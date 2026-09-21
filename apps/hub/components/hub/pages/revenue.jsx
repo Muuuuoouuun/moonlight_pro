@@ -8,6 +8,7 @@ import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, Emp
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
+import { requestPersonaChat } from "../persona-client";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
@@ -1216,6 +1217,121 @@ export function Leads({ workspace }) {
 }
 
 // 딜 체크리스트 — 공유 실행 척추의 딜 쪽 절반. 판매 과정의 하위 항목(견적서 발송·데모
+function DealOutreachDrafter({ deal, onApplyNextAction }) {
+  const [open, setOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [draftText, setDraftText] = React.useState("");
+  const [copied, setCopied] = React.useState(false);
+  const toast = useToast();
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setOpen(true);
+    try {
+      const res = await requestPersonaChat({
+        personaId: "sales",
+        mode: "outreach-draft",
+        draft: `[영업 딜 고객 연락 맥락]\n딜/고객명: ${deal.name || deal.account}\n소속 회사: ${deal.account || "미지정"}\n진행 단계: ${deal.stage || "초기"}\n예상 금액: ${deal.value ? deal.value + "원" : "미정"}\n현재 다음 행동: ${deal.nextAction || "미정"}\n메모: ${deal.notes || "없음"}\n\n위 고객에게 발송할 3~4문장의 부담 없는 카카오톡/문자 연락 초안을 작성해줘.`,
+      });
+      setLoading(false);
+      if (res.state === "done") {
+        setDraftText(res.text);
+      } else {
+        toast.error(res.note || "초안 생성 실패");
+      }
+    } catch (e) {
+      setLoading(false);
+      toast.error(e.message || "오류 발생");
+    }
+  };
+
+  const handleCopy = () => {
+    if (!draftText) return;
+    navigator.clipboard.writeText(draftText);
+    setCopied(true);
+    toast.success("메시지 초안이 복사되었습니다.");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const extractOneLineAction = (text) => {
+    if (!text) return "고객 후속 연락 진행";
+    const match = text.match(/📌\s*추천\s*다음\s*행동:\s*([^\n\r]+)/);
+    if (match && match[1]?.trim()) return match[1].trim();
+    const first = text.split("\n")[0].replace(/^[0-9\.\-\*\s#💬]+/, "").trim().slice(0, 80);
+    return first || "고객 안부 및 일정 조율 연락";
+  };
+
+  return (
+    <div style={{ marginTop: 8, borderTop: "1px solid var(--line-soft)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+      {!open ? (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Button
+            variant="outline"
+            size="xs"
+            icon="sparkle"
+            onClick={handleGenerate}
+          >
+            {loading ? "연락 초안 작성 중…" : "✍️ 맞춤 연락 초안 생성"}
+          </Button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--fg)" }}>추천 연락 메시지 초안</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
+            >
+              접기
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ fontSize: 11, color: "var(--fg-muted)", padding: "4px 0" }}>초안 생성 중…</div>
+          ) : draftText ? (
+            <>
+              <div
+                style={{
+                  background: "var(--surface-3)",
+                  padding: "8px 10px",
+                  borderRadius: "var(--r-xs)",
+                  fontSize: 11.5,
+                  lineHeight: 1.55,
+                  whiteSpace: "pre-wrap",
+                  color: "var(--fg)",
+                  border: "1px solid var(--line-soft)",
+                }}
+              >
+                {draftText}
+              </div>
+              <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
+                  {copied ? "복사됨 ✓" : "본문 복사"}
+                </Button>
+                {onApplyNextAction && (
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    icon="check"
+                    onClick={() => {
+                      const act = extractOneLineAction(draftText);
+                      onApplyNextAction(act);
+                      toast.success("다음 행동에 반영되었습니다.");
+                    }}
+                  >
+                    다음 행동 반영
+                  </Button>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 준비·재미팅 잡기)이 딜 안에 산다. 저장은 tasks 원장(meta.deal_id)이라 '내 작업'의
 // 할 일 레인에도 그대로 흐른다. 클로징 딜에는 판매 후 실행(A/S)을 낮은 우선순위 후속
 // 프로젝트로 분리하는 버튼이 붙는다 — 딜은 돈을 추적하고 닫히는 레코드, 실행은 계속되는
@@ -2151,6 +2267,17 @@ export function Deals({ workspace, onNavigate }) {
                 </span>
               </div>
             )}
+            <DealOutreachDrafter
+              deal={editingDeal}
+              onApplyNextAction={(act) => {
+                if (editDealId) {
+                  setDealDrafts(prev => ({
+                    ...prev,
+                    [editDealId]: { ...prev[editDealId], nextAction: act },
+                  }));
+                }
+              }}
+            />
           </div>
         )}
         <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />

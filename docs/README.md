@@ -80,6 +80,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [CRM 탭 디벨롭 기획](superpowers/specs/2026-09-21-crm-tab-develop-design.md) — **DRAFT v0.2 · 권장 · 적용 준비(2026-09-21)**. 운영자가 지정한 여섯 축(연락·미팅 내용·기록·매출 내용·니즈·위기)을 코드에 대입한 지도와 CRM 탭 재구성 권장안(정본 1 + 렌즈 3, 통합 기록창, 니즈·위기 사건 판정, Q117 계층 정렬, 매출 필드). 검증된 구조 문제 8건 — 기록 원장 2분열, `reaction` 소비자 0, 큐 정렬이 Q117과 반대, **고객 연락 행의 버킷 필터·레일·클릭·반응 줄이 다른 원장 모양을 기대해 전부 죽음**, **첫 화면 집중 고객이 `won`만 뽑고 `next_action`은 이관 템플릿**(첫 화면 스펙 D3의 원인), 위험 라벨이 점수 밴드. 디자인 부채 9건. `classinkr-web` `home_v4.2`에서 가져올 7가지·버릴 5가지. 테이블·컬럼 변경 0(RPC v2 함수 1개). 미정 Q138~Q146에 **권장 기본값**을 달아 반대 없으면 진행. 0·1단계 파일 단위 실행 계획은 [`plans/2026-09-21-crm-tab-develop-phase0-1.md`](superpowers/plans/2026-09-21-crm-tab-develop-phase0-1.md).
 
+- [CRM 최적화·편의성·UI/UX 보완 기획](superpowers/specs/2026-09-21-crm-optimization-usability-ux-plan.md) — **DRAFT · 검토용(2026-09-21)**. 위 CRM 탭 기획을 현재 코드와 로컬 화면에 대조한 보완안. 이미 반영된 주간 집계는 제외하고, 저장·조회 신뢰성 → 공통 상세·기록창 → 검색·조회 최적화 → 기록 탐색 순서로 정리했다. 정책 승인·구현 완료를 뜻하지 않는다.
+
 - [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 업무 사실과 인터뷰 원본
 - [`superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 활성 제품 설계
 - [`master-directive.md`](master-directive.md) — 제품 불변식

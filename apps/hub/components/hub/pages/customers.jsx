@@ -18,6 +18,7 @@ import {
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
+import { requestPersonaChat } from "../persona-client";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
 
@@ -611,6 +612,92 @@ function CustomerDeleteAction({ row, onConfirm }) {
   );
 }
 
+function CustomerOutreachDrafter({ row }) {
+  const [open, setOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [draftText, setDraftText] = React.useState("");
+  const [copied, setCopied] = React.useState(false);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setOpen(true);
+    try {
+      const res = await requestPersonaChat({
+        personaId: "sales",
+        mode: "outreach-draft",
+        draft: `[고객 360 연락 맥락]\n고객명: ${row.person || row.name}\n조직/소속: ${row.name || "미지정"}${row.personTitle ? ` (${row.personTitle})` : ""}\n유형: ${row.kind === "account" ? "계약 고객" : `리드 (${row.stage})`}\n건강도/상태: ${row.health || "보통"}\n기존 다음 액션: ${row.nextAction || "없음"}\n\n위 고객에게 발송할 3~4문장의 부담 없는 카카오톡/문자 연락 초안을 작성해줘.`,
+      });
+      setLoading(false);
+      if (res.state === "done") {
+        setDraftText(res.text);
+      }
+    } catch (e) {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (!draftText) return;
+    navigator.clipboard.writeText(draftText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, border: "1px solid var(--line-soft)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Iconed name="sparkle" size={13} style={{ color: "var(--moon-300)" }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>맞춤 연락 초안 (Guru)</span>
+        </div>
+        {!open ? (
+          <Button variant="outline" size="xs" icon="sparkle" onClick={handleGenerate}>
+            {loading ? "작성 중…" : "초안 생성"}
+          </Button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
+          >
+            접기
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {loading ? (
+            <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>고객 맥락에 맞는 초안을 작성하고 있습니다…</div>
+          ) : draftText ? (
+            <>
+              <div
+                style={{
+                  background: "var(--surface-3)",
+                  padding: "8px 10px",
+                  borderRadius: "var(--r-xs)",
+                  fontSize: 11.5,
+                  lineHeight: 1.55,
+                  whiteSpace: "pre-wrap",
+                  color: "var(--fg)",
+                  border: "1px solid var(--line-soft)",
+                }}
+              >
+                {draftText}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
+                  {copied ? "복사됨 ✓" : "본문 복사"}
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
   const [activities, setActivities] = React.useState([]);
   const [actSync, setActSync] = React.useState("loading");
@@ -757,6 +844,9 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
             </div>
           </div>
         )}
+
+        {/* 맞춤 연락 초안 */}
+        <CustomerOutreachDrafter row={row} />
 
         {/* 컨택 완료 시트 — Phase 1C 핵심 루프 */}
         <ContactOutcomeSheet
