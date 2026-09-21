@@ -273,6 +273,11 @@ The hub ships one fixed density — no user-facing toggle. Values: `row-h: 36`, 
 - Feature panels: `20px` (`--r-xl`)
 - Floating pills / buttons: `999px`
 
+Writing fields (titles, notes, and multi-line content) keep `--r-sm` (6px), including
+inside the Futura shell. The pill treatment applies to selection controls, not writing
+surfaces. Shared `TextAreaField` controls and quick memo use 1.7 line-height and
+12px vertical padding; the Studio body uses 16px padding and 1.8 line-height.
+
 ## 8. Component Language
 
 Primitives live in `apps/hub/components/hub/hub-primitives.jsx` and must be the source of
@@ -477,6 +482,7 @@ Build order when adding a new surface:
 
 | Date | Decision | Status | Rationale |
 | --- | --- | --- | --- |
+| 2026-09-21 | 글쓰기 입력창(제목·메모·본문)은 `--r-sm`(6px)으로 통일하고 여러 줄 입력 여백·행간을 확보한다. Futura의 입력 pill은 select에만 남긴다 | confirmed | 운영자 지시 “콘텐츠 입력 창들 ui 다듬기 (글쓰는 곳에서는 라운딩 너무 강하지 않게)”. 09-19 공용 입력 pill 결정을 글쓰기 표면에 한해 대체. Studio 본문 스타일이 공통 필드에 덮이던 우선순위와 빠른 메모의 미정의 radius 토큰도 교정 |
 | 2026-07-19 | Separate interaction, urgency, certainty, lifecycle, and source truth into distinct visual channels | confirmed | Prevents semantic color drift while keeping urgent work immediately scannable |
 | 2026-07-19 | Allow danger red for true urgency, blocking failure, and destructive action | confirmed | Immediate-loss states need a stronger signal than the neutral system |
 | 2026-07-19 | Express recommended/unknown states through line pattern, marker, label, and luminance | confirmed | Keeps the palette restrained and avoids presenting a recommendation as fact |

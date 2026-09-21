@@ -521,7 +521,8 @@
 
 .hub-app .hub-iconbtn { border-radius: var(--fx-pill); }
 
-.hub-app .hub-input { border-radius: var(--fx-pill); }
+/* 선택 컨트롤만 pill — 제목·본문은 공통 입력 필드의 작은 모서리를 유지한다. */
+.hub-app select.hub-input { border-radius: var(--fx-pill); }
 
 /* 카드 — 보더 대신 그림자가 면을 분리한다 */
 .hub-app .hub-card {

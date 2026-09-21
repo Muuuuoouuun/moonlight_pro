@@ -21,7 +21,8 @@
 .studio-fields-two > *, .studio-variant-bar > * { min-width: 0; }
 .studio-variant-bar { display: flex; gap: 12px; align-items: flex-end; }
 .studio-variant-bar > :first-child { flex: 1; }
-.studio-body-input { min-height: 340px; line-height: 1.9; font-size: 14px; resize: vertical; }
+.hub-app .content-studio .hub-input { font-size: 14px; }
+.hub-app .content-studio .studio-body-input { min-height: 340px; line-height: 1.8; padding: 16px; resize: vertical; }
 .studio-export-bar { border-top: 1px solid var(--line); padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .studio-export-bar p { margin: 0; }
 .studio-eyebrow { color: var(--fg-dim); font-size: 11px; }
@@ -67,12 +68,12 @@
   .content-studio { padding: 16px; }
   .studio-fields-two, .studio-sidebar, .studio-preview-cards, .studio-recovery-compare { grid-template-columns: minmax(0, 1fr); }
   .studio-page-header { align-items: flex-start; }
-  .content-studio .hub-input { font-size: 16px; }
+  .hub-app .content-studio .hub-input { font-size: 16px; }
   .content-studio button, .content-studio summary { min-height: 44px; }
   .studio-variant-bar { flex-wrap: wrap; }
   .studio-variant-bar > :first-child { flex-basis: 100%; }
   .studio-preview-card { aspect-ratio: auto; min-height: 240px; }
-  .studio-body-input { min-height: 320px; }
+  .hub-app .content-studio .studio-body-input { min-height: 320px; }
 }
 
 /* Keep the content title and action visible before secondary table metadata. */
