@@ -15,7 +15,8 @@ async function getLatestRunByAgent() {
   if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", byAgent: new Map() };
 
   const rows = await fetchSupabaseRows("agent_runs", {
-    filters: withWorkspaceFilter(),
+    // Filter before LIMIT so Office activity cannot crowd out the legacy roster.
+    filters: withWorkspaceFilter([["agent", "not.like.office.*"]]),
     order: "ran_at.desc",
     limit: 50,
   });

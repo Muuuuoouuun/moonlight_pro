@@ -48,6 +48,7 @@ export const NAV_TREE = [
   {
     key: 'agents', label: 'Agents', icon: 'agents', secondary: true,
     children: [
+      { key: 'office-council', label: 'Office', icon: 'agents', path: 'dashboard/agents/office-council' },
       { key: 'chat', label: 'Chat', icon: 'chat', path: 'dashboard/agents/chat' },
       { key: 'orders', label: 'Orders', icon: 'orders', path: 'dashboard/agents/orders' },
       { key: 'council', label: 'Council', icon: 'council', path: 'dashboard/agents/council' },

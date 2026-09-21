@@ -100,6 +100,7 @@ const Webhooks = lazyPage(() => import("./pages/automations").then(m => m.Webhoo
 const Runs = lazyPage(() => import("./pages/automations").then(m => m.Runs));
 const Flows = lazyPage(() => import("./pages/automations").then(m => m.Flows));
 const SheetsSync = lazyPage(() => import("./pages/sheets-sync").then(m => m.SheetsSync));
+const OfficeCouncil = lazyPage(() => import("./pages/office-council").then(m => m.OfficeCouncil));
 const AgentsChat = lazyPage(() => import("./pages/agents").then(m => m.AgentsChat));
 const AgentsCouncil = lazyPage(() => import("./pages/agents").then(m => m.AgentsCouncil));
 const AgentsOrders = lazyPage(() => import("./pages/agents").then(m => m.AgentsOrders));
@@ -231,6 +232,7 @@ const PAGE_MAP = {
   'dashboard/automations/webhooks': (n) => <Webhooks onNavigate={n} />,
   'dashboard/automations/runs': (n) => <Runs onNavigate={n} />,
   'dashboard/automations/sheets': () => <SheetsSync />,
+  'dashboard/agents/office-council': (n, notifications, scope) => <OfficeCouncil scope={scope} />,
   'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,

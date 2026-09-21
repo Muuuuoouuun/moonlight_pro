@@ -170,7 +170,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 도메인 참고
 
-- Office Council 캐릭터: [`superpowers/specs/2026-09-15-eevee-office-council-personas.md`](superpowers/specs/2026-09-15-eevee-office-council-personas.md) — **9명 구성·역할 매핑·정립 방향 승인 / 세부 지침 v1 작성**. 역할·성격·말투와 Guru·Mentor·Legend의 업무 분할, 기존/신규 라우팅·인계 경계(§19~23). 기존 실행 계약은 유지하며 런타임 연결·경로 수정은 미적용.
+- Office Council: [`superpowers/specs/2026-09-15-eevee-office-council-personas.md`](superpowers/specs/2026-09-15-eevee-office-council-personas.md) — **첫 단계 A+B 로컬 구현·검증 / 운영 미배포**. 9명 역할·성격·말투, 기존 Guru·Mentor·Legend 경계, 전용 API·화면·기억 분리. 실제 업무 쓰기·Legend 카드·worker 연결은 후속. 현재 상태는 §25.
+
 - 빠른 메모: [`quick-memo-plan-2026-09-09.md`](quick-memo-plan-2026-09-09.md) — 공통 우측 하단 입력창·초안 복원·기존 메모 저장 경로 재사용. **2026-09-10 로컬 구현·검증 완료, 운영 배포 별도**
 - Agent/Council API·MCP: [`agent-council-api-mcp-operating-plan-2026-09-09.md`](agent-council-api-mcp-operating-plan-2026-09-09.md) — 현재 연동 구현과 권장 운영법. 아래 보류된 전체 Agent UI·자율 실행 설계를 승인한 것은 아님
 - Sales OS: [`sales-os-direction.md`](sales-os-direction.md), [`sales-os/`](sales-os/), [`sales-daily-loop-playbook.md`](sales-daily-loop-playbook.md)

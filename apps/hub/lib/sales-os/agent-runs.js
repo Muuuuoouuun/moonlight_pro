@@ -88,6 +88,8 @@ export async function getRecentAgentRuns({
   const extra = [];
   if (ref) extra.push(["ref", eqFilter(ref)]);
   if (agent) extra.push(["agent", eqFilter(agent)]);
+  // Existing Guru/team memory must never absorb the separate Office namespace.
+  else extra.push(["agent", "not.like.office.*"]);
 
   const rows = await fetchSupabaseRows("agent_runs", {
     filters: withWorkspaceFilter(extra),
