@@ -14,7 +14,6 @@ import {
   EditDrawer,
   EmptyState,
   Kbd,
-  SectionTitle,
   SyncBadge,
   useToast,
   Skeleton,
@@ -24,6 +23,7 @@ import {
   selectBrand,
 } from "@/lib/brand-directory";
 import { createClientId } from "@/lib/pms-ui";
+import "./brands.css";
 import { BRAND_IDENTITY_FIELDS, BRAND_OPERATING_STATES, brandIdentityDraft, brandIdentityPayload } from "@/lib/brand-identity";
 
 // 브랜드 탭 — 브랜드를 콘텐츠 필터가 아니라 운영 대상으로 다루는 표면
@@ -140,16 +140,9 @@ function BrandRow({ brand, onOpen }) {
 function TextBlock({ label, value, placeholder }) {
   const filled = Boolean(String(value || "").trim());
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-      <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>
-        {label}
-      </span>
-      <p style={{
-        margin: 0, fontSize: 13, lineHeight: 1.65,
-        color: filled ? "var(--fg)" : "var(--fg-dim)",
-      }}>
-        {filled ? value : placeholder}
-      </p>
+    <div className="brand-fact">
+      <span className="brand-fact-label">{label}</span>
+      <p className={filled ? "brand-fact-value" : "brand-fact-empty"}>{filled ? value : placeholder}</p>
     </div>
   );
 }
@@ -157,19 +150,11 @@ function TextBlock({ label, value, placeholder }) {
 function ListBlock({ label, items, placeholder, mono = false }) {
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>
-        {label}
-      </span>
-      {list.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 13, color: "var(--fg-dim)" }}>{placeholder}</p>
-      ) : (
-        <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-          {list.map((entry, index) => (
-            <li key={`${entry}-${index}`} className={mono ? "mono" : undefined} style={{ fontSize: mono ? 12 : 13, lineHeight: 1.6, color: "var(--fg-muted)" }}>
-              {entry}
-            </li>
-          ))}
+    <div className="brand-fact">
+      <span className="brand-fact-label">{label}</span>
+      {list.length === 0 ? <p className="brand-fact-empty">{placeholder}</p> : (
+        <ul className="brand-fact-list">
+          {list.map((entry, index) => <li key={`${entry}-${index}`} className={mono ? "mono" : undefined}>{entry}</li>)}
         </ul>
       )}
     </div>
@@ -179,134 +164,93 @@ function ListBlock({ label, items, placeholder, mono = false }) {
 function ChipBlock({ label, items, placeholder }) {
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>
-        {label}
-      </span>
-      {list.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 13, color: "var(--fg-dim)" }}>{placeholder}</p>
-      ) : (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {list.map((entry, index) => (
-            <span key={`${entry}-${index}`} style={{
-              fontSize: 12, color: "var(--fg-muted)",
-              padding: "3px 9px", borderRadius: 999,
-              border: "1px solid var(--line-soft)", background: "var(--surface-2)",
-            }}>{entry}</span>
-          ))}
+    <div className="brand-fact">
+      <span className="brand-fact-label">{label}</span>
+      {list.length === 0 ? <p className="brand-fact-empty">{placeholder}</p> : (
+        <div className="brand-chips">
+          {list.map((entry, index) => <span key={`${entry}-${index}`}>{entry}</span>)}
         </div>
       )}
     </div>
   );
 }
 
-function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue, onEdit }) {
+function BrandDetail({ brand, onOpenStudio, onOpenQueue, onEdit }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <Card>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 22, color: "var(--fg-muted)" }} aria-hidden="true">{brand.glyph || "○"}</span>
-          <div style={{ flex: "1 1 240px", minWidth: 0 }}>
-            <div style={{ fontSize: 16, fontWeight: 500, color: "var(--fg)" }}>{brand.name}</div>
-            <div style={{ marginTop: 3, fontSize: 12.5, color: "var(--fg-muted)" }}>
-              {brand.description || "설명 없음"}
-            </div>
-          </div>
-          <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-            {brand.isFocused ? "집중 브랜드 · " : ""}{BRAND_OPERATING_STATES.find((s) => s.value === brand.operatingState)?.label || "운영 상태 미정"}
-          </div>
-        </div>
-        {brand.failedPublishes > 0 && (
-          // 발행 실패는 목록에서만이 아니라 상세에서도 보여야 한다 — 브랜드를 열고도
-          // 실패를 못 보면 목록의 붉은 레일이 설명되지 않는다.
-          <div style={{
-            marginTop: 12, padding: "9px 12px",
-            border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)",
-            boxShadow: "inset 1px 0 0 var(--danger)",
-            display: "flex", alignItems: "center", gap: 8,
-            fontSize: 12.5, color: "var(--danger)",
-          }}>
-            <Iconed name="flag" size={13} />
-            발행 실패 {brand.failedPublishes}건 · 발행 로그에서 원인을 확인하세요
-          </div>
-        )}
-      </Card>
-
-      <Card>
+    <div className="brand-detail">
+      {brand.description && <p className="brand-description">{brand.description}</p>}
+      <div className="brand-focus-bar">
         <TextBlock label="현재 집중점" value={brand.currentFocus} placeholder="이번에 쌓거나 검증할 한 가지를 정해보세요." />
-      </Card>
-      <Card>
-        <SectionTitle
-          subtitle="무엇을 만들지 판단할 때 함께 읽는 브랜드 기준입니다. 빈칸이 있어도 저장할 수 있습니다."
-          right={<Button variant="secondary" size="sm" onClick={onEdit}>브랜드 기준 편집</Button>}
-        >
-          방향과 표현 기준
-        </SectionTitle>
-        <CertaintyBadge state={brand.identity.state} label={identityRowLabel(brand.identity)} />
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--section-gap)", marginTop: 14 }}>
-          <TextBlock label="대상" value={brand.audience} placeholder="누구의 어떤 문제와 욕구를 다룰지" />
-          <TextBlock label="핵심 약속" value={brand.promise} placeholder="이 브랜드를 만나고 무엇이 달라질지" />
-          <TextBlock label="제공하는 가치" value={brand.offer} placeholder="상품·서비스·작품·경험" />
-          <TextBlock label="철학" value={brand.philosophy} placeholder="아직 비어 있습니다 · 이 브랜드가 왜 존재하는지" />
-          <TextBlock label="방향" value={brand.direction} placeholder="아직 비어 있습니다 · 어떤 형태로 쌓아갈지" />
-          <TextBlock label="보이스" value={brand.voice} placeholder="아직 비어 있습니다 · 어떤 언어로 말할지" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>
-              발행 리듬
-            </span>
-            <span style={{ fontSize: 13, color: "var(--fg)" }}>
-              {brand.cadenceLabel}
-              {brand.weeklyGoal.value != null && (
-                <span style={{ color: "var(--fg-muted)" }}>
-                  {" · 주 "}{brand.weeklyGoal.value}건
-                  {brand.weeklyGoal.certainty === "recommended" ? " (권장)" : ""}
-                </span>
-              )}
-            </span>
-          </div>
-          <TextBlock label="좋은 표현 예시" value={brand.voiceExamples} placeholder="이 브랜드다운 실제 문장" />
-          <ChipBlock label="핵심 주제" items={brand.keywords} placeholder="키워드가 없습니다" />
-          <ListBlock label="콘텐츠 규칙" items={brand.rules} placeholder="규칙이 없습니다 · 이 브랜드에서 반드시 지킬 것" />
-          <ListBlock label="금지어 · 하지 않을 것" items={brand.forbidden} placeholder="금지 목록이 없습니다" />
-          <ChipBlock label="채널" items={brand.channels} placeholder="연결된 채널이 없습니다" />
-          <ListBlock label="링크" items={brand.sourceLinks} placeholder="등록된 링크가 없습니다" mono />
-        </div>
-      </Card>
-
-      <Card>
-        <SectionTitle subtitle="소재 선택과 이어쓰기는 이 브랜드로 필터한 콘텐츠 보기에서 이어갑니다.">콘텐츠</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap", marginTop: 12 }}>
-          {brand.counts ? (
-            <>
-              {[
-                ["아이디어", brand.counts.ideas],
-                ["초안·검토", brand.counts.drafts],
-                ["예약", brand.counts.scheduled],
-                ["발행", brand.counts.published],
-              ].map(([label, value]) => (
-                <span key={label} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>{label}</span>
-                  <span className="stat" style={{ fontSize: 18, fontWeight: 600, color: "var(--fg)" }}>{value}</span>
-                </span>
-              ))}
-            </>
-          ) : (
-            <span style={{ fontSize: 12.5, color: "var(--fg-dim)" }}>
-              소재와 초안, 발행 기록을 함께 확인하세요.
-            </span>
-          )}
-          <div style={{ flex: 1 }} />
-          <Button variant="secondary" size="sm" icon="queue" onClick={() => onOpenQueue(brand.key)}>소재·원고 보기</Button>
+        <div className="brand-detail-actions">
           <MemoCaptureLink context={{ type: "brand", id: brand.id }} />
+          <Button variant="secondary" size="sm" icon="queue" onClick={() => onOpenQueue(brand.key)}>소재·원고 보기</Button>
           <Button variant="primary" size="sm" icon="plus" onClick={() => onOpenStudio(brand.key)}>이 브랜드로 새 콘텐츠</Button>
         </div>
-      </Card>
+      </div>
 
-      <Card><RelatedMemos type="brand" id={brand.id} /></Card>
-      <Card><GoalLinks entityType="brands" entityId={brand.id} scope={brand.orgScope} /></Card>
+      {brand.failedPublishes > 0 && (
+        <div className="brand-publish-alert" role="status">
+          <Iconed name="flag" size={13} />
+          발행 실패 {brand.failedPublishes}건 · 발행 로그에서 원인을 확인하세요
+        </div>
+      )}
 
-      <div>
-        <Button variant="ghost" size="sm" icon="chevronL" onClick={onBack}>브랜드 목록</Button>
+      <div className="brand-detail-grid">
+        <Card pad={false} className="brand-identity-panel">
+          <div className="brand-panel-heading">
+            <div className="brand-panel-title">
+              <h3>방향과 표현 기준</h3>
+              <CertaintyBadge state={brand.identity.state} label={identityRowLabel(brand.identity)} />
+            </div>
+            <Button variant="secondary" size="sm" onClick={onEdit}>브랜드 기준 편집</Button>
+          </div>
+          <div className="brand-identity-grid">
+            <TextBlock label="대상" value={brand.audience} placeholder="누구의 어떤 문제와 욕구를 다룰지" />
+            <TextBlock label="핵심 약속" value={brand.promise} placeholder="이 브랜드를 만나고 무엇이 달라질지" />
+            <TextBlock label="제공하는 가치" value={brand.offer} placeholder="상품·서비스·작품·경험" />
+            <TextBlock label="철학" value={brand.philosophy} placeholder="이 브랜드가 왜 존재하는지" />
+            <TextBlock label="방향" value={brand.direction} placeholder="어떤 형태로 쌓아갈지" />
+            <TextBlock label="보이스" value={brand.voice} placeholder="어떤 언어로 말할지" />
+            <TextBlock label="좋은 표현 예시" value={brand.voiceExamples} placeholder="이 브랜드다운 실제 문장" />
+            <ChipBlock label="핵심 주제" items={brand.keywords} placeholder="키워드가 없습니다" />
+            <ListBlock label="콘텐츠 규칙" items={brand.rules} placeholder="이 브랜드에서 반드시 지킬 것" />
+            <ListBlock label="금지어 · 하지 않을 것" items={brand.forbidden} placeholder="금지 목록이 없습니다" />
+            <div className="brand-fact">
+              <span className="brand-fact-label">발행 리듬</span>
+              <p className="brand-fact-value">
+                {brand.cadenceLabel}
+                {brand.weeklyGoal.value != null && (
+                  <span className="brand-fact-empty">
+                    {" · 주 "}<span className="num">{brand.weeklyGoal.value}</span>건
+                    {brand.weeklyGoal.certainty === "recommended" ? " (권장)" : ""}
+                  </span>
+                )}
+              </p>
+            </div>
+            <ChipBlock label="채널" items={brand.channels} placeholder="연결된 채널이 없습니다" />
+            <ListBlock label="링크" items={brand.sourceLinks} placeholder="등록된 링크가 없습니다" mono />
+          </div>
+        </Card>
+
+        <Card style={{ padding: 16 }} className="brand-context-panel">
+          <section aria-label="콘텐츠 현황">
+            <h3>콘텐츠 현황</h3>
+            {brand.counts ? (
+              <dl className="brand-content-counts">
+                {[
+                  ["아이디어", brand.counts.ideas],
+                  ["초안·검토", brand.counts.drafts],
+                  ["예약", brand.counts.scheduled],
+                  ["발행", brand.counts.published],
+                ].map(([label, value]) => (
+                  <div key={label}><dt>{label}</dt><dd className="stat">{value}</dd></div>
+                ))}
+              </dl>
+            ) : <p className="brand-content-note">소재와 초안, 발행 기록은 소재·원고 보기에서 확인하세요.</p>}
+          </section>
+          <RelatedMemos type="brand" id={brand.id} />
+          <GoalLinks entityType="brands" entityId={brand.id} scope={brand.orgScope} />
+        </Card>
       </div>
     </div>
   );
@@ -451,30 +395,32 @@ export function Brands() {
   const totals = directory.totals;
 
   return (
-    <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <div className="hub-page-header" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>브랜드</h2>
+    <div className="hub-page brands-page">
+      <div className="brand-page-header">
+        {selected && <Button variant="ghost" size="sm" icon="chevronL" onClick={() => setQuery(null)}>브랜드 목록</Button>}
+        <div className="brand-page-title">
+          <h2>{selected ? selected.name : "브랜드"}</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             {selected
-              ? `${selected.name} · 정체성`
+              ? `${selected.isFocused ? "집중 브랜드 · " : ""}${BRAND_OPERATING_STATES.find((s) => s.value === selected.operatingState)?.label || "운영 상태 미정"}`
               : `${directory.brands.length}개${scopeSuffix} · 방향 · 집중점 · 자산`}
             <SyncBadge state={syncState} />
           </div>
         </div>
-        <div style={{ flex: 1 }} />
-        {saveNote && (
-          <span className="mono" style={{
-            fontSize: 10.5, whiteSpace: "nowrap",
-            color: saveNote.tone === "ok" ? "var(--fg-muted)" : saveNote.tone === "err" ? "var(--danger)" : "var(--fg-dim)",
-          }}>{saveNote.label}</span>
-        )}
-        <Button variant="secondary" size="sm" onClick={openContentLog}>
-          컨텐츠 로그
-        </Button>
-        <Button variant="primary" size="sm" icon="plus" onClick={createBrand}>
-          브랜드 <Kbd>N</Kbd>
-        </Button>
+        <div className="brand-page-tools">
+          {saveNote && (
+            <span className="mono" style={{
+              fontSize: 10.5, whiteSpace: "nowrap",
+              color: saveNote.tone === "ok" ? "var(--fg-muted)" : saveNote.tone === "err" ? "var(--danger)" : "var(--fg-dim)",
+            }}>{saveNote.label}</span>
+          )}
+          <Button variant="secondary" size="sm" onClick={openContentLog}>
+            컨텐츠 로그
+          </Button>
+          <Button variant={selected ? "secondary" : "primary"} size="sm" icon="plus" onClick={createBrand}>
+            브랜드 <Kbd>N</Kbd>
+          </Button>
+        </div>
       </div>
 
       {/* "찾지 못함"은 라이브 원장을 실제로 읽었을 때만 말할 수 있다 — read 실패·미연결을
@@ -513,7 +459,6 @@ export function Brands() {
       {selected && (
         <BrandDetail
           brand={selected}
-          onBack={() => setQuery(null)}
           onOpenStudio={openStudio}
           onOpenQueue={openQueue}
           onEdit={() => { setSaveNote(null); setIdentityDraft(brandIdentityDraft(selected)); }}
@@ -585,7 +530,7 @@ export function Brands() {
                 icon="brand"
                 title={scope === "all" ? "아직 브랜드가 없습니다" : `${SCOPE_LABEL[scope]} 스코프에 브랜드가 없습니다`}
                 description="브랜드를 만들면 정체성·발행 리듬·기록이 한 곳에 모입니다."
-                action={<Button variant="primary" size="sm" icon="plus" onClick={createBrand}>첫 브랜드 만들기</Button>}
+                action={<Button variant={selected ? "secondary" : "primary"} size="sm" icon="plus" onClick={createBrand}>첫 브랜드 만들기</Button>}
                 style={{ minHeight: 200 }}
               />
             )}
