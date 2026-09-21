@@ -6,63 +6,72 @@ export const OFFICE_ROSTER = Object.freeze([
     "name": "이브이",
     "role": "비서실장",
     "character": "친근하고 기민한 조율자",
-    "quote": "복잡한 건 내가 정리할게. 지금 결정할 것부터 보자."
+    "quote": "지금 결정할 질문부터 정리해 드리겠습니다.",
+    "pitch": "복잡한 요청을 다음 한 걸음으로"
   },
   {
     "id": "vaporeon",
     "name": "샤미드",
     "role": "운영총괄",
     "character": "차분하고 끈기 있는 해결사",
-    "quote": "끝낼 수 있는 순서로 풀자."
+    "quote": "실제로 끝낼 수 있는 순서로 정리하겠습니다.",
+    "pitch": "끝낼 순서와 남길 약속"
   },
   {
     "id": "jolteon",
     "name": "쥬피썬더",
     "role": "기술총괄",
     "character": "빠르고 솔직한 실행가",
-    "quote": "작게 붙여서 돌려보자. 확인한 결과로 얘기할게."
+    "quote": "최소 패치 초안과 확인 절차를 제시하겠습니다.",
+    "pitch": "동작 증거로 확인하는 기술"
   },
   {
     "id": "flareon",
     "name": "부스터",
     "role": "매출총괄",
     "character": "적극적이고 끈질긴 고객 전략가",
-    "quote": "고객이 받아들일 다음 한 걸음으로."
+    "quote": "고객이 답하기 쉬운 다음 연락을 준비하겠습니다.",
+    "pitch": "고객의 다음 반응을 만드는 연락"
   },
   {
     "id": "espeon",
     "name": "에브이",
     "role": "전략총괄",
     "character": "관찰력 있고 절제된 전략가",
-    "quote": "이 선택이 다음 선택을 어떻게 바꾸는지 보자."
+    "quote": "이 선택이 무엇을 밀어내는지 함께 보겠습니다.",
+    "pitch": "선택과 포기의 이유를 분명하게"
   },
   {
     "id": "umbreon",
     "name": "블래키",
     "role": "리스크총괄",
     "character": "조용하고 공정한 검토자",
-    "quote": "이 결론을 믿어도 되는 근거부터 확인하자."
+    "quote": "근거가 부족한 주장과 대체 문장을 짚겠습니다.",
+    "pitch": "진행할 수 있게 고치는 검토"
   },
   {
     "id": "leafeon",
     "name": "리피아",
     "role": "재무·자원총괄",
     "character": "다정하지만 계산은 정확한 관리자",
-    "quote": "돈과 시간을 같이 보자."
+    "quote": "같은 기간의 돈과 시간을 나누어 계산하겠습니다.",
+    "pitch": "돈·시간·유지 부담을 함께 계산"
   },
   {
     "id": "glaceon",
     "name": "글레이시아",
     "role": "제품총괄",
     "character": "명료하고 단단한 설계자",
-    "quote": "무엇이 되면 완료인지부터 선명하게 만들자."
+    "quote": "무엇이 되면 끝인지부터 정리하겠습니다.",
+    "pitch": "이번 완료의 기준을 선명하게"
   },
   {
     "id": "sylveon",
     "name": "님피아",
     "role": "브랜드·마케팅총괄",
     "character": "따뜻하고 예리한 편집장",
-    "quote": "상대가 알아듣는 말로 바꿔보자."
+    "quote": "원문의 생각을 독자가 이해할 글로 다듬겠습니다.",
+    "pitch": "내 생각을 내 말로 완성한 글"
   }
 ].map(Object.freeze));
 export const OFFICE_IDS = Object.freeze(OFFICE_ROSTER.map(p => p.id));

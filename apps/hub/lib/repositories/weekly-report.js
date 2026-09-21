@@ -18,12 +18,18 @@ const defaultGoals = async options => {
   catch { return {status:'error',error:'goals-read-failed',objectives:[],metrics:[]}; }
 };
 
-export async function getWeeklyReport({scope='personal',windowDays=7,timezone='Asia/Seoul',now=new Date(),workspaceId=resolveDefaultWorkspaceId(),reader=createMetricReader({workspaceId,now}),getGoals=defaultGoals}={}) {
+export async function getWeeklyReport({scope='personal',windowDays=7,timezone='Asia/Seoul',periodStart:requestedStart,periodEnd:requestedEnd,now=new Date(),workspaceId=resolveDefaultWorkspaceId(),reader=createMetricReader({workspaceId,now}),getGoals=defaultGoals}={}) {
   if (!['personal','company'].includes(scope) || !Number.isInteger(windowDays) || windowDays<1 || windowDays>31) throw new Error('invalid-weekly-period');
-  const periodEnd=shiftDateKey(toZonedDateKey(now,timezone),-1);
-  const periodStart=shiftDateKey(periodEnd,1-windowDays);
+  const explicit = requestedStart !== undefined || requestedEnd !== undefined;
+  if (explicit && (typeof requestedStart !== 'string' || typeof requestedEnd !== 'string')) throw new Error('invalid-weekly-period');
+  const periodEnd=explicit ? requestedEnd : shiftDateKey(toZonedDateKey(now,timezone),-1);
+  const periodStart=explicit ? requestedStart : shiftDateKey(periodEnd,1-windowDays);
   const window=metricPeriodWindow({periodStart,periodEnd,timezone});
   if (!window) throw new Error('invalid-weekly-timezone');
+  if (explicit) {
+    windowDays=(Date.parse(periodEnd)-Date.parse(periodStart))/86400000+1;
+    if (windowDays<1 || windowDays>31 || periodEnd>=toZonedDateKey(now,timezone)) throw new Error('invalid-weekly-period');
+  }
   const period={scope,periodStart,periodEnd,timezone};
   const sourceKeys=scope==='company'?['contacts_recorded']:['tasks_completed','content_published','contacts_recorded'];
   const [measurements,dealsResult,goals] = await Promise.all([

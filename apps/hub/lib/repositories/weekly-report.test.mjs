@@ -14,6 +14,15 @@ test('weekly window consists of seven completed calendar days and includes share
   assert.equal(report.periodStart,'2026-09-14'); assert.equal(report.periodEnd,'2026-09-20');
   assert.deepEqual(report.goals,goals); assert.equal(report.scorecard,null); assert.equal(report.stats.contacts,0);
 });
+test('explicit completed period is stable across reopening and rejects partial/future periods',async()=>{
+  const input={periodStart:'2026-09-14',periodEnd:'2026-09-20',timezone:'Asia/Seoul'};
+  const a=await getWeeklyReport({...dependencies(),...input});
+  const b=await getWeeklyReport({...dependencies(),...input,now:new Date('2026-09-24T00:00:00Z')});
+  assert.equal(a.since,b.since);assert.equal(a.until,b.until);assert.equal(b.windowDays,7);
+  await assert.rejects(getWeeklyReport({...dependencies(),periodStart:input.periodStart}),/invalid-weekly-period/);
+  await assert.rejects(getWeeklyReport({...dependencies(),...input,periodEnd:'2026-09-21'}),/invalid-weekly-period/);
+  await assert.rejects(getWeeklyReport({...dependencies(),...input,periodStart:'2026-08-01'}),/invalid-weekly-period/);
+});
 test('partial source reads remain null instead of fabricating zero or achievement',async()=>{
   const report=await getWeeklyReport(dependencies({reader:{measure:async ({sourceKey})=>measurement(sourceKey,sourceKey==='tasks_completed'?null:0,sourceKey==='tasks_completed'?'unmeasured':'complete'),scopedRows:async()=>({rows:[],coverage:'complete'})}}));
   assert.equal(report.stats.doneTasks,null);assert.equal(report.stats.contacts,0);assert.equal(report.partial,true);

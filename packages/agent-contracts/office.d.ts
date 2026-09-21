@@ -5,7 +5,7 @@ export interface OfficeRequest {ownerId:OfficeId;mode:OfficeMode;scope:OfficeSco
 export interface OfficeAnswer {answer:string;nextAction:string;recommendation?:string;evidence?:string[];dissent?:string[]}
 export interface OfficeContext {source:'provided'|'live'|'partial'|'preview'|'error';scope:OfficeScope;projects:{id:string;name:string;status:string;scope:'classin'|'personal'|'unknown'}[];note:string}
 export const OFFICE_VERSION:string;
-export const OFFICE_ROSTER:readonly {id:OfficeId;name:string;role:string;character:string;quote:string}[];
+export const OFFICE_ROSTER:readonly {id:OfficeId;name:string;role:string;character:string;quote:string;pitch:string}[];
 export const OFFICE_IDS:readonly OfficeId[];
 export const OFFICE_MODES:readonly OfficeMode[];
 export const OFFICE_SCOPES:readonly OfficeScope[];

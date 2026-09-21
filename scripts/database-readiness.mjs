@@ -13,6 +13,11 @@ export const DATABASE_FEATURES = [
     functions: ['agent_command_v1(uuid,text,text[],jsonb)', 'agent_command_receipt_v1(uuid,text,text[],uuid)'] },
   { name: 'Agent 작업', migration: '20260913_0033_agent_jobs.sql',
     tables: ['agent_jobs', 'agent_job_events', 'agent_workers'], functions: ['agent_jobs_v1(uuid,text,text,jsonb)', 'agent_worker_v1(uuid,text,text,jsonb)'] },
+  { name: 'Office 업무 연결', migration: '20260921_0038_office_requests.sql', tables: ['office_requests'],
+    functions: ['office_request_receipt_v1(uuid,text,uuid,jsonb)', 'office_request_claim_v1(uuid,text,jsonb,jsonb)',
+      'office_request_finish_v1(uuid,text,uuid,uuid,jsonb)', 'office_request_list_v1(uuid,text,text,text,jsonb,integer,jsonb)',
+      'office_request_log_v1(uuid,text,uuid,uuid,text)', 'office_application_claim_v1(uuid,text,uuid,integer,jsonb,jsonb)',
+      'office_apply_task_v1(uuid,text,uuid)', 'office_application_refresh_v1(uuid,text,uuid)', 'office_requests_expire_v1(timestamptz)'] },
 ];
 const literal = value => "'" + value.replaceAll("'", "''") + "'";
 export function readinessSql() {

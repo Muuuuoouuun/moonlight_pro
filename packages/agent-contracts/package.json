@@ -13,6 +13,14 @@
     "./office": {
       "types": "./office.d.ts",
       "default": "./office.js"
+    },
+    "./office-workflow": {
+      "types": "./office-workflow.d.ts",
+      "default": "./office-workflow.js"
+    },
+    "./office-studio": {
+      "types": "./office-studio.d.ts",
+      "default": "./office-studio.js"
     }
   }
 }
