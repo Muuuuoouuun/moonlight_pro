@@ -90,3 +90,29 @@ test('discard new deal removes its local row and preserves existing deals', () =
   assert.equal(cardOf(app).props['data-deal-card'], deal().id);
   assert.equal(drawerOf(app).props.record, null);
 });
+
+// Regression: ISSUE-003 — unscoped read errors displayed a blank board without retry.
+test('read failure exposes retry and blocks creation across all workspace scopes', () => {
+  for (const workspace of [undefined, 'classin', 'brand']) {
+    const app = mount({ state: 'error', workspace });
+    const error = app.findAll(n => n.type === 'LedgerReadError');
+    assert.equal(error.length, 1);
+    error[0].props.onRetry(); assert.equal(app.reloads(), 1);
+    assert.equal(app.findAll(n => n.type === 'ScrollShadowX').length, 0);
+    const create = app.findAll(n => n.type === 'Button' && n.props.icon === 'plus')[0];
+    assert.equal(create.props.disabled, true);
+    create.props.onClick(); app.render();
+    assert.equal(drawerOf(app).props.record, null);
+  }
+});
+
+test('loading uses Skeleton and partial data retains the board with retry', () => {
+  const loading = mount({ state: 'loading' });
+  assert.equal(loading.findAll(n => n.type === 'Skeleton').length, 1);
+  assert.equal(loading.findAll(n => n.type === 'EmptyState').length, 0);
+  const partial = mount({ state: 'partial', records: [deal()] });
+  assert.equal(partial.findAll(n => n.type === 'ScrollShadowX').length, 1);
+  assert.equal(partial.findAll(n => n.type === 'Skeleton').length, 0);
+  partial.findAll(n => n.type === 'Button' && n.props.children.includes('딜 원장 다시 확인'))[0].props.onClick();
+  assert.equal(partial.reloads(), 1);
+});
