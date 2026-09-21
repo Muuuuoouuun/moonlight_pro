@@ -36,8 +36,8 @@ function readHubAppSource() {
 test("keeps the server and first client render deterministic before restoring saved preferences", () => {
   const storage = memoryStorage({ "mlp.theme": "light" });
 
-  assert.deepEqual(DEFAULT_HUB_PREFERENCES, { theme: "dark" });
-  assert.deepEqual(readHubPreferences(storage), { theme: "light" });
+  assert.deepEqual(DEFAULT_HUB_PREFERENCES, { theme: "dark", sidebarCollapsed: false });
+  assert.deepEqual(readHubPreferences(storage), { theme: "light", sidebarCollapsed: false });
 });
 
 test("restores browser preferences after hydration instead of inside state initializers", () => {
@@ -65,5 +65,22 @@ test("persists only supported shell preferences", () => {
   assert.equal(persistHubPreference(storage, "theme", "light"), true);
   assert.equal(persistHubPreference(storage, "density", "relaxed"), false);
   assert.equal(persistHubPreference(storage, "theme", "sepia"), false);
-  assert.deepEqual(readHubPreferences(storage), { theme: "light" });
+  assert.deepEqual(readHubPreferences(storage), { theme: "light", sidebarCollapsed: false });
+});
+
+
+test("sidebar collapse survives reload and can be explicitly expanded", () => {
+  const storage = memoryStorage();
+  assert.equal(persistHubPreference(storage, "sidebarCollapsed", true), true);
+  assert.equal(readHubPreferences(storage).sidebarCollapsed, true);
+  assert.equal(persistHubPreference(storage, "sidebarCollapsed", false), true);
+  assert.equal(readHubPreferences(storage).sidebarCollapsed, false);
+  assert.equal(persistHubPreference(storage, "sidebarCollapsed", "true"), false);
+  assert.equal(readHubPreferences(memoryStorage({ "mlp.sidebarCollapsed": "invalid" })).sidebarCollapsed, false);
+});
+
+test("blocked storage never prevents sidebar interaction", () => {
+  const storage = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } };
+  assert.deepEqual(readHubPreferences(storage), DEFAULT_HUB_PREFERENCES);
+  assert.equal(persistHubPreference(storage, "sidebarCollapsed", true), false);
 });

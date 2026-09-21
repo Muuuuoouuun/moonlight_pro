@@ -278,7 +278,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const routeScope = deriveSidebarScope(path)
     || (queryScope ? normalizeScope(queryScope) : null);
 
-  const [collapsed, setCollapsed] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(DEFAULT_HUB_PREFERENCES.sidebarCollapsed);
   const [navOpen, setNavOpen] = React.useState(false);
   const [navScope, setNavScope] = React.useState(routeScope || 'all');
   // SSR and the first client render must use the same values. Persisted browser
@@ -302,7 +302,16 @@ export function HubApp({ memoDraftContext = "preview" }) {
     try { storage = window.localStorage; } catch { /* storage can be blocked */ }
     const stored = readHubPreferences(storage);
     setTheme(stored.theme);
+    setCollapsed(stored.sidebarCollapsed);
   }, []);
+
+  const toggleSidebar = React.useCallback(() => {
+    const next = !collapsed;
+    setCollapsed(next);
+    let storage = null;
+    try { storage = window.localStorage; } catch { /* session-only preference */ }
+    persistHubPreference(storage, "sidebarCollapsed", next);
+  }, [collapsed]);
 
   const updateTheme = React.useCallback((nextTheme) => {
     setTheme(nextTheme);
@@ -547,7 +556,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
 
   const render = PAGE_MAP[path];
   const page = render ? render(navigate, inquiryNotifications) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
-  const sidebarCollapsed = collapsed && !navOpen;
+  const sidebarCollapsed = collapsed && !isMobileViewport;
 
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme}>
@@ -567,7 +576,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
             onScopeChange={setNavScope}
             onNavigate={navigateFromSidebar}
             collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setCollapsed(c => !c)}
+            onToggleCollapse={toggleSidebar}
             openPalette={openCommandPalette}
             mobileHidden={mobileNavState.navHidden}
             mobileOpen={mobileNavState.open}

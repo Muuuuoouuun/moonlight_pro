@@ -236,8 +236,8 @@ test("only the closed mobile sidebar is removed from focus and the accessibility
   assert.doesNotMatch(sidebarSource, /const sidebarA11yProps = \{[\s\S]*?inert:/);
   assert.equal(
     sidebarSource.match(/<aside\s+\{\.\.\.sidebarA11yProps\}/g)?.length,
-    2,
-    "both expanded and collapsed sidebar variants must share the mobile-only inert contract",
+    1,
+    "one stable sidebar keeps focus and shares the mobile-only inert contract across widths",
   );
   assert.doesNotMatch(appSource, /aria-hidden=\{!navOpen\}/);
 });

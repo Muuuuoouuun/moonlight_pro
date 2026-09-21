@@ -173,7 +173,7 @@ export const SIDEBAR_PRIMARY = [
     // back-compat in isSidebarAnchorActive.
     key: 'tasks',
     label: '내 작업',
-    icon: 'inbox',
+    icon: 'checklist',
     scopeAware: false,
     owns: ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review'],
     children: { all: MY_WORK_CHILDREN, classin: MY_WORK_CHILDREN, personal: MY_WORK_CHILDREN },
@@ -211,7 +211,7 @@ export const SIDEBAR_PRIMARY = [
   {
     key: 'followups',
     label: '고객 연락',
-    icon: 'bell',
+    icon: 'followup',
     scopeAware: true,
     // classin/followups 페이지는 제거됨(LEGACY_REDIRECTS) — owns는 옛 딥링크의
     // 액티브 판정용으로만 유지하고, 내비 착지는 항상 정본 페이지다.
@@ -224,7 +224,7 @@ export const SIDEBAR_PRIMARY = [
     },
   },
   {
-    key: 'discovery', label: '기회 탐색', icon: 'search', scopeAware: true,
+    key: 'discovery', label: '기회 탐색', icon: 'compass', scopeAware: true,
     owns: ['dashboard/discovery'],
     paths: { all: 'dashboard/discovery', classin: 'dashboard/discovery?scope=classin', personal: 'dashboard/discovery?scope=personal' },
   },
