@@ -7,7 +7,8 @@
 
 import React from "react";
 import { RelatedMemos } from '../related-memos';
-import { MemoCaptureLink } from "../journal-links";
+import { RelatedCustomerProjects } from '../related-customer-projects';
+import { ContextMemoDrawer } from '../context-memo-drawer';
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import {
@@ -711,6 +712,8 @@ function CustomerOutreachDrafter({ row }) {
 }
 
 function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
+  const [memoState, setMemoState] = React.useState(null);
+  const memoContexts = React.useMemo(() => [{ type: row.kind, id: row.id, label: row.person || row.name }], [row.kind, row.id, row.person, row.name]);
   const [activities, setActivities] = React.useState([]);
   const [actSync, setActSync] = React.useState("loading");
   // 컨택 완료 시트 저장 직후 부모 원장 재조회 없이 최신 다음 액션을 반영
@@ -777,6 +780,8 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
     ? `dashboard/revenue/leads?lead=${encodeURIComponent(row.id)}`
     : null;
 
+  if (memoState) return <ContextMemoDrawer contexts={memoContexts} noteId={memoState.noteId || null} onClose={() => setMemoState(null)} />;
+
   return (
     <Drawer
       title={row.person || row.name}
@@ -785,7 +790,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
       width="min(440px, 96vw)"
       footer={(
         <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minWidth: 0 }}>
-          <MemoCaptureLink context={{ type: row.kind, id: row.id }} />
+          <Button variant="primary" onClick={() => setMemoState({})}>메모 남기기</Button>
           {editHref && <Button variant="outline" size="sm" onClick={() => onNavigate?.(editHref)}>정식 편집 열기</Button>}
           <div style={{ flex: 1 }} />
           <CustomerDeleteAction row={row} onConfirm={onDelete} />
@@ -793,6 +798,42 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
       )}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* 다음 액션 */}
+        {(nextActionOverride ?? row.nextAction) && (
+          <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "9px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+            <Iconed name="bolt" size={13} style={{ color: "var(--moon-300)" }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>다음 액션</div>
+              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{nextActionOverride ?? row.nextAction}</div>
+            </div>
+          </div>
+        )}
+
+
+        {/* 활동 타임라인 (읽기 우선 배치) */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 500 }}>활동 타임라인</span>
+            <SyncBadge state={actSync} />
+          </div>
+          {actSync === "loading" ? (
+            <div style={{ padding: "8px 0" }}>
+              <Skeleton height={14} lines={2} />
+            </div>
+          ) : actSync === "error" ? (
+            <div style={{ fontSize: 12, color: "var(--danger)", padding: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
+              활동 기록을 읽지 못했습니다.
+              <Button variant="ghost" size="xs" onClick={reload}>다시 시도</Button>
+            </div>
+          ) : (
+            <><ActivityTimeline rows={activities.slice(0, 3)} />{activities.length > 3 && <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>전체 대화 기록 보기</summary><ActivityTimeline rows={activities.slice(3)} /></details>}</>
+          )}
+        </div>
+
+        <RelatedCustomerProjects type={row.kind} id={row.id} />
+        <RelatedMemos type={row.kind} id={row.id} onOpen={(noteId) => setMemoState({ noteId })} />
+
+        <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>연락처·거래 정보</summary>
         {/* 헤더 요약 */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           {row.health && (
@@ -808,24 +849,12 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
           <span className="mono" style={{ fontSize: 15 }}>{fmtMoney(row.valueNum)}</span>
         </div>
 
-        <RelatedMemos type={row.kind} id={row.id} />
 
         {/* 연락처 */}
         {(row.phone || row.email) && (
           <div className="mono" style={{ fontSize: 11.5, color: "var(--fg-muted)", display: "flex", gap: 12, flexWrap: "wrap" }}>
             {row.phone && <span>{row.phone}</span>}
             {row.email && <span>{row.email}</span>}
-          </div>
-        )}
-
-        {/* 다음 액션 */}
-        {(nextActionOverride ?? row.nextAction) && (
-          <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "9px 12px", display: "flex", alignItems: "center", gap: 8 }}>
-            <Iconed name="bolt" size={13} style={{ color: "var(--moon-300)" }} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>다음 액션</div>
-              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{nextActionOverride ?? row.nextAction}</div>
-            </div>
           </div>
         )}
 
@@ -861,26 +890,9 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
         {/* 스코어 요약 — 리드 enrichment 분류·증거 (점수 산출 근거의 간이 표기) */}
         {row.raw && <LeadEnrichmentPanel lead={row.raw} />}
 
-        {/* 활동 타임라인 (읽기 우선 배치) */}
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 500 }}>활동 타임라인</span>
-            <SyncBadge state={actSync} />
-          </div>
-          {actSync === "loading" ? (
-            <div style={{ padding: "8px 0" }}>
-              <Skeleton height={14} lines={2} />
-            </div>
-          ) : actSync === "error" ? (
-            <div style={{ fontSize: 12, color: "var(--danger)", padding: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
-              활동 기록을 읽지 못했습니다.
-              <Button variant="ghost" size="xs" onClick={reload}>다시 시도</Button>
-            </div>
-          ) : (
-            <ActivityTimeline rows={activities} />
-          )}
-        </div>
+        </details>
 
+        <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>연락 결과 남기기</summary>
         {/* 맞춤 연락 초안 (Guru) */}
         <CustomerOutreachDrafter row={row} />
 
@@ -915,6 +927,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
           </div>
         )}
         <QuickLog onSave={logActivity} />
+        </details>
       </div>
     </Drawer>
   );

@@ -82,7 +82,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [CRM 최적화·편의성·UI/UX 보완 기획](superpowers/specs/2026-09-21-crm-optimization-usability-ux-plan.md) — **DRAFT · 검토용(2026-09-21)**. 위 CRM 탭 기획을 현재 코드와 로컬 화면에 대조한 보완안. 이미 반영된 주간 집계는 제외하고, 저장·조회 신뢰성 → 공통 상세·기록창 → 검색·조회 최적화 → 기록 탐색 순서로 정리했다. 정책 승인·구현 완료를 뜻하지 않는다.
 
-- [CRM·프로젝트의 간결한 보기·입력·고객 연결](superpowers/specs/2026-09-21-crm-project-context-and-focus-design.md) — **사용자 요구 3개 확정 / 상세 설계 권장 / 구현 전**. 화면 과밀 방지, 편한 보기·입력, 프로젝트 고객 태그를 화면 역할·고객 칩·문맥 입력으로 구체화한다. 기존 단일 고객 연결과 다중 고객 확장 범위를 구분한다.
+- [CRM·프로젝트의 간결한 보기·입력·고객 연결](superpowers/specs/2026-09-21-crm-project-context-and-focus-design.md) — **진행 승인 · 1·2단계 구현(2026-09-21)**. 프로젝트 고객 칩·요약·역조회, `할 일 / 기록·자료`, 문맥을 이어받는 메모 입력과 초안 복구를 적용했다. 기존 단일 고객 관계·메모 원장을 재사용하며 다중 고객·통합 인물 검색·선택 분석은 후속이다. 운영 DB의 시험 저장은 실행하지 않았다.
 
 - [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 업무 사실과 인터뷰 원본
 - [`superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 활성 제품 설계

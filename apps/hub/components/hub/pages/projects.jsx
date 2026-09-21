@@ -38,6 +38,7 @@ import { ProjectCreateDrawer, ProjectCreateInline } from "./project-create-drawe
 import { MemoWorkspace } from "./memo-workspace";
 import { ProjectDeliveryEditor } from "./project-delivery";
 import { ProjectDetailPanel } from "./project-detail-panel";
+import { ContextMemoDrawer } from '../context-memo-drawer';
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { ProjectPortfolioWorkspace } from "./project-portfolio-workspace";
 import { ProjectTaskDetailDrawer } from './project-task-detail-drawer';
@@ -109,6 +110,7 @@ export function Projects({ workspace }) {
   const view = normalizeProjectView(searchParams.get('view'));
   const selectedProjectId = searchParams.get('project');
   const [memoTaskId, setMemoTaskId] = React.useState(searchParams.get('task') || null);
+  const [contextMemo, setContextMemo] = React.useState(null);
   const [memoTaskFallback, setMemoTaskFallback] = React.useState(null);
   const taskFilters = readTaskFilters(searchParams);
   const taskView = ['backlog', 'board', 'todos'].includes(view);
@@ -180,7 +182,7 @@ export function Projects({ workspace }) {
   const [taskChecklistConflict, setTaskChecklistConflict] = React.useState(null);
   const [containerDraft, setContainerDraft] = React.useState(null);
   const [localContainers, setLocalContainers] = React.useState([]);
-  const drawerOpen = Boolean(projectDraft || deliveryProject || taskDraft || containerDraft || memoTaskId || !sidebarHidden || containerPickerOpen);
+  const drawerOpen = Boolean(contextMemo || projectDraft || deliveryProject || taskDraft || containerDraft || memoTaskId || !sidebarHidden || containerPickerOpen);
 
   const formatTime = (d) => {
     try {
@@ -1634,7 +1636,7 @@ export function Projects({ workspace }) {
   };
 
   return (
-    <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: '1fr', height: '100%', overflow: 'hidden' }}>
+    <div className="hub-workspace-shell hub-projects-workspace" style={{ display: 'grid', gridTemplateColumns: '1fr', height: '100%', overflow: 'hidden' }}>
       {!sidebarHidden && (
       <Drawer title="소속 관리" onClose={() => setSidebarHidden(true)} width="min(360px, 94vw)">
         <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
@@ -1775,7 +1777,7 @@ export function Projects({ workspace }) {
       </Drawer>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="hub-projects-workspace-main" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className={`hub-page-header hub-project-page-header${openDetail ? ' hub-project-page-header--detail' : ''}`} style={{ padding: '14px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div className="hub-project-header-context">
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
@@ -2478,12 +2480,15 @@ export function Projects({ workspace }) {
                 <div
                   ref={detailSheetRef}
                   className="hub-project-detail-sheet"
+                  aria-hidden={contextMemo ? true : undefined}
+                  inert={contextMemo ? '' : undefined}
                   role={mobileDetail ? 'dialog' : 'region'}
                   aria-modal={mobileDetail ? 'true' : undefined}
                   aria-label={`${p.name} 프로젝트 상세`}
                 >
                   <button type="button" tabIndex={-1} className="hub-project-detail-sheet__backdrop" aria-label="프로젝트 상세 닫기" onClick={closeProjectDetail} />
                   <ProjectDetailPanel
+                    key={p.id}
                     project={p}
                     container={pBrand}
                     todos={pTodos}
@@ -2502,6 +2507,17 @@ export function Projects({ workspace }) {
                     orderResult={orderResult}
                     pendingTodoIds={pendingTaskIds}
                     onClose={closeProjectDetail}
+                    onMemo={(contexts) => setContextMemo({ contexts })}
+                    onOpenMemo={(noteId) => setContextMemo({ noteId, contexts: [] })}
+                    onCustomerSaved={async (saved, selected) => {
+                      projectsLedgerCache = null;
+                      setLedger(current => ({ ...current, projects: current.projects.map(project => project.id === p.id ? {
+                        ...project, updatedAt: saved?.updated_at || project.updatedAt,
+                        entityRef: selected ? { type: selected.type === 'account' ? 'customer_account' : 'lead', id: selected.id } : null,
+                        entityLabel: selected?.label || null,
+                      } : project) }));
+                      await loadLedger();
+                    }}
                     onEdit={editProject}
                     onEditTodo={editTodo}
                     taskPartial={taskPartial}
@@ -2571,6 +2587,7 @@ export function Projects({ workspace }) {
         )}
       </div>
 
+      {contextMemo && <ContextMemoDrawer contexts={contextMemo.contexts} noteId={contextMemo.noteId} onClose={() => setContextMemo(null)} onSaved={() => setOrderResult({ tone: 'ok', label: '메모를 저장했어요' })} />}
       {deliveryProject && <ProjectDeliveryEditor key={deliveryProject.id} project={deliveryProject} onClose={() => setDeliveryProject(null)} onSave={persistDelivery} />}
 
       {projectDraft?.isNew && !containerDraft && view !== 'tree' && (

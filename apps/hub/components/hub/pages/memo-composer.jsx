@@ -163,7 +163,7 @@ function MemoActionExtractor({ text, contexts }) {
   );
 }
 
-export function MemoComposer({ model, isNew, onClose, onReload }) {
+export function MemoComposer({ model, isNew, onClose, onReload, focused = false }) {
   const { draft, entry, ready, locked, busy, dirty, pending, conflict, source, edit } = model;
   const [selection, setSelection] = React.useState(null), [helper, setHelper] = React.useState(Boolean(draft?.noteMeta.enhancement));
   const bodyRef = React.useRef(null);
@@ -194,6 +194,16 @@ export function MemoComposer({ model, isNew, onClose, onReload }) {
     event.stopPropagation();
     model.save();
   }
+  const tagFields = draft ? <>
+          <TextField label="태그 · 선택" placeholder="쉼표로 구분해 입력" value={(draft.noteMeta.tags || []).join(',')} disabled={locked}
+            hint={`최대 ${JOURNAL_TAG_LIMIT}개 · 태그당 ${JOURNAL_TAG_LENGTH}자 · 검색으로 다시 찾을 수 있어요.`}
+            error={invalidTags ? `태그는 ${JOURNAL_TAG_LIMIT}개까지, 각 ${JOURNAL_TAG_LENGTH}자 이내로 입력해 주세요.` : undefined}
+            onChange={(event) => edit({ noteMeta: { ...draft.noteMeta, tags: event.target.value.split(',') } })} />
+          {normalizedTags?.length > 0 && <ul className="memo-tag-chips" aria-label="입력한 태그">{normalizedTags.map(tag => <li key={tag}>
+            <span>#{tag}</span><Button size="xs" disabled={locked} aria-label={`${tag} 태그 삭제`}
+              onClick={() => edit({ noteMeta: { ...draft.noteMeta, tags: normalizedTags.filter(value => value !== tag) } })}>×</Button>
+          </li>)}</ul>}
+  </> : null;
   return <Drawer title={isNew && !entry ? '메모 남기기' : '메모'} subtitle="짧게 남기고, 필요한 순간 꺼내 쓰세요." presentation={isNew && !entry ? 'compact' : 'side'} width="min(620px, 96vw)" initialFocusRef={bodyRef} onClose={() => { if (!busy) onClose(); }}
     footer={<div className="memo-footer">
       {/* 단축키는 §8.1대로 실행 버튼 옆 Kbd 한 칸으로 알린다 — 모바일에서 안내문을 한 줄 더 늘리지 않는다. */}
@@ -208,17 +218,10 @@ export function MemoComposer({ model, isNew, onClose, onReload }) {
         {model.localError && <div className="memo-feedback" role="alert"><p>이 탭의 복구 사본을 저장하지 못했어요. 입력을 복사해 보관해 주세요.</p><Button onClick={copy}>입력 복사</Button></div>}
         <TextAreaField ref={bodyRef} label="원문 메모" placeholder="기억하고 싶은 일이나 떠오른 생각을 한 줄로…" value={draft.body} rows={isNew && !entry ? 3 : 9} style={isNew && !entry ? { minHeight: 80 } : undefined} maxLength={20000} disabled={locked}
           onChange={(event) => edit({ body: event.target.value })} onSelect={selectionChanged} hint={entry ? '일부만 쓰려면 문장을 선택하세요. 선택하지 않으면 메모 전체(3,500자까지)를 보냅니다.' : '제목이나 분류 없이 바로 저장할 수 있어요.'} />
-        <MemoActionExtractor text={draft.body} contexts={draft.contexts} />
+        {!focused && <MemoActionExtractor text={draft.body} contexts={draft.contexts} />}
         <div className="memo-metadata">
-          <TextField label="태그 · 선택" placeholder="쉼표로 구분해 입력" value={(draft.noteMeta.tags || []).join(',')} disabled={locked}
-            hint={`최대 ${JOURNAL_TAG_LIMIT}개 · 태그당 ${JOURNAL_TAG_LENGTH}자 · 검색으로 다시 찾을 수 있어요.`}
-            error={invalidTags ? `태그는 ${JOURNAL_TAG_LIMIT}개까지, 각 ${JOURNAL_TAG_LENGTH}자 이내로 입력해 주세요.` : undefined}
-            onChange={(event) => edit({ noteMeta: { ...draft.noteMeta, tags: event.target.value.split(',') } })} />
-          {normalizedTags?.length > 0 && <ul className="memo-tag-chips" aria-label="입력한 태그">{normalizedTags.map(tag => <li key={tag}>
-            <span>#{tag}</span><Button size="xs" disabled={locked} aria-label={`${tag} 태그 삭제`}
-              onClick={() => edit({ noteMeta: { ...draft.noteMeta, tags: normalizedTags.filter(value => value !== tag) } })}>×</Button>
-          </li>)}</ul>}
           <MemoContextPicker selected={draft.contexts} onChange={(contexts) => edit({ contexts })} disabled={locked} label="프로젝트·고객·브랜드 연결" />
+          {focused ? <details className="memo-details"><summary>분류 태그 <span className="memo-muted">선택</span></summary>{tagFields}</details> : tagFields}
         </div>
         <details className="memo-details"><summary>제목·시각 <span className="memo-muted">선택</span></summary><div className="memo-stack">
           <TextField label="제목" value={draft.title} maxLength={200} disabled={locked} onChange={(event) => edit({ title: event.target.value })} />

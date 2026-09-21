@@ -314,13 +314,14 @@ test("partial project reads preserve core rows and offer a named retry state", (
 
 test("project detail distinguishes failed optional ledgers from successful empty history", () => {
   assert.match(detailPanelSource, /failedSources = \[\]/);
-  assert.match(detailPanelSource, /failedEmpty\("project_updates"/);
-  assert.match(detailPanelSource, /failedEmpty\("decisions"/);
-  assert.match(detailPanelSource, /<ProjectNotes[^\n]*failed=\{failed\.has\("notes"\)\}/);
+  assert.match(detailPanelSource, /failedEmpty\(["']project_updates["']/);
+  assert.match(detailPanelSource, /failedEmpty\(["']decisions["']/);
+  assert.match(detailPanelSource, /<ProjectNotes[^\n]*failed=\{failed\.has\(["']notes["']\)\}/);
   assert.match(detailPanelSource, /연결 메모를 확인할 수 없습니다/);
   assert.match(detailPanelSource, /검색은 불러온 기록 안에서만 진행됩니다/);
-  assert.match(detailPanelSource, /failedEmpty\("routine_checks"/);
-  assert.match(detailPanelSource, /\$\{source\} 원장을 읽지 못했습니다/);
+  assert.match(detailPanelSource, /failedEmpty\(["']routine_checks["']/);
+  assert.match(detailPanelSource, /failedSources\.length > 0/);
+  assert.match(detailPanelSource, /일부 기록을 확인하지 못했어요/);
   assert.match(detailPanelSource, /업데이트 기록 미확인/);
 });
 
@@ -469,8 +470,8 @@ test("mobile project todos collapse to a readable two-column card instead of squ
 });
 
 test("desktop project detail owns a viewport-bounded scroller and persistent action footer", () => {
-  assert.match(detailPanelSource, /className=["']hub-project-detail-panel["']/);
-  assert.match(detailPanelSource, /className=["']hub-project-detail-actions["']/);
+  assert.match(detailPanelSource, /className=["']hub-project-detail-panel(?: [^"']*)?["']/);
+  assert.match(detailPanelSource, /className=["']hub-project-detail-actions(?: [^"']*)?["']/);
   assert.match(projectsSource, /hub-project-page-header--detail/);
   assert.match(globalCss, /\.hub-app \.hub-project-detail-sheet\s*\{[\s\S]*?max-height:\s*calc\(100dvh - 126px\)/);
   assert.match(globalCss, /\.hub-project-page-header--detail \.hub-project-header-context[\s\S]*?display:\s*none/);
@@ -521,7 +522,7 @@ test("sidebar rows and filter chips drop the monogram mark instead of repeating 
 
   const sidebarRowFn = projectsSource.slice(
     projectsSource.indexOf("const renderBrandSidebarRow = "),
-    projectsSource.indexOf("return (\n    <div className=\"hub-workspace-shell\""),
+    projectsSource.indexOf("return (\n    <div className=\"hub-workspace-shell"),
   );
   assert.doesNotMatch(sidebarRowFn, /BrandMark/);
 
