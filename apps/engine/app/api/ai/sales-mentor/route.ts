@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server.js";
 import { mentorDraftPrompt, parseMentorDraft } from "../../../../lib/mentor-draft.ts";
+import { buildAdvisorySystemInstruction } from "../../../../lib/advisor-guardrails.ts";
 
 // Gemini generations can legitimately run tens of seconds; cap the route
 // so a hung upstream cannot pin a serverless invocation past a minute.
@@ -210,10 +211,19 @@ export async function POST(req: Request) {
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const context = payload.context ?? {};
   const workspaceId = resolveDefaultWorkspaceId();
+  const explicitDirectives = payload.directives ?? (payload.values || payload.knowledge ? { values: payload.values, knowledge: payload.knowledge } : null);
 
   const startedAt = new Date().toISOString();
+  const systemInstruction = draftMode
+    ? SYSTEM_INSTRUCTION
+    : buildAdvisorySystemInstruction({
+        type: "sales-mentor",
+        mode,
+        context,
+        directives: explicitDirectives,
+      });
   const result = await generateGeminiText({
-    systemInstruction: SYSTEM_INSTRUCTION,
+    systemInstruction,
     prompt: draftMode ? mentorDraftPrompt(mode, context) : buildPrompt(mode as Mode, context, draft),
     maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192,
   });

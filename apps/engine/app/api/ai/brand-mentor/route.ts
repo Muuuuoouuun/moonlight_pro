@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server.js";
 import { mentorDraftPrompt, parseMentorDraft } from "../../../../lib/mentor-draft.ts";
+import { buildAdvisorySystemInstruction } from "../../../../lib/advisor-guardrails.ts";
+import { formatLegendTriad } from "../../../../lib/legend-cards.ts";
+import { parseCouncilResponse } from "../../../../lib/council-contract.ts";
 
 // Gemini generations can legitimately run tens of seconds; cap the route
 // so a hung upstream cannot pin a serverless invocation past a minute.
@@ -139,7 +142,7 @@ function digestBrand(context: any): string {
   return lines.length ? ["브랜드 컨텍스트 요약:", ...lines].join("\n") : "";
 }
 
-function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
+function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legendIds?: string[]) {
   const config = MODES[mode];
   const lines = [
     config.question,
@@ -162,6 +165,13 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
           "4. 승인 큐 후보 (work_order로 올릴 제목 1개와 gate/human approval 표기)",
         ]),
   ];
+
+  if (legendIds && legendIds.length > 0) {
+    const formattedLegends = formatLegendTriad(legendIds);
+    if (formattedLegends) {
+      lines.push("", "적용할 레전드 마이크로 카드 (가치관·비용·판단 질문):", formattedLegends);
+    }
+  }
 
   if (draft && draft.trim()) {
     const label = mode === "meeting-synthesis" ? "정리할 회의록/메모:" : "검토할 초안:";
@@ -213,13 +223,33 @@ export async function POST(req: Request) {
   const mode = draftMode ? requestedMode : normalizeMode(requestedMode);
   const ref = typeof payload.ref === "string" ? payload.ref.trim() || null : null;
   const draft = typeof payload.draft === "string" ? payload.draft : null;
+  const legendIds = Array.isArray(payload.legendIds) ? payload.legendIds : [];
   const context = payload.context ?? {};
   const workspaceId = resolveDefaultWorkspaceId();
 
+  const isCouncilMode = mode === "sparring" || requestedMode === "council" || legendIds.length > 0;
+  const explicitDirectives = payload.directives ?? (payload.values || payload.knowledge ? { values: payload.values, knowledge: payload.knowledge } : null);
+  const combinedDirectives = explicitDirectives ? {
+    ...explicitDirectives,
+    values: {
+      ...explicitDirectives.values,
+      legendIds: explicitDirectives.values?.legendIds ?? (legendIds.length ? legendIds : undefined),
+    },
+  } : (legendIds.length ? { values: { legendIds } } : undefined);
+
+  const systemInstruction = draftMode
+    ? SYSTEM_INSTRUCTION
+    : buildAdvisorySystemInstruction({
+        type: isCouncilMode ? "council" : "brand-mentor",
+        mode,
+        context,
+        directives: combinedDirectives,
+      });
+
   const startedAt = new Date().toISOString();
   const result = await generateGeminiText({
-    systemInstruction: SYSTEM_INSTRUCTION,
-    prompt: draftMode ? mentorDraftPrompt(mode, context) : buildPrompt(mode as Mode, context, draft),
+    systemInstruction,
+    prompt: draftMode ? mentorDraftPrompt(mode, context) : buildPrompt(mode as Mode, context, draft, legendIds),
     maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192,
   });
   const parsedDraft = draftMode && result.ok ? parseMentorDraft(mode, result.text) : null;
@@ -227,6 +257,7 @@ export async function POST(req: Request) {
     result.ok = false;
     result.reason = "invalid-draft-output";
   }
+  const councilAnalysis = (isCouncilMode && result.ok && !draftMode) ? parseCouncilResponse(result.text) : null;
   const finishedAt = new Date().toISOString();
 
   const connection = await upsertIntegrationConnection({
@@ -281,6 +312,7 @@ export async function POST(req: Request) {
       model: result.model,
       text: result.text,
       ...(parsedDraft || {}),
+      ...(councilAnalysis ? { council: councilAnalysis } : {}),
       reason: result.reason,
       persistence: { connection, syncRun, councilUpdate },
     },
