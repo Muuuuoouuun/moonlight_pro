@@ -2524,7 +2524,7 @@ export function Projects({ workspace }) {
                   ref={detailSheetRef}
                   className="hub-project-detail-sheet"
                   aria-hidden={contextMemo ? true : undefined}
-                  inert={contextMemo ? '' : undefined}
+                  inert={contextMemo ? true : undefined}
                   role={mobileDetail ? 'dialog' : 'region'}
                   aria-modal={mobileDetail ? 'true' : undefined}
                   aria-label={`${p.name} 프로젝트 상세`}
