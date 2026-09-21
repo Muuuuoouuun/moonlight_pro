@@ -272,6 +272,9 @@
 .hub-app .hub-iconbtn:hover { background: var(--surface-3); border-color: var(--line-soft); color: var(--fg); }
 .hub-app .hub-iconbtn--danger { color: var(--danger); }
 .hub-app .hub-iconbtn--danger:hover { color: var(--danger); }
+.hub-app .hub-iconbtn--star-active { color: var(--moon-300); }
+.hub-app .hub-iconbtn--star-active svg path { fill: currentColor; }
+.hub-app .hub-iconbtn--star-active:hover { color: var(--moon-300); }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-iconbtn { transition: none; }
 }
