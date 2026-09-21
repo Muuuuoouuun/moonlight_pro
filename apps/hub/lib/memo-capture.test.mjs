@@ -5,6 +5,8 @@ import {
   newMemoDraft,
   memoCapturePayload,
   restoreMemoDraft,
+  isMediaFile,
+  readMediaFileBase64,
 } from "./memo-capture.js";
 import { selectMemos } from "./memo-view.js";
 import { forwardMemoCapture } from "./memo-capture-engine-client.js";
@@ -104,4 +106,16 @@ test("Hub relay is authenticated, bounded and never retries a write", async () =
   assert.equal(calls, 1);
   assert.equal(result.data.status, "error");
   assert.equal(JSON.stringify(result).includes("private detail"), false);
+});
+
+test("isMediaFile and readMediaFileBase64 detect and convert media files", async () => {
+  assert.equal(isMediaFile({ type: "image/jpeg", name: "photo.jpg" }), true);
+  assert.equal(isMediaFile({ type: "audio/mp3", name: "recording.mp3" }), true);
+  assert.equal(isMediaFile({ type: "text/plain", name: "note.txt" }), false);
+
+  const file = new File(["dummy-audio-content"], "test.mp3", { type: "audio/mp3" });
+  const read = await readMediaFileBase64(file);
+  assert.equal(read.mimeType, "audio/mp3");
+  assert.equal(read.name, "test.mp3");
+  assert.ok(typeof read.base64 === "string" && read.base64.length > 0);
 });

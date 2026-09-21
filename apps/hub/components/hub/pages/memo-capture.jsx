@@ -9,6 +9,8 @@ import {
   memoCapturePayload,
   readMemoFile,
   restoreMemoDraft,
+  isMediaFile,
+  readMediaFileBase64,
 } from "@/lib/memo-capture";
 import styles from "./memo-capture.module.css";
 import { memoHref, saveMemoAndVerify } from "@/lib/memo-save";
@@ -17,6 +19,9 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
   const [draft, setDraft] = React.useState(null);
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [aiBusy, setAiBusy] = React.useState(false);
+  const [extractedData, setExtractedData] = React.useState(null);
+  const [actionItemChecks, setActionItemChecks] = React.useState({});
   const [message, setMessage] = React.useState("");
   const [storageStatus, setStorageStatus] = React.useState("");
   const [pendingFile, setPendingFile] = React.useState(null);
@@ -88,6 +93,72 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || busyRef.current) return;
+
+    if (isMediaFile(file)) {
+      busyRef.current = true;
+      setBusy(true);
+      setAiBusy(true);
+      setMessage("AI가 사진/음성을 분석하고 있습니다… (Gemini 멀티모달 요약 및 할 일 추출)");
+      try {
+        const media = await readMediaFileBase64(file);
+        const res = await fetchImpl("/api/hub/intake/multimodal", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            mediaBase64: media.base64,
+            mimeType: media.mimeType,
+          }),
+        });
+        const envelope = await res.json().catch(() => null);
+        if (!envelope || envelope.status === "error") {
+          setMessage(envelope?.error || "AI 분석에 실패했습니다.");
+          return;
+        }
+        if (envelope.status === "preview") {
+          setMessage(envelope.message || "GEMINI_API_KEY 설정이 필요합니다.");
+          return;
+        }
+        const data = envelope.data;
+        if (data) {
+          setExtractedData(data);
+          const initialChecks = {};
+          if (Array.isArray(data.actionItems)) {
+            data.actionItems.forEach((_, idx) => {
+              initialChecks[idx] = true;
+            });
+          }
+          setActionItemChecks(initialChecks);
+
+          const cur = draftRef.current;
+          const newTitle = cur.title || data.title || "";
+          const parts = [];
+          if (data.summary) parts.push(`📌 [핵심 요약]\n${data.summary}`);
+          if (data.transcription) parts.push(`📝 [전사/원문 내용]\n${data.transcription}`);
+          if (data.keyDecisions?.length) parts.push(`💡 [결정사항]\n${data.keyDecisions.map((d) => `- ${d}`).join("\n")}`);
+
+          const newBody = cur.body ? `${cur.body}\n\n${parts.join("\n\n")}` : parts.join("\n\n");
+          const newLabels = cur.labels
+            ? cur.labels
+            : (data.suggestedTags || []).join(", ");
+
+          update({
+            title: newTitle,
+            body: newBody,
+            labels: newLabels,
+            source: { type: "file", name: file.name },
+          });
+          setMessage("AI 분석 완료: 요약 및 추출된 할 일 체크리스트를 확인하세요.");
+        }
+      } catch (error) {
+        setMessage(error.message || "미디어 분석 중 오류가 발생했습니다.");
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+        setAiBusy(false);
+      }
+      return;
+    }
+
     busyRef.current = true;
     setBusy(true);
     try {
@@ -122,6 +193,33 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
     try {
       const result = await saveMemoAndVerify(payload, fetchImpl);
       setSavedId(result.id);
+
+      let createdTasksCount = 0;
+      if (extractedData?.actionItems?.length) {
+        const toCreate = extractedData.actionItems.filter(
+          (_, idx) => actionItemChecks[idx] !== false,
+        );
+        for (const item of toCreate) {
+          try {
+            const taskRes = await fetchImpl("/api/hub/tasks", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                title: item.task,
+                priority: item.priority || "medium",
+                dueDate: item.suggestedDue || null,
+                description: `[AI 추출 메모 연계: ${draftRef.current.title || "메모"}]\n${item.task}`,
+              }),
+            });
+            if (taskRes.ok) createdTasksCount++;
+          } catch {
+            // Task creation failure doesn't invalidate memo save
+          }
+        }
+      }
+
+      setExtractedData(null);
+      setActionItemChecks({});
       const empty = newMemoDraft();
       draftRef.current = empty;
       setDraft(empty);
@@ -133,7 +231,7 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
       setMessage(
         result.status === "duplicate"
           ? "이미 저장된 동일 메모를 확인했습니다. 중복 추가하지 않았습니다."
-          : "저장 후 원문을 다시 불러와 확인했습니다.",
+          : `저장 후 원문을 다시 불러와 확인했습니다.${createdTasksCount > 0 ? ` (할 일 ${createdTasksCount}건 함께 등록)` : ""}`,
       );
       onSaved?.({ id: result.id, memo: result.memo });
     } catch (error) {
@@ -199,6 +297,59 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
                 placeholder="생각나는 대로 적거나 원문을 붙여넣으세요. Enter는 줄바꿈입니다."
               />
             </label>
+            {aiBusy ? (
+              <div className={styles.pending} role="status">
+                <p>✦ Gemini 멀티모달 분석 중… (사진·음성에서 요약 및 할 일 추출 중)</p>
+              </div>
+            ) : null}
+            {extractedData ? (
+              <div className={styles.aiCard} role="region" aria-label="AI 멀티모달 추출 결과">
+                <div className={styles.aiCardHeading}>
+                  <span>✦ AI 멀티모달 추출: {extractedData.title}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setExtractedData(null)}
+                  >
+                    닫기 ✕
+                  </Button>
+                </div>
+                {extractedData.summary ? (
+                  <div>
+                    <div className={styles.aiSectionTitle}>핵심 요약</div>
+                    <div className={styles.aiSummary}>{extractedData.summary}</div>
+                  </div>
+                ) : null}
+                {extractedData.actionItems?.length ? (
+                  <div>
+                    <div className={styles.aiSectionTitle}>
+                      추출된 할 일 ({extractedData.actionItems.length}건) · 저장 시 태스크로 자동 생성
+                    </div>
+                    <ul className={styles.aiActionsList}>
+                      {extractedData.actionItems.map((item, idx) => (
+                        <li key={idx} className={styles.aiActionRow}>
+                          <input
+                            type="checkbox"
+                            checked={actionItemChecks[idx] !== false}
+                            onChange={(e) =>
+                              setActionItemChecks((prev) => ({
+                                ...prev,
+                                [idx]: e.target.checked,
+                              }))
+                            }
+                          />
+                          <span className={styles.aiActionText}>{item.task}</span>
+                          {item.suggestedDue ? (
+                            <span className={styles.aiActionDue}>기한: {item.suggestedDue}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {draft.source.type === "file" ? (
               <p>
                 출처: {draft.source.name} · 가져온 파일 원문은 별도로
@@ -206,8 +357,18 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
               </p>
             ) : null}
             <details className={styles.options}>
-              <summary>제목 · 라벨 · 파일 가져오기</summary>
+              <summary>제목 · 라벨 · 파일/미디어 가져오기</summary>
               <div className={styles.tools}>
+                <label className={styles.mediaButton}>
+                  📷 🎙️ 사진·음성 AI 분석
+                  <input
+                    aria-label="사진 또는 음성 AI 분석"
+                    type="file"
+                    className={styles.mediaInput}
+                    accept="image/*,audio/*,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.m4a,.aac,.ogg,.webm"
+                    onChange={chooseFile}
+                  />
+                </label>
                 <label className={styles.file}>
                   TXT · Markdown 가져오기
                   <input
@@ -217,7 +378,7 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
                     onChange={chooseFile}
                   />
                 </label>
-                <span>UTF-8 · 파일 256KB 이하 · 본문 최대 {MAX_MEMO_CHARS.toLocaleString()}자</span>
+                <span>사진·음성 20MB 이하 · UTF-8 텍스트 256KB 이하</span>
               </div>
               {pendingFile ? (
                 <div className={styles.pending} role="status">

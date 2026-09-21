@@ -8,6 +8,52 @@ export const MEMO_DRAFT_KEY = "moonlight:memo-draft:v1";
 export const MAX_MEMO_CHARS = 20000;
 export const MAX_MEMO_TITLE_CHARS = 200;
 export const MAX_MEMO_FILE_BYTES = 256 * 1024;
+export const MAX_MEDIA_FILE_BYTES = 20 * 1024 * 1024;
+
+export function isMediaFile(file) {
+  if (!file) return false;
+  const type = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  return (
+    type.startsWith("image/") ||
+    type.startsWith("audio/") ||
+    /\.(jpe?g|png|webp|gif|bmp|mp3|wav|m4a|aac|ogg|webm)$/i.test(name)
+  );
+}
+
+export async function readMediaFileBase64(file) {
+  if (file.size > MAX_MEDIA_FILE_BYTES) {
+    throw new Error("사진 및 오디오 파일은 20MB 이하로 업로드할 수 있습니다.");
+  }
+  if (typeof FileReader === "undefined") {
+    // Node.js environment fallback for testing
+    const buf = Buffer.from(await file.arrayBuffer());
+    return {
+      base64: buf.toString("base64"),
+      mimeType: file.type || "application/octet-stream",
+      name: file.name,
+    };
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        const commaIdx = result.indexOf(",");
+        const base64 = commaIdx >= 0 ? result.slice(commaIdx + 1) : result;
+        resolve({
+          base64,
+          mimeType: file.type || "application/octet-stream",
+          name: file.name,
+        });
+      } else {
+        reject(new Error("파일을 읽을 수 없습니다."));
+      }
+    };
+    reader.onerror = () => reject(new Error("파일을 읽는 중 오류가 발생했습니다."));
+    reader.readAsDataURL(file);
+  });
+}
 export const newMemoDraft = () => ({
   id: crypto.randomUUID(),
   occurredAt: new Date().toISOString(),

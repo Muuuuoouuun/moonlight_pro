@@ -18,3 +18,31 @@ test('generation reports the actual overridden model on success and failure', as
     for (const [name, value] of [['GEMINI_API_KEY', before.key], ['GEMINI_MODEL', before.model]]) value === undefined ? delete process.env[name] : process.env[name] = value;
   }
 });
+
+test('generateGeminiText sends media inlineData parts in payload', async () => {
+  const before = { fetch: globalThis.fetch, key: process.env.GEMINI_API_KEY };
+  process.env.GEMINI_API_KEY = 'local-test-key';
+  try {
+    let capturedBody = null;
+    globalThis.fetch = async (_url, options) => {
+      capturedBody = JSON.parse(options.body);
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '분석완료' }] } }] }), { status: 200 });
+    };
+
+    const res = await generateGeminiText({
+      prompt: '이미지 분석',
+      media: [{ mimeType: 'image/jpeg', base64: 'aGVsbG8=' }],
+    });
+
+    assert.equal(res.ok, true);
+    assert.equal(res.text, '분석완료');
+    assert.deepEqual(capturedBody.contents[0].parts, [
+      { text: '이미지 분석' },
+      { inlineData: { mimeType: 'image/jpeg', data: 'aGVsbG8=' } },
+    ]);
+  } finally {
+    globalThis.fetch = before.fetch;
+    if (before.key === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = before.key;
+  }
+});

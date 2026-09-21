@@ -1,4 +1,9 @@
-interface GeminiGenerateInput {
+export interface GeminiMediaPart {
+  mimeType: string;
+  base64: string;
+}
+
+export interface GeminiGenerateInput {
   prompt: string;
   systemInstruction?: string;
   maxOutputTokens?: number;
@@ -6,6 +11,7 @@ interface GeminiGenerateInput {
   signal?: AbortSignal;
   responseJsonSchema?: Record<string, unknown>;
   thinkingLevel?: 'high';
+  media?: GeminiMediaPart[];
 }
 
 function resolveGeminiApiKey() {
@@ -59,11 +65,25 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
     };
   }
 
+  const userParts: Record<string, unknown>[] = [{ text: input.prompt }];
+  if (Array.isArray(input.media)) {
+    for (const item of input.media) {
+      if (item?.mimeType && item?.base64) {
+        userParts.push({
+          inlineData: {
+            mimeType: item.mimeType,
+            data: item.base64,
+          },
+        });
+      }
+    }
+  }
+
   const body: Record<string, unknown> = {
     contents: [
       {
         role: "user",
-        parts: [{ text: input.prompt }],
+        parts: userParts,
       },
     ],
     generationConfig: {
