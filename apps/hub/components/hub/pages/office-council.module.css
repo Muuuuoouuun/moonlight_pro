@@ -37,4 +37,20 @@
 .notice p { margin:8px 0 0; }
 .error { box-shadow:inset 1px 0 0 var(--danger-line); }
 .page button:focus-visible { outline:1px solid var(--moon-300); outline-offset:2px; }
+.chamberSection { margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--line-soft); }
+.chamberTitle { font-size:11px; color:var(--fg-dim); letter-spacing:.08em; text-transform:uppercase; margin:0 0 8px; }
+.chamberPresets { display:flex; flex-wrap:wrap; gap:8px; }
+.chamberChip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; font-size:12px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--surface-2); color:var(--fg-muted); cursor:pointer; transition:border-color var(--dur-hover) var(--ease-hub),color var(--dur-hover) var(--ease-hub); }
+.chamberChip:hover { border-color:var(--line-strong); color:var(--fg); }
+.chamberChipActive { border-color:var(--moon-400); color:var(--fg); background:var(--surface-3); }
+.chamberDesc { font-size:10.5px; color:var(--fg-dim); }
+.answerActions { display:flex; justify-content:flex-end; margin-top:8px; }
+.nextHeader { display:flex; justify-content:space-between; align-items:center; }
+.copyBtn { display:inline-flex; align-items:center; font-size:11px; padding:3px 8px; border:1px solid var(--line); border-radius:var(--r-xs); background:var(--surface-2); color:var(--fg-muted); cursor:pointer; transition:all var(--dur-hover) var(--ease-hub); }
+.copyBtn:hover { color:var(--fg); border-color:var(--line-strong); }
+.actionBadge { display:inline-block; font-family:var(--font-mono); font-size:11px; font-weight:500; color:var(--moon-200); background:var(--surface-3); border:1px solid var(--line); border-radius:var(--r-xs); padding:2px 6px; margin-right:8px; }
+.shieldBtn { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--surface-2); color:var(--fg-muted); font-size:12px; cursor:pointer; transition:all var(--dur-hover) var(--ease-hub); }
+.shieldBtn:hover { border-color:var(--line-strong); color:var(--fg); }
+.shieldBtnActive { border-color:var(--warning-line); background:var(--surface-3); color:var(--warning); box-shadow:inset 1px 0 0 var(--warning-line); }
 @media(max-width:760px) { .page {padding:16px;} .layout {grid-template-columns:minmax(0,1fr);gap:16px;} .roster {grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;} .member {padding:8px;gap:6px;} .member small {font-size:10.5px;} .monogram {display:none;} .rosterNote {grid-column:1/-1;margin:8px;font-size:12px;} .rosterNote br {display:none;} .intro,.composer {padding:16px;} .controls {padding:16px;} .thread {padding:0 16px;} .header {align-items:flex-start;} .intro h3 span {display:block;margin:8px 0 0;} }
+
