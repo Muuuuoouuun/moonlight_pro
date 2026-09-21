@@ -8,8 +8,11 @@ import {
   fetchSupabaseRowsDetailed,
   inFilter,
   insertSupabaseRecord,
+  invokeSupabaseRpc,
   updateSupabaseRecord,
 } from "./supabase-rest";
+import { executeCaptureCommand } from "./capture-command";
+import { planTelegramCapture, telegramReply } from "./telegram-capture";
 import {
   getTelegramMessage,
   getTelegramText,
@@ -662,11 +665,56 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
   };
 
   if (!command) {
-    return finalize({
-      status: "ignored",
-      response: { message: "No slash command detected." },
-      commandName: null,
-    });
+    // 평문 캡처 — 허용된 chat에서 온 슬래시 없는 텍스트를 빠른 입력 인박스(work_orders)로 보낸다.
+    // 목적지 판정은 capture_quick_input_v1(hint='inbox')가 하고, 답장은 웹훅 응답 본문의
+    // sendMessage로 돌려준다(2026-09-20 §6.1). 예약(reserveTelegramUpdate)이 먼저 재전송을 거른다.
+    const plan = planTelegramCapture(update);
+    if (!plan.ok) {
+      return finalize({
+        status: "ignored",
+        response: {
+          message: plan.reason === "slash-command" ? "No slash command detected." : `Plain text ignored: ${plan.reason}`,
+          reason: plan.reason,
+        },
+        commandName: null,
+      });
+    }
+
+    try {
+      const workspaceId = resolveWorkspaceId();
+      const ownerRows = workspaceId
+        ? await fetchSupabaseRows("workspaces", {
+            select: "owner_id",
+            filters: [["id", `eq.${workspaceId}`]],
+            limit: 1,
+          })
+        : null;
+      const ownerId = typeof ownerRows?.[0]?.owner_id === "string" ? ownerRows[0].owner_id : null;
+      const capture = await executeCaptureCommand(
+        { raw: plan.raw, hint: plan.hint, idempotencyKey: plan.idempotencyKey },
+        { workspaceId, ownerId },
+        { rpc: invokeSupabaseRpc },
+      );
+      const saved = capture.status === "saved" || capture.status === "duplicate";
+      return await finalize({
+        status: saved ? "completed" : "failed",
+        response: {
+          message: saved ? "Captured to inbox." : "Capture failed.",
+          capture,
+          reply: telegramReply(plan.chatId, saved ? "저장됨 · 인박스" : "저장 실패 — 잠시 뒤 다시 보내 주세요"),
+        },
+        commandName: "capture",
+        errorMessage: saved ? undefined : String(capture.error || capture.status),
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return finalize({
+        status: "failed",
+        response: { error: errorMessage, reply: telegramReply(plan.chatId, "저장 실패 — 잠시 뒤 다시 보내 주세요") },
+        commandName: "capture",
+        errorMessage,
+      });
+    }
   }
 
   try {

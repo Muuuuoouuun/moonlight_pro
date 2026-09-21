@@ -159,6 +159,15 @@ export async function POST(req: Request) {
       }
     });
 
+    // 평문 캡처의 답장 — 응답 본문이 Bot API 메서드 호출이면 Telegram이 그대로 실행한다
+    // (별도 발신 API 없음). 답장이 없을 때만 기존 진단 봉투를 돌려준다.
+    const reply = result.response && typeof result.response === "object"
+      ? (result.response as { reply?: Record<string, unknown> }).reply
+      : undefined;
+    if (reply && typeof reply === "object" && typeof reply.method === "string") {
+      return NextResponse.json(reply);
+    }
+
     return NextResponse.json({
       status: result.status,
       runId: result.runId,
