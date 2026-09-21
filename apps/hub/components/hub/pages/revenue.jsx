@@ -2746,6 +2746,10 @@ function LeadActivityPanel({ lead, onCountChange }) {
       })
       .then(d => {
         if (!alive) return;
+        if (d?.status === 'error') {
+          setSyncState('error');
+          return;
+        }
         setActivities(Array.isArray(d.activities) ? d.activities : []);
         setSyncState(d.status === 'live' ? 'live' : 'preview');
       })

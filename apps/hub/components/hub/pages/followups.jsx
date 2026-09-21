@@ -231,6 +231,10 @@ function ActivityPanel({ item, onClose, onNavigate }) {
       })
       .then((d) => {
         if (!active) return;
+        if (d?.status === "error") {
+          setState({ syncState: "error", activities: [] });
+          return;
+        }
         setState({
           syncState: d.status === "live" ? "live" : "preview",
           activities: Array.isArray(d.activities) ? d.activities : [],
