@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 
 import {
   buildJunhyukLeadEnrichment,
+  isTemplateNextAction,
   normalizeEntityName,
 } from "../apps/hub/lib/sales-os/lead-enrichment.js";
 import { assertEnrichmentApplyPolicy } from "./enrich-eeocrm-policy.mjs";
@@ -239,9 +240,18 @@ async function main() {
       publicEvidence: publicEvidence.get(normalizeEntityName(company.name)) || [],
       now,
     });
+    // 운영자가 직접 적은 다음 행동은 덮지 않는다(2026-09-21 0c). 비어 있거나 이전 실행이
+    // 남긴 템플릿 문장일 때만 갱신한다 — 재실행이 운영자의 약속을 필러로 되돌리던 경로다.
+    const operatorOwnsNextAction = Boolean(lead.next_action)
+      && !isTemplateNextAction(lead.next_action);
+    if (operatorOwnsNextAction) {
+      delete built.patch.next_action;
+    } else {
+      built.patch.meta = { ...built.patch.meta, next_action_source: "import-template" };
+    }
     const currentFingerprint = lead.meta?.enrichment?.evidenceFingerprint || null;
     const changed = lead.score !== built.patch.score
-      || lead.next_action !== built.patch.next_action
+      || (!operatorOwnsNextAction && lead.next_action !== built.patch.next_action)
       || (currentFingerprint
         ? currentFingerprint !== built.enrichment.evidenceFingerprint
         : JSON.stringify(semanticEnrichment(lead.meta?.enrichment)) !== JSON.stringify(semanticEnrichment(built.enrichment)));

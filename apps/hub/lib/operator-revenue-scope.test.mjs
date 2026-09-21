@@ -106,3 +106,59 @@ test("focus override: lower excludes and raise outranks higher raw scores withou
 
   assert.deepEqual(selected.map((item) => item.id), ["lead-raised", "lead-high", "lead-mid"]);
 });
+
+// ── 0c: 집중 고객 후보 조건 ────────────────────────────────────────────────────
+// 이전 조건(priorityLane === "customer_success")은 lead-enrichment가 status === "won"일 때만
+// 붙이는 lane이라, 진행 중인 리드는 구조적으로 집중 고객이 될 수 없었다 — 프로필 §8의
+// 정의("전환 가능성이 높아 지금 연락해야 하는 고객")와 정반대다.
+const NOW = new Date("2026-09-21T03:00:00Z"); // KST 12:00
+const day = (offset) => new Date(NOW.getTime() + offset * 86400000).toISOString().slice(0, 10);
+
+test("in-progress leads can be focus customers — the won-only lane gate is gone", () => {
+  const selected = revenueScope.selectOperatorFocusLeads({
+    leads: [
+      { id: "in-progress", owner: "Me", stage: "Qualified", score: 50, nextAction: "견적서 발송" },
+      { id: "customer", owner: "Me", stage: "Customer", priorityLane: "customer_success", score: 90, nextAction: "갱신 확인" },
+    ],
+  }, { limit: 5, now: NOW });
+
+  assert.deepEqual(selected.map((item) => item.id).sort(), ["customer", "in-progress"]);
+});
+
+test("import-template next actions never count as a promise", () => {
+  const selected = revenueScope.selectOperatorFocusLeads({
+    leads: [
+      { id: "template", owner: "Me", score: 99, nextAction: "고객 활성 상태 확인 → 갱신·휴면 여부 정리" },
+      { id: "template-2", owner: "Me", score: 98, nextAction: "공식 계정 확인 → 첫 접촉 목적과 채널 결정" },
+      { id: "real", owner: "Me", score: 10, nextAction: "원장님 통화" },
+    ],
+  }, { limit: 5, now: NOW });
+
+  assert.deepEqual(selected.map((item) => item.id), ["real"]);
+});
+
+test("a promise coming due outranks a higher score with no date", () => {
+  const selected = revenueScope.selectOperatorFocusLeads({
+    leads: [
+      { id: "no-date", owner: "Me", score: 99, nextAction: "언젠가 연락" },
+      { id: "due", owner: "Me", score: 10, nextAction: "견적서 발송", nextActionAt: day(1) },
+      { id: "overdue", owner: "Me", score: 5, nextAction: "자료 전달", nextActionAt: day(-2) },
+      { id: "far", owner: "Me", score: 80, nextAction: "다음 달 확인", nextActionAt: day(30) },
+    ],
+  }, { limit: 4, now: NOW });
+
+  // 임박·지남이 먼저, 그 안에서는 점수순. 먼 약속은 날짜 없는 건과 같은 칸에서 점수로 겨룬다.
+  assert.deepEqual(selected.map((item) => item.id), ["due", "overdue", "no-date", "far"]);
+});
+
+test("dormant and lost customers stay out of the focus slots", () => {
+  const selected = revenueScope.selectOperatorFocusLeads({
+    leads: [
+      { id: "dormant", owner: "Me", score: 99, nextAction: "나중에", dormant: true },
+      { id: "lost", owner: "Me", stage: "Lost", score: 98, nextAction: "재접촉" },
+      { id: "live", owner: "Me", score: 10, nextAction: "통화" },
+    ],
+  }, { limit: 5, now: NOW });
+
+  assert.deepEqual(selected.map((item) => item.id), ["live"]);
+});

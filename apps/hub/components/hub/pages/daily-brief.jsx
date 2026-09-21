@@ -1474,6 +1474,9 @@ function RhythmPanel({ onNavigate }) {
 // §2 확정 슬롯 — 긴급 KA(최대 1) · 집중 고객(3~5) · 오늘 일정. tone 정렬 신호 큐에 섞여
 // 소실되던 풀을 명명된 자리로 분리한 첫 화면의 핵심 계약(2026-08-05 컷오버). 각 슬롯은
 // 자기 소스의 truth 상태를 따로 표시한다 — 캘린더 미연결이 매출 슬롯을 오염시키지 않는다.
+// crm_activities.reaction 어휘(0016 CHECK) — 집중 고객 행의 마지막 접점 라벨.
+const FOCUS_REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "우려", rejected: "거절", no_response: "무응답" };
+
 function FocusSlots({ dailyFocus, onNavigate }) {
   if (!dailyFocus) return null;
   const [guruFocusItem, setGuruFocusItem] = React.useState(null);
@@ -1605,6 +1608,8 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                       <span style={{ color: item.dueOverdue ? 'var(--danger)' : 'var(--fg-faint)', fontWeight: item.dueOverdue ? 600 : 400 }}> · {item.dueLabel}</span>
                     )}
                     {item.lastTouch && <span> · 최근 {item.lastTouch}</span>}
+                    {/* 반응은 이 행이 다른 행과 다른 말을 하게 만드는 사실이다(0c). 색 없이 라벨만. */}
+                    {item.lastReaction && <span> · {FOCUS_REACTION_LABEL[item.lastReaction] || item.lastReaction}</span>}
                   </div>
                 </div>
                 <IconButton

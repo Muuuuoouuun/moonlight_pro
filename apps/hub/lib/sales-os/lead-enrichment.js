@@ -77,6 +77,23 @@ function resolvePipelineLane(status) {
   return "new_pipeline";
 }
 
+// 이관 스크립트가 채워 넣는 다음 행동 문장 5종. 운영자가 직접 적은 약속과 구분하기 위해
+// 목록으로 노출한다 — 첫 화면 집중 고객은 이 문장을 약속으로 치지 않고, 스크립트는
+// 운영자가 고쳐 쓴 문장을 다시 템플릿으로 덮지 않는다(2026-09-21 0c).
+export const NEXT_ACTION_TEMPLATES = Object.freeze([
+  "최근 접점 후속 확인 → 활용 상태와 갱신·업셀 기회 정리",
+  "구매·수금 이력 확인 → 활성 사용 상태와 갱신·업셀 기회 정리",
+  "고객 활성 상태 확인 → 갱신·휴면 여부 정리",
+  "최근 접점 결과 정리 → 다음 미팅·제안 일정 확정",
+  "공식 계정 확인 → 첫 접촉 목적과 채널 결정",
+]);
+
+const TEMPLATE_SET = new Set(NEXT_ACTION_TEMPLATES);
+
+export function isTemplateNextAction(text) {
+  return TEMPLATE_SET.has(String(text ?? "").trim());
+}
+
 function resolveNextAction({ status, commercialCount, calendarTotal, latestCalendarDays }) {
   if (status === "won") {
     if (calendarTotal > 0 && latestCalendarDays != null && latestCalendarDays <= 120) {
