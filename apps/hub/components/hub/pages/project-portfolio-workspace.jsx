@@ -551,14 +551,14 @@ export function ProjectPortfolioWorkspace({
                           <summary className="hub-row">
                             <Iconed name="chevronR" size={14} />
                             <Iconed name={type === 'milestone' ? 'flag' : 'folder'} size={16} />
-                            <span className="hub-project-portfolio-item__title"><small>{label}</small><strong>{task.title}</strong></span>
+                            <span className="hub-project-portfolio-item__title"><small>{label} · {STATUS_COPY[task.status] || (task.done ? "완료" : "대기")}</small><strong>{task.title}</strong></span>
                             <span className="hub-project-portfolio-item__progress"><TaskChecklistGauge task={task} emptyLabel="세부 항목 없음" /></span>
                             <span className="mono">{formatScheduleDate(task.dueAt)}</span>
                           </summary>
                           <div className="hub-project-portfolio-item__body">
                             <div className="hub-project-portfolio-item__toolbar">
                               <Checkbox checked={task.done} onChange={() => onToggleTodo(task.id)} disabled={pendingTodoIds.has(task.id)} label={`${task.done ? '다시 열기' : '완료'}: ${task.title}`} />
-                              <LifecycleBadge state={task.done ? 'done' : task.status === 'doing' ? 'active' : task.status === 'blocked' ? 'blocked' : 'queued'} />
+                              <LifecycleBadge label={STATUS_COPY[task.status] || (task.done ? '완료' : '대기')} state={task.done ? 'done' : task.status === 'doing' ? 'active' : task.status === 'blocked' ? 'blocked' : 'queued'} />
                               <Button variant="outline" size="sm" icon="edit" onClick={() => onEditTodo(task)}>상세·일정 편집</Button>
                             </div>
                             {task.description && <p className="hub-project-portfolio-item__description">{task.description}</p>}
