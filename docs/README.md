@@ -76,6 +76,10 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [실사용 입력 개선](superpowers/specs/2026-09-20-input-usability-design.md) — **승인·구현(2026-09-20)**. 체크리스트 한 줄·Enter 연속 입력, 새 할 일 중앙 팝업·저장 후 계속, 메모 태그·업무 연결, PMS 소속 선택 및 반복 범례 축소. [검증 기록](superpowers/plans/2026-09-20-input-usability.md). 태그 검색 0035는 서울 DB 적용 완료.
 
+- [첫 화면 디자인 디벨롭](superpowers/specs/2026-09-21-home-screen-design-development.md) — **DRAFT · 권장(2026-09-21)**. 첫 화면이 두 개라는 사실(`dashboard` Daily Brief 12슬롯 vs 운영자 확정 Futura 트리아지 `dashboard/home` — DESIGN.md §15 2026-09-18·19 `confirmed`인데 `09.bigmac1.02`에 **미병합**)을 정리하고, 12슬롯·3.34폴드(모바일 4.22)를 6슬롯·2폴드로 줄이는 권장안. 실측·진단 6건(팔레트 원색 13건과 가드 공백 포함)·구현 순서 4주·미정 Q132~Q137. 데이터 쪽은 [세 축·Action KPI 기획](superpowers/specs/2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md) §6.2가 짝이다.
+
+- [CRM 탭 디벨롭 기획](superpowers/specs/2026-09-21-crm-tab-develop-design.md) — **DRAFT v0.2 · 권장 · 적용 준비(2026-09-21)**. 운영자가 지정한 여섯 축(연락·미팅 내용·기록·매출 내용·니즈·위기)을 코드에 대입한 지도와 CRM 탭 재구성 권장안(정본 1 + 렌즈 3, 통합 기록창, 니즈·위기 사건 판정, Q117 계층 정렬, 매출 필드). 검증된 구조 문제 8건 — 기록 원장 2분열, `reaction` 소비자 0, 큐 정렬이 Q117과 반대, **고객 연락 행의 버킷 필터·레일·클릭·반응 줄이 다른 원장 모양을 기대해 전부 죽음**, **첫 화면 집중 고객이 `won`만 뽑고 `next_action`은 이관 템플릿**(첫 화면 스펙 D3의 원인), 위험 라벨이 점수 밴드. 디자인 부채 9건. `classinkr-web` `home_v4.2`에서 가져올 7가지·버릴 5가지. 테이블·컬럼 변경 0(RPC v2 함수 1개). 미정 Q138~Q146에 **권장 기본값**을 달아 반대 없으면 진행. 0·1단계 파일 단위 실행 계획은 [`plans/2026-09-21-crm-tab-develop-phase0-1.md`](superpowers/plans/2026-09-21-crm-tab-develop-phase0-1.md).
+
 - [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 업무 사실과 인터뷰 원본
 - [`superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 활성 제품 설계
 - [`master-directive.md`](master-directive.md) — 제품 불변식
@@ -132,8 +136,11 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
+- [`superpowers/specs/2026-09-21-reference-capture-and-browse-usability-design.md`](superpowers/specs/2026-09-21-reference-capture-and-browse-usability-design.md) — **입력·모아보기 우선순위 운영자 확정 / 상세 동작 권장안 / 구현 전**. 한 칸에 링크·생각 입력, 저장 후 연속 입력, 전체 검색·상세·수정·즐겨찾기·복귀, 기존 자료 이관을 첫 출시로 제안한다. 09-20 기획의 Studio 우선 순서를 대체하며 AI 초안 연결은 후속이다.
+
 - [`superpowers/specs/2026-09-20-reference-library-writing-workflow-design.md`](superpowers/specs/2026-09-20-reference-library-writing-workflow-design.md) — **DRAFT · 권장안 / 구현 미착수**. 저장 레퍼런스에서 질문·출처 1–3개를 골라 내 관점을 기록하고 기존 소재함·Studio 초안으로 연결한다. item의 선별 출처 사본, 확인 범위, AI 생성 근거와 재시도 계약을 제안한다. 전체 DB 이관·자동 수집·발행은 후속 범위다.
 
+- [`superpowers/specs/2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md`](superpowers/specs/2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md) — **DRAFT · 권장안**. 운영자의 외부 브레인스토밍(워크플로우 OS 4계층·4모듈·"일단 세 가지"·Action KPI/OKR)을 현재 코드에 대입한 지도(있음·부분·없음·충돌)와 "루프 닫기" 묶음(오늘 Top 3 `tasks.meta.focus_dates`, 주간 집계 원천 교정, 딜 단계 이동 기록, 메모 3분할 통합, 텔레그램 평문 캡처). 새 테이블·마이그레이션 0. 09-03 성장 기획서의 F-0→F-1→F-3 순서를 유지하며 그 옆에서 병행. 초안 크론 수리 커밋 `34bb180`이 이 브랜치에 미병합임을 확인. 운영자 확정 전까지 권장.
 - [`superpowers/specs/2026-09-13-revenue-and-cashflow-design.md`](superpowers/specs/2026-09-13-revenue-and-cashflow-design.md) — **초기 기능 범위 확정 · 상세 설계 권장안**. 사업·개인 재정의 통합/분할 보기, 계좌·카드, 할부·대출·반복 지출, 직접 입력·엑셀/CSV 가져오기와 매출 수금 연결. 구현 전이며 기존 거래 기반 30일 전망과 실제 현금 흐름을 구분한다.
 
 - [`superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md`](superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md) — **디자인·UI/UX 우선 확정(09-14) / 세부 설계 DRAFT v0.2**. 고객 목록·상세·빠른 기록의 UX 시나리오 → 화면 구조 → 시각·인터랙션 확인 → 실제 기록 연결 → 근거 평가·제한 추천 순서. 메모/연락 결과·버튼·템플릿·내 패턴·리드 스코어링·넛지를 함께 설계하며 실패/복구 상태와 디자인 게이트를 포함한다. 시안 제작·UX 검증·앱 구현·라이브 재채점은 아직 하지 않음.

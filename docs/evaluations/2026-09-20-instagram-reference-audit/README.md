@@ -8,6 +8,7 @@
 
 ## 바로 열어볼 결과
 
+- [다른 계정 Threads DM 추가: 출처 브랜드·장르·주제별 정리](threads-dm-addendum.md) — 프로필 공유 링크 2개와 분류 근거 5개. 아래 기존 Instagram 105개 집계와 별도.
 - [비즈니스 저장 자료 85개: 원문 링크·제안 분류·확인 수준](saved-index.md)
 - [지정 DM 자료 20개: 링크·요약·한계](dm-audit.md)
 - [업무 활용 틀 3개: 고객 상담 / Threads 글 / 제품 검증](reusable-actions.md)
