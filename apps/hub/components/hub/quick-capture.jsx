@@ -51,7 +51,11 @@ export function QuickCaptureForm({
 
   React.useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus, inputRef]);
   // Refocus after React has re-enabled the field, not while it is still disabled.
-  React.useEffect(() => { if (state.status === 'saved') inputRef.current?.focus(); }, [state.status, inputRef]);
+  React.useEffect(() => {
+    if (state.status !== 'saved') return;
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [state.status, inputRef]);
 
   async function submit(event) {
     event.preventDefault();
@@ -181,7 +185,6 @@ export function GlobalQuickCapture({ openRequest = 0, onNavigate, onSaved }) {
     >
       <QuickCaptureForm
         layout="compact"
-        autoFocus
         session={session}
         focusRef={inputRef}
         inputId="hub-global-quick-capture"

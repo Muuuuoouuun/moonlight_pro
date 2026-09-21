@@ -22,7 +22,7 @@ const LABELS = {
   'integrations': 'Integrations', 'activity': 'Activity', 'issues': 'Issues',
 };
 
-export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSidebarOpen, onNew, navOpen, menuButtonRef, inquiryNotifications, onAdvisorOpen }) {
+export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSidebarOpen, onNew, onQuickCapture, navOpen, menuButtonRef, inquiryNotifications, onAdvisorOpen }) {
   const [deferredMenuOpen, setDeferredMenuOpen] = React.useState(false);
   const deferredMenuRef = React.useRef(null);
   const segments = path.split('/').filter(Boolean);
@@ -115,6 +115,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
           <Iconed name={theme === 'dark' ? 'moon' : 'sun'} size={13} />
         </button>
         <InquiryBell className="hub-topbar__secondary" state={inquiryNotifications} onNavigate={onNavigate} />
+        <Button variant="ghost" size="sm" title="빠른 입력 · C" onClick={onQuickCapture}>빠른 입력</Button>
         {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>}
       </div>
 

@@ -38,3 +38,13 @@ Connect objectives and measurable key results to existing work, preserve dated e
 ## Finish
 
 Run independent contract/security and UX/measurement reviews, repair findings, optimize measured bottlenecks, write rollout/configuration and evidence report. Add a separate creative UI/UX development plan with optional ideas beyond current DESIGN.md. Do not treat local completion as production migration or deployment.
+
+## Follow-through: fast entry and navigation
+
+Continue the existing input/check workflow within `현황 → 목표·성과`, using the current worktree. No new sidebar anchor or storage schema.
+
+- [x] Pin goal route options (`check`, `new=goal`) and scope-aware command catalog paths with failing tests in `goal-client.test.mjs` and `hub-nav.test.mjs`.
+- [x] Extend `goalHref(id, scope, {check, create})`; use it in `pages/goals.jsx` and the shell's New action so detail/create/close retain the list's scope and check view. Sidebar scope changes also retain the check view; closing capture/detail restores the opener focus.
+- [x] Register `목표 빠른 체크` in `hub-data.js`; resolve only scope-aware entries against the current shell scope in `hub-command-palette.jsx`.
+- [x] Wire a visible secondary `빠른 입력` button in `hub-topbar.jsx` to the existing shell capture session. Keep `C` and the palette action equivalent.
+- [x] Verify keyboard palette → scoped check → New/close and all-scope detail/close, plus mobile capture/close on local QA data. Run focused route tests, the full suite, and Hub build; document and commit the result.

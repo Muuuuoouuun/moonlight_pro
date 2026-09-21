@@ -5,6 +5,21 @@ import { randomUUID } from 'node:crypto';
 import { validateGoalCommand } from '@com-moon/goal-contracts';
 
 const file = new URL('./goal-client.js', import.meta.url);
+test('goal routes retain the check view and list scope through create and detail navigation', async () => {
+  const { goalHref } = await import(file);
+  for (const scope of ['all', 'personal', 'classin']) {
+    const create = new URL(goalHref(null, scope, { check: true, create: true }), 'https://hub.invalid');
+    assert.equal(create.searchParams.get('scope'), scope);
+    assert.equal(create.searchParams.get('check'), '1');
+    assert.equal(create.searchParams.get('new'), 'goal');
+    assert.equal(create.searchParams.has('goal'), false);
+    const detail = new URL(goalHref('saved-goal', scope, { check: true }), 'https://hub.invalid');
+    assert.equal(detail.searchParams.get('scope'), scope);
+    assert.equal(detail.searchParams.get('check'), '1');
+    assert.equal(detail.searchParams.get('goal'), 'saved-goal');
+    assert.equal(detail.searchParams.has('new'), false);
+  }
+});
 test('post-mutation refresh never shares a pre-mutation read or lets it evict the new read', async () => {
   const { createGoalReadClient } = await import(file);
   assert.equal(typeof createGoalReadClient, 'function');

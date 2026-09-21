@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { NAV_TREE } from "./hub-data.js";
+import * as catalog from "./hub-data.js";
 import {
   DEFAULT_EXPANDED_ANCHORS,
   DEFAULT_SCOPE,
@@ -34,6 +35,23 @@ function navTreePaths() {
   }
   return paths;
 }
+
+test('goal palette shortcuts stay in the current scope without adding a sidebar anchor', () => {
+  const quick = NAV_TREE.find(node => node.key === 'goals-check');
+  assert.ok(quick, 'quick check must be discoverable through the command catalog');
+  for (const scope of ['personal', 'classin', 'all']) {
+    const path = catalog.navPathForScope(quick, scope);
+    const url = new URL(path, 'https://hub.invalid/');
+    assert.equal(url.searchParams.get('scope'), scope);
+    assert.equal(url.searchParams.get('check'), '1');
+    assert.equal(ownerAnchorKey(path), 'overview');
+    assert.equal(topNavigationForRoute('dashboard/overview', scope, 'goals').activeTab.key, 'overview-goals');
+    const goals = NAV_TREE.find(node => node.key === 'goals');
+    assert.equal(new URL(catalog.navPathForScope(goals, scope), 'https://hub.invalid/').searchParams.get('scope'), scope);
+  }
+  const work = NAV_TREE.find(node => node.key === 'my-work');
+  assert.equal(catalog.navPathForScope(work, 'personal'), work.path);
+});
 
 // Overview joined 2026-07-15 by direct operator instruction (see hub-nav.js
 // header); brands joined 2026-08-29 (브랜드 탭 설계 §5.2 — 프로젝트 다음, 콘텐츠 앞)

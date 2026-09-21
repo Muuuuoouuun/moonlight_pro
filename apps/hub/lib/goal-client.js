@@ -4,9 +4,11 @@ export function goalScope(value) {
   return value === 'classin' || value === 'company' ? 'company' : value === 'personal' ? 'personal' : '';
 }
 
-export function goalHref(id, scope) {
+export function goalHref(id, scope, { check = false, create = false } = {}) {
   const params = new URLSearchParams({ view: 'goals', scope: goalScope(scope) === 'company' ? 'classin' : goalScope(scope) || 'all' });
   if (id) params.set('goal', id);
+  if (check) params.set('check', '1');
+  if (create) params.set('new', 'goal');
   return `/dashboard/overview?${params}`;
 }
 

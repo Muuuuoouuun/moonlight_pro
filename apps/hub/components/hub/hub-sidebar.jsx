@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { goalHref } from '@/lib/goal-client';
 import { InquiryBell } from './inquiry-notifications';
 import { Iconed } from "./hub-icons";
 import { IconButton, Avatar, Kbd, SegmentedControl } from "./hub-primitives";
@@ -94,7 +95,7 @@ function CountBadge({ n }) {
   );
 }
 
-export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeScope, onScopeChange, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false, mobileOpen = false, onMobileClose, mobileCloseButtonRef, inquiryNotifications }, ref) {
+export const Sidebar = React.forwardRef(function Sidebar({ active, view, search = '', routeScope, onScopeChange, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false, mobileOpen = false, onMobileClose, mobileCloseButtonRef, inquiryNotifications }, ref) {
   const counts = useAnchorCounts();
   const sidebarRef = React.useRef(null);
   const setSidebarRef = React.useCallback((node) => {
@@ -151,9 +152,11 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
     const currentPathname = pathnameOf(active);
     const sibling = sidebarChildren(owner, value)
       .find(c => pathnameOf(c.path) === currentPathname && (owner !== 'overview' || (new URLSearchParams(c.path.split('?')[1] || '').get('view') === 'goals') === (view === 'goals')));
-    const target = sibling ? sibling.path : resolveSidebarPath(owner, value);
+    const target = owner === 'overview' && view === 'goals'
+      ? goalHref(null, value, { check: new URLSearchParams(search).get('check') === '1' }).slice(1)
+      : sibling ? sibling.path : resolveSidebarPath(owner, value);
     if (target) onNavigate(target);
-  }, [active, view, onNavigate, setScope]);
+  }, [active, view, search, onNavigate, setScope]);
 
   const anchorProps = (a) => ({
     type: 'button',

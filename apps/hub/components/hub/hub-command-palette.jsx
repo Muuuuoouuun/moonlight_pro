@@ -3,7 +3,7 @@
 import React from "react";
 import { Iconed } from "./hub-icons";
 import { Button, Kbd } from "./hub-primitives";
-import { NAV_TREE, LEGACY_TREE } from "./hub-data";
+import { NAV_TREE, LEGACY_TREE, navPathForScope } from "./hub-data";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 import { readRevenueCache } from "./revenue-shared-cache";
 
@@ -44,7 +44,7 @@ async function loadRecordItems() {
 
 const RECORD_RESULT_CAP = 8;
 
-export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuickCapture }) {
+export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuickCapture, scope = 'all' }) {
   const [q, setQ] = React.useState('');
   const [idx, setIdx] = React.useState(0);
   const [records, setRecords] = React.useState([]);
@@ -65,8 +65,8 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
       { kind: 'Action', label: '빠른 메모', action: 'quick-memo', icon: 'edit', keywords: ['메모', '생각', '아이디어', '기록', 'quick note', 'memo', 'idea'] },
     ];
     for (const n of NAV_TREE) {
-      if (n.path) flat.push({ kind: 'Navigate', label: n.label, path: n.path, icon: n.icon, keywords: n.keywords });
-      if (n.children) for (const c of n.children) flat.push({ kind: 'Navigate', label: `${n.label} › ${c.label}`, path: c.path, icon: c.icon, keywords: c.keywords });
+      if (n.path) flat.push({ kind: 'Navigate', label: n.label, path: navPathForScope(n, scope), icon: n.icon, keywords: n.keywords });
+      if (n.children) for (const c of n.children) flat.push({ kind: 'Navigate', label: `${n.label} › ${c.label}`, path: navPathForScope(c, scope), icon: c.icon, keywords: c.keywords });
     }
     for (const c of LEGACY_TREE) flat.push({ kind: 'Archive', label: `기타 › ${c.label}`, path: c.path, icon: c.icon, keywords: c.keywords });
     flat.push({ kind: 'Action', label: 'New Decision 기록', path: 'dashboard/work/decisions?new=decision', icon: 'decisions' });
@@ -85,7 +85,7 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
     flat.push({ kind: 'Action', label: 'AI 02 콘텐츠: 앵글 기획', path: 'dashboard/system/agents?agent=content', icon: 'sparkle', keywords: ['콘텐츠', '앵글', '아이디어', '발행', 'ai'] });
     flat.push({ kind: 'Action', label: 'AI 04 검수: 게이트 판정', path: 'dashboard/system/agents?agent=review', icon: 'sparkle', keywords: ['검수', '게이트', '판정', '가드레일', 'ai'] });
     return flat;
-  }, []);
+  }, [scope]);
 
   const filtered = React.useMemo(() => {
     if (!q) return items; // 빈 검색 = 내비 목록 (레코드는 검색어가 있을 때만 섞인다)
