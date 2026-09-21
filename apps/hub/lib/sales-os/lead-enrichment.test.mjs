@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { CLASSIN_NEXT_ACTIONS } from "./operator-context.js";
 import {
   NEXT_ACTION_TEMPLATES,
   buildJunhyukLeadEnrichment,
@@ -173,4 +174,15 @@ test("the exposed template list is exactly what resolveNextAction can emit", () 
       `${status} → ${built.nextAction} 이 템플릿 목록에 없다`,
     );
   }
+});
+
+// 실측(2026-09-21 운영 DB): 리드 117건 중 101건이 시트 동기화 문장을 달고 있었다. 이 계열을
+// 빠뜨리면 첫 화면 집중 고객이 여전히 같은 말을 반복한다.
+test("sheet-sync source sentences are templates too", () => {
+  for (const sentence of Object.values(CLASSIN_NEXT_ACTIONS)) {
+    assert.equal(isTemplateNextAction(sentence), true, sentence);
+  }
+  assert.equal(isTemplateNextAction("리드 출처 확인 후 다음 접촉 채널 정하기"), true);
+  // 운영자가 같은 리드에 직접 적은 문장은 계속 약속이다.
+  assert.equal(isTemplateNextAction("설명회 온 원장님께 견적서 발송"), false);
 });

@@ -1571,7 +1571,15 @@ function FocusSlots({ dailyFocus, onNavigate }) {
         ) : revenuePreview ? (
           <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>매출 원장이 연결되면 집중 고객 3~5건이 여기에 표시됩니다.</div>
         ) : focusItems.length === 0 ? (
-          <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>집중 고객 없음 — CS 레인에 다음 행동이 있는 리드가 없습니다.</div>
+          // 빈 이유를 말하고 다음 행동을 안내한다 — 0c로 후보 조건이 "내가 적은 약속"이 됐다.
+          // 자동으로 채워진 문장(이관·시트 동기화)은 약속으로 치지 않으므로 여기 뜨지 않는다.
+          <div style={{ padding: '12px 16px 14px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+              집중 고객 없음 — 내가 직접 적은 다음 행동이 있는 고객이 아직 없습니다.
+              자동으로 채워진 문구는 약속으로 세지 않습니다.
+            </div>
+            <Button variant="outline" size="xs" icon="leads" onClick={() => onNavigate?.('dashboard/revenue/leads')}>리드 목록에서 약속 남기기</Button>
+          </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             {focusItems.map((item, i) => (

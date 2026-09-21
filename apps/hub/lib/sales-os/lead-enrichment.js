@@ -1,3 +1,5 @@
+import { CLASSIN_NEXT_ACTIONS } from "./operator-context.js";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function asCount(value) {
@@ -88,7 +90,9 @@ export const NEXT_ACTION_TEMPLATES = Object.freeze([
   "공식 계정 확인 → 첫 접촉 목적과 채널 결정",
 ]);
 
-const TEMPLATE_SET = new Set(NEXT_ACTION_TEMPLATES);
+// 기계가 채운 다음 행동은 두 계열이다 — 이관 enrichment(위 5종)와 시트 동기화의
+// 유입 소스별 문장(CLASSIN_NEXT_ACTIONS 4종). 둘 다 운영자의 약속이 아니다.
+const TEMPLATE_SET = new Set([...NEXT_ACTION_TEMPLATES, ...Object.values(CLASSIN_NEXT_ACTIONS)]);
 
 export function isTemplateNextAction(text) {
   return TEMPLATE_SET.has(String(text ?? "").trim());
