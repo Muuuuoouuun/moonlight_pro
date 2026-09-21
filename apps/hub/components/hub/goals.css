@@ -33,3 +33,26 @@
 .goal-detail { padding:4px 0; }
 .goal-detail>p { white-space:pre-wrap; overflow-wrap:anywhere; }
 @media (max-width:600px) { .goals-page { padding:16px 12px; } .goal-fields-two { grid-template-columns:minmax(0,1fr); } .goal-header { gap:16px; } }
+.goal-header > .goal-actions { flex-direction:row; align-items:center; }
+.goal-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
+.goal-filters { display:flex; align-items:flex-end; flex-wrap:wrap; gap:12px; }
+.goal-filters > :first-child { flex:1 1 240px; }
+.goal-filters > :not(:first-child) { flex:0 1 180px; }
+.goal-check-list { list-style:none; margin:0; padding:0; border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; }
+.goal-check-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(180px,0.6fr) auto; align-items:center; gap:16px; padding:16px; background:var(--surface); }
+.goal-check-row + .goal-check-row { border-top:1px solid var(--line-soft); }
+.goal-check-identity,.goal-check-value { display:flex; flex-direction:column; min-width:0; gap:4px; overflow-wrap:anywhere; }
+.goal-check-identity > a { color:var(--fg); text-decoration:none; font-size:14px; font-weight:500; padding:4px 0; }
+.goal-check-value > strong { font-size:20px; font-weight:500; }
+.goal-check-evidence { display:flex; align-items:center; min-height:44px; color:var(--fg); text-decoration:none; font-size:12px; }
+.goal-options { border-top:1px solid var(--line-soft); padding-top:8px; }
+.goal-options > summary { cursor:pointer; font-size:12px; color:var(--fg-muted); min-height:44px; align-content:center; }
+.goal-options[open] > :not(summary) { margin-top:12px; }
+.goal-reuse-evidence { align-self:flex-start; }
+.goal-form > .goal-actions { position:sticky; bottom:0; padding:12px 0; background:var(--surface); border-top:1px solid var(--line-soft); }
+@media (max-width:600px) {
+  .goal-check-row { grid-template-columns:minmax(0,1fr) auto; gap:12px; }
+  .goal-check-identity { grid-column:1 / -1; }
+  .goal-filters > :first-child { flex-basis:100%; }
+  .goal-filters > :not(:first-child) { flex:1 1 130px; }
+}

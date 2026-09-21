@@ -1,6 +1,8 @@
 "use client";
 import React from 'react';
 import { Button, EmptyState, SelectField, Skeleton, TextAreaField, TextField, TruthBadge } from './hub-primitives';
+import { candidateReviewDraft, candidateReviewInput, copyCandidateOutput, readCompleteCandidate } from '@/lib/ai-review-client';
+import { readGoalLocal, writeGoalLocal } from '@/lib/goal-client';
 import './goal-assistance.css';
 
 const OPERATIONS = [{ value: 'draft', label: '초안 작성' }, { value: 'rewrite', label: '표현 개선' }, { value: 'critique', label: '품질 검토' }, { value: 'analyze', label: '근거 분석' }];
@@ -75,12 +77,13 @@ function AssistanceEditor({ entityType, entityId, initialScope }) {
         if (command.recoveryOutput) { setOutput(command.recoveryOutput); setExternal(true); setClient('manual'); }
         clearRequest(); setMessage(errorCopy(result.error)); await refresh();
       }
+      return result;
     } catch { if (active.current) setMessage('응답이 끊겼습니다. 입력과 요청을 보존했으니 같은 요청을 확인해주세요.'); }
     finally { inFlight.current = false; if (active.current) setBusy(false); }
   }
   function submit(action, input) {
-    if (busy || pending) return;
-    const command = { commandId: crypto.randomUUID(), action, input }; keepRequest(command); dispatch(command);
+    if (inFlight.current || requestRef.current || busy || pending) return;
+    const command = { commandId: crypto.randomUUID(), action, input }; keepRequest(command); return dispatch(command);
   }
   const ready = ['live', 'partial'].includes(data.status) && data.sourceUpdatedAt && !data.failedSources?.includes('operating_ai_candidates');
   const locked = busy || Boolean(pending);
@@ -99,39 +102,89 @@ function AssistanceEditor({ entityType, entityId, initialScope }) {
     {message && <p className="assist-message" role="status">{message}</p>}
     {pending?.recoveryOutput && <article className="assist-candidate"><strong>생성됨 · 서버 저장 미확인</strong><pre tabIndex={0} aria-label="보존된 미저장 AI 후보">{pending.recoveryOutput}</pre>{pending.recoveryOutputTruncated && <p>긴 결과의 일부를 표시합니다. 저장 복구 뒤 전체를 읽을 수 있습니다.</p>}{pending.recoveryToken && <Button variant="primary" disabled={busy} onClick={() => dispatch(requestRef.current)}>다시 생성하지 않고 저장 복구</Button>}</article>}
     {pending && <div className="assist-actions"><Button disabled={busy} onClick={() => dispatch(requestRef.current, true)}>같은 요청 확인</Button><Button disabled={busy} onClick={() => dispatch(requestRef.current)}>같은 요청 재전송</Button><span className="assist-muted mono">{pending.commandId}</span></div>}
-    {candidates.map(candidate => <CandidateReview key={`${candidate.id}:${candidate.revision}`} candidate={candidate} locked={locked} onReview={input => submit('review_candidate', input)} />)}
+    {candidates.map(candidate => <CandidateReview key={candidate.id} candidate={candidate} locked={locked} onReview={input => submit('review_candidate', input)} />)}
     {ready && !candidates.length && <p className="assist-muted">아직 저장한 후보가 없습니다.</p>}
     {candidates.length > 0 && <p className="assist-muted">최근 후보 최대 3개를 표시합니다. 새 후보는 기존 원문을 덮어쓰지 않습니다.</p>}
   </div>;
 }
 
 function CandidateReview({ candidate, locked, onReview }) {
-  const [open, setOpen] = React.useState(false), [outcome, setOutcome] = React.useState(candidate.review?.outcome || 'accepted');
-  const [baseline, setBaseline] = React.useState(candidate.review?.baselineMinutes ?? ''), [review, setReview] = React.useState(candidate.review?.reviewMinutes ?? ''), [actual, setActual] = React.useState(candidate.review?.actualMinutes ?? '');
-  const [note, setNote] = React.useState(candidate.review?.note || '');
-  const [visibleOutput, setVisibleOutput] = React.useState(candidate.output || ''), [nextOffset, setNextOffset] = React.useState(candidate.nextOffset ?? null), [reading, setReading] = React.useState(false), [readError, setReadError] = React.useState('');
-  async function readRemaining() {
-    if (reading || nextOffset === null) return;
-    setReading(true); setReadError('');
-    let offset = nextOffset;
-    try {
-      while (offset !== null) {
-        const response = await fetch(`${endpoint}?${new URLSearchParams({ candidateId: candidate.id, offset: String(offset), outputHash: candidate.outputHash })}`, { cache: 'no-store' });
-        const page = await response.json();
-        if (!response.ok || page.status !== 'live' || page.outputHash !== candidate.outputHash || typeof page.candidate?.output !== 'string' || page.nextOffset !== null && page.nextOffset <= offset) throw new Error();
-        setVisibleOutput(value => value + page.candidate.output); offset = page.nextOffset; setNextOffset(offset);
-      }
-    } catch { setReadError('남은 후보를 읽지 못했습니다. 표시된 내용은 보존했습니다.'); }
-    finally { setReading(false); }
+  const [open, setOpen] = React.useState(false);
+  const draftKey = `assist-review:${candidate.id}`;
+  const [draft, setDraft] = React.useState(() => {
+    const initial = candidateReviewDraft(candidate), saved = readGoalLocal(draftKey);
+    return saved?.dirty && Number.isInteger(saved.revision) && ['outcome', 'baselineMinutes', 'reviewMinutes', 'actualMinutes', 'note'].every(key => typeof saved[key] === 'string') ? saved : initial;
+  });
+  const [notice, setNotice] = React.useState(''), [reviewing, setReviewing] = React.useState('');
+  const [visibleOutput, setVisibleOutput] = React.useState(candidate.output || ''), [nextOffset, setNextOffset] = React.useState(candidate.nextOffset ?? null);
+  const [reading, setReading] = React.useState(false), [copying, setCopying] = React.useState(false), [readMessage, setReadMessage] = React.useState('');
+  const reviewInFlight = React.useRef(false), outputInFlight = React.useRef(false);
+  const detailsId = React.useId();
+  function updateDraft(update) {
+    setDraft(previous => { const next = typeof update === 'function' ? update(previous) : update; writeGoalLocal(draftKey, next.dirty ? next : null); return next; });
   }
-  const minutes = value => value === '' ? null : Number(value);
-  const valid = [baseline, review, actual].every(value => value === '' || Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 10080);
+  React.useEffect(() => { updateDraft(previous => candidateReviewDraft(candidate, previous)); }, [candidate.revision]);
+  React.useEffect(() => { setVisibleOutput(candidate.output || ''); setNextOffset(candidate.nextOffset ?? null); }, [candidate.outputHash]);
+  const change = (field, value) => updateDraft(previous => ({ ...previous, [field]: value, dirty: true, outcomeDirty: field === 'outcome' || previous.outcomeDirty }));
+  let detailInput = null, validation = '';
+  try { detailInput = candidateReviewInput(candidate, draft.outcome, draft); } catch (error) { validation = error.message; }
+  const staleDraft = draft.dirty && draft.revision !== candidate.revision;
+  async function record(outcome, details = false) {
+    if (locked || reviewInFlight.current || details && (!detailInput || staleDraft)) return;
+    reviewInFlight.current = true; setReviewing(details ? 'details' : outcome); setNotice('');
+    try {
+      const result = await onReview(details ? detailInput : candidateReviewInput(candidate, outcome));
+      if (result?.status === 'saved' && result.persisted === true && result.candidate) {
+        updateDraft(previous => details ? candidateReviewDraft(result.candidate) : candidateReviewDraft(result.candidate, previous, true));
+        setNotice(`${REVIEW.find(item => item.value === outcome)?.label || '검토 결과'} 기록을 저장했습니다. 원문은 그대로입니다.`);
+        if (details) setOpen(false);
+      }
+    } finally { reviewInFlight.current = false; setReviewing(''); }
+  }
+  async function readOrCopy(copy) {
+    if (outputInFlight.current) return;
+    outputInFlight.current = true; setReading(true); setCopying(copy); setReadMessage('');
+    const source = { ...candidate, output: visibleOutput, nextOffset };
+    const options = { onPage: page => { setVisibleOutput(page.output); setNextOffset(page.nextOffset); } };
+    try {
+      const complete = copy ? await copyCandidateOutput(source, options) : await readCompleteCandidate(source, options);
+      setVisibleOutput(complete); setNextOffset(null);
+      setReadMessage(copy ? '전체 후보를 복사했습니다.' : '전체 후보를 불러왔습니다.');
+    } catch {
+      setReadMessage(copy ? '복사하지 못했습니다. 전체 후보를 확인한 뒤 다시 시도하거나 본문을 선택해 복사하세요.' : '남은 후보를 확인하지 못했습니다. 표시된 내용은 보존했습니다.');
+    } finally { outputInFlight.current = false; setReading(false); setCopying(false); }
+  }
+  const busy = locked || Boolean(reviewing);
   return <article className="assist-candidate">
     <div className="assist-heading"><strong>{OPERATIONS.find(item => item.value === candidate.operation)?.label || 'AI 후보'}</strong><span className="assist-muted">{candidate.provider === 'gemini' ? 'Gemini 생성' : candidate.client || '직접 저장'}</span></div>
     {candidate.stale && <p className="assist-message">후보를 만든 뒤 원문이 바뀌었습니다. 적용 전에 최신 원문을 확인해주세요.</p>}
     {candidate.output ? <pre tabIndex={0} aria-label="저장된 AI 후보">{visibleOutput}</pre> : <p>생성 상태: {candidate.status === 'running' ? '확인 중' : candidate.status === 'unknown' ? '결과 미확인' : '생성하지 못함'}</p>}
-    {nextOffset !== null && <Button disabled={reading} onClick={readRemaining}>{reading ? '후보 읽는 중' : '전체 후보 읽기'}</Button>}{readError && <p role="status">{readError}</p>}
-    <div className="assist-actions">{candidate.output && <Button disabled={locked} aria-expanded={open} onClick={() => setOpen(value => !value)}>검토·시간 기록</Button>}{candidate.review && <span className="assist-muted">{REVIEW.find(item => item.value === candidate.review.outcome)?.label} · {candidate.timeSavedMinutes == null ? '시간 차이 미측정' : `작업 시간 차이 ${candidate.timeSavedMinutes}분`}</span>}</div>
-    {open && <div className="assist-review"><SelectField label="후보 검토 결과" options={REVIEW} value={outcome} onChange={event => setOutcome(event.target.value)} disabled={locked} /><div className="assist-fields"><TextField label="기존 방식 기준 시간 (분)" type="number" min="0" max="10080" value={baseline} onChange={event => setBaseline(event.target.value)} disabled={locked} placeholder="모르면 비워두기" /><TextField label="후보 검토 시간 (분)" type="number" min="0" max="10080" value={review} onChange={event => setReview(event.target.value)} disabled={locked} /><TextField label="그 외 작업 시간 (분)" type="number" min="0" max="10080" value={actual} onChange={event => setActual(event.target.value)} disabled={locked} /></div><p className="assist-muted">그 외 작업 시간에는 요청 작성·실행·수정을 포함하고 후보 검토 시간은 제외합니다. 차이는 기준 − 검토 − 그 외 작업 시간이며, 시스템 구축·유지 비용을 포함한 전체 절감 효과는 아닙니다. 모르는 시간은 비워둡니다.</p><TextAreaField label="검토 메모" value={note} maxLength={2000} onChange={event => setNote(event.target.value)} disabled={locked} /><Button variant="outline" disabled={locked || !valid} onClick={() => onReview({ candidateId: candidate.id, expectedRevision: candidate.revision, outcome, baselineMinutes: minutes(baseline), reviewMinutes: minutes(review), actualMinutes: minutes(actual), note })}>검토 결과 저장</Button></div>}
+    {candidate.output && <>
+      <div className="assist-actions assist-review-decisions" aria-label="후보 검토 결과 기록">
+        {REVIEW.map(item => <Button key={item.value} variant="outline" disabled={busy} onClick={() => record(item.value)}>{reviewing === item.value ? '기록 중…' : item.value === 'accepted' ? '채택 기록' : item.value === 'rejected' ? '폐기 기록' : '수정 후 채택'}</Button>)}
+      </div>
+      {candidate.review && <p className="assist-muted assist-review-summary">저장된 검토: {REVIEW.find(item => item.value === candidate.review.outcome)?.label} · {candidate.timeSavedMinutes == null ? '시간 차이 미측정' : `작업 시간 차이 ${candidate.timeSavedMinutes}분`}</p>}
+      {notice && <p className="assist-muted" role="status">{notice}</p>}
+      <div className="assist-actions assist-candidate-tools">
+        <Button disabled={reading} onClick={() => readOrCopy(true)}>{copying ? '복사 준비 중…' : '후보 복사'}</Button>
+        {nextOffset !== null && <Button disabled={reading} onClick={() => readOrCopy(false)}>{reading && !copying ? '후보 읽는 중…' : '전체 후보 읽기'}</Button>}
+        <Button disabled={busy} aria-expanded={open} aria-controls={detailsId} onClick={() => setOpen(value => !value)}>시간·메모 {open ? '접기' : '추가'}{draft.dirty ? ' · 작성 중' : ''}</Button>
+      </div>
+    </>}
+    {readMessage && <p className="assist-muted" role="status">{readMessage}</p>}
+    {open && <form id={detailsId} className="assist-review" onSubmit={event => { event.preventDefault(); record(draft.outcome, true); }}>
+      <p className="assist-muted">시간과 메모는 선택입니다. 위의 빠른 기록은 저장된 값을 유지하고, 작성 중인 내용은 아래에서 따로 저장합니다.</p>
+      <SelectField label="후보 검토 결과" options={[{ value: '', label: '검토 결과 선택' }, ...REVIEW]} value={draft.outcome} onChange={event => change('outcome', event.target.value)} disabled={busy} required />
+      <TextAreaField label="검토 메모 · 선택" value={draft.note} maxLength={2000} onChange={event => change('note', event.target.value)} disabled={busy} />
+      <div className="assist-fields">
+        <TextField label="기존 방식 기준 시간 (분)" type="number" min="0" max="10080" value={draft.baselineMinutes} onChange={event => change('baselineMinutes', event.target.value)} disabled={busy} placeholder="모르면 비워두기" />
+        <TextField label="후보 검토 시간 (분)" type="number" min="0" max="10080" value={draft.reviewMinutes} onChange={event => change('reviewMinutes', event.target.value)} disabled={busy} />
+        <TextField label="그 외 작업 시간 (분)" type="number" min="0" max="10080" value={draft.actualMinutes} onChange={event => change('actualMinutes', event.target.value)} disabled={busy} />
+      </div>
+      <p className="assist-muted">그 외 작업 시간에는 요청 작성·실행·수정을 포함하고 후보 검토 시간은 제외합니다. 차이는 기준 − 검토 − 그 외 작업 시간이며 전체 절감 효과는 아닙니다. 모르는 시간은 비워둡니다.</p>
+      {staleDraft && <div className="assist-message" role="status"><p>저장된 검토가 바뀌었습니다. 작성 중인 입력은 유지했습니다.</p><p>현재 메모: {candidate.review?.note || '없음'} · 기준 {candidate.review?.baselineMinutes ?? '미측정'}분 · 검토 {candidate.review?.reviewMinutes ?? '미측정'}분 · 그 외 {candidate.review?.actualMinutes ?? '미측정'}분</p><Button disabled={busy} onClick={() => updateDraft(previous => ({ ...previous, revision: candidate.revision }))}>현재 기록을 확인했고 내 입력 유지</Button></div>}
+      {validation && draft.dirty && <p className="assist-muted" role="status">{validation}</p>}
+      <div className="assist-actions"><Button type="submit" variant="outline" disabled={busy || !detailInput || staleDraft}>{reviewing === 'details' ? '저장 중…' : '시간·메모 저장'}</Button><Button disabled={busy} onClick={() => setOpen(false)}>닫기</Button></div>
+    </form>}
   </article>;
 }

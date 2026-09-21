@@ -1,7 +1,8 @@
 "use client";
 import React from 'react';
-import { Button, Card, EmptyState, Progress, SelectField, Skeleton, TextAreaField, TextField, TruthBadge } from './hub-primitives';
+import { Button, Card, EmptyState, Kbd, Progress, SelectField, Skeleton, TextAreaField, TextField, TruthBadge } from './hub-primitives';
 import { goalMetricInput, goalObjectiveInput, goalObservationInput, goalWriteErrorMessage, measurementLabel, safeGoalEvidenceHref } from '@/lib/goal-client';
+import { goalPeriodPreset } from '@/lib/goal-input-ux';
 import { useGoalCommand, useGoalDraft } from './use-goals';
 import './goals.css';
 
@@ -16,7 +17,13 @@ const roles = [{ value: 'outcome', label: '결과 · 달성하려는 변화' }, 
 const directions = [{ value: 'increase', label: '늘리기' }, { value: 'decrease', label: '줄이기' }, { value: 'range', label: '범위 유지' }];
 export const goalScopeLabel = value => value === 'company' ? 'ClassIn' : '개인';
 const dateTime = value => value && Number.isFinite(new Date(value).getTime()) ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '확인되지 않음';
-const localInputTime = () => { const date = new Date(); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+const localInputTime = value => { const date = value ? new Date(value) : new Date(); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+function submitShortcut(event) {
+  if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey) || event.nativeEvent?.isComposing || event.nativeEvent?.keyCode === 229) return;
+  event.preventDefault();
+  const submitter = event.currentTarget.querySelector('button[type="submit"]');
+  if (submitter && !submitter.disabled && !event.currentTarget.querySelector('fieldset:disabled')) event.currentTarget.requestSubmit(submitter);
+}
 const optionalNumber = value => value === '' || value == null ? null : Number(value);
 
 export function GoalReadFeedback({ model, emptyTitle = '아직 목표가 없습니다', onCreate }) {
@@ -74,21 +81,21 @@ export function GoalObjectiveForm({ objective, scope = 'personal', onSaved, onCa
   React.useEffect(() => { onBusyChange?.(command.state === 'saving'); return () => onBusyChange?.(false); }, [command.state, onBusyChange]);
   async function submit(event) {
     event.preventDefault();
-    if (command.locked) return;
+    if (command.locked || command.state === 'conflict') return;
     if (!draft.title.trim() || !draft.periodStart || !draft.periodEnd || draft.periodStart > draft.periodEnd) { setValidation('목표 이름과 올바른 시작·종료일을 입력하세요.'); return; }
     setValidation('');
     await command.submit(objective ? 'update_objective' : 'create_objective', goalObjectiveInput(draft, objective), revision);
   }
-  return <form id={formId} className="goal-form" onSubmit={submit} aria-busy={command.state === 'saving'}>
+  return <form id={formId} className="goal-form" onSubmit={submit} onKeyDown={submitShortcut} aria-busy={command.state === 'saving'}>
     <fieldset disabled={command.locked}>
       <TextField label="목표 이름" required maxLength={240} value={draft.title} onChange={event => change('title', event.target.value)} autoFocus />
-      <TextAreaField label="어떤 변화가 필요한가요?" maxLength={4000} value={draft.description} onChange={event => change('description', event.target.value)} rows={3} />
-      {!objective ? <><SelectField label="소속" value={draft.scope} options={[{ value: 'personal', label: '개인' }, { value: 'company', label: 'ClassIn' }]} onChange={event => change('scope', event.target.value)} /><div className="goal-fields-two"><TextField label="시작일" type="date" required value={draft.periodStart} onChange={event => change('periodStart', event.target.value)} /><TextField label="종료일" type="date" required min={draft.periodStart} value={draft.periodEnd} onChange={event => change('periodEnd', event.target.value)} /></div><p className="goal-muted">Asia/Seoul 기준, 시작일과 종료일을 포함합니다. 실제 계획 기간을 선택하세요.</p></> : <><p className="goal-muted">{goalScopeLabel(objective.scope)} · {objective.periodStart}–{objective.periodEnd} · {objective.timezone}</p><SelectField label="목표 상태" value={draft.status} options={[{ value: 'active', label: '진행' }, { value: 'archived', label: '보관' }]} onChange={event => change('status', event.target.value)} /></>}
+      <details className="goal-options" open={draft.description ? true : undefined}><summary>설명 추가 · 선택</summary><TextAreaField label="어떤 변화가 필요한가요?" maxLength={4000} value={draft.description} onChange={event => change('description', event.target.value)} rows={3} /></details>
+      {!objective ? <><SelectField label="소속" value={draft.scope} options={[{ value: 'personal', label: '개인' }, { value: 'company', label: 'ClassIn' }]} onChange={event => change('scope', event.target.value)} /><div className="goal-actions" role="group" aria-label="목표 기간 빠른 선택">{[{value:'week',label:'이번 주'},{value:'month',label:'이번 달'},{value:'quarter',label:'이번 분기'}].map(item => <Button key={item.value} size="xs" variant="outline" onClick={() => { const period = goalPeriodPreset(item.value); change('periodStart', period.periodStart); change('periodEnd', period.periodEnd); }}>{item.label}</Button>)}</div><div className="goal-fields-two"><TextField label="시작일" type="date" required value={draft.periodStart} onChange={event => change('periodStart', event.target.value)} /><TextField label="종료일" type="date" required min={draft.periodStart} value={draft.periodEnd} onChange={event => change('periodEnd', event.target.value)} /></div><p className="goal-muted">Asia/Seoul 기준, 시작일과 종료일을 포함합니다. 실제 계획 기간을 선택하세요.</p></> : <><p className="goal-muted">{goalScopeLabel(objective.scope)} · {objective.periodStart}–{objective.periodEnd} · {objective.timezone}</p><SelectField label="목표 상태" value={draft.status} options={[{ value: 'active', label: '진행' }, { value: 'archived', label: '보관' }]} onChange={event => change('status', event.target.value)} /></>}
     </fieldset>
     {validation && <p role="alert" className="goal-error">{validation}</p>}
     <GoalCommandFeedback command={command} />
     {command.state === 'conflict' && <div className="goal-feedback"><p>현재 저장본: {command.entity?.title || objective?.title}</p><p className="goal-muted">{command.entity?.description || '설명 없음'}</p><Button disabled={!Number.isFinite(command.entity?.revision ?? objective?.revision)} onClick={() => { setRevision(command.entity?.revision ?? objective?.revision); command.reset(); }}>현재 저장본과 비교했고 내 입력 유지</Button></div>}
-    <div className="goal-actions"><Button type="submit" variant="primary" disabled={command.locked || command.state === 'conflict'}>{objective ? '변경 저장' : '목표 만들기'}</Button><Button onClick={onCancel} disabled={command.state === 'saving'}>닫기</Button><span className="goal-muted">닫아도 작성 중인 입력은 이 창에 남습니다.</span></div>
+    <div className="goal-actions"><Button type="submit" variant="primary" disabled={command.locked || command.state === 'conflict'}>{objective ? '변경 저장' : '목표 만들기'} <Kbd>⌘↵</Kbd></Button><Button onClick={onCancel} disabled={command.state === 'saving'}>닫기</Button><span className="goal-muted">닫아도 작성 중인 입력은 이 창에 남습니다.</span></div>
   </form>;
 }
 
@@ -105,7 +112,7 @@ export function GoalMetricForm({ objective, onSaved, onCancel }) {
     setValidation('');
     await command.submit('create_metric', goalMetricInput(draft, objective.id));
   }
-  return <form className="goal-form" onSubmit={submit} aria-busy={command.state === 'saving'}>
+  return <form className="goal-form" onSubmit={submit} onKeyDown={submitShortcut} aria-busy={command.state === 'saving'}>
     <h3>측정 지표 추가</h3><fieldset disabled={command.locked}>
       <TextField label="측정할 변화" required maxLength={240} value={draft.name} onChange={event => change('name', event.target.value)} autoFocus />
       <div className="goal-fields-two"><SelectField label="역할" value={draft.role} options={roles} onChange={event => change('role', event.target.value)} /><TextField label="단위" required maxLength={40} value={draft.unit} onChange={event => change('unit', event.target.value)} /></div>
@@ -117,7 +124,7 @@ export function GoalMetricForm({ objective, onSaved, onCancel }) {
     </fieldset>
     <p className="goal-muted">지표의 의미는 생성 뒤 바꾸지 않습니다. 변경이 필요하면 기존 지표를 보관하고 새로 만드세요.</p>
     {validation && <p role="alert" className="goal-error">{validation}</p>}<GoalCommandFeedback command={command} />
-    <div className="goal-actions"><Button type="submit" variant="primary" disabled={command.locked}>지표 추가</Button><Button disabled={command.state === 'saving'} onClick={onCancel}>닫기</Button></div>
+    <div className="goal-actions"><Button type="submit" variant="primary" disabled={command.locked}>지표 추가 <Kbd>⌘↵</Kbd></Button><Button disabled={command.state === 'saving'} onClick={onCancel}>닫기</Button></div>
   </form>;
 }
 
@@ -137,18 +144,20 @@ export function GoalObservationForm({ metric, objective, onSaved, onCancel }) {
     setValidation('');
     await command.submit('record_observation', goalObservationInput(draft, metric.id, objective));
   }
-  return <form className="goal-form" onSubmit={submit} aria-busy={command.state === 'saving'}><h3>실제 관측 기록</h3><p className="goal-muted">{metric.name} · {objective.periodStart}–{objective.periodEnd}. 이 기간의 관측값입니다. 이전 기록과 합산하지 않습니다.</p>
+  return <form className="goal-form" onSubmit={submit} onKeyDown={submitShortcut} aria-busy={command.state === 'saving'}><h3>실제 관측 기록</h3><p className="goal-muted">{metric.name} · {objective.periodStart}–{objective.periodEnd}. 이 기간의 관측값입니다. 이전 기록과 합산하지 않습니다.</p>
     <fieldset disabled={command.locked}>
       <SelectField label="측정 상태" value={draft.coverage} options={[{ value: 'complete', label: '관측 시점까지 확인함' }, { value: 'partial', label: '일부만 확인함' }, { value: 'unmeasured', label: '아직 측정하지 못함' }]} onChange={event => change('coverage', event.target.value)} />
-      {draft.coverage !== 'unmeasured' && <TextField label={`실제값 (${metric.unit})`} type="number" step="any" required={draft.coverage === 'complete'} value={draft.value} onChange={event => change('value', event.target.value)} hint="실제 0과 미측정은 다릅니다." />}
-      <TextField label="관측 일시 · 현재 기기 시간대" type="datetime-local" required value={draft.observedAt} onChange={event => change('observedAt', event.target.value)} />
+      {draft.coverage !== 'unmeasured' && <TextField label={`실제값 (${metric.unit})`} type="number" step="any" required={draft.coverage === 'complete'} value={draft.value} onChange={event => change('value', event.target.value)} autoFocus inputMode="decimal" hint="실제 0과 미측정은 다릅니다." />}
+      {metric.measurement?.evidence?.some(item => item.label && safeGoalEvidenceHref(item.href) && Number.isFinite(Date.parse(item.occurredAt))) && <Button className="goal-reuse-evidence" size="xs" variant="outline" onClick={() => { const last = metric.measurement.evidence.find(item => item.label && safeGoalEvidenceHref(item.href) && Number.isFinite(Date.parse(item.occurredAt))); change('evidenceLabel', last.label); change('evidenceHref', last.href); change('evidenceAt', localInputTime(last.occurredAt)); }}>최근 근거 불러오기</Button>}
       <TextField label="근거 이름" required={draft.coverage === 'complete'} maxLength={240} value={draft.evidenceLabel} onChange={event => change('evidenceLabel', event.target.value)} />
       <TextField label="근거 주소" required={draft.coverage === 'complete'} value={draft.evidenceHref} onChange={event => change('evidenceHref', event.target.value)} hint="https:// 주소 또는 /dashboard/로 시작하는 업무 주소" />
+      <p className="goal-muted">관측 {draft.observedAt.replace('T', ' ')} · 근거 {draft.evidenceAt.replace('T', ' ')} (기기 시간대)</p><details className="goal-options"><summary>일시 변경 · 메모 추가</summary><p className="goal-muted">근거의 실제 발생 일시를 기록하세요. 최근 근거를 불러오면 기존 날짜도 유지합니다.</p>
+      <TextField label="관측 일시 · 현재 기기 시간대" type="datetime-local" required value={draft.observedAt} onChange={event => change('observedAt', event.target.value)} />
       <TextField label="근거가 발생한 일시 · 현재 기기 시간대" type="datetime-local" required={draft.coverage === 'complete'} value={draft.evidenceAt} onChange={event => change('evidenceAt', event.target.value)} />
-      <TextAreaField label="관측·정정 메모" value={draft.note} maxLength={4000} onChange={event => change('note', event.target.value)} />
+      <TextAreaField label="관측·정정 메모" value={draft.note} maxLength={4000} onChange={event => change('note', event.target.value)} /></details>
     </fieldset>
     {validation && <p role="alert" className="goal-error">{validation}</p>}<GoalCommandFeedback command={command} />
-    <div className="goal-actions"><Button type="submit" variant="primary" disabled={command.locked}>관측 저장</Button><Button disabled={command.state === 'saving'} onClick={onCancel}>닫기</Button></div>
+    <div className="goal-actions"><Button type="submit" variant="primary" disabled={command.locked}>관측 저장 <Kbd>⌘↵</Kbd></Button><Button disabled={command.state === 'saving'} onClick={onCancel}>닫기</Button></div>
   </form>;
 }
 

@@ -10,4 +10,8 @@
 .assist-source summary { cursor: pointer; min-height: 32px; }
 .assist-source pre, .assist-candidate pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 12px; line-height: 1.75; max-height: 360px; overflow-y: auto; }
 .assist-review, .assist-external { display: grid; gap: 10px; margin-top: 10px; }
+.assist-review-decisions { padding-top: 4px; }
+.assist-editor .assist-review-summary { margin-top: 8px; }
+.assist-candidate-tools { margin-top: 8px; }
+.assist-review { border-top: 1px solid var(--line); padding-top: 12px; }
 .assist-message { color: var(--fg); padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; line-height: 1.6; }

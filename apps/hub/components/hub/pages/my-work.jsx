@@ -8,6 +8,7 @@ import { Badge, Card, Button, Checkbox, DateQuickPresets, EmptyState, SyncBadge,
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
+import { clearSubmittedQuickTaskDraft, shouldSubmitQuickTask } from "@/lib/quick-task-capture";
 import { applyMute, clearMute, mutedIdSet, readMuteStore, seoulDayKey, writeMuteStore } from "./my-work-mute.js";
 
 // 내 작업 — one personal operating surface, three lenses over the cross-lane attention
@@ -271,7 +272,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       role="button"
       tabIndex={0}
       onClick={() => onOpen(item)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(item); } }}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpen(item); } }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -546,11 +547,14 @@ export function MyWork({ onNavigate }) {
   const mutedIds = React.useMemo(() => mutedIdSet(muted, todayKey), [muted, todayKey]);
 
   const [search, setSearch] = React.useState('');
-  const [quickTitle, setQuickTitle] = React.useState('');
+  const [quickDraft, setQuickDraft] = React.useState({ title: '', dueAt: '', priority: 'medium' });
+  const { title: quickTitle, dueAt: quickDue, priority: quickPriority } = quickDraft;
+  const setQuickTitle = value => setQuickDraft(current => ({ ...current, title: value }));
+  const setQuickDue = value => setQuickDraft(current => ({ ...current, dueAt: value }));
+  const setQuickPriority = value => setQuickDraft(current => ({ ...current, priority: value }));
   const [showQuickDetail, setShowQuickDetail] = React.useState(false);
-  const [quickDue, setQuickDue] = React.useState('');
-  const [quickPriority, setQuickPriority] = React.useState('medium');
   const [saving, setSaving] = React.useState(false);
+  const quickSavingRef = React.useRef(false);
   const [notice, setNotice] = React.useState(null); // { tone, label, action?: { label, onClick } }
   const [taskDraft, setTaskDraft] = React.useState(null);
   // 방금 추가한 할 일의 attention item.id — 저장 직후 그 행으로 스크롤 + 잠깐 하이라이트해서
@@ -613,7 +617,9 @@ export function MyWork({ onNavigate }) {
   // 기한·우선순위도 한 번에 저장 — 기본은 제목만(빠른 경로) 그대로 유지.
   const createTask = async () => {
     const title = quickTitle.trim();
-    if (!title || saving) return;
+    if (!title || quickSavingRef.current) return;
+    const submittedDraft = quickDraft;
+    quickSavingRef.current = true;
     setSaving(true);
     try {
       const payload = { title };
@@ -629,9 +635,8 @@ export function MyWork({ onNavigate }) {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.status === 'saved') {
         const createdId = data.task?.id || data.id || null;
-        setQuickTitle('');
-        setQuickDue('');
-        setQuickPriority('medium');
+        // Saving one item must not erase the next item typed during the request.
+        setQuickDraft(current => clearSubmittedQuickTaskDraft(current, submittedDraft));
         // 새 할 일이 무조건 화면에 보이도록: 리스트 렌즈로, 그리고 방금 만든 (대개 기한 없는)
         // 항목을 가릴 수 있는 레인·기한 필터를 해제한다. board/week나 'today' 필터 상태에서
         // 추가하면 새 항목이 안 보여 "추가가 안 된다"고 느끼던 문제(2026-07-18)를 막는다.
@@ -671,6 +676,7 @@ export function MyWork({ onNavigate }) {
       setNotice({ tone: 'err', label: errMsg });
       toast.error(errMsg);
     } finally {
+      quickSavingRef.current = false;
       setSaving(false);
     }
   };
@@ -1190,7 +1196,7 @@ export function MyWork({ onNavigate }) {
             ref={quickRef}
             value={quickTitle}
             onChange={(e) => setQuickTitle(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') createTask(); }}
+            onKeyDown={(e) => { if (shouldSubmitQuickTask(e, quickSavingRef.current)) { e.preventDefault(); createTask(); } }}
             placeholder="새 할 일 — Enter로 저장"
             // outline을 죽이지 않는다 — 전역 :focus-visible 링(§11)이 키보드 포커스를 표시한다.
             style={{
