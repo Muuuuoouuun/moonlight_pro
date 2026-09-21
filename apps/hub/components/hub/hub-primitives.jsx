@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "./hub-icons";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 import './hub-compact-drawer.css';
+import './hub-edit-drawer.css';
 export { useToast, ToastProvider } from './hub-toast';
 
 export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', numeric = false, style }) {
@@ -939,7 +940,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   }, [confirming, dirty, onClose]);
 
   const handleDone = async (continueCreating = false) => {
-    if (savingRef.current) return;
+    if (savingRef.current || confirming) return;
     if (!onSave) { onClose(); return; }
     savingRef.current = true;
     setSaveState('saving');
@@ -1048,12 +1049,13 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
               ) : f.type === 'textarea' ? (
                 <textarea
                   ref={focusRef}
+                  className="hub-edit-textarea"
                   disabled={saveState === 'saving'}
                   value={record[f.key] ?? ''}
                   placeholder={f.placeholder || ''}
                   rows={f.rows || 5}
                   onChange={e => onChange(f.key, e.target.value)}
-                  style={{ ...DRAWER_INPUT_STYLE, height: 'auto', minHeight: f.rows ? undefined : 112, padding: '9px 10px', lineHeight: 1.5, resize: 'vertical' }}
+                  style={{ minHeight: f.rows ? undefined : 112 }}
                 />
               ) : (
                 <input
