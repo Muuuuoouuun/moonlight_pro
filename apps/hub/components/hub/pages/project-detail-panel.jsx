@@ -112,10 +112,11 @@ export function ProjectDetailPanel({
   contentTone = {}, orderPending = false, orderResult = null, pendingTodoIds = new Set(),
   taskPartial = false, onClose, onEdit, onToggleTodo, onEditTodo, onCreateTodo, onOpen,
   onSendOrder, onConsultCouncil, onComplete, onManageDelivery, onArchive,
-  onCustomerSaved, onMemo, onOpenMemo,
+  onCustomerSaved, onMemo, onOpenMemo, customerInitiallyOpen = false, onCustomerClosed, customerSaving = false, onCustomerPendingChange,
 }) {
   const [tab, setTab] = React.useState('tasks');
-  const [customerOpen, setCustomerOpen] = React.useState(false);
+  const [customerOpen, setCustomerOpen] = React.useState(customerInitiallyOpen);
+  React.useEffect(() => { if (customerInitiallyOpen) setCustomerOpen(true); }, [customerInitiallyOpen]);
   const customerButton = React.useRef(null);
   const mainBody = React.useRef(null), savedScroll = React.useRef(0);
   if (!project) return null;
@@ -127,6 +128,7 @@ export function ProjectDetailPanel({
   const failedEmpty = (source, empty) => failed.has(source) ? '이 기록을 읽지 못했어요. 다시 확인해 주세요.' : empty;
   const backToProject = () => {
     setCustomerOpen(false);
+    onCustomerClosed?.();
     requestAnimationFrame(() => {
       if (mainBody.current) mainBody.current.scrollTop = savedScroll.current;
       customerButton.current?.focus({ preventScroll: true });
@@ -137,7 +139,7 @@ export function ProjectDetailPanel({
     <div className="project-focus-top">
       <BrandMark brand={container} size={20} />
       <span className="project-focus-muted project-focus-container">{container?.name || '저장 위치 미정'}</span>
-      <IconButton icon="x" size={24} tooltip="상세 닫기" onClick={onClose} />
+      <IconButton icon="x" size={24} tooltip="상세 닫기" disabled={customerSaving} onClick={onClose} />
     </div>
     <div ref={mainBody} hidden={customerOpen} className="hub-project-detail-body scroll-y project-focus-body">
       <header className="project-focus-identity">
@@ -208,7 +210,7 @@ export function ProjectDetailPanel({
       </div>
     </div>
     {customerOpen && <div className="hub-project-detail-body scroll-y project-focus-body">
-      <ProjectCustomerPanel project={project} onBack={backToProject} onSaved={onCustomerSaved} onMemo={onMemo} onOpenMemo={onOpenMemo} />
+      <ProjectCustomerPanel onPendingChange={onCustomerPendingChange} project={project} onBack={backToProject} onSaved={onCustomerSaved} onMemo={onMemo} onOpenMemo={onOpenMemo} />
     </div>}
     <div hidden={customerOpen} className="hub-project-detail-actions project-focus-footer">
       <div className="project-focus-actions">

@@ -209,11 +209,12 @@ export function ProjectProgressGauge({ progress, compact = false, ariaLabel = "�
   const value = Math.max(0, Math.min(100, Math.round(progress.value)));
   const valueText = `${value}% · ${sourceLabel}${countLabel ? ` · ${countLabel} 완료` : ""}`;
 
-  const isCompleted = value >= 100;
+  const isChecklist = progress.source === 'tasks' && Boolean(countLabel);
+  const reading = isChecklist ? `${countLabel} 완료` : `${value}%`;
 
   return (
     <div
-      className={`hub-pms-progress${compact ? " hub-pms-progress--compact" : ""}${isCompleted ? " hub-pms-progress--completed" : ""}`}
+      className={`hub-pms-progress hub-pms-progress--evidence${compact ? " hub-pms-progress--compact" : ""}`}
       data-progress-source={progress.source || "reported"}
       role="progressbar"
       aria-label={ariaLabel}
@@ -223,11 +224,9 @@ export function ProjectProgressGauge({ progress, compact = false, ariaLabel = "�
       aria-valuetext={valueText}
     >
       <div className="hub-pms-progress__reading">
-        <span className={`hub-pms-progress__value mono${isCompleted ? " hub-pms-progress__value--100" : ""}`}>
-          {value}%{isCompleted && <span className="hub-pms-sparkle-mark" aria-hidden="true">✦</span>}
-        </span>
+        <span className="hub-pms-progress__value mono">{reading}</span>
         <span className="hub-pms-progress__evidence">
-          {sourceLabel}{countLabel ? ` · ${countLabel}` : ""}
+          {isChecklist ? "체크리스트" : sourceLabel}
         </span>
       </div>
       <div className="hub-pms-progress__track" aria-hidden="true">

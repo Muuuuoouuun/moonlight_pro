@@ -464,7 +464,8 @@ export function mergeProjectDetailQuery(current, projectId) {
   const params = new URLSearchParams(
     typeof current === "string" ? current : current?.toString?.() || "",
   );
-  params.delete("view");
+  // Table and Home share the detail panel. Keep the originating table view.
+  if (params.get("view") !== "table") params.delete("view");
   params.delete("new");
   params.delete("task");
   params.set("project", projectId);

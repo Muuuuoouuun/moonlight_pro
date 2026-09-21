@@ -99,9 +99,12 @@ test("Progress primitive applies completed, overachieved classes, role=progressb
   assert.match(primitivesSource, /title=\{computedTitle\}/);
 });
 
-test("ProjectProgressGauge indicates 100% completion with celebration class and sparkle mark", () => {
-  assert.match(pmsComponentsSource, /hub-pms-progress--completed/);
-  assert.match(pmsComponentsSource, /hub-pms-sparkle-mark/);
+test("project evidence reaching 100% does not imply lifecycle completion", () => {
+  const gauge = pmsComponentsSource.slice(pmsComponentsSource.indexOf('export function ProjectProgressGauge'), pmsComponentsSource.indexOf('const PORTFOLIO_CELLS'));
+  assert.doesNotMatch(gauge, /hub-pms-progress--completed|hub-pms-sparkle-mark/);
+  assert.match(gauge, /progress.source === 'tasks'/);
+  assert.match(gauge, /체크리스트/);
+  assert.match(gauge, /countLabel.*완료/);
 });
 
 test("hub-tokens.css defines celebration shimmer keyframes and reduced-motion fallback", () => {

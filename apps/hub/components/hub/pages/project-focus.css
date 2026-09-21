@@ -58,3 +58,31 @@
   .hub-app .hub-projects-workspace-main { min-height: 0; }
   .hub-app .hub-projects-main-grid:has(.project-focus) { min-height: 0; grid-template-rows: minmax(0, 1fr); }
 }
+
+/* Keep customer context separate from the row's project-opening action. */
+.hub-app .hub-project-row__customer { grid-column: 2 / 5; grid-row: 2; justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 28px; max-width: 100%; padding: 4px 8px; margin: -4px 0 8px; color: var(--fg-muted); font-size: 12px; border-radius: var(--r-sm); text-align: left; }
+.hub-app .hub-project-row__customer > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .hub-project-row__customer > svg { flex-shrink: 0; }
+.hub-app .hub-project-group-add { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 4px 8px; border-top: 1px solid var(--line-soft); }
+.hub-app .hub-project-group-add > :last-child { color: var(--fg-muted); }
+.hub-app .hub-pms-progress--evidence .hub-pms-progress__reading { flex-wrap: wrap; gap: 4px 6px; }
+.hub-app .hub-pms-progress--evidence .hub-pms-progress__evidence { white-space: normal; overflow: visible; }
+.hub-app .hub-project-mobile-view { display: none; }
+.project-customer-result-copy .mono { font-size: 10.5px; overflow-wrap: anywhere; }
+@media (min-width: 769px) {
+  @container project-list (max-width: 860px) {
+    .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-table .hub-project-secondary-state { display: flex; }
+    .hub-app .hub-project-table .hub-project-row__customer { grid-column: 2; grid-row: 2; margin: 0; }
+    .hub-app .hub-project-table .hub-project-row:has(.hub-project-row__customer) > .hub-pms-progress,
+    .hub-app .hub-project-table .hub-project-row:has(.hub-project-row__customer) > .hub-project-secondary-state { grid-row: 3; }
+  }
+}
+@media (max-width: 900px) {
+  .hub-app .hub-project-view-control { display: none !important; }
+  .hub-app .hub-project-mobile-view { display: block; order: 1; flex: 0 1 132px; min-width: 0; }
+  .hub-app .hub-project-mobile-view select { min-height: 44px; font-size: 16px; }
+}
+@media (max-width: 768px) {
+  .hub-app .hub-project-row__customer { grid-column: 2; grid-row: auto; min-height: 44px; margin: 0 12px 8px; }
+  .hub-app .hub-project-group-add .hub-btn { min-height: 44px; }
+}

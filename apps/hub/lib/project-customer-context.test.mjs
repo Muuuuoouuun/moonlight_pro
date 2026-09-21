@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { contextMemoKey, projectCustomerHref, projectCustomerPatch, projectCustomerRef, projectMemoContexts } from './project-customer-context.js';
 import { initialMemoContexts, buildNoteSave } from './journal-client.js';
-import { getProjectCustomerContext } from './repositories/project-customer-context.js';
+import { getProjectCustomerContext, searchProjectCustomers } from './repositories/project-customer-context.js';
 
 const W = '11111111-1111-4111-8111-111111111111';
 const P = '22222222-2222-4222-8222-222222222222';
@@ -92,4 +92,73 @@ test('reverse project view avoids unrelated CRM reads; preview and invalid ident
   const noRead = () => { throw Error('unexpected read'); };
   assert.equal((await getProjectCustomerContext({ kind: 'lead', id: C, configured: false, read: noRead })).status, 'preview');
   assert.equal((await getProjectCustomerContext({ kind: 'company', id: C, configured: true, read: noRead })).status, 'error');
+});
+
+
+test('customer search preserves exact identities and supplies real disambiguating metadata', async () => {
+  const calls = [];
+  const search = async ({ type, q }) => {
+    assert.equal(q, '같은 기관');
+    return { status: 'live', workspaceId: W, contexts: type === 'lead' ? [C, P].map(id => ({ type, id, label: '같은 기관' })) : [], hasMore: type === 'lead' };
+  };
+  const read = async (table, query) => {
+    calls.push([table, query]);
+    if (table === 'leads') return [
+      { id: C, company_id: A, contact_id: A, meta: { region: '서울' } },
+      { id: P, company_id: A, meta: { region: '부산' } },
+    ];
+    if (table === 'companies') return [{ id: A, name: '같은 기관', meta: {} }];
+    if (table === 'contacts') return [{ id: A, name: '담당자', title: '원장', email: 'director@example.com' }];
+    throw Error('unexpected query');
+  };
+  const result = await searchProjectCustomers({ q: '같은 기관', search, read });
+  assert.equal(result.status, 'live'); assert.equal(result.hasMore, true);
+  assert.deepEqual(result.contexts.map(row => row.id), [C, P]);
+  assert.equal(result.contexts[0].description, '담당자 · 원장 · 서울 · director@example.com');
+  assert.equal(result.contexts[1].description, '부산');
+  assert.ok(result.contexts.every(row => row.recordId === null));
+  assert.equal(calls.length, 3, 'only bounded batch reads, no per-result requests');
+  for (const [, query] of calls) {
+    assert.ok(query.filters.some(([key, value]) => key === 'workspace_id' && value === `eq.${W}`));
+    assert.ok(query.filters.some(([key]) => key === 'id'));
+    assert.ok(query.limit <= 2);
+  }
+});
+
+test('customer search distinguishes identical records without inventing a contact', async () => {
+  const result = await searchProjectCustomers({
+    search: async ({ type }) => ({ status: 'live', workspaceId: W, contexts: type === 'lead' ? [C, P].map(id => ({ type, id, label: '기관' })) : [], hasMore: false }),
+    read: async () => [C, P].map(id => ({ id, meta: {} })),
+  });
+  assert.equal(result.status, 'live');
+  assert.deepEqual(result.contexts.map(row => [row.description, row.recordId]), [['', C], ['', P]]);
+});
+
+test('customer search never presents incomplete or cross-workspace identities as selectable', async () => {
+  const search = async ({ type }) => ({ status: 'live', workspaceId: W, contexts: [{ type, id: C, label: '기관' }], hasMore: false });
+  for (const read of [async () => null, async () => [], async () => [{ id: A }], async () => { throw Error('offline'); }]) {
+    const result = await searchProjectCustomers({ search, read });
+    assert.equal(result.status, 'error'); assert.deepEqual(result.contexts, []);
+  }
+  const noRead = () => { throw Error('must not read'); };
+  for (const bad of [
+    async ({ type }) => ({ status: type === 'lead' ? 'live' : 'error', workspaceId: W, contexts: [] }),
+    async ({ type }) => ({ status: 'live', workspaceId: type === 'lead' ? W : A, contexts: [] }),
+  ]) assert.equal((await searchProjectCustomers({ search: bad, read: noRead })).status, 'error');
+  assert.equal((await searchProjectCustomers({ q: 'x'.repeat(101), search: noRead, read: noRead })).status, 'error');
+  assert.equal((await searchProjectCustomers({ search: async () => ({ status: 'preview' }), read: noRead })).status, 'preview');
+});
+
+
+test('contract accounts use their own schema and never infer a person from their company', async () => {
+  const result = await searchProjectCustomers({
+    search: async ({ type }) => ({ status: 'live', workspaceId: W, contexts: type === 'account' ? [{ type, id: C, label: '계약 기관' }] : [], hasMore: false }),
+    read: async (table, query) => {
+      assert.equal(table, 'customer_accounts');
+      assert.equal(query.select.includes('contact_id'), false, 'customer_accounts has no contact_id column');
+      return [{ id: C, name: '계약 기관', meta: { region: '경기' } }];
+    },
+  });
+  assert.equal(result.status, 'live');
+  assert.equal(result.contexts[0].description, '경기');
 });
