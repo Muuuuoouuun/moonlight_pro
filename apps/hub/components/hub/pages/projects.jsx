@@ -2250,7 +2250,7 @@ export function Projects({ workspace }) {
                                       )}
                                     </div>
                                     {(blocked || overdue) && <span className="hub-project-risk-label">{blocked ? '막힘' : '기한 지남'}</span>}
-                                    {!blocked && !overdue && <span>위험 신호 없음</span>}
+                                    {!blocked && !overdue && <span className="hub-project-no-risk">위험 신호 없음</span>}
                                   </div>
                                 </button>
                                 <ProjectProgressGauge
@@ -2260,7 +2260,7 @@ export function Projects({ workspace }) {
                                 />
                                 <div className="hub-project-secondary-state">
                                   <ProjectStatusBadge status={p.status} />
-                                  <span><Dot tone={prioTone[p.priority]} size={5} />{p.priority || 'medium'}</span>
+                                  <span><Dot tone={prioTone[p.priority]} size={5} />{{ low: '낮음', medium: '보통', high: '높음', critical: '긴급' }[p.priority] || '보통'}</span>
                                 </div>
                                 <div className="hub-project-row-actions" aria-label={`${p.name} 관리`}>
                                   <IconButton icon="pencil" size={30} iconSize={16} tooltip={`${p.name} 편집`} onClick={() => editProject(p)} />
