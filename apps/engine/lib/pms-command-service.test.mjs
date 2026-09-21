@@ -747,3 +747,99 @@ test("keeps a network relationship lookup failure in the 502 error taxonomy", as
     detail: "request-failed",
   });
 });
+
+// ── 오늘 Top 3 — meta.focus_dates 병합과 3건 상한 (2026-09-20 §6.2) ───────────────────
+
+const FOCUS_WS = "33333333-3333-4333-8333-333333333333";
+const FOCUS_TASK = "55555555-5555-4555-8555-555555555555";
+
+function focusDependencies({ meta = {}, othersToday = 0, updates = [], reads = [] } = {}) {
+  return {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async (table, filters, patch) => {
+      updates.push({ table, filters, patch });
+      return { persisted: true, reason: "ok", records: [{ id: FOCUS_TASK, ...patch }] };
+    },
+    fetchRows: async (table, options = {}) => {
+      reads.push({ table, options });
+      const filters = options.filters || [];
+      // 같은 날짜를 고른 다른 할 일 수 — jsonb containment 필터로 구분한다.
+      if (table === "tasks" && filters.some(([key]) => key === "meta->focus_dates")) {
+        return Array.from({ length: othersToday }, (_, i) => ({ id: `other-${i}` }));
+      }
+      if (table === "tasks") return [{ id: FOCUS_TASK, meta, updated_at: "2026-09-21T00:00:00.000Z" }];
+      return [];
+    },
+  };
+}
+
+test("focus on appends today's key to meta.focus_dates and keeps the picked history", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: true } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    focusDependencies({ meta: { checklist: [], focus_dates: ["2026-09-18"] }, othersToday: 2, updates }),
+  );
+
+  assert.equal(result.status, "saved");
+  assert.equal(updates.length, 1);
+  // 날짜를 생략하면 서버가 KST 오늘로 푼다. 이전 선택(09-18)은 보존된다.
+  assert.deepEqual(updates[0].patch.meta, { checklist: [], focus_dates: ["2026-09-18", "2026-09-21"] });
+});
+
+test("focus on is refused with a conflict once three other tasks already hold the day", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: true, date: "2026-09-21" } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    focusDependencies({ meta: {}, othersToday: 3, updates }),
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.equal(result.error, "focus-limit");
+  assert.equal(result.limit, 3);
+  assert.equal(result.date, "2026-09-21");
+  assert.equal(updates.length, 0, "상한에 걸리면 아무것도 쓰지 않는다");
+});
+
+test("focus on is idempotent and does not count the task itself against the cap", async () => {
+  const updates = [];
+  const reads = [];
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: true, date: "2026-09-21" } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    focusDependencies({ meta: { focus_dates: ["2026-09-21"] }, othersToday: 3, updates, reads }),
+  );
+
+  assert.equal(result.status, "saved");
+  assert.deepEqual(updates[0].patch.meta, { focus_dates: ["2026-09-21"] });
+  assert.ok(!reads.some((r) => r.options?.filters?.some(([key]) => key === "meta->focus_dates")), "이미 골라져 있으면 상한 조회를 하지 않는다");
+});
+
+test("focus off removes only that day and leaves other picked days intact", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: false, date: "2026-09-21" } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    focusDependencies({ meta: { focus_dates: ["2026-09-18", "2026-09-21"] }, updates }),
+  );
+
+  assert.equal(result.status, "saved");
+  assert.deepEqual(updates[0].patch.meta, { focus_dates: ["2026-09-18"] });
+});
+
+test("focus cap query uses jsonb containment scoped to the workspace", async () => {
+  const reads = [];
+  await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: true, date: "2026-09-21" } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    focusDependencies({ meta: {}, othersToday: 0, reads }),
+  );
+
+  const capRead = reads.find((r) => r.options?.filters?.some(([key]) => key === "meta->focus_dates"));
+  assert.ok(capRead);
+  assert.deepEqual(capRead.options.filters, [
+    ["workspace_id", `eq.${FOCUS_WS}`],
+    ["meta->focus_dates", 'cs.["2026-09-21"]'],
+  ]);
+});

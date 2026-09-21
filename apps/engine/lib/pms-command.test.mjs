@@ -662,3 +662,48 @@ test("rejects malformed project and brand relationship ids instead of clearing t
     projectId: "not-a-project-id",
   }, context), { ok: false, reason: "invalid-project-id" });
 });
+
+// ── 오늘 Top 3 (meta.focus_dates) — 2026-09-20 세 축·Action KPI 기획 §6.2 ──────────────
+
+test("update_task accepts a focus toggle without any other field", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focus: { on: true, date: "2026-09-21" },
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-21T01:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.focus, { on: true, date: "2026-09-21" });
+  // 토글만 보내도 empty-patch가 아니다 — 서비스가 focus_dates를 meta에 병합한다.
+  assert.deepEqual(result.patch, { updated_at: "2026-09-21T01:00:00.000Z" });
+});
+
+test("update_task focus shorthand and missing date resolve on the server side", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focus: false,
+  }, { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-21T01:00:00.000Z" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.focus, { on: false, date: null });
+});
+
+test("update_task rejects malformed focus toggles and impossible dates", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-21T01:00:00.000Z" };
+  const id = "55555555-5555-4555-8555-555555555555";
+
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: "today" }, context), { ok: false, reason: "invalid-focus" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: "yes" } }, context), { ok: false, reason: "invalid-focus" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: true, date: "2026-02-30" } }, context), { ok: false, reason: "invalid-focus-date" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: true, date: "21/09/2026" } }, context), { ok: false, reason: "invalid-focus-date" });
+});
+
+test("zonedDateKey renders the operator day in Asia/Seoul", () => {
+  // 2026-09-20 23:30 UTC is already 2026-09-21 in Seoul.
+  assert.equal(pmsCommand.zonedDateKey("2026-09-20T23:30:00.000Z"), "2026-09-21");
+  assert.equal(pmsCommand.MAX_FOCUS_PER_DAY, 3);
+});

@@ -3,13 +3,13 @@
 import React from "react";
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd, Skeleton, CertaintyBadge } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
-import { buildTaskToday, isDurableTaskUpdateResult } from "@/lib/task-today";
+import { buildTaskToday, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import {
   beginRhythmCheck,
@@ -278,8 +278,44 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     setFeedback({ status: 'idle', message: '완료 취소됨', action: null });
   }
 
+  // 오늘 3개 토글 — meta.focus_dates에 오늘을 넣거나 뺀다(2026-09-20 §6.2). 서버가 3건 상한을
+  // 강제하고(409 focus-limit), 화면은 상한에서 넣기 버튼을 비활성으로 그린다.
+  const focusSummary = taskToday?.focus || { picked: 0, done: 0, limit: MAX_FOCUS_PER_DAY, remaining: MAX_FOCUS_PER_DAY };
+  const focusFull = focusSummary.remaining <= 0;
+  const [focusBusyId, setFocusBusyId] = React.useState(null);
+  async function toggleFocus(task) {
+    const on = !task.focusToday;
+    if (on && focusFull) {
+      setFeedback({ status: 'error', message: `오늘 3개가 이미 찼습니다 (${focusSummary.limit}/${focusSummary.limit}).`, action: null });
+      return;
+    }
+    setFocusBusyId(task.id);
+    try {
+      const response = await fetch('/api/hub/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: task.id, focus: { on } }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 409 && data.error === 'focus-limit') {
+        throw new Error(`오늘 3개가 이미 찼습니다 (${data.limit}/${data.limit}).`);
+      }
+      if (!response.ok || !isDurableTaskUpdateResult(data)) {
+        throw new Error(data.error || data.status || `저장 실패 (${response.status})`);
+      }
+      setFeedback({ status: 'saved', message: on ? `${task.title} — 오늘 3개에 넣음.` : `${task.title} — 오늘 3개에서 뺌.`, action: null });
+      onChanged?.();
+    } catch (error) {
+      setFeedback({ status: 'error', message: error instanceof Error ? error.message : '오늘 3개를 저장하지 못했습니다.', action: null });
+    } finally {
+      setFocusBusyId(null);
+    }
+  }
+
   // §5.2: missed is the only immediate-loss lane; today/inbox are ordinary stages → neutral.
+  // focus = 운영자가 고른 "현재" 선택 → Moonstone(§5.2 selected 의미), 라벨 "오늘 3개"와 함께.
   const laneTone = {
+    focus: 'moon',
     missed: 'danger',
     today: 'neutral',
     waiting: 'neutral',
@@ -297,6 +333,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
             isBurning={isBurning}
             isPopping={isPopping}
           />
+          <Badge tone="moon" size="xs" variant="outline">오늘 3개 {focusSummary.done}/{focusSummary.picked}</Badge>
           <Badge tone={(counts.missed || 0) > 0 ? 'danger' : 'neutral'} size="xs">놓침 {counts.missed || 0}</Badge>
           <Badge tone="neutral" size="xs">오늘 {counts.today || 0}</Badge>
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>모두 보기</Button>
@@ -339,6 +376,16 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                     ) : ''}{task.priority || 'med'}
                   </div>
                 </div>
+                <IconButton
+                  icon="star"
+                  size={32}
+                  iconSize={15}
+                  tooltip={task.focusToday ? '오늘 3개에서 빼기' : focusFull ? `오늘 3개가 찼습니다 (${focusSummary.limit}/${focusSummary.limit})` : '오늘 3개에 넣기'}
+                  aria-pressed={task.focusToday ? 'true' : 'false'}
+                  disabled={focusBusyId === task.id || (!task.focusToday && focusFull)}
+                  onClick={() => toggleFocus(task)}
+                  style={{ color: task.focusToday ? 'var(--moon-300)' : undefined, flexShrink: 0 }}
+                />
                 <Button
                   variant="secondary"
                   size="sm"
@@ -751,12 +798,44 @@ const BRIEF_LANE_META = {
   brand: { label: '브랜드', tone: 'neutral' },
 };
 
-function MorningBriefCard({ brief, onNavigate }) {
-  if (!brief) return null;
-  const items = Array.isArray(brief.items) ? brief.items : [];
-  const when = brief.generatedAt
+function MorningBriefCard({ brief, taskToday, onNavigate }) {
+  // 1차 소스 = 운영자가 고른 오늘 3개(meta.focus_dates). 비어 있으면 첫 화면 레인 순서 상위 3개를
+  // dashed `◇ 권장`으로 제안한다 — 시스템 추천을 확정처럼 보이지 않게(§5.3 certainty).
+  // chief-of-staff 크론(project_updates ai.morning_brief)의 항목은 보조 줄로 남긴다(2026-09-20 §6.2).
+  const laneItems = Array.isArray(taskToday?.items) ? taskToday.items : [];
+  const focusTasks = laneItems.filter((t) => t.lane === 'focus');
+  const recommendedTasks = focusTasks.length ? [] : laneItems.filter((t) => t.lane !== 'focus').slice(0, MAX_FOCUS_PER_DAY);
+  const items = Array.isArray(brief?.items) ? brief.items : [];
+  if (!brief && !laneItems.length) return null;
+  const when = brief?.generatedAt
     ? new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date(brief.generatedAt))
     : null;
+  const taskRow = (task, i, total, recommended) => (
+    <div
+      key={`task-${task.id}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onNavigate?.('dashboard/work/my')}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.('dashboard/work/my'); } }}
+      className="hub-row"
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', cursor: 'pointer',
+        borderBottom: i < total - 1 ? '1px solid var(--line-soft)' : 'none',
+      }}
+    >
+      <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--moon-300)', width: 14, flexShrink: 0, paddingTop: 1 }}>{i + 1}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{task.title}</div>
+        <div className="mono" style={{ marginTop: 3, fontSize: 11, color: 'var(--fg-muted)' }}>
+          {task.due && task.due !== '미정' ? `due ${task.due} · ` : ''}{task.priority || 'med'}
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 1 }}>
+        {recommended ? <CertaintyBadge state="recommended" /> : <Badge tone="moon" size="xs" variant="outline">오늘 3개</Badge>}
+        <Iconed name="chevronR" size={11} style={{ color: 'var(--fg-faint)' }} />
+      </div>
+    </div>
+  );
 
   // approve-lane rows resolve right below in the approval queue — no navigation needed.
   const targetFor = (item) => {
@@ -771,16 +850,28 @@ function MorningBriefCard({ brief, onNavigate }) {
     <div>
       <SectionTitle right={<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {when && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{when}</span>}
-        <Badge tone="neutral" size="xs">Chief of Staff</Badge>
+        <Badge tone="neutral" size="xs">{focusTasks.length ? '내가 고른 것' : recommendedTasks.length ? '권장 — 아직 안 고름' : 'Chief of Staff'}</Badge>
       </div>}>
         오늘 이 3개만
       </SectionTitle>
       <Card pad={false}>
-        {items.length === 0 ? (
-          <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-            {brief.summary || '오늘 급한 항목 없음 — 큐가 비었습니다.'}
+        {focusTasks.length > 0 && focusTasks.map((task, i) => taskRow(task, i, focusTasks.length, false))}
+        {focusTasks.length === 0 && recommendedTasks.length > 0 && (
+          <div style={{ borderBottom: items.length ? '1px solid var(--line-soft)' : 'none' }}>
+            {/* dashed edge = 권장(확정 아님). 고르기 전까지 시스템 순서 상위 3개를 보여줄 뿐이다. */}
+            <div style={{ margin: 10, border: '1px dashed var(--line)', borderRadius: 'var(--r-sm)' }}>
+              {recommendedTasks.map((task, i) => taskRow(task, i, recommendedTasks.length, true))}
+            </div>
+            <div style={{ padding: '0 14px 12px', fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+              아직 오늘 3개를 고르지 않았습니다 — 위 목록의 ★ 또는 내 작업에서 고르세요.
+            </div>
           </div>
-        ) : (
+        )}
+        {focusTasks.length === 0 && recommendedTasks.length === 0 && items.length === 0 ? (
+          <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+            {brief?.summary || '오늘 급한 항목 없음 — 큐가 비었습니다.'}
+          </div>
+        ) : items.length === 0 ? null : (
           items.map((item, i) => {
             const lane = BRIEF_LANE_META[item.lane] || { label: item.lane || '기타', tone: 'neutral' };
             const target = targetFor(item);
@@ -1770,13 +1861,17 @@ function WeeklyReportCard({ onNavigate }) {
     ? [
         { label: '연락', value: stats.contacts },
         { label: '신규 딜', value: stats.newDeals },
-        { label: '진행 딜', value: stats.movedDeals },
+        { label: '이동 딜', value: stats.movedDeals },
         { label: 'Won', value: stats.wonDeals },
       ]
     : [
+        // 오늘 3개 완료율(Action KPI, 2026-09-20 §7.2) — 고른 게 없으면 비율 대신 '—'.
+        { label: '오늘 3개', value: stats.focusPicked ? `${stats.focusDone}/${stats.focusPicked}` : '—' },
         { label: '완료 할 일', value: stats.doneTasks },
-        { label: '발행', value: stats.publishes },
         { label: '연락', value: stats.contacts },
+        { label: '메모', value: stats.memos },
+        { label: '리뷰 일수', value: stats.reviewDays },
+        { label: '발행', value: stats.publishes },
         { label: '개인 딜', value: stats.personalDeals },
       ];
   return (
@@ -1968,7 +2063,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
         <MoreDetail title="보조 정보 · 리듬, 모닝 브리프, 승인" summary={approvalSummary}>
           <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
           <RhythmPanel onNavigate={onNavigate} />
-          <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
+          <MorningBriefCard brief={ledger.morningBrief} taskToday={ledger.taskToday} onNavigate={onNavigate} />
           <ApprovalQueueCard onNavigate={onNavigate} />
         </MoreDetail>
       </div>

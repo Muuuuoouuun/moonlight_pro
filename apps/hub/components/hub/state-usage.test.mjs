@@ -34,7 +34,7 @@ test('overview charts use a monochrome Moonstone scale and reserve danger for bl
 test('urgent rails stay one pixel while non-urgent timing remains neutral', () => {
   const myWork = page('my-work');
   const followups = page('followups');
-  assert.match(myWork, /item\.bucket === 'overdue' \? 'inset 1px 0 0 var\(--danger\)'/);
+  assert.match(myWork, /dueBucket === 'overdue' \? 'inset 1px 0 0 var\(--danger\)'/);
   assert.match(followups, /BUCKET_STRIPE = \{ overdue: "var\(--danger\)" \}/);
   assert.doesNotMatch(followups, /inset 2px 0 0/);
 });

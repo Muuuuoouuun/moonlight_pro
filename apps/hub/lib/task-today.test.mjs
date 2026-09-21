@@ -35,6 +35,7 @@ test("builds task-only Today lanes without completed or future backlog tasks", (
   assert.deepEqual(result.counts, {
     total: 5,
     shown: 5,
+    focus: 0,
     missed: 1,
     today: 2,
     waiting: 1,
@@ -92,4 +93,45 @@ test("computes consecutive task completion streak and burning state", () => {
   assert.equal(streak.todayDoneCount, 1);
   assert.equal(streak.isBurning, true);
   assert.deepEqual(streak.recentDays, [0, 0, 1, 0, 1, 1, 1]); // [7/9, 7/10, 7/11, 7/12, 7/13, 7/14, 7/15]
+});
+
+// ── 오늘 3개 레인 (meta.focus_dates) — 2026-09-20 세 축·Action KPI 기획 §6.2 ────────────
+
+test("tasks picked for today lead the lanes even when their due date is missed", () => {
+  const now = new Date("2026-09-21T03:00:00.000Z"); // 12:00 KST, Monday
+  const result = taskToday.buildTaskToday([
+    { id: "overdue-picked", title: "견적 보내기", status: "todo", dueAt: "2026-09-18", priority: "low", focusDates: ["2026-09-21"] },
+    { id: "overdue-plain", title: "명함 정리", status: "todo", dueAt: "2026-09-18", priority: "high" },
+    { id: "today-plain", title: "쇼룸 확인", status: "todo", dueAt: "2026-09-21", priority: "high" },
+    { id: "picked-yesterday", title: "어제 고른 것", status: "todo", dueAt: "2026-09-21", priority: "high", focusDates: ["2026-09-20"] },
+    { id: "picked-done", title: "끝낸 것", status: "done", completedAt: "2026-09-21T01:00:00.000Z", focusDates: ["2026-09-21"] },
+  ], { now });
+
+  assert.deepEqual(result.items.map((task) => [task.id, task.lane]), [
+    ["overdue-picked", "focus"],
+    ["overdue-plain", "missed"],
+    ["picked-yesterday", "today"],
+    ["today-plain", "today"],
+  ]);
+  assert.equal(result.items[0].laneLabel, "오늘 3개");
+  assert.equal(result.items[0].focusToday, true);
+  assert.equal(result.counts.focus, 1);
+  // 요약은 완료된 선택도 센다: 오늘 고른 2건 중 1건 완료.
+  assert.deepEqual(result.focus, { date: "2026-09-21", picked: 2, done: 1, limit: 3, remaining: 1 });
+});
+
+test("focus summary only credits completions that landed on the picked day", () => {
+  const now = new Date("2026-09-21T03:00:00.000Z");
+  const summary = taskToday.summarizeFocusDay([
+    // 어제 고르고 오늘 끝냄 → 오늘 선택이 아니므로 제외
+    { id: "a", status: "done", completedAt: "2026-09-21T01:00:00.000Z", focusDates: ["2026-09-20"] },
+    // 오늘 고르고 오늘 끝냄
+    { id: "b", status: "done", completedAt: "2026-09-21T02:00:00.000Z", focusDates: ["2026-09-21"] },
+    // 오늘 골랐지만 완료 시각이 어제(재오픈 뒤 흔적) → 완료로 치지 않음
+    { id: "c", status: "done", completedAt: "2026-09-20T02:00:00.000Z", focusDates: ["2026-09-21"] },
+    { id: "d", status: "todo", focusDates: ["2026-09-21"] },
+  ], { now });
+
+  assert.deepEqual(summary, { date: "2026-09-21", picked: 3, done: 1, limit: 3, remaining: 0 });
+  assert.deepEqual(taskToday.focusDatesOf({ meta: { focus_dates: ["2026-09-21", 7, "nope"] } }), ["2026-09-21"]);
 });

@@ -1,5 +1,20 @@
 import { parseDelivery, validateDelivery, completionIssue, validDay } from "../../../packages/project-delivery/index.ts";
 
+// 오늘 Top 3 — 하루에 고를 수 있는 할 일 수. Hub task-today.js MAX_FOCUS_PER_DAY와 같은 값
+// (2026-09-20 세 축·Action KPI 기획 §6.2). 상한은 행을 읽는 pms-command-service가 강제한다.
+export const MAX_FOCUS_PER_DAY = 3;
+export const FOCUS_TIME_ZONE = "Asia/Seoul";
+const FOCUS_DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+// timestamp → 'YYYY-MM-DD' in the operator zone. Mirrors Hub task-today.js dateKeyInZone.
+export function zonedDateKey(value: Date | string | number = new Date(), timeZone = FOCUS_TIME_ZONE) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
 type CommandContext = {
   workspaceId?: string;
   ownerId?: string | null;
@@ -14,8 +29,12 @@ type NormalizedCommand =
       record?: Record<string, unknown>;
       filters?: Array<[string, string]>;
       patch?: Record<string, unknown>;
+      // 오늘 Top 3 토글 — 배열 자체는 클라이언트가 보내지 않고 서비스가 기존 이력과 병합한다.
+      focus?: TaskFocusToggle;
     }
   | { ok: false; reason: string };
+
+export type TaskFocusToggle = { on: boolean; date: string | null };
 
 const PROJECT_STATUSES = new Set(["draft", "active", "blocked", "completed", "archived"]);
 const TASK_STATUSES = new Set(["inbox", "todo", "doing", "blocked", "done"]);
@@ -109,6 +128,19 @@ function taskChecklist(value: unknown): { ok: true; items: ChecklistItem[] } | {
     items.push({ id, title: item.title.trim(), done: item.done, note: (item.note || "").trim() });
   }
   return { ok: true, items };
+}
+
+// `focus: true|false` 또는 `focus: { on, date?: 'YYYY-MM-DD' }`. date를 생략하면 서비스가
+// 운영자 시간대(KST)의 오늘로 푼다 — 클라이언트 시계에 기대지 않는다.
+function taskFocusToggle(value: unknown): { ok: true; value: TaskFocusToggle } | { ok: false; reason: string } {
+  if (typeof value === "boolean") return { ok: true, value: { on: value, date: null } };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, reason: "invalid-focus" };
+  const input = value as Record<string, unknown>;
+  if (typeof input.on !== "boolean") return { ok: false, reason: "invalid-focus" };
+  if (input.date === undefined || input.date === null || input.date === "") return { ok: true, value: { on: input.on, date: null } };
+  const date = text(input.date, 10);
+  if (!FOCUS_DATE_KEY.test(date) || !validDay(date)) return { ok: false, reason: "invalid-focus-date" };
+  return { ok: true, value: { on: input.on, date } };
 }
 
 export function normalizePmsCommand(
@@ -293,8 +325,17 @@ export function normalizePmsCommand(
       // The service merges this one owned key with the persisted metadata under the same version guard.
       patch.meta = { checklist: checklist.items };
     }
+    // 오늘 Top 3 — meta.focus_dates(고른 날짜의 이력)에 하루를 넣거나 뺀다. 배열을 통째로 받지
+    // 않는 이유: 이력을 모르는 클라이언트가 덮어쓰면 지난 날의 선택 수가 사라져 완료율이 소급
+    // 변동한다. 병합과 3건 상한은 행을 읽는 pms-command-service가 한다(2026-09-20 §6.2).
+    let focus: TaskFocusToggle | null = null;
+    if (has(input, "focus")) {
+      const toggle = taskFocusToggle(input.focus);
+      if (!toggle.ok) return { ok: false, reason: toggle.reason };
+      focus = toggle.value;
+    }
 
-    if (Object.keys(patch).length === 0) return { ok: false, reason: "empty-patch" };
+    if (Object.keys(patch).length === 0 && !focus) return { ok: false, reason: "empty-patch" };
     patch.updated_at = now.value;
 
     return {
@@ -303,6 +344,7 @@ export function normalizePmsCommand(
       table: "tasks",
       filters,
       patch,
+      ...(focus ? { focus } : {}),
     };
   }
 

@@ -9,8 +9,10 @@ import { getInquiriesLedger } from './inquiries-ledger.js';
 // live tasks as preview, and vice versa).
 //
 // Item contract (minimal on purpose — the surface shows 핵심 정보만):
-//   { id, lane: 'task'|'deal'|'event', title, bucket: 'overdue'|'today'|'week'|'later',
+//   { id, lane: 'task'|'deal'|'event', title, bucket: 'focus'|'overdue'|'today'|'week'|'later',
 //     whenAt, whenLabel, recencyAt, meta, href, status, done }
+// `focus` bucket = 사람이 오늘로 고른 할 일(meta.focus_dates에 오늘이 있음, 2026-09-20 §6.2).
+// 기한 기준 버킷은 `dueBucket`에 그대로 남겨 지난 기한 표시(빨간 날짜)를 잃지 않는다.
 // `href` is a hub deep-link (deals open their native drawer); tasks carry `status` so the
 // list can complete them durably through PATCH /api/hub/tasks.
 
@@ -21,6 +23,7 @@ import { getInquiriesLedger } from './inquiries-ledger.js';
 import { getTaskLedger } from "./operating-ledger.js";
 import { getRevenueLedger } from "./revenue-ledger.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
+import { isFocusedOn } from "../task-today.js";
 
 const TIME_ZONE = "Asia/Seoul";
 const DAY_MS = 86400000;
@@ -86,6 +89,8 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
     .filter((t) => !t.done)
     .map((t) => {
       const project = t.project ? projectById.get(t.project) : null;
+      const dueBucket = bucketFor(t.dueAt, todayKey, weekEndKey);
+      const focusToday = isFocusedOn(t, todayKey);
       return {
         id: `task-${t.id}`,
         entityId: t.id,
@@ -95,7 +100,10 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
         // 없으면 드로어 저장이 기존 설명을 확인할 길 없이 진행된다.
         description: t.description || "",
         sourceRefs: t.sourceRefs || [],
-        bucket: bucketFor(t.dueAt, todayKey, weekEndKey),
+        bucket: focusToday ? "focus" : dueBucket,
+        dueBucket,
+        focusToday,
+        focusDates: Array.isArray(t.focusDates) ? t.focusDates : [],
         whenAt: t.dueAt || "",
         whenLabel: t.dueAt ? shortDate(t.dueAt) : "기한 없음",
         recencyAt: t.updatedAt || "",
@@ -180,6 +188,11 @@ const STAGE_PRIORITY_RANK = { final: 5, quote: 4, consult: 3, contact: 2, potent
 function assignPriority(item, leadScoreByDealEntityId) {
   const leadScore = item.lane === "deal" ? leadScoreByDealEntityId.get(item.entityId) || 0 : 0;
   const stageRank = item.lane === "deal" ? STAGE_PRIORITY_RANK[item.status] || 0 : 0;
+
+  // 0. 오늘 3개 — 운영자가 직접 고른 할 일은 시스템 규칙보다 앞선다(2026-09-20 §6.2).
+  if (item.lane === "task" && item.focusToday) {
+    return { priorityScore: 6000, priorityReason: "오늘 3개" };
+  }
 
   // 1. 기한 지난 약속 — older overdue first (larger daysPast → higher).
   if (item.bucket === "overdue") {
