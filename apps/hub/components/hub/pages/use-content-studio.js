@@ -10,6 +10,7 @@ import { manualPublicationFields, publicationIsVerified } from '@/lib/content-wo
 import { refreshContentLedger } from '../use-content-ledger';
 import { createStudioSaveQueue, isDefinitiveStudioRejection } from '@/lib/content-studio-save-queue';
 import { readStudioMirror, readStudioDocumentMirror, writeStudioMirror } from '@/lib/content-studio-storage';
+import { resolveStudioBrandId, studioDocumentQuery } from '@/lib/content-studio-routing';
 
 export async function postStudio(path, body) {
   const response = await fetch('/api/hub/content/' + path, {
@@ -29,7 +30,7 @@ async function getDetail(contentId) {
 const copyAsNew = (draft) => ({
   ...draft, contentId: null, variantId: null, itemUpdatedAt: null, variantUpdatedAt: null, status: 'draft', sourceRefs: [],
 });
-const routeIdentity = (scope, item, variant, fresh, draft) => [scope, item || '', variant || '', fresh || '', draft || ''].join('|');
+const routeIdentity = (scope, item, variant, fresh, draft, brand) => [scope, item || '', variant || '', fresh || '', draft || '', item ? '' : brand || ''].join('|');
 const emptyHistory = () => ({ revisions: [], nextCursor: null, loading: false, error: '' });
 const busyState = { busy: false, pendingSave: null, pendingMutation: null };
 
@@ -49,14 +50,11 @@ export function useContentStudio(workspace) {
     const next = typeof patch === 'function' ? patch(stateRef.current) : { ...stateRef.current, ...patch };
     stateRef.current = next; setState(next);
   }, []);
-  const routeKey = routeIdentity(scope, itemParam, variantParam, newParam, draftParam);
+  const routeKey = routeIdentity(scope, itemParam, variantParam, newParam, draftParam, brandParam);
   const writeUrl = React.useCallback((draft) => {
-    const query = new URLSearchParams();
-    if (draft.contentId) query.set('item', draft.contentId);
-    if (draft.variantId) query.set('variant', draft.variantId);
-    if (!draft.contentId) { query.set('new', 'draft'); query.set('draft', draftKey.current); }
-    loadedRoute.current = routeIdentity(scope, draft.contentId, draft.variantId, draft.contentId ? '' : 'draft', draft.contentId ? '' : draftKey.current);
-    window.history.replaceState(null, '', pathname + '?' + query.toString());
+    const query = studioDocumentQuery(draft, draftKey.current);
+    loadedRoute.current = routeIdentity(scope, draft.contentId, draft.variantId, draft.contentId ? '' : 'draft', draft.contentId ? '' : draftKey.current, draft.brandId);
+    window.history.replaceState(null, '', pathname + '?' + query);
   }, [pathname, scope]);
   const mirror = React.useCallback((next, dirty, receiptPatch = {}, options = {}) => {
     const key = studioMirrorKey({ ...next, draftKey: draftKey.current });
@@ -102,7 +100,7 @@ export function useContentStudio(workspace) {
     const documentEpoch = ++epoch.current;
     draftKey.current = draftParam || crypto.randomUUID();
     const current = () => epoch.current === documentEpoch;
-    update({ draft: emptyStudioDraft(brandParam || ''), ready: false, loadError: '', recovery: null, detail: null, dirty: false,
+    update({ draft: emptyStudioDraft(), ready: false, loadError: '', recovery: null, detail: null, dirty: false,
       saveState: 'idle', saveMessage: '', history: emptyHistory(), localState: 'idle', localSavedAt: null, ...busyState });
     // A bare new=draft is intentional creation. Give it a stable address before
     // any typing, persistence or reload can happen.
@@ -134,7 +132,7 @@ export function useContentStudio(workspace) {
       } catch { if (current()) update({ localState: 'error' }); }
       if (!current()) return;
       if (local?.draftKey && !draftParam) draftKey.current = local.draftKey;
-      let detail = null, draft = emptyStudioDraft(brandParam || ''), unavailable = false, readError = '';
+      let detail = null, draft = emptyStudioDraft(), unavailable = false, readError = '';
       if (contentId) {
         try {
           detail = await getDetail(contentId);
@@ -160,6 +158,17 @@ export function useContentStudio(workspace) {
           pendingSave, pendingMutation, saveState: 'error', localSavedAt: local.savedAt,
           saveMessage: pendingMutation ? '이전 작업의 응답을 확인하지 못했습니다. 이전 작업 상태 확인으로 같은 요청을 재개해주세요.' : '이전 저장의 응답을 확인하지 못했습니다. 다시 저장하면 같은 요청부터 확인합니다.' });
         resetQueue(); writeUrl(local.draft); return;
+      }
+      if (!contentId) {
+        if (local?.draft) draft.brandId = local.draft.brandId;
+        else {
+          try { draft.brandId = await resolveStudioBrandId(brandParam); }
+          catch (error) {
+            if (current()) update({ loadError: error.message || '선택한 브랜드를 확인하지 못했습니다. 다시 불러와주세요.', ready: false });
+            return;
+          }
+          if (!current()) return;
+        }
       }
       const recovery = local?.draft && (unavailable || local.dirty || local.legacy) && (unavailable || studioFingerprint(local.draft) !== studioFingerprint(draft))
         ? { local: local.draft, server: draft, savedAt: local.savedAt, unavailable, stale: Boolean(unavailable || local.legacy || local.draft.contentId && (
