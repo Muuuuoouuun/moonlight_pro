@@ -35,7 +35,7 @@ function CustomerPicker({ project, onSaved, onCancel }) {
       if (results.some(result => result.status !== 'live')) throw Error('고객 저장소 연결을 확인해 주세요.');
       setRows(results.flatMap(result => result.contexts || []));
       setHasMore(results.some(result => result.hasMore));
-    } catch (failure) { if (request.current === ticket) setError(failure.message); }
+    } catch (failure) { if (request.current === ticket) setError(failure instanceof TypeError ? '고객 목록을 불러오지 못했어요. 다시 찾아 주세요.' : failure.message); }
     finally { if (request.current === ticket) setBusy(false); }
   }
   async function save() {
@@ -48,7 +48,10 @@ function CustomerPicker({ project, onSaved, onCancel }) {
       if (!response.ok || data.status !== 'saved') throw Error(data.status === 'conflict'
         ? '다른 곳에서 프로젝트가 바뀌었어요. 닫고 프로젝트를 다시 불러온 뒤 연결해 주세요.' : '연결을 저장하지 못했어요. 선택은 유지됩니다. 다시 시도해 주세요.');
       await onSaved(data.project, selected);
-    } catch (failure) { setError(failure.message); }
+    } catch (failure) {
+      setError(failure instanceof TypeError || ['TimeoutError', 'AbortError'].includes(failure.name)
+        ? '연결 저장 결과를 확인하지 못했어요. 선택은 유지됩니다. 다시 시도하거나 프로젝트를 다시 불러와 주세요.' : failure.message);
+    }
     finally { writing.current = false; setSaving(false); }
   }
   return <section className="project-focus-stack" aria-label="고객 연결 선택">
