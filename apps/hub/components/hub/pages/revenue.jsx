@@ -1760,6 +1760,12 @@ export function Deals({ workspace, onNavigate }) {
     return () => clearTimeout(t);
   }, [boardNotice]);
   const dragMovedRef = React.useRef(false); // true from dragStart until just after dragEnd — suppresses the card click
+  const finishDealDrag = () => {
+    setDrag(null);
+    // Moving between columns unmounts the source card before its dragend can bubble.
+    // Drop must also release the drag state; defer clicks only through this event turn.
+    setTimeout(() => { dragMovedRef.current = false; }, 0);
+  };
   React.useEffect(() => {
     if (!boardNotice) return undefined;
     const id = setTimeout(() => setBoardNotice(null), 6000);
@@ -2076,7 +2082,11 @@ export function Deals({ workspace, onNavigate }) {
           return (
             <div key={s.key}
               onDragOver={e => e.preventDefault()}
-              onDrop={() => drag && move(drag, s.key)}
+              onDrop={e => {
+                e.preventDefault();
+                if (drag) move(drag, s.key);
+                finishDealDrag();
+              }}
               style={{
                 width: 260, flexShrink: 0,
                 background: 'var(--surface)',
@@ -2110,7 +2120,7 @@ export function Deals({ workspace, onNavigate }) {
                     onClick={() => { if (dragMovedRef.current) return; setEditDealId(d.id); }}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditDealId(d.id); } }}
                     onDragStart={() => { dragMovedRef.current = true; setDrag(d.id); }}
-                    onDragEnd={() => { setDrag(null); setTimeout(() => { dragMovedRef.current = false; }, 0); }}
+                    onDragEnd={finishDealDrag}
                     style={{
                       background: 'var(--surface-2)',
                       // 숨긴 딜은 전체 opacity 대신 dashed 엣지 + 숨김 뱃지(§5.3 — 상태를
