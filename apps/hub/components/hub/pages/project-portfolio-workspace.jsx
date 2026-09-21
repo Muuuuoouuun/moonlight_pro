@@ -455,7 +455,7 @@ export function ProjectPortfolioWorkspace({
 
               <section className="hub-project-portfolio-hero" style={{ padding: "14px 18px", marginBottom: 16 }}>
                 <div className="hub-project-portfolio-hero__project">
-                  <div className="hub-project-portfolio-hero__value stat" style={{ fontSize: 32 }}>
+                  <div className="hub-project-portfolio-hero__value stat">
                     {progress === null ? <span className="is-empty">—</span> : <>{progress}<small>%</small></>}
                   </div>
                   <div className="hub-project-portfolio-hero__identity">
@@ -485,14 +485,26 @@ export function ProjectPortfolioWorkspace({
                     <span>{dueDays === null ? "기한 미정" : dueDays < 0 ? `${Math.abs(dueDays)}일 지남` : dueDays === 0 ? "오늘 마감" : `마감 ${dueDays}일`}</span>
                     <span className={risk.risky ? "is-risk" : ""}><Iconed name={risk.risky ? "flag" : "check"} size={12} />{risk.label}</span>
                   </div>
-                  <div className="hub-project-portfolio-ruler__track" aria-hidden="true">
-                    {Array.from({ length: 13 }, (_, index) => <i key={index} style={{ left: `${(index / 12) * 100}%` }} />)}
+                  <div
+                    className="hub-project-portfolio-ruler__track"
+                    role="progressbar"
+                    aria-label="프로젝트 진척"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={progress ?? undefined}
+                    aria-valuetext={progress === null ? "진척 미집계" : `${progress}%`}
+                  >
+                    {Array.from({ length: 21 }, (_, index) => <i key={index} data-major={index % 5 === 0} style={{ left: `${index * 5}%` }} />)}
                     <span style={{ width: `${progress ?? 0}%` }} />
                     {progress !== null && <b style={{ left: `${progress}%` }} />}
                   </div>
 
+                  <div className="hub-project-portfolio-ruler__scale mono" aria-hidden="true">
+                    {[0, 25, 50, 75, 100].map((value) => <span key={value}>{value}{value === 100 ? "%" : ""}</span>)}
+                  </div>
+
                   {totalTasks > 0 && (
-                    <div className="hub-project-status-bar" style={{ marginTop: 8 }}>
+                    <div className="hub-project-status-bar" style={{ marginTop: 12 }}>
                       <div className="hub-project-status-bar__track">
                         {doneTasksCount > 0 && <span style={{ width: `${(doneTasksCount / totalTasks) * 100}%` }} data-status="done" title={`완료 ${doneTasksCount}개`} />}
                         {doingTasksCount > 0 && <span style={{ width: `${(doingTasksCount / totalTasks) * 100}%` }} data-status="doing" title={`진행 ${doingTasksCount}개`} />}
