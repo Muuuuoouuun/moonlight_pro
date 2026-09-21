@@ -2781,7 +2781,7 @@ export function Projects({ workspace }) {
       <ProjectTaskDetailDrawer
         draft={taskDraft} editing={Boolean(taskEditSource)} projects={allProjects}
         onChange={(key, value) => setTaskDraft(current => ({ ...current, [key]: value }))}
-        onSave={persistTask} onContinue={() => createTodo(null, 'todo', { projectId: taskDraft?.projectId || '' })} onDelete={taskEditSource ? deleteTask : undefined}
+        onSave={persistTask} onContinue={() => createTodo(null, 'todo', { projectId: taskDraft?.projectId || '', itemType: taskDraft?.itemType || 'task' })} onDelete={taskEditSource ? deleteTask : undefined}
         onClose={() => { setTaskDraft(null); setTaskEditSource(null); setTaskChecklistConflict(null); }}
         checklistConflict={taskChecklistConflict}
         onUseCurrentChecklist={() => { setTaskDraft(current => ({ ...current, checklist: taskChecklistConflict })); setTaskChecklistConflict(null); }}
