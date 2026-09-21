@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { Iconed } from '../hub-icons';
 import { Button, EmptyState, Skeleton, TextField, TruthBadge } from '../hub-primitives';
 import { RelatedMemos } from '../related-memos';
 import { useCustomerContext } from '../use-customer-context';
@@ -55,22 +56,23 @@ function CustomerPicker({ project, onSaved, onCancel }) {
     finally { writing.current = false; setSaving(false); }
   }
   return <section className="project-focus-stack" aria-label="고객 연결 선택">
-    <p className="project-focus-muted">연결할 고객·기관명을 찾아 선택하세요.</p>
-    <form className="project-focus-stack" onSubmit={search}>
+    <header className="project-focus-identity"><h3 className="project-focus-heading">고객 연결</h3><p className="project-focus-muted">프로젝트와 함께 볼 고객·기관을 선택하세요.</p></header>
+    <form className="project-customer-search" onSubmit={search}>
       <TextField label="고객·기관명 검색" value={query} maxLength={100} disabled={busy || saving} onChange={(event) => setQuery(event.target.value)}
         onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
-      <Button type="submit" variant="outline" disabled={busy || saving}>고객 찾기</Button>
+      <Button type="submit" variant="outline" disabled={busy || saving} style={{ height: 44 }}>고객 찾기</Button>
     </form>
     {busy ? <Skeleton lines={3} height={14} label="고객 찾는 중" /> : rows && <div className="project-customer-results" aria-label="찾은 고객">
-      {rows.length ? rows.map(row => <Button key={`${row.type}:${row.id}`} className="hub-row" active={selected?.type === row.type && selected?.id === row.id} aria-pressed={selected?.type === row.type && selected?.id === row.id} disabled={saving} onClick={() => setSelected(row)}>
-        <span>{row.label}</span><span className="project-focus-muted">{row.type === 'lead' ? '리드' : '계약 고객'}</span>
+      {rows.length ? rows.map(row => <Button key={`${row.type}:${row.id}`} className="hub-row" style={{ height: 'auto', whiteSpace: 'normal', padding: '12px', justifyContent: 'space-between' }} active={selected?.type === row.type && selected?.id === row.id} aria-pressed={selected?.type === row.type && selected?.id === row.id} disabled={saving} onClick={() => setSelected(row)}>
+        <span className="project-customer-result-copy"><span>{row.label}</span><span className="project-focus-muted">{row.type === 'lead' ? '리드' : '계약 고객'}</span></span>
+        {selected?.type === row.type && selected?.id === row.id && <Iconed name="check" size={16} />}
       </Button>) : <EmptyState title="찾은 고객이 없어요" description="고객·기관명을 바꿔 검색해 주세요." />}
     </div>}
     {hasMore && <p className="project-focus-muted">일부 검색 결과를 표시했어요. 이름을 더 구체적으로 입력해 주세요.</p>}
     {project.entityRef && <Button variant="ghost" disabled={saving} aria-pressed={selected === null} onClick={() => setSelected(null)}>고객 연결 해제</Button>}
     {selected !== undefined && <p role="status">{selected ? `${selected.label} 연결` : '이 프로젝트에서 고객 연결만 해제합니다.'}</p>}
     {error && <p role="alert" className="project-focus-error">{error}</p>}
-    <div className="project-focus-actions"><Button variant="ghost" disabled={saving} onClick={onCancel}>취소</Button>
+    <div className="project-focus-actions project-customer-save"><Button variant="ghost" disabled={saving} onClick={onCancel}>취소</Button>
       <Button variant="primary" disabled={selected === undefined || saving} onClick={save}>{saving ? '연결 저장 중…' : '연결 저장'}</Button></div>
   </section>;
 }

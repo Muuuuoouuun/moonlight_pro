@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Iconed } from '../hub-icons';
 import { RelatedMemos } from '../related-memos';
 import { GoalLinks } from '../goal-links';
 import { Badge, Button, Checkbox, IconButton, SegmentedControl, TruthBadge } from "../hub-primitives";
@@ -37,7 +38,7 @@ function ActivityRow({ title, body, meta, badge, tone = "neutral" }) {
         <div style={{ flex: 1, minWidth: 0, fontSize: 12.2, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
         {meta && <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", whiteSpace: "nowrap" }}>{meta}</span>}
       </div>
-      {body && <div style={{ marginTop: 5, color: "var(--fg-muted)", fontSize: 11.5, lineHeight: 1.45, whiteSpace: "pre-wrap" }}>{body}</div>}
+      {body && <div style={{ marginTop: 8, color: "var(--fg-muted)", fontSize: 12, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{body}</div>}
     </div>
   );
 }
@@ -72,11 +73,12 @@ function ProjectNotes({ notes, partial, failed }) {
       {notes.length > 0 && (
         <input
           type="search"
+          className="project-focus-search"
           aria-label="연결 메모 제목·본문 검색"
           placeholder="불러온 메모 제목·본문 검색"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          style={{ width: "100%", minHeight: 44, padding: "8px 10px", marginBottom: 8, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg)", fontSize: 12 }}
+          style={{ width: "100%", minHeight: 44, padding: "8px 12px", marginBottom: 8, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg)" }}
         />
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -138,16 +140,16 @@ export function ProjectDetailPanel({
       <IconButton icon="x" size={24} tooltip="상세 닫기" onClick={onClose} />
     </div>
     <div ref={mainBody} hidden={customerOpen} className="hub-project-detail-body scroll-y project-focus-body">
-      <header className="project-focus-stack">
+      <header className="project-focus-identity">
         <h3 className="project-focus-heading">{project.name}</h3>
         <div className="project-focus-actions">
           <ProjectStatusBadge status={project.status} />
-          <span className="mono project-focus-muted">{project.due || '기한 없음'}</span>
+          <span className="project-focus-due"><Iconed name="calendar" size={12} /><span className="mono project-focus-muted">{project.due || '기한 없음'}</span></span>
         </div>
         <div className="project-focus-customers">
           <span className="project-focus-muted">관련 고객</span>
-          <Button ref={customerButton} variant="outline" size="sm" onClick={() => { savedScroll.current = mainBody.current?.scrollTop || 0; setCustomerOpen(true); }}>
-            {customer ? project.entityLabel || '연결된 고객 보기' : '+ 고객 연결'}
+          <Button ref={customerButton} variant="ghost" size="sm" className="project-focus-customer-link" icon={customer ? 'user' : 'plus'} style={{ height: 'auto', whiteSpace: 'normal' }} onClick={() => { savedScroll.current = mainBody.current?.scrollTop || 0; setCustomerOpen(true); }}>
+            <span>{customer ? project.entityLabel || '연결된 고객 보기' : '고객 연결'}</span><Iconed name="chevronR" size={12} />
           </Button>
         </div>
       </header>
@@ -155,13 +157,13 @@ export function ProjectDetailPanel({
         <h4>다음 행동</h4><p>{displayNextAction}</p>
       </section>}
       {failedSources.length > 0 && <div role="status"><TruthBadge state="partial" /><p className="project-focus-muted">일부 기록을 확인하지 못했어요.</p></div>}
-      <SegmentedControl label="프로젝트 상세 보기" value={tab} onChange={setTab} options={[
+      <SegmentedControl label="프로젝트 상세 보기" fill value={tab} onChange={setTab} options={[
         { key: 'tasks', label: '할 일' }, { key: 'records', label: '기록·자료' },
       ]} />
       <div hidden={tab !== 'tasks'} className="project-focus-stack">
-        <div className="project-focus-actions">
+        {(todos.length > 0 || taskPartial) && <div className="project-focus-section-heading">
           <h4>할 일</h4><span className="mono project-focus-muted">{doneCount}/{todos.length} 완료{taskPartial ? ' · 확인된 범위' : ''}</span>
-        </div>
+        </div>}
         {todos.map(todo => <div key={todo.id} className="project-focus-task">
           <Checkbox checked={todo.done} onChange={() => onToggleTodo?.(todo.id)} disabled={pendingTodoIds.has(todo.id)} size={16} label={`${todo.done ? '다시 열기' : '완료'}: ${todo.title}`} />
           <div className="project-focus-task-copy"><button className="hub-pms-task-main" onClick={() => onEditTodo?.(todo)}>
