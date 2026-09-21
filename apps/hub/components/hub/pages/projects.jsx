@@ -2261,8 +2261,8 @@ export function Projects({ workspace }) {
                                   <span><Dot tone={prioTone[p.priority]} size={5} />{p.priority || 'medium'}</span>
                                 </div>
                                 <div className="hub-project-row-actions" aria-label={`${p.name} 관리`}>
-                                  <IconButton icon="edit" size={28} tooltip={`${p.name} 편집`} onClick={() => editProject(p)} />
-                                  <IconButton icon="trash" size={28} tooltip={`${p.name} 삭제`} onClick={() => requestProjectDelete(p)} />
+                                  <IconButton icon="pencil" size={30} iconSize={16} tooltip={`${p.name} 편집`} onClick={() => editProject(p)} />
+                                  <IconButton icon="trash" size={30} iconSize={16} className="hub-project-delete-action" tooltip={`${p.name} 삭제`} onClick={() => requestProjectDelete(p)} />
                                 </div>
                               </div>
 
@@ -2490,7 +2490,7 @@ export function Projects({ workspace }) {
                                 <span style={{ fontSize: 11, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{pBrand.name}</span>
                               </button>
                               <ProjectStatusBadge status={p.status} />
-                              <IconButton icon="edit" size={28} tooltip={`${p.name} 편집`} onClick={() => editProject(p)} />
+                              <IconButton icon="pencil" size={30} iconSize={16} tooltip={`${p.name} 편집`} onClick={() => editProject(p)} />
                               <Button variant="ghost" size="sm" onClick={() => setProjectStatus(p, 'active')}>다시 열기</Button>
                               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', flexShrink: 0 }}>{p.due || ''}</span>
                             </div>
@@ -2645,8 +2645,12 @@ export function Projects({ workspace }) {
             </>
           )}
         >
-          <p style={{ fontSize: 14, overflowWrap: 'anywhere' }}><strong>{deleteProjectTarget.name}</strong> 프로젝트를 목록에서 삭제할까요?</p>
-          <p style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.6 }}>프로젝트는 보관 처리됩니다. 연결된 할 일·메모·기록은 유지되며, 목록 아래 ‘완료·보관’에서 다시 열 수 있습니다.</p>
+          <div className="hub-project-delete-summary">
+            <span className="hub-project-delete-summary__icon"><Iconed name="archive" size={20} /></span>
+            <div><span className="hub-project-delete-summary__label">삭제할 프로젝트</span><strong>{deleteProjectTarget.name}</strong></div>
+          </div>
+          <p className="hub-project-delete-description">활성 목록에서 제외하고 보관합니다.<br />연결된 할 일·메모·기록은 그대로 유지됩니다.</p>
+          <div className="hub-project-delete-recovery"><Iconed name="archive" size={14} /><span>완료·보관 → 다시 열기로 복원할 수 있습니다.</span></div>
           {deleteProjectError && <p role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>{deleteProjectError}</p>}
         </Drawer>
       )}
