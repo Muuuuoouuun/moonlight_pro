@@ -2007,7 +2007,7 @@ export function Projects({ workspace }) {
             />}
             {view === 'table' && (
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
-              <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+              <div style={{ maxWidth: 1210, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {summaryFilter ? (
