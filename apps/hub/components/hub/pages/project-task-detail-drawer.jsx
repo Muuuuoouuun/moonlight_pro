@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { GoalLinks } from '../goal-links';
 import { DateQuickPresets, EditDrawer } from '../hub-primitives';
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from '@/lib/pms-ui';
 import { checklistForSave } from '@/lib/task-checklist-input';
@@ -32,6 +33,7 @@ export function ProjectTaskDetailDrawer({ draft, editing, projects, onChange, on
     >
       <div className="hub-task-date-presets"><span>기한</span><DateQuickPresets disabled={saving} onPick={value => onChange('dueAt', value)} /></div>
       {draft && draft.checklist?.length > 0 && <TaskChecklistGauge task={{ ...draft, checklist: checklistForSave(draft.checklist) }} />}
+      {editing && <GoalLinks entityType="tasks" entityId={draft?.id} scope={draft?.orgScope} />}
       {error && <p className="hub-task-checklist-error" role="status">체크리스트 탭 · {error}</p>}
       {checklistConflict && <p className="hub-task-checklist-error" role="alert">체크리스트 탭에서 변경 내용을 확인하고 사용할 항목을 선택하세요.</p>}
     </EditDrawer>

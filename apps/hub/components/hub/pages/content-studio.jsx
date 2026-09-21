@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { JournalSources } from '../journal-links';
+import { GoalLinks } from '../goal-links';
 import { Badge, Button, Card, Drawer, Skeleton, TextField, TextAreaField, SelectField, TruthBadge, useToast } from '../hub-primitives';
 import { filterBrandsByWorkspace } from '../workspace-map';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
@@ -147,6 +148,7 @@ export function ContentStudio({ workspace, ledger }) {
               <TextField label="다음 행동" value={draft.nextAction} placeholder="예: 실제 수업 사례 하나 넣기" onChange={(event) => studio.edit({ nextAction: event.target.value })} disabled={disabled} />
               <SelectField label="막힌 이유" value={draft.blocker} options={BLOCKERS} onChange={(event) => studio.edit({ blocker: event.target.value })} disabled={disabled} />
               <JournalSources refs={studio.detail?.item?.meta?.source_refs || draft.sourceRefs} />
+              <GoalLinks entityType="content_items" entityId={studio.detail?.item?.id} scope={workspace} />
               {draft.sourceRefs.some((ref) => ref.variant_id) && <div className="studio-stack">
                 <p className="studio-muted studio-small">다른 결과물에서 파생되었습니다. 원본 버전과의 연결이 저장되어 있습니다.</p>
                 {draft.sourceRefs[0]?.variant_id && <Button variant="outline" disabled={disabled} onClick={() => studio.switchVariant(draft.sourceRefs[0].variant_id)}>원본 결과물 열기</Button>}

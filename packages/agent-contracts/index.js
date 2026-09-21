@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 export const AGENT_SCHEMA_VERSION = '1.0';
-export const AGENT_SCOPES = Object.freeze(['read', 'tasks:write', 'contact-outcomes:write', 'jobs:read', 'jobs:write']);
+export const AGENT_SCOPES = Object.freeze(['read', 'tasks:write', 'contact-outcomes:write', 'jobs:read', 'jobs:write', 'goals:write', 'ai:write']);
 export const AGENT_RESPONSE_LIMITS = Object.freeze({ summary: 2048, rows: 16384, full: 32768 });
 export const AGENT_QUERY_ORDER = 'created_at.asc,id.asc';
 export const AGENT_CURSOR_TTL_MS = 60 * 60 * 1000;

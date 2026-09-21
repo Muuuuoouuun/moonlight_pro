@@ -1,11 +1,14 @@
 import {z} from 'zod';
 import {registerMoonlightTools as registerLegacyTools} from './legacy-tools.js';
+import {registerAssistanceTools} from './assistance-tools.js';
 import {registerAgentTools} from './agent-tools.js';
 import {hasAgentToken} from './agent-client.js';
 import {projectLegacyPayload} from './legacy-projection.js';
+import {projectWeeklyPayload} from './weekly-projection.js';
 export {errorResult} from './legacy-tools.js';
 
 const PROFILES={
+  assistant:['get_hub_health','get_work_context','get_ai_candidate','search_knowledge','get_weekly_report','get_goals','record_goal_command','get_goal_receipt','save_ai_candidate','request_ai_assist','record_assist_outcome','recover_ai_candidate','get_assistance_receipt'],
   core:['get_hub_health','get_daily_brief','list_tasks','get_task','create_task','update_task','complete_task','get_command_receipt'],
   pms:['get_hub_health','list_projects','get_project','list_tasks','get_task','create_task','update_task','complete_task','get_command_receipt'],
   sales:['get_hub_health','list_followups','list_work_orders','get_work_order','record_contact_outcome','get_command_receipt','get_revenue'],
@@ -22,10 +25,11 @@ export function registerMoonlightTools(server,{profile='all',mode='auto'}={}){
     const schema=read?{...definition.inputSchema,detail:z.enum(['summary','rows','full']).optional(),limit:definition.inputSchema.limit??z.number().int().min(1).max(100).optional(),offset:z.number().int().min(0).optional()}:definition.inputSchema;
     collector.registerTool(name,{...definition,inputSchema:schema,outputSchema:z.object({status:z.string().optional()}).passthrough(),annotations:{readOnlyHint:read,destructiveHint:name==='decide_work_order',idempotentHint:read,openWorldHint:true,...definition.annotations}},async(args={})=>{
       const result=await handler(args);if(result.isError)return result;
-      try{let data=JSON.parse(result.content[0].text);if(read)data=projectLegacyPayload(data,args);return {...result,content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data};}catch{return result;}
+      try{let data=JSON.parse(result.content[0].text);if(read)data=name==='get_weekly_report'?projectWeeklyPayload(data):projectLegacyPayload(data,args);return {...result,content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data};}catch{return result;}
     });
   }});
   registerAgentTools(collector,{replaceLegacy:mode==='agent'||mode==='auto'&&hasAgentToken()});
+  registerAssistanceTools(collector);
   const allowed=profile==='all'?null:new Set(PROFILES[profile]);
   for(const [name,{definition,handler}] of tools)if(!allowed||allowed.has(name))server.registerTool(name,definition,handler);
   return [...tools.keys()].filter(name=>!allowed||allowed.has(name));

@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
+import { goalHref } from "@/lib/goal-client";
 
 import { Button, Skeleton } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
@@ -415,6 +416,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
+    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: searchParams.get('check') === '1', create: true }).slice(1);
     if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
     if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
     if (p.startsWith('dashboard/revenue/leads') || p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/leads?new=lead';
@@ -426,7 +428,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
     if (p.startsWith('dashboard/content')) return 'dashboard/content/studio?new=draft';
     return null;
-  }, [queryScope]);
+  }, [queryScope, searchParams]);
 
   const createOnCurrentSurface = React.useCallback(() => {
     const target = createTargetForPath(path);
@@ -563,6 +565,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
             className="hub-sidebar-root"
             active={path}
             view={view}
+            search={searchParams.toString()}
             routeScope={routeScope}
             onScopeChange={setNavScope}
             onNavigate={navigateFromSidebar}
@@ -582,6 +585,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
               scope={routeScope || navScope}
               onNavigate={navigate}
               onNew={createOnCurrentSurface}
+              onQuickCapture={() => setCaptureOpenRequest(value => value + 1)}
               onSidebarOpen={openMobileNavigation}
               onAdvisorOpen={() => setGlobalAdvisorOpen((v) => !v)}
               navOpen={mobileNavState.open}
@@ -601,7 +605,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
         </div>
       <GlobalQuickCapture openRequest={captureOpenRequest} onNavigate={navigate} />
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open} openRequest={memoOpenRequest} onNavigate={navigate} />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
+      <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
       <FloatingMentorWidget
         key={`global-advisor:${path}`}

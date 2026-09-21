@@ -142,6 +142,11 @@ const MY_WORK_CHILDREN = [
   { key: 'daily-review', label: '하루 리뷰', path: 'dashboard/work/daily-review' },
 ];
 
+const OVERVIEW_CHILDREN = Object.fromEntries(SIDEBAR_SCOPES.map(({ key }) => [key, [
+  { key: 'overview-summary', label: '집계', path: 'dashboard/overview' },
+  { key: 'overview-goals', label: '목표·성과', path: `dashboard/overview?view=goals&scope=${key}` },
+]]));
+
 export const SIDEBAR_PRIMARY = [
   {
     key: 'today',
@@ -159,8 +164,9 @@ export const SIDEBAR_PRIMARY = [
     key: 'overview',
     label: '현황',
     icon: 'signal',
-    scopeAware: false,
+    scopeAware: true,
     owns: ['dashboard/overview'],
+    children: OVERVIEW_CHILDREN,
     paths: {
       all: 'dashboard/overview',
       classin: 'dashboard/overview',
@@ -392,6 +398,11 @@ export function pathnameOf(path) {
 // pathname matches exactly. Queries (?scope=personal) don't affect matching.
 export function isSidebarChildActive(anchorKey, childPath, activePath, view) {
   if (!isSidebarAnchorActive(anchorKey, activePath, view)) return false;
+  if (anchorKey === 'overview') {
+    const childView = new URLSearchParams(String(childPath).split('?')[1] || '').get('view') || '';
+    const currentView = view || new URLSearchParams(String(activePath).split('?')[1] || '').get('view') || '';
+    if ((childView === 'goals') !== (currentView === 'goals')) return false;
+  }
   return pathnameOf(childPath) === pathnameOf(activePath);
 }
 

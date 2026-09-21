@@ -3,7 +3,7 @@
 import React from "react";
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
@@ -1913,14 +1913,14 @@ function WeeklyReportCard({ onNavigate }) {
   const title = scope === 'company' ? '회사 주간 리포트 · ClassIn' : '나의 주간 리포트';
   const { report, syncState } = state;
   const stats = report?.stats;
-  const scorecard = scope === 'personal' ? report?.scorecard : null;
-  const scorecardUnavailable = syncState === 'preview' || report?.failedSources?.includes('campaigns');
+  const goals = report?.goals;
+  const objectives = goals?.objectives?.filter(goal => goal.status === 'active') || [];
   const rows = !stats ? [] : scope === 'company'
     ? [
         { label: '연락', value: stats.contacts },
         { label: '신규 딜', value: stats.newDeals },
-        { label: '진행 딜', value: stats.movedDeals },
-        { label: 'Won', value: stats.wonDeals },
+        { label: '수정된 진행 딜', value: stats.modifiedOpenDeals },
+        { label: '성사일 확인된 딜', value: stats.wonDeals },
       ]
     : [
         { label: '완료 할 일', value: stats.doneTasks },
@@ -1932,48 +1932,26 @@ function WeeklyReportCard({ onNavigate }) {
     <Card className="fade-up">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <SectionTitle style={{ margin: 0 }}>{title}</SectionTitle>
-        <SyncBadge state={syncState} />
-        <span style={{ fontSize: 11, color: 'var(--fg-dim)' }}>지난 7일</span>
+        <TruthBadge state={syncState} />
+        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{report?.periodStart && report?.periodEnd ? `${report.periodStart} — ${report.periodEnd}` : '지난 7일'}</span>
       </div>
       {syncState === 'error' ? (
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>주간 기록을 읽지 못했습니다 — 아래 수치 없이 넘어가지 말고 새로고침으로 다시 확인하세요.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {scope === 'personal' && syncState !== 'loading' && (
-            scorecard ? (
-              <div style={{ padding: 12, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 180 }}>
-                    <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginBottom: 4 }}>{scorecard.campaignName}</div>
-                    <div style={{ fontSize: 13, color: 'var(--fg)' }}>{scorecard.metric}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span className="stat" style={{ fontSize: 24 }}>{scorecard.actual ?? '—'}</span>
-                    <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}> / {scorecard.target}</span>
-                    <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>
-                      {scorecard.actual === null ? 'actual 입력 필요' : scorecard.gap >= 0 ? `목표 +${scorecard.gap}` : `목표까지 ${Math.abs(scorecard.gap)}`}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ marginTop: 10 }}><Progress value={scorecard.progress} tone="moon" /></div>
-              </div>
-            ) : scorecardUnavailable ? (
-              <div style={{ padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', fontSize: 12, color: 'var(--fg-muted)' }}>
-                {syncState === 'preview'
-                  ? 'Supabase 미설정 — 활성 캠페인의 KPI를 판단할 수 없습니다.'
-                  : '캠페인 전략을 읽지 못해 이번 주 KPI를 판단할 수 없습니다.'}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', flexWrap: 'wrap' }}>
-                <span style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>활성 캠페인의 primary metric과 weekly target이 아직 없습니다.</span>
-                <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/content/campaigns')}>Strategy 열기</Button>
-              </div>
-            )
+          {syncState !== 'loading' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', flexWrap: 'wrap' }}>
+              <span style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>
+                {goals?.status === 'error' ? '목표·성과 원장을 읽지 못했습니다.' : syncState === 'preview' ? '측정 원장이 연결되면 기간별 실적을 확인할 수 있습니다.' : objectives.length ? `진행 목표 ${objectives.length}개 · 기간과 측정 근거를 확인하세요.` : '측정할 목표와 결과 지표를 연결해 보세요.'}
+              </span>
+              <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/overview?view=goals&scope=${scope}`)}>목표·성과</Button>
+            </div>
           )}
+          {syncState === 'partial' && <p role="status" style={{ margin: 0, fontSize: 12, color: 'var(--fg-muted)' }}>일부 근거를 확인하지 못했습니다. ‘—’는 0이 아닌 미측정입니다.</p>}
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             {rows.map((r) => (
               <div key={r.label} style={{ minWidth: 72 }}>
-                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? <Skeleton lines={1} height={22} width="56%" label="지표 확인 중" /> : r.value}</div>
+                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? <Skeleton lines={1} height={22} width="56%" label="지표 확인 중" /> : (r.value ?? '—')}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>{r.label}</div>
               </div>
             ))}

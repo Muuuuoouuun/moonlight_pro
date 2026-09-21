@@ -2,6 +2,7 @@
 
 import React from "react";
 import { RelatedMemos } from '../related-memos';
+import { GoalLinks } from '../goal-links';
 import { MemoCaptureLink } from "../journal-links";
 import { Avatar, Badge, Button, Checkbox, IconButton } from "../hub-primitives";
 import { ProjectDeliverySummary } from "./project-delivery";
@@ -173,6 +174,7 @@ export function ProjectDetailPanel({
           </div>
         </div>
         <ProjectDeliverySummary project={project} onManage={onManageDelivery} compact />
+        <GoalLinks entityType="projects" entityId={project.id} scope={project.orgScope || project.tag} />
         <div style={{
           padding: "12px 14px",
           background: "var(--surface-2)",

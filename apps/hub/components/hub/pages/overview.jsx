@@ -1,8 +1,10 @@
 "use client";
 
 import React from "react";
+import { useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Iconed } from "../hub-icons";
-import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress } from "../hub-primitives";
+import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress, Skeleton } from "../hub-primitives";
 import {
   activitySeriesAvailability,
   buildAutomationMetricRows,
@@ -646,7 +648,13 @@ function ActivityRow({ item, onNavigate }) {
   );
 }
 
-export function Overview({ onNavigate }) {
+const GoalsView = dynamic(() => import('./goals').then(module => module.Goals), { ssr: false, loading: () => <div className="goals-page"><Skeleton lines={4} height={18} label="목표 화면 불러오는 중" /></div> });
+export function Overview(props) {
+  const params = useSearchParams();
+  return params.get('view') === 'goals' ? <GoalsView /> : <OverviewSummary {...props} />;
+}
+
+function OverviewSummary({ onNavigate }) {
   const { ledger, syncState, reload } = useOverviewLedger();
   const [period, setPeriod] = React.useState('14');
   const [activityExpanded, setActivityExpanded] = React.useState(false);

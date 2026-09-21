@@ -119,3 +119,29 @@ test('search_knowledge queries the Agent API search endpoint with query and limi
   assert.equal(result.structuredContent.items.length, 1);
 });
 
+
+test('assistant profile exposes grounded work, goals and persisted candidate tools with small discovery', async t => {
+  let sent;
+  setup(t, async (url, init) => { sent = { url, body: init.body && JSON.parse(init.body) }; return response({ status: 'saved', persisted: true }); });
+  const tools = registry({ mode: 'agent', profile: 'assistant' });
+  for (const name of ['get_work_context', 'get_goals', 'record_goal_command', 'get_goal_receipt', 'save_ai_candidate', 'request_ai_assist', 'record_assist_outcome', 'get_assistance_receipt', 'search_knowledge', 'get_weekly_report']) assert.ok(tools.has(name), name);
+  assert.ok(tools.size <= 15);
+  await tools.get('request_ai_assist').handler({ commandId, entityType: 'tasks', entityId: taskId, scope: 'personal', expectedSourceUpdatedAt: '2026-09-21T00:00:00Z', operation: 'draft', instruction: '원문 정리' });
+  assert.equal(sent.body.commandId, commandId); assert.equal(sent.body.action, 'generate');
+  assert.equal(sent.body.input.entityId, taskId);
+  assert.equal(tools.get('request_ai_assist').definition.annotations.readOnlyHint, false);
+});
+
+test('assistance and goal write uncertainty keeps stable ID and correct receipt tool without retry', async t => {
+  let calls = 0;
+  setup(t, async () => { calls++; throw Object.assign(new Error('timeout'), { name: 'TimeoutError' }); });
+  const tools = registry({ mode: 'agent', profile: 'assistant' });
+  for (const [name, receipt] of [['request_ai_assist', 'get_assistance_receipt'], ['record_goal_command', 'get_goal_receipt']]) {
+    const result = await tools.get(name).handler({ commandId, operation: 'draft', input: {}, action: 'create_objective' });
+    assert.equal(result.structuredContent.persisted, null);
+    assert.equal(result.structuredContent.retryable, false);
+    assert.equal(result.structuredContent.commandId, commandId);
+    assert.match(result.structuredContent.error, new RegExp(receipt));
+  }
+  assert.equal(calls, 2);
+});

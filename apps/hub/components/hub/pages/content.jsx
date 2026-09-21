@@ -1,4 +1,5 @@
 "use client";
+import { GoalLinks } from '../goal-links';
 
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -575,6 +576,8 @@ function buildPreviewCampaignDetail(campaign) {
 
 export function Campaigns() {
   const router = useRouter();
+  const campaignParams = useSearchParams();
+  const campaignParam = campaignParams.get('campaign');
   // 캠페인 lifecycle도 중립 — done/paused는 라벨·아이콘 몫(§5.3).
   const sTone = { Active: 'neutral', Planning: 'neutral', Draft: 'neutral', Paused: 'neutral', Completed: 'neutral' };
   const ledger = useContentLedger();
@@ -590,6 +593,10 @@ export function Campaigns() {
     setCampaigns(nextCampaigns);
     setSelectedId((prev) => (nextCampaigns.some((c) => c.id === prev) ? prev : nextCampaigns[0]?.id || null));
   }, [ledger.syncState, ledger.campaigns]);
+
+  React.useEffect(() => {
+    if (campaignParam && campaigns.some(item => item.id === campaignParam)) setSelectedId(campaignParam);
+  }, [campaignParam, campaigns]);
 
   const selected = campaigns.find(c => c.id === selectedId) || campaigns[0] || null;
   // Campaign rows without an attached war-room ledger use an honest empty detail.
@@ -819,6 +826,7 @@ export function Campaigns() {
           style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}
         >
           <Card pad={false} className="campaign-detail-frame">
+            <div style={{ padding: '0 var(--card-pad) var(--card-pad)' }}><GoalLinks entityType="campaigns" entityId={selected.id} /></div>
             <div style={{ padding: 'var(--card-pad)', borderBottom: '1px solid var(--line-soft)' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                 <div style={{

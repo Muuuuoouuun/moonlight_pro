@@ -125,6 +125,33 @@ test('run and weekly reads forward exact filters; all tools declare operation hi
   for (const { definition } of tools.values()) assert.equal(typeof definition.annotations.readOnlyHint, 'boolean');
 });
 
+test('weekly MCP retains statistics, period and measurement truth when goal history exceeds the response budget', async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const payload = {
+    status:'partial', source:'supabase', scope:'personal', periodStart:'2026-09-14', periodEnd:'2026-09-20', timezone:'Asia/Seoul',
+    partial:true, failedSources:['tasks_completed'], stats:{doneTasks:null,publishes:2,contacts:0,personalDeals:0},
+    definitions:{doneTasks:'Counts currently completed work by completed_at.',publishes:'Deduplicated published external post identity.'},
+    measurements:[{sourceKey:'tasks_completed',value:null,coverage:'partial',reason:'scope-reference-unavailable',evidence:[{type:'query',table:'tasks',count:2,scope:'personal',periodStart:'2026-09-14',periodEnd:'2026-09-20'}]},
+      {sourceKey:'content_published',value:2,coverage:'complete',evidence:Array.from({length:20},(_,i)=>({type:i===19?'query':'ledger',table:'publish_logs',id:String(i),count:2,href:'https://example.com/'+ 'a'.repeat(1800),label:'publication'}))}],
+    goals:{status:'live',objectives:[{id:'goal'}],metrics:[{id:'metric'}],observations:Array.from({length:80},()=>({evidence:'x'.repeat(1800)}))},
+  };
+  globalThis.fetch = async () => Response.json(payload);
+  const result = await registeredTools().get('get_weekly_report').handler({scope:'personal'});
+  const report=result.structuredContent;
+  assert.deepEqual(report.stats,payload.stats);
+  assert.equal(report.periodStart,payload.periodStart);
+  assert.equal(report.definitions.doneTasks,payload.definitions.doneTasks);
+  assert.equal(report.measurements[0].value,null);
+  assert.equal(report.measurements[0].coverage,'partial');
+  assert.equal(report.measurements[0].reason,'scope-reference-unavailable');
+  assert.ok(report.measurements[1].evidence.some(e=>e.type==='query'&&e.count===2));
+  assert.equal(report.measurements[1].evidenceTruncated,true);
+  assert.equal(report.goals.detailTool,'get_goals');
+  assert.equal(report.goals.observations,undefined);
+  assert.ok(Buffer.byteLength(JSON.stringify(report))<=16384);
+});
+
 // --- Error contract (R2) -----------------------------------------------------
 // Before this contract existed, a dead Hub reached the caller as a bare "fetch failed"
 // and an HTTP 401 reached it as a successful result. Both regressions are locked below,

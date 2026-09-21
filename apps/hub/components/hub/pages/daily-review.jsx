@@ -1,6 +1,8 @@
 "use client";
 
 import React from 'react';
+import { useSearchParams } from 'next/navigation';
+import { GoalLinks } from '../goal-links';
 import { Button, EmptyState, IconButton, TextField, TruthBadge } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
 import { isDailyReviewDate } from '@/lib/daily-review';
@@ -16,6 +18,8 @@ function moveDay(date, offset) {
 }
 
 export function DailyReview() {
+  const params = useSearchParams();
+  const requestedDate = params.get('date');
   const model = useDailyReview();
   const { date, timezone, draft, review, entries, source, busy, dirty, message, chooseDate } = model;
   const [composerOpen, setComposerOpen] = React.useState(false);
@@ -24,6 +28,13 @@ export function DailyReview() {
   const isToday = date === todayIn(timezone);
   const savedText = review?.note || review?.focus;
   const actionLabel = dirty ? '이어서 쓰기' : review ? '기록 수정' : '기록 남기기';
+  const consumedDate = React.useRef(null);
+  React.useEffect(() => {
+    if (isDailyReviewDate(requestedDate) && consumedDate.current !== requestedDate && !busy) {
+      consumedDate.current = requestedDate;
+      chooseDate(requestedDate);
+    }
+  }, [requestedDate, chooseDate, busy]);
 
   return <div className="daily-review-page">
     <header className="daily-review-header">
@@ -58,6 +69,7 @@ export function DailyReview() {
       <TruthBadge state={source} label={source === 'live' ? '저장소 연결됨' : undefined} />
       {(source === 'error' || source === 'preview') && <><span>{model.loadMessage}</span><Button variant="outline" onClick={model.refresh}>다시 불러오기</Button></>}
     </div>
+    {source === 'live' && review && <GoalLinks entityType="journal_entries" entityId={review.id} scope="personal" />}
 
     <section className="daily-review-history" aria-label="날짜별 기록">
       <div className="daily-review-history-heading"><h3>날짜별 기록</h3><TextField id="daily-review-month" label="조회 월" type="month" value={date.slice(0, 7)} disabled={busy} onChange={(event) => chooseDate(`${event.target.value}-01`)} /></div>

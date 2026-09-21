@@ -101,7 +101,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
         status: response.status,
         reason: data?.error?.message || `http-${response.status}`,
         text: "",
-        model: status.model,
+        model: targetModel,
       };
     }
 
@@ -110,7 +110,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       status: response.status,
       reason: "ok",
       text: extractGeminiText(data),
-      model: status.model,
+      model: targetModel,
       usageMetadata: data?.usageMetadata || null,
     };
   } catch (error) {
@@ -119,7 +119,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       status: null,
       reason: error instanceof Error ? error.message : String(error),
       text: "",
-      model: status.model,
+      model: targetModel,
     };
   }
 }

@@ -42,6 +42,8 @@ async function callEngineDraft(body) {
     headers,
     body: JSON.stringify(body),
     cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.timeout(60000),
   });
   const text = await response.text();
   let data = null;
@@ -67,7 +69,10 @@ export async function GET(req) {
     }
 
     const cadence = context.content?.cadence || null;
-    const behind = Boolean(cadence?.behind);
+    if (!cadence || typeof cadence.behind !== "boolean") {
+      return NextResponse.json({ status: "needs-data", reason: "personal-cadence-unmeasured", ...summary });
+    }
+    const behind = cadence.behind;
     summary.cadenceBehind = behind;
 
     // Only act when the cadence is actually behind goal — the point is to keep it alive, not
@@ -106,11 +111,11 @@ export async function GET(req) {
       target_idea: { id: idea.id, title: idea.title, summary: idea.summary || "", brandKey: idea.brandKey },
     };
 
-    // One retry: the thinking model malforms JSON ~5% of the time even with bounded thinking.
+    // A paid generation is never retried automatically after an ambiguous result.
     let engine = null;
     let data = null;
     let ok = false;
-    for (let attempt = 0; attempt < 2 && !ok; attempt += 1) {
+    {
       engine = await callEngineDraft({
         mode: "content-draft",
         ref: idea.title,

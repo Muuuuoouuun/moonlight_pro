@@ -1,13 +1,14 @@
 // A scoped Agent API credential is deliberately separate from the legacy Hub secret.
 const MAX_RESPONSE_BYTES = 128 * 1024;
 export const hasAgentToken = () => Boolean(process.env.COM_MOON_AGENT_API_TOKEN?.trim());
-export async function agentRequest(path, {method='GET', body}={}) {
+export async function agentRequest(path, {method='GET', body, timeoutMs}={}) {
   const token=process.env.COM_MOON_AGENT_API_TOKEN?.trim();
   if(!token) return {ok:false,httpStatus:0,data:{status:'error',error:'COM_MOON_AGENT_API_TOKEN is not set. Configure the scoped Agent API before using this tool.',retryable:false}};
   const base=(process.env.COM_MOON_HUB_URL?.trim()||'http://localhost:3000').replace(/\/$/,'');
-  const isCommand=path==='/commands'&&method==='POST';
+  const isCommand=['/commands','/goals/commands','/ai-assistance'].includes(path)&&method==='POST';
+  const receiptTool=path==='/ai-assistance'?'get_assistance_receipt':path==='/goals/commands'?'get_goal_receipt':'get_command_receipt';
   const isJobWrite=method==='POST'&&(path==='/jobs'||/^\/jobs\/[^/]+\/(resume|cancel)$/.test(path));
-  const timeout=Number(process.env.COM_MOON_MCP_TIMEOUT_MS)||15_000;
+  const timeout=Number(timeoutMs)||Number(process.env.COM_MOON_MCP_TIMEOUT_MS)||15_000;
   try {
     const res=await fetch(`${base}/api/agent/v1${path}`,{
       method,headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},
@@ -20,7 +21,7 @@ export async function agentRequest(path, {method='GET', body}={}) {
     const ok=res.ok&&!['error','unauthorized','forbidden','invalid-input','conflict','failed'].includes(data.status);
     return {ok,httpStatus:res.status,data};
   }catch(error){
-    return {ok:false,httpStatus:0,data:{status:'error',error:isCommand?'Command outcome is unknown. Call get_command_receipt with this commandId before retrying.':isJobWrite?'Job outcome is unknown. Check the job list or saved job before retrying; reuse the same requestId and unchanged content, or the same expectedTurnCount for cancellation.':'Agent API is unavailable; check Hub and COM_MOON_HUB_URL.',code:error?.name==='TimeoutError'?'timeout':'agent-unavailable',retryable:!isCommand&&!isJobWrite,...(isCommand||isJobWrite?{persisted:null}:{}),...(isJobWrite?{requestId:body?.requestId??null,expectedTurnCount:body?.expectedTurnCount??null}:{}),...(body?.commandId?{commandId:body.commandId}:{})}};
+    return {ok:false,httpStatus:0,data:{status:'error',error:isCommand?`Command outcome is unknown. Call ${receiptTool} with this commandId before retrying.`:isJobWrite?'Job outcome is unknown. Check the job list or saved job before retrying; reuse the same requestId and unchanged content, or the same expectedTurnCount for cancellation.':'Agent API is unavailable; check Hub and COM_MOON_HUB_URL.',code:error?.name==='TimeoutError'?'timeout':'agent-unavailable',retryable:!isCommand&&!isJobWrite,...(isCommand||isJobWrite?{persisted:null}:{}),...(isJobWrite?{requestId:body?.requestId??null,expectedTurnCount:body?.expectedTurnCount??null}:{}),...(body?.commandId?{commandId:body.commandId}:{})}};
   }
 }
 export function agentToolResult(result){return {content:[{type:'text',text:JSON.stringify(result.data)}],structuredContent:result.data,...(!result.ok?{isError:true}:{})};}

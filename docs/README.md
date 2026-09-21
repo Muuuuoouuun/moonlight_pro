@@ -158,6 +158,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`system-eval-2026-08-05.md`](system-eval-2026-08-05.md) — 재감사 1~30차 채점·조치 로그. 축별(안정성·속도·정체성·사용성·디자인·편의성·UIUX) 점수 추이와 각 차수의 지적·수리 내역. 기록 문서이므로 새 구현의 근거로는 §4의 최신 스펙을 우선한다.
 
+- [`evaluations/2026-09-21-measurable-personal-os-validation.md`](evaluations/2026-09-21-measurable-personal-os-validation.md) — **격리 워크트리 구현·로컬 검증 완료 / 운영 적용 별도**. 공통 목표·지표·근거/관측, 업무 연결, Gemini·구독형 MCP 후보/검토, 실제 DB·브라우저·모델 검증과 6축 평가. [실행 계약](superpowers/plans/2026-09-21-measurable-personal-os.md), [설정/적용 가이드](measurable-personal-os-operations.md). 후속 [최적화·UI/UX 개발안](superpowers/plans/2026-09-21-personal-os-optimization-and-experience.md)은 미확정 제안이다.
+
 ### 아키텍처·데이터 정본
 
 - [`supabase-first-operating-ledger.md`](supabase-first-operating-ledger.md)

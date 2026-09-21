@@ -1,90 +1,45 @@
 import assert from "node:assert/strict";
-import { registerHooks } from "node:module";
-import { beforeEach, test } from "node:test";
-
-const serverReadStub = `
-export function eqFilter(value) { return \`eq.\${value}\`; }
-export function withWorkspaceFilter(filters = []) { return [["workspace_id", "eq.workspace-1"], ...filters]; }
-export async function fetchSupabaseRows(table, options = {}) {
-  globalThis.__weeklyReportState.calls.push({ table, options });
-  return globalThis.__weeklyReportState.rows[table];
+import { test } from "node:test";
+import { getWeeklyReport } from "./weekly-report.js";
+const now = new Date('2026-09-21T00:00:00Z');
+const measurement = (sourceKey,value=0,coverage='complete') => ({sourceKey,value,coverage,evidence:[]});
+function dependencies(overrides={}) {
+  return { now, workspaceId:'workspace',
+    reader:{ measure:async ({sourceKey})=>measurement(sourceKey),scopedRows:async()=>({rows:[],coverage:'complete'}),...overrides.reader },
+    getGoals:async()=>({status:'live',objectives:[],metrics:[]}), ...overrides };
 }
-`;
-
-registerHooks({
-  resolve(specifier, context, nextResolve) {
-    if (specifier === "@/lib/server-read") {
-      return { url: `data:text/javascript,${encodeURIComponent(serverReadStub)}`, shortCircuit: true };
-    }
-    return nextResolve(specifier, context);
-  },
+test('weekly window consists of seven completed calendar days and includes shared goals', async()=>{
+  const goals={status:'live',objectives:[{id:'goal'}],metrics:[]};
+  const report=await getWeeklyReport(dependencies({getGoals:async()=>goals}));
+  assert.equal(report.periodStart,'2026-09-14'); assert.equal(report.periodEnd,'2026-09-20');
+  assert.deepEqual(report.goals,goals); assert.equal(report.scorecard,null); assert.equal(report.stats.contacts,0);
 });
-
-const state = globalThis.__weeklyReportState = { calls: [], rows: {} };
-const { getWeeklyReport } = await import("./weekly-report.js?campaign-scorecard-contract");
-
-beforeEach(() => {
-  state.calls = [];
-  state.rows = {
-    tasks: [{ id: "task-1", title: "제안서 발송", status: "done" }],
-    outreach_outcomes: [{ id: "outcome-1", action: "email" }],
-    deals: [{ id: "deal-1", title: "개인 진단", stage: "proposal", meta: { type: "personal" } }],
-    publish_logs: [{ id: "publish-1" }],
-    campaigns: [{
-      id: "campaign-1",
-      name: "Founder OS 론칭",
-      status: "active",
-      meta: {
-        business_truth: {
-          primary_metric: "유료 진단 예약",
-          weekly_target: 5,
-          weekly_actual: 2,
-        },
-      },
-    }],
-  };
+test('partial source reads remain null instead of fabricating zero or achievement',async()=>{
+  const report=await getWeeklyReport(dependencies({reader:{measure:async ({sourceKey})=>measurement(sourceKey,sourceKey==='tasks_completed'?null:0,sourceKey==='tasks_completed'?'unmeasured':'complete'),scopedRows:async()=>({rows:[],coverage:'complete'})}}));
+  assert.equal(report.stats.doneTasks,null);assert.equal(report.stats.contacts,0);assert.equal(report.partial,true);
+  assert.ok(report.failedSources.includes('tasks_completed'));
 });
-
-test("personal weekly report adds the active campaign target-versus-actual scorecard", async () => {
-  const report = await getWeeklyReport({ scope: "personal" });
-
-  assert.deepEqual(state.calls.map((call) => call.table), [
-    "tasks",
-    "outreach_outcomes",
-    "deals",
-    "publish_logs",
-    "campaigns",
-  ]);
-  assert.deepEqual(report.scorecard, {
-    campaignId: "campaign-1",
-    campaignName: "Founder OS 론칭",
-    metric: "유료 진단 예약",
-    target: 5,
-    actual: 2,
-    gap: -3,
-    progress: 40,
-  });
+test('all unavailable sources produce an error report, not a live empty report',async()=>{
+  const report=await getWeeklyReport(dependencies({reader:{measure:async({sourceKey})=>measurement(sourceKey,null,'unmeasured'),scopedRows:async()=>({rows:[],coverage:'unmeasured'})},getGoals:async()=>({status:'error'})}));
+  assert.equal(report.source,'error');assert.equal(report.stats,null);
 });
-
-test("company weekly report does not read or report personal campaign strategy", async () => {
-  const report = await getWeeklyReport({ scope: "company" });
-
-  assert.deepEqual(state.calls.map((call) => call.table), [
-    "tasks",
-    "outreach_outcomes",
-    "deals",
-    "publish_logs",
-  ]);
-  assert.equal(report.scorecard, null);
+test('company won results require an actual won timestamp and distinguish modified open deals',async()=>{
+  const report=await getWeeklyReport(dependencies({scope:'company',reader:{measure:async ({sourceKey})=>measurement(sourceKey),scopedRows:async()=>({coverage:'complete',rows:[
+    {id:'old',stage:'won',amount:100,updated_at:'2026-09-17T00:00:00Z',won_at:'2026-08-01T00:00:00Z'},
+    {id:'new',stage:'won',amount:200,currency:'KRW',won_at:'2026-09-17T00:00:00Z'},
+    {id:'open',stage:'proposal',updated_at:'2026-09-17T00:00:00Z'},
+  ]})}}));
+  assert.equal(report.stats.wonDeals,1);assert.equal(report.stats.wonAmount,200);assert.equal(report.stats.modifiedOpenDeals,1);
+  assert.match(report.definitions.wonAmount,/입금/);
 });
-
-test("campaign read failure is named as a partial personal report", async () => {
-  state.rows.campaigns = null;
-
-  const report = await getWeeklyReport({ scope: "personal" });
-
-  assert.equal(report.source, "supabase");
-  assert.equal(report.partial, true);
-  assert.deepEqual(report.failedSources, ["campaigns"]);
-  assert.equal(report.scorecard, null);
+test('undated wins are unmeasured, and missing goal storage is surfaced without erasing measured activities',async()=>{
+  const report=await getWeeklyReport(dependencies({scope:'company',reader:{measure:async ({sourceKey})=>measurement(sourceKey,2),scopedRows:async()=>({coverage:'complete',rows:[{id:'old',stage:'won'}]})},getGoals:async()=>({status:'error',error:'migration-required'})}));
+  assert.equal(report.stats.wonDeals,null);assert.equal(report.stats.wonAmount,null);assert.equal(report.stats.contacts,2);assert.equal(report.partial,true);
+  assert.ok(report.failedSources.includes('goals'));assert.ok(report.failedSources.includes('deal-win-timestamps'));
+});
+test('modified open deals use canonical legacy aliases and stage_detail precedence',async()=>{
+  const rows=['new','nurturing','consult'].map((stage,i)=>({id:String(i),stage,updated_at:'2026-09-17T00:00:00Z'}));
+  rows.push({id:'detail',stage:'won',meta:{stage_detail:'contact'},updated_at:'2026-09-17T00:00:00Z'});
+  const report=await getWeeklyReport(dependencies({scope:'company',reader:{measure:async({sourceKey})=>measurement(sourceKey),scopedRows:async()=>({rows,coverage:'complete'})}}));
+  assert.equal(report.stats.modifiedOpenDeals,4);assert.equal(report.stats.wonDeals,0);
 });

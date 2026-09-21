@@ -1,148 +1,64 @@
-// 주간 정리 리포트 원장 — Q118·Q119 확정(2026-08-18).
-// 목요일 아침 = 회사(ClassIn) 리포트, 월요일 아침 = 개인 리포트. 7일 윈도의 실제
-// 기록(완료 할 일·연락 기록·딜 변화·발행)만 집계한다. read 실패는 0으로 뭉개지 않고
-// error/failedSources로 명명한다(§5.3 source truth — 코어 read 실패 계약).
+// Weekly review uses the same measurement definitions as Objectives, with seven
+// completed local calendar days. Values without complete evidence remain null.
+import { createMetricReader, metricPeriodWindow } from '../metrics/source-adapters.js';
+import { shiftDateKey, toZonedDateKey } from '../rhythm-calendar.js';
+import { DEAL_STAGES, STAGE_ALIASES } from '../deal-stages.js';
+import { resolveDefaultWorkspaceId } from '../server-write.js';
 
-import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
-import { buildWeeklyScorecard } from "@/lib/campaign-business-truth";
+const STAGES = new Set(DEAL_STAGES.map(stage => stage.key));
+const OPEN_STAGES = new Set([...STAGES].filter(stage => stage !== 'closing'));
+const normalizeStage = deal => {
+  const detail = String(deal.meta?.stage_detail || '').toLowerCase();
+  if (STAGES.has(detail) || detail === 'lost') return detail;
+  const raw = String(deal.stage || '').toLowerCase();
+  return STAGE_ALIASES[raw] || (STAGES.has(raw) ? raw : 'potential');
+};
+const defaultGoals = async options => {
+  try { return await (await import('./goals-ledger.js')).getGoalsLedger({scope:options.scope},{workspaceId:options.workspaceId}); }
+  catch { return {status:'error',error:'goals-read-failed',objectives:[],metrics:[]}; }
+};
 
-const WINDOW_DAYS = 7;
-
-// 딜의 열린 단계(정체 후보) — followups-ledger와 같은 어휘.
-const OPEN_STAGES = new Set(["prospect", "proposal", "negotiation", "lead", "qualified", "qual", "neg", "prop"]);
-
-function toNum(v, fallback = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-// scope: 'company'(ClassIn 세일즈 축) | 'personal'(개인 실행 축).
-// 두 리포트가 다른 질문에 답한다 — 회사: 파이프라인이 움직였는가, 개인: 내가 실행했는가.
-export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_DAYS } = {}) {
-  const since = new Date(Date.now() - windowDays * 86400e3).toISOString();
-
-  const [taskRows, outcomeRows, dealRows, publishRows, campaignRows] = await Promise.all([
-    fetchSupabaseRows("tasks", {
-      select: "id,title,status,updated_at",
-      filters: withWorkspaceFilter([
-        ["status", eqFilter("done")],
-        ["updated_at", `gte.${since}`],
-      ]),
-      limit: 300,
-    }),
-    fetchSupabaseRows("outreach_outcomes", {
-      select: "id,action,occurred_at,lead_id,company_id",
-      filters: withWorkspaceFilter([["occurred_at", `gte.${since}`]]),
-      limit: 300,
-    }),
-    fetchSupabaseRows("deals", {
-      // deals에 type 컬럼은 없다(스키마 + 0018 마이그레이션) — 정체성은 meta.type.
-      select: "id,title,stage,amount,meta,created_at,updated_at",
-      filters: withWorkspaceFilter([["updated_at", `gte.${since}`]]),
-      limit: 300,
-    }),
-    fetchSupabaseRows("publish_logs", {
-      select: "id,created_at",
-      filters: withWorkspaceFilter([["created_at", `gte.${since}`]]),
-      limit: 200,
-    }),
-    scope === "personal"
-      ? fetchSupabaseRows("campaigns", {
-          select: "id,name,status,meta,updated_at",
-          filters: withWorkspaceFilter([["status", eqFilter("active")]]),
-          order: "updated_at.desc",
-          limit: 20,
-        })
-      : Promise.resolve([]),
+export async function getWeeklyReport({scope='personal',windowDays=7,timezone='Asia/Seoul',now=new Date(),workspaceId=resolveDefaultWorkspaceId(),reader=createMetricReader({workspaceId,now}),getGoals=defaultGoals}={}) {
+  if (!['personal','company'].includes(scope) || !Number.isInteger(windowDays) || windowDays<1 || windowDays>31) throw new Error('invalid-weekly-period');
+  const periodEnd=shiftDateKey(toZonedDateKey(now,timezone),-1);
+  const periodStart=shiftDateKey(periodEnd,1-windowDays);
+  const window=metricPeriodWindow({periodStart,periodEnd,timezone});
+  if (!window) throw new Error('invalid-weekly-timezone');
+  const period={scope,periodStart,periodEnd,timezone};
+  const sourceKeys=scope==='company'?['contacts_recorded']:['tasks_completed','content_published','contacts_recorded'];
+  const [measurements,dealsResult,goals] = await Promise.all([
+    Promise.all(sourceKeys.map(sourceKey=>reader.measure({...period,sourceKey}))),
+    reader.scopedRows('deals',[],scope),
+    getGoals({scope,workspaceId}),
   ]);
-
-  const failedSources = [
-    ...(taskRows === null ? ["tasks"] : []),
-    ...(outcomeRows === null ? ["outreach_outcomes"] : []),
-    ...(dealRows === null ? ["deals"] : []),
-    ...(publishRows === null ? ["publish_logs"] : []),
-    ...(scope === "personal" && campaignRows === null ? ["campaigns"] : []),
-  ];
-  const sourceCount = scope === "personal" ? 5 : 4;
-  // 집계 소스가 전부 실패면 이 리포트에 사실이 하나도 없다 — partial 대신 error.
-  if (failedSources.length === sourceCount) {
-    return {
-      source: "error",
-      error: "weekly-report-read-failed",
-      configured: true,
-      scope,
-      windowDays,
-      failedSources,
-      stats: null,
-      scorecard: null,
-      highlights: [],
-    };
-  }
-
-  const tasks = taskRows || [];
-  const outcomes = outcomeRows || [];
-  const deals = dealRows || [];
-  const publishes = publishRows || [];
-  const campaigns = campaignRows || [];
-
-  // 회사 리포트는 company 타입 딜만, 개인 리포트는 personal 타입 딜만 본다.
-  // (레거시 딜의 type: 'company' | 'personal' — workspace-map과 같은 어휘.)
-  const scopedDeals = deals.filter((d) => {
-    const t = d.type ?? d.meta?.type;
-    return scope === "company" ? t !== "personal" : t === "personal";
-  });
-  const newDeals = scopedDeals.filter((d) => d.created_at && d.created_at >= since);
-  const openDeals = scopedDeals.filter((d) => OPEN_STAGES.has(String(d.stage || "").toLowerCase()));
-  const wonDeals = scopedDeals.filter((d) => {
-    const s = String(d.stage || "").toLowerCase();
-    return s === "closing" || s === "won" || s === "closed_won";
-  });
-  const wonAmount = wonDeals.reduce((sum, d) => sum + toNum(d.amount), 0);
-
-  const stats = scope === "company"
-    ? {
-        contacts: outcomes.length,
-        newDeals: newDeals.length,
-        movedDeals: openDeals.length,
-        wonDeals: wonDeals.length,
-        wonAmount,
-      }
-    : {
-        doneTasks: tasks.length,
-        publishes: publishes.length,
-        contacts: outcomes.length,
-        personalDeals: scopedDeals.length,
-      };
-
-  let scorecard = null;
-  if (scope === "personal") {
-    for (const campaign of campaigns) {
-      const campaignScorecard = buildWeeklyScorecard(campaign.meta);
-      if (!campaignScorecard) continue;
-      scorecard = {
-        campaignId: campaign.id,
-        campaignName: campaign.name || "캠페인",
-        ...campaignScorecard,
-      };
-      break;
-    }
-  }
-
-  // 하이라이트: 리포트가 숫자만 나열하지 않게 실제 제목을 몇 개 남긴다(§10 운영자 카피).
-  const highlights = scope === "company"
-    ? wonDeals.slice(0, 3).map((d) => ({ kind: "won", label: d.title || "딜" }))
-    : tasks.slice(0, 3).map((t) => ({ kind: "done", label: t.title || "할 일" }));
-
+  const failedSources=measurements.filter(m=>m.coverage!=='complete').map(m=>m.sourceKey);
+  if(dealsResult.coverage!=='complete')failedSources.push('deals');
+  if(!['live','empty'].includes(goals.status))failedSources.push('goals');
+  const deals=dealsResult.rows;
+  const inPeriod=value=>typeof value==='string'&&Date.parse(value)>=Date.parse(window.start)&&Date.parse(value)<Date.parse(window.end);
+  const newDeals=deals.filter(d=>inPeriod(d.created_at));
+  const modified=deals.filter(d=>inPeriod(d.updated_at));
+  const openDeals=modified.filter(d=>OPEN_STAGES.has(normalizeStage(d)));
+  const won=deals.filter(d=>normalizeStage(d)==='closing');
+  const undatedWins=won.some(d=>!d.won_at||!Number.isFinite(Date.parse(d.won_at)));
+  const wonDeals=won.filter(d=>inPeriod(d.won_at));
+  if(scope==='company'&&undatedWins)failedSources.push('deal-win-timestamps');
+  const knownDeals=dealsResult.coverage==='complete';
+  const winsMeasured=knownDeals&&!undatedWins;
+  const krwOnly=wonDeals.every(d=>(d.currency||'KRW')==='KRW'&&d.amount!==null&&d.amount!==''&&Number.isFinite(Number(d.amount)));
+  const values=Object.fromEntries(measurements.map(m=>[m.sourceKey,m.coverage==='complete'?m.value:null]));
+  const stats=scope==='company'?{
+    contacts:values.contacts_recorded,newDeals:knownDeals?newDeals.length:null,
+    modifiedOpenDeals:knownDeals?openDeals.length:null,
+    wonDeals:winsMeasured?wonDeals.length:null,
+    wonAmount:winsMeasured&&krwOnly?wonDeals.reduce((sum,d)=>sum+Number(d.amount),0):null,
+  }:{doneTasks:values.tasks_completed,publishes:values.content_published,contacts:values.contacts_recorded,personalDeals:knownDeals?modified.length:null};
+  const unavailable=measurements.every(m=>m.coverage==='unmeasured')&&dealsResult.coverage==='unmeasured'&&goals.status==='error';
   return {
-    source: "supabase",
-    configured: true,
-    scope,
-    windowDays,
-    since,
-    partial: failedSources.length > 0,
-    failedSources,
-    stats,
-    scorecard,
-    highlights,
+    source:unavailable?'error':'supabase',configured:Boolean(workspaceId),scope,windowDays,timezone,periodStart,periodEnd,since:window.start,until:window.end,asOf:now.toISOString(),
+    partial:failedSources.length>0,failedSources,stats:unavailable?null:stats,scorecard:null,goals,measurements,
+    definitions:{contacts:'CRM에 기록된 실제 연락 활동. 노트·AI 기록·상태 수정은 제외합니다.',doneTasks:'현재 완료 상태인 작업을 completed_at으로 집계합니다. 재오픈 시 과거 값도 바뀝니다.',publishes:'성공한 발행을 실제 발행 시각과 외부 게시물 식별자로 중복 제거합니다.',modifiedOpenDeals:'기간 중 수정된 현재 진행 딜. 단계 전이 횟수가 아닙니다.',wonDeals:'실제 won_at이 기간 안인 현재 성사 딜. 성사일 미상 딜이 있으면 미측정입니다.',wonAmount:'위 성사 딜의 KRW 계약 금액 합계이며 실제 입금이 아닙니다.',scorecard:'이전 캠페인 수동 현재값은 기간 증거가 없어 주간 실적으로 표시하지 않습니다.'},
+    highlights:scope==='company'&&winsMeasured?wonDeals.slice(0,3).map(d=>({kind:'won',label:d.title||'딜'})):[],
+    ...(unavailable?{error:'weekly-report-read-failed'}:{}),
   };
 }
