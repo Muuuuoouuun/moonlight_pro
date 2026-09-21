@@ -594,11 +594,7 @@ function KpiCard({ k, onNavigate }) {
       onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(k.nav); } } : undefined}
       className="hub-metric-card"
       style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--line-soft)',
-        borderRadius: 'var(--r-lg)',
         padding: 'var(--card-pad)',
-        boxShadow: 'var(--shadow-soft)',
         cursor: clickable ? 'pointer' : 'default',
       }}
     >

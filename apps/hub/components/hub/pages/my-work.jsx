@@ -1240,7 +1240,7 @@ export function MyWork({ onNavigate }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Input ref={searchRef} icon="search" placeholder="제목 검색 (/)" value={search} onChange={setSearch} style={{ width: 180 }} />
+        <Input ref={searchRef} icon="search" placeholder="제목 검색" kbd="/" clearable value={search} onChange={setSearch} style={{ width: 190 }} />
         <SegmentedControl
           label="레인 필터"
           options={LANE_OPTIONS.map((o) => ({ ...o, count: laneCounts[o.key] || 0 }))}

@@ -52,7 +52,7 @@ export function MemoComposer({ model, isNew, onClose, onReload }) {
         <div aria-live="polite"><TruthBadge state={truth} label={truthLabel} /></div>
         {source !== 'live' && <div className="memo-feedback"><TruthBadge state={source} /><p>저장소를 확인한 뒤 서버에 저장할 수 있어요.</p><Button onClick={onReload} disabled={busy}>연결 다시 확인</Button><Button onClick={copy}>입력 복사</Button></div>}
         {model.localError && <div className="memo-feedback" role="alert"><p>이 탭의 복구 사본을 저장하지 못했어요. 입력을 복사해 보관해 주세요.</p><Button onClick={copy}>입력 복사</Button></div>}
-        <TextAreaField ref={bodyRef} label="원문 메모" placeholder="기억하고 싶은 일이나 떠오른 생각을 한 줄로…" value={draft.body} rows={isNew && !entry ? 3 : 9} style={isNew && !entry ? { minHeight: 80 } : undefined} maxLength={20000} disabled={locked}
+        <TextAreaField ref={bodyRef} label="원문 메모" placeholder="기억하고 싶은 일이나 떠오른 생각을 한 줄로…" value={draft.body} rows={isNew && !entry ? 3 : 9} style={isNew && !entry ? { minHeight: 80 } : undefined} maxLength={20000} disabled={locked} spacious showCount autoResize
           onChange={(event) => edit({ body: event.target.value })} onSelect={selectionChanged} hint={entry ? '일부만 쓰려면 문장을 선택하세요. 선택하지 않으면 메모 전체(3,500자까지)를 보냅니다.' : '제목이나 분류 없이 바로 저장할 수 있어요.'} />
         <div className="memo-metadata">
           <TextField label="태그 · 선택" placeholder="쉼표로 구분해 입력" value={(draft.noteMeta.tags || []).join(',')} disabled={locked}

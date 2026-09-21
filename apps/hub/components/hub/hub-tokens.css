@@ -382,8 +382,17 @@
   transition: background var(--dur-hover) ease, color var(--dur-hover) ease;
 }
 /* Clickable KPI card — border lifts on hover. CSS, not onMouseEnter handlers. */
-.hub-app .hub-metric-card { transition: border-color var(--dur-hover) ease; }
-.hub-app .hub-metric-card[role="button"]:hover { border-color: var(--line-strong); }
+.hub-app .hub-metric-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-soft);
+  transition: border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-metric-card[role="button"]:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-metric-card { transition: none; }
 }
@@ -461,7 +470,112 @@
    요소 자신의 radius를 따라가므로 여기서 radius를 건드릴 이유가 없다. */
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
 /* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
-.hub-app .hub-field:focus-within { border-color: var(--moon-300); }
+.hub-app .hub-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-field:hover:not(:focus-within) {
+  border-color: var(--line-strong);
+}
+.hub-app .hub-field:focus-within {
+  border-color: var(--moon-300);
+  background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--moon-300);
+}
+.hub-app .hub-field[data-disabled="true"],
+.hub-app .hub-field:has(input:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--line-soft);
+}
+
+/* EditDrawer inputs and controls — unified 32px compact input chrome */
+.hub-app .hub-drawer-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub);
+}
+.hub-app textarea.hub-drawer-input {
+  height: auto;
+  min-height: 104px;
+  padding: 9px 10px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.hub-app select.hub-drawer-input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 28px;
+  cursor: pointer;
+}
+.hub-app .hub-drawer-input::placeholder {
+  color: var(--fg-faint);
+}
+.hub-app .hub-drawer-input:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+.hub-app .hub-drawer-input:focus {
+  border-color: var(--moon-300);
+  background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--moon-300);
+  outline: none;
+}
+.hub-app .hub-drawer-input:disabled {
+  color: var(--fg-faint);
+  background: var(--surface);
+  border-color: var(--line-soft);
+  cursor: not-allowed;
+}
+
+/* Quick capture field styles */
+.hub-app .hub-quick-capture__field {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-quick-capture__field:hover:not(:focus-within) {
+  border-color: var(--line-strong);
+}
+.hub-app .hub-quick-capture__field:focus-within {
+  border-color: var(--moon-300);
+  background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--moon-300);
+}
+.hub-app .hub-quick-capture__field[data-invalid="true"] {
+  border-color: var(--danger-line);
+}
+.hub-app .hub-quick-capture__input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+.hub-app .hub-quick-capture__input::placeholder {
+  color: var(--fg-faint);
+}
 
 /* ── Form controls (§8.1 primitives-first) ─────────────────────────────────────
    Capture surfaces used to re-declare input chrome inline on every field, and every
@@ -484,6 +598,25 @@
   transition: border-color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 .hub-app textarea.hub-input { height: auto; min-height: 104px; padding: 11px 12px; resize: vertical; }
+.hub-app textarea.hub-input--spacious {
+  min-height: 128px;
+  padding: 13px 15px;
+  font-size: 13.5px;
+  line-height: 1.62;
+  letter-spacing: -0.005em;
+}
+.hub-app textarea.hub-drawer-input--spacious {
+  min-height: 116px;
+  padding: 11px 13px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Compact and spacious field size modifiers */
+.hub-app .hub-field--xs { height: 24px; padding: 0 7px; font-size: 11.5px; }
+.hub-app .hub-field--sm { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.hub-app .hub-field--md { height: 36px; padding: 0 12px; font-size: 13.5px; }
+.hub-app .hub-field--lg { height: 42px; padding: 0 14px; font-size: 14.5px; }
 .hub-app .hub-input::placeholder { color: var(--fg-faint); }
 .hub-app .hub-input:hover:not(:disabled) { border-color: var(--line-strong); }
 .hub-app .hub-input:focus { border-color: var(--moon-300); background: var(--surface-3); }

@@ -977,7 +977,7 @@ export function Leads({ workspace }) {
         </div>
         <div style={{ flex: 1 }} />
         <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
-        <Input ref={searchRef} className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input ref={searchRef} className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
         <div style={{ width: 8 }} />
         <Button variant="secondary" size="sm" icon="plus" onClick={() => cardFileRef.current?.click()}>명함</Button>
         <input ref={cardFileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onCardFile} />
@@ -3467,7 +3467,7 @@ export function Accounts({ workspace, onNavigate }) {
         {/* Type filter */}
         <SegmentedControl className="hub-toolbar" options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
 
-        <Input ref={accountSearchRef} className="hub-toolbar" placeholder="계정·담당자·전화·딜 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input ref={accountSearchRef} className="hub-toolbar" placeholder="계정·담당자·전화·딜 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
         <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account <Kbd>N</Kbd></Button>
       </div>
 

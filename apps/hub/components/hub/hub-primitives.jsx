@@ -320,20 +320,41 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
 
 export const Input = React.forwardRef(function Input({ placeholder, icon, value, onChange, style, size = 'sm', className,
   // 통과 속성: 로그인(비밀번호)·폼 접근성에 필요하다. 기존 호출처는 전부 기본값을 쓰므로 동작이 바뀌지 않는다.
-  type = 'text', id, name, disabled, autoComplete, inputMode, maxLength, readOnly, required, ariaLabel }, ref) {
-  const sizes = { sm: { h: 30, fs: 12.5 }, md: { h: 34, fs: 13 } };
-  const s = sizes[size];
+  type = 'text', id, name, disabled, autoComplete, inputMode, maxLength, readOnly, required, ariaLabel,
+  clearable = false, onClear, kbd, prefix, suffix, showCount = false, ...props }, ref) {
+  const sizes = {
+    xs: { h: 24, fs: 11.5, px: 7, gap: 5 },
+    sm: { h: 30, fs: 12.5, px: 10, gap: 8 },
+    md: { h: 36, fs: 13.5, px: 12, gap: 8 },
+    lg: { h: 42, fs: 14.5, px: 14, gap: 10 },
+  };
+  const s = sizes[size] || sizes.sm;
+  const hasValue = value != null && String(value).length > 0;
+  const currentLength = hasValue ? String(value).length : 0;
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape' && (clearable || onClear) && hasValue) {
+      e.preventDefault();
+      e.stopPropagation();
+      onChange?.('');
+      onClear?.();
+    }
+    props.onKeyDown?.(e);
+  };
+
   return (
-    <div className={`hub-field${className ? ` ${className}` : ''}`} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 8,
-      height: s.h, padding: '0 10px',
-      background: 'var(--surface-2)',
-      border: '1px solid var(--line-soft)',
-      borderRadius: 'var(--r-sm)',
-      transition: 'border-color var(--dur-hover) ease',
-      ...style,
-    }}>
-      {icon && <Iconed name={icon} size={13} style={{ color: 'var(--fg-faint)' }} />}
+    <div
+      className={`hub-field hub-field--${size}${className ? ` ${className}` : ''}`}
+      data-disabled={disabled ? 'true' : undefined}
+      style={{
+        height: s.h,
+        padding: `0 ${s.px}px`,
+        gap: s.gap,
+        ...style,
+      }}
+    >
+      {prefix}
+      {icon && <Iconed name={icon} size={size === 'xs' ? 11 : 13} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />}
       <input
         ref={ref}
         type={type}
@@ -348,13 +369,51 @@ export const Input = React.forwardRef(function Input({ placeholder, icon, value,
         aria-label={ariaLabel}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         style={{
           flex: 1, minWidth: 0,
           background: 'transparent', border: 'none', outline: 'none',
           color: 'var(--fg)', fontSize: s.fs,
         }}
+        {...props}
       />
+      {showCount && maxLength != null && (
+        <span
+          className="mono"
+          style={{
+            fontSize: 10,
+            flexShrink: 0,
+            color: currentLength >= maxLength ? 'var(--danger)' : currentLength >= maxLength * 0.9 ? 'var(--warning)' : 'var(--fg-faint)',
+          }}
+        >
+          {currentLength}/{maxLength}
+        </span>
+      )}
+      {(clearable || onClear) && hasValue && !disabled && (
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="입력 지우기"
+          onClick={(e) => {
+            e.stopPropagation();
+            onChange?.('');
+            onClear?.();
+          }}
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: size === 'xs' ? 14 : 16, height: size === 'xs' ? 14 : 16, borderRadius: 999,
+            background: 'var(--surface-3)', color: 'var(--fg-dim)',
+            border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0,
+          }}
+        >
+          <Iconed name="x" size={size === 'xs' ? 8 : 9} />
+        </button>
+      )}
+      {kbd && !hasValue && (
+        <Kbd style={{ fontSize: 9.5, minWidth: 15, height: 15, padding: '0 3px', lineHeight: '14px', flexShrink: 0 }}>{kbd}</Kbd>
+      )}
+      {suffix}
     </div>
   );
 });
@@ -368,15 +427,29 @@ export const Input = React.forwardRef(function Input({ placeholder, icon, value,
 //   · `required` renders a visible `필수` and sets aria-required
 //   · `error` sets aria-invalid and is announced; `hint` is wired via aria-describedby
 //   · chrome comes from `.hub-input` in hub-tokens.css — never from a call site
-function FieldShell({ id, label, required, hint, error, children, style, className }) {
+function FieldShell({ id, label, required, hint, error, showCount, currentLength, maxLength, children, style, className }) {
   const message = error || hint;
+  const hasCount = showCount && maxLength != null;
   return (
     <div className={className} style={{ minWidth: 0, ...style }}>
       {label && (
-        <label className="hub-label" htmlFor={id}>
-          {label}
-          {required && <span className="hub-label__req"> · 필수</span>}
-        </label>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 7 }}>
+          <label className="hub-label" htmlFor={id}>
+            {label}
+            {required && <span className="hub-label__req"> · 필수</span>}
+          </label>
+          {hasCount && (
+            <span
+              className="mono"
+              style={{
+                fontSize: 10.5,
+                color: currentLength >= maxLength ? 'var(--danger)' : currentLength >= maxLength * 0.9 ? 'var(--warning)' : 'var(--fg-faint)',
+              }}
+            >
+              {currentLength} / {maxLength}
+            </span>
+          )}
+        </div>
       )}
       {children}
       {message && (
@@ -407,23 +480,75 @@ function useFieldA11y({ id, required, hint, error }) {
 }
 
 export const TextField = React.forwardRef(function TextField(
-  { id, label, required, hint, error, style, fieldStyle, fieldClassName, className, ...input }, ref,
+  { id, label, required, hint, error, style, fieldStyle, fieldClassName, className, showCount = false, value, defaultValue, onChange, ...input }, ref,
 ) {
   const { fid, aria } = useFieldA11y({ id, required, hint, error });
+  const currentLen = typeof value === 'string' ? value.length : (typeof defaultValue === 'string' ? defaultValue.length : 0);
   return (
-    <FieldShell id={fid} label={label} required={required} hint={hint} error={error} style={fieldStyle} className={fieldClassName}>
-      <input ref={ref} {...aria} {...input} className={`hub-input${className ? ` ${className}` : ''}`} style={style} />
+    <FieldShell id={fid} label={label} required={required} hint={hint} error={error} showCount={showCount} currentLength={currentLen} maxLength={input.maxLength} style={fieldStyle} className={fieldClassName}>
+      <input ref={ref} value={value} defaultValue={defaultValue} onChange={onChange} {...aria} {...input} className={`hub-input${className ? ` ${className}` : ''}`} style={style} />
     </FieldShell>
   );
 });
 
 export const TextAreaField = React.forwardRef(function TextAreaField(
-  { id, label, required, hint, error, style, fieldStyle, fieldClassName, className, rows = 3, ...input }, ref,
+  { id, label, required, hint, error, style, fieldStyle, fieldClassName, className, rows = 3, autoResize = false, spacious = false, showCount = false, onCmdEnter, value, defaultValue, onChange, ...input }, ref,
 ) {
   const { fid, aria } = useFieldA11y({ id, required, hint, error });
+  const innerRef = React.useRef(null);
+  const resolvedRef = ref || innerRef;
+
+  const adjustHeight = React.useCallback(() => {
+    if (!autoResize) return;
+    const el = resolvedRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.max(el.scrollHeight, (rows || 3) * 24)}px`;
+  }, [autoResize, rows, resolvedRef]);
+
+  React.useEffect(() => {
+    if (autoResize) adjustHeight();
+  }, [autoResize, value, adjustHeight]);
+
+  const handleKeyDown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && onCmdEnter) {
+      e.preventDefault();
+      onCmdEnter(e);
+    }
+    input.onKeyDown?.(e);
+  };
+
+  const currentLen = typeof value === 'string' ? value.length : (typeof defaultValue === 'string' ? defaultValue.length : 0);
+  const spaciousCls = spacious ? ' hub-input--spacious' : '';
+
   return (
-    <FieldShell id={fid} label={label} required={required} hint={hint} error={error} style={fieldStyle} className={fieldClassName}>
-      <textarea ref={ref} rows={rows} {...aria} {...input} className={`hub-input${className ? ` ${className}` : ''}`} style={style} />
+    <FieldShell
+      id={fid}
+      label={label}
+      required={required}
+      hint={hint}
+      error={error}
+      showCount={showCount}
+      currentLength={currentLen}
+      maxLength={input.maxLength}
+      style={fieldStyle}
+      className={fieldClassName}
+    >
+      <textarea
+        ref={resolvedRef}
+        rows={rows}
+        value={value}
+        defaultValue={defaultValue}
+        onChange={(e) => {
+          onChange?.(e);
+          if (autoResize) adjustHeight();
+        }}
+        onKeyDown={handleKeyDown}
+        {...aria}
+        {...input}
+        className={`hub-input${spaciousCls}${className ? ` ${className}` : ''}`}
+        style={style}
+      />
     </FieldShell>
   );
 });
@@ -760,18 +885,6 @@ export function SegmentedControl({ options, value, onChange, className, style, l
   );
 }
 
-const DRAWER_INPUT_STYLE = {
-  height: 32,
-  padding: '0 10px',
-  fontSize: 13,
-  background: 'var(--surface-2)',
-  color: 'var(--fg)',
-  border: '1px solid var(--line)',
-  borderRadius: 'var(--r-sm)',
-  width: '100%',
-  fontVariantNumeric: 'tabular-nums',
-};
-
 // Elements the drawer's focus manager treats as tab stops.
 const DRAWER_FOCUSABLE = 'input, select, textarea, button, a[href], [tabindex]:not([tabindex="-1"])';
 
@@ -1023,13 +1136,31 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
           {group.fields.map((f, j) => {
             // 탭 모드에서만 쓰이는 열림 포커스 앵커 — 탭이 없으면 Drawer 기본 규칙 그대로다.
             const focusRef = primary && hasPanels && i === 0 && j === 0 ? firstFieldRef : undefined;
+            const isSpaciousTextarea = f.type === 'textarea' && (f.spacious || (f.rows && f.rows >= 4) || ['notes', 'description', 'memo', 'content', 'body'].includes(f.key));
+            const currentLen = typeof record[f.key] === 'string' ? record[f.key].length : 0;
             return (
             <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: 1, minWidth: 0 } : null) }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}{f.labelBadge || null}</span>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{f.label}{f.labelBadge || null}</span>
+                {f.maxLength ? (
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.02em', textTransform: 'none' }} aria-hidden="true">
+                    {currentLen} / {f.maxLength}
+                  </span>
+                ) : null}
+              </span>
               {f.type === 'select' ? (
-                <select ref={focusRef} disabled={saveState === 'saving'} value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
-                  {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <span className="hub-select">
+                  <select
+                    ref={focusRef}
+                    disabled={saveState === 'saving'}
+                    value={record[f.key] ?? ''}
+                    onChange={e => onChange(f.key, e.target.value)}
+                    className="hub-drawer-input"
+                  >
+                    {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <Iconed name="chevronD" size={13} aria-hidden="true" />
+                </span>
               ) : f.type === 'chips' ? (
                 <div role="group" aria-label={f.label} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '2px 0' }}>
                   {f.options.map(o => {
@@ -1052,8 +1183,16 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
                   value={record[f.key] ?? ''}
                   placeholder={f.placeholder || ''}
                   rows={f.rows || 5}
-                  onChange={e => onChange(f.key, e.target.value)}
-                  style={{ ...DRAWER_INPUT_STYLE, height: 'auto', minHeight: f.rows ? undefined : 112, padding: '9px 10px', lineHeight: 1.5, resize: 'vertical' }}
+                  maxLength={f.maxLength}
+                  onChange={e => {
+                    onChange(f.key, e.target.value);
+                    if (f.autoResize) {
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${e.target.scrollHeight}px`;
+                    }
+                  }}
+                  className={`hub-drawer-input${isSpaciousTextarea ? ' hub-drawer-input--spacious' : ''}`}
+                  style={f.rows && !f.autoResize ? { height: 'auto' } : undefined}
                 />
               ) : (
                 <input
@@ -1066,8 +1205,9 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
                   // renders it blank instead of erroring, so this slice is load-bearing.
                   value={f.inputType === 'date' ? String(record[f.key] ?? '').slice(0, 10) : (record[f.key] ?? '')}
                   placeholder={f.placeholder || ''}
+                  maxLength={f.maxLength}
                   onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
-                  style={DRAWER_INPUT_STYLE}
+                  className="hub-drawer-input"
                 />
               )}
             </label>

@@ -132,7 +132,7 @@ export function Segments({ workspace, onNavigate }) {
           value={dimension}
           onChange={(key) => { setDimension(key); setExpanded(clearExpandedSegments()); }}
         />
-        <Input ref={searchRef} className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input ref={searchRef} className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
       </div>
 
       {segments.length === 0 && (

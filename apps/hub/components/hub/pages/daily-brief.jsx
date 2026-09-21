@@ -606,9 +606,6 @@ function MetricCard({ m, onNavigate, compact }) {
       onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(target); } } : undefined}
       className="hub-metric-card daily-brief__metric-card"
       style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--line-soft)',
-        borderRadius: 'var(--r-lg)',
         padding: compact ? '12px 14px' : 'var(--card-pad)',
         boxShadow: compact ? 'none' : 'var(--shadow-soft)',
         cursor: clickable ? 'pointer' : 'default',
@@ -1477,10 +1474,12 @@ function RhythmPanel({ onNavigate }) {
 function FocusSlots({ dailyFocus, onNavigate }) {
   if (!dailyFocus) return null;
   const [guruFocusItem, setGuruFocusItem] = React.useState(null);
+  const [showAllCustomers, setShowAllCustomers] = React.useState(false);
   const ka = dailyFocus.urgentKa || {};
   const focus = dailyFocus.focusCustomers || {};
   const agenda = dailyFocus.todayAgenda || {};
   const focusItems = Array.isArray(focus.items) ? focus.items : [];
+  const visibleFocusItems = showAllCustomers ? focusItems : focusItems.slice(0, 3);
   const agendaItems = Array.isArray(agenda.items) ? agenda.items : [];
   const revenueError = focus.state === 'error';
   const revenuePreview = focus.state === 'preview';
@@ -1571,7 +1570,7 @@ function FocusSlots({ dailyFocus, onNavigate }) {
           <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>집중 고객 없음 — CS 레인에 다음 행동이 있는 리드가 없습니다.</div>
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            {focusItems.map((item, i) => (
+            {visibleFocusItems.map((item, i) => (
               <div
                 key={item.id}
                 className="hub-row daily-brief__customer-row"
@@ -1579,7 +1578,7 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                 tabIndex={0}
                 onClick={() => onNavigate?.(item.href)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(item.href); } }}
-                style={{ borderBottom: i < focusItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}
+                style={{ borderBottom: i < visibleFocusItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}
               >
                 <span className="mono" style={{ width: 20, height: 20, borderRadius: 'var(--r-xs)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', color: 'var(--moon-300)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1631,6 +1630,13 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                 <Iconed name="chevronR" size={12} className="daily-brief__row-arrow" />
               </div>
             ))}
+            {focusItems.length > 3 && (
+              <div style={{ padding: '6px 16px 10px', borderTop: '1px solid var(--line-soft)', display: 'flex', justifyContent: 'center' }}>
+                <Button variant="ghost" size="xs" onClick={() => setShowAllCustomers(v => !v)}>
+                  {showAllCustomers ? '접기' : `집중 고객 ${focusItems.length - 3}건 더 보기 ›`}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Card>

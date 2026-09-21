@@ -977,7 +977,7 @@ export function Customers({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Input ref={searchRef} className="hub-toolbar" placeholder="학원명·담당자·지역 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input ref={searchRef} className="hub-toolbar" placeholder="학원명·담당자·지역 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
         <Button variant="primary" size="sm" icon="plus" onClick={createCustomer}>고객 등록 <Kbd>N</Kbd></Button>
       </div>
 

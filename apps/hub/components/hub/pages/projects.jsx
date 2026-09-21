@@ -1809,6 +1809,8 @@ export function Projects({ workspace }) {
               placeholder="검색"
               value={projectQuery}
               onChange={setProjectQuery}
+              clearable
+              kbd="/"
               style={{ flex: '0 1 180px', minWidth: 100 }}
             />
           </span>}
