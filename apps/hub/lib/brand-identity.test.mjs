@@ -49,6 +49,38 @@ test("identity writes preserve unrelated metadata and round-trip durable fields"
   assert.equal(reopened.identityConfirmedAt, now);
 });
 
+test("editing one section preserves the full brand draft and requires fresh confirmation", async () => {
+  const completeRow = { ...row, meta: { ...row.meta,
+    audience: "Independent writers", promise: "An original promise", offer: "Practical essays",
+    philosophy: "Explain the reasoning", direction: "Build a useful archive",
+    keywords: ["Writing", "Learning"], voice: "Clear and direct",
+    voice_examples: "Start with one observation.", content_rules: ["Name the source", "Show the steps"],
+    forbidden_terms: ["Unsupported claims"], current_focus: "Refine the next essay",
+    operating_state: "experimenting", is_focused: true, identity_confirmed_at: before,
+  } };
+  const original = mapBrandIdentity(completeRow);
+  const draft = brandIdentityDraft(original);
+  // The section editor exposes promise while the record still holds every other field.
+  draft.promise = "A revised promise";
+  const command = { action: "update_brand_identity", ...brandIdentityPayload(draft) };
+  assert.equal(command.expectedUpdatedAt, before);
+  assert.equal(command.confirmIdentity, false);
+  let saved;
+  const result = await executePmsCommand(command, { workspaceId, now }, {
+    fetchRows: async () => [completeRow], insert: async () => assert.fail("must not create a new brand"),
+    update: async (table, filters, patch) => {
+      assert.equal(table, "brands");
+      assert.deepEqual(filters.find(([key]) => key === "updated_at"), ["updated_at", `eq.${before}`]);
+      saved = { ...completeRow, ...patch };
+      return { persisted: true, reason: "ok", records: [saved] };
+    },
+  });
+  assert.equal(result.status, "saved");
+  assert.deepEqual(mapBrandIdentity(saved), {
+    ...original, promise: "A revised promise", updatedAt: now, identityConfirmedAt: null,
+  });
+});
+
 test("stale or unreadable brand metadata never gets overwritten", async () => {
   for (const current of [null, [{ ...row, updated_at: now }]]) {
     const result = await executePmsCommand(payload(), { workspaceId, now }, {
