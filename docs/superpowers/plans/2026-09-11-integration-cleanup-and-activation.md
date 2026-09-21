@@ -18,7 +18,7 @@
 - Ledger data stays. No `DELETE` against Supabase. Seeds and schema comments are code and may change.
 - `.env.local` files are the operator's; the plan tells you which **names** to remove, you edit them locally and never commit them.
 - Never print secret values. Env var names only.
-- Baseline before Task 1: `npm test` → `pass 784, fail 0`; `npm run check:contracts` → all PASS.
+- Baseline before Task 1 (worktree, WIP excluded): `npm test` → `pass 780, fail 0`; `npm run check:contracts` → all PASS.
 - Commit message trailer (required):
   ```
   Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
@@ -134,7 +134,7 @@ Expected: only `apps/engine/package.json` and `apps/engine/next.config.mjs`. If 
 - [ ] **Step 9: Verify**
 
 Run: `npm test && npm run check:contracts && npm --workspace @com-moon/engine run typecheck`
-Expected: `pass 784, fail 0`; contracts all PASS; tsc clean.
+Expected: `pass 780, fail 0`; contracts all PASS; tsc clean.
 
 - [ ] **Step 10: Commit**
 
@@ -1231,6 +1231,8 @@ Delete the later per-integration sections for Telegram, OpenClaw, Gmail/Email, R
 - Spec §2 table: set Telegram/OpenClaw/Gmail/Resend/Notion rows to `제거(2026-09-11)`, Slack to `작동(배선)`, Moonlight MCP to `등록됨`, Threads/Instagram to `basic scope, 앱 등록 대기`.
 - `docs/README.md` §3: add a row `통합 정리·활성화 (2026-09-11) | 완료 | plans/2026-09-11-integration-cleanup-and-activation.md`.
 - Root `README.md`: remove Telegram mentions (2). `packages/mcp-server/README.md`: 16 tools, `.mcp.json` registration snippet.
+- Stale `/api/webhook/telegram` references in `docs/master-plan.md`, `docs/engine-priority-todo.md`, `docs/engine-os-separation-ui-plan.md`, `docs/system-eval-2026-08-05.md`: add a one-line `> 2026-09-11: Telegram 연동 제거됨` note under each file's status header (these are historical docs; do not rewrite them).
+- `packages/content-manager`: after Task 1 no workspace imports it (Hub uses the `card_news` variant type, not the package). Add `> 상태: DORMANT (2026-09-11) — 소비자 0, 삭제 여부는 운영자 결정` to `packages/content-manager/README.md` (create the file if missing) and fix the stale comment in `packages/content-manager/card-news/generator.ts:26` that says Engine passes its output through Gemini.
 
 - [ ] **Step 3: Contracts and commit**
 

@@ -119,7 +119,6 @@ export function resolveSecretReadiness(env = process.env) {
     oauthState: String(env.COM_MOON_OAUTH_STATE_SECRET || "").trim(),
     sharedWebhook: String(env.COM_MOON_SHARED_WEBHOOK_SECRET || "").trim(),
     hubWrite: String(env.COM_MOON_HUB_WRITE_SECRET || "").trim(),
-    openclawSync: String(env.OPENCLAW_SYNC_SECRET || "").trim(),
   };
   const names = Object.keys(values);
   const coupled = [];
@@ -139,7 +138,6 @@ export function resolveSecretReadiness(env = process.env) {
     oauthState: { configured: Boolean(values.oauthState) },
     sharedWebhook: { configured: Boolean(values.sharedWebhook) },
     hubWrite: { configured: Boolean(values.hubWrite) },
-    openclawSync: { configured: Boolean(values.openclawSync) },
     separated: coupled.length === 0,
     coupled,
   };
@@ -209,13 +207,9 @@ export async function resolveControlPlaneReadiness(env = process.env, options = 
     timeoutMs: options.timeoutMs ?? 1500,
     fetchImpl: options.fetchImpl || fetch,
   };
-  const [engine, openclawRelay] = await Promise.all([
-    resolveEndpoint(env.COM_MOON_ENGINE_URL, "/api/health", probeOptions),
-    resolveEndpoint(env.OPENCLAW_LOCAL_URL, "/health", probeOptions),
-  ]);
+  const engine = await resolveEndpoint(env.COM_MOON_ENGINE_URL, "/api/health", probeOptions);
 
   return {
     engine,
-    openclawRelay,
   };
 }

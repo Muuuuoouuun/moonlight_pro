@@ -338,7 +338,6 @@ export function EmailAutomation({ onNavigate }) {
 // 존재하지 않는 URL을 지어내 렌더했다(8차 잔여 S: 가짜 endpoint). 매핑에 없는 소스는
 // 경로를 생략한다(이름 줄이 이미 source·eventType을 전달).
 const ENGINE_INGEST_PATHS = {
-  telegram: 'engine /api/webhook/telegram',
   moltbot: 'engine /api/webhook/project/moltbot',
   project: 'engine /api/webhook/project',
 };
@@ -423,7 +422,7 @@ export function Webhooks({ onNavigate }) {
             title={syncState === 'error' ? 'webhook 기록을 읽지 못했습니다' : '수신된 webhook 이벤트가 없습니다'}
             description={syncState === 'error'
               ? '지금 화면은 비어 보여도 실제 이벤트가 있을 수 있습니다. 새로고침으로 재시도하세요.'
-              : 'Project webhook smoke test나 Telegram webhook이 들어오면 endpoint별 활동이 집계됩니다.'}
+              : 'Project webhook smoke test가 들어오면 endpoint별 활동이 집계됩니다.'}
             action={
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                 <Button variant="primary" size="sm" icon="play" onClick={() => runHookTest(0, { name: 'Project smoke test', url: '/api/webhooks/project-test' })}>
