@@ -2240,6 +2240,9 @@ export function Deals({ workspace, onNavigate }) {
         onClose={() => {
           // 닫기 = 미저장 드래프트 폐기(EditDrawer의 dirty confirm이 이미 실수를 막는다).
           setDealDrafts(prev => { if (!editDealId || !prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
+          if (String(editDealId).toLowerCase().startsWith('local-')) {
+            setDeals(ds => ds.filter(d => d.id !== editDealId));
+          }
           setEditDealId(null);
         }}
       >

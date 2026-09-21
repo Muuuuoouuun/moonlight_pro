@@ -79,3 +79,14 @@ test('same-column drop and cancelled drag both leave cards clickable', () => {
   cardOf(app).props.onClick(); app.render();
   assert.equal(drawerOf(app).props.record.id, deal().id);
 });
+
+// Regression: ISSUE-002 — dismissing a new deal left a phantom card in the live board.
+test('discard new deal removes its local row and preserves existing deals', () => {
+  const app = mount({ records: [deal()] });
+  app.findAll(n => n.type === 'Button' && n.props.icon === 'plus')[0].props.onClick(); app.render();
+  assert.equal(app.findAll(n => n.props['data-deal-card']).length, 2);
+  drawerOf(app).props.onClose(); app.render();
+  assert.equal(app.findAll(n => n.props['data-deal-card']).length, 1);
+  assert.equal(cardOf(app).props['data-deal-card'], deal().id);
+  assert.equal(drawerOf(app).props.record, null);
+});
