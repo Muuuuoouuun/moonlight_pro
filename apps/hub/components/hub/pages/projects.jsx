@@ -1304,7 +1304,7 @@ export function Projects({ workspace }) {
     return result.saved.length === 1;
   }, [applyTaskChanges, todos]);
 
-  const toggleTodo = React.useCallback(async (id) => {
+  const toggleTodo = React.useCallback(async (id, event) => {
     const todo = todos.find(item => item.id === id);
     if (!todo) return;
     const willBeDone = todo.status !== 'done';
@@ -1312,6 +1312,16 @@ export function Projects({ workspace }) {
       const updated = await updateTaskStatus(id, todo.status === 'done' ? 'todo' : 'done');
       if (!updated) return;
       if (willBeDone) {
+        let sx = event?.clientX;
+        let sy = event?.clientY;
+        if ((sx == null || sy == null) && event?.target?.getBoundingClientRect) {
+          const rect = event.target.getBoundingClientRect();
+          sx = rect.left + rect.width / 2;
+          sy = rect.top + rect.height / 2;
+        }
+        if (sx != null && sy != null && sx > 0 && sy > 0) {
+          triggerSparkleAt(sx, sy);
+        }
         const pTasks = todos.filter(t => t.project === todo.project);
         if (pTasks.length > 0 && pTasks.every(t => t.id === id || t.status === 'done' || t.done)) {
           triggerCelebration({ mode: 'confetti' });
@@ -2235,7 +2245,7 @@ export function Projects({ workspace }) {
                                     <div key={t.id} className="hub-project-subtask" data-done={t.done ? 'true' : 'false'} style={{ borderBottom: ti < pTodos.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
                                       <Checkbox
                                         checked={t.done}
-                                        onChange={() => toggleTodo(t.id)}
+                                        onChange={(_next, e) => toggleTodo(t.id, e)}
                                         disabled={pendingTaskIds.has(t.id)}
                                         size={16}
                                         label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}

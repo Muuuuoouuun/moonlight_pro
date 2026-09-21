@@ -555,7 +555,7 @@ export function ProjectPortfolioWorkspace({
                         <div key={task.id} data-done={task.done ? "true" : "false"}>
                           <Checkbox
                             checked={task.done}
-                            onChange={() => onToggleTodo(task.id)}
+                            onChange={(_next, e) => onToggleTodo(task.id, e)}
                             disabled={pendingTodoIds.has(task.id)}
                             size={16}
                             label={`${task.done ? "다시 열기" : "완료"}: ${task.title}`}

@@ -608,6 +608,11 @@
   will-change: border-color, box-shadow;
 }
 
+.hub-app .hub-streak-badge--milestone {
+  border-color: rgba(255, 209, 102, 0.45) !important;
+  box-shadow: 0 0 12px -2px rgba(255, 209, 102, 0.35);
+}
+
 .hub-app .hub-streak-pop {
   animation: mlBurnPop var(--dur-enter) var(--ease-hub);
 }
@@ -724,6 +729,18 @@
   line-height: 1;
 }
 
+.hub-app .hub-checkbox {
+  transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .hub-checkbox:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.hub-app .hub-checkbox svg {
+  animation: hubSparklePop var(--dur-enter) var(--ease-hub);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-progress--completed .hub-progress-bar::after,
   .hub-app .hub-pms-progress--completed .hub-pms-progress__fill::after {
@@ -732,6 +749,13 @@
   }
   .hub-app .hub-celebration-badge,
   .hub-app .hub-celebration-card {
+    animation: none;
+  }
+  .hub-app .hub-checkbox {
+    transition: none;
+    transform: none !important;
+  }
+  .hub-app .hub-checkbox svg {
     animation: none;
   }
 }
@@ -2060,6 +2084,48 @@
 .personal-revenue-summary-item.is-primary > strong {
   color: var(--moon-200);
   font-size: clamp(26px, 3.6vw, 38px);
+}
+
+.personal-revenue-summary-item.is-all-confirmed {
+  border-left: 2px solid #ffd166;
+  background: rgba(255, 209, 102, 0.05);
+}
+
+.personal-revenue-summary-item.is-all-confirmed > strong,
+.personal-revenue-summary-item.is-all-confirmed .stat {
+  color: #ffd166;
+}
+
+.personal-revenue-confirmed-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: rgba(255, 209, 102, 0.15);
+  color: #ffd166;
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  animation: hubSparklePop var(--dur-enter) var(--ease-hub);
+}
+
+.personal-revenue-progress-track {
+  height: 3px;
+  background: var(--surface-3);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.personal-revenue-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--moon-300);
+  transition: width var(--dur-enter) var(--ease-hub);
+}
+
+.personal-revenue-progress-fill.is-all-confirmed {
+  background: linear-gradient(90deg, var(--moon-300), #ffd166);
+  box-shadow: 0 0 6px rgba(255, 209, 102, 0.3);
 }
 
 .personal-revenue-timeline-section,

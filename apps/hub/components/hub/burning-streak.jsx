@@ -120,7 +120,7 @@ export function BurningStreakBadge({
   if (compact) {
     return (
       <div
-        className={`${burning ? "hub-streak-badge--burning" : ""} ${isPopping ? "hub-streak-pop" : ""}`.trim()}
+        className={`${burning ? "hub-streak-badge--burning" : ""} ${milestone ? "hub-streak-badge--milestone" : ""} ${isPopping ? "hub-streak-pop" : ""}`.trim()}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -128,7 +128,7 @@ export function BurningStreakBadge({
           padding: "3px 8px 3px 6px",
           borderRadius: "var(--r-sm)",
           background: burning ? "rgba(255, 110, 40, 0.08)" : "var(--surface-2)",
-          border: `1px solid ${burning ? "rgba(255, 130, 60, 0.35)" : "var(--line-soft)"}`,
+          border: `1px solid ${milestone ? "rgba(255, 209, 102, 0.45)" : burning ? "rgba(255, 130, 60, 0.35)" : "var(--line-soft)"}`,
           fontSize: 11.5,
           fontWeight: 500,
           color: burning ? "var(--fg)" : "var(--fg-muted)",
@@ -150,7 +150,7 @@ export function BurningStreakBadge({
 
   return (
     <div
-      className={`${burning ? "hub-streak-badge--burning" : ""} ${isPopping ? "hub-streak-pop" : ""}`.trim()}
+      className={`${burning ? "hub-streak-badge--burning" : ""} ${milestone ? "hub-streak-badge--milestone" : ""} ${isPopping ? "hub-streak-pop" : ""}`.trim()}
       style={{
         display: "flex",
         alignItems: "center",
@@ -161,7 +161,7 @@ export function BurningStreakBadge({
         background: burning
           ? "linear-gradient(90deg, rgba(255, 115, 45, 0.09) 0%, rgba(82, 116, 168, 0.04) 100%)"
           : "var(--surface-2)",
-        border: `1px solid ${burning ? "rgba(255, 130, 60, 0.3)" : "var(--line-soft)"}`,
+        border: `1px solid ${milestone ? "rgba(255, 209, 102, 0.45)" : burning ? "rgba(255, 130, 60, 0.3)" : "var(--line-soft)"}`,
         transition: "all var(--dur-enter) var(--ease-hub)",
         ...style,
       }}
@@ -207,8 +207,9 @@ export function BurningStreakBadge({
                   border: isToday
                     ? `1px solid ${done ? "#ff9a52" : "var(--line-strong)"}`
                     : "1px solid var(--line-soft)",
+                  boxShadow: done && isToday ? "0 0 6px rgba(255, 120, 50, 0.55)" : undefined,
                   opacity: done ? 1 : 0.6,
-                  transition: "background var(--dur-enter) ease",
+                  transition: "background var(--dur-enter) var(--ease-hub)",
                 }}
               />
             );

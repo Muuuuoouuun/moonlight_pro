@@ -94,7 +94,7 @@ export function ProjectTodosView({
                       <div className="hub-project-todo-check">
                         <Checkbox
                           checked={t.done}
-                          onChange={() => onToggleTodo(t.id)}
+                          onChange={(_next, e) => onToggleTodo(t.id, e)}
                           disabled={pendingTaskIds.has(t.id)}
                           size={16}
                           label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}

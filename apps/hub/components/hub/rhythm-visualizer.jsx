@@ -185,7 +185,15 @@ export function RhythmVisualizer({
           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
             <span className="stat" style={{ fontSize: 20, fontWeight: 600 }}>{upload.weeklyDone} / {upload.weeklyGoal}</span>
             <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>건</span>
-            <span className="mono" style={{ fontSize: 11, color: uploadPercent >= 70 ? "var(--fg)" : "var(--fg-dim)", marginLeft: "auto" }}>{uploadPercent}% 달성</span>
+            {uploadPercent >= 100 ? (
+              <span className="hub-celebration-badge hub-celebration-badge--sparkle" style={{ marginLeft: "auto" }}>
+                ✦ 목표 완수
+              </span>
+            ) : (
+              <span className="mono" style={{ fontSize: 11, color: uploadPercent >= 70 ? "var(--fg)" : "var(--fg-dim)", marginLeft: "auto" }}>
+                {uploadPercent}% 달성
+              </span>
+            )}
           </div>
         </div>
 
@@ -400,7 +408,13 @@ export function RhythmVisualizer({
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span className="stat" style={{ fontSize: 18, fontWeight: 600 }}>{upload.weeklyDone} / {upload.weeklyGoal}</span>
-                <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>발행 완료</span>
+                {upload.weeklyDone >= upload.weeklyGoal && upload.weeklyGoal > 0 ? (
+                  <span className="hub-celebration-badge hub-celebration-badge--sparkle">
+                    ✦ 주간 목표 완수
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>발행 완료</span>
+                )}
               </div>
             </div>
 
@@ -409,31 +423,51 @@ export function RhythmVisualizer({
 
             {/* 채널별 카드 그리드 */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 18 }}>
-              {upload.channels.map((ch, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    padding: "12px 14px",
-                    borderRadius: "var(--r-sm)",
-                    background: "var(--surface-2)",
-                    border: "1px solid var(--line-soft)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 6,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: "var(--fg)" }}>{ch.name}</span>
-                    <Badge tone={ch.tone} size="xs">{ch.count}/{ch.goal}개</Badge>
+              {upload.channels.map((ch, idx) => {
+                const isDone = ch.count >= ch.goal && ch.goal > 0;
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: "var(--r-sm)",
+                      background: "var(--surface-2)",
+                      border: `1px solid ${isDone ? "rgba(255, 209, 102, 0.35)" : "var(--line-soft)"}`,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      transition: "border-color var(--dur-enter) var(--ease-hub)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: "var(--fg)" }}>{ch.name}</span>
+                      {isDone ? (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            padding: "1px 6px",
+                            borderRadius: 4,
+                            background: "rgba(255, 209, 102, 0.15)",
+                            color: "#ffd166",
+                            border: "1px solid rgba(255, 209, 102, 0.35)",
+                          }}
+                        >
+                          ✦ {ch.count}/{ch.goal} 완료
+                        </span>
+                      ) : (
+                        <Badge tone={ch.tone} size="xs">{ch.count}/{ch.goal}개</Badge>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>
+                      {ch.name === "Threads" ? "주요 도달 채널 (일 1개 목표)" : "파생 재생산 채널"}
+                    </div>
+                    <div style={{ marginTop: 4 }}>
+                      <Progress value={Math.min(100, Math.round((ch.count / ch.goal) * 100))} />
+                    </div>
                   </div>
-                  <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>
-                    {ch.name === "Threads" ? "주요 도달 채널 (일 1개 목표)" : "파생 재생산 채널"}
-                  </div>
-                  <div style={{ marginTop: 4 }}>
-                    <Progress value={Math.min(100, Math.round((ch.count / ch.goal) * 100))} />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* 7일 요일별 발행 타임라인 도트 */}

@@ -311,7 +311,7 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
       border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
       background: checked ? 'var(--moon-300)' : 'transparent',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease', flexShrink: 0, opacity: disabled ? 0.55 : 1,
+      flexShrink: 0, opacity: disabled ? 0.55 : 1,
     }}>
       {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}
     </button>

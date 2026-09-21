@@ -263,7 +263,7 @@ export function ProjectDetailPanel({
               <div key={todo.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
                 <Checkbox
                   checked={todo.done}
-                  onChange={() => onToggleTodo?.(todo.id)}
+                  onChange={(_next, e) => onToggleTodo?.(todo.id, e)}
                   disabled={pendingTodoIds.has(todo.id)}
                   size={16}
                   label={`${todo.done ? "다시 열기" : "완료"}: ${todo.title}`}
