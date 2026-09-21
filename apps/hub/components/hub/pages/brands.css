@@ -3,6 +3,15 @@
 .brand-page-title { min-width: 0; flex: 1 1 180px; }
 .brand-page-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .brand-page-title h2 { margin: 0; font-size: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.brand-switcher { width: min(240px, 100%); }
+.brand-switcher .hub-label { margin-bottom: 4px; }
+.brand-directory-toolbar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px 24px; }
+.brand-directory-search { flex: 1 1 240px; max-width: 440px; }
+.brand-directory-filter { min-width: 0; max-width: 100%; }
+.brand-directory-filter .hub-seg { width: max-content; }
+.brand-directory-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; min-height: 32px; font-size: 12px; line-height: 1.6; color: var(--fg-muted); }
+.brand-directory-failures { display: inline-flex; align-items: center; gap: 4px; color: var(--danger); }
+.brand-directory-partial { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-left: auto; }
 .brand-detail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .brand-description { margin: 0; font-size: 13px; line-height: 1.65; color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .brand-focus-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; padding: 12px 0 16px; border-bottom: 1px solid var(--line); }
@@ -63,6 +72,12 @@
 @media (max-width: 600px) {
   .brand-page-header { gap: 8px; }
   .brand-page-tools { width: 100%; }
+  .brand-switcher { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; }
+  .brand-switcher .hub-label { display: inline-block; margin: 0; }
+  .brand-directory-toolbar { gap: 12px; }
+  .brand-directory-search { flex-basis: 100%; max-width: none; }
+  .brand-directory-filter { width: 100%; }
+  .brand-directory-partial { margin-left: 0; }
   .brand-focus-bar { padding-top: 8px; gap: 16px; }
   .brand-detail-actions { width: 100%; }
   .brand-detail-actions > * { flex: 1 1 auto; }

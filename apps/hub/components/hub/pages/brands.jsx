@@ -14,7 +14,11 @@ import {
   EditDrawer,
   EmptyState,
   Kbd,
+  ScrollShadowX,
+  SegmentedControl,
+  SelectField,
   SyncBadge,
+  TextField,
   useToast,
   Skeleton,
 } from "../hub-primitives";
@@ -23,15 +27,15 @@ import {
   selectBrand,
 } from "@/lib/brand-directory";
 import { createClientId } from "@/lib/pms-ui";
+import { BRAND_VIEW_FILTERS, filterBrandDirectory } from "./brand-directory-view";
 import "./brands.css";
 import { BRAND_IDENTITY_FIELDS, BRAND_OPERATING_STATES, brandIdentityDraft, brandIdentityPayload } from "@/lib/brand-identity";
 
 // 브랜드 탭 — 브랜드를 콘텐츠 필터가 아니라 운영 대상으로 다루는 표면
 // 방향과 표현 기준은 brands.meta에 저장하고 콘텐츠 작업은 공통 보기로 연결한다.
 //
-// 목록 ⇄ 상세는 같은 라우트의 두 상태다 (`?b=<slug>`). aside 레일을 쓰지 않는 이유는
-// 모바일에서 `.hub-workspace-shell > aside`가 통째로 숨겨져 브랜드를 바꿀 방법이
-// 사라지기 때문이다 — PMS는 헤더 드롭다운으로 보완하지만 여기서는 상태 전환이 더 맞다.
+// 목록 ⇄ 상세는 같은 라우트의 두 상태다 (`?b=<slug>`). 상세의 기본 select로
+// 모바일·키보드에서도 브랜드를 바꾸고, 목록으로 돌아오면 검색/필터를 유지한다.
 
 const SCOPE_LABEL = { classin: "ClassIn", personal: "개인" };
 const IDENTITY_GROUPS = [
@@ -331,6 +335,9 @@ export function Brands() {
   const [saveNote, setSaveNote] = React.useState(null);
   const [identityDraft, setIdentityDraft] = React.useState(null);
   const [identitySection, setIdentitySection] = React.useState("all");
+  const [directoryQuery, setDirectoryQuery] = React.useState("");
+  const [directoryFilter, setDirectoryFilter] = React.useState("all");
+  const searchRef = React.useRef(null);
 
   const directory = React.useMemo(
     () => buildBrandDirectory(ledger, { scope }),
@@ -338,6 +345,17 @@ export function Brands() {
   );
   const selected = selectBrand(directory, selectedKey);
   const syncState = syncStateOf(ledger.source, ledger.partial);
+  const canBrowseDirectory = syncState === "live" || syncState === "partial";
+  const visibleBrands = React.useMemo(
+    () => filterBrandDirectory(directory.brands, { query: directoryQuery, filter: directoryFilter }),
+    [directory.brands, directoryQuery, directoryFilter],
+  );
+  const hasDirectoryFilter = Boolean(directoryQuery.trim()) || directoryFilter !== "all";
+  const clearDirectoryFilters = () => {
+    setDirectoryQuery("");
+    setDirectoryFilter("all");
+    searchRef.current?.focus();
+  };
 
   const setQuery = React.useCallback((next) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -472,10 +490,19 @@ export function Brands() {
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             {selected
               ? `${selected.isFocused ? "집중 브랜드 · " : ""}${BRAND_OPERATING_STATES.find((s) => s.value === selected.operatingState)?.label || "운영 상태 미정"}`
-              : `${directory.brands.length}개${scopeSuffix} · 방향 · 집중점 · 자산`}
+              : `${canBrowseDirectory ? `${directory.brands.length}개${scopeSuffix} · ` : ""}방향 · 집중점 · 자산`}
             <SyncBadge state={syncState} />
           </div>
         </div>
+        {selected && directory.brands.length > 1 && (
+          <SelectField
+            label="브랜드 전환"
+            fieldClassName="brand-switcher"
+            value={selected.key}
+            options={directory.brands.map((brand) => ({ value: brand.key, label: `${brand.name}${brand.isFocused ? " · 집중" : ""}` }))}
+            onChange={(event) => { setSaveNote(null); setQuery(event.target.value); }}
+          />
+        )}
         {(saveNote || !selected) && <div className="brand-page-tools">
           {saveNote && (
             <span className="mono" style={{
@@ -496,9 +523,9 @@ export function Brands() {
         <Card>
           <EmptyState
             icon="brand"
-            title="이 브랜드를 찾지 못했습니다"
-            description={`'${selectedKey}'는 현재 스코프에 없거나 더 이상 존재하지 않습니다.`}
-            action={<Button variant="secondary" size="sm" onClick={() => setQuery(null)}>브랜드 목록으로</Button>}
+            title={syncState === "partial" ? "불러온 목록에 이 브랜드가 없습니다" : "이 브랜드를 찾지 못했습니다"}
+            description={syncState === "partial" ? `브랜드 목록을 일부만 읽어 '${selectedKey}'를 확인할 수 없습니다. 다시 읽어주세요.` : `'${selectedKey}'는 현재 스코프에 없거나 더 이상 존재하지 않습니다.`}
+            action={<Button variant="secondary" size="sm" onClick={syncState === "partial" ? reload : () => setQuery(null)}>{syncState === "partial" ? "다시 읽기" : "브랜드 목록으로"}</Button>}
           />
         </Card>
       )}
@@ -540,34 +567,39 @@ export function Brands() {
 
       {!selectedKey && (
         <>
-          {totals && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap",
-              padding: "12px 16px", border: "1px solid var(--line-soft)",
-              borderRadius: "var(--r-lg)", background: "var(--surface)",
-            }}>
-              {[
-                ["브랜드", totals.brands],
-                ["집중 브랜드", totals.focused],
-                ["기준 확인됨", totals.confirmed],
-                ["휴식중", totals.resting],
-              ].map(([label, value]) => (
-                <span key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>{label}</span>
-                  <span className="stat" style={{ fontSize: 18, fontWeight: 600, color: "var(--fg)" }}>{value}</span>
-                </span>
-              ))}
-              {totals.failedPublishes > 0 && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--danger)" }}>
-                  <Iconed name="flag" size={13} />
-                  발행 실패 {totals.failedPublishes}건
-                </span>
-              )}
+          {canBrowseDirectory && (directory.brands.length > 0 || hasDirectoryFilter) && (
+            <div className="brand-directory-toolbar">
+              <TextField
+                ref={searchRef}
+                type="search"
+                label="브랜드 검색"
+                placeholder="이름 · 약속 · 집중점 검색"
+                value={directoryQuery}
+                onChange={(event) => setDirectoryQuery(event.target.value)}
+                fieldClassName="brand-directory-search"
+              />
+              <div className="brand-directory-filter">
+                <span className="hub-label">빠른 보기</span>
+                <ScrollShadowX>
+                  <SegmentedControl label="브랜드 빠른 보기" options={BRAND_VIEW_FILTERS} value={directoryFilter} onChange={setDirectoryFilter} />
+                </ScrollShadowX>
+              </div>
+            </div>
+          )}
+          {canBrowseDirectory && (
+            <div className="brand-directory-summary">
+              <span role="status" aria-live="polite">
+                {hasDirectoryFilter ? <><span className="num">{visibleBrands.length}</span>개 표시 · </> : null}
+                {syncState === "partial" ? "불러온 브랜드 " : "전체 "}<span className="num">{directory.brands.length}</span>개
+              </span>
+              {hasDirectoryFilter && <Button variant="ghost" size="sm" onClick={clearDirectoryFilters}>검색·필터 초기화</Button>}
+              {totals?.failedPublishes > 0 && <span className="brand-directory-failures"><Iconed name="flag" size={13} />{syncState === "partial" ? "불러온 발행 실패" : "전체 발행 실패"} <span className="num">{totals.failedPublishes}</span>건</span>}
+              {syncState === "partial" && <span className="brand-directory-partial">일부만 불러왔습니다.<Button variant="ghost" size="sm" onClick={reload}>다시 읽기</Button></span>}
             </div>
           )}
 
           <Card pad={false} className="hub-table-card">
-            {directory.brands.length > 0 && (
+            {canBrowseDirectory && visibleBrands.length > 0 && (
               <div className="hub-brand-row hub-brand-row--head" style={{ padding: "8px 16px", borderBottom: "1px solid var(--line-soft)" }}>
                 <span aria-hidden="true" />
                 <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>브랜드</span>
@@ -598,7 +630,7 @@ export function Brands() {
                 style={{ minHeight: 200 }}
               />
             )}
-            {syncState === "live" && directory.brands.length === 0 && (
+            {syncState === "live" && directory.brands.length === 0 && !hasDirectoryFilter && (
               <EmptyState
                 icon="brand"
                 title={scope === "all" ? "아직 브랜드가 없습니다" : `${SCOPE_LABEL[scope]} 스코프에 브랜드가 없습니다`}
@@ -607,7 +639,25 @@ export function Brands() {
                 style={{ minHeight: 200 }}
               />
             )}
-            {directory.brands.map((brand) => (
+            {canBrowseDirectory && hasDirectoryFilter && visibleBrands.length === 0 && (
+              <EmptyState
+                icon="search"
+                title="조건에 맞는 브랜드가 없습니다"
+                description={syncState === "partial" ? "일부만 불러온 목록에서 검색했습니다. 검색·필터를 지우거나 다시 읽어주세요." : "다른 검색어를 입력하거나 빠른 보기를 전체로 바꿔보세요."}
+                action={<Button variant="secondary" size="sm" onClick={clearDirectoryFilters}>검색·필터 초기화</Button>}
+                style={{ minHeight: 200 }}
+              />
+            )}
+            {syncState === "partial" && !hasDirectoryFilter && directory.brands.length === 0 && (
+              <EmptyState
+                icon="brand"
+                title="브랜드 목록을 다시 확인해 주세요"
+                description="일부 데이터만 읽어 현재 표시할 수 있는 브랜드가 없습니다."
+                action={<Button variant="secondary" size="sm" onClick={reload}>다시 읽기</Button>}
+                style={{ minHeight: 200 }}
+              />
+            )}
+            {canBrowseDirectory && visibleBrands.map((brand) => (
               <BrandRow key={brand.key} brand={brand} onOpen={setQuery} />
             ))}
           </Card>
