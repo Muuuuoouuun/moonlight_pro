@@ -40,3 +40,25 @@ test('overlapping checklist changes require an explicit choice, unrelated edits 
   assert.equal(checks.hasChecklistConflict(source, local, { ...source, title: '서버 변경' }), false);
   assert.equal(checks.hasChecklistConflict(source, local, local), false);
 });
+
+test('dated steps round-trip and participate in edit conflicts', () => {
+  const dated = { ...source, checklist: [{ ...checklist[0], dueAt: '2026-09-21' }] };
+  assert.equal(checks.readTaskChecklist(dated)[0].dueAt, '2026-09-21');
+  assert.equal(checks.validateTaskChecklist(dated.checklist), '');
+  assert.notEqual(checks.validateTaskChecklist([{ ...checklist[0], dueAt: '2026-02-30' }]), '');
+  const local = { ...dated, checklist: [{ ...dated.checklist[0], dueAt: '2026-09-22' }] };
+  const remote = { ...dated, checklist: [{ ...dated.checklist[0], dueAt: '2026-09-23' }] };
+  assert.equal(checks.hasChecklistConflict(dated, local, remote), true);
+  assert.equal(buildTaskPatch(dated, buildTaskEditDraft(local)).checklist[0].dueAt, '2026-09-22');
+});
+
+test('project item types survive creation echoes and guarded edits without reclassifying legacy tasks', () => {
+  assert.equal(checks.projectItemType(source), 'task');
+  const current = mergeSavedTask(source, { id: source.id, meta: { item_type: 'subproject', checklist } });
+  const draft = buildTaskEditDraft(current);
+  assert.equal(draft.itemType, 'subproject');
+  assert.deepEqual(buildTaskPatch(current, draft), { id: source.id });
+  assert.deepEqual(buildTaskPatch(current, { ...draft, itemType: 'milestone' }), {
+    id: source.id, itemType: 'milestone', expectedUpdatedAt: source.updatedAt,
+  });
+});

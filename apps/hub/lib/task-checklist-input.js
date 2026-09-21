@@ -1,6 +1,6 @@
 import { TASK_CHECKLIST_LIMIT } from './task-checklist.js';
 
-const unused = item => !item.title?.trim() && !item.note?.trim() && !item.done;
+const unused = item => !item.title?.trim() && !item.note?.trim() && !item.done && !item.dueAt;
 
 // Empty capture rows are UI affordances, not records. Never drop a note or completion.
 export function checklistForSave(items = []) {

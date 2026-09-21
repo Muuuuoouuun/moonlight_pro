@@ -2817,3 +2817,34 @@ button {
   .hub-app .hub-project-identity { align-items: flex-start; }
   .hub-app .hub-project-identity__copy strong { font-size: 14px; }
 }
+
+/* Project hierarchy: each work package owns its details and dated steps. */
+.hub-app .hub-project-portfolio-items { display: grid; gap: 8px; }
+.hub-app .hub-project-portfolio-item { border: 1px solid var(--line-soft); border-radius: var(--r-sm); min-width: 0; }
+.hub-app .hub-project-portfolio-item > summary { display: grid; grid-template-columns: 14px 18px minmax(0, 1fr) minmax(100px, 160px) auto; align-items: center; gap: 12px; min-height: 64px; padding: 10px 14px; cursor: pointer; list-style: none; }
+.hub-app .hub-project-portfolio-item > summary::-webkit-details-marker { display: none; }
+.hub-app .hub-project-portfolio-item > summary > svg { color: var(--fg-muted); }
+.hub-app .hub-project-portfolio-item > summary > svg:first-child { transition: transform var(--dur-panel) var(--ease-hub); }
+.hub-app .hub-project-portfolio-item[open] > summary > svg:first-child { transform: rotate(90deg); }
+.hub-app .hub-project-portfolio-item__title { min-width: 0; display: grid; gap: 4px; }
+.hub-app .hub-project-portfolio-item__title small { font-size: 10.5px; color: var(--fg-muted); }
+.hub-app .hub-project-portfolio-item__title strong { font-size: 13px; font-weight: 550; color: var(--fg); overflow-wrap: anywhere; }
+.hub-app .hub-project-portfolio-item summary > .mono { font-size: 11px; color: var(--fg-muted); }
+.hub-app .hub-project-portfolio-item__body { padding: 14px 18px; border-top: 1px solid var(--line-soft); }
+.hub-app .hub-project-portfolio-item__body p { font-size: 12px; line-height: 1.6; color: var(--fg-muted); overflow-wrap: anywhere; }
+.hub-app .hub-project-portfolio-item__description { white-space: pre-wrap; }
+.hub-app .hub-project-portfolio-item__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.hub-app .hub-project-portfolio-item__toolbar > button:last-child { margin-left: auto; }
+.hub-app .hub-project-portfolio-item__checks { margin-top: 12px; }
+.hub-app .hub-project-portfolio-item__checks > div { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; padding-block: 10px; align-items: start; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--fg-muted); }
+.hub-app .hub-project-portfolio-item__checks strong { color: var(--fg); font-weight: 450; overflow-wrap: anywhere; }
+.hub-app .hub-project-portfolio-item__checks p { margin: 4px 0 0; white-space: pre-wrap; }
+.hub-app .hub-project-portfolio-item__checks [data-done="true"] strong { text-decoration: line-through; color: var(--fg-muted); }
+.hub-app .hub-project-portfolio-item__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+@media (max-width: 620px) {
+  .hub-app .hub-project-portfolio-item > summary { grid-template-columns: 14px 18px minmax(0, 1fr); gap: 8px; padding: 12px; }
+  .hub-app .hub-project-portfolio-item__progress, .hub-app .hub-project-portfolio-item summary > .mono { grid-column: 3; }
+  .hub-app .hub-project-portfolio-item__body { padding: 12px; }
+  .hub-app .hub-project-portfolio-item__checks > div { grid-template-columns: 14px minmax(0, 1fr); }
+  .hub-app .hub-project-portfolio-item__checks .mono { grid-column: 2; }
+}

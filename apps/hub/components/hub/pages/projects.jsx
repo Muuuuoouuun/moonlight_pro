@@ -1229,6 +1229,7 @@ export function Projects({ workspace }) {
           description: taskDraft.description || '',
           nextAction: taskDraft.nextAction || '',
           checklist: checklistForSave(taskDraft.checklist || []),
+          itemType: taskDraft.itemType || 'task',
           source: 'hub-projects',
         }),
       });

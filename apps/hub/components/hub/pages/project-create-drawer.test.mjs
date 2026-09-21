@@ -209,7 +209,8 @@ test("EditDrawer protects dirty drafts and uses explicit save copy", () => {
   assert.match(primitivesSource, /saveLabel = ['"]변경사항 저장['"]/);
   assert.match(primitivesSource, /saveState === ['"]saving['"] \? ['"]저장 중…['"] : saveLabel/);
   assert.match(projectsSource, /<ProjectTaskDetailDrawer[\s\S]*editing=\{Boolean\(taskEditSource\)\}/);
-  assert.match(taskDrawerSource, /saveLabel=\{editing \? ['"]변경사항 저장['"] : ['"]할 일 만들기['"]\}/);
+  assert.match(taskDrawerSource, /saveLabel=\{editing \? ['"]변경사항 저장['"] : `\$\{itemLabel\} 만들기`\}/);
+  assert.match(taskDrawerSource, /itemType === 'task' \? '할 일'/);
   assert.match(
     projectsSource,
     /saveLabel=\{containerDraft\?\.isNew === false \? ['"]변경사항 저장['"] : ['"]컨테이너 만들기['"]\}/,

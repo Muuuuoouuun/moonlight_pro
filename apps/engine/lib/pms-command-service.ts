@@ -77,10 +77,11 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
       workspace_id: row.workspace_id,
       project_id: row.project_id ?? null,
       deal_id: meta.deal_id ?? null,
+      item_type: meta.item_type ?? "task",
       // JSONB can reorder object keys; item order itself remains meaningful.
       checklist: Array.isArray(meta.checklist)
         ? meta.checklist.map((item) => item && typeof item === "object"
-          ? { id: item.id, title: item.title, done: item.done, note: item.note ?? "" }
+          ? { id: item.id, title: item.title, done: item.done, note: item.note ?? "", ...(item.dueAt ? { dueAt: item.dueAt } : {}) }
           : item)
         : meta.checklist ?? [],
       title: row.title,
