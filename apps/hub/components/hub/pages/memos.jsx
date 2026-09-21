@@ -12,6 +12,7 @@ import { useMemoSearch } from './use-memo-search';
 import { MemoSearchControls } from './memo-search-controls';
 import { filtersFromParams, memoSearchParams, memoListHref, memoDocumentHref, memoMatchSegments, MEMO_CHANGED_EVENT } from '@/lib/journal-search-client';
 import { MemoPatternPanel } from './memo-pattern-panel';
+import { MEMO_SAVED_EVENT } from '@/lib/memo-save';
 import './memos.css';
 
 function MemoDocument({ onClose, onReload, ...props }) {
@@ -95,6 +96,21 @@ export function Memos() {
     }
     load(); return () => { active = false; generation.current++; };
   }, [noteId, isNew, draftId, reload]);
+
+  // 빠른 메모(M·⌘K)도 2026-09-20부터 같은 journal 저장소를 쓴다. 저장 이벤트를 듣지 않으면
+  // 이 화면에서 메모를 남겨도 새로고침 전까지 목록에 뜨지 않는다(실측). memo-workspace 는
+  // 이미 같은 이벤트를 듣고 있었고 이 화면만 빠져 있었다.
+  React.useEffect(() => {
+    const refresh = () => {
+      setReload((value) => value + 1);
+      // 화면의 목록은 ledger 가 아니라 검색 훅(useMemoSearch)이 그리고, 그건
+      // MEMO_CHANGED_EVENT 만 듣는다. 두 이벤트를 여기서 잇는다 — 저장 지점(quick-memo)이
+      // 검색 계층을 알 필요는 없고, 목록을 소유한 이 화면이 아는 것이 맞다.
+      window.dispatchEvent(new Event(MEMO_CHANGED_EVENT));
+    };
+    window.addEventListener(MEMO_SAVED_EVENT, refresh);
+    return () => window.removeEventListener(MEMO_SAVED_EVENT, refresh);
+  }, []);
 
   function readRecoveries() {
     try {
