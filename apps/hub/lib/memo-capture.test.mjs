@@ -8,6 +8,8 @@ import {
 } from "./memo-capture.js";
 import { selectMemos } from "./memo-view.js";
 import { forwardMemoCapture } from "./memo-capture-engine-client.js";
+import { validateJournalInput } from "./journal.js";
+import { journalSaveCommand } from "./memo-save.js";
 test("UTF-8 Markdown keeps line breaks, source name and original text; labels stay optional", async () => {
   const file = new File(
     ["# 제목\r\n\n[[참고]]\n<script>no execution</script>"],
@@ -45,6 +47,21 @@ test("draft restore and label parsing preserve the immutable request ID", () => 
   assert.deepEqual(memoCapturePayload(draft).labels, ["고객질문", "아이디어"]);
   assert.equal(restoreMemoDraft("{broken"), null);
   assert.equal(restoreMemoDraft(JSON.stringify({ version: 0, draft })), null);
+});
+test("memo capture boundaries match the journal save contract without dropping input", () => {
+  const draft = { ...newMemoDraft(), body: "본문", title: "제".repeat(200), labels: Array.from({ length: 8 }, (_, n) => `${n}${"태".repeat(31)}`).join(",") };
+  const accepted = memoCapturePayload(draft);
+  assert.equal(validateJournalInput(journalSaveCommand(accepted)).ok, true);
+  for (const patch of [{ title: "제".repeat(201) }, { labels: "태".repeat(33) }, { labels: Array.from({ length: 9 }, (_, n) => `태그${n}`).join(",") }]) {
+    const oversized = { ...draft, ...patch };
+    const before = structuredClone(oversized);
+    assert.throws(() => memoCapturePayload(oversized));
+    assert.deepEqual(oversized, before);
+  }
+  // Existing overlong titles remain recoverable so the operator can shorten them.
+  const legacy = { ...draft, title: "제".repeat(300) };
+  assert.equal(restoreMemoDraft(JSON.stringify({ version: 1, draft: legacy })).title, legacy.title);
+  assert.deepEqual(memoCapturePayload({ ...draft, labels: "#Follow   up, follow up, ##검토" }).labels, ["Follow up", "검토"]);
 });
 test("rediscovery uses saved date, matches labels and file names, excludes unknown dates", () => {
   const old = {

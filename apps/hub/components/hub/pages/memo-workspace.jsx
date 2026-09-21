@@ -8,8 +8,9 @@ import {
   memoLinkVerified,
 } from "@/lib/memo-view";
 import styles from "./memo-workspace.module.css";
-import { MemoCapture } from "./memo-capture";
+import { MemoCaptureLink } from "../journal-links";
 import { MEMO_SAVED_EVENT } from "@/lib/memo-save";
+import { isCanonicalUuid } from "@/lib/uuid";
 const EMPTY = {
   memos: [],
   links: [],
@@ -215,23 +216,20 @@ export function MemoWorkspace({
     >
       <header className={styles.header}>
         <div>
-          <h2>{taskId ? "원본 메모" : "메모 · 받은함"}</h2>
+          <h2>{taskId ? "원본 메모" : "기존 메모 · 받은함"}</h2>
         </div>
         <Button variant="ghost" size="sm" onClick={load} disabled={busy}>
           새로고침
         </Button>
       </header>
       {!taskId && (
-        <MemoCapture
-          onSaved={async ({ id }) => {
-            await load(id);
-            setSelected(`note:${id}`);
-            setProjectFilter("");
-            setQuery("");
-            setFilter("all");
-            onSaved?.();
-          }}
-        />
+        <div className={styles.notice}>
+          <p>새 메모는 메모 목록에서 작성하고 확인합니다.</p>
+          <MemoCaptureLink
+            context={isCanonicalUuid(projectFilter) ? { type: "project", id: projectFilter } : undefined}
+            label="새 메모 남기기"
+          />
+        </div>
       )}
       {data.status !== "live" && (
         <p role="status" className={styles.notice}>
@@ -322,7 +320,7 @@ export function MemoWorkspace({
                   ? "업무 연결 정보를 불러오지 못했습니다. 연결 기능을 사용할 수 없습니다."
                   : taskId
                     ? "확인된 연결 메모가 없습니다."
-                    : "표시할 메모가 없습니다. ‘새 메모’로 기록을 남겨보세요."}
+                    : "표시할 기존 메모가 없습니다. ‘새 메모 남기기’에서 기록을 시작하세요."}
             </p>
           )}
           <p className={styles.notice}>

@@ -62,7 +62,8 @@ test("read-back mismatch, preview, HTTP and transport failure retain the known r
   }
 });
 
-test("lost acknowledgement is retried with the same immutable payload, not automatically", async () => {
+test("lost acknowledgement replays the entire persisted command after a later reload", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-09-21T00:00:00Z") });
   const input = payload();
   const posted = [];
   let failed = false;
@@ -76,15 +77,38 @@ test("lost acknowledgement is retried with the same immutable payload, not autom
   };
   await assert.rejects(saveMemoAndVerify(input, fetchImpl));
   assert.equal(posted.length, 1);
-  assert.equal((await saveMemoAndVerify(input, fetchImpl)).status, "duplicate");
-  // 멱등 키(requestId)와 본문은 재시도에도 그대로다. occurredAt 은 호출 시각이라 달라질 수
-  // 있고, 중복 판정은 requestId 가 하므로 그 차이는 계약에 영향이 없다.
+  t.mock.timers.tick(60000);
+  assert.equal((await saveMemoAndVerify(JSON.parse(JSON.stringify(input)), fetchImpl)).status, "duplicate");
+  // SQL compares request_payload to the entire command, including occurredAt.
   assert.equal(posted.length, 2);
+  assert.deepEqual(posted[1], posted[0]);
   for (const sent of posted) {
     assert.equal(sent.requestId, input.id);
     assert.equal(sent.entryId, input.id);
     assert.equal(sent.body, input.body);
     assert.equal(sent.expectedRevision, 0);
+  }
+});
+
+test("legacy tab drafts gain one persisted timestamp before their first journal save", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-09-21T00:00:00Z") });
+  const draft = { ...newMemoDraft(), body: "복원할 메모" };
+  delete draft.occurredAt;
+  const entries = new Map([["quick", JSON.stringify({ version: 1, draft })]]);
+  const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) };
+  const restored = readQuickMemoDraft(storage, "quick");
+  writeQuickMemoDraft(storage, "quick", restored);
+  const command = journalSaveCommand(memoCapturePayload(restored));
+  t.mock.timers.tick(60000);
+  assert.deepEqual(journalSaveCommand(memoCapturePayload(readQuickMemoDraft(storage, "quick"))), command);
+  assert.equal(command.occurredAt, "2026-09-21T00:00:00.000Z");
+});
+
+test("missing or invalid draft timestamps never send an unstable journal command", async () => {
+  for (const occurredAt of [undefined, null, "not-a-date", "2026-02-30T00:00:00Z"]) {
+    let calls = 0;
+    await assert.rejects(saveMemoAndVerify({ ...payload(), occurredAt }, async () => { calls++; }), /작성 시각/);
+    assert.equal(calls, 0);
   }
 });
 

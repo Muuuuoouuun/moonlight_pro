@@ -1,11 +1,16 @@
+import { isJournalTimestamp } from "./journal.js";
+import { JOURNAL_TAG_LENGTH, JOURNAL_TAG_LIMIT, normalizeJournalTags } from "./journal-tags.js";
+
 export const MEMO_DRAFT_KEY = "moonlight:memo-draft:v1";
 // journal_entries 의 본문 한계가 20,000자다(`lib/journal.js` validateJournalInput).
 // 빠른 메모가 journal 로 통합되면서 100,000 → 20,000 으로 맞춘다. 더 긴 글은
 // 메모가 아니라 Studio 원고의 자리다.
 export const MAX_MEMO_CHARS = 20000;
+export const MAX_MEMO_TITLE_CHARS = 200;
 export const MAX_MEMO_FILE_BYTES = 256 * 1024;
 export const newMemoDraft = () => ({
   id: crypto.randomUUID(),
+  occurredAt: new Date().toISOString(),
   title: "",
   body: "",
   labels: "",
@@ -13,24 +18,20 @@ export const newMemoDraft = () => ({
   source: { type: "manual" },
 });
 export function memoCapturePayload(draft) {
-  const labels = [
-    ...new Set(
-      draft.labels
-        .split(/[,，\n]/)
-        .map((s) => s.trim().replace(/^#/, ""))
-        .filter(Boolean),
-    ),
-  ];
+  const labels = normalizeJournalTags(draft.labels.split(/[,，\n]/));
   if (
     !draft.body.trim() ||
     draft.body.length > MAX_MEMO_CHARS ||
     draft.body.includes("\0")
   )
     throw new Error("본문은 1~20,000자의 텍스트로 입력하세요.");
-  if (labels.length > 12 || labels.some((s) => s.length > 40))
-    throw new Error("라벨은 12개까지, 하나당 40자 이내로 입력하세요.");
+  if (typeof draft.title !== "string" || draft.title.length > MAX_MEMO_TITLE_CHARS)
+    throw new Error(`제목은 ${MAX_MEMO_TITLE_CHARS}자 이내로 입력하세요.`);
+  if (labels === null)
+    throw new Error(`라벨은 ${JOURNAL_TAG_LIMIT}개까지, 하나당 ${JOURNAL_TAG_LENGTH}자 이내로 입력하세요.`);
   return {
     id: draft.id,
+    occurredAt: draft.occurredAt,
     title: draft.title,
     body: draft.body,
     labels,
@@ -53,11 +54,11 @@ export async function readMemoFile(file) {
   }
   if (!body.trim() || body.includes("\0") || body.length > MAX_MEMO_CHARS)
     throw new Error(
-      "빈 파일·바이너리 파일·100,000자를 넘는 파일은 가져올 수 없습니다.",
+      `빈 파일·바이너리 파일·${MAX_MEMO_CHARS.toLocaleString()}자를 넘는 파일은 가져올 수 없습니다.`,
     );
   return {
     body,
-    title: file.name.replace(/\.(txt|md)$/i, "").slice(0, 300),
+    title: file.name.replace(/\.(txt|md)$/i, "").slice(0, MAX_MEMO_TITLE_CHARS),
     source: {
       type: "file",
       name: file.name,
@@ -88,7 +89,10 @@ export function restoreMemoDraft(raw) {
     )
       return null;
     if (!["manual", "file"].includes(draft.source?.type)) return null;
-    return draft;
+    if (draft.occurredAt !== undefined && !isJournalTimestamp(draft.occurredAt)) return null;
+    // Older tab drafts have no journal timestamp. Upgrade once on restore; both
+    // entry points persist this draft before sending the first save request.
+    return { ...draft, occurredAt: draft.occurredAt ?? new Date().toISOString() };
   } catch {
     return null;
   }

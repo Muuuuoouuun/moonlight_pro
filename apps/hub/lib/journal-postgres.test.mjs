@@ -8,6 +8,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
+import { memoCapturePayload, newMemoDraft } from './memo-capture.js';
+import { journalSaveCommand } from './memo-save.js';
+import { readQuickMemoDraft, writeQuickMemoDraft } from './quick-memo.js';
+import { prepareMemoIdea, saveMemoAsIdeaAndVerify } from './quick-memo-content.js';
+import { validateJournalInput } from './journal.js';
 
 // Opt in to a new disposable, socket-only PostgreSQL cluster. Never reads .env.
 // JOURNAL_POSTGRES_TEST=1 node --import ./scripts/register-hub-alias.mjs --test apps/hub/lib/journal-postgres.test.mjs
@@ -213,6 +218,66 @@ test('journal PostgreSQL atomic persistence, reuse, isolation and permissions', 
       assert.equal(literalMatch.hasMore, false);
       assert.equal(search('not matching', id(150)).contexts[0].id, id(150));
       assert.equal(search('', id(999)).contexts.length, 0);
+    });
+    await t.test('quick memo content handoff replays the journal RPC after a lost reply without a legacy note', async () => {
+      const draft = prepareMemoIdea({ ...newMemoDraft(), body: '  저장소 통합 뒤 소재 연결\n원문 보존  ' });
+      const entryForClient = entry => entry && ({ ...entry, revision: entry.note_revision, occurredAt: entry.occurred_at });
+      let firstHandoff;
+      const fetch = async (url, options = {}) => {
+        if (url === '/api/hub/journal' && options.method === 'POST') {
+          const validation = validateJournalInput(JSON.parse(options.body));
+          assert.equal(validation.ok, true);
+          const { requestId, ...payload } = validation.value;
+          const result = json(`select public.journal_workflow_v1('${W}','${requestId}',${literal(JSON.stringify(payload))}::jsonb)`);
+          if (payload.action === 'create_content' && !firstHandoff) {
+            assert.equal(result.status, 'saved');
+            firstHandoff = result;
+            throw new TypeError('response lost after commit');
+          }
+          return Response.json({ ...result, entry: entryForClient(result.entry) });
+        }
+        if (url === `/api/hub/journal?note=${draft.id}`) {
+          const entry = json(`select public.journal_note_entry_v1('${W}','${draft.id}')`);
+          return Response.json({ status: 'live', entry: entryForClient(entry) });
+        }
+        assert.equal(url, '/api/hub/content');
+        assert.equal(options.method, undefined, 'legacy notes-backed write route is not used');
+        const item = json(`select to_jsonb(t) from public.content_items t where id='${firstHandoff.target.id}'`);
+        const variant = json(`select to_jsonb(t) from public.content_variants t where id='${firstHandoff.target.variantId}'`);
+        return Response.json({ status: 'live', source: 'supabase',
+          items: [{ id: item.id, sourceIdea: item.source_idea, sourceRefs: item.meta.source_refs }],
+          variants: [{ id: variant.id, contentId: variant.content_id, body: variant.body }],
+        });
+      };
+      await assert.rejects(saveMemoAsIdeaAndVerify(draft, fetch), error => error.id === draft.id);
+      let stored;
+      const storage = { getItem: () => stored, setItem: (_key, value) => { stored = value; } };
+      writeQuickMemoDraft(storage, 'handoff-test', draft);
+      const restored = prepareMemoIdea(readQuickMemoDraft(storage, 'handoff-test'));
+      const result = await saveMemoAsIdeaAndVerify(restored, fetch);
+      assert.deepEqual(result, { id: draft.id, contentId: firstHandoff.target.id, variantId: firstHandoff.target.variantId });
+      assert.notEqual(result.contentId, draft.ideaContentId, 'the RPC issues content IDs independently of retry IDs');
+      assert.equal(sql(`select count(*) from public.notes where id='${draft.id}'`), '0');
+      assert.equal(sql(`select count(*) from public.journal_links where journal_id='${draft.id}' and link_kind='use'`), '1');
+      assert.equal(sql(`select count(*) from public.content_items where meta->'source_refs' @> ${literal(JSON.stringify([{ journal_id: draft.id }]))}::jsonb`), '1');
+      assert.equal(sql(`select body from public.content_variants where id='${result.variantId}'`), '', 'the canonical handoff starts a draft from evidence');
+    });
+    await t.test('quick memo reload replays its full SQL receipt while timestamp changes conflict', (t) => {
+      t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-21T00:00:00Z') });
+      const draft = { ...newMemoDraft(), body: '응답이 유실된 메모' };
+      const entries = new Map();
+      const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) };
+      writeQuickMemoDraft(storage, 'quick', draft);
+      const initial = journalSaveCommand(memoCapturePayload(draft));
+      const submit = input => json(`select public.journal_workflow_v1('${W}',${literal(input.requestId)}::uuid,${literal(JSON.stringify(input))}::jsonb)`);
+      assert.equal(submit(initial).status, 'saved');
+      t.mock.timers.tick(60000);
+      const replay = journalSaveCommand(memoCapturePayload(readQuickMemoDraft(storage, 'quick')));
+      assert.equal(submit(replay).status, 'duplicate');
+      const changed = submit({ ...replay, occurredAt: new Date().toISOString() });
+      assert.equal(changed.status, 'conflict');
+      assert.equal(changed.error, 'request-id-reused');
+      assert.equal(sql(`select count(*) from public.journal_entries where id=${literal(draft.id)}::uuid`), '1');
     });
     await t.test('RLS and RPC execution stay service-only and migration reapply preserves state', () => {
       const signature = 'public.journal_workflow_v1(uuid,uuid,jsonb)';

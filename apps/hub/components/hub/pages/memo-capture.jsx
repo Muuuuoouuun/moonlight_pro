@@ -5,12 +5,13 @@ import {
   MEMO_DRAFT_KEY,
   MAX_MEMO_CHARS,
   newMemoDraft,
+  MAX_MEMO_TITLE_CHARS,
   memoCapturePayload,
   readMemoFile,
   restoreMemoDraft,
 } from "@/lib/memo-capture";
 import styles from "./memo-capture.module.css";
-import { saveMemoAndVerify } from "@/lib/memo-save";
+import { memoHref, saveMemoAndVerify } from "@/lib/memo-save";
 
 export function MemoCapture({ onSaved, fetchImpl = fetch }) {
   const [draft, setDraft] = React.useState(null);
@@ -216,7 +217,7 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
                     onChange={chooseFile}
                   />
                 </label>
-                <span>UTF-8 · 파일 256KB 이하 · 본문 최대 100,000자</span>
+                <span>UTF-8 · 파일 256KB 이하 · 본문 최대 {MAX_MEMO_CHARS.toLocaleString()}자</span>
               </div>
               {pendingFile ? (
                 <div className={styles.pending} role="status">
@@ -246,7 +247,7 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
               <label>
                 제목 <span>선택 · 비우면 첫 문장을 사용합니다</span>
                 <input
-                  maxLength={300}
+                  maxLength={MAX_MEMO_TITLE_CHARS}
                   value={draft.title}
                   onChange={(e) => update({ title: e.target.value })}
                 />
@@ -295,7 +296,7 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
           <>
             {" "}
             <a
-              href={`/dashboard/work/projects?view=memos&memo=note:${encodeURIComponent(savedId)}`}
+              href={memoHref(savedId)}
             >
               저장된 메모 열기
             </a>
