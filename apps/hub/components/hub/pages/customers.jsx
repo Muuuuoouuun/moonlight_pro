@@ -22,6 +22,7 @@ import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } fr
 import { requestPersonaChat } from "../persona-client";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
+import './customer-focus.css';
 
 // "₩1.2M"/"₩900K"/"—" → 정렬용 숫자 (DESIGN.md §8.1: 금액은 표시 문자열을 파싱해 정렬)
 function parseMoney(value) {
@@ -834,7 +835,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
       onClose={onClose}
       width="min(440px, 96vw)"
       footer={(
-        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minWidth: 0 }}>
+        <div className="customer-focus-footer">
           <Button variant="primary" onClick={() => setMemoState({})}>메모 남기기</Button>
           {editHref && <Button variant="outline" size="sm" onClick={() => onNavigate?.(editHref)}>정식 편집 열기</Button>}
           <div style={{ flex: 1 }} />
@@ -842,10 +843,12 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
         </div>
       )}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="customer-focus">
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Button
-            variant={focusOverride === "raise" ? "primary" : "outline"}
+            variant="outline"
+            active={focusOverride === "raise"}
+            aria-pressed={focusOverride === "raise"}
             size="xs"
             icon="star"
             onClick={() => {
@@ -870,20 +873,17 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
         </div>
         {/* 다음 액션 */}
         {(nextActionOverride ?? row.nextAction) && (
-          <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "9px 12px", display: "flex", alignItems: "center", gap: 8 }}>
-            <Iconed name="bolt" size={13} style={{ color: "var(--moon-300)" }} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>다음 액션</div>
-              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{nextActionOverride ?? row.nextAction}</div>
-            </div>
-          </div>
+          <section className="customer-focus-next" aria-label="다음 행동">
+            <h3>다음 행동</h3>
+            <p>{nextActionOverride ?? row.nextAction}</p>
+          </section>
         )}
 
 
         {/* 활동 타임라인 (읽기 우선 배치) */}
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 500 }}>활동 타임라인</span>
+        <section className="customer-focus-activity" aria-label="활동 타임라인">
+          <div className="customer-focus-section-heading">
+            <h3>활동 타임라인</h3>
             <SyncBadge state={actSync} />
           </div>
           {actNotice && (
@@ -924,7 +924,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
           ) : (
             <><ActivityTimeline rows={activities.slice(0, 3)} onDeleteActivity={deleteActivity} />{activities.length > 3 && <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>전체 대화 기록 보기</summary><ActivityTimeline rows={activities.slice(3)} onDeleteActivity={deleteActivity} /></details>}</>
           )}
-        </div>
+        </section>
 
         <RelatedCustomerProjects type={row.kind} id={row.id} />
         <RelatedMemos type={row.kind} id={row.id} onOpen={(noteId) => setMemoState({ noteId })} />
