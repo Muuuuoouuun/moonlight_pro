@@ -5,8 +5,8 @@
   "method": "Authorized read-only browser UI audit via mcp__cua_repl. Rendered DOM/AX and selected screenshots only. No hidden state, endpoints, scraping APIs, or external AI uploads.",
   "account": "junheokmun",
   "thread": {
-    "url": "https://www.instagram.com/direct/t/1458189162519383/",
-    "display_name": "곰님과 미래소년님",
+    "url": "https://www.instagram.com/direct/t/[REDACTED_THREAD_ID]/",
+    "display_name": "[REDACTED_CHAT_GROUP]",
     "identity_basis": "Visible chat header",
     "scope": "Specified thread and initially visible DM sidebar only"
   },
