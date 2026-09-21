@@ -2,7 +2,8 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
+import { Button, Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
+import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 
 // Home — Futura 텍스처의 첫 화면 (DESIGN.md §15, 2026-09-18).
 //
@@ -11,23 +12,6 @@ import { Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
 // 공유한다. 첫 화면이 별도 원장을 갖는 순간 Daily Brief와 숫자가 갈라지기 때문이다.
 //
 // 기존 daily-brief.jsx는 건드리지 않는다 — Home은 같은 원장 위의 다른 렌즈다.
-
-// daily-brief.jsx의 SIGNAL_TARGETS와 같은 표. 두 화면이 같은 신호를 다른 곳으로 보내면
-// 운영자가 "어느 쪽이 맞나"를 먼저 판단해야 한다.
-const SIGNAL_TARGETS = {
-  draft: 'dashboard/content/studio?new=draft',
-  escalate: 'dashboard/revenue/deals',
-  followup: 'dashboard/revenue/deals',
-  deals: 'dashboard/revenue/deals',
-  leads: 'dashboard/revenue/leads',
-  revenue: 'dashboard/revenue/overview',
-  wait: 'dashboard/work/rhythm',
-  runs: 'dashboard/automations/runs',
-  automations: 'dashboard/automations',
-  projects: 'dashboard/work/projects',
-  content: 'dashboard/content/queue',
-  agents: 'dashboard/agents/orders',
-};
 
 function formatEyebrowDate(date) {
   return new Intl.DateTimeFormat('ko-KR', {
@@ -51,14 +35,16 @@ function readEnvelope(res, data) {
   return data.status || 'preview';
 }
 
-function useDailyBriefSignals() {
+function useDailyBriefSignals(reloadKey) {
   const [state, setState] = React.useState({ status: 'loading', signals: [] });
 
   React.useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    setState({ status: 'loading', signals: [] });
     (async () => {
       try {
-        const res = await fetch('/api/hub/daily-brief', { cache: 'no-store' });
+        const res = await fetch('/api/hub/daily-brief', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]) });
         const data = await res.json().catch(() => null);
         if (!active) return;
         const status = readEnvelope(res, data);
@@ -70,24 +56,27 @@ function useDailyBriefSignals() {
         if (active) setState({ status: 'error', signals: [] });
       }
     })();
-    return () => { active = false; };
-  }, []);
+    return () => { active = false; controller.abort(); };
+  }, [reloadKey]);
 
   return state;
 }
 
-function useTodaySchedule() {
+function useTodaySchedule(reloadKey) {
   const [state, setState] = React.useState({ status: 'loading', events: [] });
 
   React.useEffect(() => {
     let active = true;
-    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const controller = new AbortController();
+    setState({ status: 'loading', events: [] });
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const start = new Date(`${day}T00:00:00+09:00`);
     const end = new Date(start.getTime() + 86400000);
     const params = new URLSearchParams({ timeMin: start.toISOString(), timeMax: end.toISOString() });
 
     (async () => {
       try {
-        const res = await fetch(`/api/calendar/google/event?${params}`, { cache: 'no-store' });
+        const res = await fetch(`/api/calendar/google/event?${params}`, { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]) });
         const data = await res.json().catch(() => null);
         if (!active) return;
         const status = readEnvelope(res, data);
@@ -101,8 +90,8 @@ function useTodaySchedule() {
         if (active) setState({ status: 'error', events: [] });
       }
     })();
-    return () => { active = false; };
-  }, []);
+    return () => { active = false; controller.abort(); };
+  }, [reloadKey]);
 
   return state;
 }
@@ -112,7 +101,7 @@ function TriageDetail({ signal, onDecide }) {
     return (
       <div className="fx-card">
         <EmptyState
-          title="오늘 결정할 신호가 없습니다"
+          title="확인된 신호가 없습니다"
           description="새 신호는 원장이 갱신되면 여기에 쌓입니다."
         />
       </div>
@@ -160,8 +149,8 @@ function TriageDetail({ signal, onDecide }) {
   );
 }
 
-function TodaySchedule({ onNavigate }) {
-  const { status, events } = useTodaySchedule();
+function TodaySchedule({ onNavigate, reloadKey, onReload }) {
+  const { status, events } = useTodaySchedule(reloadKey);
   const now = Date.now();
 
   return (
@@ -177,10 +166,11 @@ function TodaySchedule({ onNavigate }) {
         </button>
       </div>
 
+      {status === 'partial' && <div><TruthBadge state="partial" reason="일부 캘린더만 확인했습니다" /><Button onClick={onReload}>다시 불러오기</Button></div>}
       {status === 'loading' ? (
         <Skeleton lines={4} />
       ) : status === 'error' || status === 'preview' ? (
-        <TruthBadge state={status === 'error' ? 'error' : 'preview'} reason="캘린더 연결 필요" />
+        <div><TruthBadge state={status} reason={status === 'error' ? '일정을 불러오지 못했습니다' : '캘린더 연결 필요'} /><Button onClick={onReload}>다시 불러오기</Button></div>
       ) : !events.length ? (
         <EmptyState title="오늘 잡힌 일정이 없습니다" />
       ) : (
@@ -206,7 +196,8 @@ function TodaySchedule({ onNavigate }) {
 }
 
 export function Home({ onNavigate }) {
-  const { status, signals } = useDailyBriefSignals();
+  const [reloadKey, reload] = React.useReducer(value => value + 1, 0);
+  const { status, signals } = useDailyBriefSignals(reloadKey);
   const [resolved, setResolved] = React.useState(() => new Set());
   const [cursor, setCursor] = React.useState(0);
 
@@ -216,9 +207,10 @@ export function Home({ onNavigate }) {
   const done = total - queue.length;
 
   const decide = React.useCallback((signal, decision) => {
+    const target = decision ? SIGNAL_TARGETS[decision.action] : null;
+    if (decision && !target) return;
     setResolved((prev) => new Set(prev).add(signal.id));
     setCursor(0);
-    const target = decision ? SIGNAL_TARGETS[decision.action] : null;
     if (target) onNavigate(target);
   }, [onNavigate]);
 
@@ -254,7 +246,7 @@ export function Home({ onNavigate }) {
             Daily Brief · {formatEyebrowDate(new Date())}
           </div>
           <h2 className="fx-hero">
-            {status === 'loading' ? '불러오는 중' : queue.length ? `${queue.length}건 남았습니다` : '오늘 정리 끝'}
+            {status === 'loading' ? '불러오는 중' : status === 'error' ? '신호를 확인하지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : queue.length ? `${queue.length}건 남았습니다` : status === 'partial' ? '일부 신호 확인 필요' : '확인할 신호 없음'}
           </h2>
         </div>
 
@@ -268,13 +260,16 @@ export function Home({ onNavigate }) {
         ) : null}
       </header>
 
+      {status === 'partial' && <div><TruthBadge state="partial" reason="일부 원장만 확인했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>}
       {status === 'loading' ? (
         <div className="fx-split">
           <Skeleton lines={5} />
           <Skeleton lines={6} />
         </div>
       ) : status === 'error' ? (
-        <TruthBadge state="error" reason="첫 화면 신호를 불러오지 못했습니다" />
+        <div><TruthBadge state="error" reason="첫 화면 신호를 불러오지 못했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>
+      ) : status === 'preview' ? (
+        <TruthBadge state="preview" reason="Supabase 연결 필요" />
       ) : (
         <div className="fx-split">
           <ul className="fx-triage">
@@ -298,11 +293,7 @@ export function Home({ onNavigate }) {
         </div>
       )}
 
-      {status === 'preview' ? (
-        <TruthBadge state="preview" reason="Supabase 연결 필요" />
-      ) : null}
-
-      <TodaySchedule onNavigate={onNavigate} />
+      <TodaySchedule onNavigate={onNavigate} reloadKey={reloadKey} onReload={reload} />
 
       <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <Kbd>J</Kbd><Kbd>K</Kbd> 이동 · <Kbd>1</Kbd>–<Kbd>9</Kbd> 결정

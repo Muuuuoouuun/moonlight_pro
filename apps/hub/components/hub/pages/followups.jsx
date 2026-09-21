@@ -291,11 +291,17 @@ function FollowupDraftDrawer({ item, onClose, onOpenLog }) {
   const [loading, setLoading] = React.useState(false);
   const [draftResult, setDraftResult] = React.useState(null);
   const [copied, setCopied] = React.useState(false);
+  const [errorNote, setErrorNote] = React.useState("");
+  const requestController = React.useRef(null);
 
   const generateDraft = React.useCallback(async (targetLens) => {
-    if (!item) return;
+    if (!item || requestController.current) return;
+    const controller = new AbortController();
+    requestController.current = controller;
     setLoading(true);
     setCopied(false);
+    setDraftResult(null);
+    setErrorNote("");
     try {
       const res = await requestPersonaChat({
         personaId: "sales",
@@ -311,36 +317,48 @@ function FollowupDraftDrawer({ item, onClose, onOpenLog }) {
           nextAction: item.nextAction,
           channel: item.channel,
         },
-      });
+      }, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (res.state === "done") {
         setDraftResult(res.text);
       } else {
-        setDraftResult(res.note || "초안을 생성하지 못했습니다.");
+        setErrorNote(res.note || "초안을 생성하지 못했습니다.");
       }
     } catch {
-      setDraftResult("초안 생성 중 오류가 발생했습니다.");
+      if (!controller.signal.aborted) setErrorNote("초안 생성 중 오류가 발생했습니다.");
     } finally {
-      setLoading(false);
+      if (requestController.current === controller) {
+        requestController.current = null;
+        setLoading(false);
+      }
     }
   }, [item, lens]);
 
   React.useEffect(() => {
-    if (item) generateDraft(lens);
-  }, [item]);
+    generateDraft(lens);
+    return () => {
+      requestController.current?.abort();
+      requestController.current = null;
+    };
+  }, [generateDraft, lens]);
 
   if (!item) return null;
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!draftResult) return;
     let textToCopy = draftResult;
     const match = draftResult.match(/\[💬\s*추천\s*메시지\s*초안\]\s*\n+([\s\S]*?)(?=\n+\[💡|$)/);
     if (match && match[1]?.trim()) {
       textToCopy = match[1].trim();
     }
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(true);
-    toast.show("메시지를 복사했습니다. 메신저 앱에 붙여넣으세요.");
-    setTimeout(() => setCopied(false), 3000);
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopied(true);
+      toast.success("메시지를 복사했습니다. 메신저 앱에 붙여넣으세요.");
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      setErrorNote("복사하지 못했습니다. 본문을 선택해 복사하세요.");
+    }
   };
 
   return (
@@ -360,7 +378,7 @@ function FollowupDraftDrawer({ item, onClose, onOpenLog }) {
               icon="sparkle"
               onClick={() => {
                 onClose();
-                onOpenLog(item, "kakao", "카톡");
+                onOpenLog(item, "sent", "연락");
               }}
             >
               결과 기록하기
@@ -394,7 +412,6 @@ function FollowupDraftDrawer({ item, onClose, onOpenLog }) {
                 size="xs"
                 onClick={() => {
                   setLens(l.id);
-                  generateDraft(l.id);
                 }}
                 disabled={loading}
               >
@@ -408,7 +425,7 @@ function FollowupDraftDrawer({ item, onClose, onOpenLog }) {
           padding: "10px 12px",
           background: "var(--surface-2)",
           border: "1px solid var(--line-soft)",
-          borderRadius: "var(--r-md)",
+          borderRadius: "var(--r)",
           fontSize: 12,
           color: "var(--fg-muted)",
           display: "flex",
@@ -420,11 +437,12 @@ function FollowupDraftDrawer({ item, onClose, onOpenLog }) {
           {item.lastNote && <div><strong>최근 대화:</strong> {item.lastNote}</div>}
         </div>
 
+        {errorNote && <div role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>{errorNote}</div>}
         <div style={{
           padding: "12px 14px",
           background: "var(--surface)",
           border: "1px solid var(--line-strong)",
-          borderRadius: "var(--r-md)",
+          borderRadius: "var(--r)",
           fontSize: 12.5,
           lineHeight: 1.6,
           color: "var(--fg)",

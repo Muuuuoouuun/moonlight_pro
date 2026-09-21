@@ -2,9 +2,43 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { normalizeAssistanceCommand } from './ai-assistance.js';
+import { classifyAssistanceResult } from './ai-review-client.js';
 
 const hash = text => createHash('sha256').update(JSON.stringify(text)).digest('hex');
 const candidate = { id: randomUUID(), revision: 3, review: { outcome: 'accepted', baselineMinutes: 30, reviewMinutes: 0, actualMinutes: null, note: '기록한 메모' } };
+
+test('expired sessions, failed receipt reads and malformed responses keep the paid command pending', () => {
+  const command = { commandId: randomUUID(), action: 'generate', input: {} };
+  for (const [status, result] of [
+    [401, { status: 'unauthorized', error: 'operator-session-required' }],
+    [403, { status: 'forbidden', persisted: false }],
+    [502, { status: 'error', persisted: false }],
+    [400, { status: 'invalid-input', persisted: false }],
+    [200, { status: 'error', persisted: false }],
+    [200, { status: 'saved', persisted: true }],
+    [200, null],
+  ]) {
+    assert.equal(classifyAssistanceResult({ ok: status < 400, status }, result, command, { receiptOnly: true }), 'pending');
+    assert.equal(classifyAssistanceResult({ ok: status < 400, status }, result, command, { uncertain: true }), 'pending');
+  }
+  assert.equal(classifyAssistanceResult({ ok: false, status: 401 }, { status: 'unauthorized' }, command), 'pending');
+  assert.equal(classifyAssistanceResult({ ok: false, status: 400 }, { status: 'invalid-input', persisted: false }, command), 'rejected');
+});
+
+test('only the matching durable receipt releases a retried command or a saved recovery token', () => {
+  const command = { commandId: randomUUID(), action: 'generate', input: {}, recoveryToken: 'signed-output', recoveryOutput: '이미 생성한 후보' };
+  const saved = { status: 'generated', persisted: true, commandId: command.commandId, candidate: { id: command.commandId, revision: 1 } };
+  const response = { ok: true, status: 200 };
+  const before = structuredClone(command);
+  assert.equal(classifyAssistanceResult(response, saved, command, { receiptOnly: true, uncertain: true }), 'saved');
+  assert.equal(classifyAssistanceResult(response, { ...saved, commandId: randomUUID() }, command), 'pending');
+  assert.equal(classifyAssistanceResult(response, { ...saved, candidate: { id: randomUUID(), revision: 1 } }, command), 'pending');
+  assert.equal(classifyAssistanceResult({ ok: false, status: 400 }, { status: 'invalid-input', persisted: false, error: 'invalid-recovery-token' }, command), 'pending');
+  assert.equal(classifyAssistanceResult(response, { ...saved, status: 'error' }, command), 'pending');
+  assert.deepEqual(command, before, 'failed recovery must not remove its token or output');
+  const review = { commandId: randomUUID(), action: 'review_candidate', input: { candidateId: candidate.id } };
+  assert.equal(classifyAssistanceResult(response, { status: 'saved', persisted: true, commandId: review.commandId, candidate }, review, { receiptOnly: true }), 'saved');
+});
 
 test('quick review saves only the decision while preserving recorded details and unknown time', async () => {
   const { candidateReviewInput } = await import('./ai-review-client.js');

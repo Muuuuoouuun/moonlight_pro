@@ -18,7 +18,6 @@ import { CommandPalette } from "./hub-command-palette";
 import { QuickMemo } from "./quick-memo";
 import { GlobalQuickCapture } from "./quick-capture";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
-import { FloatingMentorWidget } from "./floating-mentor-widget";
 import { CelebrationCanvas } from "./celebration-fx";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
@@ -40,6 +39,11 @@ import {
   persistHubPreference,
   readHubPreferences,
 } from "@/lib/hub-preferences";
+
+const FloatingMentorWidget = dynamic(
+  () => import('./floating-mentor-widget').then(module => module.FloatingMentorWidget),
+  { ssr: false },
+);
 
 // Chunk-load placeholder — pages carry their own data loading states, so this
 // only covers the (brief) JS fetch. Keep it calm: no spinner, dim mono text.
@@ -294,6 +298,11 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [globalAdvisorOpen, setGlobalAdvisorOpen] = React.useState(false);
+  const [advisorRequested, setAdvisorRequested] = React.useState(false);
+  const toggleGlobalAdvisor = React.useCallback(() => {
+    setAdvisorRequested(true);
+    setGlobalAdvisorOpen(value => !value);
+  }, []);
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
   const rootRef = React.useRef(null);
@@ -495,12 +504,12 @@ export function HubApp({ memoDraftContext = "preview" }) {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
-        setGlobalAdvisorOpen((v) => !v);
+        toggleGlobalAdvisor();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [toggleGlobalAdvisor]);
 
   const advisorContext = React.useMemo(() => {
     const p = String(path || '');
@@ -593,7 +602,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
               onNew={createOnCurrentSurface}
               onQuickCapture={() => setCaptureOpenRequest(value => value + 1)}
               onSidebarOpen={openMobileNavigation}
-              onAdvisorOpen={() => setGlobalAdvisorOpen((v) => !v)}
+              onAdvisorOpen={toggleGlobalAdvisor}
               navOpen={mobileNavState.open}
               menuButtonRef={menuButtonRef}
               theme={theme}
@@ -613,7 +622,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open} openRequest={memoOpenRequest} onNavigate={navigate} />
       <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <FloatingMentorWidget
+      {advisorRequested && <FloatingMentorWidget
         key={`global-advisor:${path}`}
         isOpen={globalAdvisorOpen}
         onClose={() => setGlobalAdvisorOpen(false)}
@@ -621,7 +630,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
         contextType={advisorContext.contextType}
         contextTitle={advisorContext.contextTitle}
         contextData={advisorContext.contextData}
-      />
+      />}
         <CelebrationCanvas />
       </ToastProvider>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { Button, EmptyState, SelectField, Skeleton, TextAreaField, TextField, TruthBadge } from './hub-primitives';
-import { candidateReviewDraft, candidateReviewInput, copyCandidateOutput, readCompleteCandidate } from '@/lib/ai-review-client';
+import { candidateReviewDraft, candidateReviewInput, classifyAssistanceResult, copyCandidateOutput, readCompleteCandidate } from '@/lib/ai-review-client';
 import { readGoalLocal, writeGoalLocal } from '@/lib/goal-client';
 import './goal-assistance.css';
 
@@ -28,6 +28,7 @@ function AssistanceEditor({ entityType, entityId, initialScope }) {
   const [data, setData] = React.useState({ status: 'loading', candidates: [] });
   const [message, setMessage] = React.useState(''), [busy, setBusy] = React.useState(false), [pending, setPending] = React.useState(null);
   const active = React.useRef(true), inFlight = React.useRef(false), requestRef = React.useRef(null), loadSequence = React.useRef(0);
+  const uncertain = React.useRef(false);
   const storageKey = `moonlight:assist:${entityType}:${entityId}`;
   const refresh = React.useCallback(async () => {
     const sequence = ++loadSequence.current;
@@ -40,7 +41,7 @@ function AssistanceEditor({ entityType, entityId, initialScope }) {
   React.useEffect(() => {
     active.current = true;
     try { const stored = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (stored?.commandId) {
-      requestRef.current = stored; setPending(stored);
+      requestRef.current = stored; uncertain.current = true; setPending(stored);
       if (stored.input?.scope) setScope(stored.input.scope);
       if (stored.input?.operation) setOperation(stored.input.operation);
       if (typeof stored.input?.instruction === 'string') setInstruction(stored.input.instruction);
@@ -52,37 +53,40 @@ function AssistanceEditor({ entityType, entityId, initialScope }) {
   }, [storageKey]);
   React.useEffect(() => { setData({ status: 'loading', candidates: [] }); refresh(); }, [refresh]);
   function keepRequest(command) { requestRef.current = command; setPending(command); try { sessionStorage.setItem(storageKey, JSON.stringify(command)); } catch {} }
-  function clearRequest() { requestRef.current = null; setPending(null); try { sessionStorage.removeItem(storageKey); } catch {} }
+  function clearRequest() { requestRef.current = null; uncertain.current = false; setPending(null); try { sessionStorage.removeItem(storageKey); } catch {} }
   async function dispatch(command, receiptOnly = false) {
     if (inFlight.current) return;
     inFlight.current = true; setBusy(true); setMessage('');
     try {
       const response = await fetch(receiptOnly ? `${endpoint}?commandId=${command.commandId}` : endpoint, receiptOnly ? { cache: 'no-store' } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(command.recoveryToken ? { commandId: command.commandId, action: 'recover_candidate', input: { recoveryToken: command.recoveryToken } } : command) });
       const result = await response.json();
+      const outcome = classifyAssistanceResult(response, result, command, { receiptOnly, uncertain: uncertain.current });
+      if (outcome === 'pending' || outcome === 'unsaved') uncertain.current = true;
       // The request can outlive its drawer. Preserve a paid result before touching React state.
-      if (result.status === 'unsaved' && result.output) {
+      if (outcome === 'unsaved') {
         try { sessionStorage.setItem(storageKey, JSON.stringify({ ...command, recoveryToken: result.recoveryToken || command.recoveryToken || null, recoveryOutput: result.output, recoveryOutputTruncated: result.outputTruncated === true })); } catch {}
       }
       if (!active.current) return;
-      if (result.status === 'unsaved' && result.output) {
+      if (outcome === 'unsaved') {
         keepRequest({ ...command, recoveryToken: result.recoveryToken || command.recoveryToken || null, recoveryOutput: result.output, recoveryOutputTruncated: result.outputTruncated === true });
         setMessage('후보는 생성됐지만 저장을 확인하지 못했습니다. 아래 결과를 이 브라우저에 보존했습니다. 추가 생성 없이 저장만 복구할 수 있습니다.');
-      } else if (['saved', 'generated'].includes(result.status) && result.persisted === true) {
+      } else if (outcome === 'saved') {
         clearRequest(); setMessage(command.action === 'review_candidate' ? '검토 결과를 저장했습니다.' : '후보를 저장했습니다. 원문에 적용하거나 발송한 상태는 아닙니다.');
         if (command.action === 'save_candidate') setOutput('');
         await refresh();
-      } else if (['running', 'unknown'].includes(result.status) || result.persisted === null) {
+      } else if (outcome === 'pending') {
         setMessage('결과가 아직 확인되지 않았습니다. 새 생성 전에 같은 요청의 상태를 확인해주세요.');
       } else {
         if (command.recoveryOutput) { setOutput(command.recoveryOutput); setExternal(true); setClient('manual'); }
         clearRequest(); setMessage(errorCopy(result.error)); await refresh();
       }
       return result;
-    } catch { if (active.current) setMessage('응답이 끊겼습니다. 입력과 요청을 보존했으니 같은 요청을 확인해주세요.'); }
+    } catch { uncertain.current = true; if (active.current) setMessage('응답이 끊겼습니다. 입력과 요청을 보존했으니 같은 요청을 확인해주세요.'); }
     finally { inFlight.current = false; if (active.current) setBusy(false); }
   }
   function submit(action, input) {
     if (inFlight.current || requestRef.current || busy || pending) return;
+    uncertain.current = false;
     const command = { commandId: crypto.randomUUID(), action, input }; keepRequest(command); return dispatch(command);
   }
   const ready = ['live', 'partial'].includes(data.status) && data.sourceUpdatedAt && !data.failedSources?.includes('operating_ai_candidates');

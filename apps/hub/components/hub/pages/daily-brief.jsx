@@ -6,6 +6,8 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
+import { buildDailyDispatchContext } from "@/lib/ai-workflow-client";
+import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
@@ -50,33 +52,6 @@ function formatMoney(amount) {
   if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
   return `₩${n}`;
 }
-
-const SIGNAL_TARGETS = {
-  draft: 'dashboard/content/studio?new=draft',
-  escalate: 'dashboard/revenue/deals',
-  followup: 'dashboard/revenue/deals', // ?draft= 소비자 없음 — 죽은 파라미터 제거(4차 재감사 S)
-  deals: 'dashboard/revenue/deals',
-  leads: 'dashboard/revenue/leads',
-  revenue: 'dashboard/revenue/overview',
-  wait: 'dashboard/work/rhythm',
-  write: 'dashboard/content/studio',
-  queue: 'dashboard/content/queue',
-  delay: 'dashboard/content/queue',
-  review: 'dashboard/automations/runs',
-  flows: 'dashboard/automations/flows',
-  dismiss: 'dashboard/daily-brief',
-  accept: 'dashboard/work/roadmap',
-  chat: 'dashboard/agents/chat',
-  hold: 'dashboard/work/decisions',
-  start: 'dashboard/work/rhythm',
-  projects: 'dashboard/work/projects',
-  decision: 'dashboard/work/decisions?new=decision',
-  rhythm: 'dashboard/work/rhythm',
-  focus: 'dashboard/work/calendar?focus=15',
-  // 승인 큐의 정본 표면(agents/orders) — 자기 경로(daily-brief)를 가리키면 내비가
-  // 스킵돼 "처리함"만 찍히는 no-op 버튼이 된다(2026-08-05 re-audit #6).
-  queueApprovals: 'dashboard/agents/orders',
-};
 
 const CONTEXT_TARGETS = {
   Revenue: 'dashboard/revenue/deals',
@@ -1472,66 +1447,56 @@ function RhythmPanel({ onNavigate }) {
   );
 }
 
-function DailyDispatchCard({ dailyFocus, taskToday, signals = [], onNavigate }) {
+function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, onNavigate }) {
   const [dispatch, setDispatch] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [errorNote, setErrorNote] = React.useState(null);
   const [copied, setCopied] = React.useState(false);
+  const inFlight = React.useRef(false);
 
-  const currentHour = new Date().getHours();
-  const isEvening = currentHour >= 17;
+  const context = buildDailyDispatchContext({ dailyFocus, taskToday, signals, sourceState });
+  const isEvening = context.isEvening;
+  const briefingState = sourceState === "live" && [context.urgentKa, context.focusCustomers, context.todayAgenda, context.tasks].some(slice => slice.state !== "live")
+    ? "partial" : sourceState || "preview";
 
   const handleGenerate = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
     setErrorNote(null);
-
-    const parts = [];
-    parts.push(`[현재 시각]: ${currentHour}시 (${isEvening ? "퇴근 전 저녁" : "업무 시작 아침"})`);
-
-    if (dailyFocus?.urgentKa?.item) {
-      parts.push(`[긴급 KA]: ${dailyFocus.urgentKa.item.name || dailyFocus.urgentKa.item.title} (사유: ${dailyFocus.urgentKa.item.reason || dailyFocus.urgentKa.item.status || "즉시 조치 필요"})`);
-    }
-
-    if (Array.isArray(dailyFocus?.focusCustomers?.items) && dailyFocus.focusCustomers.items.length) {
-      parts.push(`[집중 관리 고객]: ${dailyFocus.focusCustomers.items.map((c) => `${c.name || c.title} (${c.stage || c.amount || ""})`).join(", ")}`);
-    }
-
-    const tasks = Array.isArray(taskToday?.items) ? taskToday.items : [];
-    if (tasks.length) {
-      parts.push(`[오늘 태스크 목록 (${tasks.length}건)]:\n${tasks.slice(0, 8).map((t) => `- [${t.done ? "완료" : "미완료"}] ${t.title || ""}`).join("\n")}`);
-    }
-
-    if (Array.isArray(signals) && signals.length) {
-      parts.push(`[오늘 발생 신호 (${signals.length}건)]:\n${signals.slice(0, 5).map((s) => `- [${s.tone || "알림"}] ${s.title}: ${s.why || ""}`).join("\n")}`);
-    }
-
-    const draft = parts.join("\n\n");
 
     try {
       const res = await requestPersonaChat({
         personaId: "order",
         mode: "daily-dispatch",
-        draft,
-        context: { isEvening, hour: currentHour },
+        message: isEvening
+          ? "확인된 완료 건수와 남은 작업을 정리하고 내일 먼저 확인할 행동을 제안하세요. 미조회 완료 내역이나 내일 일정은 만들어내지 마세요."
+          : "확인된 고객 다음 행동·기한·오늘 일정을 기준으로 실행 순서를 제안하세요. 자료가 부족하면 확인할 항목부터 알려주세요.",
+        context,
       });
 
-      setLoading(false);
       if (res.state === "done") {
         setDispatch(res.text);
       } else {
         setErrorNote(res.note || "브리핑을 생성하지 못했습니다.");
       }
     } catch (e) {
-      setLoading(false);
       setErrorNote(e.message || "오류가 발생했습니다.");
+    } finally {
+      inFlight.current = false;
+      setLoading(false);
     }
   };
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!dispatch) return;
-    navigator.clipboard.writeText(dispatch);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(dispatch);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setErrorNote("복사하지 못했습니다. 브리핑 본문을 선택해 복사하세요.");
+    }
   };
 
   return (
@@ -1540,7 +1505,7 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], onNavigate }) 
       style={{
         background: "var(--surface)",
         border: "1px solid var(--line-strong)",
-        borderRadius: "var(--r-md)",
+        borderRadius: "var(--r)",
         padding: "14px 16px",
         display: "flex",
         flexDirection: "column",
@@ -1553,9 +1518,10 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], onNavigate }) 
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
             {isEvening ? "🌙 퇴근 전 정돈 & 내일 첫 발자국" : "⚡ 30초 AI 실행 오더"}
           </span>
-          <Badge tone="moon" size="xs">
+          <Badge tone="neutral" size="xs">
             {isEvening ? "Evening Wind-Down" : "Morning Dispatch"}
           </Badge>
+          <TruthBadge state={briefingState} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {dispatch && (
@@ -1567,7 +1533,7 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], onNavigate }) 
             variant={dispatch ? "outline" : "primary"}
             size="xs"
             icon="sparkle"
-            disabled={loading}
+            disabled={loading || ["loading", "syncing"].includes(sourceState)}
             onClick={handleGenerate}
           >
             {loading ? "작성 중…" : dispatch ? "다시 받기" : isEvening ? "퇴근 전 정돈 받기" : "30초 브리핑 받기"}
@@ -1575,6 +1541,8 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], onNavigate }) 
         </div>
       </div>
 
+      {errorNote && <div role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>{errorNote}</div>}
+      {briefingState !== "live" && <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>일부 원장을 확인하지 못했습니다. 브리핑은 확인된 자료 범위로 제한됩니다.</div>}
       {dispatch ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div
@@ -1607,13 +1575,10 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], onNavigate }) 
         </div>
       ) : (
         <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
-          {errorNote ? (
-            <span style={{ color: "var(--warning)" }}>{errorNote}</span>
-          ) : (
-            isEvening
-              ? "오늘 완료된 성과와 미완료 항목을 정리하고, 내일 출근 직후 가장 먼저 열어야 할 1가지를 도출합니다."
+          {isEvening
+              ? "확인된 완료 건수와 남은 작업을 정리하고, 내일 먼저 확인할 행동을 제안합니다."
               : "오늘 원장 데이터(긴급 고객, 태스크, 신호)를 기반으로 지금 당장 처리할 우선순위와 시간 배분을 제안합니다."
-          )}
+          }
         </div>
       )}
     </Card>
@@ -2032,13 +1997,14 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
       <WeeklyReportCard onNavigate={onNavigate} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
         <DailyDispatchCard
           dailyFocus={ledger.dailyFocus}
           taskToday={ledger.taskToday}
           signals={ledger.signals}
+          sourceState={ledger.syncState}
           onNavigate={onNavigate}
         />
-        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
 
         <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
 

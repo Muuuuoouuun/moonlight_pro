@@ -1,5 +1,22 @@
 const minuteFields = ['baselineMinutes', 'reviewMinutes', 'actualMinutes'];
 
+// A failed receipt lookup cannot establish that an earlier paid request failed.
+// Only a matching durable receipt can release an uncertain command or recovery.
+export function classifyAssistanceResult(response, result, command, { receiptOnly = false, uncertain = false } = {}) {
+  const recovering = Boolean(command.recoveryToken || command.recoveryOutput);
+  const sameCommand = result?.commandId === command.commandId;
+  const candidateId = command.action === 'review_candidate' ? command.input?.candidateId : command.commandId;
+  const durable = response?.ok && sameCommand && result?.persisted === true
+    && result.candidate?.id === candidateId && Number.isInteger(result.candidate?.revision) && result.candidate.revision > 0;
+  if (durable && ['saved', 'generated'].includes(result.status)) return 'saved';
+  if (response?.ok && sameCommand && result?.status === 'unsaved' && typeof result.output === 'string' && result.output) return 'unsaved';
+  if (durable && result.status === 'error' && !recovering) return 'rejected';
+  if (receiptOnly || uncertain || recovering || !result || typeof result !== 'object') return 'pending';
+  if (!response?.ok && (response?.status >= 500 || [401, 403, 404].includes(response?.status))) return 'pending';
+  if (result.persisted === false && ['invalid-input', 'conflict', 'error', 'preview', 'unauthorized', 'forbidden'].includes(result.status)) return 'rejected';
+  return 'pending';
+}
+
 export function candidateReviewDraft(candidate, previous, ownDecisionSave = false) {
   if (previous?.dirty) return ownDecisionSave
     ? { ...previous, revision: candidate.revision, outcome: previous.outcomeDirty ? previous.outcome : candidate.review?.outcome || '' }

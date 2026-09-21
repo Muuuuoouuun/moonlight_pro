@@ -10,28 +10,10 @@ import { MEMO_SAVED_EVENT, memoHref, saveMemoAndVerify } from "@/lib/memo-save";
 import { contentIdeaHref, prepareMemoIdea, saveMemoAsIdeaAndVerify } from "@/lib/quick-memo-content";
 import { notifyContentLedgerChanged } from "@/lib/content-ledger-cache";
 import { requestPersonaChat } from "./persona-client";
+import { createAdviceTaskWriter, parseExtractedActions } from "@/lib/ai-workflow-client";
 import styles from "./quick-memo.module.css";
 
 const FOCUSABLE = 'button:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href]';
-
-function parseExtractedActions(text) {
-  if (!text) return null;
-  const summaryMatch = text.match(/📌\s*\[?1줄\s*핵심\s*요약\]?:\s*([^\n\r]+)/);
-  const summary = summaryMatch ? summaryMatch[1].trim() : "";
-
-  const actionLines = [];
-  const lines = text.split("\n");
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.includes("🎯") || trimmed.includes("📌 추천") || (trimmed.startsWith("- [") && trimmed.includes("]"))) {
-      const cleaned = trimmed.replace(/^[-*•\s🟢🟡🔴💡🎯📌]+/, "").trim();
-      if (cleaned.length >= 3 && !cleaned.includes("1줄 핵심 요약")) {
-        actionLines.push({ title: cleaned, saved: false });
-      }
-    }
-  }
-  return { summary, actions: actionLines };
-}
 
 export function QuickMemo({ draftContext, openRequest = 0, blocked = false, route, onNavigate, fetchImpl = fetch }) {
   const [draft, setDraft] = React.useState(null);
@@ -40,6 +22,11 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
   const [error, setError] = React.useState("");
   const [aiAnalyzing, setAiAnalyzing] = React.useState(false);
   const [extractedActions, setExtractedActions] = React.useState(null);
+  const [savingActions, setSavingActions] = React.useState(() => new Set());
+  const taskWriter = React.useMemo(() => createAdviceTaskWriter({ fetchImpl }), [fetchImpl]);
+  const extractionRequest = React.useRef(0);
+  const extractionController = React.useRef(null);
+  const pendingActions = React.useRef(new Set());
   const [storageError, setStorageError] = React.useState("");
   const [receipt, setReceipt] = React.useState(null);
   const [ideaReceipt, setIdeaReceipt] = React.useState(null);
@@ -116,9 +103,14 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
       setStorageError("이 탭에 임시 보관할 수 없어요. 떠나기 전에 저장해 주세요.");
     }
     setDraft(current.current);
+    extractionRequest.current += 1;
+    extractionController.current?.abort();
+    extractionController.current = null;
+    setExtractedActions(null);
+    setAiAnalyzing(false);
     const flush = () => persist();
     window.addEventListener("pagehide", flush);
-    return () => { alive.current = false; persist(); window.removeEventListener("pagehide", flush); };
+    return () => { alive.current = false; extractionController.current?.abort(); persist(); window.removeEventListener("pagehide", flush); };
   }, [key, persist]);
 
   React.useEffect(() => {
@@ -246,12 +238,17 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
   function update(patch) {
     if (busyRef.current) return;
     if (patch.body !== undefined && (patch.body.length > MAX_MEMO_CHARS || patch.body.includes("\0"))) {
-      setError("본문은 100,000자 이하의 텍스트로 입력하세요. 기존 내용은 유지했습니다.");
+      setError(`본문은 ${MAX_MEMO_CHARS.toLocaleString()}자 이하의 텍스트로 입력하세요. 기존 내용은 유지했습니다.`);
       return;
     }
     const hadUncertainSave = Boolean(error);
     current.current = { ...current.current, ...patch, id: crypto.randomUUID(), destination: undefined, ideaContentId: undefined, ideaVariantId: undefined };
     setDraft(current.current);
+    extractionRequest.current += 1;
+    extractionController.current?.abort();
+    extractionController.current = null;
+    setExtractedActions(null);
+    setAiAnalyzing(false);
     setReceipt(null);
     setIdeaReceipt(null);
     setError(hadUncertainSave ? "내용을 바꾸면 새 메모로 저장합니다. 이전 저장이 완료됐을 수 있으니 메모 목록을 확인하세요." : "");
@@ -280,6 +277,11 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
       if (!alive.current) return;
       current.current = newMemoDraft();
       setDraft(current.current);
+      extractionRequest.current += 1;
+      extractionController.current?.abort();
+      extractionController.current = null;
+      setExtractedActions(null);
+      setAiAnalyzing(false);
       setReceipt(result.id);
       setIdeaReceipt(result.contentId || null);
       setToast(true);
@@ -299,7 +301,11 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
   }
 
   const handleExtractActions = async () => {
-    if (!draft?.body?.trim() || busyRef.current || aiAnalyzing) return;
+    if (!draft?.body?.trim() || busyRef.current || extractionController.current) return;
+    const controller = new AbortController();
+    extractionController.current = controller;
+    const requestId = ++extractionRequest.current;
+    const isCurrent = () => alive.current && !controller.signal.aborted && requestId === extractionRequest.current;
     setAiAnalyzing(true);
     setError("");
     try {
@@ -307,37 +313,39 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
         personaId: "order",
         mode: "extract-actions",
         message: draft.body,
-      });
+        context: { source: "provided", kind: "memo-extraction" },
+      }, { signal: controller.signal });
+      if (!isCurrent()) return;
       if (res.state === "done") {
         const parsed = parseExtractedActions(res.text);
-        setExtractedActions(parsed);
+        setExtractedActions({ ...parsed, actions: parsed.actions.map(action => ({ ...action, id: crypto.randomUUID() })) });
+        if (!parsed.actions.length) setError("실행 항목을 확인하지 못했습니다. 메모를 보완한 뒤 다시 추출하세요.");
       } else {
         setError(res.note || "액션 추출에 실패했습니다.");
       }
     } catch {
-      setError("AI 액션 추출 중 오류가 발생했습니다.");
+      if (isCurrent()) setError("AI 액션 추출 중 오류가 발생했습니다.");
     } finally {
-      setAiAnalyzing(false);
+      if (isCurrent()) setAiAnalyzing(false);
+      if (extractionController.current === controller) extractionController.current = null;
     }
   };
 
-  const handleSaveExtractedTask = async (index, actionTitle) => {
+  const handleSaveExtractedTask = async (action) => {
+    if (action.saved || pendingActions.current.has(action.id)) return;
+    pendingActions.current.add(action.id);
+    const sourceId = current.current?.id;
+    setSavingActions(new Set(pendingActions.current));
+    setError("");
     try {
-      const res = await fetch("/api/hub/tasks", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: actionTitle }),
-      });
-      if (res.ok) {
-        setExtractedActions((prev) => {
-          if (!prev) return prev;
-          const next = [...prev.actions];
-          next[index] = { ...next[index], saved: true };
-          return { ...prev, actions: next };
-        });
-      }
-    } catch (e) {
-      console.error("Failed to save extracted task", e);
+      const result = await taskWriter.save({ key: action.id, title: action.title });
+      if (!alive.current || current.current?.id !== sourceId) return;
+      if (result.state === "saved") {
+        setExtractedActions(prev => prev && ({ ...prev, actions: prev.actions.map(item => item.id === action.id ? { ...item, saved: true } : item) }));
+      } else setError(result.note);
+    } finally {
+      pendingActions.current.delete(action.id);
+      if (alive.current) setSavingActions(new Set(pendingActions.current));
     }
   };
 
@@ -399,7 +407,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
           padding: "10px 12px",
           background: "var(--surface-2)",
           border: "1px solid var(--line)",
-          borderRadius: "var(--r-md)",
+          borderRadius: "var(--r)",
           display: "flex",
           flexDirection: "column",
           gap: 8,
@@ -411,7 +419,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {extractedActions.actions.map((act, idx) => (
-              <div key={idx} style={{
+              <div key={act.id} style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
@@ -426,10 +434,10 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
                   type="button"
                   size="xs"
                   variant={act.saved ? "ghost" : "outline"}
-                  disabled={act.saved}
-                  onClick={() => handleSaveExtractedTask(idx, act.title)}
+                  disabled={act.saved || savingActions.has(act.id)}
+                  onClick={() => handleSaveExtractedTask(act)}
                 >
-                  {act.saved ? "✓ 등록됨" : "+ 할 일 등록"}
+                  {act.saved ? "✓ 등록됨" : savingActions.has(act.id) ? "저장 확인 중…" : "+ 할 일 등록"}
                 </Button>
               </div>
             ))}
