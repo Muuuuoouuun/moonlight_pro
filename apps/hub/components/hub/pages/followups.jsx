@@ -8,6 +8,7 @@ import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { QUICK_LOG_ACTIONS as LOG_ACTIONS, REACTION_OPTIONS } from "@/lib/sales-os/outcome-attribution";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
+import { FOLLOWUP_GROUPS, MAX_DANGER_RAILS, groupFollowups } from "@/lib/sales-os/followup-groups";
 
 // crm_activities.reaction vocabulary (Phase 1C canonical, deep-design spec §10) — distinct from
 // this page's own REACTION_OPTIONS (outreach_outcomes.meta.reaction), which predates and doesn't
@@ -43,15 +44,8 @@ const LANE_OPTIONS = [
   { key: "deal", label: "딜" },
   { key: "event", label: "일정" },
 ];
-const BUCKET_OPTIONS = [
-  { key: "all", label: "전체" },
-  { key: "overdue", label: "지남" },
-  { key: "today", label: "오늘" },
-  { key: "week", label: "이번 주" },
-];
 const LANE_LABEL = { lead: "리드", deal: "딜", event: "일정" };
 const LANE_TONE = { lead: "neutral", deal: "neutral", event: "neutral" };
-const BUCKET_STRIPE = { overdue: "var(--danger)" };
 
 // 모듈 스코프 SWR(7차 속도): 코어 데일리 표면인데 탭 복귀마다 스켈레톤 + 원장 재조회를
 // 반복하던 유일한 예외였다 — 5분 내 캐시를 즉시 서빙하고 항상 배경 재검증한다
@@ -285,7 +279,7 @@ function ActivityPanel({ item, onClose, onNavigate }) {
   );
 }
 
-function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onCloseLog, onSubmitLog, logError, logged, kbSelected }) {
+function FollowupRow({ item, rail = false, onNavigate, onOpenPanel, logDraft, onOpenLog, onCloseLog, onSubmitLog, logError, logged, kbSelected }) {
   const stage = stageMeta(item.stage);
   const clickable = Boolean(item.href);
   const isLogging = logDraft?.itemId === item.id;
@@ -298,7 +292,7 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
         display: "flex", flexDirection: "column", gap: 8,
         padding: "12px 16px",
         borderBottom: "1px solid var(--line-soft)",
-        boxShadow: BUCKET_STRIPE[item.bucket] ? `inset 1px 0 0 ${BUCKET_STRIPE[item.bucket]}` : undefined,
+        boxShadow: rail ? "inset 1px 0 0 var(--danger)" : undefined,
         ...(kbSelected ? { outline: '1px solid var(--moon-300)', outlineOffset: -1 } : {}),
       }}
     >
@@ -323,6 +317,12 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
         {item.phone && <span className="mono" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{item.phone}</span>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, flexWrap: "wrap" }}>
+        {/* 레일 예산을 넘긴 '지남' 행은 색 대신 글리프 + 직접 라벨로 같은 사실을 말한다. */}
+        {item.bucket === "overdue" && !rail && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--fg-muted)" }}>
+            <Iconed name="clock" size={12} /> 지남
+          </span>
+        )}
         <span style={{ color: "var(--fg-muted)" }}>{item.why}</span>
         {item.nextAction && <span style={{ color: "var(--fg-faint)" }}>→ {item.nextAction}</span>}
         {item.kind === "event" && item.whenLabel && <span className="mono" style={{ color: "var(--fg-faint)" }}>{item.whenLabel}</span>}
@@ -331,7 +331,8 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--fg-faint)" }}>
           <Iconed name="chat" size={11} />
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>최근 대화: {item.lastNote}</span>
-          {item.lastReaction && <Badge tone="neutral" size="xs" variant="outline">{REACTION_OPTIONS.find((r) => r.key === item.lastReaction)?.label || item.lastReaction}</Badge>}
+          {/* lastReaction은 crm_activities 어휘다 — 이 페이지의 입력 어휘(REACTION_OPTIONS)로 찾으면 라벨이 안 나온다. */}
+          {item.lastReaction && <Badge tone="neutral" size="xs" variant="outline">{CRM_REACTION_LABEL[item.lastReaction] || item.lastReaction}</Badge>}
         </div>
       )}
 
@@ -374,7 +375,8 @@ export function Followups({ onNavigate }) {
   const router = useRouter();
   const pathname = usePathname();
   const [lane, setLane] = React.useState("all");
-  const [bucket, setBucket] = React.useState("all");
+  // 버킷은 이제 필터가 아니라 섹션이다(0b). 남는 선택은 "지켜보는 고객"을 펼쳤는지 하나뿐.
+  const [restOpen, setRestOpen] = React.useState(false);
   const [logDraft, setLogDraft] = React.useState(null); // { itemId, action, label, initial? }
   const [logError, setLogError] = React.useState(null);
   const [logged, setLogged] = React.useState({}); // id → action label
@@ -388,15 +390,17 @@ export function Followups({ onNavigate }) {
     return counts;
   }, [items]);
 
-  const bucketCounts = React.useMemo(() => {
-    const counts = { all: items.length, overdue: 0, today: 0, week: 0 };
-    items.forEach((i) => { counts[i.bucket] = (counts[i.bucket] || 0) + 1; });
-    return counts;
-  }, [items]);
-
   const visible = React.useMemo(() => {
-    return items.filter((i) => (lane === "all" || i.kind === lane) && (bucket === "all" || i.bucket === bucket));
-  }, [items, lane, bucket]);
+    return items.filter((i) => lane === "all" || i.kind === lane);
+  }, [items, lane]);
+
+  // 약속을 어긴 건 → 오늘 하기로 한 건 → 나머지(접힘). 묶음 안 순서는 원장이 정한 priority 그대로.
+  const groups = React.useMemo(() => groupFollowups(visible), [visible]);
+  const sections = React.useMemo(() => (
+    FOLLOWUP_GROUPS
+      .map((group) => ({ ...group, items: groups[group.key] || [] }))
+      .filter((group) => group.items.length > 0)
+  ), [groups]);
 
   // Deep-link: ?focus=<id> opens that row's activity panel once the ledger has loaded, then
   // strips the query so a refresh doesn't replay it (DESIGN.md §8.1 deep-link contract, same
@@ -415,12 +419,16 @@ export function Followups({ onNavigate }) {
   }, [focusParam, syncState, items, pathname, router]);
 
   // 키보드 계층(§8.1) — 코어 데일리 루프에 j/k/e 배선: j/k 행 이동, e 상세 패널.
-  const kbRows = React.useMemo(() => visible.map((i) => ({ id: `${i.kind}-${i.id}` })), [visible]);
+  // 키보드 이동 순서는 화면 순서와 같아야 한다 — 접힌 "지켜보는 고객"은 건너뛴다.
+  const rendered = React.useMemo(() => (
+    sections.flatMap((group) => (group.key === "rest" && !restOpen ? [] : group.items))
+  ), [sections, restOpen]);
+  const kbRows = React.useMemo(() => rendered.map((i) => ({ id: `${i.kind}-${i.id}` })), [rendered]);
   const kbSelection = useCrmSelection(kbRows);
   useCrmKeyboard({
     selection: kbSelection,
     onEditSelected: (rowId) => {
-      const item = visible.find((i) => `${i.kind}-${i.id}` === rowId);
+      const item = rendered.find((i) => `${i.kind}-${i.id}` === rowId);
       if (item) setPanelItem(item);
     },
   });
@@ -539,59 +547,89 @@ export function Followups({ onNavigate }) {
           value={lane}
           onChange={setLane}
         />
-        <SegmentedControl
-          label="버킷"
-          options={BUCKET_OPTIONS.map((o) => ({ ...o, label: `${o.label} ${bucketCounts[o.key] || 0}` }))}
-          value={bucket}
-          onChange={setBucket}
-        />
       </div>
 
       <Card pad={false} className="hub-table-card">
-        {visible.length === 0 ? (
+        {sections.length === 0 ? (
           // error를 preview 문구("연결되면 표시됩니다")로 뭉개면 읽기 실패가 "오늘 할 일 없음"으로
           // 보인다 — 후속 누락 0건 목표에서 가장 위험한 오독이라 상태별로 분리한다(§5.3 source truth).
           syncState === "error" ? (
             <EmptyState
               icon="clock"
-              title="팔로업 원장을 읽지 못했습니다"
+              title="연락 목록을 읽지 못했습니다"
               description="지금 화면은 비어 보이지만 실제 후속 항목이 있을 수 있습니다. 다시 시도해 주세요."
               action={<Button variant="outline" size="sm" onClick={reload}>다시 시도</Button>}
             />
           ) : (
             <EmptyState
               icon="rhythm"
-              title={["live", "partial"].includes(syncState) ? "표시할 항목이 없습니다" : "팔로업 데이터 없음"}
+              title={["live", "partial"].includes(syncState) ? "표시할 항목이 없습니다" : "연락 데이터 없음"}
               description={
                 syncState !== "live"
                   ? "리드·딜이 쌓이고 Supabase가 연결되면 표시됩니다."
-                  : lane === "all" && bucket === "all"
+                  : lane === "all"
                     // Q117 확정(2026-08-18): 이 탭은 무접촉 자동 피드가 아니라 선별 표면 —
                     // 내 작업의 '기한 지남 딜'과 기준이 다른 것이 의도임을 카피로 명시한다.
                     ? "컨택 트래킹을 시작한 고객과 다음 연락일이 된 건만 여기 뜹니다. 기한 지남 딜은 자동으로 채우지 않습니다 — 리드 목록에서 트래킹을 시작하면 관리 대상이 됩니다."
                     : "이 필터에 해당하는 항목이 없습니다."
               }
-              action={lane !== "all" || bucket !== "all"
-                ? <Button variant="outline" size="sm" onClick={() => { setLane("all"); setBucket("all"); }}>전체 보기</Button>
+              action={lane !== "all"
+                ? <Button variant="outline" size="sm" onClick={() => setLane("all")}>전체 보기</Button>
                 : <Button variant="outline" size="sm" icon="leads" onClick={() => onNavigate?.("dashboard/revenue/leads")}>리드 목록 열기</Button>}
             />
           )
         ) : (
-          visible.map((item) => (
-            <FollowupRow
-              key={`${item.kind}-${item.id}`}
-              kbSelected={kbSelection.selectedId === `${item.kind}-${item.id}`}
-              item={item}
-              onNavigate={onNavigate}
-              onOpenPanel={setPanelItem}
-              logDraft={logDraft}
-              onOpenLog={openLog}
-              onCloseLog={closeLog}
-              onSubmitLog={submitLog}
-              logError={logError}
-              logged={logged[item.id]}
-            />
-          ))
+          sections.map((group) => {
+            const collapsed = group.key === "rest" && !restOpen;
+            return (
+              <section key={group.key} aria-label={group.label}>
+                <div
+                  style={{
+                    display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap",
+                    padding: "10px 16px", borderBottom: collapsed ? "none" : "1px solid var(--line-soft)",
+                    background: "var(--surface-2)",
+                  }}
+                >
+                  <h3 style={{ margin: 0, fontSize: 11, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--fg-dim)" }}>
+                    {group.label}
+                  </h3>
+                  <span className="num" style={{ fontSize: 11.5, color: group.key === "missed" ? "var(--danger)" : "var(--fg-muted)" }}>
+                    {group.items.length}
+                  </span>
+                  {group.hint && !collapsed && (
+                    <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>{group.hint}</span>
+                  )}
+                  <div style={{ flex: 1 }} />
+                  {group.key === "rest" && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      aria-expanded={restOpen}
+                      onClick={() => setRestOpen((open) => !open)}
+                    >
+                      {restOpen ? "접기" : "펼치기"}
+                    </Button>
+                  )}
+                </div>
+                {!collapsed && group.items.map((item, index) => (
+                  <FollowupRow
+                    key={`${item.kind}-${item.id}`}
+                    kbSelected={kbSelection.selectedId === `${item.kind}-${item.id}`}
+                    item={item}
+                    rail={group.key === "missed" && index < MAX_DANGER_RAILS}
+                    onNavigate={onNavigate}
+                    onOpenPanel={setPanelItem}
+                    logDraft={logDraft}
+                    onOpenLog={openLog}
+                    onCloseLog={closeLog}
+                    onSubmitLog={submitLog}
+                    logError={logError}
+                    logged={logged[item.id]}
+                  />
+                ))}
+              </section>
+            );
+          })
         )}
       </Card>
       <div style={{ fontSize: 11, color: "var(--fg-faint)" }}>

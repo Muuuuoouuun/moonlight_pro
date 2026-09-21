@@ -46,6 +46,7 @@ registerHooks({
 
 const state = globalThis.__followupsState = { calls: [], rows: {}, activities: [], trackingStartedAt: null };
 const { buildFollowupItems, getFollowups } = await import("./followups-ledger.js?crm-activities-source");
+const { groupFollowups } = await import("../sales-os/followup-groups.js");
 
 const NOW = Date.parse("2026-09-21T03:00:00Z");
 const daysAgo = (n) => new Date(NOW - n * 86400000).toISOString();
@@ -141,4 +142,82 @@ test("getFollowups reads crm_activities (not outreach_outcomes) and names its re
   const partial = await getFollowups({ limit: 10 });
   assert.equal(partial.partial, true);
   assert.deepEqual(partial.failedSources, ["crm_activities"]);
+});
+
+// ── 0b: 행이 실제로 그려지는 데 필요한 필드 ─────────────────────────────────────
+// FollowupRow는 bucket·href·companyId·lastNote·lastReaction을 읽는데 원장이 만들지 않아
+// 버킷 필터(항상 0)·지남 레일·행 클릭·최근 대화 줄이 전부 죽어 있었다.
+
+test("rows carry companyId so the activity panel joins the way live records are linked", () => {
+  const items = buildFollowupItems({ leadRows: [lead()], companies, activities: [], now: NOW });
+  assert.equal(items[0].companyId, "co-1");
+});
+
+test("bucket comes from the promised date, not from staleness", () => {
+  const promised = (at, id) => lead({
+    id, company_id: null, last_touch_at: daysAgo(1), updated_at: daysAgo(1), meta: { next_action_at: at },
+  });
+  const items = buildFollowupItems({
+    leadRows: [],
+    datedLeadRows: [
+      promised(daysAgo(2).slice(0, 10), "missed"),
+      promised(new Date(NOW).toISOString().slice(0, 10), "today"),
+    ],
+    companies: [],
+    activities: [],
+    now: NOW,
+  });
+  const byId = Object.fromEntries(items.map((i) => [i.id, i]));
+  assert.equal(byId.missed.bucket, "overdue");
+  assert.equal(byId.today.bucket, "today");
+  // 정체로만 올라온 행은 약속 날짜가 없다 — 오늘 화면의 빨강을 차지하지 않는다.
+  const stale = buildFollowupItems({ leadRows: [lead()], companies, activities: [], now: NOW });
+  assert.equal(stale[0].bucket, "later");
+  assert.deepEqual(groupFollowups(stale).missed, []);
+});
+
+test("rows carry an href for both lanes", () => {
+  const items = buildFollowupItems({
+    leadRows: [lead()],
+    dealRows: [{ id: "deal-1", title: "한빛 20대", stage: "proposal", amount: 1, company_id: "co-1", last_activity_at: daysAgo(9), updated_at: daysAgo(9), created_at: daysAgo(20), meta: {} }],
+    companies,
+    activities: [],
+    now: NOW,
+  });
+  const byKind = Object.fromEntries(items.map((i) => [i.kind, i]));
+  assert.equal(byKind.lead.href, "dashboard/revenue/customers?customer=lead%3Alead-1");
+  assert.equal(byKind.deal.href, "dashboard/revenue/deals?deal=deal-1");
+});
+
+test("the last conversation line carries its excerpt, kind and reaction", () => {
+  const long = "가".repeat(120);
+  const items = buildFollowupItems({
+    leadRows: [lead()],
+    companies,
+    activities: [{ id: "a1", kind: "call", reaction: "concern", body: long, leadId: "lead-1", companyId: "co-1", occurredAt: daysAgo(2) }],
+    now: NOW,
+  });
+  assert.equal(items[0].lastReaction, "concern");
+  assert.equal(items[0].lastKind, "call");
+  assert.equal(items[0].lastNote.length, 81); // 80자 + 줄임표
+  assert.ok(items[0].lastNote.endsWith("…"));
+  // 기록이 없으면 빈 문자열이 아니라 null — 화면이 "최근 대화" 줄 자체를 그리지 않는다.
+  const none = buildFollowupItems({ leadRows: [lead()], companies, activities: [], now: NOW });
+  assert.equal(none[0].lastNote, null);
+  assert.equal(none[0].lastReaction, null);
+});
+
+test("summary.overdue counts missed promises, not the whole list", async () => {
+  state.trackingStartedAt = null;
+  state.rows.leads = [
+    lead({ id: "missed", company_id: null, last_touch_at: daysAgo(1), updated_at: daysAgo(1), meta: { next_action_at: daysAgo(2).slice(0, 10) } }),
+    lead({ id: "stale", company_id: null }),
+  ];
+  state.activities = [];
+
+  const res = await getFollowups({ limit: 10 });
+
+  assert.equal(res.summary.total, 2);
+  assert.equal(res.summary.overdue, 1);
+  assert.equal(res.summary.dueToday, 0);
 });

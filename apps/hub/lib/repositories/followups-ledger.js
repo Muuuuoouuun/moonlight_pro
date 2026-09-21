@@ -29,6 +29,8 @@ import {
   priorityFor,
 } from "@/lib/sales-os/followup-scoring";
 import { listRecentActivities } from "@/lib/repositories/crm-activities";
+import { dueBucket, kstDayKey, kstDayKeyAfter } from "@/lib/kst-day";
+import { groupFollowups } from "@/lib/sales-os/followup-groups";
 import { getContactTrackingStartedAt } from "@/lib/sales-os/contact-tracking";
 import {
   isExplanationLead,
@@ -103,6 +105,8 @@ function indexLastContacts(activities) {
       action: activityToOutcomeAction(a),
       kind: a.kind,
       reaction: a.reaction || null,
+      // 목록의 "최근 대화" 한 줄이 이 본문에서 나온다 — 빠뜨리면 그 줄이 통째로 사라진다.
+      body: a.body || "",
       occurredAt: a.occurredAt,
     };
     if (a.leadId && !byLead.has(a.leadId)) byLead.set(a.leadId, outcome);
@@ -116,6 +120,21 @@ function lastContactPhrase(outcome, ageDays) {
   const kind = KIND_LABEL[outcome.kind] || outcome.kind;
   const reaction = outcome.reaction ? ` · ${REACTION_LABEL[outcome.reaction] || outcome.reaction}` : "";
   return `마지막 ${kind} ${ageDays ?? "?"}일 전${reaction}`;
+}
+
+// 행이 여는 목적지 — 리드는 고객 360(기록 중심), 딜은 딜 보드 드로어.
+function hrefFor(kind, id) {
+  if (!id) return null;
+  return kind === "deal"
+    ? `dashboard/revenue/deals?deal=${encodeURIComponent(id)}`
+    : `dashboard/revenue/customers?customer=${encodeURIComponent(`lead:${id}`)}`;
+}
+
+// 목록 한 줄용 발췌 — 원문은 자르지 않고 표시만 줄인다.
+function excerpt(text, max = 80) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (!value) return null;
+  return value.length > max ? `${value.slice(0, max)}…` : value;
 }
 
 function toNum(v, d = 0) {
@@ -136,6 +155,10 @@ export function buildFollowupItems({
   now = Date.now(),
 } = {}) {
   const nowMs = now instanceof Date ? now.getTime() : Number(now) || Date.now();
+  // 버킷은 "내가 약속한 날짜"(meta.next_action_at) 기준이다 — 정체 일수가 아니라 약속이
+  // 지났는지가 §8.1의 상단 영역을 정한다. KST day-key 비교(kst-day.js).
+  const todayKey = kstDayKey(new Date(nowMs));
+  const weekEndKey = kstDayKeyAfter(6, nowMs);
   // tier-2 병합 — 본 조회와 겹치는 id는 한 번만(연락일 기록건이 윈도 안에도 있을 수 있다).
   const mergeById = (base, extra) => {
     const seen = new Set(base.map((r) => r.id));
@@ -181,6 +204,9 @@ export function buildFollowupItems({
     items.push({
       kind: "lead",
       id: lead.id,
+      // 활동 조회는 회사 기준이 정본이다(라이브 기록 110행 중 company_id 109 · lead_id 1) —
+      // 행이 companyId를 들고 가지 않으면 활동 패널이 사실상 항상 "기록 없음"이 된다.
+      companyId: lead.company_id || null,
       name: lead.name || company?.name || "이름미상",
       company: company?.name || null,
       phone: company?.phone || lead.meta?.phone || null,
@@ -189,6 +215,12 @@ export function buildFollowupItems({
       why,
       daysSince: since,
       nextAction: lead.next_action || "다음 행동 정하기",
+      promisedAt: nextAt,
+      bucket: dueBucket(nextAt, todayKey, weekEndKey),
+      href: hrefFor("lead", lead.id),
+      lastNote: outcome ? excerpt(outcome.body) : null,
+      lastReaction: outcome?.reaction || null,
+      lastKind: outcome?.kind || null,
       score: toNum(lead.score, 0),
       lastAction: outcome?.action || null,
       momentum: Math.round(boost),
@@ -223,6 +255,7 @@ export function buildFollowupItems({
     items.push({
       kind: "deal",
       id: deal.id,
+      companyId: deal.company_id || null,
       name: deal.title || company?.name || "딜",
       company: company?.name || null,
       phone: company?.phone || null,
@@ -230,7 +263,13 @@ export function buildFollowupItems({
       channel: channelFor(stage, deal),
       why,
       daysSince: since,
-      nextAction: "단계 진전 액션 정하기",
+      nextAction: deal.meta?.next_action || "단계 진전 액션 정하기",
+      promisedAt: dealNextAt,
+      bucket: dueBucket(dealNextAt, todayKey, weekEndKey),
+      href: hrefFor("deal", deal.id),
+      lastNote: outcome ? excerpt(outcome.body) : null,
+      lastReaction: outcome?.reaction || null,
+      lastKind: outcome?.kind || null,
       amount: toNum(deal.amount, 0),
       lastAction: outcome?.action || null,
       momentum: Math.round(boost),
@@ -323,7 +362,10 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
   ];
   const items = buildFollowupItems({ leadRows, dealRows, companies, activities, datedLeadRows, datedDealRows });
   const capped = items.slice(0, limit);
-  const dueToday = items.filter((i) => i.daysSince != null && i.daysSince <= (STALE_DAYS[i.stage] ?? DEFAULT_STALE) + 1).length;
+  // overdue는 "내가 어긴 약속" 수다 — 이전에는 items.length(=전체)라 헤더의 "N overdue"가
+  // 목록 길이를 빨갛게 되풀이했다. total이 그 옛 의미를 그대로 들고 간다.
+  const grouped = groupFollowups(items);
+  const dueToday = grouped.today.length;
 
   return {
     source: "supabase",
@@ -333,7 +375,12 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     failedSources,
     trackingStartedAt,
     items: capped,
-    summary: { overdue: items.length, dueToday, total: items.length, shown: capped.length },
+    summary: {
+      overdue: grouped.missed.length,
+      dueToday,
+      total: items.length,
+      shown: capped.length,
+    },
   };
 }
 
