@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, CheckboxRow, DateQuickPresets, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge, TextField, useToast } from "../hub-primitives";
@@ -285,6 +286,9 @@ function ActivityPanel({ item, onClose, onNavigate }) {
           ))}
         </div>
       )}
+      {['lead','deal'].includes(item.kind) && <OfficeWorkflowPanel key={`${item.kind}:${item.id}`} intent="customer_reply"
+        scope={item.workspace === 'classin' || item.type === 'company' ? 'classin' : item.workspace === 'brand' || item.type === 'personal' ? 'personal' : null}
+        originRef={{entityType:item.kind,entityId:item.id}} title="답장 초안" onNavigate={onNavigate} />}
     </Drawer>
   );
 }

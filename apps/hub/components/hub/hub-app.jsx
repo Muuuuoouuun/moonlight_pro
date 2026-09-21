@@ -17,6 +17,8 @@ import { useInquiryNotifications } from './inquiry-notifications';
 import { CommandPalette } from "./hub-command-palette";
 import { QuickMemo } from "./quick-memo";
 import { GlobalQuickCapture } from "./quick-capture";
+import { OfficeSessionProvider } from "./office-session-provider";
+import { OfficeWorkflowSessionProvider } from "./office-workflow-panel";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
 import { CelebrationCanvas } from "./celebration-fx";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
@@ -573,6 +575,8 @@ export function HubApp({ memoDraftContext = "preview" }) {
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme}>
       <ToastProvider>
+        <OfficeSessionProvider key={memoDraftContext}>
+          <OfficeWorkflowSessionProvider>
         <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
           <div
             className="hub-mobile-backdrop"
@@ -637,6 +641,8 @@ export function HubApp({ memoDraftContext = "preview" }) {
         contextData={advisorContext.contextData}
       />}
         <CelebrationCanvas />
+          </OfficeWorkflowSessionProvider>
+        </OfficeSessionProvider>
       </ToastProvider>
     </div>
   );

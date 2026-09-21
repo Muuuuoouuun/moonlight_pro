@@ -6,6 +6,7 @@
 // (재계약 임박 등 소스가 없는 것)는 만들지 않는다.
 
 import React from "react";
+import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { RelatedMemos } from '../related-memos';
 import { RelatedCustomerProjects } from '../related-customer-projects';
 import { ContextMemoDrawer } from '../context-memo-drawer';
@@ -1003,9 +1004,18 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
 
         </details>
 
+        <OfficeWorkflowPanel
+          key={row.key}
+          intent="customer_reply"
+          scope={row.workspace === 'classin' || row.type === 'company' ? 'classin' : row.workspace === 'brand' || row.type === 'personal' ? 'personal' : null}
+          originRef={{ entityType: row.kind === 'account' ? 'customer_account' : 'lead', entityId: row.id }}
+          title="답장 초안"
+          onNavigate={onNavigate}
+        />
+        <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>기존 영업 코칭</summary>
+          <CustomerOutreachDrafter row={row} />
+        </details>
         <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>연락 결과 남기기</summary>
-        {/* 맞춤 연락 초안 (Guru) */}
-        <CustomerOutreachDrafter row={row} />
 
         {/* 컨택 완료 시트 — Phase 1C 핵심 루프 */}
         <ContactOutcomeSheet

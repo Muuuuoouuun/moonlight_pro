@@ -228,6 +228,24 @@ test("AI·자동화 children all carry a group label for the two-eyebrow layout"
   }
 });
 
+test('Office, work execution, coaching and brand advice keep four distinct existing destinations', () => {
+  const expected = [
+    ['Office', 'dashboard/agents/office-council'],
+    ['작업·실행', 'dashboard/agents/orders'],
+    ['코칭·대화', 'dashboard/agents/chat'],
+    ['브랜드 자문', 'dashboard/agents/council'],
+  ];
+  assert.deepEqual(NAV_TREE.find(node => node.key === 'agents').children.map(child => [child.label, child.path]), expected);
+  for (const scope of SIDEBAR_SCOPES) {
+    const children = sidebarChildren('ai', scope.key).filter(child => child.group === 'Agents');
+    assert.deepEqual(children.map(child => [child.label, child.path]), expected);
+    assert.ok(children.filter(child => child.key !== 'ai-office').every(child => child.deferred));
+    const jobs = topNavigationForRoute('dashboard/agents/orders', scope.key, 'jobs');
+    assert.equal(jobs.activeTab?.key, 'ai-orders');
+  }
+  assert.equal(catalog.LEGACY_REDIRECTS['dashboard/agents/office'].to, 'dashboard/agents/chat');
+});
+
 test("second-level destinations resolve into the top bar with one active tab", () => {
   const revenue = topNavigationForRoute("dashboard/revenue/deals", "all");
   assert.equal(revenue.anchor?.key, "revenue");

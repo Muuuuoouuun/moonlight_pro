@@ -1,12 +1,13 @@
-import {parseOfficeRequest,parseOfficeAnswer} from '@com-moon/agent-contracts/office';
+import {parseOfficeRequest,parseOfficeAnswer,parseOfficeContext,OFFICE_VERSION} from '@com-moon/agent-contracts/office';
 export async function requestOffice(input,{fetcher=fetch,signal}={}) {
  try {
   const request=parseOfficeRequest(input);
   const response=await fetcher('/api/hub/office/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(request),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(60000)]):AbortSignal.timeout(60000)});
   const data=await response.json();
   if(response.ok && data?.status==='generated') {
-   if(data.ownerId!==request.ownerId||data.scope!==request.scope||data.mode!==request.mode||data.lens!==null||data.simulation!==(request.mode==='council')||JSON.stringify(data.participants)!==JSON.stringify(request.participants))throw new Error('담당 응답이 일치하지 않습니다.');
+   if(data.version!==OFFICE_VERSION||data.ownerId!==request.ownerId||data.scope!==request.scope||data.mode!==request.mode||data.lens!==null||data.simulation!==(request.mode==='council')||JSON.stringify(data.participants)!==JSON.stringify(request.participants))throw new Error('담당 응답이 일치하지 않습니다.');
    parseOfficeAnswer({answer:data.answer,nextAction:data.nextAction,...(request.mode==='council'?{recommendation:data.recommendation,evidence:data.evidence,dissent:data.dissent}:{})},request.mode);
+   parseOfficeContext(data.context,request.scope);
    return data;
   }
   return {status:data?.status==='preview'?'preview':'error',error:data?.error||'응답을 받지 못했습니다. 입력은 보존됩니다.'};

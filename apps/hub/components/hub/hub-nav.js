@@ -129,9 +129,9 @@ const CONTENT_CHILDREN = [
 function aiChildren(sheetsPath) {
   return [
     { key: 'ai-office', label: 'Office', path: 'dashboard/agents/office-council', group: 'Agents' },
-    { key: 'ai-chat', label: 'Chat', path: 'dashboard/agents/chat', group: 'Agents', deferred: true },
-    { key: 'ai-orders', label: 'Orders', path: 'dashboard/agents/orders', group: 'Agents', deferred: true },
-    { key: 'ai-council', label: 'Council', path: 'dashboard/agents/council', group: 'Agents', deferred: true },
+    { key: 'ai-orders', label: '작업·실행', path: 'dashboard/agents/orders', group: 'Agents', deferred: true },
+    { key: 'ai-chat', label: '코칭·대화', path: 'dashboard/agents/chat', group: 'Agents', deferred: true },
+    { key: 'ai-council', label: '브랜드 자문', path: 'dashboard/agents/council', group: 'Agents', deferred: true },
     // AutomationsIndex — implemented page (PAGE_MAP) with no sidebar/search row until
     // 2026-07-17. Global (unscoped), so it appears identically in every scope.
     { key: 'ai-automations-overview', label: '자동화 개요', path: 'dashboard/automations', group: 'Automations' },

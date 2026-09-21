@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
+import { isOfficeStudioOperation, OFFICE_STUDIO_POLICY_VERSION } from '@com-moon/agent-contracts/office-studio';
 
 let service;
 try { service = await import('./content-transform.ts'); } catch {}
@@ -30,6 +32,82 @@ test('editorial criteria are selected by the server and recorded with the saved 
   const repeated = await f.execute(command());
   assert.deepEqual(repeated.run.source_snapshot.editorialGuidance, guidance);
   assert.equal(f.calls.filter(call => call.kind === 'generate').length, 1);
+});
+
+test('Threads draft and polish select the grounded Sylveon policy server-side in the existing single-call path', async () => {
+  for (const operation of ['draft', 'polish']) {
+    const f = fixture();
+    const result = await f.execute(command({ operation, officeProvenance: { ownerId: 'forged', policyVersion: 'OVERRIDE_POLICY' }, ownerId: 'umbreon' }));
+    assert.equal(result.status, 'generated');
+    const provenance = result.run.source_snapshot.officeProvenance;
+    assert.equal(provenance.ownerId, 'sylveon');
+    assert.equal(provenance.policyVersion, OFFICE_STUDIO_POLICY_VERSION);
+    assert.equal(provenance.provenance, 'server-selected');
+    assert.equal(provenance.validation, 'schema-only');
+    const call = f.calls.find(entry => entry.kind === 'generate').input;
+    assert.match(call.systemInstruction, /님피아/);
+    assert.match(call.systemInstruction, /원문에 없는 1인칭 경험/);
+    assert.match(call.systemInstruction, /출력 형식을 검사/);
+    assert.doesNotMatch(call.systemInstruction + call.prompt, /OVERRIDE_POLICY/);
+    assert.equal(f.calls.filter(entry => entry.kind === 'generate').length, 1);
+    assert.equal(f.rows.content_transform_runs.length, 1);
+    assert.equal(f.rows.content_variants[0].body, sourceBody);
+  }
+});
+
+test('other operations and channels keep their existing route without a Sylveon claim', async () => {
+  for (const operation of ['shorten', 'hooks', 'repurpose']) assert.equal(isOfficeStudioOperation(operation, { variantType: 'threads_post', channel: 'threads' }), false);
+  assert.equal(isOfficeStudioOperation('polish', { variantType: 'x_thread', channel: 'x' }), false);
+  const f = fixture({ variant: { channel: 'x' }, candidates: [candidate({ channel: 'x' })] });
+  const result = await f.execute(command({ target: { variantType: 'x_thread', channel: 'x' } }));
+  assert.equal(result.status, 'generated');
+  assert.equal(result.run.source_snapshot.officeProvenance, undefined);
+  assert.doesNotMatch(f.calls.find(entry => entry.kind === 'generate').input.systemInstruction, /님피아/);
+});
+
+const oldStableJson = value => Array.isArray(value) ? `[${value.map(oldStableJson).join(',')}]` : value && typeof value === 'object'
+  ? `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${oldStableJson(value[key])}`).join(',')}}` : JSON.stringify(value);
+const inputHash = value => createHash('sha256').update(oldStableJson(value)).digest('hex');
+
+test('policy is part of a new request hash while legacy receipts remain readable without regeneration', async () => {
+  const f = fixture();
+  const normalized = service.normalizeContentTransform(command(), context).command;
+  const { requestHash, officeProvenance, ...legacyInput } = normalized;
+  assert.notEqual(requestHash, inputHash(legacyInput));
+  f.rows.content_transform_runs.push({ id: requestId, workspace_id: workspaceId, request_hash: inputHash(legacyInput), status: 'succeeded', operation: 'polish', source_snapshot: { body: sourceBody, variantId, variantUpdatedAt: updatedAt, target: command().target }, result: { candidates: [candidate()] } });
+  f.rows.content_variants[0].body = '이미 다른 원고로 수정됨';
+  const receipt = await f.execute();
+  assert.equal(receipt.status, 'duplicate');
+  assert.equal(receipt.run.source_snapshot.officeProvenance, undefined);
+  assert.equal(receipt.run.result.candidates[0].body, '고친 말');
+  assert.equal((await f.execute(command({ tone: 'formal' }))).status, 'conflict');
+  assert.equal(f.calls.filter(entry => entry.kind === 'generate').length, 0);
+});
+
+test('replaying an older recorded policy preserves its provenance, including after source edits', async () => {
+  const f = fixture();
+  await f.execute();
+  const stored = f.rows.content_transform_runs[0];
+  const normalized = service.normalizeContentTransform(command(), context).command;
+  const { requestHash, officeProvenance, ...identity } = normalized;
+  const oldPolicy = { ...officeProvenance, policyVersion: '2026-09-20.studio-v0', personaVersion: 'previous-role' };
+  stored.source_snapshot.officeProvenance = oldPolicy;
+  stored.request_hash = inputHash({ ...identity, officeProvenance: oldPolicy });
+  assert.notEqual(stored.request_hash, requestHash);
+  f.rows.content_variants[0].body = '수정한 원고';
+  const receipt = await f.execute();
+  assert.equal(receipt.status, 'duplicate');
+  assert.deepEqual(receipt.run.source_snapshot.officeProvenance, oldPolicy);
+  assert.equal(f.calls.filter(entry => entry.kind === 'generate').length, 1);
+});
+
+test('provider output cannot write policy provenance or claim a review passed', async () => {
+  const f = fixture({ candidates: [candidate({ officeProvenance: { ownerId: 'sylveon', passed: true } })] });
+  const result = await f.execute();
+  assert.equal(result.error, 'invalid-provider-output');
+  assert.equal(result.run.source_snapshot.officeProvenance.validation, 'schema-only');
+  assert.deepEqual(f.rows.content_transform_runs[0].result, {});
+  assert.equal(f.calls.filter(entry => entry.kind === 'generate').length, 1);
 });
 
 function fixture(options = {}) {
