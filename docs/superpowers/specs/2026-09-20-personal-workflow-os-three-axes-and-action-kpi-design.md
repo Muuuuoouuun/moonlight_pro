@@ -1,6 +1,6 @@
 # 개인 워크플로우 OS — 세 축(메모·할 일·CRM/루틴)과 Action KPI 기획
 
-> 상태: **DRAFT · 권장안(운영자 확정 전)**. 2026-09-20 office-hours(Builder 모드) 산출물. 운영자가 다른 AI와 나눈 브레인스토밍 원문("나만의 워크플로우 OS … 400%", "일단 세 가지", "액션 KPI·OKR 측정법")을 Moonlight의 현재 코드·문서에 대입해 정리한 기획이다.
+> 상태: **권장안 → 2026-09-21 운영자 "진행" 승인, §8 1·2주차 구현·로컬 검증 완료**(브랜치 `claude/workflow-os-a-week1`, [구현 기록](../plans/2026-09-21-workflow-os-a-week1-2.md)). 3·4주차와 30일 게이트(B)는 미착수. 2026-09-20 office-hours(Builder 모드) 산출물. 운영자가 다른 AI와 나눈 브레인스토밍 원문("나만의 워크플로우 OS … 400%", "일단 세 가지", "액션 KPI·OKR 측정법")을 Moonlight의 현재 코드·문서에 대입해 정리한 기획이다.
 > 작성일: 2026-09-20 (Asia/Seoul) · 브랜치 `09.bigmac1.02` · HEAD `0016fa9`
 > 상위 정본: [`docs/README.md`](../../README.md) 우선순위 → [운영자 프로필](../../operator-workflow-profile.md) → [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md) → 주제별 최신 스펙([09-05 일지](2026-09-05-journal-timeline-and-ai-digest.md), [09-12 하루 리뷰](2026-09-12-daily-review-and-council-design.md), [09-12 메모](2026-09-12-memo-writing-reuse-and-analysis-design.md), [09-13 메모 2차](2026-09-13-memo-discovery-and-analysis-design.md), [09-03 성장 기획서](2026-09-03-sales-content-marketing-to-branding-growth-plan.md), [09-20 입력 개선](2026-09-20-input-usability-design.md)).
 > 관계: **기존 확정 결정을 바꾸지 않는다.** 09-03 성장 기획서의 첫 30일 순서(F-0 → F-1 → F-3/F-3a, 2026-09-04 CEO 리뷰 HOLD SCOPE)는 그대로 두고, 그 옆에 "루프 닫기" 묶음을 놓는다. 본문의 `확정`은 기존 문서에서 이미 확정된 사실만 가리키고, 이 문서가 새로 제안하는 것은 전부 `권장`이다. 운영자 인터뷰는 중단 상태이므로 여기서 질문을 던지지 않고 §11에 모아 둔다(재개 시 Q127~ 후보).
