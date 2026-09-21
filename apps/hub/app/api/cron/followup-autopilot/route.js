@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed } from "@/lib/hub-write-guard";
+import { recordAutomationRun } from "@/lib/automation-runs";
 import { getFollowups } from "@/lib/repositories/followups-ledger";
 import { recordAgentRun } from "@/lib/sales-os/agent-runs";
 import { assembleSalesContext } from "@/lib/sales-os/context-assembler";
@@ -22,6 +23,9 @@ export const dynamic = "force-dynamic";
 // Auth: Vercel injects `Authorization: Bearer <CRON_SECRET>`. Set the Vercel env
 // CRON_SECRET = COM_MOON_HUB_WRITE_SECRET so assertHubWriteAllowed accepts the cron.
 const ENGINE_PATH = "/api/ai/sales-mentor";
+// 자동화 화면(automation_runs)에 남기는 이 크론의 안정 키·이름 — F-0 가시성(2026-09-03 R-2).
+const AUTOMATION_KEY = "followup-autopilot";
+const AUTOMATION_NAME = "Guru Autopilot · 후속 초안";
 const MAX_DRAFTS = 3; // top-3 stalled deals per run — a queue, not a firehose
 const DRAFT_TOKENS = 8192; // thinking model shares the budget; 4096 truncated intermittently in testing
 
@@ -71,11 +75,8 @@ function hasOpenDraft(openOrders, dealId) {
   );
 }
 
-export async function GET(req) {
-  const guard = assertHubWriteAllowed(req);
-  if (guard) return guard;
-
-  const workspaceId = resolveDefaultWorkspaceId();
+// 실행 본문 — 응답 봉투를 {body, httpStatus}로 돌려주고, GET이 automation_runs에 결과를 남긴다.
+async function runFollowupAutopilot(workspaceId) {
   const summary = { scanned: 0, drafted: 0, skipped: 0, errored: 0, deals: [] };
 
   try {
@@ -83,11 +84,7 @@ export async function GET(req) {
     const follow = await getFollowups({ workspaceId, limit: 25 });
     if (follow.source !== "supabase") {
       // No Supabase (or no data) → honest no-op, not an error. Retry is the next schedule.
-      return NextResponse.json({
-        status: "skipped",
-        reason: follow.configured ? "no-data" : "missing-config",
-        ...summary,
-      });
+      return { body: { status: "skipped", reason: follow.configured ? "no-data" : "missing-config", ...summary } };
     }
 
     const deals = (follow.items || []).filter((i) => i.kind === "deal").slice(0, MAX_DRAFTS);
@@ -183,11 +180,40 @@ export async function GET(req) {
       }
     }
 
-    return NextResponse.json({ status: "ok", ...summary });
+    return { body: { status: "ok", ...summary } };
   } catch (error) {
-    return NextResponse.json(
-      { status: "error", error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return { body: { status: "error", error: error instanceof Error ? error.message : String(error) }, httpStatus: 500 };
   }
+}
+
+export async function GET(req) {
+  const guard = assertHubWriteAllowed(req);
+  if (guard) return guard;
+
+  const workspaceId = resolveDefaultWorkspaceId();
+  const startedAt = new Date().toISOString();
+  const { body, httpStatus = 200 } = await runFollowupAutopilot(workspaceId);
+
+  // 매 실행을 automation_runs에 남긴다 — 이전에는 agent_runs(result='error')만 쌓여 몇 주간의
+  // 매일 실패가 자동화 화면 어디에도 보이지 않았다. 초안 1건이라도 실패하면 failure.
+  const errored = Number(body.errored || 0);
+  const runStatus = body.status === "error" || errored > 0 ? "failure" : body.status === "ok" ? "success" : "ignored";
+  await recordAutomationRun({
+    workspaceId,
+    key: AUTOMATION_KEY,
+    name: AUTOMATION_NAME,
+    status: runStatus,
+    startedAt,
+    correlationId: `${AUTOMATION_KEY}:${startedAt}`,
+    input: { scanned: body.scanned ?? 0 },
+    output: {
+      summary: body.status === "ok"
+        ? `초안 ${body.drafted ?? 0}건 · 건너뜀 ${body.skipped ?? 0} · 실패 ${errored}`
+        : `${body.status}${body.reason ? ` · ${body.reason}` : ""}`,
+      ...body,
+    },
+    errorMessage: runStatus === "failure" ? body.error || `${errored}건 초안 실패 (Engine 응답 계약 또는 저장)` : null,
+  });
+
+  return NextResponse.json(body, { status: httpStatus });
 }
