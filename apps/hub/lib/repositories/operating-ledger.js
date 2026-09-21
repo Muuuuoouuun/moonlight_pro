@@ -8,7 +8,7 @@ import {
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 import { canonicalOrgScopeForKey } from "../brand-org-scope.js";
 import { buildProjectProgress } from "../pms-ui.js";
-import { readTaskChecklist } from "../task-checklist.js";
+import { readTaskChecklist, projectItemType } from "../task-checklist.js";
 import {
   buildProjectCatalogFetchPlan,
   buildProjectEntities,
@@ -315,6 +315,7 @@ function mapTodos(rows, projectById, brandById) {
       description: row.description || "",
       nextAction: row.next_action || "",
       checklist: readTaskChecklist(row),
+      itemType: projectItemType(row),
       sourceRefs: Array.isArray(row.meta?.source_refs) ? row.meta.source_refs : [],
       status: row.status || "inbox",
       due: formatShortDate(row.due_at),
