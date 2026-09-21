@@ -12,7 +12,7 @@ import { ContextMemoDrawer } from '../context-memo-drawer';
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import {
-  Badge, Card, Button, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
+  Badge, Card, Button, IconButton, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
   SegmentedControl, Divider, CheckboxRow, DateQuickPresets,
   TextField, TextAreaField, SelectField, Skeleton,
 } from "../hub-primitives";
@@ -156,6 +156,7 @@ function toRows(ledger) {
 
 const SEGMENTS = [
   { key: "all", label: "전체" },
+  { key: "important", label: "⭐ 중요 고객" },
   { key: "risk", label: "확인 필요" },
   { key: "new", label: "신규" },
   { key: "dormant", label: "기약 없음" },
@@ -163,6 +164,7 @@ const SEGMENTS = [
 ];
 
 function segmentFilter(row, seg) {
+  if (seg === "important") return row.focusOverride === "raise";
   if (seg === "risk") return row.health === "risk" && !row.dormant;
   if (seg === "new") return row.isNew;
   if (seg === "dormant") return row.dormant;
@@ -185,7 +187,7 @@ const REACTIONS = [
 ];
 const OUTCOME_KINDS = ["call", "kakao", "meeting", "visit", "demo", "email"];
 
-function ActivityTimeline({ rows }) {
+function ActivityTimeline({ rows, onDeleteActivity }) {
   if (!rows.length) {
     return <div style={{ fontSize: 12, color: "var(--fg-faint)", padding: "10px 0" }}>아직 기록이 없습니다. 아래에서 첫 기록을 남기세요.</div>;
   }
@@ -193,7 +195,10 @@ function ActivityTimeline({ rows }) {
     <div style={{ display: "flex", flexDirection: "column" }}>
       {rows.map((a, i) => (
         <div key={a.id || i} style={{
-          display: "grid", gridTemplateColumns: "18px 1fr auto", gap: 10, padding: "9px 0",
+          display: "grid",
+          gridTemplateColumns: onDeleteActivity ? "18px 1fr auto auto" : "18px 1fr auto",
+          gap: 10,
+          padding: "9px 0",
           borderBottom: i < rows.length - 1 ? "1px solid var(--line-soft)" : "none",
           alignItems: "flex-start",
         }}>
@@ -212,6 +217,17 @@ function ActivityTimeline({ rows }) {
             </div>
           </div>
           <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", whiteSpace: "nowrap" }}>{a.at}</span>
+          {onDeleteActivity && a.id && (
+            <IconButton
+              icon="x"
+              size={20}
+              iconSize={11}
+              tooltip="기록 삭제 (되돌리기 지원)"
+              aria-label="기록 삭제"
+              onClick={() => onDeleteActivity(a)}
+              style={{ opacity: 0.5, marginTop: -2 }}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -596,7 +612,7 @@ function CustomerDeleteAction({ row, onConfirm }) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, lineHeight: 1.5, color: "var(--fg-muted)" }}>
-          붙어 있는 기록이 없습니다. 삭제할까요? 되돌릴 수 없습니다.
+          붙어 있는 기록이 없습니다. 삭제할까요? (삭제 후 3.5초간 되돌릴 수 있습니다)
           {skipped.length > 0 && (
             <>
               <br />
@@ -607,7 +623,7 @@ function CustomerDeleteAction({ row, onConfirm }) {
           )}
         </span>
         <Button variant="ghost" size="sm" onClick={() => setPhase("idle")}>취소</Button>
-        <Button variant="danger" size="sm" onClick={() => onConfirm(row)}>삭제</Button>
+        <Button variant="danger" size="sm" onClick={() => onConfirm(row)}>삭제 (되돌리기 지원)</Button>
       </div>
     );
   }
@@ -711,7 +727,7 @@ function CustomerOutreachDrafter({ row }) {
   );
 }
 
-function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
+function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }) {
   const [memoState, setMemoState] = React.useState(null);
   const memoContexts = React.useMemo(() => [{ type: row.kind, id: row.id, label: row.person || row.name }], [row.kind, row.id, row.person, row.name]);
   const [activities, setActivities] = React.useState([]);
@@ -719,6 +735,35 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
   // 컨택 완료 시트 저장 직후 부모 원장 재조회 없이 최신 다음 액션을 반영
   const [nextActionOverride, setNextActionOverride] = React.useState(null);
   const [focusOverride, setFocusOverride] = React.useState(row.focusOverride || "default");
+  React.useEffect(() => { setFocusOverride(row.focusOverride || "default"); }, [row.focusOverride]);
+
+  const { schedule: scheduleActUndo, cancel: cancelActUndo } = useUndoableAction();
+  const [actNotice, setActNotice] = React.useState(null);
+
+  const deleteActivity = React.useCallback((activity) => {
+    const match = a => (activity.id ? a.id === activity.id : a === activity);
+    const removed = activities.filter(match);
+    setActivities(prev => prev.filter(a => !match(a)));
+    if (!activity.id || String(activity.id).startsWith("local-")) return;
+    const key = `cust-act-delete-${activity.id}`;
+    const restore = () => setActivities(prev => [...removed, ...prev.filter(a => !match(a))]);
+    scheduleActUndo(key, () => {
+      setActNotice(cur => (cur?.key === key ? null : cur));
+      saveRevenueRecord("activity", "delete", { id: activity.id }).then(r => {
+        if (r.ok) return;
+        restore();
+        setActError({ body: "", message: `기록 삭제 실패 (${r.status}) — 행을 복원했습니다.` });
+      });
+    });
+    setActNotice({
+      key,
+      label: "기록 삭제됨",
+      undo: () => {
+        if (cancelActUndo(key)) restore();
+        setActNotice(null);
+      },
+    });
+  }, [activities, scheduleActUndo, cancelActUndo]);
 
   // company_id를 함께 실어 쓴다 — 활동을 새로 남길 때도 이후 회사 단위 조회에 걸리도록.
   const linkParam = {
@@ -798,6 +843,31 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
       )}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Button
+            variant={focusOverride === "raise" ? "primary" : "outline"}
+            size="xs"
+            icon="star"
+            onClick={() => {
+              const next = focusOverride === "raise" ? "default" : "raise";
+              const prev = focusOverride;
+              setFocusOverride(next);
+              onFocusChange?.(row.key, next);
+              if (!row.id) return;
+              saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
+                id: row.id,
+                focusOverride: next,
+              }).then(r => {
+                if (!r?.ok) {
+                  setFocusOverride(prev);
+                  onFocusChange?.(row.key, prev);
+                }
+              });
+            }}
+          >
+            {focusOverride === "raise" ? "⭐ 중요 고객" : "중요 고객 지정"}
+          </Button>
+        </div>
         {/* 다음 액션 */}
         {(nextActionOverride ?? row.nextAction) && (
           <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "9px 12px", display: "flex", alignItems: "center", gap: 8 }}>
@@ -816,6 +886,32 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
             <span style={{ fontSize: 12, fontWeight: 500 }}>활동 타임라인</span>
             <SyncBadge state={actSync} />
           </div>
+          {actNotice && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="fade-up"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "7px 10px",
+                background: "var(--surface-3)",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--r-sm)",
+                fontSize: 11.5,
+                color: "var(--fg)",
+                marginBottom: 8,
+              }}
+            >
+              <span>{actNotice.label}</span>
+              {actNotice.undo && (
+                <Button variant="ghost" size="xs" onClick={actNotice.undo}>
+                  되돌리기
+                </Button>
+              )}
+            </div>
+          )}
           {actSync === "loading" ? (
             <div style={{ padding: "8px 0" }}>
               <Skeleton height={14} lines={2} />
@@ -826,7 +922,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
               <Button variant="ghost" size="xs" onClick={reload}>다시 시도</Button>
             </div>
           ) : (
-            <><ActivityTimeline rows={activities.slice(0, 3)} />{activities.length > 3 && <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>전체 대화 기록 보기</summary><ActivityTimeline rows={activities.slice(3)} /></details>}</>
+            <><ActivityTimeline rows={activities.slice(0, 3)} onDeleteActivity={deleteActivity} />{activities.length > 3 && <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>전체 대화 기록 보기</summary><ActivityTimeline rows={activities.slice(3)} onDeleteActivity={deleteActivity} /></details>}</>
           )}
         </div>
 
@@ -845,6 +941,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
             {row.kind === "account" ? "계약 고객" : row.stage}
           </Badge>
           {row.dormant && <Badge tone="neutral" size="xs" variant="outline">기약 없음</Badge>}
+
           <div style={{ flex: 1 }} />
           <span className="mono" style={{ fontSize: 15 }}>{fmtMoney(row.valueNum)}</span>
         </div>
@@ -866,19 +963,23 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
             options={[
               { key: "lower", label: "내리기" },
               { key: "default", label: "기본" },
-              { key: "raise", label: "올리기" },
+              { key: "raise", label: "올리기 (중요)" },
             ]}
             value={focusOverride}
             onChange={(next) => {
               const prevValue = focusOverride;
               setFocusOverride(next);
+              onFocusChange?.(row.key, next);
               if (!row.id) return;
               saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
                 id: row.id,
                 focusOverride: next,
               }).then(r => {
                 // 실패하면 토글을 원위치 — 저장 안 된 값이 계속 선택돼 보이면 안 된다.
-                if (!r?.ok) setFocusOverride(prevValue);
+                if (!r?.ok) {
+                  setFocusOverride(prevValue);
+                  onFocusChange?.(row.key, prevValue);
+                }
               });
             }}
           />
@@ -941,10 +1042,26 @@ function NewCustomerDrawer({ open, onClose, onCreated }) {
   const [phone, setPhone] = React.useState("");
   const [stage, setStage] = React.useState("New");
   const [nextAction, setNextAction] = React.useState("");
+  const [isImportant, setIsImportant] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
 
   if (!open) return null;
+
+  const reset = () => {
+    setName("");
+    setPerson("");
+    setPhone("");
+    setStage("New");
+    setNextAction("");
+    setIsImportant(false);
+    setError("");
+  };
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
 
   const handleSave = async () => {
     const trimmedName = name.trim();
@@ -961,11 +1078,12 @@ function NewCustomerDrawer({ open, onClose, onCreated }) {
         contactPhone: phone.trim() || undefined,
         stage,
         nextAction: nextAction.trim() || undefined,
+        focusOverride: isImportant ? "raise" : "default",
       });
       setSubmitting(false);
       if (res.ok && res.id) {
         onCreated(res.id);
-        onClose();
+        handleClose();
       } else {
         setError(`고객 생성 실패 (${res.status || "오류"}) — 다시 시도하세요.`);
       }
@@ -979,11 +1097,11 @@ function NewCustomerDrawer({ open, onClose, onCreated }) {
     <Drawer
       title="새 고객 등록"
       subtitle="기본 정보를 입력하고 등록하면 고객 원장에 추가됩니다"
-      onClose={onClose}
+      onClose={handleClose}
       width="min(440px, 96vw)"
       footer={(
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, width: "100%" }}>
-          <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>취소</Button>
+          <Button variant="outline" size="sm" onClick={handleClose} disabled={submitting}>취소</Button>
           <Button variant="primary" size="sm" onClick={handleSave} disabled={submitting || !name.trim()}>
             {submitting ? "등록 중…" : "등록 저장"}
           </Button>
@@ -1027,6 +1145,11 @@ function NewCustomerDrawer({ open, onClose, onCreated }) {
           onChange={e => setNextAction(e.target.value)}
           placeholder="예: 소개서 발송 및 첫 상담"
         />
+        <CheckboxRow
+          checked={isImportant}
+          onChange={setIsImportant}
+          text="⭐ 중요 고객으로 등록 (집중도 높임)"
+        />
         {error && <div role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>{error}</div>}
       </div>
     </Drawer>
@@ -1042,6 +1165,7 @@ export function Customers({ onNavigate }) {
   const [sort, setSort] = React.useState({ key: null, dir: "asc" });
   const [openKey, setOpenKey] = React.useState(null);
   const [createError, setCreateError] = React.useState(null);
+  const [focusOverrides, setFocusOverrides] = React.useState({});
   // 삭제는 3.5초 뒤에야 POST된다 — 그동안 행은 목록에서 빠져 있고, 되돌리면 그대로 돌아온다.
   const [deletedKeys, setDeletedKeys] = React.useState(() => new Set());
   const [deleteNotice, setDeleteNotice] = React.useState(null);
@@ -1051,9 +1175,30 @@ export function Customers({ onNavigate }) {
   // 낙관 삭제된 행은 원장이 다시 로드돼도 계속 숨긴다 — 되돌리기 창이 닫히기 전에
   // 재조회가 끼어들면 지운 행이 깜빡이며 되살아난다.
   const allRows = React.useMemo(
-    () => ledgerRows.filter(r => !deletedKeys.has(r.key)),
-    [ledgerRows, deletedKeys],
+    () => ledgerRows
+      .filter(r => !deletedKeys.has(r.key))
+      .map(r => ({
+        ...r,
+        focusOverride: focusOverrides[r.key] ?? r.focusOverride,
+      })),
+    [ledgerRows, deletedKeys, focusOverrides],
   );
+
+  const toggleImportant = React.useCallback((e, row) => {
+    e.stopPropagation();
+    const current = focusOverrides[row.key] ?? row.focusOverride;
+    const next = current === "raise" ? "default" : "raise";
+    setFocusOverrides(prev => ({ ...prev, [row.key]: next }));
+    if (!row.id) return;
+    saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
+      id: row.id,
+      focusOverride: next,
+    }).then(r => {
+      if (!r?.ok) {
+        setFocusOverrides(prev => ({ ...prev, [row.key]: current }));
+      }
+    });
+  }, [focusOverrides]);
 
   const restoreRow = React.useCallback((key) => {
     setDeletedKeys(prev => { const next = new Set(prev); next.delete(key); return next; });
@@ -1181,19 +1326,6 @@ export function Customers({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>고객 DB</h2>
           {createError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{createError}</div>}
-          {deleteNotice && (
-            <div
-              role={deleteNotice.tone === "err" ? "alert" : "status"}
-              aria-live="polite"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 8, marginTop: 4,
-                fontSize: 12, color: deleteNotice.tone === "err" ? "var(--danger)" : "var(--fg-muted)",
-              }}
-            >
-              {deleteNotice.label}
-              {deleteNotice.undo && <Button variant="ghost" size="xs" onClick={deleteNotice.undo}>되돌리기</Button>}
-            </div>
-          )}
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             리드 {ledger.leads?.length || 0} · 계약 고객 {ledger.accounts?.length || 0}
             <SyncBadge state={syncState} />
@@ -1256,10 +1388,20 @@ export function Customers({ onNavigate }) {
                 borderBottom: "1px solid var(--line-soft)", alignItems: "center", cursor: "pointer",
                 outline: selection.selectedId === r.key ? "1px solid var(--moon-300)" : undefined,
                 outlineOffset: -1,
+                boxShadow: r.focusOverride === "raise" ? "inset 1px 0 0 var(--moon-300)" : undefined,
               }}
             >
               {/* 1. 고객 · 소속 */}
-              <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <IconButton
+                  icon="star"
+                  size={22}
+                  iconSize={13}
+                  className={r.focusOverride === "raise" ? "hub-iconbtn--star-active" : ""}
+                  tooltip={r.focusOverride === "raise" ? "중요 고객 해제" : "중요 고객으로 등록"}
+                  aria-label={r.focusOverride === "raise" ? "중요 고객 해제" : "중요 고객으로 등록"}
+                  onClick={(e) => toggleImportant(e, r)}
+                />
                 <Avatar name={r.name} size={30} tone={r.type === "personal" ? "personal" : "company"} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: r.dormant ? "var(--fg-muted)" : undefined }}>{r.name}</div>
@@ -1324,12 +1466,52 @@ export function Customers({ onNavigate }) {
         )}
       </Card>
 
+      {deleteNotice && (
+        <div
+          role={deleteNotice.tone === "err" ? "alert" : "status"}
+          aria-live="polite"
+          className="fade-up"
+          style={{
+            position: "fixed",
+            bottom: 24,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1200,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            minHeight: 40,
+            padding: "8px 16px",
+            background: "var(--surface-3)",
+            color: "var(--fg)",
+            border: `1px solid ${deleteNotice.tone === "err" ? "var(--danger)" : "var(--line-strong)"}`,
+            borderRadius: "var(--r)",
+            boxShadow: "var(--shadow-pop)",
+            fontSize: 13,
+            fontWeight: 500,
+          }}
+        >
+          <span style={{ display: "inline-flex", color: deleteNotice.tone === "err" ? "var(--danger)" : "var(--moon-300)" }}>
+            <Iconed name={deleteNotice.tone === "err" ? "bell" : "check"} size={15} />
+          </span>
+          <span style={{ minWidth: 0 }}>{deleteNotice.label}</span>
+          {deleteNotice.undo ? (
+            <Button variant="ghost" size="xs" onClick={deleteNotice.undo} style={{ color: "var(--moon-200)", fontWeight: 600 }}>
+              되돌리기 (취소)
+            </Button>
+          ) : (
+            <IconButton icon="x" size={20} iconSize={12} tooltip="닫기" onClick={() => setDeleteNotice(null)} />
+          )}
+        </div>
+      )}
+
       {openRow && (
         <Customer360Drawer
           row={openRow}
           onClose={() => setOpenKey(null)}
           onNavigate={onNavigate}
           onDelete={deleteCustomer}
+          onFocusChange={(key, val) => setFocusOverrides(prev => ({ ...prev, [key]: val }))}
         />
       )}
 

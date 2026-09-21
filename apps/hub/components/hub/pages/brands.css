@@ -1,0 +1,52 @@
+.brands-page { display: flex; flex-direction: column; gap: var(--gap); padding: var(--section-gap); }
+.brand-page-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brand-page-title { min-width: 0; flex: 1 1 180px; }
+.brand-page-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.brand-page-title h2 { margin: 0; font-size: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.brand-detail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.brand-description { margin: 0; font-size: 13px; line-height: 1.65; color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.brand-focus-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; padding: 12px 0 16px; border-bottom: 1px solid var(--line); }
+.brand-focus-bar > .brand-fact { flex: 1 1 240px; }
+.brand-detail-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.brand-detail-actions .hub-btn { min-height: 44px; }
+.brand-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.brand-identity-panel, .brand-context-panel { min-width: 0; }
+.brand-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px; border-bottom: 1px solid var(--line-soft); }
+.brand-panel-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.brand-panel-title h3, .brand-context-panel h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.brand-identity-grid { display: grid; grid-template-columns: minmax(0, 1fr); padding: 0 16px; column-gap: 24px; }
+.brand-identity-grid > .brand-fact { padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.brand-identity-grid > .brand-fact:last-child { grid-column: 1 / -1; border-bottom: 0; }
+.brand-fact { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.brand-fact-label { font-size: 11.5px; line-height: 1.5; color: var(--fg-muted); }
+.brand-fact-value, .brand-fact-empty { margin: 0; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.brand-fact-value { color: var(--fg); }
+.brand-fact-empty { color: var(--fg-dim); }
+.brand-fact-list { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 4px; max-width: 100%; box-sizing: border-box; }
+.brand-fact-list li { font-size: 13px; line-height: 1.65; color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.brand-fact-list .mono { font-size: 12px; }
+.brand-chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; }
+.brand-chips > span { padding: 3px 8px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--surface-2); color: var(--fg-muted); font-size: 12px; overflow-wrap: anywhere; min-width: 0; }
+.brand-context-panel { overflow-wrap: anywhere; }
+.brand-content-counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+.brand-content-counts dt { font-size: 11.5px; color: var(--fg-muted); }
+.brand-content-counts dd { font-size: 20px; font-weight: 600; margin: 4px 0 0; }
+.brand-content-note { font-size: 12px; line-height: 1.65; color: var(--fg-muted); margin: 8px 0 16px; }
+.brand-context-panel .goal-links { gap: 12px; }
+.brand-publish-alert { display: flex; align-items: center; gap: 8px; padding: 8px 12px; box-shadow: inset 1px 0 0 var(--danger); color: var(--danger); font-size: 12.5px; line-height: 1.6; }
+.brand-publish-alert svg { flex-shrink: 0; }
+@media (min-width: 700px) { .brand-identity-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 700px) and (max-width: 1099px) {
+  .brand-context-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
+  .brand-context-panel > section:first-child { grid-column: 1 / -1; }
+  .brand-context-panel .goal-links { margin-top: 0; }
+}
+@media (min-width: 1100px) { .brand-detail-grid { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); } }
+@media (max-width: 600px) {
+  .brand-page-header { gap: 8px; }
+  .brand-page-tools { width: 100%; }
+  .brand-focus-bar { padding-top: 8px; gap: 16px; }
+  .brand-detail-actions { width: 100%; }
+  .brand-detail-actions > * { flex: 1 1 auto; }
+  .brand-panel-heading { padding: 12px 16px; }
+}
