@@ -6,7 +6,12 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
-import { buildDailyDispatchContext } from "@/lib/ai-workflow-client";
+import {
+  buildDailyDispatchContext,
+  createAdviceTaskWriter,
+  buildWeeklySummaryText,
+  extractWeeklyExperiment,
+} from "@/lib/ai-workflow-client";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
@@ -1447,7 +1452,7 @@ function RhythmPanel({ onNavigate }) {
   );
 }
 
-function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, onNavigate }) {
+function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, onNavigate, onAdvisorOpen }) {
   const [dispatch, setDispatch] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [errorNote, setErrorNote] = React.useState(null);
@@ -1559,19 +1564,40 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
           >
             {dispatch}
           </div>
-          {onNavigate && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", paddingTop: 2 }}>
-              <Button variant="ghost" size="xs" icon="bell" onClick={() => onNavigate("dashboard/revenue/followups")}>
-                고객 연락 바로가기
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", paddingTop: 2 }}>
+            {onAdvisorOpen && (
+              <Button
+                variant="outline"
+                size="xs"
+                icon="sparkle"
+                onClick={() => onAdvisorOpen({
+                  title: isEvening ? "퇴근 전 정돈 & 내일 설계 심층 토의" : "30초 실행 오더 심층 토의",
+                  contextType: "general",
+                  agent: "council",
+                  summary: dispatch,
+                  contextData: {
+                    summary: dispatch,
+                    isEvening,
+                  },
+                })}
+              >
+                Council 심층 토의 (⌘J)
               </Button>
-              <Button variant="ghost" size="xs" icon="inbox" onClick={() => onNavigate("dashboard/work/my")}>
-                내 작업 바로가기
-              </Button>
-              <Button variant="ghost" size="xs" icon="calendar" onClick={() => onNavigate("dashboard/work/calendar")}>
-                캘린더 바로가기
-              </Button>
-            </div>
-          )}
+            )}
+            {onNavigate && (
+              <>
+                <Button variant="ghost" size="xs" icon="bell" onClick={() => onNavigate("dashboard/revenue/followups")}>
+                  고객 연락 바로가기
+                </Button>
+                <Button variant="ghost" size="xs" icon="inbox" onClick={() => onNavigate("dashboard/work/my")}>
+                  내 작업 바로가기
+                </Button>
+                <Button variant="ghost" size="xs" icon="calendar" onClick={() => onNavigate("dashboard/work/calendar")}>
+                  캘린더 바로가기
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       ) : (
         <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
@@ -1852,13 +1878,198 @@ function BriefClock({ signalCount, urgentCount, todayCount }) {
 // 회사(ClassIn). 해당 요일에만 렌더하고 다른 날은 null(§7 fold 순서를 어지럽히지 않는다).
 const WEEKLY_SCOPE_BY_DAY = { Mon: 'personal', Thu: 'company' };
 
-function weeklyScopeToday() {
+export function weeklyScopeToday(override) {
+  if (override === 'personal' || override === 'company') return override;
   const day = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' }).format(new Date());
   return WEEKLY_SCOPE_BY_DAY[day] || null;
 }
 
-function WeeklyReportCard({ onNavigate }) {
-  const scope = weeklyScopeToday();
+export { buildWeeklySummaryText, extractWeeklyExperiment };
+
+export function WeeklyAiDebrief({ report, scope, onAdvisorOpen, onTaskCreated }) {
+  const [debrief, setDebrief] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [errorNote, setErrorNote] = React.useState(null);
+  const [copied, setCopied] = React.useState(false);
+  const [taskSaving, setTaskSaving] = React.useState(false);
+  const [taskSaved, setTaskSaved] = React.useState(false);
+  const taskWriter = React.useRef(null);
+  if (!taskWriter.current) taskWriter.current = createAdviceTaskWriter();
+  const inFlight = React.useRef(false);
+
+  const handleGenerate = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setLoading(true);
+    setErrorNote(null);
+    try {
+      const summaryText = buildWeeklySummaryText(report, scope);
+      const res = await requestPersonaChat({
+        personaId: "council",
+        mode: "weekly-review",
+        message: "확인된 주간 원장 기록(완료 할 일, 연락, 딜 진척, 목표 실적)을 분석하여 팩트 요약, 병목 진단, 다음 주 단 1가지 가역적 실험을 제시하세요. 없는 지표를 임의로 지어내지 마세요.",
+        context: {
+          scope,
+          period: `${report?.periodStart} ~ ${report?.periodEnd}`,
+          stats: report?.stats,
+          goals: report?.goals?.objectives?.map(g => ({ title: g.title, status: g.status })),
+          highlights: report?.highlights,
+        },
+        draft: summaryText,
+      });
+
+      if (res.state === "done") {
+        setDebrief(res.text);
+      } else {
+        setErrorNote(res.note || "주간 평가를 생성하지 못했습니다.");
+      }
+    } catch (e) {
+      setErrorNote(e.message || "오류가 발생했습니다.");
+    } finally {
+      inFlight.current = false;
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!debrief) return;
+    try {
+      await navigator.clipboard.writeText(debrief);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setErrorNote("복사하지 못했습니다. 본문을 직접 선택해 복사하세요.");
+    }
+  };
+
+  const handleCreateTask = async () => {
+    if (taskSaving || taskSaved || !debrief) return;
+    const title = extractWeeklyExperiment(debrief) || (scope === 'company' ? '다음 주 B2B 파이프라인 가역 실험 1단계' : '다음 주 운영 가역 실험 1단계');
+    setTaskSaving(true);
+    setErrorNote(null);
+    try {
+      const result = await taskWriter.current.save({
+        key: `weekly-debrief:${scope}:${report?.periodStart || 'current'}`,
+        title,
+      });
+      if (result.state === "saved") {
+        setTaskSaved(true);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("moonlight:tasks-saved"));
+        }
+        if (onTaskCreated) onTaskCreated();
+      } else {
+        setErrorNote(result.note || "할 일을 등록하지 못했습니다.");
+      }
+    } catch {
+      setErrorNote("할 일 저장 요청을 보내지 못했습니다.");
+    } finally {
+      setTaskSaving(false);
+    }
+  };
+
+  const handleOpenCouncil = () => {
+    if (!onAdvisorOpen) return;
+    const summary = debrief || buildWeeklySummaryText(report, scope);
+    onAdvisorOpen({
+      title: `${scope === 'company' ? '회사' : '개인'} 주간 회고 심층 토의`,
+      contextType: "weekly",
+      agent: "council",
+      summary,
+      contextData: {
+        summary,
+        report,
+        scope,
+      },
+    });
+  };
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line-soft)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: debrief ? 10 : 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Iconed name="sparkle" size={15} style={{ color: "var(--moon-300)" }} />
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg)" }}>
+            한 주 사실 평가 & 조언
+          </span>
+          <Badge tone="moon" size="xs">Council AI</Badge>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {debrief && (
+            <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
+              {copied ? "복사됨 ✓" : "복사"}
+            </Button>
+          )}
+          {debrief && onAdvisorOpen && (
+            <Button variant="ghost" size="xs" icon="sparkle" onClick={handleOpenCouncil}>
+              Council 심층 토의 (⌘J)
+            </Button>
+          )}
+          <Button
+            variant={debrief ? "ghost" : "outline"}
+            size="xs"
+            icon="sparkle"
+            disabled={loading}
+            onClick={handleGenerate}
+          >
+            {loading ? "평가 작성 중…" : debrief ? "다시 평가" : "✨ 15초 AI 주간 평가 & 조언 받기"}
+          </Button>
+        </div>
+      </div>
+
+      {errorNote && (
+        <div role="alert" style={{ marginTop: 8, fontSize: 12, color: "var(--danger)" }}>
+          {errorNote}
+        </div>
+      )}
+
+      {debrief && (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div
+            style={{
+              fontSize: 12.5,
+              lineHeight: 1.65,
+              color: "var(--fg)",
+              background: "var(--surface-2)",
+              padding: "12px 14px",
+              borderRadius: "var(--r-sm)",
+              border: "1px solid var(--line-soft)",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {debrief}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Button
+                variant={taskSaved ? "ghost" : "primary"}
+                size="xs"
+                icon={taskSaved ? "check" : "plus"}
+                disabled={taskSaving || taskSaved}
+                onClick={handleCreateTask}
+              >
+                {taskSaving ? "등록 확인 중…" : taskSaved ? "📌 다음 주 할 일로 등록됨 ✓" : "📌 다음 주 1단계 실험 할 일로 등록"}
+              </Button>
+              {taskSaved && (
+                <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>
+                  오늘 할 일 및 작업 목록에 반영되었습니다.
+                </span>
+              )}
+            </div>
+            {onAdvisorOpen && (
+              <Button variant="outline" size="xs" icon="sparkle" onClick={handleOpenCouncil}>
+                Council과 토론 계속하기 ↗
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function WeeklyReportCard({ onNavigate, onAdvisorOpen, overrideScope, onTaskCreated }) {
+  const scope = weeklyScopeToday(overrideScope);
   const [state, setState] = React.useState({ syncState: 'loading', report: null });
   React.useEffect(() => {
     if (!scope) return;
@@ -1895,10 +2106,32 @@ function WeeklyReportCard({ onNavigate }) {
       ];
   return (
     <Card className="fade-up">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <SectionTitle style={{ margin: 0 }}>{title}</SectionTitle>
-        <TruthBadge state={syncState} />
-        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{report?.periodStart && report?.periodEnd ? `${report.periodStart} — ${report.periodEnd}` : '지난 7일'}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <SectionTitle style={{ margin: 0 }}>{title}</SectionTitle>
+          <TruthBadge state={syncState} />
+          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{report?.periodStart && report?.periodEnd ? `${report.periodStart} — ${report.periodEnd}` : '지난 7일'}</span>
+        </div>
+        {onAdvisorOpen && report && (
+          <Button
+            variant="outline"
+            size="xs"
+            icon="sparkle"
+            onClick={() => onAdvisorOpen({
+              title: `${title} · 회고 토의`,
+              contextType: 'weekly',
+              agent: 'council',
+              summary: buildWeeklySummaryText(report, scope),
+              contextData: {
+                summary: buildWeeklySummaryText(report, scope),
+                report,
+                scope,
+              },
+            })}
+          >
+            Council 이사회 (⌘J)
+          </Button>
+        )}
       </div>
       {syncState === 'error' ? (
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>주간 기록을 읽지 못했습니다 — 아래 수치 없이 넘어가지 말고 새로고침으로 다시 확인하세요.</div>
@@ -1930,6 +2163,14 @@ function WeeklyReportCard({ onNavigate }) {
               </div>
             )}
           </div>
+          {syncState !== 'loading' && report && (
+            <WeeklyAiDebrief
+              report={report}
+              scope={scope}
+              onAdvisorOpen={onAdvisorOpen}
+              onTaskCreated={onTaskCreated}
+            />
+          )}
         </div>
       )}
     </Card>
@@ -1944,8 +2185,12 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
   const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
   React.useEffect(() => {
     window.addEventListener('moonlight:inquiries-changed', refreshLedger);
-    return () => window.removeEventListener('moonlight:inquiries-changed', refreshLedger);
-  }, [refreshLedger]);
+    window.addEventListener('moonlight:tasks-saved', ledger.refreshTasks);
+    return () => {
+      window.removeEventListener('moonlight:inquiries-changed', refreshLedger);
+      window.removeEventListener('moonlight:tasks-saved', ledger.refreshTasks);
+    };
+  }, [refreshLedger, ledger.refreshTasks]);
 
   const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
   const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
@@ -1994,7 +2239,11 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
       <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
 
       {/* Q118·Q119: 월(개인)·목(회사) 아침에만 뜨는 주간 정리 — 다른 요일은 null. */}
-      <WeeklyReportCard onNavigate={onNavigate} />
+      <WeeklyReportCard
+        onNavigate={onNavigate}
+        onAdvisorOpen={setAdvisorSignal}
+        onTaskCreated={ledger.refreshTasks}
+      />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
         <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
@@ -2004,6 +2253,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
           signals={ledger.signals}
           sourceState={ledger.syncState}
           onNavigate={onNavigate}
+          onAdvisorOpen={setAdvisorSignal}
         />
 
         <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
@@ -2073,8 +2323,8 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
         <FloatingMentorWidget
           isOpen={Boolean(advisorSignal)}
           onClose={() => setAdvisorSignal(null)}
-          agent={advisorSignal.kind === 'deals' || advisorSignal.kind === 'leads' ? 'guru' : 'council'}
-          contextType={advisorSignal.kind === 'deals' ? 'deal' : advisorSignal.kind === 'content' ? 'content' : 'general'}
+          agent={advisorSignal.agent || (advisorSignal.kind === 'deals' || advisorSignal.kind === 'leads' ? 'guru' : 'council')}
+          contextType={advisorSignal.contextType || (advisorSignal.kind === 'deals' ? 'deal' : advisorSignal.kind === 'content' ? 'content' : 'general')}
           contextTitle={advisorSignal.title}
           contextData={{
             summary: advisorSignal.summary,
@@ -2082,6 +2332,10 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
             from: advisorSignal.source?.from,
             kind: advisorSignal.kind,
             meta: advisorSignal.meta,
+            ...advisorSignal.contextData,
+          }}
+          onCreateTask={() => {
+            ledger.refreshTasks();
           }}
         />
       )}

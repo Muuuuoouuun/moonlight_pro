@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createAdviceTaskWriter, parseExtractedActions, buildDailyDispatchContext } from "./ai-workflow-client.js";
+import {
+  createAdviceTaskWriter,
+  parseExtractedActions,
+  buildDailyDispatchContext,
+  buildWeeklySummaryText,
+  extractWeeklyExperiment,
+} from "./ai-workflow-client.js";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const json = (data, status = 200) => Response.json(data, { status });
@@ -93,3 +99,68 @@ test("daily briefing does not pass failed task or signal reads as current facts"
   assert.deepEqual(context.tasks, { state: "error" });
   assert.deepEqual(context.signals, []);
 });
+
+test("buildWeeklySummaryText builds structured fact summary for personal and company scopes", () => {
+  const personalReport = {
+    periodStart: "2026-09-14",
+    periodEnd: "2026-09-20",
+    stats: { doneTasks: 8, publishes: 2, contacts: 5, personalDeals: 1 },
+    goals: { objectives: [{ title: "B2B 파일럿 3건 성사", status: "active" }] },
+    highlights: [{ kind: "won", label: "아카데미 연간 라이선스" }],
+  };
+  const pText = buildWeeklySummaryText(personalReport, "personal");
+  assert.match(pText, /개인 주간 실적 팩트 \(2026-09-14 ~ 2026-09-20\)/);
+  assert.match(pText, /완료 할 일: 8건/);
+  assert.match(pText, /발행: 2건/);
+  assert.match(pText, /CRM 연락: 5건/);
+  assert.match(pText, /개인 딜: 1건/);
+  assert.match(pText, /B2B 파일럿 3건 성사/);
+  assert.match(pText, /Won: 아카데미 연간 라이선스/);
+
+  const companyReport = {
+    periodStart: "2026-09-14",
+    periodEnd: "2026-09-20",
+    stats: { contacts: 14, newDeals: 3, modifiedOpenDeals: 5, wonDeals: 2 },
+    goals: { objectives: [{ title: "ClassIn 신규 파트너 5곳 확보", status: "active" }] },
+    highlights: [],
+  };
+  const cText = buildWeeklySummaryText(companyReport, "company");
+  assert.match(cText, /회사\(ClassIn\) 주간 실적 팩트/);
+  assert.match(cText, /CRM 연락: 14건/);
+  assert.match(cText, /신규 딜: 3건/);
+  assert.match(cText, /수정된 진행 딜: 5건/);
+  assert.match(cText, /성사일 확인된 딜: 2건/);
+  assert.match(cText, /ClassIn 신규 파트너 5곳 확보/);
+
+  assert.equal(buildWeeklySummaryText(null, "personal"), "");
+});
+
+test("extractWeeklyExperiment parses experiment titles from council outputs", () => {
+  const sample1 = `
+1. 📊 [이번 주 실행 팩트 요약]
+완료 8건, 연락 5건 진행됨.
+
+2. 🔍 [냉철한 병목 및 패턴 진단]
+미접촉 리드 3건이 5일 이상 체류 중.
+
+3. 🎯 [다음 주 Council 조언: 단 1가지 가역적 실험]
+📌 다음 주 단 1가지 실험: [신규 학원장 3곳 15분 티타임 콜]
+완료 기준: 수요일까지 3통화 완료 및 반응 기록
+`;
+  assert.equal(
+    extractWeeklyExperiment(sample1),
+    "다음 주 실험: 신규 학원장 3곳 15분 티타임 콜"
+  );
+
+  const sample2 = `
+📌 추천 태스크: [미접촉 리드 5건 리드마그넷 발송]
+`;
+  assert.equal(
+    extractWeeklyExperiment(sample2),
+    "미접촉 리드 5건 리드마그넷 발송"
+  );
+
+  assert.equal(extractWeeklyExperiment("단순 일반 텍스트 조언"), null);
+  assert.equal(extractWeeklyExperiment(null), null);
+});
+

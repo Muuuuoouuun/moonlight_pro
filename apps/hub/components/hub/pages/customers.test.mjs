@@ -48,3 +48,12 @@ test("ActivityTimeline supports activity deletion with undo notification in Cust
   assert.match(customersSource, /cust-act-delete-/);
   assert.match(customersSource, /actNotice && \(/);
 });
+
+test("Customer360Drawer integrates Guru strategic coaching (⌘J) and FloatingMentorWidget", () => {
+  assert.match(customersSource, /Guru 전략 코칭 \(⌘J\)/);
+  assert.match(customersSource, /FloatingMentorWidget/);
+  assert.match(customersSource, /agent="guru"/);
+  assert.match(customersSource, /contextType="customer"/);
+  assert.match(customersSource, /onApplyText=\{/);
+});
+

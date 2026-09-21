@@ -20,6 +20,7 @@ import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
 import { requestPersonaChat } from "../persona-client";
+import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
 import './customer-focus.css';
@@ -740,6 +741,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
 
   const { schedule: scheduleActUndo, cancel: cancelActUndo } = useUndoableAction();
   const [actNotice, setActNotice] = React.useState(null);
+  const [guruOpen, setGuruOpen] = React.useState(false);
 
   const deleteActivity = React.useCallback((activity) => {
     const match = a => (activity.id ? a.id === activity.id : a === activity);
@@ -844,7 +846,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
       )}
     >
       <div className="customer-focus">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
           <Button
             variant="outline"
             active={focusOverride === "raise"}
@@ -869,6 +871,14 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
             }}
           >
             {focusOverride === "raise" ? "⭐ 중요 고객" : "중요 고객 지정"}
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
+            icon="sparkle"
+            onClick={() => setGuruOpen(true)}
+          >
+            Guru 전략 코칭 (⌘J)
           </Button>
         </div>
         {/* 다음 액션 */}
@@ -1030,6 +1040,35 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
         <QuickLog onSave={logActivity} />
         </details>
       </div>
+
+      {guruOpen && (
+        <FloatingMentorWidget
+          isOpen={guruOpen}
+          onClose={() => setGuruOpen(false)}
+          agent="guru"
+          contextType="customer"
+          contextTitle={row.person || row.name || "고객 전략 코칭"}
+          contextData={{
+            id: row.id,
+            name: row.person || row.name,
+            company: row.name,
+            stage: row.stage || (row.kind === "account" ? "계약 고객" : "리드"),
+            health: row.health,
+            nextAction: nextActionOverride ?? row.nextAction,
+            notes: row.notes || row.sub,
+          }}
+          onApplyText={(text) => {
+            const trimmed = text.slice(0, 100);
+            setNextActionOverride(trimmed);
+            if (row.id) {
+              saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
+                id: row.id,
+                nextAction: trimmed,
+              });
+            }
+          }}
+        />
+      )}
     </Drawer>
   );
 }

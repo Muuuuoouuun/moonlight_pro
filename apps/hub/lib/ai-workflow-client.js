@@ -80,3 +80,51 @@ export function buildDailyDispatchContext({ dailyFocus, taskToday, signals = [],
     signals: ["live", "partial"].includes(sourceState) ? signals.slice(0, 5).map(signal => ({ title: signal.title, summary: signal.summary, tone: signal.tone })) : [],
   };
 }
+
+export function buildWeeklySummaryText(report, scope) {
+  if (!report) return '';
+  const stats = report.stats || {};
+  const goals = report.goals?.objectives || [];
+  const highlights = report.highlights || [];
+  const statParts = scope === 'company'
+    ? [
+        `CRM 연락: ${stats.contacts ?? '—'}건`,
+        `신규 딜: ${stats.newDeals ?? '—'}건`,
+        `수정된 진행 딜: ${stats.modifiedOpenDeals ?? '—'}건`,
+        `성사일 확인된 딜: ${stats.wonDeals ?? '—'}건`,
+      ]
+    : [
+        `완료 할 일: ${stats.doneTasks ?? '—'}건`,
+        `발행: ${stats.publishes ?? '—'}건`,
+        `CRM 연락: ${stats.contacts ?? '—'}건`,
+        `개인 딜: ${stats.personalDeals ?? '—'}건`,
+      ];
+  const goalParts = goals.map(g => `- ${g.title} (${g.status || '진행중'})`);
+  const highlightParts = highlights.map(h => `- ${h.kind === 'won' ? 'Won' : '완료'}: ${h.label}`);
+
+  const lines = [
+    `[${scope === 'company' ? '회사(ClassIn)' : '개인'} 주간 실적 팩트 (${report.periodStart || '시작'} ~ ${report.periodEnd || '종료'})]`,
+    statParts.join(' · '),
+  ];
+  if (goalParts.length) {
+    lines.push(`[연결된 목표]`, ...goalParts);
+  }
+  if (highlightParts.length) {
+    lines.push(`[주요 하이라이트]`, ...highlightParts);
+  }
+  return lines.join('\n');
+}
+
+export function extractWeeklyExperiment(text) {
+  if (typeof text !== 'string') return null;
+  const match = text.match(/📌\s*다음\s*주\s*단\s*1가지\s*실험:\s*([^\n\r]+)/);
+  if (match && match[1]?.trim()) {
+    return '다음 주 실험: ' + match[1].trim().replace(/^\[|\]$/g, '').trim();
+  }
+  const taskMatch = text.match(/📌\s*추천\s*태스크:\s*([^\n\r]+)/);
+  if (taskMatch && taskMatch[1]?.trim()) {
+    return taskMatch[1].trim().replace(/^\[|\]$/g, '').trim();
+  }
+  return null;
+}
+
