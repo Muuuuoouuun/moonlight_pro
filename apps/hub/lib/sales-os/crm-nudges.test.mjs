@@ -152,3 +152,16 @@ test("every nudge carries a subject, a reason, one action and an escape", () => 
     assert.ok(["act", "organize", "recap"].includes(n.severity), "severity");
   }
 });
+
+// 0c가 세운 판정을 넛지도 그대로 쓴다 — 실측에서 소유 리드 16건 전부가 템플릿이었고,
+// 그 판정이 갈라져 있는 동안 넛지 화면이 영구히 비어 있었다.
+test("an auto-filled template is not a promise — it still asks to be replaced", () => {
+  const template = "고객 활성 상태 확인 → 갱신·휴면 여부 정리";
+  const nudges = buildCrmNudges({ customers: [customer({ nextAction: template })], activities: [], now: NOW });
+  assert.equal(nudges[0].ruleId, "no_next_action");
+  assert.match(nudges[0].title, /자동으로 채워진/);
+
+  // 운영자가 직접 적은 문장이면 정리된 것이다.
+  const real = buildCrmNudges({ customers: [customer({ nextAction: "원장님께 견적서 발송" })], activities: [], now: NOW });
+  assert.ok(!real.some((n) => n.ruleId === "no_next_action"));
+});

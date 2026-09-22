@@ -11,7 +11,7 @@
 // severity: act(지금 할 것) · organize(정리) · recap(요약). 표시 위치가 이 값으로 갈린다.
 
 import { kstDayKey, diffKstDays } from "../kst-day.js";
-import { normalizeEntityName } from "./lead-enrichment.js";
+import { isTemplateNextAction, normalizeEntityName } from "./lead-enrichment.js";
 import { MIN_MATCH_NAME_LENGTH } from "./calendar-touchpoints.js";
 
 // 기약 없음을 다시 보는 간격(프로필 §7 권장: 한 달 뒤 재확인).
@@ -148,12 +148,18 @@ function candidatesFor(customer, ctx) {
   }
 
   // ⑤ 다음 행동이 비어 있다 (정리)
-  if (!customer.nextAction && !customer.dormant && customer.open !== false) {
+  // 자동으로 채워진 문구(이관·시트 동기화 템플릿)는 약속이 아니다 — 0c가 집중 고객에서
+  // 세운 판정과 같은 기준을 쓴다. 그러지 않으면 필러를 단 고객이 "정리됨"으로 보인다.
+  const promised = String(customer.nextAction || "").trim();
+  const onlyTemplate = Boolean(promised) && isTemplateNextAction(promised);
+  if ((!promised || onlyTemplate) && !customer.dormant && customer.open !== false) {
     out.push({
       ruleId: "no_next_action",
-      triggerKey: triggerKey("no_next_action", [last?.id || "none"]),
-      title: "다음 행동이 비어 있어요",
-      reason: last ? `마지막 기록 ${diffKstDays(kstDayKey(last.occurredAt), todayKey)}일 전` : "아직 기록이 없어요",
+      triggerKey: triggerKey("no_next_action", [onlyTemplate ? "template" : "empty", last?.id || "none"]),
+      title: onlyTemplate ? "자동으로 채워진 문구만 있어요" : "다음 행동이 비어 있어요",
+      reason: last
+        ? `마지막 기록 ${diffKstDays(kstDayKey(last.occurredAt), todayKey)}일 전`
+        : "아직 기록이 없어요",
       action: { kind: "record", label: "정하기", prefill: {} },
       escape: ["dismiss"],
     });

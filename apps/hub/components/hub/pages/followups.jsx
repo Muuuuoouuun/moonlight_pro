@@ -6,6 +6,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, Divider, Drawer, Dot, EmptyState, SegmentedControl, Skeleton, SyncBadge, useToast } from "../hub-primitives";
 import { UNDO_WINDOW_MS } from "../use-undoable-action";
 import { ContactRecordDrawer } from "../contact-record-form";
+import { CrmNudgeSection, useCrmNudges } from "../crm-nudge";
 import { channelLabel } from "@/lib/sales-os/contact-record";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
@@ -328,6 +329,19 @@ export function Followups({ onNavigate }) {
 
   // 기록은 공용 드로어(contact-record-form)가 소유한다 — 저장·3.5초 되돌리기·늦은 실패 시
   // 입력 복원까지 전부 그 안에 있다. 이 페이지는 "누구를·어느 채널로" 열지만 정한다.
+  // 넛지는 큐 위에 붙는다 — "먼저 정리할 것"(act)과 접힌 "정리"(organize).
+  const nudgeState = useCrmNudges();
+  const actOnNudge = (nudge) => setRecordTarget({
+    item: {
+      kind: nudge.subject.type === "deal" ? "deal" : "lead",
+      id: nudge.subject.id,
+      name: nudge.subject.name,
+      companyId: nudge.subject.companyId,
+    },
+    preset: nudge.action?.prefill || {},
+    nudge,
+  });
+
   const openRecord = (item, preset) => setRecordTarget({ item, preset });
   const closeRecord = () => setRecordTarget(null);
 
@@ -336,8 +350,8 @@ export function Followups({ onNavigate }) {
     if (!item) return;
     setLogged((m) => ({ ...m, [item.id]: saved?.kind ? channelLabel(saved.kind) : "기록" }));
     toast.success(`기록됨 · ${item.name}`);
-    // 저장은 드로어가 3.5초 뒤에 보낸다 — 그때 큐가 새 next_action을 반영하도록 한 번 더 읽는다.
-    window.setTimeout(() => { reload(); }, UNDO_WINDOW_MS + 250);
+    // 저장은 드로어가 3.5초 뒤에 보낸다 — 그때 큐와 넛지가 새 사실을 반영하도록 다시 읽는다.
+    window.setTimeout(() => { reload(); nudgeState.refresh(); }, UNDO_WINDOW_MS + 250);
   };
 
   return (
@@ -378,6 +392,30 @@ export function Followups({ onNavigate }) {
           onChange={setLane}
         />
       </div>
+
+      {/* 넛지 — 계기·이유·행동 하나. 목록보다 위다: 큐는 "누구"를, 넛지는 "무엇을"을 말한다. */}
+      {(nudgeState.status !== "live" || nudgeState.nudges.length > 0) && (
+        <Card pad={false} className="hub-table-card">
+          <CrmNudgeSection
+            title="먼저 정리할 것"
+            hint="캘린더·약속·반응에서 찾은 것"
+            state={nudgeState.status}
+            nudges={nudgeState.nudges.filter((n) => n.severity === "act")}
+            busyKey={nudgeState.busyKey}
+            onAct={actOnNudge}
+            onEscape={(nudge, action, until) => nudgeState.suppress(nudge, action, until)}
+          />
+          <CrmNudgeSection
+            title="정리"
+            hint="다음 행동이 비었거나 오래 둔 것"
+            state={nudgeState.status}
+            nudges={nudgeState.nudges.filter((n) => n.severity === "organize")}
+            busyKey={nudgeState.busyKey}
+            onAct={actOnNudge}
+            onEscape={(nudge, action, until) => nudgeState.suppress(nudge, action, until)}
+          />
+        </Card>
+      )}
 
       <Card pad={false} className="hub-table-card">
         {sections.length === 0 ? (
