@@ -69,9 +69,9 @@
 
 Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 102/102이며 Phase 1A 완료를 뜻한다. Phase 1B·1C는 아직 남아 있으므로 Phase 1 전체 완료로 해석하지 않는다.
 
-2026-09-20 현재 루트 `npm test`는 **1433 tests · 실패 0**이다. 이전 기록의 "692/692 통과, 82파일"은 낡았으므로 이 줄을 기준선으로 쓴다. 2026-09-20에 **아예 돌지 않던 테스트 55건을 복구**해 1378 → 1433이 됐고, 원인 두 가지 모두 소스와 무관했다. (1) postgres를 띄우는 8파일이 macOS에서 `LC_ALL` 없이 기동을 거부해 discovery·daily review·inquiry·agent command의 **원자 RPC 검증이 통째로 미실행**이었다. (2) 스윕 테스트 3개(`motion`·`focus-ring`·`button-hover`)가 `.next` 정확일치로만 걸러 `.next.qa`·`.next.ship-*` 같은 빌드 잔재 디렉터리의 미니파이 CSS를 새 위반으로 오인했다. 커밋 `0cc7f18`.
+2026-09-23 통합 후 루트 `npm test`는 **2313 tests · 통과 2302 · 실패 0 · 건너뜀 11**이다(건너뜀은 테스트 DB 연결이 있어야 도는 postgres 테스트). 이 줄을 기준선으로 쓰고, 이전 기록의 "1433 tests"·"692/692 통과, 82파일"은 낡았다. CLAUDE.md·AGENTS.md의 테스트 줄도 같은 값이어야 한다. 아래는 그 숫자에 이르기까지의 복구 경위다 — 2026-09-20에 **아예 돌지 않던 테스트 55건을 복구**해 1378 → 1433이 됐고, 원인 두 가지 모두 소스와 무관했다. (1) postgres를 띄우는 8파일이 macOS에서 `LC_ALL` 없이 기동을 거부해 discovery·daily review·inquiry·agent command의 **원자 RPC 검증이 통째로 미실행**이었다. (2) 스윕 테스트 3개(`motion`·`focus-ring`·`button-hover`)가 `.next` 정확일치로만 걸러 `.next.qa`·`.next.ship-*` 같은 빌드 잔재 디렉터리의 미니파이 CSS를 새 위반으로 오인했다. 커밋 `0cc7f18`.
 
-파일 범위(2026-09-20 실측): 저장소의 `*.test.mjs` 203파일 중 **201파일**이 루트 글롭에 포함되고, `apps/hub/app/api/hub/content/transform/route.test.mjs`·`.../workflow/route.test.mjs` **2파일은 글롭 밖**이다(루트 글롭에 `apps/hub/app/**` 패턴이 없다). 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장하면서 이전에 CI 밖이던 20파일과 실패 4건이 해소된 것은 사실이나, "전부 포함"은 더 이상 맞지 않다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬의 범위는 어긋나지 않는다 — 다만 두 파일은 양쪽 모두에서 돌지 않는다.
+파일 범위(2026-09-23 실측): 저장소의 `*.test.mjs`는 **317파일**이고 **전부 루트 글롭 안**이다(글롭 밖 0건). 한때 글롭 밖이던 `apps/hub/app/api/hub/content/transform/route.test.mjs`·`.../workflow/route.test.mjs` 2파일은 2026-09-20에 `apps/hub/app/**` 패턴이 추가되면서(`cc1b5c9`) 해소됐다. 그 전 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장해 이전에 CI 밖이던 20파일과 실패 4건을 해소한 것도 사실이다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬의 범위는 어긋나지 않는다.
 
 사이드바 앵커는 코드(`hub-nav.js` 8 primary + 2 utility)·`hub-nav.test.mjs`·07-15 스펙 §3.1이 모두 일치한다(2026-09-04 주석·스펙 갱신으로 해소).
 
