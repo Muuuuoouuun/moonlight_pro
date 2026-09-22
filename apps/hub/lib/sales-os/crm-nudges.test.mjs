@@ -36,6 +36,37 @@ test("a missed promise stops nagging once a record lands after it", () => {
   assert.ok(!after.some((n) => n.ruleId === "promise_missed"));
 });
 
+test("an automatic deal-stage row is not a record, but a memo is", () => {
+  const base = { customers: [customer({ nextActionAt: day(-3), nextAction: "견적서 발송" })], now: NOW };
+
+  // 칸반에서 딜을 한 칸 옮기면 revenue-write가 kind='deal' 행을 자동으로 쓴다 — 연락이 아니다.
+  const afterStageMove = buildCrmNudges({
+    ...base,
+    activities: [activity({ id: "deal-move", kind: "deal", occurredAt: day(-2) })],
+  });
+  assert.ok(afterStageMove.some((n) => n.ruleId === "promise_missed"));
+
+  // 메모는 운영자가 직접 고르는 연락 채널이라 기록으로 센다.
+  const afterNote = buildCrmNudges({
+    ...base,
+    activities: [activity({ id: "note-1", kind: "note", occurredAt: day(-2) })],
+  });
+  assert.ok(!afterNote.some((n) => n.ruleId === "promise_missed"));
+});
+
+test("a stage-move row does not silence the concern follow-up either", () => {
+  const base = {
+    customers: [customer()],
+    activities: [
+      activity({ id: "call-1", kind: "call", reaction: "concern", body: "예산이 부담돼요", occurredAt: day(-5) }),
+      activity({ id: "deal-move", kind: "deal", body: "단계: 제안 → 협상", occurredAt: day(-1) }),
+    ],
+    now: NOW,
+  };
+  const nudges = buildCrmNudges(base);
+  assert.equal(nudges[0].ruleId, "reaction_open");
+});
+
 test("today's promise reads as today, not as overdue", () => {
   const nudges = buildCrmNudges({
     customers: [customer({ nextActionAt: day(0), nextAction: "원장님 통화" })],

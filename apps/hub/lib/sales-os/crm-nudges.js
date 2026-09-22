@@ -40,6 +40,16 @@ const RULE_SEVERITY = {
   weekly_recap: "recap",
 };
 
+// 운영자의 접촉이 아닌 자동·내부 기록. 넛지의 "마지막 기록"에서 뺀다 — revenue-write의
+// recordDealStageMove가 딜 단계가 바뀔 때마다 kind='deal' 행을 그 딜 id로 자동으로 쓰기 때문에,
+// 거르지 않으면 칸반에서 카드를 한 칸 옮긴 것만으로 ②promise_missed·④reaction_open이 조용히
+// 꺼진다(연락한 적이 없는데 넛지가 사라진다 — 이 기능이 막으려던 바로 그 누락).
+//
+// 화이트리스트(followup-scoring.js CONTACT_KINDS 8종)를 쓰지 않는 이유: 그 목록엔 note가 없는데
+// contact-record.js CONTACT_CHANNELS는 '메모'를 운영자가 직접 고르는 연락 채널로 둔다. 메모로
+// 기록을 남긴 직후에도 "약속한 날이 지났는데 기록이 없다"가 계속 떠서 반대 방향 오탐이 된다.
+const AUTO_ACTIVITY_KINDS = new Set(["deal", "ai", "update"]);
+
 function timeOf(value) {
   const t = new Date(value || "").getTime();
   return Number.isFinite(t) ? t : null;
@@ -53,6 +63,7 @@ function triggerKey(ruleId, parts) {
 function latestActivity(activities, customer) {
   let best = null;
   for (const a of activities || []) {
+    if (AUTO_ACTIVITY_KINDS.has(String(a?.kind || "").toLowerCase())) continue;
     if (!belongsTo(a, customer)) continue;
     const at = timeOf(a.occurredAt);
     if (at == null) continue;
