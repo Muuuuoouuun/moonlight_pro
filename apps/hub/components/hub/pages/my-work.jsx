@@ -1179,15 +1179,52 @@ export function MyWork({ onNavigate }) {
     }
   };
 
+  // 고른 카드를 기한 열로 끌면 선택을 풀고 **그 열로 옮긴다**. toggleFocus·rescheduleTask를 겹쳐
+  // 부르면 두 PATCH가 각자 background reload().then(clearPatch)를 돌려, 먼저 끝난 쪽의 clearPatch가
+  // 상대의 낙관 상태를 지운다(카드가 한 번 스냅백하거나 오늘 3개 표시가 어긋난다). 그래서 낙관
+  // 패치는 한 엔트리로 한 번만 쓰고, 두 PATCH를 순차로 보낸 뒤 reload·clearPatch는 마지막에 한 번만.
+  const unfocusAndReschedule = async (item, bucketKey, dueAt) => {
+    const clearPatch = () => setItemPatches((p) => {
+      if (!(item.id in p)) return p;
+      const next = { ...p };
+      delete next[item.id];
+      return next;
+    });
+    setItemPatches((p) => ({ ...p, [item.id]: { bucket: bucketKey, whenAt: dueAt || null, focusToday: false } }));
+    setNotice({ tone: 'ok', label: '기한 변경됨' });
+    toast.info('기한 변경됨');
+    const patchTask = async (body, failLabel) => {
+      const res = await fetch('/api/hub/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: item.entityId, ...body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status !== 'saved') throw new Error(data.error || `${failLabel} ${res.status}`);
+    };
+    try {
+      await patchTask({ focus: { on: false } }, '오늘 3개 저장 실패');
+      await patchTask({ dueAt }, '기한 변경 실패');
+      reload().then((fresh) => { if (fresh) clearPatch(); }).catch(() => {}); // null = 실패/superseded → 패치 유지
+    } catch (error) {
+      clearPatch();
+      const msg = error instanceof Error ? error.message : String(error);
+      setNotice({ tone: 'err', label: msg });
+      toast.error(msg);
+    }
+  };
+
   const dropOnBucket = (bucketKey) => {
     const item = visible.find((i) => i.id === dragItemId);
     setDragItemId(null);
     if (!item || item.lane !== 'task' || bucketKey === 'overdue') return;
-    // 오늘 3개 열로 끌어오면 기한이 아니라 선택을 바꾼다. 고른 카드를 다른 열로 끌면 선택을 푼다.
+    // 오늘 3개 열로 끌어오면 기한이 아니라 선택을 바꾼다.
     if (bucketKey === 'focus') { toggleFocus(item, true); return; }
-    if (item.focusToday) { toggleFocus(item, false); return; }
     const seoulDate = (offsetDays) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(Date.now() + offsetDays * 86400000));
     const dueAt = bucketKey === 'today' ? seoulDate(0) : bucketKey === 'week' ? seoulDate(1) : null; // 'later' clears the date
+    // 고른 카드를 기한 열로 끌면 선택을 풀고 그 열로 옮긴다 — 선택만 풀면 카드가 드롭한 열이
+    // 아니라 자기 원래 기한 버킷(지남·나중)으로 튀어 드래그가 실패한 것처럼 보인다.
+    if (item.focusToday) { unfocusAndReschedule(item, bucketKey, dueAt); return; }
     rescheduleTask(item, dueAt);
   };
 
