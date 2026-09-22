@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-22 (Office 역할 지침·개별 회의 호출·설정 보존·UI QA 추가. 의미 품질 인증은 대기)
+> 마지막 정리: 2026-09-23 (09-cmac1.2 병합과 운영 DB 마이그레이션 0001·0034·0038·0037·0039~0041 적용, `db:check` 함수 본문 버전 검사. 이전 정리: 2026-09-22 Office 역할 지침·개별 회의 호출·설정 보존·UI QA, 의미 품질 인증은 대기)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -58,7 +58,7 @@
 | 브랜드 탭 | P0·P1 구현, P2~P5 제안 | `2026-08-29-brand-tab-design.md`, `3627eef` |
 | 개인 매출 30일 로드맵 | 출시, 디자인 QA `blocked` | `2026-08-31-personal-revenue-roadmap.md`, `68517ec`, 루트 `design-qa.md` |
 | 문의 수집·알림 | 코드 구현, 운영 연결 대기 | Gmail 감지·안전한 웹훅·문의 내역·미확인 알림. [설정](inquiry-integration-setup.md), [검증](superpowers/plans/2026-09-13-unified-inquiries.md) |
-| 업무 안의 Eevee Office E0~E4 | 구현·로컬 검증 / 운영 적용 대기 | 요청 중심 Office·입력 보존, 주간 정리·고객 답장, Threads 님피아 지침, 요청 보관·복구, 같은 범위 프로젝트의 할 일 연결, 작업·실행 보기. [구현 기록](superpowers/plans/2026-09-21-eevee-office-embedded-workflow.md). 신규 0038은 임시 PostgreSQL 검증만 완료했으며 운영 DB에는 미적용. 배포·보관 정리 예약은 미실행. 후속 실제 모델 평가는 아래 역할 품질 작업에서 진행 중 |
+| 업무 안의 Eevee Office E0~E4 | 구현·로컬 검증 / 운영 DB 적용(2026-09-23) | 요청 중심 Office·입력 보존, 주간 정리·고객 답장, Threads 님피아 지침, 요청 보관·복구, 같은 범위 프로젝트의 할 일 연결, 작업·실행 보기. [구현 기록](superpowers/plans/2026-09-21-eevee-office-embedded-workflow.md). 0038과 일시 실패 재시도 수정 0040(`20260922_0040_office_apply_transient_retry.sql`)을 2026-09-23 운영 DB에 적용했다(`db:check` PASS). 배포·보관 정리 예약은 미실행. 후속 실제 모델 평가는 아래 역할 품질 작업에서 진행 중 |
 | Office 역할 품질·토론 조절 | 구현·UI 로컬 검증 / 의미 품질 인증 대기 | [9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md), 같은 모델의 역할별 개별 호출·공개 반론·주관 종합, 상황/강도/관점 비중 설정과 요청 스냅샷·복구를 구현했다. source review는 원문에 기반한 같은 모델의 편집 보조이며 독립 검증이 아니다. Office UI 15개 시나리오와 기존 자문·진행률 18개 체크 완료. [실제 평가](evaluations/2026-09-22-office-agent-quality/README.md)는 최신 `scope-v1` 전체 39건이 모두 생성됐고 독립 심사 총점은 57~71점이다. 각 축·치명 오류·설정 대조를 포함한 최종 통과는 0/9명이며 품질 목표는 미달이다. 운영 배포를 뜻하지 않는다. [구현·QA 근거와 남은 평가](superpowers/plans/2026-09-22-office-agent-quality.md) |
 | Supabase 서울 리전 이관 | 이관 완료(2026-09-20) · Vercel 환경 변수 교체 대기 | `rwqefdxalmbrkybxqwxj`(싱가포르 `ap-southeast-1`) → `ncgpnqfulnlshegalmbd`(서울 `ap-northeast-2`). 테이블 71·1368행 **전부 행 수 일치**, `npm run db:check` 7/7 PASS, 앱 읽기(`status: live`)·쓰기 왕복 확인, REST 지연 150ms→57ms. 구 싱가포르 프로젝트는 롤백 경로로 **삭제하지 않고 보존**. 툴킷은 `npm run db:move-region`, 런북·함정(함수 실행 권한 회귀 등)은 [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md), 커밋 `fa1757e`. **Vercel 환경 변수는 아직 구 싱가포르 값이므로 배포 전 교체가 필요하다** |
 | 빠른 입력 전역화 | 구현 완료(2026-09-20) | 캡처 폼을 `daily-brief.jsx` 내부에서 `apps/hub/components/hub/quick-capture.jsx`로 분리해 단일 정본화(`layout="inline"`/`"compact"`). 전역 `C` 단축키(입력 요소 안·팔레트 열림이면 무시)와 ⌘K 팔레트의 `빠른 입력` 액션, 치트시트 등록까지 포함 — DESIGN.md §8.1 생성 단축키 계약을 따른다. 커밋 `6423822` |
@@ -176,7 +176,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`system-eval-2026-08-05.md`](system-eval-2026-08-05.md) — 재감사 1~30차 채점·조치 로그. 축별(안정성·속도·정체성·사용성·디자인·편의성·UIUX) 점수 추이와 각 차수의 지적·수리 내역. 기록 문서이므로 새 구현의 근거로는 §4의 최신 스펙을 우선한다.
 
-- [`evaluations/2026-09-21-measurable-personal-os-validation.md`](evaluations/2026-09-21-measurable-personal-os-validation.md) — **격리 워크트리 구현·로컬 검증 완료 / 운영 적용 별도**. 공통 목표·지표·근거/관측, 업무 연결, Gemini·구독형 MCP 후보/검토, 실제 DB·브라우저·모델 검증과 6축 평가. [실행 계약](superpowers/plans/2026-09-21-measurable-personal-os.md), [설정/적용 가이드](measurable-personal-os-operations.md). 후속 [최적화·UI/UX 개발안](superpowers/plans/2026-09-21-personal-os-optimization-and-experience.md)은 미확정 제안이다.
+- [`evaluations/2026-09-21-measurable-personal-os-validation.md`](evaluations/2026-09-21-measurable-personal-os-validation.md) — **격리 워크트리 구현·로컬 검증 완료 / 운영 적용 별도**. 공통 목표·지표·근거/관측, 업무 연결, Gemini·구독형 MCP 후보/검토, 실제 DB·브라우저·모델 검증과 6축 평가. [실행 계약](superpowers/plans/2026-09-21-measurable-personal-os.md), [설정/적용 가이드](measurable-personal-os-operations.md). 운영 DB에는 0036·0037이 적용돼 있었으나 목표 명령이 운영에 없는 `public.digest`(pgcrypto는 `extensions` 스키마)를 불러 쓰기가 한 번도 성공하지 못했다 — 2026-09-23 `0039`(해시 수정)·`0041`(AI 권한·NULL 검증 보강)을 적용해 해소. 후속 [최적화·UI/UX 개발안](superpowers/plans/2026-09-21-personal-os-optimization-and-experience.md)은 미확정 제안이다.
 
 ### 아키텍처·데이터 정본
 
