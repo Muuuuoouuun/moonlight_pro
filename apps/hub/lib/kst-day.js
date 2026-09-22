@@ -8,6 +8,14 @@
 const TIME_ZONE = "Asia/Seoul";
 const DAY_MS = 86400000;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+// en-CA는 YYYY-MM-DD를 준다. 포맷터 생성은 포맷 호출보다 비싸고 이 함수는 요청 하나에서 수백 번
+// 불리므로(attention·followups·daily-brief의 행 단위 dueBucket) 모듈 스코프에 한 번만 만든다.
+const KST_DAY_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 // ISO/Date → 'YYYY-MM-DD'(KST). 날짜만 있는 문자열은 그대로 통과시킨다 — UTC 자정으로
 // 파싱했다가 다시 KST로 포맷하면 하루가 밀릴 수 있다.
@@ -16,13 +24,7 @@ export function kstDayKey(value) {
   if (DATE_ONLY.test(String(value))) return String(value);
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  // en-CA는 YYYY-MM-DD를 준다.
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+  return KST_DAY_FORMAT.format(date);
 }
 
 // 달력 일수 차이(toKey - fromKey). 한쪽이라도 비면 0.
