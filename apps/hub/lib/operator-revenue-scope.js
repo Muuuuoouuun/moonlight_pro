@@ -25,7 +25,7 @@ const FOCUS_OVERRIDE_BOOST = { raise: 1, default: 0, lower: -1 };
 // 후속 단계). 정렬에서만 뒤로 보낸다.
 const DUE_SOON_DAYS = 3;
 
-function dueRank(lead, todayKey, soonKey) {
+function dueRank(lead, soonKey) {
   const key = kstDayKey(lead?.nextActionAt);
   if (!key) return 1;
   return key <= soonKey ? 0 : 1;
@@ -38,7 +38,6 @@ function dueRank(lead, todayKey, soonKey) {
 // 리드는 구조적으로 집중 고객이 될 수 없었다(프로필 §8의 정의와 반대). 동시에 그 lane의
 // nextAction은 대부분 이관 템플릿이라 첫 화면 5행이 같은 문장을 반복했다.
 export function selectOperatorFocusLeads(revenue = {}, { limit = 3, now = new Date() } = {}) {
-  const todayKey = kstDayKey(now instanceof Date ? now : new Date(now));
   const soonKey = kstDayKey(new Date((now instanceof Date ? now.getTime() : Number(now) || Date.now()) + DUE_SOON_DAYS * 86400000));
 
   const ranked = filterOperatorOwnedRevenue(revenue).leads
@@ -55,7 +54,7 @@ export function selectOperatorFocusLeads(revenue = {}, { limit = 3, now = new Da
       const overrideDelta =
         (FOCUS_OVERRIDE_BOOST[right.focusOverride] || 0) - (FOCUS_OVERRIDE_BOOST[left.focusOverride] || 0);
       if (overrideDelta) return overrideDelta;
-      const dueDelta = dueRank(left, todayKey, soonKey) - dueRank(right, todayKey, soonKey);
+      const dueDelta = dueRank(left, soonKey) - dueRank(right, soonKey);
       if (dueDelta) return dueDelta;
       const scoreDelta = (Number(right.score) || 0) - (Number(left.score) || 0);
       if (scoreDelta) return scoreDelta;

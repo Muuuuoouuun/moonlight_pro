@@ -258,7 +258,9 @@ export async function POST(req: Request) {
   const maxOutputTokens =
     typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192;
 
-  const isCouncilMode = mode === "sparring" || requestedMode === "council" || legendIds.length > 0;
+  // `council`은 MODES 키가 아니라 resolveAdvisoryMode가 위에서 400으로 끊는다 — 여기서 다시
+  // 받아주면 이 route가 그 mode를 여전히 지원하는 것처럼 읽힌다.
+  const isCouncilMode = mode === "sparring" || legendIds.length > 0;
   const explicitDirectives = payload.directives ?? (payload.values || payload.knowledge ? { values: payload.values, knowledge: payload.knowledge } : null);
   const combinedDirectives = explicitDirectives ? {
     ...explicitDirectives,
