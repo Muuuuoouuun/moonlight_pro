@@ -387,50 +387,31 @@ test("patches a task description without touching other fields", () => {
   });
 });
 
-test("normalizes a focus_dates pick, merging under patch.meta without an optimistic-lock filter", () => {
-  const result = pmsCommand.normalizePmsCommand({
-    action: "update_task",
-    id: "55555555-5555-4555-8555-555555555555",
-    focusDates: ["2026-09-20", "2026-09-22"],
-  }, {
-    workspaceId: "33333333-3333-4333-8333-333333333333",
-    now: "2026-09-22T01:30:00.000Z",
-  });
-
-  assert.deepEqual(result, {
-    ok: true,
-    action: "update_task",
-    table: "tasks",
-    filters: [
-      ["id", "eq.55555555-5555-4555-8555-555555555555"],
-      ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
-    ],
-    patch: {
-      meta: { focus_dates: ["2026-09-20", "2026-09-22"] },
-      updated_at: "2026-09-22T01:30:00.000Z",
-    },
-  });
-});
-
-test("rejects malformed or duplicate focus_dates entries", () => {
+// 2026-09-23 통합: "오늘 3개"가 두 계약(배열 focusDates / 토글 focus)으로 중복 구현돼 있었다.
+// 토글 하나만 남기고 배열은 서버 소유로 닫는다 — 이 테스트는 옛 배열 경로(e0e5c80)의 입력이
+// 어떤 모양이든(정상·형식 오류·중복·불가능한 날짜) 쓰기 전에 거절되는지 고정한다.
+test("rejects client-sent focus_dates arrays — the pick history is server-owned", () => {
   const context = {
     workspaceId: "33333333-3333-4333-8333-333333333333",
     now: "2026-09-22T01:30:00.000Z",
   };
   const id = "55555555-5555-4555-8555-555555555555";
 
-  assert.deepEqual(pmsCommand.normalizePmsCommand({
-    action: "update_task", id, focusDates: "2026-09-22",
-  }, context), { ok: false, reason: "invalid-focus-dates" });
-  assert.deepEqual(pmsCommand.normalizePmsCommand({
-    action: "update_task", id, focusDates: ["not-a-date"],
-  }, context), { ok: false, reason: "invalid-focus-dates" });
-  assert.deepEqual(pmsCommand.normalizePmsCommand({
-    action: "update_task", id, focusDates: ["2026-09-22", "2026-09-22"],
-  }, context), { ok: false, reason: "invalid-focus-dates" });
-  assert.deepEqual(pmsCommand.normalizePmsCommand({
-    action: "update_task", id, focus_dates: ["2026-02-30"],
-  }, context), { ok: false, reason: "invalid-focus-dates" });
+  for (const input of [
+    { focusDates: ["2026-09-20", "2026-09-22"] },
+    { focusDates: "2026-09-22" },
+    { focusDates: ["not-a-date"] },
+    { focusDates: ["2026-09-22", "2026-09-22"] },
+    { focus_dates: ["2026-02-30"] },
+    // 토글과 같이 와도 배열은 받지 않는다 — 우회 경로를 남기지 않는다.
+    { focus: true, focusDates: ["2026-09-22"] },
+  ]) {
+    assert.deepEqual(
+      pmsCommand.normalizePmsCommand({ action: "update_task", id, ...input }, context),
+      { ok: false, reason: "focus-dates-read-only" },
+      JSON.stringify(input),
+    );
+  }
 });
 
 test("normalizes an editable project patch without changing workspace ownership", () => {
@@ -726,4 +707,49 @@ test('project item types and dated steps normalize together and require versione
   assert.equal(updated.ok, true);
   assert.equal(updated.patch.meta.item_type, 'milestone');
   assert.equal(updated.patch.meta.checklist[0].dueAt, '2026-09-22');
+});
+
+// ── 오늘 Top 3 (meta.focus_dates) — 2026-09-20 세 축·Action KPI 기획 §6.2 ──────────────
+
+test("update_task accepts a focus toggle without any other field", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focus: { on: true, date: "2026-09-21" },
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-21T01:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.focus, { on: true, date: "2026-09-21" });
+  // 토글만 보내도 empty-patch가 아니다 — 서비스가 focus_dates를 meta에 병합한다.
+  assert.deepEqual(result.patch, { updated_at: "2026-09-21T01:00:00.000Z" });
+});
+
+test("update_task focus shorthand and missing date resolve on the server side", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focus: false,
+  }, { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-21T01:00:00.000Z" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.focus, { on: false, date: null });
+});
+
+test("update_task rejects malformed focus toggles and impossible dates", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-21T01:00:00.000Z" };
+  const id = "55555555-5555-4555-8555-555555555555";
+
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: "today" }, context), { ok: false, reason: "invalid-focus" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: "yes" } }, context), { ok: false, reason: "invalid-focus" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: true, date: "2026-02-30" } }, context), { ok: false, reason: "invalid-focus-date" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: true, date: "21/09/2026" } }, context), { ok: false, reason: "invalid-focus-date" });
+});
+
+test("zonedDateKey renders the operator day in Asia/Seoul", () => {
+  // 2026-09-20 23:30 UTC is already 2026-09-21 in Seoul.
+  assert.equal(pmsCommand.zonedDateKey("2026-09-20T23:30:00.000Z"), "2026-09-21");
+  assert.equal(pmsCommand.MAX_FOCUS_PER_DAY, 3);
 });

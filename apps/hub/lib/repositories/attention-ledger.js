@@ -9,8 +9,10 @@ import { getInquiriesLedger } from './inquiries-ledger.js';
 // live tasks as preview, and vice versa).
 //
 // Item contract (minimal on purpose — the surface shows 핵심 정보만):
-//   { id, lane: 'task'|'deal'|'event', title, bucket: 'overdue'|'today'|'week'|'later',
+//   { id, lane: 'task'|'deal'|'event', title, bucket: 'focus'|'overdue'|'today'|'week'|'later',
 //     whenAt, whenLabel, recencyAt, meta, href, status, done }
+// `focus` bucket = 사람이 오늘로 고른 할 일(meta.focus_dates에 오늘이 있음, 2026-09-20 §6.2).
+// 기한 기준 버킷은 `dueBucket`에 그대로 남겨 지난 기한 표시(빨간 날짜)를 잃지 않는다.
 // `href` is a hub deep-link (deals open their native drawer); tasks carry `status` so the
 // list can complete them durably through PATCH /api/hub/tasks.
 
@@ -23,6 +25,7 @@ import { getRevenueLedger } from "./revenue-ledger.js";
 import { isDealStalled } from "../deal-stages.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
 import { dueBucket, kstDayKey } from "../kst-day.js";
+import { isFocusedOn, summarizeFocusDay } from "../task-today.js";
 
 const TIME_ZONE = "Asia/Seoul";
 const DAY_MS = 86400000;
@@ -69,7 +72,10 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
     .filter((t) => !t.done)
     .map((t) => {
       const project = t.project ? projectById.get(t.project) : null;
-      const isFocusToday = Array.isArray(t.focusDates) && t.focusDates.includes(todayKey);
+      // 기한 기준 버킷(kst-day.js dueBucket)은 따로 남긴다 — 오늘 3개로 고른 행도 지난 기한의
+      // 빨간 날짜·레일을 잃지 않게(2026-09-20 §6.2).
+      const itemDueBucket = bucketFor(t.dueAt, todayKey, weekEndKey);
+      const focusToday = isFocusedOn(t, todayKey);
       return {
         id: `task-${t.id}`,
         entityId: t.id,
@@ -79,11 +85,12 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
         // 없으면 드로어 저장이 기존 설명을 확인할 길 없이 진행된다.
         description: t.description || "",
         sourceRefs: t.sourceRefs || [],
-        // 오늘 고른 "오늘 3개"(§6.2) — 기존 overdue/today/week/later 버킷 어휘(보드 컬럼·
-        // 드래그·뮤트가 전부 이 넷을 전제)는 그대로 두고, 최상단 고정용 신호만 더한다.
-        focusDates: t.focusDates || [],
-        isFocusToday,
-        bucket: bucketFor(t.dueAt, todayKey, weekEndKey),
+        // 오늘 고른 "오늘 3개"(§6.2)는 `focus` 버킷으로 올리고, 기한 버킷은 dueBucket에 보존한다.
+        // 내 작업의 BUCKETS·보드 열·시그널 타일이 `focus`를 1급 버킷으로 다룬다.
+        bucket: focusToday ? "focus" : itemDueBucket,
+        dueBucket: itemDueBucket,
+        focusToday,
+        focusDates: Array.isArray(t.focusDates) ? t.focusDates : [],
         whenAt: t.dueAt || "",
         whenLabel: t.dueAt ? shortDate(t.dueAt) : "기한 없음",
         recencyAt: t.updatedAt || "",
@@ -169,11 +176,11 @@ function assignPriority(item, leadScoreByDealEntityId) {
   const leadScore = item.lane === "deal" ? leadScoreByDealEntityId.get(item.entityId) || 0 : 0;
   const stageRank = item.lane === "deal" ? STAGE_PRIORITY_RANK[item.status] || 0 : 0;
 
-  // 0. 오늘 사람이 고른 "오늘 3개"(§6.2) — 기한 지난 약속보다도 위, 늘 최상단.
-  // bucket(overdue/today/week/later)은 그대로 두고 우선순위만 끌어올린다.
-  if (item.isFocusToday) {
+  // 0. 오늘 3개 — 운영자가 직접 고른 할 일은 시스템 규칙보다 앞선다(2026-09-20 §6.2).
+  if (item.lane === "task" && item.focusToday) {
     return { priorityScore: 6000, priorityReason: "오늘 3개" };
   }
+
   // 1. 기한 지난 약속 — older overdue first (larger daysPast → higher).
   if (item.bucket === "overdue") {
     const daysPast = Math.min(90, Math.round((Date.now() - new Date(item.whenAt).getTime()) / DAY_MS) || 0);
@@ -308,9 +315,16 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     ...mapEventItems(calendar?.items, todayKey, weekEndKey),
   ].map((item) => ({ ...item, ...assignPriority(item, leadScoreByDealEntityId) }));
 
+  // 오늘 3개 요약(선택 수·완료 수) — 완료된 선택은 items에서 빠지므로 목록만 세면 3건 상한을
+  // 잘못 읽는다. 할 일 기록 전체(todos, 완료 포함)에서 세어 내 작업 타일·토글 비활성이 서버 판정과 같게.
+  const focusToday = taskLedgerReadable
+    ? summarizeFocusDay(projectLedger?.todos || [], { now })
+    : null;
+
   return {
     todayKey,
     sources,
+    focusToday,
     failedSources: sourceFailures.map((failure) => failure.source),
     sourceFailures,
     calendarReason: calendar?.ok ? "" : calendar?.reason || "",

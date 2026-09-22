@@ -18,6 +18,8 @@ export function useDailyReview() {
   const [draft, setDraft] = React.useState(() => blankReviewDraft(todayIn()));
   const [review, setReview] = React.useState(null);
   const [entries, setEntries] = React.useState([]);
+  // 저녁 리뷰의 읽기 전용 두 줄(오늘 3개·연락) — 서버가 같은 응답에 실어 보낸다.
+  const [today, setToday] = React.useState(null);
   const [source, setSource] = React.useState('loading');
   const [loadMessage, setLoadMessage] = React.useState('');
   const [saveState, setSaveState] = React.useState('idle');
@@ -59,6 +61,7 @@ export function useDailyReview() {
         attemptRef.current = restored.attempt;
         setConflict(restored.conflict);
         setEntries(state === 'live' && Array.isArray(data.entries) ? data.entries : []);
+        setToday(state === 'live' && data.today && typeof data.today === 'object' ? data.today : null);
         setSource(state);
         setLoadMessage(state === 'preview' ? '저장소 연결이 필요해요. 입력은 이 창에 보관됩니다.' : data.message || '기록을 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.');
         if (restored.recovered) setMessage('이 창에 보관된 미저장 입력을 불러왔어요.');
@@ -157,7 +160,7 @@ export function useDailyReview() {
       : source !== 'live' ? '연결되면 이 날짜의 기록을 확인할 수 있어요.'
         : review ? '저장된 기록입니다. 수정해서 다시 저장할 수 있어요.' : '아직 이 날짜에 저장된 기록이 없어요.';
   return {
-    date: selectedDate || draft.reviewDate, timezone, draft, review, entries,
+    date: selectedDate || draft.reviewDate, timezone, draft, review, entries, today,
     source, loadMessage, saveState, message, conflict, dirty, busy, idleMessage,
     edit, chooseDate, save, useSavedRecord, refresh: () => setReload((value) => value + 1),
   };

@@ -93,6 +93,9 @@ export async function recordActivity({
   pinned = false,
   ownerId = null,
   occurredAt = null,
+  // crm_activities.meta(0016) — 딜 단계 이동의 {from,to}, 메모 채택의 source_journal_ids 같은
+  // 구조화 꼬리표. 컬럼은 있었지만 이 helper가 한 번도 실어 보내지 않았다(2026-09-20 §6.3).
+  meta = null,
 } = {}) {
   if (!workspaceId) return { persisted: false, reason: "missing-workspace" };
   if (!leadId && !dealId && !accountId) {
@@ -113,6 +116,7 @@ export async function recordActivity({
       pinned: Boolean(pinned),
       owner_id: ownerId || null,
       occurred_at: occurredAt || new Date().toISOString(),
+      ...(meta && typeof meta === "object" && !Array.isArray(meta) ? { meta } : {}),
     },
     { returnRepresentation: true, select: "*" },
   );

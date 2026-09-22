@@ -86,106 +86,6 @@ test("applies a workspace-scoped task status update", async () => {
   });
 });
 
-test("persists a focus_dates pick under the 3-per-day cap, merged with existing metadata", async () => {
-  const updates = [];
-  const result = await pmsService.executePmsCommand({
-    action: "update_task",
-    id: "55555555-5555-4555-8555-555555555555",
-    focusDates: ["2026-09-22"],
-  }, {
-    workspaceId: "33333333-3333-4333-8333-333333333333",
-    now: "2026-09-22T01:00:00.000Z",
-  }, {
-    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
-    update: async (table, filters, patch) => {
-      updates.push({ table, filters, patch });
-      return { persisted: true, reason: "ok" };
-    },
-    fetchRows: async () => [{ id: "55555555-5555-4555-8555-555555555555", meta: { source: "manual" } }],
-    countRows: async () => 1,
-  });
-
-  assert.deepEqual(updates[0].patch.meta, { source: "manual", focus_dates: ["2026-09-22"] });
-  assert.equal(result.status, "saved");
-});
-
-test("rejects a 4th same-day focus pick without writing the task", async () => {
-  const updates = [];
-  const result = await pmsService.executePmsCommand({
-    action: "update_task",
-    id: "55555555-5555-4555-8555-555555555555",
-    focusDates: ["2026-09-22"],
-  }, {
-    workspaceId: "33333333-3333-4333-8333-333333333333",
-    now: "2026-09-22T01:00:00.000Z",
-  }, {
-    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
-    update: async (table, filters, patch) => {
-      updates.push({ table, filters, patch });
-      return { persisted: true, reason: "ok" };
-    },
-    fetchRows: async () => [{ id: "55555555-5555-4555-8555-555555555555", meta: {} }],
-    countRows: async () => 3,
-  });
-
-  assert.deepEqual(updates, []);
-  assert.deepEqual(result, { status: "invalid-input", error: "focus-limit-reached" });
-});
-
-test("skips the cap check when unselecting today or re-saving an already-picked day", async () => {
-  const countCalls = [];
-  const countRows = async () => { countCalls.push(1); return 0; };
-
-  const unselect = await pmsService.executePmsCommand({
-    action: "update_task",
-    id: "55555555-5555-4555-8555-555555555555",
-    focusDates: ["2026-09-20"],
-  }, {
-    workspaceId: "33333333-3333-4333-8333-333333333333",
-    now: "2026-09-22T01:00:00.000Z",
-  }, {
-    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
-    update: async () => ({ persisted: true, reason: "ok" }),
-    fetchRows: async () => [{ id: "55555555-5555-4555-8555-555555555555", meta: { focus_dates: ["2026-09-20", "2026-09-22"] } }],
-    countRows,
-  });
-  assert.equal(unselect.status, "saved");
-
-  const resave = await pmsService.executePmsCommand({
-    action: "update_task",
-    id: "55555555-5555-4555-8555-555555555555",
-    focusDates: ["2026-09-22"],
-  }, {
-    workspaceId: "33333333-3333-4333-8333-333333333333",
-    now: "2026-09-22T01:00:00.000Z",
-  }, {
-    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
-    update: async () => ({ persisted: true, reason: "ok" }),
-    fetchRows: async () => [{ id: "55555555-5555-4555-8555-555555555555", meta: { focus_dates: ["2026-09-22"] } }],
-    countRows,
-  });
-  assert.equal(resave.status, "saved");
-  assert.deepEqual(countCalls, []);
-});
-
-test("fails closed when the focus-limit count is unavailable", async () => {
-  const result = await pmsService.executePmsCommand({
-    action: "update_task",
-    id: "55555555-5555-4555-8555-555555555555",
-    focusDates: ["2026-09-22"],
-  }, {
-    workspaceId: "33333333-3333-4333-8333-333333333333",
-    now: "2026-09-22T01:00:00.000Z",
-  }, {
-    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
-    update: async () => ({ persisted: true, reason: "ok" }),
-    fetchRows: async () => [{ id: "55555555-5555-4555-8555-555555555555", meta: {} }],
-    countRows: async () => null,
-  });
-
-  assert.deepEqual(result, { status: "error", error: "focus-limit-check-failed" });
-});
-
 test("treats a retried client-generated create id as the same durable entity", async () => {
   const existing = {
     id: "55555555-5555-4555-8555-555555555555",
@@ -846,4 +746,155 @@ test("keeps a network relationship lookup failure in the 502 error taxonomy", as
     error: "relationship-check-failed",
     detail: "request-failed",
   });
+});
+
+// ── 오늘 Top 3 — meta.focus_dates 병합과 3건 상한 (2026-09-20 §6.2) ───────────────────
+
+const FOCUS_WS = "33333333-3333-4333-8333-333333333333";
+const FOCUS_TASK = "55555555-5555-4555-8555-555555555555";
+
+function focusDependencies({ meta = {}, othersToday = 0, updates = [], reads = [] } = {}) {
+  return {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async (table, filters, patch) => {
+      updates.push({ table, filters, patch });
+      return { persisted: true, reason: "ok", records: [{ id: FOCUS_TASK, ...patch }] };
+    },
+    fetchRows: async (table, options = {}) => {
+      reads.push({ table, options });
+      const filters = options.filters || [];
+      // 같은 날짜를 고른 다른 할 일 수 — jsonb containment 필터로 구분한다.
+      if (table === "tasks" && filters.some(([key]) => key === "meta->focus_dates")) {
+        return Array.from({ length: othersToday }, (_, i) => ({ id: `other-${i}` }));
+      }
+      if (table === "tasks") return [{ id: FOCUS_TASK, meta, updated_at: "2026-09-21T00:00:00.000Z" }];
+      return [];
+    },
+  };
+}
+
+test("focus on appends today's key to meta.focus_dates and keeps the picked history", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: true } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    focusDependencies({ meta: { checklist: [], focus_dates: ["2026-09-18"] }, othersToday: 2, updates }),
+  );
+
+  assert.equal(result.status, "saved");
+  assert.equal(updates.length, 1);
+  // 날짜를 생략하면 서버가 KST 오늘로 푼다. 이전 선택(09-18)은 보존된다.
+  assert.deepEqual(updates[0].patch.meta, { checklist: [], focus_dates: ["2026-09-18", "2026-09-21"] });
+});
+
+test("focus on is refused with a conflict once three other tasks already hold the day", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: true, date: "2026-09-21" } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    focusDependencies({ meta: {}, othersToday: 3, updates }),
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.equal(result.error, "focus-limit");
+  assert.equal(result.limit, 3);
+  assert.equal(result.date, "2026-09-21");
+  assert.equal(updates.length, 0, "상한에 걸리면 아무것도 쓰지 않는다");
+});
+
+test("focus on is idempotent and does not count the task itself against the cap", async () => {
+  const updates = [];
+  const reads = [];
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: true, date: "2026-09-21" } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    focusDependencies({ meta: { focus_dates: ["2026-09-21"] }, othersToday: 3, updates, reads }),
+  );
+
+  assert.equal(result.status, "saved");
+  assert.deepEqual(updates[0].patch.meta, { focus_dates: ["2026-09-21"] });
+  assert.ok(!reads.some((r) => r.options?.filters?.some(([key]) => key === "meta->focus_dates")), "이미 골라져 있으면 상한 조회를 하지 않는다");
+});
+
+test("focus off removes only that day and leaves other picked days intact", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: false, date: "2026-09-21" } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    focusDependencies({ meta: { focus_dates: ["2026-09-18", "2026-09-21"] }, updates }),
+  );
+
+  assert.equal(result.status, "saved");
+  assert.deepEqual(updates[0].patch.meta, { focus_dates: ["2026-09-18"] });
+});
+
+test("focus cap query uses jsonb containment scoped to the workspace", async () => {
+  const reads = [];
+  await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: true, date: "2026-09-21" } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    focusDependencies({ meta: {}, othersToday: 0, reads }),
+  );
+
+  const capRead = reads.find((r) => r.options?.filters?.some(([key]) => key === "meta->focus_dates"));
+  assert.ok(capRead);
+  assert.deepEqual(capRead.options.filters, [
+    ["workspace_id", `eq.${FOCUS_WS}`],
+    ["meta->focus_dates", 'cs.["2026-09-21"]'],
+  ]);
+});
+
+// 아래 셋은 옛 배열 계약(e0e5c80, focusDates + countRows)의 서비스 테스트를 토글 계약으로 옮긴 것이다
+// (2026-09-23 통합). 같은 행동 — 해제·재선택은 상한 조회를 건너뜀, 상한 조회 실패는 닫힘, 클라이언트
+// 배열 우회 차단 — 을 하나의 코드 경로에서 고정한다.
+
+test("focus off and a re-pick of an already-picked day never run the cap query", async () => {
+  const reads = [];
+  const off = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: false } },
+    { workspaceId: FOCUS_WS, now: "2026-09-22T01:00:00.000Z" },
+    focusDependencies({ meta: { focus_dates: ["2026-09-20", "2026-09-22"] }, othersToday: 3, reads }),
+  );
+  assert.equal(off.status, "saved");
+
+  const repick = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: true },
+    { workspaceId: FOCUS_WS, now: "2026-09-22T01:00:00.000Z" },
+    focusDependencies({ meta: { focus_dates: ["2026-09-22"] }, othersToday: 3, reads }),
+  );
+  assert.equal(repick.status, "saved");
+  assert.ok(!reads.some((r) => r.options?.filters?.some(([key]) => key === "meta->focus_dates")), "해제·재선택은 상한 조회를 하지 않는다");
+});
+
+test("focus on fails closed without writing when the cap read is unavailable", async () => {
+  const updates = [];
+  const deps = focusDependencies({ meta: {}, updates });
+  const fetchRows = deps.fetchRows;
+  deps.fetchRows = async (table, options = {}) => (
+    (options.filters || []).some(([key]) => key === "meta->focus_dates") ? null : fetchRows(table, options)
+  );
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: true } },
+    { workspaceId: FOCUS_WS, now: "2026-09-22T01:00:00.000Z" },
+    deps,
+  );
+
+  assert.equal(result.status, "error");
+  assert.equal(result.error, "focus-count-read-failed");
+  assert.equal(updates.length, 0);
+});
+
+test("a client-sent focus_dates array is refused before any read or write", async () => {
+  const updates = [];
+  const reads = [];
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focusDates: ["2026-09-22"] },
+    { workspaceId: FOCUS_WS, now: "2026-09-22T01:00:00.000Z" },
+    focusDependencies({ meta: {}, othersToday: 0, updates, reads }),
+  );
+
+  assert.equal(result.status, "invalid-input");
+  assert.equal(result.error, "focus-dates-read-only");
+  assert.equal(updates.length, 0);
+  assert.equal(reads.length, 0);
 });

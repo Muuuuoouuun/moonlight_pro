@@ -81,6 +81,21 @@ Guru는 이 공백을 메운다.
 | `proposal-critique` | 사용자가 붙인 초안 텍스트 | 구조/설득력 피드백 3점 |
 | `weekly-retro` | 최근 7일 deal 이동 + won/lost | 패턴 + 다음 주 1개 실험 |
 
+위 4개는 **자문(advisory) 모드**로, 사람이 읽는 산문을 `text` 필드에 담아 돌려준다.
+아래는 기계가 소비하는 **초안(draft) 모드**다. Hub Vercel Cron이 응답을 그대로 `work_orders`
+제안으로 만들기 때문에 산문이 아니라 이름 붙은 필드를 반환한다.
+
+| Draft mode | 호출자 | 입력 컨텍스트 | 출력 (JSON) |
+| --- | --- | --- | --- |
+| `followup-draft` | `apps/hub/app/api/cron/followup-autopilot` | `context.focus` (딜·구매자 스타일·최근 접촉) | `{ subject, body }` |
+| `content-draft` | `apps/hub/app/api/cron/content-flywheel` | `context.target_idea` (큐에서 고른 아이디어) | `{ title, body }` |
+
+초안 모드는 `responseMimeType: "application/json"` + 제한된 thinking budget으로 생성하고,
+파싱에 실패하면 `502 invalid-draft-json`으로 실패한다 — 부분 초안을 승인 큐에 넣지 않는다.
+알 수 없는 mode는 조용히 대체되지 않고 provider 호출 전에 `400 { status: "invalid-input", error: "unsupported-mode", modes, draftModes }`로 거절된다.
+계약 정본: `apps/engine/lib/ai-draft-modes.ts` (Engine) ↔ `apps/hub/lib/sales-os/draft-contract.js` (크론),
+양쪽 합치 여부는 `apps/hub/lib/sales-os/draft-contract.test.mjs`가 지킨다.
+
 ### 5.1 구매자 의사결정 스타일 적응 (cross-cutting)
 
 `docs/sales-decision-styles.md`의 7스타일(논리형·관계형·권위형·직관형·안정형·체면형·집단합의형)은

@@ -34,7 +34,9 @@ test('overview charts use a monochrome Moonstone scale and reserve danger for bl
 test('urgent rails stay one pixel while non-urgent timing remains neutral', () => {
   const myWork = page('my-work');
   const followups = page('followups');
-  assert.match(myWork, /item\.bucket === 'overdue' \? 'inset 1px 0 0 var\(--danger\)'/);
+  // 내 작업의 레일은 기한 버킷(dueBucket)을 따른다 — 오늘 3개(`focus` 버킷)로 고른 행도
+  // 지난 기한이면 빨간 1px 레일을 잃지 않는다(2026-09-20 §6.2, workflow-os-a).
+  assert.match(myWork, /dueBucket === 'overdue' \? 'inset 1px 0 0 var\(--danger\)'/);
   // 고객 연락의 레일은 2026-09-21부터 예산이 걸려 있다: 어긴 약속 상단 MAX_DANGER_RAILS개만
   // 레일을 받고 나머지는 시계 글리프 + 직접 라벨로 같은 사실을 말한다(§5.3 red budget).
   assert.match(followups, /boxShadow: rail \? "inset 1px 0 0 var\(--danger\)" : undefined/);
