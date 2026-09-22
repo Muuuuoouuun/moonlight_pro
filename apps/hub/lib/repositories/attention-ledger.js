@@ -22,32 +22,14 @@ import { getTaskLedger } from "./operating-ledger.js";
 import { getRevenueLedger } from "./revenue-ledger.js";
 import { isDealStalled } from "../deal-stages.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
+import { dueBucket, kstDayKey } from "../kst-day.js";
 
 const TIME_ZONE = "Asia/Seoul";
 const DAY_MS = 86400000;
 
-function dateKey(value) {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-  return parts; // en-CA gives YYYY-MM-DD
-}
-
-function bucketFor(whenAt, todayKey, weekEndKey) {
-  const key = dateKey(whenAt);
-  if (!key) return "later";
-  if (key < todayKey) return "overdue";
-  if (key === todayKey) return "today";
-  if (key <= weekEndKey) return "week";
-  return "later";
-}
+// KST 날짜 경계는 kst-day.js가 정본 — 고객 연락 큐도 같은 함수를 쓴다(사본 금지).
+const dateKey = kstDayKey;
+const bucketFor = dueBucket;
 
 function shortDate(value) {
   if (!value) return "";

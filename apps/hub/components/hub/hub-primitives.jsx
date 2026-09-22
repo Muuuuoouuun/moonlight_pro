@@ -991,15 +991,18 @@ export function ChipToggle({ label, selected, onChange, style }) {
   );
 }
 
-export function SegmentedControl({ options, value, onChange, className, style, label, fill, size = 'sm' }) {
+export function SegmentedControl({ options, value, onChange, className, style, label, fill, size = 'sm', invalid = false }) {
   const scale = SEGMENT_SCALE[size] || SEGMENT_SCALE.sm;
   // 색·배경·보더는 hub-tokens.css의 .hub-seg / .hub-seg__btn이 소유한다 — 인라인이면 어떤
   // :hover/전이도 붙지 않는다(§15 2026-09-15 Button과 같은 cascade). 크기 스케일만 인라인.
+  // `invalid`도 같은 이유로 DOM 속성으로만 노출한다: 호출처가 인라인 border를 얹으면 숏핸드가
+  // 나머지 롱핸드를 지워 보더가 currentColor로 떨어졌다(customers.jsx가 쓰던 우회).
   return (
     <div
       className={['hub-seg', className].filter(Boolean).join(' ')}
       role="group"
       aria-label={label}
+      data-invalid={invalid ? '' : undefined}
       style={{ display: 'flex', gap: 2, borderRadius: 'var(--r-sm)', padding: 2, ...style }}
     >
       {options.map(o => {

@@ -10,6 +10,7 @@ import {
   isContactTrackingEligible,
 } from "@/lib/sales-os/contact-tracking";
 import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
+import { isTemplateNextAction } from "../sales-os/lead-enrichment.js";
 import { SUBJECT_KEY_SET, absorbSubjectTags } from "../sales-os/lead-labels.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 
@@ -193,6 +194,11 @@ export function mapLead(row, companyById, contactById, trackingStartedAt = null,
     contactEmail: contact?.email || null,
     contactPhone: contact?.phone || null,
     contactTitle: contact?.title || null,
+    // record_contact_outcome_v1이 남기는 마지막 반응 — 첫 화면 집중 고객 행이 서로 다른
+    // 말을 하게 만드는 유일한 사실이다(0c). 없으면 null.
+    lastReaction: meta.last_reaction || null,
+    // 이관 스크립트가 채운 문장인지 — 집중 고객 후보에서 제외하는 근거.
+    nextActionIsTemplate: isTemplateNextAction(enrichmentView.nextAction),
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
     // Raw ISO timestamps for the Leads table's default sort cascade — `last` above is a
     // display string (e.g. "3일 전") and can't be re-parsed back into chronological order.
@@ -223,6 +229,11 @@ export function mapDeal(row, companyById, trackingStartedAt = null) {
     id: row.id,
     leadId: row.lead_id || null, // ties the deal back to its lead (deep-link + focus context)
     companyId: row.company_id || null, // account 행에서 딜 파이프라인을 붙이는 조인 키
+    // 넛지 엔진이 리드와 같은 모양으로 읽는다 — 리드에만 있던 투영을 딜에도 맞춘다.
+    companyName: company?.name || null,
+    nextActionAt: row.meta?.next_action_at || null,
+    dormant: Boolean(row.meta?.dormant),
+    dormantSince: row.meta?.dormant_since || null,
     name,
     type,
     // Scoping tags — workspace-map matches on these; round-trip target for scoped creates.

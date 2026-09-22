@@ -51,3 +51,30 @@ export function momentumScore({ lastAction = null, ageDays = null, replies = 0, 
   s += meetings * 12 + replies * 6 - noResponses * 8;
   return Math.max(0, Math.min(100, Math.round(s)));
 }
+
+// ── crm_activities → 학습 어휘 (2026-09-21 0a) ──────────────────────────────────────
+// 연락 결과의 저장소는 crm_activities 하나다 — UI 두 곳(고객 DB 컨택 시트·고객 연락 인라인
+// 폼)이 record_contact_outcome_v1로 쓴다. 큐의 boost·momentum은 위 outreach 어휘
+// (ACTION_MOMENTUM)를 그대로 쓰므로 kind·reaction을 그 어휘로 접는다. 대화가 아닌 기록
+// (note/update/deal/ai)은 null → boost 0. 반응 어휘는 0016 CHECK와 동일.
+export const CONTACT_KINDS = new Set(["call", "kakao", "meeting", "demo", "visit", "info_session", "email", "quote"]);
+const MEETING_KINDS = new Set(["meeting", "demo", "visit", "info_session"]);
+const ENGAGED_REACTIONS = new Set(["positive", "neutral", "concern"]);
+
+export const KIND_LABEL = {
+  call: "통화", kakao: "카톡", meeting: "미팅", demo: "데모", visit: "방문", info_session: "설명회",
+  email: "이메일", quote: "견적", note: "메모", update: "업데이트", deal: "딜", ai: "AI",
+};
+export const REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "우려", rejected: "거절", no_response: "무응답" };
+
+export function activityToOutcomeAction({ kind = null, reaction = null } = {}) {
+  const k = String(kind || "").toLowerCase();
+  if (!CONTACT_KINDS.has(k)) return null;
+  const r = String(reaction || "").toLowerCase();
+  if (r === "no_response") return "no_response";
+  if (r === "rejected") return "lost";
+  if (MEETING_KINDS.has(k)) return "meeting";
+  if (k === "quote") return "proposal";
+  if (ENGAGED_REACTIONS.has(r)) return "replied";
+  return "sent";
+}

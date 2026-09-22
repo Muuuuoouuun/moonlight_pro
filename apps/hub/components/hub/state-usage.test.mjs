@@ -35,8 +35,23 @@ test('urgent rails stay one pixel while non-urgent timing remains neutral', () =
   const myWork = page('my-work');
   const followups = page('followups');
   assert.match(myWork, /item\.bucket === 'overdue' \? 'inset 1px 0 0 var\(--danger\)'/);
-  assert.match(followups, /BUCKET_STRIPE = \{ overdue: "var\(--danger\)" \}/);
+  // 고객 연락의 레일은 2026-09-21부터 예산이 걸려 있다: 어긴 약속 상단 MAX_DANGER_RAILS개만
+  // 레일을 받고 나머지는 시계 글리프 + 직접 라벨로 같은 사실을 말한다(§5.3 red budget).
+  assert.match(followups, /boxShadow: rail \? "inset 1px 0 0 var\(--danger\)" : undefined/);
+  assert.match(followups, /rail=\{group\.key === "missed" && index < MAX_DANGER_RAILS\}/);
+  assert.match(followups, /item\.bucket === "overdue" && !rail/);
   assert.doesNotMatch(followups, /inset 2px 0 0/);
+});
+
+test('the follow-up queue puts broken promises first and folds the watch list away', () => {
+  const groups = readFileSync(new URL('../../lib/sales-os/followup-groups.js', import.meta.url), 'utf8');
+  const followups = page('followups');
+  // 묶음 정의는 순수 모듈 하나 — 페이지가 저장소 모듈을 import하면 server-read/write가
+  // 클라이언트 청크로 끌려온다.
+  assert.match(groups, /key: "missed"[\s\S]*?key: "today"[\s\S]*?key: "rest"/);
+  assert.match(followups, /groupFollowups\(visible\)/);
+  // 정렬 축은 약속 날짜(bucket)이지 정체 일수가 아니다.
+  assert.doesNotMatch(followups, /BUCKET_OPTIONS/);
 });
 
 test('follow-up truth never turns a failed read into preview or a proven empty state', () => {

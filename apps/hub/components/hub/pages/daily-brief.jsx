@@ -15,7 +15,8 @@ import {
 } from "@/lib/ai-workflow-client";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 import { BurningStreakBadge, StreakMark } from "../burning-streak";
-import { useUndoableAction } from "../use-undoable-action";
+import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
+import { ContactRecordDrawer } from "../contact-record-form";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
 import { buildTaskToday, isDurableTaskUpdateResult } from "@/lib/task-today";
@@ -1653,7 +1654,10 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
 // §2 확정 슬롯 — 긴급 KA(최대 1) · 집중 고객(3~5) · 오늘 일정. tone 정렬 신호 큐에 섞여
 // 소실되던 풀을 명명된 자리로 분리한 첫 화면의 핵심 계약(2026-08-05 컷오버). 각 슬롯은
 // 자기 소스의 truth 상태를 따로 표시한다 — 캘린더 미연결이 매출 슬롯을 오염시키지 않는다.
-function FocusSlots({ dailyFocus, onNavigate }) {
+// crm_activities.reaction 어휘(0016 CHECK) — 집중 고객 행의 마지막 접점 라벨.
+const FOCUS_REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "우려", rejected: "거절", no_response: "무응답" };
+
+function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
   if (!dailyFocus) return null;
   const [guruFocusItem, setGuruFocusItem] = React.useState(null);
   const [showAllCustomers, setShowAllCustomers] = React.useState(false);
@@ -1749,7 +1753,15 @@ function FocusSlots({ dailyFocus, onNavigate }) {
         ) : revenuePreview ? (
           <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>매출 원장이 연결되면 집중 고객 3~5건이 여기에 표시됩니다.</div>
         ) : focusItems.length === 0 ? (
-          <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>집중 고객 없음 — CS 레인에 다음 행동이 있는 리드가 없습니다.</div>
+          // 빈 이유를 말하고 다음 행동을 안내한다 — 0c로 후보 조건이 "내가 적은 약속"이 됐다.
+          // 자동으로 채워진 문장(이관·시트 동기화)은 약속으로 치지 않으므로 여기 뜨지 않는다.
+          <div style={{ padding: '12px 16px 14px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+              집중 고객 없음 — 내가 직접 적은 다음 행동이 있는 고객이 아직 없습니다.
+              자동으로 채워진 문구는 약속으로 세지 않습니다.
+            </div>
+            <Button variant="outline" size="xs" icon="leads" onClick={() => onNavigate?.('dashboard/revenue/leads')}>리드 목록에서 약속 남기기</Button>
+          </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             {visibleFocusItems.map((item, i) => (
@@ -1786,8 +1798,21 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                       <span style={{ color: item.dueOverdue ? 'var(--danger)' : 'var(--fg-faint)', fontWeight: item.dueOverdue ? 600 : 400 }}> · {item.dueLabel}</span>
                     )}
                     {item.lastTouch && <span> · 최근 {item.lastTouch}</span>}
+                    {/* 반응은 이 행이 다른 행과 다른 말을 하게 만드는 사실이다(0c). 색 없이 라벨만. */}
+                    {item.lastReaction && <span> · {FOCUS_REACTION_LABEL[item.lastReaction] || item.lastReaction}</span>}
                   </div>
                 </div>
+                {/* 기록은 어디서 열어도 같은 폼이다 — 첫 화면에서 바로 남기고 하던 일로 돌아간다. */}
+                <IconButton
+                  icon="edit"
+                  label="연락 기록 남기기"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRecord?.({ kind: 'lead', id: item.id, name: item.name, companyId: item.companyId });
+                  }}
+                  style={{ flexShrink: 0 }}
+                />
                 <IconButton
                   icon="sparkle"
                   label="Guru 세일즈 코칭"
@@ -2050,6 +2075,8 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
   const [advisorSignal, setAdvisorSignal] = React.useState(null);
   const ledger = useDailyBriefLedger(refreshKey);
   const [queueExpanded, setQueueExpanded] = React.useState(false);
+  // 기록창 대상 — 집중 고객 행에서 열고, 저장은 공용 폼(contact-record-form)이 소유한다.
+  const [recordTarget, setRecordTarget] = React.useState(null);
   const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
   React.useEffect(() => {
     window.addEventListener('moonlight:inquiries-changed', refreshLedger);
@@ -2114,7 +2141,9 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
+        {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
+            tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다. */}
+        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} onRecord={setRecordTarget} />
         <DailyDispatchCard
           dailyFocus={ledger.dailyFocus}
           taskToday={ledger.taskToday}
@@ -2205,6 +2234,14 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
           onCreateTask={() => {
             ledger.refreshTasks();
           }}
+        />
+      )}
+
+      {recordTarget && (
+        <ContactRecordDrawer
+          target={recordTarget}
+          onSaved={() => { window.setTimeout(refreshLedger, UNDO_WINDOW_MS + 250); }}
+          onClose={() => setRecordTarget(null)}
         />
       )}
     </div>

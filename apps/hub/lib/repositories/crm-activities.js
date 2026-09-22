@@ -13,7 +13,9 @@ import {
   resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
+import { CONTACT_KINDS, activityToOutcomeAction } from "@/lib/sales-os/followup-scoring";
 
+// 0016 CHECK와 동일한 12종 — 이전에는 9종이라 kakao/quote/ai가 "update"로 접혀 저장됐다.
 export const ACTIVITY_KINDS = new Set([
   "call",
   "meeting",
@@ -24,6 +26,9 @@ export const ACTIVITY_KINDS = new Set([
   "update",
   "note",
   "deal",
+  "kakao",
+  "quote",
+  "ai",
 ]);
 
 const ENTITY_TYPES = new Set(["lead", "deal", "account"]);
@@ -193,4 +198,73 @@ export async function deleteActivity({
     ["workspace_id", eqFilter(workspaceId)],
   ]);
   return res.persisted ? { persisted: true, id } : { persisted: false, reason: res.reason };
+}
+
+// ── 최근 활동 읽기 (2026-09-21 0a) ─────────────────────────────────────────────────
+// 큐(followups-ledger)·주간 리포트·컨텍스트 어셈블러가 연락 기록을 읽는 단일 원천.
+// 이전에는 셋 다 outreach_outcomes를 읽었는데 그 테이블의 UI writer는 0이라 앱에서 남긴
+// 기록이 주간 "연락 N건"과 큐 boost에 한 번도 도달하지 않았다.
+function mapRecentActivity(row) {
+  return {
+    id: row.id,
+    kind: String(row.kind || "update").toLowerCase(),
+    reaction: row.reaction || null,
+    body: row.body || "",
+    leadId: row.lead_id || null,
+    dealId: row.deal_id || null,
+    accountId: row.account_id || null,
+    companyId: row.company_id || null,
+    contactId: row.contact_id || null,
+    occurredAt: row.occurred_at || row.created_at || null,
+  };
+}
+
+// 최신순. since(ISO) 이후만. read 실패는 null — 호출측이 failedSources로 명명한다.
+export async function listRecentActivities({
+  workspaceId = resolveDefaultWorkspaceId(),
+  since = null,
+  limit = 500,
+} = {}) {
+  if (!workspaceId) return null;
+  const rows = await fetchSupabaseRows("crm_activities", {
+    select: "id,kind,reaction,body,lead_id,deal_id,account_id,company_id,contact_id,occurred_at,created_at",
+    filters: [
+      ["workspace_id", eqFilter(workspaceId)],
+      ...(since ? [["occurred_at", `gte.${since}`]] : []),
+    ],
+    order: "occurred_at.desc",
+    limit,
+  });
+  if (!Array.isArray(rows)) return null;
+  return rows.map(mapRecentActivity);
+}
+
+// context-assembler용 — 예전 getRecentOutcomes와 같은 봉투·필드명(normalizeOutcome 호환).
+// 대화가 아닌 기록은 제외하고, action은 outreach 어휘로 접는다.
+export async function getRecentContactActivities({
+  workspaceId = resolveDefaultWorkspaceId(),
+  limit = 30,
+} = {}) {
+  if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", outcomes: [] };
+  const rows = await listRecentActivities({ workspaceId, limit: Math.max(limit, 100) });
+  if (!rows) return { source: "error", error: "crm-activities-read-failed", retryable: true, outcomes: [] };
+  return {
+    source: "supabase",
+    outcomes: rows
+      .filter((a) => CONTACT_KINDS.has(a.kind))
+      .slice(0, limit)
+      .map((a) => ({
+        id: a.id,
+        leadId: a.leadId,
+        dealId: a.dealId,
+        companyId: a.companyId,
+        play: null,
+        assetId: null,
+        channel: a.kind,
+        action: activityToOutcomeAction(a),
+        note: a.body,
+        meta: { reaction: a.reaction },
+        occurredAt: a.occurredAt,
+      })),
+  };
 }

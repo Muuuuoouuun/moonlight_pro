@@ -4,25 +4,10 @@
 // 서버(UTC) 실행 전제 — 날짜 판정은 전부 KST day-key로 한다.
 
 import { filterOperatorOwnedRevenue, selectOperatorFocusLeads } from "./operator-revenue-scope.js";
+// KST 날짜 경계는 kst-day.js가 정본 — attention-ledger·고객 연락 큐와 같은 함수를 쓴다.
+import { diffKstDays, kstDayKey } from "./kst-day.js";
 
 const TIME_ZONE = "Asia/Seoul";
-
-function kstDayKey(value) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  // en-CA → YYYY-MM-DD. 날짜-only 문자열("2026-08-05")은 UTC 자정 파싱 → KST 같은 날.
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
-
-function diffKstDays(fromKey, toKey) {
-  if (!fromKey || !toKey) return 0;
-  return Math.round((Date.parse(toKey) - Date.parse(fromKey)) / 86400000);
-}
 
 function timeLabel(value) {
   const date = new Date(value);
@@ -121,7 +106,7 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
   // 라이브 read 실패는 error — preview("미구성")로 뭉개면 첫 화면 KA/집중 슬롯이
   // "연결하세요" 카피와 함께 무언 공백이 된다(4차 재감사 M).
   const revenueState = revenueReadable ? "live" : revenue?.source === "error" ? "error" : "preview";
-  const focusLeads = revenueReadable ? selectOperatorFocusLeads(revenue, { limit: 5 }) : [];
+  const focusLeads = revenueReadable ? selectOperatorFocusLeads(revenue, { limit: 5, now }) : [];
   const todayKey = kstDayKey(now);
   const calendarOk = Boolean(calendar?.ok);
   const events = calendarOk && Array.isArray(calendar.items) ? calendar.items : [];
@@ -175,6 +160,8 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
                 : `기한 ${dueKey.slice(5).replace("-", ".")}`,
           dueOverdue: Boolean(dueKey) && overdueDays > 0,
           lastTouch: lead.last || null,
+          // 마지막 접점의 반응 — 행마다 다른 사실을 하나는 갖게 한다(0c).
+          lastReaction: lead.lastReaction || null,
           reason: lead.focusOverride === "raise"
             ? "수동 상향"
             : dueKey && overdueDays >= 0

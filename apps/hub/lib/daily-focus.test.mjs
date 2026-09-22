@@ -168,3 +168,33 @@ test("focusOccupiedKeys: KA 슬롯은 kind로 구분되고 집중 고객은 전�
   assert.deepEqual([...keys].sort(), ["lead:a", "lead:b", "lead:l9"]);
   assert.equal(focusOccupiedKeys(undefined).size, 0);
 });
+
+// 0c: 집중 고객 행이 서로 다른 말을 하려면 마지막 접점의 반응이 행까지 실려야 한다.
+test("focus customer rows carry the last reaction so they stop repeating one sentence", () => {
+  const focus = buildDailyFocus({
+    revenue: {
+      source: "supabase",
+      companies: [{ id: "co-1", name: "한빛학원" }],
+      leads: [
+        {
+          id: "lead-1", owner: "Me", companyId: "co-1", companyName: "한빛학원", name: "한빛학원",
+          score: 70, nextAction: "견적서 발송", nextActionAt: "2026-08-06",
+          last: "3일 전", lastReaction: "concern",
+        },
+        {
+          id: "lead-2", owner: "Me", companyId: "co-2", companyName: "다른학원", name: "다른학원",
+          score: 60, nextAction: "원장님 통화", last: "1일 전",
+        },
+      ],
+      deals: [],
+    },
+    calendar: { ok: false, reason: "calendar-not-connected", items: [] },
+    now: NOW,
+  });
+
+  const rows = focus.focusCustomers.items;
+  assert.deepEqual(rows.map((row) => row.id), ["lead-1", "lead-2"]);
+  assert.equal(rows[0].lastReaction, "concern");
+  // 반응 기록이 없으면 빈 문자열이 아니라 null — 화면이 그 자리를 그리지 않는다.
+  assert.equal(rows[1].lastReaction, null);
+});
