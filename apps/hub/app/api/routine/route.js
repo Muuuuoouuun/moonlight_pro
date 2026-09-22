@@ -67,7 +67,11 @@ function normalizeDefinePayload(payload) {
   const checkType = cleanString(payload.checkType).toLowerCase();
   const projectId = cleanString(payload.projectId) || null;
   const categoryRaw = cleanString(payload.category).toLowerCase();
-  const category = RITUAL_CATEGORIES.has(categoryRaw) ? categoryRaw : "general";
+  // 생략하면 general이 기본값이지만, 명시된 무효 값은 PATCH와 같게 거절한다. 조용히 접으면
+  // 그 루틴은 '일반'으로 태어나 운영자가 의도한 분류는 어디에도 남지 않고, 같은 값이
+  // 편집 시점에는 400으로 막혀 한 필드가 두 계약을 갖게 된다.
+  const categoryProvided = categoryRaw !== "";
+  const category = categoryProvided ? categoryRaw : "general";
   const targetProvided = payload.targetPerWeek !== undefined && payload.targetPerWeek !== null && payload.targetPerWeek !== "";
   const targetPerWeek = normalizeTargetPerWeek(payload.targetPerWeek) || defaultTargetPerWeek(checkType);
 
@@ -82,6 +86,9 @@ function normalizeDefinePayload(payload) {
   }
   if (projectId && !isCanonicalUuid(projectId)) {
     return { error: invalidInput("invalid-project-id", "projectId must be a canonical UUID.") };
+  }
+  if (categoryProvided && !RITUAL_CATEGORIES.has(category)) {
+    return { error: invalidInput("invalid-category", "category must be one of general, work, content, health, learning, personal.") };
   }
   if (targetProvided && !normalizeTargetPerWeek(payload.targetPerWeek)) {
     return { error: invalidInput("invalid-target-per-week", "targetPerWeek must be an integer between 1 and 7.") };
