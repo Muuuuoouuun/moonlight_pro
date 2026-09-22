@@ -128,6 +128,16 @@ function filterValue(filters: Array<[string, string]> | undefined, key: string) 
   return value?.startsWith("eq.") ? value.slice(3) : null;
 }
 
+function isDatabaseFocusLimit(detail: string | undefined) {
+  if (!detail) return false;
+  try {
+    const error = JSON.parse(detail);
+    return error?.code === "P0001" && error?.message === "focus-limit";
+  } catch {
+    return false;
+  }
+}
+
 // 오늘 Top 3 — meta.focus_dates(고른 날짜의 이력)에 하루를 넣거나 뺀다. 넣을 때만 같은 날짜를
 // 고른 다른 할 일 수를 세어 MAX_FOCUS_PER_DAY를 넘기지 않는다. 배열 자체는 클라이언트가
 // 보내지 않으므로 지난 날의 선택은 절대 지워지지 않는다(2026-09-20 §6.2: 소급 변동 방지).
@@ -378,6 +388,13 @@ export async function executePmsCommand(
       if (!rows[0]) return { status: "error", error: "not-found" };
       const meta = rows[0].meta ?? {};
       if (typeof meta !== "object" || Array.isArray(meta)) return { status: "error", error: "invalid-task-metadata" };
+      // A focus toggle merges a persisted JSON object. Guard that merge even when the caller
+      // did not supply a version; otherwise two overlapping toggles of this task can each
+      // return saved while the second PATCH discards the first date.
+      if (command.focus && !filterValue(command.filters, "updated_at")) {
+        if (!rows[0].updated_at) return { status: "error", error: "missing-task-version" };
+        command.filters.push(["updated_at", `eq.${rows[0].updated_at}`]);
+      }
       let metaPatch = (command.patch.meta as Record<string, unknown> | undefined) ?? {};
       if (command.focus) {
         const focus = await applyFocusToggle(command.focus, {
@@ -394,6 +411,16 @@ export async function executePmsCommand(
     }
     const persistence = await dependencies.update(command.table, command.filters, command.patch);
     if (!persistence.persisted && persistence.reason !== "no-matching-row") {
+      if (command.focus && isDatabaseFocusLimit(persistence.detail)) {
+        return {
+          status: "conflict",
+          action: command.action,
+          error: "focus-limit",
+          retryable: false,
+          limit: MAX_FOCUS_PER_DAY,
+          date: command.focus.date || zonedDateKey(context.now || new Date()),
+        };
+      }
       return {
         status: "error",
         error: persistence.reason,

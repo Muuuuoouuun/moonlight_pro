@@ -25,6 +25,15 @@ test("선택 해제 + 기한 변경은 낙관 패치 한 엔트리와 reload 한
   assert.match(fn, /\{ bucket: bucketKey, whenAt: dueAt \|\| null, focusToday: false \}/);
   // toggleFocus·rescheduleTask를 겹쳐 부르면 각자의 clearPatch가 상대의 낙관 상태를 지운다.
   assert.doesNotMatch(fn, /toggleFocus\(|rescheduleTask\(/);
-  // reload·clearPatch는 마지막에 한 번만.
-  assert.equal((fn.match(/reload\(\)/g) || []).length, 1);
+  // 성공과 부분 실패 모두 서버 재조회가 필요하다.
+  assert.ok((fn.match(/reload\(\)/g) || []).length >= 1);
+});
+
+test("기한 저장 실패 시 성공 안내를 하지 않고 이미 저장된 선택 해제를 표시한다", () => {
+  const fn = page.slice(page.indexOf("const unfocusAndReschedule"), page.indexOf("const dropOnBucket"));
+  assert.ok(fn.indexOf("await patchTask({ dueAt }") < fn.indexOf("toast.success('기한 변경됨')"));
+  assert.match(fn, /focusSaved = true/);
+  assert.match(fn, /if \(focusSaved\) \{/);
+  assert.match(fn, /focusToday: false/);
+  assert.match(fn, /reload\(\)/);
 });

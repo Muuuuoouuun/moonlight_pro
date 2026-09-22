@@ -100,6 +100,18 @@ export async function GET(req) {
       assembleBrandContext({ mode: "brand-strategy" }).catch(() => null),
     ]);
 
+    const failedSources = [
+      ...(!followRes || followRes.source === "error" || followRes.partial ? ["followups"] : []),
+      ...(!ordersRes || ordersRes.source === "error" ? ["work_orders"] : []),
+      ...(!brandCtx || brandCtx.source === "error" ? ["brand_context"] : []),
+    ];
+    if (failedSources.length) {
+      return NextResponse.json(
+        { status: "error", error: "morning-brief-source-read-failed", failedSources },
+        { status: 502 },
+      );
+    }
+
     const configured =
       followRes?.source === "supabase" || ordersRes?.source === "supabase" || brandCtx?.source === "supabase";
     if (!configured) {

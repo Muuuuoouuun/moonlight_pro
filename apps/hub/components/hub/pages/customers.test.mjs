@@ -70,3 +70,14 @@ test("contact record form provides AI Smart Autofill from conversation or call n
   assert.match(formSource, /mode:\s*"extract-contact-outcome"/);
   assert.match(customersSource, /<ContactRecordForm[\s\S]*?aiContext=\{/);
 });
+
+test("a persisted contact replaces its optimistic timeline ID so delete reaches the saved row", () => {
+  const form = customersSource.slice(customersSource.indexOf("<ContactRecordForm"));
+  assert.match(form, /onSummaryPersisted=\{\(\{\s*activityId,\s*optimisticId\s*\}\)/);
+  assert.match(form, /a\.id === optimisticId \? \{ \.\.\.a, id: activityId \} : a/);
+});
+
+test("local activity rows cannot be silently deleted while persistence is pending", () => {
+  const timeline = customersSource.slice(customersSource.indexOf("function ActivityTimeline"), customersSource.indexOf("// 빠른 기록"));
+  assert.match(timeline, /onDeleteActivity && a\.id && !String\(a\.id\)\.startsWith\("local-"\)/);
+});

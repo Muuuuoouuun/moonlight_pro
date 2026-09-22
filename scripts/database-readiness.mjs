@@ -60,6 +60,10 @@ export const DATABASE_FEATURES = [
   { name: '무반응 연락 기록', migration: '20260923_0042_contact_outcome_reactionless.sql', tables: [], functions: [CONTACT_OUTCOME],
     bodyIncludes: [[CONTACT_OUTCOME, "v_reaction = '' and v_kind in ('kakao', 'email', 'note', 'update', 'quote')"],
       [CONTACT_OUTCOME, "when v_reaction is null then '{}'::jsonb"]] },
+  { name: 'Top 3 선택 상한', migration: '20260923_0043_task_focus_cap.sql', tables: [], functions: ['enforce_task_focus_cap_v1()'],
+    bodyIncludes: [['enforce_task_focus_cap_v1()', 'if v_selected >= 3 then'],
+      ['enforce_task_focus_cap_v1()', 'for no key update']],
+    triggers: [['tasks', 'task_focus_cap_v1', 'enforce_task_focus_cap_v1()']] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {
@@ -70,6 +74,7 @@ export function featureChecks(feature) {
     ...(feature.bodyExcludes ?? []).map(([name, detail]) => ({ kind: 'body_excludes', name, subject: '', detail })),
     ...(feature.constraintIncludes ?? []).map(([name, subject, detail]) => ({ kind: 'constraint_includes', name, subject, detail })),
     ...(feature.tableNoWrite ?? []).map(([name, subject]) => ({ kind: 'table_no_write', name, subject, detail: '' })),
+    ...(feature.triggers ?? []).map(([name, subject, detail]) => ({ kind: 'trigger', name, subject, detail })),
   ];
 }
 const literal = value => "'" + value.replaceAll("'", "''") + "'";
@@ -81,8 +86,12 @@ export function readinessSql(features = DATABASE_FEATURES) {
     else to_regclass('public.'||name)::oid end as object_id from required),
   facts as (select *,(select p.prosrc from pg_proc p where p.oid=object_id and kind in ('body_includes','body_excludes')) as body,
     (select pg_get_constraintdef(c.oid) from pg_constraint c where kind='constraint_includes' and c.conrelid=object_id and c.conname=subject limit 1) as constraint_def
+    ,(select t.oid from pg_trigger t where kind='trigger' and t.tgrelid=object_id and t.tgname=subject and not t.tgisinternal limit 1) as trigger_id,
+    (select t.tgenabled in ('O','A') and t.tgfoid=to_regprocedure('public.'||detail)::oid
+       from pg_trigger t where kind='trigger' and t.tgrelid=object_id and t.tgname=subject and not t.tgisinternal limit 1) as trigger_valid
     from objects)
-  select migration,kind,name,subject,detail,object_id is not null and (kind<>'constraint_includes' or constraint_def is not null) as present,
+  select migration,kind,name,subject,detail,object_id is not null and (kind<>'constraint_includes' or constraint_def is not null)
+    and (kind<>'trigger' or trigger_id is not null) as present,
     case when object_id is null then false when kind='table' then coalesce((select relrowsecurity from pg_class where oid=object_id),false)
       when kind='function' then has_function_privilege('service_role',object_id,'EXECUTE') and not has_function_privilege('anon',object_id,'EXECUTE')
         and not has_function_privilege('authenticated',object_id,'EXECUTE')
@@ -90,6 +99,7 @@ export function readinessSql(features = DATABASE_FEATURES) {
       when kind='body_excludes' then coalesce(strpos(body,detail)=0,false)
       when kind='constraint_includes' then coalesce(strpos(constraint_def,detail)>0,false)
       when kind='table_no_write' then not has_table_privilege(subject,object_id,'INSERT,UPDATE,DELETE,TRUNCATE')
+      when kind='trigger' then coalesce(trigger_valid,false)
       else false end as protected
   from facts order by migration,kind,name,subject,detail`;
 }
@@ -99,6 +109,7 @@ function failureReason(check, row) {
   if (kind === 'table' || kind === 'function') return name;
   const present = row?.present === true;
   if (kind === 'constraint_includes') return present ? `${name}.${subject}에 ${detail} 없음 (이전 버전)` : `${name}.${subject} 없음`;
+  if (kind === 'trigger') return present ? `${name}.${subject} 비활성 또는 함수 불일치` : `${name}.${subject} 없음`;
   if (kind === 'table_no_write') return present ? `${name}: ${subject} 직접 쓰기 권한 남음` : `${name} 없음`;
   if (!present) return `${name} 없음`;
   const fn = name.split('(')[0];

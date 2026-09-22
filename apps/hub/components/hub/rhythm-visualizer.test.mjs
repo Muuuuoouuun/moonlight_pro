@@ -29,3 +29,9 @@ test("차트 hover는 이탈 시 기본값(오늘)으로 풀리고 강조 기준
   assert.match(source, /const isHovered = focusedIndex === i;/);
   assert.doesNotMatch(source, /const isHovered = hoveredDay === i;/);
 });
+
+test("프로젝트 Rhythm 매트릭스는 선택 프로젝트의 완료 작업만 센다", () => {
+  const work = readFileSync(new URL("./pages/work.jsx", import.meta.url), "utf8");
+  assert.match(work, /const rhythmTodos = .*selectedProjectId/);
+  assert.match(work, /computeWeeklyRhythmMatrix\(\{ rituals: savedRituals, todos: rhythmTodos \}\)/);
+});

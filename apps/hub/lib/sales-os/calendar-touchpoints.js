@@ -17,6 +17,9 @@ const HOUR_MS = 3600000;
 export const RECORD_WINDOW_BEFORE_MS = 2 * HOUR_MS;
 export const RECORD_WINDOW_AFTER_MS = 24 * HOUR_MS;
 
+// 내부 변경은 고객 미팅의 기록이 아니다. 딜 단계 이동은 kind='deal'로 자동 기록된다.
+const AUTO_ACTIVITY_KINDS = new Set(["deal", "ai", "update"]);
+
 // 오탐이 큰 짧은 이름은 매칭에서 제외한다.
 export const MIN_MATCH_NAME_LENGTH = 3;
 
@@ -95,6 +98,7 @@ export function hasRecordFor(event, customer, activities = [], now = null) {
 
   return (activities || []).some((a) => {
     if (!a) return false;
+    if (AUTO_ACTIVITY_KINDS.has(String(a.kind || "").toLowerCase())) return false;
     const at = timeOf(a.occurredAt);
     if (at == null || at < from || at > to) return false;
     // 활동은 대부분 회사 기준으로 연결된다(라이브 115행 중 company_id 109·lead_id 0) —
