@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { agentHash } from '@com-moon/agent-contracts';
 import { OFFICE_WORKFLOW_VERSION } from '@com-moon/agent-contracts/office-workflow';
+import { OFFICE_DISCUSSION_VERSION, parseOfficeDeliberation } from '@com-moon/agent-contracts/office';
 import { createOfficeWorkflowService, projectOfficeReceipt } from './workflow-service.js';
 import { createOfficeWorkflowHandler } from './workflow-http.js';
 import { readOfficeTaskTargets } from './workflow-runtime.js';
@@ -62,6 +63,34 @@ test('concurrent submissions start one generation and all later replays bypass c
   assert.equal(h.counts.generation, 1);
   const body = JSON.stringify(await h.service.receipt(r.requestId, actor));
   assert.ok(!body.includes('attempt_token') && !body.includes('input_snapshot') && !body.includes('workspace_id'));
+});
+
+test('council settings survive receipt and signed recovery; changing them cannot replay the same request ID', async () => {
+  const h = harness(), r = { ...request(), mode: 'council', participants: ['vaporeon', 'eevee'], deliberation: { profile: 'urgent', influence: { eevee: 3 } } }, actor = identity();
+  h.deps.generate = async (input, c) => {
+    h.counts.generation++;
+    return { ...generated(input, c), council: { perspectives: input.participants.map(ownerId => ({ ownerId, judgment: '기한 내 최소 범위', tradeoff: '추가 항목 보류' })), recommendation: '현재 약속부터 정리' }, discussion: {
+      version: OFFICE_DISCUSSION_VERSION, settings: input.deliberation, modelCalls: 3,
+      turns: input.participants.map(ownerId => ({ ownerId, round: 'position', position: '확인한 기간만 정리한다.', evidence: [], objection: '', revisionCondition: '새 기한이 확인되면 바꾼다.', changed: false, replyTo: [], changeReason: '' })),
+    } };
+  };
+  const original = h.deps.rpc;
+  h.deps.rpc = (name, params) => name === 'office_request_finish_v1' ? Promise.reject(new Error('unavailable')) : original(name, params);
+  const unsaved = await h.service.execute(r, actor);
+  assert.equal(unsaved.status, 'unsaved');
+  const pending = await h.service.receipt(r.requestId, actor);
+  assert.deepEqual(pending.deliberation, parseOfficeDeliberation(r.deliberation, r.participants));
+  assert.equal((await h.service.execute({ ...r, deliberation: { ...r.deliberation, warmth: 3 } }, actor)).status, 'conflict');
+  h.deps.rpc = original;
+  const saved = await h.service.recover(r.requestId, { recoveryToken: unsaved.recoveryToken }, actor);
+  assert.equal(saved.status, 'generated');
+  assert.deepEqual(saved.deliberation, saved.result.discussion.settings);
+  assert.equal(h.counts.generation, 1);
+  assert.ok(!JSON.stringify(saved).includes('input_snapshot'));
+  const row = h.rows.get(r.requestId);
+  const malformed = projectOfficeReceipt({ status: 'error', request: { ...row, input_snapshot: { deliberation: { ...row.input_snapshot.deliberation, injected: 'secret' } } } });
+  assert.equal(malformed.deliberation, undefined);
+  assert.ok(!JSON.stringify(malformed).includes('secret'));
 });
 
 test('a committed claim with a lost response never authorizes generation or takeover', async () => {

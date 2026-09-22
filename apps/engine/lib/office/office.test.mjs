@@ -7,19 +7,26 @@ import {createOfficeEngineHandler} from './http.ts';
 import {OFFICE_PERSONAS} from './personas.ts';
 const request=parseOfficeRequest({ownerId:'flareon',message:'제안서 써줘',scope:'personal'});
 const context={source:'provided',scope:'personal',projects:[],note:'입력만 참고'};
+const reviewedOutput=(input,value)=>input.responseJsonSchema.properties.sourceQuotes?{sourceQuotes:[],corrections:[],...value}:value;
 test('all nine personas have real character instructions; only selected views enter prompt',()=>{
  assert.deepEqual(Object.keys(OFFICE_PERSONAS),OFFICE_IDS);
  for(const id of OFFICE_IDS){const {systemInstruction}=buildOfficePrompt({...request,ownerId:id},context);assert.ok(systemInstruction.includes(OFFICE_PERSONAS[id]));assert.match(OFFICE_PERSONAS[id],/말투/);assert.match(OFFICE_PERSONAS[id],/실패|자료가 없/);}
  const prompt=buildOfficePrompt(request,context);assert.ok(!prompt.systemInstruction.includes(OFFICE_PERSONAS.sylveon));assert.match(prompt.systemInstruction,/도구가 없다/);
 });
 test('generation and review preserve owner with one shared deadline; no tools or writes are exposed',async()=>{
- let calls=0;const result=await generateOfficeResponse(request,context,async input=>{calls++;assert.equal(input.model,undefined);assert.equal(input.tools,undefined);return {ok:true,text:'```json\n{"answer":"초안입니다","nextAction":"검토하자"}\n```',model:'test-provider'};});
- assert.equal(calls,2);assert.equal(result.status,'generated');assert.equal(result.ownerId,'flareon');assert.equal(result.simulation,false);
+ const calls=[];const result=await generateOfficeResponse(request,context,async input=>{calls.push(input);return {ok:true,text:'```json\n'+JSON.stringify(reviewedOutput(input,{answer:'초안입니다',nextAction:'검토하자'}))+'\n```',model:'test-provider'};});
+ assert.equal(calls.length,2);assert.equal(result.status,'generated');assert.equal(result.ownerId,'flareon');assert.equal(result.simulation,false);
+ assert.equal(calls[0].model,undefined);assert.equal(calls[1].model,'test-provider');assert.equal(calls[0].signal,calls[1].signal);assert.ok(calls.every(input=>input.tools===undefined));
 });
-test('council is explicitly a single-model simulation with validated output',async()=>{
+test('council keeps its simulation boundary while returning separate role calls and a validated synthesis',async()=>{
  const council={...request,mode:'council',participants:['flareon','umbreon']};
  const prompt=buildOfficePrompt(council,context);assert.match(prompt.systemInstruction,/단일 모델의 관점 시뮬레이션/);
- const good=await generateOfficeResponse(council,context,async()=>({ok:true,model:'test',text:JSON.stringify({answer:'비교',nextAction:'확인',recommendation:'추천',evidence:[],dissent:['자료 부족']})}));assert.equal(good.simulation,true);
+ let calls=0;
+ const good=await generateOfficeResponse(council,context,async input=>{
+  calls++;const {phase,roleId}=JSON.parse(input.prompt);
+  const output=phase?{position:'제공된 사실로 판단합니다.',evidence:[],objection:'자료 부족',revisionCondition:'자료가 추가되면 재검토합니다.',changed:false,replyTo:phase==='response'?[council.participants.find(id=>id!==roleId)]:[],changeReason:phase==='response'?'반론을 확인했지만 추가 근거가 없습니다.':''}:{answer:'비교',nextAction:'확인',recommendation:'추천',evidence:[],dissent:['자료 부족']};
+  return {ok:true,model:'test',text:JSON.stringify(reviewedOutput(input,output))};
+ });assert.equal(good.status,'generated');assert.equal(good.simulation,true);assert.equal(calls,5);assert.equal(good.discussion.modelCalls,5);
  const bad=await generateOfficeResponse(council,context,async()=>({ok:true,text:'{"answer":"완료","nextAction":"실행"}',model:'test'}));assert.equal(bad.status,'error');
 });
 test('empty, malformed, oversized and failed model replies do not become generated',async()=>{

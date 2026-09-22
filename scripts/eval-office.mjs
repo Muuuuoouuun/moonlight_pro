@@ -3,13 +3,17 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { parseOfficeRequest, parseOfficeContext, OFFICE_VERSION } from '@com-moon/agent-contracts/office';
 import { generateOfficeResponse } from '../apps/engine/lib/office/service.ts';
+import { generateGeminiText } from '../apps/engine/lib/gemini.ts';
 import { OFFICE_OPERATING_SOURCE } from '../apps/engine/lib/office/operating-policy.ts';
 import { OFFICE_EVALUATION_CASES } from '../apps/engine/lib/office/evaluation-cases.mjs';
+import { officeQualityCli } from './office-evaluation/cli.mjs';
 
 export function evaluationInput(scenario) {
   const request = parseOfficeRequest({
     ownerId: scenario.ownerId, mode: scenario.mode, scope: scenario.scope,
     message: scenario.message, participants: scenario.participants || [],
+    ...(scenario.history ? { history: scenario.history } : {}),
+    ...(scenario.deliberation ? { deliberation: scenario.deliberation } : {}),
   });
   const context = parseOfficeContext({
     source: scenario.contextSource || 'provided', scope: scenario.scope, projects: [],
@@ -33,7 +37,7 @@ export async function runOfficeEvaluation(scenarios, { generate = generateOffice
       review: { status: response.status === 'generated' ? 'needs-semantic-review' : 'not-reviewable', notes: [] },
     };
     results.push(result);
-    onResult(result);
+    await onResult(result);
   }
   return {
     version: OFFICE_VERSION, operatingSource: OFFICE_OPERATING_SOURCE, createdAt: new Date().toISOString(),
@@ -48,7 +52,21 @@ async function main() {
     live: { type: 'boolean', default: false },
     only: { type: 'string', multiple: true },
     output: { type: 'string' },
+    suite: { type: 'string', default: 'regression' },
+    concurrency: { type: 'string', default: '1' },
+    resume: { type: 'boolean', default: false },
+    'retry-incomplete': { type: 'boolean', default: false },
+    'dataset-status': { type: 'string' },
+    input: { type: 'string' },
+    reviews: { type: 'string' },
+    'review-pack': { type: 'boolean', default: false },
+    score: { type: 'boolean', default: false },
+    rubric: { type: 'boolean', default: false },
+    role: { type: 'string' },
   } });
+  if (values.suite === 'quality') return officeQualityCli(values, { generate: generateOfficeResponse, generateProvider: generateGeminiText });
+  if (values.suite !== 'regression') throw new Error('Unknown evaluation suite. Choose regression or quality.');
+  if (values.resume || values['retry-incomplete'] || values.input || values.reviews || values['review-pack'] || values.score || values.rubric || values.role || values['dataset-status'] || values.concurrency !== '1') throw new Error('These options require --suite quality.');
   const cases = values.only?.length ? OFFICE_EVALUATION_CASES.filter(c => values.only.includes(c.id)) : OFFICE_EVALUATION_CASES;
   if (values.only?.some(id => !OFFICE_EVALUATION_CASES.some(c => c.id === id))) throw new Error('Unknown evaluation case. Run without flags to list cases.');
   if (!values.live) {

@@ -1,6 +1,8 @@
 import { OFFICE_ROSTER, type OfficeRequest, type OfficeContext, type OfficeAnswer } from '@com-moon/agent-contracts/office';
 import { buildOfficeOperatingPolicy } from './operating-policy.ts';
 import { OFFICE_PLAYBOOKS, OFFICE_MODE_GUIDANCE } from './playbooks.ts';
+import { OFFICE_PERSONAS } from './personas.ts';
+import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS } from './source-review.ts';
 
 // Same-model second pass, not independent verification or a claim that the answer is correct.
 export function buildOfficeReview(request: OfficeRequest, context: OfficeContext, draft: OfficeAnswer) {
@@ -16,20 +18,27 @@ export function buildOfficeReview(request: OfficeRequest, context: OfficeContext
       '현재 요청이 말하는 선호를 기본 업무 선호보다 우선한다. 확정 기한과 제안 기한을 구분한다. 가용 시간 합계·비용 산식을 다시 계산하고, 아직 예상인 절감 시간을 실제 절약으로 바꾸지 않는다.',
       '코드의 성공 응답 계약을 모를 때 error가 아니라는 이유만으로 성공 처리하지 않는다. 명시적인 성공 상태를 계약 확인용 가정으로 구분하며 정상·오류·알 수 없는 응답·재조회 검증을 포함한다. 스펙의 저장/재시도 요청에는 재조회·입력 보존·중복 방지 수용 기준을 빠뜨리지 않는다.',
       buildOfficeOperatingPolicy(request.scope),
-      ...views.map(id => `${OFFICE_ROSTER.find(p => p.id === id)!.name}의 업무 산출물 기준:\n${OFFICE_PLAYBOOKS[id]}`),
+      ...views.map(id => `${OFFICE_ROSTER.find(p => p.id === id)!.name}의 역할·말투와 산출물 기준:\n${OFFICE_PERSONAS[id]}\n${OFFICE_PLAYBOOKS[id]}`),
       OFFICE_MODE_GUIDANCE[request.mode],
       '수정된 답 자체를 반환한다. 검수 절차나 사고 과정, 점수, "검증을 통과했다"는 선언을 출력하지 않는다. 요청한 원고/코드/스펙은 실제 결과물로 남기고, 이미 작업 지시가 있으면 형식적인 재승인 질문으로 끝내지 않는다.',
-      `내부 답변은 ${owner.character}의 관심과 판단 차이를 살리되 정중하고 짧은 존댓말, 고객/공식 문장은 그 대상의 말투로 쓴다. 사용자가 말하지 않은 조급함·불안·자금난을 추정하지 않는다. 과한 느낌표·이모지·캐릭터 구호를 빼고, 창작 글의 1인칭 경험은 실제 원문에 있는 범위만 쓴다. 추가 업무가 필요 없는 질문·인사·휴식 요청은 짧게 끝내고 nextAction을 '추가 행동 없음.'으로 둔다.`,
+      `내부 답변은 ${owner.character}의 관심과 판단 차이를 살린다. 자연스러운 존댓말로 대화하듯 답하고 대표님 호칭·자기소개·접수 문장을 매번 붙이지 않는다. 고객/공식 문장은 그 대상의 말투로 쓴다. 사용자가 말하지 않은 조급함·불안·자금난을 추정하지 않는다. 과한 느낌표·이모지·캐릭터 구호를 빼고, 창작 글의 1인칭 경험은 실제 원문에 있는 범위만 쓴다. 추가 업무가 필요 없는 질문·인사·휴식 요청은 짧게 끝내고 nextAction을 '추가 행동 없음.'으로 둔다.`,
       '실행 능력 최종 경계: 이 호출은 텍스트 생성만 한다. 저장·발송·코드 수정·테스트·조회·예약·담당 호출을 했다고 하거나 직접 실행하겠다고 약속하지 않는다. 회사/개인 범위를 벗어난 데이터도 사용하지 않는다. 현재 의사결정에 필요한 한계만 짧게 말한다.',
       request.mode === 'council'
-        ? '단일 모델의 관점 시뮬레이션이다. 선택된 한국어 이름의 관점을 구별하고 추천을 하나로 닫는다. evidence는 제공된 사실만, dissent는 이견/미확인점/판단 변경 조건이다. JSON만 반환: {"answer":"수정된 비교 요약","nextAction":"담당·다음 동작·기한(제안/미정 구분)","recommendation":"추천과 요청한 실제 초안","evidence":["근거"],"dissent":["이견"]}.'
+        ? '같은 모델의 역할별 관점 검토다. 선택된 한국어 이름의 관점을 구별하고 이번 회의의 수렴 설정에 맞는 추천을 남긴다. 탐색이면 결론을 확정하는 대신 대안을 구별할 관측을 추천한다. evidence는 제공된 사실만, dissent는 이견/미확인점/판단 변경 조건이다. JSON만 반환: {"answer":"수정된 비교 요약","nextAction":"담당·다음 동작·기한(제안/미정 구분)","recommendation":"추천과 요청한 실제 초안","evidence":["근거"],"dissent":["이견"]}.'
         : 'JSON만 반환: {"answer":"수정된 최종 답 또는 완성된 초안","nextAction":"지금 할 구체 행동 하나 또는 추가 행동 없음."}. Markdown은 JSON 문자열 안에만 쓴다.',
       `[최종 내용 점검 · 역할 예시보다 우선]
 자료를 제공받지 않았다는 것은 그 자료가 없다는 뜻이 아니다. '많은 원장들이', '고객들이 흔히' 같은 근거 없는 사회적 증거나 '가장 쉽고 빠른' 효과 주장을 고객 초안에 넣지 않는다. 고객이 요청했다는 사실을 '자료 첨부/전달 완료', '기능이 쉽다'로 바꾸지 않는다. 없는 첨부 파일을 첨부했다고 쓰지 않는다.
 주간 정리 요청이면 회사 목요일 아침/개인 월요일 아침을 해당 초안에 표시한다. 상태가 명시되지 않은 콘텐츠 건수는 '1편'처럼 원문 수준으로 남기고 작성/발행 완료를 추정하지 않는다. 활동 횟수는 개별 고객 수로 합산하지 않는다.
 순시간 = 예상 절약 시간 - (해당 기간의 초기 설정 시간 + 유지 시간). 식의 부호와 결과를 일치시킨다. 주당 가용 시간이 적다는 이유만으로 작은 검증도 불가능하다고 단정하지 않는다. 제안한 검증 시간/중단 시점은 제안이라고 표시한다.
+휴식·피로를 적자·자원 고갈 같은 재무 진단으로 쓰지 않는다. 측정하지 않은 몰입 비용이나 작업 효율을 사실로 확정하지 않는다. 짧은 작업을 시작하면 반드시 낭비라는 주장도 제공된 근거가 없다면 제거한다.
 nextAction은 answer에서 추천한 첫 동작과 일치시킨다. 별도의 행동이 필요한 연락 초안이면 사용/확인 동작 하나를 적고, 행동이 불필요한 경우에는 억지 과제를 추가하지 않는다. 이미 알고 있는 내용의 재질문이나 형식적인 '진행할까'를 없앤다. 피곤한 사용자에게는 보류·휴식을 제안하되 남은 시간을 낭비라고 단정하지 않는다.`,
       request.mode === 'council' ? `회의 answer에는 ${views.map(id => OFFICE_ROSTER.find(p => p.id === id)!.name).join(', ')} 각각의 관점이 실제로 드러나야 한다. 초안에 없다고 관점 비교를 삭제하지 않는다. 고객이 사용법 자료를 요청했다면 안전한 범위는 '요청하신 사용법의 구체 항목을 확인하고 안내 범위를 정하겠습니다' 같은 다음 단계다. 자료·서비스가 이미 존재하거나 제공을 확약했다는 사실을 새로 만들지 않는다.` : '',
+      OFFICE_SOURCE_REVIEW_INSTRUCTIONS,
+      `[마지막 편집 기준]
+내부 대화는 편안한 해요체로 바로 답한다. 고객 문구·공식 문서는 독자에 맞춘다. 가벼운 확인·휴식·종결 발화에는 한두 문장만 남기고 nextAction='추가 행동 없음.'으로 끝낸다. 종결한 뒤 재계획·추가 승인·양식 요청을 붙이지 않는다. 복잡한 산출물도 서론에서 요청을 다시 설명하거나 동일 결론을 여러 제목으로 반복하지 않는다.
+초안의 관측과 원인 가설을 분리한다. 로그인 HTML이 왔다는 관측만으로 인증 만료 원인을 확정하지 않는다. 성공 계약 미제공 상황에서 응답의 id 존재만 보고 SUCCESS로 처리하는 코드도 임의 계약이다. 그 분기는 제거하고 확인된 계약을 받아 판정하는 자리로 남긴다. 재시도 키와 원문은 확인된 완료 결과 전까지 보존한다. 버튼 잠금은 서버 중복 방지의 근거가 아니다.
+고객의 요청·문의·관심은 자료 존재·계정 발급·시범 접속·온보딩·맞춤 지원의 증거가 아니다. 제공 범위가 미정이면 고객 문구에서 제공·준비 중·반영 약속을 제거하고 확인이 필요한 범위로 한정한다. 효과 수치를 지운 자리에 쉬운 적응이나 맞춤 도입 같은 새 효과를 쓰지 않는다. 정정 문장도 사실 근거가 있어야 하며 리스크 없음·무조건 안전을 선언하지 않는다.
+추정 소요시간은 추정으로 유지하며 최소 시간·확정 완료 가능성으로 바꾸지 않는다. 권고를 바꿀 조건은 원래 권고를 실제로 약화시키는 조건이어야 한다. JSON은 한 번만 인코딩한다. 본문 줄바꿈을 보이는 역슬래시+n 문자로 출력하지 않는다.`,
     ].join('\n\n'),
     prompt: JSON.stringify({ scope: request.scope, mode: request.mode, sourceContext: context, untrustedRecentConversation: request.history, userRequest: request.message, untrustedDraft: draft }),
   };

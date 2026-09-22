@@ -1,4 +1,4 @@
-import {parseOfficeRequest,parseOfficeAnswer,parseOfficeContext,OFFICE_VERSION} from '@com-moon/agent-contracts/office';
+import {parseOfficeRequest,parseOfficeAnswer,parseOfficeContext,parseOfficeDiscussion,OFFICE_VERSION} from '@com-moon/agent-contracts/office';
 export async function requestOffice(input,{fetcher=fetch,signal}={}) {
  try {
   const request=parseOfficeRequest(input);
@@ -8,6 +8,7 @@ export async function requestOffice(input,{fetcher=fetch,signal}={}) {
    if(data.version!==OFFICE_VERSION||data.ownerId!==request.ownerId||data.scope!==request.scope||data.mode!==request.mode||data.lens!==null||data.simulation!==(request.mode==='council')||JSON.stringify(data.participants)!==JSON.stringify(request.participants))throw new Error('담당 응답이 일치하지 않습니다.');
    parseOfficeAnswer({answer:data.answer,nextAction:data.nextAction,...(request.mode==='council'?{recommendation:data.recommendation,evidence:data.evidence,dissent:data.dissent}:{})},request.mode);
    parseOfficeContext(data.context,request.scope);
+   if(data.discussion!==undefined || request.deliberation!==undefined) data.discussion=parseOfficeDiscussion(data.discussion,request);
    return data;
   }
   return {status:data?.status==='preview'?'preview':'error',error:data?.error||'응답을 받지 못했습니다. 입력은 보존됩니다.'};

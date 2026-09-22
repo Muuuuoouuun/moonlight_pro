@@ -5,6 +5,7 @@ import { recordAgentRun, setAgentRunEmittedCount } from "@/lib/sales-os/agent-ru
 import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { createWorkOrder } from "@/lib/sales-os/work-orders";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
+import { isValidAdvisorInput } from "@/lib/advisor-input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -141,7 +142,10 @@ export async function POST(req) {
     return parsed.error;
   }
 
-  const input = parsed.data || {};
+  const input = parsed.data;
+  if (!isValidAdvisorInput(input)) {
+    return NextResponse.json({ status: "error", error: "자문 설정의 형식을 확인해 주세요." }, { status: 400 });
+  }
   if (input.createWorkOrder !== undefined && typeof input.createWorkOrder !== "boolean") {
     return NextResponse.json({ status: "error", error: "invalid-create-work-order" }, { status: 400 });
   }

@@ -1,8 +1,11 @@
 "use client";
 
 import React from 'react';
-import {Button,EditDrawer,EmptyState,SelectField,Skeleton,TextAreaField,TruthBadge} from './hub-primitives';
-import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowQuery,officeWorkflowNote,readOfficeWorkflow,sendOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt} from './office-workflow-client';
+import {OFFICE_ROSTER} from '@com-moon/agent-contracts/office';
+import {Button,CheckboxRow,EditDrawer,EmptyState,SegmentedControl,SelectField,Skeleton,TextAreaField,TruthBadge} from './hub-primitives';
+import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowQuery,officeWorkflowNote,readOfficeWorkflow,sendOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowReviewers,officeWorkflowGenerationRequest} from './office-workflow-client';
+import {OfficeDeliberationControls,OfficeDiscussion} from './office-deliberation-controls';
+import {officeDeliberationForParticipants} from './office-deliberation-client';
 import styles from './office-workflow-panel.module.css';
 
 const Sessions=React.createContext(null);
@@ -15,7 +18,7 @@ export function OfficeWorkflowSessionProvider({children}) {
   },[store]);
   return <Sessions.Provider value={store}>{children}</Sessions.Provider>;
 }
-const ownerNames={vaporeon:'샤미드',flareon:'부스터'};
+const WORKFLOW_MODES=[{key:'draft',label:'초안'},{key:'council',label:'관점 비교'}];
 const initialMessage={weekly_report:'선택한 7일의 확인된 기록으로 주간 정리를 작성해 주세요. 확인된 활동, 변화와 막힘, 다음 주 남길 행동을 구분하고 미측정 값은 그대로 표시해 주세요.',customer_reply:'선택한 고객의 실제 기록과 약속을 참고해 보낼 답장 초안 한 개와 이번 접촉 목적을 작성해 주세요. 자료에 없는 약속이나 고객 발언을 만들지 마세요.'};
 const missingLabels={'recorded-customer-words-unavailable':'직접 연결된 발언 기록 없음','activities-limited-to-latest-five':'최근 기록 5건만 참고','contacts_recorded':'고객 연락 미측정','tasks_completed':'완료 할 일 미측정','content_published':'발행 미측정','goals':'목표 조회 미완료','deals':'거래 조회 미완료','deal-win-timestamps':'성사일 일부 미확인'};
 
@@ -38,7 +41,9 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
   const state=React.useSyncExternalStore(subscribe,snapshot,snapshot);
   const patch=changes=>store.update(sessionKey,changes);
   const loadTicket=React.useRef(0),trigger=React.useRef(null);
-  const ownerId=intent==='weekly_report'?'vaporeon':'flareon';
+  const ownerId=state.ownerId||(intent==='weekly_report'?'vaporeon':'flareon');
+  const ownerName=OFFICE_ROSTER.find(person=>person.id===ownerId)?.name;
+  const reviewers=officeWorkflowReviewers(state,ownerId),participants=[ownerId,...reviewers];
   const input={intent,scope,originRef};
   const query=officeWorkflowQuery(input);
   const receipt=state.receipt, result=receipt?.result;
@@ -51,7 +56,8 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
     patch({inspectToken});
     const data=await readOfficeWorkflow(`requests/${encodeURIComponent(id)}`);
     if(store.get(sessionKey).inspectToken!==inspectToken)return;
-    if(!validWorkflowReceipt(data,{requestId:id,scope})){patch({note:officeWorkflowNote({status:'error'})});return;}
+    const request=store.get(sessionKey).request;
+    if(!validWorkflowReceipt(data,{requestId:id,scope,request:request?.requestId===id?request:undefined})){patch({note:officeWorkflowNote({status:'error'})});return;}
     store.selectReceipt(sessionKey,data);
     return data;
   };
@@ -67,12 +73,9 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
   const generate=async()=>{
     const current=store.get(sessionKey);
     if(current.pending||!current.context?.capabilities?.generate)return;
-    const parent=current.receipt?.requestId;
-    const previousBody=current.receipt?.result?.artifact?.body;
-    if(previousBody?.length>6000&&!current.sourceExcerpt.trim()){patch({note:'이전 결과가 길어 수정할 부분을 아래 입력란에 선택해 주세요.'});return;}
-    const previous=previousBody?.length>6000?current.sourceExcerpt.trim():previousBody;
-    const request={...input,requestId:crypto.randomUUID(),ownerId,mode:'draft',participants:[],expectedContextHash:current.context.contextHash,
-      message:current.draft.trim()||initialMessage[intent],boundedHistory:previous?[{role:'assistant',text:previous}]:[],...(parent?{parentRequestId:parent}:{})};
+    let request;
+    try {request=officeWorkflowGenerationRequest(input,current,{requestId:crypto.randomUUID(),ownerId,defaultMessage:initialMessage[intent]});}
+    catch(error){patch({note:error.message||'참가 관점과 요청 내용을 확인해 주세요.'});return;}
     patch({request,sentDraft:current.draft,sentExcerpt:current.sourceExcerpt,pending:true,inspectToken:null,note:'',copied:false,applyInput:null,applicationUnknown:false});
     const data=await sendOfficeWorkflow(request);
     store.accept(sessionKey,request.requestId,data);
@@ -86,7 +89,8 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
   const recover=async()=>{
     if(store.get(sessionKey).pending)return;
     patch({pending:true,inspectToken:null});
-    const data=await writeOfficeWorkflow(`requests/${receipt.requestId}/recover`,{recoveryToken:receipt.recoveryToken},{requestId:receipt.requestId,scope});
+    const request=store.get(sessionKey).request;
+    const data=await writeOfficeWorkflow(`requests/${receipt.requestId}/recover`,{recoveryToken:receipt.recoveryToken},{requestId:receipt.requestId,scope,request:request?.requestId===receipt.requestId?request:undefined});
     patch(current=>({pending:false,receipt:mergeOfficeWorkflowReceipt(current.receipt,data),note:officeWorkflowNote(data)}));
   };
   const openTask=async()=>{
@@ -122,7 +126,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
   };
   const showTask=()=>onNavigate?onNavigate(`dashboard/work/projects?view=todos&task=${encodeURIComponent(application.entityId)}`):window.location.assign(`/dashboard/work/projects?view=todos&task=${encodeURIComponent(application.entityId)}`);
   return <section className={styles.panel} aria-label={title}>
-    <div className={styles.actions}><Button ref={trigger} variant="outline" size="xs" onClick={()=>state.open?patch({open:false}):load()} aria-expanded={state.open}>{title} · {ownerNames[ownerId]}</Button>
+    <div className={styles.actions}><Button ref={trigger} variant="outline" size="xs" onClick={()=>state.open?patch({open:false}):load()} aria-expanded={state.open}>{title} · {ownerName}</Button>
       {state.open&&<span className={styles.meta}>{scope==='classin'?'회사':'개인'} · 선택한 업무의 자료</span>}
     </div>
     {state.open&&<div className={styles.stack} onKeyDown={event=>{if(event.key==='Escape'&&!state.taskFields){event.stopPropagation();patch({open:false});trigger.current?.focus();}}}>
@@ -130,9 +134,21 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
       {state.context?.status==='ready'&&<>
         <div className={styles.actions}><TruthBadge state={state.context.missing?.length?'partial':'live'} /><Button size="xs" variant="ghost" onClick={load} disabled={state.pending}>자료·이전 결과 새로고침</Button></div>
         {!!state.context.missing?.length&&<p className={styles.note}>{state.context.missing.map(reason=>missingLabels[reason]||reason).join(' · ')}</p>}
+        <fieldset disabled={inProgress || state.applicationUnknown} className={styles.controls}>
+          <SegmentedControl label={`${title} 응답 방식`} options={WORKFLOW_MODES} value={state.mode} onChange={mode=>patch({mode})} />
+          {state.mode==='council'&&<details className={styles.comparison}>
+            <summary>함께 검토하기 · {participants.length}명</summary>
+            <div className={styles.controls}>
+              <p className={styles.note}>주관은 {ownerName}. 추가 관점을 1~2명 선택하세요. 원문과 이전 결과는 유지됩니다.</p>
+              <div className={styles.reviewers}>{OFFICE_ROSTER.filter(person=>person.id!==ownerId).map(person=><CheckboxRow key={person.id} text={`${person.name} · ${person.role}`} checked={reviewers.includes(person.id)} disabled={!reviewers.includes(person.id)&&reviewers.length>=2}
+                onChange={()=>{const selected=reviewers.includes(person.id)?reviewers.filter(id=>id!==person.id):[...reviewers,person.id];patch({reviewers:selected,deliberation:officeDeliberationForParticipants(state.deliberation,[ownerId,...selected])});}} />)}</div>
+              <OfficeDeliberationControls value={state.deliberation} participants={participants} disabled={inProgress || state.applicationUnknown} onChange={deliberation=>patch({deliberation})} />
+            </div>
+          </details>}
+        </fieldset>
         <TextAreaField label={result?'수정할 내용':'요청에 덧붙일 내용'} value={state.draft} maxLength={6000} onChange={event=>patch({draft:event.target.value})} placeholder={intent==='weekly_report'?'특히 살펴볼 변화나 막힘이 있다면 적어주세요.':'이번 연락의 목적이나 지켜야 할 약속을 적어주세요.'} rows={3} />
         {result?.artifact?.body?.length>6000&&<TextAreaField label="수정할 이전 결과 부분 · 최대 6,000자" value={state.sourceExcerpt} onChange={event=>patch({sourceExcerpt:event.target.value})} maxLength={6000} rows={4} />}
-        <div className={styles.actions}><Button variant="primary" size="sm" onClick={generate} disabled={inProgress || state.applicationUnknown || receipt?.status==='unsaved' || !state.context.capabilities?.generate}>{state.pending?'요청 처리 중…':result?'수정 요청 보내기':'초안 만들기'}</Button></div>
+        <div className={styles.actions}><Button variant="primary" size="sm" onClick={generate} disabled={inProgress || state.applicationUnknown || receipt?.status==='unsaved' || !state.context.capabilities?.generate || (state.mode==='council'&&participants.length<2)}>{state.pending?'요청 처리 중…':result?'수정 요청 보내기':state.mode==='council'?'관점 비교하기':'초안 만들기'}</Button></div>
       </>}
       {!!state.note&&<p role="status" className={styles.note}>{state.note}</p>}
       {['running','unknown','unsaved'].includes(receipt?.status)&&<div className={styles.actions}>
@@ -149,6 +165,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
         <p className={styles.note}>{result.nextStep?`다음 행동 제안: ${result.nextStep.label}`:'추가 행동 없음'}</p>
         {(result.uncertainties?.length>0||result.dissent?.length>0)&&<div className={styles.note}>{[...(result.uncertainties||[]),...(result.dissent||[])].map((line,i)=><p key={i}>{line}</p>)}</div>}
         {!!result.evidence?.length&&<details><summary>참고한 자료</summary><ul>{result.evidence.map((item,i)=><li key={i}>{item.explanation}</li>)}</ul></details>}
+        <OfficeDiscussion result={result} request={state.request?.requestId===result.requestId?state.request:undefined} />
       </article>}
       {receipt?.logState==='error'&&<p className={styles.note}>결과는 저장됐지만 활동 로그를 남기지 못했습니다.</p>}
       {state.applicationUnknown&&!hasApplication&&<div className={styles.actions}><span className={styles.note}>할 일 저장 요청을 확인해야 합니다. 편집과 새 저장은 확인 뒤에 가능합니다.</span><Button size="xs" onClick={()=>apply(state.applyInput)} disabled={state.pending}>같은 내용으로 저장 확인</Button></div>}

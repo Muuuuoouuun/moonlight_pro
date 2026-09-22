@@ -272,9 +272,7 @@ export function ProgressRing({
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (clamped / 100) * circumference;
 
-  const strokeColor = isOverachieved
-    ? '#ffd166'
-    : isCompleted
+  const strokeColor = isCompleted
     ? 'var(--moon-200)'
     : (map[tone] || map.moon);
 
@@ -292,9 +290,10 @@ export function ProgressRing({
   return (
     <div
       role="progressbar"
-      aria-valuenow={numValue}
+      aria-valuenow={clamped}
       aria-valuemin={0}
       aria-valuemax={100}
+      aria-valuetext={isOverachieved ? `${numValue}% 달성, 목표보다 ${Math.round(numValue - 100)}% 초과` : undefined}
       title={computedTitle}
       className={`hub-progress-ring${completedCls}${overachievedCls}${className ? ` ${className}` : ''}`}
       style={{
@@ -343,7 +342,7 @@ export function ProgressRing({
           className="hub-progress-ring__label mono"
           style={{
             position: 'absolute',
-            fontSize: Math.max(10.5, Math.round(size * 0.28)),
+            fontSize: Math.max(12, Math.round(size * 0.28)),
             color: isCompleted ? 'var(--moon-100)' : 'var(--fg-muted)',
             fontWeight: 600,
             lineHeight: 1,

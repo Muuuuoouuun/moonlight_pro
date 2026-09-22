@@ -6,8 +6,8 @@ const state = globalThis.__advisorRouteTest = {};
 const stubs = {
   "@/lib/hub-write-guard": `export function assertHubWriteAllowed() { return null; }
     export async function readHubWriteJson(req) { return { data: await req.json() }; }`,
-  "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { return { source: 'supabase' }; }`,
-  "@/lib/sales-os/context-assembler": `export async function assembleSalesContext() { return { source: 'supabase' }; }`,
+  "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { globalThis.__advisorRouteTest.contextRead = true; return { source: 'supabase' }; }`,
+  "@/lib/sales-os/context-assembler": `export async function assembleSalesContext() { globalThis.__advisorRouteTest.contextRead = true; return { source: 'supabase' }; }`,
   "@/lib/sales-os/agent-runs": `
     export async function recordAgentRun(input) { globalThis.__advisorRouteTest.run = input; return { persisted: true, id: 'run-1' }; }
     export async function setAgentRunEmittedCount(input) { globalThis.__advisorRouteTest.emission = input; return { persisted: true }; }
@@ -151,3 +151,40 @@ test('sales-mentor forwards directives to Engine', async () => {
   assert.equal(res.status, 200);
   assert.deepEqual(state.lastFetch.body.directives, { knowledge: { minContracts: 10 } });
 });
+
+for (const [name, handler] of [['Council', POST], ['Guru', guruPOST]]) {
+  test(`${name} rejects malformed advisor settings before context reads, model calls or ledger writes`, async () => {
+    const invalid = [null, [], 'settings',
+      { directives: [] }, { directives: 'settings' }, { directives: { values: [] } }, { directives: { knowledge: 3 } },
+      { values: { coreValues: 'one value' } }, { directives: { values: { coreValues: 'one value' } } },
+      { values: { acceptableCosts: [1] } }, { values: { pivotConditions: [{}] } }, { values: { tradeOffRules: 'a rule' } },
+      { legendIds: 'jobs' }, { legendIds: ['jobs', 'unknown'] }, { legendIds: ['jobs', 'jobs'] }, { legendIds: ['constructor'] },
+      { directives: { values: { legendIds: [null] } } },
+      { knowledge: { domain: 'unsupported' } }, { knowledge: { facts: 'one fact' } },
+      { knowledge: { playbooks: {} } }, { knowledge: { rules: [false] } }, { knowledge: { forbidden: 10 } },
+      { knowledge: { retrievedSnippets: 'text' } }, { knowledge: { retrievedSnippets: [null] } },
+      { knowledge: { retrievedSnippets: [{ title: 'snippet', snippet: null }] } },
+      { directives: { knowledge: { retrievedSnippets: [{ title: [], snippet: 'text' }] } } },
+      { knowledge: { retrievedSnippets: [{ title: 'snippet', snippet: 'text', source: {} }] } },
+    ];
+    for (const body of invalid) {
+      const response = await handler(request(body));
+      assert.equal(response.status, 400, JSON.stringify(body));
+      assert.deepEqual(await response.json(), { status: 'error', error: '자문 설정의 형식을 확인해 주세요.' });
+      assert.equal(state.contextRead, undefined);
+      assert.equal(state.lastFetch, undefined);
+      assert.equal(state.run, undefined);
+      assert.equal(state.order, undefined);
+    }
+  });
+
+  test(`${name} preserves valid nested and top-level settings without silently truncating caller data`, async () => {
+    const values = { coreValues: ['확인된 사실'], acceptableCosts: [], pivotConditions: ['새 자료 확인'], tradeOffRules: ['사실 우선'], legendIds: ['jobs', 'bezos', 'chouinard'], operatorEnergy: 4 };
+    const knowledge = { domain: 'general', facts: ['전달된 내용'], playbooks: [], rules: ['원문 보존'], forbidden: ['근거 없는 보장'], retrievedSnippets: [{ id: 'note-1', title: '자료', snippet: '원문 전체', source: 'provided' }], minContracts: 10 };
+    for (const settings of [{ directives: { values, knowledge } }, { values, knowledge }, { directives: null, values: null, knowledge: null, legendIds: null }]) {
+      const response = await handler(request(settings));
+      assert.equal(response.status, 200);
+      for (const [key, value] of Object.entries(settings)) assert.deepEqual(state.lastFetch.body[key], value === null ? undefined : value);
+    }
+  });
+}

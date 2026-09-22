@@ -3,8 +3,9 @@ import type { OfficeWorkflowRequest, OfficeWorkflowContext, OfficeWorkflowAnswer
 import { OFFICE_PERSONAS, OFFICE_PERSONA_VERSION } from './personas.ts';
 import { OFFICE_PLAYBOOKS, OFFICE_QUALITY_STANDARD, OFFICE_MODE_GUIDANCE } from './playbooks.ts';
 import { buildOfficeOperatingPolicy } from './operating-policy.ts';
+import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS } from './source-review.ts';
 
-export const OFFICE_WORKFLOW_POLICY_VERSION = `2026-09-21.workflow-v1/${OFFICE_PERSONA_VERSION}`;
+export const OFFICE_WORKFLOW_POLICY_VERSION = `2026-09-22.workflow-v2/${OFFICE_PERSONA_VERSION}`;
 
 const CONTRACT = `
 JSON 객체만 반환한다. 모델 작성 필드는 summary, artifact:{kind,body}, evidence:[{sourceRefId,explanation}], uncertainties, dissent, nextStep이고 council 모드만 council을 추가한다.
@@ -12,7 +13,7 @@ summary는 짧은 판단, artifact.body는 실제 사용할 본문이다. 초안
 evidence에는 sourceContext.sourceRefs에 실제 있는 ID만 사용한다. 근거가 없는 사용자 원문은 출처 확인된 원장으로 승격하지 않는다. 근거 목록과 이견은 없으면 빈 배열이다.
 nextStep은 별도 업무가 필요할 때만 {kind:"create_task",label,fields:{title,description?,nextAction?,dueAt?,projectId?,dealId?,priority?}} 제안이다. 별도 할 일이 없으면 null이다. 기한·프로젝트·거래 ID는 제공된 사실만 넣고 없으면 필드를 생략한다. 인사·휴식·가용 시간이 0인 상황에 새 할 일을 강제하지 않는다. 제안은 실행 명령이 아니다.
 모델은 requestId/status/resultRevision/context/generation/persistence/application/capabilities/가격/검수통과를 작성하지 않는다. 저장·발송·예약·코드 변경·테스트·조회·지속 감시·담당 호출을 수행했거나 자동으로 수행하겠다고 주장하지 않는다.
-council일 때 council:{perspectives:[{ownerId,judgment,tradeoff}],recommendation}이 필수다. perspectives는 요청 participants와 정확히 같은 집합이며 각 관점의 판단과 감수할 비용을 구별한다. 주관 추천은 하나이고 남은 이견을 지우지 않는다. 단일 모델의 관점 시뮬레이션이며 독립 에이전트 합의가 아니다. 다른 모드에는 council 필드를 쓰지 않는다.
+council일 때 council:{perspectives:[{ownerId,judgment,tradeoff}],recommendation}이 필수다. perspectives는 요청 participants와 정확히 같은 집합이며 각 관점의 판단과 감수할 비용을 구별한다. 주관은 수렴 설정에 맞는 추천을 남기고 이견을 지우지 않는다. 탐색이면 결론을 확정하는 대신 대안을 구별할 관측을 추천한다. 같은 모델의 역할별 검토이며 독립 사실 검증이 아니다. 다른 모드에는 council 필드를 쓰지 않는다.
 `;
 
 const INTENT_GUIDANCE = {
@@ -54,6 +55,7 @@ export function buildOfficeWorkflowReview(request: OfficeWorkflowRequest, contex
       '모든 수치·일정·고객 발언·약속·자료/지원의 존재·수행 상태를 원문과 대조한다. 직접 제공된 사실, 명시한 산식의 계산, 분명히 제안으로 표시한 내용만 남긴다. 근거 없는 주장을 다른 추측으로 교체하지 않는다. 없는 1인칭 경험·사회적 증거·일반 전환율을 넣지 않는다. 자료 없음과 자료 미확인을 구별한다.',
       '주간 집계의 정의·기간·범위·coverage를 보존하고 누락 0건이나 전체 성과를 확정하지 않는다. 금액과 입금, 활동 수와 사람 수, 초안과 발행, 승인과 실행을 구별한다. 순시간 = 예상 절약 시간 - (같은 기간의 초기 설정 + 유지 시간). 시간 절감을 현금으로 바꾸지 않는다.',
       '초안 본문은 고객에게 바로 보낼 문장/완성된 원고로 남기고 불확실성은 별도 필드로 옮긴다. 휴식 요청·추가 행동이 없는 답에는 nextStep=null을 유지한다. 실행되지 않은 행동을 완료했다고 말하지 않는다. nextStep이 있으면 본문 추천과 같은 행동인지 확인한다. council의 각 관점과 남은 이견을 지우지 않는다.',
+      OFFICE_SOURCE_REVIEW_INSTRUCTIONS,
     ].join('\n\n'),
     prompt: JSON.stringify({ ...data(request, context), untrustedDraft: draft }),
   };

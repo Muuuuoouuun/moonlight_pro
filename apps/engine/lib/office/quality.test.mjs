@@ -86,29 +86,35 @@ test('only the source-reviewed answer is returned; the untrusted draft cannot al
     }
     assert.equal(input.signal, firstSignal);
     assert.match(input.systemInstruction, /최종 편집 검수/);
-    return { ok: true, text: JSON.stringify({ answer: '고객이 설명한 적응 우려에 대한 질문 초안', nextAction: '확인할 질문 하나 선택' }), model: 'test' };
+    assert.deepEqual(input.responseJsonSchema.required, ['sourceQuotes', 'corrections', 'answer', 'nextAction']);
+    return { ok: true, text: JSON.stringify({ sourceQuotes: [], corrections: [], answer: '고객이 설명한 적응 우려에 대한 질문 초안', nextAction: '확인할 질문 하나 선택' }), model: 'test' };
   });
   assert.equal(calls, 2);
   assert.equal(result.status, 'generated');
   assert.doesNotMatch(JSON.stringify(result), /INVENTED_GUIDE|OVERRIDE_REVIEW/);
 });
 
-test('council asks the provider for its full schema and still rejects invalid provider output', async () => {
+test('council requests bounded role statements first and rejects incomplete role output before synthesis', async () => {
   const { request, context } = evaluationInput(OFFICE_EVALUATION_CASES.find(c => c.mode === 'council'));
-  let calls = 0;
+  const calls = [];
   const result = await generateOfficeResponse(request, context, async input => {
-    calls++;
-    assert.deepEqual(input.responseJsonSchema.required, ['answer', 'nextAction', 'recommendation', 'evidence', 'dissent']);
-    assert.equal(input.responseJsonSchema.properties.dissent.type, 'array');
+    calls.push(input);
     return { ok: true, text: '{"answer":"missing council fields","nextAction":"next"}', model: 'test' };
   });
-  assert.equal(calls, 1);
+  assert.equal(calls.length, request.participants.length);
+  for (const input of calls) {
+    assert.deepEqual(input.responseJsonSchema.required, ['sourceQuotes', 'corrections', 'position', 'evidence', 'objection', 'revisionCondition', 'changed', 'replyTo', 'changeReason']);
+    assert.equal(input.responseJsonSchema.properties.evidence.maxItems, 2);
+    assert.equal(input.responseJsonSchema.properties.ownerId, undefined);
+    assert.equal(JSON.parse(input.prompt).phase, 'position');
+  }
   assert.equal(result.status, 'error');
+  assert.equal(result.discussion, undefined);
 });
 
 test('failed or invalid review never falls back to a successful unreviewed draft', async () => {
   const { request, context } = evaluationInput(OFFICE_EVALUATION_CASES[0]);
-  for (const review of [{ ok: false, reason: 'timeout' }, { ok: true, text: '{bad json}', model: 'test' }]) {
+  for (const review of [{ ok: false, reason: 'timeout' }, { ok: true, text: '{bad json}', model: 'test' }, { ok: true, text: '{"answer":"other model","nextAction":"next"}', model: 'different-model' }]) {
     let calls = 0;
     const result = await generateOfficeResponse(request, context, async () => ++calls === 1
       ? { ok: true, text: JSON.stringify({ answer: 'unreviewed draft', nextAction: 'next' }), model: 'test' }

@@ -15,7 +15,7 @@ export function createOfficeHubHandler({guard=assertHubWriteAllowed,readContext=
    if(result.status!=='generated')return Response.json(result,{status:result.status==='preview'?202:502});
    let log={persisted:false,id:null};
    try{
-    log=await recordRun({agent:request.mode==='council'?'office.council':`office.${request.ownerId}`,mode:request.mode,ref:`office:${request.scope}`,inputSummary:`${OFFICE_VERSION} owner=${request.ownerId} scope=${request.scope} views=${request.participants.join(',')}`,recommendation:{answer:result.answer,nextAction:result.nextAction,...(request.mode==='council'?{recommendation:result.recommendation,evidence:result.evidence,dissent:result.dissent}:{})},result:'ok'});
+    log=await recordRun({agent:request.mode==='council'?'office.council':`office.${request.ownerId}`,mode:request.mode,ref:`office:${request.scope}`,inputSummary:`${OFFICE_VERSION} owner=${request.ownerId} scope=${request.scope} views=${request.participants.join(',')}`,recommendation:{answer:result.answer,nextAction:result.nextAction,...(request.mode==='council'?{recommendation:result.recommendation,evidence:result.evidence,dissent:result.dissent,discussion:result.discussion}:{})},result:'ok'});
    }catch{ /* A generated answer is still useful when only its run log fails. */ }
    return Response.json({...result,version:OFFICE_VERSION,log:{persisted:log?.persisted===true,runId:log?.persisted===true?log.id:null},businessWrites:false});
   }catch{return Response.json({status:'error',error:'Office 요청을 처리하지 못했습니다. 입력은 보존됩니다.'},{status:502});}

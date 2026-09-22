@@ -556,8 +556,11 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-checkbox,
-  .hub-app .hub-checkbox-row {
-    transition: none;
+  .hub-app .hub-checkbox-row,
+  .hub-app .hub-checkbox__icon,
+  .hub-app .hub-checkbox-row--checked .hub-checkbox-row__icon {
+    animation: none !important;
+    transition: none !important;
     transform: none !important;
   }
 }
@@ -690,9 +693,9 @@
 }
 
 @keyframes hubRingGlow {
-  0% { filter: drop-shadow(0 0 2px rgba(140, 168, 216, 0.2)); }
-  50% { filter: drop-shadow(0 0 8px rgba(140, 168, 216, 0.55)); }
-  100% { filter: drop-shadow(0 0 4px rgba(140, 168, 216, 0.35)); }
+  0% { filter: drop-shadow(0 0 2px color-mix(in srgb, var(--moon-300) 20%, transparent)); }
+  50% { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--moon-300) 55%, transparent)); }
+  100% { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--moon-300) 35%, transparent)); }
 }
 
 .hub-app .hub-progress-track {
@@ -784,7 +787,7 @@
 }
 
 .hub-app .hub-progress-ring--completed {
-  filter: drop-shadow(0 0 6px rgba(140, 168, 216, 0.4));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--moon-300) 40%, transparent));
   animation: hubRingGlow var(--dur-enter) var(--ease-hub);
 }
 

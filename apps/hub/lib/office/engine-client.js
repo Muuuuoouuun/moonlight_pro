@@ -1,4 +1,4 @@
-import { parseOfficeAnswer,parseOfficeContext,OFFICE_VERSION } from '@com-moon/agent-contracts/office';
+import { parseOfficeAnswer,parseOfficeContext,parseOfficeDiscussion,OFFICE_VERSION } from '@com-moon/agent-contracts/office';
 export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=process.env.COM_MOON_ENGINE_URL,secret=process.env.COM_MOON_SHARED_WEBHOOK_SECRET}={}) {
  if(!engineUrl?.trim()||!secret?.trim()) return {status:'preview',error:'Office Engine 연결이 필요합니다. 입력은 보존됩니다.'};
  try {
@@ -12,6 +12,8 @@ export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=
   const answer=parseOfficeAnswer({answer:data.answer,nextAction:data.nextAction,...(request.mode==='council'?{recommendation:data.recommendation,evidence:data.evidence,dissent:data.dissent}:{})},request.mode);
   parseOfficeContext(data.context,request.scope);
   if(JSON.stringify(data.context)!==JSON.stringify(context)) throw new Error('context-mismatch');
-  return {status:'generated',...answer,ownerId:request.ownerId,mode:request.mode,scope:request.scope,participants:request.participants,lens:null,simulation:data.simulation,version:data.version,model:typeof data.model==='string'?data.model:null,context};
+  const discussion=request.mode==='council'?{discussion:parseOfficeDiscussion(data.discussion,request)}:{};
+  if(request.mode!=='council'&&data.discussion!==undefined)throw new Error('unexpected-discussion');
+  return {status:'generated',...answer,...discussion,ownerId:request.ownerId,mode:request.mode,scope:request.scope,participants:request.participants,lens:null,simulation:data.simulation,version:data.version,model:typeof data.model==='string'?data.model:null,context};
  }catch{return {status:'error',error:'Office 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.'};}
 }
