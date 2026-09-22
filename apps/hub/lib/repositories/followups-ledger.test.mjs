@@ -129,12 +129,16 @@ test("Q117 tier-2 rows outside the tracking window only enter on their due date"
 });
 
 test("getFollowups reads crm_activities (not outreach_outcomes) and names its read failure", async () => {
-  state.activities = [{ id: "a1", kind: "kakao", reaction: null, body: "자료", leadId: null, companyId: "co-1", occurredAt: daysAgo(2) }];
+  // getFollowups는 IO 경로라 buildFollowupItems에 now를 넘기지 않는다(실시간 Date.now()).
+  // 고정 NOW 기준의 daysAgo()를 쓰면 날짜가 바뀌는 순간 일수가 어긋난다 — 실제로 자정을
+  // 넘기며 이 테스트가 깨졌다. 여기서는 실시간 기준으로 만들고 일수는 패턴으로만 본다.
+  const realDaysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString();
+  state.activities = [{ id: "a1", kind: "kakao", reaction: null, body: "자료", leadId: null, companyId: "co-1", occurredAt: realDaysAgo(2) }];
   const ok = await getFollowups({ limit: 10 });
   assert.equal(ok.source, "supabase");
   assert.ok(state.calls.some((c) => c.table === "crm_activities"));
   assert.ok(!state.calls.some((c) => c.table === "outreach_outcomes"));
-  assert.match(ok.items[0].why, /마지막 카톡 2일 전/);
+  assert.match(ok.items[0].why, /마지막 카톡 \d+일 전/);
   assert.equal(ok.partial, false);
 
   state.calls = [];

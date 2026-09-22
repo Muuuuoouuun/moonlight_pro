@@ -543,6 +543,8 @@
   transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 .hub-app .hub-seg__btn:hover:not([aria-pressed="true"]) { color: var(--fg-muted); }
+/* 필수 선택이 비었을 때만 — 색 단독이 아니라 폼 메시지와 함께 쓴다(§5.3). */
+.hub-app .hub-seg[data-invalid] { border-color: var(--danger); }
 .hub-app .hub-seg__btn[aria-pressed="true"] {
   color: var(--fg);
   background: var(--surface-3);

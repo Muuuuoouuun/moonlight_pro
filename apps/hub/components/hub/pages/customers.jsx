@@ -12,10 +12,10 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import {
   Badge, Card, Button, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
-  SegmentedControl, Divider, CheckboxRow, DateQuickPresets,
-  TextField, TextAreaField, SelectField,
+  SegmentedControl, Divider, TextAreaField, SelectField,
 } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
+import { ContactRecordForm } from "../contact-record-form";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
@@ -233,240 +233,6 @@ function QuickLog({ onSave }) {
         <Button variant="primary" size="sm" onClick={save} disabled={!text.trim()}>기록 저장</Button>
       </div>
     </div>
-  );
-}
-
-// ── 컨택 완료 시트 (Phase 1C) ────────────────────────────────────────────────
-// 통화·미팅을 끝냈을 때 "1줄 요약 + 반응 + 다음 액션(날짜) 또는 기약 없음"을
-// record_contact_outcome_v1 원자 RPC로 남긴다. 반응·요약 없이는 저장 불가,
-// 다음 액션 없이 저장하려 하면 경고를 먼저 보여준다 (spec §10).
-
-const REACTIONS = [
-  { key: "positive", label: "긍정" },
-  { key: "neutral", label: "중립" },
-  { key: "concern", label: "우려" },
-  { key: "rejected", label: "거절" },
-  { key: "no_response", label: "무응답" },
-];
-const OUTCOME_KINDS = ["call", "kakao", "meeting", "visit", "demo", "email"];
-
-function ContactOutcomeSheet({ row, onSaved, onUndone }) {
-  const [kind, setKind] = React.useState("call");
-  const [reaction, setReaction] = React.useState(null);
-  const [summary, setSummary] = React.useState("");
-  const [nextAction, setNextAction] = React.useState("");
-  const [nextAt, setNextAt] = React.useState("");
-  const [dormant, setDormant] = React.useState(false);
-  const [state, setState] = React.useState("idle"); // idle | warn | saving | error
-  const [errorMsg, setErrorMsg] = React.useState("");
-  // 저장을 눌러 보기 전에는 필수 표시를 붉히지 않는다 — 빈 폼을 열자마자 꾸짖는 건 잔소리다.
-  // 누른 뒤부터는 무엇이 비었는지 이름을 대고 그 필드로 포커스를 옮긴다. 이유를 말하지 않는
-  // 죽은 disabled 버튼이 이 폼에서 가장 자주 막히는 지점이었다.
-  const [attempted, setAttempted] = React.useState(false);
-  const titleId = React.useId();
-  const reactionRef = React.useRef(null);
-  const summaryRef = React.useRef(null);
-
-  const reset = () => {
-    setReaction(null); setSummary(""); setNextAction(""); setNextAt("");
-    setDormant(false); setState("idle"); setErrorMsg(""); setAttempted(false);
-  };
-  const [pendingUndo, setPendingUndo] = React.useState(null);
-
-  // followups submitLog와 같은 deferred-write 계약(5차 재감사 M: 같은 최고 빈도 액션이
-  // 진입점에 따라 되돌리기 유무가 갈렸다): 즉시 반영+3.5초 되돌리기, 창이 닫히면 POST,
-  // 늦은 실패 시 입력 복원+명명.
-  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
-  const persist = async (payload, snapshot) => {
-    try {
-      const resp = await fetch("/api/hub/revenue/contact-outcome", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (resp.ok && data.status === "saved") return;
-      // 늦은 실패 — 입력 복원 + 원인 명명 (낙관 행 제거는 onUndone이 담당)
-      onUndone?.(snapshot.optimisticId);
-      setKind(snapshot.kind); setSummary(snapshot.summary); setReaction(snapshot.reaction);
-      setNextAction(snapshot.nextAction); setNextAt(snapshot.nextAt); setDormant(snapshot.dormant);
-      setState("error");
-      setErrorMsg(`${data.error || data.reason || "저장에 실패했습니다."} — 입력을 복원했습니다.`);
-    } catch (err) {
-      onUndone?.(snapshot.optimisticId);
-      setKind(snapshot.kind); setSummary(snapshot.summary); setReaction(snapshot.reaction);
-      setNextAction(snapshot.nextAction); setNextAt(snapshot.nextAt); setDormant(snapshot.dormant);
-      setState("error");
-      setErrorMsg(`${err instanceof Error ? err.message : String(err)} — 입력을 복원했습니다.`);
-    }
-  };
-
-  const save = ({ ignoreWarning = false } = {}) => {
-    if (!summary.trim() || !reaction) {
-      setAttempted(true);
-      if (!reaction) reactionRef.current?.querySelector("button")?.focus();
-      else summaryRef.current?.focus();
-      return;
-    }
-    // 다음 액션도 기약 없음도 없으면 저장 전 1회 경고 (열린 건을 공백으로 두지 않기)
-    if (!dormant && !nextAction.trim() && !ignoreWarning) {
-      setState("warn");
-      return;
-    }
-    const optimisticId = `local-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    const snapshot = { optimisticId, kind, summary: summary.trim(), reaction, nextAction: nextAction.trim(), nextAt, dormant };
-    const payload = {
-      entityType: row.kind === "account" ? "account" : "lead",
-      entityId: row.id,
-      kind,
-      summary: summary.trim(),
-      reaction,
-      nextAction: dormant ? null : (nextAction.trim() || null),
-      nextActionAt: dormant ? null : (nextAt || null),
-      dormant,
-    };
-    onSaved({
-      activityId: optimisticId,
-      kind,
-      summary: summary.trim(),
-      reaction,
-      nextAction: dormant ? "기약 없음 (휴면)" : nextAction.trim(),
-      dormant,
-    });
-    reset();
-    const key = `contact-${optimisticId}`;
-    scheduleUndoable(key, () => {
-      setPendingUndo((cur) => (cur?.key === key ? null : cur)); // 창 닫힘 — 죽은 버튼 방지
-      persist(payload, snapshot);
-    });
-    setPendingUndo({
-      key,
-      label: "기록됨",
-      undo: () => {
-        if (cancelUndoable(key)) {
-          onUndone?.(optimisticId);
-          setKind(snapshot.kind); setSummary(snapshot.summary); setReaction(snapshot.reaction);
-          setNextAction(snapshot.nextAction); setNextAt(snapshot.nextAt); setDormant(snapshot.dormant);
-        }
-        setPendingUndo(null);
-      },
-    });
-  };
-
-  // 빠진 항목은 그 필드 옆에서 말한다 — 푸터에 한 번 더 나열하면 같은 오류를 세 번
-  // 붉히게 되고 §5.3 red budget을 넘는다. 푸터는 왜 안 눌리는지만 중립으로 알린다.
-  const showMissing = attempted && (!reaction || !summary.trim());
-
-  return (
-    <section
-      aria-labelledby={titleId}
-      style={{ border: "1px solid var(--line)", borderRadius: "var(--r-lg)", padding: 16, display: "flex", flexDirection: "column", gap: 16 }}
-    >
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-        <h3 id={titleId} style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>컨택 완료 기록</h3>
-        <span style={{ fontSize: 11.5, color: "var(--fg-faint)" }}>반응과 요약을 남기면 타임라인에 쌓입니다</span>
-      </div>
-
-      <SelectField
-        label="채널"
-        value={kind}
-        onChange={e => setKind(e.target.value)}
-        options={OUTCOME_KINDS.map(k => ({ value: k, label: ACT_LABEL[k] }))}
-        fieldStyle={{ maxWidth: 172 }}
-      />
-
-      <div ref={reactionRef}>
-        <span className="hub-label">고객 반응<span className="hub-label__req"> · 필수</span></span>
-        <SegmentedControl
-          label="고객 반응"
-          options={REACTIONS.map(r => ({ key: r.key, label: r.label }))}
-          value={reaction}
-          onChange={setReaction}
-          size="md"
-          // borderColor 롱핸드를 SegmentedControl의 border 숏핸드 위에 얹으면 React가
-          // 나머지 롱핸드를 지워 보더가 currentColor로 떨어진다 — 숏핸드째 교체한다.
-          style={{ flexWrap: "wrap", ...(attempted && !reaction ? { border: "1px solid var(--danger)" } : {}) }}
-        />
-        {attempted && !reaction && (
-          <p className="hub-field-msg hub-field-msg--error" role="alert">반응을 하나 고르세요.</p>
-        )}
-      </div>
-
-      <TextField
-        ref={summaryRef}
-        label="1줄 요약"
-        required
-        value={summary}
-        onChange={e => setSummary(e.target.value)}
-        placeholder="무슨 얘기가 오갔는지 한 줄"
-        maxLength={120}
-        hint="예) 결정권자 참석 합의, 계약 조건 이견 없음"
-        error={attempted && !summary.trim() ? "요약이 없으면 나중에 이 컨택을 읽을 수 없습니다." : null}
-      />
-
-      {/* 다음 단계는 한 묶음 — 액션·날짜·기약 없음이 서로를 끄고 켠다.
-          드로어 폭이 380px라 뷰포트 미디어쿼리로는 못 고친다: 항상 세로로 쌓아
-          날짜 입력과 프리셋이 서로를 잘라내지 않게 한다. */}
-      <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 15, display: "flex", flexDirection: "column", gap: 13 }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--fg-dim)" }}>다음 단계</div>
-
-        <TextField
-          label="다음 액션"
-          value={nextAction}
-          onChange={e => { setNextAction(e.target.value); if (state === "warn") setState("idle"); }}
-          placeholder="계약서 발송"
-          disabled={dormant}
-        />
-
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
-          <TextField
-            label="날짜"
-            type="date"
-            value={nextAt}
-            onChange={e => setNextAt(e.target.value)}
-            disabled={dormant}
-            className="mono"
-            fieldStyle={{ flex: "1 1 170px" }}
-            style={{ padding: "0 10px" }}
-          />
-          {/* date picker 반복 마찰 제거 — followups LogForm과 동일 프리셋(27차 편의성). */}
-          <DateQuickPresets disabled={dormant} onPick={setNextAt} style={{ flexWrap: "wrap", gap: 4, paddingBottom: 1 }} />
-        </div>
-
-        <CheckboxRow
-          checked={dormant}
-          onChange={(v) => { setDormant(v); if (state === "warn") setState("idle"); }}
-          text="기약 없음 — 다음 약속 없이 닫기"
-        />
-      </div>
-
-      {/* 메시지 줄은 높이를 예약한다 — 경고가 나타날 때 저장 버튼이 튀어 오르면 오조작난다. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--line-soft)", paddingTop: 15 }}>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.45, minHeight: 18 }}>
-          {showMissing && (
-            <span role="alert" style={{ color: "var(--fg-muted)" }}>위 필수 항목을 채우면 저장됩니다.</span>
-          )}
-          {!showMissing && state === "warn" && (
-            <span style={{ color: "var(--fg-muted)" }}>다음 액션이 비어 있습니다. 그래도 저장하려면 한 번 더 누르세요.</span>
-          )}
-          {!showMissing && state === "error" && <span role="alert" style={{ color: "var(--danger)" }}>{errorMsg}</span>}
-          {pendingUndo && (
-            <span role="status" aria-live="polite" style={{ color: "var(--fg-muted)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {pendingUndo.label}
-              <Button variant="ghost" size="xs" onClick={pendingUndo.undo}>되돌리기</Button>
-            </span>
-          )}
-        </div>
-        {/* 비활성 대신 항상 눌린다 — 왜 안 되는지 말하지 않는 죽은 버튼을 두지 않는다. */}
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => save({ ignoreWarning: state === "warn" })}
-        >
-          {state === "saving" ? "저장 중…" : "저장"}
-        </Button>
-      </div>
-    </section>
   );
 }
 
@@ -765,8 +531,10 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
         )}
 
         {/* 컨택 완료 시트 — Phase 1C 핵심 루프 */}
-        <ContactOutcomeSheet
-          row={row}
+        {/* 상세 안에서는 드로어를 겹치지 않고 폼만 인라인으로 쓴다(CRM 지침 §6.2 —
+            활성 오버레이는 언제나 하나). 껍데기가 필요한 진입점은 ContactRecordDrawer. */}
+        <ContactRecordForm
+          target={{ kind: row.kind === "account" ? "account" : "lead", id: row.id, companyId: row.companyId, name: row.person || row.name }}
           onSaved={(o) => {
             setActivities(prev => [
               { id: o.activityId, type: o.kind, msg: o.summary, at: "방금", reaction: o.reaction },

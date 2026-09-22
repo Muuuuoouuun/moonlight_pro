@@ -6,7 +6,8 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
-import { useUndoableAction } from "../use-undoable-action";
+import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
+import { ContactRecordDrawer } from "../contact-record-form";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
 import { buildTaskToday, isDurableTaskUpdateResult } from "@/lib/task-today";
@@ -1477,7 +1478,7 @@ function RhythmPanel({ onNavigate }) {
 // crm_activities.reaction 어휘(0016 CHECK) — 집중 고객 행의 마지막 접점 라벨.
 const FOCUS_REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "우려", rejected: "거절", no_response: "무응답" };
 
-function FocusSlots({ dailyFocus, onNavigate }) {
+function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
   if (!dailyFocus) return null;
   const [guruFocusItem, setGuruFocusItem] = React.useState(null);
   const ka = dailyFocus.urgentKa || {};
@@ -1620,6 +1621,17 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                     {item.lastReaction && <span> · {FOCUS_REACTION_LABEL[item.lastReaction] || item.lastReaction}</span>}
                   </div>
                 </div>
+                {/* 기록은 어디서 열어도 같은 폼이다 — 첫 화면에서 바로 남기고 하던 일로 돌아간다. */}
+                <IconButton
+                  icon="edit"
+                  label="연락 기록 남기기"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRecord?.({ kind: 'lead', id: item.id, name: item.name, companyId: item.companyId });
+                  }}
+                  style={{ flexShrink: 0 }}
+                />
                 <IconButton
                   icon="sparkle"
                   label="Guru 세일즈 코칭"
@@ -1862,6 +1874,8 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
   const [advisorSignal, setAdvisorSignal] = React.useState(null);
   const ledger = useDailyBriefLedger(refreshKey);
   const [queueExpanded, setQueueExpanded] = React.useState(false);
+  // 기록창 대상 — 집중 고객 행에서 열고, 저장은 공용 폼(contact-record-form)이 소유한다.
+  const [recordTarget, setRecordTarget] = React.useState(null);
   const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
   React.useEffect(() => {
     window.addEventListener('moonlight:inquiries-changed', refreshLedger);
@@ -1921,7 +1935,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
         {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
             tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다.
             모바일 점프 칩은 확정 슬롯 아래로 — fold 순서에 끼어들지 않는다. */}
-        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
+        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} onRecord={setRecordTarget} />
 
         <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
 
@@ -2000,6 +2014,14 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
             kind: advisorSignal.kind,
             meta: advisorSignal.meta,
           }}
+        />
+      )}
+
+      {recordTarget && (
+        <ContactRecordDrawer
+          target={recordTarget}
+          onSaved={() => { window.setTimeout(refreshLedger, UNDO_WINDOW_MS + 250); }}
+          onClose={() => setRecordTarget(null)}
         />
       )}
     </div>
