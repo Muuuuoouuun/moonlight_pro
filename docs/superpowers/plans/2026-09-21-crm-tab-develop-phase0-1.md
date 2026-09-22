@@ -1,6 +1,6 @@
 # CRM 탭 디벨롭 — 0·1단계 실행 계획 (파일 단위)
 
-> 상태: **DRAFT · 0단계 완료(0a·0b·0c) + 컨택 시트 전역화 완료 · 넛지(N1~N4) 대기.** 2026-09-21 오후: 실행 범위를 §0-min 최소 세트로 축소(운영자 "기본만" 판단), 이어서 "고고" 지시로 0단계 3개 PR을 worktree `claude/crm-nudge-p0`에서 완료하고 서울 운영 DB를 읽기 전용으로 확인했다(§3-실행·§3-실측). [스펙 v0.2](../specs/2026-09-21-crm-tab-develop-design.md) §7의 0단계 PR 3개와 1단계 PR 2개를 파일·함수·테스트·완료 기준까지 내린 문서이자, 0단계는 실행 기록까지 겸한다. 스펙의 권장 기본값(§9 Q138~Q146)이 뒤집히지 않는다는 전제로 쓴다. §0-min의 "3. 컨택 시트 전역화"와 "넛지 엔진(N1~N4)"은 아직 미착수다.
+> 상태: **DRAFT · 0단계 완료 + 컨택 시트 전역화 + 넛지 N1~N3(고객 연락 표시) 완료 · N3 나머지 표시 2곳과 N4 대기.** 2026-09-21 오후: 실행 범위를 §0-min 최소 세트로 축소(운영자 "기본만" 판단), 이어서 "고고" 지시로 0단계 3개 PR을 worktree `claude/crm-nudge-p0`에서 완료하고 서울 운영 DB를 읽기 전용으로 확인했다(§3-실행·§3-실측). [스펙 v0.2](../specs/2026-09-21-crm-tab-develop-design.md) §7의 0단계 PR 3개와 1단계 PR 2개를 파일·함수·테스트·완료 기준까지 내린 문서이자, 0단계는 실행 기록까지 겸한다. 스펙의 권장 기본값(§9 Q138~Q146)이 뒤집히지 않는다는 전제로 쓴다. §0-min의 "3. 컨택 시트 전역화"와 "넛지 엔진(N1~N4)"은 아직 미착수다.
 > 작성일: 2026-09-21 · 브랜치 `09.bigmac1.02` · HEAD `d8e2abe`
 > 전제: 활성 1순위는 여전히 09-03 성장 기획서 F-0(초안 크론 수리)이다. 0단계 3개 PR은 F-0이 만지는 파일(`apps/hub/app/api/cron/*`, `apps/engine/app/api/ai/*`, `automations-ledger.js`, `daily-brief.jsx` 승인 카드)과 겹치지 않아 병행할 수 있다. 여러 파일에 걸친 작업이므로 CLAUDE.md 규칙대로 **전용 worktree**(`git worktree add ../moonlight_pro-crm-p0 -b claude/crm-tab-p0`)에서 시작하고 병합 뒤 `git worktree remove`까지 마친다. `git add -A` 금지 — 만진 파일만 명시 경로로.
 
@@ -21,9 +21,9 @@
 
 | 순서 | 항목 | 파일 | 테스트 |
 |---|---|---|---|
-| N1 | **캘린더 접점** — 매칭·분류·미기록 판정 | **신설** `apps/hub/lib/sales-os/calendar-touchpoints.js`(`matchEventToCustomers`·`classifyCalendarTitle`·`findUnrecordedMeetings` — 순수; 규칙은 `scripts/enrich-eeocrm-leads.mjs`에서 옮기고 스크립트는 import) | `calendar-touchpoints.test.mjs`: ≥3자 매칭·미매칭·`next_meeting.eventId` 확정·`[start−2h, end+24h]` 경계·KST |
-| N2 | **넛지 엔진** — 계기 8종, 고객당 1개, 억제 적용 | **신설** `apps/hub/lib/sales-os/crm-nudges.js`(`buildCrmNudges({ leads, deals, activities, events, memos, suppressions, todayKey })` → `[{ ruleId, triggerKey, subject, severity:'act'|'organize'|'recap', title, reason, action:{ kind, prefill }, escape[] }]`, 순수 `@/` 없음) · **신설** `apps/hub/lib/repositories/crm-nudges-source.js`(리드·딜·최근 30일 활동·지난 3일 캘린더·정리 안 된 메모 30건 읽기 — 실패 소스는 `failedSources`) · 억제 저장: `revenue-write.js` `buildLeadWrite/buildDealWrite`에 `nudges` metaPatch(`{ [triggerKey]: { snoozedUntil, dismissed, at } }`) · 미매칭 일정 "고객 아님"은 `apps/hub/lib/crm-nudge-mute.js`(`my-work-mute.js` 복제, 키 `mlp.crm.nudge-muted`) | `crm-nudges.test.mjs`: 계기별 참/거짓·우선순위(숨긴 뒤 낮은 계기 미노출)·triggerKey가 제목 변경에 안정·억제 만료·고객당 1개 |
-| N3 | **표시 3곳** | `daily-brief/route.js`에 `buildCrmNudgeSignals`(kind `CRM`, 최대 3, `withoutFocusDuplicates` 뒤) + `daily-brief.jsx` decisions에 `record` 액션(시트 프리필 열기) · `followups.jsx` 상단 `먼저 정리할 것`(severity `act`) + 접힌 `정리`(organize) · `daily-review.jsx` 컴포저 위 `오늘 정리할 것 N` 목록(organize + 미기록 미팅) · 넛지 카드는 `discovery-nudge.jsx`를 `subject` 기반으로 일반화한 `apps/hub/components/hub/crm-nudge.jsx` | `state-usage`·`motion`·`focus-ring` 스윕 · 카드 순수 매핑 테스트(넛지 → 신호 카드 필드) |
+| N1 ✅ `cae4944` | **캘린더 접점** — 매칭·분류·미기록 판정 | **신설** `apps/hub/lib/sales-os/calendar-touchpoints.js`(`matchEventToCustomers`·`classifyCalendarTitle`·`findUnrecordedMeetings` — 순수; 규칙은 `scripts/enrich-eeocrm-leads.mjs`에서 옮기고 스크립트는 import) | `calendar-touchpoints.test.mjs`: ≥3자 매칭·미매칭·`next_meeting.eventId` 확정·`[start−2h, end+24h]` 경계·KST |
+| N2 ✅ `cae4944` | **넛지 엔진** — 계기 8종, 고객당 1개, 억제 적용 | **신설** `apps/hub/lib/sales-os/crm-nudges.js`(`buildCrmNudges({ leads, deals, activities, events, memos, suppressions, todayKey })` → `[{ ruleId, triggerKey, subject, severity:'act'|'organize'|'recap', title, reason, action:{ kind, prefill }, escape[] }]`, 순수 `@/` 없음) · **신설** `apps/hub/lib/repositories/crm-nudges-source.js`(리드·딜·최근 30일 활동·지난 3일 캘린더·정리 안 된 메모 30건 읽기 — 실패 소스는 `failedSources`) · 억제 저장: `revenue-write.js` `buildLeadWrite/buildDealWrite`에 `nudges` metaPatch(`{ [triggerKey]: { snoozedUntil, dismissed, at } }`) · 미매칭 일정 "고객 아님"은 `apps/hub/lib/crm-nudge-mute.js`(`my-work-mute.js` 복제, 키 `mlp.crm.nudge-muted`) | `crm-nudges.test.mjs`: 계기별 참/거짓·우선순위(숨긴 뒤 낮은 계기 미노출)·triggerKey가 제목 변경에 안정·억제 만료·고객당 1개 |
+| N3 ◐ `0f63bf6`·`8cf3809` | **표시 3곳** | `daily-brief/route.js`에 `buildCrmNudgeSignals`(kind `CRM`, 최대 3, `withoutFocusDuplicates` 뒤) + `daily-brief.jsx` decisions에 `record` 액션(시트 프리필 열기) · `followups.jsx` 상단 `먼저 정리할 것`(severity `act`) + 접힌 `정리`(organize) · `daily-review.jsx` 컴포저 위 `오늘 정리할 것 N` 목록(organize + 미기록 미팅) · 넛지 카드는 `discovery-nudge.jsx`를 `subject` 기반으로 일반화한 `apps/hub/components/hub/crm-nudge.jsx` | `state-usage`·`motion`·`focus-ring` 스윕 · 카드 순수 매핑 테스트(넛지 → 신호 카드 필드) |
 | N4 | **메모 → AI 후보** (`memo_unlinked`의 연결 행동) | Engine `pattern-analysis.ts` goal `contact-record`(입력: 메모 본문 + 고객명 후보 ≤50; 출력 `{customerName, customerId?, kind, summary, reaction, nextAction, nextAt, needs[]}`; 스키마 벗어나면 후보 없음) · Hub `journal/analyze` goal 통과 · **신설** `apps/hub/components/hub/contact-record-candidate.jsx`(후보 카드 → 시트 프리필) · 사용량: 응답 `usageMetadata`를 `agent_runs`에 남기고 월 합계 표시 | Engine 파서 테스트(스키마·고객명 매칭·미매칭 `customerId:null`) · 후보→시트 프리필 매핑 테스트 |
 
 `weekly_recap`은 기존 주간 카드(`getWeeklyReport`)에 `touchpoints`(기록+캘린더, 고객·날짜·종류 중복 제거) 필드를 더해 그린다 — 새 카드 없음.
@@ -191,6 +191,23 @@
 **브라우저 확인**: 고객 DB 상세에서 채널을 카톡으로 바꾸면 반응 섹션이 사라지고 `회신을 받았어요`가 나타나며, 그 토글을 켜면 반응이 정확히 돌아온다.
 
 **하지 않은 것**(계획대로): RPC v2·마이그레이션·초안 저장소·`QuickLog`/`LogComposer` 제거. 원문 붙여넣기의 원자 저장은 1b로 남는다.
+
+## 3-넛지. 캘린더 접점 · 넛지 엔진 · 표시 (2026-09-22, `cae4944`·`0f63bf6`·`8cf3809`)
+
+새 입력을 요구하지 않고 이미 연결된 것(캘린더·기록·약속·메모)만 읽어 "지금 이 고객에게 할 한 가지"를 만든다. 새 테이블 0 — 억제는 대상 레코드의 `meta.nudges`에 쌓인다.
+
+| 단계 | 산출 | 핵심 계약 |
+|---|---|---|
+| N1 `cae4944` | `sales-os/calendar-touchpoints.js`(+12 테스트) | 정규화 이름 **3자 이상**이 제목+장소에 들어 있을 때만 매칭(한글 2음절은 하한에 걸린다). 딜의 `meta.next_meeting.eventId`는 이름과 무관한 **확정** 매칭. 기록 창은 `[시작−2h, 종료+24h]`. 기록 조인은 **회사까지** 본다(라이브 115행 중 `company_id` 109·`lead_id` 0). 종일·미종료·미매칭·"고객 아님" 일정은 올리지 않는다 |
+| N2 `cae4944` | `sales-os/crm-nudges.js`(+12 테스트) | 계기 7종. **고객당 하나** — 우선순위로 고른 **뒤에** 억제를 적용한다(순서를 뒤집으면 숨긴 직후 낮은 계기가 튀어나와 "숨겼는데 또 뜬다"가 된다). `triggerKey`는 사실의 지문 — 이름·문구가 바뀌어도 같은 약속이면 같은 키 |
+| N3 앞단 `0f63bf6` | `repositories/crm-nudges-source.js` · `sales-os/nudge-suppression.js`(+5 테스트) · `/api/hub/crm-nudges` | 매출을 못 읽으면 빈 목록이 아니라 `error`. 캘린더 미연결(preview)은 실패로 세지 않는다. **억제 병합 결함 수리**: `persistRevenueRecord`의 meta 병합은 얕아서 `meta.nudges`를 통째로 갈아끼운다 — 현재 값을 먼저 읽어 얹고, 그 읽기가 실패하면 저장을 중단한다 |
+| N3 표시 `8cf3809` | `components/hub/crm-nudge.jsx` · 고객 연락 상단 2섹션 | 색을 쓰지 않는다 — severity는 배치로 말하고 카드는 중립(긴급은 목록이 이미 레일로 표현). "고객 아님"은 저장소가 아니라 브라우저에 남긴다(보기 설정이지 원본 사실이 아니다) |
+
+**실데이터가 잡은 결함.** 붙이고 보니 넛지가 **0건**이었다. 운영자 소유 리드 16건 전부가 이관·시트 템플릿을 `next_action`으로 달고 있는데 `no_next_action`이 `!nextAction`만 봐서 "정리됨"으로 통과시켰다 — 0c가 집중 고객에서 세운 `isTemplateNextAction` 판정과 갈라져 있었다. 통일하니 **16건**이 떴고, 카피도 갈라 쓴다(`자동으로 채워진 문구만 있어요` vs `다음 행동이 비어 있어요`).
+
+**브라우저 확인**(운영 DB 읽기 전용): 고객 연락 상단에 `정리 16`이 렌더되고, 각 카드의 `[정하기]`가 고객명이 프리필된 공용 기록창을 연다.
+
+**아직 안 한 것**: N3의 나머지 표시 2곳(첫 화면 신호 피드 · 하루 리뷰의 "오늘 정리할 것")과 N4(메모 → AI 후보). 억제(숨기기·미루기)는 운영 데이터 쓰기라 단위 테스트로만 확인했고 라이브 왕복은 미검증이다.
 
 ## 4. PR-1a — 고객 상세 섹션 세트
 
