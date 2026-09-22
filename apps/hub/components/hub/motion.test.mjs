@@ -24,7 +24,23 @@ async function collect(dir, acc = []) {
 }
 const sources = await collect(new URL("../../", import.meta.url));
 const MS = /(?<![\w.-])\d+(?:\.\d+)?ms\b/;
+// `ms`만 잡던 시절 `mlFlameFlicker 1.8s`·`mlBurnGlow 2.4s`가 가드를 그대로 통과했다
+// (2026-09-21 발견). §9가 허용하는 `s` 단위 duration은 라이브 인디케이터의 mlMoonPulse 1.4s
+// 하나뿐이므로, 그 이름이 없는 `s` 값은 ms와 같은 부채로 본다.
+// `0s`는 duration 선택이 아니라 "전이 없음"이므로 부채가 아니다.
+const SEC = /(?<![\w.-])(?!0s\b|0\.0+s\b)\d+(?:\.\d+)?s\b/;
 const BEZIER = /cubic-bezier\(/;
+
+// 축하 연출 2종은 §9의 단일 duration 규칙 밖에 있고, 유지 여부가 운영자 결정(Q134)에 걸려 있다.
+// 기획: docs/superpowers/specs/2026-09-21-home-screen-design-development.md §5.4·§10.
+// 임의로 값을 바꾸지 않고 부채로 박제한다 — 새 항목은 추가될 수 없다.
+const CELEBRATION_DEBT = new Set(["hubProgressShimmer", "hubSparklePop"]);
+
+function violatesMotion(value) {
+  if (BEZIER.test(value) || MS.test(value)) return true;
+  if (!SEC.test(value) || /mlMoonPulse/.test(value)) return false;
+  return ![...CELEBRATION_DEBT].some((name) => value.includes(name));
+}
 
 function cssOffenders(path, css) {
   const out = [];
@@ -36,7 +52,7 @@ function cssOffenders(path, css) {
       const [prop, ...rest] = decl.split(":");
       const value = rest.join(":").trim();
       if (!/^\s*(transition|animation)(-[a-z]+)?$/.test(prop || "")) continue;
-      if (MS.test(value) || BEZIER.test(value)) out.push(`${path}: ${selector.slice(0, 70)} → ${prop.trim()}: ${value}`);
+      if (violatesMotion(value)) out.push(`${path}: ${selector.slice(0, 70)} → ${prop.trim()}: ${value}`);
     }
   }
   return out;
@@ -46,13 +62,13 @@ function jsxOffenders(path, src) {
   // 인라인 style 객체의 transition/animation 계열 키. 값은 문자열 리터럴·템플릿·삼항 안의 문자열까지 본다.
   for (const m of src.matchAll(/\b(transition|animation)(?:Delay|Duration|TimingFunction|Property)?\s*:\s*([^,\n}]+)/g)) {
     const value = m[2];
-    if (/^\s*(reducedMotion|prefersReduced)/.test(value) && !MS.test(value)) continue;
-    if (MS.test(value) || BEZIER.test(value)) out.push(`${path}:${src.slice(0, m.index).split("\n").length} → ${m[1]}: ${value.trim().slice(0, 90)}`);
+    if (/^\s*(reducedMotion|prefersReduced)/.test(value) && !violatesMotion(value)) continue;
+    if (violatesMotion(value)) out.push(`${path}:${src.slice(0, m.index).split("\n").length} → ${m[1]}: ${value.trim().slice(0, 90)}`);
   }
   return out;
 }
 
-test("hub motion uses only the §9 tokens — no raw ms literals or inline cubic-bezier in transition/animation values", () => {
+test("hub motion uses only the §9 tokens — no raw ms/s literals or inline cubic-bezier in transition/animation values", () => {
   assert.ok(sources.length > 50, `sweep must reach the tree, saw ${sources.length}`);
   const offenders = [];
   for (const [path, src] of sources) {

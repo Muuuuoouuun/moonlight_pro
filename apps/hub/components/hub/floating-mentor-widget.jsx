@@ -425,7 +425,7 @@ export function FloatingMentorWidget({
                 border: active ? "1px solid var(--line)" : "1px solid transparent",
                 borderRadius: "var(--r-sm)",
                 cursor: "pointer",
-                transition: "all 0.15s ease",
+                transition: "all var(--dur-hover) var(--ease-hub)",
               }}
             >
               {tab.label}

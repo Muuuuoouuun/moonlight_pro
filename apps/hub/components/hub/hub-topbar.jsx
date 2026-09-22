@@ -165,7 +165,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
                 }}
               >
                 <span>보류 ({hiddenDeferredTabs.length})</span>
-                <span style={{ transform: deferredMenuOpen ? 'rotate(180deg)' : 'none', display: 'inline-flex', transition: 'transform 0.15s ease' }}>
+                <span style={{ transform: deferredMenuOpen ? 'rotate(180deg)' : 'none', display: 'inline-flex', transition: 'transform var(--dur-hover) var(--ease-hub)' }}>
                   <Iconed name="chevronD" size={10} />
                 </span>
               </button>

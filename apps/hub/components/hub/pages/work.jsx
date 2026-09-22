@@ -7,7 +7,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { RhythmVisualizer } from "../rhythm-visualizer";
-import { StreakFlame } from "../burning-streak";
+import { StreakMark } from "../burning-streak";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
 import {
@@ -1608,13 +1608,13 @@ export function Rhythm() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
             {longestStreak >= 3 && (
-              <span className="hub-streak-badge--burning" style={{ fontSize: 10.5, padding: '2px 6px', borderRadius: 'var(--r-xs)', background: 'rgba(255,120,50,0.1)', color: '#ff9a52', border: '1px solid rgba(255,140,70,0.3)' }}>
-                버닝 발동 🔥
+              <span style={{ fontSize: 10.5, padding: '2px 6px', borderRadius: 'var(--r-xs)', background: 'var(--surface-3)', color: 'var(--fg)', border: '1px solid var(--line)' }}>
+                3일 이상 연속
               </span>
             )}
           </div>
           <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }} className="stat">
-            <StreakFlame size={24} burning={longestStreak >= 3} />
+            <StreakMark size={24} level={longestStreak >= 14 ? 4 : longestStreak >= 7 ? 3 : longestStreak >= 3 ? 2 : longestStreak >= 1 ? 1 : 0} />
             <span>{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></span>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}{rhythmPartial ? ' · 관측값' : ''}</div>
@@ -1671,14 +1671,14 @@ export function Rhythm() {
                       {weeks.map((value, index) => (
                         <span key={index} aria-hidden="true" style={{
                           width: 18, height: 18, borderRadius: 4,
-                          background: value ? (isRowBurning ? '#ff7836' : 'var(--moon-500)') : 'var(--surface-3)',
+                          background: value ? 'var(--fg-muted)' : 'var(--surface-3)',
                           border: '1px solid var(--line-soft)',
                         }} />
                       ))}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {isRowBurning && <StreakFlame size={14} burning={true} />}
-                      <span className="mono" style={{ fontSize: 12, color: isRowBurning ? '#ff9a52' : 'var(--fg-muted)', fontWeight: isRowBurning ? 600 : 400 }}>
+                      {isRowBurning && <StreakMark size={14} level={2} />}
+                      <span className="mono" style={{ fontSize: 12, color: isRowBurning ? 'var(--fg)' : 'var(--fg-muted)', fontWeight: isRowBurning ? 600 : 400 }}>
                         {r.streak || 0}d
                       </span>
                     </div>
