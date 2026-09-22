@@ -180,3 +180,58 @@ test('office-chat POST executes council mode with simulation flag', async () => 
     globalThis.fetch = originalFetch;
   }
 });
+
+test('office-chat POST parses harsh evaluation score and gate', async () => {
+  assert.ok(route);
+  const prevSecret = process.env.COM_MOON_SHARED_WEBHOOK_SECRET;
+  const prevApiKey = process.env.GEMINI_API_KEY;
+  const originalFetch = globalThis.fetch;
+
+  process.env.COM_MOON_SHARED_WEBHOOK_SECRET = SHARED_SECRET;
+  process.env.GEMINI_API_KEY = 'test-gemini-key';
+
+  try {
+    globalThis.fetch = async (url) => {
+      if (String(url).includes('generateContent')) {
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: `[SCORE]: 75/100\n[GATE]: REVISE\n[EVAL_SUMMARY]: 완료 조건이 모호하고 범위가 과도합니다.\n[PENALTIES]:\n- (-15점) DoD 모호성\n- (-10점) Scope Creep\n\n1. 🚨 [치명적 맹점]\n완료 조건 불명확`,
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response('not found', { status: 404 });
+    };
+
+    const res = await route.POST(
+      mockRequest({
+        agentId: 'glaceon',
+        mode: 'critique',
+        message: '새로운 검색 기능 기획안 평가해줘',
+        evaluate: true,
+      })
+    );
+
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.status, 'generated');
+    assert.ok(data.evaluation);
+    assert.equal(data.evaluation.score, 75);
+    assert.equal(data.evaluation.gate, 'REVISE');
+    assert.ok(data.evaluation.summary.includes('완료 조건이 모호'));
+  } finally {
+    process.env.COM_MOON_SHARED_WEBHOOK_SECRET = prevSecret;
+    process.env.GEMINI_API_KEY = prevApiKey;
+    globalThis.fetch = originalFetch;
+  }
+});

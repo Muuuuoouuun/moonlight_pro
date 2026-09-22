@@ -21,40 +21,49 @@ import {
 
 const AGENT_SHORTCUTS = {
   eevee: [
-    "오늘 결정해야 할 핵심 안건 정리해줘",
-    "현재 우선순위 높은 요청의 담당 C-Level 배정",
+    "오늘 결정할 핵심 안건 1문장 압축 및 담당 C-Level 배정",
+    "다자 이견 정리 및 단일 추천 결정문 도출",
+    "지친 대표를 위한 긴급 업무 80% 컷오프",
   ],
   vaporeon: [
-    "이번 주 일정 병목 및 후속 누락 점검",
-    "마감일과 후속 확인일 분리 정렬",
+    "가용 시간 대조 오늘 마감 WBS 및 후속 확인일 분리",
+    "병목 구간 1개 해소 및 무리한 일정 재정렬",
+    "외부 응답 대기 상태와 직접 실행 작업 분리",
   ],
   jolteon: [
-    "최소 구현 Diff 및 기술 검증 계획",
-    "외부 연동 전 로컬 테스트 스펙",
+    "최소 변경 단위(Diff) 및 로컬 테스트 검증 계획",
+    "운영 배포 전 실패 원인 추적 및 롤백 플랜",
+    "외부 연동 전 모의 환경 검증 스펙",
   ],
   flareon: [
-    "정체 딜 고객 반론 대응 스크립트 작성",
-    "미팅 후속 단 1가지 CTA 제안서 초안",
+    "정체 딜 고객 맞춤 1-CTA 후속 제안서 초안 (격식체)",
+    "고객 반론 극복 및 다음 미팅 확정 질문 스크립트",
+    "관심-접촉-구매의사-결제 단계별 다음 행동 정의",
   ],
   espeon: [
-    "신규 기회 탐색 대비 기회비용 분석",
-    "가설 비교 및 1단계 검증 실험 설계",
+    "신규 기회 대비 기회비용 및 포기할 대안 비교표",
+    "1주일 가설 검증 실험 설계 및 중단 기준(Kill Criteria)",
+    "현상 유지 비용(Cost of Inaction) 분석",
   ],
   umbreon: [
-    "기획안의 맹점, 근거 결측 및 리스크 감사",
-    "안전하게 통과 가능한 수정 조건",
+    "기획안 4단 독립 감사(위치-결함근거-영향-수정안)",
+    "안전 통과 조건(Pass Criteria) 및 보완 대체 표현",
+    "출처 결측 및 허위 보장성 문구 검출",
   ],
   leafeon: [
-    "지속 가능한 비용 및 시간 투자 타당성",
-    "중단 기준(Kill criteria) 및 지출 상한 설정",
+    "초기 vs 반복 유지 비용 계산 및 지출 상한선(Cap) 설정",
+    "대표 시간/체력 투입량 대비 비즈니스 타당성 점검",
+    "손절/중단 기준(Kill Criteria) 설정",
   ],
   glaceon: [
-    "최소 제품 스펙(MVP) 및 완료 조건(DoD)",
-    "이번 릴리즈 범위에서 제외할 것 정의",
+    "최소 구현 범위(MVP) 및 검증 가능한 완료 조건(DoD)",
+    "이번 릴리즈 제외 목록(Out-of-Scope) 및 사용자 흐름",
+    "모호한 수식어 걷어낸 핵심 문제 정의 1문장",
   ],
   sylveon: [
-    "고객 관점 브랜드 메시지 및 훅 카피",
-    "상대가 겪는 구체적 문제 장면 중심 초안",
+    "타깃 관점 헤드라인 카피 3종 및 즉시 복사 본문 초안",
+    "진부한 공급자 설명 대체할 실제 전환 카피 제안",
+    "고객 문제 장면 중심의 브랜드 스토리텔링 초안",
   ],
 };
 
@@ -349,6 +358,18 @@ export function OfficeCouncil({ onNavigate }) {
                     >
                       {agent.role}
                     </div>
+                    {active && agent.resultFocus && (
+                      <div
+                        style={{
+                          fontSize: 10.5,
+                          color: "var(--moon-300)",
+                          lineHeight: 1.3,
+                          marginTop: 2,
+                        }}
+                      >
+                        🎯 {agent.resultFocus}
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -564,6 +585,11 @@ export function OfficeCouncil({ onNavigate }) {
                   <div style={{ fontSize: 11.5, color: "var(--moon-300)" }}>
                     "{activeAgent.tagline}"
                   </div>
+                  {activeAgent.resultFocus && (
+                    <div style={{ fontSize: 11, color: "var(--fg-faint)", marginTop: 2 }}>
+                      <span style={{ color: "var(--fg-muted)", fontWeight: 500 }}>결과:</span> {activeAgent.resultFocus} · <span style={{ color: "var(--fg-muted)", fontWeight: 500 }}>방향:</span> {activeAgent.directionFocus}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -584,6 +610,9 @@ export function OfficeCouncil({ onNavigate }) {
                       .map((id) => OFFICE_AGENTS[id]?.nameKo)
                       .filter(Boolean)
                       .join(", ") || "단독 검토"}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--moon-300)", marginTop: 2 }}>
+                    결과-방향성: 단일 추천 결정(1문장) · 포기할 대안 · 재검토 조건(Kill Criteria) 도출
                   </div>
                 </div>
               </div>

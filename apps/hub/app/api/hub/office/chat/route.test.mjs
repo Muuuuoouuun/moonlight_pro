@@ -82,6 +82,7 @@ test('hub office-chat route forwards sanitized request to Engine and returns res
         agentId: 'eevee',
         mode: 'chat',
         message: '할 일 정리해줘',
+        evaluate: true,
       })
     );
 
@@ -95,6 +96,7 @@ test('hub office-chat route forwards sanitized request to Engine and returns res
     assert.equal(forwardedUrl, 'https://engine.test/api/ai/office-chat');
     assert.equal(forwardedBody.agentId, 'eevee');
     assert.equal(forwardedBody.mode, 'chat');
+    assert.equal(forwardedBody.evaluate, true);
     assert.equal(forwardedHeaders['x-com-moon-shared-secret'], 'engine-secret');
   });
 });

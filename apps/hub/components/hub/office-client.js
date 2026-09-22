@@ -3,6 +3,8 @@ import {
   OFFICE_AGENT_IDS,
   OFFICE_MODES,
   OFFICE_DEFAULT_COUNCILS,
+  OFFICE_GATES,
+  OFFICE_HARSH_RUBRICS,
 } from '@com-moon/agent-contracts/office';
 
 export {
@@ -10,6 +12,8 @@ export {
   OFFICE_AGENT_IDS,
   OFFICE_MODES,
   OFFICE_DEFAULT_COUNCILS,
+  OFFICE_GATES,
+  OFFICE_HARSH_RUBRICS,
 };
 
 export const OFFICE_MODE_LABEL = {
@@ -27,6 +31,7 @@ export async function requestOfficeChat({
   participants = [],
   lens = null,
   context = null,
+  evaluate = false,
 } = {}) {
   try {
     const res = await fetch('/api/hub/office/chat', {
@@ -40,6 +45,7 @@ export async function requestOfficeChat({
         participants,
         lens,
         context,
+        evaluate,
       }),
     });
 
@@ -53,6 +59,7 @@ export async function requestOfficeChat({
         mode: data.mode || mode,
         participants: data.participants || participants,
         isSimulation: Boolean(data.isSimulation),
+        evaluation: data.evaluation || null,
         model: data.model,
         runId: data.runId,
       };

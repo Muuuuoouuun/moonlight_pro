@@ -10,8 +10,27 @@ export interface OfficeChatServiceResult {
   participants: OfficeAgentId[];
   model?: string;
   isSimulation?: boolean;
+  evaluation?: {
+    score: number | null;
+    gate: string | null;
+    summary: string | null;
+  } | null;
   error?: string;
   reason?: string;
+}
+
+function extractEvaluation(text: string) {
+  const scoreMatch = text.match(/\[SCORE\]:\s*(\d+)/i);
+  const gateMatch = text.match(/\[GATE\]:\s*(PASS|REVISE|REJECT)/i);
+  const summaryMatch = text.match(/\[EVAL_SUMMARY\]:\s*([^\n\r]+)/i);
+
+  if (!scoreMatch && !gateMatch) return null;
+
+  return {
+    score: scoreMatch ? Number.parseInt(scoreMatch[1], 10) : null,
+    gate: gateMatch ? gateMatch[1].toUpperCase() : null,
+    summary: summaryMatch ? summaryMatch[1].trim() : null,
+  };
 }
 
 export async function executeOfficeChat(
@@ -28,6 +47,7 @@ export async function executeOfficeChat(
       participants: input.participants,
       model: integration.model,
       isSimulation: input.mode === 'council',
+      evaluation: null,
       error: 'GEMINI_API_KEY is not configured on Engine.',
     };
   }
@@ -50,6 +70,7 @@ export async function executeOfficeChat(
       participants: input.participants,
       model: response.model || integration.model,
       isSimulation: input.mode === 'council',
+      evaluation: null,
       error: response.reason || 'Failed to generate office response.',
       reason: response.reason,
     };
@@ -63,5 +84,6 @@ export async function executeOfficeChat(
     participants: input.participants,
     model: response.model || integration.model,
     isSimulation: input.mode === 'council',
+    evaluation: extractEvaluation(response.text),
   };
 }

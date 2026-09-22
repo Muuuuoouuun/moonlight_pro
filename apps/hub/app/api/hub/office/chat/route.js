@@ -33,7 +33,7 @@ export async function POST(req) {
     );
   }
 
-  const { agentId, mode, message, draft, participants, lens, context: customContext } = sanitized;
+  const { agentId, mode, message, draft, participants, lens, context: customContext, evaluate } = sanitized;
 
   const context = customContext || (await assembleOfficeContext({ agentId, mode }));
   const result = await callEngineOfficeChat({
@@ -44,6 +44,7 @@ export async function POST(req) {
     participants,
     lens,
     context,
+    evaluate,
   });
 
   // Best-effort episodic memory logging
@@ -54,10 +55,13 @@ export async function POST(req) {
       agent: agentKey,
       mode,
       ref: lens ? `lens=${lens}` : null,
-      inputSummary: `mode=${mode} agent=${agentId} msg=${(message || '').slice(0, 50)}`,
+      inputSummary: `mode=${mode} agent=${agentId} eval=${evaluate} msg=${(message || '').slice(0, 50)}`,
       recommendation:
         result.data && typeof result.data === 'object'
-          ? { text: (result.data.text || '').slice(0, 2000) }
+          ? {
+              text: (result.data.text || '').slice(0, 2000),
+              evaluation: result.data.evaluation || null,
+            }
           : null,
       result: advisorRunResult(result.status, result.data),
     });

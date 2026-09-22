@@ -8,12 +8,16 @@ import {
   OFFICE_MODES,
   OFFICE_DEFAULT_COUNCILS,
   OFFICE_MODE_LABEL,
+  OFFICE_GATES,
+  OFFICE_HARSH_RUBRICS,
 } from './office-client.js';
 
 test('office-client exports 9 personas, modes, and default council agendas', () => {
   assert.equal(OFFICE_AGENT_IDS.length, 9);
   assert.equal(OFFICE_MODES.length, 4);
   assert.ok(OFFICE_DEFAULT_COUNCILS.length >= 6);
+  assert.deepEqual(OFFICE_GATES, ['PASS', 'REVISE', 'REJECT']);
+  assert.ok(OFFICE_HARSH_RUBRICS.umbreon);
 
   assert.equal(OFFICE_AGENTS.eevee.nameKo, '이브이');
   assert.equal(OFFICE_AGENTS.vaporeon.nameKo, '샤미드');
@@ -29,7 +33,7 @@ test('office-client exports 9 personas, modes, and default council agendas', () 
   assert.equal(OFFICE_MODE_LABEL.council, 'Council 종합 협업');
 });
 
-test('requestOfficeChat parses generated response', async (t) => {
+test('requestOfficeChat parses generated response and evaluation', async (t) => {
   const originalFetch = globalThis.fetch;
   t.after(() => {
     globalThis.fetch = originalFetch;
@@ -43,6 +47,11 @@ test('requestOfficeChat parses generated response', async (t) => {
         agentId: 'eevee',
         mode: 'chat',
         runId: 'test-run-id',
+        evaluation: {
+          score: 90,
+          gate: 'PASS',
+          summary: '목적 명확',
+        },
       }),
       { status: 200, headers: { 'content-type': 'application/json' } }
     );
@@ -50,12 +59,18 @@ test('requestOfficeChat parses generated response', async (t) => {
   const res = await requestOfficeChat({
     agentId: 'eevee',
     message: '업무 정리해줘',
+    evaluate: true,
   });
 
   assert.equal(res.state, 'done');
   assert.equal(res.text, '정리했어. 우선순위대로 진행하자.');
   assert.equal(res.agentId, 'eevee');
   assert.equal(res.runId, 'test-run-id');
+  assert.deepEqual(res.evaluation, {
+    score: 90,
+    gate: 'PASS',
+    summary: '목적 명확',
+  });
 });
 
 test('requestOfficeChat handles preview state and error state honestly', async (t) => {

@@ -5,6 +5,8 @@ import {
   OFFICE_AGENTS,
   OFFICE_AGENT_IDS,
   OFFICE_MODES,
+  OFFICE_GATES,
+  OFFICE_HARSH_RUBRICS,
   isOfficeAgentId,
   isOfficeMode,
   parseOfficeChatInput,
@@ -35,6 +37,10 @@ test('office contracts exports all 9 personas and 4 modes', () => {
     assert.ok(OFFICE_AGENTS[id].tagline);
     assert.ok(OFFICE_AGENTS[id].focus);
     assert.ok(OFFICE_AGENTS[id].boundary);
+    assert.ok(OFFICE_AGENTS[id].resultFocus);
+    assert.ok(OFFICE_AGENTS[id].directionFocus);
+    assert.ok(OFFICE_AGENTS[id].decisionRubric);
+    assert.ok(Array.isArray(OFFICE_AGENTS[id].tensionWith) && OFFICE_AGENTS[id].tensionWith.length > 0);
   }
   assert.equal(isOfficeAgentId('unknown'), false);
   assert.equal(isOfficeAgentId('order'), false); // ensure existing personas are not conflated
@@ -92,3 +98,35 @@ test('parseOfficeChatInput rejects unknown agents, modes, and empty input', () =
     (err) => err instanceof OfficeContractError && err.code === 'invalid-participant',
   );
 });
+
+test('office contracts exports harsh rubrics and gates', () => {
+  assert.deepEqual(OFFICE_GATES, ['PASS', 'REVISE', 'REJECT']);
+  for (const id of OFFICE_AGENT_IDS) {
+    const rubric = OFFICE_HARSH_RUBRICS[id];
+    assert.ok(rubric, `Rubric for ${id} must exist`);
+    assert.ok(rubric.metric, `Metric for ${id} must exist`);
+    assert.ok(rubric.passingThreshold >= 70 && rubric.passingThreshold <= 90);
+    assert.ok(Array.isArray(rubric.penalties) && rubric.penalties.length > 0);
+  }
+
+  // Critical gates check
+  assert.equal(OFFICE_HARSH_RUBRICS.umbreon.criticalGate, true);
+  assert.equal(OFFICE_HARSH_RUBRICS.glaceon.criticalGate, true);
+  assert.equal(OFFICE_HARSH_RUBRICS.vaporeon.criticalGate, true);
+});
+
+test('parseOfficeChatInput parses evaluate flag', () => {
+  const res1 = parseOfficeChatInput({
+    agentId: 'umbreon',
+    message: '보안 검토',
+    evaluate: true,
+  });
+  assert.equal(res1.evaluate, true);
+
+  const res2 = parseOfficeChatInput({
+    agentId: 'umbreon',
+    message: '보안 검토',
+  });
+  assert.equal(res2.evaluate, false);
+});
+
