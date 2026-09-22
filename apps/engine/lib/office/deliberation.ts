@@ -44,9 +44,9 @@ export function buildDeliberationPolicy(settings: OfficeDeliberation) {
   ][settings.challenge];
   const depth = ['','한두 문장으로 지금 결정할 쟁점 하나만 다룬다.','판단·핵심 근거·실행 조건을 짧게 잇는다.','같은 기간의 수치·선행 조건·대안의 차이를 확인한다. 세부 나열보다 결론을 바꾸는 차이에 집중한다.'][settings.depth];
   const warmth = ['담백한 존댓말로 바로 답한다. 차갑게 비난하지 않는다.','간결하고 솔직한 존댓말로 답한다.','편안한 해요체를 사용한다. 사용자가 표현한 부담이 있으면 한 번만 인정한다.','부드럽고 다정하게 말하되 칭찬·감정 추측·상투적 위로를 늘리지 않는다.'][settings.warmth];
-  const convergence = ['탐색 단계다. 의미가 다른 대안과 구분할 관측을 남기며 확정 합의를 만들지 않는다.','잠정 추천과 남은 선택지를 구분한다. 더 알아야 할 사실 하나를 남긴다.','추천 하나와 추천을 바꿀 조건을 남긴다. 근거로 해결되지 않은 이견을 보존한다.','지금 실행할 결정을 제안으로 닫는다. 담당·한 동작·제공된 기한 또는 미정·중단 조건을 짧게 남긴다. 근거 부족한 확정은 하지 않는다.'][settings.convergence];
+  const convergence = ['탐색 단계다. 의미가 다른 대안과 구분할 관측을 남기며 확정 합의를 만들지 않는다.','잠정 추천과 남은 선택지를 구분한다. 결정을 바꿀 미확인 사실이 있을 때만 남긴다.','추천 하나와 추천을 바꿀 조건을 남긴다. 근거로 해결되지 않은 이견을 보존한다.','결정 가능한 범위를 제안으로 닫는다. 실제 다음 실행을 요청받았을 때만 담당·한 동작·제공된 기한 또는 미정·중단 조건을 짧게 남긴다. 종결 확인에 새 업무를 배정하거나 근거 부족한 확정을 하지 않는다.'][settings.convergence];
   const influence = Object.entries(settings.influence).map(([id, weight]) => `${OFFICE_ROSTER.find(role => role.id === id)?.name}: ${weight}`).join(', ');
-  return `[이번 회의 조절]\n반론 강도 ${settings.challenge}/3: ${challenge}\n검토 깊이 ${settings.depth}/3: ${depth}\n말투 온도 ${settings.warmth}/3: ${warmth}\n결정 수렴 ${settings.convergence}/3: ${convergence}\n관점 비중(1~3): ${influence}. 비중이 높은 역할의 쟁점을 먼저 해결하되 표결 점수나 사실의 신뢰도로 쓰지 않는다. 검증된 사실·기한·권한·치명적 결함은 다수결이나 높은 비중으로 뒤집을 수 없다.\n설정과 역할 이름을 답변에서 설명하는 대신 실제 말투·검토·결과에 반영한다. 사용자 요청의 명시적 시간·분량·휴식 조건이 우선한다.`;
+  return `[이번 회의 조절]\n반론 강도 ${settings.challenge}/3: ${challenge}\n검토 깊이 ${settings.depth}/3: ${depth}\n말투 온도 ${settings.warmth}/3: ${warmth}\n결정 수렴 ${settings.convergence}/3: ${convergence}\n관점 비중(1~3): ${influence}. 비중이 높은 역할의 쟁점을 먼저 해결하되 표결 점수나 사실의 신뢰도로 쓰지 않는다. 검증된 사실·기한·권한·치명적 결함은 다수결이나 높은 비중으로 뒤집을 수 없다.\n설정과 역할 이름을 답변에서 설명하는 대신 실제 말투·검토·결과에 반영한다. 사용자 요청의 명시적 시간·분량·휴식·종결 조건이 우선한다. 조절값은 이번에 요청한 범위 안에서 적용하며, 깊거나 엄밀한 설정도 새 작업·추가 질문을 만들어내라는 뜻은 아니다.`;
 }
 
 const turnSchema = (participants: string[], ownerId: string, round: OfficeDiscussionTurn['round']) => {
