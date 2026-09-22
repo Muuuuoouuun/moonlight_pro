@@ -1,6 +1,6 @@
 # Moonlight MCP and Agent API
 
-Codex and other local MCP clients can query Moonlight and perform bounded business commands. MCP and authenticated HTTP clients use the same `/api/agent/v1` services. Hub's Council screen can also submit durable jobs to the optional [Codex worker](../codex-worker/README.md).
+Claude Code, Codex and other MCP clients can query Moonlight and perform bounded business commands — locally over stdio, or over authenticated Streamable HTTP for tools that cannot spawn a local process. MCP and authenticated HTTP clients use the same `/api/agent/v1` services. Hub's Council screen can also submit durable jobs to the optional [Codex worker](../codex-worker/README.md).
 
 ## Local setup
 
@@ -26,19 +26,14 @@ COM_MOON_SHARED_WEBHOOK_SECRET=<existing-shared-secret>
 
 Mirror workspace, actor, scopes and the shared webhook secret in Engine's private environment. The API token stays in Hub and the MCP client; Engine validates the shared secret and server-derived identity/scopes. Keep worker credentials distinct. Scope defaults to `read` when omitted; capability discovery reports grants separately from verified persistence.
 
-Start Hub and Engine in separate terminals with `npm run dev:hub` and `npm run dev:engine`. For Codex, use its `config.toml` registration (replace absolute paths):
+Start Hub and Engine in separate terminals with `npm run dev:hub` and `npm run dev:engine`, then register the clients you use (see [Connecting AI clients](#connecting-ai-clients)):
 
-```toml
-[mcp_servers.moonlight]
-command = "/absolute/path/to/node"
-args = ["--env-file=/absolute/path/to/moonlight/apps/hub/.env.local", "/absolute/path/to/moonlight/packages/mcp-server/src/index.js"]
-
-[mcp_servers.moonlight.env]
-COM_MOON_MCP_PROFILE = "core"
-COM_MOON_MCP_API_MODE = "agent"
+```sh
+npm run mcp:connect -- status --probe
+npm run mcp:connect -- install claude-code claude-desktop codex
 ```
 
-Node 22+ can load the ignored environment file without embedding secrets in client configuration. Restart the MCP connection after changing its environment/profile. Claude Code/Desktop can use equivalent `command` and `args` in their `mcpServers` configuration; `.mcp.json` is not Codex's configuration format.
+Restart the MCP connection after changing its environment/profile.
 
 Read-only connection diagnosis:
 
@@ -47,6 +42,69 @@ node --env-file=apps/hub/.env.local packages/mcp-server/src/doctor.js
 ```
 
 It initializes the actual stdio protocol, discovers tools and performs a small read. Output includes discovered tool count, status, payload bytes and latency; it excludes row content and credentials. It neither writes a business record nor starts a model. `npm run mcp:doctor` automatically loads the local Hub environment file when present.
+
+## Connecting AI clients
+
+Every client runs the same launcher, `bin/moonlight-mcp.js`, by absolute path. It finds the repository from its own location and reads `apps/hub/.env.local` itself, so a registration holds one path, no `cwd` and no `--env-file`. From that file it loads only `COM_MOON_HUB_URL`, `COM_MOON_HUB_WRITE_SECRET`, `COM_MOON_AGENT_API_TOKEN` and `COM_MOON_MCP_*`; model, OAuth and database secrets never enter the MCP process. Values already set in the client's `env` win over the file, and `COM_MOON_MCP_ENV_FILE` points at a different file.
+
+```sh
+node packages/mcp-server/bin/moonlight-mcp.js [--profile core|pms|sales|content|jobs|all] [--read-only]
+```
+
+`--read-only` keeps only tools annotated `readOnlyHint`, in any profile. Registrations made with `src/index.js` and `--env-file` keep working unchanged.
+
+`npm run mcp:connect` manages the `moonlight` entry in each client's own file:
+
+| Client | File | Format |
+| --- | --- | --- |
+| `claude-code` | `<repo>/.mcp.json` (git-ignored) | `mcpServers` |
+| `claude-desktop` | `~/Library/Application Support/Claude/claude_desktop_config.json` (also Cowork sessions) | `mcpServers` |
+| `codex` | `~/.codex/config.toml` | `[mcp_servers.moonlight]` |
+| `cursor` | `~/.cursor/mcp.json` | `mcpServers` |
+| `vscode` | `~/Library/Application Support/Code/User/mcp.json` | `servers` + `type` |
+| `gemini` | `~/.gemini/settings.json` | `mcpServers` |
+
+- `status` names the exact failure per client — missing executable, dead `cwd` or path, an nvm-pinned Node, or the legacy `--env-file` form that loads every Hub secret. `--probe` launches each registration as written (GUI clients with the minimal PATH a Dock-launched app gets) and lists its tools. It calls no tool. `--json` is machine-readable.
+- `install <client…>` (or `--all` for every client whose file exists) rewrites only the launch keys: `command` becomes a Node that survives upgrades (Homebrew's `/opt/homebrew/bin/node` when present), `args` becomes the launcher plus `--profile`/`--read-only` carried over or given, and `cwd` is dropped. `env`, other servers, other settings and Codex's `startup_timeout_sec`/`enabled`/`[mcp_servers.moonlight.env]` stay as they were. The original is copied to `<file>.bak.<timestamp>`, the file mode is kept, and the new registration is probed. `--dry-run` shows the result without writing. Files it cannot map safely (JSON with comments, unusual TOML) are left untouched and a snippet is printed instead.
+- Registrations always point at the main checkout. Run from a linked worktree, `install` still targets the main worktree, and refuses until the launcher exists there (after merge). `--root` overrides.
+- `print <client>` prints the snippet for manual setup; `print <client> --http` prints the HTTP form (token read from `MOONLIGHT_MCP_TOKEN` or an input prompt, never inline).
+
+Claude Desktop, Cursor and VS Code read their file at start; restart the app after `install`.
+
+## HTTP transport (other tools)
+
+For tools that cannot spawn a local process — automation services, remote agents, editors that prefer URLs — the same tools are served over [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#streamable-http):
+
+```sh
+npm run mcp:connect -- token create n8n --profile sales --read-only   # token is printed once
+npm run mcp:http                                                     # http://127.0.0.1:3333/mcp
+```
+
+Clients send `Authorization: Bearer <token>` with each POST.
+
+- **One token per external tool.** The token decides the profile and read-only status; a fresh server is built per request (stateless), so one client's grant never reaches another's tool list. `~/.moonlight/mcp/clients.json` (mode 0600, override `COM_MOON_MCP_CLIENTS_FILE`) stores SHA-256 digests only. `token list`, `token revoke <name>` — revocation applies to the running server on the next request. An unreadable registry rejects everything.
+- **Client tokens stop at the MCP process.** Hub calls use the MCP process's own `COM_MOON_AGENT_API_TOKEN`; Hub scopes still apply on top of the client's profile.
+- **Loopback by default.** Other bind addresses need `--host` and print a warning. `Host` must be loopback or listed in `COM_MOON_MCP_ALLOWED_HOSTS`; a request carrying `Origin` must match `COM_MOON_MCP_ALLOWED_ORIGINS` (empty by default). This blocks DNS rebinding from browser pages.
+- **Bounded.** POST only (GET/DELETE get 405, no server-initiated stream), 512 KiB bodies, 120 requests per minute per client (`COM_MOON_MCP_HTTP_RATE_PER_MIN`). `GET /healthz` answers without credentials and returns only name and version.
+- **Audit.** stderr gets one line per request with client name, JSON-RPC method and tool name, HTTP status and latency. Arguments, results and tokens are not logged.
+- **URL tokens, last resort.** Some hosted connectors have no field for headers. A client created with `--allow-url --read-only` may put its token in the path, `/mcp/<token>`. The URL then is the password and ends up in connector settings and proxy logs — [Claude's connector guidance](https://claude.com/docs/connectors/building/authentication) and the [MCP authorization spec](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#token-requirements) advise against credentials in URLs — so URL-token clients are always read-only (enforced at creation and per request). Revoke on any doubt.
+
+| Variable | Default |
+| --- | --- |
+| `COM_MOON_MCP_HTTP_HOST` / `--host` | `127.0.0.1` |
+| `COM_MOON_MCP_HTTP_PORT` / `--port` | `3333` |
+| `COM_MOON_MCP_ALLOWED_HOSTS` | loopback names only |
+| `COM_MOON_MCP_ALLOWED_ORIGINS` | none |
+| `COM_MOON_MCP_HTTP_RATE_PER_MIN` | `120` |
+| `COM_MOON_MCP_READ_ONLY=1` / `--read-only` | off; forces every client read-only |
+
+Nothing here makes Moonlight reachable from the internet. Hosted services connect from their own cloud (Anthropic from `160.79.104.0/21`), so they need a public HTTPS URL — for example a Cloudflare Tunnel to `127.0.0.1:3333` with its hostname added to `COM_MOON_MCP_ALLOWED_HOSTS` — and Hub plus this process running on the machine behind it. As of 2026-09:
+
+| Hosted client | Works with | Notes |
+| --- | --- | --- |
+| claude.ai / Desktop / mobile custom connector | Header token | [Request headers](https://claude.com/docs/connectors/custom/remote-mcp#authenticating-with-request-headers) is beta for a limited set of organizations: choose **No sign-in**, header `authorization`, value `Bearer <token>`. Without that section only OAuth remains, which this server does not implement. |
+| ChatGPT developer mode | URL token (read-only) | [OAuth, No Authentication or Mixed](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt); no header field. |
+| Automation and agent platforms with header support | Header token | Give each its own token and profile. |
 
 ## Profiles and compatibility
 
@@ -63,7 +121,7 @@ The CLI defaults to `core` (8 tools). Select one profile with `COM_MOON_MCP_PROF
 
 `COM_MOON_MCP_API_MODE=agent` uses the new API for overlapping task/project/work-order tools. `auto` selects it when the Agent token is configured and otherwise preserves the original routes. `legacy` retains those original bindings; new Agent-only tools still require the Agent token. Existing writes keep `COM_MOON_HUB_WRITE_SECRET` checks. Explicit `all` preserves tool discovery for clients that depended on the original 13 tools. Registration does not grant permissions.
 
-The server uses stdio only. Public Streamable HTTP MCP hosting, hosted Responses API access to local stdio, and remote browser authentication are outside this implementation. Local production Hub access works on loopback. A remotely served Hub job screen requires a separately configured authenticated gateway that satisfies the existing Hub write guard; no secret is embedded in browser code.
+Transports are stdio and local Streamable HTTP ([above](#http-transport-other-tools)). Internet-facing hosting, OAuth authorization for hosted connectors, and remote browser authentication are outside this implementation. Local production Hub access works on loopback. A remotely served Hub job screen requires a separately configured authenticated gateway that satisfies the existing Hub write guard; no secret is embedded in browser code.
 
 ## HTTP contract
 
@@ -161,7 +219,7 @@ Full Korean playbook: [Agent/Council API·MCP operating plan](../../docs/agent-c
 
 ## Advisor limitations
 
-- Remote MCP transport. The authenticated HTTP Agent API described above is available separately.
+- Internet-facing MCP hosting and OAuth. Local Streamable HTTP is available (see [HTTP transport](#http-transport-other-tools)); the authenticated HTTP Agent API is available separately.
 - Independent execution endpoints for each of the five persona roles.
 - The legacy advisor requests do not have durable request idempotency, asynchronous
   generation jobs, enforced spend caps, or a generic executor triggered by approval.

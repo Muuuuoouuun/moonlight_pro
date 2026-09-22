@@ -32,6 +32,8 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "mcp:doctor": "node --env-file-if-exists=apps/hub/.env.local packages/mcp-server/src/doctor.js",
+    "mcp:connect": "node packages/mcp-server/src/connect.js",
+    "mcp:http": "node packages/mcp-server/bin/moonlight-mcp.js --http",
     "codex:worker": "node --env-file-if-exists=.env.codex-worker.local packages/codex-worker/cli.mjs",
     "codex:check": "node --env-file-if-exists=.env.codex-worker.local packages/codex-worker/cli.mjs --check"
   },

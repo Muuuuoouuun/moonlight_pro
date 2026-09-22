@@ -12,8 +12,10 @@ const PROFILES={
   content:['get_hub_health','get_content_queue','create_campaign'],
   jobs:['get_hub_health','list_codex_projects','list_codex_jobs','get_codex_job','start_codex_job','cancel_codex_job','resume_codex_job'],
 };
+export const PROFILE_NAMES=[...Object.keys(PROFILES),'all'];
 // Export defaults preserve embedding clients; CLI explicitly selects the small core profile.
-export function registerMoonlightTools(server,{profile='all',mode='auto'}={}){
+// readOnly keeps only tools annotated readOnlyHint — the same hint clients use for approval UI.
+export function registerMoonlightTools(server,{profile='all',mode='auto',readOnly=false}={}){
   if(profile!=='all'&&!PROFILES[profile])throw new Error(`Unknown MCP profile: ${profile}`);
   if(!['auto','agent','legacy'].includes(mode))throw new Error(`Unknown MCP API mode: ${mode}`);
   const tools=new Map();const collector={registerTool:(name,definition,handler)=>tools.set(name,{definition,handler})};
@@ -27,6 +29,7 @@ export function registerMoonlightTools(server,{profile='all',mode='auto'}={}){
   }});
   registerAgentTools(collector,{replaceLegacy:mode==='agent'||mode==='auto'&&hasAgentToken()});
   const allowed=profile==='all'?null:new Set(PROFILES[profile]);
-  for(const [name,{definition,handler}] of tools)if(!allowed||allowed.has(name))server.registerTool(name,definition,handler);
-  return [...tools.keys()].filter(name=>!allowed||allowed.has(name));
+  const selected=[...tools].filter(([name,{definition}])=>(!allowed||allowed.has(name))&&(!readOnly||definition.annotations?.readOnlyHint===true));
+  for(const [name,{definition,handler}] of selected)server.registerTool(name,definition,handler);
+  return selected.map(([name])=>name);
 }

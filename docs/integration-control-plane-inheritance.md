@@ -86,7 +86,9 @@ flowchart LR
 ### 6. Codex/Claude 로컬 MCP
 
 - Moonlight MCP는 **stdio 전용 로컬 child process**다. 원격 HTTP/SSE connector가 아니다.
+  - 2026-09-22 갱신(운영자 요청 "다른 툴에도 붙이기"): stdio는 기본으로 유지하고, 헤더 토큰이 필수인 **로컬 Streamable HTTP**(`npm run mcp:http`, 기본 `127.0.0.1:3333`)를 추가했다. 토큰은 외부 툴마다 따로 발급하고(`npm run mcp:connect -- token create`) 프로필·읽기 전용이 토큰에 묶인다. 인터넷 공개(터널)와 OAuth는 **미정**이며 운영자 결정 전까지 하지 않는다. 상세 계약은 `packages/mcp-server/README.md`.
 - Codex local config와 Claude Code project `.mcp.json`은 모두 같은 `packages/mcp-server/src/index.js`를 실행하며 Hub의 `.env.local`을 process start 시 읽는다.
+  - 2026-09-22 갱신: 새 등록은 런처 `packages/mcp-server/bin/moonlight-mcp.js` 하나만 가리키고, 런처가 `.env.local`에서 MCP용 키(`COM_MOON_HUB_URL`·`COM_MOON_HUB_WRITE_SECRET`·`COM_MOON_AGENT_API_TOKEN`·`COM_MOON_MCP_*`)만 읽는다. 같은 날 Codex 등록이 사라진 Desktop 경로를 `cwd`로 들고 있어 기동 불가였던 것을 확인했다 — 클라이언트별 등록 점검은 `npm run mcp:connect -- status --probe`.
 - 두 등록 모두 환경변수 값을 config에 직접 embed하지 않는다. `.mcp.json`은 local-only이며 Git에 포함하지 않는다.
 - read tool은 Hub route의 `live`/`preview`/`error` 의미를 그대로 전달한다. write tool은 `COM_MOON_HUB_WRITE_SECRET`가 없으면 요청 전에 거부한다.
 - 현재 등록 surface에는 projects, tasks, task creation, revenue, content queue, calendar, work orders, agents, daily brief가 포함된다.
