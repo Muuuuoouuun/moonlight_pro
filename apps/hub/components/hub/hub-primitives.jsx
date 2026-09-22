@@ -442,7 +442,7 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
 export const Input = React.forwardRef(function Input({ placeholder, icon, value, onChange, style, size = 'sm', className,
   // 통과 속성: 로그인(비밀번호)·폼 접근성에 필요하다. 기존 호출처는 전부 기본값을 쓰므로 동작이 바뀌지 않는다.
   type = 'text', id, name, disabled, autoComplete, inputMode, maxLength, readOnly, required, ariaLabel,
-  clearable = false, onClear, kbd, prefix, suffix, showCount = false, ...props }, ref) {
+  clearable = false, onClear, kbd, prefix, suffix, showCount = false, onKeyDown, ...props }, ref) {
   const sizes = {
     xs: { h: 24, fs: 11.5, px: 7, gap: 5 },
     sm: { h: 30, fs: 12.5, px: 10, gap: 8 },
@@ -453,14 +453,17 @@ export const Input = React.forwardRef(function Input({ placeholder, icon, value,
   const hasValue = value != null && String(value).length > 0;
   const currentLength = hasValue ? String(value).length : 0;
 
+  // 호출처 onKeyDown을 먼저 부르고, 그쪽이 preventDefault하지 않았을 때만 ESC 지우기를 수행한다.
+  // (예전에는 {...props}가 이 핸들러 뒤에 펼쳐져, onKeyDown을 넘기는 순간 ESC 지우기가 조용히 꺼졌다.)
   const handleKeyDown = (e) => {
+    onKeyDown?.(e);
+    if (e.defaultPrevented) return;
     if (e.key === 'Escape' && (clearable || onClear) && hasValue) {
       e.preventDefault();
       e.stopPropagation();
       onChange?.('');
       onClear?.();
     }
-    props.onKeyDown?.(e);
   };
 
   return (
@@ -503,7 +506,7 @@ export const Input = React.forwardRef(function Input({ placeholder, icon, value,
         <span
           className="mono"
           style={{
-            fontSize: 10,
+            fontSize: 10.5,
             flexShrink: 0,
             color: currentLength >= maxLength ? 'var(--danger)' : currentLength >= maxLength * 0.9 ? 'var(--warning)' : 'var(--fg-faint)',
           }}
@@ -532,7 +535,8 @@ export const Input = React.forwardRef(function Input({ placeholder, icon, value,
         </button>
       )}
       {kbd && !hasValue && (
-        <Kbd style={{ fontSize: 9.5, minWidth: 15, height: 15, padding: '0 3px', lineHeight: '14px', flexShrink: 0 }}>{kbd}</Kbd>
+        // 글자 크기는 Kbd 기본값(10.5px, §8.1 보조 메타 플로어)을 그대로 쓴다 — 14px 줄 상자가 1px 보더 안에 들어가도록 높이 16.
+        <Kbd style={{ minWidth: 16, height: 16, padding: '0 3px', lineHeight: '14px', flexShrink: 0 }}>{kbd}</Kbd>
       )}
       {suffix}
     </div>
@@ -705,18 +709,19 @@ export function CheckboxRow({ checked, onChange, text, disabled = false, size = 
       aria-label={text}
       disabled={disabled}
       className={`hub-checkbox-row${isChecked ? ' hub-checkbox-row--checked' : ''}${className ? ` ${className}` : ''}`}
-      onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }}
+      // Checkbox와 같은 계약 — 클릭 이벤트를 넘겨 호출처가 좌표 기반 연출(스파클)을 띄울 수 있게 한다.
+      onClick={(e) => { e.stopPropagation(); onChange?.(!checked, e); }}
       style={style}
     >
       <span
         aria-hidden="true"
         className={`hub-checkbox${isChecked ? ' hub-checkbox--checked' : ''}`}
+        // 전이(transition)는 `.hub-app .hub-checkbox`(hub-tokens.css)가 소유한다 — 인라인은 클래스 규칙을 이긴다.
         style={{
           width: size, height: size, borderRadius: 4,
           border: `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
           background: isChecked ? 'var(--moon-300)' : 'transparent',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          transition: 'background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub)',
           flexShrink: 0,
         }}
       >
@@ -1309,9 +1314,9 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
               ) : f.type === 'textarea' ? (
                 <textarea
                   ref={focusRef}
-                  // hub-drawer-input: 드로어 공용 휴지·hover·focus chrome / hub-edit-textarea: 긴 글 읽기 타이포
-                  // (hub-edit-drawer.css가 hub-tokens.css 뒤에 로드돼 같은 특이도의 padding·글자 크기를 가진다).
-                  className={`hub-drawer-input hub-edit-textarea${isSpaciousTextarea ? ' hub-drawer-input--spacious' : ''}`}
+                  // hub-drawer-input: 드로어 공용 휴지·hover·focus chrome만 / hub-edit-textarea(+--spacious):
+                  // 크기·여백·행간·글자 크기의 단독 소유자(hub-edit-drawer.css, DESIGN.md §15 2026-09-21).
+                  className={`hub-drawer-input hub-edit-textarea${isSpaciousTextarea ? ' hub-edit-textarea--spacious' : ''}`}
                   disabled={saveState === 'saving'}
                   value={record[f.key] ?? ''}
                   placeholder={f.placeholder || ''}

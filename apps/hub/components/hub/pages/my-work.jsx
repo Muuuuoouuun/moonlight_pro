@@ -305,12 +305,12 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       ) : (
         <Badge tone={LANE_TONE[item.lane]} size="xs" variant="outline">{LANE_LABEL[item.lane]}</Badge>
       )}
-      <span style={{
-        fontSize: 13, color: completing ? 'var(--fg-faint)' : 'var(--fg)', flex: 1, minWidth: '35%',
+      {/* 완료 표현(흐린 색·취소선·전이)은 .hub-task-completed(hub-tokens.css)가 소유한다 —
+          인라인 textDecoration·transition은 그 클래스를 이겨 중복·드리프트만 만든다. */}
+      <span className={completing ? 'hub-task-completed' : undefined} style={{
+        fontSize: 13, color: 'var(--fg)', flex: 1, minWidth: '35%',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        textDecoration: completing ? 'line-through' : 'none',
         opacity: completing ? 0.65 : 1,
-        transition: 'color var(--dur-enter) var(--ease-hub), opacity var(--dur-enter) var(--ease-hub)',
       }}>
         {item.title}
       </span>

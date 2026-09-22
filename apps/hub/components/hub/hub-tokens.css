@@ -531,13 +531,10 @@
   font-variant-numeric: tabular-nums;
   transition: border-color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub);
 }
-.hub-app textarea.hub-drawer-input {
-  height: auto;
-  min-height: 104px;
-  padding: 9px 10px;
-  line-height: 1.5;
-  resize: vertical;
-}
+/* EditDrawer의 여러 줄 입력은 크기·여백·행간을 여기서 갖지 않는다 — 글쓰기 필드 규칙
+   `textarea.hub-edit-textarea`(hub-edit-drawer.css, DESIGN.md §15 2026-09-21)가 단독 소유한다.
+   여기 있던 textarea 전용 padding·line-height와 --spacious 수정자는 그 파일이 뒤에 로드돼
+   같은 특이도로 덮던 죽은 선언이었다. 휴지·hover·focus·disabled chrome만 이 공용 규칙에서 받는다. */
 .hub-app select.hub-drawer-input {
   appearance: none;
   -webkit-appearance: none;
@@ -627,12 +624,6 @@
   font-size: 13.5px;
   line-height: 1.7;
   letter-spacing: -0.005em;
-}
-.hub-app textarea.hub-drawer-input--spacious {
-  min-height: 116px;
-  padding: 11px 13px;
-  font-size: 13px;
-  line-height: 1.6;
 }
 
 /* Compact and spacious field size modifiers */
@@ -827,8 +818,7 @@
   overflow: hidden;
 }
 
-.hub-app .hub-progress--completed .hub-progress-bar::after,
-.hub-app .hub-pms-progress--completed .hub-pms-progress__fill::after {
+.hub-app .hub-progress--completed .hub-progress-bar::after {
   content: "";
   position: absolute;
   top: 0;
@@ -870,27 +860,6 @@
   box-shadow: 0 0 0 1px var(--accent-soft), 0 8px 28px -10px rgba(82, 116, 168, 0.25) !important;
 }
 
-.hub-app .hub-pms-progress--completed .hub-pms-progress__fill {
-  background: linear-gradient(90deg, var(--pms-moonstone) 0%, var(--moon-100) 100%);
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 0 8px -1px rgba(140, 168, 216, 0.45);
-}
-
-.hub-app .hub-pms-progress__value--100 {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--moon-100);
-  font-weight: 600;
-}
-
-.hub-app .hub-pms-progress__value--100 .hub-pms-sparkle-mark {
-  font-size: 10px;
-  color: #ffd166;
-  line-height: 1;
-}
-
 /* Progress Ring (원형 게이지) */
 .hub-app .hub-progress-ring {
   display: inline-flex;
@@ -917,8 +886,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hub-app .hub-progress--completed .hub-progress-bar::after,
-  .hub-app .hub-pms-progress--completed .hub-pms-progress__fill::after {
+  .hub-app .hub-progress--completed .hub-progress-bar::after {
     animation: none;
     display: none;
   }
@@ -1139,23 +1107,11 @@
   flex-shrink: 0;
 }
 
+/* 레이아웃 훅만 남긴다 — 보더·배경·포커스 링은 감싸는 `.hub-quick-capture__field`가 소유하고
+   글자·여백은 `.hub-quick-capture__input`이 갖는다. 여기서 보더·배경·:focus 링을 다시 선언하면
+   래퍼 안에 이중 보더·이중 포커스 링이 생긴다(구 9px 여백은 자체 1px 보더를 전제한 값이었다). */
 .hub-app .daily-brief__quick-input {
   width: 100%;
-  padding: 9px 12px;
-  font-size: 14.5px;
-  line-height: 1.4;
-  color: var(--fg);
-  background: var(--surface-2);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-sm);
-  transition: border-color var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub);
-}
-
-.hub-app .daily-brief__quick-input:focus {
-  outline: 1px solid var(--moon-300);
-  outline-offset: 1px;
-  border-color: var(--moon-300);
-  background: var(--surface);
 }
 
 .hub-app .daily-brief__status-toggle {

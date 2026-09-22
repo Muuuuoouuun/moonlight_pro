@@ -26,7 +26,7 @@ const EXEMPT = new Set([
 const BASELINE = {
   // 축하·골드 마일스톤 어휘 (Q134와 함께 결정)
   "components/hub/celebration-fx.jsx": 6,
-  "components/hub/hub-tokens.css": 14,
+  "components/hub/hub-tokens.css": 13,
   "components/hub/pages/overview.jsx": 4,
   // 차트 색계열 — §5.3(Moonstone 명도 + 패턴)으로 재설계 필요
   "components/hub/pages/revenue-heatmap.jsx": 8,
