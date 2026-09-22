@@ -7,72 +7,103 @@ import { Iconed } from '../hub-icons';
 import { requestPersonaChat } from '../persona-client';
 import { NOTE_QUESTIONS, selectedNoteExcerpt } from '@/lib/journal-client';
 import { JOURNAL_TAG_LIMIT, JOURNAL_TAG_LENGTH, normalizeJournalTags } from '@/lib/journal-tags';
+import { saveMemoIntakeTasks } from '@/lib/memo-intake-tasks';
 import { MemoContextPicker } from './memo-context-picker';
 
 const localTime = (value) => { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0,16); };
 export const memoTime = (value) => new Date(value).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+// AI가 뽑은 후보 한 줄을 PMS create_task 명령으로 굳힌다. 첫 등록 시도 전에 한 번만 굳히고
+// 재시도는 같은 id·같은 payload를 다시 보낸다 — 엔진은 같은 id를 duplicate(=이미 저장됨)로
+// 돌려주므로 재시도가 중복 할 일을 만들지 않는다. 등록 도중 연결(프로젝트)을 바꿔도 payload가
+// 달라지지 않게 첫 시도의 명령을 그대로 쓴다.
+export function freezeMemoAction(action, projectId) {
+  if (action.command) return action;
+  return { ...action, command: {
+    id: action.id, title: action.task, projectId: projectId || null,
+    priority: 'medium', dueAt: null, description: null, source: 'memo-action-extract',
+  } };
+}
+
+// 저장 판정은 검증된 기록기(saveMemoIntakeTasks)가 소유한다: saved/duplicate + 같은 id +
+// persisted!==false일 때만 saved. 202 preview·빈 2xx·다른 id 영수증은 저장이 아니다.
+// 기록기는 preview를 failed로 접으므로 봉투만 따로 읽어 "연결 전"과 "실패"를 가른다.
+// 반환 status: saved | preview | failed | unknown(응답 확인 불가 — 같은 id로 재확인).
+export async function registerMemoAction(action, fetchImpl = fetch) {
+  let envelope = null;
+  const observed = async (url, init) => {
+    const response = await fetchImpl(url, init);
+    envelope = await response.clone().json().catch(() => null);
+    return response;
+  };
+  const result = await saveMemoIntakeTasks({ actions: [{ id: action.id, task: action.task, selected: true, status: 'pending', command: action.command }] }, observed);
+  const item = result.actions[0];
+  if (item.status === 'saved') return { status: 'saved', error: null };
+  if (envelope?.status === 'preview') return { status: 'preview', error: item.error || '할 일 저장이 연결되지 않았습니다. 연결 후 다시 등록하세요.' };
+  return { status: item.status === 'failed' ? 'failed' : 'unknown', error: item.error || '등록 응답을 확인하지 못했습니다. 같은 내용으로 다시 확인하세요.' };
+}
+
+const ACTION_STATE_LABEL = { preview: 'Preview · 저장되지 않음', failed: '등록 실패', unknown: '결과 확인 필요' };
+
+function parseExtractedActions(text) {
+  const parsed = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    const match = trimmed.match(/^[-*•0-9.]+\s*\[?[ xX]?\]?\s*(.+)$/);
+    if (match && match[1] && !match[1].startsWith("[") && match[1].length > 2 && !match[1].includes("핵심 요약") && !match[1].includes("추천 다음 액션")) {
+      parsed.push(match[1].replace(/^\[|\]$/g, "").trim());
+    } else if (trimmed.startsWith("1.") || trimmed.startsWith("2.") || trimmed.startsWith("3.")) {
+      parsed.push(trimmed.replace(/^[0-9.]+\s*/, "").trim());
+    }
+  }
+  return parsed.slice(0, 5);
+}
+
 function MemoActionExtractor({ text, contexts }) {
   const [open, setOpen] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
+  // extract.status: idle | loading | done | preview | error — preview·error를 "추출 결과 없음"으로 그리지 않는다(§5.3).
+  const [extract, setExtract] = React.useState({ status: 'idle', note: '', source: '' });
   const [actions, setActions] = React.useState([]);
-  const [addedSet, setAddedSet] = React.useState(() => new Set());
   const toast = useToast();
 
   const projectId = contexts?.find(c => c.type === 'project')?.id || null;
+  const patchAction = (id, patch) => setActions(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item));
 
   const handleExtract = async () => {
     if (!text || text.trim().length < 10) return;
-    setLoading(true);
     setOpen(true);
+    setExtract({ status: 'loading', note: '', source: text });
     try {
       const res = await requestPersonaChat({
         personaId: "order",
         mode: "extract-actions",
         draft: `[메모 원문]:\n${text}\n\n위 메모에서 운영자가 실행해야 할 후속 조치 및 액션 아이템 목록을 추출해줘.`,
       });
-      setLoading(false);
       if (res.state === "done") {
-        const lines = res.text.split("\n");
-        const parsed = [];
-        for (const line of lines) {
-          const trimmed = line.trim();
-          const match = trimmed.match(/^[-*•0-9.]+\s*\[?[ xX]?\]?\s*(.+)$/);
-          if (match && match[1] && !match[1].startsWith("[") && match[1].length > 2 && !match[1].includes("핵심 요약") && !match[1].includes("추천 다음 액션")) {
-            parsed.push(match[1].replace(/^\[|\]$/g, "").trim());
-          } else if (trimmed.startsWith("1.") || trimmed.startsWith("2.") || trimmed.startsWith("3.")) {
-            parsed.push(trimmed.replace(/^[0-9.]+\s*/, "").trim());
-          }
-        }
-        setActions(parsed.slice(0, 5));
+        // 후보마다 고정 id를 붙인다 — 등록 상태도 인덱스가 아니라 이 id에 묶인다.
+        setActions(parseExtractedActions(res.text).map(task => ({ id: crypto.randomUUID(), task, status: 'pending', error: null })));
+        setExtract({ status: 'done', note: '', source: text });
       } else {
-        toast.error(res.note || "액션 추출 실패");
+        setActions([]);
+        setExtract({ status: res.state === 'preview' ? 'preview' : 'error', note: res.note || '', source: text });
       }
     } catch (e) {
-      setLoading(false);
-      toast.error(e.message || "오류 발생");
+      setActions([]);
+      setExtract({ status: 'error', note: e?.message || '', source: text });
     }
   };
 
-  const handleAddTask = async (act, idx) => {
-    try {
-      const res = await fetch("/api/hub/tasks", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: act,
-          project_id: projectId,
-        }),
-      });
-      if (res.ok) {
-        setAddedSet(prev => new Set([...prev, idx]));
-        toast.success(`'${act}' 할 일로 등록됨`);
-      } else {
-        toast.error("할 일 등록 실패");
-      }
-    } catch (e) {
-      toast.error(e.message || "오류 발생");
-    }
+  // 이미 추출한 같은 본문이면 다시 AI를 부르지 않고 펼친다 — 재추출은 새 id를 만들어
+  // 이미 등록한 후보를 다시 등록 가능한 상태로 되돌린다.
+  const reopen = () => { if (['done', 'loading'].includes(extract.status) && extract.source === text) setOpen(true); else handleExtract(); };
+
+  const handleAddTask = async (action) => {
+    if (action.status === 'sending' || action.status === 'saved') return;
+    const frozen = freezeMemoAction(action, projectId);
+    patchAction(action.id, { command: frozen.command, status: 'sending', error: null });
+    const outcome = await registerMemoAction(frozen);
+    patchAction(action.id, outcome);
+    if (outcome.status === 'saved') toast.success(`'${action.task}' 할 일로 등록됨`);
   };
 
   if (!text || text.trim().length < 10) return null;
@@ -81,14 +112,8 @@ function MemoActionExtractor({ text, contexts }) {
     <div style={{ margin: "4px 0 8px" }}>
       {!open ? (
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            icon="sparkle"
-            onClick={handleExtract}
-          >
-            {loading ? "액션 분석 중…" : "✨ AI 액션 추출"}
+          <Button type="button" variant="ghost" size="xs" icon="sparkle" aria-expanded={false} onClick={reopen}>
+            {extract.source !== text ? "AI 액션 추출" : extract.status === 'done' ? "추출한 액션 보기" : extract.status === 'loading' ? "액션 추출 중…" : "AI 액션 추출"}
           </Button>
         </div>
       ) : (
@@ -101,61 +126,68 @@ function MemoActionExtractor({ text, contexts }) {
             display: "flex",
             flexDirection: "column",
             gap: 6,
-            fontSize: 11.5,
+            fontSize: 12,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <span style={{ fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: 4 }}>
-              <Iconed name="sparkle" size={12} style={{ color: "var(--moon-300)" }} />
+              <Iconed name="sparkle" size={12} style={{ color: "var(--fg-muted)" }} />
               추출된 액션 아이템
             </span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
-            >
-              접기
-            </button>
+            <Button type="button" variant="ghost" size="sm" aria-expanded={true} onClick={() => setOpen(false)}>접기</Button>
           </div>
 
-          {loading ? (
-            <div style={{ color: "var(--fg-muted)", fontSize: 11, padding: "6px 0" }}>메모에서 실행 과제를 분석하고 있습니다…</div>
+          {extract.status === 'loading' ? (
+            <Skeleton lines={3} height={14} gap={6} label="메모에서 실행 과제 추출 중" />
+          ) : extract.status === 'preview' || extract.status === 'error' ? (
+            <div role={extract.status === 'error' ? 'alert' : 'status'} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+              <TruthBadge state={extract.status} label={extract.status === 'preview' ? 'Preview · AI 연결 필요' : '추출 실패'} />
+              <span style={{ color: "var(--fg-muted)" }}>
+                {extract.status === 'preview' ? 'AI 엔진이 연결되지 않아 액션을 추출하지 않았어요. 연결한 뒤 다시 추출하세요.' : `액션을 추출하지 못했어요.${extract.note ? ` (${extract.note})` : ''}`}
+              </span>
+              <Button type="button" variant="outline" size="xs" onClick={handleExtract}>다시 추출</Button>
+            </div>
           ) : actions.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {actions.map((act, i) => {
-                const added = addedSet.has(i);
+            <div aria-live="polite" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {actions.map((action, i) => {
+                const saved = action.status === 'saved';
+                const sending = action.status === 'sending';
+                const settled = ACTION_STATE_LABEL[action.status];
                 return (
                   <div
-                    key={i}
+                    key={action.id}
                     style={{
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
+                      flexWrap: "wrap",
                       gap: 6,
                       background: "var(--surface-3)",
                       padding: "4px 8px",
                       borderRadius: "var(--r-xs)",
                     }}
                   >
-                    <span style={{ flex: 1, color: "var(--fg)", fontSize: 11.5, overflowWrap: "anywhere" }}>
-                      {i + 1}. {act}
+                    <span style={{ flex: "1 1 160px", color: "var(--fg)", overflowWrap: "anywhere" }}>
+                      {i + 1}. {action.task}
                     </span>
+                    {settled && <TruthBadge state={action.status === 'failed' ? 'error' : action.status === 'unknown' ? 'partial' : 'preview'} label={settled} />}
                     <Button
                       type="button"
-                      variant={added ? "ghost" : "outline"}
+                      variant={saved ? "ghost" : "outline"}
                       size="xs"
-                      disabled={added}
-                      icon={added ? "check" : "plus"}
-                      onClick={() => handleAddTask(act, i)}
+                      disabled={saved || sending}
+                      icon={saved ? "check" : "plus"}
+                      onClick={() => handleAddTask(action)}
                     >
-                      {added ? "등록됨" : "할 일 등록"}
+                      {saved ? "등록됨" : sending ? "등록 중…" : action.status === "unknown" ? "같은 내용으로 확인" : settled ? "다시 등록" : "할 일 등록"}
                     </Button>
+                    {settled && action.error && <span style={{ flexBasis: "100%", color: "var(--fg-muted)", fontSize: 11 }}>{action.error}</span>}
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div style={{ color: "var(--fg-muted)", fontSize: 11 }}>추출된 실행 과제가 없습니다.</div>
+            <div style={{ color: "var(--fg-muted)" }}>추출된 실행 과제가 없습니다.</div>
           )}
         </div>
       )}

@@ -21,6 +21,23 @@ function MemoDocument({ onClose, onReload, ...props }) {
 }
 function MatchText({ text, query }) { return memoMatchSegments(text, query).map((part, index) => part.match ? <mark key={index}>{part.text}</mark> : <React.Fragment key={index}>{part.text}</React.Fragment>); }
 const initial = { status: 'loading', workspaceId: null, entries: [], entry: null, nextCursor: null, workspaceConfirmed: false };
+// 메모 분석 봉투 판정. 성공은 엔진이 결과를 만든 succeeded(또는 같은 요청의 duplicate)뿐이다.
+// 202 preview는 엔진·저장소 연결 전이라는 뜻이고, 그때 오는 patterns는 연결 안내용 자리표시라
+// 결과 행으로 그리지 않는다(§5.3 "never show mock work rows beside it"). 나머지는 전부 error.
+const PATTERN_ERROR_COPY = {
+  'records-not-found': '분석할 메모를 찾지 못했어요. 메모가 저장됐는지 확인해 주세요.',
+  'invalid-input': '분석 요청이 올바르지 않아요. 메모를 다시 선택해 주세요.',
+  'engine-unreachable': '분석 엔진에 연결하지 못했어요. 엔진이 실행 중인지 확인한 뒤 다시 실행해 주세요.',
+  network: '분석 요청을 보내지 못했어요. 연결을 확인한 뒤 다시 실행해 주세요.',
+};
+export function readPatternEnvelope(response, data) {
+  if (response?.ok && ['succeeded', 'duplicate'].includes(data?.status)) {
+    return { status: 'live', patterns: Array.isArray(data.patterns) ? data.patterns : [], error: null, code: null };
+  }
+  if (data?.status === 'preview') return { status: 'preview', patterns: [], error: null, code: data.error || null };
+  const code = data?.error || (data?.status === 'invalid-input' ? 'invalid-input' : response ? `http-${response.status}` : 'network');
+  return { status: 'error', patterns: [], error: PATTERN_ERROR_COPY[code] || PATTERN_ERROR_COPY[data?.status] || '분석 결과를 받지 못했어요. 다시 실행해 주세요.', code };
+}
 export function Memos() {
   const router = useRouter(), pathname = usePathname(), params = useSearchParams();
   const filters = filtersFromParams(params), searchQuery = memoSearchParams(filters).toString();
@@ -35,7 +52,9 @@ export function Memos() {
   const [recoveries, setRecoveries] = React.useState([]), [localError, setLocalError] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState([]);
   const [patternGoal, setPatternGoal] = React.useState('sales_insight');
-  const [patternState, setPatternState] = React.useState({ show: false, loading: false, patterns: [], error: null });
+  // status: idle | loading | live | preview | error — 분석 라우트의 202 preview를 성공으로 읽지 않는다(§5.3).
+  const [patternState, setPatternState] = React.useState({ status: 'idle', patterns: [], error: null, code: null, request: null });
+  const patternLoading = patternState.status === 'loading';
   const generation = React.useRef(0), currentLedger = React.useRef(ledger); currentLedger.current = ledger;
 
   const toggleSelect = React.useCallback((memoId, e) => {
@@ -45,52 +64,36 @@ export function Memos() {
     );
   }, []);
 
-  const runPatternAnalysis = React.useCallback(async () => {
-    if (selectedIds.length === 0) return;
-    setPatternState({ show: true, loading: true, patterns: [], error: null });
+  // 선택 분석과 최근 7일 종합이 같은 라우트·같은 봉투를 쓴다. request를 보관해 preview·error에서
+  // 같은 조건으로 다시 실행할 수 있게 한다.
+  // 닫은 뒤(또는 새 실행 뒤) 도착한 옛 응답이 패널을 다시 열지 않게 실행마다 번호를 붙인다.
+  const patternTicket = React.useRef(0);
+  const runAnalysis = React.useCallback(async (request) => {
+    const ticket = ++patternTicket.current;
+    setPatternState({ status: 'loading', patterns: [], error: null, code: null, request });
+    let outcome;
     try {
       const res = await fetch('/api/hub/journal/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          requestId: crypto.randomUUID(),
-          goal: patternGoal,
-          noteIds: selectedIds,
-        }),
+        body: JSON.stringify({ requestId: crypto.randomUUID(), ...request }),
       });
-      const data = await res.json();
-      if (!res.ok || data.status === 'failed') {
-        setPatternState({ show: true, loading: false, patterns: [], error: data.error || '분석에 실패했습니다.' });
-      } else {
-        setPatternState({ show: true, loading: false, patterns: data.patterns || [], error: null });
-      }
-    } catch (err) {
-      setPatternState({ show: true, loading: false, patterns: [], error: err.message });
+      outcome = readPatternEnvelope(res, await res.json().catch(() => null));
+    } catch {
+      outcome = readPatternEnvelope(null, { error: 'network' });
     }
-  }, [selectedIds, patternGoal]);
-
-  const runWeeklySynthesis = React.useCallback(async () => {
-    setPatternState({ show: true, loading: true, patterns: [], error: null });
-    try {
-      const res = await fetch('/api/hub/journal/analyze', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          requestId: crypto.randomUUID(),
-          goal: 'weekly_synthesis',
-          range: '7d',
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.status === 'failed') {
-        setPatternState({ show: true, loading: false, patterns: [], error: data.error || data.message || '주간 종합 분석에 실패했습니다.' });
-      } else {
-        setPatternState({ show: true, loading: false, patterns: data.patterns || [], error: null });
-      }
-    } catch (err) {
-      setPatternState({ show: true, loading: false, patterns: [], error: err.message });
-    }
+    if (ticket === patternTicket.current) setPatternState({ ...outcome, request });
   }, []);
+
+  const runPatternAnalysis = React.useCallback(() => {
+    if (selectedIds.length === 0) return;
+    runAnalysis({ goal: patternGoal, noteIds: selectedIds });
+  }, [selectedIds, patternGoal, runAnalysis]);
+
+  const runWeeklySynthesis = React.useCallback(() => {
+    runAnalysis({ goal: 'weekly_synthesis', range: '7d' });
+  }, [runAnalysis]);
+  const closePattern = () => { patternTicket.current++; setPatternState((prev) => ({ ...prev, status: 'idle' })); };
 
   React.useEffect(() => {
     if (!isNew || draftId) return;
@@ -176,8 +179,8 @@ export function Memos() {
   return <div className="hub-page memos-page fade-up">
     <header className="memos-header"><div><h2>메모</h2><p>남긴 생각을 다음 할 일과 콘텐츠에 이어 쓰세요.</p></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Button variant="outline" size="sm" onClick={runWeeklySynthesis} disabled={patternState.loading}>
-          ✦ 최근 7일 종합 보고서
+        <Button variant="outline" size="sm" onClick={runWeeklySynthesis} disabled={patternLoading}>
+          최근 7일 종합 보고서
         </Button>
         <Button variant="primary" icon="plus" onClick={create} disabled={Boolean(id) || ledger.status === 'loading'}>메모 남기기 <Kbd>N</Kbd></Button>
       </div>
@@ -203,8 +206,8 @@ export function Memos() {
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Button variant="primary" size="xs" icon="sparkle" onClick={runPatternAnalysis} disabled={patternState.loading}>
-            {patternState.loading ? '분석 중…' : '패턴 분석 실행'}
+          <Button variant="primary" size="xs" icon="sparkle" onClick={runPatternAnalysis} disabled={patternLoading}>
+            {patternLoading ? '분석 중…' : '패턴 분석 실행'}
           </Button>
           <Button variant="ghost" size="xs" onClick={() => setSelectedIds([])}>
             선택 취소
@@ -212,14 +215,29 @@ export function Memos() {
         </div>
       </div>
     )}
-    {patternState.show && (
+    {(patternState.status === 'loading' || patternState.status === 'live') && (
       <MemoPatternPanel
-        loading={patternState.loading}
-        error={patternState.error}
+        loading={patternLoading}
+        error={null}
         patterns={patternState.patterns}
-        onClose={() => setPatternState((prev) => ({ ...prev, show: false }))}
+        onClose={closePattern}
         onNavigate={(path) => router.push(`/${path}`)}
       />
+    )}
+    {(patternState.status === 'preview' || patternState.status === 'error') && (
+      <section className="memo-feedback" role={patternState.status === 'error' ? 'alert' : 'status'} aria-label="메모 분석 결과">
+        <div className="memo-actions">
+          <TruthBadge state={patternState.status} label={patternState.status === 'preview' ? 'Preview · 분석 엔진 연결 필요' : '분석 실패'} />
+          {patternState.code && <span className="mono memo-muted">{patternState.code}</span>}
+        </div>
+        <p>{patternState.status === 'preview'
+          ? '분석 엔진 또는 메모 저장소가 연결되지 않아 결과를 만들지 않았어요. 연결한 뒤 다시 실행하세요.'
+          : patternState.error}</p>
+        <div className="memo-actions">
+          <Button variant="outline" onClick={() => runAnalysis(patternState.request)} disabled={!patternState.request}>다시 실행</Button>
+          <Button variant="ghost" onClick={closePattern}>닫기</Button>
+        </div>
+      </section>
     )}
     {recoveries.length > 0 && <section className="memo-recovery" aria-label="작성 중인 메모"><h3>이어서 쓸 메모</h3>{recoveries.map((doc) => <Button key={doc.draft.id} className="hub-row" onClick={() => router.push(memoDocumentHref(params, doc.draft.expectedRevision ? { note: doc.draft.id } : { new: 'note', draft: doc.draft.id, from: doc.fromPreview ? 'preview' : '' }), { scroll: false })}>
       {doc.draft.title || doc.draft.body.slice(0,60) || '작성 중인 메모'} · {doc.pending ? '이전 요청 확인' : doc.fromPreview ? '연결 전 초안 이어쓰기' : '이어서 쓰기'}
