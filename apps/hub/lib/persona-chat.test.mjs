@@ -75,6 +75,9 @@ test("persona-client exposes mode labels and legend lenses", () => {
   assert.equal(PERSONA_MODE_LABEL.critique, "평가/진단");
   assert.equal(PERSONA_MODE_LABEL.sparring, "3자 토론");
   assert.equal(PERSONA_MODE_LABEL["weekly-review"], "한 주 정리");
+  assert.equal(PERSONA_MODE_LABEL["outreach-draft"], "연락 초안");
+  assert.equal(PERSONA_MODE_LABEL["extract-actions"], "액션 추출");
+  assert.equal(PERSONA_MODE_LABEL["daily-dispatch"], "오더 브리핑");
   assert.ok(LEGEND_LENS_MAP.jobs);
   assert.ok(LEGEND_LENS_MAP.bezos);
   assert.ok(LEGEND_LENS_MAP.chouinard);
@@ -132,4 +135,36 @@ test("POST supports weekly-review mode", async () => {
   );
   assert.equal(res.status, 200);
   assert.equal(state.calledBody.mode, "weekly-review");
+});
+
+test("POST supports outreach-draft, extract-actions, and daily-dispatch modes", async () => {
+  const resOutreach = await POST(
+    request({
+      personaId: "sales",
+      mode: "outreach-draft",
+      draft: "고객: 김대표님, 최근 접촉: 2주 전",
+    }),
+  );
+  assert.equal(resOutreach.status, 200);
+  assert.equal(state.calledBody.mode, "outreach-draft");
+
+  const resExtract = await POST(
+    request({
+      personaId: "order",
+      mode: "extract-actions",
+      draft: "오늘 미팅 메모: 견적서 송부하고 슬랙 채널 개설하기",
+    }),
+  );
+  assert.equal(resExtract.status, 200);
+  assert.equal(state.calledBody.mode, "extract-actions");
+
+  const resDispatch = await POST(
+    request({
+      personaId: "order",
+      mode: "daily-dispatch",
+      draft: "오늘 태스크 3개, 신호 1개",
+    }),
+  );
+  assert.equal(resDispatch.status, 200);
+  assert.equal(state.calledBody.mode, "daily-dispatch");
 });

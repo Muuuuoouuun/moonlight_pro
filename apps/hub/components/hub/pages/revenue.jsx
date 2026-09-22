@@ -1,12 +1,14 @@
 "use client";
+import { GoalLinks } from '../goal-links';
 
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress, CertaintyBadge, ChipToggle, useToast } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress, CertaintyBadge, ChipToggle, useToast } from "../hub-primitives";
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
+import { requestPersonaChat } from "../persona-client";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
@@ -1186,6 +1188,7 @@ export function Leads({ workspace }) {
         onClose={() => setEditLeadId(null)}
       >
         <LeadEnrichmentPanel lead={editingLead} />
+        <GoalLinks entityType="leads" entityId={editingLead?.id} scope={editingLead?.type} />
       </EditDrawer>
 
       {/* 벌크 바 — x로 담은 선택이 있을 때만 뜨는 하단 플로팅 바(§2.8 첫 실채택). */}
@@ -1214,6 +1217,121 @@ export function Leads({ workspace }) {
 }
 
 // 딜 체크리스트 — 공유 실행 척추의 딜 쪽 절반. 판매 과정의 하위 항목(견적서 발송·데모
+function DealOutreachDrafter({ deal, onApplyNextAction }) {
+  const [open, setOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [draftText, setDraftText] = React.useState("");
+  const [copied, setCopied] = React.useState(false);
+  const toast = useToast();
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setOpen(true);
+    try {
+      const res = await requestPersonaChat({
+        personaId: "sales",
+        mode: "outreach-draft",
+        draft: `[영업 딜 고객 연락 맥락]\n딜/고객명: ${deal.name || deal.account}\n소속 회사: ${deal.account || "미지정"}\n진행 단계: ${deal.stage || "초기"}\n예상 금액: ${deal.value ? deal.value + "원" : "미정"}\n현재 다음 행동: ${deal.nextAction || "미정"}\n메모: ${deal.notes || "없음"}\n\n위 고객에게 발송할 3~4문장의 부담 없는 카카오톡/문자 연락 초안을 작성해줘.`,
+      });
+      setLoading(false);
+      if (res.state === "done") {
+        setDraftText(res.text);
+      } else {
+        toast.error(res.note || "초안 생성 실패");
+      }
+    } catch (e) {
+      setLoading(false);
+      toast.error(e.message || "오류 발생");
+    }
+  };
+
+  const handleCopy = () => {
+    if (!draftText) return;
+    navigator.clipboard.writeText(draftText);
+    setCopied(true);
+    toast.success("메시지 초안이 복사되었습니다.");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const extractOneLineAction = (text) => {
+    if (!text) return "고객 후속 연락 진행";
+    const match = text.match(/📌\s*추천\s*다음\s*행동:\s*([^\n\r]+)/);
+    if (match && match[1]?.trim()) return match[1].trim();
+    const first = text.split("\n")[0].replace(/^[0-9\.\-\*\s#💬]+/, "").trim().slice(0, 80);
+    return first || "고객 안부 및 일정 조율 연락";
+  };
+
+  return (
+    <div style={{ marginTop: 8, borderTop: "1px solid var(--line-soft)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+      {!open ? (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Button
+            variant="outline"
+            size="xs"
+            icon="sparkle"
+            onClick={handleGenerate}
+          >
+            {loading ? "연락 초안 작성 중…" : "✍️ 맞춤 연락 초안 생성"}
+          </Button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--fg)" }}>추천 연락 메시지 초안</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
+            >
+              접기
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ fontSize: 11, color: "var(--fg-muted)", padding: "4px 0" }}>초안 생성 중…</div>
+          ) : draftText ? (
+            <>
+              <div
+                style={{
+                  background: "var(--surface-3)",
+                  padding: "8px 10px",
+                  borderRadius: "var(--r-xs)",
+                  fontSize: 11.5,
+                  lineHeight: 1.55,
+                  whiteSpace: "pre-wrap",
+                  color: "var(--fg)",
+                  border: "1px solid var(--line-soft)",
+                }}
+              >
+                {draftText}
+              </div>
+              <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
+                  {copied ? "복사됨 ✓" : "본문 복사"}
+                </Button>
+                {onApplyNextAction && (
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    icon="check"
+                    onClick={() => {
+                      const act = extractOneLineAction(draftText);
+                      onApplyNextAction(act);
+                      toast.success("다음 행동에 반영되었습니다.");
+                    }}
+                  >
+                    다음 행동 반영
+                  </Button>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 준비·재미팅 잡기)이 딜 안에 산다. 저장은 tasks 원장(meta.deal_id)이라 '내 작업'의
 // 할 일 레인에도 그대로 흐른다. 클로징 딜에는 판매 후 실행(A/S)을 낮은 우선순위 후속
 // 프로젝트로 분리하는 버튼이 붙는다 — 딜은 돈을 추적하고 닫히는 레코드, 실행은 계속되는
@@ -1628,6 +1746,7 @@ export function Deals({ workspace, onNavigate }) {
   const router = useRouter();
   const pathname = usePathname();
   const DEAL_STAGES = ledger.stages;
+  const ledgerUnavailable = syncState === 'loading' || syncState === 'error';
   const [deals, setDeals] = React.useState(ledger.deals);
   const [drag, setDrag] = React.useState(null);
   const [filter, setFilter] = useScopeFilter(searchParams);
@@ -1642,6 +1761,12 @@ export function Deals({ workspace, onNavigate }) {
     return () => clearTimeout(t);
   }, [boardNotice]);
   const dragMovedRef = React.useRef(false); // true from dragStart until just after dragEnd — suppresses the card click
+  const finishDealDrag = () => {
+    setDrag(null);
+    // Moving between columns unmounts the source card before its dragend can bubble.
+    // Drop must also release the drag state; defer clicks only through this event turn.
+    setTimeout(() => { dragMovedRef.current = false; }, 0);
+  };
   React.useEffect(() => {
     if (!boardNotice) return undefined;
     const id = setTimeout(() => setBoardNotice(null), 6000);
@@ -1769,6 +1894,7 @@ export function Deals({ workspace, onNavigate }) {
   // `stage` lets a column's inline "+ 딜 추가" seed the deal directly in that stage, so
   // creating where you're looking needs no follow-up drag. Falls back to the first stage.
   const createDeal = (stage) => {
+    if (ledgerUnavailable) return;
     const id = `LOCAL-${Date.now().toString().slice(-4)}`;
     setDeals(prev => [{
       id,
@@ -1835,12 +1961,15 @@ export function Deals({ workspace, onNavigate }) {
   const createdDealFromQueryRef = React.useRef(false);
   React.useEffect(() => {
     if (searchParams.get('new') !== 'deal') { createdDealFromQueryRef.current = false; return; }
-    if (createdDealFromQueryRef.current) return;
+    if (ledgerUnavailable || createdDealFromQueryRef.current) return;
     createdDealFromQueryRef.current = true;
     createDeal();
-    router.replace(pathname);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('new');
+    if (!params.size) router.replace(pathname);
+    else router.replace(`${pathname}?${params}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [searchParams, ledgerUnavailable]);
 
   // Deep-link: ?deal=<id> opens that deal's EditDrawer once the ledger has loaded. One-shot
   // per param, then strip the query so a refresh doesn't replay it.
@@ -1866,10 +1995,11 @@ export function Deals({ workspace, onNavigate }) {
   // "1–5 스테이지 이동"은 이 배선이 생기면서 다시 유효해졌다.
   const boardItems = React.useMemo(
     () => DEAL_STAGES.flatMap(s => visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter))),
-    [visibleDeals, filter],
+    [DEAL_STAGES, visibleDeals, filter],
   );
   const selection = useCrmSelection(boardItems);
   useCrmKeyboard({
+    enabled: !ledgerUnavailable,
     selection,
     onNew: () => createDeal(),
     onEditSelected: (id) => setEditDealId(id),
@@ -1890,8 +2020,8 @@ export function Deals({ workspace, onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Deals</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            열린 파이프라인 <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(openTotal)}</span> · <span className="mono">{openCount}</span>건
-            {closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--moon-200)' }}>{fmt(closingTotal)}</span></>}
+            {ledgerUnavailable ? '딜 파이프라인' : <>열린 파이프라인 <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(openTotal)}</span> · <span className="mono">{openCount}</span>건</>}
+            {!ledgerUnavailable && closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--moon-200)' }}>{fmt(closingTotal)}</span></>}
             <SyncBadge state={syncState} />
             {boardNotice && (
               <span role={boardNotice.tone === 'err' ? 'alert' : 'status'} aria-live="polite" style={{ marginLeft: 8, fontSize: 11.5, color: boardNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1909,13 +2039,13 @@ export function Deals({ workspace, onNavigate }) {
           </div>
         )}
         <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
-        <Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
+        <Button variant="primary" size="sm" icon="plus" disabled={ledgerUnavailable} onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
       </div>
 
       {/* 게이지 마스트헤드 — 열린 딜 금액의 단계 분포를 한 줄 세그먼트로. 아래 컬럼들의
           top 스트라이프와 같은 heat 토큰을 써서 게이지와 보드가 하나의 계기로 읽힌다.
           (읽기 전용 — 모바일 44px 버튼 플로어와 충돌하는 클릭 타깃을 만들지 않는다.) */}
-      {!wsEmpty && openTotal > 0 && (
+      {!ledgerUnavailable && !wsEmpty && openTotal > 0 && (
         <div style={{ display: 'flex', gap: 2, height: 6, borderRadius: 999, overflow: 'hidden' }} aria-hidden="true">
           {openStages.map(s => {
             const sum = totals[s.key]?.sum || 0;
@@ -1935,10 +2065,11 @@ export function Deals({ workspace, onNavigate }) {
         </div>
       )}
 
-      {wsEmpty && (
-        syncState === 'error' ? (
-          <LedgerReadError noun="딜 파이프라인" onRetry={reloadLedger} />
-        ) : (
+      {syncState === 'loading' && <Skeleton lines={3} height={64} label="딜 파이프라인 불러오는 중" />}
+      {syncState === 'error' && <LedgerReadError noun="딜 파이프라인" onRetry={reloadLedger} />}
+      {syncState === 'partial' && <Button variant="ghost" size="sm" onClick={reloadLedger}>딜 원장 다시 확인</Button>}
+
+      {!ledgerUnavailable && wsEmpty && (
         <Card>
           <EmptyState
             icon="deals"
@@ -1948,17 +2079,20 @@ export function Deals({ workspace, onNavigate }) {
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
-        )
       )}
 
-      {!wsEmpty && (
+      {!ledgerUnavailable && !wsEmpty && (
       <ScrollShadowX>
         {DEAL_STAGES.map(s => {
           const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
           return (
             <div key={s.key}
               onDragOver={e => e.preventDefault()}
-              onDrop={() => drag && move(drag, s.key)}
+              onDrop={e => {
+                e.preventDefault();
+                if (drag) move(drag, s.key);
+                finishDealDrag();
+              }}
               style={{
                 width: 260, flexShrink: 0,
                 background: 'var(--surface)',
@@ -1992,7 +2126,7 @@ export function Deals({ workspace, onNavigate }) {
                     onClick={() => { if (dragMovedRef.current) return; setEditDealId(d.id); }}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditDealId(d.id); } }}
                     onDragStart={() => { dragMovedRef.current = true; setDrag(d.id); }}
-                    onDragEnd={() => { setDrag(null); setTimeout(() => { dragMovedRef.current = false; }, 0); }}
+                    onDragEnd={finishDealDrag}
                     style={{
                       background: 'var(--surface-2)',
                       // 숨긴 딜은 전체 opacity 대신 dashed 엣지 + 숨김 뱃지(§5.3 — 상태를
@@ -2112,6 +2246,9 @@ export function Deals({ workspace, onNavigate }) {
         onClose={() => {
           // 닫기 = 미저장 드래프트 폐기(EditDrawer의 dirty confirm이 이미 실수를 막는다).
           setDealDrafts(prev => { if (!editDealId || !prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
+          if (String(editDealId).toLowerCase().startsWith('local-')) {
+            setDeals(ds => ds.filter(d => d.id !== editDealId));
+          }
           setEditDealId(null);
         }}
       >
@@ -2149,11 +2286,23 @@ export function Deals({ workspace, onNavigate }) {
                 </span>
               </div>
             )}
+            <DealOutreachDrafter
+              deal={editingDeal}
+              onApplyNextAction={(act) => {
+                if (editDealId) {
+                  setDealDrafts(prev => ({
+                    ...prev,
+                    [editDealId]: { ...prev[editDealId], nextAction: act },
+                  }));
+                }
+              }}
+            />
           </div>
         )}
         <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
         <DealNextMeetingPanel deal={editingDeal} onNavigate={onNavigate} />
         <DealLinkedProjectsPanel deal={editingDeal} onNavigate={onNavigate} />
+        <GoalLinks entityType="deals" entityId={editingDeal?.id} scope={editingDeal?.type} />
       </EditDrawer>
 
       <FloatingMentorWidget
@@ -2616,6 +2765,10 @@ function LeadActivityPanel({ lead, onCountChange }) {
       })
       .then(d => {
         if (!alive) return;
+        if (d?.status === 'error') {
+          setSyncState('error');
+          return;
+        }
         setActivities(Array.isArray(d.activities) ? d.activities : []);
         setSyncState(d.status === 'live' ? 'live' : 'preview');
       })
@@ -2894,6 +3047,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
 
       {/* Body */}
       <div className="scroll-y" style={{ flex: 1, minHeight: 0, padding: 'var(--card-pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <GoalLinks entityType="customer_accounts" entityId={account.id} scope={account.type} />
         {tab === 'activity' && (
           <>
             {activityError && (

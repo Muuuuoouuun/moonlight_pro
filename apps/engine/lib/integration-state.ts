@@ -5,7 +5,7 @@ import {
   insertSupabaseRecord,
   updateSupabaseRecord,
   upsertSupabaseRecords,
-} from "./supabase-rest";
+} from "./supabase-rest.ts";
 
 type IntegrationStatus = "pending" | "connected" | "error" | "disabled";
 type SyncRunStatus = "queued" | "running" | "success" | "failure";

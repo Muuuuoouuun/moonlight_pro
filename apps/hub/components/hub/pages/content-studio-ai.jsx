@@ -8,6 +8,7 @@ import {
 import { postStudio } from './use-content-studio';
 import { ResultPreview } from './content-studio-editors';
 import { getEditorialGuidance } from '@com-moon/content-manager/editorial-criteria';
+import { isOfficeStudioOperation } from '@com-moon/agent-contracts/office-studio';
 import { contentChangePreview } from '@/lib/content-change-preview';
 
 const OPERATIONS = [
@@ -60,6 +61,8 @@ export function StudioAI({ studio, selection, onOpenHistory }) {
   const source = state.run?.source_snapshot;
   const guidance = getEditorialGuidance(operation);
   const resultGuidance = source?.editorialGuidance;
+  const officeEditing = isOfficeStudioOperation(operation, { variantType: draft.variantType, channel: draft.channel });
+  const resultOffice = source?.officeProvenance?.ownerId === 'sylveon' ? source.officeProvenance : null;
   const dispatch = async (request) => {
     setState((current) => ({ ...current, phase: 'generating', message: '' }));
     try {
@@ -106,7 +109,7 @@ export function StudioAI({ studio, selection, onOpenHistory }) {
     (operation === 'draft' ? Boolean(draft.sourceIdea.trim() || draft.brief.message.trim()) : Boolean(draft.body.trim()));
   return <Card className="studio-ai-card">
     <div className="studio-stack">
-      <div className="studio-row"><h3 className="studio-section-title">AI 작업</h3><Badge tone="neutral" size="xs">비교 후 적용</Badge></div>
+      <div className="studio-row"><h3 className="studio-section-title">{officeEditing ? `님피아 · ${operation === 'draft' ? '원고 초안' : '원고 다듬기'}` : 'AI 작업'}</h3><Badge tone="neutral" size="xs">비교 후 적용</Badge></div>
       <SelectField label="무엇을 만들까요?" options={OPERATIONS.filter((entry) => !structured || !['hooks', 'shorten'].includes(entry.value))} value={operation} disabled={generating || busy} onChange={(event) => setOperation(event.target.value)} />
       <SelectField label="말투" options={TONES} value={tone} disabled={generating || busy} onChange={(event) => setTone(event.target.value)} />
       <details className="studio-criteria" open>
@@ -119,7 +122,7 @@ export function StudioAI({ studio, selection, onOpenHistory }) {
         <p>{operation === 'draft' ? '입력한 메모와 기획을 바탕으로 초안을 만듭니다. 부족한 근거는 별도로 표시합니다.' : selectedText && operation !== 'repurpose' ? selectedText.slice(0, 180) : '저장된 콘텐츠와 선택한 브랜드의 지침을 사용합니다.'}</p>
       </div>
       <Button variant="primary" icon="sparkle" disabled={!canGenerate || ['unknown', 'running', 'unsaved'].includes(state.phase)} onClick={generate}>
-        {generating ? 'AI 작업 중…' : candidates.length ? '새 후보 생성' : '후보 만들기'}
+        {generating ? 'AI 작업 중…' : candidates.length ? '새 후보 생성' : officeEditing ? operation === 'draft' ? '님피아로 초안 만들기' : '님피아로 원고 다듬기' : '후보 만들기'}
       </Button>
       {!draft.sourceIdea && !draft.brief.message && operation === 'draft' && <p className="studio-muted studio-small">먼저 원문 메모나 핵심 메시지를 적어주세요.</p>}
       {generating && <p role="status" className="studio-muted studio-small">작업 중에도 글을 쓸 수 있습니다. 본문이 바뀌면 새 내용으로 다시 생성해야 합니다.</p>}
@@ -134,7 +137,9 @@ export function StudioAI({ studio, selection, onOpenHistory }) {
       {stale && <p className="studio-error" role="status">후보를 만든 뒤 본문이나 버전이 바뀌었습니다. 현재 내용으로 새 후보를 만들어주세요.</p>}
       {candidates.length > 0 && <div className="studio-candidates">
         <div className="studio-row"><h3 className="studio-section-title">변경 비교</h3><Button size="xs" disabled={generating} onClick={() => setState({ phase: 'idle', message: '', run: null, persisted: false, recoveryToken: null })}>후보 닫기</Button></div>
+        {resultOffice && <p className="studio-muted studio-small">님피아 편집 지침으로 생성한 후보 · 비교하고 사실을 확인한 뒤 적용하세요.</p>}
         {resultGuidance && <details className="studio-criteria"><summary>이 후보에 사용한 기준 · {resultGuidance.version}</summary><ul>{resultGuidance.criteria.map(rule => <li key={rule.id} title={rule.source}>{rule.criterion}</li>)}</ul></details>}
+        {resultOffice && <details className="studio-criteria"><summary>이 후보의 역할 기준</summary><p className="studio-muted studio-small">정책 {resultOffice.policyVersion} · 역할 {resultOffice.personaVersion}. 생성과 출력 형식 검사를 거친 후보이며 사실 검증 완료를 뜻하지 않습니다.</p></details>}
         {(structured || state.run.operation === 'repurpose') && <details className="studio-source-compare"><summary>변경 전 보기</summary><pre>{source?.selectionText || source?.body || draft.sourceIdea}</pre></details>}
         {candidates.map((candidate, index) => <article key={candidate.id} className="studio-candidate">
           <div className="studio-row"><strong>{candidates.length > 1 ? '후보 ' + (index + 1) : '제안된 결과'}</strong><Badge size="xs" tone="neutral">{state.persisted ? '후보 저장됨' : '저장 대기'}</Badge></div>

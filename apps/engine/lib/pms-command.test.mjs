@@ -662,3 +662,22 @@ test("rejects malformed project and brand relationship ids instead of clearing t
     projectId: "not-a-project-id",
   }, context), { ok: false, reason: "invalid-project-id" });
 });
+
+test('project item types and dated steps normalize together and require versioned updates', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  const context = { workspaceId: '33333333-3333-4333-8333-333333333333', now: '2026-09-21T00:00:00Z' };
+  const input = { action: 'create_task', id, title: '단계', itemType: 'milestone', checklist: [
+    { id, title: '일정', done: false, note: '상세', dueAt: '2026-09-22' },
+  ] };
+  const created = pmsCommand.normalizePmsCommand(input, context);
+  assert.equal(created.ok, true);
+  assert.equal(created.record.meta.item_type, 'milestone');
+  assert.equal(created.record.meta.checklist[0].dueAt, '2026-09-22');
+  assert.equal(pmsCommand.normalizePmsCommand({ ...input, itemType: 'other' }, context).reason, 'invalid-item-type');
+  assert.equal(pmsCommand.normalizePmsCommand({ ...input, checklist: [{ ...input.checklist[0], dueAt: '2026-02-30' }] }, context).reason, 'invalid-checklist-date');
+  assert.equal(pmsCommand.normalizePmsCommand({ action: 'update_task', id, itemType: 'subproject' }, context).reason, 'missing-expected-updated-at');
+  const updated = pmsCommand.normalizePmsCommand({ ...input, action: 'update_task', expectedUpdatedAt: '2026-09-20T00:00:00Z' }, context);
+  assert.equal(updated.ok, true);
+  assert.equal(updated.patch.meta.item_type, 'milestone');
+  assert.equal(updated.patch.meta.checklist[0].dueAt, '2026-09-22');
+});

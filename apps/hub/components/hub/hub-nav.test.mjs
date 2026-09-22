@@ -3,10 +3,12 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { NAV_TREE } from "./hub-data.js";
+import * as catalog from "./hub-data.js";
 import {
   DEFAULT_EXPANDED_ANCHORS,
   DEFAULT_SCOPE,
   SIDEBAR_ANCHORS,
+  PAGE_OWNS_TABS,
   SIDEBAR_PRIMARY,
   SIDEBAR_SCOPES,
   SIDEBAR_UTILITIES,
@@ -35,16 +37,43 @@ function navTreePaths() {
   return paths;
 }
 
+test('goal palette shortcuts stay in the current scope without adding a sidebar anchor', () => {
+  const quick = NAV_TREE.find(node => node.key === 'goals-check');
+  assert.ok(quick, 'quick check must be discoverable through the command catalog');
+  for (const scope of ['personal', 'classin', 'all']) {
+    const path = catalog.navPathForScope(quick, scope);
+    const url = new URL(path, 'https://hub.invalid/');
+    assert.equal(url.searchParams.get('scope'), scope);
+    assert.equal(url.searchParams.get('check'), '1');
+    assert.equal(ownerAnchorKey(path), 'overview');
+    assert.equal(topNavigationForRoute('dashboard/overview', scope, 'goals').activeTab.key, 'overview-goals');
+    const goals = NAV_TREE.find(node => node.key === 'goals');
+    assert.equal(new URL(catalog.navPathForScope(goals, scope), 'https://hub.invalid/').searchParams.get('scope'), scope);
+  }
+  const work = NAV_TREE.find(node => node.key === 'my-work');
+  assert.equal(catalog.navPathForScope(work, 'personal'), work.path);
+});
+
 // Overview joined 2026-07-15 by direct operator instruction (see hub-nav.js
 // header); brands joined 2026-08-29 (브랜드 탭 설계 §5.2 — 프로젝트 다음, 콘텐츠 앞)
-// — nine primary + two utility anchors.
-test("sidebar exposes exactly nine primary and two utility anchors", () => {
-  assert.equal(SIDEBAR_PRIMARY.length, 9);
+// — ten primary + two utility anchors (home 추가, 2026-09-18).
+test("sidebar exposes exactly ten primary and two utility anchors", () => {
+  assert.equal(SIDEBAR_PRIMARY.length, 10);
   assert.equal(SIDEBAR_UTILITIES.length, 2);
   assert.deepEqual(
     SIDEBAR_PRIMARY.map((a) => a.key),
-    ["today", "overview", "tasks", "revenue", "followups", "discovery", "projects", "brands", "content"],
+    ["home", "today", "overview", "tasks", "revenue", "followups", "discovery", "projects", "brands", "content"],
   );
+});
+
+test('overview goals subview has one active child and carries organizational scope', () => {
+  const tabs = sidebarChildren('overview', 'classin');
+  const goals = tabs.find(tab => tab.key === 'overview-goals');
+  assert.ok(goals, 'goals belongs under the existing overview anchor');
+  assert.equal(goals.path, 'dashboard/overview?view=goals&scope=classin');
+  assert.equal(isSidebarChildActive('overview', 'dashboard/overview', 'dashboard/overview', 'goals'), false);
+  assert.equal(isSidebarChildActive('overview', goals.path, 'dashboard/overview', 'goals'), true);
+  assert.equal(topNavigationForRoute('dashboard/overview', 'classin', 'goals').activeTab?.key, 'overview-goals');
 });
 
 test("every anchor resolves a path in every scope", () => {
@@ -199,6 +228,24 @@ test("AI·자동화 children all carry a group label for the two-eyebrow layout"
   }
 });
 
+test('Office, work execution, coaching and brand advice keep four distinct existing destinations', () => {
+  const expected = [
+    ['Office', 'dashboard/agents/office-council'],
+    ['작업·실행', 'dashboard/agents/orders'],
+    ['코칭·대화', 'dashboard/agents/chat'],
+    ['브랜드 자문', 'dashboard/agents/council'],
+  ];
+  assert.deepEqual(NAV_TREE.find(node => node.key === 'agents').children.map(child => [child.label, child.path]), expected);
+  for (const scope of SIDEBAR_SCOPES) {
+    const children = sidebarChildren('ai', scope.key).filter(child => child.group === 'Agents');
+    assert.deepEqual(children.map(child => [child.label, child.path]), expected);
+    assert.ok(children.filter(child => child.key !== 'ai-office').every(child => child.deferred));
+    const jobs = topNavigationForRoute('dashboard/agents/orders', scope.key, 'jobs');
+    assert.equal(jobs.activeTab?.key, 'ai-orders');
+  }
+  assert.equal(catalog.LEGACY_REDIRECTS['dashboard/agents/office'].to, 'dashboard/agents/chat');
+});
+
 test("second-level destinations resolve into the top bar with one active tab", () => {
   const revenue = topNavigationForRoute("dashboard/revenue/deals", "all");
   assert.equal(revenue.anchor?.key, "revenue");
@@ -213,9 +260,32 @@ test("second-level destinations resolve into the top bar with one active tab", (
 
 test("sidebar is one level deep and the top bar owns contextual tabs", () => {
   assert.doesNotMatch(sidebarSource, /hub-nav-caret|hub-nav-sublist|hub-nav-subgroup/);
+  // 2026-09-19 Futura 패스는 외형만 바꿨다 — 사이드바는 여전히 한 단계고, 하위
+  // 목적지는 탑바가 그린다. 펼침 UI를 다시 들이는 변경은 이 단언을 먼저 깨야 한다.
+  assert.doesNotMatch(sidebarSource, /fx-nav-child|sidebarChildren\(a\.key, scope\)/);
   assert.match(topbarSource, /topNavigationForRoute\(path, scope, view\)/);
   assert.match(topbarSource, /className="hub-topbar__tabs"/);
   assert.match(topbarSource, /aria-current=\{selected \? 'page' : undefined\}/);
+});
+
+// 사이드바 내비 행은 텍스트 전용이다(§15 2026-09-19) — 아이콘 글리프는 접힌
+// 사이드바에만 남는다. 여기서 검사하는 건 외형 계약이지 깊이가 아니다.
+test("expanded sidebar nav rows carry no icon glyph", () => {
+  const expanded = sidebarSource.slice(
+    sidebarSource.indexOf("const renderAnchor"),
+    sidebarSource.indexOf("if (collapsed)"),
+  );
+  assert.ok(expanded.length > 0, "renderAnchor block must be found");
+  assert.doesNotMatch(expanded, /<Iconed/);
+});
+
+// Futura 라우트는 페이지 헤더가 pill 탭을 직접 그리므로 탑바는 같은 줄을 또 그리지 않는다.
+test("a page that draws its own tabs suppresses the top bar row", () => {
+  assert.match(topbarSource, /!pageOwnsTabs\(path\)/);
+  assert.ok(PAGE_OWNS_TABS.has("dashboard/work/decisions"));
+  for (const route of PAGE_OWNS_TABS) {
+    assert.ok(topNavigationForRoute(route, "all").tabs.length > 0, `${route} must still resolve tabs`);
+  }
 });
 
 // ── Mobile navigation accessibility contract ─────────────────────────────

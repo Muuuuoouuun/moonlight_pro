@@ -1,0 +1,14 @@
+.panel { border-top: 1px solid var(--line-soft); padding-top: 12px; margin-top: 12px; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; min-width: 0; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.meta { font-size: 11px; color: var(--fg-dim); line-height: 1.6; }
+.note { font-size: 12px; color: var(--fg-muted); line-height: 1.7; margin: 0; overflow-wrap: anywhere; }
+.result { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 16px; min-width: 0; }
+.body { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 13px; line-height: 1.8; margin: 0; color: var(--fg); }
+.panel summary { cursor: pointer; color: var(--fg-muted); font-size: 12px; padding-block: 8px; min-height: 44px; }
+.panel ul { padding-left: 20px; margin: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.7; }
+.history { list-style: none; padding-left: 0 !important; }
+.controls { display:grid; gap:12px; padding:0; margin:0; border:0; min-width:0; }
+.comparison { border-top:1px solid var(--line-soft); }
+.reviewers { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:12px; }
+@media (max-width: 600px) { .result { padding: 12px; } .actions { align-items: flex-start; } }

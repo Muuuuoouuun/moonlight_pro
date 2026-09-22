@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { buildNoteSave, createJournalWriter, isJournalEntry, noteFingerprint, noteToDraft } from '@/lib/journal-client';
+import { buildNoteSave, createJournalWriter, initialMemoContexts, isJournalEntry, noteFingerprint, noteToDraft } from '@/lib/journal-client';
 import { createJournalStore, journalTabId } from '@/lib/journal-browser-store';
 
 export async function fetchJournal(path = '') {
@@ -12,7 +12,7 @@ export async function fetchJournal(path = '') {
   return data;
 }
 
-export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, entry, source, context, fromPreview = false, onSaved }) {
+export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, entry, source, context, contexts, fromPreview = false, onSaved }) {
   const [state, setState] = React.useState({ draft: null, entry: null, pending: null, ready: false, dirty: false,
     localError: false, loadError: '', message: '', saveState: 'idle', conflict: null, reuseDraft: null, target: null });
   const ref = React.useRef(state), mounted = React.useRef(true), initialized = React.useRef(false);
@@ -47,13 +47,18 @@ export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, en
       let draft = local?.draft || (entry ? noteToDraft(entry) : isNew ? noteToDraft({ id, occurredAt: new Date().toISOString() }) : null);
       let message = local?.pending ? '이전 저장 결과를 확인해야 해요. 같은 요청으로 확인하면 중복 생성되지 않아요.'
         : local?.dirty ? '작성 중이던 내용을 불러왔어요.' : '';
-      if (!local && isNew && context?.id) {
-        try {
-          const result = await fetchJournal(`/contexts?type=${encodeURIComponent(context.type)}&id=${encodeURIComponent(context.id)}`);
-          const candidate = result.contexts?.find((row) => row.id === context.id && row.type === context.type);
-          if (candidate) draft.contexts = [candidate];
-          else message = '시작한 업무를 찾지 못했어요. 업무 연결에서 다시 선택할 수 있어요.';
-        } catch { message = '업무 연결을 확인하지 못했어요. 업무 연결에서 다시 선택할 수 있어요.'; }
+      const seeds = initialMemoContexts(context, contexts);
+      if (!local && isNew && seeds.length) {
+        const resolved = await Promise.all(seeds.map(async (seed) => {
+          try {
+            const result = await fetchJournal(`/contexts?type=${encodeURIComponent(seed.type)}&id=${encodeURIComponent(seed.id)}`);
+            return result.contexts?.find((row) => row.id === seed.id && row.type === seed.type) || null;
+          } catch { return null; }
+        }));
+        // Keep the intended relationship on a failed lookup; the save RPC validates
+        // every identity atomically instead of silently saving an orphaned note.
+        draft.contexts = resolved.map((value, index) => value || { ...seeds[index], label: seeds[index].label || '연결 확인 필요' });
+        if (resolved.some((value) => !value)) message = '시작한 업무 연결을 모두 확인하지 못했어요. 저장 전에 업무 연결에서 다시 선택해 주세요.';
       }
       if (cancelled || !mounted.current || documentEpoch.current !== epoch) return;
       initialized.current = loadKey;
@@ -83,7 +88,7 @@ export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, en
     }
     initialize();
     return () => { cancelled = true; };
-  }, [id, isNew, workspaceId, source, entry, context, fromPreview, update]);
+  }, [id, isNew, workspaceId, source, entry, context, contexts, fromPreview, update]);
 
   function keep(patch) {
     const next = { ...ref.current, ...patch };

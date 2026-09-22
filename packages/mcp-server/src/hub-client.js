@@ -112,7 +112,7 @@ async function hubFetch(path, { method = "GET", body, query } = {}) {
   const headers = { "content-type": "application/json" };
   const secret = resolveWriteSecret();
 
-  if (secret && method !== "GET") {
+  if (secret) {
     headers.authorization = `Bearer ${secret}`;
   }
 

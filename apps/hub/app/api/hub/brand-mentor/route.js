@@ -5,6 +5,7 @@ import { recordAgentRun, setAgentRunEmittedCount } from "@/lib/sales-os/agent-ru
 import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { createWorkOrder } from "@/lib/sales-os/work-orders";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
+import { isValidAdvisorInput } from "@/lib/advisor-input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,13 +66,14 @@ async function callEngine(body) {
 }
 
 // One-line fingerprint of the assembled brand context for the episodic-memory log.
-function summarizeContext(ctx) {
+function summarizeContext(ctx, legendIds) {
   if (!ctx) return null;
   const p = Array.isArray(ctx.projects) ? ctx.projects.length : 0;
   const i = ctx.content?.idea_queue_top?.length || 0;
   const m = Array.isArray(ctx.missing) ? ctx.missing.length : 0;
   const cadence = ctx.content?.cadence_status ? " cadence=1" : "";
-  return `src=${ctx.source} brand=${ctx.brand?.key || "-"} projects=${p} ideas=${i} missing=${m}${cadence}${ctx.focus ? " focus=1" : ""}`;
+  const legends = Array.isArray(legendIds) && legendIds.length ? ` legends=${legendIds.join(",")}` : "";
+  return `src=${ctx.source} brand=${ctx.brand?.key || "-"} projects=${p} ideas=${i} missing=${m}${cadence}${ctx.focus ? " focus=1" : ""}${legends}`;
 }
 
 // Store a compact recommendation snapshot (jsonb) — cap large payloads so the log stays cheap.
@@ -97,10 +99,12 @@ function modeLabel(mode) {
   })[mode] || mode;
 }
 
-async function createCouncilWorkOrder({ mode, ref, context, data, runId }) {
+async function createCouncilWorkOrder({ mode, ref, context, data, runId, legendIds }) {
   if (data?.status !== "generated" || !data?.text) {
     return { persisted: false, reason: "not-generated" };
   }
+
+  const councilNextAction = data?.council?.nextAction;
 
   return createWorkOrder({
     persona: "council",
@@ -112,9 +116,10 @@ async function createCouncilWorkOrder({ mode, ref, context, data, runId }) {
       ref,
       gate: "human_approval",
       lane: "brand_work",
-      summary: data.text.slice(0, 2000),
+      summary: (councilNextAction ? `[차기 조치] ${councilNextAction}\n\n` : "") + data.text.slice(0, 2000),
+      council: data?.council || null,
       brand: context?.brand?.key || null,
-      contextSummary: summarizeContext(context),
+      contextSummary: summarizeContext(context, legendIds),
       policy: {
         noDirectPublish: true,
         publishRequiresApproval: true,
@@ -137,16 +142,23 @@ export async function POST(req) {
     return parsed.error;
   }
 
-  const input = parsed.data || {};
+  const input = parsed.data;
+  if (!isValidAdvisorInput(input)) {
+    return NextResponse.json({ status: "error", error: "자문 설정의 형식을 확인해 주세요." }, { status: 400 });
+  }
   if (input.createWorkOrder !== undefined && typeof input.createWorkOrder !== "boolean") {
     return NextResponse.json({ status: "error", error: "invalid-create-work-order" }, { status: 400 });
   }
   const mode = typeof input.mode === "string" ? input.mode.trim() : "brand-strategy";
   const ref = typeof input.ref === "string" ? input.ref.trim() || null : null;
   const draft = typeof input.draft === "string" ? input.draft : null;
+  const legendIds = Array.isArray(input.legendIds) ? input.legendIds : undefined;
+  const directives = input.directives && typeof input.directives === "object" ? input.directives : undefined;
+  const values = input.values && typeof input.values === "object" ? input.values : undefined;
+  const knowledge = input.knowledge && typeof input.knowledge === "object" ? input.knowledge : undefined;
 
   const context = await assembleBrandContext({ mode, ref, draft });
-  const result = await callEngine({ mode, ref, draft, context });
+  const result = await callEngine({ mode, ref, draft, context, legendIds, directives, values, knowledge });
   // Episodic memory: log what the Council recommended so the next call can remember it (best-effort).
   let run = { persisted: false, id: null, reason: "agent-run-write-failed" };
   try {
@@ -154,7 +166,7 @@ export async function POST(req) {
       agent: "council",
       mode,
       ref,
-      inputSummary: summarizeContext(context),
+      inputSummary: summarizeContext(context, legendIds),
       recommendation: trimRecommendation(result.data),
       result: advisorRunResult(result.status, result.data),
     });
@@ -169,7 +181,7 @@ export async function POST(req) {
       workOrder = { persisted: false, reason: "not-generated" };
     } else {
       try {
-        workOrder = await createCouncilWorkOrder({ mode, ref, context, data: result.data, runId: run?.id || null });
+        workOrder = await createCouncilWorkOrder({ mode, ref, context, data: result.data, runId: run?.id || null, legendIds });
       } catch {
         workOrder = { persisted: false, reason: "work-order-write-failed" };
       }

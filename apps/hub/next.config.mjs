@@ -1,5 +1,8 @@
 /** @type {import("next").NextConfig} */
 const nextConfig = {
+  async redirects() {
+    return [{ source: "/favicon.ico", destination: "/icon.svg", permanent: false }];
+  },
   transpilePackages: ["@com-moon/ui"],
   serverExternalPackages: ["node-ical"],
   experimental: {

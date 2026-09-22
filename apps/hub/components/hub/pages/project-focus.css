@@ -1,0 +1,88 @@
+.hub-app .project-focus {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--line-soft);
+  background: var(--surface);
+  animation: mlFadeUp var(--dur-enter) var(--ease-hub);
+}
+.hub-app .project-focus [hidden] { display: none !important; }
+.hub-app .project-focus-top { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); }
+.hub-app .project-focus-top > .project-focus-container { flex: 1; }
+.hub-app .project-focus-body { flex: 1; display: flex; flex-direction: column; gap: 24px; padding: 16px; font-size: 13px; }
+.hub-app .project-focus-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.hub-app .project-focus-heading { font-size: 20px; font-weight: 500; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+.hub-app .project-focus-identity { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hub-app .project-focus-due { display: inline-flex; align-items: center; gap: 4px; color: var(--fg-muted); }
+.hub-app .project-focus-search { font-size: 12px; }
+.hub-app .project-focus h4 { font-size: 12px; font-weight: 500; margin: 0; color: var(--fg-muted); }
+.hub-app .project-focus p { margin: 0; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hub-app .project-focus-muted { font-size: 12px; color: var(--fg-muted); }
+.hub-app .project-focus-error { font-size: 12px; color: var(--danger); }
+.hub-app .project-focus-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hub-app .project-focus-customers { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.hub-app .project-focus-customers > span { flex-shrink: 0; }
+.hub-app .project-focus-customer-link { min-width: 0; flex: 1; justify-content: flex-start; }
+.hub-app .project-focus-customer-link > span { flex: 1; min-width: 0; }
+.hub-app .project-focus-customers button { white-space: normal; overflow-wrap: anywhere; text-align: left; min-height: 36px; }
+.hub-app .project-focus-next { display: flex; flex-direction: column; gap: 8px; padding-left: 12px; box-shadow: inset 1px 0 0 var(--line-strong); }
+.hub-app .project-focus-next > p { font-size: 14px; }
+.hub-app .project-focus-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hub-app .project-focus-section { display: flex; flex-direction: column; gap: 8px; padding-bottom: 16px; border-bottom: 1px solid var(--line-soft); }
+.hub-app .project-focus-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.hub-app .project-focus-task { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.hub-app .project-focus-task-copy { flex: 1; min-width: 0; font-size: 12px; }
+.hub-app .project-focus-details { border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.hub-app .project-focus-details > summary { min-height: 44px; padding: 12px 0; font-size: 12px; color: var(--fg-muted); cursor: pointer; }
+.hub-app .project-focus-properties { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; margin: 0; font-size: 12px; }
+.hub-app .project-focus-properties dt { color: var(--fg-muted); }
+.hub-app .project-focus-properties dd { margin: 0; overflow-wrap: anywhere; }
+.hub-app .project-focus-link { display: flex; align-items: center; min-height: 44px; color: var(--fg); font-size: 12px; }
+.hub-app .project-focus-footer { padding: 12px 16px; border-top: 1px solid var(--line-soft); font-size: 12px; }
+.hub-app .project-focus-footer > details { border-top: 0; padding-top: 0; }
+.hub-app .project-customer-search { display: flex; align-items: flex-end; gap: 8px; }
+.hub-app .project-customer-search > :first-child { flex: 1; min-width: 0; }
+.hub-app .project-customer-results { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.hub-app .project-customer-results > button { justify-content: space-between; text-align: left; white-space: normal; min-height: 44px; }
+.hub-app .project-customer-result-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.hub-app .project-customer-save { justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+@media (max-width: 600px) {
+  .hub-app .project-focus-body { padding: 16px; }
+  .hub-app .project-focus input, .hub-app .project-focus textarea { font-size: 16px; }
+  .hub-app .project-focus-customers button { min-height: 44px; }
+}
+
+@media (min-width: 901px) {
+  .hub-app .hub-content > .fade-up:has(.hub-projects-main-grid[data-detail-open="true"]) { height: 100%; }
+  .hub-app .hub-projects-workspace:has(.project-focus) { grid-template-rows: minmax(0, 1fr); }
+  .hub-app .hub-projects-workspace-main { min-height: 0; }
+  .hub-app .hub-projects-main-grid:has(.project-focus) { min-height: 0; grid-template-rows: minmax(0, 1fr); }
+}
+
+/* Keep customer context separate from the row's project-opening action. */
+.hub-app .hub-project-row__customer { grid-column: 2 / 5; grid-row: 2; justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 28px; max-width: 100%; padding: 4px 8px; margin: -4px 0 8px; color: var(--fg-muted); font-size: 12px; border-radius: var(--r-sm); text-align: left; }
+.hub-app .hub-project-row__customer > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .hub-project-row__customer > svg { flex-shrink: 0; }
+.hub-app .hub-project-group-add { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 4px 8px; border-top: 1px solid var(--line-soft); }
+.hub-app .hub-project-group-add > :last-child { color: var(--fg-muted); }
+.hub-app .hub-pms-progress--evidence .hub-pms-progress__reading { flex-wrap: wrap; gap: 4px 6px; }
+.hub-app .hub-pms-progress--evidence .hub-pms-progress__evidence { white-space: normal; overflow: visible; }
+.hub-app .hub-project-mobile-view { display: none; }
+.project-customer-result-copy .mono { font-size: 10.5px; overflow-wrap: anywhere; }
+@media (min-width: 769px) {
+  @container project-list (max-width: 860px) {
+    .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-table .hub-project-secondary-state { display: flex; }
+    .hub-app .hub-project-table .hub-project-row__customer { grid-column: 2; grid-row: 2; margin: 0; }
+    .hub-app .hub-project-table .hub-project-row:has(.hub-project-row__customer) > .hub-pms-progress,
+    .hub-app .hub-project-table .hub-project-row:has(.hub-project-row__customer) > .hub-project-secondary-state { grid-row: 3; }
+  }
+}
+@media (max-width: 900px) {
+  .hub-app .hub-project-view-control { display: none !important; }
+  .hub-app .hub-project-mobile-view { display: block; order: 1; flex: 0 1 132px; min-width: 0; }
+  .hub-app .hub-project-mobile-view select { min-height: 44px; font-size: 16px; }
+}
+@media (max-width: 768px) {
+  .hub-app .hub-project-row__customer { grid-column: 2; grid-row: auto; min-height: 44px; margin: 0 12px 8px; }
+  .hub-app .hub-project-group-add .hub-btn { min-height: 44px; }
+}

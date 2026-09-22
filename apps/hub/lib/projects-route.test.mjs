@@ -109,7 +109,7 @@ test("projects API preserves configured ledger read errors as retryable upstream
   const response = await GET();
   const body = await response.json();
 
-  assert.equal(response.status, 502);
+  assert.equal(response.status, 200);
   assert.equal(body.status, "error");
   assert.equal(body.source, "error");
   assert.equal(body.configured, true);
@@ -191,7 +191,7 @@ test("projects API never leaks internal exception details", async () => {
     const body = await response.json();
     const serialized = JSON.stringify(body);
 
-    assert.equal(response.status, 500);
+    assert.equal(response.status, 200);
     assert.equal(body.status, "error");
     assert.equal(body.error, "project-ledger-request-failed");
     assert.equal(body.retryable, true);

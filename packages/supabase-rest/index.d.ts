@@ -84,7 +84,7 @@ export function fetchSupabaseRowsDetailed<T = Record<string, unknown>>(
 export function countSupabaseRows(
   table: string,
   filters?: SupabaseFilter[],
-  options?: { timeoutMs?: number },
+  options?: { timeoutMs?: number; dedupe?: boolean },
 ): Promise<number | null>;
 
 export function insertSupabaseRecord<T = Record<string, unknown>>(

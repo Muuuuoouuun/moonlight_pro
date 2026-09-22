@@ -1,11 +1,13 @@
 "use client";
 
 import React from "react";
+import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, CheckboxRow, DateQuickPresets, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge, TextField, useToast } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
+import { requestPersonaChat } from "../persona-client";
 import { QUICK_LOG_ACTIONS as LOG_ACTIONS, REACTION_OPTIONS } from "@/lib/sales-os/outcome-attribution";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
 
@@ -230,6 +232,10 @@ function ActivityPanel({ item, onClose, onNavigate }) {
       })
       .then((d) => {
         if (!active) return;
+        if (d?.status === "error") {
+          setState({ syncState: "error", activities: [] });
+          return;
+        }
         setState({
           syncState: d.status === "live" ? "live" : "preview",
           activities: Array.isArray(d.activities) ? d.activities : [],
@@ -280,11 +286,194 @@ function ActivityPanel({ item, onClose, onNavigate }) {
           ))}
         </div>
       )}
+      {['lead','deal'].includes(item.kind) && <OfficeWorkflowPanel key={`${item.kind}:${item.id}`} intent="customer_reply"
+        scope={item.workspace === 'classin' || item.type === 'company' ? 'classin' : item.workspace === 'brand' || item.type === 'personal' ? 'personal' : null}
+        originRef={{entityType:item.kind,entityId:item.id}} title="답장 초안" onNavigate={onNavigate} />}
     </Drawer>
   );
 }
 
-function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onCloseLog, onSubmitLog, logError, logged, kbSelected }) {
+function FollowupDraftDrawer({ item, onClose, onOpenLog }) {
+  const toast = useToast();
+  const [lens, setLens] = React.useState("voss");
+  const [loading, setLoading] = React.useState(false);
+  const [draftResult, setDraftResult] = React.useState(null);
+  const [copied, setCopied] = React.useState(false);
+  const [errorNote, setErrorNote] = React.useState("");
+  const requestController = React.useRef(null);
+
+  const generateDraft = React.useCallback(async (targetLens) => {
+    if (!item || requestController.current) return;
+    const controller = new AbortController();
+    requestController.current = controller;
+    setLoading(true);
+    setCopied(false);
+    setDraftResult(null);
+    setErrorNote("");
+    try {
+      const res = await requestPersonaChat({
+        personaId: "sales",
+        mode: "outreach-draft",
+        lens: targetLens || lens,
+        context: {
+          clientName: item.name,
+          company: item.company,
+          stage: item.stage,
+          why: item.why,
+          lastNote: item.lastNote,
+          lastReaction: item.lastReaction,
+          nextAction: item.nextAction,
+          channel: item.channel,
+        },
+      }, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (res.state === "done") {
+        setDraftResult(res.text);
+      } else {
+        setErrorNote(res.note || "초안을 생성하지 못했습니다.");
+      }
+    } catch {
+      if (!controller.signal.aborted) setErrorNote("초안 생성 중 오류가 발생했습니다.");
+    } finally {
+      if (requestController.current === controller) {
+        requestController.current = null;
+        setLoading(false);
+      }
+    }
+  }, [item, lens]);
+
+  React.useEffect(() => {
+    generateDraft(lens);
+    return () => {
+      requestController.current?.abort();
+      requestController.current = null;
+    };
+  }, [generateDraft, lens]);
+
+  if (!item) return null;
+
+  const handleCopy = async () => {
+    if (!draftResult) return;
+    let textToCopy = draftResult;
+    const match = draftResult.match(/\[💬\s*추천\s*메시지\s*초안\]\s*\n+([\s\S]*?)(?=\n+\[💡|$)/);
+    if (match && match[1]?.trim()) {
+      textToCopy = match[1].trim();
+    }
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopied(true);
+      toast.success("메시지를 복사했습니다. 메신저 앱에 붙여넣으세요.");
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      setErrorNote("복사하지 못했습니다. 본문을 선택해 복사하세요.");
+    }
+  };
+
+  return (
+    <Drawer
+      title={`${item.name} 맞춤 연락 초안`}
+      subtitle={item.company && item.company !== item.name ? item.company : "Sales Guru 추천"}
+      onClose={onClose}
+      footer={
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+          <Button variant="outline" size="sm" onClick={() => generateDraft(lens)} disabled={loading}>
+            🔄 다시 생성
+          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button
+              variant="outline"
+              size="sm"
+              icon="sparkle"
+              onClick={() => {
+                onClose();
+                onOpenLog(item, "sent", "연락");
+              }}
+            >
+              결과 기록하기
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleCopy}
+              disabled={loading || !draftResult}
+            >
+              {copied ? "✓ 복사됨" : "📋 본문 복사"}
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ fontSize: 11, color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            협상 / 대화 렌즈
+          </span>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {[
+              { id: "voss", label: "크리스 보스 (No 유도/저항 극복)" },
+              { id: "rackham", label: "닐 랙햄 (SPIN 문제 진단)" },
+              { id: "jobs", label: "잡스 (극도의 단순/명료함)" },
+            ].map((l) => (
+              <Button
+                key={l.id}
+                variant={lens === l.id ? "primary" : "outline"}
+                size="xs"
+                onClick={() => {
+                  setLens(l.id);
+                }}
+                disabled={loading}
+              >
+                {l.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{
+          padding: "10px 12px",
+          background: "var(--surface-2)",
+          border: "1px solid var(--line-soft)",
+          borderRadius: "var(--r)",
+          fontSize: 12,
+          color: "var(--fg-muted)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+        }}>
+          <div><strong>연락 이유:</strong> {item.why}</div>
+          {item.nextAction && <div><strong>예정 액션:</strong> {item.nextAction}</div>}
+          {item.lastNote && <div><strong>최근 대화:</strong> {item.lastNote}</div>}
+        </div>
+
+        {errorNote && <div role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>{errorNote}</div>}
+        <div style={{
+          padding: "12px 14px",
+          background: "var(--surface)",
+          border: "1px solid var(--line-strong)",
+          borderRadius: "var(--r)",
+          fontSize: 12.5,
+          lineHeight: 1.6,
+          color: "var(--fg)",
+          whiteSpace: "pre-wrap",
+          minHeight: 140,
+        }}>
+          {loading ? (
+            <div style={{ color: "var(--fg-faint)", display: "flex", alignItems: "center", gap: 8, padding: "20px 0", justifyContent: "center" }}>
+              <Iconed name="sparkle" size={14} />
+              고객 맞춤 연락 메시지 작성 중…
+            </div>
+          ) : draftResult ? (
+            draftResult
+          ) : (
+            <span style={{ color: "var(--fg-faint)" }}>초안을 생성해주세요.</span>
+          )}
+        </div>
+      </div>
+    </Drawer>
+  );
+}
+
+function FollowupRow({ item, onNavigate, onOpenPanel, onOpenDraft, logDraft, onOpenLog, onCloseLog, onSubmitLog, logError, logged, kbSelected }) {
   const stage = stageMeta(item.stage);
   const clickable = Boolean(item.href);
   const isLogging = logDraft?.itemId === item.id;
@@ -353,11 +542,16 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
                 <Dot tone="neutral" /> 기록됨: {logged}
               </span>
             ) : (
-              LOG_ACTIONS.map((a) => (
-                <Button key={a.action} variant="outline" size="xs" onClick={() => onOpenLog(item, a.action, a.label)}>
-                  {a.label}
+              <>
+                <Button variant="outline" size="xs" icon="sparkle" onClick={() => onOpenDraft?.(item)}>
+                  메시지 초안
                 </Button>
-              ))
+                {LOG_ACTIONS.map((a) => (
+                  <Button key={a.action} variant="outline" size="xs" onClick={() => onOpenLog(item, a.action, a.label)}>
+                    {a.label}
+                  </Button>
+                ))}
+              </>
             )}
           </div>
         )
@@ -379,6 +573,7 @@ export function Followups({ onNavigate }) {
   const [logged, setLogged] = React.useState({}); // id → action label
   const [notice, setNotice] = React.useState(null); // { tone, label, action? } — 되돌리기 창 표시
   const [panelItem, setPanelItem] = React.useState(null); // row whose activity panel is open
+  const [draftItem, setDraftItem] = React.useState(null); // row whose message draft is open
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
   const laneCounts = React.useMemo(() => {
@@ -583,6 +778,7 @@ export function Followups({ onNavigate }) {
               item={item}
               onNavigate={onNavigate}
               onOpenPanel={setPanelItem}
+              onOpenDraft={setDraftItem}
               logDraft={logDraft}
               onOpenLog={openLog}
               onCloseLog={closeLog}
@@ -598,6 +794,7 @@ export function Followups({ onNavigate }) {
       </div>
 
       {panelItem && <ActivityPanel item={panelItem} onClose={() => setPanelItem(null)} onNavigate={onNavigate} />}
+      {draftItem && <FollowupDraftDrawer item={draftItem} onClose={() => setDraftItem(null)} onOpenLog={openLog} />}
     </div>
   );
 }

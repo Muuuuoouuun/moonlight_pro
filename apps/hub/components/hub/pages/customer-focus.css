@@ -1,0 +1,15 @@
+.hub-app .customer-focus { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.hub-app .customer-focus h3 { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.5; }
+.hub-app .customer-focus > section { border-top: 1px solid var(--line-soft); padding-top: 16px; }
+.hub-app .customer-focus > section > p { margin: 0; }
+.hub-app .customer-focus > .customer-focus-next { border-top: 0; padding: 0 0 0 12px; box-shadow: inset 1px 0 0 var(--line-strong); }
+.hub-app .customer-focus-next h3 { color: var(--fg-muted); font-size: 12px; }
+.hub-app .customer-focus-next p { margin: 8px 0 0; font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.hub-app .customer-focus-section-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.hub-app .customer-focus > details { border-top: 1px solid var(--line-soft); }
+.hub-app .customer-focus > details > summary { display: list-item; align-content: center; }
+.hub-app .customer-focus > details[open] > :not(summary) { margin-top: 16px; }
+.hub-app .customer-focus-footer { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .hub-app .customer-focus button, .hub-app .customer-focus-footer button { min-height: 44px; }
+}

@@ -29,38 +29,3 @@ export function summarizeGoogleOAuthProviders(health = {}) {
     };
   });
 }
-
-export function classifyWorkspaceGoogleMcp({ serverStatus, toolCount = 0, probeResult } = {}) {
-  if (serverStatus !== "ok") {
-    return {
-      level: "WARN",
-      detail: `process ${serverStatus || "unknown"}; provider not probed`,
-    };
-  }
-
-  const errorText = typeof probeResult?.error === "string" ? probeResult.error : "";
-  if (/authentication required/i.test(errorText)) {
-    return {
-      level: "INFO",
-      detail: `process ok; ${toolCount} tools; provider authentication required`,
-    };
-  }
-
-  const calendars = Array.isArray(probeResult)
-    ? probeResult
-    : Array.isArray(probeResult?.calendars)
-      ? probeResult.calendars
-      : null;
-
-  if (calendars) {
-    return {
-      level: "PASS",
-      detail: `authenticated provider read; ${toolCount} tools; ${calendars.length} calendars`,
-    };
-  }
-
-  return {
-    level: "WARN",
-    detail: `process ok; ${toolCount} tools; provider probe failed`,
-  };
-}

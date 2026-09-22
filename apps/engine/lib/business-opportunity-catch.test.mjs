@@ -33,7 +33,9 @@ const stubs = {
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier === 'next/server') return next('next/server.js', context);
-    const key = specifier.endsWith('/supabase-rest') ? 'supabase-rest.ts' : specifier.split('/').at(-1);
+    // Routes mix extensionless and explicit `.ts` lib imports; stub both spellings.
+    const name = specifier.split('/').at(-1);
+    const key = [name, name.replace(/\.ts$/, ''), `${name}.ts`].find((candidate) => stubs[candidate]);
     if (specifier.includes('/lib/') && stubs[key]) {
       return { url: 'data:text/javascript,' + encodeURIComponent(stubs[key]), shortCircuit: true };
     }

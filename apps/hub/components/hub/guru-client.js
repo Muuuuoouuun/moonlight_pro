@@ -20,18 +20,36 @@ export function guruChatPath({ mode, ref } = {}) {
   return `dashboard/agents/chat?${params.toString()}`;
 }
 
-// Returns a normalized result: { state: 'done'|'preview'|'error', text?, note? }
-export async function requestGuruCoaching({ mode = "pipeline-triage", ref = null, draft = null } = {}) {
+// Returns a normalized result: { state: 'done'|'preview'|'error', text?, mode?, ref?, runId?, note? }
+export async function requestGuruCoaching({
+  mode = "pipeline-triage",
+  ref = null,
+  draft = null,
+  directives = null,
+  values = null,
+  knowledge = null,
+} = {}) {
   try {
+    const body = { mode, ref, draft };
+    if (directives && typeof directives === "object") body.directives = directives;
+    if (values && typeof values === "object") body.values = values;
+    if (knowledge && typeof knowledge === "object") body.knowledge = knowledge;
+
     const res = await fetch("/api/hub/sales-mentor", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mode, ref, draft }),
+      body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => null);
 
     if (data?.status === "generated" && data.text) {
-      return { state: "done", text: data.text, mode: data.mode || mode, ref: data.ref ?? ref };
+      return {
+        state: "done",
+        text: data.text,
+        mode: data.mode || mode,
+        ref: data.ref ?? ref,
+        runId: data.runId || null,
+      };
     }
     if (data?.status === "preview") {
       return { state: "preview", note: data.error || "Engine이 아직 연결되지 않았습니다." };

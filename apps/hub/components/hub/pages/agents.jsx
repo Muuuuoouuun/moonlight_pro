@@ -1,11 +1,13 @@
 "use client";
 
 import React from "react";
+import { useSearchParams } from 'next/navigation';
 import { CodexJobsPanel } from "./codex-jobs";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState, SegmentedControl, TruthBadge, Skeleton } from "../hub-primitives";
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
 import { requestCouncilAdvice, councilChatPath } from "../council-client";
+import { RECOMMENDED_TRIADS } from "../council-legends";
 import { requestPersonaChat, PERSONA_MODE_LABEL, LEGEND_LENS_MAP } from "../persona-client";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
@@ -297,7 +299,7 @@ export function AgentsChat({ onNavigate }) {
           <Avatar name={persona.name} size={26} tone="moon" />
           <div style={{ flex: 1 }}>
             {/* §11: 페이지당 정확히 하나의 h2 페이지 타이틀(20px/500) — 채팅 메인 페인의 페르소나 스트립이 그 자리다. */}
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, lineHeight: 1.2 }}>{persona.title}</h2>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, lineHeight: 1.2 }}>코칭·대화</h2>
             <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{persona.name} · {persona.role}</div>
           </div>
           {/* "Pin to Brief"는 로컬 state만 뒤집고 "Pinned" 영수증을 내던 가짜 크로스-표면
@@ -586,23 +588,35 @@ function CouncilCoachPanel({ onNavigate }) {
   const [state, setState] = React.useState('idle'); // idle | loading | done | preview | error
   const [text, setText] = React.useState('');
   const [note, setNote] = React.useState('');
+  const [councilData, setCouncilData] = React.useState(null);
+  const [selectedTriadId, setSelectedTriadId] = React.useState(null);
+  const [requestedTriadId, setRequestedTriadId] = React.useState(null);
+  const [showFullText, setShowFullText] = React.useState(false);
 
   const [currentMode, setCurrentMode] = React.useState('brand-strategy');
 
-  const runMode = async (mode = 'brand-strategy') => {
+  const runMode = async (mode = 'brand-strategy', triadId = selectedTriadId) => {
     setCurrentMode(mode);
     setState('loading');
     setText('');
     setNote('');
-    const r = await requestCouncilAdvice({ mode });
+    setCouncilData(null);
+    setShowFullText(false);
+    const triad = RECOMMENDED_TRIADS.find((t) => t.id === triadId);
+    setRequestedTriadId(triad?.id || null);
+    const legendIds = triad ? triad.legendIds : undefined;
+    const r = await requestCouncilAdvice({ mode, legendIds });
     if (r.state === 'done') {
       setText(r.text);
+      setCouncilData(r.council || null);
       setState('done');
     } else {
       setNote(r.note || '');
       setState(r.state);
     }
   };
+
+  const activeTriad = RECOMMENDED_TRIADS.find((t) => t.id === (state === 'idle' ? selectedTriadId : requestedTriadId));
 
   return (
     <Card>
@@ -611,6 +625,9 @@ function CouncilCoachPanel({ onNavigate }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Council 자문 & 토의</div>
             <Badge tone="neutral" size="xs">브랜드 카운슬</Badge>
+            {activeTriad && (
+              <Badge tone="moon" size="xs">{activeTriad.label} 트라이어드</Badge>
+            )}
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>
             {currentMode === 'sparring' ? '3자 스파링 — 추진 논거 vs 맹점 비판 vs 검증 행동' : currentMode === 'weekly-review' ? '한 주 정리 — 사실 기반 패턴 진단 및 다음 주 실험' : '이번 주 브랜드 전략 — 무엇부터 손댈지'}
@@ -627,10 +644,44 @@ function CouncilCoachPanel({ onNavigate }) {
         </div>
       </div>
 
+      {/* Recommended Triads Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--line-soft)' }}>
+        <span style={{ fontSize: 11, color: 'var(--fg-dim)', marginRight: 2 }}>다음 자문의 트라이어드:</span>
+        {RECOMMENDED_TRIADS.map((t) => {
+          const isSelected = selectedTriadId === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              className="hub-btn hub-btn--subtle"
+              aria-pressed={isSelected}
+              disabled={state === 'loading'}
+              onClick={() => {
+                if (state === 'loading') return;
+                const next = isSelected ? null : t.id;
+                setSelectedTriadId(next);
+              }}
+              style={{
+                padding: '2px 8px',
+                fontSize: 11,
+                borderRadius: 999,
+                border: isSelected ? '1px solid var(--moon-500)' : '1px solid var(--line)',
+                background: isSelected ? 'var(--moon-bg)' : 'transparent',
+                color: isSelected ? 'var(--moon-100)' : 'var(--fg-muted)',
+                cursor: state === 'loading' ? 'not-allowed' : 'pointer',
+              }}
+              title={t.desc}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
       {state === 'idle' && (
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
           Council에게 브랜드/프로젝트 기록 기준의 자문을 요청하세요. 정체된 프로젝트·발행 케이던스 공백·
-          다음 마일스톤을 근거로 먼저 손댈 액션 3건과 이유를 우선순위로 제시합니다.
+          다음 마일스톤을 근거로 먼저 손댈 액션 3건과 이유를 우선순위로 제시합니다. 트라이어드를 선택하면 해당 레전드의 가치관·비용 판단 프레임이 적용됩니다.
         </div>
       )}
 
@@ -642,10 +693,85 @@ function CouncilCoachPanel({ onNavigate }) {
       )}
 
       {state === 'done' && (
-        <div>
-          <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{text}</div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
-            <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(councilChatPath())}>Chat에서 이어가기</Button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {councilData && (councilData.lenses?.length > 0 || councilData.dissent || councilData.conditionalVerdict || councilData.nextAction) ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Lenses Grid */}
+              {Array.isArray(councilData.lenses) && councilData.lenses.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+                  {councilData.lenses.map((l, idx) => (
+                    <div key={idx} style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-dim)', marginBottom: 4 }}>
+                        {l.lens || `렌즈 ${idx + 1}`}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.5, marginBottom: l.cost ? 6 : 0 }}>
+                        {l.verdict}
+                      </div>
+                      {l.cost && (
+                        <div style={{ fontSize: 11, color: 'var(--fg-muted)', borderTop: '1px dashed var(--line)', paddingTop: 4 }}>
+                          <span style={{ color: 'var(--fg-dim)' }}>감수할 비용:</span> {l.cost}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Dissent / Preservation of Dissent */}
+              {councilData.dissent && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', boxShadow: 'inset 1px 0 0 var(--line-strong)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Badge tone="neutral" size="xs">이견 보존 (Dissent)</Badge>
+                    <span style={{ fontSize: 10.5, color: 'var(--fg-dim)' }}>합의보다 반대 논거 중시</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.5 }}>
+                    {councilData.dissent}
+                  </div>
+                </div>
+              )}
+
+              {/* Conditional Verdict */}
+              {councilData.conditionalVerdict && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Badge tone="neutral" size="xs">조건부 판정</Badge>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.5 }}>
+                    {councilData.conditionalVerdict}
+                  </div>
+                </div>
+              )}
+
+              {/* Next Action */}
+              {councilData.nextAction && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Badge tone="neutral" size="xs">즉시 실행 1단계</Badge>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.5 }}>
+                    {councilData.nextAction}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <Button variant="ghost" size="xs" onClick={() => setShowFullText(!showFullText)}>
+                  {showFullText ? '원문 접기' : '자문 원문 보기'}
+                </Button>
+              </div>
+
+              {showFullText && (
+                <div style={{ fontSize: 12, color: 'var(--fg-muted)', background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: 10, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                  {text}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{text}</div>
+          )}
+
+          <div style={{ marginTop: 4, display: 'flex', gap: 6 }}>
+            <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(councilChatPath())}>코칭·대화에서 이어가기</Button>
           </div>
         </div>
       )}
@@ -671,17 +797,20 @@ export function AgentsCouncil({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Council</h2>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>브랜드 자문</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>
             {roster.personas.length}명의 페르소나가 함께 의논. 브리핑·결정에 근거 제공.
           </div>
         </div>
         <div style={{ flex: 1 }} />
         <Badge tone="neutral" size="xs">{roster.status === 'live' ? 'live' : 'preview'}</Badge>
-        <Button variant="primary" size="sm" icon="sparkle" onClick={() => onNavigate?.('dashboard/agents/chat?prompt=council')}>Convene</Button>
+        <Button variant="outline" size="sm" icon="sparkle" onClick={() => onNavigate?.('dashboard/agents/chat?prompt=council')}>자문 대화 열기</Button>
       </div>
 
-      <CodexJobsPanel />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 12, color: 'var(--fg-muted)' }}>
+        <span>Codex 코드 작업과 진행 상태는 작업·실행에서 확인합니다.</span>
+        <Button variant="ghost" size="sm" onClick={() => onNavigate?.('dashboard/agents/orders?view=jobs')}>코드 작업 열기</Button>
+      </div>
       <CouncilCoachPanel onNavigate={onNavigate} />
       {roster.status === 'loading' && (
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>페르소나 로스터 불러오는 중…</div>
@@ -748,6 +877,19 @@ function shortWhen(iso) {
 
 // Live render: real work_orders (the semi-auto queue) + the configured persona roster.
 export function AgentsOrders({ onNavigate }) {
+  const search = useSearchParams();
+  const view = search.get('view') === 'jobs' ? 'jobs' : 'orders';
+  return <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+    <header><h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>작업·실행</h2>
+      <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.7, color: 'var(--fg-muted)' }}>작업 지시의 승인과 코드 작업의 실행 결과를 각각 확인합니다.</p>
+    </header>
+    <SegmentedControl label="작업·실행 보기" options={[{ key: 'orders', label: '작업 지시' }, { key: 'jobs', label: '코드 작업' }]} value={view}
+      onChange={next => onNavigate?.(next === 'jobs' ? 'dashboard/agents/orders?view=jobs' : 'dashboard/agents/orders')} />
+    {view === 'jobs' ? <><p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--fg-muted)' }}>현재 연결 계정과 등록 프로젝트의 작업입니다. 회사·개인 필터는 적용되지 않습니다. 작업 성공은 배포 완료를 뜻하지 않습니다.</p><CodexJobsPanel /></> : <WorkOrdersQueue onNavigate={onNavigate} />}
+  </div>;
+}
+
+function WorkOrdersQueue({ onNavigate }) {
   const [orders, setOrders] = React.useState(null); // null = loading
   const [personas, setPersonas] = React.useState([]);
   const [live, setLive] = React.useState(false);
@@ -865,16 +1007,16 @@ export function AgentsOrders({ onNavigate }) {
     : [];
 
   return (
-    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Agent orders</h2>
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>작업 지시</h3>
           {actionError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{actionError}</div>}
           {readError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{readError}</div>}
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>페르소나·인박스가 올린 제안 큐 · 1클릭 승인</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>페르소나·인박스가 올린 제안 큐 · 승인은 실행 완료가 아닙니다.</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Badge tone="neutral" size="xs">{live ? 'live' : 'preview'}</Badge>
+        <TruthBadge state={orders === null ? 'loading' : readError ? 'error' : live ? 'live' : 'preview'} />
       </div>
 
       {personas.length > 0 && (
@@ -894,7 +1036,7 @@ export function AgentsOrders({ onNavigate }) {
         </div>
         {rows.length === 0 && (
           <div style={{ padding: 16, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-            {orders === null ? '큐 확인 중…' : '대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기에 쌓입니다.'}
+            {orders === null ? <Skeleton lines={3} label="작업 지시 불러오는 중" /> : readError ? '작업 지시를 확인하지 못했습니다.' : !live ? '작업 지시 저장소를 연결하면 제안을 확인할 수 있습니다.' : '대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기에 쌓입니다.'}
           </div>
         )}
         {rows.map((o, i) => (

@@ -1,0 +1,33 @@
+{
+  "browser": "Browser plugin not available; Playwright with installed Chrome",
+  "checks": [
+    "1440: legacy /dashboard/agents resolves to coaching",
+    "1440 coaching: no overflow",
+    "1440: counsel state locks during generation; result retains requested triad",
+    "1440 brand counsel: no overflow",
+    "1440 daily progress: no overflow",
+    "1440: reduced-motion stops ring animation and SVG transition",
+    "1440: reduced-motion stops checkbox/checkmark and active press transforms",
+    "1440: completed Home progress resolves token-derived glow",
+    "1440 home progress: no overflow",
+    "390: legacy /dashboard/agents resolves to coaching",
+    "390 coaching: no overflow",
+    "390: counsel state locks during generation; result retains requested triad",
+    "390 brand counsel: no overflow",
+    "390 daily progress: no overflow",
+    "390: reduced-motion stops ring animation and SVG transition",
+    "390: reduced-motion stops checkbox/checkmark and active press transforms",
+    "390: completed Home progress resolves token-derived glow",
+    "390 home progress: no overflow"
+  ],
+  "errors": [],
+  "apiWritesIntercepted": 2,
+  "shots": [
+    "/tmp/moonlight-hub-motion-council-1440-light.png",
+    "/tmp/moonlight-hub-motion-progress-1440-light.png",
+    "/tmp/moonlight-hub-motion-home-1440-light.png",
+    "/tmp/moonlight-hub-motion-council-390-dark.png",
+    "/tmp/moonlight-hub-motion-progress-390-dark.png",
+    "/tmp/moonlight-hub-motion-home-390-dark.png"
+  ]
+}

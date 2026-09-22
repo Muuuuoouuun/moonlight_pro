@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-20 (Supabase 서울 리전 이관, 테스트 기준선, 빠른 입력 전역화, 목업 가드레일 반영. 이전 정리: 2026-09-14 콘텐츠·메모·문의·Agent DB 준비 상태)
+> 마지막 정리: 2026-09-22 (Office 역할 지침·개별 회의 호출·설정 보존·UI QA 추가. 의미 품질 인증은 대기)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -58,6 +58,8 @@
 | 브랜드 탭 | P0·P1 구현, P2~P5 제안 | `2026-08-29-brand-tab-design.md`, `3627eef` |
 | 개인 매출 30일 로드맵 | 출시, 디자인 QA `blocked` | `2026-08-31-personal-revenue-roadmap.md`, `68517ec`, 루트 `design-qa.md` |
 | 문의 수집·알림 | 코드 구현, 운영 연결 대기 | Gmail 감지·안전한 웹훅·문의 내역·미확인 알림. [설정](inquiry-integration-setup.md), [검증](superpowers/plans/2026-09-13-unified-inquiries.md) |
+| 업무 안의 Eevee Office E0~E4 | 구현·로컬 검증 / 운영 적용 대기 | 요청 중심 Office·입력 보존, 주간 정리·고객 답장, Threads 님피아 지침, 요청 보관·복구, 같은 범위 프로젝트의 할 일 연결, 작업·실행 보기. [구현 기록](superpowers/plans/2026-09-21-eevee-office-embedded-workflow.md). 신규 0038은 임시 PostgreSQL 검증만 완료했으며 운영 DB에는 미적용. 배포·보관 정리 예약은 미실행. 후속 실제 모델 평가는 아래 역할 품질 작업에서 진행 중 |
+| Office 역할 품질·토론 조절 | 구현·UI 로컬 검증 / 의미 품질 인증 대기 | [9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md), 같은 모델의 역할별 개별 호출·공개 반론·주관 종합, 상황/강도/관점 비중 설정과 요청 스냅샷·복구를 구현했다. source review는 원문에 기반한 같은 모델의 편집 보조이며 독립 검증이 아니다. Office UI 15개 시나리오와 기존 자문·진행률 18개 체크 완료. [실제 평가](evaluations/2026-09-22-office-agent-quality/README.md)는 최신 `scope-v1` 전체 39건이 모두 생성됐고 독립 심사 총점은 57~71점이다. 각 축·치명 오류·설정 대조를 포함한 최종 통과는 0/9명이며 품질 목표는 미달이다. 운영 배포를 뜻하지 않는다. [구현·QA 근거와 남은 평가](superpowers/plans/2026-09-22-office-agent-quality.md) |
 | Supabase 서울 리전 이관 | 이관 완료(2026-09-20) · Vercel 환경 변수 교체 대기 | `rwqefdxalmbrkybxqwxj`(싱가포르 `ap-southeast-1`) → `ncgpnqfulnlshegalmbd`(서울 `ap-northeast-2`). 테이블 71·1368행 **전부 행 수 일치**, `npm run db:check` 7/7 PASS, 앱 읽기(`status: live`)·쓰기 왕복 확인, REST 지연 150ms→57ms. 구 싱가포르 프로젝트는 롤백 경로로 **삭제하지 않고 보존**. 툴킷은 `npm run db:move-region`, 런북·함정(함수 실행 권한 회귀 등)은 [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md), 커밋 `fa1757e`. **Vercel 환경 변수는 아직 구 싱가포르 값이므로 배포 전 교체가 필요하다** |
 | 빠른 입력 전역화 | 구현 완료(2026-09-20) | 캡처 폼을 `daily-brief.jsx` 내부에서 `apps/hub/components/hub/quick-capture.jsx`로 분리해 단일 정본화(`layout="inline"`/`"compact"`). 전역 `C` 단축키(입력 요소 안·팔레트 열림이면 무시)와 ⌘K 팔레트의 `빠른 입력` 액션, 치트시트 등록까지 포함 — DESIGN.md §8.1 생성 단축키 계약을 따른다. 커밋 `6423822` |
 | 목업 데이터 가드레일 | 구현 완료(2026-09-20) | `scripts/no-mock-data.test.mjs`가 저장소 전체에서 목업 식별자(`MOCK_`·`DEMO_`·`SAMPLE_`·`DUMMY_`·`FAKE_`·fixtures 계열) 선언과 업무 레코드형 하드코딩 배열을 막는다. 감사 시점의 저장소에는 가짜 업무 데이터가 0건이었고 없던 것은 강제 장치였다. 운영자 확정: 더미 데이터는 **로컬 전용 Supabase 프로젝트에만** 두고 코드에는 넣지 않는다 — 그 프로젝트는 free 플랜 활성 2개 상한 때문에 아직 미생성이다. 커밋 `4516e49` |
@@ -74,11 +76,19 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 제품·운영 정본
 
+- [Eevee Office — 9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md) — **실행 지침 구현 · 의미 품질 인증 대기(2026-09-22)**. `role-cards.ts`에서 생성한 읽기용 사본으로 2026-09-21 역할·말투·운영 품질 설계를 구체화한다. 실제 호출·토론 설정·UI 스냅샷·같은 모델의 source review 경계·완료한 UI QA는 [역할 품질 구현 및 검증 계획](superpowers/plans/2026-09-22-office-agent-quality.md)을 따른다. 지침·형식 검사·화면 QA 통과를 역할별 의미 점수로 환산하지 않는다. 아래 업무 내장 설계의 권한·원장·승인·보관 경계는 유지한다.
+
+- [업무 안의 Eevee Office — C레벨 심화 설계](superpowers/specs/2026-09-21-eevee-office-embedded-workflow-deep-design.md) — **구현 승인 · E0~E4 로컬 구현(2026-09-21)**. [통합 검토](2026-09-21-agent-office-consolidated-review.md)의 B 방향을 주간·고객·Threads Studio에 연결했다. Office/작업·실행/코칭·대화/브랜드 자문으로 기존 목적지를 정리하고, 요청 보관·복구와 기존 command를 통한 task 연결을 구현했다. 대체 조항은 §2, 실제 범위·검증·운영 적용 전제는 [단계별 구현 기록](superpowers/plans/2026-09-21-eevee-office-embedded-workflow.md) §9를 따른다. 다른 표면·장기 기억·자동 발송은 후속 제안이다.
+
 - [실사용 입력 개선](superpowers/specs/2026-09-20-input-usability-design.md) — **승인·구현(2026-09-20)**. 체크리스트 한 줄·Enter 연속 입력, 새 할 일 중앙 팝업·저장 후 계속, 메모 태그·업무 연결, PMS 소속 선택 및 반복 범례 축소. [검증 기록](superpowers/plans/2026-09-20-input-usability.md). 태그 검색 0035는 서울 DB 적용 완료.
 
 - [첫 화면 디자인 디벨롭](superpowers/specs/2026-09-21-home-screen-design-development.md) — **DRAFT · 권장(2026-09-21)**. 첫 화면이 두 개라는 사실(`dashboard` Daily Brief 12슬롯 vs 운영자 확정 Futura 트리아지 `dashboard/home` — DESIGN.md §15 2026-09-18·19 `confirmed`인데 `09.bigmac1.02`에 **미병합**)을 정리하고, 12슬롯·3.34폴드(모바일 4.22)를 6슬롯·2폴드로 줄이는 권장안. 실측·진단 6건(팔레트 원색 13건과 가드 공백 포함)·구현 순서 4주·미정 Q132~Q137. 데이터 쪽은 [세 축·Action KPI 기획](superpowers/specs/2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md) §6.2가 짝이다.
 
 - [CRM 탭 디벨롭 기획](superpowers/specs/2026-09-21-crm-tab-develop-design.md) — **DRAFT v0.2 · 권장 · 적용 준비(2026-09-21)**. 운영자가 지정한 여섯 축(연락·미팅 내용·기록·매출 내용·니즈·위기)을 코드에 대입한 지도와 CRM 탭 재구성 권장안(정본 1 + 렌즈 3, 통합 기록창, 니즈·위기 사건 판정, Q117 계층 정렬, 매출 필드). 검증된 구조 문제 8건 — 기록 저장소 2분열, `reaction` 소비자 0, 큐 정렬이 Q117과 반대, **고객 연락 행의 버킷 필터·레일·클릭·반응 줄이 다른 데이터 모양을 기대해 전부 죽음**, **첫 화면 집중 고객이 `won`만 뽑고 `next_action`은 이관 템플릿**(첫 화면 스펙 D3의 원인), 위험 라벨이 점수 밴드. 디자인 부채 9건. `classinkr-web` `home_v4.2`에서 가져올 7가지·버릴 5가지. 테이블·컬럼 변경 0(RPC v2 함수 1개). 미정 Q138~Q146에 **권장 기본값**을 달아 반대 없으면 진행. 0·1단계 파일 단위 실행 계획은 [`plans/2026-09-21-crm-tab-develop-phase0-1.md`](superpowers/plans/2026-09-21-crm-tab-develop-phase0-1.md).
+
+- [CRM 최적화·편의성·UI/UX 보완 기획](superpowers/specs/2026-09-21-crm-optimization-usability-ux-plan.md) — **DRAFT · 검토용(2026-09-21)**. 위 CRM 탭 기획을 현재 코드와 로컬 화면에 대조한 보완안. 이미 반영된 주간 집계는 제외하고, 저장·조회 신뢰성 → 공통 상세·기록창 → 검색·조회 최적화 → 기록 탐색 순서로 정리했다. 정책 승인·구현 완료를 뜻하지 않는다.
+
+- [CRM·프로젝트의 간결한 보기·입력·고객 연결](superpowers/specs/2026-09-21-crm-project-context-and-focus-design.md) — **진행 승인 · 1·2단계 구현(2026-09-21)**. 프로젝트 고객 칩·요약·역조회, `할 일 / 기록·자료`, 문맥을 이어받는 메모 입력과 초안 복구를 적용했다. 기존 단일 고객 관계·메모 원장을 재사용하며 다중 고객·통합 인물 검색·선택 분석은 후속이다. 운영 DB의 시험 저장은 실행하지 않았다.
 
 - [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 업무 사실과 인터뷰 원본
 - [`superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 활성 제품 설계
@@ -166,6 +176,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`system-eval-2026-08-05.md`](system-eval-2026-08-05.md) — 재감사 1~30차 채점·조치 로그. 축별(안정성·속도·정체성·사용성·디자인·편의성·UIUX) 점수 추이와 각 차수의 지적·수리 내역. 기록 문서이므로 새 구현의 근거로는 §4의 최신 스펙을 우선한다.
 
+- [`evaluations/2026-09-21-measurable-personal-os-validation.md`](evaluations/2026-09-21-measurable-personal-os-validation.md) — **격리 워크트리 구현·로컬 검증 완료 / 운영 적용 별도**. 공통 목표·지표·근거/관측, 업무 연결, Gemini·구독형 MCP 후보/검토, 실제 DB·브라우저·모델 검증과 6축 평가. [실행 계약](superpowers/plans/2026-09-21-measurable-personal-os.md), [설정/적용 가이드](measurable-personal-os-operations.md). 후속 [최적화·UI/UX 개발안](superpowers/plans/2026-09-21-personal-os-optimization-and-experience.md)은 미확정 제안이다.
+
 ### 아키텍처·데이터 정본
 
 - [`supabase-first-operating-ledger.md`](supabase-first-operating-ledger.md)
@@ -176,7 +188,9 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 도메인 참고
 
-- Office Council 캐릭터: [`superpowers/specs/2026-09-15-eevee-office-council-personas.md`](superpowers/specs/2026-09-15-eevee-office-council-personas.md) — **9명 구성·역할 매핑·정립 방향 승인 / 세부 지침 v1 작성**. 역할·성격·말투와 Guru·Mentor·Legend의 업무 분할, 기존/신규 라우팅·인계 경계(§19~23). 기존 실행 계약은 유지하며 런타임 연결·경로 수정은 미적용.
+- Office Council: [`상위 1% C-Suite 워크플로우 OS 초고도화 명세`](superpowers/specs/2026-09-21-eevee-office-c-suite-operating-system.md), [`Moonlight 시스템 전문화 9인 C-Suite 운영 정본 명세`](superpowers/specs/2026-09-21-eevee-office-moonlight-specialized-roles.md) — **역할·업무 배치의 설계 기준**. 인지 부하 1/3 감소·후속 누락 0건과 고정 챔버·비대칭 린터는 설계 목표이며 달성한 성과나 전체 구현을 뜻하지 않는다. [`탭·기능·시나리오별 역할 배치`](superpowers/specs/2026-09-21-eevee-office-surface-role-map.md), [`9명 상세 설정`](superpowers/specs/2026-09-21-eevee-office-detailed-configuration.md), [`성격·말투 심화 설계`](superpowers/specs/2026-09-21-eevee-office-voice-and-personality-deep-design.md)를 함께 읽는다. 현재 실행 지침은 [2026-09-22 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md), 실제 호출·UI 검증·미완료 품질 인증은 [구현 및 검증 계획](superpowers/plans/2026-09-22-office-agent-quality.md)을 우선한다. [`운영자 맞춤 판단·산출물 v2`](superpowers/specs/2026-09-21-eevee-office-operating-quality.md) §7과 [`역할·성격·경계 v1`](superpowers/specs/2026-09-15-eevee-office-council-personas.md)의 A+B 전용 API·화면·기억 분리는 유지하며, 업무 연결·운영 적용의 실제 범위는 E0~E4 구현 기록을 따른다. 운영 배포·Legend 카드·worker 연결은 별도다.
+
+
 - 빠른 메모: [`quick-memo-plan-2026-09-09.md`](quick-memo-plan-2026-09-09.md) — 공통 우측 하단 입력창·초안 복원·기존 메모 저장 경로 재사용. **2026-09-10 로컬 구현·검증 완료, 운영 배포 별도**
 - Agent/Council API·MCP: [`agent-council-api-mcp-operating-plan-2026-09-09.md`](agent-council-api-mcp-operating-plan-2026-09-09.md) — 현재 연동 구현과 권장 운영법. 아래 보류된 전체 Agent UI·자율 실행 설계를 승인한 것은 아님
 - Sales OS: [`sales-os-direction.md`](sales-os-direction.md), [`sales-os/`](sales-os/), [`sales-daily-loop-playbook.md`](sales-daily-loop-playbook.md)

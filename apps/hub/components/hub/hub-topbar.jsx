@@ -3,7 +3,7 @@
 import React from "react";
 import { Iconed } from "./hub-icons";
 import { IconButton, Button } from "./hub-primitives";
-import { topNavigationForRoute } from "./hub-nav";
+import { pageOwnsTabs, topNavigationForRoute } from "./hub-nav";
 import { InquiryBell } from './inquiry-notifications';
 
 const LABELS = {
@@ -22,7 +22,7 @@ const LABELS = {
   'integrations': 'Integrations', 'activity': 'Activity', 'issues': 'Issues',
 };
 
-export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSidebarOpen, onNew, navOpen, menuButtonRef, inquiryNotifications, onAdvisorOpen }) {
+export function TopBar({ path, view, scope, onNavigate, theme, themePreference, onTheme, onSidebarOpen, onNew, onQuickCapture, navOpen, menuButtonRef, inquiryNotifications, onAdvisorOpen }) {
   const [deferredMenuOpen, setDeferredMenuOpen] = React.useState(false);
   const deferredMenuRef = React.useRef(null);
   const segments = path.split('/').filter(Boolean);
@@ -103,22 +103,19 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
         <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="AI 어드바이저 (⌘J)" onClick={onAdvisorOpen} />
         {/* 보류 스코프(Agents) 상시 버튼 제거 — 코어 루프(고객 연락)가 그 자리를 갖는다. */}
         <IconButton className="hub-topbar__secondary" icon="signal" tooltip="고객 연락 열기" onClick={() => onNavigate('dashboard/revenue/followups')} />
-        <button onClick={() => onTheme(theme === 'dark' ? 'light' : 'dark')}
-          title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
-          aria-label={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
-          style={{
-            width: 28, height: 28, borderRadius: 'var(--r-sm)',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--fg-muted)',
-            border: '1px solid var(--line-soft)', background: 'var(--surface-2)',
-          }}>
-          <Iconed name={theme === 'dark' ? 'moon' : 'sun'} size={13} />
-        </button>
+        <IconButton
+          icon={themePreference === 'auto' ? 'clock' : theme === 'dark' ? 'moon' : 'sun'}
+          tooltip={themePreference === 'auto'
+            ? '테마 자동 (07–18시 밝게) · 밝게 고정하기'
+            : themePreference === 'light' ? '밝은 테마 · 어둡게 고정하기' : '어두운 테마 · 자동으로 전환하기'}
+          onClick={() => onTheme(themePreference === 'auto' ? 'light' : themePreference === 'light' ? 'dark' : 'auto')}
+        />
         <InquiryBell className="hub-topbar__secondary" state={inquiryNotifications} onNavigate={onNavigate} />
+        <Button variant="ghost" size="sm" title="빠른 입력 · C" onClick={onQuickCapture}>빠른 입력</Button>
         {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>}
       </div>
 
-      {navigation.tabs.length > 0 && (
+      {navigation.tabs.length > 0 && !pageOwnsTabs(path) && (
         <nav className="hub-topbar__tabs" aria-label={`${navigation.anchor.label} 하위 메뉴`}>
           {visibleTabs.map((tab) => {
             const selected = navigation.activeTab?.key === tab.key;

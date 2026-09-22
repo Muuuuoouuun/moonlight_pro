@@ -140,7 +140,7 @@ export async function POST(req: Request) {
     systemInstruction:
       "You are Com_Moon's backend operations analyst. Be terse, concrete, and action-oriented.",
     prompt: buildPrompt(context, typeof payload.prompt === "string" ? payload.prompt : undefined),
-    maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 768,
+    maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 4096,
   });
   const finishedAt = new Date().toISOString();
   const connection = await upsertIntegrationConnection({

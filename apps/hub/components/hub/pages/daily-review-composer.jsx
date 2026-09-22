@@ -3,6 +3,7 @@
 import React from 'react';
 import { Button, Drawer, SegmentedControl, TextAreaField, TextField, TruthBadge, useToast } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
+import { requestPersonaChat } from '../persona-client';
 
 const ENERGY = [1, 2, 3, 4, 5].map((key) => ({ key, label: String(key) }));
 export const ENERGY_LABELS = ['많이 지침', '조금 지침', '보통', '여유 있음', '활기참'];
@@ -19,6 +20,140 @@ function ReviewSummary({ review }) {
     <div><dt>진척</dt><dd>{progressLabel(review.progress)}</dd></div>
     <div><dt>메모</dt><dd>{review.note || '미입력'}</dd></div>
   </dl>;
+}
+
+function ReviewAiDebrief({ draft, onAppendNote }) {
+  const [open, setOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [adviceText, setAdviceText] = React.useState("");
+  const [copied, setCopied] = React.useState(false);
+  const toast = useToast();
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setOpen(true);
+    try {
+      const parts = [];
+      parts.push(`[오늘의 하루 회고]`);
+      if (draft.energy !== null) parts.push(`에너지: ${draft.energy}/5 (${ENERGY_LABELS[draft.energy - 1]})`);
+      if (draft.focus) parts.push(`오늘의 목표: ${draft.focus}`);
+      if (draft.progress !== null) parts.push(`진척도: ${progressLabel(draft.progress)}`);
+      if (draft.note) parts.push(`메모:\n${draft.note}`);
+
+      parts.push(`\n위 내용을 바탕으로 운영자의 오늘 하루를 따뜻하고 객관적으로 1줄 요약하고, 내일 출근 후 가장 먼저 집중해야 할 단 1가지 행동(조언)을 1줄로 제시해줘. 총 2문장 내외로 간결하게 써줘.`);
+
+      const res = await requestPersonaChat({
+        personaId: "council",
+        mode: "advice",
+        draft: parts.join("\n"),
+      });
+
+      setLoading(false);
+      if (res.state === "done") {
+        setAdviceText(res.text);
+      } else {
+        toast.error(res.note || "조언 생성에 실패했습니다.");
+      }
+    } catch (e) {
+      setLoading(false);
+      toast.error(e.message || "오류가 발생했습니다.");
+    }
+  };
+
+  const handleCopy = () => {
+    if (!adviceText) return;
+    navigator.clipboard.writeText(adviceText);
+    setCopied(true);
+    toast.success("회고 조언이 복사되었습니다.");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+      {!open ? (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            icon="sparkle"
+            onClick={handleGenerate}
+          >
+            {loading ? "AI 회고 코칭 작성 중…" : "✨ AI 회고 코칭 받기"}
+          </Button>
+        </div>
+      ) : (
+        <div
+          style={{
+            background: "var(--surface-2)",
+            border: "1px solid var(--line-soft)",
+            borderRadius: "var(--r-sm)",
+            padding: "8px 10px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            fontSize: 11.5,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: 4 }}>
+              <Iconed name="sparkle" size={12} style={{ color: "var(--moon-300)" }} />
+              Council 회고 조언 & 내일의 한 수
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
+            >
+              접기
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ color: "var(--fg-muted)", fontSize: 11, padding: "6px 0" }}>
+              오늘의 기록을 분석하고 내일의 첫 발자국을 도출하고 있습니다…
+            </div>
+          ) : adviceText ? (
+            <>
+              <div
+                style={{
+                  background: "var(--surface-3)",
+                  padding: "8px 10px",
+                  borderRadius: "var(--r-xs)",
+                  fontSize: 11.5,
+                  lineHeight: 1.55,
+                  whiteSpace: "pre-wrap",
+                  color: "var(--fg)",
+                  border: "1px solid var(--line-soft)",
+                }}
+              >
+                {adviceText}
+              </div>
+              <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                <Button type="button" variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
+                  {copied ? "복사됨 ✓" : "복사"}
+                </Button>
+                {onAppendNote && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    icon="plus"
+                    onClick={() => {
+                      onAppendNote(`[AI 회고 코칭]\n${adviceText}`);
+                      toast.success("메모에 추가되었습니다.");
+                    }}
+                  >
+                    메모에 추가
+                  </Button>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function DailyReviewComposer({ model, onClose }) {
@@ -82,6 +217,13 @@ export function DailyReviewComposer({ model, onClose }) {
             <div className="daily-review-scale"><span>많이 지침</span><span>활기참</span></div>
           </section>
           <TextAreaField id="daily-review-note" label="한 줄 메모" value={draft.note} rows={3} maxLength={4000} placeholder="오늘 기억하고 싶은 일은…" onChange={(event) => edit('note', event.target.value)} />
+          <ReviewAiDebrief
+            draft={draft}
+            onAppendNote={(text) => {
+              const cur = draft.note ? draft.note.trim() + "\n\n" : "";
+              edit('note', cur + text);
+            }}
+          />
         </fieldset>
 
         <Button className="daily-review-disclosure" disabled={locked} aria-expanded={expanded} aria-controls="daily-review-progress-fields" onClick={() => setExpanded((value) => !value)}><Iconed name="chevronD" size={13} />목표·진척도 남기기<span className="daily-review-optional">선택</span></Button>

@@ -8,7 +8,9 @@ import { Badge, Card, Button, Checkbox, DateQuickPresets, EmptyState, SyncBadge,
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
+import { clearSubmittedQuickTaskDraft, shouldSubmitQuickTask } from "@/lib/quick-task-capture";
 import { applyMute, clearMute, mutedIdSet, readMuteStore, seoulDayKey, writeMuteStore } from "./my-work-mute.js";
+import { requestPersonaChat } from "../persona-client";
 
 // 내 작업 — one personal operating surface, three lenses over the cross-lane attention
 // read model (tasks + open deals + calendar week). Design contract from the operator:
@@ -271,7 +273,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       role="button"
       tabIndex={0}
       onClick={() => onOpen(item)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(item); } }}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpen(item); } }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -307,7 +309,8 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         fontSize: 13, color: completing ? 'var(--fg-faint)' : 'var(--fg)', flex: 1, minWidth: '35%',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         textDecoration: completing ? 'line-through' : 'none',
-        transition: 'color var(--dur-panel) ease',
+        opacity: completing ? 0.65 : 1,
+        transition: 'color var(--dur-enter) var(--ease-hub), opacity var(--dur-enter) var(--ease-hub)',
       }}>
         {item.title}
       </span>
@@ -375,10 +378,293 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
   );
 }
 
+function TaskDecomposeSection({ task, onTaskCreated }) {
+  const [open, setOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [actions, setActions] = React.useState([]);
+  const [addedIndices, setAddedIndices] = React.useState(() => new Set());
+  const toast = useToast();
+
+  const handleDecompose = async () => {
+    setLoading(true);
+    setOpen(true);
+    try {
+      const res = await requestPersonaChat({
+        personaId: "order",
+        mode: "extract-actions",
+        draft: `[실행 분해 대상 할 일]: ${task.title}\n프로젝트: ${task.projectName || '없음'}\n우선순위: ${task.priority || '보통'}\n\n이 할 일을 운영자가 부담 없이 10분~15분 안에 착수하고 완료할 수 있는 구체적인 3단계 하위 실행 액션으로 분해해줘.`,
+      });
+      setLoading(false);
+      if (res.state === "done") {
+        const lines = res.text.split("\n");
+        const parsed = [];
+        for (const line of lines) {
+          const trimmed = line.trim();
+          const match = trimmed.match(/^[-*•0-9.]+\s*\[?[ xX]?\]?\s*(.+)$/);
+          if (match && match[1] && !match[1].startsWith("[") && match[1].length > 2 && !match[1].includes("핵심 요약") && !match[1].includes("추천 다음 액션")) {
+            parsed.push(match[1].replace(/^\[|\]$/g, "").trim());
+          } else if (trimmed.startsWith("1.") || trimmed.startsWith("2.") || trimmed.startsWith("3.")) {
+            parsed.push(trimmed.replace(/^[0-9.]+\s*/, "").trim());
+          }
+        }
+        setActions(parsed.slice(0, 3));
+      } else {
+        toast.error(res.note || "액션 분해에 실패했습니다.");
+      }
+    } catch (e) {
+      setLoading(false);
+      toast.error(e.message || "오류가 발생했습니다.");
+    }
+  };
+
+  const handleAddSubtask = async (actionTitle, idx) => {
+    try {
+      const res = await fetch("/api/hub/tasks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: actionTitle,
+          project_id: task.projectId || null,
+        }),
+      });
+      if (res.ok) {
+        setAddedIndices((prev) => new Set([...prev, idx]));
+        toast.success(`'${actionTitle}' 할 일로 등록됨`);
+        onTaskCreated?.();
+      } else {
+        toast.error("할 일 등록에 실패했습니다.");
+      }
+    } catch (e) {
+      toast.error(e.message || "등록 중 오류가 발생했습니다.");
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+      {!open && (
+        <button
+          type="button"
+          onClick={handleDecompose}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            height: 28,
+            fontSize: 11,
+            fontWeight: 500,
+            borderRadius: "var(--r-xs)",
+            border: "1px dashed var(--line-strong)",
+            background: "var(--surface-2)",
+            color: "var(--moon-200)",
+            cursor: "pointer",
+            width: "100%",
+          }}
+        >
+          <Iconed name="sparkle" size={12} />
+          {loading ? "3단계 액션 분해 중…" : "✨ AI 실행 3단계 쪼개기"}
+        </button>
+      )}
+
+      {open && (
+        <div
+          style={{
+            background: "var(--surface-2)",
+            border: "1px solid var(--line-soft)",
+            borderRadius: "var(--r-sm)",
+            padding: "8px 10px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            fontSize: 11.5,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: 4 }}>
+              <Iconed name="sparkle" size={12} style={{ color: "var(--moon-300)" }} />
+              추천 3단계 실행 분해
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
+            >
+              접기
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ color: "var(--fg-muted)", fontSize: 11, padding: "8px 0" }}>
+              실행 가능한 최소 단위로 쪼개고 있습니다…
+            </div>
+          ) : actions.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {actions.map((act, i) => {
+                const added = addedIndices.has(i);
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 6,
+                      background: "var(--surface-3)",
+                      padding: "4px 8px",
+                      borderRadius: "var(--r-xs)",
+                    }}
+                  >
+                    <span style={{ flex: 1, color: "var(--fg)", fontSize: 11.5, overflowWrap: "anywhere" }}>
+                      {i + 1}. {act}
+                    </span>
+                    <Button
+                      variant={added ? "ghost" : "outline"}
+                      size="xs"
+                      disabled={added}
+                      icon={added ? "check" : "plus"}
+                      onClick={() => handleAddSubtask(act, i)}
+                    >
+                      {added ? "등록됨" : "추가"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ color: "var(--fg-muted)", fontSize: 11 }}>분해된 액션이 없습니다.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DealOutreachSection({ deal }) {
+  const [open, setOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [draftText, setDraftText] = React.useState("");
+  const [copied, setCopied] = React.useState(false);
+  const toast = useToast();
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setOpen(true);
+    try {
+      const res = await requestPersonaChat({
+        personaId: "sales",
+        mode: "outreach-draft",
+        draft: `[고객 딜 연락 맥락]\n고객/딜: ${deal.title}\n단계 및 금액: ${deal.meta || "미정"}\n우선순위/상태: ${deal.priorityReason || ""}\n\n위 고객에게 카카오톡 또는 문자로 가볍게 안부를 묻고 다음 일정을 조율할 수 있는 3~4문장의 부담 없는 연락 메시지를 써줘.`,
+      });
+      setLoading(false);
+      if (res.state === "done") {
+        setDraftText(res.text);
+      } else {
+        toast.error(res.note || "초안 생성 실패");
+      }
+    } catch (e) {
+      setLoading(false);
+      toast.error(e.message || "오류 발생");
+    }
+  };
+
+  const handleCopy = () => {
+    if (!draftText) return;
+    navigator.clipboard.writeText(draftText);
+    setCopied(true);
+    toast.success("메시지 초안이 복사되었습니다. 메신저에 붙여넣으세요.");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+      {!open && (
+        <button
+          type="button"
+          onClick={handleGenerate}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            height: 28,
+            fontSize: 11,
+            fontWeight: 500,
+            borderRadius: "var(--r-xs)",
+            border: "1px dashed var(--line-strong)",
+            background: "var(--surface-2)",
+            color: "var(--moon-200)",
+            cursor: "pointer",
+            width: "100%",
+          }}
+        >
+          <Iconed name="sparkle" size={12} />
+          {loading ? "연락 초안 작성 중…" : "✍️ 카톡/문자 연락 초안 생성"}
+        </button>
+      )}
+
+      {open && (
+        <div
+          style={{
+            background: "var(--surface-2)",
+            border: "1px solid var(--line-soft)",
+            borderRadius: "var(--r-sm)",
+            padding: "8px 10px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            fontSize: 11.5,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: 4 }}>
+              <Iconed name="sparkle" size={12} style={{ color: "var(--moon-300)" }} />
+              추천 연락 초안
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
+            >
+              접기
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ color: "var(--fg-muted)", fontSize: 11, padding: "8px 0" }}>
+              고객 맥락에 맞는 초안을 작성하고 있습니다…
+            </div>
+          ) : draftText ? (
+            <>
+              <div
+                style={{
+                  background: "var(--surface-3)",
+                  padding: "8px",
+                  borderRadius: "var(--r-xs)",
+                  whiteSpace: "pre-wrap",
+                  fontSize: 11.5,
+                  lineHeight: 1.5,
+                  color: "var(--fg)",
+                }}
+              >
+                {draftText}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <Button variant="outline" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
+                  {copied ? "복사됨 ✓" : "본문 복사"}
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 우측 상세 패널 — 행 클릭 시 열리는 간단 요약 + 다음 행동. 딥워크는 각 레인의 네이티브
 // 서피스(할 일 EditDrawer · Deals 드로어 · 프로젝트 · Google Calendar)로 넘긴다.
 // ESC/닫기 버튼으로 접힌다 (§8.1 닫기 계약의 패널 버전).
-function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDefer, onEdit, onNavigate, mutedEntry, onMute, onUnmute }) {
+function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDefer, onEdit, onNavigate, mutedEntry, onMute, onUnmute, onTaskCreated }) {
   const bucketMeta = BUCKET_HEADER[normalizeBucket(item)];
   // mono는 계기 데이터(기한·단계·금액)만 — 상태/프로젝트명/근거 같은 '단어' 값을 mono로
   // 두면 이름이 ID처럼 읽힌다 (DESIGN §6 하이브리드 숫자 규칙).
@@ -432,6 +718,14 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
             </div>
           ))}
         </div>
+
+        {/* AI 보조 섹션: 할 일 실행 분해 또는 딜 연락 초안 */}
+        {item.lane === 'task' && (
+          <TaskDecomposeSection task={item} onTaskCreated={onTaskCreated} />
+        )}
+        {item.lane === 'deal' && (
+          <DealOutreachSection deal={item} />
+        )}
       </div>
       <div style={{ padding: 'var(--pad-y) var(--pad-x)', borderTop: '1px solid var(--line-soft)', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {item.lane === 'task' && (
@@ -546,11 +840,14 @@ export function MyWork({ onNavigate }) {
   const mutedIds = React.useMemo(() => mutedIdSet(muted, todayKey), [muted, todayKey]);
 
   const [search, setSearch] = React.useState('');
-  const [quickTitle, setQuickTitle] = React.useState('');
+  const [quickDraft, setQuickDraft] = React.useState({ title: '', dueAt: '', priority: 'medium' });
+  const { title: quickTitle, dueAt: quickDue, priority: quickPriority } = quickDraft;
+  const setQuickTitle = value => setQuickDraft(current => ({ ...current, title: value }));
+  const setQuickDue = value => setQuickDraft(current => ({ ...current, dueAt: value }));
+  const setQuickPriority = value => setQuickDraft(current => ({ ...current, priority: value }));
   const [showQuickDetail, setShowQuickDetail] = React.useState(false);
-  const [quickDue, setQuickDue] = React.useState('');
-  const [quickPriority, setQuickPriority] = React.useState('medium');
   const [saving, setSaving] = React.useState(false);
+  const quickSavingRef = React.useRef(false);
   const [notice, setNotice] = React.useState(null); // { tone, label, action?: { label, onClick } }
   const [taskDraft, setTaskDraft] = React.useState(null);
   // 방금 추가한 할 일의 attention item.id — 저장 직후 그 행으로 스크롤 + 잠깐 하이라이트해서
@@ -613,7 +910,9 @@ export function MyWork({ onNavigate }) {
   // 기한·우선순위도 한 번에 저장 — 기본은 제목만(빠른 경로) 그대로 유지.
   const createTask = async () => {
     const title = quickTitle.trim();
-    if (!title || saving) return;
+    if (!title || quickSavingRef.current) return;
+    const submittedDraft = quickDraft;
+    quickSavingRef.current = true;
     setSaving(true);
     try {
       const payload = { title };
@@ -629,9 +928,8 @@ export function MyWork({ onNavigate }) {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.status === 'saved') {
         const createdId = data.task?.id || data.id || null;
-        setQuickTitle('');
-        setQuickDue('');
-        setQuickPriority('medium');
+        // Saving one item must not erase the next item typed during the request.
+        setQuickDraft(current => clearSubmittedQuickTaskDraft(current, submittedDraft));
         // 새 할 일이 무조건 화면에 보이도록: 리스트 렌즈로, 그리고 방금 만든 (대개 기한 없는)
         // 항목을 가릴 수 있는 레인·기한 필터를 해제한다. board/week나 'today' 필터 상태에서
         // 추가하면 새 항목이 안 보여 "추가가 안 된다"고 느끼던 문제(2026-07-18)를 막는다.
@@ -671,6 +969,7 @@ export function MyWork({ onNavigate }) {
       setNotice({ tone: 'err', label: errMsg });
       toast.error(errMsg);
     } finally {
+      quickSavingRef.current = false;
       setSaving(false);
     }
   };
@@ -1190,7 +1489,7 @@ export function MyWork({ onNavigate }) {
             ref={quickRef}
             value={quickTitle}
             onChange={(e) => setQuickTitle(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') createTask(); }}
+            onKeyDown={(e) => { if (shouldSubmitQuickTask(e, quickSavingRef.current)) { e.preventDefault(); createTask(); } }}
             placeholder="새 할 일 — Enter로 저장"
             // outline을 죽이지 않는다 — 전역 :focus-visible 링(§11)이 키보드 포커스를 표시한다.
             style={{
@@ -1655,6 +1954,7 @@ export function MyWork({ onNavigate }) {
           mutedEntry={mutedIds.has(detailItem.id) ? muted[detailItem.id] : null}
           onMute={(mode) => muteItem(detailItem, mode)}
           onUnmute={() => unmuteItem(detailItem)}
+          onTaskCreated={reload}
         />
       )}
       </div>

@@ -413,9 +413,13 @@ export async function getAccountActivities(accountId) {
   return getCrmActivities({ accountId });
 }
 
-export async function getRevenueLedger() {
+export async function getRevenueLedger({ projection = "full" } = {}) {
   const workspaceId = resolveDefaultWorkspaceId();
   const supabaseConfig = resolveSupabaseConfig();
+  // My Work consumes only deal fields and linked lead scores. Keep the full ledger
+  // for CRM and Daily Brief's raw slots, without reading unrelated account/case/
+  // contact/cutover data on every task completion and reload.
+  const attentionOnly = projection === "attention";
 
   if (!workspaceId || !supabaseConfig) {
     return emptyLedger(false, workspaceId || null);
@@ -423,36 +427,41 @@ export async function getRevenueLedger() {
 
   const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows, trackingStartedAt] = await Promise.all([
     fetchSupabaseRows("leads", {
+      ...(attentionOnly ? { select: "id,score" } : {}),
       limit: 120,
       order: "last_touch_at.desc.nullslast",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("deals", {
+      ...(attentionOnly ? {
+        select: "id,lead_id,company_id,title,stage,amount,expected_close_at,last_activity_at,updated_at,created_at,meta",
+      } : {}),
       limit: 120,
       order: "updated_at.desc.nullslast",
       filters: withWorkspaceFilter([
         ["stage", inFilter(LEGACY_DB_STAGE_VALUES)],
       ]),
     }),
-    fetchSupabaseRows("customer_accounts", {
+    attentionOnly ? [] : fetchSupabaseRows("customer_accounts", {
       limit: 120,
       order: "updated_at.desc.nullslast",
       filters: withWorkspaceFilter([["status", inFilter(["active", "paused", "closed"])]]),
     }),
-    fetchSupabaseRows("operation_cases", {
+    attentionOnly ? [] : fetchSupabaseRows("operation_cases", {
       limit: 120,
       order: "opened_at.desc.nullslast",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("companies", {
+      ...(attentionOnly ? { select: "id,name" } : {}),
       limit: 200,
       filters: withWorkspaceFilter(),
     }),
-    fetchSupabaseRows("contacts", {
+    attentionOnly ? [] : fetchSupabaseRows("contacts", {
       limit: 200,
       filters: withWorkspaceFilter(),
     }),
-    getContactTrackingStartedAt(workspaceId),
+    attentionOnly ? null : getContactTrackingStartedAt(workspaceId),
   ]);
 
   if (!leadRows || !dealRows || !accountRows || !caseRows) {
@@ -483,6 +492,20 @@ export async function getRevenueLedger() {
   const contactById = new Map((contactRows || []).map(c => [c.id, c]));
 
   const deals = dealRows.map(row => mapDeal(row, companyById, trackingStartedAt));
+  if (attentionOnly) {
+    return {
+      source: "supabase",
+      partial: enrichmentFailedSources.length > 0,
+      failedSources: enrichmentFailedSources,
+      configured: true,
+      workspaceId,
+      leads: leadRows.map(row => ({ id: row.id, score: resolveLeadEnrichmentView(row).score })),
+      deals: deals.map(({ id, leadId, name, stage, value, closeAt, activityAt, age }) => ({
+        id, leadId, name, stage, value, closeAt, activityAt, age,
+      })),
+      stages: DEAL_STAGES,
+    };
+  }
   const dealStatsByCompany = new Map();
   dealRows.forEach(row => {
     if (!row.company_id) return;

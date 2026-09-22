@@ -6,7 +6,7 @@ import { validateSharedWebhookRequest } from "../../../../lib/shared-webhook.ts"
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MAX_PAYLOAD_BYTES = 64 * 1024;
+const MAX_PAYLOAD_BYTES = 128 * 1024;
 
 export async function POST(req: Request) {
   const auth = validateSharedWebhookRequest(req);

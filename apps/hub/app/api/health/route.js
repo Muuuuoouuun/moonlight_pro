@@ -28,6 +28,7 @@ async function checkSupabaseRest() {
     const response = await fetch(`${config.url}/rest/v1/projects?select=id&limit=1`, {
       headers: makeSupabaseHeaders(config.apiKey),
       cache: "no-store",
+      signal: AbortSignal.timeout(5000),
     });
 
     return {
@@ -38,7 +39,7 @@ async function checkSupabaseRest() {
   } catch (error) {
     return {
       ok: false,
-      reason: "request-failed",
+      reason: error?.name === "TimeoutError" || error?.name === "AbortError" ? "timeout" : "request-failed",
       detail: error instanceof Error ? error.message : String(error),
     };
   }
@@ -70,7 +71,6 @@ export async function GET() {
       sharedWebhookSecretConfigured: secrets.sharedWebhook.configured,
       oauthStateSecretConfigured: secrets.oauthState.configured,
       hubWriteSecretConfigured: secrets.hubWrite.configured,
-      openClawSyncSecretConfigured: secrets.openclawSync.configured,
       secretsSeparated: secrets.separated,
       googleOAuthConfigured: googleOAuth.calendar.configured,
       githubConfigured: Boolean(process.env.GITHUB_REPOSITORIES?.trim()),
@@ -81,7 +81,6 @@ export async function GET() {
     },
     integrations: {
       engine: controlPlane.engine,
-      openclawRelay: controlPlane.openclawRelay,
       googleOAuth,
       secrets,
     },

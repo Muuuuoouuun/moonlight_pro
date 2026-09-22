@@ -27,7 +27,7 @@
 
 사용자 컬렉션은 `성장, 반복, 인생, 태도`, `아기`, `돌`, `아티스크리에이트`, `비즈니스`, `몽글몽글`, `Fun.`, `영상기술.언젠가`, `챌린지`, `책`이다. 시스템 목록은 `모든 게시물`, `오디오`다.
 
-출처: [저장 목록](https://www.instagram.com/junheokmun/saved/), [비즈니스 컬렉션](https://www.instagram.com/junheokmun/saved/_/18028448504536117/), [지정 DM](https://www.instagram.com/direct/t/1458189162519383/).
+출처: [저장 목록](https://www.instagram.com/junheokmun/saved/), [비즈니스 컬렉션](https://www.instagram.com/junheokmun/saved/_/18028448504536117/), 지정 DM.
 
 ## 내용 접근은 어디까지 되는가
 

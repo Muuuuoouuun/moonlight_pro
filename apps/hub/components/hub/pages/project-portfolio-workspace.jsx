@@ -1,8 +1,10 @@
 "use client";
 
 import React from "react";
-import { Badge, Button, Checkbox, Input } from "../hub-primitives";
+import { Badge, Button, Checkbox, EmptyState, Input, LifecycleBadge } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
+import { PROJECT_ITEM_OPTIONS, projectItemType, readTaskChecklist } from '@/lib/task-checklist';
+import { TaskChecklistGauge } from './project-task-checklist';
 import deliveryStyles from "./project-delivery.module.css";
 import { ProjectDeliverySummary } from "./project-delivery";
 import { BrandMark } from "./project-pms-components";
@@ -216,7 +218,6 @@ export function ProjectPortfolioWorkspace({
   const [showFilterPicker, setShowFilterPicker] = React.useState(false);
   const [openSections, setOpenSections] = React.useState({
     items: true,
-    checklist: true,
     schedule: true,
   });
   const window = React.useMemo(() => portfolioWindow(), []);
@@ -226,7 +227,12 @@ export function ProjectPortfolioWorkspace({
   const projectTasks = project ? (todosByProject.get(project.id) || []) : [];
   const openTasks = projectTasks.filter((task) => !task.done);
   const doneTasks = projectTasks.filter((task) => task.done);
-  const datedTasks = projectTasks
+  const datedTasks = projectTasks.flatMap(task => [
+    ...(task.dueAt ? [{ ...task, scheduleKey: task.id, parentTask: task }] : []),
+    ...readTaskChecklist(task).filter(item => item.dueAt).map(item => ({
+      ...item, scheduleKey: `${task.id}-${item.id}`, title: `${task.title} · ${item.title}`, parentTask: task,
+    })),
+  ])
     .filter((task) => dateValue(task.dueAt))
     .slice()
     .sort((a, b) => dateValue(a.dueAt) - dateValue(b.dueAt));
@@ -455,7 +461,7 @@ export function ProjectPortfolioWorkspace({
 
               <section className="hub-project-portfolio-hero" style={{ padding: "14px 18px", marginBottom: 16 }}>
                 <div className="hub-project-portfolio-hero__project">
-                  <div className="hub-project-portfolio-hero__value stat" style={{ fontSize: 32 }}>
+                  <div className="hub-project-portfolio-hero__value stat">
                     {progress === null ? <span className="is-empty">—</span> : <>{progress}<small>%</small></>}
                   </div>
                   <div className="hub-project-portfolio-hero__identity">
@@ -485,14 +491,26 @@ export function ProjectPortfolioWorkspace({
                     <span>{dueDays === null ? "기한 미정" : dueDays < 0 ? `${Math.abs(dueDays)}일 지남` : dueDays === 0 ? "오늘 마감" : `마감 ${dueDays}일`}</span>
                     <span className={risk.risky ? "is-risk" : ""}><Iconed name={risk.risky ? "flag" : "check"} size={12} />{risk.label}</span>
                   </div>
-                  <div className="hub-project-portfolio-ruler__track" aria-hidden="true">
-                    {Array.from({ length: 13 }, (_, index) => <i key={index} style={{ left: `${(index / 12) * 100}%` }} />)}
+                  <div
+                    className="hub-project-portfolio-ruler__track"
+                    role="progressbar"
+                    aria-label="프로젝트 진척"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={progress ?? undefined}
+                    aria-valuetext={progress === null ? "진척 미집계" : `${progress}%`}
+                  >
+                    {Array.from({ length: 21 }, (_, index) => <i key={index} data-major={index % 5 === 0} style={{ left: `${index * 5}%` }} />)}
                     <span style={{ width: `${progress ?? 0}%` }} />
                     {progress !== null && <b style={{ left: `${progress}%` }} />}
                   </div>
 
+                  <div className="hub-project-portfolio-ruler__scale mono" aria-hidden="true">
+                    {[0, 25, 50, 75, 100].map((value) => <span key={value}>{value}{value === 100 ? "%" : ""}</span>)}
+                  </div>
+
                   {totalTasks > 0 && (
-                    <div className="hub-project-status-bar" style={{ marginTop: 8 }}>
+                    <div className="hub-project-status-bar" style={{ marginTop: 12 }}>
                       <div className="hub-project-status-bar__track">
                         {doneTasksCount > 0 && <span style={{ width: `${(doneTasksCount / totalTasks) * 100}%` }} data-status="done" title={`완료 ${doneTasksCount}개`} />}
                         {doingTasksCount > 0 && <span style={{ width: `${(doingTasksCount / totalTasks) * 100}%` }} data-status="doing" title={`진행 ${doingTasksCount}개`} />}
@@ -508,7 +526,7 @@ export function ProjectPortfolioWorkspace({
                 <PortfolioAccordion
                   id="items"
                   icon="folder"
-                  label="하위 아이템"
+                  label="하위 프로젝트 · 마일스톤"
                   count={projectTasks.length}
                   summary={(
                     <span className="hub-project-portfolio-visual-summary">
@@ -523,52 +541,48 @@ export function ProjectPortfolioWorkspace({
                   open={Boolean(openSections.items)}
                   onToggle={() => toggleSection("items")}
                 >
-                  {taskStatuses.length ? (
-                    <div className="hub-project-portfolio-status-grid">
-                      {taskStatuses.map((entry) => (
-                        <div key={entry.status} data-status={entry.status}>
-                          <span>{STATUS_COPY[entry.status] || entry.status}</span>
-                          <strong className="mono">{entry.count}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  ) : <span className="hub-project-portfolio-panel-empty">하위 아이템이 없습니다.</span>}
-                </PortfolioAccordion>
-
-                <PortfolioAccordion
-                  id="checklist"
-                  icon="orders"
-                  label="체크리스트"
-                  count={`${doneTasks.length}/${projectTasks.length}`}
-                  summary={(
-                    <span className="hub-project-portfolio-visual-summary">
-                      <span className="hub-project-portfolio-mini-progress" aria-hidden="true"><i style={{ width: `${projectTasks.length ? (doneTasks.length / projectTasks.length) * 100 : 0}%` }} /></span>
-                      <em>{nextTask ? `다음 · ${nextTask.title}` : projectTasks.length ? "모든 항목 완료" : "체크리스트 비어 있음"}</em>
-                    </span>
-                  )}
-                  open={Boolean(openSections.checklist)}
-                  onToggle={() => toggleSection("checklist")}
-                >
-                  {projectTasks.length ? (
-                    <div className="hub-project-portfolio-task-list">
-                      {projectTasks.map((task) => (
-                        <div key={task.id} data-done={task.done ? "true" : "false"}>
-                          <Checkbox
-                            checked={task.done}
-                            onChange={(_next, e) => onToggleTodo(task.id, e)}
-                            disabled={pendingTodoIds.has(task.id)}
-                            size={16}
-                            label={`${task.done ? "다시 열기" : "완료"}: ${task.title}`}
-                          />
-                          <button type="button" onClick={() => onEditTodo(task)}>{task.title}</button>
-                          <span className="mono">{formatScheduleDate(task.dueAt)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : <span className="hub-project-portfolio-panel-empty">체크리스트가 비어 있습니다.</span>}
-                  <button type="button" className="hub-project-portfolio-panel-add" onClick={() => onCreateTodo(project.id)}>
-                    <Iconed name="plus" size={13} />하위 아이템 추가
-                  </button>
+                  <div className="hub-project-portfolio-items">
+                    {projectTasks.map(task => {
+                      const type = projectItemType(task);
+                      const checks = readTaskChecklist(task);
+                      const label = type === 'task' ? '하위 항목' : PROJECT_ITEM_OPTIONS.find(option => option.value === type).label;
+                      return (
+                        <details key={`${project.id}-${task.id}`} className="hub-project-portfolio-item">
+                          <summary className="hub-row">
+                            <Iconed name="chevronR" size={14} />
+                            <Iconed name={type === 'milestone' ? 'flag' : 'folder'} size={16} />
+                            <span className="hub-project-portfolio-item__title"><small>{label} · {STATUS_COPY[task.status] || (task.done ? "완료" : "대기")}</small><strong>{task.title}</strong></span>
+                            <span className="hub-project-portfolio-item__progress"><TaskChecklistGauge task={task} emptyLabel="세부 항목 없음" /></span>
+                            <span className="mono">{formatScheduleDate(task.dueAt)}</span>
+                          </summary>
+                          <div className="hub-project-portfolio-item__body">
+                            <div className="hub-project-portfolio-item__toolbar">
+                              <Checkbox checked={task.done} onChange={(_next, e) => onToggleTodo(task.id, e)} disabled={pendingTodoIds.has(task.id)} label={`${task.done ? '다시 열기' : '완료'}: ${task.title}`} />
+                              <LifecycleBadge label={STATUS_COPY[task.status] || (task.done ? '완료' : '대기')} state={task.done ? 'done' : task.status === 'doing' ? 'active' : task.status === 'blocked' ? 'blocked' : 'queued'} />
+                              <Button variant="outline" size="sm" icon="edit" onClick={() => onEditTodo(task)}>상세·일정 편집</Button>
+                            </div>
+                            {task.description && <p className="hub-project-portfolio-item__description">{task.description}</p>}
+                            {task.nextAction && <p>다음 행동 · {task.nextAction}</p>}
+                            <div className="hub-project-portfolio-item__checks">
+                              {checks.map(item => (
+                                <div key={item.id} data-done={item.done}>
+                                  <Iconed name={item.done ? 'check' : 'calendar'} size={14} />
+                                  <span><strong>{item.title}</strong>{item.note && <p>{item.note}</p>}</span>
+                                  <span className="mono">{formatScheduleDate(item.dueAt)}</span>
+                                </div>
+                              ))}
+                              {!checks.length && <p>세부 일정과 체크리스트를 추가해 진행 과정을 정리하세요.</p>}
+                            </div>
+                          </div>
+                        </details>
+                      );
+                    })}
+                    {!projectTasks.length && <EmptyState icon="folder" title="하위 프로젝트·마일스톤을 추가하세요" description="각 항목 안에 일정, 상세 내용, 체크리스트를 정리할 수 있습니다." />}
+                  </div>
+                  <div className="hub-project-portfolio-item__actions">
+                    <Button variant="ghost" size="sm" icon="plus" onClick={() => onCreateTodo(project.id, 'todo', { itemType: 'subproject' })}>하위 프로젝트 추가</Button>
+                    <Button variant="ghost" size="sm" icon="flag" onClick={() => onCreateTodo(project.id, 'todo', { itemType: 'milestone' })}>마일스톤 추가</Button>
+                  </div>
                 </PortfolioAccordion>
 
                 <PortfolioAccordion
@@ -592,7 +606,7 @@ export function ProjectPortfolioWorkspace({
                       <div className="is-project-due"><Iconed name="flag" size={13} /><strong>{formatScheduleDate(project.dueAt)}</strong><span>프로젝트 마감</span></div>
                     )}
                     {datedTasks.map((task) => (
-                      <button type="button" key={task.id} onClick={() => onEditTodo(task)}>
+                      <button type="button" key={task.scheduleKey} onClick={() => onEditTodo(task.parentTask)}>
                         <Iconed name="clock" size={13} /><strong>{formatScheduleDate(task.dueAt)}</strong><span>{task.title}</span>
                       </button>
                     ))}

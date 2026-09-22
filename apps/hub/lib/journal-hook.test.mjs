@@ -8,7 +8,7 @@ import { createJournalStore, journalTabId } from './journal-browser-store.js';
 // This exercises editor replacement while a prior request is still unresolved.
 const source = fs.readFileSync(new URL('../components/hub/pages/use-memos.js', import.meta.url), 'utf8')
   .replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
-const loadHook = new Function('React', 'buildNoteSave', 'createJournalWriter', 'isJournalEntry', 'noteFingerprint', 'noteToDraft', 'createJournalStore', 'journalTabId', source + '\nreturn useMemoDocument;');
+const loadHook = new Function('React', 'initialMemoContexts', 'buildNoteSave', 'createJournalWriter', 'isJournalEntry', 'noteFingerprint', 'noteToDraft', 'createJournalStore', 'journalTabId', source + '\nreturn useMemoDocument;');
 const id='11111111-1111-4111-8111-111111111111',workspaceId='22222222-2222-4222-8222-222222222222',requestId='33333333-3333-4333-8333-333333333333';
 const entry={id,body:'original',title:'',occurredAt:'2026-09-13T02:00:00.000Z',noteMeta:{kind:'note',enhancement:''},revision:1,contexts:[],links:[]};
 function harness(t) {
@@ -27,7 +27,7 @@ function harness(t) {
     useCallback(fn,deps){const i=cursor++;if(!cells[i]||!same(cells[i].deps,deps))cells[i]={deps,value:fn};return cells[i].value;},
     useEffect(fn,deps){const i=cursor++,prior=cells[i];if(!prior||!same(prior.deps,deps)){cells[i]={deps,cleanup:prior?.cleanup};effects.push(()=>{cells[i].cleanup?.();cells[i].cleanup=fn();});}},
   };
-  const useMemoDocument=loadHook(React,client.buildNoteSave,client.createJournalWriter,client.isJournalEntry,client.noteFingerprint,client.noteToDraft,createJournalStore,journalTabId);
+  const useMemoDocument=loadHook(React,client.initialMemoContexts,client.buildNoteSave,client.createJournalWriter,client.isJournalEntry,client.noteFingerprint,client.noteToDraft,createJournalStore,journalTabId);
   let props={id,isNew:false,workspaceId,workspaceConfirmed:true,source:'error',entry:null,onSaved:e=>saved.push(e)};
   function render(patch={}){props={...props,...patch};do{needsRender=false;cursor=0;effects=[];model=useMemoDocument(props);const queue=effects;effects=[];for(const effect of queue)effect();}while(needsRender);return model;}
   render();return {render,get:()=>model,requests,store,saved};

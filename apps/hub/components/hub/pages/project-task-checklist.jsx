@@ -52,7 +52,7 @@ export function TaskChecklistEditor({ task, onChange, conflict, onUseCurrent, on
           <strong>다른 창에서도 체크리스트가 변경됐습니다.</strong>
           <p>입력한 목록은 아래에 유지했습니다. 사용할 목록을 선택한 뒤 저장하세요.</p>
           <details><summary>최신 저장 내용 · {conflict.length}개 항목</summary>
-            <ol>{conflict.map(item => <li key={item.id}>{item.done ? '완료' : '미완료'} · {item.title}{item.note && <p>{item.note}</p>}</li>)}</ol>
+            <ol>{conflict.map(item => <li key={item.id}>{item.done ? '완료' : '미완료'} · {item.title}{item.dueAt && <span> · {item.dueAt}</span>}{item.note && <p>{item.note}</p>}</li>)}</ol>
           </details>
           <div className="hub-task-checklist-actions">
             <Button variant="outline" size="sm" disabled={disabled} onClick={onUseCurrent}>최신 항목 사용</Button>
@@ -76,24 +76,26 @@ export function TaskChecklistEditor({ task, onChange, conflict, onUseCurrent, on
                   if (action.focusId) refs.current.get(action.focusId)?.focus();
                   else add(action.insertAt);
                 }} />
-              <IconButton icon="more" tooltip={`${index + 1}번째 항목 메모·순서·삭제`} size={28} disabled={disabled}
-                aria-expanded={notesOpen.get(item.id) ?? Boolean(item.note)}
-                onClick={() => setNotesOpen(previous => new Map(previous).set(item.id, !(previous.get(item.id) ?? Boolean(item.note))))} />
+              <IconButton icon="more" tooltip={`${index + 1}번째 항목 일정·메모·순서·삭제`} size={28} disabled={disabled}
+                aria-expanded={notesOpen.get(item.id) ?? Boolean(item.note || item.dueAt)}
+                onClick={() => setNotesOpen(previous => new Map(previous).set(item.id, !(previous.get(item.id) ?? Boolean(item.note || item.dueAt))))} />
             </div>
-            {(notesOpen.get(item.id) ?? Boolean(item.note)) && <div className="hub-task-checklist-item-actions">
+            {(notesOpen.get(item.id) ?? Boolean(item.note || item.dueAt)) && <div className="hub-task-checklist-item-actions">
               <span>세부 메모</span>
               <IconButton icon="arrowUp" tooltip={`${index + 1}번째 항목 위로`} size={28} disabled={disabled || index === 0} onClick={() => move(index, -1)} />
               <IconButton icon="arrowDown" tooltip={`${index + 1}번째 항목 아래로`} size={28} disabled={disabled || index === items.length - 1} onClick={() => move(index, 1)} />
               <IconButton icon="x" tooltip={`${index + 1}번째 항목 삭제`} size={28} disabled={disabled} onClick={() => { setLastRemoved({ item, index }); setItems(items.filter(row => row.id !== item.id)); refs.current.get(items[index + 1]?.id || items[index - 1]?.id)?.focus(); }} />
             </div>}
-            {(notesOpen.get(item.id) ?? Boolean(item.note)) && <TextAreaField label={`항목 ${index + 1} 세부 메모`} value={item.note} maxLength={500} rows={2} disabled={disabled}
+            {(notesOpen.get(item.id) ?? Boolean(item.note || item.dueAt)) && <TextField label={`항목 ${index + 1} 일정`} type="date" value={item.dueAt || ''} disabled={disabled}
+              onChange={event => update(item.id, { dueAt: event.target.value || undefined })} />}
+            {(notesOpen.get(item.id) ?? Boolean(item.note || item.dueAt)) && <TextAreaField label={`항목 ${index + 1} 세부 메모`} value={item.note} maxLength={500} rows={2} disabled={disabled}
               placeholder="완료 기준, 참고 링크, 확인할 내용을 적으세요." onChange={event => update(item.id, { note: event.target.value })} />}
           </div>
         ))}
       </div>
       {error && <p className="hub-task-checklist-error" role="status">{error}</p>}
       <div className="hub-task-checklist-actions">
-        <Button icon="plus" variant="outline" size="sm" disabled={disabled || items.length >= TASK_CHECKLIST_LIMIT} onClick={() => { const empty = items.find(item => !item.title.trim() && !item.note && !item.done); if (empty) refs.current.get(empty.id)?.focus(); else add(); }}>체크리스트 항목 추가</Button>
+        <Button icon="plus" variant="outline" size="sm" disabled={disabled || items.length >= TASK_CHECKLIST_LIMIT} onClick={() => { const empty = items.find(item => !item.title.trim() && !item.note && !item.done && !item.dueAt); if (empty) refs.current.get(empty.id)?.focus(); else add(); }}>체크리스트 항목 추가</Button>
         {lastRemoved && !items.some(item => item.id === lastRemoved.item.id) && <Button variant="ghost" size="sm" disabled={disabled || items.length >= TASK_CHECKLIST_LIMIT} onClick={() => {
           const next = [...items]; next.splice(Math.min(lastRemoved.index, next.length), 0, lastRemoved.item); setItems(next); setFocusId(lastRemoved.item.id); setLastRemoved(null);
         }}>삭제 되돌리기</Button>}

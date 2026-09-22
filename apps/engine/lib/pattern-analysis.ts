@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { buildBusinessOpportunityCatchInstruction } from "./business-opportunity-catch.ts";
 
-export type PatternGoal = "sales_insight" | "content_hook" | "operational_rule" | "decision_rationale" | "general";
+export type PatternGoal = "sales_insight" | "content_hook" | "operational_rule" | "decision_rationale" | "general" | "weekly_synthesis";
 
 export interface EvidenceQuote {
   journalId: string;
@@ -47,8 +47,8 @@ export interface PatternAnalysisResult {
   error?: string;
 }
 
-const MAX_TOTAL_CHARS = 16000;
-const MAX_RECORDS = 10;
+const MAX_TOTAL_CHARS = 32000;
+const MAX_RECORDS = 25;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isUuid(val: unknown): val is string {
@@ -104,6 +104,7 @@ export function buildPatternSystemInstruction(goal: PatternGoal, question?: stri
     operational_rule: "작업 및 운영 메모에서 반복되는 병목, 실수 원인, 이를 방지하기 위한 구체적인 체크리스트 규칙을 도출합니다.",
     decision_rationale: "프로젝트 및 전략 메모에서 특정 결정을 내렸던 배경, 대안 기각 사유, 향후 재검토 조건을 도출합니다.",
     general: "주어진 기록들에서 반복되는 공통 패턴, 미해결 질문, 다음 구체적 행동 후보를 도출합니다.",
+    weekly_synthesis: "지난 7일간의 운영 및 메모 전체를 종합하여, 반복되는 핵심 프로젝트/지식망 연결 테마, 후속 조치가 지연된 미결 과제(Open Loops), 다음 주 즉시 착수할 고레버리지 실행 과제를 도출합니다.",
   };
 
   return `당신은 Moonlight 1인 운영체제의 지식 및 패턴 분석 엔진(Pattern Analyzer)입니다.

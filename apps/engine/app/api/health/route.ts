@@ -27,12 +27,9 @@ export async function GET() {
     },
     auth: {
       sharedSecretConfigured: Boolean(process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim()),
-      telegramSecretConfigured: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET?.trim()),
       openWebhookModeAllowed: process.env.COM_MOON_ALLOW_OPEN_WEBHOOKS?.trim() === "true",
     },
-    commands: ["/cardnews", "/status", "/ping", "/projects", "/pms", "/webhooks"],
     routes: [
-      { method: "POST", path: "/api/webhook/telegram" },
       { method: "POST", path: "/api/webhook/project" },
       { method: "POST", path: "/api/email/send" },
       { method: "POST", path: "/api/integrations/github/sync" },

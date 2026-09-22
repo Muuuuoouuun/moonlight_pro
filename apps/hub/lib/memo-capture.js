@@ -1,36 +1,105 @@
+import { isJournalTimestamp } from "./journal.js";
+import { JOURNAL_TAG_LENGTH, JOURNAL_TAG_LIMIT, normalizeJournalTags } from "./journal-tags.js";
+import { createMemoIntake, restoreMemoIntake } from "./memo-intake-tasks.js";
+
 export const MEMO_DRAFT_KEY = "moonlight:memo-draft:v1";
 // journal_entries 의 본문 한계가 20,000자다(`lib/journal.js` validateJournalInput).
 // 빠른 메모가 journal 로 통합되면서 100,000 → 20,000 으로 맞춘다. 더 긴 글은
 // 메모가 아니라 Studio 원고의 자리다.
 export const MAX_MEMO_CHARS = 20000;
+export const MAX_MEMO_TITLE_CHARS = 200;
 export const MAX_MEMO_FILE_BYTES = 256 * 1024;
+export const MAX_MEDIA_FILE_BYTES = 14 * 1024 * 1024;
+
+export function isMediaFile(file) {
+  if (!file) return false;
+  const type = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  return (
+    type.startsWith("image/") ||
+    type.startsWith("audio/") ||
+    /\.(jpe?g|png|webp|gif|bmp|mp3|wav|m4a|aac|ogg|webm)$/i.test(name)
+  );
+}
+
+export async function readMediaFileBase64(file) {
+  if (file.size > MAX_MEDIA_FILE_BYTES) {
+    throw new Error("사진 및 오디오 파일은 14MB 이하로 업로드할 수 있습니다.");
+  }
+  if (typeof FileReader === "undefined") {
+    // Node.js environment fallback for testing
+    const buf = Buffer.from(await file.arrayBuffer());
+    return {
+      base64: buf.toString("base64"),
+      mimeType: file.type || "application/octet-stream",
+      name: file.name,
+    };
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        const commaIdx = result.indexOf(",");
+        const base64 = commaIdx >= 0 ? result.slice(commaIdx + 1) : result;
+        resolve({
+          base64,
+          mimeType: file.type || "application/octet-stream",
+          name: file.name,
+        });
+      } else {
+        reject(new Error("파일을 읽을 수 없습니다."));
+      }
+    };
+    reader.onerror = () => reject(new Error("파일을 읽는 중 오류가 발생했습니다."));
+    reader.readAsDataURL(file);
+  });
+}
 export const newMemoDraft = () => ({
   id: crypto.randomUUID(),
+  occurredAt: new Date().toISOString(),
   title: "",
   body: "",
   labels: "",
   scope: "personal",
   source: { type: "manual" },
 });
+
+export function appendMemoIntake(draft, data, fileName) {
+  const parts = [];
+  if (data.summary) parts.push(`[핵심 요약]\n${data.summary}`);
+  if (data.transcription) parts.push(`[전사/원문 내용]\n${data.transcription}`);
+  if (data.keyDecisions?.length) parts.push(`[결정사항]\n${data.keyDecisions.map((item) => `- ${item}`).join("\n")}`);
+  const body = [draft.body, parts.join("\n\n")].filter(Boolean).join("\n\n");
+  // Check before changing either the original body or its recoverable snapshot.
+  if (body.length > MAX_MEMO_CHARS) {
+    throw new Error(`분석 결과를 합치면 ${MAX_MEMO_CHARS.toLocaleString()}자를 넘습니다. 기존 입력은 그대로 유지했습니다. 원문을 줄이거나 다른 메모에서 분석하세요.`);
+  }
+  return {
+    ...draft,
+    id: crypto.randomUUID(),
+    title: draft.title || data.title || "",
+    body,
+    labels: draft.labels || (data.suggestedTags || []).join(", "),
+    source: { type: "file", name: fileName },
+    intake: createMemoIntake(data),
+  };
+}
 export function memoCapturePayload(draft) {
-  const labels = [
-    ...new Set(
-      draft.labels
-        .split(/[,，\n]/)
-        .map((s) => s.trim().replace(/^#/, ""))
-        .filter(Boolean),
-    ),
-  ];
+  const labels = normalizeJournalTags(draft.labels.split(/[,，\n]/));
   if (
     !draft.body.trim() ||
     draft.body.length > MAX_MEMO_CHARS ||
     draft.body.includes("\0")
   )
     throw new Error("본문은 1~20,000자의 텍스트로 입력하세요.");
-  if (labels.length > 12 || labels.some((s) => s.length > 40))
-    throw new Error("라벨은 12개까지, 하나당 40자 이내로 입력하세요.");
+  if (typeof draft.title !== "string" || draft.title.length > MAX_MEMO_TITLE_CHARS)
+    throw new Error(`제목은 ${MAX_MEMO_TITLE_CHARS}자 이내로 입력하세요.`);
+  if (labels === null)
+    throw new Error(`라벨은 ${JOURNAL_TAG_LIMIT}개까지, 하나당 ${JOURNAL_TAG_LENGTH}자 이내로 입력하세요.`);
   return {
     id: draft.id,
+    occurredAt: draft.occurredAt,
     title: draft.title,
     body: draft.body,
     labels,
@@ -53,11 +122,11 @@ export async function readMemoFile(file) {
   }
   if (!body.trim() || body.includes("\0") || body.length > MAX_MEMO_CHARS)
     throw new Error(
-      "빈 파일·바이너리 파일·100,000자를 넘는 파일은 가져올 수 없습니다.",
+      `빈 파일·바이너리 파일·${MAX_MEMO_CHARS.toLocaleString()}자를 넘는 파일은 가져올 수 없습니다.`,
     );
   return {
     body,
-    title: file.name.replace(/\.(txt|md)$/i, "").slice(0, 300),
+    title: file.name.replace(/\.(txt|md)$/i, "").slice(0, MAX_MEMO_TITLE_CHARS),
     source: {
       type: "file",
       name: file.name,
@@ -88,7 +157,14 @@ export function restoreMemoDraft(raw) {
     )
       return null;
     if (!["manual", "file"].includes(draft.source?.type)) return null;
-    return draft;
+    if (draft.occurredAt !== undefined && !isJournalTimestamp(draft.occurredAt)) return null;
+    // Older tab drafts have no journal timestamp. Upgrade once on restore; both
+    // entry points persist this draft before sending the first save request.
+    return {
+      ...draft,
+      occurredAt: draft.occurredAt ?? new Date().toISOString(),
+      ...(draft.intake ? { intake: restoreMemoIntake(draft.intake) } : {}),
+    };
   } catch {
     return null;
   }

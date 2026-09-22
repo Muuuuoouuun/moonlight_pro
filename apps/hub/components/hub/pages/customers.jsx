@@ -6,20 +6,26 @@
 // (재계약 임박 등 소스가 없는 것)는 만들지 않는다.
 
 import React from "react";
+import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { RelatedMemos } from '../related-memos';
-import { MemoCaptureLink } from "../journal-links";
+import { RelatedCustomerProjects } from '../related-customer-projects';
+import { ContextMemoDrawer } from '../context-memo-drawer';
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import {
-  Badge, Card, Button, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
+  Badge, Card, Button, IconButton, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
   SegmentedControl, Divider, CheckboxRow, DateQuickPresets,
-  TextField, TextAreaField, SelectField,
+  TextField, TextAreaField, SelectField, Skeleton,
 } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
+import { requestPersonaChat } from "../persona-client";
+import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
+import { parseContactOutcomeExtraction } from "@/lib/ai-workflow-client";
+import './customer-focus.css';
 
 // "₩1.2M"/"₩900K"/"—" → 정렬용 숫자 (DESIGN.md §8.1: 금액은 표시 문자열을 파싱해 정렬)
 function parseMoney(value) {
@@ -48,8 +54,8 @@ function scoreBand(score) {
   return "ok";
 }
 
-// health는 점수 밴드 — 신호등 금지(§5.2). 이탈 위험(risk)만 danger, 나머지는 중립.
-const HEALTH_TONE = { ok: "neutral", warning: "neutral", risk: "danger" };
+// health는 점수 밴드 — 신호등 금지(§5.2). 점수 미달은 '확인 필요'(neutral)이며, 실제 사건/지연만 danger(DESIGN.md §5.3).
+const HEALTH_TONE = { ok: "neutral", warning: "neutral", risk: "neutral" };
 const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Customer: 3, Lost: 4 };
 
 // 통합 행 모델: 리드와 계정을 같은 컬럼 계약으로 투영
@@ -100,6 +106,9 @@ function toRows(ledger) {
       health: scoreBand(l.score),
       healthScore: Number.isFinite(l.score) ? l.score : null,
       nextAction: l.nextAction || "",
+      nextActionAt: l.nextActionAt || null,
+      last: l.last || "—",
+      lastContactAt: l.lastContactAt || null,
       focusOverride: l.focusOverride || "default",
       valueNum: parseMoney(l.value),
       dormant: Boolean(l.dormant),
@@ -132,6 +141,9 @@ function toRows(ledger) {
       health: a.health,
       healthScore: null,
       nextAction: a.nextAction || "",
+      nextActionAt: a.nextActionAt || null,
+      last: a.last || "—",
+      lastContactAt: a.lastContactAt || null,
       focusOverride: a.focusOverride || "default",
       valueNum: Number(a.value) || 0,
       dormant: false,
@@ -148,13 +160,15 @@ function toRows(ledger) {
 
 const SEGMENTS = [
   { key: "all", label: "전체" },
-  { key: "risk", label: "이탈위험" },
+  { key: "important", label: "⭐ 중요 고객" },
+  { key: "risk", label: "확인 필요" },
   { key: "new", label: "신규" },
   { key: "dormant", label: "기약 없음" },
   { key: "customer", label: "계약 고객" },
 ];
 
 function segmentFilter(row, seg) {
+  if (seg === "important") return row.focusOverride === "raise";
   if (seg === "risk") return row.health === "risk" && !row.dormant;
   if (seg === "new") return row.isNew;
   if (seg === "dormant") return row.dormant;
@@ -168,8 +182,16 @@ function segmentFilter(row, seg) {
 
 const ACT_ICON = { email: "email", meeting: "calendar", call: "signal", note: "edit", deal: "deals", kakao: "chat", quote: "orders", ai: "sparkle", info_session: "brief", demo: "play", visit: "building", update: "rhythm" };
 const ACT_LABEL = { email: "이메일", meeting: "미팅", call: "통화", note: "노트", deal: "딜", kakao: "카카오", quote: "견적", ai: "AI", info_session: "설명회", demo: "데모", visit: "방문", update: "업데이트" };
+const REACTIONS = [
+  { key: "positive", label: "긍정" },
+  { key: "neutral", label: "중립" },
+  { key: "concern", label: "우려" },
+  { key: "rejected", label: "거절" },
+  { key: "no_response", label: "무응답" },
+];
+const OUTCOME_KINDS = ["call", "kakao", "meeting", "visit", "demo", "email"];
 
-function ActivityTimeline({ rows }) {
+function ActivityTimeline({ rows, onDeleteActivity }) {
   if (!rows.length) {
     return <div style={{ fontSize: 12, color: "var(--fg-faint)", padding: "10px 0" }}>아직 기록이 없습니다. 아래에서 첫 기록을 남기세요.</div>;
   }
@@ -177,7 +199,10 @@ function ActivityTimeline({ rows }) {
     <div style={{ display: "flex", flexDirection: "column" }}>
       {rows.map((a, i) => (
         <div key={a.id || i} style={{
-          display: "grid", gridTemplateColumns: "18px 1fr auto", gap: 10, padding: "9px 0",
+          display: "grid",
+          gridTemplateColumns: onDeleteActivity ? "18px 1fr auto auto" : "18px 1fr auto",
+          gap: 10,
+          padding: "9px 0",
           borderBottom: i < rows.length - 1 ? "1px solid var(--line-soft)" : "none",
           alignItems: "flex-start",
         }}>
@@ -186,9 +211,27 @@ function ActivityTimeline({ rows }) {
           </span>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12.5, color: "var(--fg)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{a.msg}</div>
-            <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginTop: 2 }}>{ACT_LABEL[a.type] || a.type}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+              <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{ACT_LABEL[a.type] || a.type}</span>
+              {a.reaction && (
+                <Badge tone="neutral" size="xs" variant="outline">
+                  {REACTIONS.find(r => r.key === a.reaction)?.label || a.reaction}
+                </Badge>
+              )}
+            </div>
           </div>
           <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", whiteSpace: "nowrap" }}>{a.at}</span>
+          {onDeleteActivity && a.id && (
+            <IconButton
+              icon="x"
+              size={20}
+              iconSize={11}
+              tooltip="기록 삭제 (되돌리기 지원)"
+              aria-label="기록 삭제"
+              onClick={() => onDeleteActivity(a)}
+              style={{ opacity: 0.5, marginTop: -2 }}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -235,15 +278,6 @@ function QuickLog({ onSave }) {
 // record_contact_outcome_v1 원자 RPC로 남긴다. 반응·요약 없이는 저장 불가,
 // 다음 액션 없이 저장하려 하면 경고를 먼저 보여준다 (spec §10).
 
-const REACTIONS = [
-  { key: "positive", label: "긍정" },
-  { key: "neutral", label: "중립" },
-  { key: "concern", label: "우려" },
-  { key: "rejected", label: "거절" },
-  { key: "no_response", label: "무응답" },
-];
-const OUTCOME_KINDS = ["call", "kakao", "meeting", "visit", "demo", "email"];
-
 function ContactOutcomeSheet({ row, onSaved, onUndone }) {
   const [kind, setKind] = React.useState("call");
   const [reaction, setReaction] = React.useState(null);
@@ -261,9 +295,60 @@ function ContactOutcomeSheet({ row, onSaved, onUndone }) {
   const reactionRef = React.useRef(null);
   const summaryRef = React.useRef(null);
 
+  const [aiOpen, setAiOpen] = React.useState(false);
+  const [aiInput, setAiInput] = React.useState("");
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const [aiNotice, setAiNotice] = React.useState("");
+
   const reset = () => {
     setReaction(null); setSummary(""); setNextAction(""); setNextAt("");
     setDormant(false); setState("idle"); setErrorMsg(""); setAttempted(false);
+    setAiInput(""); setAiNotice("");
+  };
+
+  const handleAiExtract = async () => {
+    const raw = aiInput.trim();
+    if (!raw) return;
+    setAiLoading(true);
+    setAiNotice("");
+    try {
+      const res = await requestPersonaChat({
+        personaId: "sales",
+        mode: "extract-contact-outcome",
+        draft: `[고객 맥락]
+고객: ${row.person || row.name} (${row.name || "미지정"})
+현재 상태: ${row.kind === "account" ? "계약 고객" : `리드 (${row.stage || "진행중"})`}
+
+[통화·미팅·대화 원문]
+${raw}
+
+위 원문을 분석하여 아래 형식으로 정확하게 추출해줘:
+[채널]: 통화 | 카카오 | 미팅 | 방문 | 데모 | 이메일 중 1개
+[고객 반응]: 긍정 | 중립 | 우려 | 거절 | 무응답 중 1개
+[1줄 요약]: 120자 이내의 사실 중심 핵심 요약
+[다음 행동]: 구체적 후속 액션 (없거나 기약 없으면 '없음')
+[다음 일정]: YYYY-MM-DD (특정 날짜 언급 없으면 '없음')
+[기약 없음]: 예 | 아니오 (다음 약속 없이 종결 또는 휴면이면 '예')`,
+      });
+      setAiLoading(false);
+      if (res?.state === "done" && res.text) {
+        const extracted = parseContactOutcomeExtraction(res.text);
+        let filledCount = 0;
+        if (extracted.kind) { setKind(extracted.kind); filledCount++; }
+        if (extracted.reaction) { setReaction(extracted.reaction); filledCount++; }
+        if (extracted.summary) { setSummary(extracted.summary); filledCount++; }
+        if (extracted.nextAction) { setNextAction(extracted.nextAction); filledCount++; }
+        if (extracted.nextAt) { setNextAt(extracted.nextAt); filledCount++; }
+        if (extracted.dormant) { setDormant(true); }
+        if (state === "warn") setState("idle");
+        setAiNotice(`폼에 ${filledCount}개 항목을 자동 채웠습니다. 내용을 확인한 뒤 저장하세요.`);
+      } else {
+        setAiNotice("추출 응답을 받지 못했습니다. 원문을 확인 후 다시 시도하세요.");
+      }
+    } catch {
+      setAiLoading(false);
+      setAiNotice("추출 중 오류가 발생했습니다. 직접 입력할 수도 있습니다.");
+    }
   };
   const [pendingUndo, setPendingUndo] = React.useState(null);
 
@@ -359,6 +444,55 @@ function ContactOutcomeSheet({ row, onSaved, onUndone }) {
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
         <h3 id={titleId} style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>컨택 완료 기록</h3>
         <span style={{ fontSize: 11.5, color: "var(--fg-faint)" }}>반응과 요약을 남기면 타임라인에 쌓입니다</span>
+      </div>
+
+      {/* AI 스마트 자동 채우기: 대화 원문이나 통화 메모에서 4대 필드 추출 */}
+      <div style={{
+        background: "var(--surface-2)",
+        borderRadius: "var(--r-md)",
+        padding: "10px 12px",
+        border: "1px solid var(--line-soft)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Iconed name="sparkle" size={13} style={{ color: "var(--moon-300)" }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>✨ 대화·메모에서 폼 자동 채우기</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => { setAiOpen(v => !v); setAiNotice(""); }}
+          >
+            {aiOpen ? "접기" : "원문 붙여넣기"}
+          </Button>
+        </div>
+        {aiOpen && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+            <TextAreaField
+              label="대화 / 통화 메모 원문"
+              value={aiInput}
+              onChange={e => setAiInput(e.target.value)}
+              placeholder="카카오톡 대화, 전화 통화 요약, 미팅 녹취 메모를 붙여넣으면 채널·반응·요약·다음 액션을 폼에 자동 입력합니다."
+              rows={3}
+            />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+              <div style={{ fontSize: 11, color: "var(--fg-dim)", flex: 1 }}>
+                {aiNotice ? <span style={{ color: "var(--moon-300)" }}>{aiNotice}</span> : "추출 후 폼 내용을 확인하고 저장하세요"}
+              </div>
+              <Button
+                variant="primary"
+                size="xs"
+                onClick={handleAiExtract}
+                disabled={aiLoading || !aiInput.trim()}
+              >
+                {aiLoading ? "추출 중…" : "추출 및 폼 채우기"}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <SelectField
@@ -582,7 +716,7 @@ function CustomerDeleteAction({ row, onConfirm }) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, lineHeight: 1.5, color: "var(--fg-muted)" }}>
-          붙어 있는 기록이 없습니다. 삭제할까요? 되돌릴 수 없습니다.
+          붙어 있는 기록이 없습니다. 삭제할까요? (삭제 후 3.5초간 되돌릴 수 있습니다)
           {skipped.length > 0 && (
             <>
               <br />
@@ -593,7 +727,7 @@ function CustomerDeleteAction({ row, onConfirm }) {
           )}
         </span>
         <Button variant="ghost" size="sm" onClick={() => setPhase("idle")}>취소</Button>
-        <Button variant="danger" size="sm" onClick={() => onConfirm(row)}>삭제</Button>
+        <Button variant="danger" size="sm" onClick={() => onConfirm(row)}>삭제 (되돌리기 지원)</Button>
       </div>
     );
   }
@@ -611,12 +745,130 @@ function CustomerDeleteAction({ row, onConfirm }) {
   );
 }
 
-function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
+function CustomerOutreachDrafter({ row }) {
+  const [open, setOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [draftText, setDraftText] = React.useState("");
+  const [copied, setCopied] = React.useState(false);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setOpen(true);
+    try {
+      const res = await requestPersonaChat({
+        personaId: "sales",
+        mode: "outreach-draft",
+        draft: `[고객 360 연락 맥락]\n고객명: ${row.person || row.name}\n조직/소속: ${row.name || "미지정"}${row.personTitle ? ` (${row.personTitle})` : ""}\n유형: ${row.kind === "account" ? "계약 고객" : `리드 (${row.stage})`}\n건강도/상태: ${row.health || "보통"}\n기존 다음 액션: ${row.nextAction || "없음"}\n\n위 고객에게 발송할 3~4문장의 부담 없는 카카오톡/문자 연락 초안을 작성해줘.`,
+      });
+      setLoading(false);
+      if (res.state === "done") {
+        setDraftText(res.text);
+      }
+    } catch (e) {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (!draftText) return;
+    navigator.clipboard.writeText(draftText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, border: "1px solid var(--line-soft)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Iconed name="sparkle" size={13} style={{ color: "var(--moon-300)" }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>맞춤 연락 초안 (Guru)</span>
+        </div>
+        {!open ? (
+          <Button variant="outline" size="xs" icon="sparkle" onClick={handleGenerate}>
+            {loading ? "작성 중…" : "초안 생성"}
+          </Button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
+          >
+            접기
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {loading ? (
+            <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>고객 맥락에 맞는 초안을 작성하고 있습니다…</div>
+          ) : draftText ? (
+            <>
+              <div
+                style={{
+                  background: "var(--surface-3)",
+                  padding: "8px 10px",
+                  borderRadius: "var(--r-xs)",
+                  fontSize: 11.5,
+                  lineHeight: 1.55,
+                  whiteSpace: "pre-wrap",
+                  color: "var(--fg)",
+                  border: "1px solid var(--line-soft)",
+                }}
+              >
+                {draftText}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
+                  {copied ? "복사됨 ✓" : "본문 복사"}
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }) {
+  const [memoState, setMemoState] = React.useState(null);
+  const memoContexts = React.useMemo(() => [{ type: row.kind, id: row.id, label: row.person || row.name }], [row.kind, row.id, row.person, row.name]);
   const [activities, setActivities] = React.useState([]);
   const [actSync, setActSync] = React.useState("loading");
   // 컨택 완료 시트 저장 직후 부모 원장 재조회 없이 최신 다음 액션을 반영
   const [nextActionOverride, setNextActionOverride] = React.useState(null);
   const [focusOverride, setFocusOverride] = React.useState(row.focusOverride || "default");
+  React.useEffect(() => { setFocusOverride(row.focusOverride || "default"); }, [row.focusOverride]);
+
+  const { schedule: scheduleActUndo, cancel: cancelActUndo } = useUndoableAction();
+  const [actNotice, setActNotice] = React.useState(null);
+  const [guruOpen, setGuruOpen] = React.useState(false);
+
+  const deleteActivity = React.useCallback((activity) => {
+    const match = a => (activity.id ? a.id === activity.id : a === activity);
+    const removed = activities.filter(match);
+    setActivities(prev => prev.filter(a => !match(a)));
+    if (!activity.id || String(activity.id).startsWith("local-")) return;
+    const key = `cust-act-delete-${activity.id}`;
+    const restore = () => setActivities(prev => [...removed, ...prev.filter(a => !match(a))]);
+    scheduleActUndo(key, () => {
+      setActNotice(cur => (cur?.key === key ? null : cur));
+      saveRevenueRecord("activity", "delete", { id: activity.id }).then(r => {
+        if (r.ok) return;
+        restore();
+        setActError({ body: "", message: `기록 삭제 실패 (${r.status}) — 행을 복원했습니다.` });
+      });
+    });
+    setActNotice({
+      key,
+      label: "기록 삭제됨",
+      undo: () => {
+        if (cancelActUndo(key)) restore();
+        setActNotice(null);
+      },
+    });
+  }, [activities, scheduleActUndo, cancelActUndo]);
 
   // company_id를 함께 실어 쓴다 — 활동을 새로 남길 때도 이후 회사 단위 조회에 걸리도록.
   const linkParam = {
@@ -641,6 +893,10 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
         return r.json();
       })
       .then(d => {
+        if (d?.status === "error") {
+          setActSync("error");
+          return;
+        }
         setActivities(Array.isArray(d.activities) ? d.activities : []);
         setActSync(d.status === "live" ? "live" : "preview");
       })
@@ -674,6 +930,8 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
     ? `dashboard/revenue/leads?lead=${encodeURIComponent(row.id)}`
     : null;
 
+  if (memoState) return <ContextMemoDrawer contexts={memoContexts} noteId={memoState.noteId || null} onClose={() => setMemoState(null)} />;
+
   return (
     <Drawer
       title={row.person || row.name}
@@ -681,15 +939,109 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
       onClose={onClose}
       width="min(440px, 96vw)"
       footer={(
-        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minWidth: 0 }}>
-          <MemoCaptureLink context={{ type: row.kind, id: row.id }} />
+        <div className="customer-focus-footer">
+          <Button variant="primary" onClick={() => setMemoState({})}>메모 남기기</Button>
           {editHref && <Button variant="outline" size="sm" onClick={() => onNavigate?.(editHref)}>정식 편집 열기</Button>}
           <div style={{ flex: 1 }} />
           <CustomerDeleteAction row={row} onConfirm={onDelete} />
         </div>
       )}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="customer-focus">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <Button
+            variant="outline"
+            active={focusOverride === "raise"}
+            aria-pressed={focusOverride === "raise"}
+            size="xs"
+            icon="star"
+            onClick={() => {
+              const next = focusOverride === "raise" ? "default" : "raise";
+              const prev = focusOverride;
+              setFocusOverride(next);
+              onFocusChange?.(row.key, next);
+              if (!row.id) return;
+              saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
+                id: row.id,
+                focusOverride: next,
+              }).then(r => {
+                if (!r?.ok) {
+                  setFocusOverride(prev);
+                  onFocusChange?.(row.key, prev);
+                }
+              });
+            }}
+          >
+            {focusOverride === "raise" ? "⭐ 중요 고객" : "중요 고객 지정"}
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
+            icon="sparkle"
+            onClick={() => setGuruOpen(true)}
+          >
+            Guru 전략 코칭 (⌘J)
+          </Button>
+        </div>
+        {/* 다음 액션 */}
+        {(nextActionOverride ?? row.nextAction) && (
+          <section className="customer-focus-next" aria-label="다음 행동">
+            <h3>다음 행동</h3>
+            <p>{nextActionOverride ?? row.nextAction}</p>
+          </section>
+        )}
+
+
+        {/* 활동 타임라인 (읽기 우선 배치) */}
+        <section className="customer-focus-activity" aria-label="활동 타임라인">
+          <div className="customer-focus-section-heading">
+            <h3>활동 타임라인</h3>
+            <SyncBadge state={actSync} />
+          </div>
+          {actNotice && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="fade-up"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "7px 10px",
+                background: "var(--surface-3)",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--r-sm)",
+                fontSize: 11.5,
+                color: "var(--fg)",
+                marginBottom: 8,
+              }}
+            >
+              <span>{actNotice.label}</span>
+              {actNotice.undo && (
+                <Button variant="ghost" size="xs" onClick={actNotice.undo}>
+                  되돌리기
+                </Button>
+              )}
+            </div>
+          )}
+          {actSync === "loading" ? (
+            <div style={{ padding: "8px 0" }}>
+              <Skeleton height={14} lines={2} />
+            </div>
+          ) : actSync === "error" ? (
+            <div style={{ fontSize: 12, color: "var(--danger)", padding: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
+              활동 기록을 읽지 못했습니다.
+              <Button variant="ghost" size="xs" onClick={reload}>다시 시도</Button>
+            </div>
+          ) : (
+            <><ActivityTimeline rows={activities.slice(0, 3)} onDeleteActivity={deleteActivity} />{activities.length > 3 && <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>전체 대화 기록 보기</summary><ActivityTimeline rows={activities.slice(3)} onDeleteActivity={deleteActivity} /></details>}</>
+          )}
+        </section>
+
+        <RelatedCustomerProjects type={row.kind} id={row.id} />
+        <RelatedMemos type={row.kind} id={row.id} onOpen={(noteId) => setMemoState({ noteId })} />
+
+        <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>연락처·거래 정보</summary>
         {/* 헤더 요약 */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           {row.health && (
@@ -701,11 +1053,11 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
             {row.kind === "account" ? "계약 고객" : row.stage}
           </Badge>
           {row.dormant && <Badge tone="neutral" size="xs" variant="outline">기약 없음</Badge>}
+
           <div style={{ flex: 1 }} />
           <span className="mono" style={{ fontSize: 15 }}>{fmtMoney(row.valueNum)}</span>
         </div>
 
-        <RelatedMemos type={row.kind} id={row.id} />
 
         {/* 연락처 */}
         {(row.phone || row.email) && (
@@ -715,12 +1067,6 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
           </div>
         )}
 
-        {/* 딜 파이프라인 — 이 고객에 걸린 딜의 단계·금액·마감 간이 계기 */}
-        <DealPipelineSection deals={row.deals || []} />
-
-        {/* 스코어 요약 — 리드 enrichment 분류·증거 (점수 산출 근거의 간이 표기) */}
-        {row.raw && <LeadEnrichmentPanel lead={row.raw} />}
-
         {/* 포커스 오버라이드 — 숫자 편집 없이 3단 조정만 (spec §7 확정 규칙) */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>포커스</span>
@@ -729,34 +1075,48 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
             options={[
               { key: "lower", label: "내리기" },
               { key: "default", label: "기본" },
-              { key: "raise", label: "올리기" },
+              { key: "raise", label: "올리기 (중요)" },
             ]}
             value={focusOverride}
             onChange={(next) => {
               const prevValue = focusOverride;
               setFocusOverride(next);
+              onFocusChange?.(row.key, next);
               if (!row.id) return;
               saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
                 id: row.id,
                 focusOverride: next,
               }).then(r => {
                 // 실패하면 토글을 원위치 — 저장 안 된 값이 계속 선택돼 보이면 안 된다.
-                if (!r?.ok) setFocusOverride(prevValue);
+                if (!r?.ok) {
+                  setFocusOverride(prevValue);
+                  onFocusChange?.(row.key, prevValue);
+                }
               });
             }}
           />
         </div>
 
-        {/* 다음 액션 */}
-        {(nextActionOverride ?? row.nextAction) && (
-          <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "9px 12px", display: "flex", alignItems: "center", gap: 8 }}>
-            <Iconed name="bolt" size={13} style={{ color: "var(--moon-300)" }} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>다음 액션</div>
-              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{nextActionOverride ?? row.nextAction}</div>
-            </div>
-          </div>
-        )}
+        {/* 딜 파이프라인 — 이 고객에 걸린 딜의 단계·금액·마감 간이 계기 */}
+        <DealPipelineSection deals={row.deals || []} />
+
+        {/* 스코어 요약 — 리드 enrichment 분류·증거 (점수 산출 근거의 간이 표기) */}
+        {row.raw && <LeadEnrichmentPanel lead={row.raw} />}
+
+        </details>
+
+        <OfficeWorkflowPanel
+          key={row.key}
+          intent="customer_reply"
+          scope={row.workspace === 'classin' || row.type === 'company' ? 'classin' : row.workspace === 'brand' || row.type === 'personal' ? 'personal' : null}
+          originRef={{ entityType: row.kind === 'account' ? 'customer_account' : 'lead', entityId: row.id }}
+          title="답장 초안"
+          onNavigate={onNavigate}
+        />
+        <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>기존 영업 코칭</summary>
+          <CustomerOutreachDrafter row={row} />
+        </details>
+        <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>연락 결과 남기기</summary>
 
         {/* 컨택 완료 시트 — Phase 1C 핵심 루프 */}
         <ContactOutcomeSheet
@@ -774,25 +1134,173 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
           }}
         />
 
-        <Divider />
-
-        {/* 활동 타임라인 */}
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 500 }}>활동 타임라인</span>
-            <SyncBadge state={actSync} />
-          </div>
-          <ActivityTimeline rows={activities} />
-        </div>
-
         {/* 빠른 기록 */}
         {actError && (
           <div role="alert" style={{ fontSize: 11.5, color: "var(--danger)", lineHeight: 1.5 }}>
             {actError.message}
-            {actError.body && <span style={{ color: "var(--fg-muted)" }}> · 입력: “{actError.body}”</span>}
+            {actError.body && (
+              <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: "var(--fg-muted)" }}>미저장 입력: “{actError.body}”</span>
+                <Button variant="ghost" size="xs" onClick={() => logActivity({ type: "note", body: actError.body })}>
+                  재시도
+                </Button>
+              </div>
+            )}
           </div>
         )}
         <QuickLog onSave={logActivity} />
+        </details>
+      </div>
+
+      {guruOpen && (
+        <FloatingMentorWidget
+          isOpen={guruOpen}
+          onClose={() => setGuruOpen(false)}
+          agent="guru"
+          contextType="customer"
+          contextTitle={row.person || row.name || "고객 전략 코칭"}
+          contextData={{
+            id: row.id,
+            name: row.person || row.name,
+            company: row.name,
+            stage: row.stage || (row.kind === "account" ? "계약 고객" : "리드"),
+            health: row.health,
+            nextAction: nextActionOverride ?? row.nextAction,
+            notes: row.notes || row.sub,
+          }}
+          onApplyText={(text) => {
+            const trimmed = text.slice(0, 100);
+            setNextActionOverride(trimmed);
+            if (row.id) {
+              saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
+                id: row.id,
+                nextAction: trimmed,
+              });
+            }
+          }}
+        />
+      )}
+    </Drawer>
+  );
+}
+
+// ── 새 고객 등록 드로어 (No ghost records) ──────────────────────────────────
+// 저장 버튼을 누를 때만 영속 DB에 생성하고, 취소 시 빈 고객 레코드를 남기지 않는다.
+function NewCustomerDrawer({ open, onClose, onCreated }) {
+  const [name, setName] = React.useState("");
+  const [person, setPerson] = React.useState("");
+  const [phone, setPhone] = React.useState("");
+  const [stage, setStage] = React.useState("New");
+  const [nextAction, setNextAction] = React.useState("");
+  const [isImportant, setIsImportant] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  if (!open) return null;
+
+  const reset = () => {
+    setName("");
+    setPerson("");
+    setPhone("");
+    setStage("New");
+    setNextAction("");
+    setIsImportant(false);
+    setError("");
+  };
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  const handleSave = async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError("고객 또는 학원명을 입력하세요.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await saveRevenueRecord("lead", "create", {
+        name: trimmedName,
+        contactName: person.trim() || undefined,
+        contactPhone: phone.trim() || undefined,
+        stage,
+        nextAction: nextAction.trim() || undefined,
+        focusOverride: isImportant ? "raise" : "default",
+      });
+      setSubmitting(false);
+      if (res.ok && res.id) {
+        onCreated(res.id);
+        handleClose();
+      } else {
+        setError(`고객 생성 실패 (${res.status || "오류"}) — 다시 시도하세요.`);
+      }
+    } catch (err) {
+      setSubmitting(false);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <Drawer
+      title="새 고객 등록"
+      subtitle="기본 정보를 입력하고 등록하면 고객 원장에 추가됩니다"
+      onClose={handleClose}
+      width="min(440px, 96vw)"
+      footer={(
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, width: "100%" }}>
+          <Button variant="outline" size="sm" onClick={handleClose} disabled={submitting}>취소</Button>
+          <Button variant="primary" size="sm" onClick={handleSave} disabled={submitting || !name.trim()}>
+            {submitting ? "등록 중…" : "등록 저장"}
+          </Button>
+        </div>
+      )}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <TextField
+          label="고객 / 학원명"
+          required
+          value={name}
+          onChange={e => { setName(e.target.value); setError(""); }}
+          placeholder="예: 미래탐구 대치점"
+          autoFocus
+        />
+        <TextField
+          label="담당자 성함"
+          value={person}
+          onChange={e => setPerson(e.target.value)}
+          placeholder="예: 김원장"
+        />
+        <TextField
+          label="연락처 / 전화번호"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          placeholder="010-0000-0000"
+        />
+        <SelectField
+          label="초기 단계"
+          value={stage}
+          onChange={e => setStage(e.target.value)}
+          options={[
+            { value: "New", label: "신규 (New)" },
+            { value: "Contact", label: "접촉 (Contact)" },
+            { value: "Qualified", label: "검증 (Qualified)" },
+          ]}
+        />
+        <TextField
+          label="다음 행동"
+          value={nextAction}
+          onChange={e => setNextAction(e.target.value)}
+          placeholder="예: 소개서 발송 및 첫 상담"
+        />
+        <CheckboxRow
+          checked={isImportant}
+          onChange={setIsImportant}
+          text="⭐ 중요 고객으로 등록 (집중도 높임)"
+        />
+        {error && <div role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>{error}</div>}
       </div>
     </Drawer>
   );
@@ -807,6 +1315,7 @@ export function Customers({ onNavigate }) {
   const [sort, setSort] = React.useState({ key: null, dir: "asc" });
   const [openKey, setOpenKey] = React.useState(null);
   const [createError, setCreateError] = React.useState(null);
+  const [focusOverrides, setFocusOverrides] = React.useState({});
   // 삭제는 3.5초 뒤에야 POST된다 — 그동안 행은 목록에서 빠져 있고, 되돌리면 그대로 돌아온다.
   const [deletedKeys, setDeletedKeys] = React.useState(() => new Set());
   const [deleteNotice, setDeleteNotice] = React.useState(null);
@@ -816,9 +1325,30 @@ export function Customers({ onNavigate }) {
   // 낙관 삭제된 행은 원장이 다시 로드돼도 계속 숨긴다 — 되돌리기 창이 닫히기 전에
   // 재조회가 끼어들면 지운 행이 깜빡이며 되살아난다.
   const allRows = React.useMemo(
-    () => ledgerRows.filter(r => !deletedKeys.has(r.key)),
-    [ledgerRows, deletedKeys],
+    () => ledgerRows
+      .filter(r => !deletedKeys.has(r.key))
+      .map(r => ({
+        ...r,
+        focusOverride: focusOverrides[r.key] ?? r.focusOverride,
+      })),
+    [ledgerRows, deletedKeys, focusOverrides],
   );
+
+  const toggleImportant = React.useCallback((e, row) => {
+    e.stopPropagation();
+    const current = focusOverrides[row.key] ?? row.focusOverride;
+    const next = current === "raise" ? "default" : "raise";
+    setFocusOverrides(prev => ({ ...prev, [row.key]: next }));
+    if (!row.id) return;
+    saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
+      id: row.id,
+      focusOverride: next,
+    }).then(r => {
+      if (!r?.ok) {
+        setFocusOverrides(prev => ({ ...prev, [row.key]: current }));
+      }
+    });
+  }, [focusOverrides]);
 
   const restoreRow = React.useCallback((key) => {
     setDeletedKeys(prev => { const next = new Set(prev); next.delete(key); return next; });
@@ -899,10 +1429,12 @@ export function Customers({ onNavigate }) {
   const sorted = React.useMemo(() => {
     if (!sort.key) return filtered;
     const dir = sort.dir === "asc" ? 1 : -1;
-    const val = r => sort.key === "value" ? r.valueNum
-      : sort.key === "stage" ? r.stageOrder
-      : sort.key === "health" ? ({ risk: 0, warning: 1, ok: 2 }[r.health] ?? 3)
-      : r.name;
+    const val = r => {
+      if (sort.key === "value") return r.valueNum;
+      if (sort.key === "stage") return r.stageOrder;
+      if (sort.key === "last") return r.lastContactAt ? new Date(r.lastContactAt).getTime() : 0;
+      return r.name;
+    };
     return [...filtered].sort((a, b) => {
       const av = val(a); const bv = val(b);
       if (typeof av === "string") return av.localeCompare(bv, "ko") * dir;
@@ -910,30 +1442,15 @@ export function Customers({ onNavigate }) {
     });
   }, [filtered, sort]);
 
-  // N 단축키: 드로어 닫힘 + 입력 포커스 밖일 때 새 고객(리드) 생성.
-  // creatingRef: 이 생성은 즉시 영속 write라 연타/저장 지연 중 재진입을 막지 않으면
-  // "새 고객" 행이 원장에 줄줄이 쌓인다.
-  const creatingRef = React.useRef(false);
-  const createCustomer = React.useCallback(() => {
-    if (creatingRef.current) return;
-    creatingRef.current = true;
-    setCreateError(null);
-    saveRevenueRecord("lead", "create", { name: "새 고객", stage: "New" })
-      .then(r => {
-        if (r.ok && r.id) setOpenKey(`lead:${r.id}`);
-        else setCreateError(`고객 생성 실패 (${r.status}) — 다시 시도하세요.`); // 무언 실패 금지(재감사 M)
-      })
-      .finally(() => { creatingRef.current = false; });
-  }, []);
+  const [newCustomerOpen, setNewCustomerOpen] = React.useState(false);
+
   // 키보드 계층(2026-08-05 배선): j/k 행 이동 · e 열기 · n 생성 · / 검색 · Esc 해제.
-  // 수제 N 리스너를 훅으로 흡수 — 입력/드로어(role=dialog)/치트시트에서는 훅이 양보하고,
-  // 연타 재진입은 createCustomer의 creatingRef가 막는다.
   const searchRef = React.useRef(null);
   const kbRows = React.useMemo(() => sorted.map(r => ({ id: r.key })), [sorted]);
   const selection = useCrmSelection(kbRows);
   useCrmKeyboard({
     selection,
-    onNew: createCustomer,
+    onNew: () => setNewCustomerOpen(true),
     onEditSelected: (key) => setOpenKey(key),
     onSearchFocus: () => searchRef.current?.focus(),
   });
@@ -950,7 +1467,8 @@ export function Customers({ onNavigate }) {
 
   const openRow = sorted.find(r => r.key === openKey) || allRows.find(r => r.key === openKey) || null;
 
-  const gridCols = "minmax(0,2.1fr) 0.9fr 0.9fr 1.3fr 0.9fr";
+  // 4대 열 묶음: 고객·소속 / 최근 접점 / 다음 행동·일정 / 진행 상황 (2026-09-21 spec §3.1)
+  const gridCols = "minmax(0,2.1fr) 1.1fr minmax(0,2.2fr) 1.1fr";
 
   return (
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -958,19 +1476,6 @@ export function Customers({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>고객 DB</h2>
           {createError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{createError}</div>}
-          {deleteNotice && (
-            <div
-              role={deleteNotice.tone === "err" ? "alert" : "status"}
-              aria-live="polite"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 8, marginTop: 4,
-                fontSize: 12, color: deleteNotice.tone === "err" ? "var(--danger)" : "var(--fg-muted)",
-              }}
-            >
-              {deleteNotice.label}
-              {deleteNotice.undo && <Button variant="ghost" size="xs" onClick={deleteNotice.undo}>되돌리기</Button>}
-            </div>
-          )}
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             리드 {ledger.leads?.length || 0} · 계약 고객 {ledger.accounts?.length || 0}
             <SyncBadge state={syncState} />
@@ -978,7 +1483,7 @@ export function Customers({ onNavigate }) {
         </div>
         <div style={{ flex: 1 }} />
         <Input ref={searchRef} className="hub-toolbar" placeholder="학원명·담당자·지역 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createCustomer}>고객 등록 <Kbd>N</Kbd></Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={() => setNewCustomerOpen(true)}>고객 등록 <Kbd>N</Kbd></Button>
       </div>
 
       <SegmentedControl
@@ -994,83 +1499,161 @@ export function Customers({ onNavigate }) {
           background: "var(--surface-2)", borderBottom: "1px solid var(--line)",
           fontSize: 10.5, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--fg-faint)",
         }}>
-          {/* 인라인 정렬 헤더 3중 복제 제거(6차 사용성 S) — revenue의 SortHead 공유 (§8.1 primitives first)
-              모바일(.hub-lc-m 숨김)은 신원+단계만 — 건강도 위험은 행 danger 레일이 전달(30차). */}
-          <SortHead k="name" sort={sort} onToggle={cycleSort}>고객 · 담당자</SortHead>
-          <SortHead k="stage" sort={sort} onToggle={cycleSort}>단계</SortHead>
-          <SortHead k="health" sort={sort} onToggle={cycleSort} className="hub-lc-m">건강도</SortHead>
-          <span className="hub-lc-m">다음 액션</span>
-          <SortHead k="value" sort={sort} onToggle={cycleSort} align="right" className="hub-lc-m">금액</SortHead>
+          {/* 4대 묶음 헤더 (2026-09-21 spec §3.1) */}
+          <SortHead k="name" sort={sort} onToggle={cycleSort}>고객 · 소속</SortHead>
+          <SortHead k="last" sort={sort} onToggle={cycleSort} className="hub-lc-m">최근 접점</SortHead>
+          <span className="hub-lc-m">다음 행동 · 일정</span>
+          <SortHead k="stage" sort={sort} onToggle={cycleSort} align="right">진행 상황</SortHead>
         </div>
 
-        {sorted.length === 0 && (
+        {syncState === "loading" ? (
+          <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+            <Skeleton height={24} />
+            <Skeleton height={24} />
+            <Skeleton height={24} />
+            <Skeleton height={24} />
+          </div>
+        ) : sorted.length === 0 ? (
           <EmptyState
             icon="accounts"
             title={term ? "검색 결과가 없습니다" : "고객이 없습니다"}
             description={term ? "다른 검색어를 시도하거나 검색을 지우세요." : "첫 고객을 등록하면 여기에 나타납니다."}
             action={term
               ? <Button variant="outline" size="sm" onClick={() => setSearch("")}>검색 지우기</Button>
-              : <Button variant="primary" size="sm" icon="plus" onClick={createCustomer}>고객 등록</Button>}
+              : <Button variant="primary" size="sm" icon="plus" onClick={() => setNewCustomerOpen(true)}>고객 등록</Button>}
             style={{ minHeight: 180, padding: "28px 12px" }}
           />
-        )}
-
-        {sorted.map(r => (
-          <div
-            key={r.key}
-            className="hub-row hub-customers-grid"
-            role="button"
-            tabIndex={0}
-            data-customer-row={r.key}
-            onClick={() => setOpenKey(r.key)}
-            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenKey(r.key); } }}
-            style={{
-              display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "11px 16px",
-              borderBottom: "1px solid var(--line-soft)", alignItems: "center", cursor: "pointer",
-              boxShadow: r.health === "risk" && !r.dormant ? "inset 1px 0 0 var(--danger-line)" : "none",
-              // 휴면은 행 전체 opacity 금지(§5.3) — "기약 없음 (휴면)" 라벨 + 이름 luminance로 전달.
-              outline: selection.selectedId === r.key ? "1px solid var(--moon-300)" : undefined,
-              outlineOffset: -1,
-            }}
-          >
-            <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 10 }}>
-              <Avatar name={r.name} size={30} tone={r.type === "personal" ? "personal" : "company"} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: r.dormant ? "var(--fg-muted)" : undefined }}>{r.name}</div>
-                <div style={{ fontSize: 11, color: "var(--fg-faint)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {[r.person, r.sub].filter(Boolean).join(" · ") || "—"}
-                  {r.kind === "lead" && r.deals?.length > 0 && (() => {
-                    // 가장 진행된 딜의 단계를 간이 표기 (패배 딜은 제외)
-                    const live = r.deals.filter(d => d.stage !== "lost");
-                    if (!live.length) return ` · 딜 ${r.deals.length} (패배)`;
-                    const top = live.reduce((a, b) =>
-                      DEAL_STAGES.findIndex(s => s.key === b.stage) > DEAL_STAGES.findIndex(s => s.key === a.stage) ? b : a);
-                    const label = DEAL_STAGES.find(s => s.key === top.stage)?.label || top.stage;
-                    return ` · 딜 ${live.length} · ${label}`;
-                  })()}
-                  {r.dormant && " · 기약 없음"}
+        ) : (
+          sorted.map(r => (
+            <div
+              key={r.key}
+              className="hub-row hub-customers-grid"
+              role="button"
+              tabIndex={0}
+              data-customer-row={r.key}
+              onClick={() => setOpenKey(r.key)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenKey(r.key); } }}
+              style={{
+                display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "11px 16px",
+                borderBottom: "1px solid var(--line-soft)", alignItems: "center", cursor: "pointer",
+                outline: selection.selectedId === r.key ? "1px solid var(--moon-300)" : undefined,
+                outlineOffset: -1,
+                boxShadow: r.focusOverride === "raise" ? "inset 1px 0 0 var(--moon-300)" : undefined,
+              }}
+            >
+              {/* 1. 고객 · 소속 */}
+              <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <IconButton
+                  icon="star"
+                  size={22}
+                  iconSize={13}
+                  className={r.focusOverride === "raise" ? "hub-iconbtn--star-active" : ""}
+                  tooltip={r.focusOverride === "raise" ? "중요 고객 해제" : "중요 고객으로 등록"}
+                  aria-label={r.focusOverride === "raise" ? "중요 고객 해제" : "중요 고객으로 등록"}
+                  onClick={(e) => toggleImportant(e, r)}
+                />
+                <Avatar name={r.name} size={30} tone={r.type === "personal" ? "personal" : "company"} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: r.dormant ? "var(--fg-muted)" : undefined }}>{r.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--fg-faint)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {[r.person, r.sub].filter(Boolean).join(" · ") || "—"}
+                    {r.kind === "lead" && r.deals?.length > 0 && (() => {
+                      const live = r.deals.filter(d => d.stage !== "lost");
+                      if (!live.length) return ` · 딜 ${r.deals.length} (패배)`;
+                      const top = live.reduce((a, b) =>
+                        DEAL_STAGES.findIndex(s => s.key === b.stage) > DEAL_STAGES.findIndex(s => s.key === a.stage) ? b : a);
+                      const label = DEAL_STAGES.find(s => s.key === top.stage)?.label || top.stage;
+                      return ` · 딜 ${live.length} · ${label}`;
+                    })()}
+                    {r.dormant && " · 기약 없음"}
+                  </div>
                 </div>
               </div>
-            </div>
-            <Badge tone="neutral" size="xs" variant="outline">{r.stage}</Badge>
-            <div className="hub-lc-m">
-              {r.health ? (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <span className="num" style={{ fontSize: 12, fontWeight: 500, color: HEALTH_TONE[r.health] === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}>
-                    {r.healthScore != null ? r.healthScore : { ok: "안전", warning: "주의", risk: "위험" }[r.health]}
+
+              {/* 2. 최근 접점 */}
+              <div className="hub-lc-m" style={{ fontSize: 12, color: "var(--fg-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {r.last !== "—" ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <Iconed name="signal" size={11} style={{ color: "var(--fg-dim)" }} />
+                    <span className="mono" style={{ fontSize: 11.5 }}>{r.last}</span>
                   </span>
-                </span>
-              ) : <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>—</span>}
+                ) : (
+                  <span style={{ fontSize: 11, color: "var(--fg-dim)" }}>기록 없음</span>
+                )}
+              </div>
+
+              {/* 3. 다음 행동 · 일정 */}
+              <div className="hub-lc-m" style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                {r.dormant ? (
+                  <span style={{ fontSize: 12, color: "var(--fg-dim)" }}>기약 없음 (휴면)</span>
+                ) : r.nextAction ? (
+                  <>
+                    <span style={{ fontSize: 12, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.nextAction}
+                    </span>
+                    {r.nextActionAt && (
+                      <span className="mono" style={{ fontSize: 10.5, padding: "1px 5px", background: "var(--surface-3)", borderRadius: "var(--r-xs)", color: "var(--fg-muted)", flexShrink: 0 }}>
+                        {r.nextActionAt.slice(5, 10)}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ fontSize: 11, color: "var(--fg-dim)" }}>—</span>
+                )}
+              </div>
+
+              {/* 4. 진행 상황 */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                <Badge tone="neutral" size="xs" variant="outline">{r.kind === "account" ? "계약 고객" : r.stage}</Badge>
+                {r.valueNum > 0 && (
+                  <div className="num hub-lc-m" style={{ fontSize: 12.5, fontWeight: 500, textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--fg-muted)" }}>
+                    {fmtMoney(r.valueNum)}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="hub-lc-m" style={{ fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {r.dormant ? "기약 없음 (휴면)" : (r.nextAction || "—")}
-            </div>
-            <div className="num hub-lc-m" style={{ fontSize: 12.5, fontWeight: 500, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-              {fmtMoney(r.valueNum)}
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </Card>
+
+      {deleteNotice && (
+        <div
+          role={deleteNotice.tone === "err" ? "alert" : "status"}
+          aria-live="polite"
+          className="fade-up"
+          style={{
+            position: "fixed",
+            bottom: 24,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1200,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            minHeight: 40,
+            padding: "8px 16px",
+            background: "var(--surface-3)",
+            color: "var(--fg)",
+            border: `1px solid ${deleteNotice.tone === "err" ? "var(--danger)" : "var(--line-strong)"}`,
+            borderRadius: "var(--r)",
+            boxShadow: "var(--shadow-pop)",
+            fontSize: 13,
+            fontWeight: 500,
+          }}
+        >
+          <span style={{ display: "inline-flex", color: deleteNotice.tone === "err" ? "var(--danger)" : "var(--moon-300)" }}>
+            <Iconed name={deleteNotice.tone === "err" ? "bell" : "check"} size={15} />
+          </span>
+          <span style={{ minWidth: 0 }}>{deleteNotice.label}</span>
+          {deleteNotice.undo ? (
+            <Button variant="ghost" size="xs" onClick={deleteNotice.undo} style={{ color: "var(--moon-200)", fontWeight: 600 }}>
+              되돌리기 (취소)
+            </Button>
+          ) : (
+            <IconButton icon="x" size={20} iconSize={12} tooltip="닫기" onClick={() => setDeleteNotice(null)} />
+          )}
+        </div>
+      )}
 
       {openRow && (
         <Customer360Drawer
@@ -1078,8 +1661,17 @@ export function Customers({ onNavigate }) {
           onClose={() => setOpenKey(null)}
           onNavigate={onNavigate}
           onDelete={deleteCustomer}
+          onFocusChange={(key, val) => setFocusOverrides(prev => ({ ...prev, [key]: val }))}
         />
       )}
+
+      <NewCustomerDrawer
+        open={newCustomerOpen}
+        onClose={() => setNewCustomerOpen(false)}
+        onCreated={(id) => {
+          setOpenKey(`lead:${id}`);
+        }}
+      />
     </div>
   );
 }

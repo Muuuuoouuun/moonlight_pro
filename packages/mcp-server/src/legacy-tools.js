@@ -78,7 +78,7 @@ export function registerMoonlightTools(server) {
 
   server.registerTool("get_weekly_report", {
     title: "Read Weekly Review",
-    description: "Read personal or company activity and the personal campaign scorecard. KPI values are manually entered; no dated weekly history or cash accounting is implied.",
+    description: "Read seven completed local calendar days of personal or company activity with measurement coverage, definitions and bounded source evidence. Missing values stay null. Goal details use get_goals; contract amounts are not cash receipts.",
     inputSchema: { scope: z.enum(["personal", "company"]).default("personal") },
   }, async ({ scope = "personal" }) => {
     const result = await hubGet("/api/hub/weekly-report", { scope });

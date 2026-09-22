@@ -611,24 +611,29 @@ button {
   border: 1px solid var(--line-soft) !important;
 }
 
+.hub-app .hub-project-table {
+  container: project-list / inline-size;
+}
+
 .hub-app .hub-project-list-head {
   display: grid;
-  grid-template-columns: 52px minmax(190px, 1.3fr) minmax(140px, 1fr) 100px 160px 120px;
+  grid-template-columns: 52px minmax(150px, 1.1fr) minmax(100px, 1.3fr) 100px 130px 110px 76px;
   gap: 10px;
   align-items: center;
   min-width: 0 !important;
   padding: 8px 14px;
   border-bottom: 1px solid var(--line-soft);
   background: rgba(255, 255, 255, 0.035);
-  color: var(--fg-faint);
-  font-size: 10.5px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  color: var(--fg-muted);
+  font-size: 11px;
+  letter-spacing: 0;
 }
+.hub-app .hub-project-list-head > :nth-child(2) { padding-left: 27px; }
+.hub-app .hub-project-list-head > :last-child { text-align: center; }
 
 .hub-app .hub-project-row {
   display: grid;
-  grid-template-columns: 52px minmax(190px, 1.3fr) minmax(140px, 1fr) 100px 160px 120px;
+  grid-template-columns: 52px minmax(150px, 1.1fr) minmax(100px, 1.3fr) 100px 130px 110px 76px;
   grid-template-rows: minmax(68px, auto);
   gap: 10px;
   align-items: center;
@@ -684,18 +689,18 @@ button {
 }
 
 .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-list-head {
-  grid-template-columns: 44px minmax(120px, 1.2fr) minmax(100px, 0.8fr) 76px 110px;
+  grid-template-columns: 44px minmax(110px, 1.2fr) minmax(80px, 0.8fr) 76px 90px 76px;
   gap: 8px;
   padding: 8px 10px;
 }
 
 .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-row {
-  grid-template-columns: 44px minmax(120px, 1.2fr) minmax(100px, 0.8fr) 76px 110px;
+  grid-template-columns: 44px minmax(110px, 1.2fr) minmax(80px, 0.8fr) 76px 90px 76px;
   gap: 8px;
   padding: 0 10px;
 }
 
-.hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-list-head > :last-child,
+.hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-list-head > :nth-child(6),
 .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-secondary-state {
   display: none;
 }
@@ -722,10 +727,12 @@ button {
 
 .hub-app .hub-project-identity__copy strong,
 .hub-app .hub-project-next-action strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 /* Hierarchy: the project name is the row's single anchor; next-action reads as
@@ -767,10 +774,13 @@ button {
   white-space: nowrap;
 }
 
-.hub-app .hub-project-due-risk > .mono {
+.hub-app .hub-project-due-risk .mono {
   color: var(--fg-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
+.hub-app .hub-project-due-risk > div { flex-wrap: wrap; }
+.hub-app .hub-project-next-action > span { display: none; }
+.hub-app .hub-project-no-risk { display: none; }
 
 .hub-app .hub-project-risk-label {
   width: fit-content;
@@ -783,7 +793,8 @@ button {
   grid-column: 6;
   grid-row: 1;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 7px;
   min-width: 0;
 }
@@ -821,7 +832,7 @@ button {
 .hub-app .hub-pms-progress__value {
   flex: 0 0 auto;
   color: var(--fg);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .hub-app .hub-pms-progress__evidence,
@@ -1910,8 +1921,8 @@ button {
 .hub-app .hub-project-portfolio-hero__value small {
   margin-left: 7px;
   color: var(--moon-400);
-  font-size: 0.42em;
-  font-weight: 350;
+  font-size: 0.34em;
+  font-weight: 500;
   letter-spacing: -0.04em;
 }
 
@@ -2016,47 +2027,65 @@ button {
   color: var(--danger);
 }
 
+/* Major ticks mark quarters; the dot tracks the exact reported progress. */
 .hub-app .hub-project-portfolio-ruler__track {
   position: relative;
-  height: 20px;
+  height: 28px;
+  margin-inline: 6px;
 }
 
 .hub-app .hub-project-portfolio-ruler__track::before {
   position: absolute;
-  top: 10px;
+  top: 18px;
   right: 0;
   left: 0;
-  height: 1px;
+  height: 4px;
+  border-radius: 999px;
   background: var(--line);
   content: "";
 }
 
 .hub-app .hub-project-portfolio-ruler__track i {
   position: absolute;
-  top: 6px;
+  top: 7px;
   width: 1px;
+  height: 5px;
+  background: var(--line);
+}
+
+.hub-app .hub-project-portfolio-ruler__track i[data-major="true"] {
+  top: 3px;
   height: 9px;
   background: var(--line-strong);
 }
 
 .hub-app .hub-project-portfolio-ruler__track > span {
   position: absolute;
-  top: 10px;
+  top: 18px;
   left: 0;
-  height: 1px;
+  height: 4px;
+  border-radius: 999px;
   background: var(--pms-moonstone);
 }
 
 .hub-app .hub-project-portfolio-ruler__track b {
   position: absolute;
-  top: 6px;
-  width: 9px;
-  height: 9px;
-  border: 1px solid var(--moon-300);
+  top: 14px;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--surface);
   border-radius: 999px;
   background: var(--pms-moonstone);
-  box-shadow: 0 0 0 3px var(--surface);
+  box-shadow: 0 0 0 2px var(--surface);
   transform: translateX(-50%);
+}
+
+.hub-app .hub-project-portfolio-ruler__scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  color: var(--fg-faint);
+  font-size: 10.5px;
 }
 
 .hub-app .hub-project-portfolio-accordions {
@@ -2074,7 +2103,7 @@ button {
 .hub-app .hub-project-portfolio-accordion__trigger {
   display: grid;
   width: 100%;
-  min-height: 76px;
+  min-height: 64px;
   grid-template-columns: 18px 22px minmax(120px, auto) 72px minmax(180px, 1fr) 18px;
   align-items: center;
   gap: 14px;
@@ -2084,7 +2113,7 @@ button {
 }
 
 .hub-app .hub-project-portfolio-accordion__trigger:hover {
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--surface-2);
 }
 
 .hub-app .hub-project-portfolio-accordion__trigger > svg:first-child {
@@ -2105,7 +2134,8 @@ button {
 
 .hub-app .hub-project-portfolio-accordion__trigger > .mono {
   color: var(--fg-muted);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .hub-app .hub-project-portfolio-accordion__summary {
@@ -2517,7 +2547,7 @@ button {
   }
 
   .hub-app .hub-project-portfolio-accordion__trigger {
-    min-height: 66px;
+    min-height: 56px;
     grid-template-columns: 16px 20px minmax(0, 1fr) auto 16px;
     gap: 10px;
     padding-inline: 14px;
@@ -2666,4 +2696,155 @@ button {
   .hub-app .project-create-disclosure__trigger > svg {
     transition: none;
   }
+}
+
+.hub-app .hub-project-row-actions {
+  grid-column: 7;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  width: fit-content;
+  gap: 8px;
+  padding: 2px;
+}
+.hub-app .hub-project-row-actions .hub-project-delete-action:hover,
+.hub-app .hub-project-row-actions .hub-project-delete-action:focus-visible {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: var(--danger-line);
+}
+.hub-app .hub-project-delete-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.hub-app .hub-project-delete-summary__icon {
+  display: inline-flex;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+.hub-app .hub-project-delete-summary__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.hub-app .hub-project-delete-summary strong {
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.hub-app .hub-project-delete-description {
+  margin: 16px 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--fg-muted);
+}
+.hub-app .hub-project-delete-recovery {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+.hub-app .hub-project-delete-recovery svg { flex-shrink: 0; }
+.hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-row-actions {
+  grid-column: 6;
+}
+@media (max-width: 768px) {
+  .hub-app .hub-project-row .hub-project-row-actions {
+    grid-column: 2;
+    grid-row: auto;
+    margin: 0 12px 12px;
+  }
+}
+
+/* Use the available list width, including a sidebar or detail panel, to choose
+   the compact layout before fixed table tracks can clip the action buttons. */
+@media (min-width: 769px) {
+  @container project-list (max-width: 860px) {
+    .hub-app .hub-project-list-head { display: none; }
+    .hub-app .hub-project-table .hub-project-row {
+      grid-template-columns: 44px minmax(0, 1fr) 110px;
+      grid-template-rows: auto auto;
+      gap: 12px;
+      padding: 16px;
+    }
+    .hub-app .hub-project-table .hub-project-row__controls {
+      align-self: start;
+      padding-top: 4px;
+    }
+    .hub-app .hub-project-table .hub-project-row__open {
+      grid-column: 2;
+      grid-row: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      min-height: 0;
+      padding: 0;
+    }
+    .hub-app .hub-project-table .hub-project-row > .hub-pms-progress {
+      grid-column: 2;
+      grid-row: 2;
+      max-width: 320px;
+    }
+    .hub-app .hub-project-table .hub-project-secondary-state {
+      display: flex;
+      grid-column: 3;
+      grid-row: 2;
+      align-self: start;
+      justify-self: end;
+      align-items: flex-end;
+    }
+    .hub-app .hub-project-table .hub-project-row-actions {
+      grid-column: 3;
+      grid-row: 1;
+      align-self: start;
+    }
+    .hub-app .hub-project-next-action > span { display: block; }
+  }
+}
+@media (max-width: 768px) {
+  .hub-app .hub-project-next-action > span { display: block; }
+  .hub-app .hub-project-row__controls { align-self: start; }
+  .hub-app .hub-project-identity { align-items: flex-start; }
+  .hub-app .hub-project-identity__copy strong { font-size: 14px; }
+}
+
+/* Project hierarchy: each work package owns its details and dated steps. */
+.hub-app .hub-project-portfolio-items { display: grid; gap: 8px; }
+.hub-app .hub-project-portfolio-item { border: 1px solid var(--line-soft); border-radius: var(--r-sm); min-width: 0; }
+.hub-app .hub-project-portfolio-item > summary { display: grid; grid-template-columns: 14px 18px minmax(0, 1fr) minmax(100px, 160px) auto; align-items: center; gap: 12px; min-height: 64px; padding: 10px 14px; cursor: pointer; list-style: none; }
+.hub-app .hub-project-portfolio-item > summary::-webkit-details-marker { display: none; }
+.hub-app .hub-project-portfolio-item > summary > svg { color: var(--fg-muted); }
+.hub-app .hub-project-portfolio-item > summary > svg:first-child { transition: transform var(--dur-panel) var(--ease-hub); }
+.hub-app .hub-project-portfolio-item[open] > summary > svg:first-child { transform: rotate(90deg); }
+.hub-app .hub-project-portfolio-item__title { min-width: 0; display: grid; gap: 4px; }
+.hub-app .hub-project-portfolio-item__title small { font-size: 10.5px; color: var(--fg-muted); }
+.hub-app .hub-project-portfolio-item__title strong { font-size: 13px; font-weight: 550; color: var(--fg); overflow-wrap: anywhere; }
+.hub-app .hub-project-portfolio-item summary > .mono { font-size: 11px; color: var(--fg-muted); }
+.hub-app .hub-project-portfolio-item__body { padding: 14px 18px; border-top: 1px solid var(--line-soft); }
+.hub-app .hub-project-portfolio-item__body p { font-size: 12px; line-height: 1.6; color: var(--fg-muted); overflow-wrap: anywhere; }
+.hub-app .hub-project-portfolio-item__description { white-space: pre-wrap; }
+.hub-app .hub-project-portfolio-item__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.hub-app .hub-project-portfolio-item__toolbar > button:last-child { margin-left: auto; }
+.hub-app .hub-project-portfolio-item__checks { margin-top: 12px; }
+.hub-app .hub-project-portfolio-item__checks > div { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; padding-block: 10px; align-items: start; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--fg-muted); }
+.hub-app .hub-project-portfolio-item__checks strong { color: var(--fg); font-weight: 450; overflow-wrap: anywhere; }
+.hub-app .hub-project-portfolio-item__checks p { margin: 4px 0 0; white-space: pre-wrap; }
+.hub-app .hub-project-portfolio-item__checks [data-done="true"] strong { text-decoration: line-through; color: var(--fg-muted); }
+.hub-app .hub-project-portfolio-item__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+@media (max-width: 620px) {
+  .hub-app .hub-project-portfolio-item > summary { grid-template-columns: 14px 18px minmax(0, 1fr); gap: 8px; padding: 12px; }
+  .hub-app .hub-project-portfolio-item__progress, .hub-app .hub-project-portfolio-item summary > .mono { grid-column: 3; }
+  .hub-app .hub-project-portfolio-item__body { padding: 12px; }
+  .hub-app .hub-project-portfolio-item__checks > div { grid-template-columns: 14px minmax(0, 1fr); }
+  .hub-app .hub-project-portfolio-item__checks .mono { grid-column: 2; }
 }

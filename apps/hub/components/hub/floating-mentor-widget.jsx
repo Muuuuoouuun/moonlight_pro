@@ -7,6 +7,7 @@ import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 import { requestCouncilAdvice } from "./council-client";
 import { requestGuruCoaching } from "./guru-client";
 import { requestPersonaChat, LEGEND_LENS_MAP } from "./persona-client";
+import { createAdviceTaskWriter } from "@/lib/ai-workflow-client";
 
 export function FloatingMentorWidget({
   isOpen = false,
@@ -19,7 +20,8 @@ export function FloatingMentorWidget({
   onApplyText,
   onCreateTask,
 }) {
-  const isGuru = agent === "guru" || contextType === "deal" || contextType === "customer" || contextType === "sales";
+  const isGuru = agent ? agent === "guru" : ["deal", "customer", "sales"].includes(contextType);
+  const contextKey = JSON.stringify([agent, contextType, contextData?.id || contextData?.ref || contextTitle]);
   const [minimized, setMinimized] = useState(false);
   const defaultTab = initialTab || (contextData?.mode === "critique" ? "critique" : "quick");
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -29,9 +31,31 @@ export function FloatingMentorWidget({
   const [statusNote, setStatusNote] = useState("");
   const [chatThread, setChatThread] = useState([]);
   const [chatInput, setChatInput] = useState("");
+  const [adviceHistory, setAdviceHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const visibleAdviceHistory = adviceHistory.filter(item => item.contextKey === contextKey);
   const [taskSaved, setTaskSaved] = useState(false);
   const [dealSaved, setDealSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [dealSaving, setDealSaving] = useState(false);
+  const taskWriter = useRef(null);
+  if (!taskWriter.current) taskWriter.current = createAdviceTaskWriter();
+  const taskPending = useRef(false);
+  const dealPending = useRef(false);
+  const requestEpoch = useRef(0);
+  const requestPending = useRef(false);
+  useEffect(() => {
+    requestEpoch.current += 1;
+    requestPending.current = false;
+    setResultText("");
+    setChatThread([]);
+    setStatusNote("");
+    setTaskSaved(false);
+    setDealSaved(false);
+    setLoading(false);
+  }, [contextKey]);
+  useEffect(() => () => { requestEpoch.current += 1; }, []);
 
   // Esc key layer registration
   const onCloseRef = useRef(onClose);
@@ -100,17 +124,21 @@ export function FloatingMentorWidget({
 
   // Run advice, critique, sparring, or weekly-review
   const handleRequest = async (mode, customDraft = "") => {
+    if (requestPending.current) return;
+    requestPending.current = true;
+    const epoch = requestEpoch.current;
     setLoading(true);
     setStatusNote("");
     setTaskSaved(false);
+    setDealSaved(false);
     const draft = buildContextPrompt(customDraft);
     const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
 
-    // Use persona-chat when lens is selected or in critique / weekly-review mode
+    // Use persona-chat when lens is selected or in critique / weekly-review / outreach / extract-actions mode
     let res;
-    if (selectedLens || mode === "critique" || mode === "weekly-review") {
+    if (selectedLens || mode === "critique" || mode === "weekly-review" || mode === "outreach-draft" || mode === "extract-actions" || mode === "daily-dispatch") {
       res = await requestPersonaChat({
-        personaId: isGuru ? "sales" : contextType === "content" ? "content" : "council",
+        personaId: isGuru ? "sales" : contextType === "content" ? "content" : mode === "extract-actions" ? "order" : "council",
         mode,
         lens: selectedLens,
         draft,
@@ -123,9 +151,22 @@ export function FloatingMentorWidget({
         : await requestCouncilAdvice({ mode, draft, ref });
     }
 
+    if (epoch !== requestEpoch.current) return;
+    requestPending.current = false;
     setLoading(false);
     if (res.state === "done") {
       setResultText(res.text);
+      setAdviceHistory((prev) => [
+        {
+          id: Date.now(),
+          at: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
+          title: contextTitle || mode,
+          text: res.text,
+          mode,
+          contextKey,
+        },
+        ...prev.slice(0, 4),
+      ]);
     } else if (res.state === "preview") {
       setStatusNote(res.note || "Engine이 연결되지 않은 preview 상태입니다.");
     } else {
@@ -137,13 +178,17 @@ export function FloatingMentorWidget({
   const handleSendChat = async (e) => {
     e?.preventDefault();
     const text = chatInput.trim();
-    if (!text || loading) return;
+    if (!text || requestPending.current) return;
+    requestPending.current = true;
+    const epoch = requestEpoch.current;
 
     const newThread = [...chatThread, { role: "user", text }];
     setChatThread(newThread);
     setChatInput("");
     setLoading(true);
     setStatusNote("");
+    setTaskSaved(false);
+    setDealSaved(false);
 
     const draft = buildContextPrompt(
       `이전 대화:\n${chatThread.map(m => `${m.role === 'user' ? '운영자' : isGuru ? 'Guru' : 'Council'}: ${m.text}`).join('\n')}\n\n새 질문:\n${text}`
@@ -174,23 +219,29 @@ export function FloatingMentorWidget({
           });
     }
 
+    if (epoch !== requestEpoch.current) return;
+    requestPending.current = false;
     setLoading(false);
 
     if (res.state === "done") {
       setChatThread([...newThread, { role: isGuru ? "guru" : "council", text: res.text }]);
     } else {
-      setChatThread([...newThread, { role: isGuru ? "guru" : "council", text: res.note || "응답을 생성하지 못했습니다." }]);
+      setChatThread([...newThread, { role: isGuru ? "guru" : "council", state: "error", text: res.note || "응답을 생성하지 못했습니다." }]);
     }
   };
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const textToCopy = activeTab === "chat"
       ? chatThread.slice(-1)[0]?.text || ""
       : resultText;
     if (!textToCopy) return;
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setStatusNote("복사하지 못했습니다. 본문을 선택해 복사하세요.");
+    }
   };
 
   const extractTaskTitle = (taskText) => {
@@ -208,36 +259,39 @@ export function FloatingMentorWidget({
   };
 
   const handleCreateTask = async (taskText) => {
-    if (!taskText) return;
+    if (!taskText || taskPending.current) return;
     const title = extractTaskTitle(taskText);
-
-    if (onCreateTask) {
-      onCreateTask(title);
-      setTaskSaved(true);
-      setTimeout(() => setTaskSaved(false), 3000);
-      return;
-    }
-
+    const epoch = requestEpoch.current;
+    taskPending.current = true;
+    setTaskSaving(true);
     try {
-      const res = await fetch("/api/hub/tasks", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title,
-          project_id: contextData?.id || null,
-        }),
-      });
-      if (res.ok) {
-        setTaskSaved(true);
-        setTimeout(() => setTaskSaved(false), 3000);
+      if (onCreateTask) {
+        await onCreateTask(title);
+        if (epoch === requestEpoch.current) setStatusNote("할 일 초안을 열었습니다. 내용을 확인하고 저장하세요.");
+        return;
       }
-    } catch (e) {
-      console.error("Failed to create task", e);
+      const result = await taskWriter.current.save({
+        key: `${contextKey}:${taskText}`,
+        title,
+        projectId: contextType === "project" ? contextData?.id || null : null,
+        dealId: contextType === "deal" ? contextData?.id || null : null,
+      });
+      if (epoch !== requestEpoch.current) return;
+      if (result.state === "saved") setTaskSaved(true);
+      else setStatusNote(result.note);
+    } catch {
+      if (epoch === requestEpoch.current) setStatusNote("할 일 초안을 열지 못했습니다. 다시 시도하세요.");
+    } finally {
+      taskPending.current = false;
+      setTaskSaving(false);
     }
   };
 
   const handleUpdateDealNextAction = async (taskText) => {
-    if (!contextData?.id || !taskText) return;
+    if (!contextData?.id || !taskText || dealPending.current) return;
+    const epoch = requestEpoch.current;
+    dealPending.current = true;
+    setDealSaving(true);
     const nextAction = extractTaskTitle(taskText);
     try {
       const res = await fetch("/api/hub/revenue/deal", {
@@ -249,12 +303,16 @@ export function FloatingMentorWidget({
           nextAction,
         }),
       });
-      if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (epoch !== requestEpoch.current) return;
+      if (res.ok && data?.status === "saved") {
         setDealSaved(true);
-        setTimeout(() => setDealSaved(false), 3000);
-      }
-    } catch (e) {
-      console.error("Failed to update deal next action", e);
+      } else setStatusNote("딜 다음 행동이 저장되지 않았습니다. 연결 상태를 확인한 뒤 다시 시도하세요.");
+    } catch {
+      if (epoch === requestEpoch.current) setStatusNote("딜 저장 응답을 받지 못했습니다. 다시 시도하세요.");
+    } finally {
+      dealPending.current = false;
+      setDealSaving(false);
     }
   };
 
@@ -277,7 +335,7 @@ export function FloatingMentorWidget({
           background: "var(--surface-2)",
           border: "1px solid var(--line-strong)",
           borderRadius: 999,
-          boxShadow: "0 8px 24px oklch(0 0 0 / 0.4)",
+          boxShadow: "var(--shadow-pop)",
           cursor: "pointer",
         }}
         onClick={() => setMinimized(false)}
@@ -287,13 +345,42 @@ export function FloatingMentorWidget({
           {isGuru ? "Sales Guru" : "Council Co-Pilot"}
         </span>
         <Badge tone="moon" size="xs">{contextTitle || contextType}</Badge>
-        <IconButton name="plus" size={14} label="열기" onClick={(e) => { e.stopPropagation(); setMinimized(false); }} />
+        <IconButton icon="plus" iconSize={14} aria-label="열기" onClick={(e) => { e.stopPropagation(); setMinimized(false); }} />
       </aside>
     );
   }
 
+  const getPromptPresets = () => {
+    if (isGuru) {
+      return [
+        "부담 없는 안부 카톡 초안 써줘",
+        "고객 거절을 어떻게 돌파할까?",
+        "이 딜의 치명적 맹점 1가지는?",
+      ];
+    }
+    if (contextType === "weekly") {
+      return [
+        "이번 주 가장 아쉬운 점과 극복책은?",
+        "다음 주 최우선 집중 과제 1개는?",
+      ];
+    }
+    if (contextType === "content") {
+      return [
+        "첫 문장을 더 후킹하게 고쳐줘",
+        "고객 입장에서 지루한 부분은?",
+        "간결하게 3줄 요약해줘",
+      ];
+    }
+    return [
+      "지금 당장 실행할 1가지 행동은?",
+      "놓치고 있는 리스크는 무엇인가?",
+      "핵심 액션 아이템만 3개 추려줘",
+    ];
+  };
+
   const quickOptions = isGuru
     ? [
+        { label: "카톡/문자 연락 초안", mode: "outreach-draft" },
         { label: "딜 진단 (Keenan 4층)", mode: "deal-review" },
         { label: "파이프라인 우선순위", mode: "pipeline-triage" },
         { label: "제안 검토", mode: "proposal-critique" },
@@ -309,9 +396,16 @@ export function FloatingMentorWidget({
         { label: "오디언스 가설", mode: "audience-analysis" },
         { label: "플로우 점검", mode: "flow-review" },
       ]
+    : contextType === "project"
+    ? [
+        { label: "액션 아이템 추출", mode: "extract-actions" },
+        { label: "병목 타파 진단 (Goldratt)", mode: "flow-review" },
+        { label: "우선순위 전략", mode: "brand-strategy" },
+      ]
     : [
         { label: "병목 타파 진단 (Goldratt)", mode: "flow-review" },
         { label: "우선순위 전략", mode: "brand-strategy" },
+        { label: "액션 아이템 추출", mode: "extract-actions" },
         { label: "메모/회의 정리", mode: "meeting-synthesis" },
       ];
 
@@ -340,7 +434,7 @@ export function FloatingMentorWidget({
         background: "var(--surface)",
         border: "1px solid var(--line-strong)",
         borderRadius: "var(--r-lg)",
-        boxShadow: "0 12px 32px oklch(0 0 0 / 0.5), 0 0 0 1px var(--line-soft)",
+        boxShadow: "var(--shadow-pop)",
         zIndex: "var(--z-drawer, 90)",
         overflow: "hidden",
       }}
@@ -381,10 +475,77 @@ export function FloatingMentorWidget({
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <IconButton name="arrowDown" size={13} label="최소화" onClick={() => setMinimized(true)} />
-          <IconButton name="x" size={13} label="닫기" onClick={onClose} />
+          {visibleAdviceHistory.length > 0 && (
+            <IconButton
+              icon="clock"
+              iconSize={13}
+              aria-label="최근 조언 기록"
+              aria-expanded={showHistory}
+              onClick={() => setShowHistory((prev) => !prev)}
+            />
+          )}
+          <IconButton icon="chevronD" iconSize={13} aria-label="최소화" onClick={() => setMinimized(true)} />
+          <IconButton icon="x" iconSize={13} aria-label="닫기" onClick={onClose} />
         </div>
       </div>
+
+      {/* 1.5 Recent Advice History Dropdown */}
+      {showHistory && visibleAdviceHistory.length > 0 && (
+        <div
+          style={{
+            padding: "8px 12px",
+            background: "var(--surface-3)",
+            borderBottom: "1px solid var(--line)",
+            maxHeight: 140,
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            fontSize: 11,
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--fg-faint)", fontSize: 10.5 }}>
+            <span>최근 조언 내역 ({visibleAdviceHistory.length}건)</span>
+            <button
+              onClick={() => setShowHistory(false)}
+              style={{ background: "none", border: "none", color: "var(--fg-muted)", cursor: "pointer", fontSize: 10.5 }}
+            >
+              닫기
+            </button>
+          </div>
+          {visibleAdviceHistory.map((item) => (
+            <button
+              type="button"
+              className="hub-row"
+              key={item.id}
+              onClick={() => {
+                setResultText(item.text);
+                setTaskSaved(false);
+                setDealSaved(false);
+                setShowHistory(false);
+                if (activeTab === "chat") setActiveTab("quick");
+              }}
+              style={{
+                padding: "4px 8px",
+                background: "var(--surface-2)",
+                border: "1px solid var(--line-soft)",
+                borderRadius: "var(--r-xs)",
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--fg)", flex: 1 }}>
+                {item.title || item.mode}
+              </span>
+              <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", flexShrink: 0 }}>{item.at}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 2. Mode Selector Bar */}
       <div
@@ -425,7 +586,7 @@ export function FloatingMentorWidget({
                 border: active ? "1px solid var(--line)" : "1px solid transparent",
                 borderRadius: "var(--r-sm)",
                 cursor: "pointer",
-                transition: "all 0.15s ease",
+                transition: "color var(--dur-hover) var(--ease-hub)",
               }}
             >
               {tab.label}
@@ -500,7 +661,7 @@ export function FloatingMentorWidget({
             alignItems: "center",
             justifyContent: "space-between",
             flexShrink: 0,
-            background: "rgba(224, 86, 74, 0.02)",
+            background: "var(--surface-2)",
           }}
         >
           <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>
@@ -606,7 +767,7 @@ export function FloatingMentorWidget({
                     lineHeight: 1.55,
                   }}
                 >
-                  <div style={{ fontSize: 10, color: "var(--fg-faint)", marginBottom: 3 }}>
+                  <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginBottom: 3 }}>
                     {msg.role === "user" ? "운영자" : isGuru ? "Guru" : "Council"}
                   </div>
                   {msg.text}
@@ -647,7 +808,7 @@ export function FloatingMentorWidget({
       </div>
 
       {/* 5. Action Bar (Apply to draft / Add as task / Copy) */}
-      {(resultText || (activeTab === "chat" && chatThread.length > 0)) && !loading && (
+      {(activeTab === "chat" ? chatThread.length > 0 && chatThread.at(-1)?.state !== "error" : resultText) && !loading && (
         <div
           style={{
             padding: "8px 12px",
@@ -680,7 +841,7 @@ export function FloatingMentorWidget({
               variant="outline"
               size="xs"
               icon={taskSaved ? "check" : "plus"}
-              disabled={taskSaved}
+              disabled={taskSaved || taskSaving}
               onClick={() => {
                 const txt = activeTab === "chat"
                   ? chatThread.slice(-1)[0]?.text || ""
@@ -688,14 +849,14 @@ export function FloatingMentorWidget({
                 handleCreateTask(txt);
               }}
             >
-              {taskSaved ? "태스크 등록됨 ✓" : contextType === "weekly" ? "📌 실험 태스크 등록" : "할 일로 등록"}
+              {taskSaving ? "저장 확인 중…" : taskSaved ? "태스크 등록됨 ✓" : onCreateTask ? "할 일 초안 열기" : contextType === "weekly" ? "📌 실험 태스크 등록" : "할 일로 등록"}
             </Button>
             {contextType === "deal" && contextData?.id && (
               <Button
                 variant="outline"
                 size="xs"
                 icon={dealSaved ? "check" : "deals"}
-                disabled={dealSaved}
+                disabled={dealSaved || dealSaving}
                 onClick={() => {
                   const txt = activeTab === "chat"
                     ? chatThread.slice(-1)[0]?.text || ""
@@ -703,13 +864,53 @@ export function FloatingMentorWidget({
                   handleUpdateDealNextAction(txt);
                 }}
               >
-                {dealSaved ? "다음 행동 저장됨 ✓" : "딜 다음 행동 반영"}
+                {dealSaving ? "저장 확인 중…" : dealSaved ? "다음 행동 저장됨 ✓" : "딜 다음 행동 반영"}
               </Button>
             )}
           </div>
           <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
             {copied ? "복사됨 ✓" : "복사"}
           </Button>
+        </div>
+      )}
+
+      {/* 5.5 Chat Prompt Presets */}
+      {activeTab === "chat" && (
+        <div
+          style={{
+            padding: "4px 10px",
+            background: "var(--surface-2)",
+            borderTop: "1px solid var(--line-soft)",
+            display: "flex",
+            gap: 6,
+            overflowX: "auto",
+            flexShrink: 0,
+          }}
+        >
+          {getPromptPresets().map((preset, idx) => (
+            <button
+              key={idx}
+              type="button"
+              className="hub-row"
+              disabled={loading}
+              onClick={() => {
+                setChatInput(preset);
+              }}
+              style={{
+                padding: "2px 8px",
+                borderRadius: 999,
+                border: "1px solid var(--line)",
+                background: "var(--surface-3)",
+                color: "var(--fg-muted)",
+                fontSize: 10.5,
+                whiteSpace: "nowrap",
+                cursor: "pointer",
+                transition: "color var(--dur-hover) var(--ease-hub)",
+              }}
+            >
+              {preset}
+            </button>
+          ))}
         </div>
       )}
 

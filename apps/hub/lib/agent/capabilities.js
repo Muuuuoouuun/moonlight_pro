@@ -5,6 +5,7 @@ import { getAgentWorkerAvailability } from './jobs.js';
 const ACTION_SCOPES = {
   create_task: 'tasks:write', update_task: 'tasks:write', complete_task: 'tasks:write',
   record_contact_outcome: 'contact-outcomes:write',
+  record_goal_command: 'goals:write', save_ai_candidate: 'ai:write', request_ai_assist: 'ai:write', record_assist_outcome: 'ai:write',
 };
 const unknownExecutor = (reason) => ({ executorOnline: null, lastHeartbeatAt: null, leaseExpiresAt: null, reason });
 

@@ -2,10 +2,19 @@
 
 import React from "react";
 import { CalendarOutcome } from "../calendar-outcome";
+import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
+import { requestPersonaChat } from "../persona-client";
+import {
+  buildDailyDispatchContext,
+  createAdviceTaskWriter,
+  buildWeeklySummaryText,
+  extractWeeklyExperiment,
+} from "@/lib/ai-workflow-client";
+import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
@@ -50,33 +59,6 @@ function formatMoney(amount) {
   if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
   return `₩${n}`;
 }
-
-const SIGNAL_TARGETS = {
-  draft: 'dashboard/content/studio?new=draft',
-  escalate: 'dashboard/revenue/deals',
-  followup: 'dashboard/revenue/deals', // ?draft= 소비자 없음 — 죽은 파라미터 제거(4차 재감사 S)
-  deals: 'dashboard/revenue/deals',
-  leads: 'dashboard/revenue/leads',
-  revenue: 'dashboard/revenue/overview',
-  wait: 'dashboard/work/rhythm',
-  write: 'dashboard/content/studio',
-  queue: 'dashboard/content/queue',
-  delay: 'dashboard/content/queue',
-  review: 'dashboard/automations/runs',
-  flows: 'dashboard/automations/flows',
-  dismiss: 'dashboard/daily-brief',
-  accept: 'dashboard/work/roadmap',
-  chat: 'dashboard/agents/chat',
-  hold: 'dashboard/work/decisions',
-  start: 'dashboard/work/rhythm',
-  projects: 'dashboard/work/projects',
-  decision: 'dashboard/work/decisions?new=decision',
-  rhythm: 'dashboard/work/rhythm',
-  focus: 'dashboard/work/calendar?focus=15',
-  // 승인 큐의 정본 표면(agents/orders) — 자기 경로(daily-brief)를 가리키면 내비가
-  // 스킵돼 "처리함"만 찍히는 no-op 버튼이 된다(2026-08-05 re-audit #6).
-  queueApprovals: 'dashboard/agents/orders',
-};
 
 const CONTEXT_TARGETS = {
   Revenue: 'dashboard/revenue/deals',
@@ -1344,14 +1326,19 @@ function RhythmPanel({ onNavigate }) {
       <Card>
         {total > 0 ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span className="stat" style={{ fontSize: 22, fontWeight: 600 }}>{completed}/{total}</span>
-              <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
-              {percent >= 100 && (
-                <span className="hub-celebration-badge hub-celebration-badge--sparkle" style={{ marginLeft: 'auto' }}>
-                  ✦ 완벽 달성
-                </span>
-              )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span className="stat" style={{ fontSize: 22, fontWeight: 600 }}>{completed}/{total}</span>
+                <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {percent >= 100 && (
+                  <span className="hub-celebration-badge hub-celebration-badge--sparkle">
+                    ✦ 완벽 달성
+                  </span>
+                )}
+                <ProgressRing value={percent} size={28} strokeWidth={3} showLabel />
+              </div>
             </div>
             <div {...rhythmProgressProps} style={{ marginTop: 10 }}><Progress value={percent} /></div>
             {summary.longestStreak > 0 && (
@@ -1466,6 +1453,165 @@ function RhythmPanel({ onNavigate }) {
         />
       )}
     </div>
+  );
+}
+
+function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, onNavigate, onAdvisorOpen }) {
+  const [dispatch, setDispatch] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [errorNote, setErrorNote] = React.useState(null);
+  const [copied, setCopied] = React.useState(false);
+  const inFlight = React.useRef(false);
+
+  const context = buildDailyDispatchContext({ dailyFocus, taskToday, signals, sourceState });
+  const isEvening = context.isEvening;
+  const briefingState = sourceState === "live" && [context.urgentKa, context.focusCustomers, context.todayAgenda, context.tasks].some(slice => slice.state !== "live")
+    ? "partial" : sourceState || "preview";
+
+  const handleGenerate = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setLoading(true);
+    setErrorNote(null);
+
+    try {
+      const res = await requestPersonaChat({
+        personaId: "order",
+        mode: "daily-dispatch",
+        message: isEvening
+          ? "확인된 완료 건수와 남은 작업을 정리하고 내일 먼저 확인할 행동을 제안하세요. 미조회 완료 내역이나 내일 일정은 만들어내지 마세요."
+          : "확인된 고객 다음 행동·기한·오늘 일정을 기준으로 실행 순서를 제안하세요. 자료가 부족하면 확인할 항목부터 알려주세요.",
+        context,
+      });
+
+      if (res.state === "done") {
+        setDispatch(res.text);
+      } else {
+        setErrorNote(res.note || "브리핑을 생성하지 못했습니다.");
+      }
+    } catch (e) {
+      setErrorNote(e.message || "오류가 발생했습니다.");
+    } finally {
+      inFlight.current = false;
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!dispatch) return;
+    try {
+      await navigator.clipboard.writeText(dispatch);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setErrorNote("복사하지 못했습니다. 브리핑 본문을 선택해 복사하세요.");
+    }
+  };
+
+  return (
+    <Card
+      className="daily-brief__panel"
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--line-strong)",
+        borderRadius: "var(--r)",
+        padding: "14px 16px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Iconed name={isEvening ? "clock" : "sparkle"} size={16} style={{ color: "var(--moon-300)" }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
+            {isEvening ? "🌙 퇴근 전 정돈 & 내일 첫 발자국" : "⚡ 30초 AI 실행 오더"}
+          </span>
+          <Badge tone="neutral" size="xs">
+            {isEvening ? "Evening Wind-Down" : "Morning Dispatch"}
+          </Badge>
+          <TruthBadge state={briefingState} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {dispatch && (
+            <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
+              {copied ? "복사됨 ✓" : "복사"}
+            </Button>
+          )}
+          <Button
+            variant={dispatch ? "outline" : "primary"}
+            size="xs"
+            icon="sparkle"
+            disabled={loading || ["loading", "syncing"].includes(sourceState)}
+            onClick={handleGenerate}
+          >
+            {loading ? "작성 중…" : dispatch ? "다시 받기" : isEvening ? "퇴근 전 정돈 받기" : "30초 브리핑 받기"}
+          </Button>
+        </div>
+      </div>
+
+      {errorNote && <div role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>{errorNote}</div>}
+      {briefingState !== "live" && <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>일부 원장을 확인하지 못했습니다. 브리핑은 확인된 자료 범위로 제한됩니다.</div>}
+      {dispatch ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div
+            style={{
+              fontSize: 12.5,
+              lineHeight: 1.65,
+              color: "var(--fg)",
+              background: "var(--surface-2)",
+              padding: "12px 14px",
+              borderRadius: "var(--r-sm)",
+              border: "1px solid var(--line-soft)",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {dispatch}
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", paddingTop: 2 }}>
+            {onAdvisorOpen && (
+              <Button
+                variant="outline"
+                size="xs"
+                icon="sparkle"
+                onClick={() => onAdvisorOpen({
+                  title: isEvening ? "퇴근 전 정돈 & 내일 설계 심층 토의" : "30초 실행 오더 심층 토의",
+                  contextType: "general",
+                  agent: "council",
+                  summary: dispatch,
+                  contextData: {
+                    summary: dispatch,
+                    isEvening,
+                  },
+                })}
+              >
+                Council 심층 토의 (⌘J)
+              </Button>
+            )}
+            {onNavigate && (
+              <>
+                <Button variant="ghost" size="xs" icon="bell" onClick={() => onNavigate("dashboard/revenue/followups")}>
+                  고객 연락 바로가기
+                </Button>
+                <Button variant="ghost" size="xs" icon="inbox" onClick={() => onNavigate("dashboard/work/my")}>
+                  내 작업 바로가기
+                </Button>
+                <Button variant="ghost" size="xs" icon="calendar" onClick={() => onNavigate("dashboard/work/calendar")}>
+                  캘린더 바로가기
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+          {isEvening
+              ? "확인된 완료 건수와 남은 작업을 정리하고, 내일 먼저 확인할 행동을 제안합니다."
+              : "오늘 원장 데이터(긴급 고객, 태스크, 신호)를 기반으로 지금 당장 처리할 우선순위와 시간 배분을 제안합니다."
+          }
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -1744,13 +1890,37 @@ function BriefClock({ signalCount, urgentCount, todayCount }) {
 // 회사(ClassIn). 해당 요일에만 렌더하고 다른 날은 null(§7 fold 순서를 어지럽히지 않는다).
 const WEEKLY_SCOPE_BY_DAY = { Mon: 'personal', Thu: 'company' };
 
-function weeklyScopeToday() {
+export function weeklyScopeToday(override) {
+  if (override === 'personal' || override === 'company') return override;
   const day = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' }).format(new Date());
   return WEEKLY_SCOPE_BY_DAY[day] || null;
 }
 
-function WeeklyReportCard({ onNavigate }) {
-  const scope = weeklyScopeToday();
+export { buildWeeklySummaryText, extractWeeklyExperiment };
+
+export function WeeklyAiDebrief({ report, scope, onAdvisorOpen, onTaskCreated, onNavigate }) {
+  return <>
+    <OfficeWorkflowPanel
+      intent="weekly_report"
+      scope={scope === 'company' ? 'classin' : 'personal'}
+      originRef={{ periodStart: report.periodStart, periodEnd: report.periodEnd, timezone: report.timezone || 'Asia/Seoul' }}
+      title="이번 주 정리"
+      onTaskCreated={onTaskCreated}
+      onNavigate={onNavigate}
+    />
+    {onAdvisorOpen && <details style={{ marginTop: 12 }}>
+      <summary style={{ minHeight: 44, cursor: 'pointer', fontSize: 12, color: 'var(--fg-muted)' }}>기존 회고 자문</summary>
+      <Button size="xs" variant="ghost" onClick={() => onAdvisorOpen({
+        title: `${scope === 'company' ? '회사' : '개인'} 주간 회고 토의`,
+        contextType: 'weekly', agent: 'council', summary: buildWeeklySummaryText(report, scope),
+        contextData: { summary: buildWeeklySummaryText(report, scope), report, scope },
+      })}>기존 Council과 토론하기</Button>
+    </details>}
+  </>;
+}
+
+export function WeeklyReportCard({ onNavigate, onAdvisorOpen, overrideScope, onTaskCreated }) {
+  const scope = weeklyScopeToday(overrideScope);
   const [state, setState] = React.useState({ syncState: 'loading', report: null });
   React.useEffect(() => {
     if (!scope) return;
@@ -1770,14 +1940,14 @@ function WeeklyReportCard({ onNavigate }) {
   const title = scope === 'company' ? '회사 주간 리포트 · ClassIn' : '나의 주간 리포트';
   const { report, syncState } = state;
   const stats = report?.stats;
-  const scorecard = scope === 'personal' ? report?.scorecard : null;
-  const scorecardUnavailable = syncState === 'preview' || report?.failedSources?.includes('campaigns');
+  const goals = report?.goals;
+  const objectives = goals?.objectives?.filter(goal => goal.status === 'active') || [];
   const rows = !stats ? [] : scope === 'company'
     ? [
         { label: '연락', value: stats.contacts },
         { label: '신규 딜', value: stats.newDeals },
-        { label: '진행 딜', value: stats.movedDeals },
-        { label: 'Won', value: stats.wonDeals },
+        { label: '수정된 진행 딜', value: stats.modifiedOpenDeals },
+        { label: '성사일 확인된 딜', value: stats.wonDeals },
       ]
     : [
         { label: '완료 할 일', value: stats.doneTasks },
@@ -1787,50 +1957,31 @@ function WeeklyReportCard({ onNavigate }) {
       ];
   return (
     <Card className="fade-up">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <SectionTitle style={{ margin: 0 }}>{title}</SectionTitle>
-        <SyncBadge state={syncState} />
-        <span style={{ fontSize: 11, color: 'var(--fg-dim)' }}>지난 7일</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <SectionTitle style={{ margin: 0 }}>{title}</SectionTitle>
+          <TruthBadge state={syncState} />
+          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{report?.periodStart && report?.periodEnd ? `${report.periodStart} — ${report.periodEnd}` : '지난 7일'}</span>
+        </div>
+
       </div>
       {syncState === 'error' ? (
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>주간 기록을 읽지 못했습니다 — 아래 수치 없이 넘어가지 말고 새로고침으로 다시 확인하세요.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {scope === 'personal' && syncState !== 'loading' && (
-            scorecard ? (
-              <div style={{ padding: 12, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 180 }}>
-                    <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginBottom: 4 }}>{scorecard.campaignName}</div>
-                    <div style={{ fontSize: 13, color: 'var(--fg)' }}>{scorecard.metric}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span className="stat" style={{ fontSize: 24 }}>{scorecard.actual ?? '—'}</span>
-                    <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}> / {scorecard.target}</span>
-                    <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>
-                      {scorecard.actual === null ? 'actual 입력 필요' : scorecard.gap >= 0 ? `목표 +${scorecard.gap}` : `목표까지 ${Math.abs(scorecard.gap)}`}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ marginTop: 10 }}><Progress value={scorecard.progress} tone="moon" /></div>
-              </div>
-            ) : scorecardUnavailable ? (
-              <div style={{ padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', fontSize: 12, color: 'var(--fg-muted)' }}>
-                {syncState === 'preview'
-                  ? 'Supabase 미설정 — 활성 캠페인의 KPI를 판단할 수 없습니다.'
-                  : '캠페인 전략을 읽지 못해 이번 주 KPI를 판단할 수 없습니다.'}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', flexWrap: 'wrap' }}>
-                <span style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>활성 캠페인의 primary metric과 weekly target이 아직 없습니다.</span>
-                <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/content/campaigns')}>Strategy 열기</Button>
-              </div>
-            )
+          {syncState !== 'loading' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', flexWrap: 'wrap' }}>
+              <span style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>
+                {goals?.status === 'error' ? '목표·성과 원장을 읽지 못했습니다.' : syncState === 'preview' ? '측정 원장이 연결되면 기간별 실적을 확인할 수 있습니다.' : objectives.length ? `진행 목표 ${objectives.length}개 · 기간과 측정 근거를 확인하세요.` : '측정할 목표와 결과 지표를 연결해 보세요.'}
+              </span>
+              <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/overview?view=goals&scope=${scope}`)}>목표·성과</Button>
+            </div>
           )}
+          {syncState === 'partial' && <p role="status" style={{ margin: 0, fontSize: 12, color: 'var(--fg-muted)' }}>일부 근거를 확인하지 못했습니다. ‘—’는 0이 아닌 미측정입니다.</p>}
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             {rows.map((r) => (
               <div key={r.label} style={{ minWidth: 72 }}>
-                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? <Skeleton lines={1} height={22} width="56%" label="지표 확인 중" /> : r.value}</div>
+                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? <Skeleton lines={1} height={22} width="56%" label="지표 확인 중" /> : (r.value ?? '—')}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>{r.label}</div>
               </div>
             ))}
@@ -1844,6 +1995,15 @@ function WeeklyReportCard({ onNavigate }) {
               </div>
             )}
           </div>
+          {syncState !== 'loading' && report && (
+            <WeeklyAiDebrief
+              report={report}
+              scope={scope}
+              onAdvisorOpen={onAdvisorOpen}
+              onTaskCreated={onTaskCreated}
+              onNavigate={onNavigate}
+            />
+          )}
         </div>
       )}
     </Card>
@@ -1858,8 +2018,12 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
   const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
   React.useEffect(() => {
     window.addEventListener('moonlight:inquiries-changed', refreshLedger);
-    return () => window.removeEventListener('moonlight:inquiries-changed', refreshLedger);
-  }, [refreshLedger]);
+    window.addEventListener('moonlight:tasks-saved', ledger.refreshTasks);
+    return () => {
+      window.removeEventListener('moonlight:inquiries-changed', refreshLedger);
+      window.removeEventListener('moonlight:tasks-saved', ledger.refreshTasks);
+    };
+  }, [refreshLedger, ledger.refreshTasks]);
 
   const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
   const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
@@ -1908,13 +2072,22 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
       <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
 
       {/* Q118·Q119: 월(개인)·목(회사) 아침에만 뜨는 주간 정리 — 다른 요일은 null. */}
-      <WeeklyReportCard onNavigate={onNavigate} />
+      <WeeklyReportCard
+        onNavigate={onNavigate}
+        onAdvisorOpen={setAdvisorSignal}
+        onTaskCreated={ledger.refreshTasks}
+      />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-        {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
-            tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다.
-            모바일 점프 칩은 확정 슬롯 아래로 — fold 순서에 끼어들지 않는다. */}
         <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
+        <DailyDispatchCard
+          dailyFocus={ledger.dailyFocus}
+          taskToday={ledger.taskToday}
+          signals={ledger.signals}
+          sourceState={ledger.syncState}
+          onNavigate={onNavigate}
+          onAdvisorOpen={setAdvisorSignal}
+        />
 
         <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
 
@@ -1983,8 +2156,8 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
         <FloatingMentorWidget
           isOpen={Boolean(advisorSignal)}
           onClose={() => setAdvisorSignal(null)}
-          agent={advisorSignal.kind === 'deals' || advisorSignal.kind === 'leads' ? 'guru' : 'council'}
-          contextType={advisorSignal.kind === 'deals' ? 'deal' : advisorSignal.kind === 'content' ? 'content' : 'general'}
+          agent={advisorSignal.agent || (advisorSignal.kind === 'deals' || advisorSignal.kind === 'leads' ? 'guru' : 'council')}
+          contextType={advisorSignal.contextType || (advisorSignal.kind === 'deals' ? 'deal' : advisorSignal.kind === 'content' ? 'content' : 'general')}
           contextTitle={advisorSignal.title}
           contextData={{
             summary: advisorSignal.summary,
@@ -1992,6 +2165,10 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
             from: advisorSignal.source?.from,
             kind: advisorSignal.kind,
             meta: advisorSignal.meta,
+            ...advisorSignal.contextData,
+          }}
+          onCreateTask={() => {
+            ledger.refreshTasks();
           }}
         />
       )}

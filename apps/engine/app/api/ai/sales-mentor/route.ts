@@ -1,17 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
+import { mentorDraftPrompt, parseMentorDraft } from "../../../../lib/mentor-draft.ts";
+import { buildAdvisorySystemInstruction } from "../../../../lib/advisor-guardrails.ts";
 
 // Gemini generations can legitimately run tens of seconds; cap the route
 // so a hung upstream cannot pin a serverless invocation past a minute.
 export const maxDuration = 60;
 
-import { generateGeminiText, getGeminiIntegrationStatus } from "../../../../lib/gemini";
+import { generateGeminiText, getGeminiIntegrationStatus } from "../../../../lib/gemini.ts";
 import {
   insertIntegrationSyncRun,
   resolveDefaultWorkspaceId,
   upsertIntegrationConnection,
-} from "../../../../lib/integration-state";
-import { validateSharedWebhookRequest } from "../../../../lib/shared-webhook";
-import { insertSupabaseRecord } from "../../../../lib/supabase-rest";
+} from "../../../../lib/integration-state.ts";
+import { validateSharedWebhookRequest } from "../../../../lib/shared-webhook.ts";
+import { insertSupabaseRecord } from "../../../../lib/supabase-rest.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -184,7 +186,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const auth = validateSharedWebhookRequest(req);
 
-  if (!auth.ok) {
+  if (!auth.ok || auth.mode === "open") {
     return NextResponse.json({ status: "unauthorized", error: auth.error }, { status: 401 });
   }
 
@@ -199,18 +201,37 @@ export async function POST(req: Request) {
     );
   }
 
-  const mode = normalizeMode(payload.mode);
+  const requestedMode = typeof payload.mode === "string" ? payload.mode.trim() : "pipeline-triage";
+  if (requestedMode !== "followup-draft" && !Object.hasOwn(MODES, requestedMode)) {
+    return NextResponse.json({ status: "invalid-input", error: "unsupported-mode" }, { status: 400 });
+  }
+  const draftMode = requestedMode === "followup-draft";
+  const mode = draftMode ? requestedMode : normalizeMode(requestedMode);
   const ref = typeof payload.ref === "string" ? payload.ref.trim() || null : null;
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const context = payload.context ?? {};
   const workspaceId = resolveDefaultWorkspaceId();
+  const explicitDirectives = payload.directives ?? (payload.values || payload.knowledge ? { values: payload.values, knowledge: payload.knowledge } : null);
 
   const startedAt = new Date().toISOString();
+  const systemInstruction = draftMode
+    ? SYSTEM_INSTRUCTION
+    : buildAdvisorySystemInstruction({
+        type: "sales-mentor",
+        mode,
+        context,
+        directives: explicitDirectives,
+      });
   const result = await generateGeminiText({
-    systemInstruction: SYSTEM_INSTRUCTION,
-    prompt: buildPrompt(mode, context, draft),
+    systemInstruction,
+    prompt: draftMode ? mentorDraftPrompt(mode, context) : buildPrompt(mode as Mode, context, draft),
     maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192,
   });
+  const parsedDraft = draftMode && result.ok ? parseMentorDraft(mode, result.text) : null;
+  if (draftMode && result.ok && !parsedDraft) {
+    result.ok = false;
+    result.reason = "invalid-draft-output";
+  }
   const finishedAt = new Date().toISOString();
 
   const connection = await upsertIntegrationConnection({
@@ -233,7 +254,7 @@ export async function POST(req: Request) {
       mode,
       ref,
       model: result.model,
-      usageMetadata: result.ok ? result.usageMetadata : null,
+      usageMetadata: result.usageMetadata || null,
     },
     errorMessage: result.ok ? null : result.reason,
   });
@@ -264,6 +285,7 @@ export async function POST(req: Request) {
       ref,
       model: result.model,
       text: result.text,
+      ...(parsedDraft || {}),
       reason: result.reason,
       persistence: { connection, syncRun, mentorUpdate },
     },

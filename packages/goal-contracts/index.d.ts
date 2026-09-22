@@ -1,0 +1,16 @@
+export type GoalScope = 'personal' | 'company';
+export type GoalMeasurement = {value:number|null;coverage:'complete'|'partial'|'unmeasured';evidence:Record<string,unknown>[];observedAt:string|null;sourceKey:string;periodStart:string;periodEnd:string;reason?:string};
+export type GoalProgress = {value:number|null;achieved:boolean|null;state:'achieved'|'in_progress'|'unmeasured'|'partial'|'target_unset'};
+export const GOAL_SOURCE_KEYS: readonly string[];
+export const GOAL_ENTITY_TYPES: readonly string[];
+export const GOAL_ACTIONS: readonly string[];
+export const GOAL_SOURCE_CATALOG: Record<string,{label:string;description:string}>;
+export function isGoalUuid(value:unknown):boolean;
+export function isGoalDate(value:unknown):boolean;
+export function isGoalTimestamp(value:unknown):boolean;
+export function validateGoalCommand(value:unknown):{ok:false;error:string}|{ok:true;value:Record<string,any>};
+export function calculateGoalProgress(metric:Record<string,any>,measurement:Partial<GoalMeasurement>|null):GoalProgress;
+export function projectObjective(row:Record<string,any>):Record<string,any>;
+export function projectMetric(row:Record<string,any>):Record<string,any>;
+export function projectObservation(row:Record<string,any>):Record<string,any>;
+export function projectGoalLink(row:Record<string,any>):Record<string,any>;

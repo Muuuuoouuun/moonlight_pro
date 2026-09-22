@@ -1,3 +1,4 @@
+import { projectItemType } from './task-checklist.js';
 import { deliveryDraft } from "../../../packages/project-delivery/index.ts";
 import { readTaskChecklist } from './task-checklist.js';
 
@@ -463,7 +464,8 @@ export function mergeProjectDetailQuery(current, projectId) {
   const params = new URLSearchParams(
     typeof current === "string" ? current : current?.toString?.() || "",
   );
-  params.delete("view");
+  // Table and Home share the detail panel. Keep the originating table view.
+  if (params.get("view") !== "table") params.delete("view");
   params.delete("new");
   params.delete("task");
   params.set("project", projectId);
@@ -555,6 +557,7 @@ export function buildTaskEditDraft(todo = {}) {
     description: todo.description || "",
     nextAction: todo.nextAction || "",
     checklist: readTaskChecklist(todo),
+    ...(projectItemType(todo) !== "task" ? { itemType: projectItemType(todo) } : {}),
   };
 }
 
@@ -567,6 +570,7 @@ export function buildTaskPatch(source = {}, draft = {}) {
     const next = field === "dueAt" ? dateInputValue(draft[field]) : (draft[field] ?? "");
     if (next !== original[field]) patch[field] = next;
   });
+  if (projectItemType(draft) !== projectItemType(source)) patch.itemType = projectItemType(draft);
   if (Array.isArray(draft.checklist) && JSON.stringify(draft.checklist) !== JSON.stringify(original.checklist)) {
     patch.checklist = draft.checklist;
   }
@@ -866,6 +870,7 @@ export function buildTaskBoardColumns(todos = [], projects = []) {
       title: todo.title,
       nextAction: todo.nextAction || '',
       checklist: readTaskChecklist(todo),
+    ...(projectItemType(todo) !== "task" ? { itemType: projectItemType(todo) } : {}),
       tag: project?.tag || null,
       priority: todo.priority,
       project: project?.name || "미지정",

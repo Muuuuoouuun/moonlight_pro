@@ -1,0 +1,53 @@
+{
+  "kind": "development-source-contract-verification",
+  "qualityClaim": "unscored; not a role quality or factuality certification",
+  "retries": 0,
+  "cases": [
+    {
+      "id": "vaporeon-evidence/initial",
+      "status": "generated",
+      "elapsedMs": 23564,
+      "calls": 2
+    },
+    {
+      "id": "jolteon-evidence/initial",
+      "status": "generated",
+      "elapsedMs": 30391,
+      "calls": 2
+    },
+    {
+      "id": "glaceon-social/initial",
+      "status": "generated",
+      "elapsedMs": 13018,
+      "calls": 2
+    },
+    {
+      "id": "delivery-urgent/initial",
+      "status": "generated",
+      "elapsedMs": 22459,
+      "calls": 4
+    }
+  ],
+  "providerCalls": 10,
+  "allHttp200Stop": true,
+  "actualModelVersions": [
+    "gemini-3.5-flash"
+  ],
+  "runtimeChecks": [
+    {
+      "type": "runtime-check",
+      "at": "2026-09-22T08:28:33.791Z",
+      "unchanged": true,
+      "bundleHash": "27540242935d2f6a27612ec28f2702699abf326248b9ae7a953df260c1dc31d1",
+      "officeVersion": "2026-09-22.v3"
+    }
+  ],
+  "verification": {
+    "tests": 1968,
+    "passed": 1957,
+    "failed": 0,
+    "skipped": 11,
+    "typecheckTasksPassed": 4,
+    "buildTasksPassed": 2
+  }
+}

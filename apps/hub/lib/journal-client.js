@@ -13,6 +13,16 @@ export const CONTEXT_TYPES = [
   { value: 'project', label: '프로젝트' }, { value: 'lead', label: '고객 · 리드' },
   { value: 'account', label: '고객 · 계약 계정' }, { value: 'brand', label: '브랜드' },
 ];
+export function initialMemoContexts(context, contexts) {
+  const values = Array.isArray(contexts) ? contexts : context ? [context] : [];
+  const seen = new Set();
+  return values.filter((value) => {
+    const key = `${value?.type}:${value?.id}`;
+    if (!CONTEXT_TYPES.some(({ value: type }) => type === value?.type) || !isCanonicalUuid(value?.id) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 8);
+}
 export function noteToDraft(entry) {
   return {
     id: entry.id, body: entry.body || '', title: entry.title || '', occurredAt: entry.occurredAt,

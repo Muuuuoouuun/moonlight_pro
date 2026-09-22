@@ -156,6 +156,10 @@ function isTimeoutError(error) {
 
 // Executes one HTTP call against PostgREST and normalizes the outcome. Never throws.
 async function supabaseFetch(op, table, url, { method = "GET", headers, body, timeoutMs } = {}) {
+  // A refresh after a write must not join a GET started before that write.
+  // RPCs can update multiple tables, so invalidate all pending read entries.
+  const mutates = method !== "GET";
+  if (mutates) inflightReads.clear();
   try {
     const response = await fetch(url, {
       method,
@@ -165,7 +169,7 @@ async function supabaseFetch(op, table, url, { method = "GET", headers, body, ti
       signal: AbortSignal.timeout(resolveTimeoutMs(timeoutMs)),
     });
 
-    const text = await response.text().catch(() => "");
+    const text = await response.text();
     return {
       ok: response.ok,
       status: response.status,
@@ -181,6 +185,8 @@ async function supabaseFetch(op, table, url, { method = "GET", headers, body, ti
       contentRange: null,
       failureReason: reason,
     };
+  } finally {
+    if (mutates) inflightReads.clear();
   }
 }
 
@@ -205,17 +211,24 @@ function parseRows(text) {
 // response text independently, so no rows array is ever shared across callers.
 const inflightReads = new Map();
 
-async function dedupedRead(url, request) {
-  const existing = inflightReads.get(url);
+async function dedupedRead(key, request) {
+  const existing = inflightReads.get(key);
   if (existing) {
     return existing;
   }
 
   const promise = request().finally(() => {
-    inflightReads.delete(url);
+    // An older request can finish after a write has replaced this entry.
+    if (inflightReads.get(key) === promise) inflightReads.delete(key);
   });
-  inflightReads.set(url, promise);
+  inflightReads.set(key, promise);
   return promise;
+}
+
+function readRequestKey(url, apiKey, timeoutMs, mode) {
+  // Count headers, credentials and deadlines are part of request identity.
+  // Entries only live while a request is pending; completed data is never cached.
+  return JSON.stringify([url, apiKey, timeoutMs, mode]);
 }
 
 export async function fetchSupabaseRowsDetailed(table, options = {}) {
@@ -229,15 +242,16 @@ export async function fetchSupabaseRowsDetailed(table, options = {}) {
   // (limited) rows in one request, via the Content-Range header.
   const withCount = options.count === "exact";
   const url = buildRestUrl(config.url, table, options);
+  const timeoutMs = resolveTimeoutMs(options.timeoutMs);
   const request = () =>
     supabaseFetch("select", table, url, {
       headers: makeSupabaseHeaders(config.apiKey, withCount ? { prefer: "count=exact" } : {}),
-      timeoutMs: options.timeoutMs,
+      timeoutMs,
     });
 
-  const result = options.dedupe === false || withCount
+  const result = options.dedupe === false
     ? await request()
-    : await dedupedRead(url, request);
+    : await dedupedRead(readRequestKey(url, config.apiKey, timeoutMs, withCount ? "rows-count" : "rows"), request);
 
   if (!result.ok) {
     const reason = result.failureReason || `http-${result.status}`;
@@ -281,13 +295,17 @@ export async function countSupabaseRows(table, filters = [], options = {}) {
   }
 
   const url = buildRestUrl(config.url, table, { select: "id", filters, limit: 1 });
-  const result = await supabaseFetch("count", table, url, {
+  const timeoutMs = resolveTimeoutMs(options.timeoutMs);
+  const request = () => supabaseFetch("count", table, url, {
     headers: {
       ...makeSupabaseHeaders(config.apiKey, { prefer: "count=exact" }),
       Range: "0-0",
     },
-    timeoutMs: options.timeoutMs,
+    timeoutMs,
   });
+  const result = options.dedupe === false
+    ? await request()
+    : await dedupedRead(readRequestKey(url, config.apiKey, timeoutMs, "count"), request);
 
   if (!result.ok) {
     logSupabaseFailure("count", table, result.failureReason || `http-${result.status}`, result.text);

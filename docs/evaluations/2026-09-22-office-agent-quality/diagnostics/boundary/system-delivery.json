@@ -1,0 +1,482 @@
+{
+  "model": "gemini-3.5-flash",
+  "apiHost": "generativelanguage.googleapis.com",
+  "token": "OFFICE_DELIVERY_6C9E",
+  "results": [
+    {
+      "structured": false,
+      "spelling": "snake",
+      "elapsedMs": 2017,
+      "wire": {
+        "contents": [
+          {
+            "role": "user",
+            "parts": [
+              {
+                "text": "What is 2+2? Answer the arithmetic question in Korean."
+              }
+            ]
+          }
+        ],
+        "generationConfig": {
+          "maxOutputTokens": 4096,
+          "thinkingConfig": {
+            "thinkingLevel": "high"
+          }
+        },
+        "system_instruction": {
+          "parts": [
+            {
+              "text": "Return only the exact literal OFFICE_DELIVERY_6C9E. No punctuation, JSON, explanation or arithmetic."
+            }
+          ]
+        }
+      },
+      "promptHash": "f1bbceb32b279dd98f90b12e0c1b37740cbb700274f3ba8224f3add60f49ebbc",
+      "response": {
+        "ok": true,
+        "status": 200,
+        "reason": "ok",
+        "finishReason": "STOP",
+        "text": "OFFICE_DELIVERY_6C9E",
+        "model": "gemini-3.5-flash",
+        "usageMetadata": {
+          "promptTokenCount": 39,
+          "candidatesTokenCount": 10,
+          "totalTokenCount": 244,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 39
+            }
+          ],
+          "thoughtsTokenCount": 195,
+          "serviceTier": "standard"
+        }
+      },
+      "upstream": {
+        "status": 200,
+        "modelVersion": "gemini-3.5-flash",
+        "finishReason": "STOP",
+        "parts": [
+          {
+            "text": "OFFICE_DELIVERY_6C9E"
+          }
+        ],
+        "usage": {
+          "promptTokenCount": 39,
+          "candidatesTokenCount": 10,
+          "totalTokenCount": 244,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 39
+            }
+          ],
+          "thoughtsTokenCount": 195,
+          "serviceTier": "standard"
+        }
+      }
+    },
+    {
+      "structured": false,
+      "spelling": "camel",
+      "elapsedMs": 1921,
+      "wire": {
+        "contents": [
+          {
+            "role": "user",
+            "parts": [
+              {
+                "text": "What is 2+2? Answer the arithmetic question in Korean."
+              }
+            ]
+          }
+        ],
+        "generationConfig": {
+          "maxOutputTokens": 4096,
+          "thinkingConfig": {
+            "thinkingLevel": "high"
+          }
+        },
+        "systemInstruction": {
+          "parts": [
+            {
+              "text": "Return only the exact literal OFFICE_DELIVERY_6C9E. No punctuation, JSON, explanation or arithmetic."
+            }
+          ]
+        }
+      },
+      "promptHash": "c5a005422af055c838bb1c70a7c8f695b56c94ce729eeed44f2e7846ddd834f9",
+      "response": {
+        "ok": true,
+        "status": 200,
+        "reason": "ok",
+        "finishReason": "STOP",
+        "text": "OFFICE_DELIVERY_6C9E",
+        "model": "gemini-3.5-flash",
+        "usageMetadata": {
+          "promptTokenCount": 39,
+          "candidatesTokenCount": 10,
+          "totalTokenCount": 220,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 39
+            }
+          ],
+          "thoughtsTokenCount": 171,
+          "serviceTier": "standard"
+        }
+      },
+      "upstream": {
+        "status": 200,
+        "modelVersion": "gemini-3.5-flash",
+        "finishReason": "STOP",
+        "parts": [
+          {
+            "text": "OFFICE_DELIVERY_6C9E"
+          }
+        ],
+        "usage": {
+          "promptTokenCount": 39,
+          "candidatesTokenCount": 10,
+          "totalTokenCount": 220,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 39
+            }
+          ],
+          "thoughtsTokenCount": 171,
+          "serviceTier": "standard"
+        }
+      }
+    },
+    {
+      "structured": false,
+      "spelling": "absent",
+      "elapsedMs": 3223,
+      "wire": {
+        "contents": [
+          {
+            "role": "user",
+            "parts": [
+              {
+                "text": "What is 2+2? Answer the arithmetic question in Korean."
+              }
+            ]
+          }
+        ],
+        "generationConfig": {
+          "maxOutputTokens": 4096,
+          "thinkingConfig": {
+            "thinkingLevel": "high"
+          }
+        }
+      },
+      "promptHash": "bc23704eda8b94c9eae8c49d89cd708e66d072b14d096fb0eb23d3e436e32559",
+      "response": {
+        "ok": true,
+        "status": 200,
+        "reason": "ok",
+        "finishReason": "STOP",
+        "text": "2 더하기 2는 4입니다. (or 간단히 **사(4)**입니다.)",
+        "model": "gemini-3.5-flash",
+        "usageMetadata": {
+          "promptTokenCount": 15,
+          "candidatesTokenCount": 21,
+          "totalTokenCount": 379,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 15
+            }
+          ],
+          "thoughtsTokenCount": 343,
+          "serviceTier": "standard"
+        }
+      },
+      "upstream": {
+        "status": 200,
+        "modelVersion": "gemini-3.5-flash",
+        "finishReason": "STOP",
+        "parts": [
+          {
+            "text": "2 더하기 2는 4입니다. (or 간단히 **사(4)**입니다.)"
+          }
+        ],
+        "usage": {
+          "promptTokenCount": 15,
+          "candidatesTokenCount": 21,
+          "totalTokenCount": 379,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 15
+            }
+          ],
+          "thoughtsTokenCount": 343,
+          "serviceTier": "standard"
+        }
+      }
+    },
+    {
+      "structured": true,
+      "spelling": "snake",
+      "elapsedMs": 1792,
+      "wire": {
+        "contents": [
+          {
+            "role": "user",
+            "parts": [
+              {
+                "text": "What is 2+2? Return JSON with the answer in the answer field."
+              }
+            ]
+          }
+        ],
+        "generationConfig": {
+          "maxOutputTokens": 4096,
+          "responseMimeType": "application/json",
+          "responseJsonSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "answer": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "answer"
+            ]
+          },
+          "thinkingConfig": {
+            "thinkingLevel": "high"
+          }
+        },
+        "system_instruction": {
+          "parts": [
+            {
+              "text": "Set answer to the exact literal OFFICE_DELIVERY_6C9E. Do not answer arithmetic. Return only the requested JSON."
+            }
+          ]
+        }
+      },
+      "promptHash": "9929b863759e98bc20cde5a011a5743ee5d800cdbf357b7dc6205a1061966097",
+      "response": {
+        "ok": true,
+        "status": 200,
+        "reason": "ok",
+        "finishReason": "STOP",
+        "text": "{\"answer\":\"OFFICE_DELIVERY_6C9E\"}",
+        "model": "gemini-3.5-flash",
+        "usageMetadata": {
+          "promptTokenCount": 45,
+          "candidatesTokenCount": 14,
+          "totalTokenCount": 197,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 45
+            }
+          ],
+          "thoughtsTokenCount": 138,
+          "serviceTier": "standard"
+        }
+      },
+      "upstream": {
+        "status": 200,
+        "modelVersion": "gemini-3.5-flash",
+        "finishReason": "STOP",
+        "parts": [
+          {
+            "text": "{\"answer\":\"OFFICE_DELIVERY_6C9E\"}"
+          }
+        ],
+        "usage": {
+          "promptTokenCount": 45,
+          "candidatesTokenCount": 14,
+          "totalTokenCount": 197,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 45
+            }
+          ],
+          "thoughtsTokenCount": 138,
+          "serviceTier": "standard"
+        }
+      }
+    },
+    {
+      "structured": true,
+      "spelling": "camel",
+      "elapsedMs": 1820,
+      "wire": {
+        "contents": [
+          {
+            "role": "user",
+            "parts": [
+              {
+                "text": "What is 2+2? Return JSON with the answer in the answer field."
+              }
+            ]
+          }
+        ],
+        "generationConfig": {
+          "maxOutputTokens": 4096,
+          "responseMimeType": "application/json",
+          "responseJsonSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "answer": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "answer"
+            ]
+          },
+          "thinkingConfig": {
+            "thinkingLevel": "high"
+          }
+        },
+        "systemInstruction": {
+          "parts": [
+            {
+              "text": "Set answer to the exact literal OFFICE_DELIVERY_6C9E. Do not answer arithmetic. Return only the requested JSON."
+            }
+          ]
+        }
+      },
+      "promptHash": "0216c548f48ff487104d42da6e8209c453cb82f19d29468199cedd41a391f74e",
+      "response": {
+        "ok": true,
+        "status": 200,
+        "reason": "ok",
+        "finishReason": "STOP",
+        "text": "{\"answer\": \"OFFICE_DELIVERY_6C9E\"}",
+        "model": "gemini-3.5-flash",
+        "usageMetadata": {
+          "promptTokenCount": 45,
+          "candidatesTokenCount": 15,
+          "totalTokenCount": 211,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 45
+            }
+          ],
+          "thoughtsTokenCount": 151,
+          "serviceTier": "standard"
+        }
+      },
+      "upstream": {
+        "status": 200,
+        "modelVersion": "gemini-3.5-flash",
+        "finishReason": "STOP",
+        "parts": [
+          {
+            "text": "{\"answer\": \"OFFICE_DELIVERY_6C9E\"}"
+          }
+        ],
+        "usage": {
+          "promptTokenCount": 45,
+          "candidatesTokenCount": 15,
+          "totalTokenCount": 211,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 45
+            }
+          ],
+          "thoughtsTokenCount": 151,
+          "serviceTier": "standard"
+        }
+      }
+    },
+    {
+      "structured": true,
+      "spelling": "absent",
+      "elapsedMs": 2461,
+      "wire": {
+        "contents": [
+          {
+            "role": "user",
+            "parts": [
+              {
+                "text": "What is 2+2? Return JSON with the answer in the answer field."
+              }
+            ]
+          }
+        ],
+        "generationConfig": {
+          "maxOutputTokens": 4096,
+          "responseMimeType": "application/json",
+          "responseJsonSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "answer": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "answer"
+            ]
+          },
+          "thinkingConfig": {
+            "thinkingLevel": "high"
+          }
+        }
+      },
+      "promptHash": "d85b6962f03f8065b972f9e8ab53a1136e60e09bbda2c7c05437e6bf79d77094",
+      "response": {
+        "ok": true,
+        "status": 200,
+        "reason": "ok",
+        "finishReason": "STOP",
+        "text": "{\"answer\": \"4\"}",
+        "model": "gemini-3.5-flash",
+        "usageMetadata": {
+          "promptTokenCount": 18,
+          "candidatesTokenCount": 6,
+          "totalTokenCount": 258,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 18
+            }
+          ],
+          "thoughtsTokenCount": 234,
+          "serviceTier": "standard"
+        }
+      },
+      "upstream": {
+        "status": 200,
+        "modelVersion": "gemini-3.5-flash",
+        "finishReason": "STOP",
+        "parts": [
+          {
+            "text": "{\"answer\": \"4\"}"
+          }
+        ],
+        "usage": {
+          "promptTokenCount": 18,
+          "candidatesTokenCount": 6,
+          "totalTokenCount": 258,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 18
+            }
+          ],
+          "thoughtsTokenCount": 234,
+          "serviceTier": "standard"
+        }
+      }
+    }
+  ]
+}

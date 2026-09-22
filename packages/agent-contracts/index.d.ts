@@ -1,4 +1,4 @@
-export type AgentScope = 'read' | 'tasks:write' | 'contact-outcomes:write' | 'jobs:read' | 'jobs:write';
+export type AgentScope = 'read' | 'tasks:write' | 'contact-outcomes:write' | 'jobs:read' | 'jobs:write' | 'goals:write' | 'ai:write';
 export type AgentResourceName = 'tasks' | 'projects' | 'followups' | 'work-orders';
 export type AgentDetail = 'summary' | 'rows' | 'full';
 export interface AgentContext { workspaceId: string; actorId: string; scopes: AgentScope[] }

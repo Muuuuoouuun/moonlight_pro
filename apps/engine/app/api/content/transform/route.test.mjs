@@ -47,7 +47,7 @@ test('wires exact scoped REST reads, a durable claim and one Gemini call, then r
       const url = new URL(value);
       calls.push({ url, init });
       const table = url.pathname.split('/').at(-1);
-      if (url.hostname.includes('googleapis')) return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ candidates: [candidate] }) }] } }], usageMetadata: { totalTokenCount: 80 } }));
+      if (url.hostname.includes('googleapis')) return new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ candidates: [candidate] }) }] } }], usageMetadata: { totalTokenCount: 80 } }));
       if (init.method === 'POST') {
         run = JSON.parse(init.body);
         return new Response(JSON.stringify([run]), { status: 201 });

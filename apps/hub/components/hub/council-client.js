@@ -21,18 +21,42 @@ export function councilChatPath({ mode, ref } = {}) {
   return `dashboard/agents/chat?${params.toString()}`;
 }
 
-// Returns a normalized result: { state: 'done'|'preview'|'error', text?, note? }
-export async function requestCouncilAdvice({ mode = "brand-strategy", ref = null, draft = null } = {}) {
+// Returns a normalized result: { state: 'done'|'preview'|'error', text?, mode?, ref?, council?, workOrder?, runId?, note? }
+export async function requestCouncilAdvice({
+  mode = "brand-strategy",
+  ref = null,
+  draft = null,
+  legendIds = null,
+  directives = null,
+  values = null,
+  knowledge = null,
+  createWorkOrder = undefined,
+} = {}) {
   try {
+    const body = { mode, ref, draft };
+    if (Array.isArray(legendIds) && legendIds.length > 0) body.legendIds = legendIds;
+    if (directives && typeof directives === "object") body.directives = directives;
+    if (values && typeof values === "object") body.values = values;
+    if (knowledge && typeof knowledge === "object") body.knowledge = knowledge;
+    if (typeof createWorkOrder === "boolean") body.createWorkOrder = createWorkOrder;
+
     const res = await fetch("/api/hub/brand-mentor", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mode, ref, draft }),
+      body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => null);
 
     if (data?.status === "generated" && data.text) {
-      return { state: "done", text: data.text, mode: data.mode || mode, ref: data.ref ?? ref };
+      return {
+        state: "done",
+        text: data.text,
+        mode: data.mode || mode,
+        ref: data.ref ?? ref,
+        council: data.council || null,
+        workOrder: data.workOrder || null,
+        runId: data.runId || null,
+      };
     }
     if (data?.status === "preview") {
       return { state: "preview", note: data.error || "Engine이 아직 연결되지 않았습니다." };

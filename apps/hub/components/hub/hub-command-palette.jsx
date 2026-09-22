@@ -2,61 +2,25 @@
 
 import React from "react";
 import { Iconed } from "./hub-icons";
-import { Button, Kbd } from "./hub-primitives";
-import { NAV_TREE, LEGACY_TREE } from "./hub-data";
+import { Button, Kbd, Skeleton, TruthBadge } from "./hub-primitives";
+import { NAV_TREE, LEGACY_TREE, navPathForScope } from "./hub-data";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
-import { readRevenueCache } from "./revenue-shared-cache";
-
-// 레코드 검색(2026-08-05) — 팔레트가 페이지 내비만 하던 것을 "이름을 치면 그 레코드"로.
-// 이미 존재하는 딥링크(?customer= ?deal= ?task=)에 얹는 팔레트측 배선이라 새 API가 없다.
-// 60초 모듈 캐시: 1인용 도구에서 팔레트를 여닫을 때마다 원장을 다시 읽지 않는다.
-// Revenue 화면이 방금 받은 원장(SWR 공유 캐시)이 신선하면 재조회 없이 그대로 쓴다(8차 잔여 S).
-let RECORDS_CACHE = { at: 0, items: [] };
-async function loadRecordItems() {
-  if (Date.now() - RECORDS_CACHE.at < 60_000) return RECORDS_CACHE.items;
-  const sharedRevenue = readRevenueCache();
-  const [rev, tasks] = await Promise.all([
-    sharedRevenue
-      ? Promise.resolve(sharedRevenue.ledger)
-      : fetch('/api/hub/revenue', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
-    fetch('/api/hub/tasks', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
-  ]);
-  const items = [];
-  (Array.isArray(rev?.leads) ? rev.leads : []).forEach((l) => {
-    if (!l?.id || !l?.name) return;
-    items.push({
-      kind: '고객', label: l.name, icon: 'leads',
-      path: `dashboard/revenue/customers?customer=${encodeURIComponent(`lead:${l.id}`)}`,
-      keywords: [l.companyName || '', l.stage || ''],
-    });
-  });
-  (Array.isArray(rev?.deals) ? rev.deals : []).forEach((d) => {
-    if (!d?.id || !d?.name) return;
-    items.push({ kind: '딜', label: d.name, icon: 'deals', path: `dashboard/revenue/deals?deal=${encodeURIComponent(d.id)}` });
-  });
-  (Array.isArray(tasks?.tasks) ? tasks.tasks : []).forEach((t) => {
-    if (!t?.id || !t?.title || t.done) return;
-    items.push({ kind: '할 일', label: t.title, icon: 'inbox', path: `dashboard/work/my?task=${encodeURIComponent(t.id)}` });
-  });
-  RECORDS_CACHE = { at: Date.now(), items };
-  return items;
-}
+import { loadPaletteRecords, matchingPaletteRecords, paletteItemKey } from './command-palette-records';
 
 const RECORD_RESULT_CAP = 8;
 
-export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuickCapture }) {
+export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuickCapture, scope = 'all' }) {
   const [q, setQ] = React.useState('');
-  const [idx, setIdx] = React.useState(0);
-  const [records, setRecords] = React.useState([]);
+  const [selectedKey, setSelectedKey] = React.useState(null);
+  const [recordState, setRecordState] = React.useState({ items: [], sources: { revenue: 'loading', tasks: 'loading' } });
+  const [reload, setReload] = React.useState(0);
   const inputRef = React.useRef(null);
 
   // 열릴 때 레코드 인덱스를 예열(캐시 60s) — 검색어를 치는 시점엔 이미 로컬 필터만 남는다.
   React.useEffect(() => {
     if (!open) return undefined;
-    let active = true;
-    loadRecordItems().then((items) => { if (active) setRecords(items); });
-    return () => { active = false; };
-  }, [open]);
+    return loadPaletteRecords(setRecordState);
+  }, [open, reload]);
 
   const items = React.useMemo(() => {
     // 생성 액션은 팔레트의 발견 경로다 — 단축키(C·⌘K)를 모르는 상태에서도 도달해야 한다.
@@ -65,8 +29,8 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
       { kind: 'Action', label: '빠른 메모', action: 'quick-memo', icon: 'edit', keywords: ['메모', '생각', '아이디어', '기록', 'quick note', 'memo', 'idea'] },
     ];
     for (const n of NAV_TREE) {
-      if (n.path) flat.push({ kind: 'Navigate', label: n.label, path: n.path, icon: n.icon, keywords: n.keywords });
-      if (n.children) for (const c of n.children) flat.push({ kind: 'Navigate', label: `${n.label} › ${c.label}`, path: c.path, icon: c.icon, keywords: c.keywords });
+      if (n.path) flat.push({ kind: 'Navigate', label: n.label, path: navPathForScope(n, scope), icon: n.icon, keywords: n.keywords });
+      if (n.children) for (const c of n.children) flat.push({ kind: 'Navigate', label: `${n.label} › ${c.label}`, path: navPathForScope(c, scope), icon: c.icon, keywords: c.keywords });
     }
     for (const c of LEGACY_TREE) flat.push({ kind: 'Archive', label: `기타 › ${c.label}`, path: c.path, icon: c.icon, keywords: c.keywords });
     flat.push({ kind: 'Action', label: 'New Decision 기록', path: 'dashboard/work/decisions?new=decision', icon: 'decisions' });
@@ -85,20 +49,28 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
     flat.push({ kind: 'Action', label: 'AI 02 콘텐츠: 앵글 기획', path: 'dashboard/system/agents?agent=content', icon: 'sparkle', keywords: ['콘텐츠', '앵글', '아이디어', '발행', 'ai'] });
     flat.push({ kind: 'Action', label: 'AI 04 검수: 게이트 판정', path: 'dashboard/system/agents?agent=review', icon: 'sparkle', keywords: ['검수', '게이트', '판정', '가드레일', 'ai'] });
     return flat;
-  }, []);
+  }, [scope]);
 
   const filtered = React.useMemo(() => {
     if (!q) return items; // 빈 검색 = 내비 목록 (레코드는 검색어가 있을 때만 섞인다)
     const lc = q.toLowerCase();
     const match = (i) => (i.label + ' ' + (i.keywords || []).join(' ')).toLowerCase().includes(lc);
-    const recordHits = records.filter(match).slice(0, RECORD_RESULT_CAP);
+    const recordHits = matchingPaletteRecords(recordState.items, match, selectedKey, RECORD_RESULT_CAP);
     return [...recordHits, ...items.filter(match)];
-  }, [q, items, records]);
+  }, [q, items, recordState.items, selectedKey]);
+
+  // Keep an explicit keyboard selection attached to its destination when an
+  // independently loaded source inserts record hits above it.
+  const idx = Math.max(0, filtered.findIndex((item) => paletteItemKey(item) === selectedKey));
+  const loadingRecords = Object.values(recordState.sources).includes('loading');
+  const incompleteRecords = Object.values(recordState.sources).some((state) => state !== 'live');
 
   React.useEffect(() => {
-    if (open) { setQ(''); setIdx(0); setTimeout(() => inputRef.current?.focus(), 30); }
+    if (!open) return undefined;
+    setQ(''); setSelectedKey(null);
+    const timer = setTimeout(() => inputRef.current?.focus(), 30);
+    return () => clearTimeout(timer);
   }, [open]);
-  React.useEffect(() => { setIdx(0); }, [q]);
 
   // Global ESC — close even when focus has left the search input (list hover, etc.).
   // 팔레트는 열릴 때 ESC 레이어 스택에 올라간다: 드로어 위에서 열렸으면 ESC가 팔레트만 닫고
@@ -118,8 +90,8 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
   const handleKey = (e) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Escape') { onClose(); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(filtered.length - 1, i + 1)); }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedKey(paletteItemKey(filtered[Math.min(filtered.length - 1, idx + 1)])); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedKey(paletteItemKey(filtered[Math.max(0, idx - 1)])); }
     if (e.key === 'Enter') {
       const it = filtered[idx];
       e.preventDefault();
@@ -128,6 +100,7 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
   };
 
   function activate(item) {
+    if (!item) return;
     onClose();
     if (item?.action === 'quick-memo') onQuickMemo?.();
     else if (item?.action === 'quick-capture') onQuickCapture?.();
@@ -154,21 +127,33 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--line-soft)' }}>
           <Iconed name="search" size={15} style={{ color: 'var(--fg-faint)' }} />
-          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={handleKey}
+          <input ref={inputRef} value={q} onChange={e => { setQ(e.target.value); setSelectedKey(null); }} onKeyDown={handleKey}
             placeholder="페이지·액션·고객·딜·할 일 검색…"
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--fg)', fontSize: 14 }} />
           <Kbd>esc</Kbd>
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
-          {filtered.length === 0 && (
+          {q && incompleteRecords && (
+            <div aria-live="polite" style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {Object.entries(recordState.sources).map(([source, state]) => state === 'live' ? null : (
+                <div key={source} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  {state === 'loading'
+                    ? <Skeleton lines={1} width="100%" height={24} style={{ width: '100%' }} label={`${source === 'revenue' ? '고객·딜' : '할 일'} 검색 불러오는 중`} />
+                    : <TruthBadge state={state} reason={`${source === 'revenue' ? '고객·딜' : '할 일'} 검색`} />}
+                  {(state === 'error' || state === 'partial') && <Button variant="ghost" size="sm" onClick={() => setReload((value) => value + 1)}>다시 시도</Button>}
+                </div>
+              ))}
+            </div>
+          )}
+          {filtered.length === 0 && !loadingRecords && (
             <div style={{ padding: '36px 20px', textAlign: 'center', color: 'var(--fg-faint)', fontSize: 13, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-              <span>‘{q}’에 해당하는 결과가 없습니다</span>
+              <span>{incompleteRecords ? `현재 확인한 결과에는 ‘${q}’이 없습니다` : `‘${q}’에 해당하는 결과가 없습니다`}</span>
               {/* §8.1 검색 0건 CTA — 빈 검색은 항상 내비 목록이 있으므로 이 분기는 q 존재를 전제 */}
-              <Button variant="outline" size="sm" onClick={() => { setQ(''); inputRef.current?.focus(); }}>검색 지우기</Button>
+              <Button variant="outline" size="sm" onClick={() => { setQ(''); setSelectedKey(null); inputRef.current?.focus(); }}>검색 지우기</Button>
             </div>
           )}
           {filtered.map((it, i) => (
-            <button key={i} onClick={() => activate(it)} onMouseEnter={() => setIdx(i)} style={{
+            <button key={paletteItemKey(it)} data-palette-selected={idx === i} onClick={() => activate(it)} onMouseEnter={() => setSelectedKey(paletteItemKey(it))} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               padding: '9px 12px', borderRadius: 'var(--r-sm)',
               background: idx === i ? 'var(--surface-3)' : 'transparent',

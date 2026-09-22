@@ -1,9 +1,13 @@
 "use client";
 
 import React from "react";
+import { Iconed } from '../hub-icons';
 import { RelatedMemos } from '../related-memos';
-import { MemoCaptureLink } from "../journal-links";
-import { Avatar, Badge, Button, Checkbox, IconButton } from "../hub-primitives";
+import { GoalLinks } from '../goal-links';
+import { Badge, Button, Checkbox, IconButton, SegmentedControl, TruthBadge } from "../hub-primitives";
+import { projectCustomerRef, projectMemoContexts } from '@/lib/project-customer-context';
+import { ProjectCustomerPanel } from './project-customer-panel';
+import './project-focus.css';
 import { ProjectDeliverySummary } from "./project-delivery";
 import { BrandMark, ProjectProgressGauge, ProjectStatusBadge } from "./project-pms-components";
 import { TaskChecklistGauge } from './project-task-checklist';
@@ -34,7 +38,7 @@ function ActivityRow({ title, body, meta, badge, tone = "neutral" }) {
         <div style={{ flex: 1, minWidth: 0, fontSize: 12.2, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
         {meta && <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", whiteSpace: "nowrap" }}>{meta}</span>}
       </div>
-      {body && <div style={{ marginTop: 5, color: "var(--fg-muted)", fontSize: 11.5, lineHeight: 1.45, whiteSpace: "pre-wrap" }}>{body}</div>}
+      {body && <div style={{ marginTop: 8, color: "var(--fg-muted)", fontSize: 12, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{body}</div>}
     </div>
   );
 }
@@ -69,11 +73,12 @@ function ProjectNotes({ notes, partial, failed }) {
       {notes.length > 0 && (
         <input
           type="search"
+          className="project-focus-search"
           aria-label="연결 메모 제목·본문 검색"
           placeholder="불러온 메모 제목·본문 검색"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          style={{ width: "100%", minHeight: 44, padding: "8px 10px", marginBottom: 8, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg)", fontSize: 12 }}
+          style={{ width: "100%", minHeight: 44, padding: "8px 12px", marginBottom: 8, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg)" }}
         />
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -101,220 +106,124 @@ function ProjectNotes({ notes, partial, failed }) {
   );
 }
 
-function computeDDay(dueAt) {
-  if (!dueAt) return null;
-  const d = new Date(dueAt);
-  if (Number.isNaN(d.getTime())) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  d.setHours(0, 0, 0, 0);
-  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
-  if (diff < 0) return { text: `D+${Math.abs(diff)} 지연`, tone: "danger" };
-  if (diff === 0) return { text: "D-Day", tone: "moon" };
-  if (diff <= 7) return { text: `D-${diff}`, tone: "moon" };
-  return { text: `D-${diff}`, tone: "neutral" };
-}
-
 export function ProjectDetailPanel({
-  project,
-  container,
-  todos = [],
-  updates = [],
-  content = [],
-  decisions = [],
-  notes = [],
-  notesPartial = false,
-  checks = [],
-  syncState,
-  failedSources = [],
-  updateTone = {},
-  checkTone = {},
-  contentTone = {},
-  orderPending = false,
-  orderResult = null,
-  pendingTodoIds = new Set(),
-  taskPartial = false,
-  onClose,
-  onEdit,
-  onToggleTodo,
-  onEditTodo,
-  onCreateTodo,
-  onOpen,
-  onSendOrder,
-  onConsultCouncil,
-  onComplete,
-  onManageDelivery,
-  onArchive,
+  project, container, todos = [], updates = [], content = [], decisions = [], notes = [],
+  notesPartial = false, checks = [], syncState, failedSources = [], updateTone = {}, checkTone = {},
+  contentTone = {}, orderPending = false, orderResult = null, pendingTodoIds = new Set(),
+  taskPartial = false, onClose, onEdit, onToggleTodo, onEditTodo, onCreateTodo, onOpen,
+  onSendOrder, onConsultCouncil, onComplete, onManageDelivery, onArchive,
+  onCustomerSaved, onMemo, onOpenMemo, customerInitiallyOpen = false, onCustomerClosed, customerSaving = false, onCustomerPendingChange,
 }) {
+  const [tab, setTab] = React.useState('tasks');
+  const [customerOpen, setCustomerOpen] = React.useState(customerInitiallyOpen);
+  React.useEffect(() => { if (customerInitiallyOpen) setCustomerOpen(true); }, [customerInitiallyOpen]);
+  const customerButton = React.useRef(null);
+  const mainBody = React.useRef(null), savedScroll = React.useRef(0);
   if (!project) return null;
-  const doneCount = todos.filter((todo) => todo.done).length;
+  const doneCount = todos.filter(todo => todo.done).length;
   const failed = new Set(failedSources);
-  const displaySummary = project.displaySummary || project.summary || "";
-  const displayNextAction = project.displayNextAction || project.nextAction || "";
-  const dday = computeDDay(project.dueAt);
-  const failedEmpty = (source, empty) => failed.has(source)
-    ? `${source} 원장을 읽지 못했습니다. 다시 시도하세요.`
-    : empty;
+  const displaySummary = project.displaySummary || project.summary || '';
+  const displayNextAction = project.displayNextAction || project.nextAction || '';
+  const customer = projectCustomerRef(project.entityRef);
+  const failedEmpty = (source, empty) => failed.has(source) ? '이 기록을 읽지 못했어요. 다시 확인해 주세요.' : empty;
+  const backToProject = () => {
+    setCustomerOpen(false);
+    onCustomerClosed?.();
+    requestAnimationFrame(() => {
+      if (mainBody.current) mainBody.current.scrollTop = savedScroll.current;
+      customerButton.current?.focus({ preventScroll: true });
+    });
+  };
 
-  return (
-    <aside className="hub-project-detail-panel" aria-label={`${project.name} 상세`} style={{ borderLeft: "1px solid var(--line-soft)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden", animation: "mlFadeUp var(--dur-enter) var(--ease-hub)" }}>
-      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 8 }}>
-        <BrandMark brand={container} size={20} />
-        <div style={{ fontSize: 11, color: "var(--fg-faint)", flex: 1 }}>{container?.name || "저장 위치 미정"}</div>
-        <IconButton icon="x" size={22} iconSize={12} tooltip="상세 닫기" onClick={onClose} />
-      </div>
-      <div className="hub-project-detail-body scroll-y" style={{ flex: 1, padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: "-0.01em" }}>{project.name}</div>
-          <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-            <ProjectStatusBadge status={project.status} />
-            {project.tag === "company" && <Badge tone="company" size="xs">Company</Badge>}
-            {project.tag === "personal" && <Badge tone="personal" size="xs">Personal</Badge>}
-          </div>
+  return <aside className="hub-project-detail-panel project-focus" aria-label={`${project.name} 상세`}>
+    <div className="project-focus-top">
+      <BrandMark brand={container} size={20} />
+      <span className="project-focus-muted project-focus-container">{container?.name || '저장 위치 미정'}</span>
+      <IconButton icon="x" size={24} tooltip="상세 닫기" disabled={customerSaving} onClick={onClose} />
+    </div>
+    <div ref={mainBody} hidden={customerOpen} className="hub-project-detail-body scroll-y project-focus-body">
+      <header className="project-focus-identity">
+        <h3 className="project-focus-heading">{project.name}</h3>
+        <div className="project-focus-actions">
+          <ProjectStatusBadge status={project.status} />
+          <span className="project-focus-due"><Iconed name="calendar" size={12} /><span className="mono project-focus-muted">{project.due || '기한 없음'}</span></span>
         </div>
-        <ProjectDeliverySummary project={project} onManage={onManageDelivery} compact />
-        <div style={{
-          padding: "12px 14px",
-          background: "var(--surface-2)",
-          border: "1px solid var(--line-soft)",
-          borderRadius: "var(--r-md)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 9,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--fg-faint)" }}>
-              진척도
-            </span>
-            <span className="mono" style={{ fontSize: 11, color: "var(--fg-muted)" }}>
-              {doneCount}/{todos.length} 완료
-            </span>
-          </div>
+        <div className="project-focus-customers">
+          <span className="project-focus-muted">관련 고객</span>
+          <Button ref={customerButton} variant="ghost" size="sm" className="project-focus-customer-link" icon={customer ? 'user' : 'plus'} style={{ height: 'auto', whiteSpace: 'normal' }} onClick={() => { savedScroll.current = mainBody.current?.scrollTop || 0; setCustomerOpen(true); }}>
+            <span>{customer ? project.entityLabel || '연결된 고객 보기' : '고객 연결'}</span><Iconed name="chevronR" size={12} />
+          </Button>
+        </div>
+      </header>
+      {displayNextAction && <section className="project-focus-next">
+        <h4>다음 행동</h4><p>{displayNextAction}</p>
+      </section>}
+      {failedSources.length > 0 && <div role="status"><TruthBadge state="partial" /><p className="project-focus-muted">일부 기록을 확인하지 못했어요.</p></div>}
+      <SegmentedControl label="프로젝트 상세 보기" fill value={tab} onChange={setTab} options={[
+        { key: 'tasks', label: '할 일' }, { key: 'records', label: '기록·자료' },
+      ]} />
+      <div hidden={tab !== 'tasks'} className="project-focus-stack">
+        {(todos.length > 0 || taskPartial) && <div className="project-focus-section-heading">
+          <h4>할 일</h4><span className="mono project-focus-muted">{doneCount}/{todos.length} 완료{taskPartial ? ' · 확인된 범위' : ''}</span>
+        </div>}
+        {todos.map(todo => <div key={todo.id} className="project-focus-task">
+          <Checkbox checked={todo.done} onChange={(_next, e) => onToggleTodo?.(todo.id, e)} disabled={pendingTodoIds.has(todo.id)} size={16} label={`${todo.done ? '다시 열기' : '완료'}: ${todo.title}`} />
+          <div className="project-focus-task-copy"><button className="hub-pms-task-main" onClick={() => onEditTodo?.(todo)}>
+            <span style={{ textDecoration: todo.done ? 'line-through' : 'none' }}>{todo.title}</span>
+            {todo.nextAction && <span className="hub-pms-task-next">{todo.nextAction}</span>}
+          </button><TaskChecklistGauge task={todo} /></div>
+          <span className="mono project-focus-muted">{todo.due}</span>
+        </div>)}
+        {!todos.length && <p className="project-focus-muted">{taskPartial ? '할 일을 모두 확인하지 못했어요.' : '할 일을 추가해 다음 행동을 이어가세요.'}</p>}
+        <Button variant="primary" icon="plus" onClick={() => onCreateTodo?.(project.id)}>할 일 추가</Button>
+        <details className="project-focus-details"><summary>목표·프로젝트 정보</summary><div className="project-focus-stack">
+          <section><h4>목표 결과</h4><p>{displaySummary || '아직 목표 결과를 정하지 않았어요.'}</p></section>
           <ProjectProgressGauge progress={project.displayProgress} ariaLabel={`${project.name} 진척`} />
-        </div>
-        {displayNextAction && (
-          <div style={{
-            padding: "10px 12px",
-            background: "var(--surface-2)",
-            border: "1px solid var(--line-soft)",
-            boxShadow: "inset 1px 0 0 var(--line-strong)", // §8.1 1px 중립 레일 — 2px moon 보더는 §5.2 위반
-            borderRadius: "var(--r-sm)",
-          }}>
-            <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--moon-300)", marginBottom: 4 }}>
-              다음 행동
-            </div>
-            <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--fg)" }}>
-              {displayNextAction}
-            </div>
-          </div>
-        )}
-        {failedSources.length > 0 && (
-          <div role="status" style={{ padding: "9px 10px", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg-muted)", fontSize: 11.5 }}>
-            일부 기록을 읽지 못했습니다 · {failedSources.join(", ")}
-          </div>
-        )}
-        <div style={{ display: "grid", gridTemplateColumns: "80px 1fr", rowGap: 9, fontSize: 12 }}>
-          <span style={{ color: "var(--fg-faint)" }}>Owner</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Avatar name={project.owner} size={18} tone={project.owner === "Me" ? "moon" : "neutral"} />
-            {project.owner}
-          </span>
-          <span style={{ color: "var(--fg-faint)" }}>기한</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span className="mono" style={{ color: "var(--fg)" }}>{project.due || "기한 없음"}</span>
-            {dday && <Badge tone={dday.tone} size="xs">{dday.text}</Badge>}
-          </span>
-          <span style={{ color: "var(--fg-faint)" }}>진행률</span>
-          <span style={{ color: "var(--fg-muted)" }}>{progressLabel(project)}</span>
-          <span style={{ color: "var(--fg-faint)" }}>최근 활동</span>
-          <span className="mono" style={{ color: "var(--fg-muted)" }}>{project.lastActivityLabel || "미정"}{project.updateEvidencePartial ? " · 업데이트 기록 미확인" : ""}</span>
-          <span style={{ color: "var(--fg-faint)" }}>다음 행동</span>
-          <span style={{ color: "var(--fg-muted)", whiteSpace: "pre-wrap" }}>{displayNextAction || (project.updateEvidencePartial ? "project_updates를 읽지 못해 확인할 수 없습니다." : "아직 지정되지 않음")}</span>
-          <span style={{ color: "var(--fg-faint)" }}>생성</span>
-          <span className="mono" style={{ color: "var(--fg-muted)" }}>{project.createdAtLabel || "미정"}</span>
-          {project.originDealId && (
-            <>
-              <span style={{ color: "var(--fg-faint)" }}>원본 딜</span>
-              {/* Projects는 PAGE_MAP에서 onNavigate를 받지 않아 SPA 이동이 불가하다 —
-                  같은 파일군의 기존 자체 링크(projects.jsx)와 동일하게 앵커로 간다. */}
-              <a
-                href={`/dashboard/revenue/deals?deal=${encodeURIComponent(project.originDealId)}`}
-                style={{ color: "var(--moon-300)", minHeight: 44, display: "inline-flex", alignItems: "center" }}
-              >
-                딜 보기
-              </a>
-            </>
-          )}
-        </div>
-        <div>
-          <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", marginBottom: 6 }}>목표 결과</div>
-          <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-            {displaySummary || (project.updateEvidencePartial
-              ? "project_updates를 읽지 못해 업데이트 기반 목표 요약을 확인할 수 없습니다."
-              : `${container?.desc || "프로젝트"}. 아직 목표 결과가 기록되지 않았습니다.`)}
-          </div>
-        </div>
-        <div>
-          <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", marginBottom: 8 }}>
-            체크리스트 · {doneCount}/{todos.length}{taskPartial ? ' · 확인된 범위' : ''}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {todos.map((todo) => (
-              <div key={todo.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
-                <Checkbox
-                  checked={todo.done}
-                  onChange={(_next, e) => onToggleTodo?.(todo.id, e)}
-                  disabled={pendingTodoIds.has(todo.id)}
-                  size={16}
-                  label={`${todo.done ? "다시 열기" : "완료"}: ${todo.title}`}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                <button className="hub-pms-task-main" onClick={() => onEditTodo?.(todo)}>
-                  <span style={{ fontSize: 12, textDecoration: todo.done ? "line-through" : "none", color: todo.done ? "var(--fg-faint)" : "var(--fg)" }}>{todo.title}</span>
-                  {todo.nextAction && <span className="hub-pms-task-next">{todo.nextAction}</span>}
-                </button>
-                <TaskChecklistGauge task={todo} />
-                </div>
-                <span className="mono" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{todo.due}</span>
-              </div>
-            ))}
-            <button onClick={() => onCreateTodo?.(project.id)} style={{ padding: "6px 8px", textAlign: "left", fontSize: 11.5, color: "var(--fg-faint)" }}>＋ 항목 추가</button>
-          </div>
-        </div>
-        <DetailSection title="최근 업데이트" count={updates.length} empty={failedEmpty("project_updates", syncState === "preview" ? "live 연결 후 project_updates가 여기에 표시됩니다." : "이 프로젝트에 연결된 update가 아직 없습니다.")}>
-          {updates.map((update) => <ActivityRow key={update.id} title={update.title} body={update.summary || update.nextAction} meta={update.progress !== null && update.progress !== undefined ? `${update.progress}%` : update.happenedAtLabel} badge={update.source} tone={updateTone[update.status] || "neutral"} />)}
-        </DetailSection>
-        <DetailSection title="연관 콘텐츠" count={content.length} empty={syncState === "preview" ? "live 연결 후 이 브랜드에 연결된 콘텐츠가 여기에 표시됩니다." : "이 브랜드에 연결된 콘텐츠가 아직 없습니다."}>
-          {content.map((item) => <ActivityRow key={item.id} title={item.title} body={[item.kind, item.channel].filter(Boolean).join(" · ")} meta={item.when} badge={item.statusLabel} tone={contentTone[item.status] || "neutral"} />)}
-        </DetailSection>
-        <DetailSection title="결정" count={decisions.length} empty={failedEmpty("decisions", "이 프로젝트에 연결된 결정 기록이 없습니다.")}>
-          {decisions.map((decision) => <ActivityRow key={decision.id} title={decision.title} body={decision.summary} meta={decision.decidedAtLabel} badge="decision" tone="neutral" />)}
-        </DetailSection>
-        <a href={`/dashboard/work/projects?view=memos&project=${encodeURIComponent(project.id)}`} style={{ minHeight:44, display:'flex', alignItems:'center', color:'var(--fg-muted)', fontSize:12 }}>메모 작업대 · 업무에 연결</a>
-        <ProjectNotes key={project.id} notes={notes} partial={notesPartial} failed={failed.has("notes")} />
-        <RelatedMemos type="project" id={project.id} />
-        <MemoCaptureLink context={{ type: "project", id: project.id }} label="이 프로젝트에 메모 남기기" />
-        <DetailSection title="루틴 체크" count={checks.length} empty={failedEmpty("routine_checks", "이 프로젝트에 연결된 routine check가 없습니다.")}>
-          {checks.map((check) => <ActivityRow key={check.id} title={check.checkType} body={check.note} meta={check.checkedAtLabel} badge={check.status} tone={checkTone[check.status] || "neutral"} />)}
-        </DetailSection>
+          <p className="project-focus-muted">{progressLabel(project)}</p>
+          <dl className="project-focus-properties"><dt>담당</dt><dd>{project.owner}</dd>
+            <dt>최근 활동</dt><dd>{project.lastActivityLabel || '미정'}{project.updateEvidencePartial ? ' · 일부 미확인' : ''}</dd>
+            <dt>생성</dt><dd>{project.createdAtLabel || '미정'}</dd></dl>
+          {project.originDealId && <a className="hub-row project-focus-link" href={`/dashboard/revenue/deals?deal=${encodeURIComponent(project.originDealId)}`}>원본 거래 보기 →</a>}
+          <ProjectDeliverySummary project={project} onManage={onManageDelivery} compact />
+          <GoalLinks entityType="projects" entityId={project.id} scope={project.orgScope || project.tag} />
+        </div></details>
       </div>
-      <div className="hub-project-detail-actions">
-        <div style={{ padding: "10px 12px 0", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-          <Button variant="ghost" size="sm" icon="check" onClick={() => onComplete?.(project)}>
-            {project.statusKey === "completed" ? "다시 열기" : "완료"}
-          </Button>
-          <Button variant="ghost" size="sm" icon="archive" onClick={() => onArchive?.(project)}>
-            {project.statusKey === "archived" ? "보관 해제" : "보관"}
-          </Button>
-        </div>
-        <div style={{ padding: 12, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <Button variant="outline" size="sm" onClick={() => onEdit?.(project)}>편집</Button>
-          <Button variant="primary" size="sm" icon="tasks" style={{ flex: 1 }} onClick={() => onOpen?.(project)}>작업 관리</Button>
-          <Button variant="outline" size="sm" icon="sparkle" onClick={() => onConsultCouncil?.(project)}>Council 조언</Button>
-          <Button variant="outline" size="sm" icon="orders" onClick={() => onSendOrder?.(project)}>{orderPending ? "Sending…" : "주문 보내기"}</Button>
-          {orderResult && !orderPending && <span role={orderResult.tone === "ok" ? "status" : "alert"} className="mono" style={{ fontSize: 10.5, color: orderResult.tone === "ok" ? "var(--fg-muted)" : "var(--danger)", whiteSpace: "nowrap" }}>{orderResult.label}</span>}
-        </div>
+      <div hidden={tab !== 'records'} className="project-focus-stack">
+        <Button variant="primary" onClick={() => onMemo?.(projectMemoContexts(project))}>프로젝트 메모 남기기</Button>
+        {tab === 'records' && <RelatedMemos type="project" id={project.id} onOpen={onOpenMemo} />}
+        <details className="project-focus-details"><summary>업데이트·결정·연관 자료</summary><div className="project-focus-stack">
+          <DetailSection title="최근 업데이트" count={updates.length} empty={failedEmpty('project_updates', '최근 업데이트가 없어요.')}>
+            {updates.map(update => <ActivityRow key={update.id} title={update.title} body={update.summary || update.nextAction} meta={update.happenedAtLabel} badge={update.source} tone={updateTone[update.status] || 'neutral'} />)}
+          </DetailSection>
+          <DetailSection title="결정" count={decisions.length} empty={failedEmpty('decisions', '결정 기록이 없어요.')}>
+            {decisions.map(decision => <ActivityRow key={decision.id} title={decision.title} body={decision.summary} meta={decision.decidedAtLabel} badge="결정" />)}
+          </DetailSection>
+          <DetailSection title="연관 콘텐츠" count={content.length} empty="연관 콘텐츠가 없어요.">
+            {content.map(item => <ActivityRow key={item.id} title={item.title} body={[item.kind, item.channel].filter(Boolean).join(' · ')} meta={item.when} badge={item.statusLabel} tone={contentTone[item.status] || 'neutral'} />)}
+          </DetailSection>
+          <ProjectNotes key={project.id} notes={notes} partial={notesPartial} failed={failed.has('notes')} />
+          <a className="hub-row project-focus-link" href={`/dashboard/work/projects?view=memos&project=${encodeURIComponent(project.id)}`}>메모 작업대 · 업무에 연결 →</a>
+          <DetailSection title="루틴 체크" count={checks.length} empty={failedEmpty('routine_checks', '루틴 체크가 없어요.')}>
+            {checks.map(check => <ActivityRow key={check.id} title={check.checkType} body={check.note} meta={check.checkedAtLabel} badge={check.status} tone={checkTone[check.status] || 'neutral'} />)}
+          </DetailSection>
+        </div></details>
       </div>
-    </aside>
-  );
+    </div>
+    {customerOpen && <div className="hub-project-detail-body scroll-y project-focus-body">
+      <ProjectCustomerPanel onPendingChange={onCustomerPendingChange} project={project} onBack={backToProject} onSaved={onCustomerSaved} onMemo={onMemo} onOpenMemo={onOpenMemo} />
+    </div>}
+    <div hidden={customerOpen} className="hub-project-detail-actions project-focus-footer">
+      <div className="project-focus-actions">
+        <Button variant="ghost" size="sm" onClick={() => onEdit?.(project)}>프로젝트 편집</Button>
+        <Button variant="outline" size="sm" onClick={() => onOpen?.(project)}>작업 관리</Button>
+      </div>
+      <details className="project-focus-details"><summary>더 보기</summary><div className="project-focus-actions">
+        <Button variant="ghost" size="sm" onClick={() => onComplete?.(project)}>{project.statusKey === 'completed' ? '다시 열기' : '완료'}</Button>
+        <Button variant="ghost" size="sm" onClick={() => onArchive?.(project)}>{project.statusKey === 'archived' ? '보관 해제' : '보관'}</Button>
+        <Button variant="ghost" size="sm" onClick={() => onConsultCouncil?.(project)}>Council 조언</Button>
+        <Button variant="ghost" size="sm" disabled={orderPending} onClick={() => onSendOrder?.(project)}>{orderPending ? '전송 중…' : '주문 보내기'}</Button>
+      </div></details>
+      {orderResult && !orderPending && <p role={orderResult.tone === 'ok' ? 'status' : 'alert'} className={orderResult.tone === 'ok' ? 'project-focus-muted' : 'project-focus-error'}>{orderResult.label}</p>}
+    </div>
+  </aside>;
 }

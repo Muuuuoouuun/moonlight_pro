@@ -1,0 +1,547 @@
+/* Moonlight Futura — 텍스처 레이어 (DESIGN.md §15, 2026-09-18 운영자 확정)
+ *
+ * 이 파일은 hub-tokens.css를 대체하지 않는다. `.hub-futura` 스코프 안에서만
+ * §7 고정 밀도(--card-pad 20 / --section-gap 24) 위에 Futura 전용 스케일을 덮어쓰는
+ * 추가 레이어다. 기존 40여 페이지는 건드리지 않는다 — 전면 전환은 별도 결정이다.
+ *
+ * 텍스처 정의(운영자 디자인 프로젝트 원문):
+ *   좌측 내비 색·점 제거 / 현재 항목은 pill + 그림자로 떠 보이게
+ *   카드 2단 그림자 + 호버 2px 리프트, 버튼·입력·탭 전부 pill
+ *   헤더 34~52px 라이트 디스플레이 제목 + 대문자 트래킹 라벨, 지표 숫자 38px
+ *   페이지 패딩 48px, 섹션 간격 44px, 카드 패딩 26px
+ */
+.hub-app {
+  /* 여백 — Futura 스케일. §7 스케일(4·8·12·16·24·32·48·64·96)에 없는 44/26은
+     이 레이어 전용 토큰으로만 존재하고 페이지에 raw 값으로 흩어지지 않는다. */
+  --fx-page-pad: 48px;
+  --fx-section-gap: 44px;
+  --fx-card-pad: 26px;
+  --fx-gap: 16px;
+
+  /* 타입 — 디스플레이 제목은 크고 가볍게(§11 20px h2 규칙의 Futura 예외, §15 참조) */
+  --fx-hero: 44px;
+  --fx-hero-weight: 300;
+  --fx-title: 27px;
+  --fx-stat: 38px;
+  --fx-eyebrow: 11px;
+
+  --fx-pill: 999px;
+
+  /* 입체감 — 보더 대신 2단 그림자가 면을 분리한다. §8.1의 1px 하이라인 계약은
+     기존 표면에 그대로 남고, 이 레이어만 그림자를 쓴다. */
+  --fx-shadow: 0 1px 2px oklch(0 0 0 / 0.05), 0 10px 28px -14px oklch(0 0 0 / 0.16);
+  --fx-shadow-lift: 0 2px 6px oklch(0 0 0 / 0.07), 0 20px 40px -16px oklch(0 0 0 / 0.22);
+}
+
+.hub-app[data-theme="dark"] {
+  --fx-shadow: 0 1px 2px oklch(0 0 0 / 0.5), 0 10px 28px -14px oklch(0 0 0 / 0.7);
+  --fx-shadow-lift: 0 2px 6px oklch(0 0 0 / 0.55), 0 20px 40px -16px oklch(0 0 0 / 0.8);
+}
+
+/* ── 페이지 골격 ─────────────────────────────────────────────── */
+.hub-app .hub-futura {
+  padding: var(--fx-page-pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fx-section-gap);
+}
+
+.hub-app .fx-eyebrow {
+  font-size: var(--fx-eyebrow);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--fg-dim);
+  font-weight: 500;
+}
+
+.hub-app .fx-hero {
+  font-size: var(--fx-hero);
+  font-weight: var(--fx-hero-weight);
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  color: var(--fg);
+  margin: 10px 0 0;
+}
+
+.hub-app .fx-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.hub-app .fx-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 180px;
+  flex: 1;
+  max-width: 420px;
+  padding-bottom: 10px;
+}
+
+.hub-app .fx-progress {
+  flex: 1;
+  height: 2px;
+  background: var(--line-soft);
+  border-radius: var(--fx-pill);
+  overflow: hidden;
+}
+
+.hub-app .fx-progress > i {
+  display: block;
+  height: 100%;
+  background: var(--fg-muted);
+  transition: width var(--dur-enter) var(--ease-hub);
+}
+
+.hub-app .fx-progress--completed {
+  box-shadow: 0 0 6px color-mix(in srgb, var(--moon-300) 45%, transparent);
+}
+
+.hub-app .fx-progress--completed > i {
+  background: linear-gradient(90deg, var(--pms-moonstone) 0%, var(--moon-200) 100%);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--moon-300) 50%, transparent);
+}
+
+/* ── 트리아지 분할 뷰 ─────────────────────────────────────────── */
+.hub-app .fx-split {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+.hub-app .fx-triage {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hub-app .fx-triage-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition:
+    background-color var(--dur-hover) var(--ease-hub),
+    box-shadow var(--dur-hover) var(--ease-hub),
+    transform var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .fx-triage-item:hover { background: var(--surface-2); }
+
+.hub-app .fx-triage-item[aria-current="true"] {
+  background: var(--surface);
+  box-shadow: var(--fx-shadow);
+}
+
+.hub-app .fx-triage-kind {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fg-dim);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.hub-app .fx-triage-item[data-urgent="true"] .fx-triage-kind { color: var(--danger); }
+
+.hub-app .fx-triage-title {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--fg);
+  display: block;
+}
+
+.hub-app .fx-triage-item[data-done="true"] .fx-triage-title {
+  color: var(--fg-dim);
+  text-decoration: line-through;
+}
+
+/* ── 상세 카드 ────────────────────────────────────────────────── */
+.hub-app .fx-card {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: var(--fx-card-pad);
+  box-shadow: var(--fx-shadow);
+  transition: box-shadow var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .fx-card--lift:hover {
+  box-shadow: var(--fx-shadow-lift);
+  transform: translateY(-2px);
+}
+
+.hub-app .fx-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+}
+
+.hub-app .fx-card-meta [data-urgent="true"] { color: var(--danger); }
+
+.hub-app .fx-card-title {
+  font-size: var(--fx-title);
+  font-weight: 300;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  color: var(--fg);
+  margin: 18px 0 0;
+}
+
+.hub-app .fx-card-body {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--fg-muted);
+  margin: 14px 0 0;
+}
+
+/* ── 결정 pill ────────────────────────────────────────────────── */
+.hub-app .fx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.hub-app .fx-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--fx-pill);
+  padding: 9px 16px;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  background: var(--surface-2);
+  color: var(--fg);
+  box-shadow: var(--fx-shadow);
+  transition:
+    background-color var(--dur-hover) var(--ease-hub),
+    box-shadow var(--dur-hover) var(--ease-hub),
+    transform var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .fx-pill-btn:hover { box-shadow: var(--fx-shadow-lift); transform: translateY(-2px); }
+
+.hub-app .fx-pill-btn--primary {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.hub-app .fx-pill-btn--ghost {
+  background: transparent;
+  box-shadow: none;
+  color: var(--fg-dim);
+}
+
+.hub-app .fx-pill-btn--ghost:hover { box-shadow: none; transform: none; color: var(--fg); }
+
+.hub-app .fx-pill-btn > kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  opacity: 0.55;
+}
+
+/* ── 오늘의 시간표 ────────────────────────────────────────────── */
+.hub-app .fx-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.hub-app .fx-timeline { display: flex; flex-direction: column; }
+
+.hub-app .fx-time-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 9px 4px;
+  border-radius: var(--r-sm);
+  transition: background-color var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .fx-time-row:hover { background: var(--surface-2); }
+
+.hub-app .fx-time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-muted);
+  min-width: 46px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hub-app .fx-time-title { font-size: 13px; color: var(--fg); }
+
+.hub-app .fx-time-lead {
+  flex: 1;
+  border-bottom: 1px dotted var(--line);
+  min-width: 24px;
+  transform: translateY(-3px);
+}
+
+.fx-time-row[data-past="true"] .fx-time,
+.hub-app .fx-time-row[data-past="true"] .fx-time-title {
+  color: var(--fg-faint);
+  text-decoration: line-through;
+}
+
+.hub-app .fx-now {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  color: var(--danger);
+}
+
+/* ── 반응형 — 모바일 우선 축소 ────────────────────────────────── */
+@media (max-width: 900px) {
+  .hub-app .hub-futura { padding: 24px 16px; gap: 32px; }
+  .hub-app .fx-split { grid-template-columns: 1fr; gap: 20px; }
+  .hub-app .hub-futura { --fx-hero: 30px; --fx-title: 21px; --fx-card-pad: 18px; }
+}
+
+/* ── 페이지 헤더 (섹션 eyebrow + 대형 제목 + 부제) ──────────────
+ * 셀렉터는 전부 `.hub-app`으로 스코프를 올린다 — `.hub-app button`(0,1,1) 리셋이
+ * `.fx-*`(0,1,0)를 이기기 때문(§15 2026-09-15의 cascade 함정).
+ */
+.hub-app .fx-page-title {
+  font-size: var(--fx-hero);
+  font-weight: var(--fx-hero-weight);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  color: var(--fg);
+  margin: 14px 0 0;
+}
+
+.hub-app .fx-page-sub {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  margin: 14px 0 0;
+  max-width: 60ch;
+  line-height: 1.6;
+}
+
+/* ── 인페이지 pill 탭 ─────────────────────────────────────────── */
+.hub-app .fx-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 28px;
+}
+
+.hub-app .fx-tab {
+  border: 0;
+  background: transparent;
+  border-radius: var(--fx-pill);
+  padding: 8px 18px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-hover) var(--ease-hub),
+    box-shadow var(--dur-hover) var(--ease-hub),
+    color var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .fx-tab:hover { color: var(--fg); }
+
+.hub-app .fx-tab[aria-current="page"] {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--fx-shadow);
+}
+
+/* ── 섹션 도입부 ──────────────────────────────────────────────── */
+.hub-app .fx-section-title {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  margin: 0;
+}
+
+.hub-app .fx-section-desc {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+  margin: 6px 0 0;
+  max-width: 62ch;
+}
+
+/* ── 결정 타임라인 ────────────────────────────────────────────── */
+.hub-app .fx-timeline-rail { position: relative; padding-left: 34px; }
+
+.hub-app .fx-timeline-rail::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--line-soft);
+}
+
+.hub-app .fx-tl-item { position: relative; margin-bottom: var(--fx-gap); }
+
+/* §8.1 자매 마커(로드맵 노드)와 같은 1px 링 관례를 유지한다. */
+.hub-app .fx-tl-dot {
+  position: absolute;
+  left: -34px;
+  top: 22px;
+  width: 11px;
+  height: 11px;
+  border-radius: var(--fx-pill);
+  background: var(--bg);
+  border: 1px solid var(--moon-400);
+}
+
+.hub-app .fx-tl-card {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: var(--fx-card-pad);
+  box-shadow: var(--fx-shadow);
+  transition: box-shadow var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .fx-tl-card:hover { box-shadow: var(--fx-shadow-lift); transform: translateY(-2px); }
+
+.hub-app .fx-tl-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.hub-app .fx-tl-date {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hub-app .fx-tl-by { font-size: 11px; color: var(--fg-faint); }
+
+.hub-app .fx-tl-title {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  margin-bottom: 7px;
+}
+
+.hub-app .fx-tl-reason {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+}
+
+
+@media (max-width: 900px) {
+  .hub-app .fx-timeline-rail { padding-left: 24px; }
+  .hub-app .fx-tl-dot { left: -24px; }
+  .hub-app .fx-tabs { margin-top: 20px; }
+}
+
+/* ═══ 셸 질감 (사이드바 · 검색 · 사용자 카드) ═══════════════════
+ * hub-app.jsx가 hub-tokens.css 다음에 이 파일을 import하므로, 같은 특이도(0,2,0)
+ * 규칙은 여기 것이 이긴다. 인라인 스타일만 이기지 못한다(§15 2026-09-15).
+ */
+
+/* 사이드바 면 — 흰 pill이 떠 보이려면 바닥이 한 단계 내려가야 한다. */
+.hub-app .hub-sidebar-futura {
+  background: var(--surface-2);
+  border-right-color: var(--line-soft);
+}
+
+/* 내비 행 — 아이콘·점 없이 텍스트만. 현재 항목만 흰 pill + 그림자로 뜬다. */
+.hub-app .hub-nav-item {
+  height: 34px;
+  font-size: 13px;
+  font-weight: 400;
+  border-left: 0;
+  border-radius: var(--r-sm);
+  transition:
+    background-color var(--dur-hover) var(--ease-hub),
+    color var(--dur-hover) var(--ease-hub),
+    box-shadow var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .hub-nav-item:hover { background: transparent; color: var(--fg); }
+
+.hub-app .hub-nav-item[aria-current="page"] {
+  color: var(--fg);
+  font-weight: 500;
+  background: var(--surface);
+  border-left-color: transparent;
+  box-shadow: var(--fx-shadow);
+}
+
+
+/* 검색 · 사용자 카드 — 같은 "떠 있는 흰 면" 어휘 */
+.hub-app .fx-shell-card {
+  background: var(--surface);
+  border-radius: var(--r);
+  box-shadow: var(--fx-shadow);
+}
+
+/* ═══ 컴포넌트 질감 ═════════════════════════════════════════════
+ * Button/IconButton/Input은 §15 2026-09-15 이후 chrome을 CSS가 소유한다.
+ * 여기서 radius와 그림자만 Futura 어휘로 덮는다 — 색은 §5.2 그대로 둔다.
+ */
+.hub-app .hub-btn {
+  border-radius: var(--fx-pill);
+  box-shadow: var(--fx-shadow);
+}
+
+.hub-app .hub-btn:hover { box-shadow: var(--fx-shadow-lift); }
+
+.hub-app .hub-btn--ghost { box-shadow: none; }
+.hub-app .hub-btn--ghost:hover { box-shadow: none; }
+
+.hub-app .hub-iconbtn { border-radius: var(--fx-pill); }
+
+/* 선택 컨트롤만 pill — 제목·본문은 공통 입력 필드의 작은 모서리를 유지한다. */
+.hub-app select.hub-input { border-radius: var(--fx-pill); }
+
+/* 카드 — 보더 대신 그림자가 면을 분리한다 */
+.hub-app .hub-card {
+  border-color: transparent;
+  box-shadow: var(--fx-shadow);
+}
+
+.hub-app .hub-card-link:hover { box-shadow: var(--fx-shadow-lift); }
+
+/* 세그먼트 컨트롤 — pill */
+.hub-app .hub-seg { border-radius: var(--fx-pill); }
+.hub-app .hub-seg__btn { border-radius: var(--fx-pill); }
+

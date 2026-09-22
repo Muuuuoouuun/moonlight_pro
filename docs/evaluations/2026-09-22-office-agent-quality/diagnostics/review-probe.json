@@ -1,0 +1,48 @@
+[
+  {
+    "id": "jolteon-evidence/initial",
+    "result": {
+      "ok": true,
+      "status": 200,
+      "reason": "ok",
+      "text": "{\n  \"corrections\": [\n    {\n      \"claim\": \"const data = await response.json(); showDone();\",\n      \"problem\": \"성공 JSON 계약이 정의되지 않은 상태에서 JSON 파싱 완료만으로 저장 성공을 확정하여 showDone()을 호출하는 것은 확인되지 않은 응답을 성공으로 잘못 판정할 위험이 있습니다.\",\n      \"replaceWith\": \"임의의 성공 판정 경로를 제거하고, JSON 응답 검증을 마친 데이터를 반환하는 수준까지만 구현하여 이후 명세 확정 시점에 완료 처리를 연동하도록 수정합니다.\"\n    }\n  ],\n  \"answer\": \"로그인이 만료되어 서버에서 HTTP 200과 함께 로그인 페이지(HTML)를 반환했음에도, 기존 코드가 `response.ok` 조건만 확인하여 성공 처리(`showDone()`)를 해버린 것이 원인이에요.\\n\\n성공 여부를 나타내는 구체적인 JSON 계약이 확인되지 않은 상태이므로, 임의로 성공을 확정하는 경로(`showDone()`)는 제거하고 Content-Type 헤더와 JSON 파싱 여부만 검증하여 데이터를 반환하는 최소 방어 코드예요.\\n\\n```javascript\\nasync function handleSave(requestBody) {\\n  try {\\n    const response = await fetch('/api/data', {\\n      method: 'POST',\\n      headers: { 'Content-Type': 'application/json' },\\n      body: JSON.stringify(requestBody)\\n    });\\n\\n    if (!response.ok) {\\n      throw new Error(`HTTP 오류: ${response.status}`);\\n    }\\n\\n    const contentType = response.headers.get('content-type') || '';\\n    if (!contentType.includes('application/json')) {\\n      throw new Error('JSON 응답이 아닙니다. 인증이 만료되었는지 확인해 주세요.');\\n    }\\n\\n    const data = await response.json();\\n    return data;\\n  } catch (error) {\\n    showError(error.message);\\n  }\\n}\\n```\",\n  \"nextAction\": \"실제 저장 성공 여부를 판별할 수 있도록 서버의 저장 성공 응답 JSON 명세(성공 계약)를 확인해 주세요.\"\n}",
+      "model": "gemini-3.5-flash",
+      "usageMetadata": {
+        "promptTokenCount": 777,
+        "candidatesTokenCount": 505,
+        "totalTokenCount": 2762,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 777
+          }
+        ],
+        "thoughtsTokenCount": 1480,
+        "serviceTier": "standard"
+      }
+    }
+  },
+  {
+    "id": "umbreon-social/initial",
+    "result": {
+      "ok": true,
+      "status": 200,
+      "reason": "ok",
+      "text": "{\n  \"corrections\": [\n    {\n      \"claim\": \"지금 준비된 기능을 직접 사용해 보실 수 있습니다.\",\n      \"problem\": \"실제 기능이 준비되어 사용 가능한 상태인지 원문에서 확인되지 않았으므로, 근거 없이 기능 제공을 확정하는 표현입니다.\",\n      \"replaceWith\": \"현재 제안 주신 내용을 바탕으로 검토를 진행하고 있습니다.\"\n    }\n  ],\n  \"answer\": \"확인되지 않은 성과를 약속하지 않으면서 사실 그대로 사용할 수 있는 문구예요. \\\"현재 제안 주신 내용을 바탕으로 검토를 진행하고 있습니다.\\\"\",\n  \"nextAction\": \"추가 행동 없음.\"\n}",
+      "model": "gemini-3.5-flash",
+      "usageMetadata": {
+        "promptTokenCount": 320,
+        "candidatesTokenCount": 153,
+        "totalTokenCount": 1328,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 320
+          }
+        ],
+        "thoughtsTokenCount": 855,
+        "serviceTier": "standard"
+      }
+    }
+  }
+]

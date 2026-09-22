@@ -92,7 +92,7 @@ function progress(value: unknown) {
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
 }
 
-type ChecklistItem = { id: string; title: string; done: boolean; note: string };
+type ChecklistItem = { id: string; title: string; done: boolean; note: string; dueAt?: string };
 function taskChecklist(value: unknown): { ok: true; items: ChecklistItem[] } | { ok: false; reason: string } {
   if (!Array.isArray(value) || value.length > 50) return { ok: false, reason: "invalid-checklist" };
   const ids = new Set<string>();
@@ -105,8 +105,13 @@ function taskChecklist(value: unknown): { ok: true; items: ChecklistItem[] } | {
       || (item.note !== undefined && (typeof item.note !== "string" || item.note.length > 500))) {
       return { ok: false, reason: "invalid-checklist-item" };
     }
+    if (item.dueAt != null && item.dueAt !== "") {
+      if (typeof item.dueAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(item.dueAt)) return { ok: false, reason: "invalid-checklist-date" };
+      const date = new Date(`${item.dueAt}T00:00:00Z`);
+      if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== item.dueAt) return { ok: false, reason: "invalid-checklist-date" };
+    }
     ids.add(id);
-    items.push({ id, title: item.title.trim(), done: item.done, note: (item.note || "").trim() });
+    items.push({ id, title: item.title.trim(), done: item.done, note: (item.note || "").trim(), ...(item.dueAt ? { dueAt: item.dueAt as string } : {}) });
   }
   return { ok: true, items };
 }
@@ -202,6 +207,7 @@ export function normalizePmsCommand(
     const priority = text(input.priority || "medium", 30).toLowerCase();
     const dueAt = dateTime(input.dueAt || input.due_at);
     const checklist = has(input, "checklist") ? taskChecklist(input.checklist) : null;
+    if (has(input, "itemType") && !["task", "subproject", "milestone"].includes(String(input.itemType))) return { ok: false, reason: "invalid-item-type" };
 
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!title) return { ok: false, reason: "missing-title" };
@@ -232,6 +238,7 @@ export function normalizePmsCommand(
           source: text(input.source || "manual", 80),
           ...(dealId.value ? { deal_id: dealId.value } : {}),
           ...(checklist?.ok ? { checklist: checklist.items } : {}),
+          ...(has(input, "itemType") ? { item_type: input.itemType } : {}),
         },
       },
     };
@@ -292,6 +299,12 @@ export function normalizePmsCommand(
       if (!checklist.ok) return { ok: false, reason: checklist.reason };
       // The service merges this one owned key with the persisted metadata under the same version guard.
       patch.meta = { checklist: checklist.items };
+    }
+
+    if (has(input, "itemType")) {
+      if (!["task", "subproject", "milestone"].includes(String(input.itemType))) return { ok: false, reason: "invalid-item-type" };
+      if (!filters.some(([key]) => key === "updated_at")) return { ok: false, reason: "missing-expected-updated-at" };
+      patch.meta = { ...(patch.meta as Record<string, unknown> || {}), item_type: input.itemType };
     }
 
     if (Object.keys(patch).length === 0) return { ok: false, reason: "empty-patch" };

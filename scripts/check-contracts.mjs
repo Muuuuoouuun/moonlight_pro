@@ -91,14 +91,10 @@ envFileHasKeys(".env.example", [
   "COM_MOON_HUB_WRITE_SECRET",
   "COM_MOON_OAUTH_STATE_SECRET",
   "COM_MOON_ALLOW_OPEN_WEBHOOKS",
-  "TELEGRAM_WEBHOOK_SECRET",
 ]);
 envFileHasKeys("apps/engine/.env.example", [
   "COM_MOON_SHARED_WEBHOOK_SECRET",
   "COM_MOON_ALLOW_OPEN_WEBHOOKS",
-  "TELEGRAM_BOT_TOKEN",
-  "TELEGRAM_WEBHOOK_SECRET",
-  "N8N_WEBHOOK_URL",
 ]);
 envFileHasKeys("apps/hub/.env.example", [
   "COM_MOON_ENGINE_URL",
@@ -209,21 +205,13 @@ assert(
   "shared webhook open mode",
   "explicit local flag required",
 );
-assert(
-  readText("apps/engine/app/api/webhook/telegram/route.ts").includes("COM_MOON_ALLOW_OPEN_WEBHOOKS"),
-  "telegram webhook open mode",
-  "explicit local flag required",
-);
 const sharedWebhookText = readText("apps/engine/lib/shared-webhook.ts");
-const telegramWebhookText = readText("apps/engine/app/api/webhook/telegram/route.ts");
 assert(
-  [sharedWebhookText, telegramWebhookText].every((text) =>
-    text.includes("isLocalOpenWebhookModeAllowed") &&
-    text.includes('process.env.NODE_ENV !== "production"') &&
-    text.includes('process.env.VERCEL_ENV !== "production"'),
-  ),
+  sharedWebhookText.includes("isLocalOpenWebhookModeAllowed") &&
+    sharedWebhookText.includes('process.env.NODE_ENV !== "production"') &&
+    sharedWebhookText.includes('process.env.VERCEL_ENV !== "production"'),
   "webhook open mode production guard",
-  "shared and Telegram open modes are local-only",
+  "shared open mode is local-only",
 );
 const projectWebhookText = readText("apps/engine/lib/project-webhook.ts");
 const projectWebhookRouteText = readText("apps/engine/app/api/webhook/project/route.ts");

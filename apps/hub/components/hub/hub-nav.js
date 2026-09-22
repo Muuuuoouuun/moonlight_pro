@@ -15,6 +15,17 @@
 
 export const DEFAULT_SCOPE = 'all';
 
+// Futura 텍스처 라우트는 페이지 헤더 안에 pill 탭을 직접 그린다(§15 2026-09-18).
+// 탑바가 같은 탭을 또 그리면 한 화면에 탭 줄이 두 개가 된다. 목록은 여기 한 곳이
+// 정본이고, 탭 데이터 자체(topNavigationForRoute)는 그대로 — 위치만 페이지로 옮긴다.
+export const PAGE_OWNS_TABS = new Set([
+  'dashboard/work/decisions',
+]);
+
+export function pageOwnsTabs(activePath) {
+  return PAGE_OWNS_TABS.has(pathnameOf(activePath));
+}
+
 export const SIDEBAR_SCOPES = [
   { key: 'all', label: '전체' },
   { key: 'classin', label: 'ClassIn' },
@@ -118,9 +129,10 @@ const CONTENT_CHILDREN = [
 // 실행 피드백(§1 계약)이라 코어 유지.
 function aiChildren(sheetsPath) {
   return [
-    { key: 'ai-chat', label: 'Chat', path: 'dashboard/agents/chat', group: 'Agents', deferred: true },
-    { key: 'ai-orders', label: 'Orders', path: 'dashboard/agents/orders', group: 'Agents', deferred: true },
-    { key: 'ai-council', label: 'Council', path: 'dashboard/agents/council', group: 'Agents', deferred: true },
+    { key: 'ai-office', label: 'Office', path: 'dashboard/agents/office-council', group: 'Agents' },
+    { key: 'ai-orders', label: '작업·실행', path: 'dashboard/agents/orders', group: 'Agents', deferred: true },
+    { key: 'ai-chat', label: '코칭·대화', path: 'dashboard/agents/chat', group: 'Agents', deferred: true },
+    { key: 'ai-council', label: '브랜드 자문', path: 'dashboard/agents/council', group: 'Agents', deferred: true },
     // AutomationsIndex — implemented page (PAGE_MAP) with no sidebar/search row until
     // 2026-07-17. Global (unscoped), so it appears identically in every scope.
     { key: 'ai-automations-overview', label: '자동화 개요', path: 'dashboard/automations', group: 'Automations' },
@@ -143,7 +155,26 @@ const MY_WORK_CHILDREN = [
   { key: 'daily-review', label: '하루 리뷰', path: 'dashboard/work/daily-review' },
 ];
 
+const OVERVIEW_CHILDREN = Object.fromEntries(SIDEBAR_SCOPES.map(({ key }) => [key, [
+  { key: 'overview-summary', label: '집계', path: 'dashboard/overview' },
+  { key: 'overview-goals', label: '목표·성과', path: `dashboard/overview?view=goals&scope=${key}` },
+]]));
+
 export const SIDEBAR_PRIMARY = [
+  {
+    // Home — Futura 텍스처의 첫 화면(§15 2026-09-18). 같은 daily-brief 원장을 다른
+    // 렌즈로 본다. 기본 착지(dashboard → daily-brief)는 아직 바꾸지 않았다.
+    key: 'home',
+    label: '홈',
+    icon: 'moon',
+    scopeAware: false,
+    owns: ['dashboard/home'],
+    paths: {
+      all: 'dashboard/home',
+      classin: 'dashboard/home',
+      personal: 'dashboard/home',
+    },
+  },
   {
     key: 'today',
     label: '오늘',
@@ -160,8 +191,9 @@ export const SIDEBAR_PRIMARY = [
     key: 'overview',
     label: '현황',
     icon: 'signal',
-    scopeAware: false,
+    scopeAware: true,
     owns: ['dashboard/overview'],
+    children: OVERVIEW_CHILDREN,
     paths: {
       all: 'dashboard/overview',
       classin: 'dashboard/overview',
@@ -393,6 +425,11 @@ export function pathnameOf(path) {
 // pathname matches exactly. Queries (?scope=personal) don't affect matching.
 export function isSidebarChildActive(anchorKey, childPath, activePath, view) {
   if (!isSidebarAnchorActive(anchorKey, activePath, view)) return false;
+  if (anchorKey === 'overview') {
+    const childView = new URLSearchParams(String(childPath).split('?')[1] || '').get('view') || '';
+    const currentView = view || new URLSearchParams(String(activePath).split('?')[1] || '').get('view') || '';
+    if ((childView === 'goals') !== (currentView === 'goals')) return false;
+  }
   return pathnameOf(childPath) === pathnameOf(activePath);
 }
 

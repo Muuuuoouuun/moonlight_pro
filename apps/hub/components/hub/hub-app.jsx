@@ -5,7 +5,9 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
+import "./hub-futura.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
+import { goalHref } from "@/lib/goal-client";
 
 import { Button, Skeleton } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
@@ -15,8 +17,9 @@ import { useInquiryNotifications } from './inquiry-notifications';
 import { CommandPalette } from "./hub-command-palette";
 import { QuickMemo } from "./quick-memo";
 import { GlobalQuickCapture } from "./quick-capture";
+import { OfficeSessionProvider } from "./office-session-provider";
+import { OfficeWorkflowSessionProvider } from "./office-workflow-panel";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
-import { FloatingMentorWidget } from "./floating-mentor-widget";
 import { CelebrationCanvas } from "./celebration-fx";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
@@ -37,7 +40,13 @@ import {
   DEFAULT_HUB_PREFERENCES,
   persistHubPreference,
   readHubPreferences,
+  watchHubTheme,
 } from "@/lib/hub-preferences";
+
+const FloatingMentorWidget = dynamic(
+  () => import('./floating-mentor-widget').then(module => module.FloatingMentorWidget),
+  { ssr: false },
+);
 
 // Chunk-load placeholder — pages carry their own data loading states, so this
 // only covers the (brief) JS fetch. Keep it calm: no spinner, dim mono text.
@@ -65,6 +74,7 @@ function PageChunkFallback() {
 // from SSRing these pages, and every page carries its own loading/empty state.
 const lazyPage = (loader) => dynamic(loader, { loading: PageChunkFallback, ssr: false });
 
+const Home = lazyPage(() => import("./pages/home").then(m => m.Home));
 const DailyBrief = lazyPage(() => import("./pages/daily-brief").then(m => m.DailyBrief));
 const Overview = lazyPage(() => import("./pages/overview").then(m => m.Overview));
 const Calendar = lazyPage(() => import("./pages/work").then(m => m.Calendar));
@@ -98,6 +108,7 @@ const Webhooks = lazyPage(() => import("./pages/automations").then(m => m.Webhoo
 const Runs = lazyPage(() => import("./pages/automations").then(m => m.Runs));
 const Flows = lazyPage(() => import("./pages/automations").then(m => m.Flows));
 const SheetsSync = lazyPage(() => import("./pages/sheets-sync").then(m => m.SheetsSync));
+const OfficeCouncil = lazyPage(() => import("./pages/office-council").then(m => m.OfficeCouncil));
 const AgentsChat = lazyPage(() => import("./pages/agents").then(m => m.AgentsChat));
 const AgentsCouncil = lazyPage(() => import("./pages/agents").then(m => m.AgentsCouncil));
 const AgentsOrders = lazyPage(() => import("./pages/agents").then(m => m.AgentsOrders));
@@ -197,6 +208,7 @@ function LegacyPlaceholder({ path, onNavigate }) {
 }
 
 const PAGE_MAP = {
+  'dashboard/home': (n) => <Home onNavigate={n} />,
   'dashboard/daily-brief': (n, inquiries) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
@@ -205,7 +217,7 @@ const PAGE_MAP = {
   'dashboard/work/daily-review': () => <DailyReview />,
   'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,
-  'dashboard/work/decisions': () => <Decisions />,
+  'dashboard/work/decisions': (n, _inquiries, scope) => <Decisions onNavigate={n} scope={scope} />,
   'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
   'dashboard/brands': () => <Brands />,
@@ -229,6 +241,7 @@ const PAGE_MAP = {
   'dashboard/automations/webhooks': (n) => <Webhooks onNavigate={n} />,
   'dashboard/automations/runs': (n) => <Runs onNavigate={n} />,
   'dashboard/automations/sheets': () => <SheetsSync />,
+  'dashboard/agents/office-council': (n, notifications, scope) => <OfficeCouncil scope={scope} />,
   'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
@@ -286,10 +299,16 @@ export function HubApp({ memoDraftContext = "preview" }) {
   // SSR and the first client render must use the same values. Persisted browser
   // preferences are restored only after hydration, then written synchronously
   // from user actions so StrictMode cannot clobber them with the defaults.
-  const [theme, setTheme] = React.useState(DEFAULT_HUB_PREFERENCES.theme);
+  const [themePreference, setThemePreference] = React.useState(DEFAULT_HUB_PREFERENCES.theme);
+  const [theme, setTheme] = React.useState("light");
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [globalAdvisorOpen, setGlobalAdvisorOpen] = React.useState(false);
+  const [advisorRequested, setAdvisorRequested] = React.useState(false);
+  const toggleGlobalAdvisor = React.useCallback(() => {
+    setAdvisorRequested(true);
+    setGlobalAdvisorOpen(value => !value);
+  }, []);
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
   const rootRef = React.useRef(null);
@@ -303,9 +322,11 @@ export function HubApp({ memoDraftContext = "preview" }) {
     let storage = null;
     try { storage = window.localStorage; } catch { /* storage can be blocked */ }
     const stored = readHubPreferences(storage);
-    setTheme(stored.theme);
+    setThemePreference(stored.theme);
     setCollapsed(stored.sidebarCollapsed);
   }, []);
+
+  React.useEffect(() => watchHubTheme(themePreference, setTheme), [themePreference]);
 
   const toggleSidebar = React.useCallback(() => {
     const next = !collapsed;
@@ -316,7 +337,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   }, [collapsed]);
 
   const updateTheme = React.useCallback((nextTheme) => {
-    setTheme(nextTheme);
+    setThemePreference(nextTheme);
     let storage = null;
     try { storage = window.localStorage; } catch { /* storage can be blocked */ }
     persistHubPreference(storage, 'theme', nextTheme);
@@ -426,6 +447,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
+    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: searchParams.get('check') === '1', create: true }).slice(1);
     if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
     if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
     if (p.startsWith('dashboard/revenue/leads') || p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/leads?new=lead';
@@ -437,7 +459,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
     if (p.startsWith('dashboard/content')) return 'dashboard/content/studio?new=draft';
     return null;
-  }, [queryScope]);
+  }, [queryScope, searchParams]);
 
   const createOnCurrentSurface = React.useCallback(() => {
     const target = createTargetForPath(path);
@@ -499,12 +521,12 @@ export function HubApp({ memoDraftContext = "preview" }) {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
-        setGlobalAdvisorOpen((v) => !v);
+        toggleGlobalAdvisor();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [toggleGlobalAdvisor]);
 
   const advisorContext = React.useMemo(() => {
     const p = String(path || '');
@@ -557,12 +579,16 @@ export function HubApp({ memoDraftContext = "preview" }) {
   }, [path, routeScope, navScope]);
 
   const render = PAGE_MAP[path];
-  const page = render ? render(navigate, inquiryNotifications) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
+  // 3번째 인자(scope)는 뒤늦게 붙었다 — 기존 항목은 추가 인자를 무시하므로 하위 호환된다.
+  const page = render ? render(navigate, inquiryNotifications, routeScope || navScope) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
+  // 아이콘 레일은 데스크톱 전용 — 모바일 드로어(navOpen은 모바일에서만 true)는 항상 펼친 상태로 그린다.
   const sidebarCollapsed = collapsed && !isMobileViewport;
 
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme}>
       <ToastProvider>
+        <OfficeSessionProvider key={memoDraftContext}>
+          <OfficeWorkflowSessionProvider>
         <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
           <div
             className="hub-mobile-backdrop"
@@ -574,6 +600,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
             className="hub-sidebar-root"
             active={path}
             view={view}
+            search={searchParams.toString()}
             routeScope={routeScope}
             onScopeChange={setNavScope}
             onNavigate={navigateFromSidebar}
@@ -593,11 +620,13 @@ export function HubApp({ memoDraftContext = "preview" }) {
               scope={routeScope || navScope}
               onNavigate={navigate}
               onNew={createOnCurrentSurface}
+              onQuickCapture={() => setCaptureOpenRequest(value => value + 1)}
               onSidebarOpen={openMobileNavigation}
-              onAdvisorOpen={() => setGlobalAdvisorOpen((v) => !v)}
+              onAdvisorOpen={toggleGlobalAdvisor}
               navOpen={mobileNavState.open}
               menuButtonRef={menuButtonRef}
               theme={theme}
+              themePreference={themePreference}
               onTheme={updateTheme}
             />
             <main
@@ -612,9 +641,9 @@ export function HubApp({ memoDraftContext = "preview" }) {
         </div>
       <GlobalQuickCapture openRequest={captureOpenRequest} onNavigate={navigate} />
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open} openRequest={memoOpenRequest} onNavigate={navigate} />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
+      <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <FloatingMentorWidget
+      {advisorRequested && <FloatingMentorWidget
         key={`global-advisor:${path}`}
         isOpen={globalAdvisorOpen}
         onClose={() => setGlobalAdvisorOpen(false)}
@@ -622,8 +651,10 @@ export function HubApp({ memoDraftContext = "preview" }) {
         contextType={advisorContext.contextType}
         contextTitle={advisorContext.contextTitle}
         contextData={advisorContext.contextData}
-      />
+      />}
         <CelebrationCanvas />
+          </OfficeWorkflowSessionProvider>
+        </OfficeSessionProvider>
       </ToastProvider>
     </div>
   );

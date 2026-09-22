@@ -59,6 +59,7 @@ The CLI defaults to `core` (8 tools). Select one profile with `COM_MOON_MCP_PROF
 | `sales` | Follow-ups, work orders, actual contact outcome recording, revenue, receipt |
 | `content` | Content queue and existing campaign command |
 | `jobs` | Registered projects, job list/detail/start/cancel/resume |
+| `assistant` | 13 bounded context, goals, candidate, recovery and review tools |
 | `all` | Every tool, including existing calendar/content aliases |
 
 `COM_MOON_MCP_API_MODE=agent` uses the new API for overlapping task/project/work-order tools. `auto` selects it when the Agent token is configured and otherwise preserves the original routes. `legacy` retains those original bindings; new Agent-only tools still require the Agent token. Existing writes keep `COM_MOON_HUB_WRITE_SECRET` checks. Explicit `all` preserves tool discovery for clients that depended on the original 13 tools. Registration does not grant permissions.
@@ -146,8 +147,9 @@ Use `--profile all` to expose the existing advisor tools along with the scoped t
   `202 preview` is recorded as `needs_human`, never a successful generation.
 - `list_agent_runs` accepts `agent`, exact `ref`, and `limit` (1–50; default 10).
   The returned recommendations are compact snapshots, not guaranteed full transcripts.
-- `get_weekly_report` accepts `scope: personal | company` (default personal). The campaign
-  scorecard is a manual current snapshot, not dated week history or cash accounting.
+- `get_weekly_report` accepts `scope: personal | company` (default personal). It measures
+  seven completed local calendar days and retains missing values, definitions and bounded
+  source evidence. Goal details use `get_goals`; contract amounts are not cash receipts.
 - A Hub request has a 90-second timeout; Hub's Engine fetch has a 60-second timeout.
   No automatic retries. A timeout does not prove the write or generation did not happen.
   Read the run/order ledger before deciding whether another paid call is justified.
@@ -168,3 +170,67 @@ Full Korean playbook: [Agent/Council API·MCP operating plan](../../docs/agent-c
   Run/proposal/count writes are not atomic. Codex jobs use the separate durable worker path.
 
 Protocol reference: [MCP tools specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
+
+
+## Source-backed assistance and measurable goals
+
+The [setup and recovery guide](../../docs/measurable-personal-os-operations.md) includes
+copyable configurations for all three clients with a separate private MCP environment file.
+
+The `assistant` profile works with any local stdio MCP client, including Codex,
+Claude Desktop/Code and Antigravity. Register the same `command` and `args` already
+shown above, with `COM_MOON_MCP_PROFILE=assistant`. Antigravity's current global
+configuration is `~/.gemini/config/mcp_config.json`, or `.agents/mcp_config.json`
+in the workspace, under `mcpServers`. See the [official Antigravity MCP guide](https://antigravity.google/docs/mcp).
+No client configuration is changed by installing this package.
+
+Apply additive migrations **0036 then 0037** only to the intended database.
+Existing `read` grants allow context and goal reads. Explicit `goals:write` and
+`ai:write` grants enable their respective commands; registration does not add
+those scopes. The browser uses the existing Hub write guard. Agent bearer tokens
+never replace that guard on browser routes.
+
+The small profile includes `get_hub_health`, `get_work_context`, `search_knowledge`,
+`get_weekly_report`, `get_ai_candidate`, `get_goals`, `record_goal_command`, `get_goal_receipt`,
+`save_ai_candidate`, `request_ai_assist`, `record_assist_outcome`,
+`recover_ai_candidate` and `get_assistance_receipt`.
+
+- Read one exact task, project or content item with its `scope`, source revision
+  and linked goals. Content context means saved source idea/summary; unsaved
+  Studio edits and channel variant bodies are not included. Goals are bounded
+  to three objectives/eight metrics; missing measurements stay missing.
+- `get_goals` pages objectives; pass an `objectiveId` for metric details and latest
+  measurements. Follow `nextCursor` without changing the filters. Full observation
+  history remains in Hub, with truncation declared in the Agent response.
+- Let the current subscription client draft or analyze, then use
+  `save_ai_candidate` with the exact source version. This invokes no Gemini model.
+  Its provider/client/model attribution is client-reported; usage is unknown.
+- Alternatively, `request_ai_assist` performs one configured **Gemini API** call
+  for `draft`, `rewrite`, `critique` or `analyze`. API credentials/billing are
+  separate from consumer subscriptions; verify the actual project in
+  [Gemini API billing](https://ai.google.dev/gemini-api/docs/billing).
+- Candidates are not applied edits, approved publications, sent messages or
+  achieved goals. Studio's existing candidate application and revision restore
+  remain available separately. This generic assistance panel does not apply text.
+- Record an actual review as accepted/edited/rejected. Baseline, review and other
+  work minutes are optional. Other work includes prompting, execution and rework,
+  excluding review. Time difference is baseline minus review minus other work;
+  any missing input makes it unknown. This excludes system setup/maintenance.
+
+All mutations use a stable `commandId`. Same ID/content replays; changed content
+conflicts. A durable claim happens before model generation. Unknown/running
+responses never permit an automatic paid retry. Check the matching receipt.
+A generated result whose final save failed returns `unsaved`, a bounded result preview,
+and a signed compressed recovery token (24 hours) containing the complete result. Preserve both. `recover_ai_candidate`
+saves that verified result without invoking the provider. Tokens are bound to the
+workspace, actor and original candidate; arbitrary client output cannot acquire
+verified Gemini provenance. The Hub panel preserves pending requests/results in
+session storage and offers the same save-only recovery.
+
+Candidate context lists at most three recent candidates without duplicated source
+snapshots. Serialized context is bounded; output excerpts declare outputTruncated.
+Use get_ai_candidate with nextOffset and outputHash to reconstruct full saved text
+in bounded sections. The Hub panel offers the same read continuation. Actual Gemini model and reported usage are retained; absent usage is
+null, not zero. Currency cost and account-wide hard spending caps are not computed
+or enforced by these tools. Gemini generation has a 45-second provider timeout;
+the MCP assist transport allows 90 seconds. No automatic retries are introduced.

@@ -14,7 +14,7 @@ import React from "react";
 import { Iconed } from "./hub-icons";
 import { Button, Card, Drawer, Kbd } from "./hub-primitives";
 import { createClientId } from "@/lib/pms-ui";
-import { buildQuickCapture, isDurableQuickCaptureResult } from "@/lib/quick-task-capture";
+import { createQuickCaptureSession, shouldSubmitQuickTask } from "@/lib/quick-task-capture";
 
 const HINTS = {
   task: {
@@ -40,58 +40,48 @@ export function QuickCaptureForm({
   onDone,
   inputId = "hub-quick-capture",
   inputClassName,
+  session: providedSession,
+  focusRef,
 }) {
-  const [raw, setRaw] = React.useState("");
-  const [hint, setHint] = React.useState(initialHint);
-  const [state, setState] = React.useState({ status: "idle", message: HINTS[initialHint].idle });
-  const requestIdRef = React.useRef(null);
-  const inputRef = React.useRef(null);
-  if (!requestIdRef.current) requestIdRef.current = createClientId();
+  const [ownSession] = React.useState(() => createQuickCaptureSession({ initialHint, createId: createClientId }));
+  const session = providedSession || ownSession;
+  const state = React.useSyncExternalStore(session.subscribe, session.snapshot, session.snapshot);
+  const { raw, hint } = state;
+  const ownInputRef = React.useRef(null);
+  const inputRef = focusRef || ownInputRef;
 
-  React.useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus]);
+  React.useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus, inputRef]);
+  // Refocus after React has re-enabled the field, not while it is still disabled.
+  React.useEffect(() => {
+    if (state.status !== 'saved') return;
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [state.status, inputRef]);
 
   async function submit(event) {
     event.preventDefault();
-    const capture = buildQuickCapture({ id: requestIdRef.current, raw, hint });
-    if (!capture.ok) {
-      setState({ status: "error", message: "할 일을 한 줄로 입력하세요." });
-      return;
-    }
-
-    setState({ status: "saving", message: "저장 중…" });
+    const capture = session.begin();
+    if (!capture.ok) return;
     try {
       const response = await fetch("/api/hub/inbox", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(capture.payload),
+        signal: AbortSignal.timeout(20000),
       });
-      const data = await response.json().catch(() => ({}));
+      const data = await response.json().catch(error => { if (error?.name === 'TimeoutError' || error?.name === 'AbortError') throw error; return {}; });
 
-      if (response.ok && isDurableQuickCaptureResult(data)) {
-        setRaw("");
-        requestIdRef.current = createClientId();
-        const message = data.status === "duplicate"
-          ? "이미 저장된 입력입니다."
-          : data.destinationType === "work_order"
-            ? "정리 전에 보관했습니다."
-            : "할 일로 저장했습니다.";
-        setState({ status: "saved", message, destinationType: data.destinationType });
+      if (session.settle({ ok: response.ok, data, error: !response.ok && !data.error && !data.status ? `저장 실패 (${response.status})` : null })) {
         onSaved?.();
         // 연속 입력이 기본값이다 — 저장 후 닫지 않고 포커스를 유지한다.
-        inputRef.current?.focus();
-        return;
       }
-
-      setState({ status: "error", message: data.error || data.status || `저장 실패 (${response.status})` });
     } catch (error) {
-      setState({
-        status: "error",
-        message: error instanceof Error ? error.message : "저장에 실패했습니다. 같은 입력으로 다시 시도하세요.",
-      });
+      session.settle({ ok: false, error: error?.name === 'TimeoutError' || error?.name === 'AbortError' ? '저장 응답을 확인하지 못했습니다. 입력을 보관했으니 같은 요청으로 다시 시도하세요.' : error instanceof Error ? error.message : null });
     }
   }
 
   const saving = state.status === "saving";
+  const message = state.status === 'error' ? state.error : saving ? '저장 중…' : state.status === 'saved' ? state.duplicate ? '이미 저장된 입력입니다.' : state.destinationType === 'work_order' ? HINTS.inbox.saved : HINTS.task.saved : HINTS[hint].idle;
   const compact = layout === "compact";
   const stateColor = state.status === "error"
     ? "var(--danger)"
@@ -99,9 +89,7 @@ export function QuickCaptureForm({
 
   function changeHint(next) {
     if (saving || next === hint) return;
-    if (state.status === "error") requestIdRef.current = createClientId();
-    setHint(next);
-    setState({ status: "idle", message: HINTS[next].idle });
+    session.setHint(next);
     inputRef.current?.focus();
   }
 
@@ -121,8 +109,8 @@ export function QuickCaptureForm({
               style={{ flex: 1, fontSize: 10.5, color: "var(--fg-dim)", letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}
             >
               <span>Quick Capture</span>
-              <span style={{ fontSize: 9.5, color: "var(--fg-faint)", textTransform: "none", letterSpacing: 0, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                (Enter로 저장 <Kbd style={{ fontSize: 9, minWidth: 14, height: 16, padding: "0 4px", lineHeight: "14px" }}>↵</Kbd>)
+              <span style={{ fontSize: 10.5, color: "var(--fg-faint)", textTransform: "none", letterSpacing: 0, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                (Enter로 저장 <Kbd style={{ fontSize: 10.5, minWidth: 14, height: 16, padding: "0 4px", lineHeight: "14px" }}>↵</Kbd>)
               </span>
             </label>
             <div role="group" aria-label="저장 위치" style={{ display: "flex", gap: 4 }}>
@@ -135,11 +123,8 @@ export function QuickCaptureForm({
               id={inputId}
               ref={inputRef}
               value={raw}
-              onChange={(event) => {
-                setRaw(event.target.value);
-                if (state.status === "error") requestIdRef.current = createClientId();
-                if (state.status !== "idle") setState({ status: "idle", message: HINTS[hint].idle });
-              }}
+              onChange={(event) => session.setRaw(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter' && !shouldSubmitQuickTask(event, saving)) event.preventDefault(); }}
               placeholder={HINTS[hint].placeholder}
               autoComplete="off"
               maxLength={4000}
@@ -152,7 +137,7 @@ export function QuickCaptureForm({
                 tabIndex={-1}
                 aria-label="입력 지우기"
                 onClick={() => {
-                  setRaw("");
+                  session.setRaw("");
                   inputRef.current?.focus();
                 }}
                 style={{
@@ -177,7 +162,7 @@ export function QuickCaptureForm({
       </form>
       <div style={{ marginTop: 6, minHeight: 18, display: "flex", alignItems: "center", gap: 8 }}>
         <span role={state.status === "error" ? "alert" : "status"} aria-live="polite" style={{ flex: 1, fontSize: 11.5, color: stateColor }}>
-          {state.message}
+          {message}
         </span>
         {state.status === "saved" && state.destinationType === "task" && (
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => { onDone?.(); onNavigate?.("dashboard/work/my"); }}>할 일 보기</Button>
@@ -196,7 +181,10 @@ export function QuickCaptureForm({
 // 어디서든 C 로 열리는 캡처 드로어. openRequest 가 증가할 때마다 열린다.
 export function GlobalQuickCapture({ openRequest = 0, onNavigate, onSaved }) {
   const [open, setOpen] = React.useState(false);
+  const [session] = React.useState(() => createQuickCaptureSession({ createId: createClientId }));
+  const inputRef = React.useRef(null);
   const seen = React.useRef(openRequest);
+  const close = () => { if (session.canClose()) setOpen(false); };
 
   React.useEffect(() => {
     if (openRequest !== seen.current) { seen.current = openRequest; setOpen(true); }
@@ -208,15 +196,17 @@ export function GlobalQuickCapture({ openRequest = 0, onNavigate, onSaved }) {
       title="빠른 입력"
       subtitle="한 줄로 저장하고 하던 일로 돌아간다"
       presentation="compact"
-      onClose={() => setOpen(false)}
+      initialFocusRef={inputRef}
+      onClose={close}
     >
       <QuickCaptureForm
         layout="compact"
-        autoFocus
+        session={session}
+        focusRef={inputRef}
         inputId="hub-global-quick-capture"
         onNavigate={onNavigate}
         onSaved={onSaved}
-        onDone={() => setOpen(false)}
+        onDone={close}
       />
     </Drawer>
   );

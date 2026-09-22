@@ -96,3 +96,25 @@ TO anon, authenticated` 를 걸어 둔다. 그래서 **복원으로 만들어진
 - `.env.migration.local` (DB 연결 문자열, gitignore 대상) — 이관 확정 후 삭제
 - `.migration-dump/` (스키마·데이터 덤프) — 롤백 필요 없다고 판단되면 삭제
 - `apps/*/.env.local.pre-kr-*` 백업
+
+## 8. 연결 설정 재발 점검 (2026-09-21)
+
+메인 체크아웃의 루트·Hub·Engine `.env.local`이 구 싱가포르 주소를 가리켜
+DNS `ENOTFOUND`, 프로젝트 조회 502, 빠른 입력 연결 실패가 발생했다.
+서울 프로젝트의 키와 워크스페이스를 확인한 뒤 세 파일을 교체하고 서버를 재시작했다.
+과거 이관 완료 기록만으로 현재 체크아웃의 환경 설정까지 보장되지는 않는다.
+
+- `npm run check:runtime`: Next의 개발 환경 변수 우선순위로 루트·Hub·Engine을 읽고
+  URL·서버 키·워크스페이스·공유 비밀키 불일치를 검사한다. 각 DB에서 워크스페이스를
+  읽기만 하며 요청당 5초로 제한한다. 키 원문은 출력하지 않고 실패 시 종료 코드 1을 반환한다.
+- `npm run db:check`: 연결 복구 뒤 기능별 스키마·권한을 확인한다.
+- 설정 변경 뒤 해당 체크아웃의 Hub·Engine을 재시작하고 두 `/api/health` 및
+  `/api/hub/projects`의 `status: live`를 확인한다. `check:runtime`은 디스크·셸의 설정 검사이며
+  이미 떠 있는 프로세스가 어느 설정을 로드했는지 대신 증명하지 않는다.
+- 워크트리에는 `.env.local`이 Git으로 복사되지 않는다. 사용할 DB를 확인해 설정을 준비한다.
+  다른 워크트리에서 실행 중인 서버의 포트·작업 디렉터리와 혼동하지 않는다.
+
+`npm test`는 파일 동시 실행을 2개로 제한한다. macOS에서 기본 CPU 수만큼 DB 통합
+테스트를 동시에 띄우면 PostgreSQL의 공유 메모리 한도를 소진해
+`could not create shared memory segment: No space left on device`가 발생할 수 있다.
+테스트 범위와 DB 검사는 유지하고 병렬도만 제한한다.

@@ -162,3 +162,52 @@ test("unsupported business candidates cannot acquire evidence from fallback text
     assert.deepEqual(result.patterns, []);
   }
 });
+
+test("executePatternAnalysis supports weekly_synthesis goal and up to 25 records", async () => {
+  const records = Array.from({ length: 15 }, (_, i) => ({
+    id: `11111111-1111-4111-8111-${String(i).padStart(12, "0")}`,
+    title: `주간 업무 메모 ${i + 1}`,
+    body: `프로젝트 알파 관련 진행 중. ${i % 2 === 0 ? "후속 조치로 파트너사 미팅 필요" : "정체 이슈 발생"}`,
+    occurredAt: "2026-09-20T10:00:00Z",
+  }));
+
+  const fakeGenerator = async ({ prompt, systemInstruction }) => {
+    assert.match(systemInstruction, /지난 7일간의 운영 및 메모 전체를 종합하여/);
+    assert.match(prompt, /기록 15/);
+    return {
+      ok: true,
+      text: JSON.stringify({
+        candidates: [
+          {
+            title: "프로젝트 알파 파트너십 지연 패턴",
+            observation: "후속 조치로 파트너사 미팅 필요 언급이 반복됨",
+            interpretation: "의사결정권자 일정 조율 난항으로 진행 정체",
+            actionableGuidance: "파트너사에 일정 재조율 제안 메일 발송",
+            suggestedTarget: "task",
+            evidenceQuotes: [
+              {
+                journalId: records[0].id,
+                quote: "후속 조치로 파트너사 미팅 필요",
+              },
+            ],
+          },
+        ],
+      }),
+    };
+  };
+
+  const result = await executePatternAnalysis(
+    {
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      requestId: "44444444-4444-4444-8444-444444444444",
+      goal: "weekly_synthesis",
+      records,
+    },
+    { generate: fakeGenerator }
+  );
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.patterns.length, 1);
+  assert.equal(result.patterns[0].kind, "weekly_synthesis");
+  assert.equal(result.recordCount, 15);
+});

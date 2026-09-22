@@ -272,6 +272,9 @@
 .hub-app .hub-iconbtn:hover { background: var(--surface-3); border-color: var(--line-soft); color: var(--fg); }
 .hub-app .hub-iconbtn--danger { color: var(--danger); }
 .hub-app .hub-iconbtn--danger:hover { color: var(--danger); }
+.hub-app .hub-iconbtn--star-active { color: var(--moon-300); }
+.hub-app .hub-iconbtn--star-active svg path { fill: currentColor; }
+.hub-app .hub-iconbtn--star-active:hover { color: var(--moon-300); }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-iconbtn { transition: none; }
 }
@@ -407,7 +410,9 @@
 .hub-sidebar-root--collapsed .hub-sidebar-search > button { height: 36px !important; padding: 0 !important; justify-content: center; }
 .hub-sidebar-root--collapsed .hub-sidebar-nav { padding: 2px 6px 10px !important; }
 .hub-sidebar-root--collapsed .hub-sidebar-utilities { padding: 6px !important; }
-.hub-sidebar-root--collapsed .hub-sidebar-footer { padding: 8px 0 !important; justify-content: center; }
+/* 사용자 카드는 Futura fx-shell-card(인라인 margin 12px)다 — 56px 레일에서는 32px로 줄어 36px 알림 버튼이
+   넘치므로, 내비 pill과 같은 44px 폭 타일로 좁힌다. */
+.hub-sidebar-root--collapsed .hub-sidebar-footer { margin: 8px 6px 10px !important; padding: 4px 0 !important; justify-content: center; }
 .hub-app .hub-sidebar-root--collapsed .hub-nav-item--icon { position: relative; width: 100%; height: 40px; justify-content: center; padding: 0; flex-shrink: 0; }
 .hub-sidebar-count-dot { position: absolute; top: 6px; right: 6px; width: 4px; height: 4px; border-radius: 50%; background: var(--fg-muted); }
 .hub-sidebar-root--collapsed .hub-sidebar-inquiry { position: relative; }
@@ -614,12 +619,13 @@
   border-radius: var(--r-sm);
   transition: border-color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
-.hub-app textarea.hub-input { height: auto; min-height: 104px; padding: 11px 12px; resize: vertical; }
+.hub-app textarea.hub-input { height: auto; min-height: 104px; padding: 12px 14px; line-height: 1.7; resize: vertical; }
+/* spacious는 기본 글쓰기 필드보다 좁아지지 않는다 — 기본 textarea가 line-height 1.7로 올라왔다. */
 .hub-app textarea.hub-input--spacious {
   min-height: 128px;
   padding: 13px 15px;
   font-size: 13.5px;
-  line-height: 1.62;
+  line-height: 1.7;
   letter-spacing: -0.005em;
 }
 .hub-app textarea.hub-drawer-input--spacious {
@@ -665,6 +671,25 @@
 .hub-app .hub-field-msg { margin: 6px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--fg-faint); }
 .hub-app .hub-field-msg--error { color: var(--danger); }
 
+.hub-app .hub-checkbox {
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-checkbox:active:not(:disabled) {
+  transform: scale(0.92);
+}
+.hub-app .hub-checkbox--checked {
+  animation: hubCheckPop var(--dur-enter) var(--ease-hub);
+}
+.hub-app .hub-checkbox__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  animation: hubCheckmarkIn var(--dur-enter) var(--ease-hub);
+}
+
 /* Checkbox with visible text: one element, one accessible name, one target. The old
    pattern put the words in a sibling <span>, so tapping the text did nothing and a
    screen reader announced the name twice. */
@@ -673,11 +698,26 @@
   padding: 8px 10px 8px 8px; margin-left: -8px;
   border-radius: var(--r-sm);
   color: var(--fg-muted); font-size: 13px; line-height: 1;
-  transition: background var(--dur-hover) ease, color var(--dur-hover) ease;
+  transition: background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+  cursor: pointer;
+  user-select: none;
 }
 .hub-app .hub-checkbox-row:hover:not(:disabled) { background: var(--surface-2); color: var(--fg); }
+.hub-app .hub-checkbox-row:active:not(:disabled) { transform: scale(0.98); }
 .hub-app .hub-checkbox-row:disabled { color: var(--fg-faint); cursor: not-allowed; }
-@media (prefers-reduced-motion: reduce) { .hub-app .hub-checkbox-row { transition: none; } }
+.hub-app .hub-checkbox-row--checked .hub-checkbox-row__icon {
+  animation: hubCheckmarkIn var(--dur-enter) var(--ease-hub);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-checkbox,
+  .hub-app .hub-checkbox-row,
+  .hub-app .hub-checkbox__icon,
+  .hub-app .hub-checkbox-row--checked .hub-checkbox-row__icon {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
 
 /* SegmentedControl — 필터/뷰 토글의 canonical(§8.1). Button(§15 2026-09-15)과 같은 이유로
    휴지 chrome을 여기서 소유한다: 인라인 색은 :hover와 전이를 죽인다. 활성 = aria-pressed 하나가
@@ -800,6 +840,23 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes hubCheckPop {
+  0% { transform: scale(0.88); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes hubCheckmarkIn {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes hubRingGlow {
+  0% { filter: drop-shadow(0 0 2px color-mix(in srgb, var(--moon-300) 20%, transparent)); }
+  50% { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--moon-300) 55%, transparent)); }
+  100% { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--moon-300) 35%, transparent)); }
+}
+
 .hub-app .hub-progress-track {
   position: relative;
   overflow: hidden;
@@ -879,16 +936,29 @@
   line-height: 1;
 }
 
-.hub-app .hub-checkbox {
-  transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+/* Progress Ring (원형 게이지) */
+.hub-app .hub-progress-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
 }
 
-.hub-app .hub-checkbox:active:not(:disabled) {
-  transform: scale(0.92);
+.hub-app .hub-progress-ring--completed {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--moon-300) 40%, transparent));
+  animation: hubRingGlow var(--dur-enter) var(--ease-hub);
 }
 
-.hub-app .hub-checkbox svg {
-  animation: hubSparklePop var(--dur-enter) var(--ease-hub);
+.hub-app .hub-progress-ring--completed circle.hub-progress-ring__circle {
+  stroke: var(--moon-200);
+}
+
+/* 완료 텍스트 트랜지션 */
+.hub-app .hub-task-completed {
+  color: var(--fg-faint) !important;
+  text-decoration: line-through;
+  transition: color var(--dur-enter) var(--ease-hub), opacity var(--dur-enter) var(--ease-hub);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -898,14 +968,8 @@
     display: none;
   }
   .hub-app .hub-celebration-badge,
-  .hub-app .hub-celebration-card {
-    animation: none;
-  }
-  .hub-app .hub-checkbox {
-    transition: none;
-    transform: none !important;
-  }
-  .hub-app .hub-checkbox svg {
+  .hub-app .hub-celebration-card,
+  .hub-app .hub-progress-ring--completed {
     animation: none;
   }
 }

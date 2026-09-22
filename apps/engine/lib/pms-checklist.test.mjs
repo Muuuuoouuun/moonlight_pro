@@ -82,3 +82,28 @@ test('identical create retries accept JSONB property ordering while preserving c
   assert.equal((await executePmsCommand(input, context, dependencies)).status, 'duplicate');
   assert.equal((await executePmsCommand({ ...input, checklist: [...input.checklist].reverse() }, context, dependencies)).status, 'conflict');
 });
+
+test('project item creation retries compare both type and nested dates', async () => {
+  const input = { action: 'create_task', id, title: '준비', itemType: 'subproject', checklist: [{ ...checklist[0], dueAt: '2026-09-22' }] };
+  const first = normalizePmsCommand(input, context);
+  const dependencies = { insert: async () => ({ persisted: false, reason: 'duplicate' }), fetchRows: async () => [first.record] };
+  assert.equal((await executePmsCommand(input, context, dependencies)).status, 'duplicate');
+  assert.equal((await executePmsCommand({ ...input, itemType: 'milestone' }, context, dependencies)).status, 'conflict');
+  assert.equal((await executePmsCommand({ ...input, checklist: [{ ...input.checklist[0], dueAt: '2026-09-23' }] }, context, dependencies)).status, 'conflict');
+});
+
+test('saving type and dated steps preserves unrelated metadata and version guard', async () => {
+  const current = { id, updated_at: version, meta: { source: 'manual', source_refs: ['retained'] } };
+  const input = update({ itemType: 'milestone', checklist: [{ ...checklist[0], dueAt: '2026-09-22' }] });
+  const result = await executePmsCommand(input, context, {
+    fetchRows: async () => [current],
+    update: async (_table, filters, patch) => {
+      assert.ok(filters.some(([key, value]) => key === 'updated_at' && value === `eq.${version}`));
+      assert.deepEqual(patch.meta.source_refs, current.meta.source_refs);
+      assert.equal(patch.meta.item_type, 'milestone');
+      assert.equal(patch.meta.checklist[0].dueAt, '2026-09-22');
+      return { persisted: true, reason: 'ok', records: [{ ...current, ...patch }] };
+    },
+  });
+  assert.equal(result.status, 'saved');
+});
