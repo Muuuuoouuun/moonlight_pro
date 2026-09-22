@@ -271,8 +271,9 @@ test("sidebar is one level deep and the top bar owns contextual tabs", () => {
   assert.match(topbarSource, /aria-current=\{selected \? 'page' : undefined\}/);
 });
 
-// 사이드바 내비 행은 텍스트 전용이다(§15 2026-09-19) — 아이콘 글리프는 접힌
-// 56px 레일에만 남는다(§15 2026-09-22). 여기서 검사하는 건 외형 계약이지 깊이가 아니다.
+// 2026-09-19 Futura 패스가 뺐던 아이콘을 2026-09-23 운영자가 펼친 행에도 다시
+// 요청했다(§15) — 펼친 행과 접힌 56px 레일(§15 2026-09-22) 모두 같은
+// <Iconed name={a.icon}>를 그린다. 여기서 검사하는 건 외형 계약이지 깊이가 아니다.
 // 소스 문자열 위치("if (collapsed)" 등)에 기대지 않고, 사이드바의 실제 행 렌더러를
 // 추출해 collapsed=false/true 두 상태로 그려 본다.
 function sidebarAst() {
@@ -332,7 +333,7 @@ async function loadSidebarRowRenderer() {
   };
 }
 
-test("expanded sidebar nav rows carry no icon glyph; only the collapsed rail shows icons", async () => {
+test("expanded sidebar nav rows carry the same icon glyph as the collapsed rail", async () => {
   const rowRenderer = await loadSidebarRowRenderer();
   const anchors = [...SIDEBAR_PRIMARY.map((a) => [a, false]), ...SIDEBAR_UTILITIES.map((a) => [a, true])];
   assert.ok(anchors.length > 0);
@@ -343,12 +344,11 @@ test("expanded sidebar nav rows carry no icon glyph; only the collapsed rail sho
     for (const [anchor, small] of anchors) {
       const label = escapeRegExp(anchor.label);
       const row = expanded(anchor, small);
-      assert.doesNotMatch(row, /<svg/, `${anchor.key}: expanded row must stay text-only`);
+      assert.match(row, /<svg/, `${anchor.key}: expanded row must draw its icon (${anchor.icon}) beside the label`);
       assert.doesNotMatch(row, /fx-nav-child/, `${anchor.key}: no nested child rows`);
       assert.match(row, new RegExp(`class="hub-sidebar-label"[^>]*>${label}<`), `${anchor.key}: visible label`);
 
-      // Positive control — the same renderer draws the glyph on the rail, so the
-      // text-only check above cannot pass vacuously. The rail names the row via aria-label.
+      // The rail draws the same glyph without the text label and names the row via aria-label.
       const railRow = rail(anchor, small);
       assert.match(railRow, /<svg/, `${anchor.key}: collapsed rail must draw its icon (${anchor.icon})`);
       assert.match(railRow, new RegExp(`aria-label="${label}`), `${anchor.key}: rail accessible name`);
@@ -373,6 +373,15 @@ test("sidebar nav regions draw rows only through the row renderer", () => {
     assert.ok(calls.length > 0, `${regionOf(region)} rows must come from renderAnchor`);
     assert.deepEqual(findNodes(region, isIconedElement).length, 0, `${regionOf(region)} must not inline icon glyphs`);
   }
+});
+
+test("expanded renderAnchor block draws <Iconed name={a.icon}> before the collapsed branch", () => {
+  const expanded = sidebarSource.slice(
+    sidebarSource.indexOf("const renderAnchor"),
+    sidebarSource.indexOf("if (collapsed)"),
+  );
+  assert.ok(expanded.length > 0, "renderAnchor block must be found");
+  assert.match(expanded, /<Iconed name=\{a\.icon\}/);
 });
 
 // Futura 라우트는 페이지 헤더가 pill 탭을 직접 그리므로 탑바는 같은 줄을 또 그리지 않는다.
