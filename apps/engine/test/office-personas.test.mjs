@@ -25,7 +25,8 @@ test('OFFICE_PERSONAS defines all 9 personas with complete results & directional
     assert.ok(Array.isArray(p.tensionWith) && p.tensionWith.length > 0, `${id} must declare tensionWith`);
 
     // Verify systemPrompt situational & results/directionality instructions
-    assert.ok(p.systemPrompt.includes('상황별 말투 및 어조'), `${id} must contain situational tone rules`);
+    assert.ok(p.systemPrompt.includes('말투 및 어조'), `${id} must contain tone rules`);
+    assert.ok(p.systemPrompt.includes('존댓말'), `${id} must enforce honorific speech (존댓말)`);
     assert.ok(
       p.systemPrompt.includes('피로') || p.systemPrompt.includes('과부하') || p.systemPrompt.includes('지쳤'),
       `${id} must contain operator fatigue guidelines`

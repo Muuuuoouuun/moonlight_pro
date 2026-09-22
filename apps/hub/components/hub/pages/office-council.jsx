@@ -90,7 +90,7 @@ export function OfficeCouncil({ onNavigate }) {
     {
       role: "agent",
       agentId: "eevee",
-      text: "안녕 대표. 비서실장 이브이야. 복잡한 생각이나 풀리지 않는 업무가 있으면 편하게 말해줘. 내가 정리해서 알맞은 임원에게 연결하거나 바로 답해줄게.",
+      text: "대표님, 오셨어요? 비서실장 이브이입니다! 복잡하거나 머리 아픈 일 있으시면 편하게 털어놔 주세요. 제가 핵심 딱 추려서 담당 임원 연결해 드릴게요!",
       time: "방금",
     },
   ]);
@@ -167,6 +167,9 @@ export function OfficeCouncil({ onNavigate }) {
                 text: res.text,
                 isSimulation: res.isSimulation,
                 evaluation: res.evaluation || null,
+                model: res.model || null,
+                latencyMs: res.latencyMs || null,
+                fallbackFrom: res.fallbackFrom || null,
                 time: now,
               };
             } else {
@@ -681,6 +684,20 @@ export function OfficeCouncil({ onNavigate }) {
                       <Badge size="xs" tone="moon" variant="outline">
                         관점 시뮬레이션
                       </Badge>
+                    )}
+                    {msg.model && (
+                      <span
+                        className="mono"
+                        style={{ fontSize: 10, color: "var(--fg-dim)" }}
+                        title={msg.fallbackFrom ? `폴백 적용: ${msg.fallbackFrom} → ${msg.model}` : undefined}
+                      >
+                        {msg.model.replace(/^gemini-/, "")}
+                      </span>
+                    )}
+                    {typeof msg.latencyMs === "number" && (
+                      <span className="mono" style={{ fontSize: 10, color: "var(--fg-dim)" }}>
+                        {msg.latencyMs}ms
+                      </span>
                     )}
                     <span className="mono">{msg.time}</span>
                   </div>
