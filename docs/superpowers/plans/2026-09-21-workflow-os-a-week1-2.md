@@ -19,9 +19,9 @@
 |---|---|---|
 | 1 | F-0 병합 + `automation_runs` 가시성 | 완료 |
 | 1 | 주간 집계 교정(`completed_at`·`crm_activities`) | 완료 |
-| 1 | Top 3 계약·내 작업 토글·첫 화면 레인·"오늘 이 3개만" 소스 교체 | 완료 — 배열 `focus_dates`(스펙 §6.2 최종안) |
+| 1 | Top 3 계약·내 작업 토글·첫 화면 레인·"오늘 이 3개만" 소스 교체 | 완료 — 2026-09-23 통합에서 `focus` 토글 계약으로 단일화(배열 입력은 서버가 거절) |
 | 2 | 딜 이동 기록, 주간 카드 필드 확장(`focusRate`·`memos`·`reviewDays`·이동 딜), 하루 리뷰 두 줄 | 완료 |
-| 2 | 텔레그램 평문 캡처 + 웹훅 응답 답장 | 완료 — 환경 변수 `TELEGRAM_CAPTURE_CHAT_IDS`가 비면 꺼짐 |
+| 2 | 텔레그램 평문 캡처 + 웹훅 응답 답장 | **제외(Q2 재결정 대기)** — 원 브랜치에서는 완료했으나 통합 브랜치에 웹훅 자체가 없어 가져오지 않았다(아래 통합 메모) |
 | 3 | 메모 통합(Q127) | 다른 세션이 `8ec7b43`로 `M` 퀵메모를 일지에 통합 — 남은 것은 프로젝트 `notes` 검색 병합 여부 |
 | 3 | 패턴 채택 저장·태그 facet·`#주간회고` 진입점·주간 탭 | 미착수 |
 | 4 | `weekly_targets` 입력 UI·`stalled.js` 단일화 | 미착수(2주 실측 뒤) |
@@ -35,17 +35,17 @@
 - `getDailyReviewLedger()` live 응답에 `today{date,focusPicked,focusDone,focusLimit,contacts}` — 팝업 부제 "오늘 3개 k/n · 연락 N건". 못 읽으면 `null`(줄 숨김).
 - `persistRevenueRecord(deals, update)`가 `stage_detail` 변화를 `crm_activities(kind='deal', meta.{from,to})`로 남긴다(레거시 첫 분류·동일값 제외). `recordActivity`에 `meta` 인자.
 - 크론 `followup-autopilot`·`content-flywheel`: 매 실행 `automation_runs`(success/failure/ignored) + `automations` 행(`meta.key`) 자동 생성.
-- 텔레그램: 허용 chat의 평문 → `capture_quick_input_v1(hint='inbox')`, 응답 본문 `{ method:'sendMessage', chat_id, text:'저장됨 · 인박스' }`. idempotency 키는 `update_id`의 결정적 UUID.
+- 텔레그램(**미적용** — 통합 브랜치에는 없다): 허용 chat의 평문 → `capture_quick_input_v1(hint='inbox')`, 응답 본문 `{ method:'sendMessage', chat_id, text:'저장됨 · 인박스' }`. idempotency 키는 `update_id`의 결정적 UUID.
 
 ## 검증
 
-- 루트 `npm test`: **1530 tests · 1519 pass · 0 fail · 11 skipped**(macOS `LC_ALL` 지정). Engine `tsc --noEmit` 통과. 신규·갱신 테스트: `task-today`(+2), `weekly-report`(7 재작성), `pms-command`(+4), `pms-command-service`(+5), `automation-runs`(4 신규), `revenue-write`(+3), `daily-review-ledger`(+2), `telegram-capture`(4 신규), `state-usage` 정규식 1건 갱신.
+- 루트 `npm test`: **1530 tests · 1519 pass · 0 fail · 11 skipped**(macOS `LC_ALL` 지정). Engine `tsc --noEmit` 통과. 신규·갱신 테스트: `task-today`(+2), `weekly-report`(7 재작성), `pms-command`(+4), `pms-command-service`(+5), `automation-runs`(4 신규), `revenue-write`(+3), `daily-review-ledger`(+2), `state-usage` 정규식 1건 갱신. (원 브랜치의 `telegram-capture` 4건은 통합에서 제외.)
 - 브라우저(샌드박스 DB `hypvqvtenfiwqaozazdw`, 워크트리 Hub 3013 + Engine 3021): 첫 화면 오늘 할 일에서 ★ 3번 → 배지 `오늘 3개 0/3`, 세 행이 "오늘 3개" 레인, 4번째 버튼 "오늘 3개가 찼습니다 (3/3)"; 같은 세션에서 4번째 할 일을 API로 직접 PATCH → `409 focus-limit`. 콘솔 에러 0.
 - 미검증: 실제 텔레그램 봇 왕복(허용 목록 환경 변수와 봇 시크릿이 있는 배포 필요), 크론의 실제 스케줄 실행(Vercel), 하루 리뷰 팝업의 부제 표시(서버 응답은 단위 테스트로만).
 
 ## 운영 적용 전제
 
-1. 배포 환경 변수: `TELEGRAM_CAPTURE_CHAT_IDS`(쉼표 구분 chat_id) — 비우면 평문 캡처는 꺼진 채로 안전.
+1. 배포 환경 변수: `TELEGRAM_CAPTURE_CHAT_IDS`(쉼표 구분 chat_id) — 비우면 평문 캡처는 꺼진 채로 안전. **통합 브랜치에는 해당 없음**(텔레그램 제외).
 2. 마이그레이션 없음. `automations` 행은 첫 크론 실행이 만든다.
 3. 병합 뒤 워크트리 정리: `git worktree remove ../moonlight_pro-workflow-os-a`. 로컬 미리보기용 launch 설정 `workflow-os-a`(3013)·`workflow-os-a-engine`(3021)은 `.claude/launch.json`(비추적)에만 있다.
 

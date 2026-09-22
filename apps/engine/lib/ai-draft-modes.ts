@@ -180,8 +180,10 @@ export interface DraftResponseInput {
 // off exactly this object; apps/hub/lib/sales-os/draft-contract.js holds the matching
 // predicates and the shared test asserts the two agree. Change this shape and that test fails.
 //
-// `text` stays populated with the raw model output so the draft routes remain debuggable the
-// same way the advisory modes are.
+// Unlike the advisory modes, this object carries no `text`: a draft answer is the named fields
+// or nothing. When parsing fails (`reason: "invalid-draft-json"`) the raw model output is not
+// returned and drafts are deliberately not written to project_updates, so the cause is visible
+// only in the run record the caller writes, never in this response.
 export function buildDraftResponse(input: DraftResponseInput) {
   const ok = Boolean(input.draft);
 

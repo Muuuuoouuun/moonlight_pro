@@ -78,6 +78,9 @@ export async function getWeeklyReport({scope='personal',windowDays=7,timezone='A
     Promise.all(sourceKeys.map(sourceKey=>reader.measure({...period,sourceKey}))),
     reader.scopedRows('deals',[],scope),
     getGoals({scope,workspaceId}),
+    // 창 필터 없이 focus_dates가 있는 할 일을 전부 읽는다 — PostgREST에서 "창 안의 7일 중
+    // 하루라도 포함"은 날짜별 containment OR라 기간 길이만큼 절이 늘고, 운영자 1인 규모에서
+    // 페이지네이션 비용보다 계약이 복잡해진다. 창은 아래 summarizeFocusWindow가 건다.
     personal?reader.read('tasks',[['meta->>focus_dates','not.is.null']]):unmeasured,
     personal?reader.read('journal_entries',[['entry_kind','eq.note'],...inWindow('created_at')]):unmeasured,
     personal?null:reader.scopedRows('crm_activities',[['kind','eq.deal'],...inWindow('occurred_at')],scope),
@@ -121,7 +124,7 @@ export async function getWeeklyReport({scope='personal',windowDays=7,timezone='A
   return {
     source:unavailable?'error':'supabase',configured:Boolean(workspaceId),scope,windowDays,timezone,periodStart,periodEnd,since:window.start,until:window.end,asOf:now.toISOString(),
     partial:failedSources.length>0,failedSources,stats:unavailable?null:stats,scorecard:null,goals,measurements,
-    definitions:{contacts:'CRM에 기록된 실제 연락 활동. 노트·AI 기록·상태 수정은 제외합니다.',doneTasks:'현재 완료 상태인 작업을 completed_at으로 집계합니다. 재오픈 시 과거 값도 바뀝니다.',publishes:'발행한 원고 단위로 실제 발행 시각에 집계합니다. 같은 원고를 다시 기록해도 1건입니다.',modifiedOpenDeals:'기간 중 수정된 현재 진행 딜. 단계 전이 횟수가 아닙니다.',movedDeals:'기간 중 기록된 딜 단계 이동 횟수(crm_activities kind=deal의 이전→이후 단계). 한 딜이 두 번 옮기면 2건입니다.',focusRate:'기간 안의 날짜에 고른 오늘 3개 중 같은 날(KST) 완료한 비율. 재오픈하면 과거 값도 내려갑니다.',memos:'기간 중 새로 남긴 메모(journal_entries note) 수.',reviewDays:'하루 리뷰를 남긴 날 수.',wonDeals:'실제 won_at이 기간 안인 현재 성사 딜. 성사일 미상 딜이 있으면 미측정입니다.',wonAmount:'위 성사 딜의 KRW 계약 금액 합계이며 실제 입금이 아닙니다.',scorecard:'이전 캠페인 수동 현재값은 기간 증거가 없어 주간 실적으로 표시하지 않습니다.'},
+    definitions:{contacts:'CRM에 기록된 실제 연락 활동. 노트·AI 기록·상태 수정은 제외합니다.',doneTasks:'현재 완료 상태인 작업을 completed_at으로 집계합니다. 재오픈 시 과거 값도 바뀝니다.',publishes:'발행한 원고 단위로 실제 발행 시각에 집계합니다. 같은 원고를 다시 기록해도 1건입니다.',modifiedOpenDeals:'기간 중 수정된 현재 진행 딜. 단계 전이 횟수가 아닙니다.',movedDeals:'기간 중 기록된 딜 단계 이동 횟수(crm_activities kind=deal의 이전→이후 단계). 한 딜이 두 번 옮기면 2건입니다.',focusRate:'기간 안의 날짜에 고른 오늘 3개 중 같은 날(KST) 완료한 비율. 재오픈하면 과거 값도 내려갑니다. 운영자 하루 단위 행동이라 워크스페이스 전체(회사 일 포함)를 세므로 개인 스코프인 완료 할 일과 직접 비교하지 마세요.',memos:'기간 중 새로 남긴 메모(journal_entries note) 수. 오늘 3개와 같은 모수 — 워크스페이스 전체(회사 일 포함)입니다.',reviewDays:'하루 리뷰를 남긴 날 수.',wonDeals:'실제 won_at이 기간 안인 현재 성사 딜. 성사일 미상 딜이 있으면 미측정입니다.',wonAmount:'위 성사 딜의 KRW 계약 금액 합계이며 실제 입금이 아닙니다.',scorecard:'이전 캠페인 수동 현재값은 기간 증거가 없어 주간 실적으로 표시하지 않습니다.'},
     highlights:scope==='company'&&winsMeasured?wonDeals.slice(0,3).map(d=>({kind:'won',label:d.title||'딜'})):[],
     ...(unavailable?{error:'weekly-report-read-failed'}:{}),
   };

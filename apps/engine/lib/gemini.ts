@@ -190,8 +190,15 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
   }
 
   // 0 is a meaningful budget (thinking off), so test for undefined rather than falsiness.
-  if (typeof input.thinkingBudget === "number") {
-    generationConfig.thinkingConfig = { thinkingBudget: input.thinkingBudget };
+  // Same family guard as thinkingLevel above, mirrored: thinkingBudget is the Gemini 2.5
+  // option and the 3-series rejects it, which would fail every draft cron (the draft modes
+  // send DRAFT_GENERATION_BOUNDS.thinkingBudget on the default gemini-3.5-flash). Merge
+  // rather than assign so a caller that sends both never loses thinkingLevel silently.
+  if (typeof input.thinkingBudget === "number" && !/^gemini-3[.-]/.test(targetModel)) {
+    generationConfig.thinkingConfig = {
+      ...(generationConfig.thinkingConfig as Record<string, unknown> | undefined),
+      thinkingBudget: input.thinkingBudget,
+    };
   }
 
   if (input.systemInstruction) {

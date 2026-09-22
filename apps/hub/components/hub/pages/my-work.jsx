@@ -5,7 +5,7 @@ import { JournalSources } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, Button, Checkbox, DateQuickPresets, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, Skeleton, TruthBadge, useToast } from "../hub-primitives";
-import { MAX_FOCUS_PER_DAY } from "@/lib/task-today";
+import { focusLimitMessage, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
@@ -1136,7 +1136,6 @@ export function MyWork({ onNavigate }) {
   // 날의 선택은 절대 지워지지 않는다. 상한 초과는 409 focus-limit로 돌아온다(2026-09-20 §6.2).
   // 옛 배열 토글(e0e5c80)에서 가져온 것: 다음 행동을 말하는 상한 카피, 실패 토스트, 저장 확인 뒤
   // 성공 토스트(§9 compact capture와 같은 "서버 확인 뒤 확정" 규칙).
-  const focusLimitMessage = (limit = MAX_FOCUS_PER_DAY) => `오늘 3개가 이미 찼습니다 (${limit}/${limit}) — 하나를 빼고 다시 고르세요.`;
   const toggleFocus = async (item, forceOn) => {
     if (item.lane !== 'task') return;
     const on = typeof forceOn === 'boolean' ? forceOn : !item.focusToday;
@@ -1546,6 +1545,9 @@ export function MyWork({ onNavigate }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--gap)' }}>
         {SIGNAL_TILES.map((t) => {
           const count = bucketCounts[t.key] || 0;
+          // 오늘 3개 타일만 표시 숫자가 서버 요약(완료한 선택 포함)이고 버킷 카운트는 미완료만
+          // 센다 — 고른 3개를 다 끝내면 3/3인데 count는 0이다. 강조는 화면에 적힌 숫자를 따른다.
+          const emphasis = t.key === 'focus' ? focusPickedCount : count;
           const active = lens === 'list' && bucketFilter === t.key;
           return (
             <button
@@ -1561,14 +1563,14 @@ export function MyWork({ onNavigate }) {
                 background: active ? 'var(--surface-2)' : 'var(--surface)',
                 border: `1px solid ${active ? 'var(--line-strong)' : 'var(--line-soft)'}`,
                 borderRadius: 'var(--r-lg)',
-                boxShadow: count > 0 && t.stripe ? `inset 1px 0 0 ${t.stripe}` : undefined,
+                boxShadow: emphasis > 0 && t.stripe ? `inset 1px 0 0 ${t.stripe}` : undefined,
                 transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease',
               }}
             >
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-dim)' }}>{t.label}</div>
               {/* 시그널 스트립은 이 페이지의 hero 지표 — Rhythm 카드(30px)와 같은 급의
                   .stat 크기로 "signal first"를 시각적으로도 주장한다. */}
-              <div className="stat" style={{ fontSize: 26, fontWeight: 500, marginTop: 4, color: count > 0 ? t.color : 'var(--fg-faint)' }}>{t.key === 'focus' ? `${focusPickedCount}/${MAX_FOCUS_PER_DAY}` : count}</div>
+              <div className="stat" style={{ fontSize: 26, fontWeight: 500, marginTop: 4, color: emphasis > 0 ? t.color : 'var(--fg-faint)' }}>{t.key === 'focus' ? `${focusPickedCount}/${MAX_FOCUS_PER_DAY}` : count}</div>
             </button>
           );
         })}

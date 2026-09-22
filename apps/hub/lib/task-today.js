@@ -6,6 +6,12 @@ export const TASK_TIME_ZONE = "Asia/Seoul";
 // 비활성으로 그린다.
 export const MAX_FOCUS_PER_DAY = 3;
 
+// 상한 카피 한 곳 — 내 작업과 첫 화면이 같은 409(focus-limit)에 같은 문장으로 답한다. 다음
+// 행동("하나를 빼고 다시 고르세요")까지 말하는 것이 DESIGN.md §11 error 상태 계약이다.
+export function focusLimitMessage(limit = MAX_FOCUS_PER_DAY) {
+  return `오늘 3개가 이미 찼습니다 (${limit}/${limit}) — 하나를 빼고 다시 고르세요.`;
+}
+
 const LANE_RANK = {
   focus: 0,
   missed: 1,

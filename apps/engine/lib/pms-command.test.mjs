@@ -748,6 +748,24 @@ test("update_task rejects malformed focus toggles and impossible dates", () => {
   assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: true, date: "21/09/2026" } }, context), { ok: false, reason: "invalid-focus-date" });
 });
 
+// 배열 입력을 거절하는 이유가 "마감된 날의 선택 수를 소급해 바꾸지 못하게"인데, 임의 날짜를
+// 받는 토글이 열려 있으면 하루씩 넣고 빼는 것으로 같은 결과가 난다 — 주간 focusRate와 저녁
+// 리뷰 k/n이 지난 날에 대해 움직인다. 허용 폭은 자정 경계 클라이언트용 ±1일뿐이다.
+test("focus toggles cannot reach past or future days beyond the midnight boundary", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-21T01:00:00.000Z" };
+  const id = "55555555-5555-4555-8555-555555555555";
+  const toggle = (date) => pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: true, date } }, context);
+
+  // 운영자 오늘(KST 2026-09-21)과 자정 경계 ±1일은 통과한다.
+  assert.equal(toggle("2026-09-21").ok, true);
+  assert.equal(toggle("2026-09-20").ok, true);
+  assert.equal(toggle("2026-09-22").ok, true);
+  // 그보다 먼 과거·미래는 거절 — 이미 집계된 날을 건드린다.
+  assert.deepEqual(toggle("2026-09-19"), { ok: false, reason: "focus-date-out-of-window" });
+  assert.deepEqual(toggle("2026-09-01"), { ok: false, reason: "focus-date-out-of-window" });
+  assert.deepEqual(toggle("2026-10-05"), { ok: false, reason: "focus-date-out-of-window" });
+});
+
 test("zonedDateKey renders the operator day in Asia/Seoul", () => {
   // 2026-09-20 23:30 UTC is already 2026-09-21 in Seoul.
   assert.equal(pmsCommand.zonedDateKey("2026-09-20T23:30:00.000Z"), "2026-09-21");

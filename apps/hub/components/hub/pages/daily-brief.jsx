@@ -20,7 +20,7 @@ import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { ContactRecordDrawer } from "../contact-record-form";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
-import { buildTaskToday, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
+import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import {
   beginRhythmCheck,
@@ -265,12 +265,17 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   // 오늘 3개 토글 — meta.focus_dates에 오늘을 넣거나 뺀다(2026-09-20 §6.2). 서버가 3건 상한을
   // 강제하고(409 focus-limit), 화면은 상한에서 넣기 버튼을 비활성으로 그린다.
   const focusSummary = taskToday?.focus || { picked: 0, done: 0, limit: MAX_FOCUS_PER_DAY, remaining: MAX_FOCUS_PER_DAY };
-  const focusFull = focusSummary.remaining <= 0;
   const [focusBusyId, setFocusBusyId] = React.useState(null);
+  // focusSummary는 마지막 로드 시점 값이라, 저장 왕복 동안 연달아 누르면 화면상 상한에 안 닿았는데
+  // 서버가 409로 막는다. 저장이 확인된 토글을 여기 더해 내 작업 타일과 같은 분모로 비활성을 그린다.
+  // 새 요약이 도착하면(picked가 바뀌면) 0으로 되돌린다.
+  const [focusDelta, setFocusDelta] = React.useState(0);
+  React.useEffect(() => { setFocusDelta(0); }, [focusSummary.picked]);
+  const focusFull = focusSummary.picked + focusDelta >= focusSummary.limit;
   async function toggleFocus(task) {
     const on = !task.focusToday;
     if (on && focusFull) {
-      setFeedback({ status: 'error', message: `오늘 3개가 이미 찼습니다 (${focusSummary.limit}/${focusSummary.limit}).`, action: null });
+      setFeedback({ status: 'error', message: focusLimitMessage(focusSummary.limit), action: null });
       return;
     }
     setFocusBusyId(task.id);
@@ -282,11 +287,12 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
       });
       const data = await response.json().catch(() => ({}));
       if (response.status === 409 && data.error === 'focus-limit') {
-        throw new Error(`오늘 3개가 이미 찼습니다 (${data.limit}/${data.limit}).`);
+        throw new Error(focusLimitMessage(data.limit || MAX_FOCUS_PER_DAY));
       }
       if (!response.ok || !isDurableTaskUpdateResult(data)) {
         throw new Error(data.error || data.status || `저장 실패 (${response.status})`);
       }
+      setFocusDelta((n) => n + (on ? 1 : -1));
       setFeedback({ status: 'saved', message: on ? `${task.title} — 오늘 3개에 넣음.` : `${task.title} — 오늘 3개에서 뺌.`, action: null });
       onChanged?.();
     } catch (error) {

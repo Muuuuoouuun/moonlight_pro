@@ -137,7 +137,13 @@ function taskChecklist(value: unknown): { ok: true; items: ChecklistItem[] } | {
 
 // `focus: true|false` 또는 `focus: { on, date?: 'YYYY-MM-DD' }`. date를 생략하면 서비스가
 // 운영자 시간대(KST)의 오늘로 푼다 — 클라이언트 시계에 기대지 않는다.
-function taskFocusToggle(value: unknown): { ok: true; value: TaskFocusToggle } | { ok: false; reason: string } {
+//
+// date는 운영자 오늘 ±1일까지만 받는다. 배열 입력을 거절하는 이유(`focus-dates-read-only`,
+// 아래 update_task)가 "이미 마감된 날의 선택 수를 소급해 바꾸지 못하게"인데, 임의 날짜를 받는
+// 토글이 열려 있으면 하루씩 넣고 빼는 것으로 같은 결과를 만들 수 있다. ±1일은 자정 경계에서
+// 화면이 어제 날짜를 들고 있는 클라이언트만 덮는 폭이다.
+const FOCUS_DATE_SLACK_DAYS = 1;
+function taskFocusToggle(value: unknown, today: string): { ok: true; value: TaskFocusToggle } | { ok: false; reason: string } {
   if (typeof value === "boolean") return { ok: true, value: { on: value, date: null } };
   if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, reason: "invalid-focus" };
   const input = value as Record<string, unknown>;
@@ -145,6 +151,9 @@ function taskFocusToggle(value: unknown): { ok: true; value: TaskFocusToggle } |
   if (input.date === undefined || input.date === null || input.date === "") return { ok: true, value: { on: input.on, date: null } };
   const date = text(input.date, 10);
   if (!FOCUS_DATE_KEY.test(date) || !validDay(date)) return { ok: false, reason: "invalid-focus-date" };
+  if (!today) return { ok: false, reason: "invalid-focus-date" };
+  const distanceDays = Math.abs(Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000;
+  if (!Number.isFinite(distanceDays) || distanceDays > FOCUS_DATE_SLACK_DAYS) return { ok: false, reason: "focus-date-out-of-window" };
   return { ok: true, value: { on: input.on, date } };
 }
 
@@ -349,7 +358,7 @@ export function normalizePmsCommand(
     // 변동한다. 병합과 3건 상한은 행을 읽는 pms-command-service가 한다(2026-09-20 §6.2).
     let focus: TaskFocusToggle | null = null;
     if (has(input, "focus")) {
-      const toggle = taskFocusToggle(input.focus);
+      const toggle = taskFocusToggle(input.focus, zonedDateKey(now.value));
       if (!toggle.ok) return { ok: false, reason: toggle.reason };
       focus = toggle.value;
     }
