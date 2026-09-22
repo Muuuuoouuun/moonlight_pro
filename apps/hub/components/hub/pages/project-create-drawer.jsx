@@ -117,7 +117,7 @@ function ProjectCreateSurface({
       setSaveState("degraded");
       setFeedback(areaUnavailable
         ? "업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다."
-        : "업무 분야 원장이 비어 있습니다. 원장을 다시 불러온 뒤 시도하세요.");
+        : "업무 분야 기록이 비어 있습니다. 기록을 다시 불러온 뒤 시도하세요.");
       return false;
     }
     const nextErrors = validateProjectDraft(candidate);
@@ -179,7 +179,7 @@ function ProjectCreateSurface({
     if (savingRef.current || !conflictProject) return;
     savingRef.current = true;
     setSaveState("saving");
-    setFeedback("기존 프로젝트를 원장에서 확인하는 중입니다.");
+    setFeedback("기존 프로젝트를 기록에서 확인하는 중입니다.");
     try {
       const result = await onOpenConflictProject?.(conflictProject);
       if (result?.ok) {
@@ -187,7 +187,7 @@ function ProjectCreateSurface({
         return;
       }
       setSaveState("conflict");
-      setFeedback("기존 프로젝트를 새 원장에서 확인하지 못했습니다. 입력은 유지했습니다. 다시 시도하세요.");
+      setFeedback("기존 프로젝트를 새 기록에서 확인하지 못했습니다. 입력은 유지했습니다. 다시 시도하세요.");
     } catch {
       setSaveState("conflict");
       setFeedback("기존 프로젝트를 열지 못했습니다. 입력은 유지했습니다. 다시 시도하세요.");
@@ -273,7 +273,7 @@ function ProjectCreateSurface({
 
       {!draft.areaId && !advancedOpen && !areaUnavailable && !areaEmpty && (
         <label className="project-create-quick-area" style={LABEL_STYLE}>
-          <span><strong>업무 분야를 한 번만 선택하세요.</strong> 현재 원장에는 자동 적용할 표준 분야가 없습니다.</span>
+          <span><strong>업무 분야를 한 번만 선택하세요.</strong> 현재 기록에는 자동 적용할 표준 분야가 없습니다.</span>
           <select
             ref={areaRef}
             name="areaId"
@@ -295,8 +295,8 @@ function ProjectCreateSurface({
           <Iconed name="flag" size={14} />
           <span>{areaUnavailable
             ? "업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다."
-            : "업무 분야 원장이 비어 있습니다. 운영 원장을 적용한 뒤 다시 불러오세요."}</span>
-          <Button variant="outline" size="sm" onClick={onRetryAreas} style={{ minHeight: 44 }}>원장 다시 불러오기</Button>
+            : "업무 분야 기록이 비어 있습니다. 운영 기록을 적용한 뒤 다시 불러오세요."}</span>
+          <Button variant="outline" size="sm" onClick={onRetryAreas} style={{ minHeight: 44 }}>기록 다시 불러오기</Button>
         </div>
       )}
 

@@ -338,18 +338,18 @@ export function projectCreateFeedback(result = {}) {
   if (result.status === "pipeline-error") {
     return {
       state: "error",
-      message: "프로젝트 입력은 유지했습니다. 콘텐츠 4단계를 원장에서 확인할 때까지 같은 요청으로 다시 시도하세요.",
+      message: "프로젝트 입력은 유지했습니다. 콘텐츠 4단계를 기록에서 확인할 때까지 같은 요청으로 다시 시도하세요.",
     };
   }
   if (result.status === "reload-error") {
     return {
       state: "error",
-      message: "저장은 접수됐지만 새 원장에서 확인하지 못했습니다. 입력과 요청 ID를 유지했으니 다시 시도하세요.",
+      message: "저장은 접수됐지만 새 기록에서 확인하지 못했습니다. 입력과 요청 ID를 유지했으니 다시 시도하세요.",
     };
   }
   if (result.status === "conflict") {
     const message = result.error === "stale-update"
-      ? "다른 변경이 먼저 저장되었습니다. 입력은 유지했습니다. 원장을 다시 확인한 뒤 재시도하세요."
+      ? "다른 변경이 먼저 저장되었습니다. 입력은 유지했습니다. 기록을 다시 확인한 뒤 재시도하세요."
       : "같은 요청 ID에 다른 내용이 감지되었습니다. 입력과 요청 ID를 유지했습니다.";
     return { state: "conflict", message };
   }

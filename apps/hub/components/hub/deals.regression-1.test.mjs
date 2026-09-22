@@ -113,7 +113,7 @@ test('loading uses Skeleton and partial data retains the board with retry', () =
   const partial = mount({ state: 'partial', records: [deal()] });
   assert.equal(partial.findAll(n => n.type === 'ScrollShadowX').length, 1);
   assert.equal(partial.findAll(n => n.type === 'Skeleton').length, 0);
-  partial.findAll(n => n.type === 'Button' && n.props.children.includes('딜 원장 다시 확인'))[0].props.onClick();
+  partial.findAll(n => n.type === 'Button' && n.props.children.includes('딜 기록 다시 확인'))[0].props.onClick();
   assert.equal(partial.reloads(), 1);
 });
 

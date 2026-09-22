@@ -51,7 +51,7 @@ const LANE_OPTIONS = [
 const LANE_LABEL = { lead: "리드", deal: "딜", event: "일정" };
 const LANE_TONE = { lead: "neutral", deal: "neutral", event: "neutral" };
 
-// 모듈 스코프 SWR(7차 속도): 코어 데일리 표면인데 탭 복귀마다 스켈레톤 + 원장 재조회를
+// 모듈 스코프 SWR(7차 속도): 코어 데일리 표면인데 탭 복귀마다 스켈레톤 + 기록 재조회를
 // 반복하던 유일한 예외였다 — 5분 내 캐시를 즉시 서빙하고 항상 배경 재검증한다
 // (revenue/daily-brief/attention/projects와 같은 serve-then-revalidate 계약).
 // 재검증 실패는 기존대로 error 명명 — 오래된 데이터를 live로 위장하지 않는다.
@@ -158,7 +158,7 @@ function ActivityPanel({ item, onClose, onNavigate }) {
         // 레이아웃이 정해진 타임라인의 로딩은 스켈레톤(DESIGN §11) — preview/error에는 쓰지 않는다.
         <Skeleton lines={3} label="최근 기록 불러오는 중" />
       ) : state.syncState === "error" ? (
-        <EmptyState icon="clock" title="활동 기록을 읽지 못했습니다" description="원장 연결 상태를 확인한 뒤 다시 열어 주세요." style={{ minHeight: 140 }} />
+        <EmptyState icon="clock" title="활동 기록을 읽지 못했습니다" description="기록 연결 상태를 확인한 뒤 다시 열어 주세요." style={{ minHeight: 140 }} />
       ) : state.activities.length === 0 ? (
         <EmptyState icon="clock" title="활동 기록이 없습니다" description="연락 기록이 쌓이면 여기에 표시됩니다." style={{ minHeight: 140 }} />
       ) : (

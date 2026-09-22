@@ -4,13 +4,13 @@
 
 ## 연결 준비
 
-1. 문의 원장 마이그레이션 `20260913_0028_unified_inquiries.sql`을 적용할 준비를 하고 Hub와 Engine에 같은 기본 workspace를 지정한다. 실제 배포·적용은 운영 배포 절차를 따른다.
+1. 문의 기록 마이그레이션 `20260913_0028_unified_inquiries.sql`을 적용할 준비를 하고 Hub와 Engine에 같은 기본 workspace를 지정한다. 실제 배포·적용은 운영 배포 절차를 따른다.
 2. Hub에 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, 전용 `COM_MOON_OAUTH_STATE_SECRET`을 설정한다. `GOOGLE_OAUTH_ENABLED_PROVIDERS`의 기존 목록에 `gmail`을 포함한다. OAuth 리디렉션 URI는 `<Hub origin>/api/email/gmail/callback`이다.
 3. 운영자 주소는 `COM_MOON_OPERATOR_EMAIL`로 지정한다. 기존 기본값을 쓰는 환경에서는 저장소의 `resolveOperatorEmail` 기본 계정이 적용된다. 브라우저 로그인 힌트나 저장된 설정만으로 수집 계정을 확정하지 않고, 실행마다 인증된 Gmail profile 주소를 다시 검증한다.
 4. Email 화면의 Gmail 연결을 진행한다. 전송 전용 토큰은 재연결해야 한다. OAuth 동의 목록은 `gmail.send`, `gmail.readonly`, `userinfo.email`이고, 수집 실행 시 Google tokeninfo의 실제 범위에 `gmail.readonly`, `gmail.modify`, `https://mail.google.com/` 중 하나가 있어야 한다. 단순히 `gmail.metadata`나 `gmail.send`만 있으면 본문 수집을 시작하지 않는다.
 5. Hub의 `COM_MOON_ENGINE_URL`과 Hub·Engine의 `COM_MOON_SHARED_WEBHOOK_SECRET`을 연결한다. Hub는 문의 도메인을 직접 저장하지 않고 Engine의 `POST /api/inquiries/command`로만 변경한다.
 
-기존 `GOOGLE_REFRESH_TOKEN_BOSS` / `GOOGLE_REFRESH_TOKEN` 환경 토큰도 호환한다. 저장된 OAuth 연결이 있으면 그것을 우선하며, 연결 원장 읽기 실패를 환경 토큰으로 조용히 우회하지 않는다. 저장된 연결의 계정이 검증됐던 경우 토큰 만료·권한 오류를 해당 계정의 최근 수집 오류에 남긴다. 환경 토큰만 있고 과거 검증 연결이 없는 경우에는 인증 실패를 실행 응답으로 보고한다.
+기존 `GOOGLE_REFRESH_TOKEN_BOSS` / `GOOGLE_REFRESH_TOKEN` 환경 토큰도 호환한다. 저장된 OAuth 연결이 있으면 그것을 우선하며, 연결 기록 읽기 실패를 환경 토큰으로 조용히 우회하지 않는다. 저장된 연결의 계정이 검증됐던 경우 토큰 만료·권한 오류를 해당 계정의 최근 수집 오류에 남긴다. 환경 토큰만 있고 과거 검증 연결이 없는 경우에는 인증 실패를 실행 응답으로 보고한다.
 
 현재 OAuth helper에는 과거 shared secret의 state-signing fallback이 남아 있다. 운영에서는 readiness 정의에 맞게 전용 `COM_MOON_OAUTH_STATE_SECRET`을 반드시 사용한다. 새 수집기와 Gmail 연결 URL은 명시적 제공자 허용 목록을 따른다.
 

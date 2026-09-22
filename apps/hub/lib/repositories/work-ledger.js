@@ -112,7 +112,7 @@ function buildDecisionsState(decisionRows, profileRows) {
       partial: false,
       failedSources: ["decisions"],
       truncatedSources: [],
-      error: { message: "decisions 원장을 읽지 못했습니다.", retryable: true },
+      error: { message: "decisions 기록을 읽지 못했습니다.", retryable: true },
     };
   }
 
@@ -129,7 +129,7 @@ function buildDecisionsState(decisionRows, profileRows) {
     failedSources: profilesFailed ? ["profiles"] : [],
     truncatedSources: truncated ? ["decisions"] : [],
     error: profilesFailed
-      ? { message: "profiles 원장을 읽지 못해 결정 작성자 일부를 확인할 수 없습니다.", retryable: true }
+      ? { message: "profiles 기록을 읽지 못해 결정 작성자 일부를 확인할 수 없습니다.", retryable: true }
       : null,
   };
 }
@@ -390,7 +390,7 @@ function buildRoadmapState(projectRows, milestoneRows, brandRows) {
     partial,
     error: failedSources.length > 0
       ? {
-          message: `${failedSources.join(", ")} 원장을 읽지 못했습니다.`,
+          message: `${failedSources.join(", ")} 기록을 읽지 못했습니다.`,
           retryable: true,
         }
       : null,
@@ -545,8 +545,8 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
         truncatedSources: [],
         error: {
           message: Array.isArray(routineRows)
-            ? "workspace timezone 원장을 읽지 못했습니다."
-            : "routine_checks 원장을 읽지 못했습니다.",
+            ? "workspace timezone 기록을 읽지 못했습니다."
+            : "routine_checks 기록을 읽지 못했습니다.",
           retryable: true,
         },
       };

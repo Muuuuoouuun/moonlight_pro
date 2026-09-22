@@ -31,7 +31,7 @@ AI를 두 계층으로 쪼개는 이유는 운영자 프로필의 확정 제약 
 | 항목 | 실측 | 함의 |
 |---|---|---|
 | `notes` 테이블 | live. `id, workspace_id, project_id, title, body, created_at` | 날짜(`occurred_at`)·태그·출처·정리 상태 컬럼이 **전부 없다** |
-| `notes` 읽기 경로 | `operating-ledger.js:650` 전역 팬아웃 `OPTIONAL_READ_LIMIT+1 = 81`행 + 프로젝트 선택 시 재조회(`:691`) | 일지를 여기 넣으면 **프로젝트 원장이 오염된다**(§4.1) |
+| `notes` 읽기 경로 | `operating-ledger.js:650` 전역 팬아웃 `OPTIONAL_READ_LIMIT+1 = 81`행 + 프로젝트 선택 시 재조회(`:691`) | 일지를 여기 넣으면 **프로젝트 기록이 오염된다**(§4.1) |
 | `memos` 테이블 | 스키마 존재, 코드 소비자 **0건**, `agent_id` 스코프 | 일지 용도로 재사용 불가 |
 | Quick Capture | `daily-brief.jsx` → `POST /api/hub/inbox` → Engine. `maxLength 4000`, 단일 `<input>`, 목적지 `task`\|`work_order` | 긴 서술 입력 표면이 아님 |
 | AI 프로바이더 | `apps/engine/lib/gemini.ts` `generateGeminiText()`. 라우트 `/api/ai/{brief,sales-mentor,brand-mentor}` | 신규 라우트 추가만 하면 되고 프로바이더 배선은 이미 있다 |
@@ -59,7 +59,7 @@ AI를 두 계층으로 쪼개는 이유는 운영자 프로필의 확정 제약 
 
 `notes`에 일지를 넣으면 **기존 표면이 실제로 회귀한다.**
 
-`operating-ledger.js`는 `notes`를 `created_at.desc` 순으로 81행 읽어 프로젝트 원장에 싣는다. 일지는 정의상 매일 쌓이고 `project_id`가 없다. 하루 3건만 적어도 **한 달이면 90건** — 상위 81행을 일지가 전부 차지하고 프로젝트 노트는 원장에서 사라진다. 정렬 키가 `created_at`이므로 이건 가능성이 아니라 **결정된 결과**다. 여기에 MCP 페이로드가 이미 최대 159KB인 상황이 겹친다.
+`operating-ledger.js`는 `notes`를 `created_at.desc` 순으로 81행 읽어 프로젝트 기록에 싣는다. 일지는 정의상 매일 쌓이고 `project_id`가 없다. 하루 3건만 적어도 **한 달이면 90건** — 상위 81행을 일지가 전부 차지하고 프로젝트 노트는 기록에서 사라진다. 정렬 키가 `created_at`이므로 이건 가능성이 아니라 **결정된 결과**다. 여기에 MCP 페이로드가 이미 최대 159KB인 상황이 겹친다.
 
 `memos`는 소비자 0건에 `agent_id` 스코프라 애초에 후보가 아니다. **이 스펙은 `memos`를 폐기 대상으로 표시할 것을 권장한다**(삭제 마이그레이션은 별도 결정 — §12).
 
@@ -248,7 +248,7 @@ MCP로 `list_journal`(투영) → 필요한 건만 `get_journal_entry`로 본문
 | `ai_summary` | 엔트리에 직접 write | 원문 `body`를 건드리지 않고 되돌릴 수 있다 |
 | `tags` | 엔트리에 write, 단 `tag_source='ai'`로 표시 | UI에서 **권장(dashed)**으로 렌더 — 사실로 위장하지 않는다 |
 | 할 일 추출 | `work_orders` `status='proposed'` | **`tasks`에 직접 쓰지 않는다** |
-| 콘텐츠 아이디어 | `work_orders` `status='proposed'` | **콘텐츠 원장에 직접 쓰지 않는다** |
+| 콘텐츠 아이디어 | `work_orders` `status='proposed'` | **콘텐츠 기록에 직접 쓰지 않는다** |
 
 승인은 기존 `decide_work_order` 경로를 그대로 쓴다. 새 승인 UI를 만들지 않는다.
 
@@ -292,7 +292,7 @@ MCP로 `list_journal`(투영) → 필요한 건만 `get_journal_entry`로 본문
 - **타임라인**: 날짜 그룹 헤더 + 엔트리 행(`.hub-row`, JS hover 금지)
 - 행 구성: `occurred_at`(`.mono`, ≥10.5px) · `ai_summary` 또는 `body` 첫 줄 · 태그 칩
 - **태그 확정도**: `CertaintyBadge state="recommended"`(AI 태그 — dashed ◇ + `권장`) vs `state="confirmed"`(운영자 확정 — solid). DESIGN §5.3·§8.2 그대로. **AI 추천을 사실처럼 렌더하지 않는다**
-- **원장 상태**: `TruthBadge`(live/preview/error). Hub read 봉투 계약(200 + `{status:'error'}`)을 읽어 분기 — `!r.ok`만 보면 read 실패가 "기록 없음"으로 위장된다
+- **기록 상태**: `TruthBadge`(live/preview/error). Hub read 봉투 계약(200 + `{status:'error'}`)을 읽어 분기 — `!r.ok`만 보면 read 실패가 "기록 없음"으로 위장된다
 - **필터**: `SegmentedControl`(전체 / 정리 전 / 정리됨) + 태그 칩
 - 행 클릭 → `EditDrawer`(본문·날짜·태그 편집, "정리 안 함" 토글, 프로젝트 연결). ESC·오버레이·닫기 3중
 - `EmptyState` + 작성 CTA, `N` 단축키로 새 일지 (DESIGN §8.1)

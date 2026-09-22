@@ -217,7 +217,7 @@ Notion 구조 × Apple 공백 × Classin Green.
 - **우선순위 큐(실구현, `lib/crm/priority.ts`):** LLM 아닌 룰엔진. `clampScore` 0~100, `severityFromScore`(critical/high/medium/low), bucket(today/renewal/watch/stale_recovery). `RESPONSE_TARGET_SOURCES={demo_modal, contact_page, meta_lead_ads}` base가중, 48h+ 미응답·만료 D-day·잔액·미수업일·태스크 due 가중. reason은 일수·건수만(금액 금지=통화 안전).
 - **매칭 자동확정 티어:** confidence ≥ 0.92 AND 2위와 갭 ≥ 0.15 → 자동 confirm(`metadata.auto_confirmed=true`). **customer/partner_account만 자동, deal은 항상 수동.** 정책=`crm_source_priorities.auto_confirm_*`, migration 미적용 시 조용히 비활성. `/admin/crm/matching` 인박스(일괄확정/제외/되돌리기). 소스 우선순위 app_v2>xiaoshouyi>lead>branch_rev_sheet.
 
-### 매출 원장 (REV/DSH)
+### 매출 기록 (REV/DSH)
 
 - **자체DB 소유율:** 활동/라벨/할일 100%, 리드 95%, 고객 ~30%, **매출 0%**(외부 의존). 성과분석은 `branch_rev_deals`(지사 시트, CNY)를 읽음.
 - **확도 3단계:** 예정 / 고확도 / 확정(`metadata.confidence`). REV 그룹핑=customerGroupKey. 정본=crm_orders(NEO 고객매출), 지사시트=파이프라인 보조. 이중계상 제거=`crm_source_links` status=confirmed로만 합산.
@@ -337,7 +337,7 @@ Notion 구조 × Apple 공백 × Classin Green.
 - RLS/admin 클라이언트 트랩(빈 배열 무음).
 - 마이그레이션 누락 INSERT 무음 실패.
 - JSON 파일 저장소가 서버리스 읽기전용 FS에서 쓰기 유실(channel-conversations·lead-magnets·event-metrics).
-- 하드웨어 원장 파일임포트↔라이브싱크 상호 덮어씀(둘 다 source='sheet_import' replace). 시트임포트 replace/merge 두 RPC 컬럼(unit_price/amount_usd)·source_digest 해시 패리티 필수(원가 NULL 유실은 빌드가 못 잡음).
+- 하드웨어 기록 파일임포트↔라이브싱크 상호 덮어씀(둘 다 source='sheet_import' replace). 시트임포트 replace/merge 두 RPC 컬럼(unit_price/amount_usd)·source_digest 해시 패리티 필수(원가 NULL 유실은 빌드가 못 잡음).
 - 출고→딜 매출 미반영(HW 시트 `3.출고 현황`에 매출 USD+CNY 실존하나 USD만 캡처·CNY 유실).
 - convert-v2 멱등성이 notes 텍스트 마커 의존.
 - **NEXT_PUBLIC_ 동적 접근 금지**(`process.env[name]`는 브라우저에서 undefined, 항상 리터럴).

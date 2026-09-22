@@ -12,7 +12,7 @@
 | 다음 행동 | Engine은 `tasks.next_action`을 쓰지만 기존 operating ledger의 task mapping에서 누락 | 읽기 전달을 복구해야 보드에서 활용 가능 |
 | 프로젝트 메모 | `notes.project_id`로 연결하고 제목·본문을 조회. 상세 화면은 4개로 잘라 전달 | 연결은 존재하지만 과거 메모 재탐색이 제한적 |
 | 빠른 메모 입력 | `capture_quick_input_v1`은 task 외 hint를 `work_order`로 저장 | 프로젝트 `notes`와 별도 흐름. 빠른 입력이 프로젝트 메모로 자동 연결된다고 설명하면 안 됨 |
-| 고객 메모 | CRM 활동의 note 유형으로 관리 | 프로젝트 메모와 같은 원장이 아님. 무분별한 복제보다 원본 참조가 적합 |
+| 고객 메모 | CRM 활동의 note 유형으로 관리 | 프로젝트 메모와 같은 기록이 아님. 무분별한 복제보다 원본 참조가 적합 |
 | 데이터 완전성 | 전역·프로젝트별 읽기 제한 및 failed/partial source 계약 존재 | 불러온 수와 전체 수, 조회 실패와 실제 빈 상태를 구분해야 함 |
 
 근거 파일: `apps/hub/components/hub/pages/projects.jsx`, `project-detail-panel.jsx`, `apps/hub/lib/pms-ui.js`, `apps/hub/lib/repositories/operating-ledger.js`, `apps/engine/lib/pms-command.ts`, `supabase/migrations/20260715_0014_quick_capture_receipts.sql`, `apps/hub/lib/repositories/crm-activities.js`.

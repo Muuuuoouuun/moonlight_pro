@@ -162,7 +162,7 @@ const OVERVIEW_CHILDREN = Object.fromEntries(SIDEBAR_SCOPES.map(({ key }) => [ke
 
 export const SIDEBAR_PRIMARY = [
   {
-    // Home — Futura 텍스처의 첫 화면(§15 2026-09-18). 같은 daily-brief 원장을 다른
+    // Home — Futura 텍스처의 첫 화면(§15 2026-09-18). 같은 daily-brief 기록을 다른
     // 렌즈로 본다. 기본 착지(dashboard → daily-brief)는 아직 바꾸지 않았다.
     key: 'home',
     label: '홈',

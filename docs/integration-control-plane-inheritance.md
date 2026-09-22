@@ -32,9 +32,9 @@ flowchart LR
 
 - **Hub**는 운영자 read surface와 승인된 로컬 write surface다. 외부 실행을 직접 가장하지 않고 Engine에 전달하며, 미연결 상태에서는 `preview` 또는 명시적 오류를 반환한다.
 - **Engine**은 외부 webhook intake, OpenClaw outbound sync, PMS/content command validation·persistence, 실행·수신 이력을 맡는다. `webhook_events`, `project_updates`, `sync_runs`와 재조회된 durable project/task/content가 실행 증거다.
-- **OpenClaw relay**는 로컬 transport adapter다. Engine snapshot을 OpenClaw CLI로 넘길 뿐 원장이 아니며, 독자적으로 프로젝트 상태를 확정하지 않는다.
-- **Supabase**가 공유 운영 원장이다. OpenClaw가 만든 진행 정보도 Engine webhook을 거쳐 원장에 기록된 뒤 Hub가 읽는다.
-- OpenClaw의 반환 경로는 `POST /api/webhook/project/openclaw`이다. Hub나 relay에 별도 반환 원장을 만들지 않는다.
+- **OpenClaw relay**는 로컬 transport adapter다. Engine snapshot을 OpenClaw CLI로 넘길 뿐 기록이 아니며, 독자적으로 프로젝트 상태를 확정하지 않는다.
+- **Supabase**가 공유 운영 기록이다. OpenClaw가 만든 진행 정보도 Engine webhook을 거쳐 기록된 뒤 Hub가 읽는다.
+- OpenClaw의 반환 경로는 `POST /api/webhook/project/openclaw`이다. Hub나 relay에 별도 반환 기록을 만들지 않는다.
 
 ### 2. 네 시크릿의 책임 분리
 
@@ -169,7 +169,7 @@ flowchart LR
 - Claude Desktop의 `claude_desktop_config.json` 존재만으로 연결 완료라고 쓰지 않는다. 앱 시작 뒤 config가 바뀌었다면 재시작 후 Moonlight child process와 tool discovery를 둘 다 확인한다.
 - eeoCRM 숫자는 변할 수 있는 ledger snapshot이다. 문서의 row count는 검증 날짜와 함께 쓰고, Mac에서 provider 인증이 확인되기 전까지 “sync”나 “MCP live”라고 부르지 않는다.
 - eeoCRM enrichment의 evidence-free 실행은 비교용 dry-run으로만 허용한다. `--apply`는 반드시 `--evidence`와 함께 실행하며, 증거를 생략한 적용은 기존 공개 근거를 지울 수 있으므로 스크립트가 선제 거부한다.
-- Revenue 전체 원장은 감사·검색을 위해 119건을 유지하지만 Daily Brief 고객 행동 신호에는 `owner="Me"`로 검증된 row만 사용한다. `eeocrm` row는 단순 `owner_id` 존재가 아니라 `owner_scope=junhyuk` 또는 `owner:junhyuk` 근거가 있어야 `Me`다.
+- Revenue 전체 기록은 감사·검색을 위해 119건을 유지하지만 Daily Brief 고객 행동 신호에는 `owner="Me"`로 검증된 row만 사용한다. `eeocrm` row는 단순 `owner_id` 존재가 아니라 `owner_scope=junhyuk` 또는 `owner:junhyuk` 근거가 있어야 `Me`다.
 - OpenClaw/Telegram/Slack처럼 여러 outbound channel이 가능한 경우 channel이 생략된 요청을 임의 채널로 보내지 않는다. 현재 뉴스 cron은 Telegram supergroup을 명시하지만, 다른 자동화는 명시적 routing policy가 없으면 disabled 또는 preview가 맞다.
 - OpenClaw job의 agent summary가 “전송 완료”라고 써도 `delivered=false`이면 전달 성공이 아니다. cron result의 `deliveryStatus`를 최종 증거로 사용한다.
 - `openclaw update --dry-run`은 2026.3.28→2026.7.1, plugin sync, gateway restart를 예고했다. 첫 post-fix 09:30 delivery 증거 전에 runtime 변수를 추가하지 않기 위해 실제 update는 보류한다.

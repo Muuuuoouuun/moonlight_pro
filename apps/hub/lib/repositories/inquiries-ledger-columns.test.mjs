@@ -12,7 +12,7 @@ import { test } from "node:test";
 
 const source = await readFile(new URL("./inquiries-ledger.js", import.meta.url), "utf8");
 
-// 원장 스키마의 사실. `supabase/setup/00_live_schema.sql`과 운영 DB 실측(2026-09-20)이 근거다.
+// 기록 스키마의 사실. `supabase/setup/00_live_schema.sql`과 운영 DB 실측(2026-09-20)이 근거다.
 const LABEL_COLUMN = {
   leads: "name",
   deals: "title",
@@ -33,7 +33,7 @@ function pairsIn(text) {
   return out;
 }
 
-test("문의 원장이 조회하는 라벨 컬럼이 실제 스키마와 일치한다", () => {
+test("문의 기록이 조회하는 라벨 컬럼이 실제 스키마와 일치한다", () => {
   const pairs = pairsIn(source);
   assert.ok(pairs.length >= 4, `테이블·컬럼 쌍을 찾지 못했다 — 정규식이 소스와 어긋났다 (찾은 수: ${pairs.length})`);
 

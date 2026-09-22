@@ -161,7 +161,7 @@ test("stale project edit rebases its source and exposes the loaded-ledger messag
   assert.match(projectsSource, /data\.status === ['"]conflict['"][\s\S]{0,240}data\.project/);
   assert.match(projectsSource, /setProjectEditSource\([\s\S]{0,120}\.source/);
   assert.match(projectsSource, /setProjectDraft\([\s\S]{0,120}\.draft/);
-  assert.match(projectsSource, /최신 원장 기준을 불러왔습니다/);
+  assert.match(projectsSource, /최신 기록 기준을 불러왔습니다/);
   assert.match(primitivesSource, /r\?\.message/);
   assert.match(primitivesSource, /saveFeedback/);
 });
@@ -240,9 +240,9 @@ test("project creation opens a recoverable draft even when no canonical area is 
 
 test("project create surface explains an empty area ledger and offers an inline retry", () => {
   assert.match(createDrawerSource, /const areaEmpty = !areaUnavailable && areas\.length === 0/);
-  assert.match(createDrawerSource, /업무 분야 원장이 비어 있습니다/);
+  assert.match(createDrawerSource, /업무 분야 기록이 비어 있습니다/);
   assert.match(createDrawerSource, /onRetryAreas/);
-  assert.match(createDrawerSource, /원장 다시 불러오기/);
+  assert.match(createDrawerSource, /기록 다시 불러오기/);
   assert.match(createDrawerSource, /disabled=\{saving \|\| areaUnavailable \|\| areaEmpty\}/);
 });
 

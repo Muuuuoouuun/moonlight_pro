@@ -39,7 +39,7 @@ const response = {
 - [x] `normalizeJournalSearch(input)`와 `getJournalSearch(input)`를 제공한다. q는 trim 후 200자까지 문자 그대로, 종류는 기존 journal enum, used는 all/used/unused, limit는 3 또는 40(기본40). 날짜는 유효한 YYYY-MM-DD, KST 시작 포함/종료 다음 날 미포함. 업무 type/id는 쌍으로 검증하고 같은 workspace 실제 객체를 확인한다.
 - [x] 매개변수 RPC `journal_search_v1`이 workspace+entry_kind=note를 먼저 한정하고 q는 title/body/note_meta.enhancement OR, 나머지 필터는 AND로 적용한다. context/use는 EXISTS. q의 %/_/backslash/*는 literal. body 전체와 enhancement 전체는 목록에 반환하지 않는다. match snippet은 해당 필드에서 최대180자, 저장 원문은 변형하지 않는다.
 - [x] occurred_at desc,id desc cursor; 서버 cursor는 workspace와 정규화된 filters 식별값을 묶고 다른 조건·malformed cursor는 status:error. limit+1 조회로 더 보기만 판단한다. 전체 개수로 오인할 count를 만들지 않는다.
-- [x] HTTP200 error/preview envelopes. RPC·table service-role 권한, migration 재적용, KST 경계·동일시각 페이지·오래된 기록·보강-only·literal 특수문자·다중 연결 중복·다른 workspace·삭제된 context를 실제 임시 DB로 확인한다. SQL 인덱스는 workspace/time 및 context 접근부터 사용하고 작은 개인 원장에 없는 확장 의존성을 추가하지 않는다.
+- [x] HTTP200 error/preview envelopes. RPC·table service-role 권한, migration 재적용, KST 경계·동일시각 페이지·오래된 기록·보강-only·literal 특수문자·다중 연결 중복·다른 workspace·삭제된 context를 실제 임시 DB로 확인한다. SQL 인덱스는 workspace/time 및 context 접근부터 사용하고 작은 개인 기록에 없는 확장 의존성을 추가하지 않는다.
 
 ## Task 2: 검색·편집 상태 분리 (root 담당)
 
@@ -68,7 +68,7 @@ Files: 새 `components/hub/related-memos.jsx`; 수정 `pages/project-detail-pane
 
 - [x] 실제 객체 `{type,id}`만 전달하는 공통 RelatedMemos를 넣는다. 검색 API에 context+limit3으로 요청하고 즉시 요약/날짜/명시적 연결 이유를 표시한다.
 - [x] `모두 보기`는 해당 context 필터의 메모 URL, 원문 열기는 같은 필터와 note ID를 함께 가져간다. 메모 생성은 같은 context를 가진 기존 capture 경로를 유지한다.
-- [x] 내부 메모 변경 이벤트로 동일 화면의 관련 목록을 갱신한다. component unmount/type/id 변경에서 요청을 취소하고 이전 업무 결과가 다음 업무에 보이지 않게 한다. 원장의 진짜 UUID가 없는 preview 객체는 요청하지 않는다.
+- [x] 내부 메모 변경 이벤트로 동일 화면의 관련 목록을 갱신한다. component unmount/type/id 변경에서 요청을 취소하고 이전 업무 결과가 다음 업무에 보이지 않게 한다. 기록의 진짜 UUID가 없는 preview 객체는 요청하지 않는다.
 - [x] 여러 곳에서 쓰는 관련 목록은 기존 UI font/border/spacing에 맞추며 새 전역 스타일·새 사이드바를 추가하지 않는다.
 
 ## Task 4: 검수·통합

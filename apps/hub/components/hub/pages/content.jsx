@@ -35,7 +35,7 @@ const EMPTY_CONTENT_LEDGER = {
   cadence: null,
 };
 
-// 모듈 스코프 stale-while-revalidate — Studio↔Queue↔Campaigns 탭 전환마다 원장을 다시
+// 모듈 스코프 stale-while-revalidate — Studio↔Queue↔Campaigns 탭 전환마다 기록을 다시
 // 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
 const CONTENT_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let catalogCache = null;
@@ -159,7 +159,7 @@ export function Queue({ workspace }) {
       <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="콘텐츠 단계" />
       {(tab === 'all' || tab === 'idea') && <ContentIdeaCapture brands={brands} initialBrand={selectedBrand?.id || ''} orgScope={workspace === 'classin' ? 'company' : 'personal'} fixedScope={Boolean(ws)} onSaved={() => setTab('idea')} />}
       <Card pad={false}>
-        {visibleQueue.length === 0 && <EmptyState icon="queue" title={`${activeLabel}에 표시할 콘텐츠가 없습니다`} description={ledger.syncState === 'error' || ledger.syncState === 'partial' ? '원장 읽기가 완료되지 않았습니다. 실제 콘텐츠가 비어 있다는 뜻은 아닙니다.' : ledger.syncState === 'preview' ? '저장소가 연결되면 저장한 소재와 원고가 여기에 표시됩니다.' : '떠오른 문장이나 링크를 소재함에 담아보세요.'} />}
+        {visibleQueue.length === 0 && <EmptyState icon="queue" title={`${activeLabel}에 표시할 콘텐츠가 없습니다`} description={ledger.syncState === 'error' || ledger.syncState === 'partial' ? '기록 읽기가 완료되지 않았습니다. 실제 콘텐츠가 비어 있다는 뜻은 아닙니다.' : ledger.syncState === 'preview' ? '저장소가 연결되면 저장한 소재와 원고가 여기에 표시됩니다.' : '떠오른 문장이나 링크를 소재함에 담아보세요.'} />}
         {visibleQueue.map((item, index) => <div key={item.id} className="hub-row hub-content-queue-row" role="button" tabIndex={0} onClick={() => openStudio(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudio(item.id); } }} style={{ display: 'grid', padding: '16px', alignItems: 'center', gap: 12, cursor: 'pointer', borderBottom: index < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
           <div style={{ minWidth: 0 }}><div style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div><div style={{ marginTop: 5, fontSize: 12, color: 'var(--fg-muted)' }}>{item.channel} · {item.brandName === 'No brand' ? '브랜드 미지정' : item.brandName || '브랜드 미지정'}</div></div>
           <Badge tone="neutral" size="xs">{tabs.find((entry) => entry.key === statusKeyOf(item))?.label || item.status}</Badge>

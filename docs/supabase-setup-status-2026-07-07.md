@@ -64,7 +64,7 @@
 - `lead_intake_raw.source` CHECK: `business_card/inbox/eeocrm/gmail` 허용
 - `uq_work_orders_open_followup` 부분 유니크 인덱스 존재
 - 스토리지 버킷 `moonlight-content-assets`(private) + `moonlight-public`(public) 존재
-- 원장: workspace 1, projects 4, brands 9, agents 6, leads 2, work_orders 15
+- 기록: workspace 1, projects 4, brands 9, agents 6, leads 2, work_orders 15
 - `npm run check:connections`: Hub/Engine Supabase REST 도달, workspace ID 일치
 
 ## 2. 기타 필요한 것 (상태별)

@@ -1,4 +1,4 @@
-// 브랜드 컨텐츠 로그 — 크로스 브랜드 콘텐츠 원장을 운영자 첨부 Brand Content Log v5
+// 브랜드 컨텐츠 로그 — 크로스 브랜드 콘텐츠 기록을 운영자 첨부 Brand Content Log v5
 // 디자인이 요구하는 형태(보드/리스트, 브랜드 아이덴티티 컬러, 채널·검색·정렬 필터)로
 // 투영하는 순수 계산 계층. 부수효과·React·fetch 없음 — Supabase 없이도 검증된다.
 // (2026-09-01 docs/superpowers/specs/2026-09-01-brand-content-log.md)

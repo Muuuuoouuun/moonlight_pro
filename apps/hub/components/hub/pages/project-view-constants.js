@@ -94,7 +94,7 @@ export const BRAND_ORDER_KEY = 'mlp.pms.brand-order';
 export const EMPTY_CONTAINER_KEY = 'mlp.pms.show-empty-containers';
 
 // Q116 확정 — 기한 임박순 정렬. 무기한은 정렬에 섞지 않고 그룹 꼬리로 보낸다(Q120).
-// 무기한끼리는 원장 순서 유지 (Array.prototype.sort는 stable).
+// 무기한끼리는 기록 순서 유지 (Array.prototype.sort는 stable).
 export function compareProjectsByDue(a, b) {
   const ta = Date.parse(a?.dueAt || '');
   const tb = Date.parse(b?.dueAt || '');
@@ -107,7 +107,7 @@ export function compareProjectsByDue(a, b) {
 }
 
 // To-dos 뷰 시간 구간 (monday My Work 문법 + Q120 무기한 분리, 2026-08-19 PMS 디벨롭).
-// 원장 bucket은 지남→오늘·무기한→다음주로 뭉개므로 UI에서 dueAt로 직접 나눈다.
+// 기록 bucket은 지남→오늘·무기한→다음주로 뭉개므로 UI에서 dueAt로 직접 나눈다.
 // 기준 TZ Asia/Seoul, calendar day (deep-design §10.1 시간 계약).
 export const TODO_TIME_SECTIONS = ['기한 지남', '오늘', '내일', '이번 주', '이후', '기한 없음'];
 // 요약 4칸 클릭 필터의 표시 라벨 (project-pms-components의 PORTFOLIO_CELLS와 동일 문구).

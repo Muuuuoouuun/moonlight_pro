@@ -10,10 +10,10 @@ import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 //
 // 데이터는 새로 만들지 않는다. /api/hub/daily-brief의 `signals`(kind·title·summary·meta·
 // source·decisions·tone)를 그대로 소비하고, 시간표는 Calendar가 쓰는 /api/calendar/google/event를
-// 공유한다. 첫 화면이 별도 원장을 갖는 순간 Daily Brief와 숫자가 갈라지기 때문이다.
+// 공유한다. 첫 화면이 별도 기록을 갖는 순간 Daily Brief와 숫자가 갈라지기 때문이다.
 // 일정 완료·특이사항도 같은 이유로 Daily Brief·Calendar와 같은 CalendarOutcome(outcomeKey)을 쓴다.
 //
-// 기존 daily-brief.jsx는 건드리지 않는다 — Home은 같은 원장 위의 다른 렌즈다.
+// 기존 daily-brief.jsx는 건드리지 않는다 — Home은 같은 기록 위의 다른 렌즈다.
 
 function formatEyebrowDate(date) {
   return new Intl.DateTimeFormat('ko-KR', {
@@ -104,7 +104,7 @@ function TriageDetail({ signal, onDecide }) {
       <div className="fx-card">
         <EmptyState
           title="확인된 신호가 없습니다"
-          description="새 신호는 원장이 갱신되면 여기에 쌓입니다."
+          description="새 신호는 기록이 갱신되면 여기에 쌓입니다."
         />
       </div>
     );
@@ -269,7 +269,7 @@ export function Home({ onNavigate }) {
         ) : null}
       </header>
 
-      {status === 'partial' && <div><TruthBadge state="partial" reason="일부 원장만 확인했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>}
+      {status === 'partial' && <div><TruthBadge state="partial" reason="일부 기록만 확인했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>}
       {status === 'loading' ? (
         <div className="fx-split">
           <Skeleton lines={5} />

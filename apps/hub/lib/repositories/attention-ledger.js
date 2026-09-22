@@ -17,7 +17,7 @@ import { getInquiriesLedger } from './inquiries-ledger.js';
 // list can complete them durably through PATCH /api/hub/tasks.
 
 // 태스크 소스는 lean read(getTaskLedger, 4콜/1웨이브) — 전체 getProjectLedger(11+콜/
-// 2웨이브)는 decisions/notes/checks/catalog 등 이 원장이 쓰지 않는 데이터까지 태웠다
+// 2웨이브)는 decisions/notes/checks/catalog 등 이 기록이 쓰지 않는 데이터까지 태웠다
 // (2026-08-05 re-audit 속도 #1). 이 엔드포인트는 내 작업 로드 + 모든 완료/미루기 뒤
 // reload가 타는 핫패스다.
 import { getTaskLedger } from "./operating-ledger.js";
@@ -210,9 +210,9 @@ function assignPriority(item, leadScoreByDealEntityId) {
   return { priorityScore: 1000, priorityReason: "일반" };
 }
 
-// includeRaw: 첫 화면(daily-brief)이 이 원장을 정본 어댑터로 소비할 때(Phase 1B A-1 컷오버)
-// 원본 원장(projectLedger/revenue/calendar)을 함께 받는다 — 첫 화면은 §7 확정 슬롯(KA·집중
-// 고객·오늘 일정·할 일 레인)을 원본 위에 프로젝션해야 하는데, 이걸 위해 같은 원장을 라우트가
+// includeRaw: 첫 화면(daily-brief)이 이 기록을 정본 어댑터로 소비할 때(Phase 1B A-1 컷오버)
+// 원본 기록(projectLedger/revenue/calendar)을 함께 받는다 — 첫 화면은 §7 확정 슬롯(KA·집중
+// 고객·오늘 일정·할 일 레인)을 원본 위에 프로젝션해야 하는데, 이걸 위해 같은 기록을 라우트가
 // 따로 또 읽으면(기존 구조) 우선순위 판정이 두 벌로 갈라진다. my-work 등 기존 소비자는
 // 옵션 미지정으로 기존 계약 그대로.
 export async function getAttentionLedger({ includeRaw = false } = {}) {
@@ -333,11 +333,11 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     // The exact unread count is independent of the three-row preview.
     inquiries,
     // My Work의 할 일 편집 드로어가 프로젝트 재배정 select를 채우는 용도 — id/name만
-    // 필요하니 프로젝트 원장 전체를 다시 내려보내지 않는다.
+    // 필요하니 프로젝트 기록 전체를 다시 내려보내지 않는다.
     projects: taskLedgerReadable
       ? (Array.isArray(projectLedger?.projects) ? projectLedger.projects.map((p) => ({ id: p.id, name: p.name })) : [])
       : [],
-    // 원본 원장 — 첫 화면 슬롯 프로젝션용(위 주석). catch 폴백 객체도 그대로 노출되므로
+    // 원본 기록 — 첫 화면 슬롯 프로젝션용(위 주석). catch 폴백 객체도 그대로 노출되므로
     // 소비자의 기존 source==='error'/'supabase' 분기가 무수정 동작한다.
     ...(includeRaw ? { raw: { projectLedger, revenue: revenueLedger, calendar } } : {}),
   };

@@ -143,7 +143,7 @@ ${formattedRecords}
       "title": "패턴 제목 (50자 이내)",
       "observation": "입력 기록들에서 관찰된 객관적 사실",
       "interpretation": "관찰을 바탕으로 한 분석적 해석 및 가설",
-      "actionableGuidance": "원장에 즉시 등록할 수 있는 구체적 실행 행동 (태스크/콘텐츠 기획)",
+      "actionableGuidance": "기록에 즉시 등록할 수 있는 구체적 실행 행동 (태스크/콘텐츠 기획)",
       "suggestedTarget": "task", // "task" | "content" | "deal" | "rule"
       "evidenceQuotes": [
         {

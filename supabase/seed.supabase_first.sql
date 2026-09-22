@@ -316,7 +316,7 @@ values
     (select id from brands where workspace_id = '11111111-1111-1111-1111-111111111111' and slug = 'moonpm'),
     '00000000-0000-0000-0000-000000000001',
     '결정을 기록하는 노트의 구조',
-    '결정은 흘러가면 사라지지만, 네 칸으로 잡으면 다음 행동의 원장이 된다.',
+    '결정은 흘러가면 사라지지만, 네 칸으로 잡으면 다음 행동의 기록이 된다.',
     'research',
     'review',
     'Moonlight Hub의 decision log 철학을 설명하는 insight draft.',

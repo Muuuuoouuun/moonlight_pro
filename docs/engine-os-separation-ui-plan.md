@@ -48,7 +48,7 @@ Engine 책임:
 - 외부 payload 수신
 - payload 정규화
 - 실행 단위 생성
-- `webhook_events`, `project_updates`, `routine_checks` 같은 원장 기록
+- `webhook_events`, `project_updates`, `routine_checks` 같은 기록
 - 실패 로그 적재
 - 외부 시스템 연결 intake 처리
 

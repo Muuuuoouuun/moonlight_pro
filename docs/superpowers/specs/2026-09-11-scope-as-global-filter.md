@@ -49,7 +49,7 @@
 | 영업·매출 | 가능 | `revenue-ledger`의 `type` (`company_id ? company : personal`) |
 | 프로젝트·브랜드·콘텐츠 | 이미 적용됨 | workspace prop / `?scope=` |
 
-라이브 원장 기준(2026-09-11): 리드 117건 전부 company, 계정 25개 전부 company, 개인 0건.
+라이브 기록 기준(2026-09-11): 리드 117건 전부 company, 계정 25개 전부 company, 개인 0건.
 즉 D3이 실현되기 전까지 영업·매출의 개인 스코프는 정상적으로 빈 화면이다.
 
 ## 4. 판정 규칙의 단일화 (구현 시 주의)
@@ -72,7 +72,7 @@
   그 사이 수동 선택은 유지" 규칙 하나를 소유한다.
 - `revenue.jsx`의 `useScopeFilter`로 Leads·Deals·Accounts 3표면 공통 적용.
   기존 `useState(() => window.location.search…)` 마운트 1회 초기화는 제거했다.
-- Accounts 빈 상태 문구를 정직화 — 필터로 0건인데 "원장이 비어 있다"고 말하던 것을
+- Accounts 빈 상태 문구를 정직화 — 필터로 0건인데 "기록이 비어 있다"고 말하던 것을
   Leads와 같은 `필터: personal · N건 중 0건` 계약으로 맞췄다.
 
 D7이 적용되면 이 훅의 소비자는 사라지고 사이드바 스코프가 직접 필터를 소유한다.

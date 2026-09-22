@@ -203,7 +203,7 @@ const EMPTY_REVENUE_LEDGER = {
 };
 
 // 모듈 스코프 stale-while-revalidate 캐시 — Leads↔Deals↔Accounts↔Cases↔Customers 탭
-// 전환은 훅을 리마운트하므로, 캐시 없이는 전환마다 동일한 6콜 원장을 다시 받고 스켈레톤을
+// 전환은 훅을 리마운트하므로, 캐시 없이는 전환마다 동일한 6콜 기록을 다시 받고 스켈레톤을
 // 보였다(re-audit 속도 #3). 캐시는 즉시 서빙하고 항상 배경 재검증하므로 신선도는 1 RTT다.
 // 저장소는 revenue-shared-cache 공유 모듈 — ⌘K 레코드 검색이 같은 스냅샷을 재사용한다.
 
@@ -278,7 +278,7 @@ export function useRevenueLedger() {
   return { ledger, syncState, reload };
 }
 
-// 원장 read 실패 공용 빈 상태 — Leads·Deals·Accounts의 wsEmpty 분기가 error에서도
+// 기록 read 실패 공용 빈 상태 — Leads·Deals·Accounts의 wsEmpty 분기가 error에서도
 // "N건 없음 + 생성 CTA"를 그려 read 실패가 빈 워크스페이스로 위장됐다(8차 잔여 M).
 // 생성 유도는 실패 화면에서 금물: 운영자가 이미 있는 레코드를 중복 생성하게 된다.
 function LedgerReadError({ noun, onRetry }) {
@@ -666,7 +666,7 @@ export function Leads({ workspace }) {
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
-  // 기록 탭 배지 건수 — 패널이 원장을 읽고 올려준다. 리드가 바뀌면 다시 미확정(null).
+  // 기록 탭 배지 건수 — 패널이 기록을 읽고 올려준다. 리드가 바뀌면 다시 미확정(null).
   const [leadActivityCount, setLeadActivityCount] = React.useState(null);
   React.useEffect(() => { setLeadActivityCount(null); }, [editLeadId]);
   // 리드 삭제 지연-undo(7차 편의) — 창 종료 후 실제 DELETE, 실패 시 복원 알림.
@@ -1329,7 +1329,7 @@ function DealOutreachDrafter({ deal, onApplyNextAction }) {
   );
 }
 
-// 준비·재미팅 잡기)이 딜 안에 산다. 저장은 tasks 원장(meta.deal_id)이라 '내 작업'의
+// 준비·재미팅 잡기)이 딜 안에 산다. 저장은 tasks 기록(meta.deal_id)이라 '내 작업'의
 // 할 일 레인에도 그대로 흐른다. 클로징 딜에는 판매 후 실행(A/S)을 낮은 우선순위 후속
 // 프로젝트로 분리하는 버튼이 붙는다 — 딜은 돈을 추적하고 닫히는 레코드, 실행은 계속되는
 // 프로젝트의 몫이라는 경계.
@@ -1814,7 +1814,7 @@ export function Deals({ workspace, onNavigate }) {
     }
   };
 
-  // DEAL_STAGES를 deps에 반드시 포함 — 원장 도착으로 stages만 갱신된 렌더에서 totals가
+  // DEAL_STAGES를 deps에 반드시 포함 — 기록 도착으로 stages만 갱신된 렌더에서 totals가
   // stale 빈 객체로 남으면 컬럼 헤더의 totals[s.key].count가 크래시한다(24차 실측 발견).
   // 'lost'도 함께 집계 — DEAL_STAGES(ledger 6단계)엔 없지만 showLost 컬럼 헤더가 읽는다.
   const totals = React.useMemo(() => [...DEAL_STAGES, { key: 'lost' }].reduce((acc, s) => {
@@ -1881,7 +1881,7 @@ export function Deals({ workspace, onNavigate }) {
     });
     toast.success(`${stageLabel}(으)로 이동됨`, { action: { label: '되돌리기', onClick: undoStageMove } });
   };
-  // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 원장에서 meta.deal_id로
+  // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 기록에서 meta.deal_id로
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
   // 방금 추가·완료한 항목이 보드에 바로 반영되게 한다.
   const [dealTaskStats, setDealTaskStats] = React.useState(new Map());
@@ -2082,7 +2082,7 @@ export function Deals({ workspace, onNavigate }) {
 
       {syncState === 'loading' && <Skeleton lines={3} height={64} label="딜 파이프라인 불러오는 중" />}
       {syncState === 'error' && <LedgerReadError noun="딜 파이프라인" onRetry={reloadLedger} />}
-      {syncState === 'partial' && <Button variant="ghost" size="sm" onClick={reloadLedger}>딜 원장 다시 확인</Button>}
+      {syncState === 'partial' && <Button variant="ghost" size="sm" onClick={reloadLedger}>딜 기록 다시 확인</Button>}
 
       {!ledgerUnavailable && wsEmpty && (
         <Card>
@@ -2398,7 +2398,7 @@ export function Cases() {
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
   const cases = sortCases(mergedCases, sort);
   const editingCase = editCaseId ? mergedCases.find(c => c.id === editCaseId) : null;
-  // asc → desc → 해제(원장 순) 3단 토글 — Leads와 같은 계약.
+  // asc → desc → 해제(기록 순) 3단 토글 — Leads와 같은 계약.
   const toggleSort = (key) => setSort(s =>
     s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
   );
@@ -2754,7 +2754,7 @@ function QuickActions({ onAction, primary = 'call' }) {
   );
 }
 
-// 리드 상세의 "기록" 탭 — Accounts DetailPanel과 같은 crm_activities 원장을 읽고 쓴다.
+// 리드 상세의 "기록" 탭 — Accounts DetailPanel과 같은 crm_activities 기록을 읽고 쓴다.
 // 리드 표면에는 편집 폼만 있었고 접촉 이력을 보려면 고객 DB/팔로업으로 나가야 했다.
 //
 // 조인 규칙은 Customer 360·팔로업 활동 패널과 동일하다: 라이브 crm_activities는 기록이
@@ -2772,7 +2772,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
 
   const leadId = lead?.id || null;
   const companyId = lead?.companyId || null;
-  // 아직 저장 안 된 로컬 행 — 원장에 붙일 id가 없다.
+  // 아직 저장 안 된 로컬 행 — 기록에 붙일 id가 없다.
   const unsaved = !leadId || String(leadId).startsWith('local-lead-');
 
   React.useEffect(() => {
@@ -2816,7 +2816,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
     setError(null);
     setActivities(prev => [{ id: tempId, type, msg: body, at: '방금', who: 'Me' }, ...prev]);
     if (unsaved) {
-      setError({ message: '리드를 먼저 저장해야 기록이 원장에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
+      setError({ message: '리드를 먼저 저장해야 기록이 저장소에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
       return;
     }
     saveRevenueRecord('activity', 'create', {
@@ -2882,7 +2882,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
       )}
       {unsaved && (
         <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.45 }}>
-          아직 저장되지 않은 리드입니다. 먼저 저장하면 기록이 원장에 남습니다.
+          아직 저장되지 않은 리드입니다. 먼저 저장하면 기록이 저장소에 남습니다.
         </div>
       )}
 
@@ -2908,7 +2908,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
         <EmptyState
           icon="clock"
           title="활동 기록을 읽지 못했습니다"
-          description="원장 연결 상태를 확인한 뒤 드로어를 다시 열어 주세요. 기록이 없다는 뜻이 아닙니다."
+          description="기록 연결 상태를 확인한 뒤 드로어를 다시 열어 주세요. 기록이 없다는 뜻이 아닙니다."
           style={{ minHeight: 140 }}
         />
       ) : activities.length === 0 ? (
@@ -3264,7 +3264,7 @@ export function Accounts({ workspace, onNavigate }) {
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
 
   const term = search.trim().toLowerCase();
-  // 검색 텍스트 인덱스를 원장 변경 시 1회만 조립(re-audit 속도 #4) — 이전에는 키스트로크마다
+  // 검색 텍스트 인덱스를 기록 변경 시 1회만 조립(re-audit 속도 #4) — 이전에는 키스트로크마다
   // 계정×(contacts 200 + deals 120) 관계 조인을 다시 돌렸다(≈38k 비교/문자).
   const accountSearchText = React.useMemo(() => {
     const map = new Map();
@@ -3284,7 +3284,7 @@ export function Accounts({ workspace, onNavigate }) {
     () => ACCOUNTS.filter(a => (filter === 'all' || a.type === filter) && (!term || (accountSearchText.get(a.name) || '').includes(term))),
     [ACCOUNTS, accountSearchText, filter, term],
   );
-  // asc → desc → 해제(원장 순) 3단 토글 — Leads·Cases와 같은 §8.1 계약. health는
+  // asc → desc → 해제(기록 순) 3단 토글 — Leads·Cases와 같은 §8.1 계약. health는
   // 알파벳이 아니라 심각도 순(ok<warning<risk), value·deals는 숫자.
   const ACCOUNT_HEALTH_RANK = { ok: 0, warning: 1, risk: 2 };
   const filtered = React.useMemo(() => {
@@ -3299,8 +3299,8 @@ export function Accounts({ workspace, onNavigate }) {
       return xv < yv ? -dir : xv > yv ? dir : 0;
     });
   }, [searched, sort]);
-  // 스코프/타입 필터로 0건인 것과 원장 자체가 비어 0건인 것은 다른 사실이다. 사이드바
-  // 스코프를 개인으로 바꾸면 여기가 비는데, 그때 "원장이 비어 있다"고 말하면 데이터가
+  // 스코프/타입 필터로 0건인 것과 기록 자체가 비어 0건인 것은 다른 사실이다. 사이드바
+  // 스코프를 개인으로 바꾸면 여기가 비는데, 그때 "기록이 비어 있다"고 말하면 데이터가
   // 없는 것처럼 읽힌다 — Leads의 "필터: x · N건 중 0건" 문구와 같은 계약으로 맞춘다.
   const scopeFilteredEmpty = filter !== 'all' && ACCOUNTS.length > 0;
   const emptyTitle = scopeFilteredEmpty ? '해당 범위에 계정이 없습니다' : '계정이 없습니다';
@@ -3330,7 +3330,7 @@ export function Accounts({ workspace, onNavigate }) {
   const [deleteNotice, setDeleteNotice] = React.useState(null); // { key, name, label, undo }
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
-  // 활동·노트는 crm_activities 원장으로 영속화한다. 계정에 id가 없으면(로컬 생성 직후)
+  // 활동·노트는 crm_activities 기록으로 영속화한다. 계정에 id가 없으면(로컬 생성 직후)
   // 낙관적 로컬 행만 유지 — preview 상태로 정직하게 남긴다.
   const persistActivity = (name, entry, { alsoNote = false } = {}) => {
     const acc = ACCOUNTS.find(a => a.name === name);
@@ -3352,8 +3352,8 @@ export function Accounts({ workspace, onNavigate }) {
     });
 
     if (!acc?.id) {
-      // 아직 저장 안 된 로컬 계정 — 기록이 원장에 남지 않는다는 사실을 표시한다.
-      setActivityError({ name, message: '계정을 먼저 저장해야 기록이 원장에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
+      // 아직 저장 안 된 로컬 계정 — 기록이 저장소에 남지 않는다는 사실을 표시한다.
+      setActivityError({ name, message: '계정을 먼저 저장해야 기록이 저장소에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
       return;
     }
     saveRevenueRecord('activity', 'create', {
@@ -3487,7 +3487,7 @@ export function Accounts({ workspace, onNavigate }) {
         const rows = Array.isArray(data.activities) ? data.activities : [];
         setDetails(prev => {
           const cur = prev[acc.name] || emptyDetail();
-          // 서버 행 + 아직 저장 안 된 로컬 행(local- 접두)만 병합 — 중복 없이 원장이 정본
+          // 서버 행 + 아직 저장 안 된 로컬 행(local- 접두)만 병합 — 중복 없이 기록이 정본
           const localOnly = cur.activity.filter(a => String(a.id).startsWith('local-'));
           const activity = [...localOnly, ...rows];
           return {
@@ -3513,7 +3513,7 @@ export function Accounts({ workspace, onNavigate }) {
     setView('detail');
   };
 
-  // 딥링크: ?account=<name> — 원장 로드 후 1회만 열고 쿼리 소거(§8.1). Revenue 표면 중
+  // 딥링크: ?account=<name> — 기록 로드 후 1회만 열고 쿼리 소거(§8.1). Revenue 표면 중
   // 유일하게 딥링크가 없던 표면이었다(system-eval U-S3).
   const accountSearchParams = useSearchParams();
   const accountRouter = useRouter();

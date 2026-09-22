@@ -122,7 +122,7 @@ test("buildDailyFocus: 오늘 일정은 KST 오늘만, 시간순, 미연결은 p
   assert.equal(off.todayAgenda.items.length, 0);
 });
 
-test("buildDailyFocus: 매출 원장이 preview면 KA·집중 슬롯도 preview (mock 승격 금지)", () => {
+test("buildDailyFocus: 매출 기록이 preview면 KA·집중 슬롯도 preview (mock 승격 금지)", () => {
   const focus = buildDailyFocus({ revenue: { source: "preview" }, calendar: { ok: false }, now: NOW });
   assert.equal(focus.urgentKa.state, "preview");
   assert.equal(focus.urgentKa.item, null);
@@ -130,7 +130,7 @@ test("buildDailyFocus: 매출 원장이 preview면 KA·집중 슬롯도 preview 
   assert.equal(focus.focusCustomers.items.length, 0);
 });
 
-// 확정 슬롯과 신호 큐가 같은 원장을 두 번 읽어 같은 고객을 첫 화면에 두 번 렌더하던 구조를
+// 확정 슬롯과 신호 큐가 같은 기록을 두 번 읽어 같은 고객을 첫 화면에 두 번 렌더하던 구조를
 // 잠근다 — 슬롯이 정본, 신호는 나머지(2026-08-07 사용성 재감사 A).
 test("withoutFocusDuplicates: 확정 슬롯이 점유한 레코드는 신호 큐에서 빠진다", () => {
   const dailyFocus = {
@@ -156,7 +156,7 @@ test("withoutFocusDuplicates: 확정 슬롯이 점유한 레코드는 신호 큐
     ["x"],
   );
 
-  // 슬롯이 비었으면(원장 preview·error 포함) 원본을 그대로 통과시킨다.
+  // 슬롯이 비었으면(기록 preview·error 포함) 원본을 그대로 통과시킨다.
   assert.equal(withoutFocusDuplicates(signals, { urgentKa: { item: null }, focusCustomers: { items: [] } }).length, 5);
   assert.equal(withoutFocusDuplicates(signals, null).length, 5);
   assert.deepEqual(withoutFocusDuplicates(null, dailyFocus), []);
