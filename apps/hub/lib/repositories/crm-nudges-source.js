@@ -55,6 +55,15 @@ function toCustomers(revenue) {
   return out;
 }
 
+// 리드·딜 id → meta.nudges. isSuppressed가 subject.id로 찾는다.
+export function collectNudgeSuppressions(revenue) {
+  const out = {};
+  for (const record of [...(revenue?.leads || []), ...(revenue?.deals || [])]) {
+    if (record?.id && record.nudgeSuppression) out[record.id] = record.nudgeSuppression;
+  }
+  return out;
+}
+
 export async function getCrmNudges({ now = Date.now(), ignoredEventIds = [], suppressions = {} } = {}) {
   const nowMs = now instanceof Date ? now.getTime() : Number(now) || Date.now();
   const since = new Date(nowMs - ACTIVITY_WINDOW_DAYS * DAY_MS).toISOString();
@@ -87,6 +96,9 @@ export async function getCrmNudges({ now = Date.now(), ignoredEventIds = [], sup
 
   const owned = filterOperatorOwnedRevenue(revenue);
   const customers = toCustomers(owned);
+  // 억제는 대상 레코드의 meta.nudges에 산다(nudge-suppression.js가 씀). 여기서 읽어 넘기지
+  // 않으면 숨기기·미루기가 저장만 되고 다음 읽기에 같은 넛지가 그대로 다시 뜬다.
+  const storedSuppressions = collectNudgeSuppressions(owned);
   const unrecordedMeetings = findUnrecordedMeetings({
     events: calendar?.ok ? calendar.items : [],
     candidates: customers,
@@ -99,7 +111,7 @@ export async function getCrmNudges({ now = Date.now(), ignoredEventIds = [], sup
     customers,
     activities: activities || [],
     unrecordedMeetings,
-    suppressions,
+    suppressions: { ...storedSuppressions, ...suppressions },
     now: nowMs,
   });
 

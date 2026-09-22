@@ -5,7 +5,8 @@ import { CalendarOutcome } from "../calendar-outcome";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton, CertaintyBadge } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton, CertaintyBadge, useToast } from "../hub-primitives";
+import { REACTION_LABEL as FOCUS_REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import {
@@ -1654,8 +1655,8 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
 // §2 확정 슬롯 — 긴급 KA(최대 1) · 집중 고객(3~5) · 오늘 일정. tone 정렬 신호 큐에 섞여
 // 소실되던 풀을 명명된 자리로 분리한 첫 화면의 핵심 계약(2026-08-05 컷오버). 각 슬롯은
 // 자기 소스의 truth 상태를 따로 표시한다 — 캘린더 미연결이 매출 슬롯을 오염시키지 않는다.
-// crm_activities.reaction 어휘(0016 CHECK) — 집중 고객 행의 마지막 접점 라벨.
-const FOCUS_REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "우려", rejected: "거절", no_response: "무응답" };
+// 집중 고객 행의 마지막 접점 라벨은 crm_activities.reaction 어휘(0016 CHECK)의 정본
+// followup-scoring REACTION_LABEL을 쓴다(파일 상단 import).
 
 function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
   if (!dailyFocus) return null;
@@ -2076,7 +2077,9 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
   const ledger = useDailyBriefLedger(refreshKey);
   const [queueExpanded, setQueueExpanded] = React.useState(false);
   // 기록창 대상 — 집중 고객 행에서 열고, 저장은 공용 폼(contact-record-form)이 소유한다.
+  // 늦은 실패면 { draft, error }를 얹어 입력 그대로 다시 연다(드로어를 먼저 닫았어도 무언 소실 금지).
   const [recordTarget, setRecordTarget] = React.useState(null);
+  const toast = useToast();
   const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
   React.useEffect(() => {
     window.addEventListener('moonlight:inquiries-changed', refreshLedger);
@@ -2240,7 +2243,15 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
       {recordTarget && (
         <ContactRecordDrawer
           target={recordTarget}
+          draft={recordTarget.draft || null}
+          initialError={recordTarget.error || ""}
           onSaved={() => { window.setTimeout(refreshLedger, UNDO_WINDOW_MS + 250); }}
+          onPersisted={() => toast.success(`기록됨 · ${recordTarget.name || "고객"}`)}
+          onFailed={({ message, form }) => {
+            const { draft: _draft, error: _error, ...target } = recordTarget;
+            toast.error(`기록하지 못했습니다 · ${target.name || "고객"} — ${message}`);
+            setRecordTarget((cur) => cur || { ...target, draft: form, error: message });
+          }}
           onClose={() => setRecordTarget(null)}
         />
       )}

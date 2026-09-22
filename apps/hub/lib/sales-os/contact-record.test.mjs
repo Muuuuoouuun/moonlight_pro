@@ -3,7 +3,9 @@ import { test } from "node:test";
 
 import {
   CONTACT_CHANNELS,
+  REACTIONLESS_KINDS,
   REACTIONS,
+  applyContactExtraction,
   buildContactRecordPayload,
   buildRawNoteWrite,
   channelLabel,
@@ -116,4 +118,67 @@ test("reaction vocabulary matches the crm_activities CHECK", () => {
   // 채널 목록은 0016 kind CHECK 안에 있어야 저장이 거부되지 않는다.
   const allowed = new Set(["call", "meeting", "info_session", "demo", "visit", "email", "update", "note", "deal", "kakao", "quote", "ai"]);
   for (const c of CONTACT_CHANNELS) assert.ok(allowed.has(c.key), c.key);
+});
+
+// RPC 계약: 빈 반응은 0042가 REACTIONLESS_KINDS에서만 받는다. 폼이 빈 반응을 보내는 모든
+// 경우가 그 목록 안에 있어야 한다 — 아니면 저장이 invalid-reaction으로 실패한다.
+test("every payload that carries no reaction uses a kind the RPC accepts without one", () => {
+  const target = { kind: "lead", id: "lead-1" };
+  for (const channel of CONTACT_CHANNELS) {
+    for (const replied of [false, true]) {
+      const payload = buildContactRecordPayload(
+        { kind: channel.key, summary: "s", replied, reaction: null, followup: "none" },
+        target,
+      );
+      // 반응을 물은 조합은 validate가 저장 전에 막는다 — 빈 반응이 실제로 나가는 건
+      // 반응을 묻지 않은 조합뿐이다.
+      if (reactionRequired(channel.key, { replied })) continue;
+      assert.equal(payload.reaction, "");
+      assert.ok(REACTIONLESS_KINDS.has(payload.kind), `${channel.key} (replied=${replied}) would be rejected`);
+    }
+  }
+  // 대화 채널은 반응 없는 목록에 들어가지 않는다.
+  for (const channel of CONTACT_CHANNELS.filter((c) => c.reaction)) {
+    assert.equal(REACTIONLESS_KINDS.has(channel.key), false, channel.key);
+  }
+});
+
+test("AI extraction only marks an outbound channel replied when the reply itself was extracted", () => {
+  const base = { kind: "kakao", reaction: null, replied: false, summary: "", nextAction: "", at: "", followup: "dated" };
+
+  // 카톡 + 무응답: 회신이 아니다 — 반응도 회신도 켜지 않는다.
+  const silent = applyContactExtraction(base, { kind: "kakao", reaction: "no_response", replied: true, summary: "견적 보냄" });
+  assert.equal(silent.form.replied, false);
+  assert.equal(silent.form.reaction, null);
+  assert.equal(silent.filled, 2);
+
+  // 카톡 + 중립이지만 회신 여부가 없다: 보낸 메시지일 수 있으므로 회신을 추정하지 않는다.
+  const unknown = applyContactExtraction(base, { kind: "kakao", reaction: "neutral", replied: null });
+  assert.equal(unknown.form.replied, false);
+  assert.equal(unknown.form.reaction, null);
+
+  // 카톡 + 긍정 + 회신 확인: 회신 받음 + 반응.
+  const answered = applyContactExtraction(base, { kind: "kakao", reaction: "positive", replied: true });
+  assert.equal(answered.form.replied, true);
+  assert.equal(answered.form.reaction, "positive");
+  assert.equal(answered.filled, 2);
+
+  // 통화는 대화 채널 — 반응을 그대로 받는다(회신 토글과 무관).
+  const call = applyContactExtraction(base, { kind: "call", reaction: "concern" });
+  assert.equal(call.form.reaction, "concern");
+  assert.equal(call.form.replied, false);
+
+  // 메모는 반응을 묻지 않는다 — 채우지도, 채운 개수로 세지도 않는다.
+  const note = applyContactExtraction({ ...base, kind: "note" }, { reaction: "positive", summary: "메모" });
+  assert.equal(note.form.reaction, null);
+  assert.equal(note.filled, 1);
+});
+
+test("AI extraction preserves fields it did not extract", () => {
+  const edited = { kind: "call", reaction: null, replied: false, summary: "", body: "원문", nextAction: "운영자가 고친 후속", at: "2026-10-01", followup: "dated" };
+  const { form } = applyContactExtraction(edited, { summary: "요약만" });
+  assert.equal(form.summary, "요약만");
+  assert.equal(form.body, "원문");
+  assert.equal(form.nextAction, "운영자가 고친 후속");
+  assert.equal(form.at, "2026-10-01");
 });

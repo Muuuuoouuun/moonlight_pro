@@ -170,6 +170,7 @@ test("parseContactOutcomeExtraction parses Korean formatted customer contact out
 [분석 결과]
 - [채널]: 카카오톡
 - [고객 반응]: 긍정
+- [회신 여부]: 예
 - [1줄 요약]: 이번 주 금요일까지 표준 견적서 송부 요청, 가격 할인 문의
 - [다음 액션]: 할인 정책 반영 견적서 발송
 - [다음 일정]: 2026-09-25
@@ -178,6 +179,7 @@ test("parseContactOutcomeExtraction parses Korean formatted customer contact out
   const result = parseContactOutcomeExtraction(sample);
   assert.equal(result.kind, "kakao");
   assert.equal(result.reaction, "positive");
+  assert.equal(result.replied, true);
   assert.equal(result.summary, "이번 주 금요일까지 표준 견적서 송부 요청, 가격 할인 문의");
   assert.equal(result.nextAction, "할인 정책 반영 견적서 발송");
   assert.equal(result.nextAt, "2026-09-25");
@@ -195,6 +197,8 @@ next action: 없음
   const resDormant = parseContactOutcomeExtraction(sampleDormant);
   assert.equal(resDormant.kind, "call");
   assert.equal(resDormant.reaction, "rejected");
+  // 회신 여부를 말하지 않으면 모른다(null) — 반응만으로 회신을 추정하지 않는다.
+  assert.equal(resDormant.replied, null);
   assert.equal(resDormant.summary, "당분간 예산 동결로 도입 계획 취소됨");
   assert.equal(resDormant.nextAction, "");
   assert.equal(resDormant.dormant, true);
@@ -218,6 +222,7 @@ next action: 없음
   assert.deepEqual(parseContactOutcomeExtraction(null), {
     kind: null,
     reaction: null,
+    replied: null,
     summary: "",
     nextAction: "",
     nextAt: "",
@@ -226,6 +231,7 @@ next action: 없음
   assert.deepEqual(parseContactOutcomeExtraction(""), {
     kind: null,
     reaction: null,
+    replied: null,
     summary: "",
     nextAction: "",
     nextAt: "",

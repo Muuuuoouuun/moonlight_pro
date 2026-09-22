@@ -149,7 +149,7 @@ test("getFollowups reads crm_activities (not outreach_outcomes) and names its re
 });
 
 // ── 0b: 행이 실제로 그려지는 데 필요한 필드 ─────────────────────────────────────
-// FollowupRow는 bucket·href·companyId·lastNote·lastReaction을 읽는데 원장이 만들지 않아
+// FollowupRow는 bucket·href·companyId·lastNote·lastReaction을 읽는데 저장소 읽기가 만들지 않아
 // 버킷 필터(항상 0)·지남 레일·행 클릭·최근 대화 줄이 전부 죽어 있었다.
 
 test("rows carry companyId so the activity panel joins the way live records are linked", () => {

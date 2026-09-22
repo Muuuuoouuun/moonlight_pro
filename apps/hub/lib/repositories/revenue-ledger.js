@@ -130,6 +130,11 @@ function resolveBrand(row) {
   return meta.brand || meta.brand_key || meta.brandKey || null;
 }
 
+function nudgeSuppressionOf(meta) {
+  const nudges = meta && typeof meta === "object" ? meta.nudges : null;
+  return nudges && typeof nudges === "object" && !Array.isArray(nudges) ? nudges : null;
+}
+
 export function mapLead(row, companyById, contactById, trackingStartedAt = null, dealStatsByCompany = null) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
@@ -197,6 +202,8 @@ export function mapLead(row, companyById, contactById, trackingStartedAt = null,
     // record_contact_outcome_v1이 남기는 마지막 반응 — 첫 화면 집중 고객 행이 서로 다른
     // 말을 하게 만드는 유일한 사실이다(0c). 없으면 null.
     lastReaction: meta.last_reaction || null,
+    // 넛지 억제(숨기기·미루기) — crm-nudges POST가 meta.nudges에 쓰고, 넛지 읽기가 여기서 읽는다.
+    nudgeSuppression: nudgeSuppressionOf(meta),
     // 이관 스크립트가 채운 문장인지 — 집중 고객 후보에서 제외하는 근거.
     nextActionIsTemplate: isTemplateNextAction(enrichmentView.nextAction),
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
@@ -234,6 +241,7 @@ export function mapDeal(row, companyById, trackingStartedAt = null) {
     nextActionAt: row.meta?.next_action_at || null,
     dormant: Boolean(row.meta?.dormant),
     dormantSince: row.meta?.dormant_since || null,
+    nudgeSuppression: nudgeSuppressionOf(row.meta),
     name,
     type,
     // Scoping tags — workspace-map matches on these; round-trip target for scoped creates.

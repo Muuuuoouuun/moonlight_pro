@@ -149,6 +149,8 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
           id: lead.id,
           name: lead.name,
           company: lead.companyName || null,
+          // 기록창이 원문 메모를 회사에도 연결하도록(buildRawNoteWrite) — 상세·큐와 같은 범위.
+          companyId: lead.companyId || null,
           nextAction: lead.nextAction || "",
           score: Number.isFinite(lead.score) ? Math.round(lead.score) : null,
           dueLabel: !dueKey

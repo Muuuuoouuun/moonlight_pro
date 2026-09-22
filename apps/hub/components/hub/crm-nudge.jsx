@@ -10,7 +10,7 @@
 // 긴급은 §5.3 빨강 예산 안에서 목록이 이미 레일로 표현한다.
 
 import React from "react";
-import { Button, Kbd } from "./hub-primitives";
+import { Button, Kbd, TextField } from "./hub-primitives";
 import { Iconed } from "./hub-icons";
 
 const ESCAPE_LABEL = {
@@ -45,14 +45,14 @@ export function CrmNudgeCard({ nudge, busy = false, onAct, onEscape }) {
       <div style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{nudge.reason}</div>
 
       {choosingDate ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <input
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, flexWrap: "wrap" }}>
+          <TextField
+            label="다시 볼 날짜"
             type="date"
-            className="hub-input mono"
-            aria-label="다시 볼 날짜"
+            className="mono"
             value={until}
             onChange={(e) => setUntil(e.target.value)}
-            style={{ height: 30, width: 150, padding: "0 8px" }}
+            fieldStyle={{ flex: "0 1 170px" }}
           />
           <Button variant="outline" size="xs" disabled={!until || busy} onClick={() => { onEscape?.(nudge, "snooze", until); setChoosingDate(false); }}>
             그때 다시
@@ -165,9 +165,12 @@ export function useCrmNudges() {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.status !== "saved") return { ok: false, reason: data.reason || data.status };
+      if (!res.ok || data.status !== "saved") return { ok: false, reason: data.detail || data.reason || data.status };
       refresh();
       return { ok: true };
+    } catch (err) {
+      // 네트워크 실패도 결과로 돌려준다 — 거부된 promise를 호출처가 버리면 실패가 조용해진다.
+      return { ok: false, reason: err instanceof Error ? err.message : String(err) };
     } finally {
       setBusyKey(null);
     }

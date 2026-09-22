@@ -76,7 +76,7 @@ test("긴급 KA: 7일 이상 방치된 KA 딜도 후보이고, 더 오래된 쪽
 
 test("buildDailyFocus: 집중 고객은 CS 레인 + next action 있는 리드를 최대 5건", () => {
   const lead = (id, score) => ({
-    id, owner: "Me", name: `리드${id}`, companyName: `회사${id}`,
+    id, owner: "Me", name: `리드${id}`, companyName: `회사${id}`, companyId: `co-${id}`,
     priorityLane: "customer_success", nextAction: "연락", score, focusOverride: "default",
   });
   const revenue = revenueFixture({
@@ -88,6 +88,8 @@ test("buildDailyFocus: 집중 고객은 CS 레인 + next action 있는 리드를
   assert.equal(focus.focusCustomers.items.length, 5); // §2: 3~5건 — 캡 5
   assert.equal(focus.focusCustomers.items[0].id, "a");
   assert.match(focus.focusCustomers.items[0].href, /customer=lead%3Aa/);
+  // 첫 화면 기록창이 원문 메모를 회사에도 연결하려면 행이 companyId를 들고 가야 한다.
+  assert.equal(focus.focusCustomers.items[0].companyId, "co-a");
 });
 
 test("buildDailyFocus: 오늘 일정은 KST 오늘만, 시간순, 미연결은 preview + reason", () => {

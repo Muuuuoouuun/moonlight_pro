@@ -24,6 +24,7 @@ import { requestPersonaChat } from "../persona-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
+import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import './customer-focus.css';
 
 // "₩1.2M"/"₩900K"/"—" → 정렬용 숫자 (DESIGN.md §8.1: 금액은 표시 문자열을 파싱해 정렬)
@@ -181,8 +182,8 @@ function segmentFilter(row, seg) {
 
 const ACT_ICON = { email: "email", meeting: "calendar", call: "signal", note: "edit", deal: "deals", kakao: "chat", quote: "orders", ai: "sparkle", info_session: "brief", demo: "play", visit: "building", update: "rhythm" };
 const ACT_LABEL = { email: "이메일", meeting: "미팅", call: "통화", note: "노트", deal: "딜", kakao: "카카오", quote: "견적", ai: "AI", info_session: "설명회", demo: "데모", visit: "방문", update: "업데이트" };
-// crm_activities.reaction 어휘(0016 CHECK). 컨택 시트가 필수로 받는 반응이 타임라인에 되돌아온다(0a).
-const REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "우려", rejected: "거절", no_response: "무응답" };
+// crm_activities.reaction 어휘(0016 CHECK)의 라벨은 followup-scoring이 정본(파일 상단 import).
+// 컨택 시트가 필수로 받는 반응이 타임라인에 되돌아온다(0a).
 
 function ActivityTimeline({ rows, onDeleteActivity }) {
   if (!rows.length) {
@@ -228,34 +229,27 @@ function ActivityTimeline({ rows, onDeleteActivity }) {
   );
 }
 
-const QUICKLOG_KINDS = ["call", "kakao", "meeting", "email", "visit", "quote", "note"];
-
+// 빠른 기록은 메모 전용이다. 통화·카톡·미팅 같은 연락은 바로 위 공용 기록창(반응 필수 규칙·
+// 후속 계획)으로만 받는다 — 여기서 연락 유형을 고르게 하면 그 규칙을 옆 입력창이 우회하고,
+// 반응 없는 통화가 주간 연락 수·마지막 접점으로 잡힌다(2026-09-23 병합 검증).
 function QuickLog({ onSave }) {
-  const [type, setType] = React.useState("call");
   const [text, setText] = React.useState("");
   const save = () => {
     const body = text.trim();
     if (!body) return;
-    onSave({ type, body });
+    onSave({ type: "note", body });
     setText("");
   };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <TextAreaField
-        label="빠른 기록"
+        label="빠른 메모"
         value={text}
         onChange={e => setText(e.target.value)}
-        placeholder="통화·미팅 메모를 입력하면 타임라인에 쌓여요"
+        placeholder="연락이 아닌 메모를 남기면 타임라인에 쌓여요"
         rows={4}
       />
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-        <SelectField
-          label="유형"
-          value={type}
-          onChange={e => setType(e.target.value)}
-          options={QUICKLOG_KINDS.map(k => ({ value: k, label: ACT_LABEL[k] }))}
-          fieldStyle={{ flex: "0 1 150px" }}
-        />
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" onClick={save} disabled={!text.trim()}>기록 저장</Button>
       </div>

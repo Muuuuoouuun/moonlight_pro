@@ -12,10 +12,7 @@ import {
 } from "@/lib/content-brand-catalog";
 import { buildOperatorHomeSummary } from "@/lib/operator-home-summary";
 import { buildTaskToday } from "@/lib/task-today";
-import {
-  filterOperatorOwnedRevenue,
-  selectOperatorFocusLeads,
-} from "@/lib/operator-revenue-scope";
+import { filterOperatorOwnedRevenue } from "@/lib/operator-revenue-scope";
 import { buildDailyFocus, withoutFocusDuplicates } from "@/lib/daily-focus";
 
 export const runtime = "nodejs";
@@ -159,24 +156,10 @@ function buildRevenueSignals(revenue, staleDealIds = new Set()) {
   const leads = Array.isArray(revenue.leads) ? revenue.leads : [];
   const signals = [];
 
-  selectOperatorFocusLeads(revenue).forEach((lead) => {
-    signals.push({
-      id: `revenue-focus-${lead.id}`,
-      // subject = 이 신호가 가리키는 원장 레코드. 첫 화면 확정 슬롯이 같은 레코드를 이미
-      // 렌더했는지 판정하는 유일한 근거다(withoutFocusDuplicates).
-      subject: { type: "lead", id: lead.id },
-      tone: "neutral",
-      kind: "Revenue",
-      title: `${lead.name} — 고객 성공 후속`,
-      summary: lead.nextAction,
-      meta: "Focus customer · verified owner",
-      source: { from: "Leads", ref: lead.id },
-      decisions: [
-        action("리드 열기", "leads", true),
-        action("오늘 보류", "wait"),
-      ],
-    });
-  });
+  // 집중 고객은 첫 화면 확정 슬롯(buildDailyFocus → focusCustomers)이 정본이다. 예전에는
+  // 여기서도 같은 selectOperatorFocusLeads로 "고객 성공 후속" 신호를 만들었지만, 슬롯(limit 5)이
+  // 신호(limit 3)를 늘 포함해 withoutFocusDuplicates가 전부 걸러내는 죽은 분기였고, 선정 기준이
+  // "약속이 있는 모든 진행 리드"로 바뀐 뒤로는 라벨도 틀렸다(2026-09-23 병합 검증).
 
   // 정체 딜 판정은 attention 원장이 정본(§4 "다음 연락 시점 지남" = STALLED_DAYS 14) —
   // 이 라우트의 자체 age>=10 밴드는 §8.1 단일 기준 위반이었고, 내 작업과 첫 화면이 같은

@@ -13,6 +13,7 @@ import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead-labels";
+import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE, LOST_STAGE, dealStageLabel, isDealStalled } from "@/lib/deal-stages";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
@@ -2597,10 +2598,9 @@ const ACT_ICON = { email: 'email', meeting: 'calendar', call: 'signal', note: 'e
 // 활동 종류는 카테고리 — 아이콘(ACT_ICON)이 종류를 말하고 톤은 전부 중립(§5.2 동결).
 const ACT_TONE = { email: 'neutral', meeting: 'neutral', call: 'neutral', note: 'neutral', deal: 'neutral', kakao: 'neutral', quote: 'neutral', ai: 'neutral', info_session: 'neutral', demo: 'neutral', visit: 'neutral', update: 'neutral' };
 const ACT_LABEL = { email: 'Email', meeting: 'Meeting', call: 'Call', note: 'Note', deal: 'Deal', kakao: '카카오', quote: '견적', ai: 'AI', info_session: '설명회', demo: '데모', visit: '방문', update: 'Update' };
-const REACTION_LABEL = { positive: '긍정', neutral: '중립', concern: '우려', rejected: '거절', no_response: '무응답' };
+
 // 반응은 기록 데이터 — 색 증명 없이 라벨로 읽는다. 전부 중립.
 const REACTION_TONE = { positive: 'neutral', neutral: 'neutral', concern: 'neutral', rejected: 'neutral', no_response: 'neutral' };
-
 function emptyDetail() {
   return { mrr: 0, contacts: [], deals: [], activity: [], notes: [] };
 }

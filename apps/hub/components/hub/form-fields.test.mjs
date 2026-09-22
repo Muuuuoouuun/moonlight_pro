@@ -83,4 +83,9 @@ test("the capture form lives in exactly one place", () => {
   }
   assert.match(customersSource, /<ContactRecordForm\b/);
   assert.match(followupsSource, /<ContactRecordDrawer\b/);
+  // 상세의 빠른 기록은 메모 전용 — 연락 유형 선택이 다시 생기면 반응 필수 규칙을 우회한다.
+  const quickLog = customersSource.match(/function QuickLog\b[\s\S]*?\n}\n/)?.[0] || "";
+  assert.ok(quickLog, "QuickLog must stay findable");
+  assert.match(quickLog, /type: "note"/);
+  assert.doesNotMatch(quickLog, /SelectField|QUICKLOG_KINDS|"call"|"kakao"|"meeting"/);
 });

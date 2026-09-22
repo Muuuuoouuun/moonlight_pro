@@ -23,6 +23,7 @@ import {
   CONTACT_CHANNELS,
   FOLLOWUP_MODES,
   REACTIONS,
+  applyContactExtraction,
   buildContactRecordPayload,
   buildRawNoteWrite,
   channelLabel,
@@ -42,24 +43,8 @@ const EMPTY_FORM = {
 };
 
 // 대화·통화 원문에서 폼을 채우는 AI 보조(3a0c18f). 저장 계약은 그대로 — AI는 폼만 채우고,
-// 운영자가 확인한 뒤 같은 저장 버튼을 누른다. 채널이 발신형(카톡·이메일)인데 반응이
-// 추출됐다면 회신을 받은 것이므로 replied를 함께 켠다(반응 필수 규칙과 일치).
-export function applyContactExtraction(form, extracted = {}) {
-  const next = { ...form };
-  let filled = 0;
-  if (extracted.kind && CONTACT_CHANNELS.some((c) => c.key === extracted.kind)) { next.kind = extracted.kind; filled++; }
-  if (extracted.reaction) {
-    next.reaction = extracted.reaction;
-    if (!reactionRequired(next.kind) && CONTACT_CHANNELS.find((c) => c.key === next.kind)?.promptsReply) next.replied = true;
-    filled++;
-  }
-  if (extracted.summary) { next.summary = extracted.summary; filled++; }
-  if (extracted.nextAction) { next.nextAction = extracted.nextAction; filled++; }
-  if (extracted.dormant) { next.followup = "dormant"; next.at = ""; }
-  else if (extracted.nextAt) { next.followup = "dated"; next.at = extracted.nextAt; filled++; }
-  return { form: next, filled };
-}
-
+// 운영자가 확인한 뒤 같은 저장 버튼을 누른다. 추출을 폼에 얹는 규칙(발신형 채널의 회신 판정
+// 포함)은 순수 함수 applyContactExtraction(lib/sales-os/contact-record.js)이 소유한다.
 function ContactAiAutofill({ target, aiContext, onApply }) {
   const [aiOpen, setAiOpen] = React.useState(false);
   const [aiInput, setAiInput] = React.useState("");
@@ -85,6 +70,7 @@ ${raw}
 위 원문을 분석하여 아래 형식으로 정확하게 추출해줘:
 [채널]: 통화 | 카카오 | 미팅 | 방문 | 데모 | 이메일 중 1개
 [고객 반응]: 긍정 | 중립 | 우려 | 거절 | 무응답 중 1개
+[회신 여부]: 예 | 아니오 (카카오·이메일일 때 원문에 상대가 실제로 보낸 답장이 있으면 '예')
 [1줄 요약]: 120자 이내의 사실 중심 핵심 요약
 [다음 행동]: 구체적 후속 액션 (없거나 기약 없으면 '없음')
 [다음 일정]: YYYY-MM-DD (특정 날짜 언급 없으면 '없음')
@@ -108,10 +94,10 @@ ${raw}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Iconed name="sparkle" size={13} style={{ color: "var(--fg-muted)" }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>✨ 대화·메모에서 폼 자동 채우기</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>대화·메모에서 폼 자동 채우기</span>
         </div>
         <Button variant="ghost" size="xs" aria-expanded={aiOpen} onClick={() => { setAiOpen((v) => !v); setAiNotice(""); }}>
-          {aiOpen ? "접기" : "원문 붙여넣기"}
+          {aiOpen ? "접기" : "AI로 채우기"}
         </Button>
       </div>
       {aiOpen && (
@@ -137,10 +123,21 @@ ${raw}
   );
 }
 
-export function ContactRecordForm({ target, preset, onSaved, onUndone, onDone, autoFocus = false, aiContext = null }) {
-  const [form, setForm] = React.useState(() => ({ ...EMPTY_FORM, ...(preset || {}) }));
-  const [state, setState] = React.useState("idle"); // idle | warn | error
-  const [errorMsg, setErrorMsg] = React.useState("");
+// onPersisted: 서버가 saved로 답한 뒤에만 불린다 — "기록됨" 확인은 여기서 띄운다.
+// onFailed({ optimisticId, message, form }): 늦은 실패. 폼이 이미 언마운트됐을 수 있으므로
+// (드로어를 닫았거나 언마운트 flush) 부모가 표시를 되돌리고 입력을 되살릴 책임을 진다.
+// draft·initialError: 실패 뒤 다시 연 기록창이 입력과 원인을 그대로 보여 주게 한다. draft는
+// 첫 상태에만 쓰고 저장 뒤 초기화는 preset 기준이다.
+export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "" }) {
+  const [form, setForm] = React.useState(() => ({ ...EMPTY_FORM, ...(preset || {}), ...(draft || {}) }));
+  const [state, setState] = React.useState(initialError ? "error" : "idle"); // idle | warn | error
+  const [errorMsg, setErrorMsg] = React.useState(initialError || "");
+  // 저장할 때마다 올린다 — AI 채우기 상자(자식 상태)를 새 기록에 맞게 비운다.
+  const [recordSeq, setRecordSeq] = React.useState(0);
+  // AI 응답은 몇 초 뒤에 온다. 그 사이 운영자가 고친 값을 클릭 시점 스냅샷으로 덮지 않도록
+  // 최신 폼을 ref로 읽고, 반영은 함수형 업데이트로 한다.
+  const formRef = React.useRef(form);
+  formRef.current = form;
   const [showBody, setShowBody] = React.useState(false);
   // 저장을 눌러 보기 전에는 필수 표시를 붉히지 않는다 — 빈 폼을 열자마자 꾸짖는 건 잔소리다.
   const [attempted, setAttempted] = React.useState(false);
@@ -156,6 +153,7 @@ export function ContactRecordForm({ target, preset, onSaved, onUndone, onDone, a
   const reset = () => {
     setForm({ ...EMPTY_FORM, ...(preset || {}) });
     setShowBody(false); setState("idle"); setErrorMsg(""); setAttempted(false);
+    setRecordSeq((n) => n + 1);
   };
 
   const wantsReaction = reactionRequired(form.kind, { replied: form.replied });
@@ -176,12 +174,10 @@ export function ContactRecordForm({ target, preset, onSaved, onUndone, onDone, a
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data.status !== "saved") {
         // 늦은 실패 — 입력 복원 + 원인 명명 (낙관 행 제거는 onUndone이 담당)
-        onUndone?.(snapshot.optimisticId);
-        restore(snapshot);
-        setState("error");
-        setErrorMsg(`${data.error || data.reason || "저장에 실패했습니다."} — 입력을 복원했습니다.`);
-        return;
+        fail(snapshot, `${data.error || data.reason || "저장에 실패했습니다."} — 입력을 복원했습니다.`);
+        return false;
       }
+      onPersisted?.({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId });
       // 붙여넣은 원문은 요약이 저장된 뒤에 별도 note로 남긴다. 아직 원자 저장이 아니라
       // (RPC v2는 1b) 이 단계가 실패해도 요약 기록은 이미 남아 있다 — 그 사실을 말해 준다.
       const note = buildRawNoteWrite(snapshot.form, target);
@@ -197,14 +193,23 @@ export function ContactRecordForm({ target, preset, onSaved, onUndone, onDone, a
           setErrorMsg("요약은 저장됐지만 붙여넣은 원문은 저장하지 못했습니다. 원문을 복사해 두세요.");
           setForm((f) => ({ ...f, body: snapshot.form.body }));
           setShowBody(true);
+          // 원문을 되살려 보여 줘야 하므로 창을 닫지 않는다.
+          return false;
         }
       }
+      return true;
     } catch (err) {
-      onUndone?.(snapshot.optimisticId);
-      restore(snapshot);
-      setState("error");
-      setErrorMsg(`${err instanceof Error ? err.message : String(err)} — 입력을 복원했습니다.`);
+      fail(snapshot, `${err instanceof Error ? err.message : String(err)} — 입력을 복원했습니다.`);
+      return false;
     }
+  };
+
+  const fail = (snapshot, message) => {
+    onUndone?.(snapshot.optimisticId);
+    restore(snapshot);
+    setState("error");
+    setErrorMsg(message);
+    onFailed?.({ optimisticId: snapshot.optimisticId, message, form: snapshot.form });
   };
 
   const save = ({ ignoreWarning = false } = {}) => {
@@ -237,8 +242,9 @@ export function ContactRecordForm({ target, preset, onSaved, onUndone, onDone, a
     const key = `contact-${optimisticId}`;
     scheduleUndoable(key, () => {
       setPendingUndo((cur) => (cur?.key === key ? null : cur)); // 창 닫힘 — 죽은 버튼 방지
-      persist(payload, snapshot);
-      onDone?.();
+      // 저장이 확인된 뒤에만 닫는다 — 먼저 닫으면 늦은 실패의 입력 복원·원인 표시가
+      // 사라진 컴포넌트에서 일어나 운영자에게 보이지 않는다.
+      persist(payload, snapshot).then((ok) => { if (ok) onDone?.(); });
     });
     setPendingUndo({
       key,
@@ -257,15 +263,15 @@ export function ContactRecordForm({ target, preset, onSaved, onUndone, onDone, a
   const showMissing = attempted && !check.ok;
 
   const applyExtraction = (extracted) => {
-    const { form: next, filled } = applyContactExtraction(form, extracted);
-    setForm(next);
-    if (state === "warn") setState("idle");
+    const { filled } = applyContactExtraction(formRef.current, extracted);
+    setForm((f) => applyContactExtraction(f, extracted).form);
+    setState((s) => (s === "warn" ? "idle" : s));
     return filled;
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {aiContext && <ContactAiAutofill target={target} aiContext={aiContext} onApply={applyExtraction} />}
+      {aiContext && <ContactAiAutofill key={recordSeq} target={target} aiContext={aiContext} onApply={applyExtraction} />}
 
       <SegmentedControl
         label="채널"
@@ -391,7 +397,7 @@ export function ContactRecordForm({ target, preset, onSaved, onUndone, onDone, a
 }
 
 // 큐·목록·첫 화면에서 여는 껍데기. 상세 안에서는 이걸 쓰지 않고 폼만 인라인으로 쓴다.
-export function ContactRecordDrawer({ target, preset, onClose, onSaved }) {
+export function ContactRecordDrawer({ target, preset, draft = null, onClose, onSaved, onUndone, onPersisted, onFailed, initialError = "" }) {
   if (!target?.id) return null;
   return (
     <Drawer
@@ -404,8 +410,13 @@ export function ContactRecordDrawer({ target, preset, onClose, onSaved }) {
       <ContactRecordForm
         target={target}
         preset={preset}
+        draft={draft}
         autoFocus
         onSaved={onSaved}
+        onUndone={onUndone}
+        onPersisted={onPersisted}
+        onFailed={onFailed}
+        initialError={initialError}
         onDone={onClose}
       />
     </Drawer>

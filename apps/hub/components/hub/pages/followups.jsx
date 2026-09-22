@@ -9,15 +9,15 @@ import { UNDO_WINDOW_MS } from "../use-undoable-action";
 import { ContactRecordDrawer } from "../contact-record-form";
 import { CrmNudgeSection, useCrmNudges } from "../crm-nudge";
 import { channelLabel } from "@/lib/sales-os/contact-record";
+import { REACTION_LABEL as CRM_REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { requestPersonaChat } from "../persona-client";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
 import { FOLLOWUP_GROUPS, MAX_DANGER_RAILS, groupFollowups } from "@/lib/sales-os/followup-groups";
 
-// crm_activities.reaction 어휘(Phase 1C canonical, 심화 설계 §10). 이 페이지가 쓰던 옛 입력
-// 어휘(outcome-attribution의 REACTION_OPTIONS — outreach_outcomes.meta.reaction 계열)는
-// 기록창이 공용 폼으로 옮겨가며 사라졌다. 읽기는 전부 이 어휘다.
-const CRM_REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "우려", rejected: "거절", no_response: "무응답" };
+// crm_activities.reaction 어휘(Phase 1C canonical, 심화 설계 §10)의 라벨은 followup-scoring이
+// 정본이다(순수 모듈이라 청크 문제 없음). 이 페이지가 쓰던 옛 입력 어휘(outcome-attribution의
+// REACTION_OPTIONS)는 기록창이 공용 폼으로 옮겨가며 사라졌다.
 
 // Small, duplicated on purpose (not imported from ./revenue): that page is its own lazy-loaded
 // route chunk, and a static cross-import here pulled its entire ~1400-line module (Leads/Deals/
@@ -462,9 +462,8 @@ export function Followups({ onNavigate }) {
   const [lane, setLane] = React.useState("all");
   // 버킷은 이제 필터가 아니라 섹션이다(0b). 남는 선택은 "지켜보는 고객"을 펼쳤는지 하나뿐.
   const [restOpen, setRestOpen] = React.useState(false);
-  const [recordTarget, setRecordTarget] = React.useState(null); // { item, preset } — 기록창 대상
+  const [recordTarget, setRecordTarget] = React.useState(null); // { item, preset, draft?, error? } — 기록창 대상
   const [logged, setLogged] = React.useState({}); // id → 방금 기록한 채널 라벨
-  const [notice, setNotice] = React.useState(null); // { tone, label, action? }
   const [panelItem, setPanelItem] = React.useState(null); // row whose activity panel is open
   const [draftItem, setDraftItem] = React.useState(null); // row whose message draft is open
 
@@ -478,7 +477,7 @@ export function Followups({ onNavigate }) {
     return items.filter((i) => lane === "all" || i.kind === lane);
   }, [items, lane]);
 
-  // 약속을 어긴 건 → 오늘 하기로 한 건 → 나머지(접힘). 묶음 안 순서는 원장이 정한 priority 그대로.
+  // 약속을 어긴 건 → 오늘 하기로 한 건 → 나머지(접힘). 묶음 안 순서는 ledger가 정한 priority 그대로.
   const groups = React.useMemo(() => groupFollowups(visible), [visible]);
   const sections = React.useMemo(() => (
     FOLLOWUP_GROUPS
@@ -539,13 +538,45 @@ export function Followups({ onNavigate }) {
   const openRecord = (item, preset) => setRecordTarget({ item, preset });
   const closeRecord = () => setRecordTarget(null);
 
+  // 기록됨 표시는 낙관적으로 붙이되, 확인 토스트는 서버가 saved로 답한 뒤에만 띄운다.
+  // 되돌리기·늦은 실패는 표시를 걷고, 실패는 원인과 함께 기록창을 입력 그대로 다시 연다
+  // (드로어를 먼저 닫았어도 입력이 조용히 사라지지 않게).
   const onRecordSaved = (saved) => {
     const item = recordTarget?.item;
     if (!item) return;
     setLogged((m) => ({ ...m, [item.id]: saved?.kind ? channelLabel(saved.kind) : "기록" }));
-    toast.success(`기록됨 · ${item.name}`);
     // 저장은 드로어가 3.5초 뒤에 보낸다 — 그때 큐와 넛지가 새 사실을 반영하도록 다시 읽는다.
     window.setTimeout(() => { reload(); nudgeState.refresh(); }, UNDO_WINDOW_MS + 250);
+  };
+  const clearLogged = (itemId) => setLogged((m) => {
+    if (!(itemId in m)) return m;
+    const next = { ...m };
+    delete next[itemId];
+    return next;
+  });
+  const onRecordUndone = () => {
+    const item = recordTarget?.item;
+    if (item) clearLogged(item.id);
+  };
+  const onRecordPersisted = () => {
+    const item = recordTarget?.item;
+    if (item) toast.success(`기록됨 · ${item.name}`);
+  };
+  const onRecordFailed = ({ message, form }) => {
+    const target = recordTarget;
+    if (!target?.item) return;
+    clearLogged(target.item.id);
+    toast.error(`기록하지 못했습니다 · ${target.item.name} — ${message}`);
+    setRecordTarget((cur) => cur || { item: target.item, preset: target.preset, draft: form, nudge: target.nudge, error: message });
+  };
+  const onNudgeEscape = async (nudge, action, until) => {
+    let result;
+    try {
+      result = await nudgeState.suppress(nudge, action, until);
+    } catch (err) {
+      result = { ok: false, reason: err instanceof Error ? err.message : String(err) };
+    }
+    if (!result?.ok) toast.error(`넛지를 정리하지 못했습니다 · ${nudge.subject?.name || ""} — ${result?.reason || "저장 실패"}`);
   };
 
   return (
@@ -562,19 +593,6 @@ export function Followups({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        {notice && (
-          // live region(§11) — 되돌리기 창 개방을 스크린리더에도 알린다. 완료 카피는 중립(§5.3).
-          <span
-            role={notice.tone === "err" ? "alert" : "status"}
-            aria-live="polite"
-            style={{ fontSize: 11.5, color: notice.tone === "err" ? "var(--danger)" : "var(--fg-muted)", display: "inline-flex", alignItems: "center", gap: 8, marginRight: 8 }}
-          >
-            {notice.label}
-            {notice.action && (
-              <Button variant="ghost" size="xs" onClick={notice.action.onClick}>{notice.action.label}</Button>
-            )}
-          </span>
-        )}
         <Button variant="ghost" size="sm" icon="runs" onClick={reload}>새로고침</Button>
       </div>
 
@@ -597,7 +615,7 @@ export function Followups({ onNavigate }) {
             nudges={nudgeState.nudges.filter((n) => n.severity === "act")}
             busyKey={nudgeState.busyKey}
             onAct={actOnNudge}
-            onEscape={(nudge, action, until) => nudgeState.suppress(nudge, action, until)}
+            onEscape={onNudgeEscape}
           />
           <CrmNudgeSection
             title="정리"
@@ -606,7 +624,7 @@ export function Followups({ onNavigate }) {
             nudges={nudgeState.nudges.filter((n) => n.severity === "organize")}
             busyKey={nudgeState.busyKey}
             onAct={actOnNudge}
-            onEscape={(nudge, action, until) => nudgeState.suppress(nudge, action, until)}
+            onEscape={onNudgeEscape}
           />
         </Card>
       )}
@@ -707,7 +725,12 @@ export function Followups({ onNavigate }) {
             name: recordTarget.item.name,
           }}
           preset={recordTarget.preset}
+          draft={recordTarget.draft || null}
+          initialError={recordTarget.error || ""}
           onSaved={onRecordSaved}
+          onUndone={onRecordUndone}
+          onPersisted={onRecordPersisted}
+          onFailed={onRecordFailed}
           onClose={closeRecord}
         />
       )}
