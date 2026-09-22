@@ -28,7 +28,9 @@ import {
   filterRhythmRows,
   finishRhythmCheck,
   getRhythmProgressProps,
+  invalidRhythmEditFields,
   resolveRhythmCheckResult,
+  RHYTHM_INVALID_FIELD_MESSAGES,
   RITUAL_CATEGORY_LABELS,
   summarizeRhythmRows,
 } from "@/lib/rhythm-ui";
@@ -1470,6 +1472,16 @@ export function Rhythm() {
       }
 
       const original = baseRituals.find((r) => r.id === editRitualId);
+      // 무효한 주간 목표는 payload에서 조용히 빠져 "저장됨"으로 답하던 경로였다 — 보내기
+      // 전에 막고 원인을 드로어가 그대로 말한다(§11: 무엇이 왜 막혔는지 + 입력 보존).
+      const invalidFields = invalidRhythmEditFields(original, editingRitual);
+      if (invalidFields.length) {
+        return {
+          ok: false,
+          status: 'invalid-input',
+          message: invalidFields.map((key) => RHYTHM_INVALID_FIELD_MESSAGES[key]).filter(Boolean).join(' '),
+        };
+      }
       const payload = buildRhythmEditPayload(original, editingRitual);
       const response = await fetch('/api/routine', {
         method: 'PATCH',

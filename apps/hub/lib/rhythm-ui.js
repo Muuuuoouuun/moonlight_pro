@@ -246,6 +246,27 @@ export function buildRhythmEditPayload(original, edited) {
   return payload;
 }
 
+// buildRhythmEditPayload는 무효한 주간 목표를 payload에서 **뺀다**. 그러면 PATCH가 나머지
+// 필드만 저장하고 200 saved로 답해서, 화면은 "저장됨"인데 주간 목표는 이전 값 그대로인
+// 무음 경로가 된다 — 라우트의 invalid-target-per-week 400은 키가 실리지 않아 도달하지 못한다.
+// 호출부가 PATCH 전에 이 함수로 막아 §11 error 계약(무엇이 왜 막혔는지 + 입력 보존 + 재시도)을
+// 지킨다. payload 빌더의 시그니처·반환은 그대로 두어 기존 호출부를 건드리지 않는다.
+//
+// 운영자가 값을 **바꾸려 했을 때만** 막는다. 저장된 값 자체가 범위 밖인 낡은 행에서
+// 이름만 고치는 편집까지 막으면, 고칠 방법이 없는 막다른 길이 된다.
+export function invalidRhythmEditFields(original, edited) {
+  const invalid = [];
+  const raw = edited?.targetPerWeek;
+  const provided = raw !== undefined && raw !== null && raw !== "";
+  const changed = String(raw ?? "") !== String(original?.targetPerWeek ?? "");
+  if (provided && changed && normalizeTargetPerWeek(raw) === null) invalid.push("targetPerWeek");
+  return invalid;
+}
+
+export const RHYTHM_INVALID_FIELD_MESSAGES = {
+  targetPerWeek: "주간 목표는 1~7 사이의 정수여야 합니다.",
+};
+
 // 삭제 = 같은 (project_id, ritual_key) 그룹의 모든 routine_checks 행 제거 — 정의 행과
 // 그 루틴의 모든 체크인 이력이 함께 사라진다. 식별 필드만 있으면 되므로 buildRhythmEditPayload
 // 와 동일한 identity 필드를 공유한다.
