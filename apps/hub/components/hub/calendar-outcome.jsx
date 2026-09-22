@@ -17,6 +17,8 @@ export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, 
   const [conflict, setConflict] = React.useState(null);
   const [retry, setRetry] = React.useState(0);
   const busyRef = React.useRef(false);
+  const editButtonRef = React.useRef(null);
+  const restoreFocusRef = React.useRef(false);
   const detailsId = React.useId();
 
   React.useEffect(() => {
@@ -53,6 +55,13 @@ export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, 
     return () => { active = false; };
   }, [eventKey, retry]);
 
+  React.useEffect(() => {
+    if (!open && !saving && restoreFocusRef.current) {
+      restoreFocusRef.current = false;
+      editButtonRef.current?.focus();
+    }
+  }, [open, saving]);
+
   async function save(done = record?.done, expectedRevision = record?.revision) {
     if (busyRef.current || state !== 'live' || !record) return;
     busyRef.current = true;
@@ -71,6 +80,8 @@ export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, 
         setNote(data.outcome.note);
         noteDrafts.delete(eventKey);
         setConflict(null);
+        restoreFocusRef.current = open;
+        setOpen(false);
         setMessage('저장됨');
       } else if (data.status === 'conflict' && data.outcome) {
         setConflict({ current: data.outcome, wantedDone: done });
@@ -103,10 +114,10 @@ export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, 
         {whenLabel && <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', padding: '2px 6px', borderRadius: 'var(--r-xs)', flexShrink: 0 }}>{whenLabel}</span>}
         <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: record?.done ? 'var(--fg-muted)' : 'var(--fg)', textDecoration: record?.done ? 'line-through' : undefined, overflowWrap: 'anywhere' }}>{title}</span>
         {record?.done && <LifecycleBadge state="done" />}
-        <Button variant="ghost" size="xs" aria-expanded={open} aria-controls={detailsId} onClick={() => setOpen(value => !value)} disabled={saving}>특이사항</Button>
+        <Button ref={editButtonRef} variant="ghost" size="xs" aria-expanded={open} aria-controls={detailsId} onClick={() => setOpen(value => !value)} disabled={saving}>{open ? '접기' : record?.note ? '수정' : '특이사항'}</Button>
       </div>
       {state === 'loading' && <Skeleton width="45%" height={12} />}
-      {!open && record?.note && <div style={{ fontSize: 12, color: 'var(--fg-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: 26 }}>{record.note}</div>}
+      {!open && record?.note && <div style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.6, paddingLeft: 26 }}>{record.note}</div>}
       {open && state === 'live' && (
         <div id={detailsId} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <TextAreaField label="특이사항" value={note} onChange={event => editNote(event.target.value)} maxLength={4000} rows={3} disabled={saving} placeholder="진행 결과나 다음에 확인할 내용을 남기세요" onCmdEnter={() => !conflict && save()} />
