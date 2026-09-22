@@ -9,6 +9,7 @@ const GOAL_LABELS = {
   operational_rule: "운영 체크리스트",
   decision_rationale: "의사결정 배경",
   general: "종합 패턴",
+  weekly_synthesis: "주간 신경망 종합 보고서",
 };
 
 export function MemoPatternPanel({

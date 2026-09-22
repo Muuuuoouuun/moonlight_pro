@@ -68,6 +68,29 @@ export function Memos() {
     }
   }, [selectedIds, patternGoal]);
 
+  const runWeeklySynthesis = React.useCallback(async () => {
+    setPatternState({ show: true, loading: true, patterns: [], error: null });
+    try {
+      const res = await fetch('/api/hub/journal/analyze', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          requestId: crypto.randomUUID(),
+          goal: 'weekly_synthesis',
+          range: '7d',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'failed') {
+        setPatternState({ show: true, loading: false, patterns: [], error: data.error || data.message || '주간 종합 분석에 실패했습니다.' });
+      } else {
+        setPatternState({ show: true, loading: false, patterns: data.patterns || [], error: null });
+      }
+    } catch (err) {
+      setPatternState({ show: true, loading: false, patterns: [], error: err.message });
+    }
+  }, []);
+
   React.useEffect(() => {
     if (!isNew || draftId) return;
     const next = new URLSearchParams(params.toString()); next.set('draft', crypto.randomUUID());
@@ -136,7 +159,12 @@ export function Memos() {
   const validId = isCanonicalUuid(id);
   return <div className="hub-page memos-page fade-up">
     <header className="memos-header"><div><h2>메모</h2><p>남긴 생각을 다음 할 일과 콘텐츠에 이어 쓰세요.</p></div>
-      <Button variant="primary" icon="plus" onClick={create} disabled={Boolean(id) || ledger.status === 'loading'}>메모 남기기 <Kbd>N</Kbd></Button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Button variant="outline" size="sm" onClick={runWeeklySynthesis} disabled={patternState.loading}>
+          ✦ 최근 7일 종합 보고서
+        </Button>
+        <Button variant="primary" icon="plus" onClick={create} disabled={Boolean(id) || ledger.status === 'loading'}>메모 남기기 <Kbd>N</Kbd></Button>
+      </div>
     </header>
     <div className="memos-state"><TruthBadge state={search.status} /><span className="memo-muted">하루 리뷰와 함께 보관하는 개인 기록</span></div>
     <MemoSearchControls filters={filters} context={search.context} onApply={applyFilters} />
@@ -150,6 +178,7 @@ export function Memos() {
             className="hub-input"
             style={{ height: 32, fontSize: 12, padding: '0 8px' }}
           >
+            <option value="weekly_synthesis">주간 신경망 종합 보고서</option>
             <option value="sales_insight">영업 인사이트 도출</option>
             <option value="content_hook">콘텐츠 훅 도출</option>
             <option value="operational_rule">운영 체크리스트 도출</option>
