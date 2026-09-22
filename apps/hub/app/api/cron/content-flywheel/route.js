@@ -38,9 +38,16 @@ async function callEngineDraft(body) {
   if (!engineUrl) {
     return { status: 202, data: { status: "preview", error: "COM_MOON_ENGINE_URL is not configured." } };
   }
-  const headers = { "content-type": "application/json" };
+  // 시크릿이 없으면 Engine은 open 모드로도 401을 준다 — 헤더 없이 보내면 설정 누락이
+  // "초안 생성 실패"로 위장된다. lib/pms-engine-client.js와 같게 여기서 끊고 원인을 말한다.
   const secret = resolveSharedSecret();
-  if (secret) headers["x-com-moon-shared-secret"] = secret;
+  if (!secret) {
+    return {
+      status: 503,
+      data: { status: "error", reason: "shared-secret-not-configured", error: "COM_MOON_SHARED_WEBHOOK_SECRET is not configured." },
+    };
+  }
+  const headers = { "content-type": "application/json", "x-com-moon-shared-secret": secret };
 
   const response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
     method: "POST",
@@ -140,7 +147,12 @@ async function runContentFlywheel(workspaceId) {
         inputSummary: `engine ${engine?.status} · ${data?.reason || "no-draft"}`,
         result: "error",
       });
-      return { body: { status: "error", reason: "draft-failed", ...summary }, httpStatus: 502 };
+      // Engine이 원인을 말했으면 그 말을 그대로 올린다 — 설정 누락이 "draft-failed"로
+      // 뭉개지면 자동화 화면에서 고칠 것을 읽을 수 없다.
+      return {
+        body: { status: "error", reason: data?.reason || "draft-failed", ...summary },
+        httpStatus: engine?.status === 503 ? 503 : 502,
+      };
     }
 
     // Mint the run first (createWorkOrder returns no id), then thread runId into the order.
@@ -194,6 +206,8 @@ export async function GET(req) {
 
   // 매 실행을 automation_runs에 남긴다 — 실패(draft-failed·저장 실패)가 자동화 화면에 보이게.
   // 케이던스 충족·아이디어 없음 같은 no-op은 ignored로 남겨 "돌긴 돌았다"를 보인다.
+  // 기록은 결과를 남기는 것이지 결과를 만드는 것이 아니다 — 기록이 던지면 이미 만들어진
+  // work_order가 크론 호출자에게 '실패'로 보이고 재시도가 붙는다. 실패는 로그로만 남긴다.
   const runStatus = body.status === "ok" ? "success" : body.status === "error" ? "failure" : "ignored";
   await recordAutomationRun({
     workspaceId,
@@ -210,6 +224,8 @@ export async function GET(req) {
       ...body,
     },
     errorMessage: runStatus === "failure" ? body.error || body.reason || "content-draft-failed" : null,
+  }).catch((error) => {
+    console.error("[cron] automation-run log failed", AUTOMATION_KEY, error);
   });
 
   return NextResponse.json(body, { status: httpStatus });

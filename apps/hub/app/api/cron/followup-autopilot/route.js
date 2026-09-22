@@ -46,9 +46,16 @@ async function callEngineDraft(body) {
     return { status: 202, data: { status: "preview", error: "COM_MOON_ENGINE_URL is not configured." } };
   }
 
-  const headers = { "content-type": "application/json" };
+  // 시크릿이 없으면 Engine은 open 모드로도 401을 준다 — 헤더 없이 보내면 설정 누락이
+  // "초안 생성 실패"로 위장된다. lib/pms-engine-client.js와 같게 여기서 끊고 원인을 말한다.
   const secret = resolveSharedSecret();
-  if (secret) headers["x-com-moon-shared-secret"] = secret;
+  if (!secret) {
+    return {
+      status: 503,
+      data: { status: "error", reason: "shared-secret-not-configured", error: "COM_MOON_SHARED_WEBHOOK_SECRET is not configured." },
+    };
+  }
+  const headers = { "content-type": "application/json", "x-com-moon-shared-secret": secret };
 
   const response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
     method: "POST",
@@ -79,7 +86,7 @@ function hasOpenDraft(openOrders, dealId) {
 
 // 실행 본문 — 응답 봉투를 {body, httpStatus}로 돌려주고, GET이 automation_runs에 결과를 남긴다.
 async function runFollowupAutopilot(workspaceId) {
-  const summary = { scanned: 0, drafted: 0, skipped: 0, errored: 0, deals: [] };
+  const summary = { scanned: 0, drafted: 0, skipped: 0, errored: 0, deals: [], errorReason: null };
 
   try {
     // Source of truth for "who's stalled" — reuse the scoring, don't reimplement priorityFor.
@@ -125,6 +132,8 @@ async function runFollowupAutopilot(workspaceId) {
 
         if (!ok) {
           summary.errored += 1;
+          // 첫 실패의 원인을 자동화 행까지 올린다 — 건수만으론 고칠 것을 읽을 수 없다.
+          if (!summary.errorReason) summary.errorReason = data?.reason || `engine-${engine.status}`;
           await recordAgentRun({
             workspaceId,
             agent: "guru",
@@ -198,6 +207,8 @@ export async function GET(req) {
   // 매일 실패가 자동화 화면 어디에도 보이지 않았다. 초안 1건이라도 실패하면 failure.
   const errored = Number(body.errored || 0);
   const runStatus = body.status === "error" || errored > 0 ? "failure" : body.status === "ok" ? "success" : "ignored";
+  // 기록은 결과를 남기는 것이지 결과를 만드는 것이 아니다 — 기록이 던지면 이미 만들어진
+  // work_order가 크론 호출자에게 '실패'로 보이고 재시도가 붙는다. 실패는 로그로만 남긴다.
   await recordAutomationRun({
     workspaceId,
     key: AUTOMATION_KEY,
@@ -212,7 +223,11 @@ export async function GET(req) {
         : `${body.status}${body.reason ? ` · ${body.reason}` : ""}`,
       ...body,
     },
-    errorMessage: runStatus === "failure" ? body.error || `${errored}건 초안 실패 (Engine 응답 계약 또는 저장)` : null,
+    errorMessage: runStatus === "failure"
+      ? body.error || body.errorReason || `${errored}건 초안 실패 (Engine 응답 계약 또는 저장)`
+      : null,
+  }).catch((error) => {
+    console.error("[cron] automation-run log failed", AUTOMATION_KEY, error);
   });
 
   return NextResponse.json(body, { status: httpStatus });
