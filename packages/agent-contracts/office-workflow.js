@@ -1,5 +1,5 @@
 // Browser-safe workflow contract. Keep the existing Office v2 chat contract independent.
-import { OFFICE_IDS, OFFICE_MODES, OfficeInputError } from './office.js';
+import { OFFICE_IDS, OFFICE_MODES, OfficeInputError, parseOfficeDeliberation, parseOfficeDiscussion } from './office.js';
 
 export const OFFICE_WORKFLOW_VERSION = '2026-09-21.v1';
 export const OFFICE_WORKFLOW_INTENTS = Object.freeze(['weekly_report', 'customer_reply', 'freeform']);
@@ -56,7 +56,7 @@ export function parseOfficeWorkflowOrigin(value, intent) {
 }
 
 export function parseOfficeWorkflowRequest(value) {
-  keys(value, ['requestId', 'intent', 'ownerId', 'mode', 'participants', 'scope', 'originRef', 'expectedContextHash', 'message', 'boundedHistory', 'parentRequestId']);
+  keys(value, ['requestId', 'intent', 'ownerId', 'mode', 'participants', 'scope', 'originRef', 'expectedContextHash', 'message', 'boundedHistory', 'parentRequestId', 'deliberation']);
   check(OFFICE_WORKFLOW_INTENTS.includes(value.intent), '지원하지 않는 workflow입니다.');
   const ownerId = value.ownerId ?? ({ weekly_report: 'vaporeon', customer_reply: 'flareon', freeform: 'eevee' }[value.intent]);
   const mode = value.mode ?? (value.intent === 'freeform' ? 'chat' : 'draft');
@@ -75,6 +75,8 @@ export function parseOfficeWorkflowRequest(value) {
   check(JSON.stringify(boundedHistory).length <= OFFICE_WORKFLOW_LIMITS.historyChars, '대화 문맥이 너무 깁니다.');
   const requestId = uuid(value.requestId);
   const result = { requestId, intent: value.intent, ownerId, mode, participants: [...participants], scope: value.scope, originRef: parseOfficeWorkflowOrigin(value.originRef, value.intent), expectedContextHash: hash(value.expectedContextHash), message: text(value.message, OFFICE_WORKFLOW_LIMITS.message), boundedHistory };
+  check(value.deliberation === undefined || mode === 'council', '토론 조절은 관점 비교에서 사용해 주세요.');
+  if (value.deliberation !== undefined) result.deliberation = parseOfficeDeliberation(value.deliberation, participants);
   if (value.parentRequestId !== undefined && value.parentRequestId !== null) {
     result.parentRequestId = uuid(value.parentRequestId);
     check(result.parentRequestId !== requestId, '원본 요청과 수정 요청은 다른 ID여야 합니다.');
@@ -154,7 +156,7 @@ export function parseOfficeWorkflowAnswer(value, request, context) {
 
 // Only Engine output enters here. Persistence, application and permissions belong to Hub.
 export function parseOfficeWorkflowResult(value, request, context) {
-  const metadata = ['version', 'requestId', 'resultRevision', 'status', 'ownerId', 'mode', 'participants', 'scope', 'context', 'generation'];
+  const metadata = ['version', 'requestId', 'resultRevision', 'status', 'ownerId', 'mode', 'participants', 'scope', 'context', 'generation', 'discussion'];
   const answerKeys = ['summary', 'artifact', 'evidence', 'uncertainties', 'dissent', 'council', 'nextStep'];
   keys(value, [...metadata, ...answerKeys, 'error']);
   check(byteLength(value) <= OFFICE_WORKFLOW_LIMITS.resultBytes, '결과가 너무 큽니다. 요청 범위를 줄여 주세요.');
@@ -162,7 +164,7 @@ export function parseOfficeWorkflowResult(value, request, context) {
   check(['generated', 'preview', 'error'].includes(value.status), '생성 상태가 올바르지 않습니다.');
   const base = { version: value.version, requestId: value.requestId, ownerId: value.ownerId, mode: value.mode, participants: [...value.participants], scope: value.scope, status: value.status };
   if (value.status !== 'generated') {
-    check(answerKeys.every(key => value[key] === undefined) && value.generation === undefined && value.resultRevision === undefined && value.context === undefined, '실패한 결과에 생성 본문을 넣을 수 없습니다.');
+    check(answerKeys.every(key => value[key] === undefined) && value.generation === undefined && value.resultRevision === undefined && value.context === undefined && value.discussion === undefined, '실패한 결과에 생성 본문을 넣을 수 없습니다.');
     return { ...base, error: text(value.error, 1000) };
   }
   check(value.error === undefined && value.resultRevision === 1, '결과 버전이 올바르지 않습니다.');
@@ -177,5 +179,7 @@ export function parseOfficeWorkflowResult(value, request, context) {
     generation.usage = { ...value.generation.usage };
   }
   const answer = Object.fromEntries(answerKeys.filter(key => value[key] !== undefined).map(key => [key, value[key]]));
-  return { ...base, resultRevision: 1, ...parseOfficeWorkflowAnswer(answer, request, context), context: { ...value.context, missing: [...value.context.missing] }, generation };
+  check(request.deliberation === undefined || value.discussion !== undefined, '요청한 토론 설정의 실행 기록이 없습니다.');
+  const discussion = value.discussion === undefined ? {} : { discussion: parseOfficeDiscussion(value.discussion, request) };
+  return { ...base, resultRevision: 1, ...parseOfficeWorkflowAnswer(answer, request, context), context: { ...value.context, missing: [...value.context.missing] }, generation, ...discussion };
 }

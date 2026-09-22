@@ -1,4 +1,6 @@
 import {parseOfficeWorkflowOrigin,parseOfficeWorkflowRequest} from '@com-moon/agent-contracts/office-workflow';
+import {OFFICE_IDS,parseOfficeDeliberation,parseOfficeDiscussion} from '@com-moon/agent-contracts/office';
+import {officeDeliberationForParticipants} from './office-deliberation-client.js';
 
 export function officeWorkflowQuery({intent,scope,originRef}) {
   if (!['personal','classin'].includes(scope)) throw new Error('범위를 선택해 주세요.');
@@ -34,12 +36,27 @@ export async function readOfficeWorkflow(path, {fetcher=fetch}={}) {
   } catch { return {status:'error',error:'office-read-failed'}; }
 }
 
-export function validWorkflowReceipt(data, {requestId,scope}) {
+export function validWorkflowReceipt(data, {requestId,scope,request}) {
   if (!data || typeof data!=='object' || data.requestId!==requestId) return false;
   if (data.result && (data.result.requestId!==requestId || data.result.scope!==scope || typeof data.result.artifact?.body!=='string' || typeof data.result.summary!=='string')) return false;
   if(data.status==='generated' && (!data.result || data.persistence?.persisted!==true))return false;
   if(data.status==='unsaved' && !data.result)return false;
   if(data.status==='saved' && (data.application?.state!=='saved' || !data.application?.commandId || !data.application?.entityId || data.persistence?.persisted!==true))return false;
+  if(data.deliberation!==undefined) {
+    try {
+      if(data.mode!=='council' || data.scope!==scope || !Array.isArray(data.participants) || data.participants.length<2 || data.participants.length>3 || !data.participants.includes(data.ownerId))return false;
+      if(request && (data.ownerId!==request.ownerId || data.mode!==request.mode || JSON.stringify(data.participants)!==JSON.stringify(request.participants)))return false;
+      const settings=parseOfficeDeliberation(data.deliberation,data.participants);
+      if(request && JSON.stringify(settings)!==JSON.stringify(parseOfficeDeliberation(request.deliberation,request.participants)))return false;
+    } catch { return false; }
+  }
+  if(data.result) {
+    if(request && (data.result.ownerId!==request.ownerId || data.result.mode!==request.mode || JSON.stringify(data.result.participants)!==JSON.stringify(request.participants)))return false;
+    if(data.result.discussion!==undefined || request?.deliberation!==undefined) {
+      try { parseOfficeDiscussion(data.result.discussion,request||{ownerId:data.result.ownerId,mode:data.result.mode,participants:data.result.participants,deliberation:data.deliberation??data.result.discussion?.settings}); }
+      catch { return false; }
+    }
+  }
   return ['running','generated','saved','error','unknown','expired','conflict','preview','unsaved'].includes(data.status);
 }
 
@@ -55,7 +72,7 @@ export function mergeOfficeWorkflowReceipt(previous,incoming) {
   return incoming;
 }
 
-export async function writeOfficeWorkflow(path, body, {fetcher=fetch,requestId,scope}={}) {
+export async function writeOfficeWorkflow(path, body, {fetcher=fetch,requestId,scope,request}={}) {
   try {
     const response=await fetcher(`/api/hub/office/${path}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(60000)});
     const data=await response.json();
@@ -63,7 +80,7 @@ export async function writeOfficeWorkflow(path, body, {fetcher=fetch,requestId,s
     if(response.status>=500)return {status:'unknown',requestId,error:data?.error||'workflow-outcome-unknown'};
     if (!response.ok) return {status:data?.status==='conflict'?'conflict':'error',requestId,error:data?.error};
     if(['preview','error','conflict','invalid-input'].includes(data?.status)&&!data.result&&!data.requestId)return {...data,status:data.status==='invalid-input'?'error':data.status,requestId};
-    if (!validWorkflowReceipt(data,{requestId,scope})) return {status:'unknown',requestId,error:'invalid-workflow-receipt'};
+    if (!validWorkflowReceipt(data,{requestId,scope,request})) return {status:'unknown',requestId,error:'invalid-workflow-receipt'};
     return data;
   } catch { return {status:'unknown',requestId,error:'workflow-outcome-unknown'}; }
 }
@@ -72,10 +89,35 @@ export async function sendOfficeWorkflow(input, options={}) {
   let request;
   try { request=parseOfficeWorkflowRequest(input); }
   catch { return {status:'error',requestId:input?.requestId,error:'invalid-workflow-request'}; }
-  return writeOfficeWorkflow('requests',request,{...options,requestId:request.requestId,scope:request.scope});
+  return writeOfficeWorkflow('requests',request,{...options,requestId:request.requestId,scope:request.scope,request});
 }
 
-const initial = () => ({open:false,draft:'',sentDraft:'',sourceExcerpt:'',sentExcerpt:'',sourceExcerpts:{},context:null,loading:false,requests:[],nextCursor:null,receipt:null,request:null,inspectToken:null,pending:false,note:'',taskFields:null,applyInput:null,applicationUnknown:false,projects:[],copied:false});
+export function officeWorkflowReviewers(state,ownerId) {
+  return (state.reviewers ?? [ownerId==='vaporeon'?'eevee':'umbreon']).filter(id=>id!==ownerId);
+}
+
+export function officeWorkflowGenerationRequest(input,state,{requestId,ownerId,defaultMessage}) {
+  const parent=state.receipt?.requestId,previousBody=state.receipt?.result?.artifact?.body;
+  if(previousBody?.length>6000&&!state.sourceExcerpt.trim())throw new Error('이전 결과가 길어 수정할 부분을 아래 입력란에 선택해 주세요.');
+  const previous=previousBody?.length>6000?state.sourceExcerpt.trim():previousBody;
+  const mode=state.mode,participants=mode==='council'?[ownerId,...officeWorkflowReviewers(state,ownerId)]:[];
+  return parseOfficeWorkflowRequest({...input,requestId,ownerId,mode,participants,
+    ...(mode==='council'?{deliberation:officeDeliberationForParticipants(state.deliberation,participants)}:{}),
+    expectedContextHash:state.context.contextHash,message:state.draft.trim()||defaultMessage,
+    boundedHistory:previous?[{role:'assistant',text:previous}]:[],...(parent?{parentRequestId:parent}:{})});
+}
+
+function settingsFromReceipt(receipt) {
+  const result=receipt.result||receipt;
+  if(!OFFICE_IDS.includes(result?.ownerId) || !['draft','council'].includes(result?.mode))return {};
+  if(result.mode==='draft')return {ownerId:result.ownerId,mode:'draft'};
+  try {
+    const deliberation=officeDeliberationForParticipants(result.discussion?.settings??receipt.deliberation,result.participants);
+    return {ownerId:result.ownerId,mode:'council',reviewers:result.participants.filter(id=>id!==result.ownerId),deliberation};
+  } catch { return {}; }
+}
+
+const initial = () => ({open:false,ownerId:null,mode:'draft',reviewers:null,deliberation:officeDeliberationForParticipants(undefined,[]),draft:'',sentDraft:'',sourceExcerpt:'',sentExcerpt:'',sourceExcerpts:{},context:null,loading:false,requests:[],nextCursor:null,receipt:null,request:null,inspectToken:null,pending:false,note:'',taskFields:null,applyInput:null,applicationUnknown:false,projects:[],copied:false});
 export function createOfficeWorkflowSessions() {
   const entries=new Map(), listeners=new Set();
   return {
@@ -88,7 +130,7 @@ export function createOfficeWorkflowSessions() {
         const switched=current.receipt?.requestId!==receipt.requestId;
         const sourceExcerpts=switched&&current.receipt?.requestId?{...current.sourceExcerpts,[current.receipt.requestId]:current.sourceExcerpt}:current.sourceExcerpts;
         return {receipt:mergeOfficeWorkflowReceipt(current.receipt,receipt),note:officeWorkflowNote(receipt),copied:false,
-          ...(switched?{sourceExcerpts,sourceExcerpt:sourceExcerpts[receipt.requestId]||'',taskFields:null,applyInput:null}:{}),
+          ...(switched?{sourceExcerpts,sourceExcerpt:sourceExcerpts[receipt.requestId]||'',taskFields:null,applyInput:null,...settingsFromReceipt(receipt)}:{}),
           ...(['saved','rejected'].includes(receipt.application?.state)?{applicationUnknown:false,applyInput:null,taskFields:null}:{})};
       });
     },

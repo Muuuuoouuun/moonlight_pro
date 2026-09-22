@@ -1,5 +1,7 @@
 // Browser-safe Office contract. Legacy persona/Guru/Council IDs remain independent.
-export const OFFICE_VERSION = '2026-09-21.v2';
+import { parseOfficeDeliberation } from './office-deliberation.js';
+export { OFFICE_DISCUSSION_VERSION, OFFICE_DELIBERATION_PROFILES, parseOfficeDeliberation, parseOfficeDiscussion, parseOfficeDiscussionTurn, officeDiscussionRounds } from './office-deliberation.js';
+export const OFFICE_VERSION = '2026-09-22.v3';
 export const OFFICE_ROSTER = Object.freeze([
   {
     "id": "eevee",
@@ -85,7 +87,7 @@ function check(ok, message) { if (!ok) throw new OfficeInputError(message); }
 function keys(x, allowed) { check(plain(x) && Object.keys(x).every(k => allowed.includes(k)), '지원하지 않는 입력 필드입니다.'); }
 function text(x, max) { check(typeof x === 'string' && x.trim().length > 0 && x.length <= max, '본문 길이를 확인해 주세요.'); return x.trim(); }
 export function parseOfficeRequest(value) {
-  keys(value, ['ownerId','mode','scope','message','participants','lens','history','includeProjects']);
+  keys(value, ['ownerId','mode','scope','message','participants','lens','history','includeProjects','deliberation']);
   const {ownerId = 'eevee', mode = 'chat', scope = 'all', lens = null} = value;
   check(OFFICE_IDS.includes(ownerId), '등록되지 않은 Office 담당입니다.');
   check(OFFICE_MODES.includes(mode), '지원하지 않는 Office 모드입니다.');
@@ -103,7 +105,8 @@ export function parseOfficeRequest(value) {
   });
   check(JSON.stringify(normalizedHistory).length <= 20000, '대화 문맥이 너무 깁니다. 새 대화를 시작해 주세요.');
   check(value.includeProjects === undefined || typeof value.includeProjects === 'boolean', '프로젝트 참조 설정이 올바르지 않습니다.');
-  return {ownerId, mode, scope, lens:null, message:text(value.message,6000), participants:[...participants], history:normalizedHistory, includeProjects:value.includeProjects === true};
+  check(value.deliberation === undefined || mode === 'council', '토론 조절은 관점 비교에서 사용해 주세요.');
+  return {ownerId, mode, scope, lens:null, message:text(value.message,6000), participants:[...participants], history:normalizedHistory, includeProjects:value.includeProjects === true,...(value.deliberation === undefined ? {} : {deliberation:parseOfficeDeliberation(value.deliberation, participants)})};
 }
 export function parseOfficeAnswer(value, mode) {
   keys(value, ['answer','nextAction','recommendation','evidence','dissent']);

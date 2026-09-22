@@ -5,6 +5,7 @@ import { Button, CheckboxRow, Drawer, EmptyState, SegmentedControl, Skeleton, Te
 import { requestOffice } from '../office-client';
 import { copyOfficeText, OFFICE_MINIMUM_INSTRUCTION, shouldSubmitOfficeKey } from '../office-session';
 import { useOfficeSession } from '../office-session-provider';
+import { OfficeDeliberationControls, OfficeDiscussion } from '../office-deliberation-controls';
 import styles from './office-council.module.css';
 
 const MODES = [{ key: 'chat', label: '대화' }, { key: 'draft', label: '초안' }, { key: 'review', label: '검토' }, { key: 'council', label: '관점 비교' }];
@@ -40,7 +41,7 @@ function ResultTurn({ turn, onRevise, onCopy, copyStatus }) {
     </details> : null}
     <div className={styles.next}><strong>다음 행동</strong><p>{result.nextAction}</p></div>
     <div className={styles.receipt}><span>{result.log?.persisted === true ? '호출 로그 저장됨' : '답변 생성됨 · 호출 로그 미저장'}</span><span>업무 변경 없음</span></div>
-    {result.simulation ? <p className={styles.note}>단일 AI의 관점 시뮬레이션 · {result.participants.map(id => OFFICE_ROSTER.find(person => person.id === id)?.name || id).join(' · ')}</p> : null}
+    <OfficeDiscussion result={result} request={turn.request} />
     {result.context?.source && result.context.source !== 'provided' ? <div className={styles.contextState}><TruthBadge state={result.context.source} /></div> : null}
     <p className={styles.note}>{result.context?.note}</p>
     {result.context?.projects?.length ? <details className={styles.request}><summary>참고한 프로젝트 ({result.context.projects.length})</summary><ul className={styles.note}>{result.context.projects.map(project => <li key={project.id}>{project.name} · {project.status}</li>)}</ul></details> : null}
@@ -94,7 +95,7 @@ export function OfficeCouncil({ scope = 'all' }) {
   function revise(result) {
     if (!busy) update({ ownerId: result.ownerId, mode: result.mode,
       reviewers: result.mode === 'council' ? result.participants.filter(id => id !== result.ownerId) : reviewers,
-      presetId: null });
+      ...(result.mode === 'council' ? { deliberation: result.discussion?.settings } : {}), presetId: null });
     inputRef.current?.focus();
   }
 
@@ -140,8 +141,9 @@ export function OfficeCouncil({ scope = 'all' }) {
             <p className={styles.note}>주관은 {owner.name}. 추가 관점을 1~2명 선택하세요.</p>
             <div className={styles.views}>{OFFICE_ROSTER.filter(person => person.id !== ownerId).map(person => <CheckboxRow key={person.id} text={`${person.name} · ${person.role}`} checked={reviewers.includes(person.id)} disabled={!reviewers.includes(person.id) && reviewers.length >= 2}
               onChange={() => update(current => ({ presetId: null, reviewers: current.reviewers.includes(person.id) ? current.reviewers.filter(id => id !== person.id) : [...current.reviewers, person.id] }))} />)}</div>
+            <OfficeDeliberationControls value={session.deliberation} participants={participants} disabled={busy} onChange={deliberation => update({ deliberation })} />
           </> : null}
-          <p className={styles.note}>단일 AI의 관점 시뮬레이션입니다. 실제 독립 에이전트 회의는 아닙니다.</p>
+          <p className={styles.note}>같은 모델의 역할별 개별 검토입니다. 첫 의견을 따로 작성한 뒤 설정에 따라 다른 관점에 답하고, 주관이 결과를 종합합니다.</p>
         </fieldset>
       </details>
       <div className={styles.thread} aria-label="Office 요청 결과">

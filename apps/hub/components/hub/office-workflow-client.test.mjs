@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {createOfficeWorkflowSessions,officeWorkflowKey,readOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt} from './office-workflow-client.js';
+import {createOfficeWorkflowSessions,officeWorkflowKey,readOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowGenerationRequest,sendOfficeWorkflow} from './office-workflow-client.js';
+import {OFFICE_DISCUSSION_VERSION,parseOfficeDeliberation} from '@com-moon/agent-contracts/office';
 const id='11111111-1111-4111-8111-111111111111';
 const other='22222222-2222-4222-8222-222222222222';
 const input={intent:'weekly_report',scope:'personal',originRef:{periodStart:'2026-09-14',periodEnd:'2026-09-20',timezone:'Asia/Seoul'}};
@@ -75,4 +76,68 @@ test('history selection restores only that result excerpt and invalidates a diff
   store.selectReceipt(key,answer);
   assert.equal(store.get(key).sourceExcerpt,'A 결과에서 고른 부분');
   assert.equal(store.get(key).sourceExcerpts[other],'B 결과에서 고른 부분');
+});
+
+test('workflow request snapshots include selected controls and keep follow-up context independent',()=>{
+  const store=createOfficeWorkflowSessions(),key=officeWorkflowKey(input);
+  store.update(key,{mode:'council',reviewers:['eevee'],draft:'  사용자가 쓴 원문  ',context:{contextHash:'a'.repeat(64)},deliberation:{profile:'scrutiny',warmth:2,influence:{vaporeon:2,eevee:3}}});
+  const request=officeWorkflowGenerationRequest(input,store.get(key),{requestId:id,ownerId:'vaporeon',defaultMessage:'주간 정리를 작성해 주세요.'});
+  assert.equal(request.message,'사용자가 쓴 원문');
+  assert.deepEqual(request.participants,['vaporeon','eevee']);
+  assert.equal(request.deliberation.warmth,2);
+  store.update(key,{request,pending:true,sentDraft:store.get(key).draft,deliberation:{profile:'urgent'}});
+  assert.equal(request.deliberation.profile,'scrutiny');
+  assert.deepEqual(request.deliberation.influence,{vaporeon:2,eevee:3});
+  store.accept(key,id,{status:'unknown',requestId:id});
+  assert.equal(store.get(key).draft,'  사용자가 쓴 원문  ');
+  store.update(key,{receipt:answer});
+  const next=officeWorkflowGenerationRequest(input,store.get(key),{requestId:other,ownerId:'vaporeon',defaultMessage:'주간 정리를 작성해 주세요.'});
+  assert.equal(next.parentRequestId,id);
+  assert.equal(next.boundedHistory[0].text,'본문');
+  assert.equal(next.deliberation.profile,'urgent');
+});
+
+test('workflow generation validates result identity and exact discussion settings before clearing input',async()=>{
+  const participants=['vaporeon','eevee'];
+  const deliberation=parseOfficeDeliberation({profile:'urgent',influence:{eevee:3}},participants);
+  const request={...input,requestId:id,ownerId:'vaporeon',mode:'council',participants,deliberation,message:'주간 검토',expectedContextHash:'a'.repeat(64),boundedHistory:[]};
+  const discussion={version:OFFICE_DISCUSSION_VERSION,settings:deliberation,modelCalls:3,turns:participants.map(ownerId=>({ownerId,round:'position',position:'확인된 기록으로 판단합니다.',evidence:['제공된 기록'],objection:'',revisionCondition:'미확인 상태가 확인되면 다시 판단합니다.',changed:false,replyTo:[],changeReason:''}))};
+  const receipt={...answer,result:{...answer.result,status:'generated',ownerId:'vaporeon',mode:'council',participants,discussion}};
+  const send=body=>sendOfficeWorkflow(request,{fetcher:async(_,init)=>{assert.deepEqual(JSON.parse(init.body).deliberation,deliberation);return Response.json(body);}});
+  assert.equal((await send(receipt)).status,'generated');
+  for(const changes of [{ownerId:'flareon'},{mode:'draft'},{participants:['vaporeon','umbreon']},{discussion:undefined},{discussion:{...discussion,settings:{...deliberation,convergence:0}}}]) {
+    const rejected=await send({...receipt,result:{...receipt.result,...changes}});
+    assert.equal(rejected.status,'unknown');assert.equal(rejected.result,undefined);
+  }
+  assert.equal(validWorkflowReceipt({...receipt,result:{...receipt.result,discussion:undefined}},{requestId:id,scope:'personal'}),true);
+  assert.equal(validWorkflowReceipt({...receipt,result:{...receipt.result,discussion:{...discussion,turns:[]}}},{requestId:id,scope:'personal'}),false);
+});
+
+test('choosing saved council results restores their controls for revision without overwriting draft',()=>{
+  const store=createOfficeWorkflowSessions(),key=officeWorkflowKey(input);
+  const participants=['vaporeon','eevee'],deliberation=parseOfficeDeliberation({profile:'explore',challenge:3},participants);
+  store.update(key,{draft:'수정할 내용',mode:'draft'});
+  store.selectReceipt(key,{...answer,result:{...answer.result,ownerId:'vaporeon',mode:'council',participants,discussion:{settings:deliberation}}});
+  const selected=store.get(key);
+  assert.equal(selected.draft,'수정할 내용');
+  assert.equal(selected.mode,'council');
+  assert.deepEqual(selected.reviewers,['eevee']);
+  assert.deepEqual(selected.deliberation,deliberation);
+  store.update(key,{deliberation:{...deliberation,warmth:3}});
+  store.selectReceipt(key,{...answer,result:{...answer.result,ownerId:'vaporeon',mode:'council',participants,discussion:{settings:deliberation}}});
+  assert.equal(store.get(key).deliberation.warmth,3);
+});
+
+test('expired or failed record metadata restores controls without manufacturing a discussion',()=>{
+  const store=createOfficeWorkflowSessions(),key=officeWorkflowKey(input),participants=['vaporeon','eevee'];
+  const deliberation=parseOfficeDeliberation({profile:'scrutiny',influence:{eevee:3}},participants);
+  const receipt={status:'expired',requestId:id,scope:'personal',ownerId:'vaporeon',mode:'council',participants,deliberation,result:null};
+  assert.equal(validWorkflowReceipt(receipt,{requestId:id,scope:'personal'}),true);
+  const request={requestId:id,ownerId:'vaporeon',mode:'council',participants,deliberation};
+  assert.equal(validWorkflowReceipt(receipt,{requestId:id,scope:'personal',request}),true);
+  assert.equal(validWorkflowReceipt({...receipt,deliberation:{...deliberation,warmth:3}},{requestId:id,scope:'personal',request}),false);
+  assert.equal(validWorkflowReceipt({...receipt,deliberation:{...deliberation,challenge:8}},{requestId:id,scope:'personal'}),false);
+  store.update(key,{draft:'보존할 수정 내용'});store.selectReceipt(key,receipt);
+  assert.deepEqual(store.get(key).deliberation,deliberation);assert.equal(store.get(key).draft,'보존할 수정 내용');
+  assert.equal(store.get(key).receipt.result,null);
 });

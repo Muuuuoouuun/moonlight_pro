@@ -10,7 +10,7 @@ export interface GeminiGenerateInput {
   model?: string;
   signal?: AbortSignal;
   responseJsonSchema?: Record<string, unknown>;
-  thinkingLevel?: 'high';
+  thinkingLevel?: 'low' | 'high';
   media?: GeminiMediaPart[];
 }
 

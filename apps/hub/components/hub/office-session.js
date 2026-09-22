@@ -1,12 +1,13 @@
 // Drafts and pending freeform requests live only in the mounted Hub session.
 // They are deliberately never serialized to localStorage or sent across scopes.
 import { officeHistory } from './office-client.js';
+import { officeDeliberationForParticipants } from './office-deliberation-client.js';
 
 export const OFFICE_MINIMUM_INSTRUCTION = '[오늘은 최소한만: 이미 정한 약속을 지키는 데 필요한 내용만 남겨 주세요. 추가 과제가 필요 없으면 추가 행동 없음으로 답해 주세요.]\n\n';
 
 function blankSession() {
   return { ownerId: 'eevee', mode: 'chat', reviewers: ['umbreon'], includeProjects: false,
-    minimumOnly: false, presetId: null, draft: '', turns: [], pending: null, error: null };
+    minimumOnly: false, presetId: null, deliberation: officeDeliberationForParticipants(undefined, ['eevee', 'umbreon']), draft: '', turns: [], pending: null, error: null };
 }
 
 export function createOfficeSessionStore() {
@@ -18,7 +19,9 @@ export function createOfficeSessionStore() {
   };
   const update = (scope, patch) => {
     const current = get(scope);
-    sessions.set(scope, { ...current, ...(typeof patch === 'function' ? patch(current) : patch) });
+    const next = { ...current, ...(typeof patch === 'function' ? patch(current) : patch) };
+    next.deliberation = officeDeliberationForParticipants(next.deliberation, [next.ownerId, ...next.reviewers.filter(id => id !== next.ownerId)]);
+    sessions.set(scope, next);
     for (const listener of listeners) listener();
     return get(scope);
   };
@@ -36,6 +39,7 @@ export function createOfficeSessionStore() {
         history: officeHistory(session.turns), includeProjects: session.includeProjects,
       };
       if (request.message.length > 6000 || (request.mode === 'council' && request.participants.length < 2)) return null;
+      if (request.mode === 'council') request.deliberation = officeDeliberationForParticipants(session.deliberation, request.participants);
       const pending = { id: requestId, rawDraft: session.draft, request };
       update(scope, { pending, error: null });
       return pending;
@@ -47,7 +51,7 @@ export function createOfficeSessionStore() {
       update(scope, result.status === 'generated' ? {
         pending: null, error: null,
         draft: session.draft === pending.rawDraft ? '' : session.draft,
-        turns: [...session.turns, { id: requestId, message: pending.rawDraft.trim(), result }],
+        turns: [...session.turns, { id: requestId, message: pending.rawDraft.trim(), request: pending.request, result }],
       } : { pending: null, error: result });
       return true;
     },

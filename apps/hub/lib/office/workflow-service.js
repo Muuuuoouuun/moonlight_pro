@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { isAgentUuid } from '@com-moon/agent-contracts';
+import { parseOfficeDeliberation } from '@com-moon/agent-contracts/office';
 import { parseOfficeWorkflowRequest, parseOfficeWorkflowContext, parseOfficeWorkflowResult, parseOfficeWorkflowOrigin } from '@com-moon/agent-contracts/office-workflow';
 
 const INTENTS = new Set(['weekly_report', 'customer_reply']);
@@ -14,9 +15,15 @@ export function projectOfficeReceipt(envelope) {
   const row = envelope?.request;
   if (!row) return errorResult(envelope?.error || 'office-receipt-unavailable', envelope?.status || 'unknown', envelope?.persisted ?? null);
   const status = envelope.status;
+  let deliberation;
+  // Project only the typed meeting controls, never arbitrary snapshot fields.
+  if (row.mode === 'council' && row.input_snapshot?.deliberation) {
+    try { deliberation = parseOfficeDeliberation(row.input_snapshot.deliberation, row.participants); } catch { /* Legacy/malformed controls are not exposed. */ }
+  }
   return {
     status, state: status, requestId: row.id, intent: row.intent, scope: row.scope, originRef: row.origin_ref,
     ownerId: row.owner_id, mode: row.mode, participants: row.participants, createdAt: row.created_at,
+    ...(deliberation ? { deliberation } : {}),
     logState: row.log_state ?? (row.state === 'generated' ? 'unknown' : null),
     parentRequestId: row.parent_request_id ?? null, expired: status === 'expired', resultRevision: row.result_revision ?? null,
     result: status === 'expired' ? null : row.state === 'generated' ? row.result ?? null : null,

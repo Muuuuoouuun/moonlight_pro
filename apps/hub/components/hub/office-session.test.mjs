@@ -90,3 +90,30 @@ test('clipboard feedback reflects completion and reports permission or capabilit
   assert.equal(await copyOfficeText('결과물', { writeText: async () => { throw new Error('denied'); } }), false);
   assert.equal(await copyOfficeText('결과물', undefined), false);
 });
+
+test('pending council snapshots preserve controls and weights across edits, scope changes and follow-up', () => {
+  const store = createOfficeSessionStore();
+  store.update('personal', { draft: '유지할 원문', mode: 'council', deliberation: { profile: 'explore', challenge: 3, influence: { eevee: 2, umbreon: 3 } } });
+  const pending = store.begin('personal', 'configured');
+  assert.equal(pending.request.deliberation.challenge, 3);
+  store.update('personal', { ownerId: 'vaporeon', reviewers: ['eevee'], deliberation: { profile: 'urgent' } });
+  store.update('classin', { draft: '별도 범위' });
+  assert.deepEqual(pending.request.deliberation.influence, { eevee: 2, umbreon: 3 });
+  assert.equal(pending.request.deliberation.profile, 'explore');
+  store.complete('personal', pending.id, generated(pending.request));
+  assert.deepEqual(store.get('personal').turns[0].request.deliberation, pending.request.deliberation);
+  assert.equal(store.get('personal').deliberation.profile, 'urgent');
+  assert.equal(store.get('classin').deliberation.profile, 'balanced');
+  store.update('personal', { draft: '수정할 내용', ownerId: pending.request.ownerId, reviewers: pending.request.participants.filter(id => id !== pending.request.ownerId), deliberation: pending.request.deliberation });
+  const followUp = store.begin('personal', 'follow-up');
+  assert.deepEqual(followUp.request.deliberation, pending.request.deliberation);
+  assert.notEqual(followUp.request.deliberation.influence, pending.request.deliberation.influence);
+});
+
+test('ordinary modes retain local settings without sending council-only fields', () => {
+  const store = createOfficeSessionStore();
+  store.update('personal', { draft: '초안 원문', mode: 'draft', deliberation: { profile: 'scrutiny' } });
+  const pending = store.begin('personal', 'draft');
+  assert.equal(pending.request.deliberation, undefined);
+  assert.equal(store.get('personal').deliberation.profile, 'scrutiny');
+});

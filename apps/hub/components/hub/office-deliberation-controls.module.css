@@ -1,0 +1,23 @@
+.controls,.discussion { min-width:0; border-top:1px solid var(--line-soft); padding-top:8px; }
+.controls summary,.discussion summary { cursor:pointer; color:var(--fg-muted); font-size:13px; line-height:1.7; min-height:44px; padding-block:10px; box-sizing:border-box; }
+.controls summary:focus-visible,.discussion summary:focus-visible { outline:1px solid var(--moon-300); outline-offset:2px; }
+.fields { margin:0; padding:8px 0 0; border:0; min-width:0; display:grid; gap:16px; }
+.axes { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,max(260px,calc(50% - 8px))),1fr)); gap:16px; }
+.axis { display:grid; gap:8px; min-width:0; align-content:start; }
+.label { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; }
+.label strong,.heading { font-size:13px; font-weight:500; }
+.label span { color:var(--fg-dim); }
+.note { color:var(--fg-muted); font-size:12px; line-height:1.7; margin:0; overflow-wrap:anywhere; }
+.weights { display:grid; gap:12px; }
+.weight { display:grid; grid-template-columns:minmax(60px,1fr) minmax(0,240px); align-items:center; gap:12px; font-size:13px; }
+.record { display:grid; gap:16px; padding-top:8px; }
+.settings { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); gap:12px; margin:0; padding:12px; border:1px solid var(--line-soft); border-radius:var(--r-sm); background:var(--surface-2); font-size:12px; line-height:1.7; }
+.settings dt,.turnDetails dt { color:var(--fg-muted); }
+.settings dd,.turnDetails dd { margin:4px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.turns { list-style:none; padding:0; margin:0; display:grid; gap:16px; }
+.turns li { padding:0 0 16px; border-bottom:1px solid var(--line-soft); min-width:0; }
+.turns li:last-child { border-bottom:0; padding-bottom:0; }
+.turns p { white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; line-height:1.8; margin:8px 0 12px; }
+.turnHeader { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--fg-muted); }
+.turnHeader strong { font-size:13px; color:var(--fg); font-weight:500; }
+.turnDetails { display:grid; gap:8px; margin:0; font-size:12px; line-height:1.7; }
