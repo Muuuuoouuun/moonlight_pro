@@ -1,11 +1,11 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "audit_date_local": "2026-09-20",
   "timezone": "Asia/Seoul",
   "platform": "Threads",
   "method": "Authorized browser UI inspection through cua_repl; rendered DOM, accessibility tree and selected screenshots.",
-  "scope": "One user-designated DM in another account. Private conversation identity and URL retained only in local provenance.",
-  "classification_status": "Analyst interpretation. Operating-brand mappings are proposals, not confirmed assignments.",
+  "scope": "One user-designated DM in another account. Private DM URL and share-time label retained only in local provenance; public brand-account mapping supplied by the user is recorded below.",
+  "classification_status": "Brand names and account mappings are user-provided facts as of 2026-09-22. Collection brand is linked from the observed DM recipient. Genres, themes and usage suggestions are analyst interpretations.",
   "coverage": {
     "direct_dm_profile_links": 2,
     "direct_dm_post_links": 0,
@@ -28,16 +28,39 @@
       "source_url": "https://www.threads.com/@byarthurf",
       "source_relation": "direct_dm_share",
       "summary_ko": "아트·디자인을 소개하며 사진과 대응하는 색 조합을 나란히 제시하는 시각 레퍼런스 계정.",
-      "genres": ["아트·비주얼 디자인", "색채 레퍼런스"],
-      "themes": ["사진 기반 색 조합", "2색 대비", "색상명·색상 코드", "창작자용 색채 자료"],
-      "observed_formats": ["이미지 캐러셀"],
-      "operating_brand_candidates": [
-        {"slug": "sinabro", "name": "시나브로", "reason": "출판물 표지·에디토리얼의 시각 기획 참고", "status": "proposed"},
-        {"slug": "moonpm", "name": "MoonPM", "reason": "기획·디자인 레퍼런스 자료화", "status": "proposed"}
+      "genres": [
+        "아트·비주얼 디자인",
+        "색채 레퍼런스"
       ],
-      "evidence_ids": ["E01", "E02"],
+      "themes": [
+        "사진 기반 색 조합",
+        "2색 대비",
+        "색상명·색상 코드",
+        "창작자용 색채 자료"
+      ],
+      "observed_formats": [
+        "이미지 캐러셀"
+      ],
+      "operating_brand_candidates": [
+        {
+          "slug": "sinabro",
+          "name": "시나브로",
+          "reason": "표지·에디토리얼의 시각 기획 참고",
+          "status": "proposed_usage"
+        }
+      ],
+      "evidence_ids": [
+        "E01",
+        "E02"
+      ],
       "verification_level": "DM profile link + public profile + selected post caption and images",
-      "classification_confidence": "high_for_observed_design_topics_only"
+      "classification_confidence": "high_for_observed_design_topics_only",
+      "collection_brand": {
+        "slug": "sinabro",
+        "name": "시나브로",
+        "basis": "Observed designated DM recipient mapped to brand using user-provided account directory on 2026-09-22.",
+        "meaning": "Collection grouping; does not establish intended use or final publishing destination."
+      }
     },
     {
       "id": "TH-DM-002",
@@ -47,30 +70,204 @@
       "source_url": "https://www.threads.com/@uxbond",
       "source_relation": "direct_dm_share",
       "summary_ko": "디자인 자료·팁을 공유하며 테마별 팔레트와 UI/UX·디자인 시스템 원칙을 함께 다루는 계정.",
-      "genres": ["UI/UX 실무", "디자인 리소스", "그래픽 디자인"],
-      "themes": ["테마 팔레트", "디자인 시스템", "일관성과 개성", "자연스러운 사용 경험"],
-      "observed_formats": ["이미지 캐러셀", "짧은 텍스트"],
+      "genres": [
+        "UI/UX 실무",
+        "디자인 리소스",
+        "그래픽 디자인"
+      ],
+      "themes": [
+        "테마 팔레트",
+        "디자인 시스템",
+        "일관성과 개성",
+        "자연스러운 사용 경험"
+      ],
+      "observed_formats": [
+        "이미지 캐러셀",
+        "짧은 텍스트"
+      ],
       "operating_brand_candidates": [
-        {"slug": "moonpm", "name": "MoonPM", "reason": "UI/UX 실무 원칙·디자인 참고 자료", "status": "proposed"}
+        {
+          "slug": "sinabro",
+          "name": "시나브로",
+          "reason": "시각 기획의 테마 팔레트 참고; UI/UX는 별도 주제 유지",
+          "status": "proposed_usage"
+        }
       ],
       "cross_brand_use": "브랜드별 시각 기획의 공통 참고 자료",
-      "evidence_ids": ["E03", "E04", "E05"],
+      "evidence_ids": [
+        "E03",
+        "E04",
+        "E05"
+      ],
       "verification_level": "DM profile link + public profile + selected post caption and images",
-      "classification_confidence": "high_for_observed_design_topics_only"
+      "classification_confidence": "high_for_observed_design_topics_only",
+      "collection_brand": {
+        "slug": "sinabro",
+        "name": "시나브로",
+        "basis": "Observed designated DM recipient mapped to brand using user-provided account directory on 2026-09-22.",
+        "meaning": "Collection grouping; does not establish intended use or final publishing destination."
+      }
     }
   ],
   "supplementary_evidence": [
-    {"id": "E01", "parent_id": "TH-DM-001", "url": "https://www.threads.com/@byarthurf/post/DdJQSH4gebd", "title_ko": "사진과 2색 조합", "source_relation": "profile_discovery_not_dm_share", "observed_date": "2026-09-11", "evidence": "Post detail caption and selected image screenshot; not every carousel slide reviewed."},
-    {"id": "E02", "parent_id": "TH-DM-001", "url": "https://www.threads.com/@byarthurf/post/DdgbboRkXrC", "title_ko": "색 조합 시리즈", "source_relation": "profile_discovery_not_dm_share", "observed_date": "2026-09-20", "evidence": "Profile feed caption and image alternative text; detail not opened."},
-    {"id": "E03", "parent_id": "TH-DM-002", "url": "https://www.threads.com/@uxbond/post/DdguVjiEkjf", "title_ko": "Batman 테마 팔레트", "source_relation": "profile_discovery_not_dm_share", "evidence": "Post detail caption and selected image screenshot; not every carousel slide reviewed."},
-    {"id": "E04", "parent_id": "TH-DM-002", "url": "https://www.threads.com/@uxbond/post/DdgpJ47Ek7t", "title_ko": "자연스럽게 느껴지는 디자인 결정", "source_relation": "profile_discovery_not_dm_share", "evidence": "Short text visible in profile feed; detail not opened."},
-    {"id": "E05", "parent_id": "TH-DM-002", "url": "https://www.threads.com/@uxbond/post/DdgmCmoEsWP", "title_ko": "일관성과 개성을 함께 유지하는 디자인 시스템", "source_relation": "profile_discovery_not_dm_share", "evidence": "Short text visible in profile feed; detail not opened."}
+    {
+      "id": "E01",
+      "parent_id": "TH-DM-001",
+      "url": "https://www.threads.com/@byarthurf/post/DdJQSH4gebd",
+      "title_ko": "사진과 2색 조합",
+      "source_relation": "profile_discovery_not_dm_share",
+      "observed_date": "2026-09-11",
+      "evidence": "Post detail caption and selected image screenshot; not every carousel slide reviewed."
+    },
+    {
+      "id": "E02",
+      "parent_id": "TH-DM-001",
+      "url": "https://www.threads.com/@byarthurf/post/DdgbboRkXrC",
+      "title_ko": "색 조합 시리즈",
+      "source_relation": "profile_discovery_not_dm_share",
+      "observed_date": "2026-09-20",
+      "evidence": "Profile feed caption and image alternative text; detail not opened."
+    },
+    {
+      "id": "E03",
+      "parent_id": "TH-DM-002",
+      "url": "https://www.threads.com/@uxbond/post/DdguVjiEkjf",
+      "title_ko": "Batman 테마 팔레트",
+      "source_relation": "profile_discovery_not_dm_share",
+      "evidence": "Post detail caption and selected image screenshot; not every carousel slide reviewed."
+    },
+    {
+      "id": "E04",
+      "parent_id": "TH-DM-002",
+      "url": "https://www.threads.com/@uxbond/post/DdgpJ47Ek7t",
+      "title_ko": "자연스럽게 느껴지는 디자인 결정",
+      "source_relation": "profile_discovery_not_dm_share",
+      "evidence": "Short text visible in profile feed; detail not opened."
+    },
+    {
+      "id": "E05",
+      "parent_id": "TH-DM-002",
+      "url": "https://www.threads.com/@uxbond/post/DdgmCmoEsWP",
+      "title_ko": "일관성과 개성을 함께 유지하는 디자인 시스템",
+      "source_relation": "profile_discovery_not_dm_share",
+      "evidence": "Short text visible in profile feed; detail not opened."
+    }
   ],
   "limitations": [
     "The two direct shares are profiles, not individual posts.",
     "Supplementary profile posts do not establish that the user saved or shared those posts.",
     "Visible DM start and end were inspected, but no independent platform history total was available.",
-    "Brand assignments are proposals based on documented brand definitions, not a live brand-directory read.",
-    "No full profile archive, complete carousel review, video transcription, media download or operational DB insertion."
+    "No full profile archive, complete carousel review, video transcription, media download or operational DB insertion.",
+    "Operating-brand account URLs were provided by the user, not revalidated live on 2026-09-22. Other brand DM and saved collections remain uncollected. Operational brand directory unchanged."
+  ],
+  "brand_mapping_updated_date_local": "2026-09-22",
+  "operating_brand_directory": [
+    {
+      "slug": "bridgemaker",
+      "name": "다리 놓는 사람",
+      "mapping_source": "user_provided_2026-09-22",
+      "channels": [
+        {
+          "platform": "Threads",
+          "handle": "ml_bridgemaker",
+          "url": "https://www.threads.com/@ml_bridgemaker"
+        }
+      ],
+      "collection_status": "not_collected",
+      "collection_record_ids": []
+    },
+    {
+      "slug": "gore",
+      "name": "고래",
+      "mapping_source": "user_provided_2026-09-22",
+      "channels": [
+        {
+          "platform": "Threads",
+          "handle": "go_re_startagain",
+          "url": "https://www.threads.com/@go_re_startagain"
+        },
+        {
+          "platform": "Instagram",
+          "handle": "go_re_startagain",
+          "url": "https://www.instagram.com/go_re_startagain/"
+        }
+      ],
+      "collection_status": "not_collected",
+      "collection_record_ids": []
+    },
+    {
+      "slug": "holyfuncollector",
+      "name": "기독밈",
+      "mapping_source": "user_provided_2026-09-22",
+      "channels": [
+        {
+          "platform": "Instagram",
+          "handle": "holyfuncollect0r",
+          "url": "https://www.instagram.com/holyfuncollect0r/"
+        }
+      ],
+      "collection_status": "not_collected",
+      "collection_record_ids": []
+    },
+    {
+      "slug": "sinabro",
+      "name": "시나브로",
+      "mapping_source": "user_provided_2026-09-22",
+      "channels": [
+        {
+          "platform": "Threads",
+          "handle": "dazz.ling_u",
+          "url": "https://www.threads.com/@dazz.ling_u"
+        }
+      ],
+      "collection_status": "designated_dm_profile_references_collected",
+      "collection_record_ids": [
+        "TH-DM-001",
+        "TH-DM-002"
+      ]
+    },
+    {
+      "slug": "22nomad",
+      "name": "22세기 유목민",
+      "mapping_source": "user_provided_2026-09-22",
+      "channels": [
+        {
+          "platform": "Threads",
+          "handle": "22th.nomad",
+          "url": "https://www.threads.com/@22th.nomad"
+        },
+        {
+          "platform": "Instagram",
+          "handle": "22th.nomad",
+          "url": "https://www.instagram.com/22th.nomad/"
+        },
+        {
+          "platform": "YouTube",
+          "handle": "22세기유목민",
+          "url": "https://www.youtube.com/@22%EC%84%B8%EA%B8%B0%EC%9C%A0%EB%AA%A9%EB%AF%BC"
+        }
+      ],
+      "collection_status": "not_collected",
+      "collection_record_ids": []
+    },
+    {
+      "slug": "politicofficer",
+      "name": "정상화",
+      "mapping_source": "user_provided_2026-09-22",
+      "channels": [
+        {
+          "platform": "Threads",
+          "handle": "politic_officer",
+          "url": "https://www.threads.com/@politic_officer"
+        }
+      ],
+      "collection_status": "not_collected",
+      "collection_record_ids": []
+    }
+  ],
+  "grouping_order": [
+    "collection_brand",
+    "genres",
+    "themes"
   ]
 }
