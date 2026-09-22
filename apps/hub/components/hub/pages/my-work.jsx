@@ -2120,7 +2120,10 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
     return map;
   }, [items, days]);
 
-  const overdue = items.filter((i) => i.bucket === 'overdue');
+  // 기한 버킷은 dueBucket이 정본 — '오늘 3개'로 고른 할 일은 bucket이 'focus'로 올라가므로
+  // i.bucket만 보면 지난 기한 항목이 주간 렌즈에서 통째로 사라진다(일자별 목록은 앞으로 7일만
+  // 담는다). deal/event 레인엔 dueBucket이 없어 폴백이 필요하다.
+  const overdue = items.filter((i) => (i.dueBucket || i.bucket) === 'overdue');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
