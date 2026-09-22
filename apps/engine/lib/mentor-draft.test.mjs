@@ -18,7 +18,7 @@ test('mentor endpoints serve cron draft shapes and reject unknown modes before p
     for (const [kind, mode, heading] of [['sales', 'followup-draft', 'subject'], ['brand', 'content-draft', 'title']]) {
       const route = await import(`../app/api/ai/${kind}-mentor/route.ts`);
       let calls = 0;
-      globalThis.fetch = async () => { calls++; return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ [heading]: '제목', body: '저장된 근거에서 작성한 초안' }) }] } }] }); };
+      globalThis.fetch = async () => { calls++; return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ [heading]: '제목', body: '저장된 근거에서 작성한 초안' }) }] } }] }); };
       const request = selected => new Request(`https://engine.test/api/ai/${kind}-mentor`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-com-moon-shared-secret': 'local-test-shared' }, body: JSON.stringify({ mode: selected, context: {} }) });
       assert.equal((await route.POST(request('unknown-mode'))).status, 400); assert.equal(calls, 0);
       const result = await (await route.POST(request(mode))).json();

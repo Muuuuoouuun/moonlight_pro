@@ -38,7 +38,7 @@ function publicTurn({ roleId, phase }, participants) {
     changeReason: phase === 'response' ? '공개 의견에서 지적한 미확인 사항을 반영했습니다.' : '',
   };
 }
-function reply(value, overrides = {}) { return { ok: true, text: JSON.stringify({ sourceQuotes: [], corrections: [], ...value }), model, usageMetadata, ...overrides }; }
+function reply(value, overrides = {}) { return { ok: true, text: JSON.stringify({ sourceIndexes: [], corrections: [], ...value }), model, usageMetadata, ...overrides }; }
 function expectedTurns(request, rounds = 2) {
   return ['position', 'response'].slice(0, rounds).flatMap(round => request.participants.map(ownerId => ({
     ...publicTurn({ roleId: ownerId, phase: round }, request.participants), ownerId, round,
@@ -87,6 +87,7 @@ test('discussion calls roles independently in parallel, exchanges only public po
   assert.deepEqual(result.turns, expectedTurns(request));
   assert.equal(result.results.length, 6);
   assert.equal(result.prompts.length, 6);
+  assert.deepEqual(result.prompts, calls.map(({ input }) => ({ systemInstruction: input.systemInstruction, prompt: input.prompt })), 'the recorded prompts must include the catalog actually sent to every role');
   assert.equal(result.model, model);
   const positions = expectedTurns(request, 1);
   for (const { input, data } of calls) {
@@ -95,9 +96,13 @@ test('discussion calls roles independently in parallel, exchanges only public po
     assert.equal(input.responseJsonSchema.additionalProperties, false);
     assert.equal(input.responseJsonSchema.properties.ownerId, undefined);
     assert.equal(input.responseJsonSchema.properties.round, undefined);
-    assert.ok(input.responseJsonSchema.required.includes('sourceQuotes'));
+    assert.ok(input.responseJsonSchema.required.includes('sourceIndexes'));
     assert.ok(input.responseJsonSchema.required.includes('corrections'));
-    assert.equal(input.responseJsonSchema.properties.sourceQuotes.maxItems, 5);
+    assert.equal(input.responseJsonSchema.properties.sourceIndexes.maxItems, 5);
+    assert.deepEqual(data.sourceCatalog, calls[0].data.sourceCatalog);
+    assert.ok(data.sourceCatalog.some(entry => entry.quote === request.message));
+    assert.ok(data.sourceCatalog.some(entry => entry.quote === chatContext.note));
+    assert.ok(data.sourceCatalog.every(entry => !entry.quote.includes(history[0].text)));
     assert.equal(input.responseJsonSchema.properties.corrections.maxItems, 5);
     assert.equal(data.sourceContext.note, chatContext.note);
     assert.deepEqual(data.untrustedRecentConversation, history);
@@ -166,6 +171,86 @@ test('one failed role aborts its in-flight sibling and never begins a later roun
     assert.equal(cancelled, 1);
     assert.equal(calls.length, failedPhase === 'position' ? 2 : 4);
   }
+});
+
+test('a failed discussion waits for an aborted provider to finish its trace cleanup', async () => {
+  const request = chatRequest();
+  for (const failedPhase of ['position', 'response']) {
+    const aborted = deferred(), releaseCleanup = deferred();
+    const events = [];
+    let discussionFinished = false, providerFinished = false;
+    const running = runOfficeDiscussion(request, chatContext, new AbortController().signal, async input => {
+      const data = JSON.parse(input.prompt);
+      if (data.phase !== failedPhase) return reply(publicTurn(data, request.participants));
+      if (data.roleId === 'flareon') return { ok: false, reason: 'provider-failed' };
+      try { return await waitForAbort(input.signal); }
+      finally {
+        aborted.resolve();
+        await releaseCleanup.promise;
+        providerFinished = true;
+      }
+    }, event => events.push(event)).finally(() => { discussionFinished = true; });
+    const rejected = assert.rejects(running, error => error instanceof OfficeDiscussionError && error.reason === 'provider-failed');
+    await aborted.promise;
+    await nextTurn();
+    try {
+      assert.equal(discussionFinished, false, 'the caller must not snapshot a trace with an unfinished provider promise');
+      assert.equal(providerFinished, false);
+    } finally {
+      releaseCleanup.resolve();
+      await rejected;
+    }
+    assert.equal(providerFinished, true);
+    assert.deepEqual(events, [{ phase: failedPhase, category: 'provider', ownerId: 'flareon' }], 'cancelled siblings are not additional provider or deadline failures');
+  }
+});
+
+test('council diagnostics identify each failing role boundary and synthesis without exposing provider data', async () => {
+  const request = chatRequest();
+  for (const failedPhase of ['position', 'response', 'synthesis']) {
+    for (const failure of ['provider', 'thrown-provider', 'json', 'source-review', 'contract', 'model-mismatch']) {
+      const events = [], calls = [];
+      const result = await generateOfficeResponse(request, chatContext, async input => {
+        const data = JSON.parse(input.prompt); calls.push(data);
+        const value = data.phase ? publicTurn(data, request.participants) : chatAnswer();
+        if ((data.phase ?? 'synthesis') !== failedPhase || (data.phase && data.roleId !== 'umbreon')) return reply(value);
+        if (failure === 'provider') return { ok: false, reason: 'PRIVATE_PROVIDER_DETAIL' };
+        if (failure === 'thrown-provider') throw new Error('PRIVATE_PROVIDER_EXCEPTION');
+        if (failure === 'json') return reply(value, { text: '{"PRIVATE_UNFINISHED_JSON"' });
+        if (failure === 'source-review') return reply({ ...value, sourceIndexes: ['PRIVATE_UNTRACEABLE_QUOTE'] });
+        if (failure === 'contract') return reply({ ...value, ownerId: 'PRIVATE_FORGED_OWNER' });
+        return reply(value, { model: 'PRIVATE_DIFFERENT_MODEL' });
+      }, event => events.push(event));
+      assert.deepEqual(events, [{ phase: failedPhase, category: failure === 'thrown-provider' ? 'provider' : failure, ownerId: failedPhase === 'synthesis' ? request.ownerId : 'umbreon' }]);
+      assert.equal(calls.length, { position: 2, response: 4, synthesis: 5 }[failedPhase]);
+      assert.equal(result.status, 'error');
+      assert.equal(result.answer, undefined);
+      assert.equal(result.discussion, undefined);
+      assert.equal(result.diagnostics, undefined);
+      assert.doesNotMatch(JSON.stringify({ events, result }), /PRIVATE_/);
+    }
+  }
+});
+
+test('council deadline diagnostics preserve the server role and active phase', async t => {
+  let deadline;
+  const budgets = [];
+  t.mock.method(AbortSignal, 'timeout', milliseconds => { budgets.push(milliseconds); return deadline.signal; });
+  for (const failedPhase of ['position', 'response', 'synthesis']) {
+    deadline = new AbortController();
+    const request = chatRequest(), calls = [], events = [];
+    const result = await generateOfficeResponse(request, chatContext, async input => {
+      const data = JSON.parse(input.prompt); calls.push(data);
+      if ((data.phase ?? 'synthesis') === failedPhase && (!data.phase || data.roleId === request.participants.at(-1))) deadline.abort(new DOMException('PRIVATE_DEADLINE', 'TimeoutError'));
+      return reply(data.phase ? publicTurn(data, request.participants) : chatAnswer());
+    }, event => events.push(event));
+    assert.equal(result.status, 'error');
+    assert.equal(calls.length, { position: 2, response: 4, synthesis: 5 }[failedPhase]);
+    assert.ok(events.every(event => event.phase === failedPhase && event.category === 'deadline'));
+    assert.deepEqual(events.map(event => event.ownerId), failedPhase === 'synthesis' ? [request.ownerId] : request.participants);
+    assert.doesNotMatch(JSON.stringify({ events, result }), /PRIVATE_DEADLINE/);
+  }
+  assert.deepEqual(budgets, [48_000, 48_000, 48_000]);
 });
 
 test('the caller deadline cancels all role calls, including an active response round', async () => {

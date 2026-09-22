@@ -86,8 +86,8 @@ test('only the source-reviewed answer is returned; the untrusted draft cannot al
     }
     assert.equal(input.signal, firstSignal);
     assert.match(input.systemInstruction, /최종 편집 검수/);
-    assert.deepEqual(input.responseJsonSchema.required, ['sourceQuotes', 'corrections', 'answer', 'nextAction']);
-    return { ok: true, text: JSON.stringify({ sourceQuotes: [], corrections: [], answer: '고객이 설명한 적응 우려에 대한 질문 초안', nextAction: '확인할 질문 하나 선택' }), model: 'test' };
+    assert.deepEqual(input.responseJsonSchema.required, ['sourceIndexes', 'corrections', 'answer', 'nextAction']);
+    return { ok: true, text: JSON.stringify({ sourceIndexes: [], corrections: [], answer: '고객이 설명한 적응 우려에 대한 질문 초안', nextAction: '확인할 질문 하나 선택' }), model: 'test' };
   });
   assert.equal(calls, 2);
   assert.equal(result.status, 'generated');
@@ -103,7 +103,7 @@ test('council requests bounded role statements first and rejects incomplete role
   });
   assert.equal(calls.length, request.participants.length);
   for (const input of calls) {
-    assert.deepEqual(input.responseJsonSchema.required, ['sourceQuotes', 'corrections', 'position', 'evidence', 'objection', 'revisionCondition', 'changed', 'replyTo', 'changeReason']);
+    assert.deepEqual(input.responseJsonSchema.required, ['sourceIndexes', 'corrections', 'position', 'evidence', 'objection', 'revisionCondition', 'changed', 'replyTo', 'changeReason']);
     assert.equal(input.responseJsonSchema.properties.evidence.maxItems, 2);
     assert.equal(input.responseJsonSchema.properties.ownerId, undefined);
     assert.equal(JSON.parse(input.prompt).phase, 'position');

@@ -15,7 +15,7 @@ test('assist route authenticates before provider and retains actual usage withou
   Object.assign(process.env, { COM_MOON_SHARED_WEBHOOK_SECRET: 'test-shared', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'selected-model' });
   const request = secret => new Request('https://engine.test/api/ai/assist', { method: 'POST', headers: { 'x-com-moon-shared-secret': secret }, body: JSON.stringify(input) });
   try {
-    globalThis.fetch = async () => { calls++; return Response.json({ candidates: [{ content: { parts: [{ text: '근거가 부족한 지표는 확인 필요입니다.' }] } }] }); };
+    globalThis.fetch = async () => { calls++; return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '근거가 부족한 지표는 확인 필요입니다.' }] } }] }); };
     assert.equal((await POST(request('wrong'))).status, 401); assert.equal(calls, 0);
     const data = await (await POST(request('test-shared'))).json();
     assert.equal(data.status, 'generated'); assert.equal(data.model, 'selected-model'); assert.equal(data.usage, null); assert.equal(calls, 1);

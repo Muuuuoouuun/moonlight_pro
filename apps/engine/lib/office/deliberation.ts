@@ -3,9 +3,32 @@ import { generateGeminiText } from '../gemini.ts';
 import { OFFICE_PERSONAS } from './personas.ts';
 import { OFFICE_PLAYBOOKS, OFFICE_QUALITY_STANDARD } from './playbooks.ts';
 import { buildOfficeOperatingPolicy } from './operating-policy.ts';
-import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS, officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
+import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS, buildOfficeSourceCatalog, officeSourceReviewPrompt, officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
 
 type DiscussionRequest = Pick<OfficeRequest, 'ownerId'|'scope'|'participants'|'message'|'deliberation'> & { history?: OfficeRequest['history']; boundedHistory?: OfficeRequest['history'] };
+
+export type OfficeDiagnosticEvent = {
+  phase: 'draft'|'review'|'position'|'response'|'synthesis';
+  category: 'provider'|'json'|'source-review'|'contract'|'deadline'|'model-mismatch';
+  ownerId?: string;
+};
+export type OfficeDiagnosticCallback = (event: OfficeDiagnosticEvent) => void;
+
+// Internal failure classification only: no model text, provider reason or exception data.
+export function reportOfficeDiagnostic(onDiagnostic: OfficeDiagnosticCallback | undefined, event: OfficeDiagnosticEvent) {
+  if (!onDiagnostic) return;
+  const { phase, category, ownerId } = event;
+  if (!['draft', 'review', 'position', 'response', 'synthesis'].includes(phase) || !['provider', 'json', 'source-review', 'contract', 'deadline', 'model-mismatch'].includes(category)) return;
+  try {
+    const safeEvent = { phase, category, ...(OFFICE_ROSTER.some(role => role.id === ownerId) ? { ownerId } : {}) };
+    void Promise.resolve(onDiagnostic(safeEvent)).catch(() => {});
+  } catch { /* An observer must not change the public result. */ }
+}
+
+export function readOfficeWithDiagnostic<T>(event: OfficeDiagnosticEvent, onDiagnostic: OfficeDiagnosticCallback | undefined, read: () => T): T {
+  try { return read(); }
+  catch (error) { reportOfficeDiagnostic(onDiagnostic, event); throw error; }
+}
 
 export class OfficeDiscussionError extends Error {
   reason: string;
@@ -50,16 +73,29 @@ const turnSchema = (participants: string[], ownerId: string, round: OfficeDiscus
 // Each role sees the same bounded source material, never another role's hidden reasoning.
 // Position calls run in parallel; a single optional response round consumes those public
 // positions. The caller then makes ONE synthesis call within the existing shared deadline.
-export async function runOfficeDiscussion(request: DiscussionRequest, context: unknown, signal: AbortSignal, generate = generateGeminiText) {
-  const settings = parseOfficeDeliberation(request.deliberation, request.participants);
+export async function runOfficeDiscussion(request: DiscussionRequest, context: unknown, signal: AbortSignal, generate = generateGeminiText, onDiagnostic?: OfficeDiagnosticCallback) {
+  const settings = readOfficeWithDiagnostic({ phase: 'position', category: 'contract', ownerId: request.ownerId }, onDiagnostic, () => parseOfficeDeliberation(request.deliberation, request.participants));
   const abort = new AbortController();
   const sharedSignal = AbortSignal.any([signal, abort.signal]);
   const results: Awaited<ReturnType<typeof generateGeminiText>>[] = [];
   const prompts: {systemInstruction: string; prompt: string}[] = [];
+  const sourceCatalog = buildOfficeSourceCatalog(request, context);
   let model: string | undefined;
   async function round(kind: OfficeDiscussionTurn['round'], positions: OfficeDiscussionTurn[] = []) {
-    const outputs = await Promise.all(request.participants.map(async ownerId => {
-      sharedSignal.throwIfAborted();
+    const pending = request.participants.map(async ownerId => {
+      const diagnostic = (category: OfficeDiagnosticEvent['category']) => reportOfficeDiagnostic(onDiagnostic, { phase: kind, category, ownerId });
+      const read = <T>(category: OfficeDiagnosticEvent['category'], value: () => T) => readOfficeWithDiagnostic({ phase: kind, category, ownerId }, onDiagnostic, value);
+      const checkDeadline = () => {
+        if (sharedSignal.aborted) {
+          if (signal.aborted) diagnostic('deadline');
+          sharedSignal.throwIfAborted();
+        }
+      };
+      const providerFailure = () => {
+        if (signal.aborted) diagnostic('deadline');
+        else if (!abort.signal.aborted) diagnostic('provider');
+      };
+      checkDeadline();
       const person = OFFICE_ROSTER.find(role => role.id === ownerId)!;
       const systemInstruction = [
         `Moonlight의 ${person.name}(${person.role}) 한 명으로 검토한다. 다른 역할의 대사를 대신 만들지 않는다. 본인의 공개 판단만 반환한다.`,
@@ -76,19 +112,34 @@ export async function runOfficeDiscussion(request: DiscussionRequest, context: u
       ].join('\n\n');
       const prompt = JSON.stringify({ phase: kind, roleId: ownerId, scope: request.scope, settings, sourceContext: context, userRequest: request.message,
         untrustedRecentConversation: request.history || request.boundedHistory || [], ...(kind === 'response' ? { untrustedPositions: positions } : {}) });
-      const call = { systemInstruction, prompt };
-      const response = await generate({ ...call, ...(model ? { model } : {}), signal: sharedSignal, maxOutputTokens: 4096, thinkingLevel: kind === 'response' && settings.depth === 3 ? 'high' : 'low', responseJsonSchema: officeSourceReviewSchema(turnSchema(request.participants, ownerId, kind)) });
-      if (!response.ok) throw new OfficeDiscussionError(response.reason || 'provider-failed');
-      sharedSignal.throwIfAborted();
-      const raw = readSourceReviewedOutput(JSON.parse(response.text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')), request, context);
+      const call = officeSourceReviewPrompt({ systemInstruction, prompt }, sourceCatalog);
+      let response: Awaited<ReturnType<typeof generateGeminiText>>;
+      try {
+        response = await generate({ ...call, ...(model ? { model } : {}), signal: sharedSignal, maxOutputTokens: 4096, thinkingLevel: kind === 'response' && settings.depth === 3 ? 'high' : 'low', responseJsonSchema: officeSourceReviewSchema(turnSchema(request.participants, ownerId, kind), sourceCatalog) });
+      } catch (error) { providerFailure(); throw error; }
+      if (!response.ok) { providerFailure(); throw new OfficeDiscussionError(response.reason || 'provider-failed'); }
+      checkDeadline();
+      const parsed = read('json', () => JSON.parse(response.text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')));
+      const raw = read('source-review', () => readSourceReviewedOutput(parsed, request, context, sourceCatalog));
       // Reject model attempts to supply identities; attribution belongs to the call.
-      if (raw.ownerId !== undefined || raw.round !== undefined) throw new OfficeDiscussionError('forged-attribution');
-      const turn = parseOfficeDiscussionTurn({ ...raw, ownerId, round: kind }, { ownerId, round: kind, participants: request.participants });
+      const turn = read('contract', () => {
+        if (raw.ownerId !== undefined || raw.round !== undefined) throw new OfficeDiscussionError('forged-attribution');
+        return parseOfficeDiscussionTurn({ ...raw, ownerId, round: kind }, { ownerId, round: kind, participants: request.participants });
+      });
       return { turn, response, call };
-    }));
+    });
+    const outputs = await Promise.all(pending).catch(async error => {
+      abort.abort();
+      // Provider wrappers finish their aborted call records before callers snapshot traces.
+      await Promise.allSettled(pending);
+      throw error;
+    });
     for (const output of outputs) {
       model ??= output.response.model;
-      if (output.response.model !== model) throw new OfficeDiscussionError('model-mismatch');
+      if (output.response.model !== model) {
+        reportOfficeDiagnostic(onDiagnostic, { phase: kind, category: 'model-mismatch', ownerId: output.turn.ownerId });
+        throw new OfficeDiscussionError('model-mismatch');
+      }
       results.push(output.response); prompts.push(output.call);
     }
     return outputs.map(output => output.turn);

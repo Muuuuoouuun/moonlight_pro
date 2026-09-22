@@ -15,7 +15,8 @@ export async function POST(req: Request) {
   } catch { return NextResponse.json({ status: 'invalid-input', error: 'invalid-assistance-context' }, { status: 400 }); }
   if (!getGeminiIntegrationStatus().configured) return NextResponse.json({ status: 'preview', error: 'gemini-not-configured', usage: null }, { status: 202 });
   const result = await generateGeminiText(input);
-  const usage = result.usageMetadata && typeof result.usageMetadata === 'object' ? Object.fromEntries(['promptTokenCount','candidatesTokenCount','totalTokenCount','cachedContentTokenCount','thoughtsTokenCount'].filter(key => Number.isFinite(result.usageMetadata[key]) && result.usageMetadata[key] >= 0).map(key => [key, result.usageMetadata[key]])) : null;
+  const usageMetadata = result.usageMetadata;
+  const usage = usageMetadata ? Object.fromEntries(['promptTokenCount','candidatesTokenCount','totalTokenCount','cachedContentTokenCount','thoughtsTokenCount'].filter(key => Number.isFinite(usageMetadata[key]) && usageMetadata[key] >= 0).map(key => [key, usageMetadata[key]])) : null;
   const valid = result.ok && result.text.trim() && Buffer.byteLength(result.text) <= 24000;
   return NextResponse.json({ status: valid ? 'generated' : result.status == null ? 'unknown' : 'error', output: valid ? result.text : null, model: result.model, provider: 'gemini', usage: usage && Object.keys(usage).length ? usage : null, error: valid ? null : result.reason || 'invalid-output' });
 }

@@ -288,8 +288,116 @@ test('provider tracing retains settings and failure codes without copying privat
   assert.deepEqual(response.evaluationTrace.failureCodes, ['timeout']);
   assert.equal(response.evaluationTrace.calls[0].settings.modelRequested, 'configured-test-model');
   assert.equal(response.evaluationTrace.calls[0].result.httpStatus, 503);
+  assert.equal(response.evaluationTrace.calls[0].result.failureCategory, 'timeout');
   assert.equal(response.evaluationTrace.calls[0].promptHash.length, 64);
   assert.doesNotMatch(JSON.stringify(response), /private-provider-text/);
+});
+
+test('provider tracing preserves actual version, finish, numeric usage, and block reason only', async () => {
+  const run = createTracedOfficeGenerator(async (_request, _context, provider) => {
+    await provider({ prompt: 'private prompt' });
+    return { status: 'error' };
+  }, async () => ({
+    ok: false, model: 'requested-alias', modelVersion: 'served-version-001', status: 200,
+    reason: 'private provider message', finishReason: 'SAFETY', text: 'private partial output',
+    usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 0, totalTokenCount: 20, thoughtsTokenCount: 8, cachedContentTokenCount: 'bad count', privateField: 'private usage text' },
+    promptFeedback: { blockReason: 'SAFETY', blockReasonMessage: 'private block explanation' },
+  }), 'configured-alias');
+  const response = await run({}, {});
+  const result = response.evaluationTrace.calls[0].result;
+  assert.equal(result.model, 'requested-alias');
+  assert.equal(result.modelVersion, 'served-version-001');
+  assert.equal(result.finishReason, 'SAFETY');
+  assert.equal(result.failureCategory, 'blocked-prompt');
+  assert.deepEqual(result.usageMetadata, { promptTokenCount: 12, candidatesTokenCount: 0, totalTokenCount: 20, thoughtsTokenCount: 8 });
+  assert.deepEqual(result.promptFeedback, { blockReason: 'SAFETY' });
+  assert.doesNotMatch(JSON.stringify(response), /private prompt|private provider message|private partial output|private usage text|private block explanation/);
+});
+
+test('provider tracing classifies thrown aborts and ignores arbitrary exception codes', async () => {
+  for (const [error, category] of [
+    [new DOMException('private abort message', 'AbortError'), 'aborted'],
+    [new DOMException('private timeout message', 'TimeoutError'), 'timeout'],
+    [Object.assign(new Error('private error message'), { code: 'PRIVATE_SECRET_SHAPED_AS_CODE' }), 'provider-error'],
+  ]) {
+    const run = createTracedOfficeGenerator(async (_request, _context, provider) => {
+      await provider({ prompt: 'unit test' });
+    }, async () => { throw error; });
+    const response = await run({}, {});
+    assert.equal(response.errorCode, category);
+    assert.equal(response.evaluationTrace.calls[0].result.failureCategory, category);
+    assert.doesNotMatch(JSON.stringify(response), /private.*message|PRIVATE_SECRET_SHAPED_AS_CODE/);
+  }
+});
+
+test('provider tracing records bounded generation diagnostics when provider calls succeeded', async () => {
+  const run = createTracedOfficeGenerator(async (_request, _context, provider, diagnostic) => {
+    await provider({ prompt: 'unit test' });
+    diagnostic({ phase: 'review', category: 'source-review', ownerId: 'umbreon', error: 'private parse error' });
+    diagnostic({ phase: 'private phase', category: 'contract' });
+    diagnostic({ phase: 'draft', category: 'private category' });
+    diagnostic({ phase: 'review', category: 'contract', ownerId: 'private owner', raw: 'private response' });
+    return { status: 'error' };
+  }, async () => ({ ok: true, model: 'requested-alias', modelVersion: 'served-version-001', reason: 'ok', finishReason: 'STOP', status: 200, text: 'unit answer' }));
+  const response = await run({}, {});
+  assert.equal(response.errorCode, 'review_contract');
+  assert.deepEqual(response.evaluationTrace.failureCodes, []);
+  assert.deepEqual(response.evaluationTrace.diagnostics, [
+    { phase: 'review', category: 'source-review', ownerId: 'umbreon' },
+    { phase: 'review', category: 'contract' },
+  ]);
+  assert.doesNotMatch(JSON.stringify(response), /private/);
+});
+
+test('provider failure codes precede diagnostic fallback and existing error codes remain compatible', async () => {
+  for (const existingErrorCode of [undefined, 'existing-runtime-code']) {
+    const run = createTracedOfficeGenerator(async (_request, _context, provider, diagnostic) => {
+      await provider({ prompt: 'unit test' });
+      diagnostic({ phase: 'position', category: 'provider', ownerId: 'eevee' });
+      return { status: 'error', ...(existingErrorCode ? { errorCode: existingErrorCode } : {}) };
+    }, async () => ({ ok: false, reason: 'http-503', failureCategory: 'provider-unavailable', status: 503, text: '' }));
+    const response = await run({}, {});
+    assert.equal(response.errorCode, existingErrorCode || 'http-503');
+    assert.deepEqual(response.evaluationTrace.failureCodes, ['http-503']);
+    assert.equal(response.evaluationTrace.calls[0].result.failureCategory, 'provider-unavailable');
+  }
+});
+
+test('a failed generation stage remains the cause when its sibling is cancelled', async () => {
+  for (const category of ['json', 'source-review', 'contract', 'model-mismatch']) {
+    const run = createTracedOfficeGenerator(async (_request, _context, provider, diagnostic) => {
+      const sibling = provider({ prompt: 'unit sibling call' });
+      diagnostic({ phase: 'position', category, ownerId: 'eevee' });
+      await sibling;
+      diagnostic({ phase: 'position', category: 'deadline', ownerId: 'umbreon' });
+      return { status: 'error' };
+    }, async () => ({ ok: false, reason: 'aborted', failureCategory: 'aborted', text: '' }));
+    const response = await run({}, {});
+    assert.equal(response.errorCode, `position_${category}`);
+    assert.deepEqual(response.evaluationTrace.failureCodes, ['aborted']);
+    assert.deepEqual(response.evaluationTrace.diagnostics, [
+      { phase: 'position', category, ownerId: 'eevee' },
+      { phase: 'position', category: 'deadline', ownerId: 'umbreon' },
+    ]);
+  }
+});
+
+test('real provider failures outrank cancellation and stage diagnostics regardless of call order', async () => {
+  for (const [reason, category, status] of [['http-503', 'provider-unavailable', 503], ['timeout', 'timeout', null]]) {
+    let calls = 0;
+    const run = createTracedOfficeGenerator(async (_request, _context, provider, diagnostic) => {
+      await provider({ prompt: 'unit cancelled sibling' });
+      diagnostic({ phase: 'position', category: 'json', ownerId: 'eevee' });
+      await provider({ prompt: 'unit provider failure' });
+      diagnostic({ phase: 'position', category: 'deadline', ownerId: 'umbreon' });
+      return { status: 'error' };
+    }, async () => ++calls === 1
+      ? { ok: false, reason: 'aborted', failureCategory: 'aborted', text: '' }
+      : { ok: false, reason, failureCategory: category, status, text: '' });
+    const response = await run({}, {});
+    assert.equal(response.errorCode, reason);
+    assert.deepEqual(response.evaluationTrace.failureCodes, ['aborted', reason]);
+  }
 });
 
 test('listing and rubric CLI modes never invoke a generator', async () => {

@@ -5,7 +5,7 @@ import { buildOfficeWorkflowPrompt, buildOfficeWorkflowReview, OFFICE_WORKFLOW_P
 import { officeWorkflowResponseSchema } from './workflow-response-schema.ts';
 import { OFFICE_DISCUSSION_VERSION, parseOfficeDiscussion } from '@com-moon/agent-contracts/office';
 import { runOfficeDiscussion, discussionSynthesisPrompt, OfficeDiscussionError } from './deliberation.ts';
-import { officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
+import { buildOfficeSourceCatalog, officeSourceReviewPrompt, officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
 
 function parseModel(text: string, request: OfficeWorkflowRequest, context: OfficeWorkflowContext) {
   const raw = text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1');
@@ -28,11 +28,13 @@ export async function generateOfficeWorkflow(request: OfficeWorkflowRequest, con
   const startedAt = Date.now();
   const signal = AbortSignal.timeout(48_000);
   const responseJsonSchema = officeWorkflowResponseSchema(request.mode);
-  const reviewSchema = officeSourceReviewSchema(responseJsonSchema);
-  const parseReviewed = (text: string) => parseOfficeWorkflowAnswer(readSourceReviewedOutput(JSON.parse(text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')), request, { facts: context.facts, sourceRefs: context.sourceRefs, missing: context.missing, asOf: context.asOf }), request, context);
+  const reviewSource = { facts: context.facts, sourceRefs: context.sourceRefs, missing: context.missing, asOf: context.asOf };
+  const sourceCatalog = buildOfficeSourceCatalog(request, reviewSource);
+  const reviewSchema = officeSourceReviewSchema(responseJsonSchema, sourceCatalog);
+  const parseReviewed = (text: string) => parseOfficeWorkflowAnswer(readSourceReviewedOutput(JSON.parse(text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')), request, reviewSource, sourceCatalog), request, context);
   try {
     if (request.mode === 'council') {
-      const source = { scope: context.scope, facts: context.facts, sourceRefs: context.sourceRefs, missing: context.missing, asOf: context.asOf };
+      const source = { scope: context.scope, ...reviewSource };
       const roles = await runOfficeDiscussion(request, source, signal, generate);
       const latest = roles.turns.slice(-request.participants.length);
       const draft = {
@@ -41,7 +43,7 @@ export async function generateOfficeWorkflow(request: OfficeWorkflowRequest, con
         evidence: [], uncertainties: [...context.missing], dissent: latest.map(turn => turn.objection).filter(Boolean), nextStep: null,
         council: { perspectives: latest.map(turn => ({ ownerId: turn.ownerId, judgment: turn.position, tradeoff: turn.objection || turn.revisionCondition })), recommendation: latest.find(turn => turn.ownerId === request.ownerId)!.position },
       };
-      const review = discussionSynthesisPrompt(buildOfficeWorkflowReview(request, context, draft), roles);
+      const review = officeSourceReviewPrompt(discussionSynthesisPrompt(buildOfficeWorkflowReview(request, context, draft), roles), sourceCatalog);
       const reviewed = await generate({ ...review, model: roles.model, signal, maxOutputTokens: 8192, responseJsonSchema: reviewSchema, thinkingLevel: 'high' });
       if (!reviewed.ok || reviewed.model !== roles.model) throw new OfficeDiscussionError('synthesis-failed');
       signal.throwIfAborted();
@@ -57,7 +59,7 @@ export async function generateOfficeWorkflow(request: OfficeWorkflowRequest, con
     if (!result.ok) return failure(result.reason === 'missing-api-key' ? 'preview' : 'error', result.reason === 'missing-api-key' ? 'AI 연결이 필요합니다. 입력은 보존됩니다.' : 'AI 응답을 받지 못했습니다. 요청 상태를 확인해 주세요.');
     signal.throwIfAborted();
     const draft = parseModel(result.text, request, context);
-    const review = buildOfficeWorkflowReview(request, context, draft);
+    const review = officeSourceReviewPrompt(buildOfficeWorkflowReview(request, context, draft), sourceCatalog);
     const reviewed = await generate({ ...review, model: result.model, signal, maxOutputTokens: 8192, responseJsonSchema: reviewSchema, thinkingLevel: 'high' });
     if (!reviewed.ok || reviewed.model !== result.model) return failure('error', '답변 검수를 마치지 못했습니다. 입력은 보존됩니다.');
     signal.throwIfAborted();
