@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Badge } from "./hub-primitives";
+import { Badge, TruthBadge } from "./hub-primitives";
 import { StreakMark } from "./burning-streak";
 import { summarizeRitualsByCategory } from "@/lib/rhythm-ui";
 
@@ -13,12 +13,17 @@ import { summarizeRitualsByCategory } from "@/lib/rhythm-ui";
  * 업로드·조회수 지표를 연결할 실데이터 소스가 아직 정해지지 않아, 이번 재설계에서 두 탭을
  * 들어내고 실제로 있는 데이터(루틴의 카테고리·주간 목표)로 만든 "루틴 구성" 섹션으로
  * 대체했다. matrix는 실측 focusData(work.jsx가 todos를 실제로 배선)를 그대로 쓴다.
+ *
+ * tasksStatus는 /api/hub/tasks 봉투의 truth 상태(live·partial·preview·error·loading)다. live가
+ * 아니면 매트릭스 옆에 TruthBadge로 밝힌다 — 할 일 read 실패가 "완료 0건"으로 보이지 않게.
+ * rhythmPartial은 루틴 기록이 조회 한도에서 잘렸다는 뜻이라 체크인 집계 옆에 같은 방식으로 표시한다.
  */
 export function RhythmVisualizer({
   rituals = [],
   summary = null,
   focusData = null,
-  onNavigate = null,
+  tasksStatus = "live",
+  rhythmPartial = false,
 }) {
   const [hoveredDay, setHoveredDay] = React.useState(null);
 
@@ -29,7 +34,9 @@ export function RhythmVisualizer({
   const longestStreak = summary?.longestStreak || 0;
 
   const matrixDays = Array.isArray(focusData?.matrix) ? focusData.matrix : [];
-  const hasMatrix = matrixDays.length === 7;
+  // 활동(할 일·루틴 완료)이 하루도 없으면 빈 상태 — 0으로 채운 차트는 측정값처럼 읽힌다.
+  const hasMatrix = matrixDays.length === 7
+    && matrixDays.some((d) => (d.tasksDone || 0) + (d.ritualsDone || 0) > 0);
   const totalFocusHours = hasMatrix
     ? matrixDays.reduce((acc, d) => acc + d.focusHours, 0).toFixed(1)
     : "0.0";
@@ -103,13 +110,16 @@ export function RhythmVisualizer({
 
         <div>
           <div style={{ fontSize: 10.5, color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            이번 주 루틴 완료
+            주간 목표 대비 체크인
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 6 }}>
             <span className="stat" style={{ fontSize: 22, fontWeight: 500 }}>{categoryCompleted} / {categoryTarget}</span>
             <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>건</span>
             <span className="mono" style={{ fontSize: 11, color: "var(--fg-dim)", marginLeft: "auto" }}>{categoryPercent}% 달성</span>
           </div>
+          {rhythmPartial && (
+            <TruthBadge state="partial" reason="루틴 기록 최근분만 집계" style={{ marginTop: 6 }} />
+          )}
         </div>
 
         <div>
@@ -135,7 +145,13 @@ export function RhythmVisualizer({
               막대는 딥워크 몰입 시간(할 일·루틴 완료 기반 추정치), 점선은 완료된 결과물 종합 점수입니다.
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 11, color: "var(--fg-muted)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 11, color: "var(--fg-muted)", flexWrap: "wrap" }}>
+            {tasksStatus !== "live" && (
+              <TruthBadge
+                state={tasksStatus === "partial" || tasksStatus === "preview" || tasksStatus === "loading" ? tasksStatus : "error"}
+                reason={tasksStatus === "loading" ? undefined : "할 일 데이터"}
+              />
+            )}
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
               <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--moon-400)" }} /> 몰입 시간 (h)
             </span>
@@ -147,7 +163,7 @@ export function RhythmVisualizer({
 
         {!hasMatrix ? (
           <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>
-            매트릭스를 계산할 데이터가 아직 없습니다.
+            최근 7일 동안 완료한 할 일·루틴 체크인이 없습니다.
           </div>
         ) : (
           <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 4 }}>
@@ -158,9 +174,9 @@ export function RhythmVisualizer({
                 <line x1="40" y1="140" x2="680" y2="140" stroke="var(--line-soft)" strokeDasharray="3 3" />
                 <line x1="40" y1="175" x2="680" y2="175" stroke="var(--line)" />
 
-                <text x="10" y="34" fill="var(--fg-faint)" fontSize="10" fontFamily="var(--font-mono)">5h/100</text>
-                <text x="10" y="89" fill="var(--fg-faint)" fontSize="10" fontFamily="var(--font-mono)">3h/60</text>
-                <text x="10" y="144" fill="var(--fg-faint)" fontSize="10" fontFamily="var(--font-mono)">1h/30</text>
+                <text x="10" y="34" fill="var(--fg-faint)" fontSize="10.5" fontFamily="var(--font-mono)">5h/100</text>
+                <text x="10" y="89" fill="var(--fg-faint)" fontSize="10.5" fontFamily="var(--font-mono)">3h/60</text>
+                <text x="10" y="144" fill="var(--fg-faint)" fontSize="10.5" fontFamily="var(--font-mono)">1h/30</text>
 
                 <path
                   d={matrixDays.reduce((acc, d, i) => {
@@ -190,10 +206,11 @@ export function RhythmVisualizer({
                       tabIndex={0}
                       aria-label={`${d.day}요일: 몰입 ${d.focusHours}시간, 성과 ${d.outcomes}점`}
                       onClick={() => setHoveredDay(i)}
+                      onFocus={() => setHoveredDay(i)}
                       onTouchStart={() => setHoveredDay(i)}
                       onMouseEnter={() => setHoveredDay(i)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setHoveredDay(i); } }}
-                      style={{ cursor: "pointer", outline: "none" }}
+                      style={{ cursor: "pointer" }}
                     >
                       {isHovered && (
                         <rect x={x - 36} y="15" width="72" height="165" rx="6" fill="var(--surface-2)" />
@@ -210,7 +227,7 @@ export function RhythmVisualizer({
                         style={{ transition: "all var(--dur-hover) var(--ease-hub)" }}
                       />
 
-                      <text x={x} y={barY - 6} textAnchor="middle" fill={isHovered ? "var(--fg)" : "var(--fg-dim)"} fontSize="10" fontFamily="var(--font-mono)">
+                      <text x={x} y={barY - 6} textAnchor="middle" fill={isHovered ? "var(--fg)" : "var(--fg-dim)"} fontSize="10.5" fontFamily="var(--font-mono)">
                         {d.focusHours}h
                       </text>
 
@@ -266,16 +283,6 @@ export function RhythmVisualizer({
               루틴마다 지정한 카테고리·주간 목표 대비 이번 주 완료 현황입니다.
             </div>
           </div>
-          {onNavigate && (
-            <button
-              type="button"
-              className="fx-pill-btn fx-pill-btn--ghost"
-              onClick={() => onNavigate("dashboard/work/rhythm")}
-              style={{ fontSize: 11.5 }}
-            >
-              루틴 관리
-            </button>
-          )}
         </div>
 
         {categories.length === 0 ? (

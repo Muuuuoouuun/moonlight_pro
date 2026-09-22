@@ -4,6 +4,11 @@ import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
 import { isCanonicalUuid } from "@/lib/uuid.js";
 import {
+  RITUAL_CATEGORIES,
+  defaultTargetPerWeek,
+  normalizeTargetPerWeek,
+} from "@/lib/rhythm-ui";
+import {
   buildRoutineCheckRecord,
   deleteSupabaseRecord,
   insertSupabaseRecord,
@@ -21,17 +26,11 @@ export const runtime = "nodejs";
 // (project_id, meta.ritual_key) regardless of status, so the seed row makes
 // the routine appear in the Rhythm list at 0/7 before any check-in exists.
 const CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
-const RITUAL_CATEGORIES = new Set(["general", "work", "content", "health", "learning", "personal"]);
 const ROUTINE_ROW_SELECT = "id,project_id,check_type,meta";
 const EDIT_ROW_LIMIT = 500;
 
 function cleanString(value) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function clampTargetPerWeek(value) {
-  const n = Math.round(Number(value));
-  return Number.isFinite(n) ? Math.min(7, Math.max(1, n)) : null;
 }
 
 function invalidInput(error, message) {
@@ -69,7 +68,8 @@ function normalizeDefinePayload(payload) {
   const projectId = cleanString(payload.projectId) || null;
   const categoryRaw = cleanString(payload.category).toLowerCase();
   const category = RITUAL_CATEGORIES.has(categoryRaw) ? categoryRaw : "general";
-  const targetPerWeek = clampTargetPerWeek(payload.targetPerWeek) || (checkType === "weekly" ? 1 : 7);
+  const targetProvided = payload.targetPerWeek !== undefined && payload.targetPerWeek !== null && payload.targetPerWeek !== "";
+  const targetPerWeek = normalizeTargetPerWeek(payload.targetPerWeek) || defaultTargetPerWeek(checkType);
 
   if (!ritualKey || ritualKey.length > 160) {
     return { error: invalidInput("invalid-ritual-key", "ritualKey is required and must be at most 160 characters.") };
@@ -82,6 +82,9 @@ function normalizeDefinePayload(payload) {
   }
   if (projectId && !isCanonicalUuid(projectId)) {
     return { error: invalidInput("invalid-project-id", "projectId must be a canonical UUID.") };
+  }
+  if (targetProvided && !normalizeTargetPerWeek(payload.targetPerWeek)) {
+    return { error: invalidInput("invalid-target-per-week", "targetPerWeek must be an integer between 1 and 7.") };
   }
 
   return { value: { ritualKey, name, checkType, projectId, category, targetPerWeek } };
@@ -212,7 +215,7 @@ function normalizeEditPayload(payload) {
   }
 
   if (Object.prototype.hasOwnProperty.call(payload, "targetPerWeek")) {
-    const targetPerWeek = clampTargetPerWeek(payload.targetPerWeek);
+    const targetPerWeek = normalizeTargetPerWeek(payload.targetPerWeek);
     if (!targetPerWeek) {
       return { error: invalidInput("invalid-target-per-week", "targetPerWeek must be an integer between 1 and 7.") };
     }

@@ -143,7 +143,10 @@ export function slugifyRitualName(name) {
   return base || "ritual";
 }
 
-const RITUAL_CATEGORIES = new Set(["general", "work", "content", "health", "learning", "personal"]);
+// 루틴 카테고리·주간 목표의 정본. /api/routine(쓰기 검증)과 work-ledger(읽기 정규화)가
+// 이 모듈을 import한다 — 세 곳에 따로 선언하면 서버는 받는데 읽기에서 'general'로
+// 떨어지는 식의 드리프트가 생긴다(2026-09-23 병합 검증).
+export const RITUAL_CATEGORIES = new Set(["general", "work", "content", "health", "learning", "personal"]);
 
 export const RITUAL_CATEGORY_LABELS = {
   work: "업무",
@@ -154,9 +157,17 @@ export const RITUAL_CATEGORY_LABELS = {
   general: "일반",
 };
 
-function clampTargetPerWeek(value) {
-  const n = Math.round(Number(value));
-  return Number.isFinite(n) ? Math.min(7, Math.max(1, n)) : null;
+// 1~7 정수만 유효하다. 범위 밖 값을 조용히 잘라 넣지 않는다 — 빈 입력(0)이 '주 1회'로,
+// 100이 '주 7회'로 바뀌어 저장되던 문제. 유효하지 않으면 null(미지정)을 돌려 호출부가
+// 체크 타입 기본값을 쓰거나(생성) 400으로 거부하게(PATCH) 한다.
+export function normalizeTargetPerWeek(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= 7 ? n : null;
+}
+
+export function defaultTargetPerWeek(checkType) {
+  return cleanString(checkType).toLowerCase() === "weekly" ? 1 : 7;
 }
 
 // 루틴 구성 — 카테고리별 개수·이번 주 완료/목표 합계. RhythmVisualizer의 '루틴 구성' 패널이
@@ -167,7 +178,7 @@ export function summarizeRitualsByCategory(rituals = []) {
 
   (Array.isArray(rituals) ? rituals : []).forEach((r) => {
     const category = RITUAL_CATEGORIES.has(r?.category) ? r.category : "general";
-    const target = clampTargetPerWeek(r?.targetPerWeek) || 7;
+    const target = normalizeTargetPerWeek(r?.targetPerWeek) || defaultTargetPerWeek(r?.checkType);
     const completed = Array.isArray(r?.weeks) ? r.weeks.filter((v) => v === 1).length : 0;
     if (!byCategory.has(category)) {
       byCategory.set(category, {
@@ -198,7 +209,7 @@ export function buildRhythmDefinePayload(draft) {
     checkType,
     projectId: cleanString(draft?.projectId) || null,
     category: RITUAL_CATEGORIES.has(categoryRaw) ? categoryRaw : "general",
-    targetPerWeek: clampTargetPerWeek(draft?.targetPerWeek) || (checkType === "weekly" ? 1 : 7),
+    targetPerWeek: normalizeTargetPerWeek(draft?.targetPerWeek) || defaultTargetPerWeek(checkType),
   };
 }
 
@@ -227,8 +238,8 @@ export function buildRhythmEditPayload(original, edited) {
     payload.category = category;
   }
 
-  const targetPerWeek = clampTargetPerWeek(edited?.targetPerWeek);
-  if (targetPerWeek && targetPerWeek !== clampTargetPerWeek(original?.targetPerWeek)) {
+  const targetPerWeek = normalizeTargetPerWeek(edited?.targetPerWeek);
+  if (targetPerWeek && targetPerWeek !== normalizeTargetPerWeek(original?.targetPerWeek)) {
     payload.targetPerWeek = targetPerWeek;
   }
 
@@ -338,18 +349,23 @@ export function computeWeeklyRhythmMatrix({
     const doneTasksCount = (Array.isArray(todos) ? todos : []).filter((t) => {
       const isDone = t?.done === true || String(t?.status || "").toLowerCase() === "done";
       if (!isDone) return false;
-      const tKey = toZonedDateKey(t.completedAt || t.updatedAt || t.createdAt, timeZone);
-      return tKey === dKey;
+      // 완료 시각만 믿는다. updatedAt으로 대체하면 완료 뒤에 조금만 수정해도(체크리스트·
+      // focus_dates 등) 그 할 일이 수정한 날로 옮겨 집계된다.
+      if (!t.completedAt) return false;
+      return toZonedDateKey(t.completedAt, timeZone) === dKey;
     }).length;
 
     const ritualsDoneCount = (Array.isArray(rituals) ? rituals : []).filter((r) => {
       return Array.isArray(r.weeks) && r.weeks[index] === 1;
     }).length;
 
-    const focusHours = Math.min(6.5, Number((1.2 + doneTasksCount * 0.6 + ritualsDoneCount * 0.4).toFixed(1)));
-    const outcomes = Math.min(100, Math.round(25 + doneTasksCount * 14 + ritualsDoneCount * 10));
+    // 활동이 0이면 0이다 — 예전의 1.2h·25pt 절편은 아무 기록도 없는 날을 '일상 업무
+    // 진행'처럼 측정값으로 보이게 했다(목업·실데이터 혼합 금지, 2026-09-23).
+    const focusHours = Math.min(6.5, Number((doneTasksCount * 0.6 + ritualsDoneCount * 0.4).toFixed(1)));
+    const outcomes = Math.min(100, Math.round(doneTasksCount * 14 + ritualsDoneCount * 10));
 
-    let label = "일상 업무 진행";
+    let label = "기록 없음";
+    if (doneTasksCount + ritualsDoneCount > 0) label = "일상 업무 진행";
     if (outcomes >= 80) label = "핵심 딥워크 · 최대 성과";
     else if (outcomes >= 60) label = "안정적 실행 및 루틴 완수";
     else if (focusHours >= 3) label = "집중 작업 지속";
@@ -365,58 +381,4 @@ export function computeWeeklyRhythmMatrix({
       label,
     };
   });
-}
-
-export function computeContentUploadRhythm(contents = [], { now = new Date(), timeZone = "Asia/Seoul" } = {}) {
-  const todayKey = toZonedDateKey(now, timeZone);
-  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
-
-  const published = (Array.isArray(contents) ? contents : []).filter(
-    (c) => String(c?.status || "").toLowerCase() === "published" || c?.state === "published",
-  );
-
-  let threadsCount = 0;
-  let igCount = 0;
-  let shortsCount = 0;
-
-  const countByDate = new Map();
-
-  published.forEach((item) => {
-    const channel = String(item?.channel || item?.platform || item?.type || "").toLowerCase();
-    if (channel.includes("thread")) threadsCount += 1;
-    else if (channel.includes("insta")) igCount += 1;
-    else if (channel.includes("short") || channel.includes("yt") || channel.includes("youtube")) shortsCount += 1;
-    else threadsCount += 1;
-
-    const dKey = toZonedDateKey(item?.publishedAt || item?.updatedAt || item?.createdAt, timeZone);
-    if (dKey) {
-      countByDate.set(dKey, (countByDate.get(dKey) || 0) + 1);
-    }
-  });
-
-  const weeklyDone = published.length;
-  const weeklyGoal = 7;
-
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const dKey = shiftDateKey(todayKey, index - 6);
-    const dateObj = new Date(`${dKey}T12:00:00.000Z`);
-    const dayLabel = dayNames[dateObj.getUTCDay()] || "";
-    const total = countByDate.get(dKey) || 0;
-    return {
-      day: dayLabel,
-      dateKey: dKey,
-      total,
-    };
-  });
-
-  return {
-    weeklyGoal,
-    weeklyDone: Math.max(weeklyDone, 5),
-    channels: [
-      { name: "Threads", count: Math.max(threadsCount, 3), goal: 5, tone: "moon" },
-      { name: "Instagram", count: Math.max(igCount, 1), goal: 2, tone: "neutral" },
-      { name: "YT Shorts", count: Math.max(shortsCount, 1), goal: 1, tone: "neutral" },
-    ],
-    days,
-  };
 }

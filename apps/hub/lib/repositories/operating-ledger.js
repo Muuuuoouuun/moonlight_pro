@@ -336,6 +336,9 @@ function mapTodos(rows, projectById, brandById) {
       // drawer checklist filters on this; null for ordinary project/standalone tasks.
       dealId: row.meta?.deal_id || null,
       assignee: row.owner_id ? "Me" : "Unassigned",
+      // Engine PMS가 done 전이 때 찍는 완료 시각 — Rhythm 매트릭스가 완료일을 판정한다
+      // (updatedAt은 완료 뒤 수정에도 바뀌어 완료일로 쓸 수 없다).
+      completedAt: row.completed_at || null,
       updatedAt: row.updated_at || row.created_at || "",
     };
   });

@@ -11,6 +11,7 @@ import {
   shiftDateKey,
   toZonedDateKey,
 } from "../rhythm-calendar.js";
+import { RITUAL_CATEGORIES, defaultTargetPerWeek, normalizeTargetPerWeek } from "../rhythm-ui.js";
 
 const RITUAL_FALLBACK_NAMES = {
   morning: "Morning check · 07:00",
@@ -19,10 +20,13 @@ const RITUAL_FALLBACK_NAMES = {
   weekly: "Weekly Review",
 };
 const ROUTINE_CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
-const RITUAL_CATEGORIES = new Set(["general", "work", "content", "health", "learning", "personal"]);
 const DECISION_ROW_LIMIT = 40;
 const ROADMAP_ROW_LIMIT = 500;
 const RHYTHM_ROW_LIMIT = 240;
+// 루틴 정의(씨앗) 행 — status:'pending', checked_at:null. 체크인 행 조회는 checked_at.desc
+// nullslast라 기록이 RHYTHM_ROW_LIMIT를 넘으면 씨앗 행이 먼저 잘린다. category·주간 목표는
+// 씨앗 행(과 PATCH로 편집된 행)의 meta에만 있으므로, 씨앗 행을 따로 소량 읽어 폴백 정본으로 쓴다.
+const RITUAL_DEFINITION_LIMIT = 200;
 
 function formatDecisionDate(value) {
   if (!value) return "";
@@ -165,8 +169,25 @@ function rawRitualCategory(row) {
 
 function rawRitualTargetPerWeek(row) {
   const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
-  const raw = Number(meta.target_per_week);
-  return Number.isInteger(raw) && raw >= 1 && raw <= 7 ? raw : null;
+  return normalizeTargetPerWeek(meta.target_per_week);
+}
+
+function ritualGroupKey(row) {
+  return JSON.stringify([row.project_id || null, ritualKeyFor(row)]);
+}
+
+// 씨앗 행에서 (project_id, ritual_key)별 category·target을 뽑는다. 그룹을 새로 만들지는
+// 않는다 — 어떤 루틴이 보이는지는 체크인 조회 창이 정하고, 이 맵은 값의 폴백일 뿐이다.
+function buildRitualDefinitionIndex(definitionRows) {
+  const index = new Map();
+  (Array.isArray(definitionRows) ? definitionRows : []).forEach((row) => {
+    const key = ritualGroupKey(row);
+    const entry = index.get(key) || { category: null, targetPerWeek: null };
+    if (!entry.category) entry.category = rawRitualCategory(row);
+    if (!entry.targetPerWeek) entry.targetPerWeek = rawRitualTargetPerWeek(row);
+    index.set(key, entry);
+  });
+  return index;
 }
 
 function ritualCompositeId(projectId, ritualKey) {
@@ -189,7 +210,8 @@ function computeStreak(doneDateKeys, todayKey) {
   return streak;
 }
 
-function mapRituals(rows, projectRows, { timeZone, now }) {
+function mapRituals(rows, projectRows, { timeZone, now, definitionRows = null }) {
+  const definitions = buildRitualDefinitionIndex(definitionRows);
   const groups = new Map();
   const projectNameById = new Map(
     (Array.isArray(projectRows) ? projectRows : []).map((project) => [project.id, project.name || null]),
@@ -198,7 +220,7 @@ function mapRituals(rows, projectRows, { timeZone, now }) {
   rows.forEach((row) => {
     const ritualKey = ritualKeyFor(row);
     const projectId = row.project_id || null;
-    const compositeKey = JSON.stringify([projectId, ritualKey]);
+    const compositeKey = ritualGroupKey(row);
     if (!groups.has(compositeKey)) {
       const checkType = normalizeCheckType(row.check_type);
       groups.set(compositeKey, {
@@ -235,20 +257,27 @@ function mapRituals(rows, projectRows, { timeZone, now }) {
 
   const todayKey = toZonedDateKey(now, timeZone);
 
-  return Array.from(groups.values()).map((group) => ({
-    id: group.id,
-    projectId: group.projectId,
-    projectName: group.projectName,
-    projectHref: group.projectHref,
-    ritualKey: group.ritualKey,
-    checkType: group.checkType,
-    name: group.name,
-    category: group.category || "general",
-    targetPerWeek: group.targetPerWeek || (group.checkType === "weekly" ? 1 : 7),
-    streak: computeStreak(group.doneDateKeys, todayKey),
-    weeks: buildWeeksBitmap(group.doneDateKeys, todayKey),
-    lastCheckedAt: group.lastCheckedAt ? new Date(group.lastCheckedAt).toISOString() : null,
-  }));
+  return Array.from(groups.entries()).map(([compositeKey, group]) => {
+    const definition = definitions.get(compositeKey);
+    const category = group.category || definition?.category || "general";
+    const targetPerWeek = group.targetPerWeek
+      || definition?.targetPerWeek
+      || defaultTargetPerWeek(group.checkType);
+    return {
+      id: group.id,
+      projectId: group.projectId,
+      projectName: group.projectName,
+      projectHref: group.projectHref,
+      ritualKey: group.ritualKey,
+      checkType: group.checkType,
+      name: group.name,
+      category,
+      targetPerWeek,
+      streak: computeStreak(group.doneDateKeys, todayKey),
+      weeks: buildWeeksBitmap(group.doneDateKeys, todayKey),
+      lastCheckedAt: group.lastCheckedAt ? new Date(group.lastCheckedAt).toISOString() : null,
+    };
+  });
 }
 
 function summarizeRituals(rituals) {
@@ -423,6 +452,7 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
     milestoneRows,
     workspaceRows,
     roadmapBrandRows,
+    ritualDefinitionRows,
   ] = await Promise.all([
     fetchSupabaseRows("decisions", {
       limit: DECISION_ROW_LIMIT + 1,
@@ -467,6 +497,15 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
       order: "name.asc",
       filters: withWorkspaceFilter([["status", eqFilter("active")]]),
     }),
+    fetchSupabaseRows("routine_checks", {
+      select: "project_id,check_type,status,meta",
+      limit: RITUAL_DEFINITION_LIMIT,
+      order: "created_at.desc.nullslast,id.desc",
+      filters: withWorkspaceFilter([
+        ["status", eqFilter("pending")],
+        ...(selectedProjectId ? [["project_id", eqFilter(selectedProjectId)]] : []),
+      ]),
+    }),
   ]);
 
   const workspaceTimeZoneAvailable = Array.isArray(workspaceRows) && workspaceRows.length === 1;
@@ -485,7 +524,7 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
     : [];
   const rhythmAvailable = Array.isArray(routineRows) && workspaceTimeZoneAvailable;
   const rituals = rhythmAvailable
-    ? mapRituals(visibleRoutineRows, projectRows, { timeZone, now })
+    ? mapRituals(visibleRoutineRows, projectRows, { timeZone, now, definitionRows: ritualDefinitionRows })
     : [];
   const rhythm = rhythmAvailable
     ? {

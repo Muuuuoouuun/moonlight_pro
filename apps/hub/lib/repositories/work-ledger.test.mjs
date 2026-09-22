@@ -761,3 +761,52 @@ test("a surviving core section keeps the ledger at partial rather than error", a
   assert.equal(ledger.error ?? null, null);
   assert.equal(ledger.partial, true);
 });
+
+test("ritual category and weekly target survive when the seed row falls outside the check-in window", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.routine_checks = [
+    {
+      id: "seed-row",
+      project_id: null,
+      check_type: "morning",
+      status: "pending",
+      checked_at: null,
+      created_at: "2026-05-01T00:00:00.000Z",
+      meta: { ritual_key: "stretch", name: "스트레칭", category: "health", target_per_week: 5 },
+    },
+    ...Array.from({ length: 241 }, (_, index) => ({
+      id: `check-${String(index).padStart(3, "0")}`,
+      project_id: null,
+      check_type: "morning",
+      status: "done",
+      checked_at: new Date(Date.UTC(2026, 6, 17) - index * 3_600_000).toISOString(),
+      meta: { ritual_key: "stretch", name: "스트레칭" },
+    })),
+  ];
+
+  const ledger = await workLedger.getWorkLedger({ now: new Date("2026-07-17T02:00:00.000Z") });
+
+  assert.equal(ledger.rhythm.partial, true);
+  assert.equal(ledger.rituals.length, 1);
+  assert.equal(ledger.rituals[0].category, "health");
+  assert.equal(ledger.rituals[0].targetPerWeek, 5);
+  const definitionCall = state.calls.filter((entry) => entry.table === "routine_checks")[1];
+  assert.ok(definitionCall.options.filters.some(([key, value]) => key === "status" && value === "eq.pending"));
+});
+
+test("a weekly ritual without an explicit target defaults to once a week", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.routine_checks = [{
+    id: "weekly-seed",
+    project_id: null,
+    check_type: "weekly",
+    status: "pending",
+    checked_at: null,
+    meta: { ritual_key: "weekly-review", name: "주간 리뷰" },
+  }];
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.rituals[0].category, "general");
+  assert.equal(ledger.rituals[0].targetPerWeek, 1);
+});
