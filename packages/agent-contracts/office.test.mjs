@@ -130,3 +130,28 @@ test('parseOfficeChatInput parses evaluate flag', () => {
   assert.equal(res2.evaluate, false);
 });
 
+test('office personas define recommendedTier and defaultTemperature', () => {
+  for (const id of OFFICE_AGENT_IDS) {
+    const meta = OFFICE_AGENTS[id];
+    assert.ok(meta.recommendedTier === 'pro' || meta.recommendedTier === 'flash');
+    assert.ok(typeof meta.defaultTemperature === 'number' && meta.defaultTemperature >= 0.1 && meta.defaultTemperature <= 1.0);
+  }
+  assert.equal(OFFICE_AGENTS.umbreon.recommendedTier, 'pro');
+  assert.equal(OFFICE_AGENTS.umbreon.defaultTemperature, 0.1);
+  assert.equal(OFFICE_AGENTS.sylveon.defaultTemperature, 0.7);
+});
+
+test('parseOfficeChatInput accepts and validates optional model parameter', () => {
+  const res = parseOfficeChatInput({
+    agentId: 'eevee',
+    message: '안녕',
+    model: 'gemini-2.5-pro',
+  });
+  assert.equal(res.model, 'gemini-2.5-pro');
+
+  assert.throws(
+    () => parseOfficeChatInput({ agentId: 'eevee', message: '안녕', model: 'invalid model name with spaces' }),
+    (err) => err instanceof OfficeContractError && err.code === 'invalid-model',
+  );
+});
+
