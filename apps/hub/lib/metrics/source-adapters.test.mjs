@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMetricReader, metricPeriodWindow } from './source-adapters.js';
+import { readdirSync, readFileSync } from 'node:fs';
+import { createMetricReader, metricPeriodWindow, METRIC_SOURCE_SELECTS } from './source-adapters.js';
+import { getContentPerformance } from '../repositories/content-performance-ledger.js';
+import { seoulDate } from '../content-performance.js';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 const otherWorkspace = '00000000-0000-4000-8000-000000000002';
@@ -74,7 +77,7 @@ test('successful published events use actual time and stable post identity for d
     row('b',{status:'published',published_at:'2026-09-18T00:00:00Z',channel:'threads',external_id:'one',variant_id:'v'}),
     row('c',{status:'queued',created_at:'2026-09-18T00:00:00Z',variant_id:'v'}),
     row('d',{status:'failed',published_at:'2026-09-18T00:00:00Z',variant_id:'v'}),
-  ],content_variants:[row('v',{content_item_id:'i'})],content_items:[row('i',{meta:{org_scope:'personal'}})]});
+  ],content_variants:[row('v',{content_id:'i'})],content_items:[row('i',{meta:{org_scope:'personal'}})]});
   const m=await r.measure({...period,sourceKey:'content_published'});
   assert.equal(m.value,1); assert.equal(m.coverage,'complete'); assert.ok(m.evidence.length);
 });
@@ -82,6 +85,60 @@ test('unidentified published log does not assert an exact count', async () => {
   const r=reader({publish_logs:[row('a',{status:'published',published_at:'2026-09-18T00:00:00Z'})]});
   const m=await r.measure({...period,sourceKey:'content_published'});
   assert.equal(m.coverage,'partial');assert.equal(m.value,null);
+});
+test('a variant log that points at no external post keeps the count partial', async () => {
+  const r=reader({publish_logs:[row('a',{status:'published',published_at:'2026-09-18T00:00:00Z',channel:'Web',variant_id:'v'})],
+    content_variants:[row('v',{content_id:'i'})],content_items:[row('i',{meta:{org_scope:'personal'}})]});
+  const m=await r.measure({...period,sourceKey:'content_published'});
+  assert.equal(m.value,null);assert.equal(m.coverage,'partial');assert.equal(m.reason,'publication-identity-missing');
+});
+// Content performance page counts one publication per content variant (content_variants.published_at);
+// the goal metric must report the same number for the same window, so a re-published variant counts once.
+test('a re-published variant counts once, matching the content performance page for the same window', async () => {
+  const brandId='b', itemId='i';
+  const logs=[
+    row('l1',{status:'published',published_at:'2026-09-15T01:00:00Z',channel:'threads',target_url:'https://threads.net/p/first',variant_id:'v1'}),
+    row('l2',{status:'published',published_at:'2026-09-18T01:00:00Z',channel:'threads',target_url:'https://threads.net/p/fixed',variant_id:'v1'}),
+    row('l3',{status:'published',published_at:'2026-09-19T01:00:00Z',channel:'threads',external_id:'post-3',variant_id:'v2'}),
+    row('l4',{status:'queued',channel:'threads',variant_id:'v3'}),
+  ];
+  // record_publication writes the log's published_at onto the variant, so v1 carries its latest log.
+  const variants=[
+    row('v1',{content_id:itemId,title:'원고 1',channel:'threads',variant_type:'threads_post',status:'published',published_at:'2026-09-18T01:00:00Z',updated_at:'2026-09-18T01:00:00Z',meta:{}}),
+    row('v2',{content_id:itemId,title:'원고 2',channel:'threads',variant_type:'threads_post',status:'published',published_at:'2026-09-19T01:00:00Z',updated_at:'2026-09-19T01:00:00Z',meta:{}}),
+    row('v3',{content_id:itemId,title:'원고 3',channel:'threads',variant_type:'threads_post',status:'draft',published_at:null,updated_at:'2026-09-19T01:00:00Z',meta:{}}),
+  ];
+  const items=[row(itemId,{title:'아이템',brand_id:brandId,meta:{org_scope:'personal'}})];
+  const brands=[row(brandId,{name:'브랜드',slug:'personal-brand',meta:{org_scope:'personal'}})];
+  const r=reader({publish_logs:logs,content_variants:variants,content_items:items,brands});
+  const m=await r.measure({...period,sourceKey:'content_published'});
+  assert.equal(m.value,2); assert.equal(m.coverage,'complete');
+  const hrefs=m.evidence.filter(e=>e.type==='ledger').map(e=>e.href);
+  assert.ok(hrefs.includes('https://threads.net/p/fixed')); assert.ok(!hrefs.includes('https://threads.net/p/first'));
+  assert.match(m.definitionNote,/원고 단위/);
+
+  const tables={brands,content_items:items,content_variants:variants};
+  const page=await getContentPerformance({year:2026},{workspaceId,now,fetchRows:async(table,options)=>{
+    const cursor=options.filters.find(([key,value])=>key==='id'&&value.startsWith('gt.'))?.[1].slice(3);
+    return {configured:true,error:null,rows:tables[table].filter(value=>!cursor||value.id>cursor)};
+  }});
+  assert.equal(page.status,'live');
+  const inWindow=page.publications.filter(p=>seoulDate(p.publishedAt)>=period.periodStart&&seoulDate(p.publishedAt)<=period.periodEnd);
+  assert.equal(inWindow.length,m.value);
+});
+test('metric source projections only name columns the schema defines', () => {
+  const root=new URL('../../../../supabase/',import.meta.url);
+  const sql=['schema.sql',...readdirSync(new URL('migrations/',root)).filter(f=>f.endsWith('.sql')).map(f=>`migrations/${f}`)].map(f=>readFileSync(new URL(f,root),'utf8')).join('\n');
+  const columns=new Map();
+  const add=(table,column)=>{table=table.replace(/^public\./,'');if(!columns.has(table))columns.set(table,new Set());columns.get(table).add(column);};
+  for(const [,table,body] of sql.matchAll(/create table (?:if not exists )?([\w.]+)\s*\(([\s\S]*?)\n\);/gi))
+    for(const line of body.split('\n')){const match=line.trim().match(/^([a-z_][a-z0-9_]*)\s+(?:uuid|text|integer|int|bigint|numeric|boolean|jsonb|timestamptz|date|smallint)\b/i);if(match)add(table,match[1]);}
+  for(const [,table,body] of sql.matchAll(/alter table (?:if exists )?(?:only )?([\w.]+)([\s\S]*?);/gi))
+    for(const [,column] of body.matchAll(/add column (?:if not exists )?([a-z_][a-z0-9_]*)/gi))add(table,column);
+  for(const [table,select] of Object.entries(METRIC_SOURCE_SELECTS)){
+    const missing=select.split(',').filter(column=>!columns.get(table)?.has(column));
+    assert.deepEqual(missing,[],`${table} select names unknown columns`);
+  }
 });
 test('source failure and zero rows have distinct values and coverage', async () => {
   const bad = await reader({tasks:null}).measure({...period,sourceKey:'tasks_completed'});

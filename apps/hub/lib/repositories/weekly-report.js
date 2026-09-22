@@ -63,7 +63,7 @@ export async function getWeeklyReport({scope='personal',windowDays=7,timezone='A
   return {
     source:unavailable?'error':'supabase',configured:Boolean(workspaceId),scope,windowDays,timezone,periodStart,periodEnd,since:window.start,until:window.end,asOf:now.toISOString(),
     partial:failedSources.length>0,failedSources,stats:unavailable?null:stats,scorecard:null,goals,measurements,
-    definitions:{contacts:'CRM에 기록된 실제 연락 활동. 노트·AI 기록·상태 수정은 제외합니다.',doneTasks:'현재 완료 상태인 작업을 completed_at으로 집계합니다. 재오픈 시 과거 값도 바뀝니다.',publishes:'성공한 발행을 실제 발행 시각과 외부 게시물 식별자로 중복 제거합니다.',modifiedOpenDeals:'기간 중 수정된 현재 진행 딜. 단계 전이 횟수가 아닙니다.',wonDeals:'실제 won_at이 기간 안인 현재 성사 딜. 성사일 미상 딜이 있으면 미측정입니다.',wonAmount:'위 성사 딜의 KRW 계약 금액 합계이며 실제 입금이 아닙니다.',scorecard:'이전 캠페인 수동 현재값은 기간 증거가 없어 주간 실적으로 표시하지 않습니다.'},
+    definitions:{contacts:'CRM에 기록된 실제 연락 활동. 노트·AI 기록·상태 수정은 제외합니다.',doneTasks:'현재 완료 상태인 작업을 completed_at으로 집계합니다. 재오픈 시 과거 값도 바뀝니다.',publishes:'발행한 원고 단위로 실제 발행 시각에 집계합니다. 같은 원고를 다시 기록해도 1건입니다.',modifiedOpenDeals:'기간 중 수정된 현재 진행 딜. 단계 전이 횟수가 아닙니다.',wonDeals:'실제 won_at이 기간 안인 현재 성사 딜. 성사일 미상 딜이 있으면 미측정입니다.',wonAmount:'위 성사 딜의 KRW 계약 금액 합계이며 실제 입금이 아닙니다.',scorecard:'이전 캠페인 수동 현재값은 기간 증거가 없어 주간 실적으로 표시하지 않습니다.'},
     highlights:scope==='company'&&winsMeasured?wonDeals.slice(0,3).map(d=>({kind:'won',label:d.title||'딜'})):[],
     ...(unavailable?{error:'weekly-report-read-failed'}:{}),
   };
