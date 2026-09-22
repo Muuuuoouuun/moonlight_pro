@@ -222,15 +222,16 @@ test("sidebar is one level deep and the top bar owns contextual tabs", () => {
   assert.match(topbarSource, /aria-current=\{selected \? 'page' : undefined\}/);
 });
 
-// 사이드바 내비 행은 텍스트 전용이다(§15 2026-09-19) — 아이콘 글리프는 접힌
-// 사이드바에만 남는다. 여기서 검사하는 건 외형 계약이지 깊이가 아니다.
-test("expanded sidebar nav rows carry no icon glyph", () => {
+// 2026-09-19 Futura 패스가 뺐던 아이콘을 2026-09-23 운영자가 펼친 행에도 다시
+// 요청했다(§15) — 접힌 레일과 펼친 행 둘 다 같은 <Iconed name={a.icon}>를 쓴다.
+// 여기서 검사하는 건 외형 계약이지 깊이가 아니다.
+test("expanded sidebar nav rows carry the same icon glyph as the collapsed rail", () => {
   const expanded = sidebarSource.slice(
     sidebarSource.indexOf("const renderAnchor"),
     sidebarSource.indexOf("if (collapsed)"),
   );
   assert.ok(expanded.length > 0, "renderAnchor block must be found");
-  assert.doesNotMatch(expanded, /<Iconed/);
+  assert.match(expanded, /<Iconed name=\{a\.icon\}/);
 });
 
 // Futura 라우트는 페이지 헤더가 pill 탭을 직접 그리므로 탑바는 같은 줄을 또 그리지 않는다.

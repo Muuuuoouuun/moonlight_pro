@@ -164,15 +164,16 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
 
   // Sidebar stays one level deep. Contextual destinations are rendered as
   // horizontal top tabs by TopBar, so the operator never has to expand a tree.
-  // 2026-09-19 Futura 패스는 *외형만* 바꿨다 — 아이콘·색점을 빼고 현재 항목을
-  // pill로 띄웠을 뿐, 깊이와 이동 동작은 그대로다(운영자: "기능은 유지").
-  // 접힌 56px 레일에서만 라벨 대신 아이콘이 이름을 맡는다. 한 종류의 버튼이 두
-  // 상태를 모두 그리므로 접기 토글 뒤에도 같은 DOM·포커스가 유지된다.
+  // 2026-09-19 Futura 패스는 사이드바 행에서 아이콘·색점을 뺐으나(§15), 2026-09-23
+  // 운영자가 펼친 상태에서도 아이콘을 라벨과 같이 보여달라고 재확정 — 깊이와
+  // 이동 동작은 그대로다. 접힌 56px 레일은 아이콘이 이름을 전담(라벨 숨김)하고
+  // count는 점 하나로, 펼친 행은 아이콘+라벨+건수 뱃지를 함께 보여준다.
   const renderAnchor = (a, small) => {
     const count = counts[a.key];
-    // 펼친 행 — 라벨과 건수 뱃지만(Futura 텍스트 전용, §15 2026-09-19).
+    // 펼친 행 — 아이콘 + 라벨 + 건수 뱃지 (§15 2026-09-23).
     let content = (
       <>
+        <Iconed name={a.icon} size={small ? 15 : 16} />
         <span className="hub-sidebar-label" style={{ flex: 1 }}>{a.label}</span>
         <CountBadge n={count} />
       </>
