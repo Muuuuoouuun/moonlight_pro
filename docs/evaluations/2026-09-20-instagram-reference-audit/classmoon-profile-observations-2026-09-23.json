@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "observed_on": "2026-09-23",
+  "timezone": "Asia/Seoul",
+  "status": "public_profile_observation",
+  "brand": {
+    "id": "classmoon",
+    "name": "class.moon",
+    "brand_mapping_authority": "운영자가 회사 세일즈 겸 교육 정보 계정으로 Threads @moon.classin 지정",
+    "channels": [
+      {
+        "platform": "threads",
+        "url": "https://www.threads.com/@moon.classin",
+        "mapping": "operator_provided",
+        "display_name": "클래스문",
+        "bio": "교육과 기술로 세상을 이롭게",
+        "topic_tags": [
+          "AI Threads",
+          "교육",
+          "수학",
+          "Tech Threads",
+          "학원이야기"
+        ],
+        "followers": 743,
+        "recent_views_label": "2.5만회",
+        "recent_views_period": null,
+        "scope": "고정글 2개 및 최근 목록과 이전 글 일부의 텍스트·링크·공개 지표 확인. 영상 전체 전사 미실시."
+      },
+      {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/moon.classin/",
+        "mapping": "threads_profile_linked_not_separately_confirmed_by_operator",
+        "display_name": "클래스문",
+        "followers": 36,
+        "post_count": 8,
+        "scope": "공개 그리드 8개 항목의 표지·대체 텍스트와 링크 확인. 영상 전체 미검토."
+      }
+    ],
+    "posts": [
+      {
+        "url": "https://www.threads.com/@moon.classin/post/DYjp8bLE2rh",
+        "date": "2026-05-20",
+        "summary": "학원에서 ClassIn을 사용한 판서·실시간 풀이·피드백 시연",
+        "verification": "고정글의 목록 캡션·일부 영상 미리보기·반응 수",
+        "metrics": {
+          "likes": 263,
+          "replies": 52,
+          "reposts": 17,
+          "shares": 113
+        }
+      },
+      {
+        "url": "https://www.threads.com/@moon.classin/post/DYjt_rfCdWN",
+        "date": "2026-05-20",
+        "summary": "개인 칠판 기능에 대한 이어지는 글",
+        "verification": "고정글의 목록 캡션"
+      },
+      {
+        "url": "https://www.threads.com/@moon.classin/post/Ddi3b0PiVHX",
+        "summary": "자동 녹화·스크립트·강의 평가·요약 소개",
+        "verification": "프로필 목록의 캡션, 현재 기능 범위 미검증"
+      },
+      {
+        "url": "https://www.threads.com/@moon.classin/post/Dda7Ex8CXwk",
+        "summary": "PDF를 분할·배경 제거해 수업 자료로 만드는 과정 소개",
+        "verification": "프로필 목록의 캡션, 현재 기능 범위 미검증"
+      },
+      {
+        "url": "https://www.threads.com/@moon.classin/post/DbZs6H8E3dg",
+        "date": "2026-07-30",
+        "summary": "시험 문항 추출 프로그램의 필요를 묻는 글",
+        "verification": "프로필 목록의 캡션"
+      },
+      {
+        "url": "https://www.threads.com/@moon.classin/post/DaUptkKCbSD",
+        "date": "2026-07-03",
+        "summary": "원장·강사에게 자료 변환 도구가 필요한지 묻는 글",
+        "verification": "프로필 목록의 캡션·반응 수, 댓글 내용·판매 전환 미검증",
+        "metrics": {
+          "likes": 42,
+          "replies": 66,
+          "shares": 12
+        }
+      },
+      {
+        "url": "https://www.threads.com/@moon.classin/post/DbZwHnoiSOL",
+        "date": "2026-07-30",
+        "summary": "학원 설명회·홈페이지용 사이트를 빠르게 만든 경험",
+        "verification": "프로필 목록의 캡션"
+      },
+      {
+        "url": "https://www.instagram.com/moon.classin/reel/DPA49GNkvjG/",
+        "summary": "손글씨 수식을 그래프로 바꾸는 기능을 소개한 릴스",
+        "verification": "그리드의 이미지 대체 텍스트와 링크. 당시 출시 상태를 현재 사실로 사용하지 않음"
+      }
+    ]
+  },
+  "limitations": [
+    "팔로워와 조회수는 단일 시점 공개 표시값으로 성장률이 아님.",
+    "최근 조회수 배지의 집계 기간 미확인.",
+    "반응 수로 상담·판매·도입을 추론하지 않음.",
+    "제품 기능의 현재 출시·가격·성능은 별도 검증 필요.",
+    "Instagram은 Threads 프로필이 직접 연결했지만 사용자가 이번 메시지에서 별도로 운영 채널로 지정하지 않음."
+  ]
+}
