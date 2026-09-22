@@ -153,6 +153,37 @@ export function Projects({ workspace }) {
   const [drag, setDrag] = React.useState(null);
   const [expanded, setExpanded] = React.useState(() => new Set());
   const [showTerminal, setShowTerminal] = React.useState(false);
+  // 완료·보관 헤더: 클릭 토글 + 세로 드래그 토글 병행. 한 제스처당 한 번만
+  // 토글되도록 triggered 플래그로 잠그고, 임계값 미만 드래그는 click으로 처리한다.
+  const terminalDragRef = React.useRef({ startY: 0, active: false, triggered: false });
+  const [terminalDragOffset, setTerminalDragOffset] = React.useState(0);
+  const handleTerminalDragStart = (e) => {
+    terminalDragRef.current = { startY: e.clientY, active: true, triggered: false };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const handleTerminalDragMove = (e) => {
+    const dragState = terminalDragRef.current;
+    if (!dragState.active) return;
+    const dy = e.clientY - dragState.startY;
+    const offset = showTerminal ? Math.min(0, dy) : Math.max(0, dy);
+    setTerminalDragOffset(offset);
+    if (!dragState.triggered && Math.abs(offset) > 28) {
+      dragState.triggered = true;
+      setShowTerminal(v => !v);
+    }
+  };
+  const handleTerminalDragEnd = (e) => {
+    terminalDragRef.current.active = false;
+    setTerminalDragOffset(0);
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+  };
+  const handleTerminalToggleClick = () => {
+    if (terminalDragRef.current.triggered) {
+      terminalDragRef.current.triggered = false;
+      return;
+    }
+    setShowTerminal(v => !v);
+  };
   // Row-checkbox completion (my-work의 undo 계약과 동일): 체크 → 짧은 취소선
   // 플래시 → 리스트에서 낙관적으로 사라짐 → 3.5초 되돌리기 창이 닫힌 뒤에야
   // 실제 PATCH가 나간다. 실수 탭이 진짜 복구 가능해야 한다.
@@ -1958,7 +1989,11 @@ export function Projects({ workspace }) {
               onToggleTodo={toggleTodo}
               pendingTodoIds={pendingTaskIds}
               showTerminal={showTerminal}
-              onToggleTerminal={() => setShowTerminal(value => !value)}
+              onToggleTerminal={handleTerminalToggleClick}
+              onTerminalDragStart={handleTerminalDragStart}
+              onTerminalDragMove={handleTerminalDragMove}
+              onTerminalDragEnd={handleTerminalDragEnd}
+              terminalDragOffset={terminalDragOffset}
               onReopenProject={(project) => setProjectStatus(project, 'active')}
               onReload={() => loadLedger({ initial: true })}
               onSwitchView={setView}
@@ -2419,16 +2454,24 @@ export function Projects({ workspace }) {
                       type="button"
                       className="hub-row"
                       aria-expanded={showTerminal}
-                      onClick={() => setShowTerminal(v => !v)}
+                      onClick={handleTerminalToggleClick}
+                      onPointerDown={handleTerminalDragStart}
+                      onPointerMove={handleTerminalDragMove}
+                      onPointerUp={handleTerminalDragEnd}
+                      onPointerCancel={handleTerminalDragEnd}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                         padding: '6px 8px', marginBottom: showTerminal ? 10 : 0, borderRadius: 'var(--r-sm)',
                         textAlign: 'left', color: 'var(--fg-dim)',
+                        cursor: 'ns-resize', touchAction: 'pan-x',
+                        transform: terminalDragOffset ? `translateY(${terminalDragOffset}px)` : undefined,
+                        transition: terminalDragOffset ? 'none' : 'transform var(--dur-hover) var(--ease-hub)',
                       }}
                     >
                       <Iconed name="chevronD" size={12} style={{ transform: showTerminal ? 'none' : 'rotate(-90deg)', color: 'var(--fg-faint)' }} />
                       <span style={{ fontSize: 12.5, fontWeight: 600 }}>완료·보관</span>
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{terminalCount}</span>
+                      <Iconed name="drag" size={12} style={{ marginLeft: 'auto', color: 'var(--fg-faint)' }} />
                     </button>
                     {showTerminal && (
                       <Card pad={false} className="hub-table-card">

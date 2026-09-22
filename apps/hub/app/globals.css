@@ -1370,7 +1370,7 @@ button {
   display: grid;
   width: 100%;
   min-height: 42px;
-  grid-template-columns: 14px 1fr auto;
+  grid-template-columns: 14px 1fr auto auto;
   align-items: center;
   gap: 7px;
   padding: 0 18px;
