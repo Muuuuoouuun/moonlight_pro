@@ -2,6 +2,7 @@
 
 > 상태: **DRAFT · 권장안(운영자 확정 전)**. 본문의 `확정`은 기존 문서·커밋에 이미 남은 운영자 결정만 가리키고, 이 문서가 새로 제안하는 것은 전부 `권장`이다.
 > 작성일: 2026-09-21 (Asia/Seoul) · 실측·추가 정리 2026-09-22
+> 2026-09-23 갱신 — Futura(`claude/moonlight-home-futura` 3커밋)는 2026-09-22 `bcc975f`로 병합됐다(DESIGN.md §15 2026-09-22 행). 본문 §1.2·§4 비교표·§7 1단계의 "미병합" 전제는 그 시점 기준의 서술이며 지금은 해소됐다. 이 문서의 접근안 C는 여전히 DRAFT·미적용이다.
 > 주의: 이 문서는 브랜치명을 정본으로 적지 않는다(CLAUDE.md). §1.2의 미병합 사실은 작업 시점에 `git log <현재 브랜치>..claude/moonlight-home-futura`로 직접 확인한다 — 2026-09-21 확인 당시 현재 브랜치는 `09.bigmac1.02`였고 2026-09-22에 같은 워크트리가 `09.bigmac1.22`로 옮겨 갔다.
 > 상위 정본: [`docs/README.md`](../../README.md) 우선순위 → [`DESIGN.md`](../../../DESIGN.md) §3·§5·§7·§8.1·§11·§13·§15 → [운영자 프로필](../../operator-workflow-profile.md) → [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md)
 > 관계: [세 축·Action KPI 기획](2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md) §6.2가 첫 화면의 **데이터**(오늘 Top 3 = `tasks.meta.focus_dates`)를 정하고, 이 문서는 같은 화면의 **형태**(슬롯·폴드·텍스처)를 정한다. 둘은 같은 주에 맞물려야 한다 — §7 참조. 2026-09-20 운영자 재확정(캡처 → 오늘 할 일 순서)과 DESIGN.md §15 2026-09-18·19 확정(Futura)을 **둘 다** 지키는 것이 이 기획의 제약이다.
@@ -11,7 +12,7 @@
 
 ## 0. 한 장 요약
 
-첫 화면은 지금 **두 개**다. 하나는 운영자가 매일 보는 `dashboard`(Daily Brief, 12슬롯)이고, 다른 하나는 운영자가 2026-09-18에 Claude Design에서 5회 이터레이션해 확정한 Futura 트리아지 홈(`dashboard/home`)이다. **후자는 현재 작업 브랜치에 없다.** `09.bigmac1.02`의 DESIGN.md에서 "Futura"는 0회 등장하고, 그 결정과 코드는 23커밋 뒤처진 `claude/moonlight-home-futura`에만 있다.
+첫 화면은 지금 **두 개**다. 하나는 운영자가 매일 보는 `dashboard`(Daily Brief, 12슬롯)이고, 다른 하나는 운영자가 2026-09-18에 Claude Design에서 5회 이터레이션해 확정한 Futura 트리아지 홈(`dashboard/home`)이다. 작성 당시 후자는 작업 브랜치에 없었다 — 그 DESIGN.md에서 "Futura"는 0회 등장하고 결정과 코드는 23커밋 뒤처진 `claude/moonlight-home-futura`에만 있었다. **2026-09-22 `bcc975f`로 병합돼 지금은 둘 다 같은 트리에 있다**(DESIGN.md §15 2026-09-22 행).
 
 그래서 이 기획의 첫 문장은 디자인 제안이 아니라 정리다.
 
@@ -49,7 +50,7 @@
 - 데스크톱 첫 폴드(768px)에 들어가는 것: 헤더·상태줄·캡처·오늘 할 일 카드까지. 실제 업무 행이 보이는 높이는 702px 중 마지막 407px다.
 - 모바일 첫 폴드(812px): 헤더 134 + 상태 44 + 캡처 210 + 갭 60 = **448px(55%)가 입력·크롬**이고, 그 아래 「오늘 할 일」 카드는 스트릭 배너를 먼저 그린 뒤라 **할 일 행이 2행 미만** 보인다.
 
-### 1.2 미병합 `dashboard/home`(Futura 트리아지)
+### 1.2 `dashboard/home`(Futura 트리아지 — 2026-09-22 병합됨)
 
 `claude/moonlight-home-futura` `ab87550` — 3커밋, 10파일.
 
@@ -185,6 +186,8 @@ DESIGN.md §15에 `confirmed`로 적힌 2026-09-18·19 결정이 현재 작업 �
 | 09-20 확정(캡처→할 일) | 지킨다 | **어긴다**(트리아지에 캡처·할 일 없음) | 지킨다 |
 | 코드량 | S | S(라우팅만) — 대신 기능 손실 | M |
 | 위험 | 확정이 계속 코드 밖에 남는다 | 매일 쓰는 캡처·할 일·고객이 첫 화면에서 사라진다. 신호 2건짜리 트리아지 화면은 대부분의 날 비어 있다 | 한 화면을 크게 고친다 — 회귀 표면이 넓다 |
+
+※ 2026-09-22 Futura 병합(`bcc975f`)으로 A안의 "09-18 확정을 어긴다" 전제는 해소됐다. 위 표는 작성 시점 기준의 논증으로 남긴다.
 | 되돌리기 | 쉬움 | 쉬움(라우팅) | 보통(슬롯 단위로 되돌릴 수 있게 설계) |
 
 **권장 C.** 이유 셋.
@@ -317,7 +320,7 @@ DESIGN.md §15에 `confirmed`로 적힌 2026-09-18·19 결정이 현재 작업 �
 
 | 주 | 묶음 | 규모 | 완료 기준 |
 |---|---|---|---|
-| 1 | **Futura 병합**: `claude/moonlight-home-futura` 3커밋을 `09.bigmac1.02`로. 충돌은 `DESIGN.md`(§15 행 병합)·`hub-app.jsx`(PAGE_MAP)뿐 | S | `npm test` 통과(특히 `hub-nav.test.mjs`·`state-usage.test.mjs`). `dashboard/home` 렌더 확인. DESIGN.md §15에 09-18·19 두 행이 현재 브랜치에 존재 |
+| 1 | **Futura 병합** — ✅ 완료(2026-09-22 `bcc975f`). 3커밋 병합, 충돌은 `DESIGN.md`(§15 행 병합)·`hub-app.jsx`(PAGE_MAP)뿐이었다 | S | `npm test` 통과(특히 `hub-nav.test.mjs`·`state-usage.test.mjs`). `dashboard/home` 렌더 확인. DESIGN.md §15에 09-18·19 두 행이 현재 브랜치에 존재 |
 | 1 | **가드 신설**: `palette.test.mjs` — `apps/hub` 전역에서 warm hue 원색(hex·rgb·hsl)과 토큰 밖 raw 색을 막는다. `motion.test.mjs`의 `MS` 정규식을 `s` 단위까지 확장(`--dur-*`·`mlMoonPulse 1.4s` 화이트리스트) | S | 현행 13건이 **실패로 잡히고**, 수정 후 0. 두 테스트가 루트 `npm test` 글롭 안 |
 | 1 | **스트릭 중립화**(§5.4): 화염 SVG → 7칸 도트, 무한 애니 2종 제거, 카피 정리 | S | `palette`·`motion` 테스트 통과. `prefers-reduced-motion`에서 변화 없음 |
 | 2 | **슬롯 감축**(§5.2): 헤더 칩→문장, 상태줄 흡수, 빠른 이동 데스크톱 제거, 문의 조건부, 지표 5→3, 집중 고객 5→3 | M | 1024×768 실측 **≤1536px**. 각 변경이 독립 커밋이라 슬롯 단위 되돌리기 가능 |
