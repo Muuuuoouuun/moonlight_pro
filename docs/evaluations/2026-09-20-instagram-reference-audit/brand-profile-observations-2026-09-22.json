@@ -1,0 +1,345 @@
+{
+  "schema_version": 1,
+  "observed_on": "2026-09-22",
+  "timezone": "Asia/Seoul",
+  "status": "research_draft",
+  "method": "사용자가 지정한 공개 프로필을 브라우저 UI로 열고 목록 본문·표지·공개 지표를 확인. 선택한 IG·YouTube 영상은 일부 실제 화면 확인.",
+  "scope_note": "모든 게시물이나 모든 미디어를 완독·전사한 자료가 아님. posts는 관찰 범위 중 대표 근거 목록이며 수집 총건수와 같지 않음.",
+  "mapping_authority": "사용자가 제공한 브랜드 이름·계정 URL 목록",
+  "limitations": [
+    "팔로워·조회수는 단일 시점 공개 표시값이며 성장률이나 인과효과를 뜻하지 않음.",
+    "최근 조회수 배지의 집계 기간은 확인하지 않음.",
+    "표본의 최신 날짜를 전체 계정의 마지막 발행일로 단정하지 않음.",
+    "게시물의 인용 진위·정치적 주장·과거 영상의 현재 제품 사양은 검증하지 않음.",
+    "개인 DM·브라우저 내비게이션·다른 로그인 계정 정보는 이 파일에 포함하지 않음.",
+    "브랜드별 장르·테마는 관찰자의 분류이며 정체성 확정이 아님."
+  ],
+  "brands": [
+    {
+      "id": "bridgemaker",
+      "name": "다리 놓는 사람",
+      "genre": [
+        "신앙 에세이",
+        "변증",
+        "인용",
+        "종교 유머"
+      ],
+      "themes": [
+        "신앙과 생활",
+        "도덕",
+        "정의",
+        "성숙"
+      ],
+      "channels": [
+        {
+          "platform": "threads",
+          "url": "https://www.threads.com/@ml_bridgemaker",
+          "display_name": "다리놓는 사람",
+          "followers": 82,
+          "scope": "게시물 URL 11개, 이어지는 글 포함. 본문과 일부 이미지 대체 텍스트.",
+          "recent_views_label": "35만회",
+          "recent_views_period": null
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@ml_bridgemaker/post/Ddc_14FgZWo",
+          "summary": "기독교와 정의의 관계를 돌아보는 단문",
+          "verification": "프로필 목록의 본문"
+        },
+        {
+          "url": "https://www.threads.com/@ml_bridgemaker/post/DdaH4SvgbF9",
+          "summary": "신 없이 도덕을 설명할 수 있는지 묻는 글",
+          "verification": "프로필 목록의 본문"
+        },
+        {
+          "url": "https://www.threads.com/@ml_bridgemaker/post/DdVDhatAF-O",
+          "summary": "무신론에 관한 인용 게시물",
+          "verification": "프로필 목록의 본문·반응 수; 인용 진위와 댓글 찬반 미검증",
+          "metrics": {
+            "likes": 467,
+            "replies": 102,
+            "reposts": 55,
+            "shares": 9
+          }
+        },
+        {
+          "url": "https://www.threads.com/@ml_bridgemaker/post/DdU-Bw4gZ6z",
+          "summary": "성숙한 신앙과 다니엘에 관한 글",
+          "verification": "프로필 목록의 본문"
+        }
+      ]
+    },
+    {
+      "id": "gore",
+      "name": "고래",
+      "genre": [
+        "자기계발 큐레이션",
+        "동기부여 단문"
+      ],
+      "themes": [
+        "재시작",
+        "습관",
+        "작은 도전",
+        "선택"
+      ],
+      "channels": [
+        {
+          "platform": "threads",
+          "url": "https://www.threads.com/@go_re_startagain",
+          "display_name": "GO;RE",
+          "followers": 6,
+          "scope": "목록의 게시물 링크 9개와 본문. 이어지는 글 포함.",
+          "latest_visible_post_date": "2025-12-09"
+        },
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/go_re_startagain/",
+          "followers": 7,
+          "post_count": 7,
+          "scope": "그리드 7개 표지·게시물 링크. 전체 캐러셀 미검토."
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@go_re_startagain/post/DSB3FB8Ej7T",
+          "date": "2025-12-09",
+          "summary": "작은 도전을 권하는 글",
+          "verification": "프로필 목록의 본문·날짜"
+        },
+        {
+          "url": "https://www.threads.com/@go_re_startagain/post/DQVvKQxkum_",
+          "date": "2025-10-28",
+          "summary": "작심삼일 뒤에도 다시 시작하자는 단문",
+          "verification": "프로필 목록의 본문·날짜"
+        },
+        {
+          "url": "https://www.instagram.com/go_re_startagain/p/C4PtU37vcFe/",
+          "summary": "습관 관련 조언 카드가 보이는 그리드 항목",
+          "verification": "그리드 링크·표지 확인, 전체 슬라이드 미검토"
+        }
+      ]
+    },
+    {
+      "id": "holyfuncollector",
+      "name": "기독밈",
+      "genre": [
+        "종교 밈",
+        "영상 유머",
+        "교회 문화 관찰"
+      ],
+      "themes": [
+        "성경 장면",
+        "예배와 기도",
+        "신앙과 생활"
+      ],
+      "channels": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/holyfuncollect0r/",
+          "followers": 418,
+          "post_count": 59,
+          "scope": "그리드 12개 항목, 대표 게시물 상세의 캡션·일부 영상 화면·댓글. 전체 영상 전사 미실시."
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.instagram.com/p/DO3bBAvDY0n/",
+          "profile_grid_url": "https://www.instagram.com/holyfuncollect0r/reel/DO3bBAvDY0n/",
+          "date": "2025-09-21",
+          "summary": "바랐던 기독교 복음 콘텐츠를 다룬 영상. 일부 화면에서 유쾌한 전달과 건설적 비판 강조.",
+          "verification": "게시물 상세·일부 실제 영상 화면·날짜·댓글 일부 확인",
+          "metrics": {
+            "likes": 31
+          }
+        },
+        {
+          "url": "https://www.instagram.com/holyfuncollect0r/reel/DLPUIErNTUG/",
+          "summary": "아브라함 관련 밈",
+          "verification": "프로필 그리드 표지·대체 텍스트; 전체 영상 미검토"
+        }
+      ]
+    },
+    {
+      "id": "sinabro",
+      "name": "시나브로",
+      "genre": [
+        "시",
+        "짧은 산문"
+      ],
+      "themes": [
+        "시간",
+        "아름다움",
+        "상실",
+        "위로",
+        "관계"
+      ],
+      "channels": [
+        {
+          "platform": "threads",
+          "url": "https://www.threads.com/@dazz.ling_u",
+          "display_name": "눈이 부시게",
+          "followers": 3,
+          "scope": "목록에 나타난 게시물 5개 본문.",
+          "latest_visible_post_date": "2026-02-11"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@dazz.ling_u/post/DUmZ5Cujn0m",
+          "date": "2026-02-11",
+          "summary": "아름다움의 이상과 현실에 관한 단문",
+          "verification": "프로필 목록의 본문·날짜"
+        },
+        {
+          "url": "https://www.threads.com/@dazz.ling_u/post/DUmXWUoEyPL",
+          "date": "2026-02-11",
+          "summary": "벽과 문을 통해 가능성과 위로를 다룬 글",
+          "verification": "프로필 목록의 본문·날짜"
+        },
+        {
+          "url": "https://www.threads.com/@dazz.ling_u/post/DUmT1Q3k7ga",
+          "date": "2026-02-11",
+          "summary": "소중한 순간과 시간에 관한 단문",
+          "verification": "프로필 목록의 본문·날짜"
+        },
+        {
+          "url": "https://www.threads.com/@dazz.ling_u/post/DBlEfIbSzDx",
+          "date": "2024-10-26",
+          "summary": "죽음에 관한 시",
+          "verification": "프로필 목록의 본문·이미지 대체 텍스트"
+        }
+      ]
+    },
+    {
+      "id": "22nomad",
+      "name": "22세기 유목민",
+      "genre": [
+        "AI·IT 소식",
+        "도구 소개",
+        "기술 에세이"
+      ],
+      "themes": [
+        "코딩 AI",
+        "업무 활용",
+        "기술 발표",
+        "정보 과잉"
+      ],
+      "channels": [
+        {
+          "platform": "threads",
+          "url": "https://www.threads.com/@22th.nomad",
+          "display_name": "미래소년",
+          "followers": 0,
+          "scope": "게시물 3개 본문. 최신 표시 날짜 2026-02-20.",
+          "latest_visible_post_date": "2026-02-20"
+        },
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/22th.nomad/",
+          "display_name": "미래소년",
+          "followers": 3,
+          "post_count": 2,
+          "scope": "릴스 2개 그리드·주제, 전체 영상 미검토."
+        },
+        {
+          "platform": "youtube",
+          "url": "https://www.youtube.com/@22%EC%84%B8%EA%B8%B0%EC%9C%A0%EB%AA%A9%EB%AF%BC",
+          "display_name": "22세기 유목민",
+          "subscribers": 18,
+          "video_count": 6,
+          "scope": "쇼츠 6개 제목·표시 조회수와 코딩 AI 영상 일부 실제 화면. 전체 영상 전사 미실시."
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@22th.nomad/post/DU9yluXERGu",
+          "date": "2026-02-20",
+          "summary": "기술의 풍요와 과잉, 끝내지 못한 일에 관한 글",
+          "verification": "프로필 목록의 본문·날짜"
+        },
+        {
+          "url": "https://www.threads.com/@22th.nomad/post/DU9XZFCkm_0",
+          "date": "2026-02-20",
+          "summary": "AI 생성 콘텐츠의 범람에 대한 양가적 시선",
+          "verification": "프로필 목록의 본문·날짜"
+        },
+        {
+          "url": "https://www.instagram.com/22th.nomad/reel/DJ5unQRg24d/",
+          "summary": "Codex 코딩 에이전트 발표 소개",
+          "verification": "그리드 주제·링크; 현재 제품 사양 근거로 사용하지 않음"
+        },
+        {
+          "url": "https://www.youtube.com/shorts/GNELLiWCBUg",
+          "summary": "코딩 AI 소개 쇼츠",
+          "verification": "제목·표시 조회수·일부 실제 영상 화면",
+          "metrics": {
+            "views_label": "2.3만",
+            "views_rounded": true
+          }
+        },
+        {
+          "url": "https://www.youtube.com/shorts/j5nQHMP2RMs",
+          "summary": "Claude 4 발표 소개",
+          "verification": "채널 목록의 제목·조회수",
+          "metrics": {
+            "views_label": "1.3천",
+            "views_rounded": true
+          }
+        },
+        {
+          "url": "https://www.youtube.com/shorts/3jF7mifIXLg",
+          "summary": "GPT o3/o4 소개",
+          "verification": "채널 목록의 제목·조회수",
+          "metrics": {
+            "views_label": "2.1천",
+            "views_rounded": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "politicofficer",
+      "name": "정상화",
+      "genre": [
+        "정치·시사 논평",
+        "비판",
+        "이미지 공유"
+      ],
+      "themes": [
+        "권력",
+        "민주주의",
+        "시민 참여",
+        "언론 해석"
+      ],
+      "channels": [
+        {
+          "platform": "threads",
+          "url": "https://www.threads.com/@politic_officer",
+          "display_name": "한국 정치 정상화",
+          "followers": 9654,
+          "scope": "최근 목록의 5개 항목, 이어지는 글 포함. 전체 댓글과 정치적 주장 검증 미실시.",
+          "recent_views_label": "115.4만회",
+          "recent_views_period": null
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@politic_officer/post/DdlYOJvkr_e",
+          "summary": "강한 정치적 비판과 주장이 담긴 논평",
+          "verification": "프로필 목록의 본문. 주장 진위 미검증"
+        },
+        {
+          "url": "https://www.threads.com/@politic_officer/post/DdlYjTOkidw",
+          "summary": "앞선 정치 논평의 이어지는 글",
+          "verification": "프로필 목록의 본문. 주장 진위 미검증"
+        },
+        {
+          "url": "https://www.threads.com/@politic_officer/post/DdjBFgBEv6f",
+          "summary": "안보·선거·언론 해석에 관한 비판",
+          "verification": "프로필 목록의 본문. 주장 진위 미검증"
+        }
+      ]
+    }
+  ]
+}

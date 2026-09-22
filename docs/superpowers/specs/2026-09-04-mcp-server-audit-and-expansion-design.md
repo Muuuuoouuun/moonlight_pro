@@ -245,7 +245,7 @@ C9·C10은 `integration-control-plane-inheritance.md` §8이 OpenClaw gateway에
 | `list_followups` | `GET /api/hub/followups` | 읽기 |
 | `record_contact_outcome` | `POST /api/hub/revenue/contact-outcome` | 자동 허용 (사람의 행동 **기록**) |
 
-**주의 — 선행 결정이 있다.** `docs/README.md` §3과 성장 계획 F-2가 기록한 대로, 컨택 결과 기록에는 **두 경로가 공존**한다(고객 DB의 원자 RPC `record_contact_outcome_v1` vs `followups.jsx`의 비원자 단건 insert). **정본 화면은 운영자 미정**이다. MCP 도구는 **원자 RPC 경로(`/api/hub/revenue/contact-outcome`)에 붙인다** — 원자성이 있는 쪽이 에이전트 쓰기에 안전하기 때문이다. 이 선택이 F-2의 운영자 결정을 대신하지 않으며, 결정이 나면 그때 맞춘다.
+**주의 — 2026-09-22 정정.** 이 주석은 원래 "컨택 결과 기록에 두 경로가 공존하고 정본 화면은 미정"이라고 적었으나 틀렸다. `followups.jsx`와 고객 DB 컨택 시트는 2026-08-05부터 **둘 다** 원자 RPC `record_contact_outcome_v1`(`/api/hub/revenue/contact-outcome`)을 쓴다(`docs/README.md` §3 Phase 1C 행). 성장 계획 F-2는 이 사실로 소멸했다. 남은 문제는 경로가 아니라 **저장 위치**다 — RPC는 `crm_activities`에만 쓰고, 주간 리포트·큐 점수는 아직 `outreach_outcomes`를 읽는다. 활동 기록의 정본을 `crm_activities` 하나로 두는 기본값은 [CRM 탭 스펙](2026-09-21-crm-tab-develop-design.md) Q144(권장 기본값, 운영자가 한 줄로 뒤집을 수 있음)가 정했다. MCP 도구는 그대로 원자 RPC 경로에 붙인다.
 
 ### E3. 캡처·아이디어 — **P1** (F-14 흡수)
 

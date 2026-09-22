@@ -1,6 +1,6 @@
 # 세일즈·콘텐츠·마케팅 → 브랜딩: 성장 구조 기획
 
-> 상태: **DRAFT · 권장안(운영자 확정 전)**. 2026-09-03 office-hours 세션 산출물.
+> 상태: **DRAFT · 권장안(운영자 확정 전) · 대부분 후속 주제 스펙이 흡수(2026-09-22)**. 2026-09-03 office-hours 세션 산출물. 이 문서에서 아직 살아 있는 실행 항목은 F-0(크론 수리, 별도 세션 진행 중)·T3(마이그레이션 번호 규칙)·T7(시트 import)이다. 나머지가 어디로 갔는지는 §15.9.
 > 상위 정본: `docs/README.md` 우선순위 → `docs/operator-workflow-profile.md` → `2026-07-13-moonlight-personal-operator-os-deep-design.md` → 주제별 최신 스펙(`2026-08-29-brand-tab-design.md`, `plans/2026-08-31-personal-revenue-roadmap.md`).
 > 관계: 이 문서는 기존 확정 결정을 바꾸지 않는다. Phase 1B·1C 완료를 전제로 **다음 사이클의 후보**를 정리한다. 본문의 `확정`은 기존 문서에서 이미 확정된 사실만 가리키고, 이 문서가 새로 제안하는 것은 전부 `권장`이다. 운영자 인터뷰는 중단 상태이므로 여기서 질문을 던지지 않고 §12에 모아 둔다.
 > 검토: 독립 2차 의견 1회(§11), 적대적 리뷰 1회(사실 오류 4건·불일치 8건 반영, 2026-09-03), CEO 리뷰 1회(HOLD SCOPE, 2026-09-04 — §15).
@@ -579,13 +579,13 @@ GAP 5건 중 3건은 F-0(가시성)이 닫고, 2건은 F-3a 구현 시 `followup
   - 출처: R-2 CRITICAL GAP
   - 파일: `cron/{followup-autopilot,content-flywheel}/route.js`, `ai/{sales,brand}-mentor/route.ts`, `daily-brief.jsx`
   - 검증: 수리 후 `work_orders(proposed)` 생성 회귀 테스트 1건, 실패 주입 시 Daily Brief 한 줄 노출
-- [ ] **T2 (P1, human ~2시간 / CC ~20분)** — security — 배포된 Hub read 라우트 접근 제한 확인
+- [x] **T2 (P1, human ~2시간 / CC ~20분)** — security — 배포된 Hub read 라우트 접근 제한 확인 — **해결(2026-09-22 확인)**: `apps/hub/middleware.js` + `apps/hub/lib/route-access.js`가 허브 전 요청을 거른다
   - 출처: R-3 HIGH
   - 검증: 인증 없는 요청이 리드·연락처를 반환하지 않는지 실제 배포 URL로 확인
 - [ ] **T3 (P1, human ~30분 / CC ~10분)** — migrations — 마이그레이션 번호 규칙 명시(F-7·F-10보다 먼저)
   - 출처: R-8
   - 파일: `docs/supabase-db-strategy.md`
-- [ ] **T4 (P2, human ~15분 / CC ~5분)** — docs — MCP 확충 설계 §6 E2의 낡은 컨택 결과 주석 정정
+- [x] **T4 (P2, human ~15분 / CC ~5분)** — docs — MCP 확충 설계 §6 E2의 낡은 컨택 결과 주석 정정 — **해결(2026-09-22)**: 경로는 이미 단일, 남은 문제는 저장 위치이며 Q144가 기본값을 정했다고 고쳐 적음
   - 출처: 낡은 F-2 주장이 다른 문서로 전파됨
 - [ ] **T5 (P2, human ~4시간 / CC ~30분)** — hub — F-3a 스트립에 `partial`/`failedSources` 봉투 계약 상속
   - 출처: R-1
@@ -593,7 +593,53 @@ GAP 5건 중 3건은 F-0(가시성)이 닫고, 2건은 F-3a 구현 시 `followup
   - 출처: R-6
 - [ ] **T7 (P2, human ~1시간 / CC ~10분)** — hub — 시트 import 크론 추가 또는 SLA 지표에 import 주기 한계 라벨
   - 출처: R-4
-- [ ] **T8 (P3, human ~1시간 / CC ~10분)** — hub — `growth-ledger`를 기존 원장 조합으로 구현한다고 명시
+- [~] **T8 (P3)** — hub — `growth-ledger` 구현 방식 명시 — **폐기(2026-09-22)**: B-7과 함께 `growth-ledger.js` 자체가 없어졌다. 이미 있는 `weekly-report.js`의 집계 원천을 고치는 쪽으로 대체(§15.9)
   - 출처: R-5
 
 JSONL 산출물: `~/.gstack/projects/Muuuuoouuun-moonlight_pro/tasks-ceo-review-20260905-000354.jsonl`
+
+### 15.9 2026-09-22 후속 — 막힌 결정 두 개의 행방
+
+CEO 리뷰 막바지에 두 질문(연락 기록 테이블 해석, 반박된 제안 처리)을 올렸으나 답을 받지 못한 채 멈췄다. 18일 뒤 확인하니 두 질문의 실질을 후속 주제 스펙이 넘겨받았다. 여기서는 다시 묻지 않고 위치만 적는다.
+
+| 막힌 결정 | 넘겨받은 곳 | 2026-09-22 상태 |
+|---|---|---|
+| 연락 기록을 어느 테이블에 둘 것인가 (`crm_activities` vs `outreach_outcomes`) | [CRM 탭 스펙](2026-09-21-crm-tab-develop-design.md) Q144 | 권장 기본값 `crm_activities` 하나, 운영자 확인 대기. 이 브랜치의 `weekly-report.js`는 아직 `outreach_outcomes`를 읽고 `movedDeals: openDeals.length` 오산도 그대로다 |
+| B-5 ("오늘 연락할 리드"에 신규 리드 전부 유입) | CRM 탭 스펙 §0.5·§4.6, [세 축 스펙](2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md) "5영업일 무접촉 자동 알림은 넣지 않는다" | **폐기.** Q117 확정(자동 범람 반대, 4-2-3-1 계층)에 맞춘 정렬로 대체 |
+| B-7·`growth-ledger.js` (새 주간 리뷰 read model) | 세 축 스펙 §6.3 1번 "주간 집계 교정" | **폐기.** 이미 있는 `weekly-report.js`의 집계 원천을 `crm_activities`·`completed_at`으로 고치는 XS 작업으로 대체 |
+| F-1 (IntakeInbox 라우팅) | CRM 탭 스펙 Q142 | `고객`의 `유입` 세그먼트로 통합(권장). 이 브랜치에서는 여전히 라우팅 0건 |
+| F-0 우선순위 vs Q118 (주간 리포트가 자동화 1순위) | [CRM 0·1단계 플랜](../plans/2026-09-21-crm-tab-develop-phase0-1.md) 전제 | F-0이 활성 1순위로 유지. 주간 리포트는 이미 출시돼 있어 실제 충돌은 없다(고장 난 출시 기능 수리 ≠ 새 자동화 우선) |
+| 개인 lane 오퍼 (§12 1번·B-9) | [개인 사업 트랙 스펙](2026-09-21-personal-business-track-and-scope-boundary.md) ①·B-9 게이트 | 운영자의 한 문장 대기 |
+
+**첫 질문에 대한 운영자 답의 해석.** 운영자는 2026-09-05에 "crm 무시, 그냥 우리 버전으로만, crm은 신규 고객·신규 딜 혹은 나중에 프로젝트와 연결만"이라고 답했다. 당시 이를 "`outreach_outcomes`를 우리 버전으로"라고 읽고 확인 질문을 올렸는데, Q144의 기본값은 반대 방향(`crm_activities` 하나)이다. 운영자의 "crm"이 회사 CRM(ClassIn/Neo)을 가리켰다면 두 해석은 충돌하지 않는다 — Moonlight 자체 테이블이 활동 정본이고, 회사 CRM에는 신규 고객·딜·프로젝트 연결만 간다. 이 해석 위에 아무것도 구현하지 않았다.
+
+**외부 의견 기록.** Codex(`codex exec`, reasoning high)와 독립 Claude 서브에이전트가 이 문서를 따로 읽고 **같은 결함 5건**을 지목했다: 연락 기록 저장 위치 분열, B-5가 이미 있는 화면과 중복, F-0 순서, §13 과제 1 실행 불가(과거 데이터가 결측·오염), 90일 계획의 중단 조건 부재. Codex만 찾은 것: 운영자 인터뷰가 2026-08-18에 재개돼 Q116~Q121이 확정됐다는 사실, 그리고 `weekly-report.js`의 `movedDeals` 오산. 두 의견의 모든 코드 주장을 검증했다.
+
+**태스크 상태 (2026-09-22, 브랜치 `09.bigmac1.22` HEAD `767e3c4`).**
+
+| 태스크 | 상태 |
+|---|---|
+| T1 크론 계약 + 가시성 | 미병합. 수리 커밋 `34bb180`은 별도 브랜치에만 있고 Engine MODES에 `followup-draft` 0건, 크론의 `automation_runs` 쓰기 0건. 별도 세션이 진행 중 |
+| T2 read 인증 | 해결 |
+| T3 마이그레이션 번호 규칙 | 미착수. 중복 번호가 `0001·0003·0004·0012~0018·0025·0035`로 **늘었다**(09-04에는 `0003·0004·0012~0018`) |
+| T4 MCP 문서 주석 | 해결 |
+| T5 스트립 실패 봉투 · T6 순수 로직 테스트 | B-5 폐기로 대상 화면이 CRM 탭 스펙으로 이동. 그 스펙의 구현 때 적용 |
+| T7 시트 import 크론 | 미착수. `vercel.json`에 시트 크론 0건 |
+| T8 | 폐기 |
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | ISSUES_OPEN | mode: HOLD_SCOPE, 1 critical gap (침묵하는 크론 실패) |
+| Codex Review | `/codex review` | Independent 2nd opinion | 1 | ISSUES_FOUND | 8건, 서브에이전트 의견과 5건 합치 |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 0 | — | — |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | — |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+
+- **CROSS-MODEL:** Codex와 독립 Claude 서브에이전트가 같은 결함 5건을 따로 지목했다(연락 기록 저장 위치 분열·B-5 중복·F-0 순서·§13 과제 1 실행 불가·중단 조건 부재). 두 모델 합의 항목은 전부 코드로 확인됐다.
+- **VERDICT:** CEO 리뷰 완료, 이슈 열림 — eng review required
+
+**UNRESOLVED DECISIONS:**
+- 연락 기록 정본 테이블 — CRM 탭 스펙 Q144 권장 기본값(`crm_activities` 하나)의 운영자 확인 대기
+- 이 기획서의 공식 지위 — 실행 항목 대부분을 후속 스펙이 흡수했으나 `SUPERSEDED` 표기 여부는 운영자가 정하지 않았다
