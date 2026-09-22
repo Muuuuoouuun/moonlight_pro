@@ -4,11 +4,12 @@ import React from "react";
 import { JournalSources } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, Button, Checkbox, DateQuickPresets, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, useToast } from "../hub-primitives";
+import { Badge, Card, Button, Checkbox, DateQuickPresets, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, Skeleton, TruthBadge, useToast } from "../hub-primitives";
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
 import { clearSubmittedQuickTaskDraft, shouldSubmitQuickTask } from "@/lib/quick-task-capture";
+import { freezeTaskCommand, saveTaskCommand, TASK_OUTCOME } from "@/lib/memo-intake-tasks";
 import { applyMute, clearMute, mutedIdSet, readMuteStore, seoulDayKey, writeMuteStore } from "./my-work-mute.js";
 import { requestPersonaChat } from "../persona-client";
 
@@ -380,21 +381,21 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
 
 function TaskDecomposeSection({ task, onTaskCreated }) {
   const [open, setOpen] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
+  // decompose.status: idle | loading | done | preview | error — preview·error를 "분해 결과 없음"으로 그리지 않는다(§5.3).
+  const [decompose, setDecompose] = React.useState({ status: 'idle', note: '' });
   const [actions, setActions] = React.useState([]);
-  const [addedIndices, setAddedIndices] = React.useState(() => new Set());
   const toast = useToast();
+  const patchAction = (id, patch) => setActions((prev) => prev.map((item) => item.id === id ? { ...item, ...patch } : item));
 
   const handleDecompose = async () => {
-    setLoading(true);
     setOpen(true);
+    setDecompose({ status: 'loading', note: '' });
     try {
       const res = await requestPersonaChat({
         personaId: "order",
         mode: "extract-actions",
         draft: `[실행 분해 대상 할 일]: ${task.title}\n프로젝트: ${task.projectName || '없음'}\n우선순위: ${task.priority || '보통'}\n\n이 할 일을 운영자가 부담 없이 10분~15분 안에 착수하고 완료할 수 있는 구체적인 3단계 하위 실행 액션으로 분해해줘.`,
       });
-      setLoading(false);
       if (res.state === "done") {
         const lines = res.text.split("\n");
         const parsed = [];
@@ -407,63 +408,43 @@ function TaskDecomposeSection({ task, onTaskCreated }) {
             parsed.push(trimmed.replace(/^[0-9.]+\s*/, "").trim());
           }
         }
-        setActions(parsed.slice(0, 3));
+        // 후보마다 고정 id를 붙인다 — 등록 상태도, 재시도 때 다시 보낼 명령 id도 이 id에 묶인다.
+        setActions(parsed.slice(0, 3).map((title) => ({ id: crypto.randomUUID(), task: title, status: 'pending', error: null })));
+        setDecompose({ status: 'done', note: '' });
       } else {
-        toast.error(res.note || "액션 분해에 실패했습니다.");
+        setActions([]);
+        setDecompose({ status: res.state === 'preview' ? 'preview' : 'error', note: res.note || '' });
       }
     } catch (e) {
-      setLoading(false);
-      toast.error(e.message || "오류가 발생했습니다.");
+      setActions([]);
+      setDecompose({ status: 'error', note: e?.message || '' });
     }
   };
 
-  const handleAddSubtask = async (actionTitle, idx) => {
-    try {
-      const res = await fetch("/api/hub/tasks", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: actionTitle,
-          project_id: task.projectId || null,
-        }),
-      });
-      if (res.ok) {
-        setAddedIndices((prev) => new Set([...prev, idx]));
-        toast.success(`'${actionTitle}' 할 일로 등록됨`);
-        onTaskCreated?.();
-      } else {
-        toast.error("할 일 등록에 실패했습니다.");
-      }
-    } catch (e) {
-      toast.error(e.message || "등록 중 오류가 발생했습니다.");
+  // 이미 분해했으면 다시 AI를 부르지 않고 펼친다 — 재분해는 새 id를 만들어 이미 등록한 후보를
+  // 다시 등록 가능한 상태로 되돌린다.
+  const reopen = () => ['done', 'loading'].includes(decompose.status) ? setOpen(true) : handleDecompose();
+
+  // res.ok만 보면 202 preview가 "등록됨"이 되고 재시도마다 새 할 일이 생긴다. 첫 시도 전에 명령을
+  // 굳히고(같은 id 재전송 = 엔진 duplicate), 저장 판정은 공용 경로(saveTaskCommand)가 봉투로 한다.
+  const handleAddSubtask = async (action) => {
+    if (action.status === 'sending' || action.status === 'saved') return;
+    const frozen = freezeTaskCommand(action, { projectId: task.projectId || null, source: 'my-work-decompose' });
+    patchAction(action.id, { command: frozen.command, status: 'sending', error: null });
+    const outcome = await saveTaskCommand(frozen.command);
+    patchAction(action.id, outcome);
+    if (outcome.status === 'saved') {
+      toast.success(`'${action.task}' 할 일로 등록됨`);
+      onTaskCreated?.();
     }
   };
 
   return (
     <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
       {!open && (
-        <button
-          type="button"
-          onClick={handleDecompose}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            height: 28,
-            fontSize: 11,
-            fontWeight: 500,
-            borderRadius: "var(--r-xs)",
-            border: "1px dashed var(--line-strong)",
-            background: "var(--surface-2)",
-            color: "var(--moon-200)",
-            cursor: "pointer",
-            width: "100%",
-          }}
-        >
-          <Iconed name="sparkle" size={12} />
-          {loading ? "3단계 액션 분해 중…" : "✨ AI 실행 3단계 쪼개기"}
-        </button>
+        <Button type="button" variant="outline" size="sm" icon="sparkle" aria-expanded={false} onClick={reopen} style={{ width: "100%" }}>
+          {decompose.status === 'done' ? "분해한 액션 보기" : decompose.status === 'loading' ? "3단계 액션 분해 중…" : "AI 실행 3단계 쪼개기"}
+        </Button>
       )}
 
       {open && (
@@ -476,62 +457,67 @@ function TaskDecomposeSection({ task, onTaskCreated }) {
             display: "flex",
             flexDirection: "column",
             gap: 6,
-            fontSize: 11.5,
+            fontSize: 12,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <span style={{ fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: 4 }}>
-              <Iconed name="sparkle" size={12} style={{ color: "var(--moon-300)" }} />
+              <Iconed name="sparkle" size={12} style={{ color: "var(--fg-muted)" }} />
               추천 3단계 실행 분해
             </span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
-            >
-              접기
-            </button>
+            <Button type="button" variant="ghost" size="sm" aria-expanded={true} onClick={() => setOpen(false)}>접기</Button>
           </div>
 
-          {loading ? (
-            <div style={{ color: "var(--fg-muted)", fontSize: 11, padding: "8px 0" }}>
-              실행 가능한 최소 단위로 쪼개고 있습니다…
+          {decompose.status === 'loading' ? (
+            <Skeleton lines={3} height={14} gap={6} label="할 일을 실행 단위로 분해 중" />
+          ) : decompose.status === 'preview' || decompose.status === 'error' ? (
+            <div role={decompose.status === 'error' ? 'alert' : 'status'} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+              <TruthBadge state={decompose.status} label={decompose.status === 'preview' ? 'Preview · AI 연결 필요' : '분해 실패'} />
+              <span style={{ color: "var(--fg-muted)" }}>
+                {decompose.status === 'preview' ? 'AI 엔진이 연결되지 않아 액션을 분해하지 않았어요. 연결한 뒤 다시 분해하세요.' : `액션을 분해하지 못했어요.${decompose.note ? ` (${decompose.note})` : ''}`}
+              </span>
+              <Button type="button" variant="outline" size="xs" onClick={handleDecompose}>다시 분해</Button>
             </div>
           ) : actions.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {actions.map((act, i) => {
-                const added = addedIndices.has(i);
+            <div aria-live="polite" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {actions.map((action, i) => {
+                const saved = action.status === 'saved';
+                const sending = action.status === 'sending';
+                const settled = TASK_OUTCOME[action.status];
                 return (
                   <div
-                    key={i}
+                    key={action.id}
                     style={{
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
+                      flexWrap: "wrap",
                       gap: 6,
                       background: "var(--surface-3)",
                       padding: "4px 8px",
                       borderRadius: "var(--r-xs)",
                     }}
                   >
-                    <span style={{ flex: 1, color: "var(--fg)", fontSize: 11.5, overflowWrap: "anywhere" }}>
-                      {i + 1}. {act}
+                    <span style={{ flex: "1 1 160px", color: "var(--fg)", overflowWrap: "anywhere" }}>
+                      {i + 1}. {action.task}
                     </span>
+                    {settled && <TruthBadge state={settled.truth} label={settled.label} />}
                     <Button
-                      variant={added ? "ghost" : "outline"}
+                      variant={saved ? "ghost" : "outline"}
                       size="xs"
-                      disabled={added}
-                      icon={added ? "check" : "plus"}
-                      onClick={() => handleAddSubtask(act, i)}
+                      disabled={saved || sending}
+                      icon={saved ? "check" : "plus"}
+                      onClick={() => handleAddSubtask(action)}
                     >
-                      {added ? "등록됨" : "추가"}
+                      {saved ? "등록됨" : sending ? "등록 중…" : settled ? settled.retry : "추가"}
                     </Button>
+                    {settled && action.error && <span style={{ flexBasis: "100%", color: "var(--fg-muted)", fontSize: 11 }}>{action.error}</span>}
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div style={{ color: "var(--fg-muted)", fontSize: 11 }}>분해된 액션이 없습니다.</div>
+            <div style={{ color: "var(--fg-muted)" }}>분해된 액션이 없습니다.</div>
           )}
         </div>
       )}
@@ -721,7 +707,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
 
         {/* AI 보조 섹션: 할 일 실행 분해 또는 딜 연락 초안 */}
         {item.lane === 'task' && (
-          <TaskDecomposeSection task={item} onTaskCreated={onTaskCreated} />
+          <TaskDecomposeSection key={item.id} task={item} onTaskCreated={onTaskCreated} />
         )}
         {item.lane === 'deal' && (
           <DealOutreachSection deal={item} />
