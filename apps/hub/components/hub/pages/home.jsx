@@ -3,6 +3,7 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Button, Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
+import { CalendarOutcome } from "../calendar-outcome";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 
 // Home — Futura 텍스처의 첫 화면 (DESIGN.md §15, 2026-09-18).
@@ -10,6 +11,7 @@ import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 // 데이터는 새로 만들지 않는다. /api/hub/daily-brief의 `signals`(kind·title·summary·meta·
 // source·decisions·tone)를 그대로 소비하고, 시간표는 Calendar가 쓰는 /api/calendar/google/event를
 // 공유한다. 첫 화면이 별도 원장을 갖는 순간 Daily Brief와 숫자가 갈라지기 때문이다.
+// 일정 완료·특이사항도 같은 이유로 Daily Brief·Calendar와 같은 CalendarOutcome(outcomeKey)을 쓴다.
 //
 // 기존 daily-brief.jsx는 건드리지 않는다 — Home은 같은 원장 위의 다른 렌즈다.
 
@@ -175,18 +177,23 @@ function TodaySchedule({ onNavigate, reloadKey, onReload }) {
         <EmptyState title="오늘 잡힌 일정이 없습니다" />
       ) : (
         <div className="fx-timeline">
-          {events.map((e) => {
+          {events.map((e, i) => {
             const startMs = new Date(e.start).getTime();
             const endMs = new Date(e.end || e.start).getTime();
             const past = endMs < now;
             const live = startMs <= now && now <= endMs;
+            // 키는 Daily Brief·Calendar와 같은 outcomeKey — provider id만으로는 개인·회사 피드에
+            // 같은 id가 겹칠 수 있고, 완료·특이사항 기록도 이 키로 저장된다.
             return (
-              <div key={e.id} className="fx-time-row" data-past={past ? 'true' : undefined}>
-                <span className="fx-time">{formatClock(e.start)}</span>
-                <span className="fx-time-title">{e.title}</span>
-                {live ? <span className="fx-now">NOW</span> : null}
-                <span className="fx-time-lead" aria-hidden="true" />
-              </div>
+              <CalendarOutcome
+                key={e.outcomeKey || e.id || i}
+                compact
+                eventKey={e.outcomeKey}
+                title={e.title}
+                whenLabel={formatClock(e.start)}
+                past={past}
+                aside={live ? <span className="fx-now">NOW</span> : null}
+              />
             );
           })}
         </div>

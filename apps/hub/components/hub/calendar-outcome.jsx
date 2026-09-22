@@ -6,8 +6,12 @@ import { Button, Checkbox, LifecycleBadge, Skeleton, TextAreaField } from './hub
 // Preserve unsaved notes when navigating between the home card and calendar drawer.
 // Server records are always re-read; drafts are never treated as saved data.
 const noteDrafts = new Map();
+const SAVED = '저장됨';
 
-export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, onSavingChange }) {
+// One record, many surfaces: Daily Brief, the Calendar drawer and the Futura home all key
+// by the same `outcomeKey` and read/write through /api/hub/calendar-outcomes, so the layout
+// may differ per surface but the state machine below must not.
+function useCalendarOutcome(eventKey, { expanded, onSavingChange }) {
   const [record, setRecord] = React.useState(null);
   const [note, setNote] = React.useState(() => noteDrafts.get(eventKey)?.note ?? '');
   const [open, setOpen] = React.useState(expanded || noteDrafts.has(eventKey));
@@ -15,7 +19,7 @@ export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, 
   const [message, setMessage] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [conflict, setConflict] = React.useState(null);
-  const [retry, setRetry] = React.useState(0);
+  const [retryCount, setRetry] = React.useState(0);
   const busyRef = React.useRef(false);
   const editButtonRef = React.useRef(null);
   const restoreFocusRef = React.useRef(false);
@@ -53,7 +57,7 @@ export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, 
         if (active) { setState('error'); setMessage('일정 기록을 불러오지 못했어요.'); }
       });
     return () => { active = false; };
-  }, [eventKey, retry]);
+  }, [eventKey, retryCount]);
 
   React.useEffect(() => {
     if (!open && !saving && restoreFocusRef.current) {
@@ -82,7 +86,7 @@ export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, 
         setConflict(null);
         restoreFocusRef.current = open;
         setOpen(false);
-        setMessage('저장됨');
+        setMessage(SAVED);
       } else if (data.status === 'conflict' && data.outcome) {
         setConflict({ current: data.outcome, wantedDone: done });
         setOpen(true);
@@ -106,35 +110,96 @@ export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, 
     setMessage('');
   }
 
-  const error = state !== 'preview' && message && message !== '저장됨';
+  function acceptCurrent() {
+    setRecord(conflict.current);
+    setNote(conflict.current.note);
+    noteDrafts.delete(eventKey);
+    setConflict(null);
+    setMessage('');
+  }
+
+  return {
+    record, note, open, state, message, saving, conflict, detailsId, editButtonRef,
+    save, editNote, acceptCurrent,
+    toggleOpen: () => setOpen(value => !value),
+    retry: () => setRetry(value => value + 1),
+    // A failed read or save is an error; preview is a neutral truth state (§5.3).
+    error: state !== 'preview' && Boolean(message) && message !== SAVED,
+    editLabel: open ? '접기' : record?.note ? '수정' : '특이사항',
+  };
+}
+
+function OutcomeEditor({ outcome, className }) {
+  const { note, conflict, saving, detailsId } = outcome;
+  return (
+    <div id={detailsId} className={className} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <TextAreaField label="특이사항" value={note} onChange={event => outcome.editNote(event.target.value)} maxLength={4000} rows={3} disabled={saving} placeholder="진행 결과나 다음에 확인할 내용을 남기세요" onCmdEnter={() => !conflict && outcome.save()} />
+      {conflict ? (
+        <div style={{ padding: 12, border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>현재 저장된 기록 · {conflict.current.done ? '완료' : '미완료'}{'\n'}{conflict.current.note || '특이사항 없음'}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Button variant="secondary" size="sm" disabled={saving} onClick={outcome.acceptCurrent}>현재 기록 사용</Button>
+            <Button variant="outline" size="sm" disabled={saving} onClick={() => outcome.save(conflict.wantedDone, conflict.current.revision)}>내 내용 다시 저장</Button>
+          </div>
+        </div>
+      ) : <Button variant="secondary" size="sm" disabled={saving} onClick={() => outcome.save()} style={{ alignSelf: 'flex-end' }}>{saving ? '저장 중…' : '저장'}</Button>}
+    </div>
+  );
+}
+
+function RetryButton({ outcome }) {
+  if (outcome.state !== 'error' && outcome.state !== 'preview') return null;
+  return <Button variant="ghost" size="xs" onClick={outcome.retry}>다시 시도</Button>;
+}
+
+// `compact` draws one Futura timeline row (`.fx-time-*`, hub-futura.css) for the home
+// schedule: the save acknowledgement stays inside the row and the saved note is clamped
+// to one line, so completing or noting an event never grows the fold. Everything that
+// needs attention — read/save failure, preview, a conflict — still gets its own line.
+export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, onSavingChange, compact = false, past = false, aside = null }) {
+  const outcome = useCalendarOutcome(eventKey, { expanded, onSavingChange });
+  const { record, open, state, message, saving, conflict, error, detailsId, editButtonRef } = outcome;
+
+  if (compact) {
+    const alert = !saving && message && message !== SAVED;
+    return (
+      <div className="fx-time-item">
+        <div className="fx-time-row" data-past={past ? 'true' : undefined} data-done={record?.done ? 'true' : undefined}>
+          <Checkbox checked={record?.done} onChange={done => outcome.save(done)} disabled={state !== 'live' || saving || Boolean(conflict)} label={`${title} 완료`} size={16} style={{ alignSelf: 'center' }} />
+          <span className="fx-time">{whenLabel}</span>
+          <span className="fx-time-title">{title}</span>
+          {aside}
+          <span className="fx-time-lead" aria-hidden="true" />
+          <span className="fx-time-ack" role="status" aria-live="polite">{saving ? '저장 중…' : message === SAVED ? SAVED : ''}</span>
+          <Button ref={editButtonRef} variant="ghost" size="xs" aria-expanded={open} aria-controls={detailsId} aria-label={`${title} ${outcome.editLabel}`} onClick={outcome.toggleOpen} disabled={saving || state !== 'live'}>{outcome.editLabel}</Button>
+        </div>
+        {!open && record?.note && <div className="fx-time-note" title={record.note}>{record.note}</div>}
+        {open && state === 'live' && <OutcomeEditor outcome={outcome} className="fx-time-detail" />}
+        {alert && (
+          <div className="fx-time-alert" role={error ? 'alert' : 'status'} data-error={error ? 'true' : undefined}>
+            <span>{message}</span>
+            <RetryButton outcome={outcome} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-        <Checkbox checked={record?.done} onChange={done => save(done)} disabled={state !== 'live' || saving || Boolean(conflict)} label={`${title} 완료`} size={18} />
+        <Checkbox checked={record?.done} onChange={done => outcome.save(done)} disabled={state !== 'live' || saving || Boolean(conflict)} label={`${title} 완료`} size={18} />
         {whenLabel && <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', padding: '2px 6px', borderRadius: 'var(--r-xs)', flexShrink: 0 }}>{whenLabel}</span>}
         <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: record?.done ? 'var(--fg-muted)' : 'var(--fg)', textDecoration: record?.done ? 'line-through' : undefined, overflowWrap: 'anywhere' }}>{title}</span>
         {record?.done && <LifecycleBadge state="done" />}
-        <Button ref={editButtonRef} variant="ghost" size="xs" aria-expanded={open} aria-controls={detailsId} onClick={() => setOpen(value => !value)} disabled={saving}>{open ? '접기' : record?.note ? '수정' : '특이사항'}</Button>
+        <Button ref={editButtonRef} variant="ghost" size="xs" aria-expanded={open} aria-controls={detailsId} onClick={outcome.toggleOpen} disabled={saving}>{outcome.editLabel}</Button>
       </div>
       {state === 'loading' && <Skeleton width="45%" height={12} />}
       {!open && record?.note && <div style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.6, paddingLeft: 26 }}>{record.note}</div>}
-      {open && state === 'live' && (
-        <div id={detailsId} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <TextAreaField label="특이사항" value={note} onChange={event => editNote(event.target.value)} maxLength={4000} rows={3} disabled={saving} placeholder="진행 결과나 다음에 확인할 내용을 남기세요" onCmdEnter={() => !conflict && save()} />
-          {conflict ? (
-            <div style={{ padding: 12, border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>현재 저장된 기록 · {conflict.current.done ? '완료' : '미완료'}{'\n'}{conflict.current.note || '특이사항 없음'}</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Button variant="secondary" size="sm" disabled={saving} onClick={() => { setRecord(conflict.current); setNote(conflict.current.note); noteDrafts.delete(eventKey); setConflict(null); setMessage(''); }}>현재 기록 사용</Button>
-                <Button variant="outline" size="sm" disabled={saving} onClick={() => save(conflict.wantedDone, conflict.current.revision)}>내 내용 다시 저장</Button>
-              </div>
-            </div>
-          ) : <Button variant="secondary" size="sm" disabled={saving} onClick={() => save()} style={{ alignSelf: 'flex-end' }}>{saving ? '저장 중…' : '저장'}</Button>}
-        </div>
-      )}
+      {open && state === 'live' && <OutcomeEditor outcome={outcome} />}
       {(saving || message) && <div role={error ? 'alert' : 'status'} aria-live="polite" style={{ fontSize: 12, color: error ? 'var(--danger)' : 'var(--fg-dim)' }}>
         {saving ? '저장 중…' : message}
-        {(state === 'error' || state === 'preview') && <Button variant="ghost" size="xs" onClick={() => setRetry(value => value + 1)}>다시 시도</Button>}
+        <RetryButton outcome={outcome} />
       </div>}
     </div>
   );

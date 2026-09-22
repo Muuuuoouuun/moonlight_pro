@@ -15,7 +15,22 @@ async function exists(url) {
   }
 }
 
+const fromProject = (context) => Boolean(context.parentURL?.startsWith(PROJECT_ROOT.href)) && !context.parentURL.includes("/node_modules/");
+
 export async function resolve(specifier, context, nextResolve) {
+  // Component tests import real .jsx trees, which carry Next-only habits: CSS side-effect
+  // imports and extensionless relative paths ("./hub-primitives" → .jsx). Both only ever
+  // failed before, so ordinary JS resolution is unchanged.
+  if (fromProject(context) && specifier.endsWith(".css")) {
+    return { url: "data:text/javascript,", shortCircuit: true };
+  }
+  if (fromProject(context) && /^\.\.?\//.test(specifier) && !/\.(?:[cm]?js|jsx|json)$/.test(specifier)) {
+    const base = new URL(specifier, context.parentURL);
+    for (const candidate of [`${base.href}.js`, `${base.href}.jsx`, `${base.href}/index.js`]) {
+      if (await exists(new URL(candidate))) return nextResolve(candidate, context);
+    }
+  }
+
   if (!specifier.startsWith("@/")) {
     return nextResolve(specifier, context);
   }
