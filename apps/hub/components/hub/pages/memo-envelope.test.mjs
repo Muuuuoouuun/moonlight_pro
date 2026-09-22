@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import ts from "typescript";
-import { saveMemoIntakeTasks } from "../../../lib/memo-intake-tasks.js";
+import { freezeTaskCommand, saveTaskCommand } from "../../../lib/memo-intake-tasks.js";
 import { normalizePmsCommand } from "../../../../engine/lib/pms-command.ts";
 
 // 메모 화면의 두 쓰기·분석 경로가 서버 봉투를 읽는지 고정한다(2026-09-22).
@@ -21,7 +21,7 @@ function load(name, names, scope = {}) {
 }
 const composerSource = read("./memo-composer.jsx");
 const pageSource = read("./memos.jsx");
-const { freezeMemoAction, registerMemoAction } = load("./memo-composer.jsx", ["freezeMemoAction", "registerMemoAction"], { React: {}, saveMemoIntakeTasks });
+const { freezeMemoAction, registerMemoAction } = load("./memo-composer.jsx", ["freezeMemoAction", "registerMemoAction"], { React: {}, freezeTaskCommand, saveTaskCommand });
 const { readPatternEnvelope } = load("./memos.jsx", ["readPatternEnvelope"], { React: {} });
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status });

@@ -7,43 +7,20 @@ import { Iconed } from '../hub-icons';
 import { requestPersonaChat } from '../persona-client';
 import { NOTE_QUESTIONS, selectedNoteExcerpt } from '@/lib/journal-client';
 import { JOURNAL_TAG_LIMIT, JOURNAL_TAG_LENGTH, normalizeJournalTags } from '@/lib/journal-tags';
-import { saveMemoIntakeTasks } from '@/lib/memo-intake-tasks';
+import { freezeTaskCommand, saveTaskCommand, TASK_OUTCOME } from '@/lib/memo-intake-tasks';
 import { MemoContextPicker } from './memo-context-picker';
 
 const localTime = (value) => { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0,16); };
 export const memoTime = (value) => new Date(value).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-// AI가 뽑은 후보 한 줄을 PMS create_task 명령으로 굳힌다. 첫 등록 시도 전에 한 번만 굳히고
-// 재시도는 같은 id·같은 payload를 다시 보낸다 — 엔진은 같은 id를 duplicate(=이미 저장됨)로
-// 돌려주므로 재시도가 중복 할 일을 만들지 않는다. 등록 도중 연결(프로젝트)을 바꿔도 payload가
-// 달라지지 않게 첫 시도의 명령을 그대로 쓴다.
+// AI가 뽑은 후보 한 줄을 create_task 명령으로 굳히고(첫 시도 전 한 번), 봉투로 저장을 판정한다.
+// 고정 id·재시도·preview/unknown 판정 계약은 lib/memo-intake-tasks.js의 공용 경로가 소유한다.
 export function freezeMemoAction(action, projectId) {
-  if (action.command) return action;
-  return { ...action, command: {
-    id: action.id, title: action.task, projectId: projectId || null,
-    priority: 'medium', dueAt: null, description: null, source: 'memo-action-extract',
-  } };
+  return freezeTaskCommand(action, { projectId: projectId || null, source: 'memo-action-extract' });
 }
-
-// 저장 판정은 검증된 기록기(saveMemoIntakeTasks)가 소유한다: saved/duplicate + 같은 id +
-// persisted!==false일 때만 saved. 202 preview·빈 2xx·다른 id 영수증은 저장이 아니다.
-// 기록기는 preview를 failed로 접으므로 봉투만 따로 읽어 "연결 전"과 "실패"를 가른다.
-// 반환 status: saved | preview | failed | unknown(응답 확인 불가 — 같은 id로 재확인).
-export async function registerMemoAction(action, fetchImpl = fetch) {
-  let envelope = null;
-  const observed = async (url, init) => {
-    const response = await fetchImpl(url, init);
-    envelope = await response.clone().json().catch(() => null);
-    return response;
-  };
-  const result = await saveMemoIntakeTasks({ actions: [{ id: action.id, task: action.task, selected: true, status: 'pending', command: action.command }] }, observed);
-  const item = result.actions[0];
-  if (item.status === 'saved') return { status: 'saved', error: null };
-  if (envelope?.status === 'preview') return { status: 'preview', error: item.error || '할 일 저장이 연결되지 않았습니다. 연결 후 다시 등록하세요.' };
-  return { status: item.status === 'failed' ? 'failed' : 'unknown', error: item.error || '등록 응답을 확인하지 못했습니다. 같은 내용으로 다시 확인하세요.' };
+export function registerMemoAction(action, fetchImpl = fetch) {
+  return saveTaskCommand(action.command, fetchImpl);
 }
-
-const ACTION_STATE_LABEL = { preview: 'Preview · 저장되지 않음', failed: '등록 실패', unknown: '결과 확인 필요' };
 
 function parseExtractedActions(text) {
   const parsed = [];
@@ -152,7 +129,7 @@ function MemoActionExtractor({ text, contexts }) {
               {actions.map((action, i) => {
                 const saved = action.status === 'saved';
                 const sending = action.status === 'sending';
-                const settled = ACTION_STATE_LABEL[action.status];
+                const settled = TASK_OUTCOME[action.status];
                 return (
                   <div
                     key={action.id}
@@ -170,7 +147,7 @@ function MemoActionExtractor({ text, contexts }) {
                     <span style={{ flex: "1 1 160px", color: "var(--fg)", overflowWrap: "anywhere" }}>
                       {i + 1}. {action.task}
                     </span>
-                    {settled && <TruthBadge state={action.status === 'failed' ? 'error' : action.status === 'unknown' ? 'partial' : 'preview'} label={settled} />}
+                    {settled && <TruthBadge state={settled.truth} label={settled.label} />}
                     <Button
                       type="button"
                       variant={saved ? "ghost" : "outline"}
@@ -179,7 +156,7 @@ function MemoActionExtractor({ text, contexts }) {
                       icon={saved ? "check" : "plus"}
                       onClick={() => handleAddTask(action)}
                     >
-                      {saved ? "등록됨" : sending ? "등록 중…" : action.status === "unknown" ? "같은 내용으로 확인" : settled ? "다시 등록" : "할 일 등록"}
+                      {saved ? "등록됨" : sending ? "등록 중…" : settled ? settled.retry : "할 일 등록"}
                     </Button>
                     {settled && action.error && <span style={{ flexBasis: "100%", color: "var(--fg-muted)", fontSize: 11 }}>{action.error}</span>}
                   </div>
