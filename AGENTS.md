@@ -6,7 +6,7 @@
 - Next.js App Router monorepo (`apps/hub`, `apps/engine`, `packages/*`) + TypeScript/JavaScript
 - Supabase REST ledger 중심: Hub는 운영 판단 UI, Engine은 webhook/intake/실행 기록
 - Hub(`/dashboard/**`)와 Engine(`/api/**`)이 현역 실행 표면이며, public web은 active workspace에서 분리됨
-- `packages/*`: `supabase-rest`(Hub·Engine·gateway가 공유하는 단일 Supabase REST 클라이언트 `@com-moon/supabase-rest`), `hub-gateway`, `content-manager`, `ui`(공유 CSS 토큰 `--cm-*`와 구 TS 프리미티브 — Hub UI 프리미티브의 정본은 `apps/hub/components/hub/hub-primitives.jsx`), `mcp-server`(`.mcp.json`의 `moonlight` MCP 서버)
+- `packages/*`: `supabase-rest`(Hub·Engine·gateway가 공유하는 단일 Supabase REST 클라이언트 `@com-moon/supabase-rest`), `hub-gateway`, `content-manager`, `ui`(공유 CSS 토큰 `--cm-*`와 구 TS 프리미티브 — Hub UI 프리미티브의 정본은 `apps/hub/components/hub/hub-primitives.jsx`), `mcp-server`(`.mcp.json`의 `moonlight` MCP 서버 — 클라이언트 등록 점검·설치는 `npm run mcp:connect`, 다른 툴용 HTTP는 `npm run mcp:http`)
 - 워크트리에서 `packages/*`를 고치면 그 워크트리 루트에서 `npm install`을 먼저 해야 dev/build에 반영된다
 
 ## 운영자 업무 기준

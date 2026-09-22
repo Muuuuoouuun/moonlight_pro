@@ -1,15 +1,17 @@
 {
   "name": "@com-moon/mcp-server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Scoped Moonlight tools for Codex and MCP clients with bounded reads and durable commands.",
+  "description": "Moonlight tools for Claude Code, Codex and other MCP clients over stdio or authenticated Streamable HTTP, with bounded reads and durable commands.",
   "bin": {
-    "moonlight-mcp": "./src/index.js"
+    "moonlight-mcp": "./bin/moonlight-mcp.js"
   },
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node bin/moonlight-mcp.js",
+    "http": "node bin/moonlight-mcp.js --http",
+    "connect": "node src/connect.js",
     "doctor": "node src/doctor.js"
   },
   "dependencies": {
