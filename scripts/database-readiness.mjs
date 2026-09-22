@@ -1,4 +1,5 @@
 export const DATABASE_FEATURES = [
+  { name: '캘린더 기록', migration: '20260922_0036_calendar_event_outcomes.sql', tables: ['calendar_event_outcomes'], functions: [] },
   { name: '콘텐츠', migration: '20260912_0026_content_workflow.sql',
     tables: ['content_revisions', 'content_workflow_receipts', 'content_transform_runs'], functions: ['content_workflow_v1(uuid,uuid,text,jsonb)'] },
   { name: '메모', migration: '20260913_0027_journal_notes.sql',

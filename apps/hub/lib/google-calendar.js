@@ -15,7 +15,7 @@ import {
   resolveOAuthStateSecret,
 } from "@/lib/integration-readiness";
 import { extractGoogleCalendarAccountIdentity } from "@/lib/google-calendar-identity";
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
 
 const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
 const GOOGLE_CALENDAR_SYNC_SOURCE = "google_calendar";
@@ -626,7 +626,16 @@ export async function readCombinedGoogleCalendarEvents({
     readMergedSources({ timeMin: effectiveTimeMin, timeMax: effectiveTimeMax, maxResults }),
   ]);
 
-  const items = [...(oauthResult.ok ? oauthResult.items : []), ...mergedResult.items].sort(
+  // Provider event IDs identify recurring instances; never key by mutable title/start.
+  const withOutcomeKey = (event, source) => ({
+    ...event,
+    outcomeKey: event.id ? createHash("sha256").update(JSON.stringify([source, event.id])).digest("hex") : null,
+  });
+  const oauthSource = oauthResult.source === "ical" ? "ical:default" : `oauth:${oauthResult.calendarId || calendarId || "primary"}`;
+  const items = [
+    ...(oauthResult.ok ? oauthResult.items.map(event => withOutcomeKey(event, oauthSource)) : []),
+    ...mergedResult.items.map(event => withOutcomeKey(event, `ical:${event.source}`)),
+  ].sort(
     (a, b) => combinedCalendarItemSortKey(a).localeCompare(combinedCalendarItemSortKey(b)),
   );
 

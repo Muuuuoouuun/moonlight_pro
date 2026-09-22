@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { CalendarOutcome } from "../calendar-outcome";
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
@@ -1665,9 +1666,8 @@ function FocusSlots({ dailyFocus, onNavigate }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {agendaItems.map((event, i) => (
-                <div key={event.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: i < agendaItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
-                  <span className="mono" style={{ fontSize: 11, fontWeight: 500, color: event.allDay ? 'var(--fg-faint)' : 'var(--moon-300)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', padding: '2px 7px', borderRadius: 'var(--r-xs)', flexShrink: 0 }}>{event.whenLabel}</span>
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</span>
+                <div key={event.outcomeKey || event.id} style={{ padding: '10px 16px', borderBottom: i < agendaItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                  <CalendarOutcome eventKey={event.outcomeKey} title={event.title} whenLabel={event.whenLabel} />
                 </div>
               ))}
             </div>

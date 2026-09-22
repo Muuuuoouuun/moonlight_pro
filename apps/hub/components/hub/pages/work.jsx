@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
+import { CalendarOutcome } from "../calendar-outcome";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge } from "../hub-primitives";
+import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { RhythmVisualizer } from "../rhythm-visualizer";
 import { StreakFlame } from "../burning-streak";
@@ -299,6 +300,8 @@ function mapGoogleEventsToGrid(events, days) {
     const rawEndHour = e.allDay ? 9 : end.getHours() + end.getMinutes() / 60;
     return {
       id: e.id,
+      outcomeKey: e.outcomeKey,
+      allDay: e.allDay,
       day,
       start: startHour,
       end: Math.max(startHour + 0.25, rawEndHour),
@@ -401,6 +404,8 @@ export function Calendar({ onNavigate }) {
   const [gcalStatus, setGcalStatus] = React.useState('idle');
   const [gcalMessage, setGcalMessage] = React.useState('');
   const [creating, setCreating] = React.useState(false);
+  const [selectedEvent, setSelectedEvent] = React.useState(null);
+  const [outcomeSaving, setOutcomeSaving] = React.useState(false);
   const [createError, setCreateError] = React.useState('');
   const focusAppliedRef = React.useRef(false);
   const { days: fetchDays } = buildCalendarWeek(selectedDate);
@@ -728,7 +733,8 @@ export function Calendar({ onNavigate }) {
                   const top = (e.start - 8) * 52;
                   const height = (e.end - e.start) * 52 - 2;
                   return (
-                    <div key={ei} style={{
+                    <button key={e.outcomeKey || ei} type="button" className="hub-card-link" aria-label={`일정 기록: ${e.title}`} onClick={() => setSelectedEvent(e)} style={{
+                      textAlign: 'left', width: 'calc(100% - 8px)',
                       position: 'absolute', top, left: 4, right: 4, height,
                       background: toneBg[e.tone], color: toneFg[e.tone],
                       border: `1px solid ${toneBd[e.tone]}`,
@@ -741,7 +747,7 @@ export function Calendar({ onNavigate }) {
                       )}
                       {e.title}
                       <div className="mono" style={{ fontSize: 10.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -749,6 +755,11 @@ export function Calendar({ onNavigate }) {
           </div>
         </div>
       </Card>
+      {selectedEvent && (
+        <Drawer title="일정 기록" subtitle="완료와 특이사항을 Moonlight에 남깁니다." onClose={() => { if (!outcomeSaving) setSelectedEvent(null); }} width="min(440px, 94vw)">
+          <CalendarOutcome key={selectedEvent.outcomeKey || selectedEvent.id} eventKey={selectedEvent.outcomeKey} title={selectedEvent.title} whenLabel={selectedEvent.allDay ? '종일' : `${formatHour(selectedEvent.start)} – ${formatHour(selectedEvent.end)}`} expanded onSavingChange={setOutcomeSaving} />
+        </Drawer>
+      )}
     </div>
   );
 }

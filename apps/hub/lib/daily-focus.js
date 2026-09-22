@@ -138,6 +138,7 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
         whenLabel: allDay ? "종일" : timeLabel(start),
         allDay,
         calendarLink: event?.htmlLink || null,
+        outcomeKey: event?.outcomeKey || null,
       };
     })
     .filter(Boolean)

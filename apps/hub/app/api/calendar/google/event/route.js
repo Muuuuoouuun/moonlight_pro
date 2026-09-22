@@ -31,6 +31,7 @@ function mapGoogleEvent(event) {
 
   return {
     id: event.id,
+    outcomeKey: event.outcomeKey || null,
     title: event.summary || "(제목 없음)",
     start,
     end,
