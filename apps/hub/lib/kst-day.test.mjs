@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { diffKstDays, dueBucket, kstDayKey, kstDayKeyAfter } from "./kst-day.js";
+import { diffKstDays, dueBucket, kstDayKey, kstDayKeyAfter, zonedDayKey } from "./kst-day.js";
+import { dateKeyInZone } from "./task-today.js";
 
 // 서버는 UTC로 돈다. 이 파일이 고정하는 것은 "오늘"이 KST 자정 경계라는 사실이다.
 test("kstDayKey converts an instant to the Seoul calendar day", () => {
@@ -45,4 +46,18 @@ test("kstDayKeyAfter walks forward in calendar days", () => {
   const base = Date.parse("2026-09-21T03:00:00Z"); // KST 12:00
   assert.equal(kstDayKeyAfter(0, base), "2026-09-21");
   assert.equal(kstDayKeyAfter(6, base), "2026-09-27");
+});
+
+// 사본 금지 — task-today의 dateKeyInZone은 여기 얹혀 있다. 한쪽만 고쳐져 "오늘"의 정의가
+// 화면마다 갈리는 것을 이 왕복이 막는다.
+test("dateKeyInZone is the same implementation as zonedDayKey", () => {
+  const cases = ["2026-09-20T15:30:00Z", "2026-09-20T14:59:00Z", "2026-09-26", "", null, undefined, "not-a-date"];
+  for (const value of cases) {
+    assert.equal(dateKeyInZone(value), zonedDayKey(value), `KST: ${String(value)}`);
+    assert.equal(dateKeyInZone(value), kstDayKey(value), `kstDayKey: ${String(value)}`);
+  }
+  // 시간대 인자도 살아 있다 — UTC 15:30은 서울에서 다음 날, 뉴욕에서는 같은 날 아침이다.
+  assert.equal(zonedDayKey("2026-09-20T15:30:00Z", "America/New_York"), "2026-09-20");
+  assert.equal(dateKeyInZone("2026-09-20T15:30:00Z", "America/New_York"), "2026-09-20");
+  assert.equal(zonedDayKey("2026-09-20T15:30:00Z", "Asia/Seoul"), "2026-09-21");
 });

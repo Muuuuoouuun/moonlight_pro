@@ -1,3 +1,4 @@
+import { zonedDayKey } from "./kst-day.js";
 import { shiftDateKey } from "./rhythm-calendar.js";
 
 export const TASK_TIME_ZONE = "Asia/Seoul";
@@ -39,21 +40,10 @@ const PRIORITY_RANK = {
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 // timestamp | Date | 'YYYY-MM-DD' → 'YYYY-MM-DD' in the given zone ('' when unreadable).
+// 구현은 kst-day.js 하나 — 그 모듈이 "세 번째 사본을 만들지 않는다"고 선언한 규칙을 지킨다.
+// 여기는 호출처 시그니처(기본 시간대 인자)를 지키는 재수출만 남는다.
 export function dateKeyInZone(value, timeZone = TASK_TIME_ZONE) {
-  if (!value) return "";
-  if (DATE_KEY.test(String(value))) return String(value);
-
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${byType.year}-${byType.month}-${byType.day}`;
+  return zonedDayKey(value, timeZone);
 }
 
 // 고른 날짜의 이력 — ledger row(meta.focus_dates)와 todo 모델(focusDates) 양쪽을 읽는다.
