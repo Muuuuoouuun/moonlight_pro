@@ -105,7 +105,9 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
     const range = getDailyReviewMonthRange(selectedMonth);
     if (!isDailyReviewDate(reviewDate) || !range) return readError(base, "invalid-date");
     const filters = [["workspace_id", eqFilter(context.workspaceId)], ["entry_kind", eqFilter("daily_review")]];
-    const [selectedRows, monthRows] = await Promise.all([
+    // 두 줄 신호(오늘 3개·연락 N건)는 workspaceId·timezone·reviewDate만 쓰고 셋 다 여기서 이미
+    // 확정됐으므로 리뷰 읽기와 같은 왕복에 태운다 — 직렬로 두면 단계가 하나 더 생긴다.
+    const [selectedRows, monthRows, today] = await Promise.all([
       fetchSupabaseRows("journal_entries", {
         select: REVIEW_SELECT, filters: [...filters, ["review_date", eqFilter(reviewDate)]], limit: 2,
       }),
@@ -113,6 +115,7 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
         select: REVIEW_SELECT, filters: [...filters, ["review_date", `gte.${range.start}`], ["review_date", `lte.${range.end}`]],
         order: "review_date.desc", limit: 31,
       }),
+      readTodaySignals({ workspaceId: context.workspaceId, timezone: context.timezone, reviewDate }).catch(() => null),
     ]);
     if (!Array.isArray(selectedRows) || selectedRows.length > 1 || !Array.isArray(monthRows) || monthRows.length > 31) return readError(base);
     const review = selectedRows.length ? reviewFromRow(selectedRows[0], context.workspaceId) : null;
@@ -121,7 +124,6 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
     if (summaries.some((entry) => !entry || entry.reviewDate < range.start || entry.reviewDate > range.end)
       || new Set(summaries.map((entry) => entry.reviewDate)).size !== summaries.length) return readError(base);
     const entries = summaries.map(({ note, ...entry }) => ({ ...entry, excerpt: note.slice(0, 180) }));
-    const today = await readTodaySignals({ workspaceId: context.workspaceId, timezone: context.timezone, reviewDate }).catch(() => null);
     return { ...base, status: "live", review, entries, today };
   } catch {
     return readError(base);
