@@ -13,6 +13,7 @@ const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 const json = value => `${quote(JSON.stringify(value))}::jsonb`;
 const rootUrl = new URL('../../../../', import.meta.url);
 const migration = new URL('supabase/migrations/20260921_0038_office_requests.sql', rootUrl);
+const retryMigration = new URL('supabase/migrations/20260922_0040_office_apply_transient_retry.sql', rootUrl);
 
 test('Office PostgreSQL receipts, retention and task application share real command transaction rules', async t => {
   let bin;
@@ -21,9 +22,12 @@ test('Office PostgreSQL receipts, retention and task application share real comm
   }
   if (!bin) return t.skip('Local PostgreSQL binaries unavailable');
   const root = await mkdtemp(join(tmpdir(), 'moon-office-')), data = join(root, 'data'); let running = false;
+  // Socket-only server in a private directory; a random port also keeps the
+  // shared-memory key apart from other PostgreSQL tests running concurrently.
+  const port = String(20000 + Math.floor(Math.random() * 20000));
   const env = { ...process.env, LC_ALL: 'C' };
   const run = (name, args, input) => { const result = spawnSync(join(bin, name), args, { input, encoding: 'utf8', timeout: 30000, env }); assert.equal(result.status, 0, result.stderr || result.error || result.stdout); return result.stdout.trim(); };
-  const args = ['-XAtq', '-h', root, '-p', '5432', '-U', userInfo().username, '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'];
+  const args = ['-XAtq', '-h', root, '-p', port, '-U', userInfo().username, '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'];
   const sql = input => run('psql', args, input);
   const asyncSql = input => new Promise((resolve, reject) => {
     const child = spawn(join(bin, 'psql'), args, { env }); let output = '', error = '';
@@ -57,13 +61,14 @@ test('Office PostgreSQL receipts, retention and task application share real comm
   const ready = (changes = {}) => { const r = request(changes), c = claim(r); assert.equal(finish(r, c.request.attempt_token).status, 'generated'); return r; };
   try {
     run('initdb', ['-D', data, '--auth=trust', '--no-locale', '--encoding=UTF8']);
-    run('pg_ctl', ['-D', data, '-l', join(root, 'postgres.log'), '-o', `-F -h '' -k ${root} -p 5432`, '-w', 'start']); running = true;
+    run('pg_ctl', ['-D', data, '-l', join(root, 'postgres.log'), '-o', `-F -h '' -k ${root} -p ${port}`, '-w', 'start']); running = true;
     sql('CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN BYPASSRLS; CREATE SCHEMA auth; CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$SELECT NULL::uuid$$;');
     sql(await readFile(new URL('supabase/setup/00_live_schema.sql', rootUrl), 'utf8'));
     sql(await readFile(new URL('supabase/migrations/20260718_0021_task_description.sql', rootUrl), 'utf8'));
     sql(`CREATE TABLE public.crm_activities(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),workspace_id uuid NOT NULL REFERENCES workspaces(id),entity_type text NOT NULL,kind text NOT NULL,body text NOT NULL,reaction text,contact_id uuid REFERENCES contacts(id),lead_id uuid REFERENCES leads(id),deal_id uuid REFERENCES deals(id),account_id uuid REFERENCES customer_accounts(id),occurred_at timestamptz NOT NULL,created_at timestamptz NOT NULL DEFAULT now());`);
     for (const file of ['20260716_0018_record_contact_outcome.sql', '20260913_0032_agent_commands.sql', '20260921_0036_operating_goals.sql']) sql(await readFile(new URL(`supabase/migrations/${file}`, rootUrl), 'utf8'));
     const source = await readFile(migration, 'utf8'); sql(source); sql(source);
+    const retrySource = await readFile(retryMigration, 'utf8'); sql(retrySource); sql(retrySource);
     sql(`INSERT INTO workspaces(id,slug,name) VALUES(${quote(w)},${quote(w)},'Office'),(${quote(other)},${quote(other)},'Other');`);
 
     await t.test('concurrent claims have one owner; actor, workspace and changed inputs cannot reuse receipts', async () => {
@@ -133,6 +138,65 @@ test('Office PostgreSQL receipts, retention and task application share real comm
       assert.equal(call('office_application_claim_v1', [...base(r3.requestId), '1', json({ commandId: id, targetId: id, action: 'create_task', payload: { title: '누락' } }), json([])]).status, 'invalid-input');
       const disagreement = ready({ scope: 'classin' }); application(disagreement, project('company'));
       assert.equal(apply(disagreement).error, 'scope-rules-disagree');
+    });
+    await t.test('transient command storage failures keep the stored command retryable; deterministic refusals still close the slot', () => {
+      // Real agent_command_v1 error branches, provoked by a task insert failure
+      // for one command id only. The wrapper never sees SQL messages.
+      sql(`CREATE TABLE public.test_task_insert_failures(id uuid PRIMARY KEY, sqlstate text NOT NULL);
+        CREATE FUNCTION public.test_fail_task_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+        DECLARE v_state text;
+        BEGIN
+          SELECT f.sqlstate INTO v_state FROM public.test_task_insert_failures f WHERE f.id=NEW.id;
+          IF v_state IS NOT NULL THEN RAISE EXCEPTION USING ERRCODE=v_state, MESSAGE='simulated task insert failure'; END IF;
+          RETURN NEW;
+        END $$;
+        CREATE TRIGGER test_fail_task_insert BEFORE INSERT ON public.tasks FOR EACH ROW EXECUTE FUNCTION public.test_fail_task_insert();`);
+      const failNext = (id, sqlstate) => sql(`INSERT INTO test_task_insert_failures VALUES(${quote(id)},${quote(sqlstate)})`);
+      const heal = id => sql(`DELETE FROM test_task_insert_failures WHERE id=${quote(id)}`);
+      const tasks = id => sql(`SELECT count(*) FROM tasks WHERE id=${quote(id)}`);
+      try {
+        for (const [sqlstate, code] of [['40001', 'command-storage-error'], ['42703', 'agent-commands-migration-required']]) {
+          const r = ready(), a = application(r, project()), id = a.command.commandId;
+          failNext(id, sqlstate);
+          const failed = apply(r);
+          assert.deepEqual([failed.status, failed.code, failed.persisted, failed.commandId], ['error', code, false, id]);
+          assert.equal(receipt(r).request.application.state, 'pending', `${code} must leave the application slot retryable`);
+          assert.equal(receipt(r).request.application.error, undefined);
+          assert.equal(failed.retryable, true); assert.equal(failed.retryPolicy, 'same-command-id-and-input-only');
+          assert.equal(tasks(id), '0'); assert.equal(sql(`SELECT count(*) FROM agent_command_receipts WHERE command_id=${quote(id)}`), '0');
+          // A repeated failure is still retryable, and the Engine claim keeps the stored command.
+          assert.equal(apply(r).code, code); assert.equal(receipt(r).request.application.state, 'pending');
+          assert.equal(application(r, project()).result.request.application.commandId, id);
+          heal(id);
+          const retried = apply(r);
+          assert.deepEqual([retried.status, retried.replayed, retried.commandId], ['saved', false, id]);
+          assert.equal(tasks(id), '1'); assert.equal(refresh(r).request.application.state, 'saved');
+          assert.equal(apply(r).replayed, true);
+        }
+        for (const [sqlstate, code, error] of [['23514', 'invalid-input', 'invalid-command-values'], ['23505', 'conflict', 'task-id-already-exists']]) {
+          const r = ready(), a = application(r, project()), id = a.command.commandId;
+          failNext(id, sqlstate);
+          const refused = apply(r);
+          assert.deepEqual([refused.status, refused.code, refused.error, refused.persisted, refused.retryable], ['error', code, error, false, false]);
+          assert.deepEqual([receipt(r).request.application.state, receipt(r).request.application.error], ['rejected', error]);
+          heal(id);
+          assert.equal(apply(r).error, 'application-rejected', `${code} stays closed even after the cause disappears`);
+          assert.equal(tasks(id), '0');
+        }
+        // Slots the 0038 wrapper closed after a transient failure reopen when 0040
+        // is applied; deterministic or body-stripped slots stay closed.
+        const closeAs = (r, error, strip = false) => sql(`UPDATE office_requests SET application=${strip ? "(application-'command')" : 'application'}||${json({ state: 'rejected', error })} WHERE id=${quote(r.requestId)}`);
+        const legacy = ready(), la = application(legacy, project()); closeAs(legacy, 'command-storage-error');
+        const refusedSlot = ready(); application(refusedSlot, project()); closeAs(refusedSlot, 'invalid-command-values');
+        const stripped = ready(); application(stripped, project()); closeAs(stripped, 'command-storage-error', true);
+        sql(retrySource);
+        assert.deepEqual([receipt(legacy).request.application.state, receipt(legacy).request.application.error], ['pending', undefined]);
+        assert.equal(receipt(refusedSlot).request.application.state, 'rejected');
+        assert.equal(receipt(stripped).request.application.state, 'rejected');
+        assert.equal(apply(legacy).status, 'saved'); assert.equal(tasks(la.command.commandId), '1');
+      } finally {
+        sql('DROP TRIGGER test_fail_task_insert ON public.tasks; DROP FUNCTION public.test_fail_task_insert(); DROP TABLE public.test_task_insert_failures;');
+      }
     });
     await t.test('body expiry preserves unresolved command recovery, then keeps a tombstone after cleanup', () => {
       const r = ready(), target = project(), a = application(r, target);
