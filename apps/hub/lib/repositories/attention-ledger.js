@@ -20,6 +20,7 @@ import { getInquiriesLedger } from './inquiries-ledger.js';
 // reload가 타는 핫패스다.
 import { getTaskLedger } from "./operating-ledger.js";
 import { getRevenueLedger } from "./revenue-ledger.js";
+import { STALLED_DAYS } from "../deal-stages.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
 
 const TIME_ZONE = "Asia/Seoul";
@@ -125,7 +126,7 @@ function mapDealItems(deals, stages, todayKey, weekEndKey) {
   return (Array.isArray(deals) ? deals : [])
     .filter((d) => d.stage !== "closing" && d.stage !== "lost")
     .map((d) => {
-      const stalled = Number(d.age) >= 14;
+      const stalled = Number(d.age) >= STALLED_DAYS;
       return {
         id: `deal-${d.id}`,
         entityId: d.id,

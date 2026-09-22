@@ -14,7 +14,7 @@ import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAcc
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
-import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
+import { DEAL_STAGES, STAGE_FILL, STAGE_LINE, STALLED_DAYS } from "@/lib/deal-stages";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
@@ -43,10 +43,6 @@ const formatMeetingTime = (iso) => {
     hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(d);
 };
-
-// A deal counts as "stalled" once it has aged this many days in an open stage. Two weeks
-// is the follow-up window — high enough that a deal mid-motion isn't flagged as neglected.
-const STALLED_DAYS = 14;
 
 
 // Shared All/Personal/Company scope filter for every Revenue surface (Leads, Deals,
@@ -1751,6 +1747,11 @@ export function Deals({ workspace, onNavigate }) {
   const [drag, setDrag] = React.useState(null);
   const [filter, setFilter] = useScopeFilter(searchParams);
   const [showHidden, setShowHidden] = React.useState(false);
+  // Lost는 hidden과 다른 축이다 — hidden은 되돌릴 수 있는 정리 플래그, lost는 실제 단계다.
+  // 하지만 DEAL_STAGES(=ledger.stages)엔 lost 컬럼이 없어 stage='lost'로 바뀐 딜은 어느
+  // 칸반 컬럼에도 매치되지 않아 조용히 사라졌다. showLost 토글로 켜면 보드 끝에 별도
+  // 컬럼을 붙여 드래그·클릭 편집 같은 기존 카드 인터랙션으로 그대로 복구할 수 있게 한다.
+  const [showLost, setShowLost] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
   const [guruDeal, setGuruDeal] = React.useState(null);
   const [boardNotice, setBoardNotice] = React.useState(null); // { key?, tone, label, undo? } — 이동 되돌리기·저장 실패 안내
@@ -1790,6 +1791,7 @@ export function Deals({ workspace, onNavigate }) {
   // 초기화(숨기기)된 딜은 기본적으로 파이프라인에서 빠진다 — 되돌릴 수 있는 정리이지
   // 삭제가 아니다. showHidden이 켜지면 다시 전부 보인다(dashed 엣지 + 숨김 뱃지).
   const hiddenCount = React.useMemo(() => scopedDeals.filter(d => d.hidden).length, [scopedDeals]);
+  const lostCount = React.useMemo(() => scopedDeals.filter(d => d.stage === 'lost').length, [scopedDeals]);
   const visibleDeals = React.useMemo(
     () => (showHidden ? scopedDeals : scopedDeals.filter(d => !d.hidden)),
     [scopedDeals, showHidden],
@@ -1814,7 +1816,8 @@ export function Deals({ workspace, onNavigate }) {
 
   // DEAL_STAGES를 deps에 반드시 포함 — 원장 도착으로 stages만 갱신된 렌더에서 totals가
   // stale 빈 객체로 남으면 컬럼 헤더의 totals[s.key].count가 크래시한다(24차 실측 발견).
-  const totals = React.useMemo(() => DEAL_STAGES.reduce((acc, s) => {
+  // 'lost'도 함께 집계 — DEAL_STAGES(ledger 6단계)엔 없지만 showLost 컬럼 헤더가 읽는다.
+  const totals = React.useMemo(() => [...DEAL_STAGES, { key: 'lost' }].reduce((acc, s) => {
     const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
     return acc;
@@ -1823,6 +1826,10 @@ export function Deals({ workspace, onNavigate }) {
   // The old single grandTotal blended won deals into "pipeline", overstating what's open.
   const openStages = DEAL_STAGES.filter(s => s.key !== 'closing' && s.key !== 'lost');
   const openTotal = openStages.reduce((a, s) => a + (totals[s.key]?.sum || 0), 0);
+  // Lost는 퍼널 밖 종료 상태 — 히트 램프에 태우지 않는 중립 컬럼이라 ramp를 비워
+  // STAGE_FILL/STAGE_LINE 인덱싱에서 자연히 빠지고 inset 스트라이프는 --line-strong으로
+  // 떨어진다(DESIGN.md §5.3 lifecycle "cancelled"=neutral, funnel 색과 분리).
+  const boardStages = (showLost && lostCount > 0) ? [...DEAL_STAGES, { key: 'lost', label: 'Lost' }] : DEAL_STAGES;
   const openCount = openStages.reduce((a, s) => a + (totals[s.key]?.count || 0), 0);
   const closingTotal = totals.closing?.sum || 0;
   // Drag-to-move: 낙관 이동 → 3.5초 되돌리기 창 → 창이 닫힌 뒤에만 PATCH(지연 쓰기 —
@@ -2038,6 +2045,12 @@ export function Deals({ workspace, onNavigate }) {
             <span>숨긴 딜 {hiddenCount}건 보기</span>
           </div>
         )}
+        {lostCount > 0 && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 10, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+            <Checkbox checked={showLost} onChange={setShowLost} size={16} label={`Lost ${lostCount}건 보기`} />
+            <span>Lost {lostCount}건 보기</span>
+          </div>
+        )}
         <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
         <Button variant="primary" size="sm" icon="plus" disabled={ledgerUnavailable} onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
       </div>
@@ -2083,7 +2096,7 @@ export function Deals({ workspace, onNavigate }) {
 
       {!ledgerUnavailable && !wsEmpty && (
       <ScrollShadowX>
-        {DEAL_STAGES.map(s => {
+        {boardStages.map(s => {
           const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
           return (
             <div key={s.key}
@@ -2147,6 +2160,15 @@ export function Deals({ workspace, onNavigate }) {
                         flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.35,
                         display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                       }}>{d.name}</div>
+                      {s.key === 'lost' && (
+                        <IconButton
+                          icon="refresh"
+                          size={20}
+                          iconSize={12}
+                          tooltip="잠재 리드로 되돌리기"
+                          onClick={(e) => { e.stopPropagation(); move(d.id, 'potential'); }}
+                        />
+                      )}
                       <IconButton
                         icon="eye"
                         size={20}
@@ -2161,6 +2183,7 @@ export function Deals({ workspace, onNavigate }) {
                         tooltip="Guru에게 진단 요청"
                         onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}
                       />
+                      {s.key === 'lost' && <Badge tone="neutral" size="xs" variant="outline">종료</Badge>}
                       {d.hidden && <Badge tone="neutral" size="xs" variant="outline">숨김</Badge>}
                       <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">
                         {d.type === 'personal' ? 'P' : 'C'}
@@ -2205,6 +2228,7 @@ export function Deals({ workspace, onNavigate }) {
                   </div>
                   );
                 })}
+                {s.key !== 'lost' && (
                 <button
                   onClick={() => createDeal(s.key)}
                   title={`${s.label}에 새 딜 추가`}
@@ -2216,6 +2240,7 @@ export function Deals({ workspace, onNavigate }) {
                   }}>
                   <Iconed name="plus" size={11} /> 딜 추가
                 </button>
+                )}
               </div>
             </div>
           );
