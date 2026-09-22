@@ -4,6 +4,7 @@ import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { recordAgentRun } from "@/lib/sales-os/agent-runs";
 import { assembleSalesContext } from "@/lib/sales-os/context-assembler";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
+import { isValidAdvisorInput } from "@/lib/advisor-input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,7 +86,10 @@ export async function POST(req) {
     return parsed.error;
   }
 
-  const input = parsed.data || {};
+  const input = parsed.data;
+  if (!isValidAdvisorInput(input)) {
+    return NextResponse.json({ status: "error", error: "자문 설정의 형식을 확인해 주세요." }, { status: 400 });
+  }
   const mode = typeof input.mode === "string" ? input.mode.trim() : "pipeline-triage";
   const ref = typeof input.ref === "string" ? input.ref.trim() || null : null;
   const draft = typeof input.draft === "string" ? input.draft : null;

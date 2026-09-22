@@ -97,12 +97,12 @@
 }
 
 .hub-app .fx-progress--completed {
-  box-shadow: 0 0 6px rgba(140, 168, 216, 0.45);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--moon-300) 45%, transparent);
 }
 
 .hub-app .fx-progress--completed > i {
   background: linear-gradient(90deg, var(--pms-moonstone) 0%, var(--moon-200) 100%);
-  box-shadow: 0 0 8px rgba(140, 168, 216, 0.5);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--moon-300) 50%, transparent);
 }
 
 /* ── 트리아지 분할 뷰 ─────────────────────────────────────────── */

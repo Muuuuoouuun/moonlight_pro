@@ -590,6 +590,7 @@ function CouncilCoachPanel({ onNavigate }) {
   const [note, setNote] = React.useState('');
   const [councilData, setCouncilData] = React.useState(null);
   const [selectedTriadId, setSelectedTriadId] = React.useState(null);
+  const [requestedTriadId, setRequestedTriadId] = React.useState(null);
   const [showFullText, setShowFullText] = React.useState(false);
 
   const [currentMode, setCurrentMode] = React.useState('brand-strategy');
@@ -602,6 +603,7 @@ function CouncilCoachPanel({ onNavigate }) {
     setCouncilData(null);
     setShowFullText(false);
     const triad = RECOMMENDED_TRIADS.find((t) => t.id === triadId);
+    setRequestedTriadId(triad?.id || null);
     const legendIds = triad ? triad.legendIds : undefined;
     const r = await requestCouncilAdvice({ mode, legendIds });
     if (r.state === 'done') {
@@ -614,7 +616,7 @@ function CouncilCoachPanel({ onNavigate }) {
     }
   };
 
-  const activeTriad = RECOMMENDED_TRIADS.find((t) => t.id === selectedTriadId);
+  const activeTriad = RECOMMENDED_TRIADS.find((t) => t.id === (state === 'idle' ? selectedTriadId : requestedTriadId));
 
   return (
     <Card>
@@ -644,7 +646,7 @@ function CouncilCoachPanel({ onNavigate }) {
 
       {/* Recommended Triads Bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--line-soft)' }}>
-        <span style={{ fontSize: 11, color: 'var(--fg-dim)', marginRight: 2 }}>추천 트라이어드:</span>
+        <span style={{ fontSize: 11, color: 'var(--fg-dim)', marginRight: 2 }}>다음 자문의 트라이어드:</span>
         {RECOMMENDED_TRIADS.map((t) => {
           const isSelected = selectedTriadId === t.id;
           return (
@@ -652,7 +654,10 @@ function CouncilCoachPanel({ onNavigate }) {
               key={t.id}
               type="button"
               className="hub-btn hub-btn--subtle"
+              aria-pressed={isSelected}
+              disabled={state === 'loading'}
               onClick={() => {
+                if (state === 'loading') return;
                 const next = isSelected ? null : t.id;
                 setSelectedTriadId(next);
               }}
@@ -663,7 +668,7 @@ function CouncilCoachPanel({ onNavigate }) {
                 border: isSelected ? '1px solid var(--moon-500)' : '1px solid var(--line)',
                 background: isSelected ? 'var(--moon-bg)' : 'transparent',
                 color: isSelected ? 'var(--moon-100)' : 'var(--fg-muted)',
-                cursor: 'pointer',
+                cursor: state === 'loading' ? 'not-allowed' : 'pointer',
               }}
               title={t.desc}
             >
@@ -714,9 +719,9 @@ function CouncilCoachPanel({ onNavigate }) {
 
               {/* Dissent / Preservation of Dissent */}
               {councilData.dissent && (
-                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderLeftWidth: 3, borderLeftColor: 'var(--warning)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', boxShadow: 'inset 1px 0 0 var(--line-strong)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <Badge tone="warning" size="xs">이견 보존 (Dissent)</Badge>
+                    <Badge tone="neutral" size="xs">이견 보존 (Dissent)</Badge>
                     <span style={{ fontSize: 10.5, color: 'var(--fg-dim)' }}>합의보다 반대 논거 중시</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.5 }}>
@@ -729,7 +734,7 @@ function CouncilCoachPanel({ onNavigate }) {
               {councilData.conditionalVerdict && (
                 <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <Badge tone="info" size="xs">조건부 판정</Badge>
+                    <Badge tone="neutral" size="xs">조건부 판정</Badge>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.5 }}>
                     {councilData.conditionalVerdict}
@@ -741,7 +746,7 @@ function CouncilCoachPanel({ onNavigate }) {
               {councilData.nextAction && (
                 <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <Badge tone="success" size="xs">즉시 실행 1단계</Badge>
+                    <Badge tone="neutral" size="xs">즉시 실행 1단계</Badge>
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.5 }}>
                     {councilData.nextAction}
