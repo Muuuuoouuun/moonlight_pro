@@ -30,6 +30,12 @@ type Dependencies = {
     table: string,
     options?: Record<string, unknown>,
   ) => Promise<RowReadResult>;
+  // Row count for the focus_dates 3-per-day cap (§6.2) — a plain count, not a fetch, since
+  // the check only needs "how many", not the rows themselves.
+  countRows?: (
+    table: string,
+    filters: Array<[string, string]>,
+  ) => Promise<number | null>;
 };
 
 type CommandContext = {
@@ -334,7 +340,32 @@ export async function executePmsCommand(
       if (!rows[0]) return { status: "error", error: "not-found" };
       const meta = rows[0].meta ?? {};
       if (typeof meta !== "object" || Array.isArray(meta)) return { status: "error", error: "invalid-task-metadata" };
-      command.patch.meta = { ...meta, ...command.patch.meta as Record<string, unknown> };
+      const patchMeta = command.patch.meta as Record<string, unknown>;
+      if (Array.isArray(patchMeta.focus_dates)) {
+        const today = dayKey(context.now || new Date().toISOString());
+        const previousFocusDates = Array.isArray((meta as Record<string, unknown>).focus_dates)
+          ? (meta as Record<string, unknown>).focus_dates as string[]
+          : [];
+        const nextFocusDates = patchMeta.focus_dates as string[];
+        // Only a newly-added "today" needs the cap — unselecting, or re-saving a day that
+        // was already picked, can never push another task over the 3-per-day limit.
+        if (nextFocusDates.includes(today) && !previousFocusDates.includes(today)) {
+          const workspaceId = filterValue(command.filters, "workspace_id");
+          const taskId = filterValue(command.filters, "id");
+          if (!workspaceId) return { status: "error", error: "missing-workspace" };
+          const countFilters: Array<[string, string]> = [
+            ["workspace_id", `eq.${workspaceId}`],
+            ["meta->focus_dates", `cs.${JSON.stringify([today])}`],
+          ];
+          if (taskId) countFilters.push(["id", `neq.${taskId}`]);
+          const count = dependencies.countRows
+            ? await dependencies.countRows("tasks", countFilters)
+            : null;
+          if (count === null) return { status: "error", error: "focus-limit-check-failed" };
+          if (count >= 3) return { status: "invalid-input", error: "focus-limit-reached" };
+        }
+      }
+      command.patch.meta = { ...meta, ...patchMeta };
     }
     const persistence = await dependencies.update(command.table, command.filters, command.patch);
     if (!persistence.persisted && persistence.reason !== "no-matching-row") {

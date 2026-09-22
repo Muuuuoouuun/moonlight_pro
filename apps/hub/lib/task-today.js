@@ -1,6 +1,7 @@
 import { shiftDateKey } from "./rhythm-calendar.js";
 
 const LANE_RANK = {
+  focus: -1,
   missed: 0,
   today: 1,
   waiting: 2,
@@ -8,6 +9,7 @@ const LANE_RANK = {
 };
 
 const LANE_LABEL = {
+  focus: "오늘 3개",
   missed: "놓침",
   today: "오늘",
   waiting: "대기",
@@ -42,6 +44,9 @@ function dateKey(value, timeZone) {
 function laneForTask(task, todayKey, timeZone) {
   const status = String(task?.status || "").toLowerCase();
   if (task?.done === true || status === "done") return null;
+
+  // 사람이 고른 "오늘 3개"(tasks.meta.focus_dates, §6.2) — 기한·상태와 무관하게 최상단.
+  if (Array.isArray(task?.focusDates) && task.focusDates.includes(todayKey)) return "focus";
 
   const dueKey = dateKey(task?.dueAt, timeZone);
   if (dueKey && dueKey < todayKey) return "missed";
@@ -144,6 +149,7 @@ export function buildTaskToday(
   const counts = {
     total: candidates.length,
     shown: Math.min(candidates.length, Math.max(0, limit)),
+    focus: candidates.filter((task) => task.lane === "focus").length,
     missed: candidates.filter((task) => task.lane === "missed").length,
     today: candidates.filter((task) => task.lane === "today").length,
     waiting: candidates.filter((task) => task.lane === "waiting").length,
@@ -157,6 +163,9 @@ export function buildTaskToday(
     counts,
     hiddenCount: counts.total - counts.shown,
     streak,
+    // 오늘 고른 항목 전부(표시 limit과 무관) — "오늘 이 3개만" 카드가 이 배열을 1차
+    // 소스로 쓴다(§6.2). 비어 있으면 카드가 Q116 정렬 상위 3개를 dashed 권장으로 보여준다.
+    focusItems: candidates.filter((task) => task.lane === "focus"),
   };
 }
 

@@ -316,6 +316,10 @@ function mapTodos(rows, projectById, brandById) {
       nextAction: row.next_action || "",
       checklist: readTaskChecklist(row),
       sourceRefs: Array.isArray(row.meta?.source_refs) ? row.meta.source_refs : [],
+      // KST YYYY-MM-DD history of days this task was picked into "오늘 3개"
+      // (tasks.meta.focus_dates, §6.2) — task-today.js/attention-ledger.js read this back
+      // to place a currently-picked task in the top `focus` lane.
+      focusDates: Array.isArray(row.meta?.focus_dates) ? row.meta.focus_dates : [],
       status: row.status || "inbox",
       due: formatShortDate(row.due_at),
       dueAt: row.due_at || "",

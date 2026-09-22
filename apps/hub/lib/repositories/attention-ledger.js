@@ -86,6 +86,7 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
     .filter((t) => !t.done)
     .map((t) => {
       const project = t.project ? projectById.get(t.project) : null;
+      const isFocusToday = Array.isArray(t.focusDates) && t.focusDates.includes(todayKey);
       return {
         id: `task-${t.id}`,
         entityId: t.id,
@@ -95,6 +96,10 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
         // 없으면 드로어 저장이 기존 설명을 확인할 길 없이 진행된다.
         description: t.description || "",
         sourceRefs: t.sourceRefs || [],
+        // 오늘 고른 "오늘 3개"(§6.2) — 기존 overdue/today/week/later 버킷 어휘(보드 컬럼·
+        // 드래그·뮤트가 전부 이 넷을 전제)는 그대로 두고, 최상단 고정용 신호만 더한다.
+        focusDates: t.focusDates || [],
+        isFocusToday,
         bucket: bucketFor(t.dueAt, todayKey, weekEndKey),
         whenAt: t.dueAt || "",
         whenLabel: t.dueAt ? shortDate(t.dueAt) : "기한 없음",
@@ -181,6 +186,11 @@ function assignPriority(item, leadScoreByDealEntityId) {
   const leadScore = item.lane === "deal" ? leadScoreByDealEntityId.get(item.entityId) || 0 : 0;
   const stageRank = item.lane === "deal" ? STAGE_PRIORITY_RANK[item.status] || 0 : 0;
 
+  // 0. 오늘 사람이 고른 "오늘 3개"(§6.2) — 기한 지난 약속보다도 위, 늘 최상단.
+  // bucket(overdue/today/week/later)은 그대로 두고 우선순위만 끌어올린다.
+  if (item.isFocusToday) {
+    return { priorityScore: 6000, priorityReason: "오늘 3개" };
+  }
   // 1. 기한 지난 약속 — older overdue first (larger daysPast → higher).
   if (item.bucket === "overdue") {
     const daysPast = Math.min(90, Math.round((Date.now() - new Date(item.whenAt).getTime()) / DAY_MS) || 0);

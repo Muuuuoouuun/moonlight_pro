@@ -387,6 +387,52 @@ test("patches a task description without touching other fields", () => {
   });
 });
 
+test("normalizes a focus_dates pick, merging under patch.meta without an optimistic-lock filter", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focusDates: ["2026-09-20", "2026-09-22"],
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-22T01:30:00.000Z",
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    action: "update_task",
+    table: "tasks",
+    filters: [
+      ["id", "eq.55555555-5555-4555-8555-555555555555"],
+      ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
+    ],
+    patch: {
+      meta: { focus_dates: ["2026-09-20", "2026-09-22"] },
+      updated_at: "2026-09-22T01:30:00.000Z",
+    },
+  });
+});
+
+test("rejects malformed or duplicate focus_dates entries", () => {
+  const context = {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-22T01:30:00.000Z",
+  };
+  const id = "55555555-5555-4555-8555-555555555555";
+
+  assert.deepEqual(pmsCommand.normalizePmsCommand({
+    action: "update_task", id, focusDates: "2026-09-22",
+  }, context), { ok: false, reason: "invalid-focus-dates" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({
+    action: "update_task", id, focusDates: ["not-a-date"],
+  }, context), { ok: false, reason: "invalid-focus-dates" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({
+    action: "update_task", id, focusDates: ["2026-09-22", "2026-09-22"],
+  }, context), { ok: false, reason: "invalid-focus-dates" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({
+    action: "update_task", id, focus_dates: ["2026-02-30"],
+  }, context), { ok: false, reason: "invalid-focus-dates" });
+});
+
 test("normalizes an editable project patch without changing workspace ownership", () => {
   const result = pmsCommand.normalizePmsCommand({
     action: "update_project",

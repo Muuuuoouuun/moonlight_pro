@@ -213,7 +213,7 @@ function useAttentionLedger() {
 // strikethrough flash before a task leaves the list (undo window handled by the caller).
 // `selected` marks the row whose detail panel is open. `hideProject` suppresses the
 // project label inside a project accordion (the header already names it).
-function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded, onDefer, mutedEntry, onMute, onUnmute }) {
+function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded, onDefer, mutedEntry, onMute, onUnmute, onToggleFocus, focusCapReached }) {
   // 우선순위 정렬일 때는 meta 자리에 정렬 근거(reason)를 보여준다 — 첫 화면 요구사항
   // "지금 해야 하는 이유"(profile §4)를 행 높이 증가 없이 전달.
   const projectLabel = !hideProject && item.lane === 'task' ? item.projectName || '' : '';
@@ -343,6 +343,22 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       }}>
         {item.whenLabel}
       </span>
+      {/* "오늘 3개"(§6.2) 토글 — 선택 상태는 Moonstone 하나로만 표시(색 단독 금지 원칙에
+          따라 별 채움 + 라벨 둘 다로 전달), 4번째부터는 비활성(§8.1). */}
+      {onToggleFocus && item.lane === 'task' && !swipeAction && (
+        <span className="hub-row-action" data-open={item.isFocusToday ? 'true' : undefined}>
+          <IconButton
+            icon="star"
+            size={24}
+            iconSize={13}
+            tooltip={item.isFocusToday ? '오늘 3개에서 빼기' : focusCapReached ? '오늘 3개를 이미 다 골랐습니다' : '오늘 3개로 고르기'}
+            disabled={!item.isFocusToday && focusCapReached}
+            style={item.isFocusToday ? { color: 'var(--moon-300)' } : undefined}
+            onClick={(e) => { e.stopPropagation(); onToggleFocus(item); }}
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+        </span>
+      )}
       {/* 행 보조 액션 — hover/포커스에서만 드러나는 한 번 클릭 정리(.hub-row-action).
           여기 있는 건 되돌리기 쉬운 '오늘 안 보기' 하나뿐이고, '아예 안 보기'는 행을 열어
           상세 패널에서 고른다(무기한 숨김은 의도적으로 한 단계 더 깊게 둔다). */}
@@ -609,6 +625,14 @@ export function MyWork({ onNavigate }) {
     return sorted;
   }, [items, lane, bucketFilter, search, sort, hiddenIds, lens, itemPatches, justAddedId, mutedIds, showMuted]);
 
+  // "오늘 3개"(§6.2) 픽 수 — 현재 필터/뷰와 무관하게 서버 3건 상한과 같은 모수를 센다.
+  const focusTodayCount = React.useMemo(() => {
+    const patched = Object.keys(itemPatches).length
+      ? items.map((i) => (itemPatches[i.id] ? { ...i, ...itemPatches[i.id] } : i))
+      : items;
+    return patched.filter((i) => i.lane === 'task' && i.isFocusToday).length;
+  }, [items, itemPatches]);
+
   // Durable quick-add task: POST /api/hub/tasks (Phase 1A write path). 상세 토글을 열면
   // 기한·우선순위도 한 번에 저장 — 기본은 제목만(빠른 경로) 그대로 유지.
   const createTask = async () => {
@@ -797,6 +821,46 @@ export function MyWork({ onNavigate }) {
     const seoulDate = (offsetDays) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(Date.now() + offsetDays * 86400000));
     const dueAt = bucketKey === 'today' ? seoulDate(0) : bucketKey === 'week' ? seoulDate(1) : null; // 'later' clears the date
     rescheduleTask(item, dueAt);
+  };
+
+  // "오늘 3개" 토글(§6.2) — tasks.meta.focus_dates에 오늘(KST)을 더하거나 뺀다. 기한·상태와
+  // 무관하게 사람이 직접 고른 오늘의 우선순위이므로, 완료율 보존을 위해 배열 전체가 아니라
+  // "오늘"만 더하거나 뺀 새 배열을 보낸다(과거 날짜는 그대로 둔다).
+  const toggleFocusToday = async (item) => {
+    if (item.lane !== 'task') return;
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+    const current = Array.isArray(item.focusDates) ? item.focusDates : [];
+    const isOn = current.includes(today);
+    if (!isOn && focusTodayCount >= 3) {
+      const msg = '오늘 3개를 이미 다 골랐습니다 — 하나를 빼고 다시 고르세요.';
+      setNotice({ tone: 'err', label: msg });
+      toast.error(msg);
+      return;
+    }
+    const next = isOn ? current.filter((d) => d !== today) : [...current, today];
+    setItemPatches((p) => ({ ...p, [item.id]: { ...(p[item.id] || {}), isFocusToday: !isOn, focusDates: next } }));
+    try {
+      const res = await fetch('/api/hub/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: item.entityId, focusDates: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status !== 'saved') {
+        throw new Error(data.error === 'focus-limit-reached'
+          ? '오늘 3개를 이미 다 골랐습니다 — 하나를 빼고 다시 고르세요.'
+          : data.error || `저장 실패 ${res.status}`);
+      }
+      const label = isOn ? '오늘 3개에서 뺐습니다' : '오늘 3개에 넣었습니다';
+      setNotice({ tone: 'ok', label });
+      toast.success(label);
+      reload();
+    } catch (error) {
+      setItemPatches((p) => { const n = { ...p }; delete n[item.id]; return n; });
+      const msg = error instanceof Error ? error.message : String(error);
+      setNotice({ tone: 'err', label: msg });
+      toast.error(msg);
+    }
   };
 
   // 행 클릭 → 우측 상세 패널 토글 (모든 레인). 할 일 편집(EditDrawer)·Deals 이동·
@@ -1417,6 +1481,8 @@ export function MyWork({ onNavigate }) {
                         mutedEntry={mutedIds.has(row.item.id) ? muted[row.item.id] : null}
                         onMute={muteItem}
                         onUnmute={unmuteItem}
+                        onToggleFocus={toggleFocusToday}
+                        focusCapReached={focusTodayCount >= 3}
                         rowRef={nextRowRef()}
                       />
                     );
@@ -1467,6 +1533,8 @@ export function MyWork({ onNavigate }) {
                                 mutedEntry={mutedIds.has(item.id) ? muted[item.id] : null}
                                 onMute={muteItem}
                                 onUnmute={unmuteItem}
+                                onToggleFocus={toggleFocusToday}
+                                focusCapReached={focusTodayCount >= 3}
                                 rowRef={nextRowRef()}
                               />
                             ))}
@@ -1517,6 +1585,8 @@ export function MyWork({ onNavigate }) {
                               mutedEntry={mutedIds.has(item.id) ? muted[item.id] : null}
                               onMute={muteItem}
                               onUnmute={unmuteItem}
+                              onToggleFocus={toggleFocusToday}
+                              focusCapReached={focusTodayCount >= 3}
                               hideProject
                               rowRef={nextRowRef()}
                             />
@@ -1543,6 +1613,8 @@ export function MyWork({ onNavigate }) {
                 mutedEntry={mutedIds.has(item.id) ? muted[item.id] : null}
                 onMute={muteItem}
                 onUnmute={unmuteItem}
+                onToggleFocus={toggleFocusToday}
+                focusCapReached={focusTodayCount >= 3}
                 rowRef={nextRowRef()}
               />
             ))
@@ -1636,6 +1708,8 @@ export function MyWork({ onNavigate }) {
             onNavigate={onNavigate}
             completingIds={completingIds}
             selectedId={detailId}
+            onToggleFocus={toggleFocusToday}
+            focusCapReached={focusTodayCount >= 3}
           />
         )
       )}
@@ -1690,7 +1764,7 @@ export function MyWork({ onNavigate }) {
 
 // 주간 렌즈 — 7-day agenda (grid가 아니라 목록: 모바일 우선, 미니멀). Each day lists its
 // items; undated items stay out (they live in 리스트/보드 '나중').
-function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, completingIds, selectedId }) {
+function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, completingIds, selectedId, onToggleFocus, focusCapReached }) {
   const days = React.useMemo(() => {
     const out = [];
     const now = new Date();
@@ -1733,7 +1807,7 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
             기한 지남 {overdue.length}
           </div>
           {overdue.map((item) => (
-            <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} selected={selectedId === item.id} />
+            <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} selected={selectedId === item.id} onToggleFocus={onToggleFocus} focusCapReached={focusCapReached} />
           ))}
         </Card>
       )}
@@ -1751,7 +1825,7 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 'auto' }}>{dayItems.length || ''}</span>
             </div>
             {dayItems.map((item) => (
-              <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} selected={selectedId === item.id} />
+              <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} selected={selectedId === item.id} onToggleFocus={onToggleFocus} focusCapReached={focusCapReached} />
             ))}
           </Card>
         );

@@ -86,6 +86,106 @@ test("applies a workspace-scoped task status update", async () => {
   });
 });
 
+test("persists a focus_dates pick under the 3-per-day cap, merged with existing metadata", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focusDates: ["2026-09-22"],
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-22T01:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async (table, filters, patch) => {
+      updates.push({ table, filters, patch });
+      return { persisted: true, reason: "ok" };
+    },
+    fetchRows: async () => [{ id: "55555555-5555-4555-8555-555555555555", meta: { source: "manual" } }],
+    countRows: async () => 1,
+  });
+
+  assert.deepEqual(updates[0].patch.meta, { source: "manual", focus_dates: ["2026-09-22"] });
+  assert.equal(result.status, "saved");
+});
+
+test("rejects a 4th same-day focus pick without writing the task", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focusDates: ["2026-09-22"],
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-22T01:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async (table, filters, patch) => {
+      updates.push({ table, filters, patch });
+      return { persisted: true, reason: "ok" };
+    },
+    fetchRows: async () => [{ id: "55555555-5555-4555-8555-555555555555", meta: {} }],
+    countRows: async () => 3,
+  });
+
+  assert.deepEqual(updates, []);
+  assert.deepEqual(result, { status: "invalid-input", error: "focus-limit-reached" });
+});
+
+test("skips the cap check when unselecting today or re-saving an already-picked day", async () => {
+  const countCalls = [];
+  const countRows = async () => { countCalls.push(1); return 0; };
+
+  const unselect = await pmsService.executePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focusDates: ["2026-09-20"],
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-22T01:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async () => ({ persisted: true, reason: "ok" }),
+    fetchRows: async () => [{ id: "55555555-5555-4555-8555-555555555555", meta: { focus_dates: ["2026-09-20", "2026-09-22"] } }],
+    countRows,
+  });
+  assert.equal(unselect.status, "saved");
+
+  const resave = await pmsService.executePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focusDates: ["2026-09-22"],
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-22T01:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async () => ({ persisted: true, reason: "ok" }),
+    fetchRows: async () => [{ id: "55555555-5555-4555-8555-555555555555", meta: { focus_dates: ["2026-09-22"] } }],
+    countRows,
+  });
+  assert.equal(resave.status, "saved");
+  assert.deepEqual(countCalls, []);
+});
+
+test("fails closed when the focus-limit count is unavailable", async () => {
+  const result = await pmsService.executePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focusDates: ["2026-09-22"],
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-22T01:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async () => ({ persisted: true, reason: "ok" }),
+    fetchRows: async () => [{ id: "55555555-5555-4555-8555-555555555555", meta: {} }],
+    countRows: async () => null,
+  });
+
+  assert.deepEqual(result, { status: "error", error: "focus-limit-check-failed" });
+});
+
 test("treats a retried client-generated create id as the same durable entity", async () => {
   const existing = {
     id: "55555555-5555-4555-8555-555555555555",
