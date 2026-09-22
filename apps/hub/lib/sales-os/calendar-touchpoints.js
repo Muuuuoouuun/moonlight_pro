@@ -78,12 +78,20 @@ export function matchEventToCustomers(event, candidates = []) {
 }
 
 // 이 일정에 해당하는 기록이 이미 있는가. 같은 고객의 활동이 창 안에 하나라도 있으면 있다고 본다.
-export function hasRecordFor(event, customer, activities = []) {
+//
+// now: 넛지 목록이 훑는 창(crm-nudges-source의 CALENDAR_LOOKBACK_DAYS=3일)이 인정 창(종료+24h)보다
+// 넓어서, 끝난 지 24~72시간 된 미팅은 "기록 남기기"를 눌러도(RPC가 occurred_at=now()로 쓴다) 그
+// 기록이 창 밖이라 인정되지 않고 같은 넛지가 계속 재등장했다. 그래서 인정 상한을 "종료+24h 또는
+// 지금, 더 늦은 쪽"으로 둔다 — 넛지가 제안하는 행동으로 그 넛지를 끌 수 있어야 한다. now를 넘기지
+// 않으면 기존 창 그대로다(경계 테스트가 이 기본값을 고정한다).
+export function hasRecordFor(event, customer, activities = [], now = null) {
   const start = timeOf(eventStart(event));
   if (start == null) return false;
   const end = timeOf(eventEnd(event)) ?? start;
+  const nowMs = now == null ? null : (now instanceof Date ? now.getTime() : Number(now));
   const from = start - RECORD_WINDOW_BEFORE_MS;
-  const to = end + RECORD_WINDOW_AFTER_MS;
+  const windowEnd = end + RECORD_WINDOW_AFTER_MS;
+  const to = Number.isFinite(nowMs) ? Math.max(windowEnd, nowMs) : windowEnd;
 
   return (activities || []).some((a) => {
     if (!a) return false;
@@ -128,7 +136,7 @@ export function findUnrecordedMeetings({
     const matched = matchEventToCustomers(event, candidates);
     const customer = matched[0];
     if (!customer) continue; // 고객을 못 찾은 일정은 넛지로 올리지 않는다(오탐 방지)
-    if (hasRecordFor(event, customer, activities)) continue;
+    if (hasRecordFor(event, customer, activities, nowMs)) continue;
 
     const kind = classifyCalendarTitle(event?.summary);
     out.push({

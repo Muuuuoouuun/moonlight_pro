@@ -78,6 +78,33 @@ test("the record window spans two hours before the start to a day after the end"
   assert.equal(hasRecordFor(e, 한빛, [act("2026-09-22T02:30:00Z")]), false);
 });
 
+test("a record made now closes a meeting that ended days ago", () => {
+  // 넛지 목록은 3일치를 훑는데 인정 창은 종료+24h였다 — 이틀 전 미팅은 "기록 남기기"를 눌러도
+  // (RPC가 occurred_at=now()로 쓴다) 넛지가 꺼지지 않았다.
+  const twoDaysAgo = event({
+    id: "ev-old",
+    start: { dateTime: at("2026-09-20T01:00:00Z") },
+    end: { dateTime: at("2026-09-20T02:00:00Z") },
+  });
+  const justNow = [{ occurredAt: new Date(NOW).toISOString(), companyId: "co-1" }];
+
+  // now를 안 넘기면 기존 창 그대로 — 인정되지 않는다.
+  assert.equal(hasRecordFor(twoDaysAgo, 한빛, justNow), false);
+  assert.equal(hasRecordFor(twoDaysAgo, 한빛, justNow, NOW), true);
+  // 그래도 일정 시작 앞쪽 경계는 그대로다.
+  assert.equal(hasRecordFor(twoDaysAgo, 한빛, [{ occurredAt: at("2026-09-19T22:30:00Z"), companyId: "co-1" }], NOW), false);
+
+  assert.deepEqual(
+    findUnrecordedMeetings({ events: [twoDaysAgo], candidates: [한빛], activities: justNow, now: NOW }),
+    [],
+  );
+  // 기록이 없으면 여전히 넛지로 올라온다.
+  assert.equal(
+    findUnrecordedMeetings({ events: [twoDaysAgo], candidates: [한빛], activities: [], now: NOW }).length,
+    1,
+  );
+});
+
 test("records join by company as well — live rows carry company_id, not lead_id", () => {
   const e = event();
   const inWindow = at("2026-09-21T03:00:00Z");
