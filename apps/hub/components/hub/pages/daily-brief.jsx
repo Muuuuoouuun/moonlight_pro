@@ -1661,7 +1661,7 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
       </div>
 
       {errorNote && <div role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>{errorNote}</div>}
-      {briefingState !== "live" && <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>일부 원장을 확인하지 못했습니다. 브리핑은 확인된 자료 범위로 제한됩니다.</div>}
+      {briefingState !== "live" && <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>일부 기록을 확인하지 못했습니다. 브리핑은 확인된 자료 범위로 제한됩니다.</div>}
       {dispatch ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div
@@ -1717,7 +1717,7 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
         <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
           {isEvening
               ? "확인된 완료 건수와 남은 작업을 정리하고, 내일 먼저 확인할 행동을 제안합니다."
-              : "오늘 원장 데이터(긴급 고객, 태스크, 신호)를 기반으로 지금 당장 처리할 우선순위와 시간 배분을 제안합니다."
+              : "오늘 기록 데이터(긴급 고객, 태스크, 신호)를 기반으로 지금 당장 처리할 우선순위와 시간 배분을 제안합니다."
           }
         </div>
       )}
@@ -2113,7 +2113,7 @@ export function WeeklyReportCard({ onNavigate, onAdvisorOpen, overrideScope, onT
           {syncState !== 'loading' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', flexWrap: 'wrap' }}>
               <span style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>
-                {goals?.status === 'error' ? '목표·성과 원장을 읽지 못했습니다.' : syncState === 'preview' ? '측정 원장이 연결되면 기간별 실적을 확인할 수 있습니다.' : objectives.length ? `진행 목표 ${objectives.length}개 · 기간과 측정 근거를 확인하세요.` : '측정할 목표와 결과 지표를 연결해 보세요.'}
+                {goals?.status === 'error' ? '목표·성과 기록을 읽지 못했습니다.' : syncState === 'preview' ? '측정 기록이 연결되면 기간별 실적을 확인할 수 있습니다.' : objectives.length ? `진행 목표 ${objectives.length}개 · 기간과 측정 근거를 확인하세요.` : '측정할 목표와 결과 지표를 연결해 보세요.'}
               </span>
               <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/overview?view=goals&scope=${scope}`)}>목표·성과</Button>
             </div>

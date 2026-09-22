@@ -453,7 +453,7 @@ export function Brands() {
       if (!response.ok || data.status !== "saved") {
         const message = data.status === "conflict" ? "다른 변경이 먼저 저장되었습니다. 입력을 보관하고 브랜드를 다시 열어주세요." : data.status === "preview" ? "저장 연결이 없어 입력을 유지했습니다. 브랜드 기준은 저장되지 않았습니다." : data.error || "브랜드 기준을 저장하지 못했습니다. 입력을 유지합니다.";
         setSaveNote({ tone: "err", label: message });
-        // 이 편집기는 preview를 로컬 원장에 반영하지 않는다. 드로어 내부에서도
+        // 이 편집기는 preview를 로컬 기록에 반영하지 않는다. 드로어 내부에서도
         // 실제 실패 원인을 보여주고, 재시도할 수 있도록 입력을 유지한다.
         return { ok: false, status: data.status === "conflict" ? "conflict" : "error", message };
       }
@@ -558,7 +558,7 @@ export function Brands() {
           onEdit={(section) => {
             setSaveNote(null);
             setIdentitySection(section);
-            // 섹션은 보이는 필드만 좁힌다. 전체 draft와 원장 revision을 유지해야
+            // 섹션은 보이는 필드만 좁힌다. 전체 draft와 기록 revision을 유지해야
             // 부분 편집을 저장해도 다른 섹션의 기준이 지워지지 않는다.
             setIdentityDraft(brandIdentityDraft(selected));
           }}

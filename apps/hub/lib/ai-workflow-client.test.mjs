@@ -65,7 +65,7 @@ test("synchronous transport failures remain retryable and invalid AI titles neve
 });
 
 test("action extraction strips classification and ignores headings, prose and duplicate actions", () => {
-  const parsed = parseExtractedActions("1. 📌 [1줄 핵심 요약]: 고객 후속\n2. 📋 [추출된 다음 행동 (Action Items)]:\n- 🎯 [분류: Task] 견적 보내기 (내일)\n- 🎯 [분류: Task] 견적 보내기 (내일)\n- [추천 원장] Tasks\n3. 💡 [Moonlight 추천 연결]:\n- 🎯 [분류: Idea] 후속 콘텐츠 정리");
+  const parsed = parseExtractedActions("1. 📌 [1줄 핵심 요약]: 고객 후속\n2. 📋 [추출된 다음 행동 (Action Items)]:\n- 🎯 [분류: Task] 견적 보내기 (내일)\n- 🎯 [분류: Task] 견적 보내기 (내일)\n- [추천 기록] Tasks\n3. 💡 [Moonlight 추천 연결]:\n- 🎯 [분류: Idea] 후속 콘텐츠 정리");
   assert.equal(parsed.summary, "고객 후속");
   assert.deepEqual(parsed.actions.map(action => action.title), ["견적 보내기 (내일)", "후속 콘텐츠 정리"]);
   assert.equal(parseExtractedActions(null).actions.length, 0);
