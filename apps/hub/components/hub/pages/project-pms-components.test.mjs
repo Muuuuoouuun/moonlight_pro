@@ -557,3 +557,13 @@ test("container selection and management dialogs suspend background page shortcu
   assert.match(projectsSource, /onOpenChange=\{setContainerPickerOpen\}/);
   assert.match(pmsComponentsSource, /onOpenChange\?\.\(open\)/);
 });
+
+// §11 터치 타깃 44px 플로어 — 완료·보관 드래그 그립은 `touch-action: none`으로 터치 제스처를
+// 독점하면서 히트 영역은 24×24였다. 터치에서만 의미가 있는 컨트롤이라 정확히 플로어가 필요하다.
+// `.hub-checkbox::before`와 같은 계약: 글리프는 12px, 히트 영역만 pseudo-element로 키운다.
+test("완료·보관 드래그 그립은 coarse 포인터에서 44px 히트 영역을 갖는다", () => {
+  const grip = responsiveCss.slice(responsiveCss.indexOf("[data-terminal-grip]"));
+  assert.match(grip, /@media \(pointer: coarse\)\s*\{[\s\S]*?\[data-terminal-grip\]::before\s*\{[\s\S]*?inset:\s*-10px/);
+  // 레이아웃은 그대로 — 그립 자체에 음수 margin을 더해 이웃을 밀지 않는다.
+  assert.match(grip, /\[data-terminal-grip\]\s*\{\s*position: relative;\s*\}/);
+});

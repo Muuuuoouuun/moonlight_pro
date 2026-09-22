@@ -56,7 +56,10 @@ export function MemoPatternPanel({
 
   return (
     <div className="memo-pattern-panel fade-up" style={{ marginTop: 16 }}>
-      <Card pad={true} style={{ border: "1px solid var(--line-strong)" }}>
+      {/* 휴지 보더는 Card primitive의 기본 chrome을 쓴다 — --line-strong은 pressed/emphasized
+          전용이라(§5.2) 상시로 두르면 같은 화면의 다른 카드보다 한 단계 강해진다. Futura
+          레이어에서는 .hub-card가 보더를 투명으로 내리고 그림자를 쓰므로 위계가 더 어긋났다. */}
+      <Card pad={true}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <strong style={{ fontSize: 15, fontWeight: 600 }}>메모 패턴 분석 및 실행 도출</strong>
@@ -141,7 +144,9 @@ export function MemoPatternPanel({
                               padding: "4px 8px",
                               background: "var(--surface-3)",
                               borderRadius: "var(--r-xs)",
-                              borderLeft: "1px solid var(--line-strong)",
+                              // 좌측 강조는 §8.1의 inset 1px 스트라이프 어휘로 — borderLeft는
+                              // 텍스트를 1px 밀고 --line-strong은 pressed 전용이다.
+                              boxShadow: "inset 1px 0 0 var(--line)",
                             }}
                           >
                             <span style={{ fontStyle: "italic" }}>"{eq.quote}"</span>

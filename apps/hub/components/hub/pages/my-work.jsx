@@ -294,10 +294,10 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         position: 'relative',
         touchAction: 'pan-y',
         transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
-        background: swipeAction === 'complete'
-          ? 'rgba(56, 239, 125, 0.08)'
-          : swipeAction === 'defer'
-          ? 'rgba(140, 168, 216, 0.08)'
+        // 스와이프 방향은 라벨·아이콘·행 이동이 말한다 — 배경색으로 분류하지 않는다(§5.3).
+        // 초록/파랑 raw rgba는 §5.2의 "페이지 안 하드코딩 금지"에도 걸렸다.
+        background: swipeAction
+          ? 'var(--surface-3)'
           : justAdded
           ? 'var(--surface-3)'
           : selected
@@ -323,14 +323,16 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       }}>
         {item.title}
       </span>
+      {/* §5.3: 완료는 check 글리프 + 중립 텍스트(초록 금지), 미루기는 clock 글리프.
+          이모지는 §15 2026-09-22가 첫 화면에서 걷어낸 어휘라 새로 쓰지 않는다. */}
       {swipeAction === 'complete' && (
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--success)' }}>
-          ✓ 완료
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--fg)' }}>
+          <Iconed name="check" size={12} /> 완료
         </span>
       )}
       {swipeAction === 'defer' && (
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--moon-300)' }}>
-          ⏰ 미루기
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--fg-muted)' }}>
+          <Iconed name="clock" size={12} /> 미루기
         </span>
       )}
       {metaText && !swipeAction && (
