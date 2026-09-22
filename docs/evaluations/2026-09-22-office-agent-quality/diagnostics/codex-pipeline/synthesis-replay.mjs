@@ -1,0 +1,10 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { createCodexCliProvider } from '/Users/clmagi/Desktop/Projects/moonlight_pro-office-cli-compare/scripts/office-evaluation/codex-provider.mjs';
+const original=JSON.parse((await readFile('/tmp/moonlight-office-codex-pipeline.provider.jsonl','utf8')).trim().split('\n').at(-1));
+const events=[];
+const provider=await createCodexCliProvider({command:process.execPath,argv:['/Users/clmagi/Desktop/Projects/moonlight_pro-office-cli-compare/node_modules/@openai/codex/bin/codex.js']},{spawnImpl:(...args)=>{const child=spawn(...args);let pending='';child.stdout.on('data',chunk=>{pending+=chunk.toString();let newline;while((newline=pending.indexOf('\n'))>=0){const line=pending.slice(0,newline);pending=pending.slice(newline+1);try{const e=JSON.parse(line);if(e.type==='error'||e.type==='turn.failed')events.push(e);}catch{}}});return child;}});
+const response=await provider.generate(original.request);
+const result={purpose:'Explicit diagnostic replay of the terminal failed synthesis; not substituted into the original run',at:new Date().toISOString(),originalCallId:original.id,request:original.request,response,errors:events};
+await writeFile('/tmp/moonlight-office-codex-error-probe.json',JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
+console.log(JSON.stringify({ok:response.ok,reason:response.reason,elapsedMs:response.adapterMetadata.elapsedMs,errors:events.map(e=>({type:e.type,keys:Object.keys(e),messageLength:String(e.message||e.error?.message||'').length}))}));

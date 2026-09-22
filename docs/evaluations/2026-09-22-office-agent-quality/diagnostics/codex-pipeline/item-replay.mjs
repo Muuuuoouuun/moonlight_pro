@@ -1,0 +1,11 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {spawn} from 'node:child_process';
+import {createCodexCliProvider} from '/Users/clmagi/Desktop/Projects/moonlight_pro-office-cli-compare/scripts/office-evaluation/codex-provider.mjs';
+const original=(await readFile('/tmp/moonlight-office-codex-single-pass.provider.jsonl','utf8')).trim().split('\n').map(JSON.parse).find(c=>c.id===1);
+const itemTypes=[];
+const known=new Set(['agent_message','reasoning','command_execution','file_change','mcp_tool_call','web_search','todo_list','error']);
+const provider=await createCodexCliProvider({command:process.execPath,argv:['/Users/clmagi/Desktop/Projects/moonlight_pro-office-cli-compare/node_modules/@openai/codex/bin/codex.js']},{spawnImpl:(...args)=>{const child=spawn(...args);let pending='';child.stdout.on('data',chunk=>{pending+=chunk.toString();let newline;while((newline=pending.indexOf('\n'))>=0){const line=pending.slice(0,newline);pending=pending.slice(newline+1);try{const e=JSON.parse(line);if(e.type.startsWith('item.'))itemTypes.push({event:e.type,itemType:known.has(e.item?.type)?e.item.type:'unknown'});}catch{}}});return child;}});
+const request=original.appliedRequest||original.request;
+const response=await provider.generate(request);
+await writeFile('/tmp/moonlight-office-codex-item-probe.json',JSON.stringify({purpose:'One diagnostic replay of a terminal unsupported-item failure; original run unchanged',at:new Date().toISOString(),originalCallId:original.id,request,response,itemTypes},null,2)+'\n',{flag:'wx',mode:0o600});
+console.log(JSON.stringify({ok:response.ok,reason:response.reason,elapsedMs:response.adapterMetadata.elapsedMs,itemTypes}));

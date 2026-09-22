@@ -1,0 +1,6 @@
+{"id":"jolteon-work/initial","status":"error","errorCode":"provider-error","elapsedMs":4219}
+{"id":"jolteon-evidence/initial","status":"generated","elapsedMs":27544}
+{"id":"flareon-evidence/initial","status":"generated","elapsedMs":15459}
+{"id":"glaceon-social/initial","status":"generated","elapsedMs":11003}
+{"id":"delivery-urgent/initial","status":"error","errorCode":"timeout","elapsedMs":48028}
+{"summary":{"planned":5,"recorded":5,"generated":3,"generationFailed":2,"preview":0,"blocked":0,"unevaluated":0},"runtimeUnchanged":true,"quality":"unscored"}
