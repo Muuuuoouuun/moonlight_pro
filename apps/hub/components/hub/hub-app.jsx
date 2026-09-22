@@ -103,6 +103,7 @@ const SheetsSync = lazyPage(() => import("./pages/sheets-sync").then(m => m.Shee
 const AgentsChat = lazyPage(() => import("./pages/agents").then(m => m.AgentsChat));
 const AgentsCouncil = lazyPage(() => import("./pages/agents").then(m => m.AgentsCouncil));
 const AgentsOrders = lazyPage(() => import("./pages/agents").then(m => m.AgentsOrders));
+const OfficeCouncil = lazyPage(() => import("./pages/office-council").then(m => m.OfficeCouncil));
 const Evolution = lazyPage(() => import("./pages/evolution-settings").then(m => m.Evolution));
 const Settings = lazyPage(() => import("./pages/evolution-settings").then(m => m.Settings));
 
@@ -235,6 +236,7 @@ const PAGE_MAP = {
   'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
+  'dashboard/agents/office-council': (n) => <OfficeCouncil onNavigate={n} />,
   'dashboard/evolution': (n) => <Evolution onNavigate={n} />,
   'dashboard/settings': (n) => <Settings onNavigate={n} />,
 

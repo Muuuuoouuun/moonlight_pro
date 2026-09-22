@@ -129,6 +129,7 @@ const CONTENT_CHILDREN = [
 // 실행 피드백(§1 계약)이라 코어 유지.
 function aiChildren(sheetsPath) {
   return [
+    { key: 'ai-office-council', label: 'Office Council', path: 'dashboard/agents/office-council', group: 'Agents' },
     { key: 'ai-chat', label: 'Chat', path: 'dashboard/agents/chat', group: 'Agents', deferred: true },
     { key: 'ai-orders', label: 'Orders', path: 'dashboard/agents/orders', group: 'Agents', deferred: true },
     { key: 'ai-council', label: 'Council', path: 'dashboard/agents/council', group: 'Agents', deferred: true },
