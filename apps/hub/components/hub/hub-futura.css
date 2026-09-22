@@ -301,10 +301,62 @@
   transform: translateY(-3px);
 }
 
-.fx-time-row[data-past="true"] .fx-time,
+/* 지난 일정은 명도만 낮춘다. 취소선은 완료(`data-done`, CalendarOutcome) 전용이다 —
+   둘 다 취소선이면 "끝났지만 완료 표시 안 함"이 "완료"와 구분되지 않는다(§5.3 채널 겸직 금지). */
+.hub-app .fx-time-row[data-past="true"] .fx-time,
 .hub-app .fx-time-row[data-past="true"] .fx-time-title {
   color: var(--fg-faint);
+}
+
+.hub-app .fx-time-row[data-done="true"] .fx-time-title {
+  color: var(--fg-muted);
   text-decoration: line-through;
+}
+
+/* 일정 기록(CalendarOutcome compact) — 행 한 줄은 그대로 두고, 메모는 한 줄로 접고,
+   편집기·오류만 필요할 때 행 아래로 편다. 들여쓰기는 행 패딩 4 + 체크박스 16 + 간격 14
+   + 시각 46 + 간격 14 = 94px로 제목 첫 글자에 맞춘다. */
+.hub-app .fx-time-item { display: flex; flex-direction: column; min-width: 0; }
+.hub-app .fx-time-item .fx-time-row { padding-block: 6px; }
+.hub-app .fx-time-item .fx-time-title { min-width: 0; overflow-wrap: anywhere; }
+.hub-app .fx-time-item .fx-time-lead { min-width: 12px; }
+
+.hub-app .fx-time-ack {
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+/* 비어 있어도 live region은 트리에 남아야 저장 확인이 읽힌다 — display:none 대신 간격만 상쇄. */
+.hub-app .fx-time-ack:empty { margin-inline-start: -14px; }
+
+.hub-app .fx-time-note,
+.hub-app .fx-time-detail,
+.hub-app .fx-time-alert { padding: 0 4px 8px 94px; }
+
+.hub-app .fx-time-note {
+  font-size: 12px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hub-app .fx-time-alert {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.hub-app .fx-time-alert[data-error="true"] { color: var(--danger); }
+
+/* 터치 플로어(hub-tokens.css, §11)가 버튼을 44px로 키우는 구간에서는 그 버튼이 곧 행 높이다 —
+   세로 패딩까지 더하면 일정 한 건마다 폴드를 12px씩 더 먹는다. */
+@media (pointer: coarse), (max-width: 720px) {
+  .hub-app .fx-time-item .fx-time-row { padding-block: 0; }
 }
 
 .hub-app .fx-now {
@@ -319,6 +371,8 @@
   .hub-app .hub-futura { padding: 24px 16px; gap: 32px; }
   .hub-app .fx-split { grid-template-columns: 1fr; gap: 20px; }
   .hub-app .hub-futura { --fx-hero: 30px; --fx-title: 21px; --fx-card-pad: 18px; }
+  /* 좁은 화면에서는 편집기만 전폭 — 94px 들여쓰기가 입력 폭을 3분의 1 가까이 먹는다. */
+  .hub-app .fx-time-detail { padding-left: 4px; }
 }
 
 /* ── 페이지 헤더 (섹션 eyebrow + 대형 제목 + 부제) ──────────────
