@@ -161,3 +161,39 @@ test('evaluate_office_proposal routes to harsh evaluation mode', async (t) => {
   assert.equal(requestedBody.mode, 'critique');
   assert.equal(requestedBody.evaluate, true);
 });
+
+test('office MCP tools forward optional model override', async (t) => {
+  const tools = registeredTools();
+  const prevSecret = process.env.COM_MOON_HUB_WRITE_SECRET;
+  const originalFetch = globalThis.fetch;
+  process.env.COM_MOON_HUB_WRITE_SECRET = 'test-secret';
+
+  t.after(() => {
+    if (prevSecret) process.env.COM_MOON_HUB_WRITE_SECRET = prevSecret;
+    else delete process.env.COM_MOON_HUB_WRITE_SECRET;
+    globalThis.fetch = originalFetch;
+  });
+
+  let requestedBody = null;
+
+  globalThis.fetch = async (_url, init) => {
+    requestedBody = JSON.parse(init.body);
+    return new Response(
+      JSON.stringify({
+        status: 'generated',
+        text: '완료',
+        model: 'gemini-custom-pro',
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    );
+  };
+
+  const res = await tools.get('request_office_agent').handler({
+    agentId: 'eevee',
+    message: '테스트',
+    model: 'gemini-custom-pro',
+  });
+
+  assert.equal(res.isError, undefined);
+  assert.equal(requestedBody.model, 'gemini-custom-pro');
+});

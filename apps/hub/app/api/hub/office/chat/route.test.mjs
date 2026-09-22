@@ -100,3 +100,36 @@ test('hub office-chat route forwards sanitized request to Engine and returns res
     assert.equal(forwardedHeaders['x-com-moon-shared-secret'], 'engine-secret');
   });
 });
+
+test('hub office-chat route forwards custom model to Engine when provided', async () => {
+  assert.ok(route);
+  await withEnv(async () => {
+    let forwardedBody = null;
+
+    globalThis.fetch = async (_url, init) => {
+      forwardedBody = JSON.parse(init.body);
+      return new Response(
+        JSON.stringify({
+          status: 'generated',
+          text: '응답 완료',
+          model: 'gemini-custom-pro',
+          latencyMs: 120,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    };
+
+    const res = await route.POST(
+      request({
+        agentId: 'eevee',
+        message: '테스트',
+        model: 'gemini-custom-pro',
+      })
+    );
+
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.model, 'gemini-custom-pro');
+    assert.equal(forwardedBody.model, 'gemini-custom-pro');
+  });
+});

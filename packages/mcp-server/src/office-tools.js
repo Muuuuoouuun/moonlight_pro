@@ -77,9 +77,15 @@ export function registerOfficeTools(server) {
           .string()
           .optional()
           .describe('Optional philosophical/expert lens (e.g. jobs, bezos, voss).'),
+        model: z
+          .string()
+          .trim()
+          .max(100)
+          .optional()
+          .describe('Optional AI model override (e.g. gemini-2.5-pro, gemini-2.5-flash).'),
       },
     },
-    async ({ agentId, mode = 'chat', message, draft, evaluate = false, lens }) => {
+    async ({ agentId, mode = 'chat', message, draft, evaluate = false, lens, model }) => {
       const denied = requireWriteSecret();
       if (denied) return denied;
 
@@ -90,6 +96,7 @@ export function registerOfficeTools(server) {
         draft,
         evaluate,
         lens,
+        model,
       });
       return toolResult(result);
     }
@@ -132,9 +139,15 @@ export function registerOfficeTools(server) {
           .boolean()
           .default(true)
           .describe('If true, enforces composite scoring and critical gate clearance (PASS/REVISE/REJECT).'),
+        model: z
+          .string()
+          .trim()
+          .max(100)
+          .optional()
+          .describe('Optional AI model override for council debate.'),
       },
     },
-    async ({ lead = 'glaceon', participants = ['jolteon', 'vaporeon'], agenda, draft, evaluate = true }) => {
+    async ({ lead = 'glaceon', participants = ['jolteon', 'vaporeon'], agenda, draft, evaluate = true, model }) => {
       const denied = requireWriteSecret();
       if (denied) return denied;
 
@@ -145,6 +158,7 @@ export function registerOfficeTools(server) {
         message: agenda,
         draft,
         evaluate,
+        model,
       });
       return toolResult(result);
     }
@@ -172,9 +186,15 @@ export function registerOfficeTools(server) {
           .enum(['all', 'risk', 'scope', 'workload', 'roi', 'action'])
           .default('all')
           .describe('Evaluation focus: all (council), risk (umbreon), scope (glaceon), workload (vaporeon), roi (leafeon), action (flareon).'),
+        model: z
+          .string()
+          .trim()
+          .max(100)
+          .optional()
+          .describe('Optional AI model override for evaluation (e.g. gemini-2.5-pro).'),
       },
     },
-    async ({ proposal, focus = 'all' }) => {
+    async ({ proposal, focus = 'all', model }) => {
       const denied = requireWriteSecret();
       if (denied) return denied;
 
@@ -203,6 +223,7 @@ export function registerOfficeTools(server) {
         message: `아래 제안/기획안에 대해 가혹한 감점 평가와 게이트 통과 여부를 정밀 감사하라.`,
         draft: proposal,
         evaluate: true,
+        model,
       });
       return toolResult(result);
     }

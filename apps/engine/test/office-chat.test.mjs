@@ -235,3 +235,134 @@ test('office-chat POST parses harsh evaluation score and gate', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('office-chat dynamic model tiering routes routine chat to Flash and audit/evaluate to Pro', async () => {
+  assert.ok(route);
+  const prevSecret = process.env.COM_MOON_SHARED_WEBHOOK_SECRET;
+  const prevApiKey = process.env.GEMINI_API_KEY;
+  const prevFlash = process.env.GEMINI_FLASH_MODEL;
+  const prevPro = process.env.GEMINI_PRO_MODEL;
+  const originalFetch = globalThis.fetch;
+
+  process.env.COM_MOON_SHARED_WEBHOOK_SECRET = SHARED_SECRET;
+  process.env.GEMINI_API_KEY = 'test-gemini-key';
+  process.env.GEMINI_FLASH_MODEL = 'gemini-test-flash';
+  process.env.GEMINI_PRO_MODEL = 'gemini-test-pro';
+
+  try {
+    let requestedUrls = [];
+    let requestedBodies = [];
+
+    globalThis.fetch = async (url, init) => {
+      requestedUrls.push(String(url));
+      requestedBodies.push(JSON.parse(init.body));
+      return new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: '답변 완료' }] } }],
+          usageMetadata: { promptTokenCount: 15, candidatesTokenCount: 10, totalTokenCount: 25 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    };
+
+    // 1. Eevee routine chat -> Flash tier
+    const res1 = await route.POST(
+      mockRequest({ agentId: 'eevee', mode: 'chat', message: '일정 확인' })
+    );
+    assert.equal(res1.status, 200);
+    const data1 = await res1.json();
+    assert.ok(requestedUrls[0].includes('gemini-test-flash'));
+    assert.equal(requestedBodies[0].generationConfig.temperature, 0.3);
+    assert.ok(typeof data1.latencyMs === 'number');
+    assert.equal(data1.usageMetadata.totalTokenCount, 25);
+
+    // 2. Umbreon risk audit -> Pro tier & low temperature 0.1
+    const res2 = await route.POST(
+      mockRequest({ agentId: 'umbreon', mode: 'critique', message: '보안 점검' })
+    );
+    assert.equal(res2.status, 200);
+    assert.ok(requestedUrls[1].includes('gemini-test-pro'));
+    assert.equal(requestedBodies[1].generationConfig.temperature, 0.1);
+
+    // 3. Sylveon brand copy -> Flash tier & creative temperature 0.7
+    const res3 = await route.POST(
+      mockRequest({ agentId: 'sylveon', mode: 'chat', message: '카피 작성' })
+    );
+    assert.equal(res3.status, 200);
+    assert.ok(requestedUrls[2].includes('gemini-test-flash'));
+    assert.equal(requestedBodies[2].generationConfig.temperature, 0.7);
+
+    // 4. Explicit model override honors caller choice
+    const res4 = await route.POST(
+      mockRequest({ agentId: 'eevee', mode: 'chat', message: '테스트', model: 'custom-expert-model' })
+    );
+    assert.equal(res4.status, 200);
+    assert.ok(requestedUrls[3].includes('custom-expert-model'));
+  } finally {
+    process.env.COM_MOON_SHARED_WEBHOOK_SECRET = prevSecret;
+    process.env.GEMINI_API_KEY = prevApiKey;
+    if (prevFlash) process.env.GEMINI_FLASH_MODEL = prevFlash; else delete process.env.GEMINI_FLASH_MODEL;
+    if (prevPro) process.env.GEMINI_PRO_MODEL = prevPro; else delete process.env.GEMINI_PRO_MODEL;
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('office-chat fallback resilience recovers from primary model failure', async () => {
+  assert.ok(route);
+  const prevSecret = process.env.COM_MOON_SHARED_WEBHOOK_SECRET;
+  const prevApiKey = process.env.GEMINI_API_KEY;
+  const prevFlash = process.env.GEMINI_FLASH_MODEL;
+  const prevPro = process.env.GEMINI_PRO_MODEL;
+  const originalFetch = globalThis.fetch;
+
+  process.env.COM_MOON_SHARED_WEBHOOK_SECRET = SHARED_SECRET;
+  process.env.GEMINI_API_KEY = 'test-gemini-key';
+  process.env.GEMINI_FLASH_MODEL = 'gemini-fallback-flash';
+  process.env.GEMINI_PRO_MODEL = 'gemini-primary-pro';
+
+  try {
+    let callCount = 0;
+    globalThis.fetch = async (url) => {
+      callCount++;
+      const urlStr = String(url);
+      if (urlStr.includes('gemini-primary-pro')) {
+        // Primary Pro model fails with 503
+        return new Response(JSON.stringify({ error: { message: 'Service Unavailable' } }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (urlStr.includes('gemini-fallback-flash')) {
+        // Fallback Flash model succeeds
+        return new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: '폴백 응답 성공' }] } }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response('not found', { status: 404 });
+    };
+
+    const res = await route.POST(
+      mockRequest({
+        agentId: 'umbreon',
+        mode: 'critique',
+        message: '감사 요청',
+      })
+    );
+
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.status, 'generated');
+    assert.equal(data.model, 'gemini-fallback-flash');
+    assert.equal(data.fallbackFrom, 'gemini-primary-pro');
+    assert.ok(data.text.includes('폴백 응답 성공'));
+  } finally {
+    process.env.COM_MOON_SHARED_WEBHOOK_SECRET = prevSecret;
+    process.env.GEMINI_API_KEY = prevApiKey;
+    if (prevFlash) process.env.GEMINI_FLASH_MODEL = prevFlash; else delete process.env.GEMINI_FLASH_MODEL;
+    if (prevPro) process.env.GEMINI_PRO_MODEL = prevPro; else delete process.env.GEMINI_PRO_MODEL;
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -32,6 +32,7 @@ export async function requestOfficeChat({
   lens = null,
   context = null,
   evaluate = false,
+  model = null,
 } = {}) {
   try {
     const res = await fetch('/api/hub/office/chat', {
@@ -46,6 +47,7 @@ export async function requestOfficeChat({
         lens,
         context,
         evaluate,
+        model,
       }),
     });
 
@@ -61,6 +63,10 @@ export async function requestOfficeChat({
         isSimulation: Boolean(data.isSimulation),
         evaluation: data.evaluation || null,
         model: data.model,
+        appliedModel: data.appliedModel || data.model,
+        fallbackFrom: data.fallbackFrom || null,
+        usageMetadata: data.usageMetadata || null,
+        latencyMs: data.latencyMs || null,
         runId: data.runId,
       };
     }
