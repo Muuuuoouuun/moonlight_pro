@@ -7,7 +7,7 @@
 // close label) are intentionally left untouched — best-effort, never clobbered.
 
 import { eqFilter, fetchSupabaseRows } from "../server-read.js";
-import { DEAL_STAGES } from "../deal-stages.js";
+import { dealStageLabel } from "../deal-stages.js";
 import { recordActivity } from "../repositories/crm-activities.js";
 import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./customer-delete.js";
 import { SUBJECT_KEY_SET } from "./lead-labels.js";
@@ -329,8 +329,7 @@ export function dealStageMove({ table, existingMeta, metaPatch }) {
   const from = typeof existingMeta.stage_detail === "string" ? existingMeta.stage_detail : null;
   const to = metaPatch.stage_detail;
   if (!from || from === to) return null;
-  const label = (key) => DEAL_STAGES.find((stage) => stage.key === key)?.label || key;
-  return { from, to, body: `단계: ${label(from)} → ${label(to)}` };
+  return { from, to, body: `단계: ${dealStageLabel(from)} → ${dealStageLabel(to)}` };
 }
 
 async function recordDealStageMove({ table, id, workspaceId, existingMeta, metaPatch }) {

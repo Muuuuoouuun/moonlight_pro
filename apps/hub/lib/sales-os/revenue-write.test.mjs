@@ -282,6 +282,12 @@ test("dealStageMove names the move only when stage_detail actually changes", () 
     dealStageMove({ table: "deals", existingMeta: { stage_detail: "quote" }, metaPatch: { stage_detail: "final" } }),
     { from: "quote", to: "final", body: "단계: 견적 → 최종미팅" },
   );
+  // `lost`는 DEAL_STAGES 밖이라 dealStageLabel만 라벨을 안다 — 기록 본문이 원시 키로 떨어지면
+  // 같은 이동의 화면 토스트("Lost(으)로 이동됨")와 영구 기록이 갈린다.
+  assert.deepEqual(
+    dealStageMove({ table: "deals", existingMeta: { stage_detail: "quote" }, metaPatch: { stage_detail: "lost" } }),
+    { from: "quote", to: "lost", body: "단계: 견적 → Lost" },
+  );
   assert.equal(dealStageMove({ table: "deals", existingMeta: { stage_detail: "quote" }, metaPatch: { stage_detail: "quote" } }), null, "같은 값 재저장은 이동이 아니다");
   assert.equal(dealStageMove({ table: "deals", existingMeta: {}, metaPatch: { stage_detail: "quote" } }), null, "레거시 딜의 첫 분류는 이동이 아니다");
   assert.equal(dealStageMove({ table: "leads", existingMeta: { stage_detail: "quote" }, metaPatch: { stage_detail: "final" } }), null);
