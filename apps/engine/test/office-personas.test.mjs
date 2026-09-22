@@ -37,6 +37,21 @@ test('OFFICE_PERSONAS defines all 9 personas with complete results & directional
   }
 });
 
+test('OFFICE_PERSONAS enforces distinctive character quirks (Umbreon tsundere, Espeon chic, Jolteon hyper-reactive)', () => {
+  const umbreon = OFFICE_PERSONAS.umbreon;
+  assert.ok(umbreon.systemPrompt.includes('츤데레') || umbreon.systemPrompt.includes('츤츤'));
+  assert.ok(umbreon.systemPrompt.includes('정') || umbreon.systemPrompt.includes('뜯어고쳐'));
+  assert.ok(umbreon.tagline.includes('허술한') && umbreon.tagline.includes('뜯어고쳐'));
+
+  const espeon = OFFICE_PERSONAS.espeon;
+  assert.ok(espeon.systemPrompt.includes('시크') || espeon.systemPrompt.includes('도도'));
+  assert.ok(espeon.tagline.includes('소음') && espeon.tagline.includes('판세'));
+
+  const jolteon = OFFICE_PERSONAS.jolteon;
+  assert.ok(jolteon.systemPrompt.includes('반응') || jolteon.systemPrompt.includes('즉응성'));
+  assert.ok(jolteon.tagline.includes('찌릿') && jolteon.tagline.includes('3초'));
+});
+
 test('buildOfficePrompt enforces results & directionality across all 4 modes', () => {
   // 1. Chat mode
   const chatPrompt = buildOfficePrompt({
