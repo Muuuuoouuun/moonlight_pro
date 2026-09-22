@@ -89,10 +89,13 @@ export async function POST(req) {
   const mode = typeof input.mode === "string" ? input.mode.trim() : "pipeline-triage";
   const ref = typeof input.ref === "string" ? input.ref.trim() || null : null;
   const draft = typeof input.draft === "string" ? input.draft : null;
+  const directives = input.directives && typeof input.directives === "object" ? input.directives : undefined;
+  const values = input.values && typeof input.values === "object" ? input.values : undefined;
+  const knowledge = input.knowledge && typeof input.knowledge === "object" ? input.knowledge : undefined;
 
   const context = await assembleSalesContext({ mode, ref });
   let result;
-  try { result = await callEngine({ mode, ref, draft, context }); }
+  try { result = await callEngine({ mode, ref, draft, context, directives, values, knowledge }); }
   catch { result = { status: 502, data: { status: "error", reason: "engine-request-failed" } }; }
 
   // Episodic memory: log what Guru recommended so the next call can remember it (best-effort).

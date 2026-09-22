@@ -7,6 +7,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState, SegmentedControl, TruthBadge, Skeleton } from "../hub-primitives";
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
 import { requestCouncilAdvice, councilChatPath } from "../council-client";
+import { RECOMMENDED_TRIADS } from "../council-legends";
 import { requestPersonaChat, PERSONA_MODE_LABEL, LEGEND_LENS_MAP } from "../persona-client";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
@@ -587,23 +588,33 @@ function CouncilCoachPanel({ onNavigate }) {
   const [state, setState] = React.useState('idle'); // idle | loading | done | preview | error
   const [text, setText] = React.useState('');
   const [note, setNote] = React.useState('');
+  const [councilData, setCouncilData] = React.useState(null);
+  const [selectedTriadId, setSelectedTriadId] = React.useState(null);
+  const [showFullText, setShowFullText] = React.useState(false);
 
   const [currentMode, setCurrentMode] = React.useState('brand-strategy');
 
-  const runMode = async (mode = 'brand-strategy') => {
+  const runMode = async (mode = 'brand-strategy', triadId = selectedTriadId) => {
     setCurrentMode(mode);
     setState('loading');
     setText('');
     setNote('');
-    const r = await requestCouncilAdvice({ mode });
+    setCouncilData(null);
+    setShowFullText(false);
+    const triad = RECOMMENDED_TRIADS.find((t) => t.id === triadId);
+    const legendIds = triad ? triad.legendIds : undefined;
+    const r = await requestCouncilAdvice({ mode, legendIds });
     if (r.state === 'done') {
       setText(r.text);
+      setCouncilData(r.council || null);
       setState('done');
     } else {
       setNote(r.note || '');
       setState(r.state);
     }
   };
+
+  const activeTriad = RECOMMENDED_TRIADS.find((t) => t.id === selectedTriadId);
 
   return (
     <Card>
@@ -612,6 +623,9 @@ function CouncilCoachPanel({ onNavigate }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Council 자문 & 토의</div>
             <Badge tone="neutral" size="xs">브랜드 카운슬</Badge>
+            {activeTriad && (
+              <Badge tone="moon" size="xs">{activeTriad.label} 트라이어드</Badge>
+            )}
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>
             {currentMode === 'sparring' ? '3자 스파링 — 추진 논거 vs 맹점 비판 vs 검증 행동' : currentMode === 'weekly-review' ? '한 주 정리 — 사실 기반 패턴 진단 및 다음 주 실험' : '이번 주 브랜드 전략 — 무엇부터 손댈지'}
@@ -628,10 +642,41 @@ function CouncilCoachPanel({ onNavigate }) {
         </div>
       </div>
 
+      {/* Recommended Triads Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--line-soft)' }}>
+        <span style={{ fontSize: 11, color: 'var(--fg-dim)', marginRight: 2 }}>추천 트라이어드:</span>
+        {RECOMMENDED_TRIADS.map((t) => {
+          const isSelected = selectedTriadId === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              className="hub-btn hub-btn--subtle"
+              onClick={() => {
+                const next = isSelected ? null : t.id;
+                setSelectedTriadId(next);
+              }}
+              style={{
+                padding: '2px 8px',
+                fontSize: 11,
+                borderRadius: 999,
+                border: isSelected ? '1px solid var(--moon-500)' : '1px solid var(--line)',
+                background: isSelected ? 'var(--moon-bg)' : 'transparent',
+                color: isSelected ? 'var(--moon-100)' : 'var(--fg-muted)',
+                cursor: 'pointer',
+              }}
+              title={t.desc}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
       {state === 'idle' && (
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
           Council에게 브랜드/프로젝트 기록 기준의 자문을 요청하세요. 정체된 프로젝트·발행 케이던스 공백·
-          다음 마일스톤을 근거로 먼저 손댈 액션 3건과 이유를 우선순위로 제시합니다.
+          다음 마일스톤을 근거로 먼저 손댈 액션 3건과 이유를 우선순위로 제시합니다. 트라이어드를 선택하면 해당 레전드의 가치관·비용 판단 프레임이 적용됩니다.
         </div>
       )}
 
@@ -643,9 +688,84 @@ function CouncilCoachPanel({ onNavigate }) {
       )}
 
       {state === 'done' && (
-        <div>
-          <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{text}</div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {councilData && (councilData.lenses?.length > 0 || councilData.dissent || councilData.conditionalVerdict || councilData.nextAction) ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Lenses Grid */}
+              {Array.isArray(councilData.lenses) && councilData.lenses.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+                  {councilData.lenses.map((l, idx) => (
+                    <div key={idx} style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-dim)', marginBottom: 4 }}>
+                        {l.lens || `렌즈 ${idx + 1}`}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.5, marginBottom: l.cost ? 6 : 0 }}>
+                        {l.verdict}
+                      </div>
+                      {l.cost && (
+                        <div style={{ fontSize: 11, color: 'var(--fg-muted)', borderTop: '1px dashed var(--line)', paddingTop: 4 }}>
+                          <span style={{ color: 'var(--fg-dim)' }}>감수할 비용:</span> {l.cost}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Dissent / Preservation of Dissent */}
+              {councilData.dissent && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderLeftWidth: 3, borderLeftColor: 'var(--warning)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Badge tone="warning" size="xs">이견 보존 (Dissent)</Badge>
+                    <span style={{ fontSize: 10.5, color: 'var(--fg-dim)' }}>합의보다 반대 논거 중시</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.5 }}>
+                    {councilData.dissent}
+                  </div>
+                </div>
+              )}
+
+              {/* Conditional Verdict */}
+              {councilData.conditionalVerdict && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Badge tone="info" size="xs">조건부 판정</Badge>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.5 }}>
+                    {councilData.conditionalVerdict}
+                  </div>
+                </div>
+              )}
+
+              {/* Next Action */}
+              {councilData.nextAction && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Badge tone="success" size="xs">즉시 실행 1단계</Badge>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.5 }}>
+                    {councilData.nextAction}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <Button variant="ghost" size="xs" onClick={() => setShowFullText(!showFullText)}>
+                  {showFullText ? '원문 접기' : '자문 원문 보기'}
+                </Button>
+              </div>
+
+              {showFullText && (
+                <div style={{ fontSize: 12, color: 'var(--fg-muted)', background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: 10, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                  {text}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{text}</div>
+          )}
+
+          <div style={{ marginTop: 4, display: 'flex', gap: 6 }}>
             <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(councilChatPath())}>코칭·대화에서 이어가기</Button>
           </div>
         </div>

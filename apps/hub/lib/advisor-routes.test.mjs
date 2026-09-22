@@ -33,7 +33,10 @@ beforeEach((t) => {
   const old = process.env.COM_MOON_ENGINE_URL;
   const fetchBefore = globalThis.fetch;
   process.env.COM_MOON_ENGINE_URL = 'http://engine.test';
-  globalThis.fetch = async () => Response.json({ status: 'generated', text: 'advice' });
+  globalThis.fetch = async (url, options) => {
+    state.lastFetch = { url, options, body: options?.body ? JSON.parse(options.body) : null };
+    return Response.json({ status: 'generated', text: 'advice' });
+  };
   t.after(() => {
     globalThis.fetch = fetchBefore;
     if (old === undefined) delete process.env.COM_MOON_ENGINE_URL;
@@ -106,4 +109,45 @@ test('run history validates bounds and keeps failed reads distinct from empty hi
   const data = await (await GET(new Request('http://hub.test?agent=council&ref=brand-1&limit=5'))).json();
   assert.equal(data.status, 'error');
   assert.deepEqual(state.query, { agent: 'council', ref: 'brand-1', limit: 5 });
+});
+test('brand-mentor forwards legendIds and directives to Engine and retains structured council', async () => {
+  globalThis.fetch = async (url, options) => {
+    state.lastFetch = { url, options, body: options?.body ? JSON.parse(options.body) : null };
+    return Response.json({
+      status: 'generated',
+      text: 'advice',
+      council: {
+        lenses: [{ lens: 'Jobs', verdict: '본질 집중', cost: '부차적 기능 포기' }],
+        dissent: '단기 매출 하락 리스크 존재',
+        conditionalVerdict: '고객 인터뷰 10명 통과 시 추진',
+        nextAction: '핵심 기능 1개 정의 및 프로토타입 배포',
+      },
+    });
+  };
+
+  const res = await POST(request({
+    legendIds: ['jobs', 'bezos', 'chouinard'],
+    directives: { values: { operatorEnergy: 4 } },
+    createWorkOrder: true,
+  }));
+  const data = await res.json();
+  assert.equal(data.status, 'generated');
+  assert.deepEqual(state.lastFetch.body.legendIds, ['jobs', 'bezos', 'chouinard']);
+  assert.deepEqual(state.lastFetch.body.directives, { values: { operatorEnergy: 4 } });
+  assert.ok(data.council);
+  assert.equal(data.council.dissent, '단기 매출 하락 리스크 존재');
+  assert.equal(state.order.body.council.conditionalVerdict, '고객 인터뷰 10명 통과 시 추진');
+  assert.ok(state.run.inputSummary.includes('legends=jobs,bezos,chouinard'));
+});
+test('sales-mentor forwards directives to Engine', async () => {
+  const req = new Request('http://hub.test/api/hub/sales-mentor', {
+    method: 'POST',
+    body: JSON.stringify({
+      mode: 'deal-review',
+      directives: { knowledge: { minContracts: 10 } },
+    }),
+  });
+  const res = await guruPOST(req);
+  assert.equal(res.status, 200);
+  assert.deepEqual(state.lastFetch.body.directives, { knowledge: { minContracts: 10 } });
 });
