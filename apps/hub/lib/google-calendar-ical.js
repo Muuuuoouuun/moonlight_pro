@@ -46,9 +46,13 @@ function mapInstance(instance, event) {
   if (!start || !end) return null;
 
   const uid = normalizeText(source.uid || event.uid) || `ical-${start.getTime()}`;
-  const isRecurring = Boolean(event.rrule);
+  const isRecurring = Boolean(event.rrule || source.recurrenceid);
   const allDay = Boolean(instance.isFullDay || source.start?.dateOnly || source.datetype === "date");
-  const occurrenceKey = allDay ? formatLocalDate(start) : start.toISOString();
+  // RECURRENCE-ID names the original slot even when this occurrence moves.
+  const recurrenceId = asDate(source.recurrenceid);
+  const occurrence = recurrenceId || start;
+  const occurrenceAllDay = recurrenceId ? Boolean(source.recurrenceid.dateOnly) : allDay;
+  const occurrenceKey = occurrenceAllDay ? formatLocalDate(occurrence) : occurrence.toISOString();
 
   return {
     id: isRecurring ? `${uid}:${occurrenceKey}` : uid,
