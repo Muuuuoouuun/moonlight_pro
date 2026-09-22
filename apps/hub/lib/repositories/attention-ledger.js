@@ -229,7 +229,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
       failedSources: ["tasks"],
       todos: [],
     })),
-    getRevenueLedger().catch(() => ({
+    getRevenueLedger({ projection: includeRaw ? "full" : "attention" }).catch(() => ({
       source: "error",
       error: "revenue-ledger-request-failed",
       failedSources: ["deals"],
