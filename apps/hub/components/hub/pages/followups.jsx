@@ -606,7 +606,8 @@ export function Followups({ onNavigate }) {
       </div>
 
       {/* 넛지 — 계기·이유·행동 하나. 목록보다 위다: 큐는 "누구"를, 넛지는 "무엇을"을 말한다. */}
-      {(nudgeState.status !== "live" || nudgeState.nudges.length > 0) && (
+      {/* loading은 껍데기도 그리지 않는다 — 빈 Card가 떴다 사라지면 첫 화면이 흔들린다. */}
+      {((nudgeState.status !== "live" && nudgeState.status !== "loading") || nudgeState.nudges.length > 0) && (
         <Card pad={false} className="hub-table-card">
           <CrmNudgeSection
             title="먼저 정리할 것"
@@ -633,7 +634,12 @@ export function Followups({ onNavigate }) {
         {sections.length === 0 ? (
           // error를 preview 문구("연결되면 표시됩니다")로 뭉개면 읽기 실패가 "오늘 할 일 없음"으로
           // 보인다 — 후속 누락 0건 목표에서 가장 위험한 오독이라 상태별로 분리한다(§5.3 source truth).
-          syncState === "error" ? (
+          syncState === "loading" ? (
+            // 콜드 로딩을 "연락 데이터 없음"으로 그리면 로딩과 빈 상태가 같은 문구를 쓴다 —
+            // §11은 레이아웃이 아는 로딩을 Skeleton으로 그리라고 못박는다(이 파일의 드로어
+            // 타임라인도 같은 계약).
+            <Skeleton lines={5} height={14} label="연락 목록 불러오는 중" style={{ padding: 16 }} />
+          ) : syncState === "error" ? (
             <EmptyState
               icon="clock"
               title="연락 목록을 읽지 못했습니다"

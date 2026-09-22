@@ -82,8 +82,11 @@ export function CrmNudgeCard({ nudge, busy = false, onAct, onEscape }) {
 
 // 섹션 껍데기 — 제목·건수·읽기 상태. 넛지가 없으면 아무것도 그리지 않는다
 // (빈 섹션은 "할 일이 없다"를 말하는 게 아니라 자리만 먹는다).
+// loading도 같이 접는다 — 예전엔 콜드 로드마다 "먼저 정리할 것 0" 헤더가 본문 없이 떴다가
+// live+0건이 되면 사라졌다(헤더 플래시). 로딩을 스켈레톤으로 예고하지도, 빈 상태를 정직하게
+// 말하지도 않는 중간 상태였다(§11).
 export function CrmNudgeSection({ title, hint, nudges = [], state = "live", busyKey, onAct, onEscape }) {
-  if (state === "live" && nudges.length === 0) return null;
+  if (nudges.length === 0 && (state === "live" || state === "loading")) return null;
 
   return (
     <section aria-label={title}>
