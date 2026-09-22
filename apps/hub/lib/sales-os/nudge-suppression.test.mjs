@@ -33,15 +33,21 @@ globalThis.__nudgeRows = [];
 const { buildNudgeMetaPatch, buildNudgeSuppressionWrite, persistNudgeSuppression } =
   await import("./nudge-suppression.js?suppression");
 
-test("input validation names what is wrong instead of writing a half-formed record", () => {
-  assert.equal(buildNudgeSuppressionWrite({ subjectType: "memo", subjectId: "m1", action: "dismiss" }).reason, "invalid-subject");
-  assert.equal(buildNudgeSuppressionWrite({ subjectType: "lead", action: "dismiss" }).reason, "missing-subject-id");
-  assert.equal(buildNudgeSuppressionWrite({ subjectType: "lead", subjectId: "l1", action: "nope" }).reason, "invalid-action");
-  // 키 없이 숨기면 그 고객이 영구히 조용해진다.
-  assert.equal(buildNudgeSuppressionWrite({ subjectType: "lead", subjectId: "l1", action: "dismiss" }).reason, "missing-trigger-key");
-  assert.equal(buildNudgeSuppressionWrite({ subjectType: "lead", subjectId: "l1", action: "snooze", until: "내일" }).reason, "invalid-until");
+const LEAD_ID = "11111111-1111-4111-8111-111111111111";
+const DEAL_ID = "22222222-2222-4222-8222-222222222222";
 
-  const ok = buildNudgeSuppressionWrite({ subjectType: "deal", subjectId: "d1", action: "snooze", until: "2026-10-01" });
+test("input validation names what is wrong instead of writing a half-formed record", () => {
+  assert.equal(buildNudgeSuppressionWrite({ subjectType: "memo", subjectId: LEAD_ID, action: "dismiss" }).reason, "invalid-subject");
+  assert.equal(buildNudgeSuppressionWrite({ subjectType: "lead", action: "dismiss" }).reason, "missing-subject-id");
+  // 비UUID가 통과하면 PostgREST 캐스팅 오류 → failed → 라우트 502. 입력 오류를 서버 장애로
+  // 보고하지 않도록 형식도 여기서 막는다.
+  assert.equal(buildNudgeSuppressionWrite({ subjectType: "lead", subjectId: "l1", action: "dismiss", triggerKey: "k" }).reason, "invalid-subject-id");
+  assert.equal(buildNudgeSuppressionWrite({ subjectType: "lead", subjectId: LEAD_ID, action: "nope" }).reason, "invalid-action");
+  // 키 없이 숨기면 그 고객이 영구히 조용해진다.
+  assert.equal(buildNudgeSuppressionWrite({ subjectType: "lead", subjectId: LEAD_ID, action: "dismiss" }).reason, "missing-trigger-key");
+  assert.equal(buildNudgeSuppressionWrite({ subjectType: "lead", subjectId: LEAD_ID, action: "snooze", until: "내일" }).reason, "invalid-until");
+
+  const ok = buildNudgeSuppressionWrite({ subjectType: "deal", subjectId: DEAL_ID, action: "snooze", until: "2026-10-01" });
   assert.deepEqual({ ok: ok.ok, table: ok.table, until: ok.until }, { ok: true, table: "deals", until: "2026-10-01" });
 });
 

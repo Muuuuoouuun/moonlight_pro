@@ -6,6 +6,7 @@
 
 import { eqFilter, fetchSupabaseRows } from "../server-read.js";
 import { resolveDefaultWorkspaceId } from "../server-write.js";
+import { isCanonicalUuid } from "../uuid.js";
 import { persistRevenueRecord } from "./revenue-write.js";
 
 const ACTIONS = new Set(["snooze", "dismiss", "resume"]);
@@ -17,6 +18,10 @@ export function buildNudgeSuppressionWrite(input = {}) {
   const table = SUBJECTS[subjectType];
   if (!table) return { ok: false, reason: "invalid-subject" };
   if (!input.subjectId) return { ok: false, reason: "missing-subject-id" };
+  // 형식까지 여기서 막는다 — 비UUID가 통과하면 PostgREST의 uuid 캐스팅 오류가
+  // persistRevenueRecord의 failed가 되고 라우트가 502로 매핑한다. 클라이언트 입력 오류가
+  // 서버 장애로 보고되는 셈이라, 형제 라우트(tasks DELETE·routine projectId)와 같게 400으로 답한다.
+  if (!isCanonicalUuid(String(input.subjectId))) return { ok: false, reason: "invalid-subject-id" };
 
   const action = String(input.action || "");
   if (!ACTIONS.has(action)) return { ok: false, reason: "invalid-action" };
