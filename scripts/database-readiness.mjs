@@ -12,6 +12,7 @@ const JOURNAL_SEARCH = 'journal_search_v1(uuid,text,timestamptz,timestamptz,text
 const CONTENT_WORKFLOW = 'content_workflow_v1(uuid,uuid,text,jsonb)';
 const GOAL_COMMAND = 'operating_goal_command_v1(uuid,text,jsonb)';
 const AI_COMMAND = 'operating_ai_command_v1(uuid,text,jsonb,jsonb)';
+const CONTACT_OUTCOME = 'record_contact_outcome_v1(uuid,text,uuid,uuid,text,text,text,text,text,boolean)';
 export const DATABASE_FEATURES = [
   { name: '콘텐츠', migration: '20260912_0026_content_workflow.sql',
     tables: ['content_revisions', 'content_workflow_receipts', 'content_transform_runs'], functions: [CONTENT_WORKFLOW] },
@@ -54,6 +55,11 @@ export const DATABASE_FEATURES = [
   { name: 'AI 어시스트 보강', migration: '20260922_0041_ai_assistance_hardening.sql', tables: [], functions: [],
     bodyIncludes: [[AI_COMMAND, "v_input->>'expectedRevision' IS NULL"], [AI_COMMAND, "v_input->>'expectedSourceUpdatedAt' IS NULL"]],
     tableNoWrite: [['operating_ai_candidates', 'service_role'], ['operating_ai_receipts', 'service_role']] },
+  // 공용 기록창은 발신·메모 채널을 반응 없이 보낸다. 0018은 빈 반응을 invalid-reaction으로 거절했으니
+  // 두 마커가 0042 버전임을 증명한다: 그 채널에서 빈 반응 허용, 반응이 없으면 last_reaction 미갱신.
+  { name: '무반응 연락 기록', migration: '20260923_0042_contact_outcome_reactionless.sql', tables: [], functions: [CONTACT_OUTCOME],
+    bodyIncludes: [[CONTACT_OUTCOME, "v_reaction = '' and v_kind in ('kakao', 'email', 'note', 'update', 'quote')"],
+      [CONTACT_OUTCOME, "when v_reaction is null then '{}'::jsonb"]] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {
