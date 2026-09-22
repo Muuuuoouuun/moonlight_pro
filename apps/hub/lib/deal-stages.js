@@ -77,5 +77,29 @@ export const STAGE_LINE = [
 // Stalled threshold (days since last activity) for an open (non-closing, non-lost) deal.
 // Single canonical value per DESIGN.md §8.1 ("정체 기준은 STALLED_DAYS 상수 하나, 페이지별
 // 하드코딩 금지") — the Deals kanban queue icon and the server-side stalled-scan follow-up
-// proposer both read this instead of keeping their own copy.
+// proposer both read this instead of keeping their own copy — through isDealStalled() below.
 export const STALLED_DAYS = 14;
+
+// The one stalled verdict. The threshold is inclusive (`>=`): a deal exactly STALLED_DAYS
+// old is stalled everywhere — kanban danger rail, Revenue attention, attention ledger /
+// Daily Brief, the deal drawer, and the server-side stalled-scan. Closing and lost deals are
+// finished, so they never stall. Callers must not re-implement this comparison inline.
+export function isDealStalled(deal, days = STALLED_DAYS) {
+  if (!deal || deal.stage === "closing" || deal.stage === "lost") return false;
+  const age = Number(deal.age);
+  return Number.isFinite(age) && age >= days;
+}
+
+// `lost` sits outside the funnel (not in DEAL_STAGES), so it needs one display label of its
+// own — otherwise toasts and activity text fall back to the raw key ("lost(으)로 이동됨").
+export const LOST_STAGE = { key: "lost", label: "Lost" };
+
+// Display label for any deal stage key, including `lost`. `stages` lets a component pass the
+// ledger's own stage list; the canonical list is the fallback, then the raw key.
+export function dealStageLabel(key, stages = DEAL_STAGES) {
+  if (key === LOST_STAGE.key) return LOST_STAGE.label;
+  const list = Array.isArray(stages) ? stages : [];
+  return list.find((s) => s.key === key)?.label
+    || DEAL_STAGES.find((s) => s.key === key)?.label
+    || key;
+}

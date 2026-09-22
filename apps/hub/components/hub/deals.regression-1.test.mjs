@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
-import { DEAL_STAGES } from '../../lib/deal-stages.js';
+import { DEAL_STAGES, LOST_STAGE, dealStageLabel, isDealStalled } from '../../lib/deal-stages.js';
 
 // Regression: ISSUE-001 — column moves unmount the drag source before dragend.
 // Found by /qa on 2026-09-21. Browser evidence: /tmp/moonlight-deals-qa/drag-result.png.
@@ -14,7 +14,7 @@ const javascript = ts.transpileModule(component.replace('export function', 'func
 }).outputText;
 
 function mount({ state = 'live', records = [], workspace } = {}) {
-  const slots = [], timers = [], pending = new Map();
+  const slots = [], timers = [], pending = new Map(), selections = [];
   let index = 0, tree, reloads = 0;
   const React = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(Boolean) } }),
@@ -33,11 +33,11 @@ function mount({ state = 'live', records = [], workspace } = {}) {
     useSearchParams: () => new URLSearchParams(), useRouter: () => ({}), usePathname: () => '/dashboard/revenue/deals',
     useScopeFilter: () => React.useState('all'), getWorkspace: scope => scope ? { label: scope } : null,
     filterDealsByWorkspace: ds => ds, useUndoableAction: () => ({ schedule: (key, fn) => pending.set(key, fn), cancel: key => pending.delete(key) }),
-    useCrmSelection: () => ({ selectedId: null }), useCrmKeyboard() {},
-    STAGE_FILL: [], STAGE_LINE: [], STALLED_DAYS: 14, SCOPE_OPTIONS: [], fmt: String,
+    useCrmSelection: items => { selections.push(items); return { selectedId: null }; }, useCrmKeyboard() {},
+    STAGE_FILL: [], STAGE_LINE: [], LOST_STAGE, dealStageLabel, isDealStalled, SCOPE_OPTIONS: [], fmt: String,
     triggerCelebration() {}, saveRevenueRecord: async () => ({ ok: true, status: 'saved' }),
   };
-  for (const name of ['Button', 'Kbd', 'SyncBadge', 'Checkbox', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget']) dependencies[name] = name;
+  for (const name of ['Button', 'Kbd', 'SyncBadge', 'Checkbox', 'CheckboxRow', 'LifecycleBadge', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget']) dependencies[name] = name;
   const Deals = new Function(...Object.keys(dependencies), `${javascript}; return Deals;`)(...Object.values(dependencies));
   function render() { index = 0; tree = Deals({ workspace }); return tree; }
   function findAll(predicate, node = tree) {
@@ -45,7 +45,7 @@ function mount({ state = 'live', records = [], workspace } = {}) {
     return [...(predicate(node) ? [node] : []), ...(node.props?.children || []).flatMap(child => findAll(predicate, child))];
   }
   render();
-  return { render, findAll, pending, flush: () => { timers.splice(0).forEach(fn => fn()); }, reloads: () => reloads };
+  return { render, findAll, pending, flush: () => { timers.splice(0).forEach(fn => fn()); }, reloads: () => reloads, lastSelection: () => selections[selections.length - 1] };
 }
 
 function deal() { return { id: 'stage-regression', stage: DEAL_STAGES[0].key, value: 0 }; }
@@ -115,4 +115,24 @@ test('loading uses Skeleton and partial data retains the board with retry', () =
   assert.equal(partial.findAll(n => n.type === 'Skeleton').length, 0);
   partial.findAll(n => n.type === 'Button' && n.props.children.includes('딜 원장 다시 확인'))[0].props.onClick();
   assert.equal(partial.reloads(), 1);
+});
+
+// Regression: the Lost column rendered from boardStages, but the j/k selection list still
+// flattened DEAL_STAGES only — Lost cards could not be selected or opened with `e`.
+test('Lost 토글을 켜면 Lost 카드도 키보드 선택 목록에 들어가고 종료 lifecycle로 표시된다', () => {
+  const lost = { id: 'lost-deal', stage: 'lost', value: 0 };
+  const app = mount({ records: [deal(), lost] });
+  assert.ok(!app.lastSelection().some(d => d.id === lost.id), 'Lost 토글 전에는 선택 목록 밖');
+  const toggle = app.findAll(n => n.type === 'CheckboxRow' && String(n.props.text).startsWith(LOST_STAGE.label))[0];
+  assert.equal(toggle.props.text, `${LOST_STAGE.label} 1건 보기`);
+  toggle.props.onChange(true); app.render();
+  assert.ok(app.lastSelection().some(d => d.id === lost.id), 'Lost 컬럼 카드는 j/k 선택 대상');
+  const badge = app.findAll(n => n.type === 'LifecycleBadge')[0];
+  assert.equal(badge.props.state, 'cancelled');
+});
+
+test('숨긴 Lost 딜은 Lost 토글 건수에 세지 않는다 — 켜도 빈 컬럼이 붙지 않게', () => {
+  const app = mount({ records: [deal(), { id: 'lost-hidden', stage: 'lost', value: 0, hidden: true }] });
+  const lostToggle = app.findAll(n => n.type === 'CheckboxRow' && String(n.props.text).startsWith(LOST_STAGE.label));
+  assert.equal(lostToggle.length, 0);
 });

@@ -4,7 +4,7 @@ import { GoalLinks } from '../goal-links';
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress, CertaintyBadge, ChipToggle, useToast } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, CheckboxRow, Progress, CertaintyBadge, LifecycleBadge, ChipToggle, useToast } from "../hub-primitives";
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
@@ -14,7 +14,7 @@ import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAcc
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
-import { DEAL_STAGES, STAGE_FILL, STAGE_LINE, STALLED_DAYS } from "@/lib/deal-stages";
+import { DEAL_STAGES, STAGE_FILL, STAGE_LINE, LOST_STAGE, dealStageLabel, isDealStalled } from "@/lib/deal-stages";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
@@ -157,7 +157,7 @@ function formatPercentDelta(current, previous) {
 function buildRevenueAttention(leads, deals) {
   const items = [];
   deals
-    .filter((deal) => deal.stage !== 'closing' && deal.stage !== 'lost' && Number(deal.age) >= STALLED_DAYS)
+    .filter((deal) => isDealStalled(deal))
     .slice(0, 3)
     .forEach((deal) => {
       items.push({
@@ -1791,7 +1791,6 @@ export function Deals({ workspace, onNavigate }) {
   // 초기화(숨기기)된 딜은 기본적으로 파이프라인에서 빠진다 — 되돌릴 수 있는 정리이지
   // 삭제가 아니다. showHidden이 켜지면 다시 전부 보인다(dashed 엣지 + 숨김 뱃지).
   const hiddenCount = React.useMemo(() => scopedDeals.filter(d => d.hidden).length, [scopedDeals]);
-  const lostCount = React.useMemo(() => scopedDeals.filter(d => d.stage === 'lost').length, [scopedDeals]);
   const visibleDeals = React.useMemo(
     () => (showHidden ? scopedDeals : scopedDeals.filter(d => !d.hidden)),
     [scopedDeals, showHidden],
@@ -1829,7 +1828,13 @@ export function Deals({ workspace, onNavigate }) {
   // Lost는 퍼널 밖 종료 상태 — 히트 램프에 태우지 않는 중립 컬럼이라 ramp를 비워
   // STAGE_FILL/STAGE_LINE 인덱싱에서 자연히 빠지고 inset 스트라이프는 --line-strong으로
   // 떨어진다(DESIGN.md §5.3 lifecycle "cancelled"=neutral, funnel 색과 분리).
-  const boardStages = (showLost && lostCount > 0) ? [...DEAL_STAGES, { key: 'lost', label: 'Lost' }] : DEAL_STAGES;
+  // 토글 건수는 컬럼이 실제로 보여 줄 집합(visibleDeals + 스코프 필터)과 같은 기준으로 센다 —
+  // 숨긴 딜·필터 밖 Lost까지 세면 "Lost 2건 보기"를 켰는데 빈 컬럼이 붙었다.
+  const lostCount = totals.lost?.count || 0;
+  const boardStages = React.useMemo(
+    () => ((showLost && lostCount > 0) ? [...DEAL_STAGES, LOST_STAGE] : DEAL_STAGES),
+    [DEAL_STAGES, showLost, lostCount],
+  );
   const openCount = openStages.reduce((a, s) => a + (totals[s.key]?.count || 0), 0);
   const closingTotal = totals.closing?.sum || 0;
   // Drag-to-move: 낙관 이동 → 3.5초 되돌리기 창 → 창이 닫힌 뒤에만 PATCH(지연 쓰기 —
@@ -1848,7 +1853,7 @@ export function Deals({ workspace, onNavigate }) {
     const key = `deal-stage-${id}`;
     const undoBase = pendingStageRef.current.get(key) ?? prevStage;
     pendingStageRef.current.set(key, undoBase);
-    const stageLabel = DEAL_STAGES.find(s => s.key === to)?.label || to;
+    const stageLabel = dealStageLabel(to, DEAL_STAGES);
     const undoStageMove = () => {
       if (cancelUndoable(key)) {
         pendingStageRef.current.delete(key);
@@ -2000,9 +2005,11 @@ export function Deals({ workspace, onNavigate }) {
   // 키보드 계층(2026-08-05 배선): j/k 카드 이동(컬럼 순서로 평탄화) · e 편집 · n 생성 ·
   // 1–5 선택 딜 스테이지 이동 · Esc 해제. 수제 n 리스너를 훅으로 흡수. 치트시트(?)의
   // "1–5 스테이지 이동"은 이 배선이 생기면서 다시 유효해졌다.
+  // 보드가 그리는 컬럼(boardStages — Lost 토글 포함)과 같은 목록을 평탄화해야 Lost 카드도
+  // j/k 선택·e 편집 대상이 된다.
   const boardItems = React.useMemo(
-    () => DEAL_STAGES.flatMap(s => visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter))),
-    [DEAL_STAGES, visibleDeals, filter],
+    () => boardStages.flatMap(s => visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter))),
+    [boardStages, visibleDeals, filter],
   );
   const selection = useCrmSelection(boardItems);
   useCrmKeyboard({
@@ -2040,16 +2047,10 @@ export function Deals({ workspace, onNavigate }) {
         </div>
         <div style={{ flex: 1 }} />
         {hiddenCount > 0 && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 10, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-            <Checkbox checked={showHidden} onChange={setShowHidden} size={16} label={`숨긴 딜 ${hiddenCount}건 보기`} />
-            <span>숨긴 딜 {hiddenCount}건 보기</span>
-          </div>
+          <CheckboxRow checked={showHidden} onChange={setShowHidden} size={16} text={`숨긴 딜 ${hiddenCount}건 보기`} style={{ marginRight: 10 }} />
         )}
         {lostCount > 0 && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 10, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-            <Checkbox checked={showLost} onChange={setShowLost} size={16} label={`Lost ${lostCount}건 보기`} />
-            <span>Lost {lostCount}건 보기</span>
-          </div>
+          <CheckboxRow checked={showLost} onChange={setShowLost} size={16} text={`${LOST_STAGE.label} ${lostCount}건 보기`} style={{ marginRight: 10 }} />
         )}
         <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
         <Button variant="primary" size="sm" icon="plus" disabled={ledgerUnavailable} onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
@@ -2129,7 +2130,7 @@ export function Deals({ workspace, onNavigate }) {
                   // Stalled = open (not won/lost) and aged past the follow-up window. Surfaces
                   // in every open column, not just Negotiation, and marks the card with a
                   // danger inset stripe (§5.2 left-accent — never a full fill or a thick border).
-                  const stalled = Number(d.age) >= STALLED_DAYS && s.key !== 'closing' && s.key !== 'lost';
+                  const stalled = isDealStalled(d);
                   return (
                   <div key={d.id}
                     className="hub-kanban-card"
@@ -2183,7 +2184,7 @@ export function Deals({ workspace, onNavigate }) {
                         tooltip="Guru에게 진단 요청"
                         onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}
                       />
-                      {s.key === 'lost' && <Badge tone="neutral" size="xs" variant="outline">종료</Badge>}
+                      {s.key === 'lost' && <LifecycleBadge state="cancelled" label="종료" />}
                       {d.hidden && <Badge tone="neutral" size="xs" variant="outline">숨김</Badge>}
                       <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">
                         {d.type === 'personal' ? 'P' : 'C'}
@@ -2259,7 +2260,7 @@ export function Deals({ workspace, onNavigate }) {
           // owner를 저장한 적이 없어 편집 가능한 척만 하던 필드였다.
           { key: 'stage', row: 'primary', label: '단계', type: 'select', options: [
             ...DEAL_STAGES.map(s => ({ value: s.key, label: s.label })),
-            ...(DEAL_STAGES.some(s => s.key === 'lost') ? [] : [{ value: 'lost', label: 'Lost' }]),
+            ...(DEAL_STAGES.some(s => s.key === LOST_STAGE.key) ? [] : [{ value: LOST_STAGE.key, label: LOST_STAGE.label }]),
           ] },
           { key: 'value', row: 'primary', label: '금액 (₩)', inputType: 'number', placeholder: '0' },
           { key: 'closeAt', row: 'meta', label: '예상 마감', inputType: 'date' },
@@ -2301,7 +2302,7 @@ export function Deals({ workspace, onNavigate }) {
                 1:1 코칭 열기
               </Button>
             </div>
-            {(!editingDeal.nextAction || editingDeal.age > 7) && (
+            {(!editingDeal.nextAction || isDealStalled(editingDeal)) && (
               <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Iconed name="clock" size={12} aria-hidden="true" />
                 <span>

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 
 import { scanStalledDeals } from "./stalled-scan.js";
-import { STALLED_DAYS } from "@/lib/deal-stages";
+import { STALLED_DAYS, dealStageLabel, isDealStalled } from "@/lib/deal-stages";
 
 const ORIGINAL_ENV = { ...process.env };
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -64,16 +64,38 @@ test("closing과 lost 딜은 아무리 나이가 많아도 정체로 잡히지 �
   assert.deepEqual(result.proposals, []);
 });
 
-// The default threshold now reads the same STALLED_DAYS the Deals kanban queue icon uses
-// (deal-stages.js) instead of a separate, smaller hardcoded constant.
-test("기본 임계값은 STALLED_DAYS(14일)와 같다 — 별도 하드코딩 없음", async () => {
-  const belowCanonicalThreshold = ledgerWith([deal({ age: STALLED_DAYS })]);
-  const atThreshold = await scanStalledDeals({ workspaceId: WORKSPACE_ID, ledger: belowCanonicalThreshold, dryRun: true });
-  assert.equal(atThreshold.stalled, 0, "STALLED_DAYS와 같은 나이는 아직 정체가 아니다(> 비교)");
+// The default threshold reads the same STALLED_DAYS — and the same inclusive isDealStalled()
+// verdict — as the Deals kanban rail and the attention ledger, so the boundary day agrees.
+test("기본 임계값은 STALLED_DAYS(14일)와 같다 — 경계일(=14일)부터 정체(칸반·attention과 같은 >=)", async () => {
+  const belowThreshold = ledgerWith([deal({ age: STALLED_DAYS - 1 })]);
+  const below = await scanStalledDeals({ workspaceId: WORKSPACE_ID, ledger: belowThreshold, dryRun: true });
+  assert.equal(below.stalled, 0, "STALLED_DAYS보다 하루 어린 딜은 아직 정체가 아니다");
 
-  const overCanonicalThreshold = ledgerWith([deal({ age: STALLED_DAYS + 1 })]);
-  const overThreshold = await scanStalledDeals({ workspaceId: WORKSPACE_ID, ledger: overCanonicalThreshold, dryRun: true });
-  assert.equal(overThreshold.stalled, 1);
+  const atCanonicalThreshold = ledgerWith([deal({ age: STALLED_DAYS })]);
+  const atThreshold = await scanStalledDeals({ workspaceId: WORKSPACE_ID, ledger: atCanonicalThreshold, dryRun: true });
+  assert.equal(atThreshold.stalled, 1, "STALLED_DAYS와 같은 나이는 정체다 — 칸반 레일·attention 기록과 같은 판정");
+});
+
+test("isDealStalled는 경계 포함(>=)이고 closing·lost는 정체가 아니다", () => {
+  assert.equal(isDealStalled({ stage: "quote", age: STALLED_DAYS }), true);
+  assert.equal(isDealStalled({ stage: "quote", age: STALLED_DAYS - 1 }), false);
+  assert.equal(isDealStalled({ stage: "closing", age: 999 }), false);
+  assert.equal(isDealStalled({ stage: "lost", age: 999 }), false);
+  assert.equal(isDealStalled({ stage: "quote", age: "n/a" }), false);
+  assert.equal(isDealStalled(null), false);
+});
+
+test("lost 단계도 한국어 라벨 조회에서 원시 키로 새지 않는다", () => {
+  assert.equal(dealStageLabel("lost"), "Lost");
+  assert.equal(dealStageLabel("quote"), "견적");
+  assert.equal(dealStageLabel("quote", [{ key: "quote", label: "견적 단계" }]), "견적 단계");
+  assert.equal(dealStageLabel("unknown-key"), "unknown-key");
+});
+
+test("기록 read 실패는 preview가 아니라 status error로 드러난다", async () => {
+  const result = await scanStalledDeals({ workspaceId: WORKSPACE_ID, ledger: { source: "error", deals: [] }, dryRun: true });
+  assert.equal(result.status, "error");
+  assert.equal(result.reason, "ledger-read-failed");
 });
 
 test("trackingEligible=false 딜은 정체 스캔에서 제외된다", async () => {
