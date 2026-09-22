@@ -1685,10 +1685,6 @@ button {
   background: rgba(255, 255, 255, 0.035);
 }
 
-.hub-app .project-create-inline .project-create-field-group--schedule {
-  grid-column: 1 / -1;
-}
-
 .hub-app .project-create-field-group > header {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
@@ -1696,10 +1692,9 @@ button {
   padding-bottom: 2px;
 }
 
-.hub-app .project-create-field-group > header > span {
-  padding-top: 2px;
+.hub-app .project-create-field-group > header > svg {
+  margin-top: 2px;
   color: var(--moon-400);
-  font-size: 10.5px;
 }
 
 .hub-app .project-create-field-group h3,
@@ -1718,31 +1713,6 @@ button {
   color: var(--fg-faint);
   font-size: 10.5px;
   line-height: 1.45;
-}
-
-.hub-app .project-create-group-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  color: var(--fg-faint);
-  font-size: 10.5px;
-  line-height: 1.55;
-}
-
-.hub-app .project-create-group-note > svg {
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
-
-.hub-app .project-create-two-columns,
-.hub-app .project-create-date-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.hub-app .project-create-inline .project-create-date-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .hub-app .project-create-actions {
@@ -2480,10 +2450,7 @@ button {
     padding-inline: 10px !important;
   }
 
-  .hub-app .project-create-inline .project-create-advanced-grid,
-  .hub-app .project-create-inline .project-create-date-grid,
-  .hub-app .project-create-two-columns,
-  .hub-app .project-create-date-grid {
+  .hub-app .project-create-inline .project-create-advanced-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
