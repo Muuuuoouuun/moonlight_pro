@@ -492,3 +492,10 @@ test('memos has one my-work owner and is reachable in the navigation catalog', (
   assert.equal(resolveSidebarPath("discovery", "personal"), "dashboard/discovery?scope=personal");
   assert.ok(navTreePaths().includes("dashboard/discovery"));
 });
+
+test('content performance is a visible content child and command palette destination', () => {
+  assert.equal(ownerAnchorKey('dashboard/content/performance'), 'content');
+  assert.ok(sidebarChildren('content', 'all').some(child => child.path === 'dashboard/content/performance'));
+  assert.ok(navTreePaths().includes('dashboard/content/performance'));
+  assert.match(appSource, /'dashboard\/content\/performance':/);
+});

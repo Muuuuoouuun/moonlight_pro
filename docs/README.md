@@ -132,6 +132,10 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md`](superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md) — **방향 승인 · Studio 1차 구현**. 원문·기획·채널별 초안·AI 후보 비교/적용·버전 복원을 연결. 구현·로컬 검증 범위는 문서 §0과 [실행 기록](superpowers/plans/2026-09-12-content-workflow.md)을 따른다. [후속 검증·운영 적용 준비](superpowers/plans/2026-09-12-content-release.md)에서 통합 테스트 오류를 해결했다. 2026-09-14 인증 갱신 및 0026 운영 DB 적용 완료. 일지 신설·기간 회고·자동 콘텐츠 크론과 코드 배포는 후속 범위다.
 
+**콘텐츠 성과 (2026-09-22)**
+
+- [`superpowers/specs/2026-09-22-content-performance-design.md`](superpowers/specs/2026-09-22-content-performance-design.md) — **구현·로컬 검증 완료**. 콘텐츠 → 성과에 요약·이번 주·월별 발행량과 직접 기록한 조회·공유·답글을 집계한다. 한국 시간 기준, 브랜드·채널 필터, 미기록/0 구분, 수정 충돌 복구 포함. 수치는 해당 기간 발행 원고의 최신 누적치이며 기간 중 증가량이 아니다. [실행 기록과 검증 한계](superpowers/plans/2026-09-22-content-performance.md). 지정 채널·대시보드의 API/브라우저 자동 수집은 후속 연결이며 아직 실행하지 않는다.
+
 **메모 작성·활용 (2026-09-13)**
 
 - [`superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md`](superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md) — **1차 승인·구현 / 후속 분석·추천 DRAFT**. 내 작업 → 메모에서 제목 없는 빠른 기록·선택 보강·업무 연결·발췌의 할 일/Studio 생성과 원문 복귀를 연결한다. 같은 탭 새로고침 복구·충돌 비교·중복 방지 포함. [구현·검증·운영 적용 전제](superpowers/plans/2026-09-13-memo-workflow.md). 0027 운영 DB는 2026-09-14 적용 완료. 코드 배포는 별도다.

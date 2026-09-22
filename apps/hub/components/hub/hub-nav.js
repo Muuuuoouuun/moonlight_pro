@@ -103,6 +103,7 @@ const BRAND_CHILDREN = {
 };
 
 const CONTENT_CHILDREN = [
+  { key: 'ct-performance', label: '성과', path: 'dashboard/content/performance' },
   { key: 'ct-queue', label: '소재·제작', path: 'dashboard/content/queue' },
   { key: 'ct-studio', label: '원고 작성', path: 'dashboard/content/studio' },
   { key: 'ct-campaigns', label: 'Campaigns', path: 'dashboard/content/campaigns' },
