@@ -355,6 +355,10 @@ export function parseOfficeChatInput(input) {
     ? input.context
     : null;
   const evaluate = Boolean(input.evaluate);
+  const model = typeof input.model === 'string' && input.model.trim() ? input.model.trim() : null;
+  if (model && (model.length > 100 || !/^[\w.-]+$/.test(model))) {
+    reject('Invalid model identifier.', 'invalid-model');
+  }
 
   return {
     agentId,
@@ -365,5 +369,6 @@ export function parseOfficeChatInput(input) {
     lens,
     context,
     evaluate,
+    model,
   };
 }
