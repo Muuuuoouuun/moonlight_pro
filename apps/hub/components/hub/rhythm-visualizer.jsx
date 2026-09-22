@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Badge, TruthBadge } from "./hub-primitives";
+import { Badge, EmptyState, Skeleton, TruthBadge } from "./hub-primitives";
 import { StreakMark } from "./burning-streak";
 import { summarizeRitualsByCategory } from "@/lib/rhythm-ui";
 
@@ -17,12 +17,16 @@ import { summarizeRitualsByCategory } from "@/lib/rhythm-ui";
  * tasksStatus는 /api/hub/tasks 봉투의 truth 상태(live·partial·preview·error·loading)다. live가
  * 아니면 매트릭스 옆에 TruthBadge로 밝힌다 — 할 일 read 실패가 "완료 0건"으로 보이지 않게.
  * rhythmPartial은 루틴 기록이 조회 한도에서 잘렸다는 뜻이라 체크인 집계 옆에 같은 방식으로 표시한다.
+ *
+ * matrix는 할 일(tasksStatus)과 루틴(rhythmState) 두 소스를 합산하므로, 빈 상태 문구도 두
+ * truth를 합쳐 판정한다(matrixTruth) — 한쪽만 보면 나머지 read 실패가 "완료 0건"으로 위장된다.
  */
 export function RhythmVisualizer({
   rituals = [],
   summary = null,
   focusData = null,
   tasksStatus = "live",
+  rhythmState = "live",
   rhythmPartial = false,
 }) {
   const [hoveredDay, setHoveredDay] = React.useState(null);
@@ -48,6 +52,16 @@ export function RhythmVisualizer({
   const categoryCompleted = categories.reduce((acc, c) => acc + c.completedThisWeek, 0);
   const categoryTarget = categories.reduce((acc, c) => acc + c.targetThisWeek, 0);
   const categoryPercent = categoryTarget > 0 ? Math.min(100, Math.round((categoryCompleted / categoryTarget) * 100)) : 0;
+
+  // 두 소스를 합친 truth — 덜 확실한 쪽이 이긴다. 'live-empty'는 읽기가 성공한 빈 기록이라 live다.
+  const matrixTruth = React.useMemo(() => {
+    const norm = (s) => (s === "live-empty" ? "live" : s);
+    const states = [norm(tasksStatus), norm(rhythmState)];
+    for (const rank of ["loading", "error", "preview", "partial"]) {
+      if (states.includes(rank)) return rank;
+    }
+    return "live";
+  }, [tasksStatus, rhythmState]);
 
   const focusedIndex = hoveredDay !== null ? hoveredDay : (hasMatrix ? 6 : null);
   const focusedDay = focusedIndex !== null ? matrixDays[focusedIndex] : null;
@@ -161,10 +175,22 @@ export function RhythmVisualizer({
           </div>
         </div>
 
-        {!hasMatrix ? (
-          <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>
-            최근 7일 동안 완료한 할 일·루틴 체크인이 없습니다.
-          </div>
+        {!hasMatrix && matrixTruth === "loading" ? (
+          /* 로딩은 레이아웃을 예고한다(§11) — EmptyState는 "비어 있음"이라는 다른 truth다. */
+          <Skeleton lines={4} height={28} gap={14} label="리듬 매트릭스 불러오는 중" style={{ minHeight: 210, padding: "8px 0" }} />
+        ) : !hasMatrix ? (
+          /* live가 아니면 "체크인이 없습니다"라고 단정하지 않는다 — 원인만 말하고, 다시 읽기는
+             페이지 상단 배너가 이미 갖고 있다(work.jsx의 rhythmState 배너). */
+          <EmptyState
+            icon="rhythm"
+            title={matrixTruth === "live" ? "최근 7일 체크인이 없습니다" : "매트릭스를 그릴 수 없습니다"}
+            description={matrixTruth === "live"
+              ? "최근 7일 동안 완료한 할 일·루틴 체크인이 없습니다."
+              : matrixTruth === "preview"
+                ? "할 일·루틴 기록이 연결되면 7일 매트릭스를 그립니다."
+                : "할 일·루틴 데이터를 읽지 못해 7일 매트릭스를 그릴 수 없습니다."}
+            style={{ minHeight: 210 }}
+          />
         ) : (
           <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 4 }}>
             <div style={{ minWidth: 580, height: 210, position: "relative" }}>
@@ -197,7 +223,8 @@ export function RhythmVisualizer({
                   const barHeight = Math.max(8, (d.focusHours / 5.5) * 140);
                   const barY = 175 - barHeight;
                   const outcomeY = 175 - (d.outcomes / 100) * 145;
-                  const isHovered = hoveredDay === i;
+                  // 강조와 아래 상세 스트립의 기준을 하나로 — 초기 상태(오늘)에서도 막대가 강조된다.
+                  const isHovered = focusedIndex === i;
 
                   return (
                     <g
@@ -209,6 +236,7 @@ export function RhythmVisualizer({
                       onFocus={() => setHoveredDay(i)}
                       onTouchStart={() => setHoveredDay(i)}
                       onMouseEnter={() => setHoveredDay(i)}
+                      onMouseLeave={() => setHoveredDay(null)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setHoveredDay(i); } }}
                       style={{ cursor: "pointer" }}
                     >

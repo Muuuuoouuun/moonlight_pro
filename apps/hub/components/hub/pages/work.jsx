@@ -1675,6 +1675,7 @@ export function Rhythm() {
         summary={summary}
         focusData={{ matrix: computeWeeklyRhythmMatrix({ rituals: savedRituals, todos }) }}
         tasksStatus={tasksStatus}
+        rhythmState={rhythmState}
         rhythmPartial={rhythmPartial}
       />
 
