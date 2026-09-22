@@ -7,6 +7,8 @@ import { isContactActivity } from "../contact-activity.js";
 import { MAX_FOCUS_PER_DAY } from "../task-today.js";
 
 const REVIEW_SELECT = "id,workspace_id,entry_kind,review_date,review_timezone,focus_target,review_data,body,review_revision,updated_at";
+// 저녁 리뷰의 "연락 N건"이 훑는 crm_activities 행 수 상한(리뷰 날짜 ±1일).
+export const ACTIVITY_SCAN_LIMIT = 200;
 const CONFLICT_ERRORS = new Set(["stale-revision", "date-exists", "revision-without-review", "request-id-reused"]);
 
 function baseEnvelope(configured = false, timezone = resolveRhythmTimeZone(null)) {
@@ -54,7 +56,9 @@ export async function readTodaySignals({ workspaceId, timezone, reviewDate }) {
     fetchSupabaseRows("crm_activities", {
       select: "id,kind,occurred_at",
       filters: [workspace, ["occurred_at", `gte.${since}`], ["occurred_at", `lte.${until}`]],
-      limit: 200,
+      // 상한보다 하나 더 읽어 잘림을 감지한다 — 잘린 줄 모르고 세면 "연락 12건"처럼 사실보다
+      // 적은 수를 확신에 차서 말한다(허브 read 계약: 읽기 결손을 작은 값으로 위장하지 않는다).
+      limit: ACTIVITY_SCAN_LIMIT + 1,
     }),
   ]);
   if (!Array.isArray(taskRows) || !Array.isArray(activityRows)) return null;
@@ -67,7 +71,8 @@ export async function readTodaySignals({ workspaceId, timezone, reviewDate }) {
     focusPicked: picked.length,
     focusDone: done.length,
     focusLimit: MAX_FOCUS_PER_DAY,
-    contacts: contacts.length,
+    // 잘렸으면 숫자 대신 null — 팝업이 연락 줄만 빼고 오늘 3개는 그대로 말한다.
+    contacts: activityRows.length > ACTIVITY_SCAN_LIMIT ? null : contacts.length,
   };
 }
 

@@ -236,6 +236,22 @@ test("live ledger carries today's focus and contact signals from the same source
   assert.equal(taskCall.url.searchParams.get("meta->focus_dates"), 'cs.["2026-09-12"]');
 });
 
+test("a truncated activity read reports an unknown contact count, not a smaller one", async () => {
+  state.rows = [row()];
+  state.tasks = [];
+  // 상한을 넘기면 읽기가 잘린 것이다 — 남은 행을 못 봤으니 숫자를 말하지 않는다.
+  state.activities = Array.from({ length: ledger.ACTIVITY_SCAN_LIMIT + 2 }, (_, i) => ({
+    id: `a${i}`, workspace_id: WORKSPACE, kind: "call", occurred_at: "2026-09-12T01:00:00.000Z",
+  }));
+  state.bypassFilters = true;
+  const result = await ledger.getDailyReviewLedger({ date: "2026-09-12" });
+  assert.equal(result.status, "live");
+  assert.equal(result.today.contacts, null);
+  assert.equal(result.today.focusPicked, 0); // 오늘 3개 줄은 그대로 살아 있다
+  const activityCall = state.calls.find((call) => call.table === "crm_activities");
+  assert.equal(activityCall.url.searchParams.get("limit"), String(ledger.ACTIVITY_SCAN_LIMIT + 1));
+});
+
 test("today signals fall back to null when a source cannot be read, without failing the review", async () => {
   state.rows = [row()];
   // tasks 읽기만 500 — 리뷰 자체는 살아 있고 today만 비운다.

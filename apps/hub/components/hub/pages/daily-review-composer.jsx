@@ -167,8 +167,10 @@ export function DailyReviewComposer({ model, onClose }) {
   const locked = busy || exiting;
   const dateLabel = new Intl.DateTimeFormat('ko-KR', { timeZone: 'UTC', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date(`${date}T12:00:00Z`));
   // 읽기 전용 두 줄(2026-09-20 §6.3) — 오늘 3개 k/n · 연락 N건. 서버가 못 읽으면 날짜만 남는다.
+  // 연락 수가 null이면 읽기가 상한에 잘린 것이라 그 조각만 뺀다 — 적게 센 수를 확신에 차서
+  // 보여주지 않는다(허브 read 계약).
   const todayLine = today && today.date === date
-    ? ` · 오늘 3개 ${today.focusDone}/${today.focusPicked} · 연락 ${today.contacts}건`
+    ? ` · 오늘 3개 ${today.focusDone}/${today.focusPicked}${Number.isFinite(today.contacts) ? ` · 연락 ${today.contacts}건` : ''}`
     : '';
 
   React.useEffect(() => {
