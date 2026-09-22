@@ -26,3 +26,19 @@ node --import ./scripts/register-hub-alias.mjs scripts/eval-office-codex-async.m
 ## 코드 검증
 
 전체 테스트 2,024개 중 **2,013개 통과·11개 skip·실패 0**, 타입 검사 4개 workspace 및 Hub·Engine 빌드 2개를 통과했다. 실제 OS 신호 반복 취소, 병렬 journal 실패 정리, 늦은 성공/실패, 재개 구간 검증의 회귀를 포함한다. UI 변경과 운영 DB 적용은 없다.
+
+## 첫 전체 개발 실행 — 호출당 45초
+
+`fbb371d`의 고정된 실행 코어와 평가 코드를 사용했다. 실행 ID는 `1b656f4f-9dc1-46bd-9e47-be3cee47520b`, 소스·공급자 설정 bundle hash는 `97796457998253e76a6e8ab10e9ee86b3c1ebea0e41cf8d80500e11632a5444c`다. 개발용 33개 시나리오의 39개 요청과 모든 공급자 시도·결과를 [Office journal](first-45s.run.jsonl)과 [CLI 공급자 journal](first-45s.provider.jsonl)에 보존했다. 두 journal의 run ID·bundle hash가 같고, 결과 39건 및 공급자 시도/결과 각 120건을 확인했다. 종료 검사에서 소스 hash가 변하지 않았고 39건 모두의 기록 범위가 `verified`였다. 이는 파일 정합성 검사이며 답변 품질 인증은 아니다.
+
+| 구분 | 건수 | 관찰 |
+| --- | ---: | --- |
+| Office 응답 생성 | 33/39 | 프롬프트·출처·계약을 통과한 결과 |
+| Office 오류 | 5/39 | 쥬피썬더 업무와 `offer-balanced/update`는 45초 호출 제한, 나머지 3건은 공급자 오류 |
+| 종속 차단 | 1/39 | 실패한 `offer-balanced/update` 뒤의 종결 턴 |
+| CLI 호출 완료 | 111/120 | 공급자 자체의 `ok` 결과 |
+| CLI 비완료 | 9/120 | timeout 2, `cli-turn-failed` 3, 병렬 단계 취소 4 |
+
+역할별 필수 관찰에는 쥬피썬더의 업무 사례, 일부 회의의 수정·종결 발언이 빠졌다. 탐색·영향력 설정 대조도 완성되지 않았다. 따라서 이번 실행은 **미채점 개발 자료**이며 9명 전원 70점 이상 또는 의미 품질 개선의 근거가 아니다. CLI 이벤트가 실제 모델 버전을 제공하지 않아 그 값은 120회 모두 `null`이다. 오류를 자동 재시도하거나 이전 실패 기록을 덮어쓰지 않았다. 운영자용 Office 경로, DB, worker, UI의 비동기 상태는 이 실행으로 바뀌지 않았다.
+
+첫 journal의 SHA256은 `844cd3494c155a0238b6cd453d284a7a308ce558ba839adfa978a99d680fccc4`, 공급자 journal은 `4455484a8f7b02fb9ffc264e9bb434baedc7554b1f30ba15463304ed91307ef7`다. 각각 개발용 가상 상황의 원문이며, 인증 파일이나 운영 원장을 읽은 결과가 아니다.

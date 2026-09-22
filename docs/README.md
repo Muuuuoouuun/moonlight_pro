@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-22 (Office 역할 지침·개별 회의 호출·설정 보존·UI QA 추가. 의미 품질 인증은 대기)
+> 마지막 정리: 2026-09-23 (Office 실행 코어 분리·평가 전용 CLI 전체 실행 기록. 의미 품질 인증은 대기)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -59,7 +59,7 @@
 | 개인 매출 30일 로드맵 | 출시, 디자인 QA `blocked` | `2026-08-31-personal-revenue-roadmap.md`, `68517ec`, 루트 `design-qa.md` |
 | 문의 수집·알림 | 코드 구현, 운영 연결 대기 | Gmail 감지·안전한 웹훅·문의 내역·미확인 알림. [설정](inquiry-integration-setup.md), [검증](superpowers/plans/2026-09-13-unified-inquiries.md) |
 | 업무 안의 Eevee Office E0~E4 | 구현·로컬 검증 / 운영 적용 대기 | 요청 중심 Office·입력 보존, 주간 정리·고객 답장, Threads 님피아 지침, 요청 보관·복구, 같은 범위 프로젝트의 할 일 연결, 작업·실행 보기. [구현 기록](superpowers/plans/2026-09-21-eevee-office-embedded-workflow.md). 신규 0038은 임시 PostgreSQL 검증만 완료했으며 운영 DB에는 미적용. 배포·보관 정리 예약은 미실행. 후속 실제 모델 평가는 아래 역할 품질 작업에서 진행 중 |
-| Office 역할 품질·토론 조절 | 구현·UI 로컬 검증 / 의미 품질 인증 대기 | [9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md), 같은 모델의 역할별 개별 호출·공개 반론·주관 종합, 상황/강도/관점 비중 설정과 요청 스냅샷·복구를 구현했다. source review는 원문에 기반한 같은 모델의 편집 보조이며 독립 검증이 아니다. Office UI 15개 시나리오와 기존 자문·진행률 18개 체크 완료. [실제 평가](evaluations/2026-09-22-office-agent-quality/README.md)는 최신 `scope-v1` 전체 39건이 모두 생성됐고 독립 심사 총점은 57~71점이다. 각 축·치명 오류·설정 대조를 포함한 최종 통과는 0/9명이며 품질 목표는 미달이다. 운영 배포를 뜻하지 않는다. [구현·QA 근거와 남은 평가](superpowers/plans/2026-09-22-office-agent-quality.md) |
+| Office 역할 품질·토론 조절 | 구현·UI 로컬 검증 / 의미 품질 인증 대기 | [9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md), 같은 모델의 역할별 개별 호출·공개 반론·주관 종합, 상황/강도/관점 비중 설정과 요청 스냅샷·복구를 구현했다. source review는 원문에 기반한 같은 모델의 편집 보조이며 독립 검증이 아니다. Office UI 15개 시나리오와 기존 자문·진행률 18개 체크 완료. [실제 평가](evaluations/2026-09-22-office-agent-quality/README.md)의 최신 완전 독립 심사는 총점 57~71점·최종 통과 0/9명이다. 후속 [평가 전용 CLI 전체 실행](evaluations/2026-09-22-office-agent-quality/diagnostics/codex-async-core/README.md)은 33/39건 생성·미채점이며 운영 경로에 연결되지 않았다. 품질 목표와 운영 적용은 아직 대기다. [구현·QA 근거와 남은 평가](superpowers/plans/2026-09-22-office-agent-quality.md) |
 | Supabase 서울 리전 이관 | 이관 완료(2026-09-20) · Vercel 환경 변수 교체 대기 | `rwqefdxalmbrkybxqwxj`(싱가포르 `ap-southeast-1`) → `ncgpnqfulnlshegalmbd`(서울 `ap-northeast-2`). 테이블 71·1368행 **전부 행 수 일치**, `npm run db:check` 7/7 PASS, 앱 읽기(`status: live`)·쓰기 왕복 확인, REST 지연 150ms→57ms. 구 싱가포르 프로젝트는 롤백 경로로 **삭제하지 않고 보존**. 툴킷은 `npm run db:move-region`, 런북·함정(함수 실행 권한 회귀 등)은 [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md), 커밋 `fa1757e`. **Vercel 환경 변수는 아직 구 싱가포르 값이므로 배포 전 교체가 필요하다** |
 | 빠른 입력 전역화 | 구현 완료(2026-09-20) | 캡처 폼을 `daily-brief.jsx` 내부에서 `apps/hub/components/hub/quick-capture.jsx`로 분리해 단일 정본화(`layout="inline"`/`"compact"`). 전역 `C` 단축키(입력 요소 안·팔레트 열림이면 무시)와 ⌘K 팔레트의 `빠른 입력` 액션, 치트시트 등록까지 포함 — DESIGN.md §8.1 생성 단축키 계약을 따른다. 커밋 `6423822` |
 | 목업 데이터 가드레일 | 구현 완료(2026-09-20) | `scripts/no-mock-data.test.mjs`가 저장소 전체에서 목업 식별자(`MOCK_`·`DEMO_`·`SAMPLE_`·`DUMMY_`·`FAKE_`·fixtures 계열) 선언과 업무 레코드형 하드코딩 배열을 막는다. 감사 시점의 저장소에는 가짜 업무 데이터가 0건이었고 없던 것은 강제 장치였다. 운영자 확정: 더미 데이터는 **로컬 전용 Supabase 프로젝트에만** 두고 코드에는 넣지 않는다 — 그 프로젝트는 free 플랜 활성 2개 상한 때문에 아직 미생성이다. 커밋 `4516e49` |
