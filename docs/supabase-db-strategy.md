@@ -1,15 +1,15 @@
 # Com_Moon Supabase DB 설계 작전
 
-> 상태: ACTIVE DATA REFERENCE — 현재 개인 전용 제품에서는 다중 사용자 SaaS 권한·과금을 구현하지 않는다. 원장·RLS 설계가 Personal Operator OS 심화 설계와 충돌하면 후자를 우선한다.
+> 상태: ACTIVE DATA REFERENCE — 현재 개인 전용 제품에서는 다중 사용자 SaaS 권한·과금을 구현하지 않는다. 기록·RLS 설계가 Personal Operator OS 심화 설계와 충돌하면 후자를 우선한다.
 
 ## 1. 목적
 
 이 문서는 `Com_Moon Hub OS`의 Supabase DB를 "한 번에 다 만들기"가 아니라,
-`지금 허브가 실제로 쓰는 운영 원장`부터 안정적으로 세우기 위한 설계 기준서다.
+`지금 허브가 실제로 쓰는 운영 기록`부터 안정적으로 세우기 위한 설계 기준서다.
 
 목표는 4가지다.
 
-1. `apps/hub`와 `apps/engine`이 바로 붙을 수 있는 MVP 원장 만들기
+1. `apps/hub`와 `apps/engine`이 바로 붙을 수 있는 MVP 기록 만들기
 2. Supabase Auth + RLS 기준으로 안전한 멀티테넌시 구조 만들기
 3. Content / Revenue / Work / Automation을 한 DB 안에서 일관되게 연결하기
 4. 추후 Notion, Telegram, Calendar, Email 연동이 들어와도 스키마가 무너지지 않게 하기
@@ -23,7 +23,7 @@
 
 - `work`, `revenue`, `content`, `automation`, `evolution` 도메인이 이미 분리되어 있다
 - `workspace_id`가 대부분의 테이블에 들어가 있어 멀티테넌시 방향이 맞다
-- `project_updates`, `automation_runs`, `webhook_events`, `error_logs`처럼 운영 로그성 원장이 잘 잡혀 있다
+- `project_updates`, `automation_runs`, `webhook_events`, `error_logs`처럼 운영 로그성 기록이 잘 잡혀 있다
 
 지금 바로 손봐야 하는 점:
 
@@ -36,11 +36,11 @@
 
 결론:
 지금은 "새 스키마를 다시 그리기"보다
-"기존 스키마를 MVP 원장 + 확장 레이어로 재편"하는 전략이 맞다.
+"기존 스키마를 MVP 기록 + 확장 레이어로 재편"하는 전략이 맞다.
 
 ## 3. 설계 원칙
 
-### 원칙 1. 원장은 작고 명확해야 한다
+### 원칙 1. 기록은 작고 명확해야 한다
 
 허브 화면이 5초 안에 답해야 하는 질문은 아래다.
 
@@ -58,7 +58,7 @@ RLS는 `workspace_id` + `workspace_memberships`로 푼다.
 ### 원칙 3. 시스템 로그와 사용자 데이터는 분리한다
 
 `error_logs`, `automation_runs`, `webhook_events`, `sync_runs`, `api_keys`는
-일반 사용자 수정 테이블이 아니라 시스템 원장에 가깝다.
+일반 사용자 수정 테이블이 아니라 시스템 기록에 가깝다.
 이 영역은 service role 중심으로 쓰고, 사용자에게는 read 위주로 열어야 한다.
 
 ### 원칙 4. 공개 웹은 "공개 뷰"로 분리한다
@@ -69,7 +69,7 @@ RLS는 `workspace_id` + `workspace_memberships`로 푼다.
 ### 원칙 5. integration은 본문 테이블을 오염시키지 않고 연결한다
 
 Notion, Telegram, Calendar 같은 외부 시스템은 언제든 바뀔 수 있다.
-핵심 원장에는 필요한 최소 필드만 두고,
+핵심 기록에는 필요한 최소 필드만 두고,
 연결 메타데이터는 `integration_connections`, `sync_runs`, `webhook_events`, `meta jsonb`로 흡수한다.
 
 ## 4. MVP 기준 도메인 재정의
@@ -153,7 +153,7 @@ Notion, Telegram, Calendar 같은 외부 시스템은 언제든 바뀔 수 있�
 - `issues`
 - `memos`
 
-이 영역은 "기계가 돌고 있는지"와 "무엇이 실패했는지"를 남기는 운영 원장이다.
+이 영역은 "기계가 돌고 있는지"와 "무엇이 실패했는지"를 남기는 운영 기록이다.
 
 ## 5. 추천 테이블 구조
 
@@ -279,7 +279,7 @@ create table brands (
 - `meta jsonb not null default '{}'::jsonb`
 
 핵심 포인트:
-리드 원장에는 최소한 "누구인지", "누가 맡는지", "마지막 접점이 언제인지"가 있어야 한다.
+리드 기록에는 최소한 "누구인지", "누가 맡는지", "마지막 접점이 언제인지"가 있어야 한다.
 
 ### 6.5 `deals`
 
@@ -606,7 +606,7 @@ with check (has_workspace_role(workspace_id, array['owner', 'operator']));
 ## 11. 최종 판단
 
 이 프로젝트의 Supabase DB는 "거대한 ERP형 설계"보다
-"운영 원장 + 로그 원장 + 공개 콘텐츠 뷰" 3층 구조로 보는 것이 맞다.
+"운영 기록 + 로그 기록 + 공개 콘텐츠 뷰" 3층 구조로 보는 것이 맞다.
 
 정리하면:
 

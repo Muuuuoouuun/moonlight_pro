@@ -9,44 +9,30 @@ import { getInquiriesLedger } from './inquiries-ledger.js';
 // live tasks as preview, and vice versa).
 //
 // Item contract (minimal on purpose — the surface shows 핵심 정보만):
-//   { id, lane: 'task'|'deal'|'event', title, bucket: 'overdue'|'today'|'week'|'later',
+//   { id, lane: 'task'|'deal'|'event', title, bucket: 'focus'|'overdue'|'today'|'week'|'later',
 //     whenAt, whenLabel, recencyAt, meta, href, status, done }
+// `focus` bucket = 사람이 오늘로 고른 할 일(meta.focus_dates에 오늘이 있음, 2026-09-20 §6.2).
+// 기한 기준 버킷은 `dueBucket`에 그대로 남겨 지난 기한 표시(빨간 날짜)를 잃지 않는다.
 // `href` is a hub deep-link (deals open their native drawer); tasks carry `status` so the
 // list can complete them durably through PATCH /api/hub/tasks.
 
 // 태스크 소스는 lean read(getTaskLedger, 4콜/1웨이브) — 전체 getProjectLedger(11+콜/
-// 2웨이브)는 decisions/notes/checks/catalog 등 이 원장이 쓰지 않는 데이터까지 태웠다
+// 2웨이브)는 decisions/notes/checks/catalog 등 이 기록이 쓰지 않는 데이터까지 태웠다
 // (2026-08-05 re-audit 속도 #1). 이 엔드포인트는 내 작업 로드 + 모든 완료/미루기 뒤
 // reload가 타는 핫패스다.
 import { getTaskLedger } from "./operating-ledger.js";
 import { getRevenueLedger } from "./revenue-ledger.js";
+import { isDealStalled } from "../deal-stages.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
+import { dueBucket, kstDayKey } from "../kst-day.js";
+import { isFocusedOn, summarizeFocusDay } from "../task-today.js";
 
 const TIME_ZONE = "Asia/Seoul";
 const DAY_MS = 86400000;
 
-function dateKey(value) {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-  return parts; // en-CA gives YYYY-MM-DD
-}
-
-function bucketFor(whenAt, todayKey, weekEndKey) {
-  const key = dateKey(whenAt);
-  if (!key) return "later";
-  if (key < todayKey) return "overdue";
-  if (key === todayKey) return "today";
-  if (key <= weekEndKey) return "week";
-  return "later";
-}
+// KST 날짜 경계는 kst-day.js가 정본 — 고객 연락 큐도 같은 함수를 쓴다(사본 금지).
+const dateKey = kstDayKey;
+const bucketFor = dueBucket;
 
 function shortDate(value) {
   if (!value) return "";
@@ -86,7 +72,10 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
     .filter((t) => !t.done)
     .map((t) => {
       const project = t.project ? projectById.get(t.project) : null;
-      const isFocusToday = Array.isArray(t.focusDates) && t.focusDates.includes(todayKey);
+      // 기한 기준 버킷(kst-day.js dueBucket)은 따로 남긴다 — 오늘 3개로 고른 행도 지난 기한의
+      // 빨간 날짜·레일을 잃지 않게(2026-09-20 §6.2).
+      const itemDueBucket = bucketFor(t.dueAt, todayKey, weekEndKey);
+      const focusToday = isFocusedOn(t, todayKey);
       return {
         id: `task-${t.id}`,
         entityId: t.id,
@@ -96,11 +85,12 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
         // 없으면 드로어 저장이 기존 설명을 확인할 길 없이 진행된다.
         description: t.description || "",
         sourceRefs: t.sourceRefs || [],
-        // 오늘 고른 "오늘 3개"(§6.2) — 기존 overdue/today/week/later 버킷 어휘(보드 컬럼·
-        // 드래그·뮤트가 전부 이 넷을 전제)는 그대로 두고, 최상단 고정용 신호만 더한다.
-        focusDates: t.focusDates || [],
-        isFocusToday,
-        bucket: bucketFor(t.dueAt, todayKey, weekEndKey),
+        // 오늘 고른 "오늘 3개"(§6.2)는 `focus` 버킷으로 올리고, 기한 버킷은 dueBucket에 보존한다.
+        // 내 작업의 BUCKETS·보드 열·시그널 타일이 `focus`를 1급 버킷으로 다룬다.
+        bucket: focusToday ? "focus" : itemDueBucket,
+        dueBucket: itemDueBucket,
+        focusToday,
+        focusDates: Array.isArray(t.focusDates) ? t.focusDates : [],
         whenAt: t.dueAt || "",
         whenLabel: t.dueAt ? shortDate(t.dueAt) : "기한 없음",
         recencyAt: t.updatedAt || "",
@@ -125,7 +115,7 @@ function mapDealItems(deals, stages, todayKey, weekEndKey) {
   return (Array.isArray(deals) ? deals : [])
     .filter((d) => d.stage !== "closing" && d.stage !== "lost")
     .map((d) => {
-      const stalled = Number(d.age) >= 14;
+      const stalled = isDealStalled(d);
       return {
         id: `deal-${d.id}`,
         entityId: d.id,
@@ -186,11 +176,11 @@ function assignPriority(item, leadScoreByDealEntityId) {
   const leadScore = item.lane === "deal" ? leadScoreByDealEntityId.get(item.entityId) || 0 : 0;
   const stageRank = item.lane === "deal" ? STAGE_PRIORITY_RANK[item.status] || 0 : 0;
 
-  // 0. 오늘 사람이 고른 "오늘 3개"(§6.2) — 기한 지난 약속보다도 위, 늘 최상단.
-  // bucket(overdue/today/week/later)은 그대로 두고 우선순위만 끌어올린다.
-  if (item.isFocusToday) {
+  // 0. 오늘 3개 — 운영자가 직접 고른 할 일은 시스템 규칙보다 앞선다(2026-09-20 §6.2).
+  if (item.lane === "task" && item.focusToday) {
     return { priorityScore: 6000, priorityReason: "오늘 3개" };
   }
+
   // 1. 기한 지난 약속 — older overdue first (larger daysPast → higher).
   if (item.bucket === "overdue") {
     const daysPast = Math.min(90, Math.round((Date.now() - new Date(item.whenAt).getTime()) / DAY_MS) || 0);
@@ -220,9 +210,9 @@ function assignPriority(item, leadScoreByDealEntityId) {
   return { priorityScore: 1000, priorityReason: "일반" };
 }
 
-// includeRaw: 첫 화면(daily-brief)이 이 원장을 정본 어댑터로 소비할 때(Phase 1B A-1 컷오버)
-// 원본 원장(projectLedger/revenue/calendar)을 함께 받는다 — 첫 화면은 §7 확정 슬롯(KA·집중
-// 고객·오늘 일정·할 일 레인)을 원본 위에 프로젝션해야 하는데, 이걸 위해 같은 원장을 라우트가
+// includeRaw: 첫 화면(daily-brief)이 이 기록을 정본 어댑터로 소비할 때(Phase 1B A-1 컷오버)
+// 원본 기록(projectLedger/revenue/calendar)을 함께 받는다 — 첫 화면은 §7 확정 슬롯(KA·집중
+// 고객·오늘 일정·할 일 레인)을 원본 위에 프로젝션해야 하는데, 이걸 위해 같은 기록을 라우트가
 // 따로 또 읽으면(기존 구조) 우선순위 판정이 두 벌로 갈라진다. my-work 등 기존 소비자는
 // 옵션 미지정으로 기존 계약 그대로.
 export async function getAttentionLedger({ includeRaw = false } = {}) {
@@ -325,9 +315,16 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     ...mapEventItems(calendar?.items, todayKey, weekEndKey),
   ].map((item) => ({ ...item, ...assignPriority(item, leadScoreByDealEntityId) }));
 
+  // 오늘 3개 요약(선택 수·완료 수) — 완료된 선택은 items에서 빠지므로 목록만 세면 3건 상한을
+  // 잘못 읽는다. 할 일 기록 전체(todos, 완료 포함)에서 세어 내 작업 타일·토글 비활성이 서버 판정과 같게.
+  const focusToday = taskLedgerReadable
+    ? summarizeFocusDay(projectLedger?.todos || [], { now })
+    : null;
+
   return {
     todayKey,
     sources,
+    focusToday,
     failedSources: sourceFailures.map((failure) => failure.source),
     sourceFailures,
     calendarReason: calendar?.ok ? "" : calendar?.reason || "",
@@ -336,11 +333,11 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     // The exact unread count is independent of the three-row preview.
     inquiries,
     // My Work의 할 일 편집 드로어가 프로젝트 재배정 select를 채우는 용도 — id/name만
-    // 필요하니 프로젝트 원장 전체를 다시 내려보내지 않는다.
+    // 필요하니 프로젝트 기록 전체를 다시 내려보내지 않는다.
     projects: taskLedgerReadable
       ? (Array.isArray(projectLedger?.projects) ? projectLedger.projects.map((p) => ({ id: p.id, name: p.name })) : [])
       : [],
-    // 원본 원장 — 첫 화면 슬롯 프로젝션용(위 주석). catch 폴백 객체도 그대로 노출되므로
+    // 원본 기록 — 첫 화면 슬롯 프로젝션용(위 주석). catch 폴백 객체도 그대로 노출되므로
     // 소비자의 기존 source==='error'/'supabase' 분기가 무수정 동작한다.
     ...(includeRaw ? { raw: { projectLedger, revenue: revenueLedger, calendar } } : {}),
   };

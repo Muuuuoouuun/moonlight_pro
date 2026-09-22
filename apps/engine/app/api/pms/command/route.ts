@@ -4,7 +4,6 @@ import { normalizePmsCommand } from "../../../../lib/pms-command.ts";
 import { executePmsCommand } from "../../../../lib/pms-command-service.ts";
 import { validateSharedWebhookRequest } from "../../../../lib/shared-webhook.ts";
 import {
-  countSupabaseRows,
   fetchSupabaseRows,
   fetchSupabaseRowsDetailed,
   insertSupabaseRecord,
@@ -81,7 +80,6 @@ export async function POST(req: Request) {
       table,
       options as Parameters<typeof fetchSupabaseRows>[1],
     ),
-    countRows: async (table, filters) => countSupabaseRows(table, filters),
     fetchRowsDetailed: async (table, options = {}) => {
       const detailed = await fetchSupabaseRowsDetailed(
         table,

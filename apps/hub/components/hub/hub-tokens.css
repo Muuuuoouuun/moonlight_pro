@@ -203,6 +203,20 @@
 /* Keyboard-only focus ring (§11: never rely on browser defaults) — :focus-visible so a mouse
    click doesn't leave a ring, only Tab/roving-arrow-key navigation does. */
 .hub-app .hub-row:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
+/* 완료·보관 헤더(프로젝트): 세로 드래그 토글은 grip에서만 시작한다 — touch-action: none을
+   grip에만 줘서 행 본체 위의 세로 스와이프는 스크롤로 남긴다. 드래그 중 오프셋은 JS가
+   transform으로 쓰고 data-dragging으로 전이를 끈다. hover 배경 전이는 .hub-row 그대로. */
+.hub-app .hub-row[data-terminal-toggle] { transition: background var(--dur-hover) ease, transform var(--dur-hover) var(--ease-hub); }
+.hub-app .hub-row[data-terminal-toggle][data-dragging="true"] { transition: none; }
+.hub-app [data-terminal-grip] { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; margin: -6px; touch-action: none; cursor: ns-resize; }
+/* Grip tap halo — the glyph stays 12px and the box 24px, but a coarse pointer gets the §11
+   44px floor. This control only means anything on touch, so the floor applies exactly here.
+   Same contract as .hub-checkbox::before above: a pseudo-element grows the hit area without
+   moving neighbours (a negative margin on the grip itself would shift the row's grid). */
+@media (pointer: coarse) {
+  .hub-app [data-terminal-grip] { position: relative; }
+  .hub-app [data-terminal-grip]::before { content: ''; position: absolute; inset: -10px; }
+}
 /* 행 보조 액션(내 작업의 숨기기) — 휴지 상태에서는 제목·기한의 위계를 건드리지 않고,
    hover/키보드 포커스에서만 드러난다. hover가 없는 터치 기기에서는 아예 렌더 공간을
    차지하지 않게 감춘다(보이지 않는 탭 타깃 금지) — 그쪽에서는 행을 눌러 여는 상세
@@ -724,6 +738,8 @@
   transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 .hub-app .hub-seg__btn:hover:not([aria-pressed="true"]) { color: var(--fg-muted); }
+/* 필수 선택이 비었을 때만 — 색 단독이 아니라 폼 메시지와 함께 쓴다(§5.3). */
+.hub-app .hub-seg[data-invalid] { border-color: var(--danger); }
 .hub-app .hub-seg__btn[aria-pressed="true"] {
   color: var(--fg);
   background: var(--surface-3);

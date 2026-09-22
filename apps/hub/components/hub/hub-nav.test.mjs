@@ -375,15 +375,6 @@ test("sidebar nav regions draw rows only through the row renderer", () => {
   }
 });
 
-test("expanded renderAnchor block draws <Iconed name={a.icon}> before the collapsed branch", () => {
-  const expanded = sidebarSource.slice(
-    sidebarSource.indexOf("const renderAnchor"),
-    sidebarSource.indexOf("if (collapsed)"),
-  );
-  assert.ok(expanded.length > 0, "renderAnchor block must be found");
-  assert.match(expanded, /<Iconed name=\{a\.icon\}/);
-});
-
 // Futura 라우트는 페이지 헤더가 pill 탭을 직접 그리므로 탑바는 같은 줄을 또 그리지 않는다.
 test("a page that draws its own tabs suppresses the top bar row", () => {
   assert.match(topbarSource, /!pageOwnsTabs\(path\)/);

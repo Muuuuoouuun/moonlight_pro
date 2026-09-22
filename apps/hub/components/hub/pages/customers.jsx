@@ -2,7 +2,7 @@
 
 // 고객 DB — Leads·Accounts 통합 뷰 (2026-07-16 CRM 와이어프레임 '고객 DB' 화면).
 // 한 테이블에서 리드(영업 진행)와 계정(계약 고객)을 함께 보고, 행 클릭으로 Contact 중심
-// Customer 360 드로어를 연다. 세그먼트는 원장 데이터에서 계산한다 — 근거 없는 세그먼트
+// Customer 360 드로어를 연다. 세그먼트는 기록 데이터에서 계산한다 — 근거 없는 세그먼트
 // (재계약 임박 등 소스가 없는 것)는 만들지 않는다.
 
 import React from "react";
@@ -14,17 +14,17 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import {
   Badge, Card, Button, IconButton, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
-  SegmentedControl, CheckboxRow, DateQuickPresets,
-  TextField, TextAreaField, SelectField, Skeleton,
+  SegmentedControl, CheckboxRow, TextField, TextAreaField, SelectField, Skeleton,
 } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
+import { ContactRecordForm } from "../contact-record-form";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
 import { requestPersonaChat } from "../persona-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
-import { parseContactOutcomeExtraction } from "@/lib/ai-workflow-client";
+import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import './customer-focus.css';
 
 // "₩1.2M"/"₩900K"/"—" → 정렬용 숫자 (DESIGN.md §8.1: 금액은 표시 문자열을 파싱해 정렬)
@@ -182,14 +182,8 @@ function segmentFilter(row, seg) {
 
 const ACT_ICON = { email: "email", meeting: "calendar", call: "signal", note: "edit", deal: "deals", kakao: "chat", quote: "orders", ai: "sparkle", info_session: "brief", demo: "play", visit: "building", update: "rhythm" };
 const ACT_LABEL = { email: "이메일", meeting: "미팅", call: "통화", note: "노트", deal: "딜", kakao: "카카오", quote: "견적", ai: "AI", info_session: "설명회", demo: "데모", visit: "방문", update: "업데이트" };
-const REACTIONS = [
-  { key: "positive", label: "긍정" },
-  { key: "neutral", label: "중립" },
-  { key: "concern", label: "우려" },
-  { key: "rejected", label: "거절" },
-  { key: "no_response", label: "무응답" },
-];
-const OUTCOME_KINDS = ["call", "kakao", "meeting", "visit", "demo", "email"];
+// crm_activities.reaction 어휘(0016 CHECK)의 라벨은 followup-scoring이 정본(파일 상단 import).
+// 컨택 시트가 필수로 받는 반응이 타임라인에 되돌아온다(0a).
 
 function ActivityTimeline({ rows, onDeleteActivity }) {
   if (!rows.length) {
@@ -211,13 +205,10 @@ function ActivityTimeline({ rows, onDeleteActivity }) {
           </span>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12.5, color: "var(--fg)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{a.msg}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-              <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{ACT_LABEL[a.type] || a.type}</span>
-              {a.reaction && (
-                <Badge tone="neutral" size="xs" variant="outline">
-                  {REACTIONS.find(r => r.key === a.reaction)?.label || a.reaction}
-                </Badge>
-              )}
+            <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span>{ACT_LABEL[a.type] || a.type}</span>
+              {/* 반응은 중립 뱃지 — 우려·거절도 여기서는 사실 표시일 뿐, 위기 표현은 별도 채널(§5.3). */}
+              {a.reaction && <Badge tone="neutral" size="xs" variant="outline">{REACTION_LABEL[a.reaction] || a.reaction}</Badge>}
             </div>
           </div>
           <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", whiteSpace: "nowrap" }}>{a.at}</span>
@@ -238,363 +229,31 @@ function ActivityTimeline({ rows, onDeleteActivity }) {
   );
 }
 
-const QUICKLOG_KINDS = ["call", "kakao", "meeting", "email", "visit", "quote", "note"];
-
+// 빠른 기록은 메모 전용이다. 통화·카톡·미팅 같은 연락은 바로 위 공용 기록창(반응 필수 규칙·
+// 후속 계획)으로만 받는다 — 여기서 연락 유형을 고르게 하면 그 규칙을 옆 입력창이 우회하고,
+// 반응 없는 통화가 주간 연락 수·마지막 접점으로 잡힌다(2026-09-23 병합 검증).
 function QuickLog({ onSave }) {
-  const [type, setType] = React.useState("call");
   const [text, setText] = React.useState("");
   const save = () => {
     const body = text.trim();
     if (!body) return;
-    onSave({ type, body });
+    onSave({ type: "note", body });
     setText("");
   };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <TextAreaField
-        label="빠른 기록"
+        label="빠른 메모"
         value={text}
         onChange={e => setText(e.target.value)}
-        placeholder="통화·미팅 메모를 입력하면 타임라인에 쌓여요"
+        placeholder="연락이 아닌 메모를 남기면 타임라인에 쌓여요"
         rows={4}
       />
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-        <SelectField
-          label="유형"
-          value={type}
-          onChange={e => setType(e.target.value)}
-          options={QUICKLOG_KINDS.map(k => ({ value: k, label: ACT_LABEL[k] }))}
-          fieldStyle={{ flex: "0 1 150px" }}
-        />
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" onClick={save} disabled={!text.trim()}>기록 저장</Button>
       </div>
     </div>
-  );
-}
-
-// ── 컨택 완료 시트 (Phase 1C) ────────────────────────────────────────────────
-// 통화·미팅을 끝냈을 때 "1줄 요약 + 반응 + 다음 액션(날짜) 또는 기약 없음"을
-// record_contact_outcome_v1 원자 RPC로 남긴다. 반응·요약 없이는 저장 불가,
-// 다음 액션 없이 저장하려 하면 경고를 먼저 보여준다 (spec §10).
-
-function ContactOutcomeSheet({ row, onSaved, onUndone }) {
-  const [kind, setKind] = React.useState("call");
-  const [reaction, setReaction] = React.useState(null);
-  const [summary, setSummary] = React.useState("");
-  const [nextAction, setNextAction] = React.useState("");
-  const [nextAt, setNextAt] = React.useState("");
-  const [dormant, setDormant] = React.useState(false);
-  const [state, setState] = React.useState("idle"); // idle | warn | saving | error
-  const [errorMsg, setErrorMsg] = React.useState("");
-  // 저장을 눌러 보기 전에는 필수 표시를 붉히지 않는다 — 빈 폼을 열자마자 꾸짖는 건 잔소리다.
-  // 누른 뒤부터는 무엇이 비었는지 이름을 대고 그 필드로 포커스를 옮긴다. 이유를 말하지 않는
-  // 죽은 disabled 버튼이 이 폼에서 가장 자주 막히는 지점이었다.
-  const [attempted, setAttempted] = React.useState(false);
-  const titleId = React.useId();
-  const reactionRef = React.useRef(null);
-  const summaryRef = React.useRef(null);
-
-  const [aiOpen, setAiOpen] = React.useState(false);
-  const [aiInput, setAiInput] = React.useState("");
-  const [aiLoading, setAiLoading] = React.useState(false);
-  const [aiNotice, setAiNotice] = React.useState("");
-
-  const reset = () => {
-    setReaction(null); setSummary(""); setNextAction(""); setNextAt("");
-    setDormant(false); setState("idle"); setErrorMsg(""); setAttempted(false);
-    setAiInput(""); setAiNotice("");
-  };
-
-  const handleAiExtract = async () => {
-    const raw = aiInput.trim();
-    if (!raw) return;
-    setAiLoading(true);
-    setAiNotice("");
-    try {
-      const res = await requestPersonaChat({
-        personaId: "sales",
-        mode: "extract-contact-outcome",
-        draft: `[고객 맥락]
-고객: ${row.person || row.name} (${row.name || "미지정"})
-현재 상태: ${row.kind === "account" ? "계약 고객" : `리드 (${row.stage || "진행중"})`}
-
-[통화·미팅·대화 원문]
-${raw}
-
-위 원문을 분석하여 아래 형식으로 정확하게 추출해줘:
-[채널]: 통화 | 카카오 | 미팅 | 방문 | 데모 | 이메일 중 1개
-[고객 반응]: 긍정 | 중립 | 우려 | 거절 | 무응답 중 1개
-[1줄 요약]: 120자 이내의 사실 중심 핵심 요약
-[다음 행동]: 구체적 후속 액션 (없거나 기약 없으면 '없음')
-[다음 일정]: YYYY-MM-DD (특정 날짜 언급 없으면 '없음')
-[기약 없음]: 예 | 아니오 (다음 약속 없이 종결 또는 휴면이면 '예')`,
-      });
-      setAiLoading(false);
-      if (res?.state === "done" && res.text) {
-        const extracted = parseContactOutcomeExtraction(res.text);
-        let filledCount = 0;
-        if (extracted.kind) { setKind(extracted.kind); filledCount++; }
-        if (extracted.reaction) { setReaction(extracted.reaction); filledCount++; }
-        if (extracted.summary) { setSummary(extracted.summary); filledCount++; }
-        if (extracted.nextAction) { setNextAction(extracted.nextAction); filledCount++; }
-        if (extracted.nextAt) { setNextAt(extracted.nextAt); filledCount++; }
-        if (extracted.dormant) { setDormant(true); }
-        if (state === "warn") setState("idle");
-        setAiNotice(`폼에 ${filledCount}개 항목을 자동 채웠습니다. 내용을 확인한 뒤 저장하세요.`);
-      } else {
-        setAiNotice("추출 응답을 받지 못했습니다. 원문을 확인 후 다시 시도하세요.");
-      }
-    } catch {
-      setAiLoading(false);
-      setAiNotice("추출 중 오류가 발생했습니다. 직접 입력할 수도 있습니다.");
-    }
-  };
-  const [pendingUndo, setPendingUndo] = React.useState(null);
-
-  // followups submitLog와 같은 deferred-write 계약(5차 재감사 M: 같은 최고 빈도 액션이
-  // 진입점에 따라 되돌리기 유무가 갈렸다): 즉시 반영+3.5초 되돌리기, 창이 닫히면 POST,
-  // 늦은 실패 시 입력 복원+명명.
-  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
-  const persist = async (payload, snapshot) => {
-    try {
-      const resp = await fetch("/api/hub/revenue/contact-outcome", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (resp.ok && data.status === "saved") return;
-      // 늦은 실패 — 입력 복원 + 원인 명명 (낙관 행 제거는 onUndone이 담당)
-      onUndone?.(snapshot.optimisticId);
-      setKind(snapshot.kind); setSummary(snapshot.summary); setReaction(snapshot.reaction);
-      setNextAction(snapshot.nextAction); setNextAt(snapshot.nextAt); setDormant(snapshot.dormant);
-      setState("error");
-      setErrorMsg(`${data.error || data.reason || "저장에 실패했습니다."} — 입력을 복원했습니다.`);
-    } catch (err) {
-      onUndone?.(snapshot.optimisticId);
-      setKind(snapshot.kind); setSummary(snapshot.summary); setReaction(snapshot.reaction);
-      setNextAction(snapshot.nextAction); setNextAt(snapshot.nextAt); setDormant(snapshot.dormant);
-      setState("error");
-      setErrorMsg(`${err instanceof Error ? err.message : String(err)} — 입력을 복원했습니다.`);
-    }
-  };
-
-  const save = ({ ignoreWarning = false } = {}) => {
-    if (!summary.trim() || !reaction) {
-      setAttempted(true);
-      if (!reaction) reactionRef.current?.querySelector("button")?.focus();
-      else summaryRef.current?.focus();
-      return;
-    }
-    // 다음 액션도 기약 없음도 없으면 저장 전 1회 경고 (열린 건을 공백으로 두지 않기)
-    if (!dormant && !nextAction.trim() && !ignoreWarning) {
-      setState("warn");
-      return;
-    }
-    const optimisticId = `local-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    const snapshot = { optimisticId, kind, summary: summary.trim(), reaction, nextAction: nextAction.trim(), nextAt, dormant };
-    const payload = {
-      entityType: row.kind === "account" ? "account" : "lead",
-      entityId: row.id,
-      kind,
-      summary: summary.trim(),
-      reaction,
-      nextAction: dormant ? null : (nextAction.trim() || null),
-      nextActionAt: dormant ? null : (nextAt || null),
-      dormant,
-    };
-    onSaved({
-      activityId: optimisticId,
-      kind,
-      summary: summary.trim(),
-      reaction,
-      nextAction: dormant ? "기약 없음 (휴면)" : nextAction.trim(),
-      dormant,
-    });
-    reset();
-    const key = `contact-${optimisticId}`;
-    scheduleUndoable(key, () => {
-      setPendingUndo((cur) => (cur?.key === key ? null : cur)); // 창 닫힘 — 죽은 버튼 방지
-      persist(payload, snapshot);
-    });
-    setPendingUndo({
-      key,
-      label: "기록됨",
-      undo: () => {
-        if (cancelUndoable(key)) {
-          onUndone?.(optimisticId);
-          setKind(snapshot.kind); setSummary(snapshot.summary); setReaction(snapshot.reaction);
-          setNextAction(snapshot.nextAction); setNextAt(snapshot.nextAt); setDormant(snapshot.dormant);
-        }
-        setPendingUndo(null);
-      },
-    });
-  };
-
-  // 빠진 항목은 그 필드 옆에서 말한다 — 푸터에 한 번 더 나열하면 같은 오류를 세 번
-  // 붉히게 되고 §5.3 red budget을 넘는다. 푸터는 왜 안 눌리는지만 중립으로 알린다.
-  const showMissing = attempted && (!reaction || !summary.trim());
-
-  return (
-    <section
-      aria-labelledby={titleId}
-      style={{ border: "1px solid var(--line)", borderRadius: "var(--r-lg)", padding: 16, display: "flex", flexDirection: "column", gap: 16 }}
-    >
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-        <h3 id={titleId} style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>컨택 완료 기록</h3>
-        <span style={{ fontSize: 11.5, color: "var(--fg-faint)" }}>반응과 요약을 남기면 타임라인에 쌓입니다</span>
-      </div>
-
-      {/* AI 스마트 자동 채우기: 대화 원문이나 통화 메모에서 4대 필드 추출 */}
-      <div style={{
-        background: "var(--surface-2)",
-        borderRadius: "var(--r-md)",
-        padding: "10px 12px",
-        border: "1px solid var(--line-soft)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Iconed name="sparkle" size={13} style={{ color: "var(--moon-300)" }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>✨ 대화·메모에서 폼 자동 채우기</span>
-          </div>
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => { setAiOpen(v => !v); setAiNotice(""); }}
-          >
-            {aiOpen ? "접기" : "원문 붙여넣기"}
-          </Button>
-        </div>
-        {aiOpen && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
-            <TextAreaField
-              label="대화 / 통화 메모 원문"
-              value={aiInput}
-              onChange={e => setAiInput(e.target.value)}
-              placeholder="카카오톡 대화, 전화 통화 요약, 미팅 녹취 메모를 붙여넣으면 채널·반응·요약·다음 액션을 폼에 자동 입력합니다."
-              rows={3}
-            />
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-              <div style={{ fontSize: 11, color: "var(--fg-dim)", flex: 1 }}>
-                {aiNotice ? <span style={{ color: "var(--moon-300)" }}>{aiNotice}</span> : "추출 후 폼 내용을 확인하고 저장하세요"}
-              </div>
-              <Button
-                variant="primary"
-                size="xs"
-                onClick={handleAiExtract}
-                disabled={aiLoading || !aiInput.trim()}
-              >
-                {aiLoading ? "추출 중…" : "추출 및 폼 채우기"}
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <SelectField
-        label="채널"
-        value={kind}
-        onChange={e => setKind(e.target.value)}
-        options={OUTCOME_KINDS.map(k => ({ value: k, label: ACT_LABEL[k] }))}
-        fieldStyle={{ maxWidth: 172 }}
-      />
-
-      <div ref={reactionRef}>
-        <span className="hub-label">고객 반응<span className="hub-label__req"> · 필수</span></span>
-        <SegmentedControl
-          label="고객 반응"
-          options={REACTIONS.map(r => ({ key: r.key, label: r.label }))}
-          value={reaction}
-          onChange={setReaction}
-          size="md"
-          // borderColor 롱핸드를 SegmentedControl의 border 숏핸드 위에 얹으면 React가
-          // 나머지 롱핸드를 지워 보더가 currentColor로 떨어진다 — 숏핸드째 교체한다.
-          style={{ flexWrap: "wrap", ...(attempted && !reaction ? { border: "1px solid var(--danger)" } : {}) }}
-        />
-        {attempted && !reaction && (
-          <p className="hub-field-msg hub-field-msg--error" role="alert">반응을 하나 고르세요.</p>
-        )}
-      </div>
-
-      <TextField
-        ref={summaryRef}
-        label="1줄 요약"
-        required
-        value={summary}
-        onChange={e => setSummary(e.target.value)}
-        placeholder="무슨 얘기가 오갔는지 한 줄"
-        maxLength={120}
-        hint="예) 결정권자 참석 합의, 계약 조건 이견 없음"
-        error={attempted && !summary.trim() ? "요약이 없으면 나중에 이 컨택을 읽을 수 없습니다." : null}
-      />
-
-      {/* 다음 단계는 한 묶음 — 액션·날짜·기약 없음이 서로를 끄고 켠다.
-          드로어 폭이 380px라 뷰포트 미디어쿼리로는 못 고친다: 항상 세로로 쌓아
-          날짜 입력과 프리셋이 서로를 잘라내지 않게 한다. */}
-      <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 15, display: "flex", flexDirection: "column", gap: 13 }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--fg-dim)" }}>다음 단계</div>
-
-        <TextField
-          label="다음 액션"
-          value={nextAction}
-          onChange={e => { setNextAction(e.target.value); if (state === "warn") setState("idle"); }}
-          placeholder="계약서 발송"
-          disabled={dormant}
-        />
-
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
-          <TextField
-            label="날짜"
-            type="date"
-            value={nextAt}
-            onChange={e => setNextAt(e.target.value)}
-            disabled={dormant}
-            className="mono"
-            fieldStyle={{ flex: "1 1 170px" }}
-            style={{ padding: "0 10px" }}
-          />
-          {/* date picker 반복 마찰 제거 — followups LogForm과 동일 프리셋(27차 편의성). */}
-          <DateQuickPresets disabled={dormant} onPick={setNextAt} style={{ flexWrap: "wrap", gap: 4, paddingBottom: 1 }} />
-        </div>
-
-        <CheckboxRow
-          checked={dormant}
-          onChange={(v) => { setDormant(v); if (state === "warn") setState("idle"); }}
-          text="기약 없음 — 다음 약속 없이 닫기"
-        />
-      </div>
-
-      {/* 메시지 줄은 높이를 예약한다 — 경고가 나타날 때 저장 버튼이 튀어 오르면 오조작난다. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--line-soft)", paddingTop: 15 }}>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.45, minHeight: 18 }}>
-          {showMissing && (
-            <span role="alert" style={{ color: "var(--fg-muted)" }}>위 필수 항목을 채우면 저장됩니다.</span>
-          )}
-          {!showMissing && state === "warn" && (
-            <span style={{ color: "var(--fg-muted)" }}>다음 액션이 비어 있습니다. 그래도 저장하려면 한 번 더 누르세요.</span>
-          )}
-          {!showMissing && state === "error" && <span role="alert" style={{ color: "var(--danger)" }}>{errorMsg}</span>}
-          {pendingUndo && (
-            <span role="status" aria-live="polite" style={{ color: "var(--fg-muted)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {pendingUndo.label}
-              <Button variant="ghost" size="xs" onClick={pendingUndo.undo}>되돌리기</Button>
-            </span>
-          )}
-        </div>
-        {/* 비활성 대신 항상 눌린다 — 왜 안 되는지 말하지 않는 죽은 버튼을 두지 않는다. */}
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => save({ ignoreWarning: state === "warn" })}
-        >
-          {state === "saving" ? "저장 중…" : "저장"}
-        </Button>
-      </div>
-    </section>
   );
 }
 
@@ -836,7 +495,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
   const memoContexts = React.useMemo(() => [{ type: row.kind, id: row.id, label: row.person || row.name }], [row.kind, row.id, row.person, row.name]);
   const [activities, setActivities] = React.useState([]);
   const [actSync, setActSync] = React.useState("loading");
-  // 컨택 완료 시트 저장 직후 부모 원장 재조회 없이 최신 다음 액션을 반영
+  // 컨택 완료 시트 저장 직후 부모 기록 재조회 없이 최신 다음 액션을 반영
   const [nextActionOverride, setNextActionOverride] = React.useState(null);
   const [focusOverride, setFocusOverride] = React.useState(row.focusOverride || "default");
   React.useEffect(() => { setFocusOverride(row.focusOverride || "default"); }, [row.focusOverride]);
@@ -1119,8 +778,11 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
         <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>연락 결과 남기기</summary>
 
         {/* 컨택 완료 시트 — Phase 1C 핵심 루프 */}
-        <ContactOutcomeSheet
-          row={row}
+        {/* 상세 안에서는 드로어를 겹치지 않고 폼만 인라인으로 쓴다(CRM 지침 §6.2 —
+            활성 오버레이는 언제나 하나). 껍데기가 필요한 진입점은 ContactRecordDrawer. */}
+        <ContactRecordForm
+          target={{ kind: row.kind === "account" ? "account" : "lead", id: row.id, companyId: row.companyId, name: row.person || row.name }}
+          aiContext={`${row.name || "미지정"} · ${row.kind === "account" ? "계약 고객" : `리드 (${row.stage || "진행중"})`}`}
           onSaved={(o) => {
             setActivities(prev => [
               { id: o.activityId, type: o.kind, msg: o.summary, at: "방금", reaction: o.reaction },
@@ -1246,7 +908,7 @@ function NewCustomerDrawer({ open, onClose, onCreated }) {
   return (
     <Drawer
       title="새 고객 등록"
-      subtitle="기본 정보를 입력하고 등록하면 고객 원장에 추가됩니다"
+      subtitle="기본 정보를 입력하고 등록하면 고객 기록에 추가됩니다"
       onClose={handleClose}
       width="min(440px, 96vw)"
       footer={(
@@ -1322,7 +984,7 @@ export function Customers({ onNavigate }) {
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
   const ledgerRows = React.useMemo(() => toRows(ledger), [ledger]);
-  // 낙관 삭제된 행은 원장이 다시 로드돼도 계속 숨긴다 — 되돌리기 창이 닫히기 전에
+  // 낙관 삭제된 행은 기록이 다시 로드돼도 계속 숨긴다 — 되돌리기 창이 닫히기 전에
   // 재조회가 끼어들면 지운 행이 깜빡이며 되살아난다.
   const allRows = React.useMemo(
     () => ledgerRows
@@ -1395,20 +1057,20 @@ export function Customers({ onNavigate }) {
     });
   }, [scheduleUndoable, cancelUndoable, restoreRow]);
 
-  // 딥링크: ?customer=<kind>:<id> — 원장 로드 후 1회만 열고 쿼리 소거 (DESIGN §8.1)
+  // 딥링크: ?customer=<kind>:<id> — 기록 로드 후 1회만 열고 쿼리 소거 (DESIGN §8.1)
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const deepLinkDone = React.useRef(false);
   React.useEffect(() => {
-    // 원장이 아직 로드 전(loading)일 때만 대기 — 빈/preview DB에서도 파라미터를 소비하고
-    // 설명한다(기존: 빈 원장이면 ?customer= 링크가 영원히 무시·무설명, 4차 재감사 S).
+    // 기록이 아직 로드 전(loading)일 때만 대기 — 빈/preview DB에서도 파라미터를 소비하고
+    // 설명한다(기존: 빈 기록이면 ?customer= 링크가 영원히 무시·무설명, 4차 재감사 S).
     if (deepLinkDone.current || syncState === 'loading') return;
     const target = searchParams?.get("customer");
     if (!target) { deepLinkDone.current = true; return; }
     deepLinkDone.current = true;
     if (allRows.some(r => r.key === target)) setOpenKey(target);
-    else setCreateError('링크의 고객을 찾을 수 없습니다 — 원장이 비어 있거나 항목이 삭제됐습니다.');
+    else setCreateError('링크의 고객을 찾을 수 없습니다 — 기록이 비어 있거나 항목이 삭제됐습니다.');
     router.replace(pathname, { scroll: false });
   }, [allRows, searchParams, router, pathname, syncState]);
 
@@ -1418,7 +1080,7 @@ export function Customers({ onNavigate }) {
     (!term || r.name.toLowerCase().includes(term) || (r.person || "").toLowerCase().includes(term) || (r.sub || "").toLowerCase().includes(term))
   );
 
-  // 정렬: 헤더 클릭 asc → desc → 해제 3단 (DESIGN §8.1). 해제 시 원장 순서.
+  // 정렬: 헤더 클릭 asc → desc → 해제 3단 (DESIGN §8.1). 해제 시 기록 순서.
   const cycleSort = (key) => {
     setSort(prev => {
       if (prev.key !== key) return { key, dir: "asc" };

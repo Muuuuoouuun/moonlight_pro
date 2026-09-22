@@ -3,7 +3,8 @@ import { resolveDefaultWorkspaceId } from '@/lib/server-write';
 import { canonicalOrgScopeForKey } from '../brand-org-scope.js';
 import { isCalendarDateKey, shiftDateKey, toZonedDateKey } from '../rhythm-calendar.js';
 
-const CONTACT_KINDS = new Set(['call', 'meeting', 'info_session', 'demo', 'visit', 'email', 'kakao', 'quote']);
+// 연락으로 세는 활동 종류는 고객 연락 화면과 한 정의를 공유한다(CRM 0a).
+import { CONTACT_KINDS } from '../sales-os/followup-scoring.js';
 const SOURCE_LABELS = { tasks_completed:'완료 상태인 할 일',contacts_recorded:'실제 고객 연락',content_published:'발행 완료',reviews_completed:'하루 리뷰' };
 const TABLES = {
   tasks_completed: ['tasks', 'completed_at'], contacts_recorded: ['crm_activities', 'occurred_at'],

@@ -105,3 +105,21 @@ test("내 작업 페이지가 숨김 모듈을 쓰고, 숨긴 항목을 카운�
 test("저장 키는 페이지의 다른 보기 설정과 같은 네임스페이스", () => {
   assert.equal(MUTE_STORAGE_KEY, "mlp.mywork.muted");
 });
+
+// 오늘 3개 별 토글의 활성 색은 CSS가 소유한다 — customers.jsx와 같은 정본 클래스.
+// 인라인 color를 되돌리면 활성 별의 hover 피드백과 글리프 채움이 함께 죽는다.
+test("오늘 3개 별 토글은 인라인 color 대신 hub-iconbtn--star-active 클래스를 쓴다", () => {
+  assert.match(page, /className=\{item\.focusToday \? 'hub-iconbtn--star-active' : ''\}/);
+  assert.doesNotMatch(page, /color: item\.focusToday \? 'var\(--moon-300\)'/);
+});
+
+// 스와이프 피드백: §5.3은 lifecycle done을 "check glyph + 중립 텍스트, not green"으로,
+// §5.2는 --success를 평범한 워크플로 단계에 쓰지 말라고 못박는다. 이모지는 §15 2026-09-22가
+// 첫 화면에서 걷어낸 어휘다. 배경의 raw rgba도 §5.2 "페이지 안 하드코딩 금지" 위반이었다.
+test("스와이프 완료·미루기 피드백은 중립 색 + 아이콘으로 말한다", () => {
+  assert.match(page, /<Iconed name="check" size=\{12\} \/> 완료/);
+  assert.match(page, /<Iconed name="clock" size=\{12\} \/> 미루기/);
+  assert.doesNotMatch(page, /✓ 완료|⏰ 미루기/);
+  assert.doesNotMatch(page, /color: 'var\(--success\)'/);
+  assert.doesNotMatch(page, /rgba\(56, 239, 125|rgba\(140, 168, 216/);
+});

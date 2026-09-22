@@ -74,14 +74,14 @@ npm run db:migrate -- 20260921_0036_operating_goals.sql 20260921_0037_ai_assista
 
 ## 세 클라이언트에 같은 MCP 연결
 
-MCP는 로컬 **stdio** 프로세스다. 원격 HTTP MCP 서버를 새로 제공하지 않는다. 별도 비공개 파일 `/absolute/private/moonlight-mcp.env`를 만들고 소유자만 읽도록 한다. Hub의 전체 `.env.local` 대신 다음 두 값만 둔다.
+세 클라이언트는 MCP를 로컬 **stdio** 프로세스로 띄운다. 프로세스를 띄울 수 없는 도구용으로 로컬 Streamable HTTP 전송(`npm run mcp:http`, 기본 `127.0.0.1:3333`, 도구별 bearer 토큰 필수)도 있지만 이 절은 stdio 등록만 다룬다 — [MCP 패키지 README](../packages/mcp-server/README.md#http-transport-other-tools). 별도 비공개 파일 `/absolute/private/moonlight-mcp.env`를 만들고 소유자만 읽도록 한다. Hub의 전체 `.env.local` 대신 다음 두 값만 둔다.
 
 ```dotenv
 COM_MOON_HUB_URL=http://localhost:3000
 COM_MOON_AGENT_API_TOKEN=<same-agent-token-as-hub>
 ```
 
-Gemini 키·Supabase service-role·공유 webhook 비밀키는 MCP 클라이언트에 필요하지 않다. 아래 경로는 실제 Node 실행 파일·저장소·비공개 환경 파일의 절대 경로로 바꾼다. 기존 서버 목록에 병합하고 전체 파일을 덮어쓰지 않는다. 이 문서는 전역 클라이언트 설정을 자동 변경하지 않는다.
+Gemini 키·Supabase service-role·공유 webhook 비밀키는 MCP 클라이언트에 필요하지 않다. 등록은 런처 `packages/mcp-server/bin/moonlight-mcp.js` 하나를 절대 경로로 가리키고, 비공개 파일은 `COM_MOON_MCP_ENV_FILE`로 넘긴다. 이 값이 없으면 런처는 Hub `apps/hub/.env.local`을 읽어 쓰기 비밀키까지 싣는다. 아래 경로는 실제 Node 실행 파일·저장소·비공개 환경 파일의 절대 경로로 바꾼다. 기존 서버 목록에 병합하고 전체 파일을 덮어쓰지 않는다. 이 문서는 전역 클라이언트 설정을 자동 변경하지 않는다.
 
 ### Codex
 
@@ -90,15 +90,16 @@ Gemini 키·Supabase service-role·공유 webhook 비밀키는 MCP 클라이언�
 ```toml
 [mcp_servers.moonlight]
 command = "/absolute/path/to/node"
-args = ["--env-file=/absolute/private/moonlight-mcp.env", "/absolute/path/to/moonlight/packages/mcp-server/src/index.js"]
+args = ["/absolute/path/to/moonlight/packages/mcp-server/bin/moonlight-mcp.js"]
 tool_timeout_sec = 120
 
 [mcp_servers.moonlight.env]
+COM_MOON_MCP_ENV_FILE = "/absolute/private/moonlight-mcp.env"
 COM_MOON_MCP_PROFILE = "assistant"
 COM_MOON_MCP_API_MODE = "agent"
 ```
 
-저장 후 MCP 연결을 재시작하고 `/mcp` 또는 서버 목록에서 확인한다. 명령·인자·환경 변수 구성은 [공식 OpenAI MCP 문서](https://developers.openai.com/codex/mcp)를 따른다.
+예전 형태(`--env-file=<비공개 파일>` + `src/index.js`)도 그대로 동작하고, `npm run mcp:connect -- install <client>`는 그 비공개 파일 경로를 `COM_MOON_MCP_ENV_FILE`로 옮겨 런처 등록으로 바꾼다. 저장 후 MCP 연결을 재시작하고 `/mcp` 또는 서버 목록에서 확인한다. 명령·인자·환경 변수 구성은 [공식 OpenAI MCP 문서](https://developers.openai.com/codex/mcp)를 따른다.
 
 ### Claude Desktop / Antigravity
 
@@ -109,8 +110,9 @@ COM_MOON_MCP_API_MODE = "agent"
   "mcpServers": {
     "moonlight": {
       "command": "/absolute/path/to/node",
-      "args": ["--env-file=/absolute/private/moonlight-mcp.env", "/absolute/path/to/moonlight/packages/mcp-server/src/index.js"],
+      "args": ["/absolute/path/to/moonlight/packages/mcp-server/bin/moonlight-mcp.js"],
       "env": {
+        "COM_MOON_MCP_ENV_FILE": "/absolute/private/moonlight-mcp.env",
         "COM_MOON_MCP_PROFILE": "assistant",
         "COM_MOON_MCP_API_MODE": "agent"
       }

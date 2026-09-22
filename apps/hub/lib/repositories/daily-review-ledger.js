@@ -3,8 +3,12 @@ import { invokeSupabaseRpc, resolveDefaultWorkspaceId, resolveSupabaseConfig } f
 import { getDailyReviewMonthRange, isDailyReviewDate, validateDailyReviewInput } from "../daily-review.js";
 import { resolveRhythmTimeZone, toZonedDateKey } from "../rhythm-calendar.js";
 import { isCanonicalUuid } from "../uuid.js";
+import { isContactActivity } from "../contact-activity.js";
+import { MAX_FOCUS_PER_DAY } from "../task-today.js";
 
 const REVIEW_SELECT = "id,workspace_id,entry_kind,review_date,review_timezone,focus_target,review_data,body,review_revision,updated_at";
+// 저녁 리뷰의 "연락 N건"이 훑는 crm_activities 행 수 상한(리뷰 날짜 ±1일).
+export const ACTIVITY_SCAN_LIMIT = 200;
 const CONFLICT_ERRORS = new Set(["stale-revision", "date-exists", "revision-without-review", "request-id-reused"]);
 
 function baseEnvelope(configured = false, timezone = resolveRhythmTimeZone(null)) {
@@ -31,6 +35,45 @@ async function resolveReviewContext() {
   const configuredTimezone = typeof rows[0].timezone === "string" && rows[0].timezone.trim()
     ? rows[0].timezone : rows[0].meta?.timezone;
   return { ...base, status: "live", workspaceId, timezone: resolveRhythmTimeZone(configuredTimezone) };
+}
+
+// 저녁 리뷰 팝업의 읽기 전용 두 줄 — 그날 오늘 3개(k/n)와 연락 기록 수. 원천은 주간 카드와 같다
+// (tasks.meta.focus_dates·completed_at, crm_activities.occurred_at — 2026-09-20 §6.3). 어느 기록이든
+// 못 읽으면 null — 팝업은 줄을 숨기고, 리뷰 저장 자체는 영향받지 않는다.
+export async function readTodaySignals({ workspaceId, timezone, reviewDate }) {
+  const dayStart = new Date(`${reviewDate}T00:00:00Z`);
+  if (Number.isNaN(dayStart.getTime())) return null;
+  // 시간대 오프셋을 계산하지 않고 UTC 기준 ±1일을 읽은 뒤 운영자 시간대 날짜로 거른다.
+  const since = new Date(dayStart.getTime() - 86400e3).toISOString();
+  const until = new Date(dayStart.getTime() + 2 * 86400e3).toISOString();
+  const workspace = ["workspace_id", eqFilter(workspaceId)];
+  const [taskRows, activityRows] = await Promise.all([
+    fetchSupabaseRows("tasks", {
+      select: "id,status,completed_at,meta",
+      filters: [workspace, ["meta->focus_dates", `cs.${JSON.stringify([reviewDate])}`]],
+      limit: 20,
+    }),
+    fetchSupabaseRows("crm_activities", {
+      select: "id,kind,occurred_at",
+      filters: [workspace, ["occurred_at", `gte.${since}`], ["occurred_at", `lte.${until}`]],
+      // 상한보다 하나 더 읽어 잘림을 감지한다 — 잘린 줄 모르고 세면 "연락 12건"처럼 사실보다
+      // 적은 수를 확신에 차서 말한다(허브 read 계약: 읽기 결손을 작은 값으로 위장하지 않는다).
+      limit: ACTIVITY_SCAN_LIMIT + 1,
+    }),
+  ]);
+  if (!Array.isArray(taskRows) || !Array.isArray(activityRows)) return null;
+  const sameDay = (value) => Boolean(value) && toZonedDateKey(new Date(value), timezone) === reviewDate;
+  const picked = taskRows.filter((row) => Array.isArray(row?.meta?.focus_dates) && row.meta.focus_dates.includes(reviewDate));
+  const done = picked.filter((row) => row.status === "done" && sameDay(row.completed_at));
+  const contacts = activityRows.filter((row) => isContactActivity(row) && sameDay(row.occurred_at));
+  return {
+    date: reviewDate,
+    focusPicked: picked.length,
+    focusDone: done.length,
+    focusLimit: MAX_FOCUS_PER_DAY,
+    // 잘렸으면 숫자 대신 null — 팝업이 연락 줄만 빼고 오늘 3개는 그대로 말한다.
+    contacts: activityRows.length > ACTIVITY_SCAN_LIMIT ? null : contacts.length,
+  };
 }
 
 function reviewFromRow(row, workspaceId) {
@@ -67,7 +110,9 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
     const range = getDailyReviewMonthRange(selectedMonth);
     if (!isDailyReviewDate(reviewDate) || !range) return readError(base, "invalid-date");
     const filters = [["workspace_id", eqFilter(context.workspaceId)], ["entry_kind", eqFilter("daily_review")]];
-    const [selectedRows, monthRows] = await Promise.all([
+    // 두 줄 신호(오늘 3개·연락 N건)는 workspaceId·timezone·reviewDate만 쓰고 셋 다 여기서 이미
+    // 확정됐으므로 리뷰 읽기와 같은 왕복에 태운다 — 직렬로 두면 단계가 하나 더 생긴다.
+    const [selectedRows, monthRows, today] = await Promise.all([
       fetchSupabaseRows("journal_entries", {
         select: REVIEW_SELECT, filters: [...filters, ["review_date", eqFilter(reviewDate)]], limit: 2,
       }),
@@ -75,6 +120,7 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
         select: REVIEW_SELECT, filters: [...filters, ["review_date", `gte.${range.start}`], ["review_date", `lte.${range.end}`]],
         order: "review_date.desc", limit: 31,
       }),
+      readTodaySignals({ workspaceId: context.workspaceId, timezone: context.timezone, reviewDate }).catch(() => null),
     ]);
     if (!Array.isArray(selectedRows) || selectedRows.length > 1 || !Array.isArray(monthRows) || monthRows.length > 31) return readError(base);
     const review = selectedRows.length ? reviewFromRow(selectedRows[0], context.workspaceId) : null;
@@ -83,7 +129,7 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
     if (summaries.some((entry) => !entry || entry.reviewDate < range.start || entry.reviewDate > range.end)
       || new Set(summaries.map((entry) => entry.reviewDate)).size !== summaries.length) return readError(base);
     const entries = summaries.map(({ note, ...entry }) => ({ ...entry, excerpt: note.slice(0, 180) }));
-    return { ...base, status: "live", review, entries };
+    return { ...base, status: "live", review, entries, today };
   } catch {
     return readError(base);
   }

@@ -130,7 +130,7 @@ export function extractWeeklyExperiment(text) {
 
 export function parseContactOutcomeExtraction(text, now = new Date()) {
   if (typeof text !== "string" || !text.trim()) {
-    return { kind: null, reaction: null, summary: "", nextAction: "", nextAt: "", dormant: false };
+    return { kind: null, reaction: null, replied: null, summary: "", nextAction: "", nextAt: "", dormant: false };
   }
 
   const findField = (labels) => {
@@ -160,6 +160,15 @@ export function parseContactOutcomeExtraction(text, now = new Date()) {
     else if (/rejected|거절|부정|취소|안함/i.test(rawReaction)) reaction = "rejected";
     else if (/no_response|무응답|부재|연락두절|부재중/i.test(rawReaction)) reaction = "no_response";
     else if (/neutral|중립|보통|검토|미정/i.test(rawReaction)) reaction = "neutral";
+  }
+
+  // 2b. Replied — 발신형 채널(카톡·이메일)에서 상대가 실제로 답했는지. 반응 필드는 늘 채워지므로
+  // 이 값이 없으면 회신 여부를 알 수 없다(null) — 폼은 그때 회신을 켜지 않는다.
+  let replied = null;
+  const rawReplied = findField(["회신\\s*여부", "회신", "replied"]);
+  if (rawReplied) {
+    if (/^(?:예|네|있음|받음|true|yes)/i.test(rawReplied)) replied = true;
+    else if (/^(?:아니오|아니요|없음|안\s*받음|false|no)/i.test(rawReplied)) replied = false;
   }
 
   // 3. Summary (1줄 요약)
@@ -206,7 +215,7 @@ export function parseContactOutcomeExtraction(text, now = new Date()) {
     }
   }
 
-  return { kind, reaction, summary, nextAction, nextAt, dormant };
+  return { kind, reaction, replied, summary, nextAction, nextAt, dormant };
 }
 
 

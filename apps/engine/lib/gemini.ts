@@ -12,6 +12,13 @@ export interface GeminiGenerateInput {
   responseJsonSchema?: Record<string, unknown>;
   thinkingLevel?: 'low' | 'high';
   media?: GeminiMediaPart[];
+  // Structured-output knobs. Callers that need a machine-parseable answer (the Council
+  // content-draft / Guru followup-draft modes, card-news) ask for JSON at the API layer
+  // instead of trusting the prompt alone, and cap thinking so a runaway think cannot
+  // truncate the JSON mid-object. Matches CardNewsTextGenerator in
+  // packages/content-manager/card-news/generator.ts.
+  responseMimeType?: string;
+  thinkingBudget?: number;
 }
 
 const FAILURE_CATEGORIES = new Set([
@@ -175,6 +182,24 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       } : {}),
     },
   };
+
+  const generationConfig = body.generationConfig as Record<string, unknown>;
+
+  if (input.responseMimeType) {
+    generationConfig.responseMimeType = input.responseMimeType;
+  }
+
+  // 0 is a meaningful budget (thinking off), so test for undefined rather than falsiness.
+  // Same family guard as thinkingLevel above, mirrored: thinkingBudget is the Gemini 2.5
+  // option and the 3-series rejects it, which would fail every draft cron (the draft modes
+  // send DRAFT_GENERATION_BOUNDS.thinkingBudget on the default gemini-3.5-flash). Merge
+  // rather than assign so a caller that sends both never loses thinkingLevel silently.
+  if (typeof input.thinkingBudget === "number" && !/^gemini-3[.-]/.test(targetModel)) {
+    generationConfig.thinkingConfig = {
+      ...(generationConfig.thinkingConfig as Record<string, unknown> | undefined),
+      thinkingBudget: input.thinkingBudget,
+    };
+  }
 
   if (input.systemInstruction) {
     body.system_instruction = {

@@ -157,11 +157,21 @@ export function classinLeadScore(intake = {}) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+// 시트 동기화가 유입 소스별로 채워 넣는 다음 행동 문장. 운영자가 직접 적은 약속과
+// 구분해야 해서 목록으로 노출한다 — 실측(2026-09-21) 117개 리드 중 101개가 이 문장 중
+// 하나를 달고 있었고, 첫 화면 집중 고객이 같은 말을 반복하던 두 번째 원인이었다.
+export const CLASSIN_NEXT_ACTIONS = Object.freeze({
+  explanation: "설명회 신청 리드: 24시간 안에 문자/전화로 상담 슬롯 확정",
+  threads: "Threads 관심 리드: DM 맥락 이어서 실사용 레퍼런스 1개 전달",
+  metaAds: "광고 리드: 24시간 안에 문자+전화 1차 접촉",
+  unknown: "리드 출처 확인 후 다음 접촉 채널 정하기",
+});
+
 export function classinNextAction(intake = {}) {
-  if (isExplanationLead(intake)) return "설명회 신청 리드: 24시간 안에 문자/전화로 상담 슬롯 확정";
-  if (isThreadsLead(intake)) return "Threads 관심 리드: DM 맥락 이어서 실사용 레퍼런스 1개 전달";
-  if (isMetaAdsLead(intake)) return "광고 리드: 24시간 안에 문자+전화 1차 접촉";
-  return "리드 출처 확인 후 다음 접촉 채널 정하기";
+  if (isExplanationLead(intake)) return CLASSIN_NEXT_ACTIONS.explanation;
+  if (isThreadsLead(intake)) return CLASSIN_NEXT_ACTIONS.threads;
+  if (isMetaAdsLead(intake)) return CLASSIN_NEXT_ACTIONS.metaAds;
+  return CLASSIN_NEXT_ACTIONS.unknown;
 }
 
 export function buildLeadSourceMix(leads = []) {

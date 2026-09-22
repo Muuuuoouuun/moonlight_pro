@@ -1,6 +1,6 @@
 -- Phase 1C: 컨택 완료 시트 원자 RPC (deep-design spec §10).
 -- 통화·미팅 완료 시 "1줄 요약 + 고객 반응 + 다음 액션(날짜) 또는 명시적 기약 없음"을
--- 활동 기록과 대상 원장(lead/deal/account) next_action 갱신까지 한 트랜잭션으로 남긴다.
+-- 활동 기록과 대상 기록(lead/deal/account) next_action 갱신까지 한 트랜잭션으로 남긴다.
 --
 -- 규칙:
 --  · summary(1줄 요약)와 reaction은 필수 — 비면 invalid-input.
@@ -73,7 +73,7 @@ begin
   )
   returning id into v_activity_id;
 
-  -- 2) 대상 원장 next_action + 휴면 상태 갱신 (buildFollowupWrite와 같은 meta 계약)
+  -- 2) 대상 기록 next_action + 휴면 상태 갱신 (buildFollowupWrite와 같은 meta 계약)
   v_meta_patch := case
     when v_dormant then jsonb_build_object(
       'dormant', true,
@@ -115,7 +115,7 @@ begin
   end if;
 
   if v_updated = 0 then
-    -- 대상 원장 행이 없으면 전체 롤백 — 활동만 남는 반쪽 저장을 만들지 않는다
+    -- 대상 기록 행이 없으면 전체 롤백 — 활동만 남는 반쪽 저장을 만들지 않는다
     raise exception 'entity-not-found';
   end if;
 

@@ -211,14 +211,14 @@ export function AgentsChat({ onNavigate }) {
       requestPersonaChat({
         personaId: 'council',
         mode: 'sparring',
-        message: '현재 5대 페르소나 현황 및 비즈니스 원장을 종합 진단하고 전략적 합의를 도출하라.',
+        message: '현재 5대 페르소나 현황 및 비즈니스 기록을 종합 진단하고 전략적 합의를 도출하라.',
       }).then(r => {
         setThread([
           {
             role: 'agent',
             name: 'Council',
             text: r.state === 'done'
-              ? `【Council 종합 회의 (Convene)】\n5개 실행 페르소나 및 원장 상황을 종합 검토했습니다.\n\n${r.text}`
+              ? `【Council 종합 회의 (Convene)】\n5개 실행 페르소나 및 기록 상황을 종합 검토했습니다.\n\n${r.text}`
               : `【Council 종합 회의】\n${r.note || '자문을 생성하지 못했습니다.'}`,
           },
         ]);
@@ -532,7 +532,7 @@ export function AgentsChat({ onNavigate }) {
               </>
             )}
             <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginLeft: 'auto' }}>
-              {activeMode === 'critique' ? '· 맹점과 리스크를 엄격히 검수합니다' : activeMode === 'sparring' ? '· 3단 구조로 찬반 토론합니다' : activeMode === 'weekly-review' ? '· 한 주 원장 팩트를 분석합니다' : '· 실천 가능한 조언을 제공합니다'}
+              {activeMode === 'critique' ? '· 맹점과 리스크를 엄격히 검수합니다' : activeMode === 'sparring' ? '· 3단 구조로 찬반 토론합니다' : activeMode === 'weekly-review' ? '· 한 주 기록 팩트를 분석합니다' : '· 실천 가능한 조언을 제공합니다'}
             </span>
           </div>
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>

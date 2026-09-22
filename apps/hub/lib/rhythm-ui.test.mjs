@@ -313,19 +313,87 @@ test("computeWeeklyRhythmMatrix produces 7-day focus and outcome dataset", () =>
   assert.equal(matrix[6].tasksDone, 1);
 });
 
-test("computeContentUploadRhythm aggregates channel uploads and timeline", () => {
-  const contents = [
-    { id: "c1", status: "published", channel: "threads", publishedAt: "2026-07-15T09:00:00Z" },
-    { id: "c2", status: "published", channel: "instagram", publishedAt: "2026-07-14T09:00:00Z" },
-  ];
-
-  const rhythm = rhythmUi.computeContentUploadRhythm(contents, {
+test("computeWeeklyRhythmMatrix reads no activity as zero, not a baseline", () => {
+  const matrix = rhythmUi.computeWeeklyRhythmMatrix({
+    rituals: [],
+    todos: [{ id: "t-edited", status: "done", done: true, updatedAt: "2026-07-15T10:00:00Z" }],
     now: new Date("2026-07-15T12:00:00Z"),
     timeZone: "Asia/Seoul",
   });
 
-  assert.equal(rhythm.weeklyGoal, 7);
-  assert.ok(rhythm.weeklyDone >= 2);
-  assert.equal(rhythm.days.length, 7);
-  assert.ok(rhythm.channels.some(c => c.name === "Threads"));
+  assert.equal(matrix.length, 7);
+  for (const day of matrix) {
+    assert.equal(day.focusHours, 0);
+    assert.equal(day.outcomes, 0);
+    assert.equal(day.tasksDone, 0);
+    assert.equal(day.label, "기록 없음");
+  }
+});
+
+test("weekly target accepts only integers 1-7 and defaults by check type", () => {
+  assert.equal(rhythmUi.normalizeTargetPerWeek(3), 3);
+  assert.equal(rhythmUi.normalizeTargetPerWeek("5"), 5);
+  assert.equal(rhythmUi.normalizeTargetPerWeek(0), null);
+  assert.equal(rhythmUi.normalizeTargetPerWeek(100), null);
+  assert.equal(rhythmUi.normalizeTargetPerWeek(2.5), null);
+  assert.equal(rhythmUi.normalizeTargetPerWeek(""), null);
+  assert.equal(rhythmUi.defaultTargetPerWeek("weekly"), 1);
+  assert.equal(rhythmUi.defaultTargetPerWeek("morning"), 7);
+
+  const weekly = rhythmUi.buildRhythmDefinePayload({ id: "abc", name: "주간 리뷰", checkType: "weekly", targetPerWeek: 0 });
+  assert.equal(weekly.targetPerWeek, 1);
+  assert.equal(weekly.category, "general");
+  const explicit = rhythmUi.buildRhythmDefinePayload({ id: "abc", name: "러닝", checkType: "morning", category: "health", targetPerWeek: 3 });
+  assert.equal(explicit.targetPerWeek, 3);
+  assert.equal(explicit.category, "health");
+
+  const original = { ritualKey: "run", projectId: null, name: "러닝", checkType: "morning", category: "health", targetPerWeek: 3 };
+  assert.equal("targetPerWeek" in rhythmUi.buildRhythmEditPayload(original, { ...original, targetPerWeek: 0 }), false);
+  assert.equal(rhythmUi.buildRhythmEditPayload(original, { ...original, targetPerWeek: 4 }).targetPerWeek, 4);
+  assert.equal(rhythmUi.buildRhythmEditPayload(original, { ...original, category: "work" }).category, "work");
+});
+
+test("무효한 주간 목표는 조용히 버려지지 않고 이름이 붙은 입력 오류가 된다", () => {
+  const original = { ritualKey: "run", projectId: null, name: "러닝", checkType: "morning", category: "health", targetPerWeek: 3 };
+
+  // 범위 밖·빈 칸(숫자 필드가 0으로 바꾼다)은 payload에서 빠지므로 반드시 먼저 막아야 한다.
+  assert.deepEqual(rhythmUi.invalidRhythmEditFields(original, { ...original, targetPerWeek: 9 }), ["targetPerWeek"]);
+  assert.deepEqual(rhythmUi.invalidRhythmEditFields(original, { ...original, targetPerWeek: 0 }), ["targetPerWeek"]);
+  assert.deepEqual(rhythmUi.invalidRhythmEditFields(original, { ...original, targetPerWeek: 2.5 }), ["targetPerWeek"]);
+
+  // 유효한 변경·무변경·다른 필드만 바뀐 편집은 막지 않는다.
+  assert.deepEqual(rhythmUi.invalidRhythmEditFields(original, { ...original, targetPerWeek: 4 }), []);
+  assert.deepEqual(rhythmUi.invalidRhythmEditFields(original, { ...original }), []);
+  assert.deepEqual(rhythmUi.invalidRhythmEditFields(original, { ...original, name: "러닝 30분" }), []);
+
+  // 저장된 값 자체가 범위 밖인 낡은 행에서 이름만 고치는 편집은 막다른 길이 되면 안 된다.
+  const legacy = { ...original, targetPerWeek: 9 };
+  assert.deepEqual(rhythmUi.invalidRhythmEditFields(legacy, { ...legacy, name: "러닝 30분" }), []);
+
+  assert.match(rhythmUi.RHYTHM_INVALID_FIELD_MESSAGES.targetPerWeek, /1~7/);
+});
+
+test("Rhythm 편집은 무효 입력을 PATCH 전에 막고 드로어에 원인을 돌려준다", () => {
+  assert.match(workSource, /invalidRhythmEditFields\(original, editingRitual\)/);
+  assert.match(workSource, /RHYTHM_INVALID_FIELD_MESSAGES/);
+  // 가드가 payload 조립보다 앞에 있어야 무음 저장 경로가 사라진다.
+  assert.ok(
+    workSource.indexOf("invalidRhythmEditFields(original, editingRitual)")
+      < workSource.indexOf("buildRhythmEditPayload(original, editingRitual)"),
+    "invalid-field guard must run before the PATCH payload is built",
+  );
+});
+
+test("summarizeRitualsByCategory sums check-ins against each ritual's weekly target", () => {
+  const summary = rhythmUi.summarizeRitualsByCategory([
+    { category: "health", targetPerWeek: 3, checkType: "morning", weeks: [1, 0, 1, 0, 0, 0, 1] },
+    { category: "health", checkType: "weekly", weeks: [0, 0, 0, 0, 0, 0, 1] },
+    { category: "unknown", checkType: "evening", weeks: [0, 0, 0, 0, 0, 0, 0] },
+  ]);
+
+  assert.deepEqual(summary.map((c) => c.category), ["health", "general"]);
+  assert.equal(summary[0].count, 2);
+  assert.equal(summary[0].completedThisWeek, 4);
+  assert.equal(summary[0].targetThisWeek, 4);
+  assert.equal(summary[1].targetThisWeek, 7);
 });

@@ -100,8 +100,8 @@ UI 위치와 상세 레이아웃, 스키마·API·권한 및 원자성 계약은
 - 수정에는 revision 비교와 request receipt를 적용한다. 클라이언트가 새 기회 ID를 먼저 배정하여 불확실한 저장 뒤 내용 수정도 중복 생성 대신 충돌 검토로 연결한다.
 - 충돌 시 날짜·분류·본문·판단 이유·연결 대상을 모두 비교할 수 있다. 내 입력 전체 유지 또는 저장된 기록 사용을 명시적으로 선택한다.
 - 저장마다 전체 snapshot 이력이 남는다. 목록 200건·이력 100건 단위 더 보기를 지원하고 불러온 범위의 현황임을 표시한다.
-- GET `/api/hub/discovery`는 오류도 HTTP 200 봉투로 반환한다. POST는 Hub guard → repository → 공유 REST RPC로 저장한다. 탐색 read는 공유 클라이언트의 선택적 `strictRows`로 잘못된 JSON 응답을 빈 원장과 구분한다.
+- GET `/api/hub/discovery`는 오류도 HTTP 200 봉투로 반환한다. POST는 Hub guard → repository → 공유 REST RPC로 저장한다. 탐색 read는 공유 클라이언트의 선택적 `strictRows`로 잘못된 JSON 응답을 빈 기록과 구분한다.
 - DB 테이블은 service_role SELECT만 허용하고 저장 RPC에만 EXECUTE를 허용한다. 기존 Supabase 기본 권한을 먼저 회수하여 직접 쓰기 우회를 차단한다.
 - N 생성, ESC/오버레이 닫기·미저장 변경 확인, `?new=discovery`, `?discovery=<uuid>` 딥링크, 모바일 가로 세그먼트를 지원한다.
 
-검증과 운영 적용 명령은 [실행 기록](../plans/2026-09-13-opportunity-discovery.md)을 따른다. 개발용 임시 DB와 REST 어댑터에서 브라우저 저장을 검증했으며 실제 Supabase 운영 원장에 테스트 데이터를 쓰지 않았다.
+검증과 운영 적용 명령은 [실행 기록](../plans/2026-09-13-opportunity-discovery.md)을 따른다. 개발용 임시 DB와 REST 어댑터에서 브라우저 저장을 검증했으며 실제 Supabase 운영 기록에 테스트 데이터를 쓰지 않았다.

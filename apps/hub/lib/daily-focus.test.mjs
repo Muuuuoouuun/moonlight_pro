@@ -76,7 +76,7 @@ test("긴급 KA: 7일 이상 방치된 KA 딜도 후보이고, 더 오래된 쪽
 
 test("buildDailyFocus: 집중 고객은 CS 레인 + next action 있는 리드를 최대 5건", () => {
   const lead = (id, score) => ({
-    id, owner: "Me", name: `리드${id}`, companyName: `회사${id}`,
+    id, owner: "Me", name: `리드${id}`, companyName: `회사${id}`, companyId: `co-${id}`,
     priorityLane: "customer_success", nextAction: "연락", score, focusOverride: "default",
   });
   const revenue = revenueFixture({
@@ -88,6 +88,8 @@ test("buildDailyFocus: 집중 고객은 CS 레인 + next action 있는 리드를
   assert.equal(focus.focusCustomers.items.length, 5); // §2: 3~5건 — 캡 5
   assert.equal(focus.focusCustomers.items[0].id, "a");
   assert.match(focus.focusCustomers.items[0].href, /customer=lead%3Aa/);
+  // 첫 화면 기록창이 원문 메모를 회사에도 연결하려면 행이 companyId를 들고 가야 한다.
+  assert.equal(focus.focusCustomers.items[0].companyId, "co-a");
 });
 
 test("buildDailyFocus: 오늘 일정은 KST 오늘만, 시간순, 미연결은 preview + reason", () => {
@@ -120,7 +122,7 @@ test("buildDailyFocus: 오늘 일정은 KST 오늘만, 시간순, 미연결은 p
   assert.equal(off.todayAgenda.items.length, 0);
 });
 
-test("buildDailyFocus: 매출 원장이 preview면 KA·집중 슬롯도 preview (mock 승격 금지)", () => {
+test("buildDailyFocus: 매출 기록이 preview면 KA·집중 슬롯도 preview (mock 승격 금지)", () => {
   const focus = buildDailyFocus({ revenue: { source: "preview" }, calendar: { ok: false }, now: NOW });
   assert.equal(focus.urgentKa.state, "preview");
   assert.equal(focus.urgentKa.item, null);
@@ -128,7 +130,7 @@ test("buildDailyFocus: 매출 원장이 preview면 KA·집중 슬롯도 preview 
   assert.equal(focus.focusCustomers.items.length, 0);
 });
 
-// 확정 슬롯과 신호 큐가 같은 원장을 두 번 읽어 같은 고객을 첫 화면에 두 번 렌더하던 구조를
+// 확정 슬롯과 신호 큐가 같은 기록을 두 번 읽어 같은 고객을 첫 화면에 두 번 렌더하던 구조를
 // 잠근다 — 슬롯이 정본, 신호는 나머지(2026-08-07 사용성 재감사 A).
 test("withoutFocusDuplicates: 확정 슬롯이 점유한 레코드는 신호 큐에서 빠진다", () => {
   const dailyFocus = {
@@ -154,7 +156,7 @@ test("withoutFocusDuplicates: 확정 슬롯이 점유한 레코드는 신호 큐
     ["x"],
   );
 
-  // 슬롯이 비었으면(원장 preview·error 포함) 원본을 그대로 통과시킨다.
+  // 슬롯이 비었으면(기록 preview·error 포함) 원본을 그대로 통과시킨다.
   assert.equal(withoutFocusDuplicates(signals, { urgentKa: { item: null }, focusCustomers: { items: [] } }).length, 5);
   assert.equal(withoutFocusDuplicates(signals, null).length, 5);
   assert.deepEqual(withoutFocusDuplicates(null, dailyFocus), []);
@@ -167,4 +169,34 @@ test("focusOccupiedKeys: KA 슬롯은 kind로 구분되고 집중 고객은 전�
   });
   assert.deepEqual([...keys].sort(), ["lead:a", "lead:b", "lead:l9"]);
   assert.equal(focusOccupiedKeys(undefined).size, 0);
+});
+
+// 0c: 집중 고객 행이 서로 다른 말을 하려면 마지막 접점의 반응이 행까지 실려야 한다.
+test("focus customer rows carry the last reaction so they stop repeating one sentence", () => {
+  const focus = buildDailyFocus({
+    revenue: {
+      source: "supabase",
+      companies: [{ id: "co-1", name: "한빛학원" }],
+      leads: [
+        {
+          id: "lead-1", owner: "Me", companyId: "co-1", companyName: "한빛학원", name: "한빛학원",
+          score: 70, nextAction: "견적서 발송", nextActionAt: "2026-08-06",
+          last: "3일 전", lastReaction: "concern",
+        },
+        {
+          id: "lead-2", owner: "Me", companyId: "co-2", companyName: "다른학원", name: "다른학원",
+          score: 60, nextAction: "원장님 통화", last: "1일 전",
+        },
+      ],
+      deals: [],
+    },
+    calendar: { ok: false, reason: "calendar-not-connected", items: [] },
+    now: NOW,
+  });
+
+  const rows = focus.focusCustomers.items;
+  assert.deepEqual(rows.map((row) => row.id), ["lead-1", "lead-2"]);
+  assert.equal(rows[0].lastReaction, "concern");
+  // 반응 기록이 없으면 빈 문자열이 아니라 null — 화면이 그 자리를 그리지 않는다.
+  assert.equal(rows[1].lastReaction, null);
 });

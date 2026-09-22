@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { CLASSIN_NEXT_ACTIONS } from "./operator-context.js";
 import {
+  NEXT_ACTION_TEMPLATES,
   buildJunhyukLeadEnrichment,
   inferLeadTags,
+  isTemplateNextAction,
   normalizeEntityName,
 } from "./lead-enrichment.js";
 
@@ -137,4 +140,49 @@ test("keeps a stable evidence fingerprint across run timestamps", () => {
 
   assert.ok(first.enrichment.evidenceFingerprint);
   assert.equal(first.enrichment.evidenceFingerprint, second.enrichment.evidenceFingerprint);
+});
+
+// 이관 스크립트가 채우는 문장과 운영자가 적은 약속을 가른다(0c). 첫 화면 집중 고객이
+// 같은 말을 다섯 번 하던 원인이자, 재실행이 운영자 약속을 되돌리던 경로.
+test("template next actions are recognised, operator-written ones are not", () => {
+  for (const template of NEXT_ACTION_TEMPLATES) {
+    assert.equal(isTemplateNextAction(template), true, template);
+    assert.equal(isTemplateNextAction(`  ${template}  `), true, "주변 공백은 무시한다");
+  }
+  for (const written of ["견적서 발송", "원장님 통화 후 일정 확정", "자료 보내기"]) {
+    assert.equal(isTemplateNextAction(written), false, written);
+  }
+  for (const blank of ["", "   ", null, undefined]) {
+    assert.equal(isTemplateNextAction(blank), false, String(blank));
+  }
+});
+
+test("the exposed template list is exactly what resolveNextAction can emit", () => {
+  // resolveNextAction은 비공개라 buildJunhyukLeadEnrichment의 산출로 확인한다.
+  const owner = { externalId: "1", name: "문준혁" };
+  const officialAccount = { externalId: "1", ownerId: "1", name: "한빛학원", matchType: "exact_name" };
+  for (const status of ["new", "qualified", "nurturing", "won"]) {
+    const built = buildJunhyukLeadEnrichment({
+      owner,
+      lead: { status, meta: {} },
+      company: { name: "한빛학원" },
+      officialAccount,
+      now: "2026-09-21T00:00:00Z",
+    });
+    assert.ok(
+      NEXT_ACTION_TEMPLATES.includes(built.nextAction),
+      `${status} → ${built.nextAction} 이 템플릿 목록에 없다`,
+    );
+  }
+});
+
+// 실측(2026-09-21 운영 DB): 리드 117건 중 101건이 시트 동기화 문장을 달고 있었다. 이 계열을
+// 빠뜨리면 첫 화면 집중 고객이 여전히 같은 말을 반복한다.
+test("sheet-sync source sentences are templates too", () => {
+  for (const sentence of Object.values(CLASSIN_NEXT_ACTIONS)) {
+    assert.equal(isTemplateNextAction(sentence), true, sentence);
+  }
+  assert.equal(isTemplateNextAction("리드 출처 확인 후 다음 접촉 채널 정하기"), true);
+  // 운영자가 같은 리드에 직접 적은 문장은 계속 약속이다.
+  assert.equal(isTemplateNextAction("설명회 온 원장님께 견적서 발송"), false);
 });

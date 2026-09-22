@@ -5,6 +5,7 @@ import { JournalSources } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, Button, Checkbox, DateQuickPresets, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, Skeleton, TruthBadge, useToast } from "../hub-primitives";
+import { focusLimitMessage, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
@@ -51,12 +52,14 @@ const LANE_TONE = { task: 'neutral', deal: 'neutral', event: 'neutral' };
 const LANE_LABEL = { task: '할 일', deal: '딜', event: '일정' };
 
 const BUCKETS = [
+  // 오늘 3개 — 운영자가 오늘로 고른 할 일(meta.focus_dates). 기한 버킷보다 앞선다(2026-09-20 §6.2).
+  { key: 'focus', label: '오늘 3개', tone: 'moon' },
   { key: 'overdue', label: '지남', tone: 'danger' },
   { key: 'today', label: '오늘', tone: 'neutral' },
   { key: 'week', label: '이번 주', tone: 'neutral' },
   { key: 'later', label: '나중', tone: 'neutral' },
 ];
-const BUCKET_RANK = { overdue: 0, today: 1, week: 2, later: 3 };
+const BUCKET_RANK = { focus: 0, overdue: 1, today: 2, week: 3, later: 4 };
 const BUCKET_OPTIONS = [{ key: 'all', label: '전체 기한' }, ...BUCKETS];
 // 서버 bucket 키가 넷 밖이면(방어) '나중'으로 흡수 — 그룹/카운트가 항목을 잃지 않게.
 const normalizeBucket = (item) => (BUCKET_RANK[item.bucket] != null ? item.bucket : 'later');
@@ -64,6 +67,7 @@ const normalizeBucket = (item) => (BUCKET_RANK[item.bucket] != null ? item.bucke
 // 시그널 스트립 타일 — 클릭하면 리스트 렌즈 + 해당 기한 필터 토글. '나중'은 신호가
 // 아니므로 타일에서 제외 (기한 세그먼트 토글에는 그대로 있다).
 const SIGNAL_TILES = [
+  { key: 'focus', label: '오늘 3개', color: 'var(--moon-300)' },
   { key: 'overdue', label: '기한 지남', color: 'var(--danger)', stripe: 'var(--danger)' },
   { key: 'today', label: '오늘', color: 'var(--fg)' },
   { key: 'week', label: '이번 주', color: 'var(--fg-dim)' },
@@ -71,6 +75,7 @@ const SIGNAL_TILES = [
 
 // 리스트 그룹 헤더 텍스트 톤 — 긴급 버킷만 semantic 색, 나머지는 중립 (§5.2 절제).
 const BUCKET_HEADER = {
+  focus: { label: '오늘 3개', color: 'var(--moon-300)' },
   overdue: { label: '기한 지남', color: 'var(--danger)' },
   today: { label: '오늘', color: 'var(--fg-dim)' },
   week: { label: '이번 주', color: 'var(--fg-dim)' },
@@ -151,7 +156,8 @@ function recencyValue(item) {
 
 function dueValue(item) {
   // 기한 sort: overdue first (oldest first), no-date last.
-  const rank = BUCKET_RANK[item.bucket] ?? 3;
+  // 모르는 버킷은 '나중'으로 — `focus`가 0번으로 들어와 순위가 한 칸씩 밀렸으므로 숫자 대신 키로 적는다.
+  const rank = BUCKET_RANK[item.bucket] ?? BUCKET_RANK.later;
   const t = item.whenAt ? new Date(item.whenAt).getTime() : Number.MAX_SAFE_INTEGER;
   return rank * 1e15 + (Number.isNaN(t) ? Number.MAX_SAFE_INTEGER : t);
 }
@@ -170,7 +176,7 @@ function useAttentionLedger() {
     && Date.now() - attentionLedgerCache.at < ATTENTION_CACHE_SERVABLE_MS
     ? attentionLedgerCache
     : null;
-  const [data, setData] = React.useState(cachedAttention ? cachedAttention.data : { items: [], sources: {}, calendarReason: '', projects: [] });
+  const [data, setData] = React.useState(cachedAttention ? cachedAttention.data : { items: [], sources: {}, calendarReason: '', projects: [], focusToday: null });
   const [state, setState] = React.useState(cachedAttention ? cachedAttention.state : 'loading');
   // 완료/미루기 뒤 reload가 겹치면 늦은 이전 응답이 최신 목록을 덮는다 — 최신 요청만 반영.
   const requestRef = React.useRef(0);
@@ -192,7 +198,7 @@ function useAttentionLedger() {
         setState(servingCache ? 'stale' : 'error');
         return null;
       }
-      const nextData = { items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '', projects: json.projects || [] };
+      const nextData = { items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '', projects: json.projects || [], focusToday: json.focusToday || null };
       attentionLedgerCache = { at: Date.now(), data: nextData, state: 'ready' };
       setData(nextData);
       setState('ready');
@@ -216,7 +222,9 @@ function useAttentionLedger() {
 // strikethrough flash before a task leaves the list (undo window handled by the caller).
 // `selected` marks the row whose detail panel is open. `hideProject` suppresses the
 // project label inside a project accordion (the header already names it).
-function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded, onDefer, mutedEntry, onMute, onUnmute, onToggleFocus, focusCapReached }) {
+function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded, onDefer, mutedEntry, onMute, onUnmute, onToggleFocus, focusFull }) {
+  // 기한 색·스트라이프는 기한 버킷(dueBucket)을 따른다 — 오늘 3개로 고른 행도 지난 기한은 빨갛다.
+  const dueBucket = item.dueBucket || item.bucket;
   // 우선순위 정렬일 때는 meta 자리에 정렬 근거(reason)를 보여준다 — 첫 화면 요구사항
   // "지금 해야 하는 이유"(profile §4)를 행 높이 증가 없이 전달.
   const projectLabel = !hideProject && item.lane === 'task' ? item.projectName || '' : '';
@@ -286,16 +294,16 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         position: 'relative',
         touchAction: 'pan-y',
         transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
-        background: swipeAction === 'complete'
-          ? 'rgba(56, 239, 125, 0.08)'
-          : swipeAction === 'defer'
-          ? 'rgba(140, 168, 216, 0.08)'
+        // 스와이프 방향은 라벨·아이콘·행 이동이 말한다 — 배경색으로 분류하지 않는다(§5.3).
+        // 초록/파랑 raw rgba는 §5.2의 "페이지 안 하드코딩 금지"에도 걸렸다.
+        background: swipeAction
+          ? 'var(--surface-3)'
           : justAdded
           ? 'var(--surface-3)'
           : selected
           ? 'var(--surface-2)'
           : undefined,
-        boxShadow: item.bucket === 'overdue' ? 'inset 1px 0 0 var(--danger)'
+        boxShadow: dueBucket === 'overdue' ? 'inset 1px 0 0 var(--danger)'
           : item.stalled ? 'inset 1px 0 0 var(--line-strong)'
             : justAdded ? 'inset 1px 0 0 var(--accent)' : undefined,
         transition: swipeOffset ? 'none' : 'transform var(--dur-enter) var(--ease-hub), background var(--dur-enter) ease, box-shadow var(--dur-enter) ease',
@@ -315,14 +323,16 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       }}>
         {item.title}
       </span>
+      {/* §5.3: 완료는 check 글리프 + 중립 텍스트(초록 금지), 미루기는 clock 글리프.
+          이모지는 §15 2026-09-22가 첫 화면에서 걷어낸 어휘라 새로 쓰지 않는다. */}
       {swipeAction === 'complete' && (
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--success)' }}>
-          ✓ 완료
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--fg)' }}>
+          <Iconed name="check" size={12} /> 완료
         </span>
       )}
       {swipeAction === 'defer' && (
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--moon-300)' }}>
-          ⏰ 미루기
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--fg-muted)' }}>
+          <Iconed name="clock" size={12} /> 미루기
         </span>
       )}
       {metaText && !swipeAction && (
@@ -343,21 +353,23 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       )}
       <span className="mono" style={{
         fontSize: 11, flexShrink: 0, minWidth: 64, textAlign: 'right',
-        color: item.bucket === 'overdue' ? 'var(--danger)' : item.bucket === 'today' ? 'var(--fg-muted)' : 'var(--fg-faint)',
+        color: dueBucket === 'overdue' ? 'var(--danger)' : dueBucket === 'today' ? 'var(--fg-muted)' : 'var(--fg-faint)',
       }}>
         {item.whenLabel}
       </span>
-      {/* "오늘 3개"(§6.2) 토글 — 선택 상태는 Moonstone 하나로만 표시(색 단독 금지 원칙에
-          따라 별 채움 + 라벨 둘 다로 전달), 4번째부터는 비활성(§8.1). */}
-      {onToggleFocus && item.lane === 'task' && !swipeAction && (
-        <span className="hub-row-action" data-open={item.isFocusToday ? 'true' : undefined}>
+      {item.lane === 'task' && onToggleFocus && !swipeAction && (
+        // 오늘 3개 토글(§6.2) — 고른 행은 항상 보이고(data-open), 안 고른 행은 hover/포커스에서 드러난다.
+        // 색은 선택 상태(Moonstone, §5.2 selected)에만 쓰고 라벨(툴팁·aria-pressed)이 뜻을 말한다.
+        // 상한(서버 요약 기준 3건)에 닿으면 넣기는 비활성(§8.1).
+        <span className="hub-row-action" data-open={item.focusToday ? 'true' : undefined}>
           <IconButton
             icon="star"
             size={24}
             iconSize={13}
-            tooltip={item.isFocusToday ? '오늘 3개에서 빼기' : focusCapReached ? '오늘 3개를 이미 다 골랐습니다' : '오늘 3개로 고르기'}
-            disabled={!item.isFocusToday && focusCapReached}
-            style={item.isFocusToday ? { color: 'var(--moon-300)' } : undefined}
+            tooltip={item.focusToday ? '오늘 3개에서 빼기' : focusFull ? `오늘 3개가 찼습니다 (${MAX_FOCUS_PER_DAY}/${MAX_FOCUS_PER_DAY})` : '오늘 3개에 넣기'}
+            aria-pressed={item.focusToday ? 'true' : 'false'}
+            disabled={!item.focusToday && Boolean(focusFull)}
+            className={item.focusToday ? 'hub-iconbtn--star-active' : ''}
             onClick={(e) => { e.stopPropagation(); onToggleFocus(item); }}
             onKeyDown={(e) => e.stopPropagation()}
           />
@@ -666,7 +678,7 @@ function DealOutreachSection({ deal }) {
 // 우측 상세 패널 — 행 클릭 시 열리는 간단 요약 + 다음 행동. 딥워크는 각 레인의 네이티브
 // 서피스(할 일 EditDrawer · Deals 드로어 · 프로젝트 · Google Calendar)로 넘긴다.
 // ESC/닫기 버튼으로 접힌다 (§8.1 닫기 계약의 패널 버전).
-function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDefer, onEdit, onNavigate, mutedEntry, onMute, onUnmute, onTaskCreated }) {
+function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDefer, onEdit, onNavigate, mutedEntry, onMute, onUnmute, onTaskCreated, onToggleFocus, focusFull }) {
   const bucketMeta = BUCKET_HEADER[normalizeBucket(item)];
   // mono는 계기 데이터(기한·단계·금액)만 — 상태/프로젝트명/근거 같은 '단어' 값을 mono로
   // 두면 이름이 ID처럼 읽힌다 (DESIGN §6 하이브리드 숫자 규칙).
@@ -675,8 +687,9 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
       label: '기한',
       value: item.whenLabel,
       mono: true,
-      tone: item.bucket === 'overdue' ? 'var(--danger)' : undefined,
+      tone: (item.dueBucket || item.bucket) === 'overdue' ? 'var(--danger)' : undefined,
     },
+    item.lane === 'task' && item.focusToday && { label: '오늘 3개', value: '고름' },
     item.lane === 'task' && {
       label: '상태',
       value: TASK_STATUS_OPTIONS.find((o) => o.value === item.status)?.label || item.status,
@@ -733,6 +746,18 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
         {item.lane === 'task' && (
           <>
             <Button variant="primary" size="sm" icon="check" onClick={onComplete} disabled={completing}>완료</Button>
+            {/* 오늘 3개 — 사람이 고른 오늘의 일. 서버가 하루 3건을 강제한다(2026-09-20 §6.2). */}
+            {onToggleFocus && (
+              <Button
+                variant={item.focusToday ? 'outline' : 'secondary'}
+                size="sm"
+                icon="star"
+                onClick={onToggleFocus}
+                disabled={!item.focusToday && Boolean(focusFull)}
+              >
+                {item.focusToday ? '오늘 3개에서 빼기' : focusFull ? `오늘 3개가 찼습니다 (${MAX_FOCUS_PER_DAY}/${MAX_FOCUS_PER_DAY})` : '오늘 3개에 넣기'}
+              </Button>
+            )}
             {/* 오늘 못하면 미루기 — 기본 다음날, 주말이면 월요일. */}
             <Button variant="secondary" size="sm" icon="clock" onClick={onDefer}>{deferTarget.label}로 미루기</Button>
             {/* 2차 액션(outline)은 한 줄로 — 세로 4단 스택보다 위계가 읽히고 패널이 짧아진다. */}
@@ -774,7 +799,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
             </Button>
           </>
         )}
-        {/* 숨기기 — 원장은 그대로 두고 이 목록에서만 걷어낸다. 딜을 파이프라인에서까지
+        {/* 숨기기 — 기록은 그대로 두고 이 목록에서만 걷어낸다. 딜을 파이프라인에서까지
             치우는 건 Revenue 보드의 '파이프라인에서 숨기기'(deals.hidden_at)가 따로 한다.
             되돌리기: 오늘 숨김은 내일 자동 복귀, 무기한 숨김은 툴바의 '숨김 N' 토글. */}
         <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 2, paddingTop: 8, display: 'flex', gap: 6 }}>
@@ -793,7 +818,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
 }
 
 export function MyWork({ onNavigate }) {
-  const { items, sources, calendarReason, projects, state, reload } = useAttentionLedger();
+  const { items, sources, calendarReason, projects, focusToday, state, reload } = useAttentionLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -828,7 +853,7 @@ export function MyWork({ onNavigate }) {
   const setBucketFilter = (v) => { setBucketFilterState(v); writeStoredOption('mlp.mywork.bucket', v); };
   const setSort = (v) => { setSortState(v); writeStoredOption('mlp.mywork.sort', v); };
 
-  // 숨김(뮤트) — '오늘 안 보기'(내일 자동 복귀)와 '아예 안 보기'(무기한). 원장 사실이
+  // 숨김(뮤트) — '오늘 안 보기'(내일 자동 복귀)와 '아예 안 보기'(무기한). 기록 사실이
   // 아니라 이 표면의 보기 설정이라 lane/bucket/sort와 같은 localStorage 계층에 둔다
   // (근거는 my-work-mute.js 머리주석). 읽기도 같은 이유로 마운트 후 이펙트에서 —
   // useState 초기화에서 읽으면 SSR HTML과 첫 렌더가 갈려 하이드레이션 불일치가 난다.
@@ -908,13 +933,23 @@ export function MyWork({ onNavigate }) {
     return sorted;
   }, [items, lane, bucketFilter, search, sort, hiddenIds, lens, itemPatches, justAddedId, mutedIds, showMuted]);
 
-  // "오늘 3개"(§6.2) 픽 수 — 현재 필터/뷰와 무관하게 서버 3건 상한과 같은 모수를 센다.
-  const focusTodayCount = React.useMemo(() => {
-    const patched = Object.keys(itemPatches).length
-      ? items.map((i) => (itemPatches[i.id] ? { ...i, ...itemPatches[i.id] } : i))
-      : items;
-    return patched.filter((i) => i.lane === 'task' && i.isFocusToday).length;
-  }, [items, itemPatches]);
+  // 오늘 3개 선택 수 — 서버 요약(focusToday.picked, 완료된 선택 포함)을 기준으로 하고, 낙관 패치로
+  // 아직 서버에 안 간 토글만 더한다. 이 값이 서버의 409 focus-limit 판정과 같은 분모다.
+  const focusPickedCount = React.useMemo(() => {
+    const serverPicked = Number.isFinite(focusToday?.picked) ? focusToday.picked : null;
+    const listed = items.reduce((n, i) => {
+      const patched = itemPatches[i.id] ? { ...i, ...itemPatches[i.id] } : i;
+      return n + (patched.lane === 'task' && patched.focusToday ? 1 : 0);
+    }, 0);
+    if (serverPicked === null) return listed;
+    const pending = items.reduce((n, i) => {
+      const patch = itemPatches[i.id];
+      if (!patch || typeof patch.focusToday !== 'boolean' || patch.focusToday === i.focusToday) return n;
+      return n + (patch.focusToday ? 1 : -1);
+    }, 0);
+    return Math.max(listed, serverPicked + pending);
+  }, [items, itemPatches, focusToday]);
+  const focusFull = focusPickedCount >= MAX_FOCUS_PER_DAY;
 
   // Durable quick-add task: POST /api/hub/tasks (Phase 1A write path). 상세 토글을 열면
   // 기한·우선순위도 한 번에 저장 — 기본은 제목만(빠른 경로) 그대로 유지.
@@ -1099,60 +1134,105 @@ export function MyWork({ onNavigate }) {
     }
   };
 
-  const dropOnBucket = (bucketKey) => {
-    const item = visible.find((i) => i.id === dragItemId);
-    setDragItemId(null);
-    if (!item || item.lane !== 'task' || bucketKey === 'overdue') return;
-    const seoulDate = (offsetDays) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(Date.now() + offsetDays * 86400000));
-    const dueAt = bucketKey === 'today' ? seoulDate(0) : bucketKey === 'week' ? seoulDate(1) : null; // 'later' clears the date
-    rescheduleTask(item, dueAt);
-  };
-
-  // "오늘 3개" 토글(§6.2) — tasks.meta.focus_dates에 오늘(KST)을 더하거나 뺀다. 기한·상태와
-  // 무관하게 사람이 직접 고른 오늘의 우선순위이므로, 완료율 보존을 위해 배열 전체가 아니라
-  // "오늘"만 더하거나 뺀 새 배열을 보낸다(과거 날짜는 그대로 둔다).
-  const toggleFocusToday = async (item) => {
+  // 오늘 3개 토글 — PATCH { focus: { on } }. 배열(meta.focus_dates)은 서버가 병합하므로 지난
+  // 날의 선택은 절대 지워지지 않는다. 상한 초과는 409 focus-limit로 돌아온다(2026-09-20 §6.2).
+  // 옛 배열 토글(e0e5c80)에서 가져온 것: 다음 행동을 말하는 상한 카피, 실패 토스트, 저장 확인 뒤
+  // 성공 토스트(§9 compact capture와 같은 "서버 확인 뒤 확정" 규칙).
+  const toggleFocus = async (item, forceOn) => {
     if (item.lane !== 'task') return;
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
-    const current = Array.isArray(item.focusDates) ? item.focusDates : [];
-    const isOn = current.includes(today);
-    if (!isOn && focusTodayCount >= 3) {
-      const msg = '오늘 3개를 이미 다 골랐습니다 — 하나를 빼고 다시 고르세요.';
+    const on = typeof forceOn === 'boolean' ? forceOn : !item.focusToday;
+    if (on && item.focusToday) return;
+    if (!on && !item.focusToday) return;
+    if (on && focusFull) {
+      const msg = focusLimitMessage();
       setNotice({ tone: 'err', label: msg });
       toast.error(msg);
       return;
     }
-    const next = isOn ? current.filter((d) => d !== today) : [...current, today];
-    setItemPatches((p) => ({ ...p, [item.id]: { ...(p[item.id] || {}), isFocusToday: !isOn, focusDates: next } }));
+    const clearPatch = () => setItemPatches((p) => {
+      if (!(item.id in p)) return p;
+      const next = { ...p };
+      delete next[item.id];
+      return next;
+    });
+    setItemPatches((p) => ({ ...p, [item.id]: { ...(p[item.id] || {}), bucket: on ? 'focus' : (item.dueBucket || 'later'), focusToday: on } }));
+    const label = on ? '오늘 3개에 넣음' : '오늘 3개에서 뺌';
+    setNotice({ tone: 'ok', label });
     try {
       const res = await fetch('/api/hub/tasks', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: item.entityId, focusDates: next }),
+        body: JSON.stringify({ id: item.entityId, focus: { on } }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.status !== 'saved') {
-        throw new Error(data.error === 'focus-limit-reached'
-          ? '오늘 3개를 이미 다 골랐습니다 — 하나를 빼고 다시 고르세요.'
-          : data.error || `저장 실패 ${res.status}`);
+      if (res.status === 409 && data.error === 'focus-limit') {
+        throw new Error(focusLimitMessage(data.limit || MAX_FOCUS_PER_DAY));
       }
-      const label = isOn ? '오늘 3개에서 뺐습니다' : '오늘 3개에 넣었습니다';
-      setNotice({ tone: 'ok', label });
+      if (!res.ok || data.status !== 'saved') throw new Error(data.error || `오늘 3개 저장 실패 ${res.status}`);
       toast.success(label);
-      reload();
+      reload().then((fresh) => { if (fresh) clearPatch(); }).catch(() => {});
     } catch (error) {
-      setItemPatches((p) => { const n = { ...p }; delete n[item.id]; return n; });
+      clearPatch();
       const msg = error instanceof Error ? error.message : String(error);
       setNotice({ tone: 'err', label: msg });
       toast.error(msg);
     }
   };
 
+  // 고른 카드를 기한 열로 끌면 선택을 풀고 **그 열로 옮긴다**. toggleFocus·rescheduleTask를 겹쳐
+  // 부르면 두 PATCH가 각자 background reload().then(clearPatch)를 돌려, 먼저 끝난 쪽의 clearPatch가
+  // 상대의 낙관 상태를 지운다(카드가 한 번 스냅백하거나 오늘 3개 표시가 어긋난다). 그래서 낙관
+  // 패치는 한 엔트리로 한 번만 쓰고, 두 PATCH를 순차로 보낸 뒤 reload·clearPatch는 마지막에 한 번만.
+  const unfocusAndReschedule = async (item, bucketKey, dueAt) => {
+    const clearPatch = () => setItemPatches((p) => {
+      if (!(item.id in p)) return p;
+      const next = { ...p };
+      delete next[item.id];
+      return next;
+    });
+    setItemPatches((p) => ({ ...p, [item.id]: { bucket: bucketKey, whenAt: dueAt || null, focusToday: false } }));
+    setNotice({ tone: 'ok', label: '기한 변경됨' });
+    toast.info('기한 변경됨');
+    const patchTask = async (body, failLabel) => {
+      const res = await fetch('/api/hub/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: item.entityId, ...body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status !== 'saved') throw new Error(data.error || `${failLabel} ${res.status}`);
+    };
+    try {
+      await patchTask({ focus: { on: false } }, '오늘 3개 저장 실패');
+      await patchTask({ dueAt }, '기한 변경 실패');
+      reload().then((fresh) => { if (fresh) clearPatch(); }).catch(() => {}); // null = 실패/superseded → 패치 유지
+    } catch (error) {
+      clearPatch();
+      const msg = error instanceof Error ? error.message : String(error);
+      setNotice({ tone: 'err', label: msg });
+      toast.error(msg);
+    }
+  };
+
+  const dropOnBucket = (bucketKey) => {
+    const item = visible.find((i) => i.id === dragItemId);
+    setDragItemId(null);
+    if (!item || item.lane !== 'task' || bucketKey === 'overdue') return;
+    // 오늘 3개 열로 끌어오면 기한이 아니라 선택을 바꾼다.
+    if (bucketKey === 'focus') { toggleFocus(item, true); return; }
+    const seoulDate = (offsetDays) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(Date.now() + offsetDays * 86400000));
+    const dueAt = bucketKey === 'today' ? seoulDate(0) : bucketKey === 'week' ? seoulDate(1) : null; // 'later' clears the date
+    // 고른 카드를 기한 열로 끌면 선택을 풀고 그 열로 옮긴다 — 선택만 풀면 카드가 드롭한 열이
+    // 아니라 자기 원래 기한 버킷(지남·나중)으로 튀어 드래그가 실패한 것처럼 보인다.
+    if (item.focusToday) { unfocusAndReschedule(item, bucketKey, dueAt); return; }
+    rescheduleTask(item, dueAt);
+  };
+
   // 행 클릭 → 우측 상세 패널 토글 (모든 레인). 할 일 편집(EditDrawer)·Deals 이동·
   // 프로젝트 이동·Calendar 열기는 패널 안의 액션 버튼이 담당한다.
   const openItem = (item) => setDetailId((cur) => (cur === item.id ? null : item.id));
 
-  // 숨기기/다시 표시 — 원장에 쓰지 않고 브라우저 보기 설정만 바꾼다. 완료·삭제와 달리
+  // 숨기기/다시 표시 — 기록에 쓰지 않고 브라우저 보기 설정만 바꾼다. 완료·삭제와 달리
   // 지연 커밋 undo가 필요 없다(서버 호출이 없어 '되돌리기'가 즉시 원상복구다).
   const persistMuted = (next) => {
     setMuted(next);
@@ -1449,7 +1529,7 @@ export function MyWork({ onNavigate }) {
     return counts;
   }, [items, mutedIds, showMuted]);
 
-  // 현재 원장에서 숨겨둔 항목 수 — 툴바 토글과 빈 상태 안내가 같은 숫자를 쓴다.
+  // 현재 기록에서 숨겨둔 항목 수 — 툴바 토글과 빈 상태 안내가 같은 숫자를 쓴다.
   const mutedCount = React.useMemo(
     () => items.filter((i) => mutedIds.has(i.id) && !hiddenIds.has(i.id)).length,
     [items, mutedIds, hiddenIds],
@@ -1458,7 +1538,7 @@ export function MyWork({ onNavigate }) {
   // 현재 레인 기준 기한 버킷 카운트 — 시그널 스트립과 기한 세그먼트가 같은 숫자를 쓴다
   // (타일 클릭 결과로 보이는 행 수와 일치해야 신뢰할 수 있는 계기가 된다).
   const bucketCounts = React.useMemo(() => {
-    const counts = { overdue: 0, today: 0, week: 0, later: 0 };
+    const counts = { focus: 0, overdue: 0, today: 0, week: 0, later: 0 };
     items.forEach((i) => {
       if (hiddenIds.has(i.id)) return;
       if (!showMuted && mutedIds.has(i.id)) return;
@@ -1501,9 +1581,12 @@ export function MyWork({ onNavigate }) {
 
       {/* 시그널 스트립 — "지금 뭐가 급한가"를 숫자로 먼저 답한다 (DESIGN.md 경험 원칙 1).
           타일 클릭 = 리스트 렌즈 + 해당 기한 필터, 다시 클릭하면 전체로 복귀. */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--gap)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--gap)' }}>
         {SIGNAL_TILES.map((t) => {
           const count = bucketCounts[t.key] || 0;
+          // 오늘 3개 타일만 표시 숫자가 서버 요약(완료한 선택 포함)이고 버킷 카운트는 미완료만
+          // 센다 — 고른 3개를 다 끝내면 3/3인데 count는 0이다. 강조는 화면에 적힌 숫자를 따른다.
+          const emphasis = t.key === 'focus' ? focusPickedCount : count;
           const active = lens === 'list' && bucketFilter === t.key;
           return (
             <button
@@ -1519,14 +1602,14 @@ export function MyWork({ onNavigate }) {
                 background: active ? 'var(--surface-2)' : 'var(--surface)',
                 border: `1px solid ${active ? 'var(--line-strong)' : 'var(--line-soft)'}`,
                 borderRadius: 'var(--r-lg)',
-                boxShadow: count > 0 && t.stripe ? `inset 1px 0 0 ${t.stripe}` : undefined,
+                boxShadow: emphasis > 0 && t.stripe ? `inset 1px 0 0 ${t.stripe}` : undefined,
                 transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease',
               }}
             >
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-dim)' }}>{t.label}</div>
               {/* 시그널 스트립은 이 페이지의 hero 지표 — Rhythm 카드(30px)와 같은 급의
                   .stat 크기로 "signal first"를 시각적으로도 주장한다. */}
-              <div className="stat" style={{ fontSize: 26, fontWeight: 500, marginTop: 4, color: count > 0 ? t.color : 'var(--fg-faint)' }}>{count}</div>
+              <div className="stat" style={{ fontSize: 26, fontWeight: 500, marginTop: 4, color: emphasis > 0 ? t.color : 'var(--fg-faint)' }}>{t.key === 'focus' ? `${focusPickedCount}/${MAX_FOCUS_PER_DAY}` : count}</div>
             </button>
           );
         })}
@@ -1766,8 +1849,8 @@ export function MyWork({ onNavigate }) {
                         mutedEntry={mutedIds.has(row.item.id) ? muted[row.item.id] : null}
                         onMute={muteItem}
                         onUnmute={unmuteItem}
-                        onToggleFocus={toggleFocusToday}
-                        focusCapReached={focusTodayCount >= 3}
+                        onToggleFocus={toggleFocus}
+                        focusFull={focusFull}
                         rowRef={nextRowRef()}
                       />
                     );
@@ -1818,8 +1901,8 @@ export function MyWork({ onNavigate }) {
                                 mutedEntry={mutedIds.has(item.id) ? muted[item.id] : null}
                                 onMute={muteItem}
                                 onUnmute={unmuteItem}
-                                onToggleFocus={toggleFocusToday}
-                                focusCapReached={focusTodayCount >= 3}
+                                onToggleFocus={toggleFocus}
+                                focusFull={focusFull}
                                 rowRef={nextRowRef()}
                               />
                             ))}
@@ -1870,8 +1953,8 @@ export function MyWork({ onNavigate }) {
                               mutedEntry={mutedIds.has(item.id) ? muted[item.id] : null}
                               onMute={muteItem}
                               onUnmute={unmuteItem}
-                              onToggleFocus={toggleFocusToday}
-                              focusCapReached={focusTodayCount >= 3}
+                              onToggleFocus={toggleFocus}
+                              focusFull={focusFull}
                               hideProject
                               rowRef={nextRowRef()}
                             />
@@ -1898,8 +1981,8 @@ export function MyWork({ onNavigate }) {
                 mutedEntry={mutedIds.has(item.id) ? muted[item.id] : null}
                 onMute={muteItem}
                 onUnmute={unmuteItem}
-                onToggleFocus={toggleFocusToday}
-                focusCapReached={focusTodayCount >= 3}
+                onToggleFocus={toggleFocus}
+                focusFull={focusFull}
                 rowRef={nextRowRef()}
               />
             ))
@@ -1993,8 +2076,8 @@ export function MyWork({ onNavigate }) {
             onNavigate={onNavigate}
             completingIds={completingIds}
             selectedId={detailId}
-            onToggleFocus={toggleFocusToday}
-            focusCapReached={focusTodayCount >= 3}
+            onToggleFocus={toggleFocus}
+            focusFull={focusFull}
           />
         )
       )}
@@ -2015,6 +2098,8 @@ export function MyWork({ onNavigate }) {
           onMute={(mode) => muteItem(detailItem, mode)}
           onUnmute={() => unmuteItem(detailItem)}
           onTaskCreated={reload}
+          onToggleFocus={() => toggleFocus(detailItem)}
+          focusFull={focusFull}
         />
       )}
       </div>
@@ -2050,7 +2135,7 @@ export function MyWork({ onNavigate }) {
 
 // 주간 렌즈 — 7-day agenda (grid가 아니라 목록: 모바일 우선, 미니멀). Each day lists its
 // items; undated items stay out (they live in 리스트/보드 '나중').
-function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, completingIds, selectedId, onToggleFocus, focusCapReached }) {
+function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, completingIds, selectedId, onToggleFocus, focusFull }) {
   const days = React.useMemo(() => {
     const out = [];
     const now = new Date();
@@ -2074,7 +2159,10 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
     return map;
   }, [items, days]);
 
-  const overdue = items.filter((i) => i.bucket === 'overdue');
+  // 기한 버킷은 dueBucket이 정본 — '오늘 3개'로 고른 할 일은 bucket이 'focus'로 올라가므로
+  // i.bucket만 보면 지난 기한 항목이 주간 렌즈에서 통째로 사라진다(일자별 목록은 앞으로 7일만
+  // 담는다). deal/event 레인엔 dueBucket이 없어 폴백이 필요하다.
+  const overdue = items.filter((i) => (i.dueBucket || i.bucket) === 'overdue');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -2093,7 +2181,7 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
             기한 지남 {overdue.length}
           </div>
           {overdue.map((item) => (
-            <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} selected={selectedId === item.id} onToggleFocus={onToggleFocus} focusCapReached={focusCapReached} />
+            <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} selected={selectedId === item.id} onToggleFocus={onToggleFocus} focusFull={focusFull} />
           ))}
         </Card>
       )}
@@ -2111,7 +2199,7 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 'auto' }}>{dayItems.length || ''}</span>
             </div>
             {dayItems.map((item) => (
-              <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} selected={selectedId === item.id} onToggleFocus={onToggleFocus} focusCapReached={focusCapReached} />
+              <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} selected={selectedId === item.id} onToggleFocus={onToggleFocus} focusFull={focusFull} />
             ))}
           </Card>
         );

@@ -9,7 +9,7 @@ import { buildProjectPortfolioMetrics } from "./project-pms-metrics";
 // ── PMS 프로젝트 상태 → DESIGN.md §8.2 lifecycle 열거값 ──────────────────────
 // §8.2: props는 색 이름이 아니라 의미 열거값이고, 표현은 primitive가 소유한다.
 // §5.3 lifecycle 행: 아이콘 + 직접 텍스트, blocked만 danger를 상속한다.
-// 원장 정규화가 내보내는 라벨은 Planning · Blocked · Done · Backlog ·
+// 기록 정규화가 내보내는 라벨은 Planning · Blocked · Done · Backlog ·
 // 'In progress' 다섯 개이고, Review는 operator-home-summary가 아직 세는 유산 상태다.
 //
 //   In progress → active   착수해서 굴러가는 작업.
@@ -18,7 +18,7 @@ import { buildProjectPortfolioMetrics } from "./project-pms-metrics";
 //                          프로젝트 레코드에 의존 대상 필드가 없다 —
 //                          없는 의존을 지어내느니 active로 둔다.
 //   Planning    → queued   착수 전.
-//   Backlog     → queued   원장 'archived'(보류)의 표시 라벨. 'cancelled'는
+//   Backlog     → queued   기록 'archived'(보류)의 표시 라벨. 'cancelled'는
 //                          "취소"를 뜻해 오독이고, 이 행에는 되살리는
 //                          "다시 열기" 체크박스가 붙어 있다. queued가
 //                          덜 정확할 뿐 틀리지는 않고, 보이는 라벨 '백로그'가
@@ -237,7 +237,7 @@ export function ProjectProgressGauge({ progress, compact = false, ariaLabel = "�
 }
 
 const PORTFOLIO_CELLS = [
-  { key: "active", label: "진행 중", description: "active 원장 상태" },
+  { key: "active", label: "진행 중", description: "active 기록 상태" },
   { key: "blockedOrOverdue", label: "막힘 · 지연", description: "막힘 또는 기한 경과" },
   { key: "dueSoon", label: "7일 내 기한", description: "오늘 포함 다음 7일" },
   { key: "unmeasured", label: "진척 미측정", description: "관찰 가능한 근거 없음" },
@@ -248,15 +248,15 @@ const PORTFOLIO_CELLS = [
 export function ProjectPortfolioSummary({ projects = [], sourceState = "live", projectCorePartial = false, activeKey = null, onSelectCell = null }) {
   const metrics = buildProjectPortfolioMetrics(projects, { sourceState, projectCorePartial });
   const unavailableLabel = sourceState === "error"
-    ? "프로젝트 원장을 읽지 못해 요약을 계산하지 않았습니다."
+    ? "프로젝트 기록을 읽지 못해 요약을 계산하지 않았습니다."
     : sourceState === "loading"
-      ? "프로젝트 원장을 확인하는 중입니다."
-      : "실제 프로젝트 원장이 연결되면 요약을 표시합니다.";
+      ? "프로젝트 기록을 확인하는 중입니다."
+      : "실제 프로젝트 기록이 연결되면 요약을 표시합니다.";
 
   if (!metrics || metrics.empty) {
     return (
       <section className="hub-pms-summary hub-pms-summary--empty" aria-label="프로젝트 포트폴리오 요약">
-        <span>{metrics?.empty ? "표시할 원장 없음" : unavailableLabel}</span>
+        <span>{metrics?.empty ? "표시할 기록 없음" : unavailableLabel}</span>
       </section>
     );
   }

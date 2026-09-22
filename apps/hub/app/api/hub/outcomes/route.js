@@ -14,7 +14,7 @@ export async function GET(req) {
       getOutcomeStats({}),
     ]);
 
-    // read 실패는 status:"error" 봉투로 알린다(HTTP 200, daily-brief 계약) — 원장이 분류한
+    // read 실패는 status:"error" 봉투로 알린다(HTTP 200, daily-brief 계약) — 기록이 분류한
     // error를 여기서 preview로 되뭉개면 실패한 기록이 "기록 없음"으로 위장된다(8차 안정성).
     const status = recent.source === "supabase" ? "live" : recent.source === "error" ? "error" : "preview";
     return NextResponse.json({

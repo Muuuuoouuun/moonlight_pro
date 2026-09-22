@@ -14,7 +14,7 @@
 - [x] Documentation, explicit paths commit, local integration and worktree cleanup. Operating DB activation/deployment tracked separately.
 
 ## 검증 기록 (2026-09-13)
-- Nudge JS/route + 실제 PostgreSQL 21 tests 통과(0 skipped). 권한·workspace 격리·원장 불변·멱등 재시도·동시 변경·receipt 실패 rollback 포함.
+- Nudge JS/route + 실제 PostgreSQL 21 tests 통과(0 skipped). 권한·workspace 격리·기록 불변·멱등 재시도·동시 변경·receipt 실패 rollback 포함.
 - 전체 npm test: 1,092 tests 중 1,087 pass, 5 기존 환경 의존 skip. contracts·typecheck·Hub/Engine build 통과.
 - 스펙 리뷰: 완료 할 일 규칙의 불필요한 experiment 조건 제거, 외부 revision 변경 시 실제 최신 기록 불러오기 보강 후 승인.
 - 품질 리뷰: write 중 수신한 변경 신호를 큐에 보존하고 응답 후 재조회하도록 수정 후 승인.

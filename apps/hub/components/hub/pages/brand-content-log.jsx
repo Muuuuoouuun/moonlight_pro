@@ -241,7 +241,7 @@ export function BrandContentLog({ onNavigate }) {
           }
           description={
             ledger.syncState === "error"
-              ? "콘텐츠 원장을 읽지 못했습니다 — 비어 보여도 실제 기록이 있을 수 있습니다. 새로고침으로 재시도하세요."
+              ? "콘텐츠 기록을 읽지 못했습니다 — 비어 보여도 실제 기록이 있을 수 있습니다. 새로고침으로 재시도하세요."
               : ledger.syncState === "preview"
                 ? "Supabase가 연결되지 않아 라이브 기록을 읽을 수 없습니다 — 가짜 행은 만들지 않습니다."
                 : ledger.syncState === "live"

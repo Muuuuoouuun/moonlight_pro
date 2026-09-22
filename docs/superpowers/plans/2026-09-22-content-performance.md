@@ -3,7 +3,7 @@
 > REQUIRED: superpowers:subagent-driven-development. 요청 범위와 직접 입력 선택은 승인됨.
 
 Goal: 콘텐츠의 요약·이번 주·월별 발행량과 수동 누적 성과를 한 탭에서 본다.
-Architecture: 독립 server repository의 전체 workspace 원장 조회 → pure aggregation → read API. manual metrics는 기존 variant metadata와 updated_at CAS. UI는 독립 page와 편집 Drawer, 기존 내비 세 곳 연결.
+Architecture: 독립 server repository의 전체 workspace 기록 조회 → pure aggregation → read API. manual metrics는 기존 variant metadata와 updated_at CAS. UI는 독립 page와 편집 Drawer, 기존 내비 세 곳 연결.
 
 - [x] Backend: lib/content-performance.js + tests; repositories/content-performance-ledger.js + tests; app/api/hub/content/performance/route.js + tests. 실패 테스트부터. year 검증, KST fullweek/year/month bounds, null-aware totals, paging, CAS/guard/errors. 문서 스펙의 정확한 집계 경계를 따른다.
 - [x] UI: pages/content-performance.jsx/css + 필요 client helper/test. 요약/이번주/월별 SegmentedControl, 날짜·브랜드·채널 URL, 신뢰 상태/새로고침, count bars+표, 원고 링크, Drawer 숫자입력/기록시각/충돌 입력유지.

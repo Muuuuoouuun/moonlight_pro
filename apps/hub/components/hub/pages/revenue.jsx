@@ -4,7 +4,7 @@ import { GoalLinks } from '../goal-links';
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress, CertaintyBadge, ChipToggle, useToast } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, CheckboxRow, Progress, CertaintyBadge, LifecycleBadge, ChipToggle, useToast } from "../hub-primitives";
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
@@ -13,8 +13,9 @@ import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead-labels";
+import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
-import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
+import { DEAL_STAGES, STAGE_FILL, STAGE_LINE, LOST_STAGE, dealStageLabel, isDealStalled } from "@/lib/deal-stages";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
@@ -43,10 +44,6 @@ const formatMeetingTime = (iso) => {
     hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(d);
 };
-
-// A deal counts as "stalled" once it has aged this many days in an open stage. Two weeks
-// is the follow-up window — high enough that a deal mid-motion isn't flagged as neglected.
-const STALLED_DAYS = 14;
 
 
 // Shared All/Personal/Company scope filter for every Revenue surface (Leads, Deals,
@@ -161,7 +158,7 @@ function formatPercentDelta(current, previous) {
 function buildRevenueAttention(leads, deals) {
   const items = [];
   deals
-    .filter((deal) => deal.stage !== 'closing' && deal.stage !== 'lost' && Number(deal.age) >= STALLED_DAYS)
+    .filter((deal) => isDealStalled(deal))
     .slice(0, 3)
     .forEach((deal) => {
       items.push({
@@ -206,7 +203,7 @@ const EMPTY_REVENUE_LEDGER = {
 };
 
 // 모듈 스코프 stale-while-revalidate 캐시 — Leads↔Deals↔Accounts↔Cases↔Customers 탭
-// 전환은 훅을 리마운트하므로, 캐시 없이는 전환마다 동일한 6콜 원장을 다시 받고 스켈레톤을
+// 전환은 훅을 리마운트하므로, 캐시 없이는 전환마다 동일한 6콜 기록을 다시 받고 스켈레톤을
 // 보였다(re-audit 속도 #3). 캐시는 즉시 서빙하고 항상 배경 재검증하므로 신선도는 1 RTT다.
 // 저장소는 revenue-shared-cache 공유 모듈 — ⌘K 레코드 검색이 같은 스냅샷을 재사용한다.
 
@@ -281,7 +278,7 @@ export function useRevenueLedger() {
   return { ledger, syncState, reload };
 }
 
-// 원장 read 실패 공용 빈 상태 — Leads·Deals·Accounts의 wsEmpty 분기가 error에서도
+// 기록 read 실패 공용 빈 상태 — Leads·Deals·Accounts의 wsEmpty 분기가 error에서도
 // "N건 없음 + 생성 CTA"를 그려 read 실패가 빈 워크스페이스로 위장됐다(8차 잔여 M).
 // 생성 유도는 실패 화면에서 금물: 운영자가 이미 있는 레코드를 중복 생성하게 된다.
 function LedgerReadError({ noun, onRetry }) {
@@ -669,7 +666,7 @@ export function Leads({ workspace }) {
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
-  // 기록 탭 배지 건수 — 패널이 원장을 읽고 올려준다. 리드가 바뀌면 다시 미확정(null).
+  // 기록 탭 배지 건수 — 패널이 기록을 읽고 올려준다. 리드가 바뀌면 다시 미확정(null).
   const [leadActivityCount, setLeadActivityCount] = React.useState(null);
   React.useEffect(() => { setLeadActivityCount(null); }, [editLeadId]);
   // 리드 삭제 지연-undo(7차 편의) — 창 종료 후 실제 DELETE, 실패 시 복원 알림.
@@ -1332,7 +1329,7 @@ function DealOutreachDrafter({ deal, onApplyNextAction }) {
   );
 }
 
-// 준비·재미팅 잡기)이 딜 안에 산다. 저장은 tasks 원장(meta.deal_id)이라 '내 작업'의
+// 준비·재미팅 잡기)이 딜 안에 산다. 저장은 tasks 기록(meta.deal_id)이라 '내 작업'의
 // 할 일 레인에도 그대로 흐른다. 클로징 딜에는 판매 후 실행(A/S)을 낮은 우선순위 후속
 // 프로젝트로 분리하는 버튼이 붙는다 — 딜은 돈을 추적하고 닫히는 레코드, 실행은 계속되는
 // 프로젝트의 몫이라는 경계.
@@ -1751,6 +1748,11 @@ export function Deals({ workspace, onNavigate }) {
   const [drag, setDrag] = React.useState(null);
   const [filter, setFilter] = useScopeFilter(searchParams);
   const [showHidden, setShowHidden] = React.useState(false);
+  // Lost는 hidden과 다른 축이다 — hidden은 되돌릴 수 있는 정리 플래그, lost는 실제 단계다.
+  // 하지만 DEAL_STAGES(=ledger.stages)엔 lost 컬럼이 없어 stage='lost'로 바뀐 딜은 어느
+  // 칸반 컬럼에도 매치되지 않아 조용히 사라졌다. showLost 토글로 켜면 보드 끝에 별도
+  // 컬럼을 붙여 드래그·클릭 편집 같은 기존 카드 인터랙션으로 그대로 복구할 수 있게 한다.
+  const [showLost, setShowLost] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
   const [guruDeal, setGuruDeal] = React.useState(null);
   const [boardNotice, setBoardNotice] = React.useState(null); // { key?, tone, label, undo? } — 이동 되돌리기·저장 실패 안내
@@ -1812,9 +1814,10 @@ export function Deals({ workspace, onNavigate }) {
     }
   };
 
-  // DEAL_STAGES를 deps에 반드시 포함 — 원장 도착으로 stages만 갱신된 렌더에서 totals가
+  // DEAL_STAGES를 deps에 반드시 포함 — 기록 도착으로 stages만 갱신된 렌더에서 totals가
   // stale 빈 객체로 남으면 컬럼 헤더의 totals[s.key].count가 크래시한다(24차 실측 발견).
-  const totals = React.useMemo(() => DEAL_STAGES.reduce((acc, s) => {
+  // 'lost'도 함께 집계 — DEAL_STAGES(ledger 6단계)엔 없지만 showLost 컬럼 헤더가 읽는다.
+  const totals = React.useMemo(() => [...DEAL_STAGES, { key: 'lost' }].reduce((acc, s) => {
     const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
     return acc;
@@ -1823,6 +1826,16 @@ export function Deals({ workspace, onNavigate }) {
   // The old single grandTotal blended won deals into "pipeline", overstating what's open.
   const openStages = DEAL_STAGES.filter(s => s.key !== 'closing' && s.key !== 'lost');
   const openTotal = openStages.reduce((a, s) => a + (totals[s.key]?.sum || 0), 0);
+  // Lost는 퍼널 밖 종료 상태 — 히트 램프에 태우지 않는 중립 컬럼이라 ramp를 비워
+  // STAGE_FILL/STAGE_LINE 인덱싱에서 자연히 빠지고 inset 스트라이프는 --line-strong으로
+  // 떨어진다(DESIGN.md §5.3 lifecycle "cancelled"=neutral, funnel 색과 분리).
+  // 토글 건수는 컬럼이 실제로 보여 줄 집합(visibleDeals + 스코프 필터)과 같은 기준으로 센다 —
+  // 숨긴 딜·필터 밖 Lost까지 세면 "Lost 2건 보기"를 켰는데 빈 컬럼이 붙었다.
+  const lostCount = totals.lost?.count || 0;
+  const boardStages = React.useMemo(
+    () => ((showLost && lostCount > 0) ? [...DEAL_STAGES, LOST_STAGE] : DEAL_STAGES),
+    [DEAL_STAGES, showLost, lostCount],
+  );
   const openCount = openStages.reduce((a, s) => a + (totals[s.key]?.count || 0), 0);
   const closingTotal = totals.closing?.sum || 0;
   // Drag-to-move: 낙관 이동 → 3.5초 되돌리기 창 → 창이 닫힌 뒤에만 PATCH(지연 쓰기 —
@@ -1841,7 +1854,7 @@ export function Deals({ workspace, onNavigate }) {
     const key = `deal-stage-${id}`;
     const undoBase = pendingStageRef.current.get(key) ?? prevStage;
     pendingStageRef.current.set(key, undoBase);
-    const stageLabel = DEAL_STAGES.find(s => s.key === to)?.label || to;
+    const stageLabel = dealStageLabel(to, DEAL_STAGES);
     const undoStageMove = () => {
       if (cancelUndoable(key)) {
         pendingStageRef.current.delete(key);
@@ -1868,7 +1881,7 @@ export function Deals({ workspace, onNavigate }) {
     });
     toast.success(`${stageLabel}(으)로 이동됨`, { action: { label: '되돌리기', onClick: undoStageMove } });
   };
-  // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 원장에서 meta.deal_id로
+  // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 기록에서 meta.deal_id로
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
   // 방금 추가·완료한 항목이 보드에 바로 반영되게 한다.
   const [dealTaskStats, setDealTaskStats] = React.useState(new Map());
@@ -1993,9 +2006,11 @@ export function Deals({ workspace, onNavigate }) {
   // 키보드 계층(2026-08-05 배선): j/k 카드 이동(컬럼 순서로 평탄화) · e 편집 · n 생성 ·
   // 1–5 선택 딜 스테이지 이동 · Esc 해제. 수제 n 리스너를 훅으로 흡수. 치트시트(?)의
   // "1–5 스테이지 이동"은 이 배선이 생기면서 다시 유효해졌다.
+  // 보드가 그리는 컬럼(boardStages — Lost 토글 포함)과 같은 목록을 평탄화해야 Lost 카드도
+  // j/k 선택·e 편집 대상이 된다.
   const boardItems = React.useMemo(
-    () => DEAL_STAGES.flatMap(s => visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter))),
-    [DEAL_STAGES, visibleDeals, filter],
+    () => boardStages.flatMap(s => visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter))),
+    [boardStages, visibleDeals, filter],
   );
   const selection = useCrmSelection(boardItems);
   useCrmKeyboard({
@@ -2033,10 +2048,10 @@ export function Deals({ workspace, onNavigate }) {
         </div>
         <div style={{ flex: 1 }} />
         {hiddenCount > 0 && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 10, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-            <Checkbox checked={showHidden} onChange={setShowHidden} size={16} label={`숨긴 딜 ${hiddenCount}건 보기`} />
-            <span>숨긴 딜 {hiddenCount}건 보기</span>
-          </div>
+          <CheckboxRow checked={showHidden} onChange={setShowHidden} size={16} text={`숨긴 딜 ${hiddenCount}건 보기`} style={{ marginRight: 10 }} />
+        )}
+        {lostCount > 0 && (
+          <CheckboxRow checked={showLost} onChange={setShowLost} size={16} text={`${LOST_STAGE.label} ${lostCount}건 보기`} style={{ marginRight: 10 }} />
         )}
         <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
         <Button variant="primary" size="sm" icon="plus" disabled={ledgerUnavailable} onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
@@ -2067,7 +2082,7 @@ export function Deals({ workspace, onNavigate }) {
 
       {syncState === 'loading' && <Skeleton lines={3} height={64} label="딜 파이프라인 불러오는 중" />}
       {syncState === 'error' && <LedgerReadError noun="딜 파이프라인" onRetry={reloadLedger} />}
-      {syncState === 'partial' && <Button variant="ghost" size="sm" onClick={reloadLedger}>딜 원장 다시 확인</Button>}
+      {syncState === 'partial' && <Button variant="ghost" size="sm" onClick={reloadLedger}>딜 기록 다시 확인</Button>}
 
       {!ledgerUnavailable && wsEmpty && (
         <Card>
@@ -2083,7 +2098,7 @@ export function Deals({ workspace, onNavigate }) {
 
       {!ledgerUnavailable && !wsEmpty && (
       <ScrollShadowX>
-        {DEAL_STAGES.map(s => {
+        {boardStages.map(s => {
           const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
           return (
             <div key={s.key}
@@ -2116,7 +2131,7 @@ export function Deals({ workspace, onNavigate }) {
                   // Stalled = open (not won/lost) and aged past the follow-up window. Surfaces
                   // in every open column, not just Negotiation, and marks the card with a
                   // danger inset stripe (§5.2 left-accent — never a full fill or a thick border).
-                  const stalled = Number(d.age) >= STALLED_DAYS && s.key !== 'closing' && s.key !== 'lost';
+                  const stalled = isDealStalled(d);
                   return (
                   <div key={d.id}
                     className="hub-kanban-card"
@@ -2147,6 +2162,15 @@ export function Deals({ workspace, onNavigate }) {
                         flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.35,
                         display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                       }}>{d.name}</div>
+                      {s.key === 'lost' && (
+                        <IconButton
+                          icon="refresh"
+                          size={20}
+                          iconSize={12}
+                          tooltip="잠재 리드로 되돌리기"
+                          onClick={(e) => { e.stopPropagation(); move(d.id, 'potential'); }}
+                        />
+                      )}
                       <IconButton
                         icon="eye"
                         size={20}
@@ -2161,6 +2185,7 @@ export function Deals({ workspace, onNavigate }) {
                         tooltip="Guru에게 진단 요청"
                         onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}
                       />
+                      {s.key === 'lost' && <LifecycleBadge state="cancelled" label="종료" />}
                       {d.hidden && <Badge tone="neutral" size="xs" variant="outline">숨김</Badge>}
                       <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">
                         {d.type === 'personal' ? 'P' : 'C'}
@@ -2205,6 +2230,7 @@ export function Deals({ workspace, onNavigate }) {
                   </div>
                   );
                 })}
+                {s.key !== 'lost' && (
                 <button
                   onClick={() => createDeal(s.key)}
                   title={`${s.label}에 새 딜 추가`}
@@ -2216,6 +2242,7 @@ export function Deals({ workspace, onNavigate }) {
                   }}>
                   <Iconed name="plus" size={11} /> 딜 추가
                 </button>
+                )}
               </div>
             </div>
           );
@@ -2234,7 +2261,7 @@ export function Deals({ workspace, onNavigate }) {
           // owner를 저장한 적이 없어 편집 가능한 척만 하던 필드였다.
           { key: 'stage', row: 'primary', label: '단계', type: 'select', options: [
             ...DEAL_STAGES.map(s => ({ value: s.key, label: s.label })),
-            ...(DEAL_STAGES.some(s => s.key === 'lost') ? [] : [{ value: 'lost', label: 'Lost' }]),
+            ...(DEAL_STAGES.some(s => s.key === LOST_STAGE.key) ? [] : [{ value: LOST_STAGE.key, label: LOST_STAGE.label }]),
           ] },
           { key: 'value', row: 'primary', label: '금액 (₩)', inputType: 'number', placeholder: '0' },
           { key: 'closeAt', row: 'meta', label: '예상 마감', inputType: 'date' },
@@ -2276,7 +2303,7 @@ export function Deals({ workspace, onNavigate }) {
                 1:1 코칭 열기
               </Button>
             </div>
-            {(!editingDeal.nextAction || editingDeal.age > 7) && (
+            {(!editingDeal.nextAction || isDealStalled(editingDeal)) && (
               <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Iconed name="clock" size={12} aria-hidden="true" />
                 <span>
@@ -2371,7 +2398,7 @@ export function Cases() {
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
   const cases = sortCases(mergedCases, sort);
   const editingCase = editCaseId ? mergedCases.find(c => c.id === editCaseId) : null;
-  // asc → desc → 해제(원장 순) 3단 토글 — Leads와 같은 계약.
+  // asc → desc → 해제(기록 순) 3단 토글 — Leads와 같은 계약.
   const toggleSort = (key) => setSort(s =>
     s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
   );
@@ -2571,10 +2598,9 @@ const ACT_ICON = { email: 'email', meeting: 'calendar', call: 'signal', note: 'e
 // 활동 종류는 카테고리 — 아이콘(ACT_ICON)이 종류를 말하고 톤은 전부 중립(§5.2 동결).
 const ACT_TONE = { email: 'neutral', meeting: 'neutral', call: 'neutral', note: 'neutral', deal: 'neutral', kakao: 'neutral', quote: 'neutral', ai: 'neutral', info_session: 'neutral', demo: 'neutral', visit: 'neutral', update: 'neutral' };
 const ACT_LABEL = { email: 'Email', meeting: 'Meeting', call: 'Call', note: 'Note', deal: 'Deal', kakao: '카카오', quote: '견적', ai: 'AI', info_session: '설명회', demo: '데모', visit: '방문', update: 'Update' };
-const REACTION_LABEL = { positive: '긍정', neutral: '중립', concern: '우려', rejected: '거절', no_response: '무응답' };
+
 // 반응은 기록 데이터 — 색 증명 없이 라벨로 읽는다. 전부 중립.
 const REACTION_TONE = { positive: 'neutral', neutral: 'neutral', concern: 'neutral', rejected: 'neutral', no_response: 'neutral' };
-
 function emptyDetail() {
   return { mrr: 0, contacts: [], deals: [], activity: [], notes: [] };
 }
@@ -2728,7 +2754,7 @@ function QuickActions({ onAction, primary = 'call' }) {
   );
 }
 
-// 리드 상세의 "기록" 탭 — Accounts DetailPanel과 같은 crm_activities 원장을 읽고 쓴다.
+// 리드 상세의 "기록" 탭 — Accounts DetailPanel과 같은 crm_activities 기록을 읽고 쓴다.
 // 리드 표면에는 편집 폼만 있었고 접촉 이력을 보려면 고객 DB/팔로업으로 나가야 했다.
 //
 // 조인 규칙은 Customer 360·팔로업 활동 패널과 동일하다: 라이브 crm_activities는 기록이
@@ -2746,7 +2772,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
 
   const leadId = lead?.id || null;
   const companyId = lead?.companyId || null;
-  // 아직 저장 안 된 로컬 행 — 원장에 붙일 id가 없다.
+  // 아직 저장 안 된 로컬 행 — 기록에 붙일 id가 없다.
   const unsaved = !leadId || String(leadId).startsWith('local-lead-');
 
   React.useEffect(() => {
@@ -2790,7 +2816,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
     setError(null);
     setActivities(prev => [{ id: tempId, type, msg: body, at: '방금', who: 'Me' }, ...prev]);
     if (unsaved) {
-      setError({ message: '리드를 먼저 저장해야 기록이 원장에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
+      setError({ message: '리드를 먼저 저장해야 기록이 저장소에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
       return;
     }
     saveRevenueRecord('activity', 'create', {
@@ -2856,7 +2882,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
       )}
       {unsaved && (
         <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.45 }}>
-          아직 저장되지 않은 리드입니다. 먼저 저장하면 기록이 원장에 남습니다.
+          아직 저장되지 않은 리드입니다. 먼저 저장하면 기록이 저장소에 남습니다.
         </div>
       )}
 
@@ -2882,7 +2908,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
         <EmptyState
           icon="clock"
           title="활동 기록을 읽지 못했습니다"
-          description="원장 연결 상태를 확인한 뒤 드로어를 다시 열어 주세요. 기록이 없다는 뜻이 아닙니다."
+          description="기록 연결 상태를 확인한 뒤 드로어를 다시 열어 주세요. 기록이 없다는 뜻이 아닙니다."
           style={{ minHeight: 140 }}
         />
       ) : activities.length === 0 ? (
@@ -3238,7 +3264,7 @@ export function Accounts({ workspace, onNavigate }) {
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
 
   const term = search.trim().toLowerCase();
-  // 검색 텍스트 인덱스를 원장 변경 시 1회만 조립(re-audit 속도 #4) — 이전에는 키스트로크마다
+  // 검색 텍스트 인덱스를 기록 변경 시 1회만 조립(re-audit 속도 #4) — 이전에는 키스트로크마다
   // 계정×(contacts 200 + deals 120) 관계 조인을 다시 돌렸다(≈38k 비교/문자).
   const accountSearchText = React.useMemo(() => {
     const map = new Map();
@@ -3258,7 +3284,7 @@ export function Accounts({ workspace, onNavigate }) {
     () => ACCOUNTS.filter(a => (filter === 'all' || a.type === filter) && (!term || (accountSearchText.get(a.name) || '').includes(term))),
     [ACCOUNTS, accountSearchText, filter, term],
   );
-  // asc → desc → 해제(원장 순) 3단 토글 — Leads·Cases와 같은 §8.1 계약. health는
+  // asc → desc → 해제(기록 순) 3단 토글 — Leads·Cases와 같은 §8.1 계약. health는
   // 알파벳이 아니라 심각도 순(ok<warning<risk), value·deals는 숫자.
   const ACCOUNT_HEALTH_RANK = { ok: 0, warning: 1, risk: 2 };
   const filtered = React.useMemo(() => {
@@ -3273,8 +3299,8 @@ export function Accounts({ workspace, onNavigate }) {
       return xv < yv ? -dir : xv > yv ? dir : 0;
     });
   }, [searched, sort]);
-  // 스코프/타입 필터로 0건인 것과 원장 자체가 비어 0건인 것은 다른 사실이다. 사이드바
-  // 스코프를 개인으로 바꾸면 여기가 비는데, 그때 "원장이 비어 있다"고 말하면 데이터가
+  // 스코프/타입 필터로 0건인 것과 기록 자체가 비어 0건인 것은 다른 사실이다. 사이드바
+  // 스코프를 개인으로 바꾸면 여기가 비는데, 그때 "기록이 비어 있다"고 말하면 데이터가
   // 없는 것처럼 읽힌다 — Leads의 "필터: x · N건 중 0건" 문구와 같은 계약으로 맞춘다.
   const scopeFilteredEmpty = filter !== 'all' && ACCOUNTS.length > 0;
   const emptyTitle = scopeFilteredEmpty ? '해당 범위에 계정이 없습니다' : '계정이 없습니다';
@@ -3304,7 +3330,7 @@ export function Accounts({ workspace, onNavigate }) {
   const [deleteNotice, setDeleteNotice] = React.useState(null); // { key, name, label, undo }
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
-  // 활동·노트는 crm_activities 원장으로 영속화한다. 계정에 id가 없으면(로컬 생성 직후)
+  // 활동·노트는 crm_activities 기록으로 영속화한다. 계정에 id가 없으면(로컬 생성 직후)
   // 낙관적 로컬 행만 유지 — preview 상태로 정직하게 남긴다.
   const persistActivity = (name, entry, { alsoNote = false } = {}) => {
     const acc = ACCOUNTS.find(a => a.name === name);
@@ -3326,8 +3352,8 @@ export function Accounts({ workspace, onNavigate }) {
     });
 
     if (!acc?.id) {
-      // 아직 저장 안 된 로컬 계정 — 기록이 원장에 남지 않는다는 사실을 표시한다.
-      setActivityError({ name, message: '계정을 먼저 저장해야 기록이 원장에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
+      // 아직 저장 안 된 로컬 계정 — 기록이 저장소에 남지 않는다는 사실을 표시한다.
+      setActivityError({ name, message: '계정을 먼저 저장해야 기록이 저장소에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
       return;
     }
     saveRevenueRecord('activity', 'create', {
@@ -3461,7 +3487,7 @@ export function Accounts({ workspace, onNavigate }) {
         const rows = Array.isArray(data.activities) ? data.activities : [];
         setDetails(prev => {
           const cur = prev[acc.name] || emptyDetail();
-          // 서버 행 + 아직 저장 안 된 로컬 행(local- 접두)만 병합 — 중복 없이 원장이 정본
+          // 서버 행 + 아직 저장 안 된 로컬 행(local- 접두)만 병합 — 중복 없이 기록이 정본
           const localOnly = cur.activity.filter(a => String(a.id).startsWith('local-'));
           const activity = [...localOnly, ...rows];
           return {
@@ -3487,7 +3513,7 @@ export function Accounts({ workspace, onNavigate }) {
     setView('detail');
   };
 
-  // 딥링크: ?account=<name> — 원장 로드 후 1회만 열고 쿼리 소거(§8.1). Revenue 표면 중
+  // 딥링크: ?account=<name> — 기록 로드 후 1회만 열고 쿼리 소거(§8.1). Revenue 표면 중
   // 유일하게 딥링크가 없던 표면이었다(system-eval U-S3).
   const accountSearchParams = useSearchParams();
   const accountRouter = useRouter();

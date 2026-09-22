@@ -35,7 +35,10 @@ beforeEach(() => {
     state.calls.push({ url, options, table, body });
     if (state.failure?.(url, options)) return new Response("private SQL and credentials", { status: 500 });
     if (url.pathname.includes("/rpc/")) return Response.json(state.rpc);
-    const rows = table === "workspaces" ? state.workspaces : state.rows;
+    const rows = table === "workspaces" ? state.workspaces
+      : table === "tasks" ? (state.tasks === undefined ? [] : state.tasks)
+        : table === "crm_activities" ? (state.activities === undefined ? [] : state.activities)
+          : state.rows;
     if (!Array.isArray(rows)) return Response.json(rows);
     if (state.bypassFilters) return Response.json(rows);
     const filtered = rows.filter((value) => [...url.searchParams.entries()].every(([key, filter]) => {
@@ -207,4 +210,55 @@ test("RPC transport errors and invalid success records are safe failure envelope
     assert.equal(result.review, null);
     assert.equal(JSON.stringify(result).includes("private SQL"), false);
   }
+});
+
+// ---- 저녁 리뷰 읽기 전용 두 줄: 오늘 3개·연락 (2026-09-20 세 축·Action KPI 기획 §6.3) ----
+
+test("live ledger carries today's focus and contact signals from the same sources as the weekly card", async () => {
+  state.rows = [row()];
+  state.tasks = [
+    { id: "t1", workspace_id: WORKSPACE, status: "done", completed_at: "2026-09-12T02:00:00.000Z", meta: { focus_dates: ["2026-09-12"] } },
+    { id: "t2", workspace_id: WORKSPACE, status: "todo", completed_at: null, meta: { focus_dates: ["2026-09-12"] } },
+    // 완료 시각이 전날이면(재오픈 흔적) 오늘 완료로 치지 않는다
+    { id: "t3", workspace_id: WORKSPACE, status: "done", completed_at: "2026-09-11T02:00:00.000Z", meta: { focus_dates: ["2026-09-12"] } },
+  ];
+  state.activities = [
+    { id: "a1", workspace_id: WORKSPACE, kind: "call", occurred_at: "2026-09-12T01:00:00.000Z" },
+    { id: "a2", workspace_id: WORKSPACE, kind: "note", occurred_at: "2026-09-12T01:30:00.000Z" },
+    // 서울 기준 다음 날 새벽(UTC 12일 16:00 = KST 13일 01:00)은 오늘이 아니다
+    { id: "a3", workspace_id: WORKSPACE, kind: "kakao", occurred_at: "2026-09-12T16:00:00.000Z" },
+  ];
+  state.bypassFilters = true;
+  const result = await ledger.getDailyReviewLedger({ date: "2026-09-12" });
+  assert.equal(result.status, "live");
+  assert.deepEqual(result.today, { date: "2026-09-12", focusPicked: 3, focusDone: 1, focusLimit: 3, contacts: 1 });
+  const taskCall = state.calls.find((call) => call.table === "tasks");
+  assert.equal(taskCall.url.searchParams.get("meta->focus_dates"), 'cs.["2026-09-12"]');
+});
+
+test("a truncated activity read reports an unknown contact count, not a smaller one", async () => {
+  state.rows = [row()];
+  state.tasks = [];
+  // 상한을 넘기면 읽기가 잘린 것이다 — 남은 행을 못 봤으니 숫자를 말하지 않는다.
+  state.activities = Array.from({ length: ledger.ACTIVITY_SCAN_LIMIT + 2 }, (_, i) => ({
+    id: `a${i}`, workspace_id: WORKSPACE, kind: "call", occurred_at: "2026-09-12T01:00:00.000Z",
+  }));
+  state.bypassFilters = true;
+  const result = await ledger.getDailyReviewLedger({ date: "2026-09-12" });
+  assert.equal(result.status, "live");
+  assert.equal(result.today.contacts, null);
+  assert.equal(result.today.focusPicked, 0); // 오늘 3개 줄은 그대로 살아 있다
+  const activityCall = state.calls.find((call) => call.table === "crm_activities");
+  assert.equal(activityCall.url.searchParams.get("limit"), String(ledger.ACTIVITY_SCAN_LIMIT + 1));
+});
+
+test("today signals fall back to null when a source cannot be read, without failing the review", async () => {
+  state.rows = [row()];
+  // tasks 읽기만 500 — 리뷰 자체는 살아 있고 today만 비운다.
+  state.failure = (url) => url.pathname.endsWith("/tasks");
+  state.bypassFilters = true;
+  const result = await ledger.getDailyReviewLedger({ date: "2026-09-12" });
+  assert.equal(result.status, "live");
+  assert.equal(result.today, null);
+  assert.ok(result.review);
 });

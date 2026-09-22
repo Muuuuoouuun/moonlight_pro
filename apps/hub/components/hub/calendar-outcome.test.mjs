@@ -28,11 +28,14 @@ test("compact 변형은 Futura 시간표 한 줄로 그리고 로딩 중 행 높
   assert.match(html, /role="checkbox"[^>]*aria-label="주간 점검 완료"[^>]*disabled/);
   assert.match(html, /<span class="fx-time">09:30<\/span>/);
   assert.match(html, /<span class="fx-now">NOW<\/span>/);
-  // 저장 확인 live region은 비어 있어도 처음부터 트리에 있어야 읽힌다.
-  assert.match(html, /<span class="fx-time-ack" role="status" aria-live="polite"><\/span>/);
+  // 저장 확인 live region은 처음부터 트리에 있어야 읽힌다(나중에 끼워 넣으면 고지를 놓친다).
   assert.match(html, /aria-label="주간 점검 특이사항"[^>]*disabled/);
-  // 로딩 스켈레톤 줄은 compact에서 그리지 않는다 — 체크박스 비활성(aria-busy)이 로딩을 말한다.
-  assert.doesNotMatch(html, /불러오는 중/);
+  // 로딩은 행 안의 live region 한 토큰으로 말한다 — 체크박스·편집 버튼이 둘 다 잠기는데
+  // 표시가 없으면 첫 화면 일정이 전부 "눌러도 안 되는 줄"로 보인다(§11).
+  assert.match(html, /<span class="fx-time-ack" role="status" aria-live="polite">불러오는 중…<\/span>/);
+  // 다만 행 높이는 늘리지 않는다 — 94px 들여쓰기 블록도, Skeleton 줄도 compact에서는 그리지 않는다.
+  assert.doesNotMatch(html, /hub-skeleton/);
+  assert.doesNotMatch(html, /fx-time-note|fx-time-detail|fx-time-alert/);
 });
 
 test("기본 변형(Daily Brief·Calendar 드로어)의 로딩 표시는 그대로다", () => {
@@ -47,4 +50,9 @@ test("지난 일정의 취소선은 사라지고 취소선은 완료에만 남�
   assert.ok(pastRule, "past rule exists");
   assert.doesNotMatch(pastRule[1], /line-through/);
   assert.match(futuraCss, /\.fx-time-row\[data-done="true"\] \.fx-time-title \{[^}]*line-through/);
+  // past와 done은 특정도가 같아 뒤에 오는 done이 past의 명도를 덮는다 — 조합 규칙으로 바닥을
+  // 고정하지 않으면 완료한 지난 일정이 미기록 지난 일정보다 밝아진다(명도 위계 역전).
+  const combined = futuraCss.match(/\.fx-time-row\[data-past="true"\]\[data-done="true"\] \.fx-time-title \{([^}]*)\}/);
+  assert.ok(combined, "past+done 조합 규칙이 있어야 한다");
+  assert.match(combined[1], /color: var\(--fg-faint\)/);
 });
