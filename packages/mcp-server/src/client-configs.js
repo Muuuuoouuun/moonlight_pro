@@ -62,6 +62,20 @@ export function findTomlBlock(text){
   return {start,end,entry,lines};
 }
 
+// A registration that loaded a *private* env file (only HUB_URL + AGENT_API_TOKEN, no write secret)
+// keeps that file after install: it moves from `--env-file=` to COM_MOON_MCP_ENV_FILE, which the
+// launcher reads instead of Hub's .env.local. Only Hub's own .env.local is dropped.
+const ENV_FILE_ARG=/^--env-file(?:-if-exists)?=(.+)$/;
+export const isHubEnvFile=path=>/(^|\/)apps\/hub\/\.env\.local$/.test(path);
+export function privateEnvFile(entry){
+  const args=Array.isArray(entry?.args)?entry.args.map(String):[];
+  for(const arg of args){
+    const path=ENV_FILE_ARG.exec(arg)?.[1];
+    if(path&&!isHubEnvFile(path))return path;
+  }
+  return null;
+}
+
 // Replace command/args, drop cwd (the launcher locates itself), keep every other key and subtable.
 export function upsertTomlEntry(text,{command,args}){
   const block=findTomlBlock(text);
@@ -85,6 +99,16 @@ export function upsertTomlEntry(text,{command,args}){
     body.push(line);
   }
   if(!inserted)body.unshift(...rendered);
+  const envFile=privateEnvFile(block.entry);
+  if(envFile&&block.entry.env?.COM_MOON_MCP_ENV_FILE===undefined){
+    const line=`COM_MOON_MCP_ENV_FILE = ${tomlString(envFile)}`;
+    const at=body.findIndex(item=>SUBHEADER.exec(item)?.[1]==='env');
+    if(at>=0)body.splice(at+1,0,line);
+    else{
+      let tail=body.length;while(tail>0&&!body[tail-1].trim())tail--;
+      body.splice(tail,0,'','[mcp_servers.moonlight.env]',line);
+    }
+  }
   return [...lines.slice(0,start+1),...body,...lines.slice(end)].join('\n');
 }
 
@@ -108,6 +132,8 @@ export function readEntry(text,target){
 // Keeps env overrides and unknown keys; replaces how the process is launched.
 export function mergeStdioEntry(existing,{command,launcher,flags,typed}){
   const {command:_command,args:_args,cwd:_cwd,type:_type,...rest}=existing||{};
+  const envFile=privateEnvFile(existing);
+  if(envFile&&rest.env?.COM_MOON_MCP_ENV_FILE===undefined)rest.env={...(rest.env||{}),COM_MOON_MCP_ENV_FILE:envFile};
   return {...(typed?{type:'stdio'}:{}),command,args:[launcher,...flags],...rest};
 }
 
@@ -141,8 +167,11 @@ export function inspectEntry(entry,{exists=existsSync,isExecutable=executable}={
     if(path.startsWith('/')&&!exists(path))add('error',`경로 없음: ${path}`);
   }
   if(entry.cwd&&!exists(entry.cwd))add('error',`cwd 없음: ${entry.cwd}`);
-  const legacy=args.some(arg=>arg.startsWith('--env-file'));
+  const envFiles=args.map(arg=>ENV_FILE_ARG.exec(arg)?.[1]).filter(Boolean);
+  const legacy=envFiles.some(isHubEnvFile);
   if(legacy)add('warn','구형 등록 — Hub .env.local 전체(모델·OAuth 비밀 포함)를 MCP 프로세스에 싣는다');
+  const privateFile=envFiles.find(path=>!isHubEnvFile(path));
+  if(privateFile)add('info',`비공개 env 파일 등록(${privateFile}) — install하면 런처 + COM_MOON_MCP_ENV_FILE로 옮기고 파일은 그대로 쓴다`);
   const state=issues.some(issue=>issue.level==='error')?'broken':legacy?'legacy':issues.some(issue=>issue.level==='warn')?'warn':'ok';
   return {state,issues};
 }

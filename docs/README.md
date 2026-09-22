@@ -76,7 +76,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 제품·운영 정본
 
-- [Eevee Office — 9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md) — **실행 지침 구현 · 의미 품질 인증 대기(2026-09-22)**. `role-cards.ts`에서 생성한 읽기용 사본으로 2026-09-21 역할·말투·운영 품질 설계를 구체화한다. 실제 호출·토론 설정·UI 스냅샷·같은 모델의 source review 경계·완료한 UI QA는 [역할 품질 구현 및 검증 계획](superpowers/plans/2026-09-22-office-agent-quality.md)을 따른다. 지침·형식 검사·화면 QA 통과를 역할별 의미 점수로 환산하지 않는다. 아래 업무 내장 설계의 권한·원장·승인·보관 경계는 유지한다.
+- [Eevee Office — 9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md) — **실행 지침 구현 · 의미 품질 인증 대기(2026-09-22)**. `role-cards.ts`에서 생성한 읽기용 사본으로 2026-09-21 역할·말투·운영 품질 설계를 구체화한다. 실제 호출·토론 설정·UI 스냅샷·같은 모델의 source review 경계·완료한 UI QA는 [역할 품질 구현 및 검증 계획](superpowers/plans/2026-09-22-office-agent-quality.md)을 따른다. 지침·형식 검사·화면 QA 통과를 역할별 의미 점수로 환산하지 않는다. 아래 업무 내장 설계의 권한·기록·승인·보관 경계는 유지한다.
 
 - [업무 안의 Eevee Office — C레벨 심화 설계](superpowers/specs/2026-09-21-eevee-office-embedded-workflow-deep-design.md) — **구현 승인 · E0~E4 로컬 구현(2026-09-21)**. [통합 검토](2026-09-21-agent-office-consolidated-review.md)의 B 방향을 주간·고객·Threads Studio에 연결했다. Office/작업·실행/코칭·대화/브랜드 자문으로 기존 목적지를 정리하고, 요청 보관·복구와 기존 command를 통한 task 연결을 구현했다. 대체 조항은 §2, 실제 범위·검증·운영 적용 전제는 [단계별 구현 기록](superpowers/plans/2026-09-21-eevee-office-embedded-workflow.md) §9를 따른다. 다른 표면·장기 기억·자동 발송은 후속 제안이다.
 
@@ -88,7 +88,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [CRM 최적화·편의성·UI/UX 보완 기획](superpowers/specs/2026-09-21-crm-optimization-usability-ux-plan.md) — **DRAFT · 검토용(2026-09-21)**. 위 CRM 탭 기획을 현재 코드와 로컬 화면에 대조한 보완안. 이미 반영된 주간 집계는 제외하고, 저장·조회 신뢰성 → 공통 상세·기록창 → 검색·조회 최적화 → 기록 탐색 순서로 정리했다. 정책 승인·구현 완료를 뜻하지 않는다.
 
-- [CRM·프로젝트의 간결한 보기·입력·고객 연결](superpowers/specs/2026-09-21-crm-project-context-and-focus-design.md) — **진행 승인 · 1·2단계 구현(2026-09-21)**. 프로젝트 고객 칩·요약·역조회, `할 일 / 기록·자료`, 문맥을 이어받는 메모 입력과 초안 복구를 적용했다. 기존 단일 고객 관계·메모 원장을 재사용하며 다중 고객·통합 인물 검색·선택 분석은 후속이다. 운영 DB의 시험 저장은 실행하지 않았다.
+- [CRM·프로젝트의 간결한 보기·입력·고객 연결](superpowers/specs/2026-09-21-crm-project-context-and-focus-design.md) — **진행 승인 · 1·2단계 구현(2026-09-21)**. 프로젝트 고객 칩·요약·역조회, `할 일 / 기록·자료`, 문맥을 이어받는 메모 입력과 초안 복구를 적용했다. 기존 단일 고객 관계·메모 기록을 재사용하며 다중 고객·통합 인물 검색·선택 분석은 후속이다. 운영 DB의 시험 저장은 실행하지 않았다.
 
 - [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 업무 사실과 인터뷰 원본
 - [`superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 활성 제품 설계

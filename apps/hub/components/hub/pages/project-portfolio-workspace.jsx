@@ -210,7 +210,6 @@ export function ProjectPortfolioWorkspace({
   onTerminalDragStart,
   onTerminalDragMove,
   onTerminalDragEnd,
-  terminalDragOffset = 0,
   onReopenProject,
   onReload,
   onSwitchView,
@@ -326,22 +325,24 @@ export function ProjectPortfolioWorkspace({
               <button
                 type="button"
                 className="hub-row"
+                data-terminal-toggle=""
                 aria-expanded={showTerminal}
                 onClick={onToggleTerminal}
-                onPointerDown={onTerminalDragStart}
-                onPointerMove={onTerminalDragMove}
-                onPointerUp={onTerminalDragEnd}
-                onPointerCancel={onTerminalDragEnd}
-                style={{
-                  cursor: "ns-resize", touchAction: "pan-x",
-                  transform: terminalDragOffset ? `translateY(${terminalDragOffset}px)` : undefined,
-                  transition: terminalDragOffset ? "none" : "transform var(--dur-hover) var(--ease-hub)",
-                }}
               >
                 <Iconed name="chevronD" size={12} style={{ transform: showTerminal ? "none" : "rotate(-90deg)" }} />
                 <span>완료·보관</span>
                 <span className="mono">{terminalProjects.length}</span>
-                <Iconed name="drag" size={12} style={{ color: "var(--fg-faint)" }} />
+                <span
+                  data-terminal-grip=""
+                  aria-hidden="true"
+                  onPointerDown={onTerminalDragStart}
+                  onPointerMove={onTerminalDragMove}
+                  onPointerUp={onTerminalDragEnd}
+                  onPointerCancel={onTerminalDragEnd}
+                  style={{ color: "var(--fg-faint)" }}
+                >
+                  <Iconed name="drag" size={12} />
+                </span>
               </button>
               {showTerminal && terminalProjects.map((item) => (
                 <div key={item.id} className="hub-project-portfolio-terminal__row">

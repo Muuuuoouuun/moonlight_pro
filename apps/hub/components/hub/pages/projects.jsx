@@ -157,12 +157,23 @@ export function Projects({ workspace }) {
   const [drag, setDrag] = React.useState(null);
   const [expanded, setExpanded] = React.useState(() => new Set());
   const [showTerminal, setShowTerminal] = React.useState(false);
-  // 완료·보관 헤더: 클릭 토글 + 세로 드래그 토글 병행. 한 제스처당 한 번만
-  // 토글되도록 triggered 플래그로 잠그고, 임계값 미만 드래그는 click으로 처리한다.
-  const terminalDragRef = React.useRef({ startY: 0, active: false, triggered: false });
-  const [terminalDragOffset, setTerminalDragOffset] = React.useState(0);
+  // 완료·보관 헤더: 클릭 토글 + 세로 드래그 토글 병행. 드래그는 오른쪽 grip에서만
+  // 시작해(touch-action: none은 grip에만) 행 본체 위의 세로 스와이프는 스크롤로 남는다.
+  // 한 제스처당 한 번만 토글되도록 triggered 플래그로 잠그고, 임계값 미만 드래그는
+  // click으로 처리한다. 드래그 오프셋은 state가 아니라 헤더 DOM에 직접 써서
+  // pointermove마다 Projects 전체가 다시 렌더되지 않게 한다.
+  const terminalDragRef = React.useRef({ startY: 0, active: false, triggered: false, header: null });
+  const setTerminalHeaderOffset = (header, offset) => {
+    if (!header) return;
+    header.style.transform = offset ? `translateY(${offset}px)` : '';
+    if (offset) header.dataset.dragging = 'true';
+    else delete header.dataset.dragging;
+  };
   const handleTerminalDragStart = (e) => {
-    terminalDragRef.current = { startY: e.clientY, active: true, triggered: false };
+    terminalDragRef.current = {
+      startY: e.clientY, active: true, triggered: false,
+      header: e.currentTarget.closest('[data-terminal-toggle]'),
+    };
     e.currentTarget.setPointerCapture?.(e.pointerId);
   };
   const handleTerminalDragMove = (e) => {
@@ -170,16 +181,20 @@ export function Projects({ workspace }) {
     if (!dragState.active) return;
     const dy = e.clientY - dragState.startY;
     const offset = showTerminal ? Math.min(0, dy) : Math.max(0, dy);
-    setTerminalDragOffset(offset);
+    setTerminalHeaderOffset(dragState.header, offset);
     if (!dragState.triggered && Math.abs(offset) > 28) {
       dragState.triggered = true;
       setShowTerminal(v => !v);
     }
   };
   const handleTerminalDragEnd = (e) => {
-    terminalDragRef.current.active = false;
-    setTerminalDragOffset(0);
+    const dragState = terminalDragRef.current;
+    dragState.active = false;
+    setTerminalHeaderOffset(dragState.header, 0);
     e.currentTarget.releasePointerCapture?.(e.pointerId);
+    // 같은 제스처가 보내는 click만 삼키고, click이 오지 않은 경우(터치 이동)에도
+    // 다음 키보드·보조기기 활성화가 먹히지 않게 플래그를 곧바로 푼다.
+    if (dragState.triggered) setTimeout(() => { dragState.triggered = false; }, 0);
   };
   const handleTerminalToggleClick = () => {
     if (terminalDragRef.current.triggered) {
@@ -2079,7 +2094,6 @@ export function Projects({ workspace }) {
               onTerminalDragStart={handleTerminalDragStart}
               onTerminalDragMove={handleTerminalDragMove}
               onTerminalDragEnd={handleTerminalDragEnd}
-              terminalDragOffset={terminalDragOffset}
               onReopenProject={(project) => setProjectStatus(project, 'active')}
               onReload={() => loadLedger({ initial: true })}
               onSwitchView={setView}
@@ -2523,25 +2537,29 @@ export function Projects({ workspace }) {
                     <button
                       type="button"
                       className="hub-row"
+                      data-terminal-toggle=""
                       aria-expanded={showTerminal}
                       onClick={handleTerminalToggleClick}
-                      onPointerDown={handleTerminalDragStart}
-                      onPointerMove={handleTerminalDragMove}
-                      onPointerUp={handleTerminalDragEnd}
-                      onPointerCancel={handleTerminalDragEnd}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                         padding: '6px 8px', marginBottom: showTerminal ? 10 : 0, borderRadius: 'var(--r-sm)',
                         textAlign: 'left', color: 'var(--fg-dim)',
-                        cursor: 'ns-resize', touchAction: 'pan-x',
-                        transform: terminalDragOffset ? `translateY(${terminalDragOffset}px)` : undefined,
-                        transition: terminalDragOffset ? 'none' : 'transform var(--dur-hover) var(--ease-hub)',
                       }}
                     >
                       <Iconed name="chevronD" size={12} style={{ transform: showTerminal ? 'none' : 'rotate(-90deg)', color: 'var(--fg-faint)' }} />
                       <span style={{ fontSize: 12.5, fontWeight: 600 }}>완료·보관</span>
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{terminalCount}</span>
-                      <Iconed name="drag" size={12} style={{ marginLeft: 'auto', color: 'var(--fg-faint)' }} />
+                      <span
+                        data-terminal-grip=""
+                        aria-hidden="true"
+                        onPointerDown={handleTerminalDragStart}
+                        onPointerMove={handleTerminalDragMove}
+                        onPointerUp={handleTerminalDragEnd}
+                        onPointerCancel={handleTerminalDragEnd}
+                        style={{ marginLeft: 'auto', color: 'var(--fg-faint)' }}
+                      >
+                        <Iconed name="drag" size={12} />
+                      </span>
                     </button>
                     {showTerminal && (
                       <Card pad={false} className="hub-table-card">

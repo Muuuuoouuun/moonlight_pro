@@ -48,10 +48,10 @@ It initializes the actual stdio protocol, discovers tools and performs a small r
 Every client runs the same launcher, `bin/moonlight-mcp.js`, by absolute path. It finds the repository from its own location and reads `apps/hub/.env.local` itself, so a registration holds one path, no `cwd` and no `--env-file`. From that file it loads only `COM_MOON_HUB_URL`, `COM_MOON_HUB_WRITE_SECRET`, `COM_MOON_AGENT_API_TOKEN` and `COM_MOON_MCP_*`; model, OAuth and database secrets never enter the MCP process. Values already set in the client's `env` win over the file, and `COM_MOON_MCP_ENV_FILE` points at a different file.
 
 ```sh
-node packages/mcp-server/bin/moonlight-mcp.js [--profile core|pms|sales|content|jobs|all] [--read-only]
+node packages/mcp-server/bin/moonlight-mcp.js [--profile core|pms|sales|content|jobs|assistant|all] [--read-only]
 ```
 
-`--read-only` keeps only tools annotated `readOnlyHint`, in any profile. Registrations made with `src/index.js` and `--env-file` keep working unchanged.
+`--read-only` keeps only tools annotated `readOnlyHint`, in any profile. Registrations made with `src/index.js` and `--env-file` keep working unchanged. `mcp:connect install` treats only an `--env-file` pointing at Hub's `apps/hub/.env.local` as legacy; any other env file (such as a private file holding just `COM_MOON_HUB_URL` and `COM_MOON_AGENT_API_TOKEN`) is carried over as `COM_MOON_MCP_ENV_FILE`, so the write secret never gets loaded behind your back.
 
 `npm run mcp:connect` manages the `moonlight` entry in each client's own file:
 
@@ -236,8 +236,9 @@ The [setup and recovery guide](../../docs/measurable-personal-os-operations.md) 
 copyable configurations for all three clients with a separate private MCP environment file.
 
 The `assistant` profile works with any local stdio MCP client, including Codex,
-Claude Desktop/Code and Antigravity. Register the same `command` and `args` already
-shown above, with `COM_MOON_MCP_PROFILE=assistant`. Antigravity's current global
+Claude Desktop/Code and Antigravity. Register the launcher shown under
+[Connecting AI clients](#connecting-ai-clients), with `COM_MOON_MCP_PROFILE=assistant` and
+`COM_MOON_MCP_ENV_FILE` pointing at the private environment file. Antigravity's current global
 configuration is `~/.gemini/config/mcp_config.json`, or `.agents/mcp_config.json`
 in the workspace, under `mcpServers`. See the [official Antigravity MCP guide](https://antigravity.google/docs/mcp).
 No client configuration is changed by installing this package.

@@ -537,7 +537,7 @@
   border-right-color: var(--line-soft);
 }
 
-/* 내비 행 — 아이콘·점 없이 텍스트만. 현재 항목만 흰 pill + 그림자로 뜬다. */
+/* 내비 행 — 아이콘 + 라벨, 색점 없음(§15 2026-09-23). 현재 항목만 흰 pill + 그림자로 뜬다. */
 .hub-app .hub-nav-item {
   height: 34px;
   font-size: 13px;

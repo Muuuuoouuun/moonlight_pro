@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {clientTargets,findTomlBlock,httpSnippet,inspectEntry,launcherFlags,mergeStdioEntry,readEntry,stdioSnippet,upsertJsonEntry,upsertTomlEntry} from './client-configs.js';
+import {clientTargets,findTomlBlock,httpSnippet,inspectEntry,launcherFlags,mergeStdioEntry,privateEnvFile,readEntry,stdioSnippet,upsertJsonEntry,upsertTomlEntry} from './client-configs.js';
 
 const LAUNCHER='/repo/packages/mcp-server/bin/moonlight-mcp.js';
 // Shape of a real Codex config: other servers before/after, a stale cwd, extra keys, an env subtable.
@@ -70,7 +70,7 @@ test('refuses to edit TOML it cannot map safely',()=>{
 
 test('JSON clients keep unrelated settings, other servers and env overrides',()=>{
   const target=clientTargets({home:'/h',root:'/r'}).find(t=>t.id==='claude-desktop');
-  const before=JSON.stringify({mcpServers:{other:{command:'x'},moonlight:{command:'/old/node',args:['--env-file=/dead/.env.local','/dead/index.js'],cwd:'/dead',env:{COM_MOON_MCP_PROFILE:'sales'}}},preferences:{keepAwakeEnabled:true}},null,2);
+  const before=JSON.stringify({mcpServers:{other:{command:'x'},moonlight:{command:'/old/node',args:['--env-file=/dead/apps/hub/.env.local','/dead/index.js'],cwd:'/dead',env:{COM_MOON_MCP_PROFILE:'sales'}}},preferences:{keepAwakeEnabled:true}},null,2);
   const existing=readEntry(before,target);
   const entry=mergeStdioEntry(existing,{command:'/opt/homebrew/bin/node',launcher:LAUNCHER,flags:[]});
   const after=JSON.parse(upsertJsonEntry(before,target,entry));
@@ -80,6 +80,25 @@ test('JSON clients keep unrelated settings, other servers and env overrides',()=
   const vscode=clientTargets({home:'/h',root:'/r'}).find(t=>t.id==='vscode');
   assert.deepEqual(JSON.parse(upsertJsonEntry('',vscode,mergeStdioEntry(null,{command:'/n',launcher:LAUNCHER,flags:[],typed:true}))),{servers:{moonlight:{type:'stdio',command:'/n',args:[LAUNCHER]}}});
   assert.throws(()=>upsertJsonEntry('{ // comment\n}',target,entry));
+});
+
+test('a private env file (no write secret) survives install; only Hub .env.local is dropped',()=>{
+  const PRIVATE='/Users/me/private/moonlight-mcp.env';
+  const registered={command:'/opt/homebrew/bin/node',args:[`--env-file=${PRIVATE}`,'/r/packages/mcp-server/src/index.js']};
+  assert.equal(privateEnvFile(registered),PRIVATE);
+  assert.equal(privateEnvFile({args:['--env-file=/r/apps/hub/.env.local']}),null);
+  assert.deepEqual(mergeStdioEntry(registered,{command:'/n',launcher:LAUNCHER,flags:[]}),{command:'/n',args:[LAUNCHER],env:{COM_MOON_MCP_ENV_FILE:PRIVATE}});
+  assert.deepEqual(mergeStdioEntry({...registered,env:{COM_MOON_MCP_ENV_FILE:'/chosen.env'}},{command:'/n',launcher:LAUNCHER,flags:[]}).env,{COM_MOON_MCP_ENV_FILE:'/chosen.env'},'an explicit env value wins');
+  const toml=`[mcp_servers.moonlight]\ncommand = "node"\nargs = ["--env-file=${PRIVATE}", "/r/packages/mcp-server/src/index.js"]\n\n[other]\nx = 1\n`;
+  const next=upsertTomlEntry(toml,{command:'/n',args:[LAUNCHER]});
+  assert.deepEqual(findTomlBlock(next).entry,{command:'/n',args:[LAUNCHER],env:{COM_MOON_MCP_ENV_FILE:PRIVATE}});
+  assert.match(next,/\n\[other\]\nx = 1\n$/);
+  assert.equal(upsertTomlEntry(next,{command:'/n',args:[LAUNCHER]}),next,'idempotent');
+  const withEnv=upsertTomlEntry(`[mcp_servers.moonlight]\ncommand = "node"\nargs = ["--env-file=${PRIVATE}"]\n[mcp_servers.moonlight.env]\nCOM_MOON_MCP_PROFILE = "assistant"\n`,{command:'/n',args:[LAUNCHER]});
+  assert.deepEqual(findTomlBlock(withEnv).entry.env,{COM_MOON_MCP_ENV_FILE:PRIVATE,COM_MOON_MCP_PROFILE:'assistant'});
+  const inspected=inspectEntry(registered,{exists:()=>true,isExecutable:()=>true});
+  assert.equal(inspected.state,'ok','a private env file is not the legacy full-secret registration');
+  assert.ok(inspected.issues.some(i=>i.level==='info'&&i.message.includes('COM_MOON_MCP_ENV_FILE')));
 });
 
 test('launcher flags carry over unless replaced',()=>{
