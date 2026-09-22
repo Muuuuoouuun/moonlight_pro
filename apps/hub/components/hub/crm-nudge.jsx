@@ -10,8 +10,7 @@
 // 긴급은 §5.3 빨강 예산 안에서 목록이 이미 레일로 표현한다.
 
 import React from "react";
-import { Button, Kbd, TextField } from "./hub-primitives";
-import { Iconed } from "./hub-icons";
+import { Button, TextField } from "./hub-primitives";
 
 const ESCAPE_LABEL = {
   snooze: "미루기",

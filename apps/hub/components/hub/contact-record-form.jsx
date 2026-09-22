@@ -14,7 +14,7 @@
 // Leads/Deals/Accounts 전체를 이 청크로 끌고 온다(followups.jsx가 같은 이유로 상수를 복제).
 
 import React from "react";
-import { Button, CheckboxRow, DateQuickPresets, Drawer, SegmentedControl, SelectField, TextAreaField, TextField } from "./hub-primitives";
+import { Button, CheckboxRow, DateQuickPresets, Drawer, SegmentedControl, TextAreaField, TextField } from "./hub-primitives";
 import { useUndoableAction } from "./use-undoable-action";
 import { Iconed } from "./hub-icons";
 import { requestPersonaChat } from "./persona-client";
