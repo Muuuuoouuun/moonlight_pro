@@ -361,11 +361,16 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     ...(activities === null ? ["crm_activities"] : []),
   ];
   const items = buildFollowupItems({ leadRows, dealRows, companies, activities, datedLeadRows, datedDealRows });
-  const capped = items.slice(0, limit);
-  // overdue는 "내가 어긴 약속" 수다 — 이전에는 items.length(=전체)라 헤더의 "N overdue"가
-  // 목록 길이를 빨갛게 되풀이했다. total이 그 옛 의미를 그대로 들고 간다.
+  // 자르기는 묶음 인식으로 한다. items의 정렬축은 priority 하나뿐이고 약속 날짜(bucket)와
+  // 무관하므로, 단순 slice면 어긴 약속이 상한 밖으로 밀려 헤더의 "N overdue"와 "먼저 정리할 것"
+  // 섹션이 어긋난다. 묶음 안 순서는 이미 priority 내림차순이라 추가 정렬이 필요 없다.
   const grouped = groupFollowups(items);
-  const dueToday = grouped.today.length;
+  const capped = [...grouped.missed, ...grouped.today, ...grouped.rest].slice(0, limit);
+  // overdue는 "내가 어긴 약속" 수다 — 이전에는 items.length(=전체)라 헤더의 "N overdue"가
+  // 목록 길이를 빨갛게 되풀이했다. total이 그 옛 의미를 그대로 들고 간다. 수치는 실제로 실린
+  // 목록(capped)에서 뽑는다 — 화면이 같은 배열을 다시 묶어 섹션을 그리기 때문이다.
+  const shownGroups = groupFollowups(capped);
+  const dueToday = shownGroups.today.length;
 
   return {
     source: "supabase",
@@ -376,7 +381,7 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     trackingStartedAt,
     items: capped,
     summary: {
-      overdue: grouped.missed.length,
+      overdue: shownGroups.missed.length,
       dueToday,
       total: items.length,
       shown: capped.length,

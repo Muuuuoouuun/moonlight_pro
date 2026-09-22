@@ -225,3 +225,24 @@ test("summary.overdue counts missed promises, not the whole list", async () => {
   assert.equal(res.summary.overdue, 1);
   assert.equal(res.summary.dueToday, 0);
 });
+
+test("the cap keeps missed promises in the list, and the header counts what shipped", async () => {
+  state.trackingStartedAt = null;
+  // 어긴 약속은 방금 연락했고 점수도 0이라 priority가 가장 낮다 — 정렬축(staleness·value)은
+  // 약속 날짜와 무관하므로 단순 slice면 상한 밖으로 밀린다.
+  state.rows.leads = [
+    lead({ id: "missed", company_id: null, score: 0, last_touch_at: daysAgo(1), updated_at: daysAgo(1), meta: { next_action_at: daysAgo(2).slice(0, 10) } }),
+    ...Array.from({ length: 5 }, (_, i) => lead({ id: `stale-${i}`, company_id: null, score: 90, last_touch_at: daysAgo(60), updated_at: daysAgo(60) })),
+  ];
+  state.activities = [];
+
+  const res = await getFollowups({ limit: 3 });
+
+  assert.equal(res.summary.total, 6);
+  assert.equal(res.summary.shown, 3);
+  assert.ok(res.items.some((item) => item.id.includes("missed")), "어긴 약속이 잘려 나가면 안 된다");
+  // 헤더 수치는 화면이 다시 묶는 그 목록에서 나온다.
+  assert.equal(res.summary.overdue, groupFollowups(res.items).missed.length);
+  assert.equal(res.summary.dueToday, groupFollowups(res.items).today.length);
+  assert.equal(res.summary.overdue, 1);
+});
