@@ -229,6 +229,11 @@ export function mapDeal(row, companyById, trackingStartedAt = null) {
     id: row.id,
     leadId: row.lead_id || null, // ties the deal back to its lead (deep-link + focus context)
     companyId: row.company_id || null, // account 행에서 딜 파이프라인을 붙이는 조인 키
+    // 넛지 엔진이 리드와 같은 모양으로 읽는다 — 리드에만 있던 투영을 딜에도 맞춘다.
+    companyName: company?.name || null,
+    nextActionAt: row.meta?.next_action_at || null,
+    dormant: Boolean(row.meta?.dormant),
+    dormantSince: row.meta?.dormant_since || null,
     name,
     type,
     // Scoping tags — workspace-map matches on these; round-trip target for scoped creates.
