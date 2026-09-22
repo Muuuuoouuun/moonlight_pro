@@ -51,7 +51,9 @@ node --import ./scripts/register-hub-alias.mjs scripts/eval-office.mjs --suite q
 
 시나리오·정책 파일·모델 설정이 바뀌면 같은 run에 이어 붙일 수 없다. 호출 시작만 있고 결과가 없는 중단은 결과 불명이며 자동 재호출하지 않는다. 실행자가 추가 유료 호출을 선택할 때만 `--retry-incomplete`를 함께 준다. 이미 결과가 기록된 실패는 재개 시 자동 재시도하지 않는다. 개선판·재시험은 새 파일에 전 사례를 기록하고 이전 실패도 보존한다.
 
-header에 전체 시나리오와 hash, 정책 버전, 관련 런타임 파일별 SHA256, 모델 설정을 기록한다. 각 호출의 입력·최종 응답 원문·모델·정확한 토론 설정·소요 시간·history 발췌 이력·응답 hash를 보존한다. provider wrapper는 API 키 없이 프롬프트/시스템 hash, 생성 설정, 실제 모델, HTTP 상태, 실패 reason, 출력 hash를 기록한다. 비공개 provider 오류 본문과 검수 전 초안은 복사하지 않는다.
+header에 전체 시나리오와 hash, 정책 버전, 관련 런타임 파일별 SHA256, 모델 설정을 기록한다. 각 호출의 입력·최종 응답 원문·모델·정확한 토론 설정·소요 시간·history 발췌 이력·응답 hash를 보존한다. provider wrapper는 API 키 없이 프롬프트/시스템 hash, 생성 설정, 요청 모델 alias와 API가 반환한 실제 `modelVersion`, HTTP 상태, `finishReason`, 정수 토큰 사용량, 차단·실패 분류, 출력 hash를 기록한다. 비공개 provider 오류 본문과 검수 전 초안은 복사하지 않는다. 과거 기록에 없거나 API가 반환하지 않은 값은 미확인이며 요청 모델명·0으로 대신 채우지 않는다.
+
+`evaluationTrace.diagnostics`는 Office의 실패 단계(`draft/review/position/response/synthesis`)와 종류(`provider/json/source-review/contract/deadline/model-mismatch`)만 기록한다. 내부 진단 callback은 공개 응답·오류 문구를 바꾸지 않는다. 공급자 실패 코드가 없으면 단계/종류로 오류를 구분하며, 인용 추적·형식·계약 실패를 의미 품질 실패와 혼동하지 않는다. 이 정보는 실패 원인을 좁히기 위한 것으로 자동 점수나 사실성 인증이 아니다.
 
 `attempt`와 `result`는 각각 한 줄씩 쓰고 `fsync`한다. 중단 전 완료된 응답은 살아 있다. 마지막 줄 자체가 잘린 파일은 원본을 보존하고 그 잘린 줄을 복구한 뒤 재개해야 한다. 기록되지 않은 결과를 성공으로 추측하지 않는다.
 

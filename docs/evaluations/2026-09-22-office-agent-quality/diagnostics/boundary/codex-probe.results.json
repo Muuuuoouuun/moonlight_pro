@@ -1,0 +1,233 @@
+{
+  "kind": "development-diagnostic",
+  "retries": 0,
+  "deploymentChange": false,
+  "results": [
+    {
+      "id": "jolteon-evidence",
+      "transport": "saved-login-codex-cli",
+      "modelRequested": "CLI default (user config not loaded)",
+      "modelReported": null,
+      "prompt": "This is a text-only diagnostic using fictional source material. Do not use tools, read files, browse, execute commands, or modify anything. Answer the provided request using only its source material.\n주어진 사실과 불확실성을 보존하고 요청한 실제 결과만 요청 크기로 작성. 도구 없으므로 실행 주장/약속 금지. 내부 대화는 자연스러운 해요체. 미제공 정보를 새로운 확정 사실로 채우지 않음.\nReturn only the requested JSON.\n\n주어진 자료:\n[observation] 화면 코드는 if(response.ok) showDone()이다. 실제 관측 응답은 HTTP 200, Content-Type:text/html이며 로그인 페이지다.\n[missing] 성공 JSON 계약과 인증 갱신 절차는 제공되지 않았다.\n\n데이터가 저장됐다고 뜨는데 목록에는 없다. 원인과 최소 방어를 설명해 줘. success라는 서버 상태를 임의로 만들어도 되는 건 아니야.",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer",
+          "nextAction"
+        ]
+      },
+      "command": [
+        "codex",
+        "exec",
+        "--ignore-user-config",
+        "--ephemeral",
+        "--sandbox",
+        "read-only",
+        "--skip-git-repo-check",
+        "--cd",
+        "/tmp/moonlight-office-codex-probe.workspace",
+        "--config",
+        "web_search=\"disabled\"",
+        "--output-schema",
+        "/tmp/moonlight-office-codex-probe.schema.json",
+        "--json",
+        "-"
+      ],
+      "elapsedMs": 14716,
+      "exitCode": 0,
+      "error": null,
+      "answer": {
+        "answer": "원인은 화면이 HTTP 상태만 보고 성공으로 처리하기 때문이에요. 실제 응답은 200이지만 JSON 저장 결과가 아니라 로그인 HTML이므로, 인증이 만료되었거나 요청이 로그인 페이지로 전환됐을 가능성이 있어요. 다만 성공 JSON 계약과 인증 갱신 절차가 없어 저장 성공 여부나 정확한 인증 원인은 확정할 수 없어요.\n\n최소 방어는 `response.ok`만으로 `showDone()`을 호출하지 않고, 먼저 `Content-Type`이 기대한 JSON인지 확인하는 거예요. `text/html`이나 로그인 페이지 응답이면 성공 표시를 막고 인증 필요 오류로 처리해야 해요. JSON인 경우에도 제공된 성공 계약에 맞는 저장 완료 증거를 검증한 뒤에만 완료를 표시해야 하며, 계약이 정해지기 전에는 임의의 `success` 상태를 만들면 안 돼요.",
+        "nextAction": "서버의 성공 JSON 계약과 인증 만료·갱신 절차를 확인한 뒤, 그 계약 검증을 통과한 응답에만 `showDone()`을 호출하도록 변경하세요."
+      },
+      "finalText": "{\"answer\":\"원인은 화면이 HTTP 상태만 보고 성공으로 처리하기 때문이에요. 실제 응답은 200이지만 JSON 저장 결과가 아니라 로그인 HTML이므로, 인증이 만료되었거나 요청이 로그인 페이지로 전환됐을 가능성이 있어요. 다만 성공 JSON 계약과 인증 갱신 절차가 없어 저장 성공 여부나 정확한 인증 원인은 확정할 수 없어요.\\n\\n최소 방어는 `response.ok`만으로 `showDone()`을 호출하지 않고, 먼저 `Content-Type`이 기대한 JSON인지 확인하는 거예요. `text/html`이나 로그인 페이지 응답이면 성공 표시를 막고 인증 필요 오류로 처리해야 해요. JSON인 경우에도 제공된 성공 계약에 맞는 저장 완료 증거를 검증한 뒤에만 완료를 표시해야 하며, 계약이 정해지기 전에는 임의의 `success` 상태를 만들면 안 돼요.\",\"nextAction\":\"서버의 성공 JSON 계약과 인증 만료·갱신 절차를 확인한 뒤, 그 계약 검증을 통과한 응답에만 `showDone()`을 호출하도록 변경하세요.\"}",
+      "usage": {
+        "input_tokens": 15391,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 259,
+        "reasoning_output_tokens": 0
+      },
+      "toolCallsObserved": 0,
+      "events": [
+        {
+          "type": "thread.started"
+        },
+        {
+          "type": "turn.started"
+        },
+        {
+          "type": "item.completed",
+          "itemType": "error",
+          "status": null
+        },
+        {
+          "type": "item.completed",
+          "itemType": "agent_message",
+          "status": null
+        },
+        {
+          "type": "turn.completed"
+        }
+      ]
+    },
+    {
+      "id": "umbreon-social",
+      "transport": "saved-login-codex-cli",
+      "modelRequested": "CLI default (user config not loaded)",
+      "modelReported": null,
+      "prompt": "This is a text-only diagnostic using fictional source material. Do not use tools, read files, browse, execute commands, or modify anything. Answer the provided request using only its source material.\n주어진 사실과 불확실성을 보존하고 요청한 실제 결과만 요청 크기로 작성. 도구 없으므로 실행 주장/약속 금지. 내부 대화는 자연스러운 해요체. 미제공 정보를 새로운 확정 사실로 채우지 않음.\nReturn only the requested JSON.\n\n주어진 자료:\n[pressure] 사용자는 검토가 늘 거절로 끝난다고 느끼지만 확인되지 않은 성과를 사실로 쓰자는 요청은 철회하지 않았다.\n\n또 안 된다는 말이겠지? \"효과가 검증됐다\" 대신 오늘 써도 되는 말 하나만 주고 끝내 줘. 잔소리는 싫어.",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer",
+          "nextAction"
+        ]
+      },
+      "command": [
+        "codex",
+        "exec",
+        "--ignore-user-config",
+        "--ephemeral",
+        "--sandbox",
+        "read-only",
+        "--skip-git-repo-check",
+        "--cd",
+        "/tmp/moonlight-office-codex-probe.workspace",
+        "--config",
+        "web_search=\"disabled\"",
+        "--output-schema",
+        "/tmp/moonlight-office-codex-probe.schema.json",
+        "--json",
+        "-"
+      ],
+      "elapsedMs": 6973,
+      "exitCode": 0,
+      "error": null,
+      "answer": {
+        "answer": "효과가 기대돼요.",
+        "nextAction": "이 표현으로 바꿔 쓰세요."
+      },
+      "finalText": "{\"answer\":\"효과가 기대돼요.\",\"nextAction\":\"이 표현으로 바꿔 쓰세요.\"}",
+      "usage": {
+        "input_tokens": 15374,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 34,
+        "reasoning_output_tokens": 0
+      },
+      "toolCallsObserved": 0,
+      "events": [
+        {
+          "type": "thread.started"
+        },
+        {
+          "type": "turn.started"
+        },
+        {
+          "type": "item.completed",
+          "itemType": "error",
+          "status": null
+        },
+        {
+          "type": "item.completed",
+          "itemType": "agent_message",
+          "status": null
+        },
+        {
+          "type": "turn.completed"
+        }
+      ]
+    },
+    {
+      "id": "glaceon-social",
+      "transport": "saved-login-codex-cli",
+      "modelRequested": "CLI default (user config not loaded)",
+      "modelReported": null,
+      "prompt": "This is a text-only diagnostic using fictional source material. Do not use tools, read files, browse, execute commands, or modify anything. Answer the provided request using only its source material.\n주어진 사실과 불확실성을 보존하고 요청한 실제 결과만 요청 크기로 작성. 도구 없으므로 실행 주장/약속 금지. 내부 대화는 자연스러운 해요체. 미제공 정보를 새로운 확정 사실로 채우지 않음.\nReturn only the requested JSON.\n\n주어진 자료:\n[request] 사용자는 작은 수정 하나만 검토하고 싶고 새로운 기능 목록이나 장기 로드맵을 원하지 않는다.\n\n오늘은 엄청난 제품 기획 말고 \"저장 뒤 다시 열기\" 하나면 돼. 그 선만 명료하게 확인해 주고 끝내 줘.",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer",
+          "nextAction"
+        ]
+      },
+      "command": [
+        "codex",
+        "exec",
+        "--ignore-user-config",
+        "--ephemeral",
+        "--sandbox",
+        "read-only",
+        "--skip-git-repo-check",
+        "--cd",
+        "/tmp/moonlight-office-codex-probe.workspace",
+        "--config",
+        "web_search=\"disabled\"",
+        "--output-schema",
+        "/tmp/moonlight-office-codex-probe.schema.json",
+        "--json",
+        "-"
+      ],
+      "elapsedMs": 9583,
+      "exitCode": 0,
+      "error": null,
+      "answer": {
+        "answer": "검토 범위는 \"저장한 뒤 다시 열었을 때 정상적으로 복원되는지\" 한 가지예요. 새로운 기능이나 장기 로드맵은 포함하지 않아요.",
+        "nextAction": "저장 후 다시 열기 동작만 확인하면 돼요."
+      },
+      "finalText": "{\"answer\":\"검토 범위는 \\\"저장한 뒤 다시 열었을 때 정상적으로 복원되는지\\\" 한 가지예요. 새로운 기능이나 장기 로드맵은 포함하지 않아요.\",\"nextAction\":\"저장 후 다시 열기 동작만 확인하면 돼요.\"}",
+      "usage": {
+        "input_tokens": 11983,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 113,
+        "reasoning_output_tokens": 37
+      },
+      "toolCallsObserved": 0,
+      "events": [
+        {
+          "type": "thread.started"
+        },
+        {
+          "type": "turn.started"
+        },
+        {
+          "type": "item.completed",
+          "itemType": "agent_message",
+          "status": null
+        },
+        {
+          "type": "turn.completed"
+        }
+      ]
+    }
+  ]
+}

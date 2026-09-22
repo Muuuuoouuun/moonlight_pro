@@ -1,0 +1,11 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {generateGeminiText} from '/Users/clmagi/Desktop/Projects/moonlight_pro-office-grounding/apps/engine/lib/gemini.ts';
+const rows=readFileSync('/tmp/moonlight-office-source-enum-check.provider.jsonl','utf8').trim().split('\n').map(JSON.parse);
+const request=rows.find(row=>row.response.status===400).request;
+const originalFetch=globalThis.fetch;let upstream;
+globalThis.fetch=async(url,init)=>{const response=await originalFetch(url,init);upstream={status:response.status,data:await response.clone().json()};return response;};
+const response=await generateGeminiText({...request,signal:AbortSignal.timeout(45000)});
+const result={kind:'development-error-reproduction',request,response,upstream};
+let output=JSON.stringify(result,null,2);for(const key of [process.env.GEMINI_API_KEY,process.env.GOOGLE_GENERATIVE_AI_API_KEY].filter(Boolean))output=output.replaceAll(key,'[redacted]');
+writeFileSync('/tmp/moonlight-office-enum-error.json',output,{flag:'wx',mode:0o600});
+process.stdout.write(JSON.stringify({status:upstream.status,error:upstream.data.error})+'\n');

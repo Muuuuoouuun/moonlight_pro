@@ -1,0 +1,1 @@
+{"type": "object", "additionalProperties": false, "properties": {"answer": {"type": "string"}, "nextAction": {"type": "string"}}, "required": ["answer", "nextAction"]}
