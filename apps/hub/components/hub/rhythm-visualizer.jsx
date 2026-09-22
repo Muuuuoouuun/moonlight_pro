@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Card, Badge, Button, Progress, Sparkline } from "./hub-primitives";
-import { StreakFlame } from "./burning-streak";
+import { StreakMark } from "./burning-streak";
 
 // 기본 요일 메타 (최근 7일 레이블 및 요일별 몰입-성과 기본 시뮬레이션/계측 모델)
 const DAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
@@ -105,11 +105,11 @@ export function RhythmVisualizer({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              background: "rgba(255, 120, 50, 0.12)",
-              border: "1px solid rgba(255, 140, 70, 0.3)",
+              background: "var(--surface-3)",
+              border: "1px solid var(--line)",
             }}
           >
-            <StreakFlame size={18} burning={longestStreak >= 3 || ritualCompleted > 0} />
+            <StreakMark size={18} level={longestStreak >= 14 ? 4 : longestStreak >= 7 ? 3 : longestStreak >= 3 ? 2 : (longestStreak >= 1 || ritualCompleted > 0) ? 1 : 0} />
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -202,7 +202,7 @@ export function RhythmVisualizer({
             루틴 & 성과 지수
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-            <span className="stat" style={{ fontSize: 20, fontWeight: 600, color: "#ff8a43" }}>{avgPerformance}</span>
+            <span className="stat" style={{ fontSize: 20, fontWeight: 600, color: "var(--moon-200)" }}>{avgPerformance}</span>
             <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>/ 100 pt</span>
             <span className="mono" style={{ fontSize: 11, color: "var(--fg-muted)", marginLeft: "auto" }}>루틴 {ritualRate}%</span>
           </div>
@@ -228,7 +228,7 @@ export function RhythmVisualizer({
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--moon-400)" }} /> 몰입 시간 (h)
                 </span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ff7836" }} /> 성과 점수 (pt)
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--moon-200)" }} /> 성과 점수 (pt · 점선)
                 </span>
               </div>
             </div>
@@ -262,7 +262,8 @@ export function RhythmVisualizer({
                       return i === 0 ? `M ${x} ${y}` : `${acc} L ${x} ${y}`;
                     }, "")}
                     fill="none"
-                    stroke="#ff7836"
+                    stroke="var(--moon-200)"
+                    strokeDasharray="5 3"
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -330,7 +331,7 @@ export function RhythmVisualizer({
                         cx={x}
                         cy={outcomeY}
                         r={isHovered ? 6 : 4.5}
-                        fill="#ff7836"
+                        fill="var(--moon-200)"
                         stroke="var(--surface)"
                         strokeWidth="2"
                         style={{ transition: "r var(--dur-hover) ease" }}
@@ -369,7 +370,7 @@ export function RhythmVisualizer({
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: "#ff8a43" }}>
+                <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--moon-200)" }}>
                   {matrixDays[hoveredDay !== null ? hoveredDay : 2].day}요일 집중 인사이트
                 </span>
                 <span style={{ fontSize: 12, color: "var(--fg)" }}>
@@ -380,7 +381,7 @@ export function RhythmVisualizer({
                 <span>몰입: <strong className="mono">{matrixDays[hoveredDay !== null ? hoveredDay : 2].focusHours}시간</strong></span>
                 <span>업로드: <strong className="mono">{matrixDays[hoveredDay !== null ? hoveredDay : 2].uploads}건</strong></span>
                 <span>할일 완료: <strong className="mono">{matrixDays[hoveredDay !== null ? hoveredDay : 2].tasksDone}건</strong></span>
-                <span style={{ color: "#ff8a43" }}>성과 점수: <strong className="mono">{matrixDays[hoveredDay !== null ? hoveredDay : 2].outcomes}pt</strong></span>
+                <span style={{ color: "var(--moon-200)" }}>성과 점수: <strong className="mono">{matrixDays[hoveredDay !== null ? hoveredDay : 2].outcomes}pt</strong></span>
               </div>
             </div>
 
@@ -432,7 +433,7 @@ export function RhythmVisualizer({
                       padding: "12px 14px",
                       borderRadius: "var(--r-sm)",
                       background: "var(--surface-2)",
-                      border: `1px solid ${isDone ? "rgba(255, 209, 102, 0.35)" : "var(--line-soft)"}`,
+                      border: `1px solid ${isDone ? "var(--line-strong)" : "var(--line-soft)"}`,
                       display: "flex",
                       flexDirection: "column",
                       gap: 6,
@@ -448,12 +449,12 @@ export function RhythmVisualizer({
                             fontWeight: 600,
                             padding: "1px 6px",
                             borderRadius: 4,
-                            background: "rgba(255, 209, 102, 0.15)",
-                            color: "#ffd166",
-                            border: "1px solid rgba(255, 209, 102, 0.35)",
+                            background: "var(--surface-3)",
+                            color: "var(--fg)",
+                            border: "1px solid var(--line-strong)",
                           }}
                         >
-                          ✦ {ch.count}/{ch.goal} 완료
+                          {ch.count}/{ch.goal} 완료
                         </span>
                       ) : (
                         <Badge tone={ch.tone} size="xs">{ch.count}/{ch.goal}개</Badge>
@@ -493,12 +494,12 @@ export function RhythmVisualizer({
                           width: 32,
                           height: 32,
                           borderRadius: "var(--r-sm)",
-                          background: hasUpload ? "rgba(255, 120, 50, 0.15)" : "var(--surface-3)",
-                          border: `1px solid ${hasUpload ? "#ff7836" : "var(--line-soft)"}`,
+                          background: hasUpload ? "var(--surface-3)" : "var(--surface-2)",
+                          border: `1px solid ${hasUpload ? "var(--line-strong)" : "var(--line-soft)"}`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          color: hasUpload ? "#ff9a52" : "var(--fg-faint)",
+                          color: hasUpload ? "var(--fg)" : "var(--fg-faint)",
                           fontSize: 12,
                           fontWeight: 600,
                         }}
@@ -564,7 +565,7 @@ export function RhythmVisualizer({
               <div style={{ padding: "14px", borderRadius: "var(--r-sm)", background: "var(--surface-2)", border: "1px solid var(--line-soft)" }}>
                 <div style={{ fontSize: 11, color: "var(--fg-faint)" }}>답글 및 직접 문의</div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 6 }}>
-                  <span className="stat" style={{ fontSize: 22, fontWeight: 600, color: "#ff8a43" }}>{perf.inquiries}</span>
+                  <span className="stat" style={{ fontSize: 22, fontWeight: 600, color: "var(--moon-200)" }}>{perf.inquiries}</span>
                   <span className="mono" style={{ fontSize: 11, color: "var(--fg-muted)" }}>{perf.inquiriesDelta}</span>
                 </div>
                 <div style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 10 }}>

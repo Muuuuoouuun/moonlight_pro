@@ -174,7 +174,7 @@
   height: 100dvh;
   width: 100%;
   overflow: hidden;
-  transition: background 0.2s, color 0.2s;
+  transition: background var(--dur-enter) var(--ease-hub), color var(--dur-enter) var(--ease-hub);
 }
 .hub-app button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
 .hub-app input, .hub-app textarea { font-family: inherit; color: inherit; }
@@ -750,57 +750,14 @@
   animation: mlMoonPulse 1.4s ease-in-out infinite;
 }
 
-/* Burning Streak Motion */
-@keyframes mlFlameFlicker {
-  0%, 100% {
-    transform: scale(1) rotate(0deg);
-    filter: drop-shadow(0 0 3px rgba(255, 115, 55, 0.45));
-  }
-  25% {
-    transform: scale(1.08) rotate(-2deg);
-    filter: drop-shadow(0 0 6px rgba(255, 140, 70, 0.7));
-  }
-  50% {
-    transform: scale(0.96) rotate(1.5deg);
-    filter: drop-shadow(0 0 4px rgba(255, 100, 40, 0.5));
-  }
-  75% {
-    transform: scale(1.06) rotate(-1deg);
-    filter: drop-shadow(0 0 7px rgba(255, 155, 80, 0.75));
-  }
-}
-
-@keyframes mlBurnGlow {
-  0%, 100% {
-    border-color: rgba(255, 120, 50, 0.35);
-    box-shadow: 0 0 0 1px rgba(255, 120, 50, 0.2), 0 2px 10px -2px rgba(255, 100, 40, 0.15);
-  }
-  50% {
-    border-color: rgba(255, 145, 75, 0.6);
-    box-shadow: 0 0 0 1.5px rgba(255, 145, 75, 0.35), 0 4px 16px -2px rgba(255, 120, 50, 0.3);
-  }
-}
-
+/* 연속 완주 모션 — 완료 순간의 1회 팝만 남긴다.
+   2026-09-21까지 여기에는 mlFlameFlicker 1.8s·mlBurnGlow 2.4s 무한 애니메이션과 앰버 원색
+   12건이 있었다. DESIGN.md §9는 라이브 인디케이터 duration을 mlMoonPulse 1.4s 하나로 고정하고
+   §4는 warm amber 재도입을 금지한다. 지표는 burning-streak.jsx의 중립 기하가 그대로 나른다. */
 @keyframes mlBurnPop {
   0% { transform: scale(0.9); opacity: 0.8; }
   50% { transform: scale(1.1); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
-}
-
-.hub-app .hub-streak-flame--burning {
-  animation: mlFlameFlicker 1.8s ease-in-out infinite;
-  transform-origin: center bottom;
-  will-change: transform, filter;
-}
-
-.hub-app .hub-streak-badge--burning {
-  animation: mlBurnGlow 2.4s ease-in-out infinite;
-  will-change: border-color, box-shadow;
-}
-
-.hub-app .hub-streak-badge--milestone {
-  border-color: rgba(255, 209, 102, 0.45) !important;
-  box-shadow: 0 0 12px -2px rgba(255, 209, 102, 0.35);
 }
 
 .hub-app .hub-streak-pop {
@@ -808,8 +765,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hub-app .hub-streak-flame--burning,
-  .hub-app .hub-streak-badge--burning,
   .hub-app .hub-streak-pop {
     animation: none;
   }
@@ -1691,7 +1646,7 @@
     transform: translateX(-104%);
     visibility: hidden;
     pointer-events: none;
-    transition: transform 0.18s ease, visibility 0s linear 0.18s;
+    transition: transform var(--dur-panel) var(--ease-hub), visibility 0s linear var(--dur-panel);
     box-shadow: var(--shadow-pop);
   }
 

@@ -15,7 +15,7 @@ import {
   extractWeeklyExperiment,
 } from "@/lib/ai-workflow-client";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
-import { BurningStreakBadge, StreakFlame } from "../burning-streak";
+import { BurningStreakBadge, StreakMark } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
@@ -1064,7 +1064,7 @@ function StatusLine({ state, onRetry }) {
           className="daily-brief__status-toggle"
         >
           <span>{open ? '기록 숨기기' : `기록 ${sourceCount}`}</span>
-          <Iconed name="chevronD" size={10} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          <Iconed name="chevronD" size={10} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur-hover) var(--ease-hub)' }} />
         </button>
       )}
       {open && (
@@ -1344,24 +1344,24 @@ function RhythmPanel({ onNavigate }) {
             {summary.longestStreak > 0 && (
               <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 11, color: 'var(--fg-muted)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <StreakFlame size={15} burning={summary.longestStreak >= 3} />
+                  <StreakMark size={15} level={summary.longestStreak >= 7 ? 3 : summary.longestStreak >= 3 ? 2 : summary.longestStreak >= 1 ? 1 : 0} />
                   <span>
                     최장 <span className="mono" style={{ color: 'var(--fg)', fontWeight: 600 }}>{summary.longestStreak}일</span>
                     {summary.longestStreakRitual ? ` · ${summary.longestStreakRitual}` : ''}
                   </span>
                 </div>
+                {/* 3일 이상도 색이 아니라 명도·보더 한 단계로만 구분한다 (DESIGN.md 5.2). */}
                 <span
-                  className={summary.longestStreak >= 3 ? "hub-streak-badge--burning" : ""}
                   style={{
                     fontSize: 10.5,
                     padding: '2px 6px',
                     borderRadius: 'var(--r-xs)',
-                    background: summary.longestStreak >= 3 ? 'rgba(255,120,50,0.1)' : 'var(--surface-3)',
-                    color: summary.longestStreak >= 3 ? '#ff9a52' : 'var(--fg-dim)',
-                    border: `1px solid ${summary.longestStreak >= 3 ? 'rgba(255,140,70,0.3)' : 'var(--line-soft)'}`,
+                    background: 'var(--surface-3)',
+                    color: summary.longestStreak >= 3 ? 'var(--fg)' : 'var(--fg-dim)',
+                    border: `1px solid ${summary.longestStreak >= 3 ? 'var(--line)' : 'var(--line-soft)'}`,
                   }}
                 >
-                  {summary.longestStreak >= 3 ? `버닝 ${summary.longestStreak}일째 🔥` : `${summary.longestStreak}일 연속`}
+                  {`${summary.longestStreak}일 연속`}
                 </span>
               </div>
             )}

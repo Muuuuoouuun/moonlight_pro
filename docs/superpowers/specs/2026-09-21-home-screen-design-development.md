@@ -1,7 +1,8 @@
 # 첫 화면 디자인 디벨롭 기획 — 두 개의 홈을 하나로
 
 > 상태: **DRAFT · 권장안(운영자 확정 전)**. 본문의 `확정`은 기존 문서·커밋에 이미 남은 운영자 결정만 가리키고, 이 문서가 새로 제안하는 것은 전부 `권장`이다.
-> 작성일: 2026-09-21 (Asia/Seoul) · 브랜치 `09.bigmac1.02` · HEAD `d8e2abe`
+> 작성일: 2026-09-21 (Asia/Seoul) · 실측·추가 정리 2026-09-22
+> 주의: 이 문서는 브랜치명을 정본으로 적지 않는다(CLAUDE.md). §1.2의 미병합 사실은 작업 시점에 `git log <현재 브랜치>..claude/moonlight-home-futura`로 직접 확인한다 — 2026-09-21 확인 당시 현재 브랜치는 `09.bigmac1.02`였고 2026-09-22에 같은 워크트리가 `09.bigmac1.22`로 옮겨 갔다.
 > 상위 정본: [`docs/README.md`](../../README.md) 우선순위 → [`DESIGN.md`](../../../DESIGN.md) §3·§5·§7·§8.1·§11·§13·§15 → [운영자 프로필](../../operator-workflow-profile.md) → [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md)
 > 관계: [세 축·Action KPI 기획](2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md) §6.2가 첫 화면의 **데이터**(오늘 Top 3 = `tasks.meta.focus_dates`)를 정하고, 이 문서는 같은 화면의 **형태**(슬롯·폴드·텍스처)를 정한다. 둘은 같은 주에 맞물려야 한다 — §7 참조. 2026-09-20 운영자 재확정(캡처 → 오늘 할 일 순서)과 DESIGN.md §15 2026-09-18·19 확정(Futura)을 **둘 다** 지키는 것이 이 기획의 제약이다.
 > 근거: 로컬 dev(`:3000`, 라이브 Supabase read)에서 첫 화면 실측 — 데스크톱 1024×768·모바일 375×812 스크린샷과 `getBoundingClientRect()` 슬롯 높이. 코드 읽기: `pages/daily-brief.jsx`(1994줄)·`quick-capture.jsx`·`burning-streak.jsx`·`hub-tokens.css`·`motion.test.mjs`. 미병합 브랜치는 `git show`로 소스를 읽었다 — **`claude/moonlight-home-futura`를 실제로 띄워 보지는 않았다.** 운영 DB 규모·Vercel 배포 상태는 검증하지 않았다.
@@ -17,7 +18,7 @@
 1. **확정이 코드에 없다.** DESIGN.md §15의 2026-09-18·19 두 행(Futura 텍스처 레이어 + 셸·공용 컴포넌트 확장)은 `confirmed`인데 현재 브랜치에 병합되지 않았다. 다행히 충돌 면적은 작다 — 그 브랜치가 만진 10파일 중 현재 브랜치와 겹치는 것은 `DESIGN.md`와 `hub-app.jsx` **2개뿐**이다.
 2. **현행 첫 화면은 3.34폴드(데스크톱)·4.22폴드(모바일)다.** 실측 2562px / 3430px. DESIGN.md §3-1은 "5초 안에 지금 중요한 것"을, §13은 "12 cards above the fold"를 안티패턴으로 적는다. 슬롯은 정확히 12개다.
 3. **가장 큰 슬롯이 가장 덜 말한다.** 633px를 쓰는 「긴급 KA · 집중 고객 · 오늘 일정」 블록에서, 집중 고객 5행은 전부 `다음 행동 대기 · 기약 없음 · 최근 7. 7.`이고 다음 행동 문구는 `lead-enrichment.js`의 템플릿 2종이 돌려 쓴다. 5행이 같은 말을 한다.
-4. **팔레트 규칙이 첫 슬롯에서 깨져 있다.** `burning-streak.jsx`에 앰버·오렌지 원색 12건(`#ff5e00`·`rgba(255,110,40,…)` 등)과 무한 애니메이션 2종(1.8s·2.4s)이 있다. DESIGN.md §4는 warm gold/amber 재도입을 금지하고 §9는 라이브 인디케이터 duration을 1.4s 하나로 고정한다. 넘어간 이유는 명확하다 — `motion.test.mjs`의 정규식이 `\d+ms`만 잡아 **`s` 단위가 통과했고**, 팔레트 가드 테스트는 저장소에 아예 없다.
+4. **팔레트 규칙이 첫 슬롯에서 깨져 있다 — 그리고 첫 슬롯만이 아니다.** 2026-09-22 저장소 전역 스캔 결과 `apps/hub`의 warm(주황~노랑, 채도 0.25 초과) 원색은 **85건**, 원색 danger red까지 더하면 95건이다. 첫 화면 경로(`burning-streak.jsx` 16 · `daily-brief.jsx` 3 · `work.jsx` 5 · `hub-tokens.css` 스트릭 블록 12)가 36건이고, 나머지 49건은 `rhythm-visualizer.jsx`(16) · `revenue-heatmap.jsx`(8) · `celebration-fx.jsx`(6) · `overview.jsx`(4) · `hub-tokens.css` 골드 블록(14)에 있다. DESIGN.md §4는 warm gold/amber 재도입을 금지하고 §9는 라이브 인디케이터 duration을 1.4s 하나로 고정하는데, 넘어간 이유는 명확하다 — `motion.test.mjs`의 정규식이 `\d+ms`만 잡아 **`s` 단위가 통과했고**(무한 애니 `1.8s`·`2.4s` 포함), 팔레트 가드 테스트는 저장소에 **아예 없었다**.
 
 **권장.** 접근안 C — Futura를 병합한 뒤 두 홈을 **한 화면**으로 합치고, 12슬롯을 **6슬롯 · 2폴드**로 줄인다. 트리아지(j/k·1~9)는 "지금 결정할 것" 슬롯 안으로 들어가고, 오늘의 시간표는 Futura에서 그대로 가져온다. 새 원장·새 라우트·마이그레이션은 0이다. 상세는 §5·§8.
 
@@ -133,14 +134,31 @@ DESIGN.md §3-1: "첫 화면은 5초 안에 '지금 중요한 것'을 답한다.
 
 `apps/hub/components/hub/burning-streak.jsx`:
 
-| 위반 | 실측 | 근거 규칙 |
-|---|---|---|
-| warm amber/orange 원색 | `#ff9a52` `#ff5f2e` `#d9381e` `#ffe699` `#ffaa33` `#ff5e00` `#ff7836` `#ffd166` + `rgba(255,110,40,.08)` `rgba(255,130,60,.35)` `rgba(255,115,45,.09)` `rgba(255,130,60,.3)` — **12건** | §4 "Do not reintroduce: Warm gold / amber / champagne accents" · §5.2 "raw hex/OKLCH 금지" |
-| `#ff9a52` 1건 | `daily-brief.jsx` | 같음 |
-| 무한 애니메이션 2종 | `mlFlameFlicker 1.8s … infinite` · `mlBurnGlow 2.4s … infinite`(`hub-tokens.css`) | §9 "Live indicators: `mlMoonPulse 1.4s` — one duration everywhere" |
-| 이모지·게이미피케이션 카피 | `할 일 완성 1일째! 🔥` · `✦ 30일 레전드 완주` · `✦ 2주 챔피언` | §10 운영자 목소리 · §13 "Decorative icons used as filler" |
+저장소 전역 스캔(2026-09-22, `apps/hub`, `.next*` 제외, 색상환 hue 15~70 · 채도 0.25 초과):
 
-**왜 통과했는가.** `motion.test.mjs`의 탐지 정규식은 `const MS = /(?<![\w.-])\d+(?:\.\d+)?ms\b/` — **`ms`만 본다.** `1.8s`·`2.4s`는 잡히지 않는다. 팔레트(원색 hex/rgba)를 훑는 스윕 테스트는 저장소에 **존재하지 않는다**(`motion`·`focus-ring`·`button-hover`·`state-usage`·`no-mock-data`는 있다). 즉 이 12건은 규칙 위반이 아니라 **가드 공백**의 결과다. 규칙만 고치고 가드를 안 만들면 다음 병합에서 다시 늘어난다(§15 2026-09-16이 raw `ms` 45건에서 이미 배운 교훈).
+| 파일 | warm 원색 | 성격 |
+|---|---|---|
+| `components/hub/burning-streak.jsx` | 16 | 화염 그라디언트·버닝 배지 |
+| `components/hub/hub-tokens.css` | 26 | 스트릭 키프레임 12 + 골드 마일스톤 14 |
+| `components/hub/rhythm-visualizer.jsx` | 16 | 성과 점수 차트 계열 + 버닝 어휘 |
+| `components/hub/pages/revenue-heatmap.jsx` | 8 | 히트맵 색계열 |
+| `components/hub/celebration-fx.jsx` | 6 | 축하 골드 |
+| `components/hub/pages/work.jsx` | 5 | 버닝 발동 배지·리듬 행 |
+| `components/hub/pages/overview.jsx` | 4 | 스파클 |
+| `components/hub/pages/daily-brief.jsx` | 3 | 스트릭 인라인 |
+| `lib/brand-content-log.js`(+테스트) | 7 | **§15 2026-09-01 확정 예외** — 브랜드 아이덴티티 팔레트 |
+| **합계(예외 제외)** | **85** | |
+
+여기에 원색 danger red 10건(`rgba(224, 86, 74, …)` 등 — 토큰 `var(--danger)`를 하드코딩한 사본)이 더해져 총 95건이다.
+
+| 위반 유형 | 근거 규칙 |
+|---|---|
+| warm amber/orange/gold 원색 85건 | §4 "Do not reintroduce: Warm gold / amber / champagne accents" · §5.2 "raw hex/OKLCH 금지" |
+| 무한 애니메이션 2종 `mlFlameFlicker 1.8s` · `mlBurnGlow 2.4s` | §9 "Live indicators: `mlMoonPulse 1.4s` — one duration everywhere" |
+| `s` 단위 모션 리터럴 10건(`0.15s`·`0.18s`·`0.2s`·`0.8s`·`2.4s`) | 같음 |
+| 이모지·게이미피케이션 카피 `할 일 완성 1일째! 🔥` · `✦ 30일 레전드 완주` · `버닝 발동 🔥` | §10 운영자 목소리 · §13 "Decorative icons used as filler" |
+
+**왜 통과했는가.** `motion.test.mjs`의 탐지 정규식은 `const MS = /(?<![\w.-])\d+(?:\.\d+)?ms\b/` — **`ms`만 봤다.** `1.8s`·`2.4s`는 잡히지 않았다. 팔레트(원색 hex/rgba)를 훑는 스윕 테스트는 저장소에 **존재하지 않는다**(`motion`·`focus-ring`·`button-hover`·`state-usage`·`no-mock-data`는 있다). 즉 이 12건은 규칙 위반이 아니라 **가드 공백**의 결과다. 규칙만 고치고 가드를 안 만들면 다음 병합에서 다시 늘어난다(§15 2026-09-16이 raw `ms` 45건에서 이미 배운 교훈).
 
 ### D6 — 확정과 코드가 분리돼 있다
 
@@ -287,6 +305,15 @@ DESIGN.md §15에 `confirmed`로 적힌 2026-09-18·19 결정이 현재 작업 �
 ## 8. 구현 순서와 완료 기준
 
 전부 `권장`이며, 순서는 의존성 기준이다. **새 테이블·마이그레이션 0.**
+
+> **진행(2026-09-22).** 주 1의 두 줄 — 가드 신설과 스트릭 중립화 — 을 먼저 끝냈다(미커밋).
+> 신규 `components/hub/palette.test.mjs`(warm hue 스윕 + 파일별 BASELINE 래칫 + §15 2026-09-01 브랜드 로그 예외),
+> `motion.test.mjs`의 `s` 단위 확장(`0s` 제외, 축하 연출 2종은 Q134까지 부채로 명시).
+> 정리한 파일: `burning-streak.jsx`(화염 → `StreakMark` 중립 기하) · `rhythm-visualizer.jsx`(차트 계열을 §5.3 명도+점선으로) ·
+> `work.jsx` · `daily-brief.jsx` · `hub-tokens.css`(스트릭 키프레임 제거) + `s` 단위 모션 리터럴 5건.
+> 결과: warm 원색 85 → **49**(전부 BASELINE에 박제), 루트 `npm test` **1537 · 실패 0**,
+> 첫 화면·리듬 화면의 **렌더된 warm 색 0건**(`getComputedStyle` 실측)·콘솔 에러 0.
+> **Futura 병합은 하지 않았다** — git 브랜치 작업이라 운영자 확인 뒤에 한다(Q132).
 
 | 주 | 묶음 | 규모 | 완료 기준 |
 |---|---|---|---|

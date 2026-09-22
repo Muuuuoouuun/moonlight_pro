@@ -94,7 +94,8 @@ test('ProgressRing exposes a bounded progress value and retains excess completio
     assert.match(markup, /font-size:12px/);
     if (value === 120) {
       assert.match(markup, /aria-valuetext="120% 달성, 목표보다 20% 초과"/);
-      assert.doesNotMatch(markup, /#ffd166/);
+      // Excess completion stays on Moonstone tokens — no raw hex (incl. the retired warm gold).
+      assert.doesNotMatch(markup, /#[0-9a-f]{3,8}\b/i);
     }
   }
 });
