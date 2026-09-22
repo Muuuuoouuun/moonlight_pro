@@ -1,0 +1,34 @@
+{
+  "checks": [
+    "pending customer request locks council controls",
+    "late A discussion never enters B; mode and input remain scoped",
+    "returning to A restores its settings, recorded turns and unsent follow-up input",
+    "390px customer panel controls remain within drawer"
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "ownerId": "flareon",
+      "scope": "personal",
+      "participants": [
+        "flareon",
+        "umbreon"
+      ],
+      "deliberation": {
+        "profile": "explore",
+        "challenge": 1,
+        "depth": 3,
+        "warmth": 2,
+        "convergence": 0,
+        "influence": {
+          "flareon": 1,
+          "umbreon": 3
+        }
+      }
+    }
+  ],
+  "screenshots": [
+    "/tmp/moonlight-office-quality-customer-1440-result.png",
+    "/tmp/moonlight-office-quality-customer-390-controls.png"
+  ]
+}

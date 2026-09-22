@@ -1,0 +1,30 @@
+{
+  "browser": "Browser plugin not available; regular Playwright with installed Chrome",
+  "url": "http://127.0.0.1:3017",
+  "checks": [
+    "settings preserve exact input; IME command Enter cannot submit",
+    "1440 light controls: no horizontal overflow",
+    "request contains chosen controls and result renders four validated turns",
+    "revision restores controls; mismatched response preserves input and adds no false turn",
+    "390 light controls: no horizontal overflow",
+    "390 light: keyboard setting activation",
+    "390 dark controls: no horizontal overflow",
+    "390 dark: keyboard setting activation",
+    "embedded weekly request uses selected participants and settings; turns render",
+    "saved legacy council results are labeled without fabricated discussion",
+    "390 embedded workflow: no horizontal overflow"
+  ],
+  "errors": [],
+  "screenshots": [
+    "/tmp/moonlight-office-quality-1440-light-controls.png",
+    "/tmp/moonlight-office-quality-1440-light-result.png",
+    "/tmp/moonlight-office-quality-390-light-controls.png",
+    "/tmp/moonlight-office-quality-390-dark-controls.png",
+    "/tmp/moonlight-office-quality-weekly-1440-dark-result.png",
+    "/tmp/moonlight-office-quality-weekly-390-dark-controls.png"
+  ],
+  "counts": {
+    "free": 2,
+    "workflow": 1
+  }
+}
