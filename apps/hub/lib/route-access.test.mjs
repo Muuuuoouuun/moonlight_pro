@@ -84,7 +84,7 @@ test("matcher 가 확장자 캐치올로 게이트를 끄지 않는다", async (
 
 test("dev 서버가 loopback 에만 바인딩된다", async () => {
   // `next dev` 기본값은 0.0.0.0 이라 같은 네트워크의 아무 기기나 닿는다. 그 상태에서
-  // Host: localhost 를 위조하면 loopback 분기가 열려 원장이 통째로 나갔다(2026-09-20 실측: 183KB).
+  // Host: localhost 를 위조하면 loopback 분기가 열려 기록이 통째로 나갔다(2026-09-20 실측: 183KB).
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.match(pkg.scripts.dev, /-H 127\.0\.0\.1/, "dev 서버가 LAN 에 노출된다");
 });
@@ -102,7 +102,7 @@ test("세션 비밀키가 없으면 통과가 아니라 차단이다", () => {
   assert.equal(deployed({ pathname: "/dashboard", secretConfigured: false }).action, "not-configured");
 });
 
-test("열어 둔 경로가 허브 원장 API 를 덮지 않는다", () => {
+test("열어 둔 경로가 허브 기록 API 를 덮지 않는다", () => {
   // OPEN_PREFIXES 에 `/api/hub` 같은 광범위한 값이 들어가면 게이트가 통째로 무력해진다.
   for (const prefix of [...OPEN_PREFIXES, ...OPEN_EXACT]) {
     assert.equal(isOpenPath("/api/hub/revenue"), false, `${prefix} 가 허브 API 를 열었다`);
@@ -123,7 +123,7 @@ test("저장소의 모든 허브 API 라우트가 게이트 대상이다", async
   assert.ok(paths.length >= 40, `허브 API 라우트를 찾지 못했다 (${paths.length}개)`);
 
   const open = paths.filter((path) => isOpenPath(path));
-  assert.deepEqual(open, [], `허브 원장 API 가 인증 없이 열려 있다:\n${open.join("\n")}`);
+  assert.deepEqual(open, [], `허브 기록 API 가 인증 없이 열려 있다:\n${open.join("\n")}`);
 });
 
 test("미들웨어가 판정 로직을 그대로 쓴다", async () => {

@@ -9,8 +9,8 @@ import { readRevenueCache } from "./revenue-shared-cache";
 
 // 레코드 검색(2026-08-05) — 팔레트가 페이지 내비만 하던 것을 "이름을 치면 그 레코드"로.
 // 이미 존재하는 딥링크(?customer= ?deal= ?task=)에 얹는 팔레트측 배선이라 새 API가 없다.
-// 60초 모듈 캐시: 1인용 도구에서 팔레트를 여닫을 때마다 원장을 다시 읽지 않는다.
-// Revenue 화면이 방금 받은 원장(SWR 공유 캐시)이 신선하면 재조회 없이 그대로 쓴다(8차 잔여 S).
+// 60초 모듈 캐시: 1인용 도구에서 팔레트를 여닫을 때마다 기록을 다시 읽지 않는다.
+// Revenue 화면이 방금 받은 기록(SWR 공유 캐시)이 신선하면 재조회 없이 그대로 쓴다(8차 잔여 S).
 let RECORDS_CACHE = { at: 0, items: [] };
 async function loadRecordItems() {
   if (Date.now() - RECORDS_CACHE.at < 60_000) return RECORDS_CACHE.items;

@@ -50,7 +50,7 @@ test("Roadmap consumes the shared ledger with truthful states and retry", () => 
   assert.match(block, /roadmap\.partial/);
   assert.match(block, /roadmap\.truncatedSources/);
   assert.match(block, /표시 한도를 넘어 일부만 표시합니다/);
-  assert.match(block, /일부 원장을 읽지 못했습니다/);
+  assert.match(block, /일부 기록을 읽지 못했습니다/);
   assert.match(block, /onClick=\{retry\}/);
   assert.match(block, /프로젝트로 돌아가기/);
 });

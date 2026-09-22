@@ -128,56 +128,56 @@ const PANEL_COPY = {
   projects: {
     title: '프로젝트 상태',
     icon: 'projects',
-    preview: ['프로젝트 원장 미연결', '프로젝트 원장을 연결하면 상태 분포가 표시됩니다.'],
-    error: ['프로젝트 원장 읽기 실패', '프로젝트 원장을 다시 읽은 뒤 상태 분포를 표시합니다.'],
-    partial: ['프로젝트 부분 데이터', '원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다.'],
+    preview: ['프로젝트 기록 미연결', '프로젝트 기록을 연결하면 상태 분포가 표시됩니다.'],
+    error: ['프로젝트 기록 읽기 실패', '프로젝트 기록을 다시 읽은 뒤 상태 분포를 표시합니다.'],
+    partial: ['프로젝트 부분 데이터', '기록의 일부만 읽혀 빈 상태로 확정할 수 없습니다.'],
     empty: ['프로젝트 데이터 없음', '프로젝트가 생기면 상태 분포가 표시됩니다.'],
     partialNotice: '프로젝트 부분 데이터 · 읽힌 프로젝트만 표시합니다.',
   },
   content: {
     title: '콘텐츠 파이프라인',
     icon: 'content',
-    preview: ['콘텐츠 원장 미연결', '콘텐츠 원장을 연결하면 파이프라인이 표시됩니다.'],
-    error: ['콘텐츠 원장 읽기 실패', '콘텐츠 원장을 다시 읽은 뒤 파이프라인을 표시합니다.'],
-    partial: ['콘텐츠 부분 데이터', '원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다.'],
+    preview: ['콘텐츠 기록 미연결', '콘텐츠 기록을 연결하면 파이프라인이 표시됩니다.'],
+    error: ['콘텐츠 기록 읽기 실패', '콘텐츠 기록을 다시 읽은 뒤 파이프라인을 표시합니다.'],
+    partial: ['콘텐츠 부분 데이터', '기록의 일부만 읽혀 빈 상태로 확정할 수 없습니다.'],
     empty: ['콘텐츠 데이터 없음', '콘텐츠 아이템이 생기면 파이프라인이 표시됩니다.'],
     partialNotice: '콘텐츠 부분 데이터 · 읽힌 항목만 표시합니다.',
   },
   brand: {
     title: '브랜드별 최근 활동',
     icon: 'brand',
-    preview: ['브랜드 활동 원장 미연결', '프로젝트 원장을 연결하면 브랜드별 활동이 표시됩니다.'],
-    error: ['브랜드 활동 원장을 읽지 못했습니다', '프로젝트 업데이트와 결정 원장을 다시 읽은 뒤 표시합니다.'],
-    partial: ['브랜드 활동 부분 데이터', '원장의 일부만 읽혀 비중을 확정할 수 없습니다.'],
+    preview: ['브랜드 활동 기록 미연결', '프로젝트 기록을 연결하면 브랜드별 활동이 표시됩니다.'],
+    error: ['브랜드 활동 기록을 읽지 못했습니다', '프로젝트 업데이트와 결정 기록을 다시 읽은 뒤 표시합니다.'],
+    partial: ['브랜드 활동 부분 데이터', '기록의 일부만 읽혀 비중을 확정할 수 없습니다.'],
     empty: ['브랜드 활동 없음', '프로젝트 업데이트·결정이 쌓이면 브랜드별 비중이 표시됩니다.'],
     partialNotice: '브랜드 활동 부분 데이터 · 읽힌 기록만 표시합니다.',
   },
   revenue: {
     title: '파이프라인 단계',
     icon: 'deals',
-    preview: ['매출 원장 미연결', '매출 원장을 연결하면 파이프라인 단계가 표시됩니다.'],
-    error: ['매출 원장 읽기 실패', '매출 원장을 다시 읽은 뒤 파이프라인을 표시합니다.'],
-    partial: ['매출 원장 부분 데이터', '원장의 일부만 읽혀 딜이 없다고 확정할 수 없습니다.'],
+    preview: ['매출 기록 미연결', '매출 기록을 연결하면 파이프라인 단계가 표시됩니다.'],
+    error: ['매출 기록 읽기 실패', '매출 기록을 다시 읽은 뒤 파이프라인을 표시합니다.'],
+    partial: ['매출 기록 부분 데이터', '기록의 일부만 읽혀 딜이 없다고 확정할 수 없습니다.'],
     empty: ['딜이 없습니다', '파이프라인에 딜이 생기면 단계별 분포가 표시됩니다.'],
-    partialNotice: '매출 원장 부분 데이터 · 읽힌 딜만 표시합니다.',
+    partialNotice: '매출 기록 부분 데이터 · 읽힌 딜만 표시합니다.',
   },
   automations: {
     title: '자동화 현황',
     icon: 'automations',
-    preview: ['자동화 원장 미연결', '자동화 원장을 연결하면 실행 현황이 표시됩니다.'],
-    error: ['자동화 원장 읽기 실패', '자동화 원장을 다시 읽은 뒤 실행 현황을 표시합니다.'],
-    partial: ['자동화 원장 부분 데이터', '원장의 일부만 읽혀 실행 수를 확정할 수 없습니다.'],
+    preview: ['자동화 기록 미연결', '자동화 기록을 연결하면 실행 현황이 표시됩니다.'],
+    error: ['자동화 기록 읽기 실패', '자동화 기록을 다시 읽은 뒤 실행 현황을 표시합니다.'],
+    partial: ['자동화 기록 부분 데이터', '기록의 일부만 읽혀 실행 수를 확정할 수 없습니다.'],
     empty: ['자동화 데이터 없음', '자동화가 생기면 실행 현황이 표시됩니다.'],
-    partialNotice: '자동화 원장 부분 데이터 · 읽힌 지표만 표시합니다.',
+    partialNotice: '자동화 기록 부분 데이터 · 읽힌 지표만 표시합니다.',
   },
   rhythm: {
     title: '리듬',
     icon: 'rhythm',
-    preview: ['리듬 원장 미연결', '리듬 원장을 연결하면 이번 주 체크인이 표시됩니다.'],
-    error: ['리듬 원장 읽기 실패', '리듬 원장을 다시 읽은 뒤 체크인을 표시합니다.'],
-    partial: ['리듬 원장 부분 데이터', '원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다.'],
+    preview: ['리듬 기록 미연결', '리듬 기록을 연결하면 이번 주 체크인이 표시됩니다.'],
+    error: ['리듬 기록 읽기 실패', '리듬 기록을 다시 읽은 뒤 체크인을 표시합니다.'],
+    partial: ['리듬 기록 부분 데이터', '기록의 일부만 읽혀 빈 상태로 확정할 수 없습니다.'],
     empty: ['루틴 기록 없음', '체크인이 기록되면 이번 주 리듬이 표시됩니다.'],
-    partialNotice: '리듬 원장 부분 데이터 · 읽힌 체크인만 표시합니다.',
+    partialNotice: '리듬 기록 부분 데이터 · 읽힌 체크인만 표시합니다.',
   },
 };
 
@@ -232,9 +232,9 @@ function ActivityChart({ series, days, sources, status }) {
     return (
       <EmptyState
         icon="signal"
-        title={availability.state === 'preview' ? '활동 원장 미연결' : '활동 원장 일부를 읽지 못했습니다'}
+        title={availability.state === 'preview' ? '활동 기록 미연결' : '활동 기록 일부를 읽지 못했습니다'}
         description={availability.state === 'preview'
-          ? '프로젝트·콘텐츠 원장을 연결하면 활동 추이가 표시됩니다.'
+          ? '프로젝트·콘텐츠 기록을 연결하면 활동 추이가 표시됩니다.'
           : `${availability.failedSegments.join(', ')} 기록을 다시 읽은 뒤 추이를 표시합니다.`}
         style={{ minHeight: 160 }}
       />
@@ -752,9 +752,9 @@ export function Overview({ onNavigate }) {
           />
         ) : (
           syncState === 'preview' ? (
-            <EmptyState icon="signal" title="활동 원장 미연결" description="프로젝트·콘텐츠 원장을 연결하면 활동 추이가 표시됩니다." action={<Button variant="outline" size="sm" onClick={() => onNavigate?.('dashboard/settings')}>연결 설정 열기</Button>} style={{ minHeight: 160 }} />
+            <EmptyState icon="signal" title="활동 기록 미연결" description="프로젝트·콘텐츠 기록을 연결하면 활동 추이가 표시됩니다." action={<Button variant="outline" size="sm" onClick={() => onNavigate?.('dashboard/settings')}>연결 설정 열기</Button>} style={{ minHeight: 160 }} />
           ) : syncState === 'error' || syncState === 'partial' ? (
-            <EmptyState icon="signal" title="활동 원장 일부를 읽지 못했습니다" description="지금 값은 불완전할 수 있습니다. 다시 읽어 주세요." action={<Button variant="outline" size="sm" onClick={reload}>다시 시도</Button>} style={{ minHeight: 160 }} />
+            <EmptyState icon="signal" title="활동 기록 일부를 읽지 못했습니다" description="지금 값은 불완전할 수 있습니다. 다시 읽어 주세요." action={<Button variant="outline" size="sm" onClick={reload}>다시 시도</Button>} style={{ minHeight: 160 }} />
           ) : (
             <EmptyState icon="signal" title="활동 기록이 없습니다" description="프로젝트 업데이트와 결정이 기록되면 추이가 표시됩니다." action={<Button variant="outline" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects')}>프로젝트 열기</Button>} style={{ minHeight: 160 }} />
           )
@@ -814,10 +814,10 @@ export function Overview({ onNavigate }) {
               {!recentActivityTruth.complete && (
                 <div role="status" style={{ padding: '10px 12px', marginBottom: activity.length ? 8 : 0, border: '1px dashed var(--line)', borderRadius: 'var(--r-sm)', color: 'var(--fg-muted)', fontSize: 11.5 }}>
                   {recentActivityTruth.reason === 'preview'
-                    ? `최근 활동 원장 미연결 · ${recentActivityTruth.unavailableSources.join(', ')} 원장을 연결하면 빈 상태를 확인할 수 있습니다.`
+                    ? `최근 활동 기록 미연결 · ${recentActivityTruth.unavailableSources.join(', ')} 기록을 연결하면 빈 상태를 확인할 수 있습니다.`
                     : recentActivityTruth.reason === 'partial'
-                      ? `최근 활동 원장 부분 데이터 · ${recentActivityTruth.unavailableSources.join(', ')} 기록이 일부만 읽혔습니다.`
-                      : `최근 활동 원장 일부를 읽지 못했습니다 · ${recentActivityTruth.unavailableSources.join(', ')} 기록을 다시 확인하세요.`}
+                      ? `최근 활동 기록 부분 데이터 · ${recentActivityTruth.unavailableSources.join(', ')} 기록이 일부만 읽혔습니다.`
+                      : `최근 활동 기록 일부를 읽지 못했습니다 · ${recentActivityTruth.unavailableSources.join(', ')} 기록을 다시 확인하세요.`}
                 </div>
               )}
               {activity.length === 0 ? (

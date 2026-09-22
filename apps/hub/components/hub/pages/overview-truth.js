@@ -4,7 +4,7 @@ const KPI_DEFINITIONS = [
     label: "작업 업데이트",
     hint: "프로젝트 진행 기록",
     failureHint: "프로젝트 업데이트 읽기 실패",
-    disconnectedHint: "프로젝트 업데이트 원장 미연결",
+    disconnectedHint: "프로젝트 업데이트 기록 미연결",
     tone: "moon",
     nav: "dashboard/work/projects",
     sparkKey: "work",
@@ -16,7 +16,7 @@ const KPI_DEFINITIONS = [
     label: "결정 기록",
     hint: "기획·판단 로그",
     failureHint: "결정 기록 읽기 실패",
-    disconnectedHint: "결정 기록 원장 미연결",
+    disconnectedHint: "결정 기록 미연결",
     tone: "neutral",
     nav: "dashboard/work/decisions",
     sparkKey: "decisions",
@@ -28,7 +28,7 @@ const KPI_DEFINITIONS = [
     label: "발행",
     hint: "콘텐츠 발행 완료",
     failureHint: "발행 기록 읽기 실패",
-    disconnectedHint: "발행 기록 원장 미연결",
+    disconnectedHint: "발행 기록 미연결",
     tone: "neutral",
     nav: "dashboard/content/queue",
     sparkKey: "content",
@@ -188,8 +188,8 @@ export function buildOverviewKpiCards({
       label: "진행 중 프로젝트",
       nav: "dashboard/work/projects",
       reason: projectContext.reason || "error",
-      failureHint: "프로젝트 원장 읽기 실패",
-      disconnectedHint: "프로젝트 원장 미연결",
+      failureHint: "프로젝트 기록 읽기 실패",
+      disconnectedHint: "프로젝트 기록 미연결",
     }));
     return cards;
   }
@@ -346,10 +346,10 @@ export function overviewDisclosureMessages({ failedSources = [], partialSources 
   const partial = unique(partialSources);
   return [
     ...(failed.length > 0
-      ? [{ kind: "failure", text: `일부 원장 읽기 실패 · ${failed.join(", ")}` }]
+      ? [{ kind: "failure", text: `일부 기록 읽기 실패 · ${failed.join(", ")}` }]
       : []),
     ...(partial.length > 0
-      ? [{ kind: "partial", text: `일부 원장 부분 집계 · ${partial.join(", ")}` }]
+      ? [{ kind: "partial", text: `일부 기록 부분 집계 · ${partial.join(", ")}` }]
       : []),
   ];
 }

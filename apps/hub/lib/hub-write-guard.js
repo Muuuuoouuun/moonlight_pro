@@ -129,7 +129,7 @@ export function assertHubWriteAllowed(req) {
     return null;
   }
 
-  // 원격 배포에는 로그인 레이어가 없다 — same-origin 브라우저 쓰기를 허용하면 원장이
+  // 원격 배포에는 로그인 레이어가 없다 — same-origin 브라우저 쓰기를 허용하면 기록이
   // 공개된다. 그래서 거절 자체는 유지하고, 운영자가 읽는 문구만 다음 행동을 지시하는
   // 한국어로 낸다(DESIGN.md §10). Origin/Referer가 있으면 브라우저에서 온 요청이다.
   const fromBrowser = Boolean(requestOrigin);

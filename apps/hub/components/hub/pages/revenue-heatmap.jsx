@@ -5,7 +5,7 @@
 // Moonlight 토큰으로 번역했다: 히트 램프는 문스톤 단색(color-mix), 서피스·라인 토큰만 사용.
 // 지표는 매출(확정=클로징) · 파이프라인(진행 중) · 예상(확정+파이프라인) 3단 —
 // 목표/달성률 개념은 미정이라 만들지 않는다.
-// 기간은 전체 · 최근(90/30일) · 월별 · 분기별 — 월/분기 후보는 원장 딜에서 동적으로 뽑는다.
+// 기간은 전체 · 최근(90/30일) · 월별 · 분기별 — 월/분기 후보는 기록 딜에서 동적으로 뽑는다.
 
 import React from "react";
 import { Badge, Card, Button, SyncBadge, SegmentedControl, EmptyState, IconButton, ScrollShadowX } from "../hub-primitives";
@@ -252,7 +252,7 @@ export function periodChipLabel(kind, key, nowYear) {
   return y === nowYear ? `Q${q}` : `${String(y % 100).padStart(2, "0")} Q${q}`;
 }
 
-// 원장 딜에서 실제 존재하는 월/분기 후보만 (lost·무날짜 제외, 최근 우선). 빈 칩 금지.
+// 기록 딜에서 실제 존재하는 월/분기 후보만 (lost·무날짜 제외, 최근 우선). 빈 칩 금지.
 export function dealPeriodCandidates(deals, kind, nowYear) {
   const keys = new Set();
   (deals || []).forEach(d => {
@@ -384,9 +384,9 @@ export function aggregate(ledger, { item, cutoff = null, range = null }, provinc
   };
 }
 
-// 본문 상태 — 원장이 아직 도착하지 않았거나(loading) 읽기에 실패했을 때(error) 0건을 "딜 없음"으로
+// 본문 상태 — 기록이 아직 도착하지 않았거나(loading) 읽기에 실패했을 때(error) 0건을 "딜 없음"으로
 // 위장하지 않는다(DESIGN §5.3 source truth). 캐시로 딜이 서빙되는 중이면 필터 결과가 곧 진실이므로
-// loading/error 분기는 원장 자체가 비었을 때만 탄다.
+// loading/error 분기는 기록 자체가 비었을 때만 탄다.
 export function heatmapBodyState({ syncState, ledgerDeals, matchedDeals }) {
   if (matchedDeals > 0) return "data";
   const ledgerEmpty = !ledgerDeals || ledgerDeals.length === 0;
@@ -435,7 +435,7 @@ export function RevenueHeatmap({ onNavigate }) {
   // 레일→지도 연동 하이라이트 (고객 순위 행 호버 시 해당 지역이 켜짐)
   const [linkedLabel, setLinkedLabel] = React.useState(null);
 
-  // 월/분기 후보는 원장 딜에서 실제 존재하는 것만 (최근 우선). 라벨은 현재 연도 기준.
+  // 월/분기 후보는 기록 딜에서 실제 존재하는 것만 (최근 우선). 라벨은 현재 연도 기준.
   const nowYear = new Date().getFullYear();
   const monthOptions = React.useMemo(
     () => dealPeriodCandidates(ledger.deals, "month", nowYear),
@@ -445,7 +445,7 @@ export function RevenueHeatmap({ onNavigate }) {
     () => dealPeriodCandidates(ledger.deals, "quarter", nowYear),
     [ledger.deals, nowYear],
   );
-  // 선택값이 후보에 없으면(초기 진입·원장 갱신) 가장 최근 후보로 폴백 — useEffect 동기화 없이 파생.
+  // 선택값이 후보에 없으면(초기 진입·기록 갱신) 가장 최근 후보로 폴백 — useEffect 동기화 없이 파생.
   const effectiveMonthKey = monthOptions.some(o => o.key === monthKey) ? monthKey : (monthOptions[0]?.key ?? null);
   const effectiveQuarterKey = quarterOptions.some(o => o.key === quarterKey) ? quarterKey : (quarterOptions[0]?.key ?? null);
 
@@ -541,10 +541,10 @@ export function RevenueHeatmap({ onNavigate }) {
       )}
 
       {bodyState === "loading" ? (
-        // 원장 첫 로드 — 0건 EmptyState 대신 중립 로딩 상태(§5.3: loading ≠ empty). 헤더 SyncBadge가 같은 상태를 말한다.
+        // 기록 첫 로드 — 0건 EmptyState 대신 중립 로딩 상태(§5.3: loading ≠ empty). 헤더 SyncBadge가 같은 상태를 말한다.
         <Card>
           <div role="status" aria-live="polite" style={{ minHeight: 220, padding: "32px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, textAlign: "center" }}>
-            <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--fg)" }}>매출 원장 불러오는 중…</div>
+            <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--fg)" }}>매출 기록 불러오는 중…</div>
             <div style={{ fontSize: 12, color: "var(--fg-faint)" }}>딜이 도착하면 지도와 고객 순위가 채워집니다.</div>
           </div>
         </Card>
@@ -553,7 +553,7 @@ export function RevenueHeatmap({ onNavigate }) {
         <Card>
           <EmptyState
             icon="x"
-            title="매출 원장을 읽지 못했습니다"
+            title="매출 기록을 읽지 못했습니다"
             description="지금 화면은 비어 보여도 실제 딜이 있을 수 있습니다. 연결이 복구되면 다시 읽어 주세요."
             action={reload ? <Button variant="secondary" size="sm" icon="runs" onClick={reload}>다시 읽기</Button> : undefined}
             style={{ minHeight: 220, padding: "32px 12px" }}

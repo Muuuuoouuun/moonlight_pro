@@ -64,7 +64,7 @@ test("compareProjectsByDue sorts by imminence and parks undated rows at the tail
     [...rows].sort(compareProjectsByDue).map(r => r.id),
     ["soon", "late", "none-a", "none-b", "bad"],
   );
-  // 무기한끼리는 원장 순서 유지 (Array.prototype.sort는 stable).
+  // 무기한끼리는 기록 순서 유지 (Array.prototype.sort는 stable).
   assert.equal(compareProjectsByDue({ dueAt: "" }, { dueAt: null }), 0);
   assert.ok(compareProjectsByDue({ dueAt: "2026-01-02" }, { dueAt: "2026-01-01" }) > 0);
   assert.equal(compareProjectsByDue({ dueAt: "2026-01-01" }, {}), -1);

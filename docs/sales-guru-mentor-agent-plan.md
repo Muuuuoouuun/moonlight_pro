@@ -9,16 +9,16 @@
 이미 존재하는 두 표면을 잇는다.
 
 - `apps/hub` 의 **Agents** 레이어 (`components/hub/pages/agents.jsx`, `COUNCIL` 페르소나)
-- `apps/hub` 의 **Revenue** 원장 (`pages/revenue.jsx` — leads / deals / cases / accounts)
+- `apps/hub` 의 **Revenue** 기록 (`pages/revenue.jsx` — leads / deals / cases / accounts)
 - `apps/engine` 의 **AI brief** 패턴 (`app/api/ai/brief/route.ts` + `lib/gemini.ts`)
 
-즉 "영업 데이터를 읽고, 멘토 관점으로 판단을 돌려주고, 그 판단을 원장에 다시 적는"
+즉 "영업 데이터를 읽고, 멘토 관점으로 판단을 돌려주고, 그 판단을 기록에 다시 적는"
 하나의 루프를 기존 자산 위에 얹는 것이 이 기획의 범위다.
 
 ## 2. 한 줄 제안
 
 > 세일즈 구루는 **딜을 대신 굴리는 실행자가 아니라, 운영자(파운더)의 영업 판단을
-> 옆에서 코칭하는 멘토 페르소나**다. Revenue 원장을 컨텍스트로 읽어
+> 옆에서 코칭하는 멘토 페르소나**다. Revenue 기록을 컨텍스트로 읽어
 > "지금 무엇을 놓치고 있는지 · 다음에 무엇을 해야 하는지"를 멘토 어조로 돌려준다.
 
 핵심 구분: Council의 기존 `Operator`/`Strategist`가 *작업을 실행/계획*한다면,
@@ -93,7 +93,7 @@ Guru는 이 공백을 메운다.
 
 ## 6. 데이터 / 연동 매핑
 
-Guru는 **새 데이터 소스를 만들지 않고** 기존 원장을 읽고 쓴다.
+Guru는 **새 데이터 소스를 만들지 않고** 기존 기록을 읽고 쓴다.
 
 **읽기 (입력 컨텍스트)**
 - `deals`, `leads`, `deal_stages` — `/api/hub/revenue` 가 노출하는 형태 그대로
@@ -143,7 +143,7 @@ Agents 표면은 Chat · Orders · Council만 유지하며, Guru는 동일 페�
 
 `brief/route.ts`의 `buildPrompt` 패턴을 확장. 한국어 3단 출력 골격을 유지한다.
 멘토의 **판단 프레임**은 3종 지식 베이스에서 가져오며(§14 매핑표가 모드별 1차 근거를 정의),
-**사실**(딜 상태·금액·접촉 이력)은 항상 원장에서만 인용하고 지식 베이스로 단정하지 않는다.
+**사실**(딜 상태·금액·접촉 이력)은 항상 기록에서만 인용하고 지식 베이스로 단정하지 않는다.
 지식 베이스는 토큰이 크므로 전체를 매 호출에 넣지 않고, 모드별로 필요한 섹션 발췌만
 systemInstruction에 주입한다(예: deal-review → Keenan 4층 + 의사결정 스타일표).
 
@@ -191,7 +191,7 @@ prompt(mode, context):
 | --- | --- | --- |
 | **P0 — 페르소나** | 페르소나 레지스트리에 guru 추가, Chat 진입 | UI에 멘토 등장 (preview 상태) |
 | **P1 — Engine 루프** | `ai/sales-mentor` route + Hub proxy, `pipeline-triage` 1개 모드 | 실제 LLM 코칭 1종 |
-| **P2 — 컨텍스트 심화** | `deal-review` / account 연동, project_updates 적재 | 딜 단위 진단 + 원장 기록 |
+| **P2 — 컨텍스트 심화** | `deal-review` / account 연동, project_updates 적재 | 딜 단위 진단 + 기록 |
 | **P3 — 회고/자동화** | `weekly-retro` 스케줄 오더, Runs 가시화 | 주간 자동 영업 회고 |
 
 P0는 데이터 변경 없이 프론트만으로 가치 검증 가능 → 가장 먼저 착수.
@@ -219,7 +219,7 @@ P0는 데이터 변경 없이 프론트만으로 가치 검증 가능 → 가장
 - [x] `apps/hub/components/hub/hub-data.js` — `COUNCIL`에 `guru` 추가
 - [x] `apps/hub/components/hub/pages/agents.jsx` — Chat 페르소나 분기(`?agent=guru`)
 - [x] `apps/engine/app/api/ai/sales-mentor/route.ts` — 신규 (brief route 템플릿, 4개 모드)
-- [x] `apps/hub/app/api/hub/sales-mentor/route.js` — Engine proxy (원장 컨텍스트 + shared secret)
+- [x] `apps/hub/app/api/hub/sales-mentor/route.js` — Engine proxy (기록 컨텍스트 + shared secret)
 - [x] `apps/hub/components/hub/pages/revenue.jsx` — Overview "Guru 코칭" 패널(`pipeline-triage`)
 - [x] `apps/hub/components/hub/guru-client.js` — 공용 클라이언트 헬퍼(`requestGuruCoaching`/`guruChatPath`)
 - [x] Deals 카드 `Guru에게 진단 요청` · Accounts `Ask Guru` → `deal-review` 딥링크
@@ -249,7 +249,7 @@ P0는 데이터 변경 없이 프론트만으로 가치 검증 가능 → 가장
 | `weekly-retro` | Girard 파일·팔로업, Lemkin churn·expansion, Hill 목표 | 스타일별 win/lost 패턴 | Godin 부족/허락(반복 고객) |
 
 **적용 규칙**
-- 지식 베이스는 **판단 프레임**으로만 쓰고, 사실은 항상 deals/accounts 원장에서 인용.
+- 지식 베이스는 **판단 프레임**으로만 쓰고, 사실은 항상 deals/accounts 기록에서 인용.
 - 마케팅 3인은 주로 메시지/제안/콘텐츠 코칭(`proposal-critique`)에서 발동 —
   영업 클로징 모드에서는 세일즈 12인이 우선, 마케팅은 보조.
 - 의사결정 스타일은 `deal-review`의 첫 단계(스타일 진단)로 항상 시도, 신호 부족 시 미확인 처리.
@@ -259,7 +259,7 @@ P0는 데이터 변경 없이 프론트만으로 가치 검증 가능 → 가장
 ### 부록 A. 한눈에 보는 데이터 흐름
 
 ```
-Revenue 원장 (deals/leads/accounts/cases)
+Revenue 기록 (deals/leads/accounts/cases)
         │  read
         ▼
 Hub proxy  ──(shared secret)──►  Engine /api/ai/sales-mentor

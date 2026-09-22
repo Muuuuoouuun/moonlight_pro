@@ -1,4 +1,4 @@
--- CRM 활동 원장 확장: crm_activities는 live DB에 이미 존재한다 (entity_type/kind 구조, 110행 실데이터).
+-- CRM 활동 기록 확장: crm_activities는 live DB에 이미 존재한다 (entity_type/kind 구조, 110행 실데이터).
 -- 이 마이그레이션은 기존 스키마를 유지한 채 Accounts 상세 패널 영속화 + Phase 1C 컨택 완료 시트가
 -- 필요로 하는 컬럼만 추가하고, kind 허용값에 카카오/견적/AI 자동기록을 넓힌다.
 --

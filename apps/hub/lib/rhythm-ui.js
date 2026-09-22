@@ -101,7 +101,7 @@ export function resolveRhythmCheckResult({ responseOk = false, httpStatus = 0, d
       kind: "saved",
       durable: true,
       shouldRefetch: true,
-      message: suppliedMessage || "체크인을 저장했습니다. 원장을 다시 확인합니다.",
+      message: suppliedMessage || "체크인을 저장했습니다. 기록을 다시 확인합니다.",
     };
   }
 

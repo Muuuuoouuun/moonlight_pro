@@ -20,7 +20,7 @@ const MAX_TASK_BODY_BYTES = 256 * 1024;
 
 export async function GET(req) {
   try {
-    // lean read (tasks·projects·brands 3콜) — 전체 프로젝트 원장 11+콜을 태우던 핫패스였다.
+    // lean read (tasks·projects·brands 3콜) — 전체 프로젝트 기록 11+콜을 태우던 핫패스였다.
     const ledger = await getTaskLedger();
 
     if (ledger.source === "error") {

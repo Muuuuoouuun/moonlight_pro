@@ -8,9 +8,9 @@ import { Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
 //
 // 데이터는 새로 만들지 않는다. /api/hub/daily-brief의 `signals`(kind·title·summary·meta·
 // source·decisions·tone)를 그대로 소비하고, 시간표는 Calendar가 쓰는 /api/calendar/google/event를
-// 공유한다. 첫 화면이 별도 원장을 갖는 순간 Daily Brief와 숫자가 갈라지기 때문이다.
+// 공유한다. 첫 화면이 별도 기록을 갖는 순간 Daily Brief와 숫자가 갈라지기 때문이다.
 //
-// 기존 daily-brief.jsx는 건드리지 않는다 — Home은 같은 원장 위의 다른 렌즈다.
+// 기존 daily-brief.jsx는 건드리지 않는다 — Home은 같은 기록 위의 다른 렌즈다.
 
 // daily-brief.jsx의 SIGNAL_TARGETS와 같은 표. 두 화면이 같은 신호를 다른 곳으로 보내면
 // 운영자가 "어느 쪽이 맞나"를 먼저 판단해야 한다.
@@ -113,7 +113,7 @@ function TriageDetail({ signal, onDecide }) {
       <div className="fx-card">
         <EmptyState
           title="오늘 결정할 신호가 없습니다"
-          description="새 신호는 원장이 갱신되면 여기에 쌓입니다."
+          description="새 신호는 기록이 갱신되면 여기에 쌓입니다."
         />
       </div>
     );

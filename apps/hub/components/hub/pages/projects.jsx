@@ -89,7 +89,7 @@ import {
   filterTodosByWorkspace,
 } from "../workspace-map";
 
-// 모듈 스코프 stale-while-revalidate — 탭 복귀마다 11~14콜 원장 read를 기다리며 트리가
+// 모듈 스코프 stale-while-revalidate — 탭 복귀마다 11~14콜 기록 read를 기다리며 트리가
 // 비던 것을 제거(4차 재감사 속도 M). 캐시 즉시 서빙 + 마운트마다 배경 재검증.
 const PROJECTS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let projectsLedgerCache = null; // { at, ledger, todos, syncState }
@@ -275,7 +275,7 @@ export function Projects({ workspace }) {
     ? (brands.find(b => b.key !== 'all')?.key || brands[0]?.key || 'all')
     : 'all';
   // 파생 목록 memo — 생성 드로어 타이핑(projectDraft만 변경)마다 트리·보드가 전부
-  // 재계산되던 것을 차단한다(system-eval P-7; deps는 원장·스코프 변화에만 반응).
+  // 재계산되던 것을 차단한다(system-eval P-7; deps는 기록·스코프 변화에만 반응).
   const brandProjects = React.useMemo(
     () => (brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand)),
     [allProjects, brand],
@@ -356,14 +356,14 @@ export function Projects({ workspace }) {
     return ['live', 'partial'].includes(syncState)
       ? `${projectCountLabel} projects · ${taskReadPartial ? `${openTodoCount}+ open todos` : `${openTodoCount} open todos`}`
       : syncState === 'loading'
-        ? '프로젝트 원장 확인 중'
+        ? '프로젝트 기록 확인 중'
         : syncState === 'error'
-          ? '프로젝트 원장 읽기 실패'
-          : 'preview · 실제 원장 미연결';
+          ? '프로젝트 기록 읽기 실패'
+          : 'preview · 실제 기록 미연결';
   })();
 
   // selectedProjectId를 deps에 넣으면 상세 열기/닫기(URL param 변경)마다 loadLedger가
-  // 재생성되고 마운트 이펙트가 전체 원장을 재조회한다 — 목록 탐색이 전부 네트워크 왕복이
+  // 재생성되고 마운트 이펙트가 전체 기록을 재조회한다 — 목록 탐색이 전부 네트워크 왕복이
   // 된다. 최신값은 ref로 읽고, 재조회는 아래의 "로드 창 밖 선택" 이펙트만 담당한다.
   const taskProjectSelection = isCanonicalUuid(taskFilters.projectId) ? taskFilters.projectId : null;
   const selectedProjectIdRef = React.useRef(selectedProjectId || taskProjectSelection);
@@ -378,9 +378,9 @@ export function Projects({ workspace }) {
     ledgerReadRef.current = { requestId, controller };
     const isCurrentRequest = () => ledgerReadRef.current.requestId === requestId;
 
-    // 최초/범위 전환은 명시적인 loading 상태를 쓰되, 저장 뒤 재검증은 현재 원장을
+    // 최초/범위 전환은 명시적인 loading 상태를 쓰되, 저장 뒤 재검증은 현재 기록을
     // 유지한다. 성공 여부가 정해지기 전까지 행 전체가 사라지는 깜빡임을 막는다.
-    setSyncState(current => (['live', 'partial'].includes(current) ? current : 'loading')); // 캐시/현재 원장 서빙 중엔 조용히 재검증
+    setSyncState(current => (['live', 'partial'].includes(current) ? current : 'loading')); // 캐시/현재 기록 서빙 중엔 조용히 재검증
     setReadError(null);
     try {
       const exactProjectId = typeof projectId === 'string' ? projectId.trim() : '';
@@ -393,7 +393,7 @@ export function Projects({ workspace }) {
 
       if (!response.ok || !data || data.status === 'error' || data.source === 'error') {
         setSyncState('error');
-        setReadError(data?.error || data?.message || `프로젝트 원장 응답 실패 (${response.status})`);
+        setReadError(data?.error || data?.message || `프로젝트 기록 응답 실패 (${response.status})`);
         return { ok: false, projects: [], todos: [] };
       }
 
@@ -481,7 +481,7 @@ export function Projects({ workspace }) {
     }
   }, []);
 
-  // ?project= 딥링크가 "원장 로드 후 1회" 계약(§8.1)을 지킬 수 있도록 최초 로드 완료를
+  // ?project= 딥링크가 "기록 로드 후 1회" 계약(§8.1)을 지킬 수 있도록 최초 로드 완료를
   // 기록한다 — syncState 초기값이 'preview'라서 상태만으로는 로드 전/후를 구분 못 한다.
   const initialLoadDoneRef = React.useRef(false);
   React.useEffect(() => {
@@ -491,7 +491,7 @@ export function Projects({ workspace }) {
 
   // 상세 열기(?project= 설정)에만 exact read — per-project updates/notes/decisions 보강
   // (selection read-back 계약)을 유지한다. 닫기(null)는 재조회하지 않는다: 이전에는 열기와
-  // 닫기 모두 전체 원장을 다시 읽어 목록 탐색이 왕복 2회짜리였다. 기존 원장을 유지한 채
+  // 닫기 모두 전체 기록을 다시 읽어 목록 탐색이 왕복 2회짜리였다. 기존 기록을 유지한 채
   // 백그라운드로 도는 재검증이라 로딩 깜빡임도 없다.
   React.useEffect(() => {
     if ((!selectedProjectId && !taskProjectSelection) || !initialLoadDoneRef.current) return;
@@ -499,7 +499,7 @@ export function Projects({ workspace }) {
   }, [selectedProjectId, taskProjectSelection, loadLedger]);
 
   // 프로젝트 상세의 "연관 콘텐츠" 섹션용. 상세를 실제로 열기 전에는 큰 콘텐츠
-  // 원장을 요청하지 않고, 성공한 첫 조회만 재사용한다.
+  // 기록을 요청하지 않고, 성공한 첫 조회만 재사용한다.
   React.useEffect(() => {
     if (!openDetail || contentLoadedRef.current) return undefined;
     const controller = new AbortController();
@@ -513,7 +513,7 @@ export function Projects({ workspace }) {
         }
         contentLoadedRef.current = true;
       } catch {
-        // 콘텐츠 원장 읽기 실패는 무시 — 상세 패널의 보조 섹션이다.
+        // 콘텐츠 기록 읽기 실패는 무시 — 상세 패널의 보조 섹션이다.
       }
     })();
     return () => { controller.abort(); };
@@ -879,7 +879,7 @@ export function Projects({ workspace }) {
         ? buildContentPipelineTaskSeeds(durableProjectId)
         : [];
       if (draft.contentPipeline) {
-        // 원장은 tasks를 updated_at.desc로 정렬한다(operating-ledger). 체크리스트가
+        // 기록은 tasks를 updated_at.desc로 정렬한다(operating-ledger). 체크리스트가
         // 기획→초안→검토→업로드로 위에서 아래로 읽히게 하려면 기획을 '마지막'에 생성해
         // 가장 최신이 되게 한다 → 역순 시드.
         for (const stage of [...pipelineSeeds].reverse()) {
@@ -919,7 +919,7 @@ export function Projects({ workspace }) {
         draft.contentPipeline
         && (!projectReloaded || !contentPipelineReloadContains(reloadResult, pipelineTaskIds))
       ) {
-        setOrderResult({ tone: 'err', label: '콘텐츠 4단계를 새 원장에서 확인하지 못했습니다' });
+        setOrderResult({ tone: 'err', label: '콘텐츠 4단계를 새 기록에서 확인하지 못했습니다' });
         return {
           ok: false,
           status: 'pipeline-error',
@@ -929,7 +929,7 @@ export function Projects({ workspace }) {
         };
       }
       if (!projectReloaded) {
-        setOrderResult({ tone: 'err', label: '저장 후 원장에서 프로젝트를 확인하지 못했습니다' });
+        setOrderResult({ tone: 'err', label: '저장 후 기록에서 프로젝트를 확인하지 못했습니다' });
         return {
           ok: false,
           status: 'reload-error',
@@ -1010,7 +1010,7 @@ export function Projects({ workspace }) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.status !== 'saved') {
         if (data.status === 'conflict' && data.project) {
-          const message = '최신 원장 기준을 불러왔습니다. 입력을 유지했으니 다시 저장하면 새 기준으로 재시도합니다.';
+          const message = '최신 기록 기준을 불러왔습니다. 입력을 유지했으니 다시 저장하면 새 기준으로 재시도합니다.';
           const rebasedEdit = rebaseProjectEditState(projectEditSource, projectDraft, data.project);
           setProjectEditSource(rebasedEdit.source);
           setProjectDraft(rebasedEdit.draft);
@@ -1104,7 +1104,7 @@ export function Projects({ workspace }) {
           return { ok: true, status: 'saved' };
         }
         if (data.status === 'preview') {
-          // 원장 행의 로컬 오버레이는 없다 — 저장 안 된 수정을 반영된 것처럼 그리지 않는다.
+          // 기록 행의 로컬 오버레이는 없다 — 저장 안 된 수정을 반영된 것처럼 그리지 않는다.
           return { ok: true, status: 'preview' };
         }
         setOrderResult({ tone: 'err', label: data.error || `수정 실패 ${response.status}` });
@@ -1194,7 +1194,7 @@ export function Projects({ workspace }) {
           setOrderResult({ tone: 'err', label: data.status === 'preview' ? '저장소 연결이 필요합니다.' : '할 일을 저장하지 못했습니다.' });
           return { ok: false, status: data.status || 'error' };
         }
-        // PATCH 응답의 task로 로컬 병합 — 영수증이 전체 원장 read를 기다리지 않는다.
+        // PATCH 응답의 task로 로컬 병합 — 영수증이 전체 기록 read를 기다리지 않는다.
         const saved = data.task || null;
         projectsLedgerCache = null;
         setTodos(ts => ts.map(t => t.id === patch.id ? mergeSavedTask(t, saved || {}, allProjects) : t));
@@ -1302,7 +1302,7 @@ export function Projects({ workspace }) {
 
   const applyTaskChanges = React.useCallback(async (rows, patch) => {
     if (!canWriteTasks || taskStatusPendingRef.current.size > 0) {
-      return { saved: [], failed: rows.map(task => ({ id: task.id, message: '원장을 확인하거나 진행 중인 저장이 끝난 뒤 다시 시도하세요.' })) };
+      return { saved: [], failed: rows.map(task => ({ id: task.id, message: '기록을 확인하거나 진행 중인 저장이 끝난 뒤 다시 시도하세요.' })) };
     }
     projectsLedgerCache = null;
     ledgerReadRef.current.controller?.abort();
@@ -1407,7 +1407,7 @@ export function Projects({ workspace }) {
   React.useEffect(() => {
     const onKey = (event) => {
       if (!shouldOpenGlobalProjectCreate(event, { drawerOpen })) return;
-      // 첫 원장 로드 전에는 areas가 비어 "업무 분야가 없습니다" 오탐 에러가 뜬다 —
+      // 첫 기록 로드 전에는 areas가 비어 "업무 분야가 없습니다" 오탐 에러가 뜬다 —
       // ?new=project 딥링크 이펙트와 같은 로드 완료 가드를 공유한다.
       if (!initialLoadDoneRef.current || syncState === 'loading') return;
       // N은 현재 뷰의 primary 생성을 따른다 — To-dos 뷰의 primary는 할 일 생성이라,
@@ -2087,13 +2087,13 @@ export function Projects({ workspace }) {
                 )}
                 {/* 로딩 중 본문이 비어 있던 자리 — 행 높이(68px)로 레이아웃을 예고한다(§11). preview/error엔 안 쓴다. */}
                 {syncState === 'loading' && projects.length === 0 && (
-                  <div style={{ padding: '12px 20px' }}><Skeleton lines={4} height={56} gap={12} label="프로젝트 원장 확인 중" /></div>
+                  <div style={{ padding: '12px 20px' }}><Skeleton lines={4} height={56} gap={12} label="프로젝트 기록 확인 중" /></div>
                 )}
                 {syncState === 'error' && (
                   <Card>
                     <EmptyState
                       icon="projects"
-                      title="프로젝트 원장을 읽지 못했습니다"
+                      title="프로젝트 기록을 읽지 못했습니다"
                       description={readError || "연결 상태를 확인한 뒤 다시 시도하세요. 실패한 읽기는 live로 표시하지 않습니다."}
                       action={<Button variant="outline" size="sm" onClick={() => loadLedger({ initial: true })}>다시 시도</Button>}
                     />
@@ -2103,7 +2103,7 @@ export function Projects({ workspace }) {
                   <Card>
                     <EmptyState
                       icon="projects"
-                      title="프로젝트 일부 원장을 읽지 못했습니다"
+                      title="프로젝트 일부 기록을 읽지 못했습니다"
                       description={`${[...(ledger.failedSources || []), ...(ledger.partialSources || [])].join(', ')} 기록 일부를 확인할 수 없습니다. 읽힌 프로젝트와 할 일 데이터는 유지합니다.`}
                       action={<Button variant="outline" size="sm" onClick={() => loadLedger({ initial: true })}>다시 시도</Button>}
                     />

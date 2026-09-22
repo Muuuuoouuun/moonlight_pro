@@ -82,7 +82,7 @@ export function ProjectExecutionBacklog({ model, projects, sourceState, partial 
     return (
       <div className="hub-pms-backlog scroll-y">
         <TruthBadge state={state} />
-        <EmptyState icon="tasks" title={state === 'loading' ? '작업을 불러오는 중입니다' : state === 'preview' ? '작업 원장을 연결해 주세요' : '작업을 확인하지 못했습니다'}
+        <EmptyState icon="tasks" title={state === 'loading' ? '작업을 불러오는 중입니다' : state === 'preview' ? '작업 기록을 연결해 주세요' : '작업을 확인하지 못했습니다'}
           description={state === 'preview' ? '연결된 작업이 있어야 백로그와 실행 상태를 관리할 수 있습니다.' : '확인되지 않은 작업을 빈 목록으로 표시하지 않습니다.'}
           action={state !== 'loading' ? <Button variant="outline" size="sm" onClick={onRetry}>다시 불러오기</Button> : null}
         />

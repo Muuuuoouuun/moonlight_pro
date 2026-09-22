@@ -80,7 +80,7 @@ function formatHour(value) {
 }
 
 // 모듈 스코프 stale-while-revalidate — Decisions↔Rhythm↔Roadmap 탭 전환은 훅을 리마운트해
-// 전환마다 업무 원장을 다시 기다렸다(8차 잔여 M). base(프로젝트 미선택) 응답만 캐시한다 —
+// 전환마다 업무 기록을 다시 기다렸다(8차 잔여 M). base(프로젝트 미선택) 응답만 캐시한다 —
 // 선택 스코프 응답은 base 스냅샷 복원 로직이 이미 담당.
 const WORK_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let workLedgerCache = null; // { at, state }
@@ -148,7 +148,7 @@ function useWorkLedger(projectId = null) {
           setState((prev) => ({ ...prev, syncState: 'partial' }));
           return false;
         }
-        const message = data?.error || data?.message || `업무 원장 응답 실패 (${response.status})`;
+        const message = data?.error || data?.message || `업무 기록 응답 실패 (${response.status})`;
         setState((prev) => ({
           ...prev,
           syncState: 'error',
@@ -274,7 +274,7 @@ function useWorkLedger(projectId = null) {
 
   React.useEffect(() => {
     // 로드맵 선택 해제(project param 제거)는 이미 받아둔 base 응답을 복원한다 — 선택/해제
-    // 왕복마다 업무 원장 전체를 다시 읽던 패턴 제거. 로드맵 뷰는 읽기 전용이라 선택 중
+    // 왕복마다 업무 기록 전체를 다시 읽던 패턴 제거. 로드맵 뷰는 읽기 전용이라 선택 중
     // base가 뒤에서 변하는 경로는 없고, 명시적 retry()는 여전히 네트워크로 간다.
     if (!projectQuery && baseSnapshotRef.current) {
       requestRef.current += 1; // 진행 중인 선택-스코프 응답 무효화
@@ -384,7 +384,7 @@ function useCalendarTasks(days) {
         setState({
           status: data.status || 'preview',
           tasks: Array.isArray(data.tasks) ? data.tasks : [],
-          message: data.status === 'preview' ? 'Task 원장 연결 후 기한을 표시합니다.' : '',
+          message: data.status === 'preview' ? 'Task 기록 연결 후 기한을 표시합니다.' : '',
         });
       })
       .catch(() => active && setState({ status: 'error', tasks: [], message: 'Task 기한을 불러오지 못했습니다.' }));
@@ -970,15 +970,15 @@ export function Decisions({ onNavigate, scope }) {
             <EmptyState
               icon="decisions"
               title={decisionSyncState === 'error'
-                ? '결정 원장 읽기 실패'
+                ? '결정 기록 읽기 실패'
                 : decisionSyncState === 'partial'
-                  ? '결정 원장 부분 데이터'
-                  : '결정 원장 미연결'}
+                  ? '결정 기록 부분 데이터'
+                  : '결정 기록 미연결'}
               description={decisionSyncState === 'error'
                 ? decisionsState?.error?.message || '결정 기록을 다시 읽은 뒤 빈 상태를 확인합니다.'
                 : decisionSyncState === 'partial'
                   ? '읽힌 결정만 표시하며, 기록이 없다고 확정하지 않습니다.'
-                  : 'Supabase decisions 원장을 연결하면 결정 타임라인이 표시됩니다.'}
+                  : 'Supabase decisions 기록을 연결하면 결정 타임라인이 표시됩니다.'}
               action={(decisionSyncState === 'error' || decisionSyncState === 'partial')
                 ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
                 : undefined}
@@ -1052,7 +1052,7 @@ export function Decisions({ onNavigate, scope }) {
           onChange={updateDraft}
           onClose={() => setEditDecisionId(null)}
           onSave={persistDecision}
-          // onDelete 없음은 의도: 결정 원장은 append-only 저널이다 — 번복은 지우는 게 아니라
+          // onDelete 없음은 의도: 결정 기록은 append-only 저널이다 — 번복은 지우는 게 아니라
           // 새 결정으로 기록한다 (Rhythm의 deleteRitual과 달리 이력 자체가 가치라서).
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: 4 }}>
@@ -1116,7 +1116,7 @@ export function Roadmap({ onNavigate }) {
     () => (Array.isArray(roadmap.brands) ? roadmap.brands : []),
     [roadmap.brands],
   );
-  // 원장이 다시 읽히면서 필터로 잡아둔 브랜드가 사라지면 조용히 전체로 돌아간다.
+  // 기록이 다시 읽히면서 필터로 잡아둔 브랜드가 사라지면 조용히 전체로 돌아간다.
   React.useEffect(() => {
     if (brandFilter !== 'all' && !roadmapBrands.some(b => b.key === brandFilter)) {
       setBrandFilter('all');
@@ -1192,7 +1192,7 @@ export function Roadmap({ onNavigate }) {
         <div role="status" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12, color: 'var(--fg-muted)' }}>
             {roadmap.failedSources.length > 0 && (
-              <span>일부 원장을 읽지 못했습니다 · {roadmap.failedSources.join(', ')}</span>
+              <span>일부 기록을 읽지 못했습니다 · {roadmap.failedSources.join(', ')}</span>
             )}
             {roadmap.truncatedSources.length > 0 && (
               <span>표시 한도를 넘어 일부만 표시합니다 · {roadmap.truncatedSources.join(', ')}</span>
@@ -1204,16 +1204,16 @@ export function Roadmap({ onNavigate }) {
 
       <Card pad={false} className="hub-table-card">
         {roadmap.state === 'loading' && (
-          <EmptyState icon="roadmap" title="로드맵을 읽는 중입니다" description="프로젝트와 마일스톤 원장을 확인하고 있습니다." style={{ minHeight: 220 }} />
+          <EmptyState icon="roadmap" title="로드맵을 읽는 중입니다" description="프로젝트와 마일스톤 기록을 확인하고 있습니다." style={{ minHeight: 220 }} />
         )}
         {roadmap.state === 'preview' && (
-          <EmptyState icon="roadmap" title="로드맵 원장이 연결되지 않았습니다" description="Supabase 연결 후 실제 프로젝트 일정만 표시됩니다." style={{ minHeight: 220 }} />
+          <EmptyState icon="roadmap" title="로드맵 기록이 연결되지 않았습니다" description="Supabase 연결 후 실제 프로젝트 일정만 표시됩니다." style={{ minHeight: 220 }} />
         )}
         {roadmap.state === 'error' && (
           <EmptyState
             icon="roadmap"
             title="로드맵을 읽지 못했습니다"
-            description={roadmap.error?.message || '프로젝트와 마일스톤 원장을 다시 확인해 주세요.'}
+            description={roadmap.error?.message || '프로젝트와 마일스톤 기록을 다시 확인해 주세요.'}
             action={<Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>}
             style={{ minHeight: 220 }}
           />
@@ -1391,7 +1391,7 @@ export function Rhythm() {
     setRitualEdits((prev) => ({ ...prev, [editRitualId]: { ...prev[editRitualId], [key]: value } }));
   };
 
-  // 새 루틴: /api/routine에 status:'pending' 씨앗 행 생성 → retry()로 원장을 다시 읽어
+  // 새 루틴: /api/routine에 status:'pending' 씨앗 행 생성 → retry()로 기록을 다시 읽어
   // mapRituals가 이 행을 리추얼로 집계하게 한다.
   // 기존 루틴 수정: 원래(overlay 적용 전) 값과 비교해 바뀐 필드만 /api/routine PATCH로
   // 보낸다 — 서버가 같은 ritualKey·matchProjectId를 가진 모든 행을 배치로 patch한다.
@@ -1411,7 +1411,7 @@ export function Rhythm() {
           return { ok: false, status: data.status || 'error' };
         }
         await retry();
-        // 라이브 원장이 이 루틴을 반영했으니 로컬 초안은 완전히 제거한다. render-time
+        // 라이브 기록이 이 루틴을 반영했으니 로컬 초안은 완전히 제거한다. render-time
         // dedup(identity 비교)만으로는 불충분하다 — 이후 이 루틴을 다시 편집해 연결
         // 프로젝트(=grouping key)가 바뀌면, identity가 더 이상 일치하지 않아 낡은 초안이
         // "안 보이는 상태"에서 벗어나 유령처럼 재등장한다.
@@ -1597,7 +1597,7 @@ export function Rhythm() {
 
       {rhythmState === 'error' && (
         <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
-          <span style={{ flex: 1, fontSize: 12, color: 'var(--danger)' }}>{rhythmError || '리듬 원장을 읽지 못했습니다. 체크인 상태를 확인하려면 다시 읽어 주세요.'}</span>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--danger)' }}>{rhythmError || '리듬 기록을 읽지 못했습니다. 체크인 상태를 확인하려면 다시 읽어 주세요.'}</span>
           <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
         </div>
       )}
@@ -1605,7 +1605,7 @@ export function Rhythm() {
       {rhythmState === 'partial' && (
         <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
           <span style={{ flex: 1, fontSize: 12, color: 'var(--fg-muted)' }}>
-            일부 기록만 표시합니다. {rhythmTruncatedSources.includes('routine_checks') ? 'routine_checks가 조회 한도를 초과해 최근 240건을 관측했습니다.' : '리듬 원장의 일부만 관측했습니다.'}
+            일부 기록만 표시합니다. {rhythmTruncatedSources.includes('routine_checks') ? 'routine_checks가 조회 한도를 초과해 최근 240건을 관측했습니다.' : '리듬 기록의 일부만 관측했습니다.'}
           </span>
           <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
         </div>
@@ -1661,7 +1661,7 @@ export function Rhythm() {
           <EmptyState
             icon="rhythm"
             title={selectedProjectId ? '선택한 프로젝트의 리듬이 없습니다' : '루틴 체크 기록이 없습니다'}
-            description={rhythmState === 'live-empty' ? 'Supabase routine_checks 기록이 비어 있습니다.' : rhythmState === 'error' ? '원장을 다시 읽은 뒤 체크인 상태를 확인해 주세요.' : rhythmState === 'partial' ? '일부 기록만 관측되어 전체 리듬 상태를 확정할 수 없습니다.' : '루틴을 만들면 매일 체크인할 항목이 여기에 표시됩니다.'}
+            description={rhythmState === 'live-empty' ? 'Supabase routine_checks 기록이 비어 있습니다.' : rhythmState === 'error' ? '기록을 다시 읽은 뒤 체크인 상태를 확인해 주세요.' : rhythmState === 'partial' ? '일부 기록만 관측되어 전체 리듬 상태를 확정할 수 없습니다.' : '루틴을 만들면 매일 체크인할 항목이 여기에 표시됩니다.'}
             action={rhythmState === 'error' || rhythmState === 'partial'
               ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
               : <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴</Button>}

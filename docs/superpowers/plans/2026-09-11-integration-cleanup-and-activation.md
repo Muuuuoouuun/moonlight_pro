@@ -1086,8 +1086,8 @@ COM_MOON_HUB_URL = "http://localhost:3000"
 Insert after the "대상 건수/기관" line in `.claude/commands/morning.md` and after the "아래를 순서대로 실행한다" line in `.claude/commands/team.md`:
 ```markdown
 ## 0. 도구 (Moonlight MCP — 등록됨)
-- 원장 읽기: `get_daily_brief`(긴급 KA·정체 딜·오늘 일정), `list_work_orders`, `list_tasks`, `list_projects`, `get_revenue`, `get_content`
-- 원장 쓰기(승인 큐 경유만): `create_task`, `decide_work_order`. 고객 발송·외부 실행 도구는 없다.
+- 기록 읽기: `get_daily_brief`(긴급 KA·정체 딜·오늘 일정), `list_work_orders`, `list_tasks`, `list_projects`, `get_revenue`, `get_content`
+- 기록 쓰기(승인 큐 경유만): `create_task`, `decide_work_order`. 고객 발송·외부 실행 도구는 없다.
 - `moonlight` MCP가 미연결이면 `/api/hub/*`를 직접 호출하지 말고 "도구 미연결"을 결과 맨 위에 적고 조회 단계만 수행한다.
 - 자문 생성(`request_council`, `request_sales_mentor`)은 반복 판단에만 쓴다. 같은 건에 이전 `runId`가 있으면 재생성 전에 `list_agent_runs`로 먼저 읽는다.
 ```
@@ -1222,7 +1222,7 @@ Replace everything from `## 현재 코드에 이미 있는 통합 뼈대` throug
 ## 제거된 연결 (2026-09-11 운영자 결정)
 
 Telegram(수신·n8n), OpenClaw, Gmail(OAuth·scan·send), Resend, Engine `/api/email/send`, Notion sync.
-코드·env·시드에서 제거했고 원장 행(`webhook_events` 108건, `openclaw`·`notion`·`slack` pending 행 등)은 이력으로 남긴다.
+코드·env·시드에서 제거했고 기록 행(`webhook_events` 108건, `openclaw`·`notion`·`slack` pending 행 등)은 이력으로 남긴다.
 ```
 Delete the later per-integration sections for Telegram, OpenClaw, Gmail/Email, Resend, Notion, and update the "현재 공개된 엔진 라우트" list (remove `/api/webhook/telegram`, `/api/email/send`).
 

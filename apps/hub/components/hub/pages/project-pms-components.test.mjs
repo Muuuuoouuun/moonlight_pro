@@ -167,7 +167,7 @@ test("portfolio presentation consumes the executable metric helper without synth
   assert.match(pmsComponentsSource, /projectCorePartial/);
   assert.match(pmsComponentsSource, /metrics\.lowerBound[\s\S]*\+`/);
   assert.match(pmsComponentsSource, /일부 범위/);
-  assert.match(pmsComponentsSource, /표시할 원장 없음/);
+  assert.match(pmsComponentsSource, /표시할 기록 없음/);
   assert.doesNotMatch(pmsComponentsSource, /preview에서는/);
   assert.doesNotMatch(`${pmsComponentsSource}\n${pmsMetricsSource}`, /AI.*(?:score|점수)|70\s*\/\s*30/i);
 });
@@ -241,7 +241,7 @@ test("project reads keep error distinct from preview and offer retry", () => {
 
   assert.match(loadBlock, /setSyncState\(['"]error['"]\)/);
   assert.match(loadBlock, /data\.source === ['"]error['"]/);
-  assert.match(projectsSource, /프로젝트 원장을 읽지 못했습니다/);
+  assert.match(projectsSource, /프로젝트 기록을 읽지 못했습니다/);
   assert.match(projectsSource, /onClick=\{\(\) => loadLedger\(\{ initial: true \}\)\}/);
   assert.doesNotMatch(loadBlock, /catch[\s\S]{0,120}setSyncState\(['"]preview['"]\)/);
 });
@@ -252,7 +252,7 @@ test("canonical project selection is forwarded to the Projects API before the bo
   const loadBlock = projectsSource.slice(loadStart, effectStart);
 
   assert.match(projectsSource.slice(0, loadStart), /const selectedProjectId = searchParams\.get\(['"]project['"]\)/);
-  // 선택값은 ref로 읽는다 — deps에 넣으면 상세 열기/닫기마다 마운트 이펙트가 전체 원장을
+  // 선택값은 ref로 읽는다 — deps에 넣으면 상세 열기/닫기마다 마운트 이펙트가 전체 기록을
   // 재조회한다(2026-08-05 perf). 선택 read-back은 아래 전용 이펙트가 담당한다.
   assert.match(projectsSource.slice(0, loadStart), /selectedProjectIdRef\.current = selectedProjectId/);
   assert.match(loadBlock, /projectId\s*=\s*selectedProjectIdRef\.current/);
@@ -284,7 +284,7 @@ test("mutation reloads keep the current ledger mounted while refreshing", () => 
   const effectStart = projectsSource.indexOf("React.useEffect", loadStart);
   const loadBlock = projectsSource.slice(loadStart, effectStart);
 
-  // SWR 캐시 도입(4차 재감사): initial 여부와 무관하게, 현재 원장이 live/partial이면
+  // SWR 캐시 도입(4차 재감사): initial 여부와 무관하게, 현재 기록이 live/partial이면
   // loading으로 덮지 않는다 — 뮤테이션 재검증과 캐시 서빙 마운트 둘 다 행을 유지한다.
   assert.match(loadBlock, /setSyncState\(current\s*=>[\s\S]{0,180}(live|partial)[\s\S]{0,180}loading/);
   assert.doesNotMatch(loadBlock, /^\s*setSyncState\(['"]loading['"]\);/m);
@@ -306,7 +306,7 @@ test("the linked-content ledger loads only when project detail is used", () => {
 
 test("partial project reads preserve core rows and offer a named retry state", () => {
   assert.match(projectsSource, /data\.partial \? ['"]partial['"] : ['"]live['"]/);
-  assert.match(projectsSource, /프로젝트 일부 원장을 읽지 못했습니다/);
+  assert.match(projectsSource, /프로젝트 일부 기록을 읽지 못했습니다/);
   assert.match(projectsSource, /ledger\.failedSources/);
   assert.match(projectsSource, /onClick=\{\(\) => loadLedger\(\{ initial: true \}\)\}/);
   assert.match(projectsSource, /failedSources=\{detailFailedSources\}/);
@@ -320,7 +320,7 @@ test("project detail distinguishes failed optional ledgers from successful empty
   assert.match(detailPanelSource, /연결 메모를 확인할 수 없습니다/);
   assert.match(detailPanelSource, /검색은 불러온 기록 안에서만 진행됩니다/);
   assert.match(detailPanelSource, /failedEmpty\("routine_checks"/);
-  assert.match(detailPanelSource, /\$\{source\} 원장을 읽지 못했습니다/);
+  assert.match(detailPanelSource, /\$\{source\} 기록을 읽지 못했습니다/);
   assert.match(detailPanelSource, /업데이트 기록 미확인/);
 });
 
@@ -339,8 +339,8 @@ test("project header marks an incomplete open-todo count as a lower bound", () =
   assert.match(headerSummaryBlock, /openTodoCount/);
   assert.match(headerSummaryBlock, /\$\{openTodoCount\}\+ open todos/);
   assert.match(headerSummaryBlock, /\$\{projectCountLabel\} projects/);
-  assert.match(headerSummaryBlock, /loading[\s\S]*원장 확인 중/);
-  assert.match(headerSummaryBlock, /error[\s\S]*원장 읽기 실패/);
+  assert.match(headerSummaryBlock, /loading[\s\S]*기록 확인 중/);
+  assert.match(headerSummaryBlock, /error[\s\S]*기록 읽기 실패/);
   assert.match(headerSummaryBlock, /preview/);
   assert.match(projectsSource, /\{projectHeaderSummary\}/);
   assert.match(projectsSource, /partialSources:\s*Array\.isArray\(data\.partialSources\)/);

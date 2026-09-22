@@ -6,7 +6,7 @@ const revenue = await readFile(new URL("./pages/revenue.jsx", import.meta.url), 
 const primitives = await readFile(new URL("./hub-primitives.jsx", import.meta.url), "utf8");
 
 // 리드 표면에는 편집 폼만 있었고 접촉 이력은 고객 DB/팔로업으로 나가야 볼 수 있었다.
-// Accounts DetailPanel과 같은 원장(crm_activities)을 리드 드로어 안에서 읽고 쓴다.
+// Accounts DetailPanel과 같은 기록(crm_activities)을 리드 드로어 안에서 읽고 쓴다.
 test("the lead drawer ships an activity panel wired to the crm_activities ledger", () => {
   assert.match(revenue, /function LeadActivityPanel\(\{ lead, onCountChange \}\)/);
   assert.match(revenue, /<LeadActivityPanel lead=\{editingLead\} onCountChange=\{setLeadActivityCount\} \/>/);

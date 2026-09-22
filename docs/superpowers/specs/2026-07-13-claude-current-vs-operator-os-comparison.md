@@ -44,7 +44,7 @@ Action Desk
   Quick Capture / 긴급 KA / 집중 고객 / 오늘 일 / 일정 / Inbox
 ```
 
-Approach B, 기존 원장 기반 Personal Operating Spine이 현재 코드와 가장 충돌이 적다.
+Approach B, 기존 기록 기반 Personal Operating Spine이 현재 코드와 가장 충돌이 적다.
 
 ## 2. 비교 기준선
 
@@ -123,7 +123,7 @@ Phase 1C 고객 연락 결과와 다음 행동을 원자 기록
 | 영역 | Claude 의도와 구현 | 현재 차이 | 판정 |
 |---|---|---|---|
 | 디자인 시스템 | Moonstone 토큰, primitives, 44px touch, audit 10건 반영 | Action Desk 정보 순서만 아직 없음 | **유지** |
-| Sales Guru | 원장 기반 코칭, 후속 초안 생성 | 초안 품질 사전 시뮬레이션 기록과 durable result loop가 약함 | **유지 후 보완** |
+| Sales Guru | 기록 기반 코칭, 후속 초안 생성 | 초안 품질 사전 시뮬레이션 기록과 durable result loop가 약함 | **유지 후 보완** |
 | Guru Autopilot | `draft → queue → approve → execute → learn` | `dab2ad9`로 queue까지 구현, 실제 발송은 수동 복사 | **producer로 유지** |
 | Content Flywheel | 아이디어 → AI draft → 승인 → Studio | cron/materialize는 있으나 DB variant 계약 위반 | **Phase 0 즉시 수리** |
 | Chief of Staff | 두 lane의 오늘 3개를 아침에 준비 | followups/orders/cadence는 읽지만 실제 Calendar·email·push 미포함 | **Attention adapter로 보완** |
@@ -438,7 +438,7 @@ Target plan has 16 grouped gaps. Phase별 구현 PR은 해당 범위의 gap을 �
 
 ## 19. Review Completion Summary
 
-- Step 0: 기존 원장을 재사용하고 Phase 0/1 vertical slice로 범위를 유지.
+- Step 0: 기존 기록을 재사용하고 Phase 0/1 vertical slice로 범위를 유지.
 - Architecture Review: 5 issues, 4개 정본 수정, 1개 Phase 0/1 RPC로 배정.
 - Code Quality Review: 6 current trust gaps.
 - Test Review: coverage diagram 작성, 16 grouped gaps.

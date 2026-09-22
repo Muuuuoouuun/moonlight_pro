@@ -71,7 +71,7 @@ test("a customer with nothing attached counts zero references", async () => {
   assert.deepEqual(refs.counts, {});
 });
 
-// 라이브 원장의 실제 모양: 활동·딜이 lead_id가 아니라 company_id로만 붙어 있다.
+// 라이브 기록의 실제 모양: 활동·딜이 lead_id가 아니라 company_id로만 붙어 있다.
 // lead_id만 세면 이력이 가득한 고객이 "참조 0"으로 읽혀 그대로 지워진다.
 test("references attached only by company_id are still counted", async () => {
   installFetch((table, url) => {

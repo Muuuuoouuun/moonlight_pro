@@ -91,7 +91,7 @@ test("a preview ledger lists brands but refuses to publish measured numbers", ()
   assert.equal(directory.brands[0].counts, null);
   assert.equal(directory.brands[0].publishedThisWeek, null);
   assert.equal(directory.brands[0].quietDays, null);
-  // 정체성은 원장이 없어도 읽을 수 있다 — 브랜드 행 자체에서 온다.
+  // 정체성은 기록이 없어도 읽을 수 있다 — 브랜드 행 자체에서 온다.
   assert.equal(directory.brands[0].identity.state, "recommended");
 });
 

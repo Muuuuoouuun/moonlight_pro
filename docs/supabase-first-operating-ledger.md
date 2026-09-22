@@ -7,10 +7,10 @@ Moonlight는 Supabase를 1차 source of truth로 둔다. Notion, Telegram, GitHu
 DB는 아래 3층으로 운영한다.
 
 ```text
-1. 운영 원장
+1. 운영 기록
    workspace, brand, area, project, task, note, decision, lead, deal, account, case
 
-2. 로그 원장
+2. 로그 기록
    project_updates, routine_checks, automation_runs, webhook_events, sync_runs, error_logs, activity_logs
 
 3. 공개 뷰

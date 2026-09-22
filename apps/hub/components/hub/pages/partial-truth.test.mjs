@@ -126,7 +126,7 @@ test("overview distinguishes preview nulls, error nulls, and live zeroes", () =>
     ],
   });
   assert.equal(previewCards.every((card) => card.value === "—"), true);
-  assert.equal(previewCards.every((card) => /원장 미연결/.test(card.hint)), true);
+  assert.equal(previewCards.every((card) => /기록 미연결/.test(card.hint)), true);
   assert.equal(previewCards.every((card) => card.tone === "neutral"), true);
   assert.notEqual(previewCards[2].tone, "success");
 
@@ -466,13 +466,13 @@ test("overview header keeps failed and partial source disclosures distinct", () 
       partialSources: ["tasks"],
     }),
     [
-      { kind: "failure", text: "일부 원장 읽기 실패 · project_updates" },
-      { kind: "partial", text: "일부 원장 부분 집계 · tasks" },
+      { kind: "failure", text: "일부 기록 읽기 실패 · project_updates" },
+      { kind: "partial", text: "일부 기록 부분 집계 · tasks" },
     ],
   );
   assert.deepEqual(
     overviewTruth.overviewDisclosureMessages({ failedSources: [], partialSources: ["tasks", "tasks"] }),
-    [{ kind: "partial", text: "일부 원장 부분 집계 · tasks" }],
+    [{ kind: "partial", text: "일부 기록 부분 집계 · tasks" }],
   );
 });
 
@@ -480,33 +480,33 @@ test("overview consumes API status and failed sources for partial disclosures", 
   assert.match(overviewSource, /overviewSyncState\(data\)/);
   assert.match(overviewSource, /ledger\.failedSources/);
   assert.match(overviewSource, /activitySeriesAvailability/);
-  assert.match(overviewSource, /활동 원장 일부를 읽지 못했습니다/);
-  assert.match(overviewSource, /활동 원장 미연결/);
-  assert.match(overviewSource, /브랜드 활동 원장을 읽지 못했습니다/);
-  assert.match(overviewSource, /브랜드 활동 원장 미연결/);
-  assert.match(overviewSource, /최근 활동 원장 일부를 읽지 못했습니다/);
-  assert.match(overviewSource, /최근 활동 원장 미연결/);
+  assert.match(overviewSource, /활동 기록 일부를 읽지 못했습니다/);
+  assert.match(overviewSource, /활동 기록 미연결/);
+  assert.match(overviewSource, /브랜드 활동 기록을 읽지 못했습니다/);
+  assert.match(overviewSource, /브랜드 활동 기록 미연결/);
+  assert.match(overviewSource, /최근 활동 기록 일부를 읽지 못했습니다/);
+  assert.match(overviewSource, /최근 활동 기록 미연결/);
   assert.match(overviewSource, /overviewPanelAvailability/);
   assert.match(overviewSource, /buildAutomationMetricRows/);
   assert.match(overviewSource, /overviewDisclosureMessages/);
   assert.match(overviewSource, /recentActivityAvailability/);
-  assert.match(overviewSource, /프로젝트 원장 미연결/);
-  assert.match(overviewSource, /프로젝트 원장 읽기 실패/);
+  assert.match(overviewSource, /프로젝트 기록 미연결/);
+  assert.match(overviewSource, /프로젝트 기록 읽기 실패/);
   assert.match(overviewSource, /프로젝트 부분 데이터/);
   assert.match(overviewSource, /프로젝트 데이터 없음/);
-  assert.match(overviewSource, /콘텐츠 원장 미연결/);
-  assert.match(overviewSource, /콘텐츠 원장 읽기 실패/);
+  assert.match(overviewSource, /콘텐츠 기록 미연결/);
+  assert.match(overviewSource, /콘텐츠 기록 읽기 실패/);
   assert.match(overviewSource, /콘텐츠 부분 데이터/);
   assert.match(overviewSource, /콘텐츠 데이터 없음/);
-  assert.match(overviewSource, /매출 원장 미연결/);
-  assert.match(overviewSource, /매출 원장 읽기 실패/);
-  assert.match(overviewSource, /매출 원장 부분 데이터/);
-  assert.match(overviewSource, /자동화 원장 미연결/);
-  assert.match(overviewSource, /자동화 원장 읽기 실패/);
-  assert.match(overviewSource, /자동화 원장 부분 데이터/);
-  assert.match(overviewSource, /리듬 원장 미연결/);
-  assert.match(overviewSource, /리듬 원장 읽기 실패/);
-  assert.match(overviewSource, /리듬 원장 부분 데이터/);
+  assert.match(overviewSource, /매출 기록 미연결/);
+  assert.match(overviewSource, /매출 기록 읽기 실패/);
+  assert.match(overviewSource, /매출 기록 부분 데이터/);
+  assert.match(overviewSource, /자동화 기록 미연결/);
+  assert.match(overviewSource, /자동화 기록 읽기 실패/);
+  assert.match(overviewSource, /자동화 기록 부분 데이터/);
+  assert.match(overviewSource, /리듬 기록 미연결/);
+  assert.match(overviewSource, /리듬 기록 읽기 실패/);
+  assert.match(overviewSource, /리듬 기록 부분 데이터/);
   assert.doesNotMatch(overviewSource, /kpis\.(?:updatesThisWeek|decisionsThisWeek|activeProjects)\s*\?\?\s*0/);
   assert.doesNotMatch(overviewSource, /automationsSummary\.(?:runsToday|failuresToday|activeAutomations|integrationsConnected)\s*\?\?\s*0/);
   assert.doesNotMatch(dailyBriefSource, /`\$\{pms\.taskCompletionRate\}%`/);
@@ -527,9 +527,9 @@ test("daily brief names partial state and does not collapse it into mixed or pre
 
 test("Decisions withholds the empty state when its configured ledger is incomplete", () => {
   assert.match(workSource, /decisionsState/);
-  assert.match(workSource, /결정 원장 읽기 실패/);
-  assert.match(workSource, /결정 원장 부분 데이터/);
-  assert.match(workSource, /결정 원장 미연결/);
+  assert.match(workSource, /결정 기록 읽기 실패/);
+  assert.match(workSource, /결정 기록 부분 데이터/);
+  assert.match(workSource, /결정 기록 미연결/);
   assert.match(workSource, /decisionComplete/);
   assert.match(workSource, /retry/);
 });

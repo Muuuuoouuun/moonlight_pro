@@ -20,7 +20,7 @@
 
 ### 불변식
 
-1. live 원장 데이터와 honest empty/preview/error 상태만 사용한다.
+1. live 기록 데이터와 honest empty/preview/error 상태만 사용한다.
 2. 가짜 고객·매출·일정·프로젝트·캠페인·자동화 레코드는 되살리지 않는다.
 3. VR Office의 라우트·내비게이션·컴포넌트·문서 표현은 되살리지 않는다.
 4. ClassIn과 Personal은 별도 홈이 아니라 동일 화면의 데이터 스코프다.

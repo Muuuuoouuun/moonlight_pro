@@ -153,7 +153,7 @@ export function ProjectDetailPanel({
   const displayNextAction = project.displayNextAction || project.nextAction || "";
   const dday = computeDDay(project.dueAt);
   const failedEmpty = (source, empty) => failed.has(source)
-    ? `${source} 원장을 읽지 못했습니다. 다시 시도하세요.`
+    ? `${source} 기록을 읽지 못했습니다. 다시 시도하세요.`
     : empty;
 
   return (

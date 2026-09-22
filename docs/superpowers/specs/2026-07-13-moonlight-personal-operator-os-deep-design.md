@@ -4,7 +4,7 @@
 > 작성일: 2026-07-13
 > 최초 작성 브랜치: `real_v1.1`
 > 모드: Builder / 개인 전용 운영 시스템
-> 근거: 운영자 인터뷰 Q1-Q115, 현재 Moonlight 코드·Supabase 원장, `classinkr-web` Neo CRM 구조, 기존 디자인 문서
+> 근거: 운영자 인터뷰 Q1-Q115, 현재 Moonlight 코드·Supabase 기록, `classinkr-web` Neo CRM 구조, 기존 디자인 문서
 > 심화·대체: `bigmac_moon-real_v1.1-design-20260711-180548.md`의 Capture–Attention–Done 설계
 > 함께 유지: `bigmac_moon-real_v1.1-design-20260712-215411.md`의 승인 기반 자율화 로드맵
 
@@ -20,7 +20,7 @@ Moonlight는 여러 업무 도구를 한 화면에 모은 대시보드가 아니
 
 ```text
 빠른 입력
-  -> 실제 원장에 저장
+  -> 실제 기록에 저장
   -> 고객·프로젝트·일정 문맥에 연결
   -> 지금 필요한 다음 행동으로 승격
   -> 실행과 최소 결과 기록
@@ -102,9 +102,9 @@ CRM, PMS, 콘텐츠, 캘린더, AI는 이 루프의 서로 다른 입력·문맥
 
 아래 전제는 운영자가 승인한 현재 제품 조건이다. 변경 시 이 문서와 운영자 프로필을 함께 갱신한다.
 
-1. **핵심 제품은 통합 CRM이 아니라 다음 행동 기억 장치다.** 고객·프로젝트·콘텐츠 원장을 많이 만드는 것보다, 놓친 일을 정확히 올리고 실제 저장하는 것이 먼저다.
+1. **핵심 제품은 통합 CRM이 아니라 다음 행동 기억 장치다.** 고객·프로젝트·콘텐츠 기록을 많이 만드는 것보다, 놓친 일을 정확히 올리고 실제 저장하는 것이 먼저다.
 2. **초기 이관 뒤 Moonlight가 개인 업무 정본이다.** ClassIn은 회사 공식 객체와 공식 활동 요약의 정본이며, Moonlight의 개인 상세 메모를 소유하지 않는다.
-3. **기존 원장을 재사용한다.** tasks, leads, deals, projects, content_items, work_orders를 새 만능 테이블로 옮기지 않고 공통 Attention read model로 조립한다.
+3. **기존 기록을 재사용한다.** tasks, leads, deals, projects, content_items, work_orders를 새 만능 테이블로 옮기지 않고 공통 Attention read model로 조립한다.
 4. **자동화는 기록·추천·초안 생성까지 적극 허용한다.** 고객 메시지 발송, 공식 거래 변경, 결제, 삭제는 별도 승인이 있기 전까지 확인 단계를 유지한다.
 5. **사람이 고객의 기본 단위다.** 사람은 조직에 연결되고, 문의·재문의마다 새 Opportunity를 만든다. 현재 드문 다중 담당자·동시 거래도 데이터 구조상 막지는 않는다.
 6. **1차 구현은 하나의 durable loop만 완성한다.** 빠른 텍스트 입력 → 실제 할 일 저장 → Today 승격 → 완료와 최소 결과 기록 → 재조회까지다.
@@ -128,9 +128,9 @@ CRM, PMS, 콘텐츠, 캘린더, AI는 이 루프의 서로 다른 입력·문맥
   - 다시 “기능은 많은데 무엇부터 할지 모르는” 상태가 된다.
 - 재사용: 현재 페이지 local state, 개별 API, 기존 카드 UI.
 
-### 접근안 B — 기존 원장 기반 Personal Operating Spine (선택됨)
+### 접근안 B — 기존 기록 기반 Personal Operating Spine (선택됨)
 
-기존 원장은 그대로 두고, 실제 쓰기 계약과 공통 Attention read model을 먼저 닫는다. 홈은 Action Desk가 되고, 각 도메인은 상세 문맥과 실행 화면이 된다.
+기존 기록은 그대로 두고, 실제 쓰기 계약과 공통 Attention read model을 먼저 닫는다. 홈은 Action Desk가 되고, 각 도메인은 상세 문맥과 실행 화면이 된다.
 
 - 규모: M
 - 위험: 낮음~중간
@@ -139,11 +139,11 @@ CRM, PMS, 콘텐츠, 캘린더, AI는 이 루프의 서로 다른 입력·문맥
   - 기존 코드와 실제 데이터를 가장 많이 재사용한다.
   - “저장 → 우선순위 → 실행 → 결과 → 다음 행동”을 한 계약으로 테스트할 수 있다.
   - CRM/PMS/콘텐츠/캘린더가 추가되어도 홈을 다시 만들 필요가 없다.
-  - ClassIn은 경계 API와 outbox로 분리되어 개인 원장을 오염시키지 않는다.
+  - ClassIn은 경계 API와 outbox로 분리되어 개인 기록을 오염시키지 않는다.
 - 단점:
   - 첫 UI 변화 전에 Content 계약과 durable task write를 먼저 고쳐야 한다.
   - owner scope와 honest state를 명확히 하지 않으면 잘못된 고객을 추천할 위험이 있다.
-- 재사용: Daily Brief 조립, Follow-up 엔진, tasks/projects 원장, revenue CRUD, Content Studio, Google Calendar, work_orders.
+- 재사용: Daily Brief 조립, Follow-up 엔진, tasks/projects 기록, revenue CRUD, Content Studio, Google Calendar, work_orders.
 
 ### 접근안 C — 단일 Work Graph 재설계
 
@@ -156,7 +156,7 @@ CRM, PMS, 콘텐츠, 캘린더, AI는 이 루프의 서로 다른 입력·문맥
   - 장기적으로 객체 연결이 우아해질 수 있다.
   - 복합 검색과 자동화에 유리할 수 있다.
 - 단점:
-  - 이미 작동하는 원장을 다시 이관해야 한다.
+  - 이미 작동하는 기록을 다시 이관해야 한다.
   - ClassIn과 Moonlight 양쪽의 식별자·상태·이력을 동시에 마이그레이션해야 한다.
   - 현재 목표 대비 과도하며 실제 업무를 잃을 가능성이 가장 크다.
 - 재사용: 제한적. 대부분 adapter 또는 migration이 필요하다.
@@ -414,7 +414,7 @@ adapter는 band를 직접 임의 계산하지 않고 아래 stable reason code�
 
 ### Phase 1 canonical 동작
 
-새 `captures` 만능 테이블을 만들지 않는다. 기존 원장을 우선 사용한다.
+새 `captures` 만능 테이블을 만들지 않는다. 기존 기록을 우선 사용한다.
 
 1. 기본 입력은 `정리 전`이며 existing `/api/hub/inbox`를 통해 `source=inbox`, `kind=capture`인 `work_order`에 원문을 보존한다.
 2. 사용자가 `할 일` hint를 선택하면 `tasks`에 직접 durable create한다.
@@ -637,7 +637,7 @@ ClassIn에는 official summary만 전송한다.
 
 ### Phase 1C 연락 완료 원자성
 
-연락 완료는 한 버튼에서 세 원장을 부분 성공시키면 안 된다.
+연락 완료는 한 버튼에서 세 기록을 부분 성공시키면 안 된다.
 
 ```text
 outreach outcome/activity insert
@@ -821,7 +821,7 @@ moonlight_project_id      // optional
 moonlight_activity_type   // optional
 ```
 
-이 속성이 없는 기존·외부 생성 event는 `entityType=general`로만 투영한다. 제목, 참석자 이름, 전화번호로 고객을 추측해 연결하지 않는다. 별도 `calendar_event_links` 원장은 실제 다중 provider·재연결 요구가 생길 때만 검토한다.
+이 속성이 없는 기존·외부 생성 event는 `entityType=general`로만 투영한다. 제목, 참석자 이름, 전화번호로 고객을 추측해 연결하지 않는다. 별도 `calendar_event_links` 기록은 실제 다중 provider·재연결 요구가 생길 때만 검토한다.
 
 상태:
 
@@ -1227,7 +1227,7 @@ Quick text + destination hint
 
 ### Phase 1B — Action Desk Aggregation
 
-2026-07-15 구현 스냅샷: Daily Brief는 6개 live ledger와 PMS/content pulse를 읽고, 전체 Revenue 원장 119건을 유지하면서 exact-owner `Me` 16건 중 deterministic 상위 3건만 집중 고객 신호로 올린다. `Unassigned` 고객 신호는 0건이다. 정식 `AttentionItem` adapter, Calendar agenda source, source별 timeout/partial 응답은 아직 남아 있다.
+2026-07-15 구현 스냅샷: Daily Brief는 6개 live ledger와 PMS/content pulse를 읽고, 전체 Revenue 기록 119건을 유지하면서 exact-owner `Me` 16건 중 deterministic 상위 3건만 집중 고객 신호로 올린다. `Unassigned` 고객 신호는 0건이다. 정식 `AttentionItem` adapter, Calendar agenda source, source별 timeout/partial 응답은 아직 남아 있다.
 
 - Phase 1 `AttentionItem` adapter와 결정론적 ranking helper.
 - `getFollowups()`와 실제 Google Calendar agenda를 병렬 source로 추가.
@@ -1339,7 +1339,7 @@ Quick text + destination hint
 | 5초 안에 첫 행동 이해·선택 | `action_desk_rendered` | `attention_item_opened` | 5초 초과 또는 이탈 |
 | 10초 안에 capture 저장 | `quick_capture_focused` | `quick_capture_saved` | 10초 초과, 실패, 포기 |
 | 20초 안에 연락 결과 저장 | `contact_outcome_opened` | `contact_outcome_saved` | 20초 초과, validation 포기 |
-| 후속 누락 0 | 매일 `attention_audit_started` | overdue promise 전체와 surfaced key 비교 | source 원장에는 overdue인데 Attention에 없는 건 |
+| 후속 누락 0 | 매일 `attention_audit_started` | overdue promise 전체와 surfaced key 비교 | source 기록에는 overdue인데 Attention에 없는 건 |
 
 - 14일 동안 unsurfaced overdue promise 0건을 목표로 한다.
 - 시간 목표는 최소 20회 표본의 median과 p90을 함께 본다.

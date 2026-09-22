@@ -626,7 +626,7 @@ ClassIn/Neo CRM
 
 ## 15. 구현 전 하드 게이트
 
-다음 항목이 정해지기 전에는 CRM·PMS 동기화 구조를 대규모로 확정하지 않는다. 다만 기존 원장을 이용한 `Quick Capture -> durable task -> Today -> 완료/결과 -> 재조회` Phase 1 신뢰 루프는 아래 결정을 기다리지 않고 진행할 수 있다.
+다음 항목이 정해지기 전에는 CRM·PMS 동기화 구조를 대규모로 확정하지 않는다. 다만 기존 기록을 이용한 `Quick Capture -> durable task -> Today -> 완료/결과 -> 재조회` Phase 1 신뢰 루프는 아래 결정을 기다리지 않고 진행할 수 있다.
 
 1. 최초 이관할 고객별 활동·거래의 역사 범위와 필드 매핑
 2. 프로젝트 후보의 만료 규칙
@@ -638,7 +638,7 @@ ClassIn/Neo CRM
 
 ## 16. 다음 제작 방향
 
-승인된 심화 설계는 **기존 원장 기반 Personal Operating Spine(접근안 B)** 이다. Phase 0 신뢰 기준선은 `5c9ccc2`에서 완료됐고 Phase 1A Durable Task Loop도 2026-07-15에 live 검증을 마쳤다. 다음 구현은 Phase 1B Action Desk Aggregation이다.
+승인된 심화 설계는 **기존 기록 기반 Personal Operating Spine(접근안 B)** 이다. Phase 0 신뢰 기준선은 `5c9ccc2`에서 완료됐고 Phase 1A Durable Task Loop도 2026-07-15에 live 검증을 마쳤다. 다음 구현은 Phase 1B Action Desk Aggregation이다.
 
 첫 구현은 다음 순서를 따른다.
 

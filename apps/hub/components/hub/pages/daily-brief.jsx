@@ -88,8 +88,8 @@ const CONTEXT_TARGETS = {
 };
 
 // 결정 상태는 KST 날짜 스코프로 이 기기에 영속한다 — 이전에는 컴포넌트 로컬 state뿐이라
-// "✓ 처리" 영수증이 새로고침에 증발하는 가짜였다. 신호는 매일 원장에서 재파생되므로 날짜
-// 키가 자연 만료다. (원장 영속 dismiss는 attention 컷오버 백로그 — 그때 이 키를 대체한다.)
+// "✓ 처리" 영수증이 새로고침에 증발하는 가짜였다. 신호는 매일 기록에서 재파생되므로 날짜
+// 키가 자연 만료다. (기록 영속 dismiss는 attention 컷오버 백로그 — 그때 이 키를 대체한다.)
 const BRIEF_DECISION_PREFIX = 'hub:brief-decisions:';
 function briefDecisionStorageKey() {
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -412,7 +412,7 @@ const EMPTY_DAILY_BRIEF_STATE = {
   signals: [],
   dailyFocus: null,
   // 접힌 보조 섹션의 헤더가 "안에 뭐가 있는지"를 말하려면 카드를 마운트하지 않고도 셀 수
-  // 있어야 한다 — 브리핑 원장이 이미 싣고 오는 승인 큐 요약을 그대로 쓴다(사용성 재감사 E).
+  // 있어야 한다 — 브리핑 기록이 이미 싣고 오는 승인 큐 요약을 그대로 쓴다(사용성 재감사 E).
   queue: null,
   morningBrief: null,
 };
@@ -1092,7 +1092,7 @@ function StatusLine({ state, onRetry }) {
               {source.label} · {sourceLabel(source.state)}
             </Badge>
           ))}
-          {/* §2의 5개 판단축 중 메시지 축은 데이터 소스(카톡·전화 원장)가 아직 없다 —
+          {/* §2의 5개 판단축 중 메시지 축은 데이터 소스(카톡·전화 기록)가 아직 없다 —
               침묵 대신 부재를 고지한다(가짜 UI 금지, 2026-08-05 re-audit #8). */}
           <Badge tone="neutral" variant="outline" size="xs">메시지 · 소스 없음(미연동)</Badge>
         </div>
@@ -1459,7 +1459,7 @@ function RhythmPanel({ onNavigate }) {
           onClose={() => setWeeklyReviewOpen(false)}
           agent="council"
           contextType="weekly"
-          contextTitle="이번 주 운영 원장 회고"
+          contextTitle="이번 주 운영 기록 회고"
           contextData={{
             summary: `이번 주 루틴 달성: ${completed}/${total} (${percent}%) · 연속 달성: ${summary.longestStreak}일`,
           }}
@@ -1507,7 +1507,7 @@ function FocusSlots({ dailyFocus, onNavigate }) {
         )}
         {ka.state === 'error' && (
           <div role="alert" style={{ padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11.5, color: 'var(--danger)' }}>
-            매출 원장을 읽지 못해 긴급 KA를 판정할 수 없습니다 — 지금 화면은 비어 보여도 실제 긴급 건이 있을 수 있습니다.
+            매출 기록을 읽지 못해 긴급 KA를 판정할 수 없습니다 — 지금 화면은 비어 보여도 실제 긴급 건이 있을 수 있습니다.
           </div>
         )}
         {ka.item && (
@@ -1564,9 +1564,9 @@ function FocusSlots({ dailyFocus, onNavigate }) {
           revenueError ? <SyncBadge state="error" /> : revenuePreview ? <SyncBadge state="preview" /> : null
         )}
         {revenueError ? (
-          <div role="alert" style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>매출 원장을 읽지 못했습니다 — 상단 상태줄의 다시 읽기로 재시도하세요.</div>
+          <div role="alert" style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>매출 기록을 읽지 못했습니다 — 상단 상태줄의 다시 읽기로 재시도하세요.</div>
         ) : revenuePreview ? (
-          <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>매출 원장이 연결되면 집중 고객 3~5건이 여기에 표시됩니다.</div>
+          <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>매출 기록이 연결되면 집중 고객 3~5건이 여기에 표시됩니다.</div>
         ) : focusItems.length === 0 ? (
           <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>집중 고객 없음 — CS 레인에 다음 행동이 있는 리드가 없습니다.</div>
         ) : (

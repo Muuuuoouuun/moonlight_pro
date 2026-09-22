@@ -13,7 +13,7 @@ const EMPTY_AUTOMATION_SUMMARY = {
   integrationsConnected: 0,
 };
 
-// 모듈 스코프 stale-while-revalidate — 개요↔Flows↔Webhooks↔Runs 탭 전환마다 원장을 다시
+// 모듈 스코프 stale-while-revalidate — 개요↔Flows↔Webhooks↔Runs 탭 전환마다 기록을 다시
 // 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
 const AUTOMATIONS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let automationsLedgerCache = null; // { at, state }
@@ -203,7 +203,7 @@ export function AutomationsIndex({ onNavigate }) {
                   원복되는 가짜 스위치였다. 배선 전까지 비활성 + 이유 노출이 정직하다. */}
               <IconButton
                 icon={a.status === 'Active' ? 'pause' : 'play'}
-                tooltip="상태 변경은 아직 원장에 연결되지 않았습니다"
+                tooltip="상태 변경은 아직 기록에 연결되지 않았습니다"
                 disabled
               />
               <IconButton icon="moreV" tooltip="Open flow canvas" onClick={() => onNavigate('dashboard/automations/flows')} />
@@ -530,7 +530,7 @@ export function Runs({ onNavigate } = {}) {
           >
             실시간 {autoRefresh ? 'ON' : 'OFF'}
           </Button>
-          <Button variant="ghost" size="sm" icon="refresh" onClick={() => reload()} title="원장 재조회">
+          <Button variant="ghost" size="sm" icon="refresh" onClick={() => reload()} title="기록 재조회">
             새로고침
           </Button>
           {onNavigate && (
@@ -672,7 +672,7 @@ export function Runs({ onNavigate } = {}) {
                   : filter === 'events' && heartbeatRuns.length > 0
                     ? `엔진 헬스체크는 정상 작동 중입니다 (최근 핑: ${latestHeartbeat?.at || '방금'} · ${latestHeartbeat?.ms || 0}ms). 고객 연동이나 웹훅이 실행되면 여기에 나타납니다.`
                     : syncState === 'error'
-                      ? '화면을 새로고침하여 원장 연결을 다시 시도하세요.'
+                      ? '화면을 새로고침하여 기록 연결을 다시 시도하세요.'
                       : 'Engine이 automation_runs에 기록을 남기면 이 로그가 채워집니다.'
               }
               action={

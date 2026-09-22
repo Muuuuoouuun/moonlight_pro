@@ -478,7 +478,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
             </Button>
           </>
         )}
-        {/* 숨기기 — 원장은 그대로 두고 이 목록에서만 걷어낸다. 딜을 파이프라인에서까지
+        {/* 숨기기 — 기록은 그대로 두고 이 목록에서만 걷어낸다. 딜을 파이프라인에서까지
             치우는 건 Revenue 보드의 '파이프라인에서 숨기기'(deals.hidden_at)가 따로 한다.
             되돌리기: 오늘 숨김은 내일 자동 복귀, 무기한 숨김은 툴바의 '숨김 N' 토글. */}
         <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 2, paddingTop: 8, display: 'flex', gap: 6 }}>
@@ -532,7 +532,7 @@ export function MyWork({ onNavigate }) {
   const setBucketFilter = (v) => { setBucketFilterState(v); writeStoredOption('mlp.mywork.bucket', v); };
   const setSort = (v) => { setSortState(v); writeStoredOption('mlp.mywork.sort', v); };
 
-  // 숨김(뮤트) — '오늘 안 보기'(내일 자동 복귀)와 '아예 안 보기'(무기한). 원장 사실이
+  // 숨김(뮤트) — '오늘 안 보기'(내일 자동 복귀)와 '아예 안 보기'(무기한). 기록 사실이
   // 아니라 이 표면의 보기 설정이라 lane/bucket/sort와 같은 localStorage 계층에 둔다
   // (근거는 my-work-mute.js 머리주석). 읽기도 같은 이유로 마운트 후 이펙트에서 —
   // useState 초기화에서 읽으면 SSR HTML과 첫 렌더가 갈려 하이드레이션 불일치가 난다.
@@ -803,7 +803,7 @@ export function MyWork({ onNavigate }) {
   // 프로젝트 이동·Calendar 열기는 패널 안의 액션 버튼이 담당한다.
   const openItem = (item) => setDetailId((cur) => (cur === item.id ? null : item.id));
 
-  // 숨기기/다시 표시 — 원장에 쓰지 않고 브라우저 보기 설정만 바꾼다. 완료·삭제와 달리
+  // 숨기기/다시 표시 — 기록에 쓰지 않고 브라우저 보기 설정만 바꾼다. 완료·삭제와 달리
   // 지연 커밋 undo가 필요 없다(서버 호출이 없어 '되돌리기'가 즉시 원상복구다).
   const persistMuted = (next) => {
     setMuted(next);
@@ -1100,7 +1100,7 @@ export function MyWork({ onNavigate }) {
     return counts;
   }, [items, mutedIds, showMuted]);
 
-  // 현재 원장에서 숨겨둔 항목 수 — 툴바 토글과 빈 상태 안내가 같은 숫자를 쓴다.
+  // 현재 기록에서 숨겨둔 항목 수 — 툴바 토글과 빈 상태 안내가 같은 숫자를 쓴다.
   const mutedCount = React.useMemo(
     () => items.filter((i) => mutedIds.has(i.id) && !hiddenIds.has(i.id)).length,
     [items, mutedIds, hiddenIds],

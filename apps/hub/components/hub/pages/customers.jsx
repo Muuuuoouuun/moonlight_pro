@@ -2,7 +2,7 @@
 
 // 고객 DB — Leads·Accounts 통합 뷰 (2026-07-16 CRM 와이어프레임 '고객 DB' 화면).
 // 한 테이블에서 리드(영업 진행)와 계정(계약 고객)을 함께 보고, 행 클릭으로 Contact 중심
-// Customer 360 드로어를 연다. 세그먼트는 원장 데이터에서 계산한다 — 근거 없는 세그먼트
+// Customer 360 드로어를 연다. 세그먼트는 기록 데이터에서 계산한다 — 근거 없는 세그먼트
 // (재계약 임박 등 소스가 없는 것)는 만들지 않는다.
 
 import React from "react";
@@ -614,7 +614,7 @@ function CustomerDeleteAction({ row, onConfirm }) {
 function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
   const [activities, setActivities] = React.useState([]);
   const [actSync, setActSync] = React.useState("loading");
-  // 컨택 완료 시트 저장 직후 부모 원장 재조회 없이 최신 다음 액션을 반영
+  // 컨택 완료 시트 저장 직후 부모 기록 재조회 없이 최신 다음 액션을 반영
   const [nextActionOverride, setNextActionOverride] = React.useState(null);
   const [focusOverride, setFocusOverride] = React.useState(row.focusOverride || "default");
 
@@ -813,7 +813,7 @@ export function Customers({ onNavigate }) {
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
   const ledgerRows = React.useMemo(() => toRows(ledger), [ledger]);
-  // 낙관 삭제된 행은 원장이 다시 로드돼도 계속 숨긴다 — 되돌리기 창이 닫히기 전에
+  // 낙관 삭제된 행은 기록이 다시 로드돼도 계속 숨긴다 — 되돌리기 창이 닫히기 전에
   // 재조회가 끼어들면 지운 행이 깜빡이며 되살아난다.
   const allRows = React.useMemo(
     () => ledgerRows.filter(r => !deletedKeys.has(r.key)),
@@ -865,20 +865,20 @@ export function Customers({ onNavigate }) {
     });
   }, [scheduleUndoable, cancelUndoable, restoreRow]);
 
-  // 딥링크: ?customer=<kind>:<id> — 원장 로드 후 1회만 열고 쿼리 소거 (DESIGN §8.1)
+  // 딥링크: ?customer=<kind>:<id> — 기록 로드 후 1회만 열고 쿼리 소거 (DESIGN §8.1)
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const deepLinkDone = React.useRef(false);
   React.useEffect(() => {
-    // 원장이 아직 로드 전(loading)일 때만 대기 — 빈/preview DB에서도 파라미터를 소비하고
-    // 설명한다(기존: 빈 원장이면 ?customer= 링크가 영원히 무시·무설명, 4차 재감사 S).
+    // 기록이 아직 로드 전(loading)일 때만 대기 — 빈/preview DB에서도 파라미터를 소비하고
+    // 설명한다(기존: 빈 기록이면 ?customer= 링크가 영원히 무시·무설명, 4차 재감사 S).
     if (deepLinkDone.current || syncState === 'loading') return;
     const target = searchParams?.get("customer");
     if (!target) { deepLinkDone.current = true; return; }
     deepLinkDone.current = true;
     if (allRows.some(r => r.key === target)) setOpenKey(target);
-    else setCreateError('링크의 고객을 찾을 수 없습니다 — 원장이 비어 있거나 항목이 삭제됐습니다.');
+    else setCreateError('링크의 고객을 찾을 수 없습니다 — 기록이 비어 있거나 항목이 삭제됐습니다.');
     router.replace(pathname, { scroll: false });
   }, [allRows, searchParams, router, pathname, syncState]);
 
@@ -888,7 +888,7 @@ export function Customers({ onNavigate }) {
     (!term || r.name.toLowerCase().includes(term) || (r.person || "").toLowerCase().includes(term) || (r.sub || "").toLowerCase().includes(term))
   );
 
-  // 정렬: 헤더 클릭 asc → desc → 해제 3단 (DESIGN §8.1). 해제 시 원장 순서.
+  // 정렬: 헤더 클릭 asc → desc → 해제 3단 (DESIGN §8.1). 해제 시 기록 순서.
   const cycleSort = (key) => {
     setSort(prev => {
       if (prev.key !== key) return { key, dir: "asc" };
@@ -912,7 +912,7 @@ export function Customers({ onNavigate }) {
 
   // N 단축키: 드로어 닫힘 + 입력 포커스 밖일 때 새 고객(리드) 생성.
   // creatingRef: 이 생성은 즉시 영속 write라 연타/저장 지연 중 재진입을 막지 않으면
-  // "새 고객" 행이 원장에 줄줄이 쌓인다.
+  // "새 고객" 행이 기록에 줄줄이 쌓인다.
   const creatingRef = React.useRef(false);
   const createCustomer = React.useCallback(() => {
     if (creatingRef.current) return;

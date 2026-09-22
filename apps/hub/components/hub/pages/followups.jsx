@@ -53,7 +53,7 @@ const LANE_LABEL = { lead: "리드", deal: "딜", event: "일정" };
 const LANE_TONE = { lead: "neutral", deal: "neutral", event: "neutral" };
 const BUCKET_STRIPE = { overdue: "var(--danger)" };
 
-// 모듈 스코프 SWR(7차 속도): 코어 데일리 표면인데 탭 복귀마다 스켈레톤 + 원장 재조회를
+// 모듈 스코프 SWR(7차 속도): 코어 데일리 표면인데 탭 복귀마다 스켈레톤 + 기록 재조회를
 // 반복하던 유일한 예외였다 — 5분 내 캐시를 즉시 서빙하고 항상 배경 재검증한다
 // (revenue/daily-brief/attention/projects와 같은 serve-then-revalidate 계약).
 // 재검증 실패는 기존대로 error 명명 — 오래된 데이터를 live로 위장하지 않는다.
@@ -255,7 +255,7 @@ function ActivityPanel({ item, onClose, onNavigate }) {
       {state.syncState === "loading" ? (
         <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>불러오는 중…</div>
       ) : state.syncState === "error" ? (
-        <EmptyState icon="clock" title="활동 기록을 읽지 못했습니다" description="원장 연결 상태를 확인한 뒤 다시 열어 주세요." style={{ minHeight: 140 }} />
+        <EmptyState icon="clock" title="활동 기록을 읽지 못했습니다" description="기록 연결 상태를 확인한 뒤 다시 열어 주세요." style={{ minHeight: 140 }} />
       ) : state.activities.length === 0 ? (
         <EmptyState icon="clock" title="활동 기록이 없습니다" description="연락 기록이 쌓이면 여기에 표시됩니다." style={{ minHeight: 140 }} />
       ) : (
@@ -431,7 +431,7 @@ export function Followups({ onNavigate }) {
   const openLog = (item, action, label) => { setLogError(null); setLogDraft({ itemId: item.id, action, label }); };
   const closeLog = () => { setLogError(null); setLogDraft(null); };
 
-  // Phase 1C 원자 RPC 경로 — 활동 기록 + 대상 원장 next_action 갱신이 한 트랜잭션이다.
+  // Phase 1C 원자 RPC 경로 — 활동 기록 + 대상 기록 next_action 갱신이 한 트랜잭션이다.
   // (기존 /api/integrations/outcomes/record는 outreach insert와 lead 갱신이 비원자 2단계라
   // 반쪽 저장 시 next_action 날짜가 옛값으로 남아 리드가 오늘/지남 버킷에서 소리 없이 빠졌고,
   // outreach_outcomes는 이 페이지의 활동 패널이 읽는 crm_activities에도 나타나지 않았다.)
@@ -553,7 +553,7 @@ export function Followups({ onNavigate }) {
           syncState === "error" ? (
             <EmptyState
               icon="clock"
-              title="팔로업 원장을 읽지 못했습니다"
+              title="팔로업 기록을 읽지 못했습니다"
               description="지금 화면은 비어 보이지만 실제 후속 항목이 있을 수 있습니다. 다시 시도해 주세요."
               action={<Button variant="outline" size="sm" onClick={reload}>다시 시도</Button>}
             />

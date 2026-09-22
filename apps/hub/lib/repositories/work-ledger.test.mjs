@@ -199,7 +199,7 @@ test("both failed roadmap tables report error rather than preview or live-empty"
 });
 
 // 8차 잔여 S: 전 소스 실패가 partial 200으로 위장되던 계약 구멍 — 세 코어 레인(결정·리듬·
-// 로드맵)이 전부 error면 원장 전체가 error다. "일부 데이터"는 살아있는 레인이 있을 때만.
+// 로드맵)이 전부 error면 기록 전체가 error다. "일부 데이터"는 살아있는 레인이 있을 때만.
 test("all core lanes failing is a whole-ledger error, not partial", async () => {
   const state = globalThis.__workLedgerTestState;
   state.rows.decisions = null;
@@ -496,7 +496,7 @@ test("a configured routine ledger read failure is error rather than preview", as
     partial: false,
     truncatedSources: [],
     error: {
-      message: "routine_checks 원장을 읽지 못했습니다.",
+      message: "routine_checks 기록을 읽지 못했습니다.",
       retryable: true,
     },
   });
@@ -576,7 +576,7 @@ test("rituals remain readable when the independent decisions source fails", asyn
     failedSources: ["decisions"],
     truncatedSources: [],
     error: {
-      message: "decisions 원장을 읽지 못했습니다.",
+      message: "decisions 기록을 읽지 못했습니다.",
       retryable: true,
     },
   });

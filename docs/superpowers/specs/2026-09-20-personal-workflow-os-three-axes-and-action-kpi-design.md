@@ -4,7 +4,7 @@
 > 작성일: 2026-09-20 (Asia/Seoul) · 브랜치 `09.bigmac1.02` · HEAD `0016fa9`
 > 상위 정본: [`docs/README.md`](../../README.md) 우선순위 → [운영자 프로필](../../operator-workflow-profile.md) → [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md) → 주제별 최신 스펙([09-05 일지](2026-09-05-journal-timeline-and-ai-digest.md), [09-12 하루 리뷰](2026-09-12-daily-review-and-council-design.md), [09-12 메모](2026-09-12-memo-writing-reuse-and-analysis-design.md), [09-13 메모 2차](2026-09-13-memo-discovery-and-analysis-design.md), [09-03 성장 기획서](2026-09-03-sales-content-marketing-to-branding-growth-plan.md), [09-20 입력 개선](2026-09-20-input-usability-design.md)).
 > 관계: **기존 확정 결정을 바꾸지 않는다.** 09-03 성장 기획서의 첫 30일 순서(F-0 → F-1 → F-3/F-3a, 2026-09-04 CEO 리뷰 HOLD SCOPE)는 그대로 두고, 그 옆에 "루프 닫기" 묶음을 놓는다. 본문의 `확정`은 기존 문서에서 이미 확정된 사실만 가리키고, 이 문서가 새로 제안하는 것은 전부 `권장`이다. 운영자 인터뷰는 중단 상태이므로 여기서 질문을 던지지 않고 §11에 모아 둔다(재개 시 Q127~ 후보).
-> 근거: 로컬 코드 읽기 전용 조사 3건(캡처·메모·할 일 / CRM·루틴·크론 / KPI·원장·스키마), 문서 정독, 독립 2차 의견 1회(§10 — Claude 서브에이전트; Codex CLI는 모델 버전 잠금으로 미실행), 적대적 스펙 리뷰 3회(사실 오류·불일치 반영; 리뷰어의 오판 1건 — "`crm_activities`에 `meta` 없음" — 은 0016 마이그레이션 확인으로 기각). 라인 번호 대신 파일·심볼을 인용한다. 운영 DB 건수·실사용 빈도·Vercel 배포 상태는 검증하지 않았다.
+> 근거: 로컬 코드 읽기 전용 조사 3건(캡처·메모·할 일 / CRM·루틴·크론 / KPI·기록·스키마), 문서 정독, 독립 2차 의견 1회(§10 — Claude 서브에이전트; Codex CLI는 모델 버전 잠금으로 미실행), 적대적 스펙 리뷰 3회(사실 오류·불일치 반영; 리뷰어의 오판 1건 — "`crm_activities`에 `meta` 없음" — 은 0016 마이그레이션 확인으로 기각). 라인 번호 대신 파일·심볼을 인용한다. 운영 DB 건수·실사용 빈도·Vercel 배포 상태는 검증하지 않았다.
 
 ---
 
@@ -12,12 +12,12 @@
 
 브레인스토밍이 제안한 4계층 스택(캡처 → 오케스트레이션 → DB → 인터페이스)과 4대 모듈은 **Moonlight에 이미 대부분 있다.** Notion·n8n·Obsidian·Slack 봇을 새로 붙일 일이 아니라, 있는 것을 세 축으로 다시 읽고 빠진 고리를 닫는 일이다. 코드를 직접 확인한 결론은 네 줄이다.
 
-1. **세 축의 원장과 화면은 다 있다.** 메모(`journal_entries`·태그·검색·업무 연결·발췌→할 일/콘텐츠), 할 일(`tasks`·내 작업·첫 화면 오늘 레인·체크리스트·PMS), CRM(리드·딜·고객 연락·원자 결과 RPC·다음 연락일 프리셋), 루틴(하루 리뷰 R0·Rhythm·**주간 리포트 카드**). 주간 리포트(Q118 자동화 1순위)는 문서가 "후속 제안"이라 적고 있지만 `getWeeklyReport`와 첫 화면 카드로 **이미 구현돼 있다.** 단 하나의 예외가 폰 캡처다 — 텔레그램 봇은 슬래시 명령 6종만 처리하고 평문은 `ignored`로 버린다.
+1. **세 축의 기록과 화면은 다 있다.** 메모(`journal_entries`·태그·검색·업무 연결·발췌→할 일/콘텐츠), 할 일(`tasks`·내 작업·첫 화면 오늘 레인·체크리스트·PMS), CRM(리드·딜·고객 연락·원자 결과 RPC·다음 연락일 프리셋), 루틴(하루 리뷰 R0·Rhythm·**주간 리포트 카드**). 주간 리포트(Q118 자동화 1순위)는 문서가 "후속 제안"이라 적고 있지만 `getWeeklyReport`와 첫 화면 카드로 **이미 구현돼 있다.** 단 하나의 예외가 폰 캡처다 — 텔레그램 봇은 슬래시 명령 6종만 처리하고 평문은 `ignored`로 버린다.
 2. **없는 것은 기능이 아니라 "닫힘"이다.** 오늘 할 3개를 사람이 고르고 저녁에 완료율이 남는 고리, 주간 리포트가 목표치와 비교되는 고리, 메모 분석 결과가 저장되는 고리가 없다. 선행 지표를 셀 원천(`completed_at`·`created_at`·`occurred_at`)은 대부분 있고, 없는 것은 **사람이 고른 Top 3**와 **딜 단계 이동 이력** 둘이다. 주간 카드는 그마저 두 곳에서 잘못 센다(완료 할 일을 `updated_at`으로, 연락을 호출자 0인 `outreach_outcomes`로).
 3. **메모가 세 테이블로 갈라져 있다.** 전역 `M` 퀵메모는 `notes`, 메모 페이지는 `journal_entries`, 빠른 입력 `C`의 비-할일 힌트는 `work_orders` 인박스. "메모를 모아 데이터화"하려면 먼저 하나로 읽혀야 한다.
 4. **초안 크론 2개는 HEAD에서 지금도 고장이다.** `followup-autopilot`·`content-flywheel`이 요청하는 모드가 Engine에 없어 매일 조용히 실패하고, `agent_runs(result='error')`만 남을 뿐 에러로 표면화되지 않는다. 수리 커밋(`34bb180`, 2026-09-05, `claude/vigorous-taussig-0f4251`)은 존재하지만 이 브랜치에 **병합되지 않았다.** 09-03 기획서 F-0이 활성 결정 1순위인 이유이며, 이 문서도 그 순서를 유지한다.
 
-**권장.** 접근안 A "있는 것을 닫기"(새 테이블 0, **마이그레이션 0**) + 접근안 C의 규율 하나(목표치는 2주 실측 뒤 정한다). 코드는 이번 주부터 만들되 목표 숫자만 미룬다. 30일 뒤 실사용 데이터가 생기면 접근안 B(행동 원장·목표 테이블·알림 채널·일지 AI 기간 회고)의 조각을 게이트별로 졸업시킨다. 상세는 §5·§8.
+**권장.** 접근안 A "있는 것을 닫기"(새 테이블 0, **마이그레이션 0**) + 접근안 C의 규율 하나(목표치는 2주 실측 뒤 정한다). 코드는 이번 주부터 만들되 목표 숫자만 미룬다. 30일 뒤 실사용 데이터가 생기면 접근안 B(행동 기록·목표 테이블·알림 채널·일지 AI 기간 회고)의 조각을 게이트별로 졸업시킨다. 상세는 §5·§8.
 
 ---
 
@@ -41,7 +41,7 @@
 
 ## 2. Moonlight에 대입한 지도 — 있다 · 부분 · 없다 · 충돌
 
-`있음` = 코드·원장이 있고 동작 경로가 확인됨 · `부분` = 일부만 · `없음` = 검색했으나 없음 · `충돌` = 운영자 확정 원칙과 어긋남. 심볼은 2026-09-20 HEAD 기준이다.
+`있음` = 코드·기록이 있고 동작 경로가 확인됨 · `부분` = 일부만 · `없음` = 검색했으나 없음 · `충돌` = 운영자 확정 원칙과 어긋남. 심볼은 2026-09-20 HEAD 기준이다.
 
 ### 2.1 L1 캡처 (모듈 ①의 앞부분)
 
@@ -64,7 +64,7 @@
 | 미팅 후 24h 내 요약 발송 | 없음. 발송은 확정 금지(초안·승인까지). `work_orders` 승인은 `work-order-executor.js`에서 `marked_executed`일 뿐 아무것도 보내지 않는다 | 없음(의도) |
 | 크론 스케줄러 | `apps/hub/vercel.json` 일간 5개(`recompute-scores` 00:00 · `followup-autopilot` 07:00 · `content-flywheel` 07:30 · `chief-of-staff` 07:45 · `inquiries-sync` 06:00 KST). 주간 크론 없음. Engine에는 크론 없음 | 있음 |
 
-### 2.3 L3 원장 (구축 순서 Phase 1의 "DB 4개")
+### 2.3 L3 기록 (구축 순서 Phase 1의 "DB 4개")
 
 | 제안 | Moonlight 현재 | 상태 |
 |---|---|---|
@@ -122,8 +122,8 @@
 
 ## 4. 전제 (권장 — 운영자 동의 필요)
 
-1. **Moonlight가 곧 그 "워크플로우 OS"다.** L1~L4는 Hub/Engine/Supabase/MCP에 대응하므로 Notion·Obsidian·Slack을 새로 붙이지 않고, 텔레그램 라우트에 이미 있는 n8n 전달(`forwardToN8n`)을 **오케스트레이션 계층으로 넓히지 않는다.** 심화 설계 전제 3("기존 원장 재사용")의 연장이다.
-2. **세 축은 원장·화면이 있다. 부족한 것은 매일 쓰는 것과 루프의 닫힘이다.** 단 하나의 예외는 폰 캡처(§3-6)로, 이것은 기능 자체가 없다. 2026-07-29 "아직 매일 안 씀"이 여전히 가장 무거운 사실이고, 09-03 기획서의 2차 의견("기능이 문제가 아니다")과 같은 결론이다.
+1. **Moonlight가 곧 그 "워크플로우 OS"다.** L1~L4는 Hub/Engine/Supabase/MCP에 대응하므로 Notion·Obsidian·Slack을 새로 붙이지 않고, 텔레그램 라우트에 이미 있는 n8n 전달(`forwardToN8n`)을 **오케스트레이션 계층으로 넓히지 않는다.** 심화 설계 전제 3("기존 기록 재사용")의 연장이다.
+2. **세 축은 기록·화면이 있다. 부족한 것은 매일 쓰는 것과 루프의 닫힘이다.** 단 하나의 예외는 폰 캡처(§3-6)로, 이것은 기능 자체가 없다. 2026-07-29 "아직 매일 안 씀"이 여전히 가장 무거운 사실이고, 09-03 기획서의 2차 의견("기능이 문제가 아니다")과 같은 결론이다.
 3. **"모든 메모를 LLM으로 파싱해 CRM·캘린더·할 일에 자동 생성"은 하지 않는다.** 프로필 §11 확정(외부 AI 비용을 핵심 기능으로 삼지 않음·저비용 구조화 데이터 우선·AI 분석은 운영자가 누르는 버튼·결과는 확정 전 운영자 확인)과 심화 설계 §8("자동 이름 매칭으로 고객을 붙이지 않는다")에 어긋난다. AI 구조화는 **선택한 기록에, 운영자가 누를 때만**, 그리고 이미 있는 `pattern-analyze`를 쓴다.
 4. **"5영업일 무접촉 자동 알림"은 그대로 넣지 않는다.** Q117 확정(4-2-3-1)에서 N일 무접촉 자동 유입은 최하위다. 확정된 메커니즘은 다음 연락일(Q121 프리셋 → `leads.meta.next_action_at`) 도래와 운영자의 컨택 트래킹 표시다. 정체 14일은 첫 화면의 **신호**이지 유입 피드가 아니다.
 5. **Action KPI는 새 테이블·마이그레이션 없이 셀 수 있다.** 원천은 `tasks.completed_at`, `crm_activities.occurred_at`, `journal_entries`/`notes`의 `created_at`, `routine_checks.checked_at`, `publish_logs`다. 없는 것은 (a) 오늘 Top 3 표시, (b) 딜 단계 이동 한 줄, (c) 주간 목표치이며 셋 다 기존 컬럼(`tasks.meta`, `crm_activities`, `workspaces.meta`)에 들어간다.
@@ -134,7 +134,7 @@
 
 ## 5. 접근안 비교와 권장
 
-| | A. 있는 것을 닫기 | B. Action KPI 원장 | C. 의식 먼저 |
+| | A. 있는 것을 닫기 | B. Action KPI 기록 | C. 의식 먼저 |
 |---|---|---|---|
 | 요지 | 새 테이블 0·마이그레이션 0. Top 3 표시(`tasks.meta.focus_dates`), 주간 집계 원천 교정, 딜 이동을 `crm_activities`에 기록, 메모 읽기 통합, 패턴 저장, 텔레그램 평문 캡처+답장 | `activity_logs` 소생 + 집계 RPC, `goals`(O/KR)·`action_kpis`, `deal_stage_history`, 일지 AI 2계층, 발신 채널, §20 클라이언트 계측 | 코드 0. 30일간 기존 주간 카드·하루 리뷰·Rhythm으로 의식을 돌리고 손으로 숫자를 적는다 |
 | 규모 | S~M (human ~1주 / CC ~1일) | L (human 3~4주 / CC 3~4일) | 0 |
@@ -163,7 +163,7 @@
 
 - **데이터: `tasks.meta.focus_dates`**(KST `YYYY-MM-DD` 문자열 **배열** — 고른 날짜의 이력). 오늘 고르면 오늘 날짜를 append, 해제하면 오늘만 제거한다. 단일 값이 아니라 배열인 이유는 전날 미완료를 오늘 다시 골라도 전날의 선택 수가 줄지 않게(전날 완료율의 소급 변동 방지) 하기 위해서다. 마이그레이션 없음. `focus_dates`를 쓰는 경로는 Hub `/api/hub/tasks` → Engine `/api/pms/command` 하나로 한정한다(`journal_workflow_v1`·`capture_quick_input_v1`·`agent_command_v1`도 `tasks`를 쓰지만 `focus_dates`는 만지지 않는다). `normalizePmsCommand`(`apps/engine/lib/pms-command.ts`, 순수 함수)가 형식(날짜 문자열 배열, 중복 없음)을 검증하고, **3건 상한은 DB를 읽는 `pms-command-service.ts`**(기존 행을 읽어 `{...meta, ...patch.meta}`로 얕게 병합하는 곳)에서 같은 workspace에서 `meta->'focus_dates'`가 오늘을 포함하는 행 수(Supabase REST `cs` 필터)를 세어 거부한다. 인덱스는 없지만 운영자 1인·수십 행 규모라 허용하고, 동시 요청 레이스는 마지막 쓰기 승리로 둔다(단일 사용자). **MCP `update_task`로는 설정 자체가 안 된다** — `agent_command_v1`(0032, SQL)이 `checklist` 외의 `meta` 키를 `invalid-task-metadata`로 거부한다. 우회가 아니라 차단이므로 MCP 쪽 상한 검증은 필요 없고, 허용하려면 0032 개정(마이그레이션)이라 30일 게이트(B)로 보낸다.
 - **선택 화면 2곳, 같은 primitive.** (1) 내 작업 행에 "오늘 3개" 토글 — 선택 상태는 Moonstone(§5.2 selected 의미) + 라벨 "오늘", 색 단독 금지, 4번째부터 비활성. (2) 아침 하루 리뷰 팝업(같은 `Drawer presentation="compact"`)이 후보(missed/today 상위 5, Q116 정렬)를 보여주고 3개를 고른다. 어느 쪽이 기본인지는 §11 Q128.
-- **표시.** 첫 화면 `buildTaskToday`(`apps/hub/lib/task-today.js`)와 내 작업 버킷(`/api/hub/attention` → `attention-ledger.js`; `work-ledger.js`는 루틴·Rhythm 원장이라 해당 없음)에 `focus` 레인을 최상단으로 추가(`focus → missed → today → waiting → inbox`). "오늘 이 3개만" 카드(`MorningBriefCard`)의 1차 소스를 `focus_dates`에 오늘이 든 할 일로 바꾸고, 비어 있으면 Q116 정렬 상위 3개를 dashed `◇ 권장`(§5.3 certainty)으로 제안한다. **`chief-of-staff` 크론은 손대지 않는다** — 그 출력은 카드의 보조 줄로 남긴다.
+- **표시.** 첫 화면 `buildTaskToday`(`apps/hub/lib/task-today.js`)와 내 작업 버킷(`/api/hub/attention` → `attention-ledger.js`; `work-ledger.js`는 루틴·Rhythm 기록이라 해당 없음)에 `focus` 레인을 최상단으로 추가(`focus → missed → today → waiting → inbox`). "오늘 이 3개만" 카드(`MorningBriefCard`)의 1차 소스를 `focus_dates`에 오늘이 든 할 일로 바꾸고, 비어 있으면 Q116 정렬 상위 3개를 dashed `◇ 권장`(§5.3 certainty)으로 제안한다. **`chief-of-staff` 크론은 손대지 않는다** — 그 출력은 카드의 보조 줄로 남긴다.
 - **완료율은 저장하지 않고 계산한다.** `review_data`의 CHECK가 `{energy, progress}`로 고정돼 있어 필드를 늘리면 마이그레이션이 필요하다. 대신 읽기 시점에 `focus_dates`에 `D`가 든 할 일 중 `completed_at`을 KST로 바꾼 날짜가 `D`인 수를 센다. 규칙: 분모는 그날 고른 수(1~3건, 0이면 그날은 집계 제외), 삭제된 할 일은 분모·분자 모두 제외(`tasks.status`에 cancelled는 없다 — inbox/todo/doing/blocked/done), 전날 미완료는 배열에 전날이 남아 전날 집계에 미완료로 그대로 남고 다음 날은 `missed` 레인에 기한대로 다시 나타난다. 오늘 다시 고르면 오늘이 append되어 오늘의 3개에 들되 전날 집계는 변하지 않는다. 재오픈(done → todo)은 `pms-command.ts`가 `completed_at`을 비우므로 `focusRate`가 소급해 내려간다 — 허용하고 규칙으로 적는다. 근무일은 월~금(KST) 고정: 주말에 고른 것은 그날 집계에 포함하되 `reviewDays`의 분모(5)에는 넣지 않는다. 주간 `focusRate` = 고른 날들의 Σ완료 / Σ선택. 저녁 리뷰 팝업은 "오늘 3개 중 2개 완료"를 읽기 전용으로 보여주고 `progress` 기본값을 제안한다(덮어쓰기 가능). `review_data.focus_task_ids` 스냅샷 저장은 마이그레이션이 필요해 B로 보낸다.
 - **프로젝트화.** "할 일 → 프로젝트 승격" 기능은 없다. 프로필 §11의 후보 감지 규칙(Opportunity 생성·가격 대화·14일 3회 활동)은 정의만 있고 구현 여부는 미확인이다. 이 문서는 새로 만들지 않는다 — 할 일 `EditDrawer`(`project-task-detail-drawer.jsx`)에 이미 `projectId` 선택 필드가 있어 "기존 프로젝트로 보내기"는 된다. 내 작업의 할 일 편집 드로어(`my-work.jsx` `EditDrawer`)에서도 같은 필드가 보이는지 확인만 한다.
 
@@ -176,7 +176,7 @@
 - **저녁 = 하루 리뷰 팝업.** 두 줄을 더한다: "오늘 연락 기록 N건"(`crm_activities` 당일 `occurred_at` 카운트, 읽기 전용 — 주간 카드와 같은 원천)과 "오늘 3개 중 k개 완료"(6.2). 회고 질문은 넣지 않는다 — R0의 "심플하게" 요청(09-12)을 유지하고, 잘된 점·병목은 주간에서 묻는다(7.4).
 - **주간 = 월·목 카드 + 언제든 열람.** 카드 렌더 조건(월/목)은 유지하되 `dashboard/work/daily-review`에 "주간" 탭을 두어 다른 요일에도 같은 `getWeeklyReport`를 본다. 새 최상위 탭은 없다.
 
-### 6.4 행동 원장 — 지금은 있는 원천으로 센다
+### 6.4 행동 기록 — 지금은 있는 원천으로 센다
 
 `activity_logs`를 살리는 것은 30일 게이트(B)로 보낸다. 2주 실측에 필요한 행동은 전부 기존 테이블에서 셀 수 있고, `activity_logs`가 유일하게 더하는 것은 딜 이동(6.3이 `crm_activities`로 대신함)과 Top 3 선택 이력(지금은 필요 없음)뿐이기 때문이다.
 
@@ -277,11 +277,11 @@
 >
 > **틀린 전제: 6번(그리고 "Telegram = 폰 유일 캡처 경로").** `COMMAND_HANDLERS`는 여섯 개뿐이고 슬래시 없는 텍스트는 `status:"ignored"`로 버려진다. 답장 경로도 없다. 유일한 폰 캡처 가능성은 `forwardToN8n`(`N8N_WEBHOOK_URL`)이다. 즉 전제 1 "n8n을 붙이지 않는다"는 이미 n8n이 경로에 있다는 점에서 어긋나고, 전제 2 "부족한 건 기능이 아니다"도 폰 캡처 한 곳에서는 틀렸다. 덤: 주간 리포트는 완료 할 일을 `updated_at`으로 센다 — 3주 전 끝낸 할 일의 제목만 고쳐도 이번 주 완료로 잡힌다.
 >
-> **도구.** Todoist·Things가 50%를 오늘 해결한다(기한순 오늘 목록, Top 3, 폰 캡처+확인, 푸시). 나머지 50%는 자체 앱만 가진 것 — `tasks↔leads↔journal_entries` 한 원장, `record_contact_outcome_v1`이 쓰는 `next_action_at`·`last_touch_at`, Q116/Q117 규칙, 주간 리포트. 도구를 더 붙이지 말고 Todoist가 잘하는 두 가지(캡처 확인 답장, 오늘 Top 3)만 Moonlight로 옮겨라.
+> **도구.** Todoist·Things가 50%를 오늘 해결한다(기한순 오늘 목록, Top 3, 폰 캡처+확인, 푸시). 나머지 50%는 자체 앱만 가진 것 — `tasks↔leads↔journal_entries` 한 기록, `record_contact_outcome_v1`이 쓰는 `next_action_at`·`last_touch_at`, Q116/Q117 규칙, 주간 리포트. 도구를 더 붙이지 말고 Todoist가 잘하는 두 가지(캡처 확인 답장, 오늘 Top 3)만 Moonlight로 옮겨라.
 >
 > **주말 빌드.** `tasks.meta.focus_date`(하루 최대 3개) → `work-ledger.js` `focus` 버킷 → "오늘 이 3개만" 소스를 `brief-ledger.js`(죽은 크론의 `project_updates`)에서 focus 할 일로 교체, 비면 Q116 상위 3개를 dashed 권장으로. 크론은 손대지 않는다. `daily-review-ledger.js`가 focus 3개의 `completed_at`을 읽어 `progress`를 자동 제안. `weekly-report.js` `updated_at`→`completed_at` 교정 + `focusPicked/focusDone`. 텔레그램 `run.ts`에 평문 기본 핸들러 → `tasks` inbox + 응답 `{method:"sendMessage"}`. 건너뛴다: `goals` 테이블, 일지 AI 2계층, 텔레그램 카드, 딜 이력, `activity_logs`, 정체 통합, 접근안 C(30일 더 기다리면 데이터 기아만 연장).
 >
-> **Recommendation:** 접근안 A를 `tasks.meta.focus_date` 한 필드와 텔레그램 `task` 핸들러로 좁혀 이번 주말에 만들어라 — 첫 화면의 "오늘 이 3개만"은 죽은 초안 크론을 읽고 있고, 폰 캡처 경로는 코드에 존재하지 않으며, 주간 리포트는 `updated_at`으로 완료를 세고 있어서, 새 원장을 설계하기 전에 이미 있는 루프 세 곳이 실제로 닫혀야 실사용 데이터가 생긴다.
+> **Recommendation:** 접근안 A를 `tasks.meta.focus_date` 한 필드와 텔레그램 `task` 핸들러로 좁혀 이번 주말에 만들어라 — 첫 화면의 "오늘 이 3개만"은 죽은 초안 크론을 읽고 있고, 폰 캡처 경로는 코드에 존재하지 않으며, 주간 리포트는 `updated_at`으로 완료를 세고 있어서, 새 기록을 설계하기 전에 이미 있는 루프 세 곳이 실제로 닫혀야 실사용 데이터가 생긴다.
 
 ### 10.1 반영
 
@@ -293,7 +293,7 @@
 | 접근안 C를 버려라 | **부분 동의.** 코드를 미루지 않는다. 다만 목표 숫자만 실측 뒤 정하는 규율은 유지 | §5 권장 문장 명시 |
 | `activity_logs`·정체 통합·딜 이력을 건너뛰어라 | **대체로 동의.** `activity_logs`는 B로. 딜 이동은 `crm_activities` 한 줄이라 유지, 정체 통합은 부채라 주 4에 남김 | §6.4 재작성, §8 |
 | `review_data.focus_task_ids` 스냅샷 | 마이그레이션이 필요해 A의 "0"과 충돌 | 읽기 시점 계산으로 대체, 스냅샷은 B |
-| "`work-ledger.js`에 `focus` 버킷" | **파일 오기.** `work-ledger.js`는 루틴·Rhythm 원장이고 내 작업 버킷은 `attention-ledger.js`가 만든다 | §6.2에 바른 파일로 적음 |
+| "`work-ledger.js`에 `focus` 버킷" | **파일 오기.** `work-ledger.js`는 루틴·Rhythm 기록이고 내 작업 버킷은 `attention-ledger.js`가 만든다 | §6.2에 바른 파일로 적음 |
 
 ---
 
@@ -321,7 +321,7 @@
 
 ## 13. 내가 본 것
 
-- "일단 세 가지 빠르게 필요할 것 같긴 해 … 세 번째가 뭐였지 기억이 안나." 기억에서 빠진 세 번째 축(CRM)은 Moonlight가 가장 깊게 만든 곳이고, 바로 떠오른 두 축(메모·오늘 목록)은 원장은 있는데 **닫힘이 없는** 곳이다. 아픈 데가 어딘지 이 한 문장이 말해 준다.
+- "일단 세 가지 빠르게 필요할 것 같긴 해 … 세 번째가 뭐였지 기억이 안나." 기억에서 빠진 세 번째 축(CRM)은 Moonlight가 가장 깊게 만든 곳이고, 바로 떠오른 두 축(메모·오늘 목록)은 기록은 있는데 **닫힘이 없는** 곳이다. 아픈 데가 어딘지 이 한 문장이 말해 준다.
 - "그 뭐 할 일 완료 이런 것들을 하루에 해야 될 목록들이 잘 보여야겠지." 첫 화면은 이미 오늘 레인을 보여준다. 그런데 운영자는 여전히 "잘 보여야겠지"라고 말한다 — 시스템이 고른 목록과 내가 고른 3개는 다르다. 그래서 첫 빌드가 Top 3 플래그다. 2차 의견도 이 문장을 골랐다.
 - 브레인스토밍은 Notion·n8n·Telegram을 쇼핑하는데, 운영자는 그 스택을 이미 소유하고 있다. 만든 것이 아직 매일 "느껴지지" 않는다는 신호이고, 2026-07-29의 "아직 매일 안 씀"이 두 달째 가장 무거운 사실이다. 그래서 이 문서는 새 도구를 하나도 붙이지 않는다 — 폰 캡처 한 곳만 빼고, 그것도 이미 있는 봇의 평문 처리다.
 - 다른 AI에게 "400%"라는 숫자를 요구했다. 정본 문서의 운영자 자신은 "인지 에너지 1/3, 누락 0"이라고 실패 비용으로 말했다. 이 문서는 후자를 잰다.

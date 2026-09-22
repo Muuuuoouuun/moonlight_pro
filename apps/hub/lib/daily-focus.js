@@ -100,7 +100,7 @@ export function focusOccupiedKeys(dailyFocus) {
   return keys;
 }
 
-// 신호는 `subject: { type, id }`로 자기가 가리키는 원장 레코드를 밝힌다. subject가 없는
+// 신호는 `subject: { type, id }`로 자기가 가리키는 기록 레코드를 밝힌다. subject가 없는
 // 집계 신호(복합 리스크·신규 리드 묶음 등)는 슬롯과 1:1 대응이 아니므로 그대로 둔다.
 // 반드시 정원 slice 앞에서 호출한다 — 뒤에서 걸면 중복이 자리를 먹고 진짜 신호가 잘린다.
 export function withoutFocusDuplicates(signals, dailyFocus) {

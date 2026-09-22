@@ -26,7 +26,7 @@
 - `meta.delivery`: deliverable, plannedStart, prototypeDate, criteria[{id,text,done}], remainingHours, availableHours, blocker, nextAction(입력 계약), nextVersion, resultUrl
 - 서버 관리: originalDueAt, history[{at,from,to,reason}], prototypeVerifiedAt, pausedAt. 클라이언트가 전달해 덮어쓸 수 없다.
 
-전달된 delivery 필드만 정규화하며 기존 meta의 org_scope·영업 연결 등 다른 정보는 보존한다. Engine은 workspace 범위에서 현재 행을 읽고 updated_at 조건으로 원자 PATCH한다. 원장을 읽지 못하거나 다른 수정과 충돌하면 쓰지 않는다. UI는 충돌 시 입력을 유지하고 최신 기록과 비교할 선택지를 제공한다.
+전달된 delivery 필드만 정규화하며 기존 meta의 org_scope·영업 연결 등 다른 정보는 보존한다. Engine은 workspace 범위에서 현재 행을 읽고 updated_at 조건으로 원자 PATCH한다. 기록을 읽지 못하거나 다른 수정과 충돌하면 쓰지 않는다. UI는 충돌 시 입력을 유지하고 최신 기록과 비교할 선택지를 제공한다.
 
 날짜 순서는 착수 예정일 ≤ 프로토타입 확인일 ≤ 종료일이다. 일자 판단은 서울 기준이다. 결과물·완료 조건 문구·링크를 바꾸면 작동 확인을 무효화하고 다시 확인한다. 완료 시각은 중복 완료 요청으로 바뀌지 않으며 재개하면 현재 completed_at을 비운다.
 

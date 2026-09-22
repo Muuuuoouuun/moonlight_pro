@@ -1070,7 +1070,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
       }
       else if (r?.status === 'preview') setSaveState('preview');
       else if (r?.status === 'conflict') {
-        setSaveFeedback(r?.message || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 원장을 확인한 뒤 다시 시도하세요.');
+        setSaveFeedback(r?.message || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 기록을 확인한 뒤 다시 시도하세요.');
         setSaveState('conflict');
       }
       else { setSaveFeedback(r?.message || ''); setSaveState('error'); }
@@ -1264,7 +1264,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
               <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
             )}
             {saveState === 'conflict' && (
-              <span style={{ color: 'var(--danger)' }}>{saveFeedback || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 원장을 확인한 뒤 다시 시도하세요.'}</span>
+              <span style={{ color: 'var(--danger)' }}>{saveFeedback || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 기록을 확인한 뒤 다시 시도하세요.'}</span>
             )}
             {saveState === 'error' && (
               <span style={{ color: 'var(--danger)' }}>{saveFeedback || '저장에 실패했습니다. 다시 시도하세요.'}</span>
@@ -1290,7 +1290,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             onChange={setPanelKey}
             style={presentation === 'compact' ? { margin: 0, padding: 0 } : { margin: '-16px -16px 0', padding: '0 16px' }}
           />
-          {/* 비활성 탭은 언마운트하지 않고 감춘다 — 기록 탭이 열리기 전에도 원장을 읽어
+          {/* 비활성 탭은 언마운트하지 않고 감춘다 — 기록 탭이 열리기 전에도 기록을 읽어
               탭 배지에 건수가 뜨고, 탭을 오가도 작성 중인 초안·스크롤이 살아 있다.
               display:none 요소는 Drawer의 Tab 트랩(offsetParent 필터)에서도 빠진다. */}
           <div role="tabpanel" aria-label={infoLabel} style={{ display: panelKey === FIELD_PANEL_KEY ? 'flex' : 'none', flexDirection: 'column', gap: 14 }}>

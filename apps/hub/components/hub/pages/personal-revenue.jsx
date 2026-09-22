@@ -263,7 +263,7 @@ function DealDrawer({ deal, closeDrawer, closeButtonRef, onNavigate }) {
         </div>
         <strong>{deal.action.text}</strong>
         {deal.action.source === "recommended" ? (
-          <p>원장에 확정된 다음 행동이 없어 현재 단계에 맞춘 권장안을 표시합니다.</p>
+          <p>기록에 확정된 다음 행동이 없어 현재 단계에 맞춘 권장안을 표시합니다.</p>
         ) : null}
       </div>
 
@@ -350,7 +350,7 @@ export function PersonalRevenueRoadmap({ ledger, syncState, onNavigate }) {
 
         {syncState === "loading" ? (
           <Card className="personal-revenue-state-card">
-            <div className="personal-revenue-loading" role="status">매출 원장을 불러오는 중…</div>
+            <div className="personal-revenue-loading" role="status">매출 기록을 불러오는 중…</div>
           </Card>
         ) : model.events.length === 0 ? (
           <Card className="personal-revenue-state-card" pad={false}>
@@ -359,7 +359,7 @@ export function PersonalRevenueRoadmap({ ledger, syncState, onNavigate }) {
               title="예정일이 있는 개인 딜이 없습니다"
               description={ledger?.source === "supabase"
                 ? "개인 딜에 예정일을 지정하면 30일 매출 타임라인과 실행 우선순위가 여기에 나타납니다."
-                : "Preview · 연결된 매출 원장에 개인 딜과 예정일이 필요합니다."}
+                : "Preview · 연결된 매출 기록에 개인 딜과 예정일이 필요합니다."}
               action={<Button variant="outline" onClick={() => onNavigate?.("dashboard/revenue/deals?scope=personal")}>Deals 열기</Button>}
             />
           </Card>
