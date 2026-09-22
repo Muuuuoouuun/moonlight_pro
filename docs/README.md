@@ -116,6 +116,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기회 탐색 (2026-09-13)**
 
+- [개인 사업 기회 캐치](superpowers/specs/2026-09-22-personal-business-opportunity-catch-design.md) — **요청 반영·코드 구현(2026-09-22)**. Council·AI 한 주 정리·일반 메모 분석에 SaaS/컨설팅 후보 포착 기준을 공유한다. 반복 문제·해결 요청·지불 의사·실제 결과를 구분하고 근거·미확인·최소 검증 행동을 제시한다. 원문 없는 패턴 후보를 임의 출처로 보정하지 않는다. 숫자형 주간 카드·기회 자동 등록·정기 실행·배포는 포함하지 않는다.
+
 - [`superpowers/specs/2026-09-13-discovery-contact-signals-design.md`](superpowers/specs/2026-09-13-discovery-contact-signals-design.md) — **신호 목록 입력됨 / 동작 설계 제안 / 구현 전**. 대면 미팅·연락 2회 또는 장시간 통화·선제적인 결제 일정 발언. 자동 판정의 기간·시간 기준은 확인 중이다.
 
 - [`superpowers/specs/2026-09-13-discovery-nudge-design.md`](superpowers/specs/2026-09-13-discovery-nudge-design.md) — **문맥별 넛지 구현·로컬 검증 완료**. 상세의 주요 행동·직접 입력 포커스·단계적 펼침, 날짜 미루기·계기별 숨김·해제, 목록/상세/다른 창 상태 공유. [실행 기록](superpowers/plans/2026-09-13-discovery-nudge.md). 0031 운영 DB는 2026-09-14 적용 완료. 코드 배포는 별도.

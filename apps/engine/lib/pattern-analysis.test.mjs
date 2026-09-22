@@ -148,3 +148,17 @@ test("executePatternAnalysis rejects invalid UUID or empty records", async () =>
 
   assert.equal(result.status, "invalid-input");
 });
+
+test("unsupported business candidates cannot acquire evidence from fallback text or an unknown record ID", () => {
+  const records = [{ id: "source-record", body: "반복 작업을 줄이고 싶다고 말했다." }];
+  for (const evidenceQuotes of [
+    [],
+    [{ journalId: "missing-record", quote: records[0].body }],
+    [{ journalId: "source-record", quote: "유료 컨설팅을 구매하겠다고 확약했다." }],
+  ]) {
+    const result = processAndVerifyPatternOutput(JSON.stringify({ candidates: [{
+      title: "유료 해결 후보", observation: "구매 확약", evidenceQuotes,
+    }] }), records, "general");
+    assert.deepEqual(result.patterns, []);
+  }
+});

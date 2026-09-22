@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { buildBusinessOpportunityCatchInstruction } from "./business-opportunity-catch.ts";
 
 export type PatternGoal = "sales_insight" | "content_hook" | "operational_rule" | "decision_rationale" | "general";
 
@@ -113,7 +114,8 @@ ${question ? `운영자의 구체적 분석 질문: "${question}"` : ""}
 1. [관찰(Observation)]과 [해석(Interpretation)]을 엄격히 구분하십시오. 실제로 기록된 사실은 관찰에, AI의 추론은 해석에 배치합니다.
 2. [정직한 근거 인용 (Honest Quotes)]: 근거가 되는 원문 문장은 반드시 제공된 기록의 본문에서 '글자 그대로(Verbatim)' 인용해야 합니다. 절대로 없는 문장을 지어내거나 미화하지 마십시오.
 3. [단 1가지 실행 가능한 가이드(Actionable Guidance)]: 막연한 조언 대신, 바로 할 일(Task)로 등록하거나 콘텐츠 초안으로 쓸 수 있는 명확한 다음 행동을 1개 제시하십시오.
-4. 출력 형식은 반드시 지정된 JSON 포맷을 유지하십시오.`;
+4. 출력 형식은 반드시 지정된 JSON 포맷을 유지하십시오.
+${buildBusinessOpportunityCatchInstruction({ surface: "pattern", mode: goal })}`;
 }
 
 /**
@@ -191,8 +193,8 @@ export function processAndVerifyPatternOutput(
     if (Array.isArray(c.evidenceQuotes)) {
       for (const eq of c.evidenceQuotes) {
         if (!eq || typeof eq !== "object" || !eq.quote || typeof eq.quote !== "string") continue;
-        const targetRecord = recordsMap.get(eq.journalId) || records[0];
-        if (!targetRecord) continue;
+        const targetRecord = recordsMap.get(eq.journalId);
+        if (!targetRecord) { unverifiedQuotesFiltered++; continue; }
 
         const check = verifyQuoteInRecord(eq.quote, targetRecord);
         if (check.verified && check.cleanedQuote) {
@@ -208,19 +210,9 @@ export function processAndVerifyPatternOutput(
       }
     }
 
-    // Fallback: If AI didn't provide valid quotes, take the first 60 chars of the first record as honest fallback
-    if (verifiedQuotes.length === 0 && records.length > 0) {
-      const fallbackRec = records[0];
-      const fallbackText = (fallbackRec.body || fallbackRec.title || "").trim().slice(0, 80);
-      if (fallbackText) {
-        verifiedQuotes.push({
-          journalId: fallbackRec.id,
-          quote: fallbackText,
-          occurredAt: fallbackRec.occurredAt,
-          field: "body",
-        });
-      }
-    }
+    // An unrelated first-record excerpt cannot substantiate a generated claim.
+    // Exact quote matching establishes provenance, not semantic correctness.
+    if (verifiedQuotes.length === 0) continue;
 
     patterns.push({
       id: `pattern-${idx + 1}-${Date.now().toString(36)}`,

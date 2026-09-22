@@ -16,6 +16,7 @@ import {
   fetchSupabaseRowsDetailed,
 } from "../../../../lib/supabase-rest.ts";
 import { retrieveKnowledge, type KnowledgeItem } from "../../../../lib/knowledge-retriever.ts";
+import { buildBusinessOpportunityCatchInstruction } from "../../../../lib/business-opportunity-catch.ts";
 
 const PERSONA_PROFILES: Record<string, { nameKo: string; role: string; systemPrompt: string; defaultAction: string }> = {
   order: {
@@ -202,7 +203,7 @@ function buildPrompt({
   if (ragSnippets && ragSnippets.length > 0) {
     lines.push("【🔍 관련 과거 메모 및 패턴 참고 (RAG Grounding)】:");
     for (const item of ragSnippets) {
-      lines.push(`- [${item.kind} | ${item.occurredAt ? item.occurredAt.slice(0, 10) : "최근"}] ${item.title}: "${item.snippet}"`);
+      lines.push(`- [${item.sourceTable}:${item.id} | ${item.kind} | ${item.occurredAt ? item.occurredAt.slice(0, 10) : "날짜 미제공"}] ${item.title}: "${item.snippet}"`);
     }
     lines.push("");
   }
@@ -279,6 +280,7 @@ export async function POST(req: Request) {
     "운영자의 언어는 한국어이며, 실무적이고 직설적인 문체를 사용합니다.",
     "모호한 일반론이나 칭찬은 금지하고 항상 '다음 한 수'로 끝맺습니다.",
     "사실(원장 데이터)에 없는 내용을 지어내지 않으며, 외부 발송/공개 행동은 인간 승인 게이트(Human Approval)를 거치도록 제안합니다.",
+    buildBusinessOpportunityCatchInstruction({ surface: "persona", personaId, mode, context }),
   ].join("\n\n");
 
   const prompt = buildPrompt({ personaId, mode, lens, message, context, draft, ragSnippets });

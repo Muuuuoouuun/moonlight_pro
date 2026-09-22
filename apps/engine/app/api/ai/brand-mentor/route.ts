@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 export const maxDuration = 60;
 
 import { generateGeminiText, getGeminiIntegrationStatus } from "../../../../lib/gemini";
+import { buildBusinessOpportunityCatchInstruction } from "../../../../lib/business-opportunity-catch.ts";
 import {
   insertIntegrationSyncRun,
   resolveDefaultWorkspaceId,
@@ -142,6 +143,7 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
   const config = MODES[mode];
   const lines = [
     config.question,
+    buildBusinessOpportunityCatchInstruction({ surface: "brand", mode, context }),
     "",
     `자문 렌즈: ${config.lens}`,
     `참고 프레임: ${config.frames}`,
