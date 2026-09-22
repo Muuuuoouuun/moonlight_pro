@@ -10,17 +10,17 @@
 // is skipped, so the scan can piggyback on every Daily Brief load without cron infra.
 
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
+import { STALLED_DAYS } from "@/lib/deal-stages";
 import { resolveDefaultWorkspaceId } from "../server-write.js";
 import { createWorkOrder, getWorkOrders } from "./work-orders.js";
 
-const DEFAULT_THRESHOLD_DAYS = 10;
 // Cap per scan so a long-neglected board doesn't flood the approval queue in one morning.
 const DEFAULT_MAX_CREATES = 5;
 
 export async function scanStalledDeals({
   workspaceId = resolveDefaultWorkspaceId(),
   ledger = null, // pass a pre-fetched revenue ledger to avoid a duplicate read
-  thresholdDays = DEFAULT_THRESHOLD_DAYS,
+  thresholdDays = STALLED_DAYS,
   maxCreates = DEFAULT_MAX_CREATES,
   dryRun = false,
 } = {}) {
@@ -36,7 +36,7 @@ export async function scanStalledDeals({
   const deals = Array.isArray(rev.deals) ? rev.deals : [];
   const stalled = deals.filter(
     (d) => d.trackingEligible !== false
-      && d.stage !== "won"
+      && d.stage !== "closing"
       && d.stage !== "lost"
       && Number(d.age) > thresholdDays,
   );

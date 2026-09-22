@@ -73,3 +73,9 @@ export const STAGE_LINE = [
   "var(--moon-400)",
   "var(--moon-300)",
 ];
+
+// Stalled threshold (days since last activity) for an open (non-closing, non-lost) deal.
+// Single canonical value per DESIGN.md §8.1 ("정체 기준은 STALLED_DAYS 상수 하나, 페이지별
+// 하드코딩 금지") — the Deals kanban queue icon and the server-side stalled-scan follow-up
+// proposer both read this instead of keeping their own copy.
+export const STALLED_DAYS = 14;
