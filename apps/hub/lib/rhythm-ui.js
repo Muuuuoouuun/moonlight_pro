@@ -143,14 +143,62 @@ export function slugifyRitualName(name) {
   return base || "ritual";
 }
 
+const RITUAL_CATEGORIES = new Set(["general", "work", "content", "health", "learning", "personal"]);
+
+export const RITUAL_CATEGORY_LABELS = {
+  work: "업무",
+  content: "콘텐츠",
+  health: "건강",
+  learning: "학습",
+  personal: "개인",
+  general: "일반",
+};
+
+function clampTargetPerWeek(value) {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? Math.min(7, Math.max(1, n)) : null;
+}
+
+// 루틴 구성 — 카테고리별 개수·이번 주 완료/목표 합계. RhythmVisualizer의 '루틴 구성' 패널이
+// 쓴다. 하드코딩 업로드·성과 탭을 대체하는 실데이터(카테고리·주간 목표는 §루틴 필드 확장).
+export function summarizeRitualsByCategory(rituals = []) {
+  const order = ["work", "content", "health", "learning", "personal", "general"];
+  const byCategory = new Map();
+
+  (Array.isArray(rituals) ? rituals : []).forEach((r) => {
+    const category = RITUAL_CATEGORIES.has(r?.category) ? r.category : "general";
+    const target = clampTargetPerWeek(r?.targetPerWeek) || 7;
+    const completed = Array.isArray(r?.weeks) ? r.weeks.filter((v) => v === 1).length : 0;
+    if (!byCategory.has(category)) {
+      byCategory.set(category, {
+        category,
+        label: RITUAL_CATEGORY_LABELS[category],
+        count: 0,
+        completedThisWeek: 0,
+        targetThisWeek: 0,
+      });
+    }
+    const entry = byCategory.get(category);
+    entry.count += 1;
+    entry.completedThisWeek += completed;
+    entry.targetThisWeek += target;
+  });
+
+  return order.filter((key) => byCategory.has(key)).map((key) => byCategory.get(key));
+}
+
 export function buildRhythmDefinePayload(draft) {
   const name = cleanString(draft?.name);
   const idSuffix = cleanString(draft?.id).replace(/-/g, "").slice(0, 8) || "seed";
+  const checkType = cleanString(draft?.checkType).toLowerCase() || "morning";
+  const categoryRaw = cleanString(draft?.category).toLowerCase();
   return {
     ritualKey: `${slugifyRitualName(name)}-${idSuffix}`,
     name,
-    checkType: cleanString(draft?.checkType).toLowerCase() || "morning",
+    checkType,
     projectId: cleanString(draft?.projectId) || null,
+    category: RITUAL_CATEGORIES.has(categoryRaw) ? categoryRaw : "general",
+    targetPerWeek: clampTargetPerWeek(draft?.targetPerWeek) || (checkType === "weekly" ? 1 : 7),
   };
 }
 
@@ -173,6 +221,16 @@ export function buildRhythmEditPayload(original, edited) {
   const nextProjectId = cleanString(edited?.projectId) || null;
   const prevProjectId = cleanString(original?.projectId) || null;
   if (nextProjectId !== prevProjectId) payload.projectId = nextProjectId;
+
+  const category = cleanString(edited?.category).toLowerCase();
+  if (category && category !== cleanString(original?.category).toLowerCase()) {
+    payload.category = category;
+  }
+
+  const targetPerWeek = clampTargetPerWeek(edited?.targetPerWeek);
+  if (targetPerWeek && targetPerWeek !== clampTargetPerWeek(original?.targetPerWeek)) {
+    payload.targetPerWeek = targetPerWeek;
+  }
 
   return payload;
 }

@@ -21,11 +21,17 @@ export const runtime = "nodejs";
 // (project_id, meta.ritual_key) regardless of status, so the seed row makes
 // the routine appear in the Rhythm list at 0/7 before any check-in exists.
 const CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
+const RITUAL_CATEGORIES = new Set(["general", "work", "content", "health", "learning", "personal"]);
 const ROUTINE_ROW_SELECT = "id,project_id,check_type,meta";
 const EDIT_ROW_LIMIT = 500;
 
 function cleanString(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function clampTargetPerWeek(value) {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? Math.min(7, Math.max(1, n)) : null;
 }
 
 function invalidInput(error, message) {
@@ -61,6 +67,9 @@ function normalizeDefinePayload(payload) {
   const name = cleanString(payload.name);
   const checkType = cleanString(payload.checkType).toLowerCase();
   const projectId = cleanString(payload.projectId) || null;
+  const categoryRaw = cleanString(payload.category).toLowerCase();
+  const category = RITUAL_CATEGORIES.has(categoryRaw) ? categoryRaw : "general";
+  const targetPerWeek = clampTargetPerWeek(payload.targetPerWeek) || (checkType === "weekly" ? 1 : 7);
 
   if (!ritualKey || ritualKey.length > 160) {
     return { error: invalidInput("invalid-ritual-key", "ritualKey is required and must be at most 160 characters.") };
@@ -75,7 +84,7 @@ function normalizeDefinePayload(payload) {
     return { error: invalidInput("invalid-project-id", "projectId must be a canonical UUID.") };
   }
 
-  return { value: { ritualKey, name, checkType, projectId } };
+  return { value: { ritualKey, name, checkType, projectId, category, targetPerWeek } };
 }
 
 export async function POST(req) {
@@ -89,7 +98,7 @@ export async function POST(req) {
     const normalized = normalizeDefinePayload(parsed.data);
     if (normalized.error) return normalized.error;
 
-    const { ritualKey, name, checkType, projectId } = normalized.value;
+    const { ritualKey, name, checkType, projectId, category, targetPerWeek } = normalized.value;
     const workspaceId = resolveDefaultWorkspaceId();
 
     // 정의(씨앗) 행에는 idempotency_key를 절대 붙이지 않는다 — /api/routine/check가
@@ -97,7 +106,7 @@ export async function POST(req) {
     // 씨앗 행과 idempotency_key가 겹쳐 "duplicate"로 오판될 수 있다.
     const record = {
       ...buildRoutineCheckRecord({ projectId, checkType, status: "pending", note: null, workspaceId }),
-      meta: { ritual_key: ritualKey, name },
+      meta: { ritual_key: ritualKey, name, category, target_per_week: targetPerWeek },
     };
 
     if (!workspaceId || !resolveSupabaseConfig()) {
@@ -194,6 +203,22 @@ function normalizeEditPayload(payload) {
     result.projectId = projectId;
   }
 
+  if (Object.prototype.hasOwnProperty.call(payload, "category")) {
+    const category = cleanString(payload.category).toLowerCase();
+    if (!RITUAL_CATEGORIES.has(category)) {
+      return { error: invalidInput("invalid-category", "category must be one of general, work, content, health, learning, personal.") };
+    }
+    result.category = category;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, "targetPerWeek")) {
+    const targetPerWeek = clampTargetPerWeek(payload.targetPerWeek);
+    if (!targetPerWeek) {
+      return { error: invalidInput("invalid-target-per-week", "targetPerWeek must be an integer between 1 and 7.") };
+    }
+    result.targetPerWeek = targetPerWeek;
+  }
+
   return { value: result };
 }
 
@@ -208,7 +233,7 @@ export async function PATCH(req) {
     const normalized = normalizeEditPayload(parsed.data);
     if (normalized.error) return normalized.error;
 
-    const { ritualKey, matchProjectId, name, checkType, projectId } = normalized.value;
+    const { ritualKey, matchProjectId, name, checkType, projectId, category, targetPerWeek } = normalized.value;
 
     if (!resolveSupabaseConfig()) {
       return NextResponse.json(
@@ -259,7 +284,13 @@ export async function PATCH(req) {
     const results = await Promise.all(rows.map((row) => {
       const existingMeta = row.meta && typeof row.meta === "object" ? row.meta : {};
       const patch = {
-        meta: { ...existingMeta, ritual_key: ritualKey, ...(name ? { name } : {}) },
+        meta: {
+          ...existingMeta,
+          ritual_key: ritualKey,
+          ...(name ? { name } : {}),
+          ...(category ? { category } : {}),
+          ...(targetPerWeek ? { target_per_week: targetPerWeek } : {}),
+        },
       };
       if (checkType) patch.check_type = checkType;
       if (Object.prototype.hasOwnProperty.call(normalized.value, "projectId")) patch.project_id = projectId;
