@@ -6,6 +6,7 @@ import {
   buildDailyDispatchContext,
   buildWeeklySummaryText,
   extractWeeklyExperiment,
+  parseContactOutcomeExtraction,
 } from "./ai-workflow-client.js";
 
 const id = "11111111-1111-4111-8111-111111111111";
@@ -163,4 +164,73 @@ test("extractWeeklyExperiment parses experiment titles from council outputs", ()
   assert.equal(extractWeeklyExperiment("단순 일반 텍스트 조언"), null);
   assert.equal(extractWeeklyExperiment(null), null);
 });
+
+test("parseContactOutcomeExtraction parses Korean formatted customer contact outcomes", () => {
+  const sample = `
+[분석 결과]
+- [채널]: 카카오톡
+- [고객 반응]: 긍정
+- [1줄 요약]: 이번 주 금요일까지 표준 견적서 송부 요청, 가격 할인 문의
+- [다음 액션]: 할인 정책 반영 견적서 발송
+- [다음 일정]: 2026-09-25
+- [기약 없음]: 아니오
+`;
+  const result = parseContactOutcomeExtraction(sample);
+  assert.equal(result.kind, "kakao");
+  assert.equal(result.reaction, "positive");
+  assert.equal(result.summary, "이번 주 금요일까지 표준 견적서 송부 요청, 가격 할인 문의");
+  assert.equal(result.nextAction, "할인 정책 반영 견적서 발송");
+  assert.equal(result.nextAt, "2026-09-25");
+  assert.equal(result.dormant, false);
+});
+
+test("parseContactOutcomeExtraction handles English keys, relative dates, and dormant signals", () => {
+  const sampleDormant = `
+channel: call
+reaction: rejected
+summary: 당분간 예산 동결로 도입 계획 취소됨
+next action: 없음
+기약 없음: 예
+`;
+  const resDormant = parseContactOutcomeExtraction(sampleDormant);
+  assert.equal(resDormant.kind, "call");
+  assert.equal(resDormant.reaction, "rejected");
+  assert.equal(resDormant.summary, "당분간 예산 동결로 도입 계획 취소됨");
+  assert.equal(resDormant.nextAction, "");
+  assert.equal(resDormant.dormant, true);
+
+  const baseDate = new Date("2026-09-22T06:00:00Z"); // 2026-09-22 15:00 KST
+  const sampleRelative = `
+[채널]: 미팅
+[반응]: 우려
+[요약]: 도입 일정에 대한 우려가 있어 레퍼런스 공유 필요
+[다음 행동]: 유사 학원 도입 사례집 송부
+[다음 일정]: 내일
+`;
+  const resRelative = parseContactOutcomeExtraction(sampleRelative, baseDate);
+  assert.equal(resRelative.kind, "meeting");
+  assert.equal(resRelative.reaction, "concern");
+  assert.equal(resRelative.nextAction, "유사 학원 도입 사례집 송부");
+  assert.equal(resRelative.nextAt, "2026-09-23");
+  assert.equal(resRelative.dormant, false);
+
+  // Edge cases: null or empty
+  assert.deepEqual(parseContactOutcomeExtraction(null), {
+    kind: null,
+    reaction: null,
+    summary: "",
+    nextAction: "",
+    nextAt: "",
+    dormant: false,
+  });
+  assert.deepEqual(parseContactOutcomeExtraction(""), {
+    kind: null,
+    reaction: null,
+    summary: "",
+    nextAction: "",
+    nextAt: "",
+    dormant: false,
+  });
+});
+
 

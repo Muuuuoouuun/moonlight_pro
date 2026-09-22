@@ -57,3 +57,13 @@ test("Customer360Drawer integrates Guru strategic coaching (⌘J) and FloatingMe
   assert.match(customersSource, /onApplyText=\{/);
 });
 
+test("ContactOutcomeSheet provides AI Smart Autofill from conversation or call notes", () => {
+  assert.match(customersSource, /✨ 대화·메모에서 폼 자동 채우기/);
+  assert.match(customersSource, /parseContactOutcomeExtraction/);
+  assert.match(customersSource, /handleAiExtract/);
+  assert.match(customersSource, /추출 및 폼 채우기/);
+  assert.match(customersSource, /personaId:\s*"sales"/);
+  assert.match(customersSource, /mode:\s*"extract-contact-outcome"/);
+});
+
+

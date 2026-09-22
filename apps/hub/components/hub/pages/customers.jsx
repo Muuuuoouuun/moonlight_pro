@@ -24,6 +24,7 @@ import { requestPersonaChat } from "../persona-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
+import { parseContactOutcomeExtraction } from "@/lib/ai-workflow-client";
 import './customer-focus.css';
 
 // "₩1.2M"/"₩900K"/"—" → 정렬용 숫자 (DESIGN.md §8.1: 금액은 표시 문자열을 파싱해 정렬)
@@ -294,9 +295,60 @@ function ContactOutcomeSheet({ row, onSaved, onUndone }) {
   const reactionRef = React.useRef(null);
   const summaryRef = React.useRef(null);
 
+  const [aiOpen, setAiOpen] = React.useState(false);
+  const [aiInput, setAiInput] = React.useState("");
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const [aiNotice, setAiNotice] = React.useState("");
+
   const reset = () => {
     setReaction(null); setSummary(""); setNextAction(""); setNextAt("");
     setDormant(false); setState("idle"); setErrorMsg(""); setAttempted(false);
+    setAiInput(""); setAiNotice("");
+  };
+
+  const handleAiExtract = async () => {
+    const raw = aiInput.trim();
+    if (!raw) return;
+    setAiLoading(true);
+    setAiNotice("");
+    try {
+      const res = await requestPersonaChat({
+        personaId: "sales",
+        mode: "extract-contact-outcome",
+        draft: `[고객 맥락]
+고객: ${row.person || row.name} (${row.name || "미지정"})
+현재 상태: ${row.kind === "account" ? "계약 고객" : `리드 (${row.stage || "진행중"})`}
+
+[통화·미팅·대화 원문]
+${raw}
+
+위 원문을 분석하여 아래 형식으로 정확하게 추출해줘:
+[채널]: 통화 | 카카오 | 미팅 | 방문 | 데모 | 이메일 중 1개
+[고객 반응]: 긍정 | 중립 | 우려 | 거절 | 무응답 중 1개
+[1줄 요약]: 120자 이내의 사실 중심 핵심 요약
+[다음 행동]: 구체적 후속 액션 (없거나 기약 없으면 '없음')
+[다음 일정]: YYYY-MM-DD (특정 날짜 언급 없으면 '없음')
+[기약 없음]: 예 | 아니오 (다음 약속 없이 종결 또는 휴면이면 '예')`,
+      });
+      setAiLoading(false);
+      if (res?.state === "done" && res.text) {
+        const extracted = parseContactOutcomeExtraction(res.text);
+        let filledCount = 0;
+        if (extracted.kind) { setKind(extracted.kind); filledCount++; }
+        if (extracted.reaction) { setReaction(extracted.reaction); filledCount++; }
+        if (extracted.summary) { setSummary(extracted.summary); filledCount++; }
+        if (extracted.nextAction) { setNextAction(extracted.nextAction); filledCount++; }
+        if (extracted.nextAt) { setNextAt(extracted.nextAt); filledCount++; }
+        if (extracted.dormant) { setDormant(true); }
+        if (state === "warn") setState("idle");
+        setAiNotice(`폼에 ${filledCount}개 항목을 자동 채웠습니다. 내용을 확인한 뒤 저장하세요.`);
+      } else {
+        setAiNotice("추출 응답을 받지 못했습니다. 원문을 확인 후 다시 시도하세요.");
+      }
+    } catch {
+      setAiLoading(false);
+      setAiNotice("추출 중 오류가 발생했습니다. 직접 입력할 수도 있습니다.");
+    }
   };
   const [pendingUndo, setPendingUndo] = React.useState(null);
 
@@ -392,6 +444,55 @@ function ContactOutcomeSheet({ row, onSaved, onUndone }) {
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
         <h3 id={titleId} style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>컨택 완료 기록</h3>
         <span style={{ fontSize: 11.5, color: "var(--fg-faint)" }}>반응과 요약을 남기면 타임라인에 쌓입니다</span>
+      </div>
+
+      {/* AI 스마트 자동 채우기: 대화 원문이나 통화 메모에서 4대 필드 추출 */}
+      <div style={{
+        background: "var(--surface-2)",
+        borderRadius: "var(--r-md)",
+        padding: "10px 12px",
+        border: "1px solid var(--line-soft)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Iconed name="sparkle" size={13} style={{ color: "var(--moon-300)" }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>✨ 대화·메모에서 폼 자동 채우기</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => { setAiOpen(v => !v); setAiNotice(""); }}
+          >
+            {aiOpen ? "접기" : "원문 붙여넣기"}
+          </Button>
+        </div>
+        {aiOpen && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+            <TextAreaField
+              label="대화 / 통화 메모 원문"
+              value={aiInput}
+              onChange={e => setAiInput(e.target.value)}
+              placeholder="카카오톡 대화, 전화 통화 요약, 미팅 녹취 메모를 붙여넣으면 채널·반응·요약·다음 액션을 폼에 자동 입력합니다."
+              rows={3}
+            />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+              <div style={{ fontSize: 11, color: "var(--fg-dim)", flex: 1 }}>
+                {aiNotice ? <span style={{ color: "var(--moon-300)" }}>{aiNotice}</span> : "추출 후 폼 내용을 확인하고 저장하세요"}
+              </div>
+              <Button
+                variant="primary"
+                size="xs"
+                onClick={handleAiExtract}
+                disabled={aiLoading || !aiInput.trim()}
+              >
+                {aiLoading ? "추출 중…" : "추출 및 폼 채우기"}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <SelectField

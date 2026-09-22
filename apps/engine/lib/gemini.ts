@@ -60,6 +60,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       ok: false,
       status: null,
       reason: "missing-api-key",
+      finishReason: null,
       text: "",
       model: targetModel,
     };
@@ -130,15 +131,20 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
         ok: false,
         status: response.status,
         reason: data?.error?.message || `http-${response.status}`,
+        finishReason: null,
         text: "",
         model: targetModel,
       };
     }
 
+    const candidate = data?.candidates?.[0];
+    const finishReason = candidate?.finishReason || null;
+
     return {
       ok: true,
       status: response.status,
-      reason: "ok",
+      reason: finishReason && finishReason !== "STOP" ? finishReason.toLowerCase() : "ok",
+      finishReason,
       text: extractGeminiText(data),
       model: targetModel,
       usageMetadata: data?.usageMetadata || null,
@@ -148,6 +154,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       ok: false,
       status: null,
       reason: error instanceof Error ? error.message : String(error),
+      finishReason: null,
       text: "",
       model: targetModel,
     };

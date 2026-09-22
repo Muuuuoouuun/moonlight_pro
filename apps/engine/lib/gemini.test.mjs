@@ -46,3 +46,34 @@ test('generateGeminiText sends media inlineData parts in payload', async () => {
     else process.env.GEMINI_API_KEY = before.key;
   }
 });
+
+test('generateGeminiText captures finishReason and sets reason accordingly', async () => {
+  const before = { fetch: globalThis.fetch, key: process.env.GEMINI_API_KEY };
+  process.env.GEMINI_API_KEY = 'local-test-key';
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '정상 완료' }] } }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15 },
+    }), { status: 200 });
+
+    const stopRes = await generateGeminiText({ prompt: '테스트' });
+    assert.equal(stopRes.ok, true);
+    assert.equal(stopRes.reason, 'ok');
+    assert.equal(stopRes.finishReason, 'STOP');
+    assert.equal(stopRes.usageMetadata?.totalTokenCount, 15);
+
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: '잘린 텍스트' }] } }],
+    }), { status: 200 });
+
+    const maxRes = await generateGeminiText({ prompt: '테스트' });
+    assert.equal(maxRes.ok, true);
+    assert.equal(maxRes.reason, 'max_tokens');
+    assert.equal(maxRes.finishReason, 'MAX_TOKENS');
+  } finally {
+    globalThis.fetch = before.fetch;
+    if (before.key === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = before.key;
+  }
+});
+
