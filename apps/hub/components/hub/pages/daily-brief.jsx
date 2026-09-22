@@ -374,7 +374,8 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                   aria-pressed={task.focusToday ? 'true' : 'false'}
                   disabled={focusBusyId === task.id || (!task.focusToday && focusFull)}
                   onClick={() => toggleFocus(task)}
-                  style={{ color: task.focusToday ? 'var(--moon-300)' : undefined, flexShrink: 0 }}
+                  className={task.focusToday ? 'hub-iconbtn--star-active' : ''}
+                  style={{ flexShrink: 0 }}
                 />
                 <Button
                   variant="secondary"

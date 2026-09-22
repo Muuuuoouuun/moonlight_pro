@@ -367,7 +367,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
             tooltip={item.focusToday ? '오늘 3개에서 빼기' : focusFull ? `오늘 3개가 찼습니다 (${MAX_FOCUS_PER_DAY}/${MAX_FOCUS_PER_DAY})` : '오늘 3개에 넣기'}
             aria-pressed={item.focusToday ? 'true' : 'false'}
             disabled={!item.focusToday && Boolean(focusFull)}
-            style={{ color: item.focusToday ? 'var(--moon-300)' : undefined }}
+            className={item.focusToday ? 'hub-iconbtn--star-active' : ''}
             onClick={(e) => { e.stopPropagation(); onToggleFocus(item); }}
             onKeyDown={(e) => e.stopPropagation()}
           />

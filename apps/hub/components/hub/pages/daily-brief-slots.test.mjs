@@ -43,3 +43,11 @@ test("할 일 목록은 한 벌만 렌더된다", () => {
   assert.equal((code.match(/<TaskToday\s/g) || []).length, 1, "TaskToday 렌더가 1개가 아니다");
   assert.equal((code.match(/<QuickCaptureForm\s/g) || []).length, 1, "QuickCaptureForm 렌더가 1개가 아니다");
 });
+
+// 오늘 3개 별 토글의 활성 색은 CSS가 소유한다(DESIGN.md §15 2026-09-15의 cascade 함정).
+// 인라인 color는 `.hub-iconbtn:hover`와 `.hub-iconbtn--star-active svg path { fill }`를
+// 이기므로, 활성 별이 hover 피드백을 잃고 채워지지 않은 외곽선으로 남는다.
+test("오늘 3개 별 토글은 인라인 color 대신 hub-iconbtn--star-active 클래스를 쓴다", () => {
+  assert.match(source, /className=\{task\.focusToday \? 'hub-iconbtn--star-active' : ''\}/);
+  assert.doesNotMatch(source, /color: task\.focusToday \? 'var\(--moon-300\)'/);
+});
