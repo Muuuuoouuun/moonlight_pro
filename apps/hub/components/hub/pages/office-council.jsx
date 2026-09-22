@@ -9,6 +9,7 @@ import {
   Avatar,
   EmptyState,
   SegmentedControl,
+  CheckboxRow,
 } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 import {
@@ -71,6 +72,7 @@ export function OfficeCouncil({ onNavigate }) {
   const [mainMode, setMainMode] = useState("chat"); // 'chat' (1:1) | 'council' (다자 협업)
   const [activeAgentId, setActiveAgentId] = useState("eevee");
   const [chatSubMode, setChatSubMode] = useState("chat"); // 'chat' | 'task' | 'critique'
+  const [harshEval, setHarshEval] = useState(false);
 
   // Council mode state
   const [councilLead, setCouncilLead] = useState(OFFICE_DEFAULT_COUNCILS[0].lead);
@@ -131,6 +133,7 @@ export function OfficeCouncil({ onNavigate }) {
     const isCouncil = mainMode === "council";
     const sendingAgentId = isCouncil ? councilLead : activeAgentId;
     const mode = isCouncil ? "council" : chatSubMode;
+    const evaluate = isCouncil ? true : harshEval;
 
     setThread((prev) => [
       ...prev,
@@ -150,6 +153,7 @@ export function OfficeCouncil({ onNavigate }) {
         mode,
         message: text,
         participants: isCouncil ? councilParticipants : [],
+        evaluate,
       });
 
       setThread((prev) => {
@@ -162,6 +166,7 @@ export function OfficeCouncil({ onNavigate }) {
                 agentId: res.agentId || sendingAgentId,
                 text: res.text,
                 isSimulation: res.isSimulation,
+                evaluation: res.evaluation || null,
                 time: now,
               };
             } else {
@@ -188,7 +193,7 @@ export function OfficeCouncil({ onNavigate }) {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [input, mainMode, councilLead, activeAgentId, chatSubMode, councilParticipants]);
+  }, [input, mainMode, councilLead, activeAgentId, chatSubMode, councilParticipants, harshEval]);
 
   const copyToClipboard = (text, idx) => {
     if (!text) return;
@@ -702,7 +707,81 @@ export function OfficeCouncil({ onNavigate }) {
                           : `${agentMeta?.nameKo || "에이전트"}가 생각하는 중…`}
                       </span>
                     ) : (
-                      msg.text
+                      <>
+                        {msg.evaluation && (
+                          <div
+                            style={{
+                              marginBottom: 12,
+                              padding: "8px 12px",
+                              borderRadius: "var(--r-sm)",
+                              background: "var(--surface-2)",
+                              border: "1px solid var(--line-soft)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 6,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 8,
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    color: "var(--fg-dim)",
+                                    letterSpacing: "0.04em",
+                                  }}
+                                >
+                                  가혹 게이트 평가
+                                </span>
+                                {msg.evaluation.gate && (
+                                  <Badge
+                                    size="xs"
+                                    tone={
+                                      msg.evaluation.gate === "PASS"
+                                        ? "success"
+                                        : msg.evaluation.gate === "REVISE"
+                                        ? "warning"
+                                        : "danger"
+                                    }
+                                  >
+                                    {msg.evaluation.gate}
+                                  </Badge>
+                                )}
+                              </div>
+                              {typeof msg.evaluation.score === "number" && (
+                                <span
+                                  className="mono"
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color:
+                                      msg.evaluation.score >= 80
+                                        ? "var(--success)"
+                                        : msg.evaluation.score >= 60
+                                        ? "var(--warning)"
+                                        : "var(--danger)",
+                                  }}
+                                >
+                                  {msg.evaluation.score} / 100점
+                                </span>
+                              )}
+                            </div>
+                            {msg.evaluation.summary && (
+                              <div style={{ fontSize: 11.5, color: "var(--fg-muted)", lineHeight: 1.4 }}>
+                                {msg.evaluation.summary}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {msg.text}
+                      </>
                     )}
                   </div>
 
@@ -775,6 +854,35 @@ export function OfficeCouncil({ onNavigate }) {
                 <span>⚠️ {errorNote}</span>
               </div>
             )}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 8,
+                gap: 12,
+              }}
+            >
+              <CheckboxRow
+                checked={mainMode === "council" ? true : harshEval}
+                onChange={mainMode === "council" ? undefined : setHarshEval}
+                disabled={busy || mainMode === "council"}
+                size={15}
+                text={
+                  mainMode === "council"
+                    ? "Council 종합 게이트 평가 (상시 적용: PASS/REVISE/REJECT)"
+                    : "가혹 감점 평가 (0~100점 & Gate) 활성화"
+                }
+                style={{
+                  fontSize: 12,
+                  color: (mainMode === "council" || harshEval) ? "var(--fg)" : "var(--fg-muted)",
+                  cursor: (busy || mainMode === "council") ? "default" : "pointer",
+                }}
+              />
+              <div style={{ fontSize: 11, color: "var(--fg-faint)" }}>
+                ⌘+Enter로 전송
+              </div>
+            </div>
             <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
               <textarea
                 value={input}

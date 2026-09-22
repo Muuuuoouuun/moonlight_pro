@@ -39,4 +39,12 @@ test('office-council page adheres to DESIGN.md rules', () => {
   // excluding comments
   const stripped = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
   assert.doesNotMatch(stripped, /#[0-9a-fA-F]{3,8}\b/);
+
+  // 7. Harsh Evaluation & Gate Scorecard UI
+  assert.match(source, /가혹 게이트 평가/);
+  assert.match(source, /가혹 감점 평가/);
+  assert.match(source, /CheckboxRow/);
+  assert.match(source, /PASS/);
+  assert.match(source, /REVISE/);
+  assert.match(source, /REJECT/);
 });

@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {registerMoonlightTools as registerLegacyTools} from './legacy-tools.js';
+import {registerOfficeTools} from './office-tools.js';
 import {registerAgentTools} from './agent-tools.js';
 import {hasAgentToken} from './agent-client.js';
 import {projectLegacyPayload} from './legacy-projection.js';
@@ -11,6 +12,7 @@ const PROFILES={
   sales:['get_hub_health','list_followups','list_work_orders','get_work_order','record_contact_outcome','get_command_receipt','get_revenue'],
   content:['get_hub_health','get_content_queue','create_campaign'],
   jobs:['get_hub_health','list_codex_projects','list_codex_jobs','get_codex_job','start_codex_job','cancel_codex_job','resume_codex_job'],
+  office:['get_hub_health','request_office_agent','request_office_council','evaluate_office_proposal','list_tasks','create_task','list_agent_runs'],
 };
 export const PROFILE_NAMES=[...Object.keys(PROFILES),'all'];
 // Export defaults preserve embedding clients; CLI explicitly selects the small core profile.
@@ -27,6 +29,7 @@ export function registerMoonlightTools(server,{profile='all',mode='auto',readOnl
       try{let data=JSON.parse(result.content[0].text);if(read)data=projectLegacyPayload(data,args);return {...result,content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data};}catch{return result;}
     });
   }});
+  registerOfficeTools(collector);
   registerAgentTools(collector,{replaceLegacy:mode==='agent'||mode==='auto'&&hasAgentToken()});
   const allowed=profile==='all'?null:new Set(PROFILES[profile]);
   const selected=[...tools].filter(([name,{definition}])=>(!allowed||allowed.has(name))&&(!readOnly||definition.annotations?.readOnlyHint===true));
