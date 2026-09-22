@@ -309,7 +309,8 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         fontSize: 13, color: completing ? 'var(--fg-faint)' : 'var(--fg)', flex: 1, minWidth: '35%',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         textDecoration: completing ? 'line-through' : 'none',
-        transition: 'color var(--dur-panel) ease',
+        opacity: completing ? 0.65 : 1,
+        transition: 'color var(--dur-enter) var(--ease-hub), opacity var(--dur-enter) var(--ease-hub)',
       }}>
         {item.title}
       </span>

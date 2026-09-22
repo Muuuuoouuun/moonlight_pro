@@ -246,6 +246,117 @@ export function Progress({ value = 0, tone = 'moon', height = 4, className = '',
   );
 }
 
+export function ProgressRing({
+  value = 0,
+  size = 36,
+  strokeWidth = 3,
+  tone = 'moon',
+  showLabel = false,
+  labelFormat,
+  className = '',
+  style,
+  title,
+}) {
+  const map = {
+    moon: 'var(--moon-300)',
+    accent: 'var(--accent)',
+    success: 'var(--success)',
+    warning: 'var(--warning)',
+    danger: 'var(--danger)',
+  };
+  const numValue = Number.isFinite(value) ? value : 0;
+  const clamped = Math.min(100, Math.max(0, numValue));
+  const isCompleted = clamped >= 100;
+  const isOverachieved = numValue > 100;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (clamped / 100) * circumference;
+
+  const strokeColor = isOverachieved
+    ? '#ffd166'
+    : isCompleted
+    ? 'var(--moon-200)'
+    : (map[tone] || map.moon);
+
+  const defaultTitle = isOverachieved
+    ? `${numValue}% (+${Math.round(numValue - 100)}% 초과 달성 ✦)`
+    : isCompleted
+    ? `${clamped}% (목표 100% 달성 ✦)`
+    : `${clamped}%`;
+  const computedTitle = title !== undefined ? title : defaultTitle;
+  const formattedLabel = labelFormat ? labelFormat(clamped) : `${clamped}%`;
+
+  const completedCls = isCompleted ? ' hub-progress-ring--completed' : '';
+  const overachievedCls = isOverachieved ? ' hub-progress-ring--overachieved' : '';
+
+  return (
+    <div
+      role="progressbar"
+      aria-valuenow={numValue}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      title={computedTitle}
+      className={`hub-progress-ring${completedCls}${overachievedCls}${className ? ` ${className}` : ''}`}
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: size,
+        height: size,
+        ...style,
+      }}
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        style={{ transform: 'rotate(-90deg)', display: 'block', overflow: 'visible' }}
+        aria-hidden="true"
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="var(--line-soft)"
+          strokeWidth={strokeWidth}
+        />
+        <circle
+          className="hub-progress-ring__circle"
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          style={{
+            transition: 'stroke-dashoffset var(--dur-enter) var(--ease-hub), stroke var(--dur-enter) var(--ease-hub)',
+          }}
+        />
+      </svg>
+      {showLabel && (
+        <span
+          className="hub-progress-ring__label mono"
+          style={{
+            position: 'absolute',
+            fontSize: Math.max(10.5, Math.round(size * 0.28)),
+            color: isCompleted ? 'var(--moon-100)' : 'var(--fg-muted)',
+            fontWeight: 600,
+            lineHeight: 1,
+            pointerEvents: 'none',
+          }}
+        >
+          {isCompleted ? '✦' : formattedLabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function Sparkline({ values, width = 60, height = 18, tone = 'moon' }) {
   if (!values || !values.length) return null;
   const max = Math.max(...values), min = Math.min(...values);
@@ -296,25 +407,34 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
 // `label` names the checkbox for screen readers (the visual label usually sits in a
 // sibling cell, so SRs would otherwise announce an unnamed 14px button). Always pass it
 // on new call sites — e.g. the row's title.
-export function Checkbox({ checked, onChange, size = 14, label, disabled = false }) {
+export function Checkbox({ checked, onChange, size = 14, label, disabled = false, className = '', style }) {
+  const isChecked = Boolean(checked);
   return (
     <button
       type="button"
       role="checkbox"
-      aria-checked={Boolean(checked)}
+      aria-checked={isChecked}
       aria-label={label || '선택'}
       aria-busy={disabled ? 'true' : undefined}
       disabled={disabled}
-      className="hub-checkbox"
-      onClick={(e) => { e.stopPropagation(); onChange?.(!checked, e); }} style={{
-      position: 'relative',
-      width: size, height: size, borderRadius: 4,
-      border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
-      background: checked ? 'var(--moon-300)' : 'transparent',
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease', flexShrink: 0, opacity: disabled ? 0.55 : 1,
-    }}>
-      {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}
+      className={`hub-checkbox${isChecked ? ' hub-checkbox--checked' : ''}${className ? ` ${className}` : ''}`}
+      onClick={(e) => { e.stopPropagation(); onChange?.(!checked, e); }}
+      style={{
+        position: 'relative',
+        width: size, height: size, borderRadius: 4,
+        border: `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
+        background: isChecked ? 'var(--moon-300)' : 'transparent',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub)',
+        flexShrink: 0, opacity: disabled ? 0.55 : 1,
+        ...style,
+      }}
+    >
+      {isChecked && (
+        <span className="hub-checkbox__icon" aria-hidden="true">
+          <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />
+        </span>
+      )}
     </button>
   );
 }
@@ -450,27 +570,36 @@ export const SelectField = React.forwardRef(function SelectField(
 // Checkbox + its words as ONE control. `<Checkbox label="x" />` beside a plain
 // <span>x</span> shipped a dead text target and a doubled accessible name; this is the
 // canonical form whenever the box has visible text next to it.
-export function CheckboxRow({ checked, onChange, text, disabled = false, size = 17, style }) {
+export function CheckboxRow({ checked, onChange, text, disabled = false, size = 17, style, className = '' }) {
+  const isChecked = Boolean(checked);
   return (
     <button
       type="button"
       role="checkbox"
-      aria-checked={Boolean(checked)}
+      aria-checked={isChecked}
       aria-label={text}
       disabled={disabled}
-      className="hub-checkbox-row"
+      className={`hub-checkbox-row${isChecked ? ' hub-checkbox-row--checked' : ''}${className ? ` ${className}` : ''}`}
       onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }}
       style={style}
     >
-      <span aria-hidden="true" style={{
-        width: size, height: size, borderRadius: 4,
-        border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
-        background: checked ? 'var(--moon-300)' : 'transparent',
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease',
-        flexShrink: 0,
-      }}>
-        {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}
+      <span
+        aria-hidden="true"
+        className={`hub-checkbox${isChecked ? ' hub-checkbox--checked' : ''}`}
+        style={{
+          width: size, height: size, borderRadius: 4,
+          border: `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
+          background: isChecked ? 'var(--moon-300)' : 'transparent',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub)',
+          flexShrink: 0,
+        }}
+      >
+        {isChecked && (
+          <span className="hub-checkbox__icon hub-checkbox-row__icon" aria-hidden="true">
+            <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />
+          </span>
+        )}
       </span>
       {text}
     </button>

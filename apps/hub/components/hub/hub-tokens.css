@@ -518,6 +518,24 @@
 .hub-app .hub-field-msg { margin: 6px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--fg-faint); }
 .hub-app .hub-field-msg--error { color: var(--danger); }
 
+.hub-app .hub-checkbox {
+  cursor: pointer;
+  user-select: none;
+}
+.hub-app .hub-checkbox:active:not(:disabled) {
+  transform: scale(0.92);
+}
+.hub-app .hub-checkbox--checked {
+  animation: hubCheckPop var(--dur-enter) var(--ease-hub);
+}
+.hub-app .hub-checkbox__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  animation: hubCheckmarkIn var(--dur-enter) var(--ease-hub);
+}
+
 /* Checkbox with visible text: one element, one accessible name, one target. The old
    pattern put the words in a sibling <span>, so tapping the text did nothing and a
    screen reader announced the name twice. */
@@ -526,11 +544,23 @@
   padding: 8px 10px 8px 8px; margin-left: -8px;
   border-radius: var(--r-sm);
   color: var(--fg-muted); font-size: 13px; line-height: 1;
-  transition: background var(--dur-hover) ease, color var(--dur-hover) ease;
+  transition: background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+  cursor: pointer;
+  user-select: none;
 }
 .hub-app .hub-checkbox-row:hover:not(:disabled) { background: var(--surface-2); color: var(--fg); }
+.hub-app .hub-checkbox-row:active:not(:disabled) { transform: scale(0.98); }
 .hub-app .hub-checkbox-row:disabled { color: var(--fg-faint); cursor: not-allowed; }
-@media (prefers-reduced-motion: reduce) { .hub-app .hub-checkbox-row { transition: none; } }
+.hub-app .hub-checkbox-row--checked .hub-checkbox-row__icon {
+  animation: hubCheckmarkIn var(--dur-enter) var(--ease-hub);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-checkbox,
+  .hub-app .hub-checkbox-row {
+    transition: none;
+    transform: none !important;
+  }
+}
 
 /* SegmentedControl — 필터/뷰 토글의 canonical(§8.1). Button(§15 2026-09-15)과 같은 이유로
    휴지 chrome을 여기서 소유한다: 인라인 색은 :hover와 전이를 죽인다. 활성 = aria-pressed 하나가
@@ -648,6 +678,23 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes hubCheckPop {
+  0% { transform: scale(0.88); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes hubCheckmarkIn {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes hubRingGlow {
+  0% { filter: drop-shadow(0 0 2px rgba(140, 168, 216, 0.2)); }
+  50% { filter: drop-shadow(0 0 8px rgba(140, 168, 216, 0.55)); }
+  100% { filter: drop-shadow(0 0 4px rgba(140, 168, 216, 0.35)); }
+}
+
 .hub-app .hub-progress-track {
   position: relative;
   overflow: hidden;
@@ -727,6 +774,31 @@
   line-height: 1;
 }
 
+/* Progress Ring (원형 게이지) */
+.hub-app .hub-progress-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.hub-app .hub-progress-ring--completed {
+  filter: drop-shadow(0 0 6px rgba(140, 168, 216, 0.4));
+  animation: hubRingGlow var(--dur-enter) var(--ease-hub);
+}
+
+.hub-app .hub-progress-ring--completed circle.hub-progress-ring__circle {
+  stroke: var(--moon-200);
+}
+
+/* 완료 텍스트 트랜지션 */
+.hub-app .hub-task-completed {
+  color: var(--fg-faint) !important;
+  text-decoration: line-through;
+  transition: color var(--dur-enter) var(--ease-hub), opacity var(--dur-enter) var(--ease-hub);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-progress--completed .hub-progress-bar::after,
   .hub-app .hub-pms-progress--completed .hub-pms-progress__fill::after {
@@ -734,7 +806,8 @@
     display: none;
   }
   .hub-app .hub-celebration-badge,
-  .hub-app .hub-celebration-card {
+  .hub-app .hub-celebration-card,
+  .hub-app .hub-progress-ring--completed {
     animation: none;
   }
 }

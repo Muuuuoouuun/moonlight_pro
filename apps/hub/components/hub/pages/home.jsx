@@ -252,10 +252,12 @@ export function Home({ onNavigate }) {
 
         {total ? (
           <div className="fx-progress-wrap">
-            <div className="fx-progress">
+            <div className={`fx-progress${done >= total ? ' fx-progress--completed' : ''}`}>
               <i style={{ width: `${Math.round((done / total) * 100)}%` }} />
             </div>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{done}/{total}</span>
+            <span className="mono" style={{ fontSize: 11, color: done >= total ? 'var(--moon-200)' : 'var(--fg-dim)' }}>
+              {done}/{total}{done >= total ? ' ✦' : ''}
+            </span>
           </div>
         ) : null}
       </header>

@@ -4,7 +4,7 @@ import React from "react";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import {
@@ -1328,14 +1328,19 @@ function RhythmPanel({ onNavigate }) {
       <Card>
         {total > 0 ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span className="stat" style={{ fontSize: 22, fontWeight: 600 }}>{completed}/{total}</span>
-              <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
-              {percent >= 100 && (
-                <span className="hub-celebration-badge hub-celebration-badge--sparkle" style={{ marginLeft: 'auto' }}>
-                  ✦ 완벽 달성
-                </span>
-              )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span className="stat" style={{ fontSize: 22, fontWeight: 600 }}>{completed}/{total}</span>
+                <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {percent >= 100 && (
+                  <span className="hub-celebration-badge hub-celebration-badge--sparkle">
+                    ✦ 완벽 달성
+                  </span>
+                )}
+                <ProgressRing value={percent} size={28} strokeWidth={3} showLabel />
+              </div>
             </div>
             <div {...rhythmProgressProps} style={{ marginTop: 10 }}><Progress value={percent} /></div>
             {summary.longestStreak > 0 && (

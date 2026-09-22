@@ -96,6 +96,15 @@
   transition: width var(--dur-enter) var(--ease-hub);
 }
 
+.hub-app .fx-progress--completed {
+  box-shadow: 0 0 6px rgba(140, 168, 216, 0.45);
+}
+
+.hub-app .fx-progress--completed > i {
+  background: linear-gradient(90deg, var(--pms-moonstone) 0%, var(--moon-200) 100%);
+  box-shadow: 0 0 8px rgba(140, 168, 216, 0.5);
+}
+
 /* ── 트리아지 분할 뷰 ─────────────────────────────────────────── */
 .hub-app .fx-split {
   display: grid;
