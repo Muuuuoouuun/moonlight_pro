@@ -25,6 +25,8 @@ export interface OfficeAgentMeta {
   directionFocus: string;
   decisionRubric: string;
   tensionWith: readonly OfficeAgentId[];
+  recommendedTier: 'pro' | 'flash';
+  defaultTemperature: number;
 }
 
 export type OfficeGate = 'PASS' | 'REVISE' | 'REJECT';
@@ -50,6 +52,7 @@ export interface OfficeChatInput {
   lens?: string | null;
   context?: Record<string, unknown> | null;
   evaluate?: boolean;
+  model?: string | null;
 }
 
 export interface SanitizedOfficeChatInput {
@@ -61,6 +64,7 @@ export interface SanitizedOfficeChatInput {
   lens: string | null;
   context: Record<string, unknown> | null;
   evaluate: boolean;
+  model: string | null;
 }
 
 export declare class OfficeContractError extends Error {
