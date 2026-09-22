@@ -313,6 +313,13 @@
   text-decoration: line-through;
 }
 
+/* past와 done은 특정도가 같아서 뒤에 선언된 done이 past의 명도를 덮는다. 그러면 이미 처리한
+   지난 일정이 아직 기록하지 않은 지난 일정보다 밝아지는 위계 역전이 된다 — 주의가 필요한 쪽이
+   더 흐려진다. 조합에서는 명도 바닥을 고정한다(§5.3 done = lower-emphasis). */
+.hub-app .fx-time-row[data-past="true"][data-done="true"] .fx-time-title {
+  color: var(--fg-faint);
+}
+
 /* 일정 기록(CalendarOutcome compact) — 행 한 줄은 그대로 두고, 메모는 한 줄로 접고,
    편집기·오류만 필요할 때 행 아래로 편다. 들여쓰기는 행 패딩 4 + 체크박스 16 + 간격 14
    + 시각 46 + 간격 14 = 94px로 제목 첫 글자에 맞춘다. */

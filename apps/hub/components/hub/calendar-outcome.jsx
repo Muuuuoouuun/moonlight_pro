@@ -170,7 +170,11 @@ export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, 
           <span className="fx-time-title">{title}</span>
           {aside}
           <span className="fx-time-lead" aria-hidden="true" />
-          <span className="fx-time-ack" role="status" aria-live="polite">{saving ? '저장 중…' : message === SAVED ? SAVED : ''}</span>
+          {/* 로딩 고지는 행 안의 live region 한 토큰으로 — compact는 체크박스와 편집 버튼이 둘 다
+              state !== 'live'로 잠기므로, 표시가 없으면 첫 화면 일정이 전부 "눌러도 안 되는 줄"로
+              보인다(§11). 94px 들여쓰기 블록을 하나 더 넣으면 일정 N건마다 줄이 생겼다 사라져
+              폴드가 흔들리고, 행 골격은 이미 그려져 있어 Skeleton이 예고할 자리도 없다. */}
+          <span className="fx-time-ack" role="status" aria-live="polite">{saving ? '저장 중…' : state === 'loading' ? '불러오는 중…' : message === SAVED ? SAVED : ''}</span>
           <Button ref={editButtonRef} variant="ghost" size="xs" aria-expanded={open} aria-controls={detailsId} aria-label={`${title} ${outcome.editLabel}`} onClick={outcome.toggleOpen} disabled={saving || state !== 'live'}>{outcome.editLabel}</Button>
         </div>
         {!open && record?.note && <div className="fx-time-note" title={record.note}>{record.note}</div>}
