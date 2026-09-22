@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, writeFile, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createCodexCliProvider, CODEX_CLI_DEFAULT_MODEL } from './office-evaluation/codex-provider.mjs';
+import { createCodexCliProvider, CODEX_CLI_DEFAULT_MODEL, CODEX_CLI_PROVIDER_VERSION } from './office-evaluation/codex-provider.mjs';
 
 const schema = { type: 'object', properties: { answer: { type: 'string' }, sourceIndexes: { type: 'array', maxItems: 5, items: { type: 'integer', minimum: 0, maximum: 4315 } } }, required: ['answer', 'sourceIndexes'], additionalProperties: false };
 const input = { systemInstruction: '역할 지침 원문\nBackticks `stay`; $(not-a-command); "quote" \\ 경로', prompt: '{"userRequest":"원문 그대로 😀"}\n', responseJsonSchema: schema, maxOutputTokens: 8192, thinkingLevel: 'high' };
@@ -31,15 +32,46 @@ async function setup(t, mode = 'success') {
     const final = ${JSON.stringify(finalText)};
     const message = text => emit({ type: 'item.completed', item: { type: 'agent_message', text } });
     const done = () => emit({ type: 'turn.completed', usage: { input_tokens: 17, cached_input_tokens: 3, output_tokens: 11, private: 'SENSITIVE_DIAGNOSTIC' } });
+    const internalItems = () => {
+      for (const type of ['item.started', 'item.updated', 'item.completed']) {
+        emit({ type, item: { id: 'PRIVATE_PLAN_ID', type: 'todo_list', items: [{ text: 'PRIVATE_PLAN_BODY', completed: type === 'item.completed' }] } });
+        emit({ type, item: { id: 'PRIVATE_ERROR_ID', type: 'error', message: 'PRIVATE_ERROR_BODY' } });
+      }
+    };
+    const laterAnswer = () => setTimeout(() => { message(final); done(); }, 2000);
     emit({ type: 'thread.started', thread_id: 'omit-this-thread' });
     emit({ type: 'turn.started', ...(mode === 'reported-model' ? { model_version: 'reported-model-v1' } : {}) });
-    if (mode === 'tool' || mode === 'tool-updated' || mode === 'unknown-item') {
+    if (mode.startsWith('nonfatal-')) {
+      internalItems();
+      if (mode.startsWith('nonfatal-tool-')) {
+        const toolType = mode.slice('nonfatal-tool-'.length);
+        const type = toolType === 'file_change' ? 'item.completed' : toolType === 'mcp_tool_call' ? 'item.updated' : 'item.started';
+        emit({ type, item: { type: toolType, command: 'SENSITIVE_DIAGNOSTIC', arguments: { secret: 'PRIVATE_TOOL_BODY' } } });
+        laterAnswer();
+      } else if (mode === 'nonfatal-turn-failed' || mode === 'nonfatal-error') {
+        emit({ type: mode === 'nonfatal-error' ? 'error' : 'turn.failed', message: 'PRIVATE_ERROR_BODY', error: { message: 'PRIVATE_ERROR_BODY' } });
+        laterAnswer();
+      } else if (mode === 'nonfatal-overflow') {
+        for (let index = 0; index < 2001; index++) emit({ type: 'item.updated', item: { type: 'todo_list', items: [{ text: 'PRIVATE_PLAN_BODY', completed: false }] } });
+      } else {
+        if (mode !== 'nonfatal-no-final') message(mode === 'nonfatal-bad-json' ? 'PRIVATE_ERROR_BODY' : final);
+        if (mode !== 'nonfatal-incomplete') done();
+        if (mode === 'nonfatal-nonzero') process.exitCode = 3;
+        if (mode === 'nonfatal-after-completion') internalItems();
+      }
+    } else if (mode.startsWith('unknown-type-')) {
+      const types = { string: 'SENSITIVE_DIAGNOSTIC', object: { secret: 'SENSITIVE_DIAGNOSTIC' }, array: ['SENSITIVE_DIAGNOSTIC'], number: 71, boolean: true, null: null };
+      const value = types[mode.slice('unknown-type-'.length)];
+      emit({ type: 'item.updated', item: { ...(value === undefined ? {} : { type: value }), message: 'PRIVATE_ERROR_BODY' } });
+      laterAnswer();
+    } else if (mode === 'tool' || mode === 'tool-updated' || mode === 'unknown-item') {
       emit({ type: mode === 'tool-updated' ? 'item.updated' : 'item.started', item: { type: mode === 'unknown-item' ? 'new_unknown_tool' : 'command_execution', command: 'SENSITIVE_DIAGNOSTIC', status: 'in_progress' } });
-      setTimeout(() => { message(final); done(); }, 2000);
-    } else if (mode === 'group') {
+      laterAnswer();
+    } else if (mode.startsWith('group')) {
+      internalItems();
       const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'], { stdio: ['ignore', 'inherit', 'inherit'] });
       fs.writeFileSync(capture + '.pid', String(child.pid));
-      setTimeout(() => emit({ type: 'item.started', item: { type: 'command_execution' } }), 80);
+      setTimeout(() => emit(mode === 'group-error' ? { type: 'error', message: 'PRIVATE_ERROR_BODY' } : mode === 'group-turn-failed' ? { type: 'turn.failed', error: { message: 'PRIVATE_ERROR_BODY' } } : { type: 'item.started', item: { type: 'command_execution' } }), 80);
       process.on('SIGTERM', () => process.exit(0));
       setInterval(() => {}, 1000);
     } else if (mode === 'abort-cleanup') {
@@ -100,6 +132,7 @@ test('the CLI adapter preserves both instruction channels and schema, uses the c
   assert.equal(captured.appSecretsPresent, false);
   await assert.rejects(readdir(captured.cwd), { code: 'ENOENT' });
   assert.equal(provenance.cliVersion, '0.154.0');
+  assert.equal(provenance.adapterVersion, CODEX_CLI_PROVIDER_VERSION);
   assert.equal(provenance.outputTokenCapApplied, null);
   assert.equal(provenance.adapterRetries, 0);
   assert.equal(provenance.cliInternalRetries, 'uncontrolled-built-in-provider');
@@ -109,6 +142,92 @@ test('the CLI adapter preserves both instruction channels and schema, uses the c
   assert.deepEqual(result.usageMetadata, { promptTokenCount: 17, candidatesTokenCount: 11, totalTokenCount: 28, cachedContentTokenCount: 3 });
   assert.doesNotMatch(JSON.stringify(result), /SENSITIVE_DIAGNOSTIC|DO_NOT_RECORD_REASONING|omit-this-thread/);
   assert.equal((await generate({ ...input, model: result.model })).ok, true, 'the returned default label can be reused by review/council calls without selecting a model');
+});
+
+test('SDK internal plans and nonfatal error items are observed without their contents and still require real completion', async t => {
+  const provider = await createCodexCliProvider(await setup(t, 'nonfatal-success'));
+  const result = await provider.generate(input);
+  assert.equal(result.ok, true);
+  assert.equal(result.text, finalText);
+  assert.equal(result.adapterMetadata.turnCompleted, true);
+  assert.equal(result.adapterMetadata.exitCode, 0);
+  assert.equal(result.adapterMetadata.finalJsonParsed, true);
+  assert.equal(result.adapterMetadata.internalPlanEventsObserved, 3);
+  assert.equal(result.adapterMetadata.nonfatalErrorEventsObserved, 3);
+  assert.equal(result.adapterMetadata.externalToolEventsObserved, 0);
+  assert.equal(result.adapterMetadata.toolEventsObserved, 0);
+  assert.equal(result.adapterMetadata.unsupportedItemEventsObserved, 0);
+  assert.equal(provider.provenance.adapterVersion, 'office-codex-cli-eval-v2');
+  assert.equal(provider.provenance.itemProtocolContract, '@openai/codex-sdk@0.154.0/dist/index.d.ts');
+  assert.equal(provider.provenance.toolEventsObservedMeaning, 'legacy-alias-of-externalToolEventsObserved');
+  assert.deepEqual(result.adapterMetadata.events.filter(event => event.itemType === 'todo_list'), ['item.started', 'item.updated', 'item.completed'].map(type => ({ type, itemType: 'todo_list', itemCategory: 'internal-plan' })));
+  assert.deepEqual(result.adapterMetadata.events.filter(event => event.itemType === 'error'), ['item.started', 'item.updated', 'item.completed'].map(type => ({ type, itemType: 'error', itemCategory: 'nonfatal-error' })));
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_|SENSITIVE_DIAGNOSTIC|omit-this-thread/);
+});
+
+test('nonfatal items never replace completion, exit success or JSON, and do not make later fatal events nonfatal', async t => {
+  for (const [mode, reason] of [['nonfatal-no-final', 'empty-output'], ['nonfatal-incomplete', 'incomplete-output'], ['nonfatal-bad-json', 'invalid-json'], ['nonfatal-nonzero', 'cli-exit-nonzero'], ['nonfatal-after-completion', 'events-after-completion'], ['nonfatal-turn-failed', 'cli-turn-failed'], ['nonfatal-error', 'cli-turn-failed']]) {
+    const provider = await createCodexCliProvider(await setup(t, mode));
+    const result = await provider.generate(input);
+    assert.equal(result.ok, false, mode);
+    assert.equal(result.reason, reason, mode);
+    assert.equal(result.text, '');
+    assert.ok(result.adapterMetadata.internalPlanEventsObserved >= 3);
+    assert.ok(result.adapterMetadata.nonfatalErrorEventsObserved >= 3);
+    assert.equal(result.adapterMetadata.externalToolEventsObserved, 0);
+    assert.ok(result.adapterMetadata.elapsedMs < 1500, 'fatal events must stop before the delayed answer');
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE_|SENSITIVE_DIAGNOSTIC/);
+  }
+});
+
+test('every external tool class still stops immediately after allowed internal items', async t => {
+  for (const itemType of ['command_execution', 'file_change', 'mcp_tool_call', 'web_search', 'collab_tool_call', 'tool_call', 'function_call']) {
+    const provider = await createCodexCliProvider(await setup(t, `nonfatal-tool-${itemType}`));
+    const result = await provider.generate(input);
+    assert.equal(result.reason, 'unexpected-tool-use', itemType);
+    assert.equal(result.ok, false);
+    assert.equal(result.text, '');
+    assert.equal(result.adapterMetadata.turnCompleted, false);
+    assert.equal(result.adapterMetadata.internalPlanEventsObserved, 3);
+    assert.equal(result.adapterMetadata.nonfatalErrorEventsObserved, 3);
+    assert.equal(result.adapterMetadata.externalToolEventsObserved, 1);
+    assert.equal(result.adapterMetadata.toolEventsObserved, 1);
+    assert.equal(result.adapterMetadata.events.at(-1).itemType, itemType);
+    assert.equal(result.adapterMetadata.events.at(-1).itemCategory, 'external-tool');
+    assert.ok(result.adapterMetadata.elapsedMs < 1500);
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE_|SENSITIVE_DIAGNOSTIC/);
+  }
+});
+
+test('unknown item types retain only fixed classifications and string fingerprints, never arbitrary type text', async t => {
+  for (const itemTypeKind of ['string', 'object', 'array', 'number', 'boolean', 'null', 'missing']) {
+    const provider = await createCodexCliProvider(await setup(t, `unknown-type-${itemTypeKind}`));
+    const result = await provider.generate(input);
+    assert.equal(result.reason, 'unsupported-item');
+    assert.equal(result.ok, false);
+    assert.equal(result.text, '');
+    assert.equal(result.adapterMetadata.unsupportedItemEventsObserved, 1);
+    assert.equal(result.adapterMetadata.externalToolEventsObserved, 0);
+    const summary = result.adapterMetadata.events.at(-1);
+    assert.deepEqual(summary, {
+      type: 'item.updated', itemType: 'unknown', itemCategory: 'unsupported', itemTypeKind,
+      ...(itemTypeKind === 'string' ? { itemTypeHash: createHash('sha256').update('SENSITIVE_DIAGNOSTIC').digest('hex') } : {}),
+    });
+    assert.ok(result.adapterMetadata.elapsedMs < 1500);
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE_|SENSITIVE_DIAGNOSTIC/);
+  }
+});
+
+test('allowed internal item telemetry remains bounded without saving plan or error bodies', async t => {
+  const provider = await createCodexCliProvider(await setup(t, 'nonfatal-overflow'));
+  const result = await provider.generate(input);
+  assert.equal(result.reason, 'output-limit');
+  assert.equal(result.ok, false);
+  assert.equal(result.adapterMetadata.events.length, 2000);
+  assert.equal(result.adapterMetadata.internalPlanEventsObserved, 1995);
+  assert.equal(result.adapterMetadata.nonfatalErrorEventsObserved, 3);
+  assert.equal(result.adapterMetadata.externalToolEventsObserved, 0);
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_|SENSITIVE_DIAGNOSTIC/);
 });
 
 test('an actual model version is preserved only when present in structured CLI metadata', async t => {
@@ -141,14 +260,17 @@ test('the first tool event or unknown item stops the process before any later an
 });
 
 test('abort waits for process exit and a terminated process group includes pipe-holding descendants', async t => {
-  const options = await setup(t, 'group');
-  const { generate } = await createCodexCliProvider(options);
-  const result = await generate(input);
-  assert.equal(result.reason, 'unexpected-tool-use');
-  assert.equal(result.adapterMetadata.exitCode, 0, 'the group leader exits on TERM while its descendant keeps stdout open');
-  assert.ok(result.adapterMetadata.elapsedMs >= 250, 'the adapter waits for KILL and pipe closure');
-  const pid = Number(await readFile(options.capture + '.pid', 'utf8'));
-  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  for (const mode of ['group', 'group-error', 'group-turn-failed']) {
+    const options = await setup(t, mode);
+    const { generate } = await createCodexCliProvider(options);
+    const result = await generate(input);
+    assert.equal(result.reason, mode === 'group' ? 'unexpected-tool-use' : 'cli-turn-failed');
+    assert.equal(result.adapterMetadata.exitCode, 0, 'the group leader exits on TERM while its descendant keeps stdout open');
+    assert.ok(result.adapterMetadata.elapsedMs >= 250, 'the adapter waits for KILL and pipe closure');
+    const pid = Number(await readFile(options.capture + '.pid', 'utf8'));
+    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE_|SENSITIVE_DIAGNOSTIC/);
+  }
 });
 
 test('the shared AbortSignal cancels concurrent calls and preserves their completed cleanup metadata', async t => {

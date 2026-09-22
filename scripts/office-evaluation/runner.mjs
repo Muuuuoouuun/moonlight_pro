@@ -110,7 +110,7 @@ function safeFailure(error) {
   return { status: 'error', errorCode: code, error: 'Evaluation generation failed. Provider error details are not copied into the report.' };
 }
 
-export async function runOfficeQualityEvaluation(run, { generate, priorResults = [], interruptedIds = [], retryIncomplete = false, concurrency = 1, onAttempt = async () => {}, onResult = async () => {} } = {}) {
+export async function runOfficeQualityEvaluation(run, { generate, priorResults = [], interruptedIds = [], retryIncomplete = false, concurrency = 1, onAttempt = async () => {}, onResult = async () => {}, onFatalError = async () => {} } = {}) {
   if (typeof generate !== 'function') throw new Error('An explicit generation function is required.');
   if (![1, 2].includes(concurrency)) throw new Error('Quality evaluation concurrency must be 1 or 2.');
   if (interruptedIds.length && !retryIncomplete) throw new Error('Interrupted calls have unknown outcomes. Use --retry-incomplete explicitly to permit another paid attempt.');
@@ -161,7 +161,21 @@ export async function runOfficeQualityEvaluation(run, { generate, priorResults =
       }
     }
   };
-  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  let failed = false, firstFailure;
+  // A journal failure must stop new work immediately, but must not release the
+  // caller's journal handles while a sibling is still recording its outcome.
+  await Promise.allSettled(Array.from({ length: concurrency }, async () => {
+    try { await worker(); }
+    catch (error) {
+      stopped = true;
+      if (!failed) {
+        failed = true;
+        firstFailure = error;
+        try { await onFatalError(error); } catch { /* Preserve the original journal failure. */ }
+      }
+    }
+  }));
+  if (failed) throw firstFailure;
   return buildOfficeQualityReport(run, [...records.values()]);
 }
 
@@ -227,7 +241,7 @@ export async function readOfficeQualityJournal(path) {
   }
   const report = buildOfficeQualityReport(run, results);
   const runtimeChecks = entries.filter(entry => entry.type === 'runtime-check');
-  return { run, results, interruptedIds: [...pending], report, runtimeChecks };
+  return { run, results, interruptedIds: [...pending], report, runtimeChecks, entries };
 }
 
 export async function openOfficeQualityJournal(path, { run, resume = false } = {}) {

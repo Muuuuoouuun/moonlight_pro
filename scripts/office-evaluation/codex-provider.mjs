@@ -6,19 +6,36 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 
-export const CODEX_CLI_PROVIDER_VERSION = 'office-codex-cli-eval-v1';
+export const CODEX_CLI_PROVIDER_VERSION = 'office-codex-cli-eval-v2';
 export const CODEX_CLI_DEFAULT_MODEL = 'codex-cli-default';
 const execFileAsync = promisify(execFile);
 const MAX_CAPTURE_BYTES = 4 * 1024 * 1024;
+const MAX_CAPTURE_EVENTS = 2_000;
 const TERMINATE_GRACE_MS = 250;
 const REQUIRED_FLAGS = ['--ignore-user-config', '--ephemeral', '--sandbox', '--skip-git-repo-check', '--cd', '--config', '--output-schema', '--json'];
 const CONFIG = ['web_search="disabled"', 'approval_policy="never"', 'project_doc_max_bytes=0', 'features.shell_tool=false', 'features.unified_exec=false', 'features.apps=false', 'features.multi_agent=false', 'features.hooks=false', 'features.memories=false'];
-const ITEM_TYPES = new Set(['agent_message', 'reasoning']);
+// SDK 0.154.0 declares todo_list as running plan state and ErrorItem as
+// non-fatal. Neither represents external tool execution or proof that the turn completed.
+// Their payloads, including item IDs, must never enter the saved trace.
+const ITEM_CATEGORIES = new Map([['agent_message', 'message'], ['reasoning', 'reasoning'], ['todo_list', 'internal-plan'], ['error', 'nonfatal-error']]);
 const TOOL_TYPES = new Set(['command_execution', 'file_change', 'mcp_tool_call', 'web_search', 'collab_tool_call', 'tool_call', 'function_call']);
 const EVENT_TYPES = new Set(['thread.started', 'turn.started', 'turn.completed', 'turn.failed', 'item.started', 'item.updated', 'item.completed', 'error']);
 const hash = value => createHash('sha256').update(value).digest('hex');
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const count = value => Number.isSafeInteger(value) && value >= 0;
+
+function itemSummary(item) {
+  const type = item?.type;
+  if (ITEM_CATEGORIES.has(type)) return { itemType: type, itemCategory: ITEM_CATEGORIES.get(type) };
+  if (TOOL_TYPES.has(type)) return { itemType: type, itemCategory: 'external-tool' };
+  // Unknown type values may themselves contain secrets. Persist only a fixed
+  // shape label and, for strings, a fingerprint for correlating repeat failures.
+  return {
+    itemType: 'unknown', itemCategory: 'unsupported',
+    itemTypeKind: type === undefined ? 'missing' : type === null ? 'null' : Array.isArray(type) ? 'array' : typeof type,
+    ...(typeof type === 'string' ? { itemTypeHash: hash(type) } : {}),
+  };
+}
 
 // Keep the operator's normal CLI login location. Never read, copy or replace auth
 // files, or pass API keys/other application secrets through the child environment.
@@ -59,12 +76,16 @@ export async function createCodexCliProvider({ command = 'codex', argv = [], tim
     requiredFlags: [...REQUIRED_FLAGS], config: [...CONFIG], emptyWorkingDirectory: true, detachedProcessGroup: true,
     timeoutMs, terminateGraceMs: TERMINATE_GRACE_MS, adapterRetries: 0, cliInternalRetries: 'uncontrolled-built-in-provider',
     outputTokenCapApplied: null, thinkingLevelMapping: 'model_reasoning_effort', builtInCliInstructionsRetained: true,
+    itemProtocolContract: '@openai/codex-sdk@0.154.0/dist/index.d.ts',
+    internalItemPolicy: 'todo_list-and-error-metadata-only', toolEventsObservedMeaning: 'legacy-alias-of-externalToolEventsObserved',
+    unknownItemPolicy: 'fail-fixed-type-kind-and-sha256-only', maxObservedEvents: MAX_CAPTURE_EVENTS,
     configReference: 'https://learn.chatgpt.com/docs/config-file/config-reference', protocolReference: 'https://learn.chatgpt.com/docs/non-interactive-mode',
   });
 
   async function generate(input) {
     const started = performance.now();
-    const metadata = { provenance, elapsedMs: 0, exitCode: null, exitSignal: null, turnCompleted: false, finalJsonParsed: false, toolEventsObserved: 0, events: [], usage: null,
+    const metadata = { provenance, elapsedMs: 0, exitCode: null, exitSignal: null, turnCompleted: false, finalJsonParsed: false,
+      toolEventsObserved: 0, externalToolEventsObserved: 0, internalPlanEventsObserved: 0, nonfatalErrorEventsObserved: 0, unsupportedItemEventsObserved: 0, events: [], usage: null,
       requestedMaxOutputTokens: count(input?.maxOutputTokens) ? input.maxOutputTokens : null, reasoningEffortApplied: ['low', 'high'].includes(input?.thinkingLevel) ? input.thinkingLevel : null };
     const result = (reason, text = '', usageMetadata = null, modelVersion = null) => {
       metadata.elapsedMs = Math.round(performance.now() - started);
@@ -107,17 +128,19 @@ export async function createCodexCliProvider({ command = 'codex', argv = [], tim
         let event;
         try { event = JSON.parse(line); } catch { stop('invalid-event-json'); return; }
         if (!record(event) || !EVENT_TYPES.has(event.type)) { stop('unsupported-event'); return; }
+        if (metadata.events.length >= MAX_CAPTURE_EVENTS) { stop('output-limit'); return; }
         const item = record(event.item) ? event.item : null;
         const summary = { type: event.type };
         if (event.type.startsWith('item.')) {
-          if (!item || !ITEM_TYPES.has(item.type)) {
-            if (item && TOOL_TYPES.has(item.type)) { summary.itemType = item.type; metadata.toolEventsObserved++; }
-            metadata.events.push(summary); stop(item && TOOL_TYPES.has(item.type) ? 'unexpected-tool-use' : 'unsupported-item'); return;
-          }
-          summary.itemType = item.type;
+          Object.assign(summary, itemSummary(item));
+          if (summary.itemCategory === 'internal-plan') metadata.internalPlanEventsObserved++;
+          if (summary.itemCategory === 'nonfatal-error') metadata.nonfatalErrorEventsObserved++;
+          if (summary.itemCategory === 'external-tool') { metadata.externalToolEventsObserved++; metadata.toolEventsObserved++; }
+          if (summary.itemCategory === 'unsupported') metadata.unsupportedItemEventsObserved++;
         }
         metadata.events.push(summary);
-        if (metadata.events.length > 2_000) { stop('output-limit'); return; }
+        if (summary.itemCategory === 'external-tool') { stop('unexpected-tool-use'); return; }
+        if (summary.itemCategory === 'unsupported') { stop('unsupported-item'); return; }
         if (event.type === 'error' || event.type === 'turn.failed') { stop('cli-turn-failed'); return; }
         if (completed) { stop('events-after-completion'); return; }
         if (['thread.started', 'turn.started', 'turn.completed'].includes(event.type)) {

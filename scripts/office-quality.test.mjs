@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { OFFICE_IDS } from '@com-moon/agent-contracts/office';
@@ -405,4 +405,221 @@ test('listing and rubric CLI modes never invoke a generator', async () => {
   await officeQualityCli({ live: false }, { generate: async () => assert.fail('unexpected model call'), log: line => output.push(line) });
   assert.match(output.join('\n'), /39 Office generation calls planned\. No model calls/);
   await officeQualityCli({ rubric: true }, { generate: async () => assert.fail('unexpected model call'), log: () => {} });
+});
+
+test('provider-specific live evaluation binds the run and both provenance snapshots without a Gemini gate', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'office-provider-provenance-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'run.jsonl');
+  const events = [];
+  const provenance = { ...testProvenance, modelConfiguration: { provider: 'offline-unit-process', model: 'unit-test-no-provider' } };
+  const result = await officeQualityCli({ live: true, only: ['eevee-work'], output: path, 'dataset-status': 'development' }, {
+    requireLiveConfiguration: async () => { events.push('configuration'); },
+    collectProvenance: async () => { events.push('snapshot'); return provenance; },
+    onRun: async run => { events.push('run'); assert.equal(run.bundleHash, provenance.bundleHash); assert.ok(run.runId); },
+    generate: async request => { events.push('generation'); return generated(request); }, log: () => {},
+  });
+  assert.deepEqual(events, ['configuration', 'snapshot', 'run', 'generation', 'snapshot']);
+  const saved = await readOfficeQualityJournal(path);
+  assert.deepEqual(saved.run.provenance, provenance);
+  assert.equal(saved.run.runId, result.runId);
+  assert.equal(saved.runtimeChecks[0].unchanged, true);
+  assert.equal(result.qualityClaim, 'not-scored');
+});
+
+test('configuration failure and sidecar binding failure stop before any model or run journal', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'office-provider-gate-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  for (const stopAt of ['configuration', 'binding']) {
+    const path = join(directory, `${stopAt}.jsonl`);
+    await assert.rejects(officeQualityCli({ live: true, only: ['eevee-work'], output: path }, {
+      requireLiveConfiguration: async () => { if (stopAt === 'configuration') throw new Error('preflight denied'); },
+      collectProvenance: async () => ({ ...testProvenance, modelConfiguration: { model: 'unit-test-no-provider' } }),
+      onRun: async () => { throw new Error('sidecar belongs to another run'); },
+      generate: async () => assert.fail('generation must not start'), log: () => {},
+    }), /preflight denied|sidecar belongs/);
+    await assert.rejects(stat(path), { code: 'ENOENT' });
+  }
+  await officeQualityCli({ live: false }, {
+    requireLiveConfiguration: async () => assert.fail('listing must not preflight a provider'),
+    collectProvenance: async () => assert.fail('listing must not collect a live snapshot'),
+    onRun: async () => assert.fail('listing must not open a provider journal'), log: () => {},
+  });
+});
+
+test('a changed custom provider snapshot invalidates integrity and cannot be resumed', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'office-provider-changed-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'run.jsonl'), exitCode = process.exitCode;
+  let snapshots = 0;
+  try {
+    const result = await officeQualityCli({ live: true, only: ['eevee-work'], output: path }, {
+      requireLiveConfiguration: async () => {},
+      collectProvenance: async () => ({ ...testProvenance, bundleHash: snapshots++ ? 'changed-policy' : 'initial-policy', modelConfiguration: { model: 'unit-test-no-provider' } }),
+      generate: async request => generated(request), log: () => {},
+    });
+    assert.equal(result.runtimeIntegrity, 'unverified');
+    assert.equal(process.exitCode, 1);
+    const saved = await readOfficeQualityJournal(path);
+    assert.equal(saved.runtimeChecks[0].unchanged, false);
+    await assert.rejects(officeQualityCli({ live: true, resume: true, output: path }, {
+      requireLiveConfiguration: async () => {},
+      collectProvenance: async () => ({ ...testProvenance, bundleHash: 'changed-policy' }),
+      generate: async () => assert.fail('changed snapshot must not resume'), log: () => {},
+    }), /runtime changed/);
+  } finally { process.exitCode = exitCode; }
+});
+
+const offlineQualityDependencies = {
+  requireLiveConfiguration: async () => {}, collectProvenance: async () => testProvenance,
+  generate: async request => generated(request), log: () => {},
+};
+const legacyRuntimeCheck = () => ({ type: 'runtime-check', unchanged: true, bundleHash: testProvenance.bundleHash, officeVersion: testProvenance.officeVersion });
+async function writeQualityEntries(path, run, entries) {
+  const journal = await openOfficeQualityJournal(path, { run });
+  try { for (const entry of entries) await journal.append(entry); }
+  finally { await journal.close(); }
+}
+
+test('runtime coverage cannot promote the first interrupted segment after a successful resume or score', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'office-runtime-first-interruption-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'run.jsonl'), exitCode = process.exitCode;
+  let fatalErrors = 0, resumedCalls = 0;
+  try {
+    await assert.rejects(officeQualityCli({ live: true, output: path }, {
+      ...offlineQualityDependencies,
+      log: () => { throw new Error('interrupted after result sync'); },
+      onFatalError: async error => { assert.match(error.message, /interrupted/); fatalErrors++; },
+    }), /interrupted/);
+    const interrupted = await readOfficeQualityJournal(path);
+    assert.equal(interrupted.results.length, 1);
+    assert.equal(interrupted.runtimeChecks.length, 0);
+    assert.equal(fatalErrors, 1);
+    const result = await officeQualityCli({ live: true, resume: true, output: path }, {
+      ...offlineQualityDependencies,
+      generate: async request => { resumedCalls++; return generated(request); },
+    });
+    assert.equal(resumedCalls, 38);
+    assert.equal(result.summary.generated, 39);
+    assert.equal(result.runtimeIntegrity, 'unverified');
+    assert.equal(process.exitCode, 1);
+    assert.deepEqual(result.results[0], interrupted.results[0]);
+    const check = (await readOfficeQualityJournal(path)).runtimeChecks[0];
+    assert.equal(check.unchanged, true);
+    assert.equal(check.coverage.priorResultCount, 1);
+    assert.equal(check.coverage.resultCount, 39);
+    assert.equal(check.coverage.verifiedResultCount, 0);
+    assert.equal(check.coverage.runtimeIntegrity, 'unverified');
+    const pack = await officeQualityCli({ 'review-pack': true, input: path, output: join(directory, 'pack.json') }, offlineQualityDependencies);
+    assert.equal(pack.report.runtimeIntegrity, 'unverified');
+    await writeFile(join(directory, 'reviews.json'), JSON.stringify(completedArithmeticReview(pack.report)));
+    const scored = await officeQualityCli({ score: true, input: path, reviews: join(directory, 'reviews.json'), output: join(directory, 'score.json') }, offlineQualityDependencies);
+    assert.equal(scored.status, 'unverified');
+    assert.ok(scored.roles.every(role => role.issues.includes('runtime-snapshot-not-verified')));
+  } finally { process.exitCode = exitCode; }
+});
+
+test('runtime coverage preserves a gap when the second resumed segment is interrupted', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'office-runtime-resume-interruption-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'run.jsonl'), exitCode = process.exitCode;
+  const run = makeRun(OFFICE_QUALITY_SCENARIOS.slice(0, 3));
+  const recorded = await runOfficeQualityEvaluation(run, offlineQualityDependencies);
+  await writeQualityEntries(path, run, [{ type: 'result', record: recorded.results[0] }, legacyRuntimeCheck()]);
+  try {
+    await assert.rejects(officeQualityCli({ live: true, resume: true, output: path }, {
+      ...offlineQualityDependencies, log: () => { throw new Error('second segment interrupted'); },
+    }), /second segment/);
+    const interrupted = await readOfficeQualityJournal(path);
+    assert.equal(interrupted.results.length, 2);
+    assert.equal(interrupted.runtimeChecks.length, 1);
+    const pack = await officeQualityCli({ 'review-pack': true, input: path, output: join(directory, 'interrupted-pack.json') }, offlineQualityDependencies);
+    assert.equal(pack.report.runtimeIntegrity, 'unverified', 'a prior check cannot cover later results');
+    const resumed = await officeQualityCli({ live: true, resume: true, output: path }, offlineQualityDependencies);
+    assert.equal(resumed.runtimeIntegrity, 'unverified');
+    const check = (await readOfficeQualityJournal(path)).runtimeChecks.at(-1);
+    assert.equal(check.coverage.priorResultCount, 2);
+    assert.equal(check.coverage.resultCount, 3);
+    assert.equal(check.coverage.verifiedResultCount, 1);
+    const repeated = await officeQualityCli({ live: true, resume: true, output: path }, {
+      ...offlineQualityDependencies, generate: async () => assert.fail('all results already exist'),
+    });
+    assert.equal(repeated.runtimeIntegrity, 'unverified', 'another empty resume must not repair the gap');
+  } finally { process.exitCode = exitCode; }
+});
+
+test('runtime coverage binds both result prefixes and extends a checked segment through normal resumes', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'office-runtime-normal-resume-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'run.jsonl');
+  const run = makeRun(OFFICE_QUALITY_SCENARIOS.slice(0, 3));
+  const recorded = await runOfficeQualityEvaluation(run, offlineQualityDependencies);
+  await writeQualityEntries(path, run, [{ type: 'result', record: recorded.results[0] }, legacyRuntimeCheck()]);
+  let calls = 0;
+  const resumed = await officeQualityCli({ live: true, resume: true, output: path, concurrency: 2 }, {
+    ...offlineQualityDependencies, generate: async request => {
+      if (++calls === 1) await new Promise(resolve => setTimeout(resolve, 10));
+      return generated(request);
+    },
+  });
+  assert.equal(calls, 2);
+  assert.equal(resumed.runtimeIntegrity, 'verified');
+  const saved = await readOfficeQualityJournal(path), check = saved.runtimeChecks.at(-1);
+  assert.notDeepEqual(saved.results.map(record => record.id), resumed.results.map(record => record.id), 'hashes bind journal order despite concurrent result order');
+  const prefixHash = records => qualityHash(records.map(({ id, inputHash = null, responseHash }) => ({ id, inputHash, responseHash })));
+  assert.deepEqual(check.coverage, {
+    version: 1, priorResultCount: 1, priorResultsHash: prefixHash(saved.results.slice(0, 1)),
+    resultCount: 3, resultsHash: prefixHash(saved.results), verifiedResultCount: 3, runtimeIntegrity: 'verified',
+  });
+  const repeated = await officeQualityCli({ live: true, resume: true, output: path }, {
+    ...offlineQualityDependencies, generate: async () => assert.fail('completed results must not repeat'),
+  });
+  assert.equal(repeated.runtimeIntegrity, 'verified');
+  const pack = await officeQualityCli({ 'review-pack': true, input: path, output: join(directory, 'pack.json') }, offlineQualityDependencies);
+  assert.equal(pack.report.runtimeIntegrity, 'verified');
+});
+
+test('complete legacy runtime checks remain score-compatible but lack historical segment start boundaries', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'office-runtime-legacy-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'run.jsonl'), report = await fullReport();
+  // Old checks have no start count/hash. They can cover the prefix at their
+  // position, but cannot reveal an interrupted segment before that old check.
+  await writeQualityEntries(path, report, report.results.flatMap((record, index) => [
+    { type: 'result', record }, ...(index === 0 || index === report.results.length - 1 ? [legacyRuntimeCheck()] : []),
+  ]));
+  const pack = await officeQualityCli({ 'review-pack': true, input: path, output: join(directory, 'pack.json') }, offlineQualityDependencies);
+  assert.equal(pack.report.runtimeIntegrity, 'verified');
+  assert.equal(pack.report.runtimeCoverage.legacyCheckCount, 2);
+  await writeFile(join(directory, 'reviews.json'), JSON.stringify(completedArithmeticReview(pack.report)));
+  const scored = await officeQualityCli({ score: true, input: path, reviews: join(directory, 'reviews.json'), output: join(directory, 'score.json') }, offlineQualityDependencies);
+  assert.equal(scored.status, 'passed');
+});
+
+test('runtime coverage fails closed on malformed bounds, false checks, and a legacy downgrade after scoped checks', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'office-runtime-invalid-check-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'run.jsonl');
+  await officeQualityCli({ live: true, only: ['eevee-work'], output: path }, offlineQualityDependencies);
+  const saved = await readOfficeQualityJournal(path);
+  for (const [name, change] of Object.entries({
+    'wrong-prefix': entry => { entry.coverage.priorResultsHash = 'wrong'; },
+    'wrong-results': entry => { entry.coverage.resultsHash = 'wrong'; },
+    'invalid-bound': entry => { entry.coverage.priorResultCount = -1; },
+    'invalid-version': entry => { entry.coverage.version = 2; },
+    'wrong-cumulative-count': entry => { entry.coverage.verifiedResultCount = 0; },
+    'wrong-cumulative-status': entry => { entry.coverage.runtimeIntegrity = 'unverified'; },
+    'changed-source': entry => { entry.unchanged = false; },
+    'wrong-source-binding': entry => { entry.bundleHash = 'other-policy'; },
+    'legacy-downgrade': () => {},
+  })) {
+    const entries = structuredClone(saved.entries), lastCheck = entries.at(-1);
+    change(lastCheck);
+    entries.push(legacyRuntimeCheck());
+    const changedPath = join(directory, `${name}.jsonl`);
+    await writeQualityEntries(changedPath, saved.run, entries);
+    const pack = await officeQualityCli({ 'review-pack': true, input: changedPath, output: join(directory, `${name}.json`) }, offlineQualityDependencies);
+    assert.equal(pack.report.runtimeIntegrity, 'unverified', name);
+  }
 });
