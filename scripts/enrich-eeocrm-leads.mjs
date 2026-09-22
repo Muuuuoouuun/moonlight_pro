@@ -8,6 +8,8 @@ import {
   isTemplateNextAction,
   normalizeEntityName,
 } from "../apps/hub/lib/sales-os/lead-enrichment.js";
+// 제목 분류는 calendar-touchpoints가 정본 — 넛지와 같은 규칙을 써야 한다(사본 금지).
+import { classifyCalendarTitle } from "../apps/hub/lib/sales-os/calendar-touchpoints.js";
 import { assertEnrichmentApplyPolicy } from "./enrich-eeocrm-policy.mjs";
 
 const DEFAULT_OWNER = {
@@ -66,14 +68,6 @@ async function requestJson(url, { headers = {}, method = "GET", body } = {}) {
 function ownerFilter(owner) {
   const aliases = [owner.externalId, owner.name, "Mun Junhyuk (문준혁)", "Junhyuk Mun"];
   return `owner_name=in.(${[...new Set(aliases)].map(encodeURIComponent).join(",")})`;
-}
-
-function classifyCalendarTitle(title) {
-  const text = String(title || "").toLowerCase();
-  if (/설명회|세미나|웨비나/.test(text)) return "infoSession";
-  if (/미팅|회의|meeting|방문|상담/.test(text)) return "meeting";
-  if (/콜|전화|call/.test(text)) return "call";
-  return "other";
 }
 
 function monthRanges(now = new Date(), months = 7) {
