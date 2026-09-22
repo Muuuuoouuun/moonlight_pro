@@ -3,6 +3,9 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
+import { OfficeNudgeStrip } from "../office-nudge-strip";
+import { OfficeQuickDrawer } from "../office-quick-drawer";
+import { resolveActiveOfficeNudge } from "@/lib/office-nudge-rules";
 
 // Home — Futura 텍스처의 첫 화면 (DESIGN.md §15, 2026-09-18).
 //
@@ -209,11 +212,21 @@ export function Home({ onNavigate }) {
   const { status, signals } = useDailyBriefSignals();
   const [resolved, setResolved] = React.useState(() => new Set());
   const [cursor, setCursor] = React.useState(0);
+  const [suppressedNudges, setSuppressedNudges] = React.useState(() => new Set());
+  const [officeDrawerNudge, setOfficeDrawerNudge] = React.useState(null);
 
   const queue = React.useMemo(() => signals.filter((s) => !resolved.has(s.id)), [signals, resolved]);
   const active = queue[Math.min(cursor, Math.max(queue.length - 1, 0))] || null;
   const total = signals.length;
   const done = total - queue.length;
+
+  const activeOfficeNudge = React.useMemo(() => {
+    return resolveActiveOfficeNudge({
+      surface: 'home',
+      signals: queue,
+      suppressedKeys: suppressedNudges,
+    });
+  }, [queue, suppressedNudges]);
 
   const decide = React.useCallback((signal, decision) => {
     setResolved((prev) => new Set(prev).add(signal.id));
@@ -268,6 +281,14 @@ export function Home({ onNavigate }) {
         ) : null}
       </header>
 
+      {activeOfficeNudge && (
+        <OfficeNudgeStrip
+          nudge={activeOfficeNudge}
+          onAction={(nudge) => setOfficeDrawerNudge(nudge)}
+          onSnooze={(key) => setSuppressedNudges((prev) => new Set(prev).add(key))}
+        />
+      )}
+
       {status === 'loading' ? (
         <div className="fx-split">
           <Skeleton lines={5} />
@@ -307,6 +328,15 @@ export function Home({ onNavigate }) {
       <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <Kbd>J</Kbd><Kbd>K</Kbd> 이동 · <Kbd>1</Kbd>–<Kbd>9</Kbd> 결정
       </footer>
+
+      {officeDrawerNudge && (
+        <OfficeQuickDrawer
+          isOpen={Boolean(officeDrawerNudge)}
+          onClose={() => setOfficeDrawerNudge(null)}
+          nudge={officeDrawerNudge}
+          onNavigate={onNavigate}
+        />
+      )}
     </div>
   );
 }

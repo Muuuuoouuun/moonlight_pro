@@ -9,6 +9,9 @@ import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
 import { applyMute, clearMute, mutedIdSet, readMuteStore, seoulDayKey, writeMuteStore } from "./my-work-mute.js";
+import { OfficeNudgeStrip } from "../office-nudge-strip";
+import { OfficeQuickDrawer } from "../office-quick-drawer";
+import { resolveActiveOfficeNudge } from "@/lib/office-nudge-rules";
 
 // 내 작업 — one personal operating surface, three lenses over the cross-lane attention
 // read model (tasks + open deals + calendar week). Design contract from the operator:
@@ -581,6 +584,26 @@ export function MyWork({ onNavigate }) {
   const quickRef = React.useRef(null);
   const searchRef = React.useRef(null);
   const rowRefs = React.useRef([]);
+
+  const [suppressedNudges, setSuppressedNudges] = React.useState(() => new Set());
+  const [officeDrawerNudge, setOfficeDrawerNudge] = React.useState(null);
+
+  const activeOfficeNudge = React.useMemo(() => {
+    const taskItems = items
+      .filter((i) => i.lane === 'task')
+      .map((i) => ({
+        id: i.entityId || i.id,
+        title: i.title,
+        dueDate: i.whenAt ? i.whenAt.slice(0, 10) : null,
+        completed: hiddenIds.has(i.id),
+      }));
+    return resolveActiveOfficeNudge({
+      surface: 'work',
+      tasks: taskItems,
+      today: todayKey,
+      suppressedKeys: suppressedNudges,
+    });
+  }, [items, hiddenIds, todayKey, suppressedNudges]);
 
   const visible = React.useMemo(() => {
     const patched = Object.keys(itemPatches).length
@@ -1183,6 +1206,14 @@ export function MyWork({ onNavigate }) {
         })}
       </div>
 
+      {activeOfficeNudge && (
+        <OfficeNudgeStrip
+          nudge={activeOfficeNudge}
+          onAction={(nudge) => setOfficeDrawerNudge(nudge)}
+          onSnooze={(key) => setSuppressedNudges((prev) => new Set(prev).add(key))}
+        />
+      )}
+
       {/* Quick capture — Enter saves a durable task; N focuses. 상세 토글로 기한·우선순위 추가. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1684,6 +1715,15 @@ export function MyWork({ onNavigate }) {
         onDelete={deleteTaskDetail}
         onClose={() => setTaskDraft(null)}
       ><JournalSources refs={taskDraft?.sourceRefs} /></EditDrawer>
+
+      {officeDrawerNudge && (
+        <OfficeQuickDrawer
+          isOpen={Boolean(officeDrawerNudge)}
+          onClose={() => setOfficeDrawerNudge(null)}
+          nudge={officeDrawerNudge}
+          onNavigate={onNavigate}
+        />
+      )}
     </div>
   );
 }

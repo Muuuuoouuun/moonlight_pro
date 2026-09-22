@@ -1,0 +1,143 @@
+/* Moonlight Office Nudge & Intervention CSS (DESIGN.md 준수) */
+
+@keyframes mlMoonPulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 oklch(0.78 0.008 250 / 0);
+    border-color: var(--line);
+  }
+  50% {
+    box-shadow: 0 0 0 3px oklch(0.78 0.008 250 / 0.35);
+    border-color: var(--moon-300);
+  }
+}
+
+.hub-office-glow {
+  animation: mlMoonPulseGlow 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-office-glow {
+    animation: none;
+  }
+}
+
+/* 1줄 인라인 슬림 스트립 */
+.hub-office-nudge-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 8px 14px;
+  margin-bottom: var(--gap-md);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
+}
+
+.hub-office-nudge-lead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.hub-office-persona-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-full);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--moon-100);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hub-office-nudge-message {
+  font-size: 12.5px;
+  color: var(--fg);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hub-office-nudge-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.hub-office-action-btn {
+  font-size: 12px;
+  font-weight: 500;
+  height: 28px;
+  padding: 0 10px;
+}
+
+/* 퀵 드로어 내부 스타일 */
+.hub-office-drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-md);
+  padding: var(--gap-md) 0;
+}
+
+.hub-office-context-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 12px 14px;
+  font-size: 12px;
+}
+
+.hub-office-context-header {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--fg-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hub-office-prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hub-office-chip-btn {
+  font-size: 11.5px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--fg-muted);
+  border-radius: var(--r-full);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub);
+}
+
+.hub-office-chip-btn:hover {
+  border-color: var(--moon-300);
+  color: var(--fg);
+}
+
+.hub-office-result-box {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fg);
+  white-space: pre-wrap;
+  min-height: 120px;
+  max-height: 480px;
+  overflow-y: auto;
+}

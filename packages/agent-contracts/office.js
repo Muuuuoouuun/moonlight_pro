@@ -26,6 +26,8 @@ export const OFFICE_AGENTS = Object.freeze({
     directionFocus: '운영자 인지 부하 최소화 및 다자 의견의 단일 방향 수렴',
     decisionRubric: '결정할 것이 1개로 줄었는가? 담당 임원이 명확한가?',
     tensionWith: Object.freeze(['vaporeon', 'umbreon']),
+    recommendedTier: 'flash',
+    defaultTemperature: 0.3,
   },
   vaporeon: {
     id: 'vaporeon',
@@ -41,6 +43,8 @@ export const OFFICE_AGENTS = Object.freeze({
     directionFocus: '무리한 일정 차단, 끝낼 수 있는 순서로의 현실적 조정',
     decisionRubric: '가용 시간과 기존 약속에 충돌이 없는가? 대기 상태와 작업 상태가 나뉘었는가?',
     tensionWith: Object.freeze(['espeon', 'flareon']),
+    recommendedTier: 'flash',
+    defaultTemperature: 0.3,
   },
   jolteon: {
     id: 'jolteon',
@@ -56,6 +60,8 @@ export const OFFICE_AGENTS = Object.freeze({
     directionFocus: '신속한 피드백 루프, 말보다 작동하는 코드 증거 중심',
     decisionRubric: '로컬 검증과 배포 분리가 되었는가? 검증 범위가 명확한가?',
     tensionWith: Object.freeze(['glaceon', 'umbreon']),
+    recommendedTier: 'flash',
+    defaultTemperature: 0.2,
   },
   flareon: {
     id: 'flareon',
@@ -71,6 +77,8 @@ export const OFFICE_AGENTS = Object.freeze({
     directionFocus: '고객 딜 진척, 다음 행동으로 이어지는 실질적 접촉',
     decisionRubric: '고객 단계가 명확한가? 상대가 답하기 쉬운 단 1개의 행동이 있는가?',
     tensionWith: Object.freeze(['sylveon', 'leafeon']),
+    recommendedTier: 'flash',
+    defaultTemperature: 0.45,
   },
   espeon: {
     id: 'espeon',
@@ -86,6 +94,8 @@ export const OFFICE_AGENTS = Object.freeze({
     directionFocus: '장기 전략 일관성, 현상 유지 비용 직시 및 재검토 기준 설정',
     decisionRubric: '이 선택으로 무엇을 포기하는가? 가설 검증 시점이 정해졌는가?',
     tensionWith: Object.freeze(['leafeon', 'glaceon']),
+    recommendedTier: 'pro',
+    defaultTemperature: 0.4,
   },
   umbreon: {
     id: 'umbreon',
@@ -101,6 +111,8 @@ export const OFFICE_AGENTS = Object.freeze({
     directionFocus: '사실성 검증, 실패 조기 발견, 지속 가능한 신뢰 방어',
     decisionRubric: '주장에 검증된 사실 근거가 있는가? 통과할 수 있는 수정 대안을 주었는가?',
     tensionWith: Object.freeze(['flareon', 'jolteon']),
+    recommendedTier: 'pro',
+    defaultTemperature: 0.1,
   },
   leafeon: {
     id: 'leafeon',
@@ -116,6 +128,8 @@ export const OFFICE_AGENTS = Object.freeze({
     directionFocus: '지속 가능한 자원 운용, 현금흐름 및 에너지 소진 방지',
     decisionRubric: '유지 비용과 시간 비용이 계산되었는가? 실패 시 중단 기준이 있는가?',
     tensionWith: Object.freeze(['espeon', 'flareon']),
+    recommendedTier: 'flash',
+    defaultTemperature: 0.2,
   },
   glaceon: {
     id: 'glaceon',
@@ -131,6 +145,8 @@ export const OFFICE_AGENTS = Object.freeze({
     directionFocus: '문제 정의의 선명함, 불필요한 기능(Out-of-Scope)의 과감한 배제',
     decisionRubric: '시작-결과-실패 흐름이 뚜렷한가? 완료 조건(DoD)이 검증 가능한가?',
     tensionWith: Object.freeze(['jolteon', 'vaporeon']),
+    recommendedTier: 'pro',
+    defaultTemperature: 0.2,
   },
   sylveon: {
     id: 'sylveon',
@@ -146,6 +162,8 @@ export const OFFICE_AGENTS = Object.freeze({
     directionFocus: '고객 공감 및 신뢰, 브랜드 보이스 일관성 수호',
     decisionRubric: '공급자 언어가 아닌 고객 언어로 바뀌었는가? 비판 뒤 대체 문장이 있는가?',
     tensionWith: Object.freeze(['flareon', 'umbreon']),
+    recommendedTier: 'flash',
+    defaultTemperature: 0.7,
   },
 });
 

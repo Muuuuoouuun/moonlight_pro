@@ -7,6 +7,9 @@ import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, Emp
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
+import { OfficeNudgeStrip } from "../office-nudge-strip";
+import { OfficeQuickDrawer } from "../office-quick-drawer";
+import { resolveActiveOfficeNudge } from "@/lib/office-nudge-rules";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
@@ -442,6 +445,25 @@ export function RevenueOverview({ onNavigate }) {
   const totalBrandMRR = byBrand.reduce((a, b) => a + b.mrr, 0);
   const attentionItems = buildRevenueAttention(LEADS, DEALS);
 
+  const [suppressedNudges, setSuppressedNudges] = React.useState(() => new Set());
+  const [officeDrawerNudge, setOfficeDrawerNudge] = React.useState(null);
+
+  const activeOfficeNudge = React.useMemo(() => {
+    return resolveActiveOfficeNudge({
+      surface: 'revenue',
+      deals: DEALS.map((d) => ({
+        id: d.id,
+        name: d.name,
+        stage: d.stage,
+        amount: d.value,
+        lastContactDate: d.updatedAt || d.createdAt,
+        daysStagnant: Number(d.age) || 0,
+        notes: d.notes,
+      })),
+      suppressedKeys: suppressedNudges,
+    });
+  }, [DEALS, suppressedNudges]);
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end' }}>
@@ -452,10 +474,15 @@ export function RevenueOverview({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        {/* MTD/QTD/YTD 토글 제거(2026-08-05 재감사): period를 소비하는 데이터가 없어
-            클릭해도 숫자가 안 바뀌는 죽은 컨트롤이었다. 분기/연간 뷰는 서버 요약이
-            생길 때 실데이터와 함께 복귀한다. */}
       </div>
+
+      {activeOfficeNudge && (
+        <OfficeNudgeStrip
+          nudge={activeOfficeNudge}
+          onAction={(nudge) => setOfficeDrawerNudge(nudge)}
+          onSnooze={(key) => setSuppressedNudges((prev) => new Set(prev).add(key))}
+        />
+      )}
 
       <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {[
@@ -574,6 +601,15 @@ export function RevenueOverview({ onNavigate }) {
       </div>
 
       <GuruCoachPanel onNavigate={onNavigate} />
+
+      {officeDrawerNudge && (
+        <OfficeQuickDrawer
+          isOpen={Boolean(officeDrawerNudge)}
+          onClose={() => setOfficeDrawerNudge(null)}
+          nudge={officeDrawerNudge}
+          onNavigate={onNavigate}
+        />
+      )}
     </div>
   );
 }
@@ -1669,6 +1705,25 @@ export function Deals({ workspace, onNavigate }) {
     () => (showHidden ? scopedDeals : scopedDeals.filter(d => !d.hidden)),
     [scopedDeals, showHidden],
   );
+
+  const [suppressedNudges, setSuppressedNudges] = React.useState(() => new Set());
+  const [officeDrawerNudge, setOfficeDrawerNudge] = React.useState(null);
+
+  const activeOfficeNudge = React.useMemo(() => {
+    return resolveActiveOfficeNudge({
+      surface: 'deals',
+      deals: visibleDeals.map((d) => ({
+        id: d.id,
+        name: d.name,
+        stage: d.stage,
+        amount: d.value,
+        lastContactDate: d.updatedAt || d.createdAt,
+        daysStagnant: Number(d.age) || 0,
+        notes: d.notes || d.description,
+      })),
+      suppressedKeys: suppressedNudges,
+    });
+  }, [visibleDeals, suppressedNudges]);
   const wsEmpty = Boolean(ws) && visibleDeals.length === 0;
   const editingBase = editDealId ? deals.find(d => d.id === editDealId) : null;
   const editingDeal = editingBase
@@ -1951,6 +2006,14 @@ export function Deals({ workspace, onNavigate }) {
         )
       )}
 
+      {activeOfficeNudge && (
+        <OfficeNudgeStrip
+          nudge={activeOfficeNudge}
+          onAction={(nudge) => setOfficeDrawerNudge(nudge)}
+          onSnooze={(key) => setSuppressedNudges((prev) => new Set(prev).add(key))}
+        />
+      )}
+
       {!wsEmpty && (
       <ScrollShadowX>
         {DEAL_STAGES.map(s => {
@@ -2180,6 +2243,15 @@ export function Deals({ workspace, onNavigate }) {
           }
         }}
       />
+
+      {officeDrawerNudge && (
+        <OfficeQuickDrawer
+          isOpen={Boolean(officeDrawerNudge)}
+          onClose={() => setOfficeDrawerNudge(null)}
+          nudge={officeDrawerNudge}
+          onNavigate={onNavigate}
+        />
+      )}
     </div>
   );
 }
