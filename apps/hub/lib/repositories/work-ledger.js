@@ -19,6 +19,7 @@ const RITUAL_FALLBACK_NAMES = {
   weekly: "Weekly Review",
 };
 const ROUTINE_CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
+const RITUAL_CATEGORIES = new Set(["general", "work", "content", "health", "learning", "personal"]);
 const DECISION_ROW_LIMIT = 40;
 const ROADMAP_ROW_LIMIT = 500;
 const RHYTHM_ROW_LIMIT = 240;
@@ -148,6 +149,26 @@ function normalizeCheckType(value) {
   return ROUTINE_CHECK_TYPES.has(normalized) ? normalized : "midday";
 }
 
+// category/targetPerWeek live in meta alongside ritual_key/name — no schema migration,
+// same "no separate rituals table" model as the rest of the routine definition fields.
+// Only the seed (definition) row and any row touched by a later PATCH edit carry these —
+// /api/routine/check never writes them onto a check-in row's meta. Rows are read in
+// checked_at.desc order, which sorts a fresh check-in ahead of the (checked_at: null)
+// seed row, so this must scan every row in the group for an explicit value rather than
+// trust whichever row happens to be seen first — otherwise the very next check-in after
+// creating a ritual "resets" its category/target back to the default in the UI.
+function rawRitualCategory(row) {
+  const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
+  const value = String(meta.category || "").trim().toLowerCase();
+  return RITUAL_CATEGORIES.has(value) ? value : null;
+}
+
+function rawRitualTargetPerWeek(row) {
+  const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
+  const raw = Number(meta.target_per_week);
+  return Number.isInteger(raw) && raw >= 1 && raw <= 7 ? raw : null;
+}
+
 function ritualCompositeId(projectId, ritualKey) {
   return `ritual:${projectId ? encodeURIComponent(projectId) : "unscoped"}:${encodeURIComponent(ritualKey)}`;
 }
@@ -179,6 +200,7 @@ function mapRituals(rows, projectRows, { timeZone, now }) {
     const projectId = row.project_id || null;
     const compositeKey = JSON.stringify([projectId, ritualKey]);
     if (!groups.has(compositeKey)) {
+      const checkType = normalizeCheckType(row.check_type);
       groups.set(compositeKey, {
         id: ritualCompositeId(projectId, ritualKey),
         projectId,
@@ -187,14 +209,18 @@ function mapRituals(rows, projectRows, { timeZone, now }) {
           ? `/dashboard/work/projects?project=${encodeURIComponent(projectId)}`
           : null,
         ritualKey,
-        checkType: normalizeCheckType(row.check_type),
+        checkType,
         name: ritualDisplayName(row),
+        category: null,
+        targetPerWeek: null,
         doneDateKeys: new Set(),
         lastCheckedAt: null,
       });
     }
 
     const group = groups.get(compositeKey);
+    if (!group.category) group.category = rawRitualCategory(row);
+    if (!group.targetPerWeek) group.targetPerWeek = rawRitualTargetPerWeek(row);
 
     if (row.status === "done") {
       const dateKey = routineLocalDateKey(row, timeZone);
@@ -217,6 +243,8 @@ function mapRituals(rows, projectRows, { timeZone, now }) {
     ritualKey: group.ritualKey,
     checkType: group.checkType,
     name: group.name,
+    category: group.category || "general",
+    targetPerWeek: group.targetPerWeek || (group.checkType === "weekly" ? 1 : 7),
     streak: computeStreak(group.doneDateKeys, todayKey),
     weeks: buildWeeksBitmap(group.doneDateKeys, todayKey),
     lastCheckedAt: group.lastCheckedAt ? new Date(group.lastCheckedAt).toISOString() : null,

@@ -28,6 +28,7 @@ import {
   finishRhythmCheck,
   getRhythmProgressProps,
   resolveRhythmCheckResult,
+  RITUAL_CATEGORY_LABELS,
   summarizeRhythmRows,
 } from "@/lib/rhythm-ui";
 
@@ -793,6 +794,8 @@ function buildRhythmDraft(defaultProjectId) {
     name: '새 루틴',
     checkType: 'morning',
     projectId: defaultProjectId || '',
+    category: 'general',
+    targetPerWeek: 7,
   };
 }
 
@@ -1293,12 +1296,33 @@ export function Roadmap({ onNavigate }) {
   );
 }
 
+// 매트릭스의 몰입 시간·성과 점수는 할 일 완료를 반영해야 한다(computeWeeklyRhythmMatrix가
+// todos를 받게 설계돼 있었는데 이 호출부가 넘기지 않아 매일 같은 베이스라인만 나오던 버그,
+// 2026-09-22 재설계 중 발견). useCalendarTasks와 같은 /api/hub/tasks를 쓰되, Rhythm은
+// 요일별 그리드가 아니라 원본 목록이 필요해 매핑 없이 그대로 든다.
+function useRhythmTasks() {
+  const [todos, setTodos] = React.useState([]);
+  React.useEffect(() => {
+    let active = true;
+    fetch('/api/hub/tasks', { cache: 'no-store' })
+      .then((response) => response.json().catch(() => null))
+      .then((data) => {
+        if (!active || !data || !Array.isArray(data.tasks)) return;
+        setTodos(data.tasks);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+  return todos;
+}
+
 export function Rhythm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const selectedProjectId = searchParams.get('project')?.trim() || null;
   const [weeklyReviewOpen, setWeeklyReviewOpen] = React.useState(false);
+  const todos = useRhythmTasks();
   const {
     rituals: liveRituals,
     rhythmState,
@@ -1356,6 +1380,7 @@ export function Rhythm() {
     { value: 'evening', label: '저녁' },
     { value: 'weekly', label: '주간' },
   ];
+  const categoryOptions = Object.entries(RITUAL_CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
 
   const createRitual = React.useCallback(() => {
     const draft = buildRhythmDraft(selectedProjectId);
@@ -1569,14 +1594,15 @@ export function Rhythm() {
   }, [retry]);
 
   return (
-    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+    <div className="hub-futura hub-page fade-up">
+      <header className="fx-head">
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+          <div className="fx-eyebrow">Work</div>
+          <h2 className="fx-page-title">Rhythm</h2>
+          <p className="fx-page-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             루틴은 실행의 인프라
             <SyncBadge state={rhythmBadgeState} />
-          </div>
+          </p>
           {selectedProjectId && (
             <a
               href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
@@ -1586,14 +1612,13 @@ export function Rhythm() {
             </a>
           )}
         </div>
-        <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <Button variant="outline" size="sm" icon="sparkle" onClick={() => setWeeklyReviewOpen(true)}>
             한 주 정리 & Council 평가
           </Button>
           <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴 <Kbd>N</Kbd></Button>
         </div>
-      </div>
+      </header>
 
       {rhythmState === 'error' && (
         <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
@@ -1615,12 +1640,12 @@ export function Rhythm() {
       <RhythmVisualizer
         rituals={mergedRituals}
         summary={summary}
-        focusData={{ matrix: computeWeeklyRhythmMatrix({ rituals: mergedRituals }) }}
+        focusData={{ matrix: computeWeeklyRhythmMatrix({ rituals: mergedRituals, todos }) }}
         onNavigate={(path) => router.push(path)}
       />
 
-      <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
-        <Card>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--fx-gap)' }}>
+        <div className="fx-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
             {!rhythmPartial && percent >= 100 && (
@@ -1638,8 +1663,8 @@ export function Rhythm() {
           ) : (
             <div {...rhythmProgressProps} style={{ marginTop: 14 }}><Progress value={percent} /></div>
           )}
-        </Card>
-        <Card>
+        </div>
+        <div className="fx-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
             {longestStreak >= 3 && (
@@ -1653,10 +1678,10 @@ export function Rhythm() {
             <span>{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></span>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}{rhythmPartial ? ' · 관측값' : ''}</div>
-        </Card>
+        </div>
       </div>
 
-      <Card pad={false} className="hub-table-card">
+      <div className="fx-card" style={{ padding: mergedRituals.length === 0 ? undefined : 0, overflow: 'hidden' }}>
         {mergedRituals.length === 0 && (
           <EmptyState
             icon="rhythm"
@@ -1692,7 +1717,9 @@ export function Rhythm() {
                   >
                     <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                       <span style={{ fontSize: 13 }}>{r.name}</span>
-                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{r.checkType} · {r.ritualKey}</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>
+                        {RITUAL_CATEGORY_LABELS[r.category] || RITUAL_CATEGORY_LABELS.general} · {r.checkType} · 주 {r.targetPerWeek || 7}회 목표
+                      </span>
                       {r.projectHref && (
                         <a href={r.projectHref} onClick={(e) => e.stopPropagation()} style={{ width: 'fit-content', color: 'var(--moon-300)', fontSize: 11.5, textUnderlineOffset: 3 }}>{r.projectName || '연결 프로젝트'}</a>
                       )}
@@ -1735,7 +1762,7 @@ export function Rhythm() {
             </div>
           </div>
         )}
-      </Card>
+      </div>
 
       {editingRitual && (
         <EditDrawer
@@ -1745,7 +1772,9 @@ export function Rhythm() {
           fields={[
             { key: 'name', label: '이름', placeholder: '예: 아침 스트레칭' },
             { key: 'checkType', label: '체크 타입', type: 'select', row: 'meta', options: checkTypeOptions },
-            { key: 'projectId', label: '연결 프로젝트', type: 'select', row: 'meta', options: projectOptions },
+            { key: 'category', label: '카테고리', type: 'select', row: 'meta', options: categoryOptions },
+            { key: 'targetPerWeek', label: '주간 목표', inputType: 'number', row: 'target' },
+            { key: 'projectId', label: '연결 프로젝트', type: 'select', row: 'target', options: projectOptions },
           ]}
           onChange={updateRitualDraft}
           onClose={() => setEditRitualId(null)}
