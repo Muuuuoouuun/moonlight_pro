@@ -33,7 +33,9 @@ export function resolveOfficeModelConfig(input: SanitizedOfficeChatInput) {
     input.evaluate ||
     input.mode === 'council' ||
     input.mode === 'critique' ||
-    persona.recommendedTier === 'pro';
+    persona.recommendedTier === 'pro' ||
+    (input.agentId === 'jolteon' && input.mode === 'task') ||
+    (input.agentId === 'leafeon' && input.mode === 'task');
 
   const defaultPrimary = isProDemand ? status.proModel : status.flashModel;
   const defaultFallback = isProDemand ? status.flashModel : status.proModel;
@@ -44,12 +46,16 @@ export function resolveOfficeModelConfig(input: SanitizedOfficeChatInput) {
   // 2. Temperature determination
   let temperature = persona.defaultTemperature ?? 0.3;
   if (input.evaluate) {
-    // Clamp to 0.2 when evaluating for rigorous consistency
-    temperature = Math.min(temperature, 0.2);
+    // Clamp to 0.15 when evaluating for rigorous consistency
+    temperature = Math.min(temperature, 0.15);
   } else if (input.mode === 'critique') {
-    temperature = Math.min(temperature, 0.2);
+    temperature = Math.min(temperature, 0.18);
   } else if (input.mode === 'council') {
     temperature = 0.35; // balanced for multi-perspective debate
+  } else if (input.agentId === 'jolteon' && input.mode === 'task') {
+    temperature = 0.15; // deterministic code diffs
+  } else if (input.agentId === 'leafeon' && input.mode === 'task') {
+    temperature = 0.15; // precise financial computation
   }
 
   // 3. TopP determination
@@ -58,6 +64,8 @@ export function resolveOfficeModelConfig(input: SanitizedOfficeChatInput) {
     topP = 0.8;
   } else if (input.agentId === 'sylveon') {
     topP = 0.95;
+  } else if (input.agentId === 'flareon') {
+    topP = 0.9;
   }
 
   // 4. Max Output Tokens

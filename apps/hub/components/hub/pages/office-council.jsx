@@ -347,13 +347,22 @@ export function OfficeCouncil({ onNavigate }) {
                       >
                         {agent.nameKo}
                       </span>
-                      <Badge
-                        size="xs"
-                        tone={active ? "moon" : "neutral"}
-                        variant="outline"
-                      >
-                        {agent.domain}
-                      </Badge>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <Badge
+                          size="xs"
+                          tone={agent.recommendedTier === "pro" ? "moon" : "neutral"}
+                          variant="outline"
+                        >
+                          {agent.recommendedTier === "pro" ? "Pro" : "Flash"}
+                        </Badge>
+                        <Badge
+                          size="xs"
+                          tone={active ? "moon" : "neutral"}
+                          variant="outline"
+                        >
+                          {agent.domain}
+                        </Badge>
+                      </div>
                     </div>
                     <div
                       style={{
@@ -589,6 +598,13 @@ export function OfficeCouncil({ onNavigate }) {
                     <span style={{ fontSize: 12, color: "var(--fg-faint)" }}>
                       {activeAgent.title}
                     </span>
+                    <Badge
+                      size="xs"
+                      tone={activeAgent.recommendedTier === "pro" ? "moon" : "neutral"}
+                      variant="outline"
+                    >
+                      {activeAgent.recommendedTier === "pro" ? "Pro 3.1 심층추론" : "Flash 3.5 고속실행"}
+                    </Badge>
                   </div>
                   <div style={{ fontSize: 11.5, color: "var(--moon-300)" }}>
                     "{activeAgent.tagline}"
@@ -610,6 +626,9 @@ export function OfficeCouncil({ onNavigate }) {
                     </span>
                     <Badge tone="moon" size="xs">
                       주관: {OFFICE_AGENTS[councilLead]?.nameKo}
+                    </Badge>
+                    <Badge tone="moon" size="xs" variant="outline">
+                      Pro 3.1 심층 토론
                     </Badge>
                   </div>
                   <div style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>

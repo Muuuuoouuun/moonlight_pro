@@ -45,11 +45,11 @@ export function getGeminiIntegrationStatus() {
       "gemini-3.5-flash",
     proModel:
       process.env.GEMINI_PRO_MODEL?.trim() ||
-      "gemini-2.5-pro",
+      "gemini-3.1-pro-preview",
     flashModel:
       process.env.GEMINI_FLASH_MODEL?.trim() ||
       process.env.GEMINI_MODEL?.trim() ||
-      "gemini-2.5-flash",
+      "gemini-3.5-flash",
     apiBaseUrl:
       process.env.GEMINI_API_BASE_URL?.trim() ||
       "https://generativelanguage.googleapis.com/v1beta",
