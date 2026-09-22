@@ -92,6 +92,24 @@ function progress(value: unknown) {
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
 }
 
+// KST YYYY-MM-DD history of days a task was picked into "오늘 3개" (§6.2 of the three-axes
+// design). An array, not a single value, so re-picking a task today doesn't shrink a past
+// day's selected count — that would retroactively move that day's focus-rate.
+function taskFocusDates(value: unknown): { ok: true; dates: string[] } | { ok: false; reason: string } {
+  if (!Array.isArray(value) || value.length > 366) return { ok: false, reason: "invalid-focus-dates" };
+  const seen = new Set<string>();
+  const dates: string[] = [];
+  for (const entry of value) {
+    const day = text(entry, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !validDay(day) || seen.has(day)) {
+      return { ok: false, reason: "invalid-focus-dates" };
+    }
+    seen.add(day);
+    dates.push(day);
+  }
+  return { ok: true, dates };
+}
+
 type ChecklistItem = { id: string; title: string; done: boolean; note: string; dueAt?: string };
 function taskChecklist(value: unknown): { ok: true; items: ChecklistItem[] } | { ok: false; reason: string } {
   if (!Array.isArray(value) || value.length > 50) return { ok: false, reason: "invalid-checklist" };
@@ -298,7 +316,15 @@ export function normalizePmsCommand(
       const checklist = taskChecklist(input.checklist);
       if (!checklist.ok) return { ok: false, reason: checklist.reason };
       // The service merges this one owned key with the persisted metadata under the same version guard.
-      patch.meta = { checklist: checklist.items };
+      patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), checklist: checklist.items };
+    }
+    if (has(input, "focusDates") || has(input, "focus_dates")) {
+      const focusDates = taskFocusDates(has(input, "focusDates") ? input.focusDates : input.focus_dates);
+      if (!focusDates.ok) return { ok: false, reason: focusDates.reason };
+      // No optimistic-lock requirement (unlike checklist) — this path only ever adds or
+      // removes today's own date, and concurrent single-user writes settle last-write-wins
+      // (§6.2). The service enforces the 3-per-day cap when today is newly added.
+      patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), focus_dates: focusDates.dates };
     }
 
     if (has(input, "itemType")) {

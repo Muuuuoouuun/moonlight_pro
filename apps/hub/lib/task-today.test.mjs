@@ -35,12 +35,36 @@ test("builds task-only Today lanes without completed or future backlog tasks", (
   assert.deepEqual(result.counts, {
     total: 5,
     shown: 5,
+    focus: 0,
     missed: 1,
     today: 2,
     waiting: 1,
     inbox: 1,
   });
   assert.equal(result.hiddenCount, 0);
+  assert.deepEqual(result.focusItems, []);
+});
+
+test("places a today-picked task in the focus lane ahead of missed/waiting, regardless of its due date or status", () => {
+  const result = taskToday.buildTaskToday([
+    { id: "picked-overdue", title: "오늘 고른 지난 할 일", status: "todo", dueAt: "2026-07-10", priority: "low", focusDates: ["2026-07-14", "2026-07-15"] },
+    { id: "picked-blocked", title: "오늘 고른 대기 할 일", status: "blocked", dueAt: "", priority: "high", focusDates: ["2026-07-15"] },
+    { id: "picked-yesterday-only", title: "어제만 고름", status: "todo", dueAt: "2026-07-20", priority: "high", focusDates: ["2026-07-14"] },
+    { id: "missed", title: "놓침", status: "todo", dueAt: "2026-07-14", priority: "high" },
+  ], {
+    now: new Date("2026-07-15T00:00:00Z"),
+    timeZone: "Asia/Seoul",
+  });
+
+  // Within the shared focus lane, the existing priority tiebreak still applies —
+  // picked-blocked (high) sorts ahead of picked-overdue (low).
+  assert.deepEqual(result.items.map(({ id, lane }) => ({ id, lane })), [
+    { id: "picked-blocked", lane: "focus" },
+    { id: "picked-overdue", lane: "focus" },
+    { id: "missed", lane: "missed" },
+  ]);
+  assert.equal(result.counts.focus, 2);
+  assert.deepEqual(result.focusItems.map((t) => t.id).sort(), ["picked-blocked", "picked-overdue"]);
 });
 
 test("keeps the newest quick captures first and reports capped rows", () => {

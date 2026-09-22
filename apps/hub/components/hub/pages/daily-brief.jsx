@@ -5,7 +5,7 @@ import { CalendarOutcome } from "../calendar-outcome";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton, CertaintyBadge } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import {
@@ -730,10 +730,19 @@ const BRIEF_LANE_META = {
   brand: { label: '브랜드', tone: 'neutral' },
 };
 
-function MorningBriefCard({ brief, onNavigate }) {
-  if (!brief) return null;
-  const items = Array.isArray(brief.items) ? brief.items : [];
-  const when = brief.generatedAt
+// §6.2: "오늘 이 3개만"의 1차 소스는 사람이 고른 tasks.meta.focus_dates(taskToday.focusItems)다.
+// 아직 아무것도 안 골랐으면 Q116 정렬 상위 3개를 dashed 권장으로 보여준다. chief-of-staff
+// 크론(brief)은 손대지 않고 카드의 보조 줄로만 남긴다.
+function MorningBriefCard({ brief, taskToday, onNavigate }) {
+  const focusItems = Array.isArray(taskToday?.focusItems) ? taskToday.focusItems : [];
+  const recommended = focusItems.length === 0
+    ? (Array.isArray(taskToday?.items) ? taskToday.items.slice(0, 3) : [])
+    : [];
+  const displayItems = focusItems.length > 0 ? focusItems : recommended;
+  const isRecommended = focusItems.length === 0 && recommended.length > 0;
+
+  const briefItems = Array.isArray(brief?.items) ? brief.items : [];
+  const when = brief?.generatedAt
     ? new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date(brief.generatedAt))
     : null;
 
@@ -746,49 +755,76 @@ function MorningBriefCard({ brief, onNavigate }) {
     return null;
   };
 
+  if (displayItems.length === 0 && briefItems.length === 0) return null;
+
   return (
     <div>
-      <SectionTitle right={<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {when && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{when}</span>}
-        <Badge tone="neutral" size="xs">Chief of Staff</Badge>
-      </div>}>
-        오늘 이 3개만
-      </SectionTitle>
+      <SectionTitle>오늘 이 3개만</SectionTitle>
       <Card pad={false}>
-        {items.length === 0 ? (
+        {displayItems.length === 0 ? (
           <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-            {brief.summary || '오늘 급한 항목 없음 — 큐가 비었습니다.'}
+            오늘 고른 할 일이 없습니다 — 내 작업에서 별표로 최대 3개를 고르세요.
           </div>
         ) : (
-          items.map((item, i) => {
-            const lane = BRIEF_LANE_META[item.lane] || { label: item.lane || '기타', tone: 'neutral' };
-            const target = targetFor(item);
-            return (
-              <div
-                key={`${item.lane}-${i}`}
-                role={target ? 'button' : undefined}
-                tabIndex={target ? 0 : undefined}
-                onClick={target ? () => onNavigate?.(target) : undefined}
-                onKeyDown={target ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(target); } } : undefined}
-                className={target ? 'hub-row' : undefined}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px',
-                  cursor: target ? 'pointer' : 'default',
-                  borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                }}
-              >
-                <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--moon-300)', width: 14, flexShrink: 0, paddingTop: 1 }}>{i + 1}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{item.title}</div>
-                  {item.detail && <div style={{ marginTop: 3, fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.5 }}>{item.detail}</div>}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 1 }}>
-                  <Badge tone={lane.tone} size="xs">{lane.label}</Badge>
-                  {target && <Iconed name="chevronR" size={11} style={{ color: 'var(--fg-faint)' }} />}
-                </div>
+          displayItems.map((item, i) => (
+            <div
+              key={item.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onNavigate?.('dashboard/work/my')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.('dashboard/work/my'); } }}
+              className="hub-row"
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', cursor: 'pointer',
+                borderBottom: i < displayItems.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              }}
+            >
+              <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--moon-300)', width: 14, flexShrink: 0, paddingTop: 1 }}>{i + 1}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{item.title}</div>
               </div>
-            );
-          })
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 1 }}>
+                {isRecommended && <CertaintyBadge state="recommended" />}
+                <Iconed name="chevronR" size={11} style={{ color: 'var(--fg-faint)' }} />
+              </div>
+            </div>
+          ))
+        )}
+        {briefItems.length > 0 && (
+          <div style={{ borderTop: displayItems.length > 0 ? '1px solid var(--line-soft)' : 'none' }}>
+            <div style={{ padding: '8px 14px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Chief of Staff 제안</span>
+              {when && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{when}</span>}
+            </div>
+            {briefItems.map((item, i) => {
+              const lane = BRIEF_LANE_META[item.lane] || { label: item.lane || '기타', tone: 'neutral' };
+              const target = targetFor(item);
+              return (
+                <div
+                  key={`${item.lane}-${i}`}
+                  role={target ? 'button' : undefined}
+                  tabIndex={target ? 0 : undefined}
+                  onClick={target ? () => onNavigate?.(target) : undefined}
+                  onKeyDown={target ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(target); } } : undefined}
+                  className={target ? 'hub-row' : undefined}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 14px 9px 30px',
+                    cursor: target ? 'pointer' : 'default',
+                    borderTop: i > 0 ? '1px solid var(--line-soft)' : 'none',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.45 }}>{item.title}</div>
+                    {item.detail && <div style={{ marginTop: 3, fontSize: 10.5, color: 'var(--fg-dim)', lineHeight: 1.5 }}>{item.detail}</div>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 1 }}>
+                    <Badge tone={lane.tone} size="xs">{lane.label}</Badge>
+                    {target && <Iconed name="chevronR" size={11} style={{ color: 'var(--fg-faint)' }} />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </Card>
     </div>
@@ -2146,7 +2182,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
         <MoreDetail title="보조 정보 · 리듬, 모닝 브리프, 승인" summary={approvalSummary}>
           <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
           <RhythmPanel onNavigate={onNavigate} />
-          <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
+          <MorningBriefCard brief={ledger.morningBrief} taskToday={ledger.taskToday} onNavigate={onNavigate} />
           <ApprovalQueueCard onNavigate={onNavigate} />
         </MoreDetail>
       </div>
