@@ -164,29 +164,50 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
 
   // Sidebar stays one level deep. Contextual destinations are rendered as
   // horizontal top tabs by TopBar, so the operator never has to expand a tree.
+  // 2026-09-19 Futura 패스는 *외형만* 바꿨다 — 아이콘·색점을 빼고 현재 항목을
+  // pill로 띄웠을 뿐, 깊이와 이동 동작은 그대로다(운영자: "기능은 유지").
+  // 접힌 56px 레일에서만 라벨 대신 아이콘이 이름을 맡는다. 한 종류의 버튼이 두
+  // 상태를 모두 그리므로 접기 토글 뒤에도 같은 DOM·포커스가 유지된다.
   const renderAnchor = (a, small) => {
+    const count = counts[a.key];
+    // 펼친 행 — 라벨과 건수 뱃지만(Futura 텍스트 전용, §15 2026-09-19).
+    let content = (
+      <>
+        <span className="hub-sidebar-label" style={{ flex: 1 }}>{a.label}</span>
+        <CountBadge n={count} />
+      </>
+    );
+    let railLabel;
+    if (collapsed) {
+      // 레일 — 이름·건수는 tooltip과 접근 가능한 이름으로, "건수 있음"은 점 하나로 알린다.
+      railLabel = `${a.label}${count ? ` · ${count}건` : ''}`;
+      content = (
+        <>
+          <Iconed name={a.icon} size={18} />
+          {count > 0 && <span className="hub-sidebar-count-dot" aria-hidden="true" />}
+        </>
+      );
+    }
     return (
       <button
         key={a.key}
         type="button"
         className={`hub-nav-item${small ? ' hub-nav-item--sm' : ''}${collapsed ? ' hub-nav-item--icon' : ''}`}
-        title={collapsed ? `${a.label}${counts[a.key] ? ` · ${counts[a.key]}건` : ''}` : undefined}
-        aria-label={collapsed ? `${a.label}${counts[a.key] ? ` · ${counts[a.key]}건` : ''}` : undefined}
+        title={railLabel}
+        aria-label={railLabel}
         aria-current={isSidebarAnchorActive(a.key, active, view) ? 'page' : undefined}
         onClick={() => go(a.key)}
       >
-        <Iconed name={a.icon} size={collapsed ? 18 : small ? 16 : 18} />
-        <span className="hub-sidebar-label" style={{ flex: 1 }}>{a.label}</span>
-        {collapsed ? counts[a.key] > 0 && <span className="hub-sidebar-count-dot" aria-hidden="true" /> : <CountBadge n={counts[a.key]} />}
+        {content}
       </button>
     );
   };
 
 
   return (
-    <aside {...sidebarA11yProps} ref={setSidebarRef} onKeyDown={handleMobileKeyDown} className={`${className || ""}${collapsed ? " hub-sidebar-root--collapsed" : ""}`} data-collapsed={collapsed} aria-label="주요 메뉴" style={{
+    <aside {...sidebarA11yProps} ref={setSidebarRef} onKeyDown={handleMobileKeyDown} className={`hub-sidebar-futura${className ? ` ${className}` : ''}${collapsed ? ' hub-sidebar-root--collapsed' : ''}`} data-collapsed={collapsed} aria-label="주요 메뉴" style={{
+      // 면 색은 .hub-sidebar-futura(hub-futura.css)가 소유한다 — 인라인 background는 그 규칙을 이긴다.
       width: collapsed ? 56 : 232, flexShrink: 0,
-      background: 'var(--surface)',
       borderRight: '1px solid var(--line-soft)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
@@ -194,10 +215,11 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
       <div className="hub-sidebar-header" style={{ padding: '14px 14px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div className="hub-sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
           <div style={{
-            width: 22, height: 22, borderRadius: 999,
-            background: 'radial-gradient(circle at 35% 30%, var(--moon-100), var(--moon-400) 60%, var(--moon-700))',
-            boxShadow: '0 0 12px color-mix(in oklch, var(--moon-300) 30%, transparent), inset 0 -1px 2px oklch(0 0 0 / 0.5)',
-          }} />
+            width: 24, height: 24, borderRadius: 'var(--r-sm)',
+            background: 'var(--fg)', color: 'var(--bg)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontWeight: 600, letterSpacing: '-0.02em',
+          }} aria-hidden="true">M</div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em' }}>Moonlight</div>
             <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.05em', marginTop: -1 }}>HUB · PRO</div>
@@ -216,12 +238,10 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
       </div>
 
       <div className="hub-sidebar-search" style={{ padding: '4px 12px 8px' }}>
-        <button onClick={openPalette} title="검색 · ⌘K" aria-label="검색 · ⌘K" style={{
+        <button onClick={openPalette} className="fx-shell-card" title="검색 · ⌘K" aria-label="검색 · ⌘K" style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-          height: 30, padding: '0 10px',
-          background: 'var(--surface-2)',
-          border: '1px solid var(--line-soft)',
-          borderRadius: 'var(--r-sm)',
+          height: 34, padding: '0 12px',
+          border: 0,
           color: 'var(--fg-faint)', fontSize: 12,
         }}>
           <Iconed name="search" size={13} />
@@ -255,8 +275,8 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
         {SIDEBAR_UTILITIES.map(a => renderAnchor(a, true))}
       </div>
 
-      <div className="hub-sidebar-footer" style={{
-        padding: '10px 12px', borderTop: '1px solid var(--line-soft)',
+      <div className="hub-sidebar-footer fx-shell-card" style={{
+        margin: '8px 12px 12px', padding: '9px 11px',
         display: 'flex', alignItems: 'center', gap: 9,
       }}>
         <span className="hub-sidebar-label"><Avatar name="문준혁" size={26} /></span>
