@@ -15,7 +15,7 @@ test('bounded recent history never injects system roles or overflows the contrac
  assert.equal(history.length,8);assert.ok(JSON.stringify(history).length<20000);assert.ok(history.every(t=>['user','assistant'].includes(t.role)));
 });
 test('new Office destination preserves legacy office alias and has navigation ownership',()=>{
- assert.equal(LEGACY_REDIRECTS['dashboard/agents/office'].to,'dashboard/agents/chat');
+ assert.equal(LEGACY_REDIRECTS['dashboard/agents/office'].to,'dashboard/agents/office-council');
  assert.ok(JSON.stringify(NAV_TREE).includes('dashboard/agents/office-council'));
  assert.ok(JSON.stringify(SIDEBAR_ANCHORS).includes('dashboard/agents/office-council'));
 });
@@ -53,4 +53,12 @@ test('browser rejects old policy, foreign scope context, and mismatched particip
  for(const changes of [{version:'older-policy'},{scope:'classin'},{participants:['umbreon']},{context:{...valid.context,scope:'classin'}}]){
   assert.equal((await call({...valid,...changes})).status,'error');
  }
+});
+
+test('⌘J and the top-bar sparkle open the Office page instead of the legacy global widget', () => {
+  const app = fs.readFileSync(new URL('./hub-app.jsx', import.meta.url), 'utf8');
+  const topbar = fs.readFileSync(new URL('./hub-topbar.jsx', import.meta.url), 'utf8');
+  assert.match(app, /navigate\('dashboard\/agents\/office-council'\)/);
+  assert.doesNotMatch(app, /FloatingMentorWidget/);
+  assert.match(topbar, /tooltip="Office \(⌘J\)"/);
 });

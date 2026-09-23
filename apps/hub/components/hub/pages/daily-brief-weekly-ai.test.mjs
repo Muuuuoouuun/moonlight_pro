@@ -27,7 +27,9 @@ test("WeeklyAiDebrief fixes period and scope for the Office panel without a seco
 });
 
 test("DailyDispatchCard includes Council sparring button when dispatch is ready", () => {
-  assert.match(dailyBriefSource, /Council 심층 토의 \(⌘J\)/);
+  assert.match(dailyBriefSource, /Council 심층 토의/);
+  // ⌘J는 Office 단축키다(2026-09-23) — 페이지 위젯 버튼에 붙이지 않는다.
+  assert.doesNotMatch(dailyBriefSource, /Council 심층 토의 \(⌘J\)/);
   assert.match(dailyBriefSource, /contextType:\s*"general"/);
   assert.match(dailyBriefSource, /agent:\s*"council"/);
 });

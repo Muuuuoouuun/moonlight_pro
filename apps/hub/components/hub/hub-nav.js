@@ -336,12 +336,12 @@ export const SIDEBAR_UTILITIES = [
     icon: 'sparkle',
     scopeAware: false,
     owns: ['dashboard/agents', 'dashboard/automations', 'dashboard/classin/automations'],
-    // 대표 경로는 코어(Engine 실행 로그) — 보류 스코프(agents/chat)가 앵커 착지 지점을
-    // 점유하면 사이드바 클릭 = '준비 중' 표면 착지가 된다(2026-08-05 re-audit).
+    // 대표 경로는 Office — 2026-09-23 운영자 확정. Runs는 하위 탭으로 한 단계 아래에 남고,
+    // 보류 스코프(agents/chat·council)는 여전히 착지 지점이 아니다(2026-08-05 re-audit).
     paths: {
-      all: 'dashboard/automations/runs',
-      classin: 'dashboard/automations/runs',
-      personal: 'dashboard/automations/runs',
+      all: 'dashboard/agents/office-council',
+      classin: 'dashboard/agents/office-council',
+      personal: 'dashboard/agents/office-council',
     },
     children: {
       all: aiChildren('dashboard/automations/sheets'),

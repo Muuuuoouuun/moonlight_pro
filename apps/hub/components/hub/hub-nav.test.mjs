@@ -246,7 +246,7 @@ test('Office, work execution, coaching and brand advice keep four distinct exist
     const jobs = topNavigationForRoute('dashboard/agents/orders', scope.key, 'jobs');
     assert.equal(jobs.activeTab?.key, 'ai-orders');
   }
-  assert.equal(catalog.LEGACY_REDIRECTS['dashboard/agents/office'].to, 'dashboard/agents/chat');
+  assert.equal(catalog.LEGACY_REDIRECTS['dashboard/agents/office'].to, 'dashboard/agents/office-council');
 });
 
 test("second-level destinations resolve into the top bar with one active tab", () => {
@@ -664,4 +664,11 @@ test('content performance is a visible content child and command palette destina
   assert.ok(sidebarChildren('content', 'all').some(child => child.path === 'dashboard/content/performance'));
   assert.ok(navTreePaths().includes('dashboard/content/performance'));
   assert.match(appSource, /'dashboard\/content\/performance':/);
+});
+
+test('AI utility anchor lands on Office in every scope and Office is findable in Korean', () => {
+  const ai = SIDEBAR_UTILITIES.find(anchor => anchor.key === 'ai');
+  for (const scope of SIDEBAR_SCOPES) assert.equal(ai.paths[scope.key], 'dashboard/agents/office-council');
+  const office = NAV_TREE.find(node => node.key === 'agents').children.find(child => child.key === 'office-council');
+  for (const word of ['오피스', '이브이', '비서']) assert.ok(office.keywords.includes(word), word);
 });
