@@ -93,6 +93,25 @@ test("buildAccountWrite reverses the health band to a representative score", () 
   assert.deepEqual(metaPatch, { account_kind: "company", note: "킥오프 예정" });
 });
 
+test("customer label writes support lead genres and account region, subjects and genres", () => {
+  const lead = buildLeadWrite({ genres: [' 음악 ', '음악'], region: '경기-안양' }).metaPatch;
+  assert.deepEqual(lead.genres, ['음악']);
+  assert.equal(lead.region, '경기-안양');
+
+  const account = buildAccountWrite({
+    region: ' 서울-강남 ', subjects: ['math', 'bogus', 'english', 'math'], genres: ['국악', '국악'],
+    labelSource: { region: 'operator', subjects: 'operator' },
+  }).metaPatch;
+  assert.equal(account.region, '서울-강남');
+  assert.deepEqual(account.subjects, ['math', 'english']);
+  assert.deepEqual(account.genres, ['국악']);
+  assert.deepEqual(account.label_source, { region: 'operator', subjects: 'operator' });
+  assert.deepEqual(buildAccountWrite({ region: '', subjects: [], genres: [] }).metaPatch, {
+    region: null, subjects: [], genres: [],
+  });
+  assert.deepEqual(buildAccountWrite({ name: 'Only name' }).metaPatch, {});
+});
+
 test("buildLeadWrite maps next_action to a column and snooze_until into meta", () => {
   const { columns, metaPatch } = buildLeadWrite({ next_action: "전화 재시도", snooze_until: "2026-07-10" });
   assert.equal(columns.next_action, "전화 재시도");
