@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 import "./hub-futura.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
-import { goalHref } from "@/lib/goal-client";
+import { GOAL_WORK_BASE, goalHref } from "@/lib/goal-client";
 
 import { Button, Skeleton } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
@@ -81,6 +81,7 @@ const Calendar = lazyPage(() => import("./pages/work").then(m => m.Calendar));
 const Decisions = lazyPage(() => import("./pages/work").then(m => m.Decisions));
 const Roadmap = lazyPage(() => import("./pages/work").then(m => m.Roadmap));
 const Rhythm = lazyPage(() => import("./pages/work").then(m => m.Rhythm));
+const WorkGoals = lazyPage(() => import("./pages/goals").then(m => m.Goals));
 const MyWork = lazyPage(() => import("./pages/my-work").then(m => m.MyWork));
 const Memos = lazyPage(() => import("./pages/memos").then(m => m.Memos));
 const Discovery = lazyPage(() => import("./pages/discovery").then(m => m.Discovery));
@@ -220,6 +221,7 @@ const PAGE_MAP = {
   'dashboard/work/decisions': (n, _inquiries, scope) => <Decisions onNavigate={n} scope={scope} />,
   'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
+  'dashboard/work/goals': () => <WorkGoals />,
   'dashboard/brands': () => <Brands />,
   'dashboard/brands/log': (n) => <BrandContentLog onNavigate={n} />,
   'dashboard/content/performance': () => <ContentPerformance />,
@@ -457,6 +459,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     if (p.startsWith('dashboard/work/projects') || p.startsWith('dashboard/work/roadmap')) return 'dashboard/work/projects?new=project';
     if (p.startsWith('dashboard/work/decisions')) return 'dashboard/work/decisions?new=decision';
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
+    if (p.startsWith('dashboard/work/goals')) return goalHref(null, queryScope || 'all', { check: searchParams.get('check') === '1', create: true, base: GOAL_WORK_BASE }).slice(1);
     if (p.startsWith('dashboard/content')) return 'dashboard/content/studio?new=draft';
     return null;
   }, [queryScope, searchParams]);

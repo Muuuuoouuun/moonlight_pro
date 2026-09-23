@@ -60,6 +60,7 @@ export const NAV_TREE = [
       { key: 'projects', label: 'Projects', icon: 'projects', path: 'dashboard/work/projects', keywords: ['프로젝트', '기획', 'pms'] },
       { key: 'calendar', label: 'Calendar', icon: 'calendar', path: 'dashboard/work/calendar', keywords: ['캘린더', '일정'] },
       { key: 'rhythm', label: 'Rhythm', icon: 'rhythm', path: 'dashboard/work/rhythm', keywords: ['리듬', '루틴'] },
+      { key: 'work-goals', label: 'OKR·KPI', icon: 'signal', path: 'dashboard/work/goals', keywords: ['OKR', 'KPI', '목표', '핵심 결과', '지표', '트래킹', '성과'] },
       { key: 'decisions', label: 'Decisions', icon: 'decisions', path: 'dashboard/work/decisions', keywords: ['결정', '의사결정'] },
       { key: 'roadmap', label: 'Roadmap', icon: 'roadmap', path: 'dashboard/work/roadmap', keywords: ['로드맵'] },
     ],

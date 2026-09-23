@@ -94,13 +94,15 @@ const REVENUE_CLASSIN_CHILDREN = [
   { key: 'rev-ci-accounts', label: 'Accounts', path: 'dashboard/classin/accounts' },
 ];
 
-// Calendar · Roadmap · Decisions · Rhythm are global routes today — scope only
+// Calendar · Roadmap · Decisions · Rhythm · OKR·KPI are global routes today — scope only
 // swaps the Projects entry. Scope filtering of these surfaces is Phase 2.
+// OKR·KPI(2026-09-23)는 현황의 목표·성과와 같은 Goals 화면을 Work 안에서 여는 탭이다.
 const PLANNING_TAIL = [
   { key: 'prj-calendar', label: 'Calendar', path: 'dashboard/work/calendar' },
   { key: 'prj-roadmap', label: 'Roadmap', path: 'dashboard/work/roadmap' },
   { key: 'prj-decisions', label: 'Decisions', path: 'dashboard/work/decisions' },
   { key: 'prj-rhythm', label: 'Rhythm', path: 'dashboard/work/rhythm' },
+  { key: 'prj-goals', label: 'OKR·KPI', path: 'dashboard/work/goals' },
 ];
 
 // 브랜드 탭의 두 번째 레벨 — 목록(정체성·리듬)과 로그(발행 기록)는 별개 표면이라

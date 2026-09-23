@@ -4,12 +4,17 @@ export function goalScope(value) {
   return value === 'classin' || value === 'company' ? 'company' : value === 'personal' ? 'personal' : '';
 }
 
-export function goalHref(id, scope, { check = false, create = false } = {}) {
-  const params = new URLSearchParams({ view: 'goals', scope: goalScope(scope) === 'company' ? 'classin' : goalScope(scope) || 'all' });
+// 목표 화면은 두 곳에 걸린다 — 현황의 `?view=goals`(기본)와 Work 탭의 `dashboard/work/goals`
+// (2026-09-23 운영자 "OKR·KPI 트래킹 탭 신설"). base를 넘기면 그 경로 안에서 링크가 머문다.
+export const GOAL_WORK_BASE = '/dashboard/work/goals';
+
+export function goalHref(id, scope, { check = false, create = false, base = '/dashboard/overview' } = {}) {
+  const params = new URLSearchParams(base === GOAL_WORK_BASE ? {} : { view: 'goals' });
+  params.set('scope', goalScope(scope) === 'company' ? 'classin' : goalScope(scope) || 'all');
   if (id) params.set('goal', id);
   if (check) params.set('check', '1');
   if (create) params.set('new', 'goal');
-  return `/dashboard/overview?${params}`;
+  return `${base}?${params}`;
 }
 
 export function goalLinkedEntityHref(link) {

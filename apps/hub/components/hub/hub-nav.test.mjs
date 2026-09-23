@@ -665,3 +665,18 @@ test('content performance is a visible content child and command palette destina
   assert.ok(navTreePaths().includes('dashboard/content/performance'));
   assert.match(appSource, /'dashboard\/content\/performance':/);
 });
+
+test("Work tab bar carries OKR·KPI next to Rhythm, and it lights only on its own route", () => {
+  for (const { key: scope } of SIDEBAR_SCOPES) {
+    const nav = topNavigationForRoute("dashboard/work/goals", scope);
+    const keys = nav.tabs.map((tab) => tab.key);
+    assert.deepEqual(keys.slice(-2), ["prj-rhythm", "prj-goals"], scope);
+    assert.equal(nav.activeTab?.key, "prj-goals", scope);
+    assert.equal(nav.tabs.find((tab) => tab.key === "prj-goals").label, "OKR·KPI");
+    assert.equal(topNavigationForRoute("dashboard/work/rhythm", scope).activeTab?.key, "prj-rhythm", scope);
+  }
+  // 현황의 목표·성과 경로는 그대로 현황 탭이 소유한다(두 입구, 같은 Goals 화면).
+  assert.equal(topNavigationForRoute("dashboard/overview", "all", "goals").activeTab?.key, "overview-goals");
+  const workGroup = NAV_TREE.find((group) => group.key === "work");
+  assert.ok(workGroup.children.some((child) => child.path === "dashboard/work/goals"), "⌘K catalog reaches the OKR·KPI tab");
+});
