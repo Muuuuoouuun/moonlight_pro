@@ -2002,98 +2002,118 @@ button {
   justify-content: center;
 }
 
-.hub-app .hub-project-portfolio-ruler {
+.hub-app .hub-project-portfolio-evidence {
   grid-column: 1 / -1;
-  padding: 14px clamp(16px, 2vw, 26px) 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px 24px;
+  padding: 16px clamp(16px, 2vw, 26px);
   border-top: 1px solid var(--line-soft);
 }
 
-.hub-app .hub-project-portfolio-ruler__unmeasured { margin: 4px 0 0; color: var(--fg-muted); font-size: 11.5px; }
-
-.hub-app .hub-project-portfolio-ruler__labels {
+.hub-app .hub-project-portfolio-evidence__measure {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 13px;
-  color: var(--fg-faint);
+  min-width: 0;
+  gap: 10px;
+}
+
+.hub-app .hub-project-portfolio-evidence__heading,
+.hub-app .hub-project-portfolio-evidence__source {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.hub-app .hub-project-portfolio-evidence__heading {
+  justify-content: space-between;
+}
+
+.hub-app .hub-project-portfolio-evidence__source > span,
+.hub-app .hub-project-portfolio-evidence__time,
+.hub-app .hub-project-portfolio-evidence__context small {
+  color: var(--fg-dim);
   font-size: 10.5px;
+  font-weight: 400;
 }
 
-.hub-app .hub-project-portfolio-ruler__labels > span:nth-child(2) {
-  font-family: var(--font-mono);
+.hub-app .hub-project-portfolio-evidence__source strong {
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 550;
 }
 
-.hub-app .hub-project-portfolio-ruler__labels > span:last-child {
+.hub-app .hub-project-portfolio-evidence__track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.hub-app .hub-project-portfolio-evidence__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--moon-400);
+}
+
+.hub-app .hub-project-portfolio-evidence__empty,
+.hub-app .hub-project-portfolio-evidence__note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.hub-app .hub-project-portfolio-evidence__empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.hub-app .hub-project-portfolio-evidence__empty > span {
+  flex: none;
+  margin-top: 2px;
+}
+
+.hub-app .hub-project-portfolio-evidence__context {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-left: 24px;
+  border-left: 1px solid var(--line-soft);
+}
+
+.hub-app .hub-project-portfolio-evidence__context > span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.hub-app .hub-project-portfolio-evidence__context strong {
   display: inline-flex;
   align-items: center;
-  justify-self: end;
   gap: 5px;
+  color: var(--fg-muted);
+  font-size: 11.5px;
+  font-weight: 450;
+  white-space: nowrap;
 }
 
-.hub-app .hub-project-portfolio-ruler__labels > span.is-risk {
+.hub-app .hub-project-portfolio-evidence__context [data-risk="true"] strong {
   color: var(--danger);
 }
 
-/* Major ticks mark quarters; the dot tracks the exact reported progress. */
-.hub-app .hub-project-portfolio-ruler__track {
-  position: relative;
-  height: 28px;
-  margin-inline: 6px;
-}
+@media (max-width: 1023px) {
+  .hub-app .hub-project-portfolio-evidence {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-.hub-app .hub-project-portfolio-ruler__track::before {
-  position: absolute;
-  top: 18px;
-  right: 0;
-  left: 0;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--line);
-  content: "";
-}
-
-.hub-app .hub-project-portfolio-ruler__track i {
-  position: absolute;
-  top: 7px;
-  width: 1px;
-  height: 5px;
-  background: var(--line);
-}
-
-.hub-app .hub-project-portfolio-ruler__track i[data-major="true"] {
-  top: 3px;
-  height: 9px;
-  background: var(--line-strong);
-}
-
-.hub-app .hub-project-portfolio-ruler__track > span {
-  position: absolute;
-  top: 18px;
-  left: 0;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--pms-moonstone);
-}
-
-.hub-app .hub-project-portfolio-ruler__track b {
-  position: absolute;
-  top: 14px;
-  width: 12px;
-  height: 12px;
-  border: 1px solid var(--surface);
-  border-radius: 999px;
-  background: var(--pms-moonstone);
-  box-shadow: 0 0 0 2px var(--surface);
-  transform: translateX(-50%);
-}
-
-.hub-app .hub-project-portfolio-ruler__scale {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 3px;
-  color: var(--fg-faint);
-  font-size: 10.5px;
+  .hub-app .hub-project-portfolio-evidence__context {
+    padding-left: 0;
+    border-left: 0;
+  }
 }
 
 .hub-app .hub-project-portfolio-accordions {
@@ -2455,7 +2475,7 @@ button {
     border-left: 0;
   }
 
-  .hub-app .hub-project-portfolio-ruler {
+  .hub-app .hub-project-portfolio-evidence {
     grid-column: 1;
   }
 
@@ -2543,16 +2563,17 @@ button {
     margin-top: 10px;
   }
 
-  .hub-app .hub-project-portfolio-ruler {
+  .hub-app .hub-project-portfolio-evidence {
     padding: 14px 16px 16px;
   }
 
-  .hub-app .hub-project-portfolio-ruler__labels {
-    grid-template-columns: 1fr auto;
+  .hub-app .hub-project-portfolio-evidence__context {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .hub-app .hub-project-portfolio-ruler__labels > span:nth-child(2) {
-    display: none;
+  .hub-app .hub-project-portfolio-evidence__context strong {
+    white-space: normal;
   }
 
   .hub-app .hub-project-portfolio-accordion__trigger {
@@ -2617,84 +2638,6 @@ button {
   background: var(--surface-3);
   color: var(--fg-muted);
   border: 1px solid var(--line-soft);
-}
-
-.hub-app .hub-project-status-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.hub-app .hub-project-status-bar__track {
-  display: flex;
-  height: 6px;
-  width: 100%;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  gap: 2px;
-}
-
-.hub-app .hub-project-status-bar__track > span {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  transition: width var(--dur-hover) var(--ease-hub);
-}
-
-.hub-app .hub-project-status-bar__track > span[data-status="done"] {
-  background: var(--moon-400);
-}
-
-.hub-app .hub-project-status-bar__track > span[data-status="doing"] {
-  background: var(--moon-200);
-}
-
-.hub-app .hub-project-status-bar__track > span[data-status="todo"] {
-  background: var(--line-strong);
-}
-
-.hub-app .hub-project-status-bar__track > span[data-status="blocked"] {
-  background: var(--danger);
-}
-
-.hub-app .hub-project-status-bar__legend {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-
-.hub-app .hub-project-status-bar__pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 10.5px;
-  color: var(--fg-faint);
-}
-
-.hub-app .hub-project-status-bar__pill::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-}
-
-.hub-app .hub-project-status-bar__pill[data-status="done"]::before {
-  background: var(--moon-400);
-}
-
-.hub-app .hub-project-status-bar__pill[data-status="doing"]::before {
-  background: var(--moon-200);
-}
-
-.hub-app .hub-project-status-bar__pill[data-status="todo"]::before {
-  background: var(--line-strong);
-}
-
-.hub-app .hub-project-status-bar__pill[data-status="blocked"]::before {
-  background: var(--danger);
 }
 
 @media (prefers-reduced-motion: reduce) {
