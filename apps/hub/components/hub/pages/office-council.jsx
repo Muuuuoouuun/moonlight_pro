@@ -73,6 +73,7 @@ export function OfficeCouncil({ scope = 'all' }) {
   const [copyStatus, setCopyStatus] = React.useState(null);
   const [comparisonOpen, setComparisonOpen] = React.useState(mode === 'council');
   const inputRef = React.useRef(null);
+  const threadRef = React.useRef(null);
   const composing = React.useRef(false);
   const busy = Boolean(session.pending);
   const owner = OFFICE_ROSTER.find(person => person.id === ownerId);
@@ -100,9 +101,16 @@ export function OfficeCouncil({ scope = 'all' }) {
     if (composing.current || tooLong) return;
     const pending = store.begin(scope, crypto.randomUUID());
     if (!pending) return;
+    // 전송하면 설정을 접어 결과가 모바일 폴드 아래로 밀리지 않게 한다(2026-09-23 운영자 확정).
+    setComparisonOpen(false);
     // The store belongs to Hub, so navigating away does not lose or relabel a late result.
     const result = await requestOffice(pending.request);
     store.complete(scope, pending.id, result);
+    requestAnimationFrame(() => {
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      threadRef.current?.focus({ preventScroll: true });
+      threadRef.current?.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+    });
   }
 
   async function copy(text, id) {
@@ -143,7 +151,7 @@ export function OfficeCouncil({ scope = 'all' }) {
         </div>
         {includeProjects ? <p className={styles.note}>현재 범위의 최근 프로젝트 최대 8개를 참고합니다. 고객·일정 원장은 이 자유 요청에 자동 연결되지 않습니다.</p> : null}
         {minimumOnly ? <p className={styles.note}>이미 정한 약속을 지키는 데 필요한 내용만 요청합니다. 추가 행동이 필요 없으면 남기지 않습니다.</p> : null}
-        {session.error ? <div role="alert" className={`${styles.notice} ${session.error.status === 'error' ? styles.error : ''}`}><TruthBadge state={session.error.status === 'preview' ? 'preview' : 'error'} /><p>{session.error.error}</p></div> : null}
+        {session.error ? <div role={session.error.status === 'error' ? 'alert' : 'status'} className={`${styles.notice} ${session.error.status === 'error' ? styles.error : ''}`}><TruthBadge state={session.error.status === 'preview' ? 'preview' : 'error'} /><p>{session.error.error}</p></div> : null}
         <div className={styles.actions}>
           <span className={styles.note}>{busy ? '요청한 담당이 작성 중입니다. 다른 화면으로 이동해도 이 세션에서 이어집니다.' : '⌘/Ctrl + Enter로 보내기 · 답변은 업무를 변경하지 않습니다.'}</span>
           <Button type="submit" variant="primary" disabled={busy || !session.draft.trim() || tooLong || (mode === 'council' && participants.length < 2)}>{busy ? '작성 중…' : mode === 'council' ? '관점 비교하기' : '요청 보내기'}</Button>
@@ -164,8 +172,8 @@ export function OfficeCouncil({ scope = 'all' }) {
           <p className={styles.note}>같은 모델의 역할별 개별 검토입니다. 첫 의견을 따로 작성한 뒤 설정에 따라 다른 관점에 답하고, 주관이 결과를 종합합니다.</p>
         </fieldset>
       </details>
-      <div className={styles.thread} aria-label="Office 요청 결과">
-        {busy ? <div className={styles.pending} aria-live="polite"><TruthBadge state="loading" /><Skeleton lines={3} /></div> : null}
+      <div className={styles.thread} ref={threadRef} tabIndex={-1} aria-live="polite" aria-label="Office 요청 결과">
+        {busy ? <div className={styles.pending}><TruthBadge state="loading" /><Skeleton lines={3} /></div> : null}
         {session.turns.length === 0 && !busy ? <EmptyState icon="chat" title="필요한 결과물부터 요청하세요" description="초안·검토·관점 비교를 돕습니다. 자유 요청의 원문과 답변은 이 Hub 세션에서만 유지됩니다." action={<Button variant="ghost" onClick={() => inputRef.current?.focus()}>요청 작성하기</Button>} /> : null}
         {[...session.turns].reverse().map(turn => <ResultTurn key={turn.id} turn={turn} onRevise={revise} onCopy={copy} copyStatus={copyStatus} />)}
       </div>

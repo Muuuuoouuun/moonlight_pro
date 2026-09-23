@@ -77,3 +77,16 @@ test('Office shows a seven-day usage line that honors the read envelope', () => 
   assert.match(page, /<OfficeUsageLine refreshKey=\{session\.turns\.length\} \/>/);
   assert.match(page, /OFFICE_FAILURE_LABELS/);
 });
+
+test('Office surfaces follow the truth, selection and announcement contracts', () => {
+  const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
+  const panel = fs.readFileSync(new URL('./office-workflow-panel.jsx', import.meta.url), 'utf8');
+  assert.match(page, /role=\{session\.error\.status === 'error' \? 'alert' : 'status'\}/);
+  assert.match(page, /aria-live="polite" aria-label="Office 요청 결과"/);
+  assert.match(page, /threadRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(css, /\.member\[aria-pressed="true"\][^}]*--accent-line/);
+  assert.match(css, /\.thread:focus-visible \{ outline:1px solid var\(--moon-300\); outline-offset:-2px; \}/);
+  assert.doesNotMatch(panel, /<EmptyState icon="sparkle" title="업무 연결 확인 필요"/);
+  assert.match(panel, /className=\{`mono \$\{styles\.historyTime\}`\}/);
+});

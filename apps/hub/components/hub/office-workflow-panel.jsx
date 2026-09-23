@@ -2,7 +2,7 @@
 
 import React from 'react';
 import {OFFICE_ROSTER} from '@com-moon/agent-contracts/office';
-import {Button,CertaintyBadge,CheckboxRow,EditDrawer,EmptyState,SegmentedControl,SelectField,Skeleton,TextAreaField,TruthBadge} from './hub-primitives';
+import {Button,CertaintyBadge,CheckboxRow,EditDrawer,SegmentedControl,SelectField,Skeleton,TextAreaField,TruthBadge} from './hub-primitives';
 import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowQuery,officeWorkflowNote,readOfficeWorkflow,sendOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowReviewers,officeWorkflowGenerationRequest} from './office-workflow-client';
 import {OfficeDeliberationControls,OfficeDiscussion} from './office-deliberation-controls';
 import {officeDeliberationForParticipants} from './office-deliberation-client';
@@ -136,7 +136,9 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
       {state.open&&<span className={styles.meta}>{scope==='classin'?'회사':'개인'} · 선택한 업무의 자료</span>}
     </div>
     {state.open&&<div className={styles.stack} onKeyDown={event=>{if(event.key==='Escape'&&!state.taskFields){event.stopPropagation();patch({open:false});trigger.current?.focus();}}}>
-      {state.loading?<Skeleton lines={2} label="Office 자료와 이전 결과 확인 중" />:state.context?.status!=='ready'?<EmptyState icon="sparkle" title="업무 연결 확인 필요" description={officeWorkflowNote(state.context)||'자료를 확인할 수 없습니다.'} action={<Button size="xs" onClick={load}>다시 확인</Button>} />:null}
+      {state.loading?<Skeleton lines={2} label="Office 자료와 이전 결과 확인 중" />:state.context?.status!=='ready'?<div className={styles.truth} role={state.context?.status==='preview'?'status':'alert'}>
+        {/* DESIGN §5.3: 연결 전·오류는 '비어 있음'(EmptyState)이 아니라 truth 상태 + 원인 + 재시도다. */}
+        <TruthBadge state={state.context?.status==='preview'?'preview':'error'} /><p className={styles.note}>{officeWorkflowNote(state.context)||'자료를 확인할 수 없습니다.'}</p><Button size="xs" onClick={load}>다시 확인</Button></div>:null}
       {state.context?.status==='ready'&&<>
         <div className={styles.actions}><TruthBadge state={state.context.missing?.length?'partial':'live'} /><Button size="xs" variant="ghost" onClick={load} disabled={state.pending}>자료·이전 결과 새로고침</Button></div>
         {!!state.context.missing?.length&&<p className={styles.note}>{state.context.missing.map(reason=>missingLabels[reason]||reason).join(' · ')}</p>}
@@ -180,7 +182,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
         {application.entityId?<Button size="xs" onClick={showTask}>연결된 할 일</Button>:null}
         {!['saved','rejected'].includes(application.state)&&<Button size="xs" onClick={()=>apply(state.applyInput)} disabled={state.pending}>같은 명령으로 저장 확인</Button>}
       </div>}
-      {!!state.requests.length&&<details><summary>이 업무의 요청 기록 ({state.requests.length})</summary><ul className={styles.history}>{state.requests.map(item=><li key={item.requestId}><Button size="xs" variant="ghost" onClick={()=>inspect(item.requestId)} disabled={state.pending || receipt?.status==='unsaved' || state.applicationUnknown}>{new Date(item.createdAt).toLocaleString('ko-KR')} · {item.expired?'본문 만료':({generated:'초안 저장됨',running:'처리 중',unknown:'확인 필요',error:'생성 실패'}[item.state]||item.state)}</Button></li>)}</ul>
+      {!!state.requests.length&&<details><summary>이 업무의 요청 기록 ({state.requests.length})</summary><ul className={styles.history}>{state.requests.map(item=><li key={item.requestId}><Button size="xs" variant="ghost" onClick={()=>inspect(item.requestId)} disabled={state.pending || receipt?.status==='unsaved' || state.applicationUnknown}><span className={`mono ${styles.historyTime}`}>{new Date(item.createdAt).toLocaleString('ko-KR')}</span> · {item.expired?'본문 만료':({generated:'초안 저장됨',running:'처리 중',unknown:'확인 필요',error:'생성 실패'}[item.state]||item.state)}</Button></li>)}</ul>
         {state.nextCursor&&<Button size="xs" onClick={async()=>{const list=await readOfficeWorkflow(`requests?${query}&cursor=${encodeURIComponent(state.nextCursor)}`);if(Array.isArray(list.requests))patch(current=>({requests:[...current.requests,...list.requests.filter(item=>!current.requests.some(old=>old.requestId===item.requestId))],nextCursor:list.nextCursor||null}));else patch({note:officeWorkflowNote(list)});}}>이전 요청 더 보기</Button>}
       </details>}
       <p className={styles.meta}>초안 생성·복사는 실제 연락이나 업무 완료를 기록하지 않습니다.</p>

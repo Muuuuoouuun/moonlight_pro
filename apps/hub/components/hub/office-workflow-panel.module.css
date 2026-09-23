@@ -11,5 +11,7 @@
 .controls { display:grid; gap:12px; padding:0; margin:0; border:0; min-width:0; }
 .comparison { border-top:1px solid var(--line-soft); }
 .reviewers { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:12px; }
+.truth { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.historyTime { font-size:12px; }
 .changeNotice { display:grid; gap:8px; padding:12px; border:1px solid var(--line); border-radius:var(--r-sm); margin-bottom:12px; }
 @media (max-width: 600px) { .result { padding: 12px; } .actions { align-items: flex-start; } }
