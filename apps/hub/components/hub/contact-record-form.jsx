@@ -42,6 +42,11 @@ const EMPTY_FORM = {
   followup: "dated",
 };
 
+// 드로어가 닫혀 폼이 언마운트돼도, 현재 열린 앱에서 미저장 원문을 다시 보여 준다.
+const rawNoteRecoveries = new Map();
+const rawNoteKey = (target) => JSON.stringify([target?.kind || "lead", target?.id || ""]);
+const RAW_NOTE_ERROR = "요약은 저장됐지만 원문은 저장하지 못했습니다. 원문만 다시 저장하거나 복사해 두세요.";
+
 // 대화·통화 원문에서 폼을 채우는 AI 보조(3a0c18f). 저장 계약은 그대로 — AI는 폼만 채우고,
 // 운영자가 확인한 뒤 같은 저장 버튼을 누른다. 추출을 폼에 얹는 규칙(발신형 채널의 회신 판정
 // 포함)은 순수 함수 applyContactExtraction(lib/sales-os/contact-record.js)이 소유한다.
@@ -123,31 +128,44 @@ ${raw}
   );
 }
 
-// onPersisted: 서버가 saved로 답한 뒤에만 불린다 — "기록됨" 확인은 여기서 띄운다.
+// onSummaryPersisted: 연락 요약 RPC가 저장된 즉시 불린다 — 낙관 행을 서버 ID로 바꾼다.
+// onPersisted: 선택 원문까지 저장되거나 운영자가 건너뛴 뒤 불린다 — "기록됨" 확인은 여기서 띄운다.
 // onFailed({ optimisticId, message, form }): 늦은 실패. 폼이 이미 언마운트됐을 수 있으므로
 // (드로어를 닫았거나 언마운트 flush) 부모가 표시를 되돌리고 입력을 되살릴 책임을 진다.
 // draft·initialError: 실패 뒤 다시 연 기록창이 입력과 원인을 그대로 보여 주게 한다. draft는
 // 첫 상태에만 쓰고 저장 뒤 초기화는 preset 기준이다.
-export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "" }) {
-  const [form, setForm] = React.useState(() => ({ ...EMPTY_FORM, ...(preset || {}), ...(draft || {}) }));
-  const [state, setState] = React.useState(initialError ? "error" : "idle"); // idle | warn | error
-  const [errorMsg, setErrorMsg] = React.useState(initialError || "");
+export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onSummaryPersisted, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "" }) {
+  const [recoveredRawNote] = React.useState(() => rawNoteRecoveries.get(rawNoteKey(target)) || null);
+  const [form, setForm] = React.useState(() => ({ ...EMPTY_FORM, ...(preset || {}), ...(draft || {}), ...(recoveredRawNote ? { body: recoveredRawNote.body } : {}) }));
+  const [state, setState] = React.useState(initialError || recoveredRawNote ? "error" : "idle"); // idle | warn | error
+  const [errorMsg, setErrorMsg] = React.useState(recoveredRawNote ? RAW_NOTE_ERROR : initialError || "");
   // 저장할 때마다 올린다 — AI 채우기 상자(자식 상태)를 새 기록에 맞게 비운다.
   const [recordSeq, setRecordSeq] = React.useState(0);
   // AI 응답은 몇 초 뒤에 온다. 그 사이 운영자가 고친 값을 클릭 시점 스냅샷으로 덮지 않도록
   // 최신 폼을 ref로 읽고, 반영은 함수형 업데이트로 한다.
   const formRef = React.useRef(form);
   formRef.current = form;
-  const [showBody, setShowBody] = React.useState(false);
+  const [showBody, setShowBody] = React.useState(!!recoveredRawNote);
   // 저장을 눌러 보기 전에는 필수 표시를 붉히지 않는다 — 빈 폼을 열자마자 꾸짖는 건 잔소리다.
   const [attempted, setAttempted] = React.useState(false);
   const [pendingUndo, setPendingUndo] = React.useState(null);
+  // 요약 RPC 성공 뒤 원문 note만 실패하면, 같은 연락을 두 번 만들지 않고 note만 재시도한다.
+  const [pendingRawNote, setPendingRawNote] = React.useState(() => recoveredRawNote && {
+    activityId: recoveredRawNote.activityId,
+    optimisticId: recoveredRawNote.optimisticId,
+  });
+  const [rawNoteSaving, setRawNoteSaving] = React.useState(false);
   const reactionRef = React.useRef(null);
   const summaryRef = React.useRef(null);
   const atRef = React.useRef(null);
 
   const edit = (patch) => {
     setForm((f) => ({ ...f, ...patch }));
+    if (pendingRawNote && Object.hasOwn(patch, "body")) {
+      const key = rawNoteKey(target);
+      const recovery = rawNoteRecoveries.get(key);
+      if (recovery) rawNoteRecoveries.set(key, { ...recovery, body: patch.body });
+    }
     if (state === "warn") setState("idle");
   };
   const reset = () => {
@@ -177,11 +195,16 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
         fail(snapshot, `${data.error || data.reason || "저장에 실패했습니다."} — 입력을 복원했습니다.`);
         return false;
       }
-      onPersisted?.({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId });
+      onSummaryPersisted?.({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId });
       // 붙여넣은 원문은 요약이 저장된 뒤에 별도 note로 남긴다. 아직 원자 저장이 아니라
       // (RPC v2는 1b) 이 단계가 실패해도 요약 기록은 이미 남아 있다 — 그 사실을 말해 준다.
       const note = buildRawNoteWrite(snapshot.form, target);
       if (note) {
+        rawNoteRecoveries.set(rawNoteKey(target), {
+          activityId: data.activityId || null,
+          optimisticId: snapshot.optimisticId,
+          body: snapshot.form.body,
+        });
         const noteResp = await fetch("/api/hub/revenue/activity", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -189,19 +212,64 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
         }).catch(() => null);
         const noteData = await noteResp?.json().catch(() => ({})) ?? {};
         if (!noteResp?.ok || noteData.status !== "saved") {
+          setPendingRawNote({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId });
           setState("error");
-          setErrorMsg("요약은 저장됐지만 붙여넣은 원문은 저장하지 못했습니다. 원문을 복사해 두세요.");
+          setErrorMsg(RAW_NOTE_ERROR);
           setForm((f) => ({ ...f, body: snapshot.form.body }));
           setShowBody(true);
           // 원문을 되살려 보여 줘야 하므로 창을 닫지 않는다.
           return false;
         }
+        rawNoteRecoveries.delete(rawNoteKey(target));
       }
+      onPersisted?.({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId });
       return true;
     } catch (err) {
       fail(snapshot, `${err instanceof Error ? err.message : String(err)} — 입력을 복원했습니다.`);
       return false;
     }
+  };
+
+  const retryRawNote = async () => {
+    if (!pendingRawNote || rawNoteSaving) return;
+    const note = buildRawNoteWrite(form, target);
+    if (!note) {
+      setState("error");
+      setErrorMsg("다시 저장할 원문을 입력하세요.");
+      return;
+    }
+    setRawNoteSaving(true);
+    const key = rawNoteKey(target);
+    const recovery = rawNoteRecoveries.get(key);
+    if (recovery) rawNoteRecoveries.set(key, { ...recovery, body: form.body });
+    try {
+      const response = await fetch("/api/hub/revenue/activity", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(note),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.status !== "saved") throw new Error(data.error || data.reason || "원문 저장 실패");
+      rawNoteRecoveries.delete(key);
+      onPersisted?.(pendingRawNote);
+      setPendingRawNote(null);
+      reset();
+      onDone?.();
+    } catch (error) {
+      setState("error");
+      setErrorMsg(`${error instanceof Error ? error.message : String(error)} — 원문은 이 창에 남아 있습니다.`);
+    } finally {
+      setRawNoteSaving(false);
+    }
+  };
+
+  const skipRawNote = () => {
+    if (!pendingRawNote) return;
+    rawNoteRecoveries.delete(rawNoteKey(target));
+    onPersisted?.(pendingRawNote);
+    setPendingRawNote(null);
+    reset();
+    onDone?.();
   };
 
   const fail = (snapshot, message) => {
@@ -390,14 +458,15 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
           )}
         </div>
         {/* 비활성 대신 항상 눌린다 — 왜 안 되는지 말하지 않는 죽은 버튼을 두지 않는다. */}
-        <Button variant="primary" size="sm" onClick={() => save({ ignoreWarning: state === "warn" })}>저장</Button>
+        {pendingRawNote && <Button variant="ghost" size="xs" onClick={skipRawNote} disabled={rawNoteSaving}>원문 저장 건너뛰기</Button>}
+        <Button variant="primary" size="sm" disabled={rawNoteSaving} onClick={() => pendingRawNote ? retryRawNote() : save({ ignoreWarning: state === "warn" })}>{pendingRawNote ? "원문 저장 재시도" : "저장"}</Button>
       </div>
     </div>
   );
 }
 
 // 큐·목록·첫 화면에서 여는 껍데기. 상세 안에서는 이걸 쓰지 않고 폼만 인라인으로 쓴다.
-export function ContactRecordDrawer({ target, preset, draft = null, onClose, onSaved, onUndone, onPersisted, onFailed, initialError = "" }) {
+export function ContactRecordDrawer({ target, preset, draft = null, onClose, onSaved, onUndone, onSummaryPersisted, onPersisted, onFailed, initialError = "" }) {
   if (!target?.id) return null;
   return (
     <Drawer
@@ -414,6 +483,7 @@ export function ContactRecordDrawer({ target, preset, draft = null, onClose, onS
         autoFocus
         onSaved={onSaved}
         onUndone={onUndone}
+        onSummaryPersisted={onSummaryPersisted}
         onPersisted={onPersisted}
         onFailed={onFailed}
         initialError={initialError}

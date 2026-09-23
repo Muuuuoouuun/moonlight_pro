@@ -34,6 +34,16 @@ test('rows in the pre-extension shape (no subject/detail) still satisfy table an
   assert.deepEqual(featureOf(summarizeReadiness(legacy.map(r => r.name === 'office_requests' ? { ...r, protected: false } : r)), 'Office 업무 연결').missingOrUnprotected, ['office_requests']);
 });
 
+test('Top 3 readiness requires its cap function and attached trigger', () => {
+  const feature = DATABASE_FEATURES.find(f => f.migration === '20260923_0043_task_focus_cap.sql');
+  assert.ok(feature);
+  assert.deepEqual(featureChecks(feature).map(check => check.kind), ['function', 'body_includes', 'body_includes', 'trigger']);
+  const rows = rowsFor([feature]);
+  assert.equal(summarizeReadiness(rows, [feature])[0].ready, true);
+  assert.equal(summarizeReadiness(rows.filter(row => row.kind !== 'trigger'), [feature])[0].ready, false);
+  assert.match(readinessSql([feature]), /pg_trigger/);
+});
+
 // One synthetic feature per check kind so each failure mode is isolated.
 const SYNTHETIC = [
   { name: '본문 포함', migration: 'a.sql', tables: [], functions: [], bodyIncludes: [['probe_v1(uuid)', 'sha256(convert_to']] },
@@ -86,7 +96,7 @@ test('readinessSql emits one quoted row per check and stays a single SELECT', ()
 const bodyOf = (sql, signature) => [...sql.matchAll(new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${signature.split('(')[0]}\\s*\\([\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$`, 'gi'))].at(-1)?.[1];
 const constraintOf = (sql, name) => [...sql.matchAll(new RegExp(`alter\\s+table[^;]*?add\\s+constraint\\s+${name}\\b[^;]*;`, 'gi'))].at(-1)?.[0];
 
-test('every version marker is in its migration, absent from the version it replaces, and holds after all migrations', async () => {
+test('every body marker identifies its migration and holds after all migrations', async () => {
   const files = (await readdir(MIGRATIONS)).filter(n => n.endsWith('.sql')).sort();
   const text = new Map(await Promise.all(files.map(async n => [n, await readFile(new URL(n, MIGRATIONS), 'utf8')])));
   const order = DATABASE_FEATURES.map(f => f.migration);
@@ -98,10 +108,11 @@ test('every version marker is in its migration, absent from the version it repla
     const own = text.get(f.migration);
     for (const [kind, [signature, marker]] of [...(f.bodyIncludes ?? []).map(c => ['includes', c]), ...(f.bodyExcludes ?? []).map(c => ['excludes', c])]) {
       const body = bodyOf(own, signature), previous = last(before(f.migration), s => bodyOf(s, signature)), final = last(files, s => bodyOf(s, signature));
-      assert.ok(body && previous, `${f.migration} redefines ${signature}`);
+      assert.ok(body, `${f.migration} defines ${signature}`);
       const has = kind === 'includes';
       assert.equal(body.includes(marker), has, `${f.migration}: ${marker}`);
-      assert.equal(previous.includes(marker), !has, `${f.migration}: the replaced version must differ on ${marker}`);
+      if (previous) assert.equal(previous.includes(marker), !has, `${f.migration}: the replaced version must differ on ${marker}`);
+      else assert.ok(f.functions?.includes(signature), `${f.migration}: first definition of ${signature} must be tracked as a function`);
       assert.equal(final.includes(marker), has, `${signature}: a later migration undoes ${f.migration}`);
     }
     for (const [table, name, marker] of f.constraintIncludes ?? []) {

@@ -1193,8 +1193,6 @@ export function MyWork({ onNavigate }) {
       return next;
     });
     setItemPatches((p) => ({ ...p, [item.id]: { bucket: bucketKey, whenAt: dueAt || null, focusToday: false } }));
-    setNotice({ tone: 'ok', label: '기한 변경됨' });
-    toast.info('기한 변경됨');
     const patchTask = async (body, failLabel) => {
       const res = await fetch('/api/hub/tasks', {
         method: 'PATCH',
@@ -1204,13 +1202,25 @@ export function MyWork({ onNavigate }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status !== 'saved') throw new Error(data.error || `${failLabel} ${res.status}`);
     };
+    let focusSaved = false;
     try {
       await patchTask({ focus: { on: false } }, '오늘 3개 저장 실패');
+      focusSaved = true;
       await patchTask({ dueAt }, '기한 변경 실패');
+      setNotice({ tone: 'ok', label: '기한 변경됨' });
+      toast.success('기한 변경됨');
       reload().then((fresh) => { if (fresh) clearPatch(); }).catch(() => {}); // null = 실패/superseded → 패치 유지
     } catch (error) {
-      clearPatch();
-      const msg = error instanceof Error ? error.message : String(error);
+      if (focusSaved) {
+        // 첫 PATCH는 이미 저장됐다. 두 번째만 실패했으므로 서버의 선택 해제를 그대로
+        // 보여 주고 재조회가 성공할 때까지 그 사실을 낙관 패치로 유지한다.
+        setItemPatches((p) => ({ ...p, [item.id]: { bucket: item.dueBucket || 'later', focusToday: false } }));
+        reload().then((fresh) => { if (fresh) clearPatch(); }).catch(() => {});
+      } else {
+        clearPatch();
+      }
+      const detail = error instanceof Error ? error.message : String(error);
+      const msg = focusSaved ? `오늘 3개에서는 빠졌지만 기한은 바꾸지 못했습니다 — ${detail}` : detail;
       setNotice({ tone: 'err', label: msg });
       toast.error(msg);
     }

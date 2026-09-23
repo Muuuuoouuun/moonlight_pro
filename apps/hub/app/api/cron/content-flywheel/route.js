@@ -102,8 +102,18 @@ async function runContentFlywheel(workspaceId) {
     // Dedup: don't stack drafts. Skip ideas that already have an open 'proposed' content-draft
     // (keyed on work_orders.asset_id = the idea's content_items id).
     const existing = await getWorkOrders({ workspaceId, status: "proposed", limit: 200 });
+    if (existing.source !== "supabase" || !Array.isArray(existing.orders) || existing.orders.length >= 200) {
+      return {
+        body: {
+          status: "error",
+          reason: existing.source === "error" ? existing.error || "work-orders-read-failed" : "work-orders-read-incomplete",
+          ...summary,
+        },
+        httpStatus: 503,
+      };
+    }
     const openDraftAssetIds = new Set(
-      (existing.orders || [])
+      existing.orders
         .filter((o) => o.kind === CONTENT_DRAFT_MODE && o.status === "proposed")
         .map((o) => o.assetId),
     );

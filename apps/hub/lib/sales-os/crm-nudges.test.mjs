@@ -76,6 +76,24 @@ test("today's promise reads as today, not as overdue", () => {
   assert.equal(nudges[0].title, "원장님 통화");
 });
 
+test("closed leads and deals do not receive overdue promise nudges", () => {
+  const customers = [
+    customer({ id: "lost-lead", open: false, nextActionAt: day(-3), nextAction: "전화" }),
+    customer({ id: "closed-deal", kind: "deal", open: false, nextActionAt: day(-3), nextAction: "전화" }),
+  ];
+  assert.deepEqual(buildCrmNudges({ customers, now: NOW }), []);
+});
+
+test("closing a deal does not hide an unrecorded customer meeting", () => {
+  const nudges = buildCrmNudges({
+    customers: [customer({ open: false, nextActionAt: day(-3), nextAction: "전화" })],
+    unrecordedMeetings: [{ eventId: "ev-closed", title: "한빛학원 미팅", startAt: day(-1), channel: "meeting", customer: { id: "lead-1" } }],
+    now: NOW,
+  });
+  assert.equal(nudges.length, 1);
+  assert.equal(nudges[0].ruleId, "meeting_unrecorded");
+});
+
 test("concern or rejection with nothing planned becomes an act nudge, quoting the record", () => {
   const nudges = buildCrmNudges({
     customers: [customer({ nextAction: "", nextActionAt: null })],

@@ -5,10 +5,9 @@ import { CalendarOutcome } from "../calendar-outcome";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { topNavigationForRoute } from "../hub-nav";
-import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer } from "../hub-primitives";
+import { Badge, Card, IconButton, Button, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
-import { RhythmVisualizer } from "../rhythm-visualizer";
-import { StreakMark } from "../burning-streak";
+import { RhythmToday, RhythmWeekGrid } from "../rhythm-today";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
 import {
@@ -22,18 +21,23 @@ import {
   buildRhythmDefinePayload,
   buildRhythmDeletePayload,
   buildRhythmEditPayload,
-  computeWeeklyRhythmMatrix,
   createRhythmCheckState,
   defaultTargetPerWeek,
   filterRhythmRows,
   finishRhythmCheck,
-  getRhythmProgressProps,
   invalidRhythmEditFields,
   resolveRhythmCheckResult,
   RHYTHM_INVALID_FIELD_MESSAGES,
   RITUAL_CATEGORY_LABELS,
-  summarizeRhythmRows,
 } from "@/lib/rhythm-ui";
+import {
+  buildRhythmUncheckPayload,
+  buildTodayRhythm,
+  recentDayLabels,
+  resolveRhythmUncheckResult,
+  RHYTHM_QUICK_PRESETS,
+  summarizeRecentWeek,
+} from "@/lib/rhythm-today";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EN_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
@@ -794,7 +798,7 @@ function buildRhythmDraft(defaultProjectId) {
     isNew: true,
     id: createClientId(),
     ritualKey: '',
-    name: '새 루틴',
+    name: '',
     checkType: 'morning',
     projectId: defaultProjectId || '',
     category: 'general',
@@ -1299,39 +1303,12 @@ export function Roadmap({ onNavigate }) {
   );
 }
 
-// 매트릭스의 몰입 시간·성과 점수는 할 일 완료를 반영해야 한다(computeWeeklyRhythmMatrix가
-// todos를 받게 설계돼 있었는데 이 호출부가 넘기지 않아 매일 같은 베이스라인만 나오던 버그,
-// 2026-09-22 재설계 중 발견). useCalendarTasks와 같은 /api/hub/tasks를 쓰되, Rhythm은
-// 요일별 그리드가 아니라 원본 목록이 필요해 매핑 없이 그대로 든다. 허브 read 봉투를 읽는다 —
-// error(502·200 모두)·preview를 "완료 0건"으로 위장하지 않도록 status를 함께 돌려준다.
-function useRhythmTasks() {
-  const [state, setState] = React.useState({ status: 'loading', tasks: [] });
-  React.useEffect(() => {
-    let active = true;
-    fetch('/api/hub/tasks', { cache: 'no-store' })
-      .then((response) => response.json().catch(() => null).then((data) => ({ response, data })))
-      .then(({ response, data }) => {
-        if (!active) return;
-        if (!response.ok || !data || data.status === 'error' || data.source === 'error') {
-          setState({ status: 'error', tasks: [] });
-          return;
-        }
-        const status = data.status === 'live' || data.status === 'partial' ? data.status : 'preview';
-        setState({ status, tasks: status === 'preview' || !Array.isArray(data.tasks) ? [] : data.tasks });
-      })
-      .catch(() => active && setState({ status: 'error', tasks: [] }));
-    return () => { active = false; };
-  }, []);
-  return state;
-}
-
 export function Rhythm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const selectedProjectId = searchParams.get('project')?.trim() || null;
   const [weeklyReviewOpen, setWeeklyReviewOpen] = React.useState(false);
-  const { status: tasksStatus, tasks: todos } = useRhythmTasks();
   const {
     rituals: liveRituals,
     rhythmState,
@@ -1388,7 +1365,7 @@ export function Rhythm() {
     { value: 'morning', label: '아침' },
     { value: 'midday', label: '낮' },
     { value: 'evening', label: '저녁' },
-    { value: 'weekly', label: '주간' },
+    { value: 'weekly', label: '주 단위(언제든)' },
   ];
   const categoryOptions = Object.entries(RITUAL_CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -1549,23 +1526,107 @@ export function Rhythm() {
     }
   }, [editingRitual, editRitualId, baseRituals, retry]);
 
-  const summary = React.useMemo(() => summarizeRhythmRows(rituals), [rituals]);
+  // 오늘의 리듬 — 저장된 루틴만(초안 isNew 제외). 할 일은 섞지 않는다(2026-09-23 운영자).
+  // 체크/취소는 낙관적으로 먼저 그리고(todayOverrides), 서버 기록을 다시 읽으면 덮어쓰기를 걷는다.
+  const [todayOverrides, setTodayOverrides] = React.useState({});
+  const [justCheckedIds, setJustCheckedIds] = React.useState(() => new Set());
+  const [celebrateDay, setCelebrateDay] = React.useState(false);
 
   React.useEffect(() => {
     latestAttemptRef.current.clear();
     setMutationState(createRhythmCheckState());
+    setTodayOverrides({});
+    setJustCheckedIds(new Set());
   }, [selectedProjectId]);
 
-  const completed = summary.ritualsCompletedThisWeek;
-  const total = summary.ritualsTotalThisWeek;
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const rhythmProgressProps = getRhythmProgressProps({
-    partial: rhythmPartial,
-    completed,
-    total,
-  });
-  const longestStreak = summary.longestStreak;
-  const longestStreakRitual = summary.longestStreakRitual;
+  const today = buildTodayRhythm(savedRituals, { overrides: todayOverrides });
+  const dayLabels = React.useMemo(() => recentDayLabels(), []);
+  const recentWeek = summarizeRecentWeek(today.groups.flatMap((g) => g.items));
+  const weekItems = today.groups.flatMap((g) => g.items);
+
+  // 하루 링이 닫히는 순간 — 이 세션에서 직접 체크해 완주했을 때만 1회 연출한다(첫 로드 제외).
+  const prevAllDoneRef = React.useRef(today.allDone);
+  React.useEffect(() => {
+    if (today.allDone && !prevAllDoneRef.current && justCheckedIds.size > 0) setCelebrateDay(true);
+    if (!today.allDone) setCelebrateDay(false);
+    prevAllDoneRef.current = today.allDone;
+  }, [today.allDone, justCheckedIds]);
+
+  const clearOverride = React.useCallback((ritualId) => {
+    setTodayOverrides((prev) => {
+      if (!(ritualId in prev)) return prev;
+      const next = { ...prev };
+      delete next[ritualId];
+      return next;
+    });
+  }, []);
+
+  // 체크(POST) ↔ 취소(DELETE) 한 버튼. 같은 루틴의 최신 시도만 결과를 반영한다.
+  const toggleToday = React.useCallback(async (item) => {
+    const ritualId = item.id;
+    const nextDone = !item.doneToday;
+    const attemptId = `${Date.now()}-${attemptSequenceRef.current + 1}`;
+    attemptSequenceRef.current += 1;
+    latestAttemptRef.current.set(ritualId, attemptId);
+    setMutationState((state) => beginRhythmCheck(state, ritualId, attemptId));
+    setTodayOverrides((prev) => ({ ...prev, [ritualId]: nextDone }));
+    setJustCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (nextDone) next.add(ritualId);
+      else next.delete(ritualId);
+      return next;
+    });
+    if (nextDone) {
+      try { navigator.vibrate?.(12); } catch { /* 햅틱 미지원 */ }
+    }
+
+    const resolve = nextDone ? resolveRhythmCheckResult : resolveRhythmUncheckResult;
+    let result;
+    try {
+      const response = await fetch('/api/routine/check', {
+        method: nextDone ? 'POST' : 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(nextDone ? buildRhythmCheckPayload(item) : buildRhythmUncheckPayload(item)),
+      });
+      const data = await response.json().catch(() => null);
+      result = resolve({ responseOk: response.ok, httpStatus: response.status, data });
+    } catch (error) {
+      result = resolve({ error });
+    }
+
+    if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+    if (!result.durable) {
+      // 저장되지 않았다 — 낙관적 표시를 되돌리고 이유를 그 줄에 남긴다(§11 error 계약).
+      clearOverride(ritualId);
+      setJustCheckedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(ritualId);
+        return next;
+      });
+    } else if (result.shouldRefetch) {
+      const refreshed = await retry();
+      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+      if (refreshed) clearOverride(ritualId);
+      else result = { ...result, message: `${result.message} 저장은 확인됐지만 기록을 다시 읽지 못했습니다. 다시 읽어 주세요.` };
+    }
+
+    setMutationState((state) => finishRhythmCheck(state, ritualId, attemptId, result));
+  }, [retry, clearOverride]);
+
+  const applyPreset = React.useCallback((preset) => {
+    const draft = {
+      ...buildRhythmDraft(selectedProjectId),
+      name: preset.label,
+      category: preset.category,
+      checkType: preset.checkType,
+      targetPerWeek: defaultTargetPerWeek(preset.checkType),
+    };
+    setLocalRituals((prev) => [draft, ...prev]);
+    setEditRitualId(draft.id);
+  }, [selectedProjectId]);
+
+  const existingNames = new Set(savedRituals.map((r) => String(r.name || '').trim()));
+  const presets = RHYTHM_QUICK_PRESETS.filter((preset) => !existingNames.has(preset.label));
   const selectedProjectName = rituals.find((ritual) => ritual.projectName)?.projectName || '';
   // §8.1 primitives-first — 수제 sync 라벨을 SyncBadge로 교체 (live-empty→live 매핑만 여기서).
   const rhythmBadgeState = rhythmState === 'live-empty'
@@ -1573,56 +1634,9 @@ export function Rhythm() {
     : rhythmState === 'loading'
       ? 'syncing'
       : rhythmState;
-
-  const checkIn = React.useCallback(async (ritual) => {
-    const ritualId = ritual.id;
-    const attemptId = `${Date.now()}-${attemptSequenceRef.current + 1}`;
-    attemptSequenceRef.current += 1;
-    latestAttemptRef.current.set(ritualId, attemptId);
-    setMutationState((state) => beginRhythmCheck(state, ritualId, attemptId));
-
-    try {
-      const response = await fetch('/api/routine/check', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(buildRhythmCheckPayload(ritual)),
-      });
-      const data = await response.json().catch(() => null);
-      let result = resolveRhythmCheckResult({
-        responseOk: response.ok,
-        httpStatus: response.status,
-        data,
-      });
-
-      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
-      if (result.shouldRefetch) {
-        const refreshed = await retry();
-        if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
-        if (!refreshed) {
-          result = {
-            ...result,
-            message: `${result.message} 저장은 확인됐지만 주간 현황을 다시 읽지 못했습니다. 다시 읽어 주세요.`,
-          };
-        }
-      }
-
-      setMutationState((state) => finishRhythmCheck(
-        state,
-        ritualId,
-        attemptId,
-        result,
-      ));
-    } catch (error) {
-      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
-      const result = resolveRhythmCheckResult({ error });
-      setMutationState((state) => finishRhythmCheck(
-        state,
-        ritualId,
-        attemptId,
-        result,
-      ));
-    }
-  }, [retry]);
+  const feedbackById = Object.fromEntries(
+    Object.entries(mutationState.feedbackByRitual).filter(([, f]) => f && f.kind !== 'pending'),
+  );
 
   return (
     <div className="hub-futura hub-page fade-up">
@@ -1631,7 +1645,7 @@ export function Rhythm() {
           <div className="fx-eyebrow">Work</div>
           <h2 className="fx-page-title">Rhythm</h2>
           <p className="fx-page-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            루틴은 실행의 인프라
+            매일 지키는 생활 루틴 · 할 일과 따로 갑니다
             <SyncBadge state={rhythmBadgeState} />
           </p>
           {selectedProjectId && (
@@ -1644,8 +1658,8 @@ export function Rhythm() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <Button variant="outline" size="sm" icon="sparkle" onClick={() => setWeeklyReviewOpen(true)}>
-            한 주 정리 & Council 평가
+          <Button variant="ghost" size="sm" icon="sparkle" onClick={() => setWeeklyReviewOpen(true)}>
+            한 주 돌아보기
           </Button>
           <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴 <Kbd>N</Kbd></Button>
         </div>
@@ -1653,7 +1667,7 @@ export function Rhythm() {
 
       {rhythmState === 'error' && (
         <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
-          <span style={{ flex: 1, fontSize: 12, color: 'var(--danger)' }}>{rhythmError || '리듬 기록을 읽지 못했습니다. 체크인 상태를 확인하려면 다시 읽어 주세요.'}</span>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--danger)' }}>{rhythmError || '리듬 기록을 읽지 못했습니다. 체크 상태를 확인하려면 다시 읽어 주세요.'}</span>
           <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
         </div>
       )}
@@ -1667,148 +1681,45 @@ export function Rhythm() {
         </div>
       )}
 
-      {/* 리듬 3대 축: 업로드 리듬 · 성과 반응 · 몰입도×성과 상관 매트릭스 시각화 */}
-      {/* 저장 전 초안(isNew)은 집계에서 뺀다 — 페이지 카드(summary)와 같은 live 루틴 집합을
-          봐야 한 화면의 두 '이번 주' 지표가 서로 다른 모집단을 세지 않는다. */}
-      <RhythmVisualizer
-        rituals={savedRituals}
-        summary={summary}
-        focusData={{ matrix: computeWeeklyRhythmMatrix({ rituals: savedRituals, todos }) }}
-        tasksStatus={tasksStatus}
-        rhythmState={rhythmState}
-        rhythmPartial={rhythmPartial}
-      />
-
-      <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--fx-gap)' }}>
-        <div className="fx-card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-            <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
-            {!rhythmPartial && percent >= 100 && (
-              <span className="hub-celebration-badge hub-celebration-badge--sparkle">
-                ✦ 100% 달성
-              </span>
-            )}
-          </div>
-          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{completed} / {total}</div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{rhythmPartial ? '관측된 완료 · 일부 기록' : 'rituals completed'}</div>
-          {rhythmPartial ? (
-            <div {...rhythmProgressProps} style={{ marginTop: 14, fontSize: 11, color: 'var(--fg-faint)' }}>
-              관측 {completed} / {total} · 일부 기록
-            </div>
-          ) : (
-            <div {...rhythmProgressProps} style={{ marginTop: 14 }}><Progress value={percent} /></div>
-          )}
+      {rhythmState === 'loading' && savedRituals.length === 0 ? (
+        <div className="fx-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Skeleton lines={1} height={96} label="오늘의 리듬 불러오는 중" />
+          <Skeleton lines={3} height={52} label="루틴 목록 불러오는 중" />
         </div>
-        <div className="fx-card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-            <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
-            {longestStreak >= 3 && (
-              <span style={{ fontSize: 10.5, padding: '2px 6px', borderRadius: 'var(--r-xs)', background: 'var(--surface-3)', color: 'var(--fg)', border: '1px solid var(--line)' }}>
-                3일 이상 연속
-              </span>
-            )}
-          </div>
-          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }} className="stat">
-            <StreakMark size={24} level={longestStreak >= 14 ? 4 : longestStreak >= 7 ? 3 : longestStreak >= 3 ? 2 : longestStreak >= 1 ? 1 : 0} />
-            <span>{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></span>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}{rhythmPartial ? ' · 관측값' : ''}</div>
-        </div>
-      </div>
+      ) : (
+        <RhythmToday
+          today={today}
+          dayLabels={dayLabels}
+          recentWeek={recentWeek}
+          pendingById={mutationState.pendingByRitual}
+          feedbackById={feedbackById}
+          justCheckedIds={justCheckedIds}
+          celebrate={celebrateDay}
+          partial={rhythmPartial}
+          presets={rhythmState === 'error' || rhythmState === 'partial' ? [] : presets}
+          emptyTitle={selectedProjectId ? '선택한 프로젝트의 리듬이 없습니다' : '아직 정한 리듬이 없습니다'}
+          emptyDescription={rhythmState === 'error' ? '기록을 다시 읽은 뒤 체크 상태를 확인해 주세요.' : rhythmState === 'partial' ? '일부 기록만 관측되어 전체 리듬 상태를 확정할 수 없습니다.' : rhythmState === 'preview' ? 'Preview · 연결 필요 — Supabase가 연결되면 루틴과 체크가 저장됩니다.' : '기도·운동·청소처럼 매일 지킬 루틴을 정하면 여기서 하루 한 번 체크합니다.'}
+          emptyAction={rhythmState === 'error' || rhythmState === 'partial'
+            ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+            : <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴</Button>}
+          onToggle={toggleToday}
+          onEdit={(item) => setEditRitualId(item.id)}
+          onPreset={applyPreset}
+        />
+      )}
 
-      <div className="fx-card" style={{ padding: mergedRituals.length === 0 ? undefined : 0, overflow: 'hidden' }}>
-        {mergedRituals.length === 0 && (
-          <EmptyState
-            icon="rhythm"
-            title={selectedProjectId ? '선택한 프로젝트의 리듬이 없습니다' : '루틴 체크 기록이 없습니다'}
-            description={rhythmState === 'live-empty' ? 'Supabase routine_checks 기록이 비어 있습니다.' : rhythmState === 'error' ? '기록을 다시 읽은 뒤 체크인 상태를 확인해 주세요.' : rhythmState === 'partial' ? '일부 기록만 관측되어 전체 리듬 상태를 확정할 수 없습니다.' : '루틴을 만들면 매일 체크인할 항목이 여기에 표시됩니다.'}
-            action={rhythmState === 'error' || rhythmState === 'partial'
-              ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
-              : <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴</Button>}
-            style={{ minHeight: 220 }}
-          />
-        )}
-        {mergedRituals.length > 0 && (
-          <div className="hub-rhythm-scroll" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <div style={{ minWidth: 720 }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px' }}>
-                <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
-              </div>
-              {mergedRituals.map((r, i) => {
-                const weeks = Array.isArray(r.weeks) ? r.weeks : [0,0,0,0,0,0,0];
-                const pending = Boolean(mutationState.pendingByRitual[r.id]);
-                const feedback = mutationState.feedbackByRitual[r.id];
-                const bitmapText = weeks.map((value, index) => `${index === 6 ? '오늘' : `${6 - index}일 전`} ${value ? '완료' : '미완료'}`).join(', ');
-                const isRowBurning = (r.streak || 0) >= 3;
-                return (
-                  <div
-                    key={r.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setEditRitualId(r.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditRitualId(r.id); } }}
-                    className="hub-row"
-                    style={{ padding: '12px 16px', minHeight: 68, borderBottom: i < mergedRituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px', alignItems: 'center', cursor: 'pointer' }}
-                  >
-                    <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <span style={{ fontSize: 13 }}>{r.name}</span>
-                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>
-                        {RITUAL_CATEGORY_LABELS[r.category] || RITUAL_CATEGORY_LABELS.general} · {r.checkType} · 주 {r.targetPerWeek || defaultTargetPerWeek(r.checkType)}회 목표
-                      </span>
-                      {r.projectHref && (
-                        <a href={r.projectHref} onClick={(e) => e.stopPropagation()} style={{ width: 'fit-content', color: 'var(--moon-300)', fontSize: 11.5, textUnderlineOffset: 3 }}>{r.projectName || '연결 프로젝트'}</a>
-                      )}
-                      {feedback && (
-                        <span aria-live="polite" style={{ fontSize: 11, color: feedback.kind === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}>
-                          {feedback.message}
-                        </span>
-                      )}
-                    </div>
-                    <div role="img" aria-label={`최근 7일 체크 기록: ${bitmapText}`} style={{ display: 'flex', gap: 4 }}>
-                      {weeks.map((value, index) => (
-                        <span key={index} aria-hidden="true" style={{
-                          width: 18, height: 18, borderRadius: 4,
-                          background: value ? 'var(--fg-muted)' : 'var(--surface-3)',
-                          border: '1px solid var(--line-soft)',
-                        }} />
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {isRowBurning && <StreakMark size={14} level={2} />}
-                      <span className="mono" style={{ fontSize: 12, color: isRowBurning ? 'var(--fg)' : 'var(--fg-muted)', fontWeight: isRowBurning ? 600 : 400 }}>
-                        {r.streak || 0}d
-                      </span>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={pending}
-                        aria-label={`${r.projectName ? `${r.projectName} · ` : ''}${r.name} 체크인 저장`}
-                        style={{ minHeight: 44 }}
-                        onClick={(e) => { e.stopPropagation(); checkIn(r); }}
-                      >
-                        {pending ? '저장 중…' : '체크인 저장'}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
+      <RhythmWeekGrid items={weekItems} dayLabels={dayLabels} />
 
       {editingRitual && (
         <EditDrawer
           title={editingRitual.isNew ? '새 루틴 만들기' : '루틴 편집'}
-          subtitle={editingRitual.isNew ? undefined : `${editingRitual.streak || 0}일 연속 · 이번 주 ${(editingRitual.weeks || []).filter(Boolean).length}/7`}
+          subtitle={editingRitual.isNew ? '매일(또는 주 N회) 지킬 생활 루틴' : `${editingRitual.streak || 0}일 연속 · 최근 7일 ${(editingRitual.weeks || []).filter(Boolean).length}회`}
           record={editingRitual}
           fields={[
-            { key: 'name', label: '이름', placeholder: '예: 아침 스트레칭' },
-            { key: 'checkType', label: '체크 타입', type: 'select', row: 'meta', options: checkTypeOptions },
-            { key: 'category', label: '카테고리', type: 'select', row: 'meta', options: categoryOptions },
-            { key: 'targetPerWeek', label: '주간 목표', inputType: 'number', row: 'target' },
+            { key: 'name', label: '이름', placeholder: '예: 기도하기 · 청소 · 저녁 운동' },
+            { key: 'checkType', label: '시간대', type: 'select', row: 'meta', options: checkTypeOptions },
+            { key: 'category', label: '분류', type: 'select', row: 'meta', options: categoryOptions },
+            { key: 'targetPerWeek', label: '주간 목표(회)', inputType: 'number', row: 'target' },
             { key: 'projectId', label: '연결 프로젝트', type: 'select', row: 'target', options: projectOptions },
           ]}
           onChange={updateRitualDraft}
@@ -1824,9 +1735,9 @@ export function Rhythm() {
           onClose={() => setWeeklyReviewOpen(false)}
           agent="council"
           contextType="weekly"
-          contextTitle="이번 주 리듬 및 운영 회고"
+          contextTitle="이번 주 리듬 돌아보기"
           contextData={{
-            summary: `이번 주 루틴 총 ${rituals.length}개 · 완료율 ${(completed / (total || 1) * 100).toFixed(0)}% · 최장 연속 ${longestStreak}일(${longestStreakRitual || '-'})`,
+            summary: `생활 루틴 ${today.total}개 · 오늘 ${today.done}/${today.due} · 최근 7일 달성 ${recentWeek.percent}% (${recentWeek.done}/${recentWeek.target}) · 최장 연속 ${today.bestStreak.streak}일(${today.bestStreak.name || '-'})`,
           }}
         />
       )}

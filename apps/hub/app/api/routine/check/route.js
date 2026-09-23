@@ -14,6 +14,7 @@ import {
 import { isCanonicalUuid } from "../../../../lib/uuid.js";
 import {
   buildRoutineCheckRecord,
+  deleteSupabaseRecord,
   insertSupabaseRecord,
   resolveDefaultWorkspaceId,
   resolveSupabaseConfig,
@@ -373,6 +374,86 @@ export async function POST(req) {
         status: "error",
         error: error instanceof Error ? error.message : String(error),
       },
+      { status: 500 },
+    );
+  }
+}
+
+// 오늘 체크 취소. 체크는 (workspace, project, ritualKey, 워크스페이스 현지 날짜)당 한 행이라
+// POST와 같은 멱등 키로 오늘 행을 찾아 지운다 — 날짜는 서버가 정하므로 어제 이전 기록은 이
+// 경로로 지울 수 없다. 멱등 키가 없던 옛 행은 POST의 중복 판정과 같은 레거시 조회로 찾는다.
+// 지울 행이 없으면 404 not-found — 클라이언트는 "이미 취소된 상태"로 읽고 다시 읽는다.
+export async function DELETE(req) {
+  try {
+    const guard = assertHubWriteAllowed(req);
+    if (guard) return guard;
+
+    const parsed = await readHubWriteJson(req);
+    if (parsed.error) return parsed.error;
+
+    const body = parsed.data && typeof parsed.data === "object" && !Array.isArray(parsed.data)
+      ? { ...parsed.data, status: "done" }
+      : parsed.data;
+    const normalized = normalizePayload(body);
+    if (normalized.error) return normalized.error;
+
+    const payload = normalized.value;
+    const workspaceId = resolveDefaultWorkspaceId();
+
+    if (!workspaceId || !resolveSupabaseConfig()) {
+      return NextResponse.json(
+        { status: "preview", message: "Workspace or Supabase is not configured. This undo was not saved.", saved: false },
+        { status: 202 },
+      );
+    }
+
+    const workspaceTimeZone = await resolveWorkspaceTimeZone(workspaceId);
+    if (!workspaceTimeZone.ok) return readFailure("workspaces timezone");
+
+    const authoritative = buildAuthoritativeRecord(payload, workspaceId, workspaceTimeZone.timeZone);
+    const { dateKey, record } = authoritative;
+
+    const keyed = await findRoutineCheckByIdempotencyKey(record.idempotency_key);
+    if (!Array.isArray(keyed)) return readFailure("routine_checks");
+
+    let targets = keyed.filter((row) => row?.id && cleanString(row.status || "done") === "done");
+    if (targets.length === 0) {
+      const legacy = await findLegacyRoutineCheck(authoritative.payload, workspaceTimeZone.timeZone);
+      if (legacy.state === "read-failure") return readFailure("routine_checks");
+      if (legacy.state === "overflow") return legacyOverflowResponse();
+      targets = legacy.rows.filter((row) => row?.id);
+    }
+
+    if (targets.length === 0) {
+      return NextResponse.json(
+        { status: "not-found", message: "No check-in for the current local date.", dateKey, localDate: dateKey },
+        { status: 404 },
+      );
+    }
+
+    const ids = [...new Set(targets.map((row) => row.id))];
+    const persistence = await deleteSupabaseRecord("routine_checks", withWorkspaceFilter([
+      ["id", `in.(${ids.join(",")})`],
+      ["status", eqFilter("done")],
+    ]));
+    if (!persistence?.persisted) {
+      return NextResponse.json(
+        {
+          status: "error",
+          error: persistence?.detail || persistence?.reason || "Routine check undo persistence failed.",
+          retryable: true,
+        },
+        { status: 502 },
+      );
+    }
+
+    return NextResponse.json(
+      { status: "saved", message: "Routine check removed.", deleted: ids.length, dateKey, localDate: dateKey },
+      { status: 200 },
+    );
+  } catch (error) {
+    return NextResponse.json(
+      { status: "error", error: error instanceof Error ? error.message : String(error) },
       { status: 500 },
     );
   }

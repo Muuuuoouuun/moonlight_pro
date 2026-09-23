@@ -91,6 +91,16 @@ async function runFollowupAutopilot(workspaceId) {
   try {
     // Source of truth for "who's stalled" — reuse the scoring, don't reimplement priorityFor.
     const follow = await getFollowups({ workspaceId, limit: 25 });
+    if (follow.source === "error" || follow.partial) {
+      return {
+        body: {
+          status: "error",
+          reason: follow.source === "error" ? follow.error || "followups-read-failed" : "followups-read-partial",
+          ...summary,
+        },
+        httpStatus: 503,
+      };
+    }
     if (follow.source !== "supabase") {
       // No Supabase (or no data) → honest no-op, not an error. Retry is the next schedule.
       return { body: { status: "skipped", reason: follow.configured ? "no-data" : "missing-config", ...summary } };
@@ -101,7 +111,17 @@ async function runFollowupAutopilot(workspaceId) {
 
     // Load open proposals once for the dedup check (avoids N queries in the loop).
     const existing = await getWorkOrders({ workspaceId, status: "proposed", limit: 200 });
-    const openOrders = existing.orders || [];
+    if (existing.source !== "supabase" || !Array.isArray(existing.orders) || existing.orders.length >= 200) {
+      return {
+        body: {
+          status: "error",
+          reason: existing.source === "error" ? existing.error || "work-orders-read-failed" : "work-orders-read-incomplete",
+          ...summary,
+        },
+        httpStatus: 503,
+      };
+    }
+    const openOrders = existing.orders;
 
     for (const deal of deals) {
       // Per-deal isolation: one deal's failure never kills the whole run.
@@ -224,7 +244,7 @@ export async function GET(req) {
       ...body,
     },
     errorMessage: runStatus === "failure"
-      ? body.error || body.errorReason || `${errored}건 초안 실패 (Engine 응답 계약 또는 저장)`
+      ? body.error || body.reason || body.errorReason || `${errored}건 초안 실패 (Engine 응답 계약 또는 저장)`
       : null,
   }).catch((error) => {
     console.error("[cron] automation-run log failed", AUTOMATION_KEY, error);

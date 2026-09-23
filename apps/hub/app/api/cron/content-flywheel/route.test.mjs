@@ -38,7 +38,7 @@ const stubs = {
     }
   `,
   "@/lib/sales-os/work-orders": `
-    export async function getWorkOrders() { return { orders: [] }; }
+    export async function getWorkOrders() { return globalThis.__openOrdersResult; }
     export async function createWorkOrder(order) { globalThis.__workOrders.push(order); return { persisted: true }; }
   `,
 };
@@ -57,6 +57,7 @@ function reset({ logThrows = false } = {}) {
   globalThis.__agentRuns = [];
   globalThis.__workOrders = [];
   globalThis.__cronLogThrows = logThrows;
+  globalThis.__openOrdersResult = { source: "supabase", orders: [] };
 }
 
 async function run() {
@@ -115,6 +116,35 @@ test("automation_runs 기록이 실패해도 끝난 실행의 응답은 바뀌�
     assert.equal(logged.length, 1);
   } finally {
     console.error = errorSnapshot;
+    process.env = env;
+    globalThis.fetch = fetchSnapshot;
+  }
+});
+
+test("승인 대기 목록 읽기 실패 시 유료 생성과 중복 제안을 시작하지 않는다", async () => {
+  const env = { ...process.env };
+  const fetchSnapshot = globalThis.fetch;
+  process.env.COM_MOON_ENGINE_URL = "https://engine.test";
+  process.env.COM_MOON_SHARED_WEBHOOK_SECRET = "shared-secret";
+  let engineCalls = 0;
+  globalThis.fetch = async () => {
+    engineCalls += 1;
+    return new Response(JSON.stringify({ status: "generated", title: "중복 초안", body: "본문" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  reset();
+  globalThis.__openOrdersResult = { source: "error", error: "work-orders-read-failed", orders: [] };
+  try {
+    const { httpStatus, body } = await run();
+    assert.equal(httpStatus, 503);
+    assert.equal(body.status, "error");
+    assert.equal(body.reason, "work-orders-read-failed");
+    assert.equal(engineCalls, 0);
+    assert.equal(globalThis.__workOrders.length, 0);
+    assert.equal(globalThis.__cronRuns.at(-1).status, "failure");
+  } finally {
     process.env = env;
     globalThis.fetch = fetchSnapshot;
   }

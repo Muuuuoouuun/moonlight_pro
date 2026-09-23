@@ -210,6 +210,13 @@ function computeStreak(doneDateKeys, todayKey) {
   return streak;
 }
 
+// 어제까지 이어진 연속 — "오늘 체크하면 N+1일"의 N. streak(오늘 포함 연속)의 정의는
+// 그대로 두고 별도 필드로 싣는다. 오늘 체크를 취소해도 화면이 연속을 되돌릴 수 있게 오늘
+// 완료 여부와 무관하게 어제 기준으로 센다.
+function computePendingStreak(doneDateKeys, todayKey) {
+  return computeStreak(doneDateKeys, shiftDateKey(todayKey, -1));
+}
+
 function mapRituals(rows, projectRows, { timeZone, now, definitionRows = null }) {
   const definitions = buildRitualDefinitionIndex(definitionRows);
   const groups = new Map();
@@ -274,6 +281,7 @@ function mapRituals(rows, projectRows, { timeZone, now, definitionRows = null })
       category,
       targetPerWeek,
       streak: computeStreak(group.doneDateKeys, todayKey),
+      pendingStreak: computePendingStreak(group.doneDateKeys, todayKey),
       weeks: buildWeeksBitmap(group.doneDateKeys, todayKey),
       lastCheckedAt: group.lastCheckedAt ? new Date(group.lastCheckedAt).toISOString() : null,
     };
