@@ -37,10 +37,15 @@ test("Studio main surface stays within its control budget", () => {
   assert.doesNotMatch(studio, /<aside\b/, "Studio has no side panel — secondary tools live in the 더보기 drawer");
 });
 
-test("Studio AI exposes exactly two direct actions; the rest is folded", () => {
-  const surface = between(ai, 'return <div className="studio-ai"', '<details className="studio-ai-more">');
-  assert.equal(count(surface, /<Button\b/g), 2, "AI 초안 · AI 다듬기");
-  assert.equal(count(surface, /<SelectField\b/g), 0, "작업·말투 선택은 '다른 작업' 안에 접는다");
+test("Studio AI exposes exactly two direct actions; request, templates and other operations are folded", () => {
+  const row = between(ai, '<div className="studio-actions studio-ai-actions">', "</div>");
+  assert.equal(count(row, /<Button\b/g), 2, "AI 초안 · AI 다듬기");
+  assert.equal(count(row, /<(SelectField|TextField|TextAreaField)\b/g), 0);
+  // 요청문·템플릿·기타 작업은 접힌 <details> 안에만 있다.
+  const request = between(ai, '<details className="studio-ai-request">', "</details>");
+  assert.match(request, /label="템플릿"/);
+  assert.match(request, /label="AI에게 부탁할 것"/);
+  assert.ok(ai.indexOf('label="작업"') > ai.indexOf('<details className="studio-ai-more">'), "작업 선택은 '다른 작업' 안에 접는다");
 });
 
 test("Studio drops the writing-focus toggle, variant title field, and celebration effects", () => {

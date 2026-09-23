@@ -18,10 +18,12 @@
 .studio-source-fields { margin-top: 16px; }
 .studio-fields-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .studio-fields-two > * { min-width: 0; }
-.studio-memo summary, .studio-ai-more summary, .studio-more-section > summary { cursor: pointer; font-size: 13px; font-weight: 500; padding: 4px 0; min-height: 28px; }
+.studio-memo summary, .studio-ai-request summary, .studio-ai-more summary, .studio-more-section > summary { cursor: pointer; font-size: 13px; font-weight: 500; padding: 4px 0; min-height: 28px; }
 .studio-memo[open] > summary { margin-bottom: 12px; }
 .studio-memo, .studio-ai { border-top: 1px solid var(--line-soft); padding-top: 12px; }
 .studio-ai-more summary { color: var(--fg-muted); font-weight: 400; }
+.studio-template-row { padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
+.studio-template-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .studio-more-section { padding-bottom: 16px; border-bottom: 1px solid var(--line-soft); }
 .hub-app .content-studio .hub-input { font-size: 14px; }
 .hub-app .content-studio .studio-body-input { min-height: 340px; line-height: 1.8; padding: 16px; resize: vertical; }

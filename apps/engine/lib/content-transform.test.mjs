@@ -450,3 +450,30 @@ test('rejects provider transport errors, extra JSON keys and malformed Shorts sc
     assert.equal((await f.execute(command({ operation: 'repurpose', target: { variantType: 'reels_script', channel: 'youtube_shorts' } }))).error, 'invalid-provider-output');
   }
 });
+
+test('operator request is sent as a bounded writing request, recorded, and part of the request identity', async () => {
+  const f = fixture();
+  const request = '  첫 줄은 질문으로, 세 문단, 반말로. 매출 30% 증가도 넣어줘  ';
+  const result = await f.execute(command({ request }));
+  assert.equal(result.status, 'generated');
+  assert.equal(result.run.source_snapshot.operatorRequest, request.trim());
+  const input = f.calls.find(call => call.kind === 'generate').input;
+  assert.equal(JSON.parse(input.prompt).operatorRequest, request.trim());
+  assert.match(input.systemInstruction, /operatorRequest is the operator's own writing request/);
+  assert.match(input.systemInstruction, /never evidence/);
+  // Same request ID with a different request text is a different command, never a second model call.
+  assert.equal((await f.execute(command({ request: '다르게' }))).status, 'conflict');
+  assert.equal((await f.execute(command({ request }))).status, 'duplicate');
+  assert.equal(f.calls.filter(call => call.kind === 'generate').length, 1);
+});
+
+test('empty operator request keeps the legacy hash and prompt; oversized or non-text requests are rejected', () => {
+  const plain = service.normalizeContentTransform(command(), context);
+  const blank = service.normalizeContentTransform(command({ request: '   ' }), context);
+  assert.equal(blank.command.requestHash, plain.command.requestHash);
+  assert.equal(blank.command.request, undefined);
+  assert.equal(service.normalizeContentTransform(command({ request: '가'.repeat(2001) }), context).reason, 'invalid-request');
+  assert.equal(service.normalizeContentTransform(command({ request: 3 }), context).reason, 'invalid-request');
+  assert.equal(service.normalizeContentTransform(command({ request: 'a\u0000b' }), context).reason, 'invalid-request');
+  assert.equal(service.normalizeContentTransform(command({ request: '가'.repeat(2000) }), context).ok, true);
+});

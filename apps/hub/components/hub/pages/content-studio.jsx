@@ -8,6 +8,7 @@ import { filterBrandsByWorkspace } from '../workspace-map';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { BRIEF_FIELDS, STUDIO_CHANNELS, channelLabel, channelForType, formatForChannel, exportStudioVariant, studioTextForCopy } from '@/lib/content-workflow-client';
 import { useContentStudio } from './use-content-studio';
+import { useContentTemplates } from './use-content-templates';
 import { DraftEditor } from './content-studio-editors';
 import { StudioAI } from './content-studio-ai';
 import { FloatingMentorWidget } from '../floating-mentor-widget';
@@ -37,6 +38,10 @@ export function ContentStudio({ workspace, ledger }) {
   const [mentorOpen, setMentorOpen] = React.useState(false);
   const [mentorMode, setMentorMode] = React.useState('advice');
   const [newChannel, setNewChannel] = React.useState('instagram'), [notice, setNotice] = React.useState('');
+  const templates = useContentTemplates();
+  // AI 요청은 작업마다 쓰는 지시문이라 콘텐츠에 저장하지 않는다. 실행한 요청은 AI 작업 기록(run)에 남는다.
+  const [aiRequest, setAiRequest] = React.useState(''), [templateId, setTemplateId] = React.useState('');
+  const [templateDraft, setTemplateDraft] = React.useState(null), [templateSaving, setTemplateSaving] = React.useState(false);
   const brands = filterBrandsByWorkspace(ledger.brands || [], workspace).filter((brand) => brand.id && brand.key !== 'all');
   const allBrands = ledger.brands || [];
   const selectedBrand = allBrands.find((brand) => brand.id === draft.brandId);
@@ -73,6 +78,32 @@ export function ContentStudio({ workspace, ledger }) {
       setPublicationDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
     }
     setDrawer('publication');
+  };
+  const pickTemplate = (id) => {
+    setTemplateId(id);
+    const template = templates.templates.find((t) => t.id === id);
+    if (!template) return;
+    setAiRequest(template.request);
+    if (!template.skeleton.trim()) return;
+    if (!draft.body.trim() && !['card_news', 'reels_script'].includes(draft.variantType)) studio.edit({ body: template.skeleton });
+    else toast.info('본문이 비어 있을 때만 글 틀을 넣습니다. 요청문만 적용했습니다.');
+  };
+  const editTemplate = (template) => setTemplateDraft(template ? { ...template } : { id: crypto.randomUUID(), name: '', request: aiRequest, skeleton: '', revision: 0 });
+  const saveTemplate = async () => {
+    setTemplateSaving(true);
+    const result = await templates.save(templateDraft);
+    setTemplateSaving(false);
+    if (['saved', 'duplicate'].includes(result.status)) {
+      if (templateId === result.template.id || !templateDraft.revision) setTemplateId(result.template.id);
+      setTemplateDraft(null);
+      toast.success('템플릿을 저장했습니다.');
+    } else toast.error(result.message || '템플릿을 저장하지 못했습니다.');
+  };
+  const deleteTemplate = async (template) => {
+    if (!window.confirm(`'${template.name}' 템플릿을 삭제할까요?`)) return;
+    const result = await templates.remove(template.id);
+    if (result.status === 'deleted') { if (templateId === template.id) setTemplateId(''); toast.success('템플릿을 삭제했습니다.'); }
+    else toast.error(result.message || '템플릿을 삭제하지 못했습니다.');
   };
   const openMentor = (mode) => { setDrawer(null); setMentorMode(mode); setMentorOpen(true); };
   const createVariant = async () => {
@@ -133,7 +164,8 @@ export function ContentStudio({ workspace, ledger }) {
               </details>
               {variants.length > 1 && <SelectField label="채널별 결과물" value={draft.variantId || ''} options={channelOptions} onChange={(event) => studio.switchVariant(event.target.value)} disabled={disabled} />}
               <DraftEditor draft={draft} edit={studio.edit} disabled={disabled} onSelect={setSelection} />
-              <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} />
+              <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} request={aiRequest} onRequestChange={(value) => { setAiRequest(value); setTemplateId(''); }}
+                templates={templates} templateId={templateId} onPickTemplate={pickTemplate} onSaveAsTemplate={() => editTemplate(null)} />
               <div className="studio-export-bar">
                 <Button variant="primary" icon="copy" onClick={copy} disabled={!draft.body.trim()}>복사</Button>
                 <Button variant="outline" onClick={openPublication} disabled={disabled || !draft.body.trim()}>발행했음</Button>
@@ -169,6 +201,19 @@ export function ContentStudio({ workspace, ledger }) {
             <Button variant="outline" icon="download" onClick={download} disabled={!draft.body.trim()}>파일로 내보내기</Button>
           </div>
         </section>
+        <section className="studio-stack studio-more-section" aria-label="AI 템플릿">
+          <div className="studio-row"><h3 className="studio-section-title">AI 템플릿</h3>
+            <Button size="xs" variant="outline" icon="plus" onClick={() => { setDrawer(null); editTemplate(null); }} disabled={templates.status !== 'live'}>새 템플릿</Button></div>
+          <p className="studio-muted studio-small">자주 쓰는 AI 요청문과 글 틀을 저장해 두고 AI 요청 칸에서 고릅니다.</p>
+          {templates.status === 'loading' && <Skeleton lines={2} height={14} width={['60%', '40%']} gap={8} label="템플릿 불러오는 중" />}
+          {templates.status === 'preview' && <TruthBadge state="preview" label="템플릿 저장소 연결 필요" style={{ alignSelf: 'flex-start' }} />}
+          {templates.status === 'error' && <div className="studio-actions"><TruthBadge state="error" label="불러오기 실패" /><Button size="xs" onClick={templates.reload}>다시 불러오기</Button></div>}
+          {templates.status === 'live' && templates.templates.length === 0 && <p className="studio-muted studio-small">아직 템플릿이 없습니다.</p>}
+          {templates.templates.map((template) => <div key={template.id} className="studio-row studio-template-row">
+            <span>{template.name}<span className="studio-muted studio-small">{[template.request.trim() && '요청문', template.skeleton.trim() && '글 틀'].filter(Boolean).map((x) => ' · ' + x).join('')}</span></span>
+            <span className="studio-actions"><Button size="xs" onClick={() => { setDrawer(null); editTemplate(template); }}>편집</Button><Button size="xs" variant="ghost" onClick={() => deleteTemplate(template)}>삭제</Button></span>
+          </div>)}
+        </section>
         <details className="studio-more-section">
           <summary>기획 구체화 <span className="studio-summary-count"><span className="num">{briefCount} / 6</span></span></summary>
           <div className="studio-stack studio-source-fields">
@@ -196,6 +241,15 @@ export function ContentStudio({ workspace, ledger }) {
             <Button variant="outline" icon="sparkle" onClick={() => openMentor('critique')} disabled={disabled}>검수 게이트 판정</Button>
           </div>
         </section>
+      </div>
+    </Drawer>}
+    {templateDraft && <Drawer title={templateDraft.revision ? '템플릿 편집' : '새 템플릿'} subtitle="요청문은 AI에게 줄 지시(구성·길이·말투), 글 틀은 빈 본문에 채울 뼈대입니다." width="min(480px, 94vw)"
+      onClose={() => { if (!templateSaving) setTemplateDraft(null); }}
+      footer={<Button variant="primary" onClick={saveTemplate} disabled={templateSaving || !templateDraft.name.trim() || (!templateDraft.request.trim() && !templateDraft.skeleton.trim())}>{templateSaving ? '저장 중…' : '템플릿 저장'}</Button>}>
+      <div className="studio-stack">
+        <TextField label="이름" value={templateDraft.name} maxLength={60} placeholder="예: 후킹 스레드" onChange={(event) => setTemplateDraft({ ...templateDraft, name: event.target.value })} disabled={templateSaving} />
+        <TextAreaField label="AI 요청문" value={templateDraft.request} maxLength={2000} showCount rows={4} placeholder="예: 첫 줄은 질문으로, 세 문단 이내, 반말, 마지막 줄은 한 줄 결론" onChange={(event) => setTemplateDraft({ ...templateDraft, request: event.target.value })} disabled={templateSaving} />
+        <TextAreaField label="글 틀" hint="템플릿을 고를 때 본문이 비어 있으면 이 틀을 채웁니다." value={templateDraft.skeleton} maxLength={4000} showCount rows={6} placeholder={'예:\n[훅 — 질문 한 줄]\n\n[공감 — 독자가 겪는 상황]\n\n[사례 — 실제 수업 장면]\n\n[한 줄 결론]'} onChange={(event) => setTemplateDraft({ ...templateDraft, skeleton: event.target.value })} disabled={templateSaving} />
       </div>
     </Drawer>}
     {drawer === 'publication' && <Drawer title="발행 기록" subtitle="외부 채널에 게시한 URL과 시각을 기록합니다. 운영자 확인이며 외부 게시 여부를 자동 검증하지 않습니다." presentation="compact" onClose={() => { if (!studio.busy) setDrawer(null); }} footer={<Button variant="primary" disabled={disabled} onClick={async () => {
