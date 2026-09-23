@@ -120,7 +120,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **프로젝트 · PMS (2026-09-13 실행 백로그·하위 아이템 보강)**
 
-- [`superpowers/specs/2026-09-23-project-direct-workflow-redesign.md`](superpowers/specs/2026-09-23-project-direct-workflow-redesign.md) — **2026-09-23 직접 실행 UI 구현·로컬 검증**. 프로젝트 안에서 할 일·세부 체크를 바로 입력하고 Enter로 추가한다. 마일스톤·작업 묶음은 선택 사항이며, 결과·완료 기준의 긴 필드는 접는다. 초안·요청 ID 유지와 버전 비교로 재시도를 처리한다. 아래 개요 스펙의 하위 항목 우선 배치를 대체하며 진척의 근거·시점은 유지한다. 서버 완료 검증 완화는 미구현 제안이다.
+- [`superpowers/specs/2026-09-23-project-direct-workflow-redesign.md`](superpowers/specs/2026-09-23-project-direct-workflow-redesign.md) — **2026-09-23 직접 실행 UI·진척 게이지 후속 구현·로컬 검증**. 프로젝트 안에서 할 일·세부 체크를 바로 입력하고 Enter로 추가한다. 마일스톤·작업 묶음은 선택 사항이며, 결과·완료 기준의 긴 필드는 접는다. 초안·요청 ID 유지와 버전 비교로 재시도를 처리한다. 아래 개요 스펙의 하위 항목 우선 배치를 대체하며 진척의 근거·시점은 유지한다. 선택 프로젝트 게이지는 구간별 색·그라데이션·1회 가속 반짝임을 쓰되 실제 작업 속도 판정은 아니다. 서버 완료 검증 완화는 미구현 제안이다.
 - [`superpowers/specs/2026-09-23-project-operator-experience-and-write-trust-design.md`](superpowers/specs/2026-09-23-project-operator-experience-and-write-trust-design.md) — **DRAFT · 평가/권장, 진척 근거 진행 바 UI만 구현·로컬 검증**. 할 일·요약·고객에서 프로젝트로 진입해 급한 하위 항목과 체크리스트를 처리하고, 진행/완료 프로젝트를 고객과 함께 월 평가하는 흐름을 구체화한다. 진척 근거 외 모바일 우선순위·보관 영향·저장 멱등성은 여전히 권장안이며 기존 완료 검증·PMS 저장 모델은 유지한다.
 - [`superpowers/plans/2026-09-13-pms-task-checklists.md`](superpowers/plans/2026-09-13-pms-task-checklists.md) — **구현·로컬 검증 완료**. 하위 아이템 상세와 체크리스트 기반 진척, 항목별 메모·정렬·저장·충돌 선택. `tasks.meta.checklist`를 사용하며 작업 상태와 체크리스트 완료율은 별도로 유지한다.
 
