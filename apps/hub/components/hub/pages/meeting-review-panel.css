@@ -1,0 +1,45 @@
+.meeting-review { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.meeting-review__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.meeting-review__head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.meeting-review__head p { margin: 6px 0 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.meeting-review__head-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.meeting-review__blocked { margin: 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: var(--r-sm); color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.meeting-review__message { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.meeting-review__message p { margin: 0; }
+.meeting-review__message--error { box-shadow: inset 1px 0 0 var(--danger-line); }
+.meeting-review__layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; min-width: 0; }
+.meeting-review__source, .meeting-review__results { min-width: 0; }
+.meeting-review__source { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface-2); }
+.meeting-review__source-head, .meeting-review__results-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.meeting-review__source-head strong, .meeting-review__results-head strong { font-weight: 600; }
+.meeting-review__source-head .mono, .meeting-review__results-head .num { color: var(--fg-muted); font-size: 11px; }
+.meeting-review__usage { margin: 0; color: var(--fg-muted); font-size: 11px; line-height: 1.6; }
+.meeting-review__usage .mono { font-size: 11px; }
+.meeting-review__source-body { margin: 0; max-height: 340px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 13px; line-height: 1.7; color: var(--fg-muted); }
+.meeting-review__results { display: flex; flex-direction: column; gap: 12px; }
+.meeting-review__candidates { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.meeting-review__candidate { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface-2); }
+.meeting-review__candidate[data-selected="true"] { border-color: var(--moon-300); }
+.meeting-review__candidate-head, .meeting-review__candidate-labels, .meeting-review__candidate-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.meeting-review__candidate-head { justify-content: space-between; }
+.meeting-review__candidate textarea { max-height: 220px; resize: vertical; }
+.meeting-review__kind { color: var(--fg); font-size: 12px; font-weight: 600; }
+.meeting-review__eyebrow { color: var(--fg-dim); font-size: 10.5px; letter-spacing: 0.04em; }
+.meeting-review__candidate-evidence { display: flex; flex-direction: column; gap: 6px; }
+.meeting-review__excerpt { margin: 0; padding: 8px 12px; border-left: 1px solid var(--line-strong); border-radius: var(--r-xs); background: var(--surface-3); color: var(--fg-muted); font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.meeting-review__excerpt mark { background: transparent; color: var(--fg); text-decoration: underline; text-decoration-color: var(--moon-300); text-underline-offset: 3px; }
+.meeting-review__source-missing { margin: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.meeting-review__unknown, .meeting-review__disabled-note { margin: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.meeting-review__local-error { margin: 0; padding: 8px 12px; box-shadow: inset 1px 0 0 var(--danger-line); background: var(--danger-bg); color: var(--danger); font-size: 12px; line-height: 1.6; }
+.meeting-review__receipt { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--fg-muted); font-size: 12px; }
+.meeting-review__receipt .mono { font-size: 10.5px; overflow-wrap: anywhere; }
+.meeting-review__target-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--fg); text-decoration: underline; text-underline-offset: 4px; padding: 8px 0; }
+.meeting-review__candidate-actions { padding-top: 4px; border-top: 1px solid var(--line-soft); }
+
+@media (max-width: 760px) {
+  .meeting-review__layout { grid-template-columns: minmax(0, 1fr); }
+  .meeting-review__source { position: static; }
+  .meeting-review__source-body { max-height: 240px; }
+  .meeting-review__head-actions { justify-content: flex-start; }
+  .meeting-review__candidate-actions > button { flex: 1 1 auto; }
+}
