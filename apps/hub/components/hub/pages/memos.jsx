@@ -277,12 +277,12 @@ export function Memos() {
         <MemoDocument key={id} id={id} isNew={isNew} workspaceId={ledger.workspaceId} workspaceConfirmed={ledger.workspaceConfirmed} source={ledger.requestKey === requestKey ? ledger.status : 'loading'} entry={ledger.entry?.id === id ? ledger.entry : null} context={context} fromPreview={fromPreview} onSaved={saved} onClose={close} onReload={() => setReload((n) => n + 1)} />
         {relatedMemos.length > 0 && (
           <aside className="memo-network-panel" aria-label="연관된 이전 메모">
-            <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--moon-200)' }}>
-              ✦ AI 지식 신경망: 연관된 이전 메모 ({relatedMemos.length}건)
+            <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+              연관된 이전 메모 ({relatedMemos.length}건)
             </h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
               {relatedMemos.map((rel) => (
-                <div key={rel.id} className="memo-network-card" onClick={() => router.push(memoDocumentHref(params, { note: rel.id }), { scroll: false })}>
+                <button key={rel.id} type="button" className="memo-network-card" onClick={() => router.push(memoDocumentHref(params, { note: rel.id }), { scroll: false })}>
                   <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)' }}>
                     {rel.title}
                   </div>
@@ -293,7 +293,7 @@ export function Memos() {
                       </span>
                     ))}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </aside>

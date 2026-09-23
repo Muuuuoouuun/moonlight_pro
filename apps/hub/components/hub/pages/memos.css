@@ -74,9 +74,13 @@
 }
 .memo-network-card {
   padding: 12px 14px;
+  width: 100%;
+  min-height: 44px;
   background: var(--surface);
   border: 1px solid var(--line-soft);
   border-radius: var(--r-sm);
+  color: var(--fg);
+  font: inherit;
   display: flex;
   flex-direction: column;
   gap: 6px;

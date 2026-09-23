@@ -37,9 +37,9 @@ test('urgent rails stay one pixel while non-urgent timing remains neutral', () =
   // 내 작업의 레일은 기한 버킷(dueBucket)을 따른다 — 오늘 3개(`focus` 버킷)로 고른 행도
   // 지난 기한이면 빨간 1px 레일을 잃지 않는다(2026-09-20 §6.2, workflow-os-a).
   assert.match(myWork, /dueBucket === 'overdue' \? 'inset 1px 0 0 var\(--danger\)'/);
-  // 주간 렌즈 상단의 '기한 지남' 집계도 같은 기한 버킷을 읽는다 — 옛 `i.bucket`만 보면 오늘 3개로
-  // 고른 지난 기한 할 일이 주간 렌즈의 유일한 노출 지점에서 사라진다.
-  assert.match(myWork, /const overdue = items\.filter\(\(i\) => \(i\.dueBucket \|\| i\.bucket\) === 'overdue'\);/);
+  // 오늘 3개는 원래 기한을 보존하되, 명시적으로 해제한 과거 알림은 레일과 주간 집계에서 뺀다.
+  assert.match(myWork, /const visibleDueBucket = \(item\) => item\.deadlineAlertSuppressed \? 'later' : \(item\.dueBucket \|\| item\.bucket\);/);
+  assert.match(myWork, /const overdue = items\.filter\(\(i\) => visibleDueBucket\(i\) === 'overdue'\);/);
   // 고객 연락의 레일은 2026-09-21부터 예산이 걸려 있다: 어긴 약속 상단 MAX_DANGER_RAILS개만
   // 레일을 받고 나머지는 시계 글리프 + 직접 라벨로 같은 사실을 말한다(§5.3 red budget).
   assert.match(followups, /boxShadow: rail \? "inset 1px 0 0 var\(--danger\)" : undefined/);
