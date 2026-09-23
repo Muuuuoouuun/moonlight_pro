@@ -118,6 +118,7 @@ export async function getAttentionLedger() {
 `,
       "@/lib/repositories/brief-ledger": repositoryStub("brief", "getMorningBrief"),
       "@/lib/sales-os/work-orders": repositoryStub("orders", "getWorkOrders"),
+      "@/lib/sales-os/work-order-counts": repositoryStub("orderCounts", "getWorkOrderCounts"),
       "@/lib/operator-home-summary": operatorHomeStub,
       "@/lib/task-today": taskTodayStub,
       "@/lib/content-brand-catalog": contentCatalogStub,
@@ -184,6 +185,7 @@ function resetState() {
   state.automations = { source: "supabase", runs: [], automations: [], summary: {} };
   state.work = { source: "supabase", decisions: [], rituals: [], summary: {} };
   state.orders = { source: "supabase", orders: [] };
+  state.orderCounts = { source: 'supabase', counts: { proposed: 0, approved: 0, executing: 0, executed: 0, dismissed: 0 } };
   state.brief = { source: "supabase", brief: null };
 }
 
@@ -202,10 +204,24 @@ test('pending work orders remain available as queue data without becoming Home o
     source: 'supabase',
     orders: [{ id: 'order-1', status: 'proposed', persona: 'guru', kind: 'followup', title: '연락 제안' }],
   };
+  state.orderCounts.counts.proposed = 1;
   const body = await (await dailyBriefRoute.GET()).json();
   assert.equal(body.queue.pending, 1);
   assert.equal(body.queue.orders[0].id, 'order-1');
   assert.equal(body.signals.some((signal) => signal.id === 'queue-approvals'), false);
+});
+
+test('daily brief queue uses the exact proposal count and exposes count failure', async () => {
+  state.orders = { source: 'supabase', orders: [{ id: 'order-1', status: 'proposed', source: 'guru' }] };
+  state.orderCounts.counts.proposed = 28;
+  const live = await (await dailyBriefRoute.GET()).json();
+  assert.equal(live.queue.pending, 28);
+  assert.equal(live.queue.orders.length, 1);
+  state.orderCounts = { source: 'error', counts: null };
+  const failed = await (await dailyBriefRoute.GET()).json();
+  assert.equal(failed.queue.source, 'error');
+  assert.equal(failed.queue.pending, null);
+  assert.ok(failed.failedSources.includes('agents'));
 });
 
 test('inquiry read failure does not erase readable task data', async () => {

@@ -6,6 +6,7 @@ import { getMorningBrief } from "@/lib/repositories/brief-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
+import { getWorkOrderCounts } from "@/lib/sales-os/work-order-counts";
 import {
   buildContentBrandCatalog,
   filterContentLedgerToBrandLanes,
@@ -371,12 +372,13 @@ export async function GET() {
   // 어댑터로 한 번만 읽는다. 예전엔 이 라우트가 같은 세 기록을 attention과 별개로 다시 읽어
   // "지금 중요한 것" 판정이 첫 화면과 내 작업에서 두 벌로 갈라졌다(정체성 캡의 원인).
   // §7 확정 슬롯(KA·집중 고객·오늘 일정·할 일 레인)은 attention.raw 원본 위의 프로젝션.
-  const [attentionResult, workResult, contentResult, automationsResult, ordersResult, briefResult] = await Promise.allSettled([
+  const [attentionResult, workResult, contentResult, automationsResult, ordersResult, countsResult, briefResult] = await Promise.allSettled([
     getAttentionLedger({ includeRaw: true }),
     getWorkLedger(),
     getContentLedger(),
     getAutomationsLedger(),
-    getWorkOrders({ status: "proposed", limit: 20 }),
+    getWorkOrders({ status: "proposed", scope: 'proposals', limit: 12 }),
+    getWorkOrderCounts(),
     getMorningBrief(),
   ]);
 
@@ -412,6 +414,7 @@ export async function GET() {
   const automations = readLedger(automationsResult);
   // reject(transport throw)는 read 실패다 — preview로 두면 승인 큐 신호가 "빈 큐"로 위장된다.
   const ordersLedger = readLedger(ordersResult, { source: "error", error: "work-orders-request-failed", orders: [] });
+  const orderCounts = readLedger(countsResult, { source: 'error', error: 'work-order-counts-request-failed', counts: null });
   // Chief of Staff composed brief (ai.morning_brief) — the cron's output finally has a reader.
   const morning = readLedger(briefResult, { source: "preview", brief: null });
   // attention의 캘린더 창은 7일(내 작업과 공유) — 오늘 일정 슬롯은 buildDailyFocus가
@@ -420,26 +423,17 @@ export async function GET() {
   // §2 확정 슬롯: 긴급 KA ≤1 · 집중 고객 ≤5 · 오늘 일정 — tone 정렬 신호 큐와 별개의
   // 명명된 풀. 각 슬롯이 자기 소스 truth 상태를 따로 갖는다.
   const dailyFocus = buildDailyFocus({ revenue: operatorRevenue, calendar });
-  // 컨택 추적 컷오버 이전에 등록된 리드/딜의 follow-up 주문은 승인 큐에서 가린다
-  // (contact-tracking 리셋 계약). 컷오버가 없으면 trackingEligible이 undefined라 전부 통과한다.
-  const isTrackedContactOrder = (order) => {
-    if (!["followup", "followup-draft"].includes(order.kind)) return true;
-    if (order.leadId) {
-      return (revenue.leads || []).some((lead) => lead.id === order.leadId && lead.trackingEligible !== false);
-    }
-    if (order.dealId) {
-      return (revenue.deals || []).some((deal) => deal.id === order.dealId && deal.trackingEligible !== false);
-    }
-    return true;
-  };
-  const visibleOrders = Array.isArray(ordersLedger.orders)
-    ? ordersLedger.orders.filter(isTrackedContactOrder)
-    : [];
+  const queueSource = [ordersLedger.source, orderCounts.source].includes('error')
+    ? 'error'
+    : ordersLedger.source === 'supabase' && orderCounts.source === 'supabase'
+      ? 'supabase'
+      : 'preview';
   const queue = {
-    source: ordersLedger.source || "preview",
-    pending: visibleOrders.length,
-    orders: visibleOrders.slice(0, 12),
+    source: queueSource,
+    pending: queueSource === 'supabase' ? orderCounts.counts.proposed : null,
+    orders: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.slice(0, 12) : [],
   };
+  results.orders = { status: 'fulfilled', value: { source: queueSource, error: queueSource === 'error' ? 'work-orders-read-failed' : null } };
   const sources = buildSources(results);
   sources.push({ key: 'inquiries', label: '문의', state: attention?.inquiries?.status || 'error', error: attention?.inquiries?.error || null });
   const liveCount = sources.filter((source) => source.state === "live").length;

@@ -215,16 +215,16 @@ export function registerMoonlightTools(server) {
     {
       title: "Decide Work Order",
       description:
-        "Approve, dismiss, or mark a work order executed — the same one-click decision the Orders " +
-        "screen makes. WRITE: requires COM_MOON_HUB_WRITE_SECRET. When moving to 'executed' for an " +
-        "outreach-style order, pass outcome to close the learning loop. Approval does not dispatch an executor. Mark executed only after the action actually happened; requires the operator's decision, not model self-approval.",
+        "Approve, dismiss, or mark a work order executed. This changes only the work-order status; " +
+        "it does not dispatch work, create a CRM contact record, or attribute an outcome. " +
+        "WRITE: requires COM_MOON_HUB_WRITE_SECRET and the operator's decision.",
       inputSchema: {
         id: z.string().describe("Work order id."),
         status: z.enum(["approved", "dismissed", "executed"]),
         outcomeAction: z
           .enum(["sent", "replied", "meeting", "proposal", "won", "lost", "no_response"])
           .optional()
-          .describe("e.g. 'sent' | 'replied' | 'meeting' | 'no_response' — only used when status is 'executed'."),
+          .describe("Accepted for compatibility but not persisted as a CRM outcome by this tool."),
         outcomeNote: z.string().optional(),
       },
     },

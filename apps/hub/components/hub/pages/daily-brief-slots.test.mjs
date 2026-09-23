@@ -51,3 +51,13 @@ test("오늘 3개 별 토글은 인라인 color 대신 hub-iconbtn--star-active 
   assert.match(source, /className=\{task\.focusToday \? 'hub-iconbtn--star-active' : ''\}/);
   assert.doesNotMatch(source, /color: task\.focusToday \? 'var\(--moon-300\)'/);
 });
+
+test('보조 승인 정보는 건수와 작업 지시 링크만 제공하며 여기서 결정을 쓰지 않는다', () => {
+  const start = source.indexOf('function ApprovalQueueCard(');
+  const end = source.indexOf('// (PipelineShapeCard', start);
+  const card = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(card, /summary=1&scope=proposals/);
+  assert.match(card, /dashboard\/agents\/orders\?status=proposed/);
+  assert.doesNotMatch(card, /method:\s*'POST'|method:\s*'DELETE'|승인<|보류<|리드로 등록|Studio 초안 생성/);
+});

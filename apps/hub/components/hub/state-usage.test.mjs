@@ -87,7 +87,12 @@ test('approval queue read failure is never rendered as an empty queue', () => {
       /\.then\(async \(r\) => \(\{ ok: r\.ok, d: await r\.json\(\)\.catch\(\(\) => null\) \}\)\)/,
       `${name}: work-orders 응답을 봉투로 읽지 않는다`,
     );
-    assert.match(source, /if \(!ok \|\| !d \|\| d\.status === 'error'/, `${name}: status 봉투 가드 없음`);
+    if (name === 'agents') {
+      assert.match(source, /if \(!listResponse\?\.ok \|\| !listData \|\| listData\.status === 'error'/, 'agents: 목록 봉투 가드 없음');
+      assert.match(source, /if \(!countResponse\?\.ok \|\| !countData \|\| countData\.status === 'error'/, 'agents: 건수 봉투 가드 없음');
+    } else {
+      assert.match(source, /if \(!ok \|\| !d \|\| d\.status === 'error'/, `${name}: status 봉투 가드 없음`);
+    }
   }
 
   // 첫 화면: !r.ok 단독 감지기로 되돌아가지 않는다.

@@ -9,7 +9,7 @@ import { insertSupabaseRecord, resolveDefaultWorkspaceId, resolveSupabaseConfig,
 
 const STATUSES = new Set(["proposed", "approved", "executing", "executed", "dismissed"]);
 const SOURCES = new Set(["team", "inbox", "guru", "manual"]);
-const TERMINAL_STATUSES = new Set(["executed", "dismissed"]);
+const TERMINAL_STATUSES = new Set(["executed"]);
 
 function mapWorkOrder(r) {
   return {
@@ -81,6 +81,7 @@ export async function createWorkOrder({
 export async function getWorkOrders({
   workspaceId = resolveDefaultWorkspaceId(),
   status = null,
+  scope = null,
   limit = 50,
 } = {}) {
   if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", orders: [] };
@@ -89,9 +90,10 @@ export async function getWorkOrders({
   if (status) {
     extra.push(["status", Array.isArray(status) ? inFilter(status) : eqFilter(status)]);
   }
+  if (scope === 'proposals') extra.push(['source', 'neq.inbox']);
 
   const rows = await fetchSupabaseRows("work_orders", {
-    filters: withWorkspaceFilter(extra),
+    filters: [["workspace_id", eqFilter(workspaceId)], ...extra],
     order: "proposed_at.desc",
     limit,
   });
@@ -206,8 +208,9 @@ async function getWorkOrderRow({ workspaceId, id }) {
 function isAllowedTransition(from, to) {
   if (TERMINAL_STATUSES.has(from)) return false;
   if (from === "proposed") return to === "approved" || to === "dismissed";
-  if (from === "approved") return to === "executing" || to === "executed" || to === "dismissed";
+  if (from === "approved") return to === "executing" || to === "executed" || to === "dismissed" || to === 'proposed';
   if (from === "executing") return to === "executed" || to === "approved" || to === "dismissed";
+  if (from === 'dismissed') return to === 'proposed';
   return false;
 }
 
@@ -229,16 +232,28 @@ export async function decideWorkOrder({
 
   const now = new Date().toISOString();
   const patch = { status };
+  if (status === 'proposed') {
+    patch.decided_at = null;
+    patch.proposed_at = now;
+    patch.body = {
+      ...(current.body || {}),
+      firstProposedAt: current.body?.firstProposedAt || current.proposed_at,
+    };
+  }
   if (status === "approved" || status === "dismissed") patch.decided_at = now;
   if (status === "executed") {
     patch.executed_at = now;
     if (outcomeId) patch.outcome_id = outcomeId;
   }
 
-  return updateSupabaseRecord(
+  const result = await updateSupabaseRecord(
     "work_orders",
     [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)], ["status", eqFilter(current.status)]],
     patch,
     { returnRepresentation: true, select: "*" },
   );
+  if (!result.persisted && result.reason === 'duplicate' && current.kind === 'followup' && status === 'proposed') {
+    return { persisted: false, reason: 'open-followup-exists' };
+  }
+  return result;
 }

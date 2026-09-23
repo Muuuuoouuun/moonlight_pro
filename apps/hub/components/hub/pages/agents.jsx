@@ -4,12 +4,13 @@ import React from "react";
 import { useSearchParams } from 'next/navigation';
 import { CodexJobsPanel } from "./codex-jobs";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState, SegmentedControl, TruthBadge, Skeleton } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState, SegmentedControl, TruthBadge, Skeleton, LifecycleBadge, Checkbox } from "../hub-primitives";
+import { useUndoableAction } from '../use-undoable-action';
+import { ContactRecordDrawer } from '../contact-record-form';
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
 import { requestCouncilAdvice, councilChatPath } from "../council-client";
 import { RECOMMENDED_TRIADS } from "../council-legends";
 import { requestPersonaChat, PERSONA_MODE_LABEL, LEGEND_LENS_MAP } from "../persona-client";
-import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
 
 const DEFAULT_PERSONA_KEY = PERSONA_CONTRACT[0]?.id || 'order';
@@ -874,9 +875,6 @@ export function AgentsCouncil({ onNavigate }) {
   );
 }
 
-// lifecycle은 §5.3 중립 — 라벨이 상태를 말한다.
-const WO_STATUS_TONE = { proposed: 'neutral', approved: 'neutral', executed: 'neutral', dismissed: 'neutral', done: 'neutral', review: 'neutral', draft: 'neutral' };
-
 function shortWhen(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -888,236 +886,231 @@ function shortWhen(iso) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric' }).format(d);
 }
 
-// Live render: real work_orders (the semi-auto queue) + the configured persona roster.
+const ORDER_FILTERS = [
+  { key: 'proposed', label: '대기' },
+  { key: 'approved', label: '실행 전' },
+  { key: 'executed', label: '완료' },
+  { key: 'dismissed', label: '보류' },
+  { key: 'all', label: '전체' },
+];
+const ORDER_LIFECYCLE = {
+  proposed: ['queued', '대기'],
+  approved: ['waiting', '실행 전'],
+  executing: ['active', '실행 중'],
+  executed: ['done', '완료'],
+  dismissed: ['cancelled', '보류'],
+};
+
 export function AgentsOrders({ onNavigate }) {
   const search = useSearchParams();
   const view = search.get('view') === 'jobs' ? 'jobs' : 'orders';
+  const requestedStatus = search.get('status') || 'proposed';
+  const status = ORDER_FILTERS.some((option) => option.key === requestedStatus) ? requestedStatus : 'proposed';
   return <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
     <header><h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>작업·실행</h2>
-      <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.7, color: 'var(--fg-muted)' }}>작업 지시의 승인과 코드 작업의 실행 결과를 각각 확인합니다.</p>
+      <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.7, color: 'var(--fg-muted)' }}>작업 지시와 코드 작업의 현재 상태를 확인합니다.</p>
     </header>
     <SegmentedControl label="작업·실행 보기" options={[{ key: 'orders', label: '작업 지시' }, { key: 'jobs', label: '코드 작업' }]} value={view}
-      onChange={next => onNavigate?.(next === 'jobs' ? 'dashboard/agents/orders?view=jobs' : 'dashboard/agents/orders')} />
-    {view === 'jobs' ? <><p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--fg-muted)' }}>현재 연결 계정과 등록 프로젝트의 작업입니다. 회사·개인 필터는 적용되지 않습니다. 작업 성공은 배포 완료를 뜻하지 않습니다.</p><CodexJobsPanel /></> : <WorkOrdersQueue onNavigate={onNavigate} />}
+      onChange={next => onNavigate?.(next === 'jobs' ? `dashboard/agents/orders?view=jobs&status=${status}` : `dashboard/agents/orders?status=${status}`)} />
+    {view === 'jobs' ? <><p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--fg-muted)' }}>현재 연결 계정과 등록 프로젝트의 작업입니다. 회사·개인 필터는 적용되지 않습니다. 작업 성공은 배포 완료를 뜻하지 않습니다.</p><CodexJobsPanel /></> :
+      <WorkOrdersQueue status={status} onStatusChange={(next) => onNavigate?.(`dashboard/agents/orders?status=${next}`)} />}
   </div>;
 }
 
-function WorkOrdersQueue({ onNavigate }) {
-  const [orders, setOrders] = React.useState(null); // null = loading
-  const [personas, setPersonas] = React.useState([]);
-  const [live, setLive] = React.useState(false);
-  const [busyId, setBusyId] = React.useState(null);
+function WorkOrdersQueue({ status, onStatusChange }) {
+  const [orders, setOrders] = React.useState(null);
+  const [counts, setCounts] = React.useState(null);
+  const [listState, setListState] = React.useState('loading');
+  const [countState, setCountState] = React.useState('loading');
   const [actionError, setActionError] = React.useState(null);
-  const [readError, setReadError] = React.useState(null);
+  const [selected, setSelected] = React.useState(new Set());
+  const [locked, setLocked] = React.useState(new Set());
+  const [notices, setNotices] = React.useState([]);
   const [copiedId, setCopiedId] = React.useState(null);
+  const [recordTarget, setRecordTarget] = React.useState(null);
+  const lockedRef = React.useRef(new Set());
+  const readSeq = React.useRef(0);
+  const statusRef = React.useRef(status);
+  statusRef.current = status;
+  const { schedule, cancel } = useUndoableAction();
 
-  // 딜 채널이 카톡/전화 중심이라 "복사"가 실제 발송 경로 — 초안을 클립보드로 옮겨 보내는 흐름.
-  const copyDraft = async (o) => {
-    const subject = o.body?.subject || o.body?.title || '';
-    const text = [subject, o.body?.body || ''].filter(Boolean).join('\n\n');
+  const refresh = React.useCallback(async () => {
+    const seq = ++readSeq.current;
+    const requestedStatus = statusRef.current;
+    const read = (url) => fetch(url, { cache: 'no-store' })
+      .then(async (r) => ({ ok: r.ok, d: await r.json().catch(() => null) }));
+    const [list, summary] = await Promise.allSettled([
+      read(`/api/hub/work-orders?scope=proposals&status=${requestedStatus}`),
+      read('/api/hub/work-orders?summary=1&scope=proposals'),
+    ]);
+    if (readSeq.current !== seq || statusRef.current !== requestedStatus) return;
+    const listResponse = list.status === 'fulfilled' ? list.value : null;
+    const listData = listResponse?.d;
+    if (!listResponse?.ok || !listData || listData.status === 'error' || listData.source === 'error') {
+      setOrders([]);
+      setListState('error');
+    } else {
+      setOrders(Array.isArray(listData.orders) ? listData.orders : []);
+      setListState(listData.source === 'supabase' ? 'live' : 'preview');
+    }
+    const countResponse = summary.status === 'fulfilled' ? summary.value : null;
+    const countData = countResponse?.d;
+    if (!countResponse?.ok || !countData || countData.status === 'error' || countData.source === 'error') {
+      setCounts(null);
+      setCountState('error');
+    } else {
+      setCounts(countData.source === 'supabase' ? countData.counts : null);
+      setCountState(countData.source === 'supabase' ? 'live' : 'preview');
+    }
+  }, []);
+
+  React.useEffect(() => {
+    setOrders(null);
+    setListState('loading');
+    setSelected(new Set());
+    refresh();
+    return () => { readSeq.current += 1; };
+  }, [status, refresh]);
+
+  const lockIds = (ids) => {
+    ids.forEach((id) => lockedRef.current.add(id));
+    setLocked(new Set(lockedRef.current));
+  };
+  const unlockIds = (ids) => {
+    ids.forEach((id) => lockedRef.current.delete(id));
+    setLocked(new Set(lockedRef.current));
+  };
+
+  const scheduleAction = (ids, targetStatus = null) => {
+    const eligible = ids.filter((id) => orders?.some((order) => order.id === id) && !lockedRef.current.has(id));
+    if (!eligible.length) return;
+    lockIds(eligible);
+    setSelected(new Set());
+    setActionError(null);
+    const key = `order-${Date.now()}-${Math.random()}`;
+    const label = targetStatus === 'approved' ? '승인 예정' : targetStatus === 'dismissed' ? '보류 예정'
+      : targetStatus === 'executed' ? '완료 표시 예정' : targetStatus === 'proposed' ? '다시 열기 예정' : '삭제 예정';
+    setNotices((current) => [...current, { key, ids: eligible, label }]);
+    schedule(key, async () => {
+      try {
+        if (targetStatus) {
+          const response = await fetch('/api/hub/work-orders', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ id: eligible[0], status: targetStatus }),
+          });
+          const data = await response.json().catch(() => null);
+          if (!response.ok || !data || data.persisted === false) {
+            if (data?.reason === 'open-followup-exists') throw new Error('같은 딜에 열린 후속 제안이 이미 있습니다.');
+            throw new Error('상태를 저장하지 못했습니다. 새로고침 후 다시 시도하세요.');
+          }
+        } else {
+          const response = await fetch('/api/hub/work-orders', {
+            method: 'DELETE', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ ids: eligible }),
+          });
+          const data = await response.json().catch(() => null);
+          if (!response.ok || !data?.ok) throw new Error('제안을 삭제하지 못했습니다. 다시 시도하세요.');
+        }
+        await refresh();
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : '작업 지시를 저장하지 못했습니다.');
+      } finally {
+        unlockIds(eligible);
+        setNotices((current) => current.filter((notice) => notice.key !== key));
+      }
+    });
+  };
+
+  const undo = (notice) => {
+    if (!cancel(notice.key)) return;
+    unlockIds(notice.ids);
+    setNotices((current) => current.filter((item) => item.key !== notice.key));
+  };
+
+  const copyDraft = async (order) => {
+    const text = [order.body?.subject, order.body?.body].filter(Boolean).join('\n\n');
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
-      setCopiedId(o.id);
-      window.setTimeout(() => setCopiedId((v) => (v === o.id ? null : v)), 1600);
-    } catch { /* clipboard unavailable — silent */ }
+      setCopiedId(order.id);
+    } catch { setActionError('초안을 복사하지 못했습니다.'); }
   };
 
-  React.useEffect(() => {
-    let active = true;
-    fetch('/api/hub/work-orders', { cache: 'no-store' })
-      .then(async (r) => ({ ok: r.ok, d: await r.json().catch(() => null) }))
-      .then(({ ok, d }) => {
-        if (!active) return;
-        if (!ok || !d || d.status === 'error') {
-          // read 실패를 빈 큐("대기 제안 없음")로 위장하지 않는다 — 후속 누락 0건 계약.
-          setReadError('승인 큐를 읽지 못했습니다 — 대기 제안이 있을 수 있습니다. 새로고침으로 재시도하세요.');
-          setOrders([]);
-          setLive(false);
-          return;
-        }
-        if (Array.isArray(d.orders) && d.source === 'supabase') {
-          setOrders(d.orders);
-          setLive(true);
-        } else {
-          setOrders([]);
-          setLive(false);
-        }
-      })
-      .catch(() => {
-        if (!active) return;
-        setReadError('승인 큐를 읽지 못했습니다 — 대기 제안이 있을 수 있습니다. 새로고침으로 재시도하세요.');
-        setOrders([]);
-        setLive(false);
-      });
-    fetch('/api/hub/agents', { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
-      .then((d) => { if (active && d && Array.isArray(d.personas)) setPersonas(d.personas); })
-      .catch(() => {});
-    return () => { active = false; };
-  }, []);
-
-  async function decide(id, status) {
-    if (busyId) return;
-    setBusyId(id);
-    setActionError(null);
-    try {
-      const res = await fetch('/api/hub/work-orders', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id, status }),
-      });
-      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
-      else setActionError(`처리 실패 (${res.status}) — 스테일 전이면 새로고침 후 다시 시도하세요.`);
-    } catch {
-      setActionError('처리 실패 — 네트워크를 확인하고 다시 시도하세요.');
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  // Approved → executed with the realized outcome, closing the outcome-attribution loop.
-  async function execute(id, action) {
-    if (busyId) return;
-    setBusyId(id);
-    try {
-      const res = await fetch('/api/hub/work-orders', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id, status: 'executed', outcome: { action } }),
-      });
-      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'executed' } : o)));
-      else setActionError(`처리 실패 (${res.status}) — 다시 시도하세요.`);
-    } catch {
-      setActionError('처리 실패 — 네트워크를 확인하고 다시 시도하세요.');
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  // Approved dm/lead capture → executed with no outcome payload, closing the lead-capture
-  // loop instead (work_orders.lead_id back-fill — see work-orders.js promoteCaptureToLead).
-  async function promote(id) {
-    if (busyId) return;
-    setBusyId(id);
-    try {
-      const res = await fetch('/api/hub/work-orders', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id, status: 'executed' }),
-      });
-      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'executed' } : o)));
-      else setActionError(`처리 실패 (${res.status}) — 다시 시도하세요.`);
-    } catch {
-      setActionError('처리 실패 — 네트워크를 확인하고 다시 시도하세요.');
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  const rows = Array.isArray(orders)
-    ? orders.map((o) => ({ id: o.id, at: shortWhen(o.proposedAt), to: o.persona, what: o.title, status: o.status, kind: o.kind, body: o.body, live: true }))
-    : [];
+  const visibleOrders = (orders || []).filter((order) => !locked.has(order.id));
+  const selectedIds = visibleOrders.filter((order) => selected.has(order.id)).map((order) => order.id).slice(0, 50);
+  const countFor = (key) => {
+    if (!counts) return null;
+    if (key === 'approved') return counts.approved + counts.executing;
+    if (key === 'all') return Object.values(counts).reduce((sum, value) => sum + value, 0);
+    return counts[key];
+  };
+  const options = ORDER_FILTERS.map((option) => ({ ...option, count: countFor(option.key) }));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
-        <div>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1 }}>
           <h3 style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>작업 지시</h3>
-          {actionError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{actionError}</div>}
-          {readError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{readError}</div>}
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>페르소나·인박스가 올린 제안 큐 · 승인은 실행 완료가 아닙니다.</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 3 }}>승인은 실행 완료가 아닙니다. 캡처 메모는 메모 &gt; 받은함에서 정리합니다.</div>
         </div>
-        <div style={{ flex: 1 }} />
-        <TruthBadge state={orders === null ? 'loading' : readError ? 'error' : live ? 'live' : 'preview'} />
+        <TruthBadge state={listState} />
       </div>
-
-      {personas.length > 0 && (
-        <Card pad={false} style={{ padding: '10px 14px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: 'var(--surface-2)' }}>
-          <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Personas</span>
-          {personas.map((p) => (
-            <Badge key={p.id} tone={p.status === 'idle' ? 'neutral' : 'moon'} variant="outline" size="xs">
-              {p.nameKo || p.id} · {p.emits}
-            </Badge>
-          ))}
-        </Card>
-      )}
-
+      <SegmentedControl label="작업 지시 상태" options={options} value={status} onChange={onStatusChange} />
+      {countState === 'error' && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>상태별 건수를 읽지 못했습니다. 목록은 별도로 확인해 주세요.</div>}
+      {actionError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>{actionError}</div>}
+      {notices.map((notice) => <div key={notice.key} role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
+        <span>{notice.label} · 3.5초 뒤 저장</span>
+        <Button variant="ghost" size="xs" onClick={() => undo(notice)}>되돌리기</Button>
+      </div>)}
+      {listState === 'live' && visibleOrders.length > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Button variant="ghost" size="xs" onClick={() => setSelected(selectedIds.length === Math.min(visibleOrders.length, 50) ? new Set() : new Set(visibleOrders.slice(0, 50).map((order) => order.id)))}>
+          {selectedIds.length === Math.min(visibleOrders.length, 50) ? '선택 해제' : '이 목록 모두 선택'}
+        </Button>
+        <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>한 번에 50건까지</span>
+        {selectedIds.length > 0 && <Button variant="danger" size="xs" onClick={() => scheduleAction(selectedIds)}>선택 삭제 {selectedIds.length}건</Button>}
+      </div>}
       <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: '100px 90px 1fr 90px 120px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span>When</span><span>Persona</span><span>Proposal</span><span>Status</span><span style={{ textAlign: 'right' }} />
-        </div>
-        {rows.length === 0 && (
-          <div style={{ padding: 16, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-            {orders === null ? <Skeleton lines={3} label="작업 지시 불러오는 중" /> : readError ? '작업 지시를 확인하지 못했습니다.' : !live ? '작업 지시 저장소를 연결하면 제안을 확인할 수 있습니다.' : '대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기에 쌓입니다.'}
-          </div>
-        )}
-        {rows.map((o, i) => (
-          <div key={o.id} style={{
-            opacity: busyId === o.id ? 0.5 : 1,
-            borderBottom: i < rows.length - 1 ? '1px solid var(--line-soft)' : 'none',
-          }}>
-            <div style={{
-              display: 'grid', gridTemplateColumns: '100px 90px 1fr 90px 120px',
-              padding: '12px 16px', alignItems: 'center',
-            }}>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{o.at}</span>
-              <span style={{ fontSize: 12, color: 'var(--moon-300)' }}>{o.to}</span>
-              <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.what}</span>
-              <Badge tone={WO_STATUS_TONE[o.status] || 'neutral'} size="xs">{o.status}</Badge>
-              <div style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                {o.live && o.status === 'proposed' ? (
-                  <>
-                    <Button variant="primary" size="xs" onClick={() => decide(o.id, 'approved')}>승인</Button>
-                    <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
-                  </>
-                ) : null /* 결정 끝난 행의 "Open"은 ?order= 제거 후 맥락 없는 빈 채팅에
-                  착지하는 死 어포던스였다(7차 사용성) — 행 자체가 기록이라 액션 불필요 */}
-              </div>
-            </div>
-            {/* AI-drafted message preview — operator reads it before the 1-click approve. No auto-send.
-                복사 = 카톡/전화 채널의 실제 발송 경로 (클립보드로 옮겨 보낸다). */}
-            {o.live && (o.kind === 'followup-draft' || o.kind === 'content-draft') && o.body?.body && (
-              <div style={{ padding: '0 16px 12px 116px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
-                  {o.body.body}
+        {orders === null ? <div style={{ padding: 16 }}><Skeleton lines={3} label="작업 지시 불러오는 중" /></div>
+          : listState === 'error' ? <div role="alert" style={{ padding: 16, color: 'var(--danger)', fontSize: 12.5 }}>작업 지시를 읽지 못했습니다. 대기 제안이 있을 수 있습니다.</div>
+          : listState === 'preview' ? <EmptyState icon="agents" title="작업 지시 연결 필요" description="저장소가 연결되면 제안을 확인할 수 있습니다." />
+          : visibleOrders.length === 0 ? <EmptyState icon="agents" title={status === 'proposed' ? '대기 중인 제안이 없습니다' : '이 상태의 제안이 없습니다'} description="다른 상태는 위 필터에서 확인할 수 있습니다." />
+          : visibleOrders.map((order, index) => {
+            const [lifecycle, label] = ORDER_LIFECYCLE[order.status] || ORDER_LIFECYCLE.proposed;
+            return <div className="hub-row" key={order.id} style={{ padding: '12px 14px', borderBottom: index < visibleOrders.length - 1 ? '1px solid var(--line-soft)' : undefined, display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+              <Checkbox label={`${order.title} 선택`} checked={selected.has(order.id)} onChange={(checked) => setSelected((current) => {
+                const next = new Set(current);
+                if (checked && next.size < 50) next.add(order.id);
+                else if (!checked) next.delete(order.id);
+                return next;
+              })} />
+              <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 5 }}>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{shortWhen(order.proposedAt)}</span>
+                  <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{order.persona || '미지정'}</span>
+                  <LifecycleBadge state={lifecycle} label={label} />
                 </div>
-                <Button variant="ghost" size="xs" onClick={() => copyDraft(o)} style={{ flexShrink: 0 }}>
-                  {copiedId === o.id ? '복사됨' : '복사'}
-                </Button>
+                <div style={{ fontSize: 13, color: 'var(--fg)' }}>{order.title}</div>
+                {(order.kind === 'followup-draft' || order.kind === 'content-draft') && order.body?.body &&
+                  <details style={{ marginTop: 7, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+                    <summary>초안 보기</summary>
+                    <div style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>{order.body.body}</div>
+                    <Button variant="ghost" size="xs" onClick={() => copyDraft(order)}>{copiedId === order.id ? '복사됨' : '초안 복사'}</Button>
+                  </details>}
               </div>
-            )}
-            {o.live && o.status === 'approved' && (o.kind === 'dm' || o.kind === 'lead' ? (
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>
-                {/* 완료 확인은 check + 중립 텍스트 (§5.2 — green 축하 금지). */}
-                <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Iconed name="check" size={11} /> 신규 리드
-                </span>
-                <Button variant="outline" size="xs" onClick={() => promote(o.id)}>리드로 등록</Button>
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
+                {order.status === 'proposed' && <>
+                  <Button variant="primary" size="xs" onClick={() => scheduleAction([order.id], 'approved')}>승인</Button>
+                  <Button variant="ghost" size="xs" onClick={() => scheduleAction([order.id], 'dismissed')}>보류</Button>
+                </>}
+                {order.status === 'approved' && <Button variant="outline" size="xs" onClick={() => scheduleAction([order.id], 'executed')}>완료로 표시</Button>}
+                {['approved', 'dismissed'].includes(order.status) && <Button variant="ghost" size="xs" onClick={() => scheduleAction([order.id], 'proposed')}>다시 열기</Button>}
+                {order.dealId && <Button variant="ghost" size="xs" onClick={() => setRecordTarget({ kind: 'deal', id: order.dealId, name: order.title })}>연락 기록 열기</Button>}
+                <IconButton icon="trash" size={28} iconSize={13} tooltip="제안 삭제 (되돌리기 지원)" aria-label="제안 삭제" onClick={() => scheduleAction([order.id])} />
               </div>
-            ) : o.kind === 'content-draft' ? (
-              // 승인 = Studio 파이프라인으로 구체화(서버가 idea→draft 승격 + variant 생성).
-              // 콘텐츠 초안은 영업 퍼널 outcome을 절대 남기지 않는다 — 완료는 무-outcome executed.
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>
-                <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Iconed name="check" size={11} /> Studio 초안 생성
-                </span>
-                <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/content/studio')}>Studio 열기</Button>
-                <Button variant="ghost" size="xs" onClick={() => promote(o.id)}>완료</Button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>
-                <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Iconed name="check" size={11} /> 실행 결과
-                </span>
-                {WO_EXECUTE_ACTIONS.map((a) => (
-                  <Button key={a.action} variant="outline" size="xs" onClick={() => execute(o.id, a.action)}>{a.label}</Button>
-                ))}
-              </div>
-            ))}
-          </div>
-        ))}
+            </div>;
+          })}
       </Card>
+      {recordTarget && <ContactRecordDrawer target={recordTarget} onClose={() => setRecordTarget(null)} />}
     </div>
   );
 }

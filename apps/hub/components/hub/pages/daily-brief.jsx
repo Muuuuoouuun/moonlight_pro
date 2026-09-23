@@ -21,7 +21,6 @@ import { ContactRecordDrawer } from "../contact-record-form";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
 import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
-import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import { DailyReviewCue } from "../daily-review-cue";
 import { REVIEW_EVENING_HOUR } from "@/lib/daily-review-rhythm";
 import {
@@ -783,9 +782,6 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
   );
 }
 
-// 작업 주문 kind는 카테고리 — §5.2 동결: 카테고리에 semantic/accent 톤 금지.
-const WO_KIND_TONE = {};
-
 // Chief of Staff 브리핑 — the /api/cron/chief-of-staff composed agenda, read back from
 // project_updates (ai.morning_brief) via /api/hub/daily-brief. Renders only when a fresh
 // (<24h) brief exists; lanes map to identity tones (sales=company, brand=personal).
@@ -927,230 +923,43 @@ function MorningBriefCard({ brief, taskToday, onNavigate }) {
   );
 }
 
-// The brief keeps the queue SHORT — the top 5 waiting decisions, not the full backlog. The
-// full queue lives on Agents Orders; the brief is the "what do I act on first" cockpit.
-const QUEUE_MAX_VISIBLE = 5;
-
-// The 1-click approval cockpit — proposed work orders (persona/inbox/guru) decided in place.
-// registry.json no_auto_send=true: nothing executes without this click.
+// This secondary surface reports the queue only; decisions live in 작업 지시.
 function ApprovalQueueCard({ onNavigate }) {
-  const [orders, setOrders] = React.useState([]);
   const [state, setState] = React.useState('loading');
-  const [busyId, setBusyId] = React.useState(null);
-  const [dismissNotice, setDismissNotice] = React.useState(null);
-  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
-  const [actionError, setActionError] = React.useState(null);
-  const [approved, setApproved] = React.useState({}); // id → true once approved (reveals execute row)
-  const [copiedId, setCopiedId] = React.useState(null);
-
-  // 딜 채널이 카톡/전화 중심이라 "복사"가 실제 발송 경로 — 초안을 클립보드로 옮겨 보내는 흐름.
-  const copyDraft = async (o) => {
-    const subject = o.body?.subject || o.body?.title || '';
-    const text = [subject, o.body?.body || ''].filter(Boolean).join('\n\n');
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(o.id);
-      window.setTimeout(() => setCopiedId((v) => (v === o.id ? null : v)), 1600);
-    } catch { /* clipboard unavailable — silent */ }
-  };
+  const [pending, setPending] = React.useState(null);
 
   React.useEffect(() => {
     let active = true;
-    fetch('/api/hub/work-orders?status=proposed', { cache: 'no-store' })
+    fetch('/api/hub/work-orders?summary=1&scope=proposals', { cache: 'no-store' })
       .then(async (r) => ({ ok: r.ok, d: await r.json().catch(() => null) }))
       .then(({ ok, d }) => {
         if (!active) return;
-        // 승인 큐 read 실패를 empty로 뭉개면 "승인 대기 없음"으로 오독된다(re-audit S10).
-        // 라우트는 실패를 HTTP 200 + status:"error" 봉투로 알린다(2026-09-01 봉투 통일)
-        // — !ok만 보면 read 실패가 "대기 없음"으로 위장된다. agents.jsx와 같은 가드를 쓴다.
-        if (!ok || !d || d.status === 'error' || d.source === 'error') {
-          setOrders([]);
+        if (!ok || !d || d.status === 'error' || d.source === 'error' ||
+            (d.source === 'supabase' && !Number.isInteger(d.pending))) {
           setState('error');
           return;
         }
-        if (Array.isArray(d.orders)) {
-          setOrders(d.orders);
-          setState(d.source === 'supabase' ? 'live' : 'empty');
-        } else {
-          setState('empty');
-        }
+        setPending(d.source === 'supabase' ? d.pending : null);
+        setState(d.source === 'supabase' ? 'live' : 'preview');
       })
-      .catch(() => active && setState('error'));
+      .catch(() => { if (active) setState('error'); });
     return () => { active = false; };
   }, []);
 
-  async function post(id, body) {
-    if (busyId) return false;
-    setBusyId(id);
-    setActionError(null);
-    try {
-      const res = await fetch('/api/hub/work-orders', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id, ...body }),
-      });
-      // 실패(400 스테일 전이/RLS·네트워크)를 무언 no-op으로 두지 않는다 — agents 큐와
-      // 동일 계약(5차 재감사 S: 첫 화면 쌍둥이만 미적용이었다).
-      if (!res.ok) setActionError(`처리 실패 (${res.status}) — 새로고침 후 다시 시도하세요.`);
-      return res.ok;
-    } catch {
-      setActionError('처리 실패 — 네트워크를 확인하고 다시 시도하세요.');
-      return false;
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  // proposed → approved reveals the execute row; execute logs the realized outcome and
-  // closes the outcome-attribution loop. dismiss drops it.
-  const approve = async (id) => { if (await post(id, { status: 'approved' })) setApproved((m) => ({ ...m, [id]: true })); };
-  // 보류는 3.5초 지연 실행 + 되돌리기 — 1클릭 영구 제거였던 유일한 무안전망 액션(6차 재감사).
-  const dismiss = (id) => {
-    const removed = orders.find((o) => o.id === id) || null;
-    setOrders((prev) => prev.filter((o) => o.id !== id));
-    const key = `dismiss-${id}`;
-    scheduleUndoable(key, () => {
-      setActionError((cur) => cur); // no-op — 상태 유지
-      setDismissNotice((cur) => (cur?.key === key ? null : cur));
-      post(id, { status: 'dismissed' }).then((ok) => {
-        if (!ok && removed) setOrders((prev) => (prev.some((o) => o.id === id) ? prev : [removed, ...prev]));
-      });
-    });
-    setDismissNotice({
-      key,
-      label: '제안 보류됨',
-      undo: () => {
-        if (cancelUndoable(key) && removed) setOrders((prev) => (prev.some((o) => o.id === id) ? prev : [removed, ...prev]));
-        setDismissNotice(null);
-      },
-    });
-  };
-  const execute = async (id, action) => { if (await post(id, { status: 'executed', outcome: { action } })) setOrders((prev) => prev.filter((o) => o.id !== id)); };
-  // dm/lead capture → executed with no outcome payload, closes the lead-capture loop instead
-  // (work_orders.lead_id back-fill — see work-orders.js promoteCaptureToLead).
-  const promote = async (id) => { if (await post(id, { status: 'executed' })) setOrders((prev) => prev.filter((o) => o.id !== id)); };
-
-  const pending = orders.filter((o) => !approved[o.id]).length;
-  const visible = orders.slice(0, QUEUE_MAX_VISIBLE);
-  const overflow = Math.max(0, orders.length - QUEUE_MAX_VISIBLE);
-  // 페르소나별 대기 요약 — 큐를 5개로 줄여도 "누가 얼마나 기다리는지" 전체 모양은 유지한다.
-  const personaCounts = Object.entries(
-    orders.reduce((acc, o) => { const k = o.persona || '기타'; acc[k] = (acc[k] || 0) + 1; return acc; }, {}),
-  ).sort((a, b) => b[1] - a[1]).slice(0, 4);
-
+  if (state === 'live' && pending === 0) return null;
   return (
     <div>
-      {/* 대기 0은 상태 정보 — 녹색 완료 아님(§5.3), 중립 유지. */}
-      <SectionTitle right={<Badge tone="neutral" size="xs">{pending} 대기</Badge>}>
-        승인 큐
-      </SectionTitle>
-      {actionError && (
-        <div role="alert" style={{ marginBottom: 8, fontSize: 12, color: 'var(--danger)' }}>{actionError}</div>
-      )}
-      {dismissNotice && (
-        <div role="status" aria-live="polite" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
-          <span>{dismissNotice.label}</span>
-          <Button variant="ghost" size="xs" onClick={dismissNotice.undo}>되돌리기</Button>
-        </div>
-      )}
+      <SectionTitle>작업 지시</SectionTitle>
       <Card pad={false}>
-        {orders.length === 0 ? (
-          <div role={state === 'error' ? 'alert' : undefined} style={{ padding: 14, fontSize: 12.5, color: state === 'error' ? 'var(--danger)' : 'var(--fg-muted)', lineHeight: 1.5 }}>
-            {state === 'loading'
-              ? <Skeleton lines={2} label="승인 큐 확인 중" />
-              : state === 'error'
-              ? '승인 큐를 읽지 못했습니다 — 대기 제안이 있을 수 있습니다. 새로고침해 주세요.'
-              : '승인 대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기서 1클릭으로 처리합니다.'}
-          </div>
-        ) : (
-          <>
-          {personaCounts.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
-              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>대기</span>
-              {personaCounts.map(([p, c]) => (
-                <Badge key={p} tone="neutral" variant="outline" size="xs">{p} {c}</Badge>
-              ))}
-            </div>
+        <div role={state === 'error' ? 'alert' : undefined} style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 12.5, color: state === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}>
+          {state === 'loading' ? <Skeleton lines={1} label="작업 지시 확인 중" />
+            : state === 'error' ? '작업 지시를 읽지 못했습니다. 대기 항목이 있을 수 있습니다.'
+            : state === 'preview' ? '작업 지시 저장소 연결이 필요합니다.'
+            : <span>승인 대기 <span className="num">{pending}</span>건</span>}
+          {state === 'live' && pending > 0 && (
+            <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/agents/orders?status=proposed')}>작업 지시에서 보기</Button>
           )}
-          {visible.map((o, i) => (
-            <div key={o.id} style={{
-              padding: '11px 14px', opacity: busyId === o.id ? 0.5 : 1,
-              borderBottom: (i < visible.length - 1 || overflow > 0) ? '1px solid var(--line-soft)' : 'none',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <Badge tone={WO_KIND_TONE[o.kind] || 'neutral'} size="xs">{o.kind}</Badge>
-                    <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{o.persona}{o.channel ? ` · ${o.channel}` : ''}</span>
-                  </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {o.title}
-                  </div>
-                  {/* AI-drafted message (followup/content) — the operator reads this BEFORE approving. No auto-send. */}
-                  {(o.kind === 'followup-draft' || o.kind === 'content-draft') && o.body?.body && (
-                    <div style={{ marginTop: 5, fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
-                      {o.body.body}
-                    </div>
-                  )}
-                </div>
-                {!approved[o.id] && (
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    {(o.kind === 'followup-draft' || o.kind === 'content-draft') && o.body?.body && (
-                      <Button variant="ghost" size="xs" onClick={() => copyDraft(o)}>{copiedId === o.id ? '복사됨' : '복사'}</Button>
-                    )}
-                    <Button variant="primary" size="xs" onClick={() => approve(o.id)}>승인</Button>
-                    <Button variant="ghost" size="xs" onClick={() => dismiss(o.id)}>보류</Button>
-                  </div>
-                )}
-              </div>
-              {approved[o.id] && (o.kind === 'dm' || o.kind === 'lead' ? (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                  {/* 완료 확인은 check + 중립 텍스트 (§5.2 — green 축하 금지). */}
-                  <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Iconed name="check" size={11} /> 승인됨 · 신규 리드
-                  </span>
-                  <Button variant="outline" size="xs" onClick={() => promote(o.id)}>리드로 등록</Button>
-                </div>
-              ) : o.kind === 'content-draft' ? (
-                // 승인 = Studio 파이프라인으로 구체화(서버가 idea→draft 승격 + variant 생성).
-                // 콘텐츠 초안은 영업 퍼널 outcome을 절대 남기지 않는다 — 완료는 무-outcome executed.
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Iconed name="check" size={11} /> 승인됨 · Studio 초안 생성
-                  </span>
-                  <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/content/studio')}>Studio 열기</Button>
-                  <Button variant="ghost" size="xs" onClick={() => promote(o.id)}>완료</Button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Iconed name="check" size={11} /> 승인됨 · 실행 결과
-                  </span>
-                  {o.kind === 'followup-draft' && o.body?.body && (
-                    <Button variant="ghost" size="xs" onClick={() => copyDraft(o)}>{copiedId === o.id ? '복사됨' : '복사'}</Button>
-                  )}
-                  {WO_EXECUTE_ACTIONS.map((a) => (
-                    <Button key={a.action} variant="outline" size="xs" onClick={() => execute(o.id, a.action)}>{a.label}</Button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ))}
-          {overflow > 0 && (
-            <button
-              onClick={() => onNavigate?.('dashboard/agents/orders')}
-              style={{
-                width: '100%', textAlign: 'left', padding: '10px 14px', display: 'flex', alignItems: 'center',
-                gap: 6, fontSize: 12, color: 'var(--fg-muted)', background: 'transparent', cursor: 'pointer',
-              }}
-            >
-              <span>+{overflow}건 더 · 전체 승인 큐 보기</span>
-              <Iconed name="arrowRight" size={12} style={{ marginLeft: 'auto', color: 'var(--fg-faint)' }} />
-            </button>
-          )}
-          </>
-        )}
+        </div>
       </Card>
     </div>
   );
