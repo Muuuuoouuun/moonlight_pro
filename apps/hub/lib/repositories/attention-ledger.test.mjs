@@ -34,6 +34,9 @@ export async function readCombinedGoogleCalendarEvents() { return { ok: true, it
 const inquiriesStub = `
 export async function getInquiriesLedger() { return { status: "live", rows: [], unreadCount: 0 }; }
 `;
+const deadlineStub = `
+export async function getDeadlineAlertSettings() { return { status: "live", reset: globalThis.__attentionReadState.deadlineReset || null }; }
+`;
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -43,6 +46,7 @@ registerHooks({
       "./operating-ledger.js": operatingStub,
       "../google-calendar.js": calendarStub,
       "./inquiries-ledger.js": inquiriesStub,
+      "./deadline-alert-settings.js": deadlineStub,
     };
     // The real contact-tracking reader uses a relative import. Keep it in the
     // query-count baseline so the full ledger's workspace read is measured too.
@@ -63,6 +67,7 @@ beforeEach((t) => {
   state.configured = true;
   state.calls = [];
   state.gate = null;
+  state.deadlineReset = null;
   state.rows = {
     leads: [{ id: "lead-1", score: "87.5", name: "Lead", meta: {} }],
     deals: [
@@ -85,6 +90,26 @@ beforeEach((t) => {
     contacts: [{ id: "contact-1", name: "Contact" }],
     workspaces: [{ id: "workspace-1", meta: { contact_tracking_started_at: "2026-09-20T00:00:00.000Z" } }],
   };
+});
+
+test("an acknowledged old deal deadline remains visible without an overdue alert", async () => {
+  const dueAt = "2026-08-26T16:00:00+00:00";
+  state.rows.deals[0].expected_close_at = dueAt;
+  state.deadlineReset = {
+    resetAt: "2026-09-22T03:00:00Z", beforeDay: "2026-09-21",
+    items: [{ kind: "deal", id: "deal-1", dueAt }],
+  };
+  const cleared = await getAttentionLedger();
+  const deal = cleared.items.find((item) => item.entityId === "deal-1");
+  assert.equal(deal.whenAt, dueAt);
+  assert.equal(deal.bucket, "later");
+  assert.equal(deal.deadlineAlertSuppressed, true);
+  assert.equal(deal.priorityReason, "이전 기한 · 알림 해제");
+  assert.equal(deal.priorityScore, 900);
+
+  state.rows.deals[0].expected_close_at = "2026-09-20T16:00:00+00:00";
+  const changed = await getAttentionLedger();
+  assert.equal(changed.items.find((item) => item.entityId === "deal-1").bucket, "overdue");
 });
 
 test("attention returns the same items and scoring with three revenue reads instead of seven", async () => {

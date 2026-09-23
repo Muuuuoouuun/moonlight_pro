@@ -20,6 +20,8 @@ import { getInquiriesLedger } from './inquiries-ledger.js';
 // reload가 타는 핫패스다.
 import { getTaskLedger } from "./operating-ledger.js";
 import { getRevenueLedger } from "./revenue-ledger.js";
+import { getDeadlineAlertSettings } from "./deadline-alert-settings.js";
+import { isDeadlineAlertSuppressed } from "../deadline-alert-reset.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
 
 const TIME_ZONE = "Asia/Seoul";
@@ -181,6 +183,10 @@ function assignPriority(item, leadScoreByDealEntityId) {
   const leadScore = item.lane === "deal" ? leadScoreByDealEntityId.get(item.entityId) || 0 : 0;
   const stageRank = item.lane === "deal" ? STAGE_PRIORITY_RANK[item.status] || 0 : 0;
 
+  if (item.deadlineAlertSuppressed) {
+    return { priorityScore: 900, priorityReason: "이전 기한 · 알림 해제" };
+  }
+
   // 1. 기한 지난 약속 — older overdue first (larger daysPast → higher).
   if (item.bucket === "overdue") {
     const daysPast = Math.min(90, Math.round((Date.now() - new Date(item.whenAt).getTime()) / DAY_MS) || 0);
@@ -222,7 +228,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
   const startOfTodayIso = new Date(`${todayKey}T00:00:00+09:00`).toISOString();
   const weekEndIso = new Date(now.getTime() + 7 * DAY_MS).toISOString();
 
-  const [projectLedger, revenueLedger, calendar, inquiries] = await Promise.all([
+  const [projectLedger, revenueLedger, calendar, inquiries, deadlineAlerts] = await Promise.all([
     getTaskLedger().catch(() => ({
       source: "error",
       error: "project-ledger-request-failed",
@@ -240,6 +246,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
       () => ({ ok: false, reason: "calendar-read-failed", items: [] }),
     ),
     getInquiriesLedger({ filter: 'unread', pageSize: 3 }).catch(() => ({ status: 'error', source: 'error', rows: [], unreadCount: null, error: 'inquiries-read-failed' })),
+    getDeadlineAlertSettings().catch(() => ({ status: "error", error: "deadline-alert-settings-read-failed", reset: null })),
   ]);
 
   const taskAggregationPartial = projectLedger?.source === "supabase"
@@ -282,6 +289,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     inquiries: inquiries.status,
     tasks: taskSourceState,
     deals: dealSourceState,
+    deadlineAlerts: deadlineAlerts.status,
     calendar: calendar?.ok
       ? "live"
       : ["calendar-not-connected", "missing-connection", "missing-access-token", "missing-config"].includes(calendar?.reason || "calendar-not-connected")
@@ -290,6 +298,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
   };
 
   if (inquiries.status === 'error') sourceFailures.push({ source: 'inquiries', error: inquiries.error, failedSources: ['inquiries'] });
+  if (deadlineAlerts.status === 'error') sourceFailures.push({ source: 'deadlineAlerts', error: deadlineAlerts.error, failedSources: ['deadlineAlerts'] });
 
   // Deal entityId → linked lead's follow-up score (0–100). Deals carry lead_id; leads carry
   // the recomputed momentum score — this join is the pipeline↔lead-score bridge.
@@ -313,7 +322,13 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     ),
     ...mapDealItems(revenueLedger?.deals, revenueLedger?.stages, todayKey, weekEndKey),
     ...mapEventItems(calendar?.items, todayKey, weekEndKey),
-  ].map((item) => ({ ...item, ...assignPriority(item, leadScoreByDealEntityId) }));
+  ].map((item) => {
+    const suppressed = isDeadlineAlertSuppressed(deadlineAlerts.reset, item.lane, item.entityId, item.whenAt);
+    const displayed = suppressed
+      ? { ...item, bucket: "later", whenLabel: `${shortDate(item.whenAt)} · 알림 해제`, deadlineAlertSuppressed: true }
+      : item;
+    return { ...displayed, ...assignPriority(displayed, leadScoreByDealEntityId) };
+  });
 
   return {
     todayKey,

@@ -2238,9 +2238,9 @@ export function Projects({ workspace }) {
                           const pBrand = brandByKey.get(p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
                           const dueTime = p.dueAt ? new Date(p.dueAt).getTime() : Number.NaN;
-                          const pDDay = computeDDay(p.dueAt);
+                          const pDDay = p.deadlineAlertSuppressed ? null : computeDDay(p.dueAt);
                           const terminal = isTerminalProject(p);
-                          const overdue = !terminal && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
+                          const overdue = !terminal && !p.deadlineAlertSuppressed && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
                           const blocked = String(p.statusKey || '').toLowerCase() === 'blocked' || p.status === 'Blocked';
                           const nextAction = p.displayNextAction || p.projectNextAction || (p.updateEvidencePartial ? '업데이트 기록 미확인' : '다음 행동 미정');
                           return (
@@ -2298,7 +2298,8 @@ export function Projects({ workspace }) {
                                       )}
                                     </div>
                                     {(blocked || overdue) && <span className="hub-project-risk-label">{blocked ? '막힘' : '기한 지남'}</span>}
-                                    {!blocked && !overdue && <span className="hub-project-no-risk">위험 신호 없음</span>}
+                                    {!blocked && p.deadlineAlertSuppressed && <span className="hub-project-alert-reset" title="이전 기한 · 알림 해제">알림 해제</span>}
+                                    {!blocked && !overdue && !p.deadlineAlertSuppressed && <span className="hub-project-no-risk">위험 신호 없음</span>}
                                   </div>
                                 </button>
                                 {projectCustomerRef(p.entityRef) && <button
