@@ -221,7 +221,6 @@ export function ProjectPortfolioWorkspace({
   const [showFilterPicker, setShowFilterPicker] = React.useState(false);
   const [openSections, setOpenSections] = React.useState({
     items: true,
-    schedule: true,
   });
   const window = React.useMemo(() => portfolioWindow(), []);
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
@@ -239,6 +238,12 @@ export function ProjectPortfolioWorkspace({
     .filter((task) => dateValue(task.dueAt))
     .slice()
     .sort((a, b) => dateValue(a.dueAt) - dateValue(b.dueAt));
+  const projectUpdates = updates.filter((item) => item.projectId === project?.id);
+  const scheduleCount = datedTasks.length + (project?.dueAt ? 1 : 0);
+  const nextSchedule = [
+    ...(project?.dueAt ? [{ dueAt: project.dueAt, title: "프로젝트 마감" }] : []),
+    ...datedTasks,
+  ].sort((a, b) => dateValue(a.dueAt) - dateValue(b.dueAt))[0] || null;
   const nextTask = openTasks.slice().sort((a, b) => {
     const aDue = dateValue(a.dueAt)?.getTime() ?? Number.POSITIVE_INFINITY;
     const bDue = dateValue(b.dueAt)?.getTime() ?? Number.POSITIVE_INFINITY;
@@ -555,7 +560,10 @@ export function ProjectPortfolioWorkspace({
                           <i key={entry.status} data-status={entry.status} style={{ width: `${Math.max(18, (entry.count / Math.max(1, projectTasks.length)) * 100)}%` }} />
                         ))}
                       </span>
-                      <em>{taskStatuses.length ? taskStatuses.map((entry) => `${STATUS_COPY[entry.status] || entry.status} ${entry.count}`).join(" · ") : "등록된 항목 없음"}</em>
+                      <em>{[
+                        taskStatuses.length ? taskStatuses.map((entry) => `${STATUS_COPY[entry.status] || entry.status} ${entry.count}`).join(" · ") : "등록된 항목 없음",
+                        scheduleCount ? `일정 ${scheduleCount}` : null,
+                      ].filter(Boolean).join(" · ")}</em>
                     </span>
                   )}
                   open={Boolean(openSections.items)}
@@ -603,48 +611,28 @@ export function ProjectPortfolioWorkspace({
                     <Button variant="ghost" size="sm" icon="plus" onClick={() => onCreateTodo(project.id, 'todo', { itemType: 'subproject' })}>하위 프로젝트 추가</Button>
                     <Button variant="ghost" size="sm" icon="flag" onClick={() => onCreateTodo(project.id, 'todo', { itemType: 'milestone' })}>마일스톤 추가</Button>
                   </div>
-                </PortfolioAccordion>
-
-                <PortfolioAccordion
-                  id="schedule"
-                  icon="calendar"
-                  label="일정"
-                  count={datedTasks.length + (project.dueAt ? 1 : 0)}
-                  summary={(
-                    <span className="hub-project-portfolio-visual-summary">
-                      <span className="hub-project-portfolio-mini-schedule" aria-hidden="true">
-                        {Array.from({ length: 4 }, (_, index) => <i key={index} data-active={index < Math.min(4, datedTasks.length + (project.dueAt ? 1 : 0)) ? "true" : "false"} />)}
-                      </span>
-                      <em>{datedTasks[0] ? `${formatScheduleDate(datedTasks[0].dueAt)} · ${datedTasks[0].title}` : formatLongDate(project.dueAt)}</em>
-                    </span>
-                  )}
-                  open={Boolean(openSections.schedule)}
-                  onToggle={() => toggleSection("schedule")}
-                >
-                  <div className="hub-project-portfolio-schedule-list">
-                    {project.dueAt && (
-                      <div className="is-project-due"><Iconed name="flag" size={13} /><strong>{formatScheduleDate(project.dueAt)}</strong><span>프로젝트 마감</span></div>
-                    )}
-                    {datedTasks.map((task) => (
-                      <button type="button" key={task.scheduleKey} onClick={() => onEditTodo(task.parentTask)}>
-                        <Iconed name="clock" size={13} /><strong>{formatScheduleDate(task.dueAt)}</strong><span>{task.title}</span>
-                      </button>
-                    ))}
-                    {!project.dueAt && datedTasks.length === 0 && <span className="hub-project-portfolio-panel-empty">기한이 지정된 일정이 없습니다.</span>}
-                  </div>
-                  {updates && updates.filter((u) => u.projectId === project.id).length > 0 && (
-                    <div style={{ marginTop: 14, borderTop: "1px solid var(--line-soft)", paddingTop: 10 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--fg-muted)", marginBottom: 8 }}>최근 업데이트 기록</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {updates.filter((u) => u.projectId === project.id).slice(0, 4).map((u) => (
-                          <div key={u.id} style={{ fontSize: 11.5, color: "var(--fg-faint)", display: "flex", alignItems: "center", gap: 8 }}>
-                            <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-muted)" }}>{u.happenedAtLabel || "최근"}</span>
-                            <span style={{ color: "var(--fg)" }}>{u.title}</span>
-                            {u.summary && <span style={{ color: "var(--fg-muted)" }}>· {u.summary}</span>}
-                          </div>
+                  {scheduleCount > 0 && (
+                    <details className="hub-project-portfolio-support">
+                      <summary className="hub-row"><Iconed name="calendar" size={14} /><strong>일정 {scheduleCount}</strong><span>{nextSchedule ? `${formatScheduleDate(nextSchedule.dueAt)} · ${nextSchedule.title}` : ""}</span><Iconed name="chevronD" size={14} /></summary>
+                      <div className="hub-project-portfolio-schedule-list">
+                        {project.dueAt && <div className="is-project-due"><Iconed name="flag" size={13} /><strong>{formatScheduleDate(project.dueAt)}</strong><span>프로젝트 마감</span></div>}
+                        {datedTasks.map((task) => (
+                          <button type="button" key={task.scheduleKey} onClick={() => onEditTodo(task.parentTask)}>
+                            <Iconed name="clock" size={13} /><strong>{formatScheduleDate(task.dueAt)}</strong><span>{task.title}</span>
+                          </button>
                         ))}
                       </div>
-                    </div>
+                    </details>
+                  )}
+                  {projectUpdates.length > 0 && (
+                    <details className="hub-project-portfolio-support">
+                      <summary className="hub-row"><Iconed name="clock" size={14} /><strong>최근 업데이트 기록</strong><span>{projectUpdates[0].happenedAtLabel || "최근"}</span><Iconed name="chevronD" size={14} /></summary>
+                      <div className="hub-project-portfolio-support__updates">
+                        {projectUpdates.slice(0, 4).map((item) => (
+                          <div key={item.id}><span className="mono">{item.happenedAtLabel || "최근"}</span><span><strong>{item.title}</strong>{item.summary && <> · {item.summary}</>}</span></div>
+                        ))}
+                      </div>
+                    </details>
                   )}
                 </PortfolioAccordion>
               </div>
