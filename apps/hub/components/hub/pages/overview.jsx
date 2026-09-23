@@ -3,6 +3,7 @@
 import React from "react";
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { OkrSummaryCard } from "../okr-summary-card";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress, Skeleton } from "../hub-primitives";
 import {
@@ -737,6 +738,9 @@ function OverviewSummary({ onNavigate }) {
       <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {kpiCards.map((k) => <KpiCard key={k.label} k={k} onNavigate={onNavigate} />)}
       </div>
+
+      {/* OKR·KPI — 추적 본체는 내 작업 › OKR·KPI. 현황에는 핵심 지표만 띄운다(2026-09-23). */}
+      <OkrSummaryCard />
 
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>

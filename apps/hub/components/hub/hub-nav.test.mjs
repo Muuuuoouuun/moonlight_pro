@@ -172,7 +172,8 @@ test("single-destination anchors render no sub-list", () => {
 
 test("daily review stays under my work and opens the same personal record in every scope", () => {
   for (const { key } of SIDEBAR_SCOPES) {
-    assert.deepEqual(sidebarChildren('tasks', key).map((child) => child.path), ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review']);
+    // OKR·KPI는 2026-09-23 운영자 지시로 내 작업의 마지막 하위 탭이 됐다.
+    assert.deepEqual(sidebarChildren('tasks', key).map((child) => child.path), ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review', 'dashboard/work/goals']);
     assert.equal(ownerAnchorKey('dashboard/work/daily-review'), 'tasks');
   }
   assert.ok(NAV_TREE.some((node) => node.path === 'dashboard/work/daily-review'));
@@ -666,17 +667,23 @@ test('content performance is a visible content child and command palette destina
   assert.match(appSource, /'dashboard\/content\/performance':/);
 });
 
-test("Work tab bar carries OKR·KPI next to Rhythm, and it lights only on its own route", () => {
+test("OKR·KPI lives under 내 작업 and is also surfaced on 현황 (same Goals screen, two doors)", () => {
   for (const { key: scope } of SIDEBAR_SCOPES) {
+    // 본체: 내 작업의 하위 탭 — 경로 소유자가 프로젝트(dashboard/work)가 아니라 내 작업이다.
+    assert.equal(ownerAnchorKey("dashboard/work/goals"), "tasks");
     const nav = topNavigationForRoute("dashboard/work/goals", scope);
-    const keys = nav.tabs.map((tab) => tab.key);
-    assert.deepEqual(keys.slice(-2), ["prj-rhythm", "prj-goals"], scope);
-    assert.equal(nav.activeTab?.key, "prj-goals", scope);
-    assert.equal(nav.tabs.find((tab) => tab.key === "prj-goals").label, "OKR·KPI");
-    assert.equal(topNavigationForRoute("dashboard/work/rhythm", scope).activeTab?.key, "prj-rhythm", scope);
+    assert.equal(nav.anchor?.key, "tasks", scope);
+    assert.deepEqual(nav.tabs.map((tab) => tab.key).slice(-1), ["my-okr"], scope);
+    assert.equal(nav.activeTab?.key, "my-okr", scope);
+    assert.equal(nav.activeTab.label, "OKR·KPI");
+    // Work 탭 줄에는 더 이상 없다.
+    const work = topNavigationForRoute("dashboard/work/rhythm", scope);
+    assert.ok(!work.tabs.some((tab) => tab.path === "dashboard/work/goals"), scope);
+    assert.equal(work.activeTab?.key, "prj-rhythm", scope);
+    // 현황: 같은 이름의 탭이 목표 화면을 연다.
+    const overview = topNavigationForRoute("dashboard/overview", scope, "goals");
+    assert.equal(overview.activeTab?.key, "overview-goals", scope);
+    assert.equal(overview.activeTab.label, "OKR·KPI", scope);
   }
-  // 현황의 목표·성과 경로는 그대로 현황 탭이 소유한다(두 입구, 같은 Goals 화면).
-  assert.equal(topNavigationForRoute("dashboard/overview", "all", "goals").activeTab?.key, "overview-goals");
-  const workGroup = NAV_TREE.find((group) => group.key === "work");
-  assert.ok(workGroup.children.some((child) => child.path === "dashboard/work/goals"), "⌘K catalog reaches the OKR·KPI tab");
+  assert.ok(NAV_TREE.some((item) => item.path === "dashboard/work/goals"), "⌘K catalog reaches 내 작업 › OKR·KPI");
 });
