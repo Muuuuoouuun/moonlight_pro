@@ -21,8 +21,8 @@ export async function runOfficeResponse(request: OfficeRequest, context: OfficeC
   const parseJson = (text: string, phase: OfficeDiagnosticEvent['phase']) => read(phase, 'json', () => JSON.parse(text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')));
   const parseReviewed = (text: string, phase: 'review'|'synthesis') => {
     const raw = parseJson(text, phase);
-    const answer = read(phase, 'source-review', () => readSourceReviewedOutput(raw, request, context, sourceCatalog));
-    return read(phase, 'contract', () => parseOfficeAnswer(answer, request.mode));
+    const reviewed = read(phase, 'source-review', () => readSourceReviewedOutput(raw, request, context, sourceCatalog));
+    return { ...read(phase, 'contract', () => parseOfficeAnswer(reviewed.answer, request.mode)), sourceCheck: reviewed.sourceCheck };
   };
   const checkDeadline = (phase: OfficeDiagnosticEvent['phase']) => {
     if (signal.aborted) diagnostic(phase, 'deadline');

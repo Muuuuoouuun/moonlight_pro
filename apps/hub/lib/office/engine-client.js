@@ -14,6 +14,6 @@ export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=
   if(JSON.stringify(data.context)!==JSON.stringify(context)) throw new Error('context-mismatch');
   const discussion=request.mode==='council'?{discussion:parseOfficeDiscussion(data.discussion,request)}:{};
   if(request.mode!=='council'&&data.discussion!==undefined)throw new Error('unexpected-discussion');
-  return {status:'generated',...answer,...discussion,ownerId:request.ownerId,mode:request.mode,scope:request.scope,participants:request.participants,lens:null,simulation:data.simulation,version:data.version,model:typeof data.model==='string'?data.model:null,context};
+  return {status:'generated',...answer,...discussion,ownerId:request.ownerId,mode:request.mode,scope:request.scope,participants:request.participants,lens:null,simulation:data.simulation,version:data.version,model:typeof data.model==='string'?data.model:null,context,...(['traced','none','untraced'].includes(data.sourceCheck)?{sourceCheck:data.sourceCheck}:{})};
  }catch{return {status:'error',error:'Office 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.'};}
 }

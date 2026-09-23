@@ -56,3 +56,9 @@ test('project context is capped, strictly UUID validated, and never includes arb
  const result=await readOfficeContext({...request,includeProjects:true},{workspaceId:'test',read:async()=>({configured:true,rows})});
  assert.equal(result.projects.length,8);assert.equal(result.source,'partial');assert.ok(!JSON.stringify(result).includes('secret'));
 });
+test('engine client carries an allow-listed source check to the browser',async()=>{
+ const opts=value=>({engineUrl:'http://engine.test',secret:'test-secret',fetcher:async()=>Response.json({...generated,...value})});
+ assert.equal((await callOfficeEngine(request,context,opts({sourceCheck:'untraced'}))).sourceCheck,'untraced');
+ assert.equal((await callOfficeEngine(request,context,opts({sourceCheck:'forged'}))).sourceCheck,undefined);
+ assert.equal((await callOfficeEngine(request,context,opts({}))).sourceCheck,undefined);
+});

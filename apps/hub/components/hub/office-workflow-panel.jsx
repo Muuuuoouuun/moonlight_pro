@@ -2,7 +2,7 @@
 
 import React from 'react';
 import {OFFICE_ROSTER} from '@com-moon/agent-contracts/office';
-import {Button,CheckboxRow,EditDrawer,EmptyState,SegmentedControl,SelectField,Skeleton,TextAreaField,TruthBadge} from './hub-primitives';
+import {Button,CertaintyBadge,CheckboxRow,EditDrawer,EmptyState,SegmentedControl,SelectField,Skeleton,TextAreaField,TruthBadge} from './hub-primitives';
 import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowQuery,officeWorkflowNote,readOfficeWorkflow,sendOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowReviewers,officeWorkflowGenerationRequest} from './office-workflow-client';
 import {OfficeDeliberationControls,OfficeDiscussion} from './office-deliberation-controls';
 import {officeDeliberationForParticipants} from './office-deliberation-client';
@@ -163,7 +163,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
         {!state.pending&&<details><summary>새 요청이 필요한 경우</summary><p className={styles.note}>{receipt.status==='unsaved'?'저장되지 않은 본문을 먼저 복사해 주세요. 새 결과를 만들면 현재 본문이 바뀝니다.':'이전 요청이 계속 처리될 수 있습니다. 새 요청은 별도로 실행되며 비용이 중복될 수 있습니다.'}</p><Button size="xs" onClick={()=>patch({receipt:{...receipt,status:'error'},note:'이전 요청을 목록에 보존했습니다. 새 요청을 보낼 수 있습니다.'})}>별도 요청 준비</Button></details>}
       </div>}
       {result&&<article className={styles.result}>
-        <div className={styles.actions}><strong>{result.summary}</strong><TruthBadge state={receipt.persistence?.persisted===true?'live':'partial'} label={receipt.persistence?.persisted===true?'초안 저장됨':'저장 확인 필요'} /></div>
+        <div className={styles.actions}><strong>{result.summary}</strong><TruthBadge state={receipt.persistence?.persisted===true?'live':'partial'} label={receipt.persistence?.persisted===true?'초안 저장됨':'저장 확인 필요'} />{result.sourceCheck === 'untraced' ? <CertaintyBadge state="unknown" label="근거 확인 안 됨" /> : null}</div>
         <pre className={styles.body}>{result.artifact.body}</pre>
         <div className={styles.actions}><Button size="xs" onClick={copy}>{state.copied?'복사됨':'복사'}</Button>
           {result.nextStep && !hasApplication && <Button size="xs" onClick={openTask} disabled={!receipt.capabilities?.applyTask || receipt.persistence?.persisted!==true || state.pending || state.applicationUnknown}>할 일로 연결</Button>}

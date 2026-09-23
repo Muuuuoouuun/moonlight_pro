@@ -34,7 +34,11 @@ export async function runOfficeWorkflow(request: OfficeWorkflowRequest, context:
   const reviewSource = { facts: context.facts, sourceRefs: context.sourceRefs, missing: context.missing, asOf: context.asOf };
   const sourceCatalog = buildOfficeSourceCatalog(request, reviewSource);
   const reviewSchema = officeSourceReviewSchema(responseJsonSchema, sourceCatalog);
-  const parseReviewed = (text: string) => parseOfficeWorkflowAnswer(readSourceReviewedOutput(JSON.parse(text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')), request, reviewSource, sourceCatalog), request, context);
+  const parseReviewed = (text: string) => {
+    const reviewed = readSourceReviewedOutput(JSON.parse(text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')), request, reviewSource, sourceCatalog);
+    // The contract upgrades this to 'untraced' when every returned evidence ref falls outside the sources.
+    return parseOfficeWorkflowAnswer({ ...reviewed.answer, sourceCheck: reviewed.sourceCheck }, request, context);
+  };
   const call = async (input: Parameters<typeof generateGeminiText>[0]) => {
     signal.throwIfAborted();
     const result = await generate(input);

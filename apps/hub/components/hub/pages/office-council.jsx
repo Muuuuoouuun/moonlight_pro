@@ -25,6 +25,7 @@ function ResultTurn({ turn, onRevise, onCopy, copyStatus }) {
       <strong>{owner?.name || 'Office'}</strong>
       <span>{SCOPE_LABEL[result.scope]} · {MODES.find(item => item.key === result.mode)?.label}</span>
       <CertaintyBadge state="recommended" />
+      {result.sourceCheck === 'untraced' ? <CertaintyBadge state="unknown" label="근거 확인 안 됨" /> : null}
     </div>
     <details className={styles.request}><summary>이번 요청</summary><p>{turn.message}</p></details>
     <div className={styles.answer}>{result.answer}</div>

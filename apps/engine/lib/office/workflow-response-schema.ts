@@ -9,7 +9,6 @@ export function officeWorkflowResponseSchema(mode: OfficeMode): Record<string, u
   const taskFields = object({
     title: string(300), description: string(4000), nextAction: string(1000),
     dueAt: { ...string(40), description: '사용자가 제시한 기한만. 없으면 필드를 생략한다.' },
-    projectId: { ...string(36), description: 'sourceRefs의 project entityId만. 없으면 생략한다.' },
     dealId: { ...string(36), description: 'sourceRefs의 deal entityId만. 없으면 생략한다.' },
     priority: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
   }, ['title']);

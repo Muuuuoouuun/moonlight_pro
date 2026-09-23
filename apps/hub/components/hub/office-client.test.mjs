@@ -62,3 +62,9 @@ test('⌘J and the top-bar sparkle open the Office page instead of the legacy gl
   assert.doesNotMatch(app, /FloatingMentorWidget/);
   assert.match(topbar, /tooltip="Office \(⌘J\)"/);
 });
+
+test('an untraced result carries an explicit certainty badge on both Office surfaces', () => {
+  const badge = /sourceCheck === 'untraced' \? <CertaintyBadge state="unknown" label="근거 확인 안 됨" \/> : null/;
+  assert.match(fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8'), badge);
+  assert.match(fs.readFileSync(new URL('./office-workflow-panel.jsx', import.meta.url), 'utf8'), badge);
+});

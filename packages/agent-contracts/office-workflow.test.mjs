@@ -40,17 +40,51 @@ test('facts and outputs use byte limits so large Korean payloads fail without se
 });
 
 test('model cannot invent a reference, server state, action ID or an unrequested council', () => {
-  for (const change of [{ evidence: [{ sourceRefId: 'fabricated', explanation: 'citation' }] }, { persisted: true }, { status: 'generated' }, { council: {} }, { nextStep: { kind: 'send_message', label: '보내기', fields: {} } }]) assert.throws(() => parseOfficeWorkflowAnswer({ ...answer(), ...change }, request, context));
+  for (const change of [{ persisted: true }, { status: 'generated' }, { council: {} }]) assert.throws(() => parseOfficeWorkflowAnswer({ ...answer(), ...change }, request, context));
   assert.equal(parseOfficeWorkflowAnswer(answer(), request, context).nextStep, null);
+  // 2026-09-23 운영자 확정: 지어낸 근거·지원하지 않는 행동은 결과 전체가 아니라 그 항목만 버린다.
+  const invented = parseOfficeWorkflowAnswer({ ...answer(), evidence: [{ sourceRefId: 'fabricated', explanation: 'citation' }] }, request, context);
+  assert.deepEqual(invented.evidence, []);
+  assert.equal(invented.sourceCheck, 'untraced');
+  assert.ok(invented.uncertainties.includes('근거 1건은 전달된 자료에서 찾지 못해 제외했습니다.'));
+  const action = parseOfficeWorkflowAnswer({ ...answer(), nextStep: { kind: 'send_message', label: '보내기', fields: {} } }, request, context);
+  assert.equal(action.nextStep, null);
+  assert.equal(action.artifact.body, answer().artifact.body);
 });
 
 test('next task is a typed proposal; source IDs and editable fields cannot grant execution', () => {
   const proposal = { kind: 'create_task', label: '후속 정리', fields: { title: '확인할 항목 정리' } };
-  assert.deepEqual(parseOfficeWorkflowAnswer({ ...answer(), nextStep: proposal }, request, context).nextStep, proposal);
-  for (const fields of [{ ...proposal.fields, commandId: id }, { ...proposal.fields, projectId }, { ...proposal.fields, dueAt: '2026-02-30' }, { ...proposal.fields, status: 'done' }, { ...proposal.fields, description: 'x'.repeat(4001) }]) assert.throws(() => parseOfficeWorkflowAnswer({ ...answer(), nextStep: { ...proposal, fields } }, request, context));
+  const clean = parseOfficeWorkflowAnswer({ ...answer(), nextStep: proposal }, request, context);
+  assert.deepEqual(clean.nextStep, proposal);
+  assert.deepEqual(clean.uncertainties, answer().uncertainties);
+  for (const fields of [{ ...proposal.fields, commandId: id }, { ...proposal.fields, projectId }, { ...proposal.fields, dueAt: '2026-02-30' }, { ...proposal.fields, status: 'done' }, { ...proposal.fields, description: 'x'.repeat(4001) }]) {
+    const parsed = parseOfficeWorkflowAnswer({ ...answer(), nextStep: { ...proposal, fields } }, request, context);
+    assert.deepEqual(parsed.nextStep, proposal, JSON.stringify(fields));
+    assert.ok(parsed.uncertainties.includes('다음 행동 제안의 일부 항목(기한·우선순위 등)을 확인하지 못해 뺐습니다.'));
+    assert.equal(parsed.artifact.body, answer().artifact.body);
+  }
   assert.equal(parseOfficeWorkflowAnswer({ ...answer(), nextStep: { ...proposal, fields: { ...proposal.fields, description: 'x'.repeat(4000) } } }, request, context).nextStep.fields.description.length, 4000);
+  // 프로젝트는 운영자가 연결 단계에서 고른다 — 참고 자료에 있어도 모델이 채운 projectId는 받지 않는다.
   const withProject = { ...context, sourceRefs: [...context.sourceRefs, { id: 'project', type: 'project', entityId: projectId }] };
-  assert.equal(parseOfficeWorkflowAnswer({ ...answer(), nextStep: { ...proposal, fields: { ...proposal.fields, projectId } } }, request, withProject).nextStep.fields.projectId, projectId);
+  assert.equal(parseOfficeWorkflowAnswer({ ...answer(), nextStep: { ...proposal, fields: { ...proposal.fields, projectId } } }, request, withProject).nextStep.fields.projectId, undefined);
+  const untitled = parseOfficeWorkflowAnswer({ ...answer(), nextStep: { kind: 'create_task', label: '', fields: { title: '' } } }, request, context);
+  assert.equal(untitled.nextStep, null);
+  assert.ok(untitled.uncertainties.includes('다음 행동 제안을 확인하지 못해 제외했습니다. 필요하면 할 일을 직접 만들어 주세요.'));
+});
+
+test('partial repairs are idempotent and keep the twelve-line uncertainty limit', () => {
+  const noisy = { ...answer(), uncertainties: Array.from({ length: 12 }, (_, i) => `모델 메모 ${i}`), evidence: [{ sourceRefId: 'weekly', explanation: '선택 기간 집계' }, { sourceRefId: 'nope', explanation: '없음' }], nextStep: { kind: 'create_task', label: '후속', fields: { title: '정리', priority: 'urgent' } } };
+  const once = parseOfficeWorkflowAnswer(noisy, request, context);
+  assert.equal(once.uncertainties.length, 12);
+  assert.equal(once.evidence.length, 1);
+  assert.equal(once.sourceCheck, undefined);
+  assert.deepEqual(parseOfficeWorkflowAnswer(once, request, context), once);
+});
+
+test('sourceCheck is an allow-listed optional result field', () => {
+  assert.equal(parseOfficeWorkflowResult({ ...generated(), sourceCheck: 'none' }, request, context).sourceCheck, 'none');
+  assert.equal(parseOfficeWorkflowResult(generated(), request, context).sourceCheck, undefined);
+  assert.throws(() => parseOfficeWorkflowResult({ ...generated(), sourceCheck: 'maybe' }, request, context));
 });
 
 test('council requires exactly the selected distinct perspectives and the owner recommendation', () => {
