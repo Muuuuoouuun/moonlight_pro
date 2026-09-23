@@ -64,6 +64,7 @@ export const DATABASE_FEATURES = [
     bodyIncludes: [['enforce_task_focus_cap_v1()', 'if v_selected >= 3 then'],
       ['enforce_task_focus_cap_v1()', 'for no key update']],
     triggers: [['tasks', 'task_focus_cap_v1', 'enforce_task_focus_cap_v1()']] },
+  { name: 'Studio AI 템플릿', migration: '20260923_0044_content_prompt_templates.sql', tables: ['content_prompt_templates'], functions: [] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

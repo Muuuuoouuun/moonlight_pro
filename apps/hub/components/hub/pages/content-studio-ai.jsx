@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Badge, Button, SelectField } from '../hub-primitives';
+import { Badge, Button, SelectField, TextAreaField } from '../hub-primitives';
 import {
   STUDIO_CHANNELS, formatForChannel, isTransformStale, previewCandidate, studioErrorMessage,
 } from '@/lib/content-workflow-client';
@@ -32,7 +32,7 @@ function ChangePreview({ before, after }) {
   </div>;
 }
 
-export function StudioAI({ studio, selection, onOpenHistory }) {
+export function StudioAI({ studio, selection, onOpenHistory, request = '', onRequestChange, templates, templateId = '', onPickTemplate, onSaveAsTemplate }) {
   const { draft, save, mutate, busy, recovery } = studio;
   const [operation, setOperation] = React.useState('draft'), [tone, setTone] = React.useState('brand');
   const [targetChannel, setTargetChannel] = React.useState('instagram');
@@ -95,6 +95,7 @@ export function StudioAI({ studio, selection, onOpenHistory }) {
     const request = {
       requestId: crypto.randomUUID(), contentId: saved.contentId, variantId: saved.variantId,
       expectedVariantUpdatedAt: saved.variantUpdatedAt, operation: op, selection: range, tone,
+      ...(request.trim() ? { request: request.trim() } : {}),
       target: { variantType: op === 'repurpose' ? formatForChannel(channel) : saved.variantType, channel },
     };
     requestRef.current = request;
@@ -111,9 +112,25 @@ export function StudioAI({ studio, selection, onOpenHistory }) {
   const moreOperation = moreOperations.some((entry) => entry.value === operation) ? operation : moreOperations[0]?.value;
   const moreGuidance = getEditorialGuidance(moreOperation);
   // 자주 쓰는 두 작업(초안·다듬기)만 버튼으로 드러내고, 나머지 작업·말투·기준은 '다른 작업'에 접어 둔다.
+  const templateName = templates?.templates?.find((t) => t.id === templateId)?.name;
+  const templateOptions = [{ value: '', label: templates?.status === 'loading' ? '불러오는 중…' : '템플릿 없이' },
+    ...(templates?.templates || []).map((t) => ({ value: t.id, label: t.name }))];
   return <div className="studio-ai" aria-label="AI 작업">
     <div className="studio-stack">
-      <div className="studio-actions">
+      <details className="studio-ai-request">
+        <summary>AI 요청 · 템플릿 <span className="studio-summary-count">{templateName || (request.trim() ? '직접 입력' : '없음')}</span></summary>
+        <div className="studio-stack studio-source-fields">
+          <SelectField label="템플릿" options={templateOptions} value={templateId} disabled={generating || templates?.status !== 'live'} onChange={(event) => onPickTemplate?.(event.target.value)} />
+          {['preview', 'error'].includes(templates?.status) && <p role="status" className="studio-muted studio-small">
+            {templates.status === 'preview' ? '템플릿 저장소 연결이 필요합니다. 요청은 이번 작업에만 쓸 수 있습니다.' : templates.message}
+            {templates.status === 'error' && <> <Button size="xs" onClick={templates.reload}>다시 불러오기</Button></>}
+          </p>}
+          <TextAreaField label="AI에게 부탁할 것" hint="구성·길이·말투·강조를 적어 주세요. 여기 적은 사실·수치는 근거로 쓰지 않습니다 — 근거는 원문 메모에." placeholder="예: 첫 줄은 질문으로, 세 문단 이내, 반말, 마지막 줄은 한 줄 결론"
+            value={request} onChange={(event) => onRequestChange?.(event.target.value)} rows={3} maxLength={2000} showCount disabled={generating} />
+          <div className="studio-actions"><Button size="xs" variant="outline" disabled={generating || templates?.status !== 'live' || !request.trim()} onClick={onSaveAsTemplate}>이 요청을 템플릿으로 저장</Button></div>
+        </div>
+      </details>
+      <div className="studio-actions studio-ai-actions">
         <Button variant="outline" icon="sparkle" disabled={!canRun('draft')} onClick={() => generate('draft')}>{generating && operation === 'draft' ? 'AI 초안 작성 중…' : 'AI 초안'}</Button>
         <Button variant="outline" icon="sparkle" disabled={!canRun('polish')} onClick={() => generate('polish')}>{generating && operation === 'polish' ? 'AI 다듬는 중…' : activeSelection ? '선택 부분 AI 다듬기' : 'AI 다듬기'}</Button>
         {!draft.sourceIdea.trim() && !draft.brief.message.trim() && !draft.body.trim() && <span className="studio-muted studio-small">원문 메모를 적으면 AI 초안을 만들 수 있습니다.</span>}
