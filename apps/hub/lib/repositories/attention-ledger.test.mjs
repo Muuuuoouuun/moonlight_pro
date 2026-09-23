@@ -137,6 +137,18 @@ test("an acknowledged old task deadline keeps a deliberate today focus without r
   assert.equal(unfocused.priorityReason, "이전 기한 · 알림 해제");
 });
 
+test("standalone task action, checklist and database version reach My Work detail", async () => {
+  const checklist = [{ id: "22222222-2222-4222-8222-222222222222", title: "후속 연락", done: false, note: "", dueAt: "2026-09-30" }];
+  state.todos = [{ id: "11111111-1111-4111-8111-111111111111", title: "회의 후속", status: "todo", done: false,
+    nextAction: "자료를 보내고 수신 여부 확인", checklist, updatedAt: "2026-09-23T02:10:11.123456Z" }];
+  const result = await getAttentionLedger();
+  const task = result.items.find((item) => item.lane === "task");
+  assert.equal(task.projectId, null);
+  assert.equal(task.nextAction, state.todos[0].nextAction);
+  assert.deepEqual(task.checklist, checklist);
+  assert.equal(task.updatedAt, state.todos[0].updatedAt);
+});
+
 test("attention returns the same items and scoring with three revenue reads instead of seven", async () => {
   const { raw, ...full } = await getAttentionLedger({ includeRaw: true });
   const fullCalls = state.calls;

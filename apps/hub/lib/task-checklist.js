@@ -33,12 +33,14 @@ export function validateTaskChecklist(items) {
   if (!Array.isArray(items) || items.length > TASK_CHECKLIST_LIMIT) return `체크리스트는 최대 ${TASK_CHECKLIST_LIMIT}개까지 만들 수 있습니다.`;
   const ids = new Set();
   for (const [index, item] of items.entries()) {
-    if (!isCanonicalUuid(item.id) || ids.has(item.id)) return '체크리스트 항목을 다시 확인하세요.';
-    if (!item.title?.trim()) return `${index + 1}번째 체크리스트 항목의 이름을 입력하세요.`;
+    if (!item || typeof item !== 'object' || Array.isArray(item)
+      || !isCanonicalUuid(item.id) || ids.has(item.id.toLowerCase())) return '체크리스트 항목을 다시 확인하세요.';
+    if (typeof item.title !== 'string' || !item.title.trim()) return `${index + 1}번째 체크리스트 항목의 이름을 입력하세요.`;
+    if (item.note !== undefined && typeof item.note !== 'string') return '체크리스트 세부 메모를 확인하세요.';
     if (item.title.length > 200 || (item.note || '').length > 500) return '항목 이름은 200자, 세부 메모는 500자까지 입력할 수 있습니다.';
     if (!validChecklistDate(item.dueAt)) return `${index + 1}번째 항목의 날짜를 확인하세요.`;
     if (typeof item.done !== 'boolean') return '체크리스트 완료 여부를 확인하세요.';
-    ids.add(item.id);
+    ids.add(item.id.toLowerCase());
   }
   return '';
 }

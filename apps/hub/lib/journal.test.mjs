@@ -52,6 +52,19 @@ test('reuse validates revision, required title, optional dates, project, brand a
   assert.deepEqual(validateJournalInput(reuse({ action: 'create_content', target: { title: 'x' } })).value.target, { title: 'x', brandId: null, channel: 'threads' });
 });
 
+test('task reuse preserves a reviewed action plan and rejects malformed checklist input', () => {
+  const step = { id: ID, title: '자료 확인', done: false, note: '', dueAt: '2026-09-30' };
+  const command = reuse({ target: { title: '후속 연락', dueAt: '2026-09-30T00:00:00+09:00', projectId: null,
+    nextAction: '  전화로 확인  ', checklist: [{ ...step, extra: 'ignored' }] } });
+  assert.deepEqual(validateJournalInput(command).value.target, { title: '후속 연락', dueAt: '2026-09-30T00:00:00+09:00',
+    projectId: null, nextAction: '전화로 확인', checklist: [step] });
+  for (const checklist of [null, {}, [null], [{ ...step, done: 'false' }], [{ ...step, title: 7 }], [{ ...step, note: {} }], [{ ...step, dueAt: '2026-02-31' }],
+    [step, step], Array.from({ length: 51 }, (_, index) => ({ ...step, id: index === 0 ? ID : REQUEST }))]) {
+    assert.equal(validateJournalInput(reuse({ target: { title: '후속 연락', checklist } })).ok, false);
+  }
+  assert.equal(validateJournalInput(reuse({ target: { title: '후속 연락', nextAction: '전화' } })).ok, false);
+});
+
 test('timestamps require real ISO dates with timezone and generated links are internal', () => {
   for (const value of ['2026-09-13T12:00:00Z', '2024-02-29T23:59:59.123456+09:00']) assert.equal(isJournalTimestamp(value), true);
   for (const value of ['2026-09-13T24:00:00Z', '2026-09-13T12:00:00', '2026-09-13T12:00:00+99:00', '0000-01-01T00:00:00Z']) assert.equal(isJournalTimestamp(value), false);
