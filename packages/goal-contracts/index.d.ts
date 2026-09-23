@@ -6,6 +6,7 @@ export const GOAL_ENTITY_TYPES: readonly string[];
 export const GOAL_ACTIONS: readonly string[];
 export const GOAL_SOURCE_CATALOG: Record<string,{label:string;description:string}>;
 export function isGoalUuid(value:unknown):boolean;
+export function isGoalEntityUuid(value:unknown):boolean;
 export function isGoalDate(value:unknown):boolean;
 export function isGoalTimestamp(value:unknown):boolean;
 export function validateGoalCommand(value:unknown):{ok:false;error:string}|{ok:true;value:Record<string,any>};

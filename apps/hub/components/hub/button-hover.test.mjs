@@ -230,6 +230,8 @@ const AUDITED_RAW_BUTTON_CONTAINERS = [
   // memo-workspace.jsx (CSS module) — 필터는 raw <button aria-pressed>
   ".workspace .filters button",
   '.workspace .filters button[aria-pressed="true"]',
+  // project-work-list.jsx (CSS module) — 추가 항목 유형 메뉴는 raw <button aria-pressed>
+  '.addOptions button[aria-pressed="true"]',
 ];
 
 test("every high-specificity descendant button rule under apps/hub is audited (DESIGN.md 8.1)", async () => {

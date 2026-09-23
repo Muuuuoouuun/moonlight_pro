@@ -9,6 +9,59 @@ const context={workspaceId:workspace,actorId:'operator'};
 function dependencies(extra={}) {
   return {configured:true,now:'2026-09-21T02:00:00Z',fetchRows:async table=>{const rows=table==='operating_objectives'?[objective]:table==='operating_metrics'?[metric]:table==='operating_observations'?[observation]:[];return {rows,count:rows.length};},...extra};
 }
+test('legacy canonical workspace IDs reach goal reads and entity scope resolution',async()=>{
+  const legacyWorkspace='11111111-1111-1111-1111-111111111111';
+  const seen=[];
+  const reads=dependencies({fetchRows:async(table,options)=>{
+    seen.push({table,options});return {rows:[],count:0};
+  },metricReader:{get:async(table,entityId)=>({id:entityId,workspace_id:legacyWorkspace}),resolveEntityScope:async()=> 'company'}});
+  const trusted={workspaceId:legacyWorkspace,actorId:'operator'};
+  const all=await getGoalsLedger({},trusted,reads);
+  assert.equal(all.status,'live');assert.deepEqual(all.objectives,[]);
+  const linked=await getGoalsLedger({entityType:'tasks',entityId:id},trusted,reads);
+  assert.equal(linked.status,'live');assert.equal(linked.entityScope,'company');
+  assert.deepEqual(seen.map(entry=>entry.table),['operating_objectives','operating_goal_links']);
+  assert.ok(seen.every(entry=>entry.options.filters.some(([key,value])=>key==='workspace_id'&&value===`eq.${legacyWorkspace}`)));
+  assert.equal((await getGoalsLedger({entityType:'tasks',entityId:'not-a-uuid'},trusted,reads)).error,'invalid-goal-filter','entity IDs still require canonical database UUID syntax');
+  assert.equal((await getGoalsLedger({}, {workspaceId:'not-a-uuid',actorId:'operator'},reads)).error,'invalid-workspace');
+  assert.equal(seen.length,2,'invalid workspace and entity filters never reach storage');
+});
+test('legacy task links hydrate through trusted workspace and scope filters',async()=>{
+  const legacyTask='44444444-4444-4444-4444-444444444441';
+  const link={workspace_id:workspace,objective_id:id,entity_type:'tasks',entity_id:legacyTask};
+  const seen=[];
+  const linkedDependencies=dependencies({fetchRows:async(table,options)=>{
+    seen.push({table,options});
+    const rows=table==='operating_goal_links'?[link]:table==='operating_objectives'?[objective]:[];
+    return {rows,count:rows.length};
+  },metricReader:{get:async(table,entityId)=>{assert.equal(table,'tasks');assert.equal(entityId,legacyTask);return {id:entityId,workspace_id:workspace};},resolveEntityScope:async()=> 'personal'}});
+  const result=await getGoalsLedger({entityType:'tasks',entityId:legacyTask},context,linkedDependencies);
+  assert.equal(result.status,'live');
+  assert.equal(result.links[0].entityId,legacyTask);assert.equal(result.links[0].linkStatus,'current');
+  assert.ok(seen.every(entry=>entry.options.filters.some(([key,value])=>key==='workspace_id'&&value===`eq.${workspace}`)));
+  assert.ok(seen.find(entry=>entry.table==='operating_objectives').options.filters.some(([key,value])=>key==='scope'&&value==='eq.personal'));
+  const wrongWorkspace=await getGoalsLedger({entityType:'tasks',entityId:legacyTask},context,{...linkedDependencies,fetchRows:async()=>({rows:[{...link,workspace_id:other}],count:1})});
+  assert.equal(wrongWorkspace.error,'goal-links-read-failed');
+  const unavailableScope=await getGoalsLedger({entityType:'tasks',entityId:legacyTask},context,{...linkedDependencies,metricReader:{get:async()=>null,resolveEntityScope:async()=>null}});
+  assert.equal(unavailableScope.error,'entity-scope-unavailable');
+  assert.equal((await getGoalsLedger({objectiveId:legacyTask},context,linkedDependencies)).error,'invalid-goal-filter');
+});
+test('legacy workspace context reaches command and receipt RPCs without relaxing command IDs',async()=>{
+  const legacyWorkspace='11111111-1111-1111-1111-111111111111';
+  const trusted={workspaceId:legacyWorkspace,actorId:'operator'};
+  const calls=[];
+  const storage=dependencies({rpc:async(name,params)=>{
+    calls.push({name,params});return {ok:true,data:{status:'saved',persisted:true,commandId:id,entity:{id},replayed:name==='operating_goal_receipt_v1'}};
+  }});
+  const payload={commandId:id,action:'create_objective',input:{title:'목표',scope:'personal',periodStart:'2026-09-01',periodEnd:'2026-09-30',timezone:'Asia/Seoul'}};
+  assert.equal((await executeGoalCommand(payload,trusted,storage)).status,'saved');
+  assert.equal((await getGoalCommandReceipt(id,trusted,storage)).status,'saved');
+  assert.deepEqual(calls.map(call=>call.name),['operating_goal_command_v1','operating_goal_receipt_v1']);
+  assert.ok(calls.every(call=>call.params.p_workspace_id===legacyWorkspace));
+  assert.equal((await executeGoalCommand({...payload,commandId:legacyWorkspace},trusted,storage)).status,'invalid-input');
+  assert.equal((await getGoalCommandReceipt(legacyWorkspace,trusted,storage)).error,'invalid-command-id');
+  assert.equal(calls.length,2);
+});
 test('projection uses exact-period latest snapshots and never adds them',async()=>{
   const result=await getGoalsLedger({},context,dependencies({fetchRows:async table=>{
     const rows=table==='operating_objectives'?[objective]:table==='operating_metrics'?[metric]:table==='operating_observations'?[{...observation,value:5,created_at:'2026-09-20T00:00:00Z'},observation]:[];

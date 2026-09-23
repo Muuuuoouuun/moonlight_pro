@@ -25,6 +25,12 @@ export function goalReadState(response, data) {
   return ['live', 'partial', 'preview'].includes(data.status) ? data.status : 'error';
 }
 
+export function goalReadErrorMessage(code) {
+  if (code === 'invalid-workspace') return '목표를 불러올 작업공간 설정을 확인해야 합니다. 업무 내용은 계속 편집할 수 있습니다.';
+  if (code === 'entity-scope-unavailable') return '이 업무의 소속을 확인하지 못했습니다. 프로젝트·소속을 저장한 뒤 다시 확인해 주세요.';
+  return '목표 정보를 읽지 못했습니다. 잠시 후 다시 확인해 주세요. 업무 내용은 계속 편집할 수 있습니다.';
+}
+
 export function createGoalReadClient({ fetchImpl = fetch } = {}) {
   const inflight = new Map();
   const empty = { objectives: [], metrics: [], observations: [], links: [], asOf: null };
@@ -38,7 +44,7 @@ export function createGoalReadClient({ fetchImpl = fetch } = {}) {
             const response = await fetchImpl(`/api/hub/goals${query ? `?${query}` : ''}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
             const data = await response.json().catch(() => null);
             const status = goalReadState(response, data);
-            return { ...empty, ...(status === 'error' ? {} : data), status, error: status === 'error' ? '목표 원장을 읽지 못했습니다. 다시 불러오세요.' : '' };
+            return { ...empty, ...(status === 'error' ? {} : data), status, error: status === 'error' ? goalReadErrorMessage(data?.error) : '' };
           } catch { return { ...empty, status: 'error', error: '연결을 확인하고 목표 원장을 다시 불러오세요.' }; }
           finally { if (inflight.get(query) === entry) inflight.delete(query); }
         })();

@@ -5,6 +5,21 @@ import { randomUUID } from 'node:crypto';
 import { validateGoalCommand } from '@com-moon/goal-contracts';
 
 const file = new URL('./goal-client.js', import.meta.url);
+test('goal read failures retain a safe actionable explanation without exposing server errors as content', async () => {
+  const { createGoalReadClient, goalReadErrorMessage } = await import(file);
+  for (const code of ['invalid-workspace', 'entity-scope-unavailable', 'database internal details']) {
+    const reader = createGoalReadClient({ fetchImpl: async () => ({ ok: true,
+      json: async () => ({ status: 'error', error: code, objectives: [{ id: 'stale-goal' }] }),
+    }) });
+    const result = await reader.read('entityType=tasks');
+    assert.equal(result.status, 'error');
+    assert.deepEqual(result.objectives, []);
+    assert.equal(result.error, goalReadErrorMessage(code));
+    assert.equal(result.error.includes(code), false);
+  }
+  assert.match(goalReadErrorMessage('invalid-workspace'), /작업공간 설정/);
+  assert.match(goalReadErrorMessage('entity-scope-unavailable'), /프로젝트·소속/);
+});
 test('goal routes retain the check view and list scope through create and detail navigation', async () => {
   const { goalHref } = await import(file);
   for (const scope of ['all', 'personal', 'classin']) {

@@ -10,6 +10,9 @@ export const GOAL_SOURCE_CATALOG = {
 };
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 export const isGoalUuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+// Linked work already exists in the database, including legacy UUID variants.
+// Newly issued goal, metric and command IDs retain isGoalUuid's stricter contract.
+export const isGoalEntityUuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export function isGoalDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value < '0001-01-01') return false;
   const date = new Date(`${value}T00:00:00Z`);
@@ -62,7 +65,7 @@ export function validateGoalCommand(input) {
       if (!Array.isArray(value.evidence) || value.evidence.length > 20 || (value.coverage === 'complete' && value.evidence.length === 0) || value.evidence.some(entry => !only(entry,['type','label','href','occurredAt']) || (entry.type !== undefined && entry.type !== 'manual') || !boundedText(entry.label,300,true) || !safeHref(entry.href) || !isGoalTimestamp(entry.occurredAt))) return bad('invalid-evidence');
       break;
     default:
-      if (!only(value,['objectiveId','entityType','entityId']) || !isGoalUuid(value.objectiveId) || !GOAL_ENTITY_TYPES.includes(value.entityType) || !isGoalUuid(value.entityId)) return bad('invalid-link');
+      if (!only(value,['objectiveId','entityType','entityId']) || !isGoalUuid(value.objectiveId) || !GOAL_ENTITY_TYPES.includes(value.entityType) || !isGoalEntityUuid(value.entityId)) return bad('invalid-link');
   }
   return {ok:true,value:{...input,commandId:input.commandId.toLowerCase()}};
 }
