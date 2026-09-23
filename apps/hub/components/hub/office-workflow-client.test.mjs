@@ -152,3 +152,8 @@ test('a 409 context change keeps the change summary for the confirmation step', 
   assert.equal(officeWorkflowNote(data), 'AI 결과를 만든 뒤 새 기록 1건 · 바뀐 기록 2건이 생겼습니다. 확인한 뒤 그대로 연결할 수 있습니다.');
   assert.match(officeWorkflowNote({ status: 'conflict', error: 'office-context-changed', contextChange: { added: 0, updated: 0, removed: 0 } }), /기록 내용이 바뀌었습니다/);
 });
+
+test('a classified generation failure explains its cause in the panel note', () => {
+  assert.match(officeWorkflowNote({ status: 'error', failure: { phase: 'review', category: 'deadline' } }), /제한 시간/);
+  assert.match(officeWorkflowNote({ status: 'error', failure: { phase: 'review', category: 'nope' } }), /요청을 처리하지 못했습니다/);
+});

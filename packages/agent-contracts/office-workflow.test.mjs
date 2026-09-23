@@ -101,3 +101,11 @@ test('Engine transport result binds identity and context while refusing Hub pers
   const { version, requestId, ownerId, mode, participants, scope } = generated();
   assert.equal(parseOfficeWorkflowResult({ version, requestId, ownerId, mode, participants, scope, status: 'error', error: '검수 실패' }, request, context).status, 'error');
 });
+
+test('a failed workflow result may carry only an allow-listed failure classification', () => {
+  const failed = { version: OFFICE_WORKFLOW_VERSION, requestId: id, status: 'error', ownerId: request.ownerId, mode: request.mode, participants: [], scope: request.scope, error: '응답이 제한 시간을 넘었습니다.' };
+  assert.deepEqual(parseOfficeWorkflowResult({ ...failed, failure: { phase: 'review', category: 'deadline' } }, request, context).failure, { phase: 'review', category: 'deadline' });
+  assert.equal(parseOfficeWorkflowResult({ ...failed, failure: { phase: 'review', category: 'boom' } }, request, context).failure, undefined);
+  assert.equal(parseOfficeWorkflowResult(failed, request, context).failure, undefined);
+  assert.throws(() => parseOfficeWorkflowResult({ ...generated(), failure: { phase: 'review', category: 'deadline' } }, request, context));
+});

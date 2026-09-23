@@ -122,3 +122,18 @@ test('legacy v2 guidance keeps its strict fields while removing forced work and 
     assert.doesNotMatch(built.systemInstruction, /친근하고 짧은 반말|제가 다시 연락할 테니|내일 캘린더로 다시 정돈/);
   }
 });
+
+test('a failed workflow names the failing phase and cause without provider text', async () => {
+  const cases = [
+    { name: 'json', provider: async () => ({ ok: true, text: '{bad json}', model: 'test-provider' }), expect: { phase: 'draft', category: 'json' } },
+    { name: 'provider', provider: async () => ({ ok: false, reason: 'sensitive provider error' }), expect: { phase: 'draft', category: 'provider' } },
+    { name: 'review provider', provider: (() => { let calls = 0; return async input => ++calls === 1 ? reply('초안', input) : { ok: false, reason: 'sensitive provider error' }; })(), expect: { phase: 'review', category: 'provider' } },
+    { name: 'review model', provider: (() => { let calls = 0; return async input => ++calls === 1 ? reply('초안', input) : { ...reply('검수', input), model: 'other-model' }; })(), expect: { phase: 'review', category: 'model-mismatch' } },
+  ];
+  for (const item of cases) {
+    const result = await generateOfficeWorkflow(request, context, item.provider);
+    assert.equal(result.status, 'error', item.name);
+    assert.deepEqual(result.failure, item.expect, item.name);
+    assert.doesNotMatch(JSON.stringify(result), /sensitive provider error/);
+  }
+});

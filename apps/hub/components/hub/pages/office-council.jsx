@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { OFFICE_ROSTER } from '@com-moon/agent-contracts/office';
+import { OFFICE_FAILURE_LABELS, OFFICE_ROSTER } from '@com-moon/agent-contracts/office';
 import { Button, CheckboxRow, Drawer, EmptyState, SegmentedControl, Skeleton, TextAreaField, TruthBadge, CertaintyBadge } from '../hub-primitives';
 import { requestOffice } from '../office-client';
 import { copyOfficeText, OFFICE_MINIMUM_INSTRUCTION, shouldSubmitOfficeKey } from '../office-session';
@@ -47,6 +47,23 @@ function ResultTurn({ turn, onRevise, onCopy, copyStatus }) {
     <p className={styles.note}>{result.context?.note}</p>
     {result.context?.projects?.length ? <details className={styles.request}><summary>참고한 프로젝트 ({result.context.projects.length})</summary><ul className={styles.note}>{result.context.projects.map(project => <li key={project.id}>{project.name} · {project.status}</li>)}</ul></details> : null}
   </article>;
+}
+
+// 2026-09-23 운영자 확정: 최근 7일 요청·할 일 연결·평균 지연·실패 원인을 한 줄로 — Office에 더 투자할지 판단할 근거.
+function OfficeUsageLine({ refreshKey }) {
+  const [usage, setUsage] = React.useState(null);
+  const load = React.useCallback(() => {
+    setUsage(null);
+    fetch('/api/hub/office/usage', { cache: 'no-store' }).then(res => res.json()).then(setUsage).catch(() => setUsage({ status: 'error' }));
+  }, []);
+  React.useEffect(() => { load(); }, [load, refreshKey]);
+  if (!usage) return <div className={styles.usage}><Skeleton lines={1} label="최근 7일 사용 기록 확인 중" style={{ flex: '1 1 240px', maxWidth: 320 }} /></div>;
+  if (usage.status === 'preview') return <p className={styles.usage}><TruthBadge state="preview" /> 사용 기록은 저장 연결 후 표시됩니다.</p>;
+  if (usage.status !== 'live') return <p className={styles.usage}><TruthBadge state="error" /> 사용 기록을 읽지 못했습니다. <Button size="xs" variant="ghost" onClick={load}>다시 확인</Button></p>;
+  const failures = Object.entries(usage.failureCategories || {}).map(([key, n]) => `${OFFICE_FAILURE_LABELS[key] || key} ${n}`).join(' · ');
+  return <p className={styles.usage}>최근 <span className="mono">{usage.windowDays}</span>일 · 요청 <span className="mono">{usage.requests}</span> · 할 일 연결 <span className="mono">{usage.applied}</span>
+    {usage.averageElapsedMs != null ? <> · 평균 <span className="mono">{Math.round(usage.averageElapsedMs / 1000)}</span>초</> : null}
+    {' · '}실패 <span className="mono">{usage.failed}</span>{failures ? ` (${failures})` : ''}</p>;
 }
 
 export function OfficeCouncil({ scope = 'all' }) {
@@ -154,6 +171,7 @@ export function OfficeCouncil({ scope = 'all' }) {
       </div>
     </div>
     <p className={styles.sessionNote}>범위를 바꾸면 해당 범위의 입력과 대화를 엽니다. 새로고침·탭 종료 시 자유 요청의 미전송 원문과 답변은 사라집니다.</p>
+    <OfficeUsageLine refreshKey={session.turns.length} />
     {rosterOpen ? <Drawer title="담당 변경" subtitle="필요한 산출물에 맞춰 고르세요." onClose={() => setRosterOpen(false)} width="min(440px, 94vw)">
       <div className={styles.roster}>{OFFICE_ROSTER.map(person => <button type="button" key={person.id} className={`hub-row ${styles.member}`} aria-pressed={person.id === ownerId} onClick={() => selectOwner(person.id)}>
         <span><strong>{person.name} <small>{person.role}</small></strong><span className={styles.memberPitch}>{person.pitch}</span></span>

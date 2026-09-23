@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { isAgentUuid } from '@com-moon/agent-contracts';
-import { parseOfficeDeliberation } from '@com-moon/agent-contracts/office';
+import { parseOfficeDeliberation, parseOfficeFailure } from '@com-moon/agent-contracts/office';
 import { parseOfficeWorkflowRequest, parseOfficeWorkflowContext, parseOfficeWorkflowResult, parseOfficeWorkflowOrigin } from '@com-moon/agent-contracts/office-workflow';
 
 const INTENTS = new Set(['weekly_report', 'customer_reply']);
@@ -29,6 +29,7 @@ export function projectOfficeReceipt(envelope) {
     result: status === 'expired' ? null : row.state === 'generated' ? row.result ?? null : null,
     persistence: { persisted: true }, application: publicApplication(row.application),
     ...(row.state === 'error' && row.result?.error ? { error: row.result.error } : {}),
+    ...(row.state === 'error' && parseOfficeFailure(row.result?.failure) ? { failure: parseOfficeFailure(row.result.failure) } : {}),
     capabilities: { generate: false, applyTask: status === 'generated' && row.context_snapshot?.capabilities?.applyTask === true && !row.application },
   };
 }
@@ -137,7 +138,10 @@ export function createOfficeWorkflowService(deps) {
     try {
       result = await deps.generate(request, resolved);
       if (result.status === 'generated') result = parseOfficeWorkflowResult(result, request, resolved);
-      else if (result.status !== 'unknown') result = { status: 'error', error: result.error || 'office-generation-failed' };
+      else if (result.status !== 'unknown') {
+        const failure = parseOfficeFailure(result.failure);
+        result = { status: 'error', error: result.error || 'office-generation-failed', ...(failure ? { failure } : {}) };
+      }
     } catch { result = { status: 'error', error: 'office-result-validation-failed' }; }
     if (Buffer.byteLength(JSON.stringify(result), 'utf8') > 32768) result = { status: 'error', error: 'office-result-too-large' };
     try {
@@ -151,12 +155,16 @@ export function createOfficeWorkflowService(deps) {
       if (saved.persisted === true) {
         if (result.status === 'generated' && saved.status === 'generated') {
           let run = null;
-          try { run = await deps.recordRun?.({ workspaceId: identity.workspaceId, agent: `office.${request.ownerId}`, mode: request.mode, ref: `office-request:${request.requestId}`, inputSummary: `intent=${request.intent} scope=${request.scope}`, recommendation: { requestId: request.requestId, artifactKind: result.artifact.kind, status: 'generated' }, result: 'ok' }); } catch { /* receipt remains authoritative */ }
+          try { run = await deps.recordRun?.({ workspaceId: identity.workspaceId, agent: `office.${request.ownerId}`, mode: request.mode, ref: `office-request:${request.requestId}`, inputSummary: `intent=${request.intent} scope=${request.scope}`, recommendation: { requestId: request.requestId, artifactKind: result.artifact.kind, status: 'generated', elapsedMs: result.generation?.elapsedMs ?? null, usage: result.generation?.usage ?? null }, result: 'ok' }); } catch { /* receipt remains authoritative */ }
           const logState = run?.persisted === true && isAgentUuid(run.id) ? 'saved' : run?.persisted === false ? 'error' : 'unknown';
           try {
             const logged = await rpc('office_request_log_v1', { p_request_id: request.requestId, p_run_id: logState === 'saved' ? run.id : null, p_log_state: logState }, identity);
             if (logged.persisted === true) saved = logged;
           } catch { saved = { ...saved, request: { ...saved.request, log_state: 'unknown' } }; }
+        }
+        // 2026-09-23 운영자 확정: 실패도 원인 분류만(본문 없음) 실행 기록에 남겨 Office 하단 요약에 보인다.
+        if (result.status === 'error') {
+          try { await deps.recordRun?.({ workspaceId: identity.workspaceId, agent: `office.${request.ownerId}`, mode: request.mode, ref: `office-request:${request.requestId}`, inputSummary: `intent=${request.intent} scope=${request.scope}`, recommendation: { requestId: request.requestId, status: 'error', failure: result.failure ?? null }, result: 'error' }); } catch { /* 영수증이 정본이다. */ }
         }
         return projectOfficeReceipt(saved);
       }

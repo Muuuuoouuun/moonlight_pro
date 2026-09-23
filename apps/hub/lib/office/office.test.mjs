@@ -37,18 +37,45 @@ test('Hub guard runs before generation; browser cannot inject workspace/context/
 });
 test('Hub rejects missing or stale Engine policy versions instead of relabeling them',async()=>{
  for(const version of [undefined,'2026-09-15.v1']) {
-  let writes=0;
-  const handler=createOfficeHubHandler({readContext:async()=>context,callEngine:(request,context)=>callOfficeEngine(request,context,{engineUrl:'http://engine.test',secret:'test',fetcher:async()=>Response.json({...generated,version})}),recordRun:async()=>{writes++;return {persisted:true};}});
+  const writes=[];
+  const handler=createOfficeHubHandler({readContext:async()=>context,callEngine:(request,context)=>callOfficeEngine(request,context,{engineUrl:'http://engine.test',secret:'test',fetcher:async()=>Response.json({...generated,version})}),recordRun:async value=>{writes.push(value.result);return {persisted:true};}});
   const response=await handler(req(input));
-  assert.equal(response.status,502);assert.equal((await response.json()).status,'error');assert.equal(writes,0);
+  // A stale answer is never relabeled or logged as a success; it may be logged only as an error.
+  assert.equal(response.status,502);assert.equal((await response.json()).status,'error');assert.deepEqual(writes,['error']);
  }
 });
 test('generated answer survives failed run logging; no business writes and no legacy agent key',async()=>{
  let seen;const handler=createOfficeHubHandler({readContext:async()=>context,callEngine:async()=>generated,recordRun:async value=>{seen=value;throw new Error('db failed');}});
  const response=await handler(req(input));const data=await response.json();assert.equal(response.status,200);assert.equal(data.status,'generated');assert.equal(data.log.persisted,false);assert.equal(data.businessWrites,false);assert.equal(seen.agent,'office.flareon');
 });
-test('preview or error generation is never logged as successful',async()=>{
- for(const status of ['preview','error']) {const handler=createOfficeHubHandler({readContext:async()=>context,callEngine:async()=>({status}),recordRun:async()=>assert.fail('must not log success')});assert.equal((await handler(req(input))).status,status==='preview'?202:502);}
+test('preview is never logged and an error is logged only as an error with its classification',async()=>{
+ const preview=createOfficeHubHandler({readContext:async()=>context,callEngine:async()=>({status:'preview'}),recordRun:async()=>assert.fail('must not log preview')});
+ assert.equal((await preview(req(input))).status,202);
+ const runs=[];const failure={phase:'review',category:'deadline'};
+ const handler=createOfficeHubHandler({readContext:async()=>context,callEngine:async()=>({status:'error',error:'응답이 제한 시간을 넘었습니다.',failure}),recordRun:async value=>{runs.push(value);return {persisted:true,id:'run'};}});
+ const response=await handler(req(input));const data=await response.json();
+ assert.equal(response.status,502);assert.deepEqual(data.failure,failure);
+ assert.equal(runs.length,1);assert.equal(runs[0].result,'error');assert.equal(runs[0].agent,'office.flareon');
+ assert.deepEqual(runs[0].recommendation.failure,failure);assert.ok(Number.isInteger(runs[0].recommendation.elapsedMs));
+ assert.doesNotMatch(JSON.stringify(runs[0]),/제안서/);
+});
+test('a generated answer logs latency, model calls and usage but never the request text',async()=>{
+ const runs=[];const generation={elapsedMs:18000,modelCalls:2,usage:{promptTokens:100,outputTokens:20,totalTokens:130}};
+ const handler=createOfficeHubHandler({readContext:async()=>context,callEngine:async()=>({...generated,generation}),recordRun:async value=>{runs.push(value);return {persisted:true,id:'run'};}});
+ assert.equal((await handler(req(input))).status,200);
+ assert.equal(runs[0].result,'ok');
+ assert.deepEqual({elapsedMs:runs[0].recommendation.elapsedMs,modelCalls:runs[0].recommendation.modelCalls,usage:runs[0].recommendation.usage},generation);
+ assert.doesNotMatch(JSON.stringify(runs[0]),/제안서/);
+});
+test('engine client passes a classified failure and a well-formed generation record',async()=>{
+ const opts=(body,status=200)=>({engineUrl:'http://engine.test',secret:'test-secret',fetcher:async()=>Response.json(body,{status})});
+ const failed=await callOfficeEngine(request,context,opts({status:'error',error:'raw',failure:{phase:'synthesis',category:'deadline'}},502));
+ assert.equal(failed.status,'error');assert.deepEqual(failed.failure,{phase:'synthesis',category:'deadline'});assert.match(failed.error,/제한 시간/);
+ const unclassified=await callOfficeEngine(request,context,opts({status:'error',error:'raw',failure:{phase:'x',category:'y'}},502));
+ assert.equal(unclassified.status,'error');assert.equal(unclassified.failure,undefined);
+ const generation={elapsedMs:10,modelCalls:2,usage:null};
+ assert.deepEqual((await callOfficeEngine(request,context,opts({...generated,generation}))).generation,generation);
+ assert.equal((await callOfficeEngine(request,context,opts({...generated,generation:{elapsedMs:-1,modelCalls:2,usage:null}}))).generation,undefined);
 });
 
 test('project context is capped, strictly UUID validated, and never includes arbitrary metadata',async()=>{

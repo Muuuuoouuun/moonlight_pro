@@ -1,5 +1,5 @@
 // Browser-safe workflow contract. Keep the existing Office v2 chat contract independent.
-import { OFFICE_IDS, OFFICE_MODES, OfficeInputError, parseOfficeDeliberation, parseOfficeDiscussion } from './office.js';
+import { OFFICE_IDS, OFFICE_MODES, OfficeInputError, parseOfficeDeliberation, parseOfficeDiscussion, parseOfficeFailure } from './office.js';
 
 export const OFFICE_WORKFLOW_VERSION = '2026-09-21.v1';
 export const OFFICE_WORKFLOW_INTENTS = Object.freeze(['weekly_report', 'customer_reply', 'freeform']);
@@ -182,16 +182,17 @@ export function parseOfficeWorkflowAnswer(value, request, context) {
 export function parseOfficeWorkflowResult(value, request, context) {
   const metadata = ['version', 'requestId', 'resultRevision', 'status', 'ownerId', 'mode', 'participants', 'scope', 'context', 'generation', 'discussion'];
   const answerKeys = ['summary', 'artifact', 'evidence', 'uncertainties', 'dissent', 'council', 'nextStep', 'sourceCheck'];
-  keys(value, [...metadata, ...answerKeys, 'error']);
+  keys(value, [...metadata, ...answerKeys, 'error', 'failure']);
   check(byteLength(value) <= OFFICE_WORKFLOW_LIMITS.resultBytes, '결과가 너무 큽니다. 요청 범위를 줄여 주세요.');
   check(value.version === OFFICE_WORKFLOW_VERSION && value.requestId === request.requestId && value.ownerId === request.ownerId && value.mode === request.mode && value.scope === request.scope && stable(value.participants) === stable(request.participants), '생성 결과의 요청 정보가 일치하지 않습니다.');
   check(['generated', 'preview', 'error'].includes(value.status), '생성 상태가 올바르지 않습니다.');
   const base = { version: value.version, requestId: value.requestId, ownerId: value.ownerId, mode: value.mode, participants: [...value.participants], scope: value.scope, status: value.status };
   if (value.status !== 'generated') {
     check(answerKeys.every(key => value[key] === undefined) && value.generation === undefined && value.resultRevision === undefined && value.context === undefined && value.discussion === undefined, '실패한 결과에 생성 본문을 넣을 수 없습니다.');
-    return { ...base, error: text(value.error, 1000) };
+    const failure = parseOfficeFailure(value.failure);
+    return { ...base, error: text(value.error, 1000), ...(failure ? { failure } : {}) };
   }
-  check(value.error === undefined && value.resultRevision === 1, '결과 버전이 올바르지 않습니다.');
+  check(value.error === undefined && value.failure === undefined && value.resultRevision === 1, '결과 버전이 올바르지 않습니다.');
   keys(value.context, ['asOf', 'contextHash', 'missing']);
   check(value.context.contextHash === context.contextHash && value.context.asOf === context.asOf && stable(value.context.missing) === stable(context.missing), '결과의 업무 문맥이 일치하지 않습니다.');
   keys(value.generation, ['policyVersion', 'promptHash', 'model', 'usage', 'elapsedMs']);

@@ -212,7 +212,7 @@ test('run logging records attribution independently; failure keeps the generated
 });
 
 test('all Office Hub read and mutation routes remain behind the existing session gate', () => {
-  for (const path of ['/api/hub/office/context', '/api/hub/office/requests', `/api/hub/office/requests/${randomUUID()}`, `/api/hub/office/requests/${randomUUID()}/recover`, `/api/hub/office/requests/${randomUUID()}/apply`]) {
+  for (const path of ['/api/hub/office/context', '/api/hub/office/requests', `/api/hub/office/requests/${randomUUID()}`, `/api/hub/office/requests/${randomUUID()}/recover`, `/api/hub/office/requests/${randomUUID()}/apply`, '/api/hub/office/usage']) {
     const input = { pathname: path, host: 'hub.example.test', secretConfigured: true, hasSession: false, allowLoopback: false };
     assert.notEqual(resolveRouteAccess(input).action, 'allow', path);
     assert.equal(resolveRouteAccess({ ...input, hasSession: true }).action, 'allow', path);
@@ -268,4 +268,25 @@ test('re-confirming an already saved application does not log a second link', as
   h.deps.apply = async () => ({ status: 'saved', persisted: true, commandId, entity: { id: taskId } });
   assert.equal((await h.service.apply(r.requestId, { resultRevision: 1 }, actor)).status, 'saved');
   assert.equal(runs.filter(run => run.agent === 'office.apply').length, 0);
+});
+
+test('a classified engine failure is stored with the request and logged as an error run', async () => {
+  const runs = [], failure = { phase: 'review', category: 'deadline' };
+  const h = harness({ generate: async () => ({ status: 'error', error: '응답이 제한 시간을 넘었습니다.', failure }), recordRun: async run => { runs.push(run); return { persisted: true, id: randomUUID() }; } });
+  const r = request(), actor = identity();
+  const result = await h.service.execute(r, actor);
+  assert.equal(result.status, 'error');
+  assert.deepEqual(result.failure, failure);
+  assert.deepEqual(h.rows.get(r.requestId).result.failure, failure);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].result, 'error');
+  assert.deepEqual(runs[0].recommendation, { requestId: r.requestId, status: 'error', failure });
+});
+
+test('a generated workflow run records latency and usage from the engine result', async () => {
+  const runs = [];
+  const h = harness({ generate: async (r, c) => { const g = generated(r, c); return { ...g, generation: { ...g.generation, elapsedMs: 21000, usage: { promptTokens: 10, outputTokens: 5, totalTokens: 15 } } }; }, recordRun: async run => { runs.push(run); return { persisted: true, id: randomUUID() }; } });
+  await h.service.execute(request(), identity());
+  assert.equal(runs[0].recommendation.elapsedMs, 21000);
+  assert.deepEqual(runs[0].recommendation.usage, { promptTokens: 10, outputTokens: 5, totalTokens: 15 });
 });

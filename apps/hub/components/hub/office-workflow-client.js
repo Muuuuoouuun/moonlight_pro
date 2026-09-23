@@ -1,5 +1,5 @@
 import {parseOfficeWorkflowOrigin,parseOfficeWorkflowRequest} from '@com-moon/agent-contracts/office-workflow';
-import {OFFICE_IDS,parseOfficeDeliberation,parseOfficeDiscussion} from '@com-moon/agent-contracts/office';
+import {OFFICE_IDS,parseOfficeDeliberation,parseOfficeDiscussion,parseOfficeFailure,officeFailureMessage} from '@com-moon/agent-contracts/office';
 import {officeDeliberationForParticipants} from './office-deliberation-client.js';
 
 export function officeWorkflowQuery({intent,scope,originRef}) {
@@ -24,6 +24,7 @@ export function officeWorkflowNote(receipt) {
     const parts=[added&&`새 기록 ${added}건`,updated&&`바뀐 기록 ${updated}건`,removed&&`빠진 기록 ${removed}건`].filter(Boolean);
     return parts.length?`AI 결과를 만든 뒤 ${parts.join(' · ')}이 생겼습니다. 확인한 뒤 그대로 연결할 수 있습니다.`:'AI 결과를 만든 뒤 기록 내용이 바뀌었습니다. 확인한 뒤 그대로 연결할 수 있습니다.';
   }
+  if (receipt?.status==='error' && parseOfficeFailure(receipt.failure)) return officeFailureMessage(receipt.failure);
   if (receipt?.error==='customer-scope-mismatch') return '선택한 범위와 고객의 범위가 다릅니다. 고객의 회사·개인 분류를 확인해 주세요.';
   if (receipt?.error==='customer-scope-unavailable') return '고객의 회사·개인 분류를 먼저 확인해 주세요.';
   if (receipt?.error==='context-too-large') return '참고 자료가 길어 이 요청으로 처리할 수 없습니다. 필요한 부분을 Office 자유 요청에서 선택해 주세요.';

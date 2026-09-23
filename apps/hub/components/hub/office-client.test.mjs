@@ -68,3 +68,12 @@ test('an untraced result carries an explicit certainty badge on both Office surf
   assert.match(fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8'), badge);
   assert.match(fs.readFileSync(new URL('./office-workflow-panel.jsx', import.meta.url), 'utf8'), badge);
 });
+
+test('Office shows a seven-day usage line that honors the read envelope', () => {
+  const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
+  assert.match(page, /fetch\('\/api\/hub\/office\/usage'/);
+  assert.match(page, /usage\.status === 'preview'/);
+  assert.match(page, /usage\.status !== 'live'/);
+  assert.match(page, /<OfficeUsageLine refreshKey=\{session\.turns\.length\} \/>/);
+  assert.match(page, /OFFICE_FAILURE_LABELS/);
+});

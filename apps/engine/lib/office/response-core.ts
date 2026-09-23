@@ -5,12 +5,17 @@ import { buildOfficeReview } from './review.ts';
 import { officeResponseSchema } from './response-schema.ts';
 import { runOfficeDiscussion, discussionSynthesisPrompt, OfficeDiscussionError, reportOfficeDiagnostic, readOfficeWithDiagnostic, type OfficeDiagnosticCallback, type OfficeDiagnosticEvent } from './deliberation.ts';
 import { buildOfficeSourceCatalog, officeSourceReviewPrompt, officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
+import { usageFor } from './usage.ts';
 
 export type OfficeResponseExecution = { signal: AbortSignal; generate: typeof generateGeminiText; onDiagnostic?: OfficeDiagnosticCallback };
 
 export async function runOfficeResponse(request: OfficeRequest, context: OfficeContext, execution: OfficeResponseExecution) {
   if (!(execution?.signal instanceof AbortSignal) || typeof execution.generate !== 'function') throw new TypeError('Office execution requires an AbortSignal and provider.');
   const { signal, generate, onDiagnostic } = execution;
+  const startedAt = Date.now();
+  const results: { usageMetadata?: unknown }[] = [];
+  // 2026-09-23 운영자 확정: 자유 대화도 지연·토큰을 남긴다(본문 없음).
+  const generation = () => ({ elapsedMs: Date.now() - startedAt, modelCalls: results.length, usage: usageFor(results) });
   const meta = { ownerId: request.ownerId, mode: request.mode, scope: request.scope, participants: request.participants, lens: null, simulation: request.mode === 'council', version: OFFICE_VERSION, context };
   const responseJsonSchema = officeResponseSchema(request.mode);
   const sourceCatalog = buildOfficeSourceCatalog(request, context);
@@ -33,6 +38,7 @@ export async function runOfficeResponse(request: OfficeRequest, context: OfficeC
     let result;
     try { result = await generate(input); }
     catch (error) { diagnostic(phase, signal.aborted ? 'deadline' : 'provider'); throw error; }
+    results.push(result);
     checkDeadline(phase);
     return result;
   };
@@ -40,6 +46,7 @@ export async function runOfficeResponse(request: OfficeRequest, context: OfficeC
     checkDeadline(request.mode === 'council' ? 'position' : 'draft');
     if (request.mode === 'council') {
       const roles = await runOfficeDiscussion(request, context, signal, generate, onDiagnostic);
+      results.push(...roles.results);
       const latest = roles.turns.slice(-request.participants.length);
       const draft: OfficeAnswer = {
         answer: latest.map(turn => `${turn.ownerId}: ${turn.position}`).join('\n'),
@@ -58,7 +65,7 @@ export async function runOfficeResponse(request: OfficeRequest, context: OfficeC
       const answer = parseReviewed(reviewed.text, 'synthesis');
       const discussion = read('synthesis', 'contract', () => parseOfficeDiscussion({ version: OFFICE_DISCUSSION_VERSION, settings: roles.settings, turns: roles.turns, modelCalls: roles.results.length + 1 }, request));
       checkDeadline('synthesis');
-      return { ...meta, status: 'generated', ...answer, model: reviewed.model, discussion };
+      return { ...meta, status: 'generated', ...answer, model: reviewed.model, discussion, generation: generation() };
     }
     const result = await call('draft', { ...buildOfficePrompt(request, context), maxOutputTokens: 8192, signal, responseJsonSchema });
     if (!result.ok) {
@@ -77,7 +84,7 @@ export async function runOfficeResponse(request: OfficeRequest, context: OfficeC
     checkDeadline('review');
     const answer = parseReviewed(reviewed.text, 'review');
     checkDeadline('review');
-    return { ...meta, status: 'generated', ...answer, model: reviewed.model };
+    return { ...meta, status: 'generated', ...answer, model: reviewed.model, generation: generation() };
   } catch (error) {
     if (!signal.aborted && error instanceof OfficeDiscussionError && error.reason === 'missing-api-key') return { ...meta, status: 'preview', error: 'AI 연결이 필요합니다. 입력은 보존됩니다.' };
     return { ...meta, status: 'error', error: '응답 형식을 확인하거나 검수를 마치지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.' };
