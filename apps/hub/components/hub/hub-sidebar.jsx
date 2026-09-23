@@ -210,7 +210,8 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
   return (
     <aside {...sidebarA11yProps} ref={setSidebarRef} onKeyDown={handleMobileKeyDown} className={`hub-sidebar-futura${className ? ` ${className}` : ''}${collapsed ? ' hub-sidebar-root--collapsed' : ''}`} data-collapsed={collapsed} aria-label="주요 메뉴" style={{
       // 면 색은 .hub-sidebar-futura(hub-futura.css)가 소유한다 — 인라인 background는 그 규칙을 이긴다.
-      width: collapsed ? 56 : 232, flexShrink: 0,
+      // 펼친 폭은 셸의 --hub-sidebar-w(경계 드래그로 조절, hub-app.jsx)가 소유한다.
+      width: collapsed ? 56 : 'var(--hub-sidebar-w, 232px)', flexShrink: 0,
       borderRight: '1px solid var(--line-soft)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',

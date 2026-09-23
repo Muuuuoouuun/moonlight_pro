@@ -5,6 +5,9 @@ import { test } from "node:test";
 
 import {
   DEFAULT_HUB_PREFERENCES,
+  SIDEBAR_WIDTH,
+  clampSidebarWidth,
+  nextSidebarWidth,
   persistHubPreference,
   readHubPreferences,
   resolveHubTheme,
@@ -38,8 +41,8 @@ function readHubAppSource() {
 test("keeps the server and first client render deterministic before restoring saved preferences", () => {
   const storage = memoryStorage({ "mlp.theme": "light" });
 
-  assert.deepEqual(DEFAULT_HUB_PREFERENCES, { theme: "auto", sidebarCollapsed: false });
-  assert.deepEqual(readHubPreferences(storage), { theme: "light", sidebarCollapsed: false });
+  assert.deepEqual(DEFAULT_HUB_PREFERENCES, { theme: "auto", sidebarCollapsed: false, sidebarWidth: 232 });
+  assert.deepEqual(readHubPreferences(storage), { theme: "light", sidebarCollapsed: false, sidebarWidth: 232 });
 });
 
 test("restores browser preferences after hydration instead of inside state initializers", () => {
@@ -67,7 +70,7 @@ test("persists only supported shell preferences", () => {
   assert.equal(persistHubPreference(storage, "theme", "light"), true);
   assert.equal(persistHubPreference(storage, "density", "relaxed"), false);
   assert.equal(persistHubPreference(storage, "theme", "sepia"), false);
-  assert.deepEqual(readHubPreferences(storage), { theme: "light", sidebarCollapsed: false });
+  assert.deepEqual(readHubPreferences(storage), { theme: "light", sidebarCollapsed: false, sidebarWidth: 232 });
 });
 
 
@@ -81,10 +84,45 @@ test("sidebar collapse survives reload and can be explicitly expanded", () => {
   assert.equal(readHubPreferences(memoryStorage({ "mlp.sidebarCollapsed": "invalid" })).sidebarCollapsed, false);
 });
 
+test("dragged sidebar width survives reload and stays inside the usable range", () => {
+  const storage = memoryStorage();
+  assert.equal(persistHubPreference(storage, "sidebarWidth", 288), true);
+  assert.equal(readHubPreferences(storage).sidebarWidth, 288);
+  // 범위 밖·정수 아닌 값은 저장하지 않는다 — 다음 로드에서 사이드바가 사라지거나 본문을 덮으면 안 된다.
+  assert.equal(persistHubPreference(storage, "sidebarWidth", SIDEBAR_WIDTH.max + 1), false);
+  assert.equal(persistHubPreference(storage, "sidebarWidth", SIDEBAR_WIDTH.min - 1), false);
+  assert.equal(persistHubPreference(storage, "sidebarWidth", 250.5), false);
+  assert.equal(persistHubPreference(storage, "sidebarWidth", "288"), false);
+  assert.equal(readHubPreferences(storage).sidebarWidth, 288);
+  // 손으로 고친 저장값도 읽을 때 범위로 되돌린다.
+  assert.equal(readHubPreferences(memoryStorage({ "mlp.sidebarWidth": "9999" })).sidebarWidth, SIDEBAR_WIDTH.max);
+  assert.equal(readHubPreferences(memoryStorage({ "mlp.sidebarWidth": "12" })).sidebarWidth, SIDEBAR_WIDTH.min);
+  assert.equal(readHubPreferences(memoryStorage({ "mlp.sidebarWidth": "wide" })).sidebarWidth, SIDEBAR_WIDTH.default);
+  assert.equal(readHubPreferences(memoryStorage({ "mlp.sidebarWidth": "" })).sidebarWidth, SIDEBAR_WIDTH.default);
+});
+
+test("sidebar width clamps drag positions and answers the splitter keys", () => {
+  assert.equal(SIDEBAR_WIDTH.default, 232, "기본 폭은 드래그 기능 이전의 고정 폭과 같다");
+  assert.ok(SIDEBAR_WIDTH.min < SIDEBAR_WIDTH.default && SIDEBAR_WIDTH.default < SIDEBAR_WIDTH.max);
+  assert.equal(clampSidebarWidth(232 + 40.4), 272);
+  assert.equal(clampSidebarWidth(-500), SIDEBAR_WIDTH.min);
+  assert.equal(clampSidebarWidth(5000), SIDEBAR_WIDTH.max);
+  assert.equal(clampSidebarWidth(Number.NaN), SIDEBAR_WIDTH.default);
+
+  assert.equal(nextSidebarWidth(232, "ArrowRight"), 232 + SIDEBAR_WIDTH.step);
+  assert.equal(nextSidebarWidth(232, "ArrowLeft"), 232 - SIDEBAR_WIDTH.step);
+  assert.equal(nextSidebarWidth(SIDEBAR_WIDTH.min, "ArrowLeft"), SIDEBAR_WIDTH.min);
+  assert.equal(nextSidebarWidth(SIDEBAR_WIDTH.max, "ArrowRight"), SIDEBAR_WIDTH.max);
+  assert.equal(nextSidebarWidth(260, "Home"), SIDEBAR_WIDTH.min);
+  assert.equal(nextSidebarWidth(260, "End"), SIDEBAR_WIDTH.max);
+  assert.equal(nextSidebarWidth(260, "Enter"), null, "처리하지 않는 키는 기본 동작을 막지 않도록 null");
+});
+
 test("blocked storage never prevents sidebar interaction", () => {
   const storage = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } };
   assert.deepEqual(readHubPreferences(storage), DEFAULT_HUB_PREFERENCES);
   assert.equal(persistHubPreference(storage, "sidebarCollapsed", true), false);
+  assert.equal(persistHubPreference(storage, "sidebarWidth", 280), false);
 });
 
 test("automatic theme follows local morning and evening boundaries; explicit choices win", () => {
