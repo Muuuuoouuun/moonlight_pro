@@ -4,12 +4,29 @@ export function goalScope(value) {
   return value === 'classin' || value === 'company' ? 'company' : value === 'personal' ? 'personal' : '';
 }
 
-export function goalHref(id, scope, { check = false, create = false } = {}) {
+// 목표·성과의 세 보기 — 목표별 · 빠른 체크 · 주간 실측. 주간 실측은 체크와 겹치지 않는다.
+export function goalHref(id, scope, { check = false, create = false, weekly = false } = {}) {
   const params = new URLSearchParams({ view: 'goals', scope: goalScope(scope) === 'company' ? 'classin' : goalScope(scope) || 'all' });
   if (id) params.set('goal', id);
-  if (check) params.set('check', '1');
+  if (weekly) params.set('weekly', '1');
+  else if (check) params.set('check', '1');
   if (create) params.set('new', 'goal');
   return `/dashboard/overview?${params}`;
+}
+
+export function goalView(params) {
+  if (params.get('weekly') === '1') return 'weekly';
+  return params.get('check') === '1' ? 'check' : 'goals';
+}
+
+// 하루 리뷰(journal_entries)에는 소속이 없어 정본 규칙상 언제나 개인이다(source-adapters
+// resolveEntityScope). 회사 목표에 이 원천을 고르면 영원히 측정된 0이 나오므로 고를 수 없게 한다.
+const GOAL_SOURCE_KEYS_BY_SCOPE = {
+  personal: ['manual', 'tasks_completed', 'contacts_recorded', 'content_published', 'reviews_completed'],
+  company: ['manual', 'tasks_completed', 'contacts_recorded', 'content_published'],
+};
+export function goalSourceKeysFor(scope) {
+  return GOAL_SOURCE_KEYS_BY_SCOPE[scope === 'company' ? 'company' : 'personal'];
 }
 
 export function goalLinkedEntityHref(link) {
@@ -95,6 +112,7 @@ export function goalWriteErrorMessage(error) {
     'invalid-observation': '관측 일시·기간·실제값과 측정 상태를 확인해 주세요.',
     'invalid-evidence': '근거의 이름·주소·발생 일시를 확인해 주세요. 관측값을 확정하려면 근거가 필요합니다.',
     'entity-scope-mismatch': '업무와 같은 소속의 목표를 선택해 주세요.',
+    'source-scope-mismatch': '하루 리뷰는 개인 기록이라 회사 목표의 측정 방법으로 쓸 수 없습니다. 다른 측정 방법을 고르세요.',
   })[error] || '저장하지 못했습니다. 입력과 연결 상태를 확인한 뒤 다시 시도하세요.';
 }
 

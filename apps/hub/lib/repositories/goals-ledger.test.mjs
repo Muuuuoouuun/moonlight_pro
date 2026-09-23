@@ -130,3 +130,25 @@ test('every receipt availability failure retains unknown persistence and retry i
   const receipt=await getGoalCommandReceipt(id,context,{configured:false});
   assert.equal(receipt.persisted,null);assert.equal(receipt.nextAction,'get_goal_command_receipt');
 });
+
+test('a company objective cannot get a daily-review metric through any client, including MCP', async () => {
+  // 하루 리뷰는 정본 규칙상 항상 개인이다 — 회사 목표에 붙이면 영원히 측정된 0이 된다. 목표의 소속은
+  // 생성 뒤 바뀌지 않으므로 RPC 전에 한 번 읽어 판정한다.
+  const calls = [];
+  const company = { ...objective, scope: 'company' };
+  const storage = scopeRow => dependencies({
+    fetchRows: async table => { const rows = table === 'operating_objectives' ? scopeRow : []; return { rows, count: rows.length }; },
+    rpc: async (name, params) => { calls.push(name); return { ok: true, data: { status: 'saved', persisted: true, commandId: id, entity: { id }, replayed: false } }; },
+  });
+  const payload = { commandId: id, action: 'create_metric', input: { objectiveId: id, name: '리뷰', unit: '일', role: 'driver', direction: 'increase', target: 5, sourceKey: 'reviews_completed' } };
+  const rejected = await executeGoalCommand(payload, context, storage([company]));
+  assert.equal(rejected.httpStatus, 400);
+  assert.equal(rejected.error, 'source-scope-mismatch');
+  assert.equal(rejected.persisted, false);
+  assert.deepEqual(calls, []);
+  const unreadable = await executeGoalCommand(payload, context, dependencies({ fetchRows: async () => ({ error: 'down', rows: null }), rpc: async () => { calls.push('rpc'); return { ok: true, data: {} }; } }));
+  assert.equal(unreadable.httpStatus, 503);
+  assert.deepEqual(calls, [], 'an unreadable objective never falls through to the write');
+  assert.equal((await executeGoalCommand(payload, context, storage([objective]))).status, 'saved');
+  assert.equal((await executeGoalCommand({ ...payload, input: { ...payload.input, sourceKey: 'contacts_recorded' } }, context, storage([company]))).status, 'saved');
+});

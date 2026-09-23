@@ -67,6 +67,7 @@
 | CRM 0단계(0a·0b·0c) · 연락 기록창 전역화 · 넛지 N1~N3 | 구현·로컬 검증 완료(2026-09-23 통합) · 운영 배포 별도 | 연락 기록의 단일 원천을 `crm_activities`로 통일(`282572a`), 고객 연락 행의 죽은 버킷·레일·클릭·반응 복구와 약속 기준 2단 정렬(`1a67949`), 집중 고객을 `won` 전용에서 실제 약속 기준으로(`d4b57b5`·보강 `1879595`), 어디서든 열리는 공용 연락 기록창(`6530533`), 캘린더 접점·넛지 엔진과 읽기·억제 계층(`cae4944`·`0f63bf6`·`8cf3809`), 병합 검증 수리 `eadd97e`. 발신·메모 채널의 무반응 기록을 살리는 `20260923_0042_contact_outcome_reactionless.sql`은 2026-09-23 운영 DB에 적용했다(`db:check` PASS — 0018이 빈 반응을 `invalid-reaction`으로 거절해 "카톡 보냄, 아직 답 없음" 같은 기록이 전부 실패하던 것을 해소). 파일 단위 실행 계획과 잔여 범위는 [`plans/2026-09-21-crm-tab-develop-phase0-1.md`](superpowers/plans/2026-09-21-crm-tab-develop-phase0-1.md) — N3 나머지 표시 2곳과 N4는 대기 |
 | Rhythm 탭 재설계 | 구현·로컬 검증 완료(2026-09-23 통합) · 운영 배포 별도 | 하드코딩 탭 2개를 제거하고 `computeWeeklyRhythmMatrix` 실데이터로 배선, 루틴 카테고리·주간 목표 필드, Futura 어휘 리스킨(`0a44c6c`·병합 `b7ddf9a`·수리 `0103f9f`). Futura 범위 확장은 DESIGN.md §15 2026-09-23 행(`recommended`)에 기록 |
 | 생활 루틴 `오늘의 리듬` | 구현·자동 테스트 통과 / 실사용 화면 검증 대기(2026-09-23) · 운영 배포 별도 | 할 일과 생활 루틴 체크를 분리한 오늘 전용 화면·저장/취소 API(`505394c`), 호출처가 없어진 기존 Visualizer 제거(`2512f21`). 2026-09-23 병합에서 순수 규칙·라우트 테스트 66건이 통과했다. Futura 범위와 세부 화면은 DESIGN.md §15의 `recommended` 상태이며 운영자 화면 검토 전이다. |
+| OKR·KPI 수집·측정 흐름 점검 | 구현·로컬 검증 완료(2026-09-23) · 마이그레이션 0 · 운영 배포 별도 | 목표 원장·자동 지표·주간 리포트는 재구현하지 않고 수집·전달 공백만 닫았다: `deals.won_at` 무작성으로 회사 성사 KR이 영구 미측정이던 결함(알려진 단계 전환에서만 기록 + 창 이전 수정 미상 성사 제외), MCP·Council 주간 요약의 Action KPI 누락과 partial 은폐, 월·목 밖에서 볼 수 없던 주간 수치를 목표·성과 → **주간 실측**(지난 4주 + 이번 주, ⌘K)으로. 목표값은 정하지 않았다(09-20 §7.1). 남은 공백·순서는 [기록](superpowers/plans/2026-09-23-okr-kpi-measurement-flow.md) §4 |
 
 2026-09-23 안정화에서 오늘 Top 3의 동시 선택 상한을 위한 `20260923_0043_task_focus_cap.sql`을 추가하고 로컬 PostgreSQL로 검증했다. 같은 날 서울 운영 DB(`ncgpnqfulnlshegalmbd`)에 해당 파일만 적용했으며 `npm run db:check` 전 항목이 통과했다. 트리거는 활성 상태이고 함수 실행 권한은 `service_role`에만 있다. 기존 작업 행은 변경하지 않았다.
 
@@ -192,6 +193,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`system-eval-2026-08-05.md`](system-eval-2026-08-05.md) — 재감사 1~30차 채점·조치 로그. 축별(안정성·속도·정체성·사용성·디자인·편의성·UIUX) 점수 추이와 각 차수의 지적·수리 내역. 기록 문서이므로 새 구현의 근거로는 §4의 최신 스펙을 우선한다.
 
 - [`evaluations/2026-09-21-measurable-personal-os-validation.md`](evaluations/2026-09-21-measurable-personal-os-validation.md) — **격리 워크트리 구현·로컬 검증 완료 / 운영 적용 별도**. 공통 목표·지표·근거/관측, 업무 연결, Gemini·구독형 MCP 후보/검토, 실제 DB·브라우저·모델 검증과 6축 평가. [실행 계약](superpowers/plans/2026-09-21-measurable-personal-os.md), [설정/적용 가이드](measurable-personal-os-operations.md). 운영 DB에는 0036·0037이 적용돼 있었으나 목표 명령이 운영에 없는 `public.digest`(pgcrypto는 `extensions` 스키마)를 불러 쓰기가 한 번도 성공하지 못했다 — 2026-09-23 `0039`(해시 수정)·`0041`(AI 권한·NULL 검증 보강)을 적용해 해소. 후속 [최적화·UI/UX 개발안](superpowers/plans/2026-09-21-personal-os-optimization-and-experience.md)은 미확정 제안이다.
+- [`superpowers/plans/2026-09-23-okr-kpi-measurement-flow.md`](superpowers/plans/2026-09-23-okr-kpi-measurement-flow.md) — **구현·로컬 검증 완료(2026-09-23)**. OKR·KPI 수집·측정 흐름의 현재 작동 범위, 결함 7건과 조치(성사 시각 무작성·MCP/Council 주간 수치 누락·주간 실측 보기 등), 남은 공백의 우선순위(Action KPI 목표 원천은 마이그레이션·운영 DB 적용 필요)를 기록한다.
 
 ### 아키텍처·데이터 정본
 

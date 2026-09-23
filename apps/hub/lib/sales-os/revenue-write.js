@@ -7,7 +7,7 @@
 // close label) are intentionally left untouched — best-effort, never clobbered.
 
 import { eqFilter, fetchSupabaseRows } from "../server-read.js";
-import { dealStageLabel } from "../deal-stages.js";
+import { dealStageLabel, STAGE_ALIASES } from "../deal-stages.js";
 import { recordActivity } from "../repositories/crm-activities.js";
 import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./customer-delete.js";
 import { SUBJECT_KEY_SET } from "./lead-labels.js";
@@ -310,9 +310,10 @@ export function buildActivityWrite(payload = {}) {
   return { columns, metaPatch };
 }
 
-async function readExistingMeta(table, id, workspaceId) {
+// 딜은 성사 시각 판정(dealWonAtPatch)에 이전 stage 컬럼도 필요해 함께 읽는다.
+async function readExistingRow(table, id, workspaceId) {
   const rows = await fetchSupabaseRows(table, {
-    select: "meta",
+    select: table === "deals" ? "meta,stage" : "meta",
     filters: [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]],
     limit: 1,
   });
@@ -321,7 +322,7 @@ async function readExistingMeta(table, id, workspaceId) {
   // (2026-08-05 재감사 안정성 M: meta-wipe).
   if (!Array.isArray(rows)) return null;
   const meta = rows[0] ? rows[0].meta : null;
-  return meta && typeof meta === "object" ? meta : {};
+  return { meta: meta && typeof meta === "object" ? meta : {}, stage: typeof rows[0]?.stage === "string" ? rows[0].stage : null };
 }
 
 // Shared insert/update path for both the lead and deal routes. Returns a small status
@@ -346,6 +347,22 @@ export function dealStageMove({ table, existingMeta, metaPatch }) {
   const to = metaPatch.stage_detail;
   if (!from || from === to) return null;
   return { from, to, body: `단계: ${dealStageLabel(from)} → ${dealStageLabel(to)}` };
+}
+
+// 성사 시각 — 주간 회사 리포트의 "성사일 확인된 딜"은 deals.won_at만 믿는다(추정 금지). 이전 단계를
+// 아는 전환에서만 찍는다: 모르는 레거시 딜은 이미 성사였을 수 있어 지금 시각을 찍으면 옛 성사가
+// 이번 주 성사로 둔갑한다. 성사에서 벗어나면 비운다(won_at = 현재 성사의 시작 시각). 이동 이력은
+// crm_activities(kind='deal')가 따로 남긴다.
+// 이관 딜처럼 stage_detail이 없으면 stage 컬럼을 별칭으로 읽는다 — won은 closing이므로 옛 성사를 다시 찍지 않는다.
+export function dealWonAtPatch({ table, existingMeta, existingStage = null, metaPatch, now = new Date() }) {
+  if (table !== "deals" || !existingMeta || typeof metaPatch?.stage_detail !== "string") return {};
+  const from = typeof existingMeta.stage_detail === "string" ? existingMeta.stage_detail
+    : typeof existingStage === "string" ? STAGE_ALIASES[existingStage.toLowerCase()] || null : null;
+  const to = metaPatch.stage_detail;
+  if (!from || from === to) return {};
+  if (to === "closing") return { won_at: now.toISOString() };
+  if (from === "closing") return { won_at: null };
+  return {};
 }
 
 async function recordDealStageMove({ table, id, workspaceId, existingMeta, metaPatch }) {
@@ -422,15 +439,18 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
   // Merge meta against the live row so we never drop sibling keys (brand, lane, campaign…).
   let mergedMeta = null;
   let existingMeta = null;
+  let existingStage = null;
   if (hasMeta) {
-    existingMeta = await readExistingMeta(table, id, workspaceId);
+    const existing = await readExistingRow(table, id, workspaceId);
+    existingMeta = existing ? existing.meta : null;
+    existingStage = existing ? existing.stage : null;
     if (existingMeta === null) {
       // 병합 기준을 못 읽었으면 저장을 중단한다 — 빈 meta 위에 덮어쓰면 무언 데이터 파괴.
       return { status: "failed", reason: "meta-read-failed", detail: "existing meta unreadable; save aborted to avoid wiping sibling keys" };
     }
     mergedMeta = { ...existingMeta, ...metaPatch };
   }
-  const patch = { ...columns, ...(mergedMeta ? { meta: mergedMeta } : {}) };
+  const patch = { ...columns, ...dealWonAtPatch({ table, existingMeta, existingStage, metaPatch }), ...(mergedMeta ? { meta: mergedMeta } : {}) };
   if (!Object.keys(patch).length) return { status: "noop" };
 
   const res = await updateSupabaseRecord(

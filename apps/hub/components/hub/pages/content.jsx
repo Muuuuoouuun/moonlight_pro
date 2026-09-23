@@ -306,7 +306,7 @@ function CampaignStrategyPanel({ campaign, detail, onSave }) {
 
       <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 0.8fr)', gap: 'var(--gap)' }}>
         <Card>
-          <SectionTitle subtitle="월요일 개인 주간 리포트도 이 수치를 그대로 사용합니다.">Target vs Actual</SectionTitle>
+          <SectionTitle subtitle="캠페인에 직접 적는 값입니다. 기간 근거가 없어 주간 리포트 실적에는 넣지 않습니다.">Target vs Actual</SectionTitle>
           {scorecard ? (
             <>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>

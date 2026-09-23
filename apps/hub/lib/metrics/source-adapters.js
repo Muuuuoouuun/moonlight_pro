@@ -167,6 +167,8 @@ export function createMetricReader({ workspaceId = resolveDefaultWorkspaceId(), 
     const window = metricPeriodWindow({periodStart, periodEnd, timezone});
     if (!TABLES[sourceKey] || !window || !['personal','company'].includes(scope)) return {...base,reason:'invalid-measurement-definition'};
     if (window.start > observedAt) return {...base,reason:'period-not-started'};
+    // 하루 리뷰(journal_entries)에는 소속이 없어 언제나 개인이다 — 회사 집계는 0이 아니라 쓸 수 없는 원천이다.
+    if (sourceKey === 'reviews_completed' && scope !== 'personal') return {...base,reason:'source-personal-only'};
     const [table, timeField] = TABLES[sourceKey];
     const filters = sourceKey === 'reviews_completed'
       ? [['entry_kind','eq.daily_review'],['review_date',`gte.${periodStart}`],['review_date',`lt.${shiftDateKey(periodEnd < toZonedDateKey(now,timezone) ? periodEnd : toZonedDateKey(now,timezone),1)}`]]

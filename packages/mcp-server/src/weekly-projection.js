@@ -8,8 +8,12 @@ function text(value, limit = 160) {
   return selected;
 }
 const finite = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
-const STAT_KEYS = ['doneTasks', 'publishes', 'contacts', 'personalDeals', 'newDeals', 'modifiedOpenDeals', 'wonDeals', 'wonAmount'];
-const DEFINITION_KEYS = ['contacts', 'doneTasks', 'publishes', 'modifiedOpenDeals', 'wonDeals', 'wonAmount', 'scorecard'];
+// Every stat the Hub weekly report returns, including the Action KPI fields (today's three, memos,
+// review days, deal stage moves). apps/hub/lib/repositories/weekly-report.test.mjs fails if the Hub
+// adds a stat this list drops.
+const STAT_KEYS = ['doneTasks', 'publishes', 'contacts', 'personalDeals', 'focusPicked', 'focusDone', 'focusRate', 'focusDays', 'memos', 'reviewDays',
+  'newDeals', 'movedDeals', 'modifiedOpenDeals', 'wonDeals', 'wonAmount'];
+const DEFINITION_KEYS = ['contacts', 'doneTasks', 'publishes', 'focusRate', 'memos', 'reviewDays', 'movedDeals', 'modifiedOpenDeals', 'wonDeals', 'wonAmount', 'scorecard'];
 function evidence(value) {
   const out = {};
   for (const key of ['type', 'table', 'id', 'periodStart', 'periodEnd', 'scope', 'asOf']) if (typeof value[key] === 'string') out[key] = text(value[key], 80);

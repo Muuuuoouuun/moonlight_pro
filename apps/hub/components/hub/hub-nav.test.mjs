@@ -53,6 +53,14 @@ test('goal palette shortcuts stay in the current scope without adding a sidebar 
     const goals = NAV_TREE.find(node => node.key === 'goals');
     assert.equal(new URL(catalog.navPathForScope(goals, scope), 'https://hub.invalid/').searchParams.get('scope'), scope);
   }
+  const weekly = NAV_TREE.find(node => node.key === 'goals-weekly');
+  assert.ok(weekly, 'weekly actuals must be reachable on days without the weekly card');
+  for (const scope of ['personal', 'classin', 'all']) {
+    const url = new URL(catalog.navPathForScope(weekly, scope), 'https://hub.invalid/');
+    assert.equal(url.searchParams.get('scope'), scope);
+    assert.equal(url.searchParams.get('weekly'), '1');
+    assert.equal(url.searchParams.has('check'), false);
+  }
   const work = NAV_TREE.find(node => node.key === 'my-work');
   assert.equal(catalog.navPathForScope(work, 'personal'), work.path);
 });

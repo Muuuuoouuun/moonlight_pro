@@ -44,3 +44,12 @@ test("DailyBrief FloatingMentorWidget supports weekly contextType and task refre
   assert.match(dailyBriefSource, /\.\.\.advisorSignal\.contextData/);
   assert.match(dailyBriefSource, /onCreateTask=\{[\s\S]*?ledger\.refreshTasks\(\)/);
 });
+
+test("WeeklyReportCard shares the weekly field contract, names missing sources and opens the weekly actuals view", () => {
+  const section = dailyBriefSource.slice(dailyBriefSource.indexOf('export function WeeklyReportCard'), dailyBriefSource.indexOf('export function DailyBrief('));
+  assert.match(section, /WEEKLY_STAT_FIELDS\[scope\]/);
+  assert.match(section, /weeklyStatValue\(/);
+  assert.match(section, /weeklySourceLabels\(report\?\.failedSources\)/);
+  assert.match(section, /goalHref\(null, scope, \{ weekly: true \}\)/);
+  assert.doesNotMatch(section, /label: '이동 딜', value: stats\.movedDeals/, 'rows come from the shared field list, not a second inline copy');
+});
