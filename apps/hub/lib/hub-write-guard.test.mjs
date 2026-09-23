@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 
 import { HUB_WRITE_SECRET_HEADER, assertHubWriteAllowed } from "./hub-write-guard.js";
+import { createOperatorSessionToken, OPERATOR_SESSION_COOKIE } from "./operator-session.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -32,6 +33,31 @@ test("production hub writes require the Hub write secret even for same-origin re
   assert.equal((await result.json()).status, "forbidden");
 });
 
+test("production browser writes require a signed operator session and exact same origin", async () => {
+  process.env.NODE_ENV = "production";
+  process.env.COM_MOON_OPERATOR_SESSION_SECRET = "separate-session-secret";
+  process.env.COM_MOON_OPERATOR_USERNAME = "moonlight";
+  process.env.COM_MOON_OPERATOR_PASSWORD_HASH = `scrypt$131072$8$1$${'a'.repeat(32)}$${'b'.repeat(128)}`;
+  process.env.COM_MOON_HUB_URL = "https://hub.example.com";
+  const cookie = `${OPERATOR_SESSION_COOKIE}=${createOperatorSessionToken()}`;
+
+  assert.equal(assertHubWriteAllowed(makeRequest({ origin: "https://hub.example.com", cookie })), null);
+  assert.equal(assertHubWriteAllowed(makeRequest({ referer: "https://hub.example.com/dashboard", cookie })), null);
+  for (const headers of [
+    { origin: "https://hub.example.com" },
+    { origin: "https://evil.example.com", cookie },
+    { origin: "https://other.example.com", cookie },
+  ]) {
+    const denied = assertHubWriteAllowed(makeRequest(headers));
+    assert.ok(denied instanceof Response);
+    assert.equal(denied.status, 403);
+  }
+  delete process.env.COM_MOON_OPERATOR_PASSWORD_HASH;
+  const revoked = assertHubWriteAllowed(makeRequest({ origin: "https://hub.example.com", cookie }));
+  assert.ok(revoked instanceof Response);
+  assert.equal(revoked.status, 403);
+});
+
 test("production hub writes allow a matching Hub write secret", () => {
   process.env.NODE_ENV = "production";
   process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
@@ -55,7 +81,7 @@ test("local hub writes keep the same-origin fallback for smoke testing", () => {
   assert.equal(result, null);
 });
 
-test("production localhost allows same-origin browser writes without exposing a secret", () => {
+test("production localhost requires a signed session for browser writes", () => {
   process.env.NODE_ENV = "production";
   process.env.COM_MOON_HUB_URL = "http://127.0.0.1:3000";
   process.env.COM_MOON_HUB_WRITE_SECRET = "server-only-secret";
@@ -65,10 +91,11 @@ test("production localhost allows same-origin browser writes without exposing a 
     "http://127.0.0.1:3000/api/hub/projects",
   ));
 
-  assert.equal(result, null);
+  assert.ok(result instanceof Response);
+  assert.equal(result.status, 401);
 });
 
-test("production loopback accepts localhost and 127 aliases only on the same port", async () => {
+test("production loopback aliases do not bypass browser authentication", async () => {
   process.env.NODE_ENV = "production";
   process.env.COM_MOON_HUB_URL = "http://localhost:3000";
   process.env.COM_MOON_HUB_WRITE_SECRET = "server-only-secret";
@@ -82,7 +109,8 @@ test("production loopback accepts localhost and 127 aliases only on the same por
     "http://localhost:3000/api/hub/projects",
   ));
 
-  assert.equal(aliasResult, null);
+  assert.ok(aliasResult instanceof Response);
+  assert.equal(aliasResult.status, 401);
   assert.ok(wrongPortResult instanceof Response);
   assert.equal(wrongPortResult.status, 401);
 });
@@ -96,7 +124,7 @@ test("브라우저 거절 문구는 운영자가 읽을 한국어 안내다", as
   const body = await result.json();
 
   assert.equal(body.status, "forbidden");
-  assert.equal(body.error, "이 배포에서는 저장할 수 없습니다 — 로컬 Hub에서 입력하세요.");
+  assert.equal(body.error, "로그인 후 다시 시도하세요.");
   // 영어 원문이 운영자 화면에 그대로 노출되던 회귀를 막는다 (DESIGN.md §10).
   assert.ok(!/Hub write routes/.test(body.error));
 });

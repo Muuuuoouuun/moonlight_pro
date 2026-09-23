@@ -56,12 +56,11 @@ export function resolveRouteAccess({ pathname, host, hasSession, hasServerCreden
   // 앱에 도달시키지 않고 404 DEPLOYMENT_NOT_FOUND 로 끊지만, 그 플랫폼 동작 하나에
   // 기대지 않는다. 프로덕션 런타임에서는 loopback 우회 자체를 끈다.
   if (allowLoopback && isLoopbackHost(host)) return { action: "allow", reason: "loopback" };
-  if (hasSession) return { action: "allow", reason: "session" };
-
   const isApi = String(pathname || "").startsWith("/api/");
   if (isApi && hasServerCredential) return { action: "allow", reason: "server-credential" };
   // 비밀키가 없으면 아무도 세션을 만들 수 없다. 통과시키면 지금의 무방비 상태가
   // 그대로 배포되므로 닫는다 — 잘못된 설정은 조용히 열리는 대신 시끄럽게 막힌다.
   if (!secretConfigured) return { action: "not-configured", reason: isApi ? "api" : "page" };
+  if (hasSession) return { action: "allow", reason: "session" };
   return { action: isApi ? "unauthorized" : "login", reason: "no-session" };
 }
