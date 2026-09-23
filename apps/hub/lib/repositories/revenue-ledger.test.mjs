@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { mapDeal, mapLead } from "./revenue-ledger.js";
+import { mapAccount, mapDeal, mapLead } from "./revenue-ledger.js";
 
 test("mapDeal reads back the next-meeting breadcrumb and rejects a non-object", () => {
   const breadcrumb = {
@@ -52,4 +52,20 @@ test("mapLead: meta.subjects 우선, enrichment 태그 흡수 폴백, 출처 구
     new Map(), new Map(),
   );
   assert.equal(searchedRegion.labelSource.region, "searched");
+});
+
+test('account labels use account values and company region only as a fallback', () => {
+  const companies = new Map([['company-1', { meta: { region: '경기-안양' } }]]);
+  const fallback = mapAccount({ id: 'account-1', name: '학원', company_id: 'company-1', meta: {} }, new Map(), companies);
+  assert.equal(fallback.region, '경기-안양');
+  assert.equal(fallback.labelSource.region, 'derived');
+  const explicit = mapAccount({
+    id: 'account-1', name: '학원', company_id: 'company-1',
+    meta: { region: '서울-강남', subjects: ['math', 'bogus'], genres: ['입시'], label_source: { region: 'operator' } },
+  }, new Map(), companies);
+  assert.equal(explicit.region, '서울-강남');
+  assert.deepEqual(explicit.subjects, ['math']);
+  assert.deepEqual(explicit.genres, ['입시']);
+  assert.equal(explicit.labelSource.region, 'operator');
+  assert.equal(mapAccount({ id: 'account-1', name: '학원', company_id: 'company-1', meta: { region: null } }, new Map(), companies).region, '');
 });
