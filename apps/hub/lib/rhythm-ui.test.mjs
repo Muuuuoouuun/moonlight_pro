@@ -252,28 +252,37 @@ test("Rhythm source wires create/edit/delete through /api/routine with a shared 
   assert.match(workSource, /role="button"/);
 });
 
-test("Rhythm source keeps project context, durable feedback, and mobile scroll semantics", () => {
+test("Rhythm source keeps project context, durable feedback, and a routine-only today view", () => {
   assert.match(workSource, /searchParams\.get\(['"]project['"]\)/);
   assert.match(workSource, /filterRhythmRows\(/);
   assert.match(workSource, /rhythmState/);
   assert.match(workSource, /rhythmPartial/);
   assert.match(workSource, /rhythmTruncatedSources/);
   assert.match(workSource, /rhythmState === ['"]partial['"]/);
-  assert.match(workSource, /getRhythmProgressProps\(/);
-  assert.match(workSource, /rhythmPartial\s*\?\s*\([\s\S]*관측 \{completed\} \/ \{total\}[\s\S]*:\s*\([\s\S]*<Progress value=\{percent\}/);
   assert.match(workSource, /일부 기록/);
   assert.match(workSource, /routine_checks/);
+  // 체크와 체크 취소는 같은 경로의 POST/DELETE이고, 저장이 확인되면 기록을 다시 읽는다.
   assert.match(workSource, /fetch\(['"]\/api\/routine\/check['"]/);
-  assert.match(workSource, /method:\s*['"]POST['"]/);
+  assert.match(workSource, /method:\s*nextDone \? ['"]POST['"] : ['"]DELETE['"]/);
   assert.match(workSource, /await\s+retry\(\)/);
-  assert.match(workSource, /aria-live=["']polite["']/);
-  assert.match(workSource, /disabled=\{[^}]*pending/);
+  // 저장되지 않은 낙관적 체크는 되돌린다 — preview/error가 완료처럼 남지 않는다.
+  assert.match(workSource, /if \(!result\.durable\) \{[\s\S]*?clearOverride\(ritualId\)/);
   assert.match(workSource, /프로젝트로 돌아가기/);
-  assert.match(workSource, /projectHref/);
-  assert.match(workSource, /aria-label=\{`\$\{r\.projectName\s*\?\s*`\$\{r\.projectName\}\s*·\s*`\s*:\s*['"]['"]\}\$\{r\.name\} 체크인 저장`\}/);
-  assert.match(workSource, /className=["']hub-rhythm-scroll["']/);
-  assert.match(workSource, /aria-label=\{`최근 7일 체크 기록:/);
+  // 리듬은 할 일과 별개다(2026-09-23) — Rhythm 탭이 /api/hub/tasks를 읽지 않는다.
+  const rhythmSource = workSource.slice(workSource.indexOf("export function Rhythm"));
+  assert.doesNotMatch(rhythmSource, /\/api\/hub\/tasks/);
+  assert.doesNotMatch(rhythmSource, /computeWeeklyRhythmMatrix|RhythmVisualizer/);
+  assert.match(rhythmSource, /buildTodayRhythm\(savedRituals/);
   assert.doesNotMatch(workSource, /checkedRituals/);
+});
+
+test("today rhythm rows expose pressed state, pending lock, and a 7-day record", async () => {
+  const todaySource = await readFile(new URL("../components/hub/rhythm-today.jsx", import.meta.url), "utf8");
+  assert.match(todaySource, /aria-pressed=\{item\.doneToday\}/);
+  assert.match(todaySource, /disabled=\{pending\}/);
+  assert.match(todaySource, /aria-live="polite"/);
+  assert.match(todaySource, /aria-label=\{`최근 7일 체크 기록:/);
+  assert.match(todaySource, /aria-label=\{`\$\{scope\}\$\{item\.name\} \$\{item\.doneToday \? "오늘 완료 취소" : "오늘 완료로 체크"\}`\}/);
 });
 
 test("sortRitualsByTimeOfDay prioritizes rituals according to current time", () => {

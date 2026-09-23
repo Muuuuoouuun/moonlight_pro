@@ -127,7 +127,7 @@ Also defined in `hub-tokens.css` (names verbatim, both themes):
 - Layering: `--z-project-detail: 61`, `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100`.
 - Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-pop`.
 - Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7).
-- Motion: `--dur-hover`, `--dur-enter`, `--dur-panel`, `--dur-overlay`, `--ease-hub`, `--stagger-step` (§9).
+- Motion: `--dur-hover`, `--dur-enter`, `--dur-panel`, `--dur-overlay`, `--dur-celebrate`, `--ease-hub`, `--stagger-step` (§9).
 
 ### 5.2 Usage rules
 
@@ -394,6 +394,7 @@ Deliberate, never playful. Since 2026-07-29 the only sanctioned durations and cu
 | `--dur-enter` | `200ms` | page reveal (`.fade-up`), card cascade (`.stagger-up`), list exits |
 | `--dur-panel` | `180ms` | drawer slide-in (`hubDrawerIn`), project detail panel |
 | `--dur-overlay` | `160ms` | overlay fade (`hubFadeIn`), ⌘K palette overlay |
+| `--dur-celebrate` | `420ms` | one-shot completion moment only — Rhythm check pop/ripple and the day ring closing (`rhythm-today.css`). Never loops |
 | `--ease-hub` | `cubic-bezier(0.2, 0.7, 0.3, 1)` | every entrance / exit curve |
 | `--stagger-step` | `45ms` | per-child delay in `.stagger-up`, capped after the seventh child |
 
@@ -513,3 +514,4 @@ Build order when adding a new surface:
 | 2026-09-22 | 사이드바 병합 해소: **펼친 상태는 Futura 텍스트 전용 행**(2026-09-19 행)을 그대로 두고, **아이콘은 접힌 56px 상시 레일에서만** 이름을 맡는다(`fae8416` — 아이콘 + tooltip·`aria-label`, 건수는 점 하나). 행 렌더러 하나가 두 상태를 모두 그려 접기 토글 뒤에도 같은 DOM·포커스를 유지한다. 접힌 사용자 카드는 좌우 6px margin의 44px 폭 타일로 좁혀 36px 알림 버튼이 레일 안에 들어가게 한다. 테마 기본값은 `auto`(기기 시계 07:00–18:00 라이트, 그 밖 다크 — §5)이고, `sidebarCollapsed`가 같은 환경설정 저장소(`mlp.sidebarCollapsed`, hydration 이후 복구)에 함께 저장된다 | recommended | 구성 요소는 각각 따로 정해졌다 — 텍스트 전용 행은 2026-09-19 운영자 확정, 56px 아이콘 레일은 2026-09-22 운영자 요청(`docs/superpowers/plans/2026-09-22-sidebar-icon-rail.md`), `auto` 테마는 §5 본문(`25b8abe`). 두 브랜치가 같은 사이드바를 반대 방향(행 아이콘 제거 vs 아이콘 레일)으로 고쳐 충돌했고, "펼침=텍스트, 접힘=아이콘"으로 둘을 함께 살렸다. 이 **조합 상태**는 운영자가 아직 한 화면으로 검토하지 않았으므로 권장으로 둔다 — 확정되면 이 행의 상태만 바꾼다. `hub-nav.test.mjs`가 행 렌더러를 collapsed=false/true로 그려 레일의 아이콘·접근 가능한 이름을 고정하고(펼친 행 단언은 2026-09-23 행에서 "아이콘이 있어야 한다"로 반전), `fx-nav-child`·`sidebarChildren(a.key, scope)` 재등장도 계속 막는다 |
 | 2026-09-23 | §15 2026-09-19 (a)를 부분 되돌림 — 사이드바 내비 행은 펼친 상태에서도 `Iconed name={a.icon}`을 라벨과 같이 그린다(접힌 56px 레일과 동일 아이콘, 같은 `currentColor` 상속). 색점·pill 현재 항목 표시 등 나머지 09-19 결정은 그대로 둔다 | confirmed | 운영자가 접힌 레일 스크린샷과 펼친 텍스트 전용 스크린샷을 나란히 보고 "아이콘도 같이 표시"로 확정 — 전체 메뉴 항목(주요 10 + 유틸리티 2) 대상. `hub-nav.test.mjs`의 "expanded sidebar nav rows carry no icon glyph" 단언을 반대로 뒤집었다. 위 2026-09-22 사이드바 병합 해소 행의 "펼친 상태는 텍스트 전용" 부분을 이 행이 대체하고, 접힌 56px 레일·`auto` 테마·`sidebarCollapsed` 저장은 그대로 둔다 |
 | 2026-09-23 | Futura 텍스처를 `dashboard/work/rhythm`으로 확장 — 페이지 셸이 `hub-futura hub-page`, 헤더가 `fx-head`·`fx-page-title`, 카드가 `fx-card`를 쓴다(`RhythmVisualizer` 포함). 2026-09-18 행이 Futura를 `dashboard/home` 한 화면으로 한정하고 09-19 행이 셸·공용 컴포넌트·`work/decisions`까지만 열거했으므로, Rhythm은 세 번째 서피스다 | recommended | rhythm-redesign 병합(b7ddf9a)이 코드를 먼저 올렸고 결정 로그가 따라오지 못했다 — 기록해 두지 않으면 다음 세션이 "어디까지가 Futura인가"를 코드에서 역추적해야 한다. 밀도·타이포는 09-18 행과 같은 이유로 `.hub-futura` 스코프 안에 머물고 §7 고정 밀도·§8.1 1px 하이라인 계약은 다른 40여 페이지에서 그대로다. 운영자가 화면을 직접 보고 확정하기 전까지 `recommended`로 둔다 |
+| 2026-09-23 | Rhythm을 **할 일과 분리된 생활 루틴 표면**으로 재구성. 할 일 완료를 섞던 `RhythmVisualizer`(몰입도×성과 매트릭스)를 제거하고 `rhythm-today.jsx`의 "오늘의 리듬"(시간대별 한 탭 체크·체크 취소·하루 링·최근 7일 그리드)으로 대체. 완료는 `--fg` 채움 + 그려지는 체크 + 이름 취소선 + 명도 한 단계 하강(초록 없음, §5.3), "지금" 시간대만 `--accent`(현재 위치), 주 N회 목표를 채운 루틴은 점선 원 + "쉬어도 돼요". 1회성 축하 연출용 `--dur-celebrate: 420ms` 토큰 신설(위 2026-09-16 행이 예고한 경로). 분류에 `spirit`(신앙)·`home`(집안일) 추가 | recommended | 운영자 지시 "리듬은 매일 루틴적으로 행하는 것들 — 오늘 할 일과 별개, 기도·청소·운동 같은 생활 루틴을 설정·표시·체크하고 했을 때 만족되는 디자인·애니메이션". 체크 취소는 `DELETE /api/routine/check`가 POST와 같은 멱등 키로 오늘 행만 지운다. 연속은 `pendingStreak`(어제까지)을 따로 실어 "N일 연속 · 오늘 이어가기"로 동기를 주되 빨강을 쓰지 않는다(§5.2 no warning-by-default). 운영자가 화면을 직접 보고 확정하기 전까지 `recommended` |
