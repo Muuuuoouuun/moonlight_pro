@@ -1776,6 +1776,34 @@ button {
   line-height: 1;
 }
 
+.hub-app .hub-project-portfolio-stage__title-row {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hub-app .hub-project-portfolio-stage__title-row > div:first-child { min-width: 0; }
+
+.hub-app .hub-project-portfolio-stage__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.hub-app .hub-project-portfolio-stage__actions .hub-btn {
+  min-height: 36px;
+}
+
+@media (max-width: 768px) {
+  .hub-app .hub-project-portfolio-stage__title-row { flex-direction: column; }
+  .hub-app .hub-project-portfolio-stage__actions { justify-content: flex-start; }
+  .hub-app .hub-project-portfolio-stage__actions .hub-btn { min-height: 44px; }
+}
+
 .hub-app .hub-project-portfolio-metrics {
   display: flex;
   flex-wrap: wrap;
@@ -2705,6 +2733,16 @@ button {
   color: var(--fg-muted);
 }
 .hub-app .hub-project-delete-recovery svg { flex-shrink: 0; }
+
+.hub-app .hub-project-delete-acknowledgment {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 0 4px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-row-actions {
   grid-column: 6;
 }

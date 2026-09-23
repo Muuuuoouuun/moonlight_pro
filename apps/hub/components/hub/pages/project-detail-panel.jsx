@@ -111,7 +111,7 @@ export function ProjectDetailPanel({
   notesPartial = false, checks = [], syncState, failedSources = [], updateTone = {}, checkTone = {},
   contentTone = {}, orderPending = false, orderResult = null, pendingTodoIds = new Set(),
   taskPartial = false, onClose, onEdit, onToggleTodo, onEditTodo, onCreateTodo, onOpen,
-  onSendOrder, onConsultCouncil, onComplete, onManageDelivery, onArchive,
+  onSendOrder, onConsultCouncil, onComplete, onManageDelivery, onArchive, onRemove,
   onCustomerSaved, onMemo, onOpenMemo, customerInitiallyOpen = false, onCustomerClosed, customerSaving = false, onCustomerPendingChange,
 }) {
   const [tab, setTab] = React.useState('tasks');
@@ -139,6 +139,7 @@ export function ProjectDetailPanel({
     <div className="project-focus-top">
       <BrandMark brand={container} size={20} />
       <span className="project-focus-muted project-focus-container">{container?.name || '저장 위치 미정'}</span>
+      <IconButton icon="pencil" size={30} tooltip="프로젝트 편집" disabled={customerSaving} onClick={() => onEdit?.(project)} />
       <IconButton icon="x" size={24} tooltip="상세 닫기" disabled={customerSaving} onClick={onClose} />
     </div>
     <div ref={mainBody} hidden={customerOpen} className="hub-project-detail-body scroll-y project-focus-body">
@@ -214,12 +215,13 @@ export function ProjectDetailPanel({
     </div>}
     <div hidden={customerOpen} className="hub-project-detail-actions project-focus-footer">
       <div className="project-focus-actions">
-        <Button variant="ghost" size="sm" onClick={() => onEdit?.(project)}>프로젝트 편집</Button>
-        <Button variant="outline" size="sm" onClick={() => onOpen?.(project)}>작업 관리</Button>
+        <Button variant="outline" size="sm" onClick={() => onOpen?.(project)}>작업 목록 열기</Button>
       </div>
       <details className="project-focus-details"><summary>더 보기</summary><div className="project-focus-actions">
         <Button variant="ghost" size="sm" onClick={() => onComplete?.(project)}>{project.statusKey === 'completed' ? '다시 열기' : '완료'}</Button>
-        <Button variant="ghost" size="sm" onClick={() => onArchive?.(project)}>{project.statusKey === 'archived' ? '보관 해제' : '보관'}</Button>
+        {project.statusKey === 'archived'
+          ? <Button variant="ghost" size="sm" onClick={() => onArchive?.(project)}>보관 해제</Button>
+          : <Button variant="ghost" size="sm" onClick={() => onRemove?.(project)}>목록에서 제거</Button>}
         <Button variant="ghost" size="sm" onClick={() => onConsultCouncil?.(project)}>Council 조언</Button>
         <Button variant="ghost" size="sm" disabled={orderPending} onClick={() => onSendOrder?.(project)}>{orderPending ? '전송 중…' : '주문 보내기'}</Button>
       </div></details>
