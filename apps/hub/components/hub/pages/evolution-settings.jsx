@@ -485,6 +485,42 @@ export function Settings({ onNavigate }) {
   const incomingWebhooks = [];
   const [metaThreadsStatus, setMetaThreadsStatus] = React.useState(EMPTY_META_THREADS_STATUS);
   const [instagramStatus, setInstagramStatus] = React.useState(EMPTY_INSTAGRAM_STATUS);
+  const [deadlineAlerts, setDeadlineAlerts] = React.useState({ status: 'loading', reset: null });
+  const [deadlineBusy, setDeadlineBusy] = React.useState(false);
+  const [deadlineMessage, setDeadlineMessage] = React.useState('');
+  const loadDeadlineAlerts = React.useCallback(async () => {
+    try {
+      const response = await fetch('/api/hub/settings/deadline-alerts', { cache: 'no-store' });
+      const data = await response.json();
+      setDeadlineAlerts(data?.status === 'live' || data?.status === 'preview'
+        ? { status: data.status, reset: data.reset || null }
+        : { status: 'error', reset: null });
+    } catch {
+      setDeadlineAlerts({ status: 'error', reset: null });
+    }
+  }, []);
+  React.useEffect(() => { loadDeadlineAlerts(); }, [loadDeadlineAlerts]);
+  const changeDeadlineAlerts = async (action) => {
+    if (deadlineBusy) return;
+    setDeadlineBusy(true);
+    setDeadlineMessage('');
+    try {
+      const response = await fetch('/api/hub/settings/deadline-alerts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await response.json();
+      if (!response.ok || data?.status !== 'live') throw new Error(data?.status === 'conflict' ? '다른 설정이 먼저 바뀌었습니다. 다시 시도해 주세요.' : '마감 알림 설정을 저장하지 못했습니다.');
+      setDeadlineAlerts({ status: 'live', reset: data.reset || null });
+      setDeadlineMessage(action === 'reset' ? '이전 마감 경고를 초기화했습니다.' : '이전 마감 경고를 다시 켰습니다.');
+    } catch (error) {
+      setDeadlineMessage(error instanceof Error ? error.message : '다시 시도해 주세요.');
+      await loadDeadlineAlerts();
+    } finally {
+      setDeadlineBusy(false);
+    }
+  };
   React.useEffect(() => {
     let active = true;
 
@@ -562,6 +598,44 @@ export function Settings({ onNavigate }) {
               <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>개인 운영 OS · Founder · KST</div>
             </div>
             <Badge tone="neutral" size="xs">local profile</Badge>
+          </div>
+        </Card>
+      </div>
+
+      <div>
+        <SectionTitle>마감 알림</SectionTitle>
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 280px' }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>이전 마감 경고 정리</div>
+              <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 5, lineHeight: 1.6 }}>
+                이번 주 이전의 지나간 마감 경고만 해제합니다. 원래 날짜와 업무 기록은 남고, 기한을 새로 바꾸면 알림이 다시 작동합니다.
+              </div>
+              {deadlineAlerts.status === 'live' && deadlineAlerts.reset && (
+                <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 8 }}>
+                  {deadlineAlerts.reset.items.length}건 알림 해제 · {deadlineAlerts.reset.beforeDay} 이전
+                </div>
+              )}
+              {deadlineAlerts.status === 'preview' && <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 8 }}>저장소를 연결하면 사용할 수 있습니다.</div>}
+              {deadlineAlerts.status === 'error' && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 8 }}>알림 설정을 읽지 못했습니다.</div>}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {deadlineAlerts.status === 'live' && deadlineAlerts.reset && (
+                <Button variant="ghost" size="sm" disabled={deadlineBusy} onClick={() => changeDeadlineAlerts('restore')}>이전 경고 다시 켜기</Button>
+              )}
+              {deadlineAlerts.status === 'error' ? (
+                <Button variant="outline" size="sm" onClick={loadDeadlineAlerts}>다시 불러오기</Button>
+              ) : (
+                <Button variant="outline" size="sm" disabled={deadlineBusy || deadlineAlerts.status !== 'live'} onClick={() => changeDeadlineAlerts('reset')}>
+                  {deadlineBusy ? '저장 중…' : '이번 주 이전 경고 초기화'}
+                </Button>
+              )}
+            </div>
+          </div>
+          {deadlineMessage && <div role="status" aria-live="polite" style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 10 }}>{deadlineMessage}</div>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate?.('dashboard/work/my')}>내 작업에서 새 기한 지정</Button>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate?.('dashboard/work/projects')}>프로젝트 마감 보기</Button>
           </div>
         </Card>
       </div>

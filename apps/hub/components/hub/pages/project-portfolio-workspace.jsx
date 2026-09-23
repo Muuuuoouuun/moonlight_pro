@@ -70,7 +70,7 @@ function daysUntil(value, now = new Date()) {
 
 function projectRisk(project, window) {
   const flags = classifyProjectPortfolio(project, window);
-  if (!flags.blockedOrOverdue) return { risky: false, label: "위험 없음" };
+  if (!flags.blockedOrOverdue) return { risky: false, label: project?.deadlineAlertSuppressed ? "이전 기한 · 알림 해제" : "위험 없음" };
   const status = String(project?.statusKey || project?.status || "").toLowerCase();
   if (status === "blocked") return { risky: true, label: "막힘" };
   return { risky: true, label: "기한 지남" };
@@ -121,7 +121,7 @@ function computeDDay(dueAt) {
 function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, onSelect }) {
   const progress = progressValue(project);
   const risk = projectRisk(project, window);
-  const dday = computeDDay(project.dueAt);
+  const dday = project.deadlineAlertSuppressed ? null : computeDDay(project.dueAt);
   return (
     <button
       type="button"
@@ -243,8 +243,8 @@ export function ProjectPortfolioWorkspace({
   })[0] || null;
   const progress = progressValue(project);
   const risk = project ? projectRisk(project, window) : { risky: false, label: "위험 없음" };
-  const dueDays = project ? daysUntil(project.dueAt) : null;
-  const dday = project ? computeDDay(project.dueAt) : null;
+  const dueDays = project && !project.deadlineAlertSuppressed ? daysUntil(project.dueAt) : null;
+  const dday = project && !project.deadlineAlertSuppressed ? computeDDay(project.dueAt) : null;
   const brand = project
     ? (brandByKey.get(project.brand) || brands[0] || null)
     : null;
@@ -488,7 +488,7 @@ export function ProjectPortfolioWorkspace({
                 <div className="hub-project-portfolio-ruler" style={{ marginTop: 12 }}>
                   <div className="hub-project-portfolio-ruler__labels">
                     <span>프로젝트 진척 · {doneTasksCount}/{totalTasks} 완료</span>
-                    <span>{dueDays === null ? "기한 미정" : dueDays < 0 ? `${Math.abs(dueDays)}일 지남` : dueDays === 0 ? "오늘 마감" : `마감 ${dueDays}일`}</span>
+                    <span>{project.deadlineAlertSuppressed ? "이전 기한 · 알림 해제" : dueDays === null ? "기한 미정" : dueDays < 0 ? `${Math.abs(dueDays)}일 지남` : dueDays === 0 ? "오늘 마감" : `마감 ${dueDays}일`}</span>
                     <span className={risk.risky ? "is-risk" : ""}><Iconed name={risk.risky ? "flag" : "check"} size={12} />{risk.label}</span>
                   </div>
                   <div

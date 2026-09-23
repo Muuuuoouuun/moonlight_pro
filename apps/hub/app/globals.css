@@ -781,6 +781,7 @@ button {
 .hub-app .hub-project-due-risk > div { flex-wrap: wrap; }
 .hub-app .hub-project-next-action > span { display: none; }
 .hub-app .hub-project-no-risk { display: none; }
+.hub-app .hub-project-alert-reset { color: var(--fg-muted); font-size: 10.5px; }
 
 .hub-app .hub-project-risk-label {
   width: fit-content;
