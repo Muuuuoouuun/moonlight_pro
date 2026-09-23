@@ -1,7 +1,9 @@
 # 첫 화면 디자인 디벨롭 기획 — 두 개의 홈을 하나로
 
 > 상태: **DRAFT · 권장안(운영자 확정 전)**. 본문의 `확정`은 기존 문서·커밋에 이미 남은 운영자 결정만 가리키고, 이 문서가 새로 제안하는 것은 전부 `권장`이다.
-> 작성일: 2026-09-21 (Asia/Seoul) · 브랜치 `09.bigmac1.02` · HEAD `d8e2abe`
+> 작성일: 2026-09-21 (Asia/Seoul) · 실측·추가 정리 2026-09-22
+> 2026-09-23 갱신 — Futura(`claude/moonlight-home-futura` 3커밋)는 2026-09-22 `bcc975f`로 병합됐다(DESIGN.md §15 2026-09-22 행). 본문 §1.2·§4 비교표·§7 1단계의 "미병합" 전제는 그 시점 기준의 서술이며 지금은 해소됐다. 이 문서의 접근안 C는 여전히 DRAFT·미적용이다.
+> 주의: 이 문서는 브랜치명을 정본으로 적지 않는다(CLAUDE.md). §1.2의 미병합 사실은 작업 시점에 `git log <현재 브랜치>..claude/moonlight-home-futura`로 직접 확인한다 — 2026-09-21 확인 당시 현재 브랜치는 `09.bigmac1.02`였고 2026-09-22에 같은 워크트리가 `09.bigmac1.22`로 옮겨 갔다.
 > 상위 정본: [`docs/README.md`](../../README.md) 우선순위 → [`DESIGN.md`](../../../DESIGN.md) §3·§5·§7·§8.1·§11·§13·§15 → [운영자 프로필](../../operator-workflow-profile.md) → [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md)
 > 관계: [세 축·Action KPI 기획](2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md) §6.2가 첫 화면의 **데이터**(오늘 Top 3 = `tasks.meta.focus_dates`)를 정하고, 이 문서는 같은 화면의 **형태**(슬롯·폴드·텍스처)를 정한다. 둘은 같은 주에 맞물려야 한다 — §7 참조. 2026-09-20 운영자 재확정(캡처 → 오늘 할 일 순서)과 DESIGN.md §15 2026-09-18·19 확정(Futura)을 **둘 다** 지키는 것이 이 기획의 제약이다.
 > 근거: 로컬 dev(`:3000`, 라이브 Supabase read)에서 첫 화면 실측 — 데스크톱 1024×768·모바일 375×812 스크린샷과 `getBoundingClientRect()` 슬롯 높이. 코드 읽기: `pages/daily-brief.jsx`(1994줄)·`quick-capture.jsx`·`burning-streak.jsx`·`hub-tokens.css`·`motion.test.mjs`. 미병합 브랜치는 `git show`로 소스를 읽었다 — **`claude/moonlight-home-futura`를 실제로 띄워 보지는 않았다.** 운영 DB 규모·Vercel 배포 상태는 검증하지 않았다.
@@ -10,16 +12,16 @@
 
 ## 0. 한 장 요약
 
-첫 화면은 지금 **두 개**다. 하나는 운영자가 매일 보는 `dashboard`(Daily Brief, 12슬롯)이고, 다른 하나는 운영자가 2026-09-18에 Claude Design에서 5회 이터레이션해 확정한 Futura 트리아지 홈(`dashboard/home`)이다. **후자는 현재 작업 브랜치에 없다.** `09.bigmac1.02`의 DESIGN.md에서 "Futura"는 0회 등장하고, 그 결정과 코드는 23커밋 뒤처진 `claude/moonlight-home-futura`에만 있다.
+첫 화면은 지금 **두 개**다. 하나는 운영자가 매일 보는 `dashboard`(Daily Brief, 12슬롯)이고, 다른 하나는 운영자가 2026-09-18에 Claude Design에서 5회 이터레이션해 확정한 Futura 트리아지 홈(`dashboard/home`)이다. 작성 당시 후자는 작업 브랜치에 없었다 — 그 DESIGN.md에서 "Futura"는 0회 등장하고 결정과 코드는 23커밋 뒤처진 `claude/moonlight-home-futura`에만 있었다. **2026-09-22 `bcc975f`로 병합돼 지금은 둘 다 같은 트리에 있다**(DESIGN.md §15 2026-09-22 행).
 
 그래서 이 기획의 첫 문장은 디자인 제안이 아니라 정리다.
 
 1. **확정이 코드에 없다.** DESIGN.md §15의 2026-09-18·19 두 행(Futura 텍스처 레이어 + 셸·공용 컴포넌트 확장)은 `confirmed`인데 현재 브랜치에 병합되지 않았다. 다행히 충돌 면적은 작다 — 그 브랜치가 만진 10파일 중 현재 브랜치와 겹치는 것은 `DESIGN.md`와 `hub-app.jsx` **2개뿐**이다.
 2. **현행 첫 화면은 3.34폴드(데스크톱)·4.22폴드(모바일)다.** 실측 2562px / 3430px. DESIGN.md §3-1은 "5초 안에 지금 중요한 것"을, §13은 "12 cards above the fold"를 안티패턴으로 적는다. 슬롯은 정확히 12개다.
 3. **가장 큰 슬롯이 가장 덜 말한다.** 633px를 쓰는 「긴급 KA · 집중 고객 · 오늘 일정」 블록에서, 집중 고객 5행은 전부 `다음 행동 대기 · 기약 없음 · 최근 7. 7.`이고 다음 행동 문구는 `lead-enrichment.js`의 템플릿 2종이 돌려 쓴다. 5행이 같은 말을 한다.
-4. **팔레트 규칙이 첫 슬롯에서 깨져 있다.** `burning-streak.jsx`에 앰버·오렌지 원색 12건(`#ff5e00`·`rgba(255,110,40,…)` 등)과 무한 애니메이션 2종(1.8s·2.4s)이 있다. DESIGN.md §4는 warm gold/amber 재도입을 금지하고 §9는 라이브 인디케이터 duration을 1.4s 하나로 고정한다. 넘어간 이유는 명확하다 — `motion.test.mjs`의 정규식이 `\d+ms`만 잡아 **`s` 단위가 통과했고**, 팔레트 가드 테스트는 저장소에 아예 없다.
+4. **팔레트 규칙이 첫 슬롯에서 깨져 있다 — 그리고 첫 슬롯만이 아니다.** 2026-09-22 저장소 전역 스캔 결과 `apps/hub`의 warm(주황~노랑, 채도 0.25 초과) 원색은 **85건**, 원색 danger red까지 더하면 95건이다. 첫 화면 경로(`burning-streak.jsx` 16 · `daily-brief.jsx` 3 · `work.jsx` 5 · `hub-tokens.css` 스트릭 블록 12)가 36건이고, 나머지 49건은 `rhythm-visualizer.jsx`(16) · `revenue-heatmap.jsx`(8) · `celebration-fx.jsx`(6) · `overview.jsx`(4) · `hub-tokens.css` 골드 블록(14)에 있다. DESIGN.md §4는 warm gold/amber 재도입을 금지하고 §9는 라이브 인디케이터 duration을 1.4s 하나로 고정하는데, 넘어간 이유는 명확하다 — `motion.test.mjs`의 정규식이 `\d+ms`만 잡아 **`s` 단위가 통과했고**(무한 애니 `1.8s`·`2.4s` 포함), 팔레트 가드 테스트는 저장소에 **아예 없었다**.
 
-**권장.** 접근안 C — Futura를 병합한 뒤 두 홈을 **한 화면**으로 합치고, 12슬롯을 **6슬롯 · 2폴드**로 줄인다. 트리아지(j/k·1~9)는 "지금 결정할 것" 슬롯 안으로 들어가고, 오늘의 시간표는 Futura에서 그대로 가져온다. 새 원장·새 라우트·마이그레이션은 0이다. 상세는 §5·§8.
+**권장.** 접근안 C — Futura를 병합한 뒤 두 홈을 **한 화면**으로 합치고, 12슬롯을 **6슬롯 · 2폴드**로 줄인다. 트리아지(j/k·1~9)는 "지금 결정할 것" 슬롯 안으로 들어가고, 오늘의 시간표는 Futura에서 그대로 가져온다. 새 기록·새 라우트·마이그레이션은 0이다. 상세는 §5·§8.
 
 ---
 
@@ -48,7 +50,7 @@
 - 데스크톱 첫 폴드(768px)에 들어가는 것: 헤더·상태줄·캡처·오늘 할 일 카드까지. 실제 업무 행이 보이는 높이는 702px 중 마지막 407px다.
 - 모바일 첫 폴드(812px): 헤더 134 + 상태 44 + 캡처 210 + 갭 60 = **448px(55%)가 입력·크롬**이고, 그 아래 「오늘 할 일」 카드는 스트릭 배너를 먼저 그린 뒤라 **할 일 행이 2행 미만** 보인다.
 
-### 1.2 미병합 `dashboard/home`(Futura 트리아지)
+### 1.2 `dashboard/home`(Futura 트리아지 — 2026-09-22 병합됨)
 
 `claude/moonlight-home-futura` `ab87550` — 3커밋, 10파일.
 
@@ -60,7 +62,7 @@
 
 설계 골자(소스 확인):
 
-- **원장을 새로 만들지 않는다.** `/api/hub/daily-brief`의 `signals`와 `/api/calendar/google/event`를 그대로 소비한다. `SIGNAL_TARGETS` 표도 `daily-brief.jsx`와 같은 값으로 복사돼 있다.
+- **기록을 새로 만들지 않는다.** `/api/hub/daily-brief`의 `signals`와 `/api/calendar/google/event`를 그대로 소비한다. `SIGNAL_TARGETS` 표도 `daily-brief.jsx`와 같은 값으로 복사돼 있다.
 - **분할 트리아지**: 좌측 큐 목록 + 우측 상세 카드. `j`/`k` 이동, `1`~`9` 결정 단축키, `보류` 버튼. 처리하면 로컬 `resolved` Set에서 빠지고 상단 진행바가 `done/total`로 찬다.
 - **오늘의 시간표**: 종일 제외·시작시각 정렬, 지난 일정은 `data-past`, 진행 중이면 `NOW`.
 - **텍스처 토큰**: `--fx-page-pad: 48` / `--fx-section-gap: 44` / `--fx-card-pad: 26` / `--fx-hero: 44px·weight 300` / `--fx-stat: 38` / `--fx-pill: 999px` / 2단 그림자 `--fx-shadow`·`--fx-shadow-lift`.
@@ -133,14 +135,31 @@ DESIGN.md §3-1: "첫 화면은 5초 안에 '지금 중요한 것'을 답한다.
 
 `apps/hub/components/hub/burning-streak.jsx`:
 
-| 위반 | 실측 | 근거 규칙 |
-|---|---|---|
-| warm amber/orange 원색 | `#ff9a52` `#ff5f2e` `#d9381e` `#ffe699` `#ffaa33` `#ff5e00` `#ff7836` `#ffd166` + `rgba(255,110,40,.08)` `rgba(255,130,60,.35)` `rgba(255,115,45,.09)` `rgba(255,130,60,.3)` — **12건** | §4 "Do not reintroduce: Warm gold / amber / champagne accents" · §5.2 "raw hex/OKLCH 금지" |
-| `#ff9a52` 1건 | `daily-brief.jsx` | 같음 |
-| 무한 애니메이션 2종 | `mlFlameFlicker 1.8s … infinite` · `mlBurnGlow 2.4s … infinite`(`hub-tokens.css`) | §9 "Live indicators: `mlMoonPulse 1.4s` — one duration everywhere" |
-| 이모지·게이미피케이션 카피 | `할 일 완성 1일째! 🔥` · `✦ 30일 레전드 완주` · `✦ 2주 챔피언` | §10 운영자 목소리 · §13 "Decorative icons used as filler" |
+저장소 전역 스캔(2026-09-22, `apps/hub`, `.next*` 제외, 색상환 hue 15~70 · 채도 0.25 초과):
 
-**왜 통과했는가.** `motion.test.mjs`의 탐지 정규식은 `const MS = /(?<![\w.-])\d+(?:\.\d+)?ms\b/` — **`ms`만 본다.** `1.8s`·`2.4s`는 잡히지 않는다. 팔레트(원색 hex/rgba)를 훑는 스윕 테스트는 저장소에 **존재하지 않는다**(`motion`·`focus-ring`·`button-hover`·`state-usage`·`no-mock-data`는 있다). 즉 이 12건은 규칙 위반이 아니라 **가드 공백**의 결과다. 규칙만 고치고 가드를 안 만들면 다음 병합에서 다시 늘어난다(§15 2026-09-16이 raw `ms` 45건에서 이미 배운 교훈).
+| 파일 | warm 원색 | 성격 |
+|---|---|---|
+| `components/hub/burning-streak.jsx` | 16 | 화염 그라디언트·버닝 배지 |
+| `components/hub/hub-tokens.css` | 26 | 스트릭 키프레임 12 + 골드 마일스톤 14 |
+| `components/hub/rhythm-visualizer.jsx` | 16 | 성과 점수 차트 계열 + 버닝 어휘 |
+| `components/hub/pages/revenue-heatmap.jsx` | 8 | 히트맵 색계열 |
+| `components/hub/celebration-fx.jsx` | 6 | 축하 골드 |
+| `components/hub/pages/work.jsx` | 5 | 버닝 발동 배지·리듬 행 |
+| `components/hub/pages/overview.jsx` | 4 | 스파클 |
+| `components/hub/pages/daily-brief.jsx` | 3 | 스트릭 인라인 |
+| `lib/brand-content-log.js`(+테스트) | 7 | **§15 2026-09-01 확정 예외** — 브랜드 아이덴티티 팔레트 |
+| **합계(예외 제외)** | **85** | |
+
+여기에 원색 danger red 10건(`rgba(224, 86, 74, …)` 등 — 토큰 `var(--danger)`를 하드코딩한 사본)이 더해져 총 95건이다.
+
+| 위반 유형 | 근거 규칙 |
+|---|---|
+| warm amber/orange/gold 원색 85건 | §4 "Do not reintroduce: Warm gold / amber / champagne accents" · §5.2 "raw hex/OKLCH 금지" |
+| 무한 애니메이션 2종 `mlFlameFlicker 1.8s` · `mlBurnGlow 2.4s` | §9 "Live indicators: `mlMoonPulse 1.4s` — one duration everywhere" |
+| `s` 단위 모션 리터럴 10건(`0.15s`·`0.18s`·`0.2s`·`0.8s`·`2.4s`) | 같음 |
+| 이모지·게이미피케이션 카피 `할 일 완성 1일째! 🔥` · `✦ 30일 레전드 완주` · `버닝 발동 🔥` | §10 운영자 목소리 · §13 "Decorative icons used as filler" |
+
+**왜 통과했는가.** `motion.test.mjs`의 탐지 정규식은 `const MS = /(?<![\w.-])\d+(?:\.\d+)?ms\b/` — **`ms`만 봤다.** `1.8s`·`2.4s`는 잡히지 않았다. 팔레트(원색 hex/rgba)를 훑는 스윕 테스트는 저장소에 **존재하지 않는다**(`motion`·`focus-ring`·`button-hover`·`state-usage`·`no-mock-data`는 있다). 즉 이 12건은 규칙 위반이 아니라 **가드 공백**의 결과다. 규칙만 고치고 가드를 안 만들면 다음 병합에서 다시 늘어난다(§15 2026-09-16이 raw `ms` 45건에서 이미 배운 교훈).
 
 ### D6 — 확정과 코드가 분리돼 있다
 
@@ -151,7 +170,7 @@ DESIGN.md §15에 `confirmed`로 적힌 2026-09-18·19 결정이 현재 작업 �
 ## 3. 전제 (권장 — 운영자 동의 필요)
 
 - **P1. 첫 화면은 하나다.** 트리아지와 브리핑은 두 라우트가 아니라 한 화면의 두 슬롯이다. 두 홈을 유지하면 §1.3의 "어느 쪽이 맞나"를 매일 판단해야 한다.
-- **P2. 새 원장·새 라우트·마이그레이션 0.** Futura 홈이 이미 이 규율을 지켰고, 세 축 기획의 접근안 A도 같다. 화면이 원장을 새로 가지는 순간 숫자가 갈라진다.
+- **P2. 새 기록·새 라우트·마이그레이션 0.** Futura 홈이 이미 이 규율을 지켰고, 세 축 기획의 접근안 A도 같다. 화면이 기록을 새로 가지는 순간 숫자가 갈라진다.
 - **P3. 슬롯은 예산이다.** 새 슬롯을 넣으려면 기존 슬롯을 하나 빼거나 접는다. 지금의 12는 예산이 없었기 때문에 생겼다.
 - **P4. 0은 자리를 갖지 않는다.** 값이 0이고 행동이 없으면 렌더하지 않는다 — 단, **read 실패는 0이 아니다**(CLAUDE.md 읽기 봉투: `status:"error"`는 반드시 표면화). 현행 `긴급 KA 없음 · KA 지정은 Sales Ledger 시트에서 관리` 같은 "부재 고지"는 이 규칙의 예외로 남긴다(2026-08-05 재감사 #1 — 없는 기능을 있는 척하지 않기).
 - **P5. 텍스처는 결정이 끝난 뒤 넓힌다.** Futura는 지금 첫 화면·사이드바·공용 컴포넌트까지 확정이다. 나머지 40여 페이지로의 확장은 이 문서의 범위가 아니다(Q133).
@@ -167,6 +186,8 @@ DESIGN.md §15에 `confirmed`로 적힌 2026-09-18·19 결정이 현재 작업 �
 | 09-20 확정(캡처→할 일) | 지킨다 | **어긴다**(트리아지에 캡처·할 일 없음) | 지킨다 |
 | 코드량 | S | S(라우팅만) — 대신 기능 손실 | M |
 | 위험 | 확정이 계속 코드 밖에 남는다 | 매일 쓰는 캡처·할 일·고객이 첫 화면에서 사라진다. 신호 2건짜리 트리아지 화면은 대부분의 날 비어 있다 | 한 화면을 크게 고친다 — 회귀 표면이 넓다 |
+
+※ 2026-09-22 Futura 병합(`bcc975f`)으로 A안의 "09-18 확정을 어긴다" 전제는 해소됐다. 위 표는 작성 시점 기준의 논증으로 남긴다.
 | 되돌리기 | 쉬움 | 쉬움(라우팅) | 보통(슬롯 단위로 되돌릴 수 있게 설계) |
 
 **권장 C.** 이유 셋.
@@ -288,9 +309,18 @@ DESIGN.md §15에 `confirmed`로 적힌 2026-09-18·19 결정이 현재 작업 �
 
 전부 `권장`이며, 순서는 의존성 기준이다. **새 테이블·마이그레이션 0.**
 
+> **진행(2026-09-22).** 주 1의 두 줄 — 가드 신설과 스트릭 중립화 — 을 먼저 끝냈다(미커밋).
+> 신규 `components/hub/palette.test.mjs`(warm hue 스윕 + 파일별 BASELINE 래칫 + §15 2026-09-01 브랜드 로그 예외),
+> `motion.test.mjs`의 `s` 단위 확장(`0s` 제외, 축하 연출 2종은 Q134까지 부채로 명시).
+> 정리한 파일: `burning-streak.jsx`(화염 → `StreakMark` 중립 기하) · `rhythm-visualizer.jsx`(차트 계열을 §5.3 명도+점선으로) ·
+> `work.jsx` · `daily-brief.jsx` · `hub-tokens.css`(스트릭 키프레임 제거) + `s` 단위 모션 리터럴 5건.
+> 결과: warm 원색 85 → **49**(전부 BASELINE에 박제), 루트 `npm test` **1537 · 실패 0**,
+> 첫 화면·리듬 화면의 **렌더된 warm 색 0건**(`getComputedStyle` 실측)·콘솔 에러 0.
+> **Futura 병합은 하지 않았다** — git 브랜치 작업이라 운영자 확인 뒤에 한다(Q132).
+
 | 주 | 묶음 | 규모 | 완료 기준 |
 |---|---|---|---|
-| 1 | **Futura 병합**: `claude/moonlight-home-futura` 3커밋을 `09.bigmac1.02`로. 충돌은 `DESIGN.md`(§15 행 병합)·`hub-app.jsx`(PAGE_MAP)뿐 | S | `npm test` 통과(특히 `hub-nav.test.mjs`·`state-usage.test.mjs`). `dashboard/home` 렌더 확인. DESIGN.md §15에 09-18·19 두 행이 현재 브랜치에 존재 |
+| 1 | **Futura 병합** — ✅ 완료(2026-09-22 `bcc975f`). 3커밋 병합, 충돌은 `DESIGN.md`(§15 행 병합)·`hub-app.jsx`(PAGE_MAP)뿐이었다 | S | `npm test` 통과(특히 `hub-nav.test.mjs`·`state-usage.test.mjs`). `dashboard/home` 렌더 확인. DESIGN.md §15에 09-18·19 두 행이 현재 브랜치에 존재 |
 | 1 | **가드 신설**: `palette.test.mjs` — `apps/hub` 전역에서 warm hue 원색(hex·rgb·hsl)과 토큰 밖 raw 색을 막는다. `motion.test.mjs`의 `MS` 정규식을 `s` 단위까지 확장(`--dur-*`·`mlMoonPulse 1.4s` 화이트리스트) | S | 현행 13건이 **실패로 잡히고**, 수정 후 0. 두 테스트가 루트 `npm test` 글롭 안 |
 | 1 | **스트릭 중립화**(§5.4): 화염 SVG → 7칸 도트, 무한 애니 2종 제거, 카피 정리 | S | `palette`·`motion` 테스트 통과. `prefers-reduced-motion`에서 변화 없음 |
 | 2 | **슬롯 감축**(§5.2): 헤더 칩→문장, 상태줄 흡수, 빠른 이동 데스크톱 제거, 문의 조건부, 지표 5→3, 집중 고객 5→3 | M | 1024×768 실측 **≤1536px**. 각 변경이 독립 커밋이라 슬롯 단위 되돌리기 가능 |
@@ -308,7 +338,7 @@ DESIGN.md §15에 `confirmed`로 적힌 2026-09-18·19 결정이 현재 작업 �
 - Futura 텍스처의 나머지 40여 페이지 확장(Q133) — 첫 화면에서 한 달 살아본 뒤.
 - 밀도 토글 부활(§15 2026-07-21 고정 밀도 확정).
 - 카테고리 색 도입(원안의 붉은 `REVENUE` 라벨 — §5.3).
-- 첫 화면 전용 원장·새 API·새 최상위 탭.
+- 첫 화면 전용 기록·새 API·새 최상위 탭.
 - 푸시·알림 채널(세 축 Q130에서 별도 결정).
 - 사이드바 깊이 변경 — 2026-07-15 "한 단계" 확정이 살아 있고 `hub-nav.test.mjs`가 고정한다.
 - AI 위젯(`FloatingMentorWidget`) 배치 변경 — Council/Guru는 보류 스코프(README §4).

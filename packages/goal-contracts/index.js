@@ -5,7 +5,7 @@ export const GOAL_SOURCE_CATALOG = {
   manual: { label: '근거와 함께 직접 기록', description: '기간 전체의 현재값을 기록합니다. 이전 기록과 합산하지 않습니다.' },
   tasks_completed: { label: '완료 작업 수', description: '현재 완료 상태인 작업의 완료 시각 기준입니다. 재오픈하면 과거 집계도 바뀝니다.' },
   contacts_recorded: { label: '실제 연락 기록 수', description: '실제 연락 활동을 발생 시각과 소속으로 집계합니다.' },
-  content_published: { label: '발행 완료 수', description: '성공한 발행 기록만 실제 발행 시각으로 집계합니다.' },
+  content_published: { label: '발행 완료 수', description: '성공한 발행을 원고 단위로 실제 발행 시각에 집계합니다. 같은 원고의 재기록은 1건입니다.' },
   reviews_completed: { label: '하루 리뷰 수', description: '기간 안에 저장된 하루 리뷰를 집계합니다.' },
 };
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -15,8 +15,13 @@ export function isGoalDate(value) {
   const date = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
+// PostgreSQL timestamptz accepts UTC offsets only up to ±15:59 (22009 beyond it), while
+// Date.parse accepts up to ±23:59. Reject the gap here so the RPC never sees it.
+const GOAL_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-](\d{2}):(\d{2}))$/;
 export function isGoalTimestamp(value) {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/.test(value) && isGoalDate(value.slice(0,10)) && Number.isFinite(Date.parse(value));
+  const match = typeof value === 'string' ? GOAL_TIMESTAMP.exec(value) : null;
+  if (!match || (match[1] !== undefined && (Number(match[1]) > 15 || Number(match[2]) > 59))) return false;
+  return isGoalDate(value.slice(0,10)) && Number.isFinite(Date.parse(value));
 }
 const boundedText = (value, max, required = false) => typeof value === 'string' && value.length <= max && (!required || value.trim().length > 0);
 const optionalNumber = value => value === undefined || value === null || (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 1e15);

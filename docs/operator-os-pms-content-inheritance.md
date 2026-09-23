@@ -15,7 +15,7 @@
 빠른 입력 또는 도메인 화면
   -> Hub BFF에서 사용자·origin 검증
   -> Engine command에서 validation·idempotency·transaction
-  -> Moonlight Supabase 원장에 저장
+  -> Moonlight Supabase 기록에 저장
   -> Hub read repository로 재조회
   -> Today / PMS / Content에 같은 durable record 표시
 ```
@@ -50,8 +50,8 @@ source=supabase                         -> live 숫자와 row 표시
 read 실패                              -> error + retry
 ```
 
-- preview/error 원장 안의 fixture 배열은 집계하지 않는다.
-- `0`은 live 원장에서 실제로 0인 경우에만 운영 숫자로 보여준다.
+- preview/error 기록 안의 fixture 배열은 집계하지 않는다.
+- `0`은 live 기록에서 실제로 0인 경우에만 운영 숫자로 보여준다.
 - mock, preview, live record를 한 차트나 한 합계에 섞지 않는다.
 - 저장 실패를 preview 성공이나 완료 toast로 바꾸지 않는다.
 
@@ -64,7 +64,7 @@ read 실패                              -> error + retry
 - 홈은 별도 CRM/PMS/Content 대시보드의 합이 아니라 Action Desk다.
 - 홈의 주인공은 Quick Capture, 긴급 KA 최대 1건, 집중 고객 3~5건, 오늘 일정과 필수 할 일이다.
 - 매출·프로젝트·콘텐츠 숫자는 위 행동을 밀어내지 않는 보조 pulse다.
-- 전제 1~7과 기존 원장 기반 접근안 B가 승인됐다. Phase 1A의 read foundation, 핵심 PMS write path, 홈 Quick Capture의 task/work-order 두 destination과 공통 receipt, task-only Today 완료 loop가 live 연결됐고, dependency·milestone·custom workflow 같은 고급 PMS는 후속 Phase 3 범위다.
+- 전제 1~7과 기존 기록 기반 접근안 B가 승인됐다. Phase 1A의 read foundation, 핵심 PMS write path, 홈 Quick Capture의 task/work-order 두 destination과 공통 receipt, task-only Today 완료 loop가 live 연결됐고, dependency·milestone·custom workflow 같은 고급 PMS는 후속 Phase 3 범위다.
 
 ### 2.2 PMS
 
@@ -114,7 +114,7 @@ read 실패                              -> error + retry
    - 작은 차트: `idea / draft / review / scheduled / published` 분포
    - CTA: `/dashboard/classin/content`
 
-차트는 추세를 꾸미지 않는다. 현재 원장의 상태 분포만 사용하고 각 카드에 다음 행동을 한 개 둔다. Action Desk의 명령 카드와 결정 큐보다 위로 올리지 않는다.
+차트는 추세를 꾸미지 않는다. 현재 기록의 상태 분포만 사용하고 각 카드에 다음 행동을 한 개 둔다. Action Desk의 명령 카드와 결정 큐보다 위로 올리지 않는다.
 
 새 pure helper `apps/hub/lib/operator-home-summary.js`의 `buildOperatorHomeSummary({ projects, content })`가 이 read model을 만든다.
 
@@ -131,7 +131,7 @@ read 실패                              -> error + retry
 | My Tasks | 여러 프로젝트의 개인 작업대 | 오늘, 예정, 나중, 완료; project/customer deep link |
 | Board | 공통 상태 이동 | 수집, 계획, 진행, 대기, 완료; 보류/취소는 별도 필터 |
 
-- 프로젝트 상세는 checklist, 최근 update, 결정, note를 기존 원장에서 읽는다.
+- 프로젝트 상세는 checklist, 최근 update, 결정, note를 기존 기록에서 읽는다.
 - project 후보, dependency, 분야별 custom workflow, 70/30 AI 진척 점수는 Phase 3 계약 뒤에 추가한다.
 - task와 project mutation은 `Browser → Hub BFF → Engine command → Supabase → Hub read repository` 경계를 재사용한다.
 - Hub BFF는 `POST/PATCH /api/hub/projects`, `POST/PATCH /api/hub/tasks`이고, 실제 validation·workspace scope·persistence는 Engine의 `POST /api/pms/command`가 담당한다.

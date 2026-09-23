@@ -10,9 +10,12 @@ const workspace='11111111-1111-4111-8111-111111111111', other='22222222-2222-422
 const id = n => `33333333-3333-4333-8333-${String(n).padStart(12,'0')}`;
 const quote = value => `'${String(value).replaceAll("'","''")}'`;
 const command = (n,action,input,expectedRevision) => ({commandId:id(n),action,input,...(expectedRevision===undefined?{}:{expectedRevision})});
+const migrationSource = name => readFileSync(new URL(`../../../supabase/migrations/${name}`,import.meta.url),'utf8');
 test('operating goals PostgreSQL contract and security', {skip:available?false:'PostgreSQL binaries and non-root user required'},async t=>{
   const dir=mkdtempSync(join(tmpdir(),'operating-goals-pg-')),data=join(dir,'data');
-  const args=['-X','-qAt','-v','ON_ERROR_STOP=1','-h',dir,'-p','55509','-U','goals_test','-d','postgres'];
+  // Unix socket only, in a private directory; a random port keeps parallel clusters apart.
+  const port=String(20000+Math.floor(Math.random()*40000));
+  const args=['-X','-qAt','-v','ON_ERROR_STOP=1','-h',dir,'-p',port,'-U','goals_test','-d','postgres'];
   const sql=source=>execFileSync('psql',args,{input:source,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
   const request=(cmd,scope=workspace)=>`select public.operating_goal_command_v1('${scope}','operator',${quote(JSON.stringify(cmd))}::jsonb);`;
   const run=(cmd,scope)=>JSON.parse(sql(request(cmd,scope)));
@@ -20,15 +23,27 @@ test('operating goals PostgreSQL contract and security', {skip:available?false:'
   try {
     const env={...process.env,LC_ALL:process.env.LC_ALL||'C'};
     execFileSync('initdb',['-D',data,'-U','goals_test','-A','trust','--no-locale','--encoding=UTF8'],{stdio:'pipe',env});
-    execFileSync('pg_ctl',['-D',data,'-l',join(dir,'postgres.log'),'-o',`-F -k ${dir} -p 55509 -c listen_addresses=''`,'-w','start'],{stdio:'pipe',env});started=true;
+    execFileSync('pg_ctl',['-D',data,'-l',join(dir,'postgres.log'),'-o',`-F -k ${dir} -p ${port} -c listen_addresses=''`,'-w','start'],{stdio:'pipe',env});started=true;
     sql(`create role anon;create role authenticated;create role service_role bypassrls;create role unrelated;
       create table workspaces(id uuid primary key);insert into workspaces values('${workspace}'),('${other}');
       create table projects(id uuid primary key,workspace_id uuid not null,meta jsonb default '{}');insert into projects(id,workspace_id,meta) values('${id(90)}','${workspace}','{}'),('${id(91)}','${other}','{}'),('${id(92)}','${workspace}','{"org_scope":"company"}');
       create table brands(id uuid primary key,workspace_id uuid not null,slug text,meta jsonb default '{}');
       create table leads(id uuid primary key,workspace_id uuid not null,company_id uuid,brand_id uuid,meta jsonb default '{}');
       create table deals(like leads including all);create table customer_accounts(like leads including all);`);
-    const migration=readFileSync(new URL('../../../supabase/migrations/20260921_0036_operating_goals.sql',import.meta.url),'utf8');
+    // Mirror Supabase: pgcrypto lives in schema "extensions", so public.digest does not exist.
+    sql(`create schema extensions;create extension pgcrypto schema extensions;`);
+    const migration=migrationSource('20260921_0036_operating_goals.sql');
+    const hashFix=migrationSource('20260922_0039_operating_goal_hash_fix.sql');
     sql(migration);
+    await t.test('0036 alone cannot write on Supabase pgcrypto placement; 0039 restores writes',()=>{
+      assert.equal(sql(`select to_regprocedure('public.digest(text,text)') is null and to_regprocedure('extensions.digest(text,text)') is not null`),'t');
+      const probe=command(99,'create_objective',{title:'해시 확인',scope:'personal',periodStart:'2026-09-01',periodEnd:'2026-09-30',timezone:'Asia/Seoul'});
+      assert.throws(()=>run(probe),/digest\(text, unknown\) does not exist/);
+      assert.equal(sql('select count(*) from operating_objectives'),'0');
+      sql(hashFix);
+      assert.equal(sql(`select prosrc like '%sha256(convert_to(%' and prosrc not like '%digest(%' and prosecdef from pg_proc where oid='public.operating_goal_command_v1(uuid,text,jsonb)'::regprocedure`),'t');
+      assert.equal(sql(`select array_to_string(proconfig,',') from pg_proc where oid='public.operating_goal_command_v1(uuid,text,jsonb)'::regprocedure`),'search_path=pg_catalog, public, pg_temp');
+    });
     await t.test('CRM source scope follows canonical account kind, workspace and brand precedence',()=>{
       let next=100;
       const resolve=(type,meta={},companyId=null,brandId=null)=>{
@@ -58,7 +73,9 @@ test('operating goals PostgreSQL contract and security', {skip:available?false:'
     await t.test('create and repeated command produce one objective and receipt',()=>{
       const saved=run(create);assert.equal(saved.status,'saved');assert.equal(saved.persisted,true);assert.equal(saved.replayed,false);objective=saved.entity;
       assert.equal(objective.periodStart,'2026-09-01');assert.equal(objective.revision,1);
+      assert.equal(sql(`select count(*)||':'||bool_and(request_hash~'^[0-9a-f]{64}$')||':'||bool_and(response->>'status'='saved') from operating_goal_receipts where command_id='${id(1)}'`),'1:true:true');
       assert.equal(run(create).replayed,true);assert.equal(sql('select count(*) from operating_objectives'),'1');
+      assert.equal(sql('select count(*) from operating_goal_receipts'),'1');
       assert.equal(run({...create,input:{...create.input,title:'다른 제목'}}).status,'conflict');
     });
     await t.test('immutable period and exact CAS preserve objective',async()=>{
@@ -96,6 +113,14 @@ test('operating goals PostgreSQL contract and security', {skip:available?false:'
     await t.test('manual snapshots append, preserve corrections and require evidence and exact period',()=>{
       observation.metricId=metric.id;
       for(const patch of [{evidence:[]},{sourceKey:'tasks_completed'},{periodStart:'2026-08-01'},{value:null},{observedAt:'2026-08-31T14:59:59Z',evidence:[{...evidence[0],occurredAt:'2026-08-31T14:59:59Z'}]},{observedAt:new Date(Date.now()+86400000).toISOString()},{evidence:[{...evidence[0],occurredAt:new Date().toISOString()}]},{evidence:[{label:'침입',href:'javascript:alert(1)',occurredAt:recordedAt}]}])assert.equal(run(command(10,'record_observation',{...observation,...patch})).status,'invalid-input');
+      // +16:00 matches the format regex but exceeds PostgreSQL's ±15:59 offset range (22009):
+      // it must come back as the invalid-input envelope, not a raw error (command-outcome-unknown).
+      const farOffset='2026-09-21T01:00:00+16:00';
+      for(const patch of [{observedAt:farOffset},{evidence:[{...evidence[0],occurredAt:farOffset.replace('+','-')}]}]){
+        const rejected=run(command(10,'record_observation',{...observation,...patch}));
+        assert.equal(rejected.status,'invalid-input');assert.equal(rejected.persisted,false);
+      }
+      assert.equal(sql(`select count(*) from operating_goal_receipts where command_id='${id(10)}'`),'0');
       assert.equal(run(command(11,'record_observation',observation)).status,'saved');
       assert.equal(run(command(12,'record_observation',{...observation,value:1})).status,'saved');
       assert.equal(sql('select count(*) from operating_observations'),'2');
@@ -122,7 +147,11 @@ test('operating goals PostgreSQL contract and security', {skip:available?false:'
       assert.equal(sql(`select has_table_privilege('service_role','operating_observations','UPDATE')`),'f');
       assert.equal(sql(`select bool_and(relrowsecurity) from pg_class where relname like 'operating_%' and relkind='r'`),'t');
       assert.equal(JSON.parse(sql(`set role service_role;${request(create)}`)).replayed,true);
-      sql(migration);assert.equal(sql('select count(*) from operating_observations'),'2');
+      // Filename order: re-running 0036 restores the digest version until 0039 runs again.
+      sql(migration);sql(hashFix);sql(hashFix);assert.equal(sql('select count(*) from operating_observations'),'2');
+      assert.equal(run(create).replayed,true);
+      for(const role of ['anon','authenticated','unrelated'])assert.equal(sql(`select has_function_privilege('${role}','${sig}','EXECUTE')`),'f');
+      assert.equal(sql(`select has_function_privilege('service_role','${sig}','EXECUTE')`),'t');
     });
   } finally {
     if(started)execFileSync('pg_ctl',['-D',data,'-m','fast','-w','stop'],{stdio:'pipe',env:{...process.env,LC_ALL:process.env.LC_ALL||'C'}});

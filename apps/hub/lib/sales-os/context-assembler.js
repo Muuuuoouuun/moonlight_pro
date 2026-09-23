@@ -1,14 +1,14 @@
 // 360 context assembler — the single richer input for Guru (and, later, every persona).
 //
 // Replaces the flat revenue slice the sales-mentor route used to build. Pulls the real ledger
-// entry points (getRevenueLedger / getRecentOutcomes / getContentLedger) + episodic memory
+// entry points (getRevenueLedger / getRecentContactActivities / getContentLedger) + episodic memory
 // (getRecentAgentRuns), normalizes via the pure context-schema, and degrades honestly: a source
 // failure lands in missing[] and the loop continues (context-spine §4). Superset of the old
 // context shape (deals/leads/accounts/cases/focus kept) so the Engine prompt stays compatible.
 
 import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getCrmPipeline } from "@/lib/repositories/crm-pipeline";
-import { getRecentOutcomes } from "@/lib/repositories/outcomes-ledger";
+import { getRecentContactActivities } from "@/lib/repositories/crm-activities";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
@@ -36,7 +36,8 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
   const missing = [];
   const [ledger, outcomesRes, content, runsRes] = await Promise.all([
     settled(getRevenueLedger(), "revenue-ledger", missing),
-    settled(getRecentOutcomes({ limit: 30 }), "outreach_outcomes", missing),
+    // 0a: 연락 기록의 단일 원천은 crm_activities — 봉투·필드명은 예전 outcomes와 같다.
+    settled(getRecentContactActivities({ limit: 30 }), "crm_activities", missing),
     settled(getContentLedger(), "content-ledger", missing),
     settled(getRecentAgentRuns({ ref, limit: 5 }), "agent_runs", missing),
   ]);

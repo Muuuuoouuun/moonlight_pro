@@ -3,11 +3,36 @@
 import React from "react";
 
 /**
- * 정밀 SVG 화염 아이콘 (Linear / Moonstone 스타일)
- * burning=true 일 때 일렁이는 버닝 애니메이션과 앰버-오렌지 화염 그라디언트가 활성화됩니다.
+ * 연속 완주 표시 — DESIGN.md §4·§5.2·§5.3·§9·§10.
+ *
+ * 2026-09-21까지 이 파일은 앰버·오렌지 화염(원색 16건)과 무한 애니메이션 2종으로 그려졌다.
+ * §4는 warm gold/amber 재도입을 금지하고, §9는 라이브 인디케이터 duration을 mlMoonPulse
+ * 1.4s 하나로 고정하며, §5.3은 "색 단독으로 상태를 나르지 않는다"를 요구한다.
+ * 지표(연속 일수)는 그대로 두고 표현만 중립 기하로 되돌렸다 — 채워진 칸의 수와 막대 높이가
+ * 정보를 나르므로 흑백·색각 차이에서도 읽힌다. 팔레트 회귀는 palette.test.mjs가 막는다.
  */
-export function StreakFlame({ size = 18, burning = false, className = "", style = {} }) {
-  const gradId = React.useId();
+
+// 연속 일수 → 4단계. 색이 아니라 채워진 막대 수가 단계를 말한다.
+function streakLevel(streak) {
+  if (streak >= 14) return 4;
+  if (streak >= 7) return 3;
+  if (streak >= 3) return 2;
+  if (streak >= 1) return 1;
+  return 0;
+}
+
+/**
+ * 오름차순 막대 4개. `level` 만큼 채운다.
+ * 채움은 포그라운드 명도(--fg / --fg-muted)이고 빈 칸은 하이라인(--line) — accent 아님(§5.2).
+ */
+export function StreakMark({ size = 18, level = 0, className = "", style = {} }) {
+  const lit = Math.max(0, Math.min(4, level));
+  const bars = [
+    { x: 2.5, y: 14.5, h: 6.5 },
+    { x: 8, y: 11, h: 10 },
+    { x: 13.5, y: 7.5, h: 13.5 },
+    { x: 19, y: 4, h: 17 },
+  ];
 
   return (
     <svg
@@ -16,69 +41,31 @@ export function StreakFlame({ size = 18, burning = false, className = "", style 
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={`${burning ? "hub-streak-flame--burning" : ""} ${className}`.trim()}
-      style={{
-        display: "inline-block",
-        verticalAlign: "middle",
-        flexShrink: 0,
-        ...style,
-      }}
+      className={className}
+      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }}
       aria-hidden="true"
     >
-      <defs>
-        <linearGradient id={`${gradId}-outer`} x1="12" y1="2" x2="12" y2="22" gradientUnits="userSpaceOnUse">
-          {burning ? (
-            <>
-              <stop offset="0%" stopColor="#ff9a52" />
-              <stop offset="45%" stopColor="#ff5f2e" />
-              <stop offset="100%" stopColor="#d9381e" />
-            </>
-          ) : (
-            <>
-              <stop offset="0%" stopColor="var(--fg-faint)" />
-              <stop offset="100%" stopColor="var(--line-strong)" />
-            </>
-          )}
-        </linearGradient>
-        <linearGradient id={`${gradId}-inner`} x1="12" y1="11" x2="12" y2="21" gradientUnits="userSpaceOnUse">
-          {burning ? (
-            <>
-              <stop offset="0%" stopColor="#ffe699" />
-              <stop offset="70%" stopColor="#ffaa33" />
-              <stop offset="100%" stopColor="#ff5e00" />
-            </>
-          ) : (
-            <>
-              <stop offset="0%" stopColor="var(--fg-dim)" />
-              <stop offset="100%" stopColor="var(--fg-faint)" />
-            </>
-          )}
-        </linearGradient>
-      </defs>
-
-      {/* 바깥 화염 (Outer flame contour) */}
-      <path
-        d="M12 2.5C12 2.5 13.8 6.2 13.8 8.4C13.8 9.7 13.2 10.8 12.5 11.6C12.3 11.8 12 11.7 12 11.4C12 9.5 10.6 8.2 9.2 7.1C7.8 6 6.5 4.4 6.5 4.4C5.2 6.5 4.5 9 4.5 11.8C4.5 16.5 7.9 20.5 12 21.5C16.1 20.5 19.5 16.5 19.5 11.8C19.5 8.1 17.2 4.9 14.8 3.5C13.6 2.8 12.8 2.2 12 2.5Z"
-        fill={`url(#${gradId}-outer)`}
-        fillOpacity={burning ? 0.95 : 0.65}
-      />
-
-      {/* 중심 코어 화염 (Inner burning core) */}
-      <path
-        d="M12 12C12.8 12 14.5 14 14.5 16C14.5 17.8 13.4 19.4 12 19.9C10.6 19.4 9.5 17.8 9.5 16C9.5 14.6 10.4 13.2 11.2 12.4C11.5 12.1 12 12 12 12Z"
-        fill={`url(#${gradId}-inner)`}
-        fillOpacity={burning ? 1 : 0.4}
-      />
+      {bars.map((b, i) => (
+        <rect
+          key={b.x}
+          x={b.x}
+          y={b.y}
+          width={2.5}
+          height={b.h}
+          rx={1.25}
+          fill={i < lit ? (lit >= 3 ? "var(--fg)" : "var(--fg-muted)") : "var(--line)"}
+        />
+      ))}
     </svg>
   );
 }
 
 /**
- * 연속 달성 버닝 스트릭 배지 및 헤더 위젯
+ * 연속 달성 배지
  * - `streak`: 연속 완료 일수
  * - `todayCompleted`: 오늘 완료한 할 일 건수
  * - `recentDays`: 최근 7일 완료 여부 배열 [0, 1, 0, ...]
- * - `isPopping`: 완료 직후 팝 애니메이션 trigger
+ * - `isPopping`: 완료 직후 1회 팝(§9 --dur-enter). 반복 애니메이션은 쓰지 않는다
  */
 export function BurningStreakBadge({
   streak = 0,
@@ -91,58 +78,38 @@ export function BurningStreakBadge({
   style = {},
 }) {
   const activeStreak = Math.max(0, streak);
-  const burning = isBurning || activeStreak >= 3 || (activeStreak > 0 && todayCompleted > 0);
+  const level = streakLevel(activeStreak);
+  // 기존 호출처가 넘기는 isBurning은 "3일 이상 또는 오늘 완료"를 뜻한다. 강조는 명도 한 단계로만.
+  const sustained = isBurning || activeStreak >= 3 || (activeStreak > 0 && todayCompleted > 0);
 
-  // 마일스톤 레벨 판정
-  let milestone = null;
-  if (activeStreak >= 30) {
-    milestone = { label: "✦ 30일 레전드 완주", tone: "gold" };
-  } else if (activeStreak >= 14) {
-    milestone = { label: "✦ 2주 챔피언", tone: "sparkle" };
-  } else if (activeStreak >= 7) {
-    milestone = { label: "✦ 7일 완주 마스터", tone: "sparkle" };
-  }
-
-  // 텍스트 카피 결정
-  let streakText = "";
-  if (activeStreak === 0) {
-    streakText = "오늘 첫 완료로 버닝 시작";
-  } else if (activeStreak === 1) {
-    streakText = "할 일 완성 1일째! 🔥";
-  } else if (activeStreak < 3) {
-    streakText = `할 일 완성 ${activeStreak}일째! 🔥`;
-  } else if (milestone) {
-    streakText = `할 일 완성 ${activeStreak}일째! ${milestone.label} 🔥`;
-  } else {
-    streakText = `할 일 완성 ${activeStreak}일째! 연속 버닝 중 🔥`;
-  }
+  const headline = activeStreak > 0 ? `${activeStreak}일 연속` : "오늘 첫 완료 대기";
 
   if (compact) {
     return (
       <div
-        className={`${burning ? "hub-streak-badge--burning" : ""} ${isPopping ? "hub-streak-pop" : ""}`.trim()}
+        className={isPopping ? "hub-streak-pop" : ""}
         style={{
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
           padding: "3px 8px 3px 6px",
           borderRadius: "var(--r-sm)",
-          background: burning ? "rgba(255, 110, 40, 0.08)" : "var(--surface-2)",
-          border: `1px solid ${burning ? "rgba(255, 130, 60, 0.35)" : "var(--line-soft)"}`,
+          background: "var(--surface-2)",
+          border: `1px solid ${sustained ? "var(--line)" : "var(--line-soft)"}`,
           fontSize: 11.5,
           fontWeight: 500,
-          color: burning ? "var(--fg)" : "var(--fg-muted)",
-          transition: "all var(--dur-enter) var(--ease-hub)",
+          color: sustained ? "var(--fg)" : "var(--fg-muted)",
+          transition: "border-color var(--dur-hover) var(--ease-hub)",
           ...style,
         }}
         title={`${title}: ${activeStreak}일 연속${todayCompleted > 0 ? ` (오늘 ${todayCompleted}건 완료)` : ""}`}
       >
-        <StreakFlame size={14} burning={burning} />
-        <span className="mono" style={{ fontWeight: 600, color: burning ? "var(--fg)" : "var(--fg-dim)" }}>
+        <StreakMark size={14} level={level} />
+        <span className="mono" style={{ fontWeight: 600, color: sustained ? "var(--fg)" : "var(--fg-dim)" }}>
           {activeStreak}일
         </span>
-        <span style={{ fontSize: 11, color: milestone ? "#ffd166" : (burning ? "var(--fg-muted)" : "var(--fg-faint)"), fontWeight: milestone ? 600 : 400 }}>
-          {milestone ? milestone.label.replace("✦ ", "") : (activeStreak >= 3 ? "연속 버닝" : activeStreak > 0 ? "완성 중" : "도전")}
+        <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>
+          {activeStreak > 0 ? "연속" : "대기"}
         </span>
       </div>
     );
@@ -150,7 +117,7 @@ export function BurningStreakBadge({
 
   return (
     <div
-      className={`${burning ? "hub-streak-badge--burning" : ""} ${isPopping ? "hub-streak-pop" : ""}`.trim()}
+      className={isPopping ? "hub-streak-pop" : ""}
       style={{
         display: "flex",
         alignItems: "center",
@@ -158,21 +125,17 @@ export function BurningStreakBadge({
         gap: 12,
         padding: "8px 12px",
         borderRadius: "var(--r-sm)",
-        background: burning
-          ? "linear-gradient(90deg, rgba(255, 115, 45, 0.09) 0%, rgba(82, 116, 168, 0.04) 100%)"
-          : "var(--surface-2)",
-        border: `1px solid ${burning ? "rgba(255, 130, 60, 0.3)" : "var(--line-soft)"}`,
-        transition: "all var(--dur-enter) var(--ease-hub)",
+        background: "var(--surface-2)",
+        border: `1px solid ${sustained ? "var(--line)" : "var(--line-soft)"}`,
+        transition: "border-color var(--dur-hover) var(--ease-hub)",
         ...style,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-        <StreakFlame size={20} burning={burning} />
+        <StreakMark size={20} level={level} />
         <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
-              {streakText}
-            </span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{headline}</span>
             {todayCompleted > 0 && (
               <span className="mono" style={{ fontSize: 11, color: "var(--fg-muted)" }}>
                 · 오늘 {todayCompleted}건 완료
@@ -180,7 +143,7 @@ export function BurningStreakBadge({
             )}
           </div>
           <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>
-            {burning ? "루틴과 매일 할 일이 강력하게 연결되고 있습니다" : "매일 한 건씩 완료하면 연속 버닝이 켜집니다"}
+            {sustained ? "오늘도 이어가는 중" : "하루 한 건 완료하면 이어집니다"}
           </span>
         </div>
       </div>
@@ -201,14 +164,10 @@ export function BurningStreakBadge({
                   width: 9,
                   height: 14,
                   borderRadius: 2.5,
-                  background: done
-                    ? (burning ? "#ff7836" : "var(--moon-400)")
-                    : "var(--surface-3)",
-                  border: isToday
-                    ? `1px solid ${done ? "#ff9a52" : "var(--line-strong)"}`
-                    : "1px solid var(--line-soft)",
-                  opacity: done ? 1 : 0.6,
-                  transition: "background var(--dur-enter) ease",
+                  // 채움/빈칸은 명도 차이로만 구분한다 — 오늘 칸은 1px 강조 보더가 추가 채널(§5.3).
+                  background: done ? "var(--fg-muted)" : "var(--surface-3)",
+                  border: `1px solid ${isToday ? "var(--line-strong)" : "var(--line-soft)"}`,
+                  transition: "background var(--dur-enter) var(--ease-hub)",
                 }}
               />
             );

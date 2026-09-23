@@ -1,0 +1,210 @@
+'use client';
+
+import React from 'react';
+import { Button, Checkbox, LifecycleBadge, Skeleton, TextAreaField } from './hub-primitives';
+
+// Preserve unsaved notes when navigating between the home card and calendar drawer.
+// Server records are always re-read; drafts are never treated as saved data.
+const noteDrafts = new Map();
+const SAVED = '저장됨';
+
+// One record, many surfaces: Daily Brief, the Calendar drawer and the Futura home all key
+// by the same `outcomeKey` and read/write through /api/hub/calendar-outcomes, so the layout
+// may differ per surface but the state machine below must not.
+function useCalendarOutcome(eventKey, { expanded, onSavingChange }) {
+  const [record, setRecord] = React.useState(null);
+  const [note, setNote] = React.useState(() => noteDrafts.get(eventKey)?.note ?? '');
+  const [open, setOpen] = React.useState(expanded || noteDrafts.has(eventKey));
+  const [state, setState] = React.useState('loading');
+  const [message, setMessage] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [conflict, setConflict] = React.useState(null);
+  const [retryCount, setRetry] = React.useState(0);
+  const busyRef = React.useRef(false);
+  const editButtonRef = React.useRef(null);
+  const restoreFocusRef = React.useRef(false);
+  const detailsId = React.useId();
+
+  React.useEffect(() => {
+    let active = true;
+    setState('loading');
+    setMessage('');
+    if (!eventKey) {
+      setState('error');
+      setMessage('일정 기록을 연결하지 못했어요. 캘린더를 새로고침해 주세요.');
+      return;
+    }
+    fetch(`/api/hub/calendar-outcomes?eventKey=${encodeURIComponent(eventKey)}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
+      .then(async response => {
+        const data = await response.json();
+        if (!active) return;
+        if (!response.ok || data.status !== 'live' || !data.outcome) {
+          setState(data.status === 'preview' ? 'preview' : 'error');
+          setMessage(data.message || '일정 기록을 불러오지 못했어요.');
+          return;
+        }
+        const draft = noteDrafts.get(eventKey);
+        setRecord(draft?.base || data.outcome);
+        setNote(draft?.note ?? data.outcome.note);
+        if (draft && draft.base.revision !== data.outcome.revision) {
+          setConflict({ current: data.outcome, wantedDone: draft.base.done });
+          setOpen(true);
+          setMessage('작성 중 다른 창에서 기록이 변경됐어요. 현재 기록을 확인해 주세요.');
+        }
+        setState('live');
+      })
+      .catch(() => {
+        if (active) { setState('error'); setMessage('일정 기록을 불러오지 못했어요.'); }
+      });
+    return () => { active = false; };
+  }, [eventKey, retryCount]);
+
+  React.useEffect(() => {
+    if (!open && !saving && restoreFocusRef.current) {
+      restoreFocusRef.current = false;
+      editButtonRef.current?.focus();
+    }
+  }, [open, saving]);
+
+  async function save(done = record?.done, expectedRevision = record?.revision) {
+    if (busyRef.current || state !== 'live' || !record) return;
+    busyRef.current = true;
+    setSaving(true);
+    onSavingChange?.(true);
+    setMessage('');
+    try {
+      const response = await fetch('/api/hub/calendar-outcomes', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ eventKey, done, note, expectedRevision }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = await response.json();
+      if (response.ok && ['saved', 'duplicate'].includes(data.status) && data.outcome?.eventKey === eventKey) {
+        setRecord(data.outcome);
+        setNote(data.outcome.note);
+        noteDrafts.delete(eventKey);
+        setConflict(null);
+        restoreFocusRef.current = open;
+        setOpen(false);
+        setMessage(SAVED);
+      } else if (data.status === 'conflict' && data.outcome) {
+        setConflict({ current: data.outcome, wantedDone: done });
+        setOpen(true);
+        setMessage(data.message);
+      } else {
+        setMessage(data.message || '저장을 확인하지 못했어요. 다시 시도해 주세요.');
+      }
+    } catch {
+      setMessage('저장을 확인하지 못했어요. 입력을 유지했으니 다시 시도해 주세요.');
+    } finally {
+      busyRef.current = false;
+      setSaving(false);
+      onSavingChange?.(false);
+    }
+  }
+
+  function editNote(value) {
+    setNote(value);
+    if (value === record?.note) noteDrafts.delete(eventKey);
+    else noteDrafts.set(eventKey, { note: value, base: record });
+    setMessage('');
+  }
+
+  function acceptCurrent() {
+    setRecord(conflict.current);
+    setNote(conflict.current.note);
+    noteDrafts.delete(eventKey);
+    setConflict(null);
+    setMessage('');
+  }
+
+  return {
+    record, note, open, state, message, saving, conflict, detailsId, editButtonRef,
+    save, editNote, acceptCurrent,
+    toggleOpen: () => setOpen(value => !value),
+    retry: () => setRetry(value => value + 1),
+    // A failed read or save is an error; preview is a neutral truth state (§5.3).
+    error: state !== 'preview' && Boolean(message) && message !== SAVED,
+    editLabel: open ? '접기' : record?.note ? '수정' : '특이사항',
+  };
+}
+
+function OutcomeEditor({ outcome, className }) {
+  const { note, conflict, saving, detailsId } = outcome;
+  return (
+    <div id={detailsId} className={className} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <TextAreaField label="특이사항" value={note} onChange={event => outcome.editNote(event.target.value)} maxLength={4000} rows={3} disabled={saving} placeholder="진행 결과나 다음에 확인할 내용을 남기세요" onCmdEnter={() => !conflict && outcome.save()} />
+      {conflict ? (
+        <div style={{ padding: 12, border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>현재 저장된 기록 · {conflict.current.done ? '완료' : '미완료'}{'\n'}{conflict.current.note || '특이사항 없음'}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Button variant="secondary" size="sm" disabled={saving} onClick={outcome.acceptCurrent}>현재 기록 사용</Button>
+            <Button variant="outline" size="sm" disabled={saving} onClick={() => outcome.save(conflict.wantedDone, conflict.current.revision)}>내 내용 다시 저장</Button>
+          </div>
+        </div>
+      ) : <Button variant="secondary" size="sm" disabled={saving} onClick={() => outcome.save()} style={{ alignSelf: 'flex-end' }}>{saving ? '저장 중…' : '저장'}</Button>}
+    </div>
+  );
+}
+
+function RetryButton({ outcome }) {
+  if (outcome.state !== 'error' && outcome.state !== 'preview') return null;
+  return <Button variant="ghost" size="xs" onClick={outcome.retry}>다시 시도</Button>;
+}
+
+// `compact` draws one Futura timeline row (`.fx-time-*`, hub-futura.css) for the home
+// schedule: the save acknowledgement stays inside the row and the saved note is clamped
+// to one line, so completing or noting an event never grows the fold. Everything that
+// needs attention — read/save failure, preview, a conflict — still gets its own line.
+export function CalendarOutcome({ eventKey, title, whenLabel, expanded = false, onSavingChange, compact = false, past = false, aside = null }) {
+  const outcome = useCalendarOutcome(eventKey, { expanded, onSavingChange });
+  const { record, open, state, message, saving, conflict, error, detailsId, editButtonRef } = outcome;
+
+  if (compact) {
+    const alert = !saving && message && message !== SAVED;
+    return (
+      <div className="fx-time-item">
+        <div className="fx-time-row" data-past={past ? 'true' : undefined} data-done={record?.done ? 'true' : undefined}>
+          <Checkbox checked={record?.done} onChange={done => outcome.save(done)} disabled={state !== 'live' || saving || Boolean(conflict)} label={`${title} 완료`} size={16} style={{ alignSelf: 'center' }} />
+          <span className="fx-time">{whenLabel}</span>
+          <span className="fx-time-title">{title}</span>
+          {aside}
+          <span className="fx-time-lead" aria-hidden="true" />
+          {/* 로딩 고지는 행 안의 live region 한 토큰으로 — compact는 체크박스와 편집 버튼이 둘 다
+              state !== 'live'로 잠기므로, 표시가 없으면 첫 화면 일정이 전부 "눌러도 안 되는 줄"로
+              보인다(§11). 94px 들여쓰기 블록을 하나 더 넣으면 일정 N건마다 줄이 생겼다 사라져
+              폴드가 흔들리고, 행 골격은 이미 그려져 있어 Skeleton이 예고할 자리도 없다. */}
+          <span className="fx-time-ack" role="status" aria-live="polite">{saving ? '저장 중…' : state === 'loading' ? '불러오는 중…' : message === SAVED ? SAVED : ''}</span>
+          <Button ref={editButtonRef} variant="ghost" size="xs" aria-expanded={open} aria-controls={detailsId} aria-label={`${title} ${outcome.editLabel}`} onClick={outcome.toggleOpen} disabled={saving || state !== 'live'}>{outcome.editLabel}</Button>
+        </div>
+        {!open && record?.note && <div className="fx-time-note" title={record.note}>{record.note}</div>}
+        {open && state === 'live' && <OutcomeEditor outcome={outcome} className="fx-time-detail" />}
+        {alert && (
+          <div className="fx-time-alert" role={error ? 'alert' : 'status'} data-error={error ? 'true' : undefined}>
+            <span>{message}</span>
+            <RetryButton outcome={outcome} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <Checkbox checked={record?.done} onChange={done => outcome.save(done)} disabled={state !== 'live' || saving || Boolean(conflict)} label={`${title} 완료`} size={18} />
+        {whenLabel && <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', padding: '2px 6px', borderRadius: 'var(--r-xs)', flexShrink: 0 }}>{whenLabel}</span>}
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: record?.done ? 'var(--fg-muted)' : 'var(--fg)', textDecoration: record?.done ? 'line-through' : undefined, overflowWrap: 'anywhere' }}>{title}</span>
+        {record?.done && <LifecycleBadge state="done" />}
+        <Button ref={editButtonRef} variant="ghost" size="xs" aria-expanded={open} aria-controls={detailsId} onClick={outcome.toggleOpen} disabled={saving}>{outcome.editLabel}</Button>
+      </div>
+      {state === 'loading' && <Skeleton width="45%" height={12} />}
+      {!open && record?.note && <div style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.6, paddingLeft: 26 }}>{record.note}</div>}
+      {open && state === 'live' && <OutcomeEditor outcome={outcome} />}
+      {(saving || message) && <div role={error ? 'alert' : 'status'} aria-live="polite" style={{ fontSize: 12, color: error ? 'var(--danger)' : 'var(--fg-dim)' }}>
+        {saving ? '저장 중…' : message}
+        <RetryButton outcome={outcome} />
+      </div>}
+    </div>
+  );
+}

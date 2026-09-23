@@ -179,7 +179,7 @@ test("portfolio presentation consumes the executable metric helper without synth
   assert.match(pmsComponentsSource, /projectCorePartial/);
   assert.match(pmsComponentsSource, /metrics\.lowerBound[\s\S]*\+`/);
   assert.match(pmsComponentsSource, /일부 범위/);
-  assert.match(pmsComponentsSource, /표시할 원장 없음/);
+  assert.match(pmsComponentsSource, /표시할 기록 없음/);
   assert.doesNotMatch(pmsComponentsSource, /preview에서는/);
   assert.doesNotMatch(`${pmsComponentsSource}\n${pmsMetricsSource}`, /AI.*(?:score|점수)|70\s*\/\s*30/i);
 });
@@ -253,7 +253,7 @@ test("project reads keep error distinct from preview and offer retry", () => {
 
   assert.match(loadBlock, /setSyncState\(['"]error['"]\)/);
   assert.match(loadBlock, /data\.source === ['"]error['"]/);
-  assert.match(projectsSource, /프로젝트 원장을 읽지 못했습니다/);
+  assert.match(projectsSource, /프로젝트 기록을 읽지 못했습니다/);
   assert.match(projectsSource, /onClick=\{\(\) => loadLedger\(\{ initial: true \}\)\}/);
   assert.doesNotMatch(loadBlock, /catch[\s\S]{0,120}setSyncState\(['"]preview['"]\)/);
 });
@@ -264,7 +264,7 @@ test("canonical project selection is forwarded to the Projects API before the bo
   const loadBlock = projectsSource.slice(loadStart, effectStart);
 
   assert.match(projectsSource.slice(0, loadStart), /const selectedProjectId = searchParams\.get\(['"]project['"]\)/);
-  // 선택값은 ref로 읽는다 — deps에 넣으면 상세 열기/닫기마다 마운트 이펙트가 전체 원장을
+  // 선택값은 ref로 읽는다 — deps에 넣으면 상세 열기/닫기마다 마운트 이펙트가 전체 기록을
   // 재조회한다(2026-08-05 perf). 선택 read-back은 아래 전용 이펙트가 담당한다.
   assert.match(projectsSource.slice(0, loadStart), /selectedProjectIdRef\.current = selectedProjectId/);
   assert.match(loadBlock, /projectId\s*=\s*selectedProjectIdRef\.current/);
@@ -296,7 +296,7 @@ test("mutation reloads keep the current ledger mounted while refreshing", () => 
   const effectStart = projectsSource.indexOf("React.useEffect", loadStart);
   const loadBlock = projectsSource.slice(loadStart, effectStart);
 
-  // SWR 캐시 도입(4차 재감사): initial 여부와 무관하게, 현재 원장이 live/partial이면
+  // SWR 캐시 도입(4차 재감사): initial 여부와 무관하게, 현재 기록이 live/partial이면
   // loading으로 덮지 않는다 — 뮤테이션 재검증과 캐시 서빙 마운트 둘 다 행을 유지한다.
   assert.match(loadBlock, /setSyncState\(current\s*=>[\s\S]{0,180}(live|partial)[\s\S]{0,180}loading/);
   assert.doesNotMatch(loadBlock, /^\s*setSyncState\(['"]loading['"]\);/m);
@@ -318,7 +318,7 @@ test("the linked-content ledger loads only when project detail is used", () => {
 
 test("partial project reads preserve core rows and offer a named retry state", () => {
   assert.match(projectsSource, /data\.partial \? ['"]partial['"] : ['"]live['"]/);
-  assert.match(projectsSource, /프로젝트 일부 원장을 읽지 못했습니다/);
+  assert.match(projectsSource, /프로젝트 일부 기록을 읽지 못했습니다/);
   assert.match(projectsSource, /ledger\.failedSources/);
   assert.match(projectsSource, /onClick=\{\(\) => loadLedger\(\{ initial: true \}\)\}/);
   assert.match(projectsSource, /failedSources=\{detailFailedSources\}/);
@@ -352,8 +352,8 @@ test("project header marks an incomplete open-todo count as a lower bound", () =
   assert.match(headerSummaryBlock, /openTodoCount/);
   assert.match(headerSummaryBlock, /\$\{openTodoCount\}\+ open todos/);
   assert.match(headerSummaryBlock, /\$\{projectCountLabel\} projects/);
-  assert.match(headerSummaryBlock, /loading[\s\S]*원장 확인 중/);
-  assert.match(headerSummaryBlock, /error[\s\S]*원장 읽기 실패/);
+  assert.match(headerSummaryBlock, /loading[\s\S]*기록 확인 중/);
+  assert.match(headerSummaryBlock, /error[\s\S]*기록 읽기 실패/);
   assert.match(headerSummaryBlock, /preview/);
   assert.match(projectsSource, /\{projectHeaderSummary\}/);
   assert.match(projectsSource, /partialSources:\s*Array\.isArray\(data\.partialSources\)/);
@@ -568,4 +568,14 @@ test("container selection and management dialogs suspend background page shortcu
   assert.match(gate, /containerPickerOpen/);
   assert.match(projectsSource, /onOpenChange=\{setContainerPickerOpen\}/);
   assert.match(pmsComponentsSource, /onOpenChange\?\.\(open\)/);
+});
+
+// §11 터치 타깃 44px 플로어 — 완료·보관 드래그 그립은 `touch-action: none`으로 터치 제스처를
+// 독점하면서 히트 영역은 24×24였다. 터치에서만 의미가 있는 컨트롤이라 정확히 플로어가 필요하다.
+// `.hub-checkbox::before`와 같은 계약: 글리프는 12px, 히트 영역만 pseudo-element로 키운다.
+test("완료·보관 드래그 그립은 coarse 포인터에서 44px 히트 영역을 갖는다", () => {
+  const grip = responsiveCss.slice(responsiveCss.indexOf("[data-terminal-grip]"));
+  assert.match(grip, /@media \(pointer: coarse\)\s*\{[\s\S]*?\[data-terminal-grip\]::before\s*\{[\s\S]*?inset:\s*-10px/);
+  // 레이아웃은 그대로 — 그립 자체에 음수 margin을 더해 이웃을 밀지 않는다.
+  assert.match(grip, /\[data-terminal-grip\]\s*\{\s*position: relative;\s*\}/);
 });

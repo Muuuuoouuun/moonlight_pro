@@ -36,7 +36,7 @@
 - `apps/hub/components/hub/pages/brands.jsx`: 브랜드 읽기가 `/api/hub/content`에 의존. 정체성은 읽기 전용이며 콘텐츠 이동 버튼 제공.
 - `apps/hub/components/hub/pages/content.jsx`: `Studio`의 blog/carousel 모드, `useContentLedger`의 기존 5분 캐시, Queue 및 Campaigns 구현.
 - `apps/hub/lib/brand-content-log.js`: 기획/제작중/발행 상태 투영, 성과값은 모두 0이고 표시는 ‘—’.
-- `apps/hub/app/api/hub/content/route.js`: 원장 조회와 draft/handoff/export 경로. 현재 Publish 표면은 handoff와 실제 외부 발행을 구분해 읽어야 한다.
+- `apps/hub/app/api/hub/content/route.js`: 기록 조회와 draft/handoff/export 경로. 현재 Publish 표면은 handoff와 실제 외부 발행을 구분해 읽어야 한다.
 
 Campaigns의 Business Truth에는 고객·문제·약속·제안이 있다. 이는 코드 검토 결과이며 해당 화면의 전체 상호작용은 이번에 점검하지 않았다. 브랜드 전략을 추가할 때 같은 정보를 별도 정본으로 중복시키지 않아야 한다.
 
@@ -92,7 +92,7 @@ Campaigns의 Business Truth에는 고객·문제·약속·제안이 있다. 이�
 
 원고 옆에는 선택 브랜드의 핵심 기준만 요약한다. 전체 브랜드 목록·저장 기술명·자동화 설정은 작업을 방해하지 않는 위치로 옮긴다. 카드뉴스 디자인과 영상 제작은 형식에 따라 필요한 때 연다.
 
-원본과 채널별 버전을 구분하고 원본 연결을 남긴다. Threads는 X의 thread와 별도 채널이므로 기존 타입 이름을 바꾸는 방식으로 지원했다고 처리하지 않는다. 원장 타입·Engine validation·읽기/쓰기/재열기까지 계약을 맞춰야 한다.
+원본과 채널별 버전을 구분하고 원본 연결을 남긴다. Threads는 X의 thread와 별도 채널이므로 기존 타입 이름을 바꾸는 방식으로 지원했다고 처리하지 않는다. 기록 타입·Engine validation·읽기/쓰기/재열기까지 계약을 맞춰야 한다.
 
 ### 5.3 발행·재사용
 
@@ -123,7 +123,7 @@ Campaigns의 Business Truth에는 고객·문제·약속·제안이 있다. 이�
 
 ## 8. 기술 최적화: 기능 목적에 맞춰 좁게
 
-- **데이터 의존성:** 브랜드 정체성을 읽는 데 전체 콘텐츠·asset·publish log·campaign 원장을 요구하지 않도록 조회 계약을 분리한다. Hub repository 경로를 유지하고 브랜드 기준은 콘텐츠 조회 실패와 독립적으로 표시한다.
+- **데이터 의존성:** 브랜드 정체성을 읽는 데 전체 콘텐츠·asset·publish log·campaign 기록을 요구하지 않도록 조회 계약을 분리한다. Hub repository 경로를 유지하고 브랜드 기준은 콘텐츠 조회 실패와 독립적으로 표시한다.
 - **기존 캐시 개선:** `useContentLedger`에는 이미 5분 캐시가 있다. 캐시 신설을 해결책으로 삼지 않고 공통 모듈로 분리해 요청 중복, 저장 후 무효화와 화면 간 최신 상태 반영을 확인한다. 지금 `brand-content-log.jsx`가 대형 페이지 모듈에서 훅을 가져오는 의존성도 정리한다.
 - **범위 일치:** 선택 브랜드·상태에 따라 목록과 요약 숫자의 범위를 맞춘다. 데이터량 증가 시 서버 필터·페이지네이션·상세 본문 지연 조회를 적용한다. 먼저 payload와 전환 시간을 측정한다.
 - **쓰기 계약:** Hub → Engine 인증 전달과 입력 검증, 동일 식별자 재시도, 저장 후 재조회, unknown/preview/partial/error 구분을 유지한다. 브랜드 정체성의 편집 필드 허용 범위는 기존 update_brand 계약부터 점검한다.

@@ -25,12 +25,9 @@ test("quick create is title-first with an inline workspace and a drawer fallback
   assert.match(createDrawerSource, /<Drawer\b/);
   assert.match(createDrawerSource, /className="project-create-inline"/);
   assert.match(createDrawerSource, /프로젝트명 \*/);
-  assert.match(createDrawerSource, /목표 결과/);
-  assert.match(createDrawerSource, /<textarea[\s\S]*완료됐을 때 어떤 상태가 되어야 하나요\?/);
-  assert.match(createDrawerSource, /다음 행동/);
   const disclosureStart = createDrawerSource.indexOf("{advancedOpen && (");
-  const summaryStart = createDrawerSource.indexOf("목표 결과");
-  assert.ok(disclosureStart >= 0 && summaryStart > disclosureStart, "optional details must stay behind disclosure");
+  const entityStart = createDrawerSource.indexOf("관련 리드/고객");
+  assert.ok(disclosureStart >= 0 && entityStart > disclosureStart, "optional details must stay behind disclosure");
   assert.doesNotMatch(createDrawerSource, /name=["']progress["']/);
   assert.doesNotMatch(createDrawerSource, /진행률 \(%\)/);
 });
@@ -47,8 +44,20 @@ test("advanced project settings start collapsed and expose their state accessibl
   assert.match(createDrawerSource, /useState\(false\)/);
   assert.match(createDrawerSource, /aria-expanded=\{advancedOpen\}/);
   assert.match(createDrawerSource, /상태/);
-  assert.match(createDrawerSource, /우선순위/);
-  assert.match(createDrawerSource, /목표 종료일/);
+});
+
+// 09.22 간소화: 목표·다음 행동·일정·우선순위는 만든 뒤 프로젝트 상세(EditDrawer·
+// ProjectDeliveryEditor)에서 채운다 — 생성 드로어는 분류(업무 분야·브랜드·연결)만 남긴다.
+test("create drawer defers goal, next-action, priority, and delivery fields to post-create editing", () => {
+  assert.doesNotMatch(createDrawerSource, /목표 결과/);
+  assert.doesNotMatch(createDrawerSource, /다음 행동/);
+  assert.doesNotMatch(createDrawerSource, /우선순위/);
+  assert.doesNotMatch(createDrawerSource, /최소 결과물/);
+  assert.doesNotMatch(createDrawerSource, /착수 예정일/);
+  assert.doesNotMatch(createDrawerSource, /프로토타입 확인일/);
+  assert.doesNotMatch(createDrawerSource, /목표 종료일/);
+  assert.doesNotMatch(createDrawerSource, /name=["']summary["']/);
+  assert.doesNotMatch(createDrawerSource, /name=["']nextAction["']/);
 });
 
 test("global project entry requires a flat Area while keeping Brand optional", () => {
@@ -152,7 +161,7 @@ test("stale project edit rebases its source and exposes the loaded-ledger messag
   assert.match(projectsSource, /data\.status === ['"]conflict['"][\s\S]{0,240}data\.project/);
   assert.match(projectsSource, /setProjectEditSource\([\s\S]{0,120}\.source/);
   assert.match(projectsSource, /setProjectDraft\([\s\S]{0,120}\.draft/);
-  assert.match(projectsSource, /최신 원장 기준을 불러왔습니다/);
+  assert.match(projectsSource, /최신 기록 기준을 불러왔습니다/);
   assert.match(primitivesSource, /r\?\.message/);
   assert.match(primitivesSource, /saveFeedback/);
 });
@@ -231,9 +240,9 @@ test("project creation opens a recoverable draft even when no canonical area is 
 
 test("project create surface explains an empty area ledger and offers an inline retry", () => {
   assert.match(createDrawerSource, /const areaEmpty = !areaUnavailable && areas\.length === 0/);
-  assert.match(createDrawerSource, /업무 분야 원장이 비어 있습니다/);
+  assert.match(createDrawerSource, /업무 분야 기록이 비어 있습니다/);
   assert.match(createDrawerSource, /onRetryAreas/);
-  assert.match(createDrawerSource, /원장 다시 불러오기/);
+  assert.match(createDrawerSource, /기록 다시 불러오기/);
   assert.match(createDrawerSource, /disabled=\{saving \|\| areaUnavailable \|\| areaEmpty\}/);
 });
 

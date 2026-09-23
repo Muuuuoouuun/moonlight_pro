@@ -1,24 +1,26 @@
 "use client";
 
 import React from "react";
+import { CalendarOutcome } from "../calendar-outcome";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton, CertaintyBadge, useToast } from "../hub-primitives";
+import { REACTION_LABEL as FOCUS_REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import {
   buildDailyDispatchContext,
-  createAdviceTaskWriter,
   buildWeeklySummaryText,
   extractWeeklyExperiment,
 } from "@/lib/ai-workflow-client";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
-import { BurningStreakBadge, StreakFlame } from "../burning-streak";
-import { useUndoableAction } from "../use-undoable-action";
+import { BurningStreakBadge, StreakMark } from "../burning-streak";
+import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
+import { ContactRecordDrawer } from "../contact-record-form";
 import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
-import { buildTaskToday, isDurableTaskUpdateResult } from "@/lib/task-today";
+import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import {
   beginRhythmCheck,
@@ -69,8 +71,8 @@ const CONTEXT_TARGETS = {
 };
 
 // 결정 상태는 KST 날짜 스코프로 이 기기에 영속한다 — 이전에는 컴포넌트 로컬 state뿐이라
-// "✓ 처리" 영수증이 새로고침에 증발하는 가짜였다. 신호는 매일 원장에서 재파생되므로 날짜
-// 키가 자연 만료다. (원장 영속 dismiss는 attention 컷오버 백로그 — 그때 이 키를 대체한다.)
+// "✓ 처리" 영수증이 새로고침에 증발하는 가짜였다. 신호는 매일 기록에서 재파생되므로 날짜
+// 키가 자연 만료다. (기록 영속 dismiss는 attention 컷오버 백로그 — 그때 이 키를 대체한다.)
 const BRIEF_DECISION_PREFIX = 'hub:brief-decisions:';
 function briefDecisionStorageKey() {
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -260,8 +262,50 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     setFeedback({ status: 'idle', message: '완료 취소됨', action: null });
   }
 
+  // 오늘 3개 토글 — meta.focus_dates에 오늘을 넣거나 뺀다(2026-09-20 §6.2). 서버가 3건 상한을
+  // 강제하고(409 focus-limit), 화면은 상한에서 넣기 버튼을 비활성으로 그린다.
+  const focusSummary = taskToday?.focus || { picked: 0, done: 0, limit: MAX_FOCUS_PER_DAY, remaining: MAX_FOCUS_PER_DAY };
+  const [focusBusyId, setFocusBusyId] = React.useState(null);
+  // focusSummary는 마지막 로드 시점 값이라, 저장 왕복 동안 연달아 누르면 화면상 상한에 안 닿았는데
+  // 서버가 409로 막는다. 저장이 확인된 토글을 여기 더해 내 작업 타일과 같은 분모로 비활성을 그린다.
+  // 새 요약이 도착하면(picked가 바뀌면) 0으로 되돌린다.
+  const [focusDelta, setFocusDelta] = React.useState(0);
+  React.useEffect(() => { setFocusDelta(0); }, [focusSummary.picked]);
+  const focusFull = focusSummary.picked + focusDelta >= focusSummary.limit;
+  async function toggleFocus(task) {
+    const on = !task.focusToday;
+    if (on && focusFull) {
+      setFeedback({ status: 'error', message: focusLimitMessage(focusSummary.limit), action: null });
+      return;
+    }
+    setFocusBusyId(task.id);
+    try {
+      const response = await fetch('/api/hub/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: task.id, focus: { on } }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 409 && data.error === 'focus-limit') {
+        throw new Error(focusLimitMessage(data.limit || MAX_FOCUS_PER_DAY));
+      }
+      if (!response.ok || !isDurableTaskUpdateResult(data)) {
+        throw new Error(data.error || data.status || `저장 실패 (${response.status})`);
+      }
+      setFocusDelta((n) => n + (on ? 1 : -1));
+      setFeedback({ status: 'saved', message: on ? `${task.title} — 오늘 3개에 넣음.` : `${task.title} — 오늘 3개에서 뺌.`, action: null });
+      onChanged?.();
+    } catch (error) {
+      setFeedback({ status: 'error', message: error instanceof Error ? error.message : '오늘 3개를 저장하지 못했습니다.', action: null });
+    } finally {
+      setFocusBusyId(null);
+    }
+  }
+
   // §5.2: missed is the only immediate-loss lane; today/inbox are ordinary stages → neutral.
+  // focus = 운영자가 고른 "현재" 선택 → Moonstone(§5.2 selected 의미), 라벨 "오늘 3개"와 함께.
   const laneTone = {
+    focus: 'moon',
     missed: 'danger',
     today: 'neutral',
     waiting: 'neutral',
@@ -279,6 +323,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
             isBurning={isBurning}
             isPopping={isPopping}
           />
+          <Badge tone="moon" size="xs" variant="outline">오늘 3개 {focusSummary.done}/{focusSummary.picked}</Badge>
           <Badge tone={(counts.missed || 0) > 0 ? 'danger' : 'neutral'} size="xs">놓침 {counts.missed || 0}</Badge>
           <Badge tone="neutral" size="xs">오늘 {counts.today || 0}</Badge>
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>모두 보기</Button>
@@ -321,6 +366,17 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                     ) : ''}{task.priority || 'med'}
                   </div>
                 </div>
+                <IconButton
+                  icon="star"
+                  size={32}
+                  iconSize={15}
+                  tooltip={task.focusToday ? '오늘 3개에서 빼기' : focusFull ? `오늘 3개가 찼습니다 (${focusSummary.limit}/${focusSummary.limit})` : '오늘 3개에 넣기'}
+                  aria-pressed={task.focusToday ? 'true' : 'false'}
+                  disabled={focusBusyId === task.id || (!task.focusToday && focusFull)}
+                  onClick={() => toggleFocus(task)}
+                  className={task.focusToday ? 'hub-iconbtn--star-active' : ''}
+                  style={{ flexShrink: 0 }}
+                />
                 <Button
                   variant="secondary"
                   size="sm"
@@ -393,7 +449,7 @@ const EMPTY_DAILY_BRIEF_STATE = {
   signals: [],
   dailyFocus: null,
   // 접힌 보조 섹션의 헤더가 "안에 뭐가 있는지"를 말하려면 카드를 마운트하지 않고도 셀 수
-  // 있어야 한다 — 브리핑 원장이 이미 싣고 오는 승인 큐 요약을 그대로 쓴다(사용성 재감사 E).
+  // 있어야 한다 — 브리핑 기록이 이미 싣고 오는 승인 큐 요약을 그대로 쓴다(사용성 재감사 E).
   queue: null,
   morningBrief: null,
 };
@@ -588,9 +644,6 @@ function MetricCard({ m, onNavigate, compact }) {
       onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(target); } } : undefined}
       className="hub-metric-card daily-brief__metric-card"
       style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--line-soft)',
-        borderRadius: 'var(--r-lg)',
         padding: compact ? '12px 14px' : 'var(--card-pad)',
         boxShadow: compact ? 'none' : 'var(--shadow-soft)',
         cursor: clickable ? 'pointer' : 'default',
@@ -733,12 +786,48 @@ const BRIEF_LANE_META = {
   brand: { label: '브랜드', tone: 'neutral' },
 };
 
-function MorningBriefCard({ brief, onNavigate }) {
-  if (!brief) return null;
-  const items = Array.isArray(brief.items) ? brief.items : [];
-  const when = brief.generatedAt
+// §6.2: "오늘 이 3개만"의 1차 소스는 사람이 고른 오늘 3개(tasks.meta.focus_dates →
+// taskToday.focusItems, 표시 limit과 무관)다. 아직 아무것도 안 골랐으면 첫 화면 레인 순서 상위
+// 3개를 dashed ◇ 권장으로 보여준다 — 시스템 추천을 확정처럼 보이지 않게(§5.3 certainty).
+// chief-of-staff 크론(project_updates ai.morning_brief)은 손대지 않고 카드의 보조 줄로만 남긴다.
+// (2026-09-23 통합: today-focus-split e0e5c80의 focusItems 소스·보조 줄 배치와 workflow-os-a
+// e913338의 dashed 권장 상자·행 메타·상태 배지를 한 카드로 합쳤다.)
+function MorningBriefCard({ brief, taskToday, onNavigate }) {
+  const laneItems = Array.isArray(taskToday?.items) ? taskToday.items : [];
+  const focusTasks = Array.isArray(taskToday?.focusItems)
+    ? taskToday.focusItems
+    : laneItems.filter((t) => t.lane === 'focus');
+  const recommendedTasks = focusTasks.length ? [] : laneItems.filter((t) => t.lane !== 'focus').slice(0, MAX_FOCUS_PER_DAY);
+  const briefItems = Array.isArray(brief?.items) ? brief.items : [];
+  const when = brief?.generatedAt
     ? new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date(brief.generatedAt))
     : null;
+  const taskRow = (task, i, total, recommended) => (
+    <div
+      key={`task-${task.id}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onNavigate?.('dashboard/work/my')}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.('dashboard/work/my'); } }}
+      className="hub-row"
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', cursor: 'pointer',
+        borderBottom: i < total - 1 ? '1px solid var(--line-soft)' : 'none',
+      }}
+    >
+      <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--moon-300)', width: 14, flexShrink: 0, paddingTop: 1 }}>{i + 1}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{task.title}</div>
+        <div className="mono" style={{ marginTop: 3, fontSize: 11, color: 'var(--fg-muted)' }}>
+          {task.due && task.due !== '미정' ? `due ${task.due} · ` : ''}{task.priority || 'med'}
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 1 }}>
+        {recommended ? <CertaintyBadge state="recommended" /> : <Badge tone="moon" size="xs" variant="outline">오늘 3개</Badge>}
+        <Iconed name="chevronR" size={11} style={{ color: 'var(--fg-faint)' }} />
+      </div>
+    </div>
+  );
 
   // approve-lane rows resolve right below in the approval queue — no navigation needed.
   const targetFor = (item) => {
@@ -749,49 +838,69 @@ function MorningBriefCard({ brief, onNavigate }) {
     return null;
   };
 
+  const hasTasks = focusTasks.length > 0 || recommendedTasks.length > 0;
+  if (!hasTasks && briefItems.length === 0) return null;
+
   return (
     <div>
-      <SectionTitle right={<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {when && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{when}</span>}
-        <Badge tone="neutral" size="xs">Chief of Staff</Badge>
-      </div>}>
+      <SectionTitle right={hasTasks ? (
+        <Badge tone="neutral" size="xs">{focusTasks.length ? '내가 고른 것' : '권장 — 아직 안 고름'}</Badge>
+      ) : null}>
         오늘 이 3개만
       </SectionTitle>
       <Card pad={false}>
-        {items.length === 0 ? (
-          <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-            {brief.summary || '오늘 급한 항목 없음 — 큐가 비었습니다.'}
+        {focusTasks.length > 0 && focusTasks.map((task, i) => taskRow(task, i, focusTasks.length, false))}
+        {focusTasks.length === 0 && recommendedTasks.length > 0 && (
+          <div>
+            {/* dashed edge = 권장(확정 아님). 고르기 전까지 시스템 순서 상위 3개를 보여줄 뿐이다. */}
+            <div style={{ margin: 10, border: '1px dashed var(--line)', borderRadius: 'var(--r-sm)' }}>
+              {recommendedTasks.map((task, i) => taskRow(task, i, recommendedTasks.length, true))}
+            </div>
+            <div style={{ padding: '0 14px 12px', fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+              아직 오늘 3개를 고르지 않았습니다 — 위 목록의 ★ 또는 내 작업에서 고르세요.
+            </div>
           </div>
-        ) : (
-          items.map((item, i) => {
-            const lane = BRIEF_LANE_META[item.lane] || { label: item.lane || '기타', tone: 'neutral' };
-            const target = targetFor(item);
-            return (
-              <div
-                key={`${item.lane}-${i}`}
-                role={target ? 'button' : undefined}
-                tabIndex={target ? 0 : undefined}
-                onClick={target ? () => onNavigate?.(target) : undefined}
-                onKeyDown={target ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(target); } } : undefined}
-                className={target ? 'hub-row' : undefined}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px',
-                  cursor: target ? 'pointer' : 'default',
-                  borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                }}
-              >
-                <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--moon-300)', width: 14, flexShrink: 0, paddingTop: 1 }}>{i + 1}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{item.title}</div>
-                  {item.detail && <div style={{ marginTop: 3, fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.5 }}>{item.detail}</div>}
+        )}
+        {!hasTasks && (
+          <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+            오늘 고른 할 일이 없습니다 — 내 작업에서 별표로 최대 3개를 고르세요.
+          </div>
+        )}
+        {briefItems.length > 0 && (
+          <div style={{ borderTop: '1px solid var(--line-soft)' }}>
+            <div style={{ padding: '8px 14px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Chief of Staff 제안</span>
+              {when && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{when}</span>}
+            </div>
+            {briefItems.map((item, i) => {
+              const lane = BRIEF_LANE_META[item.lane] || { label: item.lane || '기타', tone: 'neutral' };
+              const target = targetFor(item);
+              return (
+                <div
+                  key={`${item.lane}-${i}`}
+                  role={target ? 'button' : undefined}
+                  tabIndex={target ? 0 : undefined}
+                  onClick={target ? () => onNavigate?.(target) : undefined}
+                  onKeyDown={target ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(target); } } : undefined}
+                  className={target ? 'hub-row' : undefined}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 14px 9px 30px',
+                    cursor: target ? 'pointer' : 'default',
+                    borderTop: i > 0 ? '1px solid var(--line-soft)' : 'none',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.45 }}>{item.title}</div>
+                    {item.detail && <div style={{ marginTop: 3, fontSize: 10.5, color: 'var(--fg-dim)', lineHeight: 1.5 }}>{item.detail}</div>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 1 }}>
+                    <Badge tone={lane.tone} size="xs">{lane.label}</Badge>
+                    {target && <Iconed name="chevronR" size={11} style={{ color: 'var(--fg-faint)' }} />}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 1 }}>
-                  <Badge tone={lane.tone} size="xs">{lane.label}</Badge>
-                  {target && <Iconed name="chevronR" size={11} style={{ color: 'var(--fg-faint)' }} />}
-                </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </Card>
     </div>
@@ -1066,7 +1175,7 @@ function StatusLine({ state, onRetry }) {
           className="daily-brief__status-toggle"
         >
           <span>{open ? '기록 숨기기' : `기록 ${sourceCount}`}</span>
-          <Iconed name="chevronD" size={10} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          <Iconed name="chevronD" size={10} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur-hover) var(--ease-hub)' }} />
         </button>
       )}
       {open && (
@@ -1076,7 +1185,7 @@ function StatusLine({ state, onRetry }) {
               {source.label} · {sourceLabel(source.state)}
             </Badge>
           ))}
-          {/* §2의 5개 판단축 중 메시지 축은 데이터 소스(카톡·전화 원장)가 아직 없다 —
+          {/* §2의 5개 판단축 중 메시지 축은 데이터 소스(카톡·전화 기록)가 아직 없다 —
               침묵 대신 부재를 고지한다(가짜 UI 금지, 2026-08-05 re-audit #8). */}
           <Badge tone="neutral" variant="outline" size="xs">메시지 · 소스 없음(미연동)</Badge>
         </div>
@@ -1346,24 +1455,24 @@ function RhythmPanel({ onNavigate }) {
             {summary.longestStreak > 0 && (
               <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 11, color: 'var(--fg-muted)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <StreakFlame size={15} burning={summary.longestStreak >= 3} />
+                  <StreakMark size={15} level={summary.longestStreak >= 7 ? 3 : summary.longestStreak >= 3 ? 2 : summary.longestStreak >= 1 ? 1 : 0} />
                   <span>
                     최장 <span className="mono" style={{ color: 'var(--fg)', fontWeight: 600 }}>{summary.longestStreak}일</span>
                     {summary.longestStreakRitual ? ` · ${summary.longestStreakRitual}` : ''}
                   </span>
                 </div>
+                {/* 3일 이상도 색이 아니라 명도·보더 한 단계로만 구분한다 (DESIGN.md 5.2). */}
                 <span
-                  className={summary.longestStreak >= 3 ? "hub-streak-badge--burning" : ""}
                   style={{
                     fontSize: 10.5,
                     padding: '2px 6px',
                     borderRadius: 'var(--r-xs)',
-                    background: summary.longestStreak >= 3 ? 'rgba(255,120,50,0.1)' : 'var(--surface-3)',
-                    color: summary.longestStreak >= 3 ? '#ff9a52' : 'var(--fg-dim)',
-                    border: `1px solid ${summary.longestStreak >= 3 ? 'rgba(255,140,70,0.3)' : 'var(--line-soft)'}`,
+                    background: 'var(--surface-3)',
+                    color: summary.longestStreak >= 3 ? 'var(--fg)' : 'var(--fg-dim)',
+                    border: `1px solid ${summary.longestStreak >= 3 ? 'var(--line)' : 'var(--line-soft)'}`,
                   }}
                 >
-                  {summary.longestStreak >= 3 ? `버닝 ${summary.longestStreak}일째 🔥` : `${summary.longestStreak}일 연속`}
+                  {`${summary.longestStreak}일 연속`}
                 </span>
               </div>
             )}
@@ -1448,7 +1557,7 @@ function RhythmPanel({ onNavigate }) {
           onClose={() => setWeeklyReviewOpen(false)}
           agent="council"
           contextType="weekly"
-          contextTitle="이번 주 운영 원장 회고"
+          contextTitle="이번 주 운영 기록 회고"
           contextData={{
             summary: `이번 주 루틴 달성: ${completed}/${total} (${percent}%) · 연속 달성: ${summary.longestStreak}일`,
           }}
@@ -1553,7 +1662,7 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
       </div>
 
       {errorNote && <div role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>{errorNote}</div>}
-      {briefingState !== "live" && <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>일부 원장을 확인하지 못했습니다. 브리핑은 확인된 자료 범위로 제한됩니다.</div>}
+      {briefingState !== "live" && <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>일부 기록을 확인하지 못했습니다. 브리핑은 확인된 자료 범위로 제한됩니다.</div>}
       {dispatch ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div
@@ -1609,7 +1718,7 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
         <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
           {isEvening
               ? "확인된 완료 건수와 남은 작업을 정리하고, 내일 먼저 확인할 행동을 제안합니다."
-              : "오늘 원장 데이터(긴급 고객, 태스크, 신호)를 기반으로 지금 당장 처리할 우선순위와 시간 배분을 제안합니다."
+              : "오늘 기록 데이터(긴급 고객, 태스크, 신호)를 기반으로 지금 당장 처리할 우선순위와 시간 배분을 제안합니다."
           }
         </div>
       )}
@@ -1620,13 +1729,18 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
 // §2 확정 슬롯 — 긴급 KA(최대 1) · 집중 고객(3~5) · 오늘 일정. tone 정렬 신호 큐에 섞여
 // 소실되던 풀을 명명된 자리로 분리한 첫 화면의 핵심 계약(2026-08-05 컷오버). 각 슬롯은
 // 자기 소스의 truth 상태를 따로 표시한다 — 캘린더 미연결이 매출 슬롯을 오염시키지 않는다.
-function FocusSlots({ dailyFocus, onNavigate }) {
+// 집중 고객 행의 마지막 접점 라벨은 crm_activities.reaction 어휘(0016 CHECK)의 정본
+// followup-scoring REACTION_LABEL을 쓴다(파일 상단 import).
+
+function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
   if (!dailyFocus) return null;
   const [guruFocusItem, setGuruFocusItem] = React.useState(null);
+  const [showAllCustomers, setShowAllCustomers] = React.useState(false);
   const ka = dailyFocus.urgentKa || {};
   const focus = dailyFocus.focusCustomers || {};
   const agenda = dailyFocus.todayAgenda || {};
   const focusItems = Array.isArray(focus.items) ? focus.items : [];
+  const visibleFocusItems = showAllCustomers ? focusItems : focusItems.slice(0, 3);
   const agendaItems = Array.isArray(agenda.items) ? agenda.items : [];
   const revenueError = focus.state === 'error';
   const revenuePreview = focus.state === 'preview';
@@ -1653,7 +1767,7 @@ function FocusSlots({ dailyFocus, onNavigate }) {
         )}
         {ka.state === 'error' && (
           <div role="alert" style={{ padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11.5, color: 'var(--danger)' }}>
-            매출 원장을 읽지 못해 긴급 KA를 판정할 수 없습니다 — 지금 화면은 비어 보여도 실제 긴급 건이 있을 수 있습니다.
+            매출 기록을 읽지 못해 긴급 KA를 판정할 수 없습니다 — 지금 화면은 비어 보여도 실제 긴급 건이 있을 수 있습니다.
           </div>
         )}
         {ka.item && (
@@ -1710,14 +1824,22 @@ function FocusSlots({ dailyFocus, onNavigate }) {
           revenueError ? <SyncBadge state="error" /> : revenuePreview ? <SyncBadge state="preview" /> : null
         )}
         {revenueError ? (
-          <div role="alert" style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>매출 원장을 읽지 못했습니다 — 상단 상태줄의 다시 읽기로 재시도하세요.</div>
+          <div role="alert" style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>매출 기록을 읽지 못했습니다 — 상단 상태줄의 다시 읽기로 재시도하세요.</div>
         ) : revenuePreview ? (
-          <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>매출 원장이 연결되면 집중 고객 3~5건이 여기에 표시됩니다.</div>
+          <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>매출 기록이 연결되면 집중 고객 3~5건이 여기에 표시됩니다.</div>
         ) : focusItems.length === 0 ? (
-          <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>집중 고객 없음 — CS 레인에 다음 행동이 있는 리드가 없습니다.</div>
+          // 빈 이유를 말하고 다음 행동을 안내한다 — 0c로 후보 조건이 "내가 적은 약속"이 됐다.
+          // 자동으로 채워진 문장(이관·시트 동기화)은 약속으로 치지 않으므로 여기 뜨지 않는다.
+          <div style={{ padding: '12px 16px 14px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+              집중 고객 없음 — 내가 직접 적은 다음 행동이 있는 고객이 아직 없습니다.
+              자동으로 채워진 문구는 약속으로 세지 않습니다.
+            </div>
+            <Button variant="outline" size="xs" icon="leads" onClick={() => onNavigate?.('dashboard/revenue/leads')}>리드 목록에서 약속 남기기</Button>
+          </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            {focusItems.map((item, i) => (
+            {visibleFocusItems.map((item, i) => (
               <div
                 key={item.id}
                 className="hub-row daily-brief__customer-row"
@@ -1725,7 +1847,7 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                 tabIndex={0}
                 onClick={() => onNavigate?.(item.href)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(item.href); } }}
-                style={{ borderBottom: i < focusItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}
+                style={{ borderBottom: i < visibleFocusItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}
               >
                 <span className="mono" style={{ width: 20, height: 20, borderRadius: 'var(--r-xs)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', color: 'var(--moon-300)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1751,8 +1873,21 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                       <span style={{ color: item.dueOverdue ? 'var(--danger)' : 'var(--fg-faint)', fontWeight: item.dueOverdue ? 600 : 400 }}> · {item.dueLabel}</span>
                     )}
                     {item.lastTouch && <span> · 최근 {item.lastTouch}</span>}
+                    {/* 반응은 이 행이 다른 행과 다른 말을 하게 만드는 사실이다(0c). 색 없이 라벨만. */}
+                    {item.lastReaction && <span> · {FOCUS_REACTION_LABEL[item.lastReaction] || item.lastReaction}</span>}
                   </div>
                 </div>
+                {/* 기록은 어디서 열어도 같은 폼이다 — 첫 화면에서 바로 남기고 하던 일로 돌아간다. */}
+                <IconButton
+                  icon="edit"
+                  label="연락 기록 남기기"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRecord?.({ kind: 'lead', id: item.id, name: item.name, companyId: item.companyId });
+                  }}
+                  style={{ flexShrink: 0 }}
+                />
                 <IconButton
                   icon="sparkle"
                   label="Guru 세일즈 코칭"
@@ -1777,6 +1912,13 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                 <Iconed name="chevronR" size={12} className="daily-brief__row-arrow" />
               </div>
             ))}
+            {focusItems.length > 3 && (
+              <div style={{ padding: '6px 16px 10px', borderTop: '1px solid var(--line-soft)', display: 'flex', justifyContent: 'center' }}>
+                <Button variant="ghost" size="xs" onClick={() => setShowAllCustomers(v => !v)}>
+                  {showAllCustomers ? '접기' : `집중 고객 ${focusItems.length - 3}건 더 보기 ›`}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -1805,9 +1947,8 @@ function FocusSlots({ dailyFocus, onNavigate }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {agendaItems.map((event, i) => (
-                <div key={event.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: i < agendaItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
-                  <span className="mono" style={{ fontSize: 11, fontWeight: 500, color: event.allDay ? 'var(--fg-faint)' : 'var(--moon-300)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', padding: '2px 7px', borderRadius: 'var(--r-xs)', flexShrink: 0 }}>{event.whenLabel}</span>
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</span>
+                <div key={event.outcomeKey || event.id} style={{ padding: '10px 16px', borderBottom: i < agendaItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                  <CalendarOutcome eventKey={event.outcomeKey} title={event.title} whenLabel={event.whenLabel} />
                 </div>
               ))}
             </div>
@@ -1940,13 +2081,20 @@ export function WeeklyReportCard({ onNavigate, onAdvisorOpen, overrideScope, onT
     ? [
         { label: '연락', value: stats.contacts },
         { label: '신규 딜', value: stats.newDeals },
+        // 이동 딜 = 기간 중 기록된 단계 이동 수(crm_activities kind='deal'), 수정된 진행 딜과 다른 질문이다.
+        { label: '이동 딜', value: stats.movedDeals },
         { label: '수정된 진행 딜', value: stats.modifiedOpenDeals },
         { label: '성사일 확인된 딜', value: stats.wonDeals },
       ]
     : [
+        // 오늘 3개 완료율(Action KPI, 2026-09-20 §7.2) — 완료/선택. '—'는 미측정(null)만 뜻한다:
+        // 고른 날이 없으면 0으로 말한다(이 카드의 "‘—’는 0이 아닌 미측정" 약속).
+        { label: '오늘 3개', value: stats.focusPicked == null ? null : stats.focusPicked === 0 ? 0 : `${stats.focusDone}/${stats.focusPicked}` },
         { label: '완료 할 일', value: stats.doneTasks },
-        { label: '발행', value: stats.publishes },
         { label: '연락', value: stats.contacts },
+        { label: '메모', value: stats.memos },
+        { label: '리뷰 일수', value: stats.reviewDays },
+        { label: '발행', value: stats.publishes },
         { label: '개인 딜', value: stats.personalDeals },
       ];
   return (
@@ -1966,7 +2114,7 @@ export function WeeklyReportCard({ onNavigate, onAdvisorOpen, overrideScope, onT
           {syncState !== 'loading' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', flexWrap: 'wrap' }}>
               <span style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>
-                {goals?.status === 'error' ? '목표·성과 원장을 읽지 못했습니다.' : syncState === 'preview' ? '측정 원장이 연결되면 기간별 실적을 확인할 수 있습니다.' : objectives.length ? `진행 목표 ${objectives.length}개 · 기간과 측정 근거를 확인하세요.` : '측정할 목표와 결과 지표를 연결해 보세요.'}
+                {goals?.status === 'error' ? '목표·성과 기록을 읽지 못했습니다.' : syncState === 'preview' ? '측정 기록이 연결되면 기간별 실적을 확인할 수 있습니다.' : objectives.length ? `진행 목표 ${objectives.length}개 · 기간과 측정 근거를 확인하세요.` : '측정할 목표와 결과 지표를 연결해 보세요.'}
               </span>
               <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/overview?view=goals&scope=${scope}`)}>목표·성과</Button>
             </div>
@@ -2009,6 +2157,10 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
   const [advisorSignal, setAdvisorSignal] = React.useState(null);
   const ledger = useDailyBriefLedger(refreshKey);
   const [queueExpanded, setQueueExpanded] = React.useState(false);
+  // 기록창 대상 — 집중 고객 행에서 열고, 저장은 공용 폼(contact-record-form)이 소유한다.
+  // 늦은 실패면 { draft, error }를 얹어 입력 그대로 다시 연다(드로어를 먼저 닫았어도 무언 소실 금지).
+  const [recordTarget, setRecordTarget] = React.useState(null);
+  const toast = useToast();
   const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
   React.useEffect(() => {
     window.addEventListener('moonlight:inquiries-changed', refreshLedger);
@@ -2073,7 +2225,9 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
+        {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
+            tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다. */}
+        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} onRecord={setRecordTarget} />
         <DailyDispatchCard
           dailyFocus={ledger.dailyFocus}
           taskToday={ledger.taskToday}
@@ -2141,7 +2295,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
         <MoreDetail title="보조 정보 · 리듬, 모닝 브리프, 승인" summary={approvalSummary}>
           <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
           <RhythmPanel onNavigate={onNavigate} />
-          <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
+          <MorningBriefCard brief={ledger.morningBrief} taskToday={ledger.taskToday} onNavigate={onNavigate} />
           <ApprovalQueueCard onNavigate={onNavigate} />
         </MoreDetail>
       </div>
@@ -2164,6 +2318,22 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
           onCreateTask={() => {
             ledger.refreshTasks();
           }}
+        />
+      )}
+
+      {recordTarget && (
+        <ContactRecordDrawer
+          target={recordTarget}
+          draft={recordTarget.draft || null}
+          initialError={recordTarget.error || ""}
+          onSaved={() => { window.setTimeout(refreshLedger, UNDO_WINDOW_MS + 250); }}
+          onPersisted={() => toast.success(`기록됨 · ${recordTarget.name || "고객"}`)}
+          onFailed={({ message, form }) => {
+            const { draft: _draft, error: _error, ...target } = recordTarget;
+            toast.error(`기록하지 못했습니다 · ${target.name || "고객"} — ${message}`);
+            setRecordTarget((cur) => cur || { ...target, draft: form, error: message });
+          }}
+          onClose={() => setRecordTarget(null)}
         />
       )}
     </div>

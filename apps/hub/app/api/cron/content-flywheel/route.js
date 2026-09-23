@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed } from "@/lib/hub-write-guard";
+import { recordAutomationRun } from "@/lib/automation-runs";
 import { recordAgentRun } from "@/lib/sales-os/agent-runs";
 import { assembleBrandContext } from "@/lib/sales-os/brand-context";
+import { CONTENT_DRAFT_MODE, isContentDraftOk } from "@/lib/sales-os/draft-contract";
 import { createWorkOrder, getWorkOrders } from "@/lib/sales-os/work-orders";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
@@ -18,6 +20,9 @@ export const dynamic = "force-dynamic";
 //
 // Auth: same as recompute-scores — Vercel injects Bearer CRON_SECRET (= COM_MOON_HUB_WRITE_SECRET).
 const ENGINE_PATH = "/api/ai/brand-mentor";
+// 자동화 화면(automation_runs)에 남기는 이 크론의 안정 키·이름 — F-0 가시성(2026-09-03 R-2).
+const AUTOMATION_KEY = "content-flywheel";
+const AUTOMATION_NAME = "Content Flywheel · 콘텐츠 초안";
 const DRAFT_TOKENS = 8192; // thinking model shares the budget; bounded thinking is set engine-side
 
 function resolveEngineUrl() {
@@ -33,9 +38,16 @@ async function callEngineDraft(body) {
   if (!engineUrl) {
     return { status: 202, data: { status: "preview", error: "COM_MOON_ENGINE_URL is not configured." } };
   }
-  const headers = { "content-type": "application/json" };
+  // 시크릿이 없으면 Engine은 open 모드로도 401을 준다 — 헤더 없이 보내면 설정 누락이
+  // "초안 생성 실패"로 위장된다. lib/pms-engine-client.js와 같게 여기서 끊고 원인을 말한다.
   const secret = resolveSharedSecret();
-  if (secret) headers["x-com-moon-shared-secret"] = secret;
+  if (!secret) {
+    return {
+      status: 503,
+      data: { status: "error", reason: "shared-secret-not-configured", error: "COM_MOON_SHARED_WEBHOOK_SECRET is not configured." },
+    };
+  }
+  const headers = { "content-type": "application/json", "x-com-moon-shared-secret": secret };
 
   const response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
     method: "POST",
@@ -55,22 +67,19 @@ async function callEngineDraft(body) {
   return { status: response.status, data };
 }
 
-export async function GET(req) {
-  const guard = assertHubWriteAllowed(req);
-  if (guard) return guard;
-
-  const workspaceId = resolveDefaultWorkspaceId();
+// 실행 본문 — 응답 봉투를 {body, httpStatus}로 돌려주고, GET이 automation_runs에 결과를 남긴다.
+async function runContentFlywheel(workspaceId) {
   const summary = { cadenceBehind: false, drafted: 0, skipped: 0, errored: 0, idea: null };
 
   try {
-    const context = await assembleBrandContext({ mode: "content-draft" });
+    const context = await assembleBrandContext({ mode: CONTENT_DRAFT_MODE });
     if (!context || context.source !== "supabase") {
-      return NextResponse.json({ status: "skipped", reason: "missing-config-or-preview", ...summary });
+      return { body: { status: "skipped", reason: "missing-config-or-preview", ...summary } };
     }
 
     const cadence = context.content?.cadence || null;
     if (!cadence || typeof cadence.behind !== "boolean") {
-      return NextResponse.json({ status: "needs-data", reason: "personal-cadence-unmeasured", ...summary });
+      return { body: { status: "needs-data", reason: "personal-cadence-unmeasured", ...summary } };
     }
     const behind = cadence.behind;
     summary.cadenceBehind = behind;
@@ -78,7 +87,7 @@ export async function GET(req) {
     // Only act when the cadence is actually behind goal — the point is to keep it alive, not
     // to flood the queue. On-track weeks are a clean no-op.
     if (!behind) {
-      return NextResponse.json({ status: "on-track", reason: "cadence-met", ...summary });
+      return { body: { status: "on-track", reason: "cadence-met", ...summary } };
     }
 
     // Neutralize the effectiveIdeaRank +30 classmoon (ClassIn sales brand) bias — the Council
@@ -87,7 +96,7 @@ export async function GET(req) {
     const ownIdeas = ideas.filter((i) => i && i.brandKey && i.brandKey !== "classmoon");
     const pool = ownIdeas.length ? ownIdeas : ideas;
     if (!pool.length) {
-      return NextResponse.json({ status: "skipped", reason: "no-ideas", ...summary });
+      return { body: { status: "skipped", reason: "no-ideas", ...summary } };
     }
 
     // Dedup: don't stack drafts. Skip ideas that already have an open 'proposed' content-draft
@@ -95,13 +104,13 @@ export async function GET(req) {
     const existing = await getWorkOrders({ workspaceId, status: "proposed", limit: 200 });
     const openDraftAssetIds = new Set(
       (existing.orders || [])
-        .filter((o) => o.kind === "content-draft" && o.status === "proposed")
+        .filter((o) => o.kind === CONTENT_DRAFT_MODE && o.status === "proposed")
         .map((o) => o.assetId),
     );
     const idea = pool.find((i) => !openDraftAssetIds.has(i.id));
     if (!idea) {
       summary.skipped = pool.length;
-      return NextResponse.json({ status: "skipped", reason: "all-ideas-already-queued", ...summary });
+      return { body: { status: "skipped", reason: "all-ideas-already-queued", ...summary } };
     }
     summary.idea = idea.title;
 
@@ -117,19 +126,15 @@ export async function GET(req) {
     let ok = false;
     {
       engine = await callEngineDraft({
-        mode: "content-draft",
+        mode: CONTENT_DRAFT_MODE,
         ref: idea.title,
         context: draftContext,
         maxOutputTokens: DRAFT_TOKENS,
       });
       data = engine.data;
-      ok =
-        engine.status >= 200 &&
-        engine.status < 300 &&
-        data &&
-        data.status === "generated" &&
-        typeof data.title === "string" &&
-        typeof data.body === "string";
+      // Shared predicate — apps/hub/lib/sales-os/draft-contract.js, asserted against the
+      // Engine's real response builder in draft-contract.test.mjs.
+      ok = isContentDraftOk(engine.status, data);
     }
 
     if (!ok) {
@@ -137,19 +142,24 @@ export async function GET(req) {
       await recordAgentRun({
         workspaceId,
         agent: "council",
-        mode: "content-draft",
+        mode: CONTENT_DRAFT_MODE,
         ref: idea.id,
         inputSummary: `engine ${engine?.status} · ${data?.reason || "no-draft"}`,
         result: "error",
       });
-      return NextResponse.json({ status: "error", reason: "draft-failed", ...summary }, { status: 502 });
+      // Engine이 원인을 말했으면 그 말을 그대로 올린다 — 설정 누락이 "draft-failed"로
+      // 뭉개지면 자동화 화면에서 고칠 것을 읽을 수 없다.
+      return {
+        body: { status: "error", reason: data?.reason || "draft-failed", ...summary },
+        httpStatus: engine?.status === 503 ? 503 : 502,
+      };
     }
 
     // Mint the run first (createWorkOrder returns no id), then thread runId into the order.
     const run = await recordAgentRun({
       workspaceId,
       agent: "council",
-      mode: "content-draft",
+      mode: CONTENT_DRAFT_MODE,
       ref: idea.id,
       inputSummary: `content-draft · ${idea.brandKey || "brand"} · ${idea.title}`,
       recommendation: { title: data.title, body: String(data.body).slice(0, 800) },
@@ -160,7 +170,7 @@ export async function GET(req) {
     const created = await createWorkOrder({
       workspaceId,
       persona: "council",
-      kind: "content-draft",
+      kind: CONTENT_DRAFT_MODE,
       source: "team", // work_orders.source CHECK: team|inbox|guru|manual — 'council' is NOT valid
       assetId: idea.id, // content_items id (asset_id is plain text)
       title: String(data.title).slice(0, 200),
@@ -180,11 +190,43 @@ export async function GET(req) {
     if (created.persisted) summary.drafted = 1;
     else summary.errored = 1;
 
-    return NextResponse.json({ status: created.persisted ? "ok" : "error", ...summary });
+    return { body: { status: created.persisted ? "ok" : "error", ...summary } };
   } catch (error) {
-    return NextResponse.json(
-      { status: "error", error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return { body: { status: "error", error: error instanceof Error ? error.message : String(error) }, httpStatus: 500 };
   }
+}
+
+export async function GET(req) {
+  const guard = assertHubWriteAllowed(req);
+  if (guard) return guard;
+
+  const workspaceId = resolveDefaultWorkspaceId();
+  const startedAt = new Date().toISOString();
+  const { body, httpStatus = 200 } = await runContentFlywheel(workspaceId);
+
+  // 매 실행을 automation_runs에 남긴다 — 실패(draft-failed·저장 실패)가 자동화 화면에 보이게.
+  // 케이던스 충족·아이디어 없음 같은 no-op은 ignored로 남겨 "돌긴 돌았다"를 보인다.
+  // 기록은 결과를 남기는 것이지 결과를 만드는 것이 아니다 — 기록이 던지면 이미 만들어진
+  // work_order가 크론 호출자에게 '실패'로 보이고 재시도가 붙는다. 실패는 로그로만 남긴다.
+  const runStatus = body.status === "ok" ? "success" : body.status === "error" ? "failure" : "ignored";
+  await recordAutomationRun({
+    workspaceId,
+    key: AUTOMATION_KEY,
+    name: AUTOMATION_NAME,
+    status: runStatus,
+    startedAt,
+    correlationId: `${AUTOMATION_KEY}:${startedAt}`,
+    input: { cadenceBehind: body.cadenceBehind ?? false, idea: body.idea ?? null },
+    output: {
+      summary: body.status === "ok"
+        ? `초안 1건 · ${body.idea || "아이디어"}`
+        : `${body.status}${body.reason ? ` · ${body.reason}` : ""}`,
+      ...body,
+    },
+    errorMessage: runStatus === "failure" ? body.error || body.reason || "content-draft-failed" : null,
+  }).catch((error) => {
+    console.error("[cron] automation-run log failed", AUTOMATION_KEY, error);
+  });
+
+  return NextResponse.json(body, { status: httpStatus });
 }

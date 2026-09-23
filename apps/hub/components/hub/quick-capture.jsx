@@ -11,6 +11,7 @@
 // layout="compact" : 어디서든 C 로 열리는 Drawer presentation="compact" 안의 모양
 
 import React from "react";
+import { Iconed } from "./hub-icons";
 import { Button, Card, Drawer, Kbd } from "./hub-primitives";
 import { createClientId } from "@/lib/pms-ui";
 import { createQuickCaptureSession, shouldSubmitQuickTask } from "@/lib/quick-task-capture";
@@ -117,24 +118,39 @@ export function QuickCaptureForm({
               <Button type="button" variant={hint === "inbox" ? "secondary" : "ghost"} size="xs" aria-pressed={hint === "inbox"} disabled={saving} onClick={() => changeHint("inbox")}>정리 전</Button>
             </div>
           </div>
-          <input
-            id={inputId}
-            ref={inputRef}
-            value={raw}
-            onChange={(event) => session.setRaw(event.target.value)}
-            onKeyDown={(event) => { if (event.key === 'Enter' && !shouldSubmitQuickTask(event, saving)) event.preventDefault(); }}
-            placeholder={HINTS[hint].placeholder}
-            autoComplete="off"
-            maxLength={4000}
-            disabled={saving}
-            className={inputClassName}
-            style={{
-              width: "100%", padding: "9px 12px", fontSize: 14.5, lineHeight: 1.4,
-              color: "var(--fg)", background: "var(--surface-2)",
-              border: `1px solid ${state.status === "error" ? "var(--danger-line)" : "var(--line-soft)"}`,
-              borderRadius: "var(--r-sm)",
-            }}
-          />
+          <div className="hub-quick-capture__field" data-invalid={state.status === "error" ? "true" : undefined}>
+            <input
+              id={inputId}
+              ref={inputRef}
+              value={raw}
+              onChange={(event) => session.setRaw(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter' && !shouldSubmitQuickTask(event, saving)) event.preventDefault(); }}
+              placeholder={HINTS[hint].placeholder}
+              autoComplete="off"
+              maxLength={4000}
+              disabled={saving}
+              className={`hub-quick-capture__input${inputClassName ? ` ${inputClassName}` : ""}`}
+            />
+            {raw && !saving && (
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label="입력 지우기"
+                onClick={() => {
+                  session.setRaw("");
+                  inputRef.current?.focus();
+                }}
+                style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 20, height: 20, borderRadius: 999,
+                  background: "var(--surface-3)", color: "var(--fg-dim)",
+                  border: "none", padding: 0, margin: "0 10px", cursor: "pointer", flexShrink: 0,
+                }}
+              >
+                <Iconed name="x" size={10} />
+              </button>
+            )}
+          </div>
         </div>
         <Button
           type="submit" variant="primary" size="md" icon="plus"

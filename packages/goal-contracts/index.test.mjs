@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { validateGoalCommand, calculateGoalProgress, isGoalDate, projectObjective } from './index.js';
+import { validateGoalCommand, calculateGoalProgress, isGoalDate, isGoalTimestamp, projectObjective } from './index.js';
 const id = '11111111-1111-4111-8111-111111111111';
 const command = (action, input, extra = {}) => ({ commandId: id, action, input, ...extra });
 const metric = { name:'납기 누락', unit:'건', role:'guardrail', direction:'decrease', baseline:5, target:0, sourceKey:'manual', objectiveId:id };
@@ -19,6 +19,18 @@ test('manual observations require finite numbers and dated safe evidence', () =>
   for (const patch of [{sourceKey:'tasks_completed'}, {value:Infinity}, {value:null}, {evidence:[]}, {evidence:[{label:'자료',href:'javascript:alert(1)',occurredAt:input.observedAt}]}]) {
     assert.equal(validateGoalCommand(command('record_observation', {...input,...patch})).ok, false);
   }
+});
+test('timestamps stay inside the PostgreSQL UTC offset range (±15:59)', () => {
+  for (const value of ['2026-09-21T01:00:00Z', '2026-09-21T01:00:00.123456+09:00', '2026-09-21T01:00:00+15:59', '2026-09-21T01:00:00-15:59', '2026-09-21T01:00:00-00:00']) {
+    assert.equal(isGoalTimestamp(value), true, value);
+  }
+  // Date.parse accepts the first three (up to ±23:59); PostgreSQL raises 22009 for them.
+  for (const value of ['2026-09-21T01:00:00+16:00', '2026-09-21T01:00:00-16:00', '2026-09-21T01:00:00+23:59', '2026-09-21T01:00:00+15:60', '2026-09-21T01:00:00+24:00', '2026-02-30T01:00:00Z', '2026-09-21 01:00:00Z', 1789866000000, null]) {
+    assert.equal(isGoalTimestamp(value), false, String(value));
+  }
+  const input = { metricId:id, value:0, observedAt:'2026-09-21T01:00:00+16:00', periodStart:'2026-09-01',periodEnd:'2026-09-30',coverage:'complete',evidence:[{label:'확인',href:'/dashboard/work',occurredAt:'2026-09-21T01:00:00Z'}] };
+  assert.equal(validateGoalCommand(command('record_observation', input)).error, 'invalid-observation');
+  assert.equal(validateGoalCommand(command('record_observation', {...input, observedAt:'2026-09-21T01:00:00Z', evidence:[{...input.evidence[0], occurredAt:'2026-09-21T01:00:00-16:00'}]})).error, 'invalid-evidence');
 });
 test('progress handles decreasing zero target, negative values, ranges and missing data', () => {
   const complete = value => ({value,coverage:'complete'});

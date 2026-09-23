@@ -18,6 +18,18 @@ insert into public.workspaces (id, slug, name)
 values ('11111111-1111-1111-1111-111111111111', 'dev', '[개발] 로컬 워크스페이스')
 on conflict (id) do update set name = excluded.name;
 
+-- 업무 분야 6개 — docs/operator-workflow-profile.md §7 확정 목록과 CANONICAL_AREA_SLUGS
+-- (apps/hub/lib/repositories/project-ledger-context.js) 순서를 그대로 따른다. 데모용
+-- 가짜 이름이 아니라 운영자가 실제로 쓸 분류 값이라 `[개발]` 접두사를 붙이지 않는다.
+insert into public.areas (id, workspace_id, slug, name, status) values
+  ('a2000000-0000-4000-8000-000000000001', '11111111-1111-1111-1111-111111111111', 'sales', '영업', 'active'),
+  ('a2000000-0000-4000-8000-000000000002', '11111111-1111-1111-1111-111111111111', 'marketing', '마케팅', 'active'),
+  ('a2000000-0000-4000-8000-000000000003', '11111111-1111-1111-1111-111111111111', 'content', '콘텐츠', 'active'),
+  ('a2000000-0000-4000-8000-000000000004', '11111111-1111-1111-1111-111111111111', 'it', 'IT', 'active'),
+  ('a2000000-0000-4000-8000-000000000005', '11111111-1111-1111-1111-111111111111', 'ai-third-party-development', 'AI 기반 서드파티 개발', 'active'),
+  ('a2000000-0000-4000-8000-000000000006', '11111111-1111-1111-1111-111111111111', 'personal-projects', '개인 프로젝트', 'active')
+on conflict (id) do update set name = excluded.name, status = excluded.status;
+
 -- 브랜드 2개
 insert into public.brands (id, workspace_id, slug, name, status) values
   ('b0000000-0000-4000-8000-000000000001', '11111111-1111-1111-1111-111111111111', 'dev-brand-a', '[개발] 브랜드 A', 'active'),
@@ -68,6 +80,7 @@ commit;
 
 -- 확인
 select '워크스페이스 ' || (select count(*) from public.workspaces)::text
+    || ' · 업무 분야 ' || (select count(*) from public.areas)::text
     || ' · 브랜드 ' || (select count(*) from public.brands)::text
     || ' · 프로젝트 ' || (select count(*) from public.projects)::text
     || ' · 할 일 ' || (select count(*) from public.tasks)::text

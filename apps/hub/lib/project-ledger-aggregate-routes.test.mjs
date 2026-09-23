@@ -100,7 +100,7 @@ registerHooks({
       "@/lib/repositories/work-ledger": repositoryStub("work", "getWorkLedger"),
       // daily-brief의 A-1 어댑터 정본 — 실모듈을 로드하면 상대 import 체인이
       // (operating·revenue·google-calendar) 스텁을 우회해 실 read를 시도한다.
-      // 계약: attention.raw가 lean 태스크 원장·revenue 원장·calendar를 동반한다.
+      // 계약: attention.raw가 lean 태스크 기록·revenue 기록·calendar를 동반한다.
       "@/lib/repositories/attention-ledger": `
 export async function getAttentionLedger() {
   const s = globalThis.__projectAggregateRouteState || {};
@@ -227,7 +227,7 @@ test("tasks API returns 502 instead of flattening a configured task read error",
 });
 
 test("tasks API stays live when unrelated full-ledger sources are partial", async () => {
-  // lean read는 notes/routine_checks를 아예 읽지 않는다 — 전체 원장이 부분 실패여도
+  // lean read는 notes/routine_checks를 아예 읽지 않는다 — 전체 기록이 부분 실패여도
   // 태스크 목록은 live를 유지한다(과거: 전체 getProjectLedger 상태에 끌려갔다).
   state.projects = liveProjectLedger({ partial: true, failedSources: ["notes", "routine_checks"] });
   state.tasksLedger = liveTaskLedger();

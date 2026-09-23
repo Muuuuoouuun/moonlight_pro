@@ -561,8 +561,8 @@ function mapWorkDomain({ workspaceId, routineRows, workspaceRows, projectRows, n
           truncatedSources: [],
           error: {
             message: Array.isArray(routineRows)
-              ? "workspace timezone 원장을 읽지 못했습니다."
-              : "routine_checks 원장을 읽지 못했습니다.",
+              ? "workspace timezone 기록을 읽지 못했습니다."
+              : "routine_checks 기록을 읽지 못했습니다.",
             retryable: true,
           },
         },

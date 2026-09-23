@@ -167,7 +167,7 @@ export function ProjectDetailPanel({
           <h4>할 일</h4><span className="mono project-focus-muted">{doneCount}/{todos.length} 완료{taskPartial ? ' · 확인된 범위' : ''}</span>
         </div>}
         {todos.map(todo => <div key={todo.id} className="project-focus-task">
-          <Checkbox checked={todo.done} onChange={() => onToggleTodo?.(todo.id)} disabled={pendingTodoIds.has(todo.id)} size={16} label={`${todo.done ? '다시 열기' : '완료'}: ${todo.title}`} />
+          <Checkbox checked={todo.done} onChange={(_next, e) => onToggleTodo?.(todo.id, e)} disabled={pendingTodoIds.has(todo.id)} size={16} label={`${todo.done ? '다시 열기' : '완료'}: ${todo.title}`} />
           <div className="project-focus-task-copy"><button className="hub-pms-task-main" onClick={() => onEditTodo?.(todo)}>
             <span style={{ textDecoration: todo.done ? 'line-through' : 'none' }}>{todo.title}</span>
             {todo.nextAction && <span className="hub-pms-task-next">{todo.nextAction}</span>}

@@ -14,7 +14,7 @@
 
 ## 2026-04-20 Supabase 연결 이후 작업 예정
 
-Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 모두 "외부 서비스가 source of truth"가 아니라
+Supabase는 이제 Hub/Engine의 1차 기록으로 본다. 다음 연결들은 모두 "외부 서비스가 source of truth"가 아니라
 `Engine -> Supabase ledger -> Hub`로 흘러 들어오는 입력/실행 채널이다.
 
 ### 권장 순서
@@ -91,7 +91,7 @@ Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 �
 
 | Provider | 역할 | 연결 방식 | 현재 상태 | 내부 연결 지점 | 필요한 것 | 다음 액션 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Supabase | 시스템 원장, 로그, 프로젝트, task, sync 상태 저장 | REST + DB | Connected (local) | Hub, Engine, `packages/hub-gateway` | 로컬 workspace와 REST credential 설정 완료. production은 별도 secret 주입 필요 | production 환경에서 workspace·REST 권한을 재검증하고 local credential을 복사하지 않음 |
+| Supabase | 시스템 기록, 로그, 프로젝트, task, sync 상태 저장 | REST + DB | Connected (local) | Hub, Engine, `packages/hub-gateway` | 로컬 workspace와 REST credential 설정 완료. production은 별도 secret 주입 필요 | production 환경에서 workspace·REST 권한을 재검증하고 local credential을 복사하지 않음 |
 | Moonlight PMS | 프로젝트·task 생성, project 편집, task 상태 이동 | Hub BFF + authenticated Engine command | Connected (local) | `/api/hub/projects`, `/api/hub/tasks`, `/api/pms/command`, `projects`, `tasks` | Hub/Engine shared secret, Hub write guard, live workspace | dependency·milestone·delete는 별도 Phase 3 계약 전까지 추가하지 않음 |
 | Telegram (direct Engine) | 인바운드 명령, 빠른 운영 입력 | Webhook intake | Ready, external registration pending | `/api/webhook/telegram`, `automation_runs`, `webhook_events` | 공개 Engine URL, Telegram bot webhook 등록 | OpenClaw Telegram 채널과 합치지 말고 direct webhook이 필요할 때만 별도 등록·smoke 실행 |
 | Project tools | 외부 PM/진행률 도구에서 progress/PMS 이벤트 수집 | Generic webhook | Ready | `/api/webhook/project`, `project_updates`, `routine_checks`, `projects` | 공개 Engine URL, 공급자 payload mapping | 먼저 하나의 PM 도구 payload를 webhook contract에 맞춤 |
@@ -218,7 +218,7 @@ OpenClaw가 Moonlight로 응답할 때는 기존 inbound lane을 그대로 쓴�
 
 ### Projects folder bridge
 
-로컬 `~/Desktop/Projects` 아래의 여러 프로젝트는 아직 같은 원장에 직접 연결되어 있지 않다. 1차 연결은 각 프로젝트를 별도 API로 억지로 붙이는 방식이 아니라,
+로컬 `~/Desktop/Projects` 아래의 여러 프로젝트는 아직 같은 기록에 직접 연결되어 있지 않다. 1차 연결은 각 프로젝트를 별도 API로 억지로 붙이는 방식이 아니라,
 문서/설정/웹훅 계획을 Moonlight의 공통 project webhook contract로 정규화하는 방식으로 시작한다.
 
 실행 명령:
@@ -267,7 +267,7 @@ Google Calendar는 이제 직접 연결 가능한 1차 일정 provider다.
 - OAuth audience는 조직 내부용이며, 범위는 `https://www.googleapis.com/auth/calendar.events`다.
 - 로컬 callback은 `http://localhost:3000/api/calendar/google/callback`으로 등록됐다.
 - `integration_connections`의 `google_calendar` connection은 `connected`이며 access token과 refresh token이 저장됐다.
-- Google Calendar API가 반환한 primary identity를 원장의 `external_account_id`에 보정했고, 다음 OAuth callback도 이를 자동 저장한다. 문서에는 `j***@classin.com`으로만 표기한다.
+- Google Calendar API가 반환한 primary identity를 기록의 `external_account_id`에 보정했고, 다음 OAuth callback도 이를 자동 저장한다. 문서에는 `j***@classin.com`으로만 표기한다.
 - Hub API smoke check는 `source: oauth`, `readOnly: false`로 성공했고, 2026-07-15~07-31 범위에서 실제 일정 11건을 읽었다.
 - 실제 일정 생성·수정 smoke test는 사용자 캘린더에 불필요한 이벤트를 만들지 않기 위해 실행하지 않았다.
 - `GOOGLE_CALENDAR_ICAL_URL`은 OAuth connection이 없을 때만 쓰는 읽기 전용 fallback으로 유지한다. 저장소 문서에는 실제 공개/비공개 URL을 기록하지 않는다.
@@ -411,7 +411,7 @@ OAuth에는 Meta Dashboard의 `Threads 앱 ID`와 `Threads 앱 시크릿 코드`
 
 ### Slack
 
-Slack은 소통 채널이지 원장이 아니다. 원장은 계속 Hub + Supabase여야 한다.
+Slack은 소통 채널이지 기록이 아니다. 기록은 계속 Hub + Supabase여야 한다.
 
 권장 1차 범위:
 

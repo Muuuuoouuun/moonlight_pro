@@ -14,7 +14,7 @@ export const OPEN_PREFIXES = [
   "/api/cron/", // Vercel Cron — CRON_SECRET Bearer 자체 검증
   "/api/webhooks/", // 외부 웹훅 — provider secret 자체 검증
   "/api/agent/v1/", // Agent API — authorizeAgentRequest 자체 검증
-  "/api/health", // 상태 점검 — 원장 데이터를 반환하지 않는다
+  "/api/health", // 상태 점검 — 기록 데이터를 반환하지 않는다
   "/login", // 로그인 화면
 ];
 

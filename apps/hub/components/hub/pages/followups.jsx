@@ -4,17 +4,20 @@ import React from "react";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Button, Card, CheckboxRow, DateQuickPresets, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge, TextField, useToast } from "../hub-primitives";
-import { useUndoableAction } from "../use-undoable-action";
+import { Badge, Button, Card, Divider, Drawer, Dot, EmptyState, SegmentedControl, Skeleton, SyncBadge, useToast } from "../hub-primitives";
+import { UNDO_WINDOW_MS } from "../use-undoable-action";
+import { ContactRecordDrawer } from "../contact-record-form";
+import { CrmNudgeSection, useCrmNudges } from "../crm-nudge";
+import { channelLabel } from "@/lib/sales-os/contact-record";
+import { REACTION_LABEL as CRM_REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { requestPersonaChat } from "../persona-client";
-import { QUICK_LOG_ACTIONS as LOG_ACTIONS, REACTION_OPTIONS } from "@/lib/sales-os/outcome-attribution";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
+import { FOLLOWUP_GROUPS, MAX_DANGER_RAILS, groupFollowups } from "@/lib/sales-os/followup-groups";
 
-// crm_activities.reaction vocabulary (Phase 1C canonical, deep-design spec §10) — distinct from
-// this page's own REACTION_OPTIONS (outreach_outcomes.meta.reaction), which predates and doesn't
-// match it. The activity panel below reads crm_activities, so it labels with THIS vocabulary.
-const CRM_REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "우려", rejected: "거절", no_response: "무응답" };
+// crm_activities.reaction 어휘(Phase 1C canonical, 심화 설계 §10)의 라벨은 followup-scoring이
+// 정본이다(순수 모듈이라 청크 문제 없음). 이 페이지가 쓰던 옛 입력 어휘(outcome-attribution의
+// REACTION_OPTIONS)는 기록창이 공용 폼으로 옮겨가며 사라졌다.
 
 // Small, duplicated on purpose (not imported from ./revenue): that page is its own lazy-loaded
 // route chunk, and a static cross-import here pulled its entire ~1400-line module (Leads/Deals/
@@ -36,8 +39,8 @@ const CHANNEL_ICON = { "전화/문자": "chat", "방문": "building", "카톡": 
 
 // record_contact_outcome_v1 어휘로의 매핑 — 이 페이지의 운영자 어휘(관심/고민중/보류/거절,
 // 채널 라벨)는 유지하고 전송 시에만 RPC canonical로 변환한다.
-const RPC_KIND_BY_CHANNEL = { "카톡": "kakao", "방문": "visit", "전화/문자": "call" };
-const RPC_REACTION = { interested: "positive", considering: "neutral", hold: "concern", declined: "rejected" };
+// 행이 제안하는 채널 라벨 → 기록창의 채널 키.
+const CHANNEL_PRESET = { "카톡": "kakao", "방문": "visit", "전화/문자": "call", "문자/전화": "call", "스레드 DM": "kakao" };
 
 const LANE_OPTIONS = [
   { key: "all", label: "전체" },
@@ -45,17 +48,10 @@ const LANE_OPTIONS = [
   { key: "deal", label: "딜" },
   { key: "event", label: "일정" },
 ];
-const BUCKET_OPTIONS = [
-  { key: "all", label: "전체" },
-  { key: "overdue", label: "지남" },
-  { key: "today", label: "오늘" },
-  { key: "week", label: "이번 주" },
-];
 const LANE_LABEL = { lead: "리드", deal: "딜", event: "일정" };
 const LANE_TONE = { lead: "neutral", deal: "neutral", event: "neutral" };
-const BUCKET_STRIPE = { overdue: "var(--danger)" };
 
-// 모듈 스코프 SWR(7차 속도): 코어 데일리 표면인데 탭 복귀마다 스켈레톤 + 원장 재조회를
+// 모듈 스코프 SWR(7차 속도): 코어 데일리 표면인데 탭 복귀마다 스켈레톤 + 기록 재조회를
 // 반복하던 유일한 예외였다 — 5분 내 캐시를 즉시 서빙하고 항상 배경 재검증한다
 // (revenue/daily-brief/attention/projects와 같은 serve-then-revalidate 계약).
 // 재검증 실패는 기존대로 error 명명 — 오래된 데이터를 live로 위장하지 않는다.
@@ -102,106 +98,6 @@ function useFollowups() {
 
   React.useEffect(() => { load(); }, [load]);
   return { ...state, reload: load };
-}
-
-// Inline min-record capture (operator-workflow-profile.md §7 확정): 대화 요약 + 고객 반응 +
-// 다음 행동과 날짜(또는 기약 없음). Replaces the old fire-immediately quick-log tap — a single
-// tap used to write nothing but the action tag, which fell short of the confirmed requirement.
-function LogForm({ item, action, label, onCancel, onSubmit, submitting, error, initial }) {
-  // initial: 저장 실패로 폼을 되살릴 때 입력을 복원한다(무언 소실 금지).
-  const [summary, setSummary] = React.useState(initial?.summary ?? "");
-  const [reaction, setReaction] = React.useState(initial?.reaction ?? null);
-  const [nextAction, setNextAction] = React.useState(initial?.nextAction ?? "");
-  const [at, setAt] = React.useState(initial?.at ?? "");
-  const [dormant, setDormant] = React.useState(Boolean(initial?.dormant));
-
-  // 확정 최소 기록(프로필 §7): 요약 + 반응 + 다음 행동 날짜(또는 기약 없음). RPC도 요약·반응이
-  // 비면 invalid-input으로 거부하므로 여기서 먼저 막는다. 노응답 기록은 반응이 자동(no_response).
-  const canSubmit =
-    Boolean(summary.trim()) &&
-    Boolean(reaction || action === "no_response") &&
-    Boolean(dormant || at) &&
-    !submitting;
-
-  // 같은 최소 기록을 Customer 360 컨택 시트와 같은 껍데기·같은 필드 primitive로 —
-  // 두 진입점이 서로 다른 폼처럼 보이던 것이 §8.1이 경계하는 드리프트다.
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 16, border: "1px solid var(--line)", borderRadius: "var(--r-lg)" }}>
-      <div style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>{item.name} · <Badge tone={LANE_TONE[item.kind]} size="xs" variant="outline">{label}</Badge> 기록</div>
-
-      <TextField
-        label="대화 요약"
-        required
-        value={summary}
-        onChange={(e) => setSummary(e.target.value)}
-        placeholder="무슨 얘기가 오갔는지 한 줄"
-        maxLength={120}
-      />
-
-      {action !== "no_response" && (
-        <div>
-          <span className="hub-label">고객 반응<span className="hub-label__req"> · 필수</span></span>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {REACTION_OPTIONS.map((r) => (
-              <Button key={r.key} type="button" variant={reaction === r.key ? "secondary" : "outline"} size="sm" onClick={() => setReaction(r.key)}>
-                {r.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 다음 행동·날짜·기약 없음은 한 묶음 — 인라인 폼 폭이 좁아 한 줄로 늘어놓으면
-          날짜 입력과 프리셋이 서로를 잘라낸다. 세로로 쌓는다. */}
-      <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 15, display: "flex", flexDirection: "column", gap: 13 }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--fg-dim)" }}>다음 단계</div>
-
-        <TextField
-          label="다음 행동"
-          value={nextAction}
-          onChange={(e) => setNextAction(e.target.value)}
-          placeholder="계약서 발송"
-        />
-
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
-          <TextField
-            label="날짜"
-            required={!dormant}
-            type="date"
-            value={at}
-            disabled={dormant}
-            onChange={(e) => setAt(e.target.value)}
-            className="mono"
-            fieldStyle={{ flex: "1 1 170px" }}
-            style={{ padding: "0 10px" }}
-          />
-          {/* 최고 빈도 액션의 date picker 반복 마찰 제거 — 프리셋 1클릭(27차 편의성). */}
-          <DateQuickPresets disabled={dormant} onPick={setAt} style={{ flexWrap: "wrap", gap: 4, paddingBottom: 1 }} />
-        </div>
-
-        <CheckboxRow
-          checked={dormant}
-          onChange={(v) => { setDormant(v); if (v) setAt(""); }}
-          text="기약 없음 — 다음 약속 없이 닫기"
-        />
-      </div>
-
-      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
-        {error && (
-          <span role="alert" style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: "var(--danger)" }}>{error}</span>
-        )}
-        <Button variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>취소</Button>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={!canSubmit}
-          onClick={() => onSubmit({ summary, reaction, nextAction, at, dormant })}
-        >
-          {submitting ? "기록 중…" : "기록"}
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 // Read-only recent-activity panel — clicking a row used to navigate away to the full Leads/
@@ -259,9 +155,10 @@ function ActivityPanel({ item, onClose, onNavigate }) {
         최근 기록<SyncBadge state={state.syncState} />
       </div>
       {state.syncState === "loading" ? (
-        <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>불러오는 중…</div>
+        // 레이아웃이 정해진 타임라인의 로딩은 스켈레톤(DESIGN §11) — preview/error에는 쓰지 않는다.
+        <Skeleton lines={3} label="최근 기록 불러오는 중" />
       ) : state.syncState === "error" ? (
-        <EmptyState icon="clock" title="활동 기록을 읽지 못했습니다" description="원장 연결 상태를 확인한 뒤 다시 열어 주세요." style={{ minHeight: 140 }} />
+        <EmptyState icon="clock" title="활동 기록을 읽지 못했습니다" description="기록 연결 상태를 확인한 뒤 다시 열어 주세요." style={{ minHeight: 140 }} />
       ) : state.activities.length === 0 ? (
         <EmptyState icon="clock" title="활동 기록이 없습니다" description="연락 기록이 쌓이면 여기에 표시됩니다." style={{ minHeight: 140 }} />
       ) : (
@@ -293,7 +190,7 @@ function ActivityPanel({ item, onClose, onNavigate }) {
   );
 }
 
-function FollowupDraftDrawer({ item, onClose, onOpenLog }) {
+function FollowupDraftDrawer({ item, onClose, onRecord }) {
   const toast = useToast();
   const [lens, setLens] = React.useState("voss");
   const [loading, setLoading] = React.useState(false);
@@ -386,7 +283,8 @@ function FollowupDraftDrawer({ item, onClose, onOpenLog }) {
               icon="sparkle"
               onClick={() => {
                 onClose();
-                onOpenLog(item, "sent", "연락");
+                // 초안을 보낸 뒤의 결과도 같은 공용 기록창으로 남긴다(CRM 시트 전역화).
+                onRecord(item, { kind: CHANNEL_PRESET[item.channel] || "kakao" });
               }}
             >
               결과 기록하기
@@ -473,10 +371,9 @@ function FollowupDraftDrawer({ item, onClose, onOpenLog }) {
   );
 }
 
-function FollowupRow({ item, onNavigate, onOpenPanel, onOpenDraft, logDraft, onOpenLog, onCloseLog, onSubmitLog, logError, logged, kbSelected }) {
+function FollowupRow({ item, rail = false, onNavigate, onOpenPanel, onOpenDraft, onRecord, logged, kbSelected }) {
   const stage = stageMeta(item.stage);
   const clickable = Boolean(item.href);
-  const isLogging = logDraft?.itemId === item.id;
 
   return (
     <div
@@ -486,7 +383,7 @@ function FollowupRow({ item, onNavigate, onOpenPanel, onOpenDraft, logDraft, onO
         display: "flex", flexDirection: "column", gap: 8,
         padding: "12px 16px",
         borderBottom: "1px solid var(--line-soft)",
-        boxShadow: BUCKET_STRIPE[item.bucket] ? `inset 1px 0 0 ${BUCKET_STRIPE[item.bucket]}` : undefined,
+        boxShadow: rail ? "inset 1px 0 0 var(--danger)" : undefined,
         ...(kbSelected ? { outline: '1px solid var(--moon-300)', outlineOffset: -1 } : {}),
       }}
     >
@@ -511,6 +408,12 @@ function FollowupRow({ item, onNavigate, onOpenPanel, onOpenDraft, logDraft, onO
         {item.phone && <span className="mono" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{item.phone}</span>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, flexWrap: "wrap" }}>
+        {/* 레일 예산을 넘긴 '지남' 행은 색 대신 글리프 + 직접 라벨로 같은 사실을 말한다. */}
+        {item.bucket === "overdue" && !rail && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--fg-muted)" }}>
+            <Iconed name="clock" size={12} /> 지남
+          </span>
+        )}
         <span style={{ color: "var(--fg-muted)" }}>{item.why}</span>
         {item.nextAction && <span style={{ color: "var(--fg-faint)" }}>→ {item.nextAction}</span>}
         {item.kind === "event" && item.whenLabel && <span className="mono" style={{ color: "var(--fg-faint)" }}>{item.whenLabel}</span>}
@@ -519,42 +422,32 @@ function FollowupRow({ item, onNavigate, onOpenPanel, onOpenDraft, logDraft, onO
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--fg-faint)" }}>
           <Iconed name="chat" size={11} />
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>최근 대화: {item.lastNote}</span>
-          {item.lastReaction && <Badge tone="neutral" size="xs" variant="outline">{REACTION_OPTIONS.find((r) => r.key === item.lastReaction)?.label || item.lastReaction}</Badge>}
+          {item.lastReaction && <Badge tone="neutral" size="xs" variant="outline">{CRM_REACTION_LABEL[item.lastReaction] || item.lastReaction}</Badge>}
         </div>
       )}
 
       {item.kind !== "event" && (
-        isLogging ? (
-          <LogForm
-            key={logDraft.initial ? "restored" : "fresh"}
-            item={item}
-            action={logDraft.action}
-            label={logDraft.label}
-            initial={logDraft.initial}
-            error={logError}
-            onCancel={onCloseLog}
-            onSubmit={(fields) => onSubmitLog(item, logDraft.action, logDraft.label, fields)}
-          />
-        ) : (
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            {logged ? (
-              <span style={{ fontSize: 12, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6 }}>
-                <Dot tone="neutral" /> 기록됨: {logged}
-              </span>
-            ) : (
-              <>
-                <Button variant="outline" size="xs" icon="sparkle" onClick={() => onOpenDraft?.(item)}>
-                  메시지 초안
-                </Button>
-                {LOG_ACTIONS.map((a) => (
-                  <Button key={a.action} variant="outline" size="xs" onClick={() => onOpenLog(item, a.action, a.label)}>
-                    {a.label}
-                  </Button>
-                ))}
-              </>
-            )}
-          </div>
-        )
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {logged ? (
+            <span style={{ fontSize: 12, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+              <Dot tone="neutral" /> 기록됨: {logged}
+            </span>
+          ) : (
+            <>
+              <Button variant="outline" size="xs" icon="sparkle" onClick={() => onOpenDraft?.(item)}>
+                메시지 초안
+              </Button>
+              {/* 기록은 어디서 열어도 같은 폼이다(contact-record-form). 행이 제안하는 채널을
+                  프리셋으로 넘기고, 가장 잦은 예외인 부재중만 버튼 하나를 더 둔다. */}
+              <Button variant="outline" size="xs" icon="edit" onClick={() => onRecord(item, { kind: CHANNEL_PRESET[item.channel] || "call" })}>
+                기록
+              </Button>
+              <Button variant="ghost" size="xs" onClick={() => onRecord(item, { kind: "call", reaction: "no_response" })}>
+                부재중
+              </Button>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
@@ -567,14 +460,12 @@ export function Followups({ onNavigate }) {
   const router = useRouter();
   const pathname = usePathname();
   const [lane, setLane] = React.useState("all");
-  const [bucket, setBucket] = React.useState("all");
-  const [logDraft, setLogDraft] = React.useState(null); // { itemId, action, label, initial? }
-  const [logError, setLogError] = React.useState(null);
-  const [logged, setLogged] = React.useState({}); // id → action label
-  const [notice, setNotice] = React.useState(null); // { tone, label, action? } — 되돌리기 창 표시
+  // 버킷은 이제 필터가 아니라 섹션이다(0b). 남는 선택은 "지켜보는 고객"을 펼쳤는지 하나뿐.
+  const [restOpen, setRestOpen] = React.useState(false);
+  const [recordTarget, setRecordTarget] = React.useState(null); // { item, preset, draft?, error? } — 기록창 대상
+  const [logged, setLogged] = React.useState({}); // id → 방금 기록한 채널 라벨
   const [panelItem, setPanelItem] = React.useState(null); // row whose activity panel is open
   const [draftItem, setDraftItem] = React.useState(null); // row whose message draft is open
-  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
   const laneCounts = React.useMemo(() => {
     const counts = { all: items.length, lead: 0, deal: 0, event: 0 };
@@ -582,15 +473,17 @@ export function Followups({ onNavigate }) {
     return counts;
   }, [items]);
 
-  const bucketCounts = React.useMemo(() => {
-    const counts = { all: items.length, overdue: 0, today: 0, week: 0 };
-    items.forEach((i) => { counts[i.bucket] = (counts[i.bucket] || 0) + 1; });
-    return counts;
-  }, [items]);
-
   const visible = React.useMemo(() => {
-    return items.filter((i) => (lane === "all" || i.kind === lane) && (bucket === "all" || i.bucket === bucket));
-  }, [items, lane, bucket]);
+    return items.filter((i) => lane === "all" || i.kind === lane);
+  }, [items, lane]);
+
+  // 약속을 어긴 건 → 오늘 하기로 한 건 → 나머지(접힘). 묶음 안 순서는 ledger가 정한 priority 그대로.
+  const groups = React.useMemo(() => groupFollowups(visible), [visible]);
+  const sections = React.useMemo(() => (
+    FOLLOWUP_GROUPS
+      .map((group) => ({ ...group, items: groups[group.key] || [] }))
+      .filter((group) => group.items.length > 0)
+  ), [groups]);
 
   // Deep-link: ?focus=<id> opens that row's activity panel once the ledger has loaded, then
   // strips the query so a refresh doesn't replay it (DESIGN.md §8.1 deep-link contract, same
@@ -609,12 +502,16 @@ export function Followups({ onNavigate }) {
   }, [focusParam, syncState, items, pathname, router]);
 
   // 키보드 계층(§8.1) — 코어 데일리 루프에 j/k/e 배선: j/k 행 이동, e 상세 패널.
-  const kbRows = React.useMemo(() => visible.map((i) => ({ id: `${i.kind}-${i.id}` })), [visible]);
+  // 키보드 이동 순서는 화면 순서와 같아야 한다 — 접힌 "지켜보는 고객"은 건너뛴다.
+  const rendered = React.useMemo(() => (
+    sections.flatMap((group) => (group.key === "rest" && !restOpen ? [] : group.items))
+  ), [sections, restOpen]);
+  const kbRows = React.useMemo(() => rendered.map((i) => ({ id: `${i.kind}-${i.id}` })), [rendered]);
   const kbSelection = useCrmSelection(kbRows);
   useCrmKeyboard({
     selection: kbSelection,
     onEditSelected: (rowId) => {
-      const item = visible.find((i) => `${i.kind}-${i.id}` === rowId);
+      const item = rendered.find((i) => `${i.kind}-${i.id}` === rowId);
       if (item) setPanelItem(item);
     },
   });
@@ -623,77 +520,63 @@ export function Followups({ onNavigate }) {
     document.querySelector(`[data-kb-row="${CSS.escape(kbSelection.selectedId)}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [kbSelection.selectedId]);
 
-  const openLog = (item, action, label) => { setLogError(null); setLogDraft({ itemId: item.id, action, label }); };
-  const closeLog = () => { setLogError(null); setLogDraft(null); };
+  // 기록은 공용 드로어(contact-record-form)가 소유한다 — 저장·3.5초 되돌리기·늦은 실패 시
+  // 입력 복원까지 전부 그 안에 있다. 이 페이지는 "누구를·어느 채널로" 열지만 정한다.
+  // 넛지는 큐 위에 붙는다 — "먼저 정리할 것"(act)과 접힌 "정리"(organize).
+  const nudgeState = useCrmNudges();
+  const actOnNudge = (nudge) => setRecordTarget({
+    item: {
+      kind: nudge.subject.type === "deal" ? "deal" : "lead",
+      id: nudge.subject.id,
+      name: nudge.subject.name,
+      companyId: nudge.subject.companyId,
+    },
+    preset: nudge.action?.prefill || {},
+    nudge,
+  });
 
-  // Phase 1C 원자 RPC 경로 — 활동 기록 + 대상 원장 next_action 갱신이 한 트랜잭션이다.
-  // (기존 /api/integrations/outcomes/record는 outreach insert와 lead 갱신이 비원자 2단계라
-  // 반쪽 저장 시 next_action 날짜가 옛값으로 남아 리드가 오늘/지남 버킷에서 소리 없이 빠졌고,
-  // outreach_outcomes는 이 페이지의 활동 패널이 읽는 crm_activities에도 나타나지 않았다.)
-  const persistLog = async (item, action, label, { summary, reaction, nextAction, at, dormant }) => {
+  const openRecord = (item, preset) => setRecordTarget({ item, preset });
+  const closeRecord = () => setRecordTarget(null);
+
+  // 기록됨 표시는 낙관적으로 붙이되, 확인 토스트는 서버가 saved로 답한 뒤에만 띄운다.
+  // 되돌리기·늦은 실패는 표시를 걷고, 실패는 원인과 함께 기록창을 입력 그대로 다시 연다
+  // (드로어를 먼저 닫았어도 입력이 조용히 사라지지 않게).
+  const onRecordSaved = (saved) => {
+    const item = recordTarget?.item;
+    if (!item) return;
+    setLogged((m) => ({ ...m, [item.id]: saved?.kind ? channelLabel(saved.kind) : "기록" }));
+    // 저장은 드로어가 3.5초 뒤에 보낸다 — 그때 큐와 넛지가 새 사실을 반영하도록 다시 읽는다.
+    window.setTimeout(() => { reload(); nudgeState.refresh(); }, UNDO_WINDOW_MS + 250);
+  };
+  const clearLogged = (itemId) => setLogged((m) => {
+    if (!(itemId in m)) return m;
+    const next = { ...m };
+    delete next[itemId];
+    return next;
+  });
+  const onRecordUndone = () => {
+    const item = recordTarget?.item;
+    if (item) clearLogged(item.id);
+  };
+  const onRecordPersisted = () => {
+    const item = recordTarget?.item;
+    if (item) toast.success(`기록됨 · ${item.name}`);
+  };
+  const onRecordFailed = ({ message, form }) => {
+    const target = recordTarget;
+    if (!target?.item) return;
+    clearLogged(target.item.id);
+    toast.error(`기록하지 못했습니다 · ${target.item.name} — ${message}`);
+    setRecordTarget((cur) => cur || { item: target.item, preset: target.preset, draft: form, nudge: target.nudge, error: message });
+  };
+  const onNudgeEscape = async (nudge, action, until) => {
+    let result;
     try {
-      const res = await fetch("/api/hub/revenue/contact-outcome", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          entityType: item.kind, // 'lead' | 'deal'
-          entityId: item.id,
-          kind: action === "meeting" ? "meeting" : RPC_KIND_BY_CHANNEL[item.channel] || "call",
-          summary,
-          reaction: action === "no_response" ? "no_response" : RPC_REACTION[reaction] || "",
-          nextAction: nextAction || null,
-          nextActionAt: dormant ? null : at || null,
-          dormant: Boolean(dormant),
-        }),
-      });
-      const data = await res.json().catch(() => null);
-      // 4xx/5xx도 fetch는 resolve한다 — status='saved' 확인 없이는 실패가 "기록됨"으로 표시된다.
-      if (!res.ok || data?.status !== "saved") {
-        const reason = data?.status === "preview" ? "preview" : data?.error || res.status;
-        throw new Error(`contact-outcome ${reason}`);
-      }
-      await reload();
-      toast.success(`연락 기록을 저장했습니다 · ${item.name}`);
+      result = await nudgeState.suppress(nudge, action, until);
     } catch (err) {
-      // 늦은 실패: 기록됨 표시를 걷어내고 폼을 입력 그대로 되살린다(무언 소실 금지).
-      setLogged((m) => { const n = { ...m }; delete n[item.id]; return n; });
-      setLogDraft({ itemId: item.id, action, label, initial: { summary, reaction, nextAction, at, dormant } });
-      setLogError(
-        String(err?.message || "").includes("preview")
-          ? "Supabase 미연결 — 기록이 저장되지 않았습니다. 연결 후 다시 시도하세요."
-          : "기록 저장에 실패했습니다. 다시 시도하세요.",
-      );
-      setNotice({ tone: "err", label: "기록 저장 실패 — 입력을 복원했습니다." });
-      toast.error("기록 저장 실패 — 입력을 복원했습니다.");
+      result = { ok: false, reason: err instanceof Error ? err.message : String(err) };
     }
-  };
-
-  // 기록도 되돌리기 창을 갖는다(최고 빈도 액션 — my-work 완료와 같은 deferred-write 계약):
-  // 즉시 "기록됨"으로 표시하되 실제 POST는 3.5초 뒤. 되돌리기는 진짜 취소(네트워크 없음).
-  const submitLog = (item, action, label, fields) => {
-    const key = `log-${item.id}`;
-    setLogError(null);
-    setLogged((m) => ({ ...m, [item.id]: label }));
-    setLogDraft(null);
-    setNotice({ key, tone: "ok", label: `기록됨 · ${item.name}`, action: { label: "되돌리기", onClick: () => undoLog(item) } });
-    toast.success(`기록됨 · ${item.name}`, { action: { label: "되돌리기", onClick: () => undoLog(item) } });
-    scheduleUndoable(key, () => {
-      // 창이 닫히면 알림을 통째로 걷는다 — 라벨만 남기면 "기록됨"이 다음 액션까지
-      // 영구 표시된다(7차 UIUX — revenue·daily-brief의 전체 소거 패턴으로 통일).
-      setNotice((cur) => (cur?.key === key ? null : cur));
-      persistLog(item, action, label, fields);
-    });
-  };
-
-  const undoLog = (item) => {
-    const key = `log-${item.id}`;
-    if (!cancelUndoable(key)) {
-      setNotice((cur) => (cur?.key === key ? null : cur));
-      return; // 창이 닫혔으면 이미 POST됐다
-    }
-    setLogged((m) => { const n = { ...m }; delete n[item.id]; return n; });
-    setNotice({ tone: "ok", label: "기록 취소됨" });
-    toast.info("기록 취소됨");
+    if (!result?.ok) toast.error(`넛지를 정리하지 못했습니다 · ${nudge.subject?.name || ""} — ${result?.reason || "저장 실패"}`);
   };
 
   return (
@@ -710,19 +593,6 @@ export function Followups({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        {notice && (
-          // live region(§11) — 되돌리기 창 개방을 스크린리더에도 알린다. 완료 카피는 중립(§5.3).
-          <span
-            role={notice.tone === "err" ? "alert" : "status"}
-            aria-live="polite"
-            style={{ fontSize: 11.5, color: notice.tone === "err" ? "var(--danger)" : "var(--fg-muted)", display: "inline-flex", alignItems: "center", gap: 8, marginRight: 8 }}
-          >
-            {notice.label}
-            {notice.action && (
-              <Button variant="ghost" size="xs" onClick={notice.action.onClick}>{notice.action.label}</Button>
-            )}
-          </span>
-        )}
         <Button variant="ghost" size="sm" icon="runs" onClick={reload}>새로고침</Button>
       </div>
 
@@ -733,60 +603,116 @@ export function Followups({ onNavigate }) {
           value={lane}
           onChange={setLane}
         />
-        <SegmentedControl
-          label="버킷"
-          options={BUCKET_OPTIONS.map((o) => ({ ...o, label: `${o.label} ${bucketCounts[o.key] || 0}` }))}
-          value={bucket}
-          onChange={setBucket}
-        />
       </div>
 
+      {/* 넛지 — 계기·이유·행동 하나. 목록보다 위다: 큐는 "누구"를, 넛지는 "무엇을"을 말한다. */}
+      {/* loading은 껍데기도 그리지 않는다 — 빈 Card가 떴다 사라지면 첫 화면이 흔들린다. */}
+      {((nudgeState.status !== "live" && nudgeState.status !== "loading") || nudgeState.nudges.length > 0) && (
+        <Card pad={false} className="hub-table-card">
+          <CrmNudgeSection
+            title="먼저 정리할 것"
+            hint="캘린더·약속·반응에서 찾은 것"
+            state={nudgeState.status}
+            nudges={nudgeState.nudges.filter((n) => n.severity === "act")}
+            busyKey={nudgeState.busyKey}
+            onAct={actOnNudge}
+            onEscape={onNudgeEscape}
+          />
+          <CrmNudgeSection
+            title="정리"
+            hint="다음 행동이 비었거나 오래 둔 것"
+            state={nudgeState.status}
+            nudges={nudgeState.nudges.filter((n) => n.severity === "organize")}
+            busyKey={nudgeState.busyKey}
+            onAct={actOnNudge}
+            onEscape={onNudgeEscape}
+          />
+        </Card>
+      )}
+
       <Card pad={false} className="hub-table-card">
-        {visible.length === 0 ? (
+        {sections.length === 0 ? (
           // error를 preview 문구("연결되면 표시됩니다")로 뭉개면 읽기 실패가 "오늘 할 일 없음"으로
           // 보인다 — 후속 누락 0건 목표에서 가장 위험한 오독이라 상태별로 분리한다(§5.3 source truth).
-          syncState === "error" ? (
+          syncState === "loading" ? (
+            // 콜드 로딩을 "연락 데이터 없음"으로 그리면 로딩과 빈 상태가 같은 문구를 쓴다 —
+            // §11은 레이아웃이 아는 로딩을 Skeleton으로 그리라고 못박는다(이 파일의 드로어
+            // 타임라인도 같은 계약).
+            <Skeleton lines={5} height={14} label="연락 목록 불러오는 중" style={{ padding: 16 }} />
+          ) : syncState === "error" ? (
             <EmptyState
               icon="clock"
-              title="팔로업 원장을 읽지 못했습니다"
+              title="연락 목록을 읽지 못했습니다"
               description="지금 화면은 비어 보이지만 실제 후속 항목이 있을 수 있습니다. 다시 시도해 주세요."
               action={<Button variant="outline" size="sm" onClick={reload}>다시 시도</Button>}
             />
           ) : (
             <EmptyState
               icon="rhythm"
-              title={["live", "partial"].includes(syncState) ? "표시할 항목이 없습니다" : "팔로업 데이터 없음"}
+              title={["live", "partial"].includes(syncState) ? "표시할 항목이 없습니다" : "연락 데이터 없음"}
               description={
                 syncState !== "live"
                   ? "리드·딜이 쌓이고 Supabase가 연결되면 표시됩니다."
-                  : lane === "all" && bucket === "all"
+                  : lane === "all"
                     // Q117 확정(2026-08-18): 이 탭은 무접촉 자동 피드가 아니라 선별 표면 —
                     // 내 작업의 '기한 지남 딜'과 기준이 다른 것이 의도임을 카피로 명시한다.
                     ? "컨택 트래킹을 시작한 고객과 다음 연락일이 된 건만 여기 뜹니다. 기한 지남 딜은 자동으로 채우지 않습니다 — 리드 목록에서 트래킹을 시작하면 관리 대상이 됩니다."
                     : "이 필터에 해당하는 항목이 없습니다."
               }
-              action={lane !== "all" || bucket !== "all"
-                ? <Button variant="outline" size="sm" onClick={() => { setLane("all"); setBucket("all"); }}>전체 보기</Button>
+              action={lane !== "all"
+                ? <Button variant="outline" size="sm" onClick={() => setLane("all")}>전체 보기</Button>
                 : <Button variant="outline" size="sm" icon="leads" onClick={() => onNavigate?.("dashboard/revenue/leads")}>리드 목록 열기</Button>}
             />
           )
         ) : (
-          visible.map((item) => (
-            <FollowupRow
-              key={`${item.kind}-${item.id}`}
-              kbSelected={kbSelection.selectedId === `${item.kind}-${item.id}`}
-              item={item}
-              onNavigate={onNavigate}
-              onOpenPanel={setPanelItem}
-              onOpenDraft={setDraftItem}
-              logDraft={logDraft}
-              onOpenLog={openLog}
-              onCloseLog={closeLog}
-              onSubmitLog={submitLog}
-              logError={logError}
-              logged={logged[item.id]}
-            />
-          ))
+          sections.map((group) => {
+            const collapsed = group.key === "rest" && !restOpen;
+            return (
+              <section key={group.key} aria-label={group.label}>
+                <div
+                  style={{
+                    display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap",
+                    padding: "10px 16px", borderBottom: collapsed ? "none" : "1px solid var(--line-soft)",
+                    background: "var(--surface-2)",
+                  }}
+                >
+                  <h3 style={{ margin: 0, fontSize: 11, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--fg-dim)" }}>
+                    {group.label}
+                  </h3>
+                  <span className="num" style={{ fontSize: 11.5, color: group.key === "missed" ? "var(--danger)" : "var(--fg-muted)" }}>
+                    {group.items.length}
+                  </span>
+                  {group.hint && !collapsed && (
+                    <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>{group.hint}</span>
+                  )}
+                  <div style={{ flex: 1 }} />
+                  {group.key === "rest" && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      aria-expanded={restOpen}
+                      onClick={() => setRestOpen((open) => !open)}
+                    >
+                      {restOpen ? "접기" : "펼치기"}
+                    </Button>
+                  )}
+                </div>
+                {!collapsed && group.items.map((item, index) => (
+                  <FollowupRow
+                    key={`${item.kind}-${item.id}`}
+                    kbSelected={kbSelection.selectedId === `${item.kind}-${item.id}`}
+                    item={item}
+                    rail={group.key === "missed" && index < MAX_DANGER_RAILS}
+                    onNavigate={onNavigate}
+                    onOpenPanel={setPanelItem}
+                    onOpenDraft={setDraftItem}
+                    onRecord={openRecord}
+                    logged={logged[item.id]}
+                  />
+                ))}
+              </section>
+            );
+          })
         )}
       </Card>
       <div style={{ fontSize: 11, color: "var(--fg-faint)" }}>
@@ -794,7 +720,26 @@ export function Followups({ onNavigate }) {
       </div>
 
       {panelItem && <ActivityPanel item={panelItem} onClose={() => setPanelItem(null)} onNavigate={onNavigate} />}
-      {draftItem && <FollowupDraftDrawer item={draftItem} onClose={() => setDraftItem(null)} onOpenLog={openLog} />}
+      {draftItem && <FollowupDraftDrawer item={draftItem} onClose={() => setDraftItem(null)} onRecord={openRecord} />}
+
+      {recordTarget && (
+        <ContactRecordDrawer
+          target={{
+            kind: recordTarget.item.kind,
+            id: recordTarget.item.id,
+            companyId: recordTarget.item.companyId,
+            name: recordTarget.item.name,
+          }}
+          preset={recordTarget.preset}
+          draft={recordTarget.draft || null}
+          initialError={recordTarget.error || ""}
+          onSaved={onRecordSaved}
+          onUndone={onRecordUndone}
+          onPersisted={onRecordPersisted}
+          onFailed={onRecordFailed}
+          onClose={closeRecord}
+        />
+      )}
     </div>
   );
 }

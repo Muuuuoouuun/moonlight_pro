@@ -3,17 +3,20 @@ import { resolveDefaultWorkspaceId } from '@/lib/server-write';
 import { canonicalOrgScopeForKey } from '../brand-org-scope.js';
 import { isCalendarDateKey, shiftDateKey, toZonedDateKey } from '../rhythm-calendar.js';
 
-const CONTACT_KINDS = new Set(['call', 'meeting', 'info_session', 'demo', 'visit', 'email', 'kakao', 'quote']);
+// 연락으로 세는 활동 종류는 고객 연락 화면과 한 정의를 공유한다(CRM 0a).
+import { CONTACT_KINDS } from '../sales-os/followup-scoring.js';
 const SOURCE_LABELS = { tasks_completed:'완료 상태인 할 일',contacts_recorded:'실제 고객 연락',content_published:'발행 완료',reviews_completed:'하루 리뷰' };
 const TABLES = {
   tasks_completed: ['tasks', 'completed_at'], contacts_recorded: ['crm_activities', 'occurred_at'],
   content_published: ['publish_logs', 'published_at'], reviews_completed: ['journal_entries', 'review_date'],
 };
 const ENTITY_TABLES = new Set(['tasks', 'projects', 'brands', 'content_items', 'content_variants', 'deals', 'leads', 'customer_accounts', 'companies', 'campaigns', 'memos', 'journal_entries']);
-const SELECTS = {
+// Column names must exist in supabase/schema.sql or a migration; the test file checks this.
+// (content_variants links to its item through content_id — never content_item_id.)
+export const METRIC_SOURCE_SELECTS = {
   tasks: 'id,workspace_id,title,status,completed_at,project_id,meta',
   projects: 'id,workspace_id,name,brand_id,meta', brands: 'id,workspace_id,slug,meta',
-  content_items: 'id,workspace_id,title,brand_id,meta', content_variants: 'id,workspace_id,content_item_id,meta',
+  content_items: 'id,workspace_id,title,brand_id,meta', content_variants: 'id,workspace_id,content_id,meta',
   publish_logs: 'id,workspace_id,variant_id,channel,status,published_at,external_id,target_url',
   crm_activities: 'id,workspace_id,kind,occurred_at,lead_id,deal_id,account_id,meta',
   journal_entries: 'id,workspace_id,entry_kind,review_date,review_timezone',
@@ -57,7 +60,7 @@ export function createMetricReader({ workspaceId = resolveDefaultWorkspaceId(), 
       try {
         for (let page = 0; page < maxPages; page += 1) {
           const answer = await readRows(table, {
-            select: SELECTS[table] || '*', filters: [['workspace_id', `eq.${workspaceId}`], ...filters, ...(cursor ? [['id', `gt.${cursor}`]] : [])], order: 'id.asc', limit: pageSize,
+            select: METRIC_SOURCE_SELECTS[table] || '*', filters: [['workspace_id', `eq.${workspaceId}`], ...filters, ...(cursor ? [['id', `gt.${cursor}`]] : [])], order: 'id.asc', limit: pageSize,
           });
           const result = Array.isArray(answer) ? answer : answer?.rows;
           const remaining = Array.isArray(answer) ? null : answer?.count;
@@ -97,7 +100,7 @@ export function createMetricReader({ workspaceId = resolveDefaultWorkspaceId(), 
   async function prime(rows, depth = 0) {
     if (depth > 6) return;
     const groups = new Map();
-    for (const row of rows) for (const [field,table] of [['brand_id','brands'],['project_id','projects'],['variant_id','content_variants'],['content_item_id','content_items'],['lead_id','leads'],['deal_id','deals'],['account_id','customer_accounts']]) {
+    for (const row of rows) for (const [field,table] of [['brand_id','brands'],['project_id','projects'],['variant_id','content_variants'],['content_id','content_items'],['lead_id','leads'],['deal_id','deals'],['account_id','customer_accounts']]) {
       const id = row[field];
       if (!id || references.has(`${table}:${id}`)) continue;
       if (!groups.has(table)) groups.set(table,new Set());
@@ -132,7 +135,7 @@ export function createMetricReader({ workspaceId = resolveDefaultWorkspaceId(), 
     const brandKey = meta.brand || meta.brand_key || meta.brandKey || meta.brand_slug || row.brand;
     if (brandKey) return normalizeScope(canonicalOrgScopeForKey(brandKey));
     if (table === 'tasks' && row.project_id) return resolveEntityScope('projects', await get('projects', row.project_id), next);
-    if (table === 'content_variants' && row.content_item_id) return resolveEntityScope('content_items', await get('content_items', row.content_item_id), next);
+    if (table === 'content_variants' && row.content_id) return resolveEntityScope('content_items', await get('content_items', row.content_id), next);
     if (table === 'publish_logs') {
       if (!row.variant_id) return null;
       return resolveEntityScope('content_variants', await get('content_variants', row.variant_id), next);
@@ -179,12 +182,23 @@ export function createMetricReader({ workspaceId = resolveDefaultWorkspaceId(), 
       const scopes = await Promise.all(group.map(row => resolveEntityScope(table,row)));
       group.forEach((row,i) => { if (!scopes[i]) {incomplete = true;reason='scope-reference-unavailable';} else if (scopes[i] === scope) chosen.push(row); });
     }
+    // content_published counts published pieces, not publish events: one per content variant
+    // (publish_logs.variant_id), the same unit as the content performance page
+    // (content_variants.published_at). Recording a publication again for the same variant inside
+    // the window (URL fix, re-post) counts once. A published log must still point at an external
+    // post (external_id or target_url) — an export handoff without one keeps the count partial.
+    // A log without a variant cannot resolve ownership and is already partial above; should one
+    // ever resolve, its post identity is the fallback key.
     const unique = new Map();
     for (const row of chosen) {
       let identity = row.id;
       if (sourceKey === 'content_published') {
-        identity = row.external_id ? `${row.channel}:${row.external_id}` : row.target_url ? `${row.channel}:${row.target_url}` : null;
-        if (!identity) {incomplete = true;reason='publication-identity-missing';continue;}
+        const post = row.external_id ? `${row.channel}:${row.external_id}` : row.target_url ? `${row.channel}:${row.target_url}` : null;
+        if (!post) {incomplete = true;reason='publication-identity-missing';continue;}
+        identity = row.variant_id ? `variant:${row.variant_id}` : `post:${post}`;
+        // Keep the latest log as evidence: its URL is the one the variant carries now.
+        const kept = unique.get(identity);
+        if (kept && Date.parse(kept.published_at) > Date.parse(row.published_at)) continue;
       }
       if (sourceKey === 'reviews_completed') identity = `${row.review_timezone || timezone}:${row.review_date}`;
       unique.set(identity,row);
@@ -193,7 +207,7 @@ export function createMetricReader({ workspaceId = resolveDefaultWorkspaceId(), 
       ...(sourceKey==='tasks_completed'?{href:`/dashboard/work/projects?view=todos&task=${row.id}`}:sourceKey==='reviews_completed'?{href:`/dashboard/work/daily-review?date=${row.review_date}`}:sourceKey==='content_published'&&/^https?:\/\//.test(row.target_url||'')?{href:row.target_url}:{}),
     }));
     evidence.push({type:'query',table,label:`${SOURCE_LABELS[sourceKey]} · ${periodStart}–${periodEnd} · ${incomplete?'일부 확인':`${unique.size}건 확인`}`,periodStart,periodEnd,scope,count:unique.size,asOf:observedAt});
-    return {...base, value:incomplete ? null : unique.size, coverage: source.coverage === 'unmeasured' ? 'unmeasured' : incomplete ? 'partial' : 'complete', evidence, ...(reason ? {reason} : {}), ...(sourceKey === 'tasks_completed' ? {definitionNote:'현재 완료 상태의 작업을 완료 시각으로 집계합니다. 재오픈·재완료하면 과거 집계도 바뀔 수 있습니다.'} : {})};
+    return {...base, value:incomplete ? null : unique.size, coverage: source.coverage === 'unmeasured' ? 'unmeasured' : incomplete ? 'partial' : 'complete', evidence, ...(reason ? {reason} : {}), ...(sourceKey === 'tasks_completed' ? {definitionNote:'현재 완료 상태의 작업을 완료 시각으로 집계합니다. 재오픈·재완료하면 과거 집계도 바뀔 수 있습니다.'} : sourceKey === 'content_published' ? {definitionNote:'발행한 원고 단위로 집계합니다. 같은 원고의 발행을 기간 안에서 다시 기록해도 1건입니다.'} : {})};
   }
   return { measure, read, get, getMany, scopedRows, resolveEntityScope };
 }

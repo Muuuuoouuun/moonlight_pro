@@ -207,6 +207,9 @@ export function ProjectPortfolioWorkspace({
   pendingTodoIds,
   showTerminal,
   onToggleTerminal,
+  onTerminalDragStart,
+  onTerminalDragMove,
+  onTerminalDragEnd,
   onReopenProject,
   onReload,
   onSwitchView,
@@ -319,10 +322,27 @@ export function ProjectPortfolioWorkspace({
 
           {terminalProjects.length > 0 && (
             <div className="hub-project-portfolio-terminal">
-              <button type="button" className="hub-row" aria-expanded={showTerminal} onClick={onToggleTerminal}>
+              <button
+                type="button"
+                className="hub-row"
+                data-terminal-toggle=""
+                aria-expanded={showTerminal}
+                onClick={onToggleTerminal}
+              >
                 <Iconed name="chevronD" size={12} style={{ transform: showTerminal ? "none" : "rotate(-90deg)" }} />
                 <span>완료·보관</span>
                 <span className="mono">{terminalProjects.length}</span>
+                <span
+                  data-terminal-grip=""
+                  aria-hidden="true"
+                  onPointerDown={onTerminalDragStart}
+                  onPointerMove={onTerminalDragMove}
+                  onPointerUp={onTerminalDragEnd}
+                  onPointerCancel={onTerminalDragEnd}
+                  style={{ color: "var(--fg-faint)" }}
+                >
+                  <Iconed name="drag" size={12} />
+                </span>
               </button>
               {showTerminal && terminalProjects.map((item) => (
                 <div key={item.id} className="hub-project-portfolio-terminal__row">
@@ -418,7 +438,7 @@ export function ProjectPortfolioWorkspace({
           {sourceState === "error" && (
             <div className="hub-project-portfolio-truth" role="alert" data-state="error">
               <Iconed name="flag" size={15} />
-              <span><strong>프로젝트 원장을 읽지 못했습니다.</strong>{readError || "연결 상태를 확인한 뒤 다시 시도하세요."}</span>
+              <span><strong>프로젝트 기록을 읽지 못했습니다.</strong>{readError || "연결 상태를 확인한 뒤 다시 시도하세요."}</span>
               <Button variant="outline" size="sm" onClick={onReload}>다시 시도</Button>
             </div>
           )}
@@ -557,7 +577,7 @@ export function ProjectPortfolioWorkspace({
                           </summary>
                           <div className="hub-project-portfolio-item__body">
                             <div className="hub-project-portfolio-item__toolbar">
-                              <Checkbox checked={task.done} onChange={() => onToggleTodo(task.id)} disabled={pendingTodoIds.has(task.id)} label={`${task.done ? '다시 열기' : '완료'}: ${task.title}`} />
+                              <Checkbox checked={task.done} onChange={(_next, e) => onToggleTodo(task.id, e)} disabled={pendingTodoIds.has(task.id)} label={`${task.done ? '다시 열기' : '완료'}: ${task.title}`} />
                               <LifecycleBadge label={STATUS_COPY[task.status] || (task.done ? '완료' : '대기')} state={task.done ? 'done' : task.status === 'doing' ? 'active' : task.status === 'blocked' ? 'blocked' : 'queued'} />
                               <Button variant="outline" size="sm" icon="edit" onClick={() => onEditTodo(task)}>상세·일정 편집</Button>
                             </div>
@@ -632,8 +652,8 @@ export function ProjectPortfolioWorkspace({
           ) : (
             <div className="hub-project-portfolio-stage__empty">
               <Iconed name={query || activeFilter ? "search" : "projects"} size={28} />
-              <h2>{sourceState === "loading" ? "프로젝트 원장 확인 중" : query || activeFilter ? "조건에 맞는 프로젝트가 없습니다" : sourceState === "preview" ? "Preview · 실제 프로젝트 없음" : "첫 프로젝트를 시작하세요"}</h2>
-              <p>{sourceState === "loading" ? "원장 상태를 확인하고 있습니다." : query || activeFilter ? "왼쪽 검색 또는 포트폴리오 필터를 해제하면 전체 프로젝트가 돌아옵니다." : sourceState === "preview" ? "Supabase가 연결되면 예시 데이터 없이 실제 프로젝트만 표시합니다." : "프로젝트를 만들면 진척, 다음 행동, 체크리스트와 일정을 한 화면에서 관리할 수 있습니다."}</p>
+              <h2>{sourceState === "loading" ? "프로젝트 기록 확인 중" : query || activeFilter ? "조건에 맞는 프로젝트가 없습니다" : sourceState === "preview" ? "Preview · 실제 프로젝트 없음" : "첫 프로젝트를 시작하세요"}</h2>
+              <p>{sourceState === "loading" ? "기록 상태를 확인하고 있습니다." : query || activeFilter ? "왼쪽 검색 또는 포트폴리오 필터를 해제하면 전체 프로젝트가 돌아옵니다." : sourceState === "preview" ? "Supabase가 연결되면 예시 데이터 없이 실제 프로젝트만 표시합니다." : "프로젝트를 만들면 진척, 다음 행동, 체크리스트와 일정을 한 화면에서 관리할 수 있습니다."}</p>
               {sourceState === "loading" ? null : query || activeFilter ? (
                 <Button variant="outline" size="sm" onClick={() => { onQueryChange(""); onFilterChange(null); }}>검색·필터 지우기</Button>
               ) : (

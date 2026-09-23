@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server.js";
-import { mentorDraftPrompt, parseMentorDraft } from "../../../../lib/mentor-draft.ts";
 import { buildAdvisorySystemInstruction } from "../../../../lib/advisor-guardrails.ts";
 
 // Gemini generations can legitimately run tens of seconds; cap the route
 // so a hung upstream cannot pin a serverless invocation past a minute.
 export const maxDuration = 60;
 
+import {
+  DRAFT_GENERATION_BOUNDS,
+  FOLLOWUP_DRAFT_MODE,
+  buildDraftResponse,
+  buildFollowupDraftPrompt,
+  draftHttpStatus,
+  parseFollowupDraft,
+} from "../../../../lib/ai-draft-modes.ts";
 import { generateGeminiText, getGeminiIntegrationStatus } from "../../../../lib/gemini.ts";
 import {
   insertIntegrationSyncRun,
@@ -76,9 +83,15 @@ async function readJson(req: Request) {
   return text ? JSON.parse(text) : {};
 }
 
-function normalizeMode(value: unknown): Mode {
+// Resolve an advisory mode, or null when the caller asked for something this route does not
+// implement. Deliberately NOT a silent fallback: the followup-autopilot cron shipped against a
+// 'followup-draft' mode that did not exist here, the old fallback quietly answered with
+// pipeline-triage prose instead, and every scheduled run burned a Gemini call to produce a
+// response the cron could never accept. An unknown mode is now a 400 that names itself.
+function resolveAdvisoryMode(value: unknown): Mode | null {
   const key = typeof value === "string" ? value.trim() : "";
-  return (key in MODES ? key : "pipeline-triage") as Mode;
+  if (!key) return "pipeline-triage";
+  return (key in MODES ? key : null) as Mode | null;
 }
 
 // Readable digest of the 360 context-assembler slices, so the model attends to the
@@ -181,6 +194,7 @@ export async function GET() {
     integration: "gemini",
     agent: "guru",
     modes: Object.keys(MODES),
+    draftModes: [FOLLOWUP_DRAFT_MODE],
     status: getGeminiIntegrationStatus(),
   });
 }
@@ -203,53 +217,80 @@ export async function POST(req: Request) {
     );
   }
 
-  const requestedMode = typeof payload.mode === "string" ? payload.mode.trim() : "pipeline-triage";
-  if (requestedMode !== "followup-draft" && !Object.hasOwn(MODES, requestedMode)) {
-    return NextResponse.json({ status: "invalid-input", error: "unsupported-mode" }, { status: 400 });
+  const requestedMode = typeof payload.mode === "string" ? payload.mode.trim() : "";
+  const isDraftMode = requestedMode === FOLLOWUP_DRAFT_MODE;
+  const advisoryMode = isDraftMode ? null : resolveAdvisoryMode(payload.mode);
+
+  // Unknown modes are refused before any provider call (never silently swapped for an
+  // advisory lens). The body names what this route does implement.
+  if (!isDraftMode && !advisoryMode) {
+    return NextResponse.json(
+      {
+        status: "invalid-input",
+        error: "unsupported-mode",
+        detail: `Unsupported mode '${requestedMode}'.`,
+        modes: Object.keys(MODES),
+        draftModes: [FOLLOWUP_DRAFT_MODE],
+      },
+      { status: 400 },
+    );
   }
-  const draftMode = requestedMode === "followup-draft";
-  const mode = draftMode ? requestedMode : normalizeMode(requestedMode);
+
+  const mode = isDraftMode ? FOLLOWUP_DRAFT_MODE : (advisoryMode as Mode);
   const ref = typeof payload.ref === "string" ? payload.ref.trim() || null : null;
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const context = payload.context ?? {};
   const workspaceId = resolveDefaultWorkspaceId();
   const explicitDirectives = payload.directives ?? (payload.values || payload.knowledge ? { values: payload.values, knowledge: payload.knowledge } : null);
+  const maxOutputTokens =
+    typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192;
 
   const startedAt = new Date().toISOString();
-  const systemInstruction = draftMode
-    ? SYSTEM_INSTRUCTION
-    : buildAdvisorySystemInstruction({
-        type: "sales-mentor",
-        mode,
-        context,
-        directives: explicitDirectives,
-      });
-  const result = await generateGeminiText({
-    systemInstruction,
-    prompt: draftMode ? mentorDraftPrompt(mode, context) : buildPrompt(mode as Mode, context, draft),
-    maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192,
-  });
-  const parsedDraft = draftMode && result.ok ? parseMentorDraft(mode, result.text) : null;
-  if (draftMode && result.ok && !parsedDraft) {
-    result.ok = false;
-    result.reason = "invalid-draft-output";
-  }
+  // The draft mode asks for JSON at the API layer with a capped thinking budget; the advisory
+  // modes stay free-form prose for the chat pane, under the advisory guardrails/directives.
+  const result = await generateGeminiText(
+    isDraftMode
+      ? {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          prompt: buildFollowupDraftPrompt(context),
+          maxOutputTokens,
+          ...DRAFT_GENERATION_BOUNDS,
+        }
+      : {
+          systemInstruction: buildAdvisorySystemInstruction({
+            type: "sales-mentor",
+            mode,
+            context,
+            directives: explicitDirectives,
+          }),
+          prompt: buildPrompt(mode as Mode, context, draft),
+          maxOutputTokens,
+        },
+  );
   const finishedAt = new Date().toISOString();
+
+  // Parse before the telemetry writes so a well-formed HTTP 200 carrying unparseable JSON is
+  // recorded as the failure it is, instead of showing the integration as healthy.
+  const parsedDraft = isDraftMode && result.ok ? parseFollowupDraft(result.text) : null;
+  const draftOk = isDraftMode ? Boolean(parsedDraft) : false;
+  const generationOk = isDraftMode ? draftOk : result.ok;
+  const failureReason =
+    isDraftMode && result.ok && !draftOk ? "invalid-draft-json" : result.reason;
 
   const connection = await upsertIntegrationConnection({
     provider: "guru",
-    status: result.ok ? "connected" : "error",
+    status: generationOk ? "connected" : "error",
     config: {
       ...getGeminiIntegrationStatus(),
       agent: "guru",
-      lastResult: { ok: result.ok, status: result.status, reason: result.reason, mode },
+      lastResult: { ok: generationOk, status: result.status, reason: failureReason, mode },
     },
-    lastSyncedAt: result.ok ? finishedAt : null,
+    lastSyncedAt: generationOk ? finishedAt : null,
   });
   const syncRun = await insertIntegrationSyncRun({
     provider: "guru",
     connectionId: connection.connection?.id || null,
-    status: result.ok ? "success" : "failure",
+    status: generationOk ? "success" : "failure",
     payload: {
       startedAt,
       finishedAt,
@@ -258,8 +299,25 @@ export async function POST(req: Request) {
       model: result.model,
       usageMetadata: result.usageMetadata || null,
     },
-    errorMessage: result.ok ? null : result.reason,
+    errorMessage: generationOk ? null : failureReason,
   });
+
+  if (isDraftMode) {
+    // No project_updates row for drafts: the artifact is the work_orders proposal the cron
+    // creates, and the cron logs its own agent_run. Writing a Daily Brief entry here too would
+    // double-report the same draft.
+    return NextResponse.json(
+      buildDraftResponse({
+        mode,
+        ref,
+        model: result.model,
+        draft: parsedDraft,
+        reason: draftOk ? "ok" : failureReason,
+        persistence: { connection, syncRun, mentorUpdate: null },
+      }),
+      { status: draftHttpStatus(parsedDraft) },
+    );
+  }
 
   let mentorUpdate = null;
 
@@ -287,7 +345,6 @@ export async function POST(req: Request) {
       ref,
       model: result.model,
       text: result.text,
-      ...(parsedDraft || {}),
       reason: result.reason,
       persistence: { connection, syncRun, mentorUpdate },
     },

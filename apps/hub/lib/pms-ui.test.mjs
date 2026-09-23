@@ -413,7 +413,7 @@ test("rotates only the project client id for conflict recovery", () => {
     ...draft,
     title: "운영 OS",
     summary: "정본을 만든다",
-    nextAction: "첫 원장 확인",
+    nextAction: "첫 기록 확인",
     status: "active",
     priority: "high",
     dueAt: "2026-07-31",

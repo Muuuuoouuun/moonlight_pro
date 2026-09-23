@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import ts from "typescript";
 
 import { NAV_TREE } from "./hub-data.js";
 import * as catalog from "./hub-data.js";
@@ -268,15 +271,108 @@ test("sidebar is one level deep and the top bar owns contextual tabs", () => {
   assert.match(topbarSource, /aria-current=\{selected \? 'page' : undefined\}/);
 });
 
-// 사이드바 내비 행은 텍스트 전용이다(§15 2026-09-19) — 아이콘 글리프는 접힌
-// 사이드바에만 남는다. 여기서 검사하는 건 외형 계약이지 깊이가 아니다.
-test("expanded sidebar nav rows carry no icon glyph", () => {
-  const expanded = sidebarSource.slice(
-    sidebarSource.indexOf("const renderAnchor"),
-    sidebarSource.indexOf("if (collapsed)"),
-  );
-  assert.ok(expanded.length > 0, "renderAnchor block must be found");
-  assert.doesNotMatch(expanded, /<Iconed/);
+// 2026-09-19 Futura 패스가 뺐던 아이콘을 2026-09-23 운영자가 펼친 행에도 다시
+// 요청했다(§15) — 펼친 행과 접힌 56px 레일(§15 2026-09-22) 모두 같은
+// <Iconed name={a.icon}>를 그린다. 여기서 검사하는 건 외형 계약이지 깊이가 아니다.
+// 소스 문자열 위치("if (collapsed)" 등)에 기대지 않고, 사이드바의 실제 행 렌더러를
+// 추출해 collapsed=false/true 두 상태로 그려 본다.
+function sidebarAst() {
+  return ts.createSourceFile("hub-sidebar.jsx", sidebarSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+}
+
+function findNodes(root, predicate) {
+  const found = [];
+  const visit = (node) => {
+    if (predicate(node)) found.push(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+}
+
+function compileJsx(code) {
+  return ts.transpileModule(code, {
+    compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+}
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const isIconedElement = (node) =>
+  (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText() === "Iconed";
+
+async function loadSidebarRowRenderer() {
+  const ast = sidebarAst();
+  const [renderAnchor] = findNodes(ast, (node) =>
+    ts.isVariableDeclaration(node) && node.name.getText() === "renderAnchor" && node.initializer && ts.isArrowFunction(node.initializer));
+  assert.ok(renderAnchor, "hub-sidebar.jsx must render nav rows through renderAnchor");
+  const [countBadge] = findNodes(ast, (node) => ts.isFunctionDeclaration(node) && node.name?.text === "CountBadge");
+  assert.ok(countBadge, "hub-sidebar.jsx must declare CountBadge");
+
+  const CountBadge = new Function("React", `${compileJsx(countBadge.getText())}; return CountBadge;`)(React);
+  const { Iconed } = await import("./hub-icons.jsx");
+  const rowSource = compileJsx(`const renderAnchor = ${renderAnchor.initializer.getText()};`);
+
+  // renderAnchor의 클로저 의존성 — 새 식별자가 생기면 ReferenceError로 여기서 드러난다.
+  return ({ collapsed, counts = {} }) => {
+    const scope = {
+      React, Iconed, CountBadge, isSidebarAnchorActive,
+      collapsed, counts, active: "dashboard/daily-brief", view: undefined, go: () => {},
+    };
+    const render = new Function(...Object.keys(scope), `${rowSource}; return renderAnchor;`)(...Object.values(scope));
+    return (anchor, small) => {
+      try {
+        return renderToStaticMarkup(render(anchor, small));
+      } catch (error) {
+        if (error instanceof ReferenceError) {
+          throw new Error(`renderAnchor gained a closure dependency this test does not supply: ${error.message}`);
+        }
+        throw error;
+      }
+    };
+  };
+}
+
+test("expanded sidebar nav rows carry the same icon glyph as the collapsed rail", async () => {
+  const rowRenderer = await loadSidebarRowRenderer();
+  const anchors = [...SIDEBAR_PRIMARY.map((a) => [a, false]), ...SIDEBAR_UTILITIES.map((a) => [a, true])];
+  assert.ok(anchors.length > 0);
+
+  for (const counts of [{}, Object.fromEntries(anchors.map(([a]) => [a.key, 3]))]) {
+    const expanded = rowRenderer({ collapsed: false, counts });
+    const rail = rowRenderer({ collapsed: true, counts });
+    for (const [anchor, small] of anchors) {
+      const label = escapeRegExp(anchor.label);
+      const row = expanded(anchor, small);
+      assert.match(row, /<svg/, `${anchor.key}: expanded row must draw its icon (${anchor.icon}) beside the label`);
+      assert.doesNotMatch(row, /fx-nav-child/, `${anchor.key}: no nested child rows`);
+      assert.match(row, new RegExp(`class="hub-sidebar-label"[^>]*>${label}<`), `${anchor.key}: visible label`);
+
+      // The rail draws the same glyph without the text label and names the row via aria-label.
+      const railRow = rail(anchor, small);
+      assert.match(railRow, /<svg/, `${anchor.key}: collapsed rail must draw its icon (${anchor.icon})`);
+      assert.match(railRow, new RegExp(`aria-label="${label}`), `${anchor.key}: rail accessible name`);
+      assert.doesNotMatch(railRow, /hub-sidebar-label/, `${anchor.key}: rail hides the text label`);
+    }
+  }
+});
+
+test("sidebar nav regions draw rows only through the row renderer", () => {
+  const ast = sidebarAst();
+  const regionOf = (element) => {
+    const className = element.openingElement.attributes.properties
+      .find((attr) => ts.isJsxAttribute(attr) && attr.name.getText() === "className")?.initializer?.getText() || "";
+    if (/\bhub-sidebar-nav\b/.test(className)) return "nav";
+    if (/\bhub-sidebar-utilities\b/.test(className)) return "utilities";
+    return null;
+  };
+  const regions = findNodes(ast, (node) => ts.isJsxElement(node) && regionOf(node));
+  assert.deepEqual(regions.map(regionOf).sort(), ["nav", "utilities"]);
+  for (const region of regions) {
+    const calls = findNodes(region, (node) => ts.isCallExpression(node) && node.expression.getText() === "renderAnchor");
+    assert.ok(calls.length > 0, `${regionOf(region)} rows must come from renderAnchor`);
+    assert.deepEqual(findNodes(region, isIconedElement).length, 0, `${regionOf(region)} must not inline icon glyphs`);
+  }
 });
 
 // Futura 라우트는 페이지 헤더가 pill 탭을 직접 그리므로 탑바는 같은 줄을 또 그리지 않는다.
@@ -306,8 +402,8 @@ test("only the closed mobile sidebar is removed from focus and the accessibility
   assert.doesNotMatch(sidebarSource, /const sidebarA11yProps = \{[\s\S]*?inert:/);
   assert.equal(
     sidebarSource.match(/<aside\s+\{\.\.\.sidebarA11yProps\}/g)?.length,
-    2,
-    "both expanded and collapsed sidebar variants must share the mobile-only inert contract",
+    1,
+    "one stable sidebar keeps focus and shares the mobile-only inert contract across widths",
   );
   assert.doesNotMatch(appSource, /aria-hidden=\{!navOpen\}/);
 });
@@ -561,4 +657,11 @@ test('memos has one my-work owner and is reachable in the navigation catalog', (
   assert.equal(resolveSidebarPath("discovery", "classin"), "dashboard/discovery?scope=classin");
   assert.equal(resolveSidebarPath("discovery", "personal"), "dashboard/discovery?scope=personal");
   assert.ok(navTreePaths().includes("dashboard/discovery"));
+});
+
+test('content performance is a visible content child and command palette destination', () => {
+  assert.equal(ownerAnchorKey('dashboard/content/performance'), 'content');
+  assert.ok(sidebarChildren('content', 'all').some(child => child.path === 'dashboard/content/performance'));
+  assert.ok(navTreePaths().includes('dashboard/content/performance'));
+  assert.match(appSource, /'dashboard\/content\/performance':/);
 });

@@ -91,7 +91,7 @@ import {
   filterTodosByWorkspace,
 } from "../workspace-map";
 
-// 모듈 스코프 stale-while-revalidate — 탭 복귀마다 11~14콜 원장 read를 기다리며 트리가
+// 모듈 스코프 stale-while-revalidate — 탭 복귀마다 11~14콜 기록 read를 기다리며 트리가
 // 비던 것을 제거(4차 재감사 속도 M). 캐시 즉시 서빙 + 마운트마다 배경 재검증.
 const PROJECTS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let projectsLedgerCache = null; // { at, ledger, todos, syncState }
@@ -157,6 +157,52 @@ export function Projects({ workspace }) {
   const [drag, setDrag] = React.useState(null);
   const [expanded, setExpanded] = React.useState(() => new Set());
   const [showTerminal, setShowTerminal] = React.useState(false);
+  // 완료·보관 헤더: 클릭 토글 + 세로 드래그 토글 병행. 드래그는 오른쪽 grip에서만
+  // 시작해(touch-action: none은 grip에만) 행 본체 위의 세로 스와이프는 스크롤로 남는다.
+  // 한 제스처당 한 번만 토글되도록 triggered 플래그로 잠그고, 임계값 미만 드래그는
+  // click으로 처리한다. 드래그 오프셋은 state가 아니라 헤더 DOM에 직접 써서
+  // pointermove마다 Projects 전체가 다시 렌더되지 않게 한다.
+  const terminalDragRef = React.useRef({ startY: 0, active: false, triggered: false, header: null });
+  const setTerminalHeaderOffset = (header, offset) => {
+    if (!header) return;
+    header.style.transform = offset ? `translateY(${offset}px)` : '';
+    if (offset) header.dataset.dragging = 'true';
+    else delete header.dataset.dragging;
+  };
+  const handleTerminalDragStart = (e) => {
+    terminalDragRef.current = {
+      startY: e.clientY, active: true, triggered: false,
+      header: e.currentTarget.closest('[data-terminal-toggle]'),
+    };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const handleTerminalDragMove = (e) => {
+    const dragState = terminalDragRef.current;
+    if (!dragState.active) return;
+    const dy = e.clientY - dragState.startY;
+    const offset = showTerminal ? Math.min(0, dy) : Math.max(0, dy);
+    setTerminalHeaderOffset(dragState.header, offset);
+    if (!dragState.triggered && Math.abs(offset) > 28) {
+      dragState.triggered = true;
+      setShowTerminal(v => !v);
+    }
+  };
+  const handleTerminalDragEnd = (e) => {
+    const dragState = terminalDragRef.current;
+    dragState.active = false;
+    setTerminalHeaderOffset(dragState.header, 0);
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    // 같은 제스처가 보내는 click만 삼키고, click이 오지 않은 경우(터치 이동)에도
+    // 다음 키보드·보조기기 활성화가 먹히지 않게 플래그를 곧바로 푼다.
+    if (dragState.triggered) setTimeout(() => { dragState.triggered = false; }, 0);
+  };
+  const handleTerminalToggleClick = () => {
+    if (terminalDragRef.current.triggered) {
+      terminalDragRef.current.triggered = false;
+      return;
+    }
+    setShowTerminal(v => !v);
+  };
   // Row-checkbox completion (my-work의 undo 계약과 동일): 체크 → 짧은 취소선
   // 플래시 → 리스트에서 낙관적으로 사라짐 → 3.5초 되돌리기 창이 닫힌 뒤에야
   // 실제 PATCH가 나간다. 실수 탭이 진짜 복구 가능해야 한다.
@@ -260,7 +306,7 @@ export function Projects({ workspace }) {
     ? (brands.find(b => b.key !== 'all')?.key || brands[0]?.key || 'all')
     : 'all';
   // 파생 목록 memo — 생성 드로어 타이핑(projectDraft만 변경)마다 트리·보드가 전부
-  // 재계산되던 것을 차단한다(system-eval P-7; deps는 원장·스코프 변화에만 반응).
+  // 재계산되던 것을 차단한다(system-eval P-7; deps는 기록·스코프 변화에만 반응).
   const brandProjects = React.useMemo(
     () => (brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand)),
     [allProjects, brand],
@@ -341,14 +387,14 @@ export function Projects({ workspace }) {
     return ['live', 'partial'].includes(syncState)
       ? `${projectCountLabel} projects · ${taskReadPartial ? `${openTodoCount}+ open todos` : `${openTodoCount} open todos`}`
       : syncState === 'loading'
-        ? '프로젝트 원장 확인 중'
+        ? '프로젝트 기록 확인 중'
         : syncState === 'error'
-          ? '프로젝트 원장 읽기 실패'
-          : 'preview · 실제 원장 미연결';
+          ? '프로젝트 기록 읽기 실패'
+          : 'preview · 실제 기록 미연결';
   })();
 
   // selectedProjectId를 deps에 넣으면 상세 열기/닫기(URL param 변경)마다 loadLedger가
-  // 재생성되고 마운트 이펙트가 전체 원장을 재조회한다 — 목록 탐색이 전부 네트워크 왕복이
+  // 재생성되고 마운트 이펙트가 전체 기록을 재조회한다 — 목록 탐색이 전부 네트워크 왕복이
   // 된다. 최신값은 ref로 읽고, 재조회는 아래의 "로드 창 밖 선택" 이펙트만 담당한다.
   const taskProjectSelection = isCanonicalUuid(taskFilters.projectId) ? taskFilters.projectId : null;
   const selectedProjectIdRef = React.useRef(selectedProjectId || taskProjectSelection);
@@ -363,9 +409,9 @@ export function Projects({ workspace }) {
     ledgerReadRef.current = { requestId, controller };
     const isCurrentRequest = () => ledgerReadRef.current.requestId === requestId;
 
-    // 최초/범위 전환은 명시적인 loading 상태를 쓰되, 저장 뒤 재검증은 현재 원장을
+    // 최초/범위 전환은 명시적인 loading 상태를 쓰되, 저장 뒤 재검증은 현재 기록을
     // 유지한다. 성공 여부가 정해지기 전까지 행 전체가 사라지는 깜빡임을 막는다.
-    setSyncState(current => (['live', 'partial'].includes(current) ? current : 'loading')); // 캐시/현재 원장 서빙 중엔 조용히 재검증
+    setSyncState(current => (['live', 'partial'].includes(current) ? current : 'loading')); // 캐시/현재 기록 서빙 중엔 조용히 재검증
     setReadError(null);
     try {
       const exactProjectId = typeof projectId === 'string' ? projectId.trim() : '';
@@ -378,7 +424,7 @@ export function Projects({ workspace }) {
 
       if (!response.ok || !data || data.status === 'error' || data.source === 'error') {
         setSyncState('error');
-        setReadError(data?.error || data?.message || `프로젝트 원장 응답 실패 (${response.status})`);
+        setReadError(data?.error || data?.message || `프로젝트 기록 응답 실패 (${response.status})`);
         return { ok: false, projects: [], todos: [] };
       }
 
@@ -466,7 +512,7 @@ export function Projects({ workspace }) {
     }
   }, []);
 
-  // ?project= 딥링크가 "원장 로드 후 1회" 계약(§8.1)을 지킬 수 있도록 최초 로드 완료를
+  // ?project= 딥링크가 "기록 로드 후 1회" 계약(§8.1)을 지킬 수 있도록 최초 로드 완료를
   // 기록한다 — syncState 초기값이 'preview'라서 상태만으로는 로드 전/후를 구분 못 한다.
   const initialLoadDoneRef = React.useRef(false);
   React.useEffect(() => {
@@ -476,7 +522,7 @@ export function Projects({ workspace }) {
 
   // 상세 열기(?project= 설정)에만 exact read — per-project updates/notes/decisions 보강
   // (selection read-back 계약)을 유지한다. 닫기(null)는 재조회하지 않는다: 이전에는 열기와
-  // 닫기 모두 전체 원장을 다시 읽어 목록 탐색이 왕복 2회짜리였다. 기존 원장을 유지한 채
+  // 닫기 모두 전체 기록을 다시 읽어 목록 탐색이 왕복 2회짜리였다. 기존 기록을 유지한 채
   // 백그라운드로 도는 재검증이라 로딩 깜빡임도 없다.
   React.useEffect(() => {
     if ((!selectedProjectId && !taskProjectSelection) || !initialLoadDoneRef.current) return;
@@ -484,7 +530,7 @@ export function Projects({ workspace }) {
   }, [selectedProjectId, taskProjectSelection, loadLedger]);
 
   // 프로젝트 상세의 "연관 콘텐츠" 섹션용. 상세를 실제로 열기 전에는 큰 콘텐츠
-  // 원장을 요청하지 않고, 성공한 첫 조회만 재사용한다.
+  // 기록을 요청하지 않고, 성공한 첫 조회만 재사용한다.
   React.useEffect(() => {
     if (!openDetail || contentLoadedRef.current) return undefined;
     const controller = new AbortController();
@@ -498,7 +544,7 @@ export function Projects({ workspace }) {
         }
         contentLoadedRef.current = true;
       } catch {
-        // 콘텐츠 원장 읽기 실패는 무시 — 상세 패널의 보조 섹션이다.
+        // 콘텐츠 기록 읽기 실패는 무시 — 상세 패널의 보조 섹션이다.
       }
     })();
     return () => { controller.abort(); };
@@ -932,7 +978,7 @@ export function Projects({ workspace }) {
         ? buildContentPipelineTaskSeeds(durableProjectId)
         : [];
       if (draft.contentPipeline) {
-        // 원장은 tasks를 updated_at.desc로 정렬한다(operating-ledger). 체크리스트가
+        // 기록은 tasks를 updated_at.desc로 정렬한다(operating-ledger). 체크리스트가
         // 기획→초안→검토→업로드로 위에서 아래로 읽히게 하려면 기획을 '마지막'에 생성해
         // 가장 최신이 되게 한다 → 역순 시드.
         for (const stage of [...pipelineSeeds].reverse()) {
@@ -972,7 +1018,7 @@ export function Projects({ workspace }) {
         draft.contentPipeline
         && (!projectReloaded || !contentPipelineReloadContains(reloadResult, pipelineTaskIds))
       ) {
-        setOrderResult({ tone: 'err', label: '콘텐츠 4단계를 새 원장에서 확인하지 못했습니다' });
+        setOrderResult({ tone: 'err', label: '콘텐츠 4단계를 새 기록에서 확인하지 못했습니다' });
         return {
           ok: false,
           status: 'pipeline-error',
@@ -982,7 +1028,7 @@ export function Projects({ workspace }) {
         };
       }
       if (!projectReloaded) {
-        setOrderResult({ tone: 'err', label: '저장 후 원장에서 프로젝트를 확인하지 못했습니다' });
+        setOrderResult({ tone: 'err', label: '저장 후 기록에서 프로젝트를 확인하지 못했습니다' });
         return {
           ok: false,
           status: 'reload-error',
@@ -1063,7 +1109,7 @@ export function Projects({ workspace }) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.status !== 'saved') {
         if (data.status === 'conflict' && data.project) {
-          const message = '최신 원장 기준을 불러왔습니다. 입력을 유지했으니 다시 저장하면 새 기준으로 재시도합니다.';
+          const message = '최신 기록 기준을 불러왔습니다. 입력을 유지했으니 다시 저장하면 새 기준으로 재시도합니다.';
           const rebasedEdit = rebaseProjectEditState(projectEditSource, projectDraft, data.project);
           setProjectEditSource(rebasedEdit.source);
           setProjectDraft(rebasedEdit.draft);
@@ -1157,7 +1203,7 @@ export function Projects({ workspace }) {
           return { ok: true, status: 'saved' };
         }
         if (data.status === 'preview') {
-          // 원장 행의 로컬 오버레이는 없다 — 저장 안 된 수정을 반영된 것처럼 그리지 않는다.
+          // 기록 행의 로컬 오버레이는 없다 — 저장 안 된 수정을 반영된 것처럼 그리지 않는다.
           return { ok: true, status: 'preview' };
         }
         setOrderResult({ tone: 'err', label: data.error || `수정 실패 ${response.status}` });
@@ -1247,7 +1293,7 @@ export function Projects({ workspace }) {
           setOrderResult({ tone: 'err', label: data.status === 'preview' ? '저장소 연결이 필요합니다.' : '할 일을 저장하지 못했습니다.' });
           return { ok: false, status: data.status || 'error' };
         }
-        // PATCH 응답의 task로 로컬 병합 — 영수증이 전체 원장 read를 기다리지 않는다.
+        // PATCH 응답의 task로 로컬 병합 — 영수증이 전체 기록 read를 기다리지 않는다.
         const saved = data.task || null;
         projectsLedgerCache = null;
         setTodos(ts => ts.map(t => t.id === patch.id ? mergeSavedTask(t, saved || {}, allProjects) : t));
@@ -1356,7 +1402,7 @@ export function Projects({ workspace }) {
 
   const applyTaskChanges = React.useCallback(async (rows, patch) => {
     if (!canWriteTasks || taskStatusPendingRef.current.size > 0) {
-      return { saved: [], failed: rows.map(task => ({ id: task.id, message: '원장을 확인하거나 진행 중인 저장이 끝난 뒤 다시 시도하세요.' })) };
+      return { saved: [], failed: rows.map(task => ({ id: task.id, message: '기록을 확인하거나 진행 중인 저장이 끝난 뒤 다시 시도하세요.' })) };
     }
     projectsLedgerCache = null;
     ledgerReadRef.current.controller?.abort();
@@ -1389,7 +1435,7 @@ export function Projects({ workspace }) {
     return result.saved.length === 1;
   }, [applyTaskChanges, todos]);
 
-  const toggleTodo = React.useCallback(async (id) => {
+  const toggleTodo = React.useCallback(async (id, event) => {
     const todo = todos.find(item => item.id === id);
     if (!todo) return;
     const willBeDone = todo.status !== 'done';
@@ -1397,6 +1443,16 @@ export function Projects({ workspace }) {
       const updated = await updateTaskStatus(id, todo.status === 'done' ? 'todo' : 'done');
       if (!updated) return;
       if (willBeDone) {
+        let sx = event?.clientX;
+        let sy = event?.clientY;
+        if ((sx == null || sy == null) && event?.target?.getBoundingClientRect) {
+          const rect = event.target.getBoundingClientRect();
+          sx = rect.left + rect.width / 2;
+          sy = rect.top + rect.height / 2;
+        }
+        if (sx != null && sy != null && sx > 0 && sy > 0) {
+          triggerSparkleAt(sx, sy);
+        }
         const pTasks = todos.filter(t => t.project === todo.project);
         if (pTasks.length > 0 && pTasks.every(t => t.id === id || t.status === 'done' || t.done)) {
           triggerCelebration({ mode: 'confetti' });
@@ -1451,7 +1507,7 @@ export function Projects({ workspace }) {
   React.useEffect(() => {
     const onKey = (event) => {
       if (!shouldOpenGlobalProjectCreate(event, { drawerOpen })) return;
-      // 첫 원장 로드 전에는 areas가 비어 "업무 분야가 없습니다" 오탐 에러가 뜬다 —
+      // 첫 기록 로드 전에는 areas가 비어 "업무 분야가 없습니다" 오탐 에러가 뜬다 —
       // ?new=project 딥링크 이펙트와 같은 로드 완료 가드를 공유한다.
       if (!initialLoadDoneRef.current || syncState === 'loading') return;
       // N은 현재 뷰의 primary 생성을 따른다 — To-dos 뷰의 primary는 할 일 생성이라,
@@ -1884,6 +1940,8 @@ export function Projects({ workspace }) {
               placeholder="검색"
               value={projectQuery}
               onChange={setProjectQuery}
+              clearable
+              kbd="/"
               style={{ flex: '0 1 180px', minWidth: 100 }}
             />
           </span>}
@@ -2032,7 +2090,10 @@ export function Projects({ workspace }) {
               onToggleTodo={toggleTodo}
               pendingTodoIds={pendingTaskIds}
               showTerminal={showTerminal}
-              onToggleTerminal={() => setShowTerminal(value => !value)}
+              onToggleTerminal={handleTerminalToggleClick}
+              onTerminalDragStart={handleTerminalDragStart}
+              onTerminalDragMove={handleTerminalDragMove}
+              onTerminalDragEnd={handleTerminalDragEnd}
               onReopenProject={(project) => setProjectStatus(project, 'active')}
               onReload={() => loadLedger({ initial: true })}
               onSwitchView={setView}
@@ -2126,13 +2187,13 @@ export function Projects({ workspace }) {
                 )}
                 {/* 로딩 중 본문이 비어 있던 자리 — 행 높이(68px)로 레이아웃을 예고한다(§11). preview/error엔 안 쓴다. */}
                 {syncState === 'loading' && projects.length === 0 && (
-                  <div style={{ padding: '12px 20px' }}><Skeleton lines={4} height={56} gap={12} label="프로젝트 원장 확인 중" /></div>
+                  <div style={{ padding: '12px 20px' }}><Skeleton lines={4} height={56} gap={12} label="프로젝트 기록 확인 중" /></div>
                 )}
                 {syncState === 'error' && (
                   <Card>
                     <EmptyState
                       icon="projects"
-                      title="프로젝트 원장을 읽지 못했습니다"
+                      title="프로젝트 기록을 읽지 못했습니다"
                       description={readError || "연결 상태를 확인한 뒤 다시 시도하세요. 실패한 읽기는 live로 표시하지 않습니다."}
                       action={<Button variant="outline" size="sm" onClick={() => loadLedger({ initial: true })}>다시 시도</Button>}
                     />
@@ -2142,7 +2203,7 @@ export function Projects({ workspace }) {
                   <Card>
                     <EmptyState
                       icon="projects"
-                      title="프로젝트 일부 원장을 읽지 못했습니다"
+                      title="프로젝트 일부 기록을 읽지 못했습니다"
                       description={`${[...(ledger.failedSources || []), ...(ledger.partialSources || [])].join(', ')} 기록 일부를 확인할 수 없습니다. 읽힌 프로젝트와 할 일 데이터는 유지합니다.`}
                       action={<Button variant="outline" size="sm" onClick={() => loadLedger({ initial: true })}>다시 시도</Button>}
                     />
@@ -2329,7 +2390,7 @@ export function Projects({ workspace }) {
                                     <div key={t.id} className="hub-project-subtask" data-done={t.done ? 'true' : 'false'} style={{ borderBottom: ti < pTodos.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
                                       <Checkbox
                                         checked={t.done}
-                                        onChange={() => toggleTodo(t.id)}
+                                        onChange={(_next, e) => toggleTodo(t.id, e)}
                                         disabled={pendingTaskIds.has(t.id)}
                                         size={16}
                                         label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
@@ -2477,8 +2538,9 @@ export function Projects({ workspace }) {
                     <button
                       type="button"
                       className="hub-row"
+                      data-terminal-toggle=""
                       aria-expanded={showTerminal}
-                      onClick={() => setShowTerminal(v => !v)}
+                      onClick={handleTerminalToggleClick}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                         padding: '6px 8px', marginBottom: showTerminal ? 10 : 0, borderRadius: 'var(--r-sm)',
@@ -2488,6 +2550,17 @@ export function Projects({ workspace }) {
                       <Iconed name="chevronD" size={12} style={{ transform: showTerminal ? 'none' : 'rotate(-90deg)', color: 'var(--fg-faint)' }} />
                       <span style={{ fontSize: 12.5, fontWeight: 600 }}>완료·보관</span>
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{terminalCount}</span>
+                      <span
+                        data-terminal-grip=""
+                        aria-hidden="true"
+                        onPointerDown={handleTerminalDragStart}
+                        onPointerMove={handleTerminalDragMove}
+                        onPointerUp={handleTerminalDragEnd}
+                        onPointerCancel={handleTerminalDragEnd}
+                        style={{ marginLeft: 'auto', color: 'var(--fg-faint)' }}
+                      >
+                        <Iconed name="drag" size={12} />
+                      </span>
                     </button>
                     {showTerminal && (
                       <Card pad={false} className="hub-table-card">

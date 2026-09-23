@@ -1,13 +1,28 @@
+import { zonedDayKey } from "./kst-day.js";
 import { shiftDateKey } from "./rhythm-calendar.js";
 
+export const TASK_TIME_ZONE = "Asia/Seoul";
+// 오늘 Top 3 — 하루에 고를 수 있는 할 일 수. Engine pms-command.ts MAX_FOCUS_PER_DAY와 같은 값
+// (2026-09-20 세 축·Action KPI 기획 §6.2). 서버가 상한을 강제하고, 클라이언트는 4번째 토글을
+// 비활성으로 그린다.
+export const MAX_FOCUS_PER_DAY = 3;
+
+// 상한 카피 한 곳 — 내 작업과 첫 화면이 같은 409(focus-limit)에 같은 문장으로 답한다. 다음
+// 행동("하나를 빼고 다시 고르세요")까지 말하는 것이 DESIGN.md §11 error 상태 계약이다.
+export function focusLimitMessage(limit = MAX_FOCUS_PER_DAY) {
+  return `오늘 3개가 이미 찼습니다 (${limit}/${limit}) — 하나를 빼고 다시 고르세요.`;
+}
+
 const LANE_RANK = {
-  missed: 0,
-  today: 1,
-  waiting: 2,
-  inbox: 3,
+  focus: 0,
+  missed: 1,
+  today: 2,
+  waiting: 3,
+  inbox: 4,
 };
 
 const LANE_LABEL = {
+  focus: "오늘 3개",
   missed: "놓침",
   today: "오늘",
   waiting: "대기",
@@ -22,28 +37,42 @@ const PRIORITY_RANK = {
   low: 2,
 };
 
-function dateKey(value, timeZone) {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
+// timestamp | Date | 'YYYY-MM-DD' → 'YYYY-MM-DD' in the given zone ('' when unreadable).
+// 구현은 kst-day.js 하나 — 그 모듈이 "세 번째 사본을 만들지 않는다"고 선언한 규칙을 지킨다.
+// 여기는 호출처 시그니처(기본 시간대 인자)를 지키는 재수출만 남는다.
+export function dateKeyInZone(value, timeZone = TASK_TIME_ZONE) {
+  return zonedDayKey(value, timeZone);
+}
 
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${byType.year}-${byType.month}-${byType.day}`;
+// 고른 날짜의 이력 — ledger row(meta.focus_dates)와 todo 모델(focusDates) 양쪽을 읽는다.
+export function focusDatesOf(task) {
+  const raw = Array.isArray(task?.focusDates)
+    ? task.focusDates
+    : Array.isArray(task?.meta?.focus_dates)
+      ? task.meta.focus_dates
+      : [];
+  return raw.filter((value) => typeof value === "string" && DATE_KEY.test(value));
+}
+
+export function isFocusedOn(task, dateKey) {
+  return Boolean(dateKey) && focusDatesOf(task).includes(dateKey);
+}
+
+function isDoneTask(task) {
+  return task?.done === true || String(task?.status || "").toLowerCase() === "done";
 }
 
 function laneForTask(task, todayKey, timeZone) {
-  const status = String(task?.status || "").toLowerCase();
-  if (task?.done === true || status === "done") return null;
+  if (isDoneTask(task)) return null;
 
-  const dueKey = dateKey(task?.dueAt, timeZone);
+  // 사람이 오늘로 고른 할 일이 시스템 레인(놓침·오늘·대기)보다 앞선다 — 기한이 지났어도
+  // 오늘 하기로 한 일이면 "오늘 3개"에서 보인다(§6.2).
+  if (isFocusedOn(task, todayKey)) return "focus";
+
+  const status = String(task?.status || "").toLowerCase();
+  const dueKey = dateKeyInZone(task?.dueAt, timeZone);
   if (dueKey && dueKey < todayKey) return "missed";
   if (dueKey === todayKey) return "today";
   if (status === "doing") return "today";
@@ -57,8 +86,23 @@ function descendingTime(value) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-export function computeTaskStreak(todos = [], { now = new Date(), timeZone = "Asia/Seoul" } = {}) {
-  const todayKey = dateKey(now, timeZone);
+// 오늘 3개 요약 — 선택 수(분모)는 상태와 무관하게 오늘을 고른 할 일, 완료 수(분자)는 그중
+// 오늘(KST) 끝낸 할 일. 저녁 리뷰 팝업과 주간 카드가 같은 정의를 쓴다.
+export function summarizeFocusDay(todos = [], { now = new Date(), timeZone = TASK_TIME_ZONE } = {}) {
+  const dateKey = dateKeyInZone(now, timeZone);
+  const picked = (Array.isArray(todos) ? todos : []).filter((task) => isFocusedOn(task, dateKey));
+  const done = picked.filter((task) => isDoneTask(task) && dateKeyInZone(task.completedAt, timeZone) === dateKey);
+  return {
+    date: dateKey,
+    picked: picked.length,
+    done: done.length,
+    limit: MAX_FOCUS_PER_DAY,
+    remaining: Math.max(0, MAX_FOCUS_PER_DAY - picked.length),
+  };
+}
+
+export function computeTaskStreak(todos = [], { now = new Date(), timeZone = TASK_TIME_ZONE } = {}) {
+  const todayKey = dateKeyInZone(now, timeZone);
   if (!todayKey) {
     return { streak: 0, todayDoneCount: 0, isBurning: false, recentDays: [0, 0, 0, 0, 0, 0, 0] };
   }
@@ -67,11 +111,10 @@ export function computeTaskStreak(todos = [], { now = new Date(), timeZone = "As
   let todayDoneCount = 0;
 
   (Array.isArray(todos) ? todos : []).forEach((task) => {
-    const isDone = task?.done === true || String(task?.status || "").toLowerCase() === "done";
-    if (!isDone) return;
+    if (!isDoneTask(task)) return;
 
     const completionTimestamp = task?.completedAt || task?.updatedAt || task?.createdAt;
-    const taskDateKey = dateKey(completionTimestamp, timeZone);
+    const taskDateKey = dateKeyInZone(completionTimestamp, timeZone);
     if (taskDateKey) {
       doneDateKeys.add(taskDateKey);
       if (taskDateKey === todayKey) {
@@ -111,9 +154,9 @@ export function computeTaskStreak(todos = [], { now = new Date(), timeZone = "As
 
 export function buildTaskToday(
   todos = [],
-  { now = new Date(), timeZone = "Asia/Seoul", limit = 5 } = {},
+  { now = new Date(), timeZone = TASK_TIME_ZONE, limit = 5 } = {},
 ) {
-  const todayKey = dateKey(now, timeZone);
+  const todayKey = dateKeyInZone(now, timeZone);
   const candidates = (Array.isArray(todos) ? todos : [])
     .map((task) => {
       const lane = laneForTask(task, todayKey, timeZone);
@@ -122,6 +165,7 @@ export function buildTaskToday(
         ...task,
         lane,
         laneLabel: LANE_LABEL[lane],
+        focusToday: lane === "focus",
       };
     })
     .filter(Boolean)
@@ -132,7 +176,7 @@ export function buildTaskToday(
       const priorityDelta = (PRIORITY_RANK[left.priority] ?? 1) - (PRIORITY_RANK[right.priority] ?? 1);
       if (priorityDelta) return priorityDelta;
 
-      const dueDelta = dateKey(left.dueAt, timeZone).localeCompare(dateKey(right.dueAt, timeZone));
+      const dueDelta = dateKeyInZone(left.dueAt, timeZone).localeCompare(dateKeyInZone(right.dueAt, timeZone));
       if (dueDelta) return dueDelta;
 
       const updatedDelta = descendingTime(right.updatedAt) - descendingTime(left.updatedAt);
@@ -144,6 +188,7 @@ export function buildTaskToday(
   const counts = {
     total: candidates.length,
     shown: Math.min(candidates.length, Math.max(0, limit)),
+    focus: candidates.filter((task) => task.lane === "focus").length,
     missed: candidates.filter((task) => task.lane === "missed").length,
     today: candidates.filter((task) => task.lane === "today").length,
     waiting: candidates.filter((task) => task.lane === "waiting").length,
@@ -151,12 +196,18 @@ export function buildTaskToday(
   };
 
   const streak = computeTaskStreak(todos, { now, timeZone });
+  const focus = summarizeFocusDay(todos, { now, timeZone });
 
   return {
     items: candidates.slice(0, counts.shown),
     counts,
     hiddenCount: counts.total - counts.shown,
     streak,
+    // 오늘 고른 항목 전부(표시 limit과 무관) — "오늘 이 3개만" 카드가 이 배열을 1차
+    // 소스로 쓴다(§6.2). 비어 있으면 카드가 레인 상위 3개를 dashed 권장으로 보여준다.
+    // 완료된 선택은 여기서 빠지므로 분모·분자는 `focus` 요약(summarizeFocusDay)을 쓴다.
+    focusItems: candidates.filter((task) => task.lane === "focus"),
+    focus,
   };
 }
 

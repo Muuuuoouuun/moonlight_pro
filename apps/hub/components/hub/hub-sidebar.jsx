@@ -98,6 +98,13 @@ function CountBadge({ n }) {
 export const Sidebar = React.forwardRef(function Sidebar({ active, view, search = '', routeScope, onScopeChange, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false, mobileOpen = false, onMobileClose, mobileCloseButtonRef, inquiryNotifications }, ref) {
   const counts = useAnchorCounts();
   const sidebarRef = React.useRef(null);
+  const scopeFocusPending = React.useRef(false);
+  React.useLayoutEffect(() => {
+    if (!collapsed && scopeFocusPending.current) {
+      scopeFocusPending.current = false;
+      sidebarRef.current?.querySelector('.hub-sidebar-scope [aria-pressed="true"]')?.focus();
+    }
+  }, [collapsed]);
   const setSidebarRef = React.useCallback((node) => {
     sidebarRef.current = node;
     if (typeof ref === 'function') ref(node);
@@ -158,98 +165,58 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
     if (target) onNavigate(target);
   }, [active, view, search, onNavigate, setScope]);
 
-  const anchorProps = (a) => ({
-    type: 'button',
-    onClick: () => go(a.key),
-    'aria-current': isSidebarAnchorActive(a.key, active, view) ? 'page' : undefined,
-  });
-
   // Sidebar stays one level deep. Contextual destinations are rendered as
   // horizontal top tabs by TopBar, so the operator never has to expand a tree.
-  // 2026-09-19 Futura 패스는 *외형만* 바꿨다 — 아이콘·색점을 빼고 현재 항목을
-  // pill로 띄웠을 뿐, 깊이와 이동 동작은 그대로다(운영자: "기능은 유지").
+  // 2026-09-19 Futura 패스는 사이드바 행에서 아이콘·색점을 뺐으나(§15), 2026-09-23
+  // 운영자가 펼친 상태에서도 아이콘을 라벨과 같이 보여달라고 재확정 — 깊이와
+  // 이동 동작은 그대로다. 접힌 56px 레일은 아이콘이 이름을 전담(라벨 숨김)하고
+  // count는 점 하나로, 펼친 행은 아이콘+라벨+건수 뱃지를 함께 보여준다.
   const renderAnchor = (a, small) => {
+    const count = counts[a.key];
+    // 펼친 행 — 아이콘 + 라벨 + 건수 뱃지 (§15 2026-09-23).
+    let content = (
+      <>
+        <Iconed name={a.icon} size={small ? 15 : 16} />
+        <span className="hub-sidebar-label" style={{ flex: 1 }}>{a.label}</span>
+        <CountBadge n={count} />
+      </>
+    );
+    let railLabel;
+    if (collapsed) {
+      // 레일 — 이름·건수는 tooltip과 접근 가능한 이름으로, "건수 있음"은 점 하나로 알린다.
+      railLabel = `${a.label}${count ? ` · ${count}건` : ''}`;
+      content = (
+        <>
+          <Iconed name={a.icon} size={18} />
+          {count > 0 && <span className="hub-sidebar-count-dot" aria-hidden="true" />}
+        </>
+      );
+    }
     return (
       <button
         key={a.key}
         type="button"
-        className={small ? 'hub-nav-item hub-nav-item--sm' : 'hub-nav-item'}
+        className={`hub-nav-item${small ? ' hub-nav-item--sm' : ''}${collapsed ? ' hub-nav-item--icon' : ''}`}
+        title={railLabel}
+        aria-label={railLabel}
         aria-current={isSidebarAnchorActive(a.key, active, view) ? 'page' : undefined}
         onClick={() => go(a.key)}
       >
-        <span style={{ flex: 1 }}>{a.label}</span>
-        <CountBadge n={counts[a.key]} />
+        {content}
       </button>
     );
   };
 
-  if (collapsed) {
-    return (
-      <aside
-        {...sidebarA11yProps}
-        ref={setSidebarRef}
-        onKeyDown={handleMobileKeyDown}
-        className={`${className || ''} hub-sidebar-root--collapsed`}
-        aria-label="주요 메뉴"
-        style={{
-          width: 56, flexShrink: 0,
-          background: 'var(--surface)',
-          borderRight: '1px solid var(--line-soft)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center',
-          padding: '14px 0', gap: 4,
-        }}
-      >
-        <button onClick={onToggleCollapse} title="Expand" aria-label="사이드바 펼치기" style={{
-          width: 36, height: 36, borderRadius: 'var(--r-sm)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--moon-200)', marginBottom: 8,
-        }}>
-          <div style={{
-            width: 22, height: 22, borderRadius: 999,
-            background: 'radial-gradient(circle at 35% 30%, var(--moon-100), var(--moon-400) 60%, var(--moon-700))',
-            boxShadow: '0 0 12px color-mix(in oklch, var(--moon-300) 30%, transparent)',
-          }} />
-        </button>
-        {SIDEBAR_PRIMARY.map(a => {
-          const act = isSidebarAnchorActive(a.key, active, view);
-          return (
-            <button key={a.key} {...anchorProps(a)} title={a.label} aria-label={a.label} style={{
-              width: 36, height: 36, borderRadius: 'var(--r-sm)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: act ? 'var(--fg)' : 'var(--fg-faint)',
-              background: act ? 'var(--surface-3)' : 'transparent',
-            }}>
-              <Iconed name={a.icon} size={16} />
-            </button>
-          );
-        })}
-        <div style={{ flex: 1 }} />
-        {SIDEBAR_UTILITIES.map(a => {
-          const act = isSidebarAnchorActive(a.key, active, view);
-          return (
-            <button key={a.key} {...anchorProps(a)} title={a.label} aria-label={a.label} style={{
-              width: 36, height: 36, borderRadius: 'var(--r-sm)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: act ? 'var(--fg)' : 'var(--fg-faint)',
-              background: act ? 'var(--surface-3)' : 'transparent',
-            }}>
-              <Iconed name={a.icon} size={16} />
-            </button>
-          );
-        })}
-      </aside>
-    );
-  }
-
   return (
-    <aside {...sidebarA11yProps} ref={setSidebarRef} onKeyDown={handleMobileKeyDown} className={`hub-sidebar-futura${className ? ` ${className}` : ''}`} aria-label="주요 메뉴" style={{
-      width: 232, flexShrink: 0,
+    <aside {...sidebarA11yProps} ref={setSidebarRef} onKeyDown={handleMobileKeyDown} className={`hub-sidebar-futura${className ? ` ${className}` : ''}${collapsed ? ' hub-sidebar-root--collapsed' : ''}`} data-collapsed={collapsed} aria-label="주요 메뉴" style={{
+      // 면 색은 .hub-sidebar-futura(hub-futura.css)가 소유한다 — 인라인 background는 그 규칙을 이긴다.
+      width: collapsed ? 56 : 232, flexShrink: 0,
       borderRight: '1px solid var(--line-soft)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
     }}>
-      <div style={{ padding: '14px 14px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+      <div className="hub-sidebar-header" style={{ padding: '14px 14px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="hub-sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
           <div style={{
             width: 24, height: 24, borderRadius: 'var(--r-sm)',
             background: 'var(--fg)', color: 'var(--bg)',
@@ -269,53 +236,58 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
             tooltip="내비게이션 닫기"
             onClick={onMobileClose}
           />
-          <IconButton className="hub-desktop-sidebar-collapse" icon="chevronL" onClick={onToggleCollapse} size={24} iconSize={13} tooltip="Collapse" />
+          <IconButton className="hub-desktop-sidebar-collapse" icon={collapsed ? "panelExpand" : "panelCollapse"} onClick={onToggleCollapse} size={32} iconSize={18} tooltip={collapsed ? "사이드바 펼치기" : "사이드바 최소화"} aria-expanded={!collapsed} />
         </div>
       </div>
 
-      <div style={{ padding: '4px 12px 8px' }}>
-        <button onClick={openPalette} className="fx-shell-card" style={{
+      <div className="hub-sidebar-search" style={{ padding: '4px 12px 8px' }}>
+        <button onClick={openPalette} className="fx-shell-card" title="검색 · ⌘K" aria-label="검색 · ⌘K" style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 8,
           height: 34, padding: '0 12px',
           border: 0,
           color: 'var(--fg-faint)', fontSize: 12,
         }}>
           <Iconed name="search" size={13} />
-          <span style={{ flex: 1, textAlign: 'left' }}>Search · jump to</span>
-          <Kbd>⌘</Kbd><Kbd>K</Kbd>
+          <span className="hub-sidebar-label" style={{ flex: 1, textAlign: 'left' }}>검색 · 바로 이동</span>
+          <span className="hub-sidebar-label" style={{ display: 'flex', gap: 4 }}><Kbd>⌘</Kbd><Kbd>K</Kbd></span>
         </button>
       </div>
 
       {/* Scope replaces the old workspace trees: 소속은 여기서 한 번만 고른다. */}
-      <div style={{ padding: '0 12px 10px' }}>
-        <SegmentedControl
+      <div className="hub-sidebar-scope" style={{ padding: '0 12px 10px' }}>
+        {collapsed ? <IconButton
+          icon={scope === 'classin' ? 'building' : scope === 'personal' ? 'user' : 'globe'}
+          size={36} iconSize={18}
+          tooltip={`작업 범위: ${SIDEBAR_SCOPES.find(s => s.key === scope)?.label} · 변경`}
+          onClick={() => { scopeFocusPending.current = true; onToggleCollapse(); }}
+        /> : <SegmentedControl
           label="작업 범위"
           fill
           options={SIDEBAR_SCOPES}
           value={scope}
           onChange={changeScope}
           style={{ width: '100%' }}
-        />
+        />}
       </div>
 
-      <nav className="scroll-y" style={{ flex: 1, padding: '2px 8px 10px' }}>
+      <nav className="scroll-y hub-sidebar-nav" aria-label="업무 메뉴" style={{ flex: 1, minHeight: 0, padding: '2px 8px 10px' }}>
         {SIDEBAR_PRIMARY.map(a => renderAnchor(a, false))}
       </nav>
 
-      <div style={{ padding: '6px 8px', borderTop: '1px solid var(--line-soft)' }}>
+      <div className="hub-sidebar-utilities" style={{ padding: '6px 8px', borderTop: '1px solid var(--line-soft)' }}>
         {SIDEBAR_UTILITIES.map(a => renderAnchor(a, true))}
       </div>
 
-      <div className="fx-shell-card" style={{
+      <div className="hub-sidebar-footer fx-shell-card" style={{
         margin: '8px 12px 12px', padding: '9px 11px',
         display: 'flex', alignItems: 'center', gap: 9,
       }}>
-        <Avatar name="문준혁" size={26} />
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <span className="hub-sidebar-label"><Avatar name="문준혁" size={26} /></span>
+        <div className="hub-sidebar-label" style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>문준혁</div>
           <div style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Founder · Pro</div>
         </div>
-        <InquiryBell size={24} state={inquiryNotifications} onNavigate={onNavigate} />
+        <InquiryBell className="hub-sidebar-inquiry" size={collapsed ? 36 : 24} state={inquiryNotifications} onNavigate={onNavigate} />
       </div>
     </aside>
   );

@@ -101,7 +101,7 @@ export function resolveRhythmCheckResult({ responseOk = false, httpStatus = 0, d
       kind: "saved",
       durable: true,
       shouldRefetch: true,
-      message: suppliedMessage || "체크인을 저장했습니다. 원장을 다시 확인합니다.",
+      message: suppliedMessage || "체크인을 저장했습니다. 기록을 다시 확인합니다.",
     };
   }
 
@@ -143,14 +143,73 @@ export function slugifyRitualName(name) {
   return base || "ritual";
 }
 
+// 루틴 카테고리·주간 목표의 정본. /api/routine(쓰기 검증)과 work-ledger(읽기 정규화)가
+// 이 모듈을 import한다 — 세 곳에 따로 선언하면 서버는 받는데 읽기에서 'general'로
+// 떨어지는 식의 드리프트가 생긴다(2026-09-23 병합 검증).
+export const RITUAL_CATEGORIES = new Set(["general", "work", "content", "health", "learning", "personal"]);
+
+export const RITUAL_CATEGORY_LABELS = {
+  work: "업무",
+  content: "콘텐츠",
+  health: "건강",
+  learning: "학습",
+  personal: "개인",
+  general: "일반",
+};
+
+// 1~7 정수만 유효하다. 범위 밖 값을 조용히 잘라 넣지 않는다 — 빈 입력(0)이 '주 1회'로,
+// 100이 '주 7회'로 바뀌어 저장되던 문제. 유효하지 않으면 null(미지정)을 돌려 호출부가
+// 체크 타입 기본값을 쓰거나(생성) 400으로 거부하게(PATCH) 한다.
+export function normalizeTargetPerWeek(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= 7 ? n : null;
+}
+
+export function defaultTargetPerWeek(checkType) {
+  return cleanString(checkType).toLowerCase() === "weekly" ? 1 : 7;
+}
+
+// 루틴 구성 — 카테고리별 개수·이번 주 완료/목표 합계. RhythmVisualizer의 '루틴 구성' 패널이
+// 쓴다. 하드코딩 업로드·성과 탭을 대체하는 실데이터(카테고리·주간 목표는 §루틴 필드 확장).
+export function summarizeRitualsByCategory(rituals = []) {
+  const order = ["work", "content", "health", "learning", "personal", "general"];
+  const byCategory = new Map();
+
+  (Array.isArray(rituals) ? rituals : []).forEach((r) => {
+    const category = RITUAL_CATEGORIES.has(r?.category) ? r.category : "general";
+    const target = normalizeTargetPerWeek(r?.targetPerWeek) || defaultTargetPerWeek(r?.checkType);
+    const completed = Array.isArray(r?.weeks) ? r.weeks.filter((v) => v === 1).length : 0;
+    if (!byCategory.has(category)) {
+      byCategory.set(category, {
+        category,
+        label: RITUAL_CATEGORY_LABELS[category],
+        count: 0,
+        completedThisWeek: 0,
+        targetThisWeek: 0,
+      });
+    }
+    const entry = byCategory.get(category);
+    entry.count += 1;
+    entry.completedThisWeek += completed;
+    entry.targetThisWeek += target;
+  });
+
+  return order.filter((key) => byCategory.has(key)).map((key) => byCategory.get(key));
+}
+
 export function buildRhythmDefinePayload(draft) {
   const name = cleanString(draft?.name);
   const idSuffix = cleanString(draft?.id).replace(/-/g, "").slice(0, 8) || "seed";
+  const checkType = cleanString(draft?.checkType).toLowerCase() || "morning";
+  const categoryRaw = cleanString(draft?.category).toLowerCase();
   return {
     ritualKey: `${slugifyRitualName(name)}-${idSuffix}`,
     name,
-    checkType: cleanString(draft?.checkType).toLowerCase() || "morning",
+    checkType,
     projectId: cleanString(draft?.projectId) || null,
+    category: RITUAL_CATEGORIES.has(categoryRaw) ? categoryRaw : "general",
+    targetPerWeek: normalizeTargetPerWeek(draft?.targetPerWeek) || defaultTargetPerWeek(checkType),
   };
 }
 
@@ -174,8 +233,39 @@ export function buildRhythmEditPayload(original, edited) {
   const prevProjectId = cleanString(original?.projectId) || null;
   if (nextProjectId !== prevProjectId) payload.projectId = nextProjectId;
 
+  const category = cleanString(edited?.category).toLowerCase();
+  if (category && category !== cleanString(original?.category).toLowerCase()) {
+    payload.category = category;
+  }
+
+  const targetPerWeek = normalizeTargetPerWeek(edited?.targetPerWeek);
+  if (targetPerWeek && targetPerWeek !== normalizeTargetPerWeek(original?.targetPerWeek)) {
+    payload.targetPerWeek = targetPerWeek;
+  }
+
   return payload;
 }
+
+// buildRhythmEditPayload는 무효한 주간 목표를 payload에서 **뺀다**. 그러면 PATCH가 나머지
+// 필드만 저장하고 200 saved로 답해서, 화면은 "저장됨"인데 주간 목표는 이전 값 그대로인
+// 무음 경로가 된다 — 라우트의 invalid-target-per-week 400은 키가 실리지 않아 도달하지 못한다.
+// 호출부가 PATCH 전에 이 함수로 막아 §11 error 계약(무엇이 왜 막혔는지 + 입력 보존 + 재시도)을
+// 지킨다. payload 빌더의 시그니처·반환은 그대로 두어 기존 호출부를 건드리지 않는다.
+//
+// 운영자가 값을 **바꾸려 했을 때만** 막는다. 저장된 값 자체가 범위 밖인 낡은 행에서
+// 이름만 고치는 편집까지 막으면, 고칠 방법이 없는 막다른 길이 된다.
+export function invalidRhythmEditFields(original, edited) {
+  const invalid = [];
+  const raw = edited?.targetPerWeek;
+  const provided = raw !== undefined && raw !== null && raw !== "";
+  const changed = String(raw ?? "") !== String(original?.targetPerWeek ?? "");
+  if (provided && changed && normalizeTargetPerWeek(raw) === null) invalid.push("targetPerWeek");
+  return invalid;
+}
+
+export const RHYTHM_INVALID_FIELD_MESSAGES = {
+  targetPerWeek: "주간 목표는 1~7 사이의 정수여야 합니다.",
+};
 
 // 삭제 = 같은 (project_id, ritual_key) 그룹의 모든 routine_checks 행 제거 — 정의 행과
 // 그 루틴의 모든 체크인 이력이 함께 사라진다. 식별 필드만 있으면 되므로 buildRhythmEditPayload
@@ -280,18 +370,23 @@ export function computeWeeklyRhythmMatrix({
     const doneTasksCount = (Array.isArray(todos) ? todos : []).filter((t) => {
       const isDone = t?.done === true || String(t?.status || "").toLowerCase() === "done";
       if (!isDone) return false;
-      const tKey = toZonedDateKey(t.completedAt || t.updatedAt || t.createdAt, timeZone);
-      return tKey === dKey;
+      // 완료 시각만 믿는다. updatedAt으로 대체하면 완료 뒤에 조금만 수정해도(체크리스트·
+      // focus_dates 등) 그 할 일이 수정한 날로 옮겨 집계된다.
+      if (!t.completedAt) return false;
+      return toZonedDateKey(t.completedAt, timeZone) === dKey;
     }).length;
 
     const ritualsDoneCount = (Array.isArray(rituals) ? rituals : []).filter((r) => {
       return Array.isArray(r.weeks) && r.weeks[index] === 1;
     }).length;
 
-    const focusHours = Math.min(6.5, Number((1.2 + doneTasksCount * 0.6 + ritualsDoneCount * 0.4).toFixed(1)));
-    const outcomes = Math.min(100, Math.round(25 + doneTasksCount * 14 + ritualsDoneCount * 10));
+    // 활동이 0이면 0이다 — 예전의 1.2h·25pt 절편은 아무 기록도 없는 날을 '일상 업무
+    // 진행'처럼 측정값으로 보이게 했다(목업·실데이터 혼합 금지, 2026-09-23).
+    const focusHours = Math.min(6.5, Number((doneTasksCount * 0.6 + ritualsDoneCount * 0.4).toFixed(1)));
+    const outcomes = Math.min(100, Math.round(doneTasksCount * 14 + ritualsDoneCount * 10));
 
-    let label = "일상 업무 진행";
+    let label = "기록 없음";
+    if (doneTasksCount + ritualsDoneCount > 0) label = "일상 업무 진행";
     if (outcomes >= 80) label = "핵심 딥워크 · 최대 성과";
     else if (outcomes >= 60) label = "안정적 실행 및 루틴 완수";
     else if (focusHours >= 3) label = "집중 작업 지속";
@@ -307,58 +402,4 @@ export function computeWeeklyRhythmMatrix({
       label,
     };
   });
-}
-
-export function computeContentUploadRhythm(contents = [], { now = new Date(), timeZone = "Asia/Seoul" } = {}) {
-  const todayKey = toZonedDateKey(now, timeZone);
-  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
-
-  const published = (Array.isArray(contents) ? contents : []).filter(
-    (c) => String(c?.status || "").toLowerCase() === "published" || c?.state === "published",
-  );
-
-  let threadsCount = 0;
-  let igCount = 0;
-  let shortsCount = 0;
-
-  const countByDate = new Map();
-
-  published.forEach((item) => {
-    const channel = String(item?.channel || item?.platform || item?.type || "").toLowerCase();
-    if (channel.includes("thread")) threadsCount += 1;
-    else if (channel.includes("insta")) igCount += 1;
-    else if (channel.includes("short") || channel.includes("yt") || channel.includes("youtube")) shortsCount += 1;
-    else threadsCount += 1;
-
-    const dKey = toZonedDateKey(item?.publishedAt || item?.updatedAt || item?.createdAt, timeZone);
-    if (dKey) {
-      countByDate.set(dKey, (countByDate.get(dKey) || 0) + 1);
-    }
-  });
-
-  const weeklyDone = published.length;
-  const weeklyGoal = 7;
-
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const dKey = shiftDateKey(todayKey, index - 6);
-    const dateObj = new Date(`${dKey}T12:00:00.000Z`);
-    const dayLabel = dayNames[dateObj.getUTCDay()] || "";
-    const total = countByDate.get(dKey) || 0;
-    return {
-      day: dayLabel,
-      dateKey: dKey,
-      total,
-    };
-  });
-
-  return {
-    weeklyGoal,
-    weeklyDone: Math.max(weeklyDone, 5),
-    channels: [
-      { name: "Threads", count: Math.max(threadsCount, 3), goal: 5, tone: "moon" },
-      { name: "Instagram", count: Math.max(igCount, 1), goal: 2, tone: "neutral" },
-      { name: "YT Shorts", count: Math.max(shortsCount, 1), goal: 1, tone: "neutral" },
-    ],
-    days,
-  };
 }

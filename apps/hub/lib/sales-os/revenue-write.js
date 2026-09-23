@@ -7,6 +7,8 @@
 // close label) are intentionally left untouched — best-effort, never clobbered.
 
 import { eqFilter, fetchSupabaseRows } from "../server-read.js";
+import { dealStageLabel } from "../deal-stages.js";
+import { recordActivity } from "../repositories/crm-activities.js";
 import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./customer-delete.js";
 import { SUBJECT_KEY_SET } from "./lead-labels.js";
 import { normalizeGenreLabels } from "./customer-labels.js";
@@ -335,6 +337,34 @@ function persistFailure(res) {
     : { status: "failed", reason: res.reason, detail: res.detail };
 }
 
+// 딜 단계 이동 한 줄 — crm_activities(kind='deal', meta.from/to). 주간 리포트의 "이동 딜"이 이 행을
+// 센다(2026-09-20 §6.3). 기존 stage_detail이 없던 레거시 딜의 첫 분류는 이동이 아니므로 남기지
+// 않고, 같은 값 재저장도 남기지 않는다. 기록 실패는 딜 저장 결과를 바꾸지 않는다.
+export function dealStageMove({ table, existingMeta, metaPatch }) {
+  if (table !== "deals" || !existingMeta || typeof metaPatch?.stage_detail !== "string") return null;
+  const from = typeof existingMeta.stage_detail === "string" ? existingMeta.stage_detail : null;
+  const to = metaPatch.stage_detail;
+  if (!from || from === to) return null;
+  return { from, to, body: `단계: ${dealStageLabel(from)} → ${dealStageLabel(to)}` };
+}
+
+async function recordDealStageMove({ table, id, workspaceId, existingMeta, metaPatch }) {
+  const move = dealStageMove({ table, existingMeta, metaPatch });
+  if (!move) return null;
+  try {
+    return await recordActivity({
+      workspaceId,
+      dealId: id,
+      entityType: "deal",
+      kind: "deal",
+      body: move.body,
+      meta: { from: move.from, to: move.to },
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function persistRevenueRecord({ table, op, id, payload, build }) {
   const workspaceId = resolveDefaultWorkspaceId();
 
@@ -391,8 +421,9 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
 
   // Merge meta against the live row so we never drop sibling keys (brand, lane, campaign…).
   let mergedMeta = null;
+  let existingMeta = null;
   if (hasMeta) {
-    const existingMeta = await readExistingMeta(table, id, workspaceId);
+    existingMeta = await readExistingMeta(table, id, workspaceId);
     if (existingMeta === null) {
       // 병합 기준을 못 읽었으면 저장을 중단한다 — 빈 meta 위에 덮어쓰면 무언 데이터 파괴.
       return { status: "failed", reason: "meta-read-failed", detail: "existing meta unreadable; save aborted to avoid wiping sibling keys" };
@@ -408,7 +439,7 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
     patch,
     { returnRepresentation: true, select: "*" },
   );
-  return res.persisted
-    ? { status: "saved", id, record: res.record }
-    : persistFailure(res);
+  if (!res.persisted) return persistFailure(res);
+  await recordDealStageMove({ table, id, workspaceId, existingMeta, metaPatch });
+  return { status: "saved", id, record: res.record };
 }

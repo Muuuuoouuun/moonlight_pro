@@ -234,7 +234,7 @@ test("aggregate: cutoff·range 필터는 dealTimestamp 기준으로 동작한다
   assert.equal(ranged.otherRows[0]?.expected, 50);
 });
 
-test("heatmapBodyState: 원장 로딩·읽기 실패를 '딜 없음'으로 위장하지 않는다 (§5.3 truth)", () => {
+test("heatmapBodyState: 기록 로딩·읽기 실패를 '딜 없음'으로 위장하지 않는다 (§5.3 truth)", () => {
   const none = [];
   assert.equal(period.heatmapBodyState({ syncState: "loading", ledgerDeals: none, matchedDeals: 0 }), "loading");
   assert.equal(period.heatmapBodyState({ syncState: "error", ledgerDeals: none, matchedDeals: 0 }), "error");

@@ -65,7 +65,7 @@ test("synchronous transport failures remain retryable and invalid AI titles neve
 });
 
 test("action extraction strips classification and ignores headings, prose and duplicate actions", () => {
-  const parsed = parseExtractedActions("1. 📌 [1줄 핵심 요약]: 고객 후속\n2. 📋 [추출된 다음 행동 (Action Items)]:\n- 🎯 [분류: Task] 견적 보내기 (내일)\n- 🎯 [분류: Task] 견적 보내기 (내일)\n- [추천 원장] Tasks\n3. 💡 [Moonlight 추천 연결]:\n- 🎯 [분류: Idea] 후속 콘텐츠 정리");
+  const parsed = parseExtractedActions("1. 📌 [1줄 핵심 요약]: 고객 후속\n2. 📋 [추출된 다음 행동 (Action Items)]:\n- 🎯 [분류: Task] 견적 보내기 (내일)\n- 🎯 [분류: Task] 견적 보내기 (내일)\n- [추천 기록] Tasks\n3. 💡 [Moonlight 추천 연결]:\n- 🎯 [분류: Idea] 후속 콘텐츠 정리");
   assert.equal(parsed.summary, "고객 후속");
   assert.deepEqual(parsed.actions.map(action => action.title), ["견적 보내기 (내일)", "후속 콘텐츠 정리"]);
   assert.equal(parseExtractedActions(null).actions.length, 0);
@@ -170,6 +170,7 @@ test("parseContactOutcomeExtraction parses Korean formatted customer contact out
 [분석 결과]
 - [채널]: 카카오톡
 - [고객 반응]: 긍정
+- [회신 여부]: 예
 - [1줄 요약]: 이번 주 금요일까지 표준 견적서 송부 요청, 가격 할인 문의
 - [다음 액션]: 할인 정책 반영 견적서 발송
 - [다음 일정]: 2026-09-25
@@ -178,6 +179,7 @@ test("parseContactOutcomeExtraction parses Korean formatted customer contact out
   const result = parseContactOutcomeExtraction(sample);
   assert.equal(result.kind, "kakao");
   assert.equal(result.reaction, "positive");
+  assert.equal(result.replied, true);
   assert.equal(result.summary, "이번 주 금요일까지 표준 견적서 송부 요청, 가격 할인 문의");
   assert.equal(result.nextAction, "할인 정책 반영 견적서 발송");
   assert.equal(result.nextAt, "2026-09-25");
@@ -195,6 +197,8 @@ next action: 없음
   const resDormant = parseContactOutcomeExtraction(sampleDormant);
   assert.equal(resDormant.kind, "call");
   assert.equal(resDormant.reaction, "rejected");
+  // 회신 여부를 말하지 않으면 모른다(null) — 반응만으로 회신을 추정하지 않는다.
+  assert.equal(resDormant.replied, null);
   assert.equal(resDormant.summary, "당분간 예산 동결로 도입 계획 취소됨");
   assert.equal(resDormant.nextAction, "");
   assert.equal(resDormant.dormant, true);
@@ -218,6 +222,7 @@ next action: 없음
   assert.deepEqual(parseContactOutcomeExtraction(null), {
     kind: null,
     reaction: null,
+    replied: null,
     summary: "",
     nextAction: "",
     nextAt: "",
@@ -226,6 +231,7 @@ next action: 없음
   assert.deepEqual(parseContactOutcomeExtraction(""), {
     kind: null,
     reaction: null,
+    replied: null,
     summary: "",
     nextAction: "",
     nextAt: "",

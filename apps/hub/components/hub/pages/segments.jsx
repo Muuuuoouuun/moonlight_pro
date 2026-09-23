@@ -16,7 +16,7 @@ import { useRevenueLedger } from "./revenue";
 import { clearExpandedSegments, sortSegmentsByPriority, toggleExpandedSegment } from "./segments-state.mjs";
 
 // 로컬 fetch 복제 제거(7차 속도) — Revenue 표면들이 데운 모듈 SWR 캐시를 그대로 재사용해
-// 탭 진입마다 7콜 원장을 다시 받지 않는다(no-store·재시도·error 분류도 훅이 소유).
+// 탭 진입마다 7콜 기록을 다시 받지 않는다(no-store·재시도·error 분류도 훅이 소유).
 function useLeadsLedger() {
   const { ledger, syncState } = useRevenueLedger();
   return {
@@ -132,7 +132,7 @@ export function Segments({ workspace, onNavigate }) {
           value={dimension}
           onChange={(key) => { setDimension(key); setExpanded(clearExpandedSegments()); }}
         />
-        <Input ref={searchRef} className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input ref={searchRef} className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
       </div>
 
       {segments.length === 0 && (
@@ -143,7 +143,7 @@ export function Segments({ workspace, onNavigate }) {
             description={source === 'supabase'
               ? '리드가 없거나 검색 결과가 비어 있습니다.'
               : source === 'error'
-                ? '리드 원장을 읽지 못했습니다 — 지금 화면은 비어 보여도 실제 세그먼트가 있을 수 있습니다. 새로고침으로 재시도하세요.'
+                ? '리드 기록을 읽지 못했습니다 — 지금 화면은 비어 보여도 실제 세그먼트가 있을 수 있습니다. 새로고침으로 재시도하세요.'
                 : 'Supabase 연결 후 리드가 쌓이면 유입경로·지역·규모·스코어별로 자동 그룹핑됩니다.'}
             action={source === 'supabase' ? (
               // No intake surface in this branch — send the operator to the classin Leads list.

@@ -1,6 +1,7 @@
 import { deliveryDraft, validateDelivery, completionIssue, dayKey } from "../../../packages/project-delivery/index.ts";
 
-import { normalizePmsCommand } from "./pms-command.ts";
+import { MAX_FOCUS_PER_DAY, normalizePmsCommand, zonedDateKey } from "./pms-command.ts";
+import type { TaskFocusToggle } from "./pms-command.ts";
 
 type PersistenceResult = {
   persisted: boolean;
@@ -125,6 +126,48 @@ function sameCanonicalCreatePayload(
 function filterValue(filters: Array<[string, string]> | undefined, key: string) {
   const value = filters?.find(([filterKey]) => filterKey === key)?.[1];
   return value?.startsWith("eq.") ? value.slice(3) : null;
+}
+
+// 오늘 Top 3 — meta.focus_dates(고른 날짜의 이력)에 하루를 넣거나 뺀다. 넣을 때만 같은 날짜를
+// 고른 다른 할 일 수를 세어 MAX_FOCUS_PER_DAY를 넘기지 않는다. 배열 자체는 클라이언트가
+// 보내지 않으므로 지난 날의 선택은 절대 지워지지 않는다(2026-09-20 §6.2: 소급 변동 방지).
+async function applyFocusToggle(
+  toggle: TaskFocusToggle,
+  input: {
+    taskId: string;
+    workspaceFilters: Array<[string, string]>;
+    meta: Record<string, unknown>;
+    now?: string;
+    fetchRows: Dependencies["fetchRows"];
+  },
+): Promise<{ ok: true; focusDates: string[] } | { ok: false; error: Record<string, unknown> }> {
+  const date = toggle.date || zonedDateKey(input.now ? new Date(input.now) : new Date());
+  if (!date) return { ok: false, error: { status: "error", error: "focus-date-unresolved" } };
+  const current = Array.isArray(input.meta.focus_dates)
+    ? (input.meta.focus_dates as unknown[]).filter((value): value is string => typeof value === "string")
+    : [];
+
+  if (!toggle.on) return { ok: true, focusDates: current.filter((day) => day !== date) };
+  if (current.includes(date)) return { ok: true, focusDates: current };
+  // 상한 조회는 반드시 워크스페이스로 좁힌다 — 필터 없이 세면 다른 워크스페이스의 선택까지
+  // 세어 버린다. 워크스페이스를 모르면 쓰지 않고 닫는다(fail closed).
+  if (!input.workspaceFilters.length) return { ok: false, error: { status: "error", error: "missing-workspace" } };
+
+  // PostgREST jsonb containment: meta->focus_dates @> '["2026-09-21"]'.
+  const others = await input.fetchRows("tasks", {
+    select: "id",
+    filters: [...input.workspaceFilters, ["meta->focus_dates", `cs.${JSON.stringify([date])}`]],
+    limit: MAX_FOCUS_PER_DAY + 1,
+  });
+  if (others === null) return { ok: false, error: { status: "error", error: "focus-count-read-failed" } };
+  const otherCount = others.filter((row) => String(row.id) !== input.taskId).length;
+  if (otherCount >= MAX_FOCUS_PER_DAY) {
+    return {
+      ok: false,
+      error: { status: "conflict", error: "focus-limit", retryable: false, limit: MAX_FOCUS_PER_DAY, date },
+    };
+  }
+  return { ok: true, focusDates: [...current, date].sort() };
 }
 
 async function validateRelationship(
@@ -319,7 +362,7 @@ export async function executePmsCommand(
         if (!expected) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
       }
     }
-    if (command.table === "tasks" && command.patch.meta) {
+    if (command.table === "tasks" && (command.patch.meta || command.focus)) {
       const options = {
         filters: command.filters.filter(([key]) => key === "id" || key === "workspace_id"),
         limit: 1,
@@ -335,7 +378,19 @@ export async function executePmsCommand(
       if (!rows[0]) return { status: "error", error: "not-found" };
       const meta = rows[0].meta ?? {};
       if (typeof meta !== "object" || Array.isArray(meta)) return { status: "error", error: "invalid-task-metadata" };
-      command.patch.meta = { ...meta, ...command.patch.meta as Record<string, unknown> };
+      let metaPatch = (command.patch.meta as Record<string, unknown> | undefined) ?? {};
+      if (command.focus) {
+        const focus = await applyFocusToggle(command.focus, {
+          taskId: String(rows[0].id ?? filterValue(command.filters, "id") ?? ""),
+          workspaceFilters: command.filters.filter(([key]) => key === "workspace_id"),
+          meta: meta as Record<string, unknown>,
+          now: context.now,
+          fetchRows: dependencies.fetchRows,
+        });
+        if (!focus.ok) return { ...focus.error, action: command.action };
+        metaPatch = { ...metaPatch, focus_dates: focus.focusDates };
+      }
+      command.patch.meta = { ...meta, ...metaPatch };
     }
     const persistence = await dependencies.update(command.table, command.filters, command.patch);
     if (!persistence.persisted && persistence.reason !== "no-matching-row") {

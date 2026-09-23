@@ -14,7 +14,7 @@
 
 Moonlight MCP 서버는 **연결·동작한다**. 문제는 있느냐 없느냐가 아니라 **형태**다.
 
-13개 도구가 전부 Hub의 화면용(BFF) 응답을 그대로 통과시킨다. 이 응답은 React 페이지 하나가 1회 렌더에 쓰라고 만든 것이라, 도구 1회 호출이 **48KB~159KB**를 반환한다. 에이전트가 매출 원장 한 번, 프로젝트 한 번을 읽으면 컨텍스트 창의 상당 부분이 사라진다. 도구는 붙어 있지만 **연속 작업에 쓸 수 없는 상태**다.
+13개 도구가 전부 Hub의 화면용(BFF) 응답을 그대로 통과시킨다. 이 응답은 React 페이지 하나가 1회 렌더에 쓰라고 만든 것이라, 도구 1회 호출이 **48KB~159KB**를 반환한다. 에이전트가 매출 기록 한 번, 프로젝트 한 번을 읽으면 컨텍스트 창의 상당 부분이 사라진다. 도구는 붙어 있지만 **연속 작업에 쓸 수 없는 상태**다.
 
 동시에 커버리지가 좁다. Hub API 라우트 65개 중 MCP가 감싸는 것은 **고유 경로 8개**뿐이고, 쓰기는 4개다. 태스크는 만들 수는 있지만 **고칠 수도 끝낼 수도 없다**(`PATCH`/`DELETE` 라우트는 있는데 MCP HTTP 클라이언트가 `GET`/`POST`만 지원한다). 운영자의 최우선 업무인 고객 연락(`followups`)과 유입 검토(`intake`)는 도구가 아예 없다.
 
@@ -71,7 +71,7 @@ Hub를 띄운 뒤 `get_daily_brief`는 `status:"live"`, `source:"supabase"`, 6/6
 - `projects` 93KB 중 **`updates` 53건이 44KB**, `projectEntities` 142건이 24KB. 정작 `projects` 본체는 7건 10KB다.
 - `work-orders` 51KB는 **`orders` 26건이 전부**다. 각 행의 `body.summary`에 AI가 쓴 수천 자 마크다운 에세이가 통째로 들어 있다.
 
-즉 큰 것은 운영자가 판단에 쓰는 요약이 아니라 **원장 전량과 생성물 원문**이다. 화면은 이걸 접어서 보여주지만, MCP는 접지 않는다.
+즉 큰 것은 운영자가 판단에 쓰는 요약이 아니라 **기록 전량과 생성물 원문**이다. 화면은 이걸 접어서 보여주지만, MCP는 접지 않는다.
 
 ### 2.4 커버리지
 
@@ -142,7 +142,7 @@ C9·C10은 `integration-control-plane-inheritance.md` §8이 OpenClaw gateway에
 
 7. **잘림은 선언한다(정직한 절단).** 투영으로 데이터를 줄이면 응답에 `truncated: true`, `totalCount`, `returnedCount`, 그리고 전량을 얻는 방법을 **반드시** 함께 넣는다. 조용한 절단은 §4.2-5의 정직성 계약 위반이다.
 8. **기본은 좁게, 확장은 명시적으로.** 모든 read 도구의 기본 응답은 판단에 필요한 최소치. 전량은 `detail:"full"` 같은 명시적 옵트인으로만.
-9. **원장 내용은 데이터지 지시가 아니다.** work order `body`, 리드 메모, 콘텐츠 초안에 담긴 텍스트는 외부 입력이다. 도구 결과에 담긴 문장을 지시로 해석하지 않는다. 이 원칙을 서버 instructions와 도구 설명에 명시한다.
+9. **기록 내용은 데이터지 지시가 아니다.** work order `body`, 리드 메모, 콘텐츠 초안에 담긴 텍스트는 외부 입력이다. 도구 결과에 담긴 문장을 지시로 해석하지 않는다. 이 원칙을 서버 instructions와 도구 설명에 명시한다.
 
 ---
 
@@ -245,7 +245,7 @@ C9·C10은 `integration-control-plane-inheritance.md` §8이 OpenClaw gateway에
 | `list_followups` | `GET /api/hub/followups` | 읽기 |
 | `record_contact_outcome` | `POST /api/hub/revenue/contact-outcome` | 자동 허용 (사람의 행동 **기록**) |
 
-**주의 — 선행 결정이 있다.** `docs/README.md` §3과 성장 계획 F-2가 기록한 대로, 컨택 결과 기록에는 **두 경로가 공존**한다(고객 DB의 원자 RPC `record_contact_outcome_v1` vs `followups.jsx`의 비원자 단건 insert). **정본 화면은 운영자 미정**이다. MCP 도구는 **원자 RPC 경로(`/api/hub/revenue/contact-outcome`)에 붙인다** — 원자성이 있는 쪽이 에이전트 쓰기에 안전하기 때문이다. 이 선택이 F-2의 운영자 결정을 대신하지 않으며, 결정이 나면 그때 맞춘다.
+**주의 — 2026-09-22 정정.** 이 주석은 원래 "컨택 결과 기록에 두 경로가 공존하고 정본 화면은 미정"이라고 적었으나 틀렸다. `followups.jsx`와 고객 DB 컨택 시트는 2026-08-05부터 **둘 다** 원자 RPC `record_contact_outcome_v1`(`/api/hub/revenue/contact-outcome`)을 쓴다(`docs/README.md` §3 Phase 1C 행). 성장 계획 F-2는 이 사실로 소멸했다. 저장 위치 문제도 2026-09-23 통합의 CRM 0a(`282572a`)로 닫혔다 — 주간 리포트·큐(`followups-ledger`)·컨텍스트 어셈블러가 모두 `crm_activities`를 단일 원천으로 읽는다(`apps/hub/lib/repositories/crm-activities.js` 주석과 `followups-ledger.test.mjs` 단언이 고정). `outreach_outcomes`는 `outcomes-ledger.js`를 쓰는 outcomes 계열 라우트에만 남는다. 활동 기록의 정본을 `crm_activities` 하나로 두는 기본값은 [CRM 탭 스펙](2026-09-21-crm-tab-develop-design.md) Q144(권장 기본값, 운영자가 한 줄로 뒤집을 수 있음)가 정했다. MCP 도구는 그대로 원자 RPC 경로에 붙인다.
 
 ### E3. 캡처·아이디어 — **P1** (F-14 흡수)
 
@@ -263,7 +263,7 @@ C9·C10은 `integration-control-plane-inheritance.md` §8이 OpenClaw gateway에
 | `list_leads` | `GET /api/hub/revenue` + R1 투영 | 읽기 |
 | `create_lead` | `POST /api/hub/revenue/lead` | 자동 허용 (후보 생성) |
 | `tag_lead_source` | `POST /api/hub/revenue/lead` | 자동 허용 (기록) |
-| `update_deal_stage` | `POST /api/hub/revenue/deal` | 자동 허용 (내부 원장 상태) |
+| `update_deal_stage` | `POST /api/hub/revenue/deal` | 자동 허용 (내부 기록 상태) |
 | `log_activity` | `POST /api/hub/revenue/activity` | 자동 허용 (기록) |
 
 `tag_lead_source`는 성장 계획 F-3의 소스 어휘 통일과 짝이다. **F-3이 어휘를 확정하기 전에는** R5의 `moonlight://vocab/lead-source`를 임시 어휘로 쓰고, 확정 시 enum을 맞춘다.

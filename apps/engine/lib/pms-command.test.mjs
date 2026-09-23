@@ -387,6 +387,33 @@ test("patches a task description without touching other fields", () => {
   });
 });
 
+// 2026-09-23 통합: "오늘 3개"가 두 계약(배열 focusDates / 토글 focus)으로 중복 구현돼 있었다.
+// 토글 하나만 남기고 배열은 서버 소유로 닫는다 — 이 테스트는 옛 배열 경로(e0e5c80)의 입력이
+// 어떤 모양이든(정상·형식 오류·중복·불가능한 날짜) 쓰기 전에 거절되는지 고정한다.
+test("rejects client-sent focus_dates arrays — the pick history is server-owned", () => {
+  const context = {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-22T01:30:00.000Z",
+  };
+  const id = "55555555-5555-4555-8555-555555555555";
+
+  for (const input of [
+    { focusDates: ["2026-09-20", "2026-09-22"] },
+    { focusDates: "2026-09-22" },
+    { focusDates: ["not-a-date"] },
+    { focusDates: ["2026-09-22", "2026-09-22"] },
+    { focus_dates: ["2026-02-30"] },
+    // 토글과 같이 와도 배열은 받지 않는다 — 우회 경로를 남기지 않는다.
+    { focus: true, focusDates: ["2026-09-22"] },
+  ]) {
+    assert.deepEqual(
+      pmsCommand.normalizePmsCommand({ action: "update_task", id, ...input }, context),
+      { ok: false, reason: "focus-dates-read-only" },
+      JSON.stringify(input),
+    );
+  }
+});
+
 test("normalizes an editable project patch without changing workspace ownership", () => {
   const result = pmsCommand.normalizePmsCommand({
     action: "update_project",
@@ -680,4 +707,67 @@ test('project item types and dated steps normalize together and require versione
   assert.equal(updated.ok, true);
   assert.equal(updated.patch.meta.item_type, 'milestone');
   assert.equal(updated.patch.meta.checklist[0].dueAt, '2026-09-22');
+});
+
+// ── 오늘 Top 3 (meta.focus_dates) — 2026-09-20 세 축·Action KPI 기획 §6.2 ──────────────
+
+test("update_task accepts a focus toggle without any other field", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focus: { on: true, date: "2026-09-21" },
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-21T01:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.focus, { on: true, date: "2026-09-21" });
+  // 토글만 보내도 empty-patch가 아니다 — 서비스가 focus_dates를 meta에 병합한다.
+  assert.deepEqual(result.patch, { updated_at: "2026-09-21T01:00:00.000Z" });
+});
+
+test("update_task focus shorthand and missing date resolve on the server side", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    focus: false,
+  }, { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-21T01:00:00.000Z" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.focus, { on: false, date: null });
+});
+
+test("update_task rejects malformed focus toggles and impossible dates", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-21T01:00:00.000Z" };
+  const id = "55555555-5555-4555-8555-555555555555";
+
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: "today" }, context), { ok: false, reason: "invalid-focus" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: "yes" } }, context), { ok: false, reason: "invalid-focus" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: true, date: "2026-02-30" } }, context), { ok: false, reason: "invalid-focus-date" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: true, date: "21/09/2026" } }, context), { ok: false, reason: "invalid-focus-date" });
+});
+
+// 배열 입력을 거절하는 이유가 "마감된 날의 선택 수를 소급해 바꾸지 못하게"인데, 임의 날짜를
+// 받는 토글이 열려 있으면 하루씩 넣고 빼는 것으로 같은 결과가 난다 — 주간 focusRate와 저녁
+// 리뷰 k/n이 지난 날에 대해 움직인다. 허용 폭은 자정 경계 클라이언트용 ±1일뿐이다.
+test("focus toggles cannot reach past or future days beyond the midnight boundary", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-21T01:00:00.000Z" };
+  const id = "55555555-5555-4555-8555-555555555555";
+  const toggle = (date) => pmsCommand.normalizePmsCommand({ action: "update_task", id, focus: { on: true, date } }, context);
+
+  // 운영자 오늘(KST 2026-09-21)과 자정 경계 ±1일은 통과한다.
+  assert.equal(toggle("2026-09-21").ok, true);
+  assert.equal(toggle("2026-09-20").ok, true);
+  assert.equal(toggle("2026-09-22").ok, true);
+  // 그보다 먼 과거·미래는 거절 — 이미 집계된 날을 건드린다.
+  assert.deepEqual(toggle("2026-09-19"), { ok: false, reason: "focus-date-out-of-window" });
+  assert.deepEqual(toggle("2026-09-01"), { ok: false, reason: "focus-date-out-of-window" });
+  assert.deepEqual(toggle("2026-10-05"), { ok: false, reason: "focus-date-out-of-window" });
+});
+
+test("zonedDateKey renders the operator day in Asia/Seoul", () => {
+  // 2026-09-20 23:30 UTC is already 2026-09-21 in Seoul.
+  assert.equal(pmsCommand.zonedDateKey("2026-09-20T23:30:00.000Z"), "2026-09-21");
+  assert.equal(pmsCommand.MAX_FOCUS_PER_DAY, 3);
 });

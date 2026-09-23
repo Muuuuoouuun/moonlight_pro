@@ -18,7 +18,7 @@ flowchart LR
   M --> A
   A --> R[Hub 조회 서비스]
   A --> W[기존 업무 command 경로]
-  R --> D[(Supabase 업무 원장)]
+  R --> D[(Supabase 업무 기록)]
   W --> E[Engine 검증·실행]
   E --> D
   H[Moonlight 작업 요청] --> Q[작업 접수 API·영속 큐]
@@ -27,7 +27,7 @@ flowchart LR
   K --> Q
 ```
 
-MCP는 Codex가 업무 도구를 발견하고 호출하는 입구다. Agent API는 같은 계약을 프로그램에서 호출하는 입구다. 원장 조회·정해진 업무 명령은 추가 모델 호출 없이 실행한다. Moonlight에서 실제 Codex 추론·코딩을 요청할 때만 worker가 모델을 사용한다.
+MCP는 Codex가 업무 도구를 발견하고 호출하는 입구다. Agent API는 같은 계약을 프로그램에서 호출하는 입구다. 기록 조회·정해진 업무 명령은 추가 모델 호출 없이 실행한다. Moonlight에서 실제 Codex 추론·코딩을 요청할 때만 worker가 모델을 사용한다.
 
 | 접근안 | 장점 | 비용·한계 | 판단 |
 |---|---|---|---|
@@ -79,7 +79,7 @@ Responses API 호출과 Codex SDK 실행은 서로 다른 통합 방식이다. R
 - JSON 봉투는 `schemaVersion, status, source, asOf, data, page, partial, failedSources, truncated`를 사용한다. live·preview·partial·error를 합치지 않는다.
 - `page`는 `returnedCount, hasMore, nextCursor, totalCount`를 포함한다. totalCount를 정확히 계산하지 않았으면 null로 반환한다. 비싼 전량 count를 매번 실행하지 않는다.
 - 목록은 안정적인 `(created_at, id)` keyset 순서로 조회한다. cursor는 workspace·필터·정렬·페이지 크기에 묶어 서명한다. 실시간 목록이므로 페이지 사이 변경 가능성을 명시하고, `asOf`를 일관된 DB snapshot 보장처럼 표현하지 않는다.
-- 서버에서 `select/filter/limit`를 적용한다. 화면용 원장 전량을 받은 뒤 잘라내는 projection은 이행 단계의 토큰 개선에만 쓰고, 지연 개선의 완료 조건에는 포함하지 않는다.
+- 서버에서 `select/filter/limit`를 적용한다. 화면용 기록 전량을 받은 뒤 잘라내는 projection은 이행 단계의 토큰 개선에만 쓰고, 지연 개선의 완료 조건에는 포함하지 않는다.
 - 크기 제한 때문에 요청 limit보다 적은 행을 반환하면 `truncated:true`와 실제 마지막 행의 nextCursor를 반환한다. 필수 상태·버전·페이지 메타데이터는 보존한다.
 - 본문은 목록에서 최대 200자 발췌와 `hasMore`만 반환한다. 상세가 상한을 넘으면 `nextSectionCursor`로 이어 읽는다. JSON 문자열을 바이트 중간에서 자르지 않는다.
 - write 직전 조회는 캐시를 우회한다. 조회 캐시는 workspace·권한 범위·필터·필드·schema version으로 격리하고 기본 TTL 15초로 시작한다. 쓰기 뒤 관련 캐시를 무효화한다. 실패·preview를 live 캐시에 넣지 않는다.
@@ -88,7 +88,7 @@ Responses API 호출과 Codex SDK 실행은 서로 다른 통합 방식이다. R
 
 명령은 `{commandId, action, targetId?, expectedUpdatedAt?, input}` 형태다. `commandId`는 호출자가 생성한 UUID이고 재시도에도 유지한다. workspace·actor·권한은 인증 정보에서 도출한다.
 
-1. 허용 action·대상 소유권·필드를 검증한다. 수정과 완료는 원장에서 읽은 정확한 `expectedUpdatedAt`을 요구한다.
+1. 허용 action·대상 소유권·필드를 검증한다. 수정과 완료는 기록에서 읽은 정확한 `expectedUpdatedAt`을 요구한다.
 2. `(workspace_id, actor_id, command_id)`를 유일 키로 삼고 정규화한 명령 해시를 저장한다. 같은 키·같은 내용은 기존 receipt를 반환한다. 같은 키·다른 내용은 409다.
 3. task 생성 UUID도 최초 command에 고정해 기존 Engine의 생성 재시도 경로에 전달한다. UUID 중복 처리만으로 모든 업무가 멱등적이라고 선언하지 않는다.
 4. 저장과 receipt를 원자적으로 확정한다. Agent가 사용하는 내부 쓰기 경로에 Engine RPC/transaction을 추가하거나 기존 원자 RPC를 확장한다. 여러 HTTP 요청 사이에서 처리 완료를 추측하는 방식은 불가하다.
@@ -100,7 +100,7 @@ Responses API 호출과 Codex SDK 실행은 서로 다른 통합 방식이다. R
 ### 3.3 상태·권한
 
 - 기존 Hub read의 HTTP 200 + `status:error`와 HTTP 실패를 모두 다룬다. API v1도 source 장애는 명시적 error 봉투로 반환하고 인증·입력 오류는 401/403/400, 충돌은 409로 구분한다. MCP에서는 실행 실패가 `isError:true`, preview·partial은 정상 봉투다.
-- `configured`, `reachable`, `authenticated`, `canRead`, `canWrite`를 구분한다. 시크릿 존재만으로 canWrite를 확정하지 않는다. health 확인 자체는 원장을 수정하지 않는다.
+- `configured`, `reachable`, `authenticated`, `canRead`, `canWrite`를 구분한다. 시크릿 존재만으로 canWrite를 확정하지 않는다. health 확인 자체는 기록을 수정하지 않는다.
 - 새 Agent API는 **조회도 인증**한다. 기존 UI same-origin 규칙을 외부 API 인증으로 사용하지 않는다. 초기 개인용 token은 서버 설정의 단일 workspace·허용 action에 묶고, 값은 로컬 secret 저장소에서 주입한다.
 - MCP client는 v1 호출의 GET/POST 모두에 별도의 scoped `COM_MOON_AGENT_API_TOKEN`을 전달한다. 현재 GET에 인증 헤더가 없는 `hub-client.js`를 그대로 재사용하지 않는다. 기존 Hub 라우트용 write-secret 사전 검사와 인증은 호환 경로에 유지하고, v1 쓰기는 token scope 검사도 수행한다. token 자체는 capability 응답에 포함하지 않는다.
 - Agent API → 기존 Hub write는 `assertHubWriteAllowed`를 거치며 내부 write secret을 서버가 전달한다. Engine 명령도 기존 shared-secret·workspace 검증을 유지한다. 외부 caller에게 내부 service credential을 반환하지 않는다.
@@ -115,11 +115,11 @@ Responses API 호출과 Codex SDK 실행은 서로 다른 통합 방식이다. R
 
 진단은 `설정 확인 → stdio initialize → tools/list → 작은 read → 결과 상태 확인` 순서다. 쓰기 권한 검증은 비변경 capability 검사와, 실제 사용자가 요청한 첫 쓰기의 receipt로 확인한다. 조회 성공을 쓰기 성공으로 표시하지 않는다.
 
-도구 묶음은 `core / pms / sales / content`로 제공하고 필요한 목록만 노출한다. 기본 core는 health·일일 요약·task 목록/상세/생성/수정/완료를 중심으로 한다. SDK server instructions에는 요약 우선·상세 확장·쓰기 영수증·원장 텍스트 취급 규칙을 짧게 넣는다.
+도구 묶음은 `core / pms / sales / content`로 제공하고 필요한 목록만 노출한다. 기본 core는 health·일일 요약·task 목록/상세/생성/수정/완료를 중심으로 한다. SDK server instructions에는 요약 우선·상세 확장·쓰기 영수증·기록 텍스트 취급 규칙을 짧게 넣는다.
 
 기존 도구 이름은 호환 기간 동안 유지한다. 중복 `get_content`는 기본 프로필에서 제외하고 `get_content_queue`로 안내한다. 모든 도구에 입출력 schema와 의미에 맞는 annotations를 붙인다. structuredContent와 호환 text가 실제 클라이언트에서 이중 컨텍스트로 주입되는지도 측정한다.
 
-예: “오늘 밀린 업무 정리하고 A를 완료해 줘” → 필요한 목록 20건 → A 상세 및 버전 확인 → 완료 command → 저장된 상태 한 줄과 링크. 전체 원장이나 긴 분석문을 매 단계 반복 출력하지 않는다.
+예: “오늘 밀린 업무 정리하고 A를 완료해 줘” → 필요한 목록 20건 → A 상세 및 버전 확인 → 완료 command → 저장된 상태 한 줄과 링크. 전체 기록이나 긴 분석문을 매 단계 반복 출력하지 않는다.
 
 ### 4.2 Moonlight → Codex
 
@@ -137,7 +137,7 @@ Node 환경의 별도 로컬 worker가 공식 `@openai/codex-sdk`를 실행한�
 - worker는 별도 worker credential로 Engine의 claim·heartbeat·event·finish 내부 API를 호출한다. DB service key를 모델 문맥이나 브라우저에 전달하지 않는다.
 - 상태: `queued → running → succeeded | failed | cancelled | needs_attention`. 중단 요청은 별도 `cancelRequestedAt`으로 나타내고 worker 종료 확인 후 cancelled로 바꾼다.
 - jobs에는 workspace, project, runtime, model, threadId, promptRef, contextRefs, budget, lease owner/token/expiry, timestamps, resultRef, error를 보관한다. events는 `(jobId, seq)`가 유일하다. 기존 `agent_runs`는 실행 종료 요약과 연결하고, `work_orders`는 실제 업무 제안·승인 기록으로 유지한다. 둘을 프로세스 큐로 오용하지 않는다.
-- 최소 저장 구조는 `agent_jobs`, `agent_job_events`, `agent_command_receipts`다. 업무 원장은 이관하지 않는다. jobs claim은 DB 원자 lease, 갱신·결과 반영은 현재 lease token 확인으로 보호한다.
+- 최소 저장 구조는 `agent_jobs`, `agent_job_events`, `agent_command_receipts`다. 업무 기록은 이관하지 않는다. jobs claim은 DB 원자 lease, 갱신·결과 반영은 현재 lease token 확인으로 보호한다.
 - worker 단절 후 쓰기 가능 작업은 `needs_attention`으로 전환하고 자동 중복 실행하지 않는다. 복구 때 receipt·변경 파일·thread를 먼저 대조한다. 읽기 전용 작업만 제한적으로 재시도한다.
 - SSE event id는 증가하는 seq다. 페이지 복귀 시 상태와 누락 이벤트를 다시 읽는다. 배포 환경이 SSE를 지원하지 않으면 ETag와 지수 backoff를 쓰는 상태 조회로 대체한다.
 - 프로젝트 ID는 서버 등록 경로로 해석한다. 작업 요청에서 임의 cwd나 shell command를 받지 않는다. 코딩 작업의 checkout 격리는 기존 worktree 규칙을 따른다.
@@ -157,7 +157,7 @@ Node 환경의 별도 로컬 worker가 공식 `@openai/codex-sdk`를 실행한�
 | 도구 목록 | 작업별 프로필과 짧은 설명; 필요한 schema만 노출 |
 | 왕복 | 독립 읽기는 최대 3개 병렬, 쓰기는 대상별 순차; 순서가 정해진 내부 처리에 모델 호출을 추가하지 않음 |
 | 캐시 | 짧은 조회 캐시와 정적 어휘 버전 재사용; 변경 전 fresh read |
-| 문맥 | 전체 repo·대화·원장 대신 목표·관련 ID·필요 구간·직전 결과; checkpoint에 이미 한 행동과 미완료 행동을 분리 |
+| 문맥 | 전체 repo·대화·기록 대신 목표·관련 ID·필요 구간·직전 결과; checkpoint에 이미 한 행동과 미완료 행동을 분리 |
 | 생성 | 기본 답변은 결과·변경·다음 행동 중심, 긴 원문은 artifact 참조 |
 | 모델 | 운영자가 선택한 기본 모델 유지, 단순 작업의 경량 모델은 선택 설정; 자동 승격은 예산 안에서만 |
 | 재시도 | 읽기 429/일시 장애에 제한된 backoff; 쓰기는 receipt 확인·동일 ID 재사용 |
@@ -173,7 +173,7 @@ Prompt caching은 안정적인 지시·도구·문맥 prefix와 모델별 지원
 | 단계 | 구체적인 작업 | 완료 기준 |
 |---|---|---|
 | **P0 연결 기준선** | 연결 진단, 클라이언트별 안내, 등록 경로·env 확인, payload/latency 측정 도구 | 설정·도구 발견·read·쓰기 권한 상태를 각각 설명 가능 |
-| **P1 업무 루프와 API** | 공통 계약·투영, tasks/projects/followups/work-orders v1, MCP PATCH 연결, ID·receipt·충돌 제어, 도구 프로필 | MCP와 HTTP로 조회→생성→수정→완료→재조회가 같은 원장에 반영 |
+| **P1 업무 루프와 API** | 공통 계약·투영, tasks/projects/followups/work-orders v1, MCP PATCH 연결, ID·receipt·충돌 제어, 도구 프로필 | MCP와 HTTP로 조회→생성→수정→완료→재조회가 같은 기록에 반영 |
 | **P2 Codex 실행** | 공식 SDK worker, jobs/events/lease, 접수·스트림·취소·이어가기, 예산·usage | 중복 요청·새로고침·단절에도 실행 상태·결과를 설명 가능 |
 | **P3 원격 확장** | 기존 계약 위에 Streamable HTTP MCP, HTTPS·caller 인증·도구 범위·연결 복구 | 원격 클라이언트에서 제한된 도구 발견·read/write 검증 후 운영 |
 

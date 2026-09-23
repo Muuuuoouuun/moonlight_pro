@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { Button, Card, EmptyState, Kbd, Progress, SelectField, Skeleton, TextAreaField, TextField, TruthBadge } from './hub-primitives';
+import { Button, Card, EmptyState, Kbd, Progress, SelectField, Skeleton, TextAreaField, TextField } from './hub-primitives';
 import { goalMetricInput, goalObjectiveInput, goalObservationInput, goalWriteErrorMessage, measurementLabel, safeGoalEvidenceHref } from '@/lib/goal-client';
 import { goalPeriodPreset } from '@/lib/goal-input-ux';
 import { useGoalCommand, useGoalDraft } from './use-goals';

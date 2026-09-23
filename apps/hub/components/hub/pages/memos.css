@@ -1,4 +1,4 @@
-.memos-page { max-width: 1080px; display: flex; flex-direction: column; gap: 24px; }
+.memos-page { padding: var(--section-gap); max-width: 1080px; display: flex; flex-direction: column; gap: 24px; }
 .memos-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .memos-header h2 { margin: 0; font-size: 20px; font-weight: 500; }
 .memos-header p { margin: 8px 0 0; color: var(--fg-muted); line-height: 1.6; }

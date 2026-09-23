@@ -114,6 +114,7 @@ const BRAND_CHILDREN = {
 };
 
 const CONTENT_CHILDREN = [
+  { key: 'ct-performance', label: '성과', path: 'dashboard/content/performance' },
   { key: 'ct-queue', label: '소재·제작', path: 'dashboard/content/queue' },
   { key: 'ct-studio', label: '원고 작성', path: 'dashboard/content/studio' },
   { key: 'ct-campaigns', label: 'Campaigns', path: 'dashboard/content/campaigns' },
@@ -161,7 +162,7 @@ const OVERVIEW_CHILDREN = Object.fromEntries(SIDEBAR_SCOPES.map(({ key }) => [ke
 
 export const SIDEBAR_PRIMARY = [
   {
-    // Home — Futura 텍스처의 첫 화면(§15 2026-09-18). 같은 daily-brief 원장을 다른
+    // Home — Futura 텍스처의 첫 화면(§15 2026-09-18). 같은 daily-brief 기록을 다른
     // 렌즈로 본다. 기본 착지(dashboard → daily-brief)는 아직 바꾸지 않았다.
     key: 'home',
     label: '홈',
@@ -205,7 +206,7 @@ export const SIDEBAR_PRIMARY = [
     // back-compat in isSidebarAnchorActive.
     key: 'tasks',
     label: '내 작업',
-    icon: 'inbox',
+    icon: 'checklist',
     scopeAware: false,
     owns: ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review'],
     children: { all: MY_WORK_CHILDREN, classin: MY_WORK_CHILDREN, personal: MY_WORK_CHILDREN },
@@ -243,7 +244,7 @@ export const SIDEBAR_PRIMARY = [
   {
     key: 'followups',
     label: '고객 연락',
-    icon: 'bell',
+    icon: 'followup',
     scopeAware: true,
     // classin/followups 페이지는 제거됨(LEGACY_REDIRECTS) — owns는 옛 딥링크의
     // 액티브 판정용으로만 유지하고, 내비 착지는 항상 정본 페이지다.
@@ -256,7 +257,7 @@ export const SIDEBAR_PRIMARY = [
     },
   },
   {
-    key: 'discovery', label: '기회 탐색', icon: 'search', scopeAware: true,
+    key: 'discovery', label: '기회 탐색', icon: 'compass', scopeAware: true,
     owns: ['dashboard/discovery'],
     paths: { all: 'dashboard/discovery', classin: 'dashboard/discovery?scope=classin', personal: 'dashboard/discovery?scope=personal' },
   },

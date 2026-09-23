@@ -6,10 +6,12 @@ const primitivesSource = await readFile(new URL("./hub-primitives.jsx", import.m
 const tokensSource = await readFile(new URL("./hub-tokens.css", import.meta.url), "utf8");
 const customersSource = await readFile(new URL("./pages/customers.jsx", import.meta.url), "utf8");
 const followupsSource = await readFile(new URL("./pages/followups.jsx", import.meta.url), "utf8");
+// 2026-09-22: 기록창이 페이지 두 곳(고객 DB 컨택 시트·고객 연락 인라인 폼)에서 공용 폼
+// 하나로 합쳐졌다. 필드 계약을 지켜야 하는 "캡처 표면"은 이제 이 파일이다.
+const contactRecordSource = await readFile(new URL("./contact-record-form.jsx", import.meta.url), "utf8");
 
 const captureSurfaces = [
-  ["customers", customersSource],
-  ["followups", followupsSource],
+  ["contact-record-form", contactRecordSource],
 ];
 
 test("labeled field primitives are exported from the shared primitive layer", () => {
@@ -68,8 +70,22 @@ test("required fields announce themselves and errors are wired to the control", 
 
 // The save button used to sit disabled with no explanation of what was missing.
 test("the contact outcome save button stays pressable and names what is missing", () => {
-  const sheet = customersSource.slice(customersSource.indexOf("function ContactOutcomeSheet"));
-  assert.doesNotMatch(sheet.slice(0, sheet.indexOf("function DealStageRail")), /disabled=\{!canSave\}/);
-  assert.match(sheet, /setAttempted\(true\);/);
-  assert.match(sheet, /reactionRef\.current\?\.querySelector\("button"\)\?\.focus\(\)/);
+  assert.doesNotMatch(contactRecordSource, /disabled=\{!can[A-Za-z]*\}/);
+  assert.match(contactRecordSource, /setAttempted\(true\);/);
+  assert.match(contactRecordSource, /reactionRef\.current\?\.querySelector\("button"\)\?\.focus\(\)/);
+});
+
+// 두 페이지가 각자 그리던 기록 폼은 사라졌다 — 다시 생기면 진입점마다 필수 필드·되돌리기가
+// 갈라진다(그게 원래 문제였다).
+test("the capture form lives in exactly one place", () => {
+  for (const [name, source] of [["customers", customersSource], ["followups", followupsSource]]) {
+    assert.doesNotMatch(source, /function (ContactOutcomeSheet|LogForm)\b/, `${name} must not re-grow its own capture form`);
+  }
+  assert.match(customersSource, /<ContactRecordForm\b/);
+  assert.match(followupsSource, /<ContactRecordDrawer\b/);
+  // 상세의 빠른 기록은 메모 전용 — 연락 유형 선택이 다시 생기면 반응 필수 규칙을 우회한다.
+  const quickLog = customersSource.match(/function QuickLog\b[\s\S]*?\n}\n/)?.[0] || "";
+  assert.ok(quickLog, "QuickLog must stay findable");
+  assert.match(quickLog, /type: "note"/);
+  assert.doesNotMatch(quickLog, /SelectField|QUICKLOG_KINDS|"call"|"kakao"|"meeting"/);
 });

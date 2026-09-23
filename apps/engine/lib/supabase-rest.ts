@@ -4,7 +4,6 @@
 // `any` row typing they were written against.
 import {
   checkSupabaseRest as sharedCheckSupabaseRest,
-  countSupabaseRows as sharedCountSupabaseRows,
   deleteSupabaseRecord as sharedDeleteSupabaseRecord,
   fetchSupabaseRows as sharedFetchSupabaseRows,
   fetchSupabaseRowsDetailed as sharedFetchSupabaseRowsDetailed,
@@ -36,10 +35,6 @@ export function checkSupabaseRest(table = "projects"): Promise<SupabaseHealthRes
 
 export function fetchSupabaseRows(table: string, options: SupabaseQueryOptions = {}): Promise<any[] | null> {
   return sharedFetchSupabaseRows<any>(table, options);
-}
-
-export function countSupabaseRows(table: string, filters: SupabaseFilter[] = []): Promise<number | null> {
-  return sharedCountSupabaseRows(table, filters);
 }
 
 export function insertSupabaseRecord(

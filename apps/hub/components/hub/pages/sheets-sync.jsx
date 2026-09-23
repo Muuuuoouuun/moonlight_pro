@@ -136,7 +136,7 @@ export function SheetsSync() {
 
         {readFailed && (
           <div role="alert" style={{ marginTop: 12, fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6 }}>
-            연결 원장을 읽지 못했습니다 — 연결이 끊긴 것인지 읽기만 실패한 것인지 확인할 수 없습니다.
+            연결 기록을 읽지 못했습니다 — 연결이 끊긴 것인지 읽기만 실패한 것인지 확인할 수 없습니다.
             이미 연결돼 있을 수 있으니 다시 읽은 뒤 판단하세요.
             <div style={{ marginTop: 12 }}>
               <Button variant="primary" size="sm" icon="runs" onClick={load}>다시 읽기</Button>

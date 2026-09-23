@@ -7,6 +7,7 @@ import { Badge, Button, Card, Drawer, Skeleton, TextField, TextAreaField, Select
 import { filterBrandsByWorkspace } from '../workspace-map';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { BRIEF_FIELDS, STUDIO_CHANNELS, channelLabel, channelForType, formatForChannel, exportStudioVariant, studioTextForCopy } from '@/lib/content-workflow-client';
+import { triggerCelebration, triggerSparkleAt } from '../celebration-fx';
 import { useContentStudio } from './use-content-studio';
 import { DraftEditor } from './content-studio-editors';
 import { StudioAI } from './content-studio-ai';
@@ -43,9 +44,15 @@ export function ContentStudio({ workspace, ledger }) {
   const variants = studio.detail?.variants || [];
   const briefCount = BRIEF_FIELDS.filter(({ key }) => draft.brief[key]?.trim()).length;
   usePageCreateHotkey(studio.newDraft);
-  const copy = async () => {
+  const copy = async (event) => {
     try {
       await navigator.clipboard.writeText(studioTextForCopy(draft));
+      if (event?.clientX && event?.clientY) {
+        triggerSparkleAt(event.clientX, event.clientY);
+      } else if (event?.target?.getBoundingClientRect) {
+        const rect = event.target.getBoundingClientRect();
+        triggerSparkleAt(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      }
       toast.success('결과물을 복사했습니다. 원하는 채널에 붙여넣을 수 있습니다.');
     } catch { toast.error('복사하지 못했습니다. 내보내기로 파일을 받거나 본문을 직접 선택해주세요.'); }
   };
@@ -169,7 +176,11 @@ export function ContentStudio({ workspace, ledger }) {
         </div>
       </>}
     {drawer === 'publication' && <Drawer title="발행 기록" subtitle="외부 채널에 게시한 URL과 시각을 기록합니다. 운영자 확인이며 외부 게시 여부를 자동 검증하지 않습니다." presentation="compact" onClose={() => { if (!studio.busy) setDrawer(null); }} footer={<Button variant="primary" disabled={disabled} onClick={async () => {
-      if (await studio.recordPublication(publicationUrl, publicationDate)) { setDrawer(null); setNotice('운영자 확인으로 발행을 기록했습니다.'); }
+      if (await studio.recordPublication(publicationUrl, publicationDate)) {
+        triggerCelebration({ mode: 'confetti' });
+        setDrawer(null);
+        setNotice('운영자 확인으로 발행을 기록했습니다. ✦');
+      }
     }}>{studio.busy ? '확인 중…' : '발행 기록 저장'}</Button>}>
       <div className="studio-stack">
         <TextField label="발행 URL" value={publicationUrl} onChange={event => setPublicationUrl(event.target.value)} disabled={studio.busy} />

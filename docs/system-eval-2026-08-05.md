@@ -38,7 +38,7 @@
 
 \%% 16차 = 편의성 체크리스트(코어 루프 3동작 클릭 수 + 영속 영수증) 라이브 재실측 — 7차(87) 이후 5개 회차분 미반영 스테일 축. 실측: ① **할 일 완료** 1클릭 → durable PATCH + 3.5초 undo + aria-live. ② **캡처** 타이핑+Enter(0클릭) → idempotency·중복 감지·좁은 재검증(tasks 4콜). ③ **연락 기록**(최고 빈도) — 첫 화면 CTA 1클릭 → 행 인라인 액션 1클릭(드로어·탭 없음) → 확정 최소 기록(§7: 요약 1줄 + 반응 1클릭 + **날짜 프리셋 1클릭**, 27차 신설) → 기록 1클릭. 원자 RPC + 3.5초 deferred-undo + 늦은 실패 입력 복원, customers 컨택 시트 완전 패리티(같은 프리셋·같은 undo). 기준선 감점 3건(진입점 없음·3클릭+폼·비원자 writer) 전부 해소 + 7차 이후 추가분(17차 시트 undo 패리티 · 22차 New 생성 직행 · 25차 BulkBar 일괄) 반영. 잔여 경미: 확정 최소 기록의 요약 타이핑은 운영자 확정 스펙(§7)의 하한이라 결손 아님, 날짜 프리셋 3종(내일·3일 뒤·다음 주)이 커버 못 하는 임의 날짜는 date input 유지(폴백 존재).
 
-\¶¶ 15차 = 26차(A-1 attention adapter 컷오버 — 정체성 캡의 명시 원인) 반영분. **정체성 94** 근거: ① README §3 Phase 1B "잔여" 소진 — 첫 화면 신호 엔진이 attention 원장을 정식 어댑터로 소비(daily-brief가 tasks·revenue·calendar를 `getAttentionLedger({includeRaw})` 하나로 읽고, 정체 딜 신호를 §4 공식·STALLED_DAYS 단일 기준에서 받음 — 첫 화면·내 작업 판정 이원화 해소, 기존 자체 `age>=10` 하드코딩 §8.1 위반도 함께 소거). ② §2 첫 화면 계약 실측: Quick Capture·오늘 할 일 레인·긴급 KA·집중 고객·오늘 일정·매출 pulse 상시·기획/콘텐츠 pulse·승인 큐 전부 live + 메시지 축은 데이터 소스 부재의 정직 고지(§3 ClassIn 동기화 하드 게이트 보류 = 스코프 아웃). ③ §7 fold 순서·비핵심 표면 준비 중 마커·보류 스코프 히어로 제외 유지. 검증: 라이브 daily-brief 응답이 컷오버 전과 동등 계약(7소스 live·슬롯·taskToday·metrics), attention 라우트 무변경(`raw` 미노출), 테스트 480 중 471(환경 격차 9 동일)·hub/engine build 통과. 잔여 경미: KA 후보 기준(§2 확정 7일)과 attention §4 공식의 이원은 확정 문서 준수라 결손 아님, 신호 큐의 자동화·승인 신호는 attention 레인 밖(Engine 실행 피드백 §1 소관).
+\¶¶ 15차 = 26차(A-1 attention adapter 컷오버 — 정체성 캡의 명시 원인) 반영분. **정체성 94** 근거: ① README §3 Phase 1B "잔여" 소진 — 첫 화면 신호 엔진이 attention 기록을 정식 어댑터로 소비(daily-brief가 tasks·revenue·calendar를 `getAttentionLedger({includeRaw})` 하나로 읽고, 정체 딜 신호를 §4 공식·STALLED_DAYS 단일 기준에서 받음 — 첫 화면·내 작업 판정 이원화 해소, 기존 자체 `age>=10` 하드코딩 §8.1 위반도 함께 소거). ② §2 첫 화면 계약 실측: Quick Capture·오늘 할 일 레인·긴급 KA·집중 고객·오늘 일정·매출 pulse 상시·기획/콘텐츠 pulse·승인 큐 전부 live + 메시지 축은 데이터 소스 부재의 정직 고지(§3 ClassIn 동기화 하드 게이트 보류 = 스코프 아웃). ③ §7 fold 순서·비핵심 표면 준비 중 마커·보류 스코프 히어로 제외 유지. 검증: 라이브 daily-brief 응답이 컷오버 전과 동등 계약(7소스 live·슬롯·taskToday·metrics), attention 라우트 무변경(`raw` 미노출), 테스트 480 중 471(환경 격차 9 동일)·hub/engine build 통과. 잔여 경미: KA 후보 기준(§2 확정 7일)과 attention §4 공식의 이원은 확정 문서 준수라 결손 아님, 신호 큐의 자동화·승인 신호는 attention 레인 밖(Engine 실행 피드백 §1 소관).
 
 \§§ 14차 = 25차(BulkBar 첫 실채택) 반영분. **편의 94** = 기준선 §2.8의 3대 격차(키보드 시스템 배선·undo 커버리지·BulkBar) 전량 소진 — x 다중 선택 → 하단 벌크 바 → 단계 일괄 변경(건별 영속·부분 실패 건수 명명·적용 후 해제, 라이브 검증). "1인 운영 후순위" 보류는 운영자의 94 목표 지시(2026-08-08 /goal)가 가장 최근 우선순위 지시라 해제로 해석 — 118행 리드 목록에서 단계 일괄 정리는 실측 반복 작업. **UIUX 94** = §8.1 계약(생성 N·딥링크·정렬 3단·키보드 문법·빈 상태 CTA·ESC 레이어)이 적용 가능한 전 표면에서 성립. TopBar New의 비매핑 표면 팔레트 폴백은 결손이 아니라 완결 판정 — 생성 시멘틱이 없는 표면(읽기 전용 Engine 피드백·결정 큐)에서 "어딘가에 만들기"(팔레트 생성 4행)로 폴백하는 것이 §3 계약에 부합하며, Orders·Runs 키보드 비대상 판정과 동일 논리.
 
@@ -66,7 +66,7 @@
 
 - 첫 화면 계약 충족 4/11: Quick Capture ✓ · 오늘 할 일 ✓ · 기획/콘텐츠 pulse ✓ 뿐. **긴급 KA 슬롯 ✗ · 집중 고객 3~5건 슬롯 ✗ · 캘린더 아젠다 ✗ · 메시지 pulse ✗**.
 - 정직성 위반 2건: ① 첫 화면 지표 카드가 **하드코딩 가짜 스파크라인**을 실데이터처럼 렌더(`apps/hub/app/api/hub/daily-brief/route.js:43` 기본 인자 `spark=[3,4,3,5,4,6,5,7]`), ② 결정 버튼이 **저장 없이 `✓ Decision` 영수증** 표시(`daily-brief.jsx` 로컬 state만, 새로고침 시 복원).
-- `selectOperatorFocusLeads`(3건 캡)가 존재하나 tone 정렬 + `QUEUE_LIMIT=2`에 밀려 화면에서 소실. attention 원장(`attention-ledger.js`)은 첫 화면이 아닌 `my-work`에만 배선.
+- `selectOperatorFocusLeads`(3건 캡)가 존재하나 tone 정렬 + `QUEUE_LIMIT=2`에 밀려 화면에서 소실. attention 기록(`attention-ledger.js`)은 첫 화면이 아닌 `my-work`에만 배선.
 - PAGE_MAP 31개 중 **~16개가 비핵심(보류 스코프)인데 전부 코어와 동일한 내비 가중치**로 노출(agents×3, automations×6, evolution, heatmap, campaigns, cases). 보류 스코프인 Council이 첫 화면 히어로 CTA 점유.
 - 연락 기록 경로 이원화: customers는 원자 RPC(`record_contact_outcome_v1`), followups는 비원자 단건 insert — 첫 화면 칩은 비원자 쪽을 가리킴.
 
@@ -99,9 +99,9 @@
 체크리스트: 첫 페인트 차단 자원 + 핫패스 read 왕복 수 + 입력 지연.
 
 - CRITICAL: `globals.css` 117KB 렌더 블로킹 중 **셀렉터 94%(363/387)가 미사용 死코드**.
-- CRITICAL: 최다 호출 read `/api/hub/tasks`가 태스크 목록 하나에 전체 원장 11~14 왕복(`getProjectLedger()` 호출 후 todos만 반환). 딜 체크박스 1탭 ≈ 28 왕복(전체 reload ×2).
-- MAJOR: 프로젝트 상세 열기/닫기마다 전체 원장 재조회(URL param이 fetch deps), revenue.jsx memo 0개(드로어 타이핑마다 2,343줄 재실행), 캐시 계층 전무(42 force-dynamic + no-store).
-- 강점: 31페이지 전부 lazy 코드 스플리팅 + 유휴 프리페치, 원장 내부는 진짜 배치화(N+1 없음), 전 read limit, 랜딩 첫 페인트 fetch 1건.
+- CRITICAL: 최다 호출 read `/api/hub/tasks`가 태스크 목록 하나에 전체 기록 11~14 왕복(`getProjectLedger()` 호출 후 todos만 반환). 딜 체크박스 1탭 ≈ 28 왕복(전체 reload ×2).
+- MAJOR: 프로젝트 상세 열기/닫기마다 전체 기록 재조회(URL param이 fetch deps), revenue.jsx memo 0개(드로어 타이핑마다 2,343줄 재실행), 캐시 계층 전무(42 force-dynamic + no-store).
+- 강점: 31페이지 전부 lazy 코드 스플리팅 + 유휴 프리페치, 기록 내부는 진짜 배치화(N+1 없음), 전 read limit, 랜딩 첫 페인트 fetch 1건.
 
 ### 2.6 디자인 — 76
 
@@ -136,7 +136,7 @@
 2. 안정성 — 테스트 배선: 루트 글롭에 `apps/hub/components/**` 편입(따옴표로 Node globstar 사용, +128 테스트 CI 편입), 부패 단언 2건 수리, supabase-rest 타임아웃 테스트 flaky(unref 타이머) 수리. 352→480 테스트.
 3. 안정성 — **KST 시간대 버그**(평가 중 발견): 서버 사이드 저장소 포매터 8개 파일이 timeZone 미지정 → 배포(UTC)에서 라벨 -9시간·"오늘" 버킷이 KST 아침 내내 하루 어긋남. 전부 `Asia/Seoul` 고정 + `resolveDueBucket`을 KST day-key 기준으로 재작성 + 자동화 "오늘 실행" 경계도 KST 자정으로.
 4. 정체성 — 첫 화면 정직화: 가짜 스파크라인 기본값 제거(실측 시계열 있을 때만 렌더), 결정 `✓` 영수증을 **KST 날짜 스코프 로컬 영속**으로 전환(새로고침 생존, "오늘 처리함" 카피, 되돌리기 추가), 완료 표시 녹색 → 중립(§5.3), all-clear 체크도 중립.
-5. 속도: `/api/hub/tasks`를 lean `getTaskLedger()`(3콜)로 분리 — 기존 11~14콜 전체 원장 낭비 제거, `?dealId=` 서버 필터 추가. 프로젝트 상세 닫기/목록 탐색의 전체 재조회 제거(열기만 exact read), 로드맵 선택 해제는 스냅샷 복원. Deals 마운트 중복 fetch 제거. Telegram n8n 포워딩을 `after()`로 응답 뒤 실행(ACK 최대 10초 지연 제거). 캘린더 이벤트 생성 무음 실패 표면화, 딜 체크리스트 토글 실패 표면화.
+5. 속도: `/api/hub/tasks`를 lean `getTaskLedger()`(3콜)로 분리 — 기존 11~14콜 전체 기록 낭비 제거, `?dealId=` 서버 필터 추가. 프로젝트 상세 닫기/목록 탐색의 전체 재조회 제거(열기만 exact read), 로드맵 선택 해제는 스냅샷 복원. Deals 마운트 중복 fetch 제거. Telegram n8n 포워딩을 `after()`로 응답 뒤 실행(ACK 최대 10초 지연 제거). 캘린더 이벤트 생성 무음 실패 표면화, 딜 체크리스트 토글 실패 표면화.
 6. 디자인: 2px 레일 7곳·2px 보더 5곳 → 1px 계약 복구(선택 강조는 §5.3 외곽 outline로), h2 위반 2곳(Calendar 28/700→20/500, Studio h2 추가), 상태 primitive 라벨 10→10.5px(12페이지 일괄), followups 기록 행·daily-brief 결정 카드의 전체 opacity 제거, automations 행 전체 semantic fill → danger 1px 레일, 성공률 신호등 색 → 중립.
 7. UI/UX: **ESC 레이어 스택**(`esc-layers.js`) — 드로어 위 ⌘K에서 ESC가 팔레트만 닫음. §11 클릭 div triple 수복(Accounts 3곳·Segments 멤버·daily-brief 2곳·Projects 보드 카드 — 보드 카드는 열기 자체가 불가능했던 것을 수리). customers N 가드(⌘N 하이재킹·연타 대량 생성 차단). 죽은 create 경로 정직화(`?new=flow`/`?new=playbook`/`?new=delivery` 제거, automations 가짜 pause 토글 비활성+사유). ⌘K 어휘를 D4 확정 라벨과 동기화(고객 연락·영업·프로젝트 검색 가능), 중복 팔레트 행 2개 제거.
 
@@ -190,7 +190,7 @@
 검증: 각 배치 `npm test` 549/549 · hub build 통과. 커밋 99a38cc · a350014 · 42de74e · 720b0a5 · 300cdff.
 
 - **6차 (정체성/사용성)**: 셸 코어 결함 2건 수리 — hub-sidebar `ownerAnchorKey` 미import ReferenceError(스코프 토글 무음 no-op), ClassIn 고객 연락 앵커가 제거된 별칭으로 착지(Archive 플레이스홀더) → 정본 경로. 가짜 페르소나 "Hyeon Park" 3면 → 문준혁. followups h2를 D4 확정 라벨 "고객 연락"으로, 푸터 카피를 실제 writer(crm_activities)로 정정. daily-brief 집중 고객 행에 §7 최소 정보(이유·기한/기약 없음·최근 활동) 추가, 점프 칩을 확정 슬롯 아래로. content Queue/Campaigns N 단축키(usePageCreateHotkey 신설).
-- **7차 (속도)**: next-intl 전면 제거(소비자 0, 전 페이지 런타임+메시지 번들 — legal 3페이지 static 복귀). daily-brief 60초 시계 BriefClock 리프 분리(분당 전체 트리 리렌더 제거). my-work 기한 변경(드래그·미루기) 낙관 반영+실패 롤백. revenue 원장 모듈 스코프 stale-while-revalidate 캐시(탭 전환 스켈레톤 제거, 신선도 1 RTT). projects 할 일 편집 저장 PATCH 응답 로컬 병합.
+- **7차 (속도)**: next-intl 전면 제거(소비자 0, 전 페이지 런타임+메시지 번들 — legal 3페이지 static 복귀). daily-brief 60초 시계 BriefClock 리프 분리(분당 전체 트리 리렌더 제거). my-work 기한 변경(드래그·미루기) 낙관 반영+실패 롤백. revenue 기록 모듈 스코프 stale-while-revalidate 캐시(탭 전환 스켈레톤 제거, 신선도 1 RTT). projects 할 일 편집 저장 PATCH 응답 로컬 병합.
 - **8차 (속도 — 첫 화면 팬아웃)**: daily-brief 라우트를 lean `getTaskLedger`(4콜)로 전환 — getProjectLedger 11~14콜/2웨이브 제거(시스템 최다 비용 라우트). lean projection에 status·partialSources 추가로 신호·요약·정직성 소비처 호환. 캡처/완료 후 재검증을 전체 집계(~30콜) → tasks 4콜 슬라이스 교체(refreshTasks). StatusLine error/partial 다시 읽기 버튼. 집계 테스트 4건을 lean 계약으로 갱신.
 - **9차 (안정성/디자인)**: use-undoable-action pagehide flush(탭 닫기 시 3.5초 창 내 쓰기 확정 소실 → 최선 노력, re-audit S14). revenue 딜 체크리스트 읽기 실패 정직화(빈 목록 위장 금지). overview 활동 피드 카테고리 semantic 톤 → 중립(§5.3). engine webhook 11개 라우트 인증 검증 전수 확인(전부 통과), localStorage JSON.parse 전수 확인(전부 try 가드), fetch r.ok 휴리스틱 전수 스캔(실긍정 1건만 — 체크리스트).
 
@@ -201,7 +201,7 @@
 주제: **3차 재감사 완주(안정성 78 · 디자인 84 · UI/UX 84 · 편의 86) → 지적 목록 전량 소진.**
 검증: 각 배치 `npm test` 549/549 · engine tsc --noEmit · hub/engine build 통과. 커밋 8f82bc3 · 8468b74 · 5333e00 · ed963a3.
 
-- **10차 (안정성 코어)**: revenue/content 원장 코어 read 실패 → error+502(기존 preview 200 — 블립 동안 "0건이 사실"+첫 화면 슬롯 무언 공백+5분 캐시 고착), 보강 소스 실패는 partial 명명. engine 0행 PATCH 단락 제거로 stale-409/404 분기 프로덕션 부활 + PersistenceResult 타입 정합 + 불가능 mock 6건 수정. revenue-write meta 병합 기준 read 실패 시 저장 중단(meta-wipe 차단). SWR 캐시 재검증 실패 시 partial 표시(오래된 live 위장 금지). recomputeLeadScores 전량 실패 명명, itemPatches 레이스, refreshTasks 요청 id, localStorage 가드.
+- **10차 (안정성 코어)**: revenue/content 기록 코어 read 실패 → error+502(기존 preview 200 — 블립 동안 "0건이 사실"+첫 화면 슬롯 무언 공백+5분 캐시 고착), 보강 소스 실패는 partial 명명. engine 0행 PATCH 단락 제거로 stale-409/404 분기 프로덕션 부활 + PersistenceResult 타입 정합 + 불가능 mock 6건 수정. revenue-write meta 병합 기준 read 실패 시 저장 중단(meta-wipe 차단). SWR 캐시 재검증 실패 시 partial 표시(오래된 live 위장 금지). recomputeLeadScores 전량 실패 명명, itemPatches 레이스, refreshTasks 요청 id, localStorage 가드.
 - **11차 (Revenue 총정리)**: Accounts 생성 즉시 영속+인라인 이름 변경(팬텀 제거), 활동 삭제 3.5초 undo+실패 복원, 핀/스테이지 이동/숨김 토글 결과 확인+롤백+role=status, MTD/QTD/YTD 죽은 토글 제거, Cases n 가드 복원, cards 뷰 j/k 커서, 딜 체크리스트 연타 가드, Accounts 360 활동 읽기 실패 정직화, ACT/REACTION/health/케이스/메트릭 §5.3 전면 중립화.
 - **12차 (잔여 표면 + 셸)**: 브랜드 톤 레인보우 소스 2곳(content-ledger CANONICAL_BRAND_TONES — studyseagull 상시 danger 칩 — + operating-ledger kind 분기) 소거, sheets-sync/automations/agents/content/evolution-settings/projects 잔여 semantic 소거, work Rhythm 수제 라벨 → SyncBadge, overview-truth 금지 어휘 중립화 + green-proof 강제 테스트 단언 §5.3로 반전, 라이트 테마 fg-dim/faint 사다리 역전 수정+warning AA. followups j/k/e 배선+만료 undo 버튼 소거, my-work j/k 별칭, customers/캠페인 생성 실패 명명, ⌘K role=dialog, 모바일 ESC 레이어 존중, LegacyPlaceholder Button primitive, 치트시트 ⌘Z 표기 실측 정합.
 - **13차**: ShortcutOverlay 닫기 버튼+포커스 이동, engine 명령 라우트 3곳 64KB 바디 상한.
@@ -215,7 +215,7 @@
 
 - **14차 (조건부 무음 실패 + 첫 화면 error 정직화)**: attention-ledger 딜 레인 revenue error 반영(기존 preview 위장), daily-focus/FocusSlots가 read 실패를 "비어 보여도 실제 건이 있을 수 있습니다"로 명명(preview "연결하세요" 위장 제거, 캘린더 read 실패도 미연결과 구분). EditDrawer 삭제가 결과 봉투 소비(실패 시 드로어 유지+원인+낙관 제거 복원 — 마지막 드로어 무음 소실 경로). engine content 라우트 return=representation(0행 PATCH saved 위장 차단)+update_draft 순차·반쪽 성공 명명. automations 클러스터 error 정직화+빈 상태 분기. agents 승인 3핸들러 실패 role=alert. 수제 n 리스너 4곳 다이얼로그 가드. 기획 pulse 5지표 복원, 죽은 ?draft=·⌘K Council 행 제거.
 - **15차 (속도 — 핫 표면 SWR)**: daily-brief/attention/projects 모듈 스코프 stale-while-revalidate(탭 복귀 스켈레톤 제거, 재검증 실패 시 partial/stale 명명). my-work 드로어 저장 낙관 병합(전체 reload 비대기), 딜 체크리스트 낙관 flip. google-calendar AbortSignal.timeout(8s) — 유일한 무한대 핫패스 외부 의존 상한 + 갱신 토큰 저장 fire-and-forget.
-- **16차 (채점 잔여 마감)**: my-work/daily-brief 만료 undo 버튼 자동 소거, Cases j/k/e(4테이블 문법 완성), Accounts list/detail 커서, projects 생성/삭제 로컬 병합, Segments/content Queue error 카피, customers 딥링크 빈 원장 소비, ?scope=personal 실소비(Leads/Deals/Accounts 필터 시드), projects·customers·daily-brief 라우트 잔여 moon/semantic 톤 중립, HealthDot 라벨 동반, 死 tone 필드·고아 폼 제거.
+- **16차 (채점 잔여 마감)**: my-work/daily-brief 만료 undo 버튼 자동 소거, Cases j/k/e(4테이블 문법 완성), Accounts list/detail 커서, projects 생성/삭제 로컬 병합, Segments/content Queue error 카피, customers 딥링크 빈 기록 소비, ?scope=personal 실소비(Leads/Deals/Accounts 필터 시드), projects·customers·daily-brief 라우트 잔여 moon/semantic 톤 중립, HealthDot 라벨 동반, 死 tone 필드·고아 폼 제거.
 
 **명시 보류(문서 명명 유지)**: 첫 화면 attention-ledger 통합(Phase 1B 잔여 — 정체성 캡), overview 라우트 lean 전환(보조 표면), hub-write-guard 프로덕션 오리진(배포 모드 확인 필요), 언마운트 후 flush 실패 무언성(pagehide 최선 노력까지), BulkBar 미배선(1인 운영 성숙도에서 후순위), TopBar New 생성 진입 강화, 알림 수명 통일.
 
@@ -256,7 +256,7 @@
 검증: `npm test` 552/552(신규 3) · hub build · engine tsc 통과. 커밋 01e2bda.
 
 - **0행 DELETE 감지(systemic)**: `deleteSupabaseRecord`가 `return=minimal` 고정이라 RLS 거부·이미 삭제됨·workspace 불일치가 전부 `{persisted:true,"ok"}`로 성공 위장됐다. 19차가 그 위에 삭제 undo 3종(my-work·projects·revenue)을 얹은 상태라 "삭제됨" 영수증 뒤 다음 로드에 레코드가 부활할 수 있는 구조였다. `return=representation` + 0행 → `no-matching-row`로 update(10차)의 기존 계약과 통일. tasks 라우트는 재시도 불가 상황을 `retryable:false` + 한국어 원인으로 구분. DELETE mock이 `204 + []`를 반환하던 불가능 스텁을 실제 PostgREST 동작으로 교정하고 0행 계약 테스트 3건 신설.
-- **read 실패 preview 재라벨 잔량 소거**: outcomes 라우트(원장 error를 preview 200으로 되뭉개던 19차 미착지 절반), campaigns·persona-registry·agent-runs 원장 3곳, campaigns 라우트 `failed` 202→502. 전부 Phase 0 분류(preview = 미구성 전용)로 정렬.
+- **read 실패 preview 재라벨 잔량 소거**: outcomes 라우트(기록 error를 preview 200으로 되뭉개던 19차 미착지 절반), campaigns·persona-registry·agent-runs 기록 3곳, campaigns 라우트 `failed` 202→502. 전부 Phase 0 분류(preview = 미구성 전용)로 정렬.
 
 **8차 잔여(다음 배치)**: sheets-sync read 실패가 "미연결 + 연결 CTA"로 위장(M), work-ledger 전 소스 실패도 partial 200(S), ⌘K가 revenueLedgerCache 미재사용(S), overview/content/work/automations 모듈 SWR 부재(M), work `?focus=` 로딩 레이스로 첫 화면 primary CTA 무음 실패(S), automations 가짜 webhook endpoint URL(S), revenue 빈 상태 error 분기 부재(M), Studio 고정 Figure 플레이스홀더(S), TruthBadge 개발 토큰 라벨(S).
 
@@ -282,7 +282,7 @@
 주제: **반응·애니메이션·편의 UX·디자인 적합성·정렬·생성·연계 — 8차 잔여 속도 2건 + 백로그 M 항목 소진.**
 검증: `npm test` 471 중 462 통과(실패 9건 = registerHooks Node ≥22.15 환경 격차, 기준선 동일). hub/engine build 통과. 라이브 브라우저 실측: TopBar New→리드 즉시 생성+드로어, 확인 스트립 3플로(ESC 취소·재해제·버리고 닫기, 포커스가 취소 버튼으로), Decisions→Rhythm 탭 전환 스켈레톤 0, 콘솔 에러 0.
 
-- **반응(속도 백로그 소진)**: overview/content/work/automations 훅에 모듈 스코프 stale-while-revalidate 이식(탭 전환·복귀 스켈레톤 제거, 재검증 실패는 partial — revenue/daily-brief 15차와 동일 클래스, work는 base 응답만 캐시). ⌘K 레코드 검색이 Revenue SWR 캐시를 재사용(`revenue-shared-cache.js` 공유 모듈 신설 — 페이지 청크를 셸로 끌지 않고 캐시만 분리, Revenue를 방금 본 직후 팔레트가 같은 원장을 재조회하던 것 제거).
+- **반응(속도 백로그 소진)**: overview/content/work/automations 훅에 모듈 스코프 stale-while-revalidate 이식(탭 전환·복귀 스켈레톤 제거, 재검증 실패는 partial — revenue/daily-brief 15차와 동일 클래스, work는 base 응답만 캐시). ⌘K 레코드 검색이 Revenue SWR 캐시를 재사용(`revenue-shared-cache.js` 공유 모듈 신설 — 페이지 청크를 셸로 끌지 않고 캐시만 분리, Revenue를 방금 본 직후 팔레트가 같은 기록을 재조회하던 것 제거).
 - **입출력 생성·연계**: TopBar New가 현재 표면의 생성 딥링크로 직행(팔레트 위장 해소 — 기준선 §2.8 지적). Leads/Deals/Cases/Accounts에 `?new=` 1회 소비+쿼리 소거 신설(projects/decisions/rhythm/studio 기존 소비와 동일 계약), ⌘K에 New Lead/Deal/Account/Case 4행 추가. 매핑 없는 표면만 팔레트 폴백. 계약 테스트 2건(셸 매핑·표면 소비).
 - **편의 UX(confirm 스타일드 플로 — 백로그 M)**: EditDrawer·project-create-drawer의 window.confirm 3곳 → 푸터 인라인 2단계 확인. ESC/오버레이는 스트립부터 해제(취소 시멘틱 — 연타로 버려지지 않음), 버림·삭제는 명시 danger 버튼만, 스트립 표시 시 포커스가 취소 버튼으로 이동. Button primitive forwardRef 전환(포커스 이동용, props 계약 유지). 계약 테스트 3건 갱신+강화.
 - **디자인 적합성·애니메이션(§9 감사)**: 위반 스캔 결과 reduced-motion 전역 킬(.hub-app 인라인 포함) ✓ · 펄스 1.2–1.5s ✓ · urgent 무애니메이션 ✓. 잔여 위반은 live 도트 glow 그림자 2곳(agents 채팅·revenue guru — 19차 아바타 glow와 동일 §4/§13 클래스) → 소거.
@@ -307,12 +307,12 @@
 
 - **Deals 스테이지 변경 3.5초 undo**: 즉시 PATCH → 지연 쓰기(useUndoableAction)로 전환 — 되돌리기는 네트워크 없는 진짜 취소, 연속 이동은 예약 대체 + 최초 원위치 복원, 창 종료 시 알림 소거(19차 수명 계약)·실패 시 롤백+명명. 드래그·1-5 키 양경로 공통. 이로써 되돌리기가 전 고빈도 뮤테이션을 커버(기준선 §2.8 "스테이지 변경 undo 없음" 소진). 계약 테스트 1건(지연 PATCH·즉시 실행 경로 부재·undoBase·소거).
 - **Segments 키보드 문법**: j/k 세그먼트 카드 커서(Moonstone outline·스크롤 추적) · e/Enter 펼침 토글 · / 검색 포커스 — 비코어 목록 표면의 마지막 문법 공백. Orders·Runs·Webhooks·Automations 개요는 계약 비대상 판정(읽기 전용 로그·결정 큐 — 12차 각주).
-- **잠복 크래시 2건(실측 발견·수리)**: ① Deals `totals` memo가 `DEAL_STAGES`를 deps에서 누락 — 원장 도착으로 stages만 갱신된 렌더에서 stale 빈 객체를 컬럼 헤더의 무가드 `totals[s.key].count`가 읽어 페이지 전체가 에러 바운더리로 떨어짐(deps 추가 + 옵셔널 가드). ② `useCrmKeyboard`가 onNew 미제공 시에도 n을 preventDefault로 소비하던 것 보정(23차와 함께) 후속으로 Segments·PMS에서 재확인.
+- **잠복 크래시 2건(실측 발견·수리)**: ① Deals `totals` memo가 `DEAL_STAGES`를 deps에서 누락 — 기록 도착으로 stages만 갱신된 렌더에서 stale 빈 객체를 컬럼 헤더의 무가드 `totals[s.key].count`가 읽어 페이지 전체가 에러 바운더리로 떨어짐(deps 추가 + 옵셔널 가드). ② `useCrmKeyboard`가 onNew 미제공 시에도 n을 preventDefault로 소비하던 것 보정(23차와 함께) 후속으로 Segments·PMS에서 재확인.
 
 ### Iteration 25 (2026-08-08) — 반영 완료
 
 주제: **BulkBar 첫 실채택(기준선 §2.8 마지막 항목) — 편의·UIUX 94 착지.**
-검증: `npm test` 475 중 466(실패 9 = registerHooks 환경 격차, 기준선 동일) · hub/engine build. 라이브 실측: x 2건 선택 → 바 "2 선택" → 1건 해제 → 단계 일괄 적용 → "1건 단계 → Contact 변경됨" → 선택 자동 해제, 신규 에러 0. 검증은 대상 리드의 기존 단계와 같은 값으로 적용해 원장 실질 무변경.
+검증: `npm test` 475 중 466(실패 9 = registerHooks 환경 격차, 기준선 동일) · hub/engine build. 라이브 실측: x 2건 선택 → 바 "2 선택" → 1건 해제 → 단계 일괄 적용 → "1건 단계 → Contact 변경됨" → 선택 자동 해제, 신규 에러 0. 검증은 대상 리드의 기존 단계와 같은 값으로 적용해 기록 실질 무변경.
 
 - **Leads BulkBar**: `useCrmKeyboard`에 `onToggleSelect` 배선(x 키), 행 `data-multi-selected` + 조용한 배경 표시(커서 outline과 채널 분리 — 바가 주 신호), 하단 플로팅 바에 단계 일괄 변경(select). 일괄 쓰기는 건별 `saveRevenueRecord` + 성공분만 로컬 반영 + 부분 실패 건수 명명("N건 저장, M건 실패") — 무언 부분 실패 금지. 치트시트에 X 행 복원(실배선 후에만 — 정직 유지). 계약 테스트 1건.
 - **보류 해제 근거 기록**: "1인 운영 성숙도에서 후순위"는 eval 루프의 우선순위 판단이었고, 운영자의 94 목표 지시(/goal 2026-08-08)가 이를 대체하는 가장 최근 지시다. SavedViews(window.prompt 포함)는 계속 미배선 — prompt는 22차에 소거한 OS 다이얼로그 클래스라 배선 전 스타일드 입력으로 교체가 선행돼야 한다(명시 보류 유지).
@@ -322,9 +322,9 @@
 주제: **A-1 attention adapter 컷오버 — 정체성 캡(Phase 1B 잔여) 해소, 정체성 94 착지.**
 검증: `npm test` 480 중 471(실패 9 = registerHooks 환경 격차, 기준선 동일) · hub/engine build. 라이브 실측(경합 오염 전): daily-brief 응답이 컷오버 전과 동등(status live · 7소스 live · 신호/슬롯/taskToday/metrics 동일 shape), attention 라우트 `raw` 미노출(my-work 무영향). 실측 중 dev 아티팩트 경합(두 dev 서버가 같은 `.next` 공유) 500은 코드 무관 환경 이슈로 판정.
 
-- **read 통합**: daily-brief 라우트가 tasks(getTaskLedger)·revenue(getRevenueLedger)·calendar를 별도로 읽던 3중 read를 `getAttentionLedger({ includeRaw: true })` 1호출로 교체 — attention이 내부에서 같은 세 원장을 이미 읽고 있었으므로 첫 화면 팬아웃에서 중복 read 3개가 사라지고, "지금 중요한 것" 판정의 원천이 물리적으로 하나가 된다. `raw`(projectLedger/revenue/calendar 원본)는 opt-in — §7 확정 슬롯(KA·집중 고객·오늘 일정·할 일 레인)은 확정 스펙의 자체 공식이 있으므로 원본 위 프로젝션으로 유지(§2 KA 7일 기준·§7 CS 레인 공식은 attention §4와 다른 축의 확정값).
-- **신호 엔진 어댑터**: 정체 딜 신호(buildUnifiedRiskSignals·buildRevenueSignals)의 판정을 attention 원장의 stalled 집합(§4 "다음 연락 시점 지남" = STALLED_DAYS 14)으로 교체 — 기존 자체 `age>=10` 밴드는 §8.1 "stalled 기준은 STALLED_DAYS 하나" 위반이었고 첫 화면과 내 작업이 같은 딜을 다르게 판정했다. stalled(14+)는 즉시 손실 위험이라 신호 톤은 전부 danger(기존 10–13일 warning 밴드는 단일 기준 정렬로 의도적 소거). operator 스코프는 revenue.deals 조인이 보장.
-- **결과 봉투 재포장**: buildSources/ledgerState의 기존 allSettled 계약을 유지하기 위해 raw 원장을 fulfilled 봉투로 재포장 — 소스 배지·error/partial 판정 로직 무수정. attention 자체 예외 시 세 원장 전부 read 실패로 명명(빈 화면 위장 금지).
+- **read 통합**: daily-brief 라우트가 tasks(getTaskLedger)·revenue(getRevenueLedger)·calendar를 별도로 읽던 3중 read를 `getAttentionLedger({ includeRaw: true })` 1호출로 교체 — attention이 내부에서 같은 세 기록을 이미 읽고 있었으므로 첫 화면 팬아웃에서 중복 read 3개가 사라지고, "지금 중요한 것" 판정의 원천이 물리적으로 하나가 된다. `raw`(projectLedger/revenue/calendar 원본)는 opt-in — §7 확정 슬롯(KA·집중 고객·오늘 일정·할 일 레인)은 확정 스펙의 자체 공식이 있으므로 원본 위 프로젝션으로 유지(§2 KA 7일 기준·§7 CS 레인 공식은 attention §4와 다른 축의 확정값).
+- **신호 엔진 어댑터**: 정체 딜 신호(buildUnifiedRiskSignals·buildRevenueSignals)의 판정을 attention 기록의 stalled 집합(§4 "다음 연락 시점 지남" = STALLED_DAYS 14)으로 교체 — 기존 자체 `age>=10` 밴드는 §8.1 "stalled 기준은 STALLED_DAYS 하나" 위반이었고 첫 화면과 내 작업이 같은 딜을 다르게 판정했다. stalled(14+)는 즉시 손실 위험이라 신호 톤은 전부 danger(기존 10–13일 warning 밴드는 단일 기준 정렬로 의도적 소거). operator 스코프는 revenue.deals 조인이 보장.
+- **결과 봉투 재포장**: buildSources/ledgerState의 기존 allSettled 계약을 유지하기 위해 raw 기록을 fulfilled 봉투로 재포장 — 소스 배지·error/partial 판정 로직 무수정. attention 자체 예외 시 세 기록 전부 read 실패로 명명(빈 화면 위장 금지).
 - README §3 Phase 1B 행을 "부분 작동 → 작동"으로 갱신(잔여 문구 소진).
 
 ### Iteration 27 (2026-08-09) — 반영 완료
@@ -352,8 +352,8 @@
 
 - **고객 연락 빈 상태 기준 명시(Q117)**: "기한 지남 딜 9 vs 연락 0" 모순 오독 해소 — 4-2-3-1 계층(트래킹 게이트 최우선, 무접촉 자동 유입 최하위)이 의도임을 카피로 명시.
 - **내 작업 무기한 분리(Q120)**: '전체 기한' 리스트에서 무기한(나중) 제외 — '나중' 렌즈 전용. 방금 추가한 무기한 할 일만 저장 확인용 예외(justAddedId).
-- **다음 연락일 tier-2 유입(Q117·Q121)**: 연락 기록 프리셋(27차)이 저장하는 meta.next_action_at을 followups 원장이 실소비 — 트래킹 윈도 밖 엔티티도 날짜 도래 시 유입(도래 전엔 정체 사유로도 유입 금지, 사유 '예약한 연락일 도래'). 후속: followups-ledger 전용 테스트 신설(기존 0건 파일).
-- **주간 리포트 이원화(Q118·Q119)**: 월=개인/목=회사(ClassIn) 아침 첫 화면 카드 + `/api/hub/weekly-report` + weekly-report 원장(7일 실기록 집계, 4소스 전멸 시 error·부분 실패 failedSources 명명). deals 스코프는 meta.type(컬럼 부재 확인).
+- **다음 연락일 tier-2 유입(Q117·Q121)**: 연락 기록 프리셋(27차)이 저장하는 meta.next_action_at을 followups 기록이 실소비 — 트래킹 윈도 밖 엔티티도 날짜 도래 시 유입(도래 전엔 정체 사유로도 유입 금지, 사유 '예약한 연락일 도래'). 후속: followups-ledger 전용 테스트 신설(기존 0건 파일).
+- **주간 리포트 이원화(Q118·Q119)**: 월=개인/목=회사(ClassIn) 아침 첫 화면 카드 + `/api/hub/weekly-report` + weekly-report 기록(7일 실기록 집계, 4소스 전멸 시 error·부분 실패 failedSources 명명). deals 스코프는 meta.type(컬럼 부재 확인).
 - **기본 정렬 기한순(Q116)**: my-work 기본 정렬 `due` — 28차 커밋 561573f에 선반영.
 
 ### Iteration 30 (2026-08-18) — 반영 완료
@@ -378,7 +378,7 @@
 ### 다음 회차 백로그 (점수 영향 순)
 
 - 편의 부가기능: 기존 키보드 시스템(useCrmKeyboard/ShortcutOverlay/BulkBar) 전면 배선, 공유 undo 훅 + live-region 토스트 → followups 기록·완료·스테이지 변경·삭제(soft) 확장, ⌘K 레코드 검색.
-- 정체성: 첫 화면을 attention 원장으로 컷오버(긴급 KA ≤1 · 집중 고객 ≤5 · 오늘 일정 슬롯), 비핵심 표면 내비 강등(preview 배지/⌘K-only), Council 히어로 CTA 교체, eeocrm-sync 死코드/미사용 카드 3종 제거.
+- 정체성: 첫 화면을 attention 기록으로 컷오버(긴급 KA ≤1 · 집중 고객 ≤5 · 오늘 일정 슬롯), 비핵심 표면 내비 강등(preview 배지/⌘K-only), Council 히어로 CTA 교체, eeocrm-sync 死코드/미사용 카드 3종 제거.
 - 속도: globals.css 死셀렉터 퍼지(117KB→~10KB), 드로어 state 지역화 + memo(revenue/projects), 뮤테이션 후 좁은 재검증.
 - 안정성: revenue-write preview/failed 분리 + 소비자 수정, 무음 실패 4곳 표면화, followups 에러 카피 분리.
 - 디자인: 전체 행 opacity 4곳 → LifecycleBadge + 메타 luminance, §15 표면 semantic 색상 정리, AttentionRail 실사용 전환.

@@ -1,6 +1,11 @@
 "use client";
 
 const I = {
+  panelCollapse: (<><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m7-11-3 3 3 3"/></>),
+  panelExpand: (<><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m4-11 3 3-3 3"/></>),
+  compass: (<><circle cx="12" cy="12" r="9"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5L16 8z"/></>),
+  followup: (<><path d="M20 11V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2v3l4-3h2M8 8h8M8 12h4m5 2 4 4-4 4m-3-4h7"/></>),
+  checklist: (<><path d="m3 6 2 2 3-4m-5 9 2 2 3-4M11 6h10M11 13h10M11 20h10M4 20h3"/></>),
   moon:      (<><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></>),
   sun:       (<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></>),
   brief:     (<><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></>),

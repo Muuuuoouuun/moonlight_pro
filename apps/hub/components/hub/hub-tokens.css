@@ -174,7 +174,7 @@
   height: 100dvh;
   width: 100%;
   overflow: hidden;
-  transition: background 0.2s, color 0.2s;
+  transition: background var(--dur-enter) var(--ease-hub), color var(--dur-enter) var(--ease-hub);
 }
 .hub-app button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
 .hub-app input, .hub-app textarea { font-family: inherit; color: inherit; }
@@ -203,6 +203,20 @@
 /* Keyboard-only focus ring (§11: never rely on browser defaults) — :focus-visible so a mouse
    click doesn't leave a ring, only Tab/roving-arrow-key navigation does. */
 .hub-app .hub-row:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
+/* 완료·보관 헤더(프로젝트): 세로 드래그 토글은 grip에서만 시작한다 — touch-action: none을
+   grip에만 줘서 행 본체 위의 세로 스와이프는 스크롤로 남긴다. 드래그 중 오프셋은 JS가
+   transform으로 쓰고 data-dragging으로 전이를 끈다. hover 배경 전이는 .hub-row 그대로. */
+.hub-app .hub-row[data-terminal-toggle] { transition: background var(--dur-hover) ease, transform var(--dur-hover) var(--ease-hub); }
+.hub-app .hub-row[data-terminal-toggle][data-dragging="true"] { transition: none; }
+.hub-app [data-terminal-grip] { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; margin: -6px; touch-action: none; cursor: ns-resize; }
+/* Grip tap halo — the glyph stays 12px and the box 24px, but a coarse pointer gets the §11
+   44px floor. This control only means anything on touch, so the floor applies exactly here.
+   Same contract as .hub-checkbox::before above: a pseudo-element grows the hit area without
+   moving neighbours (a negative margin on the grip itself would shift the row's grid). */
+@media (pointer: coarse) {
+  .hub-app [data-terminal-grip] { position: relative; }
+  .hub-app [data-terminal-grip]::before { content: ''; position: absolute; inset: -10px; }
+}
 /* 행 보조 액션(내 작업의 숨기기) — 휴지 상태에서는 제목·기한의 위계를 건드리지 않고,
    hover/키보드 포커스에서만 드러난다. hover가 없는 터치 기기에서는 아예 렌더 공간을
    차지하지 않게 감춘다(보이지 않는 탭 타깃 금지) — 그쪽에서는 행을 눌러 여는 상세
@@ -385,11 +399,39 @@
   transition: background var(--dur-hover) ease, color var(--dur-hover) ease;
 }
 /* Clickable KPI card — border lifts on hover. CSS, not onMouseEnter handlers. */
-.hub-app .hub-metric-card { transition: border-color var(--dur-hover) ease; }
-.hub-app .hub-metric-card[role="button"]:hover { border-color: var(--line-strong); }
+.hub-app .hub-metric-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-soft);
+  transition: border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-metric-card[role="button"]:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-metric-card { transition: none; }
 }
+
+/* The same sidebar DOM stays mounted so the collapse control keeps keyboard focus. */
+.hub-sidebar-root { transition: width var(--dur-panel) var(--ease-hub); }
+.hub-sidebar-root--collapsed .hub-sidebar-label,
+.hub-sidebar-root--collapsed .hub-sidebar-brand { display: none !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-header { padding: 14px 0 10px !important; justify-content: center !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-search,
+.hub-sidebar-root--collapsed .hub-sidebar-scope { padding: 4px 9px 8px !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-search > button { height: 36px !important; padding: 0 !important; justify-content: center; }
+.hub-sidebar-root--collapsed .hub-sidebar-nav { padding: 2px 6px 10px !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-utilities { padding: 6px !important; }
+/* 사용자 카드는 Futura fx-shell-card(인라인 margin 12px)다 — 56px 레일에서는 32px로 줄어 36px 알림 버튼이
+   넘치므로, 내비 pill과 같은 44px 폭 타일로 좁힌다. */
+.hub-sidebar-root--collapsed .hub-sidebar-footer { margin: 8px 6px 10px !important; padding: 4px 0 !important; justify-content: center; }
+.hub-app .hub-sidebar-root--collapsed .hub-nav-item--icon { position: relative; width: 100%; height: 40px; justify-content: center; padding: 0; flex-shrink: 0; }
+.hub-sidebar-count-dot { position: absolute; top: 6px; right: 6px; width: 4px; height: 4px; border-radius: 50%; background: var(--fg-muted); }
+.hub-sidebar-root--collapsed .hub-sidebar-inquiry { position: relative; }
+.hub-sidebar-root--collapsed .hub-sidebar-inquiry > .num { position: absolute; top: -2px; right: -5px; pointer-events: none; background: var(--surface); padding: 0 2px; border-radius: var(--r-xs); }
+.hub-sidebar-search > button:hover { color: var(--fg) !important; border-color: var(--line-strong) !important; }
 
 /* Pinned utilities (AI·자동화 · 설정) — same anchor, quieter weight. */
 .hub-app .hub-nav-item--sm {
@@ -464,7 +506,109 @@
    요소 자신의 radius를 따라가므로 여기서 radius를 건드릴 이유가 없다. */
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
 /* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
-.hub-app .hub-field:focus-within { border-color: var(--moon-300); }
+.hub-app .hub-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-field:hover:not(:focus-within) {
+  border-color: var(--line-strong);
+}
+.hub-app .hub-field:focus-within {
+  border-color: var(--moon-300);
+  background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--moon-300);
+}
+.hub-app .hub-field[data-disabled="true"],
+.hub-app .hub-field:has(input:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--line-soft);
+}
+
+/* EditDrawer inputs and controls — unified 32px compact input chrome */
+.hub-app .hub-drawer-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub);
+}
+/* EditDrawer의 여러 줄 입력은 크기·여백·행간을 여기서 갖지 않는다 — 글쓰기 필드 규칙
+   `textarea.hub-edit-textarea`(hub-edit-drawer.css, DESIGN.md §15 2026-09-21)가 단독 소유한다.
+   여기 있던 textarea 전용 padding·line-height와 --spacious 수정자는 그 파일이 뒤에 로드돼
+   같은 특이도로 덮던 죽은 선언이었다. 휴지·hover·focus·disabled chrome만 이 공용 규칙에서 받는다. */
+.hub-app select.hub-drawer-input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 28px;
+  cursor: pointer;
+}
+.hub-app .hub-drawer-input::placeholder {
+  color: var(--fg-faint);
+}
+.hub-app .hub-drawer-input:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+.hub-app .hub-drawer-input:focus {
+  border-color: var(--moon-300);
+  background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--moon-300);
+  outline: none;
+}
+.hub-app .hub-drawer-input:disabled {
+  color: var(--fg-faint);
+  background: var(--surface);
+  border-color: var(--line-soft);
+  cursor: not-allowed;
+}
+
+/* Quick capture field styles */
+.hub-app .hub-quick-capture__field {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-quick-capture__field:hover:not(:focus-within) {
+  border-color: var(--line-strong);
+}
+.hub-app .hub-quick-capture__field:focus-within {
+  border-color: var(--moon-300);
+  background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--moon-300);
+}
+.hub-app .hub-quick-capture__field[data-invalid="true"] {
+  border-color: var(--danger-line);
+}
+.hub-app .hub-quick-capture__input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+.hub-app .hub-quick-capture__input::placeholder {
+  color: var(--fg-faint);
+}
 
 /* ── Form controls (§8.1 primitives-first) ─────────────────────────────────────
    Capture surfaces used to re-declare input chrome inline on every field, and every
@@ -487,6 +631,20 @@
   transition: border-color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 .hub-app textarea.hub-input { height: auto; min-height: 104px; padding: 12px 14px; line-height: 1.7; resize: vertical; }
+/* spacious는 기본 글쓰기 필드보다 좁아지지 않는다 — 기본 textarea가 line-height 1.7로 올라왔다. */
+.hub-app textarea.hub-input--spacious {
+  min-height: 128px;
+  padding: 13px 15px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  letter-spacing: -0.005em;
+}
+
+/* Compact and spacious field size modifiers */
+.hub-app .hub-field--xs { height: 24px; padding: 0 7px; font-size: 11.5px; }
+.hub-app .hub-field--sm { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.hub-app .hub-field--md { height: 36px; padding: 0 12px; font-size: 13.5px; }
+.hub-app .hub-field--lg { height: 42px; padding: 0 14px; font-size: 14.5px; }
 .hub-app .hub-input::placeholder { color: var(--fg-faint); }
 .hub-app .hub-input:hover:not(:disabled) { border-color: var(--line-strong); }
 .hub-app .hub-input:focus { border-color: var(--moon-300); background: var(--surface-3); }
@@ -521,6 +679,7 @@
 .hub-app .hub-checkbox {
   cursor: pointer;
   user-select: none;
+  transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
 }
 .hub-app .hub-checkbox:active:not(:disabled) {
   transform: scale(0.92);
@@ -579,6 +738,8 @@
   transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 .hub-app .hub-seg__btn:hover:not([aria-pressed="true"]) { color: var(--fg-muted); }
+/* 필수 선택이 비었을 때만 — 색 단독이 아니라 폼 메시지와 함께 쓴다(§5.3). */
+.hub-app .hub-seg[data-invalid] { border-color: var(--danger); }
 .hub-app .hub-seg__btn[aria-pressed="true"] {
   color: var(--fg);
   background: var(--surface-3);
@@ -596,52 +757,14 @@
   animation: mlMoonPulse 1.4s ease-in-out infinite;
 }
 
-/* Burning Streak Motion */
-@keyframes mlFlameFlicker {
-  0%, 100% {
-    transform: scale(1) rotate(0deg);
-    filter: drop-shadow(0 0 3px rgba(255, 115, 55, 0.45));
-  }
-  25% {
-    transform: scale(1.08) rotate(-2deg);
-    filter: drop-shadow(0 0 6px rgba(255, 140, 70, 0.7));
-  }
-  50% {
-    transform: scale(0.96) rotate(1.5deg);
-    filter: drop-shadow(0 0 4px rgba(255, 100, 40, 0.5));
-  }
-  75% {
-    transform: scale(1.06) rotate(-1deg);
-    filter: drop-shadow(0 0 7px rgba(255, 155, 80, 0.75));
-  }
-}
-
-@keyframes mlBurnGlow {
-  0%, 100% {
-    border-color: rgba(255, 120, 50, 0.35);
-    box-shadow: 0 0 0 1px rgba(255, 120, 50, 0.2), 0 2px 10px -2px rgba(255, 100, 40, 0.15);
-  }
-  50% {
-    border-color: rgba(255, 145, 75, 0.6);
-    box-shadow: 0 0 0 1.5px rgba(255, 145, 75, 0.35), 0 4px 16px -2px rgba(255, 120, 50, 0.3);
-  }
-}
-
+/* 연속 완주 모션 — 완료 순간의 1회 팝만 남긴다.
+   2026-09-21까지 여기에는 mlFlameFlicker 1.8s·mlBurnGlow 2.4s 무한 애니메이션과 앰버 원색
+   12건이 있었다. DESIGN.md §9는 라이브 인디케이터 duration을 mlMoonPulse 1.4s 하나로 고정하고
+   §4는 warm amber 재도입을 금지한다. 지표는 burning-streak.jsx의 중립 기하가 그대로 나른다. */
 @keyframes mlBurnPop {
   0% { transform: scale(0.9); opacity: 0.8; }
   50% { transform: scale(1.1); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
-}
-
-.hub-app .hub-streak-flame--burning {
-  animation: mlFlameFlicker 1.8s ease-in-out infinite;
-  transform-origin: center bottom;
-  will-change: transform, filter;
-}
-
-.hub-app .hub-streak-badge--burning {
-  animation: mlBurnGlow 2.4s ease-in-out infinite;
-  will-change: border-color, box-shadow;
 }
 
 .hub-app .hub-streak-pop {
@@ -649,8 +772,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hub-app .hub-streak-flame--burning,
-  .hub-app .hub-streak-badge--burning,
   .hub-app .hub-streak-pop {
     animation: none;
   }
@@ -713,8 +834,7 @@
   overflow: hidden;
 }
 
-.hub-app .hub-progress--completed .hub-progress-bar::after,
-.hub-app .hub-pms-progress--completed .hub-pms-progress__fill::after {
+.hub-app .hub-progress--completed .hub-progress-bar::after {
   content: "";
   position: absolute;
   top: 0;
@@ -756,27 +876,6 @@
   box-shadow: 0 0 0 1px var(--accent-soft), 0 8px 28px -10px rgba(82, 116, 168, 0.25) !important;
 }
 
-.hub-app .hub-pms-progress--completed .hub-pms-progress__fill {
-  background: linear-gradient(90deg, var(--pms-moonstone) 0%, var(--moon-100) 100%);
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 0 8px -1px rgba(140, 168, 216, 0.45);
-}
-
-.hub-app .hub-pms-progress__value--100 {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--moon-100);
-  font-weight: 600;
-}
-
-.hub-app .hub-pms-progress__value--100 .hub-pms-sparkle-mark {
-  font-size: 10px;
-  color: #ffd166;
-  line-height: 1;
-}
-
 /* Progress Ring (원형 게이지) */
 .hub-app .hub-progress-ring {
   display: inline-flex;
@@ -803,8 +902,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hub-app .hub-progress--completed .hub-progress-bar::after,
-  .hub-app .hub-pms-progress--completed .hub-pms-progress__fill::after {
+  .hub-app .hub-progress--completed .hub-progress-bar::after {
     animation: none;
     display: none;
   }
@@ -1025,23 +1123,11 @@
   flex-shrink: 0;
 }
 
+/* 레이아웃 훅만 남긴다 — 보더·배경·포커스 링은 감싸는 `.hub-quick-capture__field`가 소유하고
+   글자·여백은 `.hub-quick-capture__input`이 갖는다. 여기서 보더·배경·:focus 링을 다시 선언하면
+   래퍼 안에 이중 보더·이중 포커스 링이 생긴다(구 9px 여백은 자체 1px 보더를 전제한 값이었다). */
 .hub-app .daily-brief__quick-input {
   width: 100%;
-  padding: 9px 12px;
-  font-size: 14.5px;
-  line-height: 1.4;
-  color: var(--fg);
-  background: var(--surface-2);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-sm);
-  transition: border-color var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub);
-}
-
-.hub-app .daily-brief__quick-input:focus {
-  outline: 1px solid var(--moon-300);
-  outline-offset: 1px;
-  border-color: var(--moon-300);
-  background: var(--surface);
 }
 
 .hub-app .daily-brief__status-toggle {
@@ -1532,7 +1618,7 @@
     transform: translateX(-104%);
     visibility: hidden;
     pointer-events: none;
-    transition: transform 0.18s ease, visibility 0s linear 0.18s;
+    transition: transform var(--dur-panel) var(--ease-hub), visibility 0s linear var(--dur-panel);
     box-shadow: var(--shadow-pop);
   }
 
@@ -2139,6 +2225,48 @@
 .personal-revenue-summary-item.is-primary > strong {
   color: var(--moon-200);
   font-size: clamp(26px, 3.6vw, 38px);
+}
+
+.personal-revenue-summary-item.is-all-confirmed {
+  border-left: 2px solid #ffd166;
+  background: rgba(255, 209, 102, 0.05);
+}
+
+.personal-revenue-summary-item.is-all-confirmed > strong,
+.personal-revenue-summary-item.is-all-confirmed .stat {
+  color: #ffd166;
+}
+
+.personal-revenue-confirmed-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: rgba(255, 209, 102, 0.15);
+  color: #ffd166;
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  animation: hubSparklePop var(--dur-enter) var(--ease-hub);
+}
+
+.personal-revenue-progress-track {
+  height: 3px;
+  background: var(--surface-3);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.personal-revenue-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--moon-300);
+  transition: width var(--dur-enter) var(--ease-hub);
+}
+
+.personal-revenue-progress-fill.is-all-confirmed {
+  background: linear-gradient(90deg, var(--moon-300), #ffd166);
+  box-shadow: 0 0 6px rgba(255, 209, 102, 0.3);
 }
 
 .personal-revenue-timeline-section,

@@ -52,9 +52,19 @@ export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = 
   }
 
   return (
-    <form onSubmit={capture} style={{ padding: 18, border: "1px solid var(--line-soft)", borderRadius: "var(--r-lg)", background: "rgba(255,255,255,0.04)", display: "grid", gap: 12 }}>
+    <form onSubmit={capture} style={{ padding: 18, border: "1px solid var(--line-soft)", borderRadius: "var(--r-lg)", background: "var(--surface)", display: "grid", gap: 12 }}>
       <div style={{ fontSize: 14, fontWeight: 550 }}>떠오른 소재부터 담기</div>
-      <TextAreaField label="소재 메모" value={body} onChange={(event) => setBody(event.target.value)} disabled={busy || Boolean(attempt.current)} placeholder="지금 말하고 싶은 한 가지, 기억할 문장…" rows={3} />
+      <TextAreaField
+        label="소재 메모"
+        value={body}
+        onChange={(event) => setBody(event.target.value)}
+        disabled={busy || Boolean(attempt.current)}
+        placeholder="지금 말하고 싶은 한 가지, 기억할 문장…"
+        rows={3}
+        spacious
+        autoResize
+        onCmdEnter={capture}
+      />
       <TextField label="참고 링크 (선택)" type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} disabled={busy || Boolean(attempt.current)} placeholder="https://" />
       <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
         {!brandId && !fixedScope && <label style={{ display: 'grid', gap: 5, fontSize: 12, color: 'var(--fg-muted)' }}>기록 범위<select aria-label="소재 기록 범위" value={scope} onChange={(event) => setScope(event.target.value)} disabled={busy || Boolean(attempt.current)} style={{ minHeight: 40, color: 'var(--fg)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: '8px 10px' }}><option value="personal">개인</option><option value="company">회사</option></select></label>}

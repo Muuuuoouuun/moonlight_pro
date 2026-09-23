@@ -5,8 +5,11 @@ import { readFile } from "node:fs/promises";
 
 import {
   buildJunhyukLeadEnrichment,
+  isTemplateNextAction,
   normalizeEntityName,
 } from "../apps/hub/lib/sales-os/lead-enrichment.js";
+// 제목 분류는 calendar-touchpoints가 정본 — 넛지와 같은 규칙을 써야 한다(사본 금지).
+import { classifyCalendarTitle } from "../apps/hub/lib/sales-os/calendar-touchpoints.js";
 import { assertEnrichmentApplyPolicy } from "./enrich-eeocrm-policy.mjs";
 
 const DEFAULT_OWNER = {
@@ -65,14 +68,6 @@ async function requestJson(url, { headers = {}, method = "GET", body } = {}) {
 function ownerFilter(owner) {
   const aliases = [owner.externalId, owner.name, "Mun Junhyuk (문준혁)", "Junhyuk Mun"];
   return `owner_name=in.(${[...new Set(aliases)].map(encodeURIComponent).join(",")})`;
-}
-
-function classifyCalendarTitle(title) {
-  const text = String(title || "").toLowerCase();
-  if (/설명회|세미나|웨비나/.test(text)) return "infoSession";
-  if (/미팅|회의|meeting|방문|상담/.test(text)) return "meeting";
-  if (/콜|전화|call/.test(text)) return "call";
-  return "other";
 }
 
 function monthRanges(now = new Date(), months = 7) {
@@ -239,9 +234,18 @@ async function main() {
       publicEvidence: publicEvidence.get(normalizeEntityName(company.name)) || [],
       now,
     });
+    // 운영자가 직접 적은 다음 행동은 덮지 않는다(2026-09-21 0c). 비어 있거나 이전 실행이
+    // 남긴 템플릿 문장일 때만 갱신한다 — 재실행이 운영자의 약속을 필러로 되돌리던 경로다.
+    const operatorOwnsNextAction = Boolean(lead.next_action)
+      && !isTemplateNextAction(lead.next_action);
+    if (operatorOwnsNextAction) {
+      delete built.patch.next_action;
+    } else {
+      built.patch.meta = { ...built.patch.meta, next_action_source: "import-template" };
+    }
     const currentFingerprint = lead.meta?.enrichment?.evidenceFingerprint || null;
     const changed = lead.score !== built.patch.score
-      || lead.next_action !== built.patch.next_action
+      || (!operatorOwnsNextAction && lead.next_action !== built.patch.next_action)
       || (currentFingerprint
         ? currentFingerprint !== built.enrichment.evidenceFingerprint
         : JSON.stringify(semanticEnrichment(lead.meta?.enrichment)) !== JSON.stringify(semanticEnrichment(built.enrichment)));

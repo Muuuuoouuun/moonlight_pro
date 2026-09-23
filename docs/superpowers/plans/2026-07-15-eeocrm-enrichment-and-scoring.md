@@ -6,7 +6,7 @@
 ## 확정
 
 - ClassIn/eeoCRM은 회사 공식 계정·기회·수금·활동 요약의 정본이다.
-- Moonlight는 개인 업무 정본이다. ClassIn의 상세 원장을 복제하지 않고, 공식 ID·집계·근거 링크·다음 액션만 보관한다.
+- Moonlight는 개인 업무 정본이다. ClassIn의 상세 기록을 복제하지 않고, 공식 ID·집계·근거 링크·다음 액션만 보관한다.
 - 소유자 브리지: `ownerId=3935704427463307`, `EEO04186`, `문준혁`.
 - 전체 CRM 81,294건이나 Moonlight eeoCRM 117건을 일괄 보강하지 않는다.
 - 자동 보강 게이트는 `공식 owner 일치 + 회사명 exact_name`이다. 현재 22개 소유 계정 중 Moonlight 13개 회사, 16개 리드가 통과했다.
@@ -72,4 +72,4 @@ node \
 
 - Xiaoshouyi `saleStageId` 숫자→라벨 사전은 현재 스냅샷에 없다.
 - Mac에서 호출 가능한 eeoCRM MCP/서비스 credential이 없다. 쓰기 연결은 read-only 인증이 먼저 복구된 뒤 별도 승인한다.
-- 콜·미팅·설명회 활동 원장은 ClassIn `crm_customer_events`가 현재 0건이다. 캘린더 exact match는 보조 근거일 뿐 완전한 활동 원장이 아니다. 향후 row가 생기면 owner/account target을 확인한 뒤 enrichment source에 추가한다.
+- 콜·미팅·설명회 활동 기록은 ClassIn `crm_customer_events`가 현재 0건이다. 캘린더 exact match는 보조 근거일 뿐 완전한 활동 기록이 아니다. 향후 row가 생기면 owner/account target을 확인한 뒤 enrichment source에 추가한다.

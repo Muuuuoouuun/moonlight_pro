@@ -331,7 +331,15 @@ function mapTodos(rows, projectById, brandById) {
       // Deal-linked sub-task (meta.deal_id, written by create_task's dealId) — the Deals
       // drawer checklist filters on this; null for ordinary project/standalone tasks.
       dealId: row.meta?.deal_id || null,
+      // 오늘 3개 — 고른 날짜의 이력(meta.focus_dates, KST 'YYYY-MM-DD'). task-today.js가 오늘
+      // 레인을, attention-ledger가 `focus` 버킷을, 주간 리포트가 완료율을 이걸로 센다(§6.2).
+      focusDates: Array.isArray(row.meta?.focus_dates)
+        ? row.meta.focus_dates.filter((value) => typeof value === "string")
+        : [],
       assignee: row.owner_id ? "Me" : "Unassigned",
+      // Engine PMS가 done 전이 때 찍는 완료 시각 — Rhythm 매트릭스가 완료일을 판정한다
+      // (updatedAt은 완료 뒤 수정에도 바뀌어 완료일로 쓸 수 없다).
+      completedAt: row.completed_at || null,
       updatedAt: row.updated_at || row.created_at || "",
     };
   });

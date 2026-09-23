@@ -83,6 +83,7 @@ export const NAV_TREE = [
   {
     key: 'content', label: 'Content', icon: 'content', secondary: true,
     children: [
+      { key: 'performance', label: '성과', icon: 'signal', path: 'dashboard/content/performance', keywords: ['요약', '이번 주', '월별', '발행량', '조회수', '공유', '답글', 'analytics'] },
       { key: 'queue', label: 'Queue', icon: 'queue', path: 'dashboard/content/queue', keywords: ['콘텐츠', '발행 큐'] },
       { key: 'studio', label: 'Studio', icon: 'studio', path: 'dashboard/content/studio', keywords: ['스튜디오', '작성'] },
       { key: 'campaigns', label: 'Campaigns', icon: 'campaigns', path: 'dashboard/content/campaigns' },

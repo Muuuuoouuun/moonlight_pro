@@ -45,9 +45,14 @@ function formatFullDate(value) {
 function RevenueSummary({ summary }) {
   // 세 확실성 버킷의 합이 예상 유입과 정확히 일치한다 — 기존 4키 구성은 `possible`
   // 버킷을 표에서 통째로 빠뜨려 합이 맞지 않았다.
+  const confirmedRate = summary.expectedInflow > 0
+    ? Math.round((summary.confirmed / summary.expectedInflow) * 100)
+    : 0;
+  const isAllConfirmed = summary.expectedInflow > 0 && summary.confirmed >= summary.expectedInflow;
+
   const metrics = [
     { label: "30일 예상 유입", value: formatMoney(summary.expectedInflow), primary: true },
-    { label: "확정", value: formatMoney(summary.confirmed) },
+    { label: "확정", value: formatMoney(summary.confirmed), isConfirmed: true },
     { label: "가능성 높음", value: formatMoney(summary.recommended) },
     { label: "확인 필요", value: formatMoney(summary.unknown) },
     { label: "다음 행동 없음", value: `${summary.missingNextAction}건` },
@@ -56,9 +61,40 @@ function RevenueSummary({ summary }) {
   return (
     <section className="personal-revenue-summary" aria-label="30일 매출 요약">
       {metrics.map((metric) => (
-        <div key={metric.label} className={`personal-revenue-summary-item${metric.primary ? " is-primary" : ""}`}>
-          <span>{metric.label}</span>
-          <strong className="stat">{metric.value}</strong>
+        <div
+          key={metric.label}
+          className={`personal-revenue-summary-item${metric.primary ? " is-primary" : ""}${metric.isConfirmed && isAllConfirmed ? " is-all-confirmed" : ""}`}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+            <span>{metric.label}</span>
+            {metric.isConfirmed && isAllConfirmed && (
+              <span className="personal-revenue-confirmed-badge">
+                ✦ 100% 확정
+              </span>
+            )}
+          </div>
+          <strong className="stat">
+            {metric.value}
+          </strong>
+          {metric.primary && summary.expectedInflow > 0 && (
+            <div style={{ marginTop: 6 }}>
+              <div
+                role="progressbar"
+                aria-valuenow={confirmedRate}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                title={`확정률: ${confirmedRate}%`}
+                className="personal-revenue-progress-track"
+              >
+                <div
+                  className={`personal-revenue-progress-fill${isAllConfirmed ? " is-all-confirmed" : ""}`}
+                  style={{
+                    width: `${Math.min(100, confirmedRate)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       ))}
     </section>
@@ -227,7 +263,7 @@ function DealDrawer({ deal, closeDrawer, closeButtonRef, onNavigate }) {
         </div>
         <strong>{deal.action.text}</strong>
         {deal.action.source === "recommended" ? (
-          <p>원장에 확정된 다음 행동이 없어 현재 단계에 맞춘 권장안을 표시합니다.</p>
+          <p>기록에 확정된 다음 행동이 없어 현재 단계에 맞춘 권장안을 표시합니다.</p>
         ) : null}
       </div>
 
@@ -314,7 +350,7 @@ export function PersonalRevenueRoadmap({ ledger, syncState, onNavigate }) {
 
         {syncState === "loading" ? (
           <Card className="personal-revenue-state-card">
-            <div className="personal-revenue-loading" role="status">매출 원장을 불러오는 중…</div>
+            <div className="personal-revenue-loading" role="status">매출 기록을 불러오는 중…</div>
           </Card>
         ) : model.events.length === 0 ? (
           <Card className="personal-revenue-state-card" pad={false}>
@@ -323,7 +359,7 @@ export function PersonalRevenueRoadmap({ ledger, syncState, onNavigate }) {
               title="예정일이 있는 개인 딜이 없습니다"
               description={ledger?.source === "supabase"
                 ? "개인 딜에 예정일을 지정하면 30일 매출 타임라인과 실행 우선순위가 여기에 나타납니다."
-                : "Preview · 연결된 매출 원장에 개인 딜과 예정일이 필요합니다."}
+                : "Preview · 연결된 매출 기록에 개인 딜과 예정일이 필요합니다."}
               action={<Button variant="outline" onClick={() => onNavigate?.("dashboard/revenue/deals?scope=personal")}>Deals 열기</Button>}
             />
           </Card>

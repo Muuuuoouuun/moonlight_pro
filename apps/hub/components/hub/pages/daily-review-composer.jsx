@@ -157,7 +157,7 @@ function ReviewAiDebrief({ draft, onAppendNote }) {
 }
 
 export function DailyReviewComposer({ model, onClose }) {
-  const { date, draft, review, source, saveState, busy, dirty, conflict, edit } = model;
+  const { date, draft, review, source, saveState, busy, dirty, conflict, edit, today } = model;
   const toast = useToast();
   const [expanded, setExpanded] = React.useState(() => source !== 'loading' && hasProgress(draft));
   const [exiting, setExiting] = React.useState(false);
@@ -166,6 +166,12 @@ export function DailyReviewComposer({ model, onClose }) {
   const submittingRef = React.useRef(false);
   const locked = busy || exiting;
   const dateLabel = new Intl.DateTimeFormat('ko-KR', { timeZone: 'UTC', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date(`${date}T12:00:00Z`));
+  // 읽기 전용 두 줄(2026-09-20 §6.3) — 오늘 3개 k/n · 연락 N건. 서버가 못 읽으면 날짜만 남는다.
+  // 연락 수가 null이면 읽기가 상한에 잘린 것이라 그 조각만 뺀다 — 적게 센 수를 확신에 차서
+  // 보여주지 않는다(허브 read 계약).
+  const todayLine = today && today.date === date
+    ? ` · 오늘 3개 ${today.focusDone}/${today.focusPicked}${Number.isFinite(today.contacts) ? ` · 연락 ${today.contacts}건` : ''}`
+    : '';
 
   React.useEffect(() => {
     if (source !== 'loading' && !initialized.current) {
@@ -203,7 +209,7 @@ export function DailyReviewComposer({ model, onClose }) {
     } finally { submittingRef.current = false; }
   }
 
-  return <Drawer title="하루 리뷰" subtitle={dateLabel} presentation="compact" width="460px" exiting={exiting} onClose={requestClose} initialFocusRef={formRef}
+  return <Drawer title="하루 리뷰" subtitle={`${dateLabel}${todayLine}`} presentation="compact" width="460px" exiting={exiting} onClose={requestClose} initialFocusRef={formRef}
     footer={<div className="daily-review-composer-footer">
       {!conflict && <Button form="daily-review-composer" type="submit" variant="primary" size="md" icon={saveState === 'saved' ? 'check' : undefined} disabled={locked || source !== 'live' || !dirty}>{saveState === 'saving' ? '저장 중…' : saveState === 'saved' ? '저장했어요' : saveState === 'error' ? '다시 저장' : review ? '수정 저장' : '저장'}</Button>}
       <span className="daily-review-footer-hint">{source !== 'live' && source !== 'loading' ? '연결 후 저장할 수 있어요' : dirty ? '닫아도 작성 중인 내용은 유지돼요' : '한 항목만 남겨도 좋아요'}</span>

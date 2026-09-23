@@ -1,22 +1,46 @@
 # CRM 탭 디벨롭 — 0·1단계 실행 계획 (파일 단위)
 
-> 상태: **DRAFT · 실행 대기.** [스펙 v0.2](../specs/2026-09-21-crm-tab-develop-design.md) §7의 0단계 PR 3개와 1단계 PR 2개를 파일·함수·테스트·완료 기준까지 내린 문서다. 스펙의 권장 기본값(§9 Q138~Q146)이 뒤집히지 않는다는 전제로 쓴다. 이 문서는 구현 기록이 아니다 — 착수 후 각 PR의 실측·커밋을 아래 표에 채운다.
+> 상태: **DRAFT · 0단계 완료 + 컨택 시트 전역화 + 넛지 N1~N3(고객 연락 표시) 완료 · N3 나머지 표시 2곳과 N4 대기.** 2026-09-21 오후: 실행 범위를 §0-min 최소 세트로 축소(운영자 "기본만" 판단), 이어서 "고고" 지시로 0단계 3개 PR을 worktree `claude/crm-nudge-p0`에서 완료하고 서울 운영 DB를 읽기 전용으로 확인했다(§3-실행·§3-실측). [스펙 v0.2](../specs/2026-09-21-crm-tab-develop-design.md) §7의 0단계 PR 3개와 1단계 PR 2개를 파일·함수·테스트·완료 기준까지 내린 문서이자, 0단계는 실행 기록까지 겸한다. 스펙의 권장 기본값(§9 Q138~Q146)이 뒤집히지 않는다는 전제로 쓴다. §0-min의 3(컨택 시트 전역화)와 넛지 N1~N3는 2026-09-23 통합으로 들어왔고(`6530533`·`cae4944`·`0f63bf6`·`8cf3809`), N3 나머지 표시 2곳과 N4는 대기다.
 > 작성일: 2026-09-21 · 브랜치 `09.bigmac1.02` · HEAD `d8e2abe`
 > 전제: 활성 1순위는 여전히 09-03 성장 기획서 F-0(초안 크론 수리)이다. 0단계 3개 PR은 F-0이 만지는 파일(`apps/hub/app/api/cron/*`, `apps/engine/app/api/ai/*`, `automations-ledger.js`, `daily-brief.jsx` 승인 카드)과 겹치지 않아 병행할 수 있다. 여러 파일에 걸친 작업이므로 CLAUDE.md 규칙대로 **전용 worktree**(`git worktree add ../moonlight_pro-crm-p0 -b claude/crm-tab-p0`)에서 시작하고 병합 뒤 `git worktree remove`까지 마친다. `git add -A` 금지 — 만진 파일만 명시 경로로.
 
 ---
 
+## 0-min. 최소 세트 (스펙 §0.5 · 2026-09-21 오후) — 지금 실행하는 범위
+
+운영자의 "기본만" 판단에 따라 **실행 범위를 아래 4개로 줄인다.** 나머지 PR(1a 전체, 1b의 RPC v2·초안 저장소·세 폼 제거)은 5영업일 실사용 뒤 필요가 증명되면 꺼낸다.
+
+| 순서 | 항목 | 이 문서의 절 | 축소 내용 |
+|---|---|---|---|
+| 1 | 기록 저장소 통일 + 반응 표시 | §1 PR-0a + §2.1의 `ActivityTimeline` 반응 뱃지 | 그대로 |
+| 2 | 오늘 연락 행 살리기 + 2단 정렬 | §2 PR-0b | `bucket/href/lastNote/lastReaction` 생산은 그대로. **추가**: `buildFollowupItems` 결과를 `promise_missed → due today → 나머지(접힘)` 세 묶음으로만 나누는 `groupFollowups(items, todayKey)` 순수 함수(+테스트). 5층 `rankFollowups`는 만들지 않는다 |
+| 3 ✅ `6530533` | 컨택 시트 전역화 | §5 PR-1b **축소판** | `ContactOutcomeSheet`를 `Drawer presentation="compact"`로 감싼 `ContactRecordDrawer`(파일 1개)로 승격하고 큐 행·고객 목록 행·첫 화면 집중 고객 행·Leads 편집 드로어에서 연다. 통화·미팅·방문만 반응 필수(`reactionRequired(kind)` 순수 함수 + 테스트), 카톡·메모는 원문만. 요약 `maxLength` 120 → 500. 선택 `원문 붙여넣기`는 저장 성공 뒤 `note` 활동으로 2차 저장(비원자 — 실패 시 텍스트 보존·재시도·복사). **RPC v2·마이그레이션·초안 저장소·세 폼 제거는 하지 않는다**(followups의 인라인 `LogForm`은 드로어로 대체, `QuickLog`·`LogComposer`는 남겨 둔다) |
+| 4 | 집중 고객 조건 교정 + 이관 가드 | §3 PR-0c | 그대로 |
+
+**2차 지시(2026-09-21 오후) — 넛지 엔진.** 스펙 §0.5 "넛지로 유도·연결". 실행 순서는 `0a → 3(시트 전역화) → N1 → N2 → N3 → N4`, 그다음 2·4.
+
+| 순서 | 항목 | 파일 | 테스트 |
+|---|---|---|---|
+| N1 ✅ `cae4944` | **캘린더 접점** — 매칭·분류·미기록 판정 | **신설** `apps/hub/lib/sales-os/calendar-touchpoints.js`(`matchEventToCustomers`·`classifyCalendarTitle`·`findUnrecordedMeetings` — 순수; 규칙은 `scripts/enrich-eeocrm-leads.mjs`에서 옮기고 스크립트는 import) | `calendar-touchpoints.test.mjs`: ≥3자 매칭·미매칭·`next_meeting.eventId` 확정·`[start−2h, end+24h]` 경계·KST |
+| N2 ✅ `cae4944` | **넛지 엔진** — 계기 8종, 고객당 1개, 억제 적용 | **신설** `apps/hub/lib/sales-os/crm-nudges.js`(`buildCrmNudges({ leads, deals, activities, events, memos, suppressions, todayKey })` → `[{ ruleId, triggerKey, subject, severity:'act'|'organize'|'recap', title, reason, action:{ kind, prefill }, escape[] }]`, 순수 `@/` 없음) · **신설** `apps/hub/lib/repositories/crm-nudges-source.js`(리드·딜·최근 30일 활동·지난 3일 캘린더·정리 안 된 메모 30건 읽기 — 실패 소스는 `failedSources`) · 억제 저장: `revenue-write.js` `buildLeadWrite/buildDealWrite`에 `nudges` metaPatch(`{ [triggerKey]: { snoozedUntil, dismissed, at } }`) · 미매칭 일정 "고객 아님"은 `apps/hub/lib/crm-nudge-mute.js`(`my-work-mute.js` 복제, 키 `mlp.crm.nudge-muted`) | `crm-nudges.test.mjs`: 계기별 참/거짓·우선순위(숨긴 뒤 낮은 계기 미노출)·triggerKey가 제목 변경에 안정·억제 만료·고객당 1개 |
+| N3 ◐ `0f63bf6`·`8cf3809` | **표시 3곳** | `daily-brief/route.js`에 `buildCrmNudgeSignals`(kind `CRM`, 최대 3, `withoutFocusDuplicates` 뒤) + `daily-brief.jsx` decisions에 `record` 액션(시트 프리필 열기) · `followups.jsx` 상단 `먼저 정리할 것`(severity `act`) + 접힌 `정리`(organize) · `daily-review.jsx` 컴포저 위 `오늘 정리할 것 N` 목록(organize + 미기록 미팅) · 넛지 카드는 `discovery-nudge.jsx`를 `subject` 기반으로 일반화한 `apps/hub/components/hub/crm-nudge.jsx` | `state-usage`·`motion`·`focus-ring` 스윕 · 카드 순수 매핑 테스트(넛지 → 신호 카드 필드) |
+| N4 | **메모 → AI 후보** (`memo_unlinked`의 연결 행동) | Engine `pattern-analysis.ts` goal `contact-record`(입력: 메모 본문 + 고객명 후보 ≤50; 출력 `{customerName, customerId?, kind, summary, reaction, nextAction, nextAt, needs[]}`; 스키마 벗어나면 후보 없음) · Hub `journal/analyze` goal 통과 · **신설** `apps/hub/components/hub/contact-record-candidate.jsx`(후보 카드 → 시트 프리필) · 사용량: 응답 `usageMetadata`를 `agent_runs`에 남기고 월 합계 표시 | Engine 파서 테스트(스키마·고객명 매칭·미매칭 `customerId:null`) · 후보→시트 프리필 매핑 테스트 |
+
+`weekly_recap`은 기존 주간 카드(`getWeeklyReport`)에 `touchpoints`(기록+캘린더, 고객·날짜·종류 중복 제거) 필드를 더해 그린다 — 새 카드 없음.
+
+완료 기준은 스펙 §0.5의 세 숫자(놓친 약속 0 · 기록 건수 = 연락 수 · 기록 30초)다.
+
 ## 0. 범위와 순서
 
-| PR | 이름 | 규모 | 의존 | 마이그레이션 |
-|---|---|---|---|---|
-| 0a | 집계 원천 통일 | S | — | 0 |
-| 0b | 연락 행 살리기 + 반응 표시 | M | 0a(같은 파일 `followups-ledger.js`) | 0 |
-| 0c | 집중 고객 후보 교정 + 이관 가드 | S | — | 0 |
-| 1a | 고객 상세 섹션 세트 | L | 0b | 0 |
-| 1b | 통합 기록창 + RPC v2 | L | 1a | **1**(함수) |
+| PR | 이름 | 규모 | 의존 | 마이그레이션 | 상태 |
+|---|---|---|---|---|---|
+| 0a | 집계 원천 통일 | S | — | 0 | **완료** `282572a` (worktree `claude/crm-nudge-p0`, npm test 1512 · 실패 0) |
+| 0b | 연락 행 살리기 + 2단 정렬 | M | 0a | 0 | **완료** `1a67949` (npm test 1529 · next build 통과) |
+| 0c | 집중 고객 후보 교정 + 이관 가드 | S | — | 0 | **완료** `d4b57b5` + 보강 `1879595`(시트 템플릿 계열·빈 상태 카피, npm test 1537) |
+| 1a | 고객 상세 섹션 세트 | L | 0b | 0 | 대기 |
+| 1b | 통합 기록창 + RPC v2 | L | 1a | **1**(함수) | 대기 |
 
-0a → 0b는 순서가 있고, 0c는 독립이다. 1a와 1b는 같은 주에 붙여서 한다(1a만 나가면 "기록 남기기" 버튼이 옛 세 폼 중 하나를 열게 되어 어정쩡하다).
+0a → 0b는 순서가 있고, 0c는 독립이다. 1a와 1b는 같은 주에 붙여서 한다(1a만 나가면 "기록 남기기" 버튼이 옛 세 폼 중 하나를 열게 되어 어정쩡하다). **다음 착수 후보는 §0-min "3. 컨택 시트 전역화"(PR-1b 축소판)다** — §3-실측이 확인한 대로 컨택 시트가 아직 한 번도 쓰인 적이 없어서(활동 115행 전부 `reaction` null), 1a/1b 전체보다 입력 경로를 쉽게 여는 쪽이 먼저 체감된다.
 
 **공통 완료 조건(모든 PR).** 루트 `npm test` 실패 0 · 스윕 3종 통과(`motion`·`focus-ring`·`no-mock-data`) · `state-usage.test.mjs` 통과 · `git show --stat`의 ±라인이 편집 규모와 맞음 · 이 문서의 해당 PR 행에 커밋 해시 기록.
 
@@ -113,6 +137,78 @@
 
 ---
 
+## 3-실행. 0단계 실행 기록 (2026-09-21, worktree `claude/crm-nudge-p0`)
+
+세 PR 모두 `npm test` 실패 0 + `next build` 통과로 닫았다. 계획과 달라진 곳만 적는다.
+
+| 항목 | 계획 | 실제 | 이유 |
+|---|---|---|---|
+| KST 날짜 헬퍼 | `attention-ledger`의 `dateKey`·`bucketFor`를 export로 승격해 import | **`apps/hub/lib/kst-day.js` 신설**, attention-ledger·daily-focus·followups-ledger가 모두 여기서 import | followups-ledger가 attention-ledger를 import하면 tasks·revenue·calendar·inquiries 읽기가 통째로 딸려온다. 사본은 원래 2개(attention·daily-focus)였고 이제 0개 |
+| 묶음 계약 위치 | `followups-ledger.js`에 `groupFollowups` | **`apps/hub/lib/sales-os/followup-groups.js` 신설**(순수, import 0) | 페이지가 저장소 모듈을 import하면 `server-read`/`server-write`가 클라이언트 청크로 끌려온다 |
+| 집중 고객 후보 | 날짜 도래(+3일) **또는** raise를 필수 | 날짜 없는 실제 약속도 후보로 두되 **정렬에서 뒤로** | 날짜를 필수로 하면 첫 화면이 빈 채로 시작한다. 기존 정렬 계약 테스트 4건이 무수정 통과하는 것도 이 형태 |
+| `rejected_open` 제외 | 0c 범위 | **미적용** | 위기 판정(`deriveCustomerRisk`)이 생기는 1a에서 붙인다 |
+| 예상 밖 수리 | — | 활동 종류 `kind` 화이트리스트가 9종이라 `kakao`·`quote`·`ai`가 `update`로 접혀 저장되고 있었다(0016 CHECK는 12종) | 0a에서 함께 교정 |
+| 예상 밖 수리 | — | 행에 `companyId`가 없어 활동 조회가 `lead_id`로만 나갔다 — 라이브 기록은 110행 중 109행이 `company_id`라 사실상 전 행이 "기록 없음"이었다 | 0b에서 함께 교정 |
+| 테스트 갱신 | — | `state-usage.test.mjs`의 레일 계약을 `BUCKET_STRIPE` 리터럴 고정에서 **예산 규칙**(`rail` prop + `MAX_DANGER_RAILS`)으로 교체 | 레일이 상수에서 프로퍼티로 옮겨갔다 |
+
+**아직 확인하지 않은 것**: 운영 데이터로 화면을 띄워 본 검증. 수용 체크리스트의 1~6번은 전부 실사용 확인이 필요하며, 현재까지는 단위 테스트와 컴파일만 통과했다.
+
+## 3-실측. 운영 DB 확인 (2026-09-22, 읽기 전용 · dev :3050)
+
+메인 워크트리의 `.env.local`로 워크트리 dev 서버를 띄워 서울 운영 DB를 **읽기만** 했다. 쓰기·재채점·스크립트 실행은 하지 않았다.
+
+| 항목 | 실측 | 뜻 |
+|---|---|---|
+| `crm_activities` 전체 | **115행** | 실제 연락 기록 |
+| `outreach_outcomes` 전체 | **3행** | 0a 이전에 주간 리포트·큐 점수가 읽던 테이블 |
+| 활동 연결 | `account_id` 112 · `company_id` 109 · `deal_id` 3 · **`lead_id` 0** | 0b의 `companyId` 수리가 없으면 활동 패널이 사실상 항상 "기록 없음" |
+| 활동 `reaction` | **115행 전부 null** | 컨택 시트(원자 RPC) 경로가 아직 한 번도 쓰이지 않았다. 반응 표시(0a)·`lastReaction`(0b)은 운영자가 그 폼을 쓰기 시작해야 보인다 |
+| 활동 `kind` | call 64 · visit 27 · update 15 · meeting 6 · demo 3 (kakao·quote 0) | 0a가 고친 9종 화이트리스트가 kakao/quote를 `update`로 접던 흔적과 일치 |
+| 최근 활동 | **2026-08-06**이 마지막 | 최근 7일 기록 0건 — 주간 "연락 N건"은 양쪽 원천 모두 0이라 이 숫자만으로는 0a를 증명할 수 없다. 115 vs 3이 증거다 |
+| 리드 | 117건 · `next_action` 117건 · **`next_action_at` 0건** | 약속 날짜가 하나도 없다. 그래서 고객 연락 큐가 비어 있고(컷오버 2026-08-06), 묶음 섹션은 실데이터로 아직 못 봤다 |
+| `next_action` 내용 | 이관 템플릿 16 · **시트 동기화 템플릿 101** · 운영자 문장 0 | 0c가 놓쳤던 **두 번째 템플릿 계열**을 여기서 발견해 `1879595`로 보강 |
+| 소유권 | `owner_scope=junhyuk` 16건 | 집중 고객 후보가 될 수 있는 모집단이 16건뿐이고 그 16건이 전부 템플릿 |
+
+**화면 확인**: 고객 연락에서 버킷 필터 4개가 사라지고 레인만 남았다(0b 반영). 첫 화면 집중 고객은 템플릿 5행 → **0행**이 되고 새 빈 상태 카피 + `리드 목록에서 약속 남기기` CTA가 렌더된다. 첫 화면 스펙 D3(633px가 같은 문장 5번)은 이로써 사라졌지만, **대신 슬롯이 빈다** — 운영자가 약속을 적기 시작해야 채워진다.
+
+**아직 못 본 것**: 고객 연락의 세 섹션(먼저 정리할 것 / 오늘 / 지켜보는 고객)과 danger 레일 예산은 실데이터에 해당 행이 0건이라 단위 테스트로만 확인했다. 실제로 보려면 리드 한 건에 다음 연락일을 적어야 하고, 그건 운영 DB 쓰기라 운영자 확인이 필요하다.
+
+## 3-기록창. 컨택 시트 전역화 (2026-09-22, `6530533`)
+
+§0-min의 "3. 컨택 시트 전역화"를 실행했다. §3-실측이 순서를 앞당긴 근거다 — 활동 115행이 전부 `reaction` null이었다. 즉 **컨택 시트 경로가 한 번도 쓰인 적이 없다.** 폼을 더 설계하는 것보다 있는 폼을 열기 쉽게 만드는 쪽이 먼저다.
+
+| 항목 | 내용 |
+|---|---|
+| 신설 | `lib/sales-os/contact-record.js`(순수 계약) · `contact-record.test.mjs`(9건) · `components/hub/contact-record-form.jsx`(폼 + compact Drawer) |
+| 채널↔반응 규약 | 통화·미팅·방문·데모만 반응을 묻는다. 카톡·이메일은 `회신을 받았어요`를 켰을 때만. **묻지 않은 반응은 페이로드에서 키째 빠진다** — ClassIn `contact-log.ts`가 겪은 "발신했을 뿐인 기록에 통화 결과가 붙어 응대 통계가 부푸는" 결함을 그대로 막는다 |
+| 입력 완화 | 요약 `maxLength` 120 → 500, 선택 `원문 붙여넣기`(저장 성공 뒤 `note` 2차 저장 — 아직 비원자, 실패 시 원문 보존 + 그 사실을 말함) |
+| 진입점 3곳 | 고객 상세는 **폼만 인라인**(오버레이 겹침 금지 — CRM 지침 §6.2), 고객 연락 큐와 첫 화면 집중 고객 행은 compact 드로어 |
+| 단순화 | 큐 행의 버튼 4개(전화함·응답·미팅·노응답, outreach 어휘)를 채널 프리셋 2개(`기록`·`부재중`)로 |
+| 곁다리 수리 | `SegmentedControl`에 `invalid` → `data-invalid`(계획 D5). 인라인 `border` 숏핸드가 나머지 롱핸드를 지워 보더가 `currentColor`로 떨어지던 우회를 스타일시트 소유로 교체 |
+| 테스트 | `form-fields` 계약을 공용 폼으로 이전 + **"기록 폼은 한 곳에만"** 회귀 테스트 추가(두 페이지가 다시 자기 폼을 기르면 실패). 0a 테스트의 날짜 경계 결함도 수정 — IO 경로는 실시간 `Date.now()`를 쓰는데 고정 NOW fixture를 써서 자정을 넘기며 깨졌다 |
+| 규모 | 순감소 350줄(중복 폼 2개 → 1개). `npm test` 1547 · 실패 0, `next build` 통과 |
+
+**브라우저 확인**: 고객 DB 상세에서 채널을 카톡으로 바꾸면 반응 섹션이 사라지고 `회신을 받았어요`가 나타나며, 그 토글을 켜면 반응이 정확히 돌아온다.
+
+**하지 않은 것**(계획대로): RPC v2·마이그레이션·초안 저장소·`QuickLog`/`LogComposer` 제거. 원문 붙여넣기의 원자 저장은 1b로 남는다.
+
+## 3-넛지. 캘린더 접점 · 넛지 엔진 · 표시 (2026-09-22, `cae4944`·`0f63bf6`·`8cf3809`)
+
+새 입력을 요구하지 않고 이미 연결된 것(캘린더·기록·약속·메모)만 읽어 "지금 이 고객에게 할 한 가지"를 만든다. 새 테이블 0 — 억제는 대상 레코드의 `meta.nudges`에 쌓인다.
+
+| 단계 | 산출 | 핵심 계약 |
+|---|---|---|
+| N1 `cae4944` | `sales-os/calendar-touchpoints.js`(+12 테스트) | 정규화 이름 **3자 이상**이 제목+장소에 들어 있을 때만 매칭(한글 2음절은 하한에 걸린다). 딜의 `meta.next_meeting.eventId`는 이름과 무관한 **확정** 매칭. 기록 창은 `[시작−2h, 종료+24h]`. 기록 조인은 **회사까지** 본다(라이브 115행 중 `company_id` 109·`lead_id` 0). 종일·미종료·미매칭·"고객 아님" 일정은 올리지 않는다 |
+| N2 `cae4944` | `sales-os/crm-nudges.js`(+12 테스트) | 계기 7종. **고객당 하나** — 우선순위로 고른 **뒤에** 억제를 적용한다(순서를 뒤집으면 숨긴 직후 낮은 계기가 튀어나와 "숨겼는데 또 뜬다"가 된다). `triggerKey`는 사실의 지문 — 이름·문구가 바뀌어도 같은 약속이면 같은 키 |
+| N3 앞단 `0f63bf6` | `repositories/crm-nudges-source.js` · `sales-os/nudge-suppression.js`(+5 테스트) · `/api/hub/crm-nudges` | 매출을 못 읽으면 빈 목록이 아니라 `error`. 캘린더 미연결(preview)은 실패로 세지 않는다. **억제 병합 결함 수리**: `persistRevenueRecord`의 meta 병합은 얕아서 `meta.nudges`를 통째로 갈아끼운다 — 현재 값을 먼저 읽어 얹고, 그 읽기가 실패하면 저장을 중단한다 |
+| N3 표시 `8cf3809` | `components/hub/crm-nudge.jsx` · 고객 연락 상단 2섹션 | 색을 쓰지 않는다 — severity는 배치로 말하고 카드는 중립(긴급은 목록이 이미 레일로 표현). "고객 아님"은 저장소가 아니라 브라우저에 남긴다(보기 설정이지 원본 사실이 아니다) |
+
+**실데이터가 잡은 결함.** 붙이고 보니 넛지가 **0건**이었다. 운영자 소유 리드 16건 전부가 이관·시트 템플릿을 `next_action`으로 달고 있는데 `no_next_action`이 `!nextAction`만 봐서 "정리됨"으로 통과시켰다 — 0c가 집중 고객에서 세운 `isTemplateNextAction` 판정과 갈라져 있었다. 통일하니 **16건**이 떴고, 카피도 갈라 쓴다(`자동으로 채워진 문구만 있어요` vs `다음 행동이 비어 있어요`).
+
+**브라우저 확인**(운영 DB 읽기 전용): 고객 연락 상단에 `정리 16`이 렌더되고, 각 카드의 `[정하기]`가 고객명이 프리필된 공용 기록창을 연다.
+
+**아직 안 한 것**: N3의 나머지 표시 2곳(첫 화면 신호 피드 · 하루 리뷰의 "오늘 정리할 것")과 N4(메모 → AI 후보). 억제(숨기기·미루기)는 운영 데이터 쓰기라 단위 테스트로만 확인했고 라이브 왕복은 미검증이다.
+
 ## 4. PR-1a — 고객 상세 섹션 세트
 
 **목표.** 세 진입점(고객 DB 드로어·Accounts 상세·Leads 편집 드로어)이 같은 섹션 세트를 그린다. ①니즈 ②위기 ③약속 ④돈 ⑤기록 ⑥판단 순서. 점수·건강도 뱃지는 헤더에서 사라진다.
@@ -162,7 +258,7 @@ level = events.some(e => e.rail) ? 'urgent' : 'none'
 
 ### 4.4 상태 계약(모든 섹션 공통)
 
-- `activityState ∈ {loading, live, partial, preview, error}`. `loading` → 섹션별 `Skeleton`. `error` → ⑤에만 오류 + 재시도, ①③④는 원장 데이터로 산다. `preview` → `TruthBadge preview` 한 번(헤더).
+- `activityState ∈ {loading, live, partial, preview, error}`. `loading` → 섹션별 `Skeleton`. `error` → ⑤에만 오류 + 재시도, ①③④는 데이터로 산다. `preview` → `TruthBadge preview` 한 번(헤더).
 - ②위기는 `level==='none'`이면 **DOM에 없다.**
 - ①③④ 빈 상태 카피는 스펙 §4.2 표.
 
@@ -239,15 +335,17 @@ idle → editing(초안 저장 중) → validating → optimistic('저장 중' �
 
 ## 6. 수용 체크리스트 (0·1단계 전체)
 
-- [ ] 주간 카드 `연락 N` = `crm_activities` 건수
-- [ ] 고객 연락 버킷 필터·레일·행 클릭·최근 반응 줄이 동작
-- [ ] 첫 화면 집중 고객 3행 문구가 서로 다름 · 진행 중 리드 포함
-- [ ] 이관 스크립트 dry-run: 운영자 문장 패치 0건
+체크는 **실데이터로 눈에 보였을 때만** 넣는다(단위 테스트 통과는 §1.3·§2.3·§3.3의 각 PR 완료 기준을 이미 만족시켰지만, 이 표는 그것과 별개다). §3-실측이 확인한 대로 지금 운영 DB에는 약속 날짜·컨택 시트 사용 기록이 0건이라 앞 네 항목은 **운영자가 실제로 기록을 남기기 전까지 구조적으로 체크할 수 없다.**
+
+- [ ] 주간 카드 `연락 N` = `crm_activities` 건수 (최근 7일 활동 0건이라 0a 자체는 115 vs 3 행 수 비교로 대신 확인함 — §3-실측)
+- [ ] 고객 연락 버킷 필터·레일·행 클릭·최근 반응 줄이 동작 (화면 구조는 확인, 실데이터 행 0건이라 실제 렌더는 미확인)
+- [ ] 첫 화면 집중 고객 3행 문구가 서로 다름 · 진행 중 리드 포함 (지금은 0행 — 실제 약속이 생겨야 채워짐, §3-실측)
+- [ ] 이관 스크립트 dry-run: 운영자 문장 패치 0건 (가드는 단위 테스트로 고정, 스크립트 자체는 아직 실행하지 않음)
 - [ ] 세 진입점이 같은 섹션 세트 · 헤더에 점수·건강도 없음 · `위기` = 사건
 - [ ] CRM 세 페이지 `SyncBadge` 0 · `불러오는 중…` 0 · 하드코딩 색 0 · `HealthDot` 0
 - [ ] 기록 폼 1개 · RPC v2 멱등 · 초안 복구
-- [ ] `npm test` 실패 0 · 스윕 3종 · state-usage
-- [ ] 이 문서 각 PR 행에 커밋 해시
+- [x] `npm test` 실패 0 · 스윕 3종 · state-usage (0단계까지 · 1a/1b 착수 시 재확인 필요)
+- [x] 이 문서 각 PR 행에 커밋 해시 (0a·0b·0c만 — 1a·1b는 착수 후)
 
 ---
 

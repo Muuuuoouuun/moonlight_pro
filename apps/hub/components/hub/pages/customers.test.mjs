@@ -57,13 +57,16 @@ test("Customer360Drawer integrates Guru strategic coaching (⌘J) and FloatingMe
   assert.match(customersSource, /onApplyText=\{/);
 });
 
-test("ContactOutcomeSheet provides AI Smart Autofill from conversation or call notes", () => {
-  assert.match(customersSource, /✨ 대화·메모에서 폼 자동 채우기/);
-  assert.match(customersSource, /parseContactOutcomeExtraction/);
-  assert.match(customersSource, /handleAiExtract/);
-  assert.match(customersSource, /추출 및 폼 채우기/);
-  assert.match(customersSource, /personaId:\s*"sales"/);
-  assert.match(customersSource, /mode:\s*"extract-contact-outcome"/);
+test("contact record form provides AI Smart Autofill from conversation or call notes, and the customer detail enables it", () => {
+  // CRM 시트 전역화(6530533)로 컨택 완료 시트가 공용 ContactRecordForm으로 옮겨 갔다 — AI 채우기도 함께 이동.
+  const formSource = readFileSync(new URL("../contact-record-form.jsx", import.meta.url), "utf8");
+  assert.match(formSource, /대화·메모에서 폼 자동 채우기/);
+  // 아이콘(Iconed sparkle)이 이미 있다 — 이모지를 겹치면 장식 아이콘이 된다(DESIGN §13).
+  assert.doesNotMatch(formSource, /✨/);
+  assert.match(formSource, /parseContactOutcomeExtraction/);
+  assert.match(formSource, /handleAiExtract/);
+  assert.match(formSource, /추출 및 폼 채우기/);
+  assert.match(formSource, /personaId:\s*"sales"/);
+  assert.match(formSource, /mode:\s*"extract-contact-outcome"/);
+  assert.match(customersSource, /<ContactRecordForm[\s\S]*?aiContext=\{/);
 });
-
-

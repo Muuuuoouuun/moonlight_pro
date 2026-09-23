@@ -25,7 +25,7 @@ export function resolveSupabaseConfig() {
 `;
 const operatingStub = `
 export async function getTaskLedger() {
-  return { source: "supabase", projects: [], todos: [] };
+  return { source: "supabase", projects: [], todos: globalThis.__attentionReadState.todos || [] };
 }
 `;
 const calendarStub = `
@@ -68,6 +68,7 @@ beforeEach((t) => {
   state.calls = [];
   state.gate = null;
   state.deadlineReset = null;
+  state.todos = [];
   state.rows = {
     leads: [{ id: "lead-1", score: "87.5", name: "Lead", meta: {} }],
     deals: [
@@ -110,6 +111,30 @@ test("an acknowledged old deal deadline remains visible without an overdue alert
   state.rows.deals[0].expected_close_at = "2026-09-20T16:00:00+00:00";
   const changed = await getAttentionLedger();
   assert.equal(changed.items.find((item) => item.entityId === "deal-1").bucket, "overdue");
+});
+
+test("an acknowledged old task deadline keeps a deliberate today focus without restoring its alert", async () => {
+  const dueAt = "2026-08-26T16:00:00+00:00";
+  state.todos = [{
+    id: "task-1", title: "Chosen task", dueAt, status: "todo", done: false,
+    focusDates: ["2026-09-22"],
+  }];
+  state.deadlineReset = {
+    resetAt: "2026-09-22T03:00:00Z", beforeDay: "2026-09-21",
+    items: [{ kind: "task", id: "task-1", dueAt }],
+  };
+
+  const focused = (await getAttentionLedger()).items.find((item) => item.entityId === "task-1");
+  assert.equal(focused.bucket, "focus");
+  assert.equal(focused.dueBucket, "overdue");
+  assert.equal(focused.deadlineAlertSuppressed, true);
+  assert.equal(focused.priorityScore, 6000);
+  assert.equal(focused.priorityReason, "오늘 3개");
+
+  state.todos[0].focusDates = [];
+  const unfocused = (await getAttentionLedger()).items.find((item) => item.entityId === "task-1");
+  assert.equal(unfocused.bucket, "later");
+  assert.equal(unfocused.priorityReason, "이전 기한 · 알림 해제");
 });
 
 test("attention returns the same items and scoring with three revenue reads instead of seven", async () => {

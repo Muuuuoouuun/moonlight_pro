@@ -3,12 +3,12 @@
 // 왜 가드가 필요한가. leads·customer_accounts를 가리키는 FK는 두 종류인데 둘 다 조용하다:
 //   · deals.lead_id · projects.lead_id · projects.customer_account_id ·
 //     operation_cases.customer_account_id → `on delete set null`
-//     → 삭제는 성공하고, 딜·프로젝트·케이스는 주인을 잃은 채 원장에 남는다.
+//     → 삭제는 성공하고, 딜·프로젝트·케이스는 주인을 잃은 채 기록에 남는다.
 //   · crm_activities.lead_id · crm_activities.account_id → `on delete cascade`
 //     → 그 고객과의 통화·미팅 기록이 함께 사라진다.
 // 어느 쪽이든 실패하지 않고 조용히 일어난다. 그래서 삭제 전에 세고, 하나라도 있으면 막는다.
 //
-// 왜 company_id까지 세는가. 라이브 원장의 실제 연결 모양이 그렇다 — crm_activities는
+// 왜 company_id까지 세는가. 라이브 기록의 실제 연결 모양이 그렇다 — crm_activities는
 // 110행 중 109행이 company_id로만 붙고 lead_id는 1행뿐이며, deals.lead_id도 사실상
 // 비어 있다(customers.jsx toRows·reload가 company_id로 조인하는 것과 같은 이유).
 // lead_id/account_id만 세면 이력이 가득한 고객이 "참조 0"으로 읽혀 그대로 지워진다.

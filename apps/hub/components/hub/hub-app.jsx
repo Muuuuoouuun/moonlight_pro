@@ -88,6 +88,7 @@ const DailyReview = lazyPage(() => import("./pages/daily-review").then(m => m.Da
 const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects));
 const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
 const BrandContentLog = lazyPage(() => import("./pages/brand-content-log").then(m => m.BrandContentLog));
+const ContentPerformance = lazyPage(() => import("./pages/content-performance").then(m => m.ContentPerformance));
 const Studio = lazyPage(() => import("./pages/content").then(m => m.Studio));
 const Queue = lazyPage(() => import("./pages/content").then(m => m.Queue));
 const Campaigns = lazyPage(() => import("./pages/content").then(m => m.Campaigns));
@@ -221,6 +222,7 @@ const PAGE_MAP = {
   'dashboard/work/rhythm': () => <Rhythm />,
   'dashboard/brands': () => <Brands />,
   'dashboard/brands/log': (n) => <BrandContentLog onNavigate={n} />,
+  'dashboard/content/performance': () => <ContentPerformance />,
   'dashboard/content/studio': () => <Studio />,
   'dashboard/content/queue': () => <Queue />,
   'dashboard/content/campaigns': () => <Campaigns />,
@@ -291,7 +293,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const routeScope = deriveSidebarScope(path)
     || (queryScope ? normalizeScope(queryScope) : null);
 
-  const [collapsed, setCollapsed] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(DEFAULT_HUB_PREFERENCES.sidebarCollapsed);
   const [navOpen, setNavOpen] = React.useState(false);
   const [navScope, setNavScope] = React.useState(routeScope || 'all');
   // SSR and the first client render must use the same values. Persisted browser
@@ -321,9 +323,18 @@ export function HubApp({ memoDraftContext = "preview" }) {
     try { storage = window.localStorage; } catch { /* storage can be blocked */ }
     const stored = readHubPreferences(storage);
     setThemePreference(stored.theme);
+    setCollapsed(stored.sidebarCollapsed);
   }, []);
 
   React.useEffect(() => watchHubTheme(themePreference, setTheme), [themePreference]);
+
+  const toggleSidebar = React.useCallback(() => {
+    const next = !collapsed;
+    setCollapsed(next);
+    let storage = null;
+    try { storage = window.localStorage; } catch { /* session-only preference */ }
+    persistHubPreference(storage, "sidebarCollapsed", next);
+  }, [collapsed]);
 
   const updateTheme = React.useCallback((nextTheme) => {
     setThemePreference(nextTheme);
@@ -570,7 +581,8 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const render = PAGE_MAP[path];
   // 3번째 인자(scope)는 뒤늦게 붙었다 — 기존 항목은 추가 인자를 무시하므로 하위 호환된다.
   const page = render ? render(navigate, inquiryNotifications, routeScope || navScope) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
-  const sidebarCollapsed = collapsed && !navOpen;
+  // 아이콘 레일은 데스크톱 전용 — 모바일 드로어(navOpen은 모바일에서만 true)는 항상 펼친 상태로 그린다.
+  const sidebarCollapsed = collapsed && !isMobileViewport;
 
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme}>
@@ -593,7 +605,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
             onScopeChange={setNavScope}
             onNavigate={navigateFromSidebar}
             collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setCollapsed(c => !c)}
+            onToggleCollapse={toggleSidebar}
             openPalette={openCommandPalette}
             mobileHidden={mobileNavState.navHidden}
             mobileOpen={mobileNavState.open}

@@ -32,9 +32,9 @@ flowchart LR
 
 - **Hub**는 운영자 read surface와 승인된 로컬 write surface다. 외부 실행을 직접 가장하지 않고 Engine에 전달하며, 미연결 상태에서는 `preview` 또는 명시적 오류를 반환한다.
 - **Engine**은 외부 webhook intake, OpenClaw outbound sync, PMS/content command validation·persistence, 실행·수신 이력을 맡는다. `webhook_events`, `project_updates`, `sync_runs`와 재조회된 durable project/task/content가 실행 증거다.
-- **OpenClaw relay**는 로컬 transport adapter다. Engine snapshot을 OpenClaw CLI로 넘길 뿐 원장이 아니며, 독자적으로 프로젝트 상태를 확정하지 않는다.
-- **Supabase**가 공유 운영 원장이다. OpenClaw가 만든 진행 정보도 Engine webhook을 거쳐 원장에 기록된 뒤 Hub가 읽는다.
-- OpenClaw의 반환 경로는 `POST /api/webhook/project/openclaw`이다. Hub나 relay에 별도 반환 원장을 만들지 않는다.
+- **OpenClaw relay**는 로컬 transport adapter다. Engine snapshot을 OpenClaw CLI로 넘길 뿐 기록이 아니며, 독자적으로 프로젝트 상태를 확정하지 않는다.
+- **Supabase**가 공유 운영 기록이다. OpenClaw가 만든 진행 정보도 Engine webhook을 거쳐 기록된 뒤 Hub가 읽는다.
+- OpenClaw의 반환 경로는 `POST /api/webhook/project/openclaw`이다. Hub나 relay에 별도 반환 기록을 만들지 않는다.
 
 ### 2. 네 시크릿의 책임 분리
 
@@ -86,7 +86,9 @@ flowchart LR
 ### 6. Codex/Claude 로컬 MCP
 
 - Moonlight MCP는 **stdio 전용 로컬 child process**다. 원격 HTTP/SSE connector가 아니다.
+  - 2026-09-22 갱신(운영자 요청 "다른 툴에도 붙이기"): stdio는 기본으로 유지하고, 헤더 토큰이 필수인 **로컬 Streamable HTTP**(`npm run mcp:http`, 기본 `127.0.0.1:3333`)를 추가했다. 토큰은 외부 툴마다 따로 발급하고(`npm run mcp:connect -- token create`) 프로필·읽기 전용이 토큰에 묶인다. 인터넷 공개(터널)와 OAuth는 **미정**이며 운영자 결정 전까지 하지 않는다. 상세 계약은 `packages/mcp-server/README.md`.
 - Codex local config와 Claude Code project `.mcp.json`은 모두 같은 `packages/mcp-server/src/index.js`를 실행하며 Hub의 `.env.local`을 process start 시 읽는다.
+  - 2026-09-22 갱신: 새 등록은 런처 `packages/mcp-server/bin/moonlight-mcp.js` 하나만 가리키고, 런처가 `.env.local`에서 MCP용 키(`COM_MOON_HUB_URL`·`COM_MOON_HUB_WRITE_SECRET`·`COM_MOON_AGENT_API_TOKEN`·`COM_MOON_MCP_*`)만 읽는다. 같은 날 Codex 등록이 사라진 Desktop 경로를 `cwd`로 들고 있어 기동 불가였던 것을 확인했다 — 클라이언트별 등록 점검은 `npm run mcp:connect -- status --probe`.
 - 두 등록 모두 환경변수 값을 config에 직접 embed하지 않는다. `.mcp.json`은 local-only이며 Git에 포함하지 않는다.
 - read tool은 Hub route의 `live`/`preview`/`error` 의미를 그대로 전달한다. write tool은 `COM_MOON_HUB_WRITE_SECRET`가 없으면 요청 전에 거부한다.
 - 현재 등록 surface에는 projects, tasks, task creation, revenue, content queue, calendar, work orders, agents, daily brief가 포함된다.
@@ -167,7 +169,7 @@ flowchart LR
 - Claude Desktop의 `claude_desktop_config.json` 존재만으로 연결 완료라고 쓰지 않는다. 앱 시작 뒤 config가 바뀌었다면 재시작 후 Moonlight child process와 tool discovery를 둘 다 확인한다.
 - eeoCRM 숫자는 변할 수 있는 ledger snapshot이다. 문서의 row count는 검증 날짜와 함께 쓰고, Mac에서 provider 인증이 확인되기 전까지 “sync”나 “MCP live”라고 부르지 않는다.
 - eeoCRM enrichment의 evidence-free 실행은 비교용 dry-run으로만 허용한다. `--apply`는 반드시 `--evidence`와 함께 실행하며, 증거를 생략한 적용은 기존 공개 근거를 지울 수 있으므로 스크립트가 선제 거부한다.
-- Revenue 전체 원장은 감사·검색을 위해 119건을 유지하지만 Daily Brief 고객 행동 신호에는 `owner="Me"`로 검증된 row만 사용한다. `eeocrm` row는 단순 `owner_id` 존재가 아니라 `owner_scope=junhyuk` 또는 `owner:junhyuk` 근거가 있어야 `Me`다.
+- Revenue 전체 기록은 감사·검색을 위해 119건을 유지하지만 Daily Brief 고객 행동 신호에는 `owner="Me"`로 검증된 row만 사용한다. `eeocrm` row는 단순 `owner_id` 존재가 아니라 `owner_scope=junhyuk` 또는 `owner:junhyuk` 근거가 있어야 `Me`다.
 - OpenClaw/Telegram/Slack처럼 여러 outbound channel이 가능한 경우 channel이 생략된 요청을 임의 채널로 보내지 않는다. 현재 뉴스 cron은 Telegram supergroup을 명시하지만, 다른 자동화는 명시적 routing policy가 없으면 disabled 또는 preview가 맞다.
 - OpenClaw job의 agent summary가 “전송 완료”라고 써도 `delivered=false`이면 전달 성공이 아니다. cron result의 `deliveryStatus`를 최종 증거로 사용한다.
 - `openclaw update --dry-run`은 2026.3.28→2026.7.1, plugin sync, gateway restart를 예고했다. 첫 post-fix 09:30 delivery 증거 전에 runtime 변수를 추가하지 않기 위해 실제 update는 보류한다.

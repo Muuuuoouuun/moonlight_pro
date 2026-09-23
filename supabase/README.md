@@ -6,7 +6,7 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 
 - `schema.sql`: 현재 허브/엔진이 읽고 쓰는 통합 ledger 스키마
 - `seed.sql`: 로컬 또는 스테이징에서 바로 붙여볼 수 있는 기본 데이터
-- `migrations/20260420_0001_supabase_first_foundation.sql`: Supabase-first P0 원장 보강 migration
+- `migrations/20260420_0001_supabase_first_foundation.sql`: Supabase-first P0 기록 보강 migration
 - `migrations/20260427_0003_content_os_variant_contract.sql`: Content OS variant/source constraint 보강 migration
 - `migrations/20260427_0004_canonical_brand_directory.sql`: Hub fallback과 live 브랜드 디렉토리 정렬
 - `migrations/20260602_0003_content_variant_type_contract.sql`: content_variants variant_type 5종 정리 + 데이터 마이그레이션
@@ -66,7 +66,7 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 - Content Studio의 `Schedule`/`Publish`는 외부 발송을 직접 실행하지 않고 `publish_logs`에 handoff/export 이벤트를 기록합니다.
 - 수동 export 스냅샷은 `content_assets`에 `hub://content/...` storage path로 남겨 자동화 전 단계도 추적합니다.
 - `seed.sql`은 허브 UI가 mock-only 상태를 벗어나도록 최소 동작 데이터를 넣는 데 초점을 둡니다.
-- P0 설계 기준은 `운영 원장 + 로그 원장 + 공개 콘텐츠 뷰`입니다.
+- P0 설계 기준은 `운영 기록 + 로그 기록 + 공개 콘텐츠 뷰`입니다.
 - `content_variants.variant_type`은 현재 코드 계약에 맞춰 `blog_insight`, `x_thread`, `reels_script`를 허용합니다.
 - 자세한 설계 기준은 `docs/supabase-first-operating-ledger.md`를 참고합니다.
 

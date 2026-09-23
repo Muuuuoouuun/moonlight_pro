@@ -106,3 +106,45 @@ export async function saveMemoIntakeTasks(intake, fetchImpl = fetch, onProgress 
   }
   return next;
 }
+
+// AI 후보 한 줄에서 할 일 한 건을 만드는 화면(메모 액션 추출·메모 패턴 분석·할 일 분해)의 공용 경로.
+// 명령은 첫 등록 시도 전에 한 번만 굳히고 재시도는 같은 id·같은 payload를 다시 보낸다 — 엔진은
+// 같은 id를 duplicate(=이미 저장됨)로 돌려주므로 재시도가 중복 할 일을 만들지 않는다. 이미 굳힌
+// 후보는 그대로 돌려준다(도중에 연결이 바뀌어 같은 id의 payload가 달라지면 엔진이 conflict로 거절한다).
+export function freezeTaskCommand(item, fields = {}) {
+  if (item.command) return item;
+  return {
+    ...item,
+    command: {
+      projectId: null, priority: "medium", dueAt: null, description: null, source: "manual",
+      ...fields,
+      id: item.id, title: item.task,
+    },
+  };
+}
+
+// 저장 판정은 saveMemoIntakeTasks가 소유한다: saved/duplicate + 같은 id + persisted!==false일 때만
+// saved. 202 preview·빈 2xx·다른 id 영수증은 저장이 아니다. 기록기는 preview를 failed로 접으므로
+// 봉투만 따로 읽어 "연결 전"과 "실패"를 가른다.
+// 반환 status: saved | preview | failed | unknown(응답 확인 불가 — 같은 id로 재확인).
+export async function saveTaskCommand(command, fetchImpl = fetch) {
+  let envelope = null;
+  const observed = async (url, init) => {
+    const response = await fetchImpl(url, init);
+    envelope = await response.clone().json().catch(() => null);
+    return response;
+  };
+  const result = await saveMemoIntakeTasks({ actions: [{ id: command?.id, task: command?.title, selected: true, status: "pending", command }] }, observed);
+  const item = result.actions[0];
+  if (item.status === "saved") return { status: "saved", error: null };
+  if (envelope?.status === "preview") return { status: "preview", error: item.error || "할 일 저장이 연결되지 않았습니다. 연결 후 다시 등록하세요." };
+  return { status: item.status === "failed" ? "failed" : "unknown", error: item.error || "등록 응답을 확인하지 못했습니다. 같은 내용으로 다시 확인하세요." };
+}
+
+// saveTaskCommand 결과의 화면 표기(§5.3 source truth). unknown은 실패가 아니라 "확인 필요"라
+// danger가 아닌 중립 partial로 그리고, 재시도 버튼은 "같은 내용으로 확인"이다.
+export const TASK_OUTCOME = {
+  preview: { truth: "preview", label: "Preview · 저장되지 않음", retry: "다시 등록" },
+  failed: { truth: "error", label: "등록 실패", retry: "다시 등록" },
+  unknown: { truth: "partial", label: "결과 확인 필요", retry: "같은 내용으로 확인" },
+};

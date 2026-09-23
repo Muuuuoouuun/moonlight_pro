@@ -12,10 +12,7 @@ import {
 } from "@/lib/content-brand-catalog";
 import { buildOperatorHomeSummary } from "@/lib/operator-home-summary";
 import { buildTaskToday } from "@/lib/task-today";
-import {
-  filterOperatorOwnedRevenue,
-  selectOperatorFocusLeads,
-} from "@/lib/operator-revenue-scope";
+import { filterOperatorOwnedRevenue } from "@/lib/operator-revenue-scope";
 import { buildDailyFocus, withoutFocusDuplicates } from "@/lib/daily-focus";
 
 export const runtime = "nodejs";
@@ -64,7 +61,7 @@ function nameTokens(name) {
     .filter((t) => t.length >= 2 && !RISK_STOP.has(t));
 }
 
-// staleDealIds: attention 원장(§4 공식)의 stalled 판정 — 이 라우트의 자체 age>=10 하드코딩을
+// staleDealIds: attention 기록(§4 공식)의 stalled 판정 — 이 라우트의 자체 age>=10 하드코딩을
 // 대체한다(A-1 컷오버 + §8.1 STALLED_DAYS 단일 기준). operator 스코프는 revenue.deals 조인이 보장.
 function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = new Set()) {
   const staleDeals = (Array.isArray(revenue.deals) ? revenue.deals : []).filter(
@@ -159,26 +156,12 @@ function buildRevenueSignals(revenue, staleDealIds = new Set()) {
   const leads = Array.isArray(revenue.leads) ? revenue.leads : [];
   const signals = [];
 
-  selectOperatorFocusLeads(revenue).forEach((lead) => {
-    signals.push({
-      id: `revenue-focus-${lead.id}`,
-      // subject = 이 신호가 가리키는 원장 레코드. 첫 화면 확정 슬롯이 같은 레코드를 이미
-      // 렌더했는지 판정하는 유일한 근거다(withoutFocusDuplicates).
-      subject: { type: "lead", id: lead.id },
-      tone: "neutral",
-      kind: "Revenue",
-      title: `${lead.name} — 고객 성공 후속`,
-      summary: lead.nextAction,
-      meta: "Focus customer · verified owner",
-      source: { from: "Leads", ref: lead.id },
-      decisions: [
-        action("리드 열기", "leads", true),
-        action("오늘 보류", "wait"),
-      ],
-    });
-  });
+  // 집중 고객은 첫 화면 확정 슬롯(buildDailyFocus → focusCustomers)이 정본이다. 예전에는
+  // 여기서도 같은 selectOperatorFocusLeads로 "고객 성공 후속" 신호를 만들었지만, 슬롯(limit 5)이
+  // 신호(limit 3)를 늘 포함해 withoutFocusDuplicates가 전부 걸러내는 죽은 분기였고, 선정 기준이
+  // "약속이 있는 모든 진행 리드"로 바뀐 뒤로는 라벨도 틀렸다(2026-09-23 병합 검증).
 
-  // 정체 딜 판정은 attention 원장이 정본(§4 "다음 연락 시점 지남" = STALLED_DAYS 14) —
+  // 정체 딜 판정은 attention 기록이 정본(§4 "다음 연락 시점 지남" = STALLED_DAYS 14) —
   // 이 라우트의 자체 age>=10 밴드는 §8.1 단일 기준 위반이었고, 내 작업과 첫 화면이 같은
   // 딜을 다르게 판정했다(A-1). stalled(14+)는 즉시 손실 위험이라 전부 danger.
   deals
@@ -356,7 +339,7 @@ function buildWorkSignals(projects, work) {
 }
 
 function buildMetrics(revenue, content, automations, projects) {
-  // 읽지 못한 원장의 지표를 0으로 단언하지 않는다 — 실패한 자동화 read가
+  // 읽지 못한 기록의 지표를 0으로 단언하지 않는다 — 실패한 자동화 read가
   // "Runs failed 0"으로, 매출 블립이 "₩0 MRR"로 위장되던 경로(5차 재감사 M).
   const revenueReadable = revenue?.source === "supabase";
   const contentReadable = content?.source === "supabase";
@@ -412,8 +395,8 @@ function buildSources(results) {
 }
 
 export async function GET() {
-  // A-1 컷오버(Phase 1B 잔여 — README §3): tasks·revenue·calendar는 attention 원장을 정본
-  // 어댑터로 한 번만 읽는다. 예전엔 이 라우트가 같은 세 원장을 attention과 별개로 다시 읽어
+  // A-1 컷오버(Phase 1B 잔여 — README §3): tasks·revenue·calendar는 attention 기록을 정본
+  // 어댑터로 한 번만 읽는다. 예전엔 이 라우트가 같은 세 기록을 attention과 별개로 다시 읽어
   // "지금 중요한 것" 판정이 첫 화면과 내 작업에서 두 벌로 갈라졌다(정체성 캡의 원인).
   // §7 확정 슬롯(KA·집중 고객·오늘 일정·할 일 레인)은 attention.raw 원본 위의 프로젝션.
   const [attentionResult, workResult, contentResult, automationsResult, ordersResult, briefResult] = await Promise.allSettled([
@@ -426,7 +409,7 @@ export async function GET() {
   ]);
 
   const attention = readLedger(attentionResult, null);
-  // attention 자체가 죽으면(예외) 세 원장 전부 read 실패로 명명 — 빈 화면 위장 금지.
+  // attention 자체가 죽으면(예외) 세 기록 전부 read 실패로 명명 — 빈 화면 위장 금지.
   const rawFallback = {
     projectLedger: { source: "error", error: "attention-ledger-request-failed", failedSources: ["tasks"], todos: [], projects: [] },
     revenue: { source: "error", error: "attention-ledger-request-failed", failedSources: ["deals"], leads: [], deals: [] },
@@ -434,8 +417,8 @@ export async function GET() {
   };
   const raw = attention?.raw || rawFallback;
 
-  // buildSources/ledgerState의 기존 allSettled 계약을 유지하기 위해 raw 원장을 결과 봉투로
-  // 재포장한다 — 판정 로직(ledgerState)은 원장 shape만 보므로 무수정 동작.
+  // buildSources/ledgerState의 기존 allSettled 계약을 유지하기 위해 raw 기록을 결과 봉투로
+  // 재포장한다 — 판정 로직(ledgerState)은 기록 shape만 보므로 무수정 동작.
   const projectsResult = { status: "fulfilled", value: raw.projectLedger };
   const revenueResult = { status: "fulfilled", value: raw.revenue };
 
@@ -493,7 +476,7 @@ export async function GET() {
   const failedSources = sources
     .filter((source) => ["error", "partial"].includes(source.state))
     .map((source) => source.key);
-  // A-1: 정체 딜 신호의 판정원은 attention 원장 하나 — 첫 화면 신호와 내 작업 deal 레인이
+  // A-1: 정체 딜 신호의 판정원은 attention 기록 하나 — 첫 화면 신호와 내 작업 deal 레인이
   // 같은 stalled 집합(§4 공식·STALLED_DAYS)을 본다. entityId → operator 스코프 조인은
   // build* 안에서 revenue.deals 필터가 수행.
   const staleDealIds = new Set(

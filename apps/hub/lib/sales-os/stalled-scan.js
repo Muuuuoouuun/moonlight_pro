@@ -10,17 +10,17 @@
 // is skipped, so the scan can piggyback on every Daily Brief load without cron infra.
 
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
+import { STALLED_DAYS, isDealStalled } from "@/lib/deal-stages";
 import { resolveDefaultWorkspaceId } from "../server-write.js";
 import { createWorkOrder, getWorkOrders } from "./work-orders.js";
 
-const DEFAULT_THRESHOLD_DAYS = 10;
 // Cap per scan so a long-neglected board doesn't flood the approval queue in one morning.
 const DEFAULT_MAX_CREATES = 5;
 
 export async function scanStalledDeals({
   workspaceId = resolveDefaultWorkspaceId(),
   ledger = null, // pass a pre-fetched revenue ledger to avoid a duplicate read
-  thresholdDays = DEFAULT_THRESHOLD_DAYS,
+  thresholdDays = STALLED_DAYS,
   maxCreates = DEFAULT_MAX_CREATES,
   dryRun = false,
 } = {}) {
@@ -29,16 +29,18 @@ export async function scanStalledDeals({
   }
 
   const rev = ledger || (await getRevenueLedger());
+  // A failed ledger read is an error, not "not configured" — keep the hub read envelope honest
+  // (CLAUDE.md: read failure = status "error", never disguised as preview/empty).
+  if (rev?.source === "error") {
+    return { status: "error", reason: "ledger-read-failed", stalled: 0, created: 0, skipped: 0, proposals: [] };
+  }
   if (rev?.source !== "supabase") {
     return { status: "preview", reason: "ledger-preview", stalled: 0, created: 0, skipped: 0, proposals: [] };
   }
 
   const deals = Array.isArray(rev.deals) ? rev.deals : [];
   const stalled = deals.filter(
-    (d) => d.trackingEligible !== false
-      && d.stage !== "won"
-      && d.stage !== "lost"
-      && Number(d.age) > thresholdDays,
+    (d) => d.trackingEligible !== false && isDealStalled(d, thresholdDays),
   );
   if (!stalled.length) {
     return { status: "ok", stalled: 0, created: 0, skipped: 0, proposals: [] };

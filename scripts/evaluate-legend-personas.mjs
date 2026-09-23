@@ -420,7 +420,7 @@ function report(out, manifest) {
   const lines = [
     '# Legend 가치관 카드 실제 답변 측정 — v1', '',
     `> 상태: 실제 API 측정 완료 · 개발 세트 파일럿 · ${summary.generatedAt}`, '',
-    `기준 문서 커밋: \`${manifest.baseCommit.slice(0, 7)}\`. 생성은 \`${summary.generationModelVersions.join(', ')}\`, 판정은 별도 호출의 \`${summary.judgeModelVersions.join(', ')}\`를 사용했다. 9인 각각 두 턴, Council 2개 한 턴을 A/B/C로 비교한 총 60개 답변이다. 실제 앱의 라우팅·원장 연결·배포를 시험한 결과는 아니다.`, '',
+    `기준 문서 커밋: \`${manifest.baseCommit.slice(0, 7)}\`. 생성은 \`${summary.generationModelVersions.join(', ')}\`, 판정은 별도 호출의 \`${summary.judgeModelVersions.join(', ')}\`를 사용했다. 9인 각각 두 턴, Council 2개 한 턴을 A/B/C로 비교한 총 60개 답변이다. 실제 앱의 라우팅·기록 연결·배포를 시험한 결과는 아니다.`, '',
     '## 조건별 자동 평가 결과', '', '아래 점수는 별도 모델의 자동 판정이며 사실성의 검증된 정답이 아니다. [원문 대조와 개선점](findings.md)을 함께 읽어야 한다.', '', '| 조건 | 답변 수 | 자동 평균 /100 | 자동 기준 통과 | 자동 하드 실패 답변 | 700자 초과 | 평균 글자 수 | 생성 p50 / p95 |', '|---|---:|---:|---:|---:|---:|---:|---|',
     ...Object.entries(byVariant).map(([key, row]) => `| ${key} | ${row.count} | ${row.mean} | ${row.pass}/${row.count} | ${row.hardFailures} | ${row.overlength} | ${row.charactersMean} | ${round(row.latencyP50Ms / 1000)}s / ${round(row.latencyP95Ms / 1000)}s |`), '',
     'A는 공통 지침+기록, B는 A+검토된 출처 요약, C는 B+가치관 지침이다. 첫 턴은 연속성 N/A(가중치 분모 90), 후속 턴은 분모 100이다. 모든 적용 항목 3/4 이상, 하드 실패 없음, 700자 이하를 모두 만족해야 통과다.', '',

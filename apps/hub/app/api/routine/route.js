@@ -4,6 +4,11 @@ import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
 import { isCanonicalUuid } from "@/lib/uuid.js";
 import {
+  RITUAL_CATEGORIES,
+  defaultTargetPerWeek,
+  normalizeTargetPerWeek,
+} from "@/lib/rhythm-ui";
+import {
   buildRoutineCheckRecord,
   deleteSupabaseRecord,
   insertSupabaseRecord,
@@ -61,6 +66,14 @@ function normalizeDefinePayload(payload) {
   const name = cleanString(payload.name);
   const checkType = cleanString(payload.checkType).toLowerCase();
   const projectId = cleanString(payload.projectId) || null;
+  const categoryRaw = cleanString(payload.category).toLowerCase();
+  // 생략하면 general이 기본값이지만, 명시된 무효 값은 PATCH와 같게 거절한다. 조용히 접으면
+  // 그 루틴은 '일반'으로 태어나 운영자가 의도한 분류는 어디에도 남지 않고, 같은 값이
+  // 편집 시점에는 400으로 막혀 한 필드가 두 계약을 갖게 된다.
+  const categoryProvided = categoryRaw !== "";
+  const category = categoryProvided ? categoryRaw : "general";
+  const targetProvided = payload.targetPerWeek !== undefined && payload.targetPerWeek !== null && payload.targetPerWeek !== "";
+  const targetPerWeek = normalizeTargetPerWeek(payload.targetPerWeek) || defaultTargetPerWeek(checkType);
 
   if (!ritualKey || ritualKey.length > 160) {
     return { error: invalidInput("invalid-ritual-key", "ritualKey is required and must be at most 160 characters.") };
@@ -74,8 +87,14 @@ function normalizeDefinePayload(payload) {
   if (projectId && !isCanonicalUuid(projectId)) {
     return { error: invalidInput("invalid-project-id", "projectId must be a canonical UUID.") };
   }
+  if (categoryProvided && !RITUAL_CATEGORIES.has(category)) {
+    return { error: invalidInput("invalid-category", "category must be one of general, work, content, health, learning, personal.") };
+  }
+  if (targetProvided && !normalizeTargetPerWeek(payload.targetPerWeek)) {
+    return { error: invalidInput("invalid-target-per-week", "targetPerWeek must be an integer between 1 and 7.") };
+  }
 
-  return { value: { ritualKey, name, checkType, projectId } };
+  return { value: { ritualKey, name, checkType, projectId, category, targetPerWeek } };
 }
 
 export async function POST(req) {
@@ -89,7 +108,7 @@ export async function POST(req) {
     const normalized = normalizeDefinePayload(parsed.data);
     if (normalized.error) return normalized.error;
 
-    const { ritualKey, name, checkType, projectId } = normalized.value;
+    const { ritualKey, name, checkType, projectId, category, targetPerWeek } = normalized.value;
     const workspaceId = resolveDefaultWorkspaceId();
 
     // 정의(씨앗) 행에는 idempotency_key를 절대 붙이지 않는다 — /api/routine/check가
@@ -97,7 +116,7 @@ export async function POST(req) {
     // 씨앗 행과 idempotency_key가 겹쳐 "duplicate"로 오판될 수 있다.
     const record = {
       ...buildRoutineCheckRecord({ projectId, checkType, status: "pending", note: null, workspaceId }),
-      meta: { ritual_key: ritualKey, name },
+      meta: { ritual_key: ritualKey, name, category, target_per_week: targetPerWeek },
     };
 
     if (!workspaceId || !resolveSupabaseConfig()) {
@@ -194,6 +213,22 @@ function normalizeEditPayload(payload) {
     result.projectId = projectId;
   }
 
+  if (Object.prototype.hasOwnProperty.call(payload, "category")) {
+    const category = cleanString(payload.category).toLowerCase();
+    if (!RITUAL_CATEGORIES.has(category)) {
+      return { error: invalidInput("invalid-category", "category must be one of general, work, content, health, learning, personal.") };
+    }
+    result.category = category;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, "targetPerWeek")) {
+    const targetPerWeek = normalizeTargetPerWeek(payload.targetPerWeek);
+    if (!targetPerWeek) {
+      return { error: invalidInput("invalid-target-per-week", "targetPerWeek must be an integer between 1 and 7.") };
+    }
+    result.targetPerWeek = targetPerWeek;
+  }
+
   return { value: result };
 }
 
@@ -208,7 +243,7 @@ export async function PATCH(req) {
     const normalized = normalizeEditPayload(parsed.data);
     if (normalized.error) return normalized.error;
 
-    const { ritualKey, matchProjectId, name, checkType, projectId } = normalized.value;
+    const { ritualKey, matchProjectId, name, checkType, projectId, category, targetPerWeek } = normalized.value;
 
     if (!resolveSupabaseConfig()) {
       return NextResponse.json(
@@ -259,7 +294,13 @@ export async function PATCH(req) {
     const results = await Promise.all(rows.map((row) => {
       const existingMeta = row.meta && typeof row.meta === "object" ? row.meta : {};
       const patch = {
-        meta: { ...existingMeta, ritual_key: ritualKey, ...(name ? { name } : {}) },
+        meta: {
+          ...existingMeta,
+          ritual_key: ritualKey,
+          ...(name ? { name } : {}),
+          ...(category ? { category } : {}),
+          ...(targetPerWeek ? { target_per_week: targetPerWeek } : {}),
+        },
       };
       if (checkType) patch.check_type = checkType;
       if (Object.prototype.hasOwnProperty.call(normalized.value, "projectId")) patch.project_id = projectId;

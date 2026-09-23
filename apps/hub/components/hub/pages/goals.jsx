@@ -17,7 +17,7 @@ function GoalLinkedWork({ link, objective, onRefresh }) {
   const stale = link.stale || ['scope-mismatch', 'unavailable'].includes(link.linkStatus);
   return <div className="goal-linked-work" aria-busy={command.state === 'saving'}>
     <div className="goal-link-row">{href ? <Link className="hub-row" href={href}><span>{title} 열기 →</span><span className="mono goal-muted">{link.entityId}</span></Link> : <div className="goal-linked-work__identity"><span>{title}</span><span className="mono goal-muted">{link.entityId}</span></div>}<Button disabled={command.locked} onClick={() => setConfirming(true)} aria-label={`${title} 목표 연결 해제`}>해제</Button></div>
-    {stale && <p className="goal-muted" role="status">{link.linkStatus === 'scope-mismatch' ? '업무의 소속이 바뀌었습니다. 기존 연결을 해제한 뒤 현재 소속의 목표를 연결하세요.' : '업무 원장을 확인할 수 없습니다. 다시 불러오거나 이 연결을 해제할 수 있습니다.'}</p>}
+    {stale && <p className="goal-muted" role="status">{link.linkStatus === 'scope-mismatch' ? '업무의 소속이 바뀌었습니다. 기존 연결을 해제한 뒤 현재 소속의 목표를 연결하세요.' : '업무 기록을 확인할 수 없습니다. 다시 불러오거나 이 연결을 해제할 수 있습니다.'}</p>}
     {confirming && <div className="goal-feedback"><p>목표와 업무 기록은 유지하고 이 연결만 해제합니다.</p><div className="goal-actions"><Button disabled={command.locked} onClick={() => command.submit('unlink_entity', { objectiveId: objective.id, entityType: link.entityType, entityId: link.entityId }, objective.revision)}>연결 해제</Button><Button disabled={command.state === 'saving'} onClick={() => setConfirming(false)}>취소</Button></div></div>}
     <GoalCommandFeedback command={command} />
     {command.state === 'conflict' && <Button onClick={() => { command.reset(); onRefresh(); }}>최신 목표 다시 확인</Button>}
@@ -131,7 +131,7 @@ export function Goals() {
     <div className="goal-filters"><TextField label={checking ? '목표·지표 검색' : '목표 검색'} type="search" placeholder={checking ? '목표 또는 지표 이름' : '목표 이름'} value={search} onChange={event => setSearch(event.target.value)} /><SelectField label="목표 상태" value={status} options={[{ value: 'active', label: '진행 중' }, { value: 'archived', label: '보관한 목표' }, { value: 'all', label: '전체 상태' }]} onChange={event => setStatus(event.target.value)} />{checking && <SelectField label="확인할 지표" value={checkFilter} options={[{value:'all',label:'모든 지표'},{value:'manual',label:'직접 기록 지표'},{value:'unmeasured',label:'근거 확인 필요'}]} onChange={event => setCheckFilter(event.target.value)} />}</div>
     {notice && <p role="status" className="goal-muted">{notice}</p>}
     {checking && <p className="goal-muted">자동 값은 각 목표의 개인·회사 전체 기간 기록입니다. 실제값 0과 미측정을 구분하며, 연결만으로 실적이 늘지 않습니다.</p>}
-    {model.status === 'partial' && <p className="goal-muted" role="status">일부 원장을 확인하지 못했습니다. 읽힌 값만 표시하며 부족한 근거로 달성을 확정하지 않습니다.</p>}
+    {model.status === 'partial' && <p className="goal-muted" role="status">일부 기록을 확인하지 못했습니다. 읽힌 값만 표시하며 부족한 근거로 달성을 확정하지 않습니다.</p>}
     {!['live', 'partial'].includes(model.status) || !model.objectives.length ? <GoalReadFeedback model={model} onCreate={create} /> : checking ? <GoalCheckList rows={rows} onRecord={openRecord} onOpen={event => { opener.current = event.currentTarget; }} hrefFor={hrefFor} model={model} /> : !filtered.length ? <EmptyState title="조건에 맞는 목표가 없습니다" action={<Button onClick={() => { setSearch(''); setStatus('all'); }}>검색·필터 지우기</Button>} /> : <ul className="goal-list">{filtered.map(objective => {
       const metrics = model.metrics.filter(item => item.objectiveId === objective.id && item.status !== 'archived');
       const metricState = goalSectionState(model, 'operating_metrics');
