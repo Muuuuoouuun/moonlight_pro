@@ -21,12 +21,14 @@ export function restoreMemoIntake(value) {
   if (!value.actions.every((item) => isCanonicalUuid(item?.id)
     && typeof item.task === "string" && typeof item.selected === "boolean"
     && (item.suggestedDue == null || typeof item.suggestedDue === "string")
+    && (item.projectId == null || typeof item.projectId === "string")
     && (item.error == null || typeof item.error === "string")
     && ["pending", "saved", "failed", "unknown"].includes(item.status)
     && (item.status === "pending" || item.command)
     && (!item.command || (item.command.id === item.id
       && [item.command.title, item.command.priority, item.command.description, item.command.source].every((field) => typeof field === "string")
-      && (item.command.dueAt == null || typeof item.command.dueAt === "string"))))) return null;
+      && (item.command.dueAt == null || typeof item.command.dueAt === "string")
+      && (item.command.projectId == null || typeof item.command.projectId === "string"))))) return null;
   return value;
 }
 
@@ -43,6 +45,7 @@ export function prepareMemoIntakeTasks(intake, memo) {
         title: item.task,
         priority: item.priority || "medium",
         dueAt: item.suggestedDue || null,
+        ...(item.projectId ? { projectId: item.projectId } : {}),
         description: `[AI 추출 메모: ${memo.id}]\n${memo.title || "메모"}\n${item.task}`,
         source: "memo-multimodal",
       },

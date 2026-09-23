@@ -63,6 +63,31 @@
   .memo-context-results button, .memo-uses a, .memo-target-link { min-height: 44px; }
 }
 
+.memo-network-panel {
+  padding: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.memo-network-card {
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  transition: background var(--dur-hover) var(--ease-hub);
+  cursor: pointer;
+}
+.memo-network-card:hover {
+  background: var(--surface-3);
+}
+
 .memo-tag-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0; list-style: none; }
 .memo-tag-chips > li { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); color: var(--fg-muted); font-size: 12px; }
 .memo-tag-chips > li > span { overflow-wrap: anywhere; }
