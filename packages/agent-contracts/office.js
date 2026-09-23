@@ -133,3 +133,20 @@ export function parseOfficeContext(value, scope) {
   check(!['provided','preview','error'].includes(value.source) || projects.length === 0, '연결 상태와 프로젝트 자료가 일치하지 않습니다.');
   return {source:value.source,scope,projects,note:text(value.note,1000)};
 }
+
+// Failure classification shared by Engine, Hub and the Office usage summary (2026-09-23 운영자 확정).
+// Only this phase/category pair crosses a boundary — never model text, provider reasons or exceptions.
+export const OFFICE_FAILURE_PHASES = Object.freeze(['draft','review','position','response','synthesis']);
+export const OFFICE_FAILURE_CATEGORIES = Object.freeze(['provider','json','source-review','contract','deadline','model-mismatch']);
+export const OFFICE_FAILURE_LABELS = Object.freeze({provider:'제공자 오류',json:'형식 오류','source-review':'근거 검수',contract:'계약 위반',deadline:'시간 초과','model-mismatch':'모델 불일치',unknown:'원인 미상'});
+const FAILURE_MESSAGES = Object.freeze({
+  provider:'AI 제공자가 응답하지 않았습니다. 잠시 후 다시 시도해 주세요. 입력은 보존됩니다.',
+  deadline:'응답이 제한 시간을 넘었습니다. 관점 수를 줄이거나 요청을 나눠 다시 시도해 주세요. 입력은 보존됩니다.',
+  'source-review':'근거 검수 단계에서 응답 형식을 확인하지 못했습니다. 다시 시도해 주세요. 입력은 보존됩니다.',
+});
+export function parseOfficeFailure(value) {
+  return plain(value) && OFFICE_FAILURE_PHASES.includes(value.phase) && OFFICE_FAILURE_CATEGORIES.includes(value.category) ? {phase:value.phase,category:value.category} : null;
+}
+export function officeFailureMessage(failure) {
+  return FAILURE_MESSAGES[failure?.category] || 'AI 응답 형식이 맞지 않아 결과를 버렸습니다. 같은 요청을 한 번 더 보내 주세요. 입력은 보존됩니다.';
+}

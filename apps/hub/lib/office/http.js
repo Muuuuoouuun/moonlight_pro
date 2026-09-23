@@ -10,12 +10,20 @@ export function createOfficeHubHandler({guard=assertHubWriteAllowed,readContext=
   let request;
   try{request=parseOfficeRequest(body.data);}catch(error){return Response.json({status:'error',error:error instanceof OfficeInputError?error.message:'요청을 확인해 주세요.'},{status:400});}
   try{
+   const startedAt=Date.now();
    const context=await readContext(request);
    const result=await callEngine(request,context);
-   if(result.status!=='generated')return Response.json(result,{status:result.status==='preview'?202:502});
+   const elapsedMs=Date.now()-startedAt;
+   const run={agent:request.mode==='council'?'office.council':`office.${request.ownerId}`,mode:request.mode,ref:`office:${request.scope}`,inputSummary:`${OFFICE_VERSION} owner=${request.ownerId} scope=${request.scope} views=${request.participants.join(',')}`};
+   if(result.status!=='generated'){
+    // 2026-09-23 운영자 확정: 실패도 원인 분류만(본문 없음) 기록해 Office 하단 요약에 보인다. preview는 실패가 아니다.
+    if(result.status==='error'){try{await recordRun({...run,recommendation:{status:'error',failure:result.failure??null,elapsedMs},result:'error'});}catch{ /* 응답이 우선이다. */ }}
+    return Response.json(result,{status:result.status==='preview'?202:502});
+   }
    let log={persisted:false,id:null};
    try{
-    log=await recordRun({agent:request.mode==='council'?'office.council':`office.${request.ownerId}`,mode:request.mode,ref:`office:${request.scope}`,inputSummary:`${OFFICE_VERSION} owner=${request.ownerId} scope=${request.scope} views=${request.participants.join(',')}`,recommendation:{answer:result.answer,nextAction:result.nextAction,...(request.mode==='council'?{recommendation:result.recommendation,evidence:result.evidence,dissent:result.dissent,discussion:result.discussion}:{})},result:'ok'});
+    log=await recordRun({...run,recommendation:{answer:result.answer,nextAction:result.nextAction,...(request.mode==='council'?{recommendation:result.recommendation,evidence:result.evidence,dissent:result.dissent,discussion:result.discussion}:{}),
+     status:'generated',elapsedMs:result.generation?.elapsedMs??elapsedMs,modelCalls:result.generation?.modelCalls??null,usage:result.generation?.usage??null},result:'ok'});
    }catch{ /* A generated answer is still useful when only its run log fails. */ }
    return Response.json({...result,version:OFFICE_VERSION,log:{persisted:log?.persisted===true,runId:log?.persisted===true?log.id:null},businessWrites:false});
   }catch{return Response.json({status:'error',error:'Office 요청을 처리하지 못했습니다. 입력은 보존됩니다.'},{status:502});}

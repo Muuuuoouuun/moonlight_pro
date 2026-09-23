@@ -1717,7 +1717,7 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
                   },
                 })}
               >
-                Council 심층 토의 (⌘J)
+                Council 심층 토의
               </Button>
             )}
             {onNavigate && (

@@ -68,17 +68,22 @@ function sourceQuoteCandidates(source: string[]): string[] {
   return [...candidates];
 }
 
-export function readSourceReviewedOutput(raw: unknown, request: SourceReviewRequest, context: unknown, catalog: OfficeSourceCatalog): Record<string, unknown> {
+export type OfficeSourceCheck = 'traced' | 'none' | 'untraced';
+
+// Format violations still fail. A cited index that points nowhere (outside the catalog, or at
+// text no longer in the sources) is an untraceable citation: drop it and report the check
+// state instead of discarding a reviewed answer (2026-09-23 운영자 확정).
+export function readSourceReviewedOutput(raw: unknown, request: SourceReviewRequest, context: unknown, catalog: OfficeSourceCatalog): { answer: Record<string, unknown>; sourceCheck: OfficeSourceCheck } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('invalid-source-review');
   // This is a private per-call contract, not a persisted public format. Accepting
   // legacy free-text quotes here would bypass the current server catalog.
   if (Object.hasOwn(raw, 'sourceQuotes') || Object.hasOwn(raw, 'sourceCatalog')) throw new Error('invalid-source-review');
   const { sourceIndexes, corrections, ...answer } = raw as Record<string, unknown>;
   const validStrings = (value: unknown, max: number): value is string[] => Array.isArray(value) && value.length <= 5 && value.every(item => typeof item === 'string' && item.trim() && item.length <= max && !item.includes('\0'));
-  if (!Array.isArray(sourceIndexes) || sourceIndexes.length > 5 || sourceIndexes.some(index => !Number.isSafeInteger(index) || index < 0 || index >= catalog.length || catalog[index].index !== index) || !validStrings(corrections, 350)) throw new Error('invalid-source-review');
-  const sourceQuotes = sourceIndexes.map(index => catalog[index].quote);
-  if (!validStrings(sourceQuotes, 300)) throw new Error('invalid-source-review');
+  if (!Array.isArray(sourceIndexes) || sourceIndexes.length > 5 || sourceIndexes.some(index => !Number.isSafeInteger(index)) || !validStrings(corrections, 350)) throw new Error('invalid-source-review');
+  if (!sourceIndexes.length) return { answer, sourceCheck: 'none' };
   const source = sourceTexts(request, context);
-  if (sourceQuotes.some(quote => !source.some(text => text.includes(quote)))) throw new Error('untraceable-source-review');
-  return answer;
+  const traced = sourceIndexes.filter(index => index >= 0 && index < catalog.length && catalog[index].index === index
+    && typeof catalog[index].quote === 'string' && catalog[index].quote.trim() !== '' && catalog[index].quote.length <= 300 && source.some(text => text.includes(catalog[index].quote)));
+  return { answer, sourceCheck: traced.length ? 'traced' : 'untraced' };
 }

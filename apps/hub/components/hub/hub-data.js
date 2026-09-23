@@ -49,7 +49,7 @@ export const NAV_TREE = [
   {
     key: 'agents', label: 'Agents', icon: 'agents', secondary: true,
     children: [
-      { key: 'office-council', label: 'Office', icon: 'agents', path: 'dashboard/agents/office-council' },
+      { key: 'office-council', label: 'Office', icon: 'agents', path: 'dashboard/agents/office-council', keywords: ['office', '오피스', '이브이', 'eevee', '비서', 'AI', '에이전트', '관점 비교', '초안'] },
       { key: 'orders', label: '작업·실행', icon: 'orders', path: 'dashboard/agents/orders', keywords: ['orders', 'codex', '코드 작업', '작업 지시'] },
       { key: 'chat', label: '코칭·대화', icon: 'chat', path: 'dashboard/agents/chat', keywords: ['chat', 'guru', '코칭'] },
       { key: 'council', label: '브랜드 자문', icon: 'council', path: 'dashboard/agents/council', keywords: ['council', '브랜드'] },
@@ -134,5 +134,5 @@ export const LEGACY_REDIRECTS = {
   'dashboard/projects': { to: 'dashboard/work/projects', label: 'Projects' },
   'dashboard/classin/intake': { to: 'dashboard/classin/revenue', label: '결제·리드' },
   'dashboard/classin/followups': { to: 'dashboard/revenue/followups', label: '고객 연락' },
-  'dashboard/agents/office': { to: 'dashboard/agents/chat', label: 'Agents · 코칭·대화' },
+  'dashboard/agents/office': { to: 'dashboard/agents/office-council', label: 'Office' },
 };
