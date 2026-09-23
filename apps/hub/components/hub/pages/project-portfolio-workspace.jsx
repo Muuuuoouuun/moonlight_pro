@@ -198,6 +198,8 @@ export function ProjectPortfolioWorkspace({
   onQueryChange,
   searchInputRef,
   onOpenProject,
+  onEditProject,
+  onRemoveProject,
   onCreateProject,
   onManageDelivery,
   onCreateContent,
@@ -275,9 +277,7 @@ export function ProjectPortfolioWorkspace({
     setFocusProjectId(projectId);
   };
   const toggleSection = (section) => setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  const nextAction = project?.displayNextAction || project?.projectNextAction || nextTask?.title || "다음 행동 미정";
-  const nextActionDescription = project?.displaySummary
-    || (nextTask ? `${formatScheduleDate(nextTask.dueAt)}까지 처리할 가장 가까운 할 일입니다.` : "상세에서 다음 행동과 실행 근거를 정리하세요.");
+  const nextAction = project?.displayNextAction || project?.projectNextAction || nextTask?.title;
   const lowerBound = Boolean(projectCorePartial || sourceState === "partial");
 
   return (
@@ -289,7 +289,7 @@ export function ProjectPortfolioWorkspace({
       <aside className="hub-project-portfolio-index" aria-label="프로젝트 인덱스">
         <div className="hub-project-portfolio-index__header">
           <div>
-            <strong>프로젝트</strong>
+            <strong>프로젝트 선택</strong>
             <span className="mono">{portfolioProjects.length}{projectCorePartial ? "+" : ""}</span>
           </div>
           <Input
@@ -379,15 +379,17 @@ export function ProjectPortfolioWorkspace({
         ) : (
           <div className={`hub-project-portfolio-stage__inner ${deliveryStyles.portfolio}`}>
           <header className="hub-project-portfolio-stage__header">
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", width: "100%", gap: 16 }}>
+            <div className="hub-project-portfolio-stage__title-row">
               <div>
-                <span className={deliveryStyles.eyebrow}>{brand?.name || "프로젝트"}</span>
+                <span className={deliveryStyles.eyebrow}>선택한 프로젝트 · {brand?.name || "소속 미정"}</span>
                 <h1>{project?.name || "프로젝트"}</h1>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div className="hub-project-portfolio-stage__actions">
+                {project && <Button variant="outline" size="sm" icon="pencil" onClick={() => onEditProject?.(project)}>편집</Button>}
+                {project && project.statusKey !== "archived" && <Button variant="ghost" size="sm" onClick={() => onRemoveProject?.(project)}>목록에서 제거</Button>}
                 {onSwitchView && (
                   <Button variant="outline" size="sm" onClick={() => onSwitchView("table")}>
-                    목록(Table)으로 보기 →
+                    전체 목록 보기 →
                   </Button>
                 )}
               </div>
@@ -464,9 +466,9 @@ export function ProjectPortfolioWorkspace({
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   <Iconed name="flag" size={14} style={{ color: "var(--moon-300)", flexShrink: 0 }} />
-                  <span style={{ color: "var(--fg-faint)", flexShrink: 0 }}>결과물 계획</span>
+                  <span style={{ color: "var(--fg-faint)", flexShrink: 0 }}>결과물</span>
                   <strong style={{ fontWeight: 500, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {project.delivery?.deliverable || "최소 결과물 미정"}
+                    {project.delivery?.deliverable || "계획 필요"}
                   </strong>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -492,7 +494,6 @@ export function ProjectPortfolioWorkspace({
                   <div className="hub-project-portfolio-hero__identity">
                     <span>{brand?.name || "프로젝트"}</span>
                     <h2>작업 진척</h2>
-                    <p>{project.displaySummary || project.projectSummary || "프로젝트의 목표 결과와 실행 근거를 상세에서 정리할 수 있습니다."}</p>
                     <span className="hub-project-portfolio-hero__due">
                       <Iconed name="calendar" size={14} />{formatLongDate(project.dueAt)}
                       {dday && <Badge tone={dday.tone} size="xs">{dday.text}</Badge>}
@@ -502,10 +503,10 @@ export function ProjectPortfolioWorkspace({
 
                 <div className="hub-project-portfolio-hero__action">
                   <span>다음 행동</span>
-                  <h3 style={{ fontSize: 15, margin: "4px 0 6px" }}>{nextAction}</h3>
+                  <h3 style={{ fontSize: 15, margin: "4px 0 6px" }}>{nextAction || "다음 행동을 정해 주세요"}</h3>
                   <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                    <Button variant="primary" size="sm" onClick={() => onOpenProject(project.id)}>
-                      프로젝트 열기 <Iconed name="arrowRight" size={14} />
+                    <Button variant="primary" size="sm" onClick={() => nextAction ? onOpenProject(project.id) : onEditProject?.(project)}>
+                      {nextAction ? "할 일·기록 열기" : "다음 행동 입력"} <Iconed name="arrowRight" size={14} />
                     </Button>
                   </div>
                 </div>

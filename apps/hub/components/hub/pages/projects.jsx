@@ -233,6 +233,7 @@ export function Projects({ workspace }) {
   const [deleteProjectTarget, setDeleteProjectTarget] = React.useState(null);
   const [deleteProjectPending, setDeleteProjectPending] = React.useState(false);
   const [deleteProjectError, setDeleteProjectError] = React.useState(null);
+  const [deleteProjectAcknowledged, setDeleteProjectAcknowledged] = React.useState(false);
   const projectStatusPendingRef = React.useRef(new Set());
   const [deliveryProject, setDeliveryProject] = React.useState(null);
   const [projectDraft, setProjectDraft] = React.useState(null);
@@ -837,11 +838,13 @@ export function Projects({ workspace }) {
 
   const requestProjectDelete = (project) => {
     setDeleteProjectError(null);
+    setDeleteProjectAcknowledged(false);
     setDeleteProjectTarget(project);
   };
 
   const confirmProjectDelete = async () => {
-    if (!deleteProjectTarget || deleteProjectPending) return;
+    if (!deleteProjectTarget || deleteProjectPending || !deleteProjectAcknowledged) return;
+    const removedId = deleteProjectTarget.id;
     setDeleteProjectPending(true);
     setDeleteProjectError(null);
     const result = await setProjectStatus(deleteProjectTarget, 'archived');
@@ -851,7 +854,8 @@ export function Projects({ workspace }) {
       return;
     }
     setDeleteProjectTarget(null);
-    if (result.reloaded) setOrderResult({ tone: 'ok', label: '프로젝트 삭제됨 · 완료·보관에서 다시 열 수 있습니다.' });
+    if (openDetail === removedId) closeProjectDetail();
+    if (result.reloaded) setOrderResult({ tone: 'ok', label: '목록에서 제거됨 · 완료·보관에서 다시 열 수 있습니다.' });
   };
 
   const completeProject = React.useCallback((project) => {
@@ -2082,6 +2086,8 @@ export function Projects({ workspace }) {
               onQueryChange={setProjectQuery}
               searchInputRef={searchInputRef}
               onOpenProject={openProjectDetail}
+              onEditProject={editProject}
+              onRemoveProject={requestProjectDelete}
               onManageDelivery={setDeliveryProject}
               onCreateProject={() => createProject()}
               onCreateContent={createContentProject}
@@ -2379,7 +2385,7 @@ export function Projects({ workspace }) {
                                 </div>
                                 <div className="hub-project-row-actions" aria-label={`${p.name} 관리`}>
                                   <IconButton icon="pencil" size={30} iconSize={16} tooltip={`${p.name} 편집`} onClick={() => editProject(p)} />
-                                  <IconButton icon="trash" size={30} iconSize={16} className="hub-project-delete-action" tooltip={`${p.name} 삭제`} onClick={() => requestProjectDelete(p)} />
+                                  <IconButton icon="archive" size={30} iconSize={16} className="hub-project-delete-action" tooltip={`${p.name} 목록에서 제거`} onClick={() => requestProjectDelete(p)} />
                                 </div>
                               </div>
 
@@ -2683,6 +2689,7 @@ export function Projects({ workspace }) {
                     onManageDelivery={setDeliveryProject}
                     onComplete={completeProject}
                     onArchive={archiveProject}
+                    onRemove={requestProjectDelete}
                   />
                 </div>
               );
@@ -2757,22 +2764,26 @@ export function Projects({ workspace }) {
 
       {deleteProjectTarget && (
         <Drawer
-          title="프로젝트 삭제"
+          title="프로젝트 목록에서 제거"
           presentation="compact"
           onClose={() => { if (!deleteProjectPending) setDeleteProjectTarget(null); }}
           footer={(
             <>
               <Button autoFocus variant="ghost" size="sm" disabled={deleteProjectPending} onClick={() => setDeleteProjectTarget(null)}>취소</Button>
-              <Button variant="danger" size="sm" disabled={deleteProjectPending} onClick={confirmProjectDelete}>{deleteProjectPending ? '삭제 중…' : '삭제'}</Button>
+              <Button variant="danger" size="sm" disabled={deleteProjectPending || !deleteProjectAcknowledged} onClick={confirmProjectDelete}>{deleteProjectPending ? '처리 중…' : '목록에서 제거'}</Button>
             </>
           )}
         >
           <div className="hub-project-delete-summary">
             <span className="hub-project-delete-summary__icon"><Iconed name="archive" size={20} /></span>
-            <div><span className="hub-project-delete-summary__label">삭제할 프로젝트</span><strong>{deleteProjectTarget.name}</strong></div>
+            <div><span className="hub-project-delete-summary__label">목록에서 제거할 프로젝트</span><strong>{deleteProjectTarget.name}</strong></div>
           </div>
-          <p className="hub-project-delete-description">활성 목록에서 제외하고 보관합니다.<br />연결된 할 일·메모·기록은 그대로 유지됩니다.</p>
+          <p className="hub-project-delete-description">활성 목록에서 제외하고 보관합니다. 현재 확인된 할 일 {todos.filter(task => task.projectId === deleteProjectTarget.id).length}건과 연결된 메모·기록은 그대로 유지됩니다.</p>
           <div className="hub-project-delete-recovery"><Iconed name="archive" size={14} /><span>완료·보관 → 다시 열기로 복원할 수 있습니다.</span></div>
+          <div className="hub-project-delete-acknowledgment">
+            <Checkbox checked={deleteProjectAcknowledged} onChange={setDeleteProjectAcknowledged} size={18} label="연결 기록은 유지되고 활성 목록에서만 제외됨을 확인했습니다." />
+            <span>연결 기록은 유지되고 활성 목록에서만 제외됨을 확인했습니다.</span>
+          </div>
           {deleteProjectError && <p role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>{deleteProjectError}</p>}
         </Drawer>
       )}
