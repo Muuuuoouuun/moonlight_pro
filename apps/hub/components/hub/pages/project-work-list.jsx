@@ -7,6 +7,7 @@ import { projectItemType, readTaskChecklist, TASK_CHECKLIST_LIMIT } from '@/lib/
 import styles from './project-direct-work.module.css';
 
 const TYPE_LABEL = { task: '할 일', subproject: '작업 묶음', milestone: '마일스톤' };
+const TYPE_ICON = { task: 'check', subproject: 'folder', milestone: 'flag' };
 const EMPTY_DRAFT = { title: '', itemType: 'task', request: null, status: 'idle', message: '' };
 const dateLabel = value => {
   const date = value ? new Date(value) : null;
@@ -28,6 +29,7 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
   const currentProject = React.useRef(projectId);
   currentProject.current = projectId;
   const projectKey = `project:${projectId}`;
+  const selectedType = drafts[projectKey]?.itemType || 'task';
   const openTasks = tasks.filter(task => !task.done);
   const doneTasks = tasks.filter(task => task.done);
   const updateDraft = (key, patch) => {
@@ -132,7 +134,7 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
           label={`${task.done ? '다시 열기' : '완료'}: ${task.title}`} onChange={(_next, event) => toggle(task, null, event)} /></span>
         <button type="button" data-task-expand className={styles.taskTitle} aria-expanded={isOpen} aria-controls={`project-work-${task.id}`}
           onClick={() => setExpanded(previous => ({ ...previous, [task.id]: !previous[task.id] }))}>
-          {type !== 'task' && <span className={styles.itemType}><Iconed name={type === 'milestone' ? 'flag' : 'folder'} size={13} />{TYPE_LABEL[type]}</span>}
+          {type !== 'task' && <span className={styles.itemType} role="img" aria-label={TYPE_LABEL[type]} title={TYPE_LABEL[type]}><Iconed name={TYPE_ICON[type]} size={13} /></span>}
           <span>{task.title}</span><Iconed name={isOpen ? 'chevronD' : 'chevronR'} size={12} />
         </button>
         {checks.length > 0 && <span className={`${styles.checkCount} num`} aria-label={`세부 체크 ${checks.filter(item => item.done).length}/${checks.length} 완료`}>{checks.filter(item => item.done).length}/{checks.length}</span>}
@@ -163,10 +165,10 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
     {composer(projectKey)}
     <div className={styles.listFooter}>
       <details className={styles.addOptions}>
-        <summary>다른 항목 추가 <Iconed name="chevronD" size={12} /></summary>
+        <summary>다른 항목 추가 <Iconed name="chevronD" size={12} /><span className={styles.selectedType} title="현재 추가 유형"><Iconed name={TYPE_ICON[selectedType]} size={13} />{TYPE_LABEL[selectedType]}</span></summary>
         <div>{Object.entries(TYPE_LABEL).map(([value, label]) => <button key={value} type="button" disabled={!canWrite || Boolean(drafts[projectKey]?.request)} onClick={event => {
           updateDraft(projectKey, { itemType: value }); event.currentTarget.closest('details').open = false; focusInput(projectKey);
-        }}>{label}</button>)}</div>
+        }} aria-pressed={selectedType === value}><Iconed name={TYPE_ICON[value]} size={13} />{label}</button>)}</div>
       </details>
       {doneTasks.length > 0 && <button type="button" aria-expanded={Boolean(showDone[projectId])} onClick={() => setShowDone(previous => ({ ...previous, [projectId]: !previous[projectId] }))}>
         <Iconed name={showDone[projectId] ? 'chevronD' : 'chevronR'} size={12} />완료 {doneTasks.length}

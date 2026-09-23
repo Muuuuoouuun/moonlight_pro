@@ -56,6 +56,9 @@
 .listFooter { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px 8px; }
 .listFooter > button, .addOptions > summary { display: flex; align-items: center; gap: 5px; min-height: 30px; color: var(--fg-muted); font-size: 11px; cursor: pointer; list-style: none; }
 .addOptions { position: relative; }
+.selectedType { display: inline-flex; align-items: center; gap: 5px; margin-left: 3px; padding-left: 9px; border-left: 1px solid var(--line-soft); color: var(--fg-muted); font-size: 12px; white-space: nowrap; }
+.addOptions button { display: flex; align-items: center; gap: 7px; }
+.addOptions button[aria-pressed="true"] { background: var(--surface-2); }
 .addOptions > summary::-webkit-details-marker { display: none; }
 .addOptions > div { left: 0; right: auto; }
 .support { border-top: 1px solid var(--line-soft); }
