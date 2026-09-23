@@ -37,11 +37,11 @@
 ## 검증·통합
 
 - [x] 대상 테스트의 red→green과 전체 `npm test`, `git diff --check`를 확인한다.
-- [ ] 주 워크트리의 다른 변경을 보존한 채 fast-forward 병합하고 전용 worktree를 제거한다.
+- [x] 주 워크트리의 다른 변경을 보존한 채 fast-forward 병합하고 전용 worktree를 제거한다.
 
 ## 검증 기록
 
-- `npm test`: 2,500개 중 통과 2,489 · 실패 0 · DB 연결 필요 skip 11.
+- 최신 메인 병합 기준 `npm test`: 2,559개 중 통과 2,548 · 실패 0 · DB 연결 필요 skip 11.
 - `npm --workspace @com-moon/hub run build`: 성공.
 - 로컬 실데이터 읽기 QA: 기본 대기 0건, 완료 1건, 보류 25건, 전체 26건. 보류 필터와 코드 작업 전환 후 복귀 시 `status=dismissed` 유지. 운영 데이터에 쓰기 동작은 수행하지 않았다.
 - `git diff --check`: 공백 오류 없음.
