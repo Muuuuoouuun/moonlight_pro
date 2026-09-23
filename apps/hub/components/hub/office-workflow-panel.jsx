@@ -102,12 +102,18 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
     const choices=(projects.projects||[]).filter(project=>project.orgScope===scope);
     if(!choices.length){patch({note:'같은 범위의 프로젝트를 먼저 선택해야 합니다. 프로젝트 없이 등록하려면 기존 할 일 화면을 이용해 주세요.'});return;}
     const proposed=result?.nextStep?.fields||{};
-    patch({projects:choices,taskFields:{id:receipt.requestId,title:proposed.title||'',description:proposed.description||'',nextAction:proposed.nextAction||'',dealId:proposed.dealId||null,projectId:choices.some(p=>p.id===proposed.projectId)?proposed.projectId:'',dueAt:(proposed.dueAt||'').slice(0,10),priority:proposed.priority||'medium'}});
+    patch({projects:choices,contextChange:null,acknowledgeChange:false,taskFields:{id:receipt.requestId,title:proposed.title||'',description:proposed.description||'',nextAction:proposed.nextAction||'',dealId:proposed.dealId||null,projectId:choices.some(p=>p.id===proposed.projectId)?proposed.projectId:'',dueAt:(proposed.dueAt||'').slice(0,10),priority:proposed.priority||'medium'}});
   };
-  const apply=async(fields)=>{
+  const apply=async(fields,acknowledge=false)=>{
     if(store.get(sessionKey).pending)return {ok:false,status:'error'};
     patch({pending:true,inspectToken:null,applyInput:fields||state.applyInput});
-    const data=await writeOfficeWorkflow(`requests/${receipt.requestId}/apply`,{resultRevision:result?.resultRevision||1,...(fields?{fields}: {})},{requestId:receipt.requestId,scope});
+    const data=await writeOfficeWorkflow(`requests/${receipt.requestId}/apply`,{resultRevision:result?.resultRevision||1,...(fields?{fields}: {}),...(acknowledge?{acknowledgeContextChange:true}:{})},{requestId:receipt.requestId,scope});
+    // 2026-09-23 운영자 확정: 생성 뒤 기록이 바뀌었으면 막지 않고 알린다 — 편집 중인 할 일은 그대로 두고 확인만 받는다.
+    if(data.error==='office-context-changed'){
+      const note=officeWorkflowNote(data);
+      patch({pending:false,applyInput:null,contextChange:data.contextChange||{},acknowledgeChange:false,note});
+      return {ok:false,status:'conflict',message:note};
+    }
     const uncertain=['unknown','running'].includes(data.status);
     patch({pending:false,receipt:{...receipt,application:data.application||receipt.application,capabilities:data.application?data.capabilities:receipt.capabilities},note:officeWorkflowNote(data),applicationUnknown:uncertain,
       ...(uncertain?{taskFields:null}:{}),...(['saved','conflict','error'].includes(data.status)?{applyInput:null}:{})});
@@ -122,7 +128,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
     if(!fields?.projectId||!fields.title.trim())return {ok:false,status:'error',message:'할 일 제목과 같은 범위의 프로젝트를 선택해 주세요.'};
     if(fields.title.trim().length>300 || fields.description.trim().length>4000 || (fields.nextAction||'').trim().length>1000)return {ok:false,status:'error',message:'제목은 300자, 상세는 4,000자, 다음 행동은 1,000자 이내로 입력해 주세요.'};
     const payload={title:fields.title.trim(),projectId:fields.projectId,priority:fields.priority,...(fields.description.trim()?{description:fields.description.trim()}:{}),...(fields.nextAction?.trim()?{nextAction:fields.nextAction.trim()}:{}),...(fields.dealId?{dealId:fields.dealId}:{}),...(fields.dueAt?{dueAt:`${fields.dueAt}T09:00:00+09:00`}:{})};
-    return apply(payload);
+    return apply(payload,store.get(sessionKey).acknowledgeChange===true);
   };
   const showTask=()=>onNavigate?onNavigate(`dashboard/work/projects?view=todos&task=${encodeURIComponent(application.entityId)}`):window.location.assign(`/dashboard/work/projects?view=todos&task=${encodeURIComponent(application.entityId)}`);
   return <section className={styles.panel} aria-label={title}>
@@ -182,6 +188,8 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
     {state.taskFields&&<EditDrawer title="Office 제안을 할 일로 연결" subtitle="같은 범위의 프로젝트에 저장합니다." record={state.taskFields} presentation="compact" onChange={(field,value)=>patch(current=>({taskFields:{...current.taskFields,[field]:value}}))} onClose={()=>patch({taskFields:null})} onSave={saveTask} saveLabel="할 일 등록" fields={[
       {key:'title',label:'할 일',type:'text',required:true},{key:'projectId',label:'프로젝트',type:'select',options:[{value:'',label:'프로젝트 선택'},...state.projects.map(project=>({value:project.id,label:project.name}))]},
       {key:'dueAt',label:'기한',inputType:'date',optional:true},{key:'nextAction',label:'다음 행동',type:'text',optional:true},{key:'description',label:'상세',type:'textarea',optional:true},
-    ]}><p className={styles.note}>저장 확인이 끊기면 새 할 일을 만들지 않고 같은 명령을 확인합니다.</p></EditDrawer>}
+    ]}>{state.contextChange&&<div className={styles.changeNotice} role="status"><p className={styles.note}>{officeWorkflowNote({error:'office-context-changed',contextChange:state.contextChange})}</p>
+        <CheckboxRow text="바뀐 기록을 확인했고 이 내용 그대로 연결합니다" checked={state.acknowledgeChange===true} onChange={()=>patch(current=>({acknowledgeChange:!current.acknowledgeChange}))} /></div>}
+      <p className={styles.note}>저장 확인이 끊기면 새 할 일을 만들지 않고 같은 명령을 확인합니다.</p></EditDrawer>}
   </section>;
 }

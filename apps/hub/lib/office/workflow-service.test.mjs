@@ -218,3 +218,54 @@ test('all Office Hub read and mutation routes remain behind the existing session
     assert.equal(resolveRouteAccess({ ...input, hasSession: true }).action, 'allow', path);
   }
 });
+
+test('apply reports what changed since generation and proceeds only after acknowledgement', async () => {
+  const runs = [];
+  const h = harness({ recordRun: async run => { runs.push(run); return { persisted: true, id: randomUUID() }; } }), r = request(), actor = identity();
+  await h.service.execute(r, actor);
+  const row = h.rows.get(r.requestId);
+  row.source_refs = [{ id: 'weekly:report', type: 'aggregate', label: '주간' }, { id: 'goal:g1', type: 'objective', entityId: 'g1', updatedAt: '2026-09-20T00:00:00Z', label: '목표' }];
+  h.deps.readContext = async q => ({ ...resolved({ ...q, expectedContextHash: 'd'.repeat(64) }), sourceRefs: [
+    { id: 'weekly:report', type: 'aggregate', label: '주간' },
+    { id: 'goal:g1', type: 'objective', entityId: 'g1', updatedAt: '2026-09-23T00:00:00Z', label: '목표' },
+    { id: 'goal:g2', type: 'objective', entityId: 'g2', updatedAt: '2026-09-23T00:00:00Z', label: '새 목표' },
+  ] });
+  h.deps.readTargets = async () => ({ status: 'ready', sourceRefs: [{ type: 'projects', id: randomUUID(), updatedAt: '2026-09-23T00:00:00Z' }] });
+  const taskId = randomUUID(), commandId = randomUUID();
+  h.deps.apply = async () => ({ status: 'saved', persisted: true, commandId, entity: { id: taskId } });
+  h.deps.confirmTask = async () => true;
+  const fields = { title: '주간 정리 후속', projectId: randomUUID() };
+  const blocked = await h.service.apply(r.requestId, { resultRevision: 1, fields }, actor);
+  assert.equal(blocked.status, 'conflict');
+  assert.equal(blocked.error, 'office-context-changed');
+  assert.equal(blocked.requestId, r.requestId);
+  assert.deepEqual(blocked.contextChange, { added: 1, updated: 1, removed: 0 });
+  const saved = await h.service.apply(r.requestId, { resultRevision: 1, fields, acknowledgeContextChange: true }, actor);
+  assert.equal(saved.status, 'saved');
+  const applyRun = runs.find(run => run.agent === 'office.apply');
+  assert.equal(applyRun.mode, 'apply');
+  assert.equal(applyRun.result, 'ok');
+  assert.deepEqual(applyRun.recommendation, { requestId: r.requestId, contextChanged: true, change: { added: 1, updated: 1, removed: 0 } });
+});
+
+test('apply rejects a non-boolean acknowledgement and still blocks an unreadable context', async () => {
+  const h = harness(), r = request(), actor = identity();
+  await h.service.execute(r, actor);
+  const fields = { title: '할 일', projectId: randomUUID() };
+  assert.equal((await h.service.apply(r.requestId, { resultRevision: 1, fields, acknowledgeContextChange: 'yes' }, actor)).status, 'invalid-input');
+  h.deps.readContext = async () => ({ status: 'error', error: 'weekly-report-read-failed' });
+  const unreadable = await h.service.apply(r.requestId, { resultRevision: 1, fields, acknowledgeContextChange: true }, actor);
+  assert.equal(unreadable.status, 'conflict');
+  assert.equal(unreadable.error, 'office-context-unavailable');
+});
+
+test('re-confirming an already saved application does not log a second link', async () => {
+  const runs = [];
+  const h = harness({ recordRun: async run => { runs.push(run); return { persisted: true, id: randomUUID() }; } }), r = request(), actor = identity();
+  await h.service.execute(r, actor);
+  const commandId = randomUUID(), taskId = randomUUID();
+  h.rows.get(r.requestId).application = { state: 'saved', commandId, entityId: taskId };
+  h.deps.apply = async () => ({ status: 'saved', persisted: true, commandId, entity: { id: taskId } });
+  assert.equal((await h.service.apply(r.requestId, { resultRevision: 1 }, actor)).status, 'saved');
+  assert.equal(runs.filter(run => run.agent === 'office.apply').length, 0);
+});

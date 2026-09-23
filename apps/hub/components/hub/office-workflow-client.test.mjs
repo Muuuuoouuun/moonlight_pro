@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {createOfficeWorkflowSessions,officeWorkflowKey,readOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowGenerationRequest,sendOfficeWorkflow} from './office-workflow-client.js';
+import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowNote,readOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowGenerationRequest,sendOfficeWorkflow} from './office-workflow-client.js';
 import {OFFICE_DISCUSSION_VERSION,parseOfficeDeliberation} from '@com-moon/agent-contracts/office';
 const id='11111111-1111-4111-8111-111111111111';
 const other='22222222-2222-4222-8222-222222222222';
@@ -140,4 +140,15 @@ test('expired or failed record metadata restores controls without manufacturing 
   store.update(key,{draft:'보존할 수정 내용'});store.selectReceipt(key,receipt);
   assert.deepEqual(store.get(key).deliberation,deliberation);assert.equal(store.get(key).draft,'보존할 수정 내용');
   assert.equal(store.get(key).receipt.result,null);
+});
+
+test('a 409 context change keeps the change summary for the confirmation step', async () => {
+  const requestId = crypto.randomUUID();
+  const fetcher = async () => new Response(JSON.stringify({ status: 'conflict', error: 'office-context-changed', requestId, contextChange: { added: 1, updated: 2, removed: 0 } }), { status: 409 });
+  const data = await writeOfficeWorkflow(`requests/${requestId}/apply`, {}, { fetcher, requestId, scope: 'personal' });
+  assert.equal(data.status, 'conflict');
+  assert.equal(data.error, 'office-context-changed');
+  assert.deepEqual(data.contextChange, { added: 1, updated: 2, removed: 0 });
+  assert.equal(officeWorkflowNote(data), 'AI 결과를 만든 뒤 새 기록 1건 · 바뀐 기록 2건이 생겼습니다. 확인한 뒤 그대로 연결할 수 있습니다.');
+  assert.match(officeWorkflowNote({ status: 'conflict', error: 'office-context-changed', contextChange: { added: 0, updated: 0, removed: 0 } }), /기록 내용이 바뀌었습니다/);
 });

@@ -33,6 +33,19 @@ export function projectOfficeReceipt(envelope) {
   };
 }
 
+// Generation-time refs vs current refs: what the operator should know before linking anyway.
+export function officeContextChange(storedRefs, currentRefs) {
+  const before = new Map((Array.isArray(storedRefs) ? storedRefs : []).map(ref => [ref?.id, ref]));
+  const after = new Map((Array.isArray(currentRefs) ? currentRefs : []).map(ref => [ref?.id, ref]));
+  let added = 0, updated = 0, removed = 0;
+  for (const [id, ref] of after) {
+    if (!before.has(id)) added++;
+    else if ((before.get(id)?.updatedAt ?? null) !== (ref?.updatedAt ?? null)) updated++;
+  }
+  for (const id of before.keys()) if (!after.has(id)) removed++;
+  return { added, updated, removed };
+}
+
 export function createOfficeWorkflowService(deps) {
   const now = () => deps.now?.() ?? Date.now();
   const recoverySecret = () => typeof deps.recoverySecret === 'function' ? deps.recoverySecret() : deps.recoverySecret;
@@ -191,14 +204,20 @@ export function createOfficeWorkflowService(deps) {
     try { existing = await internalReceipt(id, identity); } catch (error) { return failure(error, true); }
     if (!existing.request) return projectOfficeReceipt(existing);
     const row = existing.request;
-    let sourceRefs = null;
+    let sourceRefs = null, contextChange = null;
     if (!row.application) {
       if (existing.status === 'expired') return projectOfficeReceipt(existing);
       if (row.state !== 'generated' || input?.resultRevision !== row.result_revision || row.context_snapshot?.capabilities?.applyTask !== true) return errorResult('office-result-not-applicable', 'conflict');
-      if (!input?.fields || Object.keys(input).some(key => !['resultRevision', 'fields'].includes(key))) return errorResult('invalid-office-application', 'invalid-input');
+      if (!input?.fields || Object.keys(input).some(key => !['resultRevision', 'fields', 'acknowledgeContextChange'].includes(key))
+        || (input.acknowledgeContextChange !== undefined && typeof input.acknowledgeContextChange !== 'boolean')) return errorResult('invalid-office-application', 'invalid-input');
       try {
         const current = await deps.readContext(query(row.input_snapshot), identity);
-        if (current.status !== 'ready' || current.contextHash !== row.context_hash) return errorResult('office-context-changed', 'conflict');
+        if (current.status !== 'ready') return errorResult('office-context-unavailable', 'conflict');
+        // 2026-09-23 운영자 확정: 기록이 바뀌었으면 막지 않고 알린다. 운영자가 확인하면 그대로 연결한다.
+        if (current.contextHash !== row.context_hash) {
+          contextChange = officeContextChange(row.source_refs ?? row.context_snapshot?.sourceRefs, current.sourceRefs);
+          if (input.acknowledgeContextChange !== true) return { ...errorResult('office-context-changed', 'conflict'), requestId: id, contextChange };
+        }
         const target = await deps.readTargets(input.fields, row.scope, identity);
         if (target.status !== 'ready') return target;
         sourceRefs = target.sourceRefs;
@@ -210,6 +229,11 @@ export function createOfficeWorkflowService(deps) {
     if (outcome.status === 'saved') {
       let entityConfirmed = false;
       try { entityConfirmed = await deps.confirmTask?.(outcome.entity.id, identity) === true; } catch {}
+      // 이미 저장 확인된 적용의 재확인은 새 연결이 아니다 — 요약의 '할 일 연결' 수를 부풀리지 않는다.
+      if (row.application?.state !== 'saved') try {
+        await deps.recordRun?.({ workspaceId: identity.workspaceId, agent: 'office.apply', mode: 'apply', ref: `office-request:${id}`, inputSummary: `intent=${row.intent} scope=${row.scope}`,
+          recommendation: { requestId: id, contextChanged: Boolean(contextChange), ...(contextChange ? { change: contextChange } : {}) }, result: 'ok' });
+      } catch { /* 적용 영수증이 정본이다. 실행 기록 실패는 저장 결과를 바꾸지 않는다. */ }
       return { status: 'saved', requestId: id, persistence: { persisted: true }, application: { state: 'saved', action: 'create_task', commandId: outcome.commandId, entityId: outcome.entity.id, targetRef: { type: 'tasks', id: outcome.entity.id }, entityConfirmed }, capabilities: { generate: false, applyTask: false } };
     }
     return { ...errorResult(outcome.error || 'office-application-unavailable', outcome.status, outcome.persisted ?? null), requestId: id, application: publicApplication(row.application) };
