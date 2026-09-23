@@ -149,6 +149,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 **콘텐츠 제작 (2026-09-12)**
 
 - [`superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md`](superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md) — **방향 승인 · Studio 1차 구현**. 원문·기획·채널별 초안·AI 후보 비교/적용·버전 복원을 연결. 구현·로컬 검증 범위는 문서 §0과 [실행 기록](superpowers/plans/2026-09-12-content-workflow.md)을 따른다. [후속 검증·운영 적용 준비](superpowers/plans/2026-09-12-content-release.md)에서 통합 테스트 오류를 해결했다. 2026-09-14 인증 갱신 및 0026 운영 DB 적용 완료. 일지 신설·기간 회고·자동 콘텐츠 크론과 코드 배포는 후속 범위다.
+- [`superpowers/specs/2026-09-23-studio-simplification.md`](superpowers/specs/2026-09-23-studio-simplification.md) — **운영자 확정 · 구현(2026-09-23)**. Studio(원고 작성) 기본 화면을 "Threads 글 한 편 끝내기"로 좁혔다: 제목·원문 메모·본문·AI 초안/다듬기·복사·발행했음. 브랜드·기획 6칸·채널·버전·내보내기·다음 행동·목표·검토는 `더보기` 드로어로 옮겼고 기능·저장 계약·DB는 그대로다. 09-12 스펙의 화면 배치(좌 편집/우 도구 패널)를 대체한다. 표면 예산은 `content-studio-surface.test.mjs`가 고정한다.
 - [`superpowers/specs/2026-09-21-brand-research-editorial-system-design.md`](superpowers/specs/2026-09-21-brand-research-editorial-system-design.md) — **브랜드별 목적·초안 주기·우선 리서치 범위 확정 / 수집·선별·첫 가동 계약은 DRAFT, 구현 전**. politic_officer 2시간 간격, class.moon 하루 3개, 22th nomad 하루 1개·큰 행사 때 최대 7개의 선별용 초안을 제안된 근거·실패·비용 계약으로 준비하고, 운영자가 킵/디벨롭/완성을 선택하는 흐름이다. 09-23 §15는 실제 자료로 수동 회차를 먼저 검증하는 권장안이다.
 
 **콘텐츠 성과 (2026-09-22)**
