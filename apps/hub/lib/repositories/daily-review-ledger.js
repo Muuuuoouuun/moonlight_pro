@@ -5,6 +5,7 @@ import { resolveRhythmTimeZone, toZonedDateKey } from "../rhythm-calendar.js";
 import { isCanonicalUuid } from "../uuid.js";
 import { isContactActivity } from "../contact-activity.js";
 import { MAX_FOCUS_PER_DAY } from "../task-today.js";
+import { REVIEW_RECENT_DAYS, recentRange } from "../daily-review-rhythm.js";
 
 const REVIEW_SELECT = "id,workspace_id,entry_kind,review_date,review_timezone,focus_target,review_data,body,review_revision,updated_at";
 // 저녁 리뷰의 "연락 N건"이 훑는 crm_activities 행 수 상한(리뷰 날짜 ±1일).
@@ -49,7 +50,7 @@ export async function readTodaySignals({ workspaceId, timezone, reviewDate }) {
   const workspace = ["workspace_id", eqFilter(workspaceId)];
   const [taskRows, activityRows] = await Promise.all([
     fetchSupabaseRows("tasks", {
-      select: "id,status,completed_at,meta",
+      select: "id,title,status,completed_at,meta",
       filters: [workspace, ["meta->focus_dates", `cs.${JSON.stringify([reviewDate])}`]],
       limit: 20,
     }),
@@ -71,6 +72,8 @@ export async function readTodaySignals({ workspaceId, timezone, reviewDate }) {
     focusPicked: picked.length,
     focusDone: done.length,
     focusLimit: MAX_FOCUS_PER_DAY,
+    // 저녁 리뷰의 "오늘 3개" 권장 카드가 목표 문구로 쓴다(2026-09-23 §4.4). 제목 없는 행은 뺀다.
+    focusTitles: picked.map((row) => (typeof row.title === "string" ? row.title.trim() : "")).filter(Boolean).slice(0, MAX_FOCUS_PER_DAY),
     // 잘렸으면 숫자 대신 null — 팝업이 연락 줄만 빼고 오늘 3개는 그대로 말한다.
     contacts: activityRows.length > ACTIVITY_SCAN_LIMIT ? null : contacts.length,
   };
@@ -112,7 +115,10 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
     const filters = [["workspace_id", eqFilter(context.workspaceId)], ["entry_kind", eqFilter("daily_review")]];
     // 두 줄 신호(오늘 3개·연락 N건)는 workspaceId·timezone·reviewDate만 쓰고 셋 다 여기서 이미
     // 확정됐으므로 리뷰 읽기와 같은 왕복에 태운다 — 직렬로 두면 단계가 하나 더 생긴다.
-    const [selectedRows, monthRows, today] = await Promise.all([
+    // 최근 8일(실제 오늘 기준)은 선택 날짜와 무관하게 싣는다 — 오늘·홈의 cue와 "이번 주 k/5"가 쓴다
+    // (2026-09-23 §4.3·§4.5). 월 경계를 넘는 주도 한 번의 범위 읽기로 끝난다.
+    const recent = recentRange(toZonedDateKey(now, context.timezone));
+    const [selectedRows, monthRows, today, recentRows] = await Promise.all([
       fetchSupabaseRows("journal_entries", {
         select: REVIEW_SELECT, filters: [...filters, ["review_date", eqFilter(reviewDate)]], limit: 2,
       }),
@@ -121,6 +127,10 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
         order: "review_date.desc", limit: 31,
       }),
       readTodaySignals({ workspaceId: context.workspaceId, timezone: context.timezone, reviewDate }).catch(() => null),
+      fetchSupabaseRows("journal_entries", {
+        select: "review_date,review_data", filters: [...filters, ["review_date", `gte.${recent.from}`], ["review_date", `lte.${recent.to}`]],
+        order: "review_date.desc", limit: REVIEW_RECENT_DAYS,
+      }).catch(() => null),
     ]);
     if (!Array.isArray(selectedRows) || selectedRows.length > 1 || !Array.isArray(monthRows) || monthRows.length > 31) return readError(base);
     const review = selectedRows.length ? reviewFromRow(selectedRows[0], context.workspaceId) : null;
@@ -129,7 +139,12 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
     if (summaries.some((entry) => !entry || entry.reviewDate < range.start || entry.reviewDate > range.end)
       || new Set(summaries.map((entry) => entry.reviewDate)).size !== summaries.length) return readError(base);
     const entries = summaries.map(({ note, ...entry }) => ({ ...entry, excerpt: note.slice(0, 180) }));
-    return { ...base, status: "live", review, entries, today };
+    // 최근 기록을 못 읽으면 null — cue는 "기록 없음"으로 위장하지 않고 침묵한다.
+    const recentEntries = Array.isArray(recentRows) && recentRows.length <= REVIEW_RECENT_DAYS
+      ? recentRows.filter((row) => isDailyReviewDate(row?.review_date))
+        .map((row) => ({ reviewDate: row.review_date, energy: Number.isInteger(row.review_data?.energy) ? row.review_data.energy : null }))
+      : null;
+    return { ...base, status: "live", review, entries, today, recent: recentEntries, todayKey: recent.to };
   } catch {
     return readError(base);
   }

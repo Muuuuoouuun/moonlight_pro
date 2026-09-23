@@ -2,12 +2,11 @@
 .daily-review-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 28px; }
 .daily-review-header h2 { margin: 0; font-size: 20px; font-weight: 500; }
 .daily-review-header p { margin: 8px 0 0; font-size: 13px; line-height: 1.65; color: var(--fg-muted); }
-.daily-review-personal { flex-shrink: 0; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--fg-muted); padding: 4px 8px; font-size: 11px; }
-.daily-review-toolbar { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
-.daily-review-date-controls { display: flex; align-items: flex-end; gap: 6px; }
-.daily-review-date-controls > div { width: 158px; min-width: 0; }
-.daily-review-timezone { color: var(--fg-faint); font-size: 11px; padding-bottom: 8px; }
-.daily-review-capture { display: flex; align-items: center; gap: 24px; min-height: 164px; padding: 26px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.daily-review-week { color: var(--fg); }
+.daily-review-week > svg { display: inline-block; vertical-align: -2px; margin-right: 4px; color: var(--fg-muted); }
+.daily-review-week .num { font-size: 13px; font-weight: 600; }
+.daily-review-week-target { color: var(--fg-muted); }
+.daily-review-capture { display: flex; align-items: center; gap: 24px; padding: 20px 24px; margin-top: 16px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
 .daily-review-capture-copy { flex: 1; min-width: 0; }
 .daily-review-eyebrow { font-size: 11px; color: var(--fg-faint); }
 .daily-review-capture h3 { font-size: 16px; font-weight: 500; margin: 10px 0 8px; }
@@ -15,22 +14,51 @@
 .daily-review-saved-energy { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-muted); margin-top: 12px; }
 .daily-review-open { flex-shrink: 0; min-height: 40px; }
 .daily-review-page-feedback { display: flex; gap: 6px; align-items: center; min-height: 30px; font-size: 12px; color: var(--fg-muted); line-height: 1.6; padding-top: 4px; }
-.daily-review-source { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 28px; font-size: 12px; color: var(--fg-muted); line-height: 1.6; }
+.daily-review-source { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 12px; color: var(--fg-muted); line-height: 1.6; }
+/* 월 캘린더 — 셀 상태는 채움·테두리로만(§5.3). 오늘 테두리만 Moonstone(현재 위치 accent, §5.2). */
+.daily-review-calendar { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); padding: 16px 20px 18px; }
+.daily-review-calendar-head { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; }
+.daily-review-calendar-head h3 { margin: 0 4px; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.daily-review-calendar-count { margin-left: auto; font-size: 12px; color: var(--fg-muted); }
+.daily-review-calendar-row, .daily-review-calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.daily-review-calendar-weekday { text-align: center; font-size: 11px; color: var(--fg-dim); padding-bottom: 6px; }
+.daily-review-day { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 48px; padding: 6px 0; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--fg); cursor: pointer; transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub); }
+.daily-review-day .mono { font-size: 12px; }
+.daily-review-day:hover:not(:disabled) { background: var(--surface-2); }
+.daily-review-day:disabled { cursor: default; color: var(--fg-faint); }
+.daily-review-day[data-state="rest"] .mono { color: var(--fg-dim); }
+.daily-review-day[aria-current="date"] { background: var(--surface-2); border-color: var(--line); }
+.daily-review-day[data-today] { border-color: var(--moon-300); }
+.daily-review-day:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
+.daily-review-day-mark { display: inline-block; width: 8px; height: 8px; border-radius: 999px; border: 1px solid transparent; transition: background var(--dur-enter) var(--ease-hub), border-color var(--dur-enter) var(--ease-hub); }
+.daily-review-day[data-state="recorded"] .daily-review-day-mark, .daily-review-day-mark[data-legend="recorded"] { background: var(--fg-muted); border-color: var(--fg-muted); }
+.daily-review-day[data-state="missed"] .daily-review-day-mark, .daily-review-day-mark[data-legend="missed"] { border-color: var(--line-strong); }
+.daily-review-day[data-state="today"] .daily-review-day-mark { border-color: var(--line-strong); border-style: dashed; }
+.daily-review-calendar-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); font-size: 11px; color: var(--fg-dim); }
+.daily-review-legend { display: inline-flex; gap: 14px; }
+.daily-review-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.daily-review-energy-trend { display: inline-flex; align-items: center; gap: 10px; color: var(--fg-muted); }
 .daily-review-history { min-width: 0; border-top: 1px solid var(--line); }
-.daily-review-history-heading { padding: 20px 0 16px; display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+.daily-review-history-heading { padding: 20px 0 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.daily-review-jump { font-size: 12px; color: var(--fg-muted); text-align: right; }
+.daily-review-jump summary { cursor: pointer; padding: 4px 0; list-style: none; }
+.daily-review-jump summary::-webkit-details-marker { display: none; }
+.daily-review-jump[open] summary { margin-bottom: 8px; }
+.daily-review-jump .hub-input { width: 170px; }
 .daily-review-history h3 { font-size: 13px; font-weight: 500; margin: 0 0 8px; white-space: nowrap; }
-.daily-review-history-heading input { width: 160px; }
 .daily-review-history ul { list-style: none; padding: 0; margin: 0; }
 .daily-review-history li { border-bottom: 1px solid var(--line-soft); }
 .daily-review-history li button { display: flex; align-items: center; gap: 20px; width: 100%; text-align: left; padding: 16px 12px; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); color: var(--fg); }
 .daily-review-history li button[aria-current="date"] { background: var(--surface-2); border-color: var(--line); }
 .daily-review-history li button > svg { flex-shrink: 0; color: var(--fg-faint); }
-.daily-review-history-date { font-size: 13px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.daily-review-history-date { font-size: 12px; font-variant-numeric: tabular-nums; flex-shrink: 0; color: var(--fg-muted); }
 .daily-review-history-content { display: grid; gap: 5px; flex: 1; min-width: 0; }
 .daily-review-history-note { font-size: 13px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .daily-review-history-meta { font-size: 12px; color: var(--fg-faint); }
 .daily-review-history-message { font-size: 12px; color: var(--fg-muted); line-height: 1.6; padding: 12px 0; }
 .daily-review-composer { min-width: 0; outline: none; }
+/* 폼은 프로그램 포커스 컨테이너(저장 중 포커스 보존·숫자 키 수신)라 링을 그리지 않는다 — 안의 컨트롤은 그대로 링을 갖는다. */
+.hub-app .daily-review-composer:focus-visible { outline: none; }
 .daily-review-composer fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
 .daily-review-basics { display: grid; gap: 24px; }
 .daily-review-field { display: grid; gap: 10px; min-width: 0; }
@@ -38,7 +66,8 @@
 .daily-review-energy-label { color: var(--fg-muted); font-size: 11px; font-weight: 400; }
 .daily-review-energy button { min-height: 46px; transition: background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub); }
 .daily-review-energy button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--line-strong); transform: translateY(-1px); }
-.daily-review-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--fg-faint); }
+.daily-review-scale { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--fg-faint); }
+.daily-review-keyhint { display: inline-flex; align-items: center; gap: 3px; color: var(--fg-dim); }
 .daily-review-composer textarea { min-height: 88px; max-height: 180px; line-height: 1.7; resize: vertical; }
 .daily-review-disclosure { margin-top: 16px; width: 100%; }
 .daily-review-disclosure svg { transition: transform var(--dur-panel) var(--ease-hub); }
@@ -50,6 +79,25 @@
 .daily-review-composer .daily-review-progress-fields { display: grid; gap: 12px; padding: 18px 0 0; }
 .daily-review-progress button { transition: background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub); }
 .daily-review-no-target { justify-self: start; }
+/* 오늘 3개 권장 카드 — §5.3 certainty recommended: dashed 1px, 본문은 읽히는 명도 그대로. */
+.daily-review-suggestion { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); }
+.daily-review-suggestion-copy { display: grid; gap: 6px; flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.55; color: var(--fg); }
+.daily-review-suggestion-copy > [data-certainty] { justify-self: start; }
+.daily-review-suggestion-copy strong { font-weight: 600; }
+.daily-review-suggestion-focus { font-size: 12px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 저장된 기록에만 붙는 AI 코칭(§4.4) — 권장(◇) 문법, 인라인 style 없음. */
+.daily-review-coach-trigger { display: flex; justify-content: flex-end; margin-top: 14px; }
+.daily-review-coach { display: grid; gap: 10px; margin-top: 16px; padding: 14px; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); }
+.daily-review-coach-head { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: var(--fg-muted); }
+.daily-review-coach-text { margin: 0; font-size: 13px; line-height: 1.7; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
+.daily-review-coach-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+/* 오늘·홈의 하루 마무리 한 줄(§4.3) — 중립 글리프 + 직접 라벨, 경고색 없음. */
+.daily-review-cue { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface); color: var(--fg); text-align: left; font: inherit; font-size: 13px; cursor: pointer; }
+.daily-review-cue > svg { flex-shrink: 0; color: var(--fg-muted); }
+.daily-review-cue-copy { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.daily-review-cue-meta { font-size: 12px; color: var(--fg-muted); }
+.daily-review-cue-action { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--fg-muted); }
+.daily-review-cue[data-kind="done"] { color: var(--fg-muted); }
 .daily-review-hint { margin: 0; font-size: 12px; color: var(--fg-muted); line-height: 1.6; }
 .daily-review-composer-footer { display: grid; gap: 9px; width: 100%; text-align: center; }
 .daily-review-composer-footer > button { width: 100%; min-height: 40px; }
@@ -72,15 +120,14 @@
 }
 @media (max-width: 600px) {
   .daily-review-page { padding: 20px 16px; }
-  .daily-review-header { gap: 8px; margin-bottom: 22px; }
+  .daily-review-header { flex-direction: column; align-items: stretch; gap: 14px; margin-bottom: 20px; }
   .daily-review-page button { min-height: 44px; }
-  .daily-review-date-controls { gap: 4px; width: 100%; }
-  .daily-review-date-controls > div { flex: 1; width: auto; }
-  .daily-review-date-controls input { width: 100%; min-width: 0; padding-inline: 6px; }
-  .daily-review-date-controls > button { flex-shrink: 0; min-width: 44px; }
-  .daily-review-timezone { padding-bottom: 0; }
-  .daily-review-capture { align-items: stretch; flex-direction: column; gap: 20px; padding: 22px 20px; }
+  .daily-review-capture { align-items: stretch; flex-direction: column; gap: 16px; padding: 18px 16px; }
+  .daily-review-calendar { padding: 14px 10px 16px; }
+  .daily-review-day { min-height: 44px; }
+  .daily-review-suggestion { flex-direction: column; align-items: stretch; }
   .daily-review-open { width: 100%; }
   .daily-review-history li button { gap: 16px; padding: 14px 8px; }
   .daily-review-actions { flex-direction: column; align-items: stretch; }
 }
+.daily-review-cue--home { margin-bottom: 24px; }

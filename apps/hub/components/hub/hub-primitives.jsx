@@ -356,15 +356,18 @@ export function ProgressRing({
   );
 }
 
-export function Sparkline({ values, width = 60, height = 18, tone = 'moon' }) {
+// `min`/`max`로 고정 척도를 줄 수 있다(예: 에너지 1~5 — 값 범위로 늘리면 3→4가 바닥→천장처럼 보인다).
+// `label`이 있으면 스크린리더에 추이를 말하고, 없으면 장식으로 숨긴다.
+export function Sparkline({ values, width = 60, height = 18, tone = 'moon', min: fixedMin, max: fixedMax, label }) {
   if (!values || !values.length) return null;
-  const max = Math.max(...values), min = Math.min(...values);
+  const max = Number.isFinite(fixedMax) ? fixedMax : Math.max(...values);
+  const min = Number.isFinite(fixedMin) ? fixedMin : Math.min(...values);
   const range = max - min || 1;
   const stepX = width / (values.length - 1);
   const pts = values.map((v, i) => `${i * stepX},${height - ((v - min) / range) * height}`).join(' ');
   const colors = { moon: 'var(--moon-300)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)' };
   return (
-    <svg width={width} height={height} style={{ display: 'block' }}>
+    <svg width={width} height={height} style={{ display: 'block' }} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
       <polyline points={pts} fill="none" stroke={colors[tone]} strokeWidth="1.2" />
     </svg>
   );

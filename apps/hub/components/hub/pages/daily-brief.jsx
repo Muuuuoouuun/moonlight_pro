@@ -22,6 +22,7 @@ import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
 import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
+import { DailyReviewCue } from "../daily-review-cue";
 import {
   beginRhythmCheck,
   buildRhythmCheckPayload,
@@ -2214,6 +2215,9 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
           매출, 메시지, 기획, 콘텐츠 순서의 판단을 돕는다"도 할 일을 1순위로 적고 있다
           (2026-09-20 운영자 재확정). 긴급 KA·집중 고객 ≤5 제한은 그대로다. */}
       <QuickCaptureForm layout="inline" inputId="daily-brief-quick-task" inputClassName="daily-brief__quick-input" onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
+
+      {/* 하루 마무리(09-21 §5-4 → 2026-09-23 §4.3) — 저녁 18시 이후·다음 날 정오 전에만 말한다. 빠른 입력과 붙여 둔다. */}
+      <DailyReviewCue />
 
       <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
 
