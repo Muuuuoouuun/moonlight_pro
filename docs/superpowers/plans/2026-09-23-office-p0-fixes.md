@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-- 상태: **운영자 확정 6건(2026-09-23) · 구현 계획**
+- 상태: **운영자 확정 6건(2026-09-23) · 구현 완료(로컬, `claude/office-p0-0923`) · 운영 배포 없음**
 - 관계: [원인 평가·재기획](2026-09-23-office-agent-quality-replan.md)의 P0(튜닝 동결·위험 예시 제거)와 2026-09-23 Office 4관점 평가(런타임·페르소나·UX·품질 증거)의 P0를 운영자가 한 항목씩 확정한 결과다. 로스터 축소·`agents.jsx` 흡수·SaaS 범위·배포 여부 4건은 **미정**이라 이 계획에 넣지 않는다.
 - 브랜치: `claude/office-p0-0923` (워크트리 `../moonlight_pro-office-p0`, 기준 `09-cmac1.2@10854ed`)
 
@@ -822,3 +822,18 @@ git commit -m "fix(office): truth 상태·선택 색·결과 알림 교정과 �
 - [ ] **Step 2:** 브라우저 확인(`.claude/launch.json`의 허브 dev 서버, 워크트리 포트): ⌘J → Office 이동, 사이드바 AI → Office 착지, Office 하단 요약 줄(연결 없는 환경이면 `Preview` 배지), 390px에서 전송 후 결과로 스크롤·포커스.
 - [ ] **Step 3:** `docs/README.md` §3 Office 두 행에 이번 변경(역할 카드 v25·근거 교정, 진입점, 부분 처리, 실패 분류·요약)과 "의미 품질 인증 대기" 유지를 반영하고, 이 계획 문서를 §4 목록에 링크한다.
 - [ ] **Step 4:** 커밋 후 `git show --stat`으로 규모 확인. 로컬 머지만 하고 푸시하지 않는다(운영자 확인 후 수동).
+
+---
+
+## 구현 결과 (2026-09-23)
+
+- 커밋: T1 역할 카드 → T2 진입점 → T3 적용 확인 → T4 부분 처리 → T5 실패 분류·요약 → T6 디자인·포커스 → T7 문서.
+- `npm test`: **2471 tests · 통과 2460 · 실패 0 · skip 11** (기준선 2442 / 2431에서 +29).
+- 브라우저(워크트리 허브 `localhost:3140`, 운영 DB 읽기 전용): ⌘J → `/dashboard/agents/office-council`, 사이드바 AI·자동화 → Office, ✦ 접근 가능한 이름 `Office (⌘J)`, ⌘K "이브이" → Office, 구 주소 `dashboard/agents/office`는 LEGACY 안내 카드가 Office로 안내, 390px 가로 스크롤 없음, 콘솔 오류 없음. 요약 줄 `최근 7일 · 요청 0 · 할 일 연결 0 · 실패 0`.
+- **실측**: 운영 DB `agent_runs`에 `office.*` 행이 한 번도 없다(전체 에이전트 최근 실행 2026-07-12). 요약의 0은 필터 문제가 아니라 실제 사용 기록이 없다는 뜻이다.
+- 계획과 달라진 점:
+  - T3 영수증 기록 → `agent_runs`의 `office.apply` 행(위 "계획 단계에서 바꾼 점"). 이미 저장 확인된 적용의 재확인은 새 행을 만들지 않는다.
+  - T5 채팅 성공 기록은 **기존대로 답변 본문을 `recommendation`에 저장**한다(이번 범위에서 동작을 바꾸지 않음). 새로 더한 지연·토큰·실패 기록에는 본문이 없다.
+  - T4 출처 검수는 형식 위반(비배열·비정수·옛 `sourceQuotes`)을 계속 실패로 두고, 범위 밖 인덱스·원문에 없는 인용만 버린다.
+  - 전송 후 결과 포커스(T6)는 소스 계약 테스트로만 확인했다 — 실제 요청은 Gemini 비용과 운영 DB 쓰기가 생겨 보내지 않았다.
+
