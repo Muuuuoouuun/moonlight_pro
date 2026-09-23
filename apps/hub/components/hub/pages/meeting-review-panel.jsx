@@ -190,6 +190,7 @@ function Candidate({ proposal, body, disabled, busy, selected, onSelect, onRevie
   const targetHref = typeof proposal.application?.href === 'string' && proposal.application.href.startsWith('/dashboard/') ? proposal.application.href : null;
   const applicationUncertain = proposal.application && !['none', 'saved'].includes(proposal.application.status);
   const persistedText = typeof review.text === 'string' && review.text ? review.text : proposal.text || '';
+  const persistedExecutionKey = JSON.stringify(review.execution ?? null);
   const [editedText, setEditedText] = React.useState(persistedText);
   const [execution, setExecution] = React.useState(() => initialExecution(proposal));
   const [pending, setPending] = React.useState('');
@@ -212,7 +213,9 @@ function Candidate({ proposal, body, disabled, busy, selected, onSelect, onRevie
   React.useEffect(() => {
     setEditedText(persistedText);
     setExecution(initialExecution(proposal));
-  }, [persistedText, proposal.id, review.execution]);
+  // A sibling review refreshes every proposal object. Preserve this card's
+  // in-progress plan unless its own saved review actually changed.
+  }, [persistedText, proposal.id, persistedExecutionKey, reviewStatus]);
 
   const submitReview = async (decision) => {
     if (pendingRef.current || locked || (decision === 'accepted' && !canAccept)) return;
@@ -245,8 +248,8 @@ function Candidate({ proposal, body, disabled, busy, selected, onSelect, onRevie
     <div className="meeting-review__candidate-head">
       <div className="meeting-review__candidate-labels">
         <span className="meeting-review__kind">{kindLabel}</span>
-        <CertaintyBadge state={reviewStatus === 'accepted' ? 'confirmed' : certainty === 'unknown' ? 'unknown' : 'recommended'}
-          label={reviewStatus === 'accepted' ? '운영자 확인' : CERTAINTY_LABEL[certainty]} />
+        <CertaintyBadge state={certainty === 'unknown' ? 'unknown' : reviewStatus === 'accepted' && certainty === 'stated' ? 'confirmed' : 'recommended'}
+          label={CERTAINTY_LABEL[certainty]} />
         <LifecycleBadge state={reviewStatus === 'accepted' ? 'done' : reviewStatus === 'rejected' ? 'cancelled' : 'queued'}
           label={reviewStatus === 'accepted' ? '확인됨' : reviewStatus === 'rejected' ? '제외됨' : '검토 전'} />
       </div>

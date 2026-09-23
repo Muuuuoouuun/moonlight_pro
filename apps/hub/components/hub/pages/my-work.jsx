@@ -14,6 +14,7 @@ import { freezeTaskCommand, saveTaskCommand, TASK_OUTCOME } from "@/lib/memo-int
 import { applyMute, clearMute, mutedIdSet, readMuteStore, seoulDayKey, writeMuteStore } from "./my-work-mute.js";
 import { requestPersonaChat } from "../persona-client";
 import { buildMyWorkChecklistToggle, readMyWorkChecklistReceipt } from './my-work-checklist';
+import { MeetingWatchCard } from './meeting-watch-card';
 
 // 내 작업 — one personal operating surface, three lenses over the cross-lane attention
 // read model (tasks + open deals + calendar week). Design contract from the operator:
@@ -1781,6 +1782,8 @@ export function MyWork({ onNavigate }) {
           </div>
         )}
       </div>
+
+      <MeetingWatchCard />
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <Input ref={searchRef} icon="search" placeholder="제목 검색" kbd="/" clearable value={search} onChange={setSearch} style={{ width: 190 }} />

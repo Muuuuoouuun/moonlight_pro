@@ -16,12 +16,12 @@ declare v_item jsonb;v_ids text[]:=array[]::text[];v_date text;
 begin
   if p_execution is null then return true; end if;
   if jsonb_typeof(p_execution) is distinct from 'object'
-    or p_execution->>'actionScope' not in ('mine','related','unknown')
+    or coalesce(p_execution->>'actionScope','') not in ('mine','related','unknown')
     or jsonb_typeof(p_execution->'checklist') is distinct from 'array'
     or jsonb_array_length(p_execution->'checklist')>50
-    or jsonb_typeof(p_execution->'method') not in ('string','null')
+    or coalesce(jsonb_typeof(p_execution->'method'),'missing') not in ('string','null')
     or length(coalesce(p_execution->>'method',''))>1000
-    or jsonb_typeof(p_execution->'dueAt') not in ('string','null') then return false; end if;
+    or coalesce(jsonb_typeof(p_execution->'dueAt'),'missing') not in ('string','null') then return false; end if;
   v_date:=p_execution->>'dueAt';
   if v_date is not null and (v_date !~ '^\d{4}-\d{2}-\d{2}$' or to_char(v_date::date,'YYYY-MM-DD')<>v_date) then return false; end if;
   for v_item in select value from jsonb_array_elements(p_execution->'checklist') loop
@@ -103,6 +103,19 @@ begin
   return v_snapshot||jsonb_build_object('proposals',v_proposals);
 end; $$;
 
+-- The versioned claim is the model-cost gate. A partially migrated database
+-- cannot reserve a run and call Gemini before v2 finish/review is available.
+create or replace function public.meeting_review_claim_v2(p_workspace_id uuid,p_journal_id uuid,p_revision bigint,p_request_id uuid)
+returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $$
+declare v_result jsonb;
+begin
+  v_result:=public.meeting_review_claim_v1(p_workspace_id,p_journal_id,p_revision,p_request_id);
+  if v_result->>'status'='existing' then
+    return (v_result-'snapshot')||jsonb_build_object('snapshot',public.meeting_review_snapshot_v2(p_workspace_id,p_journal_id,p_request_id));
+  end if;
+  return v_result;
+end; $$;
+
 create or replace function public.meeting_review_decide_v2(p_workspace_id uuid,p_journal_id uuid,p_proposal_id uuid,
   p_decision text,p_edited_text text default null,p_execution jsonb default null)
 returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $$
@@ -130,6 +143,55 @@ begin
   end if;
   return jsonb_build_object('status',case when v_changed then 'saved' else v_result->>'status' end,
     'snapshot',public.meeting_review_snapshot_v2(p_workspace_id,p_journal_id,v_row.request_id));
+end; $$;
+
+-- A reviewed related action is a watch item, not a task. Only the current
+-- revision participates. The latest reviewed decision for the same evidence
+-- supersedes older runs, including a rejection or a change to "mine".
+create index if not exists meeting_review_proposals_reviewed_idx
+  on public.meeting_review_proposals(workspace_id,reviewed_at desc,id)
+  where reviewed_at is not null;
+
+create or replace function public.meeting_review_watchlist_v1(p_workspace_id uuid,p_limit integer default 20)
+returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $$
+declare v_limit integer:=least(greatest(coalesce(p_limit,20),1),50);
+  v_items jsonb:='[]'::jsonb;v_has_more boolean:=false;v_count integer:=0;v_item record;
+begin
+  if p_workspace_id is null then return jsonb_build_object('status','invalid-input','error','invalid-workspace'); end if;
+  if not exists(select 1 from public.workspaces where id=p_workspace_id) then
+    return jsonb_build_object('status','not-found','error','workspace-unavailable'); end if;
+  for v_item in
+    with reviewed as (
+      select p.*,row_number() over (
+        partition by p.journal_id,p.source_start,p.source_end,p.source_quote
+        order by p.reviewed_at desc,p.id desc
+      ) as evidence_rank
+      from public.meeting_review_proposals p
+      join public.meeting_review_runs r on r.request_id=p.request_id
+        and r.workspace_id=p.workspace_id and r.journal_id=p.journal_id
+      join public.journal_entries j on j.id=p.journal_id and j.workspace_id=p.workspace_id
+        and j.entry_kind='note' and j.note_revision=r.source_revision
+      where p.workspace_id=p_workspace_id and p.kind='action'
+        and p.reviewed_at is not null and r.state='ready'
+    )
+    select id,journal_id,coalesce(review_text,proposal_text) as title,
+      review_execution->>'dueAt' as check_at,review_execution->>'method' as method,
+      jsonb_array_length(review_execution->'checklist') as step_count,reviewed_at
+    from reviewed
+    where evidence_rank=1 and review_status='accepted'
+      and review_execution->>'actionScope'='related'
+    order by (review_execution->>'dueAt') is null,
+      review_execution->>'dueAt' asc,reviewed_at desc,id desc
+    limit v_limit+1
+  loop
+    v_count:=v_count+1;
+    if v_count>v_limit then v_has_more:=true;exit;end if;
+    v_items:=v_items||jsonb_build_array(jsonb_build_object(
+      'proposalId',v_item.id,'entryId',v_item.journal_id,'title',v_item.title,
+      'checkAt',v_item.check_at,'method',v_item.method,'stepCount',v_item.step_count,
+      'href','/dashboard/work/memos?note='||v_item.journal_id::text,'reviewedAt',v_item.reviewed_at));
+  end loop;
+  return jsonb_build_object('status','live','items',v_items,'hasMore',v_has_more);
 end; $$;
 
 -- journal_workflow_v1 inserts task, source link and receipt in one transaction.
@@ -168,7 +230,10 @@ create trigger journal_task_plan_receipt before insert on public.journal_workflo
   for each row execute function public.journal_task_plan_receipt_v1();
 
 revoke all on function public.meeting_review_execution_valid_v1(jsonb),public.meeting_review_finish_v2(uuid,uuid,uuid,jsonb),
-  public.meeting_review_snapshot_v2(uuid,uuid,uuid),public.meeting_review_decide_v2(uuid,uuid,uuid,text,text,jsonb) from public,anon,authenticated;
+  public.meeting_review_snapshot_v2(uuid,uuid,uuid),public.meeting_review_claim_v2(uuid,uuid,bigint,uuid),
+  public.meeting_review_decide_v2(uuid,uuid,uuid,text,text,jsonb),public.meeting_review_watchlist_v1(uuid,integer)
+  from public,anon,authenticated;
 grant execute on function public.meeting_review_finish_v2(uuid,uuid,uuid,jsonb),public.meeting_review_snapshot_v2(uuid,uuid,uuid),
-  public.meeting_review_decide_v2(uuid,uuid,uuid,text,text,jsonb) to service_role;
+  public.meeting_review_claim_v2(uuid,uuid,bigint,uuid),
+  public.meeting_review_decide_v2(uuid,uuid,uuid,text,text,jsonb),public.meeting_review_watchlist_v1(uuid,integer) to service_role;
 commit;

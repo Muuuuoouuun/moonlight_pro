@@ -31,7 +31,7 @@ test('manual analyze reserves a durable request, calls provider once, and return
   const service = createMeetingReviewService({ ...configured,
     rpc: async (name, args) => {
       calls.push([name, args]);
-      if (name === 'meeting_review_claim_v1') return { ok: true, data: { status: 'claimed', sourceBody: source } };
+      if (name === 'meeting_review_claim_v2') return { ok: true, data: { status: 'claimed', sourceBody: source } };
       if (name === 'meeting_review_finish_v2') return { ok: true, data: { status: 'saved', snapshot: snapshot() } };
       throw Error('unexpected RPC');
     },
@@ -42,7 +42,7 @@ test('manual analyze reserves a durable request, calls provider once, and return
   assert.equal(result.httpStatus, 200);
   assert.equal(result.proposals[0].source.quote, quote);
   assert.equal(generated, 1);
-  assert.deepEqual(calls.map(([name]) => name), ['meeting_review_claim_v1', 'meeting_review_finish_v2']);
+  assert.deepEqual(calls.map(([name]) => name), ['meeting_review_claim_v2', 'meeting_review_finish_v2']);
   assert.equal(calls[1][1].p_result.usage.candidatesTokens, null);
 });
 
@@ -50,9 +50,7 @@ test('same requestId receipt never calls the provider again, including unknown r
   let generated = 0;
   let state = 'ready';
   const service = createMeetingReviewService({ ...configured,
-    rpc: async (name) => name === 'meeting_review_claim_v1'
-      ? { ok: true, data: { status: 'existing', snapshot: snapshot(state) } }
-      : { ok: true, data: snapshot(state) },
+    rpc: async () => ({ ok: true, data: { status: 'existing', snapshot: snapshot(state) } }),
     extract: async () => { generated++; return extracted; },
   });
   const input = { entryId, requestId, expectedRevision: 1 };
@@ -68,7 +66,7 @@ test('same requestId receipt never calls the provider again, including unknown r
 test('provider error is written as a failed receipt and never reported as saved', async () => {
   let finished;
   const service = createMeetingReviewService({ ...configured,
-    rpc: async (name, args) => name === 'meeting_review_claim_v1'
+    rpc: async (name, args) => name === 'meeting_review_claim_v2'
       ? { ok: true, data: { status: 'claimed', sourceBody: source } }
       : (finished = args.p_result, { ok: true, data: { status: 'saved', snapshot: snapshot('error') } }),
     extract: async () => ({ ok: false, reason: 'provider-unavailable' }),
@@ -81,9 +79,12 @@ test('provider error is written as a failed receipt and never reported as saved'
 
 test('uncertain claim never dispatches the model, preview never creates a claim', async () => {
   let generated = 0;
-  const uncertain = createMeetingReviewService({ ...configured, rpc: async () => ({ ok: false }), extract: async () => { generated++; return extracted; } });
+  const calls = [];
+  const uncertain = createMeetingReviewService({ ...configured, rpc: async (name) => { calls.push(name); return { ok: false }; },
+    extract: async () => { generated++; return extracted; } });
   assert.equal((await uncertain.analyze({ entryId, requestId, expectedRevision: 1 })).status, 'unknown');
   assert.equal(generated, 0);
+  assert.deepEqual(calls, ['meeting_review_claim_v2']);
   const preview = createMeetingReviewService({ ...configured, configured: () => false,
     rpc: async () => { throw Error('must not call'); } });
   assert.equal((await preview.analyze({ entryId, requestId, expectedRevision: 1 })).status, 'preview');

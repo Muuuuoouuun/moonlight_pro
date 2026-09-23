@@ -61,3 +61,22 @@ test('meeting review POST enforces write guard and structured actions', async ()
   assert.equal((await review.json()).status, 'conflict');
   assert.equal(state.reviews[0].proposalId, 'proposal');
 });
+
+test('meeting review accepts the full UTF-8 checklist contract while bounding other actions', async () => {
+  const checklist = Array.from({ length: 50 }, (_, index) => ({
+    id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    title: '가'.repeat(200), done: false, note: '나'.repeat(500),
+  }));
+  const review = { action: 'review', execution: { actionScope: 'mine', dueAt: null, method: null, checklist } };
+  const reviewBytes = Buffer.byteLength(JSON.stringify(review), 'utf8');
+  assert.ok(reviewBytes > 16 * 1024 && reviewBytes < 128 * 1024);
+  assert.equal((await route.POST(post(review))).status, 200);
+  assert.equal(state.reviews.length, 1);
+  assert.equal(state.reviews[0].execution.checklist.length, 50);
+
+  assert.equal((await route.POST(post({ action: 'analyze', padding: '가'.repeat(6000) }))).status, 413);
+  assert.equal((await route.POST(post(`{ "action": "analyze", "padding": "ok"${' '.repeat(17_000)} }`))).status, 413);
+  assert.equal(state.analyzes.length, 0);
+  assert.equal((await route.POST(post({ ...review, padding: '가'.repeat(50_000) }))).status, 413);
+  assert.equal(state.reviews.length, 1);
+});

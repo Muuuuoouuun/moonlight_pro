@@ -136,18 +136,14 @@ export function createMeetingReviewService(overrides = {}) {
     if (!deps.providerConfigured()) return writeFailure(ctx, 'gemini-not-configured', 503, 'preview', requestId);
     let claim;
     try {
-      claim = await call(deps, 'meeting_review_claim_v1', { p_workspace_id: ctx.workspaceId, p_journal_id: entryId.toLowerCase(),
+      claim = await call(deps, 'meeting_review_claim_v2', { p_workspace_id: ctx.workspaceId, p_journal_id: entryId.toLowerCase(),
         p_revision: expectedRevision, p_request_id: requestId.toLowerCase() });
     } catch { return writeFailure(ctx, 'claim-outcome-unknown', 502, 'unknown', requestId); }
     if (claim.status === 'conflict') return writeFailure(ctx, claim.error || 'revision-conflict', 409, 'conflict', requestId);
     if (claim.status === 'not-found') return writeFailure(ctx, 'note-unavailable', 404, 'invalid-input', requestId);
     if (claim.status === 'invalid-input') return writeFailure(ctx, claim.error || 'invalid-request', 400, 'invalid-input', requestId);
     if (claim.status === 'existing') {
-      let current;
-      try { current = await call(deps, 'meeting_review_snapshot_v2', { p_workspace_id: ctx.workspaceId,
-        p_journal_id: entryId.toLowerCase(), p_request_id: requestId.toLowerCase() }); }
-      catch { return writeFailure(ctx, 'receipt-unavailable', 502, 'unknown', requestId); }
-      const existing = projection(ctx, current, 'duplicate');
+      const existing = projection(ctx, claim.snapshot, 'duplicate');
       if (!existing) return writeFailure(ctx, 'receipt-unavailable', 502, 'unknown', requestId);
       if (existing.run?.state === 'ready') return { ...existing, httpStatus: 200 };
       if (existing.run?.state === 'error') return { ...existing, status: 'error', httpStatus: 502, error: existing.run.error || 'analysis-failed', retryable: false };

@@ -16,6 +16,7 @@ const owner = '77777777-7777-4777-8777-777777777777';
 const journal = '33333333-3333-4333-8333-333333333333';
 const request = '44444444-4444-4444-8444-444444444444';
 const requestTwo = '55555555-5555-4555-8555-555555555555';
+const requestThree = '99999999-9999-4999-8999-999999999999';
 const literal = (value) => `'${String(value).replaceAll("'", "''")}'`;
 
 test('meeting review PostgreSQL receipts, evidence, scope and task recovery', { skip: !enabled }, async () => {
@@ -72,6 +73,7 @@ test('meeting review PostgreSQL receipts, evidence, scope and task recovery', { 
     assert.equal(result.status, 'saved');
     assert.equal(result.snapshot.run.state, 'ready');
     assert.equal(result.snapshot.proposals.length, 6);
+    assert.equal(json(`select public.meeting_review_claim_v2('${workspace}','${journal}',1,'${request}')`).snapshot.proposals.length, 6);
     const action = result.snapshot.proposals.find((p) => p.text === '후속 연락');
     const pendingAction = result.snapshot.proposals.find((p) => p.text === '고객 검토');
     const wrongTitleAction = result.snapshot.proposals.find((p) => p.text === '검토 안내');
@@ -115,12 +117,45 @@ test('meeting review PostgreSQL receipts, evidence, scope and task recovery', { 
     const relatedExecution = { actionScope: 'related', dueAt: '2026-09-30', method: '결과 확인', checklist: [] };
     const relatedReview = (title, plan) => json(`select public.meeting_review_decide_v2('${workspace}','${journal}','${relatedAction.id}','accepted',${literal(title)},${literal(JSON.stringify(plan))}::jsonb)`);
     assert.equal(relatedReview('고객 검토 결과 주시', relatedExecution).status, 'saved');
+    const watch = (limit = 20) => json(`select public.meeting_review_watchlist_v1('${workspace}',${limit})`);
+    assert.deepEqual(watch().items.map((item) => item.proposalId), [relatedAction.id]);
+    assert.equal(watch().items[0].checkAt, '2026-09-30');
+    assert.equal(watch().items[0].href, `/dashboard/work/memos?note=${journal}`);
+    assert.equal(watch().hasMore, false);
+    assert.deepEqual(json(`select public.meeting_review_watchlist_v1('${foreign}',20)`).items, []);
+    assert.equal(json("select public.meeting_review_watchlist_v1('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',20)").status, 'not-found');
+    // A later review of the same source span supersedes an older watch item.
+    assert.equal(json(`select public.meeting_review_claim_v2('${workspace}','${journal}',1,'${requestThree}')`).status, 'claimed');
+    const laterRun = json(`select public.meeting_review_finish_v2('${workspace}','${journal}','${requestThree}',${literal(JSON.stringify({
+      state: 'ready', summary: '고객 검토 결과', proposals: [relatedProposal], model: 'test',
+    }))}::jsonb)`);
+    assert.equal(laterRun.status, 'saved');
+    const laterRelatedId = laterRun.snapshot.proposals.find((item) => item.kind === 'action').id;
+    const laterReview = (decision, plan) => json(`select public.meeting_review_decide_v2('${workspace}','${journal}','${laterRelatedId}',${literal(decision)},null,${plan ? `${literal(JSON.stringify(plan))}::jsonb` : 'null'})`);
+    assert.equal(laterReview('rejected', null).status, 'saved');
+    assert.deepEqual(watch().items, []);
+    assert.equal(laterReview('accepted', relatedExecution).status, 'saved');
+    assert.deepEqual(watch().items.map((item) => item.proposalId), [laterRelatedId]);
+    assert.equal(laterReview('pending', null).status, 'saved');
+    assert.deepEqual(watch().items, []);
+    assert.equal(laterReview('accepted', relatedExecution).status, 'saved');
+    assert.deepEqual(watch().items.map((item) => item.proposalId), [laterRelatedId]);
+    assert.equal(json(`select public.meeting_review_decide_v2('${workspace}','${journal}','${plannedAction.id}','accepted',null,${literal(JSON.stringify({ ...relatedExecution,
+      dueAt: '2026-10-01',
+    }))}::jsonb)`).status, 'saved');
+    assert.deepEqual(watch().items.map((item) => item.proposalId), [laterRelatedId, plannedAction.id]);
+    assert.deepEqual(watch(1).items.map((item) => item.proposalId), [laterRelatedId]);
+    assert.equal(watch(1).hasMore, true);
     assert.equal(json(`select public.meeting_review_snapshot_v2('${workspace}','${journal}','${request}')`).proposals.find((p) => p.id === relatedAction.id).application.status, 'none');
     assert.equal(relatedReview('고객 검토 결과 주시', { ...relatedExecution, actionScope: 'mine' }).error, 'watch-needs-owned-action');
     assert.equal(relatedReview('고객 검토 결과 내가 확인', { ...relatedExecution, actionScope: 'mine' }).status, 'saved');
+    assert.deepEqual(watch().items.map((item) => item.proposalId), [plannedAction.id]);
     assert.equal(sql(`select public.meeting_review_execution_valid_v1(${literal(JSON.stringify(execution))}::jsonb)`), 't');
+    assert.equal(sql(`select public.meeting_review_execution_valid_v1('{"checklist":[]}'::jsonb)`), 'f');
+    assert.equal(sql(`select public.meeting_review_execution_valid_v1('{"actionScope":"mine","checklist":[],"method":null}'::jsonb)`), 'f');
     const decidePlan = (plan) => json(`select public.meeting_review_decide_v2('${workspace}','${journal}','${plannedAction.id}','accepted','후속 연락 단계 실행',${literal(JSON.stringify(plan))}::jsonb)`);
     assert.equal(decidePlan(execution).status, 'saved');
+    assert.deepEqual(watch().items, []);
     assert.equal(decidePlan(execution).status, 'duplicate');
     const planTarget = { title: '후속 연락 단계 실행', dueAt: '2026-09-30T00:00:00+09:00', projectId: null,
       nextAction: execution.method, checklist: execution.checklist };
@@ -145,6 +180,7 @@ test('meeting review PostgreSQL receipts, evidence, scope and task recovery', { 
     sql(`delete from public.tasks where id='${task.target.id}'`);
     assert.equal(json(`select public.meeting_review_snapshot_v1('${workspace}','${journal}','${request}')`).proposals.find((p) => p.id === action.id).application.status, 'unknown');
     sql(`update public.journal_entries set body='새 원문',note_revision=2 where id='${journal}'`);
+    assert.deepEqual(watch().items, []);
     assert.equal(json(`select public.meeting_review_snapshot_v1('${workspace}','${journal}',null)`).run.stale, true);
     assert.equal(json(`select public.meeting_review_decide_v1('${workspace}','${journal}','${summary.id}','accepted','요약')`).status, 'conflict');
     assert.equal(json(`select public.meeting_review_claim_v1('${workspace}','${journal}',2,'${requestTwo}')`).status, 'claimed');
@@ -154,6 +190,8 @@ test('meeting review PostgreSQL receipts, evidence, scope and task recovery', { 
     assert.equal(sql("select bool_and(relrowsecurity) from pg_class where relname in ('meeting_review_runs','meeting_review_proposals')"), 't');
     assert.equal(sql("select has_function_privilege('authenticated','public.meeting_review_claim_v1(uuid,uuid,bigint,uuid)','execute')"), 'f');
     assert.equal(sql("select has_function_privilege('authenticated','public.meeting_review_decide_v2(uuid,uuid,uuid,text,text,jsonb)','execute')"), 'f');
+    assert.equal(sql("select has_function_privilege('authenticated','public.meeting_review_claim_v2(uuid,uuid,bigint,uuid)','execute')"), 'f');
+    assert.equal(sql("select has_function_privilege('authenticated','public.meeting_review_watchlist_v1(uuid,integer)','execute')"), 'f');
     sql(readFileSync(new URL('supabase/migrations/20260923_0046_meeting_action_plans.sql', root), 'utf8'));
     assert.equal(sql("select count(*) from pg_trigger where tgname='journal_task_plan_receipt' and not tgisinternal"), '1');
   } finally {

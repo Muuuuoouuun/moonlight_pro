@@ -99,6 +99,19 @@ function uniqueNestedSpan(outerQuote, innerQuote, outerStart, maxLength) {
   return { quote: innerQuote, start: outerStart + localStart, end: outerStart + localStart + innerQuote.length };
 }
 
+function relationIsNegated(outerQuote, relationStart, relationEnd) {
+  // The model can quote only the positive-looking words from a negated clause
+  // ("내 할 일" from "내 할 일은 아니다"). Inspect the adjacent source clause, not
+  // just the smaller model-selected relationQuote.
+  const before = outerQuote.slice(Math.max(0, relationStart - 24), relationStart)
+    .split(/[.!?。！？;；\n]/).at(-1);
+  const after = outerQuote.slice(relationEnd).split(/[.!?。！？;；\n]/)[0].slice(0, 80);
+  if (/(?:아닌|않는|보류(?:한|된)|취소(?:한|된)|철회(?:한|된)|중단(?:한|된))\s*$/.test(before)) return true;
+  if (/^\s*(?:(?:은|는|이|가|을|를|도|만|라고|로)\s*)?(?:아니(?:다|라고|고|었|에요|요|면)?|아님|아닌|없(?:다|음)?|하지\s*(?:않|못)|안\s*[가-힣]+|못\s*[가-힣]+|보류|취소|철회|중단|유보|미정|불가)/.test(after)) return true;
+  return /(?:이|가|은|는|을|를)\s*(?:아니|하지\s*(?:않|못)|보류|취소|철회|중단|유보|미정|불가)/.test(after)
+    || /(?:였으나|했으나|였다가|했다가|하지만|했지만|였지만)\s*(?:[^,.，、]{0,28})?(?:보류|취소|철회|중단)/.test(after);
+}
+
 function normalizeActionScope(value, outerQuote, outerStart) {
   const requested = ACTION_SCOPES.includes(value.actionScope) ? value.actionScope : "unknown";
   if (requested === "unknown") return { actionScope: "unknown" };
@@ -106,9 +119,11 @@ function normalizeActionScope(value, outerQuote, outerStart) {
   if (!span) return { actionScope: "unknown" };
   // A first-person pronoun in an undiarized transcript is not evidence that
   // the operator spoke. An explicit operator/task label is required.
-  const mine = /(?:내|제)\s*(?:할\s*일|담당|몫)|운영자(?:의|가|는)?\s*(?:할\s*일|담당|몫)/.test(span.quote);
-  const related = /운영자(?:에게|의|가|는)?\s*(?:공유|보고|전달|확인|승인|일정|결정)/.test(span.quote);
-  if ((requested === "mine" && mine) || (requested === "related" && related)) {
+  const mine = /(?:내|제)\s*(?:할\s*일|담당|몫)|운영자(?:의|가|는)?\s*(?:할\s*일|담당|몫)/;
+  const related = /운영자(?:에게|의|가|는)?\s*(?:공유|보고|전달|확인|승인|일정|결정)/;
+  const matched = span.quote.match(requested === "mine" ? mine : related);
+  if (matched && !relationIsNegated(outerQuote,
+    span.start - outerStart + matched.index, span.start - outerStart + matched.index + matched[0].length)) {
     return { actionScope: requested, relation: span };
   }
   return { actionScope: "unknown" };
@@ -180,21 +195,24 @@ function normalizeCandidate(value, sourceText) {
   if (start === -1 || sourceText.indexOf(value.quote, start + 1) !== -1) return null;
   if (splitsSurrogate(sourceText, start) || splitsSurrogate(sourceText, start + value.quote.length)) return null;
   if (contradictsQuote(value)) return null;
-  if (value.suggestedDue && !dateAppearsInQuote(value.suggestedDue, value.quote)) return null;
+  // An unsupported date is a bad field, not a reason to hide an otherwise
+  // grounded action from the operator's review.
+  const evidencedSuggestedDue = value.suggestedDue && dateAppearsInQuote(value.suggestedDue, value.quote)
+    ? value.suggestedDue : null;
   const actionDetails = value.kind === "action" ? (() => {
     const relation = normalizeActionScope(value, value.quote, start);
     const dateMentions = normalizeDateMentions(value.dateMentions, value.quote, start);
     const method = uniqueNestedSpan(value.quote, value.methodQuote, start, 180);
     const checklist = normalizeChecklist(value.checklistQuotes, value.quote, start);
     const hasDateMentions = Array.isArray(value.dateMentions) && value.dateMentions.length > 0;
-    const deadline = dateMentions.find((mention) => mention.role === "deadline" && mention.date === value.suggestedDue);
+    const deadline = dateMentions.find((mention) => mention.role === "deadline" && mention.date === evidencedSuggestedDue);
     return {
       ...relation,
       dateMentions,
       method,
       checklist,
       // Legacy provider replies without dateMentions keep the prior contract.
-      suggestedDue: value.suggestedDue && ((!hasDateMentions && dateHasDeadlineWording(value.suggestedDue, value.quote)) || deadline) ? value.suggestedDue : null,
+      suggestedDue: evidencedSuggestedDue && ((!hasDateMentions && dateHasDeadlineWording(evidencedSuggestedDue, value.quote)) || deadline) ? evidencedSuggestedDue : null,
     };
   })() : null;
   return {
@@ -211,7 +229,7 @@ function normalizeCandidate(value, sourceText) {
       ...(actionDetails.method ? { methodQuote: actionDetails.method.quote } : {}),
       checklist: actionDetails.checklist,
       ...(actionDetails.suggestedDue ? { suggestedDue: actionDetails.suggestedDue } : {}),
-    } : value.suggestedDue ? { suggestedDue: value.suggestedDue } : {}),
+    } : evidencedSuggestedDue ? { suggestedDue: evidencedSuggestedDue } : {}),
   };
 }
 

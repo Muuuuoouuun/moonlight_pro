@@ -4,6 +4,8 @@ import { meetingReviewService } from '@/lib/meeting-review-service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+const ANALYZE_MAX_BYTES = 16 * 1024;
+const REVIEW_MAX_BYTES = 128 * 1024;
 
 export async function GET(req) {
   try {
@@ -19,8 +21,14 @@ export async function GET(req) {
 export async function POST(req) {
   const guard = assertHubWriteAllowed(req);
   if (guard) return guard;
-  const parsed = await readHubWriteJson(req, { maxBytes: 16 * 1024 });
+  // A reviewed plan can contain 50 checklist items with Korean titles and notes.
+  // Parse within that bound, then retain the smaller limit for analysis requests.
+  const parsed = await readHubWriteJson(req, { maxBytes: REVIEW_MAX_BYTES });
   if (parsed.error) return parsed.error;
+  if (parsed.data?.action !== 'review'
+    && parsed.byteLength > ANALYZE_MAX_BYTES) {
+    return NextResponse.json({ status: 'payload-too-large', error: `JSON payload must be ${ANALYZE_MAX_BYTES} bytes or smaller.` }, { status: 413 });
+  }
   try {
     const input = parsed.data;
     const result = input?.action === 'analyze' ? await meetingReviewService.analyze(input)

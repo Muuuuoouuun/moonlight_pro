@@ -143,6 +143,52 @@ test("meeting review does not assign an undiarized first-person promise or inven
   assert.deepEqual(proposal.checklist, []);
 }));
 
+test("meeting review does not promote a negated responsibility or sharing relation from a short positive substring", async () => withGeminiKey(async () => {
+  const cases = [
+    { quote: "내 할 일은 아니다. 영업팀이 연락한다.", scope: "mine", relationQuote: "내 할 일" },
+    { quote: "내 할 일은 보류됐다. 영업팀이 연락한다.", scope: "mine", relationQuote: "내 할 일" },
+    { quote: "운영자에게 공유하지 않는다. 영업팀이 확인한다.", scope: "related", relationQuote: "운영자에게 공유" },
+    { quote: "운영자에게 공유는 취소됐다. 영업팀이 확인한다.", scope: "related", relationQuote: "운영자에게 공유" },
+  ];
+  for (const item of cases) {
+    const result = await extractMeetingReviewText({
+      text: item.quote,
+      fetchImpl: async () => providerReply({ summary: "업무 담당을 논의했다.", proposals: [{
+        kind: "action", text: item.quote, quote: item.quote, certainty: "stated",
+        actionScope: item.scope, relationQuote: item.relationQuote,
+      }] }),
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.data.proposals.length, 1);
+    assert.equal(result.data.proposals[0].actionScope, "unknown", item.quote);
+    assert.equal(result.data.proposals[0].relation, undefined);
+  }
+  const positive = "내 할 일: 영업팀에 연락한다.";
+  const accepted = await extractMeetingReviewText({
+    text: positive,
+    fetchImpl: async () => providerReply({ summary: "연락할 일을 논의했다.", proposals: [{
+      kind: "action", text: "영업팀에 연락한다", quote: positive, certainty: "stated",
+      actionScope: "mine", relationQuote: "내 할 일",
+    }] }),
+  });
+  assert.equal(accepted.data.proposals[0].actionScope, "mine");
+}));
+
+test("meeting review removes an unsupported suggested date without hiding its grounded action", async () => withGeminiKey(async () => {
+  const quote = "내 할 일: 견적을 보낸다.";
+  const result = await extractMeetingReviewText({
+    text: quote,
+    fetchImpl: async () => providerReply({ summary: "견적 발송을 논의했다.", proposals: [{
+      kind: "action", text: "견적을 보낸다", quote, certainty: "stated", suggestedDue: "2026-10-01",
+      actionScope: "mine", relationQuote: "내 할 일", dateMentions: [],
+    }] }),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.data.proposals.length, 1);
+  assert.equal(result.data.proposals[0].actionScope, "mine");
+  assert.equal(result.data.proposals[0].suggestedDue, undefined);
+}));
+
 test("meeting review discards repeated or reordered checklist excerpts instead of fabricating execution order", async () => withGeminiKey(async () => {
   const quote = "초안 작성, 검토, 초안 작성, 발송.";
   const result = await extractMeetingReviewText({
@@ -156,7 +202,7 @@ test("meeting review discards repeated or reordered checklist excerpts instead o
   assert.deepEqual(result.data.proposals[0].checklist, []);
 }));
 
-test("meeting review drops fabricated, repeated, unsupported-date and mechanically contradictory candidates", async () => withGeminiKey(async () => {
+test("meeting review drops fabricated, repeated and contradictory candidates but strips unsupported dates", async () => withGeminiKey(async () => {
   const source = "예산은 아직 미정이다. 예약은 보류한다. 예약은 보류한다. 20개를 검토했다. 내일 연락하자. 견적은 보내지 말자.";
   const result = await extractMeetingReviewText({
     text: source,
@@ -175,7 +221,8 @@ test("meeting review drops fabricated, repeated, unsupported-date and mechanical
     }),
   });
   assert.equal(result.ok, true);
-  assert.deepEqual(result.data.proposals.map((proposal) => proposal.text), ["20개를 검토했다"]);
+  assert.deepEqual(result.data.proposals.map((proposal) => proposal.text), ["내일 연락", "20개를 검토했다"]);
+  assert.equal(result.data.proposals[0].suggestedDue, undefined);
 }));
 
 test("meeting review allows a genuine empty proposal list and does not invent usage", async () => withGeminiKey(async () => {
