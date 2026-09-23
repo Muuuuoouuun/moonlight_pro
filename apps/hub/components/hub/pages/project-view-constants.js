@@ -18,7 +18,7 @@ export const EMPTY_ALL_BRAND = {
 };
 
 export const PROJECT_VIEW_OPTIONS = [
-  { key: 'tree', label: '홈' },
+  { key: 'tree', label: '개요' },
   { key: 'table', label: '목록' },
   { key: 'backlog', label: '백로그' },
   { key: 'board', label: 'Board' },

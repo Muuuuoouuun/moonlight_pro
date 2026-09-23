@@ -9,6 +9,7 @@
 .hub-app .project-focus [hidden] { display: none !important; }
 .hub-app .project-focus-top { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); }
 .hub-app .project-focus-top > .project-focus-container { flex: 1; }
+.hub-app .project-focus-top .hub-iconbtn { min-width: 40px; min-height: 40px; }
 .hub-app .project-focus-body { flex: 1; display: flex; flex-direction: column; gap: 24px; padding: 16px; font-size: 13px; }
 .hub-app .project-focus-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .hub-app .project-focus-heading { font-size: 20px; font-weight: 500; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
@@ -48,6 +49,7 @@
 .hub-app .project-customer-save { justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--line-soft); }
 @media (max-width: 600px) {
   .hub-app .project-focus-body { padding: 16px; }
+  .hub-app .project-focus-top .hub-iconbtn { min-width: 44px; min-height: 44px; }
   .hub-app .project-focus input, .hub-app .project-focus textarea { font-size: 16px; }
   .hub-app .project-focus-customers button { min-height: 44px; }
 }

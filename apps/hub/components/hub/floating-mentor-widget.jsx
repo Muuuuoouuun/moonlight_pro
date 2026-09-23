@@ -9,6 +9,69 @@ import { requestGuruCoaching } from "./guru-client";
 import { requestPersonaChat, LEGEND_LENS_MAP } from "./persona-client";
 import { createAdviceTaskWriter } from "@/lib/ai-workflow-client";
 
+function renderAdviceWithCallouts(text) {
+  if (!text || typeof text !== "string") return null;
+  if (!text.includes("💡") && !text.includes("실전 팁")) {
+    return <div style={{ whiteSpace: "pre-wrap", fontSize: 12.5, lineHeight: 1.65 }}>{text}</div>;
+  }
+
+  const lines = text.split("\n");
+  const blocks = [];
+  let currentNormal = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isTip = /^(?:[-*•]\s*)?(?:💡|\[?(?:거장의\s*)?실전\s*팁\]?)/i.test(line.trim());
+
+    if (isTip) {
+      if (currentNormal.length > 0) {
+        blocks.push({ type: "normal", text: currentNormal.join("\n") });
+        currentNormal = [];
+      }
+      blocks.push({ type: "tip", text: line.trim() });
+    } else {
+      currentNormal.push(line);
+    }
+  }
+  if (currentNormal.length > 0) {
+    blocks.push({ type: "normal", text: currentNormal.join("\n") });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12.5, lineHeight: 1.65 }}>
+      {blocks.map((b, idx) => {
+        if (b.type === "tip") {
+          return (
+            <div
+              key={idx}
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--moon-line)",
+                boxShadow: "inset 2px 0 0 var(--moon-500)",
+                borderRadius: "var(--r)",
+                padding: "8px 12px",
+                fontSize: 12,
+                color: "var(--fg)",
+                lineHeight: 1.5,
+              }}
+            >
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--moon-200)" }}>💡 거장의 실전 팁</span>
+              </div>
+              <div>{b.text.replace(/^[-*•]\s*/, "")}</div>
+            </div>
+          );
+        }
+        return (
+          <div key={idx} style={{ whiteSpace: "pre-wrap" }}>
+            {b.text}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function FloatingMentorWidget({
   isOpen = false,
   onClose,
@@ -626,7 +689,7 @@ export function FloatingMentorWidget({
         >
           기본
         </button>
-        {["jobs", "bezos", "chouinard", "voss", "ogilvy"].map((lid) => {
+        {["jobs", "bezos", "chouinard", "voss", "ogilvy", "carnegie", "hill"].map((lid) => {
           const l = LEGEND_LENS_MAP[lid];
           const active = selectedLens === lid;
           return (
@@ -770,7 +833,7 @@ export function FloatingMentorWidget({
                   <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginBottom: 3 }}>
                     {msg.role === "user" ? "운영자" : isGuru ? "Guru" : "Council"}
                   </div>
-                  {msg.text}
+                  {msg.role === "user" ? msg.text : renderAdviceWithCallouts(msg.text)}
                 </div>
               ))
             )}
@@ -791,9 +854,7 @@ export function FloatingMentorWidget({
                 </div>
               </div>
             ) : resultText ? (
-              <div style={{ whiteSpace: "pre-wrap", fontSize: 12.5, lineHeight: 1.65 }}>
-                {resultText}
-              </div>
+              renderAdviceWithCallouts(resultText)
             ) : (
               <div style={{ padding: "30px 10px", textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>
                 {statusNote || (

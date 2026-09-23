@@ -11,6 +11,7 @@ import { dealStageLabel } from "../deal-stages.js";
 import { recordActivity } from "../repositories/crm-activities.js";
 import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./customer-delete.js";
 import { SUBJECT_KEY_SET } from "./lead-labels.js";
+import { normalizeGenreLabels } from "./customer-labels.js";
 import {
   deleteSupabaseRecord,
   insertSupabaseRecord,
@@ -105,6 +106,7 @@ export function buildLeadWrite(payload = {}) {
     const list = Array.isArray(payload.subjects) ? payload.subjects.map(String) : [];
     metaPatch.subjects = [...new Set(list.filter((key) => SUBJECT_KEY_SET.has(key)))];
   }
+  if (payload.genres !== undefined) metaPatch.genres = normalizeGenreLabels(payload.genres);
   if (payload.labelSource !== undefined) {
     const src = payload.labelSource && typeof payload.labelSource === "object" ? payload.labelSource : {};
     const valid = new Set(["operator", "derived", "searched"]);
@@ -246,6 +248,20 @@ export function buildAccountWrite(payload = {}) {
   const type = normalizeType(payload.type);
   if (type) metaPatch.account_kind = type;
   if (payload.note != null) metaPatch.note = String(payload.note).trim() || null;
+  if (payload.region !== undefined) metaPatch.region = String(payload.region).trim() || null;
+  if (payload.subjects !== undefined) {
+    const list = Array.isArray(payload.subjects) ? payload.subjects.map(String) : [];
+    metaPatch.subjects = [...new Set(list.filter((key) => SUBJECT_KEY_SET.has(key)))];
+  }
+  if (payload.genres !== undefined) metaPatch.genres = normalizeGenreLabels(payload.genres);
+  if (payload.labelSource !== undefined) {
+    const source = payload.labelSource && typeof payload.labelSource === 'object' ? payload.labelSource : {};
+    const valid = new Set(['operator', 'derived', 'searched']);
+    const next = {};
+    if (valid.has(source.subjects)) next.subjects = source.subjects;
+    if (valid.has(source.region)) next.region = source.region;
+    metaPatch.label_source = next;
+  }
   if (payload.workspace) metaPatch.workspace = payload.workspace;
   if (payload.focusOverride !== undefined) {
     metaPatch.focus_override = payload.focusOverride === "raise" || payload.focusOverride === "lower"

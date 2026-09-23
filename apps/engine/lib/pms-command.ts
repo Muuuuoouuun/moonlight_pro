@@ -429,7 +429,8 @@ export function normalizePmsCommand(
       const status = text(input.status, 30).toLowerCase();
       if (!PROJECT_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
       patch.status = status;
-      patch.completed_at = status === "completed" ? now.value : null;
+      // Archiving hides the project without erasing its completion history.
+      if (status !== "archived") patch.completed_at = status === "completed" ? now.value : null;
     }
     if (has(input, "priority")) {
       const priority = text(input.priority, 30).toLowerCase();

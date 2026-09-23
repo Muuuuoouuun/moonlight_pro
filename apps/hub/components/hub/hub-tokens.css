@@ -25,6 +25,16 @@
   --accent-soft:   oklch(0.52 0.08 250 / 0.16);
   --accent-line:   oklch(0.58 0.09 250 / 0.55);
 
+  /* Project evidence gauge only — percentage quarters, not workflow states. */
+  --project-gauge-0:     oklch(0.67 0.18 255);
+  --project-gauge-25:    oklch(0.75 0.15 218);
+  --project-gauge-50:    oklch(0.78 0.14 190);
+  --project-gauge-75:    oklch(0.75 0.19 280);
+  --project-gauge-100:   oklch(0.80 0.19 325);
+  --project-gauge-spark: oklch(0.99 0.01 250);
+  --project-gauge-tip-line: var(--surface);
+  --project-gauge-glow: oklch(0.81 0.17 280 / 0.7);
+
   --z-quick-memo: 60;
   --z-project-detail: 61;
   --z-navigation-overlay: 64;
@@ -91,7 +101,11 @@
   --dur-enter: 200ms;
   --dur-panel: 180ms;
   --dur-overlay: 160ms;
+  /* 완료 축하 1회(리듬 체크 원·하루 링 닫힘). 반복·루프 금지 — §9, §15 2026-09-23 */
+  --dur-celebrate: 420ms;
+  --dur-gauge: 1080ms;
   --ease-hub: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ease-gauge: cubic-bezier(0.58, 0.06, 0.22, 1);
   --stagger-step: 45ms;
 }
 
@@ -120,6 +134,15 @@
   --accent:        #5274a8;
   --accent-soft:   oklch(0.90 0.04 250 / 0.7);
   --accent-line:   oklch(0.52 0.10 250 / 0.45);
+
+  --project-gauge-0:     oklch(0.49 0.20 255);
+  --project-gauge-25:    oklch(0.54 0.17 218);
+  --project-gauge-50:    oklch(0.57 0.15 190);
+  --project-gauge-75:    oklch(0.53 0.20 280);
+  --project-gauge-100:   oklch(0.56 0.21 325);
+  --project-gauge-spark: oklch(1 0 0);
+  --project-gauge-tip-line: var(--surface);
+  --project-gauge-glow: oklch(0.58 0.19 280 / 0.45);
 
   --fg:            oklch(0.20 0.008 250);
   --fg-muted:      oklch(0.42 0.008 250);
@@ -432,6 +455,35 @@
 .hub-sidebar-root--collapsed .hub-sidebar-inquiry { position: relative; }
 .hub-sidebar-root--collapsed .hub-sidebar-inquiry > .num { position: absolute; top: -2px; right: -5px; pointer-events: none; background: var(--surface); padding: 0 2px; border-radius: var(--r-xs); }
 .hub-sidebar-search > button:hover { color: var(--fg) !important; border-color: var(--line-strong) !important; }
+
+/* 사이드바 너비 조절 — 경계선 위에 걸친 8px 히트 영역(좌우 -4px margin으로 레이아웃 폭 0).
+   휴지 상태에는 사이드바 자신의 1px 보더만 보이고, hover·드래그 중에는 그 자리에 --line-strong,
+   키보드 포커스에는 --moon-300 선이 겹친다. 셸이 overflow: hidden이라 포커스 링은 안쪽에 그린다(§15 2026-09-15). */
+.hub-app .hub-sidebar-resizer {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 8px;
+  margin: 0 -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.hub-app .hub-sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background-color var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-sidebar-resizer:hover::after,
+.hub-shell[data-sidebar-resizing="true"] .hub-sidebar-resizer::after { background: var(--line-strong); }
+.hub-app .hub-sidebar-resizer:focus-visible { outline-offset: -2px; }
+.hub-app .hub-sidebar-resizer:focus-visible::after { background: var(--moon-300); }
+/* 드래그 중 — 폭 전이를 끄고(포인터를 바로 따라온다) 본문 텍스트가 선택되지 않게 한다. */
+.hub-shell[data-sidebar-resizing="true"] { cursor: col-resize; user-select: none; }
+.hub-shell[data-sidebar-resizing="true"] .hub-sidebar-root { transition: none; }
 
 /* Pinned utilities (AI·자동화 · 설정) — same anchor, quieter weight. */
 .hub-app .hub-nav-item--sm {
@@ -1583,6 +1635,11 @@
   }
 
   .hub-desktop-sidebar-collapse {
+    display: none !important;
+  }
+
+  /* 모바일 사이드바는 고정 폭 드로어다 — 너비 조절 핸들은 데스크톱 전용. */
+  .hub-sidebar-resizer {
     display: none !important;
   }
 

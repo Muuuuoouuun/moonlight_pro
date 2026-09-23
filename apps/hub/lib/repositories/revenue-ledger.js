@@ -12,6 +12,7 @@ import {
 import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
 import { isTemplateNextAction } from "../sales-os/lead-enrichment.js";
 import { SUBJECT_KEY_SET, absorbSubjectTags } from "../sales-os/lead-labels.js";
+import { normalizeGenreLabels } from "../sales-os/customer-labels.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 
 const LEAD_STAGE_LABEL = {
@@ -190,6 +191,7 @@ export function mapLead(row, companyById, contactById, trackingStartedAt = null,
     // buildLeadWrite. '' fallbacks keep the drawer inputs controlled.
     region: enrichmentView.region,
     subjects,
+    genres: normalizeGenreLabels(meta.genres),
     labelSource,
     scale: meta.scale || "",
     situation: meta.situation || "",
@@ -267,8 +269,11 @@ export function mapDeal(row, companyById, trackingStartedAt = null) {
   };
 }
 
-function mapAccount(row, dealStatsByCompany) {
+export function mapAccount(row, dealStatsByCompany, companyById = new Map()) {
   const type = resolveType(row);
+  const meta = row.meta || {};
+  const companyRegion = companyById.get(row.company_id)?.meta?.region || '';
+  const region = String(Object.hasOwn(meta, 'region') ? (meta.region || '') : companyRegion).trim();
   const stats = (row.company_id && dealStatsByCompany.get(row.company_id)) || {
     deals: 0,
     value: 0,
@@ -281,6 +286,13 @@ function mapAccount(row, dealStatsByCompany) {
     companyId: row.company_id || null,
     name: row.name,
     type,
+    region,
+    subjects: Array.isArray(meta.subjects) ? meta.subjects.map(String).filter((key) => SUBJECT_KEY_SET.has(key)) : [],
+    genres: normalizeGenreLabels(meta.genres),
+    labelSource: {
+      subjects: meta.label_source?.subjects || null,
+      region: meta.label_source?.region || (region && !meta.region ? 'derived' : null),
+    },
     deals: stats.deals,
     value: stats.value,
     last: formatRelative(lastAt),
@@ -535,7 +547,7 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
   });
 
   const accountRaw = new Map(accountRows.map(a => [a.id, a]));
-  const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany));
+  const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany, companyById));
   const leads = leadRows.map(row => mapLead(row, companyById, contactById, trackingStartedAt, dealStatsByCompany));
   const cases = caseRows.map(row => mapCase(row, accountRaw));
   const summary = buildSummary(leads, deals);

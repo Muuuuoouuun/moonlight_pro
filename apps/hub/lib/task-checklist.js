@@ -2,7 +2,7 @@ import { isCanonicalUuid } from './uuid.js';
 
 export const PROJECT_ITEM_OPTIONS = [
   { value: 'task', label: '일반 작업' },
-  { value: 'subproject', label: '하위 프로젝트' },
+  { value: 'subproject', label: '작업 묶음' },
   { value: 'milestone', label: '마일스톤' },
 ];
 export function projectItemType(task = {}) {

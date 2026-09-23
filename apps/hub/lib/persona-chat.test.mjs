@@ -81,6 +81,8 @@ test("persona-client exposes mode labels and legend lenses", () => {
   assert.ok(LEGEND_LENS_MAP.jobs);
   assert.ok(LEGEND_LENS_MAP.bezos);
   assert.ok(LEGEND_LENS_MAP.chouinard);
+  assert.ok(LEGEND_LENS_MAP.carnegie);
+  assert.ok(LEGEND_LENS_MAP.hill);
 });
 
 test("POST forwards personaId, mode and lens to engine and logs agent run", async () => {

@@ -47,6 +47,7 @@ import { TaskChecklistGauge } from './project-task-checklist';
 import { hasChecklistConflict, readTaskChecklist, validateTaskChecklist } from '@/lib/task-checklist';
 import { ProjectExecutionBacklog, ProjectTaskFilters } from './project-execution-backlog';
 import { buildTaskExecutionModel, mergeSavedTask, readTaskFilters, saveTaskChanges, writeTaskFilters } from '@/lib/pms-work-items';
+import { appendProjectChecklistItem, createProjectTaskWriter } from '@/lib/project-direct-work';
 import { isCanonicalUuid } from '@/lib/uuid';
 import './project-execution.css';
 import {
@@ -110,6 +111,9 @@ export function Projects({ workspace }) {
   // don't need it in their dependency lists.
   const view = normalizeProjectView(searchParams.get('view'));
   const selectedProjectId = searchParams.get('project');
+  const focusedProjectItemId = searchParams.get('item');
+  const focusedProjectCheckId = searchParams.get('check');
+  const focusOverview = searchParams.get('focus') === 'overview' || Boolean(focusedProjectItemId);
   const [memoTaskId, setMemoTaskId] = React.useState(searchParams.get('task') || null);
   const [contextMemo, setContextMemo] = React.useState(null);
   const [memoTaskFallback, setMemoTaskFallback] = React.useState(null);
@@ -222,19 +226,28 @@ export function Projects({ workspace }) {
   const [readError, setReadError] = React.useState(null);
   const ledgerReadRef = React.useRef({ requestId: 0, controller: null });
   const taskStatusPendingRef = React.useRef(new Set());
+  const quickTaskWriterRef = React.useRef(null);
+  if (!quickTaskWriterRef.current) quickTaskWriterRef.current = createProjectTaskWriter();
+  const quickTaskRequestsRef = React.useRef(new Map());
+  const inlineTaskIntentRef = React.useRef(null);
   const contentLoadedRef = React.useRef(false);
   const detailSheetRef = React.useRef(null);
   const detailReturnFocusRef = React.useRef(null);
   const detailListScrollRef = React.useRef(null);
+  const detailReturnQueryRef = React.useRef(null);
   const detailAutofocusPresentationRef = React.useRef(null);
   const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
+  const [indexKeyboardOrder, setIndexKeyboardOrder] = React.useState([]);
   const [deleteProjectTarget, setDeleteProjectTarget] = React.useState(null);
   const [deleteProjectPending, setDeleteProjectPending] = React.useState(false);
   const [deleteProjectError, setDeleteProjectError] = React.useState(null);
+  const [deleteProjectAcknowledged, setDeleteProjectAcknowledged] = React.useState(false);
   const projectStatusPendingRef = React.useRef(new Set());
   const [deliveryProject, setDeliveryProject] = React.useState(null);
+  const [deliveryIntent, setDeliveryIntent] = React.useState('edit');
+  const manageDelivery = project => { setDeliveryIntent('edit'); setDeliveryProject(project); };
   const [projectDraft, setProjectDraft] = React.useState(null);
   const [projectEditSource, setProjectEditSource] = React.useState(null);
   const [taskDraft, setTaskDraft] = React.useState(null);
@@ -557,7 +570,7 @@ export function Projects({ workspace }) {
   }, [brand, brands, wsDefaultBrand]);
 
   React.useEffect(() => {
-    if (!['tree', 'table'].includes(view) || !selectedProjectId) {
+    if (!['tree', 'table'].includes(view) || !selectedProjectId || (view === 'tree' && focusOverview)) {
       setOpenDetail(null);
       return;
     }
@@ -569,7 +582,7 @@ export function Projects({ workspace }) {
       return;
     }
     setOpenDetail(null);
-  }, [allProjects, selectedProjectId, view]);
+  }, [allProjects, focusOverview, selectedProjectId, view]);
 
   React.useEffect(() => {
     const query = window.matchMedia('(max-width: 900px)');
@@ -592,10 +605,23 @@ export function Projects({ workspace }) {
       if (node.scrollHeight > node.clientHeight || node.scrollTop) scrolls.push({ node, top: node.scrollTop });
     }
     detailListScrollRef.current = scrolls;
+    detailReturnQueryRef.current = view === 'tree' && (searchParamsRef.current.get('focus') === 'overview' || searchParamsRef.current.has('item'))
+      && searchParamsRef.current.has('project')
+      ? searchParamsRef.current.toString()
+      : null;
     const params = mergeProjectDetailQuery(searchParamsRef.current, projectId);
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     setOpenDetail(projectId);
+  }, [pathname, router, view]);
+
+  const selectOverviewProject = React.useCallback((projectId) => {
+    const params = new URLSearchParams(searchParamsRef.current.toString());
+    params.set('project', projectId);
+    params.set('focus', 'overview');
+    params.delete('item');
+    params.delete('check');
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, router]);
 
   const closeProjectDetail = React.useCallback(() => {
@@ -603,9 +629,11 @@ export function Projects({ workspace }) {
     setDetailCustomerProject(null);
     const returnFocus = detailReturnFocusRef.current;
     setOpenDetail(null);
+    const returnQuery = detailReturnQueryRef.current;
+    detailReturnQueryRef.current = null;
     const params = new URLSearchParams(searchParamsRef.current.toString());
-    params.delete('project');
-    const query = params.toString();
+    if (!returnQuery) params.delete('project');
+    const query = returnQuery || params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     requestAnimationFrame(() => {
       if (returnFocus?.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus({ preventScroll: true });
@@ -827,7 +855,7 @@ export function Projects({ workspace }) {
       });
       return { ok: true, reloaded: reload.ok };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = '저장 결과를 확인하지 못했습니다. 다시 시도하거나 새로고침해 현재 상태를 확인하세요.';
       setOrderResult({ tone: 'err', label: message });
       return { ok: false, message };
     } finally {
@@ -837,11 +865,13 @@ export function Projects({ workspace }) {
 
   const requestProjectDelete = (project) => {
     setDeleteProjectError(null);
+    setDeleteProjectAcknowledged(false);
     setDeleteProjectTarget(project);
   };
 
   const confirmProjectDelete = async () => {
-    if (!deleteProjectTarget || deleteProjectPending) return;
+    if (!deleteProjectTarget || deleteProjectPending || !deleteProjectAcknowledged) return;
+    const removedId = deleteProjectTarget.id;
     setDeleteProjectPending(true);
     setDeleteProjectError(null);
     const result = await setProjectStatus(deleteProjectTarget, 'archived');
@@ -851,12 +881,18 @@ export function Projects({ workspace }) {
       return;
     }
     setDeleteProjectTarget(null);
-    if (result.reloaded) setOrderResult({ tone: 'ok', label: '프로젝트 삭제됨 · 완료·보관에서 다시 열 수 있습니다.' });
+    if (openDetail === removedId) closeProjectDetail();
+    if (selectedProjectId === removedId) {
+      const params = new URLSearchParams(searchParamsRef.current.toString());
+      params.delete('project'); params.delete('item'); params.delete('check');
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+    if (result.reloaded) setOrderResult({ tone: 'ok', label: '목록에서 제거됨 · 완료·보관에서 다시 열 수 있습니다.' });
   };
 
   const completeProject = React.useCallback((project) => {
     if (project.statusKey === 'completed') setProjectStatus(project, 'active');
-    else setDeliveryProject(project);
+    else { setDeliveryIntent('complete'); setDeliveryProject(project); }
   }, [setProjectStatus]);
 
   const archiveProject = React.useCallback((project) => {
@@ -865,6 +901,7 @@ export function Projects({ workspace }) {
 
   // Completion opens acceptance review; a saved server response moves the row.
   const scheduleCompleteProject = React.useCallback((project) => {
+    setDeliveryIntent('complete');
     setDeliveryProject(project);
   }, []);
 
@@ -889,52 +926,57 @@ export function Projects({ workspace }) {
     createTodo(null, 'todo', { dueAt: dueAt || '' });
   }, [createTodo]);
 
+  const quickCreateTodo = React.useCallback((input) => {
+    const pending = quickTaskRequestsRef.current.get(input.id);
+    if (pending) return quickTaskWriterRef.current(input);
+    if (!canWriteTasks || taskStatusPendingRef.current.size > 0) {
+      return Promise.resolve({ ok: false, status: 'error', message: '기록을 확인하거나 진행 중인 저장이 끝난 뒤 다시 시도하세요.' });
+    }
+    projectsLedgerCache = null;
+    ledgerReadRef.current.controller?.abort();
+    ledgerReadRef.current.requestId += 1;
+    taskStatusPendingRef.current.add(input.id);
+    setPendingTaskIds(new Set(taskStatusPendingRef.current));
+    const request = (async () => {
+      try {
+        const result = await quickTaskWriterRef.current(input);
+        if (result.ok) {
+          const created = mergeSavedTask({}, result.task, allProjects);
+          setTodos(current => current.some(task => task.id === created.id)
+            ? current.map(task => task.id === created.id ? mergeSavedTask(task, result.task, allProjects) : task)
+            : [...current, created]);
+          setOrderResult({ tone: 'ok', label: '할 일 저장됨' });
+        } else setOrderResult({ tone: 'err', label: result.message });
+        return result;
+      } finally {
+        quickTaskRequestsRef.current.delete(input.id);
+        taskStatusPendingRef.current.delete(input.id);
+        setPendingTaskIds(new Set(taskStatusPendingRef.current));
+        loadLedger();
+      }
+    })();
+    quickTaskRequestsRef.current.set(input.id, request);
+    return request;
+  }, [allProjects, canWriteTasks, loadLedger]);
+
   const handleQuickAddSubtask = React.useCallback(async (projectId) => {
     const title = inlineTaskTitle.trim();
     if (!title) return;
+    if (!inlineTaskIntentRef.current || inlineTaskIntentRef.current.projectId !== projectId) {
+      inlineTaskIntentRef.current = { id: createClientId(), projectId, title };
+    }
     setInlineSubmitting(true);
     try {
-      const newId = createClientId();
-      const payload = {
-        id: newId,
-        title,
-        projectId: projectId || null,
-        status: 'todo',
-        priority: 'medium',
-        dueAt: null,
-        description: '',
-        nextAction: '',
-        checklist: [],
-      };
-      const response = await fetch('/api/hub/tasks', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (response.ok && ['saved', 'created'].includes(data.status)) {
-        const created = data.task || {
-          ...payload,
-          project: projectId,
-          project_id: projectId,
-          done: false,
-          due: null,
-          assignee: '나',
-        };
-        setTodos(ts => [...ts, created]);
-        projectsLedgerCache = null;
-        loadLedger();
+      const result = await quickCreateTodo({ ...inlineTaskIntentRef.current, title });
+      if (result.ok) {
+        inlineTaskIntentRef.current = null;
         setInlineTaskTitle('');
-        setOrderResult({ tone: 'ok', label: '하위 아이템 추가됨' });
-      } else {
-        setOrderResult({ tone: 'err', label: data.error || '하위 아이템 저장 실패' });
       }
-    } catch (err) {
-      setOrderResult({ tone: 'err', label: err instanceof Error ? err.message : String(err) });
+      return result;
     } finally {
       setInlineSubmitting(false);
     }
-  }, [inlineTaskTitle, loadLedger]);
+  }, [inlineTaskTitle, quickCreateTodo]);
 
   // 페이지 레벨 N은 아래 뷰 인지 리스너 한 곳이 소유한다(todos → 할 일, 그 외 → 프로젝트).
   // 18차에 추가했던 무조건 usePageCreateHotkey는 preventDefault로 그 리스너를 영구
@@ -1437,11 +1479,11 @@ export function Projects({ workspace }) {
 
   const toggleTodo = React.useCallback(async (id, event) => {
     const todo = todos.find(item => item.id === id);
-    if (!todo) return;
+    if (!todo) return { ok: false, message: '할 일을 다시 읽어 주세요.' };
     const willBeDone = todo.status !== 'done';
     try {
       const updated = await updateTaskStatus(id, todo.status === 'done' ? 'todo' : 'done');
-      if (!updated) return;
+      if (!updated) return { ok: false, message: '할 일 저장 결과를 확인하지 못했습니다.' };
       if (willBeDone) {
         let sx = event?.clientX;
         let sy = event?.clientY;
@@ -1459,10 +1501,44 @@ export function Projects({ workspace }) {
         }
       }
       setOrderResult({ tone: 'ok', label: todo.status === 'done' ? '할 일 다시 열림' : '할 일 완료됨' });
+      return { ok: true };
     } catch (error) {
-      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      setOrderResult({ tone: 'err', label: message });
+      return { ok: false, message };
     }
   }, [todos, updateTaskStatus]);
+
+  const addChecklistItem = React.useCallback(async (taskId, item) => {
+    if (!canWriteTasks || taskStatusPendingRef.current.size > 0) {
+      return { ok: false, status: 'error', message: '진행 중인 저장이 끝난 뒤 다시 시도하세요.' };
+    }
+    const task = todos.find(row => row.id === taskId);
+    if (!task) return { ok: false, status: 'error', message: '할 일을 다시 읽어 주세요.' };
+    const result = await appendProjectChecklistItem(task, item, { saveChanges: applyTaskChanges });
+    if (result.ok) {
+      setTodos(current => current.map(row => row.id === taskId ? mergeSavedTask(row, result.task, allProjects) : row));
+      setOrderResult({ tone: 'ok', label: '세부 항목 저장됨' });
+    } else setOrderResult({ tone: 'err', label: result.message });
+    return result;
+  }, [allProjects, applyTaskChanges, canWriteTasks, todos]);
+
+  const toggleChecklistItem = React.useCallback(async (taskId, checkId) => {
+    const task = todos.find(item => item.id === taskId);
+    const checks = task ? readTaskChecklist(task) : [];
+    const target = checks.find(item => item.id === checkId);
+    if (!task || !target) return { ok: false, message: '체크 항목을 다시 읽어 주세요.' };
+    const result = await applyTaskChanges([task], {
+      checklist: checks.map(item => item.id === checkId ? { ...item, done: !item.done } : item),
+    });
+    if (result.failed.length) {
+      const message = result.failed[0].message || '체크 항목을 저장하지 못했습니다.';
+      setOrderResult({ tone: 'err', label: message });
+      return { ok: false, message };
+    }
+    setOrderResult({ tone: 'ok', label: target.done ? '체크 항목 다시 열림' : '체크 항목 저장됨' });
+    return { ok: true };
+  }, [applyTaskChanges, todos]);
 
   const moveCard = React.useCallback(async (id, column) => {
     const status = taskStatusForBoardColumn(column);
@@ -1657,7 +1733,8 @@ export function Projects({ workspace }) {
   // (Deals 칸반과 동일 문법). 다른 뷰(todos·timeline)는 각자 문법이 있어 비활성.
   const kbRows = React.useMemo(() => {
     if (view === 'tree') {
-      return visibleProjects.map(p => ({ id: p.id }));
+      const rank = new Map(indexKeyboardOrder.map((id, index) => [id, index]));
+      return visibleProjects.slice().sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)).map(p => ({ id: p.id }));
     }
     if (view === 'table') {
       return listSections
@@ -1668,7 +1745,7 @@ export function Projects({ workspace }) {
       return visibleColumns.flatMap(col => col.cards.map(c => ({ id: c.id })));
     }
     return [];
-  }, [view, listSections, brandSectionsCollapsed, visibleColumns]);
+  }, [view, visibleProjects, indexKeyboardOrder, listSections, brandSectionsCollapsed, visibleColumns]);
 
   const kbSelection = useCrmSelection(kbRows);
   const openKbSelected = React.useCallback((id) => {
@@ -2064,12 +2141,19 @@ export function Projects({ workspace }) {
           >
             {view === 'tree' && <ProjectPortfolioWorkspace
               projects={visibleProjects}
+              indexStorageKey={`mlp.projectIndex.${ws?.key || 'all'}.v1`}
+              onIndexOrderChange={setIndexKeyboardOrder}
+              indexProjects={allProjects}
               portfolioProjects={projects}
+              reviewProjects={brandProjects}
               terminalProjects={terminalProjects}
               todosByProject={todosByProject}
               brandByKey={brandByKey}
               brands={brands}
               selectedProjectId={selectedProjectId}
+              selectedProjectRecord={brandProjects.find(item => item.id === selectedProjectId)}
+              focusTaskId={focusedProjectItemId}
+              focusCheckId={focusedProjectCheckId}
               openDetailId={openDetail}
               keyboardSelectedId={kbSelection.selectedId}
               sourceState={syncState}
@@ -2082,12 +2166,20 @@ export function Projects({ workspace }) {
               onQueryChange={setProjectQuery}
               searchInputRef={searchInputRef}
               onOpenProject={openProjectDetail}
-              onManageDelivery={setDeliveryProject}
+              onSelectProject={selectOverviewProject}
+              onOpenCustomer={projectId => openProjectDetail(projectId, { customer: true })}
+              onEditProject={editProject}
+              onRemoveProject={requestProjectDelete}
+              onManageDelivery={manageDelivery}
               onCreateProject={() => createProject()}
               onCreateContent={createContentProject}
               onCreateTodo={createTodo}
+              onQuickCreateTodo={quickCreateTodo}
+              onAddChecklistItem={addChecklistItem}
+              canWriteTasks={canWriteTasks}
               onEditTodo={editTodo}
               onToggleTodo={toggleTodo}
+              onToggleChecklist={toggleChecklistItem}
               pendingTodoIds={pendingTaskIds}
               showTerminal={showTerminal}
               onToggleTerminal={handleTerminalToggleClick}
@@ -2299,9 +2391,9 @@ export function Projects({ workspace }) {
                           const pBrand = brandByKey.get(p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
                           const dueTime = p.dueAt ? new Date(p.dueAt).getTime() : Number.NaN;
-                          const pDDay = computeDDay(p.dueAt);
+                          const pDDay = p.deadlineAlertSuppressed ? null : computeDDay(p.dueAt);
                           const terminal = isTerminalProject(p);
-                          const overdue = !terminal && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
+                          const overdue = !terminal && !p.deadlineAlertSuppressed && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
                           const blocked = String(p.statusKey || '').toLowerCase() === 'blocked' || p.status === 'Blocked';
                           const nextAction = p.displayNextAction || p.projectNextAction || (p.updateEvidencePartial ? '업데이트 기록 미확인' : '다음 행동 미정');
                           return (
@@ -2359,7 +2451,8 @@ export function Projects({ workspace }) {
                                       )}
                                     </div>
                                     {(blocked || overdue) && <span className="hub-project-risk-label">{blocked ? '막힘' : '기한 지남'}</span>}
-                                    {!blocked && !overdue && <span className="hub-project-no-risk">위험 신호 없음</span>}
+                                    {!blocked && p.deadlineAlertSuppressed && <span className="hub-project-alert-reset" title="이전 기한 · 알림 해제">알림 해제</span>}
+                                    {!blocked && !overdue && !p.deadlineAlertSuppressed && <span className="hub-project-no-risk">위험 신호 없음</span>}
                                   </div>
                                 </button>
                                 {projectCustomerRef(p.entityRef) && <button
@@ -2378,7 +2471,7 @@ export function Projects({ workspace }) {
                                 </div>
                                 <div className="hub-project-row-actions" aria-label={`${p.name} 관리`}>
                                   <IconButton icon="pencil" size={30} iconSize={16} tooltip={`${p.name} 편집`} onClick={() => editProject(p)} />
-                                  <IconButton icon="trash" size={30} iconSize={16} className="hub-project-delete-action" tooltip={`${p.name} 삭제`} onClick={() => requestProjectDelete(p)} />
+                                  <IconButton icon="archive" size={30} iconSize={16} className="hub-project-delete-action" tooltip={`${p.name} 목록에서 제거`} onClick={() => requestProjectDelete(p)} />
                                 </div>
                               </div>
 
@@ -2433,12 +2526,14 @@ export function Projects({ workspace }) {
                                         autoFocus
                                         placeholder="하위 아이템 제목 입력 후 Enter..."
                                         value={inlineTaskTitle}
+                                        disabled={inlineSubmitting}
                                         onChange={(e) => setInlineTaskTitle(e.target.value)}
                                         onKeyDown={async (e) => {
-                                          if (e.key === 'Enter') {
+                                          if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) {
                                             e.preventDefault();
                                             await handleQuickAddSubtask(p.id);
                                           } else if (e.key === 'Escape') {
+                                            inlineTaskIntentRef.current = null;
                                             setInlineAddingProjectId(null);
                                             setInlineTaskTitle('');
                                           }
@@ -2466,8 +2561,10 @@ export function Projects({ workspace }) {
                                       <Button
                                         variant="ghost"
                                         size="xs"
+                                        disabled={inlineSubmitting}
                                         onClick={() => {
                                           const currentTitle = inlineTaskTitle;
+                                          inlineTaskIntentRef.current = null;
                                           setInlineAddingProjectId(null);
                                           setInlineTaskTitle('');
                                           createTodo(p.id);
@@ -2482,7 +2579,9 @@ export function Projects({ workspace }) {
                                       <Button
                                         variant="ghost"
                                         size="xs"
+                                        disabled={inlineSubmitting}
                                         onClick={() => {
+                                          inlineTaskIntentRef.current = null;
                                           setInlineAddingProjectId(null);
                                           setInlineTaskTitle('');
                                         }}
@@ -2496,6 +2595,7 @@ export function Projects({ workspace }) {
                                         type="button"
                                         className="hub-project-subtasks__add"
                                         onClick={() => {
+                                          inlineTaskIntentRef.current = null;
                                           setInlineAddingProjectId(p.id);
                                           setInlineTaskTitle('');
                                         }}
@@ -2679,9 +2779,10 @@ export function Projects({ workspace }) {
                     }}
                     onSendOrder={sendProjectOrder}
                     onConsultCouncil={(project) => setCouncilWidgetProject(project)}
-                    onManageDelivery={setDeliveryProject}
+                    onManageDelivery={manageDelivery}
                     onComplete={completeProject}
                     onArchive={archiveProject}
+                    onRemove={requestProjectDelete}
                   />
                 </div>
               );
@@ -2735,7 +2836,7 @@ export function Projects({ workspace }) {
       </div>
 
       {contextMemo && <ContextMemoDrawer contexts={contextMemo.contexts} noteId={contextMemo.noteId} onClose={() => setContextMemo(null)} onSaved={() => setOrderResult({ tone: 'ok', label: '메모를 저장했어요' })} />}
-      {deliveryProject && <ProjectDeliveryEditor key={deliveryProject.id} project={deliveryProject} onClose={() => setDeliveryProject(null)} onSave={persistDelivery} />}
+      {deliveryProject && <ProjectDeliveryEditor key={deliveryProject.id} project={deliveryProject} intent={deliveryIntent} onClose={() => setDeliveryProject(null)} onSave={persistDelivery} />}
 
       {projectDraft?.isNew && !containerDraft && view !== 'tree' && (
         <ProjectCreateDrawer
@@ -2761,17 +2862,21 @@ export function Projects({ workspace }) {
           onClose={() => { if (!deleteProjectPending) setDeleteProjectTarget(null); }}
           footer={(
             <>
-              <Button autoFocus variant="ghost" size="sm" disabled={deleteProjectPending} onClick={() => setDeleteProjectTarget(null)}>취소</Button>
-              <Button variant="danger" size="sm" disabled={deleteProjectPending} onClick={confirmProjectDelete}>{deleteProjectPending ? '삭제 중…' : '삭제'}</Button>
+              <Button variant="ghost" size="sm" disabled={deleteProjectPending} onClick={() => setDeleteProjectTarget(null)}>취소</Button>
+              <Button variant="danger" size="sm" disabled={deleteProjectPending || !deleteProjectAcknowledged} onClick={confirmProjectDelete}>{deleteProjectPending ? '처리 중…' : '삭제'}</Button>
             </>
           )}
         >
           <div className="hub-project-delete-summary">
             <span className="hub-project-delete-summary__icon"><Iconed name="archive" size={20} /></span>
-            <div><span className="hub-project-delete-summary__label">삭제할 프로젝트</span><strong>{deleteProjectTarget.name}</strong></div>
+            <div><span className="hub-project-delete-summary__label">목록에서 제거할 프로젝트</span><strong>{deleteProjectTarget.name}</strong></div>
           </div>
-          <p className="hub-project-delete-description">활성 목록에서 제외하고 보관합니다.<br />연결된 할 일·메모·기록은 그대로 유지됩니다.</p>
-          <div className="hub-project-delete-recovery"><Iconed name="archive" size={14} /><span>완료·보관 → 다시 열기로 복원할 수 있습니다.</span></div>
+          <p className="hub-project-delete-description">활성 목록에서 삭제하고 보관합니다. 현재 확인된 미완료 할 일 {todos.filter(task => task.project === deleteProjectTarget.id && !task.done).length}건과 연결된 고객·메모·기록은 그대로 유지됩니다. 할 일 화면 표시는 해당 화면의 필터에 따라 달라집니다.</p>
+          <div className="hub-project-delete-recovery"><Iconed name="archive" size={14} /><span>완료·보관 → 다시 열기로 진행 상태로 복원할 수 있습니다. 현재 월 평가 집계에서는 제외됩니다.</span></div>
+          <div className="hub-project-delete-acknowledgment">
+            <Checkbox checked={deleteProjectAcknowledged} onChange={setDeleteProjectAcknowledged} size={18} label="연결 기록은 유지되고 활성 목록에서만 제외됨을 확인했습니다." />
+            <span>연결 기록은 유지되고 활성 목록에서만 제외됨을 확인했습니다.</span>
+          </div>
           {deleteProjectError && <p role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>{deleteProjectError}</p>}
         </Drawer>
       )}

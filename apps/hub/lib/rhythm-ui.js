@@ -146,14 +146,18 @@ export function slugifyRitualName(name) {
 // 루틴 카테고리·주간 목표의 정본. /api/routine(쓰기 검증)과 work-ledger(읽기 정규화)가
 // 이 모듈을 import한다 — 세 곳에 따로 선언하면 서버는 받는데 읽기에서 'general'로
 // 떨어지는 식의 드리프트가 생긴다(2026-09-23 병합 검증).
-export const RITUAL_CATEGORIES = new Set(["general", "work", "content", "health", "learning", "personal"]);
+// spirit(신앙: 기도·말씀)·home(집안일)은 2026-09-23 생활 루틴(기도·청소·운동) 확장으로 추가했다.
+// 라벨 객체의 순서가 드로어 선택지 순서다 — 생활 루틴이 앞에 온다.
+export const RITUAL_CATEGORIES = new Set(["general", "work", "content", "health", "learning", "personal", "spirit", "home"]);
 
 export const RITUAL_CATEGORY_LABELS = {
-  work: "업무",
-  content: "콘텐츠",
   health: "건강",
+  spirit: "신앙",
+  home: "집안일",
   learning: "학습",
   personal: "개인",
+  work: "업무",
+  content: "콘텐츠",
   general: "일반",
 };
 
@@ -173,7 +177,7 @@ export function defaultTargetPerWeek(checkType) {
 // 루틴 구성 — 카테고리별 개수·이번 주 완료/목표 합계. RhythmVisualizer의 '루틴 구성' 패널이
 // 쓴다. 하드코딩 업로드·성과 탭을 대체하는 실데이터(카테고리·주간 목표는 §루틴 필드 확장).
 export function summarizeRitualsByCategory(rituals = []) {
-  const order = ["work", "content", "health", "learning", "personal", "general"];
+  const order = ["health", "spirit", "home", "learning", "personal", "work", "content", "general"];
   const byCategory = new Map();
 
   (Array.isArray(rituals) ? rituals : []).forEach((r) => {

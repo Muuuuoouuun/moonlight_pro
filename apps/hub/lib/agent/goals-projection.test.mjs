@@ -1,10 +1,21 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {projectAgentGoals} from './goals-projection.js';
+import {projectAgentGoals,parseAgentGoalsQuery} from './goals-projection.js';
+import {sealAgentCursor} from '@com-moon/agent-contracts';
 const id=n=>`11111111-1111-4111-8111-${String(n).padStart(12,'0')}`;
 const context={workspaceId:id(1),actorId:'codex',scopes:['read']};
 const options={secret:'test-only-cursor-secret'};
 function ledger(count=3){return {status:'live',source:'supabase',asOf:'2026-09-21T00:00:00Z',objectives:Array.from({length:count},(_,n)=>({id:id(n+10),title:`목표 ${n}`,description:'',scope:'personal',periodStart:'2026-09-01',periodEnd:'2026-09-30',timezone:'Asia/Seoul',status:'active',revision:1})),metrics:[],observations:[],links:[]};}
+test('agent entity filters accept legacy database IDs while objective and cursor IDs stay strict',()=>{
+  const legacy='44444444-4444-4444-4444-444444444441';
+  assert.equal(parseAgentGoalsQuery({entityType:'tasks',entityId:legacy}).entityId,legacy);
+  assert.throws(()=>parseAgentGoalsQuery({entityType:'tasks',entityId:`${legacy},id.eq.anything`}));
+  assert.throws(()=>parseAgentGoalsQuery({entityType:'workspaces',entityId:legacy}));
+  assert.throws(()=>parseAgentGoalsQuery({objectiveId:legacy}));
+  const binding={kind:'operating-goals-v1',workspaceId:context.workspaceId,actorId:context.actorId,scopes:['read'],query:{limit:10}};
+  const cursor=sealAgentCursor({kind:'objectives',afterId:legacy},binding,options.secret);
+  assert.throws(()=>projectAgentGoals(ledger(),{cursor},context,options),/Invalid goal cursor/);
+});
 test('overview paginates objectives with context-bound cursors',()=>{
   const data=ledger();const first=projectAgentGoals(data,{scope:'personal',limit:'2'},context,options);
   assert.equal(first.objectives.length,2);assert.equal(first.page.hasMore,true);assert.equal(first.metrics.length,0);

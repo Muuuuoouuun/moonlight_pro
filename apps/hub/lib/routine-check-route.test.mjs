@@ -87,6 +87,11 @@ export function buildRoutineCheckRecord(payload) {
     checked_at: globalThis.__routineRouteTestState.checkedAt,
   };
 }
+export async function deleteSupabaseRecord(table, filters) {
+  const state = globalThis.__routineRouteTestState;
+  state.deleteCalls.push({ table, filters });
+  return state.deletePersistence || { persisted: true, reason: "ok" };
+}
 export async function insertSupabaseRecord(table, record, options = {}) {
   const state = globalThis.__routineRouteTestState;
   state.insertCalls.push({ table, record, options });
@@ -114,7 +119,7 @@ registerHooks({
 });
 
 globalThis.__routineRouteTestState = {};
-const { POST } = await import("../app/api/routine/check/route.js?durable-rhythm-route-test");
+const { POST, DELETE } = await import("../app/api/routine/check/route.js?durable-rhythm-route-test");
 
 beforeEach(() => {
   globalThis.__routineRouteTestState = {
@@ -130,12 +135,14 @@ beforeEach(() => {
     persistence: null,
     readCalls: [],
     insertCalls: [],
+    deleteCalls: [],
+    deletePersistence: null,
   };
 });
 
-function request(body = {}) {
+function request(body = {}, method = "POST") {
   return new Request("https://hub.example.com/api/routine/check", {
-    method: "POST",
+    method,
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -762,4 +769,85 @@ test("configured persistence failure is visibly unsaved", async () => {
   assert.equal(body.status, "error");
   assert.equal(body.retryable, true);
   assert.match(body.error, /database unavailable|http-500/);
+});
+
+// ── 오늘 체크 취소(DELETE) ─────────────────────────────────────────
+
+test("undo keeps the Hub write guard", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.guardResponse = new Response(JSON.stringify({ status: "forbidden" }), { status: 403 });
+  const response = await DELETE(request(validPayload(), "DELETE"));
+  assert.equal(response.status, 403);
+  assert.equal(state.deleteCalls.length, 0);
+});
+
+test("undo without Supabase is an honest preview and deletes nothing", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.configured = false;
+  const response = await DELETE(request(validPayload(), "DELETE"));
+  const body = await response.json();
+  assert.equal(response.status, 202);
+  assert.equal(body.status, "preview");
+  assert.equal(state.deleteCalls.length, 0);
+});
+
+test("undo deletes only today's keyed done row inside the workspace", async () => {
+  const state = globalThis.__routineRouteTestState;
+  // POST로 오늘 키를 먼저 얻는다 — 같은 튜플·같은 현지 날짜면 같은 키여야 한다.
+  await POST(request(validPayload()));
+  const todayKey = state.insertCalls[0].record.idempotency_key;
+  state.applyRoutineFilters = true;
+  state.checks = [
+    { id: "check-today", project_id: PROJECT_ID, status: "done", idempotency_key: todayKey, meta: { ritual_key: "daily-focus" } },
+    { id: "check-other", project_id: PROJECT_ID, status: "done", idempotency_key: "routine-check:v1:other", meta: { ritual_key: "daily-focus" } },
+  ];
+
+  const response = await DELETE(request({ projectId: PROJECT_ID, ritualKey: "daily-focus", checkType: "morning" }, "DELETE"));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "saved");
+  assert.equal(body.deleted, 1);
+  assert.equal(body.dateKey, "2026-07-17");
+  assert.equal(state.deleteCalls.length, 1);
+  assert.deepEqual(state.deleteCalls[0].filters, [
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
+    ["id", "in.(check-today)"],
+    ["status", "eq.done"],
+  ]);
+});
+
+test("undo with nothing checked today is not-found and deletes nothing", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.applyRoutineFilters = true;
+  state.checks = [];
+  const response = await DELETE(request(validPayload(), "DELETE"));
+  const body = await response.json();
+  assert.equal(response.status, 404);
+  assert.equal(body.status, "not-found");
+  assert.equal(state.deleteCalls.length, 0);
+});
+
+test("undo read failure is an explicit error, never a silent delete", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.checks = null;
+  const response = await DELETE(request(validPayload(), "DELETE"));
+  assert.equal(response.status, 502);
+  assert.equal(state.deleteCalls.length, 0);
+});
+
+test("undo persistence failure is visibly unsaved", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.checks = [{ id: "check-today", status: "done", idempotency_key: "k", meta: { ritual_key: "daily-focus" } }];
+  state.deletePersistence = { persisted: false, reason: "http-error", detail: "boom" };
+  const response = await DELETE(request(validPayload(), "DELETE"));
+  const body = await response.json();
+  assert.equal(response.status, 502);
+  assert.equal(body.status, "error");
+  assert.equal(body.retryable, true);
+});
+
+test("undo validates identity like a check-in", async () => {
+  const response = await DELETE(request({ ritualKey: "", checkType: "morning" }, "DELETE"));
+  assert.equal(response.status, 400);
 });

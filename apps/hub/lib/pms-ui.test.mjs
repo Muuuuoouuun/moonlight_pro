@@ -233,13 +233,16 @@ test("builds a dirty-only project patch without materializing display fallbacks"
 });
 
 test("opening a table detail preserves the current view and filter query", () => {
-  const params = pmsUi.mergeProjectDetailQuery("view=table&scope=personal&keep=yes&new=project&task=old", "project-durable");
+  const params = pmsUi.mergeProjectDetailQuery("view=table&scope=personal&keep=yes&new=project&task=old&focus=overview&item=item-1&check=check-1", "project-durable");
   assert.equal(params.get("view"), "table");
   assert.equal(params.get("scope"), "personal");
   assert.equal(params.get("keep"), "yes");
   assert.equal(params.get("project"), "project-durable");
   assert.equal(params.has("new"), false);
   assert.equal(params.has("task"), false);
+  assert.equal(params.has("focus"), false);
+  assert.equal(params.has("item"), false);
+  assert.equal(params.has("check"), false);
 });
 
 test("merges the durable project selection into the canonical list query", () => {

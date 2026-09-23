@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-23 (워크트리 통합 — 세 축 1·2주차, CRM 0단계·연락 기록창 전역화·넛지 N1~N3, Rhythm 탭 재설계, 정체 판정·Deals Lost 컬럼, MCP 연결 키트, Home 시간표 일정 완료, 사이드바 아이콘 복원 + 운영 DB 마이그레이션 0001·0034·0037·0038·0039~0043 적용, `db:check` 함수 본문 버전 검사. 이전 정리: 2026-09-22 Office 역할 지침·개별 회의 호출·설정 보존·UI QA, 의미 품질 인증은 대기)
+> 마지막 정리: 2026-09-23 (main·생활 루틴 통합과 운영 DB 0043 적용 기록 반영. Office v16 의미 품질 인증 대기)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -59,27 +59,32 @@
 | 개인 매출 30일 로드맵 | 출시, 디자인 QA `blocked` | `2026-08-31-personal-revenue-roadmap.md`, `68517ec`, 루트 `design-qa.md`. 2026-09-23 통합: 정체 판정 `STALLED_DAYS` 단일 상수화·정체 스캔 `won`→`closing` 교정·Deals 칸반 Lost 컬럼(`2aa1d21`·`da146bb`) |
 | 문의 수집·알림 | 코드 구현, 운영 연결 대기 | Gmail 감지·안전한 웹훅·문의 내역·미확인 알림. [설정](inquiry-integration-setup.md), [검증](superpowers/plans/2026-09-13-unified-inquiries.md) |
 | 업무 안의 Eevee Office E0~E4 | 구현·로컬 검증 / 운영 DB 적용(2026-09-23) | 요청 중심 Office·입력 보존, 주간 정리·고객 답장, Threads 님피아 지침, 요청 보관·복구, 같은 범위 프로젝트의 할 일 연결, 작업·실행 보기. [구현 기록](superpowers/plans/2026-09-21-eevee-office-embedded-workflow.md). 0038과 일시 실패 재시도 수정 0040(`20260922_0040_office_apply_transient_retry.sql`)을 2026-09-23 운영 DB에 적용했다(`db:check` PASS). 배포·보관 정리 예약은 미실행. 후속 실제 모델 평가는 아래 역할 품질 작업에서 진행 중 |
-| Office 역할 품질·토론 조절 | 구현·UI 로컬 검증 / 의미 품질 인증 대기 | [9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md), 같은 모델의 역할별 개별 호출·공개 반론·주관 종합, 상황/강도/관점 비중 설정과 요청 스냅샷·복구를 구현했다. source review는 원문에 기반한 같은 모델의 편집 보조이며 독립 검증이 아니다. Office UI 15개 시나리오와 기존 자문·진행률 18개 체크 완료. [실제 평가](evaluations/2026-09-22-office-agent-quality/README.md)는 최신 `scope-v1` 전체 39건이 모두 생성됐고 독립 심사 총점은 57~71점이다. 각 축·치명 오류·설정 대조를 포함한 최종 통과는 0/9명이며 품질 목표는 미달이다. 운영 배포를 뜻하지 않는다. [구현·QA 근거와 남은 평가](superpowers/plans/2026-09-22-office-agent-quality.md) |
-| Supabase 서울 리전 이관 | 이관 완료(2026-09-20) · Vercel 환경 변수 교체 대기 | `rwqefdxalmbrkybxqwxj`(싱가포르 `ap-southeast-1`) → `ncgpnqfulnlshegalmbd`(서울 `ap-northeast-2`). 테이블 71·1368행 **전부 행 수 일치**, `npm run db:check` 7/7 PASS, 앱 읽기(`status: live`)·쓰기 왕복 확인, REST 지연 150ms→57ms. 구 싱가포르 프로젝트는 롤백 경로로 **삭제하지 않고 보존**. 툴킷은 `npm run db:move-region`, 런북·함정(함수 실행 권한 회귀 등)은 [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md), 커밋 `fa1757e`. **Vercel 환경 변수는 아직 구 싱가포르 값이므로 배포 전 교체가 필요하다** |
+| Office 역할 품질·토론 조절 | 구현·UI 로컬 검증 / 의미 품질 인증 대기 | [9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md), 같은 모델의 역할별 개별 호출·공개 반론·주관 종합, 상황/강도/관점 비중 설정과 요청 스냅샷·복구를 구현했다. source review는 원문 인용의 존재 확인이며 의미 검증이나 독립 검증이 아니다. Office UI 15개 시나리오와 기존 자문·진행률 18개 체크 완료. [완전 독립 심사](evaluations/2026-09-22-office-agent-quality/README.md)의 총점 57~71점·최종 통과 0/9명은 **v11~v16 이전** 실행 결과다. 후속 [평가 전용 CLI 전체 실행](evaluations/2026-09-22-office-agent-quality/diagnostics/codex-async-core/README.md)은 33/39건 생성·미채점이며 운영 경로에 연결되지 않았다. 현재 v16도 미채점이다. [원인 평가·재기획](superpowers/plans/2026-09-23-office-agent-quality-replan.md)은 DRAFT·권장안이며 품질 목표와 운영 적용은 아직 대기다. [구현·QA 근거](superpowers/plans/2026-09-22-office-agent-quality.md) |
+| Supabase 서울 리전 이관 | 이관 완료(2026-09-20) · Vercel 환경 변수 구성 대기 | `rwqefdxalmbrkybxqwxj`(싱가포르 `ap-southeast-1`) → `ncgpnqfulnlshegalmbd`(서울 `ap-northeast-2`). 테이블 71·1368행 **전부 행 수 일치**, `npm run db:check` 7/7 PASS, 앱 읽기(`status: live`)·쓰기 왕복 확인, REST 지연 150ms→57ms. 구 싱가포르 프로젝트는 롤백 경로로 **삭제하지 않고 보존**. 툴킷은 `npm run db:move-region`, 런북·함정(함수 실행 권한 회귀 등)은 [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md), 커밋 `fa1757e`. **Vercel Project·Shared 환경 변수는 2026-09-20 확인 시 0개로, 배포 전에 서울 프로젝트 값으로 처음부터 구성해야 한다** |
 | 세 축·Action KPI 기획 1·2주차(오늘 Top 3 · 주간 집계 교정 · 크론 가시성 · 딜 이동 기록 · 저녁 리뷰 두 줄) | 구현·로컬 검증 완료(2026-09-21) · 운영 배포 별도 | 브랜치 `claude/workflow-os-a-week1` 커밋 `e913338`·`3d69283`·`8df4e80`(+ `34bb180` 체리픽). 새 테이블·마이그레이션 0. [구현 기록](superpowers/plans/2026-09-21-workflow-os-a-week1-2.md). **2026-09-23 통합(`claude/integrate-0923`)**: 오늘 3개는 `today-focus-split`(`e0e5c80`)과 한 계약으로 합침(`focus` 토글·409, `focus_dates` 배열은 서버 소유). **텔레그램 평문 캡처는 통합에서 제외** — 웹훅 자체가 운영자 결정 Q2(2026-09-11, `7a6fecf`)로 삭제돼 있어 되살리려면 운영자 재결정이 필요하다. 초안 모드는 `ai-draft-modes.ts` 하나로(옛 `mentor-draft.ts` 흡수) |
 | 빠른 입력 전역화 | 구현 완료(2026-09-20) | 캡처 폼을 `daily-brief.jsx` 내부에서 `apps/hub/components/hub/quick-capture.jsx`로 분리해 단일 정본화(`layout="inline"`/`"compact"`). 전역 `C` 단축키(입력 요소 안·팔레트 열림이면 무시)와 ⌘K 팔레트의 `빠른 입력` 액션, 치트시트 등록까지 포함 — DESIGN.md §8.1 생성 단축키 계약을 따른다. 커밋 `6423822` |
 | 목업 데이터 가드레일 | 구현 완료(2026-09-20) | `scripts/no-mock-data.test.mjs`가 저장소 전체에서 목업 식별자(`MOCK_`·`DEMO_`·`SAMPLE_`·`DUMMY_`·`FAKE_`·fixtures 계열) 선언과 업무 레코드형 하드코딩 배열을 막는다. 감사 시점의 저장소에는 가짜 업무 데이터가 0건이었고 없던 것은 강제 장치였다. 운영자 확정: 더미 데이터는 **로컬 전용 Supabase 프로젝트에만** 두고 코드에는 넣지 않는다 — 그 프로젝트는 free 플랜 활성 2개 상한 때문에 아직 미생성이다. 커밋 `4516e49` |
 | CRM 0단계(0a·0b·0c) · 연락 기록창 전역화 · 넛지 N1~N3 | 구현·로컬 검증 완료(2026-09-23 통합) · 운영 배포 별도 | 연락 기록의 단일 원천을 `crm_activities`로 통일(`282572a`), 고객 연락 행의 죽은 버킷·레일·클릭·반응 복구와 약속 기준 2단 정렬(`1a67949`), 집중 고객을 `won` 전용에서 실제 약속 기준으로(`d4b57b5`·보강 `1879595`), 어디서든 열리는 공용 연락 기록창(`6530533`), 캘린더 접점·넛지 엔진과 읽기·억제 계층(`cae4944`·`0f63bf6`·`8cf3809`), 병합 검증 수리 `eadd97e`. 발신·메모 채널의 무반응 기록을 살리는 `20260923_0042_contact_outcome_reactionless.sql`은 2026-09-23 운영 DB에 적용했다(`db:check` PASS — 0018이 빈 반응을 `invalid-reaction`으로 거절해 "카톡 보냄, 아직 답 없음" 같은 기록이 전부 실패하던 것을 해소). 파일 단위 실행 계획과 잔여 범위는 [`plans/2026-09-21-crm-tab-develop-phase0-1.md`](superpowers/plans/2026-09-21-crm-tab-develop-phase0-1.md) — N3 나머지 표시 2곳과 N4는 대기 |
 | Rhythm 탭 재설계 | 구현·로컬 검증 완료(2026-09-23 통합) · 운영 배포 별도 | 하드코딩 탭 2개를 제거하고 `computeWeeklyRhythmMatrix` 실데이터로 배선, 루틴 카테고리·주간 목표 필드, Futura 어휘 리스킨(`0a44c6c`·병합 `b7ddf9a`·수리 `0103f9f`). Futura 범위 확장은 DESIGN.md §15 2026-09-23 행(`recommended`)에 기록 |
+| 생활 루틴 `오늘의 리듬` | 구현·자동 테스트 통과 / 실사용 화면 검증 대기(2026-09-23) · 운영 배포 별도 | 할 일과 생활 루틴 체크를 분리한 오늘 전용 화면·저장/취소 API(`505394c`), 호출처가 없어진 기존 Visualizer 제거(`2512f21`). 2026-09-23 병합에서 순수 규칙·라우트 테스트 66건이 통과했다. Futura 범위와 세부 화면은 DESIGN.md §15의 `recommended` 상태이며 운영자 화면 검토 전이다. |
 
 2026-09-23 안정화에서 오늘 Top 3의 동시 선택 상한을 위한 `20260923_0043_task_focus_cap.sql`을 추가하고 로컬 PostgreSQL로 검증했다. 같은 날 서울 운영 DB(`ncgpnqfulnlshegalmbd`)에 해당 파일만 적용했으며 `npm run db:check` 전 항목이 통과했다. 트리거는 활성 상태이고 함수 실행 권한은 `service_role`에만 있다. 기존 작업 행은 변경하지 않았다.
 
+2026-09-23 DB 적용 점검에서 현재 기능 20개와 `notes`→`journal_entries` 메모 2건의 이관 완료를 확인했다. 추가 인덱스는 작업 30행 규모와 기존 workspace 인덱스 실행 계획에서 근거가 없어 만들지 않았다. `20260923_0044_migration_history.sql`만 서울 운영 DB에 적용해 비공개 `moonlight_ops` 스키마와 원자적 이력 실행 함수를 만들었다. `db:check`는 기존 기능 20개와 새 이력·RLS·함수 본문·권한 검사를 모두 통과했고, 재실행은 객체 확인 후 건너뛰었다. 테스트용 트랜잭션은 롤백되어 업무 행과 이력 행이 늘지 않았다. 이후 새 SQL은 전체 파일명·SHA256으로 기록한다. 과거 파일은 적용 기록으로 임의 채우지 않았다.
+
 Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 102/102이며 Phase 1A 완료를 뜻한다. Phase 1B·1C는 아직 남아 있으므로 Phase 1 전체 완료로 해석하지 않는다.
 
-2026-09-23 통합 및 안정화 후 루트 `npm test`는 **2342 tests · 통과 2331 · 실패 0 · 건너뜀 11**이다(건너뜀은 테스트 DB 연결이 있어야 도는 postgres 테스트). 이 줄을 기준선으로 쓰고, 이전 기록의 "1433 tests"·"692/692 통과, 82파일"은 낡았다. CLAUDE.md·AGENTS.md의 테스트 줄도 같은 값이어야 한다. 아래는 그 숫자에 이르기까지의 복구 경위다 — 2026-09-20에 **아예 돌지 않던 테스트 55건을 복구**해 1378 → 1433이 됐고, 원인 두 가지 모두 소스와 무관했다. (1) postgres를 띄우는 8파일이 macOS에서 `LC_ALL` 없이 기동을 거부해 discovery·daily review·inquiry·agent command의 **원자 RPC 검증이 통째로 미실행**이었다. (2) 스윕 테스트 3개(`motion`·`focus-ring`·`button-hover`)가 `.next` 정확일치로만 걸러 `.next.qa`·`.next.ship-*` 같은 빌드 잔재 디렉터리의 미니파이 CSS를 새 위반으로 오인했다. 커밋 `0cc7f18`.
+2026-09-23 통합 및 안정화 후 루트 `npm test`는 **2380 tests · 통과 2369 · 실패 0 · 건너뜀 11**이다(건너뜀은 테스트 DB 연결이 있어야 도는 postgres 테스트). 이 줄을 기준선으로 쓰고, 이전 기록의 "1433 tests"·"692/692 통과, 82파일"은 낡았다. CLAUDE.md·AGENTS.md의 테스트 줄도 같은 값이어야 한다. 아래는 그 숫자에 이르기까지의 복구 경위다 — 2026-09-20에 **아예 돌지 않던 테스트 55건을 복구**해 1378 → 1433이 됐고, 원인 두 가지 모두 소스와 무관했다. (1) postgres를 띄우는 8파일이 macOS에서 `LC_ALL` 없이 기동을 거부해 discovery·daily review·inquiry·agent command의 **원자 RPC 검증이 통째로 미실행**이었다. (2) 스윕 테스트 3개(`motion`·`focus-ring`·`button-hover`)가 `.next` 정확일치로만 걸러 `.next.qa`·`.next.ship-*` 같은 빌드 잔재 디렉터리의 미니파이 CSS를 새 위반으로 오인했다. 커밋 `0cc7f18`.
 
-파일 범위(2026-09-23 실측): 저장소의 `*.test.mjs`는 **322파일**이고 **전부 루트 글롭 안**이다(글롭 밖 0건). 한때 글롭 밖이던 `apps/hub/app/api/hub/content/transform/route.test.mjs`·`.../workflow/route.test.mjs` 2파일은 2026-09-20에 `apps/hub/app/**` 패턴이 추가되면서(`cc1b5c9`) 해소됐다. 그 전 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장해 이전에 CI 밖이던 20파일과 실패 4건을 해소한 것도 사실이다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬의 범위는 어긋나지 않는다.
+파일 범위(2026-09-23 실측): 저장소의 `*.test.mjs`는 **327파일**이고 **전부 루트 글롭 안**이다(글롭 밖 0건). 한때 글롭 밖이던 `apps/hub/app/api/hub/content/transform/route.test.mjs`·`.../workflow/route.test.mjs` 2파일은 2026-09-20에 `apps/hub/app/**` 패턴이 추가되면서(`cc1b5c9`) 해소됐다. 그 전 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장해 이전에 CI 밖이던 20파일과 실패 4건을 해소한 것도 사실이다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬의 범위는 어긋나지 않는다.
 
 사이드바 앵커는 코드(`hub-nav.js` 8 primary + 2 utility)·`hub-nav.test.mjs`·07-15 스펙 §3.1이 모두 일치한다(2026-09-04 주석·스펙 갱신으로 해소).
 
 ## 4. 현재 문서
 
 ### 제품·운영 정본
+
+- [회의·녹음·메모에서 실행까지](superpowers/specs/2026-09-23-meeting-to-action-orchestration-design.md) — **DRAFT · 권장 · 미구현(2026-09-23)**. 현행 메모/멀티모달/Office/MCP/Codex의 실제 연결 상태를 점검하고, 근거 검토→선택 저장→역할 배분→실행 영수증의 단계별 설계를 제안한다. 운영자 프로필의 직접 녹음·전사 입력, 30일 원본 삭제, 수동 분석·비용 표시 요구는 유지한다.
 
 - [Eevee Office — 9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md) — **실행 지침 구현 · 의미 품질 인증 대기(2026-09-22)**. `role-cards.ts`에서 생성한 읽기용 사본으로 2026-09-21 역할·말투·운영 품질 설계를 구체화한다. 실제 호출·토론 설정·UI 스냅샷·같은 모델의 source review 경계·완료한 UI QA는 [역할 품질 구현 및 검증 계획](superpowers/plans/2026-09-22-office-agent-quality.md)을 따른다. 지침·형식 검사·화면 QA 통과를 역할별 의미 점수로 환산하지 않는다. 아래 업무 내장 설계의 권한·기록·승인·보관 경계는 유지한다.
 
@@ -115,6 +120,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **프로젝트 · PMS (2026-09-13 실행 백로그·하위 아이템 보강)**
 
+- [`superpowers/specs/2026-09-23-project-direct-workflow-redesign.md`](superpowers/specs/2026-09-23-project-direct-workflow-redesign.md) — **2026-09-23 직접 실행 UI·진척 게이지 후속 구현·로컬 검증**. 프로젝트 안에서 할 일·세부 체크를 바로 입력하고 Enter로 추가한다. 마일스톤·작업 묶음은 선택 사항이며, 결과·완료 기준의 긴 필드는 접는다. 초안·요청 ID 유지와 버전 비교로 재시도를 처리한다. 아래 개요 스펙의 하위 항목 우선 배치를 대체하며 진척의 근거·시점은 유지한다. 선택 프로젝트 게이지는 구간별 색·그라데이션·1회 가속 반짝임을 쓰되 실제 작업 속도 판정은 아니다. 서버 완료 검증 완화는 미구현 제안이다.
+- [`superpowers/specs/2026-09-23-project-operator-experience-and-write-trust-design.md`](superpowers/specs/2026-09-23-project-operator-experience-and-write-trust-design.md) — **DRAFT · 평가/권장, 진척 근거 진행 바 UI만 구현·로컬 검증**. 할 일·요약·고객에서 프로젝트로 진입해 급한 하위 항목과 체크리스트를 처리하고, 진행/완료 프로젝트를 고객과 함께 월 평가하는 흐름을 구체화한다. 진척 근거 외 모바일 우선순위·보관 영향·저장 멱등성은 여전히 권장안이며 기존 완료 검증·PMS 저장 모델은 유지한다.
 - [`superpowers/plans/2026-09-13-pms-task-checklists.md`](superpowers/plans/2026-09-13-pms-task-checklists.md) — **구현·로컬 검증 완료**. 하위 아이템 상세와 체크리스트 기반 진척, 항목별 메모·정렬·저장·충돌 선택. `tasks.meta.checklist`를 사용하며 작업 상태와 체크리스트 완료율은 별도로 유지한다.
 
 - [`superpowers/plans/2026-09-13-pms-execution.md`](superpowers/plans/2026-09-13-pms-execution.md) — **구현·로컬 검증 완료**. 기존 tasks 기록의 실행 백로그, 공통 필터, 일괄 변경, 다음 행동, 정확한 버전 비교와 회사/개인 범위 구분. 새 스키마 없이 개인 운영 방향을 유지한다.
@@ -145,6 +152,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 **하루 리뷰 (R0)**
 
 - [`superpowers/specs/2026-09-12-daily-review-and-council-design.md`](superpowers/specs/2026-09-12-daily-review-and-council-design.md) — **R0 승인·구현 / 후속 단계 DRAFT**. 내 작업 → 하루 리뷰에서 에너지·당일 목표 진척·메모를 날짜별 저장·수정한다. 2026-09-13 운영 DB 적용 및 실제 API 연결 확인 완료. [구현·검증·적용 안내](superpowers/plans/2026-09-12-daily-review-r0.md). Council과 주간 리포트는 후속 제안이다.
+- [`superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md`](superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md) — **DRAFT · 전부 권장**. R0 입력·원장은 그대로 두고 진입(저녁 cue·어디서든 팝업)·입력(2단계 경로·오늘 3개 권장값)·되돌아보기(월 캘린더·이번 주 k/5)·회복(어제 메우기) 4층을 제안. Phase 1~3 마이그레이션 0. 운영자 결정 후보 Q-DR1~5.
 
 **콘텐츠 제작 (2026-09-12)**
 
@@ -190,7 +198,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`supabase-first-operating-ledger.md`](supabase-first-operating-ledger.md)
 - [`supabase-db-strategy.md`](supabase-db-strategy.md)
-- [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md) — **완료(2026-09-20) 실행 기록과 런북**. 싱가포르 → 서울 리전 이관의 결과 수치, 마이그레이션 재생 대신 덤프 복제를 택한 이유, 연결 문자열(Session pooler) 주의, 실행 중 부딪힌 4가지, 그리고 가장 위험했던 **함수 실행 권한 회귀**(복원된 RPC 29개 중 25개가 anon 실행 가능으로 태어남 → `reconcile-privileges`가 자동 교정). 이관 후 남은 일(Vercel 환경 변수 교체, 로컬 전용 개발 DB 분리, 덤프 정리)도 이 문서가 정본이다. 명령은 `npm run db:move-region`
+- [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md) — **완료(2026-09-20) 실행 기록과 런북**. 싱가포르 → 서울 리전 이관의 결과 수치, 마이그레이션 재생 대신 덤프 복제를 택한 이유, 연결 문자열(Session pooler) 주의, 실행 중 부딪힌 4가지, 그리고 가장 위험했던 **함수 실행 권한 회귀**(복원된 RPC 29개 중 25개가 anon 실행 가능으로 태어남 → `reconcile-privileges`가 자동 교정). 이관 후 남은 일(Vercel 환경 변수 구성, 로컬 전용 개발 DB 분리, 덤프 정리)도 이 문서가 정본이다. 명령은 `npm run db:move-region`
 - [`integration-inventory.md`](integration-inventory.md)
 - [`projects-connection-inventory.md`](projects-connection-inventory.md)
 

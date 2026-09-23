@@ -90,6 +90,18 @@ test("portfolio due-soon metric uses today through the next six calendar days", 
   );
 });
 
+test("acknowledged old project deadlines stop counting as risk while blocked status remains risk", () => {
+  const today = new Date(2026, 8, 23, 12);
+  const dueAt = new Date(2026, 4, 8, 12).toISOString();
+  const projects = [
+    { statusKey: "active", dueAt, deadlineAlertSuppressed: true },
+    { statusKey: "blocked", dueAt, deadlineAlertSuppressed: true },
+  ];
+  const metrics = pmsMetrics.buildProjectPortfolioMetrics(projects, { today, sourceState: "live" });
+  assert.equal(metrics.blockedOrOverdue, 1);
+  assert.equal(projects[0].dueAt, dueAt);
+});
+
 test("empty live portfolio returns unavailable cells instead of fake zeroes", () => {
   assert.ok(pmsMetrics, "project-pms-metrics.js must expose executable calculations");
   assert.deepEqual(pmsMetrics.buildProjectPortfolioMetrics([], { sourceState: "live" }), {

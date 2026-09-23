@@ -63,6 +63,8 @@ const BUCKET_RANK = { focus: 0, overdue: 1, today: 2, week: 3, later: 4 };
 const BUCKET_OPTIONS = [{ key: 'all', label: '전체 기한' }, ...BUCKETS];
 // 서버 bucket 키가 넷 밖이면(방어) '나중'으로 흡수 — 그룹/카운트가 항목을 잃지 않게.
 const normalizeBucket = (item) => (BUCKET_RANK[item.bucket] != null ? item.bucket : 'later');
+// 오늘 3개는 원래 기한을 보존하지만, 명시적으로 해제한 과거 알림은 다시 경고하지 않는다.
+const visibleDueBucket = (item) => item.deadlineAlertSuppressed ? 'later' : (item.dueBucket || item.bucket);
 
 // 시그널 스트립 타일 — 클릭하면 리스트 렌즈 + 해당 기한 필터 토글. '나중'은 신호가
 // 아니므로 타일에서 제외 (기한 세그먼트 토글에는 그대로 있다).
@@ -223,8 +225,8 @@ function useAttentionLedger() {
 // `selected` marks the row whose detail panel is open. `hideProject` suppresses the
 // project label inside a project accordion (the header already names it).
 function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded, onDefer, mutedEntry, onMute, onUnmute, onToggleFocus, focusFull }) {
-  // 기한 색·스트라이프는 기한 버킷(dueBucket)을 따른다 — 오늘 3개로 고른 행도 지난 기한은 빨갛다.
-  const dueBucket = item.dueBucket || item.bucket;
+  // 오늘 3개는 원래 기한을 보이되, 해제한 과거 기한은 경고색을 되살리지 않는다.
+  const dueBucket = visibleDueBucket(item);
   // 우선순위 정렬일 때는 meta 자리에 정렬 근거(reason)를 보여준다 — 첫 화면 요구사항
   // "지금 해야 하는 이유"(profile §4)를 행 높이 증가 없이 전달.
   const projectLabel = !hideProject && item.lane === 'task' ? item.projectName || '' : '';
@@ -687,7 +689,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
       label: '기한',
       value: item.whenLabel,
       mono: true,
-      tone: (item.dueBucket || item.bucket) === 'overdue' ? 'var(--danger)' : undefined,
+      tone: visibleDueBucket(item) === 'overdue' ? 'var(--danger)' : undefined,
     },
     item.lane === 'task' && item.focusToday && { label: '오늘 3개', value: '고름' },
     item.lane === 'task' && {
@@ -769,7 +771,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
                   size="sm"
                   icon="projects"
                   style={{ flex: 1 }}
-                  onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(item.projectId)}`)}
+                  onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(item.projectId)}${item.entityId ? `&item=${encodeURIComponent(item.entityId)}` : '&focus=overview'}`)}
                 >
                   프로젝트에서 열기
                 </Button>
@@ -1155,7 +1157,7 @@ export function MyWork({ onNavigate }) {
       delete next[item.id];
       return next;
     });
-    setItemPatches((p) => ({ ...p, [item.id]: { ...(p[item.id] || {}), bucket: on ? 'focus' : (item.dueBucket || 'later'), focusToday: on } }));
+    setItemPatches((p) => ({ ...p, [item.id]: { ...(p[item.id] || {}), bucket: on ? 'focus' : visibleDueBucket(item), focusToday: on } }));
     const label = on ? '오늘 3개에 넣음' : '오늘 3개에서 뺌';
     setNotice({ tone: 'ok', label });
     try {
@@ -2172,7 +2174,7 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
   // 기한 버킷은 dueBucket이 정본 — '오늘 3개'로 고른 할 일은 bucket이 'focus'로 올라가므로
   // i.bucket만 보면 지난 기한 항목이 주간 렌즈에서 통째로 사라진다(일자별 목록은 앞으로 7일만
   // 담는다). deal/event 레인엔 dueBucket이 없어 폴백이 필요하다.
-  const overdue = items.filter((i) => (i.dueBucket || i.bucket) === 'overdue');
+  const overdue = items.filter((i) => visibleDueBucket(i) === 'overdue');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>

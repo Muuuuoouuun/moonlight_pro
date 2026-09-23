@@ -1,7 +1,7 @@
 // db:check contract. A feature is ready only when every check below passes.
 //   tables / functions   the object exists; tables have RLS on, functions run for service_role only
-// Optional checks that tell create-or-replace versions apart (there is no applied-migrations table;
-// migration filenames are the identity, so a redefined function or constraint must be read back):
+// Optional checks that tell create-or-replace versions apart (historical files
+// predate the 0044 history table, so their function/constraint state needs read-back):
 //   bodyIncludes       [[functionSignature, substring]]        pg_proc.prosrc contains substring
 //   bodyExcludes       [[functionSignature, substring]]        the function exists and its body lacks substring
 //   constraintIncludes [[table, constraintName, substring]]    pg_get_constraintdef contains substring

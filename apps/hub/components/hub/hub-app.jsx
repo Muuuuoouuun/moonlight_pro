@@ -11,6 +11,7 @@ import { goalHref } from "@/lib/goal-client";
 
 import { Button, Skeleton } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
+import { SidebarResizer } from "./sidebar-resizer";
 import { TopBar } from "./hub-topbar";
 import { ToastProvider } from "./hub-toast";
 import { useInquiryNotifications } from './inquiry-notifications';
@@ -38,6 +39,7 @@ import {
 } from "./hub-nav";
 import {
   DEFAULT_HUB_PREFERENCES,
+  clampSidebarWidth,
   persistHubPreference,
   readHubPreferences,
   watchHubTheme,
@@ -294,6 +296,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     || (queryScope ? normalizeScope(queryScope) : null);
 
   const [collapsed, setCollapsed] = React.useState(DEFAULT_HUB_PREFERENCES.sidebarCollapsed);
+  const [sidebarWidth, setSidebarWidth] = React.useState(DEFAULT_HUB_PREFERENCES.sidebarWidth);
   const [navOpen, setNavOpen] = React.useState(false);
   const [navScope, setNavScope] = React.useState(routeScope || 'all');
   // SSR and the first client render must use the same values. Persisted browser
@@ -312,6 +315,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
   const rootRef = React.useRef(null);
+  const shellRef = React.useRef(null);
   const menuButtonRef = React.useRef(null);
   const mobileCloseButtonRef = React.useRef(null);
   const mainRef = React.useRef(null);
@@ -324,6 +328,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     const stored = readHubPreferences(storage);
     setThemePreference(stored.theme);
     setCollapsed(stored.sidebarCollapsed);
+    setSidebarWidth(stored.sidebarWidth);
   }, []);
 
   React.useEffect(() => watchHubTheme(themePreference, setTheme), [themePreference]);
@@ -335,6 +340,14 @@ export function HubApp({ memoDraftContext = "preview" }) {
     try { storage = window.localStorage; } catch { /* session-only preference */ }
     persistHubPreference(storage, "sidebarCollapsed", next);
   }, [collapsed]);
+
+  const commitSidebarWidth = React.useCallback((next) => {
+    const value = clampSidebarWidth(next);
+    setSidebarWidth(value);
+    let storage = null;
+    try { storage = window.localStorage; } catch { /* session-only preference */ }
+    persistHubPreference(storage, "sidebarWidth", value);
+  }, []);
 
   const updateTheme = React.useCallback((nextTheme) => {
     setThemePreference(nextTheme);
@@ -589,7 +602,8 @@ export function HubApp({ memoDraftContext = "preview" }) {
       <ToastProvider>
         <OfficeSessionProvider key={memoDraftContext}>
           <OfficeWorkflowSessionProvider>
-        <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
+        {/* --hub-sidebar-w는 펼친 사이드바 폭이다. 드래그 중에는 SidebarResizer가 이 값만 직접 바꾼다. */}
+        <div ref={shellRef} className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'} style={{ '--hub-sidebar-w': `${sidebarWidth}px` }}>
           <div
             className="hub-mobile-backdrop"
             aria-hidden="true"
@@ -612,6 +626,9 @@ export function HubApp({ memoDraftContext = "preview" }) {
             onMobileClose={closeMobileNavigation}
             mobileCloseButtonRef={mobileCloseButtonRef}
           />
+          {!sidebarCollapsed && !isMobileViewport && (
+            <SidebarResizer width={sidebarWidth} shellRef={shellRef} onCommit={commitSidebarWidth} />
+          )}
           <div className="hub-main">
             <TopBar
               inquiryNotifications={inquiryNotifications}

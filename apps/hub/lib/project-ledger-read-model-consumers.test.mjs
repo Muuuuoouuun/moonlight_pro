@@ -24,6 +24,9 @@ export function cadenceStatusString() { return "unknown"; }
 const workspaceMapStub = `
 export function filterBrandsByWorkspace(brands) { return brands || []; }
 `;
+const deadlineStub = `
+export async function getDeadlineAlertSettings() { return { status: "live", reset: null }; }
+`;
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -39,6 +42,7 @@ registerHooks({
       "@/lib/sales-os/agent-runs": runsStub,
       "@/lib/sales-os/context-schema": contextSchemaStub,
       "@/components/hub/workspace-map": workspaceMapStub,
+      "./deadline-alert-settings.js": deadlineStub,
     };
     if (stubs[specifier]) {
       return { url: `data:text/javascript,${encodeURIComponent(stubs[specifier])}`, shortCircuit: true };

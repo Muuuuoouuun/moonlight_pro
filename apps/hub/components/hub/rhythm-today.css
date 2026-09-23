@@ -1,0 +1,315 @@
+/* 오늘의 리듬 — rhythm-today.jsx.
+ * 색은 토큰만(§5): 완료는 --fg 채움 + 체크 글리프 + 낮춘 텍스트, 초록 없음(§5.3 lifecycle done).
+ * "지금" 시간대만 --accent(현재 위치 — §5.2가 허용하는 유일한 accent 의미).
+ * 모션은 §9 토큰만: 체크 채움·그리기 --dur-enter, 링 닫힘 --dur-celebrate(1회, 반복 없음).
+ * reduced-motion은 파일 끝 블록이 이 표면의 전이·애니메이션을 전부 끈다. */
+
+/* ── 히어로: 하루 링 + 한 줄 요약 ───────────────────────────── */
+.hub-app .hub-rhythm-hero {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.hub-app .hub-rhythm-hero__text { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.hub-app .hub-rhythm-hero__headline {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--fg);
+}
+.hub-app .hub-rhythm-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+.hub-app .hub-rhythm-hero__stat { display: inline-flex; align-items: center; gap: 6px; }
+.hub-app .hub-rhythm-hero__faint { color: var(--fg-dim); }
+.hub-app .hub-rhythm-hero[data-celebrate="true"][data-complete="true"] {
+  animation: hubRhythmSettle var(--dur-celebrate) var(--ease-hub) both;
+}
+
+.hub-app .hub-rhythm-ring {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+}
+.hub-app .hub-rhythm-ring__track { stroke: var(--line); }
+.hub-app .hub-rhythm-ring__value {
+  stroke: var(--fg-muted);
+  transition: stroke-dashoffset var(--dur-celebrate) var(--ease-hub), stroke var(--dur-enter) var(--ease-hub);
+}
+.hub-app .hub-rhythm-ring[data-complete="true"] .hub-rhythm-ring__value { stroke: var(--fg); }
+.hub-app .hub-rhythm-ring__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hub-app .hub-rhythm-ring__count { font-size: 26px; font-weight: 500; color: var(--fg); }
+.hub-app .hub-rhythm-ring__of { font-size: 14px; color: var(--fg-dim); }
+.hub-app .hub-rhythm-ring__check path {
+  stroke: var(--fg);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.hub-app .hub-rhythm-ring[data-celebrate="true"] .hub-rhythm-ring__check path {
+  animation: hubRhythmDraw var(--dur-celebrate) var(--ease-hub) both;
+}
+
+/* ── 시간대 그룹 ────────────────────────────────────────── */
+.hub-app .hub-rhythm-group { padding: 8px 0; }
+.hub-app .hub-rhythm-group__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px 6px;
+}
+.hub-app .hub-rhythm-group__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.hub-app .hub-rhythm-now {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+}
+.hub-app .hub-rhythm-group__count { margin-left: auto; font-size: 12px; color: var(--fg-dim); }
+
+.hub-app .hub-rhythm-list { list-style: none; margin: 0; padding: 0; }
+
+/* ── 루틴 한 줄 ─────────────────────────────────────────── */
+.hub-app .hub-rhythm-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 0 12px 0 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.hub-app .hub-rhythm-list > .hub-rhythm-item:first-child { border-top: 0; }
+
+.hub-app .hub-rhythm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-hover) ease;
+}
+.hub-app .hub-rhythm-toggle:hover { background: var(--surface-2); }
+.hub-app .hub-rhythm-toggle:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
+.hub-app .hub-rhythm-toggle:disabled { cursor: progress; }
+.hub-app .hub-rhythm-toggle:active .hub-rhythm-check { transform: scale(0.9); }
+
+/* 체크 원: 빈 원(1px 하이라인) → --fg로 차오르고 체크가 그려진다. */
+.hub-app .hub-rhythm-check {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  transition: background var(--dur-enter) var(--ease-hub), border-color var(--dur-enter) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-rhythm-toggle:hover .hub-rhythm-check { border-color: var(--fg-muted); }
+.hub-app .hub-rhythm-check__mark {
+  stroke: var(--bg);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset var(--dur-enter) var(--ease-hub);
+}
+/* 한 번 퍼지고 사라지는 고리 — 체크한 순간에만(data-celebrate) 1회. */
+.hub-app .hub-rhythm-check::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid var(--fg-muted);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hub-app .hub-rhythm-item[data-done="true"] .hub-rhythm-check {
+  background: var(--fg);
+  border-color: var(--fg);
+}
+.hub-app .hub-rhythm-item[data-done="true"] .hub-rhythm-check__mark { stroke-dashoffset: 0; }
+.hub-app .hub-rhythm-item[data-celebrate="true"] .hub-rhythm-check {
+  animation: hubRhythmPop var(--dur-celebrate) var(--ease-hub);
+}
+.hub-app .hub-rhythm-item[data-celebrate="true"] .hub-rhythm-check::after {
+  animation: hubRhythmRipple var(--dur-celebrate) var(--ease-hub);
+}
+
+.hub-app .hub-rhythm-item__body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+/* 이름: 완료하면 왼쪽부터 줄이 그어지고 명도가 한 단계 내려간다. */
+.hub-app .hub-rhythm-item__name {
+  width: fit-content;
+  max-width: 100%;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--fg);
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 55%;
+  background-size: 0% 1px;
+  transition: background-size var(--dur-enter) var(--ease-hub), color var(--dur-enter) var(--ease-hub);
+}
+.hub-app .hub-rhythm-item[data-done="true"] .hub-rhythm-item__name {
+  color: var(--fg-dim);
+  background-size: 100% 1px;
+}
+.hub-app .hub-rhythm-item__meta {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.hub-app .hub-rhythm-sep { margin: 0 6px; color: var(--fg-faint); }
+.hub-app .hub-rhythm-item__status { display: inline-flex; align-items: center; gap: 4px; }
+.hub-app .hub-rhythm-item[data-resting="true"] .hub-rhythm-check { border-style: dashed; }
+.hub-app .hub-rhythm-item[data-resting="true"] .hub-rhythm-item__name { color: var(--fg-muted); }
+.hub-app .hub-rhythm-item__feedback {
+  grid-column: 1 / -1;
+  padding: 0 12px 10px 54px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.hub-app .hub-rhythm-item__feedback[data-kind="error"] { color: var(--danger); }
+
+/* 최근 7일 점 — 켜짐은 --fg-muted, 오늘 칸은 1px 링. */
+.hub-app .hub-rhythm-dots { display: flex; gap: 4px; }
+.hub-app .hub-rhythm-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  transition: background var(--dur-enter) var(--ease-hub);
+}
+.hub-app .hub-rhythm-dot[data-on="true"] { background: var(--fg-muted); }
+.hub-app .hub-rhythm-dot[data-today="true"] { box-shadow: 0 0 0 1px var(--line-strong); }
+.hub-app .hub-rhythm-dot[data-today="true"][data-on="true"] { background: var(--fg); }
+
+/* ── 루틴 더하기 칩 ─────────────────────────────────────── */
+.hub-app .hub-rhythm-suggest { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.hub-app .hub-rhythm-suggest__label { font-size: 12px; color: var(--fg-dim); }
+.hub-app .hub-rhythm-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.hub-app .hub-rhythm-suggest .hub-rhythm-chips { justify-content: flex-start; }
+.hub-app .hub-rhythm-chip {
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px dashed var(--line-strong);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color var(--dur-hover) ease, border-color var(--dur-hover) ease, background var(--dur-hover) ease;
+}
+.hub-app .hub-rhythm-chip:hover { color: var(--fg); border-color: var(--fg-muted); background: var(--surface-2); }
+
+/* ── 최근 7일 그리드 ────────────────────────────────────── */
+.hub-app .hub-rhythm-week { display: flex; flex-direction: column; gap: 6px; }
+.hub-app .hub-rhythm-week__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(7, 22px) 40px;
+  align-items: center;
+  gap: 6px;
+}
+.hub-app .hub-rhythm-week__row--head { margin-bottom: 4px; }
+.hub-app .hub-rhythm-week__day { font-size: 10.5px; text-align: center; color: var(--fg-dim); }
+.hub-app .hub-rhythm-week__day[data-today="true"] { color: var(--fg); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.hub-app .hub-rhythm-week__name {
+  font-size: 13px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hub-app .hub-rhythm-week__cell {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  transition: background var(--dur-enter) var(--ease-hub);
+}
+.hub-app .hub-rhythm-week__cell[data-on="true"] { background: var(--fg-muted); border-color: var(--fg-muted); }
+.hub-app .hub-rhythm-week__cell[data-today="true"] { border-color: var(--line-strong); }
+.hub-app .hub-rhythm-week__cell[data-today="true"][data-on="true"] { background: var(--fg); border-color: var(--fg); }
+.hub-app .hub-rhythm-week__goal { font-size: 12px; text-align: right; color: var(--fg-muted); }
+
+/* ── 키프레임 (1회성, 반복 없음 — §9) ───────────────────── */
+@keyframes hubRhythmPop {
+  0% { transform: scale(0.82); }
+  55% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+@keyframes hubRhythmRipple {
+  0% { opacity: 0.7; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+@keyframes hubRhythmDraw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes hubRhythmSettle {
+  0% { transform: scale(0.985); }
+  60% { transform: scale(1.01); }
+  100% { transform: scale(1); }
+}
+
+/* ── 모바일 ─────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .hub-app .hub-rhythm-hero { gap: 16px; }
+  .hub-app .hub-rhythm-hero__headline { font-size: 19px; }
+  .hub-app .hub-rhythm-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .hub-app .hub-rhythm-dots { display: none; }
+  .hub-app .hub-rhythm-item__feedback { padding-left: 54px; }
+  .hub-app .hub-rhythm-week__row { grid-template-columns: minmax(0, 1fr) repeat(7, 18px) 34px; gap: 4px; }
+  .hub-app .hub-rhythm-week__cell { width: 18px; height: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-rhythm-hero,
+  .hub-app .hub-rhythm-ring__value,
+  .hub-app .hub-rhythm-ring__check path,
+  .hub-app .hub-rhythm-toggle,
+  .hub-app .hub-rhythm-check,
+  .hub-app .hub-rhythm-check::after,
+  .hub-app .hub-rhythm-check__mark,
+  .hub-app .hub-rhythm-item__name,
+  .hub-app .hub-rhythm-dot,
+  .hub-app .hub-rhythm-chip,
+  .hub-app .hub-rhythm-week__cell {
+    animation: none !important;
+    transition: none !important;
+  }
+}

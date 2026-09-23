@@ -461,7 +461,7 @@ export function AgentsChat({ onNavigate }) {
               >
                 기본
               </button>
-              {['jobs', 'bezos', 'chouinard', 'voss', 'ogilvy'].map((lid) => {
+              {['jobs', 'bezos', 'chouinard', 'voss', 'ogilvy', 'carnegie', 'hill'].map((lid) => {
                 const l = LEGEND_LENS_MAP[lid];
                 const active = activeLens === lid;
                 return (
@@ -694,7 +694,7 @@ function CouncilCoachPanel({ onNavigate }) {
 
       {state === 'done' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {councilData && (councilData.lenses?.length > 0 || councilData.dissent || councilData.conditionalVerdict || councilData.nextAction) ? (
+          {councilData && (councilData.lenses?.length > 0 || councilData.dissent || councilData.conditionalVerdict || councilData.nextAction || councilData.tacticalTip) ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {/* Lenses Grid */}
               {Array.isArray(councilData.lenses) && councilData.lenses.length > 0 && (
@@ -750,6 +750,19 @@ function CouncilCoachPanel({ onNavigate }) {
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.5 }}>
                     {councilData.nextAction}
+                  </div>
+                </div>
+              )}
+
+              {/* Tactical Tip */}
+              {councilData.tacticalTip && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--moon-line)', boxShadow: 'inset 2px 0 0 var(--moon-500)', borderRadius: 'var(--r)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Badge tone="moon" size="xs">💡 거장의 실전 팁</Badge>
+                    <span style={{ fontSize: 10.5, color: 'var(--moon-200)' }}>30초 즉시 적용</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.5 }}>
+                    {councilData.tacticalTip}
                   </div>
                 </div>
               )}

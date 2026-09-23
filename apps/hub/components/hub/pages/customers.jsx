@@ -15,6 +15,7 @@ import { Iconed } from "../hub-icons";
 import {
   Badge, Card, Button, IconButton, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
   SegmentedControl, CheckboxRow, TextField, TextAreaField, SelectField, Skeleton,
+  CertaintyBadge, ChipToggle,
 } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { ContactRecordForm } from "../contact-record-form";
@@ -24,6 +25,8 @@ import { requestPersonaChat } from "../persona-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
+import { LEAD_SUBJECTS, subjectLabels } from "@/lib/sales-os/lead-labels";
+import { CUSTOMER_LABEL_MISSING, customerGenreOptions, customerRegionOptions, matchesCustomerLabels, normalizeGenreLabels } from "@/lib/sales-os/customer-labels";
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import './customer-focus.css';
 
@@ -100,7 +103,11 @@ function toRows(ledger) {
       personTitle: contact?.title || null,
       phone: contact?.phone || null,
       email: contact?.email || l.contactEmail || null,
-      sub: [l.region, l.source !== "—" ? l.source : null].filter(Boolean).join(" · "),
+      sub: [l.region, subjectLabels(l.subjects).slice(0, 2).join("·"), l.genres?.[0] ? `#${l.genres[0]}` : null, l.source !== "—" ? l.source : null].filter(Boolean).join(" · "),
+      region: l.region || "",
+      subjects: Array.isArray(l.subjects) ? l.subjects : [],
+      genres: Array.isArray(l.genres) ? l.genres : [],
+      labelSource: l.labelSource || {},
       stage: l.stage,
       stageOrder: LEAD_STAGE_ORDER[l.stage] ?? 0,
       health: scoreBand(l.score),
@@ -135,7 +142,11 @@ function toRows(ledger) {
       personTitle: contact?.title || null,
       phone: contact?.phone || null,
       email: contact?.email || null,
-      sub: `계약 고객 · 딜 ${a.deals}건`,
+      sub: [a.region, subjectLabels(a.subjects).slice(0, 2).join("·"), a.genres?.[0] ? `#${a.genres[0]}` : null, `계약 고객 · 딜 ${a.deals}건`].filter(Boolean).join(" · "),
+      region: a.region || "",
+      subjects: Array.isArray(a.subjects) ? a.subjects : [],
+      genres: Array.isArray(a.genres) ? a.genres : [],
+      labelSource: a.labelSource || {},
       stage: "고객",
       stageOrder: 90,
       health: a.health,
@@ -490,7 +501,102 @@ function CustomerOutreachDrafter({ row }) {
   );
 }
 
-function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }) {
+function CustomerLabelsEditor({ row, onSaved }) {
+  const draftTouched = React.useRef(false);
+  const [region, setRegion] = React.useState(row.region || "");
+  const [subjects, setSubjects] = React.useState(row.subjects || []);
+  const [genresText, setGenresText] = React.useState((row.genres || []).join(", "));
+  const [saving, setSaving] = React.useState(false);
+  const [message, setMessage] = React.useState("");
+
+  React.useEffect(() => {
+    if (saving || draftTouched.current) return;
+    setRegion(row.region || "");
+    setSubjects(row.subjects || []);
+    setGenresText((row.genres || []).join(", "));
+  }, [row.key, row.region, row.subjects, row.genres, saving]);
+
+  const rawGenres = genresText.split(/[,，\n]/).map((part) => part.trim()).filter(Boolean);
+  const genres = normalizeGenreLabels(rawGenres);
+  const regionChanged = region.trim() !== (row.region || "");
+  const subjectsChanged = JSON.stringify(subjects) !== JSON.stringify(row.subjects || []);
+  const genresChanged = JSON.stringify(genres) !== JSON.stringify(row.genres || []);
+  const changed = regionChanged || subjectsChanged || genresChanged;
+
+  const save = async () => {
+    if (!row.id || !changed || saving) return;
+    if (rawGenres.length > 12 || rawGenres.some((label) => label.length > 40)) {
+      setMessage("장르는 최대 12개, 각 40자까지 입력할 수 있습니다.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    const patch = { id: row.id };
+    if (regionChanged) patch.region = region.trim();
+    if (subjectsChanged) patch.subjects = subjects;
+    if (genresChanged) patch.genres = genres;
+    if (regionChanged || subjectsChanged) patch.labelSource = {
+      ...(row.labelSource || {}),
+      ...(regionChanged ? { region: "operator" } : {}),
+      ...(subjectsChanged ? { subjects: "operator" } : {}),
+    };
+    try {
+      const result = await saveRevenueRecord(row.kind, "update", patch);
+      if (!result?.ok) {
+        setMessage(result?.status === "preview" ? "저장소가 연결되지 않아 라벨을 저장하지 못했습니다." : "라벨을 저장하지 못했습니다. 입력은 남아 있습니다.");
+        return;
+      }
+      draftTouched.current = false;
+      setGenresText(genres.join(", "));
+      setMessage("라벨을 저장했습니다.");
+      onSaved?.();
+    } catch {
+      setMessage("라벨을 저장하지 못했습니다. 입력은 남아 있습니다.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const visible = [row.region, ...subjectLabels(row.subjects), ...(row.genres || [])].filter(Boolean);
+  return (
+    <section className="customer-labels" aria-label="고객 라벨">
+      <h3>고객 라벨</h3>
+      {visible.length ? (
+        <div className="customer-labels__values">
+          {row.region && <span>{row.region}{row.labelSource?.region === "derived" ? " · 권장" : ""}</span>}
+          {subjectLabels(row.subjects).map((label) => <span key={`subject:${label}`}>{label}</span>)}
+          {(row.genres || []).map((label) => <span key={`genre:${label}`}>#{label}</span>)}
+        </div>
+      ) : <p className="customer-labels__empty">지역·과목·장르가 아직 없습니다.</p>}
+      <details>
+        <summary>라벨 수정</summary>
+        <div className="customer-labels__fields">
+          <TextField label="지역" placeholder="경기-안양" value={region} onChange={(event) => { draftTouched.current = true; setRegion(event.target.value); setMessage(""); }} />
+          <div role="group" aria-label="과목" className="customer-labels__subjects">
+            <span className="customer-labels__field-label">과목</span>
+            <div>{LEAD_SUBJECTS.map((subject) => (
+              <ChipToggle key={subject.key} label={subject.label} selected={subjects.includes(subject.key)} onChange={() => {
+                draftTouched.current = true;
+                setSubjects((current) => current.includes(subject.key)
+                  ? current.filter((key) => key !== subject.key)
+                  : LEAD_SUBJECTS.filter((item) => item.key === subject.key || current.includes(item.key)).map((item) => item.key));
+                setMessage("");
+              }} />
+            ))}</div>
+          </div>
+          <TextField label="장르" hint="쉼표로 구분 · 최대 12개" placeholder="음악, 디자인" value={genresText} onChange={(event) => { draftTouched.current = true; setGenresText(event.target.value); setMessage(""); }} />
+          {row.labelSource?.subjects === "derived" && <CertaintyBadge state="recommended" label="과목은 기존 기록에서 권장된 값입니다" />}
+          {message && <p role={message.includes("저장했습니다") ? "status" : "alert"} className="customer-labels__message">{message}</p>}
+          <div className="customer-labels__actions">
+            <Button variant="primary" size="sm" disabled={!row.id || !changed || saving} onClick={save}>{saving ? "저장 중…" : "라벨 저장"}</Button>
+          </div>
+        </div>
+      </details>
+    </section>
+  );
+}
+
+function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, onLabelsSaved }) {
   const [memoState, setMemoState] = React.useState(null);
   const memoContexts = React.useMemo(() => [{ type: row.kind, id: row.id, label: row.person || row.name }], [row.kind, row.id, row.person, row.name]);
   const [activities, setActivities] = React.useState([]);
@@ -649,6 +755,8 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
             <p>{nextActionOverride ?? row.nextAction}</p>
           </section>
         )}
+
+        <CustomerLabelsEditor row={row} onSaved={onLabelsSaved} />
 
 
         {/* 활동 타임라인 (읽기 우선 배치) */}
@@ -977,9 +1085,12 @@ function NewCustomerDrawer({ open, onClose, onCreated }) {
 // ── 페이지 ──────────────────────────────────────────────────────────────────
 
 export function Customers({ onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const [segment, setSegment] = React.useState("all");
   const [search, setSearch] = React.useState("");
+  const [regionFilter, setRegionFilter] = React.useState("");
+  const [subjectFilter, setSubjectFilter] = React.useState("");
+  const [genreFilter, setGenreFilter] = React.useState("");
   const [sort, setSort] = React.useState({ key: null, dir: "asc" });
   const [openKey, setOpenKey] = React.useState(null);
   const [createError, setCreateError] = React.useState(null);
@@ -1080,10 +1191,15 @@ export function Customers({ onNavigate }) {
     router.replace(pathname, { scroll: false });
   }, [allRows, searchParams, router, pathname, syncState]);
 
-  const term = search.trim().toLowerCase();
+  const regionOptions = React.useMemo(() => customerRegionOptions(allRows), [allRows]);
+  const genreOptions = React.useMemo(() => customerGenreOptions(allRows), [allRows]);
+  const labelFiltersActive = Boolean(regionFilter || subjectFilter || genreFilter);
+  const term = search.trim().toLocaleLowerCase("ko");
   const filtered = allRows.filter(r =>
     segmentFilter(r, segment) &&
-    (!term || r.name.toLowerCase().includes(term) || (r.person || "").toLowerCase().includes(term) || (r.sub || "").toLowerCase().includes(term))
+    matchesCustomerLabels(r, { region: regionFilter, subject: subjectFilter, genre: genreFilter }) &&
+    (!term || [r.name, r.person, r.sub, ...subjectLabels(r.subjects), ...(r.genres || [])]
+      .filter(Boolean).join(" ").toLocaleLowerCase("ko").includes(term))
   );
 
   // 정렬: 헤더 클릭 asc → desc → 해제 3단 (DESIGN §8.1). 해제 시 기록 순서.
@@ -1161,6 +1277,18 @@ export function Customers({ onNavigate }) {
         onChange={setSegment}
       />
 
+      <div className="customer-label-filters" role="group" aria-label="고객 지역·과목·장르 필터">
+        <SelectField label="지역" value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)} options={regionOptions} />
+        <SelectField label="과목" value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)} options={[
+          { value: "", label: "전체 과목" },
+          { value: CUSTOMER_LABEL_MISSING, label: "과목 미입력" },
+          ...LEAD_SUBJECTS.map((subject) => ({ value: subject.key, label: subject.label })),
+        ]} />
+        <SelectField label="장르" value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)} options={genreOptions} />
+        {labelFiltersActive && <Button variant="ghost" size="xs" onClick={() => { setRegionFilter(""); setSubjectFilter(""); setGenreFilter(""); }}>라벨 필터 해제</Button>}
+        <span className="num customer-label-filters__count" role="status">{sorted.length}건</span>
+      </div>
+
       <Card pad={false} style={{ overflow: "hidden" }}>
         <div className="hub-customers-grid" style={{
           display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "9px 16px",
@@ -1181,13 +1309,15 @@ export function Customers({ onNavigate }) {
             <Skeleton height={24} />
             <Skeleton height={24} />
           </div>
+        ) : syncState === "error" ? (
+          <EmptyState icon="accounts" title="고객을 불러오지 못했습니다" description="연결 상태를 확인한 뒤 다시 시도하세요." action={<Button variant="outline" size="sm" onClick={reloadLedger}>다시 시도</Button>} style={{ minHeight: 180, padding: "28px 12px" }} />
         ) : sorted.length === 0 ? (
           <EmptyState
             icon="accounts"
-            title={term ? "검색 결과가 없습니다" : "고객이 없습니다"}
-            description={term ? "다른 검색어를 시도하거나 검색을 지우세요." : "첫 고객을 등록하면 여기에 나타납니다."}
-            action={term
-              ? <Button variant="outline" size="sm" onClick={() => setSearch("")}>검색 지우기</Button>
+            title={term || labelFiltersActive || segment !== "all" ? "조건에 맞는 고객이 없습니다" : "고객이 없습니다"}
+            description={term || labelFiltersActive || segment !== "all" ? "검색어나 라벨 조건을 바꿔보세요." : "첫 고객을 등록하면 여기에 나타납니다."}
+            action={term || labelFiltersActive || segment !== "all"
+              ? <Button variant="outline" size="sm" onClick={() => { setSearch(""); setRegionFilter(""); setSubjectFilter(""); setGenreFilter(""); setSegment("all"); }}>조건 지우기</Button>
               : <Button variant="primary" size="sm" icon="plus" onClick={() => setNewCustomerOpen(true)}>고객 등록</Button>}
             style={{ minHeight: 180, padding: "28px 12px" }}
           />
@@ -1325,11 +1455,13 @@ export function Customers({ onNavigate }) {
 
       {openRow && (
         <Customer360Drawer
+          key={openRow.key}
           row={openRow}
           onClose={() => setOpenKey(null)}
           onNavigate={onNavigate}
           onDelete={deleteCustomer}
           onFocusChange={(key, val) => setFocusOverrides(prev => ({ ...prev, [key]: val }))}
+          onLabelsSaved={reloadLedger}
         />
       )}
 

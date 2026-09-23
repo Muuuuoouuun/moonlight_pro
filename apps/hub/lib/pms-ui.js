@@ -468,6 +468,9 @@ export function mergeProjectDetailQuery(current, projectId) {
   if (params.get("view") !== "table") params.delete("view");
   params.delete("new");
   params.delete("task");
+  params.delete("focus");
+  params.delete("item");
+  params.delete("check");
   params.set("project", projectId);
   return params;
 }

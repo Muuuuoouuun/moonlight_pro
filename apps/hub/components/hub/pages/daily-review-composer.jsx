@@ -22,7 +22,7 @@ function ReviewSummary({ review }) {
   </dl>;
 }
 
-function ReviewAiDebrief({ draft, onAppendNote }) {
+function ReviewAiDebrief({ draft, today, onAppendNote }) {
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [adviceText, setAdviceText] = React.useState("");
@@ -36,6 +36,12 @@ function ReviewAiDebrief({ draft, onAppendNote }) {
       const parts = [];
       parts.push(`[오늘의 하루 회고]`);
       if (draft.energy !== null) parts.push(`에너지: ${draft.energy}/5 (${ENERGY_LABELS[draft.energy - 1]})`);
+      if (today?.focusTasks?.length) {
+        parts.push(`오늘 집중 Top 3 실행 결과:`);
+        today.focusTasks.forEach((t) => {
+          parts.push(`- ${t.title}: ${t.done ? '완료' : '미완료'}`);
+        });
+      }
       if (draft.focus) parts.push(`오늘의 목표: ${draft.focus}`);
       if (draft.progress !== null) parts.push(`진척도: ${progressLabel(draft.progress)}`);
       if (draft.note) parts.push(`메모:\n${draft.note}`);
@@ -65,11 +71,11 @@ function ReviewAiDebrief({ draft, onAppendNote }) {
     navigator.clipboard.writeText(adviceText);
     setCopied(true);
     toast.success("회고 조언이 복사되었습니다.");
-    setTimeout(() => setCopied(false), 2000);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
       {!open ? (
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <Button
@@ -79,59 +85,38 @@ function ReviewAiDebrief({ draft, onAppendNote }) {
             icon="sparkle"
             onClick={handleGenerate}
           >
-            {loading ? "AI 회고 코칭 작성 중…" : "✨ AI 회고 코칭 받기"}
+            {loading ? "AI 회고 코칭 작성 중…" : "AI 회고 코칭 받기"}
           </Button>
         </div>
       ) : (
-        <div
-          style={{
-            background: "var(--surface-2)",
-            border: "1px solid var(--line-soft)",
-            borderRadius: "var(--r-sm)",
-            padding: "8px 10px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-            fontSize: 11.5,
-          }}
-        >
+        <div className="daily-review-ai-box">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: 4 }}>
-              <Iconed name="sparkle" size={12} style={{ color: "var(--moon-300)" }} />
+            <span style={{ fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}>
+              <Iconed name="sparkle" size={13} style={{ color: "var(--moon-300)" }} />
               Council 회고 조언 & 내일의 한 수
             </span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               onClick={() => setOpen(false)}
-              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
             >
               접기
-            </button>
+            </Button>
           </div>
 
           {loading ? (
-            <div style={{ color: "var(--fg-muted)", fontSize: 11, padding: "6px 0" }}>
+            <div style={{ color: "var(--fg-muted)", fontSize: 12, padding: "8px 0" }}>
               오늘의 기록을 분석하고 내일의 첫 발자국을 도출하고 있습니다…
             </div>
           ) : adviceText ? (
             <>
-              <div
-                style={{
-                  background: "var(--surface-3)",
-                  padding: "8px 10px",
-                  borderRadius: "var(--r-xs)",
-                  fontSize: 11.5,
-                  lineHeight: 1.55,
-                  whiteSpace: "pre-wrap",
-                  color: "var(--fg)",
-                  border: "1px solid var(--line-soft)",
-                }}
-              >
+              <div className="daily-review-ai-content">
                 {adviceText}
               </div>
               <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                 <Button type="button" variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
-                  {copied ? "복사됨 ✓" : "복사"}
+                  {copied ? "복사됨" : "복사"}
                 </Button>
                 {onAppendNote && (
                   <Button
@@ -172,6 +157,22 @@ export function DailyReviewComposer({ model, onClose }) {
   const todayLine = today && today.date === date
     ? ` · 오늘 3개 ${today.focusDone}/${today.focusPicked}${Number.isFinite(today.contacts) ? ` · 연락 ${today.contacts}건` : ''}`
     : '';
+
+  React.useEffect(() => {
+    function handleKeyDown(event) {
+      if (locked) return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const num = parseInt(event.key, 10);
+      if (num >= 1 && num <= 5) {
+        event.preventDefault();
+        edit('energy', draft.energy === num ? null : num);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [locked, draft.energy, edit]);
 
   React.useEffect(() => {
     if (source !== 'loading' && !initialized.current) {
@@ -216,6 +217,47 @@ export function DailyReviewComposer({ model, onClose }) {
     </div>}>
     <form id="daily-review-composer" className="daily-review-composer" ref={formRef} tabIndex={-1} aria-busy={busy} onSubmit={(event) => { event.preventDefault(); if (!conflict) submit(); }}>
       {source === 'loading' ? <p className="daily-review-hint">기록을 불러오고 있어요…</p> : <>
+        {today && today.date === date && Array.isArray(today.focusTasks) && today.focusTasks.length > 0 && (
+          <section className="daily-review-focus-card" aria-label="오늘 집중 Top 3 실행 결과">
+            <div className="daily-review-focus-header">
+              <span className="daily-review-focus-title">
+                <Iconed name="star" size={13} style={{ color: 'var(--moon-300)' }} />
+                오늘 집중 Top 3 ({today.focusDone}/{today.focusPicked} 완료)
+              </span>
+              {!draft.focus.trim() && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    const taskTitles = today.focusTasks.map((t) => t.title).join(' · ');
+                    edit('focus', taskTitles);
+                    if (draft.progress === null) {
+                      const suggestedProgress = today.focusDone === today.focusPicked ? 2 : today.focusDone > 0 ? 1 : 0;
+                      edit('progress', suggestedProgress);
+                    }
+                    setExpanded(true);
+                  }}
+                >
+                  목표·진척 채우기
+                </Button>
+              )}
+            </div>
+            <div className="daily-review-focus-list">
+              {today.focusTasks.map((task) => (
+                <div key={task.id} className={`daily-review-focus-item${task.done ? ' daily-review-focus-item--done' : ''}`}>
+                  <span className={`daily-review-focus-glyph ${task.done ? 'daily-review-focus-glyph--done' : 'daily-review-focus-glyph--open'}`}>
+                    {task.done ? '✓' : '○'}
+                  </span>
+                  <span className="daily-review-focus-text">
+                    {task.title}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <fieldset disabled={locked} className="daily-review-basics">
           <section className="daily-review-field">
             <div className="daily-review-field-heading"><span>에너지는 어땠나요?</span><span className="daily-review-energy-label" aria-live="polite">{draft.energy === null ? '선택' : ENERGY_LABELS[draft.energy - 1]}</span></div>
@@ -225,6 +267,7 @@ export function DailyReviewComposer({ model, onClose }) {
           <TextAreaField id="daily-review-note" label="한 줄 메모" value={draft.note} rows={3} maxLength={4000} placeholder="오늘 기억하고 싶은 일은…" onChange={(event) => edit('note', event.target.value)} />
           <ReviewAiDebrief
             draft={draft}
+            today={today}
             onAppendNote={(text) => {
               const cur = draft.note ? draft.note.trim() + "\n\n" : "";
               edit('note', cur + text);

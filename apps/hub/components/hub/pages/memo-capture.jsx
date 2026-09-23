@@ -16,6 +16,7 @@ import {
 import styles from "./memo-capture.module.css";
 import { memoHref, saveMemoAndVerify } from "@/lib/memo-save";
 import { memoIntakeTaskSummary, prepareMemoIntakeTasks, saveMemoIntakeTasks } from "@/lib/memo-intake-tasks";
+import { formatMeetingBriefForShare } from "@/lib/multimodal-intake-core";
 
 export function MemoCapture({ onSaved, fetchImpl = fetch }) {
   const [draft, setDraft] = React.useState(null);
@@ -26,6 +27,7 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
   const [storageStatus, setStorageStatus] = React.useState("");
   const [pendingFile, setPendingFile] = React.useState(null);
   const [savedId, setSavedId] = React.useState(null);
+  const [copiedBrief, setCopiedBrief] = React.useState(false);
   const busyRef = React.useRef(false);
   const draftRef = React.useRef(null);
   const textarea = React.useRef(null);
@@ -279,20 +281,72 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
               <div className={styles.aiCard} role="region" aria-label="AI 멀티모달 추출 결과">
                 <div className={styles.aiCardHeading}>
                   <span>✦ AI 멀티모달 추출: {extractedData.title}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    disabled={memoLocked}
-                    onClick={() => replaceDraft({ ...draftRef.current, intake: null }, true)}
-                  >
-                    추출 결과 지우기
-                  </Button>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      onClick={() => {
+                        const text = formatMeetingBriefForShare(extractedData);
+                        if (text && typeof navigator !== "undefined" && navigator.clipboard) {
+                          navigator.clipboard.writeText(text);
+                          setCopiedBrief(true);
+                          setTimeout(() => setCopiedBrief(false), 2000);
+                        }
+                      }}
+                    >
+                      {copiedBrief ? "✓ 요약 복사됨" : "📋 공유 요약 복사"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      disabled={memoLocked}
+                      onClick={() => replaceDraft({ ...draftRef.current, intake: null }, true)}
+                    >
+                      추출 결과 지우기
+                    </Button>
+                  </div>
                 </div>
                 {extractedData.summary ? (
                   <div>
                     <div className={styles.aiSectionTitle}>핵심 요약</div>
                     <div className={styles.aiSummary}>{extractedData.summary}</div>
+                  </div>
+                ) : null}
+                {extractedData.keyDecisions?.length ? (
+                  <div>
+                    <div className={styles.aiSectionTitle}>합의 및 결정사항</div>
+                    <ul style={{ margin: '4px 0 0 16px', padding: 0, fontSize: 12, color: 'var(--fg)' }}>
+                      {extractedData.keyDecisions.map((dec, idx) => (
+                        <li key={idx} style={{ marginBottom: 3 }}>• {dec}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {extractedData.openIssues?.length ? (
+                  <div>
+                    <div className={styles.aiSectionTitle}>미결/후속 논의 안건</div>
+                    <ul style={{ margin: '4px 0 0 16px', padding: 0, fontSize: 12, color: 'var(--fg-muted)' }}>
+                      {extractedData.openIssues.map((issue, idx) => (
+                        <li key={idx} style={{ marginBottom: 3 }}>• {issue}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {(extractedData.detectedEntities?.projects?.length || extractedData.detectedEntities?.peopleOrCompanies?.length) ? (
+                  <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>감지된 객체:</span>
+                    {extractedData.detectedEntities.projects.map((proj, idx) => (
+                      <span key={`p-${idx}`} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'var(--surface-3)', color: 'var(--moon-200)', border: '1px solid var(--line-soft)' }}>
+                        📁 {proj}
+                      </span>
+                    ))}
+                    {extractedData.detectedEntities.peopleOrCompanies.map((person, idx) => (
+                      <span key={`c-${idx}`} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'var(--surface-3)', color: 'var(--fg)', border: '1px solid var(--line-soft)' }}>
+                        👤 {person}
+                      </span>
+                    ))}
                   </div>
                 ) : null}
                 {intake.actions.length ? (

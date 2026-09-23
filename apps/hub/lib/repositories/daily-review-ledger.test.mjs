@@ -217,10 +217,10 @@ test("RPC transport errors and invalid success records are safe failure envelope
 test("live ledger carries today's focus and contact signals from the same sources as the weekly card", async () => {
   state.rows = [row()];
   state.tasks = [
-    { id: "t1", workspace_id: WORKSPACE, status: "done", completed_at: "2026-09-12T02:00:00.000Z", meta: { focus_dates: ["2026-09-12"] } },
-    { id: "t2", workspace_id: WORKSPACE, status: "todo", completed_at: null, meta: { focus_dates: ["2026-09-12"] } },
+    { id: "t1", workspace_id: WORKSPACE, title: "주요 과제 1", status: "done", completed_at: "2026-09-12T02:00:00.000Z", meta: { focus_dates: ["2026-09-12"] } },
+    { id: "t2", workspace_id: WORKSPACE, title: "주요 과제 2", status: "todo", completed_at: null, meta: { focus_dates: ["2026-09-12"] } },
     // 완료 시각이 전날이면(재오픈 흔적) 오늘 완료로 치지 않는다
-    { id: "t3", workspace_id: WORKSPACE, status: "done", completed_at: "2026-09-11T02:00:00.000Z", meta: { focus_dates: ["2026-09-12"] } },
+    { id: "t3", workspace_id: WORKSPACE, title: "주요 과제 3", status: "done", completed_at: "2026-09-11T02:00:00.000Z", meta: { focus_dates: ["2026-09-12"] } },
   ];
   state.activities = [
     { id: "a1", workspace_id: WORKSPACE, kind: "call", occurred_at: "2026-09-12T01:00:00.000Z" },
@@ -231,7 +231,19 @@ test("live ledger carries today's focus and contact signals from the same source
   state.bypassFilters = true;
   const result = await ledger.getDailyReviewLedger({ date: "2026-09-12" });
   assert.equal(result.status, "live");
-  assert.deepEqual(result.today, { date: "2026-09-12", focusPicked: 3, focusDone: 1, focusLimit: 3, contacts: 1 });
+  assert.deepEqual(result.today, {
+    date: "2026-09-12",
+    focusPicked: 3,
+    focusDone: 1,
+    focusLimit: 3,
+    focusTasks: [
+      { id: "t1", title: "주요 과제 1", status: "done", done: true },
+      { id: "t2", title: "주요 과제 2", status: "todo", done: false },
+      { id: "t3", title: "주요 과제 3", status: "done", done: false },
+    ],
+    focusTitles: ["주요 과제 1", "주요 과제 2", "주요 과제 3"],
+    contacts: 1,
+  });
   const taskCall = state.calls.find((call) => call.table === "tasks");
   assert.equal(taskCall.url.searchParams.get("meta->focus_dates"), 'cs.["2026-09-12"]');
 });
@@ -248,6 +260,8 @@ test("a truncated activity read reports an unknown contact count, not a smaller 
   assert.equal(result.status, "live");
   assert.equal(result.today.contacts, null);
   assert.equal(result.today.focusPicked, 0); // 오늘 3개 줄은 그대로 살아 있다
+  assert.deepEqual(result.today.focusTasks, []);
+  assert.deepEqual(result.today.focusTitles, []);
   const activityCall = state.calls.find((call) => call.table === "crm_activities");
   assert.equal(activityCall.url.searchParams.get("limit"), String(ledger.ACTIVITY_SCAN_LIMIT + 1));
 });

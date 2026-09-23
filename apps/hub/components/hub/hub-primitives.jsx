@@ -1147,7 +1147,7 @@ const FIELD_PANEL_KEY = '__fields__';
 // 않으면 기존 call site와 픽셀 단위로 같은 단일 폼이 그려진다(계약 변경 없음). 탭이 있을
 // 때만 열림 포커스를 첫 필드로 고정한다: 그러지 않으면 Drawer의 "본문 첫 focusable"
 // 규칙이 탭 버튼을 집어 이름 입력이 포커스를 잃는다.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, presentation = 'side', width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', onContinue, panels, infoLabel = '정보', children }) {
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, presentation = 'side', width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', onContinue, optionalLabel = '설명·다음 행동', panels, infoLabel = '정보', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
   const [saveFeedback, setSaveFeedback] = React.useState('');
   // 파괴 확인은 브라우저 confirm()이 아니라 푸터 인라인 2단계다 — OS 다이얼로그는 디자인
@@ -1277,7 +1277,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             const isSpaciousTextarea = f.type === 'textarea' && (f.spacious || (f.rows && f.rows >= 4) || ['notes', 'description', 'memo', 'content', 'body'].includes(f.key));
             const currentLen = typeof record[f.key] === 'string' ? record[f.key].length : 0;
             return (
-            <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: 1, minWidth: 0 } : null) }}>
+            <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: f.flex ?? 1, minWidth: 0 } : null) }}>
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{f.label}{f.labelBadge || null}</span>
                 {f.maxLength ? (
@@ -1360,7 +1360,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     <>
       {renderFieldRows(fields.filter(field => !field.optional))}
       {optionalFields.length > 0 && <details className="hub-edit-optional" key={recordIdentity} open={optionalOpen} onToggle={event => setOptionalOpen(event.currentTarget.open)}>
-        <summary>설명·다음 행동 <span>선택</span></summary>
+        <summary>{optionalLabel} <span>선택</span></summary>
         <div>{renderFieldRows(optionalFields, false)}</div>
       </details>}
       {children}

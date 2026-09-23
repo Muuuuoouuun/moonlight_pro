@@ -13,6 +13,7 @@ import { MemoSearchControls } from './memo-search-controls';
 import { filtersFromParams, memoSearchParams, memoListHref, memoDocumentHref, memoMatchSegments, MEMO_CHANGED_EVENT } from '@/lib/journal-search-client';
 import { MemoPatternPanel } from './memo-pattern-panel';
 import { MEMO_SAVED_EVENT } from '@/lib/memo-save';
+import { findRelatedMemos } from '@/lib/memo-network';
 import './memos.css';
 
 function MemoDocument({ onClose, onReload, ...props }) {
@@ -176,6 +177,10 @@ export function Memos() {
     readRecoveries();
   }
   const validId = isCanonicalUuid(id);
+  const relatedMemos = React.useMemo(() => {
+    if (!validId || !ledger.entry) return [];
+    return findRelatedMemos(ledger.entry, search.entries, { limit: 3 });
+  }, [validId, ledger.entry, search.entries]);
   return <div className="hub-page memos-page fade-up">
     <header className="memos-header"><div><h2>메모</h2><p>남긴 생각을 다음 할 일과 콘텐츠에 이어 쓰세요.</p></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -267,6 +272,33 @@ export function Memos() {
           </button>
         </li>)}</ol>{search.nextCursor && <div className="memo-more"><Button variant="outline" onClick={search.more} disabled={search.moreBusy || search.refreshing}>{search.moreBusy ? '불러오는 중…' : '메모 더 보기'}</Button></div>}</Card>)}
     {id && !validId && <p role="alert">메모 주소가 올바르지 않아요. <Button onClick={close}>목록으로</Button></p>}
-    {validId && <MemoDocument key={id} id={id} isNew={isNew} workspaceId={ledger.workspaceId} workspaceConfirmed={ledger.workspaceConfirmed} source={ledger.requestKey === requestKey ? ledger.status : 'loading'} entry={ledger.entry?.id === id ? ledger.entry : null} context={context} fromPreview={fromPreview} onSaved={saved} onClose={close} onReload={() => setReload((n) => n + 1)} />}
+    {validId && (
+      <>
+        <MemoDocument key={id} id={id} isNew={isNew} workspaceId={ledger.workspaceId} workspaceConfirmed={ledger.workspaceConfirmed} source={ledger.requestKey === requestKey ? ledger.status : 'loading'} entry={ledger.entry?.id === id ? ledger.entry : null} context={context} fromPreview={fromPreview} onSaved={saved} onClose={close} onReload={() => setReload((n) => n + 1)} />
+        {relatedMemos.length > 0 && (
+          <aside className="memo-network-panel" aria-label="연관된 이전 메모">
+            <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+              연관된 이전 메모 ({relatedMemos.length}건)
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+              {relatedMemos.map((rel) => (
+                <button key={rel.id} type="button" className="memo-network-card" onClick={() => router.push(memoDocumentHref(params, { note: rel.id }), { scroll: false })}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)' }}>
+                    {rel.title}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {rel.reasons.map((r, i) => (
+                      <span key={i} style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
+                        • {r}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </aside>
+        )}
+      </>
+    )}
   </div>;
 }
