@@ -28,7 +28,12 @@ const EXTENSION_5_IDS = [
   'epictetus',
 ];
 
-const ALL_14_IDS = [...CORE_9_IDS, ...EXTENSION_5_IDS];
+const PERSUASION_2_IDS = [
+  'carnegie',
+  'hill',
+];
+
+const ALL_16_IDS = [...CORE_9_IDS, ...EXTENSION_5_IDS, ...PERSUASION_2_IDS];
 
 const VALID_CATEGORIES = new Set([
   'philosophy',
@@ -60,10 +65,10 @@ const ONE_SENTENCE_FIELDS = [
 ];
 
 describe('Legend Micro-Cards Completeness', () => {
-  it('contains exactly 14 legend cards in total', () => {
+  it('contains exactly 16 legend cards in total', () => {
     const allCards = getAllLegendCards();
-    assert.equal(allCards.length, 14);
-    assert.equal(Object.keys(LEGEND_MICRO_CARDS).length, 14);
+    assert.equal(allCards.length, 16);
+    assert.equal(Object.keys(LEGEND_MICRO_CARDS).length, 16);
   });
 
   it('contains all 9 core legends', () => {
@@ -82,6 +87,14 @@ describe('Legend Micro-Cards Completeness', () => {
     }
   });
 
+  it('contains all 2 persuasion & influence legends (Carnegie and Hill)', () => {
+    for (const id of PERSUASION_2_IDS) {
+      const card = getLegendCard(id);
+      assert.ok(card, `Persuasion legend card ${id} must exist`);
+      assert.equal(card.id, id);
+    }
+  });
+
   it('returns undefined for non-existent IDs', () => {
     assert.equal(getLegendCard('unknown-legend'), undefined);
     assert.equal(getLegendCard(''), undefined);
@@ -90,7 +103,7 @@ describe('Legend Micro-Cards Completeness', () => {
 
 describe('Legend Micro-Cards Field Constraints & Brevity', () => {
   it('every card has non-null, non-empty, valid fields', () => {
-    for (const id of ALL_14_IDS) {
+    for (const id of ALL_16_IDS) {
       const card = getLegendCard(id);
       assert.ok(card, `Card ${id} should be found`);
 
@@ -107,7 +120,7 @@ describe('Legend Micro-Cards Field Constraints & Brevity', () => {
   });
 
   it('one-sentence fields satisfy single-sentence brevity and formatting constraints', () => {
-    for (const id of ALL_14_IDS) {
+    for (const id of ALL_16_IDS) {
       const card = getLegendCard(id);
 
       for (const field of ONE_SENTENCE_FIELDS) {
@@ -143,7 +156,7 @@ describe('Legend Micro-Cards Field Constraints & Brevity', () => {
 
 describe('Legend Micro-Cards Formatting Helpers', () => {
   it('formatLegendMicroCard formats card into a concise prompt chunk under 6 lines', () => {
-    for (const id of ALL_14_IDS) {
+    for (const id of ALL_16_IDS) {
       const formatted = formatLegendMicroCard(id);
       assert.ok(formatted.length > 0, `Formatted output for ${id} should not be empty`);
 

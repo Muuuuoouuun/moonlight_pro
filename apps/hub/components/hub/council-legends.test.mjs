@@ -9,14 +9,15 @@ import {
 } from "./council-legends.js";
 import { requestCouncilAdvice } from "./council-client.js";
 
-test("council-legends: contains all 14 official legends with complete fields", () => {
+test("council-legends: contains all 16 official legends with complete fields", () => {
   const expectedIds = [
     "socrates", "einstein", "lincoln", "theodore-roosevelt", "franklin-roosevelt",
     "jobs", "bezos", "buffett", "chouinard",
     "feynman", "deming", "drucker", "ostrom", "epictetus",
+    "carnegie", "hill",
   ];
 
-  assert.equal(Object.keys(LEGEND_CARDS).length, 14);
+  assert.equal(Object.keys(LEGEND_CARDS).length, 16);
   for (const id of expectedIds) {
     const card = LEGEND_CARDS[id];
     assert.ok(card, `Card ${id} must exist`);
@@ -32,7 +33,7 @@ test("council-legends: contains all 14 official legends with complete fields", (
 
 test("council-legends: recommended triads have 3 valid legend IDs each", () => {
   const triads = getAllTriads();
-  assert.equal(triads.length, 5);
+  assert.equal(triads.length, 6);
 
   for (const triad of triads) {
     assert.ok(triad.id && triad.label && triad.desc);

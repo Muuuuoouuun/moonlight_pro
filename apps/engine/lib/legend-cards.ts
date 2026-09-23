@@ -182,6 +182,30 @@ export const LEGEND_MICRO_CARDS: Record<string, LegendMicroCard> = {
     boundaryCondition: '모든 사회적 불의나 환경적 한계를 무조건 마음의 문제로 돌리며 현실을 회피하거나 무기력에 빠지지 않는다.',
     sourceCitation: '『엥케이리디온(Enchiridion)』 제1절',
   },
+  carnegie: {
+    id: 'carnegie',
+    name: 'Dale Carnegie',
+    nameKo: '데일 카네기',
+    category: 'management',
+    coreValue: '철저히 상대방의 관점에 서서 경청하며, 논쟁을 피하고 상대가 스스로 결론을 내리게 한다.',
+    acceptableCost: '논쟁에서 이겨 지적 우월감을 뽐내고 싶은 에고와 내 제품·능력을 자랑하고 싶은 조급함을 포기한다.',
+    pivotCondition: '상대방이 진정성 있는 경청에도 불구하고 악의적인 기만이나 사기를 목적으로 접근함이 확인될 때 대화를 중단한다.',
+    piercingQuestion: '지금 당신이 하려는 말이 상대방의 중요감과 고민을 배려한 것입니까, 아니면 당신의 에고를 과시하려는 자랑입니까?',
+    boundaryCondition: '단순히 상대에게 비위를 맞추는 영혼 없는 아첨이나 위선으로 본질적 비즈니스 가치를 대체하지 않는다.',
+    sourceCitation: '1936년 『인간관계론(How to Win Friends and Influence People)』',
+  },
+  hill: {
+    id: 'hill',
+    name: 'Napoleon Hill',
+    nameKo: '나폴레온 힐',
+    category: 'resilience',
+    coreValue: '명확한 목표(Definite Chief Aim)에 대한 절대적 자기 확신을 갖고, 반드시 그에 상응하는 대가를 치른다.',
+    acceptableCost: '막연한 희망에 기대는 안일함을 버리고, 목표 달성을 위해 바쳐야 할 시간과 규율의 고통을 감수한다.',
+    pivotCondition: '목표를 달성하기 위해 지불할 구체적인 대가(노력, 시간, 포기할 것)가 원장에 명시되지 않았을 때 계획을 전면 수정한다.',
+    piercingQuestion: '이 목표를 위해 오늘 정확히 어떤 대가(Stop-Doing과 구체적 땀)를 치르기로 원장에 기록했습니까?',
+    boundaryCondition: '구체적 행동과 정량적 데이터가 결여된 맹목적인 주문이나 긍정 확언에 기대지 않는다.',
+    sourceCitation: '1937년 『생각하라 그리고 부자가 되어라(Think and Grow Rich)』, 1928년 『성공의 법칙』',
+  },
 };
 
 /**
@@ -192,7 +216,7 @@ export function getLegendCard(id: string): LegendMicroCard | undefined {
 }
 
 /**
- * Returns all 14 Legend micro-cards.
+ * Returns all 16 Legend micro-cards.
  */
 export function getAllLegendCards(): LegendMicroCard[] {
   return Object.values(LEGEND_MICRO_CARDS);

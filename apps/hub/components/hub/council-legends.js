@@ -129,6 +129,24 @@ export const LEGEND_CARDS = {
     acceptableCost: "타인의 시선이나 외부의 평판, 통제 불가능한 결과에 대한 불안을 버린다.",
     piercingQuestion: "지금 당신이 걱정하는 것 중 당신이 100% 통제할 수 있는 행동은 무엇입니까?",
   },
+  carnegie: {
+    id: "carnegie",
+    name: "Dale Carnegie",
+    nameKo: "데일 카네기",
+    category: "management",
+    coreValue: "철저히 상대방의 관점에 서서 경청하며, 논쟁을 피하고 상대가 스스로 결론을 내리게 한다.",
+    acceptableCost: "논쟁에서 이겨 지적 우월감을 뽐내고 싶은 에고와 내 제품·능력을 자랑하고 싶은 조급함을 포기한다.",
+    piercingQuestion: "지금 당신이 하려는 말이 상대방의 중요감과 고민을 배려한 것입니까, 아니면 당신의 에고를 과시하려는 자랑입니까?",
+  },
+  hill: {
+    id: "hill",
+    name: "Napoleon Hill",
+    nameKo: "나폴레온 힐",
+    category: "resilience",
+    coreValue: "명확한 목표(Definite Chief Aim)에 대한 절대적 자기 확신을 갖고, 반드시 그에 상응하는 대가를 치른다.",
+    acceptableCost: "막연한 희망에 기대는 안일함을 버리고, 목표 달성을 위해 바쳐야 할 시간과 규율의 고통을 감수한다.",
+    piercingQuestion: "이 목표를 위해 오늘 정확히 어떤 대가(Stop-Doing과 구체적 땀)를 치르기로 원장에 기록했습니까?",
+  },
 };
 
 export const RECOMMENDED_TRIADS = [
@@ -161,6 +179,12 @@ export const RECOMMENDED_TRIADS = [
     label: "인내·통제",
     legendIds: ["epictetus", "buffett", "chouinard"],
     desc: "통제력 구분(에픽테토스) + 복리와 능력범위(버핏) + 목적 지향(쉬나드)",
+  },
+  {
+    id: "persuasion",
+    label: "설득·자기확신",
+    legendIds: ["carnegie", "hill", "theodore-roosevelt"],
+    desc: "상대방 중심 경청(카네기) + 불타는 열망과 대가(힐) + 경기장 투사의 실천(루스벨트)",
   },
 ];
 
