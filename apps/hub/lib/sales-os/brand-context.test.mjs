@@ -17,7 +17,7 @@ const { assembleBrandContext } = await import('./brand-context.js');
 beforeEach(() => {
   state.content = {
     source: 'supabase',
-    brands: [{ key: 'personal-a', orgScope: 'personal', voice: 'A' }, { key: 'personal-b', orgScope: 'personal', voice: 'B' }, { key: 'company', orgScope: 'classin' }],
+    brands: [{ key: 'personal-a', orgScope: 'personal', voice: 'A' }, { key: 'personal-b', orgScope: 'personal', voice: 'B', audience: 'Founders who read Threads', promise: 'A sharper next move', currentFocus: 'Ship the roadmap' }, { key: 'company', orgScope: 'classin' }],
     items: [{ id: 'idea-a', brandKey: 'personal-a' }, { id: 'idea-company', brandKey: 'company' }],
     ideaQueue: [{ id: 'idea-a', title: 'Personal idea', brandKey: 'personal-a' }, { id: 'idea-company', title: 'Company idea', brandKey: 'company' }],
     campaigns: [{ id: 'campaign-b', name: 'Offer B', brandKey: 'personal-b', businessTruth: { customer: 'Founders' } }, { id: 'company-campaign', brandKey: 'company' }],
@@ -41,6 +41,9 @@ test('campaign focus uses its business truth and matching brand voice', async ()
   assert.equal(ctx.focus.kind, 'campaign');
   assert.equal(ctx.focus.entity.businessTruth.customer, 'Founders');
   assert.equal(ctx.brand.voice, 'B');
+  assert.equal(ctx.brand.audience, 'Founders who read Threads');
+  assert.equal(ctx.brand.promise, 'A sharper next move');
+  assert.equal(ctx.brand.currentFocus, 'Ship the roadmap');
 });
 test('cross-scope refs remain missing; memory failures are disclosed', async () => {
   state.memory = { source: 'error', error: 'memory-read-failed' };
