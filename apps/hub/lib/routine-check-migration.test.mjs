@@ -10,7 +10,6 @@ const setupUrl = new URL("../../../supabase/setup/00_live_schema.sql", import.me
 const schemaUrl = new URL("../../../supabase/schema.sql", import.meta.url);
 const applyPendingUrl = new URL("../../../supabase/apply-pending.sql", import.meta.url);
 const supabaseReadmeUrl = new URL("../../../supabase/README.md", import.meta.url);
-const migrationScriptUrl = new URL("../../../scripts/apply-migrations.mjs", import.meta.url);
 
 test("routine check idempotency is canonical in migration, live setup, and base schema", async () => {
   const [migration, setup, schema] = await Promise.all([
@@ -37,21 +36,18 @@ test("routine check idempotency is canonical in migration, live setup, and base 
   }
 });
 
-test("routine check idempotency migration is included in both supported delivery paths", async () => {
-  const [applyPending, supabaseReadme, migrationScript] = await Promise.all([
+test("routine check idempotency stays in the historical bundle and is not silently replayed", async () => {
+  const [applyPending, supabaseReadme] = await Promise.all([
     readFile(applyPendingUrl, "utf8"),
     readFile(supabaseReadmeUrl, "utf8"),
-    readFile(migrationScriptUrl, "utf8"),
   ]);
 
   assert.match(applyPending, /20260717_0019_routine_check_idempotency\.sql/);
   assert.match(applyPending, /적용 대기 마이그레이션 묶음 \(0003 → 0024, 시점순\)/);
-  assert.match(supabaseReadme, /`apply-pending\.sql`: \*\*편의 번들\*\* — 0003→0024/);
-  assert.match(supabaseReadme, /운영 마이그레이션 적용 \(0003→0024\)/);
+  assert.match(supabaseReadme, /`apply-pending\.sql`: \*\*과거 0003→0024 번들\*\*/);
+  assert.match(supabaseReadme, /파일이 있다는 이유만으로 기존 SQL을 다시 실행하지 않는다/);
   assert.match(
     applyPending,
     /add column if not exists idempotency_key text[\s\S]*create unique index if not exists routine_checks_workspace_idempotency_key_uidx/i,
   );
-  assert.match(migrationScript, /const DEFAULT_MIGRATIONS = \[[\s\S]*20260717_0019_routine_check_idempotency\.sql[\s\S]*\]/);
-  assert.match(migrationScript, /before deploying the Hub routine check route/i);
 });

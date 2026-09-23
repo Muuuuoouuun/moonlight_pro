@@ -1,6 +1,7 @@
 # Supabase DB Pack
 
-Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안내 문서입니다.
+Com_Moon Hub OS의 스키마·마이그레이션 안내입니다. 운영 DB는 서울 리전
+`ncgpnqfulnlshegalmbd`이며, 실행 전 `npm run db:check`로 실제 상태를 확인합니다.
 
 ## 포함 파일
 
@@ -23,7 +24,9 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 - `migrations/20260804_0018_backend_optimization.sql`: 백엔드 최적화 — eeoCRM JSONB 조회 키·배치 조회 인덱스, `integration_connections`/`field_mappings` unique(단일-콜 upsert 성립), staging dedupe full unique 교체
 - `migrations/20260717_0019`~`20260719_0023`: routine idempotency · `0020`(nullable project progress) · task description · project context links · deal hide
 - `migrations/20260902_0024_overview_read_indexes.sql`: Overview lean read model 최신순 쿼리 인덱스(tasks/decisions/publish logs/automation runs/routine checks)
-- `apply-pending.sql`: **편의 번들** — 0003→0024를 시점순으로 묶은 단일 파일(멱등). 대시보드 SQL Editor에 한 번에 붙여넣기용. 정본은 위 개별 migration 파일.
+- `migrations/20260912_0025`~`20260923_0043`: 하루 리뷰·콘텐츠·메모·문의·Agent·Office·운영 목표·AI·캘린더·Top 3 등 후속 기능. 동일 번호가 다른 날짜에 재사용된 파일이 있으므로 **전체 파일명**으로 식별한다.
+- `migrations/20260923_0044_migration_history.sql`: 이후 파일의 이름·SHA256을 원자적으로 기록하는 비공개 운영 이력과 실행 함수.
+- `apply-pending.sql`: **과거 0003→0024 번들**. 현재 서울 운영 DB에는 실행하지 않는다.
 - `seed.supabase_first.sql`: foundation migration 이후 넣는 브랜드/프로젝트 seed 보강
 - `policies/supabase_first_rls.sql`: Auth 연결 후 적용할 RLS 정책 초안
 - `setup/`: 새 Supabase 프로젝트에 순서대로 적용하는 live setup pack
@@ -49,15 +52,21 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 
 ### 기존 Supabase 프로젝트
 
-1. `migrations/20260602_0004_live_setup_contracts.sql` 실행
-2. `setup/01_storage.sql` 실행
-3. `setup/99_smoke_checks.sql` 실행
-4. 운영 마이그레이션 적용 (0003→0024): **간편 경로** = `apply-pending.sql` 전체를 SQL Editor에 붙여넣고 Run (멱등). **개별 경로** = PAT(`SUPABASE_ACCESS_TOKEN=sbp_...`) 설정 후 `node scripts/apply-migrations.mjs <파일들…>`. 포함: `20260602_0003`(variant_type)·`0004`·`0005`~`0018`(Sales OS·백엔드 최적화)·0019~0023(routine idempotency·nullable progress·task detail·project links·deal hide)·`0024`(Overview read 인덱스).
-5. 앱 환경 변수를 실제 project URL/key/workspace ID로 맞춘 뒤 `npm run check:connections` 실행
+1. 먼저 `npm run db:check`와 해당 데이터 이관의 건수·충돌 점검으로 현재 상태를 읽는다. 파일이 있다는 이유만으로 기존 SQL을 다시 실행하지 않는다.
+2. 새로 검토한 파일만, PAT(`SUPABASE_ACCESS_TOKEN`)와 운영 URL을 설정한 체크아웃에서 아래처럼 실행한다. 예상 ref와 설정된 `SUPABASE_PROJECT_REF`·`SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_URL`이 모두 일치해야 한다. 새 SQL 파일에는 직접 `BEGIN`/`COMMIT`을 쓰지 않고 테이블·함수 이름을 스키마로 한정한다.
 
-> **라이브 적용 상태 (2026-08-04 확인):** 운영 프로젝트(rwqefdxalmbrkybxqwxj)에는 0003→0018 적용·검증 완료. 0019~0024는 배포 전 적용 대상으로 번들에 포함되어 있다. `schema_migrations` 추적 테이블이 없으므로 적용 여부는 마커(테이블/인덱스/제약 존재)로 확인한다.
+   ```bash
+   npm run db:migrate -- --expect-ref ncgpnqfulnlshegalmbd <새-마이그레이션-파일.sql>
+   npm run db:check
+   ```
 
-> 번호 메모: `0003`·`0004`는 `20260427`·`20260602` 두 벌이 있습니다(브랜치 병합 흔적). 적용은 날짜 접두사 순서대로 — `apply-pending.sql`이 그 순서를 이미 반영합니다.
+3. 이력 테이블이 없는 프로젝트는 `20260923_0044_migration_history.sql` **한 파일만 먼저** 적용한다. 0044 자체는 생성한 테이블·함수·권한으로 확인하며, 이후 파일은 `moonlight_ops.apply_migration`이 SQL과 `applied_migrations`의 전체 파일명·SHA256을 같은 트랜잭션으로 기록한다. 동일 해시 재실행은 건너뛰고, 변경된 파일은 거부한다. `CREATE INDEX CONCURRENTLY`처럼 트랜잭션 밖에서만 되는 명령은 이 실행기로 적용하지 않는다. 시간 초과·응답 오류 뒤에는 이력을 조회해 커밋 여부를 확인한 다음 처리한다.
+4. 0044 이전 파일에는 신뢰할 적용 이력이 없다. 기존 DB에는 `--allow-legacy` 없이 재실행할 수 없으며, 사용 전 스키마 마커와 데이터 이관 상태를 별도로 대조한다. 기존 파일 중 직접 `BEGIN`/`COMMIT`이 있는 것은 실행 함수가 거부하므로 수동 적용 계획이 필요하다. `20260921_0035_memo_notes_to_journal.sql`과 `20260923_0039_memo_notes_to_journal.sql`은 SQL 내용이 같은 데이터 이관이며 서울 운영 DB에서는 두 메모 모두 이관 완료를 대조했다. 새 DB 구축은 `setup/`과 개별 파일의 선행 의존성을 검토해 진행한다. `apply-pending.sql`은 최신 기능을 포함하지 않는다.
+5. 앱 환경 변수를 실제 project URL/key/workspace ID로 맞춘 뒤 `npm run check:connections`을 실행한다.
+
+> `0019~0023` 구간의 `0020`(nullable project progress)은 기존 DB의 근거 없는 기본 진행률을 제거한다. 운영 서울 DB에는 이 구간을 포함한 현재 기능이 적용되어 있으며, `db:check`의 0043까지 20개 기능 검사와 메모 이관 데이터 대조로 확인한다.
+
+> **2026-09-23 서울 적용:** `0044` 부트스트랩만 적용했다. `db:check`의 기존 20개 기능과 이력 객체 검사가 전부 PASS이며, 재실행은 SKIP이다. 0044는 이력 행 대신 객체·함수 본문 해시·권한으로 확인한다. 이후 파일부터 이력 행을 남긴다. 시험 호출은 트랜잭션을 롤백해 업무 테이블과 이력 테이블의 행 수를 바꾸지 않았다.
 
 ## 설계 포인트
 
