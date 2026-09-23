@@ -70,11 +70,13 @@
 
 2026-09-23 안정화에서 오늘 Top 3의 동시 선택 상한을 위한 `20260923_0043_task_focus_cap.sql`을 추가하고 로컬 PostgreSQL로 검증했다. 같은 날 서울 운영 DB(`ncgpnqfulnlshegalmbd`)에 해당 파일만 적용했으며 `npm run db:check` 전 항목이 통과했다. 트리거는 활성 상태이고 함수 실행 권한은 `service_role`에만 있다. 기존 작업 행은 변경하지 않았다.
 
+2026-09-23 DB 적용 점검에서 현재 기능 20개와 `notes`→`journal_entries` 메모 2건의 이관 완료를 확인했다. 추가 인덱스는 작업 30행 규모와 기존 workspace 인덱스 실행 계획에서 근거가 없어 만들지 않았다. `20260923_0044_migration_history.sql`만 서울 운영 DB에 적용해 비공개 `moonlight_ops` 스키마와 원자적 이력 실행 함수를 만들었다. `db:check`는 기존 기능 20개와 새 이력·RLS·함수 본문·권한 검사를 모두 통과했고, 재실행은 객체 확인 후 건너뛰었다. 테스트용 트랜잭션은 롤백되어 업무 행과 이력 행이 늘지 않았다. 이후 새 SQL은 전체 파일명·SHA256으로 기록한다. 과거 파일은 적용 기록으로 임의 채우지 않았다.
+
 Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 102/102이며 Phase 1A 완료를 뜻한다. Phase 1B·1C는 아직 남아 있으므로 Phase 1 전체 완료로 해석하지 않는다.
 
-2026-09-23 통합 및 안정화 후 루트 `npm test`는 **2377 tests · 통과 2366 · 실패 0 · 건너뜀 11**이다(건너뜀은 테스트 DB 연결이 있어야 도는 postgres 테스트). 이 줄을 기준선으로 쓰고, 이전 기록의 "1433 tests"·"692/692 통과, 82파일"은 낡았다. CLAUDE.md·AGENTS.md의 테스트 줄도 같은 값이어야 한다. 아래는 그 숫자에 이르기까지의 복구 경위다 — 2026-09-20에 **아예 돌지 않던 테스트 55건을 복구**해 1378 → 1433이 됐고, 원인 두 가지 모두 소스와 무관했다. (1) postgres를 띄우는 8파일이 macOS에서 `LC_ALL` 없이 기동을 거부해 discovery·daily review·inquiry·agent command의 **원자 RPC 검증이 통째로 미실행**이었다. (2) 스윕 테스트 3개(`motion`·`focus-ring`·`button-hover`)가 `.next` 정확일치로만 걸러 `.next.qa`·`.next.ship-*` 같은 빌드 잔재 디렉터리의 미니파이 CSS를 새 위반으로 오인했다. 커밋 `0cc7f18`.
+2026-09-23 통합 및 안정화 후 루트 `npm test`는 **2380 tests · 통과 2369 · 실패 0 · 건너뜀 11**이다(건너뜀은 테스트 DB 연결이 있어야 도는 postgres 테스트). 이 줄을 기준선으로 쓰고, 이전 기록의 "1433 tests"·"692/692 통과, 82파일"은 낡았다. CLAUDE.md·AGENTS.md의 테스트 줄도 같은 값이어야 한다. 아래는 그 숫자에 이르기까지의 복구 경위다 — 2026-09-20에 **아예 돌지 않던 테스트 55건을 복구**해 1378 → 1433이 됐고, 원인 두 가지 모두 소스와 무관했다. (1) postgres를 띄우는 8파일이 macOS에서 `LC_ALL` 없이 기동을 거부해 discovery·daily review·inquiry·agent command의 **원자 RPC 검증이 통째로 미실행**이었다. (2) 스윕 테스트 3개(`motion`·`focus-ring`·`button-hover`)가 `.next` 정확일치로만 걸러 `.next.qa`·`.next.ship-*` 같은 빌드 잔재 디렉터리의 미니파이 CSS를 새 위반으로 오인했다. 커밋 `0cc7f18`.
 
-파일 범위(2026-09-23 실측): 저장소의 `*.test.mjs`는 **326파일**이고 **전부 루트 글롭 안**이다(글롭 밖 0건). 한때 글롭 밖이던 `apps/hub/app/api/hub/content/transform/route.test.mjs`·`.../workflow/route.test.mjs` 2파일은 2026-09-20에 `apps/hub/app/**` 패턴이 추가되면서(`cc1b5c9`) 해소됐다. 그 전 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장해 이전에 CI 밖이던 20파일과 실패 4건을 해소한 것도 사실이다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬의 범위는 어긋나지 않는다.
+파일 범위(2026-09-23 실측): 저장소의 `*.test.mjs`는 **327파일**이고 **전부 루트 글롭 안**이다(글롭 밖 0건). 한때 글롭 밖이던 `apps/hub/app/api/hub/content/transform/route.test.mjs`·`.../workflow/route.test.mjs` 2파일은 2026-09-20에 `apps/hub/app/**` 패턴이 추가되면서(`cc1b5c9`) 해소됐다. 그 전 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장해 이전에 CI 밖이던 20파일과 실패 4건을 해소한 것도 사실이다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬의 범위는 어긋나지 않는다.
 
 사이드바 앵커는 코드(`hub-nav.js` 8 primary + 2 utility)·`hub-nav.test.mjs`·07-15 스펙 §3.1이 모두 일치한다(2026-09-04 주석·스펙 갱신으로 해소).
 

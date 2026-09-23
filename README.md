@@ -50,7 +50,7 @@ Health endpoints:
 
 Run `npm run db:check` before enabling the content, journal, inquiry, discovery-nudge, or agent workflows. It reads the configured database catalog through the Supabase Management API and checks their required tables, RLS, and service-only RPC permissions. It requires `SUPABASE_ACCESS_TOKEN` in the local environment and does not change data. Missing objects or permissions cause a nonzero exit.
 
-Apply a reviewed migration explicitly with `npm run db:migrate -- <filename.sql>`, then rerun `npm run db:check`. The migration command's legacy default list stops at 0025; it does not apply all later migrations or track which ones already ran. Do not rerun a migration solely because its file exists.
+Apply a reviewed migration with `npm run db:migrate -- --expect-ref <project-ref> <filename.sql>`, then rerun `npm run db:check`. The command requires an explicit file and expected project. The 0044 bootstrap is verified by its private objects; subsequent files are recorded by full filename and SHA256 and identical completed files are skipped. Write new migration SQL without its own BEGIN/COMMIT. Earlier migrations have no recorded history; verify their live state before any legacy reapply. See [supabase/README.md](supabase/README.md).
 
 `npm test` covers every `*.test.mjs` in the repo — `scripts/`, `apps/hub/lib/`, `apps/hub/components/**`, `apps/engine/**`, and `packages/**`. CI delegates to the same command, so the two scopes cannot drift. To run one file:
 
