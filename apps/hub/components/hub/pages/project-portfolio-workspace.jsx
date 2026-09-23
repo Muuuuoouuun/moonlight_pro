@@ -499,10 +499,23 @@ export function ProjectPortfolioWorkspace({
                 </div>
                 <div className={workStyles.progressSummary}>
                   <div><strong className="stat">{progress === null ? '—' : <>{progress}<small>%</small></>}</strong><span>{evidenceDetail}</span></div>
-                  {progress !== null && <div className={workStyles.progressTrack} role="progressbar" aria-label="프로젝트 진척" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={`${progress}% · ${evidenceDetail} · ${evidenceTime}`}>
-                    <span style={{ width: `${progress}%` }} />
-                    {[25, 50, 75].map(value => <i key={value} style={{ left: `${value}%` }} />)}
-                  </div>}
+                  {progress !== null && <>
+                    <div
+                      className={workStyles.progressTrack}
+                      role="progressbar"
+                      aria-label="프로젝트 진척"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={progress}
+                      aria-valuetext={`${progress}% · ${evidenceDetail} · ${evidenceTime}`}
+                      style={{ '--gauge-progress': `${progress}%`, '--gauge-remaining': `${100 - progress}%` }}
+                    >
+                      <span key={`${project.id}:${progress}:fill`} className={workStyles.progressFill} aria-hidden="true" />
+                      {[25, 50, 75].map(value => <i key={value} style={{ left: `${value}%` }} aria-hidden="true" />)}
+                      {progress > 0 && <span key={`${project.id}:${progress}:tip`} className={workStyles.progressTip} aria-hidden="true" />}
+                    </div>
+                    <div className={workStyles.progressScale} aria-hidden="true"><span>0</span><span>25</span><span>50</span><span>75</span><span>100%</span></div>
+                  </>}
                   {evidenceTime && <span className={workStyles.progressMeta}>{evidenceTime}</span>}
                   <span className={workStyles.progressMeta}><Iconed name="calendar" size={12} />{formatLongDate(project.dueAt)}{dday && <Badge tone={dday.tone} size="xs">{dday.text}</Badge>}{risk.risky && <span className={workStyles.risk}>{risk.label}</span>}</span>
                   {project.displayProgress?.partial && <span className={workStyles.progressMeta}>진척 근거를 일부 읽지 못했습니다.</span>}

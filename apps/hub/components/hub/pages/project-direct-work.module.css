@@ -8,9 +8,15 @@
 .progressSummary strong { font-size: 32px; font-weight: 700; line-height: 1; letter-spacing: -0.04em; color: var(--fg); }
 .progressSummary strong small { font-size: 14px; color: var(--fg-muted); margin-left: 3px; font-weight: 500; }
 .progressSummary > div:first-child > span { color: var(--fg-muted); font-size: 10.5px; }
-.progressTrack { position: relative; height: 4px; border-radius: 2px; background: var(--line-soft); overflow: hidden; }
-.progressTrack > span { display: block; height: 100%; border-radius: inherit; background: var(--moon-300); transition: width var(--dur-enter) var(--ease-hub); }
-.progressTrack > i { position: absolute; inset-block: 0; width: 1px; background: var(--surface); }
+.progressTrack { position: relative; height: 12px; border: 1px solid var(--line-soft); border-radius: 999px; background: var(--surface-3); isolation: isolate; }
+.progressFill { position: absolute; inset: 1px; border-radius: inherit; background: linear-gradient(90deg, var(--project-gauge-0) 0%, var(--project-gauge-25) 25%, var(--project-gauge-50) 50%, var(--project-gauge-75) 75%, var(--project-gauge-100) 100%); clip-path: inset(0 var(--gauge-remaining) 0 0 round 999px); animation: projectGaugeFill var(--dur-gauge) var(--ease-gauge) both; }
+.progressTrack > i { position: absolute; z-index: 1; inset-block: 1px; width: 1px; background: var(--surface); opacity: .8; }
+.progressTip { position: absolute; z-index: 2; left: var(--gauge-progress); top: 50%; width: 9px; height: 9px; border-radius: 50%; background: var(--project-gauge-spark); box-shadow: 0 0 0 1px var(--project-gauge-tip-line), 0 0 12px var(--project-gauge-glow); transform: translate(-50%, -50%); animation: projectGaugeTip var(--dur-gauge) var(--ease-gauge) both; pointer-events: none; }
+.progressTip::before { content: ''; position: absolute; left: 50%; top: 50%; width: 23px; height: 23px; background: var(--project-gauge-spark); clip-path: polygon(50% 0, 57% 40%, 100% 50%, 57% 60%, 50% 100%, 43% 60%, 0 50%, 43% 40%); transform: translate(-50%, -50%) scale(0); filter: drop-shadow(0 0 5px var(--project-gauge-glow)); opacity: 0; animation: projectGaugeSpark var(--dur-gauge) linear both; }
+.progressScale { display: flex; align-items: center; justify-content: space-between; color: var(--fg-dim); font-family: var(--font-mono); font-size: 10.5px; font-variant-numeric: tabular-nums; line-height: 1; }
+@keyframes projectGaugeFill { from { clip-path: inset(0 100% 0 0 round 999px); } to { clip-path: inset(0 var(--gauge-remaining) 0 0 round 999px); } }
+@keyframes projectGaugeTip { from { left: 0; opacity: 0; } to { left: var(--gauge-progress); opacity: 1; } }
+@keyframes projectGaugeSpark { 0%, 34% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(-20deg); } 53% { opacity: 1; transform: translate(-50%, -50%) scale(1.45) rotate(12deg); } 72%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(.6) rotate(30deg); } }
 .progressMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--fg-muted); font-size: 10.5px; }
 .risk { color: var(--danger); margin-left: auto; }
 .mobileOnly { display: none; }
@@ -91,4 +97,4 @@
   .due { font-size: 10.5px; }
 }
 
-@media (prefers-reduced-motion: reduce) { .progressTrack > span { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .progressTip::before { display: none; } }
