@@ -149,7 +149,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 **콘텐츠 제작 (2026-09-12)**
 
 - [`superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md`](superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md) — **방향 승인 · Studio 1차 구현**. 원문·기획·채널별 초안·AI 후보 비교/적용·버전 복원을 연결. 구현·로컬 검증 범위는 문서 §0과 [실행 기록](superpowers/plans/2026-09-12-content-workflow.md)을 따른다. [후속 검증·운영 적용 준비](superpowers/plans/2026-09-12-content-release.md)에서 통합 테스트 오류를 해결했다. 2026-09-14 인증 갱신 및 0026 운영 DB 적용 완료. 일지 신설·기간 회고·자동 콘텐츠 크론과 코드 배포는 후속 범위다.
-- [`superpowers/specs/2026-09-21-brand-research-editorial-system-design.md`](superpowers/specs/2026-09-21-brand-research-editorial-system-design.md) — **브랜드별 목적·초안 주기·우선 리서치 범위 확정 / 수집·선별·첫 가동 계약은 DRAFT, 구현 전**. politic_officer 2시간 간격, class.moon 하루 3개, 22th nomad 하루 1개·큰 행사 때 최대 7개의 선별용 초안을 제안된 근거·실패·비용 계약으로 준비하고, 운영자가 킵/디벨롭/완성을 선택하는 흐름이다. 09-23 §15는 실제 자료로 수동 회차를 먼저 검증하는 권장안이다.
+- [`superpowers/specs/2026-09-23-research-inbox-content-promotion-design.md`](superpowers/specs/2026-09-23-research-inbox-content-promotion-design.md) — **Studio 전 리서치함 선별과 두 목적지 운영자 확인 / 실행 계약 DRAFT, 구현 전**. 브랜드·콘텐츠에서 같은 검토용 원고를 보고 버리거나 기존 소재함의 콘텐츠 후보(`idea`) 또는 Studio 초안(`draft`)으로 보낸다. 기존 소재함 후보를 나중에 같은 콘텐츠 ID로 Studio 초안화한다. 체크·원자 승격·중립 원고 형식·검증 순서는 권장안이다.
+- [`superpowers/specs/2026-09-21-brand-research-editorial-system-design.md`](superpowers/specs/2026-09-21-brand-research-editorial-system-design.md) — **브랜드별 목적·검토용 원고 주기·우선 리서치 범위 확정 / 수집·선별·첫 가동 계약은 DRAFT, 구현 전**. politic_officer 2시간 간격, class.moon 하루 3개, 22th nomad 하루 1개·큰 행사 때 최대 7개의 근거 있는 검토용 원고를 준비한다. 검토 위치와 콘텐츠 원장 승격은 위 09-23 후속 스펙이 대체한다. §15의 수동 회차와 근거·실패·비용 계약은 유효하다.
 
 **콘텐츠 성과 (2026-09-22)**
 
