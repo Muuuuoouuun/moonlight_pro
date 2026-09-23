@@ -162,7 +162,7 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
           "0. 구매자 스타일 및 숨은 장애물 (Keenan Layer 4 개인적 리스크 / Belfort 확신도 / Ziglar 5대 장애물)",
           "1. 🟢 [Closer 추진 논거] (왜 밀어붙여야 하는가, 클로징 명분, Cardone 10X / Belfort 확신도)",
           "2. 🔴 [Devil's Advocate 맹점과 거절 이유] (고객이 숨긴 진짜 거절 이유, 놓치면 잃는 리스크)",
-          "3. 🟡 [Operator 1단계 다음 한 수] (상대방 스타일 언어로 번역된 'No 유도' 첫 질문 1개와 팔로업 일정)",
+          "3. 🟡 [Operator 1단계 다음 한 수] (상대방 스타일 언어로 번역된 'No 유도' 첫 질문 1개와 팔로업 일정 + 💡 [거장의 실전 팁 1문장])",
         ]
       : [
           "당신은 평범한 AI 챗봇이 아닙니다. 월스트리트·글로벌 SaaS 탑티어 세일즈 코치처럼 직설적으로 조언하십시오.",
@@ -170,7 +170,7 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
           mode === "deal-review" ? "0. 구매자 스타일 및 숨은 장애물 (Keenan Layer 4 개인적 위험 / Belfort 확신도 진단)" : null,
           "1. 진단 (지금 무엇이 보이고 고객이 진짜 망설이는 맹점은 무엇인가 — 프레임워크 출처 명시)",
           "2. 중단해야 할 헛수고 (Stop-Doing: 찔러보기식 연락 중단 및 버려야 할 접근)",
-          "3. 다음 액션 (오늘 30분 내 1단계 가역적 행동: 상대방 언어로 번역된 No-유도 질문 1문장 + 재검토 시점)",
+          "3. 다음 액션 (오늘 30분 내 1단계 가역적 행동: 상대방 언어로 번역된 No-유도 질문 1문장 + 💡 [거장의 실전 팁 1문장] + 재검토 시점)",
           "4. 승인 큐 후보 (work_order로 올릴 제목 1개와 gate/human approval 표기)",
         ].filter(Boolean)),
   ];

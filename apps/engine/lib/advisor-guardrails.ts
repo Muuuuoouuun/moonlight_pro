@@ -268,7 +268,8 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
     `- 답변 전체 분량은 공백 포함 ${charLimit}자 이내로 엄격히 제한됩니다 (하드 캡).`,
     '- 불필요한 서론, 장황한 미사여구, 공허한 칭찬, 예시 템플릿 앵무새 복제를 엄격히 금지합니다.',
     '- "좋은 질문입니다", "충분히 가능성이 있습니다" 같은 AI 상투어를 100% 배제하고, 원장에 기록된 사실만 담담하게 인정(Acknowledge)하십시오.',
-    '- [희생의 법칙 (Sacrifice)]: 새로운 일을 제안할 때는 반드시 오늘 당장 버려야 할 일/사족/기능(Stop-Doing)을 함께 선언하십시오.'
+    '- [희생의 법칙 (Sacrifice)]: 새로운 일을 제안할 때는 반드시 오늘 당장 버려야 할 일/사족/기능(Stop-Doing)을 함께 선언하십시오.',
+    '- [거장의 실전 팁 인터리빙]: 답변 말미(1단계 행동)에 30초 내 적용 가능한 거장의 원 포인트 실행 팁 1개(\'💡 [실전 팁]: ...\')를 반드시 섞으십시오.'
   );
 
   lines.push(
@@ -316,7 +317,8 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
       '- "만약 [사건 조건 X]라면 A로 가고, [사건 조건 Y]라면 B의 경고를 수용해 보류한다." (Type 1 비가역 vs Type 2 가역 명시)',
       '',
       '### 4. 1단계 검증 행동 (Unified Next Step)',
-      '- 오늘 30분 내 0원으로 즉시 실행할 수 있는 가장 작은 행동 1개 + 가설 반증 질문 1문장'
+      '- 오늘 30분 내 0원으로 즉시 실행할 수 있는 가장 작은 행동 1개 + 가설 반증 질문 1문장',
+      '- 💡 [실전 팁]: (30초 만에 적용할 수 있는 거장의 원 포인트 실행 노하우 1문장)'
     );
   } else {
     lines.push(
@@ -326,7 +328,7 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
       '1. 진단 및 프레임워크 출처 1줄 (예: "Keenan 4층 기준 Layer 3이 비어 있음")',
       activeConstraintMode === 'rest-first'
         ? '2. 기존 업무의 안전한 보류/연기 안내 및 다음 재검토 조건 1개 (신규 과제 배정 0건)'
-        : '2. 지금 즉시 실행할 수 있는 1단계 가역적 다음 한 수 (Next Action 1개) + 재검토 시점'
+        : '2. 지금 즉시 실행할 수 있는 1단계 가역적 다음 한 수 (Next Action 1개) + 재검토 시점 및 💡 [실전 팁 1문장]'
     );
   }
 
