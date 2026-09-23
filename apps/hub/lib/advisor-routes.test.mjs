@@ -53,6 +53,13 @@ test('advice-only records a run without creating an approval backlog', async () 
   assert.equal(state.order, undefined);
   assert.equal(data.workOrder.reason, 'not-requested');
 });
+test('ordinary Council advice does not create a work order by default', async () => {
+  const data = await (await POST(request({}))).json();
+  assert.equal(data.status, 'generated');
+  assert.equal(data.runId, 'run-1');
+  assert.equal(state.order, undefined);
+  assert.equal(data.workOrder.reason, 'not-requested');
+});
 test('sparring mode successfully invokes brand-mentor and records run', async () => {
   const res = await POST(request({ mode: 'sparring', draft: '신규 오퍼 검토', createWorkOrder: false }));
   const data = await res.json();
@@ -69,7 +76,7 @@ test('explicit proposal links the exact run and records its emitted count', asyn
 });
 test('proposal persistence failure preserves advice and discloses the unsaved order', async () => {
   state.orderFails = true;
-  const data = await (await POST(request({}))).json();
+  const data = await (await POST(request({ createWorkOrder: true }))).json();
   assert.equal(data.text, 'advice');
   assert.equal(data.workOrder.persisted, false);
   assert.equal(state.emission, undefined);

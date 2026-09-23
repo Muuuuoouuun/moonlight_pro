@@ -197,6 +197,17 @@ test('daily brief retains exact inquiry count independently of preview rows and 
   assert.ok(body.signals.length <= 7);
 });
 
+test('pending work orders remain available as queue data without becoming Home or Today signals', async () => {
+  state.orders = {
+    source: 'supabase',
+    orders: [{ id: 'order-1', status: 'proposed', persona: 'guru', kind: 'followup', title: '연락 제안' }],
+  };
+  const body = await (await dailyBriefRoute.GET()).json();
+  assert.equal(body.queue.pending, 1);
+  assert.equal(body.queue.orders[0].id, 'order-1');
+  assert.equal(body.signals.some((signal) => signal.id === 'queue-approvals'), false);
+});
+
 test('inquiry read failure does not erase readable task data', async () => {
   state.inquiries = { status: 'error', source: 'error', rows: [], unreadCount: null, error: 'inquiries-read-failed' };
   const body = await (await dailyBriefRoute.GET()).json();

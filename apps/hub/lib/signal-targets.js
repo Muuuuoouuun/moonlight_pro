@@ -21,9 +21,6 @@ export const SIGNAL_TARGETS = {
   decision: 'dashboard/work/decisions?new=decision',
   rhythm: 'dashboard/work/rhythm',
   focus: 'dashboard/work/calendar?focus=15',
-  // 승인 큐의 정본 표면(agents/orders) — 자기 경로(daily-brief)를 가리키면 내비가
-  // 스킵돼 "처리함"만 찍히는 no-op 버튼이 된다(2026-08-05 re-audit #6).
-  queueApprovals: 'dashboard/agents/orders',
   runs: 'dashboard/automations/runs',
   automations: 'dashboard/automations',
   content: 'dashboard/content/queue',

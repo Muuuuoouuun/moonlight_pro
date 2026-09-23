@@ -123,34 +123,6 @@ function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = 
   return [];
 }
 
-// Pending approvals nudge — the proposed work-order queue surfaced in the signal feed.
-// Groups by persona so this reads as "which agents are waiting on me" instead of just
-// a bare count — the same roster Council/Orders show, not a separately invented one.
-function buildApprovalSignals(queue) {
-  const pending = queue?.pending || 0;
-  if (!pending) return [];
-  const orders = queue.orders || [];
-  const byPersona = new Map();
-  orders.forEach((o) => {
-    const key = o.persona || "미지정";
-    byPersona.set(key, (byPersona.get(key) || 0) + 1);
-  });
-  const personaBreakdown = Array.from(byPersona.entries())
-    .map(([persona, count]) => (count > 1 ? `${persona} ${count}` : persona))
-    .join(" · ");
-  const preview = orders.slice(0, 3).map((o) => o.title).join(" · ");
-  return [{
-    id: "queue-approvals",
-    tone: "neutral",
-    kind: "Queue",
-    title: `승인 대기 ${pending}건 — ${personaBreakdown}`,
-    summary: preview || "페르소나·인박스가 제안한 액션이 승인을 기다립니다.",
-    meta: "Work orders · proposed",
-    source: { from: "Agents", ref: "PROPOSED" },
-    decisions: [action("승인 큐 확인", "queueApprovals", true)],
-  }];
-}
-
 function buildRevenueSignals(revenue, staleDealIds = new Set()) {
   const deals = Array.isArray(revenue.deals) ? revenue.deals : [];
   const leads = Array.isArray(revenue.leads) ? revenue.leads : [];
@@ -487,7 +459,6 @@ export async function GET() {
   const signals = withoutFocusDuplicates(
     [
       ...buildUnifiedRiskSignals(operatorRevenue, projects, automations, staleDealIds),
-      ...buildApprovalSignals(queue),
       ...buildRevenueSignals(operatorRevenue, staleDealIds),
       ...buildContentSignals(content),
       ...buildAutomationSignals(automations),

@@ -2200,12 +2200,9 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
   const focusUrgentCount = ledger.summary?.focusUrgentCount ?? (ledger.dailyFocus?.urgentKa?.item ? 1 : 0);
   const screenUrgentCount = urgentCount + focusUrgentCount;
   // 접힌 헤더의 요약 — 0건을 굳이 말하지 않고(소음), read 실패는 0으로 뭉개지 않는다.
-  // 승인 대기가 이미 신호(queue-approvals)로 올라와 있으면 반복하지 않는다: A-2와 같은 규칙으로,
-  // 위에서 자리를 받은 것을 아래에서 또 세면 첫 화면 숫자가 다시 검증 불가가 된다.
-  const approvalPromoted = ledger.signals.some((s) => s.id === 'queue-approvals');
   const approvalSummary = ledger.queue?.source === 'error'
     ? '승인 큐 확인 불가'
-    : !approvalPromoted && Number(ledger.queue?.pending) > 0
+    : Number(ledger.queue?.pending) > 0
       ? `승인 대기 ${ledger.queue.pending}건`
       : null;
   const ranked = React.useMemo(() => rankSignals(ledger.signals), [ledger.signals]);

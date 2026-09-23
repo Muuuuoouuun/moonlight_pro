@@ -175,8 +175,8 @@ export async function POST(req) {
   }
 
   let workOrder = { persisted: false, reason: "not-requested" };
-  // UI callers retain the existing proposal behavior; MCP advice-only calls opt out.
-  if (input.createWorkOrder !== false) {
+  // Advice is the default. Only an explicit proposal request enters the work-order queue.
+  if (input.createWorkOrder === true) {
     if (advisorRunResult(result.status, result.data) !== "ok") {
       workOrder = { persisted: false, reason: "not-generated" };
     } else {
