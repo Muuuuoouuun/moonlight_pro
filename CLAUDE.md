@@ -44,6 +44,7 @@
 - 행 hover는 `.hub-row`, 카드형 클릭 타깃은 `.hub-card-link`, 칸반 카드는 `.hub-kanban-card`, `Button`은 `.hub-btn`+`.hub-btn--<variant>`, `IconButton`은 `.hub-iconbtn` (JS onMouseEnter/Leave 신규 작성 금지). `Button`/`IconButton`의 휴지 색을 인라인으로 되돌리면 인라인이 클래스 규칙을 이겨 hover가 다시 죽는다
 - 모션: `--dur-hover`/`--dur-enter`/`--dur-panel`/`--dur-overlay`·`--ease-hub`·`--stagger-step` 토큰과 `.fade-up`/`.stagger-up`만 사용 — 페이지 안 raw ms 리터럴·인라인 `cubic-bezier(` 금지 (DESIGN.md §9). `components/hub/motion.test.mjs`가 저장소 전체를 훑어 CI에서 막는다
 - 내비: 사이드바 앵커는 `hub-nav.js`(+ `hub-nav.test.mjs`), ⌘K 카탈로그는 `hub-data.js`의 `NAV_TREE`, 워크스페이스 소속은 `workspace-map.js` — `NAV_TREE`에 넣어도 사이드바 행은 생기지 않는다
+- 표면 예산: 기존 화면에 새 기능을 패널·버튼으로 덧붙이지 않는다. 그 화면의 핵심 동작만 본문에 두고, 나머지는 `더보기` 드로어나 다른 탭으로 보낸다. 본문에 무엇을 더하려면 먼저 하나를 빼거나 스펙의 예산을 고친다(2026-09-23 운영자 지시 "계속 붙는 것들 정리"). Studio는 `pages/content-studio-surface.test.mjs`가 기본 화면 예산을 고정한다 — `docs/superpowers/specs/2026-09-23-studio-simplification.md`
 - 인터랙션 계약(생성 N 단축키·ESC/오버레이 닫기·딥링크·정렬 3단 토글)은 DESIGN.md §8.1 준수
 - 반응형: 모바일 우선. 세그먼트 토글은 모바일에서도 가로 유지 (flex-basis:100% 자식 강제 금지)
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Badge, Button, Card, SelectField } from '../hub-primitives';
+import { Badge, Button, SelectField } from '../hub-primitives';
 import {
   STUDIO_CHANNELS, formatForChannel, isTransformStale, previewCandidate, studioErrorMessage,
 } from '@/lib/content-workflow-client';
@@ -59,7 +59,6 @@ export function StudioAI({ studio, selection, onOpenHistory }) {
   const candidates = state.run?.result?.candidates || [];
   const selectedText = activeSelection ? draft.body.slice(activeSelection.start, activeSelection.end) : '';
   const source = state.run?.source_snapshot;
-  const guidance = getEditorialGuidance(operation);
   const resultGuidance = source?.editorialGuidance;
   const officeEditing = isOfficeStudioOperation(operation, { variantType: draft.variantType, channel: draft.channel });
   const resultOffice = source?.officeProvenance?.ownerId === 'sylveon' ? source.officeProvenance : null;
@@ -80,22 +79,23 @@ export function StudioAI({ studio, selection, onOpenHistory }) {
       if (mounted.current) setState((current) => ({ ...current, phase: 'unknown', message: '응답이 끊겨 생성 결과를 확인하지 못했습니다. 같은 요청의 상태를 확인해주세요.' }));
     }
   };
-  const generate = async () => {
+  const generate = async (op = operation) => {
+    setOperation(op);
     setState((current) => ({ ...current, phase: 'generating', message: '' }));
     const saved = await save(true);
     if (!saved?.variantId) {
       setState((current) => ({ ...current, phase: 'error', message: '콘텐츠를 서버에 먼저 저장해야 AI로 작업할 수 있습니다.' }));
       return;
     }
-    const channel = operation === 'repurpose' ? targetChannel : saved.channel;
+    const channel = op === 'repurpose' ? targetChannel : saved.channel;
     const sameSelection = activeSelection && activeSelection.body === saved.body;
     let range = sameSelection ? { start: activeSelection.start, end: activeSelection.end } : { start: 0, end: saved.body.length };
-    if (operation === 'draft' || operation === 'repurpose' || structured) range = { start: 0, end: saved.body.length };
-    if (operation === 'hooks' && !sameSelection) range.end = saved.body.indexOf('\n\n') >= 0 ? saved.body.indexOf('\n\n') : saved.body.length;
+    if (op === 'draft' || op === 'repurpose' || structured) range = { start: 0, end: saved.body.length };
+    if (op === 'hooks' && !sameSelection) range.end = saved.body.indexOf('\n\n') >= 0 ? saved.body.indexOf('\n\n') : saved.body.length;
     const request = {
       requestId: crypto.randomUUID(), contentId: saved.contentId, variantId: saved.variantId,
-      expectedVariantUpdatedAt: saved.variantUpdatedAt, operation, selection: range, tone,
-      target: { variantType: operation === 'repurpose' ? formatForChannel(channel) : saved.variantType, channel },
+      expectedVariantUpdatedAt: saved.variantUpdatedAt, operation: op, selection: range, tone,
+      target: { variantType: op === 'repurpose' ? formatForChannel(channel) : saved.variantType, channel },
     };
     requestRef.current = request;
     await dispatch(request);
@@ -105,27 +105,33 @@ export function StudioAI({ studio, selection, onOpenHistory }) {
     if (result) setState({ phase: 'applied', message: mode === 'new_variant' ? '새 채널 결과물로 저장했습니다.' : '후보를 적용했습니다. 버전 기록에서 이전 내용으로 복원할 수 있습니다.', run: null, persisted: false, recoveryToken: null });
   };
   const persist = () => dispatch({ action: 'recover', requestId: state.run.id, recoveryToken: state.recoveryToken });
-  const canGenerate = studio.ready && !recovery && !busy && !generating &&
-    (operation === 'draft' ? Boolean(draft.sourceIdea.trim() || draft.brief.message.trim()) : Boolean(draft.body.trim()));
-  return <Card className="studio-ai-card">
+  const canRun = (op) => studio.ready && !recovery && !busy && !generating && !['unknown', 'running', 'unsaved'].includes(state.phase) &&
+    (op === 'draft' ? Boolean(draft.sourceIdea.trim() || draft.brief.message.trim()) : Boolean(draft.body.trim()));
+  const moreOperations = OPERATIONS.filter((entry) => !['draft', 'polish'].includes(entry.value) && (!structured || !['hooks', 'shorten'].includes(entry.value)));
+  const moreOperation = moreOperations.some((entry) => entry.value === operation) ? operation : moreOperations[0]?.value;
+  const moreGuidance = getEditorialGuidance(moreOperation);
+  // 자주 쓰는 두 작업(초안·다듬기)만 버튼으로 드러내고, 나머지 작업·말투·기준은 '다른 작업'에 접어 둔다.
+  return <div className="studio-ai" aria-label="AI 작업">
     <div className="studio-stack">
-      <div className="studio-row"><h3 className="studio-section-title">{officeEditing ? `님피아 · ${operation === 'draft' ? '원고 초안' : '원고 다듬기'}` : 'AI 작업'}</h3><Badge tone="neutral" size="xs">비교 후 적용</Badge></div>
-      <SelectField label="무엇을 만들까요?" options={OPERATIONS.filter((entry) => !structured || !['hooks', 'shorten'].includes(entry.value))} value={operation} disabled={generating || busy} onChange={(event) => setOperation(event.target.value)} />
-      <SelectField label="말투" options={TONES} value={tone} disabled={generating || busy} onChange={(event) => setTone(event.target.value)} />
-      <details className="studio-criteria" open>
-        <summary>적용 기준 · {guidance.criteria.map(rule => rule.label).join(' / ')}</summary>
-        <ul>{guidance.criteria.map(rule => <li key={rule.id} title={rule.source}>{rule.criterion}</li>)}</ul>
-      </details>
-      {operation === 'repurpose' && <SelectField label="변형할 채널" options={STUDIO_CHANNELS.map(({ key, label }) => ({ value: key, label }))} value={targetChannel} onChange={(event) => setTargetChannel(event.target.value)} disabled={generating || busy} />}
-      <div className="studio-ai-context">
-        <span className="studio-eyebrow">{operation === 'draft' ? '원문 + 기획 카드' : operation === 'repurpose' ? '현재 결과물 전체' : activeSelection ? '선택한 부분' : operation === 'hooks' ? '첫 문단' : '현재 결과물 전체'}</span>
-        <p>{operation === 'draft' ? '입력한 메모와 기획을 바탕으로 초안을 만듭니다. 부족한 근거는 별도로 표시합니다.' : selectedText && operation !== 'repurpose' ? selectedText.slice(0, 180) : '저장된 콘텐츠와 선택한 브랜드의 지침을 사용합니다.'}</p>
+      <div className="studio-actions">
+        <Button variant="outline" icon="sparkle" disabled={!canRun('draft')} onClick={() => generate('draft')}>{generating && operation === 'draft' ? 'AI 초안 작성 중…' : 'AI 초안'}</Button>
+        <Button variant="outline" icon="sparkle" disabled={!canRun('polish')} onClick={() => generate('polish')}>{generating && operation === 'polish' ? 'AI 다듬는 중…' : activeSelection ? '선택 부분 AI 다듬기' : 'AI 다듬기'}</Button>
+        {!draft.sourceIdea.trim() && !draft.brief.message.trim() && !draft.body.trim() && <span className="studio-muted studio-small">원문 메모를 적으면 AI 초안을 만들 수 있습니다.</span>}
       </div>
-      <Button variant="primary" icon="sparkle" disabled={!canGenerate || ['unknown', 'running', 'unsaved'].includes(state.phase)} onClick={generate}>
-        {generating ? 'AI 작업 중…' : candidates.length ? '새 후보 생성' : officeEditing ? operation === 'draft' ? '님피아로 초안 만들기' : '님피아로 원고 다듬기' : '후보 만들기'}
-      </Button>
-      {!draft.sourceIdea && !draft.brief.message && operation === 'draft' && <p className="studio-muted studio-small">먼저 원문 메모나 핵심 메시지를 적어주세요.</p>}
-      {generating && <p role="status" className="studio-muted studio-small">작업 중에도 글을 쓸 수 있습니다. 본문이 바뀌면 새 내용으로 다시 생성해야 합니다.</p>}
+      <details className="studio-ai-more">
+        <summary>다른 작업 · 말투</summary>
+        <div className="studio-stack studio-source-fields">
+          <SelectField label="작업" options={moreOperations} value={moreOperation} disabled={generating || busy} onChange={(event) => setOperation(event.target.value)} />
+          {moreOperation === 'repurpose' && <SelectField label="변형할 채널" options={STUDIO_CHANNELS.map(({ key, label }) => ({ value: key, label }))} value={targetChannel} onChange={(event) => setTargetChannel(event.target.value)} disabled={generating || busy} />}
+          <SelectField label="말투" options={TONES} value={tone} disabled={generating || busy} onChange={(event) => setTone(event.target.value)} />
+          <details className="studio-criteria">
+            <summary>적용 기준 · {moreGuidance.criteria.map(rule => rule.label).join(' / ')}</summary>
+            <ul>{moreGuidance.criteria.map(rule => <li key={rule.id} title={rule.source}>{rule.criterion}</li>)}</ul>
+          </details>
+          <div className="studio-actions"><Button variant="outline" icon="sparkle" disabled={!moreOperation || !canRun(moreOperation)} onClick={() => generate(moreOperation)}>{generating && operation === moreOperation ? 'AI 작업 중…' : '실행'}</Button></div>
+        </div>
+      </details>
+      {generating && <p role="status" className="studio-muted studio-small">{officeEditing ? '님피아 편집 지침으로 작업 중입니다. ' : ''}작업 중에도 글을 쓸 수 있습니다. 본문이 바뀌면 새 내용으로 다시 생성해야 합니다.</p>}
       {state.message && <p role="status" className={['error', 'unknown'].includes(state.phase) ? 'studio-error' : 'studio-muted'}>{state.message}</p>}
       {state.phase === 'applied' && onOpenHistory && <Button variant="outline" onClick={onOpenHistory}>이전 버전 확인·복원</Button>}
       {['running', 'unknown', 'error'].includes(state.phase) && requestRef.current && <Button variant="outline" onClick={() => dispatch(requestRef.current)} disabled={generating}>같은 요청 상태 확인</Button>}
@@ -156,5 +162,5 @@ export function StudioAI({ studio, selection, onOpenHistory }) {
         <p className="studio-muted studio-small">AI가 제안한 사실·수치·인용은 확인한 뒤 사용해주세요.</p>
       </div>}
     </div>
-  </Card>;
+  </div>;
 }
