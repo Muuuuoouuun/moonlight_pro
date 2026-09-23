@@ -1,11 +1,13 @@
 "use client";
 
 import React from "react";
-import { Badge, Button, Drawer, Input } from "../hub-primitives";
+import { Badge, Button, Drawer, IconButton, Input } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 import { readTaskChecklist } from '@/lib/task-checklist';
 import { ProjectWorkList } from './project-work-list';
 import workStyles from './project-direct-work.module.css';
+import indexStyles from './project-index-controls.module.css';
+import { useProjectIndexControls, ProjectIndexMenu } from './project-index-controls';
 import deliveryStyles from "./project-delivery.module.css";
 import { ProjectDeliverySummary } from "./project-delivery";
 import { BrandMark } from "./project-pms-components";
@@ -98,12 +100,16 @@ function computeDDay(dueAt) {
   return { text: `D-${diff}`, tone: "neutral" };
 }
 
-function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, onSelect }) {
+function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, onSelect, controls }) {
   const progress = progressValue(project);
 
   const risk = projectRisk(project, window);
   const dday = project.deadlineAlertSuppressed ? null : computeDDay(project.dueAt);
   return (
+    <div className={indexStyles.row} data-project-index-id={project.id}
+      data-dragging={controls.drag?.id === project.id ? 'true' : undefined}
+      data-drop={controls.drag?.id !== project.id && controls.drag?.target?.id === project.id ? controls.drag.target.placement : undefined}
+      {...controls.rowEvents(project.id)}>
     <button
       type="button"
       className="hub-project-portfolio-index-row hub-row"
@@ -115,7 +121,7 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
       onClick={() => onSelect(project.id)}
     >
       <span className="hub-project-portfolio-index-row__heading">
-        <BrandMark brand={brand} size={19} active={selected} />
+        <span className={indexStyles.mark}><BrandMark brand={brand} size={19} active={selected} /></span>
         <strong>{project.name}</strong>
         <span className="mono">{progress === null ? "—" : `${progress}%`}</span>
       </span>
@@ -130,6 +136,12 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
         </span>}
       </span>
     </button>
+    <IconButton className={indexStyles.handle} icon="drag" tooltip={`${project.name} 순서 이동 · 드래그 또는 메뉴의 위아래 이동`}
+      data-project-drag-handle="" onClick={event => controls.openMenu(event, 'project', project)} aria-haspopup="menu" />
+    <IconButton className={indexStyles.more} icon="more" tooltip={`${project.name} 메뉴`} data-project-menu-trigger=""
+      aria-haspopup="menu" aria-expanded={controls.menu?.project?.id === project.id}
+      onClick={event => controls.openMenu(event, 'project', project)} />
+    </div>
   );
 }
 
@@ -146,6 +158,9 @@ function MonthlyProjectRow({ project, onOpen }) {
 
 export function ProjectPortfolioWorkspace({
   projects = [],
+  indexStorageKey = 'mlp.projectIndex.all.v1',
+  onIndexOrderChange,
+  indexProjects = projects,
   portfolioProjects = [],
   reviewProjects = [],
   terminalProjects = [],
@@ -193,6 +208,9 @@ export function ProjectPortfolioWorkspace({
   updates = [],
   createSurface = null,
 }) {
+  const indexControls = useProjectIndexControls(projects, indexStorageKey, indexProjects);
+  const indexOrderKey = indexControls.ordered.map(item => item.id).join(',');
+  React.useEffect(() => { onIndexOrderChange?.(indexOrderKey ? indexOrderKey.split(',') : []); }, [indexOrderKey, onIndexOrderChange]);
   const [focusProjectId, setFocusProjectId] = React.useState(null);
   const [showFilterPicker, setShowFilterPicker] = React.useState(false);
   const [showMobilePicker, setShowMobilePicker] = React.useState(false);
@@ -282,11 +300,15 @@ export function ProjectPortfolioWorkspace({
       data-mobile-picker={showMobilePicker ? "true" : "false"}
       data-has-project={project ? "true" : "false"}
     >
+      <ProjectIndexMenu controls={indexControls} onEdit={onEditProject} onDelete={onRemoveProject}
+        canWrite={['live', 'partial'].includes(sourceState) && !failedSources.includes('projects')} />
       <aside className="hub-project-portfolio-index" aria-label="프로젝트 인덱스">
         <div className="hub-project-portfolio-index__header">
           <div>
             <strong>프로젝트 선택</strong>
             <span className="mono">{portfolioProjects.length}{projectCorePartial ? "+" : ""}</span>
+            <Button className={indexStyles.sort} variant="ghost" size="xs" icon="arrowDown" aria-label={`프로젝트 정렬: ${indexControls.sortLabel}`}
+              aria-haspopup="menu" aria-expanded={indexControls.menu?.kind === 'sort'} onClick={event => indexControls.openMenu(event, 'sort')}>{indexControls.sortLabel}</Button>
             <button type="button" className="hub-project-portfolio-index__close" onClick={() => setShowMobilePicker(false)}>닫기</button>
           </div>
           <Input
@@ -303,14 +325,15 @@ export function ProjectPortfolioWorkspace({
           </div>
         </div>
 
-        <div className="hub-project-portfolio-index__list scroll-y">
+        {indexControls.notice && <p className={indexStyles.notice} role="status">{indexControls.notice}</p>}
+        <div ref={indexControls.listRef} className="hub-project-portfolio-index__list scroll-y">
           {projects.length === 0 ? (
             <div className="hub-project-portfolio-index__empty">
               <Iconed name={query || activeFilter ? "search" : "projects"} size={22} />
               <strong>{query || activeFilter ? "조건에 맞는 프로젝트 없음" : "프로젝트 없음"}</strong>
               <span>{query || activeFilter ? "검색어나 필터를 지워보세요." : "새 프로젝트를 추가해 시작하세요."}</span>
             </div>
-          ) : projects.map((item) => (
+          ) : indexControls.ordered.map((item) => (
             <ProjectIndexRow
               key={item.id}
               project={item}
@@ -319,6 +342,7 @@ export function ProjectPortfolioWorkspace({
               keyboardSelected={keyboardSelectedId === item.id}
               window={window}
               onSelect={selectProject}
+              controls={indexControls}
             />
           ))}
 

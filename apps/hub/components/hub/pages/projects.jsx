@@ -239,6 +239,7 @@ export function Projects({ workspace }) {
   const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
+  const [indexKeyboardOrder, setIndexKeyboardOrder] = React.useState([]);
   const [deleteProjectTarget, setDeleteProjectTarget] = React.useState(null);
   const [deleteProjectPending, setDeleteProjectPending] = React.useState(false);
   const [deleteProjectError, setDeleteProjectError] = React.useState(null);
@@ -854,7 +855,7 @@ export function Projects({ workspace }) {
       });
       return { ok: true, reloaded: reload.ok };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = '저장 결과를 확인하지 못했습니다. 다시 시도하거나 새로고침해 현재 상태를 확인하세요.';
       setOrderResult({ tone: 'err', label: message });
       return { ok: false, message };
     } finally {
@@ -881,6 +882,11 @@ export function Projects({ workspace }) {
     }
     setDeleteProjectTarget(null);
     if (openDetail === removedId) closeProjectDetail();
+    if (selectedProjectId === removedId) {
+      const params = new URLSearchParams(searchParamsRef.current.toString());
+      params.delete('project'); params.delete('item'); params.delete('check');
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
     if (result.reloaded) setOrderResult({ tone: 'ok', label: '목록에서 제거됨 · 완료·보관에서 다시 열 수 있습니다.' });
   };
 
@@ -1727,7 +1733,8 @@ export function Projects({ workspace }) {
   // (Deals 칸반과 동일 문법). 다른 뷰(todos·timeline)는 각자 문법이 있어 비활성.
   const kbRows = React.useMemo(() => {
     if (view === 'tree') {
-      return visibleProjects.map(p => ({ id: p.id }));
+      const rank = new Map(indexKeyboardOrder.map((id, index) => [id, index]));
+      return visibleProjects.slice().sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)).map(p => ({ id: p.id }));
     }
     if (view === 'table') {
       return listSections
@@ -1738,7 +1745,7 @@ export function Projects({ workspace }) {
       return visibleColumns.flatMap(col => col.cards.map(c => ({ id: c.id })));
     }
     return [];
-  }, [view, listSections, brandSectionsCollapsed, visibleColumns]);
+  }, [view, visibleProjects, indexKeyboardOrder, listSections, brandSectionsCollapsed, visibleColumns]);
 
   const kbSelection = useCrmSelection(kbRows);
   const openKbSelected = React.useCallback((id) => {
@@ -2134,6 +2141,9 @@ export function Projects({ workspace }) {
           >
             {view === 'tree' && <ProjectPortfolioWorkspace
               projects={visibleProjects}
+              indexStorageKey={`mlp.projectIndex.${ws?.key || 'all'}.v1`}
+              onIndexOrderChange={setIndexKeyboardOrder}
+              indexProjects={allProjects}
               portfolioProjects={projects}
               reviewProjects={brandProjects}
               terminalProjects={terminalProjects}
@@ -2847,13 +2857,13 @@ export function Projects({ workspace }) {
 
       {deleteProjectTarget && (
         <Drawer
-          title="프로젝트 보관"
+          title="프로젝트 삭제"
           presentation="compact"
           onClose={() => { if (!deleteProjectPending) setDeleteProjectTarget(null); }}
           footer={(
             <>
-              <Button autoFocus variant="ghost" size="sm" disabled={deleteProjectPending} onClick={() => setDeleteProjectTarget(null)}>취소</Button>
-              <Button variant="danger" size="sm" disabled={deleteProjectPending || !deleteProjectAcknowledged} onClick={confirmProjectDelete}>{deleteProjectPending ? '처리 중…' : '보관'}</Button>
+              <Button variant="ghost" size="sm" disabled={deleteProjectPending} onClick={() => setDeleteProjectTarget(null)}>취소</Button>
+              <Button variant="danger" size="sm" disabled={deleteProjectPending || !deleteProjectAcknowledged} onClick={confirmProjectDelete}>{deleteProjectPending ? '처리 중…' : '삭제'}</Button>
             </>
           )}
         >
@@ -2861,8 +2871,8 @@ export function Projects({ workspace }) {
             <span className="hub-project-delete-summary__icon"><Iconed name="archive" size={20} /></span>
             <div><span className="hub-project-delete-summary__label">목록에서 제거할 프로젝트</span><strong>{deleteProjectTarget.name}</strong></div>
           </div>
-          <p className="hub-project-delete-description">활성 목록에서 제외하고 보관합니다. 미완료 할 일 {todos.filter(task => task.project === deleteProjectTarget.id && !task.done).length}건과 연결된 고객·메모·기록은 그대로 유지됩니다. 할 일 화면 표시는 해당 화면의 필터에 따라 달라집니다.</p>
-          <div className="hub-project-delete-recovery"><Iconed name="archive" size={14} /><span>완료·보관 → 다시 열기로 복원할 수 있습니다.</span></div>
+          <p className="hub-project-delete-description">활성 목록에서 삭제하고 보관합니다. 현재 확인된 미완료 할 일 {todos.filter(task => task.project === deleteProjectTarget.id && !task.done).length}건과 연결된 고객·메모·기록은 그대로 유지됩니다. 할 일 화면 표시는 해당 화면의 필터에 따라 달라집니다.</p>
+          <div className="hub-project-delete-recovery"><Iconed name="archive" size={14} /><span>완료·보관 → 다시 열기로 진행 상태로 복원할 수 있습니다. 현재 월 평가 집계에서는 제외됩니다.</span></div>
           <div className="hub-project-delete-acknowledgment">
             <Checkbox checked={deleteProjectAcknowledged} onChange={setDeleteProjectAcknowledged} size={18} label="연결 기록은 유지되고 활성 목록에서만 제외됨을 확인했습니다." />
             <span>연결 기록은 유지되고 활성 목록에서만 제외됨을 확인했습니다.</span>

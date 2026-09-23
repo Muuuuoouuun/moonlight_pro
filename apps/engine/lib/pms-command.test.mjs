@@ -459,6 +459,47 @@ test("normalizes an editable project patch without changing workspace ownership"
   });
 });
 
+test("archives a project without overwriting its completion date", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    status: "archived",
+    expectedUpdatedAt: "2026-09-20T01:00:00.123456+00:00",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-23T01:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.patch, {
+    status: "archived",
+    last_activity_at: "2026-09-23T01:00:00.000Z",
+    updated_at: "2026-09-23T01:00:00.000Z",
+  });
+  assert.deepEqual(result.filters, [
+    ["id", "eq.11111111-1111-4111-8111-111111111111"],
+    ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
+    ["updated_at", "eq.2026-09-20T01:00:00.123456+00:00"],
+  ]);
+});
+
+test("project reopening clears the completion date while completion records its timestamp", () => {
+  const now = "2026-09-23T01:00:00.000Z";
+  for (const status of ["draft", "active", "blocked", "completed"]) {
+    const result = pmsCommand.normalizePmsCommand({
+      action: "update_project",
+      id: "11111111-1111-4111-8111-111111111111",
+      status,
+    }, {
+      workspaceId: "33333333-3333-4333-8333-333333333333",
+      now,
+    });
+
+    assert.equal(result.ok, true, status);
+    assert.equal(result.patch.completed_at, status === "completed" ? now : null, status);
+  }
+});
+
 test("keeps Postgres microsecond precision in the optimistic-lock filter", () => {
   // Regression: dateTime()'s toISOString() truncated …52.676457+00:00 to
   // …52.676Z, so the eq.updated_at filter never matched microsecond rows and
