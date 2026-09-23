@@ -126,6 +126,9 @@ test('goal client implements failure-safe command and read contracts', async () 
   assert.equal(goalScope('classin'), 'company');
   assert.equal(goalScope('all'), '');
   assert.equal(goalHref('one', 'company'), '/dashboard/overview?view=goals&scope=classin&goal=one');
+  // Work 탭(OKR·KPI)에서 연 목표 화면은 링크가 그 탭 안에 머문다 — view=goals 없이 같은 쿼리 계약.
+  assert.equal(goalHref('one', 'company', { base: '/dashboard/work/goals' }), '/dashboard/work/goals?scope=classin&goal=one');
+  assert.equal(goalHref(null, '', { check: true, create: true, base: '/dashboard/work/goals' }), '/dashboard/work/goals?scope=all&check=1&new=goal');
   assert.equal(measurementLabel({ measurement: { value: null, coverage: 'unmeasured' } }), '미측정');
   assert.equal(measurementLabel({ measurement: { value: 0, coverage: 'complete' }, unit: '건' }), '0 건');
   const requests = [];

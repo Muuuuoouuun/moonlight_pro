@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { EmptyState, IconButton } from "./hub-primitives";
+import { EmptyState, IconButton, TruthBadge } from "./hub-primitives";
 import { StreakMark } from "./burning-streak";
 import { RITUAL_CATEGORY_LABELS } from "@/lib/rhythm-ui";
 import "./rhythm-today.css";
@@ -209,7 +209,7 @@ export function RhythmToday({
             {today.resting > 0 && (
               <span className="hub-rhythm-hero__stat">쉬는 루틴 <span className="num">{today.resting}</span></span>
             )}
-            {partial && <span className="hub-rhythm-hero__stat">일부 기록 · 관측값</span>}
+            {partial && <TruthBadge state="partial" />}
           </div>
         </div>
       </section>
@@ -270,37 +270,5 @@ function PresetChips({ presets, onPreset }) {
         </button>
       ))}
     </div>
-  );
-}
-
-// 최근 7일 루틴 그리드 — 루틴만의 한 주. 할 일 완료는 섞지 않는다.
-export function RhythmWeekGrid({ items, dayLabels }) {
-  if (!items.length) return null;
-  return (
-    <section className="fx-card hub-rhythm-week" aria-label="최근 7일 리듬">
-      <div className="hub-rhythm-week__row hub-rhythm-week__row--head" aria-hidden="true">
-        <span className="fx-eyebrow">최근 7일</span>
-        {dayLabels.map((d) => (
-          <span key={d.dateKey} className="hub-rhythm-week__day" data-today={d.isToday ? "true" : "false"}>{d.short}</span>
-        ))}
-        <span className="hub-rhythm-week__day">목표</span>
-      </div>
-      {items.map((item) => (
-        <div key={item.id} className="hub-rhythm-week__row">
-          <span className="hub-rhythm-week__name">{item.name}</span>
-          {item.weeks.map((v, i) => (
-            <span
-              key={i}
-              className="hub-rhythm-week__cell"
-              data-on={v ? "true" : "false"}
-              data-today={i === 6 ? "true" : "false"}
-              role="img"
-              aria-label={`${item.name} ${dayLabels[i]?.label || ""} ${v ? "완료" : "미완료"}`}
-            />
-          ))}
-          <span className="hub-rhythm-week__goal mono">{Math.min(item.weekCount, 7)}/{item.target}</span>
-        </div>
-      ))}
-    </section>
   );
 }

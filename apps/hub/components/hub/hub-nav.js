@@ -153,11 +153,14 @@ const MY_WORK_CHILDREN = [
   { key: 'my-work-list', label: '실행 목록', path: 'dashboard/work/my' },
   { key: 'memos', label: '메모', path: 'dashboard/work/memos' },
   { key: 'daily-review', label: '하루 리뷰', path: 'dashboard/work/daily-review' },
+  // OKR·KPI 추적의 본체(2026-09-23 운영자 "위치는 내 작업 하위로, 현황에도 띄우기") —
+  // 현황의 같은 이름 탭과 요약 카드는 같은 Goals 기록을 보여 주는 두 번째 입구다.
+  { key: 'my-okr', label: 'OKR·KPI', path: 'dashboard/work/goals' },
 ];
 
 const OVERVIEW_CHILDREN = Object.fromEntries(SIDEBAR_SCOPES.map(({ key }) => [key, [
   { key: 'overview-summary', label: '집계', path: 'dashboard/overview' },
-  { key: 'overview-goals', label: '목표·성과', path: `dashboard/overview?view=goals&scope=${key}` },
+  { key: 'overview-goals', label: 'OKR·KPI', path: `dashboard/overview?view=goals&scope=${key}` },
 ]]));
 
 export const SIDEBAR_PRIMARY = [
@@ -208,7 +211,7 @@ export const SIDEBAR_PRIMARY = [
     label: '내 작업',
     icon: 'checklist',
     scopeAware: false,
-    owns: ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review'],
+    owns: ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review', 'dashboard/work/goals'],
     children: { all: MY_WORK_CHILDREN, classin: MY_WORK_CHILDREN, personal: MY_WORK_CHILDREN },
     paths: {
       all: 'dashboard/work/my',

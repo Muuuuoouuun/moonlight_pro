@@ -379,6 +379,13 @@ export async function POST(req) {
   }
 }
 
+function undoNotFound(dateKey) {
+  return NextResponse.json(
+    { status: "not-found", message: "No check-in for the current local date.", dateKey, localDate: dateKey },
+    { status: 404 },
+  );
+}
+
 // 오늘 체크 취소. 체크는 (workspace, project, ritualKey, 워크스페이스 현지 날짜)당 한 행이라
 // POST와 같은 멱등 키로 오늘 행을 찾아 지운다 — 날짜는 서버가 정하므로 어제 이전 기록은 이
 // 경로로 지울 수 없다. 멱등 키가 없던 옛 행은 POST의 중복 판정과 같은 레거시 조회로 찾는다.
@@ -423,19 +430,33 @@ export async function DELETE(req) {
       if (legacy.state === "overflow") return legacyOverflowResponse();
       targets = legacy.rows.filter((row) => row?.id);
     }
-
     if (targets.length === 0) {
-      return NextResponse.json(
-        { status: "not-found", message: "No check-in for the current local date.", dateKey, localDate: dateKey },
-        { status: 404 },
-      );
+      // 루틴의 연결 프로젝트를 바꾸면 PATCH가 project_id만 옮기고 멱등 키는 옛 프로젝트로 남는다 —
+      // 키로도, 키 없는 레거시 조회로도 오늘 행을 못 찾는다. 같은 루틴·같은 현지 날짜의 done 행을
+      // 메타로 한 번 더 찾는다(날짜는 서버가 정한 오늘이므로 다른 날은 여전히 지울 수 없다).
+      const moved = await fetchSupabaseRows("routine_checks", {
+        select: ROUTINE_CHECK_SELECT,
+        limit: 5,
+        filters: withWorkspaceFilter([
+          ["project_id", payload.projectId ? eqFilter(payload.projectId) : "is.null"],
+          ["meta->>ritual_key", eqFilter(payload.ritualKey)],
+          ["meta->>local_date", eqFilter(dateKey)],
+          ["status", eqFilter("done")],
+        ]),
+      });
+      if (!Array.isArray(moved)) return readFailure("routine_checks");
+      targets = moved.filter((row) => row?.id);
     }
+
+    if (targets.length === 0) return undoNotFound(dateKey);
 
     const ids = [...new Set(targets.map((row) => row.id))];
     const persistence = await deleteSupabaseRecord("routine_checks", withWorkspaceFilter([
       ["id", `in.(${ids.join(",")})`],
       ["status", eqFilter("done")],
     ]));
+    // 동시에 들어온 다른 취소가 먼저 지웠다 — 실패가 아니라 "이미 취소됨"이다.
+    if (persistence?.reason === "no-matching-row") return undoNotFound(dateKey);
     if (!persistence?.persisted) {
       return NextResponse.json(
         {

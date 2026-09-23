@@ -1,0 +1,228 @@
+/* 리듬 기록 — rhythm-history.jsx.
+ * 한 가지 명도 램프만 쓴다: --fg를 --surface-2에 섞은 5단계(srgb 혼합 — oklch 혼합은 무채색
+ * 끝점 사이에서 색상각이 흔들려 라이트 테마에서 따뜻한 회색으로 보였다)(§5.3 charts — Moonstone luminance,
+ * hue 없음). 오늘 칸은 1px --line-strong 링, 미래 칸은 점선 빈 칸. 모든 칸은 텍스트 이름을 가진다. */
+
+.hub-app .hub-rh { display: flex; flex-direction: column; gap: 16px; }
+.hub-app .hub-rh__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.hub-app .hub-rh__title { margin: 4px 0 0; font-size: 17px; font-weight: 600; color: var(--fg); }
+.hub-app .hub-rh__nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hub-app .hub-rh__period { min-width: 140px; text-align: center; font-size: 14px; font-weight: 500; color: var(--fg); }
+.hub-app .hub-rh__alert {
+  display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-sm);
+  font-size: 12px; color: var(--danger);
+}
+.hub-app .hub-rh__alert > span:not(:first-child) { flex: 1; }
+.hub-app .hub-rh__body { display: flex; flex-direction: column; gap: 20px; transition: opacity var(--dur-enter) var(--ease-hub); }
+.hub-app .hub-rh__body[data-refreshing="true"] .hub-rh-cell,
+.hub-app .hub-rh__body[data-refreshing="true"] .hub-rh-mark { cursor: progress; }
+.hub-app .hub-rh-muted { font-size: 12px; color: var(--fg-muted); }
+
+/* 요약 4칸 */
+.hub-app .hub-rh__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.hub-app .hub-rh__stat {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+  padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: var(--r);
+}
+.hub-app .hub-rh__stat-value { font-size: 26px; font-weight: 500; color: var(--fg); }
+.hub-app .hub-rh__stat-name { font-size: 15px; font-weight: 600; color: var(--fg); min-height: 34px; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .hub-rh__unit { font-size: 13px; color: var(--fg-dim); margin-left: 2px; }
+
+/* 명도 램프 */
+.hub-app .hub-rh-cell {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  transition: background var(--dur-enter) var(--ease-hub);
+}
+.hub-app .hub-rh-cell[data-level="1"] { background: color-mix(in srgb, var(--fg) 18%, var(--surface-2)); }
+.hub-app .hub-rh-cell[data-level="2"] { background: color-mix(in srgb, var(--fg) 38%, var(--surface-2)); }
+.hub-app .hub-rh-cell[data-level="3"] { background: color-mix(in srgb, var(--fg) 62%, var(--surface-2)); }
+.hub-app .hub-rh-cell[data-level="4"] { background: var(--fg); border-color: var(--fg); }
+.hub-app .hub-rh-cell[data-future="true"] { background: transparent; border-style: dashed; }
+.hub-app .hub-rh-cell[data-today="true"] { outline: 1px solid var(--line-strong); outline-offset: 1px; }
+.hub-app .hub-rh-cell--void { background: transparent; border-color: transparent; }
+.hub-app .hub-rh-cell--legend { width: 12px; height: 12px; }
+
+.hub-app .hub-rh-legend { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--fg-dim); }
+.hub-app .hub-rh-legend > span:first-child { margin-right: 4px; }
+.hub-app .hub-rh-legend > span:last-child { margin-left: 4px; }
+
+/* 주: 루틴 × 7일 */
+.hub-app .hub-rh-week { display: flex; flex-direction: column; gap: 6px; }
+.hub-app .hub-rh-week__row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(7, 36px); align-items: center; gap: 6px; }
+.hub-app .hub-rh-week__day { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--fg-dim); }
+.hub-app .hub-rh-week__day .mono { font-size: 12px; color: var(--fg-muted); }
+.hub-app .hub-rh-week__day[data-today="true"],
+.hub-app .hub-rh-week__day[data-today="true"] .mono { color: var(--fg); font-weight: 600; }
+.hub-app .hub-rh-week__name { font-size: 13px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .hub-rh-mark {
+  width: 36px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm); border: 1px solid var(--line-soft); background: var(--surface-2);
+}
+.hub-app .hub-rh-mark[data-on="true"] { background: var(--fg); border-color: var(--fg); }
+.hub-app .hub-rh-mark[data-future="true"] { background: transparent; border-style: dashed; }
+.hub-app .hub-rh-mark svg path { stroke: var(--bg); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 월: 달력 */
+.hub-app .hub-rh-month { display: flex; flex-direction: column; gap: 6px; max-width: 520px; }
+.hub-app .hub-rh-month__head,
+.hub-app .hub-rh-month__week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.hub-app .hub-rh-month__head span { text-align: center; font-size: 11px; color: var(--fg-dim); }
+.hub-app .hub-rh-cell--day { height: 44px; align-items: flex-start; justify-content: flex-start; padding: 4px 6px; }
+.hub-app .hub-rh-cell--day .mono { font-size: 12px; color: var(--fg-muted); }
+.hub-app .hub-rh-cell--day[data-level="3"] .mono,
+.hub-app .hub-rh-cell--day[data-level="4"] .mono { color: var(--bg); }
+
+/* 분기·연: 잔디 격자 */
+.hub-app .hub-rh-scroll { position: relative; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+.hub-app .hub-rh-grid { --rh-gap: 3px; display: inline-flex; flex-direction: column; gap: 4px; }
+.hub-app .hub-rh-grid__months,
+.hub-app .hub-rh-grid__body { display: flex; gap: var(--rh-gap); }
+.hub-app .hub-rh-grid__months > span {
+  width: var(--rh-cell); flex-shrink: 0; overflow: visible; white-space: nowrap;
+  font-size: 10.5px; color: var(--fg-dim);
+}
+.hub-app .hub-rh-grid__months > span:first-child,
+.hub-app .hub-rh-grid__weekdays { width: 18px; flex-shrink: 0; }
+.hub-app .hub-rh-grid__weekdays { display: flex; flex-direction: column; gap: var(--rh-gap); }
+.hub-app .hub-rh-grid__weekdays > span { height: var(--rh-cell); line-height: var(--rh-cell); font-size: 10.5px; color: var(--fg-dim); }
+.hub-app .hub-rh-grid__col { display: flex; flex-direction: column; gap: var(--rh-gap); }
+.hub-app .hub-rh-grid__col .hub-rh-cell { width: var(--rh-cell); height: var(--rh-cell); border-radius: 3px; }
+
+/* 막대 차트 — 월(연)·주(분기) 달성률.
+ * 막대: 폭 ≤ 24px, 위 끝만 4px 둥글게, 바닥은 기준선에 각지게. 뒤에 같은 폭의 캡슐 트랙(--fg 5%)이
+ * 100%까지 서 있어 "얼마나 남았나"가 보인다. 미래 기간은 점선 빈 트랙. 지난 기간 --fg-muted,
+ * 이번 기간·가리킨 막대 --fg. 격자는 1px 실선 하이라인, 평균만 1px 점선(§5.3 패턴 구분).
+ * 숫자는 이번·최고 기간에만 고정, 나머지는 :hover/:focus-visible에서 드러난다(JS hover 없음 §8.1).
+ * 진입: 바닥에서 한 번 자라난다(--dur-celebrate, --stagger-step 간격, 반복 없음). */
+.hub-app .hub-rh-bars { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.hub-app .hub-rh-bars__caption {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 12px; color: var(--fg-muted);
+}
+.hub-app .hub-rh-bars__avg-key { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); }
+.hub-app .hub-rh-bars__avg-swatch { width: 16px; height: 0; border-top: 1px dashed var(--fg-dim); }
+.hub-app .hub-rh-bars__plot { display: grid; grid-template-columns: 36px minmax(0, 1fr); height: 176px; padding-top: 18px; }
+.hub-app .hub-rh-bars__axis { position: relative; }
+.hub-app .hub-rh-bars__axis > span {
+  position: absolute; right: 6px; transform: translateY(50%);
+  font-size: 10.5px; color: var(--fg-dim); font-variant-numeric: tabular-nums;
+}
+.hub-app .hub-rh-bars__area { position: relative; }
+.hub-app .hub-rh-bars__grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--line-soft); }
+.hub-app .hub-rh-bars__grid[data-base="true"] { border-top-color: var(--line-strong); }
+.hub-app .hub-rh-bars__avg {
+  position: absolute; left: 0; right: 0; height: 0; z-index: 2; pointer-events: none;
+  border-top: 1px dashed var(--fg-dim);
+}
+.hub-app .hub-rh-bars__cols { position: absolute; inset: 0; display: flex; align-items: flex-end; }
+.hub-app .hub-rh-bars__col {
+  position: relative; flex: 1 1 0; min-width: 0; height: 100%;
+  display: flex; align-items: flex-end; justify-content: center;
+  outline: none; cursor: default;
+}
+/* 포커스 링은 막대 칸을 감싸는 가상 요소에 그린다 — radius는 기본 규칙이 갖고 포커스 규칙은 outline만(§11). */
+.hub-app .hub-rh-bars__col::before {
+  content: ""; position: absolute; inset: -4px 2px -4px 2px;
+  border-radius: var(--r-sm); pointer-events: none;
+}
+.hub-app .hub-rh-bars__col:focus-visible::before { outline: 1px solid var(--moon-300); }
+.hub-app .hub-rh-bars__track {
+  position: relative; display: flex; align-items: flex-end;
+  width: min(24px, 58%); height: 100%;
+  border-radius: 6px 6px 0 0;
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+}
+.hub-app .hub-rh-bars__col[data-future="true"] .hub-rh-bars__track {
+  background: transparent;
+  border: 1px dashed var(--line-soft); border-bottom: 0;
+}
+.hub-app .hub-rh-bars__bar {
+  position: relative; display: block; width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--fg-muted);
+  transform-origin: bottom;
+  animation: hubRhythmBarGrow var(--dur-celebrate) var(--ease-hub) both;
+  animation-delay: calc(var(--i, 0) * var(--stagger-step));
+  transition: background var(--dur-hover) ease;
+}
+.hub-app .hub-rh-bars__col[data-current="true"] .hub-rh-bars__bar,
+.hub-app .hub-rh-bars__col:hover .hub-rh-bars__bar,
+.hub-app .hub-rh-bars__col:focus .hub-rh-bars__bar { background: var(--fg); }
+/* 가리키는 동안 나머지 막대는 한 단계 물러난다 — 불투명도가 아니라 명도로(§5.3). */
+.hub-app .hub-rh-bars__cols:hover .hub-rh-bars__col:not(:hover) .hub-rh-bars__bar { background: var(--line-strong); }
+.hub-app .hub-rh-bars__value {
+  position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, -4px);
+  font-size: 12px; font-weight: 600; color: var(--fg); white-space: nowrap;
+  opacity: 0; transition: opacity var(--dur-hover) ease;
+}
+.hub-app .hub-rh-bars__value[data-pinned="true"],
+.hub-app .hub-rh-bars__col:hover .hub-rh-bars__value,
+.hub-app .hub-rh-bars__col:focus .hub-rh-bars__value { opacity: 1; }
+.hub-app .hub-rh-bars__cols:hover .hub-rh-bars__col:not(:hover) .hub-rh-bars__value { opacity: 0; }
+.hub-app .hub-rh-bars__tip {
+  position: absolute; z-index: 3; bottom: calc(100% + 8px); left: 50%;
+  transform: translate(-50%, 4px);
+  display: flex; flex-direction: column; gap: 2px; min-width: max-content;
+  padding: 8px 10px; border-radius: var(--r);
+  background: var(--elevated); border: 1px solid var(--line); box-shadow: var(--shadow-pop);
+  font-size: 12px; color: var(--fg-muted);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity var(--dur-hover) ease, transform var(--dur-hover) var(--ease-hub), visibility var(--dur-hover);
+}
+.hub-app .hub-rh-bars__tip strong { font-weight: 600; color: var(--fg); }
+/* :focus까지 — 터치에서 탭하면 포커스가 오지만 :focus-visible은 켜지지 않는다(링만 키보드 전용). */
+.hub-app .hub-rh-bars__col:hover .hub-rh-bars__tip,
+.hub-app .hub-rh-bars__col:focus .hub-rh-bars__tip { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+.hub-app .hub-rh-bars__col:first-child .hub-rh-bars__tip { left: 0; transform: translate(0, 4px); }
+.hub-app .hub-rh-bars__col:first-child:hover .hub-rh-bars__tip,
+.hub-app .hub-rh-bars__col:first-child:focus .hub-rh-bars__tip { transform: translate(0, 0); }
+.hub-app .hub-rh-bars__col:last-child .hub-rh-bars__tip { left: auto; right: 0; transform: translate(0, 4px); }
+.hub-app .hub-rh-bars__col:last-child:hover .hub-rh-bars__tip,
+.hub-app .hub-rh-bars__col:last-child:focus .hub-rh-bars__tip { transform: translate(0, 0); }
+.hub-app .hub-rh-bars__labels { display: grid; grid-template-columns: 36px minmax(0, 1fr); }
+.hub-app .hub-rh-bars__labels > div { display: flex; }
+.hub-app .hub-rh-bars__labels > div > span {
+  flex: 1 1 0; min-width: 0; text-align: center; white-space: nowrap;
+  font-size: 11px; color: var(--fg-dim);
+}
+.hub-app .hub-rh-bars__labels > div > span[data-current="true"] { color: var(--fg); font-weight: 600; }
+
+@keyframes hubRhythmBarGrow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+/* 루틴별 달성 */
+.hub-app .hub-rh-rates { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hub-app .hub-rh-rates__row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(80px, 200px) 72px; align-items: center; gap: 12px;
+  padding: 10px 0; border-top: 1px solid var(--line-soft);
+}
+.hub-app .hub-rh-rates__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hub-app .hub-rh-rates__name { font-size: 14px; font-weight: 500; color: var(--fg); }
+.hub-app .hub-rh-rates__bar { position: relative; height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.hub-app .hub-rh-rates__bar > span { display: block; height: 100%; border-radius: inherit; background: var(--fg-muted); transition: width var(--dur-enter) var(--ease-hub); }
+.hub-app .hub-rh-rates__value { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 14px; color: var(--fg); }
+
+@media (max-width: 640px) {
+  .hub-app .hub-rh__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-app .hub-rh__stat-value { font-size: 22px; }
+  .hub-app .hub-rh-week__row { grid-template-columns: minmax(0, 1fr) repeat(7, 28px); gap: 4px; }
+  .hub-app .hub-rh-mark { width: 28px; height: 28px; }
+  .hub-app .hub-rh-rates__row { grid-template-columns: minmax(0, 1fr) 56px; }
+  .hub-app .hub-rh-rates__bar { grid-column: 1 / -1; grid-row: 2; }
+  .hub-app .hub-rh-bars__plot { height: 148px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-rh__body,
+  .hub-app .hub-rh-cell,
+  .hub-app .hub-rh-bars__bar,
+  .hub-app .hub-rh-bars__value,
+  .hub-app .hub-rh-bars__tip,
+  .hub-app .hub-rh-rates__bar > span { animation: none !important; transition: none !important; }
+}

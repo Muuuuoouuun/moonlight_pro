@@ -1,9 +1,9 @@
 "use client";
 import React from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card, Drawer, EmptyState, Kbd, SegmentedControl, SelectField, Skeleton, TextField, TruthBadge } from '../hub-primitives';
-import { goalHref, goalScope, goalSectionState, goalLinkedEntityHref, measurementLabel } from '@/lib/goal-client';
+import { GOAL_WORK_BASE, goalHref, goalScope, goalSectionState, goalLinkedEntityHref, measurementLabel } from '@/lib/goal-client';
 import { goalCheckRows } from '@/lib/goal-input-ux';
 import { useGoals, useGoalCommand } from '../use-goals';
 import { GoalCommandFeedback, GoalMetricCard, GoalMetricForm, GoalMetricSummary, GoalObjectiveForm, GoalObservationForm, GoalReadFeedback, goalScopeLabel } from '../goal-components';
@@ -77,6 +77,9 @@ function GoalCheckList({ rows, onRecord, onOpen, hrefFor, model }) {
 
 export function Goals() {
   const router = useRouter(), params = useSearchParams();
+  // Work 탭(OKR·KPI)에서 열렸으면 목표 링크가 그 탭 안에 머문다. 현황의 목표·성과는 기본 경로.
+  const onWorkTab = (usePathname() || '').startsWith(GOAL_WORK_BASE);
+  const routeBase = onWorkTab ? GOAL_WORK_BASE : undefined;
   const scope = goalScope(params.get('scope'));
   const query = scope ? new URLSearchParams({ scope }).toString() : '';
   const model = useGoals(query);
@@ -94,12 +97,12 @@ export function Goals() {
   const creating = params.get('new') === 'goal';
   const selectedId = params.get('goal');
   const filtered = model.objectives.filter(item => (status === 'all' || item.status === status) && `${item.title} ${item.description || ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
-  const base = goalHref(null, scope, { check: checking });
-  const hrefFor = objective => goalHref(objective.id, scope, { check: checking });
+  const base = goalHref(null, scope, { check: checking, base: routeBase });
+  const hrefFor = objective => goalHref(objective.id, scope, { check: checking, base: routeBase });
   const openRecord = (event, objective, metric) => { opener.current = event.currentTarget; setNotice(''); router.push(`${hrefFor(objective)}&record=${metric.id}`, {scroll:false}); };
   const create = React.useCallback(event => {
     opener.current = event?.currentTarget || createButton.current;
-    router.push(goalHref(null, scope, { check: checking, create: true }), { scroll: false });
+    router.push(goalHref(null, scope, { check: checking, create: true, base: routeBase }), { scroll: false });
   }, [router, scope, checking]);
   React.useEffect(() => {
     const key = event => {
@@ -126,8 +129,8 @@ export function Goals() {
     return () => cancelAnimationFrame(frame);
   }, [creating, selectedId]);
   return <div className="goals-page fade-up">
-    <header className="goal-header"><div><h2>목표·성과</h2><p className="goal-muted">실행과 결과를 연결하고, 날짜가 있는 근거로 변화를 확인합니다.</p><div className="goal-actions"><TruthBadge state={model.status} /><span className="goal-muted">{scope ? goalScopeLabel(scope) : '전체 소속'}{model.refreshing ? ' · 갱신 중' : ''}</span></div></div><div className="goal-actions"><Button disabled={model.refreshing} onClick={model.refresh}>새로고침</Button><Button ref={createButton} variant="primary" icon="plus" disabled={!['live', 'partial'].includes(model.status)} onClick={create}>목표 만들기 <Kbd>N</Kbd></Button></div></header>
-    <div className="goal-toolbar"><SegmentedControl label="목표 화면 보기" value={checking ? 'check' : 'goals'} options={[{key:'goals',label:'목표별 보기'},{key:'check',label:'빠른 체크'}]} onChange={value => router.replace(goalHref(null, scope, { check: value === 'check' }), {scroll:false})} /><span className="goal-muted">{checking ? '숫자와 근거를 훑고 바로 기록하세요.' : '목표의 방향과 진행 상황을 확인하세요.'}</span></div>
+    <header className="goal-header"><div><h2>{onWorkTab ? 'OKR·KPI' : '목표·성과'}</h2><p className="goal-muted">실행과 결과를 연결하고, 날짜가 있는 근거로 변화를 확인합니다.</p><div className="goal-actions"><TruthBadge state={model.status} /><span className="goal-muted">{scope ? goalScopeLabel(scope) : '전체 소속'}{model.refreshing ? ' · 갱신 중' : ''}</span></div></div><div className="goal-actions"><Button disabled={model.refreshing} onClick={model.refresh}>새로고침</Button><Button ref={createButton} variant="primary" icon="plus" disabled={!['live', 'partial'].includes(model.status)} onClick={create}>목표 만들기 <Kbd>N</Kbd></Button></div></header>
+    <div className="goal-toolbar"><SegmentedControl label="목표 화면 보기" value={checking ? 'check' : 'goals'} options={[{key:'goals',label:'목표별 보기'},{key:'check',label:'빠른 체크'}]} onChange={value => router.replace(goalHref(null, scope, { check: value === 'check', base: routeBase }), {scroll:false})} /><span className="goal-muted">{checking ? '숫자와 근거를 훑고 바로 기록하세요.' : '목표의 방향과 진행 상황을 확인하세요.'}</span></div>
     <div className="goal-filters"><TextField label={checking ? '목표·지표 검색' : '목표 검색'} type="search" placeholder={checking ? '목표 또는 지표 이름' : '목표 이름'} value={search} onChange={event => setSearch(event.target.value)} /><SelectField label="목표 상태" value={status} options={[{ value: 'active', label: '진행 중' }, { value: 'archived', label: '보관한 목표' }, { value: 'all', label: '전체 상태' }]} onChange={event => setStatus(event.target.value)} />{checking && <SelectField label="확인할 지표" value={checkFilter} options={[{value:'all',label:'모든 지표'},{value:'manual',label:'직접 기록 지표'},{value:'unmeasured',label:'근거 확인 필요'}]} onChange={event => setCheckFilter(event.target.value)} />}</div>
     {notice && <p role="status" className="goal-muted">{notice}</p>}
     {checking && <p className="goal-muted">자동 값은 각 목표의 개인·회사 전체 기간 기록입니다. 실제값 0과 미측정을 구분하며, 연결만으로 실적이 늘지 않습니다.</p>}

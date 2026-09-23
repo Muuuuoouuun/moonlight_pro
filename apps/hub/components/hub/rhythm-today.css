@@ -235,37 +235,6 @@
 }
 .hub-app .hub-rhythm-chip:hover { color: var(--fg); border-color: var(--fg-muted); background: var(--surface-2); }
 
-/* ── 최근 7일 그리드 ────────────────────────────────────── */
-.hub-app .hub-rhythm-week { display: flex; flex-direction: column; gap: 6px; }
-.hub-app .hub-rhythm-week__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) repeat(7, 22px) 40px;
-  align-items: center;
-  gap: 6px;
-}
-.hub-app .hub-rhythm-week__row--head { margin-bottom: 4px; }
-.hub-app .hub-rhythm-week__day { font-size: 10.5px; text-align: center; color: var(--fg-dim); }
-.hub-app .hub-rhythm-week__day[data-today="true"] { color: var(--fg); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
-.hub-app .hub-rhythm-week__name {
-  font-size: 13px;
-  color: var(--fg);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hub-app .hub-rhythm-week__cell {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-xs);
-  background: var(--surface-2);
-  border: 1px solid var(--line-soft);
-  transition: background var(--dur-enter) var(--ease-hub);
-}
-.hub-app .hub-rhythm-week__cell[data-on="true"] { background: var(--fg-muted); border-color: var(--fg-muted); }
-.hub-app .hub-rhythm-week__cell[data-today="true"] { border-color: var(--line-strong); }
-.hub-app .hub-rhythm-week__cell[data-today="true"][data-on="true"] { background: var(--fg); border-color: var(--fg); }
-.hub-app .hub-rhythm-week__goal { font-size: 12px; text-align: right; color: var(--fg-muted); }
-
 /* ── 키프레임 (1회성, 반복 없음 — §9) ───────────────────── */
 @keyframes hubRhythmPop {
   0% { transform: scale(0.82); }
@@ -293,8 +262,6 @@
   .hub-app .hub-rhythm-item { grid-template-columns: minmax(0, 1fr) auto; }
   .hub-app .hub-rhythm-dots { display: none; }
   .hub-app .hub-rhythm-item__feedback { padding-left: 54px; }
-  .hub-app .hub-rhythm-week__row { grid-template-columns: minmax(0, 1fr) repeat(7, 18px) 34px; gap: 4px; }
-  .hub-app .hub-rhythm-week__cell { width: 18px; height: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -307,8 +274,7 @@
   .hub-app .hub-rhythm-check__mark,
   .hub-app .hub-rhythm-item__name,
   .hub-app .hub-rhythm-dot,
-  .hub-app .hub-rhythm-chip,
-  .hub-app .hub-rhythm-week__cell {
+  .hub-app .hub-rhythm-chip {
     animation: none !important;
     transition: none !important;
   }
