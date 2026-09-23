@@ -92,17 +92,108 @@
 .hub-app .hub-rh-grid__col { display: flex; flex-direction: column; gap: var(--rh-gap); }
 .hub-app .hub-rh-grid__col .hub-rh-cell { width: var(--rh-cell); height: var(--rh-cell); border-radius: 3px; }
 
-/* 월별 막대 */
-.hub-app .hub-rh-months { display: flex; align-items: flex-end; gap: 8px; }
-.hub-app .hub-rh-months__item { flex: 1; min-width: 0; max-width: 72px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.hub-app .hub-rh-months__bar {
-  width: 100%; max-width: 40px; height: 56px; display: flex; align-items: flex-end;
-  border-radius: var(--r-xs); background: var(--surface-2); overflow: hidden;
+/* 막대 차트 — 월(연)·주(분기) 달성률.
+ * 막대: 폭 ≤ 24px, 위 끝만 4px 둥글게, 바닥은 기준선에 각지게. 뒤에 같은 폭의 캡슐 트랙(--fg 5%)이
+ * 100%까지 서 있어 "얼마나 남았나"가 보인다. 미래 기간은 점선 빈 트랙. 지난 기간 --fg-muted,
+ * 이번 기간·가리킨 막대 --fg. 격자는 1px 실선 하이라인, 평균만 1px 점선(§5.3 패턴 구분).
+ * 숫자는 이번·최고 기간에만 고정, 나머지는 :hover/:focus-visible에서 드러난다(JS hover 없음 §8.1).
+ * 진입: 바닥에서 한 번 자라난다(--dur-celebrate, --stagger-step 간격, 반복 없음). */
+.hub-app .hub-rh-bars { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.hub-app .hub-rh-bars__caption {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 12px; color: var(--fg-muted);
 }
-.hub-app .hub-rh-months__bar > span { width: 100%; background: var(--fg-muted); border-radius: var(--r-xs) var(--r-xs) 0 0; transition: height var(--dur-enter) var(--ease-hub); }
-.hub-app .hub-rh-months__item[data-future="true"] .hub-rh-months__bar { background: transparent; border: 1px dashed var(--line-soft); }
-.hub-app .hub-rh-months__label { font-size: 11px; color: var(--fg-dim); }
-.hub-app .hub-rh-months__value { font-size: 12px; color: var(--fg-muted); }
+.hub-app .hub-rh-bars__avg-key { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); }
+.hub-app .hub-rh-bars__avg-swatch { width: 16px; height: 0; border-top: 1px dashed var(--fg-dim); }
+.hub-app .hub-rh-bars__plot { display: grid; grid-template-columns: 36px minmax(0, 1fr); height: 176px; padding-top: 18px; }
+.hub-app .hub-rh-bars__axis { position: relative; }
+.hub-app .hub-rh-bars__axis > span {
+  position: absolute; right: 6px; transform: translateY(50%);
+  font-size: 10.5px; color: var(--fg-faint); font-variant-numeric: tabular-nums;
+}
+.hub-app .hub-rh-bars__area { position: relative; }
+.hub-app .hub-rh-bars__grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--line-soft); }
+.hub-app .hub-rh-bars__grid[data-base="true"] { border-top-color: var(--line-strong); }
+.hub-app .hub-rh-bars__avg {
+  position: absolute; left: 0; right: 0; height: 0; z-index: 2; pointer-events: none;
+  border-top: 1px dashed var(--fg-dim);
+}
+.hub-app .hub-rh-bars__cols { position: absolute; inset: 0; display: flex; align-items: flex-end; }
+.hub-app .hub-rh-bars__col {
+  position: relative; flex: 1 1 0; min-width: 0; height: 100%;
+  display: flex; align-items: flex-end; justify-content: center;
+  outline: none; cursor: default;
+}
+/* 포커스 링은 막대 칸을 감싸는 가상 요소에 그린다 — radius는 기본 규칙이 갖고 포커스 규칙은 outline만(§11). */
+.hub-app .hub-rh-bars__col::before {
+  content: ""; position: absolute; inset: -4px 2px -4px 2px;
+  border-radius: var(--r-sm); pointer-events: none;
+}
+.hub-app .hub-rh-bars__col:focus-visible::before { outline: 1px solid var(--moon-300); }
+.hub-app .hub-rh-bars__track {
+  position: relative; display: flex; align-items: flex-end;
+  width: min(24px, 58%); height: 100%;
+  border-radius: 6px 6px 0 0;
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+}
+.hub-app .hub-rh-bars__col[data-future="true"] .hub-rh-bars__track {
+  background: transparent;
+  border: 1px dashed var(--line-soft); border-bottom: 0;
+}
+.hub-app .hub-rh-bars__bar {
+  position: relative; display: block; width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--fg-muted);
+  transform-origin: bottom;
+  animation: hubRhythmBarGrow var(--dur-celebrate) var(--ease-hub) both;
+  animation-delay: calc(var(--i, 0) * var(--stagger-step));
+  transition: background var(--dur-hover) ease;
+}
+.hub-app .hub-rh-bars__col[data-current="true"] .hub-rh-bars__bar,
+.hub-app .hub-rh-bars__col:hover .hub-rh-bars__bar,
+.hub-app .hub-rh-bars__col:focus-visible .hub-rh-bars__bar { background: var(--fg); }
+/* 가리키는 동안 나머지 막대는 한 단계 물러난다 — 불투명도가 아니라 명도로(§5.3). */
+.hub-app .hub-rh-bars__cols:hover .hub-rh-bars__col:not(:hover) .hub-rh-bars__bar { background: var(--line-strong); }
+.hub-app .hub-rh-bars__value {
+  position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, -4px);
+  font-size: 12px; font-weight: 600; color: var(--fg); white-space: nowrap;
+  opacity: 0; transition: opacity var(--dur-hover) ease;
+}
+.hub-app .hub-rh-bars__value[data-pinned="true"],
+.hub-app .hub-rh-bars__col:hover .hub-rh-bars__value,
+.hub-app .hub-rh-bars__col:focus-visible .hub-rh-bars__value { opacity: 1; }
+.hub-app .hub-rh-bars__cols:hover .hub-rh-bars__col:not(:hover) .hub-rh-bars__value { opacity: 0; }
+.hub-app .hub-rh-bars__tip {
+  position: absolute; z-index: 3; bottom: calc(100% + 8px); left: 50%;
+  transform: translate(-50%, 4px);
+  display: flex; flex-direction: column; gap: 2px; min-width: max-content;
+  padding: 8px 10px; border-radius: var(--r);
+  background: var(--elevated); border: 1px solid var(--line); box-shadow: var(--shadow-pop);
+  font-size: 12px; color: var(--fg-muted);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity var(--dur-hover) ease, transform var(--dur-hover) var(--ease-hub), visibility var(--dur-hover);
+}
+.hub-app .hub-rh-bars__tip strong { font-weight: 600; color: var(--fg); }
+.hub-app .hub-rh-bars__col:hover .hub-rh-bars__tip,
+.hub-app .hub-rh-bars__col:focus-visible .hub-rh-bars__tip { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+.hub-app .hub-rh-bars__col:first-child .hub-rh-bars__tip { left: 0; transform: translate(0, 4px); }
+.hub-app .hub-rh-bars__col:first-child:hover .hub-rh-bars__tip,
+.hub-app .hub-rh-bars__col:first-child:focus-visible .hub-rh-bars__tip { transform: translate(0, 0); }
+.hub-app .hub-rh-bars__col:last-child .hub-rh-bars__tip { left: auto; right: 0; transform: translate(0, 4px); }
+.hub-app .hub-rh-bars__col:last-child:hover .hub-rh-bars__tip,
+.hub-app .hub-rh-bars__col:last-child:focus-visible .hub-rh-bars__tip { transform: translate(0, 0); }
+.hub-app .hub-rh-bars__labels { display: grid; grid-template-columns: 36px minmax(0, 1fr); }
+.hub-app .hub-rh-bars__labels > div { display: flex; }
+.hub-app .hub-rh-bars__labels > div > span {
+  flex: 1 1 0; min-width: 0; text-align: center; white-space: nowrap;
+  font-size: 11px; color: var(--fg-dim);
+}
+.hub-app .hub-rh-bars__labels > div > span[data-current="true"] { color: var(--fg); font-weight: 600; }
+
+@keyframes hubRhythmBarGrow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
 
 /* 루틴별 달성 */
 .hub-app .hub-rh-rates { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -112,7 +203,7 @@
 }
 .hub-app .hub-rh-rates__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .hub-app .hub-rh-rates__name { font-size: 14px; font-weight: 500; color: var(--fg); }
-.hub-app .hub-rh-rates__bar { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.hub-app .hub-rh-rates__bar { position: relative; height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .hub-app .hub-rh-rates__bar > span { display: block; height: 100%; border-radius: inherit; background: var(--fg-muted); transition: width var(--dur-enter) var(--ease-hub); }
 .hub-app .hub-rh-rates__value { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 14px; color: var(--fg); }
 
@@ -123,13 +214,14 @@
   .hub-app .hub-rh-mark { width: 28px; height: 28px; }
   .hub-app .hub-rh-rates__row { grid-template-columns: minmax(0, 1fr) 56px; }
   .hub-app .hub-rh-rates__bar { grid-column: 1 / -1; grid-row: 2; }
-  .hub-app .hub-rh-months { gap: 4px; }
-  .hub-app .hub-rh-months__value { font-size: 10.5px; }
+  .hub-app .hub-rh-bars__plot { height: 148px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-rh__body,
   .hub-app .hub-rh-cell,
-  .hub-app .hub-rh-months__bar > span,
-  .hub-app .hub-rh-rates__bar > span { transition: none !important; }
+  .hub-app .hub-rh-bars__bar,
+  .hub-app .hub-rh-bars__value,
+  .hub-app .hub-rh-bars__tip,
+  .hub-app .hub-rh-rates__bar > span { animation: none !important; transition: none !important; }
 }

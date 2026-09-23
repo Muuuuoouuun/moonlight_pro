@@ -246,21 +246,69 @@ export function buildRhythmHistory({ rituals = [], doneByRitual = new Map(), win
   };
 }
 
-// 월별 합계(연·분기 뷰의 보조 막대) — 각 달에 매일 루틴을 채운 칸 수 / 채워야 했던 칸 수.
+// 막대 차트 버킷 — 연은 월, 분기는 주(월요일 시작). 값은 "매일 루틴을 채운 칸 / 채워야 했던 칸".
+// 미래만 있는 버킷은 future(막대 없음), 오늘이 든 버킷은 current. 평균은 지난 버킷 전체의
+// 칸 합으로 낸다(버킷 비율의 평균이 아니라 — 반쯤 지난 이번 달이 평균을 왜곡하지 않게).
+function finishBuckets(buckets) {
+  const list = buckets.map((b) => ({
+    ...b,
+    rate: !b.future && b.due > 0 ? Math.min(100, Math.round((b.done / b.due) * 100)) : null,
+  }));
+  const past = list.filter((b) => b.rate !== null);
+  const done = past.reduce((a, b) => a + b.done, 0);
+  const due = past.reduce((a, b) => a + b.due, 0);
+  const best = past.reduce((top, b) => (!top || b.rate > top.rate ? b : top), null);
+  return {
+    buckets: list.map((b) => ({ ...b, isBest: Boolean(best && best.key === b.key && past.length > 1) })),
+    average: due > 0 ? Math.round((done / due) * 100) : null,
+  };
+}
+
+function bucketDay(entry, day) {
+  if (day.isToday) entry.current = true;
+  if (!day.future) {
+    entry.done += day.dueDone;
+    entry.due += day.due;
+    entry.future = false;
+  }
+}
+
 export function summarizeByMonth(history) {
   const byMonth = new Map();
   for (const day of history.days) {
     const key = day.dateKey.slice(0, 7);
-    const entry = byMonth.get(key) || { month: key, label: `${Number(key.slice(5, 7))}월`, done: 0, due: 0, future: true };
-    if (!day.future) {
-      entry.done += day.dueDone;
-      entry.due += day.due;
-      entry.future = false;
-    }
+    const m = Number(key.slice(5, 7));
+    const entry = byMonth.get(key) || { key, month: key, label: `${m}월`, longLabel: `${Number(key.slice(0, 4))}년 ${m}월`, done: 0, due: 0, future: true, current: false };
+    bucketDay(entry, day);
     byMonth.set(key, entry);
   }
-  return [...byMonth.values()].map((m) => ({
-    ...m,
-    rate: m.due > 0 ? Math.min(100, Math.round((m.done / m.due) * 100)) : null,
+  return finishBuckets([...byMonth.values()]).buckets;
+}
+
+export function summarizeByWeek(history) {
+  return finishBuckets(history.weeks.map((week) => {
+    const days = week.filter(Boolean);
+    const first = days[0];
+    const last = days[days.length - 1];
+    const [fm, fd] = [Number(first.dateKey.slice(5, 7)), Number(first.dateKey.slice(8))];
+    const [lm, ld] = [Number(last.dateKey.slice(5, 7)), Number(last.dateKey.slice(8))];
+    const entry = {
+      key: first.dateKey,
+      label: `${fm}/${fd}`,
+      longLabel: fm === lm ? `${fm}월 ${fd}일 – ${ld}일` : `${fm}월 ${fd}일 – ${lm}월 ${ld}일`,
+      done: 0,
+      due: 0,
+      future: true,
+      current: false,
+    };
+    days.forEach((day) => bucketDay(entry, day));
+    return entry;
   }));
+}
+
+// 차트용: 기간 단위에 맞는 버킷과 평균.
+export function buildRhythmBars(history) {
+  if (history.window.range === "year") return finishBuckets(summarizeByMonth(history));
+  if (history.window.range === "quarter") return summarizeByWeek(history);
+  return { buckets: [], average: null };
 }

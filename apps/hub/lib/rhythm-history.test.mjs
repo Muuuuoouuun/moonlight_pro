@@ -8,7 +8,9 @@ import {
   normalizeHistoryOffset,
   normalizeHistoryRange,
   resolveHistoryWindow,
+  buildRhythmBars,
   summarizeByMonth,
+  summarizeByWeek,
 } from "./rhythm-history.js";
 
 const TODAY = "2026-09-23"; // 수요일
@@ -129,4 +131,50 @@ test("history surface keeps the hub read envelope and the luminance-only palette
   const route = await readFile(new URL("../app/api/hub/rhythm-history/route.js", import.meta.url), "utf8");
   assert.match(route, /status: "error"/);
   assert.doesNotMatch(route, /status:\s*5\d\d/);
+});
+
+test("bar buckets: year by month, quarter by week, with a pooled average and one best bucket", () => {
+  const rituals = [{ id: "a", name: "A", targetPerWeek: 7 }];
+  const year = buildRhythmHistory({
+    window: resolveHistoryWindow({ range: "year", todayKey: TODAY }),
+    todayKey: TODAY,
+    rituals,
+    doneByRitual: { a: [...dayKeysBetween("2026-01-01", "2026-01-31"), "2026-09-01"] },
+  });
+  const yearBars = buildRhythmBars(year);
+  assert.equal(yearBars.buckets.length, 12);
+  assert.equal(yearBars.buckets[0].rate, 100);
+  assert.equal(yearBars.buckets[0].isBest, true);
+  assert.equal(yearBars.buckets.filter((b) => b.isBest).length, 1);
+  assert.equal(yearBars.buckets[8].current, true);
+  assert.equal(yearBars.buckets[9].future, true);
+  assert.equal(yearBars.buckets[9].rate, null);
+  // 평균은 버킷 비율의 평균이 아니라 지난 칸 전체의 합 — 32 / 266
+  assert.equal(yearBars.average, Math.round((32 / 266) * 100));
+
+  const quarter = buildRhythmHistory({
+    window: resolveHistoryWindow({ range: "quarter", todayKey: TODAY }),
+    todayKey: TODAY,
+    rituals,
+    doneByRitual: { a: ["2026-07-01"] },
+  });
+  const weeks = summarizeByWeek(quarter).buckets;
+  assert.equal(weeks.length, quarter.weeks.length);
+  assert.equal(weeks[0].label, "7/1");
+  assert.equal(weeks[0].due, 5, "첫 주는 창 안의 날(수~일)만 센다");
+  assert.equal(weeks.find((w) => w.current).longLabel, "9월 21일 – 27일");
+  assert.deepEqual(buildRhythmBars(quarter).buckets.map((b) => b.key), weeks.map((b) => b.key));
+  assert.deepEqual(buildRhythmBars(buildRhythmHistory({
+    window: resolveHistoryWindow({ range: "week", todayKey: TODAY }), todayKey: TODAY, rituals, doneByRitual: {},
+  })).buckets, []);
+});
+
+test("bar chart stays CSS-driven: no JS hover, capped rounded columns, one-shot growth", async () => {
+  const ui = await readFile(new URL("../components/hub/rhythm-history.jsx", import.meta.url), "utf8");
+  assert.doesNotMatch(ui, /onMouseEnter|onMouseLeave/);
+  const css = await readFile(new URL("../components/hub/rhythm-history.css", import.meta.url), "utf8");
+  assert.match(css, /\.hub-rh-bars__track \{[\s\S]*?width: min\(24px, 58%\);/);
+  assert.match(css, /\.hub-rh-bars__bar \{[\s\S]*?border-radius: 4px 4px 0 0;/);
+  assert.match(css, /animation: hubRhythmBarGrow var\(--dur-celebrate\) var\(--ease-hub\) both;/);
+  assert.match(css, /\.hub-rh-bars__avg \{[\s\S]*?border-top: 1px dashed/);
 });

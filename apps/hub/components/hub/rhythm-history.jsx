@@ -4,7 +4,7 @@ import React from "react";
 import { Button, EmptyState, IconButton, SegmentedControl, Skeleton, TruthBadge } from "./hub-primitives";
 import { StreakMark } from "./burning-streak";
 import { RITUAL_CATEGORY_LABELS } from "@/lib/rhythm-ui";
-import { RHYTHM_HISTORY_RANGE_LABELS, RHYTHM_HISTORY_RANGES, summarizeByMonth } from "@/lib/rhythm-history";
+import { buildRhythmBars, RHYTHM_HISTORY_RANGE_LABELS, RHYTHM_HISTORY_RANGES } from "@/lib/rhythm-history";
 import "./rhythm-history.css";
 
 /**
@@ -165,7 +165,6 @@ function MonthCalendar({ history }) {
 
 // 분기·연: 주 단위 열 × 요일 행의 잔디 격자 + 월별 막대.
 function YearGrid({ history, cell }) {
-  const months = summarizeByMonth(history);
   // 각 열(주)의 첫 날이 새 달의 시작을 품으면 그 위에 달 이름을 단다.
   const monthLabels = history.weeks.map((week, i) => {
     const first = week.find(Boolean);
@@ -202,17 +201,91 @@ function YearGrid({ history, cell }) {
           </div>
         </div>
       </div>
-      <div className="hub-rh-months" role="list" aria-label="월별 달성">
-        {months.map((m) => (
-          <div key={m.month} role="listitem" className="hub-rh-months__item" data-future={m.future ? "true" : "false"}
-            aria-label={m.future ? `${m.label} 아직` : `${m.label} ${m.rate ?? 0}% (${m.done}/${m.due})`}>
-            <span className="hub-rh-months__bar"><span style={{ height: `${m.rate ?? 0}%` }} /></span>
-            <span className="hub-rh-months__label">{m.label}</span>
-            <span className="hub-rh-months__value mono">{m.future ? "–" : `${m.rate ?? 0}%`}</span>
-          </div>
-        ))}
-      </div>
+      <Legend />
+      <RhythmBars history={history} />
     </>
+  );
+}
+
+// 막대 차트 — 연은 월별, 분기는 주별. 값 = 매일 루틴을 채운 칸의 비율.
+// 표식 규칙(dataviz): 막대 폭 ≤ 24px·끝만 4px 둥글게·바닥은 각지게, 1px 실선 격자, 평균은 점선
+// 기준선 하나, 숫자는 이번 기간과 최고 기간에만 직접 달고 나머지는 툴팁·aria가 맡는다.
+// 색은 명도만: 지난 기간 --fg-muted, 이번 기간·가리킨 막대 --fg(§5.3 charts).
+function RhythmBars({ history }) {
+  const { buckets, average } = buildRhythmBars(history);
+  if (!buckets.length) return null;
+  const unit = history.window.range === "year" ? "월" : "주";
+  const summary = buckets.filter((b) => b.rate !== null).map((b) => `${b.longLabel} ${b.rate}%`).join(", ");
+  return (
+    <figure className="hub-rh-bars" aria-label={`${unit}별 달성률${average !== null ? `, 평균 ${average}%` : ""}: ${summary || "기록 없음"}`}>
+      <figcaption className="hub-rh-bars__caption">
+        <span>{unit}별 달성률</span>
+        {average !== null && (
+          <span className="hub-rh-bars__avg-key">
+            <span className="hub-rh-bars__avg-swatch" aria-hidden="true" />
+            평균 <span className="num">{average}%</span>
+          </span>
+        )}
+      </figcaption>
+      <div className="hub-rh-bars__plot">
+        <div className="hub-rh-bars__axis" aria-hidden="true">
+          {[100, 50, 0].map((t) => <span key={t} className="mono" style={{ bottom: `${t}%` }}>{t}%</span>)}
+        </div>
+        <div className="hub-rh-bars__area">
+          {[0, 50, 100].map((t) => (
+            <span key={t} className="hub-rh-bars__grid" data-base={t === 0 ? "true" : "false"} style={{ bottom: `${t}%` }} aria-hidden="true" />
+          ))}
+          {average !== null && (
+            <span className="hub-rh-bars__avg" style={{ bottom: `${average}%` }} aria-hidden="true" />
+          )}
+          <div className="hub-rh-bars__cols" key={history.window.startKey}>
+            {buckets.map((b, i) => {
+              const label = b.future ? `${b.longLabel} · 아직` : `${b.longLabel} · ${b.rate ?? 0}% (매일 루틴 ${b.done}/${b.due}칸)`;
+              // 이번 기간·최고 기간만 숫자를 늘 보이고, 나머지는 가리킬 때 CSS가 드러낸다.
+              const pinned = b.current || b.isBest;
+              return (
+                <div
+                  key={b.key}
+                  className="hub-rh-bars__col"
+                  data-current={b.current ? "true" : "false"}
+                  data-future={b.future ? "true" : "false"}
+                  style={{ "--i": Math.min(i, 12) }}
+                  tabIndex={b.future ? -1 : 0}
+                  aria-label={label}
+                >
+                  {/* 캡슐 트랙: 100%까지의 빈 기둥 안을 막대가 채운다. 미래 기간은 점선 빈 트랙만. */}
+                  <span className="hub-rh-bars__track" aria-hidden="true">
+                    {!b.future && (
+                      <span className="hub-rh-bars__bar" style={{ height: `${Math.max(b.rate ?? 0, b.rate ? 3 : 0)}%` }}>
+                        {b.rate !== null && (
+                          <span className="hub-rh-bars__value num" data-pinned={pinned ? "true" : "false"}>{b.rate}%</span>
+                        )}
+                      </span>
+                    )}
+                  </span>
+                  {!b.future && (
+                    <span className="hub-rh-bars__tip" aria-hidden="true">
+                      <strong>{b.longLabel}</strong>
+                      <span><span className="num">{b.rate ?? 0}%</span> · 매일 루틴 <span className="num">{b.done}/{b.due}</span>칸</span>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <div className="hub-rh-bars__labels" aria-hidden="true">
+        <span />
+        <div>
+          {buckets.map((b, i) => (
+            <span key={b.key} data-current={b.current ? "true" : "false"}>
+              {unit === "주" && buckets.length > 8 && i % 2 === 1 && !b.current ? "" : b.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </figure>
   );
 }
 
@@ -331,7 +404,7 @@ export function RhythmHistory({ projectId = null, version = "" }) {
             {window_.range === "month" && <MonthCalendar history={history} />}
             {window_.range === "quarter" && <YearGrid history={history} cell={16} />}
             {window_.range === "year" && <YearGrid history={history} cell={11} />}
-            {window_.range !== "week" && <Legend />}
+            {window_.range === "month" && <Legend />}
 
             <RitualRates history={history} />
           </div>
