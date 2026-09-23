@@ -49,7 +49,7 @@ export async function readTodaySignals({ workspaceId, timezone, reviewDate }) {
   const workspace = ["workspace_id", eqFilter(workspaceId)];
   const [taskRows, activityRows] = await Promise.all([
     fetchSupabaseRows("tasks", {
-      select: "id,status,completed_at,meta",
+      select: "id,title,status,completed_at,meta",
       filters: [workspace, ["meta->focus_dates", `cs.${JSON.stringify([reviewDate])}`]],
       limit: 20,
     }),
@@ -66,11 +66,19 @@ export async function readTodaySignals({ workspaceId, timezone, reviewDate }) {
   const picked = taskRows.filter((row) => Array.isArray(row?.meta?.focus_dates) && row.meta.focus_dates.includes(reviewDate));
   const done = picked.filter((row) => row.status === "done" && sameDay(row.completed_at));
   const contacts = activityRows.filter((row) => isContactActivity(row) && sameDay(row.occurred_at));
+  const focusTasks = picked.slice(0, MAX_FOCUS_PER_DAY).map((row) => ({
+    id: row.id,
+    title: typeof row.title === 'string' && row.title.trim() ? row.title.trim() : '할 일',
+    status: row.status,
+    done: row.status === "done" && sameDay(row.completed_at),
+  }));
   return {
     date: reviewDate,
     focusPicked: picked.length,
     focusDone: done.length,
     focusLimit: MAX_FOCUS_PER_DAY,
+    focusTasks,
+    focusTitles: focusTasks.map((task) => task.title),
     // 잘렸으면 숫자 대신 null — 팝업이 연락 줄만 빼고 오늘 3개는 그대로 말한다.
     contacts: activityRows.length > ACTIVITY_SCAN_LIMIT ? null : contacts.length,
   };

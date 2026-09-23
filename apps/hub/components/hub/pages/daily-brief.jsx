@@ -116,6 +116,7 @@ const METRIC_TARGETS = {
 
 const BRIEF_DESTINATIONS = [
   { key: 'tasks', label: '내 작업', icon: 'inbox', target: 'dashboard/work/my' },
+  { key: 'daily-review', label: '하루 리뷰', icon: 'brief', target: 'dashboard/work/daily-review' },
   { key: 'calendar', label: '캘린더', icon: 'calendar', target: 'dashboard/work/calendar' },
   { key: 'projects', label: '프로젝트', icon: 'projects', target: 'dashboard/work/projects' },
   { key: 'followups', label: '고객 연락', icon: 'bell', target: 'dashboard/revenue/followups' },
@@ -340,6 +341,12 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
             title="오늘 할 일 연속 완주"
           />
         </div>
+        {focusSummary.picked === 0 && items.length > 0 && (
+          <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)', fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Iconed name="star" size={12} style={{ color: 'var(--moon-300)' }} />
+            <span>오늘 반드시 끝낼 핵심 3개 항목의 별표(★)를 눌러 집중 모드로 지정해 보세요.</span>
+          </div>
+        )}
         {items.length ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {items.map((task, index) => (
@@ -398,6 +405,20 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                 할 일 {taskToday.hiddenCount}건 더 보기
               </button>
             )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
+              <span style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Iconed name="brief" size={12} style={{ color: 'var(--fg-faint)' }} />
+                오늘 하루 마무리 · 17:00 저녁 회고
+              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                iconRight="arrowRight"
+                onClick={() => onNavigate?.('dashboard/work/daily-review')}
+              >
+                하루 리뷰
+              </Button>
+            </div>
           </div>
         ) : taskToday?.state === 'error' ? (
           // read 실패 ≠ 미연결 — preview 카피("live가 되면…")로 뭉개면 실패가 "연결 대기"로
@@ -797,7 +818,10 @@ function MorningBriefCard({ brief, taskToday, onNavigate }) {
   const focusTasks = Array.isArray(taskToday?.focusItems)
     ? taskToday.focusItems
     : laneItems.filter((t) => t.lane === 'focus');
-  const recommendedTasks = focusTasks.length ? [] : laneItems.filter((t) => t.lane !== 'focus').slice(0, MAX_FOCUS_PER_DAY);
+  const focusPicked = taskToday?.focus?.picked || 0;
+  const focusDone = taskToday?.focus?.done || 0;
+  const allFocusCompleted = focusPicked > 0 && focusDone >= focusPicked && focusTasks.length === 0;
+  const recommendedTasks = (focusTasks.length > 0 || allFocusCompleted) ? [] : laneItems.filter((t) => t.lane !== 'focus').slice(0, MAX_FOCUS_PER_DAY);
   const briefItems = Array.isArray(brief?.items) ? brief.items : [];
   const when = brief?.generatedAt
     ? new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date(brief.generatedAt))
@@ -838,19 +862,27 @@ function MorningBriefCard({ brief, taskToday, onNavigate }) {
     return null;
   };
 
-  const hasTasks = focusTasks.length > 0 || recommendedTasks.length > 0;
+  const hasTasks = focusTasks.length > 0 || recommendedTasks.length > 0 || allFocusCompleted;
   if (!hasTasks && briefItems.length === 0) return null;
 
   return (
     <div>
       <SectionTitle right={hasTasks ? (
-        <Badge tone="neutral" size="xs">{focusTasks.length ? '내가 고른 것' : '권장 — 아직 안 고름'}</Badge>
+        <Badge tone={allFocusCompleted ? 'moon' : 'neutral'} size="xs">
+          {allFocusCompleted ? `오늘 3개 완주 (${focusDone}/${focusPicked})` : focusTasks.length ? `내가 고른 것 (${focusDone}/${focusPicked})` : '권장 — 아직 안 고름'}
+        </Badge>
       ) : null}>
         오늘 이 3개만
       </SectionTitle>
       <Card pad={false}>
+        {allFocusCompleted && (
+          <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--fg-muted)' }}>
+            <span style={{ color: 'var(--moon-300)', fontWeight: 600 }}>✓</span>
+            <span>오늘 지정한 핵심 3개를 모두 완주했습니다 ({focusDone}/{focusPicked}). 저녁 17:00 하루 리뷰로 하루를 닫아보세요.</span>
+          </div>
+        )}
         {focusTasks.length > 0 && focusTasks.map((task, i) => taskRow(task, i, focusTasks.length, false))}
-        {focusTasks.length === 0 && recommendedTasks.length > 0 && (
+        {!allFocusCompleted && focusTasks.length === 0 && recommendedTasks.length > 0 && (
           <div>
             {/* dashed edge = 권장(확정 아님). 고르기 전까지 시스템 순서 상위 3개를 보여줄 뿐이다. */}
             <div style={{ margin: 10, border: '1px dashed var(--line)', borderRadius: 'var(--r-sm)' }}>
@@ -1199,6 +1231,7 @@ function BriefNavigation({ taskToday, onNavigate }) {
   const taskDetail = taskToday?.state === 'live' ? `${taskCount}건 확인` : '기록 확인';
   const detailByKey = {
     tasks: taskDetail,
+    'daily-review': '17:00 회고',
     calendar: '일정 배치',
     projects: '진행 확인',
     followups: '후속 조치',
