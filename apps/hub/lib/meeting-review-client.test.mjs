@@ -7,7 +7,10 @@ const proposalId = '22222222-2222-4222-8222-222222222222';
 const entry = { id: entryId, revision: 3, body: '가격은 미정입니다. 금요일에 다시 연락하겠습니다.' };
 const start = entry.body.indexOf('금요일에');
 const quote = '금요일에 다시 연락하겠습니다.';
-const proposal = { id: proposalId, kind: 'action', source: { start, end: start + quote.length, quote }, review: { status: 'accepted', text: '금요일에 고객에게 다시 연락' } };
+const stepId = '44444444-4444-4444-8444-444444444444';
+const execution = { actionScope: 'mine', dueAt: '2026-09-30', method: '전화로 확인',
+  checklist: [{ id: stepId, title: '고객에게 전화', done: false, note: '' }] };
+const proposal = { id: proposalId, kind: 'action', source: { start, end: start + quote.length, quote }, review: { status: 'accepted', text: '금요일에 고객에게 다시 연락', execution } };
 
 test('task command is tied to exact source, revision and stable proposal request ID', () => {
   const command = buildMeetingTaskCommand(entry, proposal);
@@ -15,7 +18,8 @@ test('task command is tied to exact source, revision and stable proposal request
   assert.equal(command.expectedRevision, 3);
   assert.equal(command.selection.prefix + command.selection.text + command.selection.suffix, entry.body);
   assert.equal(command.selection.text, quote);
-  assert.deepEqual(command.target, { title: proposal.review.text, dueAt: null, projectId: null });
+  assert.deepEqual(command.target, { title: proposal.review.text, dueAt: '2026-09-30T00:00:00+09:00',
+    projectId: null, nextAction: '전화로 확인', checklist: execution.checklist });
 });
 
 test('unreviewed, fabricated, oversized or already applied proposals cannot create tasks', () => {
@@ -24,6 +28,8 @@ test('unreviewed, fabricated, oversized or already applied proposals cannot crea
   assert.equal(buildMeetingTaskCommand(entry, { ...proposal, review: { status: 'accepted', text: '가'.repeat(201) } }), null);
   assert.equal(buildMeetingTaskCommand(entry, { ...proposal, application: { status: 'saved' } }), null);
   assert.equal(buildMeetingTaskCommand(entry, { ...proposal, kind: 'signal' }), null);
+  assert.equal(buildMeetingTaskCommand(entry, { ...proposal, review: { ...proposal.review, execution: { ...execution, actionScope: 'related' } } }), null);
+  assert.equal(buildMeetingTaskCommand(entry, { ...proposal, review: { ...proposal.review, execution: { ...execution, checklist: [{ ...execution.checklist[0], done: true }] } } }), null);
 });
 
 test('read and write envelopes never promote preview or HTTP 200 error to success', () => {

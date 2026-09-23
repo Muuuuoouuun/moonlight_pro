@@ -1,9 +1,12 @@
 import { extractMeetingReviewText } from '@/lib/meeting-review-extractor';
 import { invokeSupabaseRpc, resolveDefaultWorkspaceId, resolveSupabaseConfig } from '@/lib/server-write';
 import { isCanonicalUuid } from './uuid.js';
+import { validateTaskChecklist } from './task-checklist.js';
 
 const KINDS = new Set(['decision', 'open_issue', 'value', 'concern', 'signal', 'action']);
 const CERTAINTIES = new Set(['stated', 'derived', 'unknown']);
+const ACTION_SCOPES = new Set(['mine', 'related', 'unknown']);
+const DATE_ROLES = new Set(['deadline', 'scheduled', 'reference']);
 const defaultDependencies = {
   rpc: invokeSupabaseRpc,
   extract: extractMeetingReviewText,
@@ -39,6 +42,44 @@ function isDate(value) {
   const d = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
+function sourceEvidence(value, sourceBody, parent) {
+  return value && typeof value.quote === 'string' && value.quote.trim()
+    && Number.isSafeInteger(value.start) && Number.isSafeInteger(value.end)
+    && value.start >= parent.start && value.end <= parent.end && value.end > value.start
+    && sourceBody.slice(value.start, value.end) === value.quote;
+}
+function normalizeActionSuggestion(candidate, sourceBody) {
+  const parent = { start: candidate.start, end: candidate.end };
+  const actionScope = candidate.actionScope ?? 'unknown';
+  const relation = candidate.relation ?? null;
+  const dateMentions = candidate.dateMentions ?? [];
+  const methodQuote = candidate.methodQuote ?? null;
+  const checklist = candidate.checklist ?? [];
+  if (!ACTION_SCOPES.has(actionScope)
+    || (relation !== null && !sourceEvidence(relation, sourceBody, parent))
+    || ((actionScope === 'mine' || actionScope === 'related') && relation === null)
+    || !Array.isArray(dateMentions) || dateMentions.length > 10
+    || dateMentions.some((item) => !sourceEvidence(item, sourceBody, parent)
+      || !DATE_ROLES.has(item.role) || !isDate(item.date))
+    || (methodQuote !== null && (typeof methodQuote !== 'string' || !methodQuote.trim()
+      || !candidate.quote.includes(methodQuote) || methodQuote.length > 1000))
+    || !Array.isArray(checklist) || checklist.length > 50
+    || checklist.some((item) => !sourceEvidence(item, sourceBody, parent) || item.quote.length > 200)) return null;
+  return { actionScope, relation, dateMentions, methodQuote, checklist };
+}
+
+function normalizeReviewExecution(value) {
+  if (value == null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || !ACTION_SCOPES.has(value.actionScope) || !isDate(value.dueAt)
+    || (value.method != null && (typeof value.method !== 'string' || value.method.length > 1000))
+    || !Array.isArray(value.checklist) || validateTaskChecklist(value.checklist)
+    || value.checklist.some((item) => item.done !== false)) return false;
+  return { actionScope: value.actionScope, dueAt: value.dueAt ?? null,
+    method: value.method?.trim() || null,
+    checklist: value.checklist.map((item) => ({ id: item.id.toLowerCase(), title: item.title.trim(), done: false,
+      note: item.note || '', ...(item.dueAt ? { dueAt: item.dueAt } : {}) })) };
+}
 
 // The model's JSON is never sent to the definer RPC without rechecking the
 // exact source span. JS offsets are UTF-16, matching the browser selection API.
@@ -55,9 +96,12 @@ export function normalizeMeetingAnalysis(result, sourceBody) {
       || candidate.start < 0 || candidate.end <= candidate.start || candidate.end > sourceBody.length
       || sourceBody.slice(candidate.start, candidate.end) !== candidate.quote
       || !CERTAINTIES.has(candidate.certainty) || !isDate(candidate.suggestedDue)) return null;
+    const action = candidate.kind === 'action' ? normalizeActionSuggestion(candidate, sourceBody) : null;
+    if (candidate.kind === 'action' && !action) return null;
     proposals.push({ kind: candidate.kind, text: candidate.text, quote: candidate.quote,
       start: candidate.start, end: candidate.end, certainty: candidate.certainty,
-      ...(candidate.suggestedDue ? { suggestedDue: candidate.suggestedDue } : {}) });
+      ...(candidate.suggestedDue ? { suggestedDue: candidate.suggestedDue } : {}),
+      ...(action || {}) });
   }
   const rawUsage = result.usage;
   const usage = rawUsage && ['promptTokens', 'candidatesTokens', 'totalTokens'].some((key) =>
@@ -77,7 +121,7 @@ export function createMeetingReviewService(overrides = {}) {
     if (!isCanonicalUuid(entryId)) return readFailure(ctx, 'invalid-entry');
     if (!ctx.configured || !ctx.workspaceId) return { ...ctx, status: 'preview', entryId, revision: null, run: null, proposals: [], usage: { status: 'unknown' } };
     try {
-      const data = await call(deps, 'meeting_review_snapshot_v1', { p_workspace_id: ctx.workspaceId, p_journal_id: entryId.toLowerCase(), p_request_id: null });
+      const data = await call(deps, 'meeting_review_snapshot_v2', { p_workspace_id: ctx.workspaceId, p_journal_id: entryId.toLowerCase(), p_request_id: null });
       if (data.status === 'not-found') return readFailure(ctx, 'note-unavailable');
       return projection(ctx, data) ?? readFailure(ctx);
     } catch { return readFailure(ctx); }
@@ -99,7 +143,11 @@ export function createMeetingReviewService(overrides = {}) {
     if (claim.status === 'not-found') return writeFailure(ctx, 'note-unavailable', 404, 'invalid-input', requestId);
     if (claim.status === 'invalid-input') return writeFailure(ctx, claim.error || 'invalid-request', 400, 'invalid-input', requestId);
     if (claim.status === 'existing') {
-      const existing = projection(ctx, claim.snapshot, 'duplicate');
+      let current;
+      try { current = await call(deps, 'meeting_review_snapshot_v2', { p_workspace_id: ctx.workspaceId,
+        p_journal_id: entryId.toLowerCase(), p_request_id: requestId.toLowerCase() }); }
+      catch { return writeFailure(ctx, 'receipt-unavailable', 502, 'unknown', requestId); }
+      const existing = projection(ctx, current, 'duplicate');
       if (!existing) return writeFailure(ctx, 'receipt-unavailable', 502, 'unknown', requestId);
       if (existing.run?.state === 'ready') return { ...existing, httpStatus: 200 };
       if (existing.run?.state === 'error') return { ...existing, status: 'error', httpStatus: 502, error: existing.run.error || 'analysis-failed', retryable: false };
@@ -114,7 +162,7 @@ export function createMeetingReviewService(overrides = {}) {
     const result = analysis ?? { state: 'error', error: extraction?.reason === 'gemini-not-configured' ? 'provider-unavailable' : 'analysis-failed' };
     let finished;
     try {
-      finished = await call(deps, 'meeting_review_finish_v1', { p_workspace_id: ctx.workspaceId, p_journal_id: entryId.toLowerCase(),
+      finished = await call(deps, 'meeting_review_finish_v2', { p_workspace_id: ctx.workspaceId, p_journal_id: entryId.toLowerCase(),
         p_request_id: requestId.toLowerCase(), p_result: result });
     } catch { return writeFailure(ctx, 'finish-outcome-unknown', 502, 'unknown', requestId); }
     if (finished.status === 'invalid-input') return writeFailure(ctx, finished.error || 'invalid-analysis', 502, 'error', requestId);
@@ -128,15 +176,18 @@ export function createMeetingReviewService(overrides = {}) {
 
   async function review(input) {
     const ctx = base();
-    const { entryId, proposalId, decision, editedText } = input || {};
+    const { entryId, proposalId, decision, editedText, execution } = input || {};
+    const normalizedExecution = normalizeReviewExecution(execution);
     if (!isCanonicalUuid(entryId) || !isCanonicalUuid(proposalId) || !['pending', 'accepted', 'rejected'].includes(decision)
-      || (editedText !== undefined && editedText !== null && (typeof editedText !== 'string' || !editedText.trim() || editedText.length > 4000)))
+      || (editedText !== undefined && editedText !== null && (typeof editedText !== 'string' || !editedText.trim() || editedText.length > 4000))
+      || normalizedExecution === false || (decision !== 'accepted' && normalizedExecution !== null))
       return writeFailure(ctx, 'invalid-review', 400, 'invalid-input');
     if (!ctx.configured || !ctx.workspaceId) return writeFailure(ctx, 'missing-persistence', 503, 'preview');
     let result;
     try {
-      result = await call(deps, 'meeting_review_decide_v1', { p_workspace_id: ctx.workspaceId, p_journal_id: entryId.toLowerCase(),
-        p_proposal_id: proposalId.toLowerCase(), p_decision: decision, p_edited_text: editedText ?? null });
+      result = await call(deps, 'meeting_review_decide_v2', { p_workspace_id: ctx.workspaceId, p_journal_id: entryId.toLowerCase(),
+        p_proposal_id: proposalId.toLowerCase(), p_decision: decision, p_edited_text: editedText ?? null,
+        p_execution: normalizedExecution });
     } catch { return writeFailure(ctx, 'review-outcome-unknown', 502, 'unknown'); }
     if (result.status === 'conflict') return writeFailure(ctx, result.error || 'review-conflict', 409, 'conflict');
     if (result.status === 'not-found') return writeFailure(ctx, 'proposal-unavailable', 404, 'invalid-input');

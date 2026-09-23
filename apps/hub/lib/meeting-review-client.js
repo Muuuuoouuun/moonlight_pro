@@ -1,5 +1,6 @@
 import { isCanonicalUuid } from './uuid.js';
 import { selectedNoteExcerpt } from './journal-client.js';
+import { validChecklistDate, validateTaskChecklist } from './task-checklist.js';
 
 const DURABLE = new Set(['saved', 'duplicate']);
 
@@ -16,9 +17,14 @@ export function meetingReviewWriteSucceeded(response, data) {
 export function buildMeetingTaskCommand(entry, proposal) {
   const title = proposal?.review?.text?.trim();
   const source = proposal?.source;
+  const execution = proposal?.review?.execution;
   if (!isCanonicalUuid(entry?.id) || !isCanonicalUuid(proposal?.id)
     || !Number.isSafeInteger(entry?.revision) || entry.revision < 1
     || proposal.kind !== 'action' || proposal.review?.status !== 'accepted'
+    || execution?.actionScope !== 'mine' || !validChecklistDate(execution?.dueAt)
+    || (execution.dueAt != null && !/^\d{4}-\d{2}-\d{2}$/.test(execution.dueAt))
+    || (execution.method != null && (typeof execution.method !== 'string' || execution.method.length > 1000))
+    || validateTaskChecklist(execution.checklist) || execution.checklist.some((item) => item.done !== false)
     || proposal.application?.status === 'saved'
     || typeof title !== 'string' || !title || title.length > 200
     || typeof source?.quote !== 'string' || !source.quote.trim()
@@ -32,7 +38,8 @@ export function buildMeetingTaskCommand(entry, proposal) {
     entryId: entry.id,
     expectedRevision: entry.revision,
     selection,
-    target: { title, dueAt: null, projectId: null },
+    target: { title, dueAt: execution.dueAt ? `${execution.dueAt}T00:00:00+09:00` : null,
+      projectId: null, nextAction: execution.method?.trim() || null, checklist: execution.checklist },
   };
 }
 

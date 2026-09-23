@@ -25,7 +25,8 @@ function snapshot({ requestId = REQUEST_ID, proposals = [], state = 'ready' } = 
 function acceptedAction() {
   return { id: PROPOSAL_ID, kind: 'action', text: '고객에게 다시 연락',
     source: { start: 0, end: entry.body.length, quote: entry.body },
-    review: { status: 'accepted', text: '고객에게 다시 연락' }, application: { status: 'none' } };
+    review: { status: 'accepted', text: '고객에게 다시 연락',
+      execution: { actionScope: 'mine', dueAt: null, method: null, checklist: [] } }, application: { status: 'none' } };
 }
 
 function equalDeps(left, right) {

@@ -86,6 +86,9 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
         // 내 작업의 할 일 편집 드로어가 설명을 보여주고 고칠 수 있도록 실어 보낸다 —
         // 없으면 드로어 저장이 기존 설명을 확인할 길 없이 진행된다.
         description: t.description || "",
+        nextAction: t.nextAction || "",
+        checklist: Array.isArray(t.checklist) ? t.checklist : [],
+        updatedAt: t.updatedAt || "",
         sourceRefs: t.sourceRefs || [],
         // 오늘 고른 "오늘 3개"(§6.2)는 `focus` 버킷으로 올리고, 기한 버킷은 dueBucket에 보존한다.
         // 내 작업의 BUCKETS·보드 열·시그널 타일이 `focus`를 1급 버킷으로 다룬다.

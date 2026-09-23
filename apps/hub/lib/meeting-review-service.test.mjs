@@ -32,7 +32,7 @@ test('manual analyze reserves a durable request, calls provider once, and return
     rpc: async (name, args) => {
       calls.push([name, args]);
       if (name === 'meeting_review_claim_v1') return { ok: true, data: { status: 'claimed', sourceBody: source } };
-      if (name === 'meeting_review_finish_v1') return { ok: true, data: { status: 'saved', snapshot: snapshot() } };
+      if (name === 'meeting_review_finish_v2') return { ok: true, data: { status: 'saved', snapshot: snapshot() } };
       throw Error('unexpected RPC');
     },
     extract: async () => { generated++; return extracted; },
@@ -42,7 +42,7 @@ test('manual analyze reserves a durable request, calls provider once, and return
   assert.equal(result.httpStatus, 200);
   assert.equal(result.proposals[0].source.quote, quote);
   assert.equal(generated, 1);
-  assert.deepEqual(calls.map(([name]) => name), ['meeting_review_claim_v1', 'meeting_review_finish_v1']);
+  assert.deepEqual(calls.map(([name]) => name), ['meeting_review_claim_v1', 'meeting_review_finish_v2']);
   assert.equal(calls[1][1].p_result.usage.candidatesTokens, null);
 });
 
@@ -50,7 +50,9 @@ test('same requestId receipt never calls the provider again, including unknown r
   let generated = 0;
   let state = 'ready';
   const service = createMeetingReviewService({ ...configured,
-    rpc: async () => ({ ok: true, data: { status: 'existing', snapshot: snapshot(state) } }),
+    rpc: async (name) => name === 'meeting_review_claim_v1'
+      ? { ok: true, data: { status: 'existing', snapshot: snapshot(state) } }
+      : { ok: true, data: snapshot(state) },
     extract: async () => { generated++; return extracted; },
   });
   const input = { entryId, requestId, expectedRevision: 1 };
@@ -98,8 +100,31 @@ test('read uses the error envelope; review persists accepted edit and exposes du
     calls.push([name, args]);
     return { ok: true, data: { status: calls.length === 1 ? 'saved' : 'duplicate', snapshot: snapshot() } };
   } });
-  const input = { entryId, proposalId, decision: 'accepted', editedText: '후속 연락하기' };
+  const execution = { actionScope: 'mine', dueAt: '2026-09-30', method: '전화', checklist: [] };
+  const input = { entryId, proposalId, decision: 'accepted', editedText: '후속 연락하기', execution };
   assert.equal((await service.review(input)).status, 'saved');
   assert.equal((await service.review(input)).status, 'duplicate');
   assert.equal(calls[0][1].p_edited_text, '후속 연락하기');
+  assert.deepEqual(calls[0][1].p_execution, execution);
+});
+
+test('action details require exact nested source spans and valid review execution', async () => {
+  const grounded = { ...candidate, actionScope: 'mine', relation: { quote: '요청했다.', start: source.indexOf('요청했다.'), end: source.indexOf('요청했다.') + '요청했다.'.length },
+    dateMentions: [], methodQuote: null, checklist: [] };
+  assert.equal(normalizeMeetingAnalysis({ ...extracted, data: { summary: '요약', proposals: [grounded] } }, source).proposals[0].actionScope, 'mine');
+  assert.equal(normalizeMeetingAnalysis({ ...extracted, data: { summary: '요약', proposals: [{ ...grounded, relation: { ...grounded.relation, start: 0 } }] } }, source), null);
+  const calls = [];
+  const service = createMeetingReviewService({ ...configured, rpc: async (name, args) => {
+    calls.push([name, args]); return { ok: true, data: { status: 'saved', snapshot: snapshot() } };
+  } });
+  assert.equal((await service.review({ entryId, proposalId, decision: 'accepted', editedText: '연락', execution: {
+    actionScope: 'mine', dueAt: '2026-02-31', method: null, checklist: [],
+  } })).status, 'invalid-input');
+  assert.equal((await service.review({ entryId, proposalId, decision: 'accepted', editedText: '연락', execution: {
+    actionScope: 'mine', dueAt: null, method: null, checklist: [{ id: proposalId, title: '단계', done: true, note: '' }],
+  } })).status, 'invalid-input');
+  assert.equal((await service.review({ entryId, proposalId, decision: 'accepted', editedText: '연락', execution: {
+    actionScope: 'mine', dueAt: null, method: null, checklist: [{ id: proposalId, title: 7, done: false, note: '' }],
+  } })).status, 'invalid-input');
+  assert.equal(calls.length, 0);
 });

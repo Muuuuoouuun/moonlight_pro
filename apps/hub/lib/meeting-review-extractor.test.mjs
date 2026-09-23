@@ -54,6 +54,108 @@ test("meeting review anchors exact UTF-16 source spans and preserves provider us
   assert.equal(result.data.proposals[1].suggestedDue, "2026-09-30");
 }));
 
+test("meeting review separates my action, explicit deadline, method and ordered checklist by exact source spans", async () => withGeminiKey(async () => {
+  const quote = "내 할 일: 2026년 10월 2일까지 고객에게 이메일로 견적을 보내기. 체크: 가격 확인, PDF 만들기, 발송.";
+  const source = `😀 미팅 메모. ${quote}`;
+  const result = await extractMeetingReviewText({
+    text: source,
+    fetchImpl: async () => providerReply({ summary: "견적 발송을 논의했다.", proposals: [{
+      kind: "action", text: "고객에게 이메일로 견적을 보낸다", quote, certainty: "stated", suggestedDue: "2026-10-02",
+      actionScope: "mine", relationQuote: "내 할 일",
+      dateMentions: [{ quote: "2026년 10월 2일까지", role: "deadline", date: "2026-10-02" }],
+      methodQuote: "이메일로", checklistQuotes: ["가격 확인", "PDF 만들기", "발송"],
+    }] }),
+  });
+  assert.equal(result.ok, true);
+  const [proposal] = result.data.proposals;
+  assert.equal(proposal.actionScope, "mine");
+  assert.equal(proposal.suggestedDue, "2026-10-02");
+  assert.equal(proposal.methodQuote, "이메일로");
+  assert.equal(source.slice(proposal.relation.start, proposal.relation.end), "내 할 일");
+  assert.deepEqual(proposal.dateMentions.map(({ quote: item, role, date }) => ({ quote: item, role, date })), [
+    { quote: "2026년 10월 2일까지", role: "deadline", date: "2026-10-02" },
+  ]);
+  assert.deepEqual(proposal.checklist.map(({ quote: item }) => item), ["가격 확인", "PDF 만들기", "발송"]);
+  for (const item of [...proposal.dateMentions, ...proposal.checklist]) {
+    assert.equal(source.slice(item.start, item.end), item.quote);
+    assert.ok(item.start >= proposal.start && item.end <= proposal.end);
+  }
+}));
+
+test("meeting review keeps related watchpoint distinct from my task and a scheduled visit distinct from its deadline", async () => withGeminiKey(async () => {
+  const quote = "영업팀은 2026년 10월 3일 고객을 방문하고 결과를 운영자에게 공유한다.";
+  const result = await extractMeetingReviewText({
+    text: quote,
+    fetchImpl: async () => providerReply({ summary: "방문 결과 공유를 논의했다.", proposals: [{
+      kind: "action", text: "영업팀 방문 결과를 확인", quote, certainty: "stated", suggestedDue: "2026-10-03",
+      actionScope: "related", relationQuote: "운영자에게 공유",
+      dateMentions: [{ quote: "2026년 10월 3일 고객을 방문", role: "scheduled", date: "2026-10-03" }],
+      methodQuote: null, checklistQuotes: [],
+    }] }),
+  });
+  assert.equal(result.ok, true);
+  const [proposal] = result.data.proposals;
+  assert.equal(proposal.actionScope, "related");
+  assert.equal(proposal.suggestedDue, undefined);
+  assert.equal(proposal.dateMentions[0].role, "scheduled");
+  assert.equal(proposal.dateMentions[0].date, "2026-10-03");
+  assert.deepEqual(proposal.checklist, []);
+}));
+
+test("meeting review does not borrow a second date's deadline wording for a scheduled date", async () => withGeminiKey(async () => {
+  const quote = "2026년 10월 3일 고객 방문, 2026년 10월 5일까지 방문 결과 보고.";
+  const result = await extractMeetingReviewText({
+    text: quote,
+    fetchImpl: async () => providerReply({ summary: "방문과 보고 일정이 있다.", proposals: [{
+      kind: "action", text: "고객 방문 후 결과 보고", quote, certainty: "stated", suggestedDue: "2026-10-03",
+      dateMentions: [
+        { quote: "2026년 10월 3일 고객 방문", role: "deadline", date: "2026-10-03" },
+        { quote: "2026년 10월 5일까지", role: "deadline", date: "2026-10-05" },
+      ],
+    }] }),
+  });
+  assert.equal(result.ok, true);
+  const [proposal] = result.data.proposals;
+  assert.equal(proposal.suggestedDue, undefined);
+  assert.deepEqual(proposal.dateMentions.map(({ role, date }) => ({ role, date })), [
+    { role: "reference", date: "2026-10-03" },
+    { role: "deadline", date: "2026-10-05" },
+  ]);
+}));
+
+test("meeting review does not assign an undiarized first-person promise or invent method and checklist", async () => withGeminiKey(async () => {
+  const quote = "제가 내일 고객에게 연락하겠습니다.";
+  const result = await extractMeetingReviewText({
+    text: quote,
+    fetchImpl: async () => providerReply({ summary: "후속 연락 언급이 있었다.", proposals: [{
+      kind: "action", text: "고객에게 연락", quote, certainty: "stated", suggestedDue: null,
+      actionScope: "mine", relationQuote: "제가", dateMentions: [{ quote: "내일", role: "deadline", date: "2026-09-24" }],
+      methodQuote: "전화로", checklistQuotes: ["자료 준비", "전화 걸기"],
+    }] }),
+  });
+  assert.equal(result.ok, true);
+  const [proposal] = result.data.proposals;
+  assert.equal(proposal.actionScope, "unknown");
+  assert.equal(proposal.relation, undefined);
+  assert.equal(proposal.dateMentions[0].quote, "내일");
+  assert.equal(proposal.dateMentions[0].date, null);
+  assert.equal(proposal.methodQuote, undefined);
+  assert.deepEqual(proposal.checklist, []);
+}));
+
+test("meeting review discards repeated or reordered checklist excerpts instead of fabricating execution order", async () => withGeminiKey(async () => {
+  const quote = "초안 작성, 검토, 초안 작성, 발송.";
+  const result = await extractMeetingReviewText({
+    text: quote,
+    fetchImpl: async () => providerReply({ summary: "초안과 발송을 논의했다.", proposals: [{
+      kind: "action", text: "초안 작업", quote, certainty: "stated",
+      checklistQuotes: ["발송", "검토", "초안 작성"], methodQuote: null,
+    }] }),
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.data.proposals[0].checklist, []);
+}));
+
 test("meeting review drops fabricated, repeated, unsupported-date and mechanically contradictory candidates", async () => withGeminiKey(async () => {
   const source = "예산은 아직 미정이다. 예약은 보류한다. 예약은 보류한다. 20개를 검토했다. 내일 연락하자. 견적은 보내지 말자.";
   const result = await extractMeetingReviewText({

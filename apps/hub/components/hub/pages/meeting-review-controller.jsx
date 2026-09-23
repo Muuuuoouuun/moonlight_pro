@@ -25,6 +25,15 @@ async function postJson(path, payload, timeout) {
   });
   return { response, data: await responseJson(response) };
 }
+function sameExecution(saved, requested) {
+  if (!saved || !requested) return saved == null && requested == null;
+  const fields = ['actionScope', 'dueAt', 'method'];
+  if (fields.some((key) => (saved[key] ?? null) !== (requested[key] ?? null))) return false;
+  if (!Array.isArray(saved.checklist) || !Array.isArray(requested.checklist)
+    || saved.checklist.length !== requested.checklist.length) return false;
+  return saved.checklist.every((item, index) => ['id', 'title', 'done', 'note', 'dueAt']
+    .every((key) => (item[key] ?? null) === (requested.checklist[index][key] ?? null)));
+}
 
 export function MeetingReviewController({ entry, disabledReason = null, onApplied }) {
   const entryId = entry?.id;
@@ -118,7 +127,7 @@ export function MeetingReviewController({ entry, disabledReason = null, onApplie
     }
   }
 
-  async function review(proposalId, { decision, editedText }) {
+  async function review(proposalId, { decision, editedText, execution = null }) {
     if (!editable || !matchingRun || operation.current) throw new Error('현재 저장된 원문과 후보를 다시 확인해 주세요.');
     const proposal = view.proposals.find((item) => item.id === proposalId);
     if (!proposal) throw new Error('검토할 후보를 다시 확인해 주세요.');
@@ -128,7 +137,7 @@ export function MeetingReviewController({ entry, disabledReason = null, onApplie
     let outcome = null;
     try {
       outcome = await postJson(ENDPOINT, {
-        action: 'review', entryId, proposalId, decision, editedText,
+        action: 'review', entryId, proposalId, decision, editedText, execution,
       }, 20000);
     } catch {
       // The server may have saved before the response or timeout was lost.
@@ -137,7 +146,8 @@ export function MeetingReviewController({ entry, disabledReason = null, onApplie
       const latest = await refresh({ keepLive: true });
       const saved = latest?.status === 'live' && latest.proposals.some((item) =>
         item.id === proposalId && item.review?.status === decision
-          && (decision !== 'accepted' || item.review.text === editedText));
+          && (decision !== 'accepted' || (item.review.text === editedText
+            && sameExecution(item.review.execution, execution))));
       if (saved) return;
       if (!outcome) throw new Error('검토 저장 응답을 확인하지 못했어요. 결과를 다시 확인해 주세요.');
       if (!meetingReviewWriteSucceeded(outcome.response, outcome.data)) throw new Error(failureMessage(outcome.data, '검토 결과를 저장하지 못했어요.'));

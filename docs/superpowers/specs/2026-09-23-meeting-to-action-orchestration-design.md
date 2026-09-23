@@ -1,10 +1,12 @@
 # 회의·녹음·메모에서 실행까지 — 통합 정리와 배분 설계
 
-> 상태: **DRAFT · 권장안 / M0 텍스트 코드 일부 구현(2026-09-23)**. 운영 DB 적용·배포·실사용 품질 인증을 뜻하지 않는다. 실제 구현과 이 설계의 차이는 [M0 구현 기록](../plans/2026-09-23-meeting-text-review-m0.md)을 따른다.
+> 상태: **DRAFT · 권장안 / M0 텍스트 검토와 M0.5 실행 계획 코드 구현(2026-09-23)**. 운영 DB 적용·배포·실사용 품질 인증을 뜻하지 않는다. 실제 구현과 이 설계의 차이는 [M0 구현 기록](../plans/2026-09-23-meeting-text-review-m0.md)을 따른다.
 > 상위 정본: [운영자 업무 프로필](../../operator-workflow-profile.md) §음성·메시지 분석, [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md) §15, [업무 안의 Eevee Office](2026-09-21-eevee-office-embedded-workflow-deep-design.md).
 > 관계: 위 문서의 확정 정책을 **대체하지 않는다**. [CRM 기록·리드 스코어링 지침](2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md)의 근거 중심 방향과 [Office 품질 재기획](../plans/2026-09-23-office-agent-quality-replan.md)을 실행 입력 관점에서 연결한다. 이 문서의 UI·스키마·라우팅은 권장안이다.
 
 2026-09-23 후속 구현: 저장된 `MemoComposer`에서 `.txt`/붙여넣기 → 수동 Gemini 분석 → 원문 구간별 후보 수정·확인·제외 → 확인한 행동만 기존 저널 `create_task`에 연결하는 M0 경로를 추가했다. `meeting_review_runs`·`meeting_review_proposals`와 기존 `journal_workflow_receipts`를 쓰므로 아래 M0 행의 권장 테이블명·`memo-capture` 재사용 방식과 다르다. 이 문서의 §2는 설계 착수 시점의 조사 스냅샷이며, 현재 코드·검증·미완료 범위는 [구현 기록](../plans/2026-09-23-meeting-text-review-m0.md)이 우선한다.
+
+같은 날 M0.5에서는 행동 후보를 `내가 할 일 / 함께 신경 쓸 일 / 담당 확인 필요`로 나누고, 근거 있는 날짜 역할·방법·단계 제안과 운영자가 확정한 실행 계획을 보존한다. 확정한 내 행동만 작업으로 원자 등록하고 `내 작업`에서 단계를 체크할 수 있다. 관련 주시는 현재 회의 검토 안에 보존되며 전역 주시 큐·알림은 후속 범위다. 이는 아래 §4의 모든 담당자·목적지 스키마를 완료한 것이 아니다.
 
 ## 1. 한 문장 방향과 결정 상태
 
