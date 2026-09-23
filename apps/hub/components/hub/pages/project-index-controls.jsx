@@ -47,7 +47,9 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
     const context = event.type === 'contextmenu' && (event.clientX || event.clientY);
-    setMenu({ kind, project, x: context ? event.clientX : rect.left, y: context ? event.clientY : rect.bottom,
+    if (!context && menu?.kind === kind && menu.returnFocus === event.currentTarget) { closeMenu(); return; }
+    const alignEnd = !context && kind !== 'project';
+    setMenu({ kind, project, alignEnd, x: context ? event.clientX : alignEnd ? rect.right : rect.left, y: context ? event.clientY : rect.bottom,
       returnFocus: event.currentTarget.matches('button') ? event.currentTarget : event.currentTarget.querySelector('button') });
   }
   function closeMenu(restore = true) {
@@ -135,7 +137,7 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
     return () => { window.removeEventListener('keydown', cancel); window.removeEventListener('blur', blur); finish(); };
   }, [storageKey]);
 
-  return { ordered, preferences, notice, menu, drag, listRef, move, openMenu, closeMenu,
+  return { ordered, preferences, notice, dismissNotice: () => setNotice(''), menu, drag, listRef, move, openMenu, closeMenu,
     sortLabel: PROJECT_INDEX_SORT_OPTIONS.find(option => option.value === preferences.sort)?.label,
     setSort: sort => { save({ ...preferences, sort }, '정렬 설정 저장됨 · 이 브라우저'); closeMenu(); },
     rowEvents: id => ({
@@ -149,17 +151,17 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
   };
 }
 
-export function ProjectIndexMenu({ controls, onEdit, onDelete, canWrite }) {
+export function ProjectIndexMenu({ controls, onEdit, onDelete, canWrite, onMonthlyReview, onShowAll, onManageDelivery }) {
   const { menu, closeMenu } = controls;
   const ref = React.useRef(null);
   React.useLayoutEffect(() => {
     const element = ref.current;
     if (!menu || !element) return undefined;
     const rect = element.getBoundingClientRect();
-    element.style.left = `${Math.max(8, Math.min(menu.x, window.innerWidth - rect.width - 8))}px`;
+    element.style.left = `${Math.max(8, Math.min(menu.x - (menu.alignEnd ? rect.width : 0), window.innerWidth - rect.width - 8))}px`;
     element.style.top = `${Math.max(8, Math.min(menu.y, window.innerHeight - rect.height - 8))}px`;
-    element.querySelector('[role^="menuitem"]:not(:disabled)')?.focus();
-    const outside = event => { if (!element.contains(event.target)) closeMenu(false); };
+    (element.querySelector('[aria-checked="true"]') || element.querySelector('[role^="menuitem"]:not(:disabled)'))?.focus();
+    const outside = event => { if (!element.contains(event.target) && !menu.returnFocus?.contains(event.target)) closeMenu(false); };
     const close = event => { if (!element.contains(event.target)) closeMenu(false); };
     document.addEventListener('pointerdown', outside, true);
     window.addEventListener('resize', close);
@@ -174,7 +176,7 @@ export function ProjectIndexMenu({ controls, onEdit, onDelete, canWrite }) {
     closeMenu();
   };
   return <div ref={ref} className={styles.menu} style={{ left: menu.x, top: menu.y }} role="menu"
-    aria-label={menu.kind === 'sort' ? '프로젝트 정렬' : `${menu.project?.name} 메뉴`} data-shortcut-overlay="true"
+    aria-label={menu.kind === 'sort' ? '프로젝트 정렬' : menu.kind === 'manage' ? '프로젝트 관리' : `${menu.project?.name} 메뉴`} data-shortcut-overlay="true"
     onKeyDown={event => {
       event.stopPropagation();
       if (event.key === 'Escape') { event.preventDefault(); closeMenu(); }
@@ -189,11 +191,25 @@ export function ProjectIndexMenu({ controls, onEdit, onDelete, canWrite }) {
     }}>
     {menu.kind === 'sort' ? <>
       <p className={styles.menuHeading}>프로젝트 정렬</p>
-      {PROJECT_INDEX_SORT_OPTIONS.map(option => <Button key={option.value} className={styles.menuItem} variant="ghost" role="menuitemradio"
-        aria-checked={controls.preferences.sort === option.value} onClick={() => controls.setSort(option.value)}>
-        <span className={styles.check}>{controls.preferences.sort === option.value && <Iconed name="check" size={13} />}</span>{option.label}
-      </Button>)}
+      {PROJECT_INDEX_SORT_OPTIONS.map((option, index) => <React.Fragment key={option.value}>
+        {[1, 3, 5, 7].includes(index) && <div className={styles.divider} role="separator" />}
+        <Button className={styles.menuItem} variant="ghost" role="menuitemradio"
+          aria-checked={controls.preferences.sort === option.value} onClick={() => controls.setSort(option.value)}>
+          <Iconed name={option.value === 'manual' ? 'drag' : option.value.startsWith('due') ? 'calendar' : option.value.startsWith('updated') ? 'clock' : option.value.endsWith('asc') ? 'arrowUp' : 'arrowDown'} size={14} />
+          <span>{option.label}</span>
+          <span className={styles.check}>{controls.preferences.sort === option.value && <Iconed name="check" size={13} />}</span>
+        </Button>
+      </React.Fragment>)}
       <p className={styles.menuHint}>드래그하면 직접 정렬로 전환됩니다.<br />이 브라우저에 저장됩니다.</p>
+    </> : menu.kind === 'manage' ? <>
+      <p className={styles.menuHeading}>프로젝트 관리</p>
+      <Button className={styles.menuItem} variant="ghost" role="menuitem" icon="calendar" onClick={() => { closeMenu(); onMonthlyReview(); }}>이번 달 평가</Button>
+      {onShowAll && <Button className={styles.menuItem} variant="ghost" role="menuitem" icon="menu" onClick={() => { closeMenu(); onShowAll(); }}>전체 목록 보기</Button>}
+      {menu.project && <Button className={styles.menuItem} variant="ghost" role="menuitem" icon="flag" onClick={() => { closeMenu(); onManageDelivery(menu.project); }}>결과·완료 기준</Button>}
+      {menu.project && menu.project.statusKey !== 'archived' && <>
+        <div className={styles.divider} role="separator" />
+        <Button className={styles.menuItem} variant="danger" role="menuitem" icon="trash" disabled={!canWrite} onClick={() => { closeMenu(); onDelete(menu.project); }}>프로젝트 삭제…</Button>
+      </>}
     </> : <>
       <p className={styles.menuHeading}>{menu.project?.name}</p>
       <Button className={styles.menuItem} variant="ghost" role="menuitem" icon="edit" disabled={!canWrite} onClick={() => { closeMenu(); onEdit(menu.project); }}>프로젝트 편집</Button>

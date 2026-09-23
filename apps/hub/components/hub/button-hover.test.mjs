@@ -136,7 +136,7 @@ test("Button never suppresses the keyboard focus ring (DESIGN.md 11)", () => {
   assert.match(css, /\.hub-app :focus-visible \{ outline: 1px solid var\(--moon-300\); outline-offset: 2px;/);
 });
 
-// 2026-09-15 검증 기록: globals.css / hub-tokens.css에 남은 네 개의 bespoke
+// 2026-09-15 검증 기록: globals.css / hub-tokens.css에 남은 bespoke
 // `button:hover` 블록은 Button primitive의 중복이 아니라 raw <button>을 겨냥한다.
 // 그래서 삭제하지 않았다. 아래가 그 근거를 코드로 고정한다 — 이 컨테이너들이
 // <Button>으로 바뀌는 날 테스트가 깨지면서 중복 규칙을 지우라고 알려준다.
@@ -153,10 +153,6 @@ test("the bespoke button:hover rules left in place target raw <button>, not the 
     assert.ok(end > start, `missing ${endNeedle} after ${startNeedle}`);
     return src.slice(start, end);
   };
-
-  const filters = slice(portfolio, 'className="hub-project-portfolio-index__filters"', "</div>");
-  assert.match(filters, /<button type="button" aria-pressed=/);
-  assert.doesNotMatch(filters, /<Button/);
 
   const footer = slice(portfolio, 'className="hub-project-portfolio-index__footer"', "</div>");
   assert.match(footer, /<button type="button" onClick=/);
@@ -203,10 +199,7 @@ function qualifyingButtonRules(css) {
 // 검증 완료(2026-09-15): 아래 셀렉터의 컨테이너는 전부 raw <button>만 렌더한다.
 // 새 항목을 추가하려면 해당 JSX를 직접 읽고 <Button> 프리미티브가 없는지 확인할 것.
 const AUDITED_RAW_BUTTON_CONTAINERS = [
-  // project-portfolio-workspace.jsx — index 필터/푸터, terminal 행 2개 모두 raw <button>
-  ".hub-app .hub-project-portfolio-index__filters button",
-  '.hub-app .hub-project-portfolio-index__filters button[data-active="true"]',
-  ".hub-app .hub-project-portfolio-index__filters button:hover",
+  // project-portfolio-workspace.jsx — index 푸터, terminal 행은 raw <button>; 필터는 SegmentedControl로 이관
   ".hub-app .hub-project-portfolio-index__footer button",
   ".hub-app .hub-project-portfolio-index__footer button:hover",
   ".hub-app .hub-project-portfolio-schedule-list > button",

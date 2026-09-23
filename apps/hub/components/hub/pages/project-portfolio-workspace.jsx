@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Badge, Button, Drawer, IconButton, Input } from "../hub-primitives";
+import { Badge, Button, Drawer, EmptyState, IconButton, Input, SegmentedControl } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 import { readTaskChecklist } from '@/lib/task-checklist';
 import { ProjectWorkList } from './project-work-list';
@@ -106,7 +106,7 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
   const risk = projectRisk(project, window);
   const dday = project.deadlineAlertSuppressed ? null : computeDDay(project.dueAt);
   return (
-    <div className={indexStyles.row} data-project-index-id={project.id}
+    <div className={indexStyles.row} data-project-index-id={project.id} data-selected={selected ? "true" : undefined}
       data-dragging={controls.drag?.id === project.id ? 'true' : undefined}
       data-drop={controls.drag?.id !== project.id && controls.drag?.target?.id === project.id ? controls.drag.target.placement : undefined}
       {...controls.rowEvents(project.id)}>
@@ -122,18 +122,27 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
     >
       <span className="hub-project-portfolio-index-row__heading">
         <span className={indexStyles.mark}><BrandMark brand={brand} size={19} active={selected} /></span>
-        <strong>{project.name}</strong>
+        <strong title={project.name}>{project.name}</strong>
         <span className="mono">{progress === null ? "—" : `${progress}%`}</span>
       </span>
       <span className="hub-project-portfolio-index-row__progress" aria-hidden="true">
         <span style={{ width: `${progress ?? 0}%` }} />
       </span>
-      <span className="hub-project-portfolio-index-row__meta">
+      <span className={`hub-project-portfolio-index-row__meta ${indexStyles.legacyMeta}`}>
         <span><Iconed name="calendar" size={12} />{formatLongDate(project.dueAt)}</span>
         {dday && <span className={`hub-project-dday-badge hub-project-dday-badge--${dday.tone}`}>{dday.text}</span>}
         {(risk.risky || project.deadlineAlertSuppressed) && <span className={risk.risky ? "is-risk" : ""}>
           <Iconed name={risk.risky ? "flag" : "clock"} size={12} />{risk.label}
         </span>}
+      </span>
+      <span className={indexStyles.compactMeta}>
+        <span title={formatLongDate(project.dueAt)} data-risk={risk.risky ? 'true' : undefined}>
+          <Iconed name={risk.risky ? 'flag' : 'calendar'} size={12} />
+          {risk.risky ? (dday?.tone === 'danger' && risk.label !== '막힘' ? dday.text : risk.label)
+            : project.deadlineAlertSuppressed ? '기한 알림 해제' : dday ? dday.text : '기한 없음'}
+        </span>
+        <span className={indexStyles.miniProgress} aria-hidden="true"><span style={{ width: `${progress ?? 0}%` }} /></span>
+        <span className="mono" title={project.displayProgress?.label}>{progress === null ? '—' : `${progress}%`}</span>
       </span>
     </button>
     <IconButton className={indexStyles.handle} icon="drag" tooltip={`${project.name} 순서 이동 · 드래그 또는 메뉴의 위아래 이동`}
@@ -301,13 +310,15 @@ export function ProjectPortfolioWorkspace({
       data-has-project={project ? "true" : "false"}
     >
       <ProjectIndexMenu controls={indexControls} onEdit={onEditProject} onDelete={onRemoveProject}
-        canWrite={['live', 'partial'].includes(sourceState) && !failedSources.includes('projects')} />
-      <aside className="hub-project-portfolio-index" aria-label="프로젝트 인덱스">
+        canWrite={['live', 'partial'].includes(sourceState) && !failedSources.includes('projects')}
+        onMonthlyReview={() => setShowMonthlyPreview(true)} onShowAll={onSwitchView ? () => onSwitchView('table') : undefined}
+        onManageDelivery={onManageDelivery} />
+      <aside className={`hub-project-portfolio-index ${indexStyles.index}`} aria-label="프로젝트 인덱스">
         <div className="hub-project-portfolio-index__header">
           <div>
             <strong>프로젝트 선택</strong>
-            <span className="mono">{portfolioProjects.length}{projectCorePartial ? "+" : ""}</span>
-            <Button className={indexStyles.sort} variant="ghost" size="xs" icon="arrowDown" aria-label={`프로젝트 정렬: ${indexControls.sortLabel}`}
+            <span className="mono" aria-label={`프로젝트 ${projects.length}개 표시, 전체 ${portfolioProjects.length}개${projectCorePartial ? " 이상" : ""}`}>{query || activeFilter ? `${projects.length} / ` : ""}{portfolioProjects.length}{projectCorePartial ? "+" : ""}</span>
+            <Button className={indexStyles.sort} variant="ghost" size="xs" iconRight="chevronD" aria-label={`프로젝트 정렬: ${indexControls.sortLabel}`}
               aria-haspopup="menu" aria-expanded={indexControls.menu?.kind === 'sort'} onClick={event => indexControls.openMenu(event, 'sort')}>{indexControls.sortLabel}</Button>
             <button type="button" className="hub-project-portfolio-index__close" onClick={() => setShowMobilePicker(false)}>닫기</button>
           </div>
@@ -315,24 +326,42 @@ export function ProjectPortfolioWorkspace({
             ref={searchInputRef}
             icon="search"
             placeholder="프로젝트 검색"
+            ariaLabel="프로젝트 검색"
+            clearable
             value={query}
             onChange={onQueryChange}
           />
-          <div className="hub-project-portfolio-index__filters" role="group" aria-label="프로젝트 필터">
-            <button type="button" aria-pressed={!activeFilter} data-active={!activeFilter ? "true" : "false"} onClick={() => onFilterChange(null)}>전체</button>
-            <button type="button" aria-pressed={activeFilter === "active"} data-active={activeFilter === "active" ? "true" : "false"} onClick={() => onFilterChange(activeFilter === "active" ? null : "active")}>진행</button>
-            <button type="button" aria-pressed={activeFilter === "blockedOrOverdue"} data-active={activeFilter === "blockedOrOverdue" ? "true" : "false"} onClick={() => onFilterChange(activeFilter === "blockedOrOverdue" ? null : "blockedOrOverdue")}>위험</button>
+          <div className={indexStyles.filterBar}>
+            <SegmentedControl label="프로젝트 필터" fill value={activeFilter || 'all'}
+              options={[{ key: 'all', label: '전체' }, { key: 'active', label: '진행' }, { key: 'blockedOrOverdue', label: '위험' }]}
+              onChange={key => onFilterChange(key === 'all' || key === activeFilter ? null : key)} />
+            <IconButton className={indexStyles.extraFilter} icon="filter" tooltip="추가 프로젝트 필터" aria-expanded={showFilterPicker}
+              aria-controls="project-index-extra-filters" data-active={showFilterPicker || ['dueSoon', 'unmeasured'].includes(activeFilter) ? 'true' : undefined}
+              onClick={() => setShowFilterPicker(value => !value)} />
           </div>
+          {showFilterPicker && <div id="project-index-extra-filters" className={indexStyles.filterOptions} aria-label="추가 프로젝트 필터">
+            {METRIC_FILTERS.map(metric => <PortfolioMetric key={metric.key} metric={metric} count={metrics[metric.key]}
+              active={activeFilter === metric.key} lowerBound={lowerBound} onSelect={key => { onFilterChange(key); setShowFilterPicker(false); }} />)}
+          </div>}
+          {(query || activeFilter) && <div className={indexStyles.filterResult}>
+            <span>{activeFilter ? METRIC_FILTERS.find(metric => metric.key === activeFilter)?.label : '검색 결과'} · <span className="num">{projects.length}</span>개 표시</span>
+            <Button variant="ghost" size="xs" onClick={() => { onQueryChange(''); onFilterChange(null); }}>초기화</Button>
+          </div>}
         </div>
 
-        {indexControls.notice && <p className={indexStyles.notice} role="status">{indexControls.notice}</p>}
+        {indexControls.notice && <div className={indexStyles.notice}>
+          <span role="status">{indexControls.notice}</span>
+          <IconButton icon="x" size={24} tooltip="목록 알림 닫기" onClick={indexControls.dismissNotice} />
+        </div>}
         <div ref={indexControls.listRef} className="hub-project-portfolio-index__list scroll-y">
           {projects.length === 0 ? (
-            <div className="hub-project-portfolio-index__empty">
-              <Iconed name={query || activeFilter ? "search" : "projects"} size={22} />
-              <strong>{query || activeFilter ? "조건에 맞는 프로젝트 없음" : "프로젝트 없음"}</strong>
-              <span>{query || activeFilter ? "검색어나 필터를 지워보세요." : "새 프로젝트를 추가해 시작하세요."}</span>
-            </div>
+            <EmptyState icon={query || activeFilter ? 'search' : 'projects'}
+              title={query || activeFilter ? '조건에 맞는 프로젝트 없음' : '프로젝트 없음'}
+              description={query || activeFilter ? '검색어나 필터를 바꿔보세요.' : '프로젝트를 추가해 시작하세요.'}
+              action={query || activeFilter
+                ? <Button variant="outline" size="xs" onClick={() => { onQueryChange(''); onFilterChange(null); }}>검색·필터 해제</Button>
+                : <Button variant="outline" size="xs" onClick={onCreateProject}>프로젝트 추가</Button>}
+              style={{ padding: '24px 12px' }} />
           ) : indexControls.ordered.map((item) => (
             <ProjectIndexRow
               key={item.id}
@@ -413,63 +442,12 @@ export function ProjectPortfolioWorkspace({
               <div className="hub-project-portfolio-stage__actions">
                 <span className={workStyles.mobileOnly}><Button variant="outline" size="sm" onClick={() => setShowMobilePicker(true)}>프로젝트 바꾸기</Button></span>
                 {project && <Button variant="outline" size="sm" icon="pencil" onClick={() => onEditProject?.(project)}>편집</Button>}
-                <details className={workStyles.manage}>
-                  <summary aria-label="프로젝트 관리">관리 <Iconed name="chevronD" size={12} /></summary>
-                  <div>
-                    <button type="button" onClick={() => setShowMonthlyPreview(true)}>이번 달 평가</button>
-                    {onSwitchView && <button type="button" onClick={() => onSwitchView("table")}>전체 목록 보기</button>}
-                    {project && <button type="button" onClick={() => onManageDelivery?.(project)}>결과·완료 기준</button>}
-                    {project && project.statusKey !== "archived" && <button type="button" onClick={() => onRemoveProject?.(project)}>프로젝트 보관</button>}
-                  </div>
-                </details>
+                <Button variant="ghost" size="sm" iconRight="chevronD" aria-label="프로젝트 관리"
+                  aria-haspopup="menu" aria-expanded={indexControls.menu?.kind === 'manage'}
+                  onClick={event => indexControls.openMenu(event, 'manage', project)}>관리</Button>
               </div>
             </div>
-            <div className="hub-project-portfolio-stage__filter">
-              {activeFilter ? (
-                <div style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "3px 10px", borderRadius: "var(--r-sm)",
-                  background: "var(--surface-3)", border: "1px solid var(--moon-300)",
-                  fontSize: 11, color: "var(--fg)",
-                }}>
-                  <span style={{ color: "var(--fg-faint)" }}>필터:</span>
-                  <strong>{METRIC_FILTERS.find(m => m.key === activeFilter)?.label || activeFilter}</strong>
-                  <span className="mono" style={{ color: "var(--moon-300)" }}>{metrics[activeFilter]}</span>
-                  <button
-                    type="button"
-                    onClick={() => onFilterChange(null)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-faint)", padding: "0 2px", fontSize: 12 }}
-                    aria-label="필터 해제"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : null}
-              <Button
-                variant={showFilterPicker ? "outline" : "ghost"}
-                size="xs"
-                onClick={() => setShowFilterPicker(v => !v)}
-              >
-                <Iconed name="search" size={12} /> {showFilterPicker ? "필터 닫기" : "필터"}
-              </Button>
-              {showFilterPicker && (
-                <div className="hub-project-portfolio-metrics" aria-label="포트폴리오 요약" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  {METRIC_FILTERS.map((metric) => (
-                    <PortfolioMetric
-                      key={metric.key}
-                      metric={metric}
-                      count={metrics[metric.key]}
-                      active={activeFilter === metric.key}
-                      lowerBound={lowerBound}
-                      onSelect={(key) => {
-                        onFilterChange(key);
-                        setShowFilterPicker(false);
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+
           </header>
 
           {sourceState === "error" && (

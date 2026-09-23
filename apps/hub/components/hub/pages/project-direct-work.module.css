@@ -20,12 +20,9 @@
 .progressMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--fg-muted); font-size: 10.5px; }
 .risk { color: var(--danger); margin-left: auto; }
 .mobileOnly { display: none; }
-.manage { position: relative; }
-.manage > summary { display: flex; gap: 5px; align-items: center; min-height: 30px; padding: 0 10px; cursor: pointer; list-style: none; border: 1px solid var(--line-soft); border-radius: var(--r-sm); font-size: 12px; color: var(--fg-muted); }
-.manage > summary::-webkit-details-marker { display: none; }
-.manage > div, .addOptions > div { position: absolute; z-index: 8; right: 0; top: calc(100% + 4px); display: grid; min-width: 166px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-card); }
-.manage button, .addOptions button { min-height: 36px; padding: 6px 10px; text-align: left; color: var(--fg); font-size: 12px; border-radius: var(--r-sm); }
-.manage button:hover, .addOptions button:hover { background: var(--surface-2); }
+.addOptions > div { position: absolute; z-index: 8; right: 0; top: calc(100% + 4px); display: grid; min-width: 166px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-card); }
+.addOptions button { min-height: 36px; padding: 6px 10px; text-align: left; color: var(--fg); font-size: 12px; border-radius: var(--r-sm); }
+.addOptions button:hover { background: var(--surface-2); }
 .workList { min-width: 0; border: 1px solid var(--line-soft); border-radius: var(--r-md); background: var(--surface); }
 .listHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); }
 .listHeader h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--fg); font-size: 13px; font-weight: 600; }
@@ -77,8 +74,7 @@
   .progressSummary { border-left: 0; border-top: 1px solid var(--line-soft); padding: 10px 14px; gap: 7px; }
   .progressSummary > div:first-child { justify-content: space-between; }
   .progressSummary strong { font-size: 28px; }
-  .manage > summary { min-height: 44px; }
-  .manage button, .addOptions button { min-height: 44px; }
+  .addOptions button { min-height: 44px; }
   .row { min-height: 48px; gap: 4px; padding-inline: 4px; flex-wrap: wrap; }
   .checkTarget { min-width: 40px; width: 40px; min-height: 44px; }
   .checkbox::after { inset: -13px; }
@@ -98,3 +94,18 @@
 }
 
 @media (prefers-reduced-motion: reduce) { .progressTip::before { display: none; } }
+
+@media (min-width: 901px) {
+  .workspace:global(.hub-project-portfolio-workspace):not([data-detail-open="true"]) { grid-template-columns: 296px minmax(0, 1fr); }
+  .workspace :global(.hub-project-portfolio-stage__header) { justify-content: flex-start; }
+  .overview, .workList { border-radius: var(--r-lg); }
+  .nextAction { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 8px; }
+  .nextAction > strong { font-size: 15px; line-height: 1.55; }
+  .nextAction > :global(.hub-btn) { justify-self: start; margin-top: 2px; }
+  .listHeader { min-height: 40px; padding-block: 6px; }
+  .composer { border-top: 1px solid var(--line-soft); padding-block: 10px; }
+  .details .composer { border-top: 0; }
+  .task:focus-within { background: var(--surface-2); }
+  .editButton { opacity: 0; }
+  .task:hover .editButton, .task:focus-within .editButton { opacity: 1; }
+}

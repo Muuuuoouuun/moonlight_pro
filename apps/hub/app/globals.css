@@ -1219,35 +1219,6 @@ button {
   width: 100%;
 }
 
-.hub-app .hub-project-portfolio-index__filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  padding: 3px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.hub-app .hub-project-portfolio-index__filters button {
-  min-height: 30px;
-  border-radius: 5px;
-  color: var(--fg-faint);
-  font-size: 11px;
-  transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
-}
-
-.hub-app .hub-project-portfolio-index__filters button:hover {
-  color: var(--fg-muted);
-  background: var(--surface-2);
-}
-
-.hub-app .hub-project-portfolio-index__filters button[data-active="true"] {
-  color: var(--fg);
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
-}
-
 .hub-app .hub-project-portfolio-index__list {
   flex: 1 1 auto;
   min-height: 0;
