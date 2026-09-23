@@ -493,7 +493,7 @@ export function ProjectPortfolioWorkspace({
                   </div>
                   <div className="hub-project-portfolio-hero__identity">
                     <span>{brand?.name || "프로젝트"}</span>
-                    <h2>작업 진척</h2>
+                    <h2>프로젝트 진척</h2>
                     <span className="hub-project-portfolio-hero__due">
                       <Iconed name="calendar" size={14} />{formatLongDate(project.dueAt)}
                       {dday && <Badge tone={dday.tone} size="xs">{dday.text}</Badge>}
@@ -513,7 +513,9 @@ export function ProjectPortfolioWorkspace({
 
                 <div className="hub-project-portfolio-ruler" style={{ marginTop: 12 }}>
                   <div className="hub-project-portfolio-ruler__labels">
-                    <span>프로젝트 진척 · {doneTasksCount}/{totalTasks} 완료</span>
+                    <span>진척 근거 · {project.displayProgress?.source === "tasks"
+                      ? `하위 항목 ${project.displayProgress.done}/${project.displayProgress.total} 완료`
+                      : project.displayProgress?.label || "집계 전"}</span>
                     <span>{project.deadlineAlertSuppressed ? "이전 기한 · 알림 해제" : dueDays === null ? "기한 미정" : dueDays < 0 ? `${Math.abs(dueDays)}일 지남` : dueDays === 0 ? "오늘 마감" : `마감 ${dueDays}일`}</span>
                     <span className={risk.risky ? "is-risk" : ""}><Iconed name={risk.risky ? "flag" : "check"} size={12} />{risk.label}</span>
                   </div>
@@ -524,7 +526,7 @@ export function ProjectPortfolioWorkspace({
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-valuenow={progress ?? undefined}
-                    aria-valuetext={progress === null ? "진척 미집계" : `${progress}%`}
+                    aria-valuetext={progress === null ? "진척 미집계" : `${progress}% · ${project.displayProgress?.label || "진척 근거 미정"}`}
                   >
                     {Array.from({ length: 21 }, (_, index) => <i key={index} data-major={index % 5 === 0} style={{ left: `${index * 5}%` }} />)}
                     <span style={{ width: `${progress ?? 0}%` }} />
