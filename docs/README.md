@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-23 (main·생활 루틴 통합과 운영 DB 0043 적용 기록 반영. Office P0 교정 6건 — 역할 카드 v25·말투 튜닝 동결, 의미 품질 인증 대기)
+> 마지막 정리: 2026-09-23 (main·생활 루틴 통합과 운영 DB 0043 적용 기록 반영. Office P0 교정 6건 — 역할 카드 v25·말투 튜닝 동결, 의미 품질 인증 대기. DESIGN.md를 코드 실측과 대조해 정정하고 사이드바 앵커 서술을 10+2로 갱신)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -79,7 +79,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 파일 범위(2026-09-23 실측): 저장소의 `*.test.mjs`는 **340파일**이고 **전부 루트 글롭 안**이다(글롭 밖 0건). 한때 글롭 밖이던 `apps/hub/app/api/hub/content/transform/route.test.mjs`·`.../workflow/route.test.mjs` 2파일은 2026-09-20에 `apps/hub/app/**` 패턴이 추가되면서(`cc1b5c9`) 해소됐다. 그 전 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장해 이전에 CI 밖이던 20파일과 실패 4건을 해소한 것도 사실이다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬의 범위는 어긋나지 않는다.
 
-사이드바 앵커는 코드(`hub-nav.js` 8 primary + 2 utility)·`hub-nav.test.mjs`·07-15 스펙 §3.1이 모두 일치한다(2026-09-04 주석·스펙 갱신으로 해소).
+사이드바 앵커는 `hub-nav.test.mjs`가 **주요 10 + 유틸리티 2**로 고정한다(2026-09-23 실측 — 홈, 오늘, 현황, 내 작업, 영업·매출, 고객 연락, 기회 탐색, 프로젝트, 브랜드, 콘텐츠 + AI·자동화, 설정). 2026-09-04에 맞췄던 "8 primary" 서술은 그 뒤 기회 탐색·홈 앵커가 더해지며 낡았고, 07-15 스펙 §3.1과 `hub-nav.js`("Nine primary")·`hub-tokens.css`("eight-anchor") 주석은 아직 갱신되지 않았다. 사이드바는 2026-08-04(`5a3d506`)부터 한 단계이며, 07-15 스펙의 2레벨 목적지는 아코디언이 아니라 탑바 탭으로 렌더된다(DESIGN.md §7).
 
 ## 4. 현재 문서
 
@@ -115,7 +115,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`2026-09-11-brand-content-refocus-proposal.md`](superpowers/specs/2026-09-11-brand-content-refocus-proposal.md) — 9월 14일 첫 구현 지시 반영: 브랜드 기준 편집·독립 조회, 소재함·Threads 원고·수동 발행 기록·빠른 메모 연결. §10이 실제 구현 범위이며 나머지는 후속 권장안. 운영 DB 타입 확장은 인증 실패로 미적용.
 
 - [`superpowers/specs/2026-09-09-project-delivery-lifecycle.md`](superpowers/specs/2026-09-09-project-delivery-lifecycle.md) — 시작·검증·종료 일정, 최소 결과물, 완료 조건, 마무리 가능성 및 완료 검증 UI. 운영자 구현 요청 반영, 로컬 검증·운영 배포 별도.
-- [`superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md`](superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md) — **확정(2026-07-15)**. 사이드바 2레벨 아코디언 + PMS 분류 체계 정본. `2026-07-14` 8앵커 IA는 유지하되 하위 레벨 노출 방식을 이 문서가 규정한다.
+- [`superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md`](superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md) — **확정(2026-07-15)**. 사이드바 2레벨 아코디언 + PMS 분류 체계 정본. `2026-07-14` 8앵커 IA는 유지하되 하위 레벨 노출 방식을 이 문서가 규정한다. 단, 2026-08-04(`5a3d506`) 이후 코드는 사이드바를 한 단계로 두고 하위 목적지를 탑바 탭으로 렌더한다(`hub-nav.test.mjs` "sidebar is one level deep…", DESIGN.md §7). 스펙 본문은 이 변경 뒤 갱신되지 않았다.
 - [`superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md`](superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md) — §3~4(5앵커+More 내비게이션 안)은 위 문서로 대체되어 **채택하지 않음**. §5(Personal 스코프 데이터 계약)·§6(구조적 화면 복구)는 별도로 유효.
 - [`superpowers/specs/2026-07-14-sidebar-consolidation-design.md`](superpowers/specs/2026-07-14-sidebar-consolidation-design.md) — 8앵커 압축 + 스코프 셸. 하위 레벨이 통째로 사라진 부분은 위 07-15 분류 스펙 문서가 보완.
 

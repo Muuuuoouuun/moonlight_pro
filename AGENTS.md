@@ -42,11 +42,12 @@
 - 크기 플로어: 데이터 값 ≥12px, 보조 메타 ≥10.5px, 10px 미만 금지
 - Primitives first: `SegmentedControl`·`EmptyState`·`Checkbox(label)`·`EditDrawer`·`Drawer`·`Skeleton`(로딩 자리 — preview/error엔 금지, `EmptyState`로 로딩을 그리지 않는다)를 인라인 재구현 금지. 상태 표시는 `TruthBadge`·`CertaintyBadge`·`LifecycleBadge`(DESIGN.md §8.2)로 선언하고, `SyncBadge`는 호환 래퍼이므로 새 호출처에서 쓰지 않는다. `AttentionRail`은 페이지 호출처 0건으로 아직 미채택 — 레일은 §8.1 inset 1px 인라인이 현행이므로 새로 쓰기 전 DESIGN.md §15 2026-08-05 결정을 확인한다
 - 행 hover는 `.hub-row`, 카드형 클릭 타깃은 `.hub-card-link`, 칸반 카드는 `.hub-kanban-card`, `Button`은 `.hub-btn`+`.hub-btn--<variant>`, `IconButton`은 `.hub-iconbtn` (JS onMouseEnter/Leave 신규 작성 금지). `Button`/`IconButton`의 휴지 색을 인라인으로 되돌리면 인라인이 클래스 규칙을 이겨 hover가 다시 죽는다
-- 모션: `--dur-hover`/`--dur-enter`/`--dur-panel`/`--dur-overlay`·`--ease-hub`·`--stagger-step` 토큰과 `.fade-up`/`.stagger-up`만 사용 — 페이지 안 raw ms 리터럴·인라인 `cubic-bezier(` 금지 (DESIGN.md §9). `components/hub/motion.test.mjs`가 저장소 전체를 훑어 CI에서 막는다
+- 모션: `--dur-hover`/`--dur-enter`/`--dur-panel`/`--dur-overlay`(+ 1회성 `--dur-celebrate`, 진척 게이지 전용 `--dur-gauge`/`--ease-gauge`)·`--ease-hub`·`--stagger-step` 토큰과 `.fade-up`/`.stagger-up`만 사용 — 페이지 안 raw `ms`/`s` 리터럴·인라인 `cubic-bezier(` 금지 — 토큰 없이 허용되는 건 `mlMoonPulse 1.4s`와 `0s`, Q134 결정 전까지 부채로 박제된 축하 연출 2종(`hubProgressShimmer`·`hubSparklePop`)뿐 (DESIGN.md §9). `components/hub/motion.test.mjs`가 `apps/hub` 전체를 훑어 CI에서 막는다
 - 내비: 사이드바 앵커는 `hub-nav.js`(+ `hub-nav.test.mjs`), ⌘K 카탈로그는 `hub-data.js`의 `NAV_TREE`, 워크스페이스 소속은 `workspace-map.js` — `NAV_TREE`에 넣어도 사이드바 행은 생기지 않는다
 - 표면 예산: 기존 화면에 새 기능을 패널·버튼으로 덧붙이지 않는다. 그 화면의 핵심 동작만 본문에 두고, 나머지는 `더보기` 드로어나 다른 탭으로 보낸다. 본문에 무엇을 더하려면 먼저 하나를 빼거나 스펙의 예산을 고친다(2026-09-23 운영자 지시 "계속 붙는 것들 정리"). Studio는 `pages/content-studio-surface.test.mjs`가 기본 화면 예산을 고정한다 — `docs/superpowers/specs/2026-09-23-studio-simplification.md`
+- 셸·Futura: 사이드바는 한 단계(주요 10 + 유틸리티 2 앵커)이고 하위 목적지는 탑바 탭이다. Futura 셸 질감(사이드바 면·현재 항목 pill·검색/사용자 카드·버튼 그림자·select pill)은 모든 페이지에 적용되지만, 페이지 텍스처(`.hub-futura` — 48/44/26 여백·44px 제목·`fx-card`)는 `dashboard/home`·`work/decisions`(확정)·`work/rhythm`(권장)뿐이다. 다른 페이지로 넓히는 것은 별도 결정이고, 컨트롤 radius는 프리미티브가 렌더하는 값을 그대로 쓴다(DESIGN.md §7 Futura·Radius)
 - 인터랙션 계약(생성 N 단축키·ESC/오버레이 닫기·딥링크·정렬 3단 토글)은 DESIGN.md §8.1 준수
-- 반응형: 모바일 우선. 허브에는 Tailwind가 없다 — 브레이크포인트는 `hub-tokens.css`/`globals.css`의 미디어쿼리와 인라인 스타일로 처리한다. 세그먼트 토글은 모바일에서도 가로 유지 (flex-basis:100% 자식 강제 금지)
+- 반응형: 모바일 우선 = 390px에서 첫 화면의 빠른 입력·첫 행동이 보이고 터치 44px·모바일 입력 16px를 지키는 품질 플로어(DESIGN.md §3·§7 Responsive). 허브에는 Tailwind가 없다 — 브레이크포인트는 `hub-tokens.css`/`globals.css`의 미디어쿼리와 인라인 스타일로 처리한다. CSS는 데스크톱 기본 + `max-width` 축소다 — 셸 900px, 터치 플로어 720px/`pointer: coarse`, 페이지·compact 드로어 600px. 세그먼트 토글은 모바일에서도 가로 유지 (flex-basis:100% 자식 강제 금지)
 
 ## 디자인 레퍼런스 (awesome-design-md)
 > UI 컴포넌트 작업 시 아래 브랜드 DESIGN.md를 참고 레퍼런스로 활용할 것

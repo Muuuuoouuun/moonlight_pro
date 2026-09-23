@@ -1,6 +1,12 @@
 # Moonlight Design System
 
 > Current version — reflects the Moonlight Pro bundle now shipped in `apps/hub`.
+> Last reconciled against the code: 2026-09-23 (`10854ed`). Statements about the code below were re-measured on
+> that tree. Where the code and a §15 decision disagree, the gap is named in place — it is not silently resolved.
+> Scope: tokens, components, interaction, motion, accessibility. On product questions (priority, screens, IA) the
+> order in `docs/README.md` §1 wins — operator profile → personal operator OS deep design → latest topic spec →
+> this file. `docs/design-guidelines.md` is SUPERSEDED history; never cite it as a design source.
+> Status words follow the operator docs: `confirmed`/확정 is an operator decision, `recommended`/권장 is not yet one.
 > Existing token names below match `apps/hub/components/hub/hub-tokens.css` verbatim.
 > The old "Com_Moon" product name is retired from design copy. "Moonstone Command Deck" remains the working
 > visual direction (§4). Code namespaces (`COM_MOON_*` env vars, `@com-moon/*` packages) are unchanged.
@@ -31,7 +37,13 @@ If the product feels "busy", "crypto-like", or "default SaaS blue", we missed.
 1. **Show signal first.** The first screen answers "what matters right now?" in under 5 seconds.
 2. **Make action obvious.** Every section has a primary next step, not just density.
 3. **Close the loop.** Intake, ledger state, and operator action should feel like one system.
-4. **Respect mobile reality.** The founder checks numbers, captures ideas, and triggers workflows from a phone.
+4. **Respect mobile reality.** Every surface must stay usable on a phone: at 390×844 the first screen shows the
+   Quick Capture and the first actionable item, touch targets are 44px, and inputs are at least 16px (deep design §17·§20).
+   The current state of each floor is measured in §7 Responsive.
+   Read `mobile-first` (§2) as this quality floor. Phone-only features (push notifications, share sheet) are later
+   by operator decision (operator profile §4 "휴대폰 푸시 알림은 후순위"); `docs/README.md` §2 summarizes the
+   2026-07-13 interview more broadly as "모바일은 후순위". The two phrasings have not been reconciled by the
+   operator — do not use either one to drop the 390px floor or to reorder product priorities.
 5. **Restraint wins.** One accent, a small surface vocabulary, deliberate typography.
 
 ## 4. Visual Direction — Moonlight Pro
@@ -42,7 +54,10 @@ panel or a surgical console. Premium because it is calibrated, not decorated.
 **Reference blend:** Linear (dark operational density) × Apple Pro (cool silver machining) ×
 Bloomberg (command-deck rhythm: status / count / next action).
 
-- `apps/hub`: dark-native. Void surfaces, moonstone silver accents, hairline borders.
+- `apps/hub`: dark-native. Void surfaces, moonstone silver accents, hairline borders. "Dark-native" describes
+  where the palette was designed, not the daytime default: automatic mode shows light from 07:00 to 18:00 (§5),
+  and the Futura texture (§15 2026-09-18) was drawn on the light theme. Both themes are first-class;
+  check every change in both.
 - `apps/engine`: invisible by default, surfaced through health, status, run logs, and webhook outcomes.
 - `Content / Studio` surfaces: slightly lower density inside Hub so drafting and review have breathing room.
 
@@ -58,15 +73,20 @@ Bloomberg (command-deck rhythm: status / count / next action).
 The palette has **two theme modes** (automatic is the hub default: light from 07:00 to 18:00, dark overnight, using the device local clock) sharing one
 cool moonstone accent stack. The initial server render is light; after hydration the local clock
 resolves automatic mode. The top-bar theme control cycles automatic → light → dark → automatic;
-existing saved light/dark choices remain explicit overrides. Color does not classify product domains or ordinary workflow
+existing saved light/dark choices remain explicit overrides. The preference is stored as `mlp.theme`
+(`lib/hub-preferences.js`), and automatic mode re-checks the clock at the 07:00/18:00 boundary and on window
+focus/visibility change. Color does not classify product domains or ordinary workflow
 stages. It communicates only interaction emphasis and true urgency; certainty and lifecycle
 use line style, shape, icon, label, and luminance instead.
 
 ### 5.1 Canonical tokens (CSS custom properties)
 
-Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`.
+Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`. The dark block is also the
+base (`.hub-app, .hub-app[data-theme="dark"]`), so an element without `data-theme` renders dark; the light block
+overrides it.
 
 ```css
+.hub-app,
 .hub-app[data-theme="dark"] {
   /* Surfaces — void-black stack */
   --bg:            oklch(0.155 0.005 250);
@@ -112,9 +132,15 @@ Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`.
   --surface:    oklch(1 0 0);
   --surface-2:  oklch(0.965 0.004 250);
   --surface-3:  oklch(0.935 0.005 250);
+  --elevated:   oklch(1 0 0);
+  /* Text is set with literals here, not through the moon ramp */
   --fg:         oklch(0.20 0.008 250);
   --fg-muted:   oklch(0.42 0.008 250);
-  /* …moonstone + semantic stacks shift accordingly */
+  --fg-dim:     oklch(0.50 0.008 250);
+  --fg-faint:   oklch(0.55 0.007 250);
+  /* The moon ramp runs the other way (--moon-50 ≈ L 0.22 … --moon-700 ≈ L 0.88), so
+     "--moon-200 fill" stays high-contrast against the surface in both themes.
+     Semantic stacks shift accordingly — read hub-tokens.css for the exact values. */
 }
 ```
 
@@ -124,24 +150,43 @@ Also defined in `hub-tokens.css` (names verbatim, both themes):
 - Semantic hairlines and low-alpha fills: `--success-line` / `--warning-line` / `--danger-line` / `--info-line` /
   `--personal-line` / `--company-line` (left rails and chip outlines only) and the matching `--*-bg`
   (compact banners only, never full cards or rows).
-- Layering: `--z-project-detail: 61`, `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100`.
+- Layering: `--z-quick-memo: 60`, `--z-project-detail: 61`, `--z-navigation-overlay: 64`, `--z-navigation: 65`,
+  `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100` (defined once on the base block).
 - Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-pop`.
-- Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7).
+- Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7). There is no `--r-md`;
+  a few call sites still reference it and silently fall back to square corners (§14 Known gaps).
 - Motion: `--dur-hover`, `--dur-enter`, `--dur-panel`, `--dur-overlay`, `--dur-celebrate`, `--dur-gauge`, `--ease-hub`, `--ease-gauge`, `--stagger-step` (§9).
+- Selected project gauge only (§5.2 exception): `--project-gauge-0/25/50/75/100` (hue 255 → 218 → 190 → 280 → 325,
+  i.e. blue → cyan → teal → violet → magenta), `--project-gauge-spark`, `--project-gauge-glow`, `--project-gauge-tip-line`.
+  No other surface may read these tokens.
+
+Futura layer tokens live in `apps/hub/components/hub/hub-futura.css`, also on `.hub-app` (so they resolve on every
+dashboard page, §7 Futura): spacing `--fx-page-pad: 48px`, `--fx-section-gap: 44px`, `--fx-card-pad: 26px`, `--fx-gap: 16px`;
+type `--fx-hero: 44px`, `--fx-hero-weight: 300`, `--fx-title: 27px`, `--fx-stat: 38px` (currently unused),
+`--fx-eyebrow: 11px`; `--fx-pill: 999px`; and the two-step `--fx-shadow` / `--fx-shadow-lift` (re-set for dark).
 
 ### 5.2 Usage rules
 
 - **Accent anchor:** `--accent` is the theme-stable Moonstone `#5274a8` alias. Accent means current position, selection,
   focus, or the single primary action. It never means a category.
-- **Primary CTA:** use `--moon-200` fill with `--moon-100` border. Keep one visually dominant
+- **Primary CTA:** use `--moon-200` fill with `--moon-100` border (`.hub-btn--primary`; hover one rung up to
+  `--moon-100` / `--moon-50`). Keep one visually dominant
   primary CTA per view; global and page-level create actions must not compete.
 - **Surface order:** `--bg` → `--surface` → `--surface-2` → `--surface-3` for nested elevation.
 - **Borders:** always `1px`. Never thicken. Use `--line-soft` for hairlines, `--line` for dividers,
   `--line-strong` only for pressed/emphasized states.
 - **Gradients:** reserved for the brand mark and the moonstone CTA rim. Never fill a hero, card,
-  or section background with a colored gradient.
-- **Selected project progress gauge exception (2026-09-23):** its narrow track alone may use a cool
-  five-stop gradient across fixed 0/25/50/75/100% positions. Numeric scale marks and the evidence
+  or section background with a colored gradient. Measured 2026-09-23: neither reserved use renders a
+  gradient today (the sidebar logo is a neutral monogram tile, §15 2026-09-19; the primary rim is an inset
+  shadow, currently overridden — §14 Known gaps 2), so the only sanctioned colored gradient in the product is
+  the gauge track below. Neutral utility gradients (`ScrollShadowX` edge fades to `--bg`, the `Placeholder`
+  surface stripe, a `currentColor` strike line) are mechanics, not decoration, and stay allowed. Other colored
+  gradients in the code are recorded debt, not precedent (§14 Known gaps 7): the completed / overachieved
+  `Progress` fills (moonstone gradient, infinite shimmer, gold end stop), Home's `.fx-progress--completed`
+  moonstone fill, and the `--moon-300 → #ffd166` fills in personal revenue and the revenue heatmap.
+- **Selected project progress gauge exception (2026-09-23):** its narrow track alone may use a
+  five-stop gradient (blue → cyan → teal → violet → magenta, `--project-gauge-*` in §5.1) across fixed
+  0/25/50/75/100% positions. Numeric scale marks and the evidence
   label remain visible; the colors describe percentage position, not lifecycle, urgency, or actual
   work velocity. Do not extend the gradient to the surrounding summary/card or other status surfaces.
 - **Danger red:** reserved for immediate-loss states: overdue/missed, a blocker that prevents the
@@ -240,9 +285,9 @@ Moonstone `확정하기` action. It does not turn the entire recommendation red 
 | -------- | --------------------- | ----------------------------------------------- |
 | UI Sans  | `SUIT Variable`       | Everything except numbers and display headings. Loaded via `@font-face` in `app/globals.css` (Korean + Latin). `Inter Tight` is an optional future upgrade, not currently shipped. |
 | Data Mono| `JetBrains Mono`      | IDs, timestamps, keybindings, diffs, and inline/instrument metrics (< 18px). **Bundled** as `JetBrainsMono-Variable.woff2` (Latin + digits; Hangul falls back to SUIT) via `@font-face` in `app/globals.css`. |
-| Display  | `SUIT Variable`       | Page-level moments only; avoid decorative display type in dense Hub surfaces. |
+| Display  | `SUIT Variable`       | Page-level moments only; avoid decorative display type in dense Hub surfaces. Two display scales are sanctioned (§11): the Daily Brief hero (`clamp(26px, 3.2vw, 32px)` / 700, inline in `daily-brief.jsx`) and the Futura scale (`--fx-hero` 44px / 300, 30px at ≤900px) used by `.fx-hero` and `.fx-page-title`. There is no `--font-display` token. |
 
-Fallbacks: `'Inter Tight', ui-sans-serif, system-ui, sans-serif` for sans, `'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace` for mono (JetBrains Mono is now bundled and first in `--font-mono`).
+Fallbacks: `'Inter Tight', ui-sans-serif, system-ui, sans-serif` for sans, `'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace` for mono (JetBrains Mono is now bundled and first in `--font-mono` inside `.hub-app`; outside the hub scope `globals.css` maps `--font-mono` to `@com-moon/ui`'s stack, which starts with IBM Plex Mono).
 
 Hub fonts are exactly two: SUIT Variable and JetBrains Mono. The former `MaruBuri` serif (five weights) and the
 `--font-display` alias were removed from `app/globals.css` and `public/fonts/` in the 2609 merge. Only the family
@@ -254,35 +299,95 @@ system serif. Do not introduce serif display type.
 - **Hybrid number rule.** Hero / display figures (KPI values, big metrics ≥ 18px) use `.stat` — SUIT **sans** with `tabular-nums lining-nums` and a touch of display tracking (`-0.015em`), for a premium, non-code read. Instrument data (IDs, timestamps, inline values, counts < 18px) uses `.mono` — bundled JetBrains Mono, `letter-spacing: 0`. Don't set large display numbers in mono; don't set IDs/timestamps in sans.
 - 데이터 숫자는 크기로 나눔: 큰 지표는 `.stat`(sans tabular), 인라인/계기 데이터는 `.mono`(JetBrains Mono) + `tabular-nums` (column-stable). 사인에 남는 소형 카운트는 `.num` 유틸.
 - 데이터 값의 최소 크기 12px — 10–11px은 라벨 / eyebrow 전용.
-- Section eyebrow is 11px, uppercase, `letter-spacing: 0.1em`, `color: var(--fg-dim)`.
+- Section eyebrow comes from the `SectionTitle` primitive: an `<h3>` at 11px, uppercase, `letter-spacing: 0.12em`,
+  `color: var(--fg-dim)`, weight 500. Inside Futura pages `.fx-eyebrow` uses 11px / `0.14em` / 500. This file
+  used to say `0.1em`, and many shell and page labels still do (`.hub-topbar__section`, `.daily-brief__card-head`,
+  `.fx-triage-kind`, several inline labels) — that spread is drift. §8 makes the primitive the source of truth:
+  reach for `SectionTitle` (or `.fx-eyebrow` in Futura scope) rather than restyling an eyebrow inline.
 - Never mix more than two families on one screen.
 
 ## 7. Layout System
 
 ### Widths
-- Public container: `min(1120px, calc(100vw - 32px))`
-- Hub container: `min(1440px, calc(100vw - 24px))` — but most hub pages use full width,
-  two-column grids, or sidebars; the container rule only applies to editorial pages.
+- Hub pages fill the shell's main pane; no hub page uses a shared container. The formulas this file used to
+  list survive only as unused `@com-moon/ui` tokens (`--cm-container-hub: min(1440px, calc(100vw - 24px))`,
+  `--cm-container-public: min(1120px, calc(100vw - 32px))` in `packages/ui/tokens.css`, loaded through
+  `globals.css`). Pages that cap their width do it with a plain `max-width`, and the values have drifted: 1440px
+  (personal revenue), 1280px (revenue, overview), 1120px (inquiries, content performance), 1100px (automations,
+  follow-ups, sheets sync, settings, project timeline). The public web is detached (§1, §12).
+- The expanded sidebar is 232px by default and resizable from 200 to 360px (`mlp.sidebarWidth`); collapsed it is
+  a 56px icon rail (`mlp.sidebarCollapsed`). Both are desktop-only (§15 2026-09-22, 2026-09-23).
+- Shell navigation is one level deep: 10 primary + 2 utility anchors in the sidebar (`hub-nav.js`, pinned by
+  `hub-nav.test.mjs`). An anchor's second-level destinations render as the top-bar tab row
+  (`topNavigationForRoute`), not as a sidebar accordion — since 2026-08-04 (`5a3d506`), guarded by the test
+  "sidebar is one level deep and the top bar owns contextual tabs". Pages in `PAGE_OWNS_TABS` draw those tabs
+  in their own header instead.
 
 ### Spacing scale
-`4, 8, 12, 16, 24, 32, 48, 64, 96`
+`4, 8, 12, 16, 24, 32, 48, 64, 96` — Futura pages add `44` and `26` as layer tokens only (below).
 
 ### Density (fixed)
-The hub ships one fixed density — no user-facing toggle. Values: `row-h: 36`, `pad-y: 10`,
-`pad-x: 14`, `gap: 12`, `section-gap: 24`, `card-pad: 20`.
+The hub ships one fixed density — no user-facing toggle. Values (CSS custom properties on `.hub-app` in
+`hub-tokens.css`): `--row-h: 36px`, `--pad-y: 10px`, `--pad-x: 14px`, `--gap: 12px`, `--section-gap: 24px`,
+`--card-pad: 20px`. Small screens tighten two of them: ≤900px `--section-gap`/`--card-pad` 16px, ≤560px 12px/14px.
 
 ### Radius
 - Micro elements (chips, checkbox faces): `4px` (`--r-xs`)
-- Small controls: `6px` (`--r-sm`)
+- Small controls: `6px` (`--r-sm`) — what `Button`, `IconButton` and the `SegmentedControl` track render today
+  (inline in the primitive; segment buttons are 4–5px). `Input` gets `--r-sm` from its `.hub-field` wrapper;
+  `TextField`/`TextAreaField` get it from `.hub-input`.
 - Popover / menu containers: `10px` (`--r`) — text inputs use `--r-sm`
-- Standard cards: `14px` (`--r-lg`)
+- Standard cards: `14px` (`--r-lg`) — `Card` keeps a 1px `--line-soft` border plus `--shadow-card`
 - Feature panels: `20px` (`--r-xl`)
-- Floating pills / buttons: `999px`
+- Pills: `999px` — `Badge`, `select.hub-input` (`SelectField`), and `.fx-pill-btn` inside Futura pages
+
+**Open gap with §15 2026-09-19 (b), confirmed.** That decision gives `Button`, `IconButton`, `Input` and
+`SegmentedControl` a pill radius and lets `Card` separate by shadow instead of border. The code does not render
+it: `hub-futura.css` carries the pill/shadow rules, but the primitives set `borderRadius: 'var(--r-sm)'` inline
+(which beats any class rule, §8.1 Hover), `button-hover.test.mjs` pins that inline value, and the `.hub-card`
+selector matches no element. 2026-09-21 later narrowed inputs back to `--r-sm` except `select`. Until the
+operator re-confirms the scope and the primitive itself changes, pages must not restyle control radius locally —
+use the primitive as it renders.
 
 Writing fields (titles, notes, and multi-line content) keep `--r-sm` (6px), including
 inside the Futura shell. The pill treatment applies to selection controls, not writing
 surfaces. Shared `TextAreaField` controls and quick memo use 1.7 line-height and
 12px vertical padding; the Studio body uses 16px padding and 1.8 line-height.
+
+### Futura texture layer
+`hub-app.jsx` imports `hub-futura.css` after `hub-tokens.css`, so it reaches every page `HubApp` mounts (all of
+`/dashboard`; `/login` loads only `hub-tokens.css`). It works at two depths. (Its own header comment still says it
+applies only inside `.hub-futura`; that is true of the page texture, not the shell block.)
+
+| Depth | Where | What it changes | Status |
+| --- | --- | --- | --- |
+| Shell + shared components | every dashboard page | renders: sidebar surface `--surface-2`; nav rows 34px/13px with the current row as a `--surface` pill + `--fx-shadow` (icon + label, §15 2026-09-23); `.fx-shell-card` search and user card; `--fx-shadow` on non-ghost `.hub-btn`; pill `select`; `--fx-shadow-lift` on raw `.hub-card-link:hover` buttons. Declared but beaten by inline styles or unmatched: pill `.hub-btn`/`.hub-iconbtn`/`.hub-seg`, shadow `.hub-card` (§7 Radius) | confirmed 2026-09-19 · icons 2026-09-23 |
+| Page texture | inside `.hub-futura` only | 48/44/26 spacing, 44px/300 display title (§11), `.fx-card` shadow surfaces, `.fx-pill-btn`, triage and timeline blocks | `dashboard/home` confirmed 2026-09-18 · `work/decisions` confirmed 2026-09-19 · `work/rhythm` **recommended** 2026-09-23 |
+
+Adding `.hub-futura` to any other page is a separate decision (§15 2026-09-18) — the other ~40 pages keep §7
+density and §8.1 hairlines. Only `work/decisions` owns its own tabs (`PAGE_OWNS_TABS`); Rhythm still uses the
+top-bar tabs.
+
+### Responsive
+The hub has no Tailwind. CSS is desktop-default with `max-width` step-downs in `hub-tokens.css`, `globals.css`,
+`hub-futura.css` and page stylesheets. Measured breakpoints (2026-09-23):
+
+| Width | Role |
+| --- | --- |
+| `≤900px` | **Shell breakpoint** (`MOBILE_NAV_QUERY` in `hub-app.jsx`): the sidebar becomes an overlay drawer (`min(84vw, 304px)`), the collapsed rail and width handle disappear, density tightens, Futura titles drop to 30px |
+| `≤720px` or `pointer: coarse` | Touch floor: `button` and `[role="button"]` ≥44px (bare `role="checkbox"` exempt, a labelled `.hub-checkbox-row` keeps 44px), inputs ≥44px, `.hub-input` 48px, `textarea.hub-input` 112px |
+| `≤600px` | Page and drawer step-downs (most common page query); `Drawer presentation="compact"` becomes a bottom sheet |
+| `≤560px` | `--section-gap` 12px, `--card-pad` 14px |
+
+Other widths are drift: 768 and 960 also sit in the shared `hub-tokens.css`/`globals.css`, and 640, 700, 1200
+plus single uses live in page stylesheets. Unifying them is an open TODO, not a rule (`TODOS.md`). Reusing the
+four widths above for new queries is **recommended**, not decided.
+
+Mobile floor status against deep design §17 (390×844):
+- Met: 44px touch floor (above); segmented controls stay horizontal on phones (no forced `flex-basis: 100%`).
+- Not met globally: inputs ≥16px. Base `.hub-input` is 13.5px and only some page stylesheets raise it to 16px.
+- Not met: Calendar should default to an agenda on phones. `work.jsx` Calendar opens in `week` with no mobile
+  branch. Agenda-style lists exist elsewhere (`WeekAgenda` on 내 작업, the 오늘 일정 list on Daily Brief), not in Calendar.
 
 ## 8. Component Language
 
@@ -294,21 +399,36 @@ truth. Do not recreate them ad-hoc inside pages.
 - `Dot`, `Kbd`, `Avatar`, `Divider`
 - `Card` (padded / unpadded), `SectionTitle`, `Tabs`
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
-- `Input`, `Checkbox`, `Progress`, `Sparkline`, `Placeholder`, `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
-- Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` (contract in `form-fields.test.mjs`)
-- `SegmentedControl`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
+- `Input`, `Checkbox`, `Progress`, `ProgressRing`, `Sparkline`, `Placeholder` (0 call sites), `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
+- Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` — defined in
+  `hub-primitives.jsx` itself (there is no `form-fields.jsx`); the contract lives in `form-fields.test.mjs`
+- `SegmentedControl`, `ChipToggle`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
+- Toast: `useToast` / `ToastProvider` (re-exported from `hub-toast.jsx`, provided once in `hub-app.jsx`). One
+  `aria-live="polite"` viewport; danger items get `role="alert"`, others `role="status"`; tones neutral (bell) ·
+  success (check glyph in `--moon-200`, never green) · danger (x in `--danger`); optional ghost-`Button` action; at
+  most three visible. Use it for save/undo receipts instead of ad-hoc
+  banners. A toast never announces `완료` for a write that was not persisted (§8.1 Save envelope).
 - `Drawer`, `EditDrawer` — the only overlay / edit surfaces (§8.1)
   - `Drawer presentation="compact"` is the short capture variant: centered on desktop, bottom sheet at ≤600px, with the same ESC and focus handling. Default `side` remains the edit drawer. New task capture uses `compact`; optional description/next-action fields are disclosed on demand. Compact capture uses a 6px backdrop blur. Callers preserve drafts and guard dismissal while saving.
 - State primitives `AttentionRail`, `CertaintyBadge`, `LifecycleBadge`, `TruthBadge` (§8.2). `SyncBadge`
   survives only as a compatibility wrapper over `TruthBadge`; new call sites use `TruthBadge` directly.
 
+**Shared composites outside the primitives file** (reuse before rebuilding)
+- `BrandMark`, `ProjectProgressGauge`, `ProjectStatusBadge` — `pages/project-pms-components.jsx` (PMS only so far;
+  Revenue, Brands and Overview still render legacy glyphs, §14 Known gaps 9)
+- `StreakMark` — `burning-streak.jsx` (neutral ascending bars, §15 2026-09-22)
+- `CalendarOutcome` (`calendar-outcome.jsx`, compact mode on Home), `ContactRecordForm` / `ContactRecordDrawer`
+  (`contact-record-form.jsx`), `GlobalQuickCapture` (`quick-capture.jsx`), `GoalLinks` (`goal-links.jsx`)
+- `SortHead` — exported from `pages/revenue.jsx`, reused by `customers.jsx` (§8.1 Table sort)
+
 **Hub-specific composites** (page-level, see `components/hub/pages/*`)
 - Signal card (Daily Brief)
 - Metric card w/ sparkline
-- Brand-organized project tree (PMS)
+- Brand-organized project tree (PMS `tree` view, `buildContainerTree`)
 - Deal kanban
-- Flow canvas (drag-pan, node kinds: trigger · logic · ai · action)
-- Key / webhook copy rows (masked, reveal, copy button)
+- Key / webhook copy rows (`CopyRow` in `evolution-settings.jsx`)
+- Not shipped: the Flow canvas listed here earlier. `dashboard/automations/flows` renders an `EmptyState`
+  ("등록된 Flow가 없습니다") and the sidebar row is `deferred`; there is no drag-pan canvas or node kinds in code.
 
 **Behavior rules**
 - Buttons have clear primary / secondary / ghost hierarchy.
@@ -318,22 +438,34 @@ truth. Do not recreate them ad-hoc inside pages.
 
 ### 8.1 Interaction Conventions (표준 동작 — 새 서피스는 이 계약을 따른다)
 
-**Primitives first.** 페이지 안에서 pill 토글·sync 라벨·빈 상태·체크박스를 다시 만들지 않는다.
-`SegmentedControl`(필터/뷰 토글), `SyncBadge`(live·mock·preview·syncing·error),
-`EmptyState`(+ `action` CTA), `Checkbox`(`label` prop 필수), `EditDrawer`가 canonical.
-인라인 복제는 이미 두 번 드리프트 사고를 냈다(2026-07 design-review FINDING-002/003).
+**Primitives first.** 페이지 안에서 pill 토글·sync 라벨·빈 상태·체크박스·로딩 자리를 다시 만들지 않는다.
+`SegmentedControl`(필터/뷰 토글), `TruthBadge`(live·partial·syncing·loading·preview·error — 새 호출처),
+`EmptyState`(+ `action` CTA), `Checkbox`(`label` prop 필수), `Skeleton`(로딩), `Drawer`/`EditDrawer`가 canonical.
+`SyncBadge`는 같은 상태를 받는 `TruthBadge` 호환 래퍼일 뿐이다(§8.2). `mock` 상태는 없다 — 목업 데이터를 코드에
+두지 않으므로(CLAUDE.md, `scripts/no-mock-data.test.mjs`) 표시할 일도 없고, 모르는 값은 `읽기 실패`(danger)로
+떨어진다. 인라인 복제는 이미 두 번 드리프트 사고를 냈다(2026-07 design-review FINDING-002/003).
 
 **생성(Create).**
 - 모든 리스트 서피스는 헤더에 primary 생성 버튼 + `<Kbd>N</Kbd>` 힌트.
-- 페이지 레벨 `N` 단축키: 드로어 닫힘 + 포커스가 input/textarea/select/contentEditable 밖일 때만.
+- 페이지 레벨 `N` 단축키: 드로어 닫힘 + 포커스가 input/textarea/select/contentEditable 밖일 때만. 새 페이지는
+  손으로 쓰지 말고 `use-crm-keyboard.js`의 `usePageCreateHotkey`(또는 CRM 목록은 `useCrmKeyboard`의 `onNew`)를 쓴다.
+  내 작업은 인라인 빠른 추가 칸이 생성 표면이라 `N`이 그 칸으로 포커스한다.
+- 전역 단축키(`hub-app.jsx`): `C` 어디서든 빠른 입력(`GlobalQuickCapture`, compact Drawer — 2026-09-20)과 `?` 단축키
+  치트시트(`ShortcutOverlay`)는 입력 요소 안·팔레트 열림이면 무시한다. `⌘K` 팔레트와 `⌘J` AI 어드바이저는 수정키 조합이라
+  입력 중에도 동작한다. 페이지 단축키는 이 네 키와 겹치지 않게 고른다.
 - 빈 상태(워크스페이스 빈 화면·검색 0건)는 반드시 생성 CTA 또는 "검색 지우기"를 포함.
 - 칸반 컬럼 하단에 점선 "+ 추가" — 클릭하면 **그 컬럼의 stage로 시드**된 레코드가 생성되고 드로어가 즉시 열린다.
 
 **편집(Edit).**
 - 행/카드 클릭 → `EditDrawer`. `role="button" tabIndex={0}` + Enter/Space 핸들러 동반.
 - 닫기: ESC + 오버레이 클릭 + 닫기 버튼 3중 지원 (Drawer primitive가 처리).
-- 저장은 `{ ok, status }` 봉투 — `saved`(영속) / `preview`(백엔드 미설정, 낙관적 로컬 행 유지) / `error`.
-- 딥링크: `?lead=<id>` `?deal=<id>`는 기록 로드 후 해당 드로어를 1회만 열고 쿼리를 소거한다.
+- 저장은 `{ ok, status }` 봉투(Save envelope). 어휘는 심화 설계 §16과 같다 — 성공 `saved`(영속) · `accepted` ·
+  `duplicate`(이미 저장됨, 같은 요청 재시도), 실패 `failed` · `conflict`(다른 곳에서 먼저 바뀜 — 비교·선택 제공) ·
+  `degraded`. 여러 라우트가 쓰는 `error`(읽기 실패 봉투와 같은 값)도 실패로 읽는다. `preview`는 백엔드 미설정이라 **저장되지 않았다**는 뜻이다(`saved: false`). 로컬 행을 남기더라도
+  `Preview · 연결 필요` 표시를 붙이고 `완료`·`저장됨` 문구나 성공 토스트를 쓰지 않는다(심화 설계 §16 금지 항목).
+- 딥링크: `?lead=<id>` `?deal=<id>`는 기록 로드 후 해당 드로어를 1회만 열고 쿼리를 소거한다. 페이지별 딥링크는
+  이 밖에도 `?case=`·`?customer=`·`?project=`/`?task=`/`?item=`·`?memo=`·`?inquiry=`·`?goal=`·`?discovery=` 등이 있다
+  (각 동작은 해당 페이지가 정본). 새 딥링크는 "기록 로드 후 1회 열기 + 소거"를 기본으로 한다.
 
 **테이블 정렬.**
 - 헤더 클릭: asc → desc → 해제(기록 순서) 3단 토글, 방향 캐럿은 비활성일 때도 폭 예약.
@@ -375,6 +507,16 @@ composable primitives so pages declare semantics and the primitive owns presenta
 </AttentionRail>
 ```
 
+Adoption measured 2026-09-23 (JSX call sites, tests excluded):
+
+| Primitive | Call sites | Note |
+| --- | --- | --- |
+| `TruthBadge` | 54 in 31 files | direct use, not counting `SyncBadge`'s own delegation; new code starts here |
+| `SyncBadge` | 35 in 16 page files | compatibility wrapper, same states; migrate when the file is touched |
+| `CertaintyBadge` | 11 in 7 files | Daily Brief, Decisions, Brands, Office, Revenue, Customers, personal revenue |
+| `LifecycleBadge` | 12 in 8 files | incl. `CalendarOutcome`, Discovery, Codex jobs, PMS status |
+| `AttentionRail` | 0 | the example above is illustrative. Rails stay the §8.1 inline 1px `box-shadow` (§15 2026-08-05) and `state-usage.test.mjs` asserts the PMS timeline does not adopt it |
+
 Implementation rules:
 
 - The props above are semantic enums, not color names.
@@ -402,13 +544,14 @@ Deliberate, never playful. Since 2026-07-29 the only sanctioned durations and cu
 | `--dur-gauge` | `1080ms` | selected project evidence gauge reveal and one-shot sparkle |
 | `--ease-hub` | `cubic-bezier(0.2, 0.7, 0.3, 1)` | every entrance / exit curve |
 | `--ease-gauge` | `cubic-bezier(0.58, 0.06, 0.22, 1)` | gauge-only slow start, faster middle, settled end |
-| `--stagger-step` | `45ms` | per-child delay in `.stagger-up`, capped after the seventh child |
+| `--stagger-step` | `45ms` | per-child delay in `.stagger-up`; the delay grows through the 8th child (7 steps, 315ms) and stays there for every later child |
 
 - Page reveal: `.fade-up` (opacity + 4px translateY). Card lists cascade with `.stagger-up`; do not hand-roll delays.
 - Hover travel: no more than `4px`.
 - Compact capture: enter/exit and disclosure use `--dur-panel`, backdrop enters with `--dur-overlay`. A successful save closes only after the server acknowledgement; reduced-motion skips the exit delay.
 - Live indicators: `mlMoonPulse 1.4s ease-in-out infinite` — one duration everywhere. Loading skeletons (`Skeleton`) reuse it as-is, with no per-line phase offset (a wave reads as playful).
-- `motion.test.mjs` sweeps every hub stylesheet and page for raw `ms` literals and inline `cubic-bezier(` inside transition/animation values — the §9 token rule is enforced, not advisory (2026-09-16).
+- `motion.test.mjs` sweeps every hub stylesheet and page for raw `ms` **and `s`** literals and inline `cubic-bezier(` inside transition/animation values — the §9 token rule is enforced, not advisory (2026-09-16, `s` added 2026-09-22). Allowed without a token: `mlMoonPulse 1.4s` and `0s`.
+- Recorded debt, not precedent: the completed `Progress` bar loops `hubProgressShimmer 2.4s ease-in-out infinite`, and `hubSparklePop` still appears once with an inline `0.8s` next to a gold glyph (`overview.jsx`). The motion guard exempts exactly these two names until the celebration question (Q134, `2026-09-21-home-screen-design-development.md`) is decided. New work uses `--dur-celebrate` one-shots instead.
 - Urgent/critical indicators do not loop, blink, or pulse. Red already carries sufficient emphasis.
 - The selected project gauge may replay its fill and one sparkle when the selected project or its
   displayed percentage changes. This is visual acceleration, not a claim that work velocity rose.
@@ -428,7 +571,11 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 
 ## 11. Accessibility And Quality Bar
 
-- Touch targets: minimum 44px (모바일 미디어쿼리가 button에 44px 플로어를 강제 — 예외는 `role="checkbox"`뿐).
+- Touch targets: minimum 44px. `hub-tokens.css`의 `(pointer: coarse), (max-width: 720px)` 쿼리가 `button`·`[role="button"]`·
+  입력에 44px 플로어를 강제한다 — 예외는 라벨 없는 `role="checkbox"`뿐이고, 글자를 가진 `.hub-checkbox-row`는 44px를 유지한다.
+  이 쿼리는 셸 기준점(900px)과 다르다(§7 Responsive).
+- Mobile inputs: 16px 이상(심화 설계 §17, iOS 확대 방지). 현재 전역 규칙이 없고 일부 페이지 CSS만 16px로 올린다 —
+  새 입력 표면은 자기 모바일 쿼리에서 16px를 보장한다.
 - Text contrast: WCAG AA minimum.
 - Keyboard navigation works for all core flows (⌘K palette is the fast path).
 - Focus uses `outline: 1px solid var(--moon-300)` with 2px offset — never relies on browser defaults. A focus rule changes only the outline; it never sets `border-radius` (the ring follows the element's own radius — see §15 2026-09-16).
@@ -441,11 +588,19 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 - 클릭 가능한 `<div>`는 `role="button"` + `tabIndex={0}` + Enter/Space 핸들러 3종 세트 없이는 금지.
   펼침/접힘 토글에는 `aria-expanded`.
 - `Checkbox`는 `label` prop으로 스크린리더 이름을 전달한다 (행 제목 등).
-- 각 페이지는 정확히 하나의 `<h2>` 페이지 타이틀(20px/500)을 메인 페인에 가진다 — 브레드크럼만으로 대체 금지. 카브아웃: Daily Brief 히어로(`오늘의 실행`)만 §6 Display 스케일(27–32px/700)을 쓴다 — 첫 화면의 페이지 레벨 모먼트 1곳으로 한정하며, 다른 페이지로 확장 금지.
+- 각 페이지는 정확히 하나의 `<h2>` 페이지 타이틀(20px/500)을 메인 페인에 가진다 — 브레드크럼만으로 대체 금지. 공용
+  PageHeader 프리미티브는 없다: 대부분 인라인 `style={{ margin: 0, fontSize: 20, fontWeight: 500 }}`이거나 페이지 CSS가 같은
+  값을 준다. 승인된 카브아웃은 두 가지다(개인 매출 헤더의 `clamp(22px, 2.5vw, 28px)` h2는 승인되지 않은 이탈 — §14 Known gaps 12).
+  - Daily Brief 히어로(`오늘의 실행`): §6 Display 스케일 `clamp(26px, 3.2vw, 32px)`/700 — 첫 화면의 페이지 레벨 모먼트 1곳.
+  - Futura 페이지(§7 Futura): `<h2 className="fx-hero">`/`"fx-page-title">` 44px/300(≤900px 30px) — `dashboard/home`(확정
+    2026-09-18)·`work/decisions`(확정 2026-09-19)·`work/rhythm`(권장 2026-09-23).
+  그 밖의 페이지로 확장하지 않는다.
 
 ## 12. Public vs Hub Rules
 
 **Public** — story first. Fewer elements per fold. Bigger headings. Strong proof + CTA rhythm.
+_Dormant: this workspace has no public web app (`apps/` holds only `hub` and the API-only `engine`). Keep the
+rule for when a public surface returns; it does not apply to anything shipped today._
 
 **Hub** — signal first. Compact layout. Fast scan pattern. Every metric paired with status or next action.
 
@@ -472,15 +627,18 @@ Do not ship:
 | Concern                            | Source of truth                                              |
 | ---------------------------------- | ------------------------------------------------------------ |
 | Tokens                             | `apps/hub/components/hub/hub-tokens.css`                     |
-| Futura 텍스처 레이어 (Home 전용)   | `apps/hub/components/hub/hub-futura.css`                     |
+| Futura 텍스처 레이어 (셸·공용 컴포넌트 전역 + `.hub-futura` 페이지 3곳, §7) | `apps/hub/components/hub/hub-futura.css` |
 | Icons                              | `apps/hub/components/hub/hub-icons.jsx`                      |
-| Primitives                         | `apps/hub/components/hub/hub-primitives.jsx`                 |
+| Primitives (incl. form fields)     | `apps/hub/components/hub/hub-primitives.jsx`                 |
+| Drawer / toast styles              | `apps/hub/components/hub/hub-{compact-drawer,edit-drawer,toast}.css`, `hub-toast.jsx` |
+| Theme mode + sidebar width/collapse preferences | `apps/hub/lib/hub-preferences.js` (`mlp.*` keys)  |
+| Keyboard (global `C` `⌘K` `?` `⌘J`; page `N`) | `hub-app.jsx`; `apps/hub/components/hub/use-crm-keyboard.js` |
 | ⌘K catalog (`NAV_TREE`, `LEGACY_REDIRECTS`) | `apps/hub/components/hub/hub-data.js`                 |
-| Sidebar anchors (visible IA)       | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs`    |
+| Sidebar anchors (visible IA — 10 primary + 2 utility) | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs` |
 | Workspace membership (`org_scope`) | `apps/hub/components/hub/workspace-map.js`                   |
 | Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette}.jsx` |
 | Pages + `PAGE_MAP`                 | `apps/hub/components/hub/pages/*.jsx`, `hub-app.jsx`         |
-| Route mount                        | `apps/hub/app/dashboard/[[...path]]/page.jsx`; `app/dashboard/content/{studio,queue}/page.jsx` mount the same `HubApp`, `content/publish` redirects to `queue` |
+| Route mount                        | `apps/hub/app/dashboard/layout.jsx` mounts `HubApp` once; `dashboard/[[...path]]` and `content/{studio,queue}` pages render `null`; `content/publish` redirects to `queue`. `lazyPage` keeps `ssr: false` (CLAUDE.md) |
 
 Build order when adding a new surface:
 1. Confirm tokens cover every color / size needed — do not hardcode hex values.
@@ -489,6 +647,48 @@ Build order when adding a new surface:
 4. Register the route in `NAV_TREE` (`hub-data.js`) so ⌘K can reach it. That alone does not add a sidebar
    row: to surface it in the sidebar, add or extend an anchor in `hub-nav.js` and update `hub-nav.test.mjs`.
    Workspace-scoped pages resolve membership through `workspace-map.js`, never a hardcoded brand list.
+
+**Guards** — these tests read the code on every `npm test` and turn the rules above into failures:
+
+| Rule | Test (`apps/hub/components/hub/` unless noted) |
+| --- | --- |
+| §4 warm gold/amber literals only (hex/rgb) — per-file ratchet, brand content log exempt. Other raw colors are not machine-checked | `palette.test.mjs` |
+| §9 motion tokens, raw `ms`/`s`, inline `cubic-bezier(` | `motion.test.mjs` |
+| §11 focus ring 1px, no `border-radius` in `:focus-visible` | `focus-ring.test.mjs` |
+| §8.1 `Button` hover/chrome in CSS, 1px token borders, inline radius | `button-hover.test.mjs` |
+| §8.1 `SegmentedControl` chrome in CSS | `segmented-control.test.mjs` |
+| §8.2/§5.3 state primitives, truth labels, rails, lifecycle danger | `state-primitives.test.mjs`, `state-usage.test.mjs` |
+| §11 `Skeleton` contract | `skeleton.test.mjs` |
+| Form field contract | `form-fields.test.mjs` |
+| Sidebar anchors (10 + 2) and icons in both states; width handle | `hub-nav.test.mjs`; `sidebar-resizer.test.mjs` |
+| Toast a11y and tokens | `hub-toast.test.mjs` |
+| No mock/demo work records in code | `scripts/no-mock-data.test.mjs` |
+
+**Known gaps (measured 2026-09-23 — debt or open questions, never precedent)**
+
+1. §15 2026-09-19 (b) pill controls and shadow-separated cards are confirmed but not rendered (§7 Radius).
+2. The global Futura `.hub-app .hub-btn { box-shadow: var(--fx-shadow) }` has the same specificity as
+   `.hub-btn--primary` and loads later, so it replaces the primary rim shadow that `button-hover.test.mjs` checks
+   in source. Decide whether the primary keeps its rim, then make one rule own it.
+3. `var(--r-md)` is used but never defined (`hub-topbar.jsx`, `floating-mentor-widget.jsx`, `pages/revenue.jsx`,
+   `pages/project-direct-work.module.css`, `app/globals.css`) — those corners render square.
+4. `hub-btn--subtle` (`pages/agents.jsx`) has no CSS rule.
+5. Rails outside §8.1: `inset 2px 0 0 var(--moon-500)` in `floating-mentor-widget.jsx` and `pages/agents.jsx`;
+   gold `border-left: 2px solid #ffd166` in `hub-tokens.css` (personal revenue) and `pages/revenue-heatmap.jsx`.
+6. Style-mutating JS hover still in `hub-topbar.jsx` and `pages/automations.jsx` (§8.1 Hover).
+7. Celebration vocabulary pending Q134: completed/overachieved `Progress` gradient, shimmer loop and gold stop,
+   Home's `.fx-progress--completed` gradient, the gold-ended fills in `.personal-revenue-progress-fill.is-all-confirmed`
+   and `pages/revenue-heatmap.jsx`, and `hubSparklePop`; the palette ratchet still carries warm literals in
+   `celebration-fx.jsx`, `hub-tokens.css`, `pages/overview.jsx` and `pages/revenue-heatmap.jsx`.
+8. Mobile floor: no global 16px input rule; Calendar has no phone agenda (§7 Responsive).
+9. `BrandMark` is PMS-only; `pages/revenue.jsx`, `pages/brands.jsx` and `pages/overview.jsx` still render the
+   legacy `glyph` (§15 2026-08-19 named Revenue and Content as the remaining migration).
+10. Stale code comments: the `hub-futura.css` header ("only inside `.hub-futura`"), `hub-nav.js` ("Nine primary"),
+    `hub-tokens.css` ("eight-anchor nav") — the pinned count is 10 + 2; and `motion.test.mjs`'s opening comment
+    still says `s` units are not checked, though the test now checks them.
+11. Focus-ring color is mixed (`--moon-300`, `--accent`, raw rgba) and breakpoints drift — both open in `TODOS.md`.
+12. Unsanctioned title scale: `.personal-revenue-header h2` uses `clamp(22px, 2.5vw, 28px)` (§11 allows 20px/500
+    plus the two carve-outs).
 
 ## 15. Decisions Log
 
