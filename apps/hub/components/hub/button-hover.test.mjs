@@ -214,6 +214,10 @@ const AUDITED_RAW_BUTTON_CONTAINERS = [
   ".hub-app .hub-project-portfolio-terminal__row > button:first-child",
   ".hub-app .hub-project-portfolio-terminal__row > button:last-child",
   ".hub-app .hub-project-portfolio-terminal__row > button:last-child:hover",
+  // project-portfolio-workspace.jsx — 모바일 관리 메뉴와 급한 하위 항목 레일도 raw <button>
+  ".hub-app .hub-project-portfolio-mobile-manage > div > button",
+  ".hub-app .hub-project-portfolio-mobile-manage > div > button:hover",
+  ".hub-app .hub-project-portfolio-urgent__list > button",
   // hub-topbar.jsx — 탭은 raw <button>, 유일한 <Button>은 nav 밖의 primary action이다
   ".hub-app .hub-topbar__tabs button",
   '.hub-topbar__tabs button[aria-current="page"]',

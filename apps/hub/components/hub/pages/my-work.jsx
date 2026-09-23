@@ -771,7 +771,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
                   size="sm"
                   icon="projects"
                   style={{ flex: 1 }}
-                  onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(item.projectId)}`)}
+                  onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(item.projectId)}${item.entityId ? `&item=${encodeURIComponent(item.entityId)}` : '&focus=overview'}`)}
                 >
                   프로젝트에서 열기
                 </Button>

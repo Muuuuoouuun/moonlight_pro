@@ -110,6 +110,9 @@ export function Projects({ workspace }) {
   // don't need it in their dependency lists.
   const view = normalizeProjectView(searchParams.get('view'));
   const selectedProjectId = searchParams.get('project');
+  const focusedProjectItemId = searchParams.get('item');
+  const focusedProjectCheckId = searchParams.get('check');
+  const focusOverview = searchParams.get('focus') === 'overview' || Boolean(focusedProjectItemId);
   const [memoTaskId, setMemoTaskId] = React.useState(searchParams.get('task') || null);
   const [contextMemo, setContextMemo] = React.useState(null);
   const [memoTaskFallback, setMemoTaskFallback] = React.useState(null);
@@ -226,6 +229,7 @@ export function Projects({ workspace }) {
   const detailSheetRef = React.useRef(null);
   const detailReturnFocusRef = React.useRef(null);
   const detailListScrollRef = React.useRef(null);
+  const detailReturnQueryRef = React.useRef(null);
   const detailAutofocusPresentationRef = React.useRef(null);
   const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
@@ -558,7 +562,7 @@ export function Projects({ workspace }) {
   }, [brand, brands, wsDefaultBrand]);
 
   React.useEffect(() => {
-    if (!['tree', 'table'].includes(view) || !selectedProjectId) {
+    if (!['tree', 'table'].includes(view) || !selectedProjectId || (view === 'tree' && focusOverview)) {
       setOpenDetail(null);
       return;
     }
@@ -570,7 +574,7 @@ export function Projects({ workspace }) {
       return;
     }
     setOpenDetail(null);
-  }, [allProjects, selectedProjectId, view]);
+  }, [allProjects, focusOverview, selectedProjectId, view]);
 
   React.useEffect(() => {
     const query = window.matchMedia('(max-width: 900px)');
@@ -593,10 +597,23 @@ export function Projects({ workspace }) {
       if (node.scrollHeight > node.clientHeight || node.scrollTop) scrolls.push({ node, top: node.scrollTop });
     }
     detailListScrollRef.current = scrolls;
+    detailReturnQueryRef.current = view === 'tree' && (searchParamsRef.current.get('focus') === 'overview' || searchParamsRef.current.has('item'))
+      && searchParamsRef.current.has('project')
+      ? searchParamsRef.current.toString()
+      : null;
     const params = mergeProjectDetailQuery(searchParamsRef.current, projectId);
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     setOpenDetail(projectId);
+  }, [pathname, router, view]);
+
+  const selectOverviewProject = React.useCallback((projectId) => {
+    const params = new URLSearchParams(searchParamsRef.current.toString());
+    params.set('project', projectId);
+    params.set('focus', 'overview');
+    params.delete('item');
+    params.delete('check');
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, router]);
 
   const closeProjectDetail = React.useCallback(() => {
@@ -604,9 +621,11 @@ export function Projects({ workspace }) {
     setDetailCustomerProject(null);
     const returnFocus = detailReturnFocusRef.current;
     setOpenDetail(null);
+    const returnQuery = detailReturnQueryRef.current;
+    detailReturnQueryRef.current = null;
     const params = new URLSearchParams(searchParamsRef.current.toString());
-    params.delete('project');
-    const query = params.toString();
+    if (!returnQuery) params.delete('project');
+    const query = returnQuery || params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     requestAnimationFrame(() => {
       if (returnFocus?.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus({ preventScroll: true });
@@ -1468,6 +1487,23 @@ export function Projects({ workspace }) {
     }
   }, [todos, updateTaskStatus]);
 
+  const toggleChecklistItem = React.useCallback(async (taskId, checkId) => {
+    const task = todos.find(item => item.id === taskId);
+    const checks = task ? readTaskChecklist(task) : [];
+    const target = checks.find(item => item.id === checkId);
+    if (!task || !target) return { ok: false, message: '체크 항목을 다시 읽어 주세요.' };
+    const result = await applyTaskChanges([task], {
+      checklist: checks.map(item => item.id === checkId ? { ...item, done: !item.done } : item),
+    });
+    if (result.failed.length) {
+      const message = result.failed[0].message || '체크 항목을 저장하지 못했습니다.';
+      setOrderResult({ tone: 'err', label: message });
+      return { ok: false, message };
+    }
+    setOrderResult({ tone: 'ok', label: target.done ? '체크 항목 다시 열림' : '체크 항목 저장됨' });
+    return { ok: true };
+  }, [applyTaskChanges, todos]);
+
   const moveCard = React.useCallback(async (id, column) => {
     const status = taskStatusForBoardColumn(column);
     if (!status) return;
@@ -2069,11 +2105,15 @@ export function Projects({ workspace }) {
             {view === 'tree' && <ProjectPortfolioWorkspace
               projects={visibleProjects}
               portfolioProjects={projects}
+              reviewProjects={brandProjects}
               terminalProjects={terminalProjects}
               todosByProject={todosByProject}
               brandByKey={brandByKey}
               brands={brands}
               selectedProjectId={selectedProjectId}
+              selectedProjectRecord={brandProjects.find(item => item.id === selectedProjectId)}
+              focusTaskId={focusedProjectItemId}
+              focusCheckId={focusedProjectCheckId}
               openDetailId={openDetail}
               keyboardSelectedId={kbSelection.selectedId}
               sourceState={syncState}
@@ -2086,6 +2126,8 @@ export function Projects({ workspace }) {
               onQueryChange={setProjectQuery}
               searchInputRef={searchInputRef}
               onOpenProject={openProjectDetail}
+              onSelectProject={selectOverviewProject}
+              onOpenCustomer={projectId => openProjectDetail(projectId, { customer: true })}
               onEditProject={editProject}
               onRemoveProject={requestProjectDelete}
               onManageDelivery={setDeliveryProject}
@@ -2094,6 +2136,7 @@ export function Projects({ workspace }) {
               onCreateTodo={createTodo}
               onEditTodo={editTodo}
               onToggleTodo={toggleTodo}
+              onToggleChecklist={toggleChecklistItem}
               pendingTodoIds={pendingTaskIds}
               showTerminal={showTerminal}
               onToggleTerminal={handleTerminalToggleClick}
@@ -2764,13 +2807,13 @@ export function Projects({ workspace }) {
 
       {deleteProjectTarget && (
         <Drawer
-          title="프로젝트 목록에서 제거"
+          title="프로젝트 보관"
           presentation="compact"
           onClose={() => { if (!deleteProjectPending) setDeleteProjectTarget(null); }}
           footer={(
             <>
               <Button autoFocus variant="ghost" size="sm" disabled={deleteProjectPending} onClick={() => setDeleteProjectTarget(null)}>취소</Button>
-              <Button variant="danger" size="sm" disabled={deleteProjectPending || !deleteProjectAcknowledged} onClick={confirmProjectDelete}>{deleteProjectPending ? '처리 중…' : '목록에서 제거'}</Button>
+              <Button variant="danger" size="sm" disabled={deleteProjectPending || !deleteProjectAcknowledged} onClick={confirmProjectDelete}>{deleteProjectPending ? '처리 중…' : '보관'}</Button>
             </>
           )}
         >
@@ -2778,7 +2821,7 @@ export function Projects({ workspace }) {
             <span className="hub-project-delete-summary__icon"><Iconed name="archive" size={20} /></span>
             <div><span className="hub-project-delete-summary__label">목록에서 제거할 프로젝트</span><strong>{deleteProjectTarget.name}</strong></div>
           </div>
-          <p className="hub-project-delete-description">활성 목록에서 제외하고 보관합니다. 현재 확인된 할 일 {todos.filter(task => task.projectId === deleteProjectTarget.id).length}건과 연결된 메모·기록은 그대로 유지됩니다.</p>
+          <p className="hub-project-delete-description">활성 목록에서 제외하고 보관합니다. 미완료 할 일 {todos.filter(task => task.project === deleteProjectTarget.id && !task.done).length}건과 연결된 고객·메모·기록은 그대로 유지됩니다. 할 일 화면 표시는 해당 화면의 필터에 따라 달라집니다.</p>
           <div className="hub-project-delete-recovery"><Iconed name="archive" size={14} /><span>완료·보관 → 다시 열기로 복원할 수 있습니다.</span></div>
           <div className="hub-project-delete-acknowledgment">
             <Checkbox checked={deleteProjectAcknowledged} onChange={setDeleteProjectAcknowledged} size={18} label="연결 기록은 유지되고 활성 목록에서만 제외됨을 확인했습니다." />
