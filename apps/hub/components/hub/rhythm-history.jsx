@@ -250,6 +250,7 @@ function RhythmBars({ history }) {
                   data-current={b.current ? "true" : "false"}
                   data-future={b.future ? "true" : "false"}
                   style={{ "--i": Math.min(i, 12) }}
+                  role="img"
                   tabIndex={b.future ? -1 : 0}
                   aria-label={label}
                 >
@@ -349,6 +350,7 @@ export function RhythmHistory({ projectId = null, version = "" }) {
         <IconButton icon="chevronR" size={36} tooltip="다음 기간" disabled={offset >= 0} onClick={() => setOffset((o) => Math.min(0, o + 1))} />
         {offset < 0 && <Button variant="ghost" size="sm" onClick={() => setOffset(0)}>지금으로</Button>}
         {status === "partial" && <TruthBadge state="partial" />}
+        {status === "preview" && <TruthBadge state="preview" />}
       </div>
 
       {status === "loading" && (
@@ -360,13 +362,14 @@ export function RhythmHistory({ projectId = null, version = "" }) {
 
       {status === "error" && (
         <div role="alert" className="hub-rh__alert">
+          <TruthBadge state="error" />
           <span>리듬 기록을 읽지 못했습니다. {error || ""}</span>
           <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
         </div>
       )}
 
       {status === "preview" && (
-        <EmptyState icon="rhythm" title="Preview · 연결 필요" description="Supabase가 연결되면 주·월·분기·연 단위 루틴 기록이 여기에 쌓입니다." style={{ minHeight: 160 }} />
+        <EmptyState icon="rhythm" title="아직 기록을 읽을 저장소가 없습니다" description="Supabase가 연결되면 주·월·분기·연 단위 루틴 기록이 여기에 쌓입니다." style={{ minHeight: 160 }} />
       )}
 
       {history && (status === "live" || status === "partial" || status === "refreshing") && (

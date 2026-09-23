@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { EmptyState, IconButton } from "./hub-primitives";
+import { EmptyState, IconButton, TruthBadge } from "./hub-primitives";
 import { StreakMark } from "./burning-streak";
 import { RITUAL_CATEGORY_LABELS } from "@/lib/rhythm-ui";
 import "./rhythm-today.css";
@@ -209,7 +209,7 @@ export function RhythmToday({
             {today.resting > 0 && (
               <span className="hub-rhythm-hero__stat">쉬는 루틴 <span className="num">{today.resting}</span></span>
             )}
-            {partial && <span className="hub-rhythm-hero__stat">일부 기록 · 관측값</span>}
+            {partial && <TruthBadge state="partial" />}
           </div>
         </div>
       </section>

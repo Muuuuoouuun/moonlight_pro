@@ -13,7 +13,7 @@
   border: 1px solid var(--line-soft); border-radius: var(--r-sm);
   font-size: 12px; color: var(--danger);
 }
-.hub-app .hub-rh__alert > span { flex: 1; }
+.hub-app .hub-rh__alert > span:not(:first-child) { flex: 1; }
 .hub-app .hub-rh__body { display: flex; flex-direction: column; gap: 20px; transition: opacity var(--dur-enter) var(--ease-hub); }
 .hub-app .hub-rh__body[data-refreshing="true"] .hub-rh-cell,
 .hub-app .hub-rh__body[data-refreshing="true"] .hub-rh-mark { cursor: progress; }
@@ -109,7 +109,7 @@
 .hub-app .hub-rh-bars__axis { position: relative; }
 .hub-app .hub-rh-bars__axis > span {
   position: absolute; right: 6px; transform: translateY(50%);
-  font-size: 10.5px; color: var(--fg-faint); font-variant-numeric: tabular-nums;
+  font-size: 10.5px; color: var(--fg-dim); font-variant-numeric: tabular-nums;
 }
 .hub-app .hub-rh-bars__area { position: relative; }
 .hub-app .hub-rh-bars__grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--line-soft); }
@@ -151,7 +151,7 @@
 }
 .hub-app .hub-rh-bars__col[data-current="true"] .hub-rh-bars__bar,
 .hub-app .hub-rh-bars__col:hover .hub-rh-bars__bar,
-.hub-app .hub-rh-bars__col:focus-visible .hub-rh-bars__bar { background: var(--fg); }
+.hub-app .hub-rh-bars__col:focus .hub-rh-bars__bar { background: var(--fg); }
 /* 가리키는 동안 나머지 막대는 한 단계 물러난다 — 불투명도가 아니라 명도로(§5.3). */
 .hub-app .hub-rh-bars__cols:hover .hub-rh-bars__col:not(:hover) .hub-rh-bars__bar { background: var(--line-strong); }
 .hub-app .hub-rh-bars__value {
@@ -161,7 +161,7 @@
 }
 .hub-app .hub-rh-bars__value[data-pinned="true"],
 .hub-app .hub-rh-bars__col:hover .hub-rh-bars__value,
-.hub-app .hub-rh-bars__col:focus-visible .hub-rh-bars__value { opacity: 1; }
+.hub-app .hub-rh-bars__col:focus .hub-rh-bars__value { opacity: 1; }
 .hub-app .hub-rh-bars__cols:hover .hub-rh-bars__col:not(:hover) .hub-rh-bars__value { opacity: 0; }
 .hub-app .hub-rh-bars__tip {
   position: absolute; z-index: 3; bottom: calc(100% + 8px); left: 50%;
@@ -174,14 +174,15 @@
   transition: opacity var(--dur-hover) ease, transform var(--dur-hover) var(--ease-hub), visibility var(--dur-hover);
 }
 .hub-app .hub-rh-bars__tip strong { font-weight: 600; color: var(--fg); }
+/* :focus까지 — 터치에서 탭하면 포커스가 오지만 :focus-visible은 켜지지 않는다(링만 키보드 전용). */
 .hub-app .hub-rh-bars__col:hover .hub-rh-bars__tip,
-.hub-app .hub-rh-bars__col:focus-visible .hub-rh-bars__tip { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+.hub-app .hub-rh-bars__col:focus .hub-rh-bars__tip { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
 .hub-app .hub-rh-bars__col:first-child .hub-rh-bars__tip { left: 0; transform: translate(0, 4px); }
 .hub-app .hub-rh-bars__col:first-child:hover .hub-rh-bars__tip,
-.hub-app .hub-rh-bars__col:first-child:focus-visible .hub-rh-bars__tip { transform: translate(0, 0); }
+.hub-app .hub-rh-bars__col:first-child:focus .hub-rh-bars__tip { transform: translate(0, 0); }
 .hub-app .hub-rh-bars__col:last-child .hub-rh-bars__tip { left: auto; right: 0; transform: translate(0, 4px); }
 .hub-app .hub-rh-bars__col:last-child:hover .hub-rh-bars__tip,
-.hub-app .hub-rh-bars__col:last-child:focus-visible .hub-rh-bars__tip { transform: translate(0, 0); }
+.hub-app .hub-rh-bars__col:last-child:focus .hub-rh-bars__tip { transform: translate(0, 0); }
 .hub-app .hub-rh-bars__labels { display: grid; grid-template-columns: 36px minmax(0, 1fr); }
 .hub-app .hub-rh-bars__labels > div { display: flex; }
 .hub-app .hub-rh-bars__labels > div > span {

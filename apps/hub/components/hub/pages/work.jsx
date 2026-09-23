@@ -5,7 +5,7 @@ import { CalendarOutcome } from "../calendar-outcome";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { topNavigationForRoute } from "../hub-nav";
-import { Badge, Card, IconButton, Button, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer, Skeleton } from "../hub-primitives";
+import { Badge, Card, IconButton, Button, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer, Skeleton, TruthBadge } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { RhythmToday } from "../rhythm-today";
 import { RhythmHistory } from "../rhythm-history";
@@ -41,6 +41,7 @@ import {
 } from "@/lib/rhythm-today";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const LOAD_SUPERSEDED = Symbol('work-ledger-load-superseded');
 const EN_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
 
 function startOfWeek(date) {
@@ -122,9 +123,10 @@ function useWorkLedger(projectId = null) {
     },
   });
   const requestRef = React.useRef(0);
+  const latestLoadRef = React.useRef(null);
   const baseSnapshotRef = React.useRef(null);
 
-  const load = React.useCallback(async () => {
+  const runLoad = React.useCallback(async () => {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
     const hasServableCache = !projectQuery && Boolean(
@@ -148,7 +150,7 @@ function useWorkLedger(projectId = null) {
         : '/api/hub/work';
       const response = await fetch(endpoint, { cache: 'no-store' });
       const data = await response.json().catch(() => null);
-      if (requestId !== requestRef.current) return false;
+      if (requestId !== requestRef.current) return LOAD_SUPERSEDED;
 
       if (!response.ok || !data || data.status === 'error') {
         // 캐시를 보여주는 중이면 데이터를 지우지 않는다 — 재검증 실패는 partial(오래된
@@ -245,7 +247,7 @@ function useWorkLedger(projectId = null) {
       }
       return rhythm.state === 'live' || rhythm.state === 'live-empty' || rhythm.state === 'partial';
     } catch (error) {
-      if (requestId !== requestRef.current) return false;
+      if (requestId !== requestRef.current) return LOAD_SUPERSEDED;
       if (hasServableCache) {
         setState((prev) => ({ ...prev, syncState: 'partial' }));
         return false;
@@ -280,6 +282,19 @@ function useWorkLedger(projectId = null) {
       return false;
     }
   }, [projectQuery]);
+  // 더 새 load가 시작되면 앞선 호출은 false(실패)가 아니라 가장 최근 load의 결과로 답한다 —
+  // 루틴 두 개를 연달아 체크했을 때 앞 체크가 "다시 읽지 못했습니다"로 오보되고 낙관적
+  // 표시가 걷히지 않던 경로(2026-09-23 리뷰).
+  const load = React.useCallback(() => {
+    const pending = runLoad().then((result) => {
+      if (result !== LOAD_SUPERSEDED) return result;
+      // 이 호출 뒤에 시작된 load가 있으면 그 결과를 따르고, 없으면(스냅샷 복원 등으로
+      // 무효화만 된 경우) 실패로 답한다 — 자기 자신을 기다리는 순환을 만들지 않는다.
+      return latestLoadRef.current && latestLoadRef.current !== pending ? latestLoadRef.current : false;
+    });
+    latestLoadRef.current = pending;
+    return pending;
+  }, [runLoad]);
 
   React.useEffect(() => {
     // 로드맵 선택 해제(project param 제거)는 이미 받아둔 base 응답을 복원한다 — 선택/해제
@@ -1540,6 +1555,26 @@ export function Rhythm() {
     setJustCheckedIds(new Set());
   }, [selectedProjectId]);
 
+  // 서버 기록이 낙관적 표시와 같아지면 덮어쓰기를 걷는다 — 어떤 이유로 retry 결과를 못 받아도
+  // 덮어쓰기가 남아 자정 뒤 "오늘 체크"로 되살아나지 않게(진행 중인 시도는 건드리지 않는다).
+  React.useEffect(() => {
+    setTodayOverrides((prev) => {
+      const ids = Object.keys(prev);
+      if (!ids.length) return prev;
+      const byId = new Map(rituals.map((r) => [r.id, r]));
+      let changed = false;
+      const next = { ...prev };
+      ids.forEach((id) => {
+        const serverDone = Array.isArray(byId.get(id)?.weeks) && byId.get(id).weeks[6] === 1;
+        if (!mutationState.pendingByRitual[id] && serverDone === prev[id]) {
+          delete next[id];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [rituals, mutationState.pendingByRitual]);
+
   const today = buildTodayRhythm(savedRituals, { overrides: todayOverrides });
   const dayLabels = React.useMemo(() => recentDayLabels(), []);
   const recentWeek = summarizeRecentWeek(today.groups.flatMap((g) => g.items));
@@ -1667,6 +1702,7 @@ export function Rhythm() {
 
       {rhythmState === 'error' && (
         <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
+          <TruthBadge state="error" />
           <span style={{ flex: 1, fontSize: 12, color: 'var(--danger)' }}>{rhythmError || '리듬 기록을 읽지 못했습니다. 체크 상태를 확인하려면 다시 읽어 주세요.'}</span>
           <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
         </div>
@@ -1701,7 +1737,7 @@ export function Rhythm() {
           emptyDescription={rhythmState === 'error' ? '기록을 다시 읽은 뒤 체크 상태를 확인해 주세요.' : rhythmState === 'partial' ? '일부 기록만 관측되어 전체 리듬 상태를 확정할 수 없습니다.' : rhythmState === 'preview' ? 'Preview · 연결 필요 — Supabase가 연결되면 루틴과 체크가 저장됩니다.' : '기도·운동·청소처럼 매일 지킬 루틴을 정하면 여기서 하루 한 번 체크합니다.'}
           emptyAction={rhythmState === 'error' || rhythmState === 'partial'
             ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
-            : <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴</Button>}
+            : <Button variant="secondary" size="sm" icon="plus" onClick={createRitual}>새 루틴</Button>}
           onToggle={toggleToday}
           onEdit={(item) => setEditRitualId(item.id)}
           onPreset={applyPreset}

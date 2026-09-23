@@ -851,3 +851,37 @@ test("undo validates identity like a check-in", async () => {
   const response = await DELETE(request({ ritualKey: "", checkType: "morning" }, "DELETE"));
   assert.equal(response.status, 400);
 });
+
+test("undo losing a race to another undo answers not-found, not a 502", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.checks = [{ id: "check-today", status: "done", idempotency_key: "k", meta: { ritual_key: "daily-focus" } }];
+  state.deletePersistence = { persisted: false, reason: "no-matching-row" };
+  const response = await DELETE(request(validPayload(), "DELETE"));
+  const body = await response.json();
+  assert.equal(response.status, 404);
+  assert.equal(body.status, "not-found");
+});
+
+test("undo still finds today's row after the ritual moved to another project", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.applyRoutineFilters = true;
+  // PATCH가 project_id만 옮겼다 — 멱등 키는 옛 프로젝트 기준이라 새 키로는 찾을 수 없다.
+  state.checks = [{
+    id: "check-moved",
+    project_id: PROJECT_ID,
+    status: "done",
+    idempotency_key: "routine-check:v1:hashed-with-old-project",
+    meta: { ritual_key: "daily-focus", name: "Daily focus", local_date: "2026-07-17" },
+  }, {
+    id: "check-yesterday",
+    project_id: PROJECT_ID,
+    status: "done",
+    idempotency_key: "routine-check:v1:yesterday",
+    meta: { ritual_key: "daily-focus", name: "Daily focus", local_date: "2026-07-16" },
+  }];
+  const response = await DELETE(request({ projectId: PROJECT_ID, ritualKey: "daily-focus", checkType: "morning" }, "DELETE"));
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "saved");
+  assert.deepEqual(state.deleteCalls[0].filters[1], ["id", "in.(check-moved)"]);
+});
