@@ -152,7 +152,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 **하루 리뷰 (R0)**
 
 - [`superpowers/specs/2026-09-12-daily-review-and-council-design.md`](superpowers/specs/2026-09-12-daily-review-and-council-design.md) — **R0 승인·구현 / 후속 단계 DRAFT**. 내 작업 → 하루 리뷰에서 에너지·당일 목표 진척·메모를 날짜별 저장·수정한다. 2026-09-13 운영 DB 적용 및 실제 API 연결 확인 완료. [구현·검증·적용 안내](superpowers/plans/2026-09-12-daily-review-r0.md). Council과 주간 리포트는 후속 제안이다.
-- [`superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md`](superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md) — **DRAFT · 전부 권장**. R0 입력·원장은 그대로 두고 진입(저녁 cue·어디서든 팝업)·입력(2단계 경로·오늘 3개 권장값)·되돌아보기(월 캘린더·이번 주 k/5)·회복(어제 메우기) 4층을 제안. Phase 1~3 마이그레이션 0. 운영자 결정 후보 Q-DR1~5.
+- [`superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md`](superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md) — **Phase 1~3 승인·구현(2026-09-23) / Phase 4 보류**. R0 입력·원장은 그대로 두고 진입(저녁 18시·다음 날 정오 전 cue, 셸 공용 팝업, `?review=` 딥링크, ⌘K)·입력(숫자 키 1~5, 오늘 3개 권장 카드, AI 코칭은 저장 후)·되돌아보기(월 캘린더·이번 주 k/5)·회복(어제 메우기)을 구현. 마이그레이션 0. 구현 기록은 문서 §10. 2차(원탭 에너지 저장·주간 5칸·지난주 비교·에너지 막대·⌘Enter)는 §11.
 
 **콘텐츠 제작 (2026-09-12)**
 

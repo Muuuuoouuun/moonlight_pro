@@ -22,6 +22,8 @@ import { createClientId } from "@/lib/pms-ui";
 import { QuickCaptureForm } from "../quick-capture";
 import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
+import { DailyReviewCue } from "../daily-review-cue";
+import { REVIEW_EVENING_HOUR } from "@/lib/daily-review-rhythm";
 import {
   beginRhythmCheck,
   buildRhythmCheckPayload,
@@ -405,20 +407,6 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                 할 일 {taskToday.hiddenCount}건 더 보기
               </button>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
-              <span style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Iconed name="brief" size={12} style={{ color: 'var(--fg-faint)' }} />
-                오늘 하루 마무리 · 17:00 저녁 회고
-              </span>
-              <Button
-                variant="ghost"
-                size="xs"
-                iconRight="arrowRight"
-                onClick={() => onNavigate?.('dashboard/work/daily-review')}
-              >
-                하루 리뷰
-              </Button>
-            </div>
           </div>
         ) : taskToday?.state === 'error' ? (
           // read 실패 ≠ 미연결 — preview 카피("live가 되면…")로 뭉개면 실패가 "연결 대기"로
@@ -878,7 +866,7 @@ function MorningBriefCard({ brief, taskToday, onNavigate }) {
         {allFocusCompleted && (
           <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--fg-muted)' }}>
             <span style={{ color: 'var(--moon-300)', fontWeight: 600 }}>✓</span>
-            <span>오늘 지정한 핵심 3개를 모두 완주했습니다 ({focusDone}/{focusPicked}). 저녁 17:00 하루 리뷰로 하루를 닫아보세요.</span>
+            <span>오늘 지정한 핵심 3개를 모두 완주했습니다 ({focusDone}/{focusPicked}). 저녁 {REVIEW_EVENING_HOUR}:00 하루 리뷰로 하루를 닫아보세요.</span>
           </div>
         )}
         {focusTasks.length > 0 && focusTasks.map((task, i) => taskRow(task, i, focusTasks.length, false))}
@@ -1231,7 +1219,7 @@ function BriefNavigation({ taskToday, onNavigate }) {
   const taskDetail = taskToday?.state === 'live' ? `${taskCount}건 확인` : '기록 확인';
   const detailByKey = {
     tasks: taskDetail,
-    'daily-review': '17:00 회고',
+    'daily-review': `${REVIEW_EVENING_HOUR}:00 회고`,
     calendar: '일정 배치',
     projects: '진행 확인',
     followups: '후속 조치',
@@ -2247,6 +2235,9 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
           매출, 메시지, 기획, 콘텐츠 순서의 판단을 돕는다"도 할 일을 1순위로 적고 있다
           (2026-09-20 운영자 재확정). 긴급 KA·집중 고객 ≤5 제한은 그대로다. */}
       <QuickCaptureForm layout="inline" inputId="daily-brief-quick-task" inputClassName="daily-brief__quick-input" onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
+
+      {/* 하루 마무리(09-21 §5-4 → 2026-09-23 §4.3) — 저녁 18시 이후·다음 날 정오 전에만 말한다. 빠른 입력과 붙여 둔다. */}
+      <DailyReviewCue />
 
       <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
 

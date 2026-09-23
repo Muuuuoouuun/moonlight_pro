@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 import "./hub-futura.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
+import { DailyReviewProvider } from "./daily-review-provider";
 import { GOAL_WORK_BASE, goalHref } from "@/lib/goal-client";
 
 import { Button, Skeleton } from "./hub-primitives";
@@ -605,6 +606,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
       <ToastProvider>
         <OfficeSessionProvider key={memoDraftContext}>
           <OfficeWorkflowSessionProvider>
+          <DailyReviewProvider>
         {/* --hub-sidebar-w는 펼친 사이드바 폭이다. 드래그 중에는 SidebarResizer가 이 값만 직접 바꾼다. */}
         <div ref={shellRef} className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'} style={{ '--hub-sidebar-w': `${sidebarWidth}px` }}>
           <div
@@ -673,6 +675,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
         contextData={advisorContext.contextData}
       />}
         <CelebrationCanvas />
+          </DailyReviewProvider>
           </OfficeWorkflowSessionProvider>
         </OfficeSessionProvider>
       </ToastProvider>

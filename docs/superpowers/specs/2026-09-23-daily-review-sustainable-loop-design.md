@@ -1,6 +1,6 @@
 # 하루 리뷰 — 꾸준히 남게 되는 구조(진입·입력·되돌아보기·회복) 설계
 
-> 상태: **DRAFT · 전부 `권장`**. 운영자 확정 결정은 없다. 이 문서가 새로 제안하는 것은 모두 권장안이며, `확정`은 기존 문서에서 이미 확정된 사실만 가리킨다.
+> 상태: **Phase 1~3 승인·구현(2026-09-23)** / Phase 4 보류. 2026-09-23 운영자가 "전부 다 진행"으로 이 문서의 Phase 1~3과 §9 권장값(Q-DR1~5)을 승인했다. 화면을 직접 본 확정은 아직이라 DESIGN.md §15에는 `recommended`로 적었다. Phase 4는 운영 DB 마이그레이션·외부 채널이 필요해 별도 결정으로 남긴다(§10).
 > 작성일: 2026-09-23 (Asia/Seoul)
 > 요청: "오늘 하루 평가 조금 더 편리하고 디자인 높이고 정말 꾸준히 달성할 수 있을 법한 디자인 아키텍처 개선 요소 설계"
 > 상위 정본: [`docs/README.md`](../../README.md) → [운영자 프로필](../../operator-workflow-profile.md) → [09-12 하루 리뷰 R0](2026-09-12-daily-review-and-council-design.md) → [09-20 세 축·Action KPI](2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md) → [09-21 홈·오늘·현황 역할](2026-09-21-home-today-overview-role-design.md).
@@ -66,11 +66,12 @@ hub-app.jsx (shell)
      └─ ⌘K Action "하루 리뷰 쓰기" ← 새로: 팔레트 Action 항목
 
 lib/daily-review-rhythm.js         ← 새로: 순수 함수(시각·기록 → 신호). node --test로 고정
-  reviewCue(now, timezone, todayReview, yesterdayReview) → 'none' | 'evening' | 'backfill'
-  suggestFromFocus(todaySignals, focusTitles)            → { focus, progress, reason } | null
-  buildReviewMonth(month, entries, todayKey)             → cells[], weekCount, energySeries
+  reviewCue({ todayKey, hour, recent })        → { kind: 'evening' | 'backfill' | 'done', date } | null
+  weekProgress(todayKey, recent)               → { recorded, weekend, target, workdays }
+  suggestFromFocus(todaySignals)               → { focus, progress, reason } | null
+  buildReviewMonth(month, entries|null, today) → { cells[], known, recordedCount, energySeries }
 
-API: GET /api/hub/daily-review (기존)  — 응답에 today.focusTitles(최대 3), yesterday 요약 1개 추가
+API: GET /api/hub/daily-review (기존)  — 응답에 today.focusTitles(최대 3), recent(실제 오늘 기준 최근 8일), todayKey 추가
      POST (기존 그대로)
 DB:  변경 없음 (Phase 1~3)
 ```
@@ -78,7 +79,7 @@ DB:  변경 없음 (Phase 1~3)
 ### 4.2 결정 사항
 
 1. **model은 하나.** 지금은 페이지가 `useDailyReview()`를 소유하고 팝업은 그 자식이다. 팝업을 shell로 올리면서 훅 인스턴스도 Provider 하나로 옮긴다. 페이지와 팝업이 같은 초안·revision·충돌 상태를 본다. 두 인스턴스가 같은 날짜의 초안을 각자 쓰는 경쟁을 막는 게 목적이다.
-2. **Provider는 지연 로드한다.** 팝업을 열거나 cue가 필요할 때만 `GET /api/hub/daily-review`를 부른다. 모든 페이지 진입마다 리뷰를 읽지 않는다. cue는 오늘 탭 자체의 기존 로드와 별개로 가벼운 한 번의 읽기(오늘·어제)만 쓴다. 필요하면 `?date=` 한 번으로 둘 다 가져오도록 응답을 확장한다(§4.4).
+2. **셸이 한 번 읽는다.** Provider가 셸 마운트 때 `GET /api/hub/daily-review`를 1회 부르고, 오늘·홈 cue와 페이지·팝업이 그 결과를 함께 쓴다(구현 때 지연 로드안 대신 채택 — cue가 오늘·홈 첫 화면에 필요해 어차피 매번 읽어야 했다). 응답의 `recent`는 선택 날짜와 무관한 최근 8일 범위 읽기 한 번이다. 탭을 켜 둔 채 날짜가 바뀌면 돌아왔을 때(visibilitychange) 한 번 다시 읽는다.
 3. **딥링크 계약**: `?review=today` / `?review=YYYY-MM-DD`는 어느 대시보드 경로에서든 팝업을 1회 열고 쿼리를 소거한다(§8.1 `?lead=`·`?deal=` 규칙과 같은 방식). 기존 `dashboard/work/daily-review?date=`(목표·지표 링크가 쓰는 형식)는 그대로 날짜 선택으로 남긴다.
 4. **순수 함수가 규칙을 소유한다.** cue 시각, 권장값 계산, 캘린더 셀 상태는 `lib/daily-review-rhythm.js`에만 두고 컴포넌트는 결과만 그린다. `task-today.js`·`weekly-report.js`처럼 테스트가 규칙을 고정한다.
 
@@ -140,7 +141,7 @@ API 확장(마이그레이션 없음): `readTodaySignals`가 이미 `tasks`를 `
 
 - `backfill` cue(§4.3)가 유일한 회복 신호다. 어제 하루만 제안한다. 그보다 오래된 빈칸은 캘린더의 `○`로만 보이고, 누르면 메울 수 있다.
 - 과거 날짜를 저장할 때 팝업 제목에 `어제 · 9월 22일 화요일`처럼 날짜를 먼저 말해 오늘 기록과 헷갈리지 않게 한다. 저장 계약은 날짜 무관하게 동일하다(기존).
-- 오늘 3개 권장값은 **오늘 날짜에만** 뜬다(`today.date === date` 기존 조건 유지). 과거 날짜엔 부제의 신호도 없다. 서버가 그날 신호를 읽을 수 있으면 날짜별로 확장하는 것은 Phase 4.
+- 오늘 3개 권장값과 부제 신호는 `today.date === date`일 때 뜬다. 서버의 `readTodaySignals`는 원래부터 **선택한 날짜** 기준으로 읽으므로 어제를 메울 때도 그날의 오늘 3개·연락 수가 나온다(구현 중 확인 — Phase 4 "과거 날짜 신호"는 이미 있었다).
 
 ## 5. 디자인 규칙 적용표
 
@@ -192,3 +193,31 @@ Phase 1~3은 새 테이블·마이그레이션·새 의존성이 없다. 각 Pha
 3. **Q-DR3 주간 목표**: 하루 리뷰 기록일 목표를 주 5일로 둘까, 주 4일로 둘까? (4/5로 시작, 실측 뒤 조정)
 4. **Q-DR4 권장값 적용 방식**: 오늘 3개 권장값을 버튼으로 적용할까, 기본으로 채워 두고 지우게 할까? (버튼 적용. 09-12 "기본 선택값을 미리 저장하지 않는다")
 5. **Q-DR5 AI 코칭 자리**: 저장 후에만 보이게 할까, 지금처럼 입력 중에도 보일까? (저장 후)
+
+## 10. 구현 기록 (2026-09-23)
+
+| Phase | 반영 | 파일 |
+|---|---|---|
+| 1 입력 정리 | AI 코칭을 `daily-review-coach.jsx`로 분리하고 저장된 기록에만 표시. 인라인 style 약 15곳·이모지·10~11.5px 글자·raw 2000ms 타이머를 없애고 `CertaintyBadge recommended` 사용. 숫자 키 1~5. 오늘 3개 권장 카드(`적용` 전엔 draft 불변, 제목이 없으면 `목표 적기`로 입력칸 포커스). 날짜별 메모 예시 문장. 로딩은 `Skeleton`. 과거 날짜는 부제에 `어제 ·`/`지난 기록 ·` | `pages/daily-review-composer.jsx`, `pages/daily-review-coach.jsx`, `pages/daily-review-labels.js` |
+| 2 진입 | `DailyReviewProvider`(셸)가 model·팝업 소유. `?review=today\|YYYY-MM-DD` 딥링크 1회 소비 후 소거. ⌘K Action `하루 리뷰 쓰기`. `DailyReviewCue`를 오늘(빠른 입력 바로 아래)·홈(헤더 아래)에 배치 | `daily-review-provider.jsx`, `daily-review-cue.jsx`, `hub-app.jsx`, `hub-command-palette.jsx`, `pages/daily-brief.jsx`, `pages/home.jsx` |
+| 3 되돌아보기 | 헤더 primary 1개(`오늘 기록 남기기/수정`) + `이번 주 k/5일 기록 · 목표 4일`. 월 캘린더(● 기록 · ○ 빈 근무일 · 주말 표시 없음 · 오늘 Moonstone 테두리, 셀 → 그날 팝업). 기록일끼리만 잇는 에너지 추이 + 평균. 날짜 입력은 `날짜로 찾기` 접힘. `TruthBadge`는 preview·error일 때만. 읽지 못한 달은 `unknown` — 빈 근무일로 단정하지 않는다 | `pages/daily-review.jsx`, `pages/daily-review-calendar.jsx`, `pages/daily-review.css`, `hub-primitives.jsx`(`Sparkline` `min`/`max`/`label`) |
+| 서버 | `today.focusTitles`, `recent`, `todayKey`. 최근 읽기 실패는 `recent: null` — cue는 침묵, 리뷰 자체는 live | `lib/repositories/daily-review-ledger.js` |
+| 규칙 | 시간대 판정·18시/12시 경계·근무일·주간 수·권장값·월 셀 상태 | `lib/daily-review-rhythm.js` + `.test.mjs`(10), 원장 테스트 +2 |
+
+**검증**: `npm test` — 새 테스트 12건 포함 통과, 실패 7건은 변경 전과 동일한 postgres·프로세스 그룹 환경 테스트. 로컬 `next dev` + Playwright(1440·390, 다크·라이트, API 응답은 브라우저에서만 가로챔): 숫자 키 4 → 권장 `적용` → 저장 → 캘린더·이번 주·오늘 탭 cue 갱신, `/dashboard/home?review=2026-09-21` 팝업 열림·쿼리 소거, preview에서 콘솔 오류 0건.
+
+**Phase 4 보류 이유**: `review_data.focus_task_ids` 스냅샷은 `journal_entries_daily_review_shape` CHECK 변경이라 운영(서울) DB 마이그레이션이 필요하다. 텔레그램 저녁 한 줄은 09-20 §6.3 봇 평문 처리와 함께 가야 한다. Council "내일 한 수 → 할 일" 루프는 09-12 R1 DRAFT다. 셋 다 운영자 결정 뒤 별도 스펙으로 진행한다.
+
+## 11. 2차 디벨롭 (2026-09-23, 운영자 "더 디벨롭")
+
+마이그레이션 없이, "매일 누르게 되는가"에 직접 닿는 다섯 가지를 더했다.
+
+| 항목 | 내용 | 계약·근거 |
+|---|---|---|
+| 원탭 에너지 저장 | 저녁 cue에 1~5 버튼. 누르면 에너지만 즉시 저장하고 토스트 `저장했어요 · 이번 주 k/5일` + `메모 더하기` 액션(팝업). **오늘 날짜를 보고 있고 저장된 기록·쓰던 초안이 없을 때만** 나타나며, 그 밖에는 팝업으로 보내 기존 초안·충돌 계약을 그대로 탄다. 실패·충돌이면 팝업이 원인과 보존된 입력을 보여 준다 | 저장은 여전히 운영자의 명시적 한 번의 탭. 09-12 "한 항목만 남겨도 저장" |
+| 주간 5칸 | cue와 페이지 헤더에 월~금 5칸(● 기록 · ○ 빈 근무일 · 점선 오늘 · 흐림 아직). 캘린더와 같은 마크 문법 | §5.3 색 단독 금지 — 채움·테두리·선 모양 |
+| 지난주 비교 | 헤더에 `지난주 k/5일 · 에너지 x.x`, 이번 주 평균 에너지. 줄어도 경고하지 않는다 | `recent` 창을 8 → 14일로 넓혀 지난주 월요일(최대 13일 전)까지 한 번에 읽는다. 범위 밖이면 지난주는 표시하지 않는다(모름 ≠ 0) |
+| 에너지 막대 | 캘린더의 기록 마크가 에너지만큼 자라는 막대(1→4px … 5→16px). 범례 `기록 · 높이 = 에너지` | 흑백·색각 차이에서도 높이로 읽힌다 |
+| 빠른 저장 키 | 메모 입력 중 `⌘/Ctrl+Enter` 저장, 푸터 힌트. 팝업 저장 토스트도 이번 주 수를 말한다 | `TextAreaField onCmdEnter` 재사용 |
+
+규칙은 `lib/daily-review-rhythm.js`의 `weekProgress`(`days`·`energyAvg` 추가)·`weekCompare`·`weekAfterSave`·`savedMessage`가 소유하고 테스트(+3)가 고정한다. 브라우저 검증(1440·390, 20:05 KST 고정): 오늘 화면 cue에서 `3` 탭 → 토스트 `저장했어요 · 이번 주 3/5일` → cue가 `✓ 오늘 기록함`으로 전환, 팝업은 열리지 않음, 페이지 헤더 `지난주 5/5일 · 에너지 3.4`. 과정에서 `.hub-app button` 리셋(0,1,1)이 버튼 클래스(0,1,0)를 이겨 테두리가 사라지던 것을 `.hub-app` 접두로 고쳤다.

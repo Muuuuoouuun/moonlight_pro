@@ -5,6 +5,7 @@ import { Iconed } from "../hub-icons";
 import { Button, Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
 import { CalendarOutcome } from "../calendar-outcome";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
+import { DailyReviewCue } from '../daily-review-cue';
 
 // Home — Futura 텍스처의 첫 화면 (DESIGN.md §15, 2026-09-18).
 //
@@ -268,6 +269,9 @@ export function Home({ onNavigate }) {
           </div>
         ) : null}
       </header>
+
+      {/* 저녁·다음 날 아침의 하루 리뷰 한 줄 — 트리아지 큐 밖(2026-09-23 지속 루프 설계 §4.3). */}
+      <DailyReviewCue className="daily-review-cue--home" />
 
       {status === 'partial' && <div><TruthBadge state="partial" reason="일부 기록만 확인했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>}
       {status === 'loading' ? (
