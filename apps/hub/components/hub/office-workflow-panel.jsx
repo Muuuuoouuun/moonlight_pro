@@ -7,6 +7,7 @@ import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowQuery,offic
 import {OfficeDeliberationControls,OfficeDiscussion} from './office-deliberation-controls';
 import {officeDeliberationForParticipants} from './office-deliberation-client';
 import styles from './office-workflow-panel.module.css';
+import {WEEKLY_MISSING_LABELS} from '@/lib/weekly-report-fields';
 
 const Sessions=React.createContext(null);
 export function OfficeWorkflowSessionProvider({children}) {
@@ -20,7 +21,7 @@ export function OfficeWorkflowSessionProvider({children}) {
 }
 const WORKFLOW_MODES=[{key:'draft',label:'초안'},{key:'council',label:'관점 비교'}];
 const initialMessage={weekly_report:'선택한 7일의 확인된 기록으로 주간 정리를 작성해 주세요. 확인된 활동, 변화와 막힘, 다음 주 남길 행동을 구분하고 미측정 값은 그대로 표시해 주세요.',customer_reply:'선택한 고객의 실제 기록과 약속을 참고해 보낼 답장 초안 한 개와 이번 접촉 목적을 작성해 주세요. 자료에 없는 약속이나 고객 발언을 만들지 마세요.'};
-const missingLabels={'recorded-customer-words-unavailable':'직접 연결된 발언 기록 없음','activities-limited-to-latest-five':'최근 기록 5건만 참고','contacts_recorded':'고객 연락 미측정','tasks_completed':'완료 할 일 미측정','content_published':'발행 미측정','goals':'목표 조회 미완료','deals':'거래 조회 미완료','deal-win-timestamps':'성사일 일부 미확인'};
+const missingLabels={...WEEKLY_MISSING_LABELS,'recorded-customer-words-unavailable':'직접 연결된 발언 기록 없음','activities-limited-to-latest-five':'최근 기록 5건만 참고','contacts_recorded':'고객 연락 미측정','tasks_completed':'완료 할 일 미측정','content_published':'발행 미측정','goals':'목표 조회 미완료','deals':'거래 조회 미완료','deal-win-timestamps':'성사일 일부 미확인'};
 
 export function OfficeWorkflowPanel({intent,scope,originRef,title,onTaskCreated,onNavigate}) {
   const [pickedScope,setPickedScope]=React.useState('');

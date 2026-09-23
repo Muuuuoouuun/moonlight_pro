@@ -161,7 +161,9 @@ test('daily reviews use declared local review date and remain personal', async (
   const r=reader({journal_entries:[row('r',{entry_kind:'daily_review',review_date:'2026-09-20',review_timezone:'Asia/Seoul',created_at:'2026-09-20T16:00:00Z'}),row('future',{entry_kind:'daily_review',review_date:'2026-09-30',review_timezone:'Asia/Seoul'})]});
   assert.equal((await r.measure({...period,sourceKey:'reviews_completed'})).value,1);
   assert.equal((await r.measure({...period,periodEnd:'2026-09-30',sourceKey:'reviews_completed'})).value,1);
-  assert.equal((await r.measure({...period,scope:'company',sourceKey:'reviews_completed'})).value,0);
+  // 회사 소속 하루 리뷰는 존재할 수 없다 — 측정된 0이 아니라 이 소속에 쓸 수 없는 원천이다.
+  const company=await r.measure({...period,scope:'company',sourceKey:'reviews_completed'});
+  assert.equal(company.value,null);assert.equal(company.coverage,'unmeasured');assert.equal(company.reason,'source-personal-only');
 });
 test('many source rows resolve ownership in batches instead of one HTTP lookup per record', async () => {
   const r=reader({

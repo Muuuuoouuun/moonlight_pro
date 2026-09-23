@@ -1,4 +1,6 @@
 // Small client contracts shared by AI suggestions; generation is never a save receipt.
+import { WEEKLY_STAT_FIELDS, weeklySourceLabels, weeklyStatValue } from './weekly-report-fields.js';
+
 export function createAdviceTaskWriter({ fetchImpl = fetch, createId = () => crypto.randomUUID() } = {}) {
   const attempts = new Map();
   return {
@@ -81,24 +83,23 @@ export function buildDailyDispatchContext({ dailyFocus, taskToday, signals = [],
   };
 }
 
+// Council이 읽는 주간 팩트 — 카드와 같은 필드(weekly-report-fields.js)를 싣고, 일부 미측정이면
+// 무엇을 못 읽었는지 적는다. '—'를 0으로 읽은 평가가 나오지 않게 하기 위함이다.
+function weeklyFactText(field, stats) {
+  const { text, rate } = weeklyStatValue(field, stats);
+  if (text === null) return '—';
+  if (field.key === 'focus') return stats.focusPicked === 0 ? '고른 날 없음' : `${text}${rate === null ? '' : ` (${rate}%)`}`;
+  return `${text}${field.unit}`;
+}
+
 export function buildWeeklySummaryText(report, scope) {
   if (!report) return '';
   const stats = report.stats || {};
   const goals = report.goals?.objectives || [];
   const highlights = report.highlights || [];
-  const statParts = scope === 'company'
-    ? [
-        `CRM 연락: ${stats.contacts ?? '—'}건`,
-        `신규 딜: ${stats.newDeals ?? '—'}건`,
-        `수정된 진행 딜: ${stats.modifiedOpenDeals ?? '—'}건`,
-        `성사일 확인된 딜: ${stats.wonDeals ?? '—'}건`,
-      ]
-    : [
-        `완료 할 일: ${stats.doneTasks ?? '—'}건`,
-        `발행: ${stats.publishes ?? '—'}건`,
-        `CRM 연락: ${stats.contacts ?? '—'}건`,
-        `개인 딜: ${stats.personalDeals ?? '—'}건`,
-      ];
+  const fields = WEEKLY_STAT_FIELDS[scope === 'company' ? 'company' : 'personal'];
+  const statParts = fields.map(field => `${field.key === 'contacts' ? 'CRM 연락' : field.label}: ${weeklyFactText(field, stats)}`);
+  const missing = weeklySourceLabels(report.failedSources);
   const goalParts = goals.map(g => `- ${g.title} (${g.status || '진행중'})`);
   const highlightParts = highlights.map(h => `- ${h.kind === 'won' ? 'Won' : '완료'}: ${h.label}`);
 
@@ -106,6 +107,9 @@ export function buildWeeklySummaryText(report, scope) {
     `[${scope === 'company' ? '회사(ClassIn)' : '개인'} 주간 실적 팩트 (${report.periodStart || '시작'} ~ ${report.periodEnd || '종료'})]`,
     statParts.join(' · '),
   ];
+  if (report.partial || missing.length) {
+    lines.push(`[측정 상태] 일부 미측정 — ${missing.length ? missing.join(' · ') : '원천 확인 필요'}. '—'는 0이 아니라 확인하지 못한 값입니다.`);
+  }
   if (goalParts.length) {
     lines.push(`[연결된 목표]`, ...goalParts);
   }

@@ -8,7 +8,7 @@ import "./hub-tokens.css";
 import "./hub-futura.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 import { DailyReviewProvider } from "./daily-review-provider";
-import { GOAL_WORK_BASE, goalHref } from "@/lib/goal-client";
+import { GOAL_WORK_BASE, goalHref, goalView } from "@/lib/goal-client";
 
 import { Button, Skeleton } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
@@ -455,7 +455,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
-    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: searchParams.get('check') === '1', create: true }).slice(1);
+    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', create: true }).slice(1);
     if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
     if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
     if (p.startsWith('dashboard/revenue/leads') || p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/leads?new=lead';
@@ -465,7 +465,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     if (p.startsWith('dashboard/work/projects') || p.startsWith('dashboard/work/roadmap')) return 'dashboard/work/projects?new=project';
     if (p.startsWith('dashboard/work/decisions')) return 'dashboard/work/decisions?new=decision';
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
-    if (p.startsWith('dashboard/work/goals')) return goalHref(null, queryScope || 'all', { check: searchParams.get('check') === '1', create: true, base: GOAL_WORK_BASE }).slice(1);
+    if (p.startsWith('dashboard/work/goals')) return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', create: true, base: GOAL_WORK_BASE }).slice(1);
     if (p.startsWith('dashboard/content')) return 'dashboard/content/studio?new=draft';
     return null;
   }, [queryScope, searchParams]);
