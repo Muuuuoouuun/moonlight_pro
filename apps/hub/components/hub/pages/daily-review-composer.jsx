@@ -4,7 +4,7 @@ import React from 'react';
 import { Button, CertaintyBadge, Drawer, Kbd, SegmentedControl, Skeleton, TextAreaField, TextField, TruthBadge, useToast } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
 import { shiftDateKey } from '@/lib/rhythm-calendar';
-import { suggestFromFocus } from '@/lib/daily-review-rhythm';
+import { savedMessage, suggestFromFocus } from '@/lib/daily-review-rhythm';
 import { DailyReviewCoach } from './daily-review-coach';
 import { ENERGY_LABELS, PROGRESS, progressLabel } from './daily-review-labels';
 
@@ -26,7 +26,7 @@ function ReviewSummary({ review }) {
 }
 
 export function DailyReviewComposer({ model, onClose }) {
-  const { date, draft, review, source, saveState, busy, dirty, conflict, edit, editFields, today, todayKey } = model;
+  const { date, draft, review, source, saveState, busy, dirty, conflict, edit, editFields, today, todayKey, recent } = model;
   const toast = useToast();
   const [expanded, setExpanded] = React.useState(() => source !== 'loading' && hasProgress(draft));
   const [exiting, setExiting] = React.useState(false);
@@ -78,7 +78,7 @@ export function DailyReviewComposer({ model, onClose }) {
       const result = await model.save(nextDraft);
       if (result?.state === 'saved') {
         setExiting(true);
-        toast.success('하루 리뷰를 저장했어요.');
+        toast.success(savedMessage(todayKey, recent, result.review));
       }
       else if (typeof nextDraft.progress === 'number' && !nextDraft.focus.trim()) setExpanded(true);
     } finally { submittingRef.current = false; }
@@ -106,7 +106,7 @@ export function DailyReviewComposer({ model, onClose }) {
   return <Drawer title="하루 리뷰" subtitle={`${dateLabel}${todayLine}`} presentation="compact" width="460px" exiting={exiting} onClose={requestClose} initialFocusRef={formRef}
     footer={<div className="daily-review-composer-footer">
       {!conflict && <Button form="daily-review-composer" type="submit" variant="primary" size="md" icon={saveState === 'saved' ? 'check' : undefined} disabled={locked || source !== 'live' || !dirty}>{saveState === 'saving' ? '저장 중…' : saveState === 'saved' ? '저장했어요' : saveState === 'error' ? '다시 저장' : review ? '수정 저장' : '저장'}</Button>}
-      <span className="daily-review-footer-hint">{source !== 'live' && source !== 'loading' ? '연결 후 저장할 수 있어요' : dirty ? '닫아도 작성 중인 내용은 유지돼요' : '한 항목만 남겨도 좋아요'}</span>
+      <span className="daily-review-footer-hint">{source !== 'live' && source !== 'loading' ? '연결 후 저장할 수 있어요' : dirty ? <>닫아도 작성 중인 내용은 유지돼요 · <Kbd>⌘</Kbd><Kbd>Enter</Kbd> 저장</> : '한 항목만 남겨도 좋아요'}</span>
     </div>}>
     <form id="daily-review-composer" className="daily-review-composer" ref={formRef} tabIndex={-1} aria-busy={busy} onKeyDown={onKeyDown} onSubmit={(event) => { event.preventDefault(); if (!conflict) submit(); }}>
       {source === 'loading' ? <Skeleton lines={4} height={14} gap={14} width={['40%', '100%', '30%', '100%']} label="기록 불러오는 중" /> : <>
@@ -116,7 +116,7 @@ export function DailyReviewComposer({ model, onClose }) {
             <SegmentedControl className="daily-review-energy" label="에너지, 1 많이 지침부터 5 활기참까지" options={ENERGY} value={draft.energy} onChange={(value) => edit('energy', draft.energy === value ? null : value)} fill size="md" />
             <div className="daily-review-scale"><span>많이 지침</span><span className="daily-review-keyhint">숫자 키 <Kbd>1</Kbd>–<Kbd>5</Kbd></span><span>활기참</span></div>
           </section>
-          <TextAreaField id="daily-review-note" label="한 줄 메모" value={draft.note} rows={3} maxLength={4000} placeholder={notePrompt} onChange={(event) => edit('note', event.target.value)} />
+          <TextAreaField id="daily-review-note" label="한 줄 메모" value={draft.note} rows={3} maxLength={4000} placeholder={notePrompt} onCmdEnter={() => { if (!conflict && dirty) submit(); }} onChange={(event) => edit('note', event.target.value)} />
         </fieldset>
 
         {suggestion && <section className="daily-review-suggestion" aria-label="오늘 3개로 채우기">

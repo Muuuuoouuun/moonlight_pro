@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import {
   REVIEW_WEEK_TARGET, buildReviewMonth, isWorkday, recentRange, reviewCue, shiftMonth,
-  suggestFromFocus, weekProgress, weekStartOf, zonedClock,
+  savedMessage, suggestFromFocus, weekAfterSave, weekCompare, weekProgress, weekStartOf, zonedClock,
 } from "./daily-review-rhythm.js";
 
 const r = (reviewDate, energy = 3) => ({ reviewDate, energy });
@@ -22,7 +22,9 @@ test("workdays are Mon–Fri and weeks start on Monday", () => {
   assert.equal(weekStartOf("2026-09-23"), "2026-09-21");
   assert.equal(weekStartOf("2026-09-27"), "2026-09-21"); // 일요일은 그 주의 끝
   assert.equal(weekStartOf("2026-10-01"), "2026-09-28"); // 월 경계를 넘는 주
-  assert.deepEqual(recentRange("2026-09-23"), { from: "2026-09-16", to: "2026-09-23" });
+  assert.deepEqual(recentRange("2026-09-23"), { from: "2026-09-10", to: "2026-09-23" });
+  // 일요일에도 지난주 월요일이 범위 안에 든다(13일 전).
+  assert.equal(recentRange("2026-09-27").from, "2026-09-14");
 });
 
 test("cue: evening from 18:00 only when today is not recorded", () => {
@@ -48,10 +50,27 @@ test("cue stays silent when recent records could not be read", () => {
 
 test("week progress counts recorded workdays only and resets every Monday", () => {
   const recent = [r("2026-09-19"), r("2026-09-20"), r("2026-09-21"), r("2026-09-22"), r("2026-09-27")];
-  assert.deepEqual(weekProgress("2026-09-23", recent), { start: "2026-09-21", recorded: 2, weekend: 0, target: REVIEW_WEEK_TARGET, workdays: 5 });
+  const week = weekProgress("2026-09-23", recent);
+  assert.equal(week.start, "2026-09-21");
+  assert.equal(week.recorded, 2);
+  assert.equal(week.weekend, 0);
+  assert.equal(week.target, REVIEW_WEEK_TARGET);
+  assert.deepEqual(week.days.map((day) => day.state), ["recorded", "recorded", "today", "future", "future"]);
+  assert.equal(week.energyAvg, 3);
   assert.equal(weekProgress("2026-09-27", [...recent, r("2026-09-26")]).weekend, 2);
   assert.equal(weekProgress("2026-09-28", recent).recorded, 0);
   assert.equal(weekProgress("2026-09-23", null), null);
+});
+
+test("week compare reads the whole previous week and says unknown when out of range", () => {
+  const recent = [r("2026-09-14", 2), r("2026-09-15", 4), r("2026-09-18", 3), r("2026-09-22", 5)];
+  const { thisWeek, lastWeek } = weekCompare("2026-09-23", recent);
+  assert.equal(thisWeek.recorded, 1);
+  assert.equal(lastWeek.start, "2026-09-14");
+  assert.equal(lastWeek.recorded, 3);
+  assert.equal(lastWeek.energyAvg, 3);
+  assert.deepEqual(lastWeek.days.map((day) => day.state), ["recorded", "recorded", "missed", "missed", "recorded"]);
+  assert.equal(weekCompare("2026-09-23", null), null);
 });
 
 test("focus suggestion follows 09-20 §6.2 and never invents a target", () => {
@@ -97,4 +116,14 @@ test("shiftMonth crosses year boundaries", () => {
   assert.equal(shiftMonth("2026-01", -1), "2025-12");
   assert.equal(shiftMonth("2026-12", 1), "2027-01");
   assert.equal(shiftMonth("bad", 1), "");
+});
+
+test("save message counts the day just saved before state catches up", () => {
+  const recent = [r("2026-09-21"), r("2026-09-22")];
+  assert.equal(savedMessage("2026-09-23", recent, { reviewDate: "2026-09-23", energy: 4 }), "저장했어요 · 이번 주 3/5일");
+  const full = [r("2026-09-21"), r("2026-09-22"), r("2026-09-23")];
+  assert.equal(savedMessage("2026-09-24", full, { reviewDate: "2026-09-24", energy: 4 }), "저장했어요 · 이번 주 4/5일 · 목표 달성");
+  // 지난주 날짜를 메우면 이번 주 수는 말하지 않는다
+  assert.equal(savedMessage("2026-09-23", recent, { reviewDate: "2026-09-18", energy: 2 }), "하루 리뷰를 저장했어요.");
+  assert.equal(weekAfterSave("2026-09-23", null, { reviewDate: "2026-09-23" }).recorded, 1);
 });

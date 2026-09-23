@@ -243,14 +243,14 @@ test("recent records are read relative to the real today, independent of the sel
   state.rows = [
     row({ review_date: "2026-09-22", review_data: { energy: 4, progress: null } }),
     row({ review_date: "2026-09-16", review_data: { energy: null, progress: null }, body: "메모" }),
-    row({ review_date: "2026-09-15" }), // 범위 밖
+    row({ review_date: "2026-09-09" }), // 범위 밖(14일 창)
   ];
   const result = await ledger.getDailyReviewLedger({ date: "2026-08-03", now: new Date("2026-09-23T03:00:00Z") });
   assert.equal(result.status, "live");
   assert.equal(result.todayKey, "2026-09-23");
   assert.deepEqual(result.recent, [{ reviewDate: "2026-09-22", energy: 4 }, { reviewDate: "2026-09-16", energy: null }]);
   const recentCall = state.calls.find((call) => call.table === "journal_entries" && call.url.searchParams.get("select") === "review_date,review_data");
-  assert.deepEqual(recentCall.url.searchParams.getAll("review_date"), ["gte.2026-09-16", "lte.2026-09-23"]);
+  assert.deepEqual(recentCall.url.searchParams.getAll("review_date"), ["gte.2026-09-10", "lte.2026-09-23"]);
   assert.equal(recentCall.url.searchParams.get("workspace_id"), `eq.${WORKSPACE}`);
   assert.equal(recentCall.url.searchParams.get("entry_kind"), "eq.daily_review");
 });

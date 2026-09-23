@@ -32,6 +32,14 @@
 .daily-review-day:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
 .daily-review-day-mark { display: inline-block; width: 8px; height: 8px; border-radius: 999px; border: 1px solid transparent; transition: background var(--dur-enter) var(--ease-hub), border-color var(--dur-enter) var(--ease-hub); }
 .daily-review-day[data-state="recorded"] .daily-review-day-mark, .daily-review-day-mark[data-legend="recorded"] { background: var(--fg-muted); border-color: var(--fg-muted); }
+/* 기록한 날의 마크는 에너지만큼 자라는 막대(1→4px … 5→16px) — 색이 아니라 높이가 값을 말한다(§5.3 흑백 판독). */
+.daily-review-day-marks { display: inline-flex; align-items: flex-end; height: 16px; }
+.daily-review-day[data-state="recorded"][data-energy] .daily-review-day-mark { width: 6px; border-radius: 2px; }
+.daily-review-day[data-energy="1"] .daily-review-day-mark { height: 4px; }
+.daily-review-day[data-energy="2"] .daily-review-day-mark { height: 7px; }
+.daily-review-day[data-energy="3"] .daily-review-day-mark { height: 10px; }
+.daily-review-day[data-energy="4"] .daily-review-day-mark { height: 13px; }
+.daily-review-day[data-energy="5"] .daily-review-day-mark { height: 16px; }
 .daily-review-day[data-state="missed"] .daily-review-day-mark, .daily-review-day-mark[data-legend="missed"] { border-color: var(--line-strong); }
 .daily-review-day[data-state="today"] .daily-review-day-mark { border-color: var(--line-strong); border-style: dashed; }
 .daily-review-calendar-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); font-size: 11px; color: var(--fg-dim); }
@@ -92,12 +100,27 @@
 .daily-review-coach-text { margin: 0; font-size: 13px; line-height: 1.7; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
 .daily-review-coach-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
 /* 오늘·홈의 하루 마무리 한 줄(§4.3) — 중립 글리프 + 직접 라벨, 경고색 없음. */
-.daily-review-cue { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface); color: var(--fg); text-align: left; font: inherit; font-size: 13px; cursor: pointer; }
-.daily-review-cue > svg { flex-shrink: 0; color: var(--fg-muted); }
+.daily-review-cue { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; width: 100%; padding: 6px 8px 6px 6px; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface); color: var(--fg); font-size: 13px; }
+.daily-review-cue-main { display: flex; align-items: center; gap: 10px; flex: 1 1 220px; min-width: 0; min-height: 40px; padding: 6px 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.daily-review-cue-main > svg { flex-shrink: 0; color: var(--fg-muted); }
 .daily-review-cue-copy { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .daily-review-cue-meta { font-size: 12px; color: var(--fg-muted); }
 .daily-review-cue-action { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--fg-muted); }
-.daily-review-cue[data-kind="done"] { color: var(--fg-muted); }
+.daily-review-cue[data-kind="done"] .daily-review-cue-main { color: var(--fg-muted); }
+/* 원탭 에너지 — 선택 없이 누르는 즉시 저장. 휴지 상태는 중립, hover는 surface 한 단계(§5.2). */
+.daily-review-cue-energy { display: inline-flex; gap: 4px; }
+.hub-app .daily-review-cue-energy-btn { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--fg); font-size: 13px; cursor: pointer; transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub); }
+.hub-app .daily-review-cue-energy-btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--line-strong); }
+.hub-app .daily-review-cue-energy-btn:disabled { cursor: default; color: var(--fg-faint); }
+.hub-app .daily-review-cue-energy-btn[aria-busy="true"] { color: var(--fg); border-color: var(--line-strong); background: var(--surface-2); }
+/* 월~금 5칸 — 캘린더 셀과 같은 마크 문법. */
+.daily-review-weekstrip { display: inline-flex; gap: 10px; padding: 0 6px; }
+.daily-review-weekstrip-day { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; color: var(--fg-dim); }
+.daily-review-weekstrip-day[data-state="recorded"] .daily-review-day-mark { background: var(--fg-muted); border-color: var(--fg-muted); }
+.daily-review-weekstrip-day[data-state="missed"] .daily-review-day-mark { border-color: var(--line-strong); }
+.daily-review-weekstrip-day[data-state="today"] .daily-review-day-mark { border-color: var(--line-strong); border-style: dashed; }
+.daily-review-weekstrip-day[data-state="today"] { color: var(--fg); }
+.daily-review-weekstrip-day[data-state="future"] .daily-review-day-mark { border-color: var(--line-soft); }
 .daily-review-hint { margin: 0; font-size: 12px; color: var(--fg-muted); line-height: 1.6; }
 .daily-review-composer-footer { display: grid; gap: 9px; width: 100%; text-align: center; }
 .daily-review-composer-footer > button { width: 100%; min-height: 40px; }
@@ -126,8 +149,16 @@
   .daily-review-calendar { padding: 14px 10px 16px; }
   .daily-review-day { min-height: 44px; }
   .daily-review-suggestion { flex-direction: column; align-items: stretch; }
+  .daily-review-cue-energy { flex: 1 1 100%; }
+  .hub-app .daily-review-cue-energy-btn { flex: 1; height: 44px; }
+  .daily-review-weekstrip { flex: 1 1 100%; justify-content: space-between; padding: 2px 10px 4px; }
   .daily-review-open { width: 100%; }
   .daily-review-history li button { gap: 16px; padding: 14px 8px; }
   .daily-review-actions { flex-direction: column; align-items: stretch; }
 }
 .daily-review-cue--home { margin-bottom: 24px; }
+.daily-review-weekline { display: grid; gap: 8px; margin-top: 8px; justify-items: start; }
+.daily-review-weekline .daily-review-week { margin: 0; }
+.daily-review-weekline .daily-review-weekstrip { padding: 0; }
+.daily-review-header .daily-review-week-last { margin: 0; font-size: 12px; color: var(--fg-dim); }
+.daily-review-cue-scale { font-size: 11px; color: var(--fg-dim); }

@@ -45,17 +45,18 @@ export function DailyReviewCalendar({ month, entries, todayKey, selectedDate, lo
           {grid.cells.map((cell) => <button
             key={cell.date} type="button" className="daily-review-day"
             data-state={cell.state} data-today={cell.today || undefined}
+            data-energy={cell.state === 'recorded' && cell.energy ? cell.energy : undefined}
             aria-current={cell.date === selectedDate ? 'date' : undefined}
             aria-label={cellLabel(cell)} disabled={disabled || cell.state === 'future'}
             onClick={() => onPick(cell.date)}>
             <span className="mono">{cell.day}</span>
-            <span className="daily-review-day-mark" aria-hidden="true" />
+            <span className="daily-review-day-marks" aria-hidden="true"><span className="daily-review-day-mark" /></span>
           </button>)}
         </div>
       </div>
       {grid.known && <div className="daily-review-calendar-foot">
         <span className="daily-review-legend" aria-hidden="true">
-          <span><span className="daily-review-day-mark" data-legend="recorded" />기록</span>
+          <span><span className="daily-review-day-mark" data-legend="recorded" />기록 · 높이 = 에너지</span>
           <span><span className="daily-review-day-mark" data-legend="missed" />빈 근무일</span>
         </span>
         {energyDays.length > 1 && <span className="daily-review-energy-trend">

@@ -6,7 +6,8 @@ import { GoalLinks } from '../goal-links';
 import { Button, EmptyState, Skeleton, TextField, TruthBadge } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
 import { isDailyReviewDate } from '@/lib/daily-review';
-import { weekProgress } from '@/lib/daily-review-rhythm';
+import { weekCompare } from '@/lib/daily-review-rhythm';
+import { ReviewWeekStrip } from '../daily-review-cue';
 import { useDailyReviewLauncher } from '../daily-review-provider';
 import { DailyReviewCalendar } from './daily-review-calendar';
 import { energyText, progressLabel } from './daily-review-labels';
@@ -18,15 +19,23 @@ function shortDate(date) {
   return date.slice(5).replace('-', '.');
 }
 
-function WeekLine({ progress }) {
-  if (!progress) return <p>에너지 하나만 남겨도 그날은 기록한 날이에요.</p>;
-  const reached = progress.recorded >= progress.target;
-  return <p className="daily-review-week" aria-label={`이번 주 근무일 ${progress.workdays}일 중 ${progress.recorded}일 기록, 목표 ${progress.target}일`}>
-    {reached && <Iconed name="check" size={13} />}
-    이번 주 <span className="num">{progress.recorded}</span>/{progress.workdays}일 기록
-    <span className="daily-review-week-target">{reached ? ` · 목표 ${progress.target}일 달성` : ` · 목표 ${progress.target}일`}</span>
-    {progress.weekend > 0 && <span className="daily-review-week-target"> · 주말 {progress.weekend}일</span>}
-  </p>;
+// 이번 주 k/5 + 월~금 5칸 + 지난주 한 줄. 지난주보다 적어도 경고하지 않는다 — 방향만 말한다.
+function WeekLine({ compare }) {
+  if (!compare) return <p>에너지 하나만 남겨도 그날은 기록한 날이에요.</p>;
+  const { thisWeek, lastWeek } = compare;
+  const reached = thisWeek.recorded >= thisWeek.target;
+  const energy = thisWeek.energyAvg !== null ? ` · 평균 에너지 ${thisWeek.energyAvg.toFixed(1)}` : '';
+  const last = lastWeek ? `지난주 ${lastWeek.recorded}/${lastWeek.workdays}일${lastWeek.energyAvg !== null ? ` · 에너지 ${lastWeek.energyAvg.toFixed(1)}` : ''}` : '';
+  return <div className="daily-review-weekline">
+    <p className="daily-review-week" aria-label={`이번 주 근무일 ${thisWeek.workdays}일 중 ${thisWeek.recorded}일 기록, 목표 ${thisWeek.target}일${energy}`}>
+      {reached && <Iconed name="check" size={13} />}
+      이번 주 <span className="num">{thisWeek.recorded}</span>/{thisWeek.workdays}일 기록
+      <span className="daily-review-week-target">{reached ? ` · 목표 ${thisWeek.target}일 달성` : ` · 목표 ${thisWeek.target}일`}{energy}</span>
+      {thisWeek.weekend > 0 && <span className="daily-review-week-target"> · 주말 {thisWeek.weekend}일</span>}
+    </p>
+    <ReviewWeekStrip week={thisWeek} />
+    {last && <p className="daily-review-week-last">{last}</p>}
+  </div>;
 }
 
 export function DailyReview() {
@@ -36,7 +45,7 @@ export function DailyReview() {
   const { date, draft, review, entries, recent, todayKey, source, busy, dirty, chooseDate } = model;
   const isToday = date === todayKey;
   const todayRecorded = Array.isArray(recent) && recent.some((entry) => entry.reviewDate === todayKey);
-  const week = source === 'live' ? weekProgress(todayKey, recent) : null;
+  const compare = source === 'live' ? weekCompare(todayKey, recent) : null;
   const consumedDate = React.useRef(null);
   React.useEffect(() => {
     if (isDailyReviewDate(requestedDate) && consumedDate.current !== requestedDate && !busy) {
@@ -58,7 +67,7 @@ export function DailyReview() {
     <header className="daily-review-header">
       <div>
         <h2>하루 리뷰</h2>
-        <WeekLine progress={week} />
+        <WeekLine compare={compare} />
       </div>
       <Button className="daily-review-open" variant="primary" size="md" icon={todayRecorded ? 'edit' : 'plus'} disabled={busy && source !== 'loading'} onClick={() => openReview(todayKey)}>
         {todayRecorded ? '오늘 기록 수정' : '오늘 기록 남기기'}

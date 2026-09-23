@@ -8,7 +8,7 @@ export const REVIEW_EVENING_HOUR = 18; // §5 자동 테마가 다크로 바뀌�
 export const REVIEW_BACKFILL_UNTIL_HOUR = 12; // 어제 메우기 제안은 다음 날 정오까지만.
 export const REVIEW_WORKDAYS_PER_WEEK = 5; // 09-20 §6.2 근무일 = 월~금.
 export const REVIEW_WEEK_TARGET = 4; // Q-DR3 — 4/5로 시작, 실측 뒤 조정.
-export const REVIEW_RECENT_DAYS = 8; // 서버가 싣는 최근 기록 범위(오늘 포함) — 이번 주 + 지난 일요일/어제.
+export const REVIEW_RECENT_DAYS = 14; // 서버가 싣는 최근 기록 범위(오늘 포함) — 이번 주 + 지난주 전체(월요일은 최대 13일 전).
 const FOCUS_TEXT_LIMIT = 500;
 
 export function zonedClock(now = new Date(), timeZone) {
@@ -62,20 +62,39 @@ export function reviewCue({ todayKey, hour, recent }) {
 }
 
 // "이번 주 k/5" — 연속 일수 대신 매주 초기화되는 근무일 기록 수. 주말 기록은 보이되 분모에 넣지 않는다.
+// `days`는 월~금 5칸(오늘·cue의 주간 줄), `energyAvg`는 그 주 기록한 날(주말 포함)의 평균 에너지.
 export function weekProgress(todayKey, recent) {
   if (!isCalendarDateKey(todayKey) || !Array.isArray(recent)) return null;
   const start = weekStartOf(todayKey);
   const recorded = recordedMap(recent);
   let workdays = 0;
   let weekend = 0;
+  const energies = [];
+  const days = [];
   for (let offset = 0; offset < 7; offset += 1) {
     const date = shiftDateKey(start, offset);
-    if (date > todayKey) break;
-    if (!recorded.has(date)) continue;
+    const entry = recorded.get(date);
+    if (offset < REVIEW_WORKDAYS_PER_WEEK) {
+      days.push({ date, state: entry ? "recorded" : date > todayKey ? "future" : date === todayKey ? "today" : "missed" });
+    }
+    if (date > todayKey || !entry) continue;
     if (isWorkday(date)) workdays += 1;
     else weekend += 1;
+    if (Number.isInteger(entry.energy)) energies.push(entry.energy);
   }
-  return { start, recorded: workdays, weekend, target: REVIEW_WEEK_TARGET, workdays: REVIEW_WORKDAYS_PER_WEEK };
+  const energyAvg = energies.length ? Math.round((energies.reduce((sum, value) => sum + value, 0) / energies.length) * 10) / 10 : null;
+  return { start, recorded: workdays, weekend, target: REVIEW_WEEK_TARGET, workdays: REVIEW_WORKDAYS_PER_WEEK, days, energyAvg };
+}
+
+// 이번 주와 지난주(끝난 주 전체). 비교는 벌이 아니라 방향이다 — 줄었다고 경고색을 쓰지 않는다.
+export function weekCompare(todayKey, recent) {
+  const thisWeek = weekProgress(todayKey, recent);
+  if (!thisWeek) return null;
+  const lastSunday = shiftDateKey(thisWeek.start, -1);
+  const range = recentRange(todayKey);
+  // 지난주 월요일까지 읽지 못했으면(범위 밖) 지난주는 모른다고 말한다.
+  const lastWeek = range && weekStartOf(lastSunday) >= range.from ? weekProgress(lastSunday, recent) : null;
+  return { thisWeek, lastWeek };
 }
 
 // 09-20 §6.2: 고른 수 중 같은 날 완료한 수로 진척을 권한다. 값은 권장일 뿐 draft를 바꾸지 않는다.
@@ -120,4 +139,17 @@ export function buildReviewMonth(month, entries, todayKey) {
     recordedCount: cells.filter((cell) => cell.state === "recorded").length,
     energySeries: pastCells.map((cell) => cell.energy),
   };
+}
+
+// 저장 직후 토스트가 말할 "이번 주 k/5" — 상태 갱신을 기다리지 않고 방금 저장한 날을 더해 센다.
+export function weekAfterSave(todayKey, recent, saved) {
+  if (!saved || !isCalendarDateKey(saved.reviewDate)) return weekProgress(todayKey, recent);
+  const merged = [{ reviewDate: saved.reviewDate, energy: saved.energy ?? null }, ...(Array.isArray(recent) ? recent : []).filter((entry) => entry?.reviewDate !== saved.reviewDate)];
+  return weekProgress(todayKey, merged);
+}
+
+export function savedMessage(todayKey, recent, saved) {
+  const week = weekAfterSave(todayKey, recent, saved);
+  if (!week || saved.reviewDate < week.start || saved.reviewDate > todayKey) return '하루 리뷰를 저장했어요.';
+  return `저장했어요 · 이번 주 ${week.recorded}/${week.workdays}일${week.recorded >= week.target ? ' · 목표 달성' : ''}`;
 }
