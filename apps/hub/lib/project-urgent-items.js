@@ -1,4 +1,4 @@
-import { projectItemType, readTaskChecklist } from './task-checklist.js';
+import { readTaskChecklist } from './task-checklist.js';
 
 const seoulDay = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -19,7 +19,7 @@ export function selectUrgentProjectItems(tasks = [], now = new Date()) {
   const today = dayKey(now);
   if (!today) return [];
   return tasks.flatMap(task => {
-    if (task.done || task.status === 'done' || !['subproject', 'milestone'].includes(projectItemType(task))) return [];
+    if (task.done || task.status === 'done') return [];
     const nextCheck = readTaskChecklist(task)
       .filter(item => !item.done)
       .sort((a, b) => (dayKey(a.dueAt) || '9999-12-31').localeCompare(dayKey(b.dueAt) || '9999-12-31'))[0] || null;
@@ -33,5 +33,5 @@ export function selectUrgentProjectItems(tasks = [], now = new Date()) {
       : days === 0 ? '오늘' : blocked ? '막힘' : `${days}일 남음`;
     return [{ taskId: task.id, checkId: nextCheck?.id || null, title: task.title,
       checkTitle: nextCheck?.title || '', dueKey, rank, reason, blocked }];
-  }).sort((a, b) => a.rank - b.rank || (a.dueKey || '9999-12-31').localeCompare(b.dueKey || '9999-12-31') || a.title.localeCompare(b.title));
+  }).sort((a, b) => a.rank - b.rank || (a.dueKey || '9999-12-31').localeCompare(b.dueKey || '9999-12-31') || a.title.localeCompare(b.title) || String(a.taskId).localeCompare(String(b.taskId)));
 }

@@ -17,7 +17,7 @@ export function ProjectTaskDetailDrawer({ draft, editing, projects, onChange, on
     <EditDrawer title={`${itemLabel} ${editing ? '편집' : '만들기'}`} subtitle="상세 내용 · 세부 일정 · 체크리스트"
       presentation={editing ? 'side' : 'compact'} width="min(560px, 94vw)" record={draft} infoLabel="상세 내용"
       fields={[
-        { key: 'title', label: '이름', placeholder: '하위 프로젝트, 마일스톤 또는 작업 이름' },
+        { key: 'title', label: '이름', placeholder: '할 일, 작업 묶음 또는 마일스톤 이름' },
         { key: 'itemType', label: '항목 유형', type: 'select', options: PROJECT_ITEM_OPTIONS },
         { key: 'projectId', label: '프로젝트', type: 'select', options: [{ value: '', label: '미지정' }, ...projects.map(item => ({ value: item.id, label: [item.brandName || item.brandLabel, item.name].filter(Boolean).join(' / ') }))] },
         { key: 'status', row: 'task-state', label: '상태', type: 'select', options: TASK_STATUS_OPTIONS },

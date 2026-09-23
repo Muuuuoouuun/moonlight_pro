@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import { Badge, Button, Checkbox, Drawer, EmptyState, Input, LifecycleBadge } from "../hub-primitives";
+import { Badge, Button, Drawer, Input } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
-import { PROJECT_ITEM_OPTIONS, projectItemType, readTaskChecklist } from '@/lib/task-checklist';
-import { TaskChecklistGauge } from './project-task-checklist';
+import { readTaskChecklist } from '@/lib/task-checklist';
+import { ProjectWorkList } from './project-work-list';
+import workStyles from './project-direct-work.module.css';
 import deliveryStyles from "./project-delivery.module.css";
 import { ProjectDeliverySummary } from "./project-delivery";
 import { BrandMark } from "./project-pms-components";
@@ -18,15 +19,6 @@ const METRIC_FILTERS = [
   { key: "dueSoon", label: "7일 내" },
   { key: "unmeasured", label: "미측정" },
 ];
-
-const STATUS_ORDER = ["doing", "todo", "inbox", "blocked", "done"];
-const STATUS_COPY = {
-  doing: "진행",
-  todo: "대기",
-  inbox: "수집",
-  blocked: "막힘",
-  done: "완료",
-};
 
 function progressValue(project) {
   if (!Number.isFinite(project?.displayProgress?.value) || project?.displayProgress?.partial) return null;
@@ -64,21 +56,7 @@ function formatScheduleDate(value) {
 function formatEvidenceDate(value) {
   const date = dateValue(value);
   if (!date) return null;
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    timeZone: "Asia/Seoul",
-  }).format(date);
-}
-
-function daysUntil(value, now = new Date()) {
-  const due = dateValue(value);
-  if (!due) return null;
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  return Math.ceil((due.getTime() - today.getTime()) / 86_400_000);
+  return new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric', timeZone: 'Asia/Seoul' }).format(date);
 }
 
 function projectRisk(project, window) {
@@ -87,17 +65,6 @@ function projectRisk(project, window) {
   const status = String(project?.statusKey || project?.status || "").toLowerCase();
   if (status === "blocked") return { risky: true, label: "막힘" };
   return { risky: true, label: "기한 지남" };
-}
-
-function taskStatusCounts(tasks) {
-  const counts = new Map(STATUS_ORDER.map((status) => [status, 0]));
-  tasks.forEach((task) => {
-    const status = String(task.status || (task.done ? "done" : "todo")).toLowerCase();
-    counts.set(status, (counts.get(status) || 0) + 1);
-  });
-  return STATUS_ORDER
-    .map((status) => ({ status, count: counts.get(status) || 0 }))
-    .filter((entry) => entry.count > 0);
 }
 
 function PortfolioMetric({ metric, count, active, lowerBound, onSelect }) {
@@ -133,6 +100,7 @@ function computeDDay(dueAt) {
 
 function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, onSelect }) {
   const progress = progressValue(project);
+
   const risk = projectRisk(project, window);
   const dday = project.deadlineAlertSuppressed ? null : computeDDay(project.dueAt);
   return (
@@ -162,32 +130,6 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
         </span>}
       </span>
     </button>
-  );
-}
-
-function PortfolioAccordion({ id, icon, label, count, summary, open, onToggle, children }) {
-  return (
-    <section className="hub-project-portfolio-accordion" data-open={open ? "true" : "false"}>
-      <button
-        type="button"
-        className="hub-project-portfolio-accordion__trigger hub-row"
-        aria-expanded={open}
-        aria-controls={`portfolio-panel-${id}`}
-        onClick={onToggle}
-      >
-        <Iconed name="chevronD" size={14} />
-        <Iconed name={icon} size={19} />
-        <strong>{label}</strong>
-        <span className="mono">{count}</span>
-        <span className="hub-project-portfolio-accordion__summary">{summary}</span>
-        <Iconed name="chevronR" size={15} />
-      </button>
-      {open && (
-        <div id={`portfolio-panel-${id}`} className="hub-project-portfolio-accordion__panel">
-          {children}
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -233,7 +175,9 @@ export function ProjectPortfolioWorkspace({
   onCreateProject,
   onManageDelivery,
   onCreateContent,
-  onCreateTodo,
+  onQuickCreateTodo,
+  onAddChecklistItem,
+  canWriteTasks,
   onEditTodo,
   onToggleTodo,
   onToggleChecklist,
@@ -250,41 +194,23 @@ export function ProjectPortfolioWorkspace({
   createSurface = null,
 }) {
   const [focusProjectId, setFocusProjectId] = React.useState(null);
-  const [showDeliveryPlan, setShowDeliveryPlan] = React.useState(false);
   const [showFilterPicker, setShowFilterPicker] = React.useState(false);
-  const [checkFeedback, setCheckFeedback] = React.useState(null);
   const [showMobilePicker, setShowMobilePicker] = React.useState(false);
   const [showMonthlyPreview, setShowMonthlyPreview] = React.useState(false);
-  const itemsRef = React.useRef(null);
+  const workListRef = React.useRef(null);
+  const [workDrafts, setWorkDrafts] = React.useState({});
+  const workDraftsRef = React.useRef({});
   const focusedEntryRef = React.useRef(null);
-  const [openSections, setOpenSections] = React.useState({
-    items: true,
-  });
   const window = React.useMemo(() => portfolioWindow(), []);
   const selectedProject = selectedProjectRecord || projects.find((project) => project.id === selectedProjectId);
   const locallyFocused = projects.find((project) => project.id === focusProjectId);
   const project = locallyFocused || selectedProject || (!selectedProjectId ? projects[0] : null) || null;
   const missingSelection = Boolean(selectedProjectId && !selectedProject && !locallyFocused && sourceState !== 'loading');
   React.useEffect(() => setFocusProjectId(null), [selectedProjectId]);
-  React.useEffect(() => setCheckFeedback(null), [project?.id]);
-  React.useEffect(() => setShowDeliveryPlan(false), [project?.id]);
   const projectTasks = project ? (todosByProject.get(project.id) || []) : [];
   const urgentItems = React.useMemo(() => selectUrgentProjectItems(projectTasks), [projectTasks]);
   const monthlyPreview = React.useMemo(() => buildCurrentMonthProjectPreview(reviewProjects), [reviewProjects]);
-  const focusTask = React.useCallback((taskId, checkId = null) => {
-    setOpenSections(previous => previous.items ? previous : { ...previous, items: true });
-    requestAnimationFrame(() => {
-      const row = [...(itemsRef.current?.querySelectorAll('[data-task-id]') || [])]
-        .find(element => element.dataset.taskId === taskId);
-      if (!row) return;
-      row.open = true;
-      const target = checkId
-        ? [...row.querySelectorAll('[data-check-id]')].find(element => element.dataset.checkId === checkId) || row
-        : row;
-      target.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
-      ((checkId ? target.querySelector('.hub-checkbox') : null) || row.querySelector('summary'))?.focus({ preventScroll: true });
-    });
-  }, []);
+  const focusTask = React.useCallback((taskId, checkId = null) => workListRef.current?.focusTask(taskId, checkId), []);
   React.useEffect(() => {
     if (!project?.id || !focusTaskId || !projectTasks.some(task => task.id === focusTaskId)) return;
     const key = `${project.id}:${focusTaskId}:${focusCheckId || ''}`;
@@ -293,7 +219,6 @@ export function ProjectPortfolioWorkspace({
     focusTask(focusTaskId, focusCheckId);
   }, [project?.id, projectTasks, focusTaskId, focusCheckId, focusTask]);
   const openTasks = projectTasks.filter((task) => !task.done);
-  const doneTasks = projectTasks.filter((task) => task.done);
   const datedTasks = projectTasks.flatMap(task => [
     ...(task.dueAt ? [{ ...task, scheduleKey: task.id, parentTask: task }] : []),
     ...readTaskChecklist(task).filter(item => item.dueAt).map(item => ({
@@ -315,38 +240,21 @@ export function ProjectPortfolioWorkspace({
     return aDue - bDue;
   })[0] || null;
   const progress = progressValue(project);
+  const taskProgress = progress !== null && project?.displayProgress?.source === 'tasks';
+  const reportedProgress = progress !== null && project?.displayProgress?.source === 'reported';
+  const latestTaskRecord = taskProgress ? projectTasks.reduce((latest, task) => {
+    const recorded = dateValue(task.updatedAt);
+    return recorded && (!latest || recorded > latest) ? recorded : latest;
+  }, null) : null;
+  const evidenceDate = formatEvidenceDate(taskProgress ? latestTaskRecord : reportedProgress && Number.isFinite(project.latestUpdate?.progress) ? project.latestUpdate.happenedAt : null);
+  const evidenceDetail = taskProgress ? `항목 ${project.displayProgress.done}/${project.displayProgress.total} 완료`
+    : reportedProgress ? project.displayProgress.label : '진척 미측정';
+  const evidenceTime = progress === null ? null : evidenceDate ? `${taskProgress ? '최근 항목 기록' : '보고 기록'} ${evidenceDate}` : '기록 시점 미확인';
   const risk = project ? projectRisk(project, window) : { risky: false, label: "위험 없음" };
-  const dueDays = project && !project.deadlineAlertSuppressed ? daysUntil(project.dueAt) : null;
   const dday = project && !project.deadlineAlertSuppressed ? computeDDay(project.dueAt) : null;
   const brand = project
     ? (brandByKey.get(project.brand) || brands[0] || null)
     : null;
-  const taskStatuses = taskStatusCounts(projectTasks);
-  const progressSource = project?.displayProgress?.source;
-  const isTaskProgress = progress !== null && progressSource === "tasks";
-  const isReportedProgress = progress !== null && progressSource === "reported";
-  const hasUpdateProgress = isReportedProgress && Number.isFinite(project.latestUpdate?.progress);
-  const latestTaskRecord = isTaskProgress
-    ? projectTasks.reduce((latest, task) => {
-        const recorded = dateValue(task.updatedAt);
-        return recorded && (!latest || recorded > latest) ? recorded : latest;
-      }, null)
-    : null;
-  const reportRecordedAt = hasUpdateProgress ? project.latestUpdate.happenedAt : null;
-  const evidenceSource = isTaskProgress ? "하위 항목 기준" : isReportedProgress ? "보고된 진척" : "진척 근거";
-  const evidenceDetail = isTaskProgress
-    ? `${project.displayProgress.done}/${project.displayProgress.total} 완료`
-    : isReportedProgress
-      ? hasUpdateProgress ? "최근 업데이트" : "프로젝트 기록"
-      : project?.displayProgress?.partial ? "일부 확인 불가" : "계산할 항목 없음";
-  const evidenceRecordedAt = isTaskProgress
-    ? formatEvidenceDate(latestTaskRecord)
-    : isReportedProgress ? formatEvidenceDate(reportRecordedAt) : null;
-  const evidenceTime = isTaskProgress
-    ? evidenceRecordedAt ? `최근 항목 기록 ${evidenceRecordedAt}` : "항목 기록 시점 미확인"
-    : isReportedProgress
-      ? evidenceRecordedAt ? `${evidenceRecordedAt} 기록` : "기록 시점 미확인"
-      : null;
   const metrics = React.useMemo(() => {
     const counts = { active: 0, blockedOrOverdue: 0, dueSoon: 0, unmeasured: 0 };
     portfolioProjects.forEach((item) => {
@@ -361,7 +269,6 @@ export function ProjectPortfolioWorkspace({
     setShowMobilePicker(false);
     onSelectProject?.(projectId);
   };
-  const toggleSection = (section) => setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   const nextAction = project?.displayNextAction || project?.projectNextAction || nextTask?.title;
   const actionTask = nextAction ? openTasks.find(task => task.title.trim() === nextAction.trim()) : null;
   const nextActionSource = actionTask ? '연결된 할 일' : nextAction ? (project?.projectNextAction === nextAction ? '프로젝트 기록' : '최근 업데이트') : '미정';
@@ -369,7 +276,7 @@ export function ProjectPortfolioWorkspace({
 
   return (
     <div
-      className="hub-project-portfolio-workspace"
+      className={`hub-project-portfolio-workspace ${workStyles.workspace}`}
       data-detail-open={openDetailId ? "true" : "false"}
       data-create-open={createSurface ? "true" : "false"}
       data-mobile-picker={showMobilePicker ? "true" : "false"}
@@ -480,22 +387,17 @@ export function ProjectPortfolioWorkspace({
                 )}
               </div>
               <div className="hub-project-portfolio-stage__actions">
-                <Button variant="outline" size="sm" className="hub-project-portfolio-mobile-picker" onClick={() => setShowMobilePicker(true)}>프로젝트 바꾸기</Button>
-                <Button variant="outline" size="sm" icon="calendar" className="hub-project-portfolio-mobile-review" onClick={() => setShowMonthlyPreview(true)}>이번 달 평가</Button>
-                <details className="hub-project-portfolio-mobile-manage">
-                  <summary>관리 <Iconed name="chevronD" size={12} /></summary>
+                <span className={workStyles.mobileOnly}><Button variant="outline" size="sm" onClick={() => setShowMobilePicker(true)}>프로젝트 바꾸기</Button></span>
+                {project && <Button variant="outline" size="sm" icon="pencil" onClick={() => onEditProject?.(project)}>편집</Button>}
+                <details className={workStyles.manage}>
+                  <summary aria-label="프로젝트 관리">관리 <Iconed name="chevronD" size={12} /></summary>
                   <div>
-                    {project && <button type="button" onClick={() => onEditProject?.(project)}>프로젝트 편집</button>}
-                    {project && project.statusKey !== "archived" && <button type="button" onClick={() => onRemoveProject?.(project)}>프로젝트 보관</button>}
+                    <button type="button" onClick={() => setShowMonthlyPreview(true)}>이번 달 평가</button>
                     {onSwitchView && <button type="button" onClick={() => onSwitchView("table")}>전체 목록 보기</button>}
+                    {project && <button type="button" onClick={() => onManageDelivery?.(project)}>결과·완료 기준</button>}
+                    {project && project.statusKey !== "archived" && <button type="button" onClick={() => onRemoveProject?.(project)}>프로젝트 보관</button>}
                   </div>
                 </details>
-                <div className="hub-project-portfolio-desktop-actions">
-                  <Button variant="outline" size="sm" icon="calendar" onClick={() => setShowMonthlyPreview(true)}>이번 달 평가</Button>
-                  {project && <Button variant="outline" size="sm" icon="pencil" onClick={() => onEditProject?.(project)}>편집</Button>}
-                  {project && project.statusKey !== "archived" && <Button variant="ghost" size="sm" onClick={() => onRemoveProject?.(project)}>보관</Button>}
-                  {onSwitchView && <Button variant="outline" size="sm" onClick={() => onSwitchView("table")}>전체 목록 보기 →</Button>}
-                </div>
               </div>
             </div>
             <div className="hub-project-portfolio-stage__filter">
@@ -563,84 +465,31 @@ export function ProjectPortfolioWorkspace({
 
           {project ? (
             <>
-              <section className="hub-project-portfolio-hero">
-                <div className="hub-project-portfolio-hero__project">
-                  <div className="hub-project-portfolio-hero__value stat">
-                    {progress === null ? <span className="is-empty">—</span> : <>{progress}<small>%</small></>}
-                  </div>
-                  <div className="hub-project-portfolio-hero__identity">
-                    <span>{brand?.name || "프로젝트"}</span>
-                    <h2>프로젝트 진척</h2>
-                    <span className="hub-project-portfolio-hero__due">
-                      <Iconed name="calendar" size={14} />{formatLongDate(project.dueAt)}
-                      {dday && <Badge tone={dday.tone} size="xs">{dday.text}</Badge>}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="hub-project-portfolio-hero__action">
+              <section className={workStyles.overview} aria-label="프로젝트 실행 요약">
+                <div className={workStyles.nextAction}>
                   <span>다음 행동 · {nextActionSource}</span>
-                  <h3 style={{ fontSize: 15, margin: "4px 0 6px" }}>{nextAction || "다음 행동을 정해 주세요"}</h3>
-                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                    <Button variant="primary" size="sm" onClick={() => actionTask ? onEditTodo(actionTask) : nextAction ? onCreateTodo(project.id, 'todo', nextAction.length <= 200 ? { title: nextAction } : { description: nextAction }) : onEditProject?.(project)}>
-                      {actionTask ? "할 일 열기" : nextAction ? "할 일로 만들기" : "다음 행동 입력"} <Iconed name="arrowRight" size={14} />
-                    </Button>
-                  </div>
+                  <strong>{nextAction || '첫 할 일을 적고 바로 시작하세요'}</strong>
+                  <Button variant="outline" size="sm" icon="arrowRight" onClick={() => actionTask ? focusTask(actionTask.id) : workListRef.current?.focusNewTask(nextAction || '')}>
+                    {actionTask ? '목록에서 보기' : nextAction ? '할 일로 추가' : '할 일 추가'}
+                  </Button>
                 </div>
-
-                <div className="hub-project-portfolio-evidence">
-                  <div className="hub-project-portfolio-evidence__measure">
-                    <div className="hub-project-portfolio-evidence__heading">
-                      <div className="hub-project-portfolio-evidence__source">
-                        <span>{evidenceSource}</span>
-                        <strong>{evidenceDetail}</strong>
-                      </div>
-                      {evidenceTime && <span className="hub-project-portfolio-evidence__time">{evidenceTime}</span>}
-                    </div>
-                    {progress === null ? (
-                      <p className="hub-project-portfolio-evidence__empty">
-                        <span aria-hidden="true"><Iconed name="signal" size={14} /></span>
-                        {project.displayProgress?.partial
-                          ? "하위 항목 또는 업데이트를 다시 읽어야 진척을 계산할 수 있습니다."
-                          : "하위 항목과 보고값이 없어 진척을 표시할 수 없습니다."}
-                      </p>
-                    ) : (
-                      <>
-                        <div
-                          className="hub-project-portfolio-evidence__track"
-                          role="progressbar"
-                          aria-label={`${project.name} 진척`}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-valuenow={progress}
-                          aria-valuetext={`${progress}% · ${evidenceSource} · ${evidenceDetail}${evidenceTime ? ` · ${evidenceTime}` : ""}`}
-                        >
-                          <span className="hub-project-portfolio-evidence__fill" style={{ width: `${progress}%` }} />
-                        </div>
-                        {progress === 100 && project.statusKey !== "completed" && (
-                          <p className="hub-project-portfolio-evidence__note">프로젝트 완료는 결과물 검증 후</p>
-                        )}
-                        {project.displayProgress?.evidencePartial && (
-                          <p className="hub-project-portfolio-evidence__note">업데이트 기록 일부 확인 불가</p>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <div className="hub-project-portfolio-evidence__context">
-                    <span>
-                      <small>기한</small>
-                      <strong className="mono">{project.deadlineAlertSuppressed ? "이전 기한 · 알림 해제" : dueDays === null ? "미정" : dueDays < 0 ? `${Math.abs(dueDays)}일 지남` : dueDays === 0 ? "오늘 마감" : `마감 ${dueDays}일`}</strong>
-                    </span>
-                    <span data-risk={risk.risky ? "true" : "false"}>
-                      <small>위험</small>
-                      <strong><span aria-hidden="true"><Iconed name={risk.risky ? "flag" : "clock"} size={12} /></span>{risk.label}</strong>
-                    </span>
-                  </div>
+                <div className={workStyles.progressSummary}>
+                  <div><strong className="stat">{progress === null ? '—' : <>{progress}<small>%</small></>}</strong><span>{evidenceDetail}</span></div>
+                  {progress !== null && <div className={workStyles.progressTrack} role="progressbar" aria-label="프로젝트 진척" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={`${progress}% · ${evidenceDetail} · ${evidenceTime}`}>
+                    <span style={{ width: `${progress}%` }} />
+                    {[25, 50, 75].map(value => <i key={value} style={{ left: `${value}%` }} />)}
+                  </div>}
+                  {evidenceTime && <span className={workStyles.progressMeta}>{evidenceTime}</span>}
+                  <span className={workStyles.progressMeta}><Iconed name="calendar" size={12} />{formatLongDate(project.dueAt)}{dday && <Badge tone={dday.tone} size="xs">{dday.text}</Badge>}{risk.risky && <span className={workStyles.risk}>{risk.label}</span>}</span>
+                  {project.displayProgress?.partial && <span className={workStyles.progressMeta}>진척 근거를 일부 읽지 못했습니다.</span>}
+                  {project.displayProgress?.evidencePartial && <span className={workStyles.progressMeta}>업데이트 기록 일부 확인 불가</span>}
+                  {progress === null && !project.displayProgress?.partial && <span className={workStyles.progressMeta}>할 일이나 보고값을 추가하면 진척을 표시합니다.</span>}
+                  {progress === 100 && project.statusKey !== 'completed' && <span className={workStyles.progressMeta}>프로젝트 완료는 결과물 검증 후</span>}
                 </div>
               </section>
 
               {urgentItems.length > 0 && (
-                <section className="hub-project-portfolio-urgent" aria-label="먼저 처리할 하위 항목">
+                <section className="hub-project-portfolio-urgent" aria-label="먼저 처리할 할 일">
                   <div className="hub-project-portfolio-urgent__heading"><strong>먼저 처리</strong><span className="num">{urgentItems.length}</span></div>
                   <div className="hub-project-portfolio-urgent__list">
                     {urgentItems.slice(0, 3).map(item => (
@@ -656,114 +505,14 @@ export function ProjectPortfolioWorkspace({
                 </section>
               )}
 
-              <div className="hub-project-delivery-compact-bar" style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "8px 14px", background: "var(--surface-2)", border: "1px solid var(--line-soft)",
-                borderRadius: "var(--r-sm)", fontSize: 12, gap: 12,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <Iconed name="flag" size={14} style={{ color: "var(--moon-300)", flexShrink: 0 }} />
-                  <span style={{ color: "var(--fg-faint)", flexShrink: 0 }}>결과물</span>
-                  <strong style={{ fontWeight: 500, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {project.delivery?.deliverable || "계획 필요"}
-                  </strong>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  <Button variant="ghost" size="xs" onClick={() => setShowDeliveryPlan(v => !v)}>
-                    {showDeliveryPlan ? "계획 접기 ▲" : "계획 상세 ▼"}
-                  </Button>
-                  <Button variant="outline" size="xs" onClick={() => onManageDelivery?.(project)}>
-                    계획·검증
-                  </Button>
-                </div>
-              </div>
-              {showDeliveryPlan && <ProjectDeliverySummary project={project} onManage={onManageDelivery} compact />}
+              <ProjectWorkList ref={workListRef} projectId={project.id} tasks={projectTasks}
+                draftStore={{ drafts: workDrafts, setDrafts: setWorkDrafts, draftsRef: workDraftsRef }}
+                canWrite={canWriteTasks && project.statusKey !== 'archived'} pendingIds={pendingTodoIds}
+                onCreate={onQuickCreateTodo} onAddChecklist={onAddChecklistItem}
+                onToggleTask={onToggleTodo} onToggleChecklist={onToggleChecklist} onEdit={onEditTodo} />
 
-              <div className="hub-project-portfolio-accordions">
-                <PortfolioAccordion
-                  id="items"
-                  icon="folder"
-                  label="하위 프로젝트 · 마일스톤"
-                  count={projectTasks.length}
-                  summary={(
-                    <span className="hub-project-portfolio-visual-summary">
-                      <span className="hub-project-portfolio-mini-bars" aria-hidden="true">
-                        {(taskStatuses.length ? taskStatuses : [{ status: "empty", count: 0 }]).slice(0, 4).map((entry) => (
-                          <i key={entry.status} data-status={entry.status} style={{ width: `${Math.max(18, (entry.count / Math.max(1, projectTasks.length)) * 100)}%` }} />
-                        ))}
-                      </span>
-                      <em>{[
-                        taskStatuses.length ? taskStatuses.map((entry) => `${STATUS_COPY[entry.status] || entry.status} ${entry.count}`).join(" · ") : "등록된 항목 없음",
-                        scheduleCount ? `일정 ${scheduleCount}` : null,
-                      ].filter(Boolean).join(" · ")}</em>
-                    </span>
-                  )}
-                  open={Boolean(openSections.items)}
-                  onToggle={() => toggleSection("items")}
-                >
-                  <div className="hub-project-portfolio-items" ref={itemsRef}>
-                    {projectTasks.map(task => {
-                      const type = projectItemType(task);
-                      const checks = readTaskChecklist(task);
-                      const label = type === 'task' ? '하위 항목' : PROJECT_ITEM_OPTIONS.find(option => option.value === type).label;
-                      return (
-                        <details key={`${project.id}-${task.id}`} className="hub-project-portfolio-item" data-task-id={task.id}>
-                          <summary className="hub-row" tabIndex={0}>
-                            <Iconed name="chevronR" size={14} />
-                            <Iconed name={type === 'milestone' ? 'flag' : 'folder'} size={16} />
-                            <span className="hub-project-portfolio-item__title"><small>{label} · {STATUS_COPY[task.status] || (task.done ? "완료" : "대기")}</small><strong>{task.title}</strong></span>
-                            <span className="hub-project-portfolio-item__progress"><TaskChecklistGauge task={task} emptyLabel="세부 항목 없음" /></span>
-                            <span className="mono">{formatScheduleDate(task.dueAt)}</span>
-                          </summary>
-                          <div className="hub-project-portfolio-item__body">
-                            <div className="hub-project-portfolio-item__toolbar">
-                              <Checkbox checked={task.done} onChange={(_next, e) => onToggleTodo(task.id, e)} disabled={pendingTodoIds.has(task.id)} label={`${task.done ? '다시 열기' : '완료'}: ${task.title}`} />
-                              <LifecycleBadge label={STATUS_COPY[task.status] || (task.done ? '완료' : '대기')} state={task.done ? 'done' : task.status === 'doing' ? 'active' : task.status === 'blocked' ? 'blocked' : 'queued'} />
-                              <Button variant="outline" size="sm" icon="edit" onClick={() => onEditTodo(task)}>상세·일정 편집</Button>
-                            </div>
-                            {task.description && <p className="hub-project-portfolio-item__description">{task.description}</p>}
-                            {task.nextAction && <p>다음 행동 · {task.nextAction}</p>}
-                            <div className="hub-project-portfolio-item__checks">
-                              {checks.map(item => (
-                                <div key={item.id} data-done={item.done} data-check-id={item.id}>
-                                  <Checkbox
-                                    checked={item.done}
-                                    disabled={pendingTodoIds.has(task.id) || (checkFeedback?.taskId === task.id && checkFeedback.status === 'saving')}
-                                    size={16}
-                                    label={`${item.title} ${item.done ? '다시 열기' : '완료'}`}
-                                    onChange={async () => {
-                                      setCheckFeedback({ taskId: task.id, checkId: item.id, status: 'saving' });
-                                      try {
-                                        const result = await onToggleChecklist?.(task.id, item.id);
-                                        setCheckFeedback({ taskId: task.id, checkId: item.id, status: result?.ok ? 'saved' : 'error', message: result?.message });
-                                      } catch {
-                                        setCheckFeedback({ taskId: task.id, checkId: item.id, status: 'error', message: '저장 결과를 확인하지 못했습니다.' });
-                                      }
-                                    }}
-                                  />
-                                  <span>
-                                    <strong>{item.title}</strong>{item.note && <p>{item.note}</p>}
-                                    {checkFeedback?.taskId === task.id && checkFeedback?.checkId === item.id && (
-                                      <small role={checkFeedback.status === 'error' ? 'alert' : 'status'}>
-                                        {checkFeedback.status === 'saving' ? '저장 중…' : checkFeedback.status === 'saved' ? '저장됨' : checkFeedback.message || '저장 실패 · 다시 시도해 주세요.'}
-                                      </small>
-                                    )}
-                                  </span>
-                                  <span className="mono">{formatScheduleDate(item.dueAt)}</span>
-                                </div>
-                              ))}
-                              {!checks.length && <p>세부 일정과 체크리스트를 추가해 진행 과정을 정리하세요.</p>}
-                            </div>
-                          </div>
-                        </details>
-                      );
-                    })}
-                    {!projectTasks.length && <EmptyState icon="folder" title="하위 프로젝트·마일스톤을 추가하세요" description="각 항목 안에 일정, 상세 내용, 체크리스트를 정리할 수 있습니다." />}
-                  </div>
-                  <div className="hub-project-portfolio-item__actions">
-                    <Button variant="ghost" size="sm" icon="plus" onClick={() => onCreateTodo(project.id, 'todo', { itemType: 'subproject' })}>하위 프로젝트 추가</Button>
-                    <Button variant="ghost" size="sm" icon="flag" onClick={() => onCreateTodo(project.id, 'todo', { itemType: 'milestone' })}>마일스톤 추가</Button>
-                  </div>
+              <ProjectDeliverySummary project={project} onManage={onManageDelivery} compact />
+              <section className={workStyles.support} aria-label="프로젝트 참고 정보">
                   {scheduleCount > 0 && (
                     <details className="hub-project-portfolio-support">
                       <summary className="hub-row"><Iconed name="calendar" size={14} /><strong>일정 {scheduleCount}</strong><span>{nextSchedule ? `${formatScheduleDate(nextSchedule.dueAt)} · ${nextSchedule.title}` : ""}</span><Iconed name="chevronD" size={14} /></summary>
@@ -787,8 +536,7 @@ export function ProjectPortfolioWorkspace({
                       </div>
                     </details>
                   )}
-                </PortfolioAccordion>
-              </div>
+              </section>
             </>
           ) : (
             <div className="hub-project-portfolio-stage__empty">
