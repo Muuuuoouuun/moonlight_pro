@@ -1,0 +1,135 @@
+/* 리듬 기록 — rhythm-history.jsx.
+ * 한 가지 명도 램프만 쓴다: --fg를 --surface-2에 섞은 5단계(srgb 혼합 — oklch 혼합은 무채색
+ * 끝점 사이에서 색상각이 흔들려 라이트 테마에서 따뜻한 회색으로 보였다)(§5.3 charts — Moonstone luminance,
+ * hue 없음). 오늘 칸은 1px --line-strong 링, 미래 칸은 점선 빈 칸. 모든 칸은 텍스트 이름을 가진다. */
+
+.hub-app .hub-rh { display: flex; flex-direction: column; gap: 16px; }
+.hub-app .hub-rh__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.hub-app .hub-rh__title { margin: 4px 0 0; font-size: 17px; font-weight: 600; color: var(--fg); }
+.hub-app .hub-rh__nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hub-app .hub-rh__period { min-width: 140px; text-align: center; font-size: 14px; font-weight: 500; color: var(--fg); }
+.hub-app .hub-rh__alert {
+  display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-sm);
+  font-size: 12px; color: var(--danger);
+}
+.hub-app .hub-rh__alert > span { flex: 1; }
+.hub-app .hub-rh__body { display: flex; flex-direction: column; gap: 20px; transition: opacity var(--dur-enter) var(--ease-hub); }
+.hub-app .hub-rh__body[data-refreshing="true"] .hub-rh-cell,
+.hub-app .hub-rh__body[data-refreshing="true"] .hub-rh-mark { cursor: progress; }
+.hub-app .hub-rh-muted { font-size: 12px; color: var(--fg-muted); }
+
+/* 요약 4칸 */
+.hub-app .hub-rh__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.hub-app .hub-rh__stat {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+  padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: var(--r);
+}
+.hub-app .hub-rh__stat-value { font-size: 26px; font-weight: 500; color: var(--fg); }
+.hub-app .hub-rh__stat-name { font-size: 15px; font-weight: 600; color: var(--fg); min-height: 34px; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .hub-rh__unit { font-size: 13px; color: var(--fg-dim); margin-left: 2px; }
+
+/* 명도 램프 */
+.hub-app .hub-rh-cell {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  transition: background var(--dur-enter) var(--ease-hub);
+}
+.hub-app .hub-rh-cell[data-level="1"] { background: color-mix(in srgb, var(--fg) 18%, var(--surface-2)); }
+.hub-app .hub-rh-cell[data-level="2"] { background: color-mix(in srgb, var(--fg) 38%, var(--surface-2)); }
+.hub-app .hub-rh-cell[data-level="3"] { background: color-mix(in srgb, var(--fg) 62%, var(--surface-2)); }
+.hub-app .hub-rh-cell[data-level="4"] { background: var(--fg); border-color: var(--fg); }
+.hub-app .hub-rh-cell[data-future="true"] { background: transparent; border-style: dashed; }
+.hub-app .hub-rh-cell[data-today="true"] { outline: 1px solid var(--line-strong); outline-offset: 1px; }
+.hub-app .hub-rh-cell--void { background: transparent; border-color: transparent; }
+.hub-app .hub-rh-cell--legend { width: 12px; height: 12px; }
+
+.hub-app .hub-rh-legend { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--fg-dim); }
+.hub-app .hub-rh-legend > span:first-child { margin-right: 4px; }
+.hub-app .hub-rh-legend > span:last-child { margin-left: 4px; }
+
+/* 주: 루틴 × 7일 */
+.hub-app .hub-rh-week { display: flex; flex-direction: column; gap: 6px; }
+.hub-app .hub-rh-week__row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(7, 36px); align-items: center; gap: 6px; }
+.hub-app .hub-rh-week__day { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--fg-dim); }
+.hub-app .hub-rh-week__day .mono { font-size: 12px; color: var(--fg-muted); }
+.hub-app .hub-rh-week__day[data-today="true"],
+.hub-app .hub-rh-week__day[data-today="true"] .mono { color: var(--fg); font-weight: 600; }
+.hub-app .hub-rh-week__name { font-size: 13px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .hub-rh-mark {
+  width: 36px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm); border: 1px solid var(--line-soft); background: var(--surface-2);
+}
+.hub-app .hub-rh-mark[data-on="true"] { background: var(--fg); border-color: var(--fg); }
+.hub-app .hub-rh-mark[data-future="true"] { background: transparent; border-style: dashed; }
+.hub-app .hub-rh-mark svg path { stroke: var(--bg); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 월: 달력 */
+.hub-app .hub-rh-month { display: flex; flex-direction: column; gap: 6px; max-width: 520px; }
+.hub-app .hub-rh-month__head,
+.hub-app .hub-rh-month__week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.hub-app .hub-rh-month__head span { text-align: center; font-size: 11px; color: var(--fg-dim); }
+.hub-app .hub-rh-cell--day { height: 44px; align-items: flex-start; justify-content: flex-start; padding: 4px 6px; }
+.hub-app .hub-rh-cell--day .mono { font-size: 12px; color: var(--fg-muted); }
+.hub-app .hub-rh-cell--day[data-level="3"] .mono,
+.hub-app .hub-rh-cell--day[data-level="4"] .mono { color: var(--bg); }
+
+/* 분기·연: 잔디 격자 */
+.hub-app .hub-rh-scroll { position: relative; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+.hub-app .hub-rh-grid { --rh-gap: 3px; display: inline-flex; flex-direction: column; gap: 4px; }
+.hub-app .hub-rh-grid__months,
+.hub-app .hub-rh-grid__body { display: flex; gap: var(--rh-gap); }
+.hub-app .hub-rh-grid__months > span {
+  width: var(--rh-cell); flex-shrink: 0; overflow: visible; white-space: nowrap;
+  font-size: 10.5px; color: var(--fg-dim);
+}
+.hub-app .hub-rh-grid__months > span:first-child,
+.hub-app .hub-rh-grid__weekdays { width: 18px; flex-shrink: 0; }
+.hub-app .hub-rh-grid__weekdays { display: flex; flex-direction: column; gap: var(--rh-gap); }
+.hub-app .hub-rh-grid__weekdays > span { height: var(--rh-cell); line-height: var(--rh-cell); font-size: 10.5px; color: var(--fg-dim); }
+.hub-app .hub-rh-grid__col { display: flex; flex-direction: column; gap: var(--rh-gap); }
+.hub-app .hub-rh-grid__col .hub-rh-cell { width: var(--rh-cell); height: var(--rh-cell); border-radius: 3px; }
+
+/* 월별 막대 */
+.hub-app .hub-rh-months { display: flex; align-items: flex-end; gap: 8px; }
+.hub-app .hub-rh-months__item { flex: 1; min-width: 0; max-width: 72px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.hub-app .hub-rh-months__bar {
+  width: 100%; max-width: 40px; height: 56px; display: flex; align-items: flex-end;
+  border-radius: var(--r-xs); background: var(--surface-2); overflow: hidden;
+}
+.hub-app .hub-rh-months__bar > span { width: 100%; background: var(--fg-muted); border-radius: var(--r-xs) var(--r-xs) 0 0; transition: height var(--dur-enter) var(--ease-hub); }
+.hub-app .hub-rh-months__item[data-future="true"] .hub-rh-months__bar { background: transparent; border: 1px dashed var(--line-soft); }
+.hub-app .hub-rh-months__label { font-size: 11px; color: var(--fg-dim); }
+.hub-app .hub-rh-months__value { font-size: 12px; color: var(--fg-muted); }
+
+/* 루틴별 달성 */
+.hub-app .hub-rh-rates { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hub-app .hub-rh-rates__row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(80px, 200px) 72px; align-items: center; gap: 12px;
+  padding: 10px 0; border-top: 1px solid var(--line-soft);
+}
+.hub-app .hub-rh-rates__text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hub-app .hub-rh-rates__name { font-size: 14px; font-weight: 500; color: var(--fg); }
+.hub-app .hub-rh-rates__bar { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.hub-app .hub-rh-rates__bar > span { display: block; height: 100%; border-radius: inherit; background: var(--fg-muted); transition: width var(--dur-enter) var(--ease-hub); }
+.hub-app .hub-rh-rates__value { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 14px; color: var(--fg); }
+
+@media (max-width: 640px) {
+  .hub-app .hub-rh__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-app .hub-rh__stat-value { font-size: 22px; }
+  .hub-app .hub-rh-week__row { grid-template-columns: minmax(0, 1fr) repeat(7, 28px); gap: 4px; }
+  .hub-app .hub-rh-mark { width: 28px; height: 28px; }
+  .hub-app .hub-rh-rates__row { grid-template-columns: minmax(0, 1fr) 56px; }
+  .hub-app .hub-rh-rates__bar { grid-column: 1 / -1; grid-row: 2; }
+  .hub-app .hub-rh-months { gap: 4px; }
+  .hub-app .hub-rh-months__value { font-size: 10.5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-rh__body,
+  .hub-app .hub-rh-cell,
+  .hub-app .hub-rh-months__bar > span,
+  .hub-app .hub-rh-rates__bar > span { transition: none !important; }
+}

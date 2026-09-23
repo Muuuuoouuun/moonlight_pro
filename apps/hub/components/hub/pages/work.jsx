@@ -7,7 +7,8 @@ import { Iconed } from "../hub-icons";
 import { topNavigationForRoute } from "../hub-nav";
 import { Badge, Card, IconButton, Button, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge, Drawer, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
-import { RhythmToday, RhythmWeekGrid } from "../rhythm-today";
+import { RhythmToday } from "../rhythm-today";
+import { RhythmHistory } from "../rhythm-history";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
 import {
@@ -1542,7 +1543,6 @@ export function Rhythm() {
   const today = buildTodayRhythm(savedRituals, { overrides: todayOverrides });
   const dayLabels = React.useMemo(() => recentDayLabels(), []);
   const recentWeek = summarizeRecentWeek(today.groups.flatMap((g) => g.items));
-  const weekItems = today.groups.flatMap((g) => g.items);
 
   // 하루 링이 닫히는 순간 — 이 세션에서 직접 체크해 완주했을 때만 1회 연출한다(첫 로드 제외).
   const prevAllDoneRef = React.useRef(today.allDone);
@@ -1708,7 +1708,11 @@ export function Rhythm() {
         />
       )}
 
-      <RhythmWeekGrid items={weekItems} dayLabels={dayLabels} />
+      {/* 리듬 기록 — 주·월·분기·연. version은 서버 기록이 바뀔 때(체크 후 다시 읽기)만 달라진다. */}
+      <RhythmHistory
+        projectId={selectedProjectId}
+        version={rituals.map((r) => `${r.id}:${(r.weeks || []).join('')}`).join('|')}
+      />
 
       {editingRitual && (
         <EditDrawer
