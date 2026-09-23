@@ -53,6 +53,14 @@ test('goal palette shortcuts stay in the current scope without adding a sidebar 
     const goals = NAV_TREE.find(node => node.key === 'goals');
     assert.equal(new URL(catalog.navPathForScope(goals, scope), 'https://hub.invalid/').searchParams.get('scope'), scope);
   }
+  const weekly = NAV_TREE.find(node => node.key === 'goals-weekly');
+  assert.ok(weekly, 'weekly actuals must be reachable on days without the weekly card');
+  for (const scope of ['personal', 'classin', 'all']) {
+    const url = new URL(catalog.navPathForScope(weekly, scope), 'https://hub.invalid/');
+    assert.equal(url.searchParams.get('scope'), scope);
+    assert.equal(url.searchParams.get('weekly'), '1');
+    assert.equal(url.searchParams.has('check'), false);
+  }
   const work = NAV_TREE.find(node => node.key === 'my-work');
   assert.equal(catalog.navPathForScope(work, 'personal'), work.path);
 });
@@ -247,7 +255,7 @@ test('Office, work execution, coaching and brand advice keep four distinct exist
     const jobs = topNavigationForRoute('dashboard/agents/orders', scope.key, 'jobs');
     assert.equal(jobs.activeTab?.key, 'ai-orders');
   }
-  assert.equal(catalog.LEGACY_REDIRECTS['dashboard/agents/office'].to, 'dashboard/agents/chat');
+  assert.equal(catalog.LEGACY_REDIRECTS['dashboard/agents/office'].to, 'dashboard/agents/office-council');
 });
 
 test("second-level destinations resolve into the top bar with one active tab", () => {
@@ -686,4 +694,11 @@ test("OKR·KPI lives under 내 작업 and is also surfaced on 현황 (same Goals
     assert.equal(overview.activeTab.label, "OKR·KPI", scope);
   }
   assert.ok(NAV_TREE.some((item) => item.path === "dashboard/work/goals"), "⌘K catalog reaches 내 작업 › OKR·KPI");
+});
+
+test('AI utility anchor lands on Office in every scope and Office is findable in Korean', () => {
+  const ai = SIDEBAR_UTILITIES.find(anchor => anchor.key === 'ai');
+  for (const scope of SIDEBAR_SCOPES) assert.equal(ai.paths[scope.key], 'dashboard/agents/office-council');
+  const office = NAV_TREE.find(node => node.key === 'agents').children.find(child => child.key === 'office-council');
+  for (const word of ['오피스', '이브이', '비서']) assert.ok(office.keywords.includes(word), word);
 });

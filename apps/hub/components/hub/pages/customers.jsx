@@ -745,7 +745,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
             icon="sparkle"
             onClick={() => setGuruOpen(true)}
           >
-            Guru 전략 코칭 (⌘J)
+            Guru 전략 코칭
           </Button>
         </div>
         {/* 다음 액션 */}

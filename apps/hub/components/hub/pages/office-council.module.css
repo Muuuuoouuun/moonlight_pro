@@ -34,16 +34,18 @@
 .contextState { margin:12px 0 8px; }
 .note,.sessionNote { font-size:12px; color:var(--fg-muted); line-height:1.7; margin:0; overflow-wrap:anywhere; }
 .sessionNote { margin-top:16px; }
+.usage { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0 0; font-size:12px; color:var(--fg-muted); line-height:1.7; }
 .notice { padding:12px; border:1px solid var(--line); border-radius:var(--r-sm); font-size:13px; }
 .notice p { margin:8px 0 0; }
 .error { box-shadow:inset 1px 0 0 var(--danger-line); }
 .roster { display:grid; gap:8px; padding:16px; }
 .member { display:flex; width:100%; text-align:left; padding:12px; border:1px solid var(--line-soft); border-radius:var(--r-sm); background:transparent; color:var(--fg); cursor:pointer; }
-.member[aria-pressed="true"] { background:var(--surface-3); border-color:var(--line-strong); }
+.member[aria-pressed="true"] { background:var(--surface-2); border-color:var(--accent-line); box-shadow:inset 1px 0 0 var(--accent); }
 .member strong { display:block; font-size:14px; font-weight:500; }
 .member small { margin-left:8px; font-size:12px; color:var(--fg-muted); font-weight:400; }
 .memberPitch { display:block; margin-top:8px; font-size:13px; color:var(--fg-muted); }
 .page button:focus-visible,.page summary:focus-visible { outline:1px solid var(--moon-300); outline-offset:2px; }
+.thread:focus-visible { outline:1px solid var(--moon-300); outline-offset:-2px; }
 @media(max-width:600px) {
   .page { padding:16px; }
   .header { align-items:flex-start; gap:12px; }

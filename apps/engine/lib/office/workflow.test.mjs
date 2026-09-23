@@ -62,7 +62,7 @@ test('preview or failed context never invokes the provider', async () => {
 });
 
 test('invalid generation stops before review and no retry or partial answer is returned', async () => {
-  for (const first of [{ ok: false, reason: 'missing-api-key' }, { ok: false, reason: 'sensitive provider error' }, { ok: true, text: '{bad json}', model: 'test' }, { ok: true, text: JSON.stringify({ ...body('invented'), persisted: true }), model: 'test' }, { ok: true, text: JSON.stringify({ ...body('invented'), evidence: [{ sourceRefId: 'missing', explanation: 'fake' }] }), model: 'test' }]) {
+  for (const first of [{ ok: false, reason: 'missing-api-key' }, { ok: false, reason: 'sensitive provider error' }, { ok: true, text: '{bad json}', model: 'test' }, { ok: true, text: JSON.stringify({ ...body('invented'), persisted: true }), model: 'test' }]) {
     let calls = 0;
     const result = await generateOfficeWorkflow(request, context, async () => { calls++; return first; });
     assert.equal(calls, 1);
@@ -70,6 +70,17 @@ test('invalid generation stops before review and no retry or partial answer is r
     assert.equal(result.artifact, undefined);
     assert.doesNotMatch(JSON.stringify(result), /sensitive provider error/);
   }
+});
+
+test('a draft citing a missing source goes to review without that citation', async () => {
+  const prompts = [];
+  const result = await generateOfficeWorkflow(request, context, async input => {
+    prompts.push(input.prompt);
+    return prompts.length === 1 ? { ok: true, text: JSON.stringify({ ...body('초안'), evidence: [{ sourceRefId: 'missing', explanation: 'FAKE_CITATION' }] }), model: 'test-provider' } : reply('검수한 답장', input);
+  });
+  assert.equal(prompts.length, 2);
+  assert.doesNotMatch(prompts[1], /FAKE_CITATION/);
+  assert.equal(result.status, 'generated');
 });
 
 test('review failures, different models and malformed output never reveal the first draft', async () => {
@@ -109,5 +120,20 @@ test('legacy v2 guidance keeps its strict fields while removing forced work and 
     assert.match(built.systemInstruction, /존댓말/);
     assert.match(built.systemInstruction, /추가 행동 없음/);
     assert.doesNotMatch(built.systemInstruction, /친근하고 짧은 반말|제가 다시 연락할 테니|내일 캘린더로 다시 정돈/);
+  }
+});
+
+test('a failed workflow names the failing phase and cause without provider text', async () => {
+  const cases = [
+    { name: 'json', provider: async () => ({ ok: true, text: '{bad json}', model: 'test-provider' }), expect: { phase: 'draft', category: 'json' } },
+    { name: 'provider', provider: async () => ({ ok: false, reason: 'sensitive provider error' }), expect: { phase: 'draft', category: 'provider' } },
+    { name: 'review provider', provider: (() => { let calls = 0; return async input => ++calls === 1 ? reply('초안', input) : { ok: false, reason: 'sensitive provider error' }; })(), expect: { phase: 'review', category: 'provider' } },
+    { name: 'review model', provider: (() => { let calls = 0; return async input => ++calls === 1 ? reply('초안', input) : { ...reply('검수', input), model: 'other-model' }; })(), expect: { phase: 'review', category: 'model-mismatch' } },
+  ];
+  for (const item of cases) {
+    const result = await generateOfficeWorkflow(request, context, item.provider);
+    assert.equal(result.status, 'error', item.name);
+    assert.deepEqual(result.failure, item.expect, item.name);
+    assert.doesNotMatch(JSON.stringify(result), /sensitive provider error/);
   }
 });

@@ -24,6 +24,8 @@ const normalizeStage = deal => {
 };
 // 오늘 3개 — 창 안의 날짜에 고른 할 일과 그 날짜(KST)에 끝낸 할 일을 센다. 분모는 선택 수,
 // 분자는 같은 날 완료 수. 재오픈(done→todo)은 completed_at을 비우므로 소급해 내려간다(§6.2 규칙).
+// 상태를 아는 행은 지금도 done일 때만 완료로 센다 — completed_at을 남긴 채 상태만 바뀐 행이 있어도
+// tasks_completed(status=done)·저녁 리뷰(summarizeFocusDay)와 같은 답을 낸다.
 export function summarizeFocusWindow(tasks = [], { since, until, timeZone = TASK_TIME_ZONE } = {}) {
   const sinceKey = dateKeyInZone(since, timeZone);
   const untilKey = dateKeyInZone(until, timeZone);
@@ -31,7 +33,8 @@ export function summarizeFocusWindow(tasks = [], { since, until, timeZone = TASK
   let done = 0;
   const days = new Set();
   (Array.isArray(tasks) ? tasks : []).forEach((task) => {
-    const completedKey = dateKeyInZone(task.completed_at ?? task.completedAt, timeZone);
+    const stillDone = task.done === true || (typeof task.status === 'string' ? task.status.toLowerCase() === 'done' : task.done !== false);
+    const completedKey = stillDone ? dateKeyInZone(task.completed_at ?? task.completedAt, timeZone) : '';
     focusDatesOf(task).forEach((day) => {
       if (sinceKey && day < sinceKey) return;
       if (untilKey && day > untilKey) return;
@@ -55,7 +58,9 @@ const defaultGoals = async options => {
   catch { return {status:'error',error:'goals-read-failed',objectives:[],metrics:[]}; }
 };
 
-export async function getWeeklyReport({scope='personal',windowDays=7,timezone='Asia/Seoul',periodStart:requestedStart,periodEnd:requestedEnd,now=new Date(),workspaceId=resolveDefaultWorkspaceId(),reader=createMetricReader({workspaceId,now}),getGoals=defaultGoals}={}) {
+// includeGoals=false는 주간 실측(지난 주들 비교)용이다 — 목표는 주와 무관하므로 주마다 다시 읽지 않고,
+// 읽지 않은 원천을 실패로 적지도 않는다(goals: null).
+export async function getWeeklyReport({scope='personal',windowDays=7,timezone='Asia/Seoul',periodStart:requestedStart,periodEnd:requestedEnd,now=new Date(),workspaceId=resolveDefaultWorkspaceId(),reader=createMetricReader({workspaceId,now}),getGoals=defaultGoals,includeGoals=true}={}) {
   if (!['personal','company'].includes(scope) || !Number.isInteger(windowDays) || windowDays<1 || windowDays>31) throw new Error('invalid-weekly-period');
   const explicit = requestedStart !== undefined || requestedEnd !== undefined;
   if (explicit && (typeof requestedStart !== 'string' || typeof requestedEnd !== 'string')) throw new Error('invalid-weekly-period');
@@ -77,7 +82,7 @@ export async function getWeeklyReport({scope='personal',windowDays=7,timezone='A
   const [measurements,dealsResult,goals,focusResult,memoResult,moveResult] = await Promise.all([
     Promise.all(sourceKeys.map(sourceKey=>reader.measure({...period,sourceKey}))),
     reader.scopedRows('deals',[],scope),
-    getGoals({scope,workspaceId}),
+    includeGoals?getGoals({scope,workspaceId}):null,
     // 창 필터 없이 focus_dates가 있는 할 일을 전부 읽는다 — PostgREST에서 "창 안의 7일 중
     // 하루라도 포함"은 날짜별 containment OR라 기간 길이만큼 절이 늘고, 운영자 1인 규모에서
     // 페이지네이션 비용보다 계약이 복잡해진다. 창은 아래 summarizeFocusWindow가 건다.
@@ -87,7 +92,7 @@ export async function getWeeklyReport({scope='personal',windowDays=7,timezone='A
   ]);
   const failedSources=measurements.filter(m=>m.coverage!=='complete').map(m=>m.sourceKey);
   if(dealsResult.coverage!=='complete')failedSources.push('deals');
-  if(!['live','empty'].includes(goals.status))failedSources.push('goals');
+  if(includeGoals&&!['live','empty'].includes(goals?.status))failedSources.push('goals');
   if(personal&&focusResult.coverage!=='complete')failedSources.push('tasks:focus');
   if(personal&&memoResult.coverage!=='complete')failedSources.push('journal_entries:note');
   if(!personal&&moveResult.coverage!=='complete')failedSources.push('crm_activities:deal');
@@ -97,7 +102,9 @@ export async function getWeeklyReport({scope='personal',windowDays=7,timezone='A
   const modified=deals.filter(d=>inPeriod(d.updated_at));
   const openDeals=modified.filter(d=>OPEN_STAGES.has(normalizeStage(d)));
   const won=deals.filter(d=>normalizeStage(d)==='closing');
-  const undatedWins=won.some(d=>!d.won_at||!Number.isFinite(Date.parse(d.won_at)));
+  // 성사일 미상 딜 중 창 시작 전에 마지막으로 수정된 것은 창 안에서 성사됐을 수 없다(deals.updated_at은
+  // 트리거가 유지하고 성사 전환도 행 수정이다). 창 안·뒤에 수정됐거나 수정 시각을 모르면 판단할 수 없다.
+  const undatedWins=won.some(d=>(!d.won_at||!Number.isFinite(Date.parse(d.won_at)))&&!(Date.parse(d.updated_at)<Date.parse(window.start)));
   const wonDeals=won.filter(d=>inPeriod(d.won_at));
   if(scope==='company'&&undatedWins)failedSources.push('deal-win-timestamps');
   const knownDeals=dealsResult.coverage==='complete';
@@ -120,7 +127,7 @@ export async function getWeeklyReport({scope='personal',windowDays=7,timezone='A
     reviewDays:values.reviews_completed,
   };
   const extraReads=personal?[focusResult,memoResult]:[moveResult];
-  const unavailable=measurements.every(m=>m.coverage==='unmeasured')&&dealsResult.coverage==='unmeasured'&&extraReads.every(r=>r.coverage==='unmeasured')&&goals.status==='error';
+  const unavailable=measurements.every(m=>m.coverage==='unmeasured')&&dealsResult.coverage==='unmeasured'&&extraReads.every(r=>r.coverage==='unmeasured')&&(!includeGoals||goals?.status==='error');
   return {
     source:unavailable?'error':'supabase',configured:Boolean(workspaceId),scope,windowDays,timezone,periodStart,periodEnd,since:window.start,until:window.end,asOf:now.toISOString(),
     partial:failedSources.length>0,failedSources,stats:unavailable?null:stats,scorecard:null,goals,measurements,

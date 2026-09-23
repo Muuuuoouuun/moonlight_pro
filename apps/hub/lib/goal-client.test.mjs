@@ -35,6 +35,32 @@ test('goal routes retain the check view and list scope through create and detail
     assert.equal(detail.searchParams.has('new'), false);
   }
 });
+test('the weekly actuals view is its own route state and never combines with the check view', async () => {
+  const { goalHref, goalView } = await import(file);
+  const weekly = new URL(goalHref(null, 'classin', { weekly: true }), 'https://hub.invalid');
+  assert.equal(weekly.searchParams.get('weekly'), '1');
+  assert.equal(weekly.searchParams.has('check'), false);
+  assert.equal(new URL(goalHref(null, 'all', { weekly: true, check: true }), 'https://hub.invalid').searchParams.has('check'), false);
+  assert.equal(goalView(new URLSearchParams('weekly=1&check=1')), 'weekly');
+  assert.equal(goalView(new URLSearchParams('check=1')), 'check');
+  assert.equal(goalView(new URLSearchParams('')), 'goals');
+});
+
+test('the weekly actuals view stays inside 내 작업 › OKR·KPI when opened there', async () => {
+  const { GOAL_WORK_BASE, goalHref, goalView } = await import(file);
+  const weekly = new URL(goalHref(null, 'all', { weekly: true, base: GOAL_WORK_BASE }), 'https://hub.invalid');
+  assert.equal(weekly.pathname, GOAL_WORK_BASE);
+  assert.equal(weekly.searchParams.has('view'), false);
+  assert.equal(goalView(weekly.searchParams), 'weekly');
+});
+
+test('a company objective cannot pick daily reviews, which are personal by definition and would read a permanent 0', async () => {
+  const { goalSourceKeysFor } = await import(file);
+  assert.ok(goalSourceKeysFor('personal').includes('reviews_completed'));
+  assert.equal(goalSourceKeysFor('company').includes('reviews_completed'), false);
+  assert.deepEqual(goalSourceKeysFor('company'), ['manual', 'tasks_completed', 'contacts_recorded', 'content_published']);
+});
+
 test('post-mutation refresh never shares a pre-mutation read or lets it evict the new read', async () => {
   const { createGoalReadClient } = await import(file);
   assert.equal(typeof createGoalReadClient, 'function');

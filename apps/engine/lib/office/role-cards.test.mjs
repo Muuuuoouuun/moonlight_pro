@@ -67,3 +67,24 @@ test('rendered expertise preserves status, arithmetic and authorship distinction
     assert.match(OFFICE_PLAYBOOKS[id], /매 답변을 동일한 항목.*만들지 말고/);
   }
 });
+
+test('role cards never model pretend execution, invented business numbers or pressure selling', () => {
+  // 이 생성 경로에는 조회·발송·예약·업무 등록 도구가 없다 — 예시가 실행을 가장하면 모델이 따라 한다.
+  const pretend = [/걸어뒀/, /닫아두/, /배포 완료/, /격리했/, /우회 걸어/, /챙겨둘/, /환경변수로 뺐/, /다이어트해 두/, /재배치해 두/, /순연시켜 둘/, /비우겠습니다/, /끝내두겠습니다/];
+  // 운영자 확정(2026-09-23): 카드 속 영업·재무 수치는 운영자의 실제 규칙이 아니다.
+  const invented = [/\d+(?:\.\d+)?\s*%/, /\d[\d,]*\s*(?:만\s*)?원/, /\d+\s*개사/, /런웨이/, /\d+\s*배/, /\d+일\s*차/, /사용자\s*\d+명/];
+  const pressure = [/서명하시면/, /대박/, /보장해\s*드/, /100%\s*클로징/];
+  for (const id of OFFICE_IDS) {
+    const text = JSON.stringify(OFFICE_ROLE_CARDS[id]);
+    for (const pattern of [...pretend, ...invented, ...pressure]) assert.doesNotMatch(text, pattern, `${id}: ${pattern}`);
+  }
+});
+
+test('evidence rules removed in v24 stay in the runtime playbooks', () => {
+  assert.match(OFFICE_PLAYBOOKS.umbreon, /숫자·인용·후기·지원 약속·완료 표현을 근거에 대조한다/);
+  assert.match(OFFICE_PLAYBOOKS.umbreon, /문제 수를 채우지 않는다/);
+  assert.match(OFFICE_PLAYBOOKS.umbreon, /리스크가 없거나 검증과 관계없이 안전하다고 보장하지 않는다/);
+  assert.match(OFFICE_PLAYBOOKS.espeon, /근거가 없는 장기 수익·소요시간을 숫자로 채우지 않는다/);
+  assert.match(OFFICE_PLAYBOOKS.espeon, /인지 에너지 1\/3은 목표이지 현재 달성률/);
+  assert.match(OFFICE_PLAYBOOKS.eevee, /결과물 주관 하나를 보존한다/);
+});

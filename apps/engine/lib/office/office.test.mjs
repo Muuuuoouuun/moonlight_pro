@@ -125,3 +125,20 @@ test('diagnostic observers receive only allowed enums and registered role IDs', 
   reportOfficeDiagnostic(observer, { phase: 'response', category: 'json', ownerId: 'umbreon', credentials: 'PRIVATE_CREDENTIALS' });
   assert.deepEqual(events, [{ phase: 'review', category: 'contract' }, { phase: 'response', category: 'json', ownerId: 'umbreon' }]);
 });
+test('a generated chat answer reports elapsed time, model calls and summed usage',async()=>{
+ const usageMetadata={promptTokenCount:100,candidatesTokenCount:20,totalTokenCount:130};
+ const result=await generateOfficeResponse(request,context,async input=>({ok:true,text:JSON.stringify(reviewedOutput(input,{answer:'초안입니다',nextAction:'검토하자'})),model:'test-provider',usageMetadata}));
+ assert.equal(result.status,'generated');
+ assert.equal(result.generation.modelCalls,2);
+ assert.ok(Number.isInteger(result.generation.elapsedMs)&&result.generation.elapsedMs>=0);
+ assert.deepEqual(result.generation.usage,{promptTokens:200,outputTokens:40,totalTokens:260});
+});
+test('Engine returns the first classified failure with an operator message, never provider text',async()=>{
+ const handler=createOfficeEngineHandler(()=>({ok:true}),async(_request,_context,_provider,onDiagnostic)=>{onDiagnostic({phase:'review',category:'deadline'});onDiagnostic({phase:'synthesis',category:'provider'});return {status:'error',error:'secret provider detail'};});
+ const response=await handler(new Request('http://engine.test/api/ai/office-chat',{method:'POST',body:JSON.stringify({request,context})}));
+ assert.equal(response.status,502);
+ const data=await response.json();
+ assert.deepEqual(data.failure,{phase:'review',category:'deadline'});
+ assert.match(data.error,/제한 시간/);
+ assert.doesNotMatch(JSON.stringify(data),/secret provider detail/);
+});

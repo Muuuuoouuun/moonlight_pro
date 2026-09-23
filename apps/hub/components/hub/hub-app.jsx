@@ -8,7 +8,7 @@ import "./hub-tokens.css";
 import "./hub-futura.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 import { DailyReviewProvider } from "./daily-review-provider";
-import { GOAL_WORK_BASE, goalHref } from "@/lib/goal-client";
+import { GOAL_WORK_BASE, goalHref, goalView } from "@/lib/goal-client";
 
 import { Button, Skeleton } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
@@ -45,11 +45,6 @@ import {
   readHubPreferences,
   watchHubTheme,
 } from "@/lib/hub-preferences";
-
-const FloatingMentorWidget = dynamic(
-  () => import('./floating-mentor-widget').then(module => module.FloatingMentorWidget),
-  { ssr: false },
-);
 
 // Chunk-load placeholder — pages carry their own data loading states, so this
 // only covers the (brief) JS fetch. Keep it calm: no spinner, dim mono text.
@@ -309,12 +304,6 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [theme, setTheme] = React.useState("light");
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
-  const [globalAdvisorOpen, setGlobalAdvisorOpen] = React.useState(false);
-  const [advisorRequested, setAdvisorRequested] = React.useState(false);
-  const toggleGlobalAdvisor = React.useCallback(() => {
-    setAdvisorRequested(true);
-    setGlobalAdvisorOpen(value => !value);
-  }, []);
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
   const rootRef = React.useRef(null);
@@ -372,6 +361,9 @@ export function HubApp({ memoDraftContext = "preview" }) {
     const target = PARENT_JUMP[basePath] || basePath;
     router.push('/' + target + suffix);
   }, [router]);
+
+  // ⌘J·탑바 ✦ → Office (2026-09-23 운영자 확정). 페이지 맥락 위젯은 딜·신호 카드 버튼에만 남는다.
+  const openOffice = React.useCallback(() => navigate('dashboard/agents/office-council'), [navigate]);
 
   const navigateFromSidebar = React.useCallback((p) => {
     const [basePath, suffix = ''] = String(p || '').split(/(?=[?#])/, 2);
@@ -463,7 +455,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
-    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: searchParams.get('check') === '1', create: true }).slice(1);
+    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', create: true }).slice(1);
     if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
     if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
     if (p.startsWith('dashboard/revenue/leads') || p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/leads?new=lead';
@@ -473,7 +465,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     if (p.startsWith('dashboard/work/projects') || p.startsWith('dashboard/work/roadmap')) return 'dashboard/work/projects?new=project';
     if (p.startsWith('dashboard/work/decisions')) return 'dashboard/work/decisions?new=decision';
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
-    if (p.startsWith('dashboard/work/goals')) return goalHref(null, queryScope || 'all', { check: searchParams.get('check') === '1', create: true, base: GOAL_WORK_BASE }).slice(1);
+    if (p.startsWith('dashboard/work/goals')) return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', create: true, base: GOAL_WORK_BASE }).slice(1);
     if (p.startsWith('dashboard/content')) return 'dashboard/content/studio?new=draft';
     return null;
   }, [queryScope, searchParams]);
@@ -533,67 +525,17 @@ export function HubApp({ memoDraftContext = "preview" }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [paletteOpen, helpOpen]);
 
-  // `⌘J` → 전역 AI 어드바이저 코파일럿 호출
+  // `⌘J` → Office
   React.useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
-        toggleGlobalAdvisor();
+        openOffice();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleGlobalAdvisor]);
-
-  const advisorContext = React.useMemo(() => {
-    const p = String(path || '');
-    if (p.startsWith('dashboard/revenue') || p.startsWith('dashboard/classin/pipeline') || p.startsWith('dashboard/classin/revenue')) {
-      return {
-        agent: 'guru',
-        contextType: 'deal',
-        contextTitle: '영업·파이프라인 코칭',
-        contextData: { path: p, scope: routeScope || navScope },
-      };
-    }
-    if (p.startsWith('dashboard/content') || p.startsWith('dashboard/brand/studio') || p.startsWith('dashboard/brand/queue')) {
-      return {
-        agent: 'council',
-        contextType: 'content',
-        contextTitle: '컨텐츠 기획·검수 코파일럿',
-        contextData: { path: p, scope: routeScope || navScope },
-      };
-    }
-    if (p.startsWith('dashboard/work/decisions')) {
-      return {
-        agent: 'council',
-        contextType: 'project',
-        contextTitle: '의사결정 및 전략 검증',
-        contextData: { path: p, scope: routeScope || navScope },
-      };
-    }
-    if (p.startsWith('dashboard/work') || p.startsWith('dashboard/classin/projects') || p.startsWith('dashboard/brand/projects')) {
-      return {
-        agent: 'council',
-        contextType: 'project',
-        contextTitle: '프로젝트 실행 전략',
-        contextData: { path: p, scope: routeScope || navScope },
-      };
-    }
-    if (p.startsWith('dashboard/daily-brief')) {
-      return {
-        agent: 'council',
-        contextType: 'weekly',
-        contextTitle: '우선순위 브리프 및 리듬 코칭',
-        contextData: { path: p, scope: routeScope || navScope },
-      };
-    }
-    return {
-      agent: 'council',
-      contextType: 'general',
-      contextTitle: 'Moonlight 운영 코파일럿',
-      contextData: { path: p, scope: routeScope || navScope },
-    };
-  }, [path, routeScope, navScope]);
+  }, [openOffice]);
 
   const render = PAGE_MAP[path];
   // 3번째 인자(scope)는 뒤늦게 붙었다 — 기존 항목은 추가 인자를 무시하므로 하위 호환된다.
@@ -644,7 +586,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
               onNew={createOnCurrentSurface}
               onQuickCapture={() => setCaptureOpenRequest(value => value + 1)}
               onSidebarOpen={openMobileNavigation}
-              onAdvisorOpen={toggleGlobalAdvisor}
+              onOfficeOpen={openOffice}
               navOpen={mobileNavState.open}
               menuButtonRef={menuButtonRef}
               theme={theme}
@@ -665,15 +607,6 @@ export function HubApp({ memoDraftContext = "preview" }) {
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open} openRequest={memoOpenRequest} onNavigate={navigate} />
       <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
-      {advisorRequested && <FloatingMentorWidget
-        key={`global-advisor:${path}`}
-        isOpen={globalAdvisorOpen}
-        onClose={() => setGlobalAdvisorOpen(false)}
-        agent={advisorContext.agent}
-        contextType={advisorContext.contextType}
-        contextTitle={advisorContext.contextTitle}
-        contextData={advisorContext.contextData}
-      />}
         <CelebrationCanvas />
           </DailyReviewProvider>
           </OfficeWorkflowSessionProvider>

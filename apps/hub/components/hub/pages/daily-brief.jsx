@@ -15,6 +15,8 @@ import {
   extractWeeklyExperiment,
 } from "@/lib/ai-workflow-client";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
+import { WEEKLY_STAT_FIELDS, weeklySourceLabels, weeklyStatValue } from '@/lib/weekly-report-fields';
+import { goalHref } from '@/lib/goal-client';
 import { BurningStreakBadge, StreakMark } from "../burning-streak";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { ContactRecordDrawer } from "../contact-record-form";
@@ -1526,7 +1528,7 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
                   },
                 })}
               >
-                Council 심층 토의 (⌘J)
+                Council 심층 토의
               </Button>
             )}
             {onNavigate && (
@@ -1907,26 +1909,9 @@ export function WeeklyReportCard({ onNavigate, onAdvisorOpen, overrideScope, onT
   const stats = report?.stats;
   const goals = report?.goals;
   const objectives = goals?.objectives?.filter(goal => goal.status === 'active') || [];
-  const rows = !stats ? [] : scope === 'company'
-    ? [
-        { label: '연락', value: stats.contacts },
-        { label: '신규 딜', value: stats.newDeals },
-        // 이동 딜 = 기간 중 기록된 단계 이동 수(crm_activities kind='deal'), 수정된 진행 딜과 다른 질문이다.
-        { label: '이동 딜', value: stats.movedDeals },
-        { label: '수정된 진행 딜', value: stats.modifiedOpenDeals },
-        { label: '성사일 확인된 딜', value: stats.wonDeals },
-      ]
-    : [
-        // 오늘 3개 완료율(Action KPI, 2026-09-20 §7.2) — 완료/선택. '—'는 미측정(null)만 뜻한다:
-        // 고른 날이 없으면 0으로 말한다(이 카드의 "‘—’는 0이 아닌 미측정" 약속).
-        { label: '오늘 3개', value: stats.focusPicked == null ? null : stats.focusPicked === 0 ? 0 : `${stats.focusDone}/${stats.focusPicked}` },
-        { label: '완료 할 일', value: stats.doneTasks },
-        { label: '연락', value: stats.contacts },
-        { label: '메모', value: stats.memos },
-        { label: '리뷰 일수', value: stats.reviewDays },
-        { label: '발행', value: stats.publishes },
-        { label: '개인 딜', value: stats.personalDeals },
-      ];
+  // 표시 필드는 주간 실측·Council 요약과 같은 목록이다(weekly-report-fields.js). '—'는 미측정(null)만 뜻한다.
+  const rows = !stats ? [] : WEEKLY_STAT_FIELDS[scope].map(field => ({ label: field.label, value: weeklyStatValue(field, stats).text }));
+  const missing = weeklySourceLabels(report?.failedSources);
   return (
     <Card className="fade-up">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
@@ -1946,10 +1931,11 @@ export function WeeklyReportCard({ onNavigate, onAdvisorOpen, overrideScope, onT
               <span style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>
                 {goals?.status === 'error' ? '목표·성과 기록을 읽지 못했습니다.' : syncState === 'preview' ? '측정 기록이 연결되면 기간별 실적을 확인할 수 있습니다.' : objectives.length ? `진행 목표 ${objectives.length}개 · 기간과 측정 근거를 확인하세요.` : '측정할 목표와 결과 지표를 연결해 보세요.'}
               </span>
+              <Button variant="ghost" size="xs" onClick={() => onNavigate?.(goalHref(null, scope, { weekly: true }).slice(1))}>지난 주와 비교</Button>
               <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/overview?view=goals&scope=${scope}`)}>목표·성과</Button>
             </div>
           )}
-          {syncState === 'partial' && <p role="status" style={{ margin: 0, fontSize: 12, color: 'var(--fg-muted)' }}>일부 근거를 확인하지 못했습니다. ‘—’는 0이 아닌 미측정입니다.</p>}
+          {syncState === 'partial' && <p role="status" style={{ margin: 0, fontSize: 12, color: 'var(--fg-muted)' }}>일부 근거를 확인하지 못했습니다{missing.length ? ` (${missing.join(' · ')})` : ''}. ‘—’는 0이 아닌 미측정입니다.</p>}
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             {rows.map((r) => (
               <div key={r.label} style={{ minWidth: 72 }}>

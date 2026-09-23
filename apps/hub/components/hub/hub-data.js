@@ -17,6 +17,7 @@ export const NAV_TREE = [
   { key: 'overview', label: '현황', icon: 'signal', path: 'dashboard/overview', keywords: ['overview', '현황', '차트', '시각', '통계', 'chart', 'stats', '정리'] },
   { key: 'goals', label: 'OKR·KPI · 현황', icon: 'signal', scopeAware: true, path: 'dashboard/overview?view=goals&scope=all', keywords: ['목표', '성과', 'OKR', 'KPI', '지표', '측정', '핵심 결과'] },
   { key: 'goals-check', label: '목표 빠른 체크', icon: 'signal', scopeAware: true, path: 'dashboard/overview?view=goals&scope=all&check=1', keywords: ['빠른 체크', 'KPI 기록', '지표 확인', '실제값', '성과 점검'] },
+  { key: 'goals-weekly', label: '주간 실측', icon: 'signal', scopeAware: true, path: 'dashboard/overview?view=goals&scope=all&weekly=1', keywords: ['주간 리포트', '지난주', 'Action KPI', '오늘 3개 완료율', '실측 비교', '기준선'] },
   { key: 'my-work', label: '내 작업', icon: 'inbox', path: 'dashboard/work/my', keywords: ['내 작업', 'my work', '내작업', 'tasks', '할 일', '할일', 'todo', 'deals', 'calendar', '일정', '실행'] },
   { key: 'memos', label: '메모', icon: 'content', path: 'dashboard/work/memos', keywords: ['메모', '일지', 'note', 'memo', 'journal', '아이디어', '발췌'] },
   { key: 'daily-review', label: '하루 리뷰', icon: 'brief', path: 'dashboard/work/daily-review', keywords: ['하루', '리뷰', '회고', '일기', '에너지', 'daily review'] },
@@ -49,7 +50,7 @@ export const NAV_TREE = [
   {
     key: 'agents', label: 'Agents', icon: 'agents', secondary: true,
     children: [
-      { key: 'office-council', label: 'Office', icon: 'agents', path: 'dashboard/agents/office-council' },
+      { key: 'office-council', label: 'Office', icon: 'agents', path: 'dashboard/agents/office-council', keywords: ['office', '오피스', '이브이', 'eevee', '비서', 'AI', '에이전트', '관점 비교', '초안'] },
       { key: 'orders', label: '작업·실행', icon: 'orders', path: 'dashboard/agents/orders', keywords: ['orders', 'codex', '코드 작업', '작업 지시'] },
       { key: 'chat', label: '코칭·대화', icon: 'chat', path: 'dashboard/agents/chat', keywords: ['chat', 'guru', '코칭'] },
       { key: 'council', label: '브랜드 자문', icon: 'council', path: 'dashboard/agents/council', keywords: ['council', '브랜드'] },
@@ -134,5 +135,5 @@ export const LEGACY_REDIRECTS = {
   'dashboard/projects': { to: 'dashboard/work/projects', label: 'Projects' },
   'dashboard/classin/intake': { to: 'dashboard/classin/revenue', label: '결제·리드' },
   'dashboard/classin/followups': { to: 'dashboard/revenue/followups', label: '고객 연락' },
-  'dashboard/agents/office': { to: 'dashboard/agents/chat', label: 'Agents · 코칭·대화' },
+  'dashboard/agents/office': { to: 'dashboard/agents/office-council', label: 'Office' },
 };

@@ -120,7 +120,7 @@ export async function runOfficeDiscussion(request: DiscussionRequest, context: u
       if (!response.ok) { providerFailure(); throw new OfficeDiscussionError(response.reason || 'provider-failed'); }
       checkDeadline();
       const parsed = read('json', () => JSON.parse(response.text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')));
-      const raw = read('source-review', () => readSourceReviewedOutput(parsed, request, context, sourceCatalog));
+      const raw = read('source-review', () => readSourceReviewedOutput(parsed, request, context, sourceCatalog).answer);
       // Reject model attempts to supply identities; attribution belongs to the call.
       const turn = read('contract', () => {
         if (raw.ownerId !== undefined || raw.round !== undefined) throw new OfficeDiscussionError('forged-attribution');

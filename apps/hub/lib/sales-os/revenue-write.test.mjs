@@ -146,7 +146,7 @@ test("buildDealWrite carries the next-meeting breadcrumb into meta untouched", (
 
 let calls;
 
-function installSupabaseFetch({ existingMeta, deleteReturnsRows = true } = {}) {
+function installSupabaseFetch({ existingMeta, existingStage, deleteReturnsRows = true } = {}) {
   calls = [];
   globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
@@ -155,7 +155,7 @@ function installSupabaseFetch({ existingMeta, deleteReturnsRows = true } = {}) {
 
     if (method === "GET") {
       // meta read for the merge step
-      return jsonResponse([{ meta: existingMeta || {} }]);
+      return jsonResponse([{ meta: existingMeta || {}, ...(existingStage ? { stage: existingStage } : {}) }]);
     }
     if (method === "POST") {
       return jsonResponse([{ id: "real-id-123", ...(init.body ? JSON.parse(init.body) : {}) }]);
@@ -338,4 +338,51 @@ test("persistRevenueRecord update does not log a move when the stage is unchange
   });
   assert.equal(result.status, "saved");
   assert.equal(calls.some((c) => c.url.includes("/rest/v1/crm_activities")), false);
+});
+
+// ---- 성사 시각 won_at — 주간 회사 리포트 "성사일 확인된 딜"의 유일한 원천 ----
+
+import { dealWonAtPatch } from "./revenue-write.js";
+
+test("dealWonAtPatch stamps won_at only on a known move into closing and clears it on a known move out", () => {
+  const now = new Date("2026-09-23T05:00:00.000Z");
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: { stage_detail: "final" }, metaPatch: { stage_detail: "closing" }, now }), { won_at: "2026-09-23T05:00:00.000Z" });
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: { stage_detail: "closing" }, metaPatch: { stage_detail: "quote" }, now }), { won_at: null });
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: { stage_detail: "closing" }, metaPatch: { stage_detail: "closing" }, now }), {}, "재저장은 성사 시각을 새로 찍지 않는다");
+  // 이전 단계를 모르는 레거시 딜은 이미 성사였을 수 있다 — 지금 시각을 찍으면 옛 성사가 이번 주 성사로 둔갑한다.
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: {}, metaPatch: { stage_detail: "closing" }, now }), {});
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: { stage_detail: "final" }, metaPatch: { next_action: "x" }, now }), {});
+  assert.deepEqual(dealWonAtPatch({ table: "leads", existingMeta: { stage_detail: "final" }, metaPatch: { stage_detail: "closing" }, now }), {});
+});
+
+test("persistRevenueRecord writes won_at in the same update as the move into closing", async () => {
+  installSupabaseFetch({ existingMeta: { stage_detail: "final", workspace: "classin" } });
+  const result = await persistRevenueRecord({
+    table: "deals", op: "update", id: "deal-1", payload: { stage: "closing" }, build: buildDealWrite,
+  });
+  assert.equal(result.status, "saved");
+  const patch = calls.find(call => call.method === "PATCH" && call.url.includes("/deals"));
+  assert.ok(patch, "deal update must be sent");
+  const body = patch.body;
+  assert.ok(Number.isFinite(Date.parse(body.won_at)), "won_at must be a timestamp");
+  assert.equal(body.meta.stage_detail, "closing");
+});
+
+test("a legacy deal without stage_detail uses its stage column as the known previous stage", () => {
+  const now = new Date("2026-09-23T05:00:00.000Z");
+  // 이관 딜은 stage_detail 없이 stage 컬럼만 가진다. won 컬럼은 closing으로 읽히므로 옛 성사가 다시 찍히지 않는다.
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: {}, existingStage: "negotiation", metaPatch: { stage_detail: "closing" }, now }), { won_at: "2026-09-23T05:00:00.000Z" });
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: {}, existingStage: "won", metaPatch: { stage_detail: "closing" }, now }), {});
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: {}, existingStage: "won", metaPatch: { stage_detail: "final" }, now }), { won_at: null });
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: {}, existingStage: "mystery", metaPatch: { stage_detail: "closing" }, now }), {}, "모르는 컬럼 값은 이전 단계를 알려주지 않는다");
+});
+
+test("persistRevenueRecord reads the legacy stage column so a first move into closing is dated", async () => {
+  installSupabaseFetch({ existingMeta: { workspace: "classin" }, existingStage: "negotiation" });
+  const result = await persistRevenueRecord({ table: "deals", op: "update", id: "deal-1", payload: { stage: "closing" }, build: buildDealWrite });
+  assert.equal(result.status, "saved");
+  const read = calls.find(call => call.method === "GET" && call.url.includes("/deals"));
+  assert.match(decodeURIComponent(read.url), /select=meta,stage/);
+  const patch = calls.find(call => call.method === "PATCH" && call.url.includes("/deals"));
+  assert.ok(Number.isFinite(Date.parse(patch.body.won_at)));
 });

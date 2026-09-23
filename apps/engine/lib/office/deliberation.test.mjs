@@ -395,23 +395,29 @@ for (const surface of surfaces) {
   });
 }
 
-test('workflow synthesis rejects evidence or task targets outside the server-supplied source references', async () => {
+test('workflow synthesis drops evidence and task targets outside the sources but rejects an unrequested perspective', async () => {
   const { request, context } = workflowInputs();
-  const invalid = [
-    { evidence: [{ sourceRefId: 'unknown-source', explanation: 'PRIVATE_FABRICATED_EVIDENCE' }] },
-    { nextStep: { kind: 'create_task', label: '확인', fields: { title: '확인', projectId: '30000000-0000-4000-8000-000000000001' } } },
-    { council: { ...workflowAnswer(request).council, perspectives: [{ ownerId: 'espeon', judgment: 'PRIVATE_OUTSIDER', tradeoff: '미확인' }, { ownerId: 'umbreon', judgment: '확인', tradeoff: '미확인' }] } },
-  ];
-  for (const patch of invalid) {
+  const run = async patch => {
     let calls = 0;
     const result = await generateOfficeWorkflow(request, context, async input => {
       const data = JSON.parse(input.prompt); calls++;
       return reply(data.phase ? publicTurn(data, request.participants) : { ...workflowAnswer(request), ...patch });
     });
     assert.equal(calls, 5);
-    assert.equal(result.status, 'error');
-    assert.equal(result.artifact, undefined);
-    assert.equal(result.discussion, undefined);
-    assert.doesNotMatch(JSON.stringify(result), /PRIVATE_/);
-  }
+    return result;
+  };
+  // 2026-09-23 운영자 확정: 지어낸 근거·대상은 그 항목만 버리고 검수된 본문은 살린다.
+  const invented = await run({ evidence: [{ sourceRefId: 'unknown-source', explanation: 'PRIVATE_FABRICATED_EVIDENCE' }] });
+  assert.equal(invented.status, 'generated');
+  assert.deepEqual(invented.evidence, []);
+  assert.equal(invented.sourceCheck, 'untraced');
+  assert.doesNotMatch(JSON.stringify(invented), /PRIVATE_/);
+  const target = await run({ nextStep: { kind: 'create_task', label: '확인', fields: { title: '확인', projectId: '30000000-0000-4000-8000-000000000001' } } });
+  assert.equal(target.status, 'generated');
+  assert.deepEqual(target.nextStep.fields, { title: '확인' });
+  const outsider = await run({ council: { ...workflowAnswer(request).council, perspectives: [{ ownerId: 'espeon', judgment: 'PRIVATE_OUTSIDER', tradeoff: '미확인' }, { ownerId: 'umbreon', judgment: '확인', tradeoff: '미확인' }] } });
+  assert.equal(outsider.status, 'error');
+  assert.equal(outsider.artifact, undefined);
+  assert.equal(outsider.discussion, undefined);
+  assert.doesNotMatch(JSON.stringify(outsider), /PRIVATE_/);
 });
