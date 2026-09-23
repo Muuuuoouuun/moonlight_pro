@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-23 (워크트리 통합 — 세 축 1·2주차, CRM 0단계·연락 기록창 전역화·넛지 N1~N3, Rhythm 탭 재설계, 정체 판정·Deals Lost 컬럼, MCP 연결 키트, Home 시간표 일정 완료, 사이드바 아이콘 복원 + 운영 DB 마이그레이션 0001·0034·0037·0038·0039~0042 적용, `db:check` 함수 본문 버전 검사. 이전 정리: 2026-09-22 Office 역할 지침·개별 회의 호출·설정 보존·UI QA, 의미 품질 인증은 대기)
+> 마지막 정리: 2026-09-23 (워크트리 통합 — 세 축 1·2주차, CRM 0단계·연락 기록창 전역화·넛지 N1~N3, Rhythm 탭 재설계, 정체 판정·Deals Lost 컬럼, MCP 연결 키트, Home 시간표 일정 완료, 사이드바 아이콘 복원 + 운영 DB 마이그레이션 0001·0034·0037·0038·0039~0043 적용, `db:check` 함수 본문 버전 검사. 이전 정리: 2026-09-22 Office 역할 지침·개별 회의 호출·설정 보존·UI QA, 의미 품질 인증은 대기)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -67,7 +67,7 @@
 | CRM 0단계(0a·0b·0c) · 연락 기록창 전역화 · 넛지 N1~N3 | 구현·로컬 검증 완료(2026-09-23 통합) · 운영 배포 별도 | 연락 기록의 단일 원천을 `crm_activities`로 통일(`282572a`), 고객 연락 행의 죽은 버킷·레일·클릭·반응 복구와 약속 기준 2단 정렬(`1a67949`), 집중 고객을 `won` 전용에서 실제 약속 기준으로(`d4b57b5`·보강 `1879595`), 어디서든 열리는 공용 연락 기록창(`6530533`), 캘린더 접점·넛지 엔진과 읽기·억제 계층(`cae4944`·`0f63bf6`·`8cf3809`), 병합 검증 수리 `eadd97e`. 발신·메모 채널의 무반응 기록을 살리는 `20260923_0042_contact_outcome_reactionless.sql`은 2026-09-23 운영 DB에 적용했다(`db:check` PASS — 0018이 빈 반응을 `invalid-reaction`으로 거절해 "카톡 보냄, 아직 답 없음" 같은 기록이 전부 실패하던 것을 해소). 파일 단위 실행 계획과 잔여 범위는 [`plans/2026-09-21-crm-tab-develop-phase0-1.md`](superpowers/plans/2026-09-21-crm-tab-develop-phase0-1.md) — N3 나머지 표시 2곳과 N4는 대기 |
 | Rhythm 탭 재설계 | 구현·로컬 검증 완료(2026-09-23 통합) · 운영 배포 별도 | 하드코딩 탭 2개를 제거하고 `computeWeeklyRhythmMatrix` 실데이터로 배선, 루틴 카테고리·주간 목표 필드, Futura 어휘 리스킨(`0a44c6c`·병합 `b7ddf9a`·수리 `0103f9f`). Futura 범위 확장은 DESIGN.md §15 2026-09-23 행(`recommended`)에 기록 |
 
-2026-09-23 안정화에서 오늘 Top 3의 동시 선택 상한을 위한 `20260923_0043_task_focus_cap.sql`을 추가하고 로컬 PostgreSQL로 검증했다. **운영 DB에는 미적용**이므로 운영 상한 보장은 파일명을 지정해 이 마이그레이션을 적용하고 `npm run db:check`가 통과한 뒤에 성립한다.
+2026-09-23 안정화에서 오늘 Top 3의 동시 선택 상한을 위한 `20260923_0043_task_focus_cap.sql`을 추가하고 로컬 PostgreSQL로 검증했다. 같은 날 서울 운영 DB(`ncgpnqfulnlshegalmbd`)에 해당 파일만 적용했으며 `npm run db:check` 전 항목이 통과했다. 트리거는 활성 상태이고 함수 실행 권한은 `service_role`에만 있다. 기존 작업 행은 변경하지 않았다.
 
 Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 102/102이며 Phase 1A 완료를 뜻한다. Phase 1B·1C는 아직 남아 있으므로 Phase 1 전체 완료로 해석하지 않는다.
 
