@@ -94,7 +94,7 @@ export async function getProjectCustomerContext({ kind, id, projectsOnly = false
     recent: activity ? { id: activity.id, kind: activity.kind, body: activity.body || '', occurredAt: activity.occurred_at,
       scope: direct?.[0] ? 'customer' : 'company' } : null,
     projects: (projects || []).slice(0, 20).map((project) => ({ id: project.id, name: project.name, status: project.status,
-      dueAt: project.due_at, href: `/dashboard/work/projects?project=${project.id}` })),
+      dueAt: project.due_at, href: `/dashboard/work/projects?project=${project.id}&focus=overview` })),
     hasMore: (projects?.length || 0) > 20,
   };
 }
