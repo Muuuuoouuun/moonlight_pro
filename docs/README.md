@@ -120,7 +120,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **프로젝트 · PMS (2026-09-13 실행 백로그·하위 아이템 보강)**
 
-- [`superpowers/specs/2026-09-23-project-operator-experience-and-write-trust-design.md`](superpowers/specs/2026-09-23-project-operator-experience-and-write-trust-design.md) — **DRAFT · 평가/권장, 구현 승인 아님**. 할 일·요약·고객에서 프로젝트로 진입해 급한 하위 항목과 체크리스트를 처리하고, 진행/완료 프로젝트를 고객과 함께 월 평가하는 흐름을 구체화한다. 진척 근거·모바일 우선순위·보관 영향·저장 멱등성도 포함하며 기존 완료 검증·PMS 저장 모델은 유지한다.
+- [`superpowers/specs/2026-09-23-project-operator-experience-and-write-trust-design.md`](superpowers/specs/2026-09-23-project-operator-experience-and-write-trust-design.md) — **DRAFT · 평가/권장, 진척 근거 진행 바 UI만 구현·로컬 검증**. 할 일·요약·고객에서 프로젝트로 진입해 급한 하위 항목과 체크리스트를 처리하고, 진행/완료 프로젝트를 고객과 함께 월 평가하는 흐름을 구체화한다. 진척 근거 외 모바일 우선순위·보관 영향·저장 멱등성은 여전히 권장안이며 기존 완료 검증·PMS 저장 모델은 유지한다.
 - [`superpowers/plans/2026-09-13-pms-task-checklists.md`](superpowers/plans/2026-09-13-pms-task-checklists.md) — **구현·로컬 검증 완료**. 하위 아이템 상세와 체크리스트 기반 진척, 항목별 메모·정렬·저장·충돌 선택. `tasks.meta.checklist`를 사용하며 작업 상태와 체크리스트 완료율은 별도로 유지한다.
 
 - [`superpowers/plans/2026-09-13-pms-execution.md`](superpowers/plans/2026-09-13-pms-execution.md) — **구현·로컬 검증 완료**. 기존 tasks 기록의 실행 백로그, 공통 필터, 일괄 변경, 다음 행동, 정확한 버전 비교와 회사/개인 범위 구분. 새 스키마 없이 개인 운영 방향을 유지한다.

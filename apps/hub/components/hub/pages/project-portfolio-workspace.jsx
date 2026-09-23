@@ -61,6 +61,17 @@ function formatScheduleDate(value) {
   }).format(date);
 }
 
+function formatEvidenceDate(value) {
+  const date = dateValue(value);
+  if (!date) return null;
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    timeZone: "Asia/Seoul",
+  }).format(date);
+}
+
 function daysUntil(value, now = new Date()) {
   const due = dateValue(value);
   if (!due) return null;
@@ -311,11 +322,31 @@ export function ProjectPortfolioWorkspace({
     ? (brandByKey.get(project.brand) || brands[0] || null)
     : null;
   const taskStatuses = taskStatusCounts(projectTasks);
-  const totalTasks = projectTasks.length;
-  const doneTasksCount = doneTasks.length;
-  const doingTasksCount = projectTasks.filter((t) => (String(t.status || "").toLowerCase() === "doing" || t.status === "In progress")).length;
-  const blockedTasksCount = projectTasks.filter((t) => (String(t.status || "").toLowerCase() === "blocked" || t.status === "Blocked")).length;
-  const todoTasksCount = Math.max(0, totalTasks - doneTasksCount - doingTasksCount - blockedTasksCount);
+  const progressSource = project?.displayProgress?.source;
+  const isTaskProgress = progress !== null && progressSource === "tasks";
+  const isReportedProgress = progress !== null && progressSource === "reported";
+  const hasUpdateProgress = isReportedProgress && Number.isFinite(project.latestUpdate?.progress);
+  const latestTaskRecord = isTaskProgress
+    ? projectTasks.reduce((latest, task) => {
+        const recorded = dateValue(task.updatedAt);
+        return recorded && (!latest || recorded > latest) ? recorded : latest;
+      }, null)
+    : null;
+  const reportRecordedAt = hasUpdateProgress ? project.latestUpdate.happenedAt : null;
+  const evidenceSource = isTaskProgress ? "하위 항목 기준" : isReportedProgress ? "보고된 진척" : "진척 근거";
+  const evidenceDetail = isTaskProgress
+    ? `${project.displayProgress.done}/${project.displayProgress.total} 완료`
+    : isReportedProgress
+      ? hasUpdateProgress ? "최근 업데이트" : "프로젝트 기록"
+      : project?.displayProgress?.partial ? "일부 확인 불가" : "계산할 항목 없음";
+  const evidenceRecordedAt = isTaskProgress
+    ? formatEvidenceDate(latestTaskRecord)
+    : isReportedProgress ? formatEvidenceDate(reportRecordedAt) : null;
+  const evidenceTime = isTaskProgress
+    ? evidenceRecordedAt ? `최근 항목 기록 ${evidenceRecordedAt}` : "항목 기록 시점 미확인"
+    : isReportedProgress
+      ? evidenceRecordedAt ? `${evidenceRecordedAt} 기록` : "기록 시점 미확인"
+      : null;
   const metrics = React.useMemo(() => {
     const counts = { active: 0, blockedOrOverdue: 0, dueSoon: 0, unmeasured: 0 };
     portfolioProjects.forEach((item) => {
@@ -557,44 +588,54 @@ export function ProjectPortfolioWorkspace({
                   </div>
                 </div>
 
-                <div className="hub-project-portfolio-ruler" style={{ marginTop: 12 }}>
-                  <div className="hub-project-portfolio-ruler__labels">
-                    <span>진척 근거 · {project.displayProgress?.source === "tasks"
-                      ? `하위 항목 ${project.displayProgress.done}/${project.displayProgress.total} 완료`
-                      : project.displayProgress?.source === "reported"
-                        ? `${project.displayProgress.label}${Number.isFinite(project.latestUpdate?.progress) ? ` · ${formatScheduleDate(project.latestUpdate.happenedAt)} 기록` : ' · 기록 시점 미확인'}`
-                        : project.displayProgress?.label || "집계 전"}</span>
-                    <span>{project.deadlineAlertSuppressed ? "이전 기한 · 알림 해제" : dueDays === null ? "기한 미정" : dueDays < 0 ? `${Math.abs(dueDays)}일 지남` : dueDays === 0 ? "오늘 마감" : `마감 ${dueDays}일`}</span>
-                    <span className={risk.risky ? "is-risk" : ""}><Iconed name={risk.risky ? "flag" : !project.dueAt || project.deadlineAlertSuppressed ? "clock" : "check"} size={12} />{risk.label}</span>
-                  </div>
-                  {progress === null ? <p className="hub-project-portfolio-ruler__unmeasured">{project.displayProgress?.partial ? '진척 근거를 일부 읽지 못했습니다.' : '진척을 계산할 하위 항목이나 보고값이 없습니다.'}</p> : <div
-                    className="hub-project-portfolio-ruler__track"
-                    role="progressbar"
-                    aria-label="프로젝트 진척"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={progress ?? undefined}
-                    aria-valuetext={progress === null ? "진척 미집계" : `${progress}% · ${project.displayProgress?.label || "진척 근거 미정"}`}
-                  >
-                    {Array.from({ length: 21 }, (_, index) => <i key={index} data-major={index % 5 === 0} style={{ left: `${index * 5}%` }} />)}
-                    <span style={{ width: `${progress ?? 0}%` }} />
-                    <b style={{ left: `${progress}%` }} />
-                  </div>}
-
-                  {progress !== null && <div className="hub-project-portfolio-ruler__scale mono" aria-hidden="true">
-                    {[0, 25, 50, 75, 100].map((value) => <span key={value}>{value}{value === 100 ? "%" : ""}</span>)}
-                  </div>}
-
-                  {totalTasks > 0 && (
-                    <div className="hub-project-status-bar" style={{ marginTop: 12 }}>
-                      <div className="hub-project-status-bar__track">
-                        {doneTasksCount > 0 && <span style={{ width: `${(doneTasksCount / totalTasks) * 100}%` }} data-status="done" title={`완료 ${doneTasksCount}개`} />}
-                        {doingTasksCount > 0 && <span style={{ width: `${(doingTasksCount / totalTasks) * 100}%` }} data-status="doing" title={`진행 ${doingTasksCount}개`} />}
-                        {todoTasksCount > 0 && <span style={{ width: `${(todoTasksCount / totalTasks) * 100}%` }} data-status="todo" title={`대기 ${todoTasksCount}개`} />}
-                        {blockedTasksCount > 0 && <span style={{ width: `${(blockedTasksCount / totalTasks) * 100}%` }} data-status="blocked" title={`막힘 ${blockedTasksCount}개`} />}
+                <div className="hub-project-portfolio-evidence">
+                  <div className="hub-project-portfolio-evidence__measure">
+                    <div className="hub-project-portfolio-evidence__heading">
+                      <div className="hub-project-portfolio-evidence__source">
+                        <span>{evidenceSource}</span>
+                        <strong>{evidenceDetail}</strong>
                       </div>
+                      {evidenceTime && <span className="hub-project-portfolio-evidence__time">{evidenceTime}</span>}
                     </div>
-                  )}
+                    {progress === null ? (
+                      <p className="hub-project-portfolio-evidence__empty">
+                        <span aria-hidden="true"><Iconed name="signal" size={14} /></span>
+                        {project.displayProgress?.partial
+                          ? "하위 항목 또는 업데이트를 다시 읽어야 진척을 계산할 수 있습니다."
+                          : "하위 항목과 보고값이 없어 진척을 표시할 수 없습니다."}
+                      </p>
+                    ) : (
+                      <>
+                        <div
+                          className="hub-project-portfolio-evidence__track"
+                          role="progressbar"
+                          aria-label={`${project.name} 진척`}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={progress}
+                          aria-valuetext={`${progress}% · ${evidenceSource} · ${evidenceDetail}${evidenceTime ? ` · ${evidenceTime}` : ""}`}
+                        >
+                          <span className="hub-project-portfolio-evidence__fill" style={{ width: `${progress}%` }} />
+                        </div>
+                        {progress === 100 && project.statusKey !== "completed" && (
+                          <p className="hub-project-portfolio-evidence__note">프로젝트 완료는 결과물 검증 후</p>
+                        )}
+                        {project.displayProgress?.evidencePartial && (
+                          <p className="hub-project-portfolio-evidence__note">업데이트 기록 일부 확인 불가</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <div className="hub-project-portfolio-evidence__context">
+                    <span>
+                      <small>기한</small>
+                      <strong className="mono">{project.deadlineAlertSuppressed ? "이전 기한 · 알림 해제" : dueDays === null ? "미정" : dueDays < 0 ? `${Math.abs(dueDays)}일 지남` : dueDays === 0 ? "오늘 마감" : `마감 ${dueDays}일`}</strong>
+                    </span>
+                    <span data-risk={risk.risky ? "true" : "false"}>
+                      <small>위험</small>
+                      <strong><span aria-hidden="true"><Iconed name={risk.risky ? "flag" : "clock"} size={12} /></span>{risk.label}</strong>
+                    </span>
+                  </div>
                 </div>
               </section>
 
