@@ -22,6 +22,8 @@ export const LEGEND_LENS_MAP = {
   godin: { id: "godin", name: "세스 고딘", label: "고딘 (작은 유효시장)" },
   rackham: { id: "rackham", name: "닐 랙햄", label: "랙햄 (SPIN 질문)" },
   goldratt: { id: "goldratt", name: "엘리 골드랫", label: "골드랫 (제약이론 병목)" },
+  carnegie: { id: "carnegie", name: "데일 카네기", label: "카네기 (경청·논쟁회피·오늘의방)" },
+  hill: { id: "hill", name: "나폴레온 힐", label: "힐 (목표확신·등가대가)" },
 };
 
 export async function requestPersonaChat({

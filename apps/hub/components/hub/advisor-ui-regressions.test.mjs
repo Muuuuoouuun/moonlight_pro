@@ -86,6 +86,27 @@ test('a default Council result is not relabeled when a triad is selected for the
   assert.ok(app.findAll(node => node.props.children.includes('기본 자문')).length);
 });
 
+test('Council renders tactical tip with moon tone badge and inset line when present', async () => {
+  const app = mountCouncil();
+  const running = launch(app); app.render();
+  const answerWithTip = {
+    state: 'done',
+    text: '자문 본문',
+    council: {
+      lenses: [{ lens: '카네기', verdict: '경청하라', cost: '반박 포기' }],
+      dissent: '남은 이견',
+      conditionalVerdict: '조건부 결론',
+      nextAction: '1:1 대화 요청',
+      tacticalTip: '논쟁에서 이기는 유일한 방법은 논쟁을 피하는 것임을 명심하십시오.',
+    },
+  };
+  app.pending[0].resolve(answerWithTip); await running; app.render();
+  assert.ok(app.findAll(node => node.props?.children?.includes('논쟁에서 이기는 유일한 방법은 논쟁을 피하는 것임을 명심하십시오.')).length);
+  const tipBadge = app.findAll(node => node.type === 'Badge' && node.props?.children?.includes('💡 거장의 실전 팁'))[0];
+  assert.ok(tipBadge);
+  assert.equal(tipBadge.props.tone, 'moon');
+});
+
 test('ProgressRing exposes a bounded progress value and retains excess completion in accessible text', () => {
   for (const [value, expected] of [[-5, 0], [0, 0], [50, 50], [100, 100], [120, 100], [NaN, 0], [Infinity, 0]]) {
     const markup = renderToStaticMarkup(React.createElement(ProgressRing, { value, size: 28, showLabel: true }));

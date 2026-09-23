@@ -243,6 +243,44 @@ describe('parseCouncilResponse contract parsing', () => {
     assert.equal(result.conditionalVerdict, '조건 A 확인 시 제안, 불확실 시 보류');
     assert.equal(result.nextAction, '체크리스트 확인');
   });
+
+  it('extracts tacticalTip when present in markdown section 4', () => {
+    const mdWithTip = `
+### 1. 관점별 진단
+- **[카네기]**: 상대의 체면을 세워주라 / 즉각적 반박 포기
+- **[나폴레온 힐]**: 흔들림 없는 목적의 명확성을 확립하라 / 미온적 타협 배제
+
+### 2. 남은 이견
+관계적 공감 우선(카네기) vs 원칙적 결단 우선(힐)의 긴장
+
+### 3. 조건부 결론
+상대방이 신뢰를 원할 때는 카네기 접근, 합의된 원칙을 요구할 때는 힐 접근으로 결단한다.
+
+### 4. 1단계 검증 행동
+- 내일 오전 10시까지 상대방의 핵심 우려 1가지를 경청하는 1:1 대화 요청.
+- 💡 [실전 팁]: 논쟁에서 이기는 유일한 방법은 논쟁을 피하는 것임을 명심하십시오. (카네기 『인간관계론』 3부 1장)
+`.trim();
+
+    const result = council.parseCouncilResponse(mdWithTip);
+    assert.equal(result.lenses.length, 2);
+    assert.ok(result.nextAction.includes('1:1 대화 요청'));
+    assert.ok(!result.nextAction.includes('💡'));
+    assert.equal(result.tacticalTip, '논쟁에서 이기는 유일한 방법은 논쟁을 피하는 것임을 명심하십시오. (카네기 『인간관계론』 3부 1장)');
+  });
+
+  it('extracts tacticalTip from JSON format', () => {
+    const jsonWithTip = JSON.stringify({
+      lenses: [{ lens: '카네기', verdict: '경청', cost: '반박 포기' }],
+      dissent: '없음',
+      conditionalVerdict: '경청 후 제안',
+      nextAction: '내일 아침 전화',
+      tacticalTip: '통화 시작 10초 동안 상대방 이름을 세 번 기억하고 불러라.',
+    });
+
+    const result = council.parseCouncilResponse(jsonWithTip);
+    assert.equal(result.nextAction, '내일 아침 전화');
+    assert.equal(result.tacticalTip, '통화 시작 10초 동안 상대방 이름을 세 번 기억하고 불러라.');
+  });
 });
 
 describe('validateAdvisoryFidelity anti-hallucination verification', () => {
