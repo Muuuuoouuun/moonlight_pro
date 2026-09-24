@@ -10,7 +10,6 @@ APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_BINARY="$APP_CONTENTS/MacOS/$APP_NAME"
 
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 swift build -j 2 --package-path "$ROOT_DIR"
 BUILD_DIR="$(swift build --package-path "$ROOT_DIR" --show-bin-path)"
 BUILD_BINARY="$BUILD_DIR/$APP_NAME"
@@ -21,6 +20,7 @@ if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
   exit 1
 fi
 
+pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_CONTENTS/MacOS" "$APP_CONTENTS/Resources"
 cp "$BUILD_BINARY" "$APP_BINARY"
@@ -55,7 +55,11 @@ case "$MODE" in
   --verify|verify)
     open_app
     sleep 1
-    pgrep -x "$APP_NAME" >/dev/null
+    cmp -s "$BUILD_BINARY" "$APP_BINARY"
+    RUNNING_PIDS="$(pgrep -x "$APP_NAME")"
+    [[ "$(printf '%s\n' "$RUNNING_PIDS" | wc -l | tr -d ' ')" == "1" ]]
+    [[ "$(ps -p "$RUNNING_PIDS" -o command=)" == "$APP_BINARY" ]]
+    echo "Verified running build: $APP_BINARY (pid $RUNNING_PIDS)"
     ;;
   *)
     echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2

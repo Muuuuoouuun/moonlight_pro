@@ -1,82 +1,72 @@
 import AppKit
 import SwiftUI
 
-private struct GlassBackdrop: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-    let forcesDarkAppearance: Bool
+/// Keep the desktop sampler outside SwiftUI's clipping/compositing hierarchy.
+@MainActor
+final class GlassPanel: NSView {
+    private let backdrop = NSVisualEffectView()
+    private let foreground: NSView
+    private var accessibilityObserver: NSObjectProtocol?
 
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = .behindWindow
-        view.state = .active
-        view.appearance = forcesDarkAppearance ? NSAppearance(named: .darkAqua) : nil
-        return view
+    static func host<Content: View>(_ content: Content, cornerRadius: CGFloat) -> NSView {
+        let host = NSHostingView(rootView: content)
+        host.sizingOptions = []
+        return GlassPanel(content: host, cornerRadius: cornerRadius)
     }
 
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.material = material
-        view.appearance = forcesDarkAppearance ? NSAppearance(named: .darkAqua) : nil
-    }
-}
-
-private struct GlassPanelStyle: ViewModifier {
-    let cornerRadius: CGFloat
-    let adaptsToSystemAppearance: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius)
-        let rim = adaptsToSystemAppearance ? Palette.glassInk : Palette.moon100
+    private init(content: NSView, cornerRadius: CGFloat) {
         if #available(macOS 26.0, *) {
-            let glass = content
-                .glassEffect(.regular, in: shape)
-                .background {
-                    GlassBackdrop(
-                        material: adaptsToSystemAppearance ? .underWindowBackground : .popover,
-                        forcesDarkAppearance: !adaptsToSystemAppearance
-                    )
-                        .opacity(adaptsToSystemAppearance ? 0.55 : 1)
-                        .clipShape(shape)
-                        .allowsHitTesting(false)
-                }
-                .overlay {
-                    shape.strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                rim.opacity(0.42),
-                                rim.opacity(0.14),
-                                rim.opacity(0.07),
-                                rim.opacity(0.20)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-                }
-            if adaptsToSystemAppearance { glass }
-            else { glass.environment(\.colorScheme, .dark) }
+            let glass = NSGlassEffectView()
+            glass.style = .clear
+            glass.cornerRadius = cornerRadius
+            glass.contentView = content
+            foreground = glass
         } else {
-            let frost = content
-                .background {
-                    GlassBackdrop(material: adaptsToSystemAppearance ? .underWindowBackground : .hudWindow,
-                                  forcesDarkAppearance: !adaptsToSystemAppearance)
-                        .overlay(adaptsToSystemAppearance ? .clear : Palette.surface.opacity(0.68))
-                        .allowsHitTesting(false)
-                }
-                .clipShape(shape)
-                .overlay(shape.strokeBorder(rim.opacity(0.22), lineWidth: 1))
-            if adaptsToSystemAppearance { frost }
-            else { frost.environment(\.colorScheme, .dark) }
+            foreground = content
+        }
+        super.init(frame: .zero)
+
+        backdrop.material = .popover
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .active
+        updateAccessibility()
+        let diameter = cornerRadius * 2 + 1
+        backdrop.maskImage = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
+            NSColor.white.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+            return true
+        }
+        backdrop.maskImage?.capInsets = NSEdgeInsets(top: cornerRadius, left: cornerRadius,
+                                                    bottom: cornerRadius, right: cornerRadius)
+        backdrop.maskImage?.resizingMode = .stretch
+        addSubview(backdrop)
+        addSubview(foreground)
+        for view in [backdrop, foreground] {
+            view.frame = bounds
+            view.autoresizingMask = [.width, .height]
+        }
+        accessibilityObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.updateAccessibility() }
         }
     }
-}
 
-extension View {
-    func moonlightGlassPanel(cornerRadius: CGFloat,
-                             adaptsToSystemAppearance: Bool = false) -> some View {
-        modifier(GlassPanelStyle(cornerRadius: cornerRadius,
-                                 adaptsToSystemAppearance: adaptsToSystemAppearance))
+    private func updateAccessibility() {
+        let reduceTransparency = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+        // Only the material fades; text, input controls and character art stay at full opacity.
+        backdrop.alphaValue = reduceTransparency ? 1 : 0.78
+        if #available(macOS 26.0, *), let glass = foreground as? NSGlassEffectView {
+            glass.style = reduceTransparency ? .regular : .clear
+        }
     }
+
+    deinit {
+        if let accessibilityObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(accessibilityObserver)
+        }
+    }
+
+    required init?(coder: NSCoder) { nil }
 }

@@ -138,21 +138,21 @@ final class WindowCoordinator: NSObject {
         petWindow.contentView = petClickView
         petWindow.hasShadow = false
 
-        previewWindow.contentView = NSHostingView(rootView: PreviewView(model: model) { [weak self] in
+        previewWindow.contentView = GlassPanel.host(PreviewView(model: model) { [weak self] in
             self?.showBar()
-        })
-        barWindow.contentView = NSHostingView(rootView: QuickBarView(
+        }, cornerRadius: 14)
+        barWindow.contentView = GlassPanel.host(QuickBarView(
             model: model,
             close: { [weak self] in self?.dismissBar() },
             modeChanged: { [weak self] in self?.resizeBar() },
             startFocus: { [weak self] in self?.startFocus() }
-        ))
-        widgetWindow.contentView = NSHostingView(rootView: CompactWidgetView(
+        ), cornerRadius: 16)
+        widgetWindow.contentView = GlassPanel.host(CompactWidgetView(
             model: model,
             collapse: { [weak self] in self?.collapseWidget() },
             modeChanged: { [weak self] in self?.resizeWidget() },
             moveVertically: { [weak self] offset in self?.moveWidgetVertically(by: offset) }
-        ))
+        ), cornerRadius: 18)
 
         model.onFocusFinished = { [weak self] in self?.endFocus() }
         placePetInitially()
