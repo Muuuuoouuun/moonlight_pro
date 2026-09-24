@@ -12,6 +12,7 @@ import { recordActivity } from "../repositories/crm-activities.js";
 import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./customer-delete.js";
 import { SUBJECT_KEY_SET } from "./lead-labels.js";
 import { normalizeGenreLabels } from "./customer-labels.js";
+import { promiseColumns, promiseMetaPatch } from "./customer-promise.js";
 import {
   deleteSupabaseRecord,
   insertSupabaseRecord,
@@ -124,6 +125,8 @@ export function buildLeadWrite(payload = {}) {
   if (payload.snooze_until !== undefined) {
     metaPatch.snooze_until = String(payload.snooze_until).trim() || null;
   }
+  // 약속 날짜만 옮기기(고객 드로어 "날짜 다시") — 연락 기록이 아니므로 RPC를 거치지 않는다.
+  Object.assign(metaPatch, promiseMetaPatch(payload));
 
   return { columns, metaPatch };
 }
@@ -268,6 +271,9 @@ export function buildAccountWrite(payload = {}) {
       ? payload.focusOverride
       : null;
   }
+  // 계약 고객의 약속(customer_accounts.next_action + meta.next_action_at) — 고객 드로어가 쓴다.
+  Object.assign(columns, promiseColumns(payload));
+  Object.assign(metaPatch, promiseMetaPatch(payload));
 
   return { columns, metaPatch };
 }
