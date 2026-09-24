@@ -80,6 +80,17 @@ test("sidebar exposes exactly nine primary and two utility anchors", () => {
   assert.ok(!SIDEBAR_ANCHORS.some((a) => a.key === "followups" || a.label === "고객 연락"), "고객 연락 is a revenue tab now, not an anchor");
 });
 
+test('news discovery stays under Content in every scope', () => {
+  const path = 'dashboard/content/news';
+  assert.equal(ownerAnchorKey(path), 'content');
+  for (const scope of ['all', 'classin', 'personal']) {
+    const nav = topNavigationForRoute(path, scope);
+    assert.equal(nav.activeTab?.path, path, scope);
+    assert.ok(nav.tabs.some((tab) => tab.path === path), scope);
+  }
+  assert.ok(navTreePaths().includes(path));
+});
+
 test('overview goals subview has one active child and carries organizational scope', () => {
   const tabs = sidebarChildren('overview', 'classin');
   const goals = tabs.find(tab => tab.key === 'overview-goals');
@@ -303,14 +314,13 @@ test("every child resolves and is owned by its parent anchor in every scope", ()
   }
 });
 
-test("single-destination anchors render no sub-list", () => {
+test("single-destination anchors render no sub-list and ClassIn Content has its discovery tab", () => {
   for (const scope of SIDEBAR_SCOPES) {
     for (const key of ["home", "today"]) {
       assert.deepEqual(sidebarChildren(key, scope.key), [], `${key} in ${scope.key}`);
     }
   }
-  // ClassIn 콘텐츠 is one surface — the anchor is the destination.
-  assert.deepEqual(sidebarChildren("content", "classin"), []);
+  assert.deepEqual(sidebarChildren("content", "classin").map((child) => child.key), ["ct-queue", "ct-news"]);
   assert.ok(sidebarChildren("content", "all").length > 1);
 });
 

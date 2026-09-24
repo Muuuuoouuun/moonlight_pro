@@ -328,6 +328,7 @@ Hub는 읽기 repository와 검토 명령을 담당하고 Engine이 수집·모�
 - 확인 상태: metadata_only / transcript_excerpt / transcript_full / video_analysis와 범위·한계를 보존한다. 자동 자막의 숫자·고유명사·직접 인용은 중요한 경우 별도 대조한다.
 - Brave: Web/News로 발견하고 선택적 LLM Context를 사용한다. 반환 토큰과 URL 수를 제한할 수 있지만 snippet은 원문 전체가 아니다. 별도 Answers 재요약을 모든 결과에 중첩하지 않는다.
 - 보관: Brave 검색 결과의 일부/전체 저장에는 해당 plan의 storage rights 확인이 필요하다. 허용 범위가 확인되기 전 Brave 유래 결과를 durable cache로 저장하는 경로는 활성화하지 않는다. 별도로 허용되는 publisher/RSS 수집은 분리해 운영할 수 있다. 제3자 원문 권리는 검색 API가 제공하지 않는다.
+- **2026-09-24 운영자 확인:** 현재 Brave는 무료 요금제다. 별도 storage rights가 확인되지 않았으므로 Brave 결과는 현재 구현처럼 일시적 발견에만 쓰고 DB에는 저장하지 않는다. 월 무료 제공량을 반복 수집의 승인된 지출 상한으로 간주하지 않으며, 호출 예산과 실행 게이트의 계산은 [Brave News 연결 기록](../plans/2026-09-24-brave-news-discovery.md)을 따른다.
 - 보존 정책: 출처별 허용 범위와 보존 기간에 따라 metadata·짧은 근거·본문을 구분한다. 삭제/갱신 의무가 있으면 파생 저장본도 추적한다. 선택 근거의 재열람 불가 상태도 기록하고 원문 전문 무기한 보관을 기본값으로 두지 않는다.
 
 ## 11. 품질을 실제로 측정하는 방법

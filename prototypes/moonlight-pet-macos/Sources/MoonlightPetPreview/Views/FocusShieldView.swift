@@ -55,5 +55,6 @@ struct FocusShieldView: View {
             }
         }
         .tint(Palette.moon300)
+        .environment(\.colorScheme, .dark)
     }
 }
