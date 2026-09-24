@@ -133,6 +133,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **브랜드 · 개인 매출 (2026-08 이후 추가, 이 인덱스에 늦게 등재)**
 
+- [`superpowers/specs/2026-09-24-personal-business-okr-kpi-design.md`](superpowers/specs/2026-09-24-personal-business-okr-kpi-design.md) — **DRAFT v3 · 운영자 확정 15건(2026-09-24, 3차 4문항 포함) + 권장안, 10월 목표·지표 10개 목표·성과에 등록(2026-09-24, v3 등록 변경 없음), 코드 변경 없음**. 개인 사업 10월 OKR "만들지 않고 이미 가진 것(강의·학원용 소프트웨어 2종·채널)을 돈으로": 주 5~10시간 예산(판매 60%+·유지 10% 이하, **Moonlight 개발은 예산 안이며 10월 동결**), KR 바닥/천장 분리와 안티 골(신규 개발 0, Moonlight 포함), KR2는 1:1 가격 제시만·강의 모집은 마일스톤(9/30 가격 확정·10/9 모집 오픈), 주간 스코어보드 6칸 + 월말 4칸, 소프트웨어 2종은 경계 확인과 병행해 바로 판매하되 취업규칙 관문 표(§6.1)로 멈출 갈래 명시, 끝 그림 미정에 대비한 결정 규칙·분기 결정 질문, 미정 Q1~Q3.
 - [`evaluations/2026-09-20-instagram-reference-audit/brand-direction-operator-decisions-2026-09-23.md`](evaluations/2026-09-20-instagram-reference-audit/brand-direction-operator-decisions-2026-09-23.md) — **7개 브랜드 운영자 답변 반영(2026-09-23)**. 정상화·class.moon 집중과 브랜드별 정체성 기준은 운영자 확인 내용이며, 독자 정의·연재명·첫 게시물 아이디어는 제안이다. 이전 6개 브랜드 조사 문서의 정체성·우선순위·미답 질문을 대체한다.
 - [`superpowers/specs/2026-08-29-brand-tab-design.md`](superpowers/specs/2026-08-29-brand-tab-design.md) — **P0·P1 구현됨 / P2~P5 제안**. 브랜드를 콘텐츠 필터가 아닌 운영 대상으로 분리. `2026-07-15` PMS 분류 §4의 `sns-channel` 축을 부분 대체.
 - [`superpowers/specs/2026-09-01-brand-content-log.md`](superpowers/specs/2026-09-01-brand-content-log.md) — **확정**. 브랜드 컨텐츠 로그(`dashboard/brands/log`) 설계. 운영자 v5 첨부가 확정한 8색 브랜드 아이덴티티 팔레트와 3px 좌측 레일은 DESIGN.md §8.1·§8.2의 이 표면 한정 예외다(§15 2026-09-01 결정).
