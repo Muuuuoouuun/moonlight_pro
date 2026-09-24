@@ -1,0 +1,60 @@
+.office-mentor__reference,
+.office-mentor__source,
+.office-mentor__turn,
+.office-mentor__lane {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+}
+
+.office-mentor__reference summary,
+.office-mentor__source summary {
+  padding: 14px 16px;
+  cursor: pointer;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.office-mentor__reference-body,
+.office-mentor__source-body,
+.office-mentor__lane { padding: 0 16px 16px; }
+.office-mentor__source-body,
+.office-mentor__reference-body { border-top: 1px solid var(--line-soft); padding-top: 14px; }
+.office-mentor__reference-body p,
+.office-mentor__source-body p,
+.office-mentor__source-body li,
+.office-mentor__lane p,
+.office-mentor__turn p { margin: 0 0 10px; color: var(--fg-muted); font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.office-mentor__reference-body p { color: var(--fg); }
+.office-mentor__reference-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--fg-dim); font-size: 11px; }
+.office-mentor__source-body strong { color: var(--fg); font-weight: 500; }
+.office-mentor__source-body ul { margin: 5px 0 12px; padding-left: 18px; }
+.office-mentor__source-ids { margin-bottom: 12px; color: var(--fg-dim); font-size: 10.5px; overflow-wrap: anywhere; }
+.office-mentor__lane { padding-top: 16px; }
+.office-mentor__turn { padding: 16px; }
+.office-mentor__turn + .office-mentor__turn { margin-top: 4px; }
+.office-mentor__turn-question { border-bottom: 1px solid var(--line-soft); margin-bottom: 12px; }
+.office-mentor__turn-question span,
+.office-mentor__turn-answer span { display: block; margin-bottom: 6px; color: var(--fg-dim); font-size: 11px; }
+.office-mentor__turn-answer p { color: var(--fg); margin-bottom: 0; }
+.office-mentor__note,
+.office-mentor__feedback,
+.office-mentor__retention { margin: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.office-mentor__retention { color: var(--fg-dim); font-size: 10.5px; }
+
+@media (max-width: 600px) {
+  .office-mentor__reference summary,
+  .office-mentor__source summary { padding: 14px; }
+  .office-mentor__reference-body,
+  .office-mentor__source-body,
+  .office-mentor__lane,
+  .office-mentor__turn { padding-left: 14px; padding-right: 14px; }
+}
+
+@media (pointer: coarse) {
+  .office-mentor__reference summary,
+  .office-mentor__source summary,
+  .office-mentor__lane .hub-seg__btn,
+  .office-mentor__footer-button { min-height: 44px; }
+}
