@@ -86,6 +86,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 제품·운영 정본
 
+- [macOS 가장자리 펫 목업](superpowers/specs/2026-09-24-macos-edge-pet-mockup-design.md) — **시연용 목업 · Hub 연동/운영 배포 전**. 오른쪽 펫 → 미리보기 → 빠른 기능 바 → Mac 화면 집중 차단의 네 상태. [독립 SwiftPM 목업](../prototypes/moonlight-pet-macos/README.md)은 할 일·메모를 이 Mac에만 저장하고 기존 Hub는 브라우저로 연다. 전체 화면 앱·다중 화면·Spaces 동작은 실장비 검증 항목이다.
+
 - [회의·녹음·메모에서 실행까지](superpowers/specs/2026-09-23-meeting-to-action-orchestration-design.md) — **DRAFT · 권장 · 미구현(2026-09-23)**. 현행 메모/멀티모달/Office/MCP/Codex의 실제 연결 상태를 점검하고, 근거 검토→선택 저장→역할 배분→실행 영수증의 단계별 설계를 제안한다. 운영자 프로필의 직접 녹음·전사 입력, 30일 원본 삭제, 수동 분석·비용 표시 요구는 유지한다.
 
 - [Eevee Office — 9명 역할 지침](superpowers/specs/2026-09-22-office-agent-role-instructions.md) — **실행 지침 구현 · 의미 품질 인증 대기(2026-09-22)**. `role-cards.ts`에서 생성한 읽기용 사본으로 2026-09-21 역할·말투·운영 품질 설계를 구체화한다. 실제 호출·토론 설정·UI 스냅샷·같은 모델의 source review 경계·완료한 UI QA는 [역할 품질 구현 및 검증 계획](superpowers/plans/2026-09-22-office-agent-quality.md)을 따른다. 지침·형식 검사·화면 QA 통과를 역할별 의미 점수로 환산하지 않는다. 아래 업무 내장 설계의 권한·기록·승인·보관 경계는 유지한다.

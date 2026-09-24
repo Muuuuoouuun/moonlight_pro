@@ -1,0 +1,43 @@
+import Foundation
+
+enum SelfCheck {
+    @MainActor
+    static func run() -> Bool {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let clock = FocusClock(endsAt: now.addingTimeInterval(90))
+        guard clock.remaining(at: now) == 90,
+              clock.remaining(at: now.addingTimeInterval(91)) == 0 else {
+            fputs("Focus clock check failed\n", stderr)
+            return false
+        }
+
+        let suite = "MoonlightPetPreview.SelfCheck.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else { return false }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = AppModel(defaults: defaults)
+        model.taskDraft = "  테스트 할 일  "
+        model.addTask()
+        model.memoDraft = "사용자가 쓴 메모"
+        model.saveMemo()
+        let reopened = AppModel(defaults: defaults)
+        guard reopened.tasks.first?.title == "테스트 할 일",
+              reopened.savedMemo == "사용자가 쓴 메모",
+              reopened.openTaskCount == 1,
+              let id = reopened.tasks.first?.id else {
+            fputs("Local persistence check failed\n", stderr)
+            return false
+        }
+        reopened.toggleTask(id)
+        guard reopened.openTaskCount == 0 else {
+            fputs("Task completion check failed\n", stderr)
+            return false
+        }
+        reopened.removeTask(id)
+        guard AppModel(defaults: defaults).tasks.isEmpty else {
+            fputs("Task removal check failed\n", stderr)
+            return false
+        }
+        print("PASS: focus clock, local task and memo persistence, task removal")
+        return true
+    }
+}
