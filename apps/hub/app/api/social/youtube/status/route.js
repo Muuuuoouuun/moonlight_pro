@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import {
   hasYouTubeOAuthStateSecret,
+  getYouTubeConnectionStatus,
   readYouTubeConnections,
   resolveYouTubeOAuthConfig,
   resolveYouTubeRedirectUri,
@@ -28,13 +29,7 @@ export async function GET(req) {
       ? (row) => row.account_key === channelId
       : brandKey ? (row) => row.config?.brandKey === brandKey : () => true,
     summarize: summarizeYouTubeConnection,
-    connectedStatus: (_row, selected) => {
-      if (!selected.hasRefreshToken ||
-        (selected.refreshTokenExpiresAt && Date.parse(selected.refreshTokenExpiresAt) <= Date.now())) {
-        return "reauthorization-required";
-      }
-      return "connected";
-    },
+    connectedStatus: (_row, selected) => getYouTubeConnectionStatus(selected),
   });
 
   return NextResponse.json({

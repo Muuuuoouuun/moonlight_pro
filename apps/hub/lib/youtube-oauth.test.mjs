@@ -7,6 +7,8 @@ import {
   decodeYouTubeState,
   exchangeYouTubeCode,
   fetchAuthenticatedYouTubeChannel,
+  getUsableYouTubeAccessToken,
+  getYouTubeConnectionStatus,
   isExpectedYouTubeChannel,
   resolveYouTubeOAuthConfig,
   saveYouTubeConnection,
@@ -172,4 +174,124 @@ test("a zero-row upsert cannot report a YouTube connection as persisted", async 
   });
   assert.equal(saved.persistence.persisted, false);
   assert.throws(() => assertPersistedSocialConnection(saved), /connection-not-persisted/);
+});
+
+test("server token helper returns a valid token without contacting Google or rewriting storage", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "db-test-key";
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), method: options.method || "GET" });
+    assert.equal(options.method || "GET", "GET");
+    return {
+      ok: true, status: 200,
+      text: async () => JSON.stringify([{
+        id: "connection-1", workspace_id: "workspace-1", provider: "youtube",
+        account_key: "UC123", status: "connected", last_synced_at: "2026-09-24T00:00:00.000Z",
+        config: {
+          channelId: "UC123", accessToken: "still-valid", refreshToken: "refresh-secret",
+          expiresAt: "2026-09-24T02:00:00.000Z", refreshTokenExpiresAt: "2026-10-01T00:00:00.000Z",
+        },
+      }]),
+      headers: { get: () => null },
+    };
+  };
+
+  const result = await getUsableYouTubeAccessToken({
+    workspaceId: "workspace-1", channelId: "UC123", now: Date.parse("2026-09-24T01:00:00.000Z"),
+  });
+  assert.deepEqual(result, { accessToken: "still-valid", refreshed: false, expiresAt: "2026-09-24T02:00:00.000Z" });
+  assert.equal(calls.length, 1);
+  assert.equal(new URL(calls[0].url).searchParams.get("account_key"), "eq.UC123");
+});
+
+test("server token helper refreshes an expired token and saves only the selected account", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "db-test-key";
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const parsed = new URL(url);
+    calls.push({ url: parsed, options });
+    if (parsed.hostname === "db.example.com" && (options.method || "GET") === "GET") {
+      return {
+        ok: true, status: 200,
+        text: async () => JSON.stringify([{
+          id: "connection-1", workspace_id: "workspace-1", provider: "youtube",
+          account_key: "UC123", status: "connected", last_synced_at: "2026-09-24T00:00:00.000Z",
+          config: {
+            channelId: "UC123", channelTitle: "Channel", brandKey: "bridgemaker",
+            accessToken: "expired", refreshToken: "refresh-secret",
+            expiresAt: "2026-09-24T00:30:00.000Z", refreshTokenExpiresAt: "2026-10-01T00:00:00.000Z",
+          },
+        }]),
+        headers: { get: () => null },
+      };
+    }
+    if (parsed.hostname === "oauth2.googleapis.com") {
+      const body = new URLSearchParams(options.body);
+      assert.equal(body.get("grant_type"), "refresh_token");
+      assert.equal(body.get("refresh_token"), "refresh-secret");
+      assert.equal(body.get("client_id"), "youtube-client-id");
+      assert.equal(body.get("client_secret"), "youtube-client-secret");
+      return { ok: true, json: async () => ({
+        access_token: "new-access", refresh_token: "rotated-refresh", expires_in: 3600,
+      }) };
+    }
+    assert.equal(options.method, "PATCH");
+    const record = JSON.parse(options.body);
+    assert.equal(parsed.searchParams.get("workspace_id"), "eq.workspace-1");
+    assert.equal(parsed.searchParams.get("provider"), "eq.youtube");
+    assert.equal(parsed.searchParams.get("account_key"), "eq.UC123");
+    assert.equal(parsed.searchParams.get("status"), "eq.connected");
+    assert.equal(parsed.searchParams.get("last_synced_at"), "eq.2026-09-24T00:00:00.000Z");
+    assert.equal(record.config.accessToken, "new-access");
+    assert.equal(record.config.refreshToken, "rotated-refresh");
+    assert.equal(record.config.brandKey, "bridgemaker");
+    assert.equal(record.config.channelTitle, "Channel");
+    assert.equal(record.config.expiresAt, "2026-09-24T02:00:00.000Z");
+    return {
+      ok: true, status: 200,
+      text: async () => JSON.stringify([{ id: "connection-1", ...record }]),
+      headers: { get: () => null },
+    };
+  };
+
+  const result = await getUsableYouTubeAccessToken({
+    workspaceId: "workspace-1", channelId: "UC123", now: Date.parse("2026-09-24T01:00:00.000Z"),
+  });
+  assert.deepEqual(result, { accessToken: "new-access", refreshed: true, expiresAt: "2026-09-24T02:00:00.000Z" });
+  assert.deepEqual(calls.map((call) => call.options.method || "GET"), ["GET", "POST", "PATCH"]);
+});
+
+test("server token helper refuses an expired refresh grant before calling Google", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "db-test-key";
+  let callCount = 0;
+  globalThis.fetch = async () => {
+    callCount += 1;
+    return {
+      ok: true, status: 200,
+      text: async () => JSON.stringify([{
+        id: "connection-1", workspace_id: "workspace-1", provider: "youtube",
+        account_key: "UC123", status: "connected",
+        config: { channelId: "UC123", accessToken: "expired", refreshToken: "refresh-secret",
+          expiresAt: "2026-09-24T00:00:00.000Z", refreshTokenExpiresAt: "2026-09-24T00:30:00.000Z" },
+      }]),
+      headers: { get: () => null },
+    };
+  };
+  await assert.rejects(getUsableYouTubeAccessToken({
+    workspaceId: "workspace-1", channelId: "UC123", now: Date.parse("2026-09-24T01:00:00.000Z"),
+  }), /youtube-reauthorization-required/);
+  assert.equal(callCount, 1);
+});
+
+test("status distinguishes cached access, refresh needed and reauthorization", () => {
+  const now = Date.parse("2026-09-24T01:00:00.000Z");
+  const connection = { hasAccessToken: true, hasRefreshToken: true,
+    expiresAt: "2026-09-24T02:00:00.000Z", refreshTokenExpiresAt: "2026-10-01T00:00:00.000Z" };
+  assert.equal(getYouTubeConnectionStatus(connection, now), "connected");
+  assert.equal(getYouTubeConnectionStatus({ ...connection, expiresAt: "2026-09-24T00:00:00.000Z" }, now), "refresh-required");
+  assert.equal(getYouTubeConnectionStatus({ ...connection, refreshTokenExpiresAt: "2026-09-24T00:00:00.000Z" }, now), "reauthorization-required");
+  assert.equal(getYouTubeConnectionStatus({ ...connection, hasRefreshToken: false }, now), "reauthorization-required");
 });

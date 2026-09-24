@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import {
   resolveDefaultWorkspaceId,
+  updateSupabaseRecord,
 } from "@com-moon/supabase-rest";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "./social-account-connections.js";
 
@@ -10,6 +11,7 @@ const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels";
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const ACCESS_TOKEN_SAFETY_MS = 60 * 1000;
 const SCOPES = [
   "https://www.googleapis.com/auth/youtube.readonly",
   "https://www.googleapis.com/auth/youtube.upload",
@@ -173,6 +175,100 @@ export async function readYouTubeConnections(workspaceId = resolveDefaultWorkspa
   return listSocialAccountConnections(PROVIDER, workspaceId, accountId);
 }
 
+export function getYouTubeConnectionStatus(connection, now = Date.now()) {
+  if (!connection?.hasRefreshToken ||
+    (connection.refreshTokenExpiresAt &&
+      !(Date.parse(connection.refreshTokenExpiresAt) > now))) {
+    return "reauthorization-required";
+  }
+  return connection.hasAccessToken &&
+    Date.parse(connection.expiresAt) > now + ACCESS_TOKEN_SAFETY_MS
+    ? "connected"
+    : "refresh-required";
+}
+
+/** Server-only. Selects one immutable channel ID and never returns a token to a route response. */
+export async function getUsableYouTubeAccessToken({
+  workspaceId = resolveDefaultWorkspaceId(),
+  channelId,
+  now = Date.now(),
+} = {}) {
+  if (!workspaceId || !channelId) throw new Error("youtube-channel-id-required");
+  const { connections, available } = await readYouTubeConnections(workspaceId, channelId);
+  if (!available) throw new Error("youtube-connection-storage-error");
+  const row = connections[0];
+  if (!row || row.status !== "connected" || row.workspace_id !== workspaceId ||
+    row.provider !== PROVIDER || row.account_key !== channelId ||
+    row.config?.channelId !== channelId) {
+    throw new Error("youtube-connection-not-found");
+  }
+  const config = row.config;
+  const status = getYouTubeConnectionStatus(summarizeYouTubeConnection(row), now);
+  if (status === "reauthorization-required") {
+    throw new Error("youtube-reauthorization-required");
+  }
+  if (status === "connected") {
+    return { accessToken: config.accessToken, refreshed: false, expiresAt: config.expiresAt };
+  }
+  const oauth = resolveYouTubeOAuthConfig();
+  if (!oauth.configured) throw new Error("youtube-client-not-configured");
+  const response = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: oauth.clientId,
+      client_secret: oauth.clientSecret,
+      refresh_token: config.refreshToken,
+      grant_type: "refresh_token",
+    }).toString(),
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null);
+    throw new Error(detail?.error === "invalid_grant"
+      ? "youtube-reauthorization-required" : "youtube-token-refresh-failed");
+  }
+  const token = await response.json();
+  const expiresIn = Number(token?.expires_in);
+  if (!token?.access_token || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+    throw new Error("youtube-token-refresh-invalid-response");
+  }
+  const expiresAt = new Date(now + expiresIn * 1000).toISOString();
+  const nextConfig = {
+    ...config,
+    accessToken: token.access_token,
+    refreshToken: token.refresh_token || config.refreshToken,
+    expiresAt,
+  };
+  const updatedAt = new Date(now).toISOString();
+  const updated = await updateSupabaseRecord("integration_connections", [
+    ["id", `eq.${row.id}`],
+    ["workspace_id", `eq.${workspaceId}`],
+    ["provider", `eq.${PROVIDER}`],
+    ["account_key", `eq.${channelId}`],
+    ["status", "eq.connected"],
+    ["last_synced_at", row.last_synced_at ? `eq.${row.last_synced_at}` : "is.null"],
+  ], { config: nextConfig, last_synced_at: updatedAt }, { returnRepresentation: true });
+  if (!updated.persisted) {
+    if (updated.reason === "no-matching-row") {
+      const latest = await readYouTubeConnections(workspaceId, channelId);
+      const winner = latest.connections[0];
+      if (latest.available && winner?.status === "connected" &&
+        winner.account_key === channelId && winner.config?.channelId === channelId &&
+        getYouTubeConnectionStatus(summarizeYouTubeConnection(winner), now) === "connected") {
+        return {
+          accessToken: winner.config.accessToken,
+          refreshed: false,
+          expiresAt: winner.config.expiresAt,
+        };
+      }
+    }
+    throw new Error("youtube-token-refresh-not-persisted");
+  }
+  return { accessToken: token.access_token, refreshed: true, expiresAt };
+}
+
 export async function saveYouTubeConnection({ workspaceId, token, channel, brandKey = null }) {
   if (!channel?.id) throw new Error("social-account-id-missing");
   const refreshExpiresIn = Number(token.refresh_token_expires_in);
@@ -209,6 +305,7 @@ export function summarizeYouTubeConnection(connection) {
     brandKey: config.brandKey || null,
     expiresAt: config.expiresAt || null,
     refreshTokenExpiresAt: config.refreshTokenExpiresAt || null,
+    hasAccessToken: Boolean(config.accessToken),
     hasRefreshToken: Boolean(config.refreshToken),
   };
 }
