@@ -579,12 +579,14 @@
  * Button/IconButton/Input은 §15 2026-09-15 이후 chrome을 CSS가 소유한다.
  * 여기서 radius와 그림자만 Futura 어휘로 덮는다 — 색은 §5.2 그대로 둔다.
  */
-.hub-app .hub-btn {
+.hub-app .hub-btn:not(.hub-btn--primary) {
   border-radius: var(--fx-pill);
   box-shadow: var(--fx-shadow);
 }
 
-.hub-app .hub-btn:hover { box-shadow: var(--fx-shadow-lift); }
+.hub-app .hub-btn--primary { border-radius: var(--fx-pill); }
+
+.hub-app .hub-btn:not(.hub-btn--primary):hover { box-shadow: var(--fx-shadow-lift); }
 
 .hub-app .hub-btn--ghost { box-shadow: none; }
 .hub-app .hub-btn--ghost:hover { box-shadow: none; }
@@ -605,4 +607,3 @@
 /* 세그먼트 컨트롤 — pill */
 .hub-app .hub-seg { border-radius: var(--fx-pill); }
 .hub-app .hub-seg__btn { border-radius: var(--fx-pill); }
-

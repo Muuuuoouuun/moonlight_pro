@@ -153,8 +153,7 @@ Also defined in `hub-tokens.css` (names verbatim, both themes):
 - Layering: `--z-quick-memo: 60`, `--z-project-detail: 61`, `--z-navigation-overlay: 64`, `--z-navigation: 65`,
   `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100` (defined once on the base block).
 - Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-pop`.
-- Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7). There is no `--r-md`;
-  a few call sites still reference it and silently fall back to square corners (§14 Known gaps).
+- Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7). Call sites use `--r` for the middle step; the undefined `--r-md` references were removed (§15 2026-09-24).
 - Motion: `--dur-hover`, `--dur-enter`, `--dur-panel`, `--dur-overlay`, `--dur-celebrate`, `--dur-gauge`, `--ease-hub`, `--ease-gauge`, `--stagger-step` (§9).
 - Selected project gauge only (§5.2 exception): `--project-gauge-0/25/50/75/100` (hue 255 → 218 → 190 → 280 → 325,
   i.e. blue → cyan → teal → violet → magenta), `--project-gauge-spark`, `--project-gauge-glow`, `--project-gauge-tip-line`.
@@ -177,8 +176,8 @@ type `--fx-hero: 44px`, `--fx-hero-weight: 300`, `--fx-title: 27px`, `--fx-stat:
   `--line-strong` only for pressed/emphasized states.
 - **Gradients:** reserved for the brand mark and the moonstone CTA rim. Never fill a hero, card,
   or section background with a colored gradient. The Moonlight symbol uses a cool silver gradient in
-  `public/icon.svg` (§15 2026-09-24); the primary rim remains an inset shadow currently overridden
-  (§14 Known gaps 2). The gauge track below is the only other sanctioned colored gradient. Neutral utility
+  `public/icon.svg` (§15 2026-09-24); the primary rim remains an inset shadow and is no longer overridden
+  by Futura's generic button shadow. The gauge track below is the only other sanctioned colored gradient. Neutral utility
   gradients (`ScrollShadowX` edge fades to `--bg`, the `Placeholder`
   surface stripe, a `currentColor` strike line) are mechanics, not decoration, and stay allowed. Other colored
   gradients in the code are recorded debt, not precedent (§14 Known gaps 7): the completed / overachieved
@@ -385,7 +384,7 @@ four widths above for new queries is **recommended**, not decided.
 
 Mobile floor status against deep design §17 (390×844):
 - Met: 44px touch floor (above); segmented controls stay horizontal on phones (no forced `flex-basis: 100%`).
-- Not met globally: inputs ≥16px. Base `.hub-input` is 13.5px and only some page stylesheets raise it to 16px.
+- Met: inputs ≥16px at ≤720px or coarse pointer through the shared mobile rule; desktop `.hub-input` remains 13.5px.
 - Not met: Calendar should default to an agenda on phones. `work.jsx` Calendar opens in `week` with no mobile
   branch. Agenda-style lists exist elsewhere (`WeekAgenda` on 내 작업, the 오늘 일정 list on Daily Brief), not in Calendar.
 
@@ -414,8 +413,8 @@ truth. Do not recreate them ad-hoc inside pages.
   survives only as a compatibility wrapper over `TruthBadge`; new call sites use `TruthBadge` directly.
 
 **Shared composites outside the primitives file** (reuse before rebuilding)
-- `BrandMark`, `ProjectProgressGauge`, `ProjectStatusBadge` — `pages/project-pms-components.jsx` (PMS only so far;
-  Revenue, Brands and Overview still render legacy glyphs, §14 Known gaps 9)
+- `BrandMark`, `ProjectProgressGauge`, `ProjectStatusBadge` — `pages/project-pms-components.jsx`.
+  `BrandIcon` (`brand-icons.jsx`) is used by the brand directory, Overview, Revenue and PMS brand references.
 - `StreakMark` — `burning-streak.jsx` (neutral ascending bars, §15 2026-09-22)
 - `CalendarOutcome` (`calendar-outcome.jsx`, compact mode on Home), `ContactRecordForm` / `ContactRecordDrawer`
   (`contact-record-form.jsx`), `GlobalQuickCapture` (`quick-capture.jsx`), `GoalLinks` (`goal-links.jsx`)
@@ -574,8 +573,7 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 - Touch targets: minimum 44px. `hub-tokens.css`의 `(pointer: coarse), (max-width: 720px)` 쿼리가 `button`·`[role="button"]`·
   입력에 44px 플로어를 강제한다 — 예외는 라벨 없는 `role="checkbox"`뿐이고, 글자를 가진 `.hub-checkbox-row`는 44px를 유지한다.
   이 쿼리는 셸 기준점(900px)과 다르다(§7 Responsive).
-- Mobile inputs: 16px 이상(심화 설계 §17, iOS 확대 방지). 현재 전역 규칙이 없고 일부 페이지 CSS만 16px로 올린다 —
-  새 입력 표면은 자기 모바일 쿼리에서 16px를 보장한다.
+- Mobile inputs: 16px 이상(심화 설계 §17, iOS 확대 방지). 공통 `(pointer: coarse), (max-width: 720px)` 규칙이 입력 컴포넌트와 인라인 작은 글자 선언보다 우선해 이 플로어를 보장한다.
 - Text contrast: WCAG AA minimum.
 - Keyboard navigation works for all core flows (⌘K palette is the fast path).
 - Focus uses `outline: 1px solid var(--moon-300)` with 2px offset — never relies on browser defaults. A focus rule changes only the outline; it never sets `border-radius` (the ring follows the element's own radius — see §15 2026-09-16).
@@ -668,27 +666,20 @@ Build order when adding a new surface:
 **Known gaps (measured 2026-09-23 — debt or open questions, never precedent)**
 
 1. §15 2026-09-19 (b) pill controls and shadow-separated cards are confirmed but not rendered (§7 Radius).
-2. The global Futura `.hub-app .hub-btn { box-shadow: var(--fx-shadow) }` has the same specificity as
-   `.hub-btn--primary` and loads later, so it replaces the primary rim shadow that `button-hover.test.mjs` checks
-   in source. Decide whether the primary keeps its rim, then make one rule own it.
-3. `var(--r-md)` is used but never defined (`hub-topbar.jsx`, `floating-mentor-widget.jsx`, `pages/revenue.jsx`,
-   `pages/project-direct-work.module.css`, `app/globals.css`) — those corners render square.
-4. `hub-btn--subtle` (`pages/agents.jsx`) has no CSS rule.
-5. Rails outside §8.1: `inset 2px 0 0 var(--moon-500)` in `floating-mentor-widget.jsx` and `pages/agents.jsx`;
+2. `hub-btn--subtle` (`pages/agents.jsx`) has no CSS rule.
+3. Rails outside §8.1: `inset 2px 0 0 var(--moon-500)` in `floating-mentor-widget.jsx` and `pages/agents.jsx`;
    gold `border-left: 2px solid #ffd166` in `hub-tokens.css` (personal revenue) and `pages/revenue-heatmap.jsx`.
-6. Style-mutating JS hover still in `hub-topbar.jsx` and `pages/automations.jsx` (§8.1 Hover).
-7. Celebration vocabulary pending Q134: completed/overachieved `Progress` gradient, shimmer loop and gold stop,
+4. Style-mutating JS hover still in `hub-topbar.jsx` and `pages/automations.jsx` (§8.1 Hover).
+5. Celebration vocabulary pending Q134: completed/overachieved `Progress` gradient, shimmer loop and gold stop,
    Home's `.fx-progress--completed` gradient, the gold-ended fills in `.personal-revenue-progress-fill.is-all-confirmed`
    and `pages/revenue-heatmap.jsx`, and `hubSparklePop`; the palette ratchet still carries warm literals in
    `celebration-fx.jsx`, `hub-tokens.css`, `pages/overview.jsx` and `pages/revenue-heatmap.jsx`.
-8. Mobile floor: no global 16px input rule; Calendar has no phone agenda (§7 Responsive).
-9. `BrandMark` is PMS-only; `pages/revenue.jsx`, `pages/brands.jsx` and `pages/overview.jsx` still render the
-   legacy `glyph` (§15 2026-08-19 named Revenue and Content as the remaining migration).
-10. Stale code comments: the `hub-futura.css` header ("only inside `.hub-futura`"), `hub-nav.js` ("Nine primary"),
+6. Mobile floor: Calendar has no phone agenda (§7 Responsive). The input size floor is now global at ≤720px or coarse pointer.
+7. Stale code comments: the `hub-futura.css` header ("only inside `.hub-futura`"), `hub-nav.js` ("Nine primary"),
     `hub-tokens.css` ("eight-anchor nav") — the pinned count is 10 + 2; and `motion.test.mjs`'s opening comment
     still says `s` units are not checked, though the test now checks them.
-11. Focus-ring color is mixed (`--moon-300`, `--accent`, raw rgba) and breakpoints drift — both open in `TODOS.md`.
-12. Unsanctioned title scale: `.personal-revenue-header h2` uses `clamp(22px, 2.5vw, 28px)` (§11 allows 20px/500
+8. Focus-ring color is mixed (`--moon-300`, `--accent`, raw rgba) and breakpoints drift — both open in `TODOS.md`.
+9. Unsanctioned title scale: `.personal-revenue-header h2` uses `clamp(22px, 2.5vw, 28px)` (§11 allows 20px/500
     plus the two carve-outs).
 
 ## 15. Decisions Log
@@ -735,3 +726,4 @@ Build order when adding a new surface:
 | 2026-09-24 | 브랜드 목록의 `meta.glyph` 기하 기호를 브랜드별 단색 SVG로 바꾼다. 22th.Nomad=로봇, BridgeMaker=다리, Class.Moon=책, ClassIn Side=대화, HolyFunCollector=웃는 대화, MoonPM=워크플로, Politic_Officer=저울, Study.Seagull=갈매기, 고래=고래, 시나브로=펜촉이다. 이름·DB의 glyph 데이터는 유지하며 브랜드 목록·상세·현황·프로젝트 소속 표시에 같은 심볼을 쓴다. 새 학원은 교육 아이콘, 식별되지 않은 브랜드는 중립 기하 아이콘으로 표시한다 | recommended | 운영자가 브랜드별 의미를 드러내는 아이콘을 요청하고 다리·IT/로봇·고래·펜의 방향을 제시했다. 정확한 모양은 구현안이므로 시각 검토 전까지 권장으로 둔다 |
 | 2026-09-24 | 브랜드 아이콘 네 개를 재정리한다. BridgeMaker=십자가, HolyFunCollector=천사, Study.Seagull=새 윤곽, MoonPM=연결된 작업 흐름이다. 위 행의 해당 네 아이콘 설명을 이 행이 대체하며 나머지 브랜드·표면·DB 계약은 유지한다 | recommended | 운영자가 BridgeMaker·HolyFunCollector·Study.Seagull의 재제작 방향을 지정했다. 네 번째 MoonPM은 기존 세로 칸 아이콘이 18px에서 빽빽해 보여 선정했다. BridgeMaker의 대안으로 기존 아치형 다리 아이콘을 먼저 비교했으나 작은 크기에서 문처럼 보여 십자가를 택했다 |
 | 2026-09-24 | 고래(Go;Re)는 SVG Repo Animals 24의 물뿜는 고래 실루엣, 시나브로는 Phosphor Pen Nib의 잉크 펜촉 아이콘을 쓴다. 위 브랜드 아이콘 행의 해당 두 형태를 이 행이 대체한다 | recommended | 운영자가 기존 아이콘 중 더 어울리는 고래와 잉크 펜을 요청했다. 18px 비교에서 고래의 분수와 꼬리, 펜촉의 외곽이 분명한 자산을 골랐다. 출처와 라이선스는 `brand-icons.LICENSE`에 기록했다 |
+| 2026-09-24 | 브랜드 목록의 운영 상태·집중점이 모두 비었으면 긴 문구 두 개 대신 `운영 방향 정하기` 한 줄을 표시하고 상세의 기존 편집 흐름으로 연결한다. 모바일 목록은 중복 `컨텐츠 로그` 버튼과 시각적 검색·필터 라벨을 덜어 첫 브랜드를 앞당기며, 라벨의 접근 가능한 이름·필터 동작은 유지한다. 모바일 입력은 16px 이상, 미정의 `--r-md` 참조는 `--r`로, Futura 기본 버튼 그림자는 primary를 제외해 CTA rim을 보존한다. Revenue의 마지막 `glyph` 소비자는 `BrandIcon`을 쓴다 | confirmed | 운영자가 디자인 개선 네 항목과 모바일 입력 크기까지 모두 진행하라고 지시했다. 390px 검토에서 첫 브랜드 위치와 입력 글자 크기를 직접 측정했다. 데이터·라우트·상태 의미는 바꾸지 않는다 |

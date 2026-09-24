@@ -2643,7 +2643,7 @@ button {
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--line-soft);
-  border-radius: var(--r-md);
+  border-radius: var(--r);
   background: var(--surface-2);
 }
 .hub-app .hub-project-delete-summary__icon {

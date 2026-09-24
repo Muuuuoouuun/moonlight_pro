@@ -117,6 +117,8 @@ function identityRowLabel(identity) {
 
 function BrandRow({ brand, onOpen }) {
   const open = () => onOpen(brand.key);
+  const operatingLabel = BRAND_OPERATING_STATES.find((s) => s.value === brand.operatingState)?.label;
+  const needsOperatingDirection = !brand.operatingState && !brand.currentFocus;
   return (
     <div
       className="hub-row hub-brand-row"
@@ -143,12 +145,16 @@ function BrandRow({ brand, onOpen }) {
         </span>
       </span>
 
-      <span className="hub-brand-row__rhythm" style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-        {brand.isFocused ? "집중 브랜드 · " : ""}{BRAND_OPERATING_STATES.find((s) => s.value === brand.operatingState)?.label || "운영 상태 미정"}
-      </span>
-      <span className="hub-brand-row__quiet" style={{ fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {brand.currentFocus || "현재 집중점을 정해보세요"}
-      </span>
+      {needsOperatingDirection ? (
+        <span className="hub-brand-row__setup">{brand.isFocused ? "집중 브랜드 · " : ""}운영 방향 정하기</span>
+      ) : <>
+        <span className="hub-brand-row__rhythm" style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+          {brand.isFocused ? "집중 브랜드 · " : ""}{operatingLabel || "운영 상태 미정"}
+        </span>
+        <span className="hub-brand-row__quiet" style={{ fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {brand.currentFocus || "집중점 미정"}
+        </span>
+      </>}
 
       <span className="hub-brand-row__state" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
         {brand.failedPublishes > 0 && (
@@ -370,10 +376,6 @@ export function Brands() {
   const openQueue = React.useCallback((key) => {
     router.push(`/dashboard/content/queue?brand=${encodeURIComponent(key)}`);
   }, [router]);
-  const openContentLog = React.useCallback(() => {
-    router.push("/dashboard/brands/log");
-  }, [router]);
-
   const createBrand = React.useCallback(() => {
     setSaveNote(null);
     setDraft({
@@ -513,7 +515,6 @@ export function Brands() {
             }}>{saveNote.label}</span>
           )}
           {!selected && <>
-            <Button variant="secondary" size="sm" onClick={openContentLog}>컨텐츠 로그</Button>
             <Button variant="primary" size="sm" icon="plus" onClick={createBrand}>브랜드 <Kbd>N</Kbd></Button>
           </>}
         </div>}
@@ -606,9 +607,7 @@ export function Brands() {
                 <span aria-hidden="true" />
                 <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>브랜드</span>
                 <span className="hub-brand-row__rhythm" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>운영 상태</span>
-                <span className="hub-brand-row__quiet" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", textAlign: "right" }}>
-                  현재 집중점
-                </span>
+                <span className="hub-brand-row__quiet" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", textAlign: "right" }}>현재 집중점</span>
                 <span className="hub-brand-row__state" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", textAlign: "right" }}>상태</span>
               </div>
             )}

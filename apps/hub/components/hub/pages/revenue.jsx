@@ -4,6 +4,7 @@ import { GoalLinks } from '../goal-links';
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
+import { BrandIcon } from "../brand-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, CheckboxRow, Progress, CertaintyBadge, LifecycleBadge, ChipToggle, useToast } from "../hub-primitives";
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
@@ -513,7 +514,7 @@ export function RevenueOverview({ onNavigate }) {
             )}
             {byBrand.map(b => (
               <div key={b.key} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 72px', gap: 10, alignItems: 'center' }}>
-                <span style={{ fontSize: 14 }}>{b.glyph}</span>
+                <BrandIcon brand={b} size={18} style={{ color: 'var(--fg-muted)' }} />
                 <div>
                   <div style={{ fontSize: 12, marginBottom: 4 }}>{b.name}</div>
                   <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
@@ -2284,7 +2285,7 @@ export function Deals({ workspace, onNavigate }) {
             padding: '12px 14px',
             background: 'var(--surface-2)',
             border: '1px solid var(--line-soft)',
-            borderRadius: 'var(--r-md)',
+            borderRadius: 'var(--r)',
             display: 'flex',
             flexDirection: 'column',
             gap: 8,

@@ -1,5 +1,5 @@
 .workspace :global(button.hub-project-portfolio-index-row) { min-height: 60px; padding-block: 8px; gap: 5px; }
-.overview { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(230px, 1fr); border: 1px solid var(--line-soft); border-radius: var(--r-md); background: var(--surface); }
+.overview { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(230px, 1fr); border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface); }
 .nextAction { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: center; gap: 6px 16px; padding: 16px 18px; min-width: 0; }
 .nextAction > span { grid-column: 1 / -1; font-size: 10.5px; color: var(--fg-muted); }
 .nextAction > strong { align-self: center; color: var(--fg); font-size: 14px; font-weight: 550; line-height: 1.5; overflow-wrap: anywhere; }
@@ -23,7 +23,7 @@
 .addOptions > div { position: absolute; z-index: 8; right: 0; top: calc(100% + 4px); display: grid; min-width: 166px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-card); }
 .addOptions button { min-height: 36px; padding: 6px 10px; text-align: left; color: var(--fg); font-size: 12px; border-radius: var(--r-sm); }
 .addOptions button:hover { background: var(--surface-2); }
-.workList { min-width: 0; border: 1px solid var(--line-soft); border-radius: var(--r-md); background: var(--surface); }
+.workList { min-width: 0; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface); }
 .listHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); }
 .listHeader h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--fg); font-size: 13px; font-weight: 600; }
 .listHeader h2 span, .listHeader > span { color: var(--fg-muted); font-size: 12px; font-weight: 400; }

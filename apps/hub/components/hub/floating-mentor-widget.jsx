@@ -822,7 +822,7 @@ export function FloatingMentorWidget({
                     alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
                     maxWidth: "88%",
                     padding: "8px 12px",
-                    borderRadius: "var(--r-md)",
+                    borderRadius: "var(--r)",
                     background: msg.role === "user" ? "var(--surface-3)" : "var(--surface-2)",
                     border: `1px solid ${msg.role === "user" ? "var(--line-strong)" : "var(--line)"}`,
                     whiteSpace: "pre-wrap",

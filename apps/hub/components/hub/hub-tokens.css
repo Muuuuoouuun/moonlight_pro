@@ -1551,6 +1551,8 @@
   .hub-app textarea,
   .hub-app select {
     min-height: 44px;
+    /* 390px 입력 품질 플로어. 기존 컴포넌트/인라인의 작은 글자 선언도 덮는다. */
+    font-size: max(16px, 1em) !important;
   }
 
   /* 캡처 폼은 스캔용 테이블이 아니라 운영자가 직접 쓰는 드래프팅 표면이다(§4) —
@@ -1569,6 +1571,7 @@
 }
 
 @media (max-width: 1200px) {
+  .hub-brand-row > .hub-brand-row__setup { grid-column: 3 / -1; }
   .hub-brand-row {
     grid-template-columns: 18px minmax(0, 1fr) 168px 176px;
   }
@@ -1607,7 +1610,8 @@
 
   .hub-brand-row > .hub-brand-row__rhythm,
   .hub-brand-row > .hub-brand-row__quiet,
-  .hub-brand-row > .hub-brand-row__state {
+  .hub-brand-row > .hub-brand-row__state,
+  .hub-brand-row > .hub-brand-row__setup {
     grid-column: 2 / -1;
     /* 인라인 flex 정렬(우측 정렬)을 눌러 쌓인 행의 모든 줄을 왼쪽에 맞춘다. */
     justify-content: flex-start !important;
