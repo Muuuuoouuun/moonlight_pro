@@ -3,7 +3,7 @@
 import React from 'react';
 import { Badge, Button, SelectField, TextAreaField } from '../hub-primitives';
 import {
-  STUDIO_CHANNELS, formatForChannel, isTransformStale, previewCandidate, studioErrorMessage,
+  STUDIO_CHANNELS, buildStudioTransformCommand, isTransformStale, previewCandidate, studioErrorMessage,
 } from '@/lib/content-workflow-client';
 import { postStudio } from './use-content-studio';
 import { ResultPreview } from './content-studio-editors';
@@ -87,19 +87,10 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
       setState((current) => ({ ...current, phase: 'error', message: '콘텐츠를 서버에 먼저 저장해야 AI로 작업할 수 있습니다.' }));
       return;
     }
-    const channel = op === 'repurpose' ? targetChannel : saved.channel;
-    const sameSelection = activeSelection && activeSelection.body === saved.body;
-    let range = sameSelection ? { start: activeSelection.start, end: activeSelection.end } : { start: 0, end: saved.body.length };
-    if (op === 'draft' || op === 'repurpose' || structured) range = { start: 0, end: saved.body.length };
-    if (op === 'hooks' && !sameSelection) range.end = saved.body.indexOf('\n\n') >= 0 ? saved.body.indexOf('\n\n') : saved.body.length;
-    const request = {
-      requestId: crypto.randomUUID(), contentId: saved.contentId, variantId: saved.variantId,
-      expectedVariantUpdatedAt: saved.variantUpdatedAt, operation: op, selection: range, tone,
-      ...(request.trim() ? { request: request.trim() } : {}),
-      target: { variantType: op === 'repurpose' ? formatForChannel(channel) : saved.variantType, channel },
-    };
-    requestRef.current = request;
-    await dispatch(request);
+    const command = buildStudioTransformCommand({ saved, operation: op, selection: activeSelection, tone, targetChannel,
+      operatorRequest: request, structured, requestId: crypto.randomUUID() });
+    requestRef.current = command;
+    await dispatch(command);
   };
   const apply = async (candidate, mode) => {
     const result = await mutate({ action: 'apply_candidate', runId: state.run.id, candidateId: candidate.id, mode });
