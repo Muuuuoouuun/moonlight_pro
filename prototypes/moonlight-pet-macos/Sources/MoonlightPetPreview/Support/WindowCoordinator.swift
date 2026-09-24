@@ -13,6 +13,7 @@ final class PetClickView: NSView {
     private let model: AppModel
     private let interaction = PetInteraction()
     var onClick: (() -> Void)?
+    var onDoubleClick: (() -> Void)?
     var onMoved: (() -> Void)?
     private var lastScreenPoint: NSPoint?
     private var didDrag = false
@@ -75,8 +76,9 @@ final class PetClickView: NSView {
             interaction.isPressed = false
             interaction.isDragging = false
         }
-        if !didDrag && event.clickCount == 1 && bounds.contains(convert(event.locationInWindow, from: nil)) {
-            onClick?()
+        if !didDrag && bounds.contains(convert(event.locationInWindow, from: nil)) {
+            if event.clickCount == 1 { onClick?() }
+            else if event.clickCount == 2 { onDoubleClick?() }
         }
     }
 
@@ -109,6 +111,7 @@ final class WindowCoordinator: NSObject {
     private let petWindow: KeyPanel
     private let previewWindow: KeyPanel
     private let barWindow: KeyPanel
+    private let widgetWindow: KeyPanel
     private var shieldWindows: [ShieldWindow] = []
     private var previousPresentationOptions: NSApplication.PresentationOptions = []
     private var screenObserver: NSObjectProtocol?
@@ -125,10 +128,12 @@ final class WindowCoordinator: NSObject {
         petWindow = Self.panel(size: NSSize(width: 56, height: 56))
         previewWindow = Self.panel(size: NSSize(width: 326, height: 130))
         barWindow = Self.panel(size: Self.barSize(for: model.mode))
+        widgetWindow = Self.panel(size: Self.widgetSize(for: model.compactMode))
         super.init()
 
         let petClickView = PetClickView(frame: NSRect(origin: .zero, size: petWindow.frame.size), model: model)
         petClickView.onClick = { [weak self] in self?.toggleBar() }
+        petClickView.onDoubleClick = { [weak self] in self?.showWidget() }
         petClickView.onMoved = { [weak self] in self?.placeTransientWindows() }
         petWindow.contentView = petClickView
         petWindow.hasShadow = false
@@ -141,6 +146,12 @@ final class WindowCoordinator: NSObject {
             close: { [weak self] in self?.dismissBar() },
             modeChanged: { [weak self] in self?.resizeBar() },
             startFocus: { [weak self] in self?.startFocus() }
+        ))
+        widgetWindow.contentView = NSHostingView(rootView: CompactWidgetView(
+            model: model,
+            collapse: { [weak self] in self?.collapseWidget() },
+            modeChanged: { [weak self] in self?.resizeWidget() },
+            moveVertically: { [weak self] offset in self?.moveWidgetVertically(by: offset) }
         ))
 
         model.onFocusFinished = { [weak self] in self?.endFocus() }
@@ -192,8 +203,11 @@ final class WindowCoordinator: NSObject {
                     self.escapeTimer = nil
                 }
             } else if event.type == .keyDown {
-                self.dismiss(self.previewWindow)
-                self.dismiss(self.barWindow)
+                if self.isRequestedVisible(self.widgetWindow) { self.collapseWidget() }
+                else {
+                    self.dismiss(self.previewWindow)
+                    self.dismiss(self.barWindow)
+                }
             }
             return nil
         }
@@ -215,6 +229,7 @@ final class WindowCoordinator: NSObject {
         guard !model.isFocused else { return }
         if isRequestedVisible(previewWindow) { dismiss(previewWindow) }
         else {
+            if isRequestedVisible(widgetWindow) { collapseWidget() }
             dismiss(barWindow)
             placeTransientWindows()
             present(previewWindow)
@@ -223,6 +238,7 @@ final class WindowCoordinator: NSObject {
 
     func toggleBar() {
         guard !model.isFocused else { return }
+        if isRequestedVisible(widgetWindow) { collapseWidget() }
         if isRequestedVisible(barWindow) { dismiss(barWindow) }
         else { showBar() }
     }
@@ -230,6 +246,7 @@ final class WindowCoordinator: NSObject {
     func showBar() {
         interactionLog.info("show bar")
         guard !model.isFocused else { return }
+        if isRequestedVisible(widgetWindow) { collapseWidget() }
         dismiss(previewWindow)
         placeTransientWindows()
         present(barWindow)
@@ -237,6 +254,32 @@ final class WindowCoordinator: NSObject {
     }
 
     private func dismissBar() { dismiss(barWindow) }
+
+    func showWidget() {
+        interactionLog.info("show dedicated widget")
+        guard !model.isFocused else { return }
+        if isRequestedVisible(widgetWindow) {
+            widgetWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+        hideNow(previewWindow)
+        hideNow(barWindow)
+        model.compactMode = .tasks
+        model.compactOpenRevision += 1
+        widgetWindow.setContentSize(Self.widgetSize(for: .tasks))
+        placeWidget()
+        petWindow.orderOut(nil)
+        present(widgetWindow)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func collapseWidget() {
+        guard isRequestedVisible(widgetWindow) else { return }
+        dismiss(widgetWindow) { [weak self] in
+            guard let self, !self.model.isFocused else { return }
+            self.petWindow.orderFrontRegardless()
+        }
+    }
 
     private func isRequestedVisible(_ window: KeyPanel) -> Bool {
         desiredVisibility[ObjectIdentifier(window)] == true
@@ -275,13 +318,17 @@ final class WindowCoordinator: NSObject {
         }
     }
 
-    private func dismiss(_ window: KeyPanel) {
+    private func dismiss(_ window: KeyPanel, completion: (() -> Void)? = nil) {
         let key = ObjectIdentifier(window)
         let revision = advanceRevision(for: window)
         desiredVisibility[key] = false
-        guard window.isVisible else { return }
+        guard window.isVisible else {
+            completion?()
+            return
+        }
         if PetMotion.reduceMotion {
             hideNow(window)
+            completion?()
             return
         }
         NSAnimationContext.runAnimationGroup { context in
@@ -295,6 +342,7 @@ final class WindowCoordinator: NSObject {
                       !self.isRequestedVisible(window) else { return }
                 window.orderOut(nil)
                 window.alphaValue = 1
+                completion?()
             }
         }
     }
@@ -322,6 +370,49 @@ final class WindowCoordinator: NSObject {
             let y = min(max(pet.midY - window.frame.height / 2, visible.minY + 8), visible.maxY - window.frame.height - 8)
             window.setFrameOrigin(NSPoint(x: x, y: y))
         }
+        placeWidget()
+    }
+
+    private func placeWidget() {
+        let pet = petWindow.frame
+        let visible = petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? pet
+        let size = widgetWindow.frame.size
+        let x = min(max(pet.maxX - size.width, visible.minX + 8), visible.maxX - size.width - 8)
+        let y = min(max(pet.maxY - size.height, visible.minY + 8), visible.maxY - size.height - 8)
+        widgetWindow.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    private func resizeWidget() {
+        let size = Self.widgetSize(for: model.compactMode)
+        var frame = widgetWindow.frame
+        let top = frame.maxY
+        frame.size = size
+        let visible = widgetWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? frame
+        frame.origin.y = min(max(top - size.height, visible.minY + 8), visible.maxY - size.height - 8)
+        if PetMotion.reduceMotion { widgetWindow.setFrame(frame, display: true) }
+        else {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = PetMotion.panelDuration
+                context.timingFunction = PetMotion.timingFunction
+                widgetWindow.animator().setFrame(frame, display: true)
+            }
+        }
+    }
+
+    private func moveWidgetVertically(by offset: CGFloat) {
+        let visible = widgetWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? widgetWindow.frame
+        var origin = widgetWindow.frame.origin
+        origin.y = min(max(origin.y + offset, visible.minY + 8), visible.maxY - widgetWindow.frame.height - 8)
+        widgetWindow.setFrameOrigin(origin)
+        var petOrigin = petWindow.frame.origin
+        petOrigin.y = min(max(widgetWindow.frame.maxY - petWindow.frame.height, visible.minY + 8),
+                          visible.maxY - petWindow.frame.height - 8)
+        petWindow.setFrameOrigin(petOrigin)
+        placeTransientWindows()
+    }
+
+    private static func widgetSize(for mode: CompactMode) -> NSSize {
+        NSSize(width: 288, height: mode == .tasks ? 420 : 304)
     }
 
     private func resizeBar() {
@@ -360,6 +451,7 @@ final class WindowCoordinator: NSObject {
         petWindow.orderOut(nil)
         hideNow(previewWindow)
         hideNow(barWindow)
+        hideNow(widgetWindow)
         previousPresentationOptions = NSApp.presentationOptions
         NSApp.presentationOptions = [.hideDock, .hideMenuBar, .disableProcessSwitching, .disableHideApplication]
         rebuildShields()
