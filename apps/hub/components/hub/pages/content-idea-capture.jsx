@@ -3,22 +3,26 @@
 import React from "react";
 import { Button, TextAreaField, TextField } from "../hub-primitives";
 import { refreshContentLedger } from "../use-content-ledger";
+import { JOURNAL_TAG_LIMIT, JOURNAL_TAG_LENGTH, normalizeJournalTags } from "@/lib/journal-tags";
 
 export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = "personal", fixedScope = false, onSaved }) {
   const [body, setBody] = React.useState("");
   const [sourceUrl, setSourceUrl] = React.useState("");
+  const [tags, setTags] = React.useState([]);
   const [brandId, setBrandId] = React.useState(initialBrand);
   const [scope, setScope] = React.useState(orgScope);
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState("");
   const [error, setError] = React.useState(false);
   const attempt = React.useRef(null);
+  const normalizedTags = normalizeJournalTags(tags);
+  const invalidTags = normalizedTags === null;
 
   React.useEffect(() => { setBrandId(initialBrand); }, [initialBrand]);
 
   async function capture(event) {
     event.preventDefault();
-    if (busy || (!body.trim() && !sourceUrl.trim())) return;
+    if (busy || invalidTags || (!body.trim() && !sourceUrl.trim())) return;
     setBusy(true);
     setError(false);
     setMessage("소재를 저장하고 있습니다…");
@@ -26,6 +30,7 @@ export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = 
     attempt.current ||= {
       action: "idea", contentId: crypto.randomUUID(), variantId: crypto.randomUUID(),
       body: body, sourceUrl: sourceUrl.trim() || undefined, brandId: brandId || undefined,
+      tags: normalizedTags,
       orgScope: brandId ? (['company', 'classin'].includes(brands.find((brand) => brand.id === brandId)?.orgScope) ? 'company' : 'personal') : scope,
     };
     try {
@@ -43,7 +48,7 @@ export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = 
         throw new Error("저장 응답을 받았지만 목록에서 확인하지 못했습니다. 같은 소재로 다시 확인해 주세요.");
       }
       attempt.current = null;
-      setBody(""); setSourceUrl("");
+      setBody(""); setSourceUrl(""); setTags([]);
       setMessage("소재함에 저장했습니다. 준비되면 원고를 이어 쓰세요.");
       onSaved?.(id);
     } catch (cause) {
@@ -66,6 +71,26 @@ export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = 
         onCmdEnter={capture}
       />
       <TextField label="참고 링크 (선택)" type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} disabled={busy || Boolean(attempt.current)} placeholder="https://" />
+      <div>
+        <TextField
+          label="태그 · 선택"
+          placeholder="쉼표로 구분해 입력"
+          value={tags.join(',')}
+          disabled={busy || Boolean(attempt.current)}
+          error={invalidTags ? `태그는 ${JOURNAL_TAG_LIMIT}개까지, 각 ${JOURNAL_TAG_LENGTH}자 이내로 입력해 주세요.` : undefined}
+          onChange={(event) => setTags(event.target.value.split(','))}
+        />
+        {normalizedTags?.length > 0 && (
+          <ul style={{ display: 'flex', flexWrap: 'wrap', gap: 6, listStyle: 'none', margin: '8px 0 0', padding: 0 }} aria-label="입력한 태그">
+            {normalizedTags.map((tag) => (
+              <li key={tag} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: 'var(--fg-muted)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 999, padding: '3px 4px 3px 9px' }}>
+                <span>#{tag}</span>
+                <Button type="button" size="xs" variant="ghost" disabled={busy || Boolean(attempt.current)} aria-label={`${tag} 태그 삭제`} onClick={() => setTags(normalizedTags.filter((value) => value !== tag))}>×</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
         {!brandId && !fixedScope && <label style={{ display: 'grid', gap: 5, fontSize: 12, color: 'var(--fg-muted)' }}>기록 범위<select aria-label="소재 기록 범위" value={scope} onChange={(event) => setScope(event.target.value)} disabled={busy || Boolean(attempt.current)} style={{ minHeight: 40, color: 'var(--fg)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: '8px 10px' }}><option value="personal">개인</option><option value="company">회사</option></select></label>}
         <label style={{ display: "grid", gap: 5, fontSize: 12, color: "var(--fg-muted)", flex: "1 1 180px" }}>
@@ -75,7 +100,7 @@ export function ContentIdeaCapture({ brands = [], initialBrand = "", orgScope = 
             {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
           </select>
         </label>
-        <Button type="submit" variant="primary" disabled={busy || (!body.trim() && !sourceUrl.trim())}>{busy ? "저장 중…" : attempt.current ? "같은 소재로 재시도" : "소재 저장"}</Button>
+        <Button type="submit" variant="primary" disabled={busy || invalidTags || (!body.trim() && !sourceUrl.trim())}>{busy ? "저장 중…" : attempt.current ? "같은 소재로 재시도" : "소재 저장"}</Button>
       </div>
       {message && <div role={error ? "alert" : "status"} style={{ fontSize: 12, color: error ? "var(--danger)" : "var(--fg-muted)" }}>{message}</div>}
     </form>

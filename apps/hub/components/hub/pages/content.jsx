@@ -4,7 +4,7 @@ import { GoalLinks } from '../goal-links';
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Progress, Tabs, Kbd, SectionTitle, EmptyState, Avatar, SyncBadge, TextField, TextAreaField, SelectField } from "../hub-primitives";
+import { Badge, Dot, Card, Button, IconButton, Progress, Tabs, Kbd, SectionTitle, EmptyState, Skeleton, Avatar, SyncBadge, TextField, TextAreaField, SelectField } from "../hub-primitives";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 import { ContentStudio } from "./content-studio";
@@ -16,6 +16,17 @@ import "./content-workflow.css";
 function statusKeyOf(item) {
   if (item?.statusKey) return item.statusKey;
   return String(item?.status || "").toLowerCase();
+}
+
+const CONTENT_QUEUE_PAGE_SIZE = 30;
+
+// 1 … 현재-1 현재 현재+1 … 마지막 — 페이지가 많아져도 번호 줄이 한 줄을 넘지 않는다.
+function contentQueuePageWindow(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const keep = [...new Set([1, 2, total - 1, total, current - 1, current, current + 1])]
+    .filter((n) => n >= 1 && n <= total)
+    .sort((a, b) => a - b);
+  return keep.flatMap((n, i) => (i > 0 && n - keep[i - 1] > 1 ? ['…', n] : [n]));
 }
 
 const EMPTY_CONTENT_LEDGER = {
@@ -33,6 +44,7 @@ const EMPTY_CONTENT_LEDGER = {
   summary: null,
   ideaQueue: [],
   cadence: null,
+  tagTrends: [],
 };
 
 // 모듈 스코프 stale-while-revalidate — Studio↔Queue↔Campaigns 탭 전환마다 기록을 다시
@@ -85,6 +97,7 @@ export function useContentLedger({ catalogOnly = false } = {}) {
             summary: data.summary || null,
             ideaQueue: Array.isArray(data.ideaQueue) ? data.ideaQueue : [],
             cadence: data.cadence || null,
+            tagTrends: Array.isArray(data.tagTrends) ? data.tagTrends : [],
           };
           if (catalogOnly) catalogCache = { at: Date.now(), state: nextState };
           else contentLedgerCache = { at: Date.now(), state: nextState };
@@ -115,12 +128,98 @@ export function Studio({ workspace }) {
   return <ContentStudio workspace={workspace} ledger={ledger} />;
 }
 
+const CADENCE_CHART_W = 180;
+const CADENCE_CHART_H = 52;
+const CADENCE_BASELINE = 46;
+const CADENCE_PLOT_H = 38;
+
+function ContentCadencePanel({ cadence, syncState }) {
+  if (!cadence) {
+    return (
+      <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <SectionTitle style={{ marginBottom: 0 }}>발행 리듬</SectionTitle>
+        {syncState === 'loading'
+          ? <Skeleton lines={3} />
+          : <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{syncState === 'preview' ? '저장소가 연결되면 발행 리듬이 표시됩니다.' : '발행 리듬을 불러오지 못했습니다.'}</div>}
+      </div>
+    );
+  }
+
+  const weeks = Array.isArray(cadence.recentWeeks) ? cadence.recentWeeks : [];
+  const scaleMax = Math.max(cadence.goal || 0, ...weeks.map((w) => w.count || 0), 1) + 1;
+  const marginX = 8, gapW = 10;
+  const barW = weeks.length ? Math.max(6, (CADENCE_CHART_W - marginX * 2 - gapW * (weeks.length - 1)) / weeks.length) : 0;
+  const goalY = CADENCE_BASELINE - ((cadence.goal || 0) / scaleMax) * CADENCE_PLOT_H;
+
+  return (
+    <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <SectionTitle style={{ marginBottom: 0 }}>발행 리듬</SectionTitle>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+        <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>{cadence.published}</span>
+        <span style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>/ {cadence.goal} · 이번 주 발행</span>
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>
+        {cadence.remaining > 0 ? `목표까지 ${cadence.remaining}건` : '이번 주 목표를 달성했어요'}
+      </div>
+      {weeks.length > 0 && (
+        <svg viewBox={`0 0 ${CADENCE_CHART_W} ${CADENCE_CHART_H}`} width="100%" height={CADENCE_CHART_H} role="img" aria-label={`최근 ${weeks.length}주 발행량, 목표 ${cadence.goal}건`}>
+          <line x1={marginX} y1={goalY} x2={CADENCE_CHART_W - marginX} y2={goalY} stroke="var(--line-strong)" strokeWidth="1" strokeDasharray="2 3" />
+          {weeks.map((w, i) => {
+            const x = marginX + i * (barW + gapW);
+            const h = Math.max(1, ((w.count || 0) / scaleMax) * CADENCE_PLOT_H);
+            return <rect key={w.week} x={x} y={CADENCE_BASELINE - h} width={barW} height={h} rx="3" fill={w.current ? 'var(--moon-300)' : 'var(--fg-faint)'} />;
+          })}
+        </svg>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 9, borderTop: '1px solid var(--line-soft)', fontSize: 11.5, color: 'var(--fg-muted)' }}>
+        <span>소재함 대기</span>
+        <span className="num" style={{ color: 'var(--fg)', fontWeight: 500 }}>{cadence.queueDepth}건</span>
+      </div>
+    </div>
+  );
+}
+
+const TAG_TREND_GLYPH = { up: '▲', down: '▼', flat: '·', new: 'NEW' };
+
+function ContentTagTrendPanel({ tagTrends, syncState }) {
+  const loading = syncState === 'loading' && tagTrends.length === 0;
+  const showEmptyNote = !loading && tagTrends.length === 0;
+  const maxCount = Math.max(1, ...tagTrends.map((entry) => entry.count));
+
+  return (
+    <div style={{ border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)', background: 'var(--surface)', padding: 14, display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <SectionTitle style={{ marginBottom: 0 }}>최근 태그</SectionTitle>
+      {loading && <Skeleton lines={4} />}
+      {showEmptyNote && (
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+          {syncState === 'preview'
+            ? '저장소가 연결되면 태그 추세가 표시됩니다.'
+            : syncState === 'error' || syncState === 'partial'
+              ? '태그 추세를 불러오지 못했습니다.'
+              : '최근 30일 동안 태그를 단 소재가 없어요. 소재 메모에 태그를 달아보세요.'}
+        </div>
+      )}
+      {tagTrends.map((entry) => (
+        <div key={entry.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 84px) 1fr 22px 30px', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>#{entry.tag}</span>
+          <span style={{ height: 5, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
+            <span style={{ display: 'block', height: '100%', width: `${Math.round((entry.count / maxCount) * 100)}%`, background: 'var(--moon-300)', borderRadius: 3 }} />
+          </span>
+          <span className="num" style={{ fontSize: 11, color: 'var(--fg-muted)', textAlign: 'right' }}>{entry.count}</span>
+          <span style={{ fontSize: entry.trend === 'new' ? 8.5 : 11, fontWeight: entry.trend === 'new' ? 600 : 400, color: entry.trend === 'new' ? 'var(--accent)' : 'var(--fg-faint)', textAlign: 'center' }}>{TAG_TREND_GLYPH[entry.trend]}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Queue({ workspace }) {
   const ws = getWorkspace(workspace);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = React.useState('all');
   const [brandFilter, setBrandFilter] = React.useState(() => searchParams.get('brand') || 'all');
+  const [page, setPage] = React.useState(1);
   const ledger = useContentLedger();
   const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
   const queue = filterContentByWorkspace(ledger.queue || [], workspace);
@@ -128,6 +227,9 @@ export function Queue({ workspace }) {
   const tabs = contentQueueTabs(filteredByBrand);
   const visibleQueue = tab === 'all' ? filteredByBrand : filteredByBrand.filter((item) => statusKeyOf(item) === tab);
   const activeLabel = tabs.find((entry) => entry.key === tab)?.label || '전체';
+  const totalPages = Math.max(1, Math.ceil(visibleQueue.length / CONTENT_QUEUE_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = visibleQueue.slice((safePage - 1) * CONTENT_QUEUE_PAGE_SIZE, safePage * CONTENT_QUEUE_PAGE_SIZE);
   const selectedBrand = brands.find((brand) => brand.id === brandFilter || brand.key === brandFilter);
   const openStudio = React.useCallback((id) => {
     const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
@@ -136,6 +238,7 @@ export function Queue({ workspace }) {
   const createDraft = React.useCallback(() => openStudio(), [openStudio]);
   usePageCreateHotkey(createDraft);
   React.useEffect(() => { setBrandFilter(searchParams.get('brand') || 'all'); }, [searchParams]);
+  React.useEffect(() => { setPage(1); }, [tab, brandFilter]);
   return (
     <div className="hub-page content-queue" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: "wrap" }}>
@@ -157,16 +260,38 @@ export function Queue({ workspace }) {
         <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{selectedBrand?.name || '현재 범위'} · {filteredByBrand.length}건 중 {visibleQueue.length}건</span>
       </div>
       <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="콘텐츠 단계" />
-      {(tab === 'all' || tab === 'idea') && <ContentIdeaCapture brands={brands} initialBrand={selectedBrand?.id || ''} orgScope={workspace === 'classin' ? 'company' : 'personal'} fixedScope={Boolean(ws)} onSaved={() => setTab('idea')} />}
-      <Card pad={false}>
-        {visibleQueue.length === 0 && <EmptyState icon="queue" title={`${activeLabel}에 표시할 콘텐츠가 없습니다`} description={ledger.syncState === 'error' || ledger.syncState === 'partial' ? '기록 읽기가 완료되지 않았습니다. 실제 콘텐츠가 비어 있다는 뜻은 아닙니다.' : ledger.syncState === 'preview' ? '저장소가 연결되면 저장한 소재와 원고가 여기에 표시됩니다.' : '떠오른 문장이나 링크를 소재함에 담아보세요.'} />}
-        {visibleQueue.map((item, index) => <div key={item.id} className="hub-row hub-content-queue-row" role="button" tabIndex={0} onClick={() => openStudio(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudio(item.id); } }} style={{ display: 'grid', padding: '16px', alignItems: 'center', gap: 12, cursor: 'pointer', borderBottom: index < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
-          <div style={{ minWidth: 0 }}><div style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div><div style={{ marginTop: 5, fontSize: 12, color: 'var(--fg-muted)' }}>{item.channel} · {item.brandName === 'No brand' ? '브랜드 미지정' : item.brandName || '브랜드 미지정'}</div></div>
-          <Badge tone="neutral" size="xs">{tabs.find((entry) => entry.key === statusKeyOf(item))?.label || item.status}</Badge>
-          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{item.when}</span>
-          <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{statusKeyOf(item) === 'idea' ? '원고 시작 →' : '열기 →'}</span>
-        </div>)}
-      </Card>
+      {(tab === 'all' || tab === 'idea') && (
+        <div className="content-queue-split">
+          <ContentIdeaCapture brands={brands} initialBrand={selectedBrand?.id || ''} orgScope={workspace === 'classin' ? 'company' : 'personal'} fixedScope={Boolean(ws)} onSaved={() => setTab('idea')} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+            <ContentCadencePanel cadence={ledger.cadence} syncState={ledger.syncState} />
+            <ContentTagTrendPanel tagTrends={ledger.tagTrends} syncState={ledger.syncState} />
+          </div>
+        </div>
+      )}
+      {visibleQueue.length === 0 && <EmptyState icon="queue" title={`${activeLabel}에 표시할 콘텐츠가 없습니다`} description={ledger.syncState === 'error' || ledger.syncState === 'partial' ? '기록 읽기가 완료되지 않았습니다. 실제 콘텐츠가 비어 있다는 뜻은 아닙니다.' : ledger.syncState === 'preview' ? '저장소가 연결되면 저장한 소재와 원고가 여기에 표시됩니다.' : '떠오른 문장이나 링크를 소재함에 담아보세요.'} />}
+      {pageItems.length > 0 && (
+        <div>
+          {pageItems.map((item, index) => <div key={item.id} className="hub-row hub-content-queue-row" role="button" tabIndex={0} onClick={() => openStudio(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudio(item.id); } }} style={{ display: 'grid', padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', gap: 12, cursor: 'pointer', borderBottom: index < pageItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+            <div style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ flex: '1 1 auto', minWidth: 0, fontSize: 13, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</span>
+              <span style={{ flexShrink: 0, fontSize: 11.5, color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>{item.channel} · {item.brandName === 'No brand' ? '브랜드 미지정' : item.brandName || '브랜드 미지정'}</span>
+            </div>
+            <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>{tabs.find((entry) => entry.key === statusKeyOf(item))?.label || item.status}</span>
+            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{item.when}</span>
+            <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{statusKeyOf(item) === 'idea' ? '원고 시작 →' : '열기 →'}</span>
+          </div>)}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, paddingTop: 14 }}>
+              <IconButton icon="chevronL" size={26} iconSize={13} tooltip="이전 페이지" aria-label="이전 페이지" onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage === 1} />
+              {contentQueuePageWindow(safePage, totalPages).map((entry, i) => entry === '…'
+                ? <span key={`gap-${i}`} style={{ fontSize: 12, color: 'var(--fg-faint)', padding: '0 4px' }}>…</span>
+                : <Button key={entry} variant="ghost" size="xs" active={entry === safePage} aria-current={entry === safePage ? 'page' : undefined} onClick={() => setPage(entry)}>{entry}</Button>)}
+              <IconButton icon="chevronR" size={26} iconSize={13} tooltip="다음 페이지" aria-label="다음 페이지" onClick={() => setPage(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
