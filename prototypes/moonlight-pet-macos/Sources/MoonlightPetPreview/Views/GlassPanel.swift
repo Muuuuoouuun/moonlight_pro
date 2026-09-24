@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 final class GlassPanel: NSView {
     static func host<Content: View>(_ content: Content, cornerRadius: CGFloat, ornament: AnyView? = nil) -> NSView {
-        let host = FirstMouseHostingView(rootView: content.modifier(GlassContentLegibility()).environment(\.colorScheme, .light))
+        let host = FirstMouseHostingView(rootView: content.environment(\.colorScheme, .light))
         host.sizingOptions = []
         host.focusRingType = .none
         let accessory = ornament.map { view -> NSView in
@@ -20,12 +20,13 @@ final class GlassPanel: NSView {
     private let radius: CGFloat
     private let material: NSView
     private let rim: NSView
-    private var fallbackContent: NSView?
+    private let foreground: NSView
     private let ornament: NSView?
 
     private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?) {
         radius = cornerRadius
         self.ornament = ornament
+        foreground = content
         rim = makeOpticalRim(radius: cornerRadius)
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
@@ -33,7 +34,9 @@ final class GlassPanel: NSView {
             glass.style = .clear
             glass.appearance = NSAppearance(named: .aqua)
             glass.cornerRadius = cornerRadius
-            glass.contentView = content
+            // Keep glyphs out of the glass content-compositing subtree. The native
+            // effect handles only the backdrop; the sibling host draws sharp text.
+            glass.contentView = NSView()
             material = glass
         } else {
             let backdrop = NSVisualEffectView()
@@ -51,7 +54,6 @@ final class GlassPanel: NSView {
                                                         bottom: cornerRadius, right: cornerRadius)
             backdrop.maskImage?.resizingMode = .stretch
             material = backdrop
-            fallbackContent = content
         }
         super.init(frame: .zero)
         wantsLayer = true
@@ -60,8 +62,8 @@ final class GlassPanel: NSView {
         layer?.shadowRadius = 6
         layer?.shadowOffset = CGSize(width: 0, height: -2)
         addSubview(material)
-        if let fallbackContent { addSubview(fallbackContent) }
         addSubview(rim)
+        addSubview(foreground)
         if let ornament { addSubview(ornament) }
         updateMaterialAccessibility()
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(updateMaterialAccessibility),
@@ -89,7 +91,7 @@ final class GlassPanel: NSView {
                                     width: CompanionLayout.perchSize, height: CompanionLayout.perchSize)
         }
         material.frame = frame
-        fallbackContent?.frame = frame
+        foreground.frame = frame
         rim.frame = frame
         layer?.shadowPath = CGPath(roundedRect: frame, cornerWidth: radius, cornerHeight: radius, transform: nil)
     }
