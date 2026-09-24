@@ -1,30 +1,204 @@
-.hub-app .customer-focus { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
-.hub-app .customer-focus h3 { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.5; }
-.hub-app .customer-focus > section { border-top: 1px solid var(--line-soft); padding-top: 16px; }
-.hub-app .customer-focus > section > p { margin: 0; }
-.hub-app .customer-focus > .customer-focus-next { border-top: 0; padding: 0 0 0 12px; box-shadow: inset 1px 0 0 var(--line-strong); }
-.hub-app .customer-focus-next h3 { color: var(--fg-muted); font-size: 12px; }
-.hub-app .customer-focus-next p { margin: 8px 0 0; font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
-.hub-app .customer-focus-section-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.hub-app .customer-focus > details { border-top: 1px solid var(--line-soft); }
-.hub-app .customer-focus > details > summary { display: list-item; align-content: center; }
-.hub-app .customer-focus > details[open] > :not(summary) { margin-top: 16px; }
-.hub-app .customer-focus-footer { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; flex-wrap: wrap; }
+/* 고객 — 한 목록 + 한 사람 드로어 (2026-09-24 영업·매출 재설계, 목업 02 · Futura 텍스처).
+ * 색은 토큰만, 보더는 1px, 긴급은 1px inset 레일만(DESIGN §5.2·§8.1). Futura 면(`.fx-card`·
+ * `.fx-page-title`·`.fx-eyebrow`)은 hub-futura.css가 소유하고 여기는 이 화면의 배치만 둔다.
+ * 셀렉터는 `.hub-app`으로 스코프를 올린다 — `.hub-app button` 리셋이 단일 클래스를 이긴다. */
+
+/* ── 페이지 골격 ─────────────────────────────────────────────── */
+/* Futura 섹션 간격(44px)은 이 화면에서 검색·목록을 너무 멀리 띄운다 — 스케일의 24px로 좁힌다. */
+.hub-app .customers-page.hub-futura { gap: 24px; }
+.hub-app .customers-hero { display: grid; gap: 20px; }
+.hub-app .customers-hero .fx-head { align-items: flex-end; }
+.hub-app .customers-hero__eyebrow { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 0 4px; }
+.hub-app .customers-hero__eyebrow .num { letter-spacing: 0; }
+.hub-app .customers-hero__alert { margin: 10px 0 0; font-size: 12px; color: var(--danger); }
+
+/* 검색 — 이 화면의 주 입력이라 가장 크다. 초점 표시는 .hub-field:focus-within이 소유한다. */
+.hub-app .customers-search {
+  display: flex;
+  width: 100%;
+  height: 56px;
+  padding: 0 14px 0 22px;
+  gap: 12px;
+  border-radius: var(--fx-pill);
+  border-color: transparent;
+  background: var(--surface);
+  box-shadow: var(--fx-shadow);
+  color: var(--fg-dim);
+  cursor: text;
+}
+.hub-app .customers-search:hover:not(:focus-within) { border-color: var(--line); }
+.hub-app .customers-search:focus-within { background: var(--surface); box-shadow: var(--fx-shadow), 0 0 0 1px var(--moon-300); }
+.hub-app .customers-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 17px;
+}
+.hub-app .customers-search input::placeholder { color: var(--fg-faint); }
+.hub-app .customers-search__icon, .hub-app .customers-search__kbd { display: inline-flex; color: var(--fg-dim); }
+
+/* ── 도구줄 · 필터 ───────────────────────────────────────────── */
+.hub-app .customers-list { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.hub-app .customers-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+/* 세그먼트는 모바일에서도 가로 한 줄 — 넘치면 가로 스크롤(flex-basis:100% 강제 금지). */
+.hub-app .customers-toolbar .customers-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.hub-app .customers-toolbar__hint { margin-left: auto; font-size: 11.5px; color: var(--fg-dim); }
+.hub-app .customers-filters { padding: 12px 14px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--fx-shadow); }
 .hub-app .customer-label-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 8px 12px; }
 .hub-app .customer-label-filters .hub-field { min-width: 130px; flex: 0 1 170px; }
 .hub-app .customer-label-filters select { min-height: 36px; }
-.hub-app .customer-label-filters__count { margin-left: auto; align-self: center; color: var(--fg-muted); font-size: 12px; }
+
+/* ── 표 ──────────────────────────────────────────────────────── */
+.hub-app .customers-table { padding: 0; overflow: hidden; }
+.hub-app .customers-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(96px, 0.7fr) minmax(0, 1.4fr) minmax(0, 1fr) 96px;
+  gap: 14px;
+  align-items: center;
+  padding: 0 20px;
+}
+/* 헤더 — §6 eyebrow 문법(11px · 대문자 트래킹 · --fg-dim). 칸은 전부 SortHead(3단 정렬). */
+.hub-app .customers-head { min-height: 38px; border-bottom: 1px solid var(--line-soft); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; color: var(--fg-dim); }
+.hub-app .customers-row { min-height: 60px; padding-block: 8px; border-top: 1px solid var(--line-soft); cursor: pointer; }
+.hub-app .customers-rows > .customers-row:first-child { border-top: 0; }
+.hub-app .customers-row[data-selected="true"] { outline: 1px solid var(--moon-300); outline-offset: -2px; }
+/* 약속을 놓친 행 — 1px danger 레일(예산: 목록 위에서 MAX_DANGER_RAILS개). */
+.hub-app .customers-row[data-urgent="true"] { box-shadow: inset 1px 0 0 var(--danger); }
+
+.hub-app .customers-cell { min-width: 0; }
+.hub-app .customers-cell--who { display: flex; align-items: center; gap: 10px; }
+.hub-app .customers-who { display: flex; flex-direction: column; min-width: 0; }
+.hub-app .customers-who__name { display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hub-app .customers-who__star { display: inline-flex; flex-shrink: 0; color: var(--fg-muted); }
+.hub-app .customers-who__org { font-size: 12px; color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.hub-app .customers-next { display: flex; flex-direction: column; min-width: 0; }
+.hub-app .customers-next__what { font-size: 13px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hub-app .customers-next__when { font-size: 12px; color: var(--fg-dim); white-space: nowrap; }
+.hub-app .customers-next__when [data-late="true"] { display: inline-flex; align-items: center; gap: 3px; color: var(--danger); font-weight: 500; }
+.hub-app .customers-next__glyph { display: inline-flex; }
+.hub-app .customers-next[data-empty="true"] .customers-next__what { color: var(--fg-dim); font-weight: 400; }
+
+.hub-app .customers-last { display: flex; flex-direction: column; font-size: 12.5px; color: var(--fg-muted); min-width: 0; }
+.hub-app .customers-last small { font-size: 12px; color: var(--fg-dim); }
+.hub-app .customers-last[data-empty="true"] { color: var(--fg-dim); }
+
+.hub-app .customers-cell--money { text-align: right; }
+/* 금액 = 스칼라 값의 명도 강조(§5.2 Value emphasis) — accent 의미가 아니다. */
+.hub-app .customers-money,
+.hub-app .customer-money { font-size: 13px; font-weight: 500; color: var(--moon-200); font-variant-numeric: tabular-nums; }
+.hub-app .customers-money[data-empty="true"] { color: var(--fg-faint); font-weight: 400; }
+
+.hub-app .customers-foot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 20px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--fg-dim); }
+.hub-app .customers-skeleton { padding: 18px 20px; }
+.hub-app .customers-state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 28px 20px; }
+.hub-app .customers-state p { margin: 0; max-width: 52ch; font-size: 12.5px; line-height: 1.6; color: var(--fg-muted); }
+.hub-app .customers-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+
+/* ── 드로어 ──────────────────────────────────────────────────── */
+.hub-app .customer-focus { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.hub-app .customer-eyebrow { margin: 0; }
+.hub-app .customer-focus-footer { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; flex-wrap: wrap; }
+.hub-app .customer-drawer-id { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hub-app .customer-drawer-id__none { font-size: 12px; color: var(--fg-dim); }
+.hub-app .customer-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.hub-app .customer-drawer-id > .hub-btn:last-child { margin-left: auto; }
+
+/* 다음 약속 — 드로어 맨 위. 놓친 약속은 1px danger 레일 + 직접 라벨. */
+.hub-app .customer-promise { padding: 16px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--fx-shadow); }
+.hub-app .customer-promise[data-late="true"] { box-shadow: inset 1px 0 0 var(--danger), var(--fx-shadow); }
+.hub-app .customer-promise__what { margin: 6px 0 0; font-size: 15px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; color: var(--fg); }
+.hub-app .customer-promise__what[data-muted="true"] { color: var(--fg-muted); font-weight: 500; }
+.hub-app .customer-promise__when { margin: 2px 0 0; font-size: 12.5px; color: var(--fg-muted); }
+.hub-app .customer-promise__late { color: var(--danger); font-weight: 500; }
+.hub-app .customer-promise__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.hub-app .customer-promise__editor { display: grid; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.hub-app .customer-promise__editor .customer-promise__actions { margin-top: 0; }
+.hub-app .customer-promise__dates { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.hub-app .customer-promise__msg { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--fg-muted); }
+.hub-app .customer-promise__msg[data-error="true"] { color: var(--danger); }
+
+/* 기록 — 활동 + 연결 메모의 한 줄기 */
+.hub-app .customer-record { display: flex; flex-direction: column; gap: 8px; }
+.hub-app .customer-focus-section-heading { display: flex; align-items: center; gap: 8px; }
+.hub-app .customer-inline-notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; background: var(--surface-3); border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 12px; color: var(--fg); }
+.hub-app .customer-inline-error { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hub-app .customer-tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hub-app .customer-tl__item { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: flex-start; padding: 6px 0; }
+.hub-app .customer-tl__item::before { content: ""; position: absolute; left: 9.5px; top: 30px; bottom: -6px; width: 1px; background: var(--line-soft); }
+.hub-app .customer-tl__item:last-child::before { display: none; }
+.hub-app .customer-tl__dot { width: 20px; height: 20px; margin-top: 2px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg-muted); display: inline-flex; align-items: center; justify-content: center; }
+.hub-app .customer-tl__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hub-app .customer-tl__body--link { width: 100%; padding: 2px 4px; margin: -2px -4px; border: 0; border-radius: var(--r-sm); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.hub-app .customer-tl__title { font-size: 13px; line-height: 1.5; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
+.hub-app .customer-tl__detail { font-size: 12px; line-height: 1.5; color: var(--fg-muted); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hub-app .customer-tl__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--fg-dim); }
+.hub-app .customer-tl__empty { margin: 0; padding: 6px 0; font-size: 12px; line-height: 1.6; color: var(--fg-dim); }
+
+/* 접힌 섹션 — 거래 · 정보 · 도움 받기 */
+.hub-app .customer-sec { border-top: 1px solid var(--line-soft); padding-top: 4px; }
+.hub-app .customer-sec > summary { list-style: none; display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.hub-app .customer-sec > summary::-webkit-details-marker { display: none; }
+.hub-app .customer-sec__hint { font-size: 12px; color: var(--fg-dim); }
+.hub-app .customer-sec__more { font-size: 12px; color: var(--fg-muted); }
+.hub-app .customer-sec__chev { margin-left: auto; display: inline-flex; color: var(--fg-dim); transition: transform var(--dur-panel) var(--ease-hub); }
+.hub-app .customer-sec[open] > summary .customer-sec__chev { transform: rotate(90deg); }
+.hub-app .customer-sec__in { display: flex; flex-direction: column; gap: 14px; padding: 4px 0 12px; }
+.hub-app .customer-sec--flat { border-top: 0; padding-top: 0; }
+.hub-app .customer-deal { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: var(--r); }
+.hub-app .customer-kv { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 13px; }
+.hub-app .customer-kv dt { font-size: 12px; color: var(--fg-dim); }
+.hub-app .customer-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--fg); }
+.hub-app .customer-kv dd.mono { font-size: 12.5px; }
+.hub-app .customer-kv__label { margin: 0; font-size: 12px; font-weight: 400; color: var(--fg-dim); }
+.hub-app .customer-kv__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hub-app .customer-danger-zone { display: flex; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+
+/* 라벨 편집(과목·지역·장르) */
 .hub-app .customer-labels { display: grid; gap: 8px; }
 .hub-app .customer-labels__values, .hub-app .customer-labels__subjects > div { display: flex; flex-wrap: wrap; gap: 6px; }
-.hub-app .customer-labels__values > span { padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--fg-muted); background: var(--surface-2); font-size: 11.5px; }
+.hub-app .customer-labels__values > span { padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--fg-muted); background: var(--surface-2); font-size: 12px; }
 .hub-app .customer-labels__empty, .hub-app .customer-labels__message { margin: 0; color: var(--fg-muted); font-size: 12px; }
 .hub-app .customer-labels details > summary { min-height: 40px; align-content: center; cursor: pointer; color: var(--fg-muted); font-size: 12px; }
 .hub-app .customer-labels__fields { display: grid; gap: 12px; padding: 12px 0 4px; }
 .hub-app .customer-labels__subjects { display: grid; gap: 8px; }
 .hub-app .customer-labels__field-label { font-size: 12px; color: var(--fg-muted); }
 .hub-app .customer-labels__actions { display: flex; justify-content: flex-end; }
+
+/* ── 모바일 390 ──────────────────────────────────────────────── */
 @media (max-width: 600px) {
-  .hub-app .customer-focus button, .hub-app .customer-focus-footer button { min-height: 44px; }
+  .hub-app .customers-page.hub-futura { gap: 16px; }
+  .hub-app .customers-hero { gap: 14px; }
+  .hub-app .customers-search { height: 52px; padding: 0 8px 0 16px; }
+  /* iOS 확대 방지 — 모바일 입력 16px 플로어(DESIGN §11). */
+  .hub-app .customers-search input { font-size: 16px; }
+  .hub-app .customers-search__kbd { display: none; }
+  .hub-app .customers-toolbar__hint { display: none; }
   .hub-app .customer-label-filters .hub-field { flex: 1 1 120px; min-width: 120px; }
-  .hub-app .customer-label-filters__count { width: 100%; margin-left: 0; }
+
+  /* 행은 카드로: 이름·금액 / 다음 약속 / 마지막 연락 + 단계 */
+  .hub-app .customers-head { display: none; }
+  .hub-app .customers-row.customers-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "who money" "next next" "last phase";
+    gap: 6px 10px;
+    padding: 12px 14px;
+  }
+  .hub-app .customers-cell--who { grid-area: who; }
+  .hub-app .customers-cell--money { grid-area: money; }
+  .hub-app .customers-cell--next { grid-area: next; padding-left: 40px; }
+  .hub-app .customers-cell--last { grid-area: last; padding-left: 40px; }
+  .hub-app .customers-cell--phase { grid-area: phase; justify-self: end; }
+  .hub-app .customers-next { flex-direction: row; align-items: baseline; gap: 6px; }
+  .hub-app .customers-last { flex-direction: row; gap: 6px; }
+  .hub-app .customers-foot { padding: 10px 14px; }
+
+  .hub-app .customer-drawer-id > .hub-btn:last-child { margin-left: 0; }
+  .hub-app .customer-quick { flex: 1 1 100%; }
+  .hub-app .customer-quick .hub-btn, .hub-app .customer-promise__actions .hub-btn { flex: 1 1 auto; }
 }

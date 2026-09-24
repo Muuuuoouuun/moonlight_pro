@@ -1,34 +1,49 @@
 "use client";
 
-// 고객 DB — Leads·Accounts 통합 뷰 (2026-07-16 CRM 와이어프레임 '고객 DB' 화면).
-// 한 테이블에서 리드(영업 진행)와 계정(계약 고객)을 함께 보고, 행 클릭으로 Contact 중심
-// Customer 360 드로어를 연다. 세그먼트는 기록 데이터에서 계산한다 — 근거 없는 세그먼트
-// (재계약 임박 등 소스가 없는 것)는 만들지 않는다.
+// 고객 — 영업·매출의 사람 목록 하나 (2026-09-24 운영자 승인 재설계, 목업 02 · Futura).
+// Leads(영업 중)·Accounts(계약)·고객 DB가 같은 기록을 세 번 보여 주던 것을 한 목록으로 합쳤다.
+// "리드냐 계정이냐"는 사람이 바뀌는 게 아니라 단계가 바뀌는 것이라 단계 열 하나로 읽는다.
+// 이 화면은 대부분 검색창으로 쓴다 — 그래서 검색이 제일 크다. 기본 정렬은 "다음 약속이 급한
+// 순"이라 목록이 곧 할 일 순서다. 판정(세그먼트·약속·마지막 연락·정렬·검색)은 전부
+// lib/sales-os/customer-list.js가 소유한다 — 이 파일은 그리기와 저장 계약만 가진다.
+//
+// 한 사람 = 한 드로어(Customer 360). 맨 위는 프로필이 아니라 '약속'이고, 그다음 기록(활동 +
+// 연결 메모 한 줄기), 접힌 거래·정보·도움 받기 순이다. 연락 기록은 같은 드로어의 기록 모드로
+// 전환해 연다(CRM 스펙 §4.3 — 활성 오버레이는 언제나 하나).
 
 import React from "react";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
-import { RelatedMemos } from '../related-memos';
 import { RelatedCustomerProjects } from '../related-customer-projects';
 import { ContextMemoDrawer } from '../context-memo-drawer';
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import {
-  Badge, Card, Button, IconButton, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
+  Badge, Button, IconButton, Avatar, EmptyState, TruthBadge, Kbd, Drawer,
   SegmentedControl, CheckboxRow, TextField, TextAreaField, SelectField, Skeleton,
-  CertaintyBadge, ChipToggle,
+  CertaintyBadge, ChipToggle, LifecycleBadge, DateQuickPresets, useToast,
 } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { ContactRecordForm } from "../contact-record-form";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
+import { useMemoSearch } from "./use-memo-search";
 import { requestPersonaChat } from "../persona-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { GuruGuidanceCard } from '../guru-guidance-card';
+import { filterLeadsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
+import { isCanonicalUuid } from "@/lib/uuid";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
 import { LEAD_SUBJECTS, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { CUSTOMER_LABEL_MISSING, customerGenreOptions, customerRegionOptions, matchesCustomerLabels, normalizeGenreLabels } from "@/lib/sales-os/customer-labels";
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
+import {
+  CUSTOMER_FOCUS_FILTERS, CUSTOMER_PHASES, CUSTOMER_SEGMENTS, DEFAULT_CUSTOMER_SEGMENT,
+  channelFromPromise, countOpenWithoutPromise, customerDisplayName, customerLastContact,
+  customerOrgLabel, customerPhase, customerPromise, customerSegmentCounts, inCustomerSegment,
+  localDateKey, matchesCustomerFocus, matchesCustomerSearch, recordTimeLabel, shortDateLabel,
+  sortCaption, sortCustomers,
+} from "@/lib/sales-os/customer-list";
 import './customer-focus.css';
 
 // "₩1.2M"/"₩900K"/"—" → 정렬용 숫자 (DESIGN.md §8.1: 금액은 표시 문자열을 파싱해 정렬)
@@ -50,7 +65,7 @@ const fmtMoney = v => {
   return n ? `₩${n}` : "—";
 };
 
-// lead score(0-100) → 계정 health와 같은 3밴드로 접어 한 컬럼에서 읽게 한다
+// lead score(0-100) → 계정 health와 같은 3밴드. '확인 필요' 보조 필터의 원천이다.
 function scoreBand(score) {
   if (!Number.isFinite(score)) return null;
   if (score < 40) return "risk";
@@ -58,9 +73,13 @@ function scoreBand(score) {
   return "ok";
 }
 
-// health는 점수 밴드 — 신호등 금지(§5.2). 점수 미달은 '확인 필요'(neutral)이며, 실제 사건/지연만 danger(DESIGN.md §5.3).
-const HEALTH_TONE = { ok: "neutral", warning: "neutral", risk: "neutral" };
 const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Customer: 3, Lost: 4 };
+
+// 빨강 예산(DESIGN §5.3) — 약속을 놓친 행이 많아도 1px 레일은 위에서부터 이만큼만.
+// 나머지는 "N일 지남" 직접 라벨이 말한다.
+const MAX_DANGER_RAILS = 3;
+
+const SCOPE_LABEL = { classin: "ClassIn", personal: "개인" };
 
 // 통합 행 모델: 리드와 계정을 같은 컬럼 계약으로 투영
 function toRows(ledger) {
@@ -101,14 +120,15 @@ function toRows(ledger) {
       companyId: l.companyId || null,
       name: l.name,
       person: contact?.name || l.contactName || null,
-      personTitle: contact?.title || null,
-      phone: contact?.phone || null,
+      personTitle: contact?.title || l.contactTitle || null,
+      phone: contact?.phone || l.contactPhone || null,
       email: contact?.email || l.contactEmail || null,
-      sub: [l.region, subjectLabels(l.subjects).slice(0, 2).join("·"), l.genres?.[0] ? `#${l.genres[0]}` : null, l.source !== "—" ? l.source : null].filter(Boolean).join(" · "),
+      sub: [l.region, subjectLabels(l.subjects).slice(0, 2).join("·"), l.genres?.[0] ? `#${l.genres[0]}` : null].filter(Boolean).join(" · "),
       region: l.region || "",
       subjects: Array.isArray(l.subjects) ? l.subjects : [],
       genres: Array.isArray(l.genres) ? l.genres : [],
       labelSource: l.labelSource || {},
+      source: l.source && l.source !== "—" ? l.source : "",
       stage: l.stage,
       stageOrder: LEAD_STAGE_ORDER[l.stage] ?? 0,
       health: scoreBand(l.score),
@@ -117,12 +137,13 @@ function toRows(ledger) {
       nextActionAt: l.nextActionAt || null,
       last: l.last || "—",
       lastContactAt: l.lastContactAt || null,
+      lastReaction: l.lastReaction || null,
+      createdAt: l.createdAt || null,
       focusOverride: l.focusOverride || "default",
       valueNum: parseMoney(l.value),
       dormant: Boolean(l.dormant),
-      dormantSince: l.dormantSince,
+      dormantSince: l.dormantSince || null,
       tags: Array.isArray(l.enrichmentTags) ? l.enrichmentTags : [],
-      isNew: l.stage === "New",
       workspace: l.workspace,
       brand: l.brand,
       type: l.type,
@@ -143,11 +164,12 @@ function toRows(ledger) {
       personTitle: contact?.title || null,
       phone: contact?.phone || null,
       email: contact?.email || null,
-      sub: [a.region, subjectLabels(a.subjects).slice(0, 2).join("·"), a.genres?.[0] ? `#${a.genres[0]}` : null, `계약 고객 · 딜 ${a.deals}건`].filter(Boolean).join(" · "),
+      sub: [a.region, subjectLabels(a.subjects).slice(0, 2).join("·"), a.genres?.[0] ? `#${a.genres[0]}` : null].filter(Boolean).join(" · "),
       region: a.region || "",
       subjects: Array.isArray(a.subjects) ? a.subjects : [],
       genres: Array.isArray(a.genres) ? a.genres : [],
       labelSource: a.labelSource || {},
+      source: "",
       stage: "고객",
       stageOrder: 90,
       health: a.health,
@@ -155,12 +177,15 @@ function toRows(ledger) {
       nextAction: a.nextAction || "",
       nextActionAt: a.nextActionAt || null,
       last: a.last || "—",
-      lastContactAt: a.lastContactAt || null,
+      lastContactAt: null,
+      lastReaction: null,
+      createdAt: null,
       focusOverride: a.focusOverride || "default",
       valueNum: Number(a.value) || 0,
-      dormant: false,
+      dealCount: Number(a.deals) || 0,
+      dormant: Boolean(a.dormant),
+      dormantSince: null,
       tags: [],
-      isNew: false,
       type: a.type,
       deals: (a.companyId && dealsByCompany.get(a.companyId)) || [],
       raw: null,
@@ -170,74 +195,78 @@ function toRows(ledger) {
   return [...leadRows, ...accountRows];
 }
 
-const SEGMENTS = [
-  { key: "all", label: "전체" },
-  { key: "important", label: "⭐ 중요 고객" },
-  { key: "risk", label: "확인 필요" },
-  { key: "new", label: "신규" },
-  { key: "dormant", label: "기약 없음" },
-  { key: "customer", label: "계약 고객" },
-];
+function useMediaQuery(query) {
+  const [matches, setMatches] = React.useState(() => (
+    typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(query).matches : false
+  ));
+  React.useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    mql.addEventListener?.("change", onChange);
+    return () => mql.removeEventListener?.("change", onChange);
+  }, [query]);
+  return matches;
+}
 
-function segmentFilter(row, seg) {
-  if (seg === "important") return row.focusOverride === "raise";
-  if (seg === "risk") return row.health === "risk" && !row.dormant;
-  if (seg === "new") return row.isNew;
-  if (seg === "dormant") return row.dormant;
-  if (seg === "customer") return row.kind === "account";
-  return true;
+function isTypingTarget(el) {
+  return Boolean(el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable));
 }
 
 // ── Customer 360 드로어 ──────────────────────────────────────────────────────
-// Contact(사람) 중심 헤더 + 활동 타임라인 + 빠른 기록. 컨택 완료 시트·포커스
-// 오버라이드는 이 패널에 슬롯이 있다 (Phase 1C / focus_override 작업).
 
-const ACT_ICON = { email: "email", meeting: "calendar", call: "signal", note: "edit", deal: "deals", kakao: "chat", quote: "orders", ai: "sparkle", info_session: "brief", demo: "play", visit: "building", update: "rhythm" };
-const ACT_LABEL = { email: "이메일", meeting: "미팅", call: "통화", note: "노트", deal: "딜", kakao: "카카오", quote: "견적", ai: "AI", info_session: "설명회", demo: "데모", visit: "방문", update: "업데이트" };
+const ACT_ICON = { email: "email", meeting: "calendar", call: "signal", note: "edit", deal: "deals", kakao: "chat", quote: "orders", ai: "sparkle", info_session: "brief", demo: "play", visit: "building", update: "rhythm", memo: "pencil" };
+const ACT_LABEL = { email: "이메일", meeting: "미팅", call: "통화", note: "노트", deal: "거래", kakao: "카카오", quote: "견적", ai: "AI", info_session: "설명회", demo: "데모", visit: "방문", update: "업데이트", memo: "메모" };
 // crm_activities.reaction 어휘(0016 CHECK)의 라벨은 followup-scoring이 정본(파일 상단 import).
 // 컨택 시트가 필수로 받는 반응이 타임라인에 되돌아온다(0a).
 
-function ActivityTimeline({ rows, onDeleteActivity }) {
+// 기록 한 줄기 — 활동(crm_activities)과 이 고객에 연결한 메모(journal)를 시간순으로 섞는다.
+// 메모는 열어 보기만, 활동은 되돌리기 가능한 삭제까지.
+function ActivityTimeline({ rows, today, onDeleteActivity, onOpenMemo }) {
   if (!rows.length) {
-    return <div style={{ fontSize: 12, color: "var(--fg-faint)", padding: "10px 0" }}>아직 기록이 없습니다. 아래에서 첫 기록을 남기세요.</div>;
+    return <p className="customer-tl__empty">아직 기록이 없어요. 연락하고 나서 [연락 기록]으로 30초만 남겨 두세요.</p>;
   }
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      {rows.map((a, i) => (
-        <div key={a.id || i} style={{
-          display: "grid",
-          gridTemplateColumns: onDeleteActivity && a.id && !String(a.id).startsWith("local-") ? "18px 1fr auto auto" : "18px 1fr auto",
-          gap: 10,
-          padding: "9px 0",
-          borderBottom: i < rows.length - 1 ? "1px solid var(--line-soft)" : "none",
-          alignItems: "flex-start",
-        }}>
-          <span style={{ color: "var(--fg-muted)", marginTop: 1 }}>
-            <Iconed name={ACT_ICON[a.type] || "edit"} size={13} />
-          </span>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12.5, color: "var(--fg)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{a.msg}</div>
-            <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+    <ol className="customer-tl">
+      {rows.map((a, i) => {
+        const memo = a.source === "memo";
+        const deletable = onDeleteActivity && a.id && !String(a.id).startsWith("local-") && !memo;
+        const when = recordTimeLabel(a.occurredAt, today, a.at || "방금");
+        const body = (
+          <>
+            <span className="customer-tl__title">{a.msg || "—"}</span>
+            {a.detail && <span className="customer-tl__detail">{a.detail}</span>}
+            <span className="customer-tl__meta">
               <span>{ACT_LABEL[a.type] || a.type}</span>
               {/* 반응은 중립 뱃지 — 우려·거절도 여기서는 사실 표시일 뿐, 위기 표현은 별도 채널(§5.3). */}
               {a.reaction && <Badge tone="neutral" size="xs" variant="outline">{REACTION_LABEL[a.reaction] || a.reaction}</Badge>}
-            </div>
-          </div>
-          <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", whiteSpace: "nowrap" }}>{a.at}</span>
-          {onDeleteActivity && a.id && !String(a.id).startsWith("local-") && (
-            <IconButton
-              icon="x"
-              size={20}
-              iconSize={11}
-              tooltip="기록 삭제 (되돌리기 지원)"
-              aria-label="기록 삭제"
-              onClick={() => onDeleteActivity(a)}
-              style={{ opacity: 0.5, marginTop: -2 }}
-            />
-          )}
-        </div>
-      ))}
-    </div>
+              <span className="mono">{when}</span>
+            </span>
+          </>
+        );
+        return (
+          <li key={a.id || i} className="customer-tl__item">
+            <span className="customer-tl__dot" aria-hidden="true"><Iconed name={ACT_ICON[a.type] || "edit"} size={11} /></span>
+            {memo ? (
+              <button type="button" className="hub-row customer-tl__body customer-tl__body--link" onClick={() => onOpenMemo?.(a.noteId)}>{body}</button>
+            ) : (
+              <div className="customer-tl__body">{body}</div>
+            )}
+            {deletable && (
+              <IconButton
+                icon="x"
+                size={24}
+                iconSize={11}
+                tooltip="기록 삭제 (되돌리기 지원)"
+                aria-label="기록 삭제"
+                onClick={() => onDeleteActivity(a)}
+              />
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -258,12 +287,11 @@ function QuickLog({ onSave }) {
         label="빠른 메모"
         value={text}
         onChange={e => setText(e.target.value)}
-        placeholder="연락이 아닌 메모를 남기면 타임라인에 쌓여요"
-        rows={4}
+        placeholder="연락이 아닌 메모를 남기면 기록에 한 줄로 쌓여요"
+        rows={3}
       />
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-        <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" onClick={save} disabled={!text.trim()}>기록 저장</Button>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <Button variant="secondary" size="sm" onClick={save} disabled={!text.trim()}>메모 저장</Button>
       </div>
     </div>
   );
@@ -297,15 +325,14 @@ function DealPipelineSection({ deals }) {
   if (!deals.length) return null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ fontSize: 11, color: "var(--fg-faint)" }}>딜 파이프라인 · {deals.length}건</div>
       {deals.map(d => (
-        <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "8px 11px" }}>
+        <div key={d.id} className="customer-deal">
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.name}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.name}</div>
             <div style={{ marginTop: 4 }}><DealStageRail stage={d.stage} /></div>
           </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div className="num" style={{ fontSize: 12.5, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(d.value)}</div>
+            <div className="num customer-money">{fmtMoney(d.value)}</div>
             <div className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", marginTop: 2 }}>마감 {d.close}</div>
           </div>
         </div>
@@ -411,7 +438,7 @@ function CustomerDeleteAction({ row, onConfirm }) {
       disabled={phase === "checking" || !row.id}
       style={{ color: "var(--danger)" }}
     >
-      {phase === "checking" ? "확인 중…" : "삭제"}
+      {phase === "checking" ? "확인 중…" : "고객 삭제"}
     </Button>
   );
 }
@@ -459,20 +486,17 @@ function CustomerOutreachDrafter({ row }) {
             {loading ? "작성 중…" : "초안 생성"}
           </Button>
         ) : (
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
-          >
+          // 10px 텍스트 버튼은 §8.1 크기 플로어 위반이었다 — 공용 Button(12px)으로.
+          <Button variant="ghost" size="xs" aria-expanded={open} onClick={() => setOpen(false)}>
             접기
-          </button>
+          </Button>
         )}
       </div>
 
       {open && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {loading ? (
-            <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>고객 맥락에 맞는 초안을 작성하고 있습니다…</div>
+            <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>고객 맥락에 맞는 초안을 작성하고 있습니다…</div>
           ) : draftText ? (
             <>
               <div
@@ -480,7 +504,7 @@ function CustomerOutreachDrafter({ row }) {
                   background: "var(--surface-3)",
                   padding: "8px 10px",
                   borderRadius: "var(--r-xs)",
-                  fontSize: 11.5,
+                  fontSize: 12,
                   lineHeight: 1.55,
                   whiteSpace: "pre-wrap",
                   color: "var(--fg)",
@@ -561,7 +585,7 @@ function CustomerLabelsEditor({ row, onSaved }) {
   const visible = [row.region, ...subjectLabels(row.subjects), ...(row.genres || [])].filter(Boolean);
   return (
     <section className="customer-labels" aria-label="고객 라벨">
-      <h3>고객 라벨</h3>
+      <h4 className="customer-kv__label">과목 · 지역 · 장르</h4>
       {visible.length ? (
         <div className="customer-labels__values">
           {row.region && <span>{row.region}{row.labelSource?.region === "derived" ? " · 권장" : ""}</span>}
@@ -589,7 +613,8 @@ function CustomerLabelsEditor({ row, onSaved }) {
           {row.labelSource?.subjects === "derived" && <CertaintyBadge state="recommended" label="과목은 기존 기록에서 권장된 값입니다" />}
           {message && <p role={message.includes("저장했습니다") ? "status" : "alert"} className="customer-labels__message">{message}</p>}
           <div className="customer-labels__actions">
-            <Button variant="primary" size="sm" disabled={!row.id || !changed || saving} onClick={save}>{saving ? "저장 중…" : "라벨 저장"}</Button>
+            {/* 드로어의 primary는 '연락 기록' 하나 — 접힌 섹션의 저장은 secondary다. */}
+            <Button variant="secondary" size="sm" disabled={!row.id || !changed || saving} onClick={save}>{saving ? "저장 중…" : "라벨 저장"}</Button>
           </div>
         </div>
       </details>
@@ -597,15 +622,159 @@ function CustomerLabelsEditor({ row, onSaved }) {
   );
 }
 
-function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, onLabelsSaved }) {
+// ── 다음 약속 카드 ───────────────────────────────────────────────────────────
+// 드로어 맨 위는 프로필이 아니라 약속이다. 이 사람과 다음에 뭘 하기로 했는지가 먼저 보이고,
+// 버튼 두 개로 끝난다 — 했으면 기록, 못 했으면 날짜 다시.
+function PromiseEditor({ mode, initialWhat = "", busy, error, onSave, onCancel }) {
+  const [what, setWhat] = React.useState(initialWhat);
+  const [at, setAt] = React.useState("");
+  const [missing, setMissing] = React.useState("");
+  const needsWhat = mode === "set";
+  const submit = () => {
+    if (needsWhat && !what.trim()) { setMissing("무엇을 하기로 했는지 한 줄 적어 주세요."); return; }
+    if (!at) { setMissing("날짜를 고르세요."); return; }
+    setMissing("");
+    onSave({ what: needsWhat ? what.trim() : undefined, at });
+  };
+  return (
+    <div className="customer-promise__editor" role="group" aria-label={needsWhat ? "약속 정하기" : "날짜 다시 정하기"}>
+      {needsWhat && (
+        <TextField label="무엇을" value={what} onChange={e => { setWhat(e.target.value); setMissing(""); }} placeholder="예: 견적서 보내기" autoFocus />
+      )}
+      <div className="customer-promise__dates">
+        <TextField
+          label="언제"
+          type="date"
+          value={at}
+          onChange={e => { setAt(e.target.value); setMissing(""); }}
+          className="mono"
+          fieldStyle={{ flex: "1 1 150px" }}
+          style={{ padding: "0 10px" }}
+          autoFocus={!needsWhat}
+        />
+        <DateQuickPresets onPick={(value) => { setAt(value); setMissing(""); }} disabled={busy} style={{ flexWrap: "wrap", gap: 4, paddingBottom: 1 }} />
+      </div>
+      {(missing || error) && <p role="alert" className="customer-promise__msg" data-error={error && !missing ? "true" : undefined}>{missing || error}</p>}
+      <div className="customer-promise__actions">
+        <Button variant="secondary" size="sm" onClick={submit} disabled={busy}>{busy ? "저장 중…" : "약속 저장"}</Button>
+        <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>취소</Button>
+      </div>
+    </div>
+  );
+}
+
+function PromiseCard({ promise, busy, error, onRecord, onSave }) {
+  const [editor, setEditor] = React.useState(null); // null | "reschedule" | "set"
+  const late = promise.state === "dated" && promise.late > 0;
+  const save = async (value) => {
+    const ok = await onSave(value);
+    if (ok) setEditor(null);
+  };
+
+  let what; let when = null; let actions = null;
+  if (promise.state === "dated" || promise.state === "undated") {
+    what = promise.what || "다음 약속";
+    when = promise.state === "dated"
+      ? (late
+        ? <><span className="customer-promise__late">{promise.late}일 지남</span> · {promise.dateLabel} 약속</>
+        : <>{promise.whenLabel === promise.dateLabel ? `${promise.dateLabel} 약속` : `${promise.whenLabel} · ${promise.dateLabel}`}</>)
+      : "날짜를 아직 안 정했어요";
+    actions = (
+      <>
+        <Button variant="outline" size="sm" icon="check" onClick={() => onRecord({ kind: channelFromPromise(promise.what) }, { summary: promise.what })}>했어요 · 기록</Button>
+        <Button variant="ghost" size="sm" aria-expanded={editor === "reschedule"} onClick={() => setEditor(editor ? null : "reschedule")}>
+          {promise.state === "dated" ? "날짜 다시" : "날짜 정하기"}
+        </Button>
+      </>
+    );
+  } else if (promise.state === "dormant") {
+    what = promise.days != null ? `기약 없음 · ${promise.days}일째` : "기약 없음";
+    actions = <Button variant="outline" size="sm" aria-expanded={editor === "set"} onClick={() => setEditor(editor ? null : "set")}>약속 정하기</Button>;
+  } else if (promise.state === "closed") {
+    what = "종료된 고객";
+  } else {
+    what = "아직 정하지 않았어요";
+    actions = <Button variant="outline" size="sm" aria-expanded={editor === "set"} onClick={() => setEditor(editor ? null : "set")}>약속 정하기</Button>;
+  }
+  const muted = !(promise.state === "dated" || promise.state === "undated");
+
+  return (
+    <section className="customer-promise" data-late={late ? "true" : undefined} aria-label="다음 약속">
+      <h3 className="fx-eyebrow customer-eyebrow">다음 약속</h3>
+      <p className="customer-promise__what" data-muted={muted ? "true" : undefined}>{what}</p>
+      {when && <p className="customer-promise__when">{when}</p>}
+      {editor ? (
+        <PromiseEditor
+          key={editor}
+          mode={editor}
+          initialWhat={editor === "set" ? promise.what : ""}
+          busy={busy}
+          error={error}
+          onSave={save}
+          onCancel={() => setEditor(null)}
+        />
+      ) : (
+        <>
+          {error && <p role="alert" className="customer-promise__msg" data-error="true">{error}</p>}
+          {actions && <div className="customer-promise__actions">{actions}</div>}
+        </>
+      )}
+    </section>
+  );
+}
+
+// 전화·카톡·메일 — 데이터가 있을 때만. 카톡은 API가 없어 번호 복사까지만 한다.
+function QuickContactActions({ row, onCopied }) {
+  if (!row.phone && !row.email) {
+    return <span className="customer-drawer-id__none">연락처가 아직 없어요</span>;
+  }
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(row.phone);
+      onCopied?.(true);
+    } catch {
+      onCopied?.(false);
+    }
+  };
+  return (
+    <div className="customer-quick" role="group" aria-label="바로 연락">
+      {row.phone && <Button variant="outline" size="sm" icon="signal" onClick={() => window.location.assign(`tel:${String(row.phone).replace(/[^\d+]/g, "")}`)}>전화</Button>}
+      {row.phone && <Button variant="outline" size="sm" icon="copy" onClick={copy}>카톡용 번호 복사</Button>}
+      {row.email && <Button variant="outline" size="sm" icon="email" onClick={() => window.location.assign(`mailto:${row.email}`)}>메일</Button>}
+    </div>
+  );
+}
+
+function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed, onClose, onNavigate, onDelete, onFocusChange, onLabelsSaved, onPromiseSaved, onRecordPersisted, onRecordFailed }) {
+  const toast = useToast();
+  const mobile = useMediaQuery("(max-width: 600px)");
   const [memoState, setMemoState] = React.useState(null);
   const memoContexts = React.useMemo(() => [{ type: row.kind, id: row.id, label: row.person || row.name }], [row.kind, row.id, row.person, row.name]);
   const [activities, setActivities] = React.useState([]);
   const [actSync, setActSync] = React.useState("loading");
-  // 컨택 완료 시트 저장 직후 부모 기록 재조회 없이 최신 다음 액션을 반영
-  const [nextActionOverride, setNextActionOverride] = React.useState(null);
   const [focusOverride, setFocusOverride] = React.useState(row.focusOverride || "default");
   React.useEffect(() => { setFocusOverride(row.focusOverride || "default"); }, [row.focusOverride]);
+
+  // 기록 모드 — 같은 드로어 안에서 공용 기록창으로 전환한다. { preset, draft, error }
+  const [record, setRecord] = React.useState(null);
+  const [recordSeq, setRecordSeq] = React.useState(0);
+  const recordRef = React.useRef(record);
+  recordRef.current = record;
+  const mountedRef = React.useRef(true);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  const startRecord = React.useCallback((preset = {}, draft = null, error = "") => {
+    setRecord({ preset: Object.fromEntries(Object.entries(preset || {}).filter(([, v]) => v != null && v !== "")), draft, error });
+    setRecordSeq((n) => n + 1);
+  }, []);
+  // 늦은 실패로 부모가 기록창을 입력 그대로 다시 열어 달라고 할 때.
+  React.useEffect(() => {
+    if (!recordRequest || recordRequest.key !== row.key) return;
+    startRecord({}, recordRequest.draft || null, recordRequest.error || "");
+    onRecordRequestConsumed?.();
+  }, [recordRequest, row.key, startRecord, onRecordRequestConsumed]);
 
   const { schedule: scheduleActUndo, cancel: cancelActUndo } = useUndoableAction();
   const [actNotice, setActNotice] = React.useState(null);
@@ -613,6 +782,14 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
   const [guruGuidanceId, setGuruGuidanceId] = React.useState(null);
   const [guruQuestion, setGuruQuestion] = React.useState('');
 
+  const [promiseBusy, setPromiseBusy] = React.useState(false);
+  const [promiseError, setPromiseError] = React.useState("");
+  const promise = customerPromise(row, today);
+  const displayName = customerDisplayName(row);
+  const org = customerOrgLabel(row);
+  const phase = CUSTOMER_PHASES[customerPhase(row)];
+
+  const [actError, setActError] = React.useState(null);
   const deleteActivity = React.useCallback((activity) => {
     const match = a => (activity.id ? a.id === activity.id : a === activity);
     const removed = activities.filter(match);
@@ -673,7 +850,30 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
 
   React.useEffect(() => { reload(); }, [reload]);
 
-  const [actError, setActError] = React.useState(null);
+  // 이 고객에 직접 연결한 메모 — 기록 한 줄기에 시간순으로 섞는다(RelatedMemos와 같은 조회).
+  const memoEnabled = (row.kind === "lead" || row.kind === "account") && isCanonicalUuid(row.id);
+  const memoQuery = memoEnabled
+    ? `${new URLSearchParams({ contextType: row.kind, contextId: String(row.id).toLowerCase() })}&limit=5`
+    : "";
+  const memos = useMemoSearch(memoQuery, { enabled: memoEnabled });
+
+  const stream = React.useMemo(() => {
+    const t = (value) => {
+      const n = Date.parse(value || "");
+      return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER; // 저장 전 낙관 행은 맨 위
+    };
+    const acts = activities.map(a => ({ ...a, source: "activity" }));
+    const notes = memoEnabled && memos.status === "live"
+      ? memos.entries.map(e => ({
+        id: `memo:${e.id}`, noteId: e.id, source: "memo", type: "memo",
+        msg: e.title || e.excerpt || "제목 없는 메모",
+        detail: e.title ? e.excerpt : "",
+        occurredAt: e.occurredAt,
+      }))
+      : [];
+    return [...acts, ...notes].sort((a, b) => t(b.occurredAt) - t(a.occurredAt));
+  }, [activities, memos.status, memos.entries, memoEnabled]);
+
   const logActivity = ({ type, body }) => {
     const temp = { id: `local-${Date.now()}`, type, msg: body, at: "방금" };
     setActError(null);
@@ -691,6 +891,47 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
     });
   };
 
+  // 약속만 옮긴다 — 연락 기록이 아니므로 RPC가 아니라 리드·계정 update 라우트(next_action·
+  // next_action_at 스네이크 키, customer-promise.js). 저장 확인 뒤에만 목록에 반영한다.
+  const savePromise = async ({ what, at }) => {
+    if (!row.id) { setPromiseError("저장된 고객이 아니라 약속을 저장할 수 없어요."); return false; }
+    setPromiseBusy(true);
+    setPromiseError("");
+    const patch = { id: row.id };
+    if (what !== undefined) patch.next_action = what;
+    if (at !== undefined) patch.next_action_at = at;
+    const result = await saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", patch);
+    if (!mountedRef.current) return result.ok;
+    setPromiseBusy(false);
+    if (!result.ok) {
+      setPromiseError(result.status === "preview"
+        ? "Preview · 연결 필요 — 약속이 저장되지 않았어요."
+        : `약속을 저장하지 못했어요 (${result.status}). 다시 시도하세요.`);
+      return false;
+    }
+    onPromiseSaved?.(row, {
+      ...(what !== undefined ? { nextAction: what } : {}),
+      ...(at !== undefined ? { nextActionAt: at, dormant: false, dormantSince: null } : {}),
+    });
+    toast.success(at ? `약속 저장됨 · ${shortDateLabel(at)}` : "다음 행동 저장됨");
+    return true;
+  };
+
+  // R — 연락 기록. 입력 중이거나 이 드로어 위에 다른 대화상자가 있으면 양보한다.
+  React.useEffect(() => {
+    if (record || memoState || guruOpen) return undefined;
+    const onKey = (e) => {
+      if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "r" && e.key !== "R") return;
+      if (isTypingTarget(document.activeElement)) return;
+      if (document.querySelectorAll('[role="dialog"]').length > 1) return;
+      e.preventDefault();
+      startRecord();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [record, memoState, guruOpen, startRecord]);
+
   // 이 드로어는 접촉 기록용 360 뷰 — 이름·연락처·단계의 원본 편집은 리드 정식 편집기
   // (?lead= 딥링크)가 담당한다. 계약 고객(account)은 아직 ?account= 딥링크가 없어
   // followups ActivityPanel과 같은 규칙으로 링크를 숨긴다.
@@ -700,234 +941,277 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
 
   if (memoState) return <ContextMemoDrawer contexts={memoContexts} noteId={memoState.noteId || null} onClose={() => setMemoState(null)} />;
 
+  const recordTarget = { kind: row.kind === "account" ? "account" : "lead", id: row.id, companyId: row.companyId, name: displayName };
+  const dealTotal = (row.deals || []).filter(d => d.stage !== "lost").reduce((sum, d) => sum + (Number(d.value) || 0), 0);
+
   return (
     <Drawer
-      title={row.person || row.name}
-      subtitle={row.person ? `${row.name}${row.personTitle ? ` · ${row.personTitle}` : ""}` : (row.sub || null)}
-      onClose={onClose}
-      width="min(440px, 96vw)"
-      footer={(
+      title={record ? "연락 기록" : displayName}
+      subtitle={record ? `${displayName}${org ? ` · ${org}` : ""}` : [org, phase.label].filter(Boolean).join(" · ")}
+      onClose={record ? () => setRecord(null) : onClose}
+      presentation={mobile ? "compact" : "side"}
+      width="min(480px, 96vw)"
+      footer={record ? (
         <div className="customer-focus-footer">
-          <Button variant="primary" onClick={() => setMemoState({})}>메모 남기기</Button>
-          {editHref && <Button variant="outline" size="sm" onClick={() => onNavigate?.(editHref)}>정식 편집 열기</Button>}
-          <div style={{ flex: 1 }} />
-          <CustomerDeleteAction row={row} onConfirm={onDelete} />
+          <Button variant="ghost" size="sm" icon="chevronL" onClick={() => setRecord(null)}>고객 정보로</Button>
+        </div>
+      ) : (
+        <div className="customer-focus-footer">
+          <Button variant="primary" size="md" icon="edit" onClick={() => startRecord()} style={{ flex: 1 }}>연락 기록 <Kbd>R</Kbd></Button>
+          {editHref && <Button variant="ghost" size="md" onClick={() => onNavigate?.(editHref)}>편집</Button>}
         </div>
       )}
     >
-      <div className="customer-focus">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-          <Button
-            variant="outline"
-            active={focusOverride === "raise"}
-            aria-pressed={focusOverride === "raise"}
-            size="xs"
-            icon="star"
-            onClick={() => {
-              const next = focusOverride === "raise" ? "default" : "raise";
-              const prev = focusOverride;
-              setFocusOverride(next);
-              onFocusChange?.(row.key, next);
-              if (!row.id) return;
-              saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
-                id: row.id,
-                focusOverride: next,
-              }).then(r => {
-                if (!r?.ok) {
-                  setFocusOverride(prev);
-                  onFocusChange?.(row.key, prev);
-                }
-              });
+      {record ? (
+        <div className="customer-focus">
+          {/* 상세 안에서는 드로어를 겹치지 않고 폼만 인라인으로 쓴다(CRM 지침 §6.2 —
+              활성 오버레이는 언제나 하나). 껍데기가 필요한 진입점은 ContactRecordDrawer. */}
+          <ContactRecordForm
+            key={recordSeq}
+            target={recordTarget}
+            preset={record.preset}
+            draft={record.draft}
+            initialError={record.error || ""}
+            autoFocus
+            aiContext={`${row.name || "미지정"} · ${row.kind === "account" ? "계약 고객" : `리드 (${phase.label})`}`}
+            onSaved={(o) => {
+              setActivities(prev => [
+                { id: o.activityId, type: o.kind, msg: o.summary, at: "방금", reaction: o.reaction, occurredAt: new Date().toISOString() },
+                ...prev,
+              ]);
             }}
-          >
-            {focusOverride === "raise" ? "⭐ 중요 고객" : "중요 고객 지정"}
-          </Button>
+            onUndone={(optimisticId) => {
+              setActivities(prev => prev.filter(a => a.id !== optimisticId));
+            }}
+            onSummaryPersisted={({ activityId, optimisticId }) => {
+              if (!activityId) { reload(); return; }
+              setActivities(prev => prev.map(a => (
+                a.id === optimisticId ? { ...a, id: activityId } : a
+              )));
+            }}
+            onPersisted={() => onRecordPersisted?.(row)}
+            onFailed={({ message, form }) => onRecordFailed?.(row, {
+              message,
+              form,
+              // 폼이 아직 떠 있으면 폼이 직접 입력을 복원하고 원인을 말한다 — 부모는 알림만.
+              formMounted: mountedRef.current && Boolean(recordRef.current),
+            })}
+            onDone={() => { if (mountedRef.current) setRecord(null); }}
+          />
+          <details className="customer-sec">
+            <summary><h4 className="fx-eyebrow customer-eyebrow">연락이 아닌 한 줄 메모</h4><span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span></summary>
+            <div className="customer-sec__in">
+              {actError && (
+                <div role="alert" style={{ fontSize: 12, color: "var(--danger)", lineHeight: 1.5 }}>
+                  {actError.message}
+                  {actError.body && (
+                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: "var(--fg-muted)" }}>미저장 입력: “{actError.body}”</span>
+                      <Button variant="ghost" size="xs" onClick={() => logActivity({ type: "note", body: actError.body })}>
+                        재시도
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+              <QuickLog onSave={logActivity} />
+            </div>
+          </details>
         </div>
-        {/* 다음 액션 */}
-        {(nextActionOverride ?? row.nextAction) && (
-          <section className="customer-focus-next" aria-label="다음 행동">
-            <h3>다음 행동</h3>
-            <p>{nextActionOverride ?? row.nextAction}</p>
-          </section>
-        )}
-
-        <GuruGuidanceCard domain="sales" compact onAsk={card => {
-          setGuruGuidanceId(card.id);
-          setGuruQuestion(card.question);
-          setGuruOpen(true);
-        }} />
-
-        <CustomerLabelsEditor row={row} onSaved={onLabelsSaved} />
-
-
-        {/* 활동 타임라인 (읽기 우선 배치) */}
-        <section className="customer-focus-activity" aria-label="활동 타임라인">
-          <div className="customer-focus-section-heading">
-            <h3>활동 타임라인</h3>
-            <SyncBadge state={actSync} />
-          </div>
-          {actNotice && (
-            <div
-              role="status"
-              aria-live="polite"
-              className="fade-up"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "7px 10px",
-                background: "var(--surface-3)",
-                border: "1px solid var(--line)",
-                borderRadius: "var(--r-sm)",
-                fontSize: 11.5,
-                color: "var(--fg)",
-                marginBottom: 8,
+      ) : (
+        <div className="customer-focus">
+          <div className="customer-drawer-id">
+            <Avatar name={row.name} size={40} tone="neutral" />
+            <QuickContactActions row={row} onCopied={(ok) => (ok ? toast.success("번호를 복사했어요") : toast.error("번호를 복사하지 못했어요 — 정보에서 직접 확인하세요"))} />
+            <Button
+              variant="outline"
+              active={focusOverride === "raise"}
+              aria-pressed={focusOverride === "raise"}
+              size="sm"
+              icon="star"
+              onClick={() => {
+                const next = focusOverride === "raise" ? "default" : "raise";
+                const prev = focusOverride;
+                setFocusOverride(next);
+                onFocusChange?.(row.key, next);
+                if (!row.id) return;
+                saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
+                  id: row.id,
+                  focusOverride: next,
+                }).then(r => {
+                  if (!r?.ok) {
+                    setFocusOverride(prev);
+                    onFocusChange?.(row.key, prev);
+                  }
+                });
               }}
             >
-              <span>{actNotice.label}</span>
-              {actNotice.undo && (
-                <Button variant="ghost" size="xs" onClick={actNotice.undo}>
-                  되돌리기
-                </Button>
-              )}
-            </div>
-          )}
-          {actSync === "loading" ? (
-            <div style={{ padding: "8px 0" }}>
-              <Skeleton height={14} lines={2} />
-            </div>
-          ) : actSync === "error" ? (
-            <div style={{ fontSize: 12, color: "var(--danger)", padding: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
-              활동 기록을 읽지 못했습니다.
-              <Button variant="ghost" size="xs" onClick={reload}>다시 시도</Button>
-            </div>
-          ) : (
-            <><ActivityTimeline rows={activities.slice(0, 3)} onDeleteActivity={deleteActivity} />{activities.length > 3 && <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>전체 대화 기록 보기</summary><ActivityTimeline rows={activities.slice(3)} onDeleteActivity={deleteActivity} /></details>}</>
-          )}
-        </section>
-
-        <RelatedCustomerProjects type={row.kind} id={row.id} />
-        <RelatedMemos type={row.kind} id={row.id} onOpen={(noteId) => setMemoState({ noteId })} />
-
-        <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>연락처·거래 정보</summary>
-        {/* 헤더 요약 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          {row.health && (
-            <Badge tone={HEALTH_TONE[row.health]} size="xs">
-              {row.healthScore != null ? `스코어 ${row.healthScore}` : `건강도 ${row.health}`}
-            </Badge>
-          )}
-          <Badge tone="neutral" size="xs" variant="outline">
-            {row.kind === "account" ? "계약 고객" : row.stage}
-          </Badge>
-          {row.dormant && <Badge tone="neutral" size="xs" variant="outline">기약 없음</Badge>}
-
-          <div style={{ flex: 1 }} />
-          <span className="mono" style={{ fontSize: 15 }}>{fmtMoney(row.valueNum)}</span>
-        </div>
-
-
-        {/* 연락처 */}
-        {(row.phone || row.email) && (
-          <div className="mono" style={{ fontSize: 11.5, color: "var(--fg-muted)", display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {row.phone && <span>{row.phone}</span>}
-            {row.email && <span>{row.email}</span>}
+              {focusOverride === "raise" ? "⭐ 중요 고객" : "중요 고객 지정"}
+            </Button>
           </div>
-        )}
 
-        {/* 포커스 오버라이드 — 숫자 편집 없이 3단 조정만 (spec §7 확정 규칙) */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>포커스</span>
-          <SegmentedControl
-            label="포커스 조정"
-            options={[
-              { key: "lower", label: "내리기" },
-              { key: "default", label: "기본" },
-              { key: "raise", label: "올리기 (중요)" },
-            ]}
-            value={focusOverride}
-            onChange={(next) => {
-              const prevValue = focusOverride;
-              setFocusOverride(next);
-              onFocusChange?.(row.key, next);
-              if (!row.id) return;
-              saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
-                id: row.id,
-                focusOverride: next,
-              }).then(r => {
-                // 실패하면 토글을 원위치 — 저장 안 된 값이 계속 선택돼 보이면 안 된다.
-                if (!r?.ok) {
-                  setFocusOverride(prevValue);
-                  onFocusChange?.(row.key, prevValue);
-                }
-              });
-            }}
+          <PromiseCard
+            promise={promise}
+            busy={promiseBusy}
+            error={promiseError}
+            onRecord={(preset, draft) => startRecord(preset, draft)}
+            onSave={savePromise}
           />
-        </div>
 
-        {/* 딜 파이프라인 — 이 고객에 걸린 딜의 단계·금액·마감 간이 계기 */}
-        <DealPipelineSection deals={row.deals || []} />
-
-        {/* 스코어 요약 — 리드 enrichment 분류·증거 (점수 산출 근거의 간이 표기) */}
-        {row.raw && <LeadEnrichmentPanel lead={row.raw} />}
-
-        </details>
-
-        <OfficeWorkflowPanel
-          key={row.key}
-          intent="customer_reply"
-          scope={row.workspace === 'classin' || row.type === 'company' ? 'classin' : row.workspace === 'brand' || row.type === 'personal' ? 'personal' : null}
-          originRef={{ entityType: row.kind === 'account' ? 'customer_account' : 'lead', entityId: row.id }}
-          title="답장 초안"
-          onNavigate={onNavigate}
-        />
-        <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>기존 영업 코칭</summary>
-          <CustomerOutreachDrafter row={row} />
-        </details>
-        <details><summary style={{ minHeight: 44, cursor: "pointer", color: "var(--fg-muted)", fontSize: 12 }}>연락 결과 남기기</summary>
-
-        {/* 컨택 완료 시트 — Phase 1C 핵심 루프 */}
-        {/* 상세 안에서는 드로어를 겹치지 않고 폼만 인라인으로 쓴다(CRM 지침 §6.2 —
-            활성 오버레이는 언제나 하나). 껍데기가 필요한 진입점은 ContactRecordDrawer. */}
-        <ContactRecordForm
-          target={{ kind: row.kind === "account" ? "account" : "lead", id: row.id, companyId: row.companyId, name: row.person || row.name }}
-          aiContext={`${row.name || "미지정"} · ${row.kind === "account" ? "계약 고객" : `리드 (${row.stage || "진행중"})`}`}
-          onSaved={(o) => {
-            setActivities(prev => [
-              { id: o.activityId, type: o.kind, msg: o.summary, at: "방금", reaction: o.reaction },
-              ...prev,
-            ]);
-            setNextActionOverride(o.nextAction || null);
-          }}
-          onUndone={(optimisticId) => {
-            setActivities(prev => prev.filter(a => a.id !== optimisticId));
-            setNextActionOverride(null);
-          }}
-          onSummaryPersisted={({ activityId, optimisticId }) => {
-            if (!activityId) { reload(); return; }
-            setActivities(prev => prev.map(a => (
-              a.id === optimisticId ? { ...a, id: activityId } : a
-            )));
-          }}
-        />
-
-        {/* 빠른 기록 */}
-        {actError && (
-          <div role="alert" style={{ fontSize: 11.5, color: "var(--danger)", lineHeight: 1.5 }}>
-            {actError.message}
-            {actError.body && (
-              <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ color: "var(--fg-muted)" }}>미저장 입력: “{actError.body}”</span>
-                <Button variant="ghost" size="xs" onClick={() => logActivity({ type: "note", body: actError.body })}>
-                  재시도
-                </Button>
+          {/* 기록 — 활동과 연결 메모의 한 줄기 (읽기 우선 배치) */}
+          <section className="customer-record" aria-label="기록">
+            <div className="customer-focus-section-heading">
+              <h3 className="fx-eyebrow customer-eyebrow">기록</h3>
+              {actSync !== "live" && actSync !== "loading" && actSync !== "error" && <TruthBadge state={actSync} />}
+              <div style={{ flex: 1 }} />
+              <Button variant="ghost" size="xs" icon="pencil" onClick={() => setMemoState({})}>메모</Button>
+            </div>
+            {actNotice && (
+              <div role="status" aria-live="polite" className="fade-up customer-inline-notice">
+                <span>{actNotice.label}</span>
+                {actNotice.undo && (
+                  <Button variant="ghost" size="xs" onClick={actNotice.undo}>
+                    되돌리기
+                  </Button>
+                )}
               </div>
             )}
-          </div>
-        )}
-        <QuickLog onSave={logActivity} />
-        </details>
-      </div>
+            {actError && (
+              <p role="alert" className="customer-promise__msg" data-error="true">{actError.message}</p>
+            )}
+            {actSync === "loading" ? (
+              <Skeleton height={14} lines={3} label="기록 불러오는 중" />
+            ) : actSync === "error" ? (
+              <div role="alert" className="customer-inline-error">
+                <TruthBadge state="error" reason="활동 기록을 읽지 못했어요" />
+                <Button variant="ghost" size="xs" onClick={reload}>다시 시도</Button>
+              </div>
+            ) : (
+              <>
+                <ActivityTimeline rows={stream.slice(0, 5)} today={today} onDeleteActivity={deleteActivity} onOpenMemo={(noteId) => setMemoState({ noteId })} />
+                {stream.length > 5 && (
+                  <details className="customer-sec customer-sec--flat">
+                    <summary><span className="customer-sec__more">전체 기록 {stream.length}건 보기</span></summary>
+                    <ActivityTimeline rows={stream.slice(5)} today={today} onDeleteActivity={deleteActivity} onOpenMemo={(noteId) => setMemoState({ noteId })} />
+                  </details>
+                )}
+              </>
+            )}
+            {memoEnabled && memos.status === "error" && (
+              <div role="alert" className="customer-inline-error">
+                <TruthBadge state="error" reason="연결 메모를 읽지 못했어요" />
+                <Button variant="ghost" size="xs" onClick={memos.refresh}>다시 시도</Button>
+              </div>
+            )}
+          </section>
+
+          {/* 거래 — Accounts 화면의 계약 정보가 여기로 들어온다. */}
+          <details className="customer-sec">
+            <summary>
+              <h3 className="fx-eyebrow customer-eyebrow">거래</h3>
+              <span className="customer-sec__hint num">
+                {(row.deals || []).length ? `${row.deals.length}건 · ${fmtMoney(dealTotal)}` : "열린 거래 없음"}
+              </span>
+              <span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span>
+            </summary>
+            <div className="customer-sec__in">
+              {row.kind === "account" && (
+                <dl className="customer-kv">
+                  <dt>계약</dt><dd>계약 고객 · 거래 {row.dealCount || 0}건</dd>
+                  <dt>합계</dt><dd className="num customer-money">{fmtMoney(row.valueNum)}</dd>
+                </dl>
+              )}
+              {(row.deals || []).length > 0
+                ? <DealPipelineSection deals={row.deals} />
+                : <p className="customer-tl__empty">이 고객에 걸린 거래가 없어요.</p>}
+              <RelatedCustomerProjects type={row.kind} id={row.id} />
+            </div>
+          </details>
+
+          {/* 정보 — 필요할 때만 연다 */}
+          <details className="customer-sec">
+            <summary>
+              <h3 className="fx-eyebrow customer-eyebrow">정보</h3>
+              <span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span>
+            </summary>
+            <div className="customer-sec__in">
+              <dl className="customer-kv">
+                {row.person && <><dt>담당자</dt><dd>{[row.person, row.personTitle].filter(Boolean).join(" · ")}</dd></>}
+                <dt>연락처</dt>
+                <dd className="mono">{[row.phone, row.email].filter(Boolean).join(" · ") || "—"}</dd>
+                {row.source && <><dt>유입</dt><dd>{row.source}</dd></>}
+                {row.raw?.scale && <><dt>규모</dt><dd>{row.raw.scale}</dd></>}
+                {row.raw?.units !== "" && row.raw?.units != null && <><dt>도입 댓수</dt><dd className="num">{row.raw.units}</dd></>}
+                <dt>단계</dt><dd><LifecycleBadge state={phase.lifecycle} label={phase.label} /></dd>
+              </dl>
+
+              <CustomerLabelsEditor row={row} onSaved={onLabelsSaved} />
+
+              {/* 포커스 오버라이드 — 숫자 편집 없이 3단 조정만 (spec §7 확정 규칙) */}
+              <div className="customer-kv__row">
+                <span className="customer-kv__label">포커스</span>
+                <SegmentedControl
+                  label="포커스 조정"
+                  options={[
+                    { key: "lower", label: "내리기" },
+                    { key: "default", label: "기본" },
+                    { key: "raise", label: "올리기 (중요)" },
+                  ]}
+                  value={focusOverride}
+                  onChange={(next) => {
+                    const prevValue = focusOverride;
+                    setFocusOverride(next);
+                    onFocusChange?.(row.key, next);
+                    if (!row.id) return;
+                    saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
+                      id: row.id,
+                      focusOverride: next,
+                    }).then(r => {
+                      // 실패하면 토글을 원위치 — 저장 안 된 값이 계속 선택돼 보이면 안 된다.
+                      if (!r?.ok) {
+                        setFocusOverride(prevValue);
+                        onFocusChange?.(row.key, prevValue);
+                      }
+                    });
+                  }}
+                />
+              </div>
+
+              {/* 왜 이렇게 보이나 — 리드 enrichment 분류·증거 (점수는 헤더가 아니라 여기) */}
+              {row.raw && <LeadEnrichmentPanel lead={row.raw} />}
+
+              <div className="customer-danger-zone">
+                <CustomerDeleteAction row={row} onConfirm={onDelete} />
+              </div>
+            </div>
+          </details>
+
+          {/* 도움 받기 — 답장 초안·코칭은 필요할 때만 (표면 예산) */}
+          <details className="customer-sec">
+            <summary>
+              <h3 className="fx-eyebrow customer-eyebrow">도움 받기</h3>
+              <span className="customer-sec__hint">답장 초안 · 코칭</span>
+              <span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span>
+            </summary>
+            <div className="customer-sec__in">
+              <GuruGuidanceCard domain="sales" compact onAsk={card => {
+                setGuruGuidanceId(card.id);
+                setGuruQuestion(card.question);
+                setGuruOpen(true);
+              }} />
+              <OfficeWorkflowPanel
+                key={row.key}
+                intent="customer_reply"
+                scope={row.workspace === 'classin' || row.type === 'company' ? 'classin' : row.workspace === 'brand' || row.type === 'personal' ? 'personal' : null}
+                originRef={{ entityType: row.kind === 'account' ? 'customer_account' : 'lead', entityId: row.id }}
+                title="답장 초안"
+                onNavigate={onNavigate}
+              />
+              <CustomerOutreachDrafter row={row} />
+            </div>
+          </details>
+        </div>
+      )}
 
       {guruOpen && (
         <FloatingMentorWidget
@@ -943,20 +1227,14 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
             id: row.id,
             name: row.person || row.name,
             company: row.name,
-            stage: row.stage || (row.kind === "account" ? "계약 고객" : "리드"),
+            stage: phase.label,
             health: row.health,
-            nextAction: nextActionOverride ?? row.nextAction,
+            nextAction: row.nextAction,
             notes: row.notes || row.sub,
           }}
           onApplyText={(text) => {
-            const trimmed = text.slice(0, 100);
-            setNextActionOverride(trimmed);
-            if (row.id) {
-              saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
-                id: row.id,
-                nextAction: trimmed,
-              });
-            }
+            // 표시 모델 키(nextAction)는 라우트가 무시한다 — 약속 쓰기 계약의 next_action으로 보낸다.
+            savePromise({ what: text.slice(0, 100) });
           }}
         />
       )}
@@ -966,32 +1244,16 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
 
 // ── 새 고객 등록 드로어 (No ghost records) ──────────────────────────────────
 // 저장 버튼을 누를 때만 영속 DB에 생성하고, 취소 시 빈 고객 레코드를 남기지 않는다.
-function NewCustomerDrawer({ open, onClose, onCreated }) {
-  const [name, setName] = React.useState("");
-  const [person, setPerson] = React.useState("");
-  const [phone, setPhone] = React.useState("");
+// 첫 약속(무엇 + 언제)을 함께 받는다 — 약속이 정본이다(CRM 스펙 §0.5). 담당자·연락처 칸은
+// 없앴다: 리드 생성 경로에 연락처 쓰기가 없어 입력이 조용히 버려지고 있었다.
+function NewCustomerDrawer({ initialName = "", workspace = null, onClose, onCreated }) {
+  const [name, setName] = React.useState(initialName);
   const [stage, setStage] = React.useState("New");
   const [nextAction, setNextAction] = React.useState("");
+  const [nextActionAt, setNextActionAt] = React.useState("");
   const [isImportant, setIsImportant] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
-
-  if (!open) return null;
-
-  const reset = () => {
-    setName("");
-    setPerson("");
-    setPhone("");
-    setStage("New");
-    setNextAction("");
-    setIsImportant(false);
-    setError("");
-  };
-
-  const handleClose = () => {
-    reset();
-    onClose();
-  };
 
   const handleSave = async () => {
     const trimmedName = name.trim();
@@ -999,23 +1261,29 @@ function NewCustomerDrawer({ open, onClose, onCreated }) {
       setError("고객 또는 학원명을 입력하세요.");
       return;
     }
+    if (nextActionAt && !nextAction.trim()) {
+      setError("날짜를 골랐다면 무엇을 하기로 했는지도 한 줄 적어 주세요.");
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
       const res = await saveRevenueRecord("lead", "create", {
         name: trimmedName,
-        contactName: person.trim() || undefined,
-        contactPhone: phone.trim() || undefined,
         stage,
-        nextAction: nextAction.trim() || undefined,
+        ...(nextAction.trim() ? { next_action: nextAction.trim() } : {}),
+        ...(nextActionAt ? { next_action_at: nextActionAt } : {}),
+        ...(workspace ? { workspace } : {}),
         focusOverride: isImportant ? "raise" : "default",
       });
       setSubmitting(false);
       if (res.ok && res.id) {
-        onCreated(res.id);
-        handleClose();
+        onCreated(res.id, trimmedName);
+        onClose();
       } else {
-        setError(`고객 생성 실패 (${res.status || "오류"}) — 다시 시도하세요.`);
+        setError(res.status === "preview"
+          ? "Preview · 연결 필요 — 고객이 저장되지 않았습니다."
+          : `고객 생성 실패 (${res.status || "오류"}) — 다시 시도하세요.`);
       }
     } catch (err) {
       setSubmitting(false);
@@ -1025,15 +1293,16 @@ function NewCustomerDrawer({ open, onClose, onCreated }) {
 
   return (
     <Drawer
-      title="새 고객 등록"
-      subtitle="기본 정보를 입력하고 등록하면 고객 기록에 추가됩니다"
-      onClose={handleClose}
-      width="min(440px, 96vw)"
+      title="새 고객"
+      subtitle="이름만 있으면 됩니다 — 나머지는 나중에"
+      onClose={onClose}
+      presentation="compact"
+      width="min(480px, 96vw)"
       footer={(
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, width: "100%" }}>
-          <Button variant="outline" size="sm" onClick={handleClose} disabled={submitting}>취소</Button>
-          <Button variant="primary" size="sm" onClick={handleSave} disabled={submitting || !name.trim()}>
-            {submitting ? "등록 중…" : "등록 저장"}
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={submitting}>취소</Button>
+          <Button variant="primary" size="sm" onClick={handleSave} disabled={submitting}>
+            {submitting ? "등록 중…" : "고객 등록"}
           </Button>
         </div>
       )}
@@ -1044,67 +1313,199 @@ function NewCustomerDrawer({ open, onClose, onCreated }) {
           required
           value={name}
           onChange={e => { setName(e.target.value); setError(""); }}
-          placeholder="예: 미래탐구 대치점"
+          placeholder="예: 한빛수학학원 김원장"
           autoFocus
         />
         <TextField
-          label="담당자 성함"
-          value={person}
-          onChange={e => setPerson(e.target.value)}
-          placeholder="예: 김원장"
-        />
-        <TextField
-          label="연락처 / 전화번호"
-          value={phone}
-          onChange={e => setPhone(e.target.value)}
-          placeholder="010-0000-0000"
-        />
-        <SelectField
-          label="초기 단계"
-          value={stage}
-          onChange={e => setStage(e.target.value)}
-          options={[
-            { value: "New", label: "신규 (New)" },
-            { value: "Contact", label: "접촉 (Contact)" },
-            { value: "Qualified", label: "검증 (Qualified)" },
-          ]}
-        />
-        <TextField
-          label="다음 행동"
+          label="다음 약속"
           value={nextAction}
-          onChange={e => setNextAction(e.target.value)}
-          placeholder="예: 소개서 발송 및 첫 상담"
+          onChange={e => { setNextAction(e.target.value); setError(""); }}
+          placeholder="예: 소개서 보내고 첫 통화"
         />
-        <CheckboxRow
-          checked={isImportant}
-          onChange={setIsImportant}
-          text="⭐ 중요 고객으로 등록 (집중도 높임)"
-        />
+        <div className="customer-promise__dates">
+          <TextField
+            label="언제"
+            type="date"
+            value={nextActionAt}
+            onChange={e => { setNextActionAt(e.target.value); setError(""); }}
+            className="mono"
+            fieldStyle={{ flex: "1 1 150px" }}
+            style={{ padding: "0 10px" }}
+          />
+          <DateQuickPresets onPick={(value) => { setNextActionAt(value); setError(""); }} style={{ flexWrap: "wrap", gap: 4, paddingBottom: 1 }} />
+        </div>
+        <details className="customer-sec">
+          <summary><span className="customer-sec__more">단계 · 중요 고객</span><span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span></summary>
+          <div className="customer-sec__in">
+            <SelectField
+              label="초기 단계"
+              value={stage}
+              onChange={e => setStage(e.target.value)}
+              options={[
+                { value: "New", label: "신규" },
+                { value: "Contact", label: "연락 중" },
+                { value: "Qualified", label: "검증" },
+              ]}
+            />
+            <CheckboxRow
+              checked={isImportant}
+              onChange={setIsImportant}
+              text="⭐ 중요 고객으로 등록 (집중도 높임)"
+            />
+          </div>
+        </details>
         {error && <div role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>{error}</div>}
       </div>
     </Drawer>
   );
 }
 
+// ── 목록 ────────────────────────────────────────────────────────────────────
+
+function PromiseCell({ promise }) {
+  if (promise.state === "dated") {
+    const late = promise.late > 0;
+    return (
+      <div className="customers-next">
+        <span className="customers-next__what">{promise.what || "다음 약속"}</span>
+        <span className="customers-next__when">
+          <span data-late={late ? "true" : undefined}>
+            {late && <span className="customers-next__glyph" aria-hidden="true"><Iconed name="clock" size={11} /></span>}
+            {promise.whenLabel}
+          </span>
+          {late && <span> · {promise.dateLabel}</span>}
+        </span>
+      </div>
+    );
+  }
+  if (promise.state === "undated") {
+    return (
+      <div className="customers-next">
+        <span className="customers-next__what">{promise.what}</span>
+        <span className="customers-next__when">날짜 없음</span>
+      </div>
+    );
+  }
+  const label = promise.state === "dormant" ? "기약 없음" : promise.state === "closed" ? "종료" : "다음 약속 없음";
+  return (
+    <div className="customers-next" data-empty="true">
+      <span className="customers-next__what">{label}</span>
+    </div>
+  );
+}
+
+function CustomerRow({ row, today, selected, rail, onOpen, onSelect }) {
+  const promise = customerPromise(row, today);
+  const phase = CUSTOMER_PHASES[customerPhase(row)];
+  const last = customerLastContact(row, today);
+  const org = customerOrgLabel(row) || row.sub;
+  const open = () => { onSelect(row.key); onOpen(row.key); };
+  return (
+    <div
+      className="hub-row customers-grid customers-row"
+      role="button"
+      tabIndex={0}
+      data-customer-row={row.key}
+      data-selected={selected ? "true" : undefined}
+      data-urgent={rail ? "true" : undefined}
+      aria-label={`${customerDisplayName(row)}${org ? `, ${org}` : ""} — ${phase.label}${promise.late ? `, 약속 ${promise.late}일 지남` : ""}`}
+      onClick={open}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
+    >
+      <div className="customers-cell customers-cell--who">
+        <Avatar name={row.name} size={30} tone="neutral" />
+        <div className="customers-who">
+          <span className="customers-who__name">
+            {row.focusOverride === "raise" && <span className="customers-who__star" role="img" aria-label="중요 고객"><Iconed name="star" size={12} /></span>}
+            {customerDisplayName(row)}
+          </span>
+          {org && <span className="customers-who__org">{org}</span>}
+        </div>
+      </div>
+      <div className="customers-cell customers-cell--phase">
+        <LifecycleBadge state={phase.lifecycle} label={phase.label} />
+      </div>
+      <div className="customers-cell customers-cell--next">
+        <PromiseCell promise={promise} />
+      </div>
+      <div className="customers-cell customers-cell--last">
+        {last.known ? (
+          <span className="customers-last">
+            {last.reaction || (row.kind === "account" ? "변경" : "연락")}
+            <small>{last.days != null ? (last.days <= 0 ? "오늘" : last.days === 1 ? "어제" : `${last.days}일 전`) : last.label}</small>
+          </span>
+        ) : (
+          <span className="customers-last" data-empty="true">{last.label}</span>
+        )}
+      </div>
+      <div className="customers-cell customers-cell--money">
+        <span className="num customers-money" data-empty={row.valueNum > 0 ? undefined : "true"}>{fmtMoney(row.valueNum)}</span>
+      </div>
+    </div>
+  );
+}
+
+// 읽기 실패는 빈 목록이 아니다 — "고객이 없습니다"로 그리면 이미 있는 고객을 또 만든다.
+function CustomersReadError({ onRetry }) {
+  return (
+    <div role="alert" className="customers-state">
+      <TruthBadge state="error" reason="고객 기록을 읽지 못했어요" />
+      <p>지금 비어 보여도 실제 고객이 있을 수 있어요. 새로 만들기 전에 다시 읽어 확인하세요.</p>
+      <Button variant="secondary" size="sm" icon="refresh" onClick={onRetry}>다시 읽기</Button>
+    </div>
+  );
+}
+
 // ── 페이지 ──────────────────────────────────────────────────────────────────
 
 export function Customers({ onNavigate }) {
+  const toast = useToast();
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
-  const [segment, setSegment] = React.useState("all");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // 사이드바 스코프는 ?scope=로만 도착한다(revenue-scope-filter.js 머리 주석). classin은
+  // workspace-map의 회사 레인, personal은 개인 유형 — ClassIn 고객 탭이 이 화면을 가리킬 수 있다.
+  const queryScope = searchParams?.get("scope") || null;
+  const scopeKey = queryScope === "classin" || queryScope === "personal" ? queryScope : null;
+  const scopedLedger = React.useMemo(() => {
+    if (scopeKey === "classin") {
+      return { ...ledger, leads: filterLeadsByWorkspace(ledger.leads, "classin"), accounts: filterAccountsByWorkspace(ledger.accounts, "classin") };
+    }
+    if (scopeKey === "personal") {
+      return { ...ledger, leads: (ledger.leads || []).filter(l => l.type === "personal"), accounts: (ledger.accounts || []).filter(a => a.type === "personal") };
+    }
+    return ledger;
+  }, [ledger, scopeKey]);
+
+  const [segment, setSegment] = React.useState(DEFAULT_CUSTOMER_SEGMENT);
   const [search, setSearch] = React.useState("");
+  const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const [focusFilter, setFocusFilter] = React.useState("");
   const [regionFilter, setRegionFilter] = React.useState("");
   const [subjectFilter, setSubjectFilter] = React.useState("");
   const [genreFilter, setGenreFilter] = React.useState("");
-  const [sort, setSort] = React.useState({ key: null, dir: "asc" });
+  const [sourceFilter, setSourceFilter] = React.useState("");
+  const [sort, setSort] = React.useState({ key: "promise", dir: "asc" });
   const [openKey, setOpenKey] = React.useState(null);
   const [createError, setCreateError] = React.useState(null);
   const [focusOverrides, setFocusOverrides] = React.useState({});
+  // 약속 저장이 확인된 값 — 기록을 다시 읽으면(ledger 교체) 서버 값이 정본이므로 비운다.
+  const [promiseOverrides, setPromiseOverrides] = React.useState({});
+  React.useEffect(() => { setPromiseOverrides({}); }, [ledger]);
   // 삭제는 3.5초 뒤에야 POST된다 — 그동안 행은 목록에서 빠져 있고, 되돌리면 그대로 돌아온다.
   const [deletedKeys, setDeletedKeys] = React.useState(() => new Set());
   const [deleteNotice, setDeleteNotice] = React.useState(null);
+  const [newCustomer, setNewCustomer] = React.useState(null); // null | { name }
+  const [pendingOpen, setPendingOpen] = React.useState(null); // { key, ledger } — 생성 직후 열기
+  const [recordRequest, setRecordRequest] = React.useState(null);
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
-  const ledgerRows = React.useMemo(() => toRows(ledger), [ledger]);
+  const today = new Date();
+  const todayKey = localDateKey(today);
+
+  const ledgerRows = React.useMemo(() => toRows(scopedLedger), [scopedLedger]);
   // 낙관 삭제된 행은 기록이 다시 로드돼도 계속 숨긴다 — 되돌리기 창이 닫히기 전에
   // 재조회가 끼어들면 지운 행이 깜빡이며 되살아난다.
   const allRows = React.useMemo(
@@ -1112,26 +1513,11 @@ export function Customers({ onNavigate }) {
       .filter(r => !deletedKeys.has(r.key))
       .map(r => ({
         ...r,
+        ...(promiseOverrides[r.key] || {}),
         focusOverride: focusOverrides[r.key] ?? r.focusOverride,
       })),
-    [ledgerRows, deletedKeys, focusOverrides],
+    [ledgerRows, deletedKeys, focusOverrides, promiseOverrides],
   );
-
-  const toggleImportant = React.useCallback((e, row) => {
-    e.stopPropagation();
-    const current = focusOverrides[row.key] ?? row.focusOverride;
-    const next = current === "raise" ? "default" : "raise";
-    setFocusOverrides(prev => ({ ...prev, [row.key]: next }));
-    if (!row.id) return;
-    saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
-      id: row.id,
-      focusOverride: next,
-    }).then(r => {
-      if (!r?.ok) {
-        setFocusOverrides(prev => ({ ...prev, [row.key]: current }));
-      }
-    });
-  }, [focusOverrides]);
 
   const restoreRow = React.useCallback((key) => {
     setDeletedKeys(prev => { const next = new Set(prev); next.delete(key); return next; });
@@ -1178,10 +1564,32 @@ export function Customers({ onNavigate }) {
     });
   }, [scheduleUndoable, cancelUndoable, restoreRow]);
 
+  // 소비한 쿼리만 지운다 — ?scope=는 남아야 목록 범위가 유지된다. 소비한 키는 누적한다:
+  // ?q=와 ?customer=가 같은 틱에 소비되면 두 번째 replace가 낡은 searchParams로 첫 번째를 되살린다.
+  const consumedParamsRef = React.useRef(new Set());
+  const stripParams = React.useCallback((keys) => {
+    keys.forEach((key) => consumedParamsRef.current.add(key));
+    const next = new URLSearchParams(searchParams?.toString() || "");
+    consumedParamsRef.current.forEach((key) => next.delete(key));
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [searchParams, router, pathname]);
+
+  // ?q=<검색어> — 오늘 연락 등 다른 탭이 "이 사람 찾기"로 보낸다. 전체에서 찾고 1회 소거.
+  // ?new=customer — 탑바 생성·다른 탭의 "새 고객" 딥링크. 1회 열고 소거.
+  const entryParamsDone = React.useRef(false);
+  React.useEffect(() => {
+    if (entryParamsDone.current) return;
+    entryParamsDone.current = true;
+    const q = searchParams?.get("q");
+    const wantsNew = searchParams?.get("new");
+    const consumed = [];
+    if (q) { setSearch(q); setSegment("all"); consumed.push("q"); }
+    if (wantsNew === "customer" || wantsNew === "lead") { setNewCustomer({ name: q || "" }); consumed.push("new"); }
+    if (consumed.length) stripParams(consumed);
+  }, [searchParams, stripParams]);
+
   // 딥링크: ?customer=<kind>:<id> — 기록 로드 후 1회만 열고 쿼리 소거 (DESIGN §8.1)
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
   const deepLinkDone = React.useRef(false);
   React.useEffect(() => {
     // 기록이 아직 로드 전(loading)일 때만 대기 — 빈/preview DB에서도 파라미터를 소비하고
@@ -1192,21 +1600,37 @@ export function Customers({ onNavigate }) {
     deepLinkDone.current = true;
     if (allRows.some(r => r.key === target)) setOpenKey(target);
     else setCreateError('링크의 고객을 찾을 수 없습니다 — 기록이 비어 있거나 항목이 삭제됐습니다.');
-    router.replace(pathname, { scroll: false });
-  }, [allRows, searchParams, router, pathname, syncState]);
+    stripParams(["customer"]);
+  }, [allRows, searchParams, stripParams, syncState]);
+
+  // 방금 만든 고객 — 기록을 다시 읽은 뒤 열린다. 새 기록에도 없으면 조용히 넘어가지 않는다.
+  React.useEffect(() => {
+    if (!pendingOpen || syncState === "loading" || ledger === pendingOpen.ledger) return;
+    if (allRows.some(r => r.key === pendingOpen.key)) setOpenKey(pendingOpen.key);
+    else setCreateError("새 고객을 목록에서 찾지 못했어요 — 범위(스코프)를 확인하거나 새로 고침해 보세요.");
+    setPendingOpen(null);
+  }, [pendingOpen, allRows, syncState, ledger]);
 
   const regionOptions = React.useMemo(() => customerRegionOptions(allRows), [allRows]);
   const genreOptions = React.useMemo(() => customerGenreOptions(allRows), [allRows]);
-  const labelFiltersActive = Boolean(regionFilter || subjectFilter || genreFilter);
-  const term = search.trim().toLocaleLowerCase("ko");
-  const filtered = allRows.filter(r =>
-    segmentFilter(r, segment) &&
+  const sourceOptions = React.useMemo(() => {
+    const sources = [...new Set(allRows.map(r => r.source).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
+    return [{ value: "", label: "전체 유입" }, ...sources.map(s => ({ value: s, label: s }))];
+  }, [allRows]);
+  const activeFilterCount = [focusFilter, regionFilter, subjectFilter, genreFilter, sourceFilter].filter(Boolean).length;
+  const clearFilters = () => { setFocusFilter(""); setRegionFilter(""); setSubjectFilter(""); setGenreFilter(""); setSourceFilter(""); };
+
+  const term = search.trim();
+  const filtered = React.useMemo(() => allRows.filter(r =>
+    inCustomerSegment(r, segment) &&
+    matchesCustomerFocus(r, focusFilter) &&
     matchesCustomerLabels(r, { region: regionFilter, subject: subjectFilter, genre: genreFilter }) &&
-    (!term || [r.name, r.person, r.sub, ...subjectLabels(r.subjects), ...(r.genres || [])]
-      .filter(Boolean).join(" ").toLocaleLowerCase("ko").includes(term))
-  );
+    (!sourceFilter || r.source === sourceFilter) &&
+    matchesCustomerSearch(r, term)
+  ), [allRows, segment, focusFilter, regionFilter, subjectFilter, genreFilter, sourceFilter, term]);
 
   // 정렬: 헤더 클릭 asc → desc → 해제 3단 (DESIGN §8.1). 해제 시 기록 순서.
+  // 기본은 다음 약속 오름차순(날짜 없는 약속은 방향과 무관하게 뒤).
   const cycleSort = (key) => {
     setSort(prev => {
       if (prev.key !== key) return { key, dir: "asc" };
@@ -1214,209 +1638,255 @@ export function Customers({ onNavigate }) {
       return { key: null, dir: "asc" };
     });
   };
-  const sorted = React.useMemo(() => {
-    if (!sort.key) return filtered;
-    const dir = sort.dir === "asc" ? 1 : -1;
-    const val = r => {
-      if (sort.key === "value") return r.valueNum;
-      if (sort.key === "stage") return r.stageOrder;
-      if (sort.key === "last") return r.lastContactAt ? new Date(r.lastContactAt).getTime() : 0;
-      return r.name;
-    };
-    return [...filtered].sort((a, b) => {
-      const av = val(a); const bv = val(b);
-      if (typeof av === "string") return av.localeCompare(bv, "ko") * dir;
-      return (av - bv) * dir;
-    });
-  }, [filtered, sort]);
+  const sorted = React.useMemo(() => sortCustomers(filtered, sort, todayKey), [filtered, sort, todayKey]);
 
-  const [newCustomerOpen, setNewCustomerOpen] = React.useState(false);
+  // 빨강 예산 — 약속을 놓친 행 중 목록 순서로 앞의 몇 개만 레일을 받는다.
+  const railKeys = React.useMemo(() => {
+    const keys = new Set();
+    for (const r of sorted) {
+      if (keys.size >= MAX_DANGER_RAILS) break;
+      if (customerPromise(r, todayKey).late > 0) keys.add(r.key);
+    }
+    return keys;
+  }, [sorted, todayKey]);
 
-  // 키보드 계층(2026-08-05 배선): j/k 행 이동 · e 열기 · n 생성 · / 검색 · Esc 해제.
+  const counts = React.useMemo(() => customerSegmentCounts(allRows), [allRows]);
+  const openWithoutPromise = React.useMemo(() => countOpenWithoutPromise(allRows, todayKey), [allRows, todayKey]);
+
+  const openNewCustomer = React.useCallback((name = "") => setNewCustomer({ name }), []);
+
+  // 검색: 치기 시작하면 전체에서 찾는다(목업 02). 지우면 기본 세그먼트로 돌아간다.
   const searchRef = React.useRef(null);
+  const onSearchChange = (value) => {
+    if (!search.trim() && value.trim()) setSegment("all");
+    setSearch(value);
+  };
+  const clearSearch = () => { setSearch(""); setSegment(DEFAULT_CUSTOMER_SEGMENT); };
+
+  // 키보드 계층: j/k·↑↓ 행 이동 · Enter/e 열기 · n 생성 · / 검색 · Esc 해제.
   const kbRows = React.useMemo(() => sorted.map(r => ({ id: r.key })), [sorted]);
   const selection = useCrmSelection(kbRows);
+  const { moveSelection, setSelectedId, selectedId } = selection;
   useCrmKeyboard({
     selection,
-    onNew: () => setNewCustomerOpen(true),
+    onNew: () => openNewCustomer(),
     onEditSelected: (key) => setOpenKey(key),
     onSearchFocus: () => searchRef.current?.focus(),
   });
+  // useCrmKeyboard는 j/k만 안다 — 목업의 ↑↓와 선택 행 Enter를 같은 양보 규칙으로 더한다.
   React.useEffect(() => {
-    if (!selection.selectedId) return;
-    document.querySelector(`[data-customer-row="${CSS.escape(selection.selectedId)}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [selection.selectedId]);
+    const onKey = (e) => {
+      if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Enter") return;
+      if (document.querySelector('[data-drawer-open="true"], [role="dialog"], [data-shortcut-overlay="true"]')) return;
+      const el = document.activeElement;
+      const onRow = el?.closest?.("[data-customer-row]");
+      if (!(!el || el === document.body || onRow)) return;
+      if (e.key === "Enter") {
+        if (onRow || !selectedId) return; // 행 자신의 onKeyDown이 연다
+        e.preventDefault();
+        setOpenKey(selectedId);
+        return;
+      }
+      e.preventDefault();
+      moveSelection(e.key === "ArrowDown" ? "down" : "up");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moveSelection, selectedId]);
+  React.useEffect(() => {
+    if (!selectedId) return;
+    const node = document.querySelector(`[data-customer-row="${CSS.escape(selectedId)}"]`);
+    if (!node) return;
+    node.scrollIntoView({ block: "nearest" });
+    const el = document.activeElement;
+    if (!el || el === document.body || el.closest?.("[data-customer-row]")) node.focus({ preventScroll: true });
+  }, [selectedId]);
 
-  const counts = React.useMemo(() => {
-    const c = {};
-    for (const s of SEGMENTS) c[s.key] = allRows.filter(r => segmentFilter(r, s.key)).length;
-    return c;
-  }, [allRows]);
+  const onSearchKeyDown = (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (search) clearSearch();
+      else e.currentTarget.blur();
+      return;
+    }
+    if ((e.key === "ArrowDown" || e.key === "Enter") && sorted.length && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      setSelectedId(sorted[0].key);
+      document.querySelector(`[data-customer-row="${CSS.escape(sorted[0].key)}"]`)?.focus();
+    }
+  };
 
-  const openRow = sorted.find(r => r.key === openKey) || allRows.find(r => r.key === openKey) || null;
+  const openRow = allRows.find(r => r.key === openKey) || null;
 
-  // 4대 열 묶음: 고객·소속 / 최근 접점 / 다음 행동·일정 / 진행 상황 (2026-09-21 spec §3.1)
-  const gridCols = "minmax(0,2.1fr) 1.1fr minmax(0,2.2fr) 1.1fr";
+  // 기록 저장 결과 — 폼이 닫힌 뒤에 도착할 수도 있어 페이지가 받는다.
+  const onRecordPersisted = React.useCallback((row) => {
+    toast.success(`기록됨 · ${customerDisplayName(row)}`);
+    reloadLedger(); // 약속·마지막 연락이 새 기록을 반영하도록
+  }, [toast, reloadLedger]);
+  const onRecordFailed = React.useCallback((row, { message, form, formMounted }) => {
+    toast.error(`기록하지 못했습니다 · ${customerDisplayName(row)} — ${message}`);
+    if (formMounted) return;
+    setOpenKey(row.key);
+    setRecordRequest({ key: row.key, draft: form, error: message });
+  }, [toast]);
+  const onPromiseSaved = React.useCallback((row, patch) => {
+    // 저장이 확인된 값을 바로 보이고, 기록을 다시 읽어 공유 캐시(다른 탭)도 맞춘다.
+    setPromiseOverrides(prev => ({ ...prev, [row.key]: { ...(prev[row.key] || {}), ...patch } }));
+    reloadLedger();
+  }, [reloadLedger]);
+  const onRecordRequestConsumed = React.useCallback(() => setRecordRequest(null), []);
+
+  const showSkeleton = syncState === "loading" && ledgerRows.length === 0;
+  const total = allRows.length;
+  const searching = Boolean(term);
+  const filtersActive = activeFilterCount > 0;
+
+  let body;
+  if (showSkeleton) {
+    body = (
+      <div className="customers-skeleton">
+        <Skeleton lines={6} height={22} gap={18} label="고객 불러오는 중" />
+      </div>
+    );
+  } else if (syncState === "error" && ledgerRows.length === 0) {
+    body = <CustomersReadError onRetry={reloadLedger} />;
+  } else if (syncState === "preview" && ledgerRows.length === 0) {
+    body = (
+      <div className="customers-state">
+        <TruthBadge state="preview" reason="Supabase 연결 필요" />
+        <p>저장소가 연결되면 고객이 여기에 나타나요. 예시 고객은 만들지 않습니다.</p>
+      </div>
+    );
+  } else if (sorted.length === 0) {
+    body = searching ? (
+      <EmptyState
+        icon="search"
+        title={`'${term}'에 맞는 고객이 없어요`}
+        description={filtersActive ? "필터가 켜져 있어요 — 필터를 풀면 더 찾을 수 있어요." : "이름·학원·전화번호 뒷자리로 찾아요."}
+        action={(
+          <div className="customers-empty-actions">
+            <Button variant="outline" size="sm" onClick={clearSearch}>검색 지우기</Button>
+            <Button variant="outline" size="sm" icon="plus" onClick={() => openNewCustomer(term)}>'{term}' 새 고객으로</Button>
+          </div>
+        )}
+      />
+    ) : total === 0 ? (
+      <EmptyState
+        icon="accounts"
+        title="아직 고객이 없어요"
+        description="첫 고객을 등록하면 여기에 나타나요."
+        action={<Button variant="outline" size="sm" icon="plus" onClick={() => openNewCustomer()}>고객 등록</Button>}
+      />
+    ) : (
+      <EmptyState
+        icon="accounts"
+        title={filtersActive ? "조건에 맞는 고객이 없어요" : `${CUSTOMER_SEGMENTS.find(s => s.key === segment)?.label || ""} 고객이 없어요`}
+        description={filtersActive ? "필터를 풀거나 다른 구분을 골라 보세요." : "다른 구분을 고르거나 전체를 보세요."}
+        action={filtersActive
+          ? <Button variant="outline" size="sm" onClick={clearFilters}>필터 해제</Button>
+          : <Button variant="outline" size="sm" onClick={() => setSegment("all")}>전체 보기</Button>}
+      />
+    );
+  } else {
+    body = sorted.map(r => (
+      <CustomerRow
+        key={r.key}
+        row={r}
+        today={todayKey}
+        selected={selectedId === r.key}
+        rail={railKeys.has(r.key)}
+        onOpen={setOpenKey}
+        onSelect={setSelectedId}
+      />
+    ));
+  }
 
   return (
-    <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-      <div className="hub-page-header" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>고객 DB</h2>
-          {createError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{createError}</div>}
-          <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
-            리드 {ledger.leads?.length || 0} · 계약 고객 {ledger.accounts?.length || 0}
-            <SyncBadge state={syncState} />
+    <div className="hub-futura hub-page fade-up customers-page">
+      <header className="customers-hero">
+        <div className="fx-head">
+          <div>
+            <p className="fx-eyebrow customers-hero__eyebrow">
+              {scopeKey && <>{SCOPE_LABEL[scopeKey]} · </>}
+              고객 <span className="num">{total}</span>명 · 약속 없는 진행 중 <span className="num">{openWithoutPromise}</span>
+              {(syncState === "partial" || syncState === "preview" || (syncState === "error" && ledgerRows.length > 0)) && (
+                <TruthBadge state={syncState === "error" ? "partial" : syncState} reason={syncState === "error" ? "다시 읽기 실패 · 이전 기록 표시 중" : undefined} style={{ marginLeft: 8 }} />
+              )}
+              {syncState === "loading" && ledgerRows.length > 0 && <TruthBadge state="syncing" style={{ marginLeft: 8 }} />}
+            </p>
+            <h2 className="fx-page-title">누구를 찾으세요?</h2>
+            {createError && <p role="alert" className="customers-hero__alert">{createError}</p>}
           </div>
-        </div>
-        <div style={{ flex: 1 }} />
-        <Input ref={searchRef} className="hub-toolbar" placeholder="학원명·담당자·지역 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
-        <Button variant="primary" size="sm" icon="plus" onClick={() => setNewCustomerOpen(true)}>고객 등록 <Kbd>N</Kbd></Button>
-      </div>
-
-      <SegmentedControl
-        label="고객 세그먼트"
-        options={SEGMENTS.map(s => ({ key: s.key, label: s.label, count: counts[s.key] }))}
-        value={segment}
-        onChange={setSegment}
-      />
-
-      <div className="customer-label-filters" role="group" aria-label="고객 지역·과목·장르 필터">
-        <SelectField label="지역" value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)} options={regionOptions} />
-        <SelectField label="과목" value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)} options={[
-          { value: "", label: "전체 과목" },
-          { value: CUSTOMER_LABEL_MISSING, label: "과목 미입력" },
-          ...LEAD_SUBJECTS.map((subject) => ({ value: subject.key, label: subject.label })),
-        ]} />
-        <SelectField label="장르" value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)} options={genreOptions} />
-        {labelFiltersActive && <Button variant="ghost" size="xs" onClick={() => { setRegionFilter(""); setSubjectFilter(""); setGenreFilter(""); }}>라벨 필터 해제</Button>}
-        <span className="num customer-label-filters__count" role="status">{sorted.length}건</span>
-      </div>
-
-      <Card pad={false} style={{ overflow: "hidden" }}>
-        <div className="hub-customers-grid" style={{
-          display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "9px 16px",
-          background: "var(--surface-2)", borderBottom: "1px solid var(--line)",
-          fontSize: 10.5, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--fg-faint)",
-        }}>
-          {/* 4대 묶음 헤더 (2026-09-21 spec §3.1) */}
-          <SortHead k="name" sort={sort} onToggle={cycleSort}>고객 · 소속</SortHead>
-          <SortHead k="last" sort={sort} onToggle={cycleSort} className="hub-lc-m">최근 접점</SortHead>
-          <span className="hub-lc-m">다음 행동 · 일정</span>
-          <SortHead k="stage" sort={sort} onToggle={cycleSort} align="right">진행 상황</SortHead>
+          <Button variant="primary" size="md" icon="plus" onClick={() => openNewCustomer()}>고객 <Kbd>N</Kbd></Button>
         </div>
 
-        {syncState === "loading" ? (
-          <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
-            <Skeleton height={24} />
-            <Skeleton height={24} />
-            <Skeleton height={24} />
-            <Skeleton height={24} />
-          </div>
-        ) : syncState === "error" ? (
-          <EmptyState icon="accounts" title="고객을 불러오지 못했습니다" description="연결 상태를 확인한 뒤 다시 시도하세요." action={<Button variant="outline" size="sm" onClick={reloadLedger}>다시 시도</Button>} style={{ minHeight: 180, padding: "28px 12px" }} />
-        ) : sorted.length === 0 ? (
-          <EmptyState
-            icon="accounts"
-            title={term || labelFiltersActive || segment !== "all" ? "조건에 맞는 고객이 없습니다" : "고객이 없습니다"}
-            description={term || labelFiltersActive || segment !== "all" ? "검색어나 라벨 조건을 바꿔보세요." : "첫 고객을 등록하면 여기에 나타납니다."}
-            action={term || labelFiltersActive || segment !== "all"
-              ? <Button variant="outline" size="sm" onClick={() => { setSearch(""); setRegionFilter(""); setSubjectFilter(""); setGenreFilter(""); setSegment("all"); }}>조건 지우기</Button>
-              : <Button variant="primary" size="sm" icon="plus" onClick={() => setNewCustomerOpen(true)}>고객 등록</Button>}
-            style={{ minHeight: 180, padding: "28px 12px" }}
+        <label className="hub-field customers-search">
+          <span className="customers-search__icon" aria-hidden="true"><Iconed name="search" size={17} /></span>
+          <input
+            ref={searchRef}
+            type="text"
+            inputMode="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            value={search}
+            onChange={e => onSearchChange(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+            placeholder="이름 · 학원 · 전화번호 뒷자리"
+            aria-label="고객 검색"
           />
-        ) : (
-          sorted.map(r => (
-            <div
-              key={r.key}
-              className="hub-row hub-customers-grid"
-              role="button"
-              tabIndex={0}
-              data-customer-row={r.key}
-              onClick={() => setOpenKey(r.key)}
-              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenKey(r.key); } }}
-              style={{
-                display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "11px 16px",
-                borderBottom: "1px solid var(--line-soft)", alignItems: "center", cursor: "pointer",
-                outline: selection.selectedId === r.key ? "1px solid var(--moon-300)" : undefined,
-                outlineOffset: -1,
-                boxShadow: r.focusOverride === "raise" ? "inset 1px 0 0 var(--moon-300)" : undefined,
-              }}
-            >
-              {/* 1. 고객 · 소속 */}
-              <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <IconButton
-                  icon="star"
-                  size={22}
-                  iconSize={13}
-                  className={r.focusOverride === "raise" ? "hub-iconbtn--star-active" : ""}
-                  tooltip={r.focusOverride === "raise" ? "중요 고객 해제" : "중요 고객으로 등록"}
-                  aria-label={r.focusOverride === "raise" ? "중요 고객 해제" : "중요 고객으로 등록"}
-                  onClick={(e) => toggleImportant(e, r)}
-                />
-                <Avatar name={r.name} size={30} tone={r.type === "personal" ? "personal" : "company"} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: r.dormant ? "var(--fg-muted)" : undefined }}>{r.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--fg-faint)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {[r.person, r.sub].filter(Boolean).join(" · ") || "—"}
-                    {r.kind === "lead" && r.deals?.length > 0 && (() => {
-                      const live = r.deals.filter(d => d.stage !== "lost");
-                      if (!live.length) return ` · 딜 ${r.deals.length} (패배)`;
-                      const top = live.reduce((a, b) =>
-                        DEAL_STAGES.findIndex(s => s.key === b.stage) > DEAL_STAGES.findIndex(s => s.key === a.stage) ? b : a);
-                      const label = DEAL_STAGES.find(s => s.key === top.stage)?.label || top.stage;
-                      return ` · 딜 ${live.length} · ${label}`;
-                    })()}
-                    {r.dormant && " · 기약 없음"}
-                  </div>
-                </div>
-              </div>
+          {search && <IconButton icon="x" size={32} iconSize={13} tooltip="검색 지우기" onClick={clearSearch} />}
+          <span className="customers-search__kbd" aria-hidden="true"><Kbd>/</Kbd></span>
+        </label>
+      </header>
 
-              {/* 2. 최근 접점 */}
-              <div className="hub-lc-m" style={{ fontSize: 12, color: "var(--fg-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {r.last !== "—" ? (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <Iconed name="signal" size={11} style={{ color: "var(--fg-dim)" }} />
-                    <span className="mono" style={{ fontSize: 11.5 }}>{r.last}</span>
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 11, color: "var(--fg-dim)" }}>기록 없음</span>
-                )}
-              </div>
+      <section className="customers-list" aria-label="고객 목록">
+        <div className="customers-toolbar">
+          <SegmentedControl
+            label="고객 구분"
+            className="customers-seg"
+            options={CUSTOMER_SEGMENTS.map(s => ({ key: s.key, label: s.label, count: counts[s.key] }))}
+            value={segment}
+            onChange={setSegment}
+          />
+          <Button variant="ghost" size="sm" icon="filter" aria-expanded={filtersOpen} aria-controls="customers-filters" onClick={() => setFiltersOpen(o => !o)}>
+            필터{activeFilterCount ? <span className="num"> {activeFilterCount}</span> : null}
+          </Button>
+          <span className="customers-toolbar__hint">↑↓ 이동 · ↵ 열기 · / 검색</span>
+        </div>
 
-              {/* 3. 다음 행동 · 일정 */}
-              <div className="hub-lc-m" style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
-                {r.dormant ? (
-                  <span style={{ fontSize: 12, color: "var(--fg-dim)" }}>기약 없음 (휴면)</span>
-                ) : r.nextAction ? (
-                  <>
-                    <span style={{ fontSize: 12, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.nextAction}
-                    </span>
-                    {r.nextActionAt && (
-                      <span className="mono" style={{ fontSize: 10.5, padding: "1px 5px", background: "var(--surface-3)", borderRadius: "var(--r-xs)", color: "var(--fg-muted)", flexShrink: 0 }}>
-                        {r.nextActionAt.slice(5, 10)}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <span style={{ fontSize: 11, color: "var(--fg-dim)" }}>—</span>
-                )}
-              </div>
-
-              {/* 4. 진행 상황 */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-                <Badge tone="neutral" size="xs" variant="outline">{r.kind === "account" ? "계약 고객" : r.stage}</Badge>
-                {r.valueNum > 0 && (
-                  <div className="num hub-lc-m" style={{ fontSize: 12.5, fontWeight: 500, textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--fg-muted)" }}>
-                    {fmtMoney(r.valueNum)}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))
+        {filtersOpen && (
+          <div id="customers-filters" className="customer-label-filters customers-filters" role="group" aria-label="고객 보조 필터">
+            <SelectField label="표시" value={focusFilter} onChange={(event) => setFocusFilter(event.target.value)} options={CUSTOMER_FOCUS_FILTERS} />
+            <SelectField label="과목" value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)} options={[
+              { value: "", label: "전체 과목" },
+              { value: CUSTOMER_LABEL_MISSING, label: "과목 미입력" },
+              ...LEAD_SUBJECTS.map((subject) => ({ value: subject.key, label: subject.label })),
+            ]} />
+            <SelectField label="지역" value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)} options={regionOptions} />
+            <SelectField label="장르" value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)} options={genreOptions} />
+            <SelectField label="유입" value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)} options={sourceOptions} />
+            {filtersActive && <Button variant="ghost" size="sm" onClick={clearFilters}>필터 해제</Button>}
+          </div>
         )}
-      </Card>
+
+        <div className="fx-card customers-table">
+          <div className="customers-grid customers-head">
+            <SortHead k="name" sort={sort} onToggle={cycleSort}>고객</SortHead>
+            <SortHead k="phase" sort={sort} onToggle={cycleSort}>단계</SortHead>
+            <SortHead k="promise" sort={sort} onToggle={cycleSort}>다음 약속</SortHead>
+            <SortHead k="last" sort={sort} onToggle={cycleSort}>마지막 연락</SortHead>
+            <SortHead k="value" sort={sort} onToggle={cycleSort} align="right">금액</SortHead>
+          </div>
+          <div className="customers-rows">{body}</div>
+          {sorted.length > 0 && (
+            <div className="customers-foot">
+              <span><span className="num">{sorted.length}</span>명 표시</span>
+              <span>정렬: {sortCaption(sort)}</span>
+            </div>
+          )}
+        </div>
+      </section>
 
       {deleteNotice && (
         <div
@@ -1461,21 +1931,32 @@ export function Customers({ onNavigate }) {
         <Customer360Drawer
           key={openRow.key}
           row={openRow}
+          today={todayKey}
+          recordRequest={recordRequest}
+          onRecordRequestConsumed={onRecordRequestConsumed}
           onClose={() => setOpenKey(null)}
           onNavigate={onNavigate}
           onDelete={deleteCustomer}
           onFocusChange={(key, val) => setFocusOverrides(prev => ({ ...prev, [key]: val }))}
           onLabelsSaved={reloadLedger}
+          onPromiseSaved={onPromiseSaved}
+          onRecordPersisted={onRecordPersisted}
+          onRecordFailed={onRecordFailed}
         />
       )}
 
-      <NewCustomerDrawer
-        open={newCustomerOpen}
-        onClose={() => setNewCustomerOpen(false)}
-        onCreated={(id) => {
-          setOpenKey(`lead:${id}`);
-        }}
-      />
+      {newCustomer && (
+        <NewCustomerDrawer
+          initialName={newCustomer.name}
+          workspace={scopeKey === "classin" ? "classin" : null}
+          onClose={() => setNewCustomer(null)}
+          onCreated={(id, name) => {
+            toast.success(`고객 등록됨 · ${name}`);
+            setPendingOpen({ key: `lead:${id}`, ledger });
+            reloadLedger();
+          }}
+        />
+      )}
     </div>
   );
 }
