@@ -188,7 +188,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
-- [`superpowers/specs/2026-09-24-product-dev-projects-draft.md`](superpowers/specs/2026-09-24-product-dev-projects-draft.md) — **v0.2 · 방향 확정(갈래 B: Moonlight 안에 넣기, 2026-09-24) / 상세 설계 권장안 / 구현 전**. 제품 = PMS 컨테이너(`brands` 행, `meta.category = product`)에 설명·대상 고객·제공 범위·필수 조건·단계를 담는 카드, 저장소는 `product_repositories`(저장소→제품 1:1), GitHub 폴링 + HMAC webhook을 Engine이 받아 `project_updates`에 기록, 프로젝트 탭 `제품` 보기와 개요/개발/고객 3탭 드로어, 체크리스트 템플릿 DB화. 고객 적합도는 09-13 리드 스펙 F축(F0~F3, 퍼센트 금지)을 그대로 쓰고 L1 규칙 대조 → 기회 탐색 후보 → 확인으로 등급화(L2 닮은 고객은 딜↔리드 연결 0/22로 막힘). 단계 0~6과 결정 8건(1건 확정).
+- [`superpowers/specs/2026-09-24-product-dev-projects-draft.md`](superpowers/specs/2026-09-24-product-dev-projects-draft.md) — **v0.3 · 방향 확정(갈래 B) / 결정 4건 확정(2026-09-25) / 0~2단계 구현(브랜치 `claude/product-lens`) · 운영 DB 미적용**. 제품은 새 `products` 테이블(컨테이너 재사용 권장안을 운영자가 뒤집음), 프로젝트는 `projects.product_id`로 붙는다. 저장소는 `product_repositories`(저장소→제품 1:1), GitHub 폴링 + HMAC webhook을 Engine이 받아 `project_updates.product_id`에 기록, 프로젝트 탭 `제품` 보기와 개요/개발 드로어. 동시 진행 상한은 나중에 정함, ClassIn 고객 ↔ 개인 제품 교차 후보는 표시만 허용. 템플릿·적합도·돈·점수는 3~5단계로 남았다(§13 구현 기록).
 
 - [`superpowers/specs/2026-09-21-reference-capture-and-browse-usability-design.md`](superpowers/specs/2026-09-21-reference-capture-and-browse-usability-design.md) — **입력·모아보기 우선순위 운영자 확정 / 상세 동작 권장안 / 구현 전**. 한 칸에 링크·생각 입력, 저장 후 연속 입력, 전체 검색·상세·수정·즐겨찾기·복귀, 기존 자료 이관을 첫 출시로 제안한다. 09-20 기획의 Studio 우선 순서를 대체하며 AI 초안 연결은 후속이다.
 

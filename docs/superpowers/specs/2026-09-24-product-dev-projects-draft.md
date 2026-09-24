@@ -1,7 +1,8 @@
 # 수익형 제품 개발 관리 — 제품 카탈로그·GitHub·프로젝트·고객 적합도
 
-> 상태: **v0.2 · 방향 확정(갈래 B) / 상세 설계 권장안 / 구현 전**
+> 상태: **v0.3 · 방향 확정(갈래 B) / 결정 4건 확정 / 0~2단계 코드 구현(브랜치 `claude/product-lens`) · 운영 DB 미적용**
 > - 2026-09-24 운영자 확정: **갈래 B — Moonlight 안에 넣는다.** 별도 서비스(갈래 A)는 판매·팀 공유 결정이 생길 때만 다시 검토한다.
+> - 2026-09-25 운영자 확정(§12): **제품은 새 `products` 테이블**(PMS 컨테이너 재사용 권장안을 뒤집음 — §3.1), 동시 진행 상한은 **나중에 정함**, ClassIn 고객 ↔ 개인 제품 교차 후보는 **허용하되 표시만**, 이번 구현 범위는 **0~2단계**. 0049 마이그레이션의 운영 DB 적용은 운영자가 직접 한다(§13).
 > - 2026-09-24 운영자 요청 범위: 제품이 하나씩 늘어나는 것을 전제로 ① 제품별 설명 ② 프로젝트·GitHub 연결 ③ 프로젝트 탭 연결 ④ 어떤 고객이 어떤 제품을 살 수 있는지(유사도) 관리.
 > - 나머지(§12 결정 목록)는 모두 **권장**이며 확정 결정처럼 구현하지 않는다.
 >
@@ -36,7 +37,7 @@
 
 | 객체 | 정체 | 저장 (권장) | 비고 |
 | --- | --- | --- | --- |
-| **제품** Product | 파는 것, 오래 산다 | `brands` 행, `meta.category = 'product'`, 설명은 `brands.description`, 제품 필드는 `meta.product` | `projects.brand_id`가 이미 있어 PMS 트리에 그대로 붙는다 |
+| **제품** Product | 파는 것, 오래 산다 | **새 `products` 테이블**(2026-09-25 확정) — `name`·`summary`(한 줄 설명)·`org_scope`·`stage`·`details` jsonb·`version`·`stage_history` | 프로젝트는 새 열 `projects.product_id`로 붙는다 |
 | **저장소** Repo | 제품의 코드 | 새 `product_repositories` | 저장소 → 제품 1:1 보장(webhook 라우팅 키) |
 | **프로젝트** Project | 끝나는 일 | 기존 `projects` (+ `meta.github` 선택) | delivery 라이프사이클 그대로 |
 | **할 일** Task | 프로젝트의 작업 | 기존 `tasks` (+ `meta.github_issue` 선택) | 체크리스트 템플릿이 채운다 |
@@ -55,7 +56,13 @@
 제품 1 ── N 딜        (deals.meta.product_id)
 ```
 
-### 3.1 왜 제품을 새 테이블이 아니라 PMS 컨테이너(`brands` 행)로 두나
+### 3.1 제품 저장 위치 — 2026-09-25 운영자가 새 `products` 테이블을 골랐다
+
+> 아래 v0.2의 권장 논리(컨테이너 재사용)는 **기록으로만** 남긴다. 운영자는 "대안(권장 안 함)"이던 새 테이블을 택했다.
+> 결과: 브랜드 탭 제외 필터가 필요 없고, PMS 트리에 `제품` 폴더는 생기지 않는다. 제품은 프로젝트 탭의 `제품` 보기와
+> 제품 상세 드로어에서만 보이고, 프로젝트 ↔ 제품 연결은 제품 상세 `개발` 탭에서 한다. 개발 신호는 `project_updates.product_id`에 떨어진다.
+
+v0.2 권장 논리(대체됨):
 
 - 좋은 점: PMS 트리·필터·컨테이너 편집·정렬이 **공짜**다. 프로젝트 탭 연결이 따로 필요 없다.
 - 대가 1: 브랜드 탭(`brand-directory.js`)은 지금 카테고리를 거르지 않고 모든 컨테이너를 보여준다 → `product` 분류를 브랜드 탭에서 제외하는 필터 1개와 테스트가 필요하다.
@@ -79,7 +86,7 @@
 | 링크 | 배포 URL, 문서, 데모 | https://… | 제품 상세 |
 | 제품 버전 | 설명·제공 범위가 바뀔 때 +1 | 3 | F 재평가 트리거 |
 
-저장: `brands.description` = 한 줄 설명, `brands.meta.product = { problem, target{orgTypes, subjects, regions, size}, capabilities[{id,text,verifiedAt}], requirements[{id,text}], pricing{model,amount,currency}, stage, links[], version, stageHistory[] }`. `meta.org_scope`는 기존 키를 그대로 쓴다.
+저장(구현): `products.summary` = 한 줄 설명, `products.details = { problem, target{orgTypes, subjects(리드 과목 12키), regions, size}, capabilities[{id,text,verifiedAt}], requirements[{id,text}], pricing{model: undecided|free|monthly|per_use|one_time, amount, currency: KRW}, deployUrl, links[{label,url}], nextAction }`, 단계는 `products.stage`(idea·validation·mvp·launch·growth·maintain·sunset — "유지·종료"는 두 값으로 나눴다), 이력은 `products.stage_history`. 소속은 `products.org_scope`이고 등록 뒤에는 바꾸지 않는다.
 
 규칙:
 
@@ -281,10 +288,36 @@ ClassIn은 회사 공식 객체의 정본이고, 개인 프로젝트는 ClassIn�
 | # | 결정 | 권장 |
 | --- | --- | --- |
 | 1 | ~~A/B~~ | **B 확정 (2026-09-24)** |
-| 2 | PMS 분류에 `product`(제품)를 4번째로 추가 | 추가 |
-| 3 | 제품 저장 위치: PMS 컨테이너 재사용 vs 새 `products` 테이블 | 컨테이너 재사용 |
-| 4 | ClassIn 고객 ↔ 개인 제품 교차 후보 허용 | 불허(같은 소속끼리만) |
-| 5 | 동시에 MVP 이상인 제품 수 상한 | 2 또는 3 |
+| 2 | ~~PMS 분류에 `product`(제품)를 4번째로 추가~~ | **해당 없음** — 3번이 새 테이블로 정해져 분류를 늘리지 않는다 |
+| 3 | 제품 저장 위치: PMS 컨테이너 재사용 vs 새 `products` 테이블 | **새 `products` 테이블 확정 (2026-09-25)** |
+| 4 | ClassIn 고객 ↔ 개인 제품 교차 후보 허용 | **허용 · 표시만 확정 (2026-09-25)** — 교차 후보를 보여 주되 ClassIn 쪽으로는 아무것도 보내지 않는다. §8.5 권장 기본값을 대체한다 |
+| 5 | 동시에 MVP 이상인 제품 수 상한 | **나중에 정함 (2026-09-25)** — 그동안 상한도 결정 카드도 없다(§4.2 미적용) |
 | 6 | 에러 수집 도구 | Sentry 무료 등급 또는 당분간 없음 |
 | 7 | L3 AI 근거 사용 여부와 월 비용 상한 | 5단계 이후 결정 |
 | 8 | 1단계에서 넣어 볼 제품 2~3개 | 인벤토리 22개 중 매출에 가장 가까운 것 |
+
+## 13. 구현 기록 (2026-09-25, 브랜치 `claude/product-lens`)
+
+운영자 범위 결정 "0~2단계". 아래는 코드에 들어간 것이고, 운영 DB에는 **아직 적용하지 않았다**(운영자가 직접 적용).
+
+| 단계 | 들어간 것 | 위치 |
+| --- | --- | --- |
+| 스키마 | `products`, `product_repositories`(workspace+full_name unique, 소문자 저장), `projects.product_id`, `project_updates.product_id` | `supabase/migrations/20260925_0049_products.sql`, `db:check` 항목 `제품 카탈로그·저장소` |
+| 0 켜기 | Hub cron `/api/cron/github-sync`(CRON_SECRET → Engine sync, 하루 1회 09:00 KST — Vercel Hobby 1일 1회 제한 고려), 제품 보기의 `GitHub 동기화` 버튼 | `apps/hub/app/api/cron/github-sync`, `apps/hub/vercel.json` |
+| 0 켜기 | 폴링이 `product_repositories`를 정본으로 읽고 비었을 때만 `GITHUB_REPOSITORIES` 폴백. 기본 브랜치 check run·최신 릴리스까지 읽어 저장소 행의 `last_summary`에 적고, CI 상태가 바뀔 때만 제품 신호 1행 | `apps/engine/lib/github-sync.ts`, `github-signals.ts` |
+| 1 카탈로그 | Engine `create_product`·`update_product`(details 병합, 제공 범위·필수 조건 문장 변경 시 version +1, 단계 이력, 유지·종료만 이유 필수, updated_at 버전 가드) | `apps/engine/lib/product-command.ts`, `app/api/products/command` |
+| 1 카탈로그 | 프로젝트 탭 `제품` 보기(이름·단계·막힘 1개·다음 행동), 제품 카드 EditDrawer(필수 2칸 + 접힌 나머지), 상세 드로어 `개요`(단계 게이트 안내 — 막지 않음, 카드, 단계 이력), ⌘K `제품 카탈로그`, `?product=` 딥링크 | `apps/hub/components/hub/pages/project-products-view.jsx`, `product-detail-drawer.jsx`, `apps/hub/lib/product-catalog.js` |
+| 1 카탈로그 | 프로젝트 ↔ 제품 연결: 기존 `update_project`/`create_project`에 `productId`(같은 워크스페이스 제품만) | `apps/engine/lib/pms-command*.ts` |
+| 2 저장소·신호 | `connect_repository`·`update_repository`·`disconnect_repository`(연결 행만 삭제), 다른 제품 소유 저장소는 conflict | `product-command.ts`, Hub `/api/hub/products/repositories` |
+| 2 저장소·신호 | Engine `POST /api/webhook/github`: HMAC(`GITHUB_WEBHOOK_SECRET`, 없으면 503) → `webhook_events`(delivery id로 중복 차단, 원문 대신 요약) → 기본 브랜치 CI 실패/복구·PR 열림/리뷰 요청/병합·bug 이슈·릴리스는 `project_updates`(product_id), push는 시각만 | `apps/engine/lib/github-webhook.ts` |
+| 2 저장소·신호 | 상세 `개발` 탭: 저장소별 CI·리뷰 요청·릴리스·동기화 시각, 저장소 연결 폼, 프로젝트 붙이기/빼기, 최근 신호. CI 실패 행의 `Codex에 맡기기`는 sessionStorage로 초안만 넘기고(URL에 싣지 않음) 보내기는 운영자가 누른다 | `product-detail-drawer.jsx`, `codex-jobs.jsx` |
+
+하지 않은 것(다음 결정·단계):
+
+- **오늘 화면 CI 실패 1행**(§6) — 표면 예산 결정이 필요해 넣지 않았다. 신호는 제품 보기의 막힘 열과 상세에만 보인다.
+- 제품 점수(§9), 체크리스트 템플릿(3단계), 고객 적합도(4단계 — 결정 4는 확정돼 준비만 됨), 돈(5단계), 에러 도구(6단계).
+- 할 일 ↔ GitHub 이슈 연결(§5.3 선택), 프로젝트 ↔ 마일스톤 연결.
+- 단계 게이트의 "출시 전 체크리스트"·"확정 매출"은 원천이 없어 `확인 필요`로만 보인다.
+
+운영에서 켜려면: ① `npm run db:migrate 20260925_0049_products.sql` 뒤 `npm run db:check` ② Engine에 `GITHUB_TOKEN`(읽기 전용)·`GITHUB_WEBHOOK_SECRET` ③ 저장소 webhook을 Engine `/api/webhook/github`로(이벤트: workflow_run·pull_request·issues·release·push, content type JSON).
+
