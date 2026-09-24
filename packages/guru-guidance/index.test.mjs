@@ -61,7 +61,10 @@ test('person metadata links every Guru card to a stable person and method', () =
 
 test('manual person browsing keeps reviewed cards excluded from scheduled rotation', () => {
   assert.equal(typeof listGuidanceCardsForPerson, 'function');
-  for (const personId of ['napoleon-hill', 'joe-girard', 'grant-cardone', 'jordan-belfort', 'jason-lemkin']) {
+  for (const personId of [
+    'dick-dunkel', 'neil-rackham', 'chris-voss',
+    'napoleon-hill', 'joe-girard', 'grant-cardone', 'jordan-belfort', 'jason-lemkin',
+  ]) {
     const cards = listGuidanceCardsForPerson(personId);
     assert.ok(cards.length >= 1, personId);
     assert.ok(cards.every(card => card.personId === personId && card.rotationEligible === false), personId);
@@ -79,6 +82,43 @@ test('manual person browsing keeps reviewed cards excluded from scheduled rotati
       }
     }
   }
+});
+
+test('broad customer segments rotate only advice that needs no unobserved deal event', () => {
+  const broadlyApplicable = new Set([
+    'sales-gap', 'sales-ziglar-help', 'sales-carnegie-listen', 'sales-tracy-needs',
+  ]);
+  const stages = ['sales:new', 'sales:active', 'sales:dormant'];
+  const selectedByContext = new Map();
+  for (let day = 0; day < 30; day++) {
+    const slots = [0, 5, 10].map(hour => new Date(Date.UTC(2026, 8, 24 + day, hour)));
+    for (const contextKey of [undefined, 'sales:unknown', ...stages]) {
+      const selected = slots.map(now => selectGuidanceCard({ cadence: 'daily', domain: 'sales', contextKey, now }));
+      assert.equal(new Set(selected.map(card => card.id)).size, 3, contextKey ?? 'shelf');
+      assert.ok(selected.every(card => broadlyApplicable.has(card.id) ||
+        (contextKey === 'sales:new' && card.id === 'sales-ross-fit')),
+      contextKey ?? 'shelf');
+      const seen = selectedByContext.get(contextKey) ?? new Set();
+      selected.forEach(card => seen.add(card.id));
+      selectedByContext.set(contextKey, seen);
+    }
+  }
+  for (const id of broadlyApplicable) {
+    const card = GURU_CARDS.find(item => item.id === id);
+    assert.deepEqual(card?.contexts, stages, id);
+  }
+  assert.equal(GURU_CARDS.find(card => card.id === 'sales-ross-fit')?.requiresMatchedContext, true);
+  assert.ok(selectedByContext.get('sales:new').has('sales-ross-fit'));
+  assert.ok(!selectedByContext.get(undefined).has('sales-ross-fit'));
+  assert.ok(!selectedByContext.get('sales:unknown').has('sales-ross-fit'));
+  assert.ok(!selectedByContext.get('sales:active').has('sales-ross-fit'));
+  assert.ok(!selectedByContext.get('sales:dormant').has('sales-ross-fit'));
+});
+
+test('Harry Dry first-line checklist links to his direct primary post', () => {
+  const card = GURU_CARDS.find(item => item.id === 'content-three-tests');
+  assert.equal(card?.source.url,
+    'https://www.linkedin.com/posts/harrydry_three-tests-for-any-line-you-write-activity-7219696153288683521-ao7k');
 });
 
 test('new sales mentor cards use primary sources and distinguish Moonlight applications', () => {

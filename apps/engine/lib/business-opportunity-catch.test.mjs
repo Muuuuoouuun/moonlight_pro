@@ -26,7 +26,9 @@ const stubs = {
   `,
   'knowledge-retriever.ts': `
     export async function retrieveKnowledge() {
-      return { status: 'live', items: globalThis.__businessCatchTest.knowledge || [] };
+      const state = globalThis.__businessCatchTest;
+      state.knowledgeReads = (state.knowledgeReads || 0) + 1;
+      return { status: 'live', items: state.knowledge || [] };
     }
   `,
 };
@@ -110,8 +112,25 @@ test('company scope and company sales personas do not receive personal monetizat
 test('retrieved evidence retains its source ID so reports can distinguish original records from AI summaries', async () => {
   state.knowledge = [{ id: 'record-reference', sourceTable: 'journal_entries', kind: 'note', title: '업무 기록', snippet: '확인할 문제', occurredAt: '2026-09-22' }];
   await persona.POST(request({ personaId: 'council', mode: 'weekly-review', message: '이번 주 정리' }));
+  assert.equal(state.knowledgeReads, 1);
   assert.match(state.generation.prompt, /journal_entries:record-reference/);
   assert.match(instruction(), /AI.*요약.*독립/);
+});
+
+test('single-contact outreach and outcome extraction keep the supplied record without retrieving other notes', async () => {
+  state.knowledge = [{ id: 'other-contact', sourceTable: 'journal_entries', kind: 'note', title: '다른 고객', snippet: '다른 고객의 가격 협상', occurredAt: '2026-09-22' }];
+  for (const mode of ['outreach-draft', 'extract-contact-outcome']) {
+    const response = await persona.POST(request({
+      personaId: 'sales', mode,
+      draft: '이 고객의 통화 원문',
+      context: { name: '이 고객', latestContact: '오늘 통화' },
+    }));
+    assert.equal(response.status, 200);
+    assert.equal(state.knowledgeReads || 0, 0);
+    assert.match(state.generation.prompt, /이 고객의 통화 원문/);
+    assert.match(state.generation.prompt, /오늘 통화/);
+    assert.doesNotMatch(state.generation.prompt, /다른 고객의 가격 협상/);
+  }
 });
 
 test('general memo analysis receives catch criteria while preserving the structured candidate output', async () => {

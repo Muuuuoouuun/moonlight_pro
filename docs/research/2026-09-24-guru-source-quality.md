@@ -36,3 +36,9 @@
 | Jason Lemkin | [SaaStr 고객 성공 글](https://www.saastr.com/customer-success-managers-hire-early-and-no-squishy-goals-its-all-about-the-numbers/) | SaaS·반복 서비스 맥락의 사용 확인. 다른 사업에 보편화 금지 |
 
 Hill·Cardone·Belfort는 자기점검 또는 제한된 기법이라 자동 팁에서 제외한다. Girard의 계약 후 관계는 `active`·`dormant` 고객 구분만으로 계약 완료를 확인할 수 없어 수동 열람에 둔다. Lemkin도 현 고객 단계 신호만으로 SaaS 맥락을 검증할 수 없어 수동 열람에 둔다. 이 검토는 각 인물의 전체 저술이나 플레이북 본문 전체를 검증했다는 뜻이 아니다.
+
+## 2026-09-25 상황 적합성 재점검
+
+고객 목록의 `new`·`active`·`dormant`는 넓은 구분이다. 제안의 내부 검토, 고객이 말한 문제, 긍정 답변을 확인하지 않으므로 해당 사건을 사용 조건으로 둔 MEDDIC·SPIN·Voss 카드도 자동 순환에서 제외하고 직접 열람에 남겼다. 세일즈 13장 중 자동 5장·직접 열람 8장이 현재 편집 상태다. 자동 후보 네 장은 관찰되지 않은 사건을 단정하지 않는 질문으로 고쳤고, Ross의 신규 고객 적합성 질문은 `new` 구분에서만 고른다.
+
+콘텐츠의 Harry Dry 카드가 가리키던 2차 정리 글은 [Harry Dry 본인의 세 가지 문장 점검 게시물](https://www.linkedin.com/posts/harrydry_three-tests-for-any-line-you-write-activity-7219696153288683521-ao7k)로 교체했다. 이는 카드의 출처 추적을 개선한 것이며 한국어 문구가 원전의 직접 인용이라는 뜻은 아니다.

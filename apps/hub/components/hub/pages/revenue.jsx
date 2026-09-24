@@ -11,7 +11,7 @@ import { GuruGuidanceCard } from '../guru-guidance-card';
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
-import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
+import { brandInWorkspace, getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
@@ -56,6 +56,16 @@ const SCOPE_OPTIONS = [
   { key: 'personal', label: 'Personal', dot: 'personal' },
   { key: 'company', label: 'Company', dot: 'company' },
 ];
+
+function isClassInGuruRecord(record) {
+  if (!record || record.type !== 'company') return false;
+  if (record.workspace != null && record.workspace !== '' && record.workspace !== 'classin') return false;
+  const hasBrand = record.brand && record.brand !== 'all' && record.brand?.key !== 'all';
+  const classinBrand = hasBrand && brandInWorkspace(record.brand, 'classin');
+  if (hasBrand && !classinBrand) return false;
+  // Legacy revenue rows use company type without a workspace or brand tag.
+  return true;
+}
 
 // 사이드바 스코프는 `?scope=`로만 도착하고 pathname은 그대로다 — hub-app이 pathname으로
 // 페이지를 키잉하므로 리마운트가 없다. 마운트 1회 초기화로는 스코프 전환이 목록에
@@ -1746,6 +1756,9 @@ export function Deals({ workspace, onNavigate }) {
   const [showLost, setShowLost] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
   const [guruDeal, setGuruDeal] = React.useState(null);
+  const openGuruForDeal = (deal) => {
+    if (isClassInGuruRecord(deal)) setGuruDeal(deal);
+  };
   const [boardNotice, setBoardNotice] = React.useState(null); // { key?, tone, label, undo? } — 이동 되돌리기·저장 실패 안내
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   React.useEffect(() => {
@@ -2258,13 +2271,15 @@ export function Deals({ workspace, onNavigate }) {
                         tooltip={d.hidden ? '파이프라인에 다시 보이기' : '파이프라인에서 숨기기'}
                         onClick={(e) => { e.stopPropagation(); toggleDealHidden(d.id, !d.hidden); }}
                       />
-                      <IconButton
-                        icon="sparkle"
-                        size={20}
-                        iconSize={12}
-                        tooltip="Guru에게 진단 요청"
-                        onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}
-                      />
+                      {isClassInGuruRecord(d) && (
+                        <IconButton
+                          icon="sparkle"
+                          size={20}
+                          iconSize={12}
+                          tooltip="Guru에게 진단 요청"
+                          onClick={(e) => { e.stopPropagation(); openGuruForDeal(d); }}
+                        />
+                      )}
                       {s.key === 'lost' && <LifecycleBadge state="cancelled" label="종료" />}
                       {d.hidden && <Badge tone="neutral" size="xs" variant="outline">숨김</Badge>}
                       <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">
@@ -2291,9 +2306,11 @@ export function Deals({ workspace, onNavigate }) {
                           <Iconed name="clock" size={10} /> {d.age}일 정체
                         </span>
                         {/* 10px 인라인 버튼이던 것 — 텍스트 플로어(§8.1)와 hover 계약을 Button 프리미티브에 맡긴다. */}
-                        <Button variant="outline" size="xs" icon="sparkle" onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}>
-                          반론 점검
-                        </Button>
+                        {isClassInGuruRecord(d) && (
+                          <Button variant="outline" size="xs" icon="sparkle" onClick={(e) => { e.stopPropagation(); openGuruForDeal(d); }}>
+                            반론 점검
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2348,7 +2365,7 @@ export function Deals({ workspace, onNavigate }) {
           setEditDealId(null);
         }}
       >
-        {editingDeal && (
+        {editingDeal && isClassInGuruRecord(editingDeal) && (
           <div style={{
             padding: '12px 14px',
             background: 'var(--surface-2)',
@@ -2367,7 +2384,7 @@ export function Deals({ workspace, onNavigate }) {
                 variant="outline"
                 size="xs"
                 icon="sparkle"
-                onClick={() => setGuruDeal(editingDeal)}
+                onClick={() => openGuruForDeal(editingDeal)}
               >
                 1:1 코칭 열기
               </Button>
@@ -2382,19 +2399,19 @@ export function Deals({ workspace, onNavigate }) {
                 </span>
               </div>
             )}
-            <DealOutreachDrafter
-              deal={editingDeal}
-              onApplyNextAction={(act) => {
-                if (editDealId) {
-                  setDealDrafts(prev => ({
-                    ...prev,
-                    [editDealId]: { ...prev[editDealId], nextAction: act },
-                  }));
-                }
-              }}
-            />
           </div>
         )}
+        {editingDeal && <DealOutreachDrafter
+          deal={editingDeal}
+          onApplyNextAction={(act) => {
+            if (editDealId) {
+              setDealDrafts(prev => ({
+                ...prev,
+                [editDealId]: { ...prev[editDealId], nextAction: act },
+              }));
+            }
+          }}
+        />}
         <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
         <DealNextMeetingPanel deal={editingDeal} onNavigate={onNavigate} />
         <DealLinkedProjectsPanel deal={editingDeal} onNavigate={onNavigate} />
@@ -2402,7 +2419,7 @@ export function Deals({ workspace, onNavigate }) {
       </EditDrawer>
 
       <FloatingMentorWidget
-        isOpen={Boolean(guruDeal)}
+        isOpen={Boolean(guruDeal && isClassInGuruRecord(guruDeal))}
         onClose={() => setGuruDeal(null)}
         agent="guru"
         contextType="deal"
@@ -3135,14 +3152,6 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
         </div>
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <QuickActions onAction={handleQuickAction} />
-          <Button
-            variant="secondary"
-            size="xs"
-            icon="sparkle"
-            onClick={() => onNavigate?.(guruChatPath({ mode: 'deal-review', ref: account.name }))}
-          >
-            Ask Guru
-          </Button>
         </div>
         {(account.nextAction || account.dormant) && (
           <div style={{ marginTop: 12, padding: '9px 11px', display: 'flex', alignItems: 'flex-start', gap: 8, border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)' }}>

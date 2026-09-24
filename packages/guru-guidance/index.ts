@@ -10,6 +10,7 @@ export interface GuidanceCard {
   personName?: string;
   methodLabel?: string;
   rotationEligible?: false;
+  requiresMatchedContext?: true;
   frame: string;
   text: string;
   useWhen: string;
@@ -29,50 +30,47 @@ export interface GuidancePerson {
 export const GURU_CARDS: readonly GuidanceCard[] = [
   {
     id: 'sales-meddic', kind: 'guru', domain: 'sales', person: 'Dick Dunkel · MEDDIC',
-    personId: 'dick-dunkel', personName: 'Dick Dunkel', methodLabel: 'MEDDIC',
+    personId: 'dick-dunkel', personName: 'Dick Dunkel', methodLabel: 'MEDDIC', rotationEligible: false,
     frame: '결정권자, 선택 기준, 결정 과정을 각각 확인하는 자격 검증 관점',
     text: '검토가 길어지면 상대의 호감보다 실제 선택 기준과 최종 결정 과정을 확인해 보세요.',
     useWhen: '제안 후 내부 검토가 길어지는데 무엇을 기다리는지 모를 때',
     question: '내부에서 이 제안을 판단할 때 기준과 최종 승인 과정은 어떻게 되나요?',
-    contexts: ['sales:new', 'sales:active', 'sales:dormant'],
     source: { title: '세일즈 구루 12인 플레이북', path: 'docs/sales-guru-knowledge-base.md', section: 'Qualification — MEDDIC 프레임워크', url: 'https://meddicc.com/resources/who-created-meddic' },
   },
   {
     id: 'sales-gap', kind: 'guru', domain: 'sales', person: 'Keenan · GAP Selling',
     personId: 'keenan', personName: 'Keenan', methodLabel: 'GAP Selling',
-    frame: '현재 상태와 원하는 상태 사이에서 실제로 불편한 지점이 무엇인지 층별로 듣는 관점',
+    frame: '현재 방식과 원하는 상태의 차이를 차근히 듣는 관점',
     text: '문제가 있다고 단정하기 전에, 지금 방식이 상대의 일에 어떤 영향을 주는지 물어보세요.',
-    useWhen: '고객이 필요성을 말하지만 구매 이유가 분명하지 않을 때',
-    question: '지금 방식 때문에 실제 업무에서 가장 불편한 순간은 언제인가요?',
+    useWhen: '고객의 현재 방식과 바라는 결과를 직접 확인할 때',
+    question: '지금 방식에서 잘되는 점과 바꾸고 싶은 점은 무엇인가요?',
     contexts: ['sales:new', 'sales:active', 'sales:dormant'],
     source: { title: '세일즈 구루 12인 플레이북', path: 'docs/sales-guru-knowledge-base.md', section: 'Keenan — GAP Selling', url: 'https://salesgrowth.com/gap-selling-book/' },
   },
   {
     id: 'sales-spin-implication', kind: 'guru', domain: 'sales', person: 'Neil Rackham · SPIN',
-    personId: 'neil-rackham', personName: 'Neil Rackham', methodLabel: 'SPIN',
+    personId: 'neil-rackham', personName: 'Neil Rackham', methodLabel: 'SPIN', rotationEligible: false,
     frame: '고객이 말한 문제의 업무상 영향을 더 깊이 이해하는 Implication 질문 관점',
     text: '불편하다는 말에서 멈추지 말고, 그 문제가 실제 운영에 남기는 영향을 물어보세요.',
     useWhen: '고객이 문제는 말했지만 중요도와 우선순위가 불명확할 때',
     question: '그 문제가 계속되면 어떤 업무나 결과에 영향이 있나요?',
-    contexts: ['sales:new', 'sales:active', 'sales:dormant'],
     source: { title: '세일즈 구루 12인 플레이북', path: 'docs/sales-guru-knowledge-base.md', section: 'SPIN Selling System · Implication Questions', url: 'https://www.huthwaiteinternational.com/spin-methodology' },
   },
   {
     id: 'sales-voss-feasibility', kind: 'guru', domain: 'sales', person: 'Chris Voss · 실행 조건',
-    personId: 'chris-voss', personName: 'Chris Voss', methodLabel: '실행 조건',
+    personId: 'chris-voss', personName: 'Chris Voss', methodLabel: '실행 조건', rotationEligible: false,
     frame: '긍정적인 반응을 실제 실행 조건으로 확인하는 보정 질문 관점',
     text: '합의가 보이면 실행 조건을 상대의 말로 확인해 보세요.',
     useWhen: '긍정 답변은 있지만 실행 방법이 불명확할 때',
     question: '실제로 진행하려면 어떤 조건이 먼저 갖춰져야 하나요?',
-    contexts: ['sales:active', 'sales:dormant'],
     source: { title: '세일즈 구루 12인 플레이북', path: 'docs/sales-guru-knowledge-base.md', section: 'Calibrated Questions', url: 'https://www.blackswanltd.com/newsletter/the-power-of-calibrated-questions-shaping-conversations-with-precision' },
   },
   {
     id: 'sales-ross-fit', kind: 'guru', domain: 'sales', person: 'Aaron Ross · 맞는 고객',
-    personId: 'aaron-ross', personName: 'Aaron Ross', methodLabel: '맞는 고객',
-    frame: '연락량보다 이상적 고객의 공통 조건과 맞지 않는 조건을 먼저 정의하는 ICP 관점',
-    text: '연락 대상을 늘리기 전에, 잘 맞는 고객의 공통 조건과 맞지 않는 조건을 먼저 적어보세요.',
-    useWhen: '잠재고객 범위가 넓고 우선 연락 대상을 고르기 어려울 때',
+    personId: 'aaron-ross', personName: 'Aaron Ross', methodLabel: '맞는 고객', requiresMatchedContext: true,
+    frame: '이상적 고객의 공통 조건과 맞지 않는 조건을 확인하는 ICP 관점',
+    text: '새 고객을 살펴볼 때, 잘 맞았던 고객의 공통 조건과 차이를 먼저 확인해 보세요.',
+    useWhen: '새로 들어온 문의나 잠재고객의 첫 접촉을 준비할 때',
     question: '기존 고객 중 가장 잘 맞았던 곳의 공통 조건은 무엇인가요?',
     contexts: ['sales:new'],
     source: { title: '세일즈 구루 12인 플레이북', path: 'docs/sales-guru-knowledge-base.md', section: 'ICP — Ideal Customer Profile', url: 'https://predictablerevenue.com/blog/15-minute-summary-of-predictable-revenue/' },
@@ -81,20 +79,20 @@ export const GURU_CARDS: readonly GuidanceCard[] = [
     id: 'sales-ziglar-help', kind: 'guru', domain: 'sales', person: 'Zig Ziglar · 고객 목표',
     personId: 'zig-ziglar', personName: 'Zig Ziglar', methodLabel: '고객 목표',
     frame: '제품 설명보다 고객이 얻고자 하는 결과와 현재 필요를 먼저 이해하는 관점',
-    text: '설명을 시작하기 전에 상대가 이루려는 일을 먼저 물어보세요.',
-    useWhen: '고객의 목적을 충분히 듣기 전에 제품 설명을 준비하고 있을 때',
+    text: '고객과 대화할 기회가 있다면, 설명보다 상대가 이루려는 일을 먼저 물어보세요.',
+    useWhen: '신규 또는 기존 고객과 대화의 목적을 확인하고 싶을 때',
     question: '이번에 가장 이루고 싶은 변화는 무엇인가요?',
-    contexts: ['sales:new', 'sales:active'],
+    contexts: ['sales:new', 'sales:active', 'sales:dormant'],
     source: { title: '세일즈 구루 12인 플레이북', path: 'docs/sales-guru-knowledge-base.md', section: '올타임 레전드 Vol.1 — Zig Ziglar', url: 'https://www.ziglar.com/show/helping/', application: 'adapted', note: '고객의 필요를 이해하라는 원칙을 현재 대화의 질문으로 바꾼 Moonlight 응용' },
   },
   {
     id: 'sales-carnegie-listen', kind: 'guru', domain: 'sales', person: 'Dale Carnegie · 경청',
     personId: 'dale-carnegie', personName: 'Dale Carnegie', methodLabel: '경청',
     frame: '상대의 관심사를 듣고 상대 관점에서 대화를 이어가는 관계 원칙',
-    text: '내 설명을 이어가기 전에, 상대가 중요하게 보는 점을 내 말로 확인해 보세요.',
-    useWhen: '관계가 소원해졌거나 고객의 이견이 아직 풀리지 않았을 때',
+    text: '고객과 대화할 때, 상대가 중요하게 보는 점을 내 말로 확인해 보세요.',
+    useWhen: '상대가 중요하게 여기는 점을 직접 듣고 확인할 때',
     question: '제가 이해한 가장 중요한 점은 이것인데, 맞나요?',
-    contexts: ['sales:active', 'sales:dormant'],
+    contexts: ['sales:new', 'sales:active', 'sales:dormant'],
     source: { title: '세일즈 구루 12인 플레이북', path: 'docs/sales-guru-knowledge-base.md', section: '올타임 레전드 Vol.2 — Dale Carnegie', url: 'https://www.dalecarnegie.com/en/culture', application: 'adapted', note: '공식 경청·상대 관심사 원칙을 고객 대화의 확인 질문으로 적용한 Moonlight 응용' },
   },
   {
@@ -119,10 +117,10 @@ export const GURU_CARDS: readonly GuidanceCard[] = [
     id: 'sales-tracy-needs', kind: 'guru', domain: 'sales', person: 'Brian Tracy · 니즈 확인',
     personId: 'brian-tracy', personName: 'Brian Tracy', methodLabel: '니즈 확인',
     frame: '해법을 제시하기 전에 고객의 실제 필요를 질문으로 확인하는 관점',
-    text: '제안을 다듬기 전에 고객이 해결하려는 문제를 먼저 확인해 보세요.',
-    useWhen: '문의는 받았지만 고객이 원하는 결과가 아직 분명하지 않을 때',
+    text: '해법을 이야기할 때는 고객이 해결하려는 문제를 먼저 확인해 보세요.',
+    useWhen: '고객이 바라는 결과를 직접 확인하고 싶을 때',
     question: '지금 가장 해결하고 싶은 문제는 무엇인가요?',
-    contexts: ['sales:new', 'sales:active'],
+    contexts: ['sales:new', 'sales:active', 'sales:dormant'],
     source: { title: '세일즈 구루 12인 플레이북', path: 'docs/sales-guru-knowledge-base.md', section: '올타임 레전드 Vol.5 — Brian Tracy', url: 'https://www.briantracy.com/blog/sales-success/7-key-results-areas-of-sales-success-brian-tracy-certified-sales-trainer/', application: 'adapted', note: '니즈 확인 원칙을 현재 상담의 개방형 질문으로 적용한 Moonlight 응용; 원전의 성과 수치는 채택하지 않음' },
   },
   {
@@ -230,7 +228,7 @@ export const GURU_CARDS: readonly GuidanceCard[] = [
     useWhen: '제목이나 첫 장이 두루뭉술할 때',
     question: '이 문장을 다른 브랜드도 그대로 쓸 수 있나요?',
     contexts: ['content:idea', 'content:draft', 'content:review'],
-    source: { title: '콘텐츠 스토리텔링 인물 v2', path: 'docs/content-storytelling-people-v2.md', section: 'Harry Dry · 3가지 판정 질문', url: 'https://writingexamples.com/article/harry-dry-write-great-copy' },
+    source: { title: '콘텐츠 스토리텔링 인물 v2', path: 'docs/content-storytelling-people-v2.md', section: 'Harry Dry · 3가지 판정 질문', url: 'https://www.linkedin.com/posts/harrydry_three-tests-for-any-line-you-write-activity-7219696153288683521-ao7k' },
   },
   {
     id: 'content-multiplication', kind: 'guru', domain: 'content', person: 'Justin Welsh · 소재 재사용',
@@ -357,9 +355,10 @@ export function selectGuidanceCard({ cadence, domain, now = new Date(), offset =
     .filter(card => cadence === 'weekly' || card.rotationEligible !== false);
   const matched = cadence === 'daily' && contextKey
     ? catalogue.filter(card => card.contexts?.includes(contextKey)) : [];
+  const general = catalogue.filter(card => card.requiresMatchedContext !== true);
   // A situational set must still sustain all three fixed daily windows.
-  // Unknown or narrow context falls back to the reviewed domain catalogue.
-  const cards = matched.length >= 3 ? matched : catalogue;
+  // Unknown or narrow context falls back to cards safe without a matched signal.
+  const cards = matched.length >= 3 ? matched : general;
   if (!cards.length) throw new Error(`No guidance cards for ${cadence}/${domain ?? ''}`);
   const window = cadence === 'daily' ? guidanceDailyWindow(now) : null;
   const seed = window

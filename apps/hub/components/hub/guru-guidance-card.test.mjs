@@ -27,7 +27,8 @@ test('Guru cards take existing surface space and stay out of Home and Today tria
   const customers = read('./pages/customers.jsx');
   const home = read('./pages/home.jsx');
   const today = read('./pages/daily-brief.jsx');
-  assert.match(chat, /<GuruGuidanceCard allowDomains/);
+  assert.match(chat, /<GuruGuidanceCard domain="sales"/);
+  assert.doesNotMatch(chat, /<GuruGuidanceCard[^>]*allowDomains/);
   assert.match(chat, /onAsk=\{card =>/);
   assert.match(revenue, /<GuruGuidanceCard[^>]*domain="sales"/);
   assert.match(customers, /<GuruGuidanceCard[^>]*domain="sales"/);
@@ -42,6 +43,7 @@ test('Revenue card opens a prepared Guru question without generating advice', ()
   assert.equal(guruChatPath({ guidanceId: 'sales-gap' }), 'dashboard/agents/chat?agent=guru&guidanceId=sales-gap');
   assert.match(revenue, /onAsk=\{card => onNavigate\?\.\(guruChatPath\(\{ guidanceId: card\.id \}\)\)\}/);
   assert.match(chat, /q\.get\('guidanceId'\)/);
+  assert.match(chat, /GURU_CARDS\.find\(card => card\.id === guidanceId && card\.domain === 'sales'\)/);
   assert.doesNotMatch(chat, /setInput\(guidanceCard\.question\)|setInput\(card\.question\)/);
   assert.match(chat, /선택한 관점/);
   assert.match(chat, /activeMode === 'advice' \? 'open-question'/);

@@ -64,6 +64,12 @@ async function callEngine(body) {
 
 // Assemble lightweight snapshot context based on persona and mode
 async function assemblePersonaContext({ personaId, mode }) {
+  // These requests describe one contact in draft (or an explicit context).
+  // A recent-deals snapshot can introduce a different customer into the answer.
+  if (mode === "outreach-draft" || mode === "extract-contact-outcome") {
+    return null;
+  }
+
   // If brand-related or content/production
   if (personaId === "content" || personaId === "production" || personaId === "council") {
     try {

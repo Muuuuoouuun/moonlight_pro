@@ -242,7 +242,7 @@ export function AgentsChat({ onNavigate }) {
       const mode = q.get('mode');
       const ref = q.get('ref');
       const guidanceId = q.get('guidanceId');
-      const guidanceCard = a === 'guru' ? GURU_CARDS.find(card => card.id === guidanceId) : null;
+      const guidanceCard = a === 'guru' ? GURU_CARDS.find(card => card.id === guidanceId && card.domain === 'sales') : null;
       if (guidanceCard) {
         setGuruGuidanceId(guidanceCard.id);
       }
@@ -326,7 +326,7 @@ export function AgentsChat({ onNavigate }) {
         <div className="scroll-y" style={{ flex: 1, padding: '20px 20px 10px' }}>
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
             {agentKey === 'guru' && thread.length <= 1 && (
-              <GuruGuidanceCard allowDomains onBrowse={() => setGuruGuidanceId(null)} onAsk={card => {
+              <GuruGuidanceCard domain="sales" onBrowse={() => setGuruGuidanceId(null)} onAsk={card => {
                 setGuruGuidanceId(card.id);
                 guruInputRef.current?.focus();
               }} />

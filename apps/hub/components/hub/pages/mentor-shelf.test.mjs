@@ -10,7 +10,7 @@ const cssFile = new URL('./mentor-shelf.css', import.meta.url);
 const source = existsSync(jsxFile) ? readFileSync(jsxFile, 'utf8') : '';
 const css = existsSync(cssFile) ? readFileSync(cssFile, 'utf8') : '';
 
-function mount({ onGuidanceAsk = () => {}, onNavigate = () => {} } = {}) {
+function mount({ onGuidanceAsk = () => {}, onNavigate = () => {}, getElementById = () => null } = {}) {
   const slots = [];
   let cursor = 0;
   const React = {
@@ -48,7 +48,7 @@ function mount({ onGuidanceAsk = () => {}, onNavigate = () => {} } = {}) {
     listGuidanceCardsForPerson,
     { getItem: () => null, setItem: () => {} },
     { addEventListener: () => {}, removeEventListener: () => {} },
-    { addEventListener: () => {}, removeEventListener: () => {}, hidden: false },
+    { addEventListener: () => {}, removeEventListener: () => {}, hidden: false, getElementById },
   );
   return {
     Button,
@@ -196,6 +196,41 @@ test('all thirteen sales mentor profiles can be browsed even when a card is rese
   assert.equal(asked.length, 0);
   nodes(detail, node => node.type === app.Button && /선택한 관점으로 질문 쓰기/.test(words(node)))[0].props.onClick();
   assert.equal(asked[0].id, hillCard.id);
+});
+
+test('domain browsing leads with the method while person browsing leads with the name', () => {
+  const app = mount();
+  let tree = app.render();
+  const domainList = nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === '세일즈 분야 카드 목록')[0];
+  const firstDomainChoice = nodes(domainList, node => node.type === 'button')[0];
+  const firstDomainCard = listGuidanceCards({ cadence: 'daily', domain: 'sales' })
+    .find(card => card.id === firstDomainChoice.props['data-card-id']);
+  assert.equal(words(nodes(firstDomainChoice, node => node.type === 'strong')[0]), firstDomainCard.methodLabel);
+  assert.equal(words(nodes(firstDomainChoice, node => node.type === 'span')[0]), firstDomainCard.personName);
+  assert.equal(firstDomainChoice.props['aria-expanded'], undefined, 'selection is not a disclosure');
+  nodes(tree, node => node.type === app.SegmentedControl && node.props.label === '멘토 탐색 방식')[0].props.onChange('person');
+  tree = app.render();
+  const personList = nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === '세일즈 멘토 목록')[0];
+  const firstPersonChoice = nodes(personList, node => node.type === 'button')[0];
+  assert.equal(words(nodes(firstPersonChoice, node => node.type === 'strong')[0]), listGuidancePeople({ domain: 'sales' })[0].name);
+  assert.equal(firstPersonChoice.props['aria-expanded'], undefined);
+});
+
+test('the shelf gives a direct browse jump and returns focus to the selected list item', () => {
+  const focused = [];
+  const scrolled = [];
+  const app = mount({ getElementById: id => ({ focus: () => focused.push(id), scrollIntoView: () => scrolled.push(id) }) });
+  let tree = app.render();
+  nodes(tree, node => node.type === app.Button && /멘토 찾아보기/.test(words(node)))[0].props.onClick();
+  assert.deepEqual(scrolled, ['mentor-shelf-browse']);
+  assert.deepEqual(focused, ['mentor-shelf-browse']);
+  const domainList = nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === '세일즈 분야 카드 목록')[0];
+  const hill = nodes(domainList, node => node.type === 'button' && /Napoleon Hill/.test(words(node)))[0];
+  hill.props.onClick();
+  tree = app.render();
+  const detail = nodes(tree, node => node.props?.role === 'region' && node.props?.className === 'mentor-shelf__person-detail')[0];
+  nodes(detail, node => node.type === app.Button && /목록으로/.test(words(node)))[0].props.onClick();
+  assert.deepEqual(focused, ['mentor-shelf-browse', `mentor-shelf-choice-domain-${hill.props['data-card-id']}`]);
 });
 
 test('Legend remains reading only and conversation starts through the explicit route', () => {

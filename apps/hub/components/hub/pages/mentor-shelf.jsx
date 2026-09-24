@@ -65,7 +65,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
   const guruCard = selectGuidanceCard({ cadence: 'daily', domain, now, offset: guruOffset });
   const legendCard = selectGuidanceCard({ cadence: 'weekly', now, offset: legendOffset });
   const domainCards = [...listGuidanceCards({ cadence: 'daily', domain: browseDomain })]
-    .sort((a, b) => a.personName.localeCompare(b.personName, 'en') || a.methodLabel.localeCompare(b.methodLabel, 'ko'));
+    .sort((a, b) => a.methodLabel.localeCompare(b.methodLabel, 'ko') || a.personName.localeCompare(b.personName, 'en'));
   const selectedDomainCard = domainCards.find(card => card.id === selectedDomainCardId) || domainCards[0];
   const people = listGuidancePeople({ domain: browseDomain });
   const selectedPerson = people.find(person => person.id === selectedPersonId)
@@ -106,6 +106,17 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
     setSelectedPersonId(id);
     setPersonOffset(0);
   };
+  const returnToList = () => {
+    const choiceId = browseMode === 'person'
+      ? `mentor-shelf-choice-person-${selectedPerson?.id}`
+      : `mentor-shelf-choice-domain-${browseCard?.id}`;
+    document.getElementById(choiceId)?.focus();
+  };
+  const jumpToBrowse = () => {
+    const heading = document.getElementById('mentor-shelf-browse');
+    heading?.scrollIntoView();
+    heading?.focus({ preventScroll: true });
+  };
 
   React.useEffect(() => {
     const activelyChosen = browseMode === 'person' ? selectedPersonId : selectedDomainCardId;
@@ -120,7 +131,10 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
         <h2>필요할 때 꺼내 보는 관점</h2>
         <p>Guru는 실무 자료에서 한 가지 질문을 건네고, Legend는 판단을 다시 보게 합니다. 읽고 지나가거나 직접 물어볼 수 있습니다.</p>
       </div>
-      <Button variant="outline" size="md" onClick={() => onNavigate?.('dashboard/agents/chat?agent=guru')}>대화 시작</Button>
+      <div className="mentor-shelf__intro-actions">
+        <Button variant="outline" size="md" onClick={() => onNavigate?.('dashboard/agents/chat?agent=guru')}>대화 시작</Button>
+        <Button variant="ghost" size="md" onClick={jumpToBrowse}>멘토 찾아보기 ↓</Button>
+      </div>
     </header>
 
     <section className="mentor-shelf__section" aria-labelledby="mentor-shelf-today">
@@ -187,7 +201,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
 
     <section className="mentor-shelf__browse" aria-labelledby="mentor-shelf-browse">
       <div className="mentor-shelf__section-head">
-        <h3 id="mentor-shelf-browse">멘토 찾아보기</h3>
+        <h3 id="mentor-shelf-browse" tabIndex={-1}>멘토 찾아보기</h3>
         <span>시간대 카드와 별개로 검토된 관점을 찾아 읽습니다</span>
       </div>
       <SegmentedControl label="멘토 탐색 방식" options={BROWSE_MODES} value={browseMode} onChange={setBrowseMode} className="mentor-shelf__browse-mode" />
@@ -204,14 +218,15 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
               {domainCards.map(card => <li key={card.id}>
                 <button
                   type="button"
+                  id={`mentor-shelf-choice-domain-${card.id}`}
+                  data-card-id={card.id}
                   className="mentor-shelf__person-choice mentor-shelf__person-choice--card hub-card-link"
                   aria-pressed={browseCard?.id === card.id}
-                  aria-expanded={browseCard?.id === card.id}
                   aria-controls={browseCard?.id === card.id ? 'mentor-shelf-person-detail' : undefined}
                   onClick={() => setSelectedDomainCardId(card.id)}
                 >
-                  <strong>{card.personName}</strong>
-                  <span>{card.methodLabel}</span>
+                  <strong>{card.methodLabel}</strong>
+                  <span>{card.personName}</span>
                 </button>
               </li>)}
             </ul> : <ul className="mentor-shelf__person-list" aria-label={`${browseDomainLabel} 멘토 목록`}>
@@ -220,9 +235,9 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
                 return <li key={person.id}>
                   <button
                     type="button"
+                    id={`mentor-shelf-choice-person-${person.id}`}
                     className="mentor-shelf__person-choice hub-card-link"
                     aria-pressed={selectedPerson?.id === person.id}
-                    aria-expanded={selectedPerson?.id === person.id}
                     aria-controls={selectedPerson?.id === person.id ? 'mentor-shelf-person-detail' : undefined}
                     onClick={() => choosePerson(person.id)}
                   >
@@ -241,7 +256,10 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
             >
               <div className="mentor-shelf__card-head">
                 <strong>{browseDomainLabel.toUpperCase()} / {browseMode === 'person' ? '인물별' : '분야별'} 관점</strong>
-                <span className="mono">{browseCardPosition} / {browseCardCount}</span>
+                <div className="mentor-shelf__detail-tools">
+                  <span className="mono">{browseCardPosition} / {browseCardCount}</span>
+                  <Button variant="ghost" size="sm" className="mentor-shelf__return" onClick={returnToList}>목록으로 ↑</Button>
+                </div>
               </div>
               <h4>{browseCard.personName}</h4>
               <p className="mentor-shelf__person-method">{browseCard.methodLabel}</p>
