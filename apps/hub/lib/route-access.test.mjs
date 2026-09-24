@@ -77,8 +77,14 @@ test("matcher 가 확장자 캐치올로 게이트를 끄지 않는다", async (
   for (const path of ["/api/hub/revenue", "/api/hub/inquiries/x.png", "/dashboard/revenue.png", "/dashboard"]) {
     assert.ok(pattern.test(path), `${path} 가 미들웨어 대상에서 빠졌다`);
   }
-  for (const path of ["/_next/static/chunk.js", "/fonts/SUIT-Variable.woff2", "/favicon.ico", "/manifest.json"]) {
+  for (const path of [
+    "/_next/static/chunk.js", "/fonts/SUIT-Variable.woff2", "/favicon.ico", "/manifest.json",
+    "/icon.svg", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/apple-touch-icon.png",
+  ]) {
     assert.ok(!pattern.test(path), `${path} 는 정적 자산이라 통과해야 한다`);
+  }
+  for (const path of ["/icon-512.png/private", "/icon-512.png.evil", "/api/hub/icon-512.png"]) {
+    assert.ok(pattern.test(path), `${path} 는 자산 이름을 흉내 내도 인증을 거쳐야 한다`);
   }
 });
 

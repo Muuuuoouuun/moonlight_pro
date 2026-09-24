@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { OkrSummaryCard } from "../okr-summary-card";
 import { Iconed } from "../hub-icons";
+import { BrandIcon } from "../brand-icons";
 import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress, Skeleton } from "../hub-primitives";
 import {
   activitySeriesAvailability,
@@ -488,7 +489,7 @@ function BrandActivityBars({ brands = [] }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {brands.map((b) => (
         <div key={b.key} style={{ display: 'grid', gridTemplateColumns: '22px 1fr 28px', gap: 10, alignItems: 'center' }}>
-          <span aria-hidden="true" style={{ fontSize: 13, color: 'var(--fg-muted)', textAlign: 'center' }}>{b.glyph || '●'}</span>
+          <BrandIcon brand={{ key: b.key, name: b.label }} size={18} style={{ color: 'var(--fg-muted)', margin: '0 auto' }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, marginBottom: 4, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</div>
             <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>

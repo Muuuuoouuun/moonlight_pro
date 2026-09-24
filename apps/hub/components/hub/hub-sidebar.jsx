@@ -176,7 +176,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
     // 펼친 행 — 아이콘 + 라벨 + 건수 뱃지 (§15 2026-09-23).
     let content = (
       <>
-        <Iconed name={a.icon} size={small ? 15 : 16} />
+        <Iconed name={a.icon} size={small ? 16 : 17} stroke={1.7} />
         <span className="hub-sidebar-label" style={{ flex: 1 }}>{a.label}</span>
         <CountBadge n={count} />
       </>
@@ -187,7 +187,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
       railLabel = `${a.label}${count ? ` · ${count}건` : ''}`;
       content = (
         <>
-          <Iconed name={a.icon} size={18} />
+          <Iconed name={a.icon} size={19} stroke={1.7} />
           {count > 0 && <span className="hub-sidebar-count-dot" aria-hidden="true" />}
         </>
       );
@@ -218,12 +218,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
     }}>
       <div className="hub-sidebar-header" style={{ padding: '14px 14px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div className="hub-sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <div style={{
-            width: 24, height: 24, borderRadius: 'var(--r-sm)',
-            background: 'var(--fg)', color: 'var(--bg)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 600, letterSpacing: '-0.02em',
-          }} aria-hidden="true">M</div>
+          <img src="/icon.svg" width="28" height="28" alt="" aria-hidden="true" style={{ flexShrink: 0 }} />
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em' }}>Moonlight</div>
             <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.05em', marginTop: -1 }}>HUB · PRO</div>

@@ -59,6 +59,6 @@ export const config = {
   // **경로 어디든** 그 확장자로 끝나면 미들웨어를 통째로 끈다 — `/api/hub/inquiries/x.png`
   // 가 게이트를 우회했다(2026-09-20 실측). 지금은 `[id]` 라우트의 UUID 검증이 앵커돼 있어
   // 데이터가 새지 않았을 뿐이고, 동적 API 가 하나 늘면 바로 유출이 된다.
-  // public/ 에 실제로 있는 것만 접두사로 뺀다: fonts/ · icon.svg · manifest.json.
-  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|manifest\\.json|fonts/).*)"],
+  // public/ 에 실제로 있는 이름만 정확히 뺀다. /icon-512.png/anything 은 예외가 아니다.
+  matcher: ["/((?!_next/static|_next/image|fonts/|(?:favicon\\.ico|icon\\.svg|icon-192\\.png|icon-512\\.png|icon-maskable-512\\.png|apple-touch-icon\\.png|manifest\\.json)$).*)"],
 };

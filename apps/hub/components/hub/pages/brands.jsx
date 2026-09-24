@@ -7,6 +7,7 @@ import { MemoCaptureLink } from "../journal-links";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Iconed } from "../hub-icons";
+import { BrandIcon } from "../brand-icons";
 import {
   Button,
   Card,
@@ -132,9 +133,7 @@ function BrandRow({ brand, onOpen }) {
         boxShadow: brand.failedPublishes > 0 ? "inset 1px 0 0 var(--danger)" : undefined,
       }}
     >
-      <span style={{ fontSize: 15, color: "var(--fg-muted)", textAlign: "center" }} aria-hidden="true">
-        {brand.glyph || "○"}
-      </span>
+      <BrandIcon brand={brand} size={18} style={{ color: "var(--fg-muted)" }} />
       <span style={{ minWidth: 0 }}>
         <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--fg)" }}>
           {brand.name}
@@ -486,7 +485,10 @@ export function Brands() {
       <div className="brand-page-header">
         {selected && <Button variant="ghost" size="sm" icon="chevronL" onClick={() => setQuery(null)}>브랜드 목록</Button>}
         <div className="brand-page-title">
-          <h2>{selected ? selected.name : "브랜드"}</h2>
+          <h2 style={selected ? { display: "flex", alignItems: "center", gap: 8 } : undefined}>
+            {selected && <BrandIcon brand={selected} size={22} />}
+            {selected ? selected.name : "브랜드"}
+          </h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             {selected
               ? `${selected.isFocused ? "집중 브랜드 · " : ""}${BRAND_OPERATING_STATES.find((s) => s.value === selected.operatingState)?.label || "운영 상태 미정"}`

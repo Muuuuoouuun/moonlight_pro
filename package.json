@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "icons:generate": "node ./scripts/generate-brand-icons.mjs",
     "build": "turbo run build",
     "check:contracts": "node ./scripts/check-contracts.mjs",
     "check:connections": "node ./scripts/check-connections.mjs",

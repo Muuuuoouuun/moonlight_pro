@@ -520,11 +520,9 @@ test("the container selector opens a searchable compact picker and preserves man
   assert.match(projectsSource, /onToggleEmpty=\{toggleEmptyContainers\}/);
 });
 
-test("sidebar rows and filter chips drop the monogram mark instead of repeating the name's first letter", () => {
-  // BrandMark(모노그램)는 이름 첫 글자를 그대로 타일에 새기는 구조라, 바로 옆 이름과
-  // 글자가 겹쳐 보였다 (2026-09-15 운영자 지시 "사이드바랑 칩 이름 앞 글자 중복되는 거
-  // 빼줘"). 프로젝트 행 등 브랜드명과 다른 텍스트 옆의 BrandMark(브랜드 소속 표시)는
-  // 그대로 둔다 — 지운 것은 사이드바 컨테이너 행과 필터 칩뿐이다.
+test("sidebar rows and filter chips keep the quiet dot instead of repeating the brand mark", () => {
+  // 프로젝트 행 등 소속 표시에는 브랜드 아이콘이 있지만, 필터 칩과 사이드바
+  // 컨테이너 행은 기존 운영자 결정대로 이름 앞 중복 마크를 넣지 않는다.
   const chipFn = pmsComponentsSource.slice(
     pmsComponentsSource.indexOf("function ContainerChip("),
     pmsComponentsSource.indexOf("// PMS 컨테이너 선택 바"),

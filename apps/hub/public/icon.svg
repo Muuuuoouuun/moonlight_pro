@@ -1,6 +1,16 @@
-<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="192" height="192" rx="44" fill="#084734"/>
-  <circle cx="136" cy="56" r="24" fill="#DFF1E8" fill-opacity="0.9"/>
-  <rect x="34" y="34" width="124" height="124" rx="34" stroke="#F5EFE3" stroke-opacity="0.24" stroke-width="4"/>
-  <path d="M60 122V70H77.5C92.5 70 102 79.2 102 92C102 104.8 92.5 114 77.5 114H60ZM72.8 102H77.2C84.8 102 89.3 97.4 89.3 92C89.3 86.6 84.8 82 77.2 82H72.8V102ZM108 122V70H141V82H121.6V89H138.4V100H121.6V110H141V122H108Z" fill="#F8F5ED"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Moonlight">
+  <defs>
+    <linearGradient id="moonstone" x1="12" y1="10" x2="48" y2="51" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F1F5F8"/>
+      <stop offset="1" stop-color="#8FA9C2"/>
+    </linearGradient>
+    <mask id="crescent">
+      <rect width="64" height="64" fill="#fff"/>
+      <circle cx="40" cy="23" r="19" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#141C27"/>
+  <rect x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="none" stroke="#6E8195" stroke-opacity=".45"/>
+  <circle cx="31" cy="32" r="21" fill="url(#moonstone)" mask="url(#crescent)"/>
+  <path d="M46 13.5 47.7 17l3.5 1.7-3.5 1.7L46 24l-1.7-3.6-3.5-1.7 3.5-1.7z" fill="#DCE8F1"/>
 </svg>

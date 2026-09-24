@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
+import { BrandIcon } from "../brand-icons";
 import { LifecycleBadge } from "../hub-primitives";
 import { Button, Drawer, TextField } from "../hub-primitives";
 import { buildProjectPortfolioMetrics } from "./project-pms-metrics";
@@ -66,13 +67,10 @@ export function ProjectStatusBadge({ status, style }) {
   );
 }
 
-// 컨테이너 모노그램 마크 — 모양·무게가 제각각인 기하 글리프(◐ ◇ □ △ …)를 렌더에서
-// 대체한다(2026-08-19 운영자 지시 "아이콘 변경"). 이름 첫 글자를 고정 타일에 새겨
-// 목록의 시각 무게를 균일하게 만들고, '전체 브랜드'(kind:index)만 brand 아이콘을 쓴다.
-// meta.glyph 데이터는 그대로 둔다 — 표현만 교체라 되돌리기 쉽다.
+// 브랜드 소속 타일은 브랜드 목록과 같은 상징을 쓴다. '전체 브랜드'만 공용 브랜드
+// 아이콘을 사용한다. 저장된 meta.glyph는 건드리지 않고 화면 표현만 교체한다.
 export function BrandMark({ brand, size = 18, active = false, style }) {
   const isIndex = !brand || brand.kind === 'index' || brand.key === 'all';
-  const letter = isIndex ? '' : (Array.from(String(brand.name || '').trim())[0] || '·').toUpperCase();
   return (
     <span
       aria-hidden="true"
@@ -83,13 +81,10 @@ export function BrandMark({ brand, size = 18, active = false, style }) {
         background: active ? 'var(--elevated)' : 'var(--surface-3)',
         border: '1px solid var(--line-soft)',
         color: active ? 'var(--fg)' : 'var(--fg-muted)',
-        // 타일 글자도 §6 크기 플로어(10.5px) 아래로 내리지 않는다.
-        fontSize: Math.max(10.5, Math.round(size * 0.55)),
-        fontWeight: 600, lineHeight: 1, letterSpacing: 0,
         ...style,
       }}
     >
-      {isIndex ? <Iconed name="brand" size={Math.round(size * 0.62)} /> : letter}
+      {isIndex ? <Iconed name="brand" size={Math.round(size * 0.72)} /> : <BrandIcon brand={brand} size={Math.round(size * 0.72)} />}
     </span>
   );
 }

@@ -169,7 +169,7 @@ export const SIDEBAR_PRIMARY = [
     // 렌즈로 본다. 기본 착지(dashboard → daily-brief)는 아직 바꾸지 않았다.
     key: 'home',
     label: '홈',
-    icon: 'moon',
+    icon: 'navHome',
     scopeAware: false,
     owns: ['dashboard/home'],
     paths: {
@@ -181,7 +181,7 @@ export const SIDEBAR_PRIMARY = [
   {
     key: 'today',
     label: '오늘',
-    icon: 'brief',
+    icon: 'navToday',
     scopeAware: false,
     owns: ['dashboard/daily-brief'],
     paths: {
@@ -193,7 +193,7 @@ export const SIDEBAR_PRIMARY = [
   {
     key: 'overview',
     label: '현황',
-    icon: 'signal',
+    icon: 'navOverview',
     scopeAware: true,
     owns: ['dashboard/overview'],
     children: OVERVIEW_CHILDREN,
@@ -209,7 +209,7 @@ export const SIDEBAR_PRIMARY = [
     // back-compat in isSidebarAnchorActive.
     key: 'tasks',
     label: '내 작업',
-    icon: 'checklist',
+    icon: 'navTasks',
     scopeAware: false,
     owns: ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review', 'dashboard/work/goals'],
     children: { all: MY_WORK_CHILDREN, classin: MY_WORK_CHILDREN, personal: MY_WORK_CHILDREN },
@@ -222,7 +222,7 @@ export const SIDEBAR_PRIMARY = [
   {
     key: 'revenue',
     label: '영업·매출',
-    icon: 'revenue',
+    icon: 'navRevenue',
     scopeAware: true,
     owns: [
       'dashboard/revenue',
@@ -247,7 +247,7 @@ export const SIDEBAR_PRIMARY = [
   {
     key: 'followups',
     label: '고객 연락',
-    icon: 'followup',
+    icon: 'navFollowup',
     scopeAware: true,
     // classin/followups 페이지는 제거됨(LEGACY_REDIRECTS) — owns는 옛 딥링크의
     // 액티브 판정용으로만 유지하고, 내비 착지는 항상 정본 페이지다.
@@ -260,14 +260,14 @@ export const SIDEBAR_PRIMARY = [
     },
   },
   {
-    key: 'discovery', label: '기회 탐색', icon: 'compass', scopeAware: true,
+    key: 'discovery', label: '기회 탐색', icon: 'navDiscovery', scopeAware: true,
     owns: ['dashboard/discovery'],
     paths: { all: 'dashboard/discovery', classin: 'dashboard/discovery?scope=classin', personal: 'dashboard/discovery?scope=personal' },
   },
   {
     key: 'projects',
     label: '프로젝트',
-    icon: 'projects',
+    icon: 'navProjects',
     scopeAware: true,
     owns: [
       'dashboard/work',
@@ -293,7 +293,7 @@ export const SIDEBAR_PRIMARY = [
     // 앵커 세트는 고정 계약이 아니다 (2026-07-15 스펙 §3.1) — 비효율이 파악되면 추가한다.
     key: 'brands',
     label: '브랜드',
-    icon: 'brand',
+    icon: 'navBrand',
     scopeAware: true,
     // 라우트가 복수형인 이유: `dashboard/brand/*`는 이미 개인 스코프 별칭이 점유했다.
     owns: ['dashboard/brands'],
@@ -307,7 +307,7 @@ export const SIDEBAR_PRIMARY = [
   {
     key: 'content',
     label: '콘텐츠',
-    icon: 'content',
+    icon: 'navContent',
     scopeAware: true,
     owns: [
       'dashboard/content',
@@ -336,7 +336,7 @@ export const SIDEBAR_UTILITIES = [
   {
     key: 'ai',
     label: 'AI·자동화',
-    icon: 'sparkle',
+    icon: 'navAI',
     scopeAware: false,
     owns: ['dashboard/agents', 'dashboard/automations', 'dashboard/classin/automations'],
     // 대표 경로는 Office — 2026-09-23 운영자 확정. Runs는 하위 탭으로 한 단계 아래에 남고,
@@ -355,7 +355,7 @@ export const SIDEBAR_UTILITIES = [
   {
     key: 'settings',
     label: '설정',
-    icon: 'settings',
+    icon: 'navSettings',
     scopeAware: false,
     owns: ['dashboard/settings', 'dashboard/evolution'],
     paths: {

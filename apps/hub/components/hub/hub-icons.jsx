@@ -1,6 +1,19 @@
 "use client";
 
 const I = {
+  // Navigation glyphs share a quiet 24px grid and stay distinct at the 56px rail size.
+  navHome: (<><path d="M19.3 15.7A8.7 8.7 0 0 1 8.3 4.7a8.7 8.7 0 1 0 11 11Z"/><path d="M18.5 4v4m-2-2h4"/></>),
+  navToday: (<><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 8h7m-7 4h7m-7 4h4"/></>),
+  navOverview: (<><path d="M4 19V13m5 6V8m5 11v-5m5 5V5M3 19h18"/><circle cx="9" cy="8" r="1"/><circle cx="19" cy="5" r="1"/></>),
+  navTasks: (<><path d="m4 7 1.6 1.6L8 5.5M11 7h9m-16 6 1.6 1.6L8 11.5M11 13h9m-16 6 1.6 1.6L8 17.5M11 19h9"/></>),
+  navRevenue: (<><path d="M4 19V15m5 4v-6m5 6v-8m5 8V7M3 19h18M5 10l5-4 4 2 5-4"/></>),
+  navFollowup: (<><path d="M5 5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7l-5 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="M7.5 10h7m-7 4h5m2-2 2 2 2.5-3"/></>),
+  navDiscovery: (<><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8 4.8-2.2Z"/><circle cx="12" cy="12" r=".7" fill="currentColor" stroke="none"/></>),
+  navProjects: (<><rect x="4" y="7" width="14" height="13" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v10h-2M8 12h6m-6 4h4"/></>),
+  navBrand: (<><path d="m12 3 9 5v8l-9 5-9-5V8l9-5Z"/><path d="m12 7 5 5-5 5-5-5 5-5Z"/></>),
+  navContent: (<><path d="M5 3h10l4 4v14H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M15 3v5h4M8 12h8m-8 4h6"/></>),
+  navAI: (<><path d="m12 3 1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3Z"/><path d="m19 17 .7 1.8L21.5 19.5l-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L19 17Z"/></>),
+  navSettings: (<><path d="M4 6h3m4 0h9M4 12h10m4 0h2M4 18h4m4 0h8"/><circle cx="9" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></>),
   panelCollapse: (<><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m7-11-3 3 3 3"/></>),
   panelExpand: (<><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m4-11 3 3-3 3"/></>),
   compass: (<><circle cx="12" cy="12" r="9"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5L16 8z"/></>),

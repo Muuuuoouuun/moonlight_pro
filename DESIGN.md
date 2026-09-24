@@ -176,10 +176,10 @@ type `--fx-hero: 44px`, `--fx-hero-weight: 300`, `--fx-title: 27px`, `--fx-stat:
 - **Borders:** always `1px`. Never thicken. Use `--line-soft` for hairlines, `--line` for dividers,
   `--line-strong` only for pressed/emphasized states.
 - **Gradients:** reserved for the brand mark and the moonstone CTA rim. Never fill a hero, card,
-  or section background with a colored gradient. Measured 2026-09-23: neither reserved use renders a
-  gradient today (the sidebar logo is a neutral monogram tile, §15 2026-09-19; the primary rim is an inset
-  shadow, currently overridden — §14 Known gaps 2), so the only sanctioned colored gradient in the product is
-  the gauge track below. Neutral utility gradients (`ScrollShadowX` edge fades to `--bg`, the `Placeholder`
+  or section background with a colored gradient. The Moonlight symbol uses a cool silver gradient in
+  `public/icon.svg` (§15 2026-09-24); the primary rim remains an inset shadow currently overridden
+  (§14 Known gaps 2). The gauge track below is the only other sanctioned colored gradient. Neutral utility
+  gradients (`ScrollShadowX` edge fades to `--bg`, the `Placeholder`
   surface stripe, a `currentColor` strike line) are mechanics, not decoration, and stay allowed. Other colored
   gradients in the code are recorded debt, not precedent (§14 Known gaps 7): the completed / overachieved
   `Progress` fills (moonstone gradient, infinite shimmer, gold end stop), Home's `.fx-progress--completed`
@@ -629,6 +629,7 @@ Do not ship:
 | Tokens                             | `apps/hub/components/hub/hub-tokens.css`                     |
 | Futura 텍스처 레이어 (셸·공용 컴포넌트 전역 + `.hub-futura` 페이지 3곳, §7) | `apps/hub/components/hub/hub-futura.css` |
 | Icons                              | `apps/hub/components/hub/hub-icons.jsx`                      |
+| Brand and app icons | `apps/hub/public/icon.svg` → `npm run icons:generate` (`scripts/generate-brand-icons.mjs`) |
 | Primitives (incl. form fields)     | `apps/hub/components/hub/hub-primitives.jsx`                 |
 | Drawer / toast styles              | `apps/hub/components/hub/hub-{compact-drawer,edit-drawer,toast}.css`, `hub-toast.jsx` |
 | Theme mode + sidebar width/collapse preferences | `apps/hub/lib/hub-preferences.js` (`mlp.*` keys)  |
@@ -730,3 +731,7 @@ Build order when adding a new surface:
 | 2026-09-23 | 리듬 기록의 막대 차트를 정식 컬럼 차트로 재설계 — 연은 월별, 분기는 **주별** 막대. 막대 폭 ≤ 24px·위 끝만 4px 라운드·바닥 각짐, 뒤에 100%까지의 캡슐 트랙(`--fg` 5%), 1px 실선 격자(0/50/100%)와 눈금, **평균은 1px 점선 기준선 하나**(버킷 비율 평균이 아니라 지난 칸 전체 합), 숫자는 이번 기간·최고 기간에만 고정하고 나머지는 CSS `:hover`/`:focus-visible` 툴팁(JS hover 없음 §8.1), 가리키는 동안 다른 막대는 명도 한 단계 후퇴(불투명도 아님), 미래 기간은 점선 빈 트랙. 진입은 바닥에서 1회 성장(`--dur-celebrate` + `--stagger-step`) | recommended | 운영자 지시 "막대그래프 디자인 더 고급". 색은 명도 램프만(§5.3 charts), 포커스 링의 radius는 기본 규칙에 두고 포커스 규칙은 outline만(§11, `focus-ring.test.mjs`). 운영자가 화면을 보고 확정하기 전까지 `recommended` |
 | 2026-09-23 | **OKR·KPI** 탭(`dashboard/work/goals`) 신설 — 위치는 **내 작업** 하위(실행 목록·메모·하루 리뷰·OKR·KPI), 경로 소유자도 내 작업(`owns`에 추가). 새 화면을 만들지 않고 기존 `Goals` 화면(목표 → 측정 지표 → 관측, 빠른 체크)을 열며, `goalHref`에 `base`를 넘겨 탭 안의 링크·드로어·생성 딥링크가 그 탭에 머문다. **현황에도 띄운다**: 현황의 `?view=goals` 탭 이름을 `목표·성과` → `OKR·KPI`로 맞추고, 현황 집계 화면 KPI 줄 아래에 `OkrSummaryCard`(진행 중 목표·지표 수, 핵심 지표 4줄 — 현재값·목표·진척, 근거 확인 필요 수, 본체 탭 링크)를 둔다. 카드의 읽기 상태는 목표 화면과 같은 truth(loading→Skeleton, error/preview→TruthBadge, 빈 상태는 live/partial일 때만) | recommended | 운영자 지시 "OKR KPI 트래킹하는 부분 탭 신설" → "위치는 내 작업 하위로, 현황에도 띄우기"(처음 넣었던 Work 탭 줄 위치를 대체). 목표 저장소(`operating_objectives`·`operating_metrics`·관측)는 이미 있어 스키마 변경이 없다. 루틴 체크를 KPI 자동 원천으로 잇는 것(`source_key`에 routine 추가)은 마이그레이션이 필요한 별도 결정으로 남긴다 |
 | 2026-09-23 | 하루 리뷰의 습관 표시는 **연속 일수가 아니라 "이번 주 k/5일"**(근무일 분모, 주말 기록은 보이되 분모 제외)이고, 월 캘린더 셀은 색이 아니라 ● 채움(기록)·○ 1px 테두리(빈 근무일)·표시 없음(주말)·점선(오늘 미기록)으로 말한다. 오늘 셀만 `--moon-300` 테두리(현재 위치). 기록을 읽지 못한 달은 빈 근무일로 그리지 않는다(`unknown`). 오늘·홈의 하루 마무리 한 줄은 ○/✓/시계 글리프 + 직접 라벨의 중립 행이며, 끊김 경고·붉은 미기록·축하 연출은 두지 않는다. 오늘 3개 권장값과 AI 코칭은 `CertaintyBadge recommended` + dashed 1px 카드 | recommended | 운영자 요청 "정말 꾸준히 달성할 수 있을 법한" 하루 평가(2026-09-23, "전부 다 진행"으로 구현 승인). 연속 일수는 하루 빠지면 0이 되어 포기를 부르고, 주 단위는 같은 주 안에서 회복된다 — 주간 리포트 `reviewDays`와 같은 정의다. 화면 직접 확인 전이라 권장으로 둔다. 상세는 `docs/superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md` |
+| 2026-09-24 | 사이드바 10+2 앵커의 아이콘을 전용 `nav*` 24px 선 아이콘으로 통일하고, 펼친 행과 56px 레일에서 같은 형태를 쓴다. `M` 문자 타일과 구 `DE` 초록 아이콘을 초승달·기준점 Moonlight 심볼 하나로 교체한다. `icon.svg`가 정본이며 ICO·PNG 192/512·마스커블·Apple touch 자산은 `npm run icons:generate`로 만든다. 메뉴 구조·라우팅·상태 색은 바꾸지 않는다 | recommended | 운영자 요청 “왼쪽 사이드바 로고들 더 디벨롭… 브라우저 탭 아이콘 앱 아이콘들”. 작은 크기에서의 선명도와 다크·라이트 공통 사용을 위해 저장소 고유 SVG를 택했다. 운영자 시각 검토 전이라 형태의 최종 확정은 아니다 |
+| 2026-09-24 | 브랜드 목록의 `meta.glyph` 기하 기호를 브랜드별 단색 SVG로 바꾼다. 22th.Nomad=로봇, BridgeMaker=다리, Class.Moon=책, ClassIn Side=대화, HolyFunCollector=웃는 대화, MoonPM=워크플로, Politic_Officer=저울, Study.Seagull=갈매기, 고래=고래, 시나브로=펜촉이다. 이름·DB의 glyph 데이터는 유지하며 브랜드 목록·상세·현황·프로젝트 소속 표시에 같은 심볼을 쓴다. 새 학원은 교육 아이콘, 식별되지 않은 브랜드는 중립 기하 아이콘으로 표시한다 | recommended | 운영자가 브랜드별 의미를 드러내는 아이콘을 요청하고 다리·IT/로봇·고래·펜의 방향을 제시했다. 정확한 모양은 구현안이므로 시각 검토 전까지 권장으로 둔다 |
+| 2026-09-24 | 브랜드 아이콘 네 개를 재정리한다. BridgeMaker=십자가, HolyFunCollector=천사, Study.Seagull=새 윤곽, MoonPM=연결된 작업 흐름이다. 위 행의 해당 네 아이콘 설명을 이 행이 대체하며 나머지 브랜드·표면·DB 계약은 유지한다 | recommended | 운영자가 BridgeMaker·HolyFunCollector·Study.Seagull의 재제작 방향을 지정했다. 네 번째 MoonPM은 기존 세로 칸 아이콘이 18px에서 빽빽해 보여 선정했다. BridgeMaker의 대안으로 기존 아치형 다리 아이콘을 먼저 비교했으나 작은 크기에서 문처럼 보여 십자가를 택했다 |
+| 2026-09-24 | 고래(Go;Re)는 SVG Repo Animals 24의 물뿜는 고래 실루엣, 시나브로는 Phosphor Pen Nib의 잉크 펜촉 아이콘을 쓴다. 위 브랜드 아이콘 행의 해당 두 형태를 이 행이 대체한다 | recommended | 운영자가 기존 아이콘 중 더 어울리는 고래와 잉크 펜을 요청했다. 18px 비교에서 고래의 분수와 꼬리, 펜촉의 외곽이 분명한 자산을 골랐다. 출처와 라이선스는 `brand-icons.LICENSE`에 기록했다 |
