@@ -76,6 +76,16 @@ enum SelfCheck {
     }
 
     private static func checkPanelInteraction() -> Bool {
+        var glass = GlassPressState()
+        guard !glass.showsTint(accessibilityRequiresSolid: false) else { return false }
+        glass.press()
+        guard glass.showsTint(accessibilityRequiresSolid: false) else { return false }
+        glass.release()
+        guard !glass.showsTint(accessibilityRequiresSolid: false),
+              glass.showsTint(accessibilityRequiresSolid: true) else {
+            fputs("Glass must return to clear after release; accessibility stays solid\n", stderr)
+            return false
+        }
         var drag = ScreenDragTracker()
         drag.begin(at: CGPoint(x: 100, y: 100))
         guard drag.translation(to: CGPoint(x: 101, y: 101)) == nil,

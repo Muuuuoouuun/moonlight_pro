@@ -1,5 +1,15 @@
 import Foundation
 
+/// Focus and text editing do not latch the transient character wash on.
+struct GlassPressState {
+    private var pressed = false
+    mutating func press() { pressed = true }
+    mutating func release() { pressed = false }
+    func showsTint(accessibilityRequiresSolid: Bool) -> Bool {
+        accessibilityRequiresSolid || pressed
+    }
+}
+
 /// Screen coordinates stay stable while the window underneath the pointer moves.
 struct ScreenDragTracker {
     private var previous: CGPoint?

@@ -73,3 +73,9 @@ The operator's screenshot showed thick headings and outlined small text. Removin
 The operator subsequently chose white-family text and subtle character-colored translucent panels. All three floating hosts observe the selected character; the foreground host is preserved during updates. The theme wash attenuates transmitted lettering and supports white text. Input/action fills use a separate dark token. This deliberately reduces body transparency without adding a white haze or glyph halo. Sylveon's tint was first strengthened to rose pink, then softened to a lighter blush pink after live operator feedback.
 
 Native/Metal lab inspection confirmed the revised pink tint, transmitted folds, sharp title/body text and Korean paste in the native field. The lab picker is local and does not modify the saved pet. Shader/self-check results remain valid for the underlying optics; they do not measure contrast of the new wash. The wash is a visual calibration, not a claim of WCAG compliance over every desktop background.
+
+## Clear resting state restored — 2026-09-25
+
+The operator rejected the permanent colored body above. Default and typing now use zero wash opacity; only an active press/drag shows character color, with Sylveon's interaction wash reduced to 60%. Release, key loss, app deactivation and detachment clear the tint. A timer exists only during the press to cover mouse-up consumed inside native tracking loops. Accessibility solid mode still takes priority. The material lab has an explicit preview switch, off by default, for inspecting the temporary color without holding the pointer.
+
+Build and self-check passed, including the new press/release-to-clear state regression. Native widget inspection showed the resting body without the prior persistent pink fill. These checks do not establish contrast over every desktop image or an exact match to the native compositor's inactive appearance.

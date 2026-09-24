@@ -27,6 +27,7 @@ private struct GlassLabView: View {
     @State private var bevel = 12.0
     @State private var grid = false
     @State private var character: PetCharacter = .silver
+    @State private var previewsTint = false
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
@@ -51,7 +52,10 @@ private struct GlassLabView: View {
                 }.frame(width: 170)
             }
             if GlassOpticsRenderer.shared != nil {
-                GlassLabStage(strength: Float(strength),bevel: Float(bevel),grid: grid, character: character)
+                Toggle("반투명 색상 미리보기", isOn: $previewsTint)
+                    .toggleStyle(.switch).font(.system(size: 12))
+                GlassLabStage(strength: Float(strength),bevel: Float(bevel),grid: grid, character: character,
+                              previewsTint: previewsTint)
                     .clipShape(RoundedRectangle(cornerRadius: 22))
             } else {
                 ContentUnavailableView("Metal을 사용할 수 없습니다",systemImage: "display.trianglebadge.exclamationmark",
@@ -75,12 +79,14 @@ private struct GlassLabStage: NSViewRepresentable {
     let bevel: Float
     let grid: Bool
     let character: PetCharacter
+    let previewsTint: Bool
     func makeNSView(context: Context) -> StageView { StageView() }
     func updateNSView(_ view: StageView, context: Context) {
         view.background?.refraction = strength
         view.background?.bevel = bevel
         view.background?.grid = grid
         view.setCharacter(character)
+        view.previewTint(previewsTint)
     }
 
     final class StageView: NSView {
@@ -111,6 +117,10 @@ private struct GlassLabStage: NSViewRepresentable {
             wash.character = character
             wash.solidForAccessibility = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
                 || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        }
+        func previewTint(_ preview: Bool) {
+            native.previewCharacterTint(preview)
+            wash.previewsTint = preview
         }
         override func layout() {
             super.layout()
