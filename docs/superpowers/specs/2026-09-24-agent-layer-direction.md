@@ -76,7 +76,7 @@ Legend ── 주간 카드만 · 에스컬레이션 목적지 아님 · Office 
 
 ## 6. 빌드 플랜 (2026-09-25 ~ 09-27)
 
-이 절은 **예정 작업**이다. 09-24 통합 브랜치의 Guru 서가·조용한 레일·질문 드로어(`mentor-shelf.jsx`, `context-mentor-rail.jsx`, `guidance-question-drawer.jsx`)는 이미 병합됐다. 이를 다시 만들지 않는다. 기존 `office_apply_task_v1`도 유지한다. 아직 없는 것은 아래 네 연결이다. 09-28 실사용은 코드 병합만으로 완료라고 부르지 않고 실제 모델·DB·390px 화면으로 확인한다.
+이 절은 승인 당시의 구현 순서와 검증 기준이다. 09-24 통합 작업에서 1~5의 연결 코드를 앞당겨 로컬 구현했지만, 실제 모델·운영 DB·배포 검증은 별개다. Guru 서가·조용한 레일·질문 드로어(`mentor-shelf.jsx`, `context-mentor-rail.jsx`, `guidance-question-drawer.jsx`)는 병합했고 기존 `office_apply_task_v1`도 유지한다. 09-28 실사용은 코드 병합만으로 완료라고 부르지 않고 실제 모델·DB·390px 화면으로 확인한다.
 
 | 순서 | 날짜·작업 | 파일 경계와 완료 조건 |
 |---|---|---|
