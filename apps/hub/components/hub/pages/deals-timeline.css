@@ -1,0 +1,612 @@
+/* 거래 탭 — 언제 보기 · 지역 보기 · Futura 제목 (운영자 승인 목업 3, 2026-09-24)
+ *
+ * 색은 토큰만. 확실성은 색이 아니라 선 모양으로 말한다(DESIGN §5.3):
+ *   확정 = 실선 · 가능성 높음 = 점선(dashed) · 확인 필요 = 점(dotted).
+ * danger는 지난 약속의 1px 레일과 직접 라벨에만 쓴다(§5.2, 예산은 lib/deal-timeline.js).
+ * 셀렉터는 `.hub-app`으로 올린다 — `.hub-app button` 리셋(0,1,1)이 단일 클래스를 이긴다.
+ */
+
+/* ── 페이지 · 제목 ─────────────────────────────────────────────── */
+/* .hub-futura(0,2,0)의 44px 섹션 간격을 이 밀도 높은 운영 화면에서만 --section-gap으로 줄인다 */
+.hub-app .hub-futura.deals-page {
+  gap: var(--section-gap);
+  min-height: 100%;
+}
+
+.hub-app .deals-hero {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.hub-app .deals-hero__text { flex: 1 1 320px; min-width: 0; }
+
+.hub-app .deals-hero__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.hub-app .deals-hero .fx-page-title { margin-top: 8px; }
+.hub-app .deals-hero .fx-page-title .stat { font-weight: 500; }
+
+.hub-app .deals-hero .fx-page-sub { margin-top: 10px; font-size: 14px; }
+
+.hub-app .deals-hero__value {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.hub-app .deals-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hub-app .deals-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .deals-toolbar__spacer { flex: 1; }
+
+/* ── 언제 보기 ─────────────────────────────────────────────────── */
+.hub-app .deals-tl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fx-gap);
+  min-width: 0;
+}
+
+/* 확실성 리본 */
+.hub-app .deals-tl-ribbon { padding: 22px 24px 16px; }
+
+.hub-app .deals-tl-bar {
+  display: flex;
+  gap: 3px;
+  height: 40px;
+}
+
+.hub-app .deals-tl-bar--empty {
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+}
+
+.hub-app .deals-tl-bar__seg {
+  flex-basis: 0;
+  min-width: 18px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: opacity var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .deals-tl-bar__seg:hover { transform: translateY(-1px); }
+
+.hub-app .deals-tl-bar__seg[data-certainty="confirmed"] { background: var(--fg-muted); border-color: var(--fg-muted); }
+.hub-app .deals-tl-bar__seg[data-certainty="recommended"] { background: var(--surface-3); border: 1px dashed var(--line-strong); }
+.hub-app .deals-tl-bar__seg[data-certainty="unknown"] { background: transparent; border: 1px dotted var(--line-strong); }
+
+/* 거르는 중에는 고른 조각만 또렷하게 — 필터 강조이지 확실성 표현이 아니다 */
+.hub-app .deals-tl-bar[data-filtered] .deals-tl-bar__seg:not([data-on]) { opacity: 0.35; }
+
+.hub-app .deals-tl-legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.hub-app .deals-tl-legend__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .deals-tl-legend__item:hover { background: var(--surface-2); }
+
+.hub-app .deals-tl-legend__item[aria-pressed="true"] {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+  color: var(--fg);
+}
+
+.hub-app .deals-tl-legend__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hub-app .deals-tl-legend__amount {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--moon-200);
+}
+
+.hub-app .deals-tl-legend__count { font-size: 11px; color: var(--fg-dim); }
+
+.hub-app .deals-tl-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-xs);
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.hub-app .deals-tl-swatch[data-certainty="confirmed"] { background: var(--fg-muted); border-color: var(--fg-muted); }
+.hub-app .deals-tl-swatch[data-certainty="recommended"] { background: var(--surface-3); border: 1px dashed var(--line-strong); }
+.hub-app .deals-tl-swatch[data-certainty="unknown"] { border: 1px dotted var(--line-strong); }
+
+.hub-app .deals-tl-ribbon__caption {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--fg-dim);
+}
+
+/* 멈춘 거래 */
+.hub-app .deals-tl-stall {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.hub-app .deals-tl-stall__text {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--fg);
+}
+
+.hub-app .deals-tl-stall__text small {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.hub-app .deals-tl-stall__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-app .deals-tl-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--fx-pill);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+.hub-app .deals-tl-stall__more { font-size: 12px; color: var(--fg-dim); align-self: center; }
+
+.hub-app .deals-tl-overdue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--danger);
+}
+
+/* 시간 칸 */
+.hub-app .deals-tl-lanes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+  margin-top: 8px;
+}
+
+.hub-app .deals-tl-lane {
+  min-width: 0;
+  min-height: 220px;
+  padding: 4px;
+  border: 1px dashed transparent;
+  border-radius: var(--r-lg);
+  transition: background-color var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .deals-tl-lane[data-over] {
+  background: var(--surface-3);
+  border-color: var(--line-strong);
+}
+
+.hub-app .deals-tl-lane__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 8px 12px;
+}
+
+.hub-app .deals-tl-lane__head h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.hub-app .deals-tl-lane__head small { font-size: 11.5px; color: var(--fg-dim); }
+
+.hub-app .deals-tl-lane__total {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--moon-200);
+}
+
+/* 현재 위치 점 — Moonstone은 "지금 여기"만 뜻한다(§5.2) */
+.hub-app .deals-tl-now {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--fx-pill);
+  background: var(--accent);
+}
+
+.hub-app .deals-tl-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hub-app .deals-tl-group { margin: 6px 8px 0; }
+
+.hub-app .deals-tl-drop-hint {
+  display: grid;
+  place-items: center;
+  height: 44px;
+  margin: 0;
+  border: 1px dashed var(--line);
+  border-radius: var(--r);
+  font-size: 12px;
+  color: var(--fg-faint);
+}
+
+/* 카드 — 확실성 = 1px 테두리 모양, 지난 약속 = 1px danger 레일 */
+.hub-app .deals-tl-card {
+  position: relative;
+  padding: 14px 14px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  background: var(--surface);
+  box-shadow: var(--fx-shadow);
+  cursor: grab;
+  transition: box-shadow var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .deals-tl-card:hover { box-shadow: var(--fx-shadow-lift); transform: translateY(-1px); }
+.hub-app .deals-tl-card[data-certainty="recommended"] { border-style: dashed; }
+.hub-app .deals-tl-card[data-certainty="unknown"] { border-style: dotted; }
+.hub-app .deals-tl-card[data-rail] { box-shadow: inset 1px 0 0 var(--danger), var(--fx-shadow); }
+.hub-app .deals-tl-card[data-rail]:hover { box-shadow: inset 1px 0 0 var(--danger), var(--fx-shadow-lift); }
+.hub-app .deals-tl-card[data-selected] { outline: 1px solid var(--accent); outline-offset: 2px; }
+.hub-app .deals-tl-card[data-dragging] { opacity: 0.4; }
+
+.hub-app .deals-tl-card__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.hub-app .deals-tl-card__id { flex: 1; min-width: 0; }
+
+.hub-app .deals-tl-card__org {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+.hub-app .deals-tl-card__who {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hub-app .deals-tl-card__amount {
+  flex-shrink: 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--moon-200);
+}
+
+.hub-app .deals-tl-card__amount[data-unknown],
+.hub-app .deals-tl-dock__amount[data-unknown] { color: var(--fg-faint); }
+
+.hub-app .deals-tl-steps {
+  display: flex;
+  gap: 3px;
+  margin: 12px 0 10px;
+}
+
+.hub-app .deals-tl-steps > i {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+
+.hub-app .deals-tl-steps > i[data-step="done"] { background: var(--fg-muted); }
+.hub-app .deals-tl-steps > i[data-step="current"] { background: var(--fg); }
+
+.hub-app .deals-tl-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hub-app .deals-tl-card__badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.hub-app .deals-tl-card__stage { font-size: 11.5px; color: var(--fg-dim); white-space: nowrap; }
+
+.hub-app .deals-tl-card__next {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.hub-app .deals-tl-card__promise {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hub-app .deals-tl-card__due {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.hub-app .deals-tl-card__late {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+.hub-app .deals-tl-card__none { font-size: 12px; color: var(--fg-faint); }
+
+.hub-app .deals-tl-card__slip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.hub-app .deals-tl-empty { display: flex; flex-direction: column; gap: 10px; }
+.hub-app .deals-tl-empty p { margin: 0; font-size: 13px; color: var(--fg-muted); }
+
+/* ── 하단 독 ───────────────────────────────────────────────────── */
+@keyframes dealsDockIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+.hub-app .deals-tl-dock {
+  position: sticky;
+  bottom: 16px;
+  z-index: var(--z-project-detail);
+  align-self: center;
+  width: min(760px, 100%);
+  margin-top: 8px;
+  padding: 16px 18px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  animation: dealsDockIn var(--dur-panel) var(--ease-hub);
+}
+
+.hub-app .deals-tl-dock__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-app .deals-tl-dock__org { font-size: 16px; font-weight: 600; color: var(--fg); }
+
+.hub-app .deals-tl-dock__amount {
+  margin-left: auto;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--moon-200);
+}
+
+.hub-app .deals-tl-stepper {
+  display: flex;
+  align-items: flex-start;
+  margin: 14px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-app .deals-tl-stepper > li {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+/* 단계 사이 1px 선 — 앞 칸 점 중심에서 이 칸 점 중심까지 */
+.hub-app .deals-tl-stepper > li + li::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 50%;
+  width: 100%;
+  height: 1px;
+  background: var(--line);
+}
+
+.hub-app .deals-tl-stepper > li[data-step="done"] + li::before,
+.hub-app .deals-tl-stepper > li[data-step="done"]::before,
+.hub-app .deals-tl-stepper > li[data-step="current"]::before { background: var(--fg-muted); }
+
+.hub-app .deals-tl-stepper > li > i {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--fx-pill);
+  background: var(--surface);
+}
+
+.hub-app .deals-tl-stepper > li[data-step="done"] > i { background: var(--fg-muted); border-color: var(--fg-muted); }
+
+.hub-app .deals-tl-stepper > li[data-step="current"] { color: var(--fg); font-weight: 500; }
+
+/* 현재 단계만 Moonstone 링(현재 위치) */
+.hub-app .deals-tl-stepper > li[data-step="current"] > i {
+  background: var(--fg);
+  border-color: var(--fg);
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--accent);
+}
+
+.hub-app .deals-tl-dock__next {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--fg-muted);
+}
+
+.hub-app .deals-tl-dock__next b { color: var(--fg); font-weight: 500; }
+.hub-app .deals-tl-dock__next .deals-tl-card__late,
+.hub-app .deals-tl-dock__next .deals-tl-card__due { margin-left: 4px; }
+.hub-app .deals-tl-dock__close { color: var(--fg-dim); font-size: 12.5px; }
+
+.hub-app .deals-tl-dock__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hub-app .deals-tl-dock__dates {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.hub-app .deals-tl-dock__date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .deals-tl-dock__date .hub-input { width: auto; height: 28px; padding: 0 8px; }
+
+/* ── 지역 보기 — 히트맵 페이지를 그대로 품는다. 히트맵 루트의 인라인 페이지 여백만 상쇄 ── */
+.hub-app .deals-region { margin: calc(-1 * var(--section-gap)); min-width: 0; }
+
+/* ── 반응형 ───────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .hub-app .deals-tl-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+  .hub-app .deals-tl-ribbon { padding: 16px 14px 12px; }
+  .hub-app .deals-tl-bar { height: 28px; }
+  .hub-app .deals-tl-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-app .deals-tl-legend__item { min-height: 44px; }
+
+  /* 칸은 세로로 — 이번 주가 먼저 */
+  .hub-app .deals-tl-lanes { grid-template-columns: minmax(0, 1fr); }
+  .hub-app .deals-tl-lane { min-height: 0; }
+
+  /* 독은 하단 시트 — 버튼은 터치 플로어(44px)를 채워 한 줄에 둘씩 */
+  .hub-app .deals-tl[data-dock-open] { padding-bottom: 260px; }
+  .hub-app .deals-tl-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    margin: 0;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+  }
+  .hub-app .deals-tl-dock__acts > .hub-btn { flex: 1 1 calc(50% - 4px); min-height: 44px; }
+  .hub-app .deals-tl-stepper > li { font-size: 10.5px; }
+  .hub-app .deals-tl-dock__date .hub-input { height: 44px; font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .deals-tl-dock { animation: none; }
+  .hub-app .deals-tl-card,
+  .hub-app .deals-tl-bar__seg,
+  .hub-app .deals-tl-lane,
+  .hub-app .deals-tl-legend__item { transition: none; }
+  .hub-app .deals-tl-card:hover,
+  .hub-app .deals-tl-bar__seg:hover { transform: none; }
+}

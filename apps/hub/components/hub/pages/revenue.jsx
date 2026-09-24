@@ -18,6 +18,8 @@ import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE, LOST_STAGE, dealStageLabel, isDealStalled } from "@/lib/deal-stages";
+import { DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay } from "@/lib/deal-timeline";
+import { DealsTimeline, DealsRegionView } from "./deals-timeline";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
@@ -1741,6 +1743,15 @@ export function Deals({ workspace, onNavigate }) {
   const effectiveWorkspace = workspace || (queryScope === 'personal' ? 'brand' : queryScope === 'classin' ? 'classin' : undefined);
   const router = useRouter();
   const pathname = usePathname();
+  // 보기: 언제(기본 · 예상일 칸) · 단계(칸반) · 지역(히트맵). `?view=`로 남겨 새로고침·공유에도 유지.
+  const view = resolveDealView(searchParams?.get('view'));
+  const changeView = (next) => {
+    const params = new URLSearchParams(searchParams?.toString() || '');
+    if (next === 'time') params.delete('view');
+    else params.set('view', next);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
   const DEAL_STAGES = ledger.stages;
   const ledgerUnavailable = syncState === 'loading' || syncState === 'error';
   const [deals, setDeals] = React.useState(ledger.deals);
@@ -1880,6 +1891,38 @@ export function Deals({ workspace, onNavigate }) {
     });
     toast.success(`${stageLabel}(으)로 이동됨`, { action: { label: '되돌리기', onClick: undoStageMove } });
   };
+  // 언제 보기의 칸 이동·독 프리셋 = 예상일(expected_close_at) 변경. 단계 이동과 같은 지연 쓰기
+  // 계약 — 낙관 반영 → 되돌리기 창 → 창이 닫힌 뒤 PATCH, 실패하면 원래 날짜로 롤백하고 명명한다.
+  const pendingCloseRef = React.useRef(new Map()); // key → 최초 { closeAt, close }
+  const moveCloseDate = (id, nextCloseAt, label) => {
+    const current = deals.find(d => d.id === id);
+    const next = nextCloseAt || '';
+    if (!current || sameCloseDay(current.closeAt, next)) return;
+    const key = `deal-close-${id}`;
+    const base = pendingCloseRef.current.get(key) ?? { closeAt: current.closeAt || '', close: current.close };
+    pendingCloseRef.current.set(key, base);
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: next, close: formatCloseLabel(next) } : d)));
+    if (String(id).toLowerCase().startsWith('local-')) { pendingCloseRef.current.delete(key); return; }
+    const restore = () => setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: base.closeAt, close: base.close } : d)));
+    const undoCloseMove = () => {
+      if (cancelUndoable(key)) {
+        pendingCloseRef.current.delete(key);
+        restore();
+      }
+      toast.info('예상일 변경을 취소했습니다.');
+    };
+    scheduleUndoable(key, () => {
+      pendingCloseRef.current.delete(key);
+      saveRevenueRecord('deal', 'update', { id, closeAt: next }).then((r) => {
+        if (r.ok) return;
+        restore();
+        toast.error(r.status === 'preview'
+          ? 'Supabase 미연결 — 예상일이 저장되지 않아 원래 날짜로 되돌렸습니다'
+          : `예상일 저장 실패 (${r.status}) — 원래 날짜로 되돌렸습니다`);
+      });
+    });
+    toast.success(label, { action: { label: '되돌리기', onClick: undoCloseMove } });
+  };
   // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 기록에서 meta.deal_id로
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
   // 방금 추가·완료한 항목이 보드에 바로 반영되게 한다.
@@ -2011,7 +2054,21 @@ export function Deals({ workspace, onNavigate }) {
     () => boardStages.flatMap(s => visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter))),
     [boardStages, visibleDeals, filter],
   );
-  const selection = useCrmSelection(boardItems);
+  // 언제 보기 모델 — 워크스페이스·스코프 필터를 거친 같은 딜 집합(숨김·Lost는 lib가 뺀다).
+  // 제목 문장과 언제 보기의 j/k 선택 순서(= 하단 독이 여는 거래)도 이 결과를 읽는다.
+  const timelineSource = React.useMemo(
+    () => visibleDeals.filter(d => filter === 'all' || d.type === filter),
+    [visibleDeals, filter],
+  );
+  const dealTimeline = React.useMemo(
+    () => buildDealTimeline(timelineSource, { stages: DEAL_STAGES }),
+    [timelineSource, DEAL_STAGES],
+  );
+  const selection = useCrmSelection(view === 'time' ? dealTimeline.ordered : boardItems);
+  const dockOpen = view === 'time' && selection.selectedId != null
+    && dealTimeline.ordered.some(item => item.id === selection.selectedId);
+  // 읽는 중·읽기 실패·미연결(preview)에는 ₩0을 사실처럼 제목에 올리지 않는다.
+  const heroUnknown = ledgerUnavailable || syncState === 'preview';
   useCrmKeyboard({
     enabled: !ledgerUnavailable,
     selection,
@@ -2029,37 +2086,60 @@ export function Deals({ workspace, onNavigate }) {
   }, [selection.selectedId]);
 
   return (
-    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Deals</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {ledgerUnavailable ? '딜 파이프라인' : <>열린 파이프라인 <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(openTotal)}</span> · <span className="mono">{openCount}</span>건</>}
-            {!ledgerUnavailable && closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--moon-200)' }}>{fmt(closingTotal)}</span></>}
-            <SyncBadge state={syncState} />
+    <div className="hub-futura hub-page fade-up deals-page" style={view === 'stage' ? { height: '100%' } : undefined}>
+      {/* 제목이 숫자다(목업 3) — 개요 탭의 KPI 카드 대신 "확정된 돈 / 잘 풀리면" 한 문장.
+          제목 금액은 이번 달 예상일의 확정(클로징)만 — 입금 필드와 목표 금액이 기록에 없어
+          "입금됨"·"목표까지" 문구는 만들지 않는다(lib/deal-timeline.js). */}
+      <header>
+        <div className="deals-hero">
+          <div className="deals-hero__text">
+            <p className="fx-eyebrow deals-hero__eyebrow">
+              <span>{dealTimeline.month.monthLabel} · 거래 {heroUnknown ? '—' : <span className="num">{dealTimeline.count}</span>}건</span>
+              <SyncBadge state={syncState} />
+            </p>
+            <h2 className="fx-page-title">
+              {heroUnknown ? '거래' : <>이번 달 확정된 돈 <span className="stat">{fmt(dealTimeline.month.confirmed)}</span></>}
+            </h2>
+            {!heroUnknown && dealTimeline.month.upside > dealTimeline.month.confirmed && (
+              <p className="fx-page-sub">잘 풀리면 <span className="stat deals-hero__value">{fmt(dealTimeline.month.upside)}</span></p>
+            )}
+          </div>
+          <div className="deals-hero__actions">
+            <SegmentedControl label="보기" options={DEAL_VIEW_OPTIONS} value={view} onChange={changeView} />
+            {/* 독이 열리면 독의 "연락 기록"이 그 순간의 주 행동이다 — 머리의 생성은 한 단계 내린다(§5.2 한 화면 한 primary). */}
+            <Button variant={dockOpen ? 'secondary' : 'primary'} size="sm" icon="plus" disabled={ledgerUnavailable} onClick={() => createDeal()}>거래 <Kbd>N</Kbd></Button>
+          </div>
+        </div>
+        {view !== 'region' && (
+          <div className="deals-toolbar">
+            {view === 'stage' && (
+              <span>
+                {ledgerUnavailable ? '딜 파이프라인' : <>열린 파이프라인 <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(openTotal)}</span> · <span className="mono">{openCount}</span>건</>}
+                {!ledgerUnavailable && closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--moon-200)' }}>{fmt(closingTotal)}</span></>}
+              </span>
+            )}
             {boardNotice && (
-              <span role={boardNotice.tone === 'err' ? 'alert' : 'status'} aria-live="polite" style={{ marginLeft: 8, fontSize: 11.5, color: boardNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span role={boardNotice.tone === 'err' ? 'alert' : 'status'} aria-live="polite" style={{ fontSize: 11.5, color: boardNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 {boardNotice.label}
                 {boardNotice.undo && <Button variant="ghost" size="xs" onClick={boardNotice.undo}>되돌리기</Button>}
               </span>
             )}
+            <div className="deals-toolbar__spacer" />
+            {view === 'stage' && hiddenCount > 0 && (
+              <CheckboxRow checked={showHidden} onChange={setShowHidden} size={16} text={`숨긴 딜 ${hiddenCount}건 보기`} />
+            )}
+            {view === 'stage' && lostCount > 0 && (
+              <CheckboxRow checked={showLost} onChange={setShowLost} size={16} text={`${LOST_STAGE.label} ${lostCount}건 보기`} />
+            )}
+            <SegmentedControl className="hub-toolbar" label="소속" options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
           </div>
-        </div>
-        <div style={{ flex: 1 }} />
-        {hiddenCount > 0 && (
-          <CheckboxRow checked={showHidden} onChange={setShowHidden} size={16} text={`숨긴 딜 ${hiddenCount}건 보기`} style={{ marginRight: 10 }} />
         )}
-        {lostCount > 0 && (
-          <CheckboxRow checked={showLost} onChange={setShowLost} size={16} text={`${LOST_STAGE.label} ${lostCount}건 보기`} style={{ marginRight: 10 }} />
-        )}
-        <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
-        <Button variant="primary" size="sm" icon="plus" disabled={ledgerUnavailable} onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
-      </div>
+      </header>
 
       {/* 게이지 마스트헤드 — 열린 딜 금액의 단계 분포를 한 줄 세그먼트로. 아래 컬럼들의
           top 스트라이프와 같은 heat 토큰을 써서 게이지와 보드가 하나의 계기로 읽힌다.
           (읽기 전용 — 모바일 44px 버튼 플로어와 충돌하는 클릭 타깃을 만들지 않는다.) */}
-      {!ledgerUnavailable && !wsEmpty && openTotal > 0 && (
+      {view === 'stage' && !ledgerUnavailable && !wsEmpty && openTotal > 0 && (
         <div style={{ display: 'flex', gap: 2, height: 6, borderRadius: 999, overflow: 'hidden' }} aria-hidden="true">
           {openStages.map(s => {
             const sum = totals[s.key]?.sum || 0;
@@ -2079,23 +2159,43 @@ export function Deals({ workspace, onNavigate }) {
         </div>
       )}
 
-      {syncState === 'loading' && <Skeleton lines={3} height={64} label="딜 파이프라인 불러오는 중" />}
-      {syncState === 'error' && <LedgerReadError noun="딜 파이프라인" onRetry={reloadLedger} />}
-      {syncState === 'partial' && <Button variant="ghost" size="sm" onClick={reloadLedger}>딜 기록 다시 확인</Button>}
+      {view !== 'region' && syncState === 'loading' && <Skeleton lines={3} height={64} label="딜 파이프라인 불러오는 중" />}
+      {view !== 'region' && syncState === 'error' && <LedgerReadError noun="딜 파이프라인" onRetry={reloadLedger} />}
+      {view !== 'region' && syncState === 'partial' && <Button variant="ghost" size="sm" onClick={reloadLedger}>딜 기록 다시 확인</Button>}
 
-      {!ledgerUnavailable && wsEmpty && (
+      {view !== 'region' && !ledgerUnavailable && wsEmpty && (
         <Card>
           <EmptyState
             icon="deals"
             title={`${ws.label} — 해당하는 딜이 없습니다`}
             description={`이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 기록에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>거래 <Kbd>N</Kbd></Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
       )}
 
-      {!ledgerUnavailable && !wsEmpty && (
+      {view === 'time' && !ledgerUnavailable && !wsEmpty && (
+        <DealsTimeline
+          timeline={dealTimeline}
+          stages={dealTimeline.stages}
+          ledger={ledger}
+          syncState={syncState}
+          selectedId={selection.selectedId}
+          onSelect={selection.setSelectedId}
+          onMoveDate={moveCloseDate}
+          onAdvanceStage={move}
+          onEdit={(id) => setEditDealId(id)}
+          onCreate={() => createDeal()}
+          canCreate={!ledgerUnavailable}
+          onNavigate={onNavigate}
+          onReload={reloadLedger}
+        />
+      )}
+
+      {view === 'region' && <DealsRegionView onNavigate={onNavigate} />}
+
+      {view === 'stage' && !ledgerUnavailable && !wsEmpty && (
       <ScrollShadowX>
         {boardStages.map(s => {
           const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
@@ -2209,21 +2309,10 @@ export function Deals({ workspace, onNavigate }) {
                         <span style={{ fontSize: 10.5, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <Iconed name="clock" size={10} /> {d.age}일 정체
                         </span>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            fontSize: 10, padding: '2px 6px',
-                            borderRadius: 'var(--r-xs)',
-                            border: '1px solid var(--moon-line)',
-                            background: 'var(--surface-3)',
-                            color: 'var(--moon-200)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <Iconed name="sparkle" size={10} /> 반론 점검
-                        </button>
+                        {/* 10px 인라인 버튼이던 것 — 텍스트 플로어(§8.1)와 hover 계약을 Button 프리미티브에 맡긴다. */}
+                        <Button variant="outline" size="xs" icon="sparkle" onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}>
+                          반론 점검
+                        </Button>
                       </div>
                     )}
                   </div>
