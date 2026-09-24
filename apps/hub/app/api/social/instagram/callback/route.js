@@ -11,6 +11,7 @@ import {
   saveInstagramApiConnection,
 } from "@/lib/instagram-api";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { assertPersistedSocialConnection } from "@/lib/social-oauth-persistence";
 
 export const runtime = "nodejs";
 
@@ -71,13 +72,13 @@ export async function GET(req) {
     const accessToken = longLivedTokenData?.access_token || tokenData?.access_token;
     const profile = await fetchInstagramApiProfile(accessToken);
     const profileMatch = isExpectedInstagramApiProfile(profile, brandHandle);
-    const saved = await saveInstagramApiConnection({
+    const saved = assertPersistedSocialConnection(await saveInstagramApiConnection({
       workspaceId,
       brandHandle,
       tokenData,
       longLivedTokenData,
       profile,
-    });
+    }));
 
     await recordInstagramApiSync({
       workspaceId,

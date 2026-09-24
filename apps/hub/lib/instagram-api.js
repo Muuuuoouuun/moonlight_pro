@@ -19,6 +19,7 @@ const INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const INSTAGRAM_LONG_LIVED_TOKEN_URL = "https://graph.instagram.com/access_token";
 const INSTAGRAM_REFRESH_TOKEN_URL = "https://graph.instagram.com/refresh_access_token";
 const DEFAULT_INSTAGRAM_API_BASE = "https://graph.instagram.com/v21.0";
+const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 function normalizeString(value, fallback = "") {
   return typeof value === "string" ? value.trim() || fallback : fallback;
@@ -160,19 +161,36 @@ function encodeState(value) {
 
 export function decodeInstagramApiState(value) {
   if (!value) {
-    return {};
+    return { invalid: true };
   }
 
   try {
     const raw = String(value);
-    const [payload, signature] = raw.split(".");
+    const parts = raw.split(".");
+    if (parts.length !== 2) {
+      return { invalid: true };
+    }
+    const [payload, signature] = parts;
     const expected = signStatePayload(payload);
 
     if (!expected || !signature || !safeEquals(expected, signature)) {
       return { invalid: true };
     }
 
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const state = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const now = Date.now();
+    if (
+      !state ||
+      typeof state !== "object" ||
+      Array.isArray(state) ||
+      !Number.isSafeInteger(state.iat) ||
+      state.iat > now ||
+      now - state.iat > OAUTH_STATE_MAX_AGE_MS
+    ) {
+      return { invalid: true };
+    }
+
+    return state;
   } catch {
     return { invalid: true };
   }

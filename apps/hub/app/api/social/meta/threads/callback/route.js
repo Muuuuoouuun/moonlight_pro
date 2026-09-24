@@ -11,6 +11,7 @@ import {
   saveMetaThreadsConnection,
 } from "@/lib/meta-threads";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { assertPersistedSocialConnection } from "@/lib/social-oauth-persistence";
 
 export const runtime = "nodejs";
 
@@ -84,13 +85,13 @@ export async function GET(req) {
       return NextResponse.redirect(target);
     }
 
-    const saved = await saveMetaThreadsConnection({
+    const saved = assertPersistedSocialConnection(await saveMetaThreadsConnection({
       workspaceId,
       brandHandle,
       tokenData,
       longLivedTokenData,
       profile,
-    });
+    }));
 
     await recordMetaThreadsSync({
       workspaceId,

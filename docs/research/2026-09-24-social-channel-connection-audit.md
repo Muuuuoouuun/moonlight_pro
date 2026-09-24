@@ -1,0 +1,59 @@
+# 소셜 채널 연결·발행 실사
+
+> 확인일: 2026-09-24 · 읽기 전용 운영 DB·로컬 Hub 상태 API·브라우저 계정 화면·플랫폼 공식 문서 기준. 연결 결과가 바뀌면 재확인한다. 비밀 값과 개인 연락처는 기록하지 않는다.
+
+## 결론
+
+Moonlight의 Threads·Instagram OAuth 경로는 코드에 있지만, 로컬 앱 자격증명이 없고 운영 DB의 두 연결은 0건이다. YouTube OAuth·업로드 경로는 아직 없다. 이번 조사에서 외부 계정 OAuth 연결이나 게시물 업로드는 완료되지 않았다. 현재 가능한 실무 흐름은 Studio의 원고·카드 문구·쇼츠 대본 작성 → 플랫폼 화면에서 수동 게시 → 게시 URL·일시를 Moonlight에 수동 기록하는 것이다. `발행했음`은 실제 플랫폼 게시 여부를 검증하지 않는다.
+
+## 실제 계정·연결 상태
+
+| 대상 | 확인된 계정·자산 | 현재 접근 | Moonlight API 연결 |
+|---|---|---|---|
+| Threads | `@ml_bridgemaker`, `@politic_officer` | 브라우저 본인 프로필 편집·게시 UI | 없음 |
+| Instagram | `@ml_bridgemaker`, `@politic_officer` | 브라우저 프로페셔널 대시보드 | 없음 |
+| Instagram 추가 | `@go_re_startagain` | 전환 시 비밀번호 요구 | 없음 |
+| Instagram DB 링크 | HolyFunCollector | 브랜드 메타데이터에 링크만 있음. 현재 브라우저 게시 권한 미확인 | 없음 |
+| YouTube Studio | 기독밈, 문군, 22세기 유목민, 클래스인 문, ClassIn KR | 다섯 채널의 Studio·권한 화면에서 현재 로그인 계정이 각각 `소유자`인 것을 확인 | 없음 |
+| Meta Business Suite | `@politic_officer` 로그인 경로 | 약관 동의 전 단계까지. 페이지 자산·권한 미확인 | 없음 |
+
+운영 DB에는 활성 브랜드가 11개 있다. `meta.channels`에 Threads·Instagram 링크가 있는 브랜드는 BridgeMaker, HolyFunCollector, Politic_Officer 세 곳이고 나머지 8개는 비어 있다. 브랜드의 링크나 Studio 화면 접근은 API 게시 권한의 증거가 아니다. `integration_connections`에서 `meta_threads`, `instagram_api`, `youtube`는 모두 0건이다.
+
+## 지금 연결을 막는 조건
+
+### Meta Threads·Instagram
+
+1. 로컬 Hub 상태 API가 모두 `missing-config`다. 앱 ID·시크릿은 없고 OAuth state 비밀키만 있다.
+2. 브라우저의 Meta for Developers 계정은 등록 전이다. 등록 화면에서 Meta Platform Terms·Developer Policies 동의가 필요하므로 운영자가 직접 등록을 완료해야 앱을 만들 수 있다.
+3. Meta 앱을 만든 뒤 Threads·Instagram 제품과 필요한 게시 권한을 설정하고, 콜백 URI를 Dashboard에 정확히 등록해야 한다. 현재 로컬 콜백은 `http://localhost:3000/api/social/meta/threads/callback`과 `http://localhost:3000/api/social/instagram/callback`이다. 운영 연결에는 공개 HTTPS Hub 주소와 배포 환경 변수가 필요하다.
+4. 기본 브랜드 핸들이 `moon.classin`으로 고정되어 있다. 확인된 `ml_bridgemaker`·`politic_officer`를 연결하려면 올바른 핸들을 명시해야 한다. Threads는 불일치 계정을 거부하지만 Instagram은 불일치를 표시하면서 저장한다.
+5. 현행 `integration_connections`의 `(workspace_id, provider)` 고유 제약 때문에 워크스페이스별 플랫폼 계정 하나만 보관한다. 여러 브랜드를 운영하려면 계정별 연결과 브랜드 매핑으로 확장해야 한다.
+6. 장기 토큰 갱신 함수는 있으나 자동 실행 경로가 없다. 연결 뒤 만료 전 갱신·실패 표시가 필요하다.
+
+### YouTube
+
+1. Moonlight에는 YouTube 전용 OAuth scope·callback·업로드 구현이 없다. Google OAuth 공통 helper는 재사용할 수 있다.
+2. 현재 Chrome Google Cloud 계정의 여섯 프로젝트에서 로컬 Hub `GOOGLE_CLIENT_ID`와 일치하는 클라이언트를 찾지 못했다. 해당 앱의 소유 계정·프로젝트 확인이 먼저다. 다른 프로젝트에서 API를 활성화해도 현재 클라이언트와 연결되지 않는다.
+3. API 업로드에는 채널에 맞는 Google OAuth 승인, YouTube Data API v3 활성화, 앱 설정이 필요하다. 신규 미감사 프로젝트 업로드는 비공개로 제한되며 공개 발행에는 감사가 필요하다.
+4. Studio에 초대된 관리자·편집자는 Studio 업로드가 가능해도 그 위임 권한으로 YouTube APIs를 쓸 수 없다. 이번에 확인한 다섯 채널은 각각의 로그인 계정이 소유자이므로 이 특정 장애물은 해당하지 않는다. 다만 실제 OAuth 승인과 API 업로드 성공은 확인되지 않았다.
+
+## 플랫폼별 발행 가능성
+
+| 플랫폼 | 공식 API 범위 | Moonlight에 필요한 추가 작업 |
+|---|---|---|
+| Threads | 글(500자), 사진, 영상, 최대 20개 혼합 캐러셀. [`게시`](https://developers.facebook.com/documentation/threads/posts?locale=en_US) | 앱·권한·OAuth 연결, 계정별 저장, 게시 호출, 결과 확인 |
+| Instagram | 프로 계정의 사진·영상·릴스·최대 10개 캐러셀. [`게시`](https://developers.facebook.com/documentation/instagram-platform/content-publishing?locale=en_US) | 프로 계정 확인, 앱·권한·OAuth, 접근 가능한 미디어 URL, 이미지 렌더, 결과 확인 |
+| Facebook Page | 글·사진·다중 사진·릴스와 일부 예약 게시. [`게시`](https://developers.facebook.com/documentation/pages-api/posts?locale=en_US) | 보유 페이지·역할 확인, 페이지 토큰과 권한, 별도 어댑터 |
+| YouTube | `videos.insert` 영상 업로드·예약. 세로/정사각 3분 이하 영상은 Shorts로 분류. [`업로드`](https://developers.google.com/youtube/v3/docs/videos/insert), [`Shorts`](https://support.google.com/youtube/answer/15424877?hl=en-GB) | 소유 프로젝트·채널 권한 확인, OAuth·감사, 실제 MP4 제작과 업로드 |
+| TikTok | 사진·영상 Direct Post. 미감사 앱의 게시물은 비공개 제한. [`공식 안내`](https://developers.tiktok.com/docs/en/content-posting-api-get-started) | 현재 브랜드 채널 확인부터 필요 |
+| Naver Blog | 외부 서비스의 블로그 글쓰기 Open API는 2020년에 종료. [`종료 공지`](https://developers.naver.com/notice/article/7527) | 공식 자동 게시 경로로 계획하지 않음 |
+
+## 구현 순서 제안
+
+1. 운영자가 Meta 개발자 등록을 완료한다. 기존 앱이 있으면 앱 소유와 Threads·Instagram 제품 사용 가능 여부부터 확인한다.
+2. 먼저 Threads `@ml_bridgemaker` 한 계정을 정확한 핸들로 OAuth 연결하고, status·프로필·DB 저장 영수증을 확인한다. 이 단계는 게시하지 않는다.
+3. 계정별 저장 구조로 확장하고 `@politic_officer` 및 Instagram 계정을 각각 연결한다.
+4. 이미지 렌더·미디어 보관, 버전별 검토, 게시 큐·중복 방지·성공 URL 확인을 구현한 뒤 실제 게시를 별도 검증한다.
+5. YouTube는 현재 Google OAuth 클라이언트의 소유 프로젝트와 각 채널의 소유 구조 확인 후 연결한다.
+
+코드 근거: [`integration-inventory.md`](../integration-inventory.md), [`meta-threads.js`](../../apps/hub/lib/meta-threads.js), [`instagram-api.js`](../../apps/hub/lib/instagram-api.js), [`content-studio.jsx`](../../apps/hub/components/hub/pages/content-studio.jsx), [`20260804_0018_backend_optimization.sql`](../../supabase/migrations/20260804_0018_backend_optimization.sql).
