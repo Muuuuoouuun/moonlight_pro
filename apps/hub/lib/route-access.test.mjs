@@ -39,6 +39,16 @@ test("OAuth 콜백은 세션 없이 통과한다", () => {
   for (const path of OPEN_EXACT) assert.equal(deployed({ pathname: path }).action, "allow", path);
 });
 
+test("공개 법률·앱 소개 페이지만 비로그인 접근을 허용한다", () => {
+  for (const path of ["/legal/privacy", "/legal/terms", "/legal/data-deletion", "/legal/about"]) {
+    assert.equal(deployed({ pathname: path }).action, "allow", path);
+    assert.equal(deployed({ pathname: path, secretConfigured: false }).action, "allow", path);
+  }
+  for (const path of ["/legal", "/legal/private", "/legal/privacy/archive", "/dashboard", "/api/hub/revenue"]) {
+    assert.notEqual(deployed({ pathname: path }).action, "allow", path);
+  }
+});
+
 test("로컬(loopback)은 세션 없이 통과한다", () => {
   for (const host of ["localhost:3000", "127.0.0.1:3010", "[::1]:3000", "LOCALHOST:3000"]) {
     assert.equal(resolveRouteAccess({ pathname: "/api/hub/revenue", host, secretConfigured: true, hasSession: false }).action, "allow", host);
