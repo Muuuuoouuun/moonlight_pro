@@ -133,7 +133,7 @@ final class WindowCoordinator: NSObject {
 
         previewWindow.contentView = GlassPanel.host(PreviewView(model: model) { [weak self] in
             self?.showBar()
-        }, cornerRadius: 14)
+        }, cornerRadius: 14, model: model)
         barWindow.contentView = GlassPanel.host(QuickBarView(
             model: model,
             close: { [weak self] in self?.dismissBar() },
@@ -144,7 +144,7 @@ final class WindowCoordinator: NSObject {
                 self.showWidget(mode: self.model.mode)
             },
             moveVertically: { [weak self] offset in self?.moveBarVertically(by: offset) }
-        ), cornerRadius: CompanionLayout.glassRadius)
+        ), cornerRadius: CompanionLayout.glassRadius, model: model)
         widgetWindow.contentView = GlassPanel.host(CompactWidgetView(
             model: model,
             collapse: { [weak self] in self?.collapseWidget() },
@@ -152,7 +152,8 @@ final class WindowCoordinator: NSObject {
             moveVertically: { [weak self] offset in self?.moveWidgetVertically(by: offset) },
             startFocus: { [weak self] in self?.startFocus() }
         ), cornerRadius: CompanionLayout.glassRadius,
-           ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.collapseWidget() })))
+           ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.collapseWidget() })),
+           model: model)
 
         model.onFocusFinished = { [weak self] in self?.endFocus() }
         placePetInitially()

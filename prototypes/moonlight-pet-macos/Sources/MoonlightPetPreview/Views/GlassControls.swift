@@ -28,7 +28,7 @@ private struct GlassActionBody<Label: View>: View {
             .foregroundStyle(Palette.glassInk)
             .padding(.horizontal, compact ? 0 : 16)
             .frame(minWidth: 32, minHeight: compact ? 32 : 38)
-            .background(Palette.glassInk.opacity(pressed ? 0.16 : hovered ? 0.10 : 0.065),
+            .background(Palette.glassControlFill.opacity(pressed ? 0.20 : hovered ? 0.10 : 0.16),
                         in: RoundedRectangle(cornerRadius: compact ? 10 : 19, style: .continuous))
             .overlay {
                 GlassRim(radius: compact ? 10 : 19, strength: increasedContrast ? 1 : 0.65)
@@ -48,7 +48,7 @@ struct GlassInputSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(Palette.glassInk.opacity(focused ? 0.025 : 0.035),
+            .background(Palette.glassControlFill.opacity(focused ? 0.10 : 0.16),
                         in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 13, style: .continuous)

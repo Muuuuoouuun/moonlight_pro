@@ -1,11 +1,13 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// One native optical surface, with a separate non-interactive hairline and shadow gutter.
 @MainActor
 final class GlassPanel: NSView {
-    static func host<Content: View>(_ content: Content, cornerRadius: CGFloat, ornament: AnyView? = nil) -> NSView {
-        let host = FirstMouseHostingView(rootView: content.environment(\.colorScheme, .light))
+    static func host<Content: View>(_ content: Content, cornerRadius: CGFloat, ornament: AnyView? = nil,
+                                    model: AppModel? = nil) -> GlassPanel {
+        let host = FirstMouseHostingView(rootView: content.environment(\.colorScheme, .dark))
         host.sizingOptions = []
         host.focusRingType = .none
         let accessory = ornament.map { view -> NSView in
@@ -14,7 +16,13 @@ final class GlassPanel: NSView {
             host.focusRingType = .none
             return host
         }
-        return GlassPanel(content: host, cornerRadius: cornerRadius, ornament: accessory)
+        let panel = GlassPanel(content: host, cornerRadius: cornerRadius, ornament: accessory)
+        if let model {
+            panel.characterSubscription = model.$selectedCharacter.removeDuplicates().sink { [weak panel] character in
+                panel?.setCharacter(character)
+            }
+        }
+        return panel
     }
 
     private let radius: CGFloat
@@ -22,17 +30,22 @@ final class GlassPanel: NSView {
     private let rim: NSView
     private let foreground: NSView
     private let ornament: NSView?
+    private let wash: PetGlassWash
+    private var characterSubscription: AnyCancellable?
+
+    func setCharacter(_ character: PetCharacter) { wash.character = character }
 
     private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?) {
         radius = cornerRadius
         self.ornament = ornament
         foreground = content
+        wash = PetGlassWash(radius: cornerRadius)
         rim = makeOpticalRim(radius: cornerRadius)
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
             // Clear is the requested default; regular is reserved for accessibility.
             glass.style = .clear
-            glass.appearance = NSAppearance(named: .aqua)
+            glass.appearance = NSAppearance(named: .darkAqua)
             glass.cornerRadius = cornerRadius
             // Keep glyphs out of the glass content-compositing subtree. The native
             // effect handles only the backdrop; the sibling host draws sharp text.
@@ -43,7 +56,7 @@ final class GlassPanel: NSView {
             backdrop.material = .popover
             backdrop.blendingMode = .behindWindow
             backdrop.state = .active
-            backdrop.appearance = NSAppearance(named: .aqua)
+            backdrop.appearance = NSAppearance(named: .darkAqua)
             let diameter = cornerRadius * 2 + 1
             backdrop.maskImage = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
                 NSColor.white.setFill()
@@ -62,6 +75,7 @@ final class GlassPanel: NSView {
         layer?.shadowRadius = 6
         layer?.shadowOffset = CGSize(width: 0, height: -2)
         addSubview(material)
+        addSubview(wash)
         addSubview(rim)
         addSubview(foreground)
         if let ornament { addSubview(ornament) }
@@ -71,9 +85,10 @@ final class GlassPanel: NSView {
     }
 
     @objc private func updateMaterialAccessibility() {
+        let accessible = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+            || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        wash.solidForAccessibility = accessible
         if #available(macOS 26.0, *), let glass = material as? NSGlassEffectView {
-            let accessible = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
-                || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
             glass.style = accessible ? .regular : .clear
             glass.tintColor = nil
         }
@@ -91,6 +106,7 @@ final class GlassPanel: NSView {
                                     width: CompanionLayout.perchSize, height: CompanionLayout.perchSize)
         }
         material.frame = frame
+        wash.frame = frame
         foreground.frame = frame
         rim.frame = frame
         layer?.shadowPath = CGPath(roundedRect: frame, cornerWidth: radius, cornerHeight: radius, transform: nil)

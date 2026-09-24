@@ -67,3 +67,9 @@ GPU backdrop-preservation test failed against the previous implementation (75.42
 ## Sharp text correction — 2026-09-25
 
 The operator's screenshot showed thick headings and outlined small text. Removing the full-content light shadow reduced the outlines. Native lab headings remained distorted until the SwiftUI content host became a sibling above the glass material and edge renderer. Native-vs-Metal inspection then showed sharp headings and Korean field input. This preserves clear material, accessibility material switching, foreground geometry and first-mouse handling. Text contrast over arbitrary dark desktop backgrounds is a separate remaining limitation; this correction does not claim universal contrast.
+
+## White text and character tint — 2026-09-25
+
+The operator subsequently chose white-family text and subtle character-colored translucent panels. All three floating hosts observe the selected character; the foreground host is preserved during updates. The theme wash attenuates transmitted lettering and supports white text. Input/action fills use a separate dark token. This deliberately reduces body transparency without adding a white haze or glyph halo. Sylveon's tint was first strengthened to rose pink, then softened to a lighter blush pink after live operator feedback.
+
+Native/Metal lab inspection confirmed the revised pink tint, transmitted folds, sharp title/body text and Korean paste in the native field. The lab picker is local and does not modify the saved pet. Shader/self-check results remain valid for the underlying optics; they do not measure contrast of the new wash. The wash is a visual calibration, not a claim of WCAG compliance over every desktop background.
