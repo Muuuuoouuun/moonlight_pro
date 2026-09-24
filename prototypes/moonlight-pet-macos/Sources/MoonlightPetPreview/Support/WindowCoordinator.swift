@@ -188,6 +188,13 @@ final class WindowCoordinator: NSObject {
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             guard let self else { return event }
+            // Other app windows (e.g. the material lab) own their keyboard input.
+            // Focus mode retains its app-wide emergency Escape handling.
+            if !self.model.isFocused {
+                let source = event.window ?? NSApp.keyWindow
+                guard [self.petWindow, self.previewWindow, self.barWindow, self.widgetWindow]
+                    .contains(where: { $0 === source }) else { return event }
+            }
             let widgetVisible = self.isRequestedVisible(self.widgetWindow)
             let utilityVisible = widgetVisible || self.isRequestedVisible(self.barWindow)
             if !self.model.isFocused, utilityVisible, event.type == .keyDown,

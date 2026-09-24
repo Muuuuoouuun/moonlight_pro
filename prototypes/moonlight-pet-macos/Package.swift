@@ -8,7 +8,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "MoonlightPetPreview",
-            resources: [.process("Resources")]
+            resources: [.process("Resources"), .copy("Shaders")]
         )
     ]
 )

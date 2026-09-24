@@ -52,3 +52,9 @@ macOS 26에서는 창 경계의 `NSGlassEffectView(.regular)` 하나가 재질�
 cd prototypes/moonlight-pet-macos
 swift run MoonlightPetPreview --self-check
 ```
+
+### Optical glass comparison
+
+The floating panels now pair native regular glass with a Metal optical rim (curved bevel lighting, a fine edge, transparent center). The Metal pipeline is cached and redraws only for changes; a native/Core Animation fallback remains available. See [research and implementation limits](design/glass-optics-research.md).
+
+Run `./script/build_and_run.sh --glass-lab` for the optional native-vs-Metal material comparison. The sliders affect the custom material on the right; the calibration backgrounds belong to the app. Normal launch keeps the pet-only experience. `swift run -j 2 MoonlightPetPreview --self-check` also checks real GPU output for edge clipping, premultiplied alpha, Retina geometry and refractive displacement.

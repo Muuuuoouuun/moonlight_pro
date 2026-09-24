@@ -19,13 +19,14 @@ final class GlassPanel: NSView {
 
     private let radius: CGFloat
     private let material: NSView
-    private let rim = GlassEdgeView()
+    private let rim: NSView
     private var fallbackContent: NSView?
     private let ornament: NSView?
 
     private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?) {
         radius = cornerRadius
         self.ornament = ornament
+        rim = makeOpticalRim(radius: cornerRadius)
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
             // The approved floating surfaces use neutral silver glass. Regular retains
@@ -61,7 +62,6 @@ final class GlassPanel: NSView {
         layer?.shadowOffset = CGSize(width: 0, height: -2)
         addSubview(material)
         if let fallbackContent { addSubview(fallbackContent) }
-        rim.radius = cornerRadius
         addSubview(rim)
         if let ornament { addSubview(ornament) }
     }
@@ -84,7 +84,7 @@ final class GlassPanel: NSView {
     required init?(coder: NSCoder) { nil }
 }
 
-private final class GlassEdgeView: NSView {
+final class GlassEdgeView: NSView {
     var radius: CGFloat = 26
     private let gradient = CAGradientLayer()
     private let outline = CAShapeLayer()

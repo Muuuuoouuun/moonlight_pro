@@ -46,3 +46,13 @@
 ## 남은 한계
 
 macOS 14~25 폴백, 밝은 OS 외관으로 변경한 상태, VoiceOver 전체 동선, 대비 증가·투명도/동작 줄이기 실화면, 다중 모니터·Spaces는 이번 실화면 검증 범위 밖이다. 성능·광학 품질을 더 수치화하려면 프레임 프로파일과 배경별 대비 측정이 필요하다.
+
+## Optical glass refinement — 2026-09-24
+
+- Native glass is retained for desktop backdrop compositing. The old uniform outer gradient is replaced by an event-driven Metal bevel/specular rim; its center is exactly transparent. Focus card shares the same edge renderer.
+- Added `--glass-lab`: identical analytic silver-fold/grid backgrounds, native material on the left, refracted background on the right. Lens strength/bevel are adjustable. Custom backdrop luminance is compressed for readable dark text. The lab never stores records.
+- GPU verification runs the production Metal pipeline offscreen: compilation, clipped corner, visible rim, premultiplied alpha, transparent center, Retina coordinates, and edge-only refraction changes. Final calibration run observed 546 changed edge pixels with the flat center unchanged. This is a rendering assertion, not a design quality score.
+- Code review fixed app-wide shortcut leakage into the new lab and changed readback to a private texture plus aligned shared-buffer blit. Apple Silicon run passed; Intel/AMD hardware execution was not available.
+- Native CUA verification: one-click quick panel and double-click perched widget each accept the first typed character; memo switches wide and schedule switches tall; Escape returns to the original portrait. Temporary test characters were removed and the user's existing task was preserved.
+- Native CUA comparison: grid switch and bevel slider change the output. A clipboard timeout exposed missing Cocoa edit-menu routing in the accessory app; adding standard responder-chain Edit commands fixed Korean paste and Cmd+A/Delete in the lab.
+- Limits: window-only screenshots do not capture the desktop behind floating panels, so they are not proof of desktop transmission quality. The in-window lab does show its full owned background. No claim of screenshot-identical quality or measured FPS is made. macOS Reduce Transparency/Increase Contrast are respected by the custom shader and native material; system preferences were not changed during QA.

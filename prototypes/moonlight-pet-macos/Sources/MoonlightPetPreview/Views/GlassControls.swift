@@ -136,7 +136,7 @@ struct GlassSurface: ViewModifier {
                 content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             }
         }
-        .overlay { GlassRim(radius: radius) }
+        .overlay { OpticalGlassRim(radius: radius).allowsHitTesting(false).accessibilityHidden(true) }
         .shadow(color: Palette.glassShadow.opacity(0.18), radius: 12, y: 5)
     }
 }

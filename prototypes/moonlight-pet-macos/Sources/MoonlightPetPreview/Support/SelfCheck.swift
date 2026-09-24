@@ -3,7 +3,7 @@ import AppKit
 enum SelfCheck {
     @MainActor
     static func run() -> Bool {
-        guard checkPanelInteraction() else { return false }
+        guard GlassOpticsCheck.run(), checkPanelInteraction() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,
