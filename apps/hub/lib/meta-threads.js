@@ -6,6 +6,7 @@ import {
   updateSupabaseRecord,
 } from "@/lib/server-write";
 import { createHmac, timingSafeEqual } from "crypto";
+import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
 
 const META_THREADS_PROVIDER = "meta_threads";
 const META_THREADS_SYNC_SOURCE = "meta_threads";
@@ -186,7 +187,10 @@ export function decodeMetaThreadsState(value) {
       Array.isArray(state) ||
       !Number.isSafeInteger(state.iat) ||
       state.iat > now ||
-      now - state.iat > OAUTH_STATE_MAX_AGE_MS
+      now - state.iat > OAUTH_STATE_MAX_AGE_MS ||
+      typeof state.workspaceId !== "string" || !state.workspaceId ||
+      typeof state.brandHandle !== "string" || !state.brandHandle ||
+      (state.brandKey != null && !isValidSocialBrandKey(state.brandKey))
     ) {
       return { invalid: true };
     }
@@ -311,11 +315,13 @@ export function buildMetaThreadsAuthUrl({
   origin,
   workspaceId = resolveDefaultWorkspaceId(),
   brandHandle = DEFAULT_BRAND_HANDLE,
+  brandKey = null,
   returnPath = "/dashboard/settings",
 }) {
   const config = resolveMetaThreadsConfig();
 
-  if (!config.configured || !hasMetaThreadsOAuthStateSecret()) {
+  if (!config.configured || !hasMetaThreadsOAuthStateSecret() || !workspaceId ||
+    (brandKey != null && !isValidSocialBrandKey(brandKey))) {
     return null;
   }
 
@@ -327,6 +333,7 @@ export function buildMetaThreadsAuthUrl({
     state: encodeState({
       workspaceId: workspaceId || resolveDefaultWorkspaceId(),
       brandHandle: normalizeHandle(brandHandle, config.brandHandle),
+      brandKey,
       returnPath: sanitizeReturnPath(returnPath, "/dashboard/settings"),
     }),
   });
@@ -448,19 +455,12 @@ export async function fetchMetaThreadsProfile(accessToken) {
 export async function fetchLatestMetaThreadsConnection(
   workspaceId = resolveDefaultWorkspaceId(),
 ) {
-  const filters = [["provider", `eq.${META_THREADS_PROVIDER}`]];
+  const { connections } = await listSocialAccountConnections(META_THREADS_PROVIDER, workspaceId);
+  return connections[0] || null;
+}
 
-  if (workspaceId) {
-    filters.push(["workspace_id", `eq.${workspaceId}`]);
-  }
-
-  const rows = await fetchSupabaseRows("integration_connections", {
-    filters,
-    order: "created_at.desc",
-    limit: 1,
-  });
-
-  return rows?.[0] || null;
+export async function fetchMetaThreadsConnections(workspaceId = resolveDefaultWorkspaceId(), accountId = "") {
+  return listSocialAccountConnections(META_THREADS_PROVIDER, workspaceId, accountId);
 }
 
 export async function fetchMetaThreadsConnectionsByUserId({
@@ -536,21 +536,21 @@ export async function disableMetaThreadsConnectionsForUser({
 export async function saveMetaThreadsConnection({
   workspaceId = resolveDefaultWorkspaceId(),
   brandHandle = DEFAULT_BRAND_HANDLE,
+  brandKey = null,
   tokenData,
   longLivedTokenData,
   profile,
 }) {
-  const existing = await fetchLatestMetaThreadsConnection(workspaceId);
-  const now = new Date().toISOString();
+  if (!profile?.id || !profile?.username) throw new Error("social-account-id-missing");
   const accessToken =
     longLivedTokenData?.access_token ||
     tokenData?.access_token ||
-    existing?.config?.accessToken ||
     "";
   const expiresIn = longLivedTokenData?.expires_in || tokenData?.expires_in || null;
   const config = {
     provider: "Threads",
     brandHandle: normalizeHandle(brandHandle),
+    brandKey: brandKey || null,
     scope:
       longLivedTokenData?.scope ||
       tokenData?.scope ||
@@ -559,42 +559,17 @@ export async function saveMetaThreadsConnection({
     tokenType: longLivedTokenData?.token_type || tokenData?.token_type || "Bearer",
     expiresAt: expiresIn
       ? new Date(Date.now() + expiresIn * 1000).toISOString()
-      : existing?.config?.expiresAt || null,
-    userId: profile?.id || tokenData?.user_id || existing?.config?.userId || null,
-    username: profile?.username || existing?.config?.username || null,
-    profilePictureUrl:
-      profile?.threads_profile_picture_url ||
-      existing?.config?.profilePictureUrl ||
-      null,
-    biography: profile?.threads_biography || existing?.config?.biography || null,
+      : null,
+    userId: profile.id,
+    username: profile.username,
+    profilePictureUrl: profile.threads_profile_picture_url || null,
+    biography: profile.threads_biography || null,
   };
-  const record = {
-    workspace_id: workspaceId || null,
-    provider: META_THREADS_PROVIDER,
-    status: "connected",
-    config,
-    last_synced_at: now,
-  };
-
-  if (existing?.id) {
-    const persistence = await updateSupabaseRecord(
-      "integration_connections",
-      [["id", `eq.${existing.id}`]],
-      record,
-    );
-
-    return {
-      connectionId: existing.id,
-      persistence,
-      config,
-    };
-  }
-
-  const persistence = await insertSupabaseRecord("integration_connections", record);
-  const latest = await fetchLatestMetaThreadsConnection(workspaceId);
-
+  const persistence = await saveSocialAccountConnection({
+    workspaceId, provider: META_THREADS_PROVIDER, accountId: profile.id, config,
+  });
   return {
-    connectionId: latest?.id || null,
+    connectionId: persistence.id || null,
     persistence,
     config,
   };
@@ -629,6 +604,7 @@ export function summarizeMetaThreadsConnection(connection) {
     status: connection?.status || "pending",
     lastSyncedAt: connection?.last_synced_at || null,
     brandHandle: normalizeHandle(config.brandHandle),
+    brandKey: config.brandKey || null,
     userId: config.userId || null,
     username: config.username || null,
     profileHandle: config.username ? `@${config.username}` : null,

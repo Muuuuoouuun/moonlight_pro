@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 
 import {
   buildInstagramApiSetupUrls,
-  fetchLatestInstagramApiConnection,
+  fetchInstagramApiConnections,
   hasInstagramApiOAuthStateSecret,
   resolveInstagramApiConfig,
   summarizeInstagramApiConnection,
 } from "@/lib/instagram-api";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { summarizeSocialAccountStatus } from "@/lib/social-account-status";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,26 +17,32 @@ export async function GET(req) {
   const { origin } = req.nextUrl;
   const workspaceId = resolveDefaultWorkspaceId();
   const config = resolveInstagramApiConfig();
-  const connection = workspaceId
-    ? await fetchLatestInstagramApiConnection(workspaceId)
-    : null;
-  const connected = connection?.status === "connected";
+  const requestedHandle = (req.nextUrl.searchParams.get("brand") || config.brandHandle)
+    .replace(/^@+/, "").toLowerCase();
+  const accountId = req.nextUrl.searchParams.get("accountId") || "";
+  const { connections, available } = await fetchInstagramApiConnections(workspaceId);
+  const summary = summarizeSocialAccountStatus({
+    rows: connections,
+    configured: config.configured && hasInstagramApiOAuthStateSecret(),
+    available,
+    selector: accountId
+      ? (row) => row.account_key === accountId
+      : (row) => row.config?.brandHandle === requestedHandle,
+    summarize: summarizeInstagramApiConnection,
+  });
 
   return NextResponse.json({
-    status: connected
-      ? "connected"
-      : config.configured && hasInstagramApiOAuthStateSecret()
-        ? "ready"
-        : "missing-config",
+    status: summary.status,
     provider: "instagram_api",
     workspaceId: workspaceId || null,
-    brandHandle: config.brandHandle,
+    brandHandle: requestedHandle,
     configured: config.configured,
     hasAppId: config.hasAppId,
     hasAppSecret: config.hasAppSecret,
     hasOAuthStateSecret: hasInstagramApiOAuthStateSecret(),
     scopes: config.scopes,
-    connection: connection ? summarizeInstagramApiConnection(connection) : null,
+    connection: summary.connection,
+    connections: summary.connections,
     setup: buildInstagramApiSetupUrls(origin),
   });
 }

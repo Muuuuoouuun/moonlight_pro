@@ -31,6 +31,7 @@ export async function GET(req) {
 
   const workspaceId = state.workspaceId || resolveDefaultWorkspaceId();
   const brandHandle = state.brandHandle || "moon.classin";
+  const brandKey = state.brandKey || null;
   const returnPath =
     typeof state.returnPath === "string" &&
     state.returnPath.startsWith("/") &&
@@ -70,7 +71,7 @@ export async function GET(req) {
     const profile = await fetchMetaThreadsProfile(accessToken);
     const profileMatch = isExpectedMetaThreadsProfile(profile, brandHandle);
 
-    if (profileMatch === false) {
+    if (profileMatch !== true || !profile?.id) {
       await recordMetaThreadsSync({
         workspaceId,
         status: "failure",
@@ -89,6 +90,7 @@ export async function GET(req) {
     const saved = assertPersistedSocialConnection(await saveMetaThreadsConnection({
       workspaceId,
       brandHandle,
+      brandKey,
       tokenData,
       longLivedTokenData,
       profile,

@@ -35,6 +35,7 @@ export async function GET(req) {
 
   const workspaceId = state.workspaceId || resolveDefaultWorkspaceId();
   const brandHandle = state.brandHandle || "moon.classin";
+  const brandKey = state.brandKey || null;
   const returnPath =
     typeof state.returnPath === "string" &&
     state.returnPath.startsWith("/") &&
@@ -77,7 +78,7 @@ export async function GET(req) {
       brandHandle,
       profile,
     });
-    if (rejected) {
+    if (rejected || profileMatch !== true || !profile?.id) {
       target.searchParams.set("instagram", "account-mismatch");
       return NextResponse.redirect(target);
     }
@@ -85,6 +86,7 @@ export async function GET(req) {
     const saved = assertPersistedSocialConnection(await saveInstagramApiConnection({
       workspaceId,
       brandHandle,
+      brandKey,
       tokenData,
       longLivedTokenData,
       profile,

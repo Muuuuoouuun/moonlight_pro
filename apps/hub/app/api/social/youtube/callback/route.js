@@ -51,11 +51,11 @@ export async function GET(req) {
       workspaceId: state.workspaceId,
       token,
       channel,
+      brandKey: state.brandKey || null,
     }));
     target.searchParams.set("youtube", "connected");
   } catch (error) {
     const known = new Set([
-      "youtube-existing-channel-mismatch",
       "youtube-offline-grant-missing",
       "youtube-required-scope-missing",
       "youtube-channel-not-found",

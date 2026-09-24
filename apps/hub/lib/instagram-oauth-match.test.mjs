@@ -31,3 +31,15 @@ test("Instagram matching username proceeds without a failure record", async () =
   assert.deepEqual(result, { profileMatch: true, rejected: false });
   assert.equal(recordCount, 0);
 });
+
+test("Instagram rejects a profile with no verified username or app-scoped ID", async () => {
+  const records = [];
+  const result = await checkInstagramApiProfileMatch({
+    workspaceId: "workspace-1",
+    brandHandle: "ml_bridgemaker",
+    profile: { username: "ml_bridgemaker" },
+    recordSync: async (record) => { records.push(record); },
+  });
+  assert.equal(result.rejected, true);
+  assert.equal(records[0].status, "failure");
+});

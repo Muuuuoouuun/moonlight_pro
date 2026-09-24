@@ -94,14 +94,15 @@ export async function upsertIntegrationConnection(input: IntegrationConnectionIn
   const record = {
     workspace_id: workspaceId,
     provider: input.provider,
+    account_key: "",
     status: input.status,
     config: input.config || {},
     last_synced_at: input.lastSyncedAt || null,
   };
 
-  // One round trip: INSERT ... ON CONFLICT (workspace_id, provider) DO UPDATE.
+  // Non-social providers keep one row per workspace/provider at account_key=''.
   const result = await upsertSupabaseRecords("integration_connections", record, {
-    onConflict: "workspace_id,provider",
+    onConflict: "workspace_id,provider,account_key",
     returnRepresentation: true,
     select: CONNECTION_SELECT,
   });
