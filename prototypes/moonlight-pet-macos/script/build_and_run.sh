@@ -12,11 +12,19 @@ APP_BINARY="$APP_CONTENTS/MacOS/$APP_NAME"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 swift build -j 2 --package-path "$ROOT_DIR"
-BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --show-bin-path)/$APP_NAME"
+BUILD_DIR="$(swift build --package-path "$ROOT_DIR" --show-bin-path)"
+BUILD_BINARY="$BUILD_DIR/$APP_NAME"
+RESOURCE_BUNDLE="$BUILD_DIR/${APP_NAME}_${APP_NAME}.bundle"
+
+if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
+  echo "missing SwiftPM resource bundle: $RESOURCE_BUNDLE" >&2
+  exit 1
+fi
 
 rm -rf "$APP_BUNDLE"
-mkdir -p "$APP_CONTENTS/MacOS"
+mkdir -p "$APP_CONTENTS/MacOS" "$APP_CONTENTS/Resources"
 cp "$BUILD_BINARY" "$APP_BINARY"
+cp -R "$RESOURCE_BUNDLE" "$APP_CONTENTS/Resources/"
 chmod +x "$APP_BINARY"
 cat > "$APP_CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
