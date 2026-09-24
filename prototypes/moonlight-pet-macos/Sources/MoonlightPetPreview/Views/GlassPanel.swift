@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 final class GlassPanel: NSView {
     static func host<Content: View>(_ content: Content, cornerRadius: CGFloat, ornament: AnyView? = nil) -> NSView {
-        let host = FirstMouseHostingView(rootView: content.environment(\.colorScheme, .light))
+        let host = FirstMouseHostingView(rootView: content.modifier(GlassContentLegibility()).environment(\.colorScheme, .light))
         host.sizingOptions = []
         host.focusRingType = .none
         let accessory = ornament.map { view -> NSView in
@@ -29,9 +29,8 @@ final class GlassPanel: NSView {
         rim = makeOpticalRim(radius: cornerRadius)
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
-            // The approved floating surfaces use neutral silver glass. Regular retains
-            // native contrast adaptation on both bright and dark desktop backgrounds.
-            glass.style = .regular
+            // Clear is the requested default; regular is reserved for accessibility.
+            glass.style = .clear
             glass.appearance = NSAppearance(named: .aqua)
             glass.cornerRadius = cornerRadius
             glass.contentView = content
@@ -64,7 +63,21 @@ final class GlassPanel: NSView {
         if let fallbackContent { addSubview(fallbackContent) }
         addSubview(rim)
         if let ornament { addSubview(ornament) }
+        updateMaterialAccessibility()
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(updateMaterialAccessibility),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
     }
+
+    @objc private func updateMaterialAccessibility() {
+        if #available(macOS 26.0, *), let glass = material as? NSGlassEffectView {
+            let accessible = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+                || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+            glass.style = accessible ? .regular : .clear
+            glass.tintColor = nil
+        }
+    }
+
+    deinit { NSWorkspace.shared.notificationCenter.removeObserver(self) }
 
     override func layout() {
         super.layout()

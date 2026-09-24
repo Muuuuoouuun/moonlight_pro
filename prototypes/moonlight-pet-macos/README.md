@@ -55,6 +55,8 @@ swift run MoonlightPetPreview --self-check
 
 ### Optical glass comparison
 
-The floating panels now pair native regular glass with a Metal optical rim (curved bevel lighting, a fine edge, transparent center). The Metal pipeline is cached and redraws only for changes; a native/Core Animation fallback remains available. See [research and implementation limits](design/glass-optics-research.md).
+The floating panels now pair native clear glass with a Metal optical rim (curved bevel lighting, a fine edge, transparent center). The Metal pipeline is cached and redraws only for changes; a native/Core Animation fallback remains available. See [research and implementation limits](design/glass-optics-research.md).
 
 Run `./script/build_and_run.sh --glass-lab` for the optional native-vs-Metal material comparison. The sliders affect the custom material on the right; the calibration backgrounds belong to the app. Normal launch keeps the pet-only experience. `swift run -j 2 MoonlightPetPreview --self-check` also checks real GPU output for edge clipping, premultiplied alpha, Retina geometry and refractive displacement.
+
+The default is clear glass (2026-09-25 correction). Reduce Transparency / Increase Contrast select regular glass. The lab has no white luminance floor or center blur; content uses a small alpha-shaped readability halo.

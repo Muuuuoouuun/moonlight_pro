@@ -56,3 +56,10 @@ macOS 14~25 폴백, 밝은 OS 외관으로 변경한 상태, VoiceOver 전체 �
 - Native CUA verification: one-click quick panel and double-click perched widget each accept the first typed character; memo switches wide and schedule switches tall; Escape returns to the original portrait. Temporary test characters were removed and the user's existing task was preserved.
 - Native CUA comparison: grid switch and bevel slider change the output. A clipboard timeout exposed missing Cocoa edit-menu routing in the accessory app; adding standard responder-chain Edit commands fixed Korean paste and Cmd+A/Delete in the lab.
 - Limits: window-only screenshots do not capture the desktop behind floating panels, so they are not proof of desktop transmission quality. The in-window lab does show its full owned background. No claim of screenshot-identical quality or measured FPS is made. macOS Reduce Transparency/Increase Contrast are respected by the custom shader and native material; system preferences were not changed during QA.
+
+
+## Clear material correction — 2026-09-25
+
+User rejected the milky appearance. Floating panels now default to NSGlassEffectView.clear (regular only for Reduce Transparency/Increase Contrast). The custom lab removes its whole-panel white floor and center blur. The earlier contrast-compression choice above is superseded. Content gets a one-point alpha-shaped halo; the glass itself has no added white sheet.
+
+GPU backdrop-preservation test failed against the previous implementation (75.42/255 mean drift), passed after correction (0.00/255). Native comparison inspection confirms transmitted background patterns and working input. A transparent panel over a plain white background naturally remains white; its appearance must be judged over the actual background, not a window-only screenshot that omits the desktop.

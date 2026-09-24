@@ -41,12 +41,31 @@ enum GlassOpticsCheck {
         guard changedEdge > 100, Array(flat[center..<center+4]) == Array(bent[center..<center+4]) else {
             fputs("Glass refraction must displace the edge and preserve the flat center\n",stderr); return false
         }
+        // Clear material must transmit backdrop luminance, not remap dark folds
+        // into an opaque-looking white floor. Compare matching scene coordinates.
+        u.material.w = 0
+        guard let clear = renderer.pixels(u,width: width,height: height) else { return false }
+        var deviation = 0.0
+        var channels = 0
+        for y in stride(from: 60, through: 180, by: 8) {
+            for x in stride(from: 216, through: 264, by: 4) {
+                for channel in 0..<3 {
+                    deviation += Double(abs(Int(clear[(y*width+x)*4+channel]) - Int(clear[(y*width+x-160)*4+channel])))
+                    channels += 1
+                }
+            }
+        }
+        let meanDeviation = deviation / Double(channels)
+        guard meanDeviation < 12 else {
+            fputs("Clear material whitens the backdrop: mean RGB drift \(meanDeviation) / 255\n",stderr)
+            return false
+        }
         // A backing-scale change should preserve point geometry and clipping.
         u.viewport = SIMD4(320,240,2,0)
         u.rect = SIMD4(10,10,300,220)
         guard let retina = renderer.pixels(u,width: 640,height: 480),
               retina[(240*640+320)*4+3] == 0, retina[(20*640+20)*4+3] == 0 else { return false }
-        print("PASS: Metal compilation/render, premultiplied transparent rim, Retina geometry, edge refraction (\(changedEdge) displaced pixels), stable center")
+        print("PASS: Metal compilation/render, premultiplied transparent rim, Retina geometry, edge refraction (\(changedEdge) displaced pixels), stable center, clear backdrop drift \(String(format: "%.2f", meanDeviation))/255")
         return true
     }
 }

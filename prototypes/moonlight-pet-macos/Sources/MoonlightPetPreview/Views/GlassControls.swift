@@ -2,6 +2,17 @@ import AppKit
 import OSLog
 import SwiftUI
 
+/// A glyph-sized halo keeps text discoverable over busy clear backgrounds.
+/// It follows content alpha; it never fills the glass panel with a white sheet.
+struct GlassContentLegibility: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    func body(content: Content) -> some View {
+        content.shadow(color: Palette.glassLight.opacity(reduceTransparency || contrast == .increased ? 0 : 0.85),
+                       radius: 1)
+    }
+}
+
 /// A thin control layer on the shared material, without another glass surface.
 struct GlassActionStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
