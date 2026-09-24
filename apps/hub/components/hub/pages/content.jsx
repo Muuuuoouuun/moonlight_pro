@@ -4,7 +4,7 @@ import { GoalLinks } from '../goal-links';
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, IconButton, Progress, Tabs, Kbd, SectionTitle, EmptyState, Skeleton, Avatar, SyncBadge, TextField, TextAreaField, SelectField } from "../hub-primitives";
+import { Badge, Dot, Card, Button, IconButton, Progress, Tabs, Kbd, SectionTitle, EmptyState, Skeleton, SegmentedControl, Avatar, SyncBadge, TextField, TextAreaField, SelectField } from "../hub-primitives";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 import { ContentStudio } from "./content-studio";
@@ -220,6 +220,7 @@ export function Queue({ workspace }) {
   const [tab, setTab] = React.useState('all');
   const [brandFilter, setBrandFilter] = React.useState(() => searchParams.get('brand') || 'all');
   const [page, setPage] = React.useState(1);
+  const [sidePanel, setSidePanel] = React.useState('cadence');
   const ledger = useContentLedger();
   const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
   const queue = filterContentByWorkspace(ledger.queue || [], workspace);
@@ -264,8 +265,16 @@ export function Queue({ workspace }) {
         <div className="content-queue-split">
           <ContentIdeaCapture brands={brands} initialBrand={selectedBrand?.id || ''} orgScope={workspace === 'classin' ? 'company' : 'personal'} fixedScope={Boolean(ws)} onSaved={() => setTab('idea')} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-            <ContentCadencePanel cadence={ledger.cadence} syncState={ledger.syncState} />
-            <ContentTagTrendPanel tagTrends={ledger.tagTrends} syncState={ledger.syncState} />
+            <SegmentedControl
+              label="사이드 패널 선택"
+              options={[{ key: 'cadence', label: '발행 리듬' }, { key: 'tags', label: '최근 태그' }]}
+              value={sidePanel}
+              onChange={setSidePanel}
+              fill
+            />
+            {sidePanel === 'cadence'
+              ? <ContentCadencePanel cadence={ledger.cadence} syncState={ledger.syncState} />
+              : <ContentTagTrendPanel tagTrends={ledger.tagTrends} syncState={ledger.syncState} />}
           </div>
         </div>
       )}
