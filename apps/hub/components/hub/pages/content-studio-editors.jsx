@@ -64,8 +64,9 @@ export function ResultPreview({ body, type }) {
     <p className="studio-muted">{scene.visual}</p><p>{scene.spoken}</p>
     {scene.subtitle && <blockquote>{scene.subtitle}</blockquote>}
   </article>)}</div>;
-  if (type === 'x_thread' || type === 'social_post') return <div className="studio-thread-preview">{body.split(/\n\s*\n/).filter(Boolean).map((part, i) => <article key={i}>
-    <span className="studio-thread-number">{i + 1}</span><p>{part}</p>
+  // Threads·X는 빈 줄이 이어지는 글의 경계다(엔진 계약: 'Blank lines separate thread blocks').
+  if (['threads_post', 'x_thread', 'social_post'].includes(type)) return <div className="studio-thread-preview">{body.split(/\n\s*\n/).filter(Boolean).map((part, i) => <article key={i}>
+    <span className="studio-thread-number num">{i + 1}</span><p>{part}</p>
   </article>)}</div>;
   // Render text directly: user or model markdown never becomes untrusted HTML.
   return <article className="studio-article-preview">{body.split(/\n\s*\n/).map((part, i) => {
@@ -88,12 +89,9 @@ export function DraftEditor({ draft, edit, disabled, onSelect }) {
     {view === 'preview' ? <ResultPreview body={draft.body} type={draft.variantType} /> : structured
       ? <StructuredEditor draft={draft} disabled={disabled} onChange={(body) => edit({ body })} />
       : <TextAreaField aria-label="본문" placeholder={draft.channel === 'threads' ? '생각을 짧은 글로 시작해보세요.\n\n빈 줄로 연결할 글을 나눌 수 있습니다.' : '초안을 직접 작성하거나 원문·기획에서 AI로 시작해보세요.'}
-          className="studio-body-input" rows={16} value={draft.body} disabled={disabled || !supported}
+          className="studio-body-input" rows={8} autoResize value={draft.body} disabled={disabled || !supported}
           onChange={(event) => edit({ body: event.target.value })}
           onSelect={(event) => onSelect({ start: event.target.selectionStart, end: event.target.selectionEnd, body: draft.body })} />}
-    <div className="studio-row studio-muted studio-small">
-      <span>{structured ? '구조를 유지해 저장합니다.' : '문장을 선택하면 그 부분만 AI로 다듬을 수 있습니다.'}</span>
-      {!structured && <span className="mono">{chars.toLocaleString()}자</span>}
-    </div>
+    {!structured && <div className="studio-row studio-muted studio-small studio-body-meta"><span className="mono">{chars.toLocaleString()}자</span></div>}
   </div>;
 }

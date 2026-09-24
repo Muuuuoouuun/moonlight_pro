@@ -113,7 +113,7 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
         <div className="studio-stack studio-source-fields">
           <SelectField label="템플릿" options={templateOptions} value={templateId} disabled={generating || templates?.status !== 'live'} onChange={(event) => onPickTemplate?.(event.target.value)} />
           {['preview', 'error'].includes(templates?.status) && <p role="status" className="studio-muted studio-small">
-            {templates.status === 'preview' ? '템플릿 저장소 연결이 필요합니다. 요청은 이번 작업에만 쓸 수 있습니다.' : templates.message}
+            {templates.status === 'preview' ? (templates.message || '템플릿 저장소 연결이 필요합니다.') + ' 요청은 이번 작업에만 쓸 수 있습니다.' : templates.message}
             {templates.status === 'error' && <> <Button size="xs" onClick={templates.reload}>다시 불러오기</Button></>}
           </p>}
           <TextAreaField label="AI에게 부탁할 것" hint="구성·길이·말투·강조를 적어 주세요. 여기 적은 사실·수치는 근거로 쓰지 않습니다 — 근거는 원문 메모에." placeholder="예: 첫 줄은 질문으로, 세 문단 이내, 반말, 마지막 줄은 한 줄 결론"
@@ -162,7 +162,7 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
           {!structured && state.run.operation !== 'repurpose' ? <ChangePreview before={source?.selectionText || source?.body || draft.sourceIdea} after={candidate.body} /> : <ResultPreview body={candidate.body} type={candidate.variantType} />}
           {candidate.missing?.length > 0 && <div className="studio-missing"><strong>확인이 필요한 내용</strong><ul>{candidate.missing.map((missing, i) => <li key={i}>{missing}</li>)}</ul></div>}
           <div className="studio-actions">
-            {state.run.operation !== 'repurpose' && <Button variant="primary" disabled={!state.persisted || stale || busy || generating || !!recovery} onClick={() => apply(candidate, 'replace')}>이 후보 적용</Button>}
+            {state.run.operation !== 'repurpose' && <Button variant={candidates.length > 1 ? 'outline' : 'primary'} disabled={!state.persisted || stale || busy || generating || !!recovery} onClick={() => apply(candidate, 'replace')}>이 후보 적용</Button>}
             <Button variant={state.run.operation === 'repurpose' ? 'primary' : 'outline'} disabled={!state.persisted || stale || busy || generating || !!recovery || Boolean(source?.prefix || source?.suffix)} onClick={() => apply(candidate, 'new_variant')}>새 결과물로 저장</Button>
           </div>
           {source && (source.prefix || source.suffix) && <details className="studio-source-compare"><summary>적용 후 전체 글 보기</summary><pre>{previewCandidate(source, candidate)}</pre></details>}
