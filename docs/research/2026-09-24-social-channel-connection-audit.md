@@ -6,7 +6,8 @@
 
 ### 2026-09-24 연결 진행 현황
 
-- Meta `Moonlight` 앱의 Threads·Instagram 게시 권한과 임시 HTTPS 터널 콜백을 등록했다. `@ml_bridgemaker`의 두 테스터 초대를 수락하고 각 OAuth를 승인했다. 로컬 Hub 상태 API는 Threads·Instagram 각각 `connected`·계정명 `ml_bridgemaker`를 반환한다. `@politic_officer`는 양쪽 초대가 대기 중이며 현재 Chrome에 로그인 세션이 없어 계정 로그인 대기 중이다.
+- Meta `Moonlight` 앱의 Threads·Instagram 게시 권한과 임시 HTTPS 터널 콜백을 등록했다. `@ml_bridgemaker`의 두 테스터 초대를 수락하고 각 OAuth를 승인했다. 로컬 Hub 상태 API는 Threads·Instagram 각각 `connected`·계정명 `ml_bridgemaker`를 반환한다. `@politic_officer`는 별도 `도정치` Chrome 프로필에서 Instagram·Threads 본인 로그인과 Instagram 프로페셔널 대시보드를 확인했다. 두 테스터 초대는 아직 대기 중이며 OAuth는 연결되지 않았다.
+- `Classin Korea` 비즈니스가 관리하는 기존 `Classmooni` Meta 앱(상위 앱 ID `1261817029101418`)을 확인했다. Instagram 제품 앱 ID는 `940095648854296`, Threads 제품 앱 ID는 `1035066519184986`이다. 앱은 미게시 개발 상태이고 두 제품의 테스터 목록과 OAuth 리디렉션 콜백이 비어 있다. Instagram `instagram_business_basic`은 테스트 준비 완료, `instagram_business_content_publish`는 앱 검수 추가 전 상태이고 Threads `threads_basic`·`threads_content_publish`는 테스트 준비 완료로 표시된다. 회사 앱으로 활용할 수 있지만 현재 Moonlight 서버는 제품별 앱 자격증명을 하나씩만 선택하므로 다중 앱 지원과 앱별 연결 구분이 선행돼야 한다.
 - 개인 Google 계정 `seoulmentoss@gmail.com`의 Cloud 프로젝트 `moonlight-youtube-509603`에서 Data API v3·읽기/업로드 범위·웹 OAuth 클라이언트를 설정했다. `22세기 유목민`, `문군`, `기독밈`을 각 채널로 별도 승인했다. 로컬 Hub 상태 API는 세 채널 모두 정확한 채널 ID·갱신 토큰을 반환한다. Testing 갱신 토큰은 2026-10-01에 각각 만료 예정이다. `classin.com`의 기존 클라이언트 확인은 별도 재인증 대기 중이며 이 YouTube 전용 클라이언트와 무관하다.
 - Moonlight에 YouTube 전용 OAuth 연결 경로를 추가했다(`548c4ba8`, `ac30afb1`). 계정별 연결 구조와 상태 API를 적용하고 서울 운영 DB에 `20260924_0046_social_multiaccount_connections.sql`을 기록했다. 적용 전후 연결 9건, `22세기 유목민`의 동일한 연결 ID·채널 ID와 갱신 토큰을 확인했다. 게시·업로드 코드는 포함하지 않는다. Instagram의 OAuth 승인 계정이 요청 브랜드와 다르면 저장을 거부하도록 수정했다(`898bff59`).
 
@@ -18,8 +19,8 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 
 | 대상 | 확인된 계정·자산 | 현재 접근 | Moonlight API 연결 |
 |---|---|---|---|
-| Threads | `@ml_bridgemaker`, `@politic_officer` | 두 계정의 본인 게시 UI를 앞선 조사에서 확인. 현재 브라우저는 `@ml_bridgemaker` 로그인 | `@ml_bridgemaker` 1건 |
-| Instagram | `@ml_bridgemaker`, `@politic_officer` | 두 계정의 프로페셔널 대시보드를 앞선 조사에서 확인. 현재 브라우저는 `@ml_bridgemaker` 로그인 | `@ml_bridgemaker` 1건 |
+| Threads | `@ml_bridgemaker`, `@politic_officer`, `@moon.classin` | 각각 해당 Chrome 프로필에서 본인 프로필 확인. `@politic_officer` 초대 대기 | `@ml_bridgemaker` 1건 |
+| Instagram | `@ml_bridgemaker`, `@politic_officer`, `@moon.classin` | `@politic_officer`·`@moon.classin` 본인 프로필과 프로페셔널 대시보드 확인. `@politic_officer` 초대 대기 | `@ml_bridgemaker` 1건 |
 | Instagram 추가 | `@go_re_startagain` | 전환 시 비밀번호 요구 | 없음 |
 | Instagram DB 링크 | HolyFunCollector | 브랜드 메타데이터에 링크만 있음. 현재 브라우저 게시 권한 미확인 | 없음 |
 | YouTube Studio | 기독밈, 문군, 22세기 유목민, 클래스인 문, ClassIn KR | 다섯 채널의 Studio·권한 화면에 해당 로그인 계정이 각각 `소유자`로 표시. 개인 세 채널은 OAuth 반환 ID까지 확인 | 개인 3채널 |
@@ -32,11 +33,12 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 ### Meta Threads·Instagram
 
 1. 로컬 Hub 상태 API는 Threads·Instagram 모두 `connected`이며 앱 ID·시크릿·OAuth state 비밀키가 설정됐다. `@ml_bridgemaker`의 두 계정이 반환된다.
-2. `Moonlight` Meta 앱의 Threads·Instagram 게시 권한과 HTTPS 콜백은 등록됐다. `@ml_bridgemaker`의 두 초대 수락·OAuth 승인이 완료됐다. `@politic_officer` 두 플랫폼 초대와 OAuth가 남았으며 현재 브라우저 로그인부터 필요하다. Threads OAuth의 진입 URL은 `www.threads.com`으로 수정했다.
+2. `Moonlight` Meta 앱의 Threads·Instagram 게시 권한과 HTTPS 콜백은 등록됐다. `@ml_bridgemaker`의 두 초대 수락·OAuth 승인이 완료됐다. `@politic_officer`는 별도 Chrome에서 로그인됐고 두 플랫폼 초대 수락·OAuth가 남았다. Threads OAuth의 진입 URL은 `www.threads.com`으로 수정했다.
 3. Meta가 로컬 HTTP 콜백을 거부해 파일럿용 임시 HTTPS 터널을 쓴다. 운영 연결에는 안정적인 공개 HTTPS Hub 주소와 배포 환경 변수가 필요하다.
-4. 로컬 파일럿 브랜드 핸들을 `ml_bridgemaker`로 설정했다. 다른 브랜드를 연결할 때는 올바른 핸들을 명시해야 하며, Threads·Instagram 모두 계정명이 다르면 저장을 거부한다.
+4. 로컬 파일럿 브랜드 핸들을 `ml_bridgemaker`로 설정했다. 연결 경로는 `brand`와 `brandKey`를 명시할 수 있고 서명된 state와 실제 `/me` 계정명을 대조한다. 브랜드 키는 핸들과 다르다: `@politic_officer`는 `politicofficer`, `@ml_bridgemaker`는 `bridgemaker`, `@moon.classin`은 `classmoon`이다.
 5. 서울 운영 DB는 `account_key`와 `(workspace_id, provider, account_key)` 고유 제약으로 확장됐다. 상태 API는 계정 목록을 반환하고 OAuth 저장은 실제 외부 계정 ID를 키로 사용한다. Settings의 계정별 선택 UI와 게시 대상 브랜드 매핑은 아직 없다.
 6. 장기 토큰 갱신 함수는 있으나 자동 실행 경로가 없다. 연결 뒤 만료 전 갱신·실패 표시가 필요하다.
+7. 회사 소유 앱 `Classmooni`의 Instagram·Threads 이용 사례는 있지만 테스터·두 제품의 OAuth 콜백 설정이 비어 있다. 기존 Moonlight 개인 앱과 병행하려면 앱별 ID·시크릿 선택, 서명된 state의 앱 식별자, DB 연결의 앱 식별자, 앱별 해제·삭제 콜백 검증이 필요하다. 별도 Chrome 프로필만으로 앱 시크릿과 토큰은 분리되지 않는다.
 
 ### YouTube
 
@@ -59,7 +61,7 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 
 ## 구현 순서 제안
 
-1. `@politic_officer`로 Instagram·Threads에 로그인하고 남은 Meta 테스터 초대 2건을 수락한 뒤 각 OAuth 연결·반환 계정명을 확인한다. 두 앱 시크릿은 로컬에 설정됐다.
+1. `@politic_officer`는 별도 Chrome에 로그인됐다. 개인 앱을 재사용할지 Politic 전용 Meta 앱을 만들지 결정한 뒤 해당 앱의 테스터 초대·OAuth와 반환 계정명을 확인한다. 초대 수락에는 Meta 약관·테스터 활동 동의가 표시된다.
 2. `@ml_bridgemaker`의 Threads·Instagram과 개인 YouTube 3채널은 OAuth 연결됐다. 각 계정의 브랜드 매핑과 만료 전 토큰 갱신을 구현한다. 이 단계에서 게시하지 않는다.
 3. 회사 YouTube `클래스인 문`·`ClassIn KR`은 각 Google 계정을 선택해 미검증 앱 경고까지 도달했다. 회사 채널 권한 부여 확인 뒤 실제 OAuth 채널 선택 목록과 반환 채널 ID로 별도 확인한다.
 4. 이미지 렌더·미디어 보관, 버전별 검토, 게시 큐·중복 방지·성공 URL 확인을 구현한 뒤 실제 게시를 별도 검증한다.
