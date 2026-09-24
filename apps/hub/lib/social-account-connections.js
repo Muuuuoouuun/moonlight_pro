@@ -24,7 +24,7 @@ export async function resolveSocialBrandKey(workspaceId, brandKey) {
   return brandKey;
 }
 
-export async function listSocialAccountConnections(provider, workspaceId, accountId = "") {
+export async function listSocialAccountConnections(provider, workspaceId, accountId = "", offset = 0) {
   if (!workspaceId) return { connections: [], available: false };
   const filters = [
     ["workspace_id", `eq.${workspaceId}`],
@@ -33,8 +33,9 @@ export async function listSocialAccountConnections(provider, workspaceId, accoun
   if (accountId) filters.push(["account_key", `eq.${accountId}`]);
   const result = await fetchSupabaseRowsDetailed("integration_connections", {
     filters,
-    order: "created_at.desc",
+    order: "created_at.desc,id.desc",
     limit: accountId ? 1 : 100,
+    offset,
   });
   return {
     connections: result.rows || [],
@@ -48,11 +49,15 @@ export async function resolveExpectedSocialAccountId({ provider, workspaceId, ha
     (accountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(accountId))) {
     throw new Error("social-account-mismatch");
   }
-  const { connections, available } = await listSocialAccountConnections(provider, workspaceId);
-  if (!available) throw new Error("social-account-read-failed");
-  const matches = connections.filter((row) =>
-    row.config?.username?.trim().replace(/^@+/, "").toLowerCase() === expectedHandle);
-  if (matches.length > 1) throw new Error("social-account-ambiguous");
+  const matches = [];
+  for (let offset = 0; ; offset += 100) {
+    const { connections, available } = await listSocialAccountConnections(provider, workspaceId, "", offset);
+    if (!available) throw new Error("social-account-read-failed");
+    matches.push(...connections.filter((row) =>
+      row.config?.username?.trim().replace(/^@+/, "").toLowerCase() === expectedHandle));
+    if (matches.length > 1) throw new Error("social-account-ambiguous");
+    if (connections.length < 100) break;
+  }
   const match = matches[0] || null;
   if (accountId != null && (!match || match.account_key !== accountId)) {
     throw new Error("social-account-mismatch");

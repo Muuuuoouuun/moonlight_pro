@@ -170,3 +170,34 @@ test("OAuth connect binds an existing handle to its verified account ID", async 
     accountId: "ig-2",
   }), /social-account-mismatch/);
 });
+
+test("OAuth connect finds an existing account beyond the first 100 connections", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  const rows = [
+    ...Array.from({ length: 100 }, (_, index) => ({
+      account_key: `other-${index}`,
+      config: { username: `other_${index}`, brandKey: "other" },
+    })),
+    { account_key: "ig-original", config: { username: "moon.classin", brandKey: "classmoon" } },
+  ];
+  const offsets = [];
+  globalThis.fetch = async (url) => {
+    const params = new URL(url).searchParams;
+    assert.equal(params.get("provider"), "eq.instagram_api");
+    assert.equal(params.get("workspace_id"), "eq.workspace-1");
+    const offset = Number(params.get("offset") || 0);
+    offsets.push(offset);
+    return {
+      ok: true, status: 200,
+      text: async () => JSON.stringify(rows.slice(offset, offset + 100)),
+      headers: { get: () => null },
+    };
+  };
+
+  assert.equal(await resolveExpectedSocialAccountId({
+    provider: "instagram_api", workspaceId: "workspace-1", handle: "moon.classin",
+    brandKey: "classmoon",
+  }), "ig-original");
+  assert.deepEqual(offsets, [0, 100]);
+});

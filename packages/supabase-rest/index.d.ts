@@ -9,6 +9,7 @@ export interface SupabaseQueryOptions {
   select?: string;
   filters?: SupabaseFilter[];
   limit?: number;
+  offset?: number;
   order?: string;
   timeoutMs?: number;
   /** Set false to bypass in-flight GET dedup for this call. */
