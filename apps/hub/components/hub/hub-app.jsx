@@ -226,6 +226,8 @@ const PAGE_MAP = {
   'dashboard/content/studio': () => <Studio />,
   'dashboard/content/queue': () => <Queue />,
   'dashboard/content/campaigns': () => <Campaigns />,
+  // 영업·매출 탭은 오늘 연락·고객·거래·문의 넷이다(2026-09-24). 개요·히트맵·Leads·Accounts·Cases는
+  // 탭에서 내려왔지만 라우트는 그대로 남아 ⌘K·북마크·딥링크로 열린다(hub-nav.js REVENUE_ROUTE_TABS).
   'dashboard/revenue/overview': (n) => <RevenueOverview onNavigate={n} />,
   'dashboard/revenue/customers': (n) => <Customers onNavigate={n} />,
   'dashboard/revenue/heatmap': (n) => <RevenueHeatmap onNavigate={n} />,
@@ -268,7 +270,8 @@ const PARENT_JUMP = {
   'dashboard': 'dashboard/daily-brief',
   'dashboard/work': 'dashboard/work/projects',
   'dashboard/content': 'dashboard/content/queue',
-  'dashboard/revenue': 'dashboard/revenue/overview',
+  // 영업·매출의 첫 탭은 오늘 연락이다(2026-09-24 4탭 재구성) — 개요는 탭에서 내려가 ⌘K로만 연다.
+  'dashboard/revenue': 'dashboard/revenue/followups',
   'dashboard/agents': 'dashboard/agents/chat',
   'dashboard/classin': 'dashboard/classin/pipeline',
   'dashboard/brand': 'dashboard/brand/projects',

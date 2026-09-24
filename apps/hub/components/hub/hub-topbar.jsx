@@ -12,7 +12,7 @@ const LABELS = {
   'classin': '클래스인', 'brand': '브랜드', 'pipeline': '업무·파이프라인', 'segments': '세그먼트',
   'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': 'Decisions', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
   'content': 'Content', 'studio': 'Studio', 'queue': 'Queue', 'campaigns': 'Campaigns',
-  'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts', 'followups': 'Follow-ups',
+  'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts', 'followups': '오늘 연락',
   'automations': 'Automations', 'flows': 'Flows', 'email': 'Email', 'webhooks': 'Webhooks', 'runs': 'Runs',
   'agents': 'Agents', 'chat': 'Chat', 'council': 'Council', 'orders': 'Orders',
   'evolution': 'Evolution', 'settings': 'Settings',
@@ -27,11 +27,14 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
   const deferredMenuRef = React.useRef(null);
   const segments = path.split('/').filter(Boolean);
   const navigation = topNavigationForRoute(path, scope, view);
-  const pageLabel = navigation.activeTab?.label
+  // routeLabel — 탭에서 내려온 화면(Leads·Cases 등)의 제목. 가장 가까운 탭이 켜져도 제목은
+  // 그 화면의 이름으로 두고, 켤 탭이 없어도 "영업·매출 › Cases"로 한 칸 위를 유지한다.
+  const pageLabel = navigation.routeLabel
+    || navigation.activeTab?.label
     || navigation.anchor?.label
     || LABELS[segments[segments.length - 1]]
     || segments[segments.length - 1];
-  const sectionLabel = navigation.activeTab ? navigation.anchor?.label : 'Moonlight';
+  const sectionLabel = (navigation.activeTab || navigation.routeLabel) ? navigation.anchor?.label : 'Moonlight';
   const now = new Date();
   const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
   const m = now.getMonth() + 1, d = now.getDate();
@@ -101,8 +104,8 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
 
         {/* Office (⌘J) — 2026-09-23 운영자 확정 */}
         <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="Office (⌘J)" onClick={onOfficeOpen} />
-        {/* 보류 스코프(Agents) 상시 버튼 제거 — 코어 루프(고객 연락)가 그 자리를 갖는다. */}
-        <IconButton className="hub-topbar__secondary" icon="signal" tooltip="고객 연락 열기" onClick={() => onNavigate('dashboard/revenue/followups')} />
+        {/* 보류 스코프(Agents) 상시 버튼 제거 — 코어 루프(오늘 연락, 영업·매출 첫 탭)가 그 자리를 갖는다. */}
+        <IconButton className="hub-topbar__secondary" icon="signal" tooltip="오늘 연락 열기" onClick={() => onNavigate('dashboard/revenue/followups')} />
         <IconButton
           icon={themePreference === 'auto' ? 'clock' : theme === 'dark' ? 'moon' : 'sun'}
           tooltip={themePreference === 'auto'
