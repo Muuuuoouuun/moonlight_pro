@@ -39,6 +39,7 @@ export type TaskFocusToggle = { on: boolean; date: string | null };
 const PROJECT_STATUSES = new Set(["draft", "active", "blocked", "completed", "archived"]);
 const TASK_STATUSES = new Set(["inbox", "todo", "doing", "blocked", "done"]);
 const PRIORITIES = new Set(["low", "medium", "high", "critical"]);
+const PROJECT_GENRES = new Set(["company", "sales", "it", "content", "other"]);
 // PMS container (brand) taxonomy — mirrors the Hub 2026-07-15 spec §4.1.
 const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
 const BRAND_ORG_SCOPES = new Set(["classin", "personal"]);
@@ -451,12 +452,19 @@ export function normalizePmsCommand(
       patch.due_at = dueAt.value;
     }
 
+    // 프로젝트 장르(회사·세일즈·IT·콘텐츠·기타) — 목록 모노그램의 은은한 색 구분용 한 키.
+    // null이면 장르 해제. 서비스가 현재 meta와 병합하므로 다른 meta 키는 보존된다.
+    if (has(input, "genre")) {
+      const raw = input.genre === null || input.genre === "" ? null : text(input.genre, 20).toLowerCase();
+      if (raw !== null && !PROJECT_GENRES.has(raw)) return { ok: false, reason: "invalid-genre" };
+      patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), genre: raw };
+    }
     if (has(input, "delivery")) {
       const delivery = parseDelivery(input.delivery);
       if (!delivery) return { ok: false, reason: "invalid-delivery-plan" };
       const issue = validateDelivery(delivery, patch.due_at);
       if (issue) return { ok: false, reason: issue };
-      patch.meta = { delivery };
+      patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), delivery };
     }
     if (has(input, "deliveryEvent")) {
       if (!["start", "prototype", "pause", "resume"].includes(String(input.deliveryEvent))) return { ok: false, reason: "invalid-delivery-event" };

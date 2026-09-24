@@ -69,18 +69,20 @@ export function ProjectStatusBadge({ status, style }) {
 
 // 브랜드 소속 타일은 브랜드 목록과 같은 상징을 쓴다. '전체 브랜드'만 공용 브랜드
 // 아이콘을 사용한다. 저장된 meta.glyph는 건드리지 않고 화면 표현만 교체한다.
-export function BrandMark({ brand, size = 18, active = false, style }) {
+// `tint` = projectGenreTint(project.genre) — only the project index passes it (§15 2026-09-24).
+export function BrandMark({ brand, size = 18, active = false, tint = null, style }) {
   const isIndex = !brand || brand.kind === 'index' || brand.key === 'all';
   return (
     <span
       aria-hidden="true"
+      data-genre={tint || undefined}
       style={{
         width: size, height: size, flexShrink: 0,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: Math.max(4, Math.round(size * 0.26)),
-        background: active ? 'var(--elevated)' : 'var(--surface-3)',
-        border: '1px solid var(--line-soft)',
-        color: active ? 'var(--fg)' : 'var(--fg-muted)',
+        background: tint ? `var(--genre-${tint}-bg)` : active ? 'var(--elevated)' : 'var(--surface-3)',
+        border: `1px solid ${tint ? `var(--genre-${tint}-line)` : 'var(--line-soft)'}`,
+        color: tint ? `var(--genre-${tint}-fg)` : active ? 'var(--fg)' : 'var(--fg-muted)',
         ...style,
       }}
     >

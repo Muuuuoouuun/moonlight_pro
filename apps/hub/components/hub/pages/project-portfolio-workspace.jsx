@@ -11,6 +11,7 @@ import { useProjectIndexControls, ProjectIndexMenu } from './project-index-contr
 import deliveryStyles from "./project-delivery.module.css";
 import { ProjectDeliverySummary } from "./project-delivery";
 import { BrandMark } from "./project-pms-components";
+import { projectGenreLabel, projectGenreTint } from "./project-view-constants";
 import { classifyProjectPortfolio, portfolioWindow } from "./project-pms-metrics";
 import { selectUrgentProjectItems } from '@/lib/project-urgent-items';
 import { buildCurrentMonthProjectPreview } from '@/lib/project-monthly-preview';
@@ -105,10 +106,10 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
 
   const risk = projectRisk(project, window);
   const dday = project.deadlineAlertSuppressed ? null : computeDDay(project.dueAt);
+  const genreLabel = projectGenreLabel(project.genre);
   return (
     <div className={indexStyles.row} data-project-index-id={project.id} data-selected={selected ? "true" : undefined}
       data-dragging={controls.drag?.id === project.id ? 'true' : undefined}
-      data-drop={controls.drag?.id !== project.id && controls.drag?.target?.id === project.id ? controls.drag.target.placement : undefined}
       {...controls.rowEvents(project.id)}>
     <button
       type="button"
@@ -121,8 +122,9 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
       onClick={() => onSelect(project.id)}
     >
       <span className="hub-project-portfolio-index-row__heading">
-        <span className={indexStyles.mark}><BrandMark brand={brand} size={19} active={selected} /></span>
+        <span className={indexStyles.mark} title={genreLabel || undefined}><BrandMark brand={brand} size={19} active={selected} tint={projectGenreTint(project.genre)} /></span>
         <strong title={project.name}>{project.name}</strong>
+        {genreLabel && <span className={indexStyles.srOnly}>{`장르 ${genreLabel}`}</span>}
         <span className="mono">{progress === null ? "—" : `${progress}%`}</span>
       </span>
       <span className="hub-project-portfolio-index-row__progress" aria-hidden="true">
@@ -145,7 +147,7 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
         <span className="mono" title={project.displayProgress?.label}>{progress === null ? '—' : `${progress}%`}</span>
       </span>
     </button>
-    <IconButton className={indexStyles.handle} icon="drag" tooltip={`${project.name} 순서 이동 · 드래그 또는 메뉴의 위아래 이동`}
+    <IconButton className={indexStyles.handle} icon="drag" aria-label={`${project.name} 순서 이동 · 드래그 또는 메뉴의 위아래 이동`}
       data-project-drag-handle="" onClick={event => controls.openMenu(event, 'project', project)} aria-haspopup="menu" />
     <IconButton className={indexStyles.more} icon="more" tooltip={`${project.name} 메뉴`} data-project-menu-trigger=""
       aria-haspopup="menu" aria-expanded={controls.menu?.project?.id === project.id}
@@ -332,7 +334,7 @@ export function ProjectPortfolioWorkspace({
             onChange={onQueryChange}
           />
           <div className={indexStyles.filterBar}>
-            <SegmentedControl label="프로젝트 필터" fill value={activeFilter || 'all'}
+            <SegmentedControl label="프로젝트 필터" value={activeFilter || 'all'}
               options={[{ key: 'all', label: '전체' }, { key: 'active', label: '진행' }, { key: 'blockedOrOverdue', label: '위험' }]}
               onChange={key => onFilterChange(key === 'all' || key === activeFilter ? null : key)} />
             <IconButton className={indexStyles.extraFilter} icon="filter" tooltip="추가 프로젝트 필터" aria-expanded={showFilterPicker}
@@ -353,7 +355,7 @@ export function ProjectPortfolioWorkspace({
           <span role="status">{indexControls.notice}</span>
           <IconButton icon="x" size={24} tooltip="목록 알림 닫기" onClick={indexControls.dismissNotice} />
         </div>}
-        <div ref={indexControls.listRef} className="hub-project-portfolio-index__list scroll-y">
+        <div ref={indexControls.listRef} className={`hub-project-portfolio-index__list scroll-y ${indexStyles.list}`} data-sorting={indexControls.drag ? 'true' : undefined}>
           {projects.length === 0 ? (
             <EmptyState icon={query || activeFilter ? 'search' : 'projects'}
               title={query || activeFilter ? '조건에 맞는 프로젝트 없음' : '프로젝트 없음'}

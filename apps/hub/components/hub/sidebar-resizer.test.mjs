@@ -17,6 +17,7 @@ function mountResizer(width) {
   const shellVars = [];
   const shellAttrs = new Map();
   const commits = [];
+  const collapses = [];
   const shellRef = {
     current: {
       style: { setProperty: (name, value) => shellVars.push([name, value]) },
@@ -26,7 +27,12 @@ function mountResizer(width) {
   };
   let element;
   function Probe() {
-    element = SidebarResizer({ width, shellRef, onCommit: (value) => commits.push(value) });
+    element = SidebarResizer({
+      width,
+      shellRef,
+      onCommit: (value) => commits.push(value),
+      onCollapse: () => collapses.push(true),
+    });
     return element;
   }
   const markup = renderToStaticMarkup(React.createElement(Probe));
@@ -39,7 +45,7 @@ function mountResizer(width) {
     element.props.onKeyDown({ key: name, preventDefault: () => { prevented = true; } });
     return prevented;
   };
-  return { markup, props: element.props, pointer, key, commits, shellVars, shellAttrs };
+  return { markup, props: element.props, pointer, key, commits, collapses, shellVars, shellAttrs };
 }
 
 test("the handle is a keyboard-reachable vertical splitter that names the sidebar it controls", () => {
@@ -119,7 +125,7 @@ test("the shell owns the expanded width and shows the handle only beside the exp
   assert.match(appSource, /ref=\{shellRef\} className="hub-shell"[^>]*'--hub-sidebar-w': `\$\{sidebarWidth\}px`/);
   assert.match(
     appSource,
-    /\{!sidebarCollapsed && !isMobileViewport && \(\s*<SidebarResizer width=\{sidebarWidth\} shellRef=\{shellRef\} onCommit=\{commitSidebarWidth\} \/>/,
+    /\{!sidebarCollapsed && !isMobileViewport && \(\s*<SidebarResizer\s+width=\{sidebarWidth\}\s+shellRef=\{shellRef\}\s+onCommit=\{commitSidebarWidth\}\s+onCollapse=\{collapseSidebar\}\s*\/>/,
   );
   assert.match(sidebarSource, /width: collapsed \? 56 : 'var\(--hub-sidebar-w, 232px\)'/, "collapsed rail stays 56px");
 });
@@ -129,4 +135,60 @@ test("resizer styles: straddles the border, freezes the width transition while d
   assert.match(tokensSource, /\.hub-shell\[data-sidebar-resizing="true"\] \.hub-sidebar-root \{ transition: none; \}/);
   const mobile = tokensSource.match(/@media \(max-width: 900px\) \{[\s\S]*?\.hub-desktop-sidebar-collapse \{[\s\S]*?\n\}/)?.[0] || "";
   assert.match(mobile, /\.hub-sidebar-resizer \{\s*display: none !important;/, "mobile drawer keeps its fixed width");
+});
+
+test("dragging left past the collapse threshold previews the icon rail and commits collapse on release", () => {
+  const view = mountResizer(232);
+  view.props.onPointerDown(view.pointer(100));
+
+  // Small move left stays expanded
+  view.props.onPointerMove(view.pointer(80));
+  assert.deepEqual(view.shellVars.at(-1), ["--hub-sidebar-w", "212px"]);
+  assert.equal(view.shellAttrs.has("data-sidebar-collapse-preview"), false);
+
+  // Moving past collapseThreshold (140px: startWidth 232 + clientX 0 - startX 100 = 132px)
+  view.props.onPointerMove(view.pointer(0));
+  assert.deepEqual(view.shellVars.at(-1), ["--hub-sidebar-w", `${SIDEBAR_WIDTH.rail}px`]);
+  assert.equal(view.shellAttrs.get("data-sidebar-collapse-preview"), "true");
+  assert.deepEqual(view.collapses, [], "does not commit collapse mid-drag");
+
+  // Release in collapse zone commits collapse and restores the shell width variable to preserved starting width
+  view.props.onPointerUp(view.pointer(0));
+  assert.deepEqual(view.collapses, [true]);
+  assert.deepEqual(view.commits, []);
+  assert.deepEqual(view.shellVars.at(-1), ["--hub-sidebar-w", "232px"]);
+  assert.equal(view.shellAttrs.has("data-sidebar-resizing"), false);
+  assert.equal(view.shellAttrs.has("data-sidebar-collapse-preview"), false);
+});
+
+test("dragging past threshold and then back to the right restores expanded width", () => {
+  const view = mountResizer(232);
+  view.props.onPointerDown(view.pointer(100));
+
+  // Move past threshold into collapse zone
+  view.props.onPointerMove(view.pointer(0));
+  assert.equal(view.shellAttrs.get("data-sidebar-collapse-preview"), "true");
+
+  // Move back right into expanded zone (rawWidth: 232 + 80 - 100 = 212px)
+  view.props.onPointerMove(view.pointer(80));
+  assert.deepEqual(view.shellVars.at(-1), ["--hub-sidebar-w", "212px"]);
+  assert.equal(view.shellAttrs.has("data-sidebar-collapse-preview"), false);
+
+  view.props.onPointerUp(view.pointer(80));
+  assert.deepEqual(view.collapses, []);
+  assert.deepEqual(view.commits, [212]);
+});
+
+test("a cancelled drag past collapse threshold restores starting width without collapsing", () => {
+  const view = mountResizer(232);
+  view.props.onPointerDown(view.pointer(100));
+  view.props.onPointerMove(view.pointer(0));
+  assert.equal(view.shellAttrs.get("data-sidebar-collapse-preview"), "true");
+
+  view.props.onPointerCancel(view.pointer(0));
+  assert.deepEqual(view.shellVars.at(-1), ["--hub-sidebar-w", "232px"]);
+  assert.deepEqual(view.collapses, []);
+  assert.deepEqual(view.commits, []);
+  assert.equal(view.shellAttrs.has("data-sidebar-resizing"), false);
+  assert.equal(view.shellAttrs.has("data-sidebar-collapse-preview"), false);
 });

@@ -16,6 +16,7 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
   const gesture = React.useRef(null);
   const suppressClick = React.useRef(null);
   const listRef = React.useRef(null);
+  const flip = React.useRef(null);
   const preferences = stored.key === storageKey ? stored.value : normalizeProjectIndexPreferences(null);
   const ordered = React.useMemo(() => sortProjectIndex(projects, preferences), [projects, preferences]);
   const latest = React.useRef(null);
@@ -37,10 +38,12 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
   function move(sourceId, targetId, placement) {
     const current = latest.current;
     const ids = current.ordered.map(item => item.id);
-    if (!ids.includes(sourceId) || !ids.includes(targetId) || sourceId === targetId) return;
+    if (!ids.includes(sourceId) || !ids.includes(targetId) || sourceId === targetId) return false;
     const base = normalizeProjectIndexPreferences({ order: [...current.preferences.order, ...current.allProjects.map(item => item.id)] }).order;
     const order = moveProjectIndex(base, ids, sourceId, targetId, placement);
+    snapshot();
     save({ sort: 'manual', order }, '순서 저장됨 · 이 브라우저');
+    return true;
   }
   function openMenu(event, kind, project) {
     event.preventDefault();
@@ -57,21 +60,67 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
     setMenu(null);
     if (restore && element?.isConnected) element.focus({ preventScroll: true });
   }
-  function targetAt(x, y) {
+  // Sortable preview: the lifted row follows the pointer and the rows it passes slide aside,
+  // so the drop slot is visible before release. All of this is direct style on the row
+  // wrappers (they carry no React style prop), never re-rendering the list per frame.
+  function rowElements() {
     const list = listRef.current;
-    const rect = list?.getBoundingClientRect();
-    if (!rect || x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return null;
-    const row = document.elementFromPoint(x, y)?.closest('[data-project-index-id]');
-    if (!row || !list.contains(row)) return null;
-    const rowRect = row.getBoundingClientRect();
-    return { id: row.dataset.projectIndexId, placement: y < rowRect.top + rowRect.height / 2 ? 'before' : 'after' };
+    return list ? [...list.querySelectorAll(':scope > [data-project-index-id]')] : [];
   }
-  function updateTarget() {
+  function activate(state) {
+    const list = listRef.current;
+    if (!list) return;
+    const listTop = list.getBoundingClientRect().top - list.scrollTop;
+    state.rows = rowElements().map(el => {
+      const rect = el.getBoundingClientRect();
+      return { id: el.dataset.projectIndexId, el, top: rect.top - listTop, height: rect.height };
+    });
+    state.from = state.rows.findIndex(row => row.id === state.id);
+    if (state.from < 0) return;
+    state.startScroll = list.scrollTop;
+    state.active = true;
+    setDrag({ id: state.id });
+  }
+  function layout() {
     const state = gesture.current;
-    if (!state?.active) return;
-    state.target = targetAt(state.x, state.y);
-    setDrag(previous => previous?.id === state.id && previous?.target?.id === state.target?.id && previous?.target?.placement === state.target?.placement
-      ? previous : { id: state.id, target: state.target });
+    const list = listRef.current;
+    if (!state?.active || !list || state.from < 0) return;
+    const dragged = state.rows[state.from];
+    const dy = state.y - state.startY + (list.scrollTop - state.startScroll);
+    dragged.el.style.transform = `translate3d(0, ${dy}px, 0)`;
+    const center = dragged.top + dragged.height / 2 + dy;
+    const others = state.rows.filter((_, index) => index !== state.from);
+    const slot = others.filter(row => row.top + row.height / 2 < center).length;
+    state.rows.forEach((row, index) => {
+      if (index === state.from) return;
+      const shift = index > state.from && index <= slot ? -dragged.height : index < state.from && index >= slot ? dragged.height : 0;
+      row.el.style.transform = shift ? `translate3d(0, ${shift}px, 0)` : '';
+    });
+    state.target = slot === state.from ? null
+      : slot < others.length ? { id: others[slot].id, placement: 'before' } : { id: others[others.length - 1].id, placement: 'after' };
+  }
+  function snapshot() {
+    if (flip.current) return;
+    flip.current = new Map(rowElements().map(el => [el.dataset.projectIndexId, el.getBoundingClientRect().top]));
+  }
+  function playFlip() {
+    const before = flip.current;
+    flip.current = null;
+    if (!before) return;
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const moved = [];
+    for (const el of rowElements()) {
+      el.style.transition = 'none';
+      el.style.transform = '';
+      const top = before.get(el.dataset.projectIndexId);
+      const delta = top === undefined ? 0 : top - el.getBoundingClientRect().top;
+      el.style.transform = delta && !reduce ? `translate3d(0, ${delta}px, 0)` : '';
+      if (delta && !reduce) moved.push(el);
+    }
+    if (!moved.length) { rowElements().forEach(el => { el.style.transition = ''; }); return; }
+    // Reading layout flushes the inverted position, so the transition plays from it.
+    moved[0].getBoundingClientRect();
+    for (const el of rowElements()) { el.style.transition = ''; el.style.transform = ''; }
   }
   function finish(commit = false) {
     const state = gesture.current;
@@ -79,9 +128,13 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
     gesture.current = null;
     clearTimeout(state.timer);
     if (state.active) suppressClick.current = state.id;
-    state.element.releasePointerCapture?.(state.pointerId);
+    try { state.element?.releasePointerCapture?.(state.pointerId); } catch { /* already released */ }
     setDrag(null);
-    if (commit && state.active && state.key === latest.current.storageKey && state.target) move(state.id, state.target.id, state.target.placement);
+    if (!state.active) return;
+    snapshot();
+    const moved = commit && state.key === latest.current.storageKey && state.target
+      && move(state.id, state.target.id, state.target.placement);
+    if (!moved) playFlip();
   }
   function pointerDown(event, id) {
     if (event.button !== 0 || !event.isPrimary || event.target.closest('[data-project-menu-trigger]')) return;
@@ -90,13 +143,12 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
     const element = event.target.closest('button');
     const handle = Boolean(event.target.closest('[data-project-drag-handle]'));
     const state = { id, key: storageKey, element, pointerId: event.pointerId, pointerType: event.pointerType, handle,
-      startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, active: false, target: null };
+      startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, active: false, target: null, rows: [], from: -1 };
     gesture.current = state;
-    element?.setPointerCapture?.(event.pointerId);
+    try { element?.setPointerCapture?.(event.pointerId); } catch { /* synthetic pointer */ }
     state.timer = setTimeout(() => {
       if (gesture.current !== state) return;
-      state.active = true;
-      setDrag({ id, target: null });
+      activate(state);
     }, 280);
   }
   function pointerMove(event) {
@@ -108,10 +160,11 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
     if (!state.active && distance > 7) {
       if (state.pointerType === 'touch' && !state.handle) { finish(); return; }
       clearTimeout(state.timer);
-      state.active = true;
+      activate(state);
     }
-    if (state.active) { event.preventDefault(); updateTarget(); }
+    if (state.active) { event.preventDefault(); layout(); }
   }
+  React.useLayoutEffect(() => { playFlip(); }, [ordered]);
   React.useEffect(() => {
     if (!drag) return undefined;
     let frame;
@@ -120,9 +173,9 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
       const list = listRef.current;
       if (!state?.active || !list) return;
       const rect = list.getBoundingClientRect();
-      if (state.x >= rect.left && state.x <= rect.right && state.y >= rect.top && state.y <= rect.bottom) {
+      if (state.x >= rect.left && state.x <= rect.right && state.y >= rect.top - 24 && state.y <= rect.bottom + 24) {
         const delta = state.y < rect.top + 32 ? -10 : state.y > rect.bottom - 32 ? 10 : 0;
-        if (delta) { list.scrollTop += delta; updateTarget(); }
+        if (delta) { list.scrollTop += delta; layout(); }
       }
       frame = requestAnimationFrame(scroll);
     };
@@ -144,7 +197,7 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
       onContextMenu: event => { finish(); openMenu(event, 'project', projects.find(item => item.id === id)); },
       onKeyDown: event => { if ((event.shiftKey && event.key === 'F10') || event.key === 'ContextMenu') openMenu(event, 'project', projects.find(item => item.id === id)); },
       onPointerDown: event => pointerDown(event, id), onPointerMove: pointerMove,
-      onPointerUp: event => { if (gesture.current?.pointerId === event.pointerId) { updateTarget(); finish(true); } },
+      onPointerUp: event => { if (gesture.current?.pointerId === event.pointerId) { layout(); finish(true); } },
       onPointerCancel: () => finish(), onLostPointerCapture: () => finish(),
       onClickCapture: event => { if (event.detail > 0 && suppressClick.current === id) { event.preventDefault(); event.stopPropagation(); suppressClick.current = null; } },
     }),

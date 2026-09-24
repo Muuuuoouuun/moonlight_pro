@@ -341,6 +341,13 @@ export function HubApp({ memoDraftContext = "preview" }) {
     persistHubPreference(storage, "sidebarWidth", value);
   }, []);
 
+  const collapseSidebar = React.useCallback(() => {
+    setCollapsed(true);
+    let storage = null;
+    try { storage = window.localStorage; } catch { /* session-only preference */ }
+    persistHubPreference(storage, "sidebarCollapsed", true);
+  }, []);
+
   const updateTheme = React.useCallback((nextTheme) => {
     setThemePreference(nextTheme);
     let storage = null;
@@ -574,7 +581,12 @@ export function HubApp({ memoDraftContext = "preview" }) {
             mobileCloseButtonRef={mobileCloseButtonRef}
           />
           {!sidebarCollapsed && !isMobileViewport && (
-            <SidebarResizer width={sidebarWidth} shellRef={shellRef} onCommit={commitSidebarWidth} />
+            <SidebarResizer
+              width={sidebarWidth}
+              shellRef={shellRef}
+              onCommit={commitSidebarWidth}
+              onCollapse={collapseSidebar}
+            />
           )}
           <div className="hub-main">
             <TopBar

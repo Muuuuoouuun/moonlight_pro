@@ -1,6 +1,13 @@
 // 펼친 사이드바 폭(px) — 경계 드래그·키보드로 조절한다. 접힌 56px 레일과는 별개 값이라
 // 다시 펼치면 마지막으로 맞춘 폭으로 돌아온다. default는 드래그 이전의 고정 폭이다.
-export const SIDEBAR_WIDTH = Object.freeze({ min: 200, max: 360, default: 232, step: 16 });
+export const SIDEBAR_WIDTH = Object.freeze({
+  min: 200,
+  max: 360,
+  default: 232,
+  step: 16,
+  rail: 56,
+  collapseThreshold: 140,
+});
 
 export const DEFAULT_HUB_PREFERENCES = Object.freeze({
   theme: "auto",
@@ -9,6 +16,12 @@ export const DEFAULT_HUB_PREFERENCES = Object.freeze({
 });
 
 const VALID_THEMES = new Set(["auto", "dark", "light"]);
+
+export function shouldCollapseSidebar(rawWidth) {
+  const n = Number(rawWidth);
+  if (!Number.isFinite(n)) return false;
+  return n < SIDEBAR_WIDTH.collapseThreshold;
+}
 
 export function clampSidebarWidth(value) {
   const n = Number(value);

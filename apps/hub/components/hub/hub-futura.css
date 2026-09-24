@@ -567,6 +567,40 @@
   box-shadow: var(--fx-shadow);
 }
 
+/* 미끄러지는 현재 항목 pill — 영역당 하나(hub-sidebar.jsx useNavIndicator). JS가 자리를
+ * 잡으면(data-indicator="on") 행 자신의 pill은 걷히고 이 면이 행 아래로 옮겨 다닌다.
+ * reduced-motion은 hub-tokens.css의 안전망이 전이를 끈다 — 제자리로 바로 이동한다. */
+.hub-app .hub-sidebar-nav,
+.hub-app .hub-sidebar-utilities { position: relative; }
+
+.hub-app .hub-nav-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: var(--fx-shadow);
+  opacity: 0;
+  transition:
+    transform var(--dur-enter) var(--ease-hub),
+    width var(--dur-enter) var(--ease-hub),
+    height var(--dur-enter) var(--ease-hub),
+    opacity var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .hub-nav-indicator[data-instant] { transition: opacity var(--dur-hover) var(--ease-hub); }
+
+.hub-app [data-indicator="on"] > .hub-nav-indicator { opacity: 1; }
+
+.hub-app [data-indicator="on"] > .hub-nav-item { position: relative; z-index: 1; }
+
+.hub-app [data-indicator="on"] > .hub-nav-item[aria-current="page"] {
+  background: transparent;
+  box-shadow: none;
+}
+
 
 /* 검색 · 사용자 카드 — 같은 "떠 있는 흰 면" 어휘 */
 .hub-app .fx-shell-card {

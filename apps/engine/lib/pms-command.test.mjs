@@ -812,3 +812,15 @@ test("zonedDateKey renders the operator day in Asia/Seoul", () => {
   assert.equal(pmsCommand.zonedDateKey("2026-09-20T23:30:00.000Z"), "2026-09-21");
   assert.equal(pmsCommand.MAX_FOCUS_PER_DAY, 3);
 });
+
+test("sets or clears a project genre as a meta key and rejects unknown genres", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-24T01:00:00.000Z" };
+  const id = "11111111-1111-4111-8111-111111111111";
+  const set = pmsCommand.normalizePmsCommand({ action: "update_project", id, genre: "Sales" }, context);
+  assert.equal(set.ok, true);
+  assert.deepEqual(set.patch.meta, { genre: "sales" });
+  const cleared = pmsCommand.normalizePmsCommand({ action: "update_project", id, genre: "" }, context);
+  assert.deepEqual(cleared.patch.meta, { genre: null });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_project", id, genre: "marketing" }, context),
+    { ok: false, reason: "invalid-genre" });
+});

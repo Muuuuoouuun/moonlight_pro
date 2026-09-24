@@ -367,8 +367,14 @@ export async function executePmsCommand(
           if (issue) return { status: "invalid-input", error: issue };
           if (current.status === "completed") command.patch.completed_at = current.completed_at;
         }
-        command.patch.meta = { ...meta, delivery };
+        command.patch.meta = { ...meta, ...(command.patch.meta as Record<string, unknown> | undefined), delivery };
         if (supplied) command.patch.next_action = plan.nextAction || null;
+        if (!expected) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
+      } else if (command.patch.meta) {
+        // Plain meta keys (genre) merge into the stored metadata under the same version guard —
+        // a bare patch would replace org_scope, source and every other key.
+        if (!current.updated_at) return { status: "error", error: "missing-project-version" };
+        command.patch.meta = { ...meta, ...(command.patch.meta as Record<string, unknown>) };
         if (!expected) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
       }
     }

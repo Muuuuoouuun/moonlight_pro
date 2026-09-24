@@ -955,3 +955,26 @@ test("a client-sent focus_dates array is refused before any read or write", asyn
   assert.equal(updates.length, 0);
   assert.equal(reads.length, 0);
 });
+
+test("merges a project genre into stored meta under the version guard", async () => {
+  const updates = [];
+  const current = {
+    id: "11111111-1111-4111-8111-111111111111",
+    workspace_id: "33333333-3333-4333-8333-333333333333",
+    updated_at: "2026-09-23T01:00:00.000Z",
+    meta: { org_scope: "classin", source: "manual", genre: "it" },
+  };
+  const result = await pmsService.executePmsCommand({
+    action: "update_project", id: current.id, genre: "content",
+  }, { workspaceId: current.workspace_id, now: "2026-09-24T01:00:00.000Z" }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async (table, filters, patch) => {
+      updates.push({ table, filters, patch });
+      return { persisted: true, reason: "ok", records: [{ ...current, meta: patch.meta }] };
+    },
+    fetchRows: async () => [current],
+  });
+  assert.equal(result.status, "saved");
+  assert.deepEqual(updates[0].patch.meta, { org_scope: "classin", source: "manual", genre: "content" });
+  assert.deepEqual(updates[0].filters.at(-1), ["updated_at", "eq.2026-09-23T01:00:00.000Z"]);
+});

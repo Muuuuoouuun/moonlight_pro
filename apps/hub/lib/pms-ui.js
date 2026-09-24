@@ -385,6 +385,7 @@ export function buildProjectEditDraft(project = {}) {
     summary: project.projectSummary ?? "",
     status: project.statusKey || "active",
     priority: project.priority || "medium",
+    genre: project.genre || "",
     nextAction: project.projectNextAction ?? "",
     dueAt: dateInputValue(project.dueAt),
     updatedAt: project.updatedAt || null,
@@ -399,8 +400,12 @@ function currentProjectValue(current, keys, fallback) {
 }
 
 export function rebaseProjectEditSource(source = {}, current = {}) {
+  // genre lives in meta on raw rows; only carry the key when either side knows it.
+  const genre = currentProjectValue(current, ["genre"],
+    current.meta && typeof current.meta === "object" ? current.meta.genre ?? null : source.genre);
   return {
     ...source,
+    ...(genre !== undefined ? { genre } : {}),
     id: currentProjectValue(current, ["id"], source.id),
     name: currentProjectValue(current, ["name", "title"], source.name),
     brand: currentProjectValue(current, ["brand"], source.brand),
@@ -432,7 +437,7 @@ export function buildProjectPatch(source = {}, draft = {}) {
   const patch = { id: source.id };
   if (source.updatedAt) patch.expectedUpdatedAt = source.updatedAt;
 
-  const fields = ["title", "areaId", "brandId", "summary", "status", "priority", "nextAction", "dueAt"];
+  const fields = ["title", "areaId", "brandId", "summary", "status", "priority", "genre", "nextAction", "dueAt"];
   fields.forEach((field) => {
     if (field === "areaId" && !draft.areaId) return;
     const next = field === "dueAt" ? dateInputValue(draft[field]) : (draft[field] ?? "");

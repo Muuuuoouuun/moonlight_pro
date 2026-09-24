@@ -185,6 +185,7 @@ test("builds an edit draft from raw project fields and preserves its concurrency
     summary: "",
     status: "blocked",
     priority: "high",
+    genre: "",
     nextAction: "원본 다음 행동",
     dueAt: "2026-07-30",
     updatedAt: "2026-07-17T03:04:05.000Z",
@@ -394,6 +395,7 @@ test("rebases stale edit state while preserving only user-dirty fields", () => {
     summary: "Operator goal",
     status: "blocked",
     priority: "high",
+    genre: "",
     nextAction: "Operator action",
     dueAt: "2026-07-31",
     updatedAt: "2026-07-17T02:00:00.000Z",
@@ -1090,4 +1092,11 @@ test("roadmap items carry their brand so a row can name it without a second look
 
   assert.equal(projection.items[0].brandKey, "sinabro");
   assert.equal(projection.items[0].brandName, "시나브로");
+});
+
+test("project edit patch carries only a changed genre, and an emptied genre clears it", () => {
+  const source = { id: "p1", name: "Launch", genre: "it", updatedAt: "2026-09-24T00:00:00Z" };
+  assert.deepEqual(pmsUi.buildProjectPatch(source, { ...pmsUi.buildProjectEditDraft(source) }), { id: "p1", expectedUpdatedAt: source.updatedAt });
+  assert.equal(pmsUi.buildProjectPatch(source, { ...pmsUi.buildProjectEditDraft(source), genre: "sales" }).genre, "sales");
+  assert.equal(pmsUi.buildProjectPatch(source, { ...pmsUi.buildProjectEditDraft(source), genre: "" }).genre, "");
 });

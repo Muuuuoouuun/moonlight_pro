@@ -84,7 +84,7 @@ function useAnchorCounts() {
 function CountBadge({ n }) {
   if (!n) return null;
   return (
-    <span className="mono" style={{
+    <span className="mono hub-sidebar-count-badge" style={{
       fontSize: 10.5, lineHeight: 1, flexShrink: 0,
       color: 'var(--moon-300)',
       padding: '2px 5px', borderRadius: 999,
@@ -93,6 +93,58 @@ function CountBadge({ n }) {
       {n}
     </span>
   );
+}
+
+// 현재 항목 pill을 행마다 따로 칠하면 메뉴를 옮길 때 이전 행에서 사라지고 새 행에
+// 뚝 나타난다. 영역(주요·유틸리티)마다 pill 면 하나를 두고 현재 행 위치로 옮겨,
+// 이전 행에서 새 행으로 미끄러지게 한다. 처음 나타날 때는 제자리에 바로 놓고(미끄럼
+// 없음), 현재 행이 영역 밖으로 가면 걷힌다. JS가 돌기 전(SSR·hydration 직전)에는
+// data-indicator가 없어 행 자신의 pill이 그대로 보인다.
+function useNavIndicator(regionRef, placementKey) {
+  const shown = React.useRef(false);
+  // row를 주면 그 행으로(클릭 즉시 — 라우트 전환을 기다리지 않는다), 없으면 현재 행으로.
+  const place = React.useCallback((target) => {
+    const region = regionRef.current;
+    const indicator = region?.querySelector(':scope > .hub-nav-indicator');
+    if (!indicator) return;
+    const row = target || region.querySelector(':scope > .hub-nav-item[aria-current="page"]');
+    if (!row || !row.offsetHeight) {
+      region.dataset.indicator = 'off';
+      shown.current = false;
+      return;
+    }
+    const instant = !shown.current;
+    if (instant) indicator.dataset.instant = 'true';
+    indicator.style.width = `${row.offsetWidth}px`;
+    indicator.style.height = `${row.offsetHeight}px`;
+    indicator.style.transform = `translate(${row.offsetLeft}px, ${row.offsetTop}px)`;
+    if (instant) {
+      void indicator.offsetWidth; // 제자리 배치를 확정한 뒤에야 전이를 되살린다
+      delete indicator.dataset.instant;
+    }
+    region.dataset.indicator = 'on';
+    shown.current = true;
+  }, [regionRef]);
+
+  React.useLayoutEffect(() => place(), [place, placementKey]);
+
+  // 폭 드래그·접기·모바일 드로어·늦게 도착한 스타일시트처럼 행 크기가 바뀌면 pill도
+  // 따라간다. 영역 크기는 그대로인데 행만 바뀌는 경우가 있어 행도 함께 지켜본다.
+  React.useEffect(() => {
+    const region = regionRef.current;
+    if (!region || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => place());
+    observer.observe(region);
+    region.querySelectorAll(':scope > .hub-nav-item').forEach((row) => observer.observe(row));
+    return () => observer.disconnect();
+  }, [place, regionRef]);
+
+  // 영역의 onClick에 건다 — 클릭한 행으로 먼저 미끄러지고, 라우트가 바뀌면 위 효과가
+  // 실제 현재 행으로 다시 맞춘다(이동이 막히면 원래 행으로 돌아온다).
+  return React.useCallback((event) => {
+    const row = event.target.closest?.('.hub-nav-item');
+    if (row && row.parentElement === regionRef.current) place(row);
+  }, [place, regionRef]);
 }
 
 export const Sidebar = React.forwardRef(function Sidebar({ active, view, search = '', routeScope, onScopeChange, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false, mobileOpen = false, onMobileClose, mobileCloseButtonRef, inquiryNotifications }, ref) {
@@ -111,6 +163,11 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
     else if (ref) ref.current = node;
   }, [ref]);
   const [scope, setScope] = useScope(active, routeScope);
+  const navRegionRef = React.useRef(null);
+  const utilityRegionRef = React.useRef(null);
+  const indicatorKey = `${active}|${view || ''}|${collapsed ? 'rail' : 'full'}`;
+  const slideNavIndicator = useNavIndicator(navRegionRef, indicatorKey);
+  const slideUtilityIndicator = useNavIndicator(utilityRegionRef, indicatorKey);
   const sidebarA11yProps = {
     id: 'hub-mobile-navigation',
     'aria-hidden': mobileHidden ? true : undefined,
@@ -266,11 +323,13 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
         />}
       </div>
 
-      <nav className="scroll-y hub-sidebar-nav" aria-label="업무 메뉴" style={{ flex: 1, minHeight: 0, padding: '2px 8px 10px' }}>
+      <nav ref={navRegionRef} onClick={slideNavIndicator} className="scroll-y hub-sidebar-nav" aria-label="업무 메뉴" style={{ flex: 1, minHeight: 0, padding: '2px 8px 10px' }}>
+        <span className="hub-nav-indicator" aria-hidden="true" />
         {SIDEBAR_PRIMARY.map(a => renderAnchor(a, false))}
       </nav>
 
-      <div className="hub-sidebar-utilities" style={{ padding: '6px 8px', borderTop: '1px solid var(--line-soft)' }}>
+      <div ref={utilityRegionRef} onClick={slideUtilityIndicator} className="hub-sidebar-utilities" style={{ padding: '6px 8px', borderTop: '1px solid var(--line-soft)' }}>
+        <span className="hub-nav-indicator" aria-hidden="true" />
         {SIDEBAR_UTILITIES.map(a => renderAnchor(a, true))}
       </div>
 

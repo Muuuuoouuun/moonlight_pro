@@ -43,6 +43,23 @@ export const STATUS_LINE_TOKEN = {
 // 상태 라벨과 lifecycle 열거값의 정본은 ./project-pms-components 의
 // PROJECT_STATUS_LABEL_KO / PROJECT_LIFECYCLE_STATE 다 — 상세 패널과 공유한다(§8.2).
 
+// 프로젝트 장르 — 목록 모노그램 타일의 은은한 색 구분(DESIGN §15 2026-09-24 운영자 확정 예외).
+// 색은 언제나 라벨과 함께 쓴다. 'other'와 미지정은 중립 타일 그대로다.
+export const PROJECT_GENRES = [
+  { key: 'company', label: '회사' },
+  { key: 'sales', label: '세일즈' },
+  { key: 'it', label: 'IT' },
+  { key: 'content', label: '콘텐츠' },
+  { key: 'other', label: '기타' },
+];
+const TINTED_GENRES = new Set(['company', 'sales', 'it', 'content']);
+export function projectGenreLabel(genre) {
+  return PROJECT_GENRES.find(item => item.key === genre)?.label || null;
+}
+export function projectGenreTint(genre) {
+  return TINTED_GENRES.has(genre) ? genre : null;
+}
+
 // Container category folders (2026-07-15 spec §4.2). The ledger resolves
 // `category` (meta.category → canonical map → 'general'); empty folders are
 // never rendered. Collapse state is UI-only.

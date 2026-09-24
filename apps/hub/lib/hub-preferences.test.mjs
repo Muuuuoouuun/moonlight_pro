@@ -8,6 +8,7 @@ import {
   SIDEBAR_WIDTH,
   clampSidebarWidth,
   nextSidebarWidth,
+  shouldCollapseSidebar,
   persistHubPreference,
   readHubPreferences,
   resolveHubTheme,
@@ -103,7 +104,13 @@ test("dragged sidebar width survives reload and stays inside the usable range", 
 
 test("sidebar width clamps drag positions and answers the splitter keys", () => {
   assert.equal(SIDEBAR_WIDTH.default, 232, "기본 폭은 드래그 기능 이전의 고정 폭과 같다");
+  assert.equal(SIDEBAR_WIDTH.rail, 56, "접힌 레일 폭은 56px");
+  assert.equal(SIDEBAR_WIDTH.collapseThreshold, 140, "접힘 판정 임계치는 140px");
   assert.ok(SIDEBAR_WIDTH.min < SIDEBAR_WIDTH.default && SIDEBAR_WIDTH.default < SIDEBAR_WIDTH.max);
+  assert.equal(shouldCollapseSidebar(139), true);
+  assert.equal(shouldCollapseSidebar(140), false);
+  assert.equal(shouldCollapseSidebar(200), false);
+  assert.equal(shouldCollapseSidebar(Number.NaN), false);
   assert.equal(clampSidebarWidth(232 + 40.4), 272);
   assert.equal(clampSidebarWidth(-500), SIDEBAR_WIDTH.min);
   assert.equal(clampSidebarWidth(5000), SIDEBAR_WIDTH.max);

@@ -289,6 +289,7 @@ export function mapProjectRows(rows = [], {
       dueAt: row.due_at || "",
       owner: row.owner_id ? "Me" : "Unassigned",
       tag: row.meta?.tag || null,
+      genre: typeof row.meta?.genre === "string" ? row.meta.genre : null,
       tasks: stats.total,
       done: stats.done,
       changes: updates.count,

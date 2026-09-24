@@ -70,6 +70,7 @@ import {
   IDLE_OPEN_KEY,
   LIST_STATUS_GROUPS,
   PROJECT_CATEGORIES,
+  PROJECT_GENRES,
   PROJECT_VIEW_OPTIONS,
   SIDEBAR_HIDDEN_KEY,
   SUMMARY_FILTER_LABELS,
@@ -2938,6 +2939,10 @@ export function Projects({ workspace }) {
                 { value: 'high', label: '높음' },
                 { value: 'critical', label: '긴급' },
               ],
+            },
+            {
+              key: 'genre', label: '장르', type: 'select',
+              options: [{ value: '', label: '장르 없음' }, ...PROJECT_GENRES.map(item => ({ value: item.key, label: item.label }))],
             },
             { key: 'nextAction', label: '다음 행동', placeholder: '다음에 할 한 가지' },
             ...(!projectEditSource?.delivery ? [{ key: 'dueAt', label: '기한', inputType: 'date' }] : []),

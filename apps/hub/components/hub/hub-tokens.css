@@ -70,6 +70,13 @@
   --personal-line: oklch(0.5 0.05 200 / 0.5);
   --company-line:  oklch(0.5 0.04 290 / 0.5);
 
+  /* Project genre tint — project index monogram tile only (§15 2026-09-24). Low chroma,
+     always paired with the genre label in the row's accessible name. */
+  --genre-company-bg: oklch(0.31 0.045 255); --genre-company-fg: oklch(0.84 0.07 255); --genre-company-line: oklch(0.46 0.06 255 / 0.6);
+  --genre-sales-bg: oklch(0.31 0.045 20); --genre-sales-fg: oklch(0.84 0.07 20); --genre-sales-line: oklch(0.46 0.06 20 / 0.6);
+  --genre-it-bg: oklch(0.31 0.045 200); --genre-it-fg: oklch(0.84 0.07 200); --genre-it-line: oklch(0.46 0.06 200 / 0.6);
+  --genre-content-bg: oklch(0.31 0.045 310); --genre-content-fg: oklch(0.84 0.07 310); --genre-content-line: oklch(0.46 0.06 310 / 0.6);
+
   --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 0 0 1px var(--line-soft);
   --shadow-card:
     0 1px 0 0 oklch(1 0 0 / 0.04) inset,
@@ -172,6 +179,13 @@
   --info-line:     oklch(0.55 0.12 230 / 0.5);
   --personal-line: oklch(0.5 0.09 200 / 0.5);
   --company-line:  oklch(0.5 0.09 290 / 0.5);
+
+  /* Project genre tint — project index monogram tile only (§15 2026-09-24). Low chroma,
+     always paired with the genre label in the row's accessible name. */
+  --genre-company-bg: oklch(0.94 0.035 255); --genre-company-fg: oklch(0.44 0.09 255); --genre-company-line: oklch(0.8 0.06 255 / 0.7);
+  --genre-sales-bg: oklch(0.94 0.035 20); --genre-sales-fg: oklch(0.44 0.09 20); --genre-sales-line: oklch(0.8 0.06 20 / 0.7);
+  --genre-it-bg: oklch(0.94 0.035 200); --genre-it-fg: oklch(0.44 0.09 200); --genre-it-line: oklch(0.8 0.06 200 / 0.7);
+  --genre-content-bg: oklch(0.94 0.035 310); --genre-content-fg: oklch(0.44 0.09 310); --genre-content-line: oklch(0.8 0.06 310 / 0.7);
 
   --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.6) inset, 0 0 0 1px var(--line-soft);
   --shadow-card:
@@ -440,20 +454,34 @@
 /* The same sidebar DOM stays mounted so the collapse control keeps keyboard focus. */
 .hub-sidebar-root { transition: width var(--dur-panel) var(--ease-hub); }
 .hub-sidebar-root--collapsed .hub-sidebar-label,
-.hub-sidebar-root--collapsed .hub-sidebar-brand { display: none !important; }
-.hub-sidebar-root--collapsed .hub-sidebar-header { padding: 14px 0 10px !important; justify-content: center !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-brand,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-label,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-brand { display: none !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-header,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-header { padding: 14px 0 10px !important; justify-content: center !important; }
 .hub-sidebar-root--collapsed .hub-sidebar-search,
-.hub-sidebar-root--collapsed .hub-sidebar-scope { padding: 4px 9px 8px !important; }
-.hub-sidebar-root--collapsed .hub-sidebar-search > button { height: 36px !important; padding: 0 !important; justify-content: center; }
-.hub-sidebar-root--collapsed .hub-sidebar-nav { padding: 2px 6px 10px !important; }
-.hub-sidebar-root--collapsed .hub-sidebar-utilities { padding: 6px !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-scope,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-search,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-scope { padding: 4px 9px 8px !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-search > button,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-search > button { height: 36px !important; padding: 0 !important; justify-content: center; }
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-scope { visibility: hidden; }
+.hub-sidebar-root--collapsed .hub-sidebar-nav,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-nav { padding: 2px 6px 10px !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-utilities,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-utilities { padding: 6px !important; }
 /* 사용자 카드는 Futura fx-shell-card(인라인 margin 12px)다 — 56px 레일에서는 32px로 줄어 36px 알림 버튼이
    넘치므로, 내비 pill과 같은 44px 폭 타일로 좁힌다. */
-.hub-sidebar-root--collapsed .hub-sidebar-footer { margin: 8px 6px 10px !important; padding: 4px 0 !important; justify-content: center; }
-.hub-app .hub-sidebar-root--collapsed .hub-nav-item--icon { position: relative; width: 100%; height: 40px; justify-content: center; padding: 0; flex-shrink: 0; }
+.hub-sidebar-root--collapsed .hub-sidebar-footer,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-footer { margin: 8px 6px 10px !important; padding: 4px 0 !important; justify-content: center; }
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-count-badge { display: none !important; }
+.hub-app .hub-sidebar-root--collapsed .hub-nav-item--icon,
+.hub-app .hub-shell[data-sidebar-collapse-preview="true"] .hub-nav-item { position: relative; width: 100%; height: 40px; justify-content: center; padding: 0; flex-shrink: 0; }
 .hub-sidebar-count-dot { position: absolute; top: 6px; right: 6px; width: 4px; height: 4px; border-radius: 50%; background: var(--fg-muted); }
-.hub-sidebar-root--collapsed .hub-sidebar-inquiry { position: relative; }
-.hub-sidebar-root--collapsed .hub-sidebar-inquiry > .num { position: absolute; top: -2px; right: -5px; pointer-events: none; background: var(--surface); padding: 0 2px; border-radius: var(--r-xs); }
+.hub-sidebar-root--collapsed .hub-sidebar-inquiry,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-inquiry { position: relative; }
+.hub-sidebar-root--collapsed .hub-sidebar-inquiry > .num,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-inquiry > .num { position: absolute; top: -2px; right: -5px; pointer-events: none; background: var(--surface); padding: 0 2px; border-radius: var(--r-xs); }
 .hub-sidebar-search > button:hover { color: var(--fg) !important; border-color: var(--line-strong) !important; }
 
 /* 사이드바 너비 조절 — 경계선 위에 걸친 8px 히트 영역(좌우 -4px margin으로 레이아웃 폭 0).
@@ -479,6 +507,7 @@
 }
 .hub-app .hub-sidebar-resizer:hover::after,
 .hub-shell[data-sidebar-resizing="true"] .hub-sidebar-resizer::after { background: var(--line-strong); }
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-resizer::after { background: var(--moon-300); }
 .hub-app .hub-sidebar-resizer:focus-visible { outline-offset: -2px; }
 .hub-app .hub-sidebar-resizer:focus-visible::after { background: var(--moon-300); }
 /* 드래그 중 — 폭 전이를 끄고(포인터를 바로 따라온다) 본문 텍스트가 선택되지 않게 한다. */

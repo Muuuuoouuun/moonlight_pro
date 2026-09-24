@@ -119,6 +119,7 @@ test("keeps raw project fields separate from latest-update display fallbacks", (
     dueAt: "2026-08-01T00:00:00.000Z",
     owner: "Me",
     tag: "customer",
+    genre: null,
     tasks: 3,
     done: 1,
     changes: 2,
