@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "crypto";
 
 import { NextResponse } from "next/server.js";
+import { hasOperatorLoginCredentials, hasOperatorSessionSecret, verifyOperatorSessionRequest } from "./operator-session.js";
 
 export const HUB_WRITE_SECRET_HEADER = "x-com-moon-hub-write-secret";
 const DEFAULT_MAX_JSON_BYTES = 64 * 1024;
@@ -127,24 +128,31 @@ export function assertHubWriteAllowed(req) {
   const equivalentLoopback = Boolean(
     requestOrigin && areEquivalentLoopbackOrigins(requestOrigin, req.url),
   );
+  const authenticatedProductionBrowser = Boolean(
+    isProductionRuntime() &&
+    hasOperatorSessionSecret() &&
+    hasOperatorLoginCredentials() &&
+    requestOrigin &&
+    requestOrigin === normalizeOrigin(req.url) &&
+    verifyOperatorSessionRequest(req).ok
+  );
 
   if (
-    (sameOrigin && (!isProductionRuntime() || isLoopbackOrigin(requestOrigin))) ||
-    equivalentLoopback
+    authenticatedProductionBrowser ||
+    (!isProductionRuntime() && (sameOrigin || equivalentLoopback))
   ) {
     return null;
   }
 
-  // 원격 배포에는 로그인 레이어가 없다 — same-origin 브라우저 쓰기를 허용하면 기록이
-  // 공개된다. 그래서 거절 자체는 유지하고, 운영자가 읽는 문구만 다음 행동을 지시하는
-  // 한국어로 낸다(DESIGN.md §10). Origin/Referer가 있으면 브라우저에서 온 요청이다.
+  // 브라우저 쓰기는 인증된 세션과 정확한 same-origin 요청만 통과한다.
+  // Origin/Referer가 없으면 서버 호출로 간주하고 서버용 시크릿을 요구한다.
   const fromBrowser = Boolean(requestOrigin);
 
   return NextResponse.json(
     {
       status: "forbidden",
       error: fromBrowser
-        ? "이 배포에서는 저장할 수 없습니다 — 로컬 Hub에서 입력하세요."
+        ? "로그인 후 다시 시도하세요."
         : "Hub 쓰기에는 유효한 Hub write secret이 필요합니다.",
     },
     { status: expectedSecret ? 401 : 403 },

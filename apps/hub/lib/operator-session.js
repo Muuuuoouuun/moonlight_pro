@@ -1,15 +1,14 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, randomBytes, scrypt, timingSafeEqual } from "crypto";
+import { promisify } from "node:util";
 
 export const OPERATOR_SESSION_COOKIE = "com_moon_operator_session";
 const DEFAULT_TTL_SECONDS = 12 * 60 * 60;
+const derivePassword = promisify(scrypt);
+const SCRYPT_OPTIONS = { N: 1 << 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
+const PASSWORD_HASH_PATTERN = /^scrypt\$131072\$8\$1\$([a-f0-9]{32})\$([a-f0-9]{128})$/;
 
 function resolveSessionSecret() {
-  return (
-    process.env.COM_MOON_OPERATOR_SESSION_SECRET?.trim() ||
-    process.env.COM_MOON_HUB_WRITE_SECRET?.trim() ||
-    process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() ||
-    ""
-  );
+  return process.env.COM_MOON_OPERATOR_SESSION_SECRET?.trim() || "";
 }
 
 function safeEquals(a, b) {
@@ -87,7 +86,34 @@ export function hasOperatorSessionSecret() {
   return Boolean(resolveSessionSecret());
 }
 
-export function operatorLoginSecretMatches(candidate) {
-  const expected = process.env.COM_MOON_HUB_WRITE_SECRET?.trim() || "";
-  return Boolean(expected && candidate && safeEquals(expected, candidate));
+function configuredPasswordHash() {
+  return PASSWORD_HASH_PATTERN.exec(process.env.COM_MOON_OPERATOR_PASSWORD_HASH?.trim() || "");
+}
+
+export function hasOperatorLoginCredentials() {
+  const username = process.env.COM_MOON_OPERATOR_USERNAME?.trim() || "";
+  return Boolean(username && username.length <= 128 && configuredPasswordHash());
+}
+
+export async function operatorLoginCredentialsMatch(username, password) {
+  const configuredUsername = process.env.COM_MOON_OPERATOR_USERNAME?.trim() || "";
+  const match = configuredPasswordHash();
+  if (!configuredUsername || !match || typeof username !== "string" || typeof password !== "string") return false;
+  if (Buffer.byteLength(username, "utf8") > 128 || Buffer.byteLength(password, "utf8") > 1024) return false;
+
+  const [, saltHex, hashHex] = match;
+  const actual = await derivePassword(password, Buffer.from(saltHex, "hex"), 64, SCRYPT_OPTIONS);
+  const expected = Buffer.from(hashHex, "hex");
+  const passwordMatches = timingSafeEqual(actual, expected);
+  const usernameMatches = safeEquals(configuredUsername, username.trim());
+  return usernameMatches && passwordMatches;
+}
+
+export async function createOperatorPasswordHash(password) {
+  if (typeof password !== "string" || !password || Buffer.byteLength(password, "utf8") > 1024) {
+    throw new TypeError("Password must be 1–1024 UTF-8 bytes.");
+  }
+  const salt = randomBytes(16);
+  const hash = await derivePassword(password, salt, 64, SCRYPT_OPTIONS);
+  return `scrypt$131072$8$1$${salt.toString("hex")}$${hash.toString("hex")}`;
 }

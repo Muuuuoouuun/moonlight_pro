@@ -488,6 +488,25 @@ export function Settings({ onNavigate }) {
   const [deadlineAlerts, setDeadlineAlerts] = React.useState({ status: 'loading', reset: null });
   const [deadlineBusy, setDeadlineBusy] = React.useState(false);
   const [deadlineMessage, setDeadlineMessage] = React.useState('');
+  const [logoutBusy, setLogoutBusy] = React.useState(false);
+  const [logoutError, setLogoutError] = React.useState('');
+  const logout = async () => {
+    if (logoutBusy) return;
+    setLogoutBusy(true);
+    setLogoutError('');
+    try {
+      const response = await fetch('/api/operator/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout' }),
+      });
+      if (!response.ok) throw new Error('로그아웃하지 못했습니다. 다시 시도해 주세요.');
+      window.location.replace('/login');
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : '로그아웃하지 못했습니다.');
+      setLogoutBusy(false);
+    }
+  };
   const loadDeadlineAlerts = React.useCallback(async () => {
     try {
       const response = await fetch('/api/hub/settings/deadline-alerts', { cache: 'no-store' });
@@ -591,14 +610,18 @@ export function Settings({ onNavigate }) {
       <div>
         <SectionTitle>Profile</SectionTitle>
         <Card>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
             <Avatar name="문준혁" size={52} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 500 }}>문준혁</div>
               <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>개인 운영 OS · Founder · KST</div>
             </div>
             <Badge tone="neutral" size="xs">local profile</Badge>
+            <Button variant="outline" size="sm" disabled={logoutBusy} onClick={logout}>
+              {logoutBusy ? '로그아웃 중…' : '로그아웃'}
+            </Button>
           </div>
+          {logoutError && <div role="alert" style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 10 }}>{logoutError}</div>}
         </Card>
       </div>
 

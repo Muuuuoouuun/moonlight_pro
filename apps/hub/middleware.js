@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server.js";
 
 import { hasHubServerCredential } from "@/lib/hub-write-guard";
-import { hasOperatorSessionSecret, verifyOperatorSessionRequest } from "@/lib/operator-session";
+import { hasOperatorLoginCredentials, hasOperatorSessionSecret, verifyOperatorSessionRequest } from "@/lib/operator-session";
 import { resolveRouteAccess } from "@/lib/route-access";
 
 export function middleware(request) {
@@ -18,7 +18,7 @@ export function middleware(request) {
     host: request.headers.get("host"),
     hasSession: verifyOperatorSessionRequest(request).ok,
     hasServerCredential: hasHubServerCredential(request),
-    secretConfigured: hasOperatorSessionSecret(),
+    secretConfigured: hasOperatorSessionSecret() && hasOperatorLoginCredentials(),
     // Host 헤더는 클라이언트가 보내는 값이므로 loopback 분기는 개발 런타임에서만 연다.
     // `!process.env.VERCEL` 은 축이 틀렸다 — `next start` 자체 호스팅·vercel dev·ngrok
     // 같은 터널 뒤에서는 VERCEL 이 없어 우회가 다시 켜진다. 프로덕션 빌드면 무조건 닫는다.
@@ -35,12 +35,12 @@ export function middleware(request) {
   }
 
   if (access.action === "not-configured") {
-    // 세션 비밀키가 없으면 로그인 자체가 불가능하다. 화면도 API 도 닫고 이유를 밝힌다.
+    // 로그인 설정이 불완전하면 화면과 API를 모두 닫는다.
     return NextResponse.json(
       {
         status: "not-configured",
-        error: "operator-session-secret-missing",
-        message: "COM_MOON_OPERATOR_SESSION_SECRET (또는 COM_MOON_HUB_WRITE_SECRET) 를 설정해야 로그인할 수 있습니다.",
+        error: "operator-login-not-configured",
+        message: "운영자 로그인 설정을 확인하세요.",
       },
       { status: 503 },
     );
