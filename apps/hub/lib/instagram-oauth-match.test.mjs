@@ -43,3 +43,14 @@ test("Instagram rejects a profile with no verified username or app-scoped ID", a
   assert.equal(result.rejected, true);
   assert.equal(records[0].status, "failure");
 });
+
+test("Instagram reconnect rejects the right handle with a different immutable account ID", async () => {
+  const result = await checkInstagramApiProfileMatch({
+    workspaceId: "workspace-1",
+    brandHandle: "ml_bridgemaker",
+    expectedAccountId: "original-id",
+    profile: { id: "replacement-id", username: "ml_bridgemaker" },
+    recordSync: async () => {},
+  });
+  assert.deepEqual(result, { profileMatch: false, rejected: true });
+});

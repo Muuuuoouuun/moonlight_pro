@@ -5,7 +5,7 @@ import {
   resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
 
 const META_THREADS_PROVIDER = "meta_threads";
@@ -17,6 +17,7 @@ const THREADS_TOKEN_URL = "https://graph.threads.net/oauth/access_token";
 const THREADS_LONG_LIVED_TOKEN_URL = "https://graph.threads.net/access_token";
 const THREADS_API_BASE = "https://graph.threads.net/v1.0";
 const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const OAUTH_PROVIDER = "meta_threads";
 
 function normalizeString(value, fallback = "") {
   return typeof value === "string" ? value.trim() || fallback : fallback;
@@ -190,6 +191,9 @@ export function decodeMetaThreadsState(value) {
       now - state.iat > OAUTH_STATE_MAX_AGE_MS ||
       typeof state.workspaceId !== "string" || !state.workspaceId ||
       typeof state.brandHandle !== "string" || !state.brandHandle ||
+      state.provider !== OAUTH_PROVIDER ||
+      typeof state.nonce !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(state.nonce) ||
+      (state.expectedAccountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(state.expectedAccountId)) ||
       (state.brandKey != null && !isValidSocialBrandKey(state.brandKey))
     ) {
       return { invalid: true };
@@ -316,12 +320,14 @@ export function buildMetaThreadsAuthUrl({
   workspaceId = resolveDefaultWorkspaceId(),
   brandHandle = DEFAULT_BRAND_HANDLE,
   brandKey = null,
+  expectedAccountId = null,
   returnPath = "/dashboard/settings",
 }) {
   const config = resolveMetaThreadsConfig();
 
   if (!config.configured || !hasMetaThreadsOAuthStateSecret() || !workspaceId ||
-    (brandKey != null && !isValidSocialBrandKey(brandKey))) {
+    (brandKey != null && !isValidSocialBrandKey(brandKey)) ||
+    (expectedAccountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(expectedAccountId))) {
     return null;
   }
 
@@ -334,6 +340,9 @@ export function buildMetaThreadsAuthUrl({
       workspaceId: workspaceId || resolveDefaultWorkspaceId(),
       brandHandle: normalizeHandle(brandHandle, config.brandHandle),
       brandKey,
+      provider: OAUTH_PROVIDER,
+      nonce: randomBytes(32).toString("base64url"),
+      expectedAccountId,
       returnPath: sanitizeReturnPath(returnPath, "/dashboard/settings"),
     }),
   });
@@ -612,10 +621,11 @@ export function summarizeMetaThreadsConnection(connection) {
   };
 }
 
-export function isExpectedMetaThreadsProfile(profile, expectedHandle) {
-  if (!profile?.username) {
+export function isExpectedMetaThreadsProfile(profile, expectedHandle, expectedAccountId = null) {
+  if (!profile?.id || !profile?.username) {
     return null;
   }
 
-  return normalizeHandle(profile.username) === normalizeHandle(expectedHandle);
+  return normalizeHandle(profile.username) === normalizeHandle(expectedHandle) &&
+    (!expectedAccountId || profile.id === expectedAccountId);
 }

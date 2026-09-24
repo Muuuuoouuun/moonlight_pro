@@ -42,6 +42,27 @@ export async function listSocialAccountConnections(provider, workspaceId, accoun
   };
 }
 
+export async function resolveExpectedSocialAccountId({ provider, workspaceId, handle, brandKey = null, accountId = null }) {
+  const expectedHandle = typeof handle === "string" ? handle.trim().replace(/^@+/, "").toLowerCase() : "";
+  if (!/^[a-z0-9._]{1,30}$/.test(expectedHandle) ||
+    (accountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(accountId))) {
+    throw new Error("social-account-mismatch");
+  }
+  const { connections, available } = await listSocialAccountConnections(provider, workspaceId);
+  if (!available) throw new Error("social-account-read-failed");
+  const matches = connections.filter((row) =>
+    row.config?.username?.trim().replace(/^@+/, "").toLowerCase() === expectedHandle);
+  if (matches.length > 1) throw new Error("social-account-ambiguous");
+  const match = matches[0] || null;
+  if (accountId != null && (!match || match.account_key !== accountId)) {
+    throw new Error("social-account-mismatch");
+  }
+  if (brandKey && match?.config?.brandKey && match.config.brandKey !== brandKey) {
+    throw new Error("social-account-brand-mismatch");
+  }
+  return match?.account_key || null;
+}
+
 export async function saveSocialAccountConnection({
   workspaceId,
   provider,
@@ -53,14 +74,13 @@ export async function saveSocialAccountConnection({
     throw new Error("social-account-id-missing");
   }
   let storedConfig = config || {};
-  if (storedConfig.brandKey == null) {
-    const previous = await listSocialAccountConnections(provider, workspaceId, accountId);
-    if (!previous.available) throw new Error("social-account-read-failed");
-    storedConfig = {
-      ...storedConfig,
-      brandKey: previous.connections[0]?.config?.brandKey || null,
-    };
+  const previous = await listSocialAccountConnections(provider, workspaceId, accountId);
+  if (!previous.available) throw new Error("social-account-read-failed");
+  const previousBrandKey = previous.connections[0]?.config?.brandKey || null;
+  if (storedConfig.brandKey != null && previousBrandKey && storedConfig.brandKey !== previousBrandKey) {
+    throw new Error("social-account-brand-mismatch");
   }
+  storedConfig = { ...storedConfig, brandKey: storedConfig.brandKey || previousBrandKey };
   const result = await upsertSupabaseRecords("integration_connections", {
     workspace_id: workspaceId,
     provider,

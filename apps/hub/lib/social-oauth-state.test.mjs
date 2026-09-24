@@ -36,6 +36,7 @@ for (const [provider, buildAuthUrl, decodeState] of [
       workspaceId: "workspace-1",
       brandHandle: "brand-one",
       brandKey: "bridgemaker",
+      expectedAccountId: "account-1",
       returnPath: "/dashboard/settings",
     });
     const state = new URL(authUrl).searchParams.get("state");
@@ -45,8 +46,24 @@ for (const [provider, buildAuthUrl, decodeState] of [
     assert.equal(decoded.workspaceId, "workspace-1");
     assert.equal(decoded.brandHandle, "brand-one");
     assert.equal(decoded.brandKey, "bridgemaker");
+    assert.equal(decoded.expectedAccountId, "account-1");
+    assert.equal(decoded.provider, provider === "Threads" ? "meta_threads" : "instagram_api");
+    assert.match(decoded.nonce, /^[A-Za-z0-9_-]{43}$/);
     assert.equal(decoded.returnPath, "/dashboard/settings");
     assert.ok(Number.isSafeInteger(decoded.iat));
+  });
+
+  test(`${provider} uses an unpredictable nonce for each authorization`, () => {
+    const args = { origin: "https://hub.example.com", workspaceId: "workspace-1", brandHandle: "brand-one" };
+    const first = decodeState(new URL(buildAuthUrl(args)).searchParams.get("state"));
+    const second = decodeState(new URL(buildAuthUrl(args)).searchParams.get("state"));
+    assert.notEqual(first.nonce, second.nonce);
+  });
+
+  test(`${provider} rejects signed states without a provider or nonce`, () => {
+    const base = { iat: Date.now(), workspaceId: "workspace-1", brandHandle: "brand-one" };
+    assert.deepEqual(decodeState(signedState({ ...base, nonce: "a".repeat(43) })), { invalid: true });
+    assert.deepEqual(decodeState(signedState({ ...base, provider: provider === "Threads" ? "meta_threads" : "instagram_api" })), { invalid: true });
   });
 
   test(`${provider} rejects missing state`, () => {
@@ -88,3 +105,14 @@ for (const [provider, buildAuthUrl, decodeState] of [
     assert.deepEqual(decodeState(signedState({ iat: Date.now(), workspaceId: "workspace-1" })), { invalid: true });
   });
 }
+
+test("Instagram and Threads cannot accept each other's signed OAuth state", () => {
+  const threadsState = new URL(buildMetaThreadsAuthUrl({
+    origin: "https://hub.example.com", workspaceId: "workspace-1", brandHandle: "brand-one",
+  })).searchParams.get("state");
+  const instagramState = new URL(buildInstagramApiAuthUrl({
+    origin: "https://hub.example.com", workspaceId: "workspace-1", brandHandle: "brand-one",
+  })).searchParams.get("state");
+  assert.deepEqual(decodeInstagramApiState(threadsState), { invalid: true });
+  assert.deepEqual(decodeMetaThreadsState(instagramState), { invalid: true });
+});
