@@ -1,6 +1,7 @@
 # 갤럭시 통화·문자·카톡 → "기록할까요" 설정
 
 > 상태: 2026-09-24 구현(브랜치 `claude/rr-capture`). 운영자 결정: 폰은 갤럭시(Android), 전용 앱 없이 자동화 앱(MacroDroid 우선, Tasker 대안)이 HTTP로 보낸다. Mac의 Engine(:3001)에 Tailscale로 닿는다.
+> 상위 아키텍처 스펙: [`docs/superpowers/specs/2026-09-24-mobile-capture-and-phone-integration-spec.md`](../superpowers/specs/2026-09-24-mobile-capture-and-phone-integration-spec.md) (고가용성 3중 버퍼·오프라인 큐·공유 시트 설계)
 > 관련 코드: Engine `apps/engine/app/api/intake/phone-events/route.ts` · `apps/engine/lib/phone-capture*.ts`, 허브 `GET/POST /api/hub/record-candidates` · `apps/hub/components/hub/record-candidates.jsx`.
 
 ## 무엇을 하나
@@ -144,7 +145,7 @@ MacroDroid는 URL·헤더·본문에서 매직 텍스트와 `[v=변수이름]` �
 - **Android 알림 접근**: MacroDroid에 알림 접근 권한을 줘야 한다. Play 스토어가 아닌 곳에서 설치한 앱은 Android 13 이후 "제한된 설정"으로 막혀, 앱 정보 → ⋮ → 제한된 설정 허용을 먼저 해야 한다(Android 15에서 더 넓어졌다).
 - **삼성 배터리 최적화**가 MacroDroid를 멈추면 사건이 사라진다 — MacroDroid를 "절전 예외(사용하지 않음 앱 제외)"에 둔다.
 - **OS·카톡 업데이트**로 알림 형식이 바뀌면 이름 매칭이 깨질 수 있다. 연결 확인 curl로 다시 점검한다.
-- **Mac이 꺼져 있거나 Engine이 안 떠 있으면** 그 사이 사건은 버려진다(MacroDroid는 다시 보내지 않는다).
+- **Mac이 꺼져 있거나 Engine이 안 떠 있으면** 그 사이 사건은 버려진다(MacroDroid는 기본적으로 다시 보내지 않는다). → 해결책으로 [모바일 캡처 스펙](../superpowers/specs/2026-09-24-mobile-capture-and-phone-integration-spec.md) §2의 MacroDroid 로컬 재시도 큐(`[v=offlinePhoneQueue]`) 또는 텔레그램 버퍼/Supabase 직결 채널을 도입한다.
 - 통화 녹음·요약은 받지 않는다(목업 02의 녹음 요약은 이 구성의 범위 밖).
 
 ## 7. 개인정보
