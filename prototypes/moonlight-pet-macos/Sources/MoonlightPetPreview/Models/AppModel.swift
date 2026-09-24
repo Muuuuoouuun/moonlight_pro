@@ -77,6 +77,7 @@ final class AppModel: ObservableObject {
     @Published var mode: QuickMode = .tasks
     @Published var compactMode: CompactMode = .tasks
     @Published var compactOpenRevision = 0
+    @Published var quickOpenRevision = 0
     @Published var tasks: [LocalTask] = []
     @Published var taskDraft = ""
     @Published var savedMemo = ""

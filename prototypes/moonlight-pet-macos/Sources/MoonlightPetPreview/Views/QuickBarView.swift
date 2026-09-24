@@ -4,6 +4,8 @@ struct QuickBarView: View {
     @ObservedObject var model: AppModel
     @State private var hoveredMode: QuickMode?
     @State private var showsHubAddress = false
+    @FocusState private var focusedField: InputField?
+    private enum InputField: Hashable { case task, memo }
     let close: () -> Void
     let modeChanged: () -> Void
     let startFocus: () -> Void
@@ -22,7 +24,6 @@ struct QuickBarView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .padding(18)
                 }
-                .frame(width: 368)
                 .transition(.opacity.combined(with: .offset(x: 4)))
             } else {
                 VStack(spacing: 0) {
@@ -32,11 +33,25 @@ struct QuickBarView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .padding(18)
                 }
-                .frame(width: 440)
                 .transition(.opacity.combined(with: .offset(x: -4)))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .tint(Palette.glassInkMuted)
+        .onAppear { focusCurrentInput() }
+        .onChange(of: model.mode) { _, _ in focusCurrentInput() }
+        .onChange(of: model.quickOpenRevision) { _, _ in focusCurrentInput() }
+    }
+
+    private func focusCurrentInput() {
+        focusedField = nil
+        DispatchQueue.main.async {
+            switch model.mode {
+            case .tasks: focusedField = .task
+            case .memo: focusedField = .memo
+            default: focusedField = nil
+            }
+        }
     }
 
     private var modeContent: some View {
@@ -128,6 +143,7 @@ struct QuickBarView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Palette.glassInkFaint)
                 TextField("새 할 일", text: $model.taskDraft)
+                    .focused($focusedField, equals: .task)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12.5))
                     .onSubmit { withAnimation(PetMotion.panel) { model.addTask() } }
@@ -137,19 +153,17 @@ struct QuickBarView: View {
                 } label: {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Palette.glassOnAccent)
+                        .foregroundStyle(Palette.glassInk)
                         .frame(width: 27, height: 27)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(GlassActionStyle(compact: true))
                 .disabled(model.taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityLabel("할 일 추가")
             }
             .padding(.leading, 11)
             .padding(.trailing, 5)
             .frame(height: 40)
-            .background(Palette.glassInk.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.glassInk.opacity(0.12), lineWidth: 1))
+            .modifier(GlassInputSurface(focused: focusedField == .task))
 
             HStack {
                 Text("목록")
@@ -193,7 +207,7 @@ struct QuickBarView: View {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16, weight: .light))
                     .foregroundStyle(task.isDone ? Palette.glassInkFaint : Palette.glassInkMuted)
-                    .frame(width: 28, height: 34)
+                    .frame(width: 32, height: 36)
             }
             .buttonStyle(PetPressStyle())
             .accessibilityLabel("\(task.title) \(task.isDone ? "완료 취소" : "완료")")
@@ -202,17 +216,19 @@ struct QuickBarView: View {
                 .foregroundStyle(task.isDone ? Palette.glassInkFaint : Palette.glassInk)
                 .strikethrough(task.isDone)
                 .lineLimit(1)
+                .help(task.title)
             Spacer(minLength: 0)
             Button { withAnimation(PetMotion.panel) { model.removeTask(task.id) } } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Palette.glassInkFaint)
-                    .frame(width: 26, height: 30)
+                    .frame(width: 32, height: 36)
             }
             .buttonStyle(PetPressStyle())
             .accessibilityLabel("\(task.title) 삭제")
         }
-        .frame(height: 40)
+        .frame(height: 42)
+        .modifier(GlassRowSurface())
         .overlay(alignment: .bottom) { Palette.glassInk.opacity(0.09).frame(height: 1) }
         .transition(.opacity.combined(with: .offset(y: 4)))
     }
@@ -262,10 +278,10 @@ struct QuickBarView: View {
 
             Button { model.openHub(.calendar) } label: {
                 Label("Hub 일정 열기", systemImage: "arrow.up.right")
-                    .foregroundStyle(Palette.glassOnAccent)
+                    .foregroundStyle(Palette.glassInk)
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(GlassActionStyle())
 
             Spacer(minLength: 0)
 
@@ -321,23 +337,25 @@ struct QuickBarView: View {
         VStack(alignment: .leading, spacing: 11) {
             heading("빠른 메모", caption: "쓰다가 다른 기능으로 가도 초안은 유지됩니다")
             TextField("메모를 입력하세요", text: $model.memoDraft, axis: .vertical)
+                .focused($focusedField, equals: .memo)
                 .textFieldStyle(.plain)
                 .lineLimit(5...5)
                 .font(.system(size: 13))
                 .foregroundStyle(Palette.glassInk)
                 .padding(11)
                 .frame(height: 100)
-                .background(Palette.glassInk.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.glassInk.opacity(0.11), lineWidth: 1))
+                .modifier(GlassInputSurface(focused: focusedField == .memo))
             HStack {
-                Text("이 Mac에 저장")
+                Text(model.savedMemo == model.memoDraft ? "저장됨 · 이 Mac" : "수정됨 · 아직 저장 전")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Palette.glassInkFaint)
                 Spacer()
                 Button(action: model.saveMemo) {
-                    Text("저장").foregroundStyle(Palette.glassOnAccent)
+                    Text("저장").foregroundStyle(Palette.glassInk)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(GlassActionStyle())
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(model.savedMemo == model.memoDraft)
             }
         }
     }
@@ -349,9 +367,9 @@ struct QuickBarView: View {
                 : "자세한 작업은 브라우저 Hub에서 계속합니다")
             Button { model.openHub(model.mode) } label: {
                 Label("브라우저에서 열기", systemImage: "arrow.up.right.square")
-                    .foregroundStyle(Palette.glassOnAccent)
+                    .foregroundStyle(Palette.glassInk)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(GlassActionStyle())
             HStack(spacing: 8) {
                 TextField("Hub 주소", text: $model.hubBaseURL)
                     .textFieldStyle(.roundedBorder)
@@ -382,10 +400,10 @@ struct QuickBarView: View {
             }
             Button(action: startFocus) {
                 Label("집중 시작", systemImage: "timer")
-                    .foregroundStyle(Palette.glassOnAccent)
+                    .foregroundStyle(Palette.glassInk)
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(GlassActionStyle())
             Text("중지 버튼 또는 Esc 길게 누르기로 종료할 수 있습니다.")
                 .font(.system(size: 10.5))
                 .foregroundStyle(Palette.glassInkFaint)
