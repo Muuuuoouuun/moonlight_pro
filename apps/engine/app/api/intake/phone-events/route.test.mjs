@@ -134,3 +134,21 @@ test('a failed customer read refuses to classify instead of discarding', async (
   assert.equal(response.status, 502);
   assert.equal((await response.json()).error, 'customer-directory-read-failed');
 });
+
+test('unmatched call with captureUnmatched creates an unregistered lead candidate', async () => {
+  const response = await post({
+    type: 'call',
+    number: '010-5555-7777',
+    name: '신규 문의자',
+    duration: 120,
+    captureUnmatched: true,
+  });
+  assert.equal(response.status, 201);
+  const json = await response.json();
+  assert.equal(json.status, 'saved');
+  const row = events.find((e) => e.event_type === 'phone.call');
+  assert.ok(row);
+  assert.equal(row.payload.customer.isUnregistered, true);
+  assert.equal(row.payload.customer.phone, '010-5555-7777');
+  assert.equal(row.payload.customer.name, '신규 문의자');
+});

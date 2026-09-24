@@ -30,6 +30,7 @@ test("parseMoneyLabel reverses the display money projection", () => {
 test("buildLeadWrite maps display label → status and splits meta", () => {
   const { columns, metaPatch } = buildLeadWrite({
     name: "  Studio Park  ",
+    phone: " 010-1234-5678 ",
     stage: "Contact",
     source: "Referral",
     type: "company",
@@ -37,6 +38,7 @@ test("buildLeadWrite maps display label → status and splits meta", () => {
     workspace: "classin",
   });
   assert.equal(columns.name, "Studio Park");
+  assert.equal(columns.phone, "010-1234-5678");
   assert.equal(columns.status, "nurturing"); // Contact → nurturing
   assert.equal(columns.source, "Referral");
   assert.deepEqual(metaPatch, { account_kind: "company", value: 1_200_000, workspace: "classin" });

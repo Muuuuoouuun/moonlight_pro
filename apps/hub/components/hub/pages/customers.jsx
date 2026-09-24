@@ -1247,14 +1247,39 @@ function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed,
 // 저장 버튼을 누를 때만 영속 DB에 생성하고, 취소 시 빈 고객 레코드를 남기지 않는다.
 // 첫 약속(무엇 + 언제)을 함께 받는다 — 약속이 정본이다(CRM 스펙 §0.5). 담당자·연락처 칸은
 // 없앴다: 리드 생성 경로에 연락처 쓰기가 없어 입력이 조용히 버려지고 있었다.
-function NewCustomerDrawer({ initialName = "", workspace = null, onClose, onCreated }) {
+function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = null, onClose, onCreated }) {
   const [name, setName] = React.useState(initialName);
+  const [phone, setPhone] = React.useState(initialPhone);
   const [stage, setStage] = React.useState("New");
   const [nextAction, setNextAction] = React.useState("");
   const [nextActionAt, setNextActionAt] = React.useState("");
   const [isImportant, setIsImportant] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [hasContactPicker, setHasContactPicker] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof navigator !== "undefined" && "contacts" in navigator && "ContactsManager" in window) {
+      setHasContactPicker(true);
+    }
+  }, []);
+
+  const handlePickContact = async () => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.contacts?.select) {
+        const picked = await navigator.contacts.select(["name", "tel"], { multiple: false });
+        if (picked && picked[0]) {
+          const contact = picked[0];
+          const pickedName = Array.isArray(contact.name) ? contact.name[0] : contact.name || "";
+          const pickedTel = Array.isArray(contact.tel) ? contact.tel[0] : contact.tel || "";
+          if (pickedName && !name.trim()) setName(pickedName);
+          if (pickedTel) setPhone(pickedTel);
+        }
+      }
+    } catch {
+      // user cancelled or picker not available
+    }
+  };
 
   const handleSave = async () => {
     const trimmedName = name.trim();
@@ -1272,6 +1297,7 @@ function NewCustomerDrawer({ initialName = "", workspace = null, onClose, onCrea
       const res = await saveRevenueRecord("lead", "create", {
         name: trimmedName,
         stage,
+        ...(phone.trim() ? { phone: phone.trim() } : {}),
         ...(nextAction.trim() ? { next_action: nextAction.trim() } : {}),
         ...(nextActionAt ? { next_action_at: nextActionAt } : {}),
         ...(workspace ? { workspace } : {}),
@@ -1309,6 +1335,14 @@ function NewCustomerDrawer({ initialName = "", workspace = null, onClose, onCrea
       )}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>기본 정보</span>
+          {hasContactPicker && (
+            <Button variant="ghost" size="xs" icon="user" onClick={handlePickContact}>
+              주소록에서 가져오기
+            </Button>
+          )}
+        </div>
         <TextField
           label="고객 / 학원명"
           required
@@ -1316,6 +1350,13 @@ function NewCustomerDrawer({ initialName = "", workspace = null, onClose, onCrea
           onChange={e => { setName(e.target.value); setError(""); }}
           placeholder="예: 한빛수학학원 김원장"
           autoFocus
+        />
+        <TextField
+          label="전화번호"
+          value={phone}
+          onChange={e => { setPhone(e.target.value); setError(""); }}
+          placeholder="예: 010-1234-5678"
+          className="mono"
         />
         <TextField
           label="다음 약속"
@@ -1584,9 +1625,14 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
     entryParamsDone.current = true;
     const q = searchParams?.get("q");
     const wantsNew = searchParams?.get("new");
+    const phone = searchParams?.get("phone");
     const consumed = [];
     if (q) { setSearch(q); setSegment("all"); consumed.push("q"); }
-    if (wantsNew === "customer" || wantsNew === "lead") { setNewCustomer({ name: q || "" }); consumed.push("new"); }
+    if (wantsNew === "customer" || wantsNew === "lead") {
+      setNewCustomer({ name: q || "", phone: phone || "" });
+      consumed.push("new");
+      if (phone) consumed.push("phone");
+    }
     if (consumed.length) stripParams(consumed);
   }, [searchParams, stripParams]);
 
@@ -1654,7 +1700,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
   const counts = React.useMemo(() => customerSegmentCounts(allRows), [allRows]);
   const openWithoutPromise = React.useMemo(() => countOpenWithoutPromise(allRows, todayKey), [allRows, todayKey]);
 
-  const openNewCustomer = React.useCallback((name = "") => setNewCustomer({ name }), []);
+  const openNewCustomer = React.useCallback((name = "", phone = "") => setNewCustomer({ name, phone }), []);
 
   // 검색: 치기 시작하면 전체에서 찾는다(목업 02). 지우면 기본 세그먼트로 돌아간다.
   const searchRef = React.useRef(null);
@@ -1954,7 +2000,8 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
 
       {newCustomer && (
         <NewCustomerDrawer
-          initialName={newCustomer.name}
+          initialName={newCustomer.name || ""}
+          initialPhone={newCustomer.phone || ""}
           workspace={scopeKey === "classin" ? "classin" : null}
           onClose={() => setNewCustomer(null)}
           onCreated={(id, name) => {

@@ -41,6 +41,8 @@ export type PhoneCustomer = {
   leadId: string | null;
   accountId: string | null;
   contactId: string | null;
+  phone?: string | null;
+  isUnregistered?: boolean;
 };
 
 export type PhoneMatch =
