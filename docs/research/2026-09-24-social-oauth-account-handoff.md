@@ -45,7 +45,7 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 
 1. `@politic_officer`는 별도 Chrome에 로그인됐다. Instagram의 `Moonlight-IG` 테스터 초대는 계정 화면에서 승인됨으로 표시되지만 OAuth 게시 권한 연결은 아직 하지 않았다. Threads의 `Moonlight` 초대는 초대 탭에 보인다. 초대 수락 버튼은 Meta 플랫폼 약관·개발자 정책과 테스터 활동 계약 확인을 포함하므로 해당 버튼의 행동 시점 확인 뒤 처리한다. Politic을 개인 `Moonlight` 앱에 둘지 별도 Meta 개발자 앱으로 분리할지도 결정해야 한다.
 2. 회사 YouTube `클래스인 문`·`ClassIn KR`은 현재 회사 Chrome 프로필에서 각 Google 계정을 선택해 `Moonlight Video Publisher`의 미검증 앱 경고까지 도달했다. 회사 채널의 조회·동영상 관리 권한 부여는 별도 확인 대기 중이다. 승인 후 실제 OAuth 채널 선택 목록과 반환 채널 ID를 검증한다. 기존 Google Cloud 자격증명 화면의 재인증은 별개이며 Cloud 소유권은 채널 OAuth 승인의 선행 조건이 아니다.
-3. 서울 Supabase 프로젝트 SQL Editor는 현재 개인 Chrome에서 GitHub 로그인 화면까지 열려 있다. 운영자가 브라우저에서 직접 로그인하면 `20260924_0047_social_oauth_flow_guard.sql`을 이력 함수로 적용하고 검증할 수 있다. 로컬의 기존 Supabase 관리 API 토큰은 HTTP 401이어서 CLI 적용은 중단됐다. 인증 정보는 채팅이나 저장소 문서로 받지 않는다.
+3. 서울 Supabase 프로젝트 SQL Editor로 가는 GitHub 로그인은 2단계 인증 화면에서 멈췄다. 운영자는 지금 GitHub·Supabase 로그인을 완료할 수 없다고 알렸다. 따라서 `20260924_0047_social_oauth_flow_guard.sql`은 미적용이다. 로컬의 기존 Supabase 관리 API 토큰도 HTTP 401이어서 CLI 적용은 중단됐다. 인증 정보는 채팅이나 저장소 문서로 받지 않는다.
 
 ## 연결 뒤에도 필요한 변경
 
@@ -55,7 +55,7 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 - 현재 Settings는 Threads·Instagram만 플랫폼별 한 연결 행을 보여주며 YouTube 연결 버튼은 아직 없다. YouTube 파일럿은 `/api/social/youtube/connect?channelId=UC...` 직접 경로를 쓴다.
 - Meta는 로컬 HTTP 콜백을 거부해 파일럿용 임시 HTTPS 터널을 등록했다. 장기 운영에는 고정 HTTPS Hub 주소, 배포 자격증명, 콜백 재등록, 토큰 갱신 작업이 필요하다.
 - `Classin Korea` 비즈니스는 기존 `Classmooni` Meta 앱을 관리한다(상위 앱 ID `1261817029101418`, Instagram 제품 앱 ID `940095648854296`, Threads 제품 앱 ID `1035066519184986`). 앱은 개발 상태이고 Instagram·Threads 테스터 목록은 비어 있으며 두 제품의 OAuth 리디렉션 URL도 비어 있다. 기존 개인 앱과 병행하려면 앱별 ID·시크릿 선택, OAuth state/DB의 앱 식별자, 앱별 서명 검증과 삭제 콜백 격리가 필요하다. Chrome 프로필 분리만으로 API 앱 권한이 분리되지는 않는다.
-- `도정치` 프로필은 Meta Business Suite에서 `@politic_officer` 비즈니스 자산을 볼 수 있다. Meta for Developers 홈페이지의 `Login`은 이 Business Suite로 이동했고, 해당 프로필의 별도 개발자 앱은 확인되지 않았다. 정치 브랜드용 신규 앱 생성·소유권 구성은 아직 시작하지 않았다.
+- `도정치` 프로필은 Meta Business Suite에서 `@politic_officer` 비즈니스 자산을 볼 수 있다. 운영자는 `정상화` Chrome에서 Meta 개발자 등록을 완료했다고 알렸다. 그러나 같은 프로필에서 Meta for Developers 홈페이지는 여전히 `Login`을 보이고, 누르면 Business Suite로 돌아간다. `/apps/`도 광고 앱 설정으로 이동한다. 따라서 개발자 앱 생성 화면과 별도 앱은 아직 직접 확인하지 못했다. 정치 브랜드용 신규 앱 생성·소유권 구성은 시작하지 않았다.
 - `Classmooni` 기본 설정에는 개인정보처리방침 `https://classin.ai.kr/privacy`가 들어 있지만 서비스 약관·데이터 삭제 URL은 `https://www.facebook.com/`로 입력되어 있고 앱 도메인·연락처 이메일은 비어 있다. 회사의 공식 약관·삭제 안내 또는 Moonlight의 실제 운영 주체에 맞는 공개 URL을 확인한 뒤 수정해야 한다. 기존 회사 앱의 값을 추측해 교체하지 않는다. Instagram 게시 권한은 앱 검수에 아직 추가되지 않았다.
 - Google 외부 OAuth 앱의 `Testing` 상태에서 YouTube 범위로 받은 refresh token은 **7일 뒤 만료**된다. 상태 API의 세 채널별 표시 만료는 위 표를 따른다. [Google OAuth 공식 안내](https://developers.google.com/identity/protocols/oauth2). 새 미감사 API 프로젝트의 `videos.insert` 업로드는 **비공개로 제한**되므로 공개 자동 발행에는 [YouTube API 감사](https://developers.google.com/youtube/v3/docs/videos/insert)가 필요하다.
 - Google Cloud `Moonlight YouTube`의 Audience는 `External · Testing`이고 `앱 게시` 버튼은 브랜딩 미완료로 비활성이다. [Google 브랜딩 안내](https://support.google.com/cloud/answer/15549049?hl=en)에 따라 홈페이지·개인정보처리방침·서비스 약관 링크와 승인 도메인을 채워야 한다. [Google Audience 안내](https://support.google.com/cloud/answer/15549945?hl=en)에 따르면 `In Production`으로 옮기면 Testing의 7일 동의 만료 규칙은 적용되지 않는다. 전환 후에는 기존 7일 토큰이 연장된다고 가정하지 말고 채널을 재승인해 새 토큰 만료값을 확인한다. [개인 용도 100명 미만](https://support.google.com/cloud/answer/13464323?hl=en)은 OAuth 검증 면제 대상일 수 있으나 미검증 경고와 신규 사용자 100명 한도는 남는다. 이 전환은 YouTube 업로드의 비공개 제한을 해제하지 않는다.
