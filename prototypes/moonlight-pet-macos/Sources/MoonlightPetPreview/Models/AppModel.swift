@@ -77,6 +77,9 @@ final class AppModel: ObservableObject {
     @Published var isFocused = false
     @Published var showStopConfirmation = false
     @Published var hubBaseURL = "http://127.0.0.1:3000"
+    @Published var selectedCharacter: PetCharacter = .silver {
+        didSet { defaults.set(selectedCharacter.rawValue, forKey: "petPreview.character") }
+    }
 
     var onFocusFinished: (() -> Void)?
     private let defaults: UserDefaults
@@ -92,6 +95,7 @@ final class AppModel: ObservableObject {
         savedMemo = defaults.string(forKey: "petPreview.memo") ?? ""
         memoDraft = savedMemo
         hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? "http://127.0.0.1:3000"
+        selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
     }
 
     var openTaskCount: Int { tasks.filter { !$0.isDone }.count }

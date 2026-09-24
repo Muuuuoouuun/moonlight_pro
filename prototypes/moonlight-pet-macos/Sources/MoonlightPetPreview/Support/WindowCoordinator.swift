@@ -10,15 +10,17 @@ final class KeyPanel: NSPanel {
 }
 
 final class PetClickView: NSView {
+    private let model: AppModel
     var onSingleClick: (() -> Void)?
     var onDoubleClick: (() -> Void)?
     var onMoved: (() -> Void)?
     private var pendingSingle: DispatchWorkItem?
     private var lastScreenPoint: NSPoint?
 
-    override init(frame frameRect: NSRect) {
+    init(frame frameRect: NSRect, model: AppModel) {
+        self.model = model
         super.init(frame: frameRect)
-        let host = NSHostingView(rootView: PetVisual())
+        let host = NSHostingView(rootView: PetVisual(model: model))
         host.frame = bounds
         host.autoresizingMask = [.width, .height]
         addSubview(host)
@@ -27,6 +29,30 @@ final class PetClickView: NSView {
     required init?(coder: NSCoder) { nil }
 
     override func hitTest(_ point: NSPoint) -> NSView? { self }
+
+    override func rightMouseDown(with event: NSEvent) {
+        pendingSingle?.cancel()
+        pendingSingle = nil
+        let menu = NSMenu(title: "펫 캐릭터")
+        for character in PetCharacter.allCases {
+            let item = NSMenuItem(title: character.title, action: #selector(selectCharacter(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = character.rawValue
+            item.state = model.selectedCharacter == character ? .on : .off
+            if let artwork = character.artwork?.copy() as? NSImage {
+                artwork.size = NSSize(width: 20, height: 20)
+                item.image = artwork
+            }
+            menu.addItem(item)
+        }
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
+    }
+
+    @objc private func selectCharacter(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let character = PetCharacter(rawValue: rawValue) else { return }
+        model.selectedCharacter = character
+    }
 
     override func mouseDown(with event: NSEvent) {
         interactionLog.info("pet mouseDown count=\(event.clickCount)")
@@ -82,12 +108,12 @@ final class WindowCoordinator: NSObject {
 
     init(model: AppModel) {
         self.model = model
-        petWindow = Self.panel(size: NSSize(width: 58, height: 58))
-        previewWindow = Self.panel(size: NSSize(width: 304, height: 130))
+        petWindow = Self.panel(size: NSSize(width: 72, height: 72))
+        previewWindow = Self.panel(size: NSSize(width: 326, height: 130))
         barWindow = Self.panel(size: NSSize(width: 440, height: 250))
         super.init()
 
-        let petClickView = PetClickView(frame: NSRect(origin: .zero, size: petWindow.frame.size))
+        let petClickView = PetClickView(frame: NSRect(origin: .zero, size: petWindow.frame.size), model: model)
         petClickView.onSingleClick = { [weak self] in self?.togglePreview() }
         petClickView.onDoubleClick = { [weak self] in self?.toggleBar() }
         petClickView.onMoved = { [weak self] in self?.placeTransientWindows() }
