@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { migrationCallSql } from '../../../scripts/apply-migrations.mjs';
 
 // Opt in to an isolated socket-only cluster; never reads the application's env.
 const enabled = process.env.MEETING_REVIEW_POSTGRES_TEST === '1'
@@ -40,9 +42,14 @@ test('meeting review PostgreSQL receipts, evidence, scope and task recovery', { 
       'supabase/migrations/20260912_0025_daily_review_journal.sql',
       'supabase/migrations/20260912_0026_content_workflow.sql',
       'supabase/migrations/20260913_0027_journal_notes.sql',
-      'supabase/migrations/20260923_0045_meeting_text_review.sql',
-      'supabase/migrations/20260923_0046_meeting_action_plans.sql',
     ]) sql(readFileSync(new URL(name, root), 'utf8'));
+    sql(readFileSync(new URL('supabase/migrations/20260923_0044_migration_history.sql', root), 'utf8'));
+    for (const filename of ['20260923_0045_meeting_text_review.sql', '20260923_0046_meeting_action_plans.sql']) {
+      const source = readFileSync(new URL(`supabase/migrations/${filename}`, root), 'utf8');
+      const sha256 = createHash('sha256').update(source).digest('hex');
+      assert.equal(sql(migrationCallSql(source, filename, sha256)), 'applied');
+      assert.equal(sql(`select sha256 from moonlight_ops.applied_migrations where filename='${filename}'`), sha256);
+    }
     sql(`insert into public.profiles(id,email) values('${owner}','meeting-test@example.invalid');
       insert into public.workspaces(id,name,slug,owner_id) values('${workspace}','Meeting Test','meeting-test','${owner}'),('${foreign}','Foreign','foreign',null);
       insert into public.journal_entries(id,workspace_id,entry_kind,body,title,occurred_at,note_meta,note_revision)

@@ -1,7 +1,5 @@
 -- Keep reviewed responsibility, dates and steps beside the source evidence.
 -- The task plan is applied inside the existing journal workflow transaction.
-begin;
-
 alter table public.meeting_review_proposals
   add column if not exists action_scope text check (action_scope in ('mine','related','unknown')),
   add column if not exists relation_evidence jsonb,
@@ -236,4 +234,3 @@ revoke all on function public.meeting_review_execution_valid_v1(jsonb),public.me
 grant execute on function public.meeting_review_finish_v2(uuid,uuid,uuid,jsonb),public.meeting_review_snapshot_v2(uuid,uuid,uuid),
   public.meeting_review_claim_v2(uuid,uuid,bigint,uuid),
   public.meeting_review_decide_v2(uuid,uuid,uuid,text,text,jsonb),public.meeting_review_watchlist_v1(uuid,integer) to service_role;
-commit;

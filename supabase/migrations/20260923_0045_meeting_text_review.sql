@@ -1,7 +1,5 @@
 -- Manual, text-only meeting analysis. Source notes and canonical task writes remain
 -- in journal_entries / journal_workflow_v1; these rows hold review proposals only.
-begin;
-
 create table if not exists public.meeting_review_runs (
   request_id uuid primary key,
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
@@ -204,4 +202,3 @@ revoke all on function public.meeting_review_snapshot_v1(uuid,uuid,uuid),public.
   public.meeting_review_finish_v1(uuid,uuid,uuid,jsonb),public.meeting_review_decide_v1(uuid,uuid,uuid,text,text) from public,anon,authenticated;
 grant execute on function public.meeting_review_snapshot_v1(uuid,uuid,uuid),public.meeting_review_claim_v1(uuid,uuid,bigint,uuid),
   public.meeting_review_finish_v1(uuid,uuid,uuid,jsonb),public.meeting_review_decide_v1(uuid,uuid,uuid,text,text) to service_role;
-commit;
