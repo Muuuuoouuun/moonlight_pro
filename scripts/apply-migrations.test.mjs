@@ -87,6 +87,16 @@ test("migration ledger and DDL commit or roll back together in PostgreSQL", {
       assert.equal(sql(`select to_regclass('moonlight_ops.${table}') is null`), "t");
       assert.equal(sql(`select count(*) from moonlight_ops.applied_migrations where filename='${file}'`), "0");
     }
+
+    sql("create table public.workspaces(id uuid primary key);");
+    const templateFilename = "20260923_0045_content_prompt_templates.sql";
+    const templateSql = readFileSync(new URL("../supabase/migrations/" + templateFilename, import.meta.url), "utf8");
+    assert.equal(sql(migrationCallSql(templateSql, templateFilename, hash(templateSql))), "applied");
+    assert.equal(sql("select to_regclass('public.content_prompt_templates') is not null"), "t");
+    assert.equal(sql("select relrowsecurity from pg_class where oid='public.content_prompt_templates'::regclass"), "t");
+    assert.equal(sql("select has_table_privilege('anon','public.content_prompt_templates','SELECT')"), "f");
+    assert.equal(sql("select has_table_privilege('service_role','public.content_prompt_templates','SELECT,INSERT,UPDATE,DELETE')"), "t");
+    assert.equal(sql(`select sha256 from moonlight_ops.applied_migrations where filename='${templateFilename}'`), hash(templateSql));
   } finally {
     if (started) execFileSync("pg_ctl", ["-D", data, "-m", "fast", "-w", "stop"], { stdio: "pipe", env: { ...process.env, LC_ALL: process.env.LC_ALL || "C" } });
     rmSync(directory, { recursive: true, force: true });

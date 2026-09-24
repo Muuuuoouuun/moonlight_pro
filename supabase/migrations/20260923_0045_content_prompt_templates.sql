@@ -1,6 +1,6 @@
-begin;
 -- Studio AI 템플릿: 운영자가 저장해 두고 골라 쓰는 'AI 요청문 + 글 틀'.
 -- 요청문은 content transform의 operatorRequest(최대 2000자)로 들어가고, 글 틀은 빈 본문에만 채워진다.
+-- moonlight_ops.apply_migration executes this source and records its hash atomically.
 create table if not exists public.content_prompt_templates (
   id uuid primary key,
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
@@ -17,4 +17,3 @@ alter table public.content_prompt_templates enable row level security;
 revoke all on public.content_prompt_templates from public, anon, authenticated;
 grant select, insert, update, delete on public.content_prompt_templates to service_role;
 notify pgrst, 'reload schema';
-commit;
