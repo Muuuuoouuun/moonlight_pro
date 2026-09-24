@@ -6,7 +6,7 @@ const state = globalThis.__advisorRouteTest = {};
 const stubs = {
   "@/lib/hub-write-guard": `export function assertHubWriteAllowed() { return null; }
     export async function readHubWriteJson(req) { return { data: await req.json() }; }`,
-  "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { globalThis.__advisorRouteTest.contextRead = true; return { source: 'supabase' }; }`,
+  "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { globalThis.__advisorRouteTest.contextRead = true; return globalThis.__advisorRouteTest.contextResult || { source: 'supabase' }; }`,
   "@/lib/sales-os/context-assembler": `export async function assembleSalesContext() { globalThis.__advisorRouteTest.contextRead = true; return { source: 'supabase' }; }`,
   "@/lib/sales-os/agent-runs": `
     export async function recordAgentRun(input) { globalThis.__advisorRouteTest.run = input; return { persisted: true, id: 'run-1' }; }
@@ -117,6 +117,93 @@ test('Guru forwards only an allowlisted reader-selected guidance card', async ()
   const invalid = await guruPOST(request({ mode: 'deal-review', guidanceId: 'invented-card' }));
   assert.equal(invalid.status, 400);
   assert.equal(state.contextRead, false);
+});
+test('Guru rejects a marketing card before reading the sales ledger or calling Engine', async () => {
+  const response = await guruPOST(request({ mode: 'open-question', draft: '이 고객을 어떻게 이해할까요?', guidanceId: 'marketing-smallest-market' }));
+  assert.equal(response.status, 400);
+  assert.equal(state.contextRead, undefined);
+  assert.equal(state.lastFetch, undefined);
+  assert.equal(state.run, undefined);
+});
+test('personal Brand open-question accepts only a marketing or content card and an explicit question', async () => {
+  for (const guidanceId of ['sales-meddic', 'legend-buffett', 'invented-card', undefined]) {
+    const response = await POST(request({ mode: 'open-question', draft: '독자에게 어떤 질문을 할까요?', guidanceId }));
+    assert.equal(response.status, 400, String(guidanceId));
+    assert.equal(state.contextRead, undefined);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+  }
+  assert.equal((await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '  ' }))).status, 400);
+  assert.equal(state.contextRead, undefined);
+
+  const response = await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '어떤 고객 언어를 확인할까요?' }));
+  assert.equal(response.status, 200);
+  assert.equal(state.lastFetch.body.guidanceId, 'marketing-research');
+  assert.equal(state.lastFetch.body.mode, 'open-question');
+  assert.equal(state.lastFetch.body.draft, '어떤 고객 언어를 확인할까요?');
+  assert.equal(state.order, undefined);
+});
+test('personal Brand open-question never enters the approval queue even if explicitly requested', async () => {
+  const response = await POST(request({ mode: 'open-question', guidanceId: 'content-storybrand', draft: '도입부를 어떻게 볼까요?', createWorkOrder: true }));
+  assert.equal(response.status, 400);
+  assert.equal(state.contextRead, undefined);
+  assert.equal(state.lastFetch, undefined);
+  assert.equal(state.run, undefined);
+  assert.equal(state.order, undefined);
+});
+test('personal Office review forwards its provenance without a synthetic card or work order', async () => {
+  const officeSource = { requestId: '10000000-0000-4000-8000-000000000001', runId: null };
+  const response = await POST(request({
+    mode: 'office-review', scope: 'personal', draft: 'Office 종합의 근거를 다른 관점으로 검토해 주세요.', officeSource, createWorkOrder: false,
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(state.lastFetch.body.mode, 'office-review');
+  assert.equal(state.lastFetch.body.scope, 'personal');
+  assert.deepEqual(state.lastFetch.body.officeSource, officeSource);
+  assert.equal(state.lastFetch.body.guidanceId, undefined);
+  assert.equal(state.lastFetch.body.createWorkOrder, false);
+  assert.equal(state.order, undefined);
+  assert.equal(state.run.mode, 'office-review');
+  assert.match(state.run.inputSummary, /office-request=10000000-0000-4000-8000-000000000001/);
+});
+test('personal Office review rejects ambiguous lanes, malformed provenance and work requests before reading context', async () => {
+  const officeSource = { requestId: '10000000-0000-4000-8000-000000000001', runId: null };
+  const valid = { mode: 'office-review', scope: 'personal', draft: 'Office 종합 검토', officeSource, createWorkOrder: false };
+  for (const patch of [
+    { scope: 'all' }, { scope: 'classin' }, { scope: undefined },
+    { officeSource: undefined }, { officeSource: { requestId: 'bad', runId: null } },
+    { officeSource: { requestId: officeSource.requestId, runId: 'bad' } },
+    { draft: ' ' }, { draft: '가'.repeat(6001) },
+    { guidanceId: 'marketing-research' }, { createWorkOrder: true }, { createWorkOrder: undefined },
+  ]) {
+    const response = await POST(request({ ...valid, ...patch }));
+    assert.equal(response.status, 400, JSON.stringify(patch));
+    assert.equal((await response.json()).error, 'invalid-office-review');
+    assert.equal(state.contextRead, undefined);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+    assert.equal(state.order, undefined);
+  }
+});
+test('personal Office review discloses a missing brand ledger without invoking Engine', async () => {
+  state.contextResult = { source: 'error', error: 'brand-ledger-unavailable' };
+  const response = await POST(request({
+    mode: 'office-review', scope: 'personal', draft: 'Office 종합 검토',
+    officeSource: { requestId: '10000000-0000-4000-8000-000000000001', runId: null }, createWorkOrder: false,
+  }));
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).status, 'error');
+  assert.equal(state.lastFetch, undefined);
+  assert.equal(state.run, undefined);
+});
+test('personal Brand question shows preview or read error without calling Engine', async () => {
+  for (const [source, expectedStatus] of [['preview', 'preview'], ['error', 'error']]) {
+    state.contextResult = { source, error: 'brand-ledger-unavailable' };
+    const response = await POST(request({ mode: 'open-question', guidanceId: 'content-hook', draft: '무엇을 확인할까요?' }));
+    assert.equal((await response.json()).status, expectedStatus);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+  }
 });
 test('run history validates bounds and keeps failed reads distinct from empty history', async () => {
   assert.equal((await GET(new Request('http://hub.test?limit=999'))).status, 400);

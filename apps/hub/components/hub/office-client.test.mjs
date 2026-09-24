@@ -26,7 +26,46 @@ test('visible checkboxes use labeled rows and request results keep their origina
  assert.match(source,/person\.id === result\.ownerId/);
  assert.match(source,/item\.key === result\.mode/);
  assert.match(source,/같은 모델의 역할별 개별 검토/);
- assert.match(source,/<OfficeDiscussion result=\{result\} request=\{turn.request\}/);
+ assert.match(source, /officeDiscussionState\(result, request\)/);
+ assert.match(source, /discussion\.turns\.map/);
+});
+
+test('Office meeting room presents agenda, chronological speeches, and a sticky composer', () => {
+  const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
+  assert.ok(page.indexOf('styles.agendaBar') < page.indexOf('styles.thread'));
+  assert.ok(page.indexOf('styles.thread') < page.indexOf('styles.composer'));
+  assert.match(page, /session\.turns\.map\(/);
+  assert.doesNotMatch(page, /\[\.\.\.session\.turns\]\.reverse\(\)/);
+  assert.match(page, /officeDiscussionRounds\(/);
+  assert.match(page, /loadOfficeTasks\(/);
+  assert.match(page, /taskState\.status === 'error'/);
+  assert.match(page, /할 일 읽기 실패/);
+  assert.match(page, /다시 시도/);
+  assert.match(page, /taskState\.status === 'preview'/);
+  assert.match(page, /taskState\.status === 'partial'/);
+  assert.match(page, /taskWorkspace: task\.workspace/);
+  assert.match(page, /onDrop=\{handleDrop\}/);
+  assert.match(css, /\.composer\s*\{[^}]*position:sticky;[^}]*bottom:0;/);
+  assert.match(css, /scroll-padding-bottom:/);
+  assert.match(css, /@media\(max-width:600px\) and \(max-height:600px\)/);
+  assert.doesNotMatch(css, /\.composerTop\s*\{\s*display:none;/);
+});
+
+test('Eevee assignment is explicit, source-bound, reviewable, and cannot override manual selection', () => {
+  const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
+  assert.match(page, /fetch\('\/api\/hub\/office\/assignment'/);
+  assert.match(page, /parseOfficeRoutingRequest\(\{ message, scope \}\)/);
+  assert.match(page, /parseOfficeRoutingResult\(/);
+  assert.match(page, /businessWrites !== false/);
+  assert.match(page, /session\.agenda\?\.block \|\| session\.draft/);
+  assert.match(page, /onClick=\{requestAssignment\}>담당 추천<\/Button>/);
+  assert.match(page, /assignmentReadRef\.current/);
+  assert.match(page, /invalidateAssignment\(\)/);
+  assert.match(page, /<CertaintyBadge state="recommended" \/>/);
+  for (const label of ['적용', '수정', '무시', '직접 선택']) assert.ok(page.includes(label));
+  assert.match(css, /\.assignmentCard\s*\{[^}]*border:1px solid var\(--line\)/);
 });
 
 test('council completion requires the requested settings and complete recorded turns',async()=>{

@@ -5,12 +5,22 @@ import { recordAgentRun, setAgentRunEmittedCount } from "@/lib/sales-os/agent-ru
 import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { createWorkOrder } from "@/lib/sales-os/work-orders";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
-import { isValidAdvisorInput } from "@/lib/advisor-input";
+import { isGuidanceCardForDomain, isValidAdvisorInput } from "@/lib/advisor-input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ENGINE_PATH = "/api/ai/brand-mentor";
+const OFFICE_REVIEW_DRAFT_LIMIT = 6000;
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function parseOfficeSource(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["requestId", "runId"].includes(key))
+    || typeof value.requestId !== "string" || !UUID.test(value.requestId)
+    || (value.runId != null && (typeof value.runId !== "string" || !UUID.test(value.runId)))) return null;
+  return { requestId: value.requestId, runId: value.runId ?? null };
+}
 
 function resolveEngineUrl() {
   return (process.env.COM_MOON_ENGINE_URL?.trim() || "").replace(/\/$/, "");
@@ -156,9 +166,35 @@ export async function POST(req) {
   const directives = input.directives && typeof input.directives === "object" ? input.directives : undefined;
   const values = input.values && typeof input.values === "object" ? input.values : undefined;
   const knowledge = input.knowledge && typeof input.knowledge === "object" ? input.knowledge : undefined;
+  const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
+  const officeSource = mode === "office-review" ? parseOfficeSource(input.officeSource) : null;
+  if (mode === "office-review" && (
+    input.scope !== "personal" || !officeSource || !draft?.trim() || draft.length > OFFICE_REVIEW_DRAFT_LIMIT
+    || input.createWorkOrder !== false || input.guidanceId != null || (legendIds?.length || 0) > 0
+    || input.directives != null || input.values != null || input.knowledge != null
+  )) {
+    return NextResponse.json({ status: "error", error: "invalid-office-review" }, { status: 400 });
+  }
+  if (mode === "open-question" && (
+    !isGuidanceCardForDomain(guidanceId, ["marketing", "content"])
+    || !draft?.trim()
+    || input.createWorkOrder === true
+    || (legendIds?.length || 0) > 0
+  )) {
+    return NextResponse.json({ status: "error", error: "질문과 마케팅·콘텐츠 카드 출처를 확인해 주세요." }, { status: 400 });
+  }
 
   const context = await assembleBrandContext({ mode, ref, draft });
-  const result = await callEngine({ mode, ref, draft, context, legendIds, directives, values, knowledge });
+  if ((mode === "open-question" || mode === "office-review") && ["preview", "error"].includes(context?.source)) {
+    return NextResponse.json(
+      { status: context.source, error: context.error || "브랜드 자료를 읽을 수 없습니다." },
+      { status: context.source === "preview" ? 202 : 502 },
+    );
+  }
+  const result = await callEngine({
+    mode, ref, draft, context, legendIds, directives, values, knowledge, guidanceId,
+    ...(officeSource ? { scope: "personal", officeSource, createWorkOrder: false } : {}),
+  });
   // Episodic memory: log what the Council recommended so the next call can remember it (best-effort).
   let run = { persisted: false, id: null, reason: "agent-run-write-failed" };
   try {
@@ -166,7 +202,7 @@ export async function POST(req) {
       agent: "council",
       mode,
       ref,
-      inputSummary: summarizeContext(context, legendIds),
+      inputSummary: `${summarizeContext(context, legendIds) || ""}${officeSource ? ` office-request=${officeSource.requestId}${officeSource.runId ? ` office-run=${officeSource.runId}` : ""}` : ""}`.trim(),
       recommendation: trimRecommendation(result.data),
       result: advisorRunResult(result.status, result.data),
     });

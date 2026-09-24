@@ -50,21 +50,25 @@ function brandGuardrail(brand) {
   };
 }
 
-// Pick the guardrail brand: prefer an explicit ref match, then an own-brand (브랜드 workspace),
-// then the first own brand. Keeps the Council anchored to the operator's own brand voice
-// instead of the ClassIn sales brand.
-function selectFocusBrand(brands, ownKeys, ref) {
+// Legacy advisory modes choose a first personal brand when no ref is supplied.
+// Reference-only questions need an exact, explicit match so general Office or
+// shelf advice cannot inherit an unrelated brand voice or ambiguous partial name.
+function selectFocusBrand(brands, ownKeys, ref, strict = false) {
   const list = Array.isArray(brands) ? brands : [];
   if (!list.length) return null;
   const needle = ref ? String(ref).toLowerCase() : null;
   if (needle) {
     const byRef = list.find(
-      (b) => String(b.key).toLowerCase() === needle || (b.name || "").toLowerCase().includes(needle),
+      (b) => String(b.key).toLowerCase() === needle || (strict
+        ? (b.name || "").toLowerCase() === needle
+        : (b.name || "").toLowerCase().includes(needle)),
     );
     if (byRef) return byRef;
   }
-  return list.find((b) => ownKeys.includes(b.key)) || null;
+  return strict ? null : list.find((b) => ownKeys.includes(b.key)) || null;
 }
+
+const strictFocusMode = (mode) => mode === "open-question" || mode === "office-review";
 
 export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, workspace = "brand" } = {}) {
   const missing = [];
@@ -140,17 +144,25 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
   const scopedCampaigns = (content?.campaigns || []).filter((c) => ownKeys.includes(c.brandKey))
     .map((c) => ({ id: c.id, name: c.name, status: c.status, brandKey: c.brandKey, businessTruth: c.businessTruth }));
   const matchesRef = (row) => ref && (String(row.id).toLowerCase() === String(ref).toLowerCase()
-    || (row.name || row.title || "").toLowerCase().includes(String(ref).toLowerCase()));
+    || (strictFocusMode(mode)
+      ? (row.name || row.title || "").toLowerCase() === String(ref).toLowerCase()
+      : (row.name || row.title || "").toLowerCase().includes(String(ref).toLowerCase())));
   const focusCampaign = scopedCampaigns.find(matchesRef);
   const focusProject = projects.find(matchesRef);
   const focusIdea = ideaQueue.find(matchesRef);
   const focusBrand = selectFocusBrand(scopedBrands, ownKeys,
-    focusCampaign?.brandKey || focusProject?.brand || focusIdea?.brandKey || ref);
+    focusCampaign?.brandKey || focusProject?.brand || focusIdea?.brandKey || ref,
+    strictFocusMode(mode));
 
   const context = {
+    scope: workspace === "brand" ? "personal" : workspace,
     source: missing.length ? "partial" : content?.source || projectLedger?.source || "preview",
     brand: brandGuardrail(focusBrand),
-    brands: scopedBrands.map((b) => ({ key: b.key, name: b.name, kind: b.kind, voice: b.voice })),
+    // Keep portfolio membership for general questions, but only the explicitly
+    // focused brand may contribute voice guidance to a reference-only question.
+    brands: scopedBrands.map((b) => strictFocusMode(mode)
+      ? { key: b.key, name: b.name, kind: b.kind }
+      : { key: b.key, name: b.name, kind: b.kind, voice: b.voice }),
     campaigns: trim(scopedCampaigns, 10),
     content: content
       ? {

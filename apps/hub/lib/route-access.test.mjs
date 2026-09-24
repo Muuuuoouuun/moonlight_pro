@@ -35,6 +35,16 @@ test("자체 인증을 가진 경로는 세션 없이 통과한다", () => {
   }
 });
 
+test("로컬 스킬 Agent 경로는 기존 Agent 접두사 안에서 자체 토큰 인증을 쓴다", async () => {
+  for (const path of [
+    "/api/agent/v1/skill-requests/11111111-1111-4111-8111-111111111111",
+    "/api/agent/v1/skill-requests/11111111-1111-4111-8111-111111111111/receipts",
+  ]) assert.equal(deployed({ pathname: path }).action, "allow");
+  const handler = await readFile(new URL("./skill-requests-http.js", import.meta.url), "utf8");
+  assert.match(handler, /authorizeAgentRequest/);
+  assert.match(handler, /scope: action === 'record' \? 'tasks:write' : 'read'/);
+});
+
 test("OAuth 콜백은 세션 없이 통과한다", () => {
   for (const path of OPEN_EXACT) assert.equal(deployed({ pathname: path }).action, "allow", path);
 });

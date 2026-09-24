@@ -1,5 +1,6 @@
 "use client";
 import { GoalLinks } from '../goal-links';
+import { ContextMentorRail } from '../context-mentor-rail';
 
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -213,7 +214,7 @@ function ContentTagTrendPanel({ tagTrends, syncState }) {
   );
 }
 
-export function Queue({ workspace }) {
+export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
   const ws = getWorkspace(workspace);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -249,6 +250,15 @@ export function Queue({ workspace }) {
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="outline" size="sm" icon="plus" onClick={createDraft}>바로 원고 쓰기 <Kbd>N</Kbd></Button>
+        {(workspace === 'brand' || selectedBrand?.orgScope === 'personal') && (
+          <ContextMentorRail
+            domain="content"
+            contextLabel={selectedBrand?.name || '콘텐츠'}
+            disabled={selectedBrand?.orgScope !== 'personal'}
+            onGuidanceAsk={card => onGuidanceAsk?.(card, { ref: selectedBrand?.key, label: selectedBrand?.name })}
+            onNavigate={onNavigate}
+          />
+        )}
       </div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>

@@ -193,7 +193,7 @@ export async function POST(req: Request) {
 
   let mentorUpdate = null;
 
-  if (result.ok && workspaceId) {
+  if (result.ok && workspaceId && mode !== "open-question") {
     mentorUpdate = await insertSupabaseRecord("project_updates", {
       workspace_id: workspaceId,
       project_id: null,
