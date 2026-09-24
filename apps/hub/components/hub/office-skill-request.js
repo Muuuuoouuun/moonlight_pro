@@ -1,16 +1,16 @@
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
-export function officeSkillScope(agenda, officeScope) {
+export function officeSkillScope(agenda, officeScope, selectedScope = null) {
   if (!agenda?.taskId || !UUID.test(agenda.taskId)) return null;
   const taskScope = agenda.taskWorkspace === 'classin' ? 'classin'
     : agenda.taskWorkspace === 'brand' ? 'personal' : null;
-  if (!taskScope) return null;
+  if (!taskScope) return officeScope === 'all' && ['classin', 'personal'].includes(selectedScope) ? selectedScope : null;
   return officeScope === 'all' || officeScope === taskScope ? taskScope : null;
 }
 
-export function officeSkillRequestDraft({ agenda, officeScope, result } = {}) {
-  const scope = officeSkillScope(agenda, officeScope);
-  if (!scope) return null;
+export function officeSkillRequestDraft({ agenda, officeScope, result, selectedScope = null } = {}) {
+  const scope = officeSkillScope(agenda, officeScope, selectedScope);
+  if (!scope && !(officeScope === 'all' && agenda?.taskId && UUID.test(agenda.taskId) && !agenda.taskWorkspace)) return null;
   const nextAction = typeof result?.nextAction === 'string' ? result.nextAction.trim() : '';
   return {
     taskId: agenda.taskId,
@@ -58,7 +58,9 @@ export async function saveOfficeSkillRequest(input, { fetcher = fetch } = {}) {
       return { status: 'ready', persisted: true, request: data.request, replayed: data.replayed === true };
     }
     if (data?.status === 'preview') return { status: 'preview', persisted: false, error: '저장 연결이 없어 요청서를 만들지 못했습니다.' };
-    return { status: 'error', persisted: false, error: data?.error || '요청서를 저장하지 못했습니다. 다시 확인해 주세요.' };
+    return { status: 'error', persisted: false, error: data?.error === 'task-scope-or-owner-mismatch'
+      ? '할 일의 범위가 일치하지 않습니다. 범위를 바꿔 다시 확인해 주세요.'
+      : data?.error || '요청서를 저장하지 못했습니다. 다시 확인해 주세요.' };
   } catch {
     return { status: 'error', persisted: false, error: '요청서를 저장하지 못했습니다. 연결을 확인해 주세요.' };
   }

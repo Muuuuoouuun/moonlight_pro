@@ -6,12 +6,14 @@ const requestId = '94f430e4-13e7-491f-9c2f-4b83d8ab9f12';
 const taskId = 'c8814141-551c-413f-8dfa-adfe5142960f';
 const input = { requestId, taskId, scope: 'personal', instruction: '영수증을 정리한다', expectedEvidence: '정리된 파일 경로와 누락 목록' };
 
-test('only an imported task with a known matching lane can produce a skill request', () => {
+test('an imported task keeps its known lane or requires an explicit choice when unassigned', () => {
   const brand = { taskId, taskWorkspace: 'brand' };
   assert.equal(officeSkillScope(brand, 'all'), 'personal');
   assert.equal(officeSkillScope(brand, 'personal'), 'personal');
   assert.equal(officeSkillScope(brand, 'classin'), null);
   assert.equal(officeSkillScope({ taskId }, 'all'), null);
+  assert.equal(officeSkillScope({ taskId }, 'all', 'personal'), 'personal');
+  assert.equal(officeSkillRequestDraft({ agenda: { taskId }, officeScope: 'all', result: { nextAction: '폴더 정리' } }).scope, null);
   assert.equal(officeSkillScope({ taskId: 'not-an-id', taskWorkspace: 'brand' }, 'personal'), null);
   assert.equal(officeSkillRequestDraft({ agenda: brand, officeScope: 'all', result: { nextAction: '추가 행동 없음' } }).instruction, '');
   assert.equal(officeSkillRequestDraft({ agenda: null, officeScope: 'personal', result: {} }), null);
