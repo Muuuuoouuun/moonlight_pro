@@ -48,18 +48,22 @@ test('desktop trigger is a 58px vertical edge rail without taking layout width',
   assert.match(source, /<button[\s\S]*className="context-mentor-rail__trigger"/);
   assert.match(source, /context-mentor-rail__arrow/);
   assert.match(css, /\.context-mentor-rail\s*\{[^}]*position:\s*fixed/);
-  assert.match(css, /\.context-mentor-rail\s*\{[^}]*right:/);
+  assert.match(css, /\.context-mentor-rail\s*\{[^}]*right:\s*0;/);
   assert.match(css, /\.context-mentor-rail\s*\{[^}]*width:\s*58px/);
+  assert.match(css, /border-radius:\s*var\(--r\) 0 0 var\(--r\)/);
   assert.match(css, /writing-mode:\s*vertical-rl/);
 });
 
-test('mobile trigger returns to horizontal flow and the sheet keeps a 44px touch floor', () => {
+test('shell-narrow trigger returns to horizontal flow while only <=600px uses the bottom sheet', () => {
+  const source = read('./context-mentor-rail.jsx');
   const css = read('./context-mentor-rail.css');
   assert.match(css, /min-height:\s*44px/);
-  assert.match(css, /@media\s*\(max-width:\s*600px\)/);
-  assert.match(css, /@media\s*\(max-width:\s*600px\)[\s\S]*position:\s*static/);
-  assert.match(css, /@media\s*\(max-width:\s*600px\)[\s\S]*flex-direction:\s*row/);
-  assert.match(css, /@media\s*\(max-width:\s*600px\)[\s\S]*writing-mode:\s*horizontal-tb/);
+  assert.match(css, /@media\s*\(max-width:\s*900px\)/);
+  assert.match(css, /@media\s*\(max-width:\s*900px\)[\s\S]*position:\s*static/);
+  assert.match(css, /@media\s*\(max-width:\s*900px\)[\s\S]*flex-direction:\s*row/);
+  assert.match(css, /@media\s*\(max-width:\s*900px\)[\s\S]*writing-mode:\s*horizontal-tb/);
+  assert.match(source, /window\.matchMedia\('\(max-width: 600px\)'\)/);
+  assert.match(source, /presentation=\{compact \? 'compact' : 'side'\}/);
   assert.match(css, /var\(--line/);
   assert.match(css, /var\(--surface/);
   assert.doesNotMatch(css, /#[\da-fA-F]{3,8}\b|rgba?\(|oklch\(/);
