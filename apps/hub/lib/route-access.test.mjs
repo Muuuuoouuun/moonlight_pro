@@ -39,6 +39,13 @@ test("OAuth 콜백은 세션 없이 통과한다", () => {
   for (const path of OPEN_EXACT) assert.equal(deployed({ pathname: path }).action, "allow", path);
 });
 
+test("Meta의 서명 검증 콜백은 공개하고 인접 경로는 닫는다", () => {
+  for (const path of ["/api/social/meta/threads/deauthorize", "/api/social/meta/threads/data-deletion"]) {
+    assert.equal(deployed({ pathname: path }).action, "allow", path);
+    assert.equal(deployed({ pathname: `${path}/other` }).action, "unauthorized", path);
+  }
+});
+
 test("공개 법률·앱 소개 페이지만 비로그인 접근을 허용한다", () => {
   for (const path of ["/legal/privacy", "/legal/terms", "/legal/data-deletion", "/legal/about"]) {
     assert.equal(deployed({ pathname: path }).action, "allow", path);

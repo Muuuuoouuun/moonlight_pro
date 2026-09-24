@@ -26,6 +26,8 @@ export const OPEN_EXACT = [
   "/api/integrations/sheets/callback",
   "/api/social/instagram/callback",
   "/api/social/meta/threads/callback",
+  "/api/social/meta/threads/deauthorize",
+  "/api/social/meta/threads/data-deletion",
   "/api/social/youtube/callback",
   "/legal/about",
   "/legal/privacy",
