@@ -122,7 +122,7 @@ const BRIEF_DESTINATIONS = [
   { key: 'daily-review', label: '하루 리뷰', icon: 'brief', target: 'dashboard/work/daily-review' },
   { key: 'calendar', label: '캘린더', icon: 'calendar', target: 'dashboard/work/calendar' },
   { key: 'projects', label: '프로젝트', icon: 'projects', target: 'dashboard/work/projects' },
-  { key: 'followups', label: '고객 연락', icon: 'bell', target: 'dashboard/revenue/followups' },
+  { key: 'followups', label: '오늘 연락', icon: 'bell', target: 'dashboard/revenue/followups' },
   { key: 'content', label: '콘텐츠', icon: 'content', target: 'dashboard/content/queue' },
 ];
 
@@ -1534,7 +1534,7 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
             {onNavigate && (
               <>
                 <Button variant="ghost" size="xs" icon="bell" onClick={() => onNavigate("dashboard/revenue/followups")}>
-                  고객 연락 바로가기
+                  오늘 연락 바로가기
                 </Button>
                 <Button variant="ghost" size="xs" icon="inbox" onClick={() => onNavigate("dashboard/work/my")}>
                   내 작업 바로가기
@@ -2014,7 +2014,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
         <div className="hub-page-actions hub-page-actions--row" style={{ display: 'flex', gap: 8 }}>
           {/* 보류 스코프(Council)가 히어로 CTA를 점유하던 것을 코어 루프(고객 연락)로 교체
               — README §4 보류 표면은 첫 화면 프라임 자리에서 뺀다(2026-08-05 system-eval B-10). */}
-          <Button variant="ghost" size="md" icon="bell" onClick={() => onNavigate('dashboard/revenue/followups')}>고객 연락</Button>
+          <Button variant="ghost" size="md" icon="bell" onClick={() => onNavigate('dashboard/revenue/followups')}>오늘 연락</Button>
           <Button variant="primary" size="md" icon="clock" onClick={() => onNavigate('dashboard/work/calendar?focus=15')}>15분 집중</Button>
         </div>
       </div>

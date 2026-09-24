@@ -48,7 +48,7 @@ export function DealsRegionView({ onNavigate }) {
   return (
     <div className="deals-region">
       <React.Suspense fallback={<Skeleton lines={4} height={48} label="지역 보기 불러오는 중" />}>
-        <RevenueHeatmapView onNavigate={onNavigate} />
+        <RevenueHeatmapView onNavigate={onNavigate} embedded />
       </React.Suspense>
     </div>
   );

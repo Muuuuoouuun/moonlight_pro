@@ -423,7 +423,8 @@ const METRICS = [
 
 // ── 페이지 ───────────────────────────────────────────────────────────────────
 
-export function RevenueHeatmap({ onNavigate }) {
+// embedded: 거래 탭 "지역" 보기 안에 들어갈 때 — 페이지 h2는 거래 탭이 소유하므로 섹션 제목(h3)으로 내리고 바깥 여백을 뺀다.
+export function RevenueHeatmap({ onNavigate, embedded = false }) {
   const { ledger, syncState, reload } = useRevenueLedger();
   const [periodMode, setPeriodMode] = React.useState("all");
   const [recentKey, setRecentKey] = React.useState("90d");
@@ -497,10 +498,12 @@ export function RevenueHeatmap({ onNavigate }) {
   const ledgerUnsettled = bodyState === "loading" || bodyState === "error";
 
   return (
-    <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+    <div className={embedded ? undefined : "hub-page"} style={{ padding: embedded ? 0 : "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <div className="hub-page-header" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>매출 히트맵</h2>
+          {embedded
+            ? <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>지역별 매출</h3>
+            : <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>매출 히트맵</h2>}
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             {periodLabel} · {metric.longLabel} · 딜 {ledgerUnsettled ? "—" : `${matchedDeals}건`} · 합계 <span className="num">{ledgerUnsettled ? "—" : fmtMoney(totalValue)}</span>
             <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
