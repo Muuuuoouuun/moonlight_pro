@@ -10,7 +10,8 @@ test('quiet rail starts closed and only opens the shared accessible drawer on re
   assert.match(source, /export function ContextMentorRail/);
   assert.match(source, /React\.useState\(false\)/);
   assert.match(source, /aria-expanded=\{open\}/);
-  assert.match(source, /open &&\s*<Drawer/);
+  assert.match(source, /open && typeof document !== 'undefined' && createPortal\(<Drawer/);
+  assert.match(source, /document\.querySelector\('\.hub-app'\) \|\| document\.body/);
   assert.match(source, /presentation=\{compact \? 'compact' : 'side'\}/);
   assert.match(source, /<SegmentedControl/);
   assert.match(source, /<Button/);
