@@ -11,6 +11,7 @@ import { officeDiscussionState } from '../office-deliberation-client';
 import { officeSkillRequestDraft } from '../office-skill-request';
 import { OfficeSkillRequestDrawer } from '../office-skill-request-drawer';
 import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-drawer';
+import { OfficeAvatar } from '../office-avatar';
 import { officeMentorSessions } from '../office-mentor-session';
 import { requestOfficeMentor } from '../office-mentor-client';
 import styles from './office-council.module.css';
@@ -40,7 +41,7 @@ function ThreadDiscussion({ result, request }) {
   if (state === 'invalid') return <p className={styles.note} role="status">토론 기록 확인 필요 · 역할별 기록을 확인하지 못했습니다.</p>;
   return <div className={styles.discussion}><p className={styles.note}>같은 모델의 역할별 개별 검토 · 모델 호출 <span className="mono">{discussion.modelCalls}</span>회</p>
     <ol className={styles.speeches}>{discussion.turns.map((speech, index) => <li key={speech.ownerId + speech.round + index} className={styles.speech}>
-      <div className={styles.speechHeader}><strong>{personName(speech.ownerId)}</strong><span>{personRole(speech.ownerId)}</span><span>{speech.round === 'position' ? '첫 의견' : '상호 검토 · ' + (speech.changed ? '관점 수정' : '판단 유지')}</span></div>
+      <div className={styles.speechHeader}><OfficeAvatar agentId={speech.ownerId} /><strong>{personName(speech.ownerId)}</strong><span>{personRole(speech.ownerId)}</span><span>{speech.round === 'position' ? '첫 의견' : '상호 검토 · ' + (speech.changed ? '관점 수정' : '판단 유지')}</span></div>
       <p className={styles.speechBody}>{speech.position}</p>
       <div className={styles.speechMeta}>근거 {speech.evidence[0] || '제공 없음'} · 반론 {speech.objection || '없음'} · 판단 조건 {speech.revisionCondition}</div>
       <details className={styles.speechDetails}><summary>발언 근거와 판단 조건</summary><dl>
@@ -92,7 +93,7 @@ function ResultTurn({ turn, onRevise, onCopy, onSkill, onOpenMentor, skillAvaila
     <RequestMessage message={turn.message} />
     <ThreadDiscussion result={result} request={turn.request} />
     <div className={styles.summary}>
-      <div className={styles.answerHeader}><strong>종합 · {owner?.name || 'Office'}</strong><span>{SCOPE_LABEL[result.scope]} · {MODES.find(item => item.key === result.mode)?.label}</span>
+      <div className={styles.answerHeader}><OfficeAvatar agentId={result.ownerId} /><strong>종합 · {owner?.name || 'Office'}</strong><span>{SCOPE_LABEL[result.scope]} · {MODES.find(item => item.key === result.mode)?.label}</span>
         <CertaintyBadge state="recommended" />{result.sourceCheck === 'untraced' ? <CertaintyBadge state="unknown" label="근거 확인 안 됨" /> : null}</div>
       <div className={styles.answer}>{result.answer}</div>
       <div className={styles.answerActions}><Button variant="outline" size="sm" onClick={() => onCopy(result.answer, turn.id)}>답변 복사</Button>
@@ -358,9 +359,9 @@ export function OfficeCouncil({ scope = 'all' }) {
     {mentorDrawerId ? <OfficeMentorDrawer sessionId={mentorDrawerId} onClose={() => setMentorDrawerId(null)} /> : null}
     {rosterOpen ? <Drawer title="참석자 바꾸기" subtitle="주관 한 명과 관점 최대 두 명을 고르세요." onClose={() => setRosterOpen(false)} width="min(480px, 94vw)" footer={<Button variant="primary" onClick={() => setRosterOpen(false)}>완료</Button>}>
       <div className={styles.roster}><strong>주관</strong>{OFFICE_ROSTER.map(person => <button type="button" key={person.id} className={'hub-row ' + styles.member} aria-pressed={person.id === ownerId} onClick={() => { invalidateAssignment(); update({ ownerId: person.id, reviewers: reviewers.filter(id => id !== person.id), presetId: null }); }}>
-        <span><strong>{person.name} <small>{person.role}</small></strong><span className={styles.memberPitch}>{person.pitch}</span></span></button>)}
+        <OfficeAvatar agentId={person.id} size="large" /><span><strong>{person.name} <small>{person.role}</small></strong><span className={styles.memberPitch}>{person.pitch}</span></span></button>)}
         <strong>함께 볼 관점</strong>{['draft', 'review'].includes(mode) ? <p className={styles.note}>초안·검토는 주관 혼자 씁니다. 더보기에서 대화로 바꾸면 관점을 추가할 수 있습니다.</p> : null}
-        <div className={styles.views}>{OFFICE_ROSTER.filter(person => person.id !== ownerId).map(person => <CheckboxRow key={person.id} text={person.name + ' · ' + person.role} checked={reviewers.includes(person.id)}
+        <div className={styles.views}>{OFFICE_ROSTER.filter(person => person.id !== ownerId).map(person => <CheckboxRow key={person.id} text={person.name + ' · ' + person.role} leading={<OfficeAvatar agentId={person.id} size="small" />} checked={reviewers.includes(person.id)}
           disabled={busy || ['draft', 'review'].includes(mode) || (!reviewers.includes(person.id) && reviewers.length >= 2)}
           onChange={() => { invalidateAssignment(); update(current => ({ presetId: null, reviewers: current.reviewers.includes(person.id) ? current.reviewers.filter(id => id !== person.id) : [...current.reviewers, person.id] })); }} />)}</div>
       </div></Drawer> : null}

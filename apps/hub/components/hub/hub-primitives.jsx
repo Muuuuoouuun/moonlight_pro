@@ -702,7 +702,7 @@ export const SelectField = React.forwardRef(function SelectField(
 // Checkbox + its words as ONE control. `<Checkbox label="x" />` beside a plain
 // <span>x</span> shipped a dead text target and a doubled accessible name; this is the
 // canonical form whenever the box has visible text next to it.
-export function CheckboxRow({ checked, onChange, text, disabled = false, size = 17, style, className = '' }) {
+export function CheckboxRow({ checked, onChange, text, leading = null, disabled = false, size = 17, style, className = '' }) {
   const isChecked = Boolean(checked);
   return (
     <button
@@ -734,6 +734,7 @@ export function CheckboxRow({ checked, onChange, text, disabled = false, size = 
           </span>
         )}
       </span>
+      {leading}
       {text}
     </button>
   );

@@ -69,7 +69,7 @@
 .assignmentReason { border-top:1px solid var(--line-soft); padding-top:12px; color:var(--fg-muted); }
 .roster,.more,.taskPicker { display:grid; gap:12px; padding:16px; }
 .roster > strong,.more > strong { font-size:13px; font-weight:600; }
-.member { display:flex; width:100%; text-align:left; padding:12px; border:1px solid var(--line-soft); border-radius:var(--r-sm); background:transparent; color:var(--fg); cursor:pointer; }
+.member { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:12px; border:1px solid var(--line-soft); border-radius:var(--r-sm); background:transparent; color:var(--fg); cursor:pointer; }
 .member[aria-pressed="true"] { background:var(--surface-2); border-color:var(--accent-line); box-shadow:inset 1px 0 0 var(--accent); }
 .member strong { display:block; font-size:14px; font-weight:500; }
 .member small { margin-left:8px; font-size:12px; color:var(--fg-muted); font-weight:400; }
