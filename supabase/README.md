@@ -26,6 +26,7 @@ Com_Moon Hub OS의 스키마·마이그레이션 안내입니다. 운영 DB는 �
 - `migrations/20260902_0024_overview_read_indexes.sql`: Overview lean read model 최신순 쿼리 인덱스(tasks/decisions/publish logs/automation runs/routine checks)
 - `migrations/20260912_0025`~`20260923_0043`: 하루 리뷰·콘텐츠·메모·문의·Agent·Office·운영 목표·AI·캘린더·Top 3 등 후속 기능. 동일 번호가 다른 날짜에 재사용된 파일이 있으므로 **전체 파일명**으로 식별한다.
 - `migrations/20260923_0044_migration_history.sql`: 이후 파일의 이름·SHA256을 원자적으로 기록하는 비공개 운영 이력과 실행 함수.
+- `migrations/20260924_0046_social_multiaccount_connections.sql`: 기존 소셜 연결 ID·토큰·sync 참조를 유지하면서 외부 계정 ID별 고유 키로 확장. Engine의 `on_conflict` 변경과 함께 배포해야 한다.
 - `apply-pending.sql`: **과거 0003→0024 번들**. 현재 서울 운영 DB에는 실행하지 않는다.
 - `seed.supabase_first.sql`: foundation migration 이후 넣는 브랜드/프로젝트 seed 보강
 - `policies/supabase_first_rls.sql`: Auth 연결 후 적용할 RLS 정책 초안

@@ -391,11 +391,16 @@ create table integration_connections (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   provider text not null,
+  account_key text not null default '',
+  external_account_id text,
   status text not null default 'pending' check (status in ('pending', 'connected', 'error', 'disabled')),
   config jsonb not null default '{}'::jsonb,
   last_synced_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+create unique index uq_integration_connections_workspace_provider_account
+  on integration_connections (workspace_id, provider, account_key);
 
 create table field_mappings (
   id uuid primary key default gen_random_uuid(),

@@ -1,11 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import {
-  fetchSupabaseRowsDetailed,
-  insertSupabaseRecord,
   resolveDefaultWorkspaceId,
-  updateSupabaseRecord,
 } from "@com-moon/supabase-rest";
+import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "./social-account-connections.js";
 
 const PROVIDER = "youtube";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -59,14 +57,17 @@ export function buildYouTubeAuthUrl({
   origin,
   workspaceId = resolveDefaultWorkspaceId(),
   expectedChannelId = "",
+  brandKey = null,
   returnPath = "/dashboard/settings",
 } = {}) {
   const config = resolveYouTubeOAuthConfig();
-  if (!config.configured || !hasYouTubeOAuthStateSecret() || !workspaceId) return null;
+  if (!config.configured || !hasYouTubeOAuthStateSecret() || !workspaceId ||
+    (brandKey != null && !isValidSocialBrandKey(brandKey))) return null;
 
   const payload = Buffer.from(JSON.stringify({
     workspaceId,
     expectedChannelId: String(expectedChannelId || "").trim(),
+    brandKey,
     returnPath: safeReturnPath(returnPath),
     iat: Date.now(),
   })).toString("base64url");
@@ -97,7 +98,8 @@ export function decodeYouTubeState(value) {
     const state = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
     const age = Date.now() - state?.iat;
     if (!Number.isSafeInteger(state?.iat) || age < 0 || age > STATE_MAX_AGE_MS ||
-      typeof state.workspaceId !== "string" || !state.workspaceId) {
+      typeof state.workspaceId !== "string" || !state.workspaceId ||
+      (state.brandKey != null && !isValidSocialBrandKey(state.brandKey))) {
       return { invalid: true };
     }
     return state;
@@ -160,31 +162,25 @@ export function isExpectedYouTubeChannel(channel, expectedChannelId) {
 }
 
 export async function readLatestYouTubeConnection(workspaceId = resolveDefaultWorkspaceId()) {
-  if (!workspaceId) return { connection: null, available: false };
-  const result = await fetchSupabaseRowsDetailed("integration_connections", {
-    filters: [["workspace_id", `eq.${workspaceId}`], ["provider", `eq.${PROVIDER}`]],
-    order: "created_at.desc",
-    limit: 1,
-  });
+  const result = await listSocialAccountConnections(PROVIDER, workspaceId);
   return {
-    connection: result.rows?.[0] || null,
-    available: result.configured && !result.error,
+    connection: result.connections[0] || null,
+    available: result.available,
   };
 }
 
-export async function saveYouTubeConnection({ workspaceId, token, channel }) {
-  const { connection: existing, available } = await readLatestYouTubeConnection(workspaceId);
-  if (!available) throw new Error("youtube-connection-read-failed");
-  if (existing?.status === "connected" && existing.config?.channelId !== channel.id) {
-    throw new Error("youtube-existing-channel-mismatch");
-  }
+export async function readYouTubeConnections(workspaceId = resolveDefaultWorkspaceId(), accountId = "") {
+  return listSocialAccountConnections(PROVIDER, workspaceId, accountId);
+}
 
-  const now = new Date().toISOString();
+export async function saveYouTubeConnection({ workspaceId, token, channel, brandKey = null }) {
+  if (!channel?.id) throw new Error("social-account-id-missing");
   const refreshExpiresIn = Number(token.refresh_token_expires_in);
   const config = {
     provider: "YouTube",
     channelId: channel.id,
     channelTitle: channel.title,
+    brandKey: brandKey || null,
     scope: token.scope || SCOPES.join(" "),
     tokenType: token.token_type || "Bearer",
     accessToken: token.access_token,
@@ -196,22 +192,9 @@ export async function saveYouTubeConnection({ workspaceId, token, channel }) {
       ? new Date(Date.now() + refreshExpiresIn * 1000).toISOString()
       : null,
   };
-  const record = {
-    workspace_id: workspaceId,
-    provider: PROVIDER,
-    status: "connected",
-    external_account_id: channel.id,
-    config,
-    last_synced_at: now,
-  };
-  const persistence = existing?.id
-    ? await updateSupabaseRecord(
-      "integration_connections",
-      [["id", `eq.${existing.id}`]],
-      record,
-      { returnRepresentation: true },
-    )
-    : await insertSupabaseRecord("integration_connections", record, { returnRepresentation: true });
+  const persistence = await saveSocialAccountConnection({
+    workspaceId, provider: PROVIDER, accountId: channel.id, config,
+  });
   return { connectionId: persistence.id || null, persistence, config };
 }
 
@@ -223,6 +206,7 @@ export function summarizeYouTubeConnection(connection) {
     lastSyncedAt: connection?.last_synced_at || null,
     channelId: config.channelId || null,
     channelTitle: config.channelTitle || null,
+    brandKey: config.brandKey || null,
     expiresAt: config.expiresAt || null,
     refreshTokenExpiresAt: config.refreshTokenExpiresAt || null,
     hasRefreshToken: Boolean(config.refreshToken),

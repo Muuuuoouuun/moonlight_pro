@@ -1,11 +1,9 @@
 import {
   insertSupabaseRecord,
-  makeSupabaseHeaders,
   resolveDefaultWorkspaceId,
-  resolveSupabaseConfig,
-  updateSupabaseRecord,
 } from "@/lib/server-write";
 import { createHmac, timingSafeEqual } from "crypto";
+import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
 
 const INSTAGRAM_API_PROVIDER = "instagram_api";
 const INSTAGRAM_API_SYNC_SOURCE = "instagram_api";
@@ -66,55 +64,6 @@ export function resolveInstagramApiConfig() {
     hasAppId: Boolean(appId),
     hasAppSecret: Boolean(appSecret),
   };
-}
-
-function buildSupabaseReadUrl(table, { select = "*", filters = [], order, limit } = {}) {
-  const config = resolveSupabaseConfig();
-
-  if (!config) {
-    return null;
-  }
-
-  const params = new URLSearchParams();
-  params.set("select", select);
-
-  if (order) {
-    params.set("order", order);
-  }
-
-  if (typeof limit === "number") {
-    params.set("limit", String(limit));
-  }
-
-  filters.forEach(([key, value]) => {
-    params.append(key, value);
-  });
-
-  return `${config.url}/rest/v1/${table}?${params.toString()}`;
-}
-
-async function fetchSupabaseRows(table, options = {}) {
-  const config = resolveSupabaseConfig();
-  const url = buildSupabaseReadUrl(table, options);
-
-  if (!config || !url) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(url, {
-      headers: makeSupabaseHeaders(config.apiKey),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await response.json();
-  } catch {
-    return null;
-  }
 }
 
 function resolveOAuthStateSecret() {
@@ -185,7 +134,10 @@ export function decodeInstagramApiState(value) {
       Array.isArray(state) ||
       !Number.isSafeInteger(state.iat) ||
       state.iat > now ||
-      now - state.iat > OAUTH_STATE_MAX_AGE_MS
+      now - state.iat > OAUTH_STATE_MAX_AGE_MS ||
+      typeof state.workspaceId !== "string" || !state.workspaceId ||
+      typeof state.brandHandle !== "string" || !state.brandHandle ||
+      (state.brandKey != null && !isValidSocialBrandKey(state.brandKey))
     ) {
       return { invalid: true };
     }
@@ -236,11 +188,13 @@ export function buildInstagramApiAuthUrl({
   origin,
   workspaceId = resolveDefaultWorkspaceId(),
   brandHandle = DEFAULT_BRAND_HANDLE,
+  brandKey = null,
   returnPath = "/dashboard/settings",
 }) {
   const config = resolveInstagramApiConfig();
 
-  if (!config.configured || !hasInstagramApiOAuthStateSecret()) {
+  if (!config.configured || !hasInstagramApiOAuthStateSecret() || !workspaceId ||
+    (brandKey != null && !isValidSocialBrandKey(brandKey))) {
     return null;
   }
 
@@ -254,6 +208,7 @@ export function buildInstagramApiAuthUrl({
     state: encodeState({
       workspaceId: workspaceId || resolveDefaultWorkspaceId(),
       brandHandle: normalizeHandle(brandHandle, config.brandHandle),
+      brandKey,
       returnPath: sanitizeReturnPath(returnPath, "/dashboard/settings"),
     }),
   });
@@ -381,39 +336,32 @@ export async function fetchInstagramApiProfile(accessToken) {
 export async function fetchLatestInstagramApiConnection(
   workspaceId = resolveDefaultWorkspaceId(),
 ) {
-  const filters = [["provider", `eq.${INSTAGRAM_API_PROVIDER}`]];
+  const { connections } = await listSocialAccountConnections(INSTAGRAM_API_PROVIDER, workspaceId);
+  return connections[0] || null;
+}
 
-  if (workspaceId) {
-    filters.push(["workspace_id", `eq.${workspaceId}`]);
-  }
-
-  const rows = await fetchSupabaseRows("integration_connections", {
-    filters,
-    order: "created_at.desc",
-    limit: 1,
-  });
-
-  return rows?.[0] || null;
+export async function fetchInstagramApiConnections(workspaceId = resolveDefaultWorkspaceId(), accountId = "") {
+  return listSocialAccountConnections(INSTAGRAM_API_PROVIDER, workspaceId, accountId);
 }
 
 export async function saveInstagramApiConnection({
   workspaceId = resolveDefaultWorkspaceId(),
   brandHandle = DEFAULT_BRAND_HANDLE,
+  brandKey = null,
   tokenData,
   longLivedTokenData,
   profile,
 }) {
-  const existing = await fetchLatestInstagramApiConnection(workspaceId);
-  const now = new Date().toISOString();
+  if (!profile?.id || !profile?.username) throw new Error("social-account-id-missing");
   const accessToken =
     longLivedTokenData?.access_token ||
     tokenData?.access_token ||
-    existing?.config?.accessToken ||
     "";
   const expiresIn = longLivedTokenData?.expires_in || tokenData?.expires_in || null;
   const config = {
     provider: "Instagram API",
     brandHandle: normalizeHandle(brandHandle),
+    brandKey: brandKey || null,
     scope:
       longLivedTokenData?.scope ||
       tokenData?.scope ||
@@ -422,47 +370,22 @@ export async function saveInstagramApiConnection({
     tokenType: longLivedTokenData?.token_type || tokenData?.token_type || "Bearer",
     expiresAt: expiresIn
       ? new Date(Date.now() + expiresIn * 1000).toISOString()
-      : existing?.config?.expiresAt || null,
-    appScopedId: profile?.id || tokenData?.user_id || existing?.config?.appScopedId || null,
-    userId: profile?.user_id || existing?.config?.userId || null,
-    username: profile?.username || existing?.config?.username || null,
-    name: profile?.name || existing?.config?.name || null,
-    accountType: profile?.account_type || existing?.config?.accountType || null,
-    profilePictureUrl:
-      profile?.profile_picture_url ||
-      existing?.config?.profilePictureUrl ||
-      null,
-    followersCount: profile?.followers_count ?? existing?.config?.followersCount ?? null,
-    followsCount: profile?.follows_count ?? existing?.config?.followsCount ?? null,
-    mediaCount: profile?.media_count ?? existing?.config?.mediaCount ?? null,
+      : null,
+    appScopedId: profile.id,
+    userId: profile.user_id || null,
+    username: profile.username,
+    name: profile.name || null,
+    accountType: profile.account_type || null,
+    profilePictureUrl: profile.profile_picture_url || null,
+    followersCount: profile.followers_count ?? null,
+    followsCount: profile.follows_count ?? null,
+    mediaCount: profile.media_count ?? null,
   };
-  const record = {
-    workspace_id: workspaceId || null,
-    provider: INSTAGRAM_API_PROVIDER,
-    status: "connected",
-    config,
-    last_synced_at: now,
-  };
-
-  if (existing?.id) {
-    const persistence = await updateSupabaseRecord(
-      "integration_connections",
-      [["id", `eq.${existing.id}`]],
-      record,
-    );
-
-    return {
-      connectionId: existing.id,
-      persistence,
-      config,
-    };
-  }
-
-  const persistence = await insertSupabaseRecord("integration_connections", record);
-  const latest = await fetchLatestInstagramApiConnection(workspaceId);
-
+  const persistence = await saveSocialAccountConnection({
+    workspaceId, provider: INSTAGRAM_API_PROVIDER, accountId: profile.id, config,
+  });
   return {
-    connectionId: latest?.id || null,
+    connectionId: persistence.id || null,
     persistence,
     config,
   };
@@ -497,6 +420,7 @@ export function summarizeInstagramApiConnection(connection) {
     status: connection?.status || "pending",
     lastSyncedAt: connection?.last_synced_at || null,
     brandHandle: normalizeHandle(config.brandHandle),
+    brandKey: config.brandKey || null,
     appScopedId: config.appScopedId || null,
     userId: config.userId || null,
     username: config.username || null,
@@ -522,8 +446,8 @@ export async function checkInstagramApiProfileMatch({
   profile,
   recordSync = recordInstagramApiSync,
 }) {
-  const profileMatch = isExpectedInstagramApiProfile(profile, brandHandle);
-  if (profileMatch !== false) {
+  const profileMatch = Boolean(profile?.id && isExpectedInstagramApiProfile(profile, brandHandle));
+  if (profileMatch) {
     return { profileMatch, rejected: false };
   }
 
@@ -533,7 +457,7 @@ export async function checkInstagramApiProfileMatch({
     payload: {
       action: "oauth_connect",
       brandHandle,
-      username: profile.username,
+      username: profile?.username || null,
       result: "account-mismatch",
     },
     errorMessage: `Authorized Instagram account does not match @${brandHandle}.`,
