@@ -7,21 +7,17 @@ import { shiftDateKey } from '@/lib/rhythm-calendar';
 import { savedMessage, suggestFromFocus, weekProgress } from '@/lib/daily-review-rhythm';
 import { dayTotal } from '@/lib/review-activity';
 import { ReviewWeekStrip } from '../daily-review-weekstrip';
+import { EnergyMoon } from '../energy-moon';
 import { DailyReviewCoach } from './daily-review-coach';
 import { ENERGY_LABELS, PROGRESS, progressLabel } from './daily-review-labels';
 
 export { ENERGY_LABELS, progressLabel };
 
-// 에너지 칸 — 숫자 + 오름 막대(채운 막대 수 = 값) + 짧은 단어. 색이 아니라 막대 수와 단어가 값을 말한다(§5.3).
+// 에너지 칸 — 달 위상 + 숫자 + 짧은 단어. 색이 아니라 밝은 면의 넓이와 단어가 값을 말한다(§5.3).
 const ENERGY_WORDS = ['지침', '조금 지침', '보통', '여유', '활기'];
-function EnergyGlyph({ level }) {
-  return <svg className="daily-review-energy-glyph" width="21" height="14" viewBox="0 0 17 12" aria-hidden="true">
-    {[1, 2, 3, 4, 5].map((bar) => <rect key={bar} x={(bar - 1) * 3.5 + 0.5} y={12 - bar * 2.2} width="2.4" height={bar * 2.2} rx="0.6" data-on={bar <= level} />)}
-  </svg>;
-}
 const ENERGY = [1, 2, 3, 4, 5].map((key) => ({
   key,
-  label: <span className="daily-review-energy-opt"><EnergyGlyph level={key} /><span className="mono">{key}</span><span className="daily-review-energy-word">{ENERGY_WORDS[key - 1]}</span></span>,
+  label: <span className="daily-review-energy-opt"><EnergyMoon level={key} size={22} /><span className="mono">{key}</span><span className="daily-review-energy-word">{ENERGY_WORDS[key - 1]}</span></span>,
 }));
 // 메모 머리말 — 필드를 늘리지 않고(09-20 §6.3 "회고 질문 없음") 한 줄을 시작하게만 돕는다.
 const NOTE_STARTERS = ['잘된 일', '걸린 일', '내일 첫 일'];

@@ -80,8 +80,6 @@
 .daily-review-energy-opt .mono { font-size: 14px; line-height: 1; }
 .daily-review-energy-word { font-size: 11px; line-height: 1.2; color: var(--fg-dim); white-space: nowrap; }
 .hub-seg__btn[aria-pressed="true"] .daily-review-energy-word { color: var(--fg-muted); }
-.daily-review-energy-glyph rect { fill: currentColor; }
-.daily-review-energy-glyph rect[data-on="false"] { fill: none; stroke: var(--line-strong); stroke-width: 0.8; }
 /* 오늘 한 일 — 읽기 전용 칩. 0뿐인 조각은 그리지 않는다. */
 .daily-review-did { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 22px; font-size: 12px; }
 .daily-review-did-label { margin-right: 2px; font-size: 11px; color: var(--fg-dim); }
@@ -125,7 +123,7 @@
 .daily-review-cue[data-kind="done"] .daily-review-cue-main { color: var(--fg-muted); }
 /* 원탭 에너지 — 선택 없이 누르는 즉시 저장. 휴지 상태는 중립, hover는 surface 한 단계(§5.2). */
 .daily-review-cue-energy { display: inline-flex; gap: 4px; }
-.hub-app .daily-review-cue-energy-btn { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--fg); font-size: 13px; cursor: pointer; transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub); }
+.hub-app .daily-review-cue-energy-btn { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 40px; height: 44px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--fg); font-size: 12px; line-height: 1; cursor: pointer; transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub); }
 .hub-app .daily-review-cue-energy-btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--line-strong); }
 .hub-app .daily-review-cue-energy-btn:disabled { cursor: default; color: var(--fg-faint); }
 .hub-app .daily-review-cue-energy-btn[aria-busy="true"] { color: var(--fg); border-color: var(--line-strong); background: var(--surface-2); }
@@ -174,7 +172,7 @@
   .daily-review-day { min-height: 44px; }
   .daily-review-suggestion { flex-direction: column; align-items: stretch; }
   .daily-review-cue-energy { flex: 1 1 100%; }
-  .hub-app .daily-review-cue-energy-btn { flex: 1; height: 44px; }
+  .hub-app .daily-review-cue-energy-btn { flex: 1; height: 50px; }
   .daily-review-weekstrip { flex: 1 1 100%; justify-content: space-between; padding: 2px 10px 4px; }
   .daily-review-open kbd { display: none; }
   .daily-review-heat { padding: 14px 12px 12px; }

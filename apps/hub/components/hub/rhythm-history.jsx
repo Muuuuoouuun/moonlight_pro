@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Button, EmptyState, IconButton, SegmentedControl, Skeleton, TruthBadge } from "./hub-primitives";
-import { StreakMark } from "./burning-streak";
+import { StreakMark, streakLevel } from "./burning-streak";
 import { RITUAL_CATEGORY_LABELS } from "@/lib/rhythm-ui";
 import { buildRhythmBars, RHYTHM_HISTORY_RANGE_LABELS, RHYTHM_HISTORY_RANGES } from "@/lib/rhythm-history";
 import "./rhythm-history.css";
@@ -34,13 +34,6 @@ function dayTitle(day) {
   return `${m}월 ${d}일 · ${day.done}/${day.due} 완료`;
 }
 
-function streakLevel(days) {
-  if (days >= 14) return 4;
-  if (days >= 7) return 3;
-  if (days >= 3) return 2;
-  if (days >= 1) return 1;
-  return 0;
-}
 
 function useRhythmHistory({ range, offset, projectId, version }) {
   const [state, setState] = React.useState({ status: "loading", data: null, error: null });
