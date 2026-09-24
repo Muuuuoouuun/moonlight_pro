@@ -2,6 +2,7 @@ import {
   fetchSupabaseRowsDetailed,
   upsertSupabaseRecords,
 } from "@com-moon/supabase-rest";
+import { resolveMetaOAuthAppFromState } from "./meta-oauth-apps.js";
 
 const CONFLICT_KEY = "workspace_id,provider,account_key";
 
@@ -44,18 +45,42 @@ export async function listSocialAccountConnections(provider, workspaceId, accoun
   };
 }
 
-export async function resolveExpectedSocialAccountId({ provider, workspaceId, handle, brandKey = null, accountId = null }) {
+export async function resolveExpectedSocialAccountId({ provider, workspaceId, handle, brandKey = null, accountId = null, app = null }) {
   const expectedHandle = typeof handle === "string" ? handle.trim().replace(/^@+/, "").toLowerCase() : "";
   if (!/^[a-z0-9._]{1,30}$/.test(expectedHandle) ||
     (accountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(accountId))) {
     throw new Error("social-account-mismatch");
   }
+  const metaProvider = provider === "instagram_api" || provider === "meta_threads";
+  if (metaProvider && (!app?.configured || app.brandHandle !== expectedHandle ||
+    app.brandKey !== (brandKey || "bridgemaker") ||
+    !resolveMetaOAuthAppFromState({ ...app, provider }))) {
+    throw new Error("social-account-app-invalid");
+  }
+  const expectedBrandKey = metaProvider ? app.brandKey : brandKey;
   const matches = [];
   for (let offset = 0; ; offset += 100) {
     const { connections, available } = await listSocialAccountConnections(provider, workspaceId, "", offset);
     if (!available) throw new Error("social-account-read-failed");
-    matches.push(...connections.filter((row) =>
-      row.config?.username?.trim().replace(/^@+/, "").toLowerCase() === expectedHandle));
+    for (const row of connections) {
+      if (row.config?.username?.trim().replace(/^@+/, "").toLowerCase() !== expectedHandle) continue;
+      if (row.config?.brandHandle &&
+        row.config.brandHandle.trim().replace(/^@+/, "").toLowerCase() !== expectedHandle) {
+        throw new Error("social-account-mismatch");
+      }
+      if (expectedBrandKey && row.config?.brandKey && row.config.brandKey !== expectedBrandKey) {
+        throw new Error("social-account-brand-mismatch");
+      }
+      if (metaProvider) {
+        // Meta account IDs can differ between apps. Only the signing app's ID
+        // may constrain the next authorization; other app rows remain intact.
+        const sameApp = row.config?.oauthAppId === app.appId && row.config?.oauthAppKey === app.appKey;
+        const legacyBridge = app.brandKey === "bridgemaker" && app.appKey === "moonlight" &&
+          !row.config?.oauthAppId && !row.config?.oauthAppKey;
+        if (!sameApp && !legacyBridge) continue;
+      }
+      matches.push(row);
+    }
     if (matches.length > 1) throw new Error("social-account-ambiguous");
     if (connections.length < 100) break;
   }
@@ -63,8 +88,8 @@ export async function resolveExpectedSocialAccountId({ provider, workspaceId, ha
   if (accountId != null && (!match || match.account_key !== accountId)) {
     throw new Error("social-account-mismatch");
   }
-  if (brandKey && match?.config?.brandKey && match.config.brandKey !== brandKey) {
-    throw new Error("social-account-brand-mismatch");
+  if (match && !/^[A-Za-z0-9_-]{1,128}$/.test(match.account_key)) {
+    throw new Error("social-account-mismatch");
   }
   return match?.account_key || null;
 }
