@@ -3,23 +3,28 @@
 import React from 'react';
 import { JournalSources } from '../journal-links';
 import { GoalLinks } from '../goal-links';
-import { Badge, Button, Card, Drawer, Skeleton, TextField, TextAreaField, SelectField, TruthBadge, useToast } from '../hub-primitives';
+import { Button, Card, Drawer, Kbd, Skeleton, TextField, TextAreaField, SelectField, TruthBadge, useToast } from '../hub-primitives';
 import { filterBrandsByWorkspace } from '../workspace-map';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { BRIEF_FIELDS, STUDIO_CHANNELS, channelLabel, channelForType, formatForChannel, exportStudioVariant, studioTextForCopy } from '@/lib/content-workflow-client';
-import { triggerCelebration, triggerSparkleAt } from '../celebration-fx';
 import { useContentStudio } from './use-content-studio';
+import { useContentTemplates } from './use-content-templates';
 import { DraftEditor } from './content-studio-editors';
 import { StudioAI } from './content-studio-ai';
 import { FloatingMentorWidget } from '../floating-mentor-widget';
 import './content-studio.css';
 
+// 기본 화면은 "Threads 글 한 편 끝내기"만 담는다: 메모 → 본문 → AI 초안/다듬기 → 복사 → 발행 기록.
+// 나머지(브랜드·기획·채널·버전·내보내기·목표·검토)는 '더보기' 드로어에 둔다.
+// 새 기능을 이 화면 본문에 패널로 붙이지 않는다 — 2026-09-23 Studio 단순화 스펙 §3.
 const BLOCKERS = [
   { value: '', label: '막힘 없음' }, { value: 'direction', label: '방향이 아직 모호함' },
   { value: 'evidence', label: '근거·사례가 필요함' }, { value: 'writing', label: '문장을 쓰기 어려움' },
   { value: 'production', label: '이미지·촬영 등 제작 대기' }, { value: 'review', label: '검토가 필요함' },
 ];
-const SAVE_LABELS = { idle: '새 초안', editing: '변경됨', saving: '서버 저장 중', saved: '서버 저장됨', local: '서버 미연결', error: '서버 저장 미확인', conflict: '최신 내용 확인 필요' };
+// 평소 저장은 조용한 한 단어로만 알린다. 사용자가 행동해야 하는 상태만 TruthBadge로 올린다.
+const QUIET_SAVE = { idle: '', editing: '입력 중', saving: '저장 중…', saved: '저장됨' };
+const LOUD_SAVE = { local: '서버 미연결', error: '서버 저장 미확인', conflict: '최신 내용 확인 필요' };
 const REASONS = { checkpoint: '직접 저장한 버전', before_apply: 'AI 적용 전', after_apply: 'AI 적용 후', before_restore: '복원 전', branch_source: '채널 변형에 사용한 원본', branch: '파생 결과물' };
 const dateLabel = (value) => value ? new Date(value).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 
@@ -27,13 +32,16 @@ export function ContentStudio({ workspace, ledger }) {
   const studio = useContentStudio(workspace), { draft } = studio;
   const toast = useToast();
   const [selection, setSelection] = React.useState(null), [drawer, setDrawer] = React.useState(null);
-  const [sourceOpen, setSourceOpen] = React.useState(false);
-  const [writingFocus, setWritingFocus] = React.useState(false);
+  const [memoOpen, setMemoOpen] = React.useState(null);
   const [publicationUrl, setPublicationUrl] = React.useState('');
   const [publicationDate, setPublicationDate] = React.useState('');
   const [mentorOpen, setMentorOpen] = React.useState(false);
   const [mentorMode, setMentorMode] = React.useState('advice');
   const [newChannel, setNewChannel] = React.useState('instagram'), [notice, setNotice] = React.useState('');
+  const templates = useContentTemplates();
+  // AI 요청은 작업마다 쓰는 지시문이라 콘텐츠에 저장하지 않는다. 실행한 요청은 AI 작업 기록(run)에 남는다.
+  const [aiRequest, setAiRequest] = React.useState(''), [templateId, setTemplateId] = React.useState('');
+  const [templateDraft, setTemplateDraft] = React.useState(null), [templateSaving, setTemplateSaving] = React.useState(false);
   const brands = filterBrandsByWorkspace(ledger.brands || [], workspace).filter((brand) => brand.id && brand.key !== 'all');
   const allBrands = ledger.brands || [];
   const selectedBrand = allBrands.find((brand) => brand.id === draft.brandId);
@@ -43,18 +51,14 @@ export function ContentStudio({ workspace, ledger }) {
   const revisions = studio.history?.revisions || [];
   const variants = studio.detail?.variants || [];
   const briefCount = BRIEF_FIELDS.filter(({ key }) => draft.brief[key]?.trim()).length;
+  // 본문이 비어 있으면 메모부터 보이게 연다. 사용자가 직접 접거나 펼치면 그 선택을 따른다.
+  const memoIsOpen = memoOpen ?? !draft.body.trim();
   usePageCreateHotkey(studio.newDraft);
-  const copy = async (event) => {
+  const copy = async () => {
     try {
       await navigator.clipboard.writeText(studioTextForCopy(draft));
-      if (event?.clientX && event?.clientY) {
-        triggerSparkleAt(event.clientX, event.clientY);
-      } else if (event?.target?.getBoundingClientRect) {
-        const rect = event.target.getBoundingClientRect();
-        triggerSparkleAt(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      }
-      toast.success('결과물을 복사했습니다. 원하는 채널에 붙여넣을 수 있습니다.');
-    } catch { toast.error('복사하지 못했습니다. 내보내기로 파일을 받거나 본문을 직접 선택해주세요.'); }
+      toast.success('복사했습니다. Threads에 붙여넣으세요.');
+    } catch { toast.error('복사하지 못했습니다. 더보기 → 파일로 내보내기를 쓰거나 본문을 직접 선택해주세요.'); }
   };
   const download = () => {
     try {
@@ -67,6 +71,41 @@ export function ContentStudio({ workspace, ledger }) {
     } catch (error) { toast.error(error.message); }
   };
   const openHistory = async () => { setDrawer('history'); await studio.refreshHistory(); };
+  // 발행 일시는 보통 '방금'이므로 지금 시각을 미리 채운다(로컬 datetime-local 형식).
+  const openPublication = () => {
+    if (!publicationDate) {
+      const now = new Date();
+      setPublicationDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    }
+    setDrawer('publication');
+  };
+  const pickTemplate = (id) => {
+    setTemplateId(id);
+    const template = templates.templates.find((t) => t.id === id);
+    if (!template) return;
+    setAiRequest(template.request);
+    if (!template.skeleton.trim()) return;
+    if (!draft.body.trim() && !['card_news', 'reels_script'].includes(draft.variantType)) studio.edit({ body: template.skeleton });
+    else toast.info('본문이 비어 있을 때만 글 틀을 넣습니다. 요청문만 적용했습니다.');
+  };
+  const editTemplate = (template) => setTemplateDraft(template ? { ...template } : { id: crypto.randomUUID(), name: '', request: aiRequest, skeleton: '', revision: 0 });
+  const saveTemplate = async () => {
+    setTemplateSaving(true);
+    const result = await templates.save(templateDraft);
+    setTemplateSaving(false);
+    if (['saved', 'duplicate'].includes(result.status)) {
+      if (templateId === result.template.id || !templateDraft.revision) setTemplateId(result.template.id);
+      setTemplateDraft(null);
+      toast.success('템플릿을 저장했습니다.');
+    } else toast.error(result.message || '템플릿을 저장하지 못했습니다.');
+  };
+  const deleteTemplate = async (template) => {
+    if (!window.confirm(`'${template.name}' 템플릿을 삭제할까요?`)) return;
+    const result = await templates.remove(template.id);
+    if (result.status === 'deleted') { if (templateId === template.id) setTemplateId(''); toast.success('템플릿을 삭제했습니다.'); }
+    else toast.error(result.message || '템플릿을 삭제하지 못했습니다.');
+  };
+  const openMentor = (mode) => { setDrawer(null); setMentorMode(mode); setMentorOpen(true); };
   const createVariant = async () => {
     const type = formatForChannel(newChannel);
     const body = type === 'card_news' ? '{"slides":[]}' : type === 'reels_script' ? '{"scenes":[]}' : '';
@@ -77,30 +116,31 @@ export function ContentStudio({ workspace, ledger }) {
       toast.success('새 채널 결과물을 추가했습니다.');
     }
   };
-  const saveTruth = studio.loadError ? 'error' : !studio.ready ? 'syncing' : ['error', 'conflict'].includes(studio.saveState) ? 'error' : studio.saveState === 'saving' ? 'syncing' : studio.saveState === 'saved' ? 'live' : 'preview';
-  return <div className={'hub-page content-studio' + (writingFocus ? ' studio-writing-focus' : '')}>
+  const loud = studio.loadError ? '불러오기 실패' : LOUD_SAVE[studio.saveState];
+  const quiet = !studio.ready ? '' : QUIET_SAVE[studio.saveState] ?? '';
+  const channelOptions = variants.map((variant) => ({ value: variant.id, label: channelLabel(variant.channel || channelForType(variant.variant_type)) + ' · ' + (variant.title || '제목 없음') }));
+  return <div className="hub-page content-studio">
     <header className="studio-page-header">
-      <div><h2>콘텐츠 스튜디오</h2><p>메모를 기획으로, 초안을 채널별 콘텐츠로.</p></div>
+      <div><h2>원고 작성</h2><p>{channelLabel(draft.channel)} · 메모에서 시작해 다듬고 복사합니다.</p></div>
       <div className="studio-actions">
-        <Button variant="outline" onClick={studio.newDraft} disabled={(!studio.ready && !studio.loadError) || studio.busy || !!studio.recovery || !!studio.pendingMutation} icon="plus">새 콘텐츠</Button>
-        <Button onClick={openHistory} disabled={!draft.variantId || studio.busy}>버전 기록</Button>
-        <Button variant="primary" onClick={() => studio.save(true)} disabled={disabled || studio.saveState === 'saving'}>버전 저장</Button>
+        <span className="studio-save-state" aria-live="polite">
+          {loud ? <TruthBadge state={studio.loadError || studio.saveState !== 'local' ? 'error' : 'preview'} label={loud} /> : quiet && <span className="studio-muted studio-small">{quiet}</span>}
+        </span>
+        {studio.dirty && ['local', 'error'].includes(studio.saveState) && <Button size="xs" onClick={() => studio.save()} disabled={disabled}>저장 재시도</Button>}
+        <Button variant="ghost" onClick={studio.newDraft} disabled={(!studio.ready && !studio.loadError) || studio.busy || !!studio.recovery || !!studio.pendingMutation} icon="plus">새 글 <Kbd>N</Kbd></Button>
+        <Button variant="outline" icon="more" onClick={() => setDrawer('more')} disabled={!studio.ready}>더보기</Button>
       </div>
     </header>
-    <div className="studio-status-bar" aria-live="polite">
-      <TruthBadge state={saveTruth} label={studio.loadError ? '불러오기 실패' : !studio.ready ? '불러오는 중' : SAVE_LABELS[studio.saveState]} />
-      <span className="studio-small studio-muted">{studio.loadError ? '원문을 확인한 뒤 편집을 이어갈 수 있습니다.' : !studio.ready ? '저장된 콘텐츠를 확인하고 있습니다.' : studio.localState === 'error' ? '브라우저 복구 사본 저장 불가 · 파일로 내보내기를 권장합니다.' : studio.localSavedAt ? '브라우저 복구 사본 ' + dateLabel(studio.localSavedAt) : '입력하면 복구 사본을 보관하고 서버 저장 상태를 확인합니다.'}</span>
-      {studio.dirty && studio.saveState !== 'saving' && <Button size="xs" onClick={() => studio.save()} disabled={disabled}>서버 저장 재시도</Button>}
-    </div>
     {studio.saveMessage && <div className="studio-feedback" role="status">
       <p>{studio.saveMessage}</p>
       {studio.saveState === 'conflict' && <Button variant="outline" onClick={studio.compareLatest}>최신 저장본과 비교</Button>}
       {studio.pendingMutation && <Button variant="outline" onClick={studio.retryMutation} disabled={studio.busy}>이전 작업 상태 확인</Button>}
     </div>}
+    {studio.localState === 'error' && <div className="studio-feedback" role="status"><p>이 브라우저에 복구 사본을 남기지 못했습니다. 서버 저장이 확인되지 않으면 더보기 → 파일로 내보내기를 권장합니다.</p></div>}
     {notice && <div className="studio-feedback" role="status"><p>{notice}</p><Button size="xs" onClick={() => setNotice('')}>닫기</Button></div>}
     {studio.loadError ? <Card className="studio-stack"><p role="alert">{studio.loadError}</p><Button variant="outline" onClick={studio.retryLoad}>다시 불러오기</Button></Card> :
-      /* 로딩은 들어올 레이아웃(원문·기획 카드 + 초안 편집기)을 예고한다 — DESIGN §11. */
-      !studio.ready ? <Card className="studio-stack"><Skeleton lines={3} height={16} width={['34%', '100%', '78%']} gap={10} label="원문 불러오는 중" /><Skeleton lines={4} height={18} width={['100%', '100%', '100%', '62%']} gap={10} label="결과물 불러오는 중" /></Card> :
+      /* 로딩은 들어올 레이아웃(메모 + 본문 편집기)을 예고한다 — DESIGN §11. */
+      !studio.ready ? <Card className="studio-stack"><Skeleton lines={2} height={16} width={['34%', '78%']} gap={10} label="메모 불러오는 중" /><Skeleton lines={4} height={18} width={['100%', '100%', '100%', '62%']} gap={10} label="본문 불러오는 중" /></Card> :
       <>
         {studio.recovery && <Card className="studio-recovery">
           <h3>브라우저에 남은 작업이 있습니다</h3>
@@ -114,72 +154,108 @@ export function ContentStudio({ workspace, ledger }) {
             <Button variant="outline" onClick={() => studio.recover(false)}>{studio.recovery.unavailable ? '서버 다시 불러오기' : '서버 저장본 사용'}</Button>
           </div>
         </Card>}
-        <div className="studio-layout">
-          <section className="studio-main" aria-label="원문과 결과물 편집">
-            <Card className="studio-source-card">
-              <div className="studio-stack">
-                <div className="studio-fields-two studio-content-context">
-                  <TextField label="콘텐츠 기획 제목" value={draft.title} onChange={(event) => studio.edit({ title: event.target.value })} disabled={disabled} placeholder="이 콘텐츠를 구분할 이름" />
-                  <SelectField label="브랜드" value={draft.brandId} options={brandOptions} onChange={(event) => studio.edit({ brandId: event.target.value })} disabled={disabled || ['loading', 'error'].includes(ledger.syncState)} />
-                </div>
-                {['error', 'partial'].includes(ledger.syncState) && <p role="status" className="studio-muted studio-small">브랜드 목록을 모두 확인하지 못했습니다. 저장된 브랜드를 유지하며 편집할 수 있습니다.</p>}
-                <details className="studio-source-disclosure" open={sourceOpen} onToggle={(event) => setSourceOpen(event.currentTarget.open)}>
-                  <summary><span>원문 · 기획</span><span className="studio-summary-count">{draft.sourceIdea?.trim() ? '원문 있음' : '원문 없음'} · 기획 <span className="num">{briefCount}/6</span></span></summary>
-                  <div className="studio-stack studio-source-fields">
-                    <TextAreaField label="원문 메모" hint="처음 떠올린 생각과 맥락을 보관합니다. 복사·내보내기에는 포함하지 않습니다." placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={5} disabled={disabled} />
-                    <details className="studio-brief-details"><summary>기획 구체화 <span className="studio-summary-count"><span className="num">{briefCount} / 6</span> 항목</span></summary>
-                      <div className="studio-fields-two studio-source-fields">
-                        {BRIEF_FIELDS.map((field) => <TextAreaField key={field.key} label={field.label} placeholder={field.placeholder} value={draft.brief[field.key]} onChange={(event) => studio.edit({ brief: { ...draft.brief, [field.key]: event.target.value } })} rows={2} disabled={disabled} />)}
-                      </div>
-                    </details>
-                  </div>
-                </details>
+        <section className="studio-main" aria-label="원고 작성">
+          <Card className="studio-editor-card">
+            <div className="studio-stack">
+              <TextField aria-label="제목" value={draft.title} onChange={(event) => studio.edit({ title: event.target.value })} disabled={disabled} placeholder="제목 (선택 · 목록에서 찾을 이름)" />
+              <details className="studio-memo" open={memoIsOpen} onToggle={(event) => setMemoOpen(event.currentTarget.open)}>
+                <summary><span>원문 메모</span><span className="studio-summary-count">{draft.sourceIdea?.trim() ? '있음' : '비어 있음'}</span></summary>
+                <TextAreaField aria-label="원문 메모" hint="떠오른 생각·계기를 적어두면 AI 초안의 재료가 됩니다. 복사에는 포함하지 않습니다." placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={4} disabled={disabled} />
+              </details>
+              {variants.length > 1 && <SelectField label="채널별 결과물" value={draft.variantId || ''} options={channelOptions} onChange={(event) => studio.switchVariant(event.target.value)} disabled={disabled} />}
+              <DraftEditor draft={draft} edit={studio.edit} disabled={disabled} onSelect={setSelection} />
+              <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} request={aiRequest} onRequestChange={(value) => { setAiRequest(value); setTemplateId(''); }}
+                templates={templates} templateId={templateId} onPickTemplate={pickTemplate} onSaveAsTemplate={() => editTemplate(null)} />
+              <div className="studio-export-bar">
+                <Button variant="primary" icon="copy" onClick={copy} disabled={!draft.body.trim()}>복사</Button>
+                <Button variant="outline" onClick={openPublication} disabled={disabled || !draft.body.trim()}>발행했음</Button>
               </div>
-            </Card>
-            <Card className="studio-editor-card">
-              <div className="studio-stack">
-                <div className="studio-variant-bar">
-                  {variants.length > 0 ? <SelectField label="채널별 결과물" value={draft.variantId || ''} options={variants.map((variant) => ({ value: variant.id, label: channelLabel(variant.channel || channelForType(variant.variant_type)) + ' · ' + (variant.title || '제목 없음') }))} onChange={(event) => studio.switchVariant(event.target.value)} disabled={disabled} /> :
-                    <SelectField label="첫 결과물 채널" value={draft.channel} options={STUDIO_CHANNELS.map(({ key, label }) => ({ value: key, label }))} disabled={disabled || Boolean(draft.body)} onChange={(event) => studio.edit({ channel: event.target.value, variantType: formatForChannel(event.target.value) })} />}
-                  <Button variant="outline" onClick={() => setDrawer('variant')} disabled={disabled} icon="plus">채널 추가</Button>
-                </div>
-                {studio.detail?.variantsHasMore && <p className="studio-muted studio-small">결과물이 많아 처음 250개를 표시하고 있습니다.</p>}
-                <DraftEditor draft={draft} edit={studio.edit} disabled={disabled} onSelect={setSelection} writingFocus={writingFocus} onToggleFocus={() => setWritingFocus((value) => !value)} />
-                <div className="studio-export-bar">
-                  <p className="studio-muted studio-small">선택한 결과물만 복사·내보내기합니다.</p>
-                  <div className="studio-actions"><Button variant="outline" icon="copy" onClick={copy} disabled={!draft.body.trim()}>복사</Button><Button variant="outline" icon="download" onClick={download} disabled={!draft.body.trim()}>내보내기</Button><Button variant="outline" onClick={() => setDrawer('publication')} disabled={disabled || !draft.body.trim()}>발행 기록</Button></div>
-                </div>
-              </div>
-            </Card>
-          </section>
-          <aside className="studio-sidebar" aria-label="콘텐츠 작업 도구">
-            <Card><div className="studio-stack">
-              <h3 className="studio-section-title">이어서 할 일</h3>
-              <TextField label="다음 행동" value={draft.nextAction} placeholder="예: 실제 수업 사례 하나 넣기" onChange={(event) => studio.edit({ nextAction: event.target.value })} disabled={disabled} />
-              <SelectField label="막힌 이유" value={draft.blocker} options={BLOCKERS} onChange={(event) => studio.edit({ blocker: event.target.value })} disabled={disabled} />
-              <JournalSources refs={studio.detail?.item?.meta?.source_refs || draft.sourceRefs} />
-              <GoalLinks entityType="content_items" entityId={studio.detail?.item?.id} scope={workspace} />
-              {draft.sourceRefs.some((ref) => ref.variant_id) && <div className="studio-stack">
-                <p className="studio-muted studio-small">다른 결과물에서 파생되었습니다. 원본 버전과의 연결이 저장되어 있습니다.</p>
-                {draft.sourceRefs[0]?.variant_id && <Button variant="outline" disabled={disabled} onClick={() => studio.switchVariant(draft.sourceRefs[0].variant_id)}>원본 결과물 열기</Button>}
-              </div>}
-              <div className="studio-review-tools">
-                <span className="studio-muted studio-small">추가 검토</span>
-                <div className="studio-actions">
-                  <Button variant="outline" icon="sparkle" onClick={() => { setMentorMode('advice'); setMentorOpen(true); }} disabled={disabled}>방향 검토</Button>
-                  <Button variant="outline" icon="sparkle" onClick={() => { setMentorMode('critique'); setMentorOpen(true); }} disabled={disabled}>검수 게이트 판정</Button>
-                </div>
-              </div>
-            </div></Card>
-            <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} />
-          </aside>
-        </div>
+            </div>
+          </Card>
+        </section>
       </>}
+    {drawer === 'more' && <Drawer title="더보기" subtitle="자주 쓰지 않는 설정과 기록입니다." width="min(460px, 94vw)" onClose={() => setDrawer(null)}>
+      <div className="studio-stack">
+        <section className="studio-stack studio-more-section" aria-label="분류">
+          <h3 className="studio-section-title">분류</h3>
+          <SelectField label="브랜드" value={draft.brandId} options={brandOptions} onChange={(event) => studio.edit({ brandId: event.target.value })} disabled={disabled || ['loading', 'error'].includes(ledger.syncState)} />
+          {['error', 'partial'].includes(ledger.syncState) && <p role="status" className="studio-muted studio-small">브랜드 목록을 모두 확인하지 못했습니다. 저장된 브랜드를 유지하며 편집할 수 있습니다.</p>}
+          <TextField label="결과물 제목" value={draft.variantTitle} onChange={(event) => studio.edit({ variantTitle: event.target.value })} disabled={disabled} placeholder="채널별로 다른 제목이 필요할 때만" />
+        </section>
+        <section className="studio-stack studio-more-section" aria-label="채널">
+          <h3 className="studio-section-title">채널</h3>
+          {variants.length === 0 && <SelectField label="첫 결과물 채널" value={draft.channel} options={STUDIO_CHANNELS.map(({ key, label }) => ({ value: key, label }))} disabled={disabled || Boolean(draft.body)} onChange={(event) => studio.edit({ channel: event.target.value, variantType: formatForChannel(event.target.value) })} />}
+          {variants.length === 1 && <p className="studio-muted studio-small">현재 {channelLabel(draft.channel)} 결과물 하나입니다.</p>}
+          {studio.detail?.variantsHasMore && <p className="studio-muted studio-small">결과물이 많아 처음 250개를 표시하고 있습니다.</p>}
+          <div className="studio-actions">
+            <Button variant="outline" icon="plus" onClick={() => setDrawer('variant')} disabled={disabled}>빈 채널 결과물 추가</Button>
+          </div>
+          <p className="studio-muted studio-small">지금 글을 다른 채널용으로 바꾸려면 AI의 ‘다른 작업 → 다른 채널로 변형’을 쓰세요.</p>
+          {draft.sourceRefs.some((ref) => ref.variant_id) && draft.sourceRefs[0]?.variant_id && <Button variant="outline" disabled={disabled} onClick={() => { setDrawer(null); studio.switchVariant(draft.sourceRefs[0].variant_id); }}>원본 결과물 열기</Button>}
+        </section>
+        <section className="studio-stack studio-more-section" aria-label="기록">
+          <h3 className="studio-section-title">기록</h3>
+          <div className="studio-actions">
+            <Button variant="outline" onClick={openHistory} disabled={!draft.variantId || studio.busy}>버전 기록</Button>
+            <Button variant="outline" onClick={() => studio.save(true)} disabled={disabled || studio.saveState === 'saving'}>지금 버전 남기기</Button>
+            <Button variant="outline" icon="download" onClick={download} disabled={!draft.body.trim()}>파일로 내보내기</Button>
+          </div>
+        </section>
+        <section className="studio-stack studio-more-section" aria-label="AI 템플릿">
+          <div className="studio-row"><h3 className="studio-section-title">AI 템플릿</h3>
+            <Button size="xs" variant="outline" icon="plus" onClick={() => { setDrawer(null); editTemplate(null); }} disabled={templates.status !== 'live'}>새 템플릿</Button></div>
+          <p className="studio-muted studio-small">자주 쓰는 AI 요청문과 글 틀을 저장해 두고 AI 요청 칸에서 고릅니다.</p>
+          {templates.status === 'loading' && <Skeleton lines={2} height={14} width={['60%', '40%']} gap={8} label="템플릿 불러오는 중" />}
+          {templates.status === 'preview' && <TruthBadge state="preview" label="템플릿 저장소 연결 필요" style={{ alignSelf: 'flex-start' }} />}
+          {templates.status === 'error' && <div className="studio-actions"><TruthBadge state="error" label="불러오기 실패" /><Button size="xs" onClick={templates.reload}>다시 불러오기</Button></div>}
+          {templates.status === 'live' && templates.templates.length === 0 && <p className="studio-muted studio-small">아직 템플릿이 없습니다.</p>}
+          {templates.templates.map((template) => <div key={template.id} className="studio-row studio-template-row">
+            <span>{template.name}<span className="studio-muted studio-small">{[template.request.trim() && '요청문', template.skeleton.trim() && '글 틀'].filter(Boolean).map((x) => ' · ' + x).join('')}</span></span>
+            <span className="studio-actions"><Button size="xs" onClick={() => { setDrawer(null); editTemplate(template); }}>편집</Button><Button size="xs" variant="ghost" onClick={() => deleteTemplate(template)}>삭제</Button></span>
+          </div>)}
+        </section>
+        <details className="studio-more-section">
+          <summary>기획 구체화 <span className="studio-summary-count"><span className="num">{briefCount} / 6</span></span></summary>
+          <div className="studio-stack studio-source-fields">
+            {BRIEF_FIELDS.map((field) => <TextAreaField key={field.key} label={field.label} placeholder={field.placeholder} value={draft.brief[field.key]} onChange={(event) => studio.edit({ brief: { ...draft.brief, [field.key]: event.target.value } })} rows={2} disabled={disabled} />)}
+          </div>
+        </details>
+        <details className="studio-more-section">
+          <summary>이어서 할 일</summary>
+          <div className="studio-stack studio-source-fields">
+            <TextField label="다음 행동" value={draft.nextAction} placeholder="예: 실제 수업 사례 하나 넣기" onChange={(event) => studio.edit({ nextAction: event.target.value })} disabled={disabled} />
+            <SelectField label="막힌 이유" value={draft.blocker} options={BLOCKERS} onChange={(event) => studio.edit({ blocker: event.target.value })} disabled={disabled} />
+          </div>
+        </details>
+        <details className="studio-more-section">
+          <summary>연결된 일지·목표</summary>
+          <div className="studio-stack studio-source-fields">
+            <JournalSources refs={studio.detail?.item?.meta?.source_refs || draft.sourceRefs} />
+            <GoalLinks entityType="content_items" entityId={studio.detail?.item?.id} scope={workspace} />
+          </div>
+        </details>
+        <section className="studio-stack studio-more-section" aria-label="검토">
+          <h3 className="studio-section-title">검토</h3>
+          <div className="studio-actions">
+            <Button variant="outline" icon="sparkle" onClick={() => openMentor('advice')} disabled={disabled}>방향 검토</Button>
+            <Button variant="outline" icon="sparkle" onClick={() => openMentor('critique')} disabled={disabled}>검수 게이트 판정</Button>
+          </div>
+        </section>
+      </div>
+    </Drawer>}
+    {templateDraft && <Drawer title={templateDraft.revision ? '템플릿 편집' : '새 템플릿'} subtitle="요청문은 AI에게 줄 지시(구성·길이·말투), 글 틀은 빈 본문에 채울 뼈대입니다." width="min(480px, 94vw)"
+      onClose={() => { if (!templateSaving) setTemplateDraft(null); }}
+      footer={<Button variant="primary" onClick={saveTemplate} disabled={templateSaving || !templateDraft.name.trim() || (!templateDraft.request.trim() && !templateDraft.skeleton.trim())}>{templateSaving ? '저장 중…' : '템플릿 저장'}</Button>}>
+      <div className="studio-stack">
+        <TextField label="이름" value={templateDraft.name} maxLength={60} placeholder="예: 후킹 스레드" onChange={(event) => setTemplateDraft({ ...templateDraft, name: event.target.value })} disabled={templateSaving} />
+        <TextAreaField label="AI 요청문" value={templateDraft.request} maxLength={2000} showCount rows={4} placeholder="예: 첫 줄은 질문으로, 세 문단 이내, 반말, 마지막 줄은 한 줄 결론" onChange={(event) => setTemplateDraft({ ...templateDraft, request: event.target.value })} disabled={templateSaving} />
+        <TextAreaField label="글 틀" hint="템플릿을 고를 때 본문이 비어 있으면 이 틀을 채웁니다." value={templateDraft.skeleton} maxLength={4000} showCount rows={6} placeholder={'예:\n[훅 — 질문 한 줄]\n\n[공감 — 독자가 겪는 상황]\n\n[사례 — 실제 수업 장면]\n\n[한 줄 결론]'} onChange={(event) => setTemplateDraft({ ...templateDraft, skeleton: event.target.value })} disabled={templateSaving} />
+      </div>
+    </Drawer>}
     {drawer === 'publication' && <Drawer title="발행 기록" subtitle="외부 채널에 게시한 URL과 시각을 기록합니다. 운영자 확인이며 외부 게시 여부를 자동 검증하지 않습니다." presentation="compact" onClose={() => { if (!studio.busy) setDrawer(null); }} footer={<Button variant="primary" disabled={disabled} onClick={async () => {
       if (await studio.recordPublication(publicationUrl, publicationDate)) {
-        triggerCelebration({ mode: 'confetti' });
         setDrawer(null);
-        setNotice('운영자 확인으로 발행을 기록했습니다. ✦');
+        setNotice('발행을 기록했습니다.');
       }
     }}>{studio.busy ? '확인 중…' : '발행 기록 저장'}</Button>}>
       <div className="studio-stack">
@@ -190,14 +266,14 @@ export function ContentStudio({ workspace, ledger }) {
     </Drawer>}
     {drawer === 'variant'  && <Drawer title="채널 결과물 추가" subtitle="같은 원문·기획에서 채널별로 별도의 초안을 만듭니다." presentation="compact" width="420px" onClose={() => setDrawer(null)} footer={<Button variant="primary" onClick={createVariant} disabled={studio.busy}>빈 결과물 추가</Button>}>
       <div className="studio-stack"><SelectField label="추가할 채널" options={STUDIO_CHANNELS.map(({ key, label }) => ({ value: key, label }))} value={newChannel} onChange={(event) => setNewChannel(event.target.value)} />
-      <p className="studio-muted">현재 글을 AI로 변형하려면 AI 작업에서 ‘다른 채널로 변형’을 선택하세요.</p></div>
+      <p className="studio-muted">현재 글을 AI로 변형하려면 AI의 ‘다른 작업 → 다른 채널로 변형’을 선택하세요.</p></div>
     </Drawer>}
     {drawer === 'history' && <Drawer title="버전 기록" subtitle={channelLabel(draft.channel) + ' · ' + (draft.variantTitle || '제목 없음')} width="min(540px, 94vw)" onClose={() => setDrawer(null)}>
       <div className="studio-stack">
-        <p className="studio-muted studio-small">직접 저장하거나 AI 후보를 적용할 때 버전을 남깁니다. 복원하면 선택한 결과물의 내용과 상태가 돌아갑니다.</p>
+        <p className="studio-muted studio-small">직접 남기거나 AI 후보를 적용할 때 버전이 남습니다. 복원하면 선택한 결과물의 내용과 상태가 돌아갑니다.</p>
         {studio.history?.loading && <p role="status" className="studio-muted">버전 기록을 불러오는 중입니다…</p>}
         {studio.history?.error && <div role="alert"><p>{studio.history.error}</p><Button onClick={() => studio.refreshHistory()}>기록 다시 불러오기</Button></div>}
-        {!studio.history?.loading && !studio.history?.error && revisions.length === 0 && <p className="studio-empty">아직 기록된 버전이 없습니다. ‘버전 저장’을 눌러 현재 내용을 남겨주세요.</p>}
+        {!studio.history?.loading && !studio.history?.error && revisions.length === 0 && <p className="studio-empty">아직 기록된 버전이 없습니다. 더보기 → ‘지금 버전 남기기’로 현재 내용을 남길 수 있습니다.</p>}
         {revisions.map((revision) => <article key={revision.id} className="studio-revision">
           <div className="studio-row"><strong>{REASONS[revision.reason] || (revision.reason.startsWith('restored:') ? '복원한 버전' : '저장 버전')}</strong><span className="studio-muted studio-small">{dateLabel(revision.created_at)}</span></div>
           <p className="studio-small">{revision.snapshot?.title || '제목 없음'}</p><pre>{revision.snapshot?.body || '(빈 본문)'}</pre>

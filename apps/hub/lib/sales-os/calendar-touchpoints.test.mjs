@@ -116,6 +116,13 @@ test("records join by company as well — live rows carry company_id, not lead_i
   assert.equal(hasRecordFor(e, { id: "lead-1" }, [{ occurredAt: inWindow, leadId: "lead-1" }]), true);
 });
 
+test("an automatic deal stage move does not count as a meeting record", () => {
+  const deal = { id: "deal-1", kind: "deal", name: "한빛학원", companyId: "co-1" };
+  const stageMove = { kind: "deal", dealId: "deal-1", occurredAt: at("2026-09-21T03:00:00Z") };
+  assert.equal(hasRecordFor(event(), deal, [stageMove]), false);
+  assert.equal(findUnrecordedMeetings({ events: [event()], candidates: [deal], activities: [stageMove], now: NOW }).length, 1);
+});
+
 test("unrecorded meetings surface only for finished, matched, unrecorded events", () => {
   const found = findUnrecordedMeetings({
     events: [event()],

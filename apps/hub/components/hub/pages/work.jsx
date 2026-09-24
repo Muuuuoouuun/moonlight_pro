@@ -1348,6 +1348,8 @@ export function Rhythm() {
     () => filterRhythmRows(liveRituals, selectedProjectId),
     [liveRituals, selectedProjectId],
   );
+  // 프로젝트로 들어온 Rhythm은 루틴과 완료 할 일의 모집단이 같아야 한다.
+  const rhythmTodos = selectedProjectId ? todos.filter((task) => task.project === selectedProjectId) : todos;
 
   // 루틴 생성·수정. 스키마에 별도 rituals 테이블이 없어(work-ledger.js WHY 주석), 생성은
   // status:'pending' 씨앗 행을 심는 것이고, 수정은 같은 (project_id, ritual_key) 그룹의
@@ -1673,7 +1675,7 @@ export function Rhythm() {
       <RhythmVisualizer
         rituals={savedRituals}
         summary={summary}
-        focusData={{ matrix: computeWeeklyRhythmMatrix({ rituals: savedRituals, todos }) }}
+        focusData={{ matrix: computeWeeklyRhythmMatrix({ rituals: savedRituals, todos: rhythmTodos }) }}
         tasksStatus={tasksStatus}
         rhythmState={rhythmState}
         rhythmPartial={rhythmPartial}

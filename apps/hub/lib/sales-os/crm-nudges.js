@@ -214,7 +214,10 @@ export function buildCrmNudges({
 
   for (const customer of customers) {
     if (!customer?.id) continue;
-    const candidates = candidatesFor(customer, ctx);
+    // 종료된 거래의 오래된 약속은 행동 넛지가 아니지만, 이미 끝난 고객 미팅의
+    // 기록 누락은 거래 상태와 무관하게 보존한다.
+    const candidates = candidatesFor(customer, ctx).filter((candidate) =>
+      customer.open !== false || candidate.ruleId === "meeting_unrecorded");
     if (!candidates.length) continue;
 
     candidates.sort((a, b) => RULE_ORDER.indexOf(a.ruleId) - RULE_ORDER.indexOf(b.ruleId));

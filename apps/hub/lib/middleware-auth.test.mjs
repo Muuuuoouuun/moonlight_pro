@@ -7,7 +7,14 @@ import { HUB_WRITE_SECRET_HEADER } from './hub-write-guard.js';
 
 const originalEnv = { ...process.env };
 beforeEach(() => {
-  process.env = { ...originalEnv, NODE_ENV: 'production', COM_MOON_HUB_WRITE_SECRET: 'test-hub-secret' };
+  process.env = {
+    ...originalEnv,
+    NODE_ENV: 'production',
+    COM_MOON_HUB_WRITE_SECRET: 'test-hub-secret',
+    COM_MOON_OPERATOR_SESSION_SECRET: 'test-session-secret',
+    COM_MOON_OPERATOR_USERNAME: 'moonlight',
+    COM_MOON_OPERATOR_PASSWORD_HASH: `scrypt$131072$8$1$${'a'.repeat(32)}$${'b'.repeat(128)}`,
+  };
 });
 afterEach(() => { process.env = { ...originalEnv }; });
 
@@ -50,4 +57,11 @@ test('a credential must be configured server-side and cannot use the session sig
   delete process.env.COM_MOON_OPERATOR_SESSION_SECRET;
   delete process.env.COM_MOON_SHARED_WEBHOOK_SECRET;
   assert.equal(middleware(request('/api/hub/projects', { authorization: 'Bearer test-hub-secret' })).status, 503);
+});
+
+test('removing login credentials revokes an existing browser session', () => {
+  const cookie = `${OPERATOR_SESSION_COOKIE}=${createOperatorSessionToken()}`;
+  delete process.env.COM_MOON_OPERATOR_PASSWORD_HASH;
+  assert.equal(middleware(request('/dashboard', { cookie })).status, 503);
+  assert.equal(middleware(request('/api/hub/projects', { cookie })).status, 503);
 });

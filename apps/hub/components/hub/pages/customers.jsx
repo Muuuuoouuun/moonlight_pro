@@ -194,7 +194,7 @@ function ActivityTimeline({ rows, onDeleteActivity }) {
       {rows.map((a, i) => (
         <div key={a.id || i} style={{
           display: "grid",
-          gridTemplateColumns: onDeleteActivity ? "18px 1fr auto auto" : "18px 1fr auto",
+          gridTemplateColumns: onDeleteActivity && a.id && !String(a.id).startsWith("local-") ? "18px 1fr auto auto" : "18px 1fr auto",
           gap: 10,
           padding: "9px 0",
           borderBottom: i < rows.length - 1 ? "1px solid var(--line-soft)" : "none",
@@ -212,7 +212,7 @@ function ActivityTimeline({ rows, onDeleteActivity }) {
             </div>
           </div>
           <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", whiteSpace: "nowrap" }}>{a.at}</span>
-          {onDeleteActivity && a.id && (
+          {onDeleteActivity && a.id && !String(a.id).startsWith("local-") && (
             <IconButton
               icon="x"
               size={20}
@@ -793,6 +793,12 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange }
           onUndone={(optimisticId) => {
             setActivities(prev => prev.filter(a => a.id !== optimisticId));
             setNextActionOverride(null);
+          }}
+          onSummaryPersisted={({ activityId, optimisticId }) => {
+            if (!activityId) { reload(); return; }
+            setActivities(prev => prev.map(a => (
+              a.id === optimisticId ? { ...a, id: activityId } : a
+            )));
           }}
         />
 

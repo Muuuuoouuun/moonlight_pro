@@ -787,6 +787,45 @@ test("focus on appends today's key to meta.focus_dates and keeps the picked hist
   assert.deepEqual(updates[0].patch.meta, { checklist: [], focus_dates: ["2026-09-18", "2026-09-21"] });
 });
 
+test("concurrent focus edits of one task cannot discard a selected date", async () => {
+  let current = {
+    id: FOCUS_TASK,
+    meta: { focus_dates: [] },
+    updated_at: "2026-09-20T00:00:00.000Z",
+  };
+  let reads = 0;
+  let releaseReads;
+  const bothRead = new Promise((resolve) => { releaseReads = resolve; });
+  const dependencies = {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    fetchRows: async (_table, options = {}) => {
+      if ((options.filters || []).some(([key]) => key === "meta->focus_dates")) return [];
+      const snapshot = structuredClone(current);
+      if (++reads === 2) releaseReads();
+      if (reads <= 2) await bothRead;
+      return [snapshot];
+    },
+    update: async (_table, filters, patch) => {
+      const expected = filters.find(([key]) => key === "updated_at")?.[1]?.slice(3);
+      if (expected && expected !== current.updated_at) {
+        return { persisted: false, reason: "no-matching-row", records: [] };
+      }
+      current = { ...current, ...patch };
+      return { persisted: true, reason: "ok", records: [current] };
+    },
+  };
+  const context = { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" };
+  const results = await Promise.all(["2026-09-20", "2026-09-21"].map((date) =>
+    pmsService.executePmsCommand(
+      { action: "update_task", id: FOCUS_TASK, focus: { on: true, date } },
+      context,
+      dependencies,
+    )));
+
+  assert.deepEqual(results.map((result) => result.status).sort(), ["conflict", "saved"]);
+  assert.equal(current.meta.focus_dates.length, 1, "the caller seeing the conflict can retry against the current row");
+});
+
 test("focus on is refused with a conflict once three other tasks already hold the day", async () => {
   const updates = [];
   const result = await pmsService.executePmsCommand(
@@ -800,6 +839,24 @@ test("focus on is refused with a conflict once three other tasks already hold th
   assert.equal(result.limit, 3);
   assert.equal(result.date, "2026-09-21");
   assert.equal(updates.length, 0, "상한에 걸리면 아무것도 쓰지 않는다");
+});
+
+test("a database focus-cap rejection keeps the public 409 conflict contract", async () => {
+  const dependencies = focusDependencies({ meta: {}, othersToday: 2 });
+  dependencies.update = async () => ({
+    persisted: false,
+    reason: "http-400",
+    detail: JSON.stringify({ code: "P0001", message: "focus-limit" }),
+  });
+  const result = await pmsService.executePmsCommand(
+    { action: "update_task", id: FOCUS_TASK, focus: { on: true, date: "2026-09-21" } },
+    { workspaceId: FOCUS_WS, now: "2026-09-21T01:00:00.000Z" },
+    dependencies,
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.equal(result.error, "focus-limit");
+  assert.equal(result.limit, 3);
 });
 
 test("focus on is idempotent and does not count the task itself against the cap", async () => {
