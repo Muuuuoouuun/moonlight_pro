@@ -184,6 +184,7 @@ test("builds an edit draft from raw project fields and preserves its concurrency
     orgScope: "classin",
     summary: "",
     status: "blocked",
+    blocker: "",
     priority: "high",
     genre: "",
     nextAction: "원본 다음 행동",
@@ -394,6 +395,7 @@ test("rebases stale edit state while preserving only user-dirty fields", () => {
     orgScope: "classin",
     summary: "Operator goal",
     status: "blocked",
+    blocker: "",
     priority: "high",
     genre: "",
     nextAction: "Operator action",
@@ -407,6 +409,25 @@ test("rebases stale edit state while preserving only user-dirty fields", () => {
     summary: "Operator goal",
     nextAction: "Operator action",
   });
+});
+
+test("status edit carries a blocker into blocked and clears it on resume", () => {
+  const source = {
+    id: "project-1", name: "진행할 일", areaId: "area-1", statusKey: "active",
+    delivery: { deliverable: "결과", blocker: "", criteria: [] }, updatedAt: "v1",
+  };
+  const blocked = { ...pmsUi.buildProjectEditDraft(source), status: "blocked", blocker: "담당자 답변 대기" };
+  const pausePatch = pmsUi.buildProjectPatch(source, blocked);
+  assert.equal(pausePatch.status, "blocked");
+  assert.equal(pausePatch.delivery.blocker, "담당자 답변 대기");
+  assert.equal(pausePatch.delivery.deliverable, "결과");
+
+  const pausedSource = { ...source, statusKey: "blocked", delivery: pausePatch.delivery };
+  const resumed = { ...pmsUi.buildProjectEditDraft(pausedSource), status: "active", blocker: "" };
+  const resumePatch = pmsUi.buildProjectPatch(pausedSource, resumed);
+  assert.equal(resumePatch.status, "active");
+  assert.equal(resumePatch.delivery.blocker, "");
+  assert.equal(resumePatch.delivery.deliverable, "결과");
 });
 
 test("rotates only the project client id for conflict recovery", () => {

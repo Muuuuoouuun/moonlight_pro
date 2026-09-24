@@ -47,6 +47,82 @@ test("delivery lifecycle persists, verifies, completes, and reopens with evidenc
   assert.equal(store.row.meta.delivery.resultUrl, ready.resultUrl);
 });
 
+test("starting work needs no plan and status edits preserve the first actual start", async () => {
+  const store = ledger();
+  assert.equal((await store.send({ deliveryEvent: "start" })).status, "saved");
+  assert.equal(store.row.status, "active");
+  assert.ok(store.row.started_at);
+  const startedAt = store.row.started_at;
+  assert.equal((await store.send({ status: "draft" })).status, "saved");
+  assert.equal(store.row.started_at, startedAt);
+  assert.equal((await store.send({ status: "active" })).status, "saved");
+  assert.equal(store.row.started_at, startedAt);
+});
+
+test("ordinary status edits use the same blocker and pause contract as delivery actions", async () => {
+  const store = ledger();
+  assert.equal((await store.send({ status: "blocked" })).status, "invalid-input");
+  const blockedPlan = { ...plan(), blocker: "고객 답변 대기" };
+  assert.equal((await store.send({ status: "blocked", delivery: blockedPlan })).status, "saved");
+  assert.equal(store.row.status, "blocked");
+  assert.ok(store.row.meta.delivery.pausedAt);
+  assert.equal((await store.send({ status: "active" })).status, "invalid-input");
+  assert.equal((await store.send({ status: "active", delivery: plan() })).status, "saved");
+  assert.equal(store.row.meta.delivery.pausedAt, null);
+  assert.ok(store.row.started_at);
+});
+
+test("status edits reject stale versions and keep completed history when archived", async () => {
+  const store = ledger();
+  const stale = store.row.updated_at;
+  await store.send({ status: "active" });
+  assert.equal((await store.send({ status: "blocked", delivery: { ...plan(), blocker: "확인 대기" } }, stale)).status, "conflict");
+  await store.send({ delivery: deliveryDraft({ deliverable: "검토 결과를 공유했다" }), status: "completed" });
+  const completedAt = store.row.completed_at;
+  assert.equal((await store.send({ status: "archived" })).status, "saved");
+  assert.equal(store.row.completed_at, completedAt);
+  assert.equal((await store.send({ name: "정리된 프로젝트" })).status, "saved");
+  assert.equal(store.row.completed_at, completedAt);
+});
+
+test("editing a legacy completed record preserves its completion without inventing evidence", async () => {
+  const completedAt = "2026-09-08T04:00:00.000Z";
+  const legacy = { id, workspace_id: workspaceId, name: "기존 완료", status: "completed", completed_at: completedAt,
+    updated_at: "2026-09-09T01:00:00.000Z", meta: { org_scope: "personal" } };
+  let patch = null;
+  const result = await executePmsCommand({ action: "update_project", id, name: "이름 정리", status: "completed",
+    expectedUpdatedAt: legacy.updated_at }, { workspaceId, now: "2026-09-09T02:00:00.000Z" }, {
+    insert: async () => { throw Error("unexpected insert"); },
+    fetchRows: async () => [legacy],
+    update: async (_table, _filters, next) => { patch = next; return { persisted: true, reason: "ok", records: [{ ...legacy, ...next }] }; },
+  });
+  assert.equal(result.status, "saved");
+  assert.equal(patch.completed_at, completedAt);
+  assert.equal(patch.name, "이름 정리");
+  assert.equal(patch.meta.delivery, undefined);
+});
+
+test("a non-prototype project completes with an actual result and no invented URL", async () => {
+  const store = ledger();
+  assert.equal((await store.send({ status: "completed" })).status, "invalid-input");
+  await store.send({ deliveryEvent: "start" });
+  const result = deliveryDraft({ deliverable: "고객에게 계약 판단 내용을 전달하고 회신을 기록했다" });
+  assert.equal((await store.send({ status: "completed", delivery: result })).status, "saved");
+  assert.equal(store.row.status, "completed");
+  assert.ok(store.row.completed_at);
+  assert.equal(store.row.meta.delivery.resultUrl, "");
+  assert.equal(store.row.meta.delivery.prototypeVerifiedAt, undefined);
+});
+
+test("prototype date requires its verification but accepts offline evidence without a URL", async () => {
+  const store = ledger();
+  await store.send({ deliveryEvent: "start" });
+  const result = deliveryDraft({ deliverable: "현장에서 작동을 확인한 시제품", prototypeDate: "2026-09-11" });
+  assert.equal((await store.send({ status: "completed", delivery: result })).status, "invalid-input");
+  assert.equal((await store.send({ delivery: result, deliveryEvent: "prototype" })).status, "saved");
+  assert.equal((await store.send({ status: "completed" })).status, "saved");
+});
+
 test("reschedule keeps baseline and every reason, stale writes cannot overwrite metadata", async () => {
   const store = ledger();
   await store.send({ delivery: plan() });

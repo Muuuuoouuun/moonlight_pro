@@ -1907,7 +1907,13 @@
     align-items: flex-start !important;
     flex-direction: column !important;
     gap: 0 !important;
-    padding: 8px 0 8px 8px !important;
+    padding: 8px 0 !important;
+  }
+
+  .hub-project-row__controls .hub-iconbtn,
+  .hub-project-row__controls .hub-project-expand {
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .hub-project-row__open {

@@ -173,7 +173,7 @@ test('PMS project status is declared by lifecycle enum, never by a page-level to
   );
   assert.ok(labelMap.length > 0, 'PROJECT_STATUS_LABEL_KO 사전을 찾지 못했다');
   for (const [status, label] of [
-    ['In progress', '작업 중'], ['Review', '검토'], ['Planning', '계획'],
+    ['In progress', '진행 중'], ['Review', '검토'], ['Planning', '계획'],
     ['Blocked', '막힘'], ['Done', '완료'], ['Backlog', '백로그'],
   ]) {
     assert.match(

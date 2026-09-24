@@ -97,7 +97,7 @@ export const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
 // (2026-09-01 2609 병합 리뷰에서 페이지 지역 술어 isBrandActive를 흡수).
 // 리스트(tree) 뷰 상태 그룹 — 렌더와 j/k 평탄화(23차)가 같은 순서를 공유한다.
 export const LIST_STATUS_GROUPS = [
-  { key: 'In progress', label: '진행중', tone: 'var(--line-strong)' },
+  { key: 'In progress', label: '진행 중', tone: 'var(--line-strong)' },
   { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
   { key: 'Review',      label: '검토',   tone: 'var(--line-strong)' },
   { key: 'Planning',    label: '계획',   tone: 'var(--line-strong)' },

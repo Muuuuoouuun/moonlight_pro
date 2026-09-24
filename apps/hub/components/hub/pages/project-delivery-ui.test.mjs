@@ -127,15 +127,26 @@ test('changed verified results block completion locally and reveal the recheck s
   let writes = 0;
   const project = initialProject();
   project.startedAt = '2026-09-20T00:00:00Z';
-  project.delivery = { ...delivery.deliveryDraft({ deliverable: '출시 결과', resultUrl: 'https://example.com/result', criteria: [{ id: 'criterion', text: '고객 확인', done: true }] }), prototypeVerifiedAt: '2026-09-21T00:00:00Z' };
+  project.delivery = { ...delivery.deliveryDraft({ deliverable: '출시 결과', prototypeDate: '2026-09-21', resultUrl: 'https://example.com/result', criteria: [{ id: 'criterion', text: '고객 확인', done: true }] }), prototypeVerifiedAt: '2026-09-21T00:00:00Z' };
   const view = editor(project, { onSave: async () => { writes++; return { ok: false }; } });
   view.find(node => node.type === 'textarea').props.onChange({ target: { value: '수정된 결과' } });
   view.render();
-  await view.find(node => node.type === 'Button' && text(node) === '검증 후 프로젝트 완료').props.onClick();
+  await view.find(node => node.type === 'Button' && text(node) === '결과 확인 후 프로젝트 완료').props.onClick();
   view.render();
   assert.equal(writes, 0);
   assert.equal(view.find(node => node.type === 'details' && text(node).includes('실행·완료 기록')).props.open, true);
   assert.match(text(view.tree), /작동 재확인 필요/);
+});
+
+test('ordinary work can complete with a result and no prototype, link, or start event', async () => {
+  let saved;
+  const project = initialProject();
+  project.delivery = delivery.deliveryDraft({ deliverable: '고객에게 안내 발송' });
+  const view = editor(project, { onSave: async (_base, fields) => { saved = fields; return { ok: false, status: 'preview' }; } });
+  await view.find(node => node.type === 'Button' && text(node) === '결과 확인 후 프로젝트 완료').props.onClick();
+  assert.equal(saved.status, 'completed');
+  assert.equal(saved.delivery.resultUrl, '');
+  assert.equal(saved.delivery.criteria.length, 0);
 });
 
 test('pending save is locked synchronously and a failed reply preserves the edited result', async () => {

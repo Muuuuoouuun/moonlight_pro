@@ -91,11 +91,11 @@ export function ProjectDeliveryEditor({ project, onClose, onSave, intent = "edit
   const inputProps = (field) => ({ ref: (node) => { fieldRefs.current[field] = node; }, "aria-invalid": errorField === field || undefined, "aria-describedby": errorField === field ? errorId : undefined });
   const fieldError = (field) => errorField === field ? { error: message, errorId } : {};
   const reveal = (field) => {
-    if (["plannedStart", "prototypeDate", "remainingHours", "availableHours", "blocker", "nextAction", "nextVersion"].includes(field)) setAdvancedOpen(true);
+    if (["plannedStart", "prototypeDate", "remainingHours", "availableHours", "blocker", "nextAction", "nextVersion"].includes(field) || field === "prototype") setAdvancedOpen(true);
     if (["resultUrl", "start", "prototype"].includes(field)) setExecutionOpen(true);
     requestAnimationFrame(() => {
       const emptyCriterion = field === "criteria" && plan.criteria.find((item) => !item.text.trim());
-      const target = field === "deliverable" ? titleRef.current : emptyCriterion ? fieldRefs.current[`criterion-${emptyCriterion.id}`] : fieldRefs.current[field];
+      const target = field === "deliverable" ? titleRef.current : emptyCriterion ? fieldRefs.current[`criterion-${emptyCriterion.id}`] : fieldRefs.current[field === "prototype" && !plan.prototypeDate ? "prototypeDate" : field];
       target?.focus();
     });
   };
@@ -108,11 +108,9 @@ export function ProjectDeliveryEditor({ project, onClose, onSave, intent = "edit
     fieldRefs.current.criteria?.focus();
   };
   const missing = [
-    !plan.deliverable.trim() && { label: "결과물", field: "deliverable" },
-    (!plan.criteria.length || plan.criteria.some((item) => !item.done)) && { label: "완료 기준 확인", field: "criteria" },
-    !base.startedAt && { label: "착수 기록", field: "start" },
-    !safeResultUrl(plan.resultUrl) && { label: "결과물 링크", field: "resultUrl" },
-    !verifiedAt && { label: verificationChanged ? "작동 재확인" : "작동 확인", field: "prototype" },
+    !plan.deliverable.trim() && { label: "결과", field: "deliverable" },
+    plan.criteria.some((item) => !item.done) && { label: "등록한 완료 기준 확인", field: "criteria" },
+    plan.prototypeDate && !verifiedAt && { label: verificationChanged ? "작동 재확인" : "작동 확인", field: "prototype" },
     Boolean(plan.blocker.trim()) && { label: "막힌 점 해결", field: "blocker" },
   ].filter(Boolean);
   const advancedCount = [plan.plannedStart, plan.prototypeDate, plan.remainingHours !== null, plan.availableHours !== null, plan.blocker, plan.nextAction, plan.nextVersion].filter(Boolean).length;
@@ -126,14 +124,13 @@ export function ProjectDeliveryEditor({ project, onClose, onSave, intent = "edit
     const invalid = deliveryValidationIssue(candidate, dueAt);
     if (invalid) { fail(invalid.message, invalid.field); return; }
     if (dayKey(base.dueAt) && dueAt !== dayKey(base.dueAt) && !scheduleReason.trim()) { fail("목표 종료일 변경 이유를 남겨주세요.", "scheduleReason"); return; }
-    if (event === "start" && (!candidate.deliverable.trim() || !candidate.criteria.length)) { fail("결과물과 완료 기준을 먼저 정하세요.", !candidate.deliverable.trim() ? "deliverable" : "criteria"); return; }
-    if (event === "prototype" && (!base.startedAt || !safeResultUrl(candidate.resultUrl))) { fail(!base.startedAt ? "실제 착수를 먼저 기록하세요." : "작동을 확인한 결과물 링크를 남겨주세요.", !base.startedAt ? "start" : "resultUrl"); return; }
+    if (event === "prototype" && (!base.startedAt || !candidate.prototypeDate)) { fail(!base.startedAt ? "실제 착수를 먼저 기록하세요." : "프로토타입 확인일을 먼저 정하세요.", !base.startedAt ? "start" : "prototypeDate"); return; }
     if (event === "pause" && !candidate.blocker.trim()) { fail("막힌 점에 보류 이유를 남겨주세요.", "blocker"); return; }
     if (event === "resume" && candidate.blocker.trim()) { fail("막힌 점을 해결하거나 다음 버전으로 옮긴 뒤 다시 진행하세요.", "blocker"); return; }
     if (event === "complete") {
       const issue = completionIssue(candidate, deliveryVerificationAt(base, candidate));
       if (issue) {
-        const field = !candidate.deliverable.trim() ? "deliverable" : !candidate.criteria.length || candidate.criteria.some((item) => !item.done) ? "criteria" : !deliveryVerificationAt(base, candidate) ? "prototype" : !safeResultUrl(candidate.resultUrl) ? "resultUrl" : "blocker";
+        const field = !candidate.deliverable.trim() ? "deliverable" : candidate.criteria.some((item) => !item.done) ? "criteria" : candidate.prototypeDate && !deliveryVerificationAt(base, candidate) ? "prototype" : "blocker";
         fail(issue, field); return;
       }
     }
@@ -151,7 +148,7 @@ export function ProjectDeliveryEditor({ project, onClose, onSave, intent = "edit
         startedAt: row.started_at ?? row.startedAt, completedAt: row.completed_at ?? row.completedAt,
         statusKey: row.statusKey ?? row.status, updatedAt: row.updated_at ?? row.updatedAt };
       setBase(next); setPlan(deliveryDraft(next.delivery)); setDueAt(dayKey(next.dueAt)); setScheduleReason("");
-      setMessage(result.message || (event === "complete" ? "결과물과 검증 기록을 남기고 완료했습니다." : "저장했습니다."));
+      setMessage(result.message || (event === "complete" ? "결과를 확인하고 완료했습니다." : "저장했습니다."));
     } catch { setError(true); setMessage("연결을 확인한 뒤 다시 저장하세요. 입력은 유지했습니다."); }
     finally { busyRef.current = false; setBusy(false); }
   }
@@ -212,7 +209,7 @@ export function ProjectDeliveryEditor({ project, onClose, onSave, intent = "edit
           <details className={styles.disclosure} open={executionOpen} onToggle={(event) => setExecutionOpen(event.currentTarget.open)}>
             <summary><span>실행·완료 기록 <small>{base.completedAt ? `완료 ${dateLabel(base.completedAt)}` : verifiedAt ? "작동 확인됨" : verificationChanged ? "작동 재확인 필요" : "마무리할 때 확인"}</small></span></summary>
             <div className={styles.disclosureBody}>
-              <Field label="결과물 링크" {...fieldError("resultUrl")}><input {...inputProps("resultUrl")} type="url" value={plan.resultUrl} maxLength={2000} onChange={(e) => update("resultUrl", e.target.value)} placeholder="https://…" /></Field>
+              <Field label="결과물 링크 · 선택" {...fieldError("resultUrl")}><input {...inputProps("resultUrl")} type="url" value={plan.resultUrl} maxLength={2000} onChange={(e) => update("resultUrl", e.target.value)} placeholder="https://…" /></Field>
               {safeResultUrl(plan.resultUrl) && <a className={styles.link} href={safeResultUrl(plan.resultUrl)} target="_blank" rel="noopener noreferrer">결과물 열어보기 <Iconed name="arrowRight" size={13} /></a>}
               {!terminal && <div className={styles.readiness}>
                 <strong>{missing.length ? "완료 전 확인" : "완료를 기록할 준비가 됐습니다"}</strong>
@@ -220,15 +217,15 @@ export function ProjectDeliveryEditor({ project, onClose, onSave, intent = "edit
                 {verificationChanged && <p>결과물이나 완료 기준이 바뀌어 실제 작동을 다시 확인해야 합니다.</p>}
               </div>}
               <div className={styles.executionStep}>
-                <span><strong>착수</strong><small>{base.startedAt ? dateLabel(base.startedAt) : "결과와 완료 기준을 정한 뒤 기록"}</small></span>
+                <span><strong>착수</strong><small>{base.startedAt ? dateLabel(base.startedAt) : "할 일을 시작할 때 기록"}</small></span>
                 <Button ref={(node) => { fieldRefs.current.start = node; }} variant="outline" size="sm" disabled={busy || terminal || Boolean(base.startedAt) || Boolean(conflict)} onClick={() => save("start")}>{base.startedAt ? "기록됨" : "착수 기록"}</Button>
               </div>
-              <div className={styles.executionStep}>
-                <span><strong>프로토타입 작동 확인</strong><small>{verifiedAt ? dateLabel(verifiedAt) : "링크를 열어 실제 작동을 확인한 뒤 기록"}</small></span>
+              {plan.prototypeDate && <div className={styles.executionStep}>
+                <span><strong>프로토타입 작동 확인</strong><small>{verifiedAt ? dateLabel(verifiedAt) : "실제 작동을 확인한 뒤 기록"}</small></span>
                 <Button ref={(node) => { fieldRefs.current.prototype = node; }} variant="outline" size="sm" disabled={busy || terminal || Boolean(conflict)} onClick={() => save("prototype")}>{verifiedAt ? "다시 확인" : "작동 확인"}</Button>
-              </div>
+              </div>}
               {(errorField === "start" || errorField === "prototype") && <p id={errorId} className={styles.fieldError}>{message}</p>}
-              <Button variant="outline" disabled={busy || terminal || Boolean(conflict)} onClick={() => save("complete")}>{base.completedAt ? `완료 ${dateLabel(base.completedAt)}` : "검증 후 프로젝트 완료"}</Button>
+              <Button variant="outline" disabled={busy || terminal || Boolean(conflict)} onClick={() => save("complete")}>{base.completedAt ? `완료 ${dateLabel(base.completedAt)}` : "결과 확인 후 프로젝트 완료"}</Button>
             </div>
           </details>
           {base.delivery?.history?.length > 0 && <details className={styles.history}><summary>일정 변경 이력 · 최초 목표일 {dateLabel(base.delivery.originalDueAt)}</summary>{[...base.delivery.history].reverse().map((item, index) => <p key={`${item.at}-${index}`}><span className="mono">{dateLabel(item.from)} → {dateLabel(item.to)}</span><br />{item.reason} · {dateLabel(item.at)}</p>)}</details>}

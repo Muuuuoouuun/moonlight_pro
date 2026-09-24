@@ -38,7 +38,7 @@ export const PROJECT_LIFECYCLE_STATE = {
 // §8.2 "visible Korean labels and an equivalent accessible name" — LifecycleBadge가
 // 같은 문구로 aria-label('진행 상태: …')을 짜므로 라벨 정본은 여기 하나다.
 export const PROJECT_STATUS_LABEL_KO = {
-  'In progress': '작업 중',
+  'In progress': '진행 중',
   Review: '검토',
   Planning: '계획',
   Blocked: '막힘',

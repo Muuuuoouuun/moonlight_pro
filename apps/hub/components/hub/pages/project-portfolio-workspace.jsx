@@ -10,14 +10,14 @@ import indexStyles from './project-index-controls.module.css';
 import { useProjectIndexControls, ProjectIndexMenu } from './project-index-controls';
 import deliveryStyles from "./project-delivery.module.css";
 import { ProjectDeliverySummary } from "./project-delivery";
-import { BrandMark } from "./project-pms-components";
+import { BrandMark, projectStatusLabel } from "./project-pms-components";
 import { projectGenreLabel, projectGenreTint } from "./project-view-constants";
 import { classifyProjectPortfolio, portfolioWindow } from "./project-pms-metrics";
 import { selectUrgentProjectItems } from '@/lib/project-urgent-items';
 import { buildCurrentMonthProjectPreview } from '@/lib/project-monthly-preview';
 
 const METRIC_FILTERS = [
-  { key: "active", label: "진행" },
+  { key: "active", label: "진행 중" },
   { key: "blockedOrOverdue", label: "위험" },
   { key: "dueSoon", label: "7일 내" },
   { key: "unmeasured", label: "미측정" },
@@ -200,6 +200,7 @@ export function ProjectPortfolioWorkspace({
   onRemoveProject,
   onCreateProject,
   onManageDelivery,
+  onReviewCompletion,
   onCreateContent,
   onQuickCreateTodo,
   onAddChecklistItem,
@@ -248,6 +249,9 @@ export function ProjectPortfolioWorkspace({
     focusTask(focusTaskId, focusCheckId);
   }, [project?.id, projectTasks, focusTaskId, focusCheckId, focusTask]);
   const openTasks = projectTasks.filter((task) => !task.done);
+  const allTasksDone = projectTasks.length > 0 && openTasks.length === 0
+    && !failedSources.includes('tasks') && !project?.displayProgress?.partial;
+  const canReviewCompletion = allTasksDone && !['completed', 'archived'].includes(project?.statusKey);
   const datedTasks = projectTasks.flatMap(task => [
     ...(task.dueAt ? [{ ...task, scheduleKey: task.id, parentTask: task }] : []),
     ...readTaskChecklist(task).filter(item => item.dueAt).map(item => ({
@@ -335,7 +339,7 @@ export function ProjectPortfolioWorkspace({
           />
           <div className={indexStyles.filterBar}>
             <SegmentedControl label="프로젝트 필터" value={activeFilter || 'all'}
-              options={[{ key: 'all', label: '전체' }, { key: 'active', label: '진행' }, { key: 'blockedOrOverdue', label: '위험' }]}
+              options={[{ key: 'all', label: '전체' }, { key: 'active', label: '진행 중' }, { key: 'blockedOrOverdue', label: '위험' }]}
               onChange={key => onFilterChange(key === 'all' || key === activeFilter ? null : key)} />
             <IconButton className={indexStyles.extraFilter} icon="filter" tooltip="추가 프로젝트 필터" aria-expanded={showFilterPicker}
               aria-controls="project-index-extra-filters" data-active={showFilterPicker || ['dueSoon', 'unmeasured'].includes(activeFilter) ? 'true' : undefined}
@@ -471,11 +475,13 @@ export function ProjectPortfolioWorkspace({
             <>
               <section className={workStyles.overview} aria-label="프로젝트 실행 요약">
                 <div className={workStyles.nextAction}>
-                  <span>다음 행동 · {nextActionSource}</span>
-                  <strong>{nextAction || '첫 할 일을 적고 바로 시작하세요'}</strong>
-                  <Button variant="outline" size="sm" icon="arrowRight" onClick={() => actionTask ? focusTask(actionTask.id) : workListRef.current?.focusNewTask(nextAction || '')}>
-                    {actionTask ? '목록에서 보기' : nextAction ? '할 일로 추가' : '할 일 추가'}
-                  </Button>
+                  <span>프로젝트 상태 · {projectStatusLabel(project.status)} · 할 일 {projectTasks.length - openTasks.length}/{projectTasks.length} 처리</span>
+                  <strong>{canReviewCompletion ? '할 일을 모두 처리했습니다. 이제 결과를 확인하세요.' : nextAction || '첫 할 일을 적고 바로 시작하세요'}</strong>
+                  {canReviewCompletion
+                    ? <Button variant="outline" size="sm" icon="arrowRight" onClick={() => onReviewCompletion?.(project)}>완료 검토</Button>
+                    : <Button variant="outline" size="sm" icon="arrowRight" onClick={() => actionTask ? focusTask(actionTask.id) : workListRef.current?.focusNewTask(nextAction || '')}>
+                      {actionTask ? '목록에서 보기' : nextAction ? '할 일로 추가' : '할 일 추가'}
+                    </Button>}
                 </div>
                 <div className={workStyles.progressSummary}>
                   <div><strong className="stat">{progress === null ? '—' : <>{progress}<small>%</small></>}</strong><span>{evidenceDetail}</span></div>
@@ -501,7 +507,7 @@ export function ProjectPortfolioWorkspace({
                   {project.displayProgress?.partial && <span className={workStyles.progressMeta}>진척 근거를 일부 읽지 못했습니다.</span>}
                   {project.displayProgress?.evidencePartial && <span className={workStyles.progressMeta}>업데이트 기록 일부 확인 불가</span>}
                   {progress === null && !project.displayProgress?.partial && <span className={workStyles.progressMeta}>할 일이나 보고값을 추가하면 진척을 표시합니다.</span>}
-                  {progress === 100 && project.statusKey !== 'completed' && <span className={workStyles.progressMeta}>프로젝트 완료는 결과물 검증 후</span>}
+                  {progress === 100 && !['completed', 'archived'].includes(project.statusKey) && <span className={workStyles.progressMeta}>진척 100% · 프로젝트 완료는 결과 확인 후</span>}
                 </div>
               </section>
 

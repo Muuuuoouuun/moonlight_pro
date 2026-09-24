@@ -176,6 +176,11 @@ test("status stripes stay neutral line tokens and only Blocked inherits danger",
     assert.match(group.tone, /^var\(--[a-z-]+\)$/);
     assert.ok(group.label.length > 0);
   }
+  assert.equal(
+    LIST_STATUS_GROUPS.find(({ key }) => key === 'In progress')?.label,
+    '진행 중',
+    '프로젝트 진행 상태 그룹은 상세 배지와 같은 용어를 쓴다',
+  );
   // 요약 필터 라벨 4칸은 project-pms-components의 PORTFOLIO_CELLS와 같은 키를 쓴다.
   assert.deepEqual(
     Object.keys(SUMMARY_FILTER_LABELS).sort(),

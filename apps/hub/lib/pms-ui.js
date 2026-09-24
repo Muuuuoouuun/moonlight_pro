@@ -384,6 +384,7 @@ export function buildProjectEditDraft(project = {}) {
     orgScope: project.orgScope || "personal",
     summary: project.projectSummary ?? "",
     status: project.statusKey || "active",
+    blocker: project.delivery?.blocker || "",
     priority: project.priority || "medium",
     genre: project.genre || "",
     nextAction: project.projectNextAction ?? "",
@@ -421,6 +422,8 @@ export function rebaseProjectEditSource(source = {}, current = {}) {
       source.projectSummary,
     ),
     statusKey: currentProjectValue(current, ["statusKey", "status"], source.statusKey),
+    ...(("delivery" in current || current.meta?.delivery !== undefined || "delivery" in source)
+      ? { delivery: currentProjectValue(current, ["delivery"], current.meta?.delivery ?? source.delivery) } : {}),
     priority: currentProjectValue(current, ["priority"], source.priority),
     projectNextAction: currentProjectValue(
       current,
@@ -446,6 +449,16 @@ export function buildProjectPatch(source = {}, draft = {}) {
   if (draft.entityKey !== undefined && draft.entityKey !== original.entityKey) {
     patch.entityRef = parseProjectEntityKey(draft.entityKey);
   }
+  const statusChanged = draft.status !== original.status;
+  const blockerChanged = (draft.blocker || "") !== original.blocker;
+  if ((draft.status === "blocked" && (statusChanged || blockerChanged))
+    || (original.status === "blocked" && statusChanged)) {
+    patch.delivery = {
+      ...deliveryDraft(source.delivery),
+      blocker: draft.status === "blocked" ? (draft.blocker || "").trim() : "",
+      nextAction: draft.nextAction ?? original.nextAction,
+    };
+  }
   return patch;
 }
 
@@ -458,6 +471,10 @@ export function rebaseProjectEditState(source = {}, draft = {}, current = {}) {
   const nextDraft = buildProjectEditDraft(nextSource);
 
   dirtyKeys.forEach((key) => {
+    if (key === "delivery") {
+      nextDraft.blocker = draft.blocker;
+      return;
+    }
     const draftKey = key === "entityRef" ? "entityKey" : key;
     nextDraft[draftKey] = draft[draftKey];
   });

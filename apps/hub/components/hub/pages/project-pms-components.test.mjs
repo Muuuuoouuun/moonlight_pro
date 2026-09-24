@@ -18,6 +18,10 @@ const globalCss = await readFile(new URL("../../../app/globals.css", import.meta
 const todosViewSource = await readFile(new URL("./project-todos-view.jsx", import.meta.url), "utf8");
 const boardViewSource = await readFile(new URL("./project-board-view.jsx", import.meta.url), "utf8");
 
+test("project active status badge names the state 진행 중", () => {
+  assert.match(pmsComponentsSource, /'In progress': '진행 중'/);
+});
+
 test("project progress exposes evidence and only uses progressbar metadata when determinate", () => {
   assert.match(pmsComponentsSource, /export function ProjectProgressGauge/);
   assert.match(pmsComponentsSource, /role=["']progressbar["']/);
@@ -193,15 +197,12 @@ test("project list selection opens the exact query, preserves foreign keys, and 
   assert.match(projectsSource, /selectedProjectId[\s\S]{0,280}setOpenDetail\(null\)/);
 });
 
-test("project and task rows use native keyboard controls and named canonical checkboxes", () => {
+test("project review is a named button while task completion remains a checkbox", () => {
   assert.match(projectsSource, /import \{[\s\S]*Checkbox[\s\S]*\} from ["']\.\.\/hub-primitives["']/);
   assert.match(projectsSource, /className=["']hub-project-row__open["']/);
   assert.match(projectsSource, /aria-label=\{`\$\{p\.name\} 상세 열기`\}/);
-  // The row checkbox means "complete" — same semantics as the subtask checkbox
-  // below it (selection is the row click's job). Checking schedules an undoable
-  // completion; on an already-terminal row it reopens.
-  assert.match(projectsSource, /<Checkbox[\s\S]{0,520}label=\{terminal \? `다시 열기: \$\{p\.name\}` : `완료: \$\{p\.name\}`\}/);
-  assert.match(projectsSource, /onChange=\{\(\) => terminal \? completeProject\(p\) : scheduleCompleteProject\(p\)\}/);
+  assert.match(projectsSource, /tooltip=\{terminal \? `\$\{p\.name\} 다시 열기` : `\$\{p\.name\} 완료 검토`\}/);
+  assert.match(projectsSource, /onClick=\{\(\) => terminal \? setProjectStatus\(p, 'active'\) : scheduleCompleteProject\(p\)\}/);
   assert.match(projectsSource, /<Checkbox[\s\S]{0,420}label=\{`\$\{t\.done \? ['"]다시 열기['"] : ['"]완료['"]\}: \$\{t\.title\}`\}/);
   assert.doesNotMatch(projectsSource, /<input\s+type=["']checkbox["']/);
 });
@@ -212,7 +213,7 @@ test("row completion opens acceptance review and terminal projects stay collapse
   assert.doesNotMatch(projectsSource, /label: '프로젝트 완료됨'/);
   assert.match(projectsSource, /brandProjects\.filter\(p => !isTerminalProject\(p\)\)/);
   assert.match(projectsSource, /aria-expanded=\{showTerminal\}/);
-  assert.match(projectsSource, /label=\{`다시 열기: \$\{p\.name\}`\}/);
+  assert.match(projectsSource, /<Button variant="ghost" size="sm" onClick=\{\(\) => setProjectStatus\(p, 'active'\)\}>다시 열기<\/Button>/);
 });
 
 test("project detail checklist also uses the labelled canonical Checkbox", () => {

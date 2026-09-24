@@ -313,7 +313,7 @@ export async function executePmsCommand(
       if (!expected) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
     }
     // Read + compare-and-swap protects the metadata merge and schedule history.
-    if (command.table === "projects" && (command.patch.meta || "due_at" in command.patch || command.patch.status === "completed")) {
+    if (command.table === "projects" && (command.patch.meta || "due_at" in command.patch || "status" in command.patch)) {
       const identityFilters = command.filters.filter(([key]) => key === "id" || key === "workspace_id");
       const rows = await dependencies.fetchRows("projects", { filters: identityFilters, limit: 1 });
       if (rows === null) return { status: "error", error: "current-entity-read-failed" };
@@ -324,7 +324,7 @@ export async function executePmsCommand(
       const meta = (current.meta || {}) as Record<string, any>;
       const previous = meta.delivery;
       const supplied = (command.patch.meta as Record<string, any> | undefined)?.delivery;
-      if (previous || supplied || input.deliveryEvent) {
+      if (previous || supplied || input.deliveryEvent || "status" in command.patch) {
         if (!current.updated_at) return { status: "error", error: "missing-project-version" };
         const plan = deliveryDraft(supplied || previous);
         const dueAt = "due_at" in command.patch ? command.patch.due_at : current.due_at;
@@ -339,15 +339,13 @@ export async function executePmsCommand(
           delivery.history.push({ at: now, from: current.due_at ?? null, to: dueAt ?? null, reason: reason || "첫 종료일 설정" });
         }
         if (input.deliveryEvent === "start") {
-          if (!plan.deliverable || !plan.criteria.length) return { status: "invalid-input", error: "결과물과 완료 조건을 먼저 정하세요." };
           if (current.status === "completed" || current.status === "archived") return { status: "invalid-input", error: "프로젝트를 먼저 다시 열어주세요." };
-          command.patch.started_at = current.started_at || now;
           command.patch.status = "active";
         }
         if (input.deliveryEvent === "prototype") {
           if (current.status === "completed" || current.status === "archived") return { status: "invalid-input", error: "프로젝트를 먼저 다시 열어주세요." };
           if (!current.started_at) return { status: "invalid-input", error: "실제 착수를 먼저 기록하세요." };
-          if (!plan.resultUrl) return { status: "invalid-input", error: "작동을 확인한 결과물 링크를 남겨주세요." };
+          if (!plan.prototypeDate) return { status: "invalid-input", error: "프로토타입 확인일을 먼저 정하세요." };
           delivery.prototypeVerifiedAt = previous?.prototypeVerifiedAt || now;
         }
         if (input.deliveryEvent === "pause" || input.deliveryEvent === "resume") {
@@ -355,19 +353,41 @@ export async function executePmsCommand(
           if (input.deliveryEvent === "pause" && !plan.blocker) return { status: "invalid-input", error: "병목에 보류 이유를 남겨주세요." };
           if (input.deliveryEvent === "resume" && plan.blocker) return { status: "invalid-input", error: "병목을 해결하거나 다음 버전으로 옮긴 뒤 다시 진행하세요." };
           delivery.pausedAt = input.deliveryEvent === "pause" ? now : null;
-          command.patch.status = input.deliveryEvent === "pause" ? "blocked" : current.started_at ? "active" : "draft";
+          command.patch.status = input.deliveryEvent === "pause" ? "blocked" : "active";
+        }
+        // A status chosen in the ordinary project editor follows the same
+        // lifecycle contract as the dedicated start/pause/resume actions.
+        if (command.patch.status === "active") {
+          if (plan.blocker) return { status: "invalid-input", error: "막힌 점을 해결하거나 다음 버전으로 옮긴 뒤 진행하세요." };
+          command.patch.started_at = current.started_at || now;
+          delivery.pausedAt = null;
+        }
+        if (command.patch.status === "blocked") {
+          if (!plan.blocker) return { status: "invalid-input", error: "막힌 점에 보류 이유를 남겨주세요." };
+          delivery.pausedAt = previous?.pausedAt || now;
+        }
+        if (command.patch.status === "draft") {
+          if (plan.blocker) return { status: "invalid-input", error: "막힌 점을 해결하거나 다음 버전으로 옮긴 뒤 계획으로 돌리세요." };
+          delivery.pausedAt = null;
         }
         // A changed artifact or acceptance contract needs a fresh verification.
         if (previous && (plan.resultUrl !== previous.resultUrl || plan.deliverable !== previous.deliverable ||
           JSON.stringify(plan.criteria.map(({ id, text }) => ({ id, text }))) !== JSON.stringify((previous.criteria || []).map(({ id, text }: any) => ({ id, text }))))) {
           delivery.prototypeVerifiedAt = input.deliveryEvent === "prototype" ? now : null;
         }
-        if (command.patch.status === "completed" || current.status === "completed") {
+        const enteringCompleted = command.patch.status === "completed" && current.status !== "completed";
+        const editingCompletedEvidence = current.status === "completed" &&
+          (command.patch.status === undefined || command.patch.status === "completed") && Boolean(previous && supplied);
+        if (enteringCompleted || editingCompletedEvidence) {
           const issue = completionIssue(plan, delivery.prototypeVerifiedAt);
           if (issue) return { status: "invalid-input", error: issue };
-          if (current.status === "completed") command.patch.completed_at = current.completed_at;
         }
-        command.patch.meta = { ...meta, ...(command.patch.meta as Record<string, unknown> | undefined), delivery };
+        if (command.patch.status === "completed") {
+          command.patch.completed_at = current.completed_at || now;
+          delivery.pausedAt = null;
+        }
+        command.patch.meta = { ...meta, ...(command.patch.meta as Record<string, unknown> | undefined),
+          ...(previous || supplied ? { delivery } : {}) };
         if (supplied) command.patch.next_action = plan.nextAction || null;
         if (!expected) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
       } else if (command.patch.meta) {

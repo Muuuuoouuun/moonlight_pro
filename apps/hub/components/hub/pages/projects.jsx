@@ -835,6 +835,7 @@ export function Projects({ workspace }) {
         body: JSON.stringify({
           id: project.id,
           status,
+          ...(status === 'active' && project.delivery?.blocker ? { delivery: { ...project.delivery, blocker: '' } } : {}),
           ...(project.updatedAt ? { expectedUpdatedAt: project.updatedAt } : {}),
         }),
       });
@@ -1138,6 +1139,10 @@ export function Projects({ workspace }) {
   const persistProjectEdit = React.useCallback(async () => {
     if (!projectDraft?.title?.trim() || !projectEditSource) {
       return { ok: false, status: 'invalid-input', error: 'missing-project-edit-source' };
+    }
+    if (projectDraft.status === 'blocked' && !projectDraft.blocker?.trim()
+      && (projectEditSource.statusKey !== 'blocked' || Boolean(projectEditSource.delivery?.blocker))) {
+      return { ok: false, status: 'invalid-input', message: '막힘 상태에는 막힌 이유를 적어주세요.' };
     }
     const patch = buildProjectPatch(projectEditSource, projectDraft);
     const dirtyKeys = Object.keys(patch).filter((key) => !['id', 'expectedUpdatedAt'].includes(key));
@@ -2172,6 +2177,7 @@ export function Projects({ workspace }) {
               onEditProject={editProject}
               onRemoveProject={requestProjectDelete}
               onManageDelivery={manageDelivery}
+              onReviewCompletion={scheduleCompleteProject}
               onCreateProject={() => createProject()}
               onCreateContent={createContentProject}
               onCreateTodo={createTodo}
@@ -2361,7 +2367,7 @@ export function Projects({ workspace }) {
                         <BrandMark brand={section.brand} size={18} />
                         <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{section.brand.name}</span>
                         {rollupActive > 0 && (
-                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>진행 {rollupActive}</span>
+                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>진행 중 {rollupActive}</span>
                         )}
                         {rollupRisk > 0 && (
                           <span className="mono" style={{ fontSize: 10.5, color: 'var(--danger)' }}>막힘·지연 {rollupRisk}</span>
@@ -2417,13 +2423,9 @@ export function Projects({ workspace }) {
                                   >
                                   <span style={{ display: 'inline-block', transition: 'transform var(--dur-hover) var(--ease-hub)', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10.5 }}>▶</span>
                                   </button>
-                                  {/* 완료 조건과 결과물을 검증한 뒤 저장해야 완료·보관으로 이동한다. */}
-                                  <Checkbox
-                                    checked={terminal}
-                                    onChange={() => terminal ? completeProject(p) : scheduleCompleteProject(p)}
-                                    size={16}
-                                    label={terminal ? `다시 열기: ${p.name}` : `완료: ${p.name}`}
-                                  />
+                                  <IconButton icon={terminal ? 'play' : 'check'} size={24} iconSize={14}
+                                    tooltip={terminal ? `${p.name} 다시 열기` : `${p.name} 완료 검토`}
+                                    onClick={() => terminal ? setProjectStatus(p, 'active') : scheduleCompleteProject(p)} />
                                 </div>
                                 <button
                                   type="button"
@@ -2676,12 +2678,6 @@ export function Projects({ workspace }) {
                                 borderBottom: pi < terminalProjects.length - 1 ? '1px solid var(--line-soft)' : 'none',
                               }}
                             >
-                              <Checkbox
-                                checked
-                                onChange={() => setProjectStatus(p, 'active')}
-                                size={16}
-                                label={`다시 열기: ${p.name}`}
-                              />
                               <BrandMark brand={pBrand} size={16} />
                               <button
                                 type="button"
@@ -2922,7 +2918,7 @@ export function Projects({ workspace }) {
               row: 'project-state',
               options: [
                 { value: 'draft', label: '계획' },
-                { value: 'active', label: '진행' },
+                { value: 'active', label: '진행 중' },
                 { value: 'blocked', label: '막힘' },
                 ...(projectDraft.status === 'completed' ? [{ value: 'completed', label: '완료' }] : []),
                 { value: 'archived', label: '보관' },
@@ -2940,6 +2936,7 @@ export function Projects({ workspace }) {
                 { value: 'critical', label: '긴급' },
               ],
             },
+            ...(projectDraft.status === 'blocked' ? [{ key: 'blocker', label: '막힌 이유', placeholder: '진행을 막는 구체적인 이유' }] : []),
             {
               key: 'genre', label: '장르', type: 'select',
               options: [{ value: '', label: '장르 없음' }, ...PROJECT_GENRES.map(item => ({ value: item.key, label: item.label }))],
