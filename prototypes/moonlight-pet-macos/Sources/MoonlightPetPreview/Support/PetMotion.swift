@@ -13,6 +13,13 @@ enum PetMotion {
     static var hover: Animation? { animation(duration: hoverDuration) }
     static var panel: Animation? { animation(duration: panelDuration) }
     static var overlay: Animation? { animation(duration: overlayDuration) }
+    static var petPress: Animation? {
+        reduceMotion ? nil : .interactiveSpring(response: 0.12, dampingFraction: 0.92, blendDuration: 0.04)
+    }
+    static var petRelease: Animation? {
+        reduceMotion ? nil : .interactiveSpring(response: 0.21, dampingFraction: 0.82, blendDuration: 0.06)
+    }
+    static var petCharacter: Animation? { animation(duration: panelDuration) }
 
     static var timingFunction: CAMediaTimingFunction {
         CAMediaTimingFunction(controlPoints: 0.2, 0.7, 0.3, 1)
@@ -26,8 +33,9 @@ enum PetMotion {
 struct PetPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed && !PetMotion.reduceMotion ? 0.97 : 1)
+            .scaleEffect(configuration.isPressed && !PetMotion.reduceMotion ? 0.96 : 1)
             .opacity(configuration.isPressed ? 0.84 : 1)
-            .animation(PetMotion.hover, value: configuration.isPressed)
+            .animation(configuration.isPressed ? PetMotion.petPress : PetMotion.petRelease,
+                       value: configuration.isPressed)
     }
 }

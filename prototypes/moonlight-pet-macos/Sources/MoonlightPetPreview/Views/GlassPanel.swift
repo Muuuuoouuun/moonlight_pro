@@ -2,16 +2,20 @@ import AppKit
 import SwiftUI
 
 private struct GlassBackdrop: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
-        view.material = .hudWindow
+        view.material = material
         view.blendingMode = .behindWindow
         view.state = .active
         view.appearance = NSAppearance(named: .darkAqua)
         return view
     }
 
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        view.material = material
+    }
 }
 
 private struct GlassPanelStyle: ViewModifier {
@@ -22,13 +26,18 @@ private struct GlassPanelStyle: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
         if #available(macOS 26.0, *) {
             content
-                .glassEffect(.regular.tint(Palette.surface.opacity(0.85)), in: shape)
+                .glassEffect(.regular, in: shape)
+                .background {
+                    GlassBackdrop(material: .popover)
+                        .clipShape(shape)
+                        .allowsHitTesting(false)
+                }
                 .overlay(shape.strokeBorder(Palette.moon100.opacity(0.22), lineWidth: 1))
                 .environment(\.colorScheme, .dark)
         } else {
             content
                 .background {
-                    GlassBackdrop()
+                    GlassBackdrop(material: .hudWindow)
                         .overlay(Palette.surface.opacity(0.68))
                         .allowsHitTesting(false)
                 }
