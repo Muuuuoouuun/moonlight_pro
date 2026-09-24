@@ -2,15 +2,10 @@ import SwiftUI
 
 struct QuickBarView: View {
     @ObservedObject var model: AppModel
+    @State private var hoveredMode: QuickMode?
     let close: () -> Void
     let modeChanged: () -> Void
     let startFocus: () -> Void
-
-    private var motion: Animation? {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-            ? nil
-            : .timingCurve(0.2, 0.7, 0.3, 1, duration: 0.18)
-    }
 
     private var usesVerticalLayout: Bool {
         model.mode == .tasks || model.mode == .calendar
@@ -27,6 +22,7 @@ struct QuickBarView: View {
                         .padding(16)
                 }
                 .frame(width: 368)
+                .transition(.opacity)
             } else {
                 VStack(spacing: 0) {
                     horizontalNavigation
@@ -36,11 +32,11 @@ struct QuickBarView: View {
                         .padding(18)
                 }
                 .frame(width: 440)
+                .transition(.opacity)
             }
         }
         .moonlightGlassPanel(cornerRadius: 16)
         .tint(Palette.moon300)
-        .animation(motion, value: model.mode)
     }
 
     private var modeContent: some View {
@@ -53,7 +49,10 @@ struct QuickBarView: View {
             }
         }
         .id(model.mode)
-        .transition(.opacity)
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .offset(y: 4)),
+            removal: .opacity
+        ))
     }
 
     private var horizontalNavigation: some View {
@@ -81,7 +80,8 @@ struct QuickBarView: View {
 
     private func navigationButton(_ mode: QuickMode, vertical: Bool) -> some View {
         Button {
-            withAnimation(motion) { model.mode = mode }
+            guard model.mode != mode else { return }
+            withAnimation(PetMotion.panel) { model.mode = mode }
             modeChanged()
         } label: {
             VStack(spacing: 5) {
@@ -92,9 +92,12 @@ struct QuickBarView: View {
             .frame(maxWidth: vertical ? nil : .infinity)
             .frame(height: vertical ? 52 : 56)
             .foregroundStyle(model.mode == mode ? Palette.moon100 : Palette.moon400)
-            .background(model.mode == mode ? Palette.moon300.opacity(0.12) : .clear)
+            .background(model.mode == mode ? Palette.moon300.opacity(0.12)
+                : hoveredMode == mode ? Palette.moon300.opacity(0.06) : .clear)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PetPressStyle())
+        .onHover { hoveredMode = $0 ? mode : nil }
+        .animation(PetMotion.hover, value: hoveredMode == mode)
         .keyboardShortcut(KeyEquivalent(mode.shortcut), modifiers: .command)
         .accessibilityLabel(mode.title)
     }
@@ -106,7 +109,7 @@ struct QuickBarView: View {
                 .frame(width: vertical ? 64 : 28, height: vertical ? 44 : 56)
                 .foregroundStyle(Palette.moon400)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PetPressStyle())
         .accessibilityLabel("빠른 기능 닫기")
     }
 
@@ -116,8 +119,8 @@ struct QuickBarView: View {
             HStack(spacing: 8) {
                 TextField("할 일 입력", text: $model.taskDraft)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit(model.addTask)
-                Button("추가", action: model.addTask)
+                    .onSubmit { withAnimation(PetMotion.panel) { model.addTask() } }
+                Button("추가") { withAnimation(PetMotion.panel) { model.addTask() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
@@ -131,7 +134,7 @@ struct QuickBarView: View {
                     VStack(alignment: .leading, spacing: 9) {
                         ForEach(model.tasks) { task in
                             HStack(spacing: 9) {
-                                Button { model.toggleTask(task.id) } label: {
+                                Button { withAnimation(PetMotion.hover) { model.toggleTask(task.id) } } label: {
                                     Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                                     Text(task.title)
                                         .strikethrough(task.isDone)
@@ -141,7 +144,7 @@ struct QuickBarView: View {
                                 .font(.system(size: 12))
                                 .foregroundStyle(task.isDone ? Palette.moon500 : Palette.moon100)
                                 Spacer()
-                                Button { model.removeTask(task.id) } label: {
+                                Button { withAnimation(PetMotion.panel) { model.removeTask(task.id) } } label: {
                                     Image(systemName: "xmark")
                                         .font(.system(size: 10, weight: .medium))
                                         .foregroundStyle(Palette.moon500)
@@ -149,6 +152,7 @@ struct QuickBarView: View {
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("\(task.title) 삭제")
                             }
+                            .transition(.opacity.combined(with: .offset(y: 4)))
                         }
                     }
                 }
