@@ -1197,7 +1197,7 @@ function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed,
             <div className="customer-sec__in">
               <GuruGuidanceCard domain="sales" compact onAsk={card => {
                 setGuruGuidanceId(card.id);
-                setGuruQuestion(card.question);
+                setGuruQuestion('');
                 setGuruOpen(true);
               }} />
               <OfficeWorkflowPanel
@@ -1855,6 +1855,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
           </Button>
           {!openRow && !newCustomer && <ContextMentorRail
             domain="sales"
+            contextKey={scopeKey === 'classin' && ['active', 'new', 'dormant'].includes(segment) ? `sales:${segment}` : undefined}
             contextLabel={scopeKey === 'classin' ? 'ClassIn 고객' : scopeKey === 'personal' ? '개인 고객' : '전체 고객'}
             disabled={scopeKey !== 'classin'}
             onGuidanceAsk={onGuidanceAsk}

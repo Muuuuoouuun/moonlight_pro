@@ -151,6 +151,7 @@ test('personal Brand open-question accepts only a marketing or content card and 
   assert.equal(state.lastFetch.body.guidanceId, 'marketing-research');
   assert.equal(state.lastFetch.body.mode, 'open-question');
   assert.equal(state.lastFetch.body.draft, '어떤 고객 언어를 확인할까요?');
+  assert.equal(state.run.agent, 'guru.brand');
   assert.equal(state.order, undefined);
 });
 test('personal Brand open-question never enters the approval queue even if explicitly requested', async () => {
@@ -196,6 +197,9 @@ test('run history validates bounds and keeps failed reads distinct from empty hi
   const data = await (await GET(new Request('http://hub.test?agent=council&ref=brand-1&limit=5'))).json();
   assert.equal(data.status, 'error');
   assert.deepEqual(state.query, { agent: 'council', ref: 'brand-1', limit: 5 });
+  const guruBrand = await GET(new Request('http://hub.test?agent=guru.brand&ref=personal-a&limit=5'));
+  assert.equal(guruBrand.status, 200);
+  assert.deepEqual(state.query, { agent: 'guru.brand', ref: 'personal-a', limit: 5 });
 });
 test('brand-mentor forwards legendIds and directives to Engine and retains structured council', async () => {
   globalThis.fetch = async (url, options) => {

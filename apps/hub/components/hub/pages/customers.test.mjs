@@ -178,6 +178,8 @@ test("Customer360Drawer keeps the 1-click VIP toggle and the 3-step focus contro
 
 test("Customer360Drawer lets a reader request Guru after seeing a source-backed card", () => {
   assert.match(customersSource, /<GuruGuidanceCard domain="sales" compact onAsk=/);
+  assert.match(customersSource, /setGuruQuestion\(''\)/, 'a card must open a blank operator question');
+  assert.doesNotMatch(customersSource, /setGuruQuestion\(card\.question\)/);
   assert.match(customersSource, /guidanceId=\{guruGuidanceId\}/);
   assert.match(customersSource, /initialQuestion=\{guruQuestion\}/);
   assert.doesNotMatch(customersSource, /Guru 전략 코칭 \(⌘J\)/);

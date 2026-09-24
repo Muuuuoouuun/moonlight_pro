@@ -282,13 +282,21 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
     '- 반드시 "담당자가 내일 15시까지 미응답 시", "원문 초안 누락 확인 시" 등 관찰 가능한 단일 사건(Event)을 트리거로 사용하십시오.'
   );
 
-  lines.push(
-    '',
-    '[가드레일 5: Preservation of Dissent (이견 보존 원칙)]',
-    '- 억지 만장일치나 가짜 합의("우리는 만장일치로 동의합니다" 등)를 엄격히 금지합니다.',
-    '- 서로 다른 관점의 대립, 사각지대, 상충 관계(Trade-off), 감수할 비용, 남은 이견(Dissent)을 명확하게 보존하십시오.',
-    '- Devil\'s Advocate의 반론은 단순한 우려가 아니라, 이 계획이 완전히 실패할 가장 치명적인 이유를 직격해야 합니다.'
-  );
+  if (isOpenMentorQuestion) {
+    lines.push(
+      '',
+      '[가드레일 5: 질문에 필요한 반례만 다루기]',
+      '- 실제 질문에 중요한 반례가 있을 때만 짧게 설명하십시오. 근거 없는 반대 관점이나 형식적인 3자 토론을 만들지 마십시오.'
+    );
+  } else {
+    lines.push(
+      '',
+      '[가드레일 5: Preservation of Dissent (이견 보존 원칙)]',
+      '- 억지 만장일치나 가짜 합의("우리는 만장일치로 동의합니다" 등)를 엄격히 금지합니다.',
+      '- 서로 다른 관점의 대립, 사각지대, 상충 관계(Trade-off), 감수할 비용, 남은 이견(Dissent)을 명확하게 보존하십시오.',
+      '- Devil\'s Advocate의 반론은 단순한 우려가 아니라, 이 계획이 완전히 실패할 가장 치명적인 이유를 직격해야 합니다.'
+    );
+  }
 
   // 4. Values and Knowledge Directives (가치관 및 지식 지침)
   // A reader-selected Guru card is the sole mentor frame in this mode. The

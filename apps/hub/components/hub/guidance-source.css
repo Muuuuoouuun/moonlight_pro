@@ -9,6 +9,7 @@
 }
 
 .guidance-source__identity { color: var(--fg-muted); }
+.guidance-source__application { color: var(--fg-muted); }
 .guidance-source__status { color: var(--fg-dim); }
 .guidance-source__link { display: inline-flex; align-items: center; width: fit-content; min-height: 44px; color: var(--fg-muted); text-decoration: underline; text-underline-offset: 2px; }
 .guidance-source__link:hover { color: var(--fg); }

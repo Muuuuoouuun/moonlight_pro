@@ -5,12 +5,19 @@ import { beforeEach, test } from 'node:test';
 const state = globalThis.__salesContextTest = {};
 const stubs = {
   '@/lib/repositories/revenue-ledger': `export async function getRevenueLedger() { return globalThis.__salesContextTest.ledger; }`,
-  '@/lib/repositories/crm-activities': `export async function getRecentContactActivities() { return globalThis.__salesContextTest.outcomes; }`,
+  '@/lib/repositories/crm-activities': `export async function getRecentContactActivities(args) {
+    globalThis.__salesContextTest.contactQuery = args;
+    return globalThis.__salesContextTest.outcomes;
+  }`,
   '@/lib/repositories/content-ledger': `export async function getContentLedger() { return globalThis.__salesContextTest.content; }`,
   '@/lib/repositories/crm-pipeline': `export async function getCrmPipeline() { return null; }`,
   '@/lib/sales-os/agent-runs': `export async function getRecentAgentRuns(args) {
     globalThis.__salesContextTest.runQuery = args;
-    return { source: 'supabase', runs: globalThis.__salesContextTest.runRows.filter(row => !args.agent || row.agent === args.agent) };
+    return { source: 'supabase', runs: globalThis.__salesContextTest.runRows
+      .filter(row => !args.agent || row.agent === args.agent)
+      .filter(row => !args.mode || row.mode === args.mode)
+      .filter(row => !args.unscopedOnly || !row.ref)
+      .slice(0, args.limit) };
   }`,
 };
 registerHooks({ resolve(specifier, context, next) {
@@ -48,7 +55,8 @@ beforeEach(() => {
     cadence: { published: 8, goal: 10 }, ideaQueue: [{ id: 'idea-personal', brandKey: 'sinabro', title: '개인 콘텐츠' }] };
   state.runRows = [
     { id: 'run-council', agent: 'council', recommendation: '개인 브랜드 자문' },
-    { id: 'run-guru', agent: 'guru', recommendation: '영업 자문' },
+    { id: 'run-guru-deal', agent: 'guru', mode: 'deal-review', ref: 'deal-classin', recommendation: '이전 딜 코칭' },
+    { id: 'run-guru', agent: 'guru', mode: 'open-question', ref: null, recommendation: '영업 자문' },
   ];
 });
 
@@ -62,8 +70,17 @@ test('open Guru question includes only confirmed ClassIn records and Guru memory
   assert.ok(context.missing.some(item => item.reason === 'company-only activity scope unverified'));
   assert.equal(context.summary, null, 'global totals cannot describe the filtered ClassIn slice');
   assert.equal(context.content, null, 'global cadence and ideas cannot be called ClassIn facts');
-  assert.deepEqual(state.runQuery, { agent: 'guru', ref: null, limit: 5 });
+  assert.deepEqual(state.runQuery, { agent: 'guru', mode: 'open-question', unscopedOnly: true, ref: null, limit: 5 });
   assert.deepEqual(context.memory.recent_runs.map(row => row.id), ['run-guru']);
+});
+
+test('general Guru memory is not crowded out by focused customer runs', async () => {
+  state.runRows = [
+    ...Array.from({ length: 40 }, (_, index) => ({ id: `focused-${index}`, agent: 'guru', mode: 'open-question', ref: `customer-${index}` })),
+    { id: 'general', agent: 'guru', mode: 'open-question', ref: null, recommendation: '범위 없는 질문' },
+  ];
+  const context = await assembleSalesContext({ mode: 'open-question' });
+  assert.deepEqual(context.memory.recent_runs.map(row => row.id), ['general']);
 });
 
 test('unavailable or failed core revenue reads remain preview or error, never empty truth', async () => {
@@ -103,6 +120,28 @@ test('a company-only contact stays out even when current revenue rows suggest Cl
   state.ledger.leads.push({ id: 'lead-personal-shared', workspace: 'brand', type: 'personal', companyId: 'company-classin' });
   const context = await assembleSalesContext({ mode: 'open-question' });
   assert.deepEqual(context.outcomes.recent.map(row => row.note), ['회사 연락', '회사 거래 연락']);
+});
+test('account-linked contacts use the account scope even when a company ID is shared', async () => {
+  state.ledger.accounts[1].companyId = 'company-classin';
+  state.outcomes.outcomes = [
+    { id: 'account-classin-contact', accountId: 'account-classin', companyId: 'company-classin', note: 'ClassIn 계정 연락' },
+    { id: 'account-personal-contact', accountId: 'account-personal', companyId: 'company-classin', note: '개인 계정 연락' },
+    { id: 'mixed-contact', leadId: 'lead-personal', accountId: 'account-classin', note: '충돌하는 범위' },
+    { id: 'unverified-contact', companyId: 'company-classin', note: '회사 ID만 있음' },
+  ];
+  const context = await assembleSalesContext({ mode: 'open-question' });
+  assert.deepEqual(context.outcomes.recent.map(row => row.note), ['ClassIn 계정 연락']);
+  assert.equal(context.outcomes.recent[0].account_id, 'account-classin');
+  assert.deepEqual(state.contactQuery, { limit: 500 });
+});
+test('ClassIn contacts are capped after scope filtering', async () => {
+  state.outcomes.outcomes = [
+    ...Array.from({ length: 40 }, (_, index) => ({ id: `personal-${index}`, accountId: 'account-personal', note: `개인 ${index}` })),
+    ...Array.from({ length: 35 }, (_, index) => ({ id: `classin-${index}`, accountId: 'account-classin', note: `ClassIn ${index}` })),
+  ];
+  const context = await assembleSalesContext({ mode: 'open-question' });
+  assert.equal(context.outcomes.recent.length, 30);
+  assert.deepEqual(context.outcomes.recent.map(row => row.note), Array.from({ length: 30 }, (_, index) => `ClassIn ${index}`));
 });
 
 test('ordinary sales modes also exclude personal revenue and global aggregates', async () => {

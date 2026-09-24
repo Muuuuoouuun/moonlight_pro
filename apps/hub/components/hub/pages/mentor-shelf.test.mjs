@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import ts from 'typescript';
-import { GURU_CARDS, LEGEND_CARDS, guidancePeriodKey, selectGuidanceCard } from '../../../../../packages/guru-guidance/index.ts';
+import { GURU_CARDS, LEGEND_CARDS, guidanceDailyWindow, selectGuidanceCard } from '../../../../../packages/guru-guidance/index.ts';
 import { GuidanceSource } from '../guidance-source.jsx';
 
 const jsxFile = new URL('./mentor-shelf.jsx', import.meta.url);
@@ -36,12 +36,12 @@ function mount({ onGuidanceAsk = () => {}, onNavigate = () => {} } = {}) {
   );
   const MentorShelf = new Function(
     'React', 'Button', 'Card', 'SegmentedControl', 'GuidanceSource',
-    'selectGuidanceCard', 'guidancePeriodKey', 'sessionStorage', 'window', 'document',
+    'selectGuidanceCard', 'guidanceDailyWindow', 'sessionStorage', 'window', 'document',
     `${compiled}\nreturn MentorShelf;`,
   )(
     React, Button, Card, SegmentedControl, GuidanceSource,
     selectGuidanceCard,
-    guidancePeriodKey,
+    guidanceDailyWindow,
     { getItem: () => null, setItem: () => {} },
     { addEventListener: () => {}, removeEventListener: () => {} },
     { addEventListener: () => {}, removeEventListener: () => {}, hidden: false },
@@ -72,13 +72,14 @@ function words(node) {
   return (Array.isArray(children) ? children : children == null ? [] : [children]).map(words).join(' ');
 }
 
-test('the shelf reads a daily Guru and weekly Legend together with full source identity', () => {
+test('the shelf reads the current Seoul Guru window and weekly Legend together with full source identity', () => {
   assert.ok(source, 'mentor-shelf.jsx should implement the approved shelf');
   const app = mount();
   const tree = app.render();
   assert.match(words(tree), /필요할 때 꺼내 보는 관점/);
-  assert.match(words(tree), /매일 한 장/);
+  assert.match(words(tree), /서울 기준 09·14·19시 교체/);
   assert.match(words(tree), /매주 한 장/);
+  assert.match(words(tree), /다음\s+\d\d:\d\d/);
   assert.match(words(tree), /docs\/sales-guru-knowledge-base\.md/);
   assert.match(words(tree), /apps\/engine\/lib\/legend-cards\.ts/);
   assert.equal(nodes(tree, node => node.type === 'h2').length, 1);
@@ -114,6 +115,11 @@ test('domain changes and manual next stay local until the operator explicitly as
   assert.equal(asked[0].person, nextMarketing);
 });
 
+test('browse previews use the current scheduled cards instead of fixed teaser copy', () => {
+  assert.doesNotMatch(source, /BROWSE_LABELS/);
+  assert.match(source, /selectGuidanceCard\(\{ cadence: 'daily', domain: item\.key, now \}\)\.person/);
+});
+
 test('Legend remains reading only and conversation starts through the explicit route', () => {
   const navigations = [];
   const app = mount({ onNavigate: path => navigations.push(path) });
@@ -128,6 +134,8 @@ test('Legend remains reading only and conversation starts through the explicit r
 
 test('the shelf follows Hub token and responsive contracts', () => {
   assert.match(source, /sessionStorage/);
+  assert.match(source, /guidanceDailyWindow\(now\)/);
+  assert.match(source, /새 시간대 관점 보기/);
   assert.match(css, /@media\s*\(max-width:\s*600px\)/);
   assert.match(css, /grid-template-columns:\s*1fr/);
   assert.match(css, /\.mentor-shelf__domains \.hub-seg__btn\s*\{[^}]*min-height:\s*44px/);

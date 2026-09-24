@@ -12,7 +12,11 @@ test('card keeps browsing separate from advice generation and lets the reader hi
   assert.match(card, /다른 카드 보기/);
   assert.match(card, /이 세션에서 숨기기/);
   assert.match(card, /다시 보기/);
-  assert.match(card, /자료 요약/);
+  assert.match(card, /<GuidanceSource source=\{card\.source\}/);
+  assert.doesNotMatch(card, /<p className="guru-guidance__source">/);
+  assert.match(card, /guidanceDailyWindow\(now\)/);
+  assert.match(card, /새 시간대 관점 보기/);
+  assert.match(card, /서울 기준 09·14·19시에 준비/);
   assert.match(card, /onBrowse\?\.\(\)/);
   assert.doesNotMatch(card, /fetch\(|requestGuruCoaching\(|createWorkOrder\(/);
 });
@@ -38,7 +42,8 @@ test('Revenue card opens a prepared Guru question without generating advice', ()
   assert.equal(guruChatPath({ guidanceId: 'sales-gap' }), 'dashboard/agents/chat?agent=guru&guidanceId=sales-gap');
   assert.match(revenue, /onAsk=\{card => onNavigate\?\.\(guruChatPath\(\{ guidanceId: card\.id \}\)\)\}/);
   assert.match(chat, /q\.get\('guidanceId'\)/);
-  assert.match(chat, /setInput\(guidanceCard\.question\)/);
+  assert.doesNotMatch(chat, /setInput\(guidanceCard\.question\)|setInput\(card\.question\)/);
+  assert.match(chat, /선택한 관점/);
   assert.match(chat, /activeMode === 'advice' \? 'open-question'/);
   assert.match(chat, /onBrowse=\{\(\) => setGuruGuidanceId\(null\)\}/);
 });

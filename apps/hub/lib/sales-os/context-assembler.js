@@ -32,10 +32,11 @@ function belongsToClassIn(row) {
   return row.type === "company";
 }
 
-function isLinkedClassInOutcome(outcome, leadIds, dealIds) {
+function isLinkedClassInOutcome(outcome, leadIds, dealIds, accountIds) {
   const linked = [
     outcome.lead_id ? leadIds.has(outcome.lead_id) : null,
     outcome.deal_id ? dealIds.has(outcome.deal_id) : null,
+    outcome.account_id ? accountIds.has(outcome.account_id) : null,
   ].filter(value => value !== null);
   // company_id alone cannot prove org scope: the bounded revenue read may omit
   // a personal row linked to the same company.
@@ -56,9 +57,12 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
   let [ledger, outcomesRes, content, runsRes] = await Promise.all([
     settled(getRevenueLedger(), "revenue-ledger", missing),
     // 0a: 연락 기록의 단일 원천은 crm_activities — 봉투·필드명은 예전 outcomes와 같다.
-    settled(getRecentContactActivities({ limit: 30 }), "crm_activities", missing),
+    // Scope before the final 30: recent personal rows must not consume every
+    // slot available for ClassIn contacts. The underlying read stays bounded.
+    settled(getRecentContactActivities({ limit: 500 }), "crm_activities", missing),
     settled(getContentLedger(), "content-ledger", missing),
-    settled(getRecentAgentRuns({ agent: "guru", ref, limit: 5 }), "agent_runs", missing),
+    settled(getRecentAgentRuns({ agent: "guru", ref, ...(mode === "open-question"
+      ? { mode: "open-question", ...(!ref ? { unscopedOnly: true } : {}) } : {}), limit: 5 }), "agent_runs", missing),
   ]);
 
   if (!ledger || ledger.source === "preview" || ledger.source === "error") {
@@ -86,11 +90,12 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
   const classInCases = (ledger.cases || []).filter(belongsToClassIn);
   const leadIds = new Set((classInLeads || []).map(row => row.id).filter(Boolean));
   const dealIds = new Set((classInDeals || []).map(row => row.id).filter(Boolean));
-  const companyOnly = normalizedOutcomes.filter(outcome => outcome.company_id && !outcome.lead_id && !outcome.deal_id);
+  const accountIds = new Set((classInAccounts || []).map(row => row.id).filter(Boolean));
+  const companyOnly = normalizedOutcomes.filter(outcome => outcome.company_id && !outcome.lead_id && !outcome.deal_id && !outcome.account_id);
   if (companyOnly.length) {
     missing.push({ source: "crm_activities", reason: "company-only activity scope unverified", count: companyOnly.length });
   }
-  const scopedOutcomes = normalizedOutcomes.filter(outcome => isLinkedClassInOutcome(outcome, leadIds, dealIds));
+  const scopedOutcomes = normalizedOutcomes.filter(outcome => isLinkedClassInOutcome(outcome, leadIds, dealIds, accountIds));
 
   const context = {
     source: missing.length ? "partial" : ledger.source,
@@ -109,7 +114,8 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
     content: null,
     brand,
     memory: {
-      recent_runs: trim((runsRes?.runs || []).filter(run => run.agent === "guru"), 5),
+      recent_runs: trim((runsRes?.runs || []).filter(run => run.agent === "guru"
+        && (mode !== "open-question" || (run.mode === "open-question" && (ref ? run.ref === ref : !run.ref)))), 5),
     },
     missing,
   };

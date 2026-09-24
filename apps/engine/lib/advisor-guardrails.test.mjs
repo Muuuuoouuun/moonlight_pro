@@ -161,6 +161,8 @@ describe('buildAdvisorySystemInstruction prompt generation', () => {
     assert.match(prompt, /관찰/);
     assert.match(prompt, /프레임/);
     assert.match(prompt, /질문 또는 선택/);
+    assert.match(prompt, /실제 질문에 중요한 반례가 있을 때만/);
+    assert.doesNotMatch(prompt, /Devil's Advocate의 반론/);
     assert.doesNotMatch(prompt, /즉시 실행 가능한 가역적 행동을 제안|후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시|승인 큐 후보/);
   });
   it('keeps a reader-selected sales question on one source frame without unrelated Guru playbooks', () => {

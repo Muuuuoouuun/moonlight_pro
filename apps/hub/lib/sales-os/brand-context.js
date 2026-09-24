@@ -1,9 +1,9 @@
-// Brand context assembler — the richer input for the Council brand-mentor (the brand-side
-// counterpart of context-assembler.js, which feeds the ClassIn sales Guru).
+// Brand context assembler — the richer input for Council and requested brand Guru questions
+// (the brand-side counterpart of context-assembler.js, which feeds ClassIn sales Guru).
 //
 // Where the sales assembler pulls the revenue ledger, this one pulls the content + project
 // ledgers (brands with voice guardrails, publishing cadence, idea queue, brand projects) plus
-// episodic memory (agent_runs where agent='council'). It scopes projects to the 브랜드 workspace
+// episodic memory (Council and Guru-brand runs kept separate). It scopes projects to the 브랜드 workspace
 // brand set (workspace-map is the SSOT) and degrades honestly: a source failure lands in
 // missing[] and the advice continues on whatever slices resolved.
 
@@ -13,6 +13,7 @@ import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
 import { filterBrandsByWorkspace } from "@/components/hub/workspace-map";
 
 const COUNCIL_AGENT = "council";
+const BRAND_GURU_AGENT = "guru.brand";
 const trim = (arr, n) => (Array.isArray(arr) ? arr.slice(0, n) : []);
 
 // Brand keys that belong to a workspace — real_v1.1 replacement for the removed
@@ -70,10 +71,12 @@ function selectFocusBrand(brands, ownKeys, ref, strict = false) {
 
 export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, workspace = "brand" } = {}) {
   const missing = [];
+  const memoryAgent = mode === "open-question" ? BRAND_GURU_AGENT : COUNCIL_AGENT;
   let [content, projectLedger, runsRes] = await Promise.all([
     settled(getContentLedger(), "content-ledger", missing),
     settled(getProjectLedger(), "operating-ledger", missing),
-    settled(getRecentAgentRuns({ agent: COUNCIL_AGENT, ref, limit: 5 }), "agent_runs", missing),
+    settled(getRecentAgentRuns({ agent: memoryAgent, ref, ...(mode === "open-question"
+      ? { mode: "open-question", ...(!ref ? { unscopedOnly: true } : {}) } : {}), limit: 5 }), "agent_runs", missing),
   ]);
   const coreReadFailed = !content || content.source === "error" || !projectLedger || projectLedger.source === "error";
 
@@ -159,28 +162,34 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
   const focusBrand = selectFocusBrand(scopedBrands, ownKeys,
     focusCampaign?.brandKey || focusProject?.brand || focusIdea?.brandKey || ref,
     mode === "open-question");
+  const focusedBrandKey = mode === "open-question" && ref && focusBrand ? focusBrand.key : null;
+  const relevantBrands = focusedBrandKey ? scopedBrands.filter((b) => b.key === focusedBrandKey) : scopedBrands;
+  const relevantCampaigns = focusedBrandKey ? scopedCampaigns.filter((c) => c.brandKey === focusedBrandKey) : scopedCampaigns;
+  const relevantProjects = focusedBrandKey ? projects.filter((p) => p.brand === focusedBrandKey) : projects;
+  const relevantIdeas = focusedBrandKey ? ideaQueue.filter((i) => i.brandKey === focusedBrandKey) : ideaQueue;
 
   const context = {
     source: missing.length ? "partial" : content?.source || projectLedger?.source || "preview",
     brand: brandGuardrail(focusBrand),
     // Keep portfolio membership for general questions, but only the explicitly
     // focused brand may contribute voice guidance to an open question.
-    brands: scopedBrands.map((b) => mode === "open-question"
+    brands: relevantBrands.map((b) => mode === "open-question"
       ? { key: b.key, name: b.name, kind: b.kind }
       : { key: b.key, name: b.name, kind: b.kind, voice: b.voice }),
-    campaigns: trim(scopedCampaigns, 10),
+    campaigns: trim(relevantCampaigns, 10),
     content: content
       ? {
           // Existing aggregates cover the whole workspace, including ClassIn.
           cadence_status: "개인 범위 집계 미지원 — 발행 공백을 추정하지 마세요",
           cadence: null,
-          idea_queue_top: ideaQueue,
+          idea_queue_top: relevantIdeas,
           queue_counts: null,
         }
       : null,
-    projects: trim(projects, 30),
+    projects: trim(relevantProjects, 30),
     memory: {
-      recent_runs: trim(runsRes?.runs, 5),
+      recent_runs: trim((runsRes?.runs || []).filter((run) => run.agent === memoryAgent
+        && (mode !== "open-question" || (run.mode === "open-question" && (ref ? run.ref === ref : !run.ref)))), 5),
     },
     missing,
   };

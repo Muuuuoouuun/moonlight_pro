@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import {
   GURU_CARDS,
   LEGEND_CARDS,
+  guidanceDailyWindow,
   guidancePeriodKey,
   listGuidanceCards,
   selectGuidanceCard,
@@ -16,6 +17,9 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 test('Guru catalogue covers each practice domain with attributable source sections', () => {
   assert.deepEqual([...new Set(GURU_CARDS.map(card => card.domain))].sort(), ['content', 'marketing', 'sales']);
+  for (const domain of ['sales', 'marketing', 'content']) {
+    assert.ok(GURU_CARDS.filter(card => card.domain === domain).length >= 5, `${domain} needs enough reviewed views for three daily slots`);
+  }
   for (const card of [...GURU_CARDS, ...LEGEND_CARDS]) {
     assert.ok(card.id && card.person && card.frame && card.text && card.useWhen && card.question);
     assert.ok(card.source.title && card.source.section);
@@ -25,13 +29,50 @@ test('Guru catalogue covers each practice domain with attributable source sectio
   assert.equal(new Set([...GURU_CARDS, ...LEGEND_CARDS].map(card => card.id)).size, GURU_CARDS.length + LEGEND_CARDS.length);
 });
 
-test('Seoul day selection is stable across UTC time within the same local day', () => {
-  const before = new Date('2026-09-23T16:00:00Z');
-  const after = new Date('2026-09-24T14:59:00Z');
-  assert.equal(guidancePeriodKey('daily', before), '2026-09-24');
-  assert.equal(guidancePeriodKey('daily', after), '2026-09-24');
-  assert.equal(selectGuidanceCard({ cadence: 'daily', domain: 'sales', now: before }).id,
-    selectGuidanceCard({ cadence: 'daily', domain: 'sales', now: after }).id);
+test('reviewed cards distinguish source ideas from Moonlight applications', () => {
+  const cards = [...GURU_CARDS, ...LEGEND_CARDS];
+  for (const id of ['content-hook', 'legend-buffett']) {
+    assert.equal(cards.find(card => card.id === id)?.source.application, 'adapted');
+    assert.match(guidancePromptFrame(id), /Moonlight 응용/);
+  }
+  assert.equal(cards.find(card => card.id === 'legend-carnegie')?.source.url, 'https://www.dalecarnegie.com/en/culture');
+  assert.match(cards.find(card => card.id === 'marketing-smallest-market')?.person ?? '', /고객군/);
+});
+
+test('Seoul Guru windows change at 09:00, 14:00, and 19:00, with evening held overnight', () => {
+  const justBeforeMorning = new Date('2026-09-23T23:59:59Z');
+  const morning = new Date('2026-09-24T00:00:00Z');
+  const afternoon = new Date('2026-09-24T05:00:00Z');
+  const evening = new Date('2026-09-24T10:00:00Z');
+  const overnight = new Date('2026-09-24T15:00:00Z');
+  assert.deepEqual(guidanceDailyWindow(justBeforeMorning), {
+    key: '2026-09-23@2', date: '2026-09-23', slot: 2,
+    label: '저녁', nextAt: '2026-09-24T00:00:00.000Z',
+  });
+  assert.deepEqual(guidanceDailyWindow(morning), {
+    key: '2026-09-24@0', date: '2026-09-24', slot: 0,
+    label: '오전', nextAt: '2026-09-24T05:00:00.000Z',
+  });
+  assert.equal(guidanceDailyWindow(afternoon).key, '2026-09-24@1');
+  assert.equal(guidanceDailyWindow(evening).key, '2026-09-24@2');
+  assert.equal(guidanceDailyWindow(overnight).key, '2026-09-24@2');
+  assert.equal(guidancePeriodKey('daily', overnight), '2026-09-25', 'calendar date stays available separately');
+});
+
+test('Guru rotation is stable inside each window and shows three different cards per domain each day', () => {
+  const slots = [
+    new Date('2026-09-24T00:00:00Z'),
+    new Date('2026-09-24T05:00:00Z'),
+    new Date('2026-09-24T10:00:00Z'),
+  ];
+  for (const domain of ['sales', 'marketing', 'content']) {
+    const ids = slots.map(now => selectGuidanceCard({ cadence: 'daily', domain, now }).id);
+    assert.equal(new Set(ids).size, 3, domain);
+    assert.equal(
+      selectGuidanceCard({ cadence: 'daily', domain, now: new Date('2026-09-24T04:59:59Z') }).id,
+      ids[0],
+    );
+  }
 });
 
 test('weekly Legend selection changes only at the Seoul Monday boundary', () => {
@@ -56,22 +97,39 @@ test('domain filtering and manual offset do not change another domain', () => {
 test('selected frame names its source without turning a tip into a required action', () => {
   const frame = guidancePromptFrame('sales-meddic');
   assert.match(frame, /Dick Dunkel/);
+  assert.match(frame, /검토가 길어지면/);
+  assert.match(frame, /제안 후 내부 검토/);
   assert.match(frame, /docs\/sales-guru-knowledge-base\.md/);
+  assert.match(frame, /https:\/\/meddicc\.com\/resources\/who-created-meddic/);
+  assert.match(frame, /원전 본문을 직접 읽은 것으로 주장하지/);
   assert.doesNotMatch(frame, /work_order|승인 큐|반드시.*다음/);
   assert.equal(guidancePromptFrame('missing-card'), '');
 });
 
-test('verified source links point to primary materials and unverified summaries stay unlinked', () => {
+test('every published card has an HTTPS source, with editorial applications labeled separately', () => {
   const cards = [...GURU_CARDS, ...LEGEND_CARDS];
-  const linkedIds = [
-    'sales-meddic', 'sales-gap', 'marketing-smallest-market', 'marketing-research',
-    'content-storybrand', 'content-hook', 'legend-buffett', 'legend-feynman',
-  ];
-  for (const id of linkedIds) {
-    const card = cards.find(item => item.id === id);
-    assert.match(card?.source.url ?? '', /^https:\/\/[^\s]+$/, id);
+  for (const card of cards) {
+    assert.match(card.source.url ?? '', /^https:\/\/[^\s]+$/, card.id);
   }
-  assert.equal(cards.find(item => item.id === 'legend-carnegie')?.source.url, undefined);
+  assert.equal(cards.find(item => item.id === 'legend-carnegie')?.source.application, 'adapted');
+});
+
+test('screen context limits rotation to applicable cards without diagnosing a customer', () => {
+  const slots = [0, 5, 10].map(hour => new Date(`2026-09-24T${String(hour).padStart(2, '0')}:00:00Z`));
+  for (const [domain, contextKey] of [
+    ['sales', 'sales:new'], ['sales', 'sales:active'], ['sales', 'sales:dormant'],
+    ['marketing', 'marketing:audience-unrecorded'], ['marketing', 'marketing:promise-unrecorded'],
+    ['content', 'content:idea'], ['content', 'content:draft'], ['content', 'content:review'],
+  ]) {
+    assert.ok(GURU_CARDS.filter(card => card.domain === domain && card.contexts?.includes(contextKey)).length >= 4, contextKey);
+    const cards = slots.map(now => selectGuidanceCard({ cadence: 'daily', domain, contextKey, now }));
+    assert.equal(new Set(cards.map(card => card.id)).size, 3, contextKey);
+    assert.ok(cards.every(card => Array.isArray(card.contexts) && card.contexts.includes(contextKey)), contextKey);
+    const nextMorning = selectGuidanceCard({ cadence: 'daily', domain, contextKey, now: new Date('2026-09-25T00:00:00Z') });
+    assert.notEqual(nextMorning.id, cards[0].id, `${contextKey} should not replay the identical morning card each day`);
+  }
+  const invalid = selectGuidanceCard({ cadence: 'daily', domain: 'sales', contextKey: 'content:idea', now: slots[0] });
+  assert.equal(invalid.id, selectGuidanceCard({ cadence: 'daily', domain: 'sales', now: slots[0] }).id);
 });
 
 test('Feynman card follows the cited integrity address rather than an unrelated explanation trick', () => {

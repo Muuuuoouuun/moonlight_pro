@@ -245,7 +245,6 @@ export function AgentsChat({ onNavigate }) {
       const guidanceCard = a === 'guru' ? GURU_CARDS.find(card => card.id === guidanceId) : null;
       if (guidanceCard) {
         setGuruGuidanceId(guidanceCard.id);
-        setInput(guidanceCard.question);
       }
       if (mode) setActiveMode(mode);
       if (a === 'guru' && mode && GURU_MODE_LABEL[mode]) {
@@ -329,7 +328,6 @@ export function AgentsChat({ onNavigate }) {
             {agentKey === 'guru' && thread.length <= 1 && (
               <GuruGuidanceCard allowDomains onBrowse={() => setGuruGuidanceId(null)} onAsk={card => {
                 setGuruGuidanceId(card.id);
-                setInput(card.question);
                 guruInputRef.current?.focus();
               }} />
             )}
@@ -561,10 +559,13 @@ export function AgentsChat({ onNavigate }) {
             </span>
           </div>
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
-            <textarea ref={guruInputRef} value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
+            {agentKey === 'guru' && guruGuidanceId && <div style={{ padding: '2px 3px 8px', color: 'var(--fg-muted)', fontSize: 11.5 }}>
+              선택한 관점 · {GURU_CARDS.find(card => card.id === guruGuidanceId)?.person} · 질문은 직접 작성해 주세요
+            </div>}
+            <textarea ref={guruInputRef} value={input} onChange={e => setInput(e.target.value)} placeholder={agentKey === 'guru' ? 'Guru에게 직접 물어볼 내용을 적어 주세요' : `Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
               background: 'transparent', border: 'none',
-              color: 'var(--fg)', fontSize: 13.5, lineHeight: 1.5,
+              color: 'var(--fg)', fontSize: 16, lineHeight: 1.5,
             }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
               <Button variant="ghost" size="xs" icon="upload" onClick={() => setInput(v => v ? `${v}\n[첨부: context]` : '[첨부: context]')}>Attach</Button>

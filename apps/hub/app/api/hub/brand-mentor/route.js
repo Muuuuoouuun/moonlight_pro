@@ -184,11 +184,11 @@ export async function POST(req) {
     );
   }
   const result = await callEngine({ mode, ref, draft, context, legendIds, directives, values, knowledge, guidanceId });
-  // Episodic memory: log what the Council recommended so the next call can remember it (best-effort).
+  // Keep requested Guru questions separate from ordinary Council advice in episodic memory.
   let run = { persisted: false, id: null, reason: "agent-run-write-failed" };
   try {
     run = await recordAgentRun({
-      agent: "council",
+      agent: mode === "open-question" ? "guru.brand" : "council",
       mode,
       ref,
       inputSummary: summarizeContext(context, legendIds),
