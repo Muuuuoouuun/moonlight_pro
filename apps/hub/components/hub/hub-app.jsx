@@ -88,6 +88,7 @@ const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects)
 const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
 const BrandContentLog = lazyPage(() => import("./pages/brand-content-log").then(m => m.BrandContentLog));
 const ContentPerformance = lazyPage(() => import("./pages/content-performance").then(m => m.ContentPerformance));
+const ContentNews = lazyPage(() => import("./pages/content-news").then(m => m.ContentNews));
 const Studio = lazyPage(() => import("./pages/content").then(m => m.Studio));
 const Queue = lazyPage(() => import("./pages/content").then(m => m.Queue));
 const Campaigns = lazyPage(() => import("./pages/content").then(m => m.Campaigns));
@@ -223,6 +224,7 @@ const PAGE_MAP = {
   'dashboard/brands': () => <Brands />,
   'dashboard/brands/log': (n) => <BrandContentLog onNavigate={n} />,
   'dashboard/content/performance': () => <ContentPerformance />,
+  'dashboard/content/news': () => <ContentNews />,
   'dashboard/content/studio': () => <Studio />,
   'dashboard/content/queue': () => <Queue />,
   'dashboard/content/campaigns': () => <Campaigns />,
