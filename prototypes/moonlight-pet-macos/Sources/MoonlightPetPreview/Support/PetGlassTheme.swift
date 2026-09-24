@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 
 /// Operator-approved character identity colors, confined to the native pet panels.
 /// Character color belongs to transient interaction, not the resting glass.
@@ -27,6 +28,21 @@ enum PetGlassTheme {
     }
 }
 
+/// Routes physical dragging to the glass being moved, including panels that
+/// follow the separate pet window. Never tied to focus or text-entry state.
+enum PetGlassDrag {
+    fileprivate static let didChange = Notification.Name("MoonlightPetGlassDragDidChange")
+
+    static func begin(in window: NSWindow?) { send(active: true, in: window) }
+    static func update(in window: NSWindow?) { send(active: true, in: window) }
+    static func end(in window: NSWindow?) { send(active: false, in: window) }
+
+    private static func send(active: Bool, in window: NSWindow?) {
+        guard let window else { return }
+        NotificationCenter.default.post(name: didChange, object: window, userInfo: ["active": active])
+    }
+}
+
 /// No blur/shadow on glyphs and no hit-testing surface above the text host.
 final class PetGlassWash: NSView {
     var character: PetCharacter = .silver { didSet { updateColor() } }
@@ -36,6 +52,8 @@ final class PetGlassWash: NSView {
     private var interaction = GlassPressState()
     private var eventMonitor: Any?
     private var releaseTimer: Timer?
+    private var dragIsActive = false
+    private let log = Logger(subsystem: "app.moonlight.pet-preview", category: "glass-interaction")
 
     init(radius: CGFloat) {
         super.init(frame: .zero)
@@ -58,10 +76,13 @@ final class PetGlassWash: NSView {
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
         eventMonitor = nil
         NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: PetGlassDrag.didChange, object: nil)
         resetInteraction()
         guard let window else { return }
         NotificationCenter.default.addObserver(self, selector: #selector(resetInteraction),
             name: NSWindow.didResignKeyNotification, object: window)
+        NotificationCenter.default.addObserver(self, selector: #selector(updateDrag(_:)),
+            name: PetGlassDrag.didChange, object: window)
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
             guard let self else { return event }
             if event.type == .leftMouseUp {
@@ -79,7 +100,7 @@ final class PetGlassWash: NSView {
     // Some native controls consume mouse-up in a tracking loop. Poll only during
     // the press, including that loop, so the glass can never stay tinted afterward.
     private func watchForRelease() {
-        releaseTimer?.invalidate()
+        guard releaseTimer == nil else { return }
         let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             guard let self else { return }
             if NSEvent.pressedMouseButtons & 1 == 0 || self.window?.isVisible != true {
@@ -90,11 +111,30 @@ final class PetGlassWash: NSView {
         RunLoop.main.add(timer, forMode: .common)
     }
 
+    @objc private func updateDrag(_ notification: Notification) {
+        guard notification.object as? NSWindow === window else { return }
+        guard notification.userInfo?["active"] as? Bool == true else {
+            resetInteraction()
+            return
+        }
+        interaction.drag()
+        updatePresentation()
+        if !dragIsActive {
+            dragIsActive = true
+            log.info("drag tint began window=\(self.window?.windowNumber ?? -1) opacity=\(self.layer?.opacity ?? -1)")
+        }
+        watchForRelease()
+    }
+
     @objc private func resetInteraction() {
         releaseTimer?.invalidate()
         releaseTimer = nil
         interaction.release()
         updatePresentation()
+        if dragIsActive {
+            dragIsActive = false
+            log.info("drag tint ended window=\(self.window?.windowNumber ?? -1) opacity=\(self.layer?.opacity ?? -1)")
+        }
     }
 
     @objc private func updateAccessibility() {

@@ -13,7 +13,7 @@ enum CompanionLayout {
         switch mode {
         case .tasks: return CGSize(width: 336, height: 504 + rise)
         case .calendar: return CGSize(width: 336, height: 484 + rise)
-        case .memo: return CGSize(width: 560, height: 300 + rise)
+        case .memo: return CGSize(width: 520, height: 386 + rise)
         case .office, .council: return CGSize(width: 424, height: 296 + rise)
         case .focus: return CGSize(width: 380, height: 320 + rise)
         }

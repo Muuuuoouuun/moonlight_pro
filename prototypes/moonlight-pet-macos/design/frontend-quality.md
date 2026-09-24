@@ -79,3 +79,12 @@ Native/Metal lab inspection confirmed the revised pink tint, transmitted folds, 
 The operator rejected the permanent colored body above. Default and typing now use zero wash opacity; only an active press/drag shows character color, with Sylveon's interaction wash reduced to 60%. Release, key loss, app deactivation and detachment clear the tint. A timer exists only during the press to cover mouse-up consumed inside native tracking loops. Accessibility solid mode still takes priority. The material lab has an explicit preview switch, off by default, for inspecting the temporary color without holding the pointer.
 
 Build and self-check passed, including the new press/release-to-clear state regression. Native widget inspection showed the resting body without the prior persistent pink fill. These checks do not establish contrast over every desktop image or an exact match to the native compositor's inactive appearance.
+
+
+## Quick memo perch and direct drag feedback — 2026-09-25
+
+The user's next reference is applied to quick memo as a 520×440pt landscape window: larger title, inline task/memo tabs, an inset editor, bottom-right collapse, and the selected transparent character perched at the upper right. This composition now works from the one-click quick panel as well as the pinned widget. The separate idle portrait hides while quick memo is open and returns on collapse or switching back to the vertical quick task panel. The glass keeps its rounded native outline; the reference's concave notch is not introduced.
+
+The earlier local mouse monitor missed drags originating in the separate pet window. Both the native handle and the companion pet now send explicit drag start/update/end to the glass window that moves. The wash also retains the release watchdog and key/app/detach cleanup, so interaction tint cannot latch onto ordinary typing.
+
+Verification: Swift build and self-check passed, including external drag without a local mouse-down, repeated updates, release, persistence and GPU rendering (554 displaced edge pixels, clear center drift 0.00/255). Native CUA confirmed one-click opening, quick memo's perched character and inline tabs, task/memo transitions with the existing task draft intact, and collapse restoring the original portrait. A real native handle drag logged wash opacity 1 on begin and 0 on release with `activated=true`. This is event-delivery evidence; the automation's drag finishes before its screenshot, so no mid-drag optical screenshot or FPS claim is made. Existing records were not edited during QA.

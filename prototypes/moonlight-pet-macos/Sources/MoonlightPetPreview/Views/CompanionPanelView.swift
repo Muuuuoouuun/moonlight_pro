@@ -45,7 +45,7 @@ struct CompanionPanelView: View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 5) {
                 Text(showsAddress ? "Hub 연결" : title)
-                    .font(.system(size: isToday ? 25 : 20, weight: .medium))
+                    .font(.system(size: isToday || mode == .memo ? 25 : 20, weight: .medium))
                     .tracking(-0.6)
                 if isToday && !showsAddress {
                     TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -56,22 +56,32 @@ struct CompanionPanelView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if mode == .memo && !showsAddress {
+                captureTabs.frame(width: 166)
+            }
             modeMenu
-            if let pin {
+            if let pin, mode != .memo {
                 Button(action: pin) { Image(systemName: "pin").frame(width: 28, height: 32) }
                     .buttonStyle(GlassQuietStyle())
                     .help("위젯으로 고정")
                     .accessibilityLabel("위젯으로 고정")
             }
-            Button(action: close) { Image(systemName: "xmark").frame(width: 28, height: 32) }
-                .buttonStyle(GlassQuietStyle())
-                .accessibilityLabel(persistent ? "위젯 접기" : "빠른 기능 닫기")
+            if mode != .memo || showsAddress {
+                Button(action: close) { Image(systemName: "xmark").frame(width: 28, height: 32) }
+                    .buttonStyle(GlassQuietStyle())
+                    .accessibilityLabel(persistent ? "위젯 접기" : "빠른 기능 닫기")
+            }
         }
         .frame(height: 52)
     }
 
     private var modeMenu: some View {
         Menu {
+            if mode == .memo {
+                Button("Council에서 이어서", action: model.continueMemoInCouncil)
+                if let pin { Button("위젯으로 고정", action: pin) }
+                Divider()
+            }
             ForEach(QuickMode.allCases) { destination in
                 Button { select(destination) } label: {
                     Label(destination.title, systemImage: destination.symbol)
@@ -93,8 +103,16 @@ struct CompanionPanelView: View {
     }
 
     private var todayTabs: some View {
+        modeTabs([.tasks, .calendar])
+    }
+
+    private var captureTabs: some View {
+        modeTabs([.tasks, .memo])
+    }
+
+    private func modeTabs(_ destinations: [QuickMode]) -> some View {
         HStack(spacing: 2) {
-            ForEach([QuickMode.tasks, .calendar]) { destination in
+            ForEach(destinations) { destination in
                 Button { select(destination) } label: {
                     Text(destination.title)
                         .font(.system(size: 12, weight: mode == destination ? .semibold : .regular))
@@ -123,7 +141,8 @@ struct CompanionPanelView: View {
     @ViewBuilder private var modeContent: some View {
         switch mode {
         case .tasks: TaskCaptureContent(model: model, surface: persistent ? .widget : .quick, openRevision: openRevision)
-        case .memo: MemoCaptureContent(model: model, surface: persistent ? .widget : .quick, openRevision: openRevision)
+        case .memo: MemoCaptureContent(model: model, surface: persistent ? .widget : .quick,
+                                      openRevision: openRevision, close: close)
         case .calendar: CalendarCompanionContent(model: model)
         case .office, .council: browserContent
         case .focus: focusSetup
