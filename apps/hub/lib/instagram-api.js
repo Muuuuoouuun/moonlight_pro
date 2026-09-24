@@ -2,7 +2,7 @@ import {
   insertSupabaseRecord,
   resolveDefaultWorkspaceId,
 } from "@/lib/server-write";
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
 
 const INSTAGRAM_API_PROVIDER = "instagram_api";
@@ -18,6 +18,7 @@ const INSTAGRAM_LONG_LIVED_TOKEN_URL = "https://graph.instagram.com/access_token
 const INSTAGRAM_REFRESH_TOKEN_URL = "https://graph.instagram.com/refresh_access_token";
 const DEFAULT_INSTAGRAM_API_BASE = "https://graph.instagram.com/v21.0";
 const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const OAUTH_PROVIDER = "instagram_api";
 
 function normalizeString(value, fallback = "") {
   return typeof value === "string" ? value.trim() || fallback : fallback;
@@ -137,6 +138,9 @@ export function decodeInstagramApiState(value) {
       now - state.iat > OAUTH_STATE_MAX_AGE_MS ||
       typeof state.workspaceId !== "string" || !state.workspaceId ||
       typeof state.brandHandle !== "string" || !state.brandHandle ||
+      state.provider !== OAUTH_PROVIDER ||
+      typeof state.nonce !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(state.nonce) ||
+      (state.expectedAccountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(state.expectedAccountId)) ||
       (state.brandKey != null && !isValidSocialBrandKey(state.brandKey))
     ) {
       return { invalid: true };
@@ -189,12 +193,14 @@ export function buildInstagramApiAuthUrl({
   workspaceId = resolveDefaultWorkspaceId(),
   brandHandle = DEFAULT_BRAND_HANDLE,
   brandKey = null,
+  expectedAccountId = null,
   returnPath = "/dashboard/settings",
 }) {
   const config = resolveInstagramApiConfig();
 
   if (!config.configured || !hasInstagramApiOAuthStateSecret() || !workspaceId ||
-    (brandKey != null && !isValidSocialBrandKey(brandKey))) {
+    (brandKey != null && !isValidSocialBrandKey(brandKey)) ||
+    (expectedAccountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(expectedAccountId))) {
     return null;
   }
 
@@ -209,6 +215,9 @@ export function buildInstagramApiAuthUrl({
       workspaceId: workspaceId || resolveDefaultWorkspaceId(),
       brandHandle: normalizeHandle(brandHandle, config.brandHandle),
       brandKey,
+      provider: OAUTH_PROVIDER,
+      nonce: randomBytes(32).toString("base64url"),
+      expectedAccountId,
       returnPath: sanitizeReturnPath(returnPath, "/dashboard/settings"),
     }),
   });
@@ -443,10 +452,12 @@ export function isExpectedInstagramApiProfile(profile, expectedHandle) {
 export async function checkInstagramApiProfileMatch({
   workspaceId,
   brandHandle,
+  expectedAccountId = null,
   profile,
   recordSync = recordInstagramApiSync,
 }) {
-  const profileMatch = Boolean(profile?.id && isExpectedInstagramApiProfile(profile, brandHandle));
+  const profileMatch = Boolean(profile?.id && isExpectedInstagramApiProfile(profile, brandHandle) &&
+    (!expectedAccountId || profile.id === expectedAccountId));
   if (profileMatch) {
     return { profileMatch, rejected: false };
   }

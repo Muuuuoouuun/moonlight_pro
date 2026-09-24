@@ -1,12 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 import {
   buildMetaThreadsAuthUrl,
+  decodeMetaThreadsState,
   hasMetaThreadsOAuthStateSecret,
   resolveMetaThreadsConfig,
 } from "@/lib/meta-threads";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
-import { resolveSocialBrandKey } from "@/lib/social-account-connections";
+import { resolveExpectedSocialAccountId, resolveSocialBrandKey } from "@/lib/social-account-connections";
+import { registerSocialOAuthFlow } from "@/lib/social-oauth-flow";
 
 export const runtime = "nodejs";
 
@@ -34,17 +36,37 @@ export async function GET(req) {
     return NextResponse.redirect(target);
   }
 
+  let expectedAccountId;
+  try {
+    expectedAccountId = await resolveExpectedSocialAccountId({
+      provider: "meta_threads", workspaceId, handle: brandHandle, brandKey,
+      accountId: searchParams.get("accountId"),
+    });
+  } catch {
+    const target = new URL(returnPath, origin);
+    target.searchParams.set("metaThreads", "account-mismatch");
+    return NextResponse.redirect(target);
+  }
+
   const authUrl = buildMetaThreadsAuthUrl({
     origin,
     workspaceId,
     brandHandle,
     brandKey,
+    expectedAccountId,
     returnPath,
   });
 
   if (!authUrl) {
     const target = new URL(returnPath, origin);
     target.searchParams.set("metaThreads", "missing-meta-config");
+    return NextResponse.redirect(target);
+  }
+
+  const state = decodeMetaThreadsState(new URL(authUrl).searchParams.get("state"));
+  if (state.invalid || !await registerSocialOAuthFlow(state)) {
+    const target = new URL(returnPath, origin);
+    target.searchParams.set("metaThreads", "connect-failed");
     return NextResponse.redirect(target);
   }
 

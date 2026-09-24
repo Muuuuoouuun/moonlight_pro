@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 import {
   decodeMetaThreadsState,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/meta-threads";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { assertPersistedSocialConnection } from "@/lib/social-oauth-persistence";
+import { consumeSocialOAuthFlow } from "@/lib/social-oauth-flow";
 import { resolveSocialOAuthReturnUrl } from "@/lib/social-oauth-return";
 
 export const runtime = "nodejs";
@@ -24,6 +25,12 @@ export async function GET(req) {
   const fallbackReturnPath = "/dashboard/settings";
 
   if (state.invalid) {
+    const target = resolveSocialOAuthReturnUrl(fallbackReturnPath, origin);
+    target.searchParams.set("metaThreads", "invalid-state");
+    return NextResponse.redirect(target);
+  }
+
+  if (!await consumeSocialOAuthFlow(state)) {
     const target = resolveSocialOAuthReturnUrl(fallbackReturnPath, origin);
     target.searchParams.set("metaThreads", "invalid-state");
     return NextResponse.redirect(target);
@@ -69,7 +76,7 @@ export async function GET(req) {
     );
     const accessToken = longLivedTokenData?.access_token || tokenData?.access_token;
     const profile = await fetchMetaThreadsProfile(accessToken);
-    const profileMatch = isExpectedMetaThreadsProfile(profile, brandHandle);
+    const profileMatch = isExpectedMetaThreadsProfile(profile, brandHandle, state.expectedAccountId);
 
     if (profileMatch !== true || !profile?.id) {
       await recordMetaThreadsSync({
