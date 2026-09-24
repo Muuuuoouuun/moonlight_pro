@@ -9,7 +9,7 @@ export {errorResult} from './legacy-tools.js';
 
 const PROFILES={
   assistant:['get_hub_health','get_work_context','get_ai_candidate','search_knowledge','get_weekly_report','get_goals','record_goal_command','get_goal_receipt','save_ai_candidate','request_ai_assist','record_assist_outcome','recover_ai_candidate','get_assistance_receipt'],
-  core:['get_hub_health','get_daily_brief','list_tasks','get_task','create_task','update_task','complete_task','get_command_receipt'],
+  core:['get_hub_health','get_daily_brief','list_tasks','get_task','create_task','update_task','complete_task','get_command_receipt','get_skill_request','record_skill_receipt'],
   pms:['get_hub_health','list_projects','get_project','list_tasks','get_task','create_task','update_task','complete_task','get_command_receipt'],
   sales:['get_hub_health','list_followups','list_work_orders','get_work_order','record_contact_outcome','get_command_receipt','get_revenue'],
   content:['get_hub_health','get_content_queue','create_campaign'],
