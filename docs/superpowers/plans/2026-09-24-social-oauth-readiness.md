@@ -31,5 +31,5 @@
 ### Task 3: Verify and integrate
 
 - [x] Run focused OAuth tests, then `npm test` and confirm no regressions.
-- [ ] Inspect the diff for unrelated files and secrets; commit only the touched paths.
-- [ ] Merge into the shared checkout if its existing edits are unaffected, and remove the dedicated worktree.
+- [x] Inspect the diff for unrelated files and secrets; commit only the touched paths.
+- [x] Merge into the shared checkout without changing existing edits, and remove the dedicated worktree.
