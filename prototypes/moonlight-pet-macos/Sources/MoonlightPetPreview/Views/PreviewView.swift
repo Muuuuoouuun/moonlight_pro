@@ -6,7 +6,7 @@ struct PreviewView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            PetPortrait(character: model.selectedCharacter, size: 42)
+            PetPortrait(character: model.selectedCharacter, size: 42, pose: .portrait)
             VStack(alignment: .leading, spacing: 9) {
                 Text("Moonlight")
                     .font(.system(size: 12, weight: .semibold))

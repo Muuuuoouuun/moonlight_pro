@@ -1,31 +1,46 @@
 import AppKit
 import SwiftUI
 
-/// AppKit owns the optical surface at the window boundary; SwiftUI owns only content.
+/// One native optical surface, with a separate non-interactive hairline and shadow gutter.
 @MainActor
 final class GlassPanel: NSView {
-    static func host<Content: View>(_ content: Content, cornerRadius: CGFloat) -> NSView {
-        let host = FirstMouseHostingView(rootView: content)
+    static func host<Content: View>(_ content: Content, cornerRadius: CGFloat, ornament: AnyView? = nil) -> NSView {
+        let host = FirstMouseHostingView(rootView: content.environment(\.colorScheme, .light))
         host.sizingOptions = []
-        return GlassPanel(content: host, cornerRadius: cornerRadius)
+        host.focusRingType = .none
+        let accessory = ornament.map { view -> NSView in
+            let host = FirstMouseHostingView(rootView: view)
+            host.sizingOptions = []
+            host.focusRingType = .none
+            return host
+        }
+        return GlassPanel(content: host, cornerRadius: cornerRadius, ornament: accessory)
     }
 
-    private init(content: NSView, cornerRadius: CGFloat) {
-        super.init(frame: .zero)
+    private let radius: CGFloat
+    private let material: NSView
+    private let rim = GlassEdgeView()
+    private var fallbackContent: NSView?
+    private let ornament: NSView?
 
+    private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?) {
+        radius = cornerRadius
+        self.ornament = ornament
         if #available(macOS 26.0, *) {
-            // Regular provides adaptive legibility and system accessibility handling.
-            // A second visual-effect layer would wash out the native material.
             let glass = NSGlassEffectView()
+            // The approved floating surfaces use neutral silver glass. Regular retains
+            // native contrast adaptation on both bright and dark desktop backgrounds.
             glass.style = .regular
+            glass.appearance = NSAppearance(named: .aqua)
             glass.cornerRadius = cornerRadius
             glass.contentView = content
-            fillBounds(with: glass)
+            material = glass
         } else {
             let backdrop = NSVisualEffectView()
             backdrop.material = .popover
             backdrop.blendingMode = .behindWindow
             backdrop.state = .active
+            backdrop.appearance = NSAppearance(named: .aqua)
             let diameter = cornerRadius * 2 + 1
             backdrop.maskImage = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
                 NSColor.white.setFill()
@@ -35,21 +50,74 @@ final class GlassPanel: NSView {
             backdrop.maskImage?.capInsets = NSEdgeInsets(top: cornerRadius, left: cornerRadius,
                                                         bottom: cornerRadius, right: cornerRadius)
             backdrop.maskImage?.resizingMode = .stretch
-            fillBounds(with: backdrop)
-            fillBounds(with: content)
+            material = backdrop
+            fallbackContent = content
         }
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.18
+        layer?.shadowRadius = 6
+        layer?.shadowOffset = CGSize(width: 0, height: -2)
+        addSubview(material)
+        if let fallbackContent { addSubview(fallbackContent) }
+        rim.radius = cornerRadius
+        addSubview(rim)
+        if let ornament { addSubview(ornament) }
     }
 
-    private func fillBounds(with view: NSView) {
-        addSubview(view)
-        view.frame = bounds
-        view.autoresizingMask = [.width, .height]
+    override func layout() {
+        super.layout()
+        var frame = bounds.insetBy(dx: CompanionLayout.gutter, dy: CompanionLayout.gutter)
+        if let ornament {
+            frame.size.height -= CompanionLayout.perchRise
+            ornament.frame = NSRect(x: frame.maxX - CompanionLayout.perchInset - CompanionLayout.perchSize,
+                                    y: bounds.maxY - CompanionLayout.gutter - CompanionLayout.perchSize,
+                                    width: CompanionLayout.perchSize, height: CompanionLayout.perchSize)
+        }
+        material.frame = frame
+        fallbackContent?.frame = frame
+        rim.frame = frame
+        layer?.shadowPath = CGPath(roundedRect: frame, cornerWidth: radius, cornerHeight: radius, transform: nil)
     }
 
     required init?(coder: NSCoder) { nil }
 }
 
-/// Floating utility controls respond on the click that activates their window.
+private final class GlassEdgeView: NSView {
+    var radius: CGFloat = 26
+    private let gradient = CAGradientLayer()
+    private let outline = CAShapeLayer()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        gradient.colors = [NSColor.white.withAlphaComponent(0.60).cgColor,
+                           NSColor.white.withAlphaComponent(0.10).cgColor,
+                           NSColor.white.withAlphaComponent(0.12).cgColor,
+                           NSColor.white.withAlphaComponent(0.36).cgColor]
+        gradient.locations = [0, 0.38, 0.66, 1]
+        gradient.startPoint = CGPoint(x: 0, y: 1)
+        gradient.endPoint = CGPoint(x: 1, y: 0)
+        outline.fillColor = NSColor.clear.cgColor
+        outline.strokeColor = NSColor.white.cgColor
+        outline.lineWidth = 1
+        gradient.mask = outline
+        layer?.addSublayer(gradient)
+    }
+    required init?(coder: NSCoder) { nil }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradient.frame = bounds
+        outline.path = CGPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                              cornerWidth: radius, cornerHeight: radius, transform: nil)
+        CATransaction.commit()
+    }
+}
+
 private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

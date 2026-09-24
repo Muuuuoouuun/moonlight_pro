@@ -51,12 +51,9 @@ enum QuickMode: String, CaseIterable, Identifiable {
     }
 }
 
-enum CompactMode: String, CaseIterable, Identifiable {
-    case tasks, memo
+typealias CompactMode = QuickMode
 
-    var id: String { rawValue }
-    var title: String { self == .tasks ? "할 일" : "메모" }
-}
+enum CompanionSurface { case quick, widget }
 
 struct LocalTask: Codable, Identifiable, Equatable {
     var id: UUID
@@ -74,16 +71,22 @@ struct FocusClock: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
+    @Published var activeCompanion: CompanionSurface?
     @Published var mode: QuickMode = .tasks
     @Published var compactMode: CompactMode = .tasks
     @Published var compactOpenRevision = 0
     @Published var quickOpenRevision = 0
     @Published var tasks: [LocalTask] = []
-    @Published var taskDraft = ""
+    @Published var taskDraft = "" {
+        didSet { defaults.set(taskDraft, forKey: "petPreview.taskDraft") }
+    }
     @Published var savedMemo = ""
-    @Published var memoDraft = ""
+    @Published var memoDraft = "" {
+        didSet { if memoDraft != oldValue { saveMemo() } }
+    }
     @Published var focusMinutes = 25
     @Published var remainingSeconds = 0
+    @Published private(set) var focusTotalSeconds = 0
     @Published var isFocused = false
     @Published var showStopConfirmation = false
     @Published var hubBaseURL = "http://127.0.0.1:3000"
@@ -104,6 +107,7 @@ final class AppModel: ObservableObject {
         }
         savedMemo = defaults.string(forKey: "petPreview.memo") ?? ""
         memoDraft = savedMemo
+        taskDraft = defaults.string(forKey: "petPreview.taskDraft") ?? ""
         hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? "http://127.0.0.1:3000"
         selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
     }
@@ -140,6 +144,16 @@ final class AppModel: ObservableObject {
         defaults.set(savedMemo, forKey: "petPreview.memo")
     }
 
+    /// The user explicitly chooses this action; no message is submitted to Council.
+    func continueMemoInCouncil() {
+        saveMemo()
+        if !memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(memoDraft, forType: .string)
+        }
+        openHub(.council)
+    }
+
     func saveHubURL() {
         hubBaseURL = hubBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         defaults.set(hubBaseURL, forKey: "petPreview.hubURL")
@@ -158,6 +172,7 @@ final class AppModel: ObservableObject {
         let minutes = min(max(focusMinutes, 1), 120)
         focusClock = FocusClock(endsAt: Date().addingTimeInterval(TimeInterval(minutes * 60)))
         remainingSeconds = minutes * 60
+        focusTotalSeconds = remainingSeconds
         showStopConfirmation = false
         isFocused = true
         timer?.invalidate()
@@ -178,6 +193,11 @@ final class AppModel: ObservableObject {
 
     var timerLabel: String {
         String(format: "%02d:%02d", remainingSeconds / 60, remainingSeconds % 60)
+    }
+
+    var focusProgress: Double {
+        guard focusTotalSeconds > 0 else { return 0 }
+        return min(1, max(0, 1 - Double(remainingSeconds) / Double(focusTotalSeconds)))
     }
 
     private func tick() {

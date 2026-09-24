@@ -24,17 +24,16 @@ private struct GlassActionBody<Label: View>: View {
 
     var body: some View {
         label
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: 12, weight: .medium))
             .foregroundStyle(Palette.glassInk)
-            .padding(.horizontal, compact ? 0 : 12)
-            .frame(minWidth: 32, minHeight: 32)
-            .background(Palette.glassInk.opacity(pressed ? 0.20 : hovered ? 0.14 : 0.09),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.horizontal, compact ? 0 : 16)
+            .frame(minWidth: 32, minHeight: compact ? 32 : 38)
+            .background(Palette.glassInk.opacity(pressed ? 0.16 : hovered ? 0.10 : 0.065),
+                        in: RoundedRectangle(cornerRadius: compact ? 10 : 19, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Palette.glassInk.opacity(increasedContrast ? 0.6 : 0.10), lineWidth: 1)
+                GlassRim(radius: compact ? 10 : 19, strength: increasedContrast ? 1 : 0.65)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: compact ? 10 : 19, style: .continuous))
             .scaleEffect(pressed && !PetMotion.reduceMotion ? 0.97 : 1)
             .opacity(enabled ? 1 : 0.4)
             .onHover { hovered = $0 && enabled }
@@ -49,10 +48,10 @@ struct GlassInputSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(Palette.glassInk.opacity(focused ? 0.035 : 0.055),
-                        in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .background(Palette.glassInk.opacity(focused ? 0.025 : 0.035),
+                        in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .strokeBorder(Palette.glassInk.opacity(contrast == .increased ? 0.65 : focused ? 0.32 : 0.12),
                                   lineWidth: 1)
                     .allowsHitTesting(false)
@@ -79,12 +78,12 @@ struct PanelDragHandle: View {
     @State private var hovered = false
 
     var body: some View {
-        Image(systemName: "line.3.horizontal")
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(hovered ? Palette.glassInk : Palette.glassInkFaint)
-            .frame(width: 32, height: 32)
-            .background(Palette.glassInk.opacity(hovered ? 0.07 : 0), in: RoundedRectangle(cornerRadius: 8))
-            .overlay { ScreenDragSurface(move: move).frame(width: 32, height: 32) }
+        Capsule()
+            .fill(Palette.glassInk.opacity(hovered ? 0.30 : 0.16))
+            .overlay { Capsule().strokeBorder(Palette.glassLight.opacity(0.22), lineWidth: 1) }
+            .frame(width: 38, height: 4)
+            .frame(width: 56, height: 20)
+            .overlay { ScreenDragSurface(move: move) }
             .onHover { hovered = $0 }
             .animation(PetMotion.hover, value: hovered)
             .help("위아래로 드래그하여 이동")
@@ -92,6 +91,53 @@ struct PanelDragHandle: View {
             .accessibilityLabel("위젯 위치 이동")
             .accessibilityAction(named: Text("위로 이동")) { move(24) }
             .accessibilityAction(named: Text("아래로 이동")) { move(-24) }
+    }
+}
+
+/// Fine edge light stays on the contour and never paints a haze over the content.
+struct GlassRim: View {
+    var radius: CGFloat
+    var strength: Double = 1
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .strokeBorder(LinearGradient(colors: [
+                Palette.glassLight.opacity(0.62 * strength),
+                Palette.glassLight.opacity(0.14 * strength),
+                Palette.glassInk.opacity(contrast == .increased ? 0.6 : 0.10 * strength),
+                Palette.glassLight.opacity(0.34 * strength)
+            ], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+struct GlassQuietStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(Palette.glassInkMuted)
+            .modifier(GlassRowSurface())
+            .opacity(configuration.isPressed ? 0.65 : 1)
+            .scaleEffect(configuration.isPressed && !PetMotion.reduceMotion ? 0.98 : 1)
+            .animation(configuration.isPressed ? PetMotion.petPress : PetMotion.petRelease,
+                       value: configuration.isPressed)
+    }
+}
+
+/// Used inside the opaque focus window; floating utility windows use GlassPanel.
+struct GlassSurface: ViewModifier {
+    var radius: CGFloat
+    func body(content: Content) -> some View {
+        Group {
+            if #available(macOS 26.0, *) {
+                content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            } else {
+                content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            }
+        }
+        .overlay { GlassRim(radius: radius) }
+        .shadow(color: Palette.glassShadow.opacity(0.18), radius: 12, y: 5)
     }
 }
 

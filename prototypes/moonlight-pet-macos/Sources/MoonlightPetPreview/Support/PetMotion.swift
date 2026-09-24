@@ -5,7 +5,7 @@ import SwiftUI
 // Native equivalents of DESIGN.md's hover, panel, and overlay motion tokens.
 enum PetMotion {
     static let hoverDuration: TimeInterval = 0.12
-    static let panelDuration: TimeInterval = 0.18
+    static let panelDuration: TimeInterval = 0.24
     static let overlayDuration: TimeInterval = 0.16
 
     static var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
