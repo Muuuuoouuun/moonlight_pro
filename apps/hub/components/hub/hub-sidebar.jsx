@@ -17,6 +17,7 @@ import {
   pathnameOf,
   resolveSidebarPath,
   sidebarChildren,
+  tabForRouteRole,
   setElementInert,
   getMobileNavigationTabTarget,
 } from "./hub-nav";
@@ -68,10 +69,14 @@ function useAnchorCounts() {
       })
       .then(d => {
         if (!active) return;
+        // 허브 read 실패는 HTTP 200 + status:"error" 봉투다 — r.ok만 보면 실패가 "0건"으로
+        // 위장된다(CLAUDE.md). 읽지 못한 수는 뱃지로 그리지 않는다. preview도 실제 건수가 아니다.
+        if (d?.status === 'error' || d?.status === 'preview') return;
         const items = Array.isArray(d?.items) ? d.items : [];
         // followups-ledger.js summary shape: { overdue, dueToday, total, shown }.
         const due = Number.isFinite(d?.summary?.dueToday) ? d.summary.dueToday : items.length;
-        setCounts(c => ({ ...c, followups: due }));
+        // 고객 연락 앵커가 2026-09-24 영업·매출의 첫 탭(오늘 연락)이 되면서 뱃지도 따라왔다.
+        setCounts(c => ({ ...c, revenue: due }));
       })
       .catch(() => {});
 
@@ -212,10 +217,12 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
     if (!anchor?.scopeAware) return;
     // 지금 서 있는 자식 탭이 새 스코프에도 같은 pathname으로 존재하면 그 자식으로
     // 재진입한다 — 스코프 불변 표면(컨텐츠 로그 등)은 제자리, 스코프 소비 자식은
-    // 쿼리만 갱신된다. 앵커 루트로 강퇴하지 않는다 (2609 감사 #10).
+    // 쿼리만 갱신된다. 앵커 루트로 강퇴하지 않는다 (2609 감사 #10). 경로가 스코프마다
+    // 다른 탭(영업·매출의 거래 = ClassIn에선 classin/pipeline)은 같은 역할의 탭으로 간다.
     const currentPathname = pathnameOf(active);
     const sibling = sidebarChildren(owner, value)
-      .find(c => pathnameOf(c.path) === currentPathname && (owner !== 'overview' || (new URLSearchParams(c.path.split('?')[1] || '').get('view') === 'goals') === (view === 'goals')));
+      .find(c => pathnameOf(c.path) === currentPathname && (owner !== 'overview' || (new URLSearchParams(c.path.split('?')[1] || '').get('view') === 'goals') === (view === 'goals')))
+      || tabForRouteRole(owner, active, value);
     const target = owner === 'overview' && view === 'goals'
       ? goalHref(null, value, { check: goalView(new URLSearchParams(search)) === 'check', weekly: goalView(new URLSearchParams(search)) === 'weekly' }).slice(1)
       : sibling ? sibling.path : resolveSidebarPath(owner, value);

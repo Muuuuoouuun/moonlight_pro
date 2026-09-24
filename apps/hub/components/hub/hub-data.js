@@ -25,7 +25,8 @@ export const NAV_TREE = [
   {
     key: 'classin', label: '클래스인', icon: 'classin', workspace: true,
     children: [
-      { key: 'classin-pipeline', label: 'Deals', icon: 'deals', path: 'dashboard/classin/pipeline', keywords: ['deals', '딜', '칸반', 'pipeline', '파이프라인', '업무'] },
+      // ClassIn 스코프의 거래 탭(2026-09-24) — 사이드바 탭과 같은 이름. 옛 이름 Deals는 키워드로 남긴다.
+      { key: 'classin-pipeline', label: '거래', icon: 'deals', path: 'dashboard/classin/pipeline', keywords: ['Deals', 'deals', '딜', '칸반', 'pipeline', '파이프라인', '업무'] },
       { key: 'classin-revenue', label: 'Leads', icon: 'leads', path: 'dashboard/classin/revenue', keywords: ['leads', '리드', '결제'] },
       { key: 'classin-segments', label: '세그먼트', icon: 'filter', path: 'dashboard/classin/segments', keywords: ['segments', '세그먼트'] },
       { key: 'classin-accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/classin/accounts', keywords: ['accounts', '계정', '고객'] },
@@ -67,19 +68,23 @@ export const NAV_TREE = [
     ],
   },
   {
-    // 팔레트 어휘를 사이드바(hub-nav.js)의 D4 확정 라벨과 동기화(2026-07-15 스펙) — 운영자가
-    // 매일 보는 라벨(영업·매출, 고객 연락)로 검색했을 때 0건이 나오지 않아야 한다.
-    key: 'revenue', label: 'Revenue', icon: 'revenue', secondary: true,
+    // 팔레트 어휘를 사이드바(hub-nav.js) 라벨과 동기화 — 운영자가 매일 보는 라벨(영업·매출,
+    // 오늘 연락)로 검색했을 때 0건이 나오지 않아야 한다. 2026-09-24 4탭 재구성: 앞 네 항목이
+    // 탭(오늘 연락·고객·거래·문의)이고, 탭에서 내려온 화면(개요·히트맵·Leads·Accounts·Cases)은
+    // 라우트 그대로 여기 남아 ⌘K로 연다. 옛 이름(고객 연락·고객 DB·Deals·문의 내역)은
+    // 키워드로 남겨 손에 익은 검색어도 닿게 한다.
+    key: 'revenue', label: '영업·매출', icon: 'revenue', secondary: true,
     children: [
-      { key: 'inquiries', label: '문의 내역', icon: 'inbox', path: 'dashboard/revenue/inquiries', keywords: ['문의', '메일', '랜딩페이지', 'inquiry', 'webhook', '지원', '제휴'] },
+      { key: 'followups', label: '오늘 연락', icon: 'bell', path: 'dashboard/revenue/followups', keywords: ['고객 연락', 'followup', 'follow-ups', '팔로업', '연락', '후속', '약속', '놓친 약속', '연락 기록'] },
+      { key: 'customers', label: '고객', icon: 'accounts', path: 'dashboard/revenue/customers', keywords: ['고객 DB', 'customers', '고객', 'crm', '통합', '고객 찾기'] },
+      { key: 'deals', label: '거래', icon: 'deals', path: 'dashboard/revenue/deals', keywords: ['Deals', '딜', '파이프라인', '영업', '입금', '예상 입금'] },
+      { key: 'inquiries', label: '문의', icon: 'inbox', path: 'dashboard/revenue/inquiries', keywords: ['문의 내역', '문의', '메일', '랜딩페이지', 'inquiry', 'webhook', '지원', '제휴'] },
+      { key: 'cashflow', label: '개인 현금 흐름', icon: 'revenue', path: 'dashboard/revenue/overview?scope=personal', keywords: ['현금 흐름', '캐시플로', 'cashflow', '30일', '개인 매출', '로드맵'] },
       { key: 'overview', label: '개요', icon: 'revenue', path: 'dashboard/revenue/overview', keywords: ['revenue overview', '매출 개요', '영업', '영업·매출'] },
-      { key: 'customers', label: '고객 DB', icon: 'accounts', path: 'dashboard/revenue/customers', keywords: ['customers', '고객', 'crm', '통합'] },
       { key: 'heatmap', label: '매출 히트맵', icon: 'globe', path: 'dashboard/revenue/heatmap', keywords: ['heatmap', '히트맵', '지역', '지도', 'map'] },
-      { key: 'deals', label: 'Deals', icon: 'deals', path: 'dashboard/revenue/deals', keywords: ['딜', '파이프라인', '영업'] },
       { key: 'leads', label: 'Leads', icon: 'leads', path: 'dashboard/revenue/leads', keywords: ['리드', '영업'] },
       { key: 'accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/revenue/accounts', keywords: ['계정', '고객사'] },
       { key: 'cases', label: 'Cases', icon: 'cases', path: 'dashboard/revenue/cases', keywords: ['케이스', 'cs'] },
-      { key: 'followups', label: '고객 연락', icon: 'bell', path: 'dashboard/revenue/followups', keywords: ['followup', 'follow-ups', '팔로업', '연락', '후속'] },
     ],
   },
   {
@@ -134,6 +139,6 @@ export const LEGACY_REDIRECTS = {
   'dashboard/evolution/logs': { to: 'dashboard/evolution', label: 'Evolution · Log' },
   'dashboard/projects': { to: 'dashboard/work/projects', label: 'Projects' },
   'dashboard/classin/intake': { to: 'dashboard/classin/revenue', label: '결제·리드' },
-  'dashboard/classin/followups': { to: 'dashboard/revenue/followups', label: '고객 연락' },
+  'dashboard/classin/followups': { to: 'dashboard/revenue/followups', label: '오늘 연락' },
   'dashboard/agents/office': { to: 'dashboard/agents/office-council', label: 'Office' },
 };

@@ -10,7 +10,9 @@
 //
 // Nine primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
 // hub-nav.test.mjs pins both counts). Overview was added 2026-07-15 per direct
-// operator instruction; the anchor set is not a fixed contract and may change. Organizational context
+// operator instruction; the anchor set is not a fixed contract and may change —
+// 2026-09-24 the separate 고객 연락 anchor folded into 영업·매출 as its first tab
+// (오늘 연락), taking the count from ten back to nine. Organizational context
 // moves into one scope control.
 
 export const DEFAULT_SCOPE = 'all';
@@ -39,9 +41,9 @@ export function normalizeScope(scope) {
 }
 
 // `owns` lists route prefixes that light the anchor. Resolution is
-// longest-prefix-wins, so `dashboard/revenue/followups` lands on 연락·후속 even
-// though `dashboard/revenue` belongs to 매출·고객. Every route therefore maps to
-// at most one anchor.
+// longest-prefix-wins (e.g. `dashboard/work/goals` lands on 내 작업 even though
+// `dashboard/work` belongs to 프로젝트). Every route therefore maps to at most
+// one anchor.
 //
 // 할 일 and 프로젝트·기획 share the Projects surface: the same route is split by
 // the `view` query (`todos` → 할 일, anything else → 프로젝트·기획), which is why
@@ -55,44 +57,88 @@ export function normalizeScope(scope) {
 // sub-list — the anchor itself is the destination.
 
 // Second-level destinations, defined once so the per-scope tables stay readable.
-// ?scope=personal은 실제로 소비하는 표면(Leads/Deals/Accounts의 개인 필터 시드)에만
-// 붙인다 — 나머지는 전역 집계 뷰라 파라미터가 과약속이었다(5차 재감사 S).
-// rev-overview는 2609 병합으로 소비자가 생겼다 — scope=personal이 개인 캐시플로 로드맵을 연다.
-const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-overview', 'rev-inquiries', 'rev-leads', 'rev-deals', 'rev-accounts']);
+// ?scope=personal은 실제로 소비하는 표면에만 붙인다 — 소비자가 없는 표면에 붙이면
+// 같은 데이터를 두고 개인 필터가 걸린 척하는 과약속이다(5차 재감사 S). 2026-09-24 실측:
+// 거래(Deals의 useScopeFilter)와 문의(inquiryScopeForWorkspace)만 읽는다. 오늘 연락
+// (followups 전역 큐)과 고객(Customers 전역 목록)은 scope 쿼리를 읽지 않는다 — 두 화면이
+// 스코프를 읽게 되면 여기에 키를 더한다.
+const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-deals', 'rev-inquiries']);
 function personalScoped(children) {
   return children.map((c) => (
     SCOPE_CONSUMING_CHILD_KEYS.has(c.key) ? { ...c, path: `${c.path}?scope=personal` } : c
   ));
 }
 
+// 영업·매출 4탭 — 2026-09-24 운영자 확정(목업 검토 뒤 "진행"). 이전 9개 목적지(개요·문의
+// 내역·고객 DB·매출 히트맵·Leads·Deals·Accounts·Cases + 별도 앵커 고객 연락)를 매일 여는
+// 한 탭(오늘 연락)과 찾아볼 때 가는 세 탭으로 줄였다. docs/superpowers/specs/
+// 2026-09-24-revenue-four-tabs-design.md가 정본이다.
+//
+// `tab`은 탭의 역할 이름이다. 스코프마다 경로가 달라도(ClassIn의 거래 = classin/pipeline)
+// 역할이 같으면 같은 탭이다 — 탭에서 내려온 옛 화면이 가장 가까운 탭을 켜는 것
+// (REVENUE_ROUTE_TABS)과 스코프 전환 때 같은 탭으로 재진입하는 것(tabForRouteRole)이
+// 모두 이 역할로 맞춘다.
 const REVENUE_CHILDREN = [
-  // '개요', not 'Overview' — the global Overview anchor (dashboard/overview)
-  // owns that name; the revenue child keeps a distinct label to avoid two
-  // identical rows in one sidebar.
-  { key: 'rev-overview', label: '개요', path: 'dashboard/revenue/overview' },
-  { key: 'rev-inquiries', label: '문의 내역', path: 'dashboard/revenue/inquiries' },
-  // 고객 DB · 매출 히트맵 — implemented pages (PAGE_MAP + NAV_TREE search) that
-  // had no sidebar row until 2026-07-17. Both are global aggregate views
-  // (Customers/RevenueHeatmap take no workspace prop), so they live only here,
-  // not in REVENUE_CLASSIN_CHILDREN.
-  { key: 'rev-customers', label: '고객 DB', path: 'dashboard/revenue/customers' },
-  { key: 'rev-heatmap', label: '매출 히트맵', path: 'dashboard/revenue/heatmap' },
-  { key: 'rev-leads', label: 'Leads', path: 'dashboard/revenue/leads' },
-  { key: 'rev-deals', label: 'Deals', path: 'dashboard/revenue/deals' },
-  { key: 'rev-accounts', label: 'Accounts', path: 'dashboard/revenue/accounts' },
-  { key: 'rev-cases', label: 'Cases', path: 'dashboard/revenue/cases' },
+  { key: 'rev-followups', tab: 'followups', label: '오늘 연락', path: 'dashboard/revenue/followups' },
+  { key: 'rev-customers', tab: 'customers', label: '고객', path: 'dashboard/revenue/customers' },
+  { key: 'rev-deals', tab: 'deals', label: '거래', path: 'dashboard/revenue/deals' },
+  { key: 'rev-inquiries', tab: 'inquiries', label: '문의', path: 'dashboard/revenue/inquiries' },
 ];
-// Same components as the global CRM (Deals/Leads/Accounts with
-// workspace="classin") — so they carry the SAME names. The old scope-specific
-// labels (파이프라인·결제·리드·고객·계정) renamed identical surfaces and were the
-// operator's top naming confusion (2026-07-15 naming decision).
+// 개인 스코프 다섯 번째 탭 — 30일 현금 흐름 로드맵(2026-08-31 개인 매출 로드맵, 운영자 확정
+// 기능)은 개요 라우트의 scope=personal이 연다. 개요 자체는 탭에서 내려갔지만 이 로드맵은
+// 계속 한 번에 닿아야 한다.
+const REVENUE_PERSONAL_CHILDREN = [
+  ...personalScoped(REVENUE_CHILDREN),
+  { key: 'rev-cashflow', tab: 'cashflow', label: '현금 흐름', path: 'dashboard/revenue/overview?scope=personal' },
+];
+// ClassIn 스코프: 거래는 workspace="classin" Deals(classin/pipeline). 고객 목록(Customers)은
+// 아직 scope를 읽지 않으므로 ClassIn으로 걸러진 가장 가까운 표면인 classin Leads 별칭을
+// 고객 탭으로 쓴다 — Customers가 scope=classin을 소비하게 되면 그 경로로 바꾼다(스펙 미정 항목).
+// 세그먼트는 ClassIn CRM에만 있는 표면이라 이 스코프에서만 다섯 번째 탭이다.
 const REVENUE_CLASSIN_CHILDREN = [
-  { key: 'rev-ci-inquiries', label: '문의 내역', path: 'dashboard/revenue/inquiries?scope=classin' },
-  { key: 'rev-ci-pipeline', label: 'Deals', path: 'dashboard/classin/pipeline' },
-  { key: 'rev-ci-revenue', label: 'Leads', path: 'dashboard/classin/revenue' },
-  { key: 'rev-ci-segments', label: '세그먼트', path: 'dashboard/classin/segments' },
-  { key: 'rev-ci-accounts', label: 'Accounts', path: 'dashboard/classin/accounts' },
+  { key: 'rev-followups', tab: 'followups', label: '오늘 연락', path: 'dashboard/revenue/followups' },
+  { key: 'rev-ci-customers', tab: 'customers', label: '고객', path: 'dashboard/classin/revenue' },
+  { key: 'rev-ci-deals', tab: 'deals', label: '거래', path: 'dashboard/classin/pipeline' },
+  { key: 'rev-ci-inquiries', tab: 'inquiries', label: '문의', path: 'dashboard/revenue/inquiries?scope=classin' },
+  { key: 'rev-ci-segments', tab: 'segments', label: '세그먼트', path: 'dashboard/classin/segments' },
 ];
+
+// 영업·매출의 각 라우트가 켜는 탭 역할. 탭 경로와 정확히 같은 라우트는 그 탭이 먼저 이기고
+// (예: 개인 스코프의 개요 = 현금 흐름), 여기 역할은 그 밖의 경우에만 쓴다 — 다른 스코프의
+// 같은 역할 경로와, 탭에서 내려왔지만 PAGE_MAP·⌘K로 계속 열리는 옛 화면이다.
+// Leads·Accounts는 고객의 단계, 개요·히트맵은 거래의 보기라서 그 탭을 켠다. Cases는 켤 탭이
+// 없다(⌘K 전용) — 역할 없음.
+export const REVENUE_ROUTE_TABS = {
+  'dashboard/revenue/followups': 'followups',
+  'dashboard/classin/followups': 'followups',
+  'dashboard/revenue/customers': 'customers',
+  'dashboard/classin/revenue': 'customers',
+  'dashboard/revenue/leads': 'customers',
+  'dashboard/revenue/accounts': 'customers',
+  'dashboard/classin/accounts': 'customers',
+  'dashboard/revenue/deals': 'deals',
+  'dashboard/classin/pipeline': 'deals',
+  'dashboard/revenue/overview': 'deals',
+  'dashboard/revenue/heatmap': 'deals',
+  'dashboard/revenue/inquiries': 'inquiries',
+  'dashboard/classin/segments': 'segments',
+};
+
+// 탭이 아닌 화면의 탑바 제목. 옛 화면에 서 있으면 가장 가까운 탭이 켜지되 제목은 그 화면
+// 자신의 이름으로 남는다 — Leads를 보면서 제목이 '고객'이라고 말하거나, 켤 탭이 없는
+// Cases에서 브레드크럼이 '영업·매출' 한 칸으로 무너지지 않게.
+export const REVENUE_ROUTE_LABELS = {
+  'dashboard/revenue/leads': 'Leads',
+  'dashboard/revenue/accounts': 'Accounts',
+  'dashboard/classin/revenue': 'Leads',
+  'dashboard/classin/accounts': 'Accounts',
+  'dashboard/revenue/overview': '개요',
+  'dashboard/revenue/heatmap': '매출 히트맵',
+  'dashboard/revenue/cases': 'Cases',
+  // ClassIn에서만 탭인 화면 — classin/* 경로는 스코프를 ClassIn으로 끌어오지만(deriveSidebarScope),
+  // 다른 스코프로 계산돼도 제목은 남긴다.
+  'dashboard/classin/segments': '세그먼트',
+};
 
 // Calendar · Roadmap · Decisions · Rhythm are global routes today — scope only
 // swaps the Projects entry. Scope filtering of these surfaces is Phase 2.
@@ -224,40 +270,31 @@ export const SIDEBAR_PRIMARY = [
     label: '영업·매출',
     icon: 'navRevenue',
     scopeAware: true,
+    // 고객 연락 앵커가 2026-09-24 이 앵커의 첫 탭(오늘 연락)으로 들어왔다 — `dashboard/revenue`
+    // 접두사가 followups를 덮는다. classin/followups 페이지는 제거됨(LEGACY_REDIRECTS) — owns는
+    // 옛 딥링크의 액티브 판정용으로만 유지한다.
     owns: [
       'dashboard/revenue',
+      'dashboard/classin/followups',
       'dashboard/classin/pipeline',
       'dashboard/classin/revenue',
       'dashboard/classin/segments',
       'dashboard/classin/accounts',
     ],
+    // 착지는 세 스코프 모두 오늘 연락 — 매일 여는 탭이 이것 하나다(2026-09-24). 오늘 연락은
+    // 전역 큐라 scope 쿼리를 붙이지 않는다(소비자 없음 — 과약속 금지).
     paths: {
-      all: 'dashboard/revenue/overview',
-      classin: 'dashboard/classin/pipeline',
-      // 개인 스코프 개요는 30일 캐시플로 로드맵이 소비한다 (2026-08-31 personal-revenue,
-      // 2609 병합으로 합류). 6차 재감사의 "소비자 없음" 전제가 이때 거짓이 됐다.
-      personal: 'dashboard/revenue/overview?scope=personal',
-    },
-    children: {
-      all: REVENUE_CHILDREN,
-      classin: REVENUE_CLASSIN_CHILDREN,
-      personal: personalScoped(REVENUE_CHILDREN),
-    },
-  },
-  {
-    key: 'followups',
-    label: '고객 연락',
-    icon: 'navFollowup',
-    scopeAware: true,
-    // classin/followups 페이지는 제거됨(LEGACY_REDIRECTS) — owns는 옛 딥링크의
-    // 액티브 판정용으로만 유지하고, 내비 착지는 항상 정본 페이지다.
-    owns: ['dashboard/revenue/followups', 'dashboard/classin/followups'],
-    paths: {
-      // followups는 전역 큐 — scope 쿼리 소비자가 없어 데이터가 동일했다(과약속 제거).
       all: 'dashboard/revenue/followups',
       classin: 'dashboard/revenue/followups',
       personal: 'dashboard/revenue/followups',
     },
+    children: {
+      all: REVENUE_CHILDREN,
+      classin: REVENUE_CLASSIN_CHILDREN,
+      personal: REVENUE_PERSONAL_CHILDREN,
+    },
+    routeTabs: REVENUE_ROUTE_TABS,
+    routeLabels: REVENUE_ROUTE_LABELS,
   },
   {
     key: 'discovery', label: '기회 탐색', icon: 'navDiscovery', scopeAware: true,
@@ -399,9 +436,25 @@ export function sidebarChildren(anchorKey, scope) {
   return list.length > 1 ? list : [];
 }
 
+// The tab a route stands for when it is not itself a tab in this scope: another
+// scope's path for the same role (ClassIn 거래 = classin/pipeline) or a screen
+// that left the tab row but stays routable (Leads → 고객). Anchors without a
+// `routeTabs` table have no aliases, so this returns null for them.
+export function tabForRouteRole(anchorKey, activePath, scope = DEFAULT_SCOPE) {
+  const anchor = SIDEBAR_ANCHORS.find((a) => a.key === anchorKey);
+  const role = anchor?.routeTabs?.[pathnameOf(activePath)];
+  if (!role) return null;
+  return sidebarChildren(anchorKey, scope).find((tab) => tab.tab === role) || null;
+}
+
 // Second-level destinations live in the top bar, not in a nested sidebar.
 // Keeping this derivation beside the sidebar contract prevents the two shells
 // from inventing different labels, scope paths, or active-state rules.
+//
+// An exact pathname match always wins; the role alias above only applies when
+// no tab in this scope is the route itself. `routeLabel` names a screen that is
+// not a tab (or only borrows one) so the top bar title stays the screen's own
+// name instead of collapsing to the anchor.
 export function topNavigationForRoute(activePath, scope = DEFAULT_SCOPE, view) {
   let anchorKey = ownerAnchorKey(activePath);
   // Projects 표면의 To-dos 뷰는 사이드바 소유가 '내 작업'으로 넘어간다 — 탑바도 같은
@@ -409,14 +462,19 @@ export function topNavigationForRoute(activePath, scope = DEFAULT_SCOPE, view) {
   // 어긋나 탭 전부 비활성 + 브레드크럼 붕괴가 된다 (2609 감사 #4).
   if (anchorKey === 'projects' && isTaskView(view)) anchorKey = 'tasks';
   const anchor = SIDEBAR_ANCHORS.find((item) => item.key === anchorKey) || null;
-  if (!anchor) return { anchor: null, tabs: [], activeTab: null };
+  if (!anchor) return { anchor: null, tabs: [], activeTab: null, routeLabel: null };
 
   const tabs = sidebarChildren(anchor.key, scope);
-  const activeTab = tabs.find((tab) => (
+  const exactTab = tabs.find((tab) => (
     isSidebarChildActive(anchor.key, tab.path, activePath, view)
   )) || null;
+  if (exactTab) return { anchor, tabs, activeTab: exactTab, routeLabel: null };
 
-  return { anchor, tabs, activeTab };
+  const activeTab = isSidebarAnchorActive(anchor.key, activePath, view)
+    ? tabForRouteRole(anchor.key, activePath, scope)
+    : null;
+  const routeLabel = anchor.routeLabels?.[pathnameOf(activePath)] || null;
+  return { anchor, tabs, activeTab, routeLabel };
 }
 
 export function pathnameOf(path) {
