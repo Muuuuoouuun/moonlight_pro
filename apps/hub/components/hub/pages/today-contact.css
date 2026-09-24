@@ -1,0 +1,226 @@
+/* 오늘 연락 — 영업·매출 첫 탭 (2026-09-24 운영자 승인 목업 01, Futura 텍스처)
+ *
+ * `.hub-futura` 스코프(hub-futura.css) 위에서만 움직인다: 48/44 여백·44px 라이트 제목·fx-card
+ * 그림자 면. 색은 토큰만, 보더는 1px, 긴급은 놓친 약속의 1px danger 레일과 건수 한 곳(§5.3
+ * 빨강 예산). 모션은 --dur-*·--ease-hub만(§9).
+ */
+.hub-app .today-contact { max-width: 1180px; }
+
+/* ── 머리 ─────────────────────────────────────────────────────── */
+.hub-app .today-contact__head-text { min-width: 0; }
+.hub-app .today-contact__title .stat { font-weight: 500; }
+.hub-app .today-contact__sub {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 14px;
+  max-width: none;
+}
+.hub-app .today-contact__missed { color: var(--danger); font-weight: 500; }
+.hub-app .today-contact__head-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 6px;
+}
+.hub-app .today-contact__search-form { display: flex; margin: 0; }
+.hub-app .today-contact__search { min-width: 260px; }
+
+/* ── 본문 + 오른쪽 레일 ─────────────────────────────────────────── */
+.hub-app .today-contact__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 28px;
+  align-items: start;
+}
+.hub-app .today-contact__col { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+
+.hub-app .today-contact__sec-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; }
+.hub-app .today-contact__sec-title { margin: 0; }
+.hub-app .today-contact__count { font-size: 12px; color: var(--fg-muted); }
+.hub-app .today-contact__count[data-danger="true"] { color: var(--danger); font-weight: 600; }
+.hub-app .today-contact__hint { font-size: 11.5px; color: var(--fg-dim); }
+
+.hub-app .today-contact__list {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--fx-shadow);
+  overflow: hidden;
+}
+
+/* ── 행 ─────────────────────────────────────────────────────────
+ * 기록하면 행이 접히며 빠진다(grid-template-rows 1fr → 0fr). 되돌리면 같은 자리로 돌아온다.
+ * 다 접힌 뒤에는 visibility로 탭 순서에서도 빠진다. */
+.hub-app .today-contact__row-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows var(--dur-panel) var(--ease-hub),
+    opacity var(--dur-panel) var(--ease-hub);
+}
+.hub-app .today-contact__row-wrap[data-leaving="true"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows var(--dur-panel) var(--ease-hub),
+    opacity var(--dur-panel) var(--ease-hub),
+    visibility 0s linear var(--dur-panel);
+}
+.hub-app .today-contact__row-inner { min-height: 0; overflow: hidden; }
+.hub-app .today-contact__row-wrap + .today-contact__row-wrap > .today-contact__row-inner { border-top: 1px solid var(--line-soft); }
+
+.hub-app .today-contact__row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 18px;
+}
+.hub-app .today-contact__row[data-selected="true"] { outline: 1px solid var(--moon-300); outline-offset: -1px; }
+.hub-app .today-contact__body { min-width: 0; }
+.hub-app .today-contact__who { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.hub-app .today-contact__name {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-hover) var(--ease-hub);
+}
+.hub-app button.today-contact__name { cursor: pointer; }
+.hub-app button.today-contact__name:hover { text-decoration-color: var(--line-strong); }
+.hub-app .today-contact__org { font-size: 12px; color: var(--fg-dim); }
+.hub-app .today-contact__promise { margin-top: 2px; font-size: 13px; color: var(--fg); overflow-wrap: anywhere; }
+.hub-app .today-contact__why { color: var(--fg-muted); }
+.hub-app .today-contact__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+.hub-app .today-contact__late,
+.hub-app .today-contact__channel { display: inline-flex; align-items: center; gap: 4px; }
+.hub-app .today-contact__late { color: var(--fg-muted); }
+.hub-app .today-contact__late[data-urgent="true"] { color: var(--danger); font-weight: 500; }
+.hub-app .today-contact__acts { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+
+.hub-app .today-contact__resched {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 0 18px 14px 62px;
+}
+.hub-app .today-contact__resched-error { flex-basis: 100%; font-size: 12px; color: var(--danger); }
+
+/* ── 접힌 나머지 ─────────────────────────────────────────────────── */
+.hub-app .today-contact__more {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--fx-shadow);
+  overflow: hidden;
+}
+.hub-app .today-contact__more > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 12px 18px;
+  font-size: 13px;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.hub-app .today-contact__more > summary::-webkit-details-marker { display: none; }
+.hub-app .today-contact__more > summary b { font-weight: 600; color: var(--fg); }
+.hub-app .today-contact__chev {
+  display: inline-flex;
+  margin-left: auto;
+  transition: transform var(--dur-panel) var(--ease-hub);
+}
+.hub-app .today-contact__more[open] .today-contact__chev { transform: rotate(90deg); }
+.hub-app .today-contact__more-group { border-top: 1px solid var(--line-soft); }
+.hub-app .today-contact__more-label { padding: 14px 18px 2px; }
+
+/* ── 오른쪽 레일 ─────────────────────────────────────────────────── */
+.hub-app .today-contact__rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 16px;
+}
+.hub-app .today-contact__card { padding: 20px; }
+.hub-app .today-contact__card-title { margin: 0; }
+.hub-app .today-contact__card-note {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.hub-app .today-contact__kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.hub-app .today-contact__kpi { font-size: 32px; font-weight: 500; line-height: 1.1; color: var(--fg); }
+.hub-app .today-contact__kpi-label { display: block; margin-top: 2px; font-size: 11px; color: var(--fg-dim); }
+.hub-app .today-contact__bars { display: flex; align-items: flex-end; gap: 4px; height: 44px; margin-top: 14px; }
+.hub-app .today-contact__bar {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  background: var(--surface-3);
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
+}
+.hub-app .today-contact__bar > i {
+  position: absolute;
+  inset: auto 0 0 0;
+  background: var(--fg-muted);
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
+  transition: height var(--dur-enter) var(--ease-hub);
+}
+.hub-app .today-contact__bar[data-today="true"] > i { background: var(--fg); }
+/* 아직 오지 않은 요일은 빈 트랙이 아니라 점선 테두리 — "0건"과 "아직"을 다르게 말한다. */
+.hub-app .today-contact__bar[data-future="true"] { background: transparent; border: 1px dashed var(--line); border-bottom: 0; }
+.hub-app .today-contact__days { display: flex; gap: 4px; margin-top: 4px; font-size: 10.5px; color: var(--fg-dim); }
+.hub-app .today-contact__days > span { flex: 1; text-align: center; }
+.hub-app .today-contact__days > [data-today="true"] { color: var(--fg); font-weight: 600; }
+.hub-app .today-contact__checks { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 0; font-size: 12.5px; }
+.hub-app .today-contact__checks > div { display: flex; justify-content: space-between; gap: 8px; }
+.hub-app .today-contact__checks dt { color: var(--fg-muted); }
+.hub-app .today-contact__checks dd { margin: 0; color: var(--fg); }
+
+/* ── 반응형 ──────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .hub-app .today-contact__grid { grid-template-columns: minmax(0, 1fr); }
+  .hub-app .today-contact__rail { position: static; }
+}
+
+/* 터치 플로어(hub-tokens.css)는 input을 44px로 키우지만 Input 래퍼의 높이는 인라인이라 같이 키운다. */
+@media (pointer: coarse), (max-width: 720px) {
+  .hub-app .today-contact__search.hub-field { height: auto !important; min-height: 44px; }
+}
+
+@media (max-width: 600px) {
+  .hub-app .today-contact__head-actions { width: 100%; padding-bottom: 0; }
+  .hub-app .today-contact__search-form,
+  .hub-app .today-contact__search,
+  .hub-app .today-contact__cta { width: 100%; min-width: 0; }
+  .hub-app .today-contact__row { grid-template-columns: 32px minmax(0, 1fr); padding: 14px 16px; }
+  .hub-app .today-contact__acts { grid-column: 1 / -1; justify-content: stretch; }
+  .hub-app .today-contact__acts > .hub-btn { flex: 1 1 0; }
+  .hub-app .today-contact__resched { padding: 0 16px 14px; }
+  .hub-app .today-contact__more > summary { padding: 12px 16px; }
+  .hub-app .today-contact__more-label { padding: 14px 16px 2px; }
+}

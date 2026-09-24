@@ -45,7 +45,15 @@ registerHooks({
 });
 
 const state = globalThis.__followupsState = { calls: [], rows: {}, activities: [], trackingStartedAt: null };
-const { buildFollowupItems, getFollowups } = await import("./followups-ledger.js?crm-activities-source");
+const {
+  buildFollowupItems,
+  buildPromiseBook,
+  buildWeekStats,
+  getFollowups,
+  kstWeekStartKey,
+  sanitizeTargetQuery,
+  searchContactTargets,
+} = await import("./followups-ledger.js?crm-activities-source");
 const { groupFollowups } = await import("../sales-os/followup-groups.js");
 
 const NOW = Date.parse("2026-09-21T03:00:00Z");
@@ -61,7 +69,7 @@ beforeEach(() => {
   state.calls = [];
   state.trackingStartedAt = null;
   state.activities = [];
-  state.rows = { leads: [lead()], deals: [], companies };
+  state.rows = { leads: [lead()], deals: [], companies, crm_activities: [] };
 });
 
 test("last contact reaction shows up in `왜 지금`, joined through company_id like live rows", () => {
@@ -245,4 +253,154 @@ test("the cap keeps missed promises in the list, and the header counts what ship
   assert.equal(res.summary.overdue, groupFollowups(res.items).missed.length);
   assert.equal(res.summary.dueToday, groupFollowups(res.items).today.length);
   assert.equal(res.summary.overdue, 1);
+});
+
+// ── 2026-09-24 오늘 연락: 약속 장부 · 이번 주 · 고객 고르기 ─────────────────────────
+
+test("deal rows read the promise from the next_action column the contact RPC writes", async () => {
+  const items = buildFollowupItems({
+    dealRows: [{ id: "deal-1", title: "한빛 20대", stage: "proposal", amount: 1, next_action: "견적서 보내기", company_id: "co-1", last_activity_at: daysAgo(9), updated_at: daysAgo(9), created_at: daysAgo(20), meta: {} }],
+    companies,
+    now: NOW,
+  });
+  assert.equal(items[0].promiseText, "견적서 보내기");
+  assert.equal(items[0].nextAction, "견적서 보내기");
+  // 읽기도 그 컬럼을 고른다 — select에 없으면 위 매핑이 늘 비어 있다.
+  await getFollowups({ limit: 5 });
+  const dealRead = state.calls.find((c) => c.table === "deals");
+  assert.match(dealRead.options.select, /\bnext_action\b/);
+});
+
+test("items carry the raw promise text (null when unset) and the last contact time", () => {
+  const items = buildFollowupItems({
+    leadRows: [lead()],
+    companies,
+    activities: [{ id: "a1", kind: "call", reaction: "positive", leadId: "lead-1", companyId: "co-1", occurredAt: daysAgo(2) }],
+    now: NOW,
+  });
+  assert.equal(items[0].promiseText, null);
+  assert.equal(items[0].nextAction, "다음 행동 정하기"); // 옛 화면용 채움 문구는 그대로
+  assert.equal(items[0].lastContactAt, daysAgo(2));
+});
+
+test("the promise book lists only future promises, soonest first, and skips dormant or snoozed rows", () => {
+  const dated = (id, at, meta = {}) => lead({ id, company_id: null, meta: { next_action_at: at, ...meta } });
+  const tomorrow = new Date(NOW + 86400000).toISOString().slice(0, 10);
+  const nextWeek = new Date(NOW + 7 * 86400000).toISOString().slice(0, 10);
+  const book = buildPromiseBook({
+    datedLeadRows: [
+      dated("later", nextWeek),
+      dated("soon", tomorrow),
+      dated("due", new Date(NOW).toISOString().slice(0, 10)), // 오늘 도래 — items가 담는다
+      dated("sleeping", tomorrow, { dormant: true }),
+      dated("snoozed", tomorrow, { snooze_until: new Date(NOW + 3 * 86400000).toISOString() }),
+    ],
+    datedDealRows: [{ id: "deal-1", title: "한빛 20대", stage: "proposal", amount: 1200000, next_action: "계약서", company_id: "co-1", meta: { next_action_at: tomorrow } }],
+    companies,
+    now: NOW,
+  });
+  assert.deepEqual(book.upcoming.map((r) => r.id), ["soon", "deal-1", "later"]);
+  const deal = book.upcoming.find((r) => r.kind === "deal");
+  assert.equal(deal.promiseText, "계약서");
+  assert.equal(deal.company, "한빛학원");
+  assert.equal(deal.href, "dashboard/revenue/deals?deal=deal-1");
+});
+
+test("dormant customers sort oldest first and ask to recheck after 30 days", () => {
+  const sleeping = (id, days) => lead({ id, company_id: null, meta: { dormant: true, dormant_since: new Date(NOW - days * 86400000).toISOString() } });
+  const book = buildPromiseBook({
+    dormantLeadRows: [sleeping("fresh", 3), sleeping("old", 32), lead({ id: "no-date", company_id: null, meta: { dormant: true } })],
+    now: NOW,
+  });
+  assert.deepEqual(book.dormant.map((r) => r.id), ["old", "fresh", "no-date"]);
+  assert.equal(book.dormant[0].dormantDays, 32);
+  assert.equal(book.dormant[0].recheck, true);
+  assert.equal(book.dormant[1].recheck, false);
+  assert.equal(book.dormant[2].dormantDays, null);
+});
+
+test("the KST week starts on Monday, even late on a Sunday in UTC terms", () => {
+  // 2026-09-27(일) 23:30 KST = 14:30 UTC
+  assert.equal(kstWeekStartKey(Date.parse("2026-09-27T14:30:00Z")), "2026-09-21");
+  // 2026-09-21(월) 00:10 KST = 2026-09-20 15:10 UTC — UTC로는 일요일이지만 KST 월요일이다.
+  assert.equal(kstWeekStartKey(Date.parse("2026-09-20T15:10:00Z")), "2026-09-21");
+});
+
+test("week stats count conversations, not notes or automatic rows, and never invent timing", () => {
+  const at = (iso) => iso; // KST 기준 시각을 UTC로 적는다
+  const now = Date.parse("2026-09-24T06:00:00Z"); // 9/24(목) 15:00 KST
+  const week = buildWeekStats({
+    now,
+    activities: [
+      { kind: "call", leadId: "l1", occurredAt: at("2026-09-21T01:00:00Z"), meta: {} }, // 월
+      { kind: "kakao", leadId: "l1", occurredAt: at("2026-09-22T01:00:00Z"), meta: {} }, // 화, 같은 고객
+      { kind: "meeting", dealId: "d1", occurredAt: at("2026-09-24T02:00:00Z"), meta: { capture: { record_seconds: 20 } } }, // 목(오늘)
+      { kind: "note", leadId: "l2", occurredAt: at("2026-09-24T03:00:00Z"), meta: { capture: { record_seconds: 40 } } }, // 목, 메모
+      { kind: "deal", dealId: "d1", occurredAt: at("2026-09-24T04:00:00Z"), meta: {} }, // 자동 — 세지 않는다
+      { kind: "call", leadId: "l3", occurredAt: at("2026-09-24T04:30:00Z"), meta: { capture: { record_seconds: 9000 } } }, // 자리 비움 — 시간에서 뺀다
+      { kind: "call", leadId: "l9", occurredAt: at("2026-09-19T01:00:00Z"), meta: {} }, // 지난주
+    ],
+  });
+  assert.equal(week.startKey, "2026-09-21");
+  assert.equal(week.contacts, 4);
+  assert.equal(week.customers, 3); // l1 · d1 · l3
+  assert.equal(week.recordsToday, 3); // 회의 · 메모 · 통화 (자동 행 제외)
+  assert.equal(week.customersRecordedToday, 3); // d1 · l2 · l3
+  assert.deepEqual(week.recordSeconds, { count: 2, average: 30 });
+  assert.deepEqual(week.days.map((d) => [d.label, d.count]), [["월", 1], ["화", 1], ["수", 0], ["목", 2], ["금", 0]]);
+  assert.equal(week.days.find((d) => d.label === "목").today, true);
+  assert.equal(week.days.find((d) => d.label === "금").future, true);
+
+  const empty = buildWeekStats({ now, activities: [] });
+  assert.equal(empty.recordSeconds, null, "측정이 없으면 null — 화면은 '측정 전'을 말한다");
+  // 주말은 기록이 있을 때만 막대를 세운다.
+  const weekend = buildWeekStats({ now: Date.parse("2026-09-26T03:00:00Z"), activities: [{ kind: "call", leadId: "x", occurredAt: "2026-09-26T02:00:00Z", meta: {} }] });
+  assert.deepEqual(weekend.days.map((d) => d.label), ["월", "화", "수", "목", "금", "토"]);
+});
+
+test("getFollowups ships the promise book and week, and names an auxiliary read failure as partial", async () => {
+  const future = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  state.rows.leads = [lead({ id: "promised", company_id: null, last_touch_at: new Date().toISOString(), meta: { next_action_at: future } })];
+  state.rows.crm_activities = [{ id: "w1", kind: "call", lead_id: "promised", occurred_at: new Date().toISOString(), meta: {} }];
+  const ok = await getFollowups({ limit: 10 });
+  assert.equal(ok.partial, false);
+  assert.deepEqual(ok.upcoming.map((r) => r.id), ["promised"]);
+  assert.equal(ok.summary.upcoming, 1);
+  assert.equal(ok.week.contacts, 1);
+  // 이번 주 읽기는 KST 월요일 00:00부터다.
+  const weekRead = state.calls.find((c) => c.table === "crm_activities" && c.options?.filters);
+  assert.ok(weekRead.options.filters.some(([key, value]) => key === "occurred_at" && value === `gte.${new Date(`${kstWeekStartKey()}T00:00:00+09:00`).toISOString()}`));
+
+  state.rows.crm_activities = null;
+  const partial = await getFollowups({ limit: 10 });
+  assert.equal(partial.week, null, "주간 읽기 실패를 0으로 위장하지 않는다");
+  assert.deepEqual(partial.auxiliaryFailedSources, ["week_activities"]);
+  // 화면 전용 읽기 실패는 크론이 보는 partial(핵심 소스)을 올리지 않는다 — 자동 초안 크론은
+  // partial이면 멈춘다(followup-autopilot).
+  assert.equal(partial.partial, false);
+  assert.deepEqual(partial.failedSources, []);
+});
+
+test("contact target search strips PostgREST syntax and names a total read failure", async () => {
+  assert.equal(sanitizeTargetQuery("  한빛*(학원),%  "), "한빛 학원");
+  assert.equal(sanitizeTargetQuery("a".repeat(80)).length, 40);
+
+  state.rows.leads = [{ id: "lead-1", name: "김원장", status: "nurturing", company_id: "co-1" }];
+  state.rows.companies = [{ id: "co-1", name: "한빛학원" }];
+  state.rows.customer_accounts = [{ id: "acc-1", name: "한빛학원", company_id: "co-1", status: "active" }];
+  state.rows.deals = [{ id: "deal-1", title: "한빛 20대", stage: "proposal", company_id: "co-1" }];
+  const res = await searchContactTargets({ q: "한빛" });
+  assert.equal(res.source, "supabase");
+  // 이름으로 찾은 리드와 학원으로 찾은 리드가 같으면 한 번만.
+  assert.deepEqual(res.targets.map((t) => `${t.kind}:${t.id}`), ["lead:lead-1", "account:acc-1", "deal:deal-1"]);
+  assert.equal(res.targets[0].org, "한빛학원");
+  const leadSearch = state.calls.find((c) => c.table === "leads" && c.options.filters.some(([k]) => k === "name"));
+  assert.ok(leadSearch.options.filters.some(([k, v]) => k === "name" && v === "ilike.*한빛*"));
+
+  const empty = await searchContactTargets({ q: "**" });
+  assert.deepEqual(empty, { source: "supabase", targets: [] });
+
+  state.rows = { leads: null, companies: null, customer_accounts: null, deals: null };
+  const failed = await searchContactTargets({ q: "한빛" });
+  assert.equal(failed.source, "error");
 });
