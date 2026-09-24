@@ -41,7 +41,7 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 4. 로컬 파일럿 브랜드 핸들을 `ml_bridgemaker`로 설정했다. 연결 경로는 `brand`와 `brandKey`를 명시할 수 있고 서명된 state와 실제 `/me` 계정명을 대조한다. 브랜드 키는 핸들과 다르다: `@politic_officer`는 `politicofficer`, `@ml_bridgemaker`는 `bridgemaker`, `@moon.classin`은 `classmoon`이다.
 5. 서울 운영 DB는 `account_key`와 `(workspace_id, provider, account_key)` 고유 제약으로 확장됐다. 상태 API는 계정 목록을 반환하고 OAuth 저장은 실제 외부 계정 ID를 키로 사용한다. Settings의 계정별 선택 UI와 게시 대상 브랜드 매핑은 아직 없다.
 6. 장기 토큰 갱신 함수는 있으나 자동 실행 경로가 없다. 연결 뒤 만료 전 갱신·실패 표시가 필요하다.
-7. 회사 소유 앱 `Classmooni`의 Instagram·Threads 이용 사례는 있지만 테스터·두 제품의 OAuth 콜백 설정이 비어 있다. 기존 Moonlight 개인 앱과 병행하려면 앱별 ID·시크릿 선택, 서명된 state의 앱 식별자, DB 연결의 앱 식별자, 앱별 해제·삭제 콜백 검증이 필요하다. 별도 Chrome 프로필만으로 앱 시크릿과 토큰은 분리되지 않는다.
+7. 회사 소유 앱 `Classmooni`의 Instagram·Threads 이용 사례는 있지만 테스터·두 제품의 OAuth 콜백 설정이 비어 있다. Moonlight 코드는 앱별 ID·시크릿 선택, 서명된 state·DB 연결의 앱 식별자, 앱별 해제·삭제 콜백 검증을 지원한다. 회사 신규 게시 앱 생성과 계정 연결은 운영자 요청에 따라 보류 중이며, 회사 자격 증명과 콜백은 아직 설정하지 않았다. 별도 Chrome 프로필만으로 앱 시크릿과 토큰은 분리되지 않는다.
 8. [Meta의 Instagram 심사 표](https://developers.facebook.com/documentation/instagram-platform/app-review)에 따르면 소유·관리하는 Instagram 프로 계정만 쓰는 앱은 Standard Access로 운영할 수 있고 App Review가 필수는 아니다. [Threads 시작 안내](https://developers.facebook.com/documentation/threads/get-started)에 따르면 테스터는 `threads_basic`·`threads_content_publish`를 시험할 수 있지만 역할이 없는 계정을 받으려면 권한별 심사와 앱 공개가 필요하다. [앱 모드 안내](https://developers.facebook.com/documentation/development/build-and-test/app-modes)의 개발 모드 테스트 데이터 가시성 제한 때문에 테스트 성공을 일반 공개 게시 검증으로 간주하지 않는다.
 9. Threads 해제·데이터 삭제 콜백은 서명과 앱 식별자를 확인하지만 과거 유효한 요청의 재전송 차단은 아직 검증되지 않았다. 공개 콜백 등록 전에 현재 Threads 요청의 발급 시각 필드와 재연결 후 처리 규칙을 확인해야 한다.
 
