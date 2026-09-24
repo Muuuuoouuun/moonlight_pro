@@ -6,7 +6,7 @@
 
 | 영역 | 현재 상태 | 다음 확인 |
 |---|---|---|
-| Threads `@ml_bridgemaker` | Meta `Moonlight` 앱 생성, `threads_basic`·`threads_content_publish`, HTTPS 콜백 등록. 테스터 초대 대기. 로컬 앱 시크릿 없음(`missing-config`). OAuth 연결 0건 | Facebook 재인증, 초대 수락, 시크릿 설정, OAuth와 프로필 확인 |
+| Threads `@ml_bridgemaker` | Meta `Moonlight` 앱 생성, `threads_basic`·`threads_content_publish`, HTTPS 콜백 등록. 앱 시크릿 로컬 설정 완료(`ready`). 테스터 초대 대기. OAuth 연결 0건 | 초대 수락, OAuth와 프로필 확인 |
 | Instagram `@ml_bridgemaker` | Instagram Login 앱 ID, `instagram_business_basic`·`instagram_business_content_publish`, HTTPS 콜백 등록. 앱 시크릿 로컬 설정 완료(`ready`). 테스터 초대 대기로 OAuth에서 `개발자 역할 권한 부족` 확인. 연결 0건 | 초대 수락, OAuth와 프로필 확인 |
 | YouTube | `moonlight-youtube-509603` 프로젝트의 Data API v3, OAuth 앱 `Moonlight Video Publisher`, 읽기·업로드 범위, 테스트 사용자 3명, 전용 웹 클라이언트·로컬 콜백 설정 완료(`ready`). 채널 연결 0건 | 채널별 실제 OAuth 선택 가능 여부와 반환 `UC...` ID 확인 |
 | Google Calendar | 기존 Hub 연결 기록에 `connected` 및 refresh token 있음 | 실제 동기화/토큰 갱신은 별도 검증. YouTube 새 클라이언트와 분리 유지 |
@@ -19,14 +19,14 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 | Google 로그인 | Studio에서 확인한 채널 | 채널 ID |
 |---|---|---|
 | `seoulmentoss@gmail.com` | 기독밈 | `UCb599DDZuNpGXdasHgqKkzw` |
-| `seoulmentoss@gmail.com` | 문군: Studio 소유자 행은 있으나 이 로그인 브랜드 계정 목록에는 없음 | `UCJ6W-afKFqwgL_h09S3K83Q` |
-| `seoulmentoss@gmail.com` | 22세기 유목민: Studio 소유자 행은 있으나 이 로그인 OAuth 선택·브랜드 계정 목록에는 없음 | `UCK_CYxp_L_BiM2GCcP4r_8w` |
+| `seoulmentoss@gmail.com` | 문군: YouTube 개인 기본 채널. OAuth에는 `Junhyeok Mun`으로 표시되는 것으로 판단 | `UCJ6W-afKFqwgL_h09S3K83Q` |
+| `seoulmentoss@gmail.com` | 22세기 유목민: Google 브랜드 계정의 기존 표시명 `호가미`로 OAuth에 표시 | `UCK_CYxp_L_BiM2GCcP4r_8w` |
 | `junhyuk.mun@classin.com` | 클래스인 문 | `UCNK7qVBPx7HJ0gpJw6DacrQ` |
 | `classinkr@classin.com` | ClassIn KR | `UCmHz5kvfHtL_jbmmAYyF6HA` |
 
 `classinkr@classin.com`의 ClassIn KR 권한 표에는 `ek.hwa@with-people.co.kr`도 관리자라고 표시됐다. 그 계정의 API 승인은 범위에 넣지 않았다. 회사 두 이메일의 **Cloud Console 소유권은 YouTube OAuth 승인 조건이 아니다**. 기존 Hub `GOOGLE_CLIENT_ID`의 원래 프로젝트를 찾아야 할 때는 `junhyuk.mun@classin.com` Cloud 재인증이 별도로 필요하다. YouTube는 개인 계정의 전용 프로젝트·클라이언트를 사용한다.
 
-`seoulmentoss@gmail.com`으로 파일럿을 시작했을 때 Google 채널 선택 목록에는 개인 기본 채널, `호가미`, `기독밈`만 표시됐다. 이 Google 계정의 브랜드 계정 관리 목록에도 `기독밈`·`호가미`만 보인다. `22세기 유목민`은 표시되지 않아 승인하지 않았다. 다른 로그인 `aaahaaah@hanyang.ac.kr` 선택 시 비밀번호 재인증 화면이 열렸으나 아직 소유 여부는 확인하지 못했다. 재인증 후 이 로그인에서 22세기 채널이 보이는지 확인해야 한다. `문군`·회사 두 채널도 OAuth 목록 및 반환 ID를 아직 검증하지 않았다. 현재 어느 채널에도 승인이나 업로드를 하지 않았다.
+`seoulmentoss@gmail.com`의 YouTube 웹 계정 전환 메뉴에는 `문군`·`22세기 유목민`·`기독밈`이 모두 표시된다. Google OAuth 선택 목록에는 개인 기본 `Junhyeok Mun`, 브랜드 `호가미`, `기독밈`이 나온다. 22세기 유목민의 YouTube 설정에서 연 브랜드 관리자 URL의 브랜드 ID와 `호가미` 브랜드 계정 ID `116010767891049305346`이 일치한다. 따라서 채널의 현재 이름과 브랜드 계정의 기존 이름이 다른 것으로 확인했다. `문군`은 YouTube 설정에 브랜드 관리자 영역이 없는 개인 기본 채널이어서 OAuth의 `Junhyeok Mun`과 대응하는 것으로 판단한다. `aaahaaah@hanyang.ac.kr`은 YouTube 계정 전환 메뉴에 채널이 없어 대상에서 제외했다. 22세기 유목민은 `호가미` OAuth 최종 동의 화면까지 도달했으나, 아직 권한 승인·콜백의 반환 `UC...` ID 확인은 하지 않았다. 회사 두 채널도 OAuth 반환 ID를 아직 검증하지 않았다. 업로드는 하지 않았다.
 
 회사 계정의 동의가 `admin_policy_enforced` 등으로 막히면 Google Workspace 관리자가 [관리 콘솔의 보안 → 액세스 및 데이터 관리 → API 제어](https://support.google.com/a/answer/7281227?hl=en&p=app_access_apps)에서 해당 OAuth 앱의 접근 정책을 확인해야 한다. 현재는 실제 OAuth 승인 전이라 차단 여부를 단정할 수 없다.
 
@@ -42,10 +42,9 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 
 ## 운영자가 현재 직접 해야 하는 단계
 
-1. 열린 Meta 개발자 창에서 문준혁 Facebook 계정 **비밀번호 재인증을 직접 제출**한다. 앱 시크릿 조회에만 필요하며 비밀번호를 채팅으로 보내지 않는다.
-2. Threads와 Instagram `@ml_bridgemaker`의 앱 테스터 초대 수락 화면을 각각 확인한다. 수락에는 Meta 약관 동의와 **“앱 소유자가 나를 고용했거나 테스터 계약을 맺었다”**는 사실 확인이 포함된다. 사실에 맞는 경우에만 직접 수락하거나 명시적으로 진행을 요청한다.
-3. `22세기 유목민`을 연결하려면 열린 Google 재인증 창에서 `aaahaaah@hanyang.ac.kr`의 비밀번호를 직접 입력한다. 이 계정이 실제 채널 소유자인지는 로그인 후 채널 선택 화면에서 확인한다. 비밀번호는 채팅으로 보내지 않는다.
-4. 각 Google/Meta 계정의 OAuth 승인 창에서 대상 채널과 요청 권한을 확인한다. 에이전트는 승인 뒤 응답의 계정명·YouTube `UC...` ID, 저장 기록을 검증한다. Google의 사용자 데이터 정책 동의와 테스트 사용자 3명·웹 클라이언트 설정은 완료됐다.
+1. 열린 Threads와 Instagram `@ml_bridgemaker`의 앱 테스터 초대 화면을 각각 확인한다. 수락에는 Meta 약관 동의와 **“앱 소유자가 나를 고용했거나 테스터 계약을 맺었다”**는 사실 확인이 포함된다. 사실에 맞는 경우에만 직접 수락하거나 명시적으로 진행을 요청한다. `@politic_officer` 두 초대도 아직 대기 중이다.
+2. 열린 Google 동의 화면에서 `seoulmentoss@gmail.com`의 `호가미` 계정에 `YouTube 계정 보기`와 `동영상 업로드·관리` 두 범위를 승인할지 결정한다. 브랜드 ID는 22세기 유목민의 설정 링크와 일치한다. 승인되면 에이전트가 콜백의 `UC...` ID와 저장 기록을 확인한다. Google의 사용자 데이터 정책 동의와 테스트 사용자 3명·웹 클라이언트 설정은 완료됐다.
+3. 다른 Google/Meta 계정을 연결할 때도 OAuth 승인 화면의 대상 채널과 요청 권한을 확인한다. 현재 `aaahaaah@hanyang.ac.kr` 추가 인증은 필요하지 않다.
 
 ## 연결 뒤에도 필요한 변경
 
