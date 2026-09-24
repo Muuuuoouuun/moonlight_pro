@@ -121,7 +121,7 @@ test('Legend remains reading only and conversation starts through the explicit r
   tree = app.render();
   assert.equal(navigations.length, 0);
   nodes(tree, node => node.type === app.Button && /대화 시작/.test(words(node)))[0].props.onClick();
-  assert.deepEqual(navigations, ['dashboard/agents/chat?view=chat']);
+  assert.deepEqual(navigations, ['dashboard/agents/chat?agent=guru']);
 });
 
 test('the shelf follows Hub token and responsive contracts', () => {

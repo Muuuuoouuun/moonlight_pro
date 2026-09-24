@@ -249,7 +249,7 @@ const HOST_COMPONENTS = [
   "OfficeWorkflowPanel", "RelatedCustomerProjects", "ContextMemoDrawer", "Iconed", "Badge", "Button", "IconButton",
   "Avatar", "EmptyState", "TruthBadge", "Kbd", "Drawer", "SegmentedControl", "CheckboxRow", "TextField", "TextAreaField",
   "SelectField", "Skeleton", "CertaintyBadge", "ChipToggle", "LifecycleBadge", "DateQuickPresets", "ContactRecordForm",
-  "LeadEnrichmentPanel", "SortHead", "FloatingMentorWidget", "GuruGuidanceCard",
+  "LeadEnrichmentPanel", "SortHead", "FloatingMentorWidget", "GuruGuidanceCard", "ContextMentorRail",
 ];
 
 function mountCustomers({ state = "live", leads = [], accounts = [], params = "" } = {}) {

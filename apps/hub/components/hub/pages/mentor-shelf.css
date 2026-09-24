@@ -204,7 +204,7 @@
 .mentor-shelf__rule {
   width: 24px;
   margin-top: 28px;
-  border-top: 1px solid var(--accent-line);
+  border-top: 1px solid var(--line);
 }
 
 .mentor-shelf__legend h4 {
