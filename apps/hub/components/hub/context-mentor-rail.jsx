@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { guidancePeriodKey, selectGuidanceCard } from '@com-moon/guru-guidance';
 import { Button, Drawer, SegmentedControl } from './hub-primitives';
 import { Iconed } from './hub-icons';
@@ -71,7 +72,7 @@ export function ContextMentorRail({ domain = 'sales', onGuidanceAsk, onNavigate,
       <span className="context-mentor-rail__arrow" aria-hidden="true"><Iconed name="chevronL" size={16} /></span>
     </button>
 
-    {open && <Drawer
+    {open && typeof document !== 'undefined' && createPortal(<Drawer
       title="Guru · 조용한 멘토"
       subtitle={`${contextLabel || domainLabel} · 필요할 때 읽는 관점`}
       onClose={close}
@@ -123,6 +124,6 @@ export function ContextMentorRail({ domain = 'sales', onGuidanceAsk, onNavigate,
           <Button variant="ghost" iconRight="arrowRight" onClick={visitShelf}>멘토 서가에서 더 보기</Button>
         </div>
       </div>
-    </Drawer>}
+    </Drawer>, document.querySelector('.hub-app') || document.body)}
   </div>;
 }
