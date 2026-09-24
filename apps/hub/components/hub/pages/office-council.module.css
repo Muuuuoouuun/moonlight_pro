@@ -60,6 +60,12 @@
 .notice { padding:12px; border:1px solid var(--line); border-radius:var(--r-sm); font-size:13px; }
 .notice p { margin:8px 0; }
 .error { box-shadow:inset 1px 0 0 var(--danger-line); }
+.assignmentCard { display:grid; gap:12px; padding:16px; border:1px solid var(--line); border-radius:var(--r-sm); margin:16px; font-size:13px; line-height:1.7; }
+.assignmentCard > strong { font-size:14px; }
+.assignmentCard p { margin:0; overflow-wrap:anywhere; }
+.assignmentHead,.assignmentActions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.assignmentHead strong { font-size:14px; }
+.assignmentReason { border-top:1px solid var(--line-soft); padding-top:12px; color:var(--fg-muted); }
 .roster,.more,.taskPicker { display:grid; gap:12px; padding:16px; }
 .roster > strong,.more > strong { font-size:13px; font-weight:600; }
 .member { display:flex; width:100%; text-align:left; padding:12px; border:1px solid var(--line-soft); border-radius:var(--r-sm); background:transparent; color:var(--fg); cursor:pointer; }
@@ -100,9 +106,9 @@
   .page { padding:4px 12px; }
   .header { display:none; }
   .main { min-height:calc(100dvh - 105px); max-height:calc(100dvh - 105px); }
-  .thread { flex:0 1 60px; min-height:0; }
+  .thread { flex:0 1 20px; min-height:0; }
   .composer { flex:1 0 auto; max-height:none; overflow:visible; }
-  .composerTop { display:none; }
+  .composerTop > button:not(:first-child),.followUp { display:none; }
   .input { max-height:112px; }
   .actions { position:static; }
 }
