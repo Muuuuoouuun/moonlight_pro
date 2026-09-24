@@ -36,6 +36,7 @@ export async function listSocialAccountConnections(provider, workspaceId, accoun
     order: "created_at.desc,id.desc",
     limit: accountId ? 1 : 100,
     offset,
+    strictRows: true,
   });
   return {
     connections: result.rows || [],

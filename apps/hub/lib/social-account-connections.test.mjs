@@ -201,3 +201,17 @@ test("OAuth connect finds an existing account beyond the first 100 connections",
   }), "ig-original");
   assert.deepEqual(offsets, [0, 100]);
 });
+
+test("OAuth connect rejects malformed successful account lookup responses", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  globalThis.fetch = async () => ({
+    ok: true, status: 200, text: async () => "{not-json",
+    headers: { get: () => null },
+  });
+
+  await assert.rejects(resolveExpectedSocialAccountId({
+    provider: "instagram_api", workspaceId: "workspace-1", handle: "moon.classin",
+    brandKey: "classmoon",
+  }), /social-account-read-failed/);
+});
