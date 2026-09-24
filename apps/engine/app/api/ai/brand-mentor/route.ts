@@ -2,6 +2,7 @@ import { NextResponse } from "next/server.js";
 import { buildAdvisorySystemInstruction } from "../../../../lib/advisor-guardrails.ts";
 import { formatLegendTriad } from "../../../../lib/legend-cards.ts";
 import { parseCouncilResponse } from "../../../../lib/council-contract.ts";
+import { GURU_CARDS, guidancePromptFrame } from "@com-moon/guru-guidance";
 
 // Gemini generations can legitimately run tens of seconds; cap the route
 // so a hung upstream cannot pin a serverless invocation past a minute.
@@ -33,6 +34,11 @@ export const dynamic = "force-dynamic";
 // revenue ledger with sales playbooks, the Council reasons over the content/brand/project ledger
 // with brand-voice guardrails. Each mode leans on one advisor lens (Writer / Strategist / Analyst).
 const MODES = {
+  "open-question": {
+    lens: "Mentor",
+    question: "운영자가 선택한 카드 관점으로 묻는 상황을 읽고, 확인된 사실과 빠진 맥락을 구분해 도움을 주세요. 사용자가 요청하지 않은 일을 만들지 마세요.",
+    frames: "운영자가 선택한 출처 카드 한 장만 적용합니다.",
+  },
   "content-critique": {
     lens: "Writer",
     question:
@@ -155,8 +161,22 @@ function digestBrand(context: any): string {
   return lines.length ? ["브랜드 컨텍스트 요약:", ...lines].join("\n") : "";
 }
 
-function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legendIds?: string[]) {
+function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legendIds?: string[], guidanceId?: string | null) {
   const config = MODES[mode];
+  if (mode === "open-question") {
+    const lines = [
+      config.question,
+      "답변은 짧은 한국어로: 1. 관찰된 사실과 미확인 정보 2. 적용한 프레임과 자료 출처 3. 운영자가 고려할 질문 또는 선택.",
+      "후속 행동, 승인 제안, 업무 등록을 자동으로 붙이지 마십시오. 선택 카드는 원장 사실이 아닌 참고 방법론입니다.",
+      guidancePromptFrame(guidanceId || ""),
+      "운영자가 제공한 질문:",
+      draft?.trim() || "",
+    ];
+    const digest = digestBrand(context);
+    if (digest) lines.push("", digest);
+    lines.push("", "Brand ledger snapshot (선택 카드와 별개의 사실 근거):", JSON.stringify(context ?? {}, null, 2));
+    return lines.join("\n");
+  }
   const isCouncil = mode === "sparring" || (Array.isArray(legendIds) && legendIds.length > 0);
   const lines = [
     config.question,
@@ -267,6 +287,18 @@ export async function POST(req: Request) {
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const legendIds = Array.isArray(payload.legendIds) ? payload.legendIds : [];
   const context = payload.context ?? {};
+  const guidanceId = typeof payload.guidanceId === "string" ? payload.guidanceId : null;
+  if (mode === "open-question") {
+    const card = GURU_CARDS.find(item => item.id === guidanceId);
+    const brandScope = context?.brand?.orgScope;
+    const scopes = [context?.scope, context?.orgScope, brandScope];
+    if (!card || !["marketing", "content"].includes(card.domain)
+      || !draft?.trim() || legendIds.length > 0
+      || (payload.createWorkOrder != null && payload.createWorkOrder !== false)
+      || scopes.some(scope => scope === "company" || scope === "classin")) {
+      return NextResponse.json({ status: "invalid-input", error: "invalid-open-question" }, { status: 400 });
+    }
+  }
   const workspaceId = resolveDefaultWorkspaceId();
   const maxOutputTokens =
     typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192;
@@ -305,7 +337,7 @@ export async function POST(req: Request) {
         }
       : {
           systemInstruction,
-          prompt: buildPrompt(mode as Mode, context, draft, legendIds),
+          prompt: buildPrompt(mode as Mode, context, draft, legendIds, guidanceId),
           maxOutputTokens,
         },
   );
@@ -363,7 +395,7 @@ export async function POST(req: Request) {
 
   let councilUpdate = null;
 
-  if (result.ok && workspaceId) {
+  if (result.ok && workspaceId && mode !== "open-question") {
     councilUpdate = await insertSupabaseRecord("project_updates", {
       workspace_id: workspaceId,
       project_id: null,

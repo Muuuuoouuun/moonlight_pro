@@ -4,7 +4,7 @@ import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { recordAgentRun } from "@/lib/sales-os/agent-runs";
 import { assembleSalesContext } from "@/lib/sales-os/context-assembler";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
-import { isValidAdvisorInput } from "@/lib/advisor-input";
+import { isGuidanceCardForDomain, isValidAdvisorInput } from "@/lib/advisor-input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -89,6 +89,9 @@ export async function POST(req) {
   const input = parsed.data;
   if (!isValidAdvisorInput(input)) {
     return NextResponse.json({ status: "error", error: "자문 설정의 형식을 확인해 주세요." }, { status: 400 });
+  }
+  if (input.guidanceId != null && !isGuidanceCardForDomain(input.guidanceId, ["sales"])) {
+    return NextResponse.json({ status: "error", error: "세일즈 카드만 영업 Guru에 사용할 수 있습니다." }, { status: 400 });
   }
   const mode = typeof input.mode === "string" ? input.mode.trim() : "pipeline-triage";
   const ref = typeof input.ref === "string" ? input.ref.trim() || null : null;

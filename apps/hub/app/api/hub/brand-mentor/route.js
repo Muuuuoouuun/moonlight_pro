@@ -5,7 +5,7 @@ import { recordAgentRun, setAgentRunEmittedCount } from "@/lib/sales-os/agent-ru
 import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { createWorkOrder } from "@/lib/sales-os/work-orders";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
-import { isValidAdvisorInput } from "@/lib/advisor-input";
+import { isGuidanceCardForDomain, isValidAdvisorInput } from "@/lib/advisor-input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -156,9 +156,24 @@ export async function POST(req) {
   const directives = input.directives && typeof input.directives === "object" ? input.directives : undefined;
   const values = input.values && typeof input.values === "object" ? input.values : undefined;
   const knowledge = input.knowledge && typeof input.knowledge === "object" ? input.knowledge : undefined;
+  const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
+  if (mode === "open-question" && (
+    !isGuidanceCardForDomain(guidanceId, ["marketing", "content"])
+    || !draft?.trim()
+    || input.createWorkOrder === true
+    || (legendIds?.length || 0) > 0
+  )) {
+    return NextResponse.json({ status: "error", error: "질문과 마케팅·콘텐츠 카드 출처를 확인해 주세요." }, { status: 400 });
+  }
 
   const context = await assembleBrandContext({ mode, ref, draft });
-  const result = await callEngine({ mode, ref, draft, context, legendIds, directives, values, knowledge });
+  if (mode === "open-question" && ["preview", "error"].includes(context?.source)) {
+    return NextResponse.json(
+      { status: context.source, error: context.error || "브랜드 자료를 읽을 수 없습니다." },
+      { status: context.source === "preview" ? 202 : 502 },
+    );
+  }
+  const result = await callEngine({ mode, ref, draft, context, legendIds, directives, values, knowledge, guidanceId });
   // Episodic memory: log what the Council recommended so the next call can remember it (best-effort).
   let run = { persisted: false, id: null, reason: "agent-run-write-failed" };
   try {

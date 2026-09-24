@@ -30,6 +30,7 @@ export async function requestCouncilAdvice({
   directives = null,
   values = null,
   knowledge = null,
+  guidanceId = null,
   createWorkOrder = undefined,
 } = {}) {
   try {
@@ -38,6 +39,7 @@ export async function requestCouncilAdvice({
     if (directives && typeof directives === "object") body.directives = directives;
     if (values && typeof values === "object") body.values = values;
     if (knowledge && typeof knowledge === "object") body.knowledge = knowledge;
+    if (typeof guidanceId === "string") body.guidanceId = guidanceId;
     if (typeof createWorkOrder === "boolean") body.createWorkOrder = createWorkOrder;
 
     const res = await fetch("/api/hub/brand-mentor", {
