@@ -40,6 +40,27 @@ test("Politic Officer and Class.Moon use only their dedicated app credentials", 
   assert.deepEqual([classmoon.appKey, classmoon.appId], ["classmoon", "classmoon-threads-id"]);
 });
 
+test("legacy scope overrides do not expand dedicated Meta app permissions", () => {
+  process.env.COM_MOON_INSTAGRAM_SCOPES = "instagram_business_basic,instagram_business_manage_comments";
+  process.env.COM_MOON_META_THREADS_SCOPES = "threads_basic,threads_manage_replies";
+  const bridgeInstagram = resolveMetaOAuthApp({
+    provider: "instagram_api", brandKey: "bridgemaker", brandHandle: "ml_bridgemaker",
+  });
+  const politicInstagram = resolveMetaOAuthApp({
+    provider: "instagram_api", brandKey: "politicofficer", brandHandle: "politic_officer",
+  });
+  const bridgeThreads = resolveMetaOAuthApp({
+    provider: "meta_threads", brandKey: "bridgemaker", brandHandle: "ml_bridgemaker",
+  });
+  const classmoonThreads = resolveMetaOAuthApp({
+    provider: "meta_threads", brandKey: "classmoon", brandHandle: "moon.classin",
+  });
+  assert.deepEqual(bridgeInstagram.scopes, ["instagram_business_basic", "instagram_business_manage_comments"]);
+  assert.deepEqual(politicInstagram.scopes, ["instagram_business_basic", "instagram_business_content_publish"]);
+  assert.deepEqual(bridgeThreads.scopes, ["threads_basic", "threads_manage_replies"]);
+  assert.deepEqual(classmoonThreads.scopes, ["threads_basic", "threads_content_publish"]);
+});
+
 test("an unknown brand or a mismatched handle cannot fall through to another app", () => {
   assert.equal(resolveMetaOAuthApp({ provider: "instagram_api", brandKey: "unknown", brandHandle: "moon.classin" }), null);
   assert.equal(resolveMetaOAuthApp({ provider: "instagram_api", brandKey: null, brandHandle: "politic_officer" }), null);

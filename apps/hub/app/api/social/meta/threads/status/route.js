@@ -27,11 +27,12 @@ export async function GET(req) {
   });
   const accountId = req.nextUrl.searchParams.get("accountId") || "";
   const { connections, available } = await fetchMetaThreadsConnections(workspaceId);
+  const visibleConnections = connections.filter((row) => matchesMetaOAuthConnection(row, config));
   const summary = summarizeSocialAccountStatus({
-    rows: connections,
+    rows: visibleConnections,
     configured: Boolean(config?.configured && hasMetaThreadsOAuthStateSecret()),
     available,
-    selector: (row) => matchesMetaOAuthConnection(row, config, accountId),
+    selector: (row) => !accountId || row.account_key === accountId,
     summarize: summarizeMetaThreadsConnection,
   });
 

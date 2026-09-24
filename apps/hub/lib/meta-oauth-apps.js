@@ -19,8 +19,9 @@ function normalizeHandle(value) {
   return typeof value === "string" ? value.trim().replace(/^@+/, "").toLowerCase() : "";
 }
 
-function scopesFor(provider) {
+function scopesFor(provider, appKey) {
   const entry = PROVIDERS[provider];
+  if (appKey !== "moonlight") return entry.defaultScopes;
   const scopes = process.env[`${entry.prefix}_SCOPES`]?.split(/[,\s]+/).filter(Boolean);
   return scopes?.length ? scopes : entry.defaultScopes;
 }
@@ -60,7 +61,7 @@ export function resolveMetaOAuthApp({ provider, brandKey, brandHandle }) {
     appKey: brand.appKey,
     brandKey: key,
     brandHandle: brand.handle,
-    scopes: scopesFor(provider),
+    scopes: scopesFor(provider, brand.appKey),
     configured: Boolean(credentials.appId && credentials.appSecret && !duplicateAppId),
     hasAppId: Boolean(credentials.appId),
     hasAppSecret: Boolean(credentials.appSecret),

@@ -35,12 +35,14 @@ for (const [name, route, prefix] of [
     const wrong = await (await route(new NextRequest(url))).json();
     assert.equal(wrong.status, "ready");
     assert.equal(wrong.connection, null);
+    assert.deepEqual(wrong.connections, []);
     assert.equal(wrong.brandKey, "classmoon");
 
     rows[0].config.oauthAppId = "company-id";
     const right = await (await route(new NextRequest(url))).json();
     assert.equal(right.status, "connected");
     assert.equal(right.connection?.id, "other-app");
+    assert.deepEqual(right.connections.map((connection) => connection.id), ["other-app"]);
   });
 
   test(`${name} status accepts an untagged BridgeMaker connection only for BridgeMaker`, async () => {

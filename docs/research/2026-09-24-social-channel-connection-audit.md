@@ -12,11 +12,11 @@
 - Moonlight에 YouTube 전용 OAuth 연결 경로를 추가했다(`548c4ba8`, `ac30afb1`). 계정별 연결 구조와 상태 API를 적용하고 서울 운영 DB에 `20260924_0046_social_multiaccount_connections.sql`을 기록했다. 적용 전후 연결 9건, `22세기 유목민`의 동일한 연결 ID·채널 ID와 갱신 토큰을 확인했다. 게시·업로드 코드는 포함하지 않는다. Instagram의 OAuth 승인 계정이 요청 브랜드와 다르면 저장을 거부하도록 수정했다(`898bff59`).
 - YouTube 접근 토큰을 채널 ID별로 조회·갱신하는 서버 헬퍼와 `refresh-required` 상태 판정을 추가했다(`e8ad0463`). 2026-09-24 재점검에서 네 채널의 접근 토큰이 모두 `refresh-required`였고, 기존 갱신 권한으로 각각 갱신·저장한 뒤 상태 API에서 모두 `connected`를 확인했다. 갱신 토큰의 Testing 만료일(2026-10-01)은 변하지 않는다.
 - Threads 연결 해제·데이터 삭제의 Meta 서명 검증 콜백을 운영 미들웨어의 공개 명시 목록에 추가했다(`00ea2f12`). 인접 경로는 계속 세션 게이트가 막는다.
-- `codex/meta-multiapp` 격리 브랜치에는 브랜드별 Meta 앱 선택·앱별 상태 검증·생명주기 콜백 격리와 과거 앱 재연결 처리를 준비했다(`7387316c`·`2d74c20c`·`839feee3`). 전체 테스트 2,834 통과·실패 0, Hub 빌드 통과. 서울 운영 DB의 `0047`·`0048` 마이그레이션과 전용 앱 자격 증명 설정 전에는 메인에 통합하지 않았고 회사·정치 OAuth는 시작하지 않았다.
+- 서울 운영 DB에 `20260924_0047_social_oauth_flow_guard.sql`·`20260924_0048_meta_oauth_app_binding.sql`을 이력 함수로 적용했다. 두 전체 파일명과 SHA256, 테이블·앱 컬럼·연결 보호 트리거, RLS와 역할별 권한을 확인했다. 이후 `codex/social-oauth-p0`·`codex/meta-multiapp`의 브랜드별 Meta 앱 선택·앱별 상태 검증·생명주기 콜백 격리와 과거 앱 재연결 처리를 통합 브랜치에 합쳤다. 브랜드별 상태 응답 목록도 해당 앱 연결로 제한했다. 통합 후 전체 테스트 2,979 통과·실패 0·skip 13. 정치·회사 전용 앱 자격 증명과 콜백 설정이 남아 해당 계정 OAuth는 시작하지 않았다.
 
 ## 결론
 
-Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고, 운영 DB 연결은 개인 YouTube 3채널·회사 `클래스인 문` YouTube·`@ml_bridgemaker` Threads·Instagram 각 1건이다. 기존 다섯 연결의 `brandKey`는 비어 있고 회사 채널의 브랜드 매핑도 별도 확인이 필요하다. 소셜 게시·업로드 경로와 토큰 자동 갱신 작업은 아직 없다. 게시물 업로드는 실행하지 않았다. 현재 가능한 실무 흐름은 Studio의 원고·카드 문구·쇼츠 대본 작성 → 플랫폼 화면에서 수동 게시 → 게시 URL·일시를 Moonlight에 수동 기록하는 것이다. `발행했음`은 실제 플랫폼 게시 여부를 검증하지 않는다.
+Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고, 운영 DB 연결은 개인 YouTube 3채널·회사 `클래스인 문` YouTube·`@ml_bridgemaker` Threads·Instagram 각 1건, 총 6건이다. 기존 6건의 `brandKey`는 비어 있고 회사 채널의 브랜드 매핑도 별도 확인이 필요하다. 소셜 게시·업로드 경로와 토큰 자동 갱신 작업은 아직 없다. 게시물 업로드는 실행하지 않았다. 현재 가능한 실무 흐름은 Studio의 원고·카드 문구·쇼츠 대본 작성 → 플랫폼 화면에서 수동 게시 → 게시 URL·일시를 Moonlight에 수동 기록하는 것이다. `발행했음`은 실제 플랫폼 게시 여부를 검증하지 않는다.
 
 ## 실제 계정·연결 상태
 
@@ -43,6 +43,7 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 6. 장기 토큰 갱신 함수는 있으나 자동 실행 경로가 없다. 연결 뒤 만료 전 갱신·실패 표시가 필요하다.
 7. 회사 소유 앱 `Classmooni`의 Instagram·Threads 이용 사례는 있지만 테스터·두 제품의 OAuth 콜백 설정이 비어 있다. 기존 Moonlight 개인 앱과 병행하려면 앱별 ID·시크릿 선택, 서명된 state의 앱 식별자, DB 연결의 앱 식별자, 앱별 해제·삭제 콜백 검증이 필요하다. 별도 Chrome 프로필만으로 앱 시크릿과 토큰은 분리되지 않는다.
 8. [Meta의 Instagram 심사 표](https://developers.facebook.com/documentation/instagram-platform/app-review)에 따르면 소유·관리하는 Instagram 프로 계정만 쓰는 앱은 Standard Access로 운영할 수 있고 App Review가 필수는 아니다. [Threads 시작 안내](https://developers.facebook.com/documentation/threads/get-started)에 따르면 테스터는 `threads_basic`·`threads_content_publish`를 시험할 수 있지만 역할이 없는 계정을 받으려면 권한별 심사와 앱 공개가 필요하다. [앱 모드 안내](https://developers.facebook.com/documentation/development/build-and-test/app-modes)의 개발 모드 테스트 데이터 가시성 제한 때문에 테스트 성공을 일반 공개 게시 검증으로 간주하지 않는다.
+9. Threads 해제·데이터 삭제 콜백은 서명과 앱 식별자를 확인하지만 과거 유효한 요청의 재전송 차단은 아직 검증되지 않았다. 공개 콜백 등록 전에 현재 Threads 요청의 발급 시각 필드와 재연결 후 처리 규칙을 확인해야 한다.
 
 ### YouTube
 
