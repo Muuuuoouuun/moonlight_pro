@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION } from './office-session.js';
+import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION, officeMessageLength, officeTaskAgendaBlock, officeTasksForScope, loadOfficeTasks } from './office-session.js';
 
 const generated = (request, answer = '요청한 결과입니다.') => ({ status: 'generated', ...request, answer, nextAction: '추가 행동 없음' });
 
@@ -93,7 +93,7 @@ test('clipboard feedback reflects completion and reports permission or capabilit
 
 test('pending council snapshots preserve controls and weights across edits, scope changes and follow-up', () => {
   const store = createOfficeSessionStore();
-  store.update('personal', { draft: '유지할 원문', mode: 'council', deliberation: { profile: 'explore', challenge: 3, influence: { eevee: 2, umbreon: 3 } } });
+  store.update('personal', { draft: '유지할 원문', mode: 'council', reviewers: ['umbreon'], deliberation: { profile: 'explore', challenge: 3, influence: { eevee: 2, umbreon: 3 } } });
   const pending = store.begin('personal', 'configured');
   assert.equal(pending.request.deliberation.challenge, 3);
   store.update('personal', { ownerId: 'vaporeon', reviewers: ['eevee'], deliberation: { profile: 'urgent' } });
@@ -116,4 +116,96 @@ test('ordinary modes retain local settings without sending council-only fields',
   const pending = store.begin('personal', 'draft');
   assert.equal(pending.request.deliberation, undefined);
   assert.equal(store.get('personal').deliberation.profile, 'scrutiny');
+});
+
+test('one host starts without reviewers and adding or removing a perspective determines council mode', () => {
+  const store = createOfficeSessionStore();
+  assert.deepEqual(store.get('personal').reviewers, []);
+  store.update('personal', { draft: '가격 결정', mode: 'draft' });
+  assert.equal(store.begin('personal', 'solo').request.mode, 'draft');
+  store.complete('personal', 'solo', { status: 'error' });
+  store.update('personal', { reviewers: ['umbreon'] });
+  assert.equal(store.get('personal').mode, 'council');
+  store.update('personal', { reviewers: [] });
+  assert.equal(store.get('personal').mode, 'chat');
+});
+
+test('a host follow-up uses chat once without changing the configured council participants', () => {
+  const store = createOfficeSessionStore();
+  store.update('personal', { draft: '가격을 정해요', reviewers: ['umbreon'] });
+  const first = store.begin('personal', 'council');
+  assert.equal(first.request.mode, 'council');
+  store.complete('personal', first.id, generated(first.request));
+  store.update('personal', { draft: '예산이 없어요' });
+  const followUp = store.begin('personal', 'chat-follow-up', { mode: 'chat' });
+  assert.equal(followUp.request.mode, 'chat');
+  assert.deepEqual(followUp.request.participants, []);
+  assert.equal(store.get('personal').mode, 'council');
+  assert.deepEqual(store.get('personal').reviewers, ['umbreon']);
+});
+
+test('task agenda formatting and scope selection use only available task fields', () => {
+  const tasks = [
+    { id: 'a', title: '회사 제안서', workspace: 'classin', status: 'doing', nextAction: '금액 결정', due: '09-30', description: '고객 메모' },
+    { id: 'b', title: '개인 콘텐츠', workspace: 'brand', status: 'inbox' },
+    { id: 'c', title: '범위 없는 일', status: 'inbox' },
+    { id: 'd', title: '끝난 일', workspace: 'classin', status: 'done' },
+  ];
+  assert.deepEqual(officeTasksForScope(tasks, 'classin').map(task => task.id), ['a']);
+  assert.deepEqual(officeTasksForScope(tasks, 'personal').map(task => task.id), ['b']);
+  assert.deepEqual(officeTasksForScope(tasks, 'all').map(task => task.id), ['a', 'b', 'c']);
+  const block = officeTaskAgendaBlock(tasks[0]);
+  for (const line of ['회사 제안서', '금액 결정', '09-30', '고객 메모']) assert.ok(block.includes(line));
+  assert.doesNotMatch(block, /프로젝트:/);
+  assert.ok(officeTaskAgendaBlock({ title: '가'.repeat(2000) }).length <= 1500);
+});
+
+test('agenda stays in the request after the first turn falls outside four-turn history', () => {
+  const store = createOfficeSessionStore();
+  const block = officeTaskAgendaBlock({ title: '제안서 가격', nextAction: '견적 확정' });
+  store.update('classin', { agenda: { title: '제안서 가격', source: 'task', taskId: 't1', importedAt: '2026-09-24T09:00:00.000Z', block }, draft: `${block}\n\n검토해 줘` });
+  for (let index = 0; index < 5; index += 1) {
+    const pending = store.begin('classin', `turn-${index}`);
+    assert.ok(pending);
+    store.complete('classin', pending.id, generated(pending.request));
+    store.update('classin', { draft: `후속 요청 ${index}` });
+  }
+  const sixth = store.begin('classin', 'sixth');
+  assert.ok(sixth.request.message.startsWith(block));
+  assert.equal(sixth.request.message.split(block).length, 2);
+  assert.equal(sixth.request.history.length, 8);
+});
+
+test('manual agenda is derived from the first request and a new agenda clears only its scope', () => {
+  const store = createOfficeSessionStore();
+  store.update('personal', { draft: '첫 줄 안건\n추가 상황' });
+  const pending = store.begin('personal', 'manual');
+  assert.deepEqual(store.get('personal').agenda, { title: '첫 줄 안건', source: 'manual', block: '첫 줄 안건\n추가 상황' });
+  store.complete('personal', pending.id, generated(pending.request));
+  store.update('classin', { draft: '회사 원문' });
+  store.reset('personal');
+  assert.equal(store.get('personal').turns.length, 0);
+  assert.equal(store.get('personal').agenda, null);
+  assert.equal(store.get('personal').draft, '');
+  assert.equal(store.get('classin').draft, '회사 원문');
+});
+
+test('the full message limit counts a reattached agenda and shows an explicit error', () => {
+  const store = createOfficeSessionStore();
+  const block = '안건'.repeat(250);
+  store.update('personal', { agenda: { title: '긴 안건', source: 'manual', block }, turns: Array.from({ length: 5 }, (_, id) => ({ id, message: `후속 ${id}`, result: { answer: '답변' } })), draft: '가'.repeat(5600) });
+  assert.ok(officeMessageLength(store.get('personal')) > 6000);
+  assert.equal(store.begin('personal', 'too-long'), null);
+  assert.match(store.get('personal').error.error, /6,000자/);
+  assert.equal(store.get('personal').draft.length, 5600);
+});
+
+test('task reader distinguishes live, partial, preview and failed HTTP or read envelopes', async () => {
+  const read = (status, body) => loadOfficeTasks({ fetcher: async () => Response.json(body, { status }) });
+  assert.deepEqual((await read(200, { status: 'live', tasks: [{ id: 'a' }] })).tasks, [{ id: 'a' }]);
+  assert.equal((await read(200, { status: 'partial', tasks: [{ id: 'a' }] })).status, 'partial');
+  assert.equal((await read(200, { status: 'preview', tasks: [] })).status, 'preview');
+  assert.equal((await read(502, { status: 'error', tasks: [] })).status, 'error');
+  assert.equal((await read(200, { status: 'error', tasks: [] })).status, 'error');
+  assert.equal((await loadOfficeTasks({ fetcher: async () => { throw new Error('offline'); } })).status, 'error');
 });
