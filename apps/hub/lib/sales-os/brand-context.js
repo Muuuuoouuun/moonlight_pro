@@ -51,8 +51,8 @@ function brandGuardrail(brand) {
 }
 
 // Legacy advisory modes choose a first personal brand when no ref is supplied.
-// Open questions need an exact, explicit match so a general shelf question cannot
-// inherit an unrelated brand voice or an ambiguous partial name.
+// Reference-only questions need an exact, explicit match so general Office or
+// shelf advice cannot inherit an unrelated brand voice or ambiguous partial name.
 function selectFocusBrand(brands, ownKeys, ref, strict = false) {
   const list = Array.isArray(brands) ? brands : [];
   if (!list.length) return null;
@@ -67,6 +67,8 @@ function selectFocusBrand(brands, ownKeys, ref, strict = false) {
   }
   return strict ? null : list.find((b) => ownKeys.includes(b.key)) || null;
 }
+
+const strictFocusMode = (mode) => mode === "open-question" || mode === "office-review";
 
 export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, workspace = "brand" } = {}) {
   const missing = [];
@@ -142,7 +144,7 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
   const scopedCampaigns = (content?.campaigns || []).filter((c) => ownKeys.includes(c.brandKey))
     .map((c) => ({ id: c.id, name: c.name, status: c.status, brandKey: c.brandKey, businessTruth: c.businessTruth }));
   const matchesRef = (row) => ref && (String(row.id).toLowerCase() === String(ref).toLowerCase()
-    || (mode === "open-question"
+    || (strictFocusMode(mode)
       ? (row.name || row.title || "").toLowerCase() === String(ref).toLowerCase()
       : (row.name || row.title || "").toLowerCase().includes(String(ref).toLowerCase())));
   const focusCampaign = scopedCampaigns.find(matchesRef);
@@ -150,14 +152,15 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
   const focusIdea = ideaQueue.find(matchesRef);
   const focusBrand = selectFocusBrand(scopedBrands, ownKeys,
     focusCampaign?.brandKey || focusProject?.brand || focusIdea?.brandKey || ref,
-    mode === "open-question");
+    strictFocusMode(mode));
 
   const context = {
+    scope: workspace === "brand" ? "personal" : workspace,
     source: missing.length ? "partial" : content?.source || projectLedger?.source || "preview",
     brand: brandGuardrail(focusBrand),
     // Keep portfolio membership for general questions, but only the explicitly
-    // focused brand may contribute voice guidance to an open question.
-    brands: scopedBrands.map((b) => mode === "open-question"
+    // focused brand may contribute voice guidance to a reference-only question.
+    brands: scopedBrands.map((b) => strictFocusMode(mode)
       ? { key: b.key, name: b.name, kind: b.kind }
       : { key: b.key, name: b.name, kind: b.kind, voice: b.voice }),
     campaigns: trim(scopedCampaigns, 10),

@@ -39,6 +39,11 @@ const MODES = {
     question: "운영자가 선택한 카드 관점으로 묻는 상황을 읽고, 확인된 사실과 빠진 맥락을 구분해 도움을 주세요. 사용자가 요청하지 않은 일을 만들지 마세요.",
     frames: "운영자가 선택한 출처 카드 한 장만 적용합니다.",
   },
+  "office-review": {
+    lens: "Mentor",
+    question: "운영자가 가져온 개인 범위 Office 결과를 별도의 관점에서 한 번 검토합니다. 확인된 근거와 이견을 구분하고, 원래 결론을 자동 승인하거나 새 업무로 바꾸지 않습니다.",
+    frames: "Office 결과와 개인 브랜드 원장만 참고합니다. Guru 카드를 임의로 고르지 않습니다.",
+  },
   "content-critique": {
     lens: "Writer",
     question:
@@ -84,6 +89,16 @@ const MODES = {
 } as const;
 
 type Mode = keyof typeof MODES;
+const OFFICE_REVIEW_DRAFT_LIMIT = 6000;
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function parseOfficeSource(value: any) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some(key => !["requestId", "runId"].includes(key))
+    || typeof value.requestId !== "string" || !UUID.test(value.requestId)
+    || (value.runId != null && (typeof value.runId !== "string" || !UUID.test(value.runId)))) return null;
+  return { requestId: value.requestId, runId: value.runId ?? null };
+}
 
 const SYSTEM_INSTRUCTION = [
   "당신은 Moonlight 운영자(파운더)의 브랜드 카운슬(Council)입니다 — Writer·Strategist·Analyst가 함께 의논하는 자문단.",
@@ -161,8 +176,24 @@ function digestBrand(context: any): string {
   return lines.length ? ["브랜드 컨텍스트 요약:", ...lines].join("\n") : "";
 }
 
-function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legendIds?: string[], guidanceId?: string | null) {
+function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legendIds?: string[], guidanceId?: string | null, officeSource?: { requestId: string; runId: string | null } | null) {
   const config = MODES[mode];
+  if (mode === "office-review") {
+    const lines = [
+      config.question,
+      "요청자가 제공한 Office 결과는 확정된 원장 사실이나 독립 검증이 아닙니다. 근거의 출처·불확실성과 남은 이견을 구분하십시오.",
+      "다른 관점의 판단과 운영자가 확인할 질문 또는 선택만 답하십시오. 업무·승인 큐·발행·발송을 만들거나 실행했다고 주장하지 마십시오.",
+      "출처 식별자(요청자가 전달한 값, 서버 검증 완료를 뜻하지 않음):",
+      `requestId: ${officeSource?.requestId || "없음"}`,
+      `runId: ${officeSource?.runId || "없음"}`,
+      "운영자가 선택한 Office 결과:",
+      draft?.trim() || "",
+    ];
+    const digest = digestBrand(context);
+    if (digest) lines.push("", digest);
+    lines.push("", "Personal brand ledger snapshot (Office와 별개의 원장 근거):", JSON.stringify(context ?? {}, null, 2));
+    return lines.join("\n");
+  }
   if (mode === "open-question") {
     const lines = [
       config.question,
@@ -288,6 +319,25 @@ export async function POST(req: Request) {
   const legendIds = Array.isArray(payload.legendIds) ? payload.legendIds : [];
   const context = payload.context ?? {};
   const guidanceId = typeof payload.guidanceId === "string" ? payload.guidanceId : null;
+  const officeSource = mode === "office-review" ? parseOfficeSource(payload.officeSource) : null;
+  const crossLaneOfficeContext = (Array.isArray(context?.projects) && context.projects.some((project: any) => project?.workspace === "classin" || project?.workspace === "company"))
+    || (Array.isArray(context?.brands) && context.brands.some((brand: any) => brand?.orgScope === "classin" || brand?.orgScope === "company"));
+  if (mode === "office-review" && (
+    payload.scope !== "personal" || context?.scope !== "personal"
+    || [context?.orgScope, context?.brand?.orgScope].some(scope => scope === "company" || scope === "classin")
+    || crossLaneOfficeContext
+    || !officeSource || !draft?.trim() || draft.length > OFFICE_REVIEW_DRAFT_LIMIT
+    || payload.createWorkOrder !== false || payload.guidanceId != null
+    || legendIds.length > 0 || payload.directives != null || payload.values != null || payload.knowledge != null
+  )) {
+    return NextResponse.json({ status: "invalid-input", error: "invalid-office-review" }, { status: 400 });
+  }
+  if (mode === "office-review" && ["preview", "error"].includes(context.source)) {
+    return NextResponse.json(
+      { status: context.source, mode, officeSource, error: "brand-ledger-unavailable" },
+      { status: context.source === "preview" ? 202 : 502 },
+    );
+  }
   if (mode === "open-question") {
     const card = GURU_CARDS.find(item => item.id === guidanceId);
     const brandScope = context?.brand?.orgScope;
@@ -337,8 +387,8 @@ export async function POST(req: Request) {
         }
       : {
           systemInstruction,
-          prompt: buildPrompt(mode as Mode, context, draft, legendIds, guidanceId),
-          maxOutputTokens,
+          prompt: buildPrompt(mode as Mode, context, draft, legendIds, guidanceId, officeSource),
+          maxOutputTokens: mode === "office-review" ? Math.min(maxOutputTokens, 1536) : maxOutputTokens,
         },
   );
   const councilAnalysis = (isCouncilMode && result.ok && !isDraftMode) ? parseCouncilResponse(result.text) : null;
@@ -348,9 +398,10 @@ export async function POST(req: Request) {
   // recorded as the failure it is, instead of showing the integration as healthy.
   const parsedDraft = isDraftMode && result.ok ? parseContentDraft(result.text) : null;
   const draftOk = isDraftMode ? Boolean(parsedDraft) : false;
-  const generationOk = isDraftMode ? draftOk : result.ok;
+  const emptyOfficeReview = mode === "office-review" && result.ok && !result.text?.trim();
+  const generationOk = isDraftMode ? draftOk : result.ok && !emptyOfficeReview;
   const failureReason =
-    isDraftMode && result.ok && !draftOk ? "invalid-draft-json" : result.reason;
+    isDraftMode && result.ok && !draftOk ? "invalid-draft-json" : emptyOfficeReview ? "empty-office-review" : result.reason;
 
   const connection = await upsertIntegrationConnection({
     provider: "council",
@@ -371,6 +422,7 @@ export async function POST(req: Request) {
       finishedAt,
       mode,
       ref,
+      ...(officeSource ? { officeSource } : {}),
       model: result.model,
       usageMetadata: result.usageMetadata || null,
     },
@@ -395,7 +447,7 @@ export async function POST(req: Request) {
 
   let councilUpdate = null;
 
-  if (result.ok && workspaceId && mode !== "open-question") {
+  if (result.ok && workspaceId && mode !== "open-question" && mode !== "office-review") {
     councilUpdate = await insertSupabaseRecord("project_updates", {
       workspace_id: workspaceId,
       project_id: null,
@@ -414,15 +466,16 @@ export async function POST(req: Request) {
 
   return NextResponse.json(
     {
-      status: result.ok ? "generated" : "error",
+      status: generationOk ? "generated" : "error",
       mode,
       ref,
+      ...(officeSource ? { officeSource } : {}),
       model: result.model,
       text: result.text,
       ...(councilAnalysis ? { council: councilAnalysis } : {}),
-      reason: result.reason,
+      reason: failureReason,
       persistence: { connection, syncRun, councilUpdate },
     },
-    { status: result.ok ? 200 : 502 },
+    { status: generationOk ? 200 : 502 },
   );
 }

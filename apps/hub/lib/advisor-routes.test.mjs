@@ -151,6 +151,51 @@ test('personal Brand open-question never enters the approval queue even if expli
   assert.equal(state.run, undefined);
   assert.equal(state.order, undefined);
 });
+test('personal Office review forwards its provenance without a synthetic card or work order', async () => {
+  const officeSource = { requestId: '10000000-0000-4000-8000-000000000001', runId: null };
+  const response = await POST(request({
+    mode: 'office-review', scope: 'personal', draft: 'Office 종합의 근거를 다른 관점으로 검토해 주세요.', officeSource, createWorkOrder: false,
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(state.lastFetch.body.mode, 'office-review');
+  assert.equal(state.lastFetch.body.scope, 'personal');
+  assert.deepEqual(state.lastFetch.body.officeSource, officeSource);
+  assert.equal(state.lastFetch.body.guidanceId, undefined);
+  assert.equal(state.lastFetch.body.createWorkOrder, false);
+  assert.equal(state.order, undefined);
+  assert.equal(state.run.mode, 'office-review');
+  assert.match(state.run.inputSummary, /office-request=10000000-0000-4000-8000-000000000001/);
+});
+test('personal Office review rejects ambiguous lanes, malformed provenance and work requests before reading context', async () => {
+  const officeSource = { requestId: '10000000-0000-4000-8000-000000000001', runId: null };
+  const valid = { mode: 'office-review', scope: 'personal', draft: 'Office 종합 검토', officeSource, createWorkOrder: false };
+  for (const patch of [
+    { scope: 'all' }, { scope: 'classin' }, { scope: undefined },
+    { officeSource: undefined }, { officeSource: { requestId: 'bad', runId: null } },
+    { officeSource: { requestId: officeSource.requestId, runId: 'bad' } },
+    { draft: ' ' }, { draft: '가'.repeat(6001) },
+    { guidanceId: 'marketing-research' }, { createWorkOrder: true }, { createWorkOrder: undefined },
+  ]) {
+    const response = await POST(request({ ...valid, ...patch }));
+    assert.equal(response.status, 400, JSON.stringify(patch));
+    assert.equal((await response.json()).error, 'invalid-office-review');
+    assert.equal(state.contextRead, undefined);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+    assert.equal(state.order, undefined);
+  }
+});
+test('personal Office review discloses a missing brand ledger without invoking Engine', async () => {
+  state.contextResult = { source: 'error', error: 'brand-ledger-unavailable' };
+  const response = await POST(request({
+    mode: 'office-review', scope: 'personal', draft: 'Office 종합 검토',
+    officeSource: { requestId: '10000000-0000-4000-8000-000000000001', runId: null }, createWorkOrder: false,
+  }));
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).status, 'error');
+  assert.equal(state.lastFetch, undefined);
+  assert.equal(state.run, undefined);
+});
 test('personal Brand question shows preview or read error without calling Engine', async () => {
   for (const [source, expectedStatus] of [['preview', 'preview'], ['error', 'error']]) {
     state.contextResult = { source, error: 'brand-ledger-unavailable' };

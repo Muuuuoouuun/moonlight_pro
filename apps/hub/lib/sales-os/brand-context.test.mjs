@@ -45,6 +45,23 @@ test('open-question without a ref keeps personal context without choosing a bran
   assert.deepEqual(ctx.content.idea_queue_top.map((i) => i.id), ['idea-a']);
   assert.equal(ctx.campaigns.some((campaign) => campaign.brandKey === 'company'), false);
 });
+test('office-review without a ref does not choose an unrelated brand or expose company rows', async () => {
+  const ctx = await assembleBrandContext({ mode: 'office-review' });
+  assert.equal(ctx.brand, null);
+  assert.equal(Object.hasOwn(ctx, 'focus'), false);
+  assert.equal(ctx.scope, 'personal');
+  assert.ok(ctx.brands.every((brand) => !Object.hasOwn(brand, 'voice')));
+  assert.deepEqual(ctx.content.idea_queue_top.map((idea) => idea.id), ['idea-a']);
+  assert.equal(ctx.campaigns.some((campaign) => campaign.brandKey === 'company'), false);
+});
+test('office-review resolves a personal brand only when the caller selected an exact ref', async () => {
+  const matched = await assembleBrandContext({ mode: 'office-review', ref: 'personal-b' });
+  assert.equal(matched.brand.key, 'personal-b');
+  assert.equal(matched.brand.voice, 'B');
+  const unmatched = await assembleBrandContext({ mode: 'office-review', ref: 'personal' });
+  assert.equal(unmatched.brand, null);
+  assert.equal(unmatched.focus.found, false);
+});
 test('open-question applies only an explicitly matched personal brand voice', async () => {
   const brand = await assembleBrandContext({ mode: 'open-question', ref: 'personal-b' });
   assert.equal(brand.brand.key, 'personal-b');

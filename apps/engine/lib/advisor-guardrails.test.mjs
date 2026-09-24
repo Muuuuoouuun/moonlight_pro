@@ -164,6 +164,16 @@ describe('buildAdvisorySystemInstruction prompt generation', () => {
     assert.doesNotMatch(prompt, /즉시 실행 가능한 가역적 행동을 제안|후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시|승인 큐 후보/);
   });
 
+  it('keeps an Office second opinion source-based and free from invented cards or new work', () => {
+    const prompt = guardrails.buildAdvisorySystemInstruction({
+      type: 'brand-mentor', mode: 'office-review', context: { scope: 'personal', brand: null },
+    });
+    assert.match(prompt, /개인 브랜드/);
+    assert.match(prompt, /관찰된 사실과 미확인 정보/);
+    assert.match(prompt, /운영자가 판단할 질문 또는 선택/);
+    assert.doesNotMatch(prompt, /즉시 실행 가능한 가역적 행동을 제안|후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시|승인 큐 후보|work_order/);
+  });
+
   it('embeds values and knowledge directives into system instruction', () => {
     const prompt = guardrails.buildAdvisorySystemInstruction({
       type: 'sales-mentor',
