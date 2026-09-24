@@ -142,3 +142,9 @@ test("quick task Enter waits for IME completion and never repeats a pending subm
   }
   assert.equal(quickCapture.shouldSubmitQuickTask(enter, true), false);
 });
+
+test("createQuickCaptureSession accepts initialRaw from share target", () => {
+  const session = quickCapture.createQuickCaptureSession({ initialRaw: "공유받은 텍스트", createId: () => "req-1" });
+  assert.equal(session.snapshot().raw, "공유받은 텍스트");
+  assert.deepEqual(session.begin().payload, { raw: "공유받은 텍스트", hint: "task", idempotencyKey: "req-1" });
+});

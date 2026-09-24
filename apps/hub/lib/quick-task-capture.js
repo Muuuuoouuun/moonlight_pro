@@ -44,8 +44,8 @@ export function shouldSubmitQuickTask(event, saving = false) {
 // The shell owns the global session; the popup only subscribes while open.
 // This keeps an unresolved request and its draft together without persisting
 // personal capture text in browser storage or changing the existing API.
-export function createQuickCaptureSession({ initialHint = 'task', createId } = {}) {
-  let state = { raw: '', hint: QUICK_CAPTURE_HINTS.has(initialHint) ? initialHint : 'task', requestId: createId(), status: 'idle', error: null, destinationType: null, duplicate: false };
+export function createQuickCaptureSession({ initialRaw = '', initialHint = 'task', createId } = {}) {
+  let state = { raw: typeof initialRaw === 'string' ? initialRaw : '', hint: QUICK_CAPTURE_HINTS.has(initialHint) ? initialHint : 'task', requestId: createId(), status: 'idle', error: null, destinationType: null, duplicate: false };
   let lastAttempt = null;
   const listeners = new Set();
   const publish = patch => { state = { ...state, ...patch }; for (const listener of listeners) listener(); };

@@ -313,6 +313,22 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
+  const [initialCaptureRaw, setInitialCaptureRaw] = React.useState("");
+  const handledShareRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (handledShareRef.current) return;
+    const shareTitle = searchParams.get("title") || "";
+    const shareText = searchParams.get("text") || "";
+    const shareUrl = searchParams.get("url") || "";
+    const combined = [shareTitle, shareText, shareUrl].map((s) => s.trim()).filter(Boolean).join("\n");
+    if (combined) {
+      handledShareRef.current = true;
+      setInitialCaptureRaw(combined);
+      setCaptureOpenRequest((v) => v + 1);
+    }
+  }, [searchParams]);
+
   const [guidanceQuestion, setGuidanceQuestion] = React.useState(null);
   const rootRef = React.useRef(null);
   const shellRef = React.useRef(null);
@@ -636,7 +652,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
           </div>
         </div>
       <GuidanceQuestionDrawer card={guidanceQuestion?.card} context={guidanceQuestion?.context} onClose={() => setGuidanceQuestion(null)} />
-      <GlobalQuickCapture openRequest={captureOpenRequest} onNavigate={navigate} />
+      <GlobalQuickCapture openRequest={captureOpenRequest} initialRaw={initialCaptureRaw} onNavigate={navigate} />
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open || Boolean(guidanceQuestion)} openRequest={memoOpenRequest} onNavigate={navigate} />
       <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />

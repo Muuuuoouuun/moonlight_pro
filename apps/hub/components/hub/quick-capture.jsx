@@ -179,16 +179,22 @@ export function QuickCaptureForm({
 }
 
 // 어디서든 C 로 열리는 캡처 드로어. openRequest 가 증가할 때마다 열린다.
-export function GlobalQuickCapture({ openRequest = 0, onNavigate, onSaved }) {
+export function GlobalQuickCapture({ openRequest = 0, initialRaw = "", onNavigate, onSaved }) {
   const [open, setOpen] = React.useState(false);
-  const [session] = React.useState(() => createQuickCaptureSession({ createId: createClientId }));
+  const [session] = React.useState(() => createQuickCaptureSession({ initialRaw, createId: createClientId }));
   const inputRef = React.useRef(null);
   const seen = React.useRef(openRequest);
   const close = () => { if (session.canClose()) setOpen(false); };
 
   React.useEffect(() => {
-    if (openRequest !== seen.current) { seen.current = openRequest; setOpen(true); }
-  }, [openRequest]);
+    if (openRequest !== seen.current) {
+      seen.current = openRequest;
+      if (initialRaw && !session.snapshot().raw) {
+        session.setRaw(initialRaw);
+      }
+      setOpen(true);
+    }
+  }, [openRequest, initialRaw, session]);
 
   if (!open) return null;
   return (

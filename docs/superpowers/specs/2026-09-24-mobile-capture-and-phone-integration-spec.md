@@ -1,141 +1,113 @@
 # 모바일 캡처 & 폰 연동 아키텍처 스펙 (Mobile Capture & Phone Integration)
 
-> 상태: ACTIVE SPEC · 1단계(Engine `phone-events` + MacroDroid + Hub `record-candidates`) 구현 완료, 2~3단계(고가용성 웹훅 버퍼·공유 시트·오프라인 큐) 기획 확정 (2026-09-24)
+> 상태: ACTIVE SPEC · 1단계(Engine `phone-events` + MacroDroid + Hub `record-candidates`) 구현 완료, 2단계(고가용성 엣지 큐·PWA Share Target) 구현 (2026-09-24)
 > 상위 정본: [`docs/operator-workflow-profile.md`](../../operator-workflow-profile.md) (인지 에너지 1/3, 누락 0건), [`2026-09-24-revenue-four-tabs-design.md`](2026-09-24-revenue-four-tabs-design.md) (오늘 연락 · 기록 후보)
 > 실행 가이드: [`docs/guides/galaxy-phone-capture.md`](../../guides/galaxy-phone-capture.md)
-> 관계: 갤럭시(Android)와 데스크톱 Mac(Moonlight) 사이의 현실적인 OS 보안 경계, Mac 잠자기(Sleep) 시의 웹훅 유실 방지(버퍼링), 폰 내부 정보 공유(Share Sheet, 클립보드, 통화 직후 팝업) 및 데스크톱 정착 흐름을 규정한다.
+> 관계: 텔레그램 등 서드파티 메신저 의존을 완전히 배제하고, 안드로이드(Galaxy) OS 엣지와 상시 가동 Supabase 클라우드 원장 간의 **Local-First WAL(Write-Ahead Log) + 멱등성(Idempotency) 이벤트 버퍼**를 정의한다.
 
 ---
 
-## 1. 배경 및 성공 기준
+## 1. 시스템 설계 철학 (Systems Architecture First Principles)
 
-### 현실과 문제점
-1. **모바일 단일 앱 만능주의의 실패**:
-   - PWA(웹 앱)는 브라우저 보안 샌드박스로 인해 통화 감지나 타사 앱(카카오톡) 알림에 접근할 수 없다.
-   - 일반 네이티브 앱도 안드로이드 OS의 배터리 최적화 정책으로 백그라운드 프로세스가 수시로 종료되며, 무리한 상시 감시는 배터리 소모와 잦은 오류를 유발한다.
-2. **Mac 슬립(잠자기) 시 데이터 유실**:
-   - 현재 구현(`galaxy-phone-capture.md`)은 폰의 MacroDroid가 Mac Engine(`:3001`)으로 직접 HTTP POST를 쏜다.
-   - 그러나 운영자가 이동 중이거나 외출 중일 때 Mac은 잠자기(Sleep) 상태이거나 네트워크가 분리되어 있어, 이 시점의 통화·문자·카톡 사건이 버려지는 한계가 있다.
-3. **입력 마찰로 인한 누락**:
-   - 밖에서 좋은 아이디어나 고객 요구사항이 생겨도, "앱을 찾아서 켜고, 로그인하고, 카테고리를 고르고, 입력하는" 과정에 5초 이상 걸리면 기록을 미루게 되고 결국 잊힌다.
+실리콘밸리 티어-1 분산 시스템의 제1원칙:
+> **"Worker(Mac)는 일시 중단(Sleep)될 수 있지만, Cloud Ledger(Supabase)는 365일 생존하며, Edge Client(Galaxy)는 발생한 사건을 로컬에서 절대 분실하지 않는다."**
 
-### 성공 기준 (Core Job-to-be-Done)
-* **"밖에서는 생각 없이 1~2초 만에 던지고, 정리는 데스크톱 큰 화면에서 1클릭으로 끝낸다."**
-* 밖에서 발생한 생각, 통화 메모, 카톡 문의, 할 일이 **Mac의 전원 상태나 네트워크와 무관하게 100% 분실 없이 보존**되어야 한다.
+### 기존 구조의 결함과 안티패턴 해소
+1. **단일점 장애(Single Point of Failure)**: 기존 `폰 → Mac Engine(:3001)` 직접 전송은 외출 중 Mac이 잠자기 상태일 때 모든 이벤트가 유실되는 치명적 결함이 있었다.
+2. **서드파티 메신저(텔레그램 등) 배제**: 외부 메신저를 큐로 삼는 것은 비인가 토큰 유출 위험, 외부 서비스 다운타임, 데이터 스키마 변조, 알림 공해를 초래하므로 채택하지 않는다.
+3. **온디바이스 하드웨어 가속 활용**: 오디오 전체를 클라우드로 전송해 유료 STT API를 호출하는 낭비 대신, 갤럭시 내장 NPU(삼성 키보드/Gboard 실시간 온디바이스 음성인식)를 활용하여 레이턴시 0ms, 비용 $0의 텍스트 전송을 원칙으로 한다.
 
 ---
 
-## 2. 웹훅 & API 고가용성 버퍼링 아키텍처
-
-Mac이 꺼져 있어도 모바일 캡처 내용이 유실되지 않도록 **3중 수신 버퍼링(Tri-layer Ingestion Buffer)** 체계를 설계한다.
+## 2. 3-Tier 분산 토폴로지 (Distributed Topology)
 
 ```text
-[갤럭시 스마트폰]
-   │
-   ├─ A. 텍스트/링크 공유/빠른 입력 ──▶ [Supabase Cloud REST API] (24/7 상시 대기)
-   │                                       │
-   ├─ B. 통화/카톡/문자 알림 ───────▶ [MacroDroid 로컬 오프라인 큐]
-   │                                       │ (연결 성공 시 Engine 전송 / 실패 시 재시도)
-   │                                       ▼
-   └─ C. 음성(PTT)/사진/장문 ──────▶ [Telegram 비공개 봇 버퍼] (클라우드 대기)
-                                           │
-   ┌───────────────────────────────────────┴─────────────────────────────┐
-   │                                                                     ▼
-[Mac 데스크톱 (Moonlight 실행 시)] ──▶ Supabase 원장 & Engine 수신
-   │
-   ├─ 고객/통화/일정 관련 ──▶ 허브 `오늘 연락` → [기록할까요] (RecordCandidates)
-   └─ 일반 메모/할 일/아이디어 ──▶ 허브 `내 작업` → [미분류 캡처함] (Inbox)
+[1. Edge Tier: Galaxy Phone]
+   ├─ 센서: 통화 종료(Call Ended), 카카오톡/SMS 알림, 시스템 공유(Share Sheet)
+   ├─ 로컬 WAL: MacroDroid Dictionary / PWA IndexedDB (오프라인 버퍼)
+   └─ 온디바이스 STT: NPU 가속 음성 키보드 (무지연·무비용 텍스트화)
+         │
+         ▼ HTTPS POST (결정론적 멱등키 `idempotency_key` 포함)
+[2. Ledger Tier: Supabase Cloud (AWS Seoul)]
+   ├─ `webhook_events` (Append-Only Event Store)
+   ├─ `source = 'phone-capture'` / `source = 'mobile-share'`
+   └─ 멱등성 보장: UNIQUE(idempotency_key) ON CONFLICT DO NOTHING
+         │
+         ▼ Pull / Stream / Query
+[3. Control Plane: Mac Desktop (Moonlight Hub & Engine)]
+   ├─ Hub `오늘 연락` → [기록할까요] (RecordCandidates)
+   └─ Hub `내 작업` → [미분류 캡처함] (Inbox)
 ```
 
-### 계층 1: Supabase Cloud REST 직접 인제스트 (Cloud-First Primary)
-* **원리**: 문라이트의 메인 원장인 Supabase는 서울 리전(`ap-northeast-2`)에 24시간 365일 상시 가동 중이다.
-* **적용**: PWA 빠른 입력 창, 모바일 숏컷, 공유 시트에서 발생한 텍스트·링크 캡처는 Mac을 거치지 않고 Supabase의 `webhook_events` 또는 `journal_entries`로 직접 HTTPS REST 요청을 보낸다.
-* **보안 경계**:
-  - 관리자 전체 권한(`service_role`) 키를 폰에 노출하지 않는다.
-  - 전용 `anon` 키 + RLS(Row Level Security) 정책을 적용하여, `source = 'mobile-quick-capture'` 형태의 **추가(INSERT)만 가능하고 타 데이터 읽기/수정은 불가능한 쓰기 전용 게이트**로 운영한다.
+---
 
-### 계층 2: MacroDroid 로컬 오프라인 큐 (On-Device Fallback Queue)
-* **원리**: 통화 종료, SMS, 카카오톡 알림처럼 MacroDroid가 감지한 시스템 이벤트의 유실 방지.
-* **동작 규칙**:
-  1. MacroDroid가 Engine(`https://<Mac>.<tailnet>.ts.net/api/intake/phone-events`)으로 HTTP 요청 전송.
-  2. **성공 (HTTP 200/201)**: 정상 종료.
-  3. **실패 (HTTP 에러, 타임아웃, Mac 오프라인)**: 사건 페이로드를 버리지 않고 MacroDroid 로컬 배열 변수 `[v=offlinePhoneQueue]`에 JSON 문자열로 밀어 넣음(Push).
-  4. **재시도 (Flush)**: 15분 주기 또는 와이파이 연결 시 큐에 대기 중인 사건들을 순차 재전송하고 성공 시 비움. (최대 보관 48시간).
+## 3. 이벤트 봉투 및 전송 계약 (Idempotent Event Contract)
 
-### 계층 3: 텔레그램 비공개 봇 버퍼 (High-Reliability Conversational Buffer)
-* **원리**: 텔레그램 서버가 영구 무료 무중단 메시지 큐 역할을 수행.
-* **동작 규칙**:
-  - 이동 중 운전 중일 때 폰에서 비공개 1:1 봇 방으로 음성 메시지(PTT)나 사진(명함, 화이트보드) 전송.
-  - Mac Engine이 기동될 때 Telegram Bot API의 `getUpdates` 또는 롱 폴링으로 밀려 있던 메시지를 읽어와 Whisper STT 및 구조화 변환 후 Supabase 원장에 적재.
+모든 엣지 캡처 페이로드는 클라이언트가 계산한 결정론적(Deterministic) 멱등키를 포함하여 네트워크 재시도 시의 중복 저장을 원천 차단한다.
+
+```json
+{
+  "event_id": "evt_20260924_7f8a9b",
+  "idempotency_key": "sha256(type + source_number + timestamp)",
+  "source": "galaxy_edge",
+  "type": "call | sms | kakao | share_capture",
+  "client_timestamp": "2026-09-24T23:15:00.000Z",
+  "schema_version": "2026-09-24",
+  "payload": {
+    "target_name": "김원장",
+    "number": "010-1234-5678",
+    "duration_seconds": 185,
+    "quick_memo": "다음 주 화요일 미팅 일정 확인 요청",
+    "promise_hint": "다음 주 화요일"
+  }
+}
+```
+
+* **엣지 재시도 정책**: HTTP 200/201이 반환되지 않으면 폰의 로컬 FIFO 큐에 보관하고 지수 백오프(`10s → 30s → 2m → 10m`)로 재시도.
+* **서버 정책**: `idempotency_key` 충돌 시 `status: duplicate` (HTTP 200)로 응답하여 엣지 큐에서 안전하게 제거.
 
 ---
 
-## 3. 휴대폰 내부 정보 공유 & 캡처 메커니즘
+## 4. 모바일 네이티브 연동 인터페이스
 
-운영자가 스마트폰을 조작할 때 인지 부하를 최소화하는 안드로이드 OS 연동 4대 인터페이스:
-
-### ① 안드로이드 시스템 공유 시트 (Share Sheet 연동)
-* **사용자 경험**: 카카오톡 문의 메시지, 인스타그램 DM, Threads 글, 웹 기사를 읽다가 텍스트를 선택하고 **[공유] → [Moonlight]**를 탭하면 끝.
-* **구현 방식 (PWA Web Share Target)**:
-  - `apps/hub`의 PWA 매니페스트(`manifest.json`)에 `share_target` 정의:
-    ```json
-    "share_target": {
-      "action": "/api/hub/capture/share",
-      "method": "POST",
-      "enctype": "application/x-www-form-urlencoded",
-      "params": {
-        "title": "title",
-        "text": "text",
-        "url": "url"
-      }
+### ① 안드로이드 시스템 공유 시트 (PWA Web Share Target)
+* **표준 명세**: W3C Web Share Target API 채택.
+* **매니페스트 선언 (`apps/hub/public/manifest.json`)**:
+  ```json
+  "share_target": {
+    "action": "/dashboard",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
     }
-    ```
-  - 공유 시 백그라운드 팝업에서 `[할 일]` / `[고객 문의]` / `[아이디어]` 라디오 버튼 3개 중 하나만 누르면 문라이트 인제스트 완료.
-
-### ② 통화 종료 직후 10초 골든타임 팝업 (Call-End Micro Dialog)
-* **사용자 경험**: 고객과 통화를 끊는 즉시 폰 화면 하단에 2초 동안 방해되지 않는 반투명 다이얼로그 팝업.
-  ```text
-  ┌──────────────────────────────────────────┐
-  │ 📞 [해솔학원 김원장] 3분 40초 통화 완료   │
-  │ 한 줄 메모: [ 다음 주 화요일 견적 발송 ] │
-  │ 다음 연락: [내일] [3일뒤] [다음주] [저장] │
-  └──────────────────────────────────────────┘
+  }
   ```
-* **동작 규칙**:
-  - 10초 동안 아무 입력이 없으면 다이얼로그는 자동으로 닫히고, 순수 통화 메타데이터만 `record-candidates`로 전송.
-  - 한 줄이라도 치고 [저장]을 누르면 메모가 포함된 기록 후보로 즉시 전송.
+* **인터랙션**:
+  1. 카카오톡, 인스타그램, 크롬 브라우저에서 텍스트나 링크를 누르고 **[공유] → [Moonlight]** 선택.
+  2. 문라이트 PWA가 단독 앱 모드로 기동되며, URL 쿼리 파라미터를 파싱하여 `GlobalQuickCapture` 드로어를 즉시 팝업.
+  3. 운영자는 별도 타이핑 없이 `[할 일 저장]` 또는 `[정리 전 저장]` 1탭으로 완료.
+
+### ② 통화 종료 2초 골든타임 마이크로 다이얼로그 (Call-End Micro Flow)
+* **조건**: 통화 시간 15초 이상 + 주소록 매칭 대상.
+* **동작**:
+  1. 통화 종료 즉시 폰 하단에 반투명 플로팅 입력창 팝업.
+  2. 마이크 버튼 터치 후 한마디 음성 입력 ("다음 주 견적서 발송") 또는 프리셋 탭 (`[내일] [3일뒤] [다음주]`).
+  3. 5초 무입력 시 자동 소멸하되, 기본 통화 시간과 상대방 정보만 후보로 백그라운드 전송.
 
 ### ③ 상단 빠른 설정 타일 (Quick Settings Tile)
-* **사용자 경험**: 갤럭시 상단 바를 쓸어내려 `[🌙 문라이트]` 타일 터치.
-* **동작 규칙**:
-  - 클립보드에 방금 복사한 텍스트가 있으면: *"클립보드 내용을 문라이트에 등록할까요?"* 1탭 승인.
-  - 클립보드가 비어 있으면: 음성 녹음 또는 1줄 타이핑 다이얼로그 즉시 팝업.
-
-### ④ 한국 갤럭시 통화녹음(.m4a) 취급 원칙
-* **원칙**: 모든 통화 녹음 파일(수백 MB)을 무조건 자동으로 전송·분석하지 않는다 (네트워크 비용, 배터리 소모, 불필요한 AI API 비용 방지).
-* **선택적 캡처**: 정말 중요한 상담/미팅 통화인 경우, 통화 종료 후 음성 녹음 앱 목록에서 해당 통화 녹음 파일을 **[공유] → [Moonlight 음성 분석]**으로 명시 전송할 때만 Whisper/Gemini STT 및 3줄 요약 추출을 실행한다.
+* 상단 바 드롭다운의 `[🌙 문라이트]` 타일 터치 시 클립보드 내용을 감지하여 1탭 등록 창 오픈.
 
 ---
 
-## 4. 데스크톱 허브 연착륙 (Desktop Landing UX)
+## 5. 데스크톱 허브 수신 및 배치 (Desktop Landing)
 
-폰에서 들어온 데이터는 운영자의 명시적 승인 없이 기존 메인 원장(`crm_activities`, `tasks`)을 바로 수정하지 않는다. **항상 전용 대기함으로 먼저 안착**한다.
+폰에서 유입된 데이터는 무단으로 정본 엔티티(`crm_activities`, `tasks`)를 변소하지 않고, **검토 가능한 2곳의 인박스**로 연착륙한다.
 
-| 캡처 유형 | 데스크톱 허브 도착 화면 | 사용자 확인 동작 |
-|---|---|---|
-| **통화 / 카톡 / 문자** | `영업·매출` → `오늘 연락` 탭 상단 **[기록할까요]** (`RecordCandidates`) | [기록 남기기] 1클릭 → 시간·고객 자동 매칭된 시트에서 확인 저장 |
-| **공유 시트 / 클립보드 할 일** | `내 작업` → **[미분류 캡처함]** (Inbox) | 기한/프로젝트 지정 후 오늘 작업으로 승격 |
-| **소재 / 아이디어** | `브랜드·콘텐츠` → **[아이디어함]** | 가공 채널(Threads/Instagram) 선택 |
-
----
-
-## 5. 단계별 실행 계획 (Implementation Roadmap)
-
-1. **Phase 1 (현행 안정화 & 오프라인 큐)**:
-   - MacroDroid 통화 종료 매크로에 실패 시 재시도 로컬 큐(`[v=offlinePhoneQueue]`) 추가.
-   - 통화 종료 직후 1줄 메모 다이얼로그 액션 추가.
-2. **Phase 2 (PWA & Web Share Target)**:
-   - Hub PWA 매니페스트에 `share_target` 선언 및 `/api/hub/capture/share` 엔드포인트 개설.
-   - 갤럭시 Chrome에서 "홈 화면에 추가" 후 카톡/브라우저 공유 시트 연동 검증.
-3. **Phase 3 (상시 클라우드 버퍼 / 텔레그램)**:
-   - 외출 시 완벽한 음성(PTT) 및 오프라인 보존을 위한 텔레그램 비공개 봇 수신 리스너 연결.
+1. **CRM 관련 (전화·문자·카톡)**:
+   - `영업·매출` → `오늘 연락` 탭 상단의 **[기록할까요]** (`RecordCandidates`)
+   - 캘린더 미기록 미팅과 함께 묶여 원클릭 확인으로 공식 활동 등록.
+2. **할 일 및 아이디어 (공유 시트·빠른 메모)**:
+   - `내 작업` → **[미분류 캡처함]** (`Capture Inbox`)
+   - 드래그 또는 Enter 키보드 액션으로 오늘 할 일 또는 프로젝트 백로그로 할당.
