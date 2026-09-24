@@ -431,3 +431,12 @@ test("render: 날짜 다시 moves only the promise date through the lead update 
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(app.saves.at(-1), ["lead", "update", { id: "11111111-1111-4111-8111-111111111111", next_action_at: dayKey(3) }]);
 });
+
+test("drawer memo query uses a limit the journal search route accepts (3 or 40)", () => {
+  // journal-search.js는 limit을 3·40만 받는다 — 다른 값이면 invalid-input이 돌아와 드로어 기록이
+  // "연결 메모를 읽지 못했어요"로 떨어진다(2026-09-24 통합 검증에서 limit=5로 발견).
+  const limits = [...customersSource.matchAll(/contextId:[^`]*`\)?\}&limit=(\d+)/g)].map((m) => m[1]);
+  const all = [...customersSource.matchAll(/&limit=(\d+)/g)].map((m) => m[1]);
+  assert.ok(all.length > 0, "memo query present");
+  for (const value of [...limits, ...all]) assert.ok(["3", "40"].includes(value), `limit=${value}`);
+});

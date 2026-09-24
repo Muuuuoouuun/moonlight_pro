@@ -853,7 +853,7 @@ function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed,
   // 이 고객에 직접 연결한 메모 — 기록 한 줄기에 시간순으로 섞는다(RelatedMemos와 같은 조회).
   const memoEnabled = (row.kind === "lead" || row.kind === "account") && isCanonicalUuid(row.id);
   const memoQuery = memoEnabled
-    ? `${new URLSearchParams({ contextType: row.kind, contextId: String(row.id).toLowerCase() })}&limit=5`
+    ? `${new URLSearchParams({ contextType: row.kind, contextId: String(row.id).toLowerCase() })}&limit=3`
     : "";
   const memos = useMemoSearch(memoQuery, { enabled: memoEnabled });
 
