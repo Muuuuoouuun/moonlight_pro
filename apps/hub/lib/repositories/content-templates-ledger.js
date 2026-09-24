@@ -30,7 +30,7 @@ export async function listContentTemplates() {
   if (!workspaceId) return { status: 'preview', templates: [], message: 'AI 템플릿 저장 연결이 필요합니다.' };
   try {
     const { rows, error } = await fetchSupabaseRowsDetailed(TABLE, { select: SELECT, filters: [['workspace_id', eqFilter(workspaceId)]], order: 'name.asc', limit: TEMPLATE_LIMITS.count });
-    // 마이그레이션 0044 적용 전(테이블 없음)은 장애가 아니라 설정 대기 상태다.
+    // 마이그레이션 0045 적용 전(테이블 없음)은 장애가 아니라 설정 대기 상태다.
     if (error && tableMissing(error)) return { status: 'preview', templates: [], message: 'AI 템플릿 테이블이 아직 없습니다. 마이그레이션 적용이 필요합니다.' };
     if (!Array.isArray(rows)) return readError();
     const templates = rows.map((row) => templateFromRow(row, workspaceId));
