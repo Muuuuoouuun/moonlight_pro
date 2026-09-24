@@ -75,6 +75,7 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
     settled(getProjectLedger(), "operating-ledger", missing),
     settled(getRecentAgentRuns({ agent: COUNCIL_AGENT, ref, limit: 5 }), "agent_runs", missing),
   ]);
+  const coreReadFailed = !content || content.source === "error" || !projectLedger || projectLedger.source === "error";
 
   if (content?.source === "error") {
     missing.push({
@@ -82,6 +83,10 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
       reason: content.error || "content-ledger-read-failed",
       failedSources: Array.isArray(content.failedSources) ? content.failedSources : [],
     });
+    content = null;
+  }
+  if (content?.source === "preview") {
+    missing.push({ source: "content-ledger", reason: "content-ledger-unconfigured" });
     content = null;
   }
   if (content?.partial) {
@@ -98,6 +103,9 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
       failedSources: Array.isArray(projectLedger.failedSources) ? projectLedger.failedSources : [],
     });
     projectLedger = null;
+  } else if (projectLedger?.source === "preview") {
+    missing.push({ source: "operating-ledger", reason: "operating-ledger-unconfigured" });
+    projectLedger = null;
   } else if (projectLedger?.source === "supabase" && projectLedger.partial) {
     missing.push({
       source: "operating-ledger",
@@ -108,7 +116,7 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
 
   if (!content && !projectLedger) {
     return {
-      source: missing.length ? "error" : "preview",
+      source: coreReadFailed ? "error" : "preview",
       error: "brand ledgers unavailable",
       missing,
     };

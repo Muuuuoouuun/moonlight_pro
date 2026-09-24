@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { guidancePeriodKey, selectGuidanceCard } from '@com-moon/guru-guidance';
 import { Button, Drawer, SegmentedControl } from './hub-primitives';
 import { Iconed } from './hub-icons';
+import { GuidanceSource } from './guidance-source';
 import './context-mentor-rail.css';
 
 const DOMAIN_LABELS = { sales: '세일즈', marketing: '마케팅', content: '콘텐츠' };
@@ -112,12 +113,7 @@ export function ContextMentorRail({ domain = 'sales', onGuidanceAsk, onNavigate,
           {cadence === 'daily' && disabled && <p className="context-mentor-rail__read-only">이 맥락에서는 관점만 읽을 수 있습니다.</p>}
         </article>
 
-        <details className="context-mentor-rail__source" key={card.id}>
-          <summary>출처와 적용 범위</summary>
-          <p>자료 요약 · 인용 아님</p>
-          <p>{card.source.title}</p>
-          <p className="mono">{card.source.path} § {card.source.section}</p>
-        </details>
+        <GuidanceSource source={card.source} className="context-mentor-rail__source" />
 
         <div className="context-mentor-rail__footer">
           <p>열람과 카드 넘김은 조언을 생성하거나 업무를 추가하지 않습니다.</p>

@@ -174,18 +174,7 @@
 }
 
 .mentor-shelf__source {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
   margin-top: 22px;
-  color: var(--fg-dim);
-  font-size: 10.5px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.mentor-shelf__source .mono {
-  font-size: 10.5px;
 }
 
 .mentor-shelf__actions {
@@ -401,4 +390,8 @@
   .mentor-shelf__browse-card {
     min-height: 92px;
   }
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  .mentor-shelf__domains .hub-seg__btn { min-height: 44px; }
 }

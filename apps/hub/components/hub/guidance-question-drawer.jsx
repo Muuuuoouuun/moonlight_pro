@@ -4,6 +4,7 @@ import React from 'react';
 import { GURU_CARDS } from '@com-moon/guru-guidance';
 import { Button, Drawer, TextAreaField, TruthBadge } from './hub-primitives';
 import { requestGuidanceAdvice } from './guidance-advice-client';
+import { GuidanceSource } from './guidance-source';
 import './guidance-question-drawer.css';
 
 const DOMAIN_LABELS = { sales: '세일즈', marketing: '마케팅', content: '콘텐츠' };
@@ -35,7 +36,10 @@ export function GuidanceAnswer({ text }) {
     else blocks.push(<p key={`paragraph-${blocks.length}`}>{inlineEmphasis(line)}</p>);
   }
   flushBullets();
-  return <div className="guidance-question__answer-body">{blocks}</div>;
+  return <div className="guidance-question__answer-body">
+    <span className="guidance-question__answer-notice" role="status">답변이 도착했습니다.</span>
+    {blocks}
+  </div>;
 }
 
 function useCompactDrawer() {
@@ -51,7 +55,7 @@ function useCompactDrawer() {
 }
 
 function QuestionDrawerBody({ card, context, onClose }) {
-  const [question, setQuestion] = React.useState(card.question || '');
+  const [question, setQuestion] = React.useState('');
   const [result, setResult] = React.useState({ state: 'idle' });
   const inputRef = React.useRef(null);
   const compact = useCompactDrawer();
@@ -73,8 +77,8 @@ function QuestionDrawerBody({ card, context, onClose }) {
       width="min(490px, 100vw)"
       presentation={compact ? 'compact' : 'side'}
       footer={<>
-        <Button variant="ghost" size="sm" onClick={onClose}>닫기</Button>
-        <Button variant="primary" size="sm" disabled={busy || !question.trim()} onClick={send}>
+        <Button variant="ghost" size="sm" className="guidance-question__footer-button" onClick={onClose}>닫기</Button>
+        <Button variant="primary" size="sm" className="guidance-question__footer-button" disabled={busy || !question.trim()} onClick={send}>
           {busy ? '답변 받는 중…' : `${target}에게 보내기`}
         </Button>
       </>}
@@ -84,13 +88,15 @@ function QuestionDrawerBody({ card, context, onClose }) {
         {context?.label && <span className="guidance-question__context">대상 브랜드 · {context.label}</span>}
         <h3>{card.person}</h3>
         <p>{card.frame}</p>
-        <span className="guidance-question__source">자료 요약 · {card.source.title} · {card.source.section}</span>
+        <GuidanceSource source={card.source} className="guidance-question__source" />
       </section>
 
       <TextAreaField
         ref={inputRef}
         id="guidance-question"
+        className="guidance-question__input"
         label="무엇을 함께 생각해 볼까요?"
+        placeholder="상황이나 판단할 지점을 적어 주세요."
         value={question}
         onChange={event => setQuestion(event.target.value)}
         onCmdEnter={send}

@@ -7,7 +7,7 @@ const stubs = {
   "@/lib/hub-write-guard": `export function assertHubWriteAllowed() { return null; }
     export async function readHubWriteJson(req) { return { data: await req.json() }; }`,
   "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { globalThis.__advisorRouteTest.contextRead = true; return globalThis.__advisorRouteTest.contextResult || { source: 'supabase' }; }`,
-  "@/lib/sales-os/context-assembler": `export async function assembleSalesContext() { globalThis.__advisorRouteTest.contextRead = true; return { source: 'supabase' }; }`,
+  "@/lib/sales-os/context-assembler": `export async function assembleSalesContext() { globalThis.__advisorRouteTest.contextRead = true; return globalThis.__advisorRouteTest.salesContextResult || { source: 'supabase' }; }`,
   "@/lib/sales-os/agent-runs": `
     export async function recordAgentRun(input) { globalThis.__advisorRouteTest.run = input; return { persisted: true, id: 'run-1' }; }
     export async function setAgentRunEmittedCount(input) { globalThis.__advisorRouteTest.emission = input; return { persisted: true }; }
@@ -125,6 +125,16 @@ test('Guru rejects a marketing card before reading the sales ledger or calling E
   assert.equal(state.lastFetch, undefined);
   assert.equal(state.run, undefined);
 });
+test('an open Guru question returns the ledger preview or error without Engine or run writes', async () => {
+  for (const [source, status] of [['preview', 202], ['error', 502]]) {
+    state.salesContextResult = { source, error: 'revenue-ledger-unavailable' };
+    const response = await guruPOST(request({ mode: 'open-question', draft: '고객에게 무엇을 확인할까요?', guidanceId: 'sales-meddic' }));
+    assert.equal(response.status, status);
+    assert.equal((await response.json()).status, source);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+  }
+});
 test('personal Brand open-question accepts only a marketing or content card and an explicit question', async () => {
   for (const guidanceId of ['sales-meddic', 'legend-buffett', 'invented-card', undefined]) {
     const response = await POST(request({ mode: 'open-question', draft: '독자에게 어떤 질문을 할까요?', guidanceId }));
@@ -159,6 +169,25 @@ test('personal Brand question shows preview or read error without calling Engine
     assert.equal(state.lastFetch, undefined);
     assert.equal(state.run, undefined);
   }
+});
+test('a brand question with a ref requires that exact personal brand before Engine generation', async () => {
+  state.contextResult = { source: 'supabase', brand: null, focus: { found: false } };
+  const missing = await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '무엇이 중요한가요?', ref: 'personal-a' }));
+  assert.equal(missing.status, 409);
+  assert.equal((await missing.json()).status, 'error');
+  assert.equal(state.lastFetch, undefined);
+  assert.equal(state.run, undefined);
+
+  state.contextResult = { source: 'supabase', brand: { key: 'personal-b' }, focus: { found: true, kind: 'brand' } };
+  const wrong = await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '무엇이 중요한가요?', ref: 'personal-a' }));
+  assert.equal(wrong.status, 409);
+  assert.equal((await wrong.json()).status, 'error');
+  assert.equal(state.lastFetch, undefined);
+
+  state.contextResult = { source: 'supabase', brand: { key: 'personal-a' }, focus: { found: true, kind: 'brand' } };
+  const matched = await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '무엇이 중요한가요?', ref: 'personal-a' }));
+  assert.equal((await matched.json()).status, 'generated');
+  assert.equal(state.lastFetch.body.ref, 'personal-a');
 });
 test('run history validates bounds and keeps failed reads distinct from empty history', async () => {
   assert.equal((await GET(new Request('http://hub.test?limit=999'))).status, 400);

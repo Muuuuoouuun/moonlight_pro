@@ -163,6 +163,14 @@ describe('buildAdvisorySystemInstruction prompt generation', () => {
     assert.match(prompt, /질문 또는 선택/);
     assert.doesNotMatch(prompt, /즉시 실행 가능한 가역적 행동을 제안|후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시|승인 큐 후보/);
   });
+  it('keeps a reader-selected sales question on one source frame without unrelated Guru playbooks', () => {
+    const prompt = guardrails.buildAdvisorySystemInstruction({
+      type: 'sales-mentor', mode: 'open-question', context: { source: 'supabase' },
+    });
+    assert.match(prompt, /ClassIn B2B 영업/);
+    assert.match(prompt, /운영자가 판단할 질문 또는 선택/);
+    assert.doesNotMatch(prompt, /Keenan GAP 4층 진단|Chris Voss 라벨링|Napoleon Hill 명확한 목표/);
+  });
 
   it('embeds values and knowledge directives into system instruction', () => {
     const prompt = guardrails.buildAdvisorySystemInstruction({

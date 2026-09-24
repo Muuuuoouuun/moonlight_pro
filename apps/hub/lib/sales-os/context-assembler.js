@@ -12,16 +12,35 @@ import { getRecentContactActivities } from "@/lib/repositories/crm-activities";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
+import { brandInWorkspace } from "@/components/hub/workspace-map";
 import {
   OWNER_ID,
   buildFocusOperatingContext,
-  cadenceStatusString,
   normalizeOutcome,
   outcomesForEntity,
   selectBrand,
 } from "@/lib/sales-os/context-schema";
 
 const trim = (arr, n) => (Array.isArray(arr) ? arr.slice(0, n) : []);
+
+// A selected company workspace/brand is authoritative. Legacy rows with no
+// explicit scope can use the revenue type; names alone do not establish scope.
+function belongsToClassIn(row) {
+  if (!row || typeof row !== "object") return false;
+  if (row.workspace) return row.workspace === "classin";
+  if (row.brand) return brandInWorkspace(row.brand, "classin");
+  return row.type === "company";
+}
+
+function isLinkedClassInOutcome(outcome, leadIds, dealIds) {
+  const linked = [
+    outcome.lead_id ? leadIds.has(outcome.lead_id) : null,
+    outcome.deal_id ? dealIds.has(outcome.deal_id) : null,
+  ].filter(value => value !== null);
+  // company_id alone cannot prove org scope: the bounded revenue read may omit
+  // a personal row linked to the same company.
+  return linked.length > 0 && linked.every(Boolean);
+}
 
 async function settled(promise, source, missing) {
   try {
@@ -34,43 +53,63 @@ async function settled(promise, source, missing) {
 
 export async function assembleSalesContext({ mode = "pipeline-triage", ref = null } = {}) {
   const missing = [];
-  const [ledger, outcomesRes, content, runsRes] = await Promise.all([
+  let [ledger, outcomesRes, content, runsRes] = await Promise.all([
     settled(getRevenueLedger(), "revenue-ledger", missing),
     // 0a: 연락 기록의 단일 원천은 crm_activities — 봉투·필드명은 예전 outcomes와 같다.
     settled(getRecentContactActivities({ limit: 30 }), "crm_activities", missing),
     settled(getContentLedger(), "content-ledger", missing),
-    settled(getRecentAgentRuns({ ref, limit: 5 }), "agent_runs", missing),
+    settled(getRecentAgentRuns({ agent: "guru", ref, limit: 5 }), "agent_runs", missing),
   ]);
 
-  if (!ledger) {
-    return { source: "preview", error: "revenue ledger unavailable", missing };
+  if (!ledger || ledger.source === "preview" || ledger.source === "error") {
+    missing.push({ source: "revenue-ledger", reason: ledger?.error || "revenue-ledger-unavailable" });
+    return { source: ledger?.source === "preview" ? "preview" : "error", error: ledger?.error || "revenue ledger unavailable", missing };
   }
+  if (ledger.partial) {
+    missing.push({ source: "revenue-ledger", reason: "partial-read", failedSources: ledger.failedSources || [] });
+  }
+
+  for (const [value, source] of [[outcomesRes, "crm_activities"], [content, "content-ledger"], [runsRes, "agent_runs"]]) {
+    if (value?.source === "error" || value?.source === "preview") {
+      missing.push({ source, reason: value.error || `${source}-${value.source}` });
+    }
+  }
+  if (outcomesRes?.source === "error" || outcomesRes?.source === "preview") outcomesRes = null;
+  if (content?.source === "error" || content?.source === "preview") content = null;
+  if (runsRes?.source === "error" || runsRes?.source === "preview") runsRes = null;
 
   const normalizedOutcomes = (outcomesRes?.outcomes || []).map(normalizeOutcome).filter(Boolean);
   const brand = selectBrand(content?.brands);
+  const classInLeads = (ledger.leads || []).filter(belongsToClassIn);
+  const classInDeals = (ledger.deals || []).filter(belongsToClassIn);
+  const classInAccounts = (ledger.accounts || []).filter(belongsToClassIn);
+  const classInCases = (ledger.cases || []).filter(belongsToClassIn);
+  const leadIds = new Set((classInLeads || []).map(row => row.id).filter(Boolean));
+  const dealIds = new Set((classInDeals || []).map(row => row.id).filter(Boolean));
+  const companyOnly = normalizedOutcomes.filter(outcome => outcome.company_id && !outcome.lead_id && !outcome.deal_id);
+  if (companyOnly.length) {
+    missing.push({ source: "crm_activities", reason: "company-only activity scope unverified", count: companyOnly.length });
+  }
+  const scopedOutcomes = normalizedOutcomes.filter(outcome => isLinkedClassInOutcome(outcome, leadIds, dealIds));
 
   const context = {
-    source: ledger.source,
-    summary: ledger.summary || null,
+    source: missing.length ? "partial" : ledger.source,
+    // Repository aggregates and content cadence span personal and company lanes.
+    // Until scoped aggregates exist, omission is more truthful than reuse.
+    summary: null,
     stages: ledger.stages || [],
-    deals: trim(ledger.deals, 40),
-    leads: trim(ledger.leads, 40),
-    accounts: trim(ledger.accounts, 40),
-    cases: trim(ledger.cases, 20),
+    deals: trim(classInDeals, 40),
+    leads: trim(classInLeads, 40),
+    accounts: trim(classInAccounts, 40),
+    cases: trim(classInCases, 20),
     outcomes: {
       source: outcomesRes?.source || "preview",
-      recent: trim(normalizedOutcomes, 30),
+      recent: trim(scopedOutcomes, 30),
     },
-    content: content
-      ? {
-          cadence_status: cadenceStatusString(content.cadence),
-          cadence: content.cadence || null,
-          idea_queue_top: trim(content.ideaQueue, 8),
-        }
-      : null,
+    content: null,
     brand,
     memory: {
-      recent_runs: trim(runsRes?.runs, 5),
+      recent_runs: trim((runsRes?.runs || []).filter(run => run.agent === "guru"), 5),
     },
     missing,
   };
@@ -80,19 +119,19 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
   if (ref && (mode === "deal-review" || mode === "followup-draft")) {
     const needle = ref.toLowerCase();
     const deal =
-      (ledger.deals || []).find(
+      classInDeals.find(
         (d) => String(d.id).toLowerCase() === needle || (d.name || "").toLowerCase().includes(needle),
       ) || null;
     const account =
-      (ledger.accounts || []).find((a) => (a.name || "").toLowerCase().includes(needle)) || null;
+      classInAccounts.find((a) => (a.name || "").toLowerCase().includes(needle)) || null;
     // Lead match: prefer the deal's own lead_id link, fall back to a name-substring match —
     // this is what fills score/next_action_hint/contact in the focus context.
     const lead = deal
-      ? (ledger.leads || []).find((l) => deal.leadId && l.id === deal.leadId) ||
-        (ledger.leads || []).find((l) => (l.name || "").toLowerCase().includes((deal.name || "").toLowerCase())) ||
+      ? classInLeads.find((l) => deal.leadId && l.id === deal.leadId) ||
+        classInLeads.find((l) => (l.name || "").toLowerCase().includes((deal.name || "").toLowerCase())) ||
         null
       : null;
-    const entityOutcomes = deal ? outcomesForEntity(normalizedOutcomes, { dealId: deal.id }) : [];
+    const entityOutcomes = deal ? outcomesForEntity(scopedOutcomes, { dealId: deal.id }) : [];
     // v1.4 CRM gap fill — resolves to null until the classin_crm_snapshot push lands (P0b/P1);
     // buildFocusOperatingContext degrades that to the existing "eeoCRM" missing[] entry.
     const crmFacts = deal

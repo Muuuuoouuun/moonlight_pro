@@ -79,3 +79,18 @@ test('cross-scope refs remain missing; memory failures are disclosed', async () 
   assert.equal(ctx.source, 'partial');
   assert.ok(ctx.missing.some((s) => s.source === 'agent_runs'));
 });
+test('a preview ledger and a failed ledger cannot masquerade as partial usable brand context', async () => {
+  state.content = { source: 'error', error: 'content-read-failed', brands: [], items: [], ideaQueue: [] };
+  state.projects = { source: 'preview', projects: [] };
+  const contentFailure = await assembleBrandContext({ mode: 'open-question' });
+  assert.equal(contentFailure.source, 'error');
+
+  state.content = { source: 'preview', brands: [], items: [], ideaQueue: [] };
+  state.projects = { source: 'error', error: 'project-read-failed', projects: [] };
+  const projectFailure = await assembleBrandContext({ mode: 'open-question' });
+  assert.equal(projectFailure.source, 'error');
+
+  state.projects = { source: 'preview', projects: [] };
+  const unconfigured = await assembleBrandContext({ mode: 'open-question' });
+  assert.equal(unconfigured.source, 'preview');
+});

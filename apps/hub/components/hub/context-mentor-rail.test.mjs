@@ -22,9 +22,7 @@ test('rail reads the same source-backed daily Guru and weekly Legend cards witho
   const source = read('./context-mentor-rail.jsx');
   assert.match(source, /selectGuidanceCard\(/);
   assert.match(source, /guidancePeriodKey\(/);
-  assert.match(source, /source\.title/);
-  assert.match(source, /source\.path/);
-  assert.match(source, /source\.section/);
+  assert.match(source, /GuidanceSource source=\{card\.source\}/);
   assert.match(source, /setOffset\(/);
   assert.match(source, /onGuidanceAsk\?\.\(card\)/);
   assert.match(source, /onNavigate\?\.\('dashboard\/agents\/chat'\)/);
@@ -59,6 +57,7 @@ test('shell-narrow trigger returns to horizontal flow while only <=600px uses th
   const source = read('./context-mentor-rail.jsx');
   const css = read('./context-mentor-rail.css');
   assert.match(css, /min-height:\s*44px/);
+  assert.match(css, /\.context-mentor-rail__content \.hub-seg__btn\s*\{[^}]*min-height:\s*44px/);
   assert.match(css, /@media\s*\(max-width:\s*900px\)/);
   assert.match(css, /@media\s*\(max-width:\s*900px\)[\s\S]*position:\s*static/);
   assert.match(css, /@media\s*\(max-width:\s*900px\)[\s\S]*flex-direction:\s*row/);

@@ -3,6 +3,7 @@
 import React from 'react';
 import { guidancePeriodKey, selectGuidanceCard } from '@com-moon/guru-guidance';
 import { Button, Card, SegmentedControl } from '../hub-primitives';
+import { GuidanceSource } from '../guidance-source';
 import './mentor-shelf.css';
 
 const HIDDEN_KEY = 'mlp.mentorShelfHidden';
@@ -16,13 +17,6 @@ const BROWSE_LABELS = {
   marketing: '가장 먼저 반응할 사람',
   content: '독자가 주인공인 도입부',
 };
-
-function GuidanceSource({ source }) {
-  return <div className="mentor-shelf__source">
-    <span>자료 요약 · {source.title} · {source.section}</span>
-    <span className="mono">{source.path}</span>
-  </div>;
-}
 
 export function MentorShelf({ onGuidanceAsk, onNavigate }) {
   const [domain, setDomain] = React.useState('sales');
@@ -93,7 +87,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
               <strong>물어볼 질문</strong>
               <p>{guruCard.question}</p>
             </div>
-            <GuidanceSource source={guruCard.source} />
+            <GuidanceSource source={guruCard.source} className="mentor-shelf__source" />
             <div className="mentor-shelf__actions">
               {onGuidanceAsk && <Button variant="primary" size="md" onClick={() => onGuidanceAsk(guruCard)}>
                 {domain === 'sales' ? '영업 Guru에게 질문 쓰기' : '브랜드 멘토에게 질문 쓰기'}
@@ -117,7 +111,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
                 <strong>생각해 볼 질문</strong>
                 <p>{legendCard.question}</p>
               </div>
-              <GuidanceSource source={legendCard.source} />
+              <GuidanceSource source={legendCard.source} className="mentor-shelf__source" />
               <Button variant="ghost" size="md" onClick={() => setLegendOffset(value => value + 1)}>다른 Legend 보기 →</Button>
             </div>
           </Card>

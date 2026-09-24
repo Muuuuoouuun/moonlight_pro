@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -59,4 +59,31 @@ test('selected frame names its source without turning a tip into a required acti
   assert.match(frame, /docs\/sales-guru-knowledge-base\.md/);
   assert.doesNotMatch(frame, /work_order|승인 큐|반드시.*다음/);
   assert.equal(guidancePromptFrame('missing-card'), '');
+});
+
+test('verified source links point to primary materials and unverified summaries stay unlinked', () => {
+  const cards = [...GURU_CARDS, ...LEGEND_CARDS];
+  const linkedIds = [
+    'sales-meddic', 'sales-gap', 'marketing-smallest-market', 'marketing-research',
+    'content-storybrand', 'content-hook', 'legend-buffett', 'legend-feynman',
+  ];
+  for (const id of linkedIds) {
+    const card = cards.find(item => item.id === id);
+    assert.match(card?.source.url ?? '', /^https:\/\/[^\s]+$/, id);
+  }
+  assert.equal(cards.find(item => item.id === 'legend-carnegie')?.source.url, undefined);
+});
+
+test('Feynman card follows the cited integrity address rather than an unrelated explanation trick', () => {
+  const card = LEGEND_CARDS.find(item => item.id === 'legend-feynman');
+  assert.match(`${card?.frame} ${card?.text} ${card?.question}`, /불리한 근거|반례/);
+  assert.doesNotMatch(`${card?.frame} ${card?.text} ${card?.question}`, /한 문장|전문 용어/);
+});
+
+test('MEDDIC reference credits its origin and omits an unsupported win-rate multiplier', () => {
+  const playbook = readFileSync(resolve(repoRoot, 'docs/sales-guru-knowledge-base.md'), 'utf8');
+  const section = playbook.split('Qualification — MEDDIC 프레임워크')[1]?.split('## 🔑 Aaron Ross')[0] ?? '';
+  assert.match(section, /Dick Dunkel/);
+  assert.match(section, /Jack Napoli/);
+  assert.doesNotMatch(section, /클로징률\s*3배/);
 });

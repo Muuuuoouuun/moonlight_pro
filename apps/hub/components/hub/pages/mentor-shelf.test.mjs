@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { GURU_CARDS, LEGEND_CARDS, guidancePeriodKey, selectGuidanceCard } from '../../../../../packages/guru-guidance/index.ts';
+import { GuidanceSource } from '../guidance-source.jsx';
 
 const jsxFile = new URL('./mentor-shelf.jsx', import.meta.url);
 const cssFile = new URL('./mentor-shelf.css', import.meta.url);
@@ -34,11 +35,11 @@ function mount({ onGuidanceAsk = () => {}, onNavigate = () => {} } = {}) {
     { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
   );
   const MentorShelf = new Function(
-    'React', 'Button', 'Card', 'SegmentedControl',
+    'React', 'Button', 'Card', 'SegmentedControl', 'GuidanceSource',
     'selectGuidanceCard', 'guidancePeriodKey', 'sessionStorage', 'window', 'document',
     `${compiled}\nreturn MentorShelf;`,
   )(
-    React, Button, Card, SegmentedControl,
+    React, Button, Card, SegmentedControl, GuidanceSource,
     selectGuidanceCard,
     guidancePeriodKey,
     { getItem: () => null, setItem: () => {} },
@@ -67,7 +68,8 @@ function words(node) {
   if (node == null) return '';
   if (typeof node !== 'object') return String(node);
   if (typeof node.type === 'function' && node.type.name === 'GuidanceSource') return words(node.type(node.props));
-  return (node.props?.children || []).map(words).join(' ');
+  const children = node.props?.children;
+  return (Array.isArray(children) ? children : children == null ? [] : [children]).map(words).join(' ');
 }
 
 test('the shelf reads a daily Guru and weekly Legend together with full source identity', () => {
@@ -128,6 +130,7 @@ test('the shelf follows Hub token and responsive contracts', () => {
   assert.match(source, /sessionStorage/);
   assert.match(css, /@media\s*\(max-width:\s*600px\)/);
   assert.match(css, /grid-template-columns:\s*1fr/);
+  assert.match(css, /\.mentor-shelf__domains \.hub-seg__btn\s*\{[^}]*min-height:\s*44px/);
   assert.doesNotMatch(css, /#[\da-f]{3,8}\b|rgba?\(|oklch\(/i);
   assert.doesNotMatch(source, /\bfetch\s*\(|work_order|approval/i);
 });

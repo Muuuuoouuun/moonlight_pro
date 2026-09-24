@@ -173,6 +173,16 @@ export async function POST(req) {
       { status: context.source === "preview" ? 202 : 502 },
     );
   }
+  if (mode === "open-question" && ref && (
+    context?.focus?.found !== true
+    || context.focus.kind !== "brand"
+    || context?.brand?.key !== ref
+  )) {
+    return NextResponse.json(
+      { status: "error", error: "선택한 개인 브랜드를 현재 원장에서 확인할 수 없습니다." },
+      { status: 409 },
+    );
+  }
   const result = await callEngine({ mode, ref, draft, context, legendIds, directives, values, knowledge, guidanceId });
   // Episodic memory: log what the Council recommended so the next call can remember it (best-effort).
   let run = { persisted: false, id: null, reason: "agent-run-write-failed" };
