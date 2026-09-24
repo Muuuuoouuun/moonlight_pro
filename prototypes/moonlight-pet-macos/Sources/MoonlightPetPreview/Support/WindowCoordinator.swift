@@ -11,11 +11,10 @@ final class KeyPanel: NSPanel {
 
 final class PetClickView: NSView {
     private let model: AppModel
-    var onSingleClick: (() -> Void)?
-    var onDoubleClick: (() -> Void)?
+    var onClick: (() -> Void)?
     var onMoved: (() -> Void)?
-    private var pendingSingle: DispatchWorkItem?
     private var lastScreenPoint: NSPoint?
+    private var didDrag = false
 
     init(frame frameRect: NSRect, model: AppModel) {
         self.model = model
@@ -31,8 +30,6 @@ final class PetClickView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { self }
 
     override func rightMouseDown(with event: NSEvent) {
-        pendingSingle?.cancel()
-        pendingSingle = nil
         let menu = NSMenu(title: "펫 캐릭터")
         for character in PetCharacter.allCases {
             let item = NSMenuItem(title: character.title, action: #selector(selectCharacter(_:)), keyEquivalent: "")
@@ -57,16 +54,12 @@ final class PetClickView: NSView {
     override func mouseDown(with event: NSEvent) {
         interactionLog.info("pet mouseDown count=\(event.clickCount)")
         lastScreenPoint = NSEvent.mouseLocation
-        if event.clickCount >= 2 {
-            pendingSingle?.cancel()
-            pendingSingle = nil
-            onDoubleClick?()
-        } else {
-            pendingSingle?.cancel()
-            let action = DispatchWorkItem { [weak self] in self?.onSingleClick?() }
-            pendingSingle = action
-            DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: action)
-        }
+        didDrag = false
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        defer { lastScreenPoint = nil }
+        if !didDrag && event.clickCount == 1 { onClick?() }
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -74,8 +67,7 @@ final class PetClickView: NSView {
         let current = NSEvent.mouseLocation
         let distance = hypot(current.x - previous.x, current.y - previous.y)
         guard distance > 2 else { return }
-        pendingSingle?.cancel()
-        pendingSingle = nil
+        didDrag = true
         var origin = window.frame.origin
         origin.y += current.y - previous.y
         let visible = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
@@ -108,16 +100,16 @@ final class WindowCoordinator: NSObject {
 
     init(model: AppModel) {
         self.model = model
-        petWindow = Self.panel(size: NSSize(width: 72, height: 72))
+        petWindow = Self.panel(size: NSSize(width: 56, height: 56))
         previewWindow = Self.panel(size: NSSize(width: 326, height: 130))
-        barWindow = Self.panel(size: NSSize(width: 440, height: 250))
+        barWindow = Self.panel(size: Self.barSize(for: model.mode))
         super.init()
 
         let petClickView = PetClickView(frame: NSRect(origin: .zero, size: petWindow.frame.size), model: model)
-        petClickView.onSingleClick = { [weak self] in self?.togglePreview() }
-        petClickView.onDoubleClick = { [weak self] in self?.toggleBar() }
+        petClickView.onClick = { [weak self] in self?.toggleBar() }
         petClickView.onMoved = { [weak self] in self?.placeTransientWindows() }
         petWindow.contentView = petClickView
+        petWindow.hasShadow = false
 
         previewWindow.contentView = NSHostingView(rootView: PreviewView(model: model) { [weak self] in
             self?.showBar()
@@ -241,18 +233,13 @@ final class WindowCoordinator: NSObject {
     }
 
     private func resizeBar() {
-        let height: CGFloat
-        switch model.mode {
-        case .tasks: height = 250
-        case .memo: height = 290
-        case .calendar, .office, .council: height = 250
-        case .focus: height = 230
-        }
+        let size = Self.barSize(for: model.mode)
         var frame = barWindow.frame
-        frame.origin.y += frame.height - height
-        frame.size.height = height
+        frame.size = size
+        let pet = petWindow.frame
         let visible = petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? frame
-        frame.origin.y = min(max(frame.origin.y, visible.minY + 8), visible.maxY - height - 8)
+        frame.origin.x = max(visible.minX + 8, pet.minX - size.width - 10)
+        frame.origin.y = min(max(pet.midY - size.height / 2, visible.minY + 8), visible.maxY - size.height - 8)
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             barWindow.setFrame(frame, display: true)
         } else {
@@ -261,6 +248,16 @@ final class WindowCoordinator: NSObject {
                 context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.7, 0.3, 1)
                 barWindow.animator().setFrame(frame, display: true)
             }
+        }
+    }
+
+    private static func barSize(for mode: QuickMode) -> NSSize {
+        switch mode {
+        case .tasks: return NSSize(width: 368, height: 416)
+        case .calendar: return NSSize(width: 368, height: 376)
+        case .memo: return NSSize(width: 440, height: 290)
+        case .office, .council: return NSSize(width: 440, height: 250)
+        case .focus: return NSSize(width: 440, height: 230)
         }
     }
 
