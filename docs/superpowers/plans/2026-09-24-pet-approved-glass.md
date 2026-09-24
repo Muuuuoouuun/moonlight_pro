@@ -19,7 +19,9 @@
 - [x] Apply transparent character assets to all nine choices; display clean silhouettes and subtle press/hover feedback.
 - [x] Refine the opaque `FocusShieldView` into the approved centered glass timer. Preserve stop confirmation and Escape handling.
 - [x] Build and run SelfCheck; inspect actual app interactions and screenshots; fix observed defects. Record what is and is not verified.
-- [ ] Commit owned files, merge into the original branch, rebuild the real app and remove the worktree.
+- [x] Commit owned files, merge into the original branch, rebuild the real app and remove the worktree.
+
+Integration verified: implementation `5092a740`, merge `0a74573c`; original-path app build, binary/process check and SelfCheck passed. The running app preserves the operator's selected Jolteon portrait. Review found and resolved the settings-reset issue; live typing verified the hidden-host focus race fix. The isolated worktree was removed.
 
 ## Acceptance
 
