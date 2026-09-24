@@ -71,10 +71,26 @@
 .daily-review-basics { display: grid; gap: 24px; }
 .daily-review-field { display: grid; gap: 10px; min-width: 0; }
 .daily-review-field-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
-.daily-review-energy-label { color: var(--fg-muted); font-size: 11px; font-weight: 400; }
-.daily-review-energy button { min-height: 46px; transition: background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub); }
-.daily-review-energy button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--line-strong); transform: translateY(-1px); }
-.daily-review-scale { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--fg-faint); }
+.daily-review-energy-label { color: var(--fg-muted); font-size: 12px; font-weight: 400; }
+.daily-review-energy-label:empty { display: none; }
+/* 에너지 칸 — 숫자 + 오름 막대 + 단어. 선택은 표면 한 단계 + 1px 선(§5.2 hover·선택은 accent 없이). */
+.hub-app .daily-review-energy .hub-seg__btn { min-height: 64px; color: var(--fg-muted); transition: background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub); }
+.hub-app .daily-review-energy .hub-seg__btn[aria-pressed="true"] { background: var(--surface-3); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-strong); transform: translateY(-1px); }
+.daily-review-energy-opt { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+.daily-review-energy-opt .mono { font-size: 14px; line-height: 1; }
+.daily-review-energy-word { font-size: 11px; line-height: 1.2; color: var(--fg-dim); white-space: nowrap; }
+.hub-seg__btn[aria-pressed="true"] .daily-review-energy-word { color: var(--fg-muted); }
+.daily-review-energy-glyph rect { fill: currentColor; }
+.daily-review-energy-glyph rect[data-on="false"] { fill: none; stroke: var(--line-strong); stroke-width: 0.8; }
+/* 오늘 한 일 — 읽기 전용 칩. 0뿐인 조각은 그리지 않는다. */
+.daily-review-did { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 22px; font-size: 12px; }
+.daily-review-did-label { margin-right: 2px; font-size: 11px; color: var(--fg-dim); }
+.daily-review-did-chip { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--fg); background: var(--surface-2); }
+.daily-review-did-empty { color: var(--fg-muted); }
+.daily-review-note-field { display: grid; gap: 6px; }
+.daily-review-starters { display: flex; flex-wrap: wrap; gap: 4px; }
+.daily-review-footer-week { display: inline-flex; justify-content: center; align-items: center; gap: 10px; font-size: 11.5px; color: var(--fg-muted); }
+.daily-review-footer-week .daily-review-weekstrip { flex: none; padding: 0; gap: 6px; }
 .daily-review-keyhint { display: inline-flex; align-items: center; gap: 3px; color: var(--fg-dim); }
 .daily-review-composer textarea { min-height: 88px; max-height: 180px; line-height: 1.7; resize: vertical; }
 .daily-review-disclosure { margin-top: 16px; width: 100%; }
