@@ -1,0 +1,9 @@
+.body { display:grid; gap:16px; padding:16px; }
+.context,.hint { margin:0; color:var(--fg-muted); font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
+.notice,.saved { border:1px solid var(--line); border-radius:var(--r-sm); padding:12px; display:grid; gap:8px; font-size:12px; line-height:1.6; }
+.notice { grid-template-columns:auto 1fr; align-items:start; }
+.saved { background:var(--surface-2); }
+.saved strong { font-size:13px; }
+.saved p { margin:0; }
+.saved > button { justify-self:start; }
+.actions { display:flex; justify-content:flex-end; }
