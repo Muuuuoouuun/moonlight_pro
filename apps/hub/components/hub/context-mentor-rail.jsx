@@ -3,6 +3,7 @@
 import React from 'react';
 import { guidancePeriodKey, selectGuidanceCard } from '@com-moon/guru-guidance';
 import { Button, Drawer, SegmentedControl } from './hub-primitives';
+import { Iconed } from './hub-icons';
 import './context-mentor-rail.css';
 
 const DOMAIN_LABELS = { sales: '세일즈', marketing: '마케팅', content: '콘텐츠' };
@@ -56,18 +57,19 @@ export function ContextMentorRail({ domain = 'sales', onGuidanceAsk, onNavigate,
   };
 
   return <div className="context-mentor-rail">
-    <Button
+    <button
+      type="button"
       className="context-mentor-rail__trigger"
-      variant="outline"
-      icon="sparkle"
       onClick={openRail}
       aria-label={`${contextLabel || domainLabel} Guru 관점 열기`}
       aria-haspopup="dialog"
       aria-expanded={open}
     >
+      <span aria-hidden="true"><Iconed name="sparkle" size={19} /></span>
       <span className="context-mentor-rail__mark mono">GURU</span>
-      <span>관점 열기</span>
-    </Button>
+      <span className="context-mentor-rail__label">관점 열기</span>
+      <span className="context-mentor-rail__arrow" aria-hidden="true"><Iconed name="chevronL" size={16} /></span>
+    </button>
 
     {open && <Drawer
       title="Guru · 조용한 멘토"
