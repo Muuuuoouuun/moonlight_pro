@@ -50,8 +50,12 @@ test('meeting watch visibly caps a large response at 20 and retains hasMore', ()
   assert.equal(result.hasMore, true);
 });
 
-test('My Work mounts the independent meeting watch card', () => {
+test('My Work opens meeting watch only through its own URL lens', () => {
   const source = readFileSync(new URL('./my-work.jsx', import.meta.url), 'utf8');
   assert.match(source, /import \{ MeetingWatchCard \} from '\.\/meeting-watch-card';/);
-  assert.match(source, /<MeetingWatchCard \/>/);
+  assert.match(source, /\{ key: 'watch', label: '함께 신경 쓸 일' \}/);
+  assert.match(source, /\{lens === 'watch' \? <MeetingWatchCard \/> : \(\s*<>/);
+  assert.ok(source.indexOf('Quick capture') < source.indexOf("{lens === 'watch' ? <MeetingWatchCard />"));
+  assert.ok(source.indexOf("{lens === 'watch' ? <MeetingWatchCard />") < source.indexOf('label="레인 필터"'));
+  assert.match(source, /if \(e\.key === '\/' && searchRef\.current\)/);
 });

@@ -16,8 +16,9 @@ import { requestPersonaChat } from "../persona-client";
 import { buildMyWorkChecklistToggle, readMyWorkChecklistReceipt } from './my-work-checklist';
 import { MeetingWatchCard } from './meeting-watch-card';
 
-// 내 작업 — one personal operating surface, three lenses over the cross-lane attention
-// read model (tasks + open deals + calendar week). Design contract from the operator:
+// 내 작업 — one personal operating surface, three attention lenses plus a separate
+// meeting-watch lens. The attention model combines tasks, open deals and calendar week.
+// Design contract from the operator:
 // 핵심 정보만 (one line per item), 최신 기준 default sort, and fast lens/lane/sort toggles.
 // Native surfaces (Deals kanban, Projects board) stay the deep-work views — every item
 // here deep-links back to its home drawer.
@@ -33,6 +34,7 @@ const LENSES = [
   { key: 'list', label: '리스트' },
   { key: 'board', label: '보드' },
   { key: 'week', label: '주간' },
+  { key: 'watch', label: '함께 신경 쓸 일' },
 ];
 
 const LANE_OPTIONS = [
@@ -1585,7 +1587,7 @@ export function MyWork({ onNavigate }) {
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
       if (document.querySelector('[data-drawer-open="true"], [role="dialog"], [data-shortcut-overlay="true"]')) return; // 다이얼로그 위 발화 금지(§8.1)
       if (e.key === 'n' || e.key === 'N') { e.preventDefault(); quickRef.current?.focus(); return; }
-      if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); }
+      if (e.key === '/' && searchRef.current) { e.preventDefault(); searchRef.current.focus(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -1681,11 +1683,11 @@ export function MyWork({ onNavigate }) {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>내 작업</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {lens !== 'watch' && <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span>할 일<SyncBadge state={sources.tasks || 'loading'} /></span>
             <span>딜<SyncBadge state={sources.deals || 'loading'} /></span>
             <span>일정<SyncBadge state={sources.calendar || 'loading'} /></span>
-          </div>
+          </div>}
         </div>
         <div style={{ flex: 1 }} />
         <SegmentedControl className="hub-page-actions" label="보기 렌즈" options={LENSES} value={lens} onChange={setLens} />
@@ -1693,7 +1695,7 @@ export function MyWork({ onNavigate }) {
 
       {/* 시그널 스트립 — "지금 뭐가 급한가"를 숫자로 먼저 답한다 (DESIGN.md 경험 원칙 1).
           타일 클릭 = 리스트 렌즈 + 해당 기한 필터, 다시 클릭하면 전체로 복귀. */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--gap)' }}>
+      {lens !== 'watch' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--gap)' }}>
         {SIGNAL_TILES.map((t) => {
           const count = bucketCounts[t.key] || 0;
           // 오늘 3개 타일만 표시 숫자가 서버 요약(완료한 선택 포함)이고 버킷 카운트는 미완료만
@@ -1725,7 +1727,7 @@ export function MyWork({ onNavigate }) {
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* Quick capture — Enter saves a durable task; N focuses. 상세 토글로 기한·우선순위 추가. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1783,7 +1785,26 @@ export function MyWork({ onNavigate }) {
         )}
       </div>
 
-      <MeetingWatchCard />
+      {notice && (
+        <span
+          role={notice.tone === 'err' ? 'alert' : 'status'}
+          aria-live="polite"
+          style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+        >
+          {notice.label}
+          {notice.action && (
+            <button
+              onClick={notice.action.onClick}
+              style={{ fontSize: 11.5, color: 'var(--moon-200)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+            >
+              {notice.action.label}
+            </button>
+          )}
+        </span>
+      )}
+
+      {lens === 'watch' ? <MeetingWatchCard /> : (
+      <>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <Input ref={searchRef} icon="search" placeholder="제목 검색" kbd="/" clearable value={search} onChange={setSearch} style={{ width: 190 }} />
@@ -1815,25 +1836,6 @@ export function MyWork({ onNavigate }) {
           >
             숨김 <span className="num">{mutedCount}</span>
           </Button>
-        )}
-        {notice && (
-          // live region 필수(§11): 되돌리기 창이 열렸다는 사실을 스크린리더도 알아야 한다.
-          // 완료는 중립(§5.3 done ≠ green) — 에러만 danger.
-          <span
-            role={notice.tone === 'err' ? 'alert' : 'status'}
-            aria-live="polite"
-            style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
-          >
-            {notice.label}
-            {notice.action && (
-              <button
-                onClick={notice.action.onClick}
-                style={{ fontSize: 11.5, color: 'var(--moon-200)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
-              >
-                {notice.action.label}
-              </button>
-            )}
-          </span>
         )}
       </div>
 
@@ -2219,6 +2221,8 @@ export function MyWork({ onNavigate }) {
         />
       )}
       </div>
+      </>
+      )}
 
       <EditDrawer
         title={taskDraft ? (taskDraft.title || '할 일 편집') : ''}
