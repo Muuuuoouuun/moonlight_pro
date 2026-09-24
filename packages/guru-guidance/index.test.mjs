@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { test } from 'node:test';
+import * as guidance from './index.ts';
 import {
   GURU_CARDS,
   LEGEND_CARDS,
@@ -12,6 +13,8 @@ import {
   selectGuidanceCard,
   guidancePromptFrame,
 } from './index.ts';
+
+const { listGuidancePeople, listGuidanceCardsForPerson } = guidance;
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -27,6 +30,69 @@ test('Guru catalogue covers each practice domain with attributable source sectio
     assert.doesNotMatch(card.text, /\d+\s*%|“.*”/, `unverified claim or quotation in ${card.id}`);
   }
   assert.equal(new Set([...GURU_CARDS, ...LEGEND_CARDS].map(card => card.id)).size, GURU_CARDS.length + LEGEND_CARDS.length);
+});
+
+test('sales person shelf includes every named playbook mentor plus MEDDIC creator', () => {
+  assert.equal(typeof listGuidancePeople, 'function');
+  const people = listGuidancePeople({ domain: 'sales' });
+  assert.equal(people.length, 13);
+  assert.deepEqual(new Set(people.map(person => person.name)), new Set([
+    'Zig Ziglar', 'Dale Carnegie', 'Napoleon Hill', 'Joe Girard', 'Brian Tracy',
+    'Grant Cardone', 'Jordan Belfort', 'Neil Rackham', 'Chris Voss',
+    'Aaron Ross', 'Jason Lemkin', 'Keenan', 'Dick Dunkel',
+  ]));
+  assert.ok(people.every(person => person.id && person.domains.includes('sales')));
+  assert.deepEqual(people.map(person => person.name),
+    [...people.map(person => person.name)].sort((a, b) => a.localeCompare(b, 'en')));
+});
+
+test('person metadata links every Guru card to a stable person and method', () => {
+  const names = new Map();
+  for (const card of GURU_CARDS) {
+    assert.ok(card.personId && card.personName && card.methodLabel, card.id);
+    assert.match(card.personId, /^[a-z]+(?:-[a-z]+)*$/, card.id);
+    const prior = names.get(card.personId);
+    if (prior) assert.equal(card.personName, prior, card.id);
+    names.set(card.personId, card.personName);
+  }
+  assert.ok(listGuidancePeople().some(person => person.id === 'donald-miller' &&
+    person.domains.includes('marketing') && person.domains.includes('content')));
+});
+
+test('manual person browsing keeps reviewed cards excluded from scheduled rotation', () => {
+  assert.equal(typeof listGuidanceCardsForPerson, 'function');
+  for (const personId of ['napoleon-hill', 'joe-girard', 'grant-cardone', 'jordan-belfort', 'jason-lemkin']) {
+    const cards = listGuidanceCardsForPerson(personId);
+    assert.ok(cards.length >= 1, personId);
+    assert.ok(cards.every(card => card.personId === personId && card.rotationEligible === false), personId);
+  }
+  assert.deepEqual(listGuidanceCardsForPerson('unknown-person'), []);
+  assert.ok(listGuidanceCardsForPerson('donald-miller').some(card => card.domain === 'marketing'));
+  assert.ok(listGuidanceCardsForPerson('donald-miller').some(card => card.domain === 'content'));
+  assert.ok(listGuidanceCards({ cadence: 'daily', domain: 'sales' }).some(card => card.personId === 'napoleon-hill'));
+  for (let day = 0; day < 30; day++) {
+    for (const hour of [0, 5, 10]) {
+      const now = new Date(Date.UTC(2026, 8, 24 + day, hour));
+      for (const contextKey of [undefined, 'sales:new', 'sales:active', 'sales:dormant']) {
+        const card = selectGuidanceCard({ cadence: 'daily', domain: 'sales', contextKey, now });
+        assert.notEqual(card.rotationEligible, false, card.id);
+      }
+    }
+  }
+});
+
+test('new sales mentor cards use primary sources and distinguish Moonlight applications', () => {
+  for (const personId of [
+    'zig-ziglar', 'dale-carnegie', 'napoleon-hill', 'joe-girard',
+    'brian-tracy', 'grant-cardone', 'jordan-belfort', 'jason-lemkin',
+  ]) {
+    const card = listGuidanceCardsForPerson(personId).find(item => item.domain === 'sales');
+    assert.ok(card, personId);
+    assert.match(card.source.url ?? '', /^https:\/\//, personId);
+    assert.equal(card.source.application, 'adapted', personId);
+    assert.match(guidancePromptFrame(card.id), /Moonlight 응용/, personId);
+    assert.doesNotMatch(`${card.frame} ${card.text} ${card.question}`, /\d+\s*%|반드시|무조건|보장/, personId);
+  }
 });
 
 test('reviewed cards distinguish source ideas from Moonlight applications', () => {

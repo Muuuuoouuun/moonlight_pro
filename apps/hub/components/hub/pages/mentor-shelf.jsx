@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { guidanceDailyWindow, selectGuidanceCard } from '@com-moon/guru-guidance';
+import { guidanceDailyWindow, listGuidanceCards, listGuidanceCardsForPerson, listGuidancePeople, selectGuidanceCard } from '@com-moon/guru-guidance';
 import { Button, Card, SegmentedControl } from '../hub-primitives';
 import { GuidanceSource } from '../guidance-source';
 import './mentor-shelf.css';
@@ -12,8 +12,17 @@ const DOMAINS = [
   { key: 'marketing', label: '마케팅' },
   { key: 'content', label: '콘텐츠' },
 ];
+const BROWSE_MODES = [
+  { key: 'domain', label: '분야별' },
+  { key: 'person', label: '인물별' },
+];
 export function MentorShelf({ onGuidanceAsk, onNavigate }) {
   const [domain, setDomain] = React.useState('sales');
+  const [browseDomain, setBrowseDomain] = React.useState('sales');
+  const [browseMode, setBrowseMode] = React.useState('domain');
+  const [selectedDomainCardId, setSelectedDomainCardId] = React.useState(null);
+  const [selectedPersonId, setSelectedPersonId] = React.useState(null);
+  const [personOffset, setPersonOffset] = React.useState(0);
   const [guruOffset, setGuruOffset] = React.useState(0);
   const [legendOffset, setLegendOffset] = React.useState(0);
   const [hidden, setHidden] = React.useState(false);
@@ -55,6 +64,22 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
   const dailyWindow = guidanceDailyWindow(now);
   const guruCard = selectGuidanceCard({ cadence: 'daily', domain, now, offset: guruOffset });
   const legendCard = selectGuidanceCard({ cadence: 'weekly', now, offset: legendOffset });
+  const domainCards = [...listGuidanceCards({ cadence: 'daily', domain: browseDomain })]
+    .sort((a, b) => a.personName.localeCompare(b.personName, 'en') || a.methodLabel.localeCompare(b.methodLabel, 'ko'));
+  const selectedDomainCard = domainCards.find(card => card.id === selectedDomainCardId) || domainCards[0];
+  const people = listGuidancePeople({ domain: browseDomain });
+  const selectedPerson = people.find(person => person.id === selectedPersonId)
+    || (browseMode === 'person' ? people[0] : null);
+  const personCards = selectedPerson
+    ? listGuidanceCardsForPerson(selectedPerson.id).filter(card => card.domain === browseDomain)
+    : [];
+  const personCard = personCards.length ? personCards[personOffset % personCards.length] : null;
+  const browseCard = browseMode === 'person' ? personCard : selectedDomainCard;
+  const browseCardPosition = browseMode === 'person'
+    ? personOffset % personCards.length + 1
+    : domainCards.findIndex(card => card.id === browseCard?.id) + 1;
+  const browseCardCount = browseMode === 'person' ? personCards.length : domainCards.length;
+  const browseDomainLabel = DOMAINS.find(item => item.key === browseDomain)?.label || '세일즈';
   const nextTime = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(dailyWindow.nextAt));
   const showCurrentWindow = () => {
     setNow(new Date());
@@ -71,6 +96,22 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
     setGuruOffset(0);
     if (hidden) showCards(true);
   };
+  const chooseBrowseDomain = next => {
+    setBrowseDomain(next);
+    setSelectedDomainCardId(null);
+    setSelectedPersonId(null);
+    setPersonOffset(0);
+  };
+  const choosePerson = id => {
+    setSelectedPersonId(id);
+    setPersonOffset(0);
+  };
+
+  React.useEffect(() => {
+    const activelyChosen = browseMode === 'person' ? selectedPersonId : selectedDomainCardId;
+    if (!activelyChosen || !window.matchMedia('(max-width: 900px)').matches) return;
+    document.getElementById('mentor-shelf-person-detail')?.focus();
+  }, [selectedPersonId, selectedDomainCardId, browseMode, browseDomain]);
 
   return <div className="mentor-shelf">
     <header className="mentor-shelf__intro">
@@ -140,28 +181,89 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
             </div>
           </Card>
         </div>
-        <p className="mentor-shelf__foot">Guru 관점은 서울 기준 하루 세 번 준비됩니다. 읽는 동안 자동으로 넘어가지 않으며, 열람과 넘김은 조언·알림·업무를 생성하지 않습니다.</p>
+        <p className="mentor-shelf__foot">Guru 관점은 분야별로 지금 한 장씩 서울 기준 하루 세 번 준비됩니다. 읽는 동안 자동으로 넘어가지 않으며, 열람과 넘김은 조언·알림·업무를 생성하지 않습니다.</p>
       </>}
     </section>
 
     <section className="mentor-shelf__browse" aria-labelledby="mentor-shelf-browse">
       <div className="mentor-shelf__section-head">
-        <h3 id="mentor-shelf-browse">다른 분야 둘러보기</h3>
-        <span>고른 분야의 지금 카드를 펼칩니다</span>
+        <h3 id="mentor-shelf-browse">멘토 찾아보기</h3>
+        <span>시간대 카드와 별개로 검토된 관점을 찾아 읽습니다</span>
       </div>
-      <div className="mentor-shelf__browse-grid">
-        {DOMAINS.map((item, index) => <button
-          type="button"
-          key={item.key}
-          className="mentor-shelf__browse-card hub-card-link"
-          aria-pressed={domain === item.key && !hidden}
-          onClick={() => chooseDomain(item.key)}
-        >
-          <span className="mono">0{index + 1} / {item.key.toUpperCase()}</span>
-          <strong>{selectGuidanceCard({ cadence: 'daily', domain: item.key, now }).person}</strong>
-          <span>{item.label} 분야의 지금 관점 보기 →</span>
-        </button>)}
-      </div>
+      <SegmentedControl label="멘토 탐색 방식" options={BROWSE_MODES} value={browseMode} onChange={setBrowseMode} className="mentor-shelf__browse-mode" />
+      <div className="mentor-shelf__people">
+          <div className="mentor-shelf__people-head">
+            <div>
+              <strong>{browseDomainLabel} {browseMode === 'person' ? '멘토' : '관점'}</strong>
+              <span>{browseMode === 'person' ? `검수 카드가 있는 인물 ${people.length}명` : `검수 카드 ${domainCards.length}장`} · 직접 골라 읽기</span>
+            </div>
+            <SegmentedControl label="탐색 분야" options={DOMAINS} value={browseDomain} onChange={chooseBrowseDomain} className="mentor-shelf__people-domains" />
+          </div>
+          <div className="mentor-shelf__people-layout">
+            {browseMode === 'domain' ? <ul className="mentor-shelf__person-list" aria-label={`${browseDomainLabel} 분야 카드 목록`}>
+              {domainCards.map(card => <li key={card.id}>
+                <button
+                  type="button"
+                  className="mentor-shelf__person-choice mentor-shelf__person-choice--card hub-card-link"
+                  aria-pressed={browseCard?.id === card.id}
+                  aria-expanded={browseCard?.id === card.id}
+                  aria-controls={browseCard?.id === card.id ? 'mentor-shelf-person-detail' : undefined}
+                  onClick={() => setSelectedDomainCardId(card.id)}
+                >
+                  <strong>{card.personName}</strong>
+                  <span>{card.methodLabel}</span>
+                </button>
+              </li>)}
+            </ul> : <ul className="mentor-shelf__person-list" aria-label={`${browseDomainLabel} 멘토 목록`}>
+              {people.map(person => {
+                const count = listGuidanceCardsForPerson(person.id).filter(card => card.domain === browseDomain).length;
+                return <li key={person.id}>
+                  <button
+                    type="button"
+                    className="mentor-shelf__person-choice hub-card-link"
+                    aria-pressed={selectedPerson?.id === person.id}
+                    aria-expanded={selectedPerson?.id === person.id}
+                    aria-controls={selectedPerson?.id === person.id ? 'mentor-shelf-person-detail' : undefined}
+                    onClick={() => choosePerson(person.id)}
+                  >
+                    <strong>{person.name}</strong>
+                    <span>{count}장</span>
+                  </button>
+                </li>;
+              })}
+            </ul>}
+            {browseCard && <Card
+              id="mentor-shelf-person-detail"
+              role="region"
+              tabIndex={-1}
+              aria-label={`${browseCard.personName} · ${browseCard.methodLabel} 카드`}
+              className="mentor-shelf__person-detail"
+            >
+              <div className="mentor-shelf__card-head">
+                <strong>{browseDomainLabel.toUpperCase()} / {browseMode === 'person' ? '인물별' : '분야별'} 관점</strong>
+                <span className="mono">{browseCardPosition} / {browseCardCount}</span>
+              </div>
+              <h4>{browseCard.personName}</h4>
+              <p className="mentor-shelf__person-method">{browseCard.methodLabel}</p>
+              {browseCard.rotationEligible === false && <p className="mentor-shelf__manual-note">직접 선택해 읽는 관점 · 시간대 카드에는 나오지 않습니다.</p>}
+              <p className="mentor-shelf__frame">{browseCard.frame}</p>
+              <p className="mentor-shelf__copy">{browseCard.text}</p>
+              <div className="mentor-shelf__use">
+                <strong>써볼 때</strong>
+                <p>{browseCard.useWhen}</p>
+              </div>
+              <div className="mentor-shelf__question">
+                <strong>물어볼 질문</strong>
+                <p>{browseCard.question}</p>
+              </div>
+              <GuidanceSource source={browseCard.source} className="mentor-shelf__source" />
+              <div className="mentor-shelf__actions">
+                {onGuidanceAsk && <Button variant="primary" size="md" onClick={() => onGuidanceAsk(browseCard)}>선택한 관점으로 질문 쓰기</Button>}
+                {browseMode === 'person' && personCards.length > 1 && <Button variant="outline" size="md" onClick={() => setPersonOffset(value => value + 1)}>이 인물의 다른 카드</Button>}
+              </div>
+            </Card>}
+          </div>
+        </div>
     </section>
   </div>;
 }

@@ -19,3 +19,20 @@
 - Kallaway의 영상 재훅을 카드뉴스의 첫 장·본문 관계에 적용하는 것은 **Moonlight의 응용**이다. 원전이 카드뉴스 효과를 증명했다고 표기하지 않는다.
 
 새 카드의 최소 검토 단위는 **한 주장 → 원전의 해당 절 → 이 제품의 적용 상황 → 적용하지 않을 상황**이다. 실제 고객의 반응·성과는 원장에 확인된 사실만 사용한다.
+
+## 세일즈 인물별 서가 확장
+
+세일즈 플레이북의 독립 항목은 12명이다. 최초 세일즈 카드 5장은 그중 Rackham·Voss·Ross·Keenan 네 사람과 별도 방법론 창안자 Dick Dunkel을 담았다. Carnegie는 제품의 주간 Legend에도 있었지만 세일즈 Guru 자동 팁에는 없었다. 인물별 서가의 12명과 Dunkel을 카드 수나 시간대에 한 번 보이는 팁 수로 표시하지 않는다.
+
+| 인물 | 확인한 1차 자료 | 카드에 옮기는 범위 |
+|---|---|---|
+| Zig Ziglar | [Ziglar의 고객 도움 설명](https://www.ziglar.com/show/helping/) | 제품 설명 전 고객 목표를 묻기 |
+| Dale Carnegie | [공식 인간관계 원칙](https://www.dalecarnegie.com/en/culture) | 경청과 상대 관심사 확인 |
+| Napoleon Hill | [Napoleon Hill Foundation의 목적 설명](https://www.naphill.org/shop/books/paperback/napoleon-hills-path-to-purpose-7-steps-to-living-a-life-that-matters/) | 운영자 자신의 접촉 목적 설정. 영업 효과 주장 금지 |
+| Joe Girard | [계약 후 연락에 관한 본인 글](https://www.joegirard.com/posts/keep-in-touch-with-your-customers/) | 계약 후 관계 확인. 소개 수치·보장 제외 |
+| Brian Tracy | [영업 과정에 관한 본인 글](https://www.briantracy.com/blog/sales-success/7-key-results-areas-of-sales-success-brian-tracy-certified-sales-trainer/) | 제안 전에 니즈를 질문으로 확인 |
+| Grant Cardone | [10X 원칙에 관한 본인 설명](https://grantcardone.com/what-is-the-10x-rule/) | 운영자 자기 활동 점검. 고객 대상 과잉 연락 권유 금지 |
+| Jordan Belfort | [잠재고객 선별에 관한 본인 글](https://jb.online/blogs/sales-school/how-to-master-sales-prospecting-sales-school) | 비적합 고객에게 억지 제안하지 않기. 압박 클로징 제외 |
+| Jason Lemkin | [SaaStr 고객 성공 글](https://www.saastr.com/customer-success-managers-hire-early-and-no-squishy-goals-its-all-about-the-numbers/) | SaaS·반복 서비스 맥락의 사용 확인. 다른 사업에 보편화 금지 |
+
+Hill·Cardone·Belfort는 자기점검 또는 제한된 기법이라 자동 팁에서 제외한다. Girard의 계약 후 관계는 `active`·`dormant` 고객 구분만으로 계약 완료를 확인할 수 없어 수동 열람에 둔다. Lemkin도 현 고객 단계 신호만으로 SaaS 맥락을 검증할 수 없어 수동 열람에 둔다. 이 검토는 각 인물의 전체 저술이나 플레이북 본문 전체를 검증했다는 뜻이 아니다.
