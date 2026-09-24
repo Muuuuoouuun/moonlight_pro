@@ -74,6 +74,25 @@ export function resolveMetaOAuthAppFromState(state) {
   return app?.configured && app.appId === state.appId && app.appKey === state.appKey ? app : null;
 }
 
+export function matchesMetaOAuthConnection(row, app, accountId = "") {
+  if (!row?.config || !app?.configured ||
+    (accountId && row.account_key !== accountId) ||
+    normalizeHandle(row.config.username) !== app.brandHandle ||
+    normalizeHandle(row.config.brandHandle) !== app.brandHandle) return false;
+
+  const storedBrandKey = row.config.brandKey || null;
+  if (app.brandKey === "bridgemaker") {
+    if (storedBrandKey && storedBrandKey !== "bridgemaker") return false;
+  } else if (storedBrandKey !== app.brandKey) {
+    return false;
+  }
+
+  if (row.config.oauthAppId || row.config.oauthAppKey) {
+    return row.config.oauthAppId === app.appId && row.config.oauthAppKey === app.appKey;
+  }
+  return app.brandKey === "bridgemaker" && app.appKey === "moonlight";
+}
+
 export function isValidMetaOAuthAppIdentity(state) {
   return typeof state?.appId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(state.appId) &&
     typeof state?.appKey === "string" && ["moonlight", "politic_officer", "classmoon"].includes(state.appKey);

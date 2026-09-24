@@ -2,7 +2,8 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd, EmptyState } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd, EmptyState, SelectField } from "../hub-primitives";
+import { SOCIAL_BRAND_OPTIONS, socialBrandTarget, socialBrandUrl } from "./social-brand-target";
 
 const EVOLUTION_EVENTS = [];
 
@@ -22,18 +23,20 @@ const QUICK_COMMANDS = [
 ];
 
 const EMPTY_META_THREADS_STATUS = {
-  status: 'loading',
+  status: 'unselected',
   provider: 'meta_threads',
-  brandHandle: 'moon.classin',
+  brandHandle: '',
+  brandKey: null,
   configured: false,
   connection: null,
   setup: null,
 };
 
 const EMPTY_INSTAGRAM_STATUS = {
-  status: 'loading',
+  status: 'unselected',
   provider: 'instagram_api',
-  brandHandle: 'moon.classin',
+  brandHandle: '',
+  brandKey: null,
   configured: false,
   connection: null,
   setup: null,
@@ -58,9 +61,13 @@ function formatShortDate(value) {
 }
 
 function buildMetaThreadsIntegration(status) {
-  const brandHandle = status?.brandHandle || 'moon.classin';
+  const brandHandle = status?.brandHandle || '';
   const profileHandle = status?.connection?.profileHandle || `@${brandHandle}`;
   const expiresAt = formatShortDate(status?.connection?.expiresAt);
+
+  if (status?.status === 'unselected') {
+    return { n: 'Meta Threads', s: '브랜드 선택', t: 'neutral', i: 'globe', provider: 'meta_threads', detail: '연결할 브랜드를 먼저 선택하세요.', action: 'Connect', disabled: true };
+  }
 
   if (status?.status === 'connected') {
     return {
@@ -99,6 +106,10 @@ function buildMetaThreadsIntegration(status) {
     };
   }
 
+  if (status?.status === 'storage-error') {
+    return { n: 'Meta Threads', s: '읽기 실패', t: 'danger', i: 'globe', provider: 'meta_threads', detail: `@${brandHandle} · 연결 상태를 읽지 못했습니다.`, action: 'Connect', disabled: true };
+  }
+
   return {
     n: 'Meta Threads',
     s: 'Needs config',
@@ -112,10 +123,14 @@ function buildMetaThreadsIntegration(status) {
 }
 
 function buildInstagramIntegration(status) {
-  const brandHandle = status?.brandHandle || 'moon.classin';
+  const brandHandle = status?.brandHandle || '';
   const profileHandle = status?.connection?.profileHandle || `@${brandHandle}`;
   const expiresAt = formatShortDate(status?.connection?.expiresAt);
   const accountType = status?.connection?.accountType;
+
+  if (status?.status === 'unselected') {
+    return { n: 'Instagram API', s: '브랜드 선택', t: 'neutral', i: 'globe', provider: 'instagram_api', detail: '연결할 브랜드를 먼저 선택하세요.', action: 'Connect', disabled: true };
+  }
 
   if (status?.status === 'connected') {
     return {
@@ -152,6 +167,10 @@ function buildInstagramIntegration(status) {
       action: 'Connect',
       disabled: true,
     };
+  }
+
+  if (status?.status === 'storage-error') {
+    return { n: 'Instagram API', s: '읽기 실패', t: 'danger', i: 'globe', provider: 'instagram_api', detail: `@${brandHandle} · 연결 상태를 읽지 못했습니다.`, action: 'Connect', disabled: true };
   }
 
   return {
@@ -485,6 +504,12 @@ export function Settings({ onNavigate }) {
   const incomingWebhooks = [];
   const [metaThreadsStatus, setMetaThreadsStatus] = React.useState(EMPTY_META_THREADS_STATUS);
   const [instagramStatus, setInstagramStatus] = React.useState(EMPTY_INSTAGRAM_STATUS);
+  const [selectedSocialBrandKey, setSelectedSocialBrandKey] = React.useState('');
+  const selectedSocialBrand = socialBrandTarget(selectedSocialBrandKey);
+  React.useEffect(() => {
+    const brandKey = new URLSearchParams(window.location.search).get('socialBrand');
+    if (socialBrandTarget(brandKey)) setSelectedSocialBrandKey(brandKey);
+  }, []);
   const [deadlineAlerts, setDeadlineAlerts] = React.useState({ status: 'loading', reset: null });
   const [deadlineBusy, setDeadlineBusy] = React.useState(false);
   const [deadlineMessage, setDeadlineMessage] = React.useState('');
@@ -542,6 +567,15 @@ export function Settings({ onNavigate }) {
   };
   React.useEffect(() => {
     let active = true;
+    if (!selectedSocialBrand) {
+      setMetaThreadsStatus(EMPTY_META_THREADS_STATUS);
+      setInstagramStatus(EMPTY_INSTAGRAM_STATUS);
+      return () => { active = false; };
+    }
+
+    const pending = { status: 'loading', brandHandle: selectedSocialBrand.brandHandle, brandKey: selectedSocialBrand.brandKey };
+    setMetaThreadsStatus({ ...EMPTY_META_THREADS_STATUS, ...pending });
+    setInstagramStatus({ ...EMPTY_INSTAGRAM_STATUS, ...pending });
 
     async function loadSocialStatus(path, emptyStatus, setter) {
       try {
@@ -549,34 +583,38 @@ export function Settings({ onNavigate }) {
         const data = await response.json().catch(() => null);
         if (!active) return;
 
-        if (response.ok && data) {
+        if (response.ok && data && data.brandKey === selectedSocialBrand.brandKey && data.brandHandle === selectedSocialBrand.brandHandle) {
           setter({ ...emptyStatus, ...data });
         } else {
-          setter(s => ({ ...s, status: 'missing-config' }));
+          setter(s => ({ ...s, status: 'storage-error' }));
         }
       } catch {
-        if (active) setter(s => ({ ...s, status: 'missing-config' }));
+        if (active) setter(s => ({ ...s, status: 'storage-error' }));
       }
     }
 
-    loadSocialStatus('/api/social/meta/threads/status', EMPTY_META_THREADS_STATUS, setMetaThreadsStatus);
-    loadSocialStatus('/api/social/instagram/status', EMPTY_INSTAGRAM_STATUS, setInstagramStatus);
+    loadSocialStatus(socialBrandUrl('status', 'meta_threads', selectedSocialBrand.brandKey), EMPTY_META_THREADS_STATUS, setMetaThreadsStatus);
+    loadSocialStatus(socialBrandUrl('status', 'instagram_api', selectedSocialBrand.brandKey), EMPTY_INSTAGRAM_STATUS, setInstagramStatus);
     return () => { active = false; };
-  }, []);
+  }, [selectedSocialBrandKey]);
   const integrationRows = React.useMemo(() => {
     const metaRow = buildMetaThreadsIntegration(metaThreadsStatus);
     const instagramRow = buildInstagramIntegration(instagramStatus);
     return [instagramRow, metaRow];
   }, [instagramStatus, metaThreadsStatus]);
   const connectMetaThreads = () => {
-    if (metaThreadsStatus.status !== 'ready' && metaThreadsStatus.status !== 'connected') return;
-    const brand = encodeURIComponent(metaThreadsStatus.brandHandle || 'moon.classin');
-    window.location.href = `/api/social/meta/threads/connect?brand=${brand}&returnPath=/dashboard/settings`;
+    if (!selectedSocialBrand || metaThreadsStatus.brandKey !== selectedSocialBrand.brandKey ||
+      metaThreadsStatus.brandHandle !== selectedSocialBrand.brandHandle || !metaThreadsStatus.configured ||
+      !['ready', 'connected'].includes(metaThreadsStatus.status)) return;
+    const url = socialBrandUrl('connect', 'meta_threads', selectedSocialBrand.brandKey);
+    if (url) window.location.href = url;
   };
   const connectInstagram = () => {
-    if (instagramStatus.status !== 'ready' && instagramStatus.status !== 'connected') return;
-    const brand = encodeURIComponent(instagramStatus.brandHandle || 'moon.classin');
-    window.location.href = `/api/social/instagram/connect?brand=${brand}&returnPath=/dashboard/settings`;
+    if (!selectedSocialBrand || instagramStatus.brandKey !== selectedSocialBrand.brandKey ||
+      instagramStatus.brandHandle !== selectedSocialBrand.brandHandle || !instagramStatus.configured ||
+      !['ready', 'connected'].includes(instagramStatus.status)) return;
+    const url = socialBrandUrl('connect', 'instagram_api', selectedSocialBrand.brandKey);
+    if (url) window.location.href = url;
   };
   const socialSetupRows = React.useMemo(() => {
     const fallbackSetup = instagramStatus.setup || metaThreadsStatus.setup;
@@ -665,6 +703,9 @@ export function Settings({ onNavigate }) {
 
       <div>
         <SectionTitle>Integrations</SectionTitle>
+        <div style={{ maxWidth: 360, marginBottom: 12 }}>
+          <SelectField label="소셜 계정 브랜드" value={selectedSocialBrandKey} options={SOCIAL_BRAND_OPTIONS} onChange={(event) => setSelectedSocialBrandKey(event.target.value)} />
+        </div>
         <Card pad={false}>
           {integrationRows.map((it, i, arr) => (
             <div key={it.n} style={{ padding: '14px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -679,6 +720,7 @@ export function Settings({ onNavigate }) {
               <Button
                 variant="ghost"
                 size="sm"
+                disabled={it.disabled}
                 style={it.disabled ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
                 onClick={() => {
                   if (it.disabled) return;

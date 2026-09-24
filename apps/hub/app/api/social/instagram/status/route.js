@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 import {
   buildInstagramApiSetupUrls,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/instagram-api";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { summarizeSocialAccountStatus } from "@/lib/social-account-status";
-import { resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
+import { matchesMetaOAuthConnection, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,9 +31,7 @@ export async function GET(req) {
     rows: connections,
     configured: Boolean(config?.configured && hasInstagramApiOAuthStateSecret()),
     available,
-    selector: accountId
-      ? (row) => row.account_key === accountId
-      : (row) => row.config?.brandHandle === requestedHandle,
+    selector: (row) => matchesMetaOAuthConnection(row, config, accountId),
     summarize: summarizeInstagramApiConnection,
   });
 
@@ -42,6 +40,7 @@ export async function GET(req) {
     provider: "instagram_api",
     workspaceId: workspaceId || null,
     brandHandle: requestedHandle,
+    brandKey: config?.brandKey || null,
     configured: Boolean(config?.configured),
     appKey: config?.appKey || null,
     hasAppId: Boolean(config?.hasAppId),

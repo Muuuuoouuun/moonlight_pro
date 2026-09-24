@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 import {
   disableMetaThreadsConnectionsForUser,
@@ -69,13 +69,28 @@ export async function POST(req) {
   }
 
   const userId = extractUserId(parsed.payload);
-  const result = await disableMetaThreadsConnectionsForUser({
-    workspaceId,
-    userId,
-    appId: parsed.appId,
-    appKey: parsed.appKey,
-    reason: "deauthorize",
-  });
+  if (typeof userId !== "string" || !userId.trim()) {
+    return NextResponse.json({ status: "invalid", error: "missing-user-id" }, { status: 400 });
+  }
+  let result;
+  try {
+    result = await disableMetaThreadsConnectionsForUser({
+      workspaceId,
+      userId,
+      appId: parsed.appId,
+      appKey: parsed.appKey,
+      reason: "deauthorize",
+    });
+  } catch (error) {
+    await recordMetaThreadsSync({
+      workspaceId,
+      status: "failure",
+      payload: { action: "deauthorize_callback", userId },
+      errorMessage: error instanceof Error && error.message === "threads-connection-read-failed"
+        ? "threads-connection-read-failed" : "threads-connection-update-failed",
+    });
+    return NextResponse.json({ status: "error", error: "connection-update-failed" }, { status: 503 });
+  }
 
   await recordMetaThreadsSync({
     workspaceId,

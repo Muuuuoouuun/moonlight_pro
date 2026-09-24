@@ -37,13 +37,14 @@ test("a Threads lifecycle callback only disables a connection from the signing a
   globalThis.fetch = async (url, options) => {
     if (!options.method || options.method === "GET") return {
       ok: true, status: 200,
-      json: async () => [
+      text: async () => JSON.stringify([
         { id: "company-row", config: { userId: "shared-id", oauthAppId: "company-id", oauthAppKey: "classmoon" } },
         { id: "politic-row", config: { userId: "shared-id", oauthAppId: "politic-id", oauthAppKey: "politic_officer" } },
-      ],
+      ]), headers: { get: () => null },
     };
-    changed.push(new URL(url).searchParams.get("id"));
-    return { ok: true, status: 204, text: async () => "", headers: { get: () => null } };
+    const id = new URL(url).searchParams.get("id");
+    changed.push(id);
+    return { ok: true, status: 200, text: async () => JSON.stringify([{ id: id.replace(/^eq\./, "") }]), headers: { get: () => null } };
   };
 
   const result = await disableMetaThreadsConnectionsForUser({
@@ -63,8 +64,66 @@ test("Threads lifecycle never disables an account without verified app identity"
       id: "legacy-row", config: { userId: "shared-id" },
     }] };
   };
-  assert.deepEqual(await disableMetaThreadsConnectionsForUser({
+  await assert.rejects(disableMetaThreadsConnectionsForUser({
     workspaceId: "workspace-1", userId: "shared-id",
-  }), { matched: 0, updated: 0 });
+  }), /threads-connection-identity-missing/);
   assert.equal(calls, 0);
+});
+
+test("Threads lifecycle reports a database read failure instead of an empty account set", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  globalThis.fetch = async () => ({
+    ok: false, status: 503, text: async () => "database unavailable", headers: { get: () => null },
+  });
+  await assert.rejects(disableMetaThreadsConnectionsForUser({
+    workspaceId: "workspace-1", userId: "shared-id", appId: "company-id", appKey: "classmoon",
+  }), /threads-connection-read-failed/);
+});
+
+test("Threads lifecycle scans beyond the first page and updates every matching connection", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  const rows = Array.from({ length: 101 }, (_, index) => ({
+    id: `company-${index}`, config: { userId: "shared-id", oauthAppId: "company-id", oauthAppKey: "classmoon" },
+  }));
+  const offsets = [];
+  const changed = [];
+  globalThis.fetch = async (url, options) => {
+    const parsed = new URL(url);
+    if (!options.method || options.method === "GET") {
+      const offset = Number(parsed.searchParams.get("offset") || 0);
+      offsets.push(offset);
+      return {
+        ok: true, status: 200, text: async () => JSON.stringify(rows.slice(offset, offset + 100)),
+        headers: { get: () => null },
+      };
+    }
+    const id = parsed.searchParams.get("id").replace(/^eq\./, "");
+    changed.push(id);
+    return {
+      ok: true, status: 200, text: async () => JSON.stringify([{ id }]),
+      headers: { get: () => null },
+    };
+  };
+
+  const result = await disableMetaThreadsConnectionsForUser({
+    workspaceId: "workspace-1", userId: "shared-id", appId: "company-id", appKey: "classmoon",
+  });
+  assert.deepEqual(result, { matched: 101, updated: 101 });
+  assert.deepEqual(offsets, [0, 100]);
+  assert.equal(changed.length, 101);
+});
+
+test("Threads lifecycle rejects a partial update response", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  globalThis.fetch = async (_url, options) => !options.method || options.method === "GET"
+    ? { ok: true, status: 200, text: async () => JSON.stringify([{
+      id: "company-row", config: { userId: "shared-id", oauthAppId: "company-id", oauthAppKey: "classmoon" },
+    }]), headers: { get: () => null } }
+    : { ok: true, status: 200, text: async () => "[]", headers: { get: () => null } };
+  await assert.rejects(disableMetaThreadsConnectionsForUser({
+    workspaceId: "workspace-1", userId: "shared-id", appId: "company-id", appKey: "classmoon",
+  }), /threads-connection-update-failed/);
 });

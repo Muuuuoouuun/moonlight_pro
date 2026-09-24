@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
-import { resolveMetaOAuthApp, resolveMetaOAuthAppFromState } from "./meta-oauth-apps.js";
+import { matchesMetaOAuthConnection, resolveMetaOAuthApp, resolveMetaOAuthAppFromState } from "./meta-oauth-apps.js";
 
 const originalEnv = { ...process.env };
 afterEach(() => { process.env = { ...originalEnv }; });
@@ -72,4 +72,34 @@ test("dedicated brands cannot accidentally reuse the legacy Meta app ID", () => 
   });
   assert.equal(company.configured, false);
   assert.equal(bridge.configured, true);
+});
+
+test("Meta status selects only the requested account bound to the selected app", () => {
+  process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_ID = "company-id";
+  process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_SECRET = "company-secret";
+  const app = resolveMetaOAuthApp({ provider: "instagram_api", brandKey: "classmoon", brandHandle: "moon.classin" });
+  const valid = { account_key: "account-1", config: {
+    username: "moon.classin", brandHandle: "moon.classin", brandKey: "classmoon",
+    oauthAppId: "company-id", oauthAppKey: "classmoon",
+  } };
+  assert.equal(matchesMetaOAuthConnection(valid, app, "account-1"), true);
+  assert.equal(matchesMetaOAuthConnection(valid, app, "another-account"), false);
+  assert.equal(matchesMetaOAuthConnection({ ...valid, config: { ...valid.config, oauthAppId: "other-id" } }, app), false);
+  assert.equal(matchesMetaOAuthConnection({ ...valid, config: { ...valid.config, oauthAppKey: "moonlight" } }, app), false);
+  assert.equal(matchesMetaOAuthConnection({ ...valid, config: { ...valid.config, brandKey: "bridgemaker" } }, app), false);
+  assert.equal(matchesMetaOAuthConnection({ ...valid, config: { ...valid.config, username: "other" } }, app), false);
+});
+
+test("only BridgeMaker's legacy Moonlight account may omit app identity", () => {
+  process.env.COM_MOON_INSTAGRAM_APP_ID = "legacy-id";
+  process.env.COM_MOON_INSTAGRAM_APP_SECRET = "legacy-secret";
+  process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_ID = "company-id";
+  process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_SECRET = "company-secret";
+  const bridge = resolveMetaOAuthApp({ provider: "instagram_api", brandKey: "bridgemaker", brandHandle: "ml_bridgemaker" });
+  const company = resolveMetaOAuthApp({ provider: "instagram_api", brandKey: "classmoon", brandHandle: "moon.classin" });
+  const legacy = { account_key: "legacy-account", config: { username: "ml_bridgemaker", brandHandle: "ml_bridgemaker", brandKey: null } };
+  assert.equal(matchesMetaOAuthConnection(legacy, bridge), true);
+  assert.equal(matchesMetaOAuthConnection(legacy, company), false);
+  assert.equal(matchesMetaOAuthConnection({ ...legacy, config: { ...legacy.config, brandKey: "classmoon" } }, bridge), false);
+  assert.equal(matchesMetaOAuthConnection({ ...legacy, config: { ...legacy.config, oauthAppKey: "moonlight" } }, bridge), false);
 });

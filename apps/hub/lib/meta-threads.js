@@ -1,10 +1,9 @@
 import {
   insertSupabaseRecord,
-  makeSupabaseHeaders,
   resolveDefaultWorkspaceId,
-  resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
+import { fetchSupabaseRowsDetailed } from "@com-moon/supabase-rest";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
 import { configuredMetaOAuthApps, isValidMetaOAuthAppIdentity, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
@@ -61,55 +60,6 @@ export function resolveMetaThreadsConfig() {
     hasAppId: Boolean(appId),
     hasAppSecret: Boolean(appSecret),
   };
-}
-
-function buildSupabaseReadUrl(table, { select = "*", filters = [], order, limit } = {}) {
-  const config = resolveSupabaseConfig();
-
-  if (!config) {
-    return null;
-  }
-
-  const params = new URLSearchParams();
-  params.set("select", select);
-
-  if (order) {
-    params.set("order", order);
-  }
-
-  if (typeof limit === "number") {
-    params.set("limit", String(limit));
-  }
-
-  filters.forEach(([key, value]) => {
-    params.append(key, value);
-  });
-
-  return `${config.url}/rest/v1/${table}?${params.toString()}`;
-}
-
-async function fetchSupabaseRows(table, options = {}) {
-  const config = resolveSupabaseConfig();
-  const url = buildSupabaseReadUrl(table, options);
-
-  if (!config || !url) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(url, {
-      headers: makeSupabaseHeaders(config.apiKey),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await response.json();
-  } catch {
-    return null;
-  }
 }
 
 function resolveOAuthStateSecret() {
@@ -476,26 +426,36 @@ export async function fetchMetaThreadsConnectionsByUserId({
   workspaceId = resolveDefaultWorkspaceId(),
   userId,
 }) {
-  if (!userId) {
-    return [];
-  }
+  if (!userId || !workspaceId) throw new Error("threads-connection-identity-missing");
 
   const filters = [
     ["provider", `eq.${META_THREADS_PROVIDER}`],
     ["config->>userId", `eq.${userId}`],
   ];
 
-  if (workspaceId) {
-    filters.push(["workspace_id", `eq.${workspaceId}`]);
+  filters.push(["workspace_id", `eq.${workspaceId}`]);
+
+  const rows = [];
+  const ids = new Set();
+  const pageSize = 100;
+  for (let offset = 0; ; offset += pageSize) {
+    const result = await fetchSupabaseRowsDetailed("integration_connections", {
+      filters,
+      order: "created_at.desc,id.desc",
+      limit: pageSize,
+      offset,
+      strictRows: true,
+    });
+    if (!result.configured || result.error || !Array.isArray(result.rows)) {
+      throw new Error("threads-connection-read-failed");
+    }
+    for (const row of result.rows) {
+      if (!row?.id || ids.has(row.id)) throw new Error("threads-connection-read-failed");
+      ids.add(row.id);
+      rows.push(row);
+    }
+    if (result.rows.length < pageSize) return rows;
   }
-
-  const rows = await fetchSupabaseRows("integration_connections", {
-    filters,
-    order: "created_at.desc",
-    limit: 20,
-  });
-
-  return Array.isArray(rows) ? rows : [];
 }
 
 export async function disableMetaThreadsConnectionsForUser({
@@ -505,7 +465,9 @@ export async function disableMetaThreadsConnectionsForUser({
   appKey = null,
   reason = "deauthorize",
 }) {
-  if (!userId || !appId || !appKey) return { matched: 0, updated: 0 };
+  if (!userId || !workspaceId || !appId || !appKey) {
+    throw new Error("threads-connection-identity-missing");
+  }
   const rows = (await fetchMetaThreadsConnectionsByUserId({ workspaceId, userId }))
     .filter((row) =>
       (row.config?.oauthAppId === appId && row.config?.oauthAppKey === appKey) ||
@@ -519,7 +481,7 @@ export async function disableMetaThreadsConnectionsForUser({
     };
   }
 
-  const updates = await Promise.all(rows.map((row) => {
+  for (const row of rows) {
     const config = {
       ...(row.config || {}),
       accessToken: "",
@@ -531,20 +493,31 @@ export async function disableMetaThreadsConnectionsForUser({
       config.dataDeletionRequestedAt = now;
     }
 
-    return updateSupabaseRecord(
+    const result = await updateSupabaseRecord(
       "integration_connections",
-      [["id", `eq.${row.id}`]],
+      [
+        ["id", `eq.${row.id}`],
+        ["workspace_id", `eq.${workspaceId}`],
+        ["provider", `eq.${META_THREADS_PROVIDER}`],
+        ["config->>userId", `eq.${userId}`],
+        ["config->>oauthAppId", row.config?.oauthAppId ? `eq.${row.config.oauthAppId}` : "is.null"],
+        ["config->>oauthAppKey", row.config?.oauthAppKey ? `eq.${row.config.oauthAppKey}` : "is.null"],
+      ],
       {
         status: "disabled",
         config,
         last_synced_at: now,
       },
+      { returnRepresentation: true, select: "id" },
     );
-  }));
+    if (!result.persisted || result.record?.id !== row.id || result.records?.length !== 1) {
+      throw new Error("threads-connection-update-failed");
+    }
+  }
 
   return {
     matched: rows.length,
-    updated: updates.filter((result) => result.persisted).length,
+    updated: rows.length,
   };
 }
 
