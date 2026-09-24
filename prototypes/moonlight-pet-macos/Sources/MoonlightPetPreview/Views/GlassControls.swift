@@ -151,6 +151,7 @@ private struct ScreenDragSurface: NSViewRepresentable {
         private let log = Logger(subsystem: "app.moonlight.pet-preview", category: "interaction")
         var move: (CGFloat) -> Void
         private var drag = ScreenDragTracker()
+        private weak var dragWindow: NSWindow?
 
         init(move: @escaping (CGFloat) -> Void) {
             self.move = move
@@ -162,19 +163,33 @@ private struct ScreenDragSurface: NSViewRepresentable {
         override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
         override func mouseDown(with event: NSEvent) {
             log.info("widget drag began width=\(self.bounds.width) height=\(self.bounds.height)")
+            dragWindow = window
+            PetGlassDrag.begin(in: dragWindow)
             drag.begin(at: window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation)
             NSCursor.closedHand.set()
         }
         override func mouseDragged(with event: NSEvent) {
             if let offset = drag.translation(to: window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation) {
                 log.debug("widget drag delta=\(offset)")
+                PetGlassDrag.update(in: dragWindow)
                 move(offset)
             }
         }
         override func mouseUp(with event: NSEvent) {
             log.info("widget drag ended activated=\(self.drag.isDragging)")
             drag.end()
+            PetGlassDrag.end(in: dragWindow)
+            dragWindow = nil
             NSCursor.openHand.set()
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            if newWindow !== window {
+                PetGlassDrag.end(in: dragWindow)
+                dragWindow = nil
+                drag.end()
+            }
+            super.viewWillMove(toWindow: newWindow)
         }
     }
 }

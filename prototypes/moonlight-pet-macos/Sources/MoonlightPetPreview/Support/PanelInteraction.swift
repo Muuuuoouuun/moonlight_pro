@@ -2,11 +2,16 @@ import Foundation
 
 /// Focus and text editing do not latch the transient character wash on.
 struct GlassPressState {
-    private var pressed = false
-    mutating func press() { pressed = true }
-    mutating func release() { pressed = false }
+    private enum Phase { case idle, pressed, dragging }
+    private var phase = Phase.idle
+    mutating func press() {
+        if phase == .idle { phase = .pressed }
+    }
+    // A drag may originate in the separate pet window, without a local press.
+    mutating func drag() { phase = .dragging }
+    mutating func release() { phase = .idle }
     func showsTint(accessibilityRequiresSolid: Bool) -> Bool {
-        accessibilityRequiresSolid || pressed
+        accessibilityRequiresSolid || phase != .idle
     }
 }
 

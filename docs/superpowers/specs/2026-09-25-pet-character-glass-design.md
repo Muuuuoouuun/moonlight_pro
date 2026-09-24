@@ -12,6 +12,8 @@ Relation: supersedes the un-tinted floating material and black text decisions in
 - Reduce Transparency / Increase Contrast makes the wash solid and retains the native accessibility material fallback.
 - The optional material lab provides a non-persistent character selector and an explicit tint preview, off by default, to compare native and Metal surfaces. That override is never enabled in real panels.
 
-Interaction contract: consume no input events; begin only from a mouse-down inside this panel; clear on release even outside the panel, key loss, app deactivation or detach. A release-only timer runs during a press in common run-loop modes to cover native controls that consume mouse-up internally. It never runs while idle.
+Interaction contract: consume no input events; begin from a mouse-down inside this panel or an explicit drag signal from its handle/companion pet; clear on release even outside the panel, key loss, app deactivation or detach. A release-only timer runs during a press in common run-loop modes to cover native controls that consume mouse-up internally. It never runs while idle.
 
 Implementation/verification: define native theme tokens; connect the three floating hosts to character selection; match the lab; run Swift self-check/build; inspect native text, editing and character changes. Do not add application records during visual QA.
+
+2026-09-25 drag correction: the separate pet window must forward drag start/update/end to every visible companion panel. Native handle drags also send those signals directly. The wash listens only to its own target window; release watchdog, key loss and app deactivation still clear it. No drag state survives into normal typing.

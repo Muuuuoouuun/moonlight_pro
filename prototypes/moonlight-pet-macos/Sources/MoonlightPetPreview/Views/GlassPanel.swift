@@ -35,6 +35,12 @@ final class GlassPanel: NSView {
 
     func setCharacter(_ character: PetCharacter) { wash.character = character }
     func previewCharacterTint(_ preview: Bool) { wash.previewsTint = preview }
+    var showsOrnament = true {
+        didSet {
+            ornament?.isHidden = !showsOrnament
+            needsLayout = true
+        }
+    }
 
     private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?) {
         radius = cornerRadius
@@ -100,7 +106,7 @@ final class GlassPanel: NSView {
     override func layout() {
         super.layout()
         var frame = bounds.insetBy(dx: CompanionLayout.gutter, dy: CompanionLayout.gutter)
-        if let ornament {
+        if let ornament, showsOrnament {
             frame.size.height -= CompanionLayout.perchRise
             ornament.frame = NSRect(x: frame.maxX - CompanionLayout.perchInset - CompanionLayout.perchSize,
                                     y: bounds.maxY - CompanionLayout.gutter - CompanionLayout.perchSize,
