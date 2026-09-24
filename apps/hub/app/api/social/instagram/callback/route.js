@@ -12,6 +12,7 @@ import {
 } from "@/lib/instagram-api";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { assertPersistedSocialConnection } from "@/lib/social-oauth-persistence";
+import { resolveSocialOAuthReturnUrl } from "@/lib/social-oauth-return";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,7 @@ export async function GET(req) {
   const fallbackReturnPath = "/dashboard/settings";
 
   if (state.invalid) {
-    const target = new URL(fallbackReturnPath, origin);
+    const target = resolveSocialOAuthReturnUrl(fallbackReturnPath, origin);
     target.searchParams.set("instagram", "invalid-state");
     return NextResponse.redirect(target);
   }
@@ -40,7 +41,7 @@ export async function GET(req) {
     !state.returnPath.startsWith("//")
       ? state.returnPath
       : fallbackReturnPath;
-  const target = new URL(returnPath, origin);
+  const target = resolveSocialOAuthReturnUrl(returnPath, origin);
 
   if (error) {
     await recordInstagramApiSync({
