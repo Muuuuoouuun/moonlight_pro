@@ -1,14 +1,14 @@
 # 소셜 채널 연결·발행 실사
 
-> 확인일: 2026-09-24 · 읽기 전용 운영 DB·로컬 Hub 상태 API·브라우저 계정 화면·플랫폼 공식 문서 기준. 연결 결과가 바뀌면 재확인한다. 비밀 값과 개인 연락처는 기록하지 않는다.
+> 확인일: 2026-09-24 · 서울 운영 DB·로컬 Hub 상태 API·브라우저 계정 화면·플랫폼 공식 문서 기준. 연결 결과가 바뀌면 재확인한다. 비밀 값과 개인 연락처는 기록하지 않는다.
 
 계정별 소유자·승인·직접 조작 목록은 [소셜 채널 OAuth 계정 인계표](./2026-09-24-social-oauth-account-handoff.md)를 따른다.
 
 ### 2026-09-24 연결 진행 현황
 
-- Meta `Moonlight` 앱이 생성됐다. Threads·Instagram 게시 권한과 임시 HTTPS 터널 콜백을 등록했고, `@ml_bridgemaker`·`@politic_officer`를 양쪽 테스터로 초대했다. 네 초대 모두 마지막 확인에서 수락 대기 중이다. 두 앱 시크릿을 로컬에 설정해 상태가 모두 `ready`다. Instagram 파일럿 OAuth는 `개발자 역할 권한 부족`으로 멈췄다. 연결은 0건이다.
+- Meta `Moonlight` 앱이 생성됐다. Threads·Instagram 게시 권한과 임시 HTTPS 터널 콜백을 등록했고, `@ml_bridgemaker`·`@politic_officer`를 양쪽 테스터로 초대했다. 마지막 역할 화면에서 `@ml_bridgemaker` Threads는 수락됐고 나머지 세 초대는 대기 중이다. 두 앱 시크릿을 로컬에 설정해 상태가 모두 `ready`다. Instagram 파일럿 OAuth는 `개발자 역할 권한 부족`으로 멈췄다. 수락된 Threads의 OAuth 진입은 Chrome에서 `ERR_BLOCKED_BY_CLIENT`로 차단됐다. 연결은 0건이다.
 - 개인 Google 계정 `seoulmentoss@gmail.com`에 전용 Cloud 프로젝트 `moonlight-youtube-509603`을 만들고 YouTube Data API v3·사용자 데이터 정책 동의·테스트 사용자 3명·읽기/업로드 범위·전용 웹 OAuth 클라이언트까지 설정했다. `22세기 유목민`을 OAuth의 기존 브랜드명 `호가미`로 승인했고, Hub status가 `connected`·정확한 채널 ID `UCK_CYxp_L_BiM2GCcP4r_8w`·갱신 토큰을 확인했다. 테스트 앱 갱신 토큰의 표시 만료는 2026-10-01 05:55 UTC다. `classin.com` 계정의 기존 클라이언트 확인은 별도 재인증 대기 중이며 YouTube 전용 클라이언트와 무관하다.
-- Moonlight에 YouTube 전용 OAuth 연결 경로를 추가했다(`548c4ba8`, `ac30afb1`). 연결된 채널은 없다. 게시·업로드 코드는 포함하지 않는다. Instagram의 OAuth 승인 계정이 요청 브랜드와 다르면 저장을 거부하도록 수정했다(`898bff59`).
+- Moonlight에 YouTube 전용 OAuth 연결 경로를 추가했다(`548c4ba8`, `ac30afb1`). 계정별 연결 구조와 상태 API를 적용하고 서울 운영 DB에 `20260924_0046_social_multiaccount_connections.sql`을 기록했다. 적용 전후 연결 9건, `22세기 유목민`의 동일한 연결 ID·채널 ID와 갱신 토큰을 확인했다. 게시·업로드 코드는 포함하지 않는다. Instagram의 OAuth 승인 계정이 요청 브랜드와 다르면 저장을 거부하도록 수정했다(`898bff59`).
 
 ## 결론
 
@@ -32,10 +32,10 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 ### Meta Threads·Instagram
 
 1. 로컬 Hub 상태 API는 Threads·Instagram 모두 `ready`다. 앱 ID·시크릿·OAuth state 비밀키가 설정됐다.
-2. `Moonlight` Meta 앱의 Threads·Instagram 게시 권한과 HTTPS 콜백은 등록됐다. `@ml_bridgemaker`·`@politic_officer`의 두 플랫폼 테스터 초대 수락이 남았다. Instagram 파일럿 OAuth에서 역할 부족 오류를 확인했다.
+2. `Moonlight` Meta 앱의 Threads·Instagram 게시 권한과 HTTPS 콜백은 등록됐다. `@ml_bridgemaker` Threads 초대는 수락됐다. `@ml_bridgemaker` Instagram과 `@politic_officer` 두 플랫폼 초대의 수락이 남았다. Instagram 파일럿 OAuth에서 역할 부족 오류를 확인했다. 수락된 Threads의 OAuth 페이지는 Chrome에서 차단돼 다른 정상 브라우저 경로 또는 브라우저 차단 설정 확인이 필요하다.
 3. Meta가 로컬 HTTP 콜백을 거부해 파일럿용 임시 HTTPS 터널을 쓴다. 운영 연결에는 안정적인 공개 HTTPS Hub 주소와 배포 환경 변수가 필요하다.
 4. 로컬 파일럿 브랜드 핸들을 `ml_bridgemaker`로 설정했다. 다른 브랜드를 연결할 때는 올바른 핸들을 명시해야 하며, Threads·Instagram 모두 계정명이 다르면 저장을 거부한다.
-5. 현행 `integration_connections`의 `(workspace_id, provider)` 고유 제약 때문에 워크스페이스별 플랫폼 계정 하나만 보관한다. 여러 브랜드를 운영하려면 계정별 연결과 브랜드 매핑으로 확장해야 한다.
+5. 서울 운영 DB는 `account_key`와 `(workspace_id, provider, account_key)` 고유 제약으로 확장됐다. 상태 API는 계정 목록을 반환하고 OAuth 저장은 실제 외부 계정 ID를 키로 사용한다. Settings의 계정별 선택 UI와 게시 대상 브랜드 매핑은 아직 없다.
 6. 장기 토큰 갱신 함수는 있으나 자동 실행 경로가 없다. 연결 뒤 만료 전 갱신·실패 표시가 필요하다.
 
 ### YouTube
@@ -59,10 +59,10 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 
 ## 구현 순서 제안
 
-1. Threads·Instagram 테스터 초대의 약관/사실 확인을 마치고 두 앱 시크릿을 설정한다.
+1. 남은 Meta 테스터 초대 3건의 약관/사실 확인과 수락을 마친다. 두 앱 시크릿은 로컬에 설정됐다.
 2. 먼저 Threads `@ml_bridgemaker` 한 계정을 정확한 핸들로 OAuth 연결하고, status·프로필·DB 저장 영수증을 확인한다. 이 단계는 게시하지 않는다.
-3. 계정별 저장 구조로 확장하고 `@politic_officer` 및 Instagram 계정을 각각 연결한다.
+3. 계정별 저장 구조는 적용됐다. `@politic_officer` 및 Instagram 계정을 각각 OAuth 연결한다.
 4. 이미지 렌더·미디어 보관, 버전별 검토, 게시 큐·중복 방지·성공 URL 확인을 구현한 뒤 실제 게시를 별도 검증한다.
-5. YouTube는 22세기 유목민을 파일럿으로 연결하고 정확한 `UC...` ID와 갱신 토큰 저장을 확인했다. 현재 DB 제약으로 워크스페이스별 한 채널만 연결할 수 있다. 다른 채널 연결은 다중 계정 저장 구조 뒤 진행한다.
+5. YouTube는 22세기 유목민을 파일럿으로 연결하고 정확한 `UC...` ID와 갱신 토큰 저장을 확인했다. 다중 계정 DB 적용 뒤 문군·기독밈을 각각 별도 OAuth 승인으로 연결한다.
 
 코드 근거: [`integration-inventory.md`](../integration-inventory.md), [`meta-threads.js`](../../apps/hub/lib/meta-threads.js), [`instagram-api.js`](../../apps/hub/lib/instagram-api.js), [`content-studio.jsx`](../../apps/hub/components/hub/pages/content-studio.jsx), [`20260804_0018_backend_optimization.sql`](../../supabase/migrations/20260804_0018_backend_optimization.sql).
