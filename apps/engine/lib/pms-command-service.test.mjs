@@ -978,3 +978,22 @@ test("merges a project genre into stored meta under the version guard", async ()
   assert.deepEqual(updates[0].patch.meta, { org_scope: "classin", source: "manual", genre: "content" });
   assert.deepEqual(updates[0].filters.at(-1), ["updated_at", "eq.2026-09-23T01:00:00.000Z"]);
 });
+
+test("a product link must point at a product in the same workspace", async () => {
+  const lookups = [];
+  const result = await pmsService.executePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    productId: "22222222-2222-4222-8222-222222222222",
+  }, { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-25T01:00:00.000Z" }, {
+    insert: async () => assert.fail("no insert"),
+    update: async () => assert.fail("missing product must not be written"),
+    fetchRows: async (table, options) => { lookups.push({ table, options }); return []; },
+  });
+  assert.deepEqual(result, { status: "invalid-input", error: "invalid-product-reference" });
+  assert.equal(lookups[0].table, "products");
+  assert.deepEqual(lookups[0].options.filters, [
+    ["id", "eq.22222222-2222-4222-8222-222222222222"],
+    ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
+  ]);
+});

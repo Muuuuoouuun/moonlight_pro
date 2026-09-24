@@ -56,6 +56,7 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
       workspace_id: row.workspace_id,
       area_id: row.area_id ?? null,
       brand_id: row.brand_id ?? null,
+      product_id: row.product_id ?? null,
       lead_id: row.lead_id ?? null,
       customer_account_id: row.customer_account_id ?? null,
       name: row.name,
@@ -192,6 +193,7 @@ async function validateRelationship(
     ? [
         ["area_id", "areas", "invalid-reference"],
         ["brand_id", "brands", "invalid-brand-reference"],
+        ["product_id", "products", "invalid-product-reference"],
         ["lead_id", "leads", "invalid-reference"],
         ["customer_account_id", "customer_accounts", "invalid-reference"],
       ].flatMap(([column, table, error]) => (
