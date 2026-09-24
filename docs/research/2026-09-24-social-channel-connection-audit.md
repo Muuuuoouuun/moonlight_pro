@@ -10,6 +10,8 @@
 - `Classin Korea` 비즈니스가 관리하는 기존 `Classmooni` Meta 앱(상위 앱 ID `1261817029101418`)을 확인했다. Instagram 제품 앱 ID는 `940095648854296`, Threads 제품 앱 ID는 `1035066519184986`이다. 앱은 미게시 개발 상태이고 두 제품의 테스터 목록과 OAuth 리디렉션 콜백이 비어 있다. Instagram `instagram_business_basic`은 테스트 준비 완료, `instagram_business_content_publish`는 앱 검수 추가 전 상태이고 Threads `threads_basic`·`threads_content_publish`는 테스트 준비 완료로 표시된다. 회사 앱으로 활용할 수 있지만 현재 Moonlight 서버는 제품별 앱 자격증명을 하나씩만 선택하므로 다중 앱 지원과 앱별 연결 구분이 선행돼야 한다.
 - 개인 Google 계정 `seoulmentoss@gmail.com`의 Cloud 프로젝트 `moonlight-youtube-509603`에서 Data API v3·읽기/업로드 범위·웹 OAuth 클라이언트를 설정했다. `22세기 유목민`, `문군`, `기독밈`을 각 채널로 별도 승인했다. 로컬 Hub 상태 API는 세 채널 모두 정확한 채널 ID·갱신 토큰을 반환한다. Testing 갱신 토큰은 2026-10-01에 각각 만료 예정이다. `classin.com`의 기존 클라이언트 확인은 별도 재인증 대기 중이며 이 YouTube 전용 클라이언트와 무관하다.
 - Moonlight에 YouTube 전용 OAuth 연결 경로를 추가했다(`548c4ba8`, `ac30afb1`). 계정별 연결 구조와 상태 API를 적용하고 서울 운영 DB에 `20260924_0046_social_multiaccount_connections.sql`을 기록했다. 적용 전후 연결 9건, `22세기 유목민`의 동일한 연결 ID·채널 ID와 갱신 토큰을 확인했다. 게시·업로드 코드는 포함하지 않는다. Instagram의 OAuth 승인 계정이 요청 브랜드와 다르면 저장을 거부하도록 수정했다(`898bff59`).
+- YouTube 접근 토큰을 채널 ID별로 조회·갱신하는 서버 헬퍼와 `refresh-required` 상태 판정을 추가했다(`e8ad0463`). 2026-09-24에 `22세기 유목민`의 만료된 접근 토큰을 Google 갱신 엔드포인트로 실제 갱신하고 같은 채널 연결 행에 저장했다. `문군`·`기독밈`은 조회 시 아직 유효한 접근 토큰이 있어 갱신하지 않았다. 세 채널 상태 API는 `connected`를 반환했다. 갱신 토큰의 Testing 만료일(2026-10-01)은 변하지 않는다.
+- Threads 연결 해제·데이터 삭제의 Meta 서명 검증 콜백을 운영 미들웨어의 공개 명시 목록에 추가했다(`00ea2f12`). 인접 경로는 계속 세션 게이트가 막는다.
 
 ## 결론
 
@@ -39,10 +41,11 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 5. 서울 운영 DB는 `account_key`와 `(workspace_id, provider, account_key)` 고유 제약으로 확장됐다. 상태 API는 계정 목록을 반환하고 OAuth 저장은 실제 외부 계정 ID를 키로 사용한다. Settings의 계정별 선택 UI와 게시 대상 브랜드 매핑은 아직 없다.
 6. 장기 토큰 갱신 함수는 있으나 자동 실행 경로가 없다. 연결 뒤 만료 전 갱신·실패 표시가 필요하다.
 7. 회사 소유 앱 `Classmooni`의 Instagram·Threads 이용 사례는 있지만 테스터·두 제품의 OAuth 콜백 설정이 비어 있다. 기존 Moonlight 개인 앱과 병행하려면 앱별 ID·시크릿 선택, 서명된 state의 앱 식별자, DB 연결의 앱 식별자, 앱별 해제·삭제 콜백 검증이 필요하다. 별도 Chrome 프로필만으로 앱 시크릿과 토큰은 분리되지 않는다.
+8. [Meta의 Instagram 심사 표](https://developers.facebook.com/documentation/instagram-platform/app-review)에 따르면 소유·관리하는 Instagram 프로 계정만 쓰는 앱은 Standard Access로 운영할 수 있고 App Review가 필수는 아니다. [Threads 시작 안내](https://developers.facebook.com/documentation/threads/get-started)에 따르면 테스터는 `threads_basic`·`threads_content_publish`를 시험할 수 있지만 역할이 없는 계정을 받으려면 권한별 심사와 앱 공개가 필요하다. [앱 모드 안내](https://developers.facebook.com/documentation/development/build-and-test/app-modes)의 개발 모드 테스트 데이터 가시성 제한 때문에 테스트 성공을 일반 공개 게시 검증으로 간주하지 않는다.
 
 ### YouTube
 
-1. Moonlight에 YouTube 전용 OAuth scope·callback·상태 조회와 전용 클라이언트 자격증명을 설정했다. 기독밈·문군·22세기 유목민 채널이 각각 `connected`이며 반환 ID와 갱신 토큰을 확인했다. 업로드 구현과 access token 자동 갱신은 없다.
+1. Moonlight에 YouTube 전용 OAuth scope·callback·상태 조회와 전용 클라이언트 자격증명을 설정했다. 기독밈·문군·22세기 유목민 채널이 각각 `connected`이며 반환 ID와 갱신 토큰을 확인했다. 채널별 접근 토큰 갱신 헬퍼는 구현·실측했지만 예약 갱신과 업로드 구현은 없다.
 2. 기존 Hub `GOOGLE_CLIENT_ID`의 프로젝트는 개인 계정 Cloud 프로젝트들에서 찾지 못했다. 별도 `classin.com` 계정의 Cloud 자격증명 화면은 재인증 대기 중이다. YouTube는 이 기존 Calendar 클라이언트와 분리된 전용 프로젝트를 사용하므로 연결의 선행 조건은 아니다.
 3. Google OAuth 앱의 테스트 사용자 3명과 웹 클라이언트 설정은 완료됐다. `seoulmentoss@gmail.com`의 YouTube 웹 계정 전환에는 `문군`·`22세기 유목민`·`기독밈`이 보인다. `22세기 유목민`은 OAuth에서 브랜드 계정의 예전 이름 `호가미`로 나타났지만 반환 채널 ID가 일치했다. `문군`은 개인 기본 `Junhyeok Mun`으로 승인했고 반환 채널 ID가 일치했다. 신규 미감사 프로젝트 업로드는 비공개로 제한되며 공개 발행에는 감사가 필요하다.
 4. Studio의 `소유자` 행은 API 권한의 증거가 아니다. [YouTube 공식 도움말](https://support.google.com/youtube/answer/9481328?hl=en)에 따르면 채널 권한으로 초대된 사용자는 API를 쓸 수 없다. 실제 Google/Brand 계정에서 채널이 OAuth 선택 목록에 나오는지, 이후 `channels.list(mine=true)`가 기대한 `UC...` ID를 반환하는지 확인해야 한다.
