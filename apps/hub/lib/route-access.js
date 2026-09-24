@@ -18,7 +18,7 @@ export const OPEN_PREFIXES = [
   "/login", // 로그인 화면
 ];
 
-// OAuth 제공자가 돌려보내는 콜백. 세션 쿠키가 없을 수 있으므로 열어 둔다.
+// OAuth 콜백과 공급자 심사용 정적 법률 페이지는 세션 없이 접근해야 한다.
 // 명시 목록으로 둔다 — 접미사 매칭은 새 경로가 조용히 열리는 길을 만든다(fail-closed).
 export const OPEN_EXACT = [
   "/api/calendar/google/callback",
@@ -27,6 +27,10 @@ export const OPEN_EXACT = [
   "/api/social/instagram/callback",
   "/api/social/meta/threads/callback",
   "/api/social/youtube/callback",
+  "/legal/about",
+  "/legal/privacy",
+  "/legal/terms",
+  "/legal/data-deletion",
 ];
 
 export function isOpenPath(pathname) {
