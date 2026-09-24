@@ -83,7 +83,7 @@ export function DraftEditor({ draft, edit, disabled, onSelect }) {
   return <div className="studio-stack">
     <div className="studio-row studio-editor-heading">
       <span className="studio-eyebrow">{structured ? '구성' : '본문'}</span>
-      <SegmentedControl label="결과물 보기" value={view} onChange={setView} options={[{ key: 'edit', label: '편집' }, { key: 'preview', label: '미리보기' }]} />
+      <SegmentedControl label="결과물 보기" value={view} onChange={(next) => { setView(next); onSelect?.(null); }} options={[{ key: 'edit', label: '편집' }, { key: 'preview', label: '미리보기' }]} />
     </div>
     {!supported && <p className="studio-error" role="alert">이전 형식의 결과물입니다. 원본을 복사·내보내기한 뒤 지원하는 채널의 새 결과물을 만들어주세요.</p>}
     {view === 'preview' ? <ResultPreview body={draft.body} type={draft.variantType} /> : structured

@@ -27,6 +27,7 @@ const BLOCKERS = [
 const QUIET_SAVE = { idle: '', editing: '입력 중', saving: '저장 중…', saved: '저장됨' };
 const LOUD_SAVE = { local: '서버 미연결', error: '서버 저장 미확인', conflict: '최신 내용 확인 필요' };
 const REASONS = { checkpoint: '직접 저장한 버전', before_apply: 'AI 적용 전', after_apply: 'AI 적용 후', before_restore: '복원 전', branch_source: '채널 변형에 사용한 원본', branch: '파생 결과물' };
+const AI_REQUEST_KEY = 'mlp.studio.aiRequest';
 const PUBLISHED_NOTICE = '발행을 기록했습니다. 다음 글로 넘어갈까요?';
 const dateLabel = (value) => value ? new Date(value).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 
@@ -43,7 +44,15 @@ export function ContentStudio({ workspace, ledger }) {
   const [newChannel, setNewChannel] = React.useState('instagram'), [notice, setNotice] = React.useState('');
   const templates = useContentTemplates();
   // AI 요청은 작업마다 쓰는 지시문이라 콘텐츠에 저장하지 않는다. 실행한 요청은 AI 작업 기록(run)에 남는다.
-  const [aiRequest, setAiRequest] = React.useState(''), [templateId, setTemplateId] = React.useState('');
+  // 같은 지시를 매일 다시 쓰므로 이 브라우저에 마지막 요청을 기억한다(편의용 — 실패해도 동작에는 영향 없음).
+  const [aiRequest, setAiRequestState] = React.useState(''), [templateId, setTemplateId] = React.useState('');
+  React.useEffect(() => { try { const saved = window.localStorage.getItem(AI_REQUEST_KEY); if (saved) setAiRequestState(saved); } catch { /* 저장소 없음 */ } }, []);
+  const setAiRequest = (value) => {
+    setAiRequestState(value);
+    try { if (value.trim()) window.localStorage.setItem(AI_REQUEST_KEY, value); else window.localStorage.removeItem(AI_REQUEST_KEY); } catch { /* 저장소 없음 */ }
+  };
+  const aiRunRef = React.useRef(null);
+  const [publicationError, setPublicationError] = React.useState('');
   const [templateDraft, setTemplateDraft] = React.useState(null), [templateSaving, setTemplateSaving] = React.useState(false);
   const brands = filterBrandsByWorkspace(ledger.brands || [], workspace).filter((brand) => brand.id && brand.key !== 'all');
   const allBrands = ledger.brands || [];
@@ -82,13 +91,30 @@ export function ContentStudio({ workspace, ledger }) {
   const nowLocal = () => { const now = new Date(); return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
   const openPublication = () => {
     const key = draft.variantId || 'new';
-    if (publicationFor.current !== key || !publicationDate) { setPublicationUrl(''); setPublicationDate(nowLocal()); }
+    if (publicationFor.current !== key) setPublicationUrl('');
+    // 드로어를 열어 두고 Threads에 올리고 돌아오는 흐름이 많아서, 열 때마다 지금 시각으로 다시 채운다.
+    setPublicationDate(nowLocal());
+    setPublicationError('');
     publicationFor.current = key;
     setDrawer('publication');
   };
+  const submitPublication = async () => {
+    if (disabled) return;
+    setPublicationError('');
+    const result = await studio.recordPublication(publicationUrl, publicationDate);
+    if (result.ok) {
+      setDrawer(null);
+      setPublicationUrl(''); setPublicationDate('');
+      setNotice(PUBLISHED_NOTICE);
+    } else if (result.message) setPublicationError(result.message);
+  };
   // 본문이 비면 메모를 연다는 기본값은 문서가 바뀔 때마다 다시 적용한다.
-  const startNew = () => { setMemoOpen(null); setNotice(''); studio.newDraft(); };
-  const switchVariant = (id) => { setMemoOpen(null); studio.switchVariant(id); };
+  const startNew = async () => {
+    const blocked = !studio.ready || studio.busy || studio.recovery || studio.pendingMutation;
+    if (await studio.newDraft()) { setMemoOpen(null); setNotice(''); setSelection(null); }
+    else if (!blocked) toast.error('지금 글의 저장이 확인되지 않아 새 글을 열지 않았습니다. 복사하거나 저장 재시도 후 다시 눌러주세요.');
+  };
+  const switchVariant = (id) => { setMemoOpen(null); setSelection(null); studio.switchVariant(id); };
   const lastContent = React.useRef(draft.contentId);
   React.useEffect(() => {
     if (lastContent.current && draft.contentId && lastContent.current !== draft.contentId) setMemoOpen(null);
@@ -187,13 +213,14 @@ export function ContentStudio({ workspace, ledger }) {
               <TextField aria-label="제목" className="studio-title-input" value={draft.title} onChange={(event) => studio.edit({ title: event.target.value })} disabled={disabled} placeholder="제목 (선택 · 목록에서 찾을 이름)" />
               <details className="studio-memo" open={memoIsOpen} onToggle={(event) => { if (event.currentTarget.open !== memoIsOpen) setMemoOpen(event.currentTarget.open); }}>
                 <summary><span>원문 메모</span><span className="studio-summary-count">{draft.sourceIdea?.trim() ? '있음' : '비어 있음'}</span></summary>
-                <TextAreaField aria-label="원문 메모" hint="떠오른 생각·계기를 적어두면 AI 초안의 재료가 됩니다. 복사에는 포함하지 않습니다." placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={4} disabled={disabled} />
+                <TextAreaField aria-label="원문 메모" hint="떠오른 생각·계기를 적어두면 AI 초안의 재료가 됩니다. ⌘↵로 바로 AI 초안. 복사에는 포함하지 않습니다." placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={4} disabled={disabled} onCmdEnter={() => aiRunRef.current?.('draft')} />
               </details>
               {variants.length > 1 && <SelectField label="채널별 결과물" value={draft.variantId || ''} options={channelOptions} onChange={(event) => switchVariant(event.target.value)} disabled={disabled} />}
               <DraftEditor draft={draft} edit={studio.edit} disabled={disabled} onSelect={setSelection} />
               <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} request={aiRequest} onRequestChange={(value) => { setAiRequest(value); setTemplateId(''); }}
-                templates={templates} templateId={templateId} onPickTemplate={pickTemplate} onSaveAsTemplate={() => editTemplate(null)} />
-              <div className="studio-export-bar">
+                templates={templates} templateId={templateId} onPickTemplate={pickTemplate} onSaveAsTemplate={() => editTemplate(null)} runRef={aiRunRef} />
+              {/* 본문이 있을 때만 하단에 붙인다 — 빈 초안에서는 비활성 복사 바가 AI 초안 버튼을 가린다. */}
+              <div className="studio-export-bar" data-sticky={draft.body.trim() ? 'true' : undefined}>
                 <Button variant="primary" icon="copy" onClick={copy} disabled={!draft.body.trim()}>복사</Button>
                 <Button variant="outline" onClick={openPublication} disabled={disabled || !draft.body.trim()}>발행했음</Button>
               </div>
@@ -279,17 +306,12 @@ export function ContentStudio({ workspace, ledger }) {
         <TextAreaField label="글 틀" hint="템플릿을 고를 때 본문이 비어 있으면 이 틀을 채웁니다." value={templateDraft.skeleton} maxLength={4000} showCount rows={6} placeholder={'예:\n[훅 — 질문 한 줄]\n\n[공감 — 독자가 겪는 상황]\n\n[사례 — 실제 수업 장면]\n\n[한 줄 결론]'} onChange={(event) => setTemplateDraft({ ...templateDraft, skeleton: event.target.value })} disabled={templateSaving} />
       </div>
     </Drawer>}
-    {drawer === 'publication' && <Drawer title="발행 기록" subtitle="외부 채널에 게시한 URL과 시각을 기록합니다. 운영자 확인이며 외부 게시 여부를 자동 검증하지 않습니다." presentation="compact" onClose={() => { if (!studio.busy) setDrawer(null); }} footer={<Button variant="primary" disabled={disabled} onClick={async () => {
-      if (await studio.recordPublication(publicationUrl, publicationDate)) {
-        setDrawer(null);
-        setPublicationUrl(''); setPublicationDate('');
-        setNotice(PUBLISHED_NOTICE);
-      }
-    }}>{studio.busy ? '확인 중…' : '발행 기록 저장'}</Button>}>
+    {drawer === 'publication' && <Drawer title="발행 기록" subtitle="외부 채널에 게시한 URL과 시각을 기록합니다. 운영자 확인이며 외부 게시 여부를 자동 검증하지 않습니다." presentation="compact" onClose={() => { if (!studio.busy) setDrawer(null); }} footer={<Button variant="primary" disabled={disabled} onClick={submitPublication}>{studio.busy ? '확인 중…' : '발행 기록 저장'}</Button>}>
       <div className="studio-stack">
-        <TextField label="발행 URL" value={publicationUrl} onChange={event => setPublicationUrl(event.target.value)} disabled={studio.busy} />
+        <TextField label="발행 URL" type="url" inputMode="url" autoComplete="off" placeholder="https://www.threads.net/@…/post/…" value={publicationUrl} onChange={event => setPublicationUrl(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); submitPublication(); } }} disabled={studio.busy} />
         <TextField label="발행 일시" type="datetime-local" value={publicationDate} onChange={event => setPublicationDate(event.target.value)} disabled={studio.busy} />
-        {studio.saveMessage && <p role="status">{studio.saveMessage}</p>}
+        {publicationError && <p role="alert" className="studio-error">{publicationError}</p>}
       </div>
     </Drawer>}
     {drawer === 'variant'  && <Drawer title="채널 결과물 추가" subtitle="같은 원문·기획에서 채널별로 별도의 초안을 만듭니다." presentation="compact" width="420px" onClose={() => setDrawer(null)} footer={<Button variant="primary" onClick={createVariant} disabled={studio.busy}>빈 결과물 추가</Button>}>
