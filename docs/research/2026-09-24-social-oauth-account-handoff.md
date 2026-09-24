@@ -6,7 +6,7 @@
 
 | 영역 | 현재 상태 | 다음 확인 |
 |---|---|---|
-| Threads `@ml_bridgemaker` | Meta `Moonlight` 앱 생성, `threads_basic`·`threads_content_publish`, HTTPS 콜백 등록. 앱 시크릿 로컬 설정 완료(`ready`). 테스터 초대 수락 확인. OAuth 연결 0건. Chrome에서 OAuth 진입이 차단됨 | 브라우저 차단 원인 확인 후 OAuth와 프로필 확인 |
+| Threads `@ml_bridgemaker` | Meta `Moonlight` 앱 생성, `threads_basic`·`threads_content_publish`, HTTPS 콜백 등록. 앱 시크릿 로컬 설정 완료(`ready`). 테스터 초대 수락 확인. `threads.com`에서 권한 승인 화면까지 열림. OAuth 연결 0건 | 최종 권한 승인 뒤 프로필·DB 저장 확인 |
 | Instagram `@ml_bridgemaker` | Instagram Login 앱 ID, `instagram_business_basic`·`instagram_business_content_publish`, HTTPS 콜백 등록. 앱 시크릿 로컬 설정 완료(`ready`). 테스터 초대 대기로 OAuth에서 `개발자 역할 권한 부족` 확인. 연결 0건 | 초대 수락, OAuth와 프로필 확인 |
 | YouTube `22세기 유목민` | `moonlight-youtube-509603` 프로젝트의 Data API v3, OAuth 앱 `Moonlight Video Publisher`, 읽기·업로드 범위, 테스트 사용자 3명, 전용 웹 클라이언트·로컬 콜백 설정 완료. `호가미` 브랜드 계정으로 승인 후 Hub `connected`, 반환 채널 ID `UCK_CYxp_L_BiM2GCcP4r_8w`, 갱신 토큰 확인 | 테스트 상태의 갱신 토큰 만료(2026-10-01 05:55 UTC) 전에 장기 OAuth 운영 조건 검토. 다른 채널은 각각 별도 승인 |
 | Google Calendar | 기존 Hub 연결 기록에 `connected` 및 refresh token 있음 | 실제 동기화/토큰 갱신은 별도 검증. YouTube 새 클라이언트와 분리 유지 |
@@ -34,7 +34,7 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 
 | 계정 | 확인된 접근 | API 연결에 남은 일 |
 |---|---|---|
-| `@ml_bridgemaker` Threads | 로그인된 본인 게시 UI, Moonlight 테스터 초대 수락 확인 | Threads OAuth 승인. Chrome의 OAuth 페이지 차단 해결 |
+| `@ml_bridgemaker` Threads | 로그인된 본인 게시 UI, Moonlight 테스터 초대 수락 및 OAuth 권한 화면 확인 | 최종 Threads OAuth 승인 |
 | `@ml_bridgemaker` Instagram | 프로페셔널 대시보드, Moonlight-IG 테스터 초대 수락 화면 | 앱 역할 초대 수락, Instagram OAuth 승인 |
 | `@politic_officer` Threads·Instagram | 본인 게시 UI·Instagram 프로 대시보드, 양쪽 테스터 초대 대기 | 각 초대 수락, 계정 OAuth 승인 |
 | HolyFunCollector Instagram | 브랜드 DB에 링크만 | 현재 로그인·프로 계정·게시 권한 확인 |

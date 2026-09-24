@@ -6,7 +6,7 @@
 
 ### 2026-09-24 연결 진행 현황
 
-- Meta `Moonlight` 앱이 생성됐다. Threads·Instagram 게시 권한과 임시 HTTPS 터널 콜백을 등록했고, `@ml_bridgemaker`·`@politic_officer`를 양쪽 테스터로 초대했다. 마지막 역할 화면에서 `@ml_bridgemaker` Threads는 수락됐고 나머지 세 초대는 대기 중이다. 두 앱 시크릿을 로컬에 설정해 상태가 모두 `ready`다. Instagram 파일럿 OAuth는 `개발자 역할 권한 부족`으로 멈췄다. 수락된 Threads의 OAuth 진입은 Chrome에서 `ERR_BLOCKED_BY_CLIENT`로 차단됐다. 연결은 0건이다.
+- Meta `Moonlight` 앱이 생성됐다. Threads·Instagram 게시 권한과 임시 HTTPS 터널 콜백을 등록했고, `@ml_bridgemaker`·`@politic_officer`를 양쪽 테스터로 초대했다. 마지막 역할 화면에서 `@ml_bridgemaker` Threads는 수락됐고 나머지 세 초대는 대기 중이다. 두 앱 시크릿을 로컬에 설정해 상태가 모두 `ready`다. Instagram 파일럿 OAuth는 `개발자 역할 권한 부족`으로 멈췄다. Threads의 `threads.net` OAuth 진입은 Chrome에서 차단됐으나 공식 리디렉션 대상 `www.threads.com/oauth/authorize`에서 정상적인 `@ml_bridgemaker` 권한 승인 화면을 열었다. 최종 승인은 대기 중이며 연결은 0건이다.
 - 개인 Google 계정 `seoulmentoss@gmail.com`에 전용 Cloud 프로젝트 `moonlight-youtube-509603`을 만들고 YouTube Data API v3·사용자 데이터 정책 동의·테스트 사용자 3명·읽기/업로드 범위·전용 웹 OAuth 클라이언트까지 설정했다. `22세기 유목민`을 OAuth의 기존 브랜드명 `호가미`로 승인했고, Hub status가 `connected`·정확한 채널 ID `UCK_CYxp_L_BiM2GCcP4r_8w`·갱신 토큰을 확인했다. 테스트 앱 갱신 토큰의 표시 만료는 2026-10-01 05:55 UTC다. `classin.com` 계정의 기존 클라이언트 확인은 별도 재인증 대기 중이며 YouTube 전용 클라이언트와 무관하다.
 - Moonlight에 YouTube 전용 OAuth 연결 경로를 추가했다(`548c4ba8`, `ac30afb1`). 계정별 연결 구조와 상태 API를 적용하고 서울 운영 DB에 `20260924_0046_social_multiaccount_connections.sql`을 기록했다. 적용 전후 연결 9건, `22세기 유목민`의 동일한 연결 ID·채널 ID와 갱신 토큰을 확인했다. 게시·업로드 코드는 포함하지 않는다. Instagram의 OAuth 승인 계정이 요청 브랜드와 다르면 저장을 거부하도록 수정했다(`898bff59`).
 
@@ -32,7 +32,7 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 ### Meta Threads·Instagram
 
 1. 로컬 Hub 상태 API는 Threads·Instagram 모두 `ready`다. 앱 ID·시크릿·OAuth state 비밀키가 설정됐다.
-2. `Moonlight` Meta 앱의 Threads·Instagram 게시 권한과 HTTPS 콜백은 등록됐다. `@ml_bridgemaker` Threads 초대는 수락됐다. `@ml_bridgemaker` Instagram과 `@politic_officer` 두 플랫폼 초대의 수락이 남았다. Instagram 파일럿 OAuth에서 역할 부족 오류를 확인했다. 수락된 Threads의 OAuth 페이지는 Chrome에서 차단돼 다른 정상 브라우저 경로 또는 브라우저 차단 설정 확인이 필요하다.
+2. `Moonlight` Meta 앱의 Threads·Instagram 게시 권한과 HTTPS 콜백은 등록됐다. `@ml_bridgemaker` Threads 초대는 수락됐고 권한 승인 화면까지 열렸다. `@ml_bridgemaker` Instagram과 `@politic_officer` 두 플랫폼 초대의 수락이 남았다. Instagram 파일럿 OAuth에서 역할 부족 오류를 확인했다. Threads OAuth의 `threads.net` 주소는 Chrome에서 차단됐으나 공식 리디렉션 대상 `www.threads.com`에서 승인 화면이 열렸다. 앱의 인증 URL도 이 대상으로 바꾸고 로컬 리디렉션 주소를 확인했다.
 3. Meta가 로컬 HTTP 콜백을 거부해 파일럿용 임시 HTTPS 터널을 쓴다. 운영 연결에는 안정적인 공개 HTTPS Hub 주소와 배포 환경 변수가 필요하다.
 4. 로컬 파일럿 브랜드 핸들을 `ml_bridgemaker`로 설정했다. 다른 브랜드를 연결할 때는 올바른 핸들을 명시해야 하며, Threads·Instagram 모두 계정명이 다르면 저장을 거부한다.
 5. 서울 운영 DB는 `account_key`와 `(workspace_id, provider, account_key)` 고유 제약으로 확장됐다. 상태 API는 계정 목록을 반환하고 OAuth 저장은 실제 외부 계정 ID를 키로 사용한다. Settings의 계정별 선택 UI와 게시 대상 브랜드 매핑은 아직 없다.
