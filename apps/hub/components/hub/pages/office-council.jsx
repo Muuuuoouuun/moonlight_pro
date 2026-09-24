@@ -308,9 +308,8 @@ export function OfficeCouncil({ scope = 'all' }) {
       <div className={styles.agendaBar}>{agenda ? <>
         <div className={styles.agendaMain}><strong title={agenda.title}>안건: {agenda.title}</strong><span className={styles.sourceChip}>{agenda.source === 'task' ? '할 일에서 가져옴 · 복사본 · ' + importedAt : '직접 입력'}</span><span className={styles.mobileCount}>참석 {1 + reviewers.length}명</span></div>
         <div className={styles.agendaTools}><span className={styles.attendees}>참석: {personName(ownerId)}{reviewers.map(id => ' · ' + personName(id)).join('')}</span>
-          <Button variant="ghost" size="sm" disabled={busy || !assignmentMessage} onClick={requestAssignment}>담당 추천</Button>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => setMoreOpen(true)}>더보기</Button>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={newAgenda}>새 안건</Button></div></>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => setRosterOpen(true)}>참석자 바꾸기</Button>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => setMoreOpen(true)}>더보기</Button></div></>
         : <><p>안건을 올리세요 · 할 일을 가져오거나 직접 적어 주세요</p><Button variant="ghost" size="sm" onClick={() => setMoreOpen(true)}>더보기</Button></>}</div>
       <div className={styles.thread} ref={threadRef} tabIndex={-1} aria-live="polite" aria-label="Office 요청 결과">
         {session.turns.length === 0 && !busy ? <EmptyState icon="chat" title="회의할 안건을 올려 주세요" description="아래 안건 가져오기로 할 일을 넣거나 직접 적어 주세요." /> : null}

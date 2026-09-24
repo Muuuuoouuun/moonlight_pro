@@ -93,7 +93,7 @@
   .agendaMain strong { max-width:42vw; }
   .mobileCount { display:inline; white-space:nowrap; font-size:12px; color:var(--fg-muted); }
   .sourceChip,.attendees { display:none; }
-  .agendaTools button:not(:nth-last-child(2)) { display:none; }
+  .agendaTools button:not(:last-child) { display:none; }
   .thread { padding:0 12px 12px; scroll-padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
   .turn { padding:12px 0; }
   .speech { margin-left:0; }
