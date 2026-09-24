@@ -29,7 +29,6 @@ struct CompactWidgetView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(width: 288, height: panelHeight)
-        .moonlightGlassPanel(cornerRadius: 18, adaptsToSystemAppearance: true)
         .tint(Palette.glassInk)
         .onAppear { focusCurrentInput() }
         .onChange(of: model.compactMode) { _, _ in focusCurrentInput() }

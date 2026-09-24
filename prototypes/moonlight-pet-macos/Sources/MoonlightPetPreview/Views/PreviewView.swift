@@ -10,20 +10,19 @@ struct PreviewView: View {
             VStack(alignment: .leading, spacing: 9) {
                 Text("Moonlight")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(Palette.glassInkFaint)
                 Text(model.previewText)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Palette.moon100)
+                    .foregroundStyle(Palette.glassInk)
                     .lineLimit(2)
                 Button("빠른 기능 열기", action: openBar)
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Palette.moon300)
+                    .foregroundStyle(Palette.glassInkMuted)
             }
             Spacer(minLength: 0)
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .moonlightGlassPanel(cornerRadius: 14)
     }
 }

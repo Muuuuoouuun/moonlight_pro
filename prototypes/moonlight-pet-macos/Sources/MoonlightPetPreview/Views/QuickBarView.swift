@@ -17,7 +17,7 @@ struct QuickBarView: View {
             if usesVerticalLayout {
                 HStack(spacing: 0) {
                     verticalNavigation
-                    Rectangle().fill(Palette.moon100.opacity(0.13)).frame(width: 1)
+                    Rectangle().fill(Palette.glassInk.opacity(0.13)).frame(width: 1)
                     modeContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .padding(18)
@@ -27,7 +27,7 @@ struct QuickBarView: View {
             } else {
                 VStack(spacing: 0) {
                     horizontalNavigation
-                    Rectangle().fill(Palette.moon100.opacity(0.13)).frame(height: 1)
+                    Rectangle().fill(Palette.glassInk.opacity(0.13)).frame(height: 1)
                     modeContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .padding(18)
@@ -36,8 +36,7 @@ struct QuickBarView: View {
                 .transition(.opacity.combined(with: .offset(x: -4)))
             }
         }
-        .moonlightGlassPanel(cornerRadius: 16)
-        .tint(Palette.moon300)
+        .tint(Palette.glassInkMuted)
     }
 
     private var modeContent: some View {
@@ -92,11 +91,11 @@ struct QuickBarView: View {
             .frame(width: vertical ? 52 : nil)
             .frame(maxWidth: vertical ? nil : .infinity)
             .frame(height: vertical ? 50 : 52)
-            .foregroundStyle(model.mode == mode ? Palette.moon100 : Palette.moon400)
+            .foregroundStyle(model.mode == mode ? Palette.glassInk : Palette.glassInkFaint)
             .background {
                 RoundedRectangle(cornerRadius: 11)
-                    .fill(model.mode == mode ? Palette.moon100.opacity(0.15)
-                        : hoveredMode == mode ? Palette.moon100.opacity(0.06) : .clear)
+                    .fill(model.mode == mode ? Palette.glassInk.opacity(0.15)
+                        : hoveredMode == mode ? Palette.glassInk.opacity(0.06) : .clear)
             }
             .contentShape(RoundedRectangle(cornerRadius: 11))
         }
@@ -114,7 +113,7 @@ struct QuickBarView: View {
             Image(systemName: "xmark")
                 .font(.system(size: 12, weight: .semibold))
                 .frame(width: vertical ? 62 : 32, height: vertical ? 44 : 52)
-                .foregroundStyle(Palette.moon400)
+                .foregroundStyle(Palette.glassInkFaint)
         }
         .buttonStyle(PetPressStyle())
         .accessibilityLabel("빠른 기능 닫기")
@@ -127,7 +126,7 @@ struct QuickBarView: View {
             HStack(spacing: 8) {
                 Image(systemName: "plus")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(Palette.glassInkFaint)
                 TextField("새 할 일", text: $model.taskDraft)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12.5))
@@ -138,7 +137,7 @@ struct QuickBarView: View {
                 } label: {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Palette.bg)
+                        .foregroundStyle(Palette.glassOnAccent)
                         .frame(width: 27, height: 27)
                 }
                 .buttonStyle(.borderedProminent)
@@ -149,15 +148,15 @@ struct QuickBarView: View {
             .padding(.leading, 11)
             .padding(.trailing, 5)
             .frame(height: 40)
-            .background(Palette.moon100.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.moon100.opacity(0.12), lineWidth: 1))
+            .background(Palette.glassInk.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.glassInk.opacity(0.12), lineWidth: 1))
 
             HStack {
                 Text("목록")
-                    .foregroundStyle(Palette.moon300)
+                    .foregroundStyle(Palette.glassInkMuted)
                 Spacer()
                 Text("남은 \(model.openTaskCount)개")
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(Palette.glassInkFaint)
                     .monospacedDigit()
             }
             .font(.system(size: 10.5, weight: .medium))
@@ -170,7 +169,7 @@ struct QuickBarView: View {
                         Text("아직 적은 할 일이 없습니다")
                             .font(.system(size: 11.5))
                     }
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(Palette.glassInkFaint)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
@@ -193,28 +192,28 @@ struct QuickBarView: View {
             Button { withAnimation(PetMotion.hover) { model.toggleTask(task.id) } } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16, weight: .light))
-                    .foregroundStyle(task.isDone ? Palette.moon400 : Palette.moon300)
+                    .foregroundStyle(task.isDone ? Palette.glassInkFaint : Palette.glassInkMuted)
                     .frame(width: 28, height: 34)
             }
             .buttonStyle(PetPressStyle())
             .accessibilityLabel("\(task.title) \(task.isDone ? "완료 취소" : "완료")")
             Text(task.title)
                 .font(.system(size: 12))
-                .foregroundStyle(task.isDone ? Palette.moon400 : Palette.moon100)
+                .foregroundStyle(task.isDone ? Palette.glassInkFaint : Palette.glassInk)
                 .strikethrough(task.isDone)
                 .lineLimit(1)
             Spacer(minLength: 0)
             Button { withAnimation(PetMotion.panel) { model.removeTask(task.id) } } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(Palette.glassInkFaint)
                     .frame(width: 26, height: 30)
             }
             .buttonStyle(PetPressStyle())
             .accessibilityLabel("\(task.title) 삭제")
         }
         .frame(height: 40)
-        .overlay(alignment: .bottom) { Palette.moon100.opacity(0.09).frame(height: 1) }
+        .overlay(alignment: .bottom) { Palette.glassInk.opacity(0.09).frame(height: 1) }
         .transition(.opacity.combined(with: .offset(y: 4)))
     }
 
@@ -224,7 +223,7 @@ struct QuickBarView: View {
 
             Text("이번 주")
                 .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(Palette.moon300)
+                .foregroundStyle(Palette.glassInkMuted)
             HStack(spacing: 3) {
                 ForEach(Self.weekDates(containing: Date()), id: \.self) { date in
                     let isToday = Calendar.current.isDateInToday(date)
@@ -235,10 +234,10 @@ struct QuickBarView: View {
                             .font(.system(size: 13, weight: isToday ? .semibold : .regular))
                             .monospacedDigit()
                     }
-                    .foregroundStyle(isToday ? Palette.moon100 : Palette.moon400)
+                    .foregroundStyle(isToday ? Palette.glassInk : Palette.glassInkFaint)
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
-                    .background(isToday ? Palette.moon100.opacity(0.14) : .clear,
+                    .background(isToday ? Palette.glassInk.opacity(0.14) : .clear,
                                 in: RoundedRectangle(cornerRadius: 10))
                     .accessibilityLabel(Self.dateLabel(date) + (isToday ? " 오늘" : ""))
                 }
@@ -247,23 +246,23 @@ struct QuickBarView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: "calendar.badge.clock")
                     .font(.system(size: 22, weight: .light))
-                    .foregroundStyle(Palette.moon300)
+                    .foregroundStyle(Palette.glassInkMuted)
                 Text("일정은 Hub에서 확인")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Palette.moon100)
+                    .foregroundStyle(Palette.glassInk)
                 Text("브라우저에서 열리고 기존 로그인 상태를 사용합니다.")
                     .font(.system(size: 11))
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(Palette.glassInkFaint)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .background(Palette.moon100.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.moon100.opacity(0.1), lineWidth: 1))
+            .background(Palette.glassInk.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.glassInk.opacity(0.1), lineWidth: 1))
 
             Button { model.openHub(.calendar) } label: {
                 Label("Hub 일정 열기", systemImage: "arrow.up.right")
-                    .foregroundStyle(Palette.bg)
+                    .foregroundStyle(Palette.glassOnAccent)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -279,7 +278,7 @@ struct QuickBarView: View {
                     Image(systemName: showsHubAddress ? "chevron.up" : "chevron.down")
                 }
                 .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(Palette.moon400)
+                .foregroundStyle(Palette.glassInkFaint)
             }
             .buttonStyle(.plain)
             .accessibilityValue(showsHubAddress ? "펼침" : "접힘")
@@ -325,18 +324,18 @@ struct QuickBarView: View {
                 .textFieldStyle(.plain)
                 .lineLimit(5...5)
                 .font(.system(size: 13))
-                .foregroundStyle(Palette.moon100)
+                .foregroundStyle(Palette.glassInk)
                 .padding(11)
                 .frame(height: 100)
-                .background(Palette.moon100.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.moon100.opacity(0.11), lineWidth: 1))
+                .background(Palette.glassInk.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.glassInk.opacity(0.11), lineWidth: 1))
             HStack {
                 Text("이 Mac에 저장")
                     .font(.system(size: 10.5))
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(Palette.glassInkFaint)
                 Spacer()
                 Button(action: model.saveMemo) {
-                    Text("저장").foregroundStyle(Palette.bg)
+                    Text("저장").foregroundStyle(Palette.glassOnAccent)
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -350,7 +349,7 @@ struct QuickBarView: View {
                 : "자세한 작업은 브라우저 Hub에서 계속합니다")
             Button { model.openHub(model.mode) } label: {
                 Label("브라우저에서 열기", systemImage: "arrow.up.right.square")
-                    .foregroundStyle(Palette.bg)
+                    .foregroundStyle(Palette.glassOnAccent)
             }
             .buttonStyle(.borderedProminent)
             HStack(spacing: 8) {
@@ -361,7 +360,7 @@ struct QuickBarView: View {
             }
             Text("로그인은 열린 브라우저의 기존 Hub에서 진행합니다.")
                 .font(.system(size: 10.5))
-                .foregroundStyle(Palette.moon400)
+                .foregroundStyle(Palette.glassInkFaint)
         }
     }
 
@@ -371,45 +370,45 @@ struct QuickBarView: View {
             HStack {
                 Text("집중 시간")
                     .font(.system(size: 12))
-                    .foregroundStyle(Palette.moon100)
+                    .foregroundStyle(Palette.glassInk)
                 Spacer()
                 Stepper("\(model.focusMinutes)분", value: $model.focusMinutes, in: 1...120, step: 5)
                     .labelsHidden()
                 Text("\(model.focusMinutes)분")
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(Palette.moon100)
+                    .foregroundStyle(Palette.glassInk)
                     .frame(width: 48, alignment: .trailing)
             }
             Button(action: startFocus) {
                 Label("집중 시작", systemImage: "timer")
-                    .foregroundStyle(Palette.bg)
+                    .foregroundStyle(Palette.glassOnAccent)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             Text("중지 버튼 또는 Esc 길게 누르기로 종료할 수 있습니다.")
                 .font(.system(size: 10.5))
-                .foregroundStyle(Palette.moon400)
+                .foregroundStyle(Palette.glassInkFaint)
         }
     }
 
     private func heading(_ title: String, caption: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.moon100)
-            Text(caption).font(.system(size: 11)).foregroundStyle(Palette.moon300)
+            Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.glassInk)
+            Text(caption).font(.system(size: 11)).foregroundStyle(Palette.glassInkMuted)
         }
     }
 
     private func footer(_ label: String, mode: QuickMode) -> some View {
         HStack {
-            Text(label).font(.system(size: 10.5)).foregroundStyle(Palette.moon400)
+            Text(label).font(.system(size: 10.5)).foregroundStyle(Palette.glassInkFaint)
             Spacer()
             Button { model.openHub(mode) } label: {
                 Label("Hub에서 열기", systemImage: "arrow.up.right")
             }
             .buttonStyle(.plain)
             .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(Palette.moon300)
+            .foregroundStyle(Palette.glassInkMuted)
         }
     }
 }
