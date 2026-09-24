@@ -6,9 +6,9 @@
 
 | 영역 | 현재 상태 | 다음 확인 |
 |---|---|---|
-| Threads `@ml_bridgemaker` | Meta `Moonlight` 앱 생성, `threads_basic`·`threads_content_publish`, HTTPS 콜백 등록. 앱 시크릿 로컬 설정 완료(`ready`). 테스터 초대 수락 확인. `threads.com`에서 권한 승인 화면까지 열림. OAuth 연결 0건 | 최종 권한 승인 뒤 프로필·DB 저장 확인 |
-| Instagram `@ml_bridgemaker` | Instagram Login 앱 ID, `instagram_business_basic`·`instagram_business_content_publish`, HTTPS 콜백 등록. 앱 시크릿 로컬 설정 완료(`ready`). 테스터 초대 대기로 OAuth에서 `개발자 역할 권한 부족` 확인. 연결 0건 | 초대 수락, OAuth와 프로필 확인 |
-| YouTube `22세기 유목민` | `moonlight-youtube-509603` 프로젝트의 Data API v3, OAuth 앱 `Moonlight Video Publisher`, 읽기·업로드 범위, 테스트 사용자 3명, 전용 웹 클라이언트·로컬 콜백 설정 완료. `호가미` 브랜드 계정으로 승인 후 Hub `connected`, 반환 채널 ID `UCK_CYxp_L_BiM2GCcP4r_8w`, 갱신 토큰 확인 | 테스트 상태의 갱신 토큰 만료(2026-10-01 05:55 UTC) 전에 장기 OAuth 운영 조건 검토. 다른 채널은 각각 별도 승인 |
+| Threads `@ml_bridgemaker` | 테스터 초대 수락·OAuth 승인 완료. 로컬 Hub 상태 API `connected`, 계정명 `ml_bridgemaker` 확인 | 장기 토큰 자동 갱신·게시 실행 구현 |
+| Instagram `@ml_bridgemaker` | 테스터 초대 수락·OAuth 승인 완료. 로컬 Hub 상태 API `connected`, 계정명 `ml_bridgemaker` 확인 | 장기 토큰 자동 갱신·게시 실행 구현 |
+| YouTube 개인 3채널 | `moonlight-youtube-509603`의 Data API v3·읽기/업로드 범위·테스트 사용자 3명·웹 OAuth 클라이언트 설정 완료. `기독밈`(`UCb599DDZuNpGXdasHgqKkzw`), `문군`(`UCJ6W-afKFqwgL_h09S3K83Q`), `22세기 유목민`(`UCK_CYxp_L_BiM2GCcP4r_8w`) 각각 Hub `connected`·갱신 토큰 확인 | Testing 갱신 토큰은 각각 2026-10-01 07:17, 07:16, 05:55 UTC 만료 예정. 장기 OAuth 운영 조건 검토 |
 | Google Calendar | 기존 Hub 연결 기록에 `connected` 및 refresh token 있음 | 실제 동기화/토큰 갱신은 별도 검증. YouTube 새 클라이언트와 분리 유지 |
 | Gmail·Sheets | 현 로컬 Google OAuth provider 목록에는 `calendar`만 활성화 | 소셜 게시 범위 밖. 필요 시 별도 동의·권한·콜백 확인 |
 
@@ -34,23 +34,23 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 
 | 계정 | 확인된 접근 | API 연결에 남은 일 |
 |---|---|---|
-| `@ml_bridgemaker` Threads | 로그인된 본인 게시 UI, Moonlight 테스터 초대 수락 및 OAuth 권한 화면 확인 | 최종 Threads OAuth 승인 |
-| `@ml_bridgemaker` Instagram | 프로페셔널 대시보드, Moonlight-IG 테스터 초대 수락 화면 | 앱 역할 초대 수락, Instagram OAuth 승인 |
-| `@politic_officer` Threads·Instagram | 본인 게시 UI·Instagram 프로 대시보드, 양쪽 테스터 초대 대기 | 각 초대 수락, 계정 OAuth 승인 |
+| `@ml_bridgemaker` Threads | 로그인된 본인 게시 UI, Moonlight 테스터 초대 수락·OAuth 연결 확인 | 게시 기능 구현 전 연결만 완료 |
+| `@ml_bridgemaker` Instagram | 프로페셔널 대시보드, Moonlight-IG 테스터 초대 수락·OAuth 연결 확인 | 게시 기능 구현 전 연결만 완료 |
+| `@politic_officer` Threads·Instagram | 앞선 조사에서 본인 게시 UI·Instagram 프로 대시보드 확인. 양쪽 테스터 초대 대기. 현재 Chrome 세션·저장 로그인에는 이 계정이 없음 | 해당 계정으로 브라우저 로그인 후 각 초대 수락·OAuth 승인 |
 | HolyFunCollector Instagram | 브랜드 DB에 링크만 | 현재 로그인·프로 계정·게시 권한 확인 |
 | `@go_re_startagain` Instagram | 계정 전환 시 비밀번호 로그인 요구 | 계정 접근과 이 브랜드가 자동 발행 대상인지 확인 |
 
 ## 운영자가 현재 직접 해야 하는 단계
 
-1. `@ml_bridgemaker` Threads 초대는 수락됐다. 열린 Instagram `@ml_bridgemaker` 테스터 초대와 `@politic_officer`의 Threads·Instagram 초대 3건은 남아 있다. 수락에는 Meta 약관 동의와 **앱 소유자를 위해 테스터로 활동한다는 사실 확인**이 포함된다. 사실에 맞는 경우에만 직접 수락하거나 해당 화면에서 명시적으로 진행을 요청한다.
-2. 다른 Google/Meta 계정을 연결할 때 OAuth 승인 화면의 대상 채널과 요청 권한을 확인한다. `22세기 유목민`의 승인은 완료됐고 `aaahaaah@hanyang.ac.kr` 추가 인증은 필요하지 않다.
+1. `@politic_officer`의 Instagram·Threads 로그인은 현재 Chrome에 없다. 운영자에게 Instagram 계정 전환 로그인 창을 열어 두었다. 로그인 후 두 테스터 초대 수락과 각 OAuth 연결을 이어서 검증한다. 초대에는 Meta 약관 및 테스터 활동 확인이 포함되며, 운영자는 이번 대화에서 두 초대 진행을 명시적으로 승인했다.
+2. 회사 YouTube `클래스인 문`·`ClassIn KR`은 현재 회사 Chrome 프로필에서 각 Google 계정을 선택해 `Moonlight Video Publisher`의 미검증 앱 경고까지 도달했다. 회사 채널의 조회·동영상 관리 권한 부여는 별도 확인 대기 중이다. 승인 후 실제 OAuth 채널 선택 목록과 반환 채널 ID를 검증한다. 기존 Google Cloud 자격증명 화면의 재인증은 별개이며 Cloud 소유권은 채널 OAuth 승인의 선행 조건이 아니다.
 
 ## 연결 뒤에도 필요한 변경
 
-- `integration_connections`의 `account_key`·계정별 고유 제약과 OAuth 저장·상태 API의 계정 목록을 서울 운영 DB에 적용했다. `20260924_0046_social_multiaccount_connections.sql`은 이력에도 기록됐다. 적용 전후 기존 연결 9건, 22세기 유목민의 동일한 연결 ID·채널 ID·갱신 토큰을 확인했다. 브랜드별 계정 선택 UI와 게시 대상 매핑은 후속 작업이다.
+- `integration_connections`의 `account_key`·계정별 고유 제약과 OAuth 저장·상태 API의 계정 목록을 서울 운영 DB에 적용했다. `20260924_0046_social_multiaccount_connections.sql`은 이력에도 기록됐다. 적용 전후 기존 연결 9건과 22세기 유목민의 동일한 연결 ID·채널 ID·갱신 토큰을 확인했다. 지금 연결된 소셜 5건의 `brandKey`는 모두 비어 있다. 브랜드별 계정 선택 UI와 게시 대상 매핑은 후속 작업이다.
 - 현재 Settings는 Threads·Instagram만 플랫폼별 한 연결 행을 보여주며 YouTube 연결 버튼은 아직 없다. YouTube 파일럿은 `/api/social/youtube/connect?channelId=UC...` 직접 경로를 쓴다.
 - Meta는 로컬 HTTP 콜백을 거부해 파일럿용 임시 HTTPS 터널을 등록했다. 장기 운영에는 고정 HTTPS Hub 주소, 배포 자격증명, 콜백 재등록, 토큰 갱신 작업이 필요하다.
-- Google 외부 OAuth 앱의 `Testing` 상태에서 YouTube 범위로 받은 refresh token은 **7일 뒤 만료**된다. 이번 연결의 상태 API는 만료를 **2026-10-01 05:55 UTC**로 표시한다. [Google OAuth 공식 안내](https://developers.google.com/identity/protocols/oauth2). 새 미감사 API 프로젝트의 `videos.insert` 업로드는 **비공개로 제한**되므로 공개 자동 발행에는 [YouTube API 감사](https://developers.google.com/youtube/v3/docs/videos/insert)가 필요하다.
+- Google 외부 OAuth 앱의 `Testing` 상태에서 YouTube 범위로 받은 refresh token은 **7일 뒤 만료**된다. 상태 API의 세 채널별 표시 만료는 위 표를 따른다. [Google OAuth 공식 안내](https://developers.google.com/identity/protocols/oauth2). 새 미감사 API 프로젝트의 `videos.insert` 업로드는 **비공개로 제한**되므로 공개 자동 발행에는 [YouTube API 감사](https://developers.google.com/youtube/v3/docs/videos/insert)가 필요하다.
 - Google Cloud `Moonlight YouTube`의 Audience는 `External · Testing`이고 `앱 게시` 버튼은 브랜딩 미완료로 비활성이다. [Google 브랜딩 안내](https://support.google.com/cloud/answer/15549049?hl=en)에 따라 홈페이지·개인정보처리방침·서비스 약관 링크와 승인 도메인을 채워야 한다. [Google Audience 안내](https://support.google.com/cloud/answer/15549945?hl=en)에 따르면 `In Production`으로 옮기면 Testing의 7일 동의 만료 규칙은 적용되지 않는다. 전환 후에는 기존 7일 토큰이 연장된다고 가정하지 말고 채널을 재승인해 새 토큰 만료값을 확인한다. [개인 용도 100명 미만](https://support.google.com/cloud/answer/13464323?hl=en)은 OAuth 검증 면제 대상일 수 있으나 미검증 경고와 신규 사용자 100명 한도는 남는다. 이 전환은 YouTube 업로드의 비공개 제한을 해제하지 않는다.
 - 현재 Vercel `moonlight-pro-hub` 프로젝트에 연결된 도메인은 `moonlight-pro-hub.vercel.app` 하나뿐이다. 이 배포의 `/legal/privacy`·`/legal/terms`·`/legal/data-deletion`도 로그인으로 307 이동한다. 공개 경로와 `/legal/about` 코드는 준비했으나 아직 배포되지 않았다. 배포 뒤 공개 접근, Google 승인 도메인 등록 가능 여부, 도메인 소유 확인을 검증해야 한다. 현재 Vercel 배포 환경 변수는 비어 있어 운영 OAuth 콜백 배포도 별도 구성 필요하다.
 - 기존 `SUPABASE_ACCESS_TOKEN`은 관리 API에서 401을 반환한다. 이번 DB 마이그레이션은 로그인된 서울 프로젝트 SQL Editor와 이력 함수로 적용했다. `npm run db:check`·`npm run db:migrate`를 다시 사용하려면 관리 토큰 갱신이 필요하다.
