@@ -36,6 +36,9 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         openItem.keyEquivalentModifierMask = [.control, .option]
         openItem.target = self
         menu.addItem(openItem)
+        let widgetItem = NSMenuItem(title: "할 일 위젯 열기", action: #selector(showWidget), keyEquivalent: "")
+        widgetItem.target = self
+        menu.addItem(widgetItem)
         let messageItem = NSMenuItem(title: "짧은 메시지 보기", action: #selector(togglePreview), keyEquivalent: "")
         messageItem.target = self
         menu.addItem(messageItem)
@@ -51,6 +54,7 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleBar() { coordinator?.toggleBar() }
+    @objc private func showWidget() { coordinator?.showWidget() }
     @objc private func togglePreview() { coordinator?.togglePreview() }
     @objc private func openHub() { model.openHub(.tasks) }
     @objc private func quit() {

@@ -51,6 +51,13 @@ enum QuickMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum CompactMode: String, CaseIterable, Identifiable {
+    case tasks, memo
+
+    var id: String { rawValue }
+    var title: String { self == .tasks ? "할 일" : "메모" }
+}
+
 struct LocalTask: Codable, Identifiable, Equatable {
     var id: UUID
     var title: String
@@ -68,6 +75,8 @@ struct FocusClock: Equatable {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var mode: QuickMode = .tasks
+    @Published var compactMode: CompactMode = .tasks
+    @Published var compactOpenRevision = 0
     @Published var tasks: [LocalTask] = []
     @Published var taskDraft = ""
     @Published var savedMemo = ""
