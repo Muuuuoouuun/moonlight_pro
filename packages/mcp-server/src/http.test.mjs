@@ -52,7 +52,7 @@ test('a registered client lists its profile and reaches the Hub with the server-
   const {token}=createClient(h.file,{name:'n8n',profile:'core'});
   const client=await h.connect(token);
   const {tools}=await client.listTools();
-  assert.deepEqual(tools.map(tool=>tool.name).sort(),['complete_task','create_task','get_command_receipt','get_daily_brief','get_hub_health','get_task','list_tasks','update_task']);
+  assert.deepEqual(tools.map(tool=>tool.name).sort(),['complete_task','create_task','get_command_receipt','get_daily_brief','get_hub_health','get_skill_request','get_task','list_tasks','record_skill_receipt','update_task']);
   const result=await client.callTool({name:'list_tasks',arguments:{limit:1,status:'todo'}});
   assert.deepEqual(result.structuredContent,payload);
   assert.ok(h.hubAuth.length>0);
@@ -98,7 +98,7 @@ test('URL tokens work only for clients created with allowUrl',async t=>{
   const url=createClient(h.file,{name:'claude-web',profile:'core',readOnly:true,allowUrl:true});
   assert.equal((await h.raw({path:`/mcp/${header.token}`,body:INIT})).status,401);
   const client=await h.connect(null,{path:`${h.url}/${url.token}`});
-  assert.equal((await client.listTools()).tools.length,5);
+  assert.equal((await client.listTools()).tools.length,6);
   assert.equal(h.logs.some(line=>line.includes(url.token)),false);
 });
 

@@ -108,11 +108,11 @@ Nothing here makes Moonlight reachable from the internet. Hosted services connec
 
 ## Profiles and compatibility
 
-The CLI defaults to `core` (8 tools). Select one profile with `COM_MOON_MCP_PROFILE`:
+The CLI defaults to `core` (10 tools). Select one profile with `COM_MOON_MCP_PROFILE`:
 
 | Profile | Work |
 | --- | --- |
-| `core` | Health, daily brief, task list/detail/create/update/complete, receipt |
+| `core` | Health, daily brief, task list/detail/create/update/complete, command receipt, local skill request/receipt |
 | `pms` | Task workflow plus project list/detail |
 | `sales` | Follow-ups, work orders, actual contact outcome recording, revenue, receipt |
 | `content` | Content queue and existing campaign command |
