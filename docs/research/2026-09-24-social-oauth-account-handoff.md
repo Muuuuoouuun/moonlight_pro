@@ -19,14 +19,14 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 | Google 로그인 | Studio에서 확인한 채널 | 채널 ID |
 |---|---|---|
 | `seoulmentoss@gmail.com` | 기독밈 | `UCb599DDZuNpGXdasHgqKkzw` |
-| `seoulmentoss@gmail.com` | 문군 | `UCJ6W-afKFqwgL_h09S3K83Q` |
-| `seoulmentoss@gmail.com` | 22세기 유목민: Studio에서는 소유자로 표시되지만 이 로그인 OAuth 선택 목록에는 없음 | `UCK_CYxp_L_BiM2GCcP4r_8w` |
+| `seoulmentoss@gmail.com` | 문군: Studio 소유자 행은 있으나 이 로그인 브랜드 계정 목록에는 없음 | `UCJ6W-afKFqwgL_h09S3K83Q` |
+| `seoulmentoss@gmail.com` | 22세기 유목민: Studio 소유자 행은 있으나 이 로그인 OAuth 선택·브랜드 계정 목록에는 없음 | `UCK_CYxp_L_BiM2GCcP4r_8w` |
 | `junhyuk.mun@classin.com` | 클래스인 문 | `UCNK7qVBPx7HJ0gpJw6DacrQ` |
 | `classinkr@classin.com` | ClassIn KR | `UCmHz5kvfHtL_jbmmAYyF6HA` |
 
 `classinkr@classin.com`의 ClassIn KR 권한 표에는 `ek.hwa@with-people.co.kr`도 관리자라고 표시됐다. 그 계정의 API 승인은 범위에 넣지 않았다. 회사 두 이메일의 **Cloud Console 소유권은 YouTube OAuth 승인 조건이 아니다**. 기존 Hub `GOOGLE_CLIENT_ID`의 원래 프로젝트를 찾아야 할 때는 `junhyuk.mun@classin.com` Cloud 재인증이 별도로 필요하다. YouTube는 개인 계정의 전용 프로젝트·클라이언트를 사용한다.
 
-`seoulmentoss@gmail.com`으로 파일럿을 시작했을 때 Google 채널 선택 목록에는 개인 기본 채널, `호가미`, `기독밈`만 표시됐다. `22세기 유목민`은 표시되지 않아 승인하지 않았다. 다른 로그인 `aaahaaah@hanyang.ac.kr` 선택 시 비밀번호 재인증 화면이 열렸으나 아직 소유 여부는 확인하지 못했다. 재인증 후 이 로그인에서 22세기 채널이 보이는지 확인해야 한다. `문군`·회사 두 채널도 OAuth 목록 및 반환 ID를 아직 검증하지 않았다. 현재 어느 채널에도 승인이나 업로드를 하지 않았다.
+`seoulmentoss@gmail.com`으로 파일럿을 시작했을 때 Google 채널 선택 목록에는 개인 기본 채널, `호가미`, `기독밈`만 표시됐다. 이 Google 계정의 브랜드 계정 관리 목록에도 `기독밈`·`호가미`만 보인다. `22세기 유목민`은 표시되지 않아 승인하지 않았다. 다른 로그인 `aaahaaah@hanyang.ac.kr` 선택 시 비밀번호 재인증 화면이 열렸으나 아직 소유 여부는 확인하지 못했다. 재인증 후 이 로그인에서 22세기 채널이 보이는지 확인해야 한다. `문군`·회사 두 채널도 OAuth 목록 및 반환 ID를 아직 검증하지 않았다. 현재 어느 채널에도 승인이나 업로드를 하지 않았다.
 
 회사 계정의 동의가 `admin_policy_enforced` 등으로 막히면 Google Workspace 관리자가 [관리 콘솔의 보안 → 액세스 및 데이터 관리 → API 제어](https://support.google.com/a/answer/7281227?hl=en&p=app_access_apps)에서 해당 OAuth 앱의 접근 정책을 확인해야 한다. 현재는 실제 OAuth 승인 전이라 차단 여부를 단정할 수 없다.
 

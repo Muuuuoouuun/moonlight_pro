@@ -42,7 +42,7 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있다
 
 1. Moonlight에 YouTube 전용 OAuth scope·callback·상태 조회와 전용 클라이언트 자격증명을 설정했다. 로컬 상태는 `ready`지만 채널 승인은 없고 업로드 구현도 없다.
 2. 기존 Hub `GOOGLE_CLIENT_ID`의 프로젝트는 개인 계정 Cloud 프로젝트들에서 찾지 못했다. 별도 `classin.com` 계정의 Cloud 자격증명 화면은 재인증 대기 중이다. YouTube는 이 기존 Calendar 클라이언트와 분리된 전용 프로젝트를 사용하므로 연결의 선행 조건은 아니다.
-3. Google OAuth 앱의 테스트 사용자 3명과 웹 클라이언트 설정은 완료됐다. `seoulmentoss@gmail.com` OAuth 선택 목록에 `22세기 유목민` 채널이 보이지 않았다. 신규 미감사 프로젝트 업로드는 비공개로 제한되며 공개 발행에는 감사가 필요하다.
+3. Google OAuth 앱의 테스트 사용자 3명과 웹 클라이언트 설정은 완료됐다. `seoulmentoss@gmail.com`의 OAuth 선택 목록에는 개인 기본 채널과 `기독밈`·`호가미`가, 브랜드 계정 목록에는 `기독밈`·`호가미`만 보인다. `22세기 유목민`·`문군`은 어느 목록에도 보이지 않았다. 신규 미감사 프로젝트 업로드는 비공개로 제한되며 공개 발행에는 감사가 필요하다.
 4. Studio의 `소유자` 행은 API 권한의 증거가 아니다. [YouTube 공식 도움말](https://support.google.com/youtube/answer/9481328?hl=en)에 따르면 채널 권한으로 초대된 사용자는 API를 쓸 수 없다. 실제 Google/Brand 계정에서 채널이 OAuth 선택 목록에 나오는지, 이후 `channels.list(mine=true)`가 기대한 `UC...` ID를 반환하는지 확인해야 한다.
 
 ## 플랫폼별 발행 가능성
