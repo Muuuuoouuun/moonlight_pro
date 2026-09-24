@@ -161,6 +161,7 @@ const BRAND_CHILDREN = {
 
 const CONTENT_CHILDREN = [
   { key: 'ct-performance', label: '성과', path: 'dashboard/content/performance' },
+  { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
   { key: 'ct-queue', label: '소재·제작', path: 'dashboard/content/queue' },
   { key: 'ct-studio', label: '원고 작성', path: 'dashboard/content/studio' },
   { key: 'ct-campaigns', label: 'Campaigns', path: 'dashboard/content/campaigns' },
@@ -359,9 +360,12 @@ export const SIDEBAR_PRIMARY = [
     },
     children: {
       all: CONTENT_CHILDREN,
-      // ClassIn 콘텐츠 is a single surface — the anchor is the destination.
-      classin: [],
+      classin: [
+        { key: 'ct-queue', label: '소재·제작', path: 'dashboard/classin/content' },
+        { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
+      ],
       personal: [
+        { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
         { key: 'ct-queue', label: '소재·제작', path: 'dashboard/brand/queue' },
         { key: 'ct-studio', label: '원고 작성', path: 'dashboard/brand/studio' },
       ],
