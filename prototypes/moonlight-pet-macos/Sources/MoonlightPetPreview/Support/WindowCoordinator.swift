@@ -329,6 +329,7 @@ final class WindowCoordinator: NSObject {
         let visible = petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? frame
         frame.origin.x = max(visible.minX + 8, pet.minX - size.width - 10)
         frame.origin.y = min(max(pet.midY - size.height / 2, visible.minY + 8), visible.maxY - size.height - 8)
+        guard frame != barWindow.frame else { return }
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             barWindow.setFrame(frame, display: true)
         } else {
@@ -343,7 +344,7 @@ final class WindowCoordinator: NSObject {
     private static func barSize(for mode: QuickMode) -> NSSize {
         switch mode {
         case .tasks: return NSSize(width: 368, height: 416)
-        case .calendar: return NSSize(width: 368, height: 376)
+        case .calendar: return NSSize(width: 368, height: 416)
         case .memo: return NSSize(width: 440, height: 290)
         case .office, .council: return NSSize(width: 440, height: 250)
         case .focus: return NSSize(width: 440, height: 230)
