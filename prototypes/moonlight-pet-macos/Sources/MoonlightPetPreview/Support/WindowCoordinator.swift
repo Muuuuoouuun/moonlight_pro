@@ -11,28 +11,35 @@ final class KeyPanel: NSPanel {
 
 final class PetClickView: NSView {
     private let model: AppModel
-    var onSingleClick: (() -> Void)?
-    var onDoubleClick: (() -> Void)?
+    private let interaction = PetInteraction()
+    var onClick: (() -> Void)?
     var onMoved: (() -> Void)?
-    private var pendingSingle: DispatchWorkItem?
     private var lastScreenPoint: NSPoint?
+    private var didDrag = false
 
     init(frame frameRect: NSRect, model: AppModel) {
         self.model = model
         super.init(frame: frameRect)
-        let host = NSHostingView(rootView: PetVisual(model: model))
+        let host = NSHostingView(rootView: PetVisual(model: model, interaction: interaction))
         host.frame = bounds
         host.autoresizingMask = [.width, .height]
         addSubview(host)
+        addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        ))
     }
 
     required init?(coder: NSCoder) { nil }
 
     override func hitTest(_ point: NSPoint) -> NSView? { self }
 
+    override func mouseEntered(with event: NSEvent) { interaction.isHovered = true }
+    override func mouseExited(with event: NSEvent) { interaction.isHovered = false }
+
     override func rightMouseDown(with event: NSEvent) {
-        pendingSingle?.cancel()
-        pendingSingle = nil
         let menu = NSMenu(title: "펫 캐릭터")
         for character in PetCharacter.allCases {
             let item = NSMenuItem(title: character.title, action: #selector(selectCharacter(_:)), keyEquivalent: "")
@@ -57,15 +64,17 @@ final class PetClickView: NSView {
     override func mouseDown(with event: NSEvent) {
         interactionLog.info("pet mouseDown count=\(event.clickCount)")
         lastScreenPoint = NSEvent.mouseLocation
-        if event.clickCount >= 2 {
-            pendingSingle?.cancel()
-            pendingSingle = nil
-            onDoubleClick?()
-        } else {
-            pendingSingle?.cancel()
-            let action = DispatchWorkItem { [weak self] in self?.onSingleClick?() }
-            pendingSingle = action
-            DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: action)
+        didDrag = false
+        interaction.isPressed = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        defer {
+            lastScreenPoint = nil
+            interaction.isPressed = false
+        }
+        if !didDrag && event.clickCount == 1 && bounds.contains(convert(event.locationInWindow, from: nil)) {
+            onClick?()
         }
     }
 
@@ -74,8 +83,8 @@ final class PetClickView: NSView {
         let current = NSEvent.mouseLocation
         let distance = hypot(current.x - previous.x, current.y - previous.y)
         guard distance > 2 else { return }
-        pendingSingle?.cancel()
-        pendingSingle = nil
+        didDrag = true
+        interaction.isPressed = false
         var origin = window.frame.origin
         origin.y += current.y - previous.y
         let visible = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
@@ -105,26 +114,28 @@ final class WindowCoordinator: NSObject {
     private var escapeTimer: Timer?
     private var hotKeyRef: EventHotKeyRef?
     private var hotKeyHandler: EventHandlerRef?
+    private var desiredVisibility: [ObjectIdentifier: Bool] = [:]
+    private var transitionRevisions: [ObjectIdentifier: Int] = [:]
 
     init(model: AppModel) {
         self.model = model
-        petWindow = Self.panel(size: NSSize(width: 72, height: 72))
+        petWindow = Self.panel(size: NSSize(width: 56, height: 56))
         previewWindow = Self.panel(size: NSSize(width: 326, height: 130))
-        barWindow = Self.panel(size: NSSize(width: 440, height: 250))
+        barWindow = Self.panel(size: Self.barSize(for: model.mode))
         super.init()
 
         let petClickView = PetClickView(frame: NSRect(origin: .zero, size: petWindow.frame.size), model: model)
-        petClickView.onSingleClick = { [weak self] in self?.togglePreview() }
-        petClickView.onDoubleClick = { [weak self] in self?.toggleBar() }
+        petClickView.onClick = { [weak self] in self?.toggleBar() }
         petClickView.onMoved = { [weak self] in self?.placeTransientWindows() }
         petWindow.contentView = petClickView
+        petWindow.hasShadow = false
 
         previewWindow.contentView = NSHostingView(rootView: PreviewView(model: model) { [weak self] in
             self?.showBar()
         })
         barWindow.contentView = NSHostingView(rootView: QuickBarView(
             model: model,
-            close: { [weak self] in self?.barWindow.orderOut(nil) },
+            close: { [weak self] in self?.dismissBar() },
             modeChanged: { [weak self] in self?.resizeBar() },
             startFocus: { [weak self] in self?.startFocus() }
         ))
@@ -151,8 +162,8 @@ final class WindowCoordinator: NSObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self, !self.model.isFocused else { return }
-                self.previewWindow.orderOut(nil)
-                self.barWindow.orderOut(nil)
+                self.hideNow(self.previewWindow)
+                self.hideNow(self.barWindow)
             }
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
@@ -178,8 +189,8 @@ final class WindowCoordinator: NSObject {
                     self.escapeTimer = nil
                 }
             } else if event.type == .keyDown {
-                self.previewWindow.orderOut(nil)
-                self.barWindow.orderOut(nil)
+                self.dismiss(self.previewWindow)
+                self.dismiss(self.barWindow)
             }
             return nil
         }
@@ -199,27 +210,97 @@ final class WindowCoordinator: NSObject {
     func togglePreview() {
         interactionLog.info("toggle preview")
         guard !model.isFocused else { return }
-        if previewWindow.isVisible { previewWindow.orderOut(nil) }
+        if isRequestedVisible(previewWindow) { dismiss(previewWindow) }
         else {
-            barWindow.orderOut(nil)
+            dismiss(barWindow)
             placeTransientWindows()
-            previewWindow.makeKeyAndOrderFront(nil)
+            present(previewWindow)
         }
     }
 
     func toggleBar() {
         guard !model.isFocused else { return }
-        if barWindow.isVisible { barWindow.orderOut(nil) }
+        if isRequestedVisible(barWindow) { dismiss(barWindow) }
         else { showBar() }
     }
 
     func showBar() {
         interactionLog.info("show bar")
         guard !model.isFocused else { return }
-        previewWindow.orderOut(nil)
+        dismiss(previewWindow)
         placeTransientWindows()
-        barWindow.makeKeyAndOrderFront(nil)
+        present(barWindow)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func dismissBar() { dismiss(barWindow) }
+
+    private func isRequestedVisible(_ window: KeyPanel) -> Bool {
+        desiredVisibility[ObjectIdentifier(window)] == true
+    }
+
+    @discardableResult
+    private func advanceRevision(for window: KeyPanel) -> Int {
+        let key = ObjectIdentifier(window)
+        let next = (transitionRevisions[key] ?? 0) + 1
+        transitionRevisions[key] = next
+        return next
+    }
+
+    private func present(_ window: KeyPanel) {
+        advanceRevision(for: window)
+        desiredVisibility[ObjectIdentifier(window)] = true
+        let targetFrame = window.frame
+        let wasVisible = window.isVisible
+        if PetMotion.reduceMotion {
+            window.alphaValue = 1
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        if !wasVisible {
+            window.alphaValue = 0
+            var startFrame = targetFrame
+            startFrame.origin.x += 4
+            window.setFrame(startFrame, display: false)
+        }
+        window.makeKeyAndOrderFront(nil)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = PetMotion.overlayDuration
+            context.timingFunction = PetMotion.timingFunction
+            window.animator().alphaValue = 1
+            if !wasVisible { window.animator().setFrame(targetFrame, display: true) }
+        }
+    }
+
+    private func dismiss(_ window: KeyPanel) {
+        let key = ObjectIdentifier(window)
+        let revision = advanceRevision(for: window)
+        desiredVisibility[key] = false
+        guard window.isVisible else { return }
+        if PetMotion.reduceMotion {
+            hideNow(window)
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = PetMotion.hoverDuration
+            context.timingFunction = PetMotion.timingFunction
+            window.animator().alphaValue = 0
+        } completionHandler: { [weak self, weak window] in
+            Task { @MainActor in
+                guard let self, let window,
+                      self.transitionRevisions[key] == revision,
+                      !self.isRequestedVisible(window) else { return }
+                window.orderOut(nil)
+                window.alphaValue = 1
+            }
+        }
+    }
+
+    private func hideNow(_ window: KeyPanel) {
+        advanceRevision(for: window)
+        desiredVisibility[ObjectIdentifier(window)] = false
+        window.orderOut(nil)
+        window.alphaValue = 1
     }
 
     private func placePetInitially() {
@@ -241,26 +322,31 @@ final class WindowCoordinator: NSObject {
     }
 
     private func resizeBar() {
-        let height: CGFloat
-        switch model.mode {
-        case .tasks: height = 250
-        case .memo: height = 290
-        case .calendar, .office, .council: height = 250
-        case .focus: height = 230
-        }
+        let size = Self.barSize(for: model.mode)
         var frame = barWindow.frame
-        frame.origin.y += frame.height - height
-        frame.size.height = height
+        frame.size = size
+        let pet = petWindow.frame
         let visible = petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? frame
-        frame.origin.y = min(max(frame.origin.y, visible.minY + 8), visible.maxY - height - 8)
+        frame.origin.x = max(visible.minX + 8, pet.minX - size.width - 10)
+        frame.origin.y = min(max(pet.midY - size.height / 2, visible.minY + 8), visible.maxY - size.height - 8)
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             barWindow.setFrame(frame, display: true)
         } else {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.18
-                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.7, 0.3, 1)
+                context.duration = PetMotion.panelDuration
+                context.timingFunction = PetMotion.timingFunction
                 barWindow.animator().setFrame(frame, display: true)
             }
+        }
+    }
+
+    private static func barSize(for mode: QuickMode) -> NSSize {
+        switch mode {
+        case .tasks: return NSSize(width: 368, height: 416)
+        case .calendar: return NSSize(width: 368, height: 376)
+        case .memo: return NSSize(width: 440, height: 290)
+        case .office, .council: return NSSize(width: 440, height: 250)
+        case .focus: return NSSize(width: 440, height: 230)
         }
     }
 
@@ -268,8 +354,8 @@ final class WindowCoordinator: NSObject {
         model.startFocus()
         guard model.isFocused else { return }
         petWindow.orderOut(nil)
-        previewWindow.orderOut(nil)
-        barWindow.orderOut(nil)
+        hideNow(previewWindow)
+        hideNow(barWindow)
         previousPresentationOptions = NSApp.presentationOptions
         NSApp.presentationOptions = [.hideDock, .hideMenuBar, .disableProcessSwitching, .disableHideApplication]
         rebuildShields()

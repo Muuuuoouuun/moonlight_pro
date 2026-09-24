@@ -6,6 +6,7 @@ import {
   resolveMetaThreadsConfig,
 } from "@/lib/meta-threads";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { resolveSocialBrandKey } from "@/lib/social-account-connections";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,18 @@ export async function GET(req) {
   const workspaceId = resolveDefaultWorkspaceId();
   const config = resolveMetaThreadsConfig();
   const brandHandle = searchParams.get("brand") || config.brandHandle;
-  const returnPath = searchParams.get("returnPath") || "/dashboard/settings";
+  const requestedReturnPath = searchParams.get("returnPath") || "";
+  const returnPath = requestedReturnPath.startsWith("/") &&
+    !requestedReturnPath.startsWith("//") && !requestedReturnPath.includes("\\")
+    ? requestedReturnPath : "/dashboard/settings";
+  let brandKey;
+  try {
+    brandKey = await resolveSocialBrandKey(workspaceId, searchParams.get("brandKey"));
+  } catch {
+    const target = new URL(returnPath, origin);
+    target.searchParams.set("metaThreads", "invalid-brand");
+    return NextResponse.redirect(target);
+  }
 
   if (!hasMetaThreadsOAuthStateSecret()) {
     const target = new URL(returnPath, origin);
@@ -26,6 +38,7 @@ export async function GET(req) {
     origin,
     workspaceId,
     brandHandle,
+    brandKey,
     returnPath,
   });
 

@@ -35,6 +35,7 @@ for (const [provider, buildAuthUrl, decodeState] of [
       origin: "https://hub.example.com",
       workspaceId: "workspace-1",
       brandHandle: "brand-one",
+      brandKey: "bridgemaker",
       returnPath: "/dashboard/settings",
     });
     const state = new URL(authUrl).searchParams.get("state");
@@ -43,6 +44,7 @@ for (const [provider, buildAuthUrl, decodeState] of [
     assert.equal(decoded.invalid, undefined);
     assert.equal(decoded.workspaceId, "workspace-1");
     assert.equal(decoded.brandHandle, "brand-one");
+    assert.equal(decoded.brandKey, "bridgemaker");
     assert.equal(decoded.returnPath, "/dashboard/settings");
     assert.ok(Number.isSafeInteger(decoded.iat));
   });
@@ -79,5 +81,10 @@ for (const [provider, buildAuthUrl, decodeState] of [
       decodeState(signedState({ iat: Date.now() + 60_000 })),
       { invalid: true },
     );
+  });
+
+  test(`${provider} rejects a signed state without a workspace or expected account`, () => {
+    assert.deepEqual(decodeState(signedState({ iat: Date.now(), brandHandle: "brand-one" })), { invalid: true });
+    assert.deepEqual(decodeState(signedState({ iat: Date.now(), workspaceId: "workspace-1" })), { invalid: true });
   });
 }

@@ -103,7 +103,7 @@ final class AppModel: ObservableObject {
     var previewText: String {
         if openTaskCount > 0 { return "할 일 \(openTaskCount)개가 남아 있어요." }
         if !savedMemo.isEmpty { return "저장한 메모가 있어요." }
-        return "새 알림은 없어요. 빠른 입력은 두 번 눌러주세요."
+        return "새 알림은 없어요. 펫을 눌러 빠른 기능을 열어요."
     }
 
     func addTask() {

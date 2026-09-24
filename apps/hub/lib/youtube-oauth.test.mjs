@@ -44,6 +44,7 @@ test("YouTube OAuth uses its dedicated client, exact callback, offline grant and
     origin: "http://localhost:3000",
     workspaceId: "workspace-1",
     expectedChannelId: "UC123",
+    brandKey: "bridgemaker",
     returnPath: "/dashboard/settings",
   }));
 
@@ -58,6 +59,7 @@ test("YouTube OAuth uses its dedicated client, exact callback, offline grant and
   assert.deepEqual(decodeYouTubeState(url.searchParams.get("state")), {
     workspaceId: "workspace-1",
     expectedChannelId: "UC123",
+    brandKey: "bridgemaker",
     returnPath: "/dashboard/settings",
     iat: JSON.parse(Buffer.from(url.searchParams.get("state").split(".")[0], "base64url")).iat,
   });
@@ -145,11 +147,11 @@ test("connection summary never includes tokens and reports refresh expiry", () =
   assert.doesNotMatch(JSON.stringify(summary), /access-secret|refresh-secret/);
 });
 
-test("a zero-row update cannot report a YouTube connection as persisted", async () => {
+test("a zero-row upsert cannot report a YouTube connection as persisted", async () => {
   process.env.SUPABASE_URL = "https://db.example.com";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "db-test-key";
   globalThis.fetch = async (_url, options) => {
-    if (options.method === "PATCH") {
+    if (options.method === "POST") {
       return { ok: true, status: 200, text: async () => "[]", headers: { get: () => null } };
     }
     return {

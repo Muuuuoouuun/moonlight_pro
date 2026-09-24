@@ -2,69 +2,115 @@ import SwiftUI
 
 struct QuickBarView: View {
     @ObservedObject var model: AppModel
+    @State private var hoveredMode: QuickMode?
     let close: () -> Void
     let modeChanged: () -> Void
     let startFocus: () -> Void
 
-    private var motion: Animation? {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-            ? nil
-            : .timingCurve(0.2, 0.7, 0.3, 1, duration: 0.18)
+    private var usesVerticalLayout: Bool {
+        model.mode == .tasks || model.mode == .calendar
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(QuickMode.allCases) { mode in
-                    Button {
-                        withAnimation(motion) { model.mode = mode }
-                        modeChanged()
-                    } label: {
-                        VStack(spacing: 5) {
-                            Image(systemName: mode.symbol).font(.system(size: 16, weight: .medium))
-                            Text(mode.title).font(.system(size: 10.5, weight: .medium))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .foregroundStyle(model.mode == mode ? Palette.moon100 : Palette.moon500)
-                        .background(model.mode == mode ? Palette.surface3 : .clear)
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(KeyEquivalent(mode.shortcut), modifiers: .command)
-                    .accessibilityLabel(mode.title)
+        Group {
+            if usesVerticalLayout {
+                HStack(spacing: 0) {
+                    verticalNavigation
+                    Rectangle().fill(Palette.line.opacity(0.6)).frame(width: 1)
+                    modeContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .padding(16)
                 }
-                Button(action: close) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 28, height: 56)
-                        .foregroundStyle(Palette.moon400)
+                .frame(width: 368)
+                .transition(.opacity)
+            } else {
+                VStack(spacing: 0) {
+                    horizontalNavigation
+                    Rectangle().fill(Palette.line.opacity(0.6)).frame(height: 1)
+                    modeContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .padding(18)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("빠른 기능 닫기")
+                .frame(width: 440)
+                .transition(.opacity)
             }
-            .background(Palette.surface2)
-
-            Rectangle().fill(Palette.line.opacity(0.6)).frame(height: 1)
-
-            Group {
-                switch model.mode {
-                case .tasks: tasksContent
-                case .memo: memoContent
-                case .calendar, .office, .council: browserContent
-                case .focus: focusContent
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(18)
-            .id(model.mode)
-            .transition(.opacity)
         }
-        .frame(width: 440)
-        .background(Palette.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Palette.line.opacity(0.65), lineWidth: 1))
+        .moonlightGlassPanel(cornerRadius: 16)
         .tint(Palette.moon300)
-        .animation(motion, value: model.mode)
+    }
+
+    private var modeContent: some View {
+        Group {
+            switch model.mode {
+            case .tasks: tasksContent
+            case .memo: memoContent
+            case .calendar, .office, .council: browserContent
+            case .focus: focusContent
+            }
+        }
+        .id(model.mode)
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .offset(y: 4)),
+            removal: .opacity
+        ))
+    }
+
+    private var horizontalNavigation: some View {
+        HStack(spacing: 0) {
+            ForEach(QuickMode.allCases) { mode in
+                navigationButton(mode, vertical: false)
+            }
+            closeButton(vertical: false)
+        }
+        .background(Palette.surface2.opacity(0.28))
+    }
+
+    private var verticalNavigation: some View {
+        VStack(spacing: 0) {
+            ForEach(QuickMode.allCases) { mode in
+                navigationButton(mode, vertical: true)
+            }
+            Spacer(minLength: 0)
+            closeButton(vertical: true)
+        }
+        .frame(width: 64)
+        .frame(maxHeight: .infinity)
+        .background(Palette.surface2.opacity(0.28))
+    }
+
+    private func navigationButton(_ mode: QuickMode, vertical: Bool) -> some View {
+        Button {
+            guard model.mode != mode else { return }
+            withAnimation(PetMotion.panel) { model.mode = mode }
+            modeChanged()
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: mode.symbol).font(.system(size: 16, weight: .medium))
+                Text(mode.title).font(.system(size: 10.5, weight: .medium))
+            }
+            .frame(width: vertical ? 64 : nil)
+            .frame(maxWidth: vertical ? nil : .infinity)
+            .frame(height: vertical ? 52 : 56)
+            .foregroundStyle(model.mode == mode ? Palette.moon100 : Palette.moon400)
+            .background(model.mode == mode ? Palette.moon300.opacity(0.12)
+                : hoveredMode == mode ? Palette.moon300.opacity(0.06) : .clear)
+        }
+        .buttonStyle(PetPressStyle())
+        .onHover { hoveredMode = $0 ? mode : nil }
+        .animation(PetMotion.hover, value: hoveredMode == mode)
+        .keyboardShortcut(KeyEquivalent(mode.shortcut), modifiers: .command)
+        .accessibilityLabel(mode.title)
+    }
+
+    private func closeButton(vertical: Bool) -> some View {
+        Button(action: close) {
+            Image(systemName: "xmark")
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: vertical ? 64 : 28, height: vertical ? 44 : 56)
+                .foregroundStyle(Palette.moon400)
+        }
+        .buttonStyle(PetPressStyle())
+        .accessibilityLabel("빠른 기능 닫기")
     }
 
     private var tasksContent: some View {
@@ -73,8 +119,8 @@ struct QuickBarView: View {
             HStack(spacing: 8) {
                 TextField("할 일 입력", text: $model.taskDraft)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit(model.addTask)
-                Button("추가", action: model.addTask)
+                    .onSubmit { withAnimation(PetMotion.panel) { model.addTask() } }
+                Button("추가") { withAnimation(PetMotion.panel) { model.addTask() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
@@ -88,7 +134,7 @@ struct QuickBarView: View {
                     VStack(alignment: .leading, spacing: 9) {
                         ForEach(model.tasks) { task in
                             HStack(spacing: 9) {
-                                Button { model.toggleTask(task.id) } label: {
+                                Button { withAnimation(PetMotion.hover) { model.toggleTask(task.id) } } label: {
                                     Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                                     Text(task.title)
                                         .strikethrough(task.isDone)
@@ -98,7 +144,7 @@ struct QuickBarView: View {
                                 .font(.system(size: 12))
                                 .foregroundStyle(task.isDone ? Palette.moon500 : Palette.moon100)
                                 Spacer()
-                                Button { model.removeTask(task.id) } label: {
+                                Button { withAnimation(PetMotion.panel) { model.removeTask(task.id) } } label: {
                                     Image(systemName: "xmark")
                                         .font(.system(size: 10, weight: .medium))
                                         .foregroundStyle(Palette.moon500)
@@ -106,10 +152,11 @@ struct QuickBarView: View {
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("\(task.title) 삭제")
                             }
+                            .transition(.opacity.combined(with: .offset(y: 4)))
                         }
                     }
                 }
-                .frame(maxHeight: 84)
+                .frame(maxHeight: 206)
             }
             footer("이 Mac에 저장", mode: .tasks)
         }
@@ -123,7 +170,7 @@ struct QuickBarView: View {
                 .scrollContentBackground(.hidden)
                 .padding(7)
                 .frame(height: 100)
-                .background(Palette.surface2)
+                .background(Palette.surface2.opacity(0.35))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Palette.line.opacity(0.6), lineWidth: 1))
             HStack {
@@ -138,7 +185,9 @@ struct QuickBarView: View {
 
     private var browserContent: some View {
         VStack(alignment: .leading, spacing: 14) {
-            heading(model.mode.title, caption: "자세한 작업은 브라우저 Hub에서 계속합니다")
+            heading(model.mode.title, caption: model.mode == .calendar
+                ? "일정은 브라우저 Hub에서 확인합니다"
+                : "자세한 작업은 브라우저 Hub에서 계속합니다")
             Button { model.openHub(model.mode) } label: {
                 Label("브라우저에서 열기", systemImage: "arrow.up.right.square")
             }
@@ -185,7 +234,7 @@ struct QuickBarView: View {
     private func heading(_ title: String, caption: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.moon100)
-            Text(caption).font(.system(size: 11)).foregroundStyle(Palette.moon500)
+            Text(caption).font(.system(size: 11)).foregroundStyle(Palette.moon300)
         }
     }
 
