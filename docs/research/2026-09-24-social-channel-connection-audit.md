@@ -6,7 +6,7 @@
 
 ### 2026-09-24 연결 진행 현황
 
-- Meta `Moonlight` 앱이 생성됐다. Threads 게시 권한과 임시 HTTPS 터널 콜백을 등록했고, `@ml_bridgemaker`를 Threads 테스터로 초대했다. 초대 수락에는 별도의 약관 동의와 테스터 관계 확인이 표시돼 운영자 확인을 기다린다. 앱 시크릿, Instagram 설정, 실제 OAuth 연결은 아직이다.
+- Meta `Moonlight` 앱이 생성됐다. Threads·Instagram 게시 권한과 임시 HTTPS 터널 콜백을 등록했고, `@ml_bridgemaker`·`@politic_officer`를 양쪽 테스터로 초대했다. 네 초대 모두 수락 대기 중이다. 수락에는 별도의 약관 동의와 테스터 관계 확인이 표시돼 운영자 확인을 기다린다. 앱 시크릿과 실제 OAuth 연결은 아직이다.
 - 개인 Google 계정 `seoulmentoss@gmail.com`에 전용 Cloud 프로젝트 `moonlight-youtube-509603`을 만들고 YouTube Data API v3를 활성화했다. OAuth 앱 정보 입력 뒤 별도의 Google API 서비스 사용자 데이터 정책 동의 단계에서 대기 중이다. 테스트 사용자·웹 클라이언트·채널 승인은 아직이다. `classin.com` 계정의 기존 클라이언트 확인은 비밀번호 재인증 대기 중이다.
 - Moonlight에 YouTube 전용 OAuth 연결 경로를 추가했다(`548c4ba8`, `ac30afb1`). 로컬 상태 API는 현재 `missing-config`이며, 연결된 채널은 없다. 게시·업로드 코드는 포함하지 않는다. Instagram의 OAuth 승인 계정이 요청 브랜드와 다르면 저장을 거부하도록 수정했다(`898bff59`).
 
@@ -31,8 +31,8 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있지
 
 ### Meta Threads·Instagram
 
-1. 로컬 Hub 상태 API가 모두 `missing-config`다. 앱 ID·시크릿은 없고 OAuth state 비밀키만 있다.
-2. `Moonlight` Meta 앱은 만들어졌고 Threads 게시 권한·HTTPS 콜백은 등록됐다. `@ml_bridgemaker`의 Threads 테스터 초대 수락과 Threads 앱 시크릿 설정이 남았다. Instagram 이용 사례는 콜백·자격증명 설정이 남았다.
+1. 로컬 Hub 상태 API가 모두 `missing-config`다. Threads·Instagram 앱 ID와 OAuth state 비밀키는 있으나 두 앱 시크릿이 아직 없다.
+2. `Moonlight` Meta 앱의 Threads·Instagram 게시 권한과 HTTPS 콜백은 등록됐다. `@ml_bridgemaker`·`@politic_officer`의 두 플랫폼 테스터 초대 수락과 앱 시크릿 설정이 남았다.
 3. Meta가 로컬 HTTP 콜백을 거부해 파일럿용 임시 HTTPS 터널을 쓴다. 운영 연결에는 안정적인 공개 HTTPS Hub 주소와 배포 환경 변수가 필요하다.
 4. 로컬 파일럿 브랜드 핸들을 `ml_bridgemaker`로 설정했다. 다른 브랜드를 연결할 때는 올바른 핸들을 명시해야 하며, Threads·Instagram 모두 계정명이 다르면 저장을 거부한다.
 5. 현행 `integration_connections`의 `(workspace_id, provider)` 고유 제약 때문에 워크스페이스별 플랫폼 계정 하나만 보관한다. 여러 브랜드를 운영하려면 계정별 연결과 브랜드 매핑으로 확장해야 한다.
@@ -58,7 +58,7 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있지
 
 ## 구현 순서 제안
 
-1. Threads 테스터 초대 수락 후 Threads 앱 시크릿을 설정하고, Instagram 자격증명·HTTPS 콜백을 등록한다.
+1. Threads·Instagram 테스터 초대의 약관/사실 확인을 마치고 두 앱 시크릿을 설정한다.
 2. 먼저 Threads `@ml_bridgemaker` 한 계정을 정확한 핸들로 OAuth 연결하고, status·프로필·DB 저장 영수증을 확인한다. 이 단계는 게시하지 않는다.
 3. 계정별 저장 구조로 확장하고 `@politic_officer` 및 Instagram 계정을 각각 연결한다.
 4. 이미지 렌더·미디어 보관, 버전별 검토, 게시 큐·중복 방지·성공 URL 확인을 구현한 뒤 실제 게시를 별도 검증한다.

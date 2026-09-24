@@ -26,13 +26,15 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 
 `classinkr@classin.com`의 ClassIn KR 권한 표에는 `ek.hwa@with-people.co.kr`도 관리자라고 표시됐다. 그 계정의 API 승인은 범위에 넣지 않았다. 회사 두 이메일의 **Cloud Console 소유권은 YouTube OAuth 승인 조건이 아니다**. 기존 Hub `GOOGLE_CLIENT_ID`의 원래 프로젝트를 찾아야 할 때는 `junhyuk.mun@classin.com` Cloud 재인증이 별도로 필요하다. YouTube는 개인 계정의 전용 프로젝트·클라이언트를 사용한다.
 
+회사 계정의 동의가 `admin_policy_enforced` 등으로 막히면 Google Workspace 관리자가 [관리 콘솔의 보안 → 액세스 및 데이터 관리 → API 제어](https://support.google.com/a/answer/7281227?hl=en&p=app_access_apps)에서 해당 OAuth 앱의 접근 정책을 확인해야 한다. 현재는 실제 OAuth 승인 전이라 차단 여부를 단정할 수 없다.
+
 ## Meta 브랜드 계정
 
 | 계정 | 확인된 접근 | API 연결에 남은 일 |
 |---|---|---|
 | `@ml_bridgemaker` Threads | 로그인된 본인 게시 UI, Moonlight 테스터 초대 수락 화면 | 앱 역할 초대 수락, Threads OAuth 승인 |
 | `@ml_bridgemaker` Instagram | 프로페셔널 대시보드, Moonlight-IG 테스터 초대 수락 화면 | 앱 역할 초대 수락, Instagram OAuth 승인 |
-| `@politic_officer` Threads·Instagram | 본인 게시 UI·Instagram 프로 대시보드 | 각 이용 사례 테스터/역할, 계정 OAuth 승인, 다중 계정 저장 구조 |
+| `@politic_officer` Threads·Instagram | 본인 게시 UI·Instagram 프로 대시보드, 양쪽 테스터 초대 대기 | 각 초대 수락, 계정 OAuth 승인, 다중 계정 저장 구조 |
 | HolyFunCollector Instagram | 브랜드 DB에 링크만 | 현재 로그인·프로 계정·게시 권한 확인 |
 | `@go_re_startagain` Instagram | 계정 전환 시 비밀번호 로그인 요구 | 계정 접근과 이 브랜드가 자동 발행 대상인지 확인 |
 
