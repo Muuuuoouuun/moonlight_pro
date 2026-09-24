@@ -19,7 +19,8 @@ enum SelfCheck {
             fputs("Default character check failed\n", stderr)
             return false
         }
-        guard PetCharacter.allCases.allSatisfy({ $0.artwork?.size == NSSize(width: 1254, height: 1254) }) else {
+        guard PetCharacter.allCases.count == 9,
+              PetCharacter.allCases.allSatisfy({ $0.artwork?.size == NSSize(width: 1254, height: 1254) }) else {
             fputs("Character artwork check failed\n", stderr)
             return false
         }

@@ -36,6 +36,9 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         openItem.keyEquivalentModifierMask = [.control, .option]
         openItem.target = self
         menu.addItem(openItem)
+        let messageItem = NSMenuItem(title: "짧은 메시지 보기", action: #selector(togglePreview), keyEquivalent: "")
+        messageItem.target = self
+        menu.addItem(messageItem)
         let hubItem = NSMenuItem(title: "Hub 열기", action: #selector(openHub), keyEquivalent: "")
         hubItem.target = self
         menu.addItem(hubItem)
@@ -48,6 +51,7 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleBar() { coordinator?.toggleBar() }
+    @objc private func togglePreview() { coordinator?.togglePreview() }
     @objc private func openHub() { model.openHub(.tasks) }
     @objc private func quit() {
         if model.isFocused { model.stopFocus() }
