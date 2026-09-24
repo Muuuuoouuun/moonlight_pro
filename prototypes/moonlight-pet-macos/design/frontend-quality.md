@@ -60,6 +60,10 @@ macOS 14~25 폴백, 밝은 OS 외관으로 변경한 상태, VoiceOver 전체 �
 
 ## Clear material correction — 2026-09-25
 
-User rejected the milky appearance. Floating panels now default to NSGlassEffectView.clear (regular only for Reduce Transparency/Increase Contrast). The custom lab removes its whole-panel white floor and center blur. The earlier contrast-compression choice above is superseded. Content gets a one-point alpha-shaped halo; the glass itself has no added white sheet.
+User rejected the milky appearance. Floating panels now default to NSGlassEffectView.clear (regular only for Reduce Transparency/Increase Contrast). The custom lab removes its whole-panel white floor and center blur. The earlier contrast-compression choice above is superseded. The initial one-point content halo was removed in the subsequent text correction; the glass itself has no added white sheet.
 
 GPU backdrop-preservation test failed against the previous implementation (75.42/255 mean drift), passed after correction (0.00/255). Native comparison inspection confirms transmitted background patterns and working input. A transparent panel over a plain white background naturally remains white; its appearance must be judged over the actual background, not a window-only screenshot that omits the desktop.
+
+## Sharp text correction — 2026-09-25
+
+The operator's screenshot showed thick headings and outlined small text. Removing the full-content light shadow reduced the outlines. Native lab headings remained distorted until the SwiftUI content host became a sibling above the glass material and edge renderer. Native-vs-Metal inspection then showed sharp headings and Korean field input. This preserves clear material, accessibility material switching, foreground geometry and first-mouse handling. Text contrast over arbitrary dark desktop backgrounds is a separate remaining limitation; this correction does not claim universal contrast.

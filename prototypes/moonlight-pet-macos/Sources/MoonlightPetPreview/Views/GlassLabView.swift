@@ -85,7 +85,7 @@ private struct GlassLabStage: NSViewRepresentable {
         override init(frame: NSRect) {
             background = GlassOpticsRenderer.shared.map { OpticalGlassView(renderer: $0) }
             native = GlassPanel.host(LabContent(),cornerRadius: 30)
-            let content = NSHostingView(rootView: LabContent().modifier(GlassContentLegibility()).environment(\.colorScheme,.light))
+            let content = NSHostingView(rootView: LabContent().environment(\.colorScheme,.light))
             content.sizingOptions = []
             foreground = content
             super.init(frame: frame)

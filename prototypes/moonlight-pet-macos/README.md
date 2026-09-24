@@ -34,7 +34,7 @@ cd prototypes/moonlight-pet-macos
 
 펫을 우클릭하면 이브이와 진화체 아홉 캐릭터 중 하나를 선택한다. 기본 대기 아이콘과 짧은 메시지에는 처음 제공된 얼굴 이미지를 쓴다. 두 번 눌러 펼친 위젯과 집중 모드에서는 팔을 걸친 별도 투명 배경 캐릭터가 유리 상단에 올라온다. 원 테두리는 없다. 블래키는 추가 제공된 일자 앞머리, 에브이는 뒤로 묶은 머리를 살린 자산이다. 원본 이미지는 보존한다. 기본값은 글레이시아이고 선택은 이 Mac에 저장된다. 메뉴 막대의 달 아이콘에는 선택한 펫이 나오는 `짧은 메시지 보기`도 있다.
 
-macOS 26에서는 창 경계의 `NSGlassEffectView(.regular)` 하나가 재질과 대비를 처리한다. 승인 시안에 맞춰 떠 있는 패널은 밝은 실버 외관, 집중은 짙은 흑연 외관을 사용한다. 추가 블러·색상 틴트·불투명 덮개를 겹치지 않는다. 1px 빛 반사 윤곽과 그림자 여백을 분리하고 입력·버튼에는 얇은 중립 채움만 둔다. 이전 macOS는 `NSVisualEffectView(.popover, .behindWindow)`를 사용한다.
+macOS 26에서는 창 경계의 `NSGlassEffectView(.clear)` 하나가 배경 재질을 처리한다. 투명도 감소·대비 증가 설정에서는 `.regular`를 사용한다. 떠 있는 패널은 밝은 실버 외관, 집중은 짙은 흑연 외관을 사용한다. 추가 블러·색상 틴트·불투명 덮개를 겹치지 않는다. 빛 반사 윤곽과 그림자 여백을 분리하고 입력·버튼에는 얇은 중립 채움만 둔다. 글자와 입력창은 유리 위의 별도 호스트에 그려 번짐을 피한다. 이전 macOS는 `NSVisualEffectView(.popover, .behindWindow)`를 사용한다.
 
 펫은 호버·누름·해제에 작게 반응한다. 패널과 본문·선택 표시가 함께 전환되며 무한 장식 모션은 없다. macOS 동작 줄이기를 켜면 장식적 전환은 즉시 완료된다. [프론트 품질 평가 및 검증](design/frontend-quality.md)에 적용 근거와 검증 범위를 기록했다.
 
@@ -59,4 +59,4 @@ The floating panels now pair native clear glass with a Metal optical rim (curved
 
 Run `./script/build_and_run.sh --glass-lab` for the optional native-vs-Metal material comparison. The sliders affect the custom material on the right; the calibration backgrounds belong to the app. Normal launch keeps the pet-only experience. `swift run -j 2 MoonlightPetPreview --self-check` also checks real GPU output for edge clipping, premultiplied alpha, Retina geometry and refractive displacement.
 
-The default is clear glass (2026-09-25 correction). Reduce Transparency / Increase Contrast select regular glass. The lab has no white luminance floor or center blur; content uses a small alpha-shaped readability halo.
+The default is clear glass (2026-09-25 correction). Reduce Transparency / Increase Contrast select regular glass. The lab has no white luminance floor or center blur. Content has no readability halo and is hosted above the material and optical rim, outside the native glass content subtree.
