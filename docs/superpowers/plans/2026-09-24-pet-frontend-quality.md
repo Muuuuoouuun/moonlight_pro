@@ -18,7 +18,7 @@
 - [x] Refine `Views/QuickBarView.swift`: fill native bounds, focus on open/switch, share input and primary-action styling, improve row feedback. Avoid nested native glass controls.
 - [x] Compare native material paths on the real desktop. Use a single AppKit regular glass on macOS 26, with automatic system accessibility adaptation; keep the behind-window fallback on older macOS. This updates the initial plan after visual comparison exposed excess gray haze in the dual-layer setup.
 - [x] Build and run isolated SelfCheck. Review the diff; check real native UI if the Mac is unlocked. Record a qualitative audit and explicit verification limits in the prototype's `design/frontend-quality.md`.
-- [ ] Commit only owned paths, merge into the original branch, rebuild/relaunch the actual app with `script/build_and_run.sh --verify`, run its SelfCheck, and remove the dedicated worktree.
+- [x] Commit only owned paths and merge into the original branch; rebuild/relaunch the actual app with `script/build_and_run.sh --verify` and run its SelfCheck. Final native UI recheck passed for the quick bar, vertical calendar and compact task widget. The dedicated worktree is removed after this verification record.
 
 ## Acceptance
 
