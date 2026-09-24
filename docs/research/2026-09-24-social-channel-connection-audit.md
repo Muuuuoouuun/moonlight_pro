@@ -6,7 +6,7 @@
 
 ### 2026-09-24 연결 진행 현황
 
-- Meta `Moonlight` 앱의 Threads·Instagram 게시 권한과 임시 HTTPS 터널 콜백을 등록했다. `@ml_bridgemaker`의 두 테스터 초대를 수락하고 각 OAuth를 승인했다. 로컬 Hub 상태 API는 Threads·Instagram 각각 `connected`·계정명 `ml_bridgemaker`를 반환한다. `@politic_officer`는 앞선 점검에서 `도정치`로 표시된 Chrome 프로필에 Instagram·Threads 본인 로그인과 Instagram 프로페셔널 대시보드를 확인했다. Instagram 테스터 초대는 승인됨으로 표시되지만 Threads 초대와 두 OAuth는 연결되지 않았다. `정상화` Chrome에는 이후 정치 전용 `Politic Officer Publisher` Meta 앱이 실제 생성됐다(상위 앱 ID `1331254372240610`). 이 앱은 미게시·관리자 1명이다. 운영자 승인 후 Threads 게시와 Instagram 기본·게시 최소 권한 3개를 추가했고 모두 테스트 준비 완료를 확인했다. 제품별 OAuth 콜백은 아직 설정되지 않았다. 앞선 Codex 연결에는 `도정치`라는 프로필 이름이 나타나지 않아 정치 브랜드 자산 소유·권한을 재확인하지 못했다.
+- Meta `Moonlight` 앱의 Threads·Instagram 게시 권한과 임시 HTTPS 터널 콜백을 등록했다. `@ml_bridgemaker`의 두 테스터 초대를 수락하고 각 OAuth를 승인했다. 로컬 Hub 상태 API는 Threads·Instagram 각각 `connected`·계정명 `ml_bridgemaker`를 반환한다. `@politic_officer`는 앞선 브라우저 점검에서 Instagram·Threads 본인 로그인과 Instagram 프로페셔널 대시보드를 확인했다. 당시 Meta 로그인 주체와 YouTube 계정 `도정치`의 관계는 검증되지 않았다. Instagram 테스터 초대는 승인됨으로 표시되지만 Threads 초대와 두 OAuth는 연결되지 않았다. `정상화` Chrome에는 이후 정치 전용 `Politic Officer Publisher` Meta 앱이 실제 생성됐다(상위 앱 ID `1331254372240610`). 이 앱은 미게시·관리자 1명이다. 운영자 승인 후 Threads 게시와 Instagram 기본·게시 최소 권한 3개를 추가했고 모두 테스트 준비 완료를 확인했다. 제품별 OAuth 콜백은 아직 설정되지 않았다. 정치 브랜드 자산의 현재 소유·권한은 재확인하지 못했다.
 - `Classin Korea` 비즈니스가 관리하는 기존 `Classmooni` Meta 앱(상위 앱 ID `1261817029101418`)을 확인했다. Instagram 제품 앱 ID는 `940095648854296`, Threads 제품 앱 ID는 `1035066519184986`이다. 앱은 미게시 개발 상태이고 두 제품의 테스터 목록과 OAuth 리디렉션 콜백이 비어 있다. Instagram `instagram_business_basic`은 테스트 준비 완료, `instagram_business_content_publish`는 앱 검수 추가 전 상태이고 Threads `threads_basic`·`threads_content_publish`는 테스트 준비 완료로 표시된다. 회사 앱으로 활용할 수 있지만 현재 Moonlight 서버는 제품별 앱 자격증명을 하나씩만 선택하므로 다중 앱 지원과 앱별 연결 구분이 선행돼야 한다.
 - 개인 Google 계정 `seoulmentoss@gmail.com`의 Cloud 프로젝트 `moonlight-youtube-509603`에서 Data API v3·읽기/업로드 범위·웹 OAuth 클라이언트를 설정했다. `22세기 유목민`, `문군`, `기독밈`을 각 채널로 별도 승인했다. 회사 `junhyuk.mun@classin.com`의 `클래스인 문`도 운영자의 특정 권한 승인 후 연결했다. 로컬 Hub 상태 API는 네 채널 모두 정확한 채널 ID·갱신 토큰을 반환한다. Testing 갱신 토큰은 2026-10-01에 각각 만료 예정이다. `ClassIn KR`은 이번 승인 대상에서 제외해 연결하지 않았다. `classin.com`의 기존 클라이언트 확인은 별도 재인증 대기 중이며 이 YouTube 전용 클라이언트와 무관하다.
 - Moonlight에 YouTube 전용 OAuth 연결 경로를 추가했다(`548c4ba8`, `ac30afb1`). 계정별 연결 구조와 상태 API를 적용하고 서울 운영 DB에 `20260924_0046_social_multiaccount_connections.sql`을 기록했다. 적용 전후 연결 9건, `22세기 유목민`의 동일한 연결 ID·채널 ID와 갱신 토큰을 확인했다. 게시·업로드 코드는 포함하지 않는다. Instagram의 OAuth 승인 계정이 요청 브랜드와 다르면 저장을 거부하도록 수정했다(`898bff59`).
@@ -14,7 +14,7 @@
 - Threads 연결 해제·데이터 삭제의 Meta 서명 검증 콜백을 운영 미들웨어의 공개 명시 목록에 추가했다(`00ea2f12`). 인접 경로는 계속 세션 게이트가 막는다.
 - 서울 운영 DB에 `20260924_0047_social_oauth_flow_guard.sql`·`20260924_0048_meta_oauth_app_binding.sql`을 이력 함수로 적용했다. 두 전체 파일명과 SHA256, 테이블·앱 컬럼·연결 보호 트리거, RLS와 역할별 권한을 확인했다. 이후 `codex/social-oauth-p0`·`codex/meta-multiapp`의 브랜드별 Meta 앱 선택·앱별 상태 검증·생명주기 콜백 격리와 과거 앱 재연결 처리를 통합 브랜치에 합쳤다. 브랜드별 상태 응답 목록도 해당 앱 연결로 제한했다. 통합 후 전체 테스트 2,979 통과·실패 0·skip 13. 정치·회사 전용 앱 자격 증명과 콜백 설정이 남아 해당 계정 OAuth는 시작하지 않았다.
 
-> **2026-09-24 운영자 정정:** 운영자는 `도정치`를 정치 YouTube 계정용 Chrome 프로필로 추정하며 `정상화`와 계정 맥락이 겹칠 수 있다고 설명했다. 두 이름의 Google·Meta 로그인 동일성은 재검증하지 않았다. `도정치` 이름의 별도 Chrome 연결을 필수 조건으로 두지 않고, 실제 정치 Instagram·Threads 로그인과 Meta 비즈니스 자산 권한을 확인한다.
+> **2026-09-24 운영자 최종 정정:** `도정치`는 Politic Officer의 **YouTube 계정**이다. Instagram·Threads 또는 Meta의 별도 계정·프로필 이름으로 취급하지 않는다. 과거 브라우저의 정치 Meta 화면 관찰은 유지하되 당시 로그인 주체는 재확인하지 못했다. Meta 후속 작업에 `도정치`라는 이름의 Chrome 연결을 요구하지 않고, 실제 Instagram·Threads 로그인과 Meta 비즈니스 자산 권한을 확인한다.
 
 ## 결론
 
@@ -24,12 +24,13 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 
 | 대상 | 확인된 계정·자산 | 현재 접근 | Moonlight API 연결 |
 |---|---|---|---|
-| Threads | `@ml_bridgemaker`, `@politic_officer`, `@moon.classin` | 각각 해당 Chrome 프로필에서 본인 프로필 확인. `@politic_officer` 초대 탭 확인 | `@ml_bridgemaker` 1건 |
+| Threads | `@ml_bridgemaker`, `@politic_officer`, `@moon.classin` | 앞선 브라우저 점검에서 각각 본인 프로필 확인. `@politic_officer` 초대 탭 확인 | `@ml_bridgemaker` 1건 |
 | Instagram | `@ml_bridgemaker`, `@politic_officer`, `@moon.classin` | `@politic_officer`·`@moon.classin` 본인 프로필과 프로페셔널 대시보드 확인. `@politic_officer`의 기존 앱 테스터 초대 승인 표시 확인 | `@ml_bridgemaker` 1건 |
 | Instagram 추가 | `@go_re_startagain` | 전환 시 비밀번호 요구 | 없음 |
 | Instagram DB 링크 | HolyFunCollector | 브랜드 메타데이터에 링크만 있음. 현재 브라우저 게시 권한 미확인 | 없음 |
 | YouTube Studio | 기독밈, 문군, 22세기 유목민, 클래스인 문, ClassIn KR | 다섯 채널의 Studio·권한 화면에 해당 로그인 계정이 각각 `소유자`로 표시. 개인 3채널과 클래스인 문은 OAuth 반환 ID까지 확인 | 개인 3채널·클래스인 문 |
-| Meta Business Suite | `@politic_officer`의 `도정치` 표시 프로필 | 앞선 점검에서 비즈니스 자산 확인. `정상화` Chrome에서 정치 전용 개발자 앱을 생성했으나 해당 비즈니스와의 연결은 미확인. 두 프로필의 로그인 동일성도 미확인 | 없음 |
+| YouTube 정치 | `도정치` — 운영자가 Politic Officer의 YouTube 계정이라고 확인 | 채널 ID·Studio 소유자 역할은 미확인 | 없음 |
+| Meta Business Suite | `@politic_officer` 관련 비즈니스 자산 | 앞선 브라우저 점검에서 자산이 보였으나 당시 Meta 로그인 주체는 재확인하지 못함. `정상화` Chrome에서 정치 전용 개발자 앱을 생성했으나 해당 비즈니스와의 연결은 미확인 | 없음 |
 
 운영 DB에는 활성 브랜드가 11개 있다. `meta.channels`에 Threads·Instagram 링크가 있는 브랜드는 BridgeMaker, HolyFunCollector, Politic_Officer 세 곳이고 나머지 8개는 비어 있다. 브랜드의 링크나 Studio 화면 접근은 API 게시 권한의 증거가 아니다. 연결 상태 API에서 `meta_threads`·`instagram_api`는 각각 `@ml_bridgemaker` 1건, `youtube`는 개인 3채널과 회사 `클래스인 문`이다.
 
@@ -38,7 +39,7 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 ### Meta Threads·Instagram
 
 1. 로컬 Hub 상태 API는 Threads·Instagram 모두 `connected`이며 앱 ID·시크릿·OAuth state 비밀키가 설정됐다. `@ml_bridgemaker`의 두 계정이 반환된다.
-2. `Moonlight` Meta 앱의 Threads·Instagram 게시 권한과 HTTPS 콜백은 등록됐다. `@ml_bridgemaker`의 두 초대 수락·OAuth 승인이 완료됐다. `@politic_officer`는 앞선 점검의 정치 계정 Chrome 로그인에서 확인됐고 두 플랫폼 초대 수락·OAuth가 남았다. Threads OAuth의 진입 URL은 `www.threads.com`으로 수정했다.
+2. `Moonlight` Meta 앱의 Threads·Instagram 게시 권한과 HTTPS 콜백은 등록됐다. `@ml_bridgemaker`의 두 초대 수락·OAuth 승인이 완료됐다. `@politic_officer`는 앞선 Instagram·Threads 로그인 화면에서 확인됐고 두 플랫폼 초대 수락·OAuth가 남았다. 이 Meta 후속 작업은 `도정치` YouTube 로그인과 구분한다. Threads OAuth의 진입 URL은 `www.threads.com`으로 수정했다.
 3. Meta가 로컬 HTTP 콜백을 거부해 파일럿용 임시 HTTPS 터널을 쓴다. 운영 연결에는 안정적인 공개 HTTPS Hub 주소와 배포 환경 변수가 필요하다.
 4. 로컬 파일럿 브랜드 핸들을 `ml_bridgemaker`로 설정했다. 연결 경로는 `brand`와 `brandKey`를 명시할 수 있고 서명된 state와 실제 `/me` 계정명을 대조한다. 브랜드 키는 핸들과 다르다: `@politic_officer`는 `politicofficer`, `@ml_bridgemaker`는 `bridgemaker`, `@moon.classin`은 `classmoon`이다.
 5. 서울 운영 DB는 `account_key`와 `(workspace_id, provider, account_key)` 고유 제약으로 확장됐다. 상태 API는 계정 목록을 반환하고 OAuth 저장은 실제 외부 계정 ID를 키로 사용한다. Settings의 계정별 선택 UI와 게시 대상 브랜드 매핑은 아직 없다.
