@@ -8,6 +8,8 @@ import { copyOfficeText, loadOfficeTasks, officeMessageLength, officeTaskAgendaB
 import { useOfficeSession } from '../office-session-provider';
 import { OfficeDeliberationControls } from '../office-deliberation-controls';
 import { officeDiscussionState } from '../office-deliberation-client';
+import { officeSkillRequestDraft } from '../office-skill-request';
+import { OfficeSkillRequestDrawer } from '../office-skill-request-drawer';
 import styles from './office-council.module.css';
 
 const MODES = [{ key: 'chat', label: '대화' }, { key: 'draft', label: '초안' }, { key: 'review', label: '검토' }, { key: 'council', label: '회의' }];
@@ -48,7 +50,7 @@ function ThreadDiscussion({ result, request }) {
   </div>;
 }
 
-function ResultTurn({ turn, onRevise, onCopy, copyStatus, latestRef }) {
+function ResultTurn({ turn, onRevise, onCopy, onSkill, skillAvailable, copyStatus, latestRef }) {
   const result = turn.result;
   const owner = OFFICE_ROSTER.find(person => person.id === result.ownerId);
   return <article className={styles.turn} ref={latestRef}>
@@ -68,6 +70,9 @@ function ResultTurn({ turn, onRevise, onCopy, copyStatus, latestRef }) {
       </details> : null}
       <div className={styles.next}><strong>다음 행동</strong><p>{result.nextAction}</p></div>
       <div className={styles.receipt}><span>{result.log?.persisted === true ? '호출 로그 저장됨' : '답변 생성됨 · 호출 로그 미저장'}</span><span>업무 변경 없음</span></div>
+      {skillAvailable ? <details className={styles.request}><summary>더보기</summary><div className={styles.answerActions}>
+        <Button variant="outline" size="sm" onClick={() => onSkill(turn)}>로컬 스킬 요청서</Button>
+      </div></details> : null}
       {result.context?.source && result.context.source !== 'provided' ? <div className={styles.contextState}><TruthBadge state={result.context.source} /></div> : null}
       <p className={styles.note}>{result.context?.note}</p>
       {result.context?.projects?.length ? <details className={styles.request}><summary>참고한 프로젝트 ({result.context.projects.length})</summary><ul className={styles.note}>{result.context.projects.map(project => <li key={project.id}>{project.name} · {project.status}</li>)}</ul></details> : null}
@@ -114,6 +119,7 @@ export function OfficeCouncil({ scope = 'all' }) {
   const [copyStatus, setCopyStatus] = React.useState(null);
   const [inputNotice, setInputNotice] = React.useState('');
   const [assignment, setAssignment] = React.useState(null);
+  const [skillTurn, setSkillTurn] = React.useState(null);
   const inputRef = React.useRef(null);
   const threadRef = React.useRef(null);
   const latestTurnRef = React.useRef(null);
@@ -132,7 +138,7 @@ export function OfficeCouncil({ scope = 'all' }) {
   React.useEffect(() => {
     assignmentReadRef.current += 1;
     setAssignment(null); setRosterOpen(false); setMoreOpen(false); setTasksOpen(false);
-    setCopyStatus(null); setInputNotice(''); setFollowUpMode('chat');
+    setCopyStatus(null); setInputNotice(''); setFollowUpMode('chat'); setSkillTurn(null);
   }, [scope]);
 
   function invalidateAssignment() {
@@ -202,6 +208,7 @@ export function OfficeCouncil({ scope = 'all' }) {
     if (session.turns.length && !window.confirm('현재 회의를 비우고 새 안건을 올릴까요?')) return;
     if (session.turns.length) store.reset(scope);
     invalidateAssignment();
+    setSkillTurn(null);
     const block = officeTaskAgendaBlock(task);
     const previous = session.turns.length ? '' : session.agenda?.source === 'task' && session.draft.startsWith(session.agenda.block)
       ? session.draft.slice(session.agenda.block.length).trimStart() : session.draft.trimStart();
@@ -212,6 +219,7 @@ export function OfficeCouncil({ scope = 'all' }) {
   function newAgenda() {
     if (busy || !window.confirm('현재 회의와 입력을 비우고 새 안건을 시작할까요?')) return;
     invalidateAssignment();
+    setSkillTurn(null);
     store.reset(scope); setFollowUpMode('chat');
     requestAnimationFrame(() => inputRef.current?.focus());
   }
@@ -267,7 +275,8 @@ export function OfficeCouncil({ scope = 'all' }) {
         : <><p>안건을 올리세요 · 할 일을 가져오거나 직접 적어 주세요</p><Button variant="ghost" size="sm" onClick={() => setMoreOpen(true)}>더보기</Button></>}</div>
       <div className={styles.thread} ref={threadRef} tabIndex={-1} aria-live="polite" aria-label="Office 요청 결과">
         {session.turns.length === 0 && !busy ? <EmptyState icon="chat" title="회의할 안건을 올려 주세요" description="아래 안건 가져오기로 할 일을 넣거나 직접 적어 주세요." /> : null}
-        {session.turns.map((turn, index) => <ResultTurn key={turn.id} turn={turn} latestRef={index === session.turns.length - 1 ? latestTurnRef : undefined} onRevise={revise} onCopy={copy} copyStatus={copyStatus} />)}
+        {session.turns.map((turn, index) => <ResultTurn key={turn.id} turn={turn} latestRef={index === session.turns.length - 1 ? latestTurnRef : undefined}
+          onRevise={revise} onCopy={copy} onSkill={setSkillTurn} skillAvailable={Boolean(officeSkillRequestDraft({ agenda: session.agenda, officeScope: scope, result: turn.result }))} copyStatus={copyStatus} />)}
         {busy ? <div ref={pendingRef}><PendingTurn pending={session.pending} /></div> : null}
       </div>
       <form onSubmit={submit} className={styles.composer} aria-busy={busy}>
@@ -306,6 +315,7 @@ export function OfficeCouncil({ scope = 'all' }) {
           <div className={styles.assignmentActions}><Button variant="outline" size="sm" onClick={editAssignment}>직접 선택</Button><Button variant="ghost" size="sm" onClick={invalidateAssignment}>닫기</Button></div></> : null}
       </div>
     </Drawer> : null}
+    {skillTurn ? <OfficeSkillRequestDrawer key={skillTurn.id} agenda={session.agenda} officeScope={scope} result={skillTurn.result} onClose={() => setSkillTurn(null)} /> : null}
     {rosterOpen ? <Drawer title="참석자 바꾸기" subtitle="주관 한 명과 관점 최대 두 명을 고르세요." onClose={() => setRosterOpen(false)} width="min(480px, 94vw)" footer={<Button variant="primary" onClick={() => setRosterOpen(false)}>완료</Button>}>
       <div className={styles.roster}><strong>주관</strong>{OFFICE_ROSTER.map(person => <button type="button" key={person.id} className={'hub-row ' + styles.member} aria-pressed={person.id === ownerId} onClick={() => { invalidateAssignment(); update({ ownerId: person.id, reviewers: reviewers.filter(id => id !== person.id), presetId: null }); }}>
         <span><strong>{person.name} <small>{person.role}</small></strong><span className={styles.memberPitch}>{person.pitch}</span></span></button>)}
