@@ -12,11 +12,14 @@ struct CompactWidgetView: View {
     private enum InputField: Hashable { case task, memo }
 
     private var panelHeight: CGFloat { model.compactMode == .tasks ? 420 : 304 }
+    private var ink: Color { Palette.glassInk }
+    private var inkMuted: Color { Palette.glassInkMuted }
+    private var inkFaint: Color { Palette.glassInkFaint }
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            Rectangle().fill(Palette.moon100.opacity(0.12)).frame(height: 1)
+            Rectangle().fill(ink.opacity(0.12)).frame(height: 1)
             Group {
                 if model.compactMode == .tasks { tasksContent }
                 else { memoContent }
@@ -26,8 +29,8 @@ struct CompactWidgetView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(width: 288, height: panelHeight)
-        .moonlightGlassPanel(cornerRadius: 18)
-        .tint(Palette.moon300)
+        .moonlightGlassPanel(cornerRadius: 18, adaptsToSystemAppearance: true)
+        .tint(Palette.glassInk)
         .onAppear { focusCurrentInput() }
         .onChange(of: model.compactMode) { _, _ in focusCurrentInput() }
         .onChange(of: model.compactOpenRevision) { _, _ in focusCurrentInput() }
@@ -45,15 +48,15 @@ struct CompactWidgetView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.compactMode.title)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Palette.moon100)
+                    .foregroundStyle(ink)
                 Text(model.compactMode == .tasks ? "지금 할 일에 집중" : "떠오른 생각을 바로")
                     .font(.system(size: 10.5))
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(inkMuted)
             }
             Spacer(minLength: 0)
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Palette.moon500)
+                .foregroundStyle(inkFaint)
                 .frame(width: 28, height: 32)
                 .contentShape(Rectangle())
                 .gesture(
@@ -90,10 +93,10 @@ struct CompactWidgetView: View {
                 } label: {
                     Text(mode.title)
                         .font(.system(size: 11, weight: model.compactMode == mode ? .semibold : .medium))
-                        .foregroundStyle(model.compactMode == mode ? Palette.moon100 : Palette.moon400)
+                        .foregroundStyle(model.compactMode == mode ? ink : inkMuted)
                         .frame(maxWidth: .infinity)
                         .frame(height: 27)
-                        .background(model.compactMode == mode ? Palette.moon100.opacity(0.12) : .clear,
+                        .background(model.compactMode == mode ? ink.opacity(0.12) : .clear,
                                     in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(PetPressStyle())
@@ -101,7 +104,7 @@ struct CompactWidgetView: View {
             }
         }
         .padding(2)
-        .background(Palette.moon100.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+        .background(ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var tasksContent: some View {
@@ -111,7 +114,7 @@ struct CompactWidgetView: View {
             HStack(spacing: 7) {
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(inkMuted)
                 TextField("새 할 일", text: $model.taskDraft)
                     .focused($focusedField, equals: .task)
                     .textFieldStyle(.plain)
@@ -133,16 +136,16 @@ struct CompactWidgetView: View {
             .padding(.leading, 12)
             .padding(.trailing, 5)
             .frame(height: 40)
-            .background(Palette.moon100.opacity(0.07), in: RoundedRectangle(cornerRadius: 11))
+            .background(ink.opacity(0.07), in: RoundedRectangle(cornerRadius: 11))
             .overlay(RoundedRectangle(cornerRadius: 11)
-                .strokeBorder(Palette.moon100.opacity(0.12), lineWidth: 1))
+                .strokeBorder(ink.opacity(0.12), lineWidth: 1))
 
             HStack {
                 Text("목록")
-                    .foregroundStyle(Palette.moon300)
+                    .foregroundStyle(inkMuted)
                 Spacer()
                 Text("남은 \(model.openTaskCount)개")
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(inkFaint)
                     .monospacedDigit()
             }
             .font(.system(size: 10.5, weight: .medium))
@@ -155,7 +158,7 @@ struct CompactWidgetView: View {
                         Text("아직 적은 할 일이 없습니다")
                             .font(.system(size: 11.5))
                     }
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(inkMuted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
@@ -180,28 +183,28 @@ struct CompactWidgetView: View {
             Button { withAnimation(PetMotion.hover) { model.toggleTask(task.id) } } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16, weight: .light))
-                    .foregroundStyle(task.isDone ? Palette.moon400 : Palette.moon300)
+                    .foregroundStyle(task.isDone ? inkFaint : inkMuted)
                     .frame(width: 27, height: 34)
             }
             .buttonStyle(PetPressStyle())
             .accessibilityLabel("\(task.title) \(task.isDone ? "완료 취소" : "완료")")
             Text(task.title)
                 .font(.system(size: 12))
-                .foregroundStyle(task.isDone ? Palette.moon400 : Palette.moon100)
+                .foregroundStyle(task.isDone ? inkFaint : ink)
                 .strikethrough(task.isDone)
                 .lineLimit(1)
             Spacer(minLength: 0)
             Button { withAnimation(PetMotion.panel) { model.removeTask(task.id) } } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Palette.moon400)
+                    .foregroundStyle(inkMuted)
                     .frame(width: 25, height: 30)
             }
             .buttonStyle(PetPressStyle())
             .accessibilityLabel("\(task.title) 삭제")
         }
         .frame(height: 39)
-        .overlay(alignment: .bottom) { Palette.moon100.opacity(0.09).frame(height: 1) }
+        .overlay(alignment: .bottom) { ink.opacity(0.09).frame(height: 1) }
         .transition(.opacity.combined(with: .offset(y: 4)))
     }
 
@@ -212,13 +215,13 @@ struct CompactWidgetView: View {
                 .focused($focusedField, equals: .memo)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12.5))
-                .foregroundStyle(Palette.moon100)
+                .foregroundStyle(ink)
                 .lineLimit(7...7)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(8)
-                .background(Palette.moon100.opacity(0.06), in: RoundedRectangle(cornerRadius: 11))
+                .background(ink.opacity(0.06), in: RoundedRectangle(cornerRadius: 11))
                 .overlay(RoundedRectangle(cornerRadius: 11)
-                    .strokeBorder(Palette.moon100.opacity(0.12), lineWidth: 1))
+                    .strokeBorder(ink.opacity(0.12), lineWidth: 1))
                 .accessibilityLabel("메모 입력")
             HStack {
                 footer(model.savedMemo == model.memoDraft ? "저장됨 · 이 Mac" : "수정됨 · 아직 저장 전")
@@ -238,6 +241,6 @@ struct CompactWidgetView: View {
     private func footer(_ title: String) -> some View {
         Text(title)
             .font(.system(size: 10.5))
-            .foregroundStyle(Palette.moon500)
+            .foregroundStyle(inkFaint)
     }
 }

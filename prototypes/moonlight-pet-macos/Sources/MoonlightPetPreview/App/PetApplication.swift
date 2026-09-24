@@ -8,7 +8,6 @@ enum MoonlightPetPreviewMain {
             exit(passed ? 0 : 1)
         }
         let application = NSApplication.shared
-        application.appearance = NSAppearance(named: .darkAqua)
         let delegate = PetAppDelegate()
         application.delegate = delegate
         application.setActivationPolicy(.accessory)

@@ -11,6 +11,10 @@ enum Palette {
     static let moon300 = color(0.78, 0.008, 250)
     static let moon400 = color(0.68, 0.009, 250)
     static let moon500 = color(0.58, 0.010, 250)
+    // The compact system glass follows macOS appearance, so its ink must follow it too.
+    static let glassInk = Color.primary
+    static let glassInkMuted = Color.primary.opacity(0.68)
+    static let glassInkFaint = Color.primary.opacity(0.56)
 
     private static func color(_ lightness: Double, _ chroma: Double, _ degrees: Double) -> Color {
         let angle = degrees * .pi / 180
