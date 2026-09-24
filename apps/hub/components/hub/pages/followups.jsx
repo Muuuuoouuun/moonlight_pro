@@ -593,6 +593,7 @@ export function Followups({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        <Button variant="ghost" size="sm" icon="leads" onClick={() => onNavigate?.("dashboard/revenue/customers")}>고객 DB</Button>
         <Button variant="ghost" size="sm" icon="runs" onClick={reload}>새로고침</Button>
       </div>
 
