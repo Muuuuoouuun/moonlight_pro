@@ -24,8 +24,6 @@ struct PreviewView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Palette.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.line.opacity(0.6), lineWidth: 1))
+        .moonlightGlassPanel(cornerRadius: 14)
     }
 }
