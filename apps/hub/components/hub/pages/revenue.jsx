@@ -7,6 +7,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, CheckboxRow, Progress, CertaintyBadge, LifecycleBadge, ChipToggle, useToast } from "../hub-primitives";
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
+import { GuruGuidanceCard } from '../guru-guidance-card';
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
@@ -340,11 +341,11 @@ function GuruCoachPanel({ onNavigate }) {
   const [text, setText] = React.useState('');
   const [note, setNote] = React.useState('');
 
-  const run = async () => {
+  const run = async (guidanceId = null) => {
     setState('loading');
     setText('');
     setNote('');
-    const r = await requestGuruCoaching({ mode: 'pipeline-triage' });
+    const r = await requestGuruCoaching({ mode: 'pipeline-triage', guidanceId });
     if (r.state === 'done') {
       setText(r.text);
       setState('done');
@@ -365,16 +366,13 @@ function GuruCoachPanel({ onNavigate }) {
           <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>이번 주 파이프라인 분류 — 무엇부터 손댈지</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="sparkle" onClick={run} disabled={state === 'loading'}>
+        <Button variant="primary" size="sm" icon="sparkle" onClick={() => run()} disabled={state === 'loading'}>
           {state === 'loading' ? '분석 중…' : state === 'done' ? '다시 분류' : '파이프라인 분류'}
         </Button>
       </div>
 
       {state === 'idle' && (
-        <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
-          Guru에게 이번 주 파이프라인 분류를 요청하세요. 정체 딜·신규 리드·Won 신호를 근거로
-          가장 먼저 손대야 할 3건과 이유를 우선순위로 제시합니다.
-        </div>
+        <GuruGuidanceCard domain="sales" compact onAsk={card => onNavigate?.(guruChatPath({ guidanceId: card.id }))} />
       )}
 
       {state === 'loading' && (

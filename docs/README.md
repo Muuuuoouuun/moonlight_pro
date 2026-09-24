@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-23 (main·생활 루틴 통합과 운영 DB 0043 적용 기록 반영. Office P0 교정 6건 — 역할 카드 v25·말투 튜닝 동결, 의미 품질 인증 대기. DESIGN.md를 코드 실측과 대조해 정정하고 사이드바 앵커 서술을 10+2로 갱신)
+> 마지막 정리: 2026-09-24 (Guru 도움 카드 개발 서버 시범 설계·구현 위치 추가. main·생활 루틴 통합과 운영 DB 0043 적용 기록 반영. Office P0 교정 6건 — 역할 카드 v25·말투 튜닝 동결, 의미 품질 인증 대기. DESIGN.md를 코드 실측과 대조해 정정하고 사이드바 앵커 서술을 10+2로 갱신)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -214,6 +214,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - 빠른 메모: [`quick-memo-plan-2026-09-09.md`](quick-memo-plan-2026-09-09.md) — 공통 우측 하단 입력창·초안 복원·기존 메모 저장 경로 재사용. **2026-09-10 로컬 구현·검증 완료, 운영 배포 별도**
 - Agent/Council API·MCP: [`agent-council-api-mcp-operating-plan-2026-09-09.md`](agent-council-api-mcp-operating-plan-2026-09-09.md) — 현재 연동 구현과 권장 운영법. 아래 보류된 전체 Agent UI·자율 실행 설계를 승인한 것은 아님
 - 작업 지시 큐·Guru: [A→B 승인 설계](superpowers/specs/2026-09-23-work-order-queue-reassessment-design.md)가 제품 기준이며 A0~A5는 로컬 구현·검증됐다([큐 정리 구현 기록](superpowers/plans/2026-09-23-work-order-queue-a.md), [신호 소음 차단 구현 기록](superpowers/plans/2026-09-23-guru-signal-core.md)). [입력→결과 연결 점검](superpowers/specs/2026-09-23-guru-input-to-outcome-audit.md)은 현재 코드·운영 기록의 관찰과 B 단계 후속 권장을 구분한다.
+- Guru 도움 카드: [2026-09-24 개발 서버 시범 설계](superpowers/specs/2026-09-24-guru-guidance-cards-design.md)는 Guru를 필요할 때 요청하는 조언과 일간 자료 카드로, Legend를 주간 판단 카드로 둔다. [구현 계획](superpowers/plans/2026-09-24-guru-guidance-cards.md)은 격리 개발 서버 시범이며 운영 적용은 별도다. 홈·오늘 승인 대기 영역에는 카드를 넣지 않고, 카드 열람으로 업무를 생성하지 않는다.
 - Sales OS: [`sales-os-direction.md`](sales-os-direction.md), [`sales-os/`](sales-os/), [`sales-daily-loop-playbook.md`](sales-daily-loop-playbook.md)
 - Content OS: [`content-os-deep-plan.md`](content-os-deep-plan.md)
 - Hub/Engine 경계: [`engine-os-separation-ui-plan.md`](engine-os-separation-ui-plan.md)

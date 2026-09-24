@@ -76,6 +76,8 @@ export function FloatingMentorWidget({
   isOpen = false,
   onClose,
   agent, // 'council' | 'guru' (optional, auto-inferred if omitted)
+  guidanceId = null,
+  initialQuestion = "",
   contextType = "content", // 'content' | 'project' | 'deal' | 'customer' | 'sales' | 'weekly' | 'general'
   contextTitle = "",
   contextData = {},
@@ -84,7 +86,7 @@ export function FloatingMentorWidget({
   onCreateTask,
 }) {
   const isGuru = agent ? agent === "guru" : ["deal", "customer", "sales"].includes(contextType);
-  const contextKey = JSON.stringify([agent, contextType, contextData?.id || contextData?.ref || contextTitle]);
+  const contextKey = JSON.stringify([agent, contextType, contextData?.id || contextData?.ref || contextTitle, guidanceId, initialQuestion]);
   const [minimized, setMinimized] = useState(false);
   const defaultTab = initialTab || (contextData?.mode === "critique" ? "critique" : "quick");
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -93,7 +95,7 @@ export function FloatingMentorWidget({
   const [resultText, setResultText] = useState("");
   const [statusNote, setStatusNote] = useState("");
   const [chatThread, setChatThread] = useState([]);
-  const [chatInput, setChatInput] = useState("");
+  const [chatInput, setChatInput] = useState(initialQuestion);
   const [adviceHistory, setAdviceHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const visibleAdviceHistory = adviceHistory.filter(item => item.contextKey === contextKey);
@@ -113,6 +115,7 @@ export function FloatingMentorWidget({
     requestPending.current = false;
     setResultText("");
     setChatThread([]);
+    setChatInput(initialQuestion);
     setStatusNote("");
     setTaskSaved(false);
     setDealSaved(false);
@@ -210,7 +213,7 @@ export function FloatingMentorWidget({
       });
     } else {
       res = isGuru
-        ? await requestGuruCoaching({ mode, draft, ref })
+        ? await requestGuruCoaching({ mode, draft, ref, guidanceId })
         : await requestCouncilAdvice({ mode, draft, ref });
     }
 
@@ -274,6 +277,7 @@ export function FloatingMentorWidget({
             mode: activeTab === "sparring" ? "sparring" : "deal-review",
             draft,
             ref,
+            guidanceId,
           })
         : await requestCouncilAdvice({
             mode: activeTab === "sparring" ? "sparring" : "brand-strategy",

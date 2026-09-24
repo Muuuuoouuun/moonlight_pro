@@ -3,7 +3,7 @@ const nextConfig = {
   async redirects() {
     return [{ source: "/favicon.ico", destination: "/icon.svg", permanent: false }];
   },
-  transpilePackages: ["@com-moon/ui"],
+  transpilePackages: ["@com-moon/ui", "@com-moon/guru-guidance"],
   serverExternalPackages: ["node-ical"],
   experimental: {
     // 대시보드 라우트는 force-dynamic이라 클라이언트 라우터 캐시 수명이 0초 —

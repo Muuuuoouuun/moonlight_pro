@@ -1,4 +1,5 @@
 import { LEGEND_CARDS } from '../components/hub/council-legends.js';
+import { GURU_CARDS } from '@com-moon/guru-guidance';
 
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
 const optional = (value, validate) => value === undefined || value === null || validate(value);
@@ -28,6 +29,7 @@ function knowledge(value) {
 // validate every field the Engine formatter consumes before any context read/call.
 export function isValidAdvisorInput(input) {
   return plain(input)
+    && optional(input.guidanceId, id => typeof id === 'string' && GURU_CARDS.some(card => card.id === id))
     && optional(input.legendIds, legendIds)
     && optional(input.values, values)
     && optional(input.knowledge, knowledge)

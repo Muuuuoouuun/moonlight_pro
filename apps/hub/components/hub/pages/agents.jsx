@@ -8,6 +8,8 @@ import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState, Segmente
 import { useUndoableAction } from '../use-undoable-action';
 import { ContactRecordDrawer } from '../contact-record-form';
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
+import { GURU_CARDS } from '@com-moon/guru-guidance';
+import { GuruGuidanceCard } from '../guru-guidance-card';
 import { requestCouncilAdvice, councilChatPath } from "../council-client";
 import { RECOMMENDED_TRIADS } from "../council-legends";
 import { requestPersonaChat, PERSONA_MODE_LABEL, LEGEND_LENS_MAP } from "../persona-client";
@@ -39,7 +41,7 @@ CHAT_PERSONAS.guru = {
     title: '영업 멘토 세션',
     model: 'Gemini 3.1 Pro (Thinking)',
     intro: [
-      { role: 'agent', name: 'Guru', text: '영업 멘토입니다. Revenue 기록(딜·리드·계정)을 근거로 "지금 무엇을 놓치고 있고, 다음 한 수가 무엇인지"를 코칭합니다.\n\n무엇을 볼까요?\n· 이번 주 파이프라인 분류\n· 특정 딜 진단 (어느 단계에서 막혔는지)\n· 제안서/이메일/반론 대응 다듬기' },
+      { role: 'agent', name: 'Guru', text: '필요한 순간에만 관점을 빌려드릴게요. 아래 카드는 읽고 지나가도 됩니다.' },
     ],
 };
 
@@ -78,13 +80,15 @@ export function AgentsChat({ onNavigate }) {
   const [thread, setThread] = React.useState([]);
   const [conversations, setConversations] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
+  const [guruGuidanceId, setGuruGuidanceId] = React.useState(null);
+  const guruInputRef = React.useRef(null);
   const [taskSavedMap, setTaskSavedMap] = React.useState({});
   const [copiedMap, setCopiedMap] = React.useState({});
   const busyRef = React.useRef(false);
   const persona = CHAT_PERSONAS[agentKey] || CHAT_PERSONAS[DEFAULT_PERSONA_KEY];
 
   // Run a real coaching pass against Guru
-  const runGuru = React.useCallback(async (mode, { ref = null, draft = null, label } = {}) => {
+  const runGuru = React.useCallback(async (mode, { ref = null, draft = null, label, guidanceId = null } = {}) => {
     if (busyRef.current) return;
     busyRef.current = true;
     const userText = label || draft || GURU_MODE_LABEL[mode] || '코칭 요청';
@@ -94,7 +98,7 @@ export function AgentsChat({ onNavigate }) {
       { role: 'user', text: userText },
       { role: 'agent', name: 'Guru', pending: true },
     ]);
-    const r = await requestGuruCoaching({ mode, ref, draft });
+    const r = await requestGuruCoaching({ mode, ref, draft, guidanceId });
     setThread(prev => {
       const next = prev.slice();
       for (let i = next.length - 1; i >= 0; i--) {
@@ -237,6 +241,12 @@ export function AgentsChat({ onNavigate }) {
       ]);
       const mode = q.get('mode');
       const ref = q.get('ref');
+      const guidanceId = q.get('guidanceId');
+      const guidanceCard = a === 'guru' ? GURU_CARDS.find(card => card.id === guidanceId) : null;
+      if (guidanceCard) {
+        setGuruGuidanceId(guidanceCard.id);
+        setInput(guidanceCard.question);
+      }
       if (mode) setActiveMode(mode);
       if (a === 'guru' && mode && GURU_MODE_LABEL[mode]) {
         const label = ref ? `${GURU_MODE_LABEL[mode]}: ${ref}` : GURU_MODE_LABEL[mode];
@@ -256,7 +266,12 @@ export function AgentsChat({ onNavigate }) {
     if (!text || busy) return;
     setInput('');
     if (agentKey === 'guru') {
-      runGuru(activeMode === 'sparring' ? 'sparring' : 'proposal-critique', { draft: text, label: text });
+      const mode = activeMode === 'advice' ? 'open-question'
+        : activeMode === 'critique' ? 'proposal-critique'
+        : activeMode === 'weekly-review' ? 'weekly-retro'
+        : 'sparring';
+      runGuru(mode, { draft: text, label: text, guidanceId: guruGuidanceId });
+      setGuruGuidanceId(null);
       return;
     }
     runPersona(agentKey, activeMode, text, { lens: activeLens });
@@ -268,6 +283,8 @@ export function AgentsChat({ onNavigate }) {
       ...prev.map(c => ({ ...c, active: false })),
     ]);
     setThread(persona.intro || []);
+    setGuruGuidanceId(null);
+    setInput('');
   };
   return (
     <div className="hub-chat-shell" style={{ display: 'grid', gridTemplateColumns: '240px 1fr', height: '100%', overflow: 'hidden' }}>
@@ -309,6 +326,13 @@ export function AgentsChat({ onNavigate }) {
 
         <div className="scroll-y" style={{ flex: 1, padding: '20px 20px 10px' }}>
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {agentKey === 'guru' && thread.length <= 1 && (
+              <GuruGuidanceCard allowDomains onBrowse={() => setGuruGuidanceId(null)} onAsk={card => {
+                setGuruGuidanceId(card.id);
+                setInput(card.question);
+                guruInputRef.current?.focus();
+              }} />
+            )}
             {thread.map((m, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, flexDirection: m.role === 'user' ? 'row-reverse' : 'row' }}>
                 {m.role === 'agent' && <Avatar name={(m.name || persona.name).slice(0, 1)} size={24} tone="moon" />}
@@ -537,7 +561,7 @@ export function AgentsChat({ onNavigate }) {
             </span>
           </div>
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
-            <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
+            <textarea ref={guruInputRef} value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
               background: 'transparent', border: 'none',
               color: 'var(--fg)', fontSize: 13.5, lineHeight: 1.5,

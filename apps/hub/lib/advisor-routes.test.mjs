@@ -109,6 +109,15 @@ test('Guru preview and transport errors never become successful run records', as
   assert.equal(state.run.result, 'error');
   assert.equal((await response.text()).includes('private connection detail'), false);
 });
+test('Guru forwards only an allowlisted reader-selected guidance card', async () => {
+  const response = await guruPOST(request({ mode: 'deal-review', guidanceId: 'sales-meddic' }));
+  assert.equal(response.status, 200);
+  assert.equal(state.lastFetch.body.guidanceId, 'sales-meddic');
+  state.contextRead = false;
+  const invalid = await guruPOST(request({ mode: 'deal-review', guidanceId: 'invented-card' }));
+  assert.equal(invalid.status, 400);
+  assert.equal(state.contextRead, false);
+});
 test('run history validates bounds and keeps failed reads distinct from empty history', async () => {
   assert.equal((await GET(new Request('http://hub.test?limit=999'))).status, 400);
   assert.equal(state.query, undefined);

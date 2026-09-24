@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@com-moon/agent-contracts": "*",
+    "@com-moon/guru-guidance": "*",
     "@com-moon/goal-contracts": "*",
     "@com-moon/supabase-rest": "*",
     "@com-moon/ui": "*",

@@ -69,9 +69,9 @@ async function setup(t, mode = 'success') {
       laterAnswer();
     } else if (mode.startsWith('group')) {
       internalItems();
-      const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'], { stdio: ['ignore', 'inherit', 'inherit'] });
+      const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); process.send?.("ready"); setInterval(() => {}, 1000)'], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
       fs.writeFileSync(capture + '.pid', String(child.pid));
-      setTimeout(() => emit(mode === 'group-error' ? { type: 'error', message: 'PRIVATE_ERROR_BODY' } : mode === 'group-turn-failed' ? { type: 'turn.failed', error: { message: 'PRIVATE_ERROR_BODY' } } : { type: 'item.started', item: { type: 'command_execution' } }), 80);
+      child.once('message', () => setTimeout(() => emit(mode === 'group-error' ? { type: 'error', message: 'PRIVATE_ERROR_BODY' } : mode === 'group-turn-failed' ? { type: 'turn.failed', error: { message: 'PRIVATE_ERROR_BODY' } } : { type: 'item.started', item: { type: 'command_execution' } }), 80));
       process.on('SIGTERM', () => process.exit(0));
       setInterval(() => {}, 1000);
     } else if (mode === 'abort-cleanup') {
