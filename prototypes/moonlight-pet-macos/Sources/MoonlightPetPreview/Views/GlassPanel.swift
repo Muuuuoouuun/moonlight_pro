@@ -32,7 +32,21 @@ private struct GlassPanelStyle: ViewModifier {
                         .clipShape(shape)
                         .allowsHitTesting(false)
                 }
-                .overlay(shape.strokeBorder(Palette.moon100.opacity(0.22), lineWidth: 1))
+                .overlay {
+                    shape.strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Palette.moon100.opacity(0.42),
+                                Palette.moon100.opacity(0.14),
+                                Palette.moon100.opacity(0.07),
+                                Palette.moon100.opacity(0.20)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+                }
                 .environment(\.colorScheme, .dark)
         } else {
             content
