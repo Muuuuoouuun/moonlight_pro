@@ -83,10 +83,15 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
             </div>
             <SegmentedControl label="Guru 분야" options={DOMAINS} value={domain} onChange={chooseDomain} className="mentor-shelf__domains" />
             <h4 aria-live="polite">{guruCard.person}</h4>
+            <p className="mentor-shelf__frame">{guruCard.frame}</p>
             <p className="mentor-shelf__copy">{guruCard.text}</p>
             <div className="mentor-shelf__use">
               <strong>써볼 때</strong>
               <p>{guruCard.useWhen}</p>
+            </div>
+            <div className="mentor-shelf__question">
+              <strong>물어볼 질문</strong>
+              <p>{guruCard.question}</p>
             </div>
             <GuidanceSource source={guruCard.source} />
             <div className="mentor-shelf__actions">
@@ -105,8 +110,13 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
             </div>
             <div className="mentor-shelf__rule" aria-hidden="true" />
             <h4 aria-live="polite">{legendCard.person}</h4>
+            <p className="mentor-shelf__frame">{legendCard.frame}</p>
             <p className="mentor-shelf__legend-copy">{legendCard.text}</p>
             <div className="mentor-shelf__legend-bottom">
+              <div className="mentor-shelf__question mentor-shelf__question--legend">
+                <strong>생각해 볼 질문</strong>
+                <p>{legendCard.question}</p>
+              </div>
               <GuidanceSource source={legendCard.source} />
               <Button variant="ghost" size="md" onClick={() => setLegendOffset(value => value + 1)}>다른 Legend 보기 →</Button>
             </div>

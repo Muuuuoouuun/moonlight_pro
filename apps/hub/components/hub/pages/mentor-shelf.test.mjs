@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import ts from 'typescript';
-import { guidancePeriodKey, selectGuidanceCard } from '../../../../../packages/guru-guidance/index.ts';
+import { GURU_CARDS, LEGEND_CARDS, guidancePeriodKey, selectGuidanceCard } from '../../../../../packages/guru-guidance/index.ts';
 
 const jsxFile = new URL('./mentor-shelf.jsx', import.meta.url);
 const cssFile = new URL('./mentor-shelf.css', import.meta.url);
@@ -80,6 +80,14 @@ test('the shelf reads a daily Guru and weekly Legend together with full source i
   assert.match(words(tree), /docs\/sales-guru-knowledge-base\.md/);
   assert.match(words(tree), /apps\/engine\/lib\/legend-cards\.ts/);
   assert.equal(nodes(tree, node => node.type === 'h2').length, 1);
+  const [guruPerson, legendPerson] = nodes(tree, node => node.type === 'h4').map(node => words(node));
+  const guru = GURU_CARDS.find(card => card.person === guruPerson);
+  const legend = LEGEND_CARDS.find(card => card.person === legendPerson);
+  assert.ok(guru && legend);
+  for (const card of [guru, legend]) {
+    assert.ok(words(tree).includes(card.frame), `${card.id} methodology should be visible`);
+    assert.ok(words(tree).includes(card.question), `${card.id} question should be visible`);
+  }
 });
 
 test('domain changes and manual next stay local until the operator explicitly asks', () => {

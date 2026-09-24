@@ -113,9 +113,17 @@
   word-break: keep-all;
 }
 
+.mentor-shelf__frame {
+  margin: 9px 0 0;
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
 .mentor-shelf__copy {
   max-width: 620px;
-  margin: 13px 0 0;
+  margin: 17px 0 0;
   font-size: 15px;
   line-height: 1.75;
   word-break: keep-all;
@@ -139,6 +147,27 @@
 .mentor-shelf__use p {
   margin: 0;
   color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+.mentor-shelf__question {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 13px;
+  margin-top: 15px;
+}
+
+.mentor-shelf__question strong {
+  color: var(--fg-dim);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.mentor-shelf__question p {
+  margin: 0;
+  color: var(--fg);
   font-size: 12px;
   line-height: 1.6;
   word-break: keep-all;
@@ -184,7 +213,7 @@
 }
 
 .mentor-shelf__legend-copy {
-  margin: 15px 0 0;
+  margin: 17px 0 0;
   font-size: 13px;
   line-height: 1.72;
   word-break: keep-all;
@@ -193,6 +222,17 @@
 .mentor-shelf__legend-bottom {
   margin-top: auto;
   padding-top: 20px;
+}
+
+.mentor-shelf__question--legend {
+  display: block;
+  margin: 0 0 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.mentor-shelf__question--legend p {
+  margin-top: 5px;
 }
 
 .mentor-shelf__legend-bottom .mentor-shelf__source {
@@ -336,6 +376,11 @@
     grid-template-columns: 1fr;
     gap: 5px;
     margin-top: 22px;
+  }
+
+  .mentor-shelf__question {
+    grid-template-columns: 1fr;
+    gap: 5px;
   }
 
   .mentor-shelf__actions .hub-btn,
