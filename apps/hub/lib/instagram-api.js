@@ -208,6 +208,7 @@ function sanitizeReturnPath(value, fallback) {
 
 function resolveBaseUrl(origin) {
   return (
+    process.env.COM_MOON_SOCIAL_OAUTH_BASE_URL?.trim() ||
     process.env.COM_MOON_HUB_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
     origin ||
