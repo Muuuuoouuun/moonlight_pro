@@ -94,7 +94,9 @@ export function ContentStudio({ workspace, ledger }) {
     const result = await templates.save(templateDraft);
     setTemplateSaving(false);
     if (['saved', 'duplicate'].includes(result.status)) {
-      if (templateId === result.template.id || !templateDraft.revision) setTemplateId(result.template.id);
+      // 선택 표시는 AI 요청 칸의 글과 템플릿 요청문이 같을 때만 붙인다 — 이름만 보이고 다른 요청이 가는 일을 막는다.
+      if (templateId === result.template.id) setAiRequest(result.template.request);
+      else if (!templateDraft.revision && result.template.request === aiRequest) setTemplateId(result.template.id);
       setTemplateDraft(null);
       toast.success('템플릿을 저장했습니다.');
     } else toast.error(result.message || '템플릿을 저장하지 못했습니다.');
