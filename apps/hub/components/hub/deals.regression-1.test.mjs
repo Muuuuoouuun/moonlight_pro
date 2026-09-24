@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
 import { DEAL_STAGES, LOST_STAGE, dealStageLabel, isDealStalled } from '../../lib/deal-stages.js';
+import { DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay } from '../../lib/deal-timeline.js';
 
 // Regression: ISSUE-001 — column moves unmount the drag source before dragend.
 // Found by /qa on 2026-09-21. Browser evidence: /tmp/moonlight-deals-qa/drag-result.png.
@@ -13,8 +14,10 @@ const javascript = ts.transpileModule(component.replace('export function', 'func
   compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-function mount({ state = 'live', records = [], workspace } = {}) {
-  const slots = [], timers = [], pending = new Map(), selections = [];
+// 2026-09-24: 거래 탭의 기본 보기가 "언제"(예상일 칸)로 바뀌었다. 아래 칸반 회귀들은
+// 기존 보드를 그대로 겨냥하도록 `?view=stage`로 마운트한다.
+function mount({ state = 'live', records = [], workspace, search = 'view=stage', save, selectedId = null } = {}) {
+  const slots = [], timers = [], pending = new Map(), selections = [], replaced = [];
   let index = 0, tree, reloads = 0;
   const React = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(Boolean) } }),
@@ -30,14 +33,15 @@ function mount({ state = 'live', records = [], workspace } = {}) {
     React, setTimeout: fn => { timers.push(fn); }, clearTimeout: () => {},
     useToast: () => ({ success() {}, error() {}, info() {} }),
     useRevenueLedger: () => ({ ledger: { deals: records, stages: DEAL_STAGES }, syncState: state, reload: () => { reloads++; } }),
-    useSearchParams: () => new URLSearchParams(), useRouter: () => ({}), usePathname: () => '/dashboard/revenue/deals',
+    useSearchParams: () => new URLSearchParams(search), useRouter: () => ({ replace: url => { replaced.push(url); } }), usePathname: () => '/dashboard/revenue/deals',
     useScopeFilter: () => React.useState('all'), getWorkspace: scope => scope ? { label: scope } : null,
     filterDealsByWorkspace: ds => ds, useUndoableAction: () => ({ schedule: (key, fn) => pending.set(key, fn), cancel: key => pending.delete(key) }),
-    useCrmSelection: items => { selections.push(items); return { selectedId: null }; }, useCrmKeyboard() {},
+    useCrmSelection: items => { selections.push(items); return { selectedId, setSelectedId() {} }; }, useCrmKeyboard() {},
     STAGE_FILL: [], STAGE_LINE: [], LOST_STAGE, dealStageLabel, isDealStalled, SCOPE_OPTIONS: [], fmt: String,
-    triggerCelebration() {}, saveRevenueRecord: async () => ({ ok: true, status: 'saved' }),
+    triggerCelebration() {}, saveRevenueRecord: save || (async () => ({ ok: true, status: 'saved' })),
+    DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay,
   };
-  for (const name of ['Button', 'Kbd', 'SyncBadge', 'Checkbox', 'CheckboxRow', 'LifecycleBadge', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget']) dependencies[name] = name;
+  for (const name of ['Button', 'Kbd', 'SyncBadge', 'Checkbox', 'CheckboxRow', 'LifecycleBadge', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget', 'DealsTimeline', 'DealsRegionView']) dependencies[name] = name;
   const Deals = new Function(...Object.keys(dependencies), `${javascript}; return Deals;`)(...Object.values(dependencies));
   function render() { index = 0; tree = Deals({ workspace }); return tree; }
   function findAll(predicate, node = tree) {
@@ -45,7 +49,7 @@ function mount({ state = 'live', records = [], workspace } = {}) {
     return [...(predicate(node) ? [node] : []), ...(node.props?.children || []).flatMap(child => findAll(predicate, child))];
   }
   render();
-  return { render, findAll, pending, flush: () => { timers.splice(0).forEach(fn => fn()); }, reloads: () => reloads, lastSelection: () => selections[selections.length - 1] };
+  return { render, findAll, pending, replaced, flush: () => { timers.splice(0).forEach(fn => fn()); }, reloads: () => reloads, lastSelection: () => selections[selections.length - 1] };
 }
 
 function deal() { return { id: 'stage-regression', stage: DEAL_STAGES[0].key, value: 0 }; }
@@ -135,4 +139,75 @@ test('숨긴 Lost 딜은 Lost 토글 건수에 세지 않는다 — 켜도 빈 �
   const app = mount({ records: [deal(), { id: 'lost-hidden', stage: 'lost', value: 0, hidden: true }] });
   const lostToggle = app.findAll(n => n.type === 'CheckboxRow' && String(n.props.text).startsWith(LOST_STAGE.label));
   assert.equal(lostToggle.length, 0);
+});
+
+// ── 2026-09-24 거래 탭 재설계: 기본 보기 "언제"(목업 3) ─────────────────────────────
+const todayIso = () => new Date().toISOString();
+const text = node => (node && typeof node === 'object' ? (node.props?.children || []).map(text).join('') : String(node ?? ''));
+
+test('기본 보기는 언제 — 칸반 대신 시간 칸을 그리고 제목은 이번 달 확정 금액만 말한다', () => {
+  const app = mount({ search: '', records: [
+    { id: 'won', stage: 'closing', value: 1800000, closeAt: todayIso() },
+    { id: 'quote', stage: 'quote', value: 2400000, closeAt: todayIso() },
+    { id: 'contact', stage: 'contact', value: 1200000, closeAt: todayIso() },
+  ] });
+  assert.equal(app.findAll(n => n.type === 'ScrollShadowX').length, 0);
+  assert.equal(app.findAll(n => n.type === 'CheckboxRow').length, 0);
+  const timeline = app.findAll(n => n.type === 'DealsTimeline');
+  assert.equal(timeline.length, 1);
+  assert.equal(timeline[0].props.timeline.count, 3);
+  const title = app.findAll(n => n.type === 'h2')[0];
+  assert.equal(text(title), '이번 달 확정된 돈 1800000', '확정(클로징)만 — 가능성은 부제로');
+  assert.match(text(app.findAll(n => n.type === 'p' && n.props.className === 'fx-page-sub')[0]), /잘 풀리면 4200000/);
+  assert.equal(app.findAll(n => n.type === 'h2').length, 1, '페이지 제목은 하나');
+});
+
+test('보기 전환은 ?view=로 남기고 기본 보기로 돌아오면 쿼리를 지운다', () => {
+  const app = mount({ search: 'view=stage&scope=company' });
+  const toggle = app.findAll(n => n.type === 'SegmentedControl' && n.props.label === '보기')[0];
+  assert.deepEqual(toggle.props.options.map(o => o.label), ['언제', '단계', '지역']);
+  assert.equal(toggle.props.value, 'stage');
+  toggle.props.onChange('region');
+  toggle.props.onChange('time');
+  assert.deepEqual(app.replaced, ['/dashboard/revenue/deals?view=region&scope=company', '/dashboard/revenue/deals?scope=company']);
+});
+
+test('지역 보기는 히트맵에 읽기 상태를 맡긴다 — 거래 쪽 스켈레톤·오류를 겹쳐 그리지 않는다', () => {
+  for (const state of ['loading', 'error', 'live']) {
+    const app = mount({ search: 'view=region', state });
+    assert.equal(app.findAll(n => n.type === 'DealsRegionView').length, 1);
+    assert.equal(app.findAll(n => n.type === 'Skeleton' || n.type === 'LedgerReadError').length, 0, state);
+  }
+});
+
+test('칸 이동 = 예상일 변경: 낙관 반영 → 되돌리기 창 뒤 저장, 실패하면 원래 날짜로', async () => {
+  const saved = [];
+  let result = { ok: false, status: 'failed' };
+  const app = mount({ search: '', records: [{ id: 'd1', stage: 'quote', value: 10, closeAt: '' }], save: async (kind, op, body) => { saved.push([kind, op, body]); return result; } });
+  const timelineOf = () => app.findAll(n => n.type === 'DealsTimeline')[0];
+  timelineOf().props.onMoveDate('d1', '2026-10-15T03:00:00.000Z', '예상일 → 10/15 목');
+  app.render();
+  assert.equal(timelineOf().props.timeline.ordered[0].deal.closeAt, '2026-10-15T03:00:00.000Z');
+  assert.equal(saved.length, 0, '창이 닫히기 전에는 쓰지 않는다');
+  assert.equal(app.pending.size, 1);
+  [...app.pending.values()][0]();
+  await new Promise(resolve => setImmediate(resolve));
+  app.render();
+  assert.deepEqual(saved[0], ['deal', 'update', { id: 'd1', closeAt: '2026-10-15T03:00:00.000Z' }]);
+  assert.equal(timelineOf().props.timeline.ordered[0].deal.closeAt, '', '실패하면 원래 날짜(미정)로 롤백');
+  result = { ok: true, status: 'saved' };
+});
+
+test('독이 열리면 머리의 생성 버튼은 secondary로 내려 한 화면 한 primary를 지킨다', () => {
+  const records = [{ id: 'd1', stage: 'quote', value: 10, closeAt: todayIso() }];
+  const closed = mount({ search: '', records });
+  assert.equal(closed.findAll(n => n.type === 'Button' && n.props.icon === 'plus')[0].props.variant, 'primary');
+  const open = mount({ search: '', records, selectedId: 'd1' });
+  assert.equal(open.findAll(n => n.type === 'Button' && n.props.icon === 'plus')[0].props.variant, 'secondary');
+  assert.equal(open.findAll(n => n.type === 'DealsTimeline')[0].props.selectedId, 'd1');
+});
+
+test('칸반의 반론 점검은 10px 인라인 버튼이 아니라 Button 프리미티브다', () => {
+  assert.doesNotMatch(component, /fontSize: 10,/);
+  assert.match(component, /<Button variant="outline" size="xs" icon="sparkle" onClick=\{\(e\) => \{ e\.stopPropagation\(\); setGuruDeal\(d\); \}\}>/);
 });
