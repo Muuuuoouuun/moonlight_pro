@@ -10,6 +10,9 @@ import { OfficeDeliberationControls } from '../office-deliberation-controls';
 import { officeDiscussionState } from '../office-deliberation-client';
 import { officeSkillRequestDraft } from '../office-skill-request';
 import { OfficeSkillRequestDrawer } from '../office-skill-request-drawer';
+import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-drawer';
+import { officeMentorSessions } from '../office-mentor-session';
+import { requestOfficeMentor } from '../office-mentor-client';
 import styles from './office-council.module.css';
 
 const MODES = [{ key: 'chat', label: '대화' }, { key: 'draft', label: '초안' }, { key: 'review', label: '검토' }, { key: 'council', label: '회의' }];
@@ -50,7 +53,39 @@ function ThreadDiscussion({ result, request }) {
   </div>;
 }
 
-function ResultTurn({ turn, onRevise, onCopy, onSkill, skillAvailable, copyStatus, latestRef }) {
+function OfficeMentorAction({ turn, onOpenDrawer }) {
+  const mentorSession = React.useSyncExternalStore(officeMentorSessions.subscribe,
+    () => officeMentorSessions.get(turn.id), () => null);
+  const [localError, setLocalError] = React.useState(null);
+  const firstAnswer = mentorSession?.turns?.[0]?.answer;
+  const target = mentorSession?.lane === 'personal' ? '브랜드 멘토' : '영업 멘토';
+  const busy = Boolean(mentorSession?.pending);
+  async function ask() {
+    setLocalError(null);
+    let id;
+    try {
+      id = officeMentorSessions.open({ result: turn.result,
+        officeSource: { requestId: turn.id, runId: turn.result.log?.runId ?? null }, scope: turn.result.scope });
+    } catch {
+      setLocalError('Office 출처를 확인하지 못했습니다.');
+      return;
+    }
+    if (turn.result.scope === 'all') { onOpenDrawer(id); return; }
+    const pending = officeMentorSessions.begin(id, crypto.randomUUID());
+    if (!pending) return;
+    const response = await requestOfficeMentor(pending.request);
+    officeMentorSessions.complete(id, pending.id, response);
+  }
+  return <div className={styles.mentorAction}>
+    {firstAnswer ? <OfficeMentorReferenceCard answer={firstAnswer} target={target} onContinue={() => onOpenDrawer(turn.id)} />
+      : <Button variant="outline" size="sm" disabled={busy} onClick={ask}>{busy ? '멘토 답변 대기 중…' : mentorSession?.error ? '다른 관점 다시 묻기' : '다른 관점으로 검토'}</Button>}
+    {mentorSession?.error ? <p className={styles.note} role={mentorSession.error.status === 'error' ? 'alert' : 'status'}>
+      <TruthBadge state={mentorSession.error.status === 'preview' ? 'preview' : 'error'} /> {mentorSession.error.note || '멘토 답변을 확인하지 못했습니다.'}</p> : null}
+    {localError ? <p className={styles.note} role="alert">{localError}</p> : null}
+  </div>;
+}
+
+function ResultTurn({ turn, onRevise, onCopy, onSkill, onOpenMentor, skillAvailable, copyStatus, latestRef }) {
   const result = turn.result;
   const owner = OFFICE_ROSTER.find(person => person.id === result.ownerId);
   return <article className={styles.turn} ref={latestRef}>
@@ -63,6 +98,7 @@ function ResultTurn({ turn, onRevise, onCopy, onSkill, skillAvailable, copyStatu
       <div className={styles.answerActions}><Button variant="outline" size="sm" onClick={() => onCopy(result.answer, turn.id)}>답변 복사</Button>
         <Button variant="ghost" size="sm" onClick={() => onRevise(result)}>수정 요청</Button>
         {copyStatus?.id === turn.id ? <span role={copyStatus.ok ? 'status' : 'alert'} className={styles.note}>{copyStatus.ok ? '복사했습니다.' : '복사하지 못했습니다. 본문을 선택해 복사해 주세요.'}</span> : null}</div>
+      <OfficeMentorAction turn={turn} onOpenDrawer={onOpenMentor} />
       {result.recommendation ? <details className={styles.decision}><summary>추천 근거와 남은 이견</summary>
         {result.recommendation.trim() !== result.answer.trim() ? <><strong>주관 추천</strong><p>{result.recommendation}</p></> : null}
         <strong>근거</strong><ul>{result.evidence.length ? result.evidence.map((text, index) => <li key={index}>{text}</li>) : <li>제공된 근거 없음</li>}</ul>
@@ -120,6 +156,7 @@ export function OfficeCouncil({ scope = 'all' }) {
   const [inputNotice, setInputNotice] = React.useState('');
   const [assignment, setAssignment] = React.useState(null);
   const [skillTurn, setSkillTurn] = React.useState(null);
+  const [mentorDrawerId, setMentorDrawerId] = React.useState(null);
   const inputRef = React.useRef(null);
   const threadRef = React.useRef(null);
   const latestTurnRef = React.useRef(null);
@@ -138,7 +175,7 @@ export function OfficeCouncil({ scope = 'all' }) {
   React.useEffect(() => {
     assignmentReadRef.current += 1;
     setAssignment(null); setRosterOpen(false); setMoreOpen(false); setTasksOpen(false);
-    setCopyStatus(null); setInputNotice(''); setFollowUpMode('chat'); setSkillTurn(null);
+    setCopyStatus(null); setInputNotice(''); setFollowUpMode('chat'); setSkillTurn(null); setMentorDrawerId(null);
   }, [scope]);
 
   function invalidateAssignment() {
@@ -209,6 +246,7 @@ export function OfficeCouncil({ scope = 'all' }) {
     if (session.turns.length) store.reset(scope);
     invalidateAssignment();
     setSkillTurn(null);
+    setMentorDrawerId(null);
     const block = officeTaskAgendaBlock(task);
     const previous = session.turns.length ? '' : session.agenda?.source === 'task' && session.draft.startsWith(session.agenda.block)
       ? session.draft.slice(session.agenda.block.length).trimStart() : session.draft.trimStart();
@@ -220,6 +258,7 @@ export function OfficeCouncil({ scope = 'all' }) {
     if (busy || !window.confirm('현재 회의와 입력을 비우고 새 안건을 시작할까요?')) return;
     invalidateAssignment();
     setSkillTurn(null);
+    setMentorDrawerId(null);
     store.reset(scope); setFollowUpMode('chat');
     requestAnimationFrame(() => inputRef.current?.focus());
   }
@@ -276,7 +315,8 @@ export function OfficeCouncil({ scope = 'all' }) {
       <div className={styles.thread} ref={threadRef} tabIndex={-1} aria-live="polite" aria-label="Office 요청 결과">
         {session.turns.length === 0 && !busy ? <EmptyState icon="chat" title="회의할 안건을 올려 주세요" description="아래 안건 가져오기로 할 일을 넣거나 직접 적어 주세요." /> : null}
         {session.turns.map((turn, index) => <ResultTurn key={turn.id} turn={turn} latestRef={index === session.turns.length - 1 ? latestTurnRef : undefined}
-          onRevise={revise} onCopy={copy} onSkill={setSkillTurn} skillAvailable={Boolean(officeSkillRequestDraft({ agenda: session.agenda, officeScope: scope, result: turn.result }))} copyStatus={copyStatus} />)}
+          onRevise={revise} onCopy={copy} onSkill={setSkillTurn} onOpenMentor={setMentorDrawerId}
+          skillAvailable={Boolean(officeSkillRequestDraft({ agenda: session.agenda, officeScope: scope, result: turn.result }))} copyStatus={copyStatus} />)}
         {busy ? <div ref={pendingRef}><PendingTurn pending={session.pending} /></div> : null}
       </div>
       <form onSubmit={submit} className={styles.composer} aria-busy={busy}>
@@ -316,6 +356,7 @@ export function OfficeCouncil({ scope = 'all' }) {
       </div>
     </Drawer> : null}
     {skillTurn ? <OfficeSkillRequestDrawer key={skillTurn.id} agenda={session.agenda} officeScope={scope} result={skillTurn.result} onClose={() => setSkillTurn(null)} /> : null}
+    {mentorDrawerId ? <OfficeMentorDrawer sessionId={mentorDrawerId} onClose={() => setMentorDrawerId(null)} /> : null}
     {rosterOpen ? <Drawer title="참석자 바꾸기" subtitle="주관 한 명과 관점 최대 두 명을 고르세요." onClose={() => setRosterOpen(false)} width="min(480px, 94vw)" footer={<Button variant="primary" onClick={() => setRosterOpen(false)}>완료</Button>}>
       <div className={styles.roster}><strong>주관</strong>{OFFICE_ROSTER.map(person => <button type="button" key={person.id} className={'hub-row ' + styles.member} aria-pressed={person.id === ownerId} onClick={() => { invalidateAssignment(); update({ ownerId: person.id, reviewers: reviewers.filter(id => id !== person.id), presetId: null }); }}>
         <span><strong>{person.name} <small>{person.role}</small></strong><span className={styles.memberPitch}>{person.pitch}</span></span></button>)}

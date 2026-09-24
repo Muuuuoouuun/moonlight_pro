@@ -39,6 +39,7 @@
 .answerHeader strong { color:var(--fg); font-size:14px; }
 .answer { white-space:pre-wrap; font-size:14px; line-height:1.85; }
 .answerActions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:16px; }
+.mentorAction { display:grid; justify-items:start; gap:8px; margin-top:8px; }
 .decision,.next { margin-top:16px; padding:12px; background:var(--surface-2); border:1px solid var(--line-soft); border-radius:var(--r-sm); font-size:13px; line-height:1.7; }
 .decision[open] summary { margin-bottom:12px; }
 .decision p,.next p { margin:8px 0 0; white-space:pre-wrap; }
