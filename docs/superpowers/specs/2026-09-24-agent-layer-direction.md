@@ -76,7 +76,19 @@ Legend ── 주간 카드만 · 에스컬레이션 목적지 아님 · Office 
 
 ## 6. 빌드 플랜 (2026-09-25 ~ 09-27)
 
-_워크플로 결과로 채운다 — 항목별 파일·순서·컷라인·워크트리 전략._
+이 절은 **예정 작업**이다. 09-24 통합 브랜치의 Guru 서가·조용한 레일·질문 드로어(`mentor-shelf.jsx`, `context-mentor-rail.jsx`, `guidance-question-drawer.jsx`)는 이미 병합됐다. 이를 다시 만들지 않는다. 기존 `office_apply_task_v1`도 유지한다. 아직 없는 것은 아래 네 연결이다. 09-28 실사용은 코드 병합만으로 완료라고 부르지 않고 실제 모델·DB·390px 화면으로 확인한다.
+
+| 순서 | 날짜·작업 | 파일 경계와 완료 조건 |
+|---|---|---|
+| 1 | **09-25 · 회의실 A** | `apps/hub/components/hub/office-session.js`·`office-session.test.mjs`: 기본 관점 `[]`, 안건 복사본·범위별 reset, 후속 `chat` 1회와 6,000자 오류. `pages/office-council.jsx`·`office-council.module.css`: 안건 바, 할 일 가져오기(`GET /api/hub/tasks` 소비), 참석자 드로어, 시간순 발언 스레드, 하단 입력·순서 예고·결과 카드. `office-deliberation-controls.jsx`의 기존 발언 자료를 재사용한다. 할 일 read 실패를 빈 목록으로 보이지 않게 하고, 390px 첫 화면에 입력·가져오기·보내기가 보이면 통과. **A에서는 Engine·Office 계약·DB, 할 일 쪽 입구와 원래 할 일 자동 반영을 바꾸지 않는다.** |
+| 2 | **09-26 · 이브이 배분** | `packages/agent-contracts/office-routing.js`와 테스트에 추천 결과(주관 1명·관점 0~2명·이유·범위)를 한정한다. `apps/engine/lib/office/routing.ts`·`apps/engine/app/api/ai/office-assignment/route.ts`, `apps/hub/app/api/hub/office/assignment/route.js`와 라우트 테스트는 **운영자가 `담당 추천`을 누를 때만** 안건 복사본을 읽고 추천한다. `pages/office-council.jsx`는 추천을 확인 카드로 보여 주고 운영자가 적용·수정·무시한다. 명시 선택이 추천보다 우선하며 실패·미설정 때는 수동 선택이 그대로 작동한다. Office 생성 프롬프트와 역할 카드 v25는 건드리지 않는다. |
+| 3 | **09-26 · Office→Mentor 한 홉** | `apps/hub/components/hub/office-mentor-client.js`·테스트에서 Office 종합의 본문·근거·이견·다음 행동을 길이 제한된 질문으로 만들고 출처 `requestId/runId`를 보존한다. `pages/office-council.jsx` 결과 카드의 `다른 관점으로 검토`는 운영자가 누른 뒤에만 호출한다. `classin`은 기존 `/api/hub/sales-mentor`의 `open-question`, `personal`은 새 `office-review` 모드를 `apps/engine/app/api/ai/brand-mentor/route.ts`·`apps/engine/lib/brand-office-review.test.mjs`와 `apps/hub/lib/sales-os/brand-context.js`에 추가해 호출한다. 개인 범위에서 첫 브랜드 목소리를 임의로 선택하거나 출처 없는 질문에 Guru 카드 ID를 꾸미지 않는다. `all`은 회사/개인을 먼저 고르게 한다. `createWorkOrder:false`, 답변은 접힌 참고 카드, Office에 자동 재주입 없음. |
+| 4 | **09-27 · 이어서 상담** | `apps/hub/components/hub/office-mentor-session.js`·테스트, `office-mentor-drawer.jsx`·CSS에서 한 홉의 답을 첫 턴으로 삼고 운영자 질문·멘토 답을 같은 스레드에 쌓는다. `office-mentor-client.js`가 직전 대화의 길이·턴 수를 제한해 **선택된 한 레인의 같은 멘토**에 넘긴다. 실패 시 입력·이전 턴을 보존하고 재전송은 명시 버튼으로만 한다. 최소 완료선은 실제 후속 두 턴이 앞선 답을 참고하며 이어지는 것. 세션 밖 복원이 없으면 UI에 그 한계를 밝히고 `영구 보관된 상담`으로 표현하지 않는다. |
+| 5 | **09-27 · 로컬 스킬 요청·receipt** | `apps/hub/components/hub/office-skill-request.js`·테스트와 Office 결과 카드의 `더보기`에 **명시적 요청서 생성**(요청 ID, 할 일 링크, 수행 범위, 완료 증거)과 복사를 둔다. `supabase/migrations/20260925_0047_local_skill_requests.sql`(착수 시 번호 재확인), `apps/hub/lib/skill-requests.js`·테스트, 인증된 `apps/hub/app/api/hub/skill-requests/route.js`와 `apps/hub/app/api/agent/v1/skill-requests/[id]/route.js`·`receipts/route.js`, `packages/mcp-server/src/agent-tools.js`·테스트에 동일 요청 ID의 결과 receipt 읽기·기록만 더한다. Claude Code·Codex의 **로컬 스킬이** 폴더/영수증을 처리하고, Moonlight는 `요청됨/완료/실패/미확인`과 증거·연결된 기존 `complete_task` 명령 receipt만 기록한다. 저장 실패한 요청서는 실행 대기로 표시하지 않는다. 요청서 복사나 모델의 `완료` 문장만으로 task를 완료 처리하지 않는다. 실행·재시도·비밀키·파일 내용은 Hub/Office로 옮기지 않는다. |
+
+새 `agent/v1` 경로는 `authorizeAgentRequest`를 자체 적용하고 `route-access.js`·`route-access.test.mjs`의 명시적 공개 목록을 함께 갱신한다. Hub 쓰기는 `hub-write-guard.js`를 거치며, 영수증 기록 전에는 요청 ID·운영자 범위·기존 할 일 소유권을 다시 확인한다.
+
+**통합·검증 컷라인.** 이미 만든 `codex/ai-office-agent-integration-0924` 워크트리에서 1번을 닫는다. 2번의 계약·Engine, 3~4번의 멘토, 5번의 DB·MCP는 그 검증된 커밋에서 별도 워크트리로 나눌 수 있지만, 공통 `office-council.jsx` 편집은 1→2→3→4→5 순서로 통합 브랜치에 반영한다. `packages/*`를 바꾼 워크트리는 루트에서 `npm install` 후 검증한다. 각 묶음은 해당 `node --import ./scripts/register-hub-alias.mjs --test <파일>` 및 Engine/패키지 단일 테스트를 먼저 통과시킨다. 마지막에 `npm test`, `npm run typecheck`, `npm run build`, `npm run db:check`를 실행한다. 새 마이그레이션은 적용 전 충돌 번호·함수 권한을 확인하고, 운영 DB에 실제 적용·재조회되지 않았다면 스킬 receipt를 `운영 가능`으로 표시하지 않는다. 개발 서버에서 실제 막힌 할 일 1건으로 회의→이브이 추천 확인→멘토 한 홉·후속 대화→로컬 스킬 요청과 receipt를 확인한다. **실패한 묶음은 숨겨 둔 채 이미 검증된 범위만 09-28에 사용하며, 미완료 기능을 완료로 보고하지 않는다.** 역할 의미 품질 인증, 영구 상담 보관, 자동 스킬 실행·발송, A안이 제외한 할 일 양방향 연결은 이 컷라인 밖이다.
 
 ## 7. 미정 (이번 빌드에서 답하지 않음)
 
