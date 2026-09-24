@@ -13,7 +13,8 @@ create table if not exists public.products (
   org_scope text not null check (org_scope in ('personal', 'classin')),
   stage text not null default 'idea'
     check (stage in ('idea', 'validation', 'mvp', 'launch', 'growth', 'maintain', 'sunset')),
-  -- 해결하는 문제·대상 고객·제공 범위·필수 조건·가격·링크(§4 설명 계약).
+  -- 분야·대상 고객·해결하는 문제·기능(점검 여부)·필수 조건·가격·링크·특이사항(§4 설명 계약).
+  -- 과목·지역처럼 특정 분야에 묶인 칸은 두지 않는다 — 그런 세부는 특이사항 자유 서술로(2026-09-25 운영자).
   details jsonb not null default '{}'::jsonb check (jsonb_typeof(details) = 'object'),
   -- 제공 범위·필수 조건이 바뀌면 +1 — 적합도 결정의 재확인 트리거(§4).
   version integer not null default 1 check (version > 0),
@@ -65,5 +66,21 @@ alter table public.project_updates
 create index if not exists project_updates_product_happened_idx
   on public.project_updates (workspace_id, product_id, happened_at desc)
   where product_id is not null;
+
+-- 문의 ↔ 제품: 어떤 제품으로 들어온 문의인가. inquiries는 RPC로만 쓰이므로(0028) 열을 더하지 않고
+-- 연결 행을 따로 둔다. 문의 하나는 제품 하나에만 붙는다(primary key).
+create table if not exists public.product_inquiry_links (
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  inquiry_id uuid not null,
+  product_id uuid not null references public.products(id) on delete cascade,
+  linked_at timestamptz not null default now(),
+  primary key (workspace_id, inquiry_id),
+  foreign key (inquiry_id, workspace_id) references public.inquiries(id, workspace_id) on delete cascade
+);
+create index if not exists product_inquiry_links_product_idx
+  on public.product_inquiry_links (workspace_id, product_id, linked_at desc);
+alter table public.product_inquiry_links enable row level security;
+revoke all on public.product_inquiry_links from public, anon, authenticated;
+grant select, insert, update, delete on public.product_inquiry_links to service_role;
 
 notify pgrst, 'reload schema';

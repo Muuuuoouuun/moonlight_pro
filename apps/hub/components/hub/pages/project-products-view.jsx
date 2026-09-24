@@ -12,9 +12,9 @@ import { usePageCreateHotkey } from "../use-crm-keyboard";
 import {
   PRICING_MODELS,
   PRODUCT_ORG_SCOPES,
-  PRODUCT_SUBJECT_OPTIONS,
   formToProductInput,
   productBlocker,
+  productChecklist,
   productNextAction,
   productStageLabel,
   productStageOrder,
@@ -31,26 +31,22 @@ function newId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function seoulToday() {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-}
-
 export function productFormFields({ creating }) {
   return [
     { key: "name", label: "이름", maxLength: 120, placeholder: "예: OMR 메이커" },
     { key: "summary", label: "한 줄 설명", maxLength: 200, placeholder: "무엇인가 — 예: 학원 시험지 OMR 자동 채점" },
     ...(creating ? [{ key: "orgScope", label: "소속", type: "select", options: PRODUCT_ORG_SCOPES }] : []),
-    { key: "problem", label: "해결하는 문제", type: "textarea", rows: 3, optional: true, placeholder: "누가 무엇 때문에 괴로운가 — 예: 수기 채점에 주 5시간" },
-    { key: "orgTypes", label: "대상 기관 유형", optional: true, placeholder: "학원, 교습소 (쉼표로 구분)", row: "target", flex: 1.4 },
-    { key: "size", label: "규모", optional: true, placeholder: "1~3관", row: "target" },
-    { key: "subjects", label: "대상 과목", type: "chips", options: PRODUCT_SUBJECT_OPTIONS, optional: true },
-    { key: "regions", label: "지역", optional: true, placeholder: "전국 또는 서울, 경기" },
-    { key: "capabilities", label: "제공 범위 · 확인된 기능만 한 줄에 하나", type: "textarea", rows: 4, optional: true, placeholder: "PDF 채점\n성적표 출력" },
+    // 분야에 묶인 칸(과목·지역·규모)은 두지 않는다 — 분야는 한 단어, 세부는 특이사항에(2026-09-25 운영자).
+    { key: "domain", label: "분야", optional: true, maxLength: 40, placeholder: "예: 교육", row: "who" },
+    { key: "audience", label: "대상 고객", optional: true, maxLength: 200, placeholder: "누가 사나 — 예: 학원 원장", row: "who", flex: 1.6 },
+    { key: "problem", label: "해결하는 문제", type: "textarea", rows: 3, optional: true, placeholder: "누가 무엇 때문에 괴로운가" },
+    { key: "capabilities", label: "기능 · 한 줄에 하나 (점검은 상세 체크리스트에서)", type: "textarea", rows: 4, optional: true, placeholder: "PDF 채점\n성적표 출력" },
     { key: "requirements", label: "필수 조건 · 없으면 못 사는 것 한 줄에 하나", type: "textarea", rows: 3, optional: true, placeholder: "스캐너 보유\n월 결제 가능" },
     { key: "pricingModel", label: "가격 모델", type: "select", options: PRICING_MODELS, optional: true, row: "price" },
     { key: "pricingAmount", label: "금액(원)", optional: true, placeholder: "29000", row: "price", inputType: "text" },
     { key: "deployUrl", label: "배포 URL", optional: true, placeholder: "https://", inputType: "url" },
     { key: "links", label: "링크 · 이름 | https://주소", type: "textarea", rows: 2, optional: true, placeholder: "문서 | https://…" },
+    { key: "notes", label: "특이사항", type: "textarea", rows: 4, optional: true, maxLength: 2000, placeholder: "과목·지역·규모·조건 같은 세부 사항을 자유롭게" },
     { key: "nextAction", label: "다음 행동", optional: true, maxLength: 300, placeholder: "비우면 단계 조건에서 자동으로 제안해요" },
   ];
 }
@@ -59,7 +55,8 @@ function ProductRow({ product, onOpen }) {
   const blocker = productBlocker(product);
   const next = productNextAction(product, { repositories: product.repositories.length, projects: product.projects.length });
   const scope = ORG_SCOPE_LABEL[product.orgScope] || product.orgScope;
-  const label = `${product.name}, ${productStageLabel(product.stage)} 단계, ${scope}${blocker ? `, 막힘: ${blocker.label}` : ""}`;
+  const { percent } = productChecklist(product);
+  const label = `${product.name}, ${productStageLabel(product.stage)} 단계, 진척 ${percent}%, ${scope}${blocker ? `, 막힘: ${blocker.label}` : ""}`;
   return (
     <button type="button" className={`hub-row ${styles.row}${blocker?.kind === "ci" ? ` ${styles.rowBlocked}` : ""}`} onClick={() => onOpen(product.id)} aria-label={label}>
       <span className={styles.nameCell}>
@@ -69,7 +66,10 @@ function ProductRow({ product, onOpen }) {
         </span>
         <span className={styles.summary}>{product.summary}</span>
       </span>
-      <span className={styles.stage}><span className={styles.cellLabel}>단계</span>{productStageLabel(product.stage)}</span>
+      <span className={styles.stage}>
+        <span className={styles.cellLabel}>단계</span>{productStageLabel(product.stage)}
+        <span className={`mono ${styles.percent}`}>{percent}%</span>
+      </span>
       {blocker ? (
         <span className={styles.blocker}><Iconed name="x" size={12} /><span>{blocker.label}</span></span>
       ) : (
@@ -126,9 +126,9 @@ export function ProjectProductsView({ onOpenProject }) {
 
   const openCreate = React.useCallback(() => {
     setSelectedId(null);
-    // EditDrawer는 값이 있는 선택 칸이 하나라도 있으면 묶음을 펼친다 — 빈 배열·기본 가격 모델도
+    // EditDrawer는 값이 있는 선택 칸이 하나라도 있으면 묶음을 펼친다 — 기본 가격 모델도
     // "값"으로 읽히므로 새 제품은 비워 두고(formToProductInput이 기본값으로 채운다) 접힌 채 시작한다.
-    setEditing({ creating: true, product: null, record: { ...productToForm(null), id: null, subjects: null, pricingModel: "" } });
+    setEditing({ creating: true, product: null, record: { ...productToForm(null), id: null, pricingModel: "" } });
   }, []);
   const canCreate = ledger.status !== "loading" && ledger.status !== "preview" && ledger.error !== "products-table-missing";
   usePageCreateHotkey(openCreate, { enabled: canCreate && !selected && !editing });
@@ -139,7 +139,7 @@ export function ProjectProductsView({ onOpenProject }) {
 
   const saveEditing = React.useCallback(async () => {
     if (!editing) return { ok: false, status: "error" };
-    const input = formToProductInput(editing.record, editing.product, { newId, today: seoulToday() });
+    const input = formToProductInput(editing.record, editing.product, { newId });
     if (!input.name) return { ok: false, status: "error", message: "이름을 적어 주세요." };
     if (!input.summary) return { ok: false, status: "error", message: "한 줄 설명을 적어 주세요." };
     const outcome = editing.creating
@@ -243,6 +243,7 @@ export function ProjectProductsView({ onOpenProject }) {
         <ProductDetailDrawer
           product={selected}
           candidates={ledger.candidates}
+          inquiryCandidates={ledger.inquiryCandidates || []}
           github={github}
           onClose={() => setSelectedId(null)}
           onEdit={() => openEdit(selected)}
@@ -258,7 +259,7 @@ export function ProjectProductsView({ onOpenProject }) {
           title={editing.creating ? "새 제품" : `${editing.product.name} 카드 편집`}
           subtitle={editing.creating
             ? "이름과 한 줄 설명만 있으면 등록돼요. 나머지는 단계가 올라갈 때 채워요."
-            : `${ORG_SCOPE_LABEL[editing.product.orgScope] || ""} · 제공 범위·필수 조건을 바꾸면 버전이 올라가요 (지금 v${editing.product.version})`}
+            : `${ORG_SCOPE_LABEL[editing.product.orgScope] || ""} · 기능·필수 조건을 바꾸면 버전이 올라가요 (지금 v${editing.product.version})`}
           record={editing.record}
           fields={productFormFields({ creating: editing.creating })}
           optionalLabel="제품 카드 나머지 칸"

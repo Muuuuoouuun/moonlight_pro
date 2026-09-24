@@ -6,12 +6,15 @@
 // 0049 마이그레이션 전 DB는 error: "products-table-missing"으로 구분해 화면이 원인을 말하게 한다.
 // 저장소·프로젝트·신호 중 하나라도 못 읽으면 status "partial"과 missing 목록을 싣는다.
 
-import { fetchSupabaseRowsDetailed, withWorkspaceFilter } from "@/lib/server-read";
+import { fetchSupabaseRowsDetailed, inFilter, withWorkspaceFilter } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 
 const PRODUCT_LIMIT = 200;
 const SIGNAL_LIMIT = 150;
 const SIGNALS_PER_PRODUCT = 12;
+const INQUIRY_LINK_LIMIT = 500;
+const INQUIRY_CANDIDATE_LIMIT = 40;
+const INQUIRY_COLUMNS = "id,subject,status,kind,org_scope,contact_name,received_at";
 
 function isMissingTable(error) {
   const detail = `${error?.reason || ""} ${error?.detail || ""}`;
@@ -61,6 +64,18 @@ function mapSignal(row) {
   };
 }
 
+function mapInquiry(row) {
+  return {
+    id: row.id,
+    subject: row.subject || "제목 없음",
+    status: row.status || "new",
+    kind: row.kind || "general",
+    orgScope: row.org_scope || "unclassified",
+    contactName: row.contact_name || "",
+    receivedAt: row.received_at || null,
+  };
+}
+
 export function mapProductRow(row) {
   const details = row.details && typeof row.details === "object" && !Array.isArray(row.details) ? row.details : {};
   return {
@@ -82,10 +97,10 @@ export async function getProductLedger({
   configured = Boolean(resolveSupabaseConfig() && resolveDefaultWorkspaceId()),
 } = {}) {
   if (!configured) {
-    return { status: "preview", source: "preview", products: [], candidates: [], missing: [] };
+    return { status: "preview", source: "preview", products: [], candidates: [], inquiryCandidates: [], missing: [] };
   }
 
-  const [products, repositories, projects, signals] = await Promise.all([
+  const [products, repositories, projects, signals, inquiryLinks, recentInquiries] = await Promise.all([
     fetchRows("products", { filters: withWorkspaceFilter(), order: "updated_at.desc", limit: PRODUCT_LIMIT }),
     fetchRows("product_repositories", { filters: withWorkspaceFilter(), order: "created_at.asc", limit: 500 }),
     fetchRows("projects", {
@@ -100,6 +115,14 @@ export async function getProductLedger({
       order: "happened_at.desc",
       limit: SIGNAL_LIMIT,
     }),
+    fetchRows("product_inquiry_links", { filters: withWorkspaceFilter(), order: "linked_at.desc", limit: INQUIRY_LINK_LIMIT }),
+    // 연결 후보: 최근 문의(제외 처리된 것 빼고). 이미 연결된 것은 아래에서 거른다.
+    fetchRows("inquiries", {
+      select: INQUIRY_COLUMNS,
+      filters: withWorkspaceFilter([["status", "neq.ignored"], ["classification", "neq.ignored"]]),
+      order: "received_at.desc",
+      limit: INQUIRY_CANDIDATE_LIMIT,
+    }),
   ]);
 
   if (!products?.rows) {
@@ -111,6 +134,7 @@ export async function getProductLedger({
       retryable: !missingTable,
       products: [],
       candidates: [],
+      inquiryCandidates: [],
       missing: [],
     };
   }
@@ -119,6 +143,16 @@ export async function getProductLedger({
   if (!repositories?.rows) missing.push("repositories");
   if (!projects?.rows) missing.push("projects");
   if (!signals?.rows) missing.push("signals");
+
+  // 연결된 문의 본문(제목·상태)은 연결 행의 id로 따로 읽는다 — 최근 목록 밖의 오래된 문의도 보이게.
+  const links = inquiryLinks?.rows || [];
+  const linkedIds = [...new Set(links.map((link) => link.inquiry_id).filter(Boolean))];
+  const linkedInquiries = linkedIds.length
+    ? await fetchRows("inquiries", { select: INQUIRY_COLUMNS, filters: withWorkspaceFilter([["id", inFilter(linkedIds)]]), limit: linkedIds.length })
+    : { rows: [] };
+  if (!inquiryLinks?.rows || !linkedInquiries?.rows) missing.push("inquiries");
+  const inquiryById = new Map((linkedInquiries?.rows || []).map((row) => [row.id, mapInquiry(row)]));
+  const linkedSet = new Set(linkedIds);
 
   const repoRows = (repositories?.rows || []).map(mapRepository);
   const projectRows = (projects?.rows || []).map(mapProject);
@@ -131,6 +165,9 @@ export async function getProductLedger({
       repositories: repoRows.filter((repo) => repo.productId === product.id),
       projects: projectRows.filter((project) => project.productId === product.id),
       signals: signalRows.filter((signal) => signal.productId === product.id).slice(0, SIGNALS_PER_PRODUCT),
+      inquiries: links
+        .filter((link) => link.product_id === product.id && inquiryById.has(link.inquiry_id))
+        .map((link) => ({ ...inquiryById.get(link.inquiry_id), linkedAt: link.linked_at })),
     };
   });
   // 연결 후보: 아직 제품이 없고 끝나지 않은 프로젝트. 완료 프로젝트는 제품 이력으로 붙일 이유가 약하다.
@@ -138,11 +175,16 @@ export async function getProductLedger({
     .filter((project) => !project.productId && project.status !== "completed")
     .map(({ id, name, status, orgScope }) => ({ id, name, status, orgScope }));
 
+  const inquiryCandidates = (recentInquiries?.rows || [])
+    .filter((row) => !linkedSet.has(row.id))
+    .map(mapInquiry);
+
   return {
     status: missing.length || products.rows.length >= PRODUCT_LIMIT ? "partial" : "live",
     source: "supabase",
     products: mapped,
     candidates,
+    inquiryCandidates,
     missing,
   };
 }

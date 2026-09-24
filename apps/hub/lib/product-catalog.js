@@ -2,8 +2,6 @@
 // 정본 기획: docs/superpowers/specs/2026-09-24-product-dev-projects-draft.md §4·§5·§6.
 // 제품 = 오래 사는 것(단계만 바뀐다). 프로젝트 = 끝나는 것(projects.product_id로 제품 아래에 붙는다).
 
-import { LEAD_SUBJECTS } from "./sales-os/lead-labels.js";
-
 export const PRODUCT_STAGES = [
   { key: "idea", label: "아이디어" },
   { key: "validation", label: "검증" },
@@ -34,7 +32,6 @@ export const PRODUCT_ORG_SCOPES = [
   { value: "personal", label: "개인" },
   { value: "classin", label: "ClassIn" },
 ];
-export const PRODUCT_SUBJECT_OPTIONS = LEAD_SUBJECTS.map((subject) => ({ value: subject.key, label: subject.label }));
 
 export function productStageLabel(stage) {
   return PRODUCT_STAGE_LABEL[stage] || "미정";
@@ -69,9 +66,9 @@ const GATE_RULES = {
     { key: "problem", label: "해결하는 문제", field: "problem", check: (p) => nonEmpty(p.details?.problem) },
     {
       key: "target",
-      label: "대상 고객",
-      field: "orgTypes",
-      check: (p) => nonEmpty(p.details?.target?.orgTypes) || nonEmpty(p.details?.target?.subjects),
+      label: "분야나 대상 고객",
+      field: "domain",
+      check: (p) => nonEmpty(p.details?.domain) || nonEmpty(p.details?.audience),
     },
   ],
   mvp: [
@@ -79,7 +76,7 @@ const GATE_RULES = {
     { key: "project", label: "프로젝트 1개 연결", field: null, tab: "dev", check: (_p, ctx) => ctx.projects > 0 },
   ],
   launch: [
-    { key: "capabilities", label: "확인된 제공 범위 1개", field: "capabilities", check: (p) => nonEmpty(p.details?.capabilities) },
+    { key: "capabilities", label: "점검을 마친 기능 1개", field: null, tab: "checklist", check: (p) => verifiedFeatures(p).length > 0 },
     { key: "deployUrl", label: "배포 URL", field: "deployUrl", check: (p) => nonEmpty(p.details?.deployUrl) },
     { key: "launchChecklist", label: "출시 전 체크리스트", field: null, unknown: true },
   ],
@@ -157,16 +154,110 @@ export function productBlocker(product) {
 
 export const CI_STATE_LABEL = { success: "통과", failure: "실패", pending: "진행 중", none: "check 없음" };
 
+// ── 전체 체크리스트 ─────────────────────────────────────────────────────────
+// 기획 → 기능 → 개발 → 출시 → 운영 순서로 "지금 이 제품이 어디까지 됐나"를 한 목록으로 보인다
+// (2026-09-25 운영자: 기획·단계·몇 퍼센트·기능 점검·GitHub 연결·에러·문의 연결).
+// 항목은 제품 기록에서 계산한다 — 코드에 박아 둔 할 일 목록이 아니다. state:
+//   done / todo  → 진척률 분모에 들어간다
+//   unknown      → 아직 Moonlight가 읽는 원천이 없다(에러 수집 도구 미정 등). 분모에서 뺀다
+//   info         → 할 일이 아니라 현황(연결된 문의 수). 분모에서 뺀다
+
+export function productFeatures(product) {
+  return Array.isArray(product?.details?.capabilities) ? product.details.capabilities : [];
+}
+
+export function verifiedFeatures(product) {
+  return productFeatures(product).filter((feature) => Boolean(feature.verifiedAt));
+}
+
+function ciSummary(product) {
+  const states = (product?.repositories || [])
+    .filter((repo) => repo.status !== "disabled")
+    .map((repo) => repo.summary?.ci?.state)
+    .filter(Boolean);
+  if (states.includes("failure")) return "failure";
+  if (states.includes("pending")) return "pending";
+  if (states.includes("success")) return "success";
+  return null;
+}
+
+export function productChecklist(product, ctx = {}) {
+  const details = product?.details || {};
+  const repositories = (product?.repositories || []).filter((repo) => repo.status !== "disabled");
+  const projects = product?.projects || [];
+  const features = productFeatures(product);
+  const verified = verifiedFeatures(product);
+  const ci = ciSummary(product);
+  const inquiries = Number.isFinite(ctx.inquiries) ? ctx.inquiries : (product?.inquiries || []).length;
+  const item = (key, label, done, extra = {}) => ({ key, label, state: done ? "done" : "todo", ...extra });
+
+  const groups = [
+    {
+      key: "plan",
+      label: "기획",
+      items: [
+        item("summary", "한 줄 설명", nonEmpty(product?.summary), { field: "summary" }),
+        item("domain", "분야", nonEmpty(details.domain), { field: "domain", detail: details.domain || null }),
+        item("audience", "대상 고객", nonEmpty(details.audience), { field: "audience" }),
+        item("problem", "해결하는 문제", nonEmpty(details.problem), { field: "problem" }),
+      ],
+    },
+    {
+      key: "features",
+      label: "기능",
+      items: [
+        item("featuresDefined", "기능 정리", features.length > 0, { field: "capabilities", detail: features.length ? `${features.length}개` : null }),
+        item("featuresVerified", "기능 점검", features.length > 0 && verified.length === features.length, {
+          field: features.length ? null : "capabilities",
+          detail: features.length ? `${verified.length}/${features.length}` : null,
+          expandable: features.length > 0,
+        }),
+      ],
+    },
+    {
+      key: "dev",
+      label: "개발",
+      items: [
+        item("repository", "GitHub 저장소 연결", repositories.length > 0, { tab: "dev", detail: repositories.length ? `${repositories.length}개` : null }),
+        item("project", "프로젝트 연결", projects.length > 0, { tab: "dev", detail: projects.length ? `${projects.length}개` : null }),
+        repositories.length && ci
+          ? item("ci", "CI 통과", ci === "success", { tab: "dev", detail: CI_STATE_LABEL[ci] })
+          : { key: "ci", label: "CI 통과", state: "unknown", tab: "dev", detail: repositories.length ? "동기화 필요" : "저장소 연결 후" },
+      ],
+    },
+    {
+      key: "launch",
+      label: "출시",
+      items: [
+        item("pricing", "가격 정하기", (details.pricing?.model || "undecided") !== "undecided", { field: "pricingModel", detail: formatPricing(details.pricing) }),
+        item("deployUrl", "배포 URL", nonEmpty(details.deployUrl), { field: "deployUrl" }),
+      ],
+    },
+    {
+      key: "operate",
+      label: "운영",
+      items: [
+        // 에러 수집 도구는 운영자 미정(§12-6) — 원천이 생기기 전까지는 할 일로 세지 않는다.
+        { key: "errors", label: "에러 수집 연결", state: "unknown", detail: "도구 미정" },
+        { key: "inquiries", label: "연결된 문의", state: "info", tab: "inquiries", detail: `${inquiries}건` },
+      ],
+    },
+  ];
+  const counted = groups.flatMap((group) => group.items).filter((entry) => entry.state === "done" || entry.state === "todo");
+  const done = counted.filter((entry) => entry.state === "done").length;
+  return { groups, done, total: counted.length, percent: counted.length ? Math.round((done / counted.length) * 100) : 0 };
+}
+
+// 기능 점검 토글 — 점검하면 오늘(서울) 날짜, 해제하면 null. 다른 기능은 그대로.
+export function toggleFeatureVerified(product, featureId, checked, today) {
+  return productFeatures(product).map((feature) => (
+    feature.id === featureId ? { ...feature, verifiedAt: checked ? today : null } : feature
+  ));
+}
+
 // ── 폼 변환 ─────────────────────────────────────────────────────────────────
 // 제공 범위·필수 조건은 "한 줄에 하나"로 편집한다. 같은 문장은 기존 id·확인일을 유지해
 // 적합도 결정의 requirements_checked가 가리키는 id가 흔들리지 않게 한다.
-
-function splitList(text) {
-  return String(text || "")
-    .split(/[,\n]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
 
 function splitLines(text) {
   return String(text || "")
@@ -207,17 +298,15 @@ function textToLinks(text) {
 
 export function productToForm(product) {
   const details = product?.details || {};
-  const target = details.target || {};
   return {
     id: product?.id || null,
     name: product?.name || "",
     summary: product?.summary || "",
     orgScope: product?.orgScope || "personal",
+    domain: details.domain || "",
+    audience: details.audience || "",
     problem: details.problem || "",
-    orgTypes: (target.orgTypes || []).join(", "),
-    subjects: [...(target.subjects || [])],
-    regions: (target.regions || []).join(", "),
-    size: target.size || "",
+    notes: details.notes || "",
     capabilities: (details.capabilities || []).map((item) => item.text).join("\n"),
     requirements: (details.requirements || []).map((item) => item.text).join("\n"),
     pricingModel: details.pricing?.model || "undecided",
@@ -229,21 +318,19 @@ export function productToForm(product) {
 }
 
 // 폼 → Engine update_product/create_product 입력. 금액은 숫자만 받는다(쉼표·"원" 제거).
-export function formToProductInput(form, product, { newId, today }) {
+// 새로 적은 기능은 "점검 전"으로 들어간다 — 점검은 상세 체크리스트에서 한다.
+export function formToProductInput(form, product, { newId }) {
   const current = product?.details || {};
   const amountText = String(form.pricingAmount || "").replace(/[^0-9]/g, "");
   return {
     name: String(form.name || "").trim(),
     summary: String(form.summary || "").trim(),
     details: {
+      domain: String(form.domain || "").trim(),
+      audience: String(form.audience || "").trim(),
       problem: String(form.problem || "").trim(),
-      target: {
-        orgTypes: splitList(form.orgTypes).slice(0, 8),
-        subjects: Array.isArray(form.subjects) ? form.subjects : [],
-        regions: splitList(form.regions).slice(0, 10),
-        size: String(form.size || "").trim(),
-      },
-      capabilities: linesToItems(form.capabilities, current.capabilities, newId, today),
+      notes: String(form.notes || "").trim(),
+      capabilities: linesToItems(form.capabilities, current.capabilities, newId).map((feature) => ({ verifiedAt: null, ...feature })),
       requirements: linesToItems(form.requirements, current.requirements, newId),
       pricing: {
         model: form.pricingModel || "undecided",
@@ -268,6 +355,9 @@ const ERROR_TEXT = {
   "repository-already-connected": "이미 이 제품에 연결된 저장소예요.",
   "repository-owned-by-other-product": "다른 제품에 연결된 저장소예요. 저장소는 제품 하나에만 속해요.",
   "invalid-product-reference": "제품을 찾지 못했어요. 새로고침 뒤 다시 시도하세요.",
+  "invalid-inquiry-reference": "문의를 찾지 못했어요. 새로고침 뒤 다시 시도하세요.",
+  "invalid-domain": "분야는 40자 안으로 짧게 적어 주세요. 세부는 특이사항에.",
+  "invalid-notes": "특이사항은 2000자까지 적을 수 있어요.",
   "stale-update": "다른 곳에서 먼저 바뀌었어요. 입력은 유지했으니 새로고침 뒤 다시 저장하세요.",
   "engine-not-configured": "Engine 연결이 없어 저장되지 않았어요.",
   "engine-unreachable": "Engine에 연결하지 못했어요. 잠시 뒤 다시 시도하세요.",

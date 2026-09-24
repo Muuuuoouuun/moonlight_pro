@@ -8,9 +8,11 @@ import {
   linesToItems,
   nextProductStage,
   productBlocker,
+  productChecklist,
   productNextAction,
   productStageGate,
   productToForm,
+  toggleFeatureVerified,
 } from "./product-catalog.js";
 
 const product = (over = {}) => ({
@@ -26,7 +28,7 @@ test("gates accumulate forward and never block maintain/sunset beyond a reason",
   assert.deepEqual(productStageGate(product(), "idea").missing, []);
   const validation = productStageGate(product(), "validation");
   assert.deepEqual(validation.missing.map((m) => m.key), ["problem", "target"]);
-  const launch = productStageGate(product({ details: { problem: "수기 채점", target: { subjects: ["math"] } } }), "launch", { repositories: 1, projects: 0 });
+  const launch = productStageGate(product({ details: { problem: "수기 채점", domain: "교육", capabilities: [{ id: "c1", text: "PDF 채점", verifiedAt: null }] } }), "launch", { repositories: 1, projects: 0 });
   assert.deepEqual(launch.missing.map((m) => m.key), ["project", "capabilities", "deployUrl"]);
   assert.deepEqual(launch.unknown.map((m) => m.key), ["launchChecklist"], "원천이 없는 조건은 확인 필요로만");
   assert.deepEqual(productStageGate(product(), "sunset"), { target: "sunset", missing: [], unknown: [], needsReason: true });
@@ -70,8 +72,10 @@ test("capability lines keep ids and verification dates for unchanged sentences",
 test("form round-trips product details", () => {
   const source = product({
     details: {
+      domain: "교육",
+      audience: "학원 원장",
       problem: "수기 채점에 주 5시간",
-      target: { orgTypes: ["학원", "교습소"], subjects: ["math"], regions: ["서울"], size: "1~3관" },
+      notes: "수학·영어, 서울, 1~3관",
       capabilities: [{ id: "c1", text: "PDF 채점", verifiedAt: "2026-09-01" }],
       requirements: [{ id: "r1", text: "스캐너 보유" }],
       pricing: { model: "monthly", amount: 29000, currency: "KRW" },
@@ -81,10 +85,13 @@ test("form round-trips product details", () => {
     },
   });
   const form = productToForm(source);
-  assert.equal(form.orgTypes, "학원, 교습소");
+  assert.equal(form.domain, "교육");
   assert.equal(form.links, "문서 | https://docs.example.com");
-  const input = formToProductInput({ ...form, pricingAmount: "29,000원" }, source, { newId: () => "x", today: "2026-09-25" });
-  assert.deepEqual(input.details.target, source.details.target);
+  const input = formToProductInput({ ...form, capabilities: `${form.capabilities}\n성적표 출력`, pricingAmount: "29,000원" }, source, { newId: () => "x" });
+  assert.equal(input.details.notes, "수학·영어, 서울, 1~3관");
+  assert.equal("target" in input.details, false);
+  assert.deepEqual(input.details.capabilities[1], { verifiedAt: null, id: "x", text: "성적표 출력" }, "새 기능은 점검 전으로 들어간다");
+  input.details.capabilities.pop();
   assert.deepEqual(input.details.capabilities, source.details.capabilities);
   assert.deepEqual(input.details.pricing, { model: "monthly", amount: 29000 });
   assert.deepEqual(input.details.links, source.details.links);
@@ -102,3 +109,38 @@ test("list order puts money-near stages first and retired ones last", async () =
   const sorted = ["idea", "sunset", "growth", "mvp", "maintain", "launch", "validation"].sort((a, b) => productStageOrder(a) - productStageOrder(b));
   assert.deepEqual(sorted, ["growth", "launch", "mvp", "validation", "idea", "maintain", "sunset"]);
 });
+
+test("checklist runs plan → features → dev → launch → operate and counts only actionable items", () => {
+  const empty = productChecklist(product());
+  assert.deepEqual(empty.groups.map((g) => g.label), ["기획", "기능", "개발", "출시", "운영"]);
+  assert.equal(empty.total, 10, "에러 수집(도구 미정)·CI(원천 없음)·문의(현황)는 분모에서 뺀다");
+  assert.equal(empty.done, 1, "한 줄 설명은 필수라 늘 완료");
+  const errors = empty.groups.at(-1).items.find((i) => i.key === "errors");
+  assert.equal(errors.state, "unknown");
+
+  const full = productChecklist(product({
+    details: {
+      domain: "교육", audience: "학원", problem: "채점",
+      capabilities: [{ id: "c1", text: "채점", verifiedAt: "2026-09-25" }, { id: "c2", text: "성적표", verifiedAt: null }],
+      pricing: { model: "monthly", amount: 1 }, deployUrl: "https://x",
+    },
+    repositories: [{ id: "r", status: "connected", summary: { ci: { state: "success" } } }],
+    projects: [{ id: "p" }],
+    inquiries: [{ id: "i1" }, { id: "i2" }],
+  }));
+  const byKey = Object.fromEntries(full.groups.flatMap((g) => g.items).map((i) => [i.key, i]));
+  assert.equal(byKey.featuresVerified.state, "todo");
+  assert.equal(byKey.featuresVerified.detail, "1/2");
+  assert.equal(byKey.ci.state, "done");
+  assert.equal(byKey.inquiries.detail, "2건");
+  assert.equal(full.total, 11);
+  assert.equal(full.done, 10);
+  assert.equal(full.percent, 91);
+});
+
+test("feature check toggles one feature's verification date", () => {
+  const p = product({ details: { capabilities: [{ id: "a", text: "A", verifiedAt: null }, { id: "b", text: "B", verifiedAt: "2026-09-01" }] } });
+  assert.deepEqual(toggleFeatureVerified(p, "a", true, "2026-09-25"), [{ id: "a", text: "A", verifiedAt: "2026-09-25" }, { id: "b", text: "B", verifiedAt: "2026-09-01" }]);
+  assert.equal(toggleFeatureVerified(p, "b", false, "2026-09-25")[1].verifiedAt, null);
+});
+

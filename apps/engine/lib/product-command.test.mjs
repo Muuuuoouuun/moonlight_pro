@@ -2,12 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  PRODUCT_TARGET_SUBJECTS,
   executeProductCommand,
   normalizeProductCommand,
   normalizeRepositoryName,
 } from "./product-command.ts";
-import { LEAD_SUBJECTS } from "../../hub/lib/sales-os/lead-labels.js";
 
 const WS = "11111111-1111-4111-8111-111111111111";
 const PRODUCT = "22222222-2222-4222-8222-222222222222";
@@ -39,10 +37,6 @@ function fakeDeps(tables = {}) {
   };
 }
 
-test("target subjects stay the lead-label 12-key vocabulary", () => {
-  assert.deepEqual(PRODUCT_TARGET_SUBJECTS, LEAD_SUBJECTS.map((s) => s.key));
-});
-
 test("create_product requires only name, one-line summary and scope", () => {
   const result = normalizeProductCommand({ action: "create_product", id: PRODUCT, name: " OMR 메이커 ", summary: "시험지 자동 채점", orgScope: "personal" }, ctx);
   assert.equal(result.ok, true);
@@ -63,10 +57,12 @@ test("create_product requires only name, one-line summary and scope", () => {
   }
 });
 
-test("details validate target subjects, capabilities, pricing and urls", () => {
+test("details are free-text domain/audience/notes plus features, pricing and urls", () => {
   const base = { action: "update_product", id: PRODUCT };
   const ok = normalizeProductCommand({ ...base, details: {
-    target: { orgTypes: ["학원"], subjects: ["math", "english"], regions: [], size: "1~3관" },
+    domain: " 교육 ",
+    audience: "학원 원장",
+    notes: "수학·영어 학원 우선, 1~3관 규모",
     capabilities: [{ id: CAP, text: "PDF 채점", verifiedAt: "2026-09-20" }],
     requirements: [{ id: REQ, text: "스캐너 보유" }],
     pricing: { model: "monthly", amount: 29000 },
@@ -74,9 +70,12 @@ test("details validate target subjects, capabilities, pricing and urls", () => {
   } }, ctx);
   assert.equal(ok.ok, true);
   assert.deepEqual(ok.patch.details.pricing, { model: "monthly", amount: 29000, currency: "KRW" });
+  assert.equal(ok.patch.details.domain, "교육");
+  assert.equal("target" in ok.patch.details, false, "과목·지역 같은 분야 전용 구조는 없다");
 
   for (const [details, reason] of [
-    [{ target: { subjects: ["physics"] } }, "invalid-target-subject"],
+    [{ domain: "가".repeat(41) }, "invalid-domain"],
+    [{ notes: "가".repeat(2001) }, "invalid-notes"],
     [{ capabilities: [{ id: CAP, text: "x", verifiedAt: "2026-02-30" }] }, "invalid-capability-date"],
     [{ capabilities: [{ id: CAP, text: "x" }, { id: CAP, text: "y" }] }, "invalid-capability"],
     [{ pricing: { model: "yearly" } }, "invalid-pricing-model"],
@@ -170,3 +169,31 @@ test("disconnect removes only the link row and reports not-found", async () => {
     fakeDeps({ removeResult: () => ({ persisted: false, reason: "no-matching-row", records: [] }) }).deps);
   assert.equal(missing.error, "not-found");
 });
+
+test("an inquiry links to one product; relinking moves it and unlinking is idempotent", async () => {
+  const INQUIRY = "88888888-8888-4888-8888-888888888888";
+  const OTHER = "99999999-9999-4999-8999-999999999999";
+  const current = [{ inquiry_id: INQUIRY, product_id: OTHER }];
+  const { deps, calls } = fakeDeps({
+    products: () => [{ id: PRODUCT }],
+    inquiries: () => [{ id: INQUIRY }],
+    product_inquiry_links: () => current,
+  });
+  const moved = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: PRODUCT }, ctx, deps);
+  assert.equal(moved.status, "saved");
+  assert.deepEqual(calls.remove[0].filters, [["workspace_id", `eq.${WS}`], ["inquiry_id", `eq.${INQUIRY}`]]);
+  assert.deepEqual(calls.insert[0].record, { workspace_id: WS, inquiry_id: INQUIRY, product_id: PRODUCT, linked_at: NOW });
+
+  const same = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: OTHER }, ctx, deps);
+  assert.equal(same.status, "duplicate");
+
+  const missing = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: PRODUCT }, ctx,
+    fakeDeps({ products: () => [{ id: PRODUCT }], inquiries: () => [] }).deps);
+  assert.equal(missing.error, "invalid-inquiry-reference");
+
+  const unlinked = await executeProductCommand({ action: "unlink_inquiry", inquiryId: INQUIRY }, ctx,
+    fakeDeps({ removeResult: () => ({ persisted: false, reason: "no-matching-row", records: [] }) }).deps);
+  assert.equal(unlinked.status, "saved");
+  assert.deepEqual(normalizeProductCommand({ action: "link_inquiry", inquiryId: "x", productId: PRODUCT }, ctx), { ok: false, reason: "invalid-inquiry-id" });
+});
+

@@ -7,6 +7,9 @@
 // - 단계 게이트는 막지 않는다(§4.1) — 서버는 유지·종료로 내릴 때의 이유 한 줄만 강제한다.
 // - 제공 범위·필수 조건이 바뀌면 version이 오른다(§4). 적합도 결정의 재확인 트리거다.
 // - 저장소는 제품 하나에만 속한다. 이미 다른 제품에 붙은 저장소는 conflict로 돌려준다.
+// - 제품 카드는 분야에 묶인 칸(과목·지역·규모)을 두지 않는다 — 분야·대상 고객은 짧은 자유 서술,
+//   세부는 특이사항에 적는다(2026-09-25 운영자: "교육일지 아닐지 모르고 한계에 갇힌다").
+// - 문의 하나는 제품 하나에만 붙는다(product_inquiry_links). inquiries 자체는 건드리지 않는다.
 
 type Row = Record<string, unknown>;
 
@@ -34,16 +37,10 @@ const STAGES_REQUIRING_REASON = new Set(["maintain", "sunset"]);
 const ORG_SCOPES = new Set(["personal", "classin"]);
 const PRICING_MODELS = new Set(["undecided", "free", "monthly", "per_use", "one_time"]);
 const REPOSITORY_STATUSES = new Set(["connected", "disabled"]);
-// 리드 과목 12키 — Hub apps/hub/lib/sales-os/lead-labels.js LEAD_SUBJECTS가 정본이다.
-// product-command.test.mjs가 두 목록이 같은지 고정한다(Engine은 Hub 모듈을 런타임에 읽지 않는다).
-export const PRODUCT_TARGET_SUBJECTS = [
-  "math", "english", "korean", "science", "social", "essay", "coding",
-  "foreign-language", "arts-sports", "elementary-general", "early-childhood", "etc",
-];
-const SUBJECT_SET = new Set(PRODUCT_TARGET_SUBJECTS);
 
 export const PRODUCT_ACTIONS = new Set([
   "create_product", "update_product", "connect_repository", "update_repository", "disconnect_repository",
+  "link_inquiry", "unlink_inquiry",
 ]);
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -81,18 +78,6 @@ function httpUrl(value: unknown): { ok: true; value: string | null } | { ok: fal
   return { ok: true, value: raw };
 }
 
-function stringList(value: unknown, maxItems: number, maxLength: number) {
-  if (value === undefined || value === null) return { ok: true as const, value: [] as string[] };
-  if (!Array.isArray(value) || value.length > maxItems) return { ok: false as const };
-  const out: string[] = [];
-  for (const item of value) {
-    const normalized = text(item, maxLength + 1);
-    if (!normalized || normalized.length > maxLength) return { ok: false as const };
-    if (!out.includes(normalized)) out.push(normalized);
-  }
-  return { ok: true as const, value: out };
-}
-
 // GitHub 저장소 표기: owner/repo, https://github.com/owner/repo(.git) 모두 받아 소문자 owner/repo로.
 export function normalizeRepositoryName(value: unknown) {
   const raw = text(value, 300)
@@ -104,8 +89,10 @@ export function normalizeRepositoryName(value: unknown) {
 }
 
 type ProductDetails = {
+  domain: string;
+  audience: string;
   problem: string;
-  target: { orgTypes: string[]; subjects: string[]; regions: string[]; size: string };
+  notes: string;
   capabilities: Array<{ id: string; text: string; verifiedAt: string | null }>;
   requirements: Array<{ id: string; text: string }>;
   pricing: { model: string; amount: number | null; currency: "KRW" };
@@ -116,8 +103,10 @@ type ProductDetails = {
 
 export function emptyProductDetails(): ProductDetails {
   return {
+    domain: "",
+    audience: "",
     problem: "",
-    target: { orgTypes: [], subjects: [], regions: [], size: "" },
+    notes: "",
     capabilities: [],
     requirements: [],
     pricing: { model: "undecided", amount: null, currency: "KRW" },
@@ -133,22 +122,18 @@ export function normalizeProductDetails(value: unknown): { ok: true; value: Part
   const input = value as Row;
   const out: Partial<ProductDetails> = {};
 
-  if (has(input, "problem")) {
-    const problem = typeof input.problem === "string" ? input.problem.trim() : "";
-    if (problem.length > 1000) return { ok: false, reason: "invalid-problem" };
-    out.problem = problem;
-  }
-  if (has(input, "target")) {
-    const target = input.target;
-    if (!target || typeof target !== "object" || Array.isArray(target)) return { ok: false, reason: "invalid-target" };
-    const t = target as Row;
-    const orgTypes = stringList(t.orgTypes, 8, 30);
-    const subjects = stringList(t.subjects, PRODUCT_TARGET_SUBJECTS.length, 30);
-    const regions = stringList(t.regions, 10, 30);
-    const size = typeof t.size === "string" ? t.size.trim() : "";
-    if (!orgTypes.ok || !regions.ok || size.length > 60) return { ok: false, reason: "invalid-target" };
-    if (!subjects.ok || subjects.value.some((key) => !SUBJECT_SET.has(key))) return { ok: false, reason: "invalid-target-subject" };
-    out.target = { orgTypes: orgTypes.value, subjects: subjects.value, regions: regions.value, size };
+  // 자유 서술 칸: [키, 최대 길이, 오류 코드]. 분야는 "교육"처럼 짧게, 세부는 특이사항에.
+  const FREE_TEXT: Array<["domain" | "audience" | "problem" | "notes", number, string]> = [
+    ["domain", 40, "invalid-domain"],
+    ["audience", 200, "invalid-audience"],
+    ["problem", 1000, "invalid-problem"],
+    ["notes", 2000, "invalid-notes"],
+  ];
+  for (const [key, max, reason] of FREE_TEXT) {
+    if (!has(input, key)) continue;
+    const value = typeof input[key] === "string" ? (input[key] as string).trim() : "";
+    if (value.length > max) return { ok: false, reason };
+    out[key] = value;
   }
   if (has(input, "capabilities")) {
     if (!Array.isArray(input.capabilities) || input.capabilities.length > 30) return { ok: false, reason: "invalid-capabilities" };
@@ -236,7 +221,7 @@ function contractSignature(details: Row) {
 }
 
 type Normalized =
-  | { ok: true; action: string; table: "products" | "product_repositories"; record?: Row; filters?: Array<[string, string]>; patch?: Row; stageReason?: string }
+  | { ok: true; action: string; table: "products" | "product_repositories" | "product_inquiry_links"; record?: Row; filters?: Array<[string, string]>; patch?: Row; stageReason?: string }
   | { ok: false; reason: string };
 
 export function normalizeProductCommand(input: Row = {}, context: Context = {}): Normalized {
@@ -350,6 +335,22 @@ export function normalizeProductCommand(input: Row = {}, context: Context = {}):
     };
   }
 
+  if (action === "link_inquiry" || action === "unlink_inquiry") {
+    const inquiryId = uuid(input.inquiryId ?? input.inquiry_id);
+    if (!inquiryId) return { ok: false, reason: "invalid-inquiry-id" };
+    const filters: Array<[string, string]> = [["workspace_id", `eq.${workspaceId}`], ["inquiry_id", `eq.${inquiryId}`]];
+    if (action === "unlink_inquiry") return { ok: true, action, table: "product_inquiry_links", filters };
+    const productId = uuid(input.productId ?? input.product_id);
+    if (!productId) return { ok: false, reason: "invalid-product-id" };
+    return {
+      ok: true,
+      action,
+      table: "product_inquiry_links",
+      filters,
+      record: { workspace_id: workspaceId, inquiry_id: inquiryId, product_id: productId, linked_at: now },
+    };
+  }
+
   const id = uuid(input.id);
   if (!id) return { ok: false, reason: "invalid-id" };
   const filters: Array<[string, string]> = [["id", `eq.${id}`], ["workspace_id", `eq.${workspaceId}`]];
@@ -408,6 +409,8 @@ export async function executeProductCommand(input: Row, context: Context, deps: 
   if (!command.ok) return { status: "invalid-input", error: command.reason };
   const now = context.now || new Date().toISOString();
   const workspaceId = String(context.workspaceId);
+
+  if (command.table === "product_inquiry_links") return executeInquiryLink(command, workspaceId, deps);
 
   if (command.record) {
     if (command.table === "product_repositories") {
@@ -515,4 +518,43 @@ export async function executeProductCommand(input: Row, context: Context, deps: 
     action: command.action,
     entity: persistence.records?.[0] || persistence.record || { id: filterValue(filters, "id"), ...patch },
   };
+}
+
+// 문의 ↔ 제품 연결. 문의 하나에 제품 하나 — 이미 붙어 있으면 새 제품으로 옮긴다(지우고 넣는다).
+async function executeInquiryLink(
+  command: Extract<Normalized, { ok: true }>,
+  workspaceId: string,
+  deps: ProductDependencies,
+) {
+  const filters = command.filters || [];
+  if (command.action === "unlink_inquiry") {
+    const removed = await deps.remove("product_inquiry_links", filters);
+    if (!removed.persisted && removed.reason !== "no-matching-row") return { status: "error", error: removed.reason };
+    // 이미 연결이 없으면 원하는 상태와 같다 — 성공으로 본다(재시도 안전).
+    return { status: "saved", action: command.action, entity: { inquiryId: filterValue(filters, "inquiry_id"), productId: null } };
+  }
+  const record = command.record as Row;
+  const [products, inquiries] = await Promise.all([
+    deps.fetchRows("products", { select: "id", filters: [["id", `eq.${record.product_id}`], ["workspace_id", `eq.${workspaceId}`]], limit: 1 }),
+    deps.fetchRows("inquiries", { select: "id", filters: [["id", `eq.${record.inquiry_id}`], ["workspace_id", `eq.${workspaceId}`]], limit: 1 }),
+  ]);
+  if (products === null || inquiries === null) return { status: "error", error: "relationship-check-failed" };
+  if (!products[0]) return { status: "invalid-input", error: "invalid-product-reference" };
+  if (!inquiries[0]) return { status: "invalid-input", error: "invalid-inquiry-reference" };
+  const current = await deps.fetchRows("product_inquiry_links", { filters, limit: 1 });
+  if (current === null) return { status: "error", error: "current-entity-read-failed" };
+  if (current[0]?.product_id === record.product_id) {
+    return { status: "duplicate", action: command.action, entity: { inquiryId: record.inquiry_id, productId: record.product_id } };
+  }
+  if (current[0]) {
+    const removed = await deps.remove("product_inquiry_links", filters);
+    if (!removed.persisted && removed.reason !== "no-matching-row") return { status: "error", error: removed.reason };
+  }
+  const inserted = await deps.insert("product_inquiry_links", record);
+  if (!inserted.persisted) {
+    return inserted.reason === "duplicate"
+      ? { status: "conflict", action: command.action, error: "inquiry-link-changed", retryable: true }
+      : { status: "error", error: inserted.reason, detail: inserted.detail || null };
+  }
+  return { status: "saved", action: command.action, entity: { inquiryId: record.inquiry_id, productId: record.product_id } };
 }

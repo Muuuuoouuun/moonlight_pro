@@ -90,6 +90,22 @@ export const disconnectRepository = (id) => send("/api/hub/products/repositories
 // 프로젝트 ↔ 제품 연결은 기존 프로젝트 쓰기 경로(update_project)의 productId 한 칸이다.
 export const linkProject = (projectId, productId) => send("/api/hub/projects", "PATCH", { id: projectId, productId });
 
+// 문의 ↔ 제품. productId가 null이면 연결을 푼다.
+export const linkInquiry = (inquiryId, productId) => productId
+  ? send("/api/hub/products/inquiries", "POST", { inquiryId, productId })
+  : send("/api/hub/products/inquiries", "DELETE", { inquiryId });
+
+export async function readInquiryProduct(inquiryId, signal) {
+  try {
+    const response = await fetch(`/api/hub/products/inquiries?inquiry=${encodeURIComponent(inquiryId)}`, { cache: "no-store", signal });
+    const data = await response.json().catch(() => null);
+    return data && typeof data === "object" ? data : { status: "error", products: [], productId: null };
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    return { status: "error", products: [], productId: null };
+  }
+}
+
 // Codex 작업 초안 넘기기 — URL에 로그·주소를 싣지 않고 이 탭의 sessionStorage로 한 번만 건넨다.
 export const CODEX_DRAFT_KEY = "mlp.codex.draft";
 
