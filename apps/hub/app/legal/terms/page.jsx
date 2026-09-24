@@ -35,7 +35,7 @@ export default function TermsPage() {
           ["Content responsibility", "The operator remains responsible for drafts, approvals, and content published directly on each platform."],
           ["Availability", "Integrations may be interrupted by provider outages, token expiration, app review changes, or permission changes."],
           ["Security", "Operators should protect app secrets and rotate credentials if a secret is exposed."],
-          ["Contact", "For service questions, contact junhyuk.mun@classin.com."],
+          ["Contact", "For service questions, contact seoulmentoss@gmail.com."],
         ].map(([title, body]) => (
           <section key={title} style={{
             borderTop: "1px solid rgba(255,255,255,0.07)",

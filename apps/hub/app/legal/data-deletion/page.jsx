@@ -31,7 +31,7 @@ export default function DataDeletionPage() {
         }}>
           <h2 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600 }}>Request channel</h2>
           <p style={{ margin: 0, color: "var(--muted)", fontSize: 14, lineHeight: 1.65 }}>
-            Email junhyuk.mun@classin.com with the connected provider, brand handle
+            Email seoulmentoss@gmail.com with the connected provider, brand handle
             or YouTube channel ID, and deletion request. Moonlight
             will remove stored OAuth tokens, account or channel metadata, and related
             sync logs where legally and operationally possible.

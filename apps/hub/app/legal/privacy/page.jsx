@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
           ["Storage", "Integration records are stored in the configured Supabase workspace. OAuth secrets are not exposed in the browser."],
           ["Sharing", "Moonlight does not sell connected account data. OAuth and channel verification requests are sent to the connected provider when an authorized operator connects an account."],
           ["Retention", "Connection data is retained while the integration is active and may be deleted when the operator disconnects the account or requests deletion."],
-          ["Contact", "For privacy requests, contact junhyuk.mun@classin.com."],
+          ["Contact", "For privacy requests, contact seoulmentoss@gmail.com."],
         ].map(([title, body]) => (
           <section key={title} style={{
             borderTop: "1px solid rgba(255,255,255,0.07)",
