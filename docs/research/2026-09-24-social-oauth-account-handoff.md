@@ -47,12 +47,13 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 
 1. `@politic_officer`는 별도 Chrome에 로그인됐다. Instagram의 `Moonlight-IG` 테스터 초대는 계정 화면에서 승인됨으로 표시되지만 OAuth 게시 권한 연결은 아직 하지 않았다. Threads의 `Moonlight` 초대는 초대 탭에 보인다. 초대 수락 버튼은 Meta 플랫폼 약관·개발자 정책과 테스터 활동 계약 확인을 포함하므로 해당 버튼의 행동 시점 확인 뒤 처리한다. Politic을 개인 `Moonlight` 앱에 둘지 별도 Meta 개발자 앱으로 분리할지도 결정해야 한다.
 2. 회사 YouTube `클래스인 문`은 운영자가 채널 보기·동영상 관리 권한을 승인했고 연결과 반환 채널 ID를 검증했다. `ClassIn KR`은 명시적으로 승인 대상에서 제외했으므로 연결하지 않는다. 기존 Google Cloud 자격증명 화면의 재인증은 별개이며 Cloud 소유권은 채널 OAuth 승인의 선행 조건이 아니다.
-3. 서울 Supabase 프로젝트 SQL Editor로 가는 GitHub 로그인은 2단계 인증 화면에서 멈췄다. 운영자는 지금 GitHub·Supabase 로그인을 완료할 수 없다고 알렸다. 따라서 `20260924_0047_social_oauth_flow_guard.sql`은 미적용이다. 로컬의 기존 Supabase 관리 API 토큰도 HTTP 401이어서 CLI 적용은 중단됐다. 인증 정보는 채팅이나 저장소 문서로 받지 않는다.
+3. 서울 Supabase 프로젝트 SQL Editor로 가는 GitHub 로그인은 2단계 인증 화면에서 멈췄다. 운영자는 지금 GitHub·Supabase 로그인을 완료할 수 없다고 알렸다. 따라서 `20260924_0047_social_oauth_flow_guard.sql`과 후속 `20260924_0048_meta_oauth_app_binding.sql`은 미적용이다. 로컬의 기존 Supabase 관리 API 토큰도 HTTP 401이어서 CLI 적용은 중단됐다. 인증 정보는 채팅이나 저장소 문서로 받지 않는다.
 
 ## 연결 뒤에도 필요한 변경
 
 - `integration_connections`의 `account_key`·계정별 고유 제약과 OAuth 저장·상태 API의 계정 목록을 서울 운영 DB에 적용했다. `20260924_0046_social_multiaccount_connections.sql`은 이력에도 기록됐다. 적용 전후 기존 연결 9건과 22세기 유목민의 동일한 연결 ID·채널 ID·갱신 토큰을 확인했다. 지금 연결된 소셜 5건의 `brandKey`는 모두 비어 있다. 브랜드별 계정 선택 UI와 게시 대상 매핑은 후속 작업이다.
 - Meta OAuth 요청을 계정 ID·브랜드·일회용 nonce에 묶고 재사용을 막는 코드와 운영 DB 마이그레이션은 별도 작업 브랜치 `codex/social-oauth-p0`의 `06b182d1`에 준비됐다. 100건을 넘는 계정 조회와 손상된 DB 응답의 차단은 후속 `f96ab85c`·`6836f985`에서 보완했다. 관련 테스트 44개 통과. **운영 DB에 0047을 적용·검증하기 전에는 현재 브랜치에 합치지 않는다.** 새 계정의 OAuth 저장 경로가 새 테이블에 의존하므로 순서를 거꾸로 하면 연결이 실패한다.
+- 별도 `codex/meta-multiapp` 브랜치의 `7387316c`·`2d74c20c`·`839feee3`은 BridgeMaker 기존 앱을 유지하면서 Class.Moon·Politic Officer에 전용 앱 ID/secret을 배정하는 서버·Settings 경로를 준비했다. 상태 조회는 앱 ID까지 확인하고 Threads 해제·삭제 콜백은 앱별 서명과 모든 연결 행을 검사하며, 과거 앱의 계정 ID를 새 앱 재연결에 사용하지 않는다. 전체 테스트 2,834 통과·실패 0·skip 11, Hub 빌드 통과. **운영 DB의 0047 다음 0048 적용과 실제 앱 자격 증명 설정 전까지 메인 브랜치로 통합하거나 새 OAuth를 시작하지 않는다.** 앱별 적용 순서는 해당 브랜치의 `docs/research/2026-09-24-meta-multiapp-connection-handoff.md`에 적었다.
 - YouTube 채널별 접근 토큰 갱신 헬퍼를 적용했다(`e8ad0463`). 서버에서 정확한 채널 ID를 조회해 필요한 경우에만 Google 갱신 권한으로 토큰을 바꾸고 같은 연결 행에 저장한다. 만료된 접근 토큰은 상태 API에서 `refresh-required`, 갱신 권한이 만료되면 `reauthorization-required`로 구분한다. 이는 예약 갱신 작업이나 업로드 API를 뜻하지 않는다.
 - 현재 Settings는 Threads·Instagram만 플랫폼별 한 연결 행을 보여주며 YouTube 연결 버튼은 아직 없다. YouTube 파일럿은 `/api/social/youtube/connect?channelId=UC...` 직접 경로를 쓴다.
 - Meta는 로컬 HTTP 콜백을 거부해 파일럿용 임시 HTTPS 터널을 등록했다. 장기 운영에는 고정 HTTPS Hub 주소, 배포 자격증명, 콜백 재등록, 토큰 갱신 작업이 필요하다.
