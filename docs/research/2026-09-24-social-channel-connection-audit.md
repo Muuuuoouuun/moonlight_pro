@@ -50,6 +50,7 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 2. 기존 Hub `GOOGLE_CLIENT_ID`의 프로젝트는 개인 계정 Cloud 프로젝트들에서 찾지 못했다. 별도 `classin.com` 계정의 Cloud 자격증명 화면은 재인증 대기 중이다. YouTube는 이 기존 Calendar 클라이언트와 분리된 전용 프로젝트를 사용하므로 연결의 선행 조건은 아니다.
 3. Google OAuth 앱의 테스트 사용자 3명과 웹 클라이언트 설정은 완료됐다. `seoulmentoss@gmail.com`의 YouTube 웹 계정 전환에는 `문군`·`22세기 유목민`·`기독밈`이 보인다. `22세기 유목민`은 OAuth에서 브랜드 계정의 예전 이름 `호가미`로 나타났지만 반환 채널 ID가 일치했다. `문군`은 개인 기본 `Junhyeok Mun`으로 승인했고 반환 채널 ID가 일치했다. 신규 미감사 프로젝트 업로드는 비공개로 제한되며 공개 발행에는 감사가 필요하다.
 4. Studio의 `소유자` 행은 API 권한의 증거가 아니다. [YouTube 공식 도움말](https://support.google.com/youtube/answer/9481328?hl=en)에 따르면 채널 권한으로 초대된 사용자는 API를 쓸 수 없다. 실제 Google/Brand 계정에서 채널이 OAuth 선택 목록에 나오는지, 이후 `channels.list(mine=true)`가 기대한 `UC...` ID를 반환하는지 확인해야 한다.
+5. 회사 `클래스인 문`은 `junhyuk.mun@classin.com`의 개인 기본 채널이며 고급 설정에 `브랜드 계정으로 채널 이전`이 표시된다. 회사 Google 계정 소멸 가능성이 있어 [브랜드 계정 소유자 이관](https://support.google.com/youtube/answer/4628007?hl=en)을 검토해야 한다. 이관은 대상 채널 삭제 위험이 있어 이번 조사에서 실행하지 않았다.
 
 ## 플랫폼별 발행 가능성
 
