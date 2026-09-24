@@ -83,6 +83,13 @@ test('resolveDirectives returns default domain values and knowledge when context
   assert.deepEqual(brandDirectives.knowledge?.facts, DEFAULT_BRAND_KNOWLEDGE.facts);
 });
 
+test('default mentor knowledge does not claim an approval backlog or unsupported success rates', () => {
+  for (const knowledge of [DEFAULT_SALES_KNOWLEDGE, DEFAULT_BRAND_KNOWLEDGE]) {
+    const text = formatKnowledgeDirective(knowledge);
+    assert.doesNotMatch(text, /work_orders 승인 큐|승인 큐 인큐|80%를 결정|단 10명의 열광자/);
+  }
+});
+
 test('resolveDirectives honors explicit overrides from payload or context', () => {
   const customValues = { coreValues: ['단 하나의 본질 집중'] };
   const customKnowledge = { facts: ['시나브로 론칭 준비'] };

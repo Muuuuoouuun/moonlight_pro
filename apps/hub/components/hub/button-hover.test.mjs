@@ -225,6 +225,8 @@ const AUDITED_RAW_BUTTON_CONTAINERS = [
   '.workspace .filters button[aria-pressed="true"]',
   // project-work-list.jsx (CSS module) — 추가 항목 유형 메뉴는 raw <button aria-pressed>
   '.addOptions button[aria-pressed="true"]',
+  // guru-guidance-card.jsx — 카드 종류와 분야 토글은 raw <button aria-pressed>
+  '.guru-guidance__group button[aria-pressed="true"]',
 ];
 
 test("every high-specificity descendant button rule under apps/hub is audited (DESIGN.md 8.1)", async () => {

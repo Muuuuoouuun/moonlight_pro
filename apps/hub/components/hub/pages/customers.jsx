@@ -23,6 +23,7 @@ import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
 import { requestPersonaChat } from "../persona-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
+import { GuruGuidanceCard } from '../guru-guidance-card';
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
 import { LEAD_SUBJECTS, subjectLabels } from "@/lib/sales-os/lead-labels";
@@ -609,6 +610,8 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
   const { schedule: scheduleActUndo, cancel: cancelActUndo } = useUndoableAction();
   const [actNotice, setActNotice] = React.useState(null);
   const [guruOpen, setGuruOpen] = React.useState(false);
+  const [guruGuidanceId, setGuruGuidanceId] = React.useState(null);
+  const [guruQuestion, setGuruQuestion] = React.useState('');
 
   const deleteActivity = React.useCallback((activity) => {
     const match = a => (activity.id ? a.id === activity.id : a === activity);
@@ -739,14 +742,6 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
           >
             {focusOverride === "raise" ? "⭐ 중요 고객" : "중요 고객 지정"}
           </Button>
-          <Button
-            variant="outline"
-            size="xs"
-            icon="sparkle"
-            onClick={() => setGuruOpen(true)}
-          >
-            Guru 전략 코칭
-          </Button>
         </div>
         {/* 다음 액션 */}
         {(nextActionOverride ?? row.nextAction) && (
@@ -755,6 +750,12 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
             <p>{nextActionOverride ?? row.nextAction}</p>
           </section>
         )}
+
+        <GuruGuidanceCard domain="sales" compact onAsk={card => {
+          setGuruGuidanceId(card.id);
+          setGuruQuestion(card.question);
+          setGuruOpen(true);
+        }} />
 
         <CustomerLabelsEditor row={row} onSaved={onLabelsSaved} />
 
@@ -931,8 +932,11 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete, onFocusChange, 
       {guruOpen && (
         <FloatingMentorWidget
           isOpen={guruOpen}
-          onClose={() => setGuruOpen(false)}
+          onClose={() => { setGuruOpen(false); setGuruGuidanceId(null); }}
           agent="guru"
+          guidanceId={guruGuidanceId}
+          initialTab="chat"
+          initialQuestion={guruQuestion}
           contextType="customer"
           contextTitle={row.person || row.name || "고객 전략 코칭"}
           contextData={{

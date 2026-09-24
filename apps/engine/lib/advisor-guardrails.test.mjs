@@ -145,6 +145,15 @@ describe('buildAdvisorySystemInstruction prompt generation', () => {
     assert.ok(brandPrompt.includes('외부 직접 발행 금지'));
   });
 
+  it('keeps mentor advice optional and out of the approval queue by default', () => {
+    for (const type of ['sales-mentor', 'brand-mentor']) {
+      const prompt = guardrails.buildAdvisorySystemInstruction({ type, mode: 'deal-review', context: {} });
+      assert.match(prompt, /운영자가.*요청/);
+      assert.match(prompt, /질문 또는 선택/);
+      assert.doesNotMatch(prompt, /work_orders 승인 큐|승인 큐 인큐|항상 즉시 실행 가능한|반드시.*다음 한 수/);
+    }
+  });
+
   it('embeds values and knowledge directives into system instruction', () => {
     const prompt = guardrails.buildAdvisorySystemInstruction({
       type: 'sales-mentor',
