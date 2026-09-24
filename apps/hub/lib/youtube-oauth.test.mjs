@@ -9,8 +9,10 @@ import {
   fetchAuthenticatedYouTubeChannel,
   isExpectedYouTubeChannel,
   resolveYouTubeOAuthConfig,
+  saveYouTubeConnection,
   summarizeYouTubeConnection,
 } from "./youtube-oauth.js";
+import { assertPersistedSocialConnection } from "./social-oauth-persistence.js";
 
 const originalEnv = { ...process.env };
 const originalFetch = globalThis.fetch;
@@ -66,6 +68,16 @@ test("YouTube OAuth does not fall back to Calendar/Gmail credentials", () => {
   process.env.GOOGLE_CLIENT_ID = "unrelated-client";
   assert.equal(resolveYouTubeOAuthConfig().configured, false);
   assert.equal(buildYouTubeAuthUrl({ origin: "http://localhost:3000" }), null);
+});
+
+test("YouTube redirect override takes precedence over the Meta tunnel origin", () => {
+  process.env.COM_MOON_HUB_URL = "https://meta-tunnel.example.com";
+  process.env.COM_MOON_YOUTUBE_REDIRECT_URI = "http://localhost:3000/api/social/youtube/callback";
+  const url = new URL(buildYouTubeAuthUrl({
+    origin: "https://meta-tunnel.example.com",
+    workspaceId: "workspace-1",
+  }));
+  assert.equal(url.searchParams.get("redirect_uri"), process.env.COM_MOON_YOUTUBE_REDIRECT_URI);
 });
 
 test("YouTube state rejects missing, forged, expired and future states", () => {
@@ -131,4 +143,31 @@ test("connection summary never includes tokens and reports refresh expiry", () =
   assert.equal(summary.hasRefreshToken, true);
   assert.equal(summary.refreshTokenExpiresAt, "2026-10-01T00:00:00.000Z");
   assert.doesNotMatch(JSON.stringify(summary), /access-secret|refresh-secret/);
+});
+
+test("a zero-row update cannot report a YouTube connection as persisted", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "db-test-key";
+  globalThis.fetch = async (_url, options) => {
+    if (options.method === "PATCH") {
+      return { ok: true, status: 200, text: async () => "[]", headers: { get: () => null } };
+    }
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify([{
+        id: "connection-1",
+        status: "connected",
+        config: { channelId: "UC123" },
+      }]),
+      headers: { get: () => null },
+    };
+  };
+  const saved = await saveYouTubeConnection({
+    workspaceId: "workspace-1",
+    channel: { id: "UC123", title: "Moon Channel" },
+    token: { access_token: "access-token", refresh_token: "refresh-token" },
+  });
+  assert.equal(saved.persistence.persisted, false);
+  assert.throws(() => assertPersistedSocialConnection(saved), /connection-not-persisted/);
 });

@@ -41,6 +41,8 @@ export function hasYouTubeOAuthStateSecret() {
 }
 
 export function resolveYouTubeRedirectUri(origin) {
+  const override = process.env.COM_MOON_YOUTUBE_REDIRECT_URI?.trim();
+  if (override) return override;
   const base = process.env.COM_MOON_HUB_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() || origin;
   return `${String(base || "").replace(/\/$/, "")}/api/social/youtube/callback`;
@@ -203,9 +205,14 @@ export async function saveYouTubeConnection({ workspaceId, token, channel }) {
     last_synced_at: now,
   };
   const persistence = existing?.id
-    ? await updateSupabaseRecord("integration_connections", [["id", `eq.${existing.id}`]], record)
+    ? await updateSupabaseRecord(
+      "integration_connections",
+      [["id", `eq.${existing.id}`]],
+      record,
+      { returnRepresentation: true },
+    )
     : await insertSupabaseRecord("integration_connections", record, { returnRepresentation: true });
-  return { connectionId: existing?.id || persistence.id || null, persistence, config };
+  return { connectionId: persistence.id || null, persistence, config };
 }
 
 export function summarizeYouTubeConnection(connection) {
