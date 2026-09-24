@@ -687,8 +687,8 @@ Build order when adding a new surface:
     again); and `motion.test.mjs`'s opening comment
     still says `s` units are not checked, though the test now checks them.
 8. Focus-ring color is mixed (`--moon-300`, `--accent`, raw rgba) and breakpoints drift — both open in `TODOS.md`.
-9. Unsanctioned title scale: `.personal-revenue-header h2` uses `clamp(22px, 2.5vw, 28px)` (§11 allows 20px/500
-    plus the two carve-outs).
+9. ~~Unsanctioned title scale: `.personal-revenue-header h2` used `clamp(22px, 2.5vw, 28px)`~~ — resolved 2026-09-24
+    (20px/500 per §11, revenue P0 pass).
 
 ## 15. Decisions Log
 
