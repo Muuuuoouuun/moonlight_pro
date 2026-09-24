@@ -31,3 +31,11 @@ test("social OAuth UI return falls back to request origin without app URL", () =
   assert.equal(resolveSocialOAuthReturnUrl("/dashboard/settings", "https://hub.example.com").href,
     "https://hub.example.com/dashboard/settings");
 });
+
+test("social OAuth UI return rejects paths that can leave the trusted Hub origin", () => {
+  process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+  for (const path of ["/\\evil.com", "/\t/evil.com", "//evil.com", "https://evil.com", "dashboard/settings"]) {
+    assert.equal(resolveSocialOAuthReturnUrl(path, "https://localhost:3000").href,
+      "http://localhost:3000/dashboard/settings", `rejected ${path}`);
+  }
+});
