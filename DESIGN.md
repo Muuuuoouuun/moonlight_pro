@@ -316,11 +316,15 @@ system serif. Do not introduce serif display type.
   follow-ups, sheets sync, settings, project timeline). The public web is detached (§1, §12).
 - The expanded sidebar is 232px by default and resizable from 200 to 360px (`mlp.sidebarWidth`); collapsed it is
   a 56px icon rail (`mlp.sidebarCollapsed`). Both are desktop-only (§15 2026-09-22, 2026-09-23).
-- Shell navigation is one level deep: 10 primary + 2 utility anchors in the sidebar (`hub-nav.js`, pinned by
-  `hub-nav.test.mjs`). An anchor's second-level destinations render as the top-bar tab row
-  (`topNavigationForRoute`), not as a sidebar accordion — since 2026-08-04 (`5a3d506`), guarded by the test
-  "sidebar is one level deep and the top bar owns contextual tabs". Pages in `PAGE_OWNS_TABS` draw those tabs
-  in their own header instead.
+- Shell navigation is one level deep: 9 primary + 2 utility anchors in the sidebar (`hub-nav.js`, pinned by
+  `hub-nav.test.mjs`; 10 + 2 until 2026-09-24, when the 고객 연락 anchor became 영업·매출's first tab, §15). An
+  anchor's second-level destinations render as the top-bar tab row (`topNavigationForRoute`), not as a sidebar
+  accordion — since 2026-08-04 (`5a3d506`), guarded by the test "sidebar is one level deep and the top bar owns
+  contextual tabs". Pages in `PAGE_OWNS_TABS` draw those tabs in their own header instead.
+- A route that left the tab row but stays routable lights the nearest tab through the anchor's role table and
+  keeps its own title in the top bar (`routeTabs`/`routeLabels`, today only 영업·매출's `REVENUE_ROUTE_TABS`):
+  Leads/Accounts → 고객, 개요/히트맵 → 거래, Cases → no tab but still titled. An exact tab path always wins over a
+  role alias (개인 스코프 개요 = 현금 흐름).
 
 ### Spacing scale
 `4, 8, 12, 16, 24, 32, 48, 64, 96` — Futura pages add `44` and `26` as layer tokens only (below).
@@ -361,11 +365,13 @@ applies only inside `.hub-futura`; that is true of the page texture, not the she
 | Depth | Where | What it changes | Status |
 | --- | --- | --- | --- |
 | Shell + shared components | every dashboard page | renders: sidebar surface `--surface-2`; nav rows 34px/13px with the current row as a `--surface` pill + `--fx-shadow` (icon + label, §15 2026-09-23); `.fx-shell-card` search and user card; `--fx-shadow` on non-ghost `.hub-btn`; pill `select`; `--fx-shadow-lift` on raw `.hub-card-link:hover` buttons. Declared but beaten by inline styles or unmatched: pill `.hub-btn`/`.hub-iconbtn`/`.hub-seg`, shadow `.hub-card` (§7 Radius) | confirmed 2026-09-19 · icons 2026-09-23 |
-| Page texture | inside `.hub-futura` only | 48/44/26 spacing, 44px/300 display title (§11), `.fx-card` shadow surfaces, `.fx-pill-btn`, triage and timeline blocks | `dashboard/home` confirmed 2026-09-18 · `work/decisions` confirmed 2026-09-19 · `work/rhythm` **recommended** 2026-09-23 |
+| Page texture | inside `.hub-futura` only | 48/44/26 spacing, 44px/300 display title (§11), `.fx-card` shadow surfaces, `.fx-pill-btn`, triage and timeline blocks | `dashboard/home` confirmed 2026-09-18 · `work/decisions` confirmed 2026-09-19 · `work/rhythm` **recommended** 2026-09-23 · 영업·매출 `revenue/followups`·`revenue/customers`·`revenue/deals` confirmed 2026-09-24 (being implemented) |
 
-Adding `.hub-futura` to any other page is a separate decision (§15 2026-09-18) — the other ~40 pages keep §7
-density and §8.1 hairlines. Only `work/decisions` owns its own tabs (`PAGE_OWNS_TABS`); Rhythm still uses the
-top-bar tabs.
+Adding `.hub-futura` to any other page is a separate decision (§15 2026-09-18) — every other page keeps §7
+density and §8.1 hairlines. That includes the rest of 영업·매출: the 문의 tab and the screens that left its tab
+row (개요·히트맵·Leads·Accounts·Cases, ClassIn aliases, 세그먼트) stay on §7 density until decided separately.
+Only `work/decisions` owns its own tabs (`PAGE_OWNS_TABS`); Rhythm and the three 영업·매출 pages keep the
+top-bar tab row (the approved mockups draw it there).
 
 ### Responsive
 The hub has no Tailwind. CSS is desktop-default with `max-width` step-downs in `hub-tokens.css`, `globals.css`,
@@ -591,8 +597,9 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
   값을 준다. 승인된 카브아웃은 두 가지다(개인 매출 헤더의 `clamp(22px, 2.5vw, 28px)` h2는 승인되지 않은 이탈 — §14 Known gaps 12).
   - Daily Brief 히어로(`오늘의 실행`): §6 Display 스케일 `clamp(26px, 3.2vw, 32px)`/700 — 첫 화면의 페이지 레벨 모먼트 1곳.
   - Futura 페이지(§7 Futura): `<h2 className="fx-hero">`/`"fx-page-title">` 44px/300(≤900px 30px) — `dashboard/home`(확정
-    2026-09-18)·`work/decisions`(확정 2026-09-19)·`work/rhythm`(권장 2026-09-23).
-  그 밖의 페이지로 확장하지 않는다.
+    2026-09-18)·`work/decisions`(확정 2026-09-19)·`work/rhythm`(권장 2026-09-23)·영업·매출의 `revenue/followups`(오늘 연락)·
+    `revenue/customers`(고객)·`revenue/deals`(거래)(확정 2026-09-24, 구현 중).
+  그 밖의 페이지로 확장하지 않는다 — 같은 영업·매출 안의 문의 탭과 탭에서 내려온 화면도 20px/500 그대로다.
 
 ## 12. Public vs Hub Rules
 
@@ -625,7 +632,7 @@ Do not ship:
 | Concern                            | Source of truth                                              |
 | ---------------------------------- | ------------------------------------------------------------ |
 | Tokens                             | `apps/hub/components/hub/hub-tokens.css`                     |
-| Futura 텍스처 레이어 (셸·공용 컴포넌트 전역 + `.hub-futura` 페이지 3곳, §7) | `apps/hub/components/hub/hub-futura.css` |
+| Futura 텍스처 레이어 (셸·공용 컴포넌트 전역 + `.hub-futura` 페이지 — 홈·결정·리듬 + 2026-09-24 영업·매출 3곳, §7) | `apps/hub/components/hub/hub-futura.css` |
 | Icons                              | `apps/hub/components/hub/hub-icons.jsx`                      |
 | Brand and app icons | `apps/hub/public/icon.svg` → `npm run icons:generate` (`scripts/generate-brand-icons.mjs`) |
 | Primitives (incl. form fields)     | `apps/hub/components/hub/hub-primitives.jsx`                 |
@@ -633,7 +640,7 @@ Do not ship:
 | Theme mode + sidebar width/collapse preferences | `apps/hub/lib/hub-preferences.js` (`mlp.*` keys)  |
 | Keyboard (global `C` `⌘K` `?` `⌘J`; page `N`) | `hub-app.jsx`; `apps/hub/components/hub/use-crm-keyboard.js` |
 | ⌘K catalog (`NAV_TREE`, `LEGACY_REDIRECTS`) | `apps/hub/components/hub/hub-data.js`                 |
-| Sidebar anchors (visible IA — 10 primary + 2 utility) | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs` |
+| Sidebar anchors (visible IA — 9 primary + 2 utility) and tab role aliases (`REVENUE_ROUTE_TABS`) | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs` |
 | Workspace membership (`org_scope`) | `apps/hub/components/hub/workspace-map.js`                   |
 | Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette}.jsx` |
 | Pages + `PAGE_MAP`                 | `apps/hub/components/hub/pages/*.jsx`, `hub-app.jsx`         |
@@ -659,7 +666,7 @@ Build order when adding a new surface:
 | §8.2/§5.3 state primitives, truth labels, rails, lifecycle danger | `state-primitives.test.mjs`, `state-usage.test.mjs` |
 | §11 `Skeleton` contract | `skeleton.test.mjs` |
 | Form field contract | `form-fields.test.mjs` |
-| Sidebar anchors (10 + 2) and icons in both states; width handle | `hub-nav.test.mjs`; `sidebar-resizer.test.mjs` |
+| Sidebar anchors (9 + 2) and icons in both states; 영업·매출 4 tabs + legacy route aliases; width handle | `hub-nav.test.mjs`; `sidebar-resizer.test.mjs` |
 | Toast a11y and tokens | `hub-toast.test.mjs` |
 | No mock/demo work records in code | `scripts/no-mock-data.test.mjs` |
 
@@ -675,8 +682,9 @@ Build order when adding a new surface:
    and `pages/revenue-heatmap.jsx`, and `hubSparklePop`; the palette ratchet still carries warm literals in
    `celebration-fx.jsx`, `hub-tokens.css`, `pages/overview.jsx` and `pages/revenue-heatmap.jsx`.
 6. Mobile floor: Calendar has no phone agenda (§7 Responsive). The input size floor is now global at ≤720px or coarse pointer.
-7. Stale code comments: the `hub-futura.css` header ("only inside `.hub-futura`"), `hub-nav.js` ("Nine primary"),
-    `hub-tokens.css` ("eight-anchor nav") — the pinned count is 10 + 2; and `motion.test.mjs`'s opening comment
+7. Stale code comments: the `hub-futura.css` header ("only inside `.hub-futura`") and `hub-tokens.css`
+    ("eight-anchor nav") — the pinned count is 9 + 2 since 2026-09-24 (`hub-nav.js`'s "Nine primary" is accurate
+    again); and `motion.test.mjs`'s opening comment
     still says `s` units are not checked, though the test now checks them.
 8. Focus-ring color is mixed (`--moon-300`, `--accent`, raw rgba) and breakpoints drift — both open in `TODOS.md`.
 9. Unsanctioned title scale: `.personal-revenue-header h2` uses `clamp(22px, 2.5vw, 28px)` (§11 allows 20px/500
@@ -728,3 +736,5 @@ Build order when adding a new surface:
 | 2026-09-24 | 브랜드 아이콘 네 개를 재정리한다. BridgeMaker=십자가, HolyFunCollector=천사, Study.Seagull=새 윤곽, MoonPM=연결된 작업 흐름이다. 위 행의 해당 네 아이콘 설명을 이 행이 대체하며 나머지 브랜드·표면·DB 계약은 유지한다 | recommended | 운영자가 BridgeMaker·HolyFunCollector·Study.Seagull의 재제작 방향을 지정했다. 네 번째 MoonPM은 기존 세로 칸 아이콘이 18px에서 빽빽해 보여 선정했다. BridgeMaker의 대안으로 기존 아치형 다리 아이콘을 먼저 비교했으나 작은 크기에서 문처럼 보여 십자가를 택했다 |
 | 2026-09-24 | 고래(Go;Re)는 SVG Repo Animals 24의 물뿜는 고래 실루엣, 시나브로는 Phosphor Pen Nib의 잉크 펜촉 아이콘을 쓴다. 위 브랜드 아이콘 행의 해당 두 형태를 이 행이 대체한다 | recommended | 운영자가 기존 아이콘 중 더 어울리는 고래와 잉크 펜을 요청했다. 18px 비교에서 고래의 분수와 꼬리, 펜촉의 외곽이 분명한 자산을 골랐다. 출처와 라이선스는 `brand-icons.LICENSE`에 기록했다 |
 | 2026-09-24 | 브랜드 목록의 운영 상태·집중점이 모두 비었으면 긴 문구 두 개 대신 `운영 방향 정하기` 한 줄을 표시하고 상세의 기존 편집 흐름으로 연결한다. 모바일 목록은 중복 `컨텐츠 로그` 버튼과 시각적 검색·필터 라벨을 덜어 첫 브랜드를 앞당기며, 라벨의 접근 가능한 이름·필터 동작은 유지한다. 모바일 입력은 16px 이상, 미정의 `--r-md` 참조는 `--r`로, Futura 기본 버튼 그림자는 primary를 제외해 CTA rim을 보존한다. Revenue의 마지막 `glyph` 소비자는 `BrandIcon`을 쓴다 | confirmed | 운영자가 디자인 개선 네 항목과 모바일 입력 크기까지 모두 진행하라고 지시했다. 390px 검토에서 첫 브랜드 위치와 입력 글자 크기를 직접 측정했다. 데이터·라우트·상태 의미는 바꾸지 않는다 |
+| 2026-09-24 | 영업·매출을 **4탭**으로 재구성한다 — 이전 9개 목적지(탭 개요·문의 내역·고객 DB·매출 히트맵·Leads·Deals·Accounts·Cases + 별도 primary 앵커 `고객 연락`)를 `오늘 연락`(`revenue/followups`, 첫 탭·앵커 착지) · `고객`(`revenue/customers`) · `거래`(`revenue/deals`) · `문의`(`revenue/inquiries`)로. 개인 스코프는 5번째 탭 `현금 흐름`(`revenue/overview?scope=personal`, 2026-08-31 30일 로드맵), ClassIn 스코프는 `세그먼트`를 더한다. `고객 연락` 앵커가 빠져 사이드바는 주요 9 + 유틸리티 2가 되고 건수 뱃지는 영업·매출로 옮긴다. 탭에서 내려온 화면은 삭제하지 않는다 — PAGE_MAP·⌘K·딥링크로 계속 열리고, 거기 서 있으면 가장 가까운 탭이 켜지고(Leads·Accounts → 고객, 개요·히트맵 → 거래, Cases → 없음) 탑바 제목은 그 화면 이름을 유지한다(§7 Widths). 같은 역할은 스코프가 달라도 같은 이름이다(07-15 D4의 원칙 유지, D4의 영어 CRM 탭 이름은 대체) | confirmed | 운영자가 목업 4장(오늘 연락·고객·거래·휴대폰 기록 후보)을 보고 "상당히 좋은 것 같아… 진행". 매일 여는 표면은 오늘 연락 하나이고 나머지는 찾아볼 때만 간다 — Leads·Accounts는 사람이 아니라 단계가 바뀌는 것이라 고객 목록의 세그먼트, 개요·히트맵은 거래의 보기다. CRM 탭 디벨롭 기획 §4.1이 "2단계 실사용 뒤"로 미뤄 둔 IA 재배치를 운영자 결정으로 앞당겼다. 단 §4.1의 `기록` 렌즈 신설과 `문의`의 고객 흡수(Q142)는 채택하지 않았다 — 목업은 문의를 별도 탭으로 둔다. `hub-nav.test.mjs`가 탭 구성·역할 별칭·제목을 고정한다. 상세 `docs/superpowers/specs/2026-09-24-revenue-four-tabs-design.md` |
+| 2026-09-24 | Futura 페이지 텍스처(`.hub-futura`·`fx-head`·`fx-page-title`·`fx-card`·`fx-pill-btn`·`fx-eyebrow`)를 영업·매출의 `오늘 연락`·`고객`·`거래` 세 페이지로 넓힌다. 탭 줄은 페이지가 그리지 않고 탑바에 남는다(`PAGE_OWNS_TABS` 불변 — 목업이 탑바 탭을 그린다). 확실성은 §5.3 선 모양(입금됨 꽉 참·확정 옅은 채움·가능성 높음 점선·확인 필요 점)으로, 빨강은 놓친 약속 한 곳(개수 + 1px 레일)으로 한정한다. **바뀌지 않는 것**: 같은 영업·매출의 `문의` 탭, 탭에서 내려온 화면(개요·히트맵·Leads·Accounts·Cases·ClassIn 별칭·세그먼트), 나머지 모든 페이지는 §7 고정 밀도·§8.1 1px 하이라인·§11 20px/500 제목 그대로다. 컨트롤 radius는 프리미티브가 렌더하는 값 그대로(§7 Radius) | confirmed | 운영자 "2번 오케이" — 목업 검토 뒤 Futura 확장안을 골랐다. 09-18 행이 정한 "화면 하나씩 먼저 살아 보고 넓힌다"는 방식을 따른다: 세 화면만 열고, 운영자가 실제 화면을 본 뒤 문의·다른 영업 화면으로 넓힐지 다시 정한다. 구현은 브랜치 `claude/revenue-redesign`에서 진행 중이며, 이 행은 결정을 기록할 뿐 세 화면이 이미 Futura로 렌더된다는 뜻이 아니다 |
