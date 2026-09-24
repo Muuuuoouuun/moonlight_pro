@@ -34,6 +34,7 @@ final class GlassPanel: NSView {
     private var characterSubscription: AnyCancellable?
 
     func setCharacter(_ character: PetCharacter) { wash.character = character }
+    func previewCharacterTint(_ preview: Bool) { wash.previewsTint = preview }
 
     private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?) {
         radius = cornerRadius
