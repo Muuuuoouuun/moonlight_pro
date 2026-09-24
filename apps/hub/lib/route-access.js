@@ -26,6 +26,7 @@ export const OPEN_EXACT = [
   "/api/integrations/sheets/callback",
   "/api/social/instagram/callback",
   "/api/social/meta/threads/callback",
+  "/api/social/youtube/callback",
 ];
 
 export function isOpenPath(pathname) {
