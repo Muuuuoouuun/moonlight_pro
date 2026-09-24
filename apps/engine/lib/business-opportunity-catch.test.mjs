@@ -45,6 +45,7 @@ registerHooks({
 
 const persona = await import('../app/api/ai/persona-chat/route.ts');
 const brand = await import('../app/api/ai/brand-mentor/route.ts');
+const sales = await import('../app/api/ai/sales-mentor/route.ts');
 const { executePatternAnalysis, buildPatternSystemInstruction } = await import('./pattern-analysis.ts');
 const request = (body) => new Request('https://engine.test/api/ai', {
   method: 'POST', body: JSON.stringify(body),
@@ -77,6 +78,20 @@ test('Council advice and brand strategy share catch criteria, while content crit
   }
   await brand.POST(request({ mode: 'content-critique' }));
   assert.doesNotMatch(instruction(), /개인 사업 기회 포착/);
+});
+
+test('Guru open-question records generation without creating a project update, while deal review keeps its report', async () => {
+  const question = await sales.POST(request({ mode: 'open-question', draft: '고객의 결정 기준을 어떻게 확인할까요?', context: {} }));
+  assert.equal(question.status, 200);
+  const questionData = await question.json();
+  assert.equal(questionData.status, 'generated');
+  assert.equal(questionData.persistence.mentorUpdate, null);
+  assert.match(state.generation.prompt, /고객의 결정 기준을 어떻게 확인할까요/);
+  assert.deepEqual(state.writes, []);
+
+  const review = await sales.POST(request({ mode: 'deal-review', context: {} }));
+  assert.equal(review.status, 200);
+  assert.deepEqual(state.writes.map(({ table }) => table), ['project_updates']);
 });
 
 test('company scope and company sales personas do not receive personal monetization instructions', async () => {
