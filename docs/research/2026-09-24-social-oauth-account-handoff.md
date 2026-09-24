@@ -8,7 +8,7 @@
 |---|---|---|
 | Threads `@ml_bridgemaker` | Meta `Moonlight` 앱 생성, `threads_basic`·`threads_content_publish`, HTTPS 콜백 등록. 앱 시크릿 로컬 설정 완료(`ready`). 테스터 초대 대기. OAuth 연결 0건 | 초대 수락, OAuth와 프로필 확인 |
 | Instagram `@ml_bridgemaker` | Instagram Login 앱 ID, `instagram_business_basic`·`instagram_business_content_publish`, HTTPS 콜백 등록. 앱 시크릿 로컬 설정 완료(`ready`). 테스터 초대 대기로 OAuth에서 `개발자 역할 권한 부족` 확인. 연결 0건 | 초대 수락, OAuth와 프로필 확인 |
-| YouTube | `moonlight-youtube-509603` 프로젝트의 Data API v3, OAuth 앱 `Moonlight Video Publisher`, 읽기·업로드 범위, 테스트 사용자 3명, 전용 웹 클라이언트·로컬 콜백 설정 완료(`ready`). 채널 연결 0건 | 채널별 실제 OAuth 선택 가능 여부와 반환 `UC...` ID 확인 |
+| YouTube `22세기 유목민` | `moonlight-youtube-509603` 프로젝트의 Data API v3, OAuth 앱 `Moonlight Video Publisher`, 읽기·업로드 범위, 테스트 사용자 3명, 전용 웹 클라이언트·로컬 콜백 설정 완료. `호가미` 브랜드 계정으로 승인 후 Hub `connected`, 반환 채널 ID `UCK_CYxp_L_BiM2GCcP4r_8w`, 갱신 토큰 확인 | 테스트 상태의 갱신 토큰 만료(2026-10-01 05:55 UTC) 전에 장기 OAuth 운영 조건 검토. 나머지 채널은 다중 계정 저장 구조 뒤 연결 |
 | Google Calendar | 기존 Hub 연결 기록에 `connected` 및 refresh token 있음 | 실제 동기화/토큰 갱신은 별도 검증. YouTube 새 클라이언트와 분리 유지 |
 | Gmail·Sheets | 현 로컬 Google OAuth provider 목록에는 `calendar`만 활성화 | 소셜 게시 범위 밖. 필요 시 별도 동의·권한·콜백 확인 |
 
@@ -26,7 +26,7 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 
 `classinkr@classin.com`의 ClassIn KR 권한 표에는 `ek.hwa@with-people.co.kr`도 관리자라고 표시됐다. 그 계정의 API 승인은 범위에 넣지 않았다. 회사 두 이메일의 **Cloud Console 소유권은 YouTube OAuth 승인 조건이 아니다**. 기존 Hub `GOOGLE_CLIENT_ID`의 원래 프로젝트를 찾아야 할 때는 `junhyuk.mun@classin.com` Cloud 재인증이 별도로 필요하다. YouTube는 개인 계정의 전용 프로젝트·클라이언트를 사용한다.
 
-`seoulmentoss@gmail.com`의 YouTube 웹 계정 전환 메뉴에는 `문군`·`22세기 유목민`·`기독밈`이 모두 표시된다. Google OAuth 선택 목록에는 개인 기본 `Junhyeok Mun`, 브랜드 `호가미`, `기독밈`이 나온다. 22세기 유목민의 YouTube 설정에서 연 브랜드 관리자 URL의 브랜드 ID와 `호가미` 브랜드 계정 ID `116010767891049305346`이 일치한다. 따라서 채널의 현재 이름과 브랜드 계정의 기존 이름이 다른 것으로 확인했다. `문군`은 YouTube 설정에 브랜드 관리자 영역이 없는 개인 기본 채널이어서 OAuth의 `Junhyeok Mun`과 대응하는 것으로 판단한다. `aaahaaah@hanyang.ac.kr`은 YouTube 계정 전환 메뉴에 채널이 없어 대상에서 제외했다. 22세기 유목민은 `호가미` OAuth 최종 동의 화면까지 도달했으나, 아직 권한 승인·콜백의 반환 `UC...` ID 확인은 하지 않았다. 회사 두 채널도 OAuth 반환 ID를 아직 검증하지 않았다. 업로드는 하지 않았다.
+`seoulmentoss@gmail.com`의 YouTube 웹 계정 전환 메뉴에는 `문군`·`22세기 유목민`·`기독밈`이 모두 표시된다. Google OAuth 선택 목록에는 개인 기본 `Junhyeok Mun`, 브랜드 `호가미`, `기독밈`이 나온다. 22세기 유목민의 YouTube 설정에서 연 브랜드 관리자 URL의 브랜드 ID와 `호가미` 브랜드 계정 ID `116010767891049305346`이 일치한다. 따라서 채널의 현재 이름과 브랜드 계정의 기존 이름이 다른 것으로 확인했다. `호가미`를 승인한 뒤 Hub 상태 API가 반환한 채널 ID도 `UCK_CYxp_L_BiM2GCcP4r_8w`로 일치했다. `문군`은 YouTube 설정에 브랜드 관리자 영역이 없는 개인 기본 채널이어서 OAuth의 `Junhyeok Mun`과 대응하는 것으로 판단한다. `aaahaaah@hanyang.ac.kr`은 YouTube 계정 전환 메뉴에 채널이 없어 대상에서 제외했다. 회사 두 채널은 OAuth 반환 ID를 아직 검증하지 않았고, 업로드는 하지 않았다.
 
 회사 계정의 동의가 `admin_policy_enforced` 등으로 막히면 Google Workspace 관리자가 [관리 콘솔의 보안 → 액세스 및 데이터 관리 → API 제어](https://support.google.com/a/answer/7281227?hl=en&p=app_access_apps)에서 해당 OAuth 앱의 접근 정책을 확인해야 한다. 현재는 실제 OAuth 승인 전이라 차단 여부를 단정할 수 없다.
 
@@ -43,15 +43,14 @@ YouTube Studio `설정 → 권한`의 해당 사용자 행에 `소유자`가 표
 ## 운영자가 현재 직접 해야 하는 단계
 
 1. 열린 Threads와 Instagram `@ml_bridgemaker`의 앱 테스터 초대 화면을 각각 확인한다. 수락에는 Meta 약관 동의와 **“앱 소유자가 나를 고용했거나 테스터 계약을 맺었다”**는 사실 확인이 포함된다. 사실에 맞는 경우에만 직접 수락하거나 명시적으로 진행을 요청한다. `@politic_officer` 두 초대도 아직 대기 중이다.
-2. 열린 Google 동의 화면에서 `seoulmentoss@gmail.com`의 `호가미` 계정에 `YouTube 계정 보기`와 `동영상 업로드·관리` 두 범위를 승인할지 결정한다. 브랜드 ID는 22세기 유목민의 설정 링크와 일치한다. 승인되면 에이전트가 콜백의 `UC...` ID와 저장 기록을 확인한다. Google의 사용자 데이터 정책 동의와 테스트 사용자 3명·웹 클라이언트 설정은 완료됐다.
-3. 다른 Google/Meta 계정을 연결할 때도 OAuth 승인 화면의 대상 채널과 요청 권한을 확인한다. 현재 `aaahaaah@hanyang.ac.kr` 추가 인증은 필요하지 않다.
+2. 다른 Google/Meta 계정을 연결할 때 OAuth 승인 화면의 대상 채널과 요청 권한을 확인한다. `22세기 유목민`의 승인은 완료됐고 `aaahaaah@hanyang.ac.kr` 추가 인증은 필요하지 않다.
 
 ## 연결 뒤에도 필요한 변경
 
-- 현재 `integration_connections`는 `(workspace_id, provider)`가 고유해 Threads·Instagram·YouTube가 각각 워크스페이스당 **한 계정만** 저장된다. 두 Meta 브랜드와 다섯 YouTube 채널을 동시에 연결하려면 외부 계정 ID별 연결 및 브랜드 매핑으로 DB·API를 확장해야 한다.
+- 현재 `integration_connections`는 `(workspace_id, provider)`가 고유해 Threads·Instagram·YouTube가 각각 워크스페이스당 **한 계정만** 저장된다. YouTube 슬롯에는 22세기 유목민이 연결됐다. 두 Meta 브랜드와 다섯 YouTube 채널을 동시에 연결하려면 외부 계정 ID별 연결 및 브랜드 매핑으로 DB·API를 확장해야 한다.
 - 현재 Settings는 Threads·Instagram만 플랫폼별 한 연결 행을 보여주며 YouTube 연결 버튼은 아직 없다. YouTube 파일럿은 `/api/social/youtube/connect?channelId=UC...` 직접 경로를 쓴다. 다중 계정 전환 시 Settings·상태 API도 계정 목록과 브랜드별 선택을 지원해야 한다.
 - Meta는 로컬 HTTP 콜백을 거부해 파일럿용 임시 HTTPS 터널을 등록했다. 장기 운영에는 고정 HTTPS Hub 주소, 배포 자격증명, 콜백 재등록, 토큰 갱신 작업이 필요하다.
-- Google 외부 OAuth 앱의 `Testing` 상태에서 YouTube 범위로 받은 refresh token은 보통 **7일 뒤 만료**된다. [Google OAuth 공식 안내](https://developers.google.com/identity/protocols/oauth2). 새 미감사 API 프로젝트의 `videos.insert` 업로드는 **비공개로 제한**되므로 공개 자동 발행에는 [YouTube API 감사](https://developers.google.com/youtube/v3/docs/videos/insert)가 필요하다.
+- Google 외부 OAuth 앱의 `Testing` 상태에서 YouTube 범위로 받은 refresh token은 **7일 뒤 만료**된다. 이번 연결의 상태 API는 만료를 **2026-10-01 05:55 UTC**로 표시한다. [Google OAuth 공식 안내](https://developers.google.com/identity/protocols/oauth2). 새 미감사 API 프로젝트의 `videos.insert` 업로드는 **비공개로 제한**되므로 공개 자동 발행에는 [YouTube API 감사](https://developers.google.com/youtube/v3/docs/videos/insert)가 필요하다.
 - Moonlight에는 지금 연결 경로만 있고 YouTube 업로드·Meta 게시 실행 코드는 없다. 권한 연결 성공과 실제 콘텐츠 발행 가능 상태는 별도로 검증한다.
 - 2026-09-24 공유 작업 중 `apps/hub/.env.local`이 사라져 기존 백업과 현재 서울 Engine DB 설정으로 복원했다. Google Calendar의 연결 상태와 소셜 콜백 주소는 다시 확인했지만, 백업 뒤 추가됐던 다른 환경 키가 모두 보존됐는지는 알 수 없다. 새 소셜 앱 시크릿 설정 전후에 각 상태 API를 재확인한다.
 

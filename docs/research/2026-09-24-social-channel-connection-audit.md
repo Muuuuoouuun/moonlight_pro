@@ -7,12 +7,12 @@
 ### 2026-09-24 연결 진행 현황
 
 - Meta `Moonlight` 앱이 생성됐다. Threads·Instagram 게시 권한과 임시 HTTPS 터널 콜백을 등록했고, `@ml_bridgemaker`·`@politic_officer`를 양쪽 테스터로 초대했다. 네 초대 모두 마지막 확인에서 수락 대기 중이다. 두 앱 시크릿을 로컬에 설정해 상태가 모두 `ready`다. Instagram 파일럿 OAuth는 `개발자 역할 권한 부족`으로 멈췄다. 연결은 0건이다.
-- 개인 Google 계정 `seoulmentoss@gmail.com`에 전용 Cloud 프로젝트 `moonlight-youtube-509603`을 만들고 YouTube Data API v3·사용자 데이터 정책 동의·테스트 사용자 3명·읽기/업로드 범위·전용 웹 OAuth 클라이언트까지 설정했다. 로컬 상태는 `ready`다. `22세기 유목민`은 OAuth에 기존 브랜드명 `호가미`로 표시되는 것을 브랜드 ID로 확인했고 최종 동의 화면에 도달했다. 아직 승인하지 않았다. `classin.com` 계정의 기존 클라이언트 확인은 별도 재인증 대기 중이며 YouTube 전용 클라이언트와 무관하다.
+- 개인 Google 계정 `seoulmentoss@gmail.com`에 전용 Cloud 프로젝트 `moonlight-youtube-509603`을 만들고 YouTube Data API v3·사용자 데이터 정책 동의·테스트 사용자 3명·읽기/업로드 범위·전용 웹 OAuth 클라이언트까지 설정했다. `22세기 유목민`을 OAuth의 기존 브랜드명 `호가미`로 승인했고, Hub status가 `connected`·정확한 채널 ID `UCK_CYxp_L_BiM2GCcP4r_8w`·갱신 토큰을 확인했다. 테스트 앱 갱신 토큰의 표시 만료는 2026-10-01 05:55 UTC다. `classin.com` 계정의 기존 클라이언트 확인은 별도 재인증 대기 중이며 YouTube 전용 클라이언트와 무관하다.
 - Moonlight에 YouTube 전용 OAuth 연결 경로를 추가했다(`548c4ba8`, `ac30afb1`). 연결된 채널은 없다. 게시·업로드 코드는 포함하지 않는다. Instagram의 OAuth 승인 계정이 요청 브랜드와 다르면 저장을 거부하도록 수정했다(`898bff59`).
 
 ## 결론
 
-Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고 세 플랫폼 로컬 설정은 모두 `ready`다. 계정 승인이 없어 운영 DB의 연결은 0건이다. YouTube 업로드 경로는 아직 없다. 이번 조사에서 외부 계정 OAuth 연결이나 게시물 업로드는 완료되지 않았다. 현재 가능한 실무 흐름은 Studio의 원고·카드 문구·쇼츠 대본 작성 → 플랫폼 화면에서 수동 게시 → 게시 URL·일시를 Moonlight에 수동 기록하는 것이다. `발행했음`은 실제 플랫폼 게시 여부를 검증하지 않는다.
+Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고 세 플랫폼 로컬 설정이 완료됐다. 운영 DB에서 `22세기 유목민` YouTube 연결 1건은 확인됐고 Threads·Instagram은 0건이다. YouTube 업로드 경로는 아직 없다. 게시물 업로드는 실행하지 않았다. 현재 가능한 실무 흐름은 Studio의 원고·카드 문구·쇼츠 대본 작성 → 플랫폼 화면에서 수동 게시 → 게시 URL·일시를 Moonlight에 수동 기록하는 것이다. `발행했음`은 실제 플랫폼 게시 여부를 검증하지 않는다.
 
 ## 실제 계정·연결 상태
 
@@ -22,10 +22,10 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 | Instagram | `@ml_bridgemaker`, `@politic_officer` | 브라우저 프로페셔널 대시보드 | 없음 |
 | Instagram 추가 | `@go_re_startagain` | 전환 시 비밀번호 요구 | 없음 |
 | Instagram DB 링크 | HolyFunCollector | 브랜드 메타데이터에 링크만 있음. 현재 브라우저 게시 권한 미확인 | 없음 |
-| YouTube Studio | 기독밈, 문군, 22세기 유목민, 클래스인 문, ClassIn KR | 다섯 채널의 Studio·권한 화면에 해당 로그인 계정이 각각 `소유자`로 표시. API 권한은 채널별 미검증 | 없음 |
+| YouTube Studio | 기독밈, 문군, 22세기 유목민, 클래스인 문, ClassIn KR | 다섯 채널의 Studio·권한 화면에 해당 로그인 계정이 각각 `소유자`로 표시. 22세기 유목민은 OAuth 반환 ID까지 확인 | 22세기 유목민 1건 |
 | Meta Business Suite | `@politic_officer` 로그인 경로 | 약관 동의 전 단계까지. 페이지 자산·권한 미확인 | 없음 |
 
-운영 DB에는 활성 브랜드가 11개 있다. `meta.channels`에 Threads·Instagram 링크가 있는 브랜드는 BridgeMaker, HolyFunCollector, Politic_Officer 세 곳이고 나머지 8개는 비어 있다. 브랜드의 링크나 Studio 화면 접근은 API 게시 권한의 증거가 아니다. `integration_connections`에서 `meta_threads`, `instagram_api`, `youtube`는 모두 0건이다.
+운영 DB에는 활성 브랜드가 11개 있다. `meta.channels`에 Threads·Instagram 링크가 있는 브랜드는 BridgeMaker, HolyFunCollector, Politic_Officer 세 곳이고 나머지 8개는 비어 있다. 브랜드의 링크나 Studio 화면 접근은 API 게시 권한의 증거가 아니다. `integration_connections`에서 `meta_threads`·`instagram_api`는 0건, `youtube`는 22세기 유목민 1건이다.
 
 ## 지금 연결을 막는 조건
 
@@ -40,9 +40,9 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 
 ### YouTube
 
-1. Moonlight에 YouTube 전용 OAuth scope·callback·상태 조회와 전용 클라이언트 자격증명을 설정했다. 로컬 상태는 `ready`지만 채널 승인은 없고 업로드 구현도 없다.
+1. Moonlight에 YouTube 전용 OAuth scope·callback·상태 조회와 전용 클라이언트 자격증명을 설정했다. 22세기 유목민 채널이 `connected`이며 반환 ID와 갱신 토큰을 확인했다. 업로드 구현은 없다.
 2. 기존 Hub `GOOGLE_CLIENT_ID`의 프로젝트는 개인 계정 Cloud 프로젝트들에서 찾지 못했다. 별도 `classin.com` 계정의 Cloud 자격증명 화면은 재인증 대기 중이다. YouTube는 이 기존 Calendar 클라이언트와 분리된 전용 프로젝트를 사용하므로 연결의 선행 조건은 아니다.
-3. Google OAuth 앱의 테스트 사용자 3명과 웹 클라이언트 설정은 완료됐다. `seoulmentoss@gmail.com`의 YouTube 웹 계정 전환에는 `문군`·`22세기 유목민`·`기독밈`이 보이고, Google OAuth에는 개인 기본 `Junhyeok Mun`·브랜드 `호가미`·`기독밈`이 보인다. 22세기 유목민의 브랜드 관리자 ID가 `호가미` 계정 ID와 일치해 이름 차이를 확인했고, `문군`은 개인 기본 채널로 판단한다. `호가미` OAuth 최종 동의 화면까지 도달했지만 아직 승인하지 않았다. 신규 미감사 프로젝트 업로드는 비공개로 제한되며 공개 발행에는 감사가 필요하다.
+3. Google OAuth 앱의 테스트 사용자 3명과 웹 클라이언트 설정은 완료됐다. `seoulmentoss@gmail.com`의 YouTube 웹 계정 전환에는 `문군`·`22세기 유목민`·`기독밈`이 보이고, Google OAuth에는 개인 기본 `Junhyeok Mun`·브랜드 `호가미`·`기독밈`이 보인다. 22세기 유목민의 브랜드 관리자 ID가 `호가미` 계정 ID와 일치했고, OAuth 반환 채널 ID도 일치했다. `문군`은 개인 기본 채널로 판단한다. 신규 미감사 프로젝트 업로드는 비공개로 제한되며 공개 발행에는 감사가 필요하다.
 4. Studio의 `소유자` 행은 API 권한의 증거가 아니다. [YouTube 공식 도움말](https://support.google.com/youtube/answer/9481328?hl=en)에 따르면 채널 권한으로 초대된 사용자는 API를 쓸 수 없다. 실제 Google/Brand 계정에서 채널이 OAuth 선택 목록에 나오는지, 이후 `channels.list(mine=true)`가 기대한 `UC...` ID를 반환하는지 확인해야 한다.
 
 ## 플랫폼별 발행 가능성
@@ -63,6 +63,6 @@ Moonlight의 Threads·Instagram·YouTube OAuth 연결 경로는 코드에 있고
 2. 먼저 Threads `@ml_bridgemaker` 한 계정을 정확한 핸들로 OAuth 연결하고, status·프로필·DB 저장 영수증을 확인한다. 이 단계는 게시하지 않는다.
 3. 계정별 저장 구조로 확장하고 `@politic_officer` 및 Instagram 계정을 각각 연결한다.
 4. 이미지 렌더·미디어 보관, 버전별 검토, 게시 큐·중복 방지·성공 URL 확인을 구현한 뒤 실제 게시를 별도 검증한다.
-5. YouTube는 실제 OAuth 목록에서 접근 가능한 채널의 `UC...` ID를 확인한 뒤 한 곳을 파일럿으로 연결한다. 현재 DB 제약으로 워크스페이스별 한 채널만 연결할 수 있다.
+5. YouTube는 22세기 유목민을 파일럿으로 연결하고 정확한 `UC...` ID와 갱신 토큰 저장을 확인했다. 현재 DB 제약으로 워크스페이스별 한 채널만 연결할 수 있다. 다른 채널 연결은 다중 계정 저장 구조 뒤 진행한다.
 
 코드 근거: [`integration-inventory.md`](../integration-inventory.md), [`meta-threads.js`](../../apps/hub/lib/meta-threads.js), [`instagram-api.js`](../../apps/hub/lib/instagram-api.js), [`content-studio.jsx`](../../apps/hub/components/hub/pages/content-studio.jsx), [`20260804_0018_backend_optimization.sql`](../../supabase/migrations/20260804_0018_backend_optimization.sql).
