@@ -514,3 +514,28 @@ export function isExpectedInstagramApiProfile(profile, expectedHandle) {
 
   return normalizeHandle(profile.username) === normalizeHandle(expectedHandle);
 }
+
+export async function checkInstagramApiProfileMatch({
+  workspaceId,
+  brandHandle,
+  profile,
+  recordSync = recordInstagramApiSync,
+}) {
+  const profileMatch = isExpectedInstagramApiProfile(profile, brandHandle);
+  if (profileMatch !== false) {
+    return { profileMatch, rejected: false };
+  }
+
+  await recordSync({
+    workspaceId,
+    status: "failure",
+    payload: {
+      action: "oauth_connect",
+      brandHandle,
+      username: profile.username,
+      result: "account-mismatch",
+    },
+    errorMessage: `Authorized Instagram account does not match @${brandHandle}.`,
+  });
+  return { profileMatch, rejected: true };
+}

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
 import {
+  checkInstagramApiProfileMatch,
   decodeInstagramApiState,
   exchangeInstagramApiCode,
   exchangeInstagramApiLongLivedToken,
   fetchInstagramApiProfile,
-  isExpectedInstagramApiProfile,
   recordInstagramApiSync,
   resolveInstagramApiRedirectUri,
   saveInstagramApiConnection,
@@ -71,7 +71,16 @@ export async function GET(req) {
     );
     const accessToken = longLivedTokenData?.access_token || tokenData?.access_token;
     const profile = await fetchInstagramApiProfile(accessToken);
-    const profileMatch = isExpectedInstagramApiProfile(profile, brandHandle);
+    const { profileMatch, rejected } = await checkInstagramApiProfileMatch({
+      workspaceId,
+      brandHandle,
+      profile,
+    });
+    if (rejected) {
+      target.searchParams.set("instagram", "account-mismatch");
+      return NextResponse.redirect(target);
+    }
+
     const saved = assertPersistedSocialConnection(await saveInstagramApiConnection({
       workspaceId,
       brandHandle,
@@ -94,7 +103,7 @@ export async function GET(req) {
       },
     });
 
-    target.searchParams.set("instagram", profileMatch === false ? "connected-mismatch" : "connected");
+    target.searchParams.set("instagram", "connected");
     return NextResponse.redirect(target);
   } catch (callbackError) {
     await recordInstagramApiSync({
