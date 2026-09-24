@@ -92,7 +92,9 @@ test("server timezone resolves today's date across UTC boundary and historical t
   });
   for (const call of state.calls.filter((call) => call.table === "journal_entries")) {
     assert.equal(call.url.searchParams.get("workspace_id"), `eq.${WORKSPACE}`);
-    assert.equal(call.url.searchParams.get("entry_kind"), "eq.daily_review");
+    // 활동 흐름의 메모 수(select=created_at)만 note를 읽는다 — 리뷰 원장 읽기는 전부 daily_review.
+    const memoCount = call.url.searchParams.get("select") === "created_at";
+    assert.equal(call.url.searchParams.get("entry_kind"), memoCount ? "eq.note" : "eq.daily_review");
     assert.equal(call.options.cache, "no-store");
   }
 });
@@ -217,8 +219,8 @@ test("RPC transport errors and invalid success records are safe failure envelope
 test("live ledger carries today's focus and contact signals from the same sources as the weekly card", async () => {
   state.rows = [row()];
   state.tasks = [
-    { id: "t1", workspace_id: WORKSPACE, status: "done", completed_at: "2026-09-12T02:00:00.000Z", meta: { focus_dates: ["2026-09-12"] } },
-    { id: "t2", workspace_id: WORKSPACE, status: "todo", completed_at: null, meta: { focus_dates: ["2026-09-12"] } },
+    { id: "t1", title: " 제안서 ", workspace_id: WORKSPACE, status: "done", completed_at: "2026-09-12T02:00:00.000Z", meta: { focus_dates: ["2026-09-12"] } },
+    { id: "t2", title: "", workspace_id: WORKSPACE, status: "todo", completed_at: null, meta: { focus_dates: ["2026-09-12"] } },
     // 완료 시각이 전날이면(재오픈 흔적) 오늘 완료로 치지 않는다
     { id: "t3", workspace_id: WORKSPACE, status: "done", completed_at: "2026-09-11T02:00:00.000Z", meta: { focus_dates: ["2026-09-12"] } },
   ];
@@ -231,9 +233,37 @@ test("live ledger carries today's focus and contact signals from the same source
   state.bypassFilters = true;
   const result = await ledger.getDailyReviewLedger({ date: "2026-09-12" });
   assert.equal(result.status, "live");
-  assert.deepEqual(result.today, { date: "2026-09-12", focusPicked: 3, focusDone: 1, focusLimit: 3, contacts: 1 });
+  assert.deepEqual(result.today, { date: "2026-09-12", focusPicked: 3, focusDone: 1, focusLimit: 3, focusTitles: ["제안서"], contacts: 1 });
   const taskCall = state.calls.find((call) => call.table === "tasks");
   assert.equal(taskCall.url.searchParams.get("meta->focus_dates"), 'cs.["2026-09-12"]');
+  assert.match(taskCall.url.searchParams.get("select"), /title/);
+});
+
+// ---- 최근 8일 기록: 오늘·홈 cue와 "이번 주 k/5" (2026-09-23 지속 루프 설계 §4.3·§4.5) ----
+
+test("recent records are read relative to the real today, independent of the selected date", async () => {
+  state.rows = [
+    row({ review_date: "2026-09-22", review_data: { energy: 4, progress: null } }),
+    row({ review_date: "2026-09-16", review_data: { energy: null, progress: null }, body: "메모" }),
+    row({ review_date: "2026-09-09" }), // 범위 밖(14일 창)
+  ];
+  const result = await ledger.getDailyReviewLedger({ date: "2026-08-03", now: new Date("2026-09-23T03:00:00Z") });
+  assert.equal(result.status, "live");
+  assert.equal(result.todayKey, "2026-09-23");
+  assert.deepEqual(result.recent, [{ reviewDate: "2026-09-22", energy: 4 }, { reviewDate: "2026-09-16", energy: null }]);
+  const recentCall = state.calls.find((call) => call.table === "journal_entries" && call.url.searchParams.get("select") === "review_date,review_data");
+  assert.deepEqual(recentCall.url.searchParams.getAll("review_date"), ["gte.2026-09-10", "lte.2026-09-23"]);
+  assert.equal(recentCall.url.searchParams.get("workspace_id"), `eq.${WORKSPACE}`);
+  assert.equal(recentCall.url.searchParams.get("entry_kind"), "eq.daily_review");
+});
+
+test("a failed recent read leaves recent null without failing the review", async () => {
+  state.rows = [row()];
+  state.failure = (url) => url.searchParams.get("select") === "review_date,review_data";
+  const result = await ledger.getDailyReviewLedger({ date: "2026-09-12" });
+  assert.equal(result.status, "live");
+  assert.equal(result.recent, null);
+  assert.ok(result.review);
 });
 
 test("a truncated activity read reports an unknown contact count, not a smaller one", async () => {
@@ -261,4 +291,49 @@ test("today signals fall back to null when a source cannot be read, without fail
   assert.equal(result.status, "live");
   assert.equal(result.today, null);
   assert.ok(result.review);
+});
+
+// ---- 활동 흐름: 최근 16주 날짜별 활동량 (2026-09-23 지속 루프 설계 §12) ----
+
+test("activity tallies done tasks, contacts, memos and reviews per operator-timezone day", async () => {
+  state.rows = [row({ review_date: "2026-09-22" })];
+  state.tasks = [
+    { status: "done", completed_at: "2026-09-22T02:00:00.000Z", workspace_id: WORKSPACE },
+    // UTC 22일 16:00 = KST 23일 01:00
+    { status: "done", completed_at: "2026-09-22T16:00:00.000Z", workspace_id: WORKSPACE },
+  ];
+  state.activities = [
+    { kind: "call", occurred_at: "2026-09-22T03:00:00.000Z", workspace_id: WORKSPACE },
+    { kind: "note", occurred_at: "2026-09-22T03:00:00.000Z", workspace_id: WORKSPACE }, // 내부 기록은 연락이 아니다
+  ];
+  const result = await ledger.getDailyReviewLedger({ date: "2026-09-23", now: new Date("2026-09-23T03:00:00Z") });
+  assert.equal(result.status, "live");
+  assert.equal(result.activity.from, "2026-06-08");
+  assert.equal(result.activity.to, "2026-09-23");
+  assert.deepEqual(result.activity.days["2026-09-22"], { tasks: 1, contacts: 1, memos: 0, review: true });
+  assert.equal(result.activity.days["2026-09-23"].tasks, 1);
+  assert.deepEqual(result.activity.missing, []);
+  assert.equal(result.monthActivity, null); // 이번 달은 16주 창 안
+  const taskCall = state.calls.find((call) => call.table === "tasks" && call.url.searchParams.get("select") === "completed_at");
+  assert.equal(taskCall.url.searchParams.get("status"), "eq.done");
+  assert.equal(taskCall.url.searchParams.get("limit"), String(ledger.ACTIVITY_ROW_LIMIT + 1));
+});
+
+test("a truncated or failed activity source is reported missing, never counted as zero", async () => {
+  state.rows = [row()];
+  state.failure = (url) => url.pathname.endsWith("/crm_activities");
+  state.tasks = Array.from({ length: ledger.ACTIVITY_ROW_LIMIT + 1 }, () => ({ status: "done", completed_at: "2026-09-12T02:00:00.000Z" }));
+  state.bypassFilters = true;
+  const result = await ledger.getDailyReviewLedger({ date: "2026-09-12", now: new Date("2026-09-12T03:00:00Z") });
+  assert.equal(result.status, "live");
+  assert.ok(result.activity.missing.includes("tasks"));
+  assert.ok(result.activity.missing.includes("contacts"));
+  assert.ok(result.review); // 리뷰 자체는 영향 없음
+});
+
+test("an old month outside the 16-week window gets its own activity read", async () => {
+  state.rows = [];
+  const result = await ledger.getDailyReviewLedger({ date: "2026-03-10", month: "2026-03", now: new Date("2026-09-23T03:00:00Z") });
+  assert.equal(result.monthActivity.from, "2026-03-01");
+  assert.equal(result.monthActivity.to, "2026-03-31");
 });

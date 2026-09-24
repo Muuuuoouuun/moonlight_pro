@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 import "./hub-futura.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
+import { DailyReviewProvider } from "./daily-review-provider";
 import { goalHref } from "@/lib/goal-client";
 
 import { Button, Skeleton } from "./hub-primitives";
@@ -589,6 +590,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
       <ToastProvider>
         <OfficeSessionProvider key={memoDraftContext}>
           <OfficeWorkflowSessionProvider>
+          <DailyReviewProvider>
         <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
           <div
             className="hub-mobile-backdrop"
@@ -653,6 +655,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
         contextData={advisorContext.contextData}
       />}
         <CelebrationCanvas />
+          </DailyReviewProvider>
           </OfficeWorkflowSessionProvider>
         </OfficeSessionProvider>
       </ToastProvider>

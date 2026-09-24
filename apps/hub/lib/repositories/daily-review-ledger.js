@@ -5,6 +5,9 @@ import { resolveRhythmTimeZone, toZonedDateKey } from "../rhythm-calendar.js";
 import { isCanonicalUuid } from "../uuid.js";
 import { isContactActivity } from "../contact-activity.js";
 import { MAX_FOCUS_PER_DAY } from "../task-today.js";
+import { REVIEW_RECENT_DAYS, recentRange } from "../daily-review-rhythm.js";
+import { activityWindow, covers, tallyActivity } from "../review-activity.js";
+import { shiftDateKey } from "../rhythm-calendar.js";
 
 const REVIEW_SELECT = "id,workspace_id,entry_kind,review_date,review_timezone,focus_target,review_data,body,review_revision,updated_at";
 // 저녁 리뷰의 "연락 N건"이 훑는 crm_activities 행 수 상한(리뷰 날짜 ±1일).
@@ -49,7 +52,7 @@ export async function readTodaySignals({ workspaceId, timezone, reviewDate }) {
   const workspace = ["workspace_id", eqFilter(workspaceId)];
   const [taskRows, activityRows] = await Promise.all([
     fetchSupabaseRows("tasks", {
-      select: "id,status,completed_at,meta",
+      select: "id,title,status,completed_at,meta",
       filters: [workspace, ["meta->focus_dates", `cs.${JSON.stringify([reviewDate])}`]],
       limit: 20,
     }),
@@ -71,9 +74,37 @@ export async function readTodaySignals({ workspaceId, timezone, reviewDate }) {
     focusPicked: picked.length,
     focusDone: done.length,
     focusLimit: MAX_FOCUS_PER_DAY,
+    // 저녁 리뷰의 "오늘 3개" 권장 카드가 목표 문구로 쓴다(2026-09-23 §4.4). 제목 없는 행은 뺀다.
+    focusTitles: picked.map((row) => (typeof row.title === "string" ? row.title.trim() : "")).filter(Boolean).slice(0, MAX_FOCUS_PER_DAY),
     // 잘렸으면 숫자 대신 null — 팝업이 연락 줄만 빼고 오늘 3개는 그대로 말한다.
     contacts: activityRows.length > ACTIVITY_SCAN_LIMIT ? null : contacts.length,
   };
+}
+
+// 활동 흐름(2026-09-23 §12) — 원천별 행 상한. 넘으면 그 원천은 잘린 것이라 missing으로 돌린다.
+export const ACTIVITY_ROW_LIMIT = 2000;
+
+async function readCapped(table, options) {
+  const rows = await fetchSupabaseRows(table, { ...options, limit: ACTIVITY_ROW_LIMIT + 1 }).catch(() => null);
+  return Array.isArray(rows) && rows.length <= ACTIVITY_ROW_LIMIT ? rows : null;
+}
+
+// from~to(운영자 시간대 날짜) 사이 날짜별 활동 수. 시간대 오프셋을 계산하지 않고 UTC 기준 ±1일을 읽은 뒤
+// tallyActivity가 운영자 날짜로 거른다(readTodaySignals와 같은 방식).
+export async function readReviewActivity({ workspaceId, timezone, from, to }) {
+  const since = `${shiftDateKey(from, -1)}T00:00:00.000Z`;
+  const until = `${shiftDateKey(to, 2)}T00:00:00.000Z`;
+  const workspace = ["workspace_id", eqFilter(workspaceId)];
+  const [tasks, activities, memos, reviews] = await Promise.all([
+    readCapped("tasks", { select: "completed_at", filters: [workspace, ["status", eqFilter("done")], ["completed_at", `gte.${since}`], ["completed_at", `lt.${until}`]] }),
+    readCapped("crm_activities", { select: "kind,occurred_at", filters: [workspace, ["occurred_at", `gte.${since}`], ["occurred_at", `lt.${until}`]] }),
+    readCapped("journal_entries", { select: "created_at", filters: [workspace, ["entry_kind", eqFilter("note")], ["created_at", `gte.${since}`], ["created_at", `lt.${until}`]] }),
+    readCapped("journal_entries", { select: "review_date", filters: [workspace, ["entry_kind", eqFilter("daily_review")], ["review_date", `gte.${from}`], ["review_date", `lte.${to}`]] }),
+  ]);
+  return tallyActivity({
+    from, to, timezone, tasks, memos, reviews,
+    contacts: Array.isArray(activities) ? activities.filter(isContactActivity) : null,
+  });
 }
 
 function reviewFromRow(row, workspaceId) {
@@ -112,7 +143,14 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
     const filters = [["workspace_id", eqFilter(context.workspaceId)], ["entry_kind", eqFilter("daily_review")]];
     // 두 줄 신호(오늘 3개·연락 N건)는 workspaceId·timezone·reviewDate만 쓰고 셋 다 여기서 이미
     // 확정됐으므로 리뷰 읽기와 같은 왕복에 태운다 — 직렬로 두면 단계가 하나 더 생긴다.
-    const [selectedRows, monthRows, today] = await Promise.all([
+    // 최근 8일(실제 오늘 기준)은 선택 날짜와 무관하게 싣는다 — 오늘·홈의 cue와 "이번 주 k/5"가 쓴다
+    // (2026-09-23 §4.3·§4.5). 월 경계를 넘는 주도 한 번의 범위 읽기로 끝난다.
+    const recent = recentRange(toZonedDateKey(now, context.timezone));
+    // 활동 흐름: 최근 16주는 항상, 선택한 달이 그 창 밖이면 그 달을 한 번 더 읽는다(§12).
+    const heat = activityWindow(recent.to);
+    const monthTo = range.end < recent.to ? range.end : recent.to;
+    const activityContext = { workspaceId: context.workspaceId, timezone: context.timezone };
+    const [selectedRows, monthRows, today, recentRows, activity, monthActivity] = await Promise.all([
       fetchSupabaseRows("journal_entries", {
         select: REVIEW_SELECT, filters: [...filters, ["review_date", eqFilter(reviewDate)]], limit: 2,
       }),
@@ -121,6 +159,14 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
         order: "review_date.desc", limit: 31,
       }),
       readTodaySignals({ workspaceId: context.workspaceId, timezone: context.timezone, reviewDate }).catch(() => null),
+      fetchSupabaseRows("journal_entries", {
+        select: "review_date,review_data", filters: [...filters, ["review_date", `gte.${recent.from}`], ["review_date", `lte.${recent.to}`]],
+        order: "review_date.desc", limit: REVIEW_RECENT_DAYS,
+      }).catch(() => null),
+      readReviewActivity({ ...activityContext, ...heat }).catch(() => null),
+      range.start <= recent.to && !covers(heat, range.start, monthTo)
+        ? readReviewActivity({ ...activityContext, from: range.start, to: monthTo }).catch(() => null)
+        : Promise.resolve(null),
     ]);
     if (!Array.isArray(selectedRows) || selectedRows.length > 1 || !Array.isArray(monthRows) || monthRows.length > 31) return readError(base);
     const review = selectedRows.length ? reviewFromRow(selectedRows[0], context.workspaceId) : null;
@@ -129,7 +175,12 @@ export async function getDailyReviewLedger({ date = null, month = null, now = ne
     if (summaries.some((entry) => !entry || entry.reviewDate < range.start || entry.reviewDate > range.end)
       || new Set(summaries.map((entry) => entry.reviewDate)).size !== summaries.length) return readError(base);
     const entries = summaries.map(({ note, ...entry }) => ({ ...entry, excerpt: note.slice(0, 180) }));
-    return { ...base, status: "live", review, entries, today };
+    // 최근 기록을 못 읽으면 null — cue는 "기록 없음"으로 위장하지 않고 침묵한다.
+    const recentEntries = Array.isArray(recentRows) && recentRows.length <= REVIEW_RECENT_DAYS
+      ? recentRows.filter((row) => isDailyReviewDate(row?.review_date))
+        .map((row) => ({ reviewDate: row.review_date, energy: Number.isInteger(row.review_data?.energy) ? row.review_data.energy : null }))
+      : null;
+    return { ...base, status: "live", review, entries, today, recent: recentEntries, todayKey: recent.to, activity, monthActivity };
   } catch {
     return readError(base);
   }

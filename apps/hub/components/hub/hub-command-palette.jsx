@@ -41,6 +41,8 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
     flat.push({ kind: 'Action', label: 'New Deal', path: 'dashboard/revenue/deals?new=deal', icon: 'deals', keywords: ['딜', '영업'] });
     flat.push({ kind: 'Action', label: 'New Account', path: 'dashboard/revenue/accounts?new=account', icon: 'accounts', keywords: ['계정'] });
     flat.push({ kind: 'Action', label: 'New Case', path: 'dashboard/revenue/cases?new=case', icon: 'cases', keywords: ['케이스', '이슈'] });
+    // 하루 리뷰 팝업 직행(2026-09-23 지속 루프 설계 §4.2) — 셸 Provider가 ?review=를 1회 소비한다.
+    flat.push({ kind: 'Action', label: '하루 리뷰 쓰기', path: 'dashboard/work/daily-review?review=today', icon: 'brief', keywords: ['하루', '리뷰', '회고', '에너지', '마무리', 'daily review'] });
     flat.push({ kind: 'Action', label: 'Start 15m focus timer', path: 'dashboard/work/calendar?focus=15', icon: 'clock' });
     // AI Council & Persona Actions
     flat.push({ kind: 'Action', label: 'AI Council: 3자 토의 & 주간 회고', path: 'dashboard/system/agents?agent=council&mode=sparring', icon: 'sparkle', keywords: ['council', '카운슬', '자문', '토의', '스파링', 'ai', '회고'] });
