@@ -8,6 +8,7 @@ import { IconButton, useToast } from './hub-primitives';
 import { useDailyReviewLauncher } from './daily-review-provider';
 import { ENERGY_LABELS } from './pages/daily-review-labels';
 import { ReviewWeekStrip } from './daily-review-weekstrip';
+import { EnergyMoon } from './energy-moon';
 
 export { ReviewWeekStrip };
 
@@ -77,7 +78,7 @@ export function DailyReviewCue({ className }) {
     {quickSave && <span className="daily-review-cue-energy" role="group" aria-label="에너지 바로 저장, 1 많이 지침부터 5 활기참까지">
       {[1, 2, 3, 4, 5].map((energy) => <button key={energy} type="button" className="daily-review-cue-energy-btn mono"
         aria-label={`에너지 ${energy} ${ENERGY_LABELS[energy - 1]}로 저장`} aria-busy={savingEnergy === energy || undefined}
-        disabled={savingEnergy !== null} onClick={() => saveEnergy(energy)}>{energy}</button>)}
+        disabled={savingEnergy !== null} onClick={() => saveEnergy(energy)}><EnergyMoon level={energy} size={16} /><span>{energy}</span></button>)}
     </span>}
     <ReviewWeekStrip week={week} />
   </div>;
