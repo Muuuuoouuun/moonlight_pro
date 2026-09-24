@@ -9,6 +9,7 @@ import {
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { resolveExpectedSocialAccountId, resolveSocialBrandKey } from "@/lib/social-account-connections";
 import { registerSocialOAuthFlow } from "@/lib/social-oauth-flow";
+import { resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
 export const runtime = "nodejs";
 
@@ -36,11 +37,19 @@ export async function GET(req) {
     return NextResponse.redirect(target);
   }
 
+  const app = resolveMetaOAuthApp({ provider: "meta_threads", brandKey, brandHandle });
+  if (!app?.configured) {
+    const target = new URL(returnPath, origin);
+    target.searchParams.set("metaThreads", "missing-meta-config");
+    return NextResponse.redirect(target);
+  }
+
   let expectedAccountId;
   try {
     expectedAccountId = await resolveExpectedSocialAccountId({
       provider: "meta_threads", workspaceId, handle: brandHandle, brandKey,
       accountId: searchParams.get("accountId"),
+      app,
     });
   } catch {
     const target = new URL(returnPath, origin);

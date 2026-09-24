@@ -7,6 +7,7 @@ import {
   resolveSocialBrandKey,
   saveSocialAccountConnection,
 } from "./social-account-connections.js";
+import { resolveMetaOAuthApp } from "./meta-oauth-apps.js";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -145,9 +146,34 @@ test("reconnecting an account cannot silently assign it to another brand", async
   assert.equal(writes, 0);
 });
 
+test("reconnecting a Meta account cannot replace its established OAuth app", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  let writes = 0;
+  globalThis.fetch = async (_url, options) => {
+    if (options.method === "GET") return {
+      ok: true, status: 200,
+      text: async () => JSON.stringify([{
+        account_key: "account-A",
+        config: { brandKey: "classmoon", oauthAppId: "company-app-id", oauthAppKey: "classmoon" },
+      }]),
+      headers: { get: () => null },
+    };
+    writes += 1;
+    return { ok: true, status: 201, text: async () => "[]", headers: { get: () => null } };
+  };
+  await assert.rejects(saveSocialAccountConnection({
+    workspaceId: "workspace-1", provider: "instagram_api", accountId: "account-A",
+    config: { brandKey: "classmoon", oauthAppId: "personal-app-id", oauthAppKey: "moonlight" },
+  }), /social-account-app-mismatch/);
+  assert.equal(writes, 0);
+});
+
 test("OAuth connect binds an existing handle to its verified account ID", async () => {
   process.env.SUPABASE_URL = "https://db.example.com";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  process.env.COM_MOON_INSTAGRAM_APP_ID = "moonlight-id";
+  process.env.COM_MOON_INSTAGRAM_APP_SECRET = "moonlight-secret";
   globalThis.fetch = async () => ({
     ok: true, status: 200,
     text: async () => JSON.stringify([
@@ -160,26 +186,31 @@ test("OAuth connect binds an existing handle to its verified account ID", async 
   assert.equal(await resolveExpectedSocialAccountId({
     provider: "instagram_api", workspaceId: "workspace-1", handle: "@ml_bridgemaker",
     brandKey: "bridgemaker",
+    app: resolveMetaOAuthApp({ provider: "instagram_api", brandKey: "bridgemaker", brandHandle: "ml_bridgemaker" }),
   }), "ig-1");
   await assert.rejects(resolveExpectedSocialAccountId({
     provider: "instagram_api", workspaceId: "workspace-1", handle: "ml_bridgemaker",
     brandKey: "politicofficer",
-  }), /social-account-brand-mismatch/);
+    app: resolveMetaOAuthApp({ provider: "instagram_api", brandKey: "bridgemaker", brandHandle: "ml_bridgemaker" }),
+  }), /social-account-app-invalid/);
   await assert.rejects(resolveExpectedSocialAccountId({
     provider: "instagram_api", workspaceId: "workspace-1", handle: "ml_bridgemaker",
     accountId: "ig-2",
+    app: resolveMetaOAuthApp({ provider: "instagram_api", brandKey: "bridgemaker", brandHandle: "ml_bridgemaker" }),
   }), /social-account-mismatch/);
 });
 
 test("OAuth connect finds an existing account beyond the first 100 connections", async () => {
   process.env.SUPABASE_URL = "https://db.example.com";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_ID = "company-id";
+  process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_SECRET = "company-secret";
   const rows = [
     ...Array.from({ length: 100 }, (_, index) => ({
       account_key: `other-${index}`,
       config: { username: `other_${index}`, brandKey: "other" },
     })),
-    { account_key: "ig-original", config: { username: "moon.classin", brandKey: "classmoon" } },
+    { account_key: "ig-original", config: { username: "moon.classin", brandKey: "classmoon", oauthAppId: "company-id", oauthAppKey: "classmoon" } },
   ];
   const offsets = [];
   globalThis.fetch = async (url) => {
@@ -198,6 +229,7 @@ test("OAuth connect finds an existing account beyond the first 100 connections",
   assert.equal(await resolveExpectedSocialAccountId({
     provider: "instagram_api", workspaceId: "workspace-1", handle: "moon.classin",
     brandKey: "classmoon",
+    app: resolveMetaOAuthApp({ provider: "instagram_api", brandKey: "classmoon", brandHandle: "moon.classin" }),
   }), "ig-original");
   assert.deepEqual(offsets, [0, 100]);
 });
@@ -205,6 +237,8 @@ test("OAuth connect finds an existing account beyond the first 100 connections",
 test("OAuth connect rejects malformed successful account lookup responses", async () => {
   process.env.SUPABASE_URL = "https://db.example.com";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_ID = "company-id";
+  process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_SECRET = "company-secret";
   globalThis.fetch = async () => ({
     ok: true, status: 200, text: async () => "{not-json",
     headers: { get: () => null },
@@ -213,5 +247,79 @@ test("OAuth connect rejects malformed successful account lookup responses", asyn
   await assert.rejects(resolveExpectedSocialAccountId({
     provider: "instagram_api", workspaceId: "workspace-1", handle: "moon.classin",
     brandKey: "classmoon",
+    app: resolveMetaOAuthApp({ provider: "instagram_api", brandKey: "classmoon", brandHandle: "moon.classin" }),
   }), /social-account-read-failed/);
+});
+
+for (const [provider, prefix] of [["instagram_api", "COM_MOON_INSTAGRAM"], ["meta_threads", "COM_MOON_META_THREADS"]]) {
+  test(`${provider} binds only an account created by the selected Meta app`, async () => {
+    process.env.SUPABASE_URL = "https://db.example.com";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+    process.env[`${prefix}_CLASSMOON_APP_ID`] = "company-id";
+    process.env[`${prefix}_CLASSMOON_APP_SECRET`] = "company-secret";
+    const rows = [{ account_key: "historical-id", config: {
+      username: "moon.classin", brandKey: "classmoon", oauthAppId: "old-moonlight-id", oauthAppKey: "moonlight",
+    } }];
+    globalThis.fetch = async () => ({
+      ok: true, status: 200, text: async () => JSON.stringify(rows), headers: { get: () => null },
+    });
+    const options = {
+      provider, workspaceId: "workspace-1", handle: "moon.classin", brandKey: "classmoon",
+      app: resolveMetaOAuthApp({ provider, brandKey: "classmoon", brandHandle: "moon.classin" }),
+    };
+
+    assert.equal(await resolveExpectedSocialAccountId(options), null);
+    await assert.rejects(resolveExpectedSocialAccountId({ ...options, accountId: "historical-id" }), /social-account-mismatch/);
+
+    rows.push({ account_key: "company-id-1", config: {
+      username: "moon.classin", brandKey: "classmoon", oauthAppId: "company-id", oauthAppKey: "classmoon",
+    } });
+    assert.equal(await resolveExpectedSocialAccountId(options), "company-id-1");
+    rows.push({ account_key: "company-id-2", config: {
+      username: "moon.classin", brandKey: "classmoon", oauthAppId: "company-id", oauthAppKey: "classmoon",
+    } });
+    await assert.rejects(resolveExpectedSocialAccountId(options), /social-account-ambiguous/);
+  });
+}
+
+test("an untagged old Class.Moon row cannot bind a dedicated app", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  process.env.COM_MOON_META_THREADS_CLASSMOON_APP_ID = "company-id";
+  process.env.COM_MOON_META_THREADS_CLASSMOON_APP_SECRET = "company-secret";
+  globalThis.fetch = async () => ({
+    ok: true, status: 200,
+    text: async () => JSON.stringify([{ account_key: "old-id", config: { username: "moon.classin", brandKey: "classmoon" } }]),
+    headers: { get: () => null },
+  });
+  assert.equal(await resolveExpectedSocialAccountId({
+    provider: "meta_threads", workspaceId: "workspace-1", handle: "moon.classin", brandKey: "classmoon",
+    app: resolveMetaOAuthApp({ provider: "meta_threads", brandKey: "classmoon", brandHandle: "moon.classin" }),
+  }), null);
+});
+
+test("legacy BridgeMaker lookup does not bind a row assigned to another brand", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  process.env.COM_MOON_INSTAGRAM_APP_ID = "moonlight-id";
+  process.env.COM_MOON_INSTAGRAM_APP_SECRET = "moonlight-secret";
+  globalThis.fetch = async () => ({
+    ok: true, status: 200,
+    text: async () => JSON.stringify([{ account_key: "wrong-brand-id", config: {
+      username: "ml_bridgemaker", brandKey: "classmoon",
+    } }]), headers: { get: () => null },
+  });
+  await assert.rejects(resolveExpectedSocialAccountId({
+    provider: "instagram_api", workspaceId: "workspace-1", handle: "ml_bridgemaker",
+    app: resolveMetaOAuthApp({ provider: "instagram_api", brandKey: null, brandHandle: "ml_bridgemaker" }),
+  }), /social-account-brand-mismatch/);
+});
+
+test("Meta account lookup requires the current configured app", async () => {
+  let reads = 0;
+  globalThis.fetch = async () => { reads += 1; throw new Error("unexpected read"); };
+  await assert.rejects(resolveExpectedSocialAccountId({
+    provider: "instagram_api", workspaceId: "workspace-1", handle: "moon.classin", brandKey: "classmoon",
+  }), /social-account-app-invalid/);
+  assert.equal(reads, 0);
 });

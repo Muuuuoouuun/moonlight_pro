@@ -4,6 +4,7 @@ import {
 } from "@/lib/server-write";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
+import { isValidMetaOAuthAppIdentity, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
 const INSTAGRAM_API_PROVIDER = "instagram_api";
 const INSTAGRAM_API_SYNC_SOURCE = "instagram_api";
@@ -141,7 +142,8 @@ export function decodeInstagramApiState(value) {
       state.provider !== OAUTH_PROVIDER ||
       typeof state.nonce !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(state.nonce) ||
       (state.expectedAccountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(state.expectedAccountId)) ||
-      (state.brandKey != null && !isValidSocialBrandKey(state.brandKey))
+      (state.brandKey != null && !isValidSocialBrandKey(state.brandKey)) ||
+      !isValidMetaOAuthAppIdentity(state)
     ) {
       return { invalid: true };
     }
@@ -196,9 +198,9 @@ export function buildInstagramApiAuthUrl({
   expectedAccountId = null,
   returnPath = "/dashboard/settings",
 }) {
-  const config = resolveInstagramApiConfig();
+  const config = resolveMetaOAuthApp({ provider: OAUTH_PROVIDER, brandKey, brandHandle });
 
-  if (!config.configured || !hasInstagramApiOAuthStateSecret() || !workspaceId ||
+  if (!config?.configured || !hasInstagramApiOAuthStateSecret() || !workspaceId ||
     (brandKey != null && !isValidSocialBrandKey(brandKey)) ||
     (expectedAccountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(expectedAccountId))) {
     return null;
@@ -215,6 +217,8 @@ export function buildInstagramApiAuthUrl({
       workspaceId: workspaceId || resolveDefaultWorkspaceId(),
       brandHandle: normalizeHandle(brandHandle, config.brandHandle),
       brandKey,
+      appKey: config.appKey,
+      appId: config.appId,
       provider: OAUTH_PROVIDER,
       nonce: randomBytes(32).toString("base64url"),
       expectedAccountId,
@@ -225,12 +229,10 @@ export function buildInstagramApiAuthUrl({
   return `${INSTAGRAM_AUTH_URL}?${params.toString()}`;
 }
 
-export async function exchangeInstagramApiCode({ code, redirectUri }) {
-  const config = resolveInstagramApiConfig();
+export async function exchangeInstagramApiCode({ code, redirectUri, app }) {
+  const config = app;
 
-  if (!config.configured) {
-    return null;
-  }
+  if (!config?.configured) throw new Error("instagram-oauth-app-mismatch");
 
   const body = new URLSearchParams({
     client_id: config.appId,
@@ -257,12 +259,10 @@ export async function exchangeInstagramApiCode({ code, redirectUri }) {
   return await response.json();
 }
 
-export async function exchangeInstagramApiLongLivedToken(accessToken) {
-  const config = resolveInstagramApiConfig();
+export async function exchangeInstagramApiLongLivedToken(accessToken, app) {
+  const config = app;
 
-  if (!config.configured || !accessToken) {
-    return null;
-  }
+  if (!config?.configured || !accessToken) throw new Error("instagram-oauth-app-mismatch");
 
   const params = new URLSearchParams({
     grant_type: "ig_exchange_token",
@@ -360,6 +360,7 @@ export async function saveInstagramApiConnection({
   tokenData,
   longLivedTokenData,
   profile,
+  app = null,
 }) {
   if (!profile?.id || !profile?.username) throw new Error("social-account-id-missing");
   const accessToken =
@@ -371,10 +372,11 @@ export async function saveInstagramApiConnection({
     provider: "Instagram API",
     brandHandle: normalizeHandle(brandHandle),
     brandKey: brandKey || null,
+    ...(app ? { oauthAppKey: app.appKey, oauthAppId: app.appId } : {}),
     scope:
       longLivedTokenData?.scope ||
       tokenData?.scope ||
-      resolveInstagramApiConfig().scopes.join(","),
+      (app || resolveInstagramApiConfig()).scopes.join(","),
     accessToken,
     tokenType: longLivedTokenData?.token_type || tokenData?.token_type || "Bearer",
     expiresAt: expiresIn

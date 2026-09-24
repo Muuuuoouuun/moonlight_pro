@@ -50,5 +50,46 @@ for (const [provider, connect, decode] of [
     assert.equal(state.brandKey, "bridgemaker");
     assert.equal(createdFlow.provider, provider);
     assert.equal(createdFlow.workspace_id, state.workspaceId);
+    assert.equal(createdFlow.app_key, "moonlight");
+    assert.equal(createdFlow.app_id, state.appId);
+  });
+
+  test(`${provider} Class.Moon starts a fresh app-scoped authorization beside a historical Moonlight ID`, async () => {
+    process.env.SUPABASE_URL = "https://db.example.com";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+    process.env.COM_MOON_DEFAULT_WORKSPACE_ID = "11111111-1111-1111-1111-111111111111";
+    process.env.COM_MOON_OAUTH_STATE_SECRET = "oauth-state-test-secret";
+    process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_ID = "company-instagram-id";
+    process.env.COM_MOON_INSTAGRAM_CLASSMOON_APP_SECRET = "company-instagram-secret";
+    process.env.COM_MOON_META_THREADS_CLASSMOON_APP_ID = "company-threads-id";
+    process.env.COM_MOON_META_THREADS_CLASSMOON_APP_SECRET = "company-threads-secret";
+    let createdFlow = null;
+    globalThis.fetch = async (url, options) => {
+      const path = new URL(url).pathname;
+      if (path.endsWith("/brands")) return { ok: true, status: 200,
+        text: async () => JSON.stringify([{ id: "brand-1" }]), headers: { get: () => null } };
+      if (path.endsWith("/integration_connections")) return { ok: true, status: 200,
+        text: async () => JSON.stringify([{ account_key: "historical-id", config: {
+          username: "moon.classin", brandKey: "classmoon", oauthAppId: "old-moonlight-id", oauthAppKey: "moonlight",
+        } }]), headers: { get: () => null } };
+      if (path.endsWith("/social_oauth_flows") && options.method === "POST") {
+        createdFlow = JSON.parse(options.body);
+        return { ok: true, status: 201, text: async () => "", headers: { get: () => null } };
+      }
+      throw new Error(`Unexpected request ${path}`);
+    };
+
+    const url = "http://localhost:3000/api/social/connect?brand=moon.classin&brandKey=classmoon";
+    const response = await connect(new NextRequest(url));
+    const state = decode(new URL(response.headers.get("location")).searchParams.get("state"));
+    assert.equal(state.expectedAccountId, null);
+    assert.equal(createdFlow.app_key, "classmoon");
+    assert.equal(createdFlow.app_id, provider === "instagram_api" ? "company-instagram-id" : "company-threads-id");
+
+    createdFlow = null;
+    const wrong = await connect(new NextRequest(`${url}&accountId=historical-id`));
+    const location = new URL(wrong.headers.get("location"));
+    assert.equal(location.searchParams.get(provider === "instagram_api" ? "instagram" : "metaThreads"), "account-mismatch");
+    assert.equal(createdFlow, null);
   });
 }

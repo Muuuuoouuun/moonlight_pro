@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 import {
   buildMetaThreadsSetupUrls,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/meta-threads";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { summarizeSocialAccountStatus } from "@/lib/social-account-status";
+import { matchesMetaOAuthConnection, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,18 +17,21 @@ export const dynamic = "force-dynamic";
 export async function GET(req) {
   const { origin } = req.nextUrl;
   const workspaceId = resolveDefaultWorkspaceId();
-  const config = resolveMetaThreadsConfig();
-  const requestedHandle = (req.nextUrl.searchParams.get("brand") || config.brandHandle)
+  const legacyConfig = resolveMetaThreadsConfig();
+  const requestedHandle = (req.nextUrl.searchParams.get("brand") || legacyConfig.brandHandle)
     .replace(/^@+/, "").toLowerCase();
+  const config = resolveMetaOAuthApp({
+    provider: "meta_threads",
+    brandKey: req.nextUrl.searchParams.get("brandKey"),
+    brandHandle: requestedHandle,
+  });
   const accountId = req.nextUrl.searchParams.get("accountId") || "";
   const { connections, available } = await fetchMetaThreadsConnections(workspaceId);
   const summary = summarizeSocialAccountStatus({
     rows: connections,
-    configured: config.configured && hasMetaThreadsOAuthStateSecret(),
+    configured: Boolean(config?.configured && hasMetaThreadsOAuthStateSecret()),
     available,
-    selector: accountId
-      ? (row) => row.account_key === accountId
-      : (row) => row.config?.brandHandle === requestedHandle,
+    selector: (row) => matchesMetaOAuthConnection(row, config, accountId),
     summarize: summarizeMetaThreadsConnection,
   });
 
@@ -36,9 +40,11 @@ export async function GET(req) {
     provider: "meta_threads",
     workspaceId: workspaceId || null,
     brandHandle: requestedHandle,
-    configured: config.configured,
-    hasAppId: config.hasAppId,
-    hasAppSecret: config.hasAppSecret,
+    brandKey: config?.brandKey || null,
+    configured: Boolean(config?.configured),
+    appKey: config?.appKey || null,
+    hasAppId: Boolean(config?.hasAppId),
+    hasAppSecret: Boolean(config?.hasAppSecret),
     hasOAuthStateSecret: hasMetaThreadsOAuthStateSecret(),
     connection: summary.connection,
     connections: summary.connections,
