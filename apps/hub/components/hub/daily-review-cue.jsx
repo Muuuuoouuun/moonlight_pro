@@ -4,15 +4,16 @@ import React from 'react';
 import { blankReviewDraft } from '@/lib/daily-review-state';
 import { reviewCue, savedMessage, weekProgress, zonedClock } from '@/lib/daily-review-rhythm';
 import { Iconed } from './hub-icons';
-import { useToast } from './hub-primitives';
+import { IconButton, useToast } from './hub-primitives';
 import { useDailyReviewLauncher } from './daily-review-provider';
 import { ENERGY_LABELS } from './pages/daily-review-labels';
+import { ReviewWeekStrip } from './daily-review-weekstrip';
+
+export { ReviewWeekStrip };
 
 // 오늘·홈의 "하루 마무리" 한 줄(2026-09-23 지속 루프 설계 §4.3, 2차 §11). 규칙은 reviewCue가 소유하고
 // 여기서는 그리기만 한다. 전부 중립 — ○(queued)·✓(done)·시계(waiting) 글리프와 직접 라벨, 경고색 없음(§5.2·§5.3).
 // 최근 기록을 못 읽었거나(preview·error) 말할 게 없으면 아무것도 그리지 않는다.
-const WEEKDAY_SHORT = ['월', '화', '수', '목', '금'];
-const DAY_STATE_TEXT = { recorded: '기록함', missed: '비어 있음', today: '오늘', future: '아직' };
 
 function useClock(timezone) {
   const [clock, setClock] = React.useState(null);
@@ -23,18 +24,6 @@ function useClock(timezone) {
     return () => window.clearInterval(timer);
   }, [timezone]);
   return clock;
-}
-
-// 월~금 5칸 — 채움(기록)·테두리(빈 근무일)·점선(오늘)·흐림(아직). 캘린더 셀과 같은 문법.
-export function ReviewWeekStrip({ week }) {
-  if (!week) return null;
-  const label = week.days.map((day, index) => `${WEEKDAY_SHORT[index]} ${DAY_STATE_TEXT[day.state]}`).join(', ');
-  return <span className="daily-review-weekstrip" role="img" aria-label={`이번 주 ${week.recorded}/${week.workdays}일 기록 — ${label}`}>
-    {week.days.map((day, index) => <span key={day.date} className="daily-review-weekstrip-day" data-state={day.state}>
-      <span className="daily-review-day-mark" aria-hidden="true" />
-      <span aria-hidden="true">{WEEKDAY_SHORT[index]}</span>
-    </span>)}
-  </span>;
 }
 
 export function DailyReviewCue({ className }) {
@@ -92,4 +81,18 @@ export function DailyReviewCue({ className }) {
     </span>}
     <ReviewWeekStrip week={week} />
   </div>;
+}
+
+// 상단바의 하루 리뷰 버튼(§12) — 어느 화면에서든 오늘 기록을 연다. 기록한 날은 작은 ✓가 붙고
+// 이름(tooltip·aria-label)도 바뀐다 — 점 하나의 색으로만 말하지 않는다(§5.2).
+export function DailyReviewTopButton({ className }) {
+  const launcher = useDailyReviewLauncher();
+  if (!launcher) return null;
+  const { model, openReview } = launcher;
+  const recorded = model.source === 'live' && Array.isArray(model.recent) && model.recent.some((entry) => entry.reviewDate === model.todayKey);
+  const label = recorded ? '하루 리뷰 · 오늘 기록함' : '하루 리뷰 남기기';
+  return <span className={['daily-review-topbtn', className].filter(Boolean).join(' ')} data-recorded={recorded || undefined}>
+    <IconButton icon="brief" tooltip={label} onClick={() => openReview(model.todayKey)} />
+    {recorded && <span className="daily-review-topbtn-check" aria-hidden="true"><Iconed name="check" size={9} /></span>}
+  </span>;
 }

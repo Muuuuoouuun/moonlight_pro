@@ -17,6 +17,13 @@ function mergeRecent(previous, review, todayKey) {
     .sort((a, b) => b.reviewDate.localeCompare(a.reviewDate));
 }
 
+// 저장 확인 뒤 그날 칸에 리뷰(+1)를 즉시 반영한다 — 다시 읽기 전에도 잔디가 한 칸 진해진다.
+function markReviewed(activity, date) {
+  if (!activity?.days || date < activity.from || date > activity.to || activity.days[date]?.review) return activity;
+  const day = activity.days[date] || { tasks: 0, contacts: 0, memos: 0, review: false };
+  return { ...activity, days: { ...activity.days, [date]: { ...day, review: true } } };
+}
+
 export function todayIn(timezone = 'Asia/Seoul') {
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
@@ -32,6 +39,9 @@ export function useDailyReview() {
   // 실제 오늘 기준 최근 8일 기록(선택 날짜와 무관) — cue·"이번 주 k/5"가 쓴다. 못 읽으면 null.
   const [recent, setRecent] = React.useState(null);
   const [todayKey, setTodayKey] = React.useState('');
+  // 활동 흐름(최근 16주, 선택 달이 창 밖이면 그 달 따로) — 못 읽으면 null.
+  const [activity, setActivity] = React.useState(null);
+  const [monthActivity, setMonthActivity] = React.useState(null);
   const [source, setSource] = React.useState('loading');
   const [loadMessage, setLoadMessage] = React.useState('');
   const [saveState, setSaveState] = React.useState('idle');
@@ -75,6 +85,8 @@ export function useDailyReview() {
         setEntries(state === 'live' && Array.isArray(data.entries) ? data.entries : []);
         setToday(state === 'live' && data.today && typeof data.today === 'object' ? data.today : null);
         setRecent(state === 'live' && Array.isArray(data.recent) ? data.recent : null);
+        setActivity(state === 'live' && data.activity?.days ? data.activity : null);
+        setMonthActivity(state === 'live' && data.monthActivity?.days ? data.monthActivity : null);
         setTodayKey(isDailyReviewDate(data.todayKey) ? data.todayKey : todayIn(data.timezone || 'Asia/Seoul'));
         setSource(state);
         setLoadMessage(state === 'preview' ? '저장소 연결이 필요해요. 입력은 이 창에 보관됩니다.' : data.message || '기록을 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.');
@@ -88,6 +100,8 @@ export function useDailyReview() {
         setReview(null);
         setEntries([]);
         setRecent(null);
+        setActivity(null);
+        setMonthActivity(null);
         setSource('error');
         setLoadMessage('기록을 불러오지 못했어요. 입력은 유지됩니다. 다시 시도해 주세요.');
       } finally { window.clearTimeout(timer); }
@@ -143,6 +157,8 @@ export function useDailyReview() {
         setDraft(reviewToDraft(result.review));
         setEntries((previous) => [result.review, ...previous.filter((entry) => entry.reviewDate !== result.review.reviewDate)].sort((a, b) => b.reviewDate.localeCompare(a.reviewDate)));
         setRecent((previous) => mergeRecent(previous, result.review, todayKey));
+        setActivity((previous) => markReviewed(previous, result.review.reviewDate));
+        setMonthActivity((previous) => markReviewed(previous, result.review.reviewDate));
         attemptRef.current = null;
         setConflict(null);
         setSaveState('saved');
@@ -182,7 +198,7 @@ export function useDailyReview() {
       : source !== 'live' ? '연결되면 이 날짜의 기록을 확인할 수 있어요.'
         : review ? '저장된 기록입니다. 수정해서 다시 저장할 수 있어요.' : '아직 이 날짜에 저장된 기록이 없어요.';
   return {
-    date: currentDate, timezone, draft, review, entries, today, recent, todayKey,
+    date: currentDate, timezone, draft, review, entries, today, recent, todayKey, activity, monthActivity,
     source, loadMessage, saveState, message, conflict, dirty, busy, idleMessage,
     edit, editFields, chooseDate, save, useSavedRecord, refresh: () => setReload((value) => value + 1),
   };

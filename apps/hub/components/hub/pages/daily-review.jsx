@@ -3,13 +3,14 @@
 import React from 'react';
 import { useSearchParams } from 'next/navigation';
 import { GoalLinks } from '../goal-links';
-import { Button, EmptyState, Skeleton, TextField, TruthBadge } from '../hub-primitives';
+import { Button, EmptyState, Kbd, Skeleton, TextField, TruthBadge } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
 import { isDailyReviewDate } from '@/lib/daily-review';
 import { weekCompare } from '@/lib/daily-review-rhythm';
 import { ReviewWeekStrip } from '../daily-review-cue';
 import { useDailyReviewLauncher } from '../daily-review-provider';
 import { DailyReviewCalendar } from './daily-review-calendar';
+import { ActivityHeatmap } from './daily-review-heatmap';
 import { energyText, progressLabel } from './daily-review-labels';
 import './daily-review.css';
 
@@ -42,7 +43,7 @@ export function DailyReview() {
   const params = useSearchParams();
   const requestedDate = params.get('date');
   const { model, open, openReview } = useDailyReviewLauncher();
-  const { date, draft, review, entries, recent, todayKey, source, busy, dirty, chooseDate } = model;
+  const { date, draft, review, entries, recent, todayKey, source, busy, dirty, chooseDate, activity, monthActivity } = model;
   const isToday = date === todayKey;
   const todayRecorded = Array.isArray(recent) && recent.some((entry) => entry.reviewDate === todayKey);
   const compare = source === 'live' ? weekCompare(todayKey, recent) : null;
@@ -53,6 +54,20 @@ export function DailyReview() {
       chooseDate(requestedDate);
     }
   }, [requestedDate, chooseDate, busy]);
+
+  // 페이지 레벨 N — 오늘 기록 열기(§8.1 생성 단축키 조건: 팝업 닫힘 + 입력 필드 밖).
+  React.useEffect(() => {
+    const onKey = (event) => {
+      if (event.key !== 'n' && event.key !== 'N') return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.repeat || open) return;
+      const target = event.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return;
+      event.preventDefault();
+      openReview(todayKey);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, openReview, todayKey]);
 
   // 달을 옮기면 그 달에 오늘이 있으면 오늘, 아니면 1일을 고른다 — 서버가 그 달 목록을 함께 준다.
   const moveMonth = (month) => {
@@ -69,8 +84,9 @@ export function DailyReview() {
         <h2>하루 리뷰</h2>
         <WeekLine compare={compare} />
       </div>
-      <Button className="daily-review-open" variant="primary" size="md" icon={todayRecorded ? 'edit' : 'plus'} disabled={busy && source !== 'loading'} onClick={() => openReview(todayKey)}>
-        {todayRecorded ? '오늘 기록 수정' : '오늘 기록 남기기'}
+      {/* 기록 전에는 이 화면의 유일한 primary, 기록 뒤에는 outline으로 내려 앉는다 — 할 일이 끝났다는 신호(§5.2). */}
+      <Button className="daily-review-open" variant={todayRecorded ? 'outline' : 'primary'} size="md" icon={todayRecorded ? 'check' : 'plus'} disabled={busy && source !== 'loading'} onClick={() => openReview(todayKey)}>
+        {todayRecorded ? '오늘 기록함 · 수정' : '오늘 기록 남기기'}<Kbd>N</Kbd>
       </Button>
     </header>
 
@@ -80,9 +96,12 @@ export function DailyReview() {
       <Button variant="outline" onClick={model.refresh}>다시 불러오기</Button>
     </div>}
 
+    {(source === 'live' || source === 'loading') && <ActivityHeatmap activity={activity} todayKey={todayKey} loading={source === 'loading'} onPick={openReview} />}
+
     <DailyReviewCalendar
       month={date.slice(0, 7)} entries={source === 'live' ? entries : null} todayKey={todayKey}
       selectedDate={date} loading={source === 'loading'} disabled={busy}
+      activity={source === 'live' ? (monthActivity || activity) : null} scale={source === 'live' ? activity : null}
       onMonth={moveMonth} onPick={openReview} />
 
     {!isToday && <section className="daily-review-capture" aria-label="선택한 날의 리뷰" aria-busy={source === 'loading'}>
