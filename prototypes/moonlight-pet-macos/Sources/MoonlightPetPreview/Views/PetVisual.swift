@@ -6,22 +6,26 @@ final class PetInteraction: ObservableObject {
     @Published var isDragging = false
 }
 
+enum PetPose { case portrait, perched }
+
 struct PetPortrait: View {
     let character: PetCharacter
     let size: CGFloat
+    var pose: PetPose = .perched
 
     var body: some View {
         Group {
-            if let artwork = character.artwork {
+            if let artwork = pose == .portrait ? character.portraitArtwork : character.artwork {
                 Image(nsImage: artwork)
                     .resizable()
-                    .scaledToFill()
+                    .interpolation(.high)
+                    .scaledToFit()
             } else {
-                Circle().fill(Palette.surface)
+                Image(systemName: "pawprint.fill").foregroundStyle(Palette.moon300)
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.18))
+        .clipShape(RoundedRectangle(cornerRadius: pose == .portrait ? 10 : 0))
         .accessibilityLabel("\(character.title) 펫")
     }
 }
@@ -55,7 +59,7 @@ struct PetVisual: View {
 
     var body: some View {
         ZStack {
-            PetPortrait(character: model.selectedCharacter, size: 52)
+            PetPortrait(character: model.selectedCharacter, size: 52, pose: .portrait)
                 .id(model.selectedCharacter)
                 .transition(.opacity.combined(with: .scale(scale: 0.94)))
         }
@@ -66,5 +70,21 @@ struct PetVisual: View {
         .animation(interaction.isPressed ? PetMotion.petPress : PetMotion.petRelease, value: motionState)
         .animation(PetMotion.petCharacter, value: model.selectedCharacter)
         .accessibilityLabel("Moonlight \(model.selectedCharacter.title) 펫, 누르면 빠른 기능, 우클릭하면 캐릭터 선택")
+    }
+}
+
+/// The expanded panel uses the hands-on-edge pose; the idle desktop icon uses its original portrait.
+struct PanelPetOrnament: View {
+    @ObservedObject var model: AppModel
+    let close: () -> Void
+
+    var body: some View {
+        Button(action: close) {
+            PetPortrait(character: model.selectedCharacter, size: CompanionLayout.perchSize)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PetPressStyle())
+        .accessibilityLabel("펫으로 접기")
+        .help("펫으로 접기")
     }
 }

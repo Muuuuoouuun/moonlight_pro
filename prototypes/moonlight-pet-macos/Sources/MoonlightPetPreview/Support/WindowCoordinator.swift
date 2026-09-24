@@ -138,14 +138,21 @@ final class WindowCoordinator: NSObject {
             model: model,
             close: { [weak self] in self?.dismissBar() },
             modeChanged: { [weak self] in self?.resizeBar() },
-            startFocus: { [weak self] in self?.startFocus() }
-        ), cornerRadius: 16)
+            startFocus: { [weak self] in self?.startFocus() },
+            pin: { [weak self] in
+                guard let self else { return }
+                self.showWidget(mode: self.model.mode)
+            },
+            moveVertically: { [weak self] offset in self?.moveBarVertically(by: offset) }
+        ), cornerRadius: CompanionLayout.glassRadius)
         widgetWindow.contentView = GlassPanel.host(CompactWidgetView(
             model: model,
             collapse: { [weak self] in self?.collapseWidget() },
             modeChanged: { [weak self] in self?.resizeWidget() },
-            moveVertically: { [weak self] offset in self?.moveWidgetVertically(by: offset) }
-        ), cornerRadius: 18)
+            moveVertically: { [weak self] offset in self?.moveWidgetVertically(by: offset) },
+            startFocus: { [weak self] in self?.startFocus() }
+        ), cornerRadius: CompanionLayout.glassRadius,
+           ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.collapseWidget() })))
 
         model.onFocusFinished = { [weak self] in self?.endFocus() }
         placePetInitially()
@@ -181,13 +188,38 @@ final class WindowCoordinator: NSObject {
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             guard let self else { return event }
+            let widgetVisible = self.isRequestedVisible(self.widgetWindow)
+            let utilityVisible = widgetVisible || self.isRequestedVisible(self.barWindow)
+            if !self.model.isFocused, utilityVisible, event.type == .keyDown,
+               event.modifierFlags.intersection([.command, .control, .option]) == .command {
+                if let character = event.charactersIgnoringModifiers?.first,
+                   let destination = QuickMode.allCases.first(where: { $0.shortcut == character }) {
+                    withAnimation(PetMotion.panel) {
+                        if widgetVisible { self.model.compactMode = destination }
+                        else { self.model.mode = destination }
+                    }
+                    if widgetVisible {
+                        self.model.compactOpenRevision += 1
+                        self.resizeWidget()
+                    } else {
+                        self.model.quickOpenRevision += 1
+                        self.resizeBar()
+                    }
+                    return nil
+                }
+                if event.charactersIgnoringModifiers == "s" {
+                    self.model.saveMemo()
+                    return nil
+                }
+            }
             if !self.model.isFocused,
+               utilityVisible,
                event.type == .keyDown,
                event.keyCode == 36,
                event.modifierFlags.contains(.command) {
-                let mode: QuickMode = self.isRequestedVisible(self.widgetWindow)
-                    ? (self.model.compactMode == .tasks ? .tasks : .memo) : self.model.mode
-                self.model.openHub(mode)
+                let mode = widgetVisible ? self.model.compactMode : self.model.mode
+                if mode == .memo { self.model.continueMemoInCouncil() }
+                else { self.model.openHub(mode) }
                 return nil
             }
             guard event.keyCode == 53 else { return event }
@@ -257,7 +289,7 @@ final class WindowCoordinator: NSObject {
 
     private func dismissBar() { dismiss(barWindow) }
 
-    func showWidget() {
+    func showWidget(mode: QuickMode = .tasks) {
         interactionLog.info("show dedicated widget")
         guard !model.isFocused else { return }
         if isRequestedVisible(widgetWindow) {
@@ -266,8 +298,8 @@ final class WindowCoordinator: NSObject {
         }
         hideNow(previewWindow)
         hideNow(barWindow)
-        model.compactMode = .tasks
-        widgetWindow.setContentSize(Self.widgetSize(for: .tasks))
+        model.compactMode = mode
+        widgetWindow.setContentSize(Self.widgetSize(for: mode))
         placeWidget()
         petWindow.orderOut(nil)
         present(widgetWindow)
@@ -296,6 +328,8 @@ final class WindowCoordinator: NSObject {
     }
 
     private func present(_ window: KeyPanel) {
+        if window === barWindow { model.activeCompanion = .quick }
+        else if window === widgetWindow { model.activeCompanion = .widget }
         advanceRevision(for: window)
         desiredVisibility[ObjectIdentifier(window)] = true
         let targetFrame = window.frame
@@ -321,6 +355,7 @@ final class WindowCoordinator: NSObject {
     }
 
     private func dismiss(_ window: KeyPanel, completion: (() -> Void)? = nil) {
+        releaseCaptureFocus(for: window)
         let key = ObjectIdentifier(window)
         let revision = advanceRevision(for: window)
         desiredVisibility[key] = false
@@ -349,7 +384,15 @@ final class WindowCoordinator: NSObject {
         }
     }
 
+    private func releaseCaptureFocus(for window: KeyPanel) {
+        if (window === barWindow && model.activeCompanion == .quick)
+            || (window === widgetWindow && model.activeCompanion == .widget) {
+            model.activeCompanion = nil
+        }
+    }
+
     private func hideNow(_ window: KeyPanel) {
+        releaseCaptureFocus(for: window)
         advanceRevision(for: window)
         desiredVisibility[ObjectIdentifier(window)] = false
         window.orderOut(nil)
@@ -416,16 +459,13 @@ final class WindowCoordinator: NSObject {
     }
 
     private static func widgetSize(for mode: CompactMode) -> NSSize {
-        NSSize(width: 288, height: mode == .tasks ? 420 : 304)
+        CompanionLayout.size(for: mode)
     }
 
     private func resizeBar() {
         let size = Self.barSize(for: model.mode)
-        let pet = petWindow.frame
         let visible = petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? barWindow.frame
-        let requested = NSRect(x: pet.minX - size.width - 10, y: pet.midY - size.height / 2,
-                               width: size.width, height: size.height)
-        let frame = PanelGeometry.fitted(requested, in: visible)
+        let frame = PanelGeometry.resizedKeepingTopRight(barWindow.frame, size: size, in: visible)
         guard frame != barWindow.frame else { return }
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             barWindow.setFrame(frame, display: true)
@@ -439,13 +479,16 @@ final class WindowCoordinator: NSObject {
     }
 
     private static func barSize(for mode: QuickMode) -> NSSize {
-        switch mode {
-        case .tasks: return NSSize(width: 368, height: 416)
-        case .calendar: return NSSize(width: 368, height: 416)
-        case .memo: return NSSize(width: 440, height: 290)
-        case .office, .council: return NSSize(width: 440, height: 250)
-        case .focus: return NSSize(width: 440, height: 230)
-        }
+        CompanionLayout.size(for: mode, perched: false)
+    }
+
+    private func moveBarVertically(by offset: CGFloat) {
+        let visible = barWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? barWindow.frame
+        let previous = barWindow.frame
+        let frame = PanelGeometry.fitted(previous.offsetBy(dx: 0, dy: offset), in: visible)
+        barWindow.setFrame(frame, display: true)
+        let pet = petWindow.frame.offsetBy(dx: 0, dy: frame.minY - previous.minY)
+        petWindow.setFrameOrigin(PanelGeometry.fitted(pet, in: visible).origin)
     }
 
     private func startFocus() {

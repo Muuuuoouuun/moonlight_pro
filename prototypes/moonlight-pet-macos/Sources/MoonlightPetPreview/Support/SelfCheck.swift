@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 enum SelfCheck {
     @MainActor
@@ -21,7 +21,12 @@ enum SelfCheck {
             return false
         }
         guard PetCharacter.allCases.count == 9,
-              PetCharacter.allCases.allSatisfy({ $0.artwork?.size == NSSize(width: 1254, height: 1254) }) else {
+              PetCharacter.allCases.allSatisfy({ character in
+                  guard let portrait = character.portraitArtwork, portrait.size.width > 0, portrait.size.height > 0,
+                        let image = character.artwork, let data = image.tiffRepresentation,
+                        let bitmap = NSBitmapImageRep(data: data) else { return false }
+                  return image.size.width > 0 && image.size.height > 0 && bitmap.hasAlpha
+              }) else {
             fputs("Character artwork check failed\n", stderr)
             return false
         }
@@ -49,7 +54,24 @@ enum SelfCheck {
             fputs("Task removal check failed\n", stderr)
             return false
         }
-        print("PASS: continuous screen drag, anchored screen geometry, focus clock, local task, memo and character persistence, task removal")
+        reopened.taskDraft = "작성 중인 할 일"
+        reopened.memoDraft = "자동 저장 대기 중인 메모"
+        let recovered = AppModel(defaults: defaults)
+        guard recovered.taskDraft == reopened.taskDraft,
+              recovered.memoDraft == reopened.memoDraft else {
+            fputs("Draft recovery check failed\n", stderr)
+            return false
+        }
+        recovered.focusMinutes = 1
+        recovered.startFocus()
+        recovered.focusMinutes = 50
+        recovered.remainingSeconds = 30
+        guard recovered.focusProgress == 0.5 else {
+            fputs("Focus progress uses session duration check failed\n", stderr)
+            return false
+        }
+        recovered.stopFocus()
+        print("PASS: continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save and draft recovery")
         return true
     }
 
@@ -74,14 +96,14 @@ enum SelfCheck {
         guard !drag.isDragging, drag.translation(to: .zero) == nil else { return false }
 
         let screen = CGRect(x: -1440, y: 24, width: 1440, height: 876)
-        let task = CGRect(x: -304, y: 250, width: 288, height: 420)
-        let memo = PanelGeometry.resizedKeepingTopRight(task, size: CGSize(width: 288, height: 304), in: screen)
+        let task = CGRect(origin: CGPoint(x: -352, y: 250), size: CompanionLayout.size(for: .tasks))
+        let memo = PanelGeometry.resizedKeepingTopRight(task, size: CompanionLayout.size(for: .memo), in: screen)
         guard memo.maxY == task.maxY, memo.maxX == task.maxX,
               PanelGeometry.resizedKeepingTopRight(memo, size: task.size, in: screen) == task else {
             fputs("Panel anchor check failed\n", stderr)
             return false
         }
-        let nearBottom = CGRect(x: -304, y: 32, width: 288, height: 304)
+        let nearBottom = CGRect(origin: CGPoint(x: -352, y: 32), size: CompanionLayout.size(for: .memo))
         let expanded = PanelGeometry.resizedKeepingTopRight(nearBottom, size: task.size, in: screen)
         let smallScreen = CGRect(x: 0, y: 0, width: 300, height: 360)
         let fitted = PanelGeometry.fitted(task, in: smallScreen)
