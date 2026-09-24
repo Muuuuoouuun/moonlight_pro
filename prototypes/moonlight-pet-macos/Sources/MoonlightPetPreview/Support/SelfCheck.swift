@@ -3,6 +3,7 @@ import Foundation
 enum SelfCheck {
     @MainActor
     static func run() -> Bool {
+        guard checkPanelInteraction() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,
@@ -48,7 +49,48 @@ enum SelfCheck {
             fputs("Task removal check failed\n", stderr)
             return false
         }
-        print("PASS: focus clock, local task, memo and character persistence, task removal")
+        print("PASS: continuous screen drag, anchored screen geometry, focus clock, local task, memo and character persistence, task removal")
+        return true
+    }
+
+    private static func checkPanelInteraction() -> Bool {
+        var drag = ScreenDragTracker()
+        drag.begin(at: CGPoint(x: 100, y: 100))
+        guard drag.translation(to: CGPoint(x: 101, y: 101)) == nil,
+              !drag.isDragging,
+              drag.translation(to: CGPoint(x: 100, y: 104)) == 4 else {
+            fputs("Drag threshold check failed\n", stderr)
+            return false
+        }
+        // Subpixel events must not be discarded after the gesture activates.
+        for step in 1...12 {
+            guard drag.translation(to: CGPoint(x: 100, y: 104 + Double(step) * 0.5)) == 0.5 else {
+                fputs("Slow continuous drag check failed\n", stderr)
+                return false
+            }
+        }
+        guard drag.translation(to: CGPoint(x: 100, y: 109)) == -1 else { return false }
+        drag.end()
+        guard !drag.isDragging, drag.translation(to: .zero) == nil else { return false }
+
+        let screen = CGRect(x: -1440, y: 24, width: 1440, height: 876)
+        let task = CGRect(x: -304, y: 250, width: 288, height: 420)
+        let memo = PanelGeometry.resizedKeepingTopRight(task, size: CGSize(width: 288, height: 304), in: screen)
+        guard memo.maxY == task.maxY, memo.maxX == task.maxX,
+              PanelGeometry.resizedKeepingTopRight(memo, size: task.size, in: screen) == task else {
+            fputs("Panel anchor check failed\n", stderr)
+            return false
+        }
+        let nearBottom = CGRect(x: -304, y: 32, width: 288, height: 304)
+        let expanded = PanelGeometry.resizedKeepingTopRight(nearBottom, size: task.size, in: screen)
+        let smallScreen = CGRect(x: 0, y: 0, width: 300, height: 360)
+        let fitted = PanelGeometry.fitted(task, in: smallScreen)
+        guard screen.insetBy(dx: 8, dy: 8).contains(expanded),
+              expanded.minY == 32,
+              smallScreen.insetBy(dx: 8, dy: 8).contains(fitted) else {
+            fputs("Screen bounds check failed\n", stderr)
+            return false
+        }
         return true
     }
 }

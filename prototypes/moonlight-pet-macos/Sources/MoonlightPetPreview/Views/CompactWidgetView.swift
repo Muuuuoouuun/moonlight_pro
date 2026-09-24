@@ -7,11 +7,11 @@ struct CompactWidgetView: View {
     let moveVertically: (CGFloat) -> Void
 
     @FocusState private var focusedField: InputField?
-    @State private var lastDragTranslation: CGFloat = 0
+    @Namespace private var selection
+    @State private var hoveredMode: CompactMode?
 
     private enum InputField: Hashable { case task, memo }
 
-    private var panelHeight: CGFloat { model.compactMode == .tasks ? 420 : 304 }
     private var ink: Color { Palette.glassInk }
     private var inkMuted: Color { Palette.glassInkMuted }
     private var inkFaint: Color { Palette.glassInkFaint }
@@ -20,6 +20,9 @@ struct CompactWidgetView: View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(ink.opacity(0.12)).frame(height: 1)
+            modeSwitch
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
             Group {
                 if model.compactMode == .tasks { tasksContent }
                 else { memoContent }
@@ -28,7 +31,7 @@ struct CompactWidgetView: View {
             .transition(.opacity.combined(with: .offset(y: 4)))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(width: 288, height: panelHeight)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .tint(Palette.glassInk)
         .onAppear { focusCurrentInput() }
         .onChange(of: model.compactMode) { _, _ in focusCurrentInput() }
@@ -53,21 +56,7 @@ struct CompactWidgetView: View {
                     .foregroundStyle(inkMuted)
             }
             Spacer(minLength: 0)
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(inkFaint)
-                .frame(width: 28, height: 32)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 3)
-                        .onChanged { value in
-                            let delta = value.translation.height - lastDragTranslation
-                            lastDragTranslation = value.translation.height
-                            moveVertically(-delta)
-                        }
-                        .onEnded { _ in lastDragTranslation = 0 }
-                )
-                .accessibilityLabel("위젯 위치 이동")
+            PanelDragHandle(move: moveVertically)
             Button(action: collapse) {
                 PetPortrait(character: model.selectedCharacter, size: 42)
                     .frame(width: 48, height: 48)
@@ -94,11 +83,22 @@ struct CompactWidgetView: View {
                         .font(.system(size: 11, weight: model.compactMode == mode ? .semibold : .medium))
                         .foregroundStyle(model.compactMode == mode ? ink : inkMuted)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 27)
-                        .background(model.compactMode == mode ? ink.opacity(0.12) : .clear,
-                                    in: RoundedRectangle(cornerRadius: 8))
+                        .frame(height: 30)
+                        .background {
+                            if model.compactMode == mode {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(ink.opacity(0.12))
+                                    .matchedGeometryEffect(id: "selection", in: selection)
+                            } else if hoveredMode == mode {
+                                RoundedRectangle(cornerRadius: 8).fill(ink.opacity(0.04))
+                            }
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(PetPressStyle())
+                .onHover { hoveredMode = $0 ? mode : nil }
+                .animation(PetMotion.hover, value: hoveredMode)
+                .keyboardShortcut(mode == .tasks ? "1" : "2", modifiers: .command)
                 .accessibilityAddTraits(model.compactMode == mode ? .isSelected : [])
             }
         }
@@ -108,8 +108,6 @@ struct CompactWidgetView: View {
 
     private var tasksContent: some View {
         VStack(alignment: .leading, spacing: 14) {
-            modeSwitch
-
             HStack(spacing: 7) {
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .semibold))
@@ -127,17 +125,14 @@ struct CompactWidgetView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .frame(width: 25, height: 25)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(GlassActionStyle(compact: true))
                 .disabled(model.taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityLabel("할 일 추가")
             }
             .padding(.leading, 12)
             .padding(.trailing, 5)
             .frame(height: 40)
-            .background(ink.opacity(0.07), in: RoundedRectangle(cornerRadius: 11))
-            .overlay(RoundedRectangle(cornerRadius: 11)
-                .strokeBorder(ink.opacity(0.12), lineWidth: 1))
+            .modifier(GlassInputSurface(focused: focusedField == .task))
 
             HStack {
                 Text("목록")
@@ -173,7 +168,7 @@ struct CompactWidgetView: View {
             footer("이 Mac에 저장")
         }
         .padding(.horizontal, 18)
-        .padding(.top, 16)
+        .padding(.top, 12)
         .padding(.bottom, 15)
     }
 
@@ -183,7 +178,7 @@ struct CompactWidgetView: View {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16, weight: .light))
                     .foregroundStyle(task.isDone ? inkFaint : inkMuted)
-                    .frame(width: 27, height: 34)
+                    .frame(width: 32, height: 36)
             }
             .buttonStyle(PetPressStyle())
             .accessibilityLabel("\(task.title) \(task.isDone ? "완료 취소" : "완료")")
@@ -192,48 +187,47 @@ struct CompactWidgetView: View {
                 .foregroundStyle(task.isDone ? inkFaint : ink)
                 .strikethrough(task.isDone)
                 .lineLimit(1)
+                .help(task.title)
             Spacer(minLength: 0)
             Button { withAnimation(PetMotion.panel) { model.removeTask(task.id) } } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(inkMuted)
-                    .frame(width: 25, height: 30)
+                    .frame(width: 32, height: 36)
             }
             .buttonStyle(PetPressStyle())
             .accessibilityLabel("\(task.title) 삭제")
         }
-        .frame(height: 39)
+        .frame(height: 42)
+        .modifier(GlassRowSurface())
         .overlay(alignment: .bottom) { ink.opacity(0.09).frame(height: 1) }
         .transition(.opacity.combined(with: .offset(y: 4)))
     }
 
     private var memoContent: some View {
         VStack(alignment: .leading, spacing: 13) {
-            modeSwitch
             TextField("메모를 입력하세요", text: $model.memoDraft, axis: .vertical)
                 .focused($focusedField, equals: .memo)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12.5))
                 .foregroundStyle(ink)
-                .lineLimit(7...7)
+                .lineLimit(3...7)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(8)
-                .background(ink.opacity(0.06), in: RoundedRectangle(cornerRadius: 11))
-                .overlay(RoundedRectangle(cornerRadius: 11)
-                    .strokeBorder(ink.opacity(0.12), lineWidth: 1))
+                .modifier(GlassInputSurface(focused: focusedField == .memo))
                 .accessibilityLabel("메모 입력")
             HStack {
                 footer(model.savedMemo == model.memoDraft ? "저장됨 · 이 Mac" : "수정됨 · 아직 저장 전")
                 Spacer()
                 Button("저장") { model.saveMemo() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(GlassActionStyle())
+                    .keyboardShortcut("s", modifiers: .command)
                     .disabled(model.savedMemo == model.memoDraft)
                     .accessibilityLabel("메모 저장")
             }
         }
         .padding(.horizontal, 18)
-        .padding(.top, 16)
+        .padding(.top, 12)
         .padding(.bottom, 16)
     }
 
