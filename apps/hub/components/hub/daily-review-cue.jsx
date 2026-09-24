@@ -4,7 +4,7 @@ import React from 'react';
 import { blankReviewDraft } from '@/lib/daily-review-state';
 import { reviewCue, savedMessage, weekProgress, zonedClock } from '@/lib/daily-review-rhythm';
 import { Iconed } from './hub-icons';
-import { useToast } from './hub-primitives';
+import { IconButton, useToast } from './hub-primitives';
 import { useDailyReviewLauncher } from './daily-review-provider';
 import { ENERGY_LABELS } from './pages/daily-review-labels';
 
@@ -92,4 +92,18 @@ export function DailyReviewCue({ className }) {
     </span>}
     <ReviewWeekStrip week={week} />
   </div>;
+}
+
+// 상단바의 하루 리뷰 버튼(§12) — 어느 화면에서든 오늘 기록을 연다. 기록한 날은 작은 ✓가 붙고
+// 이름(tooltip·aria-label)도 바뀐다 — 점 하나의 색으로만 말하지 않는다(§5.2).
+export function DailyReviewTopButton({ className }) {
+  const launcher = useDailyReviewLauncher();
+  if (!launcher) return null;
+  const { model, openReview } = launcher;
+  const recorded = model.source === 'live' && Array.isArray(model.recent) && model.recent.some((entry) => entry.reviewDate === model.todayKey);
+  const label = recorded ? '하루 리뷰 · 오늘 기록함' : '하루 리뷰 남기기';
+  return <span className={['daily-review-topbtn', className].filter(Boolean).join(' ')} data-recorded={recorded || undefined}>
+    <IconButton icon="brief" tooltip={label} onClick={() => openReview(model.todayKey)} />
+    {recorded && <span className="daily-review-topbtn-check" aria-hidden="true"><Iconed name="check" size={9} /></span>}
+  </span>;
 }
