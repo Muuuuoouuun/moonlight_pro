@@ -145,6 +145,29 @@ test("reconnecting an account cannot silently assign it to another brand", async
   assert.equal(writes, 0);
 });
 
+test("reconnecting a Meta account cannot replace its established OAuth app", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+  let writes = 0;
+  globalThis.fetch = async (_url, options) => {
+    if (options.method === "GET") return {
+      ok: true, status: 200,
+      text: async () => JSON.stringify([{
+        account_key: "account-A",
+        config: { brandKey: "classmoon", oauthAppId: "company-app-id", oauthAppKey: "classmoon" },
+      }]),
+      headers: { get: () => null },
+    };
+    writes += 1;
+    return { ok: true, status: 201, text: async () => "[]", headers: { get: () => null } };
+  };
+  await assert.rejects(saveSocialAccountConnection({
+    workspaceId: "workspace-1", provider: "instagram_api", accountId: "account-A",
+    config: { brandKey: "classmoon", oauthAppId: "personal-app-id", oauthAppKey: "moonlight" },
+  }), /social-account-app-mismatch/);
+  assert.equal(writes, 0);
+});
+
 test("OAuth connect binds an existing handle to its verified account ID", async () => {
   process.env.SUPABASE_URL = "https://db.example.com";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";

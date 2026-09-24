@@ -9,6 +9,7 @@ import {
 } from "@/lib/instagram-api";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { summarizeSocialAccountStatus } from "@/lib/social-account-status";
+import { resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,14 +17,19 @@ export const dynamic = "force-dynamic";
 export async function GET(req) {
   const { origin } = req.nextUrl;
   const workspaceId = resolveDefaultWorkspaceId();
-  const config = resolveInstagramApiConfig();
-  const requestedHandle = (req.nextUrl.searchParams.get("brand") || config.brandHandle)
+  const legacyConfig = resolveInstagramApiConfig();
+  const requestedHandle = (req.nextUrl.searchParams.get("brand") || legacyConfig.brandHandle)
     .replace(/^@+/, "").toLowerCase();
+  const config = resolveMetaOAuthApp({
+    provider: "instagram_api",
+    brandKey: req.nextUrl.searchParams.get("brandKey"),
+    brandHandle: requestedHandle,
+  });
   const accountId = req.nextUrl.searchParams.get("accountId") || "";
   const { connections, available } = await fetchInstagramApiConnections(workspaceId);
   const summary = summarizeSocialAccountStatus({
     rows: connections,
-    configured: config.configured && hasInstagramApiOAuthStateSecret(),
+    configured: Boolean(config?.configured && hasInstagramApiOAuthStateSecret()),
     available,
     selector: accountId
       ? (row) => row.account_key === accountId
@@ -36,11 +42,12 @@ export async function GET(req) {
     provider: "instagram_api",
     workspaceId: workspaceId || null,
     brandHandle: requestedHandle,
-    configured: config.configured,
-    hasAppId: config.hasAppId,
-    hasAppSecret: config.hasAppSecret,
+    configured: Boolean(config?.configured),
+    appKey: config?.appKey || null,
+    hasAppId: Boolean(config?.hasAppId),
+    hasAppSecret: Boolean(config?.hasAppSecret),
     hasOAuthStateSecret: hasInstagramApiOAuthStateSecret(),
-    scopes: config.scopes,
+    scopes: config?.scopes || [],
     connection: summary.connection,
     connections: summary.connections,
     setup: buildInstagramApiSetupUrls(origin),

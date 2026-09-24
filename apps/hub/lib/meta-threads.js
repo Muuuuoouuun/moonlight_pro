@@ -7,6 +7,7 @@ import {
 } from "@/lib/server-write";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
+import { configuredMetaOAuthApps, isValidMetaOAuthAppIdentity, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
 const META_THREADS_PROVIDER = "meta_threads";
 const META_THREADS_SYNC_SOURCE = "meta_threads";
@@ -194,7 +195,8 @@ export function decodeMetaThreadsState(value) {
       state.provider !== OAUTH_PROVIDER ||
       typeof state.nonce !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(state.nonce) ||
       (state.expectedAccountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(state.expectedAccountId)) ||
-      (state.brandKey != null && !isValidSocialBrandKey(state.brandKey))
+      (state.brandKey != null && !isValidSocialBrandKey(state.brandKey)) ||
+      !isValidMetaOAuthAppIdentity(state)
     ) {
       return { invalid: true };
     }
@@ -206,7 +208,6 @@ export function decodeMetaThreadsState(value) {
 }
 
 export function parseMetaThreadsSignedRequest(value) {
-  const config = resolveMetaThreadsConfig();
   const raw = typeof value === "string" ? value.trim() : "";
 
   if (!raw) {
@@ -217,7 +218,8 @@ export function parseMetaThreadsSignedRequest(value) {
     };
   }
 
-  if (!config.appSecret) {
+  const apps = configuredMetaOAuthApps(OAUTH_PROVIDER);
+  if (!apps.length) {
     return {
       valid: false,
       error: "missing-app-secret",
@@ -240,14 +242,12 @@ export function parseMetaThreadsSignedRequest(value) {
       String(encodedSignature).replace(/-/g, "+").replace(/_/g, "/"),
       "base64",
     );
-    const expected = createHmac("sha256", config.appSecret)
-      .update(encodedPayload)
-      .digest();
-
-    if (!safeBufferEquals(signature, expected)) {
+    const matching = apps.filter((app) => safeBufferEquals(signature,
+      createHmac("sha256", app.appSecret).update(encodedPayload).digest()));
+    if (matching.length !== 1) {
       return {
         valid: false,
-        error: "invalid-signature",
+        error: matching.length ? "ambiguous-app-secret" : "invalid-signature",
         payload: null,
       };
     }
@@ -267,6 +267,8 @@ export function parseMetaThreadsSignedRequest(value) {
       valid: true,
       error: null,
       payload,
+      appKey: matching[0].appKey,
+      appId: matching[0].appId,
     };
   } catch (error) {
     return {
@@ -323,9 +325,9 @@ export function buildMetaThreadsAuthUrl({
   expectedAccountId = null,
   returnPath = "/dashboard/settings",
 }) {
-  const config = resolveMetaThreadsConfig();
+  const config = resolveMetaOAuthApp({ provider: OAUTH_PROVIDER, brandKey, brandHandle });
 
-  if (!config.configured || !hasMetaThreadsOAuthStateSecret() || !workspaceId ||
+  if (!config?.configured || !hasMetaThreadsOAuthStateSecret() || !workspaceId ||
     (brandKey != null && !isValidSocialBrandKey(brandKey)) ||
     (expectedAccountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(expectedAccountId))) {
     return null;
@@ -340,6 +342,8 @@ export function buildMetaThreadsAuthUrl({
       workspaceId: workspaceId || resolveDefaultWorkspaceId(),
       brandHandle: normalizeHandle(brandHandle, config.brandHandle),
       brandKey,
+      appKey: config.appKey,
+      appId: config.appId,
       provider: OAUTH_PROVIDER,
       nonce: randomBytes(32).toString("base64url"),
       expectedAccountId,
@@ -350,12 +354,10 @@ export function buildMetaThreadsAuthUrl({
   return `${THREADS_AUTH_URL}?${params.toString()}`;
 }
 
-async function exchangeThreadsToken(params) {
-  const config = resolveMetaThreadsConfig();
+async function exchangeThreadsToken(params, app) {
+  const config = app;
 
-  if (!config.configured) {
-    return null;
-  }
+  if (!config?.configured) throw new Error("threads-oauth-app-mismatch");
 
   const body = new URLSearchParams({
     client_id: config.appId,
@@ -380,20 +382,18 @@ async function exchangeThreadsToken(params) {
   return await response.json();
 }
 
-export async function exchangeMetaThreadsCode({ code, redirectUri }) {
+export async function exchangeMetaThreadsCode({ code, redirectUri, app }) {
   return exchangeThreadsToken({
     code,
     redirect_uri: redirectUri,
     grant_type: "authorization_code",
-  });
+  }, app);
 }
 
-export async function exchangeMetaThreadsLongLivedToken(accessToken) {
-  const config = resolveMetaThreadsConfig();
+export async function exchangeMetaThreadsLongLivedToken(accessToken, app) {
+  const config = app;
 
-  if (!config.configured || !accessToken) {
-    return null;
-  }
+  if (!config?.configured || !accessToken) throw new Error("threads-oauth-app-mismatch");
 
   const params = new URLSearchParams({
     grant_type: "th_exchange_token",
@@ -501,9 +501,15 @@ export async function fetchMetaThreadsConnectionsByUserId({
 export async function disableMetaThreadsConnectionsForUser({
   workspaceId = resolveDefaultWorkspaceId(),
   userId,
+  appId = null,
+  appKey = null,
   reason = "deauthorize",
 }) {
-  const rows = await fetchMetaThreadsConnectionsByUserId({ workspaceId, userId });
+  if (!userId || !appId || !appKey) return { matched: 0, updated: 0 };
+  const rows = (await fetchMetaThreadsConnectionsByUserId({ workspaceId, userId }))
+    .filter((row) =>
+      (row.config?.oauthAppId === appId && row.config?.oauthAppKey === appKey) ||
+      (appKey === "moonlight" && !row.config?.oauthAppId && !row.config?.oauthAppKey));
   const now = new Date().toISOString();
 
   if (!rows.length) {
@@ -549,6 +555,7 @@ export async function saveMetaThreadsConnection({
   tokenData,
   longLivedTokenData,
   profile,
+  app = null,
 }) {
   if (!profile?.id || !profile?.username) throw new Error("social-account-id-missing");
   const accessToken =
@@ -560,10 +567,11 @@ export async function saveMetaThreadsConnection({
     provider: "Threads",
     brandHandle: normalizeHandle(brandHandle),
     brandKey: brandKey || null,
+    ...(app ? { oauthAppKey: app.appKey, oauthAppId: app.appId } : {}),
     scope:
       longLivedTokenData?.scope ||
       tokenData?.scope ||
-      resolveMetaThreadsConfig().scopes.join(","),
+      (app || resolveMetaThreadsConfig()).scopes.join(","),
     accessToken,
     tokenType: longLivedTokenData?.token_type || tokenData?.token_type || "Bearer",
     expiresAt: expiresIn

@@ -83,10 +83,24 @@ export async function saveSocialAccountConnection({
   const previous = await listSocialAccountConnections(provider, workspaceId, accountId);
   if (!previous.available) throw new Error("social-account-read-failed");
   const previousBrandKey = previous.connections[0]?.config?.brandKey || null;
+  const previousAppId = previous.connections[0]?.config?.oauthAppId || null;
+  const previousAppKey = previous.connections[0]?.config?.oauthAppKey || null;
   if (storedConfig.brandKey != null && previousBrandKey && storedConfig.brandKey !== previousBrandKey) {
     throw new Error("social-account-brand-mismatch");
   }
-  storedConfig = { ...storedConfig, brandKey: storedConfig.brandKey || previousBrandKey };
+  if (["instagram_api", "meta_threads"].includes(provider) &&
+    ((previousAppId && storedConfig.oauthAppId && storedConfig.oauthAppId !== previousAppId) ||
+      (previousAppKey && storedConfig.oauthAppKey && storedConfig.oauthAppKey !== previousAppKey))) {
+    throw new Error("social-account-app-mismatch");
+  }
+  storedConfig = {
+    ...storedConfig,
+    brandKey: storedConfig.brandKey || previousBrandKey,
+    ...(["instagram_api", "meta_threads"].includes(provider) ? {
+      oauthAppId: storedConfig.oauthAppId || previousAppId,
+      oauthAppKey: storedConfig.oauthAppKey || previousAppKey,
+    } : {}),
+  };
   const result = await upsertSupabaseRecords("integration_connections", {
     workspace_id: workspaceId,
     provider,

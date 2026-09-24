@@ -50,5 +50,7 @@ for (const [provider, connect, decode] of [
     assert.equal(state.brandKey, "bridgemaker");
     assert.equal(createdFlow.provider, provider);
     assert.equal(createdFlow.workspace_id, state.workspaceId);
+    assert.equal(createdFlow.app_key, "moonlight");
+    assert.equal(createdFlow.app_id, state.appId);
   });
 }

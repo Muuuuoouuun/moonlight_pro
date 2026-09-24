@@ -13,6 +13,7 @@ import {
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { assertPersistedSocialConnection } from "@/lib/social-oauth-persistence";
 import { consumeSocialOAuthFlow } from "@/lib/social-oauth-flow";
+import { resolveMetaOAuthAppFromState } from "@/lib/meta-oauth-apps";
 import { resolveSocialOAuthReturnUrl } from "@/lib/social-oauth-return";
 
 export const runtime = "nodejs";
@@ -28,7 +29,8 @@ export async function GET(req) {
   const state = decodeInstagramApiState(searchParams.get("state"));
   const fallbackReturnPath = "/dashboard/settings";
 
-  if (state.invalid) {
+  const app = state.invalid ? null : resolveMetaOAuthAppFromState(state);
+  if (!app) {
     const target = resolveSocialOAuthReturnUrl(fallbackReturnPath, origin);
     target.searchParams.set("instagram", "invalid-state");
     return NextResponse.redirect(target);
@@ -74,9 +76,10 @@ export async function GET(req) {
     const tokenData = await exchangeInstagramApiCode({
       code,
       redirectUri: resolveInstagramApiRedirectUri(origin),
+      app,
     });
     const longLivedTokenData = await exchangeInstagramApiLongLivedToken(
-      tokenData?.access_token,
+      tokenData?.access_token, app,
     );
     const accessToken = longLivedTokenData?.access_token || tokenData?.access_token;
     const profile = await fetchInstagramApiProfile(accessToken);
@@ -98,6 +101,7 @@ export async function GET(req) {
       tokenData,
       longLivedTokenData,
       profile,
+      app,
     }));
 
     await recordInstagramApiSync({

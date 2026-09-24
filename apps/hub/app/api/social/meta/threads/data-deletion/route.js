@@ -86,6 +86,8 @@ export async function POST(req) {
   const result = await disableMetaThreadsConnectionsForUser({
     workspaceId,
     userId,
+    appId: parsed.appId,
+    appKey: parsed.appKey,
     reason: "data-deletion",
   });
   const statusUrl = `${setup.dataDeletionUrl}?code=${encodeURIComponent(confirmationCode)}`;
