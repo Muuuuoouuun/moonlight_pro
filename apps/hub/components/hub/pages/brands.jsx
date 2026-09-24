@@ -4,6 +4,7 @@ import React from "react";
 import { RelatedMemos } from '../related-memos';
 import { GoalLinks } from '../goal-links';
 import { MemoCaptureLink } from "../journal-links";
+import { ContextMentorRail } from "../context-mentor-rail";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Iconed } from "../hub-icons";
@@ -328,7 +329,7 @@ function BrandDetail({ brand, onOpenStudio, onOpenQueue, onEdit }) {
   );
 }
 
-export function Brands() {
+export function Brands({ onNavigate, onGuidanceAsk }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -392,8 +393,10 @@ export function Brands() {
   React.useEffect(() => {
     const onKey = (event) => {
       if (draft || identityDraft) return;
+      if (event.defaultPrevented || event.isComposing) return;
       if (event.key !== "n" && event.key !== "N") return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (document.querySelector('[data-drawer-open="true"], [role="dialog"], [data-shortcut-overlay="true"]')) return;
       const el = document.activeElement;
       const tag = el?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select" || el?.isContentEditable) return;
@@ -518,6 +521,15 @@ export function Brands() {
             <Button variant="primary" size="sm" icon="plus" onClick={createBrand}>브랜드 <Kbd>N</Kbd></Button>
           </>}
         </div>}
+        {(scope === 'personal' || selected?.orgScope === 'personal') && (
+          <ContextMentorRail
+            domain="marketing"
+            contextLabel={selected?.name || '브랜드'}
+            disabled={selected?.orgScope !== 'personal'}
+            onGuidanceAsk={card => onGuidanceAsk?.(card, { ref: selected?.key, label: selected?.name })}
+            onNavigate={onNavigate}
+          />
+        )}
       </div>
 
       {/* "찾지 못함"은 라이브 기록을 실제로 읽었을 때만 말할 수 있다 — read 실패·미연결을

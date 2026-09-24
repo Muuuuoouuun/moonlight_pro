@@ -387,7 +387,8 @@ test('Office, work execution, coaching and brand advice keep four distinct exist
   for (const scope of SIDEBAR_SCOPES) {
     const children = sidebarChildren('ai', scope.key).filter(child => child.group === 'Agents');
     assert.deepEqual(children.map(child => [child.label, child.path]), expected);
-    assert.ok(children.filter(child => child.key !== 'ai-office').every(child => child.deferred));
+    assert.equal(children.find(child => child.key === 'ai-chat')?.deferred, undefined);
+    assert.ok(children.filter(child => ['ai-orders', 'ai-council'].includes(child.key)).every(child => child.deferred));
     const jobs = topNavigationForRoute('dashboard/agents/orders', scope.key, 'jobs');
     assert.equal(jobs.activeTab?.key, 'ai-orders');
   }

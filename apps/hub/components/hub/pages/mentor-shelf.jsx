@@ -62,7 +62,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate }) {
         <h2>필요할 때 꺼내 보는 관점</h2>
         <p>Guru는 실무 자료에서 한 가지 질문을 건네고, Legend는 판단을 다시 보게 합니다. 읽고 지나가거나 직접 물어볼 수 있습니다.</p>
       </div>
-      <Button variant="outline" size="md" onClick={() => onNavigate?.('dashboard/agents/chat?view=chat')}>대화 시작</Button>
+      <Button variant="outline" size="md" onClick={() => onNavigate?.('dashboard/agents/chat?agent=guru')}>대화 시작</Button>
     </header>
 
     <section className="mentor-shelf__section" aria-labelledby="mentor-shelf-today">

@@ -30,6 +30,7 @@ import { useMemoSearch } from "./use-memo-search";
 import { requestPersonaChat } from "../persona-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { GuruGuidanceCard } from '../guru-guidance-card';
+import { ContextMentorRail } from '../context-mentor-rail';
 import { filterLeadsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { isCanonicalUuid } from "@/lib/uuid";
@@ -1458,7 +1459,7 @@ function CustomersReadError({ onRetry }) {
 
 // ── 페이지 ──────────────────────────────────────────────────────────────────
 
-export function Customers({ onNavigate }) {
+export function Customers({ onNavigate, onGuidanceAsk }) {
   const toast = useToast();
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
@@ -1852,7 +1853,13 @@ export function Customers({ onNavigate }) {
           <Button variant="ghost" size="sm" icon="filter" aria-expanded={filtersOpen} aria-controls="customers-filters" onClick={() => setFiltersOpen(o => !o)}>
             필터{activeFilterCount ? <span className="num"> {activeFilterCount}</span> : null}
           </Button>
-          <span className="customers-toolbar__hint">↑↓ 이동 · ↵ 열기 · / 검색</span>
+          {!openRow && !newCustomer && <ContextMentorRail
+            domain="sales"
+            contextLabel={scopeKey === 'classin' ? 'ClassIn 고객' : scopeKey === 'personal' ? '개인 고객' : '전체 고객'}
+            disabled={scopeKey !== 'classin'}
+            onGuidanceAsk={onGuidanceAsk}
+            onNavigate={onNavigate}
+          />}
         </div>
 
         {filtersOpen && (

@@ -18,6 +18,7 @@ import { ToastProvider } from "./hub-toast";
 import { useInquiryNotifications } from './inquiry-notifications';
 import { CommandPalette } from "./hub-command-palette";
 import { QuickMemo } from "./quick-memo";
+import { GuidanceQuestionDrawer } from "./guidance-question-drawer";
 import { GlobalQuickCapture } from "./quick-capture";
 import { OfficeSessionProvider } from "./office-session-provider";
 import { OfficeWorkflowSessionProvider } from "./office-workflow-panel";
@@ -109,6 +110,7 @@ const Flows = lazyPage(() => import("./pages/automations").then(m => m.Flows));
 const SheetsSync = lazyPage(() => import("./pages/sheets-sync").then(m => m.SheetsSync));
 const OfficeCouncil = lazyPage(() => import("./pages/office-council").then(m => m.OfficeCouncil));
 const AgentsChat = lazyPage(() => import("./pages/agents").then(m => m.AgentsChat));
+const MentorShelf = lazyPage(() => import("./pages/mentor-shelf").then(m => m.MentorShelf));
 const AgentsCouncil = lazyPage(() => import("./pages/agents").then(m => m.AgentsCouncil));
 const AgentsOrders = lazyPage(() => import("./pages/agents").then(m => m.AgentsOrders));
 const Evolution = lazyPage(() => import("./pages/evolution-settings").then(m => m.Evolution));
@@ -220,16 +222,16 @@ const PAGE_MAP = {
   'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
   'dashboard/work/goals': () => <WorkGoals />,
-  'dashboard/brands': () => <Brands />,
+  'dashboard/brands': (n, _inquiries, _scope, ask) => <Brands onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/brands/log': (n) => <BrandContentLog onNavigate={n} />,
   'dashboard/content/performance': () => <ContentPerformance />,
   'dashboard/content/studio': () => <Studio />,
-  'dashboard/content/queue': () => <Queue />,
+  'dashboard/content/queue': (n, _inquiries, _scope, ask) => <Queue onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/content/campaigns': () => <Campaigns />,
   // 영업·매출 탭은 오늘 연락·고객·거래·문의 넷이다(2026-09-24). 개요·히트맵·Leads·Accounts·Cases는
   // 탭에서 내려왔지만 라우트는 그대로 남아 ⌘K·북마크·딥링크로 열린다(hub-nav.js REVENUE_ROUTE_TABS).
   'dashboard/revenue/overview': (n) => <RevenueOverview onNavigate={n} />,
-  'dashboard/revenue/customers': (n) => <Customers onNavigate={n} />,
+  'dashboard/revenue/customers': (n, _inquiries, _scope, ask) => <Customers onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/revenue/heatmap': (n) => <RevenueHeatmap onNavigate={n} />,
   'dashboard/revenue/leads': () => <Leads />,
   'dashboard/revenue/inquiries': (n) => <Inquiries onNavigate={n} />,
@@ -244,7 +246,7 @@ const PAGE_MAP = {
   'dashboard/automations/runs': (n) => <Runs onNavigate={n} />,
   'dashboard/automations/sheets': () => <SheetsSync />,
   'dashboard/agents/office-council': (n, notifications, scope) => <OfficeCouncil scope={scope} />,
-  'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
+  'dashboard/agents/chat': (n, _inquiries, _scope, ask) => <MentorShelf onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
   'dashboard/evolution': (n) => <Evolution onNavigate={n} />,
@@ -260,10 +262,10 @@ const PAGE_MAP = {
   'dashboard/classin/projects': () => <Projects workspace="classin" />,
   'dashboard/classin/automations': () => <SheetsSync />,
   'dashboard/classin/cohorts': () => <Projects workspace="classin" />,   // legacy real_v1 bookmark alias
-  'dashboard/classin/content': () => <Queue workspace="classin" />,      // legacy real_v1 bookmark alias
+  'dashboard/classin/content': (n, _inquiries, _scope, ask) => <Queue workspace="classin" onNavigate={n} onGuidanceAsk={ask} />,      // legacy real_v1 bookmark alias
   'dashboard/brand/projects': () => <Projects workspace="brand" />,
   'dashboard/brand/studio': () => <Studio workspace="brand" />,
-  'dashboard/brand/queue': () => <Queue workspace="brand" />,
+  'dashboard/brand/queue': (n, _inquiries, _scope, ask) => <Queue workspace="brand" onNavigate={n} onGuidanceAsk={ask} />,
 };
 
 const PARENT_JUMP = {
@@ -309,6 +311,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
+  const [guidanceQuestion, setGuidanceQuestion] = React.useState(null);
   const rootRef = React.useRef(null);
   const shellRef = React.useRef(null);
   const menuButtonRef = React.useRef(null);
@@ -371,6 +374,9 @@ export function HubApp({ memoDraftContext = "preview" }) {
     const target = PARENT_JUMP[basePath] || basePath;
     router.push('/' + target + suffix);
   }, [router]);
+
+  React.useEffect(() => { setGuidanceQuestion(null); }, [pathname]);
+  const openGuidanceQuestion = React.useCallback((card, context = {}) => setGuidanceQuestion({ card, context }), []);
 
   // ⌘J·탑바 ✦ → Office (2026-09-23 운영자 확정). 페이지 맥락 위젯은 딜·신호 카드 버튼에만 남는다.
   const openOffice = React.useCallback(() => navigate('dashboard/agents/office-council'), [navigate]);
@@ -549,8 +555,16 @@ export function HubApp({ memoDraftContext = "preview" }) {
   }, [openOffice]);
 
   const render = PAGE_MAP[path];
-  // 3번째 인자(scope)는 뒤늦게 붙었다 — 기존 항목은 추가 인자를 무시하므로 하위 호환된다.
-  const page = render ? render(navigate, inquiryNotifications, routeScope || navScope) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
+  // 코칭·대화의 기본은 서가다. 기존 대화/페르소나 딥링크는 명시적으로 열고,
+  // 쿼리만 바뀌어도 대화 마운트를 갱신해 선택한 페르소나가 반영되게 한다.
+  const chatRequested = path === 'dashboard/agents/chat' && (
+    view === 'chat' || searchParams.has('agent') || searchParams.has('prompt')
+  );
+  const page = chatRequested
+    ? <AgentsChat key={searchParams.toString()} onNavigate={navigate} />
+    : render
+      ? render(navigate, inquiryNotifications, routeScope || navScope, openGuidanceQuestion)
+      : <LegacyPlaceholder path={path} onNavigate={navigate} />;
   // 아이콘 레일은 데스크톱 전용 — 모바일 드로어(navOpen은 모바일에서만 true)는 항상 펼친 상태로 그린다.
   const sidebarCollapsed = collapsed && !isMobileViewport;
 
@@ -619,8 +633,9 @@ export function HubApp({ memoDraftContext = "preview" }) {
             </main>
           </div>
         </div>
+      <GuidanceQuestionDrawer card={guidanceQuestion?.card} context={guidanceQuestion?.context} onClose={() => setGuidanceQuestion(null)} />
       <GlobalQuickCapture openRequest={captureOpenRequest} onNavigate={navigate} />
-      <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open} openRequest={memoOpenRequest} onNavigate={navigate} />
+      <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open || Boolean(guidanceQuestion)} openRequest={memoOpenRequest} onNavigate={navigate} />
       <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
         <CelebrationCanvas />

@@ -168,7 +168,7 @@ const CONTENT_CHILDREN = [
 
 // AI·자동화 renders its nine children under two eyebrow group labels.
 // Sheets is the one scope-dependent entry (ClassIn owns 시트 동기화).
-// `deferred: true` — docs/README §4 보류 스코프(Agents/Council, Flow 캔버스, Email, 시트
+// `deferred: true` — docs/README §4 보류 스코프(작업·실행/브랜드 자문, Flow 캔버스, Email, 시트
 // 동기화 하드게이트, Evolution). 페이지는 접근 가능하되 탭에 '준비 중' 마커를 달아
 // 코어와 동일한 완성 표면처럼 보이지 않게 한다(2026-08-05 system-eval — 비핵심 표면이
 // 전부 코어 가중치로 노출되던 문제의 정직성 조치). Runs·Webhooks·자동화 개요는 Engine
@@ -177,7 +177,7 @@ function aiChildren(sheetsPath) {
   return [
     { key: 'ai-office', label: 'Office', path: 'dashboard/agents/office-council', group: 'Agents' },
     { key: 'ai-orders', label: '작업·실행', path: 'dashboard/agents/orders', group: 'Agents', deferred: true },
-    { key: 'ai-chat', label: '코칭·대화', path: 'dashboard/agents/chat', group: 'Agents', deferred: true },
+    { key: 'ai-chat', label: '코칭·대화', path: 'dashboard/agents/chat', group: 'Agents' },
     { key: 'ai-council', label: '브랜드 자문', path: 'dashboard/agents/council', group: 'Agents', deferred: true },
     // AutomationsIndex — implemented page (PAGE_MAP) with no sidebar/search row until
     // 2026-07-17. Global (unscoped), so it appears identically in every scope.
