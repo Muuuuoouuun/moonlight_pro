@@ -38,9 +38,7 @@ struct QuickBarView: View {
                 .frame(width: 440)
             }
         }
-        .background(Palette.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Palette.line.opacity(0.65), lineWidth: 1))
+        .moonlightGlassPanel(cornerRadius: 16)
         .tint(Palette.moon300)
         .animation(motion, value: model.mode)
     }
@@ -65,7 +63,7 @@ struct QuickBarView: View {
             }
             closeButton(vertical: false)
         }
-        .background(Palette.surface2)
+        .background(Palette.surface2.opacity(0.28))
     }
 
     private var verticalNavigation: some View {
@@ -78,7 +76,7 @@ struct QuickBarView: View {
         }
         .frame(width: 64)
         .frame(maxHeight: .infinity)
-        .background(Palette.surface2)
+        .background(Palette.surface2.opacity(0.28))
     }
 
     private func navigationButton(_ mode: QuickMode, vertical: Bool) -> some View {
@@ -93,8 +91,8 @@ struct QuickBarView: View {
             .frame(width: vertical ? 64 : nil)
             .frame(maxWidth: vertical ? nil : .infinity)
             .frame(height: vertical ? 52 : 56)
-            .foregroundStyle(model.mode == mode ? Palette.moon100 : Palette.moon500)
-            .background(model.mode == mode ? Palette.surface3 : .clear)
+            .foregroundStyle(model.mode == mode ? Palette.moon100 : Palette.moon400)
+            .background(model.mode == mode ? Palette.moon300.opacity(0.12) : .clear)
         }
         .buttonStyle(.plain)
         .keyboardShortcut(KeyEquivalent(mode.shortcut), modifiers: .command)
@@ -168,7 +166,7 @@ struct QuickBarView: View {
                 .scrollContentBackground(.hidden)
                 .padding(7)
                 .frame(height: 100)
-                .background(Palette.surface2)
+                .background(Palette.surface2.opacity(0.35))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Palette.line.opacity(0.6), lineWidth: 1))
             HStack {
@@ -232,7 +230,7 @@ struct QuickBarView: View {
     private func heading(_ title: String, caption: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.moon100)
-            Text(caption).font(.system(size: 11)).foregroundStyle(Palette.moon500)
+            Text(caption).font(.system(size: 11)).foregroundStyle(Palette.moon300)
         }
     }
 
