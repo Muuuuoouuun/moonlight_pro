@@ -17,7 +17,7 @@ import {
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 import { WEEKLY_STAT_FIELDS, weeklySourceLabels, weeklyStatValue } from '@/lib/weekly-report-fields';
 import { goalHref } from '@/lib/goal-client';
-import { BurningStreakBadge, StreakMark } from "../burning-streak";
+import { BurningStreakBadge, StreakMark, streakLevel } from "../burning-streak";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { ContactRecordDrawer } from "../contact-record-form";
 import { createClientId } from "@/lib/pms-ui";
@@ -1287,7 +1287,7 @@ function RhythmPanel({ onNavigate }) {
             {summary.longestStreak > 0 && (
               <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 11, color: 'var(--fg-muted)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <StreakMark size={15} level={summary.longestStreak >= 7 ? 3 : summary.longestStreak >= 3 ? 2 : summary.longestStreak >= 1 ? 1 : 0} />
+                  <StreakMark size={15} level={streakLevel(summary.longestStreak)} />
                   <span>
                     최장 <span className="mono" style={{ color: 'var(--fg)', fontWeight: 600 }}>{summary.longestStreak}일</span>
                     {summary.longestStreakRitual ? ` · ${summary.longestStreakRitual}` : ''}

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { EmptyState, IconButton, TruthBadge } from "./hub-primitives";
-import { StreakMark } from "./burning-streak";
+import { StreakMark, streakLevel } from "./burning-streak";
 import { RITUAL_CATEGORY_LABELS } from "@/lib/rhythm-ui";
 import "./rhythm-today.css";
 
@@ -18,13 +18,6 @@ import "./rhythm-today.css";
  * 전부 끈다. 긴급/연속 끊김은 빨강으로 칠하지 않는다 — "오늘 이어가기" 문구가 말한다.
  */
 
-function streakLevel(streak) {
-  if (streak >= 14) return 4;
-  if (streak >= 7) return 3;
-  if (streak >= 3) return 2;
-  if (streak >= 1) return 1;
-  return 0;
-}
 
 function itemStatusCopy(item) {
   if (item.doneToday) return item.streak >= 2 ? `${item.streak}일 연속` : "오늘 완료";
