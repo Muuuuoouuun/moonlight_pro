@@ -9,7 +9,8 @@ import {
   EmptyState,
   IconButton,
   LifecycleBadge,
-  SyncBadge,
+  Skeleton,
+  TruthBadge,
 } from "../hub-primitives";
 import { filterDealsByWorkspace } from "../workspace-map";
 import { buildPersonalRevenueRoadmap } from "@/lib/personal-revenue-roadmap";
@@ -279,7 +280,7 @@ function DealDrawer({ deal, closeDrawer, closeButtonRef, onNavigate }) {
   );
 }
 
-export function PersonalRevenueRoadmap({ ledger, syncState, onNavigate }) {
+export function PersonalRevenueRoadmap({ ledger, syncState, onRetry, onNavigate }) {
   const personalDeals = React.useMemo(
     () => filterDealsByWorkspace(ledger?.deals || [], "brand"),
     [ledger?.deals],
@@ -331,6 +332,10 @@ export function PersonalRevenueRoadmap({ ledger, syncState, onNavigate }) {
     if (selectedDealId && !selectedDeal) setSelectedDealId(null);
   }, [selectedDeal, selectedDealId]);
 
+  // 첫 로드·읽기 실패 중에는 ₩0 요약과 "개인 딜이 없습니다"를 사실처럼 그리지 않는다(§5.3).
+  // 캐시가 있는 재검증 실패는 훅이 partial로 내려 기존 값을 유지한다.
+  const ledgerUnsettled = syncState === "loading" || syncState === "error";
+
   return (
     <div className={`personal-revenue-page${selectedDeal ? " has-drawer" : ""}`}>
       <main className="personal-revenue-main">
@@ -338,7 +343,7 @@ export function PersonalRevenueRoadmap({ ledger, syncState, onNavigate }) {
           <div>
             <div className="personal-revenue-eyebrow">Founder cashflow</div>
             <h2>개인 매출</h2>
-            <p>{formatFullDate(model.window.startAt)} · 향후 30일 (Asia/Seoul)<SyncBadge state={syncState} /></p>
+            <p>{formatFullDate(model.window.startAt)} · 향후 30일 (Asia/Seoul)<TruthBadge state={syncState} style={{ marginLeft: 8 }} /></p>
           </div>
           <div className="personal-revenue-period" aria-label="조회 기간">
             <Iconed name="calendar" size={15} />
@@ -346,11 +351,20 @@ export function PersonalRevenueRoadmap({ ledger, syncState, onNavigate }) {
           </div>
         </header>
 
-        <RevenueSummary summary={model.summary} />
+        {!ledgerUnsettled && <RevenueSummary summary={model.summary} />}
 
         {syncState === "loading" ? (
           <Card className="personal-revenue-state-card">
-            <div className="personal-revenue-loading" role="status">매출 기록을 불러오는 중…</div>
+            <Skeleton lines={4} height={40} gap={12} label="매출 기록 불러오는 중" />
+          </Card>
+        ) : syncState === "error" ? (
+          <Card className="personal-revenue-state-card" pad={false}>
+            <EmptyState
+              icon="x"
+              title="매출 기록을 읽지 못했습니다"
+              description="지금 화면은 비어 보여도 실제 개인 딜이 있을 수 있습니다. 연결이 복구되면 다시 읽어 확인하세요."
+              action={onRetry ? <Button variant="secondary" icon="runs" onClick={onRetry}>다시 읽기</Button> : undefined}
+            />
           </Card>
         ) : model.events.length === 0 ? (
           <Card className="personal-revenue-state-card" pad={false}>

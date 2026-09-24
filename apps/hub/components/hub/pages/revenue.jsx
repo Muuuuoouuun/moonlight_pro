@@ -4,8 +4,7 @@ import { GoalLinks } from '../goal-links';
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { BrandIcon } from "../brand-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, CheckboxRow, Progress, CertaintyBadge, LifecycleBadge, ChipToggle, useToast } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, SyncBadge, TruthBadge, SelectField, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, CheckboxRow, Progress, CertaintyBadge, LifecycleBadge, ChipToggle, useToast } from "../hub-primitives";
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { GuruGuidanceCard } from '../guru-guidance-card';
@@ -408,14 +407,14 @@ function GuruCoachPanel({ onNavigate }) {
 }
 
 export function RevenueOverview({ onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const scope = searchParams?.get('scope');
   // 개인 스코프의 Revenue 개요는 30일 캐시플로 로드맵이 본체다 (2026-08-31 계획).
   // 이 지점 아래로 훅이 없어 조기 반환이 안전하다 — 훅을 추가하게 되면 이 분기를
   // JSX 레벨로 내려야 한다.
   if (scope === 'personal') {
-    return <PersonalRevenueRoadmap ledger={ledger} syncState={syncState} onNavigate={onNavigate} />;
+    return <PersonalRevenueRoadmap ledger={ledger} syncState={syncState} onRetry={reloadLedger} onNavigate={onNavigate} />;
   }
   const LEADS = ledger.leads;
   const DEALS = ledger.deals;
@@ -436,9 +435,9 @@ export function RevenueOverview({ onNavigate }) {
   const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'closing').reduce((a, b) => a + b.value, 0);
   const newThisMonth = summary?.newThisMonth ?? 0;
   const wonDealsCount = DEALS.filter(d => d.stage === 'closing').length;
-  const byBrand = [];
-  const totalBrandMRR = byBrand.reduce((a, b) => a + b.mrr, 0);
   const attentionItems = buildRevenueAttention(LEADS, DEALS);
+  // 첫 로드·읽기 실패 중에는 ₩0 KPI와 "딜이 없습니다"를 사실처럼 그리지 않는다(§5.3 loading·error ≠ empty).
+  const ledgerReady = syncState !== 'loading' && syncState !== 'error';
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
@@ -446,7 +445,7 @@ export function RevenueOverview({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Revenue overview</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {new Intl.DateTimeFormat('ko-KR', { month: 'long' }).format(new Date())} · 이번 달 요약<SyncBadge state={syncState} />
+            {new Intl.DateTimeFormat('ko-KR', { month: 'long' }).format(new Date())} · 이번 달 요약<TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -455,6 +454,10 @@ export function RevenueOverview({ onNavigate }) {
             생길 때 실데이터와 함께 복귀한다. */}
       </div>
 
+      {syncState === 'loading' && <Skeleton lines={3} height={96} gap={12} label="매출 요약 불러오는 중" />}
+      {syncState === 'error' && <LedgerReadError noun="매출 기록" onRetry={reloadLedger} />}
+
+      {ledgerReady && (
       <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {[
           { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: 'neutral' },
@@ -469,8 +472,10 @@ export function RevenueOverview({ onNavigate }) {
           </Card>
         ))}
       </div>
+      )}
 
-      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--gap)' }}>
+      {/* 브랜드별 매출 패널 제거 — 데이터 원천(브랜드 join)이 없어 항상 비어 있던 패널이었다(표면 예산). */}
+      {ledgerReady && (
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Pipeline by stage</div>
@@ -498,34 +503,9 @@ export function RevenueOverview({ onNavigate }) {
             ))}
           </div>
         </Card>
+      )}
 
-        <Card>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Revenue by brand</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {byBrand.length === 0 && (
-              <EmptyState
-                icon="revenue"
-                title="브랜드별 매출 집계 없음"
-                description="Supabase revenue 기록은 live입니다. 브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다."
-                style={{ minHeight: 170, padding: '22px 12px' }}
-              />
-            )}
-            {byBrand.map(b => (
-              <div key={b.key} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 72px', gap: 10, alignItems: 'center' }}>
-                <BrandIcon brand={b} size={18} style={{ color: 'var(--fg-muted)' }} />
-                <div>
-                  <div style={{ fontSize: 12, marginBottom: 4 }}>{b.name}</div>
-                  <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{ width: totalBrandMRR > 0 ? `${(b.mrr / totalBrandMRR) * 100}%` : '0%', height: '100%', background: 'var(--moon-400)' }} />
-                  </div>
-                </div>
-                <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right' }}>{fmt(b.mrr)}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
+      {ledgerReady && (
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Top deals</div>
@@ -544,7 +524,7 @@ export function RevenueOverview({ onNavigate }) {
                 <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2 }}>{DEAL_STAGES.find(s => s.key === d.stage)?.label} · {d.close}</div>
               </div>
               <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(d.value)}</span>
-              <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">{d.type === 'personal' ? 'Personal' : 'Company'}</Badge>
+              <Badge tone="neutral" size="xs" variant="outline">{d.type === 'personal' ? 'Personal' : 'Company'}</Badge>
             </div>
           ))}
         </Card>
@@ -570,6 +550,7 @@ export function RevenueOverview({ onNavigate }) {
           ))}
         </Card>
       </div>
+      )}
 
       <GuruCoachPanel onNavigate={onNavigate} />
     </div>
@@ -693,6 +674,11 @@ export function Leads({ workspace }) {
   );
   const LEADS = React.useMemo(() => filterLeadsByWorkspace(mergedLeads, workspace), [mergedLeads, workspace]);
   const wsEmpty = Boolean(ws) && LEADS.length === 0;
+  // 첫 로드·읽기 실패는 빈 목록과 다른 사실이다(§5.3) — 행이 하나도 없을 때만 표 대신 스켈레톤/실패 화면.
+  // 캐시가 있는 재검증 실패는 partial로 떨어져 목록을 유지하므로 여기 걸리지 않는다.
+  const leadsLoading = syncState === 'loading' && LEADS.length === 0;
+  const leadsReadFailed = syncState === 'error' && LEADS.length === 0;
+  const showLeadTable = !wsEmpty && !leadsLoading && !leadsReadFailed;
   const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
   // 드로어 필드 라벨 옆 확정도 배지 (spec §4) — 값이 있고 출처가 알려진 경우만.
   // operator=확정(실선), derived/searched=권장(파선 ◇). 출처 미상(기존 값)은 배지 없음.
@@ -959,7 +945,7 @@ export function Leads({ workspace }) {
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Leads</h2>
           {deleteNotice && (
@@ -970,7 +956,7 @@ export function Leads({ workspace }) {
           )}
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {LEADS.length} leads · {LEADS.filter(l => l.type === 'personal').length} personal · {LEADS.filter(l => l.type === 'company').length} company
-            <SyncBadge state={syncState} />
+            <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -1015,7 +1001,7 @@ export function Leads({ workspace }) {
         );
       })()}
 
-      {!wsEmpty && (
+      {showLeadTable && (
         <ScrollShadowX>
           <div role="group" aria-label="과목·지역 필터" style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 2 }}>
             {LEAD_SUBJECTS.map(s => (
@@ -1030,15 +1016,14 @@ export function Leads({ workspace }) {
                 })}
               />
             ))}
-            <select
+            <SelectField
               aria-label="지역 필터 (시도)"
+              className="hub-field--sm"
+              fieldStyle={{ flex: '0 0 auto', minWidth: 128 }}
               value={regionSido}
               onChange={e => setRegionSido(e.target.value)}
-              style={{ height: 26, padding: '0 8px', borderRadius: 'var(--r-sm)', border: '1px solid var(--line)', background: 'var(--surface)', color: regionSido === 'all' ? 'var(--fg-muted)' : 'var(--fg)', fontSize: 12, flexShrink: 0 }}
-            >
-              <option value="all">전체 지역</option>
-              {sidoOptions.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              options={[{ value: 'all', label: '전체 지역' }, ...sidoOptions.map(s => ({ value: s, label: s }))]}
+            />
             {labelFiltersActive && (
               <Button variant="ghost" size="xs" onClick={clearLabelFilters} style={{ flexShrink: 0 }}>전체 해제</Button>
             )}
@@ -1046,10 +1031,10 @@ export function Leads({ workspace }) {
         </ScrollShadowX>
       )}
 
-      {wsEmpty && (
-        syncState === 'error' ? (
-          <LedgerReadError noun="리드 목록" onRetry={reloadLedger} />
-        ) : (
+      {leadsLoading && <Skeleton lines={6} height={36} gap={8} label="리드 목록 불러오는 중" />}
+      {leadsReadFailed && <LedgerReadError noun="리드 목록" onRetry={reloadLedger} />}
+
+      {wsEmpty && !leadsLoading && !leadsReadFailed && (
         <Card>
           <EmptyState
             icon="leads"
@@ -1059,29 +1044,28 @@ export function Leads({ workspace }) {
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
-        )
       )}
 
-      {!wsEmpty && (
+      {showLeadTable && (
       <Card pad={false} className="hub-table-card hub-leads-table">
         <div className="hub-leads-grid" style={{ display: 'grid', gridTemplateColumns: leadsGrid, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           {/* Owner 컬럼 없음 — 1인 운영이라 항상 Me이고 buildLeadWrite가 owner를 저장한 적이 없다(드로어와 동일 결정). */}
           <span /><SortHead k="name" sort={sort} onToggle={toggleSort}>Name</SortHead>{leadCols.type && <span className="hub-lc-m">Type</span>}{leadCols.source && <SortHead k="source" sort={sort} onToggle={toggleSort} className="hub-lc-m">Source</SortHead>}{leadCols.subjects && <SortHead k="subjects" sort={sort} onToggle={toggleSort} className="hub-lc-m">과목</SortHead>}{leadCols.region && <SortHead k="region" sort={sort} onToggle={toggleSort} className="hub-lc-m">지역</SortHead>}<SortHead k="stage" sort={sort} onToggle={toggleSort}>Stage</SortHead>{leadCols.score && <SortHead k="score" sort={sort} onToggle={toggleSort} className="hub-lc-m">Score</SortHead>}<span className="hub-lc-m" style={{ textAlign: 'right' }}>Last</span>
         </div>
         {sortedLeads.length === 0 && (
-          <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <Iconed name="search" size={20} style={{ color: 'var(--fg-faint)' }} />
-            <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>일치하는 리드가 없습니다.</div>
-            <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>
-              {term ? <>"<span className="mono">{search}</span>" 검색 결과 0건 · 필터: {filter}</> : <>필터: {filter} · {LEADS.length}건 중 0건</>}
-            </div>
-            <div style={{ marginTop: 6, display: 'flex', gap: 6, justifyContent: 'center' }}>
-              {labelFiltersActive && <Button variant="ghost" size="xs" onClick={clearLabelFilters}>필터 해제</Button>}
-              {term
-                ? <Button variant="ghost" size="xs" onClick={() => setSearch('')}>검색 지우기</Button>
-                : <Button variant="secondary" size="xs" icon="plus" onClick={createLead}>리드 추가</Button>}
-            </div>
-          </div>
+          <EmptyState
+            icon="search"
+            title={LEADS.length === 0 ? '리드가 없습니다' : '일치하는 리드가 없습니다'}
+            description={term ? `"${search}" 검색 결과 0건 · 필터: ${filter}` : `필터: ${filter} · ${LEADS.length}건 중 0건`}
+            action={(
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+                {labelFiltersActive && <Button variant="ghost" size="sm" onClick={clearLabelFilters}>필터 해제</Button>}
+                {term
+                  ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                  : <Button variant="secondary" size="sm" icon="plus" onClick={createLead}>리드 추가</Button>}
+              </div>
+            )}
+          />
         )}
         {sortedLeads.map((l, i) => (
           <div key={l.id} className="hub-row hub-leads-grid"
@@ -1102,7 +1086,7 @@ export function Leads({ workspace }) {
             }}
           >
             <span style={{ paddingRight: 4, display: 'flex' }}>
-              <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone={l.type === 'personal' ? 'personal' : 'company'} />
+              <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone="neutral" />
             </span>
             <span style={{ minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
@@ -1113,7 +1097,7 @@ export function Leads({ workspace }) {
             </span>
             {leadCols.type && (
             <span className="hub-lc-m" style={{ paddingRight: 8, minWidth: 0 }}>
-              <Badge tone={l.type === 'personal' ? 'personal' : 'company'} size="xs">
+              <Badge tone="neutral" size="xs" variant="outline">
                 <Iconed name={l.type === 'personal' ? 'user' : 'building'} size={9} />
                 {l.type === 'personal' ? 'Personal' : 'Company'}
               </Badge>
@@ -1189,24 +1173,21 @@ export function Leads({ workspace }) {
 
       {/* 벌크 바 — x로 담은 선택이 있을 때만 뜨는 하단 플로팅 바(§2.8 첫 실채택). */}
       <BulkBar count={selection.selectedIds.size} onClear={selection.clearSelected}>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fg-muted)' }}>
-          단계 일괄 변경
-          <select
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fg-muted)' }}>
+          <span aria-hidden="true">단계 일괄 변경</span>
+          <SelectField
             aria-label="선택한 리드 단계 일괄 변경"
+            className="hub-field--sm"
+            fieldStyle={{ flex: '0 0 auto', minWidth: 120 }}
             disabled={bulkBusy}
             value=""
             onChange={(e) => { if (e.target.value) applyBulkStage(e.target.value); }}
-            style={{
-              height: 26, padding: '0 8px', fontSize: 12, borderRadius: 'var(--r-sm)',
-              background: 'var(--surface-2)', color: 'var(--fg)', border: '1px solid var(--line)',
-            }}
-          >
-            <option value="">{bulkBusy ? '저장 중…' : '단계 선택'}</option>
-            {['New', 'Contact', 'Qualified', 'Customer', 'Lost'].map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </label>
+            options={[
+              { value: '', label: bulkBusy ? '저장 중…' : '단계 선택' },
+              ...['New', 'Contact', 'Qualified', 'Customer', 'Lost'].map((s) => ({ value: s, label: s })),
+            ]}
+          />
+        </div>
       </BulkBar>
     </div>
   );
@@ -2382,7 +2363,7 @@ function sortCases(rows, sort) {
 
 export function Cases() {
   const toast = useToast();
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -2397,6 +2378,9 @@ export function Cases() {
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
   const cases = sortCases(mergedCases, sort);
   const editingCase = editCaseId ? mergedCases.find(c => c.id === editCaseId) : null;
+  // 첫 로드 중에 "케이스가 없습니다"를, 읽기 실패에 "케이스 추가"를 그리지 않는다(§5.3 · Leads와 같은 계약).
+  const casesLoading = syncState === 'loading' && cases.length === 0;
+  const casesReadFailed = syncState === 'error' && cases.length === 0;
   // asc → desc → 해제(기록 순) 3단 토글 — Leads와 같은 계약.
   const toggleSort = (key) => setSort(s =>
     s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
@@ -2513,13 +2497,16 @@ export function Cases() {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Cases</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            Support & account issues · {cases.filter(c => c.status !== 'Resolved').length} open
-            <SyncBadge state={syncState} />
+            Support & account issues · {casesLoading || casesReadFailed ? '—' : cases.filter(c => c.status !== 'Resolved').length} open
+            <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus" onClick={createCase}>Case <Kbd>N</Kbd></Button>
       </div>
+      {casesLoading && <Skeleton lines={5} height={36} gap={8} label="케이스 불러오는 중" />}
+      {casesReadFailed && <LedgerReadError noun="케이스 목록" onRetry={reloadLedger} />}
+      {!casesLoading && !casesReadFailed && (
       <Card pad={false} className="hub-table-card">
         <div className="hub-table-min" style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>ID</span><SortHead k="title" sort={sort} onToggle={toggleSort}>Title</SortHead><SortHead k="account" sort={sort} onToggle={toggleSort}>Account</SortHead><span>Type</span><SortHead k="priority" sort={sort} onToggle={toggleSort}>Priority</SortHead><SortHead k="status" sort={sort} onToggle={toggleSort}>Status</SortHead><SortHead k="opened" sort={sort} onToggle={toggleSort}>Opened</SortHead><span style={{ textAlign: 'right' }}>Owner</span>
@@ -2552,7 +2539,7 @@ export function Cases() {
             <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</span>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.account}</span>
             <span style={{ paddingRight: 8, minWidth: 0 }}>
-              <Badge tone={c.type === 'personal' ? 'personal' : 'company'} size="xs">{c.type === 'personal' ? 'Personal' : 'Company'}</Badge>
+              <Badge tone="neutral" size="xs" variant="outline">{c.type === 'personal' ? 'Personal' : 'Company'}</Badge>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: pTone[c.priority] === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}>
               <Dot tone={pTone[c.priority]} />{c.priority}
@@ -2565,6 +2552,7 @@ export function Cases() {
           </div>
         ))}
       </Card>
+      )}
 
       <EditDrawer
         title={editingCase ? (editingCase.title || '케이스 편집') : ''}
@@ -2604,18 +2592,35 @@ function emptyDetail() {
   return { mrr: 0, contacts: [], deals: [], activity: [], notes: [] };
 }
 
-function HealthDot({ health }) {
+// 건강도는 색만으로 말하지 않는다(§5.2·§5.3) — 모양(채움 원·빈 원·채움 위험 원) + 직접 라벨.
+// ok와 warning은 같은 중립색이라 이전엔 점만으로는 구분조차 되지 않았다. `label="auto"`는
+// 주의·위험만 글자를 보이고(카드·목록의 소음 억제), "always"는 정상까지 보인다.
+const HEALTH_LABEL = { ok: '양호', warning: '주의', risk: '위험' };
+function HealthDot({ health, label = 'auto' }) {
   const tone = H_TONE[health] || 'neutral';
+  const text = HEALTH_LABEL[health] || '미정';
+  const showText = label === 'always' || (label === 'auto' && (health === 'warning' || health === 'risk'));
+  const hollow = health === 'warning' || !HEALTH_LABEL[health];
   return (
     <span
-      title={health}
-      style={{
-        width: 7, height: 7, borderRadius: 999,
-        background: tone === 'danger' ? 'var(--danger)' : 'var(--moon-500)',
-        display: 'inline-block',
-        flexShrink: 0,
-      }}
-    />
+      data-health={health || 'unknown'}
+      role="img"
+      aria-label={`건강도: ${text}`}
+      title={`건강도: ${text}`}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0, fontSize: 11, color: tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 7, height: 7, borderRadius: 999, boxSizing: 'border-box',
+          background: hollow ? 'transparent' : tone === 'danger' ? 'var(--danger)' : 'var(--moon-500)',
+          border: hollow ? '1px solid var(--moon-500)' : 'none',
+          display: 'inline-block',
+          flexShrink: 0,
+        }}
+      />
+      {showText && <span aria-hidden="true">{text}</span>}
+    </span>
   );
 }
 
@@ -2870,7 +2875,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-        기록<SyncBadge state={syncState} />
+        기록<TruthBadge state={syncState} style={{ marginLeft: 8 }} />
       </div>
 
       {/* 회사 조인은 이 리드 한 건이 아니라 같은 회사의 접촉 이력 전체를 보여준다 — 명시한다. */}
@@ -2902,7 +2907,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
       <LogComposer onLog={logActivity} preset={composerPreset} />
 
       {syncState === 'loading' ? (
-        <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>불러오는 중…</div>
+        <Skeleton lines={3} height={14} gap={10} label="활동 기록 불러오는 중" />
       ) : syncState === 'error' ? (
         <EmptyState
           icon="clock"
@@ -2992,7 +2997,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
       {/* Header */}
       <div style={{ padding: 'var(--card-pad)', borderBottom: '1px solid var(--line-soft)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-          <Avatar name={account.name} size={52} tone={account.type === 'personal' ? 'personal' : 'company'} />
+          <Avatar name={account.name} size={52} tone="neutral" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {renaming ? (
@@ -3013,14 +3018,11 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
               {onRename && !renaming && (
                 <IconButton icon="edit" size={22} iconSize={12} tooltip="이름 변경" onClick={() => setRenaming(true)} />
               )}
-              <Badge tone={account.type === 'personal' ? 'personal' : 'company'} size="xs">
+              <Badge tone="neutral" size="xs" variant="outline">
                 <Iconed name={account.type === 'personal' ? 'user' : 'building'} size={9} />
                 {account.type === 'personal' ? 'Personal' : 'Company'}
               </Badge>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-                <HealthDot health={account.health} />
-                {account.health === 'warning' ? '주의' : account.health === 'risk' ? '위험' : '양호'}
-              </span>
+              <HealthDot health={account.health} label="always" />
             </div>
             <div style={{ display: 'flex', gap: 18, marginTop: 10 }}>
               <div>
@@ -3131,7 +3133,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                 border: '1px solid var(--line-soft)',
                 borderRadius: 'var(--r-sm)',
               }}>
-                <Avatar name={c.name} size={34} tone={account.type === 'personal' ? 'personal' : 'company'} />
+                <Avatar name={c.name} size={34} tone="neutral" />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{c.name}</span>
@@ -3255,6 +3257,10 @@ export function Accounts({ workspace, onNavigate }) {
   const ws = getWorkspace(workspace);
   const ACCOUNTS = filterAccountsByWorkspace([...localAccounts, ...ledgerAccounts], workspace);
   const wsEmpty = Boolean(ws) && ACCOUNTS.length === 0;
+  // 첫 로드·읽기 실패는 빈 목록과 다른 사실이다(§5.3) — 워크스페이스 여부와 무관하게 먼저 가른다.
+  const accountsLoading = syncState === 'loading' && ACCOUNTS.length === 0;
+  const accountsReadFailed = syncState === 'error' && ACCOUNTS.length === 0;
+  const accountsSettled = !accountsLoading && !accountsReadFailed;
   const [view, setView] = React.useState('cards'); // cards | list | detail
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = useScopeFilter(searchParams);
@@ -3627,7 +3633,7 @@ export function Accounts({ workspace, onNavigate }) {
           {accountsNotice && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{accountsNotice}</div>}
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {ACCOUNTS.filter(a => a.type === 'company').length} companies · {ACCOUNTS.filter(a => a.type === 'personal').length} individuals
-            <SyncBadge state={syncState} />
+            <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -3650,10 +3656,10 @@ export function Accounts({ workspace, onNavigate }) {
         <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account <Kbd>N</Kbd></Button>
       </div>
 
-      {wsEmpty && (
-        syncState === 'error' ? (
-          <LedgerReadError noun="계정 목록" onRetry={reloadLedger} />
-        ) : (
+      {accountsLoading && <Skeleton lines={3} height={96} gap={12} label="계정 목록 불러오는 중" />}
+      {accountsReadFailed && <LedgerReadError noun="계정 목록" onRetry={reloadLedger} />}
+
+      {wsEmpty && accountsSettled && (
         <Card>
           <EmptyState
             icon="accounts"
@@ -3663,11 +3669,10 @@ export function Accounts({ workspace, onNavigate }) {
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
-        )
       )}
 
       {/* Content by view */}
-      {!wsEmpty && view === 'cards' && (
+      {!wsEmpty && accountsSettled && view === 'cards' && (
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
           {filtered.map(a => (
             <Card
@@ -3688,13 +3693,12 @@ export function Accounts({ workspace, onNavigate }) {
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(a.name); } }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                  <Avatar name={a.name} size={36} tone={a.type === 'personal' ? 'personal' : 'company'} />
+                  <Avatar name={a.name} size={36} tone="neutral" />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                      <Badge tone={a.type === 'personal' ? 'personal' : 'company'} size="xs">{a.type === 'personal' ? 'Personal' : 'Company'}</Badge>
+                      <Badge tone="neutral" size="xs" variant="outline">{a.type === 'personal' ? 'Personal' : 'Company'}</Badge>
                       <HealthDot health={a.health} />
-                      {a.health === 'risk' && <span style={{ fontSize: 10.5, color: 'var(--danger)' }}>위험</span>}
                       {buildAccountRelationshipDetail(a, ledger).contacts.length > 0 && (
                         <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{buildAccountRelationshipDetail(a, ledger).contacts.length}명</span>
                       )}
@@ -3739,7 +3743,7 @@ export function Accounts({ workspace, onNavigate }) {
         </div>
       )}
 
-      {!wsEmpty && view === 'list' && (
+      {!wsEmpty && accountsSettled && view === 'list' && (
         <Card pad={false} className="hub-table-card">
           <div className="hub-table-min" style={{
             display: 'grid',
@@ -3771,21 +3775,20 @@ export function Accounts({ workspace, onNavigate }) {
               }}
             >
               <span style={{ paddingRight: 4, display: 'flex' }}>
-                <Avatar name={a.name} size={24} tone={a.type === 'personal' ? 'personal' : 'company'} />
+                <Avatar name={a.name} size={24} tone="neutral" />
               </span>
               <span style={{ minWidth: 0 }}>
                 <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
                 {(a.nextAction || a.dormant) && <span style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.dormant ? '기약 없음' : a.nextAction}</span>}
               </span>
               <span style={{ paddingRight: 8 }}>
-                <Badge tone={a.type === 'personal' ? 'personal' : 'company'} size="xs">
+                <Badge tone="neutral" size="xs" variant="outline">
                   <Iconed name={a.type === 'personal' ? 'user' : 'building'} size={9} />
                   {a.type === 'personal' ? 'Personal' : 'Company'}
                 </Badge>
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <HealthDot health={a.health} />
-                <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{a.health}</span>
+                <HealthDot health={a.health} label="always" />
               </span>
               <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(a.value)}</span>
               <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.deals}</span>
@@ -3807,7 +3810,7 @@ export function Accounts({ workspace, onNavigate }) {
         </Card>
       )}
 
-      {!wsEmpty && view === 'detail' && (
+      {!wsEmpty && accountsSettled && view === 'detail' && (
         <Card pad={false} className="hub-detail-card" style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
           <div style={{ width: '30%', minWidth: 240, borderRight: '1px solid var(--line-soft)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
@@ -3836,12 +3839,11 @@ export function Accounts({ workspace, onNavigate }) {
                       borderBottom: '1px solid var(--line-soft)',
                     }}
                   >
-                    <Avatar name={a.name} size={28} tone={a.type === 'personal' ? 'personal' : 'company'} />
+                    <Avatar name={a.name} size={28} tone="neutral" />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <span style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
                         <HealthDot health={a.health} />
-                        {a.health === 'risk' && <span style={{ fontSize: 10.5, color: 'var(--danger)', flexShrink: 0 }}>위험</span>}
                       </div>
                       <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
                         {fmt(a.value)} · <span style={{ color: 'var(--fg-faint)' }}>{a.last}</span>

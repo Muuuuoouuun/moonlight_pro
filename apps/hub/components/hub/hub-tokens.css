@@ -2249,9 +2249,9 @@
   font-weight: 500;
 }
 
+/* §11 페이지 제목 20px/500 — 승인되지 않은 clamp(22–28px) 확대를 걷었다(DESIGN §14 Known gap 12). */
 .personal-revenue-header h2 {
-  font-size: clamp(22px, 2.5vw, 28px);
-  letter-spacing: -0.025em;
+  font-size: 20px;
 }
 
 .personal-revenue-header p,
@@ -2720,16 +2720,6 @@
 
 .personal-revenue-state-card {
   margin: 26px clamp(20px, 3vw, 36px);
-}
-
-.personal-revenue-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 220px;
-  color: var(--fg-faint);
-  font-family: var(--font-mono);
-  font-size: 11px;
 }
 
 @media (max-width: 1120px) {

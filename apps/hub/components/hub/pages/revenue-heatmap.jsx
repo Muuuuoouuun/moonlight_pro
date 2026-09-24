@@ -8,7 +8,7 @@
 // 기간은 전체 · 최근(90/30일) · 월별 · 분기별 — 월/분기 후보는 기록 딜에서 동적으로 뽑는다.
 
 import React from "react";
-import { Badge, Card, Button, SyncBadge, SegmentedControl, EmptyState, IconButton, ScrollShadowX } from "../hub-primitives";
+import { Badge, Card, Button, TruthBadge, SegmentedControl, EmptyState, IconButton, ScrollShadowX, Skeleton } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 import { KoreaHeatmap, fmtMoney, heatFill } from "../heatmap-map";
 import { useRevenueLedger } from "./revenue";
@@ -139,7 +139,7 @@ const CustomerRankRow = React.memo(function CustomerRankRow({ customer, rank, ma
           {isTop && (
             <span
               style={{
-                fontSize: 9.5,
+                fontSize: 10.5,
                 fontWeight: 700,
                 padding: "0 4px",
                 borderRadius: 3,
@@ -503,7 +503,7 @@ export function RevenueHeatmap({ onNavigate }) {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>매출 히트맵</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             {periodLabel} · {metric.longLabel} · 딜 {ledgerUnsettled ? "—" : `${matchedDeals}건`} · 합계 <span className="num">{ledgerUnsettled ? "—" : fmtMoney(totalValue)}</span>
-            <SyncBadge state={syncState} />
+            <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -541,12 +541,9 @@ export function RevenueHeatmap({ onNavigate }) {
       )}
 
       {bodyState === "loading" ? (
-        // 기록 첫 로드 — 0건 EmptyState 대신 중립 로딩 상태(§5.3: loading ≠ empty). 헤더 SyncBadge가 같은 상태를 말한다.
+        // 기록 첫 로드 — 0건 EmptyState 대신 레이아웃을 예고하는 스켈레톤(§5.3: loading ≠ empty, §11). 헤더 TruthBadge가 같은 상태를 말한다.
         <Card>
-          <div role="status" aria-live="polite" style={{ minHeight: 220, padding: "32px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, textAlign: "center" }}>
-            <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--fg)" }}>매출 기록 불러오는 중…</div>
-            <div style={{ fontSize: 12, color: "var(--fg-faint)" }}>딜이 도착하면 지도와 고객 순위가 채워집니다.</div>
-          </div>
+          <Skeleton lines={5} height={36} gap={12} label="매출 기록 불러오는 중" />
         </Card>
       ) : bodyState === "error" ? (
         // 읽기 실패 — "딜 없음"으로 위장 금지. 필터 초기화 CTA는 실패 화면에 무의미하므로 재시도만 둔다.
