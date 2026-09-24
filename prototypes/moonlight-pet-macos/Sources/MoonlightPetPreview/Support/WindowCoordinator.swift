@@ -58,13 +58,14 @@ final class PetClickView: NSView {
     @objc private func selectCharacter(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
               let character = PetCharacter(rawValue: rawValue) else { return }
-        model.selectedCharacter = character
+        withAnimation(PetMotion.petCharacter) { model.selectedCharacter = character }
     }
 
     override func mouseDown(with event: NSEvent) {
         interactionLog.info("pet mouseDown count=\(event.clickCount)")
         lastScreenPoint = NSEvent.mouseLocation
         didDrag = false
+        interaction.isDragging = false
         interaction.isPressed = true
     }
 
@@ -72,6 +73,7 @@ final class PetClickView: NSView {
         defer {
             lastScreenPoint = nil
             interaction.isPressed = false
+            interaction.isDragging = false
         }
         if !didDrag && event.clickCount == 1 && bounds.contains(convert(event.locationInWindow, from: nil)) {
             onClick?()
@@ -85,6 +87,7 @@ final class PetClickView: NSView {
         guard distance > 2 else { return }
         didDrag = true
         interaction.isPressed = false
+        interaction.isDragging = true
         var origin = window.frame.origin
         origin.y += current.y - previous.y
         let visible = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
@@ -410,7 +413,7 @@ final class WindowCoordinator: NSObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.hidesOnDeactivate = false
         return panel
     }
