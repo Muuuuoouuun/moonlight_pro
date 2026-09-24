@@ -144,17 +144,17 @@ test("영업·매출 renders four tabs, plus 현금 흐름 for 개인 and 세그
     ["거래", "dashboard/revenue/deals"],
     ["문의", "dashboard/revenue/inquiries"],
   ]);
-  // ?scope=personal은 소비자가 있는 표면(거래·문의)에만 — 오늘 연락·고객은 스코프를 읽지 않는다.
+  // ?scope=personal은 소비자가 있는 표면(고객·거래·문의)에만 — 오늘 연락은 스코프를 읽지 않는다.
   assert.deepEqual(shape("personal"), [
     ["오늘 연락", "dashboard/revenue/followups"],
-    ["고객", "dashboard/revenue/customers"],
+    ["고객", "dashboard/revenue/customers?scope=personal"],
     ["거래", "dashboard/revenue/deals?scope=personal"],
     ["문의", "dashboard/revenue/inquiries?scope=personal"],
     ["현금 흐름", "dashboard/revenue/overview?scope=personal"],
   ]);
   assert.deepEqual(shape("classin"), [
     ["오늘 연락", "dashboard/revenue/followups"],
-    ["고객", "dashboard/classin/revenue"],
+    ["고객", "dashboard/revenue/customers?scope=classin"],
     ["거래", "dashboard/classin/pipeline"],
     ["문의", "dashboard/revenue/inquiries?scope=classin"],
     ["세그먼트", "dashboard/classin/segments"],
@@ -201,9 +201,11 @@ test("screens that left the tab row stay routable and light the nearest tab with
     assert.equal(topNavigationForRoute(route, "classin").activeTab?.tab, "customers", route);
   }
   assert.equal(topNavigationForRoute("dashboard/classin/accounts", "classin").routeLabel, "Accounts");
-  // 탭 자체에 서 있으면 제목은 탭 이름이다(별칭 제목 없음).
+  // ClassIn 고객 탭은 이제 전역 고객 화면(?scope=classin)이다 — 옛 ClassIn Leads 경로는 별칭으로 고객 탭을 켜고 제목은 Leads.
   assert.equal(topNavigationForRoute("dashboard/classin/revenue", "classin").activeTab?.key, "rev-ci-customers");
-  assert.equal(topNavigationForRoute("dashboard/classin/revenue", "classin").routeLabel, null);
+  assert.equal(topNavigationForRoute("dashboard/classin/revenue", "classin").routeLabel, "Leads");
+  // 탭 자체에 서 있으면 제목은 탭 이름이다(별칭 제목 없음).
+  assert.equal(topNavigationForRoute("dashboard/revenue/customers?scope=classin", "classin").routeLabel, null);
   assert.equal(topNavigationForRoute("dashboard/revenue/deals", "all").routeLabel, null);
 });
 
@@ -236,7 +238,7 @@ test("switching scope on a revenue tab re-enters the same role, not the anchor r
   // pathname이 같은 탭이 없으면 같은 역할의 탭으로(사이드바 changeScope의 두 번째 규칙).
   assert.equal(tabForRouteRole("revenue", "dashboard/revenue/deals", "classin")?.path, "dashboard/classin/pipeline");
   assert.equal(tabForRouteRole("revenue", "dashboard/classin/pipeline", "personal")?.path, "dashboard/revenue/deals?scope=personal");
-  assert.equal(tabForRouteRole("revenue", "dashboard/revenue/customers", "classin")?.path, "dashboard/classin/revenue");
+  assert.equal(tabForRouteRole("revenue", "dashboard/revenue/customers", "classin")?.path, "dashboard/revenue/customers?scope=classin");
   assert.equal(tabForRouteRole("revenue", "dashboard/classin/segments", "all"), null, "세그먼트 has no counterpart outside ClassIn");
   assert.equal(tabForRouteRole("revenue", "dashboard/revenue/cases", "all"), null);
   assert.equal(tabForRouteRole("content", "dashboard/content/queue", "all"), null, "anchors without routeTabs have no aliases");

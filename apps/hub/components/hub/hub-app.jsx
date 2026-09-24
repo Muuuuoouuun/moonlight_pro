@@ -468,7 +468,8 @@ export function HubApp({ memoDraftContext = "preview" }) {
     if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', create: true }).slice(1);
     if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
     if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
-    if (p.startsWith('dashboard/revenue/leads') || p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/leads?new=lead';
+    if (p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/customers?new=customer';
+    if (p.startsWith('dashboard/revenue/leads')) return 'dashboard/revenue/leads?new=lead';
     if (p.startsWith('dashboard/revenue/deals')) return 'dashboard/revenue/deals?new=deal';
     if (p.startsWith('dashboard/revenue/accounts')) return 'dashboard/revenue/accounts?new=account';
     if (p.startsWith('dashboard/revenue/cases')) return 'dashboard/revenue/cases?new=case';

@@ -59,10 +59,10 @@ export function normalizeScope(scope) {
 // Second-level destinations, defined once so the per-scope tables stay readable.
 // ?scope=personal은 실제로 소비하는 표면에만 붙인다 — 소비자가 없는 표면에 붙이면
 // 같은 데이터를 두고 개인 필터가 걸린 척하는 과약속이다(5차 재감사 S). 2026-09-24 실측:
-// 거래(Deals의 useScopeFilter)와 문의(inquiryScopeForWorkspace)만 읽는다. 오늘 연락
-// (followups 전역 큐)과 고객(Customers 전역 목록)은 scope 쿼리를 읽지 않는다 — 두 화면이
-// 스코프를 읽게 되면 여기에 키를 더한다.
-const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-deals', 'rev-inquiries']);
+// 거래(Deals의 useScopeFilter)·문의(inquiryScopeForWorkspace)·고객(Customers의 ?scope= 목록
+// 범위, 2026-09-24 고객 탭 재구성)이 읽는다. 오늘 연락(followups 전역 큐)은 아직 읽지 않는다 —
+// 읽게 되면 여기에 키를 더한다.
+const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-customers', 'rev-deals', 'rev-inquiries']);
 function personalScoped(children) {
   return children.map((c) => (
     SCOPE_CONSUMING_CHILD_KEYS.has(c.key) ? { ...c, path: `${c.path}?scope=personal` } : c
@@ -97,7 +97,7 @@ const REVENUE_PERSONAL_CHILDREN = [
 // 세그먼트는 ClassIn CRM에만 있는 표면이라 이 스코프에서만 다섯 번째 탭이다.
 const REVENUE_CLASSIN_CHILDREN = [
   { key: 'rev-followups', tab: 'followups', label: '오늘 연락', path: 'dashboard/revenue/followups' },
-  { key: 'rev-ci-customers', tab: 'customers', label: '고객', path: 'dashboard/classin/revenue' },
+  { key: 'rev-ci-customers', tab: 'customers', label: '고객', path: 'dashboard/revenue/customers?scope=classin' },
   { key: 'rev-ci-deals', tab: 'deals', label: '거래', path: 'dashboard/classin/pipeline' },
   { key: 'rev-ci-inquiries', tab: 'inquiries', label: '문의', path: 'dashboard/revenue/inquiries?scope=classin' },
   { key: 'rev-ci-segments', tab: 'segments', label: '세그먼트', path: 'dashboard/classin/segments' },
