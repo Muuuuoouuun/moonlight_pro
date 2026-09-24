@@ -92,3 +92,20 @@ test("council-client: requestCouncilAdvice forwards legendIds, directives, and u
     globalThis.fetch = originalFetch;
   }
 });
+
+test("council-client: an explicit brand question forwards its source card and never asks for a work order", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedBody = null;
+  globalThis.fetch = async (_url, options) => {
+    capturedBody = JSON.parse(options.body);
+    return Response.json({ status: "generated", text: "자료 기반 조언" });
+  };
+  try {
+    const result = await requestCouncilAdvice({ mode: "open-question", guidanceId: "content-hook", draft: "첫 장과 본문이 맞나요?" });
+    assert.equal(result.state, "done");
+    assert.equal(capturedBody.guidanceId, "content-hook");
+    assert.equal(capturedBody.createWorkOrder, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

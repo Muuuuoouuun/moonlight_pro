@@ -154,6 +154,16 @@ describe('buildAdvisorySystemInstruction prompt generation', () => {
     }
   });
 
+  it('keeps an open personal brand question to observation, source frame and operator choice', () => {
+    const prompt = guardrails.buildAdvisorySystemInstruction({
+      type: 'brand-mentor', mode: 'open-question', context: { scope: 'personal' },
+    });
+    assert.match(prompt, /관찰/);
+    assert.match(prompt, /프레임/);
+    assert.match(prompt, /질문 또는 선택/);
+    assert.doesNotMatch(prompt, /즉시 실행 가능한 가역적 행동을 제안|후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시|승인 큐 후보/);
+  });
+
   it('embeds values and knowledge directives into system instruction', () => {
     const prompt = guardrails.buildAdvisorySystemInstruction({
       type: 'sales-mentor',

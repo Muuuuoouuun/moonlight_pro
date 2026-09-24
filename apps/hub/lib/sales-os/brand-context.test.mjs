@@ -36,6 +36,36 @@ test('empty personal projects never fall back to company data or global aggregat
   assert.equal(ctx.content.queue_counts, null);
   assert.equal(ctx.campaigns.length, 1);
 });
+test('open-question without a ref keeps personal context without choosing a brand voice or focus', async () => {
+  const ctx = await assembleBrandContext({ mode: 'open-question' });
+  assert.equal(ctx.brand, null);
+  assert.equal(Object.hasOwn(ctx, 'focus'), false);
+  assert.deepEqual(ctx.brands.map((b) => b.key), ['personal-a', 'personal-b']);
+  assert.ok(ctx.brands.every((b) => !Object.hasOwn(b, 'voice')));
+  assert.deepEqual(ctx.content.idea_queue_top.map((i) => i.id), ['idea-a']);
+  assert.equal(ctx.campaigns.some((campaign) => campaign.brandKey === 'company'), false);
+});
+test('open-question applies only an explicitly matched personal brand voice', async () => {
+  const brand = await assembleBrandContext({ mode: 'open-question', ref: 'personal-b' });
+  assert.equal(brand.brand.key, 'personal-b');
+  assert.equal(brand.brand.voice, 'B');
+  assert.equal(brand.focus.kind, 'brand');
+  assert.ok(brand.brands.every((b) => !Object.hasOwn(b, 'voice')));
+
+  const campaign = await assembleBrandContext({ mode: 'open-question', ref: 'campaign-b' });
+  assert.equal(campaign.brand.key, 'personal-b');
+  assert.equal(campaign.focus.kind, 'campaign');
+
+  for (const ref of ['company', 'company-project', 'unknown-brand', 'personal']) {
+    const unmatched = await assembleBrandContext({ mode: 'open-question', ref });
+    assert.equal(unmatched.brand, null, ref);
+    assert.equal(unmatched.focus.found, false, ref);
+  }
+});
+test('legacy brand strategy keeps its default personal brand for existing callers', async () => {
+  const ctx = await assembleBrandContext({ mode: 'brand-strategy' });
+  assert.equal(ctx.brand.key, 'personal-a');
+});
 test('campaign focus uses its business truth and matching brand voice', async () => {
   const ctx = await assembleBrandContext({ ref: 'campaign-b' });
   assert.equal(ctx.focus.kind, 'campaign');

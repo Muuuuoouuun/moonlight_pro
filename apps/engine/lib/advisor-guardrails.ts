@@ -191,6 +191,7 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
   const isCouncil = type === 'council';
   const isSales = type === 'sales-mentor';
   const isBrand = type === 'brand-mentor';
+  const isOpenBrandQuestion = isBrand && mode === 'open-question';
   const charLimit = isCouncil ? 700 : 600;
 
   const lines: string[] = [];
@@ -258,7 +259,9 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
       '[가드레일 2: Constraint-First Gate (제약 우선 게이트)]',
       '- 사용자의 당일 에너지 레벨(1~5)과 가용 시간 한도를 절대적으로 존중하십시오.',
       '- 가용 시간 0분 또는 에너지 1~2 상황에서는 신규 과제 0건 및 보류/연기 안내와 재검토 조건 1개만 허용됩니다.',
-      '- 허용된 가용 시간 내에서만 즉시 실행 가능한 가역적 행동을 제안하십시오.'
+      isOpenBrandQuestion
+        ? '- 질문에 답하는 데 필요한 제약만 반영하십시오. 질문 자체를 새 업무 배정으로 바꾸지 마십시오.'
+        : '- 허용된 가용 시간 내에서만 즉시 실행 가능한 가역적 행동을 제안하십시오.'
     );
   }
 
@@ -288,8 +291,11 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
   );
 
   // 4. Values and Knowledge Directives (가치관 및 지식 지침)
-  const resolvedDirectives = resolveDirectives(type, options.directives, context);
-  const directivesBlock = assembleDirectives(resolvedDirectives);
+  // A reader-selected Guru card is the sole mentor frame in this mode. The
+  // baseline playbook lists several other people and can blur attribution.
+  const directivesBlock = isOpenBrandQuestion
+    ? ''
+    : assembleDirectives(resolveDirectives(type, options.directives, context));
   if (directivesBlock) {
     lines.push(
       '',
@@ -329,7 +335,9 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
       '2. 적용한 프레임과 자료 출처',
       activeConstraintMode === 'rest-first'
         ? '3. 안전한 보류나 재검토 조건에 관한 질문 또는 선택 (신규 과제 배정 0건)'
-        : '3. 운영자가 고려할 질문 또는 선택. 후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시하십시오.'
+        : isOpenBrandQuestion
+          ? '3. 운영자가 판단할 질문 또는 선택. 후속 일을 만들지 마십시오.'
+          : '3. 운영자가 고려할 질문 또는 선택. 후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시하십시오.'
     );
   }
 

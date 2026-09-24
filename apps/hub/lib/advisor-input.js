@@ -25,6 +25,12 @@ function knowledge(value) {
       && optional(item.source, source => typeof source === 'string')));
 }
 
+export function isGuidanceCardForDomain(id, allowedDomains) {
+  return typeof id === 'string'
+    && Array.isArray(allowedDomains)
+    && GURU_CARDS.some(card => card.id === id && allowedDomains.includes(card.domain));
+}
+
 // The write guard bounds the complete JSON body. Preserve extension metadata, but
 // validate every field the Engine formatter consumes before any context read/call.
 export function isValidAdvisorInput(input) {
