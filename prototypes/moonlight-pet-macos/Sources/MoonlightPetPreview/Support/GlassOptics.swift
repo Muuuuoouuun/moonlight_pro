@@ -7,7 +7,7 @@ struct GlassUniforms {
     var viewport: SIMD4<Float> = .zero
     var rect: SIMD4<Float> = .zero
     var material = SIMD4<Float>(26, 9, 1, 0)
-    var light: SIMD4<Float> = .zero
+    var light = SIMD4<Float>(0, 0, 0, GlassStudy.edgeReflection)
 }
 
 /// Shared device, queue and pipeline. Compilation happens once, never on pointer updates.
@@ -139,7 +139,7 @@ final class OpticalGlassView: MTKView, MTKViewDelegate {
         u.viewport = SIMD4(Float(bounds.width),Float(bounds.height),Float(drawableSize.width/bounds.width),laboratory ? 1 : 0)
         u.rect = SIMD4(Float(rect.minX),Float(rect.minY),Float(rect.width),Float(rect.height))
         u.material = SIMD4(Float(radius),bevel,refraction,grid ? 1 : 0)
-        u.light = SIMD4(pointer.x,pointer.y,accessible ? 1 : 0,0)
+        u.light = SIMD4(pointer.x,pointer.y,accessible ? 1 : 0,GlassStudy.edgeReflection)
         guard renderer.encode(u, pass: pass, buffer: buffer) else { return }
         buffer.present(drawable)
         buffer.commit()

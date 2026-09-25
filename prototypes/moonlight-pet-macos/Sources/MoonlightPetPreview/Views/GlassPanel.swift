@@ -32,6 +32,8 @@ final class GlassPanel: NSView {
 
     private let radius: CGFloat
     private let material: NSView
+    private let centerDiffusion: GlassCenterDiffusion?
+    private let centerVeil: GlassCenterVeil?
     private let rim: NSView
     private let foreground: NSView
     private let ornament: NSView?
@@ -56,6 +58,8 @@ final class GlassPanel: NSView {
         wash = PetGlassWash(radius: cornerRadius)
         rim = makeOpticalRim(radius: cornerRadius)
         if #available(macOS 26.0, *) {
+            centerDiffusion = GlassCenterDiffusion(radius: cornerRadius)
+            centerVeil = GlassCenterVeil(radius: cornerRadius)
             let glass = NSGlassEffectView()
             // Clear is the requested default; regular is reserved for accessibility.
             glass.style = .clear
@@ -66,6 +70,8 @@ final class GlassPanel: NSView {
             glass.contentView = NSView()
             material = glass
         } else {
+            centerDiffusion = nil
+            centerVeil = nil
             let backdrop = NSVisualEffectView()
             backdrop.material = .popover
             backdrop.blendingMode = .behindWindow
@@ -91,8 +97,11 @@ final class GlassPanel: NSView {
         layer?.shadowOpacity = 0.18
         layer?.shadowRadius = 6
         layer?.shadowOffset = CGSize(width: 0, height: -2)
+        // The under-window diffusion is the lowest native effect. It softens
+        // the center while its mask leaves the clear glass lip exposed.
+        if let centerDiffusion { addSubview(centerDiffusion) }
         addSubview(material)
-        // No HUD reading plane: transparency is continuous, contrast follows glyphs.
+        if let centerVeil { addSubview(centerVeil) }
         addSubview(wash)
         addSubview(rim)
         addSubview(foreground)
@@ -106,6 +115,8 @@ final class GlassPanel: NSView {
         let accessible = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
             || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
         wash.solidForAccessibility = accessible
+        centerDiffusion?.isHidden = accessible
+        centerVeil?.isHidden = accessible
         if #available(macOS 26.0, *), let glass = material as? NSGlassEffectView {
             glass.style = accessible ? .regular : .clear
             glass.tintColor = nil
@@ -124,6 +135,8 @@ final class GlassPanel: NSView {
                                     width: CompanionLayout.perchSize, height: CompanionLayout.perchSize)
         }
         material.frame = frame
+        centerDiffusion?.frame = frame
+        centerVeil?.frame = frame
         wash.frame = frame
         foreground.frame = frame
         rim.frame = frame

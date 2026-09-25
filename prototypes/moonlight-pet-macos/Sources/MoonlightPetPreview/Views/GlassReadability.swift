@@ -137,7 +137,7 @@ final class ReadingMaterialView: NSVisualEffectView {
 
 /// The same nine-slice alpha mask softens the native material and its color wash.
 /// Only the backdrop is masked; text, focus rings and hit regions stay sharp.
-private enum ReadingMask {
+enum ReadingMask {
     private static let cache = NSCache<NSString, NSImage>()
 
     static func image(radius: CGFloat, feather: CGFloat) -> NSImage {
