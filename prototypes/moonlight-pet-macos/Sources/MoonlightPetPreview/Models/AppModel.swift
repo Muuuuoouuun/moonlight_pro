@@ -71,10 +71,19 @@ struct FocusClock: Equatable {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var activeCompanion: CompanionSurface? {
-        didSet { updateHubRefresh() }
+        didSet {
+            if activeCompanion != oldValue { updateHubRefresh() }
+            markCouncilRepliesRead()
+        }
     }
-    @Published var mode: QuickMode = .tasks
-    @Published var compactMode: CompactMode = .tasks
+    @Published var mode: QuickMode = .tasks { didSet { markCouncilRepliesRead() } }
+    @Published var compactMode: CompactMode = .tasks { didSet { markCouncilRepliesRead() } }
+    @Published var connectionSurface: CompanionSurface? { didSet { markCouncilRepliesRead() } }
+    var isConnectionVisible: Bool { activeCompanion != nil && activeCompanion == connectionSurface }
+    private var isReadingCouncil: Bool {
+        !isFocused && !isConnectionVisible && ((activeCompanion == .quick && mode == .council)
+            || (activeCompanion == .widget && compactMode == .council))
+    }
     @Published var compactOpenRevision = 0
     @Published var quickOpenRevision = 0
     @Published var tasks: [LocalTask] = []
@@ -108,6 +117,7 @@ final class AppModel: ObservableObject {
     var onOpenMode: ((QuickMode) -> Void)?
     private var featureObservers: Set<AnyCancellable> = []
     private var hubObserver: AnyCancellable?
+    private var connectionStarted = false
     private var refreshLoop: Task<Void, Never>?
     private let defaults: UserDefaults
     private var focusClock: FocusClock?
@@ -146,7 +156,11 @@ final class AppModel: ObservableObject {
         return memoDraft.isEmpty ? "이 Mac에 자동 저장" : "Mac에 자동 저장됨"
     }
 
+    deinit { refreshLoop?.cancel(); timer?.invalidate() }
+
     func startHubConnection() {
+        guard !connectionStarted else { return }
+        connectionStarted = true
         hubObserver = hub.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         activity.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         council.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
@@ -158,9 +172,7 @@ final class AppModel: ObservableObject {
         }
         chat.onReply = { [weak self] turn in
             guard let self else { return }
-            let isReading = !self.isFocused && ((self.activeCompanion == .quick && self.mode == .council)
-                || (self.activeCompanion == .widget && self.compactMode == .council))
-            if !isReading {
+            if !self.isReadingCouncil {
                 self.activity.addAgentReply(id: turn.id.uuidString, agentID: turn.agent.rawValue,
                     scope: turn.scope.rawValue, title: "\(turn.agent.title)의 답변이 왔어요",
                     detail: String(turn.reply.answer.prefix(80)))
@@ -187,8 +199,8 @@ final class AppModel: ObservableObject {
         guard activeCompanion != nil else { return }
         refreshLoop = Task { [weak self] in
             while !Task.isCancelled {
-                guard let self else { return }
-                if self.hub.isEnabled { await self.hub.refresh() }
+                guard self != nil else { return }
+                await self?.hub.refresh()
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
             }
         }
@@ -280,6 +292,7 @@ final class AppModel: ObservableObject {
         } catch { council.handoffMessage = "안건과 Hub 주소를 확인해 주세요. 초안은 그대로 보관돼요." }
     }
     func markCouncilRepliesRead() {
+        guard isReadingCouncil else { return }
         activity.acknowledgeAgentReplies(agentID: chat.agent.rawValue, scope: chat.scope.rawValue)
     }
     func showNotifications() { onOpenMode?(.notifications) }
@@ -354,7 +367,8 @@ final class AppModel: ObservableObject {
 
     private func tick() {
         guard let focusClock else { return }
-        remainingSeconds = focusClock.remaining(at: Date())
+        let remaining = focusClock.remaining(at: Date())
+        if remainingSeconds != remaining { remainingSeconds = remaining }
         if remainingSeconds == 0 { stopFocus() }
     }
 

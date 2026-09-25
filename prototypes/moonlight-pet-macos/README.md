@@ -36,7 +36,7 @@ cd prototypes/moonlight-pet-macos
 
 펫을 우클릭하면 이브이와 진화체 아홉 캐릭터 중 하나를 선택한다. 기본 대기 아이콘과 짧은 메시지에는 처음 제공된 얼굴 이미지를 쓴다. 빠른 메모·두 번 눌러 펼친 위젯·집중 모드에서는 팔을 걸친 별도 투명 배경 캐릭터가 유리 상단에 올라온다. 원 테두리는 없다. 블래키는 추가 제공된 일자 앞머리, 에브이는 뒤로 묶은 머리를 살린 자산이다. 원본 이미지는 보존한다. 기본값은 글레이시아이고 선택은 이 Mac에 저장된다. 메뉴 막대의 달 아이콘에는 선택한 펫이 나오는 `짧은 메시지 보기`도 있다.
 
-macOS 26에서는 창 경계의 `NSGlassEffectView(.clear)`가 배경 재질을 처리한다. 기본·입력 상태에는 캐릭터 색상층을 넣지 않는다. 빠른 기능·지속 위젯은 clear 유리 아래에 가장자리 24pt에서 사라지는 약한 under-window 확산 재질(48% 혼합)을 두고, 중앙에 최대 10% 음영을 더한다. CSS 12px 흐림을 직접 지정하는 API는 없으므로 승인한 HTML 시안의 네이티브 근사값이다. macOS 15 이상에서 TextRenderer가 글리프 모양을 따라 짧은 접촉 그림자와 부드러운 그림자를 먼저 그리고, 원본 흰 글자를 필터 없이 마지막에 그린다. 제목·목록·빈 상태·하단 뒤에 검정 바탕을 넣지 않는다. 외곽 유리와 선명한 윤곽은 그대로 유지한다. 패널을 누르거나 드래그하는 동안에만 반투명 캐릭터색이 보이며, 해제하면 투명 상태로 돌아온다. 헤더 핸들과 별도 펫 아이콘 드래그 모두 실제로 움직이는 패널에 직접 시작·이동·종료 신호를 전달한다. 글자·아이콘은 화이트 계열이다. 투명도 감소·대비 증가 설정에서는 `.regular`와 불투명 테마 바탕을 사용한다. 빛 반사 윤곽과 그림자 여백을 분리하고 외곽 1~3pt에는 약한 프리즘 색 분리를 둔다. 캐릭터 색상은 같은 창의 클릭·드래그 상태를 따르며, 반응이 끝나면 사라진다. 글자와 입력창은 유리 위의 별도 호스트에 그려 번짐을 피한다. 이전 macOS는 `NSVisualEffectView(.popover, .behindWindow)`를 사용한다.
+macOS 26에서는 창 경계의 `NSGlassEffectView(.clear)`가 배경 재질을 처리한다. 기본·입력 상태에는 캐릭터 색상층을 넣지 않는다. 빠른 기능·지속 위젯은 clear 유리 아래에 가장자리 24pt에서 사라지는 약한 under-window 확산 재질(48% 혼합)을 두고, 중앙에 최대 9% 음영을 더한다. CSS 12px 흐림을 직접 지정하는 API는 없으므로 승인한 HTML 시안의 네이티브 근사값이다. macOS 15 이상에서 TextRenderer가 글리프 모양을 따라 짧은 접촉 그림자와 부드러운 그림자를 먼저 그리고, 원본 흰 글자를 필터 없이 마지막에 그린다. 제목·목록·빈 상태·하단 뒤에 검정 바탕을 넣지 않는다. 외곽 유리와 선명한 윤곽은 그대로 유지한다. 패널을 누르거나 드래그하는 동안에만 반투명 캐릭터색이 보이며, 해제하면 투명 상태로 돌아온다. 헤더 핸들과 별도 펫 아이콘 드래그 모두 실제로 움직이는 패널에 직접 시작·이동·종료 신호를 전달한다. 글자·아이콘은 화이트 계열이다. 투명도 감소·대비 증가 설정에서는 `.regular`와 불투명 테마 바탕을 사용한다. 빛 반사 윤곽과 그림자 여백을 분리하고 외곽 1~3pt에는 약한 프리즘 색 분리를 둔다. 캐릭터 색상은 같은 창의 클릭·드래그 상태를 따르며, 반응이 끝나면 사라진다. 글자와 입력창은 유리 위의 별도 호스트에 그려 번짐을 피한다. 이전 macOS는 `NSVisualEffectView(.popover, .behindWindow)`를 사용한다.
 
 펫은 호버·누름·해제에 작게 반응한다. 패널과 본문·선택 표시가 함께 전환되며 무한 장식 모션은 없다. macOS 동작 줄이기를 켜면 장식적 전환은 즉시 완료된다. [프론트 품질 평가 및 검증](design/frontend-quality.md)에 적용 근거와 검증 범위를 기록했다.
 
@@ -59,6 +59,18 @@ macOS 26에서는 창 경계의 `NSGlassEffectView(.clear)`가 배경 재질을 
 새 데이터베이스나 공개 API는 추가하지 않는다. 기존 Hub 세션·쓰기 경계와 API를 재사용한다. [연결 설계](../../docs/superpowers/specs/2026-09-25-pet-hub-connection-design.md)와 [검증 기록](../../docs/superpowers/plans/2026-09-25-pet-hub-connection.md)을 참고한다.
 
 집중 모드는 각 화면 위에 불투명 차단 창을 띄우고 앱 전환·Dock·메뉴 막대를 숨긴다. `중지`를 누른 뒤 확인하거나 `Esc`를 1.3초 누르면 중지 확인이 열린다. macOS 시스템 UI와 모든 Spaces에서의 차단은 환경별 검증이 필요하다. 앱을 강제 종료하면 차단 창은 사라진다. 네트워크 수준의 웹사이트 차단기는 아니다.
+
+## 2026-09-26 편의성·연결 안정화
+
+- 할 일은 저장 확인 뒤 3초간 남고 기본 목록에서 숨겨진다. 재클릭으로 취소하거나 `목록 보기 → 완료한 할 일 포함`으로 다시 확인할 수 있다. 기록은 삭제하지 않는다.
+- 빨간 배지는 이 Mac의 새 알림 수다. 말풍선 닫기는 읽음 처리가 아니다. 문의·일정은 확인 뒤 목록에 남고 전체 확인도 가능하다. Hub 미확인 문의 수와는 별개다. 대기 말풍선은 1초 간격으로 표시한다.
+- 같은 Hub의 `연결 확인`은 로그인 세션과 담당자 대화를 유지한다. 거절된 주소는 브라우저·Council 목적지에 반영하지 않는다.
+- 확인된 메모 충돌은 자동 재시도를 중단하고 초안을 유지한다. 더보기의 `새 항목으로 Hub에 저장`으로 복구할 수 있다. 길이 검증 실패는 기존 메모 연결을 유지한다.
+- 일정의 날짜·주간 표시가 함께 이동한다. 일정 더보기에서 오늘·이전 주·다음 주로 이동한다. 이미 고정된 다른 화면에서도 메뉴 막대의 `할 일 위젯 열기`가 할 일로 전환한다.
+- Council은 실제로 열린 대화만 읽음 처리한다. 연결 설정에서 ⌘Return·⌘S가 가려진 대화·메모를 실행하지 않는다.
+- 중복 연결 관찰과 같은 화면의 조회 루프 재시작을 방지한다. 조회 루프는 폐기된 모델을 붙잡지 않고 정리된다. 집중 타이머는 표시 초가 바뀔 때만 갱신한다.
+
+검증·범위는 [안정화 기록](../../docs/superpowers/plans/2026-09-26-pet-stability.md)을 참고한다.
 
 ## 자체 점검
 
@@ -85,7 +97,7 @@ The floating panels now pair native clear glass with a Metal optical rim (curved
 
 Run `./script/build_and_run.sh --glass-lab` for the optional native-vs-Metal material comparison. The sliders affect the custom material on the right; the calibration backgrounds belong to the app. Normal launch keeps the pet-only experience. `swift run -j 2 MoonlightPetPreview --self-check` also checks real GPU output for edge clipping, premultiplied alpha, Retina geometry and refractive displacement.
 
-The default and typing state use native clear glass with zero character-wash opacity. Character tint appears only while pressing/dragging and fades out on release; Sylveon's blush wash is 42% during that interaction (52% for the other characters). White-family text stays above the material and optical rim with glyph-local shadows; no rectangular reading plates or full-strength HUD material. A feathered under-window material mix (48%) and a center-only shade (10%) approximate the approved mild CSS blur; AppKit owns its blur kernel. Reduce Transparency / Increase Contrast select regular glass and a solid theme body. The lab's explicit tint-preview switch is off by default and never affects the real panels or the saved pet.
+The default and typing state use native clear glass with zero character-wash opacity. Character tint appears only while pressing/dragging and fades out on release; Sylveon's blush wash is 42% during that interaction (52% for the other characters). White-family text stays above the material and optical rim with glyph-local shadows; no rectangular reading plates or full-strength HUD material. A feathered under-window material mix (48%) and a center-only shade (9%) approximate the approved mild CSS blur; AppKit owns its blur kernel. Reduce Transparency / Increase Contrast select regular glass and a solid theme body. The lab's explicit tint-preview switch is off by default and never affects the real panels or the saved pet.
 
 Character hues remain separated in lightness and saturation, with a lighter press-only wash (Sylveon 42%, others 52%). Expanded companion panels use clear native glass and glyph-local protection, suppressing nested reading materials. The developer optical lab uses the same foreground rendering. The custom prism is an edge-reflection treatment, not a public control over macOS desktop refraction. See [reading and prism design](../../docs/superpowers/specs/2026-09-25-pet-prism-readability-design.md).
 

@@ -16,6 +16,7 @@ final class HubStore: ObservableObject {
     @Published private(set) var tasks: [HubTask] = []
     @Published private(set) var events: [HubCalendarEvent] = []
     @Published var selectedDate = Date()
+    @Published private(set) var loadedCalendarWeek: Date?
     @Published private(set) var lastSyncedAt: Date?
     @Published private(set) var memoReceipt: String?
     @Published private(set) var taskReady = false
@@ -31,7 +32,7 @@ final class HubStore: ObservableObject {
         return "Hub 연결 확인 필요"
     }
     var canSaveMemoAsNew: Bool { canSaveMemo && pending.memo == nil }
-    var savedMemoBody: String? { pending.savedMemo?.body }
+    var savedMemoBody: String? { pending.memoConflict == true ? nil : pending.savedMemo?.body }
     var hasPendingTask: Bool { pending.task != nil }
     var hasPendingMemo: Bool { pending.memo != nil }
     var hasConnection: Bool { api != nil }
@@ -41,6 +42,7 @@ final class HubStore: ObservableObject {
     private let defaults: UserDefaults
     private let makeAPI: (URL) throws -> any HubServing
     private var api: (any HubServing)?
+    private var connectedOrigin: String?
     private var generation = 0
     private var taskVersion = 0
     private var refreshRequested = false
@@ -52,46 +54,61 @@ final class HubStore: ObservableObject {
         isEnabled = defaults.object(forKey: "petHub.enabled") as? Bool ?? true
     }
 
-    func connect(baseURL: String, username: String = "", password: String = "") async {
+    @discardableResult
+    func connect(baseURL: String, username: String = "", password: String = "") async -> String? {
+        let normalizedURL: URL
+        do {
+            guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) else { throw HubTransportError.rejectedURL }
+            normalizedURL = try HubTransport.validatedBaseURL(url)
+        } catch { record(error); return nil }
+        // Connection checks reuse the private cookie jar and active conversations.
+        // The form retains a username after login but deliberately clears its password.
+        if isEnabled, api != nil, connectedOrigin == normalizedURL.absoluteString, password.isEmpty {
+            errorMessage = nil
+            await refresh()
+            return connectedOrigin
+        }
         generation += 1
         onConnectionChanged?(nil, nil)
         let ticket = generation
         isEnabled = true; defaults.set(true, forKey: "petHub.enabled")
-        api = nil; tasks = []; events = []; lastSyncedAt = nil
+        api = nil; connectedOrigin = nil; tasks = []; events = []; loadedCalendarWeek = nil; lastSyncedAt = nil
         taskReady = false; calendarReady = false; needsLogin = false
         errorMessage = nil; memoReceipt = nil; pending = HubPendingState(); storageKey = nil
         isRefreshing = false; refreshRequested = false; isSavingTask = false; isSavingMemo = false; isConnecting = true
         taskMessage = "Hub에서 불러오는 중이에요."; calendarMessage = taskMessage
         defer { if ticket == generation { isConnecting = false } }
         do {
-            guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) else { throw HubTransportError.rejectedURL }
-            let normalizedURL = try HubTransport.validatedBaseURL(url)
             let service = try makeAPI(normalizedURL)
             if !username.isEmpty || !password.isEmpty { try await service.login(username: username, password: password) }
-            guard ticket == generation else { return }
+            guard ticket == generation else { return nil }
             api = service
             let origin = normalizedURL.absoluteString
+            connectedOrigin = origin
             onConnectionChanged?(service, origin)
             storageKey = "petHub.pending.v1." + origin
             if let data = defaults.data(forKey: storageKey!), let restored = try? JSONDecoder().decode(HubPendingState.self, from: data) { pending = restored }
             defaults.set(origin, forKey: "petPreview.hubURL")
-            if pending.memo != nil { memoReceipt = "이전 저장 결과 확인이 필요해요. 다시 저장을 눌러 주세요." }
+            if pending.memoConflict == true { memoReceipt = memoConflictMessage }
+            else if pending.memo != nil { memoReceipt = "이전 저장 결과 확인이 필요해요. 다시 저장을 눌러 주세요." }
             await refresh()
+            return ticket == generation ? origin : nil
         } catch {
-            guard ticket == generation else { return }
+            guard ticket == generation else { return nil }
             record(error)
             taskMessage = "할 일을 불러오지 못했어요."
             calendarMessage = "일정을 불러오지 못했어요."
+            return nil
         }
     }
 
     func useLocalStorage() {
         onConnectionChanged?(nil, nil)
-        generation += 1; api = nil; isEnabled = false; refreshRequested = false
+        generation += 1; api = nil; connectedOrigin = nil; isEnabled = false; refreshRequested = false
         defaults.set(false, forKey: "petHub.enabled")
         isConnecting = false; isRefreshing = false; isSavingTask = false; isSavingMemo = false
         needsLogin = false; errorMessage = nil; taskMessage = nil; calendarMessage = nil
-        tasks = []; events = []; taskReady = false; calendarReady = false; lastSyncedAt = nil; memoReceipt = nil
+        tasks = []; events = []; loadedCalendarWeek = nil; taskReady = false; calendarReady = false; lastSyncedAt = nil; memoReceipt = nil
     }
 
     func refresh() async {
@@ -132,7 +149,7 @@ final class HubStore: ObservableObject {
         if selectedWeek != start { refreshRequested = true }
         else { switch eventResponse {
         case .success(let page):
-            events = page.events; calendarReady = true
+            events = page.events; loadedCalendarWeek = start; calendarReady = true
             calendarMessage = page.partial ? "일부 일정만 불러왔어요. Hub에서 연결 상태를 확인해 주세요." : nil
         case .failure(let error):
             calendarReady = false; calendarMessage = friendly(error)
@@ -200,8 +217,11 @@ final class HubStore: ObservableObject {
         }
     }
 
+    private var memoConflictMessage: String { "Hub에서 메모가 바뀌었어요. 로컬 입력을 새 항목으로 저장하려면 더보기를 이용해 주세요." }
+
     func saveMemo(body: String) async {
         guard canSaveMemo, let service = api else { return }
+        guard pending.memoConflict != true else { memoReceipt = memoConflictMessage; return }
         guard pending.memo != nil || (!body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && body.utf16.count <= 20_000) else { errorMessage = HubDataError.invalidMemo.localizedDescription; return }
         let ticket = generation
         isSavingMemo = true; errorMessage = nil; memoReceipt = "Hub에 저장 중…"
@@ -228,18 +248,22 @@ final class HubStore: ObservableObject {
             memoReceipt = saved.body == body ? "Hub에 저장됨" : "이전 저장을 확인했어요. 변경한 내용은 다시 저장해 주세요."
         } catch {
             guard ticket == generation else { return }
-            if (error as? HubTransportError) == .conflict {
-                // A confirmed conflict must never be replayed over remote edits.
-                pending.memo = nil; persistPending()
-            }
-            memoReceipt = "Mac에 보관됨 · Hub 저장 확인 필요"
+            if (error as? HubTransportError) == .conflict || (error as? HubDataError) == .conflict {
+                // Never replay known-conflicting commands or implicitly create duplicates.
+                pending.memo = nil; pending.memoConflict = true; persistPending()
+                memoReceipt = memoConflictMessage
+            } else { memoReceipt = "Mac에 보관됨 · Hub 저장 확인 필요" }
             record(error)
         }
     }
 
     func saveMemoAsNew(body: String) async {
         guard canSaveMemoAsNew else { return }
-        pending.savedMemo = nil; persistPending()
+        guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, body.utf16.count <= 20_000 else {
+            errorMessage = HubDataError.invalidMemo.localizedDescription
+            return
+        }
+        pending.savedMemo = nil; pending.memoConflict = nil; persistPending()
         await saveMemo(body: body)
     }
 

@@ -15,6 +15,8 @@ private actor ControlledHub: HubServing {
     func releaseTaskToggle() { holdToggle = false; releaseToggle?.resume(); releaseToggle = nil }
     var failCreateOnce = false
     var failMemoOnce = false
+    var memoConflict = false
+    func setMemoConflict(_ value: Bool) { memoConflict = value }
     var conflictCreateOnce = false
     var confirmedTask: HubTask?
     var holdRead = false
@@ -71,6 +73,7 @@ private actor ControlledHub: HubServing {
     }
     func saveMemo(_ command: HubMemoCommand) async throws -> HubMemoEntry {
         saves.append(command)
+        if memoConflict { throw HubDataError.conflict }
         if failMemoOnce { failMemoOnce = false; throw HubTransportError.timeout }
         let saved = HubMemoEntry(id: UUID(uuidString: command.entryId)!, body: command.body, title: command.title, occurredAt: command.occurredAt, revision: command.expectedRevision + 1, noteMeta: command.noteMeta, contexts: command.contexts)
         savedMemo = saved
@@ -87,6 +90,7 @@ struct HubDomainTests {
     @MainActor static func main() async {
         do {
             try modelChecks()
+            try await recoveryChecks()
             try await storeChecks()
             let apiChecks = try await runHubAPIContractTests()
             if CommandLine.arguments.contains("--live-read") { try await liveRead() }
@@ -166,7 +170,7 @@ struct HubDomainTests {
         let loading = Task { await late.connect(baseURL: "https://late.test") }
         while !(await slow.startedRead) { await Task.yield() }
         late.useLocalStorage()
-        await slow.release(); await loading.value
+        await slow.release(); _ = await loading.value
         try check(!late.isEnabled && late.tasks.isEmpty && !late.isConnecting && !late.canSaveMemo, "Late responses cannot replace local state")
 
         let racingAPI = ControlledHub()
@@ -213,6 +217,48 @@ struct HubDomainTests {
         try check(recovered == "생성 직후 수정" && !conflict.hasPendingTask && conflict.tasks.contains { $0.title == "Hub에서 바꾼 제목" && $0.isDone }, "Confirmed task ID resolves duplicate conflict without reverting remote edits")
 
 
+    }
+
+    @MainActor static func recoveryChecks() async throws {
+        let suite = "MoonlightPetPreview.Recovery.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let api = ControlledHub()
+        var creations = 0, disconnects = 0
+        let store = HubStore(defaults: defaults, makeAPI: { _ in creations += 1; return api })
+        store.onConnectionChanged = { service, _ in if service == nil { disconnects += 1 } }
+        await store.connect(baseURL: "https://recover.test", username: "operator", password: "test-only")
+        await store.connect(baseURL: "https://RECOVER.test:443/", username: "operator", password: "")
+        try check(creations == 1 && disconnects == 1 && store.taskReady, "Checking same origin must preserve authenticated transport and downstream sessions")
+        let rejected = await store.connect(baseURL: "https://recover.test/dashboard")
+        try check(rejected == nil && store.hasConnection && store.taskReady, "Rejected address must not be returned as an accepted browser destination")
+        let accepted = await store.connect(baseURL: "https://RECOVER.test:443/")
+        try check(accepted == "https://recover.test" && creations == 1, "Connection form must receive the actual canonical origin")
+        let initialWeek = store.loadedCalendarWeek
+        store.selectedDate = Calendar.current.date(byAdding: .day, value: 7, to: store.selectedDate)!
+        await store.refresh()
+        try check(store.loadedCalendarWeek != nil && store.loadedCalendarWeek != initialWeek, "Calendar refresh must track the week actually loaded")
+        await store.saveMemo(body: "원본")
+        await store.saveMemoAsNew(body: String(repeating: "가", count: 20_001))
+        try check(store.savedMemoBody == "원본", "Invalid new memo must not detach existing remote binding")
+        await store.saveMemo(body: "수정")
+        let commands = await api.saves
+        try check(commands.count == 2 && commands[0].entryId == commands[1].entryId, "Normal save after invalid new input must still update the same memo")
+        await api.setMemoConflict(true)
+        await store.saveMemo(body: "유실 응답 이후 로컬 입력")
+        try check(!store.hasPendingMemo && store.canSaveMemoAsNew, "Confirmed data conflict must release pending retry and offer new-item recovery")
+        let before = await api.saves.count
+        await store.saveMemo(body: "유실 응답 이후 로컬 입력")
+        let afterRetry = await api.saves.count
+        try check(afterRetry == before, "Ordinary save must not replay a known-conflicting memo")
+        let reopened = HubStore(defaults: defaults, makeAPI: { _ in api })
+        await reopened.connect(baseURL: "https://recover.test")
+        await reopened.saveMemo(body: "유실 응답 이후 로컬 입력")
+        let afterRestart = await api.saves.count
+        try check(afterRestart == before, "Conflict protection must survive restart")
+        await api.setMemoConflict(false)
+        await reopened.saveMemoAsNew(body: "사용자가 새 항목으로 선택")
+        try check(reopened.savedMemoBody == "사용자가 새 항목으로 선택" && !reopened.hasPendingMemo, "Explicit new-item save must recover from conflict")
     }
 
     static func liveRead() async throws {

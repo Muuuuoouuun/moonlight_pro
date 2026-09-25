@@ -15,7 +15,7 @@ struct CompanionPanelView: View {
     @Namespace private var selection
     @State private var showsAddress = false
     private var isToday: Bool { mode == .tasks || mode == .calendar }
-    private var title: String { isToday ? "오늘" : mode == .memo ? "빠른 메모" : mode.title }
+    private var title: String { mode == .tasks ? "오늘" : mode == .memo ? "빠른 메모" : mode.title }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,6 +42,11 @@ struct CompanionPanelView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(Palette.glassInk)
         .tint(Palette.glassInk)
+        .onChange(of: showsAddress) { _, visible in
+            let surface: CompanionSurface = persistent ? .widget : .quick
+            if visible { model.connectionSurface = surface }
+            else if model.connectionSurface == surface { model.connectionSurface = nil }
+        }
         .onChange(of: mode) { _, _ in showsAddress = false }
         .onChange(of: openRevision) { _, _ in showsAddress = false }
     }
@@ -54,7 +59,7 @@ struct CompanionPanelView: View {
                     .tracking(-0.6)
                 if isToday && !showsAddress {
                     TimelineView(.periodic(from: .now, by: 60)) { context in
-                        Text(CompanionDate.label(context.date))
+                        Text(CompanionDate.label(mode == .calendar ? model.hub.selectedDate : context.date))
                             .font(.system(size: 11.5, weight: .medium))
                             .foregroundStyle(Palette.glassInkMuted)
                     }
@@ -82,6 +87,12 @@ struct CompanionPanelView: View {
 
     private var modeMenu: some View {
         Menu {
+            if mode == .calendar {
+                Button("오늘 일정") { model.hub.selectedDate = Date() }
+                Button("이전 주") { moveCalendarWeek(by: -1) }
+                Button("다음 주") { moveCalendarWeek(by: 1) }
+                Divider()
+            }
             if mode == .memo {
                 Button("Council에서 이어서", action: model.continueMemoInCouncil)
                 Button("새 항목으로 Hub에 저장", action: model.saveMemoAsNewToHub)
@@ -110,6 +121,12 @@ struct CompanionPanelView: View {
         .foregroundStyle(Palette.glassInkMuted)
         .help("메모 · Office · Council · 집중")
         .accessibilityLabel("빠른 기능 더보기")
+    }
+
+    private func moveCalendarWeek(by offset: Int) {
+        if let date = Calendar.current.date(byAdding: .weekOfYear, value: offset, to: model.hub.selectedDate) {
+            withAnimation(PetMotion.panel) { model.hub.selectedDate = date }
+        }
     }
 
     private var todayTabs: some View {

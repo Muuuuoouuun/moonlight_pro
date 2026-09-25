@@ -61,6 +61,12 @@ struct CalendarCompanionContent: View {
             }
             .font(.system(size: 11.5, weight: .medium))
         }
+        .onAppear {
+            // A reminder can choose another week before this view is mounted.
+            if model.hub.loadedCalendarWeek != CompanionDate.week(containing: model.hub.selectedDate).first {
+                Task { await model.hub.refresh() }
+            }
+        }
         .onChange(of: model.hub.selectedDate) { previous, selected in
             if CompanionDate.week(containing: previous).first != CompanionDate.week(containing: selected).first {
                 Task { await model.hub.refresh() }
@@ -71,7 +77,7 @@ struct CalendarCompanionContent: View {
     private var weekStrip: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             HStack(spacing: 3) {
-                ForEach(CompanionDate.week(containing: context.date), id: \.self) { date in
+                ForEach(CompanionDate.week(containing: model.hub.selectedDate), id: \.self) { date in
                     let isToday = Calendar.current.isDate(date, inSameDayAs: context.date)
                     let selected = Calendar.current.isDate(date, inSameDayAs: model.hub.selectedDate)
                     Button {

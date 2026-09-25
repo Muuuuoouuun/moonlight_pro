@@ -72,7 +72,28 @@ enum SelfCheck {
             return false
         }
         recovered.stopFocus()
-        print("PASS: press/drag tint reset, shared reading tint callback, continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save and draft recovery")
+        recovered.activity.addAgentReply(id: "visibility-check", agentID: recovered.chat.agent.rawValue,
+            scope: recovered.chat.scope.rawValue, title: "표시 상태 검증", detail: "")
+        recovered.markCouncilRepliesRead()
+        guard recovered.activity.unreadCount == 1 else {
+            fputs("Hidden Council views must not consume unread replies\n", stderr)
+            return false
+        }
+        recovered.mode = .council
+        recovered.activeCompanion = .quick
+        guard recovered.activity.unreadCount == 0 else {
+            fputs("Reopening Council must acknowledge the visible conversation\n", stderr)
+            return false
+        }
+        recovered.connectionSurface = .quick
+        recovered.activity.addAgentReply(id: "settings-check", agentID: recovered.chat.agent.rawValue,
+            scope: recovered.chat.scope.rawValue, title: "설정 표시 검증", detail: "")
+        recovered.markCouncilRepliesRead()
+        guard recovered.activity.unreadCount == 1, recovered.isConnectionVisible else { return false }
+        recovered.connectionSurface = nil
+        guard recovered.activity.unreadCount == 0 else { return false }
+        recovered.activeCompanion = nil
+        print("PASS: press/drag tint reset, shared reading tint callback, continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save, draft recovery and visible-only Council acknowledgments")
         return true
     }
 

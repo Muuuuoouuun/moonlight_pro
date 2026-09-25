@@ -321,5 +321,18 @@ func runPetActivityStoreTests() async throws -> Int {
         try petCheck(store.unreadCount == 0 && store.notices.count == 3 && store.banner == nil, "Read-all must retain records and suppress pending banners")
         count += 1
     }
+    // A discarded store must not stay alive through its background sleep forever.
+    do {
+        let api = ControlledActivity()
+        var store: PetActivityStore? = PetActivityStore(defaults: defaults)
+        weak var released: PetActivityStore?
+        released = store
+        store!.configure(service: api, origin: "https://lifetime.example.test")
+        try await waitForLoad(store!, api: api)
+        store = nil
+        for _ in 0..<20 { await Task.yield() }
+        try petCheck(released == nil, "Background polling must not retain a discarded activity store")
+        count += 1
+    }
     return count
 }

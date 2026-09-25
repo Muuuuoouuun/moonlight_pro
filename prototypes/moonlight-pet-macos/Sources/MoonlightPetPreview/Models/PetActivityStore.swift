@@ -63,6 +63,8 @@ final class PetActivityStore: ObservableObject {
         self.defaults = defaults
         bannersEnabled = defaults.object(forKey: "petNotices.banners") as? Bool ?? true
     }
+    deinit { loop?.cancel(); nextBanner?.cancel() }
+
     func configure(service: (any HubActivityServing)?, origin: String?) {
         loop?.cancel(); generation += 1; api = service; isRefreshing = false
         dismissBanner(); nextBanner?.cancel(); nextBanner = nil; notices = []; inquiryNotices = []; calendarNotices = []; agentNotices = []
@@ -73,8 +75,8 @@ final class PetActivityStore: ObservableObject {
         guard service != nil else { return }
         loop = Task { [weak self] in
             while !Task.isCancelled {
-                guard let self else { return }
-                await self.refresh()
+                guard self != nil else { return }
+                await self?.refresh()
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
             }
         }
@@ -145,6 +147,7 @@ final class PetActivityStore: ObservableObject {
     }
     func acknowledgeAgentReplies(agentID: String, scope: String) {
         let ids = Set(agentNotices.filter { $0.agentID == agentID && $0.scope == scope }.map(\.id))
+        guard !ids.isEmpty else { return }
         agentNotices.removeAll { ids.contains($0.id) }
         if let banner, ids.contains(banner.id) { dismissBanner() }
         rebuild(now: Date())
