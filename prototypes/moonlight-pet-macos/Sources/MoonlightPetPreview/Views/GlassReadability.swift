@@ -114,7 +114,7 @@ private struct ReadingMaterial: NSViewRepresentable {
     }
 }
 
-private final class ReadingMaterialView: NSVisualEffectView {
+final class ReadingMaterialView: NSVisualEffectView {
     private var maskRadius: CGFloat = -1
     private var maskFeather: CGFloat = -1
 

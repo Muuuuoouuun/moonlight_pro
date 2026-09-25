@@ -24,7 +24,6 @@ struct CompanionPanelView: View {
                 header
                 if isToday && !showsAddress { todayTabs }
             }
-            .modifier(GlassReadability(radius: 22, inset: 12, feather: 12))
             .padding(.bottom, isToday ? 18 : 12)
             if showsAddress {
                 HubConnectionContent(model: model) {

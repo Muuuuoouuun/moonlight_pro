@@ -6,7 +6,7 @@ import OSLog
 /// Character color belongs to transient interaction, not the resting glass.
 enum PetGlassTheme {
     static func opacity(for character: PetCharacter) -> CGFloat {
-        character == .pink ? 0.60 : 0.76
+        character == .pink ? 0.42 : 0.52
     }
     static let primary: CGFloat = 0.98
     static let secondary: CGFloat = 0.92
