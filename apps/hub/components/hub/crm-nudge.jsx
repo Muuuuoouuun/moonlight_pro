@@ -1,122 +1,32 @@
 "use client";
 
-// CRM 넛지 카드 — 계기 하나에 이유 한 줄, 행동 하나, 탈출구.
+// CRM 넛지 — 데이터 계층. 판정은 lib/sales-os/crm-nudges.js(순수 함수)가 하고, 이 파일은
+// 그 결과를 읽고(useCrmNudges) 억제(숨기기·미루기)를 쓰는 React 훅 + 어떤 규칙을 화면에
+// 팁으로 되살릴지 정하는 얇은 매핑만 가진다.
 //
-// 기회 탐색 넛지(discovery-nudge.jsx)와 같은 계약을 고객 축으로 옮긴 것이다. 차이는
-// 상태 저장 위치뿐: 기회는 전용 테이블(discovery_nudge_states), 고객은 대상 레코드의
-// meta.nudges(마이그레이션 0).
-//
-// 색은 쓰지 않는다. severity는 배치(어느 섹션에 뜨는가)로 말하고, 카드 자체는 중립이다 —
-// 긴급은 §5.3 빨강 예산 안에서 목록이 이미 레일로 표현한다.
+// 2026-09-24 영업·매출 라운드 2 — 운영자 결정: "내가 생각한 넛지는 디자인 요소나 아니면
+// 추천 팁 혹은 제안 같은 쪽으로 가야 돼." 이전 버전의 CrmNudgeCard/CrmNudgeSection(전용
+// 섹션·카드 목록)은 그 결정과 반대라서 걷어냈다 — 넛지는 이제 대상(행·드로어)에 붙는
+// SuggestionTip(./suggestion-tip.jsx) 한 줄이고, 호출부(customers.jsx·followups.jsx)가
+// useCrmNudges()로 읽은 뒤 자기 행에 직접 붙인다.
 
 import React from "react";
-import { Button, TextField } from "./hub-primitives";
 
-const ESCAPE_LABEL = {
-  snooze: "미루기",
-  dismiss: "이 제안 숨기기",
-  cancelled: "취소·노쇼",
-  "not-a-customer": "고객 아님",
-};
+// 팁으로 되살릴 규칙만 허용한다. 나머지는 이미 다른 화면 요소가 같은 사실을 말하고 있어서
+// 다시 팁으로 얹으면 "대상 하나당 팁 하나" 예산을 넘기고 중복이 된다:
+//   · meeting_unrecorded — 오늘 연락의 "기록할까요"(RecordCandidates)가 이미 같은 계기를 보여준다.
+//   · promise_missed / promise_due — 오늘 연락의 "놓친 약속"·"오늘 약속" 행 자체, 그리고 고객
+//     목록·드로어의 "N일 지남" 약속 표시 자체가 이미 그 사실이다. 같은 행에 팁을 또 붙이면
+//     같은 말을 두 번 한다.
+//   · no_next_action — 고객 목록·드로어의 "다음 약속 없음" 카드가 이미 CTA를 낸다. 문구가
+//     이관·시트 템플릿뿐인 경우는 customer-list.js의 customerPromise() state:"template"과
+//     그 문구를 그대로 보여주는 전용 제안(고객 화면)이 대신한다 — 여기서 다시 얹지 않는다.
+export const TIP_RULE_IDS = new Set(["reaction_open", "dormant_recheck"]);
 
-export function CrmNudgeCard({ nudge, busy = false, onAct, onEscape }) {
-  const [choosingDate, setChoosingDate] = React.useState(false);
-  const [until, setUntil] = React.useState("");
-
-  if (!nudge) return null;
-
-  const escapes = Array.isArray(nudge.escape) ? nudge.escape : [];
-
-  return (
-    <div
-      className="hub-row"
-      style={{
-        display: "flex", flexDirection: "column", gap: 8,
-        padding: "12px 16px", borderBottom: "1px solid var(--line-soft)",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 13.5, fontWeight: 500 }}>{nudge.subject?.name}</span>
-        <span style={{ fontSize: 12.5, color: "var(--fg)" }}>{nudge.title}</span>
-      </div>
-
-      {/* 왜 지금인가 — 근거 한 줄. 이게 없으면 넛지가 아니라 잔소리다. */}
-      <div style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{nudge.reason}</div>
-
-      {choosingDate ? (
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, flexWrap: "wrap" }}>
-          <TextField
-            label="다시 볼 날짜"
-            type="date"
-            className="mono"
-            value={until}
-            onChange={(e) => setUntil(e.target.value)}
-            fieldStyle={{ flex: "0 1 170px" }}
-          />
-          <Button variant="outline" size="xs" disabled={!until || busy} onClick={() => { onEscape?.(nudge, "snooze", until); setChoosingDate(false); }}>
-            그때 다시
-          </Button>
-          <Button variant="ghost" size="xs" onClick={() => setChoosingDate(false)}>취소</Button>
-        </div>
-      ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <Button variant="outline" size="xs" icon="edit" disabled={busy} onClick={() => onAct?.(nudge)}>
-            {nudge.action?.label || "기록 남기기"}
-          </Button>
-          {escapes.map((escape) => (
-            <Button
-              key={escape}
-              variant="ghost"
-              size="xs"
-              disabled={busy}
-              onClick={() => (escape === "snooze" ? setChoosingDate(true) : onEscape?.(nudge, escape))}
-            >
-              {ESCAPE_LABEL[escape] || escape}
-            </Button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// 섹션 껍데기 — 제목·건수·읽기 상태. 넛지가 없으면 아무것도 그리지 않는다
-// (빈 섹션은 "할 일이 없다"를 말하는 게 아니라 자리만 먹는다).
-// loading도 같이 접는다 — 예전엔 콜드 로드마다 "먼저 정리할 것 0" 헤더가 본문 없이 떴다가
-// live+0건이 되면 사라졌다(헤더 플래시). 로딩을 스켈레톤으로 예고하지도, 빈 상태를 정직하게
-// 말하지도 않는 중간 상태였다(§11).
-export function CrmNudgeSection({ title, hint, nudges = [], state = "live", busyKey, onAct, onEscape }) {
-  if (nudges.length === 0 && (state === "live" || state === "loading")) return null;
-
-  return (
-    <section aria-label={title}>
-      <div style={{
-        display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap",
-        padding: "10px 16px", borderBottom: "1px solid var(--line-soft)", background: "var(--surface-2)",
-      }}>
-        <h3 style={{ margin: 0, fontSize: 11, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--fg-dim)" }}>
-          {title}
-        </h3>
-        <span className="num" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{nudges.length}</span>
-        {hint && <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>{hint}</span>}
-      </div>
-      {state === "error" ? (
-        <div role="alert" style={{ padding: "12px 16px", fontSize: 12, color: "var(--danger)" }}>
-          넛지를 불러오지 못했습니다 — 지금 비어 보여도 실제로는 있을 수 있습니다.
-        </div>
-      ) : (
-        nudges.map((nudge) => (
-          <CrmNudgeCard
-            key={`${nudge.subject.type}-${nudge.subject.id}-${nudge.triggerKey}`}
-            nudge={nudge}
-            busy={busyKey === nudge.triggerKey}
-            onAct={onAct}
-            onEscape={onEscape}
-          />
-        ))
-      )}
-    </section>
-  );
+// 팁 한 줄 문구 — 무엇이 계기인지(title) + 근거(reason)를 한 줄로 묶는다.
+export function nudgeTipReason(nudge) {
+  if (!nudge) return "";
+  return nudge.reason ? `${nudge.title} · ${nudge.reason}` : nudge.title;
 }
 
 // 넛지 읽기 + 억제 쓰기. 억제 뒤에는 다시 읽어 "숨겼는데 그대로 있다"를 만들지 않는다.

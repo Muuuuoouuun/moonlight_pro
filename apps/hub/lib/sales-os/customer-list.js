@@ -122,12 +122,19 @@ export function addDaysKey(today, days) {
 }
 
 // ── 다음 약속 ────────────────────────────────────────────────────────────────
-// state: dated(날짜 있는 약속) · undated(무엇만 있고 날짜 없음) · none(아직 안 정함)
-//        · dormant(기약 없음) · closed(종료된 고객)
+// state: dated(날짜 있는 약속) · undated(무엇만 있고 날짜 없음) · template(이관·시트 동기화
+//        문구뿐, 날짜 없음) · none(아직 안 정함) · dormant(기약 없음) · closed(종료된 고객)
+//
+// template: 이관 스크립트(`scripts/enrich-eeocrm-leads.mjs`)·시트 동기화가 채운 문구는
+// 운영자의 약속이 아니다(2026-09-24 운영자 확인, CRM 스펙 §4.1 결정 C). 날짜가 붙으면(즉
+// 운영자가 날짜를 직접 골랐으면) 문구가 템플릿이어도 실제 약속으로 본다 — 조정 행동이
+// 있었기 때문이다. `row.nextActionIsTemplate`는 mapLead(lead-enrichment.isTemplateNextAction)가
+// 계산해 이미 ledger를 통해 내려온다; 호출부는 그 값을 그대로 넘기기만 하면 된다.
 export function customerPromise(row = {}, today = new Date()) {
   const todayKey = localDateKey(today);
   const phase = customerPhase(row);
   const what = String(row.nextAction || "").trim();
+  const isTemplate = Boolean(row.nextActionIsTemplate) && Boolean(what);
   if (phase === "lost") return { state: "closed", what, at: null, offset: null, late: 0, whenLabel: "" };
   const at = localDateKey(row.nextActionAt);
   if (at) {
@@ -144,11 +151,17 @@ export function customerPromise(row = {}, today = new Date()) {
     const days = since ? dayOffset(since, todayKey) : null;
     return { state: "dormant", what: "", at: null, offset: null, late: 0, whenLabel: "", since, days };
   }
+  if (isTemplate) {
+    // 문구는 있지만 운영자가 쓴 게 아니다 — "다음 약속 없음"으로 말하고 문구는 제안으로만 돌려준다.
+    return { state: "template", what: "", suggestion: what, at: null, offset: null, late: 0, whenLabel: "" };
+  }
   if (what) return { state: "undated", what, at: null, offset: null, late: 0, whenLabel: "날짜 없음" };
   return { state: "none", what: "", at: null, offset: null, late: 0, whenLabel: "" };
 }
 
-// 진행 중인데 날짜 있는 약속이 없는 사람 — 히어로 eyebrow의 "약속 없는 진행 중".
+// 진행 중인데 날짜 있는 약속이 없는 사람 — 히어로 eyebrow의 "약속 없는 진행 중". state가
+// "dated"가 아니면 전부 센다 — template(이관 문구뿐)도 여기 포함된다: 문구가 있어도 운영자의
+// 약속이 아니므로 "약속 없는 진행 중"에서 빠지면 안 된다(2026-09-24).
 export function countOpenWithoutPromise(rows = [], today = new Date()) {
   return rows.filter((row) => inCustomerSegment(row, "active") && customerPromise(row, today).state !== "dated").length;
 }
@@ -191,9 +204,11 @@ export function customerLastContact(row = {}, today = new Date()) {
 }
 
 // ── 정렬 ─────────────────────────────────────────────────────────────────────
-// 다음 약속: 날짜 있는 약속 → 날짜 없는 약속 → 약속 없음. 날짜 없는 쪽은 방향과 무관하게
-// 항상 뒤(null last) — 뒤집어도 "약속 없음"이 맨 위로 올라와 급한 사람을 가리지 않는다.
-const PROMISE_RANK = { dated: 0, undated: 1, none: 2, dormant: 3, closed: 4 };
+// 다음 약속: 날짜 있는 약속 → 날짜 없는 약속 → 템플릿 문구뿐(약속 아님) → 약속 없음. 날짜
+// 없는 쪽은 방향과 무관하게 항상 뒤(null last) — 뒤집어도 "약속 없음"이 맨 위로 올라와 급한
+// 사람을 가리지 않는다. template은 undated보다 뒤다 — 운영자가 쓴 문구 없는 자동 채움은
+// "날짜만 없을 뿐 할 일은 정해진" undated보다 급하지 않다.
+const PROMISE_RANK = { dated: 0, undated: 1, template: 2, none: 3, dormant: 4, closed: 5 };
 
 function byName(a, b) {
   return String(a.name || "").localeCompare(String(b.name || ""), "ko");

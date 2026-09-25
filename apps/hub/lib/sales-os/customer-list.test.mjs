@@ -78,6 +78,35 @@ test("promise labels: 오늘 · 내일 · M/D, and overdue says N일 지남", ()
   assert.equal(countOpenWithoutPromise([lead(), lead({ nextActionAt: TODAY }), { kind: "account" }], TODAY), 1);
 });
 
+// 2026-09-24: 이관·시트 동기화 문구는 운영자의 약속이 아니다(CRM 스펙 §4.1 결정 C, DESIGN.md
+// §5.3 certainty). `nextActionIsTemplate`는 mapLead(lead-enrichment.isTemplateNextAction)가
+// 계산해 넘기는 신호이고, customerPromise는 그 신호만 읽는다(문구 재판정 없음).
+test("a template next action reads as no promise, but keeps the suggested text", () => {
+  const templated = lead({ nextAction: "리드 출처 확인 후 다음 접촉 채널 정하기", nextActionIsTemplate: true });
+  const p = customerPromise(templated, TODAY);
+  assert.equal(p.state, "template");
+  assert.equal(p.what, "", "다음 약속 칸에는 템플릿 문구를 진짜 약속처럼 보여주지 않는다");
+  assert.equal(p.suggestion, "리드 출처 확인 후 다음 접촉 채널 정하기");
+
+  // 날짜가 붙으면(운영자가 날짜를 직접 골랐으면) 문구가 템플릿이어도 실제 약속으로 본다.
+  const dated = lead({ nextAction: "리드 출처 확인 후 다음 접촉 채널 정하기", nextActionIsTemplate: true, nextActionAt: "2026-09-25" });
+  assert.equal(customerPromise(dated, TODAY).state, "dated");
+
+  // 운영자가 직접 쓴 문구는 그대로 undated 약속이다.
+  const written = lead({ nextAction: "견적서 보내기" });
+  assert.equal(customerPromise(written, TODAY).state, "undated");
+});
+
+test("template rows count as 약속 없는 진행 중 and sort behind a real undated promise", () => {
+  const templated = lead({ name: "템플릿만", nextAction: "리드 출처 확인 후 다음 접촉 채널 정하기", nextActionIsTemplate: true });
+  const written = lead({ name: "직접씀", nextAction: "견적서 보내기" });
+  assert.equal(countOpenWithoutPromise([templated], TODAY), 1, "템플릿 문구뿐이어도 '약속 없는 진행 중'에 들어간다");
+  assert.deepEqual(
+    sortCustomers([templated, written], { key: "promise", dir: "asc" }, TODAY).map((r) => r.name),
+    ["직접씀", "템플릿만"],
+  );
+});
+
 test("default sort is next promise ascending with no-promise rows last in both directions", () => {
   const rows = [
     lead({ name: "없음" }),

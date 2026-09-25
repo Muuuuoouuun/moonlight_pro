@@ -24,6 +24,8 @@ import {
 } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { ContactRecordForm } from "../contact-record-form";
+import { SuggestionTip } from "../suggestion-tip";
+import { TIP_RULE_IDS, nudgeTipReason, useCrmNudges } from "../crm-nudge";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
 import { useMemoSearch } from "./use-memo-search";
@@ -38,6 +40,7 @@ import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-
 import { LEAD_SUBJECTS, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { CUSTOMER_LABEL_MISSING, customerGenreOptions, customerRegionOptions, matchesCustomerLabels, normalizeGenreLabels } from "@/lib/sales-os/customer-labels";
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
+import { isTemplateNextAction } from "@/lib/sales-os/lead-enrichment";
 import {
   CUSTOMER_FOCUS_FILTERS, CUSTOMER_PHASES, CUSTOMER_SEGMENTS, DEFAULT_CUSTOMER_SEGMENT,
   channelFromPromise, countOpenWithoutPromise, customerDisplayName, customerLastContact,
@@ -136,6 +139,9 @@ function toRows(ledger) {
       healthScore: Number.isFinite(l.score) ? l.score : null,
       nextAction: l.nextAction || "",
       nextActionAt: l.nextActionAt || null,
+      // 이관 스크립트가 채운 문구인지(mapLead가 isTemplateNextAction으로 이미 계산해 둔 값) —
+      // customerPromise가 이 신호로 "약속"과 "제안"을 가른다(2026-09-24, CRM 스펙 §4.1 결정 C).
+      nextActionIsTemplate: Boolean(l.nextActionIsTemplate),
       last: l.last || "—",
       lastContactAt: l.lastContactAt || null,
       lastReaction: l.lastReaction || null,
@@ -177,6 +183,9 @@ function toRows(ledger) {
       healthScore: null,
       nextAction: a.nextAction || "",
       nextActionAt: a.nextActionAt || null,
+      // 계약 고객(account) 행은 mapAccount가 이 신호를 계산해 주지 않으므로 여기서 같은 판정을
+      // 직접 쓴다 — 목록·이관 스크립트가 쓰는 정본과 같은 함수(lead-enrichment.isTemplateNextAction).
+      nextActionIsTemplate: isTemplateNextAction(a.nextAction),
       last: a.last || "—",
       lastContactAt: null,
       lastReaction: null,
@@ -664,7 +673,7 @@ function PromiseEditor({ mode, initialWhat = "", busy, error, onSave, onCancel }
   );
 }
 
-function PromiseCard({ promise, busy, error, onRecord, onSave }) {
+function PromiseCard({ promise, tip: nudgeTip, busy, error, onRecord, onSave }) {
   const [editor, setEditor] = React.useState(null); // null | "reschedule" | "set"
   const late = promise.state === "dated" && promise.late > 0;
   const save = async (value) => {
@@ -693,11 +702,23 @@ function PromiseCard({ promise, busy, error, onRecord, onSave }) {
     actions = <Button variant="outline" size="sm" aria-expanded={editor === "set"} onClick={() => setEditor(editor ? null : "set")}>약속 정하기</Button>;
   } else if (promise.state === "closed") {
     what = "종료된 고객";
+  } else if (promise.state === "template") {
+    // 이관·시트 템플릿 문구는 약속이 아니다 — "다음 약속 없음"으로 말하고, 문구는 아래
+    // 제안 팁의 [약속으로 정하기]가 대신 낸다(같은 버튼을 두 번 두지 않는다).
+    what = "다음 약속 없음";
   } else {
     what = "아직 정하지 않았어요";
     actions = <Button variant="outline" size="sm" aria-expanded={editor === "set"} onClick={() => setEditor(editor ? null : "set")}>약속 정하기</Button>;
   }
   const muted = !(promise.state === "dated" || promise.state === "undated");
+
+  // 한 사람당 팁은 하나(§ 예산). 넛지(우려·거절 뒤 정리 안 됨 · 기약 없음 재확인)가 있으면
+  // 그게 이긴다 — 더 구체적이고 급한 신호다. 없을 때만 템플릿 제안으로 내려간다.
+  const tip = nudgeTip || (promise.state === "template" ? {
+    reason: promise.suggestion,
+    action: "약속으로 정하기",
+    onAction: () => setEditor(editor ? null : "set"),
+  } : null);
 
   return (
     <section className="customer-promise" data-late={late ? "true" : undefined} aria-label="다음 약속">
@@ -708,7 +729,7 @@ function PromiseCard({ promise, busy, error, onRecord, onSave }) {
         <PromiseEditor
           key={editor}
           mode={editor}
-          initialWhat={editor === "set" ? promise.what : ""}
+          initialWhat={editor === "set" ? (promise.state === "template" ? promise.suggestion : promise.what) : ""}
           busy={busy}
           error={error}
           onSave={save}
@@ -718,6 +739,11 @@ function PromiseCard({ promise, busy, error, onRecord, onSave }) {
         <>
           {error && <p role="alert" className="customer-promise__msg" data-error="true">{error}</p>}
           {actions && <div className="customer-promise__actions">{actions}</div>}
+          {tip && (
+            <div className="customer-promise__tip">
+              <SuggestionTip reason={tip.reason} action={tip.action} onAction={tip.onAction} onSnooze={tip.onSnooze} onDismiss={tip.onDismiss} />
+            </div>
+          )}
         </>
       )}
     </section>
@@ -746,7 +772,7 @@ function QuickContactActions({ row, onCopied }) {
   );
 }
 
-function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed, onClose, onNavigate, onDelete, onFocusChange, onLabelsSaved, onPromiseSaved, onRecordPersisted, onRecordFailed }) {
+function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed, onClose, onNavigate, onDelete, onFocusChange, onLabelsSaved, onPromiseSaved, onRecordPersisted, onRecordFailed, nudge, onNudgeEscape }) {
   const toast = useToast();
   const mobile = useMediaQuery("(max-width: 600px)");
   const [memoState, setMemoState] = React.useState(null);
@@ -789,6 +815,20 @@ function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed,
   const displayName = customerDisplayName(row);
   const org = customerOrgLabel(row);
   const phase = CUSTOMER_PHASES[customerPhase(row)];
+  // 이 사람의 넛지(우려·거절 뒤 정리 안 됨 · 기약 없음 재확인) — 있으면 [다음 약속] 카드의
+  // 팁으로 뜬다(템플릿 제안보다 우선, PromiseCard 안에서 결정). 행동은 이 드로어의 기록
+  // 시트(startRecord)를 그대로 연다 — 새 폼을 만들지 않는다.
+  const promiseTip = React.useMemo(() => {
+    if (!nudge) return null;
+    const escapes = Array.isArray(nudge.escape) ? nudge.escape : [];
+    return {
+      reason: nudgeTipReason(nudge),
+      action: nudge.action?.label,
+      onAction: () => startRecord(nudge.action?.prefill?.kind ? { kind: nudge.action.prefill.kind } : {}),
+      onSnooze: escapes.includes("snooze") ? (until) => onNudgeEscape?.(nudge, "snooze", until) : undefined,
+      onDismiss: escapes.includes("dismiss") ? () => onNudgeEscape?.(nudge, "dismiss") : undefined,
+    };
+  }, [nudge, onNudgeEscape, startRecord]);
 
   const [actError, setActError] = React.useState(null);
   const deleteActivity = React.useCallback((activity) => {
@@ -1053,6 +1093,7 @@ function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed,
 
           <PromiseCard
             promise={promise}
+            tip={promiseTip}
             busy={promiseBusy}
             error={promiseError}
             onRecord={(preset, draft) => startRecord(preset, draft)}
@@ -1404,7 +1445,7 @@ function NewCustomerDrawer({ initialName = "", initialPhone = "", workspace = nu
 
 // ── 목록 ────────────────────────────────────────────────────────────────────
 
-function PromiseCell({ promise }) {
+function PromiseCell({ promise, tip }) {
   if (promise.state === "dated") {
     const late = promise.late > 0;
     return (
@@ -1429,15 +1470,26 @@ function PromiseCell({ promise }) {
     );
   }
   const label = promise.state === "dormant" ? "기약 없음" : promise.state === "closed" ? "종료" : "다음 약속 없음";
+  // 한 사람당 팁 하나 — 넛지가 있으면 그게 이긴다(reaction_open·dormant_recheck), 없으면
+  // 템플릿 문구뿐일 때만 그 문구를 제안으로 보여준다. 행 전체가 이미 클릭 가능한 컨테이너라
+  // (role="button") 여기서는 compact(버튼 없는 정보 표시)만 쓴다 — 실제 조작은 드로어에서.
+  const cellTip = tip || (promise.state === "template" ? { reason: promise.suggestion } : null);
   return (
     <div className="customers-next" data-empty="true">
       <span className="customers-next__what">{label}</span>
+      {cellTip && (
+        <div className="customers-next__tip">
+          <SuggestionTip reason={cellTip.reason} compact />
+        </div>
+      )}
     </div>
   );
 }
 
-function CustomerRow({ row, today, selected, rail, onOpen, onSelect }) {
+function CustomerRow({ row, today, selected, rail, nudge, onOpen, onSelect }) {
   const promise = customerPromise(row, today);
+  // compact 팁은 정보만(버튼 없음, 위 SuggestionTip 주석) — 행 전체가 이미 클릭 가능하다.
+  const nudgeTip = nudge ? { reason: nudgeTipReason(nudge) } : null;
   const phase = CUSTOMER_PHASES[customerPhase(row)];
   const last = customerLastContact(row, today);
   const org = customerOrgLabel(row) || row.sub;
@@ -1468,7 +1520,7 @@ function CustomerRow({ row, today, selected, rail, onOpen, onSelect }) {
         <LifecycleBadge state={phase.lifecycle} label={phase.label} />
       </div>
       <div className="customers-cell customers-cell--next">
-        <PromiseCell promise={promise} />
+        <PromiseCell promise={promise} tip={nudgeTip} />
       </div>
       <div className="customers-cell customers-cell--last">
         {last.known ? (
@@ -1543,6 +1595,23 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
   const [pendingOpen, setPendingOpen] = React.useState(null); // { key, ledger } — 생성 직후 열기
   const [recordRequest, setRecordRequest] = React.useState(null);
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
+
+  // 넛지는 더 이상 전용 섹션이 아니다(운영자 2026-09-24) — 대상 행·드로어에 붙는 제안 팁
+  // 하나로 나온다. TIP_RULE_IDS가 이미 다른 화면 요소로 대표되는 규칙(놓친 약속 자체·다음
+  // 약속 없음 카드 등)을 걸러 낸다.
+  const crmNudges = useCrmNudges();
+  const nudgesBySubjectId = React.useMemo(() => {
+    const map = new Map();
+    for (const nudge of crmNudges.nudges || []) {
+      if (!TIP_RULE_IDS.has(nudge.ruleId)) continue;
+      map.set(String(nudge.subject.id), nudge);
+    }
+    return map;
+  }, [crmNudges.nudges]);
+  const onNudgeEscape = React.useCallback(async (nudge, action, until) => {
+    const res = await crmNudges.suppress(nudge, action, until);
+    if (!res.ok) toast.error(`제안을 처리하지 못했어요 — ${res.reason || "다시 시도해 주세요"}`);
+  }, [crmNudges, toast]);
 
   const today = new Date();
   const todayKey = localDateKey(today);
@@ -1843,6 +1912,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
         today={todayKey}
         selected={selectedId === r.key}
         rail={railKeys.has(r.key)}
+        nudge={nudgesBySubjectId.get(String(r.id))}
         onOpen={setOpenKey}
         onSelect={setSelectedId}
       />
@@ -1995,6 +2065,8 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
           onPromiseSaved={onPromiseSaved}
           onRecordPersisted={onRecordPersisted}
           onRecordFailed={onRecordFailed}
+          nudge={nudgesBySubjectId.get(String(openRow.id))}
+          onNudgeEscape={onNudgeEscape}
         />
       )}
 

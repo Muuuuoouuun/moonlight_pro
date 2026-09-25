@@ -239,6 +239,8 @@ const deleteContract = await import("../../../lib/sales-os/customer-delete-contr
 const followupScoring = await import("../../../lib/sales-os/followup-scoring.js");
 const uuid = await import("../../../lib/uuid.js");
 const workspaceMap = await import("../workspace-map.js");
+const leadEnrichment = await import("../../../lib/sales-os/lead-enrichment.js");
+const crmNudge = await import("../crm-nudge.jsx");
 
 const pageJs = ts.transpileModule(
   customersSource.replace(/^import[\s\S]*?;\s*$/gm, "").replace("export function Customers", "function Customers"),
@@ -249,7 +251,7 @@ const HOST_COMPONENTS = [
   "OfficeWorkflowPanel", "RelatedCustomerProjects", "ContextMemoDrawer", "Iconed", "Badge", "Button", "IconButton",
   "Avatar", "EmptyState", "TruthBadge", "Kbd", "Drawer", "SegmentedControl", "CheckboxRow", "TextField", "TextAreaField",
   "SelectField", "Skeleton", "CertaintyBadge", "ChipToggle", "LifecycleBadge", "DateQuickPresets", "ContactRecordForm",
-  "LeadEnrichmentPanel", "SortHead", "FloatingMentorWidget", "GuruGuidanceCard", "ContextMentorRail",
+  "LeadEnrichmentPanel", "SortHead", "FloatingMentorWidget", "GuruGuidanceCard", "ContextMentorRail", "SuggestionTip",
 ];
 
 function mountCustomers({ state = "live", leads = [], accounts = [], params = "" } = {}) {
@@ -298,6 +300,12 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     ...customerLabels,
     REACTION_LABEL: followupScoring.REACTION_LABEL,
     ...helpers,
+    isTemplateNextAction: leadEnrichment.isTemplateNextAction,
+    TIP_RULE_IDS: crmNudge.TIP_RULE_IDS,
+    nudgeTipReason: crmNudge.nudgeTipReason,
+    // 실제 훅은 fetch로 넛지를 읽는다 — 이 렌더 스모크는 이 화면의 목록·드로어 그리기만
+    // 확인하므로 넛지 없는 정적 상태로 둔다(넛지 자체 계약은 crm-nudge.test.mjs가 고정).
+    useCrmNudges: () => ({ status: "preview", nudges: [], unrecordedMeetings: [], failedSources: [], busyKey: null, suppress: async () => ({ ok: true }), refresh() {} }),
   };
   for (const name of HOST_COMPONENTS) deps[name] = name;
   const { Customers } = new Function(...Object.keys(deps), `${pageJs}; return { Customers };`)(...Object.values(deps));
@@ -415,6 +423,46 @@ test("render: opening a row shows the promise first and one primary record actio
   assert.equal(form.props.draft.summary, "견적서 보내기");
   assert.equal(app.findAll((n) => n.type === "Drawer").length, 1);
   assert.equal(app.findAll((n) => n.type === "Drawer")[0].props.title, "연락 기록");
+});
+
+// 2026-09-24: 이관·시트 템플릿 문구는 운영자의 약속이 아니다 — 목록·드로어 둘 다 "다음 약속
+// 없음"으로 말하고, 문구는 SuggestionTip의 제안으로만 낸다(한 사람당 팁 하나).
+test("render: a template next action never shows as a real promise — it's a suggestion tip instead", () => {
+  const TEMPLATE = "고객 활성 상태 확인 → 갱신·휴면 여부 정리";
+  const templated = {
+    id: "66666666-6666-4666-8666-666666666666",
+    name: "템플릿학원 F",
+    stage: "Contact",
+    nextAction: TEMPLATE,
+    nextActionIsTemplate: true,
+    createdAt: ago(10),
+    lastContactAt: ago(10),
+  };
+  const app = mountCustomers({ leads: [templated] });
+  const row = rowsOf(app)[0];
+  assert.match(app.text(row), /다음 약속 없음/);
+  assert.doesNotMatch(app.text(row), new RegExp(TEMPLATE), "템플릿 문구를 진짜 약속처럼 행에 보여주지 않는다");
+
+  const cellTip = app.findAll((n) => n.type === "SuggestionTip" && n.props.compact)[0];
+  assert.ok(cellTip, "고객 목록 행은 compact 제안 팁을 낸다");
+  assert.equal(cellTip.props.reason, TEMPLATE);
+  assert.equal(app.findAll((n) => n.type === "SuggestionTip").length, 1, "한 사람당 팁은 하나");
+
+  rowsOf(app)[0].props.onClick();
+  app.render();
+  const promise = app.findAll((n) => n.props?.["aria-label"] === "다음 약속")[0];
+  assert.match(app.text(promise), /다음 약속 없음/);
+  const fullTip = app.findAll((n) => n.type === "SuggestionTip" && !n.props.compact)[0];
+  assert.ok(fullTip, "드로어는 버튼이 붙은 전체 제안 팁을 낸다");
+  assert.equal(fullTip.props.reason, TEMPLATE);
+  assert.equal(fullTip.props.action, "약속으로 정하기");
+  // 카드 자체의 "약속 정하기" 제네릭 버튼은 없다 — 팁의 버튼이 같은 역할을 한다(중복 없음).
+  assert.equal(app.findAll((n) => n.type === "Button" && /약속 정하기/.test(app.text(n))).length, 0);
+
+  fullTip.props.onAction();
+  app.render();
+  const editorInput = app.findAll((n) => n.type === "TextField" && n.props.label === "무엇을")[0];
+  assert.equal(editorInput.props.value, TEMPLATE, "제안을 누르면 그 문구가 그대로 편집 칸에 들어간다");
 });
 
 test("render: 날짜 다시 moves only the promise date through the lead update route", async () => {
