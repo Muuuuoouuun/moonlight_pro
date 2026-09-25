@@ -180,8 +180,9 @@ test('manual agenda is derived from the first request and a new agenda clears on
   const store = createOfficeSessionStore();
   store.update('personal', { draft: '첫 줄 안건\n추가 상황' });
   const pending = store.begin('personal', 'manual');
-  assert.deepEqual(store.get('personal').agenda, { title: '첫 줄 안건', source: 'manual', block: '첫 줄 안건\n추가 상황' });
+  assert.equal(store.get('personal').agenda, null);
   store.complete('personal', pending.id, generated(pending.request));
+  assert.deepEqual(store.get('personal').agenda, { title: '첫 줄 안건', source: 'manual', block: '첫 줄 안건\n추가 상황' });
   store.update('classin', { draft: '회사 원문' });
   store.reset('personal');
   assert.equal(store.get('personal').turns.length, 0);
@@ -208,4 +209,64 @@ test('task reader distinguishes live, partial, preview and failed HTTP or read e
   assert.equal((await read(502, { status: 'error', tasks: [] })).status, 'error');
   assert.equal((await read(200, { status: 'error', tasks: [] })).status, 'error');
   assert.equal((await loadOfficeTasks({ fetcher: async () => { throw new Error('offline'); } })).status, 'error');
+});
+
+test('task read errors map known internal codes to short Korean copy and never leak a raw code', async () => {
+  const read = (status, body) => loadOfficeTasks({ fetcher: async () => Response.json(body, { status }) });
+  assert.equal((await read(502, { status: 'error', error: 'project-ledger-core-read-failed' })).error, '업무 저장소에 연결하지 못했습니다.');
+  assert.equal((await read(500, { status: 'error', error: 'task-ledger-unexpected-error' })).error, '할 일을 불러오는 중 오류가 발생했습니다.');
+  const unknown = (await read(502, { status: 'error', error: 'some-unmapped-internal-code' })).error;
+  assert.equal(unknown, '할 일을 읽지 못했습니다.');
+  assert.doesNotMatch(unknown, /-/);
+});
+
+test('page chat override applies only to council sessions; draft/review follow-ups and revise send their stored mode', () => {
+  const store = createOfficeSessionStore();
+  const pageOverride = session => session.turns.length && session.followUpMode === 'chat' && session.mode === 'council' ? { mode: 'chat' } : undefined;
+
+  // Draft mode: first turn, then a revise-like restore of {mode:'draft', reviewers:[]} — a follow-up must still send 'draft'.
+  store.update('personal', { draft: '초안 작성해 줘', mode: 'draft' });
+  const draftFirst = store.begin('personal', 'draft-1');
+  assert.equal(draftFirst.request.mode, 'draft');
+  store.complete('personal', draftFirst.id, generated(draftFirst.request));
+  store.update('personal', { mode: 'draft', reviewers: [] });
+  store.update('personal', { draft: '다시 이어서' });
+  const draftSession = { ...store.get('personal'), followUpMode: 'chat' };
+  const draftSecond = store.begin('personal', 'draft-2', pageOverride(draftSession));
+  assert.equal(draftSecond.request.mode, 'draft');
+
+  // Council mode: the '주관에게' (chat) follow-up choice still sends 'chat' for a council session.
+  store.update('classin', { draft: '회의 안건', reviewers: ['umbreon'] });
+  const councilFirst = store.begin('classin', 'council-1');
+  assert.equal(councilFirst.request.mode, 'council');
+  store.complete('classin', councilFirst.id, generated(councilFirst.request));
+  store.update('classin', { draft: '후속 질문' });
+  const councilSession = { ...store.get('classin'), followUpMode: 'chat' };
+  const councilSecond = store.begin('classin', 'council-2', pageOverride(councilSession));
+  assert.equal(councilSecond.request.mode, 'chat');
+});
+
+test('첫 요청 실패 뒤 원문을 바꾸면 옛 원문이 붙지 않고 안건 제목도 새 원문을 따른다', () => {
+  const store = createOfficeSessionStore();
+  store.update('personal', { draft: '옛 질문 원문' });
+  store.begin('personal', 'first-fail');
+  assert.equal(store.get('personal').agenda, null);
+  store.complete('personal', 'first-fail', { status: 'error', error: '연결 실패' });
+  assert.equal(store.get('personal').agenda, null);
+  store.update('personal', { draft: '완전히 새로 쓴 원문' });
+  const second = store.begin('personal', 'second');
+  assert.equal(second.request.message, '완전히 새로 쓴 원문');
+  assert.doesNotMatch(second.request.message, /옛 질문 원문/);
+  store.complete('personal', second.id, generated(second.request));
+  assert.equal(store.get('personal').agenda.title, '완전히 새로 쓴 원문');
+});
+
+test('a task-imported agenda survives a failed first request unchanged', () => {
+  const store = createOfficeSessionStore();
+  const block = officeTaskAgendaBlock({ title: '가져온 할 일', nextAction: '확인' });
+  const importedAgenda = { title: '가져온 할 일', source: 'task', taskId: 't1', importedAt: '2026-09-25T00:00:00.000Z', block };
+  store.update('personal', { agenda: importedAgenda, draft: block });
+  store.begin('personal', 'task-fail');
+  store.complete('personal', 'task-fail', { status: 'error', error: '연결 실패' });
+  assert.deepEqual(store.get('personal').agenda, importedAgenda);
 });
