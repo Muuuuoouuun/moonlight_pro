@@ -378,7 +378,9 @@ export async function GET() {
     getContentLedger(),
     getAutomationsLedger(),
     getWorkOrders({ status: "proposed", scope: 'proposals', limit: 12 }),
-    getWorkOrderCounts(),
+    // This route only reads counts.proposed below — narrow the count to the one status
+    // instead of the default five.
+    getWorkOrderCounts({ statuses: ["proposed"] }),
     getMorningBrief(),
   ]);
 

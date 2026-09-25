@@ -149,16 +149,18 @@ test("standalone task action, checklist and database version reach My Work detai
   assert.equal(task.updatedAt, state.todos[0].updatedAt);
 });
 
-test("attention returns the same items and scoring with three revenue reads instead of seven", async () => {
+test("attention returns the same items and scoring with three revenue reads instead of five", async () => {
   const { raw, ...full } = await getAttentionLedger({ includeRaw: true });
   const fullCalls = state.calls;
   // 두 번째 "workspaces"는 이번 달 매출 목표 읽기(revenue-target.js) — 접점 추적 시작일과
-  // 별개 쿼리라 같은 테이블을 두 번 읽는다.
+  // 별개 쿼리라 같은 테이블을 두 번 읽는다. includeRaw는 revenue를 "brief" 프로젝션으로 읽어서
+  // (2026-09-25) customer_accounts·operation_cases는 애초에 읽지 않는다 — daily-brief/route.js·
+  // operator-revenue-scope.js·daily-focus.js 어디도 raw.revenue.accounts/.cases를 안 쓴다.
   assert.deepEqual(fullCalls.map(call => call.table), [
-    "leads", "deals", "customer_accounts", "operation_cases", "companies", "contacts", "workspaces", "workspaces",
+    "leads", "deals", "companies", "contacts", "workspaces", "workspaces",
   ]);
-  assert.equal(raw.revenue.accounts.length, 1);
-  assert.equal(raw.revenue.cases.length, 1);
+  assert.deepEqual(raw.revenue.accounts, []);
+  assert.deepEqual(raw.revenue.cases, []);
   assert.equal(raw.revenue.contacts.length, 1);
   assert.equal(raw.revenue.deals[0].trackingEligible, false);
 

@@ -41,6 +41,25 @@ test('counts every proposal lifecycle status exactly and excludes inbox records 
   }
 });
 
+test('a narrowed statuses list counts only those statuses (daily-brief only needs proposed)', async () => {
+  const result = await getWorkOrderCounts({ workspaceId: 'workspace-2', statuses: ['proposed'] });
+  assert.equal(result.source, 'supabase');
+  assert.deepEqual(result.counts, { proposed: state.values.proposed });
+  assert.equal(state.calls.length, 1);
+  assert.equal(state.calls[0].table, 'work_orders');
+  assert.deepEqual(state.calls[0].filters, [
+    ['workspace_id', 'eq.workspace-2'], ['source', 'neq.inbox'], ['status', 'eq.proposed'],
+  ]);
+});
+
+test('an empty or fully-unknown statuses list falls back to the default five', async () => {
+  assert.equal((await getWorkOrderCounts({ statuses: [] })).source, 'supabase');
+  assert.equal(state.calls.length, 5);
+  state.calls = [];
+  assert.equal((await getWorkOrderCounts({ statuses: ['bogus'] })).source, 'supabase');
+  assert.equal(state.calls.length, 5);
+});
+
 test('unconfigured and failed counts stay distinct from a proven zero', async () => {
   state.configured = false;
   assert.deepEqual(await getWorkOrderCounts(), { source: 'preview', counts: null });

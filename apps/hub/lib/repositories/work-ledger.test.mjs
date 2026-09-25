@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { beforeEach, test } from "node:test";
 
+import { WORKSPACE_ROW_SELECT } from "../workspace-row-select.js";
+
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
 const PROJECT_TARGET_ID = "22222222-2222-4222-8222-222222222222";
 const PROJECT_OTHER_ID = "33333333-3333-4333-8333-333333333333";
@@ -479,6 +481,31 @@ test("weekly bitmap uses the workspace timezone at the UTC to KST date boundary"
   assert.equal(ledger.rituals[0].streak, 0);
   const workspaceCall = state.calls.find((entry) => entry.table === "workspaces");
   assert.deepEqual(workspaceCall.options.filters, [["id", `eq.${WORKSPACE_ID}`]]);
+});
+
+test("workspaces read uses the shared WORKSPACE_ROW_SELECT and the roadmap brands read matches operating/content-ledger's option shape", async () => {
+  const state = globalThis.__workLedgerTestState;
+
+  await workLedger.getWorkLedger();
+
+  const workspaceCall = state.calls.find((entry) => entry.table === "workspaces");
+  // Same select as operating-ledger.js/revenue-ledger.js/contact-tracking.js/
+  // deadline-alert-settings.js's workspaces reads — packages/supabase-rest's dedupedRead only
+  // coalesces concurrent GETs whose URL (built from table+select+filters+limit) matches exactly.
+  assert.equal(workspaceCall.options.select, WORKSPACE_ROW_SELECT);
+
+  const brandCall = state.calls.find((entry) => entry.table === "brands");
+  // No `select` (mapRoadmapBrands only reads id/slug/name off the full row) and limit 80, not
+  // 40 — matches operating-ledger.js getTaskLedger's and content-ledger.js getContentLedger's
+  // brands read option-for-option so the same request reading brands from more than one of
+  // these ledgers collapses to a single network call.
+  assert.equal(brandCall.options.select, undefined);
+  assert.equal(brandCall.options.limit, 80);
+  assert.equal(brandCall.options.order, "name.asc");
+  assert.deepEqual(brandCall.options.filters, [
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
+    ["status", "eq.active"],
+  ]);
 });
 
 test("pendingStreak carries the streak through yesterday so today's check can continue it", async () => {

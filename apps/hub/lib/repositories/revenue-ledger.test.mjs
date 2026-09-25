@@ -1,7 +1,65 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { registerHooks } from "node:module";
+import { beforeEach, test } from "node:test";
 
-import { mapAccount, mapDeal, mapLead } from "./revenue-ledger.js";
+// getRevenueLedger's projection coverage (below) needs @/lib/server-read and @/lib/server-write
+// mocked before revenue-ledger.js (and the @/lib/sales-os/contact-tracking chain it pulls in)
+// is ever loaded — Node's ESM module cache is keyed by resolved URL and is process-global, so a
+// prior *unhooked* static import of this module would permanently bind its dependency graph to
+// the real (network-backed) server-read.js, and a later hook-registered dynamic import of the
+// same URL would just return that already-instantiated, unhooked module instead of a fresh one.
+// Registering the hook first and loading everything (including the plain mapper exports used by
+// the pure-function tests below) through one dynamic import avoids that trap.
+const readStub = `
+export function eqFilter(value) { return "eq." + value; }
+export function inFilter(values) { return "in.(" + values.join(",") + ")"; }
+export function withWorkspaceFilter(filters = []) {
+  return [["workspace_id", "eq.workspace-1"], ...filters];
+}
+export async function fetchSupabaseRows(table, options = {}) {
+  const state = globalThis.__revenueLedgerTest;
+  state.calls.push({ table, options });
+  return state.rows[table] || [];
+}
+`;
+const writeStub = `
+export function resolveDefaultWorkspaceId() { return "workspace-1"; }
+export function resolveSupabaseConfig() { return { url: "https://example.test", apiKey: "test" }; }
+`;
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "@/lib/server-read") {
+      return { url: `data:text/javascript,${encodeURIComponent(readStub)}`, shortCircuit: true };
+    }
+    if (specifier === "@/lib/server-write") {
+      return { url: `data:text/javascript,${encodeURIComponent(writeStub)}`, shortCircuit: true };
+    }
+    // contact-tracking.js's own relative import of the same read helper — keep it on the same
+    // stub so getContactTrackingStartedAt's "workspaces" read is counted too (real full-ledger
+    // wiring, not a bypass).
+    if (specifier === "../server-read.js" && context.parentURL.includes("/sales-os/contact-tracking.js")) {
+      return { url: `data:text/javascript,${encodeURIComponent(readStub)}`, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+});
+
+const state = (globalThis.__revenueLedgerTest = {});
+const { mapAccount, mapDeal, mapLead, getRevenueLedger } = await import("./revenue-ledger.js");
+
+beforeEach(() => {
+  state.calls = [];
+  state.rows = {
+    leads: [{ id: "lead-1", score: "87.5", name: "Lead", meta: {} }],
+    deals: [{ id: "deal-1", title: "Deal", stage: "proposal", amount: 1000, meta: {} }],
+    customer_accounts: [{ id: "account-1", name: "Account", status: "active", meta: {} }],
+    operation_cases: [{ id: "case-1", title: "Case", meta: {} }],
+    companies: [{ id: "company-1", name: "Company", meta: {} }],
+    contacts: [{ id: "contact-1", name: "Contact", meta: {} }],
+    workspaces: [{ id: "workspace-1", meta: { revenue_targets: { "2026-09": 5000000 } } }],
+  };
+});
 
 test("mapDeal reads back the implicit payment's first plan (meta.plan_baseline) and rejects a non-object", () => {
   const baseline = { amount: 1800000, closeAt: "2026-09-15T03:00:00.000Z", at: "2026-09-20T00:00:00.000Z" };
@@ -75,4 +133,35 @@ test('account labels use account values and company region only as a fallback', 
   assert.deepEqual(explicit.genres, ['입시']);
   assert.equal(explicit.labelSource.region, 'operator');
   assert.equal(mapAccount({ id: 'account-1', name: '학원', company_id: 'company-1', meta: { region: null } }, new Map(), companies).region, '');
+});
+
+// --- getRevenueLedger projection coverage (2026-09-25 db optimization) ---
+
+test('projection defaults to "full" and reads all 8 tables (leads/deals/accounts/cases/companies/contacts/workspaces×2)', async () => {
+  const full = await getRevenueLedger();
+  assert.deepEqual(
+    state.calls.map((call) => call.table),
+    ["leads", "deals", "customer_accounts", "operation_cases", "companies", "contacts", "workspaces", "workspaces"],
+  );
+  assert.equal(full.accounts.length, 1);
+  assert.equal(full.cases.length, 1);
+});
+
+test('projection:"brief" skips customer_accounts/operation_cases and leaves accounts/cases empty while keeping leads/deals/companies/contacts/revenueTargets', async () => {
+  const full = await getRevenueLedger();
+  state.calls = [];
+
+  const brief = await getRevenueLedger({ projection: "brief" });
+  assert.deepEqual(
+    state.calls.map((call) => call.table),
+    ["leads", "deals", "companies", "contacts", "workspaces", "workspaces"],
+  );
+  assert.deepEqual(brief.accounts, []);
+  assert.deepEqual(brief.cases, []);
+  assert.equal(brief.leads.length, 1);
+  assert.equal(brief.deals.length, 1);
+  assert.equal(brief.companies.length, 1);
+  assert.equal(brief.contacts.length, 1);
+  assert.deepEqual(brief.revenueTargets, full.revenueTargets);
+  assert.deepEqual(brief.revenueTargets, { "2026-09": 5000000 });
 });

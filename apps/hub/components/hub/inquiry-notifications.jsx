@@ -3,12 +3,15 @@
 import React from 'react';
 import { Button, Card, IconButton, TruthBadge } from './hub-primitives';
 import { inquiryReadState, inquiryTime } from './inquiry-view-state';
+import { createMinIntervalGate } from './min-interval-gate';
 
 export function useInquiryNotifications() {
   const [state, setState] = React.useState({ status: 'loading', rows: [], unreadCount: null });
   React.useEffect(() => {
     let controller;
+    const gate = createMinIntervalGate(20000);
     const load = async () => {
+      gate.mark();
       controller?.abort();
       controller = new AbortController();
       const signal = controller.signal;
@@ -20,9 +23,10 @@ export function useInquiryNotifications() {
     };
     load();
     const timer = setInterval(() => { if (!document.hidden) load(); }, 60000);
-    window.addEventListener('focus', load);
+    const onFocus = () => { if (gate.allow()) load(); };
+    window.addEventListener('focus', onFocus);
     window.addEventListener('moonlight:inquiries-changed', load);
-    return () => { controller?.abort(); clearInterval(timer); window.removeEventListener('focus', load); window.removeEventListener('moonlight:inquiries-changed', load); };
+    return () => { controller?.abort(); clearInterval(timer); window.removeEventListener('focus', onFocus); window.removeEventListener('moonlight:inquiries-changed', load); };
   }, []);
   return state;
 }

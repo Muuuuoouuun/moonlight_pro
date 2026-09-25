@@ -25,6 +25,15 @@ const TASK_READ_LIMIT = 160;
 const PROJECT_UPDATE_READ_LIMIT = 120;
 const OPTIONAL_READ_LIMIT = 80;
 
+// getProjectLedger의 project_updates·decisions·notes·routine_checks 읽기 select —
+// mapProjectUpdates·mapDecisions·mapNotes·mapRoutineChecks가 읽는 필드와 1:1이다
+// (컬럼은 supabase/setup/00_live_schema.sql:143-203 확인). getTaskLedger와
+// brands·projects·tasks 읽기(meta를 넓게 씀)는 대상이 아니다.
+const PROJECT_UPDATE_SELECT = "id,project_id,source,event_type,status,title,summary,progress,milestone,next_action,correlation_id,provider_event_id,happened_at,created_at";
+const DECISION_SELECT = "id,project_id,title,summary,rationale,decided_at,created_at";
+const NOTE_SELECT = "id,project_id,title,body,created_at";
+const ROUTINE_CHECK_SELECT = "id,project_id,check_type,status,note,checked_at,created_at";
+
 // PMS container category (2026-07-15 spec §4.1): 'sns-channel' | 'ka-deal' |
 // 'general'. meta.category overrides; unknown values read as "general" — the
 // code never guesses. The canonical list is the operator-confirmed 2026-07-15
@@ -662,21 +671,25 @@ export async function getProjectLedger({ projectId = null } = {}) {
     }),
     countSupabaseRows("tasks", taskFilters),
     fetchSupabaseRows("project_updates", {
+      select: PROJECT_UPDATE_SELECT,
       limit: PROJECT_UPDATE_READ_LIMIT + 1,
       order: "happened_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("decisions", {
+      select: DECISION_SELECT,
       limit: OPTIONAL_READ_LIMIT + 1,
       order: "decided_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("notes", {
+      select: NOTE_SELECT,
       limit: OPTIONAL_READ_LIMIT + 1,
       order: "created_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("routine_checks", {
+      select: ROUTINE_CHECK_SELECT,
       limit: OPTIONAL_READ_LIMIT + 1,
       order: "created_at.desc",
       filters: withWorkspaceFilter(),
@@ -699,6 +712,7 @@ export async function getProjectLedger({ projectId = null } = {}) {
       : Promise.resolve([]),
     selectedProjectId
       ? fetchSupabaseRows("project_updates", {
+          select: PROJECT_UPDATE_SELECT,
           limit: PROJECT_UPDATE_READ_LIMIT + 1,
           order: "happened_at.desc",
           filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
@@ -706,6 +720,7 @@ export async function getProjectLedger({ projectId = null } = {}) {
       : Promise.resolve([]),
     selectedProjectId
       ? fetchSupabaseRows("decisions", {
+          select: DECISION_SELECT,
           limit: OPTIONAL_READ_LIMIT + 1,
           order: "decided_at.desc",
           filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
@@ -713,6 +728,7 @@ export async function getProjectLedger({ projectId = null } = {}) {
       : Promise.resolve([]),
     selectedProjectId
       ? fetchSupabaseRows("notes", {
+          select: NOTE_SELECT,
           limit: OPTIONAL_READ_LIMIT + 1,
           order: "created_at.desc",
           filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
@@ -720,6 +736,7 @@ export async function getProjectLedger({ projectId = null } = {}) {
       : Promise.resolve([]),
     selectedProjectId
       ? fetchSupabaseRows("routine_checks", {
+          select: ROUTINE_CHECK_SELECT,
           limit: OPTIONAL_READ_LIMIT + 1,
           order: "created_at.desc",
           filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
