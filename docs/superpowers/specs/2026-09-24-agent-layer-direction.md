@@ -105,7 +105,40 @@ Legend ── 주간 카드만 · 에스컬레이션 목적지 아님 · Office 
 
 다듬기(9/28 전 권장): 멘토 답변의 마크다운 별표(`**`)가 그대로 보임 · 스킬 요청서 오류가 원인 코드(`skill-storage-unavailable`)로 노출됨(사람 말로: "요청서 저장소가 아직 준비되지 않았습니다") · 결과 카드 `더보기` 안 `로컬 스킬 요청서`가 하단 고정 입력창에 가려지는 스크롤 위치가 있음 · 안건 가져오기 목록과 참석자 드로어의 항목 버튼에 접근 가능한 이름이 없음 · 종합 카드에 `다음 행동`→새 할 일 버튼 없음(회의실 스펙 Open Question 2, 미채택).
 
-운영자만 할 수 있는 것: `SUPABASE_ACCESS_TOKEN` 갱신 후 `npm run db:check` → 0047 적용(`npm run db:migrate 20260925_0047_local_skill_requests.sql`, 적용 전 0046 번호 중복 2건과 파일명 날짜 확인).
+운영자만 할 수 있는 것: `SUPABASE_ACCESS_TOKEN` 갱신 후 `npm run db:check` → 0047 적용(`npm run db:migrate 20260925_0047_local_skill_requests.sql`, 적용 전 0046 번호 중복 2건과 파일명 날짜 확인). → **2026-09-25 해소**(아래 §6.2).
+
+### 6.2 검증 기록 — 2026-09-25 13:50~14:20, HEAD `d4c34b8d` + 이 세션 커밋 2건
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 0047 로컬 스킬 저장소 | 운영 DB 적용됨(다른 세션). `GET /api/hub/skill-requests` → `status: ready`. db:check에 미등록이던 것을 `8df840d2`로 등록, `[PASS] 로컬 스킬 요청서` | `scripts/database-readiness.mjs` |
+| 요청서 → receipt 왕복 | 회의실 결과 카드 → `로컬 스킬 요청서` → 범위 `회사` 선택 시 "할 일의 범위가 일치하지 않습니다"(서버 소유권 검사, 입력 보존) → `개인`으로 저장 성공 `요청서 저장됨 · 실행 전`(ID `5a7d57b0…`) → `GET /api/agent/v1/skill-requests/{id}` `requested` → `POST …/receipts` `unconfirmed`(검증용, 할 일 완료 없음) | 실제 할 일 `cbde85a5…`에 검증 receipt 1건이 남아 있다 |
+| **MCP 클라이언트 차단(블로커였음)** | Claude Code의 MCP 클라이언트가 2020-12 검증기만 쓰게 바뀌어 `outputSchema`가 draft-07 `$schema`를 단 도구를 호출 시 전부 거절 — `get_hub_health`부터 새 스킬 도구까지 **moonlight 도구 10개 전부**. 원인은 `packages/mcp-server/node_modules/zod` 3.x + SDK의 zod-to-json-schema(draft-07 고정, SDK 1.30.1도 동일). `ce098afb`로 outputSchema 선언을 제거(structuredContent는 유지)하고 `schema-dialect.test.mjs`가 인메모리 실제 클라이언트로 재발을 막는다. **이 세션의 MCP 서버 프로세스는 옛 코드라 재시작 전엔 여전히 실패한다** — 새 Claude Code 세션(또는 `/mcp` 재연결)에서 `get_skill_request`로 확인 | `packages/mcp-server/src/{agent-tools,assistance-tools,tools}.js` |
+| 후속 수정(다른 세션) | `e1c0327b` 멘토 답 굵게 표시(마크다운 별표 문제)·스킬 요청서 오류 문구·Hub→Engine 502/503 재시도, `4493804f` Gemini 재시도, 안건 목록 버튼에 접근 가능한 이름(`안건으로 가져오기: …`) | §6.1 다듬기 항목 중 3건 해소 |
+| 코드 리뷰(5영역 34건 → 반박 검증) | 결과는 아래 §6.3 | 워크플로 `wf_88f7be22-8f8` |
+
+### 6.3 코드 리뷰 결과 — 병합 `9d43beda` 기준 리뷰 5영역 34건, 현재 HEAD에서 1명 반박 검증
+
+블로커 0. 확인 10건 · 반박 24건(이미 고쳐졌거나, 스펙을 과잉 해석했거나, 9/28 실사용에 영향 없음). 확인 10건의 처리:
+
+| ID | 내용 | 처리 |
+|---|---|---|
+| MR-1 (major) | 첫 판 이후 초안·검토 방식이 chat으로 전송됨(수정 요청 포함) | `a7f34123` — override를 council 세션에만 |
+| MR-2 (major) | 첫 요청 실패 뒤 원문을 바꾸면 옛 원문 1,500자가 보이지 않게 앞에 붙고 제목이 옛 첫 줄로 남음 | `a7f34123` — manual 안건은 성공 시에만 고정, 첫 판엔 재부착 없음 |
+| ROUTE-1 (major) | 담당 추천 본문 상한 12,000B가 6,000자 계약과 어긋나 한글 ~3,900자부터 413 | `09549b64` — 24,000B(6,000자 한글 최악 18,031B), 실서버 5,872자 → 200 확인 |
+| ROUTE-3 (major) | `maxOutputTokens: 1200`이 thinking 모델에서 MAX_TOKENS → 추천 실패(실키 재현) | `09549b64` — 4096 |
+| F3 (minor) | 멘토·가드레일 프롬프트에 "원장" 9곳 + 페이지 1곳(2026-09-22 운영자 금지어) | `3eb865ea`·`a7f34123` — "기록" |
+| MR-7 (minor) | 할 일 읽기 실패에 내부 오류 코드 원문 노출 | `a7f34123` — 한국어 매핑 |
+| SKILL-001 (minor) | 0047이 db:check 미등록 | `8df840d2` |
+| SKILL-005 (minor) | MCP README HTTP 표에 skill-requests 2라우트·16 KiB·receipt 어휘 누락 | 미처리(문서) |
+| X-4 (minor) | DESIGN.md 헤더 SHA·§6/§11 셸프 42px 카브아웃·§8/§14 composites 미기재 | 미처리(문서, 다른 세션이 DESIGN.md 편집 중) |
+| MR-8 (minor) | 세션 `agenda`에 스펙 §9 목록 밖 `taskWorkspace` 필드(로컬 스킬 범위 판정용) | 코드 변경 없음 — 회의실 스펙 §9에 기록 필요 |
+
+추가로 이 세션에서 잡은 것: **MCP 클라이언트 outputSchema 차단**(§6.2, `ce098afb`). 리뷰 범위 밖이지만 결정 ①의 경로 전체를 막고 있었다.
+
+범위 밖 병합(결정 ①~⑤ 밖, 별도 근거 있음): 회의 텍스트 검토 M0·M0.5(메모 작성창·내 작업 렌즈, 마이그레이션 0045·0046 운영 미적용이라 토글 시 error 봉투), 멘토 서가·레일(`2026-09-24-guru-dual-experience-design.md` 운영자 승인). 마이그레이션 번호 중복 3쌍(0045·0046·0047)은 실행기가 파일명 전체로 키잉해 기계적 충돌 없음, 적용된 파일은 개명 금지.
+
+운영자 확인 항목: ① 9/28 전 갤럭시(390px)에서 회의실 첫 화면·키보드 올라온 상태의 보내기 버튼 실기 확인 ② 새 Claude Code 세션에서 `get_skill_request`가 실제로 호출되는지(MCP 수정은 재시작 뒤 반영) ③ 회의 텍스트 검토 M0를 쓸지 — 쓴다면 0045·0046 적용 승인 ④ 실사용 1주 뒤 회의실 스펙 Open Question 1·2·4 결정 ⑤ `docs/README.md:65`의 "0047 미적용" 문구는 낡음(다른 세션이 README 편집 중이라 이 세션은 손대지 않음).
 
 ## 7. 미정 (이번 빌드에서 답하지 않음)
 
