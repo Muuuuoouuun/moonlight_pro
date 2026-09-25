@@ -2172,7 +2172,8 @@ export function Deals({ workspace, onNavigate }) {
               <p className="fx-page-sub">들어올 예정 <span className="stat deals-hero__value">{fmt(dealTimeline.month.total)}</span></p>
             )}
             {!heroUnknown && (
-              <p className="fx-page-sub">
+              // 목표 편집기는 <form>을 그린다 — <p> 안의 <form>은 잘못된 중첩(하이드레이션 오류)이라 div로 감싼다.
+              <div className="fx-page-sub">
                 <RevenueTargetControl
                   targetsKnown={targetsKnown}
                   progress={targetInfo}
@@ -2180,7 +2181,7 @@ export function Deals({ workspace, onNavigate }) {
                   saving={targetSaving}
                   onSave={saveTarget}
                 />
-              </p>
+              </div>
             )}
           </div>
           <div className="deals-hero__actions">
