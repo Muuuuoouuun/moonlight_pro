@@ -260,6 +260,10 @@ export function mapProjects(
       id: row.id,
       brand: brand?.slug || "all",
       brandId: row.brand_id ?? null,
+      // 제품 운영실(2026-09-25): 제품에 붙은 일과 그 종류 — Board 제품 거르기·종류 칩이 읽는다.
+      productId: row.product_id ?? null,
+      workType: row.meta?.work_type ?? null,
+      recurrence: row.meta?.recurrence ?? null,
       name: row.name,
       statusKey: row.status ?? null,
       status: normalizeProjectStatus(row.status),

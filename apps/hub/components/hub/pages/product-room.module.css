@@ -1,0 +1,493 @@
+/* 제품 운영실 B안 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0).
+   포트폴리오 · 제품(흐름) · 문의함. 색으로 제품·종류를 나누지 않고 글리프+글자로 말한다(DESIGN §5.2·§5.3).
+   button 행은 전역 `.hub-app button` 초기화(특이도 0,1,1)를 이기도록 `.room .x`(0,2,0)로 쓴다. */
+
+.room {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 20px 32px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.muted {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.dim {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.rail {
+  box-shadow: inset 1px 0 0 var(--danger);
+}
+
+/* 요약 4칸 */
+.strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.cell {
+  padding: 14px 18px;
+  border-right: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cell:last-child {
+  border-right: 0;
+}
+
+.cellValue {
+  font-size: 24px;
+  font-weight: 500;
+}
+
+/* 한 줄 목록(지금 볼 것·표·흐름·문의 목록) */
+.box {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.room .line {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.box > :last-child .line,
+.box > .line:last-child {
+  border-bottom: 0;
+}
+
+.name {
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sub {
+  font-size: 12px;
+  color: var(--fg-dim);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 포트폴리오 표 */
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.table th {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  font-weight: 500;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.table .right {
+  text-align: right;
+}
+
+.table tbody tr {
+  cursor: pointer;
+}
+
+.work {
+  display: inline-flex;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.cards {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.room .card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ops {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.opsGlyph {
+  width: 14px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+/* 제품 페이지 */
+.pageHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+
+.numbers {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.number {
+  display: flex;
+  flex-direction: column;
+}
+
+.numberValue {
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.bucket {
+  display: flex;
+  flex-direction: column;
+}
+
+.bucketHead {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  font-weight: 500;
+  padding: 16px 0 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.room .flowRow {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.glyph {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  display: grid;
+  place-items: center;
+  color: var(--fg-muted);
+  margin-top: 1px;
+}
+
+.rowTitle {
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.due {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.aside {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panel {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mini {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+
+.mini:last-child {
+  border-bottom: 0;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 6px 12px;
+  font-size: 13px;
+}
+
+.kv > :nth-child(odd) {
+  color: var(--fg-dim);
+  font-size: 12px;
+}
+
+/* 문의함 */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+  min-height: 420px;
+}
+
+.list {
+  border-right: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.room .listRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.room .listRow[aria-current="true"] {
+  background: var(--accent-soft);
+}
+
+.detail {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.quote {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: var(--r);
+  font-size: 13.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.backButton {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .list {
+    border-right: 0;
+    max-height: none;
+  }
+
+  .split .detail {
+    display: none;
+  }
+
+  .showDetail .list {
+    display: none;
+  }
+
+  .showDetail .detail {
+    display: flex;
+  }
+
+  .backButton {
+    display: inline-flex;
+    align-self: flex-start;
+  }
+
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .room {
+    padding: 12px 16px 24px;
+  }
+
+  .strip {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cell {
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .cell:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .tableWrap {
+    display: none;
+  }
+
+  .cards {
+    display: flex;
+  }
+
+  .room .line {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

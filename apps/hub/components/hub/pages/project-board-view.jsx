@@ -4,6 +4,9 @@ import React from "react";
 import { Badge, Dot, IconButton } from "../hub-primitives";
 import { TaskChecklistGauge } from "./project-task-checklist";
 
+// 제품에 붙은 일의 종류 칩(제품 운영실 §0) — 색 없이 글자로만.
+const WORK_CHIP = { feature: "신기능", maintenance: "보수", contact: "연락" };
+
 // projects.jsx의 `{view === 'board' && canWriteTasks && (…)}` 블록 이동. 훅·상태 없음 —
 // drag 상태와 j/k 커서는 부모가 계속 소유한다(뷰 전환 시 리셋 타이밍을 바꾸지 않기 위해).
 // 카드 hover는 .hub-kanban-card 클래스가 소유하고(DESIGN.md §8.1), 키보드 커서는
@@ -78,6 +81,7 @@ export function ProjectBoardView({
                   </span>
                   <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{c.project}</span>
                   <div style={{ flex: 1 }} />
+                  {WORK_CHIP[c.workType] && <span title={`일 종류 · ${WORK_CHIP[c.workType]}`} style={{ fontSize: 10.5, color: 'var(--fg-muted)', border: '1px solid var(--line)', borderRadius: 'var(--r-xs)', padding: '0 5px', whiteSpace: 'nowrap' }}>{WORK_CHIP[c.workType]}</span>}
                   {c.tag === 'personal' && <Badge tone="personal" size="xs">P</Badge>}
                   {c.tag === 'company' && <Badge tone="company" size="xs">C</Badge>}
                 </div>

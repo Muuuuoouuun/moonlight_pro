@@ -358,6 +358,16 @@ const ERROR_TEXT = {
   "invalid-inquiry-reference": "문의를 찾지 못했어요. 새로고침 뒤 다시 시도하세요.",
   "invalid-domain": "분야는 40자 안으로 짧게 적어 주세요. 세부는 특이사항에.",
   "invalid-notes": "특이사항은 2000자까지 적을 수 있어요.",
+  "ops-note-required": "일시 중지·종료는 이유를 한 줄 남겨 주세요.",
+  "invalid-month": "달을 다시 골라 주세요.",
+  "invalid-active-users": "사용자 수는 0 이상의 정수로 적어 주세요.",
+  "invalid-revenue": "매출은 0 이상의 숫자로 적어 주세요.",
+  "invalid-cost": "비용은 0 이상의 숫자로 적어 주세요.",
+  "project-product-mismatch": "다른 제품의 일에는 붙일 수 없어요.",
+  "invalid-project-reference": "일을 찾지 못했어요. 새로고침 뒤 다시 시도하세요.",
+  "missing-title": "일 제목을 적어 주세요.",
+  "invalid-area-id": "업무 분야를 골라 주세요.",
+  "invalid-work-type": "일 종류를 다시 골라 주세요.",
   "stale-update": "다른 곳에서 먼저 바뀌었어요. 입력은 유지했으니 새로고침 뒤 다시 저장하세요.",
   "engine-not-configured": "Engine 연결이 없어 저장되지 않았어요.",
   "engine-unreachable": "Engine에 연결하지 못했어요. 잠시 뒤 다시 시도하세요.",
@@ -376,4 +386,220 @@ const LIST_RANK = ["growth", "launch", "mvp", "validation", "idea", "maintain", 
 export function productStageOrder(stage) {
   const index = LIST_RANK.indexOf(stage);
   return index < 0 ? LIST_RANK.length : index;
+}
+
+// ── 제품 운영실 B안 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0) ──────────
+
+// 운영 상태 — 단계("얼마나 자랐나")와 별개인 "지금 어떤가". 색 없이 글리프 + 글자(DESIGN §5.3 lifecycle).
+export const PRODUCT_OPS = [
+  { value: "dev", label: "개발 중", glyph: "◌" },
+  { value: "live", label: "사용 중", glyph: "●" },
+  { value: "paused", label: "일시 중지", glyph: "Ⅱ" },
+  { value: "ended", label: "종료", glyph: "／" },
+];
+const OPS_BY_VALUE = Object.fromEntries(PRODUCT_OPS.map((ops) => [ops.value, ops]));
+export const OPS_REQUIRING_NOTE = new Set(["paused", "ended"]);
+export function productOps(value) {
+  return OPS_BY_VALUE[value] || OPS_BY_VALUE.dev;
+}
+
+// 제품에 붙는 일(프로젝트)의 종류. 보수는 반복 주기를 가질 수 있다.
+export const WORK_TYPES = [
+  { value: "feature", label: "신기능", glyph: "＋" },
+  { value: "maintenance", label: "보수", glyph: "↻\uFE0E" },
+  { value: "contact", label: "연락", glyph: "☏\uFE0E" },
+];
+const WORK_BY_VALUE = Object.fromEntries(WORK_TYPES.map((type) => [type.value, type]));
+export function workType(value) {
+  return WORK_BY_VALUE[value] || null;
+}
+export const RECURRENCES = [
+  { value: "weekly", label: "매주" },
+  { value: "monthly", label: "매월" },
+  { value: "quarterly", label: "분기" },
+  { value: "yearly", label: "연 1회" },
+];
+export function recurrenceLabel(value) {
+  return RECURRENCES.find((item) => item.value === value)?.label || null;
+}
+
+const PROJECT_STATE_LABEL = { draft: "계획", active: "진행", blocked: "막힘", completed: "완료", archived: "보관" };
+export function projectStateLabel(status) {
+  return PROJECT_STATE_LABEL[status] || "진행";
+}
+
+export function seoulDay(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+export function seoulMonth(value = new Date()) {
+  return seoulDay(value)?.slice(0, 7) || null;
+}
+export function previousMonth(month) {
+  const [y, m] = String(month).split("-").map(Number);
+  if (!y || !m) return null;
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+function dayDiff(fromDay, toDay) {
+  return Math.round((Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / 86400000);
+}
+
+// 흐름(오늘 → 이번 주 → 다음 → 언젠가 → 지난): 일(프로젝트)·문의·깨진 신호를 한 줄로 섞는다.
+// - 일: 막힘·기한 지남·오늘 기한 → 오늘, 7일 안 → 이번 주, 그 뒤 → 다음, 기한 없음 → 언젠가, 완료 → 지난
+// - 문의: 새 → 오늘, 처리 중·답변 대기 → 이번 주, 처리 완료 → 지난 (제외는 흐름에 올리지 않는다)
+// - CI 실패 → 오늘
+export const FLOW_BUCKETS = [
+  { key: "today", label: "오늘" },
+  { key: "week", label: "이번 주" },
+  { key: "next", label: "다음" },
+  { key: "someday", label: "언젠가" },
+  { key: "past", label: "지난" },
+];
+
+function projectBucket(project, today) {
+  if (project.status === "completed" || project.status === "archived") return { bucket: "past", overdue: false };
+  if (project.status === "blocked") return { bucket: "today", overdue: false };
+  const due = project.dueAt ? seoulDay(project.dueAt) : null;
+  if (!due) return { bucket: "someday", overdue: false };
+  const diff = dayDiff(today, due);
+  if (diff < 0) return { bucket: "today", overdue: true };
+  if (diff === 0) return { bucket: "today", overdue: false };
+  if (diff <= 7) return { bucket: "week", overdue: false };
+  return { bucket: "next", overdue: false };
+}
+
+const INQUIRY_BUCKET = { new: "today", in_progress: "week", waiting: "week", closed: "past" };
+
+export function productFlow(product, { today = seoulDay() } = {}) {
+  const items = [];
+  for (const repo of product?.repositories || []) {
+    if (repo.status !== "disabled" && repo.summary?.ci?.state === "failure") {
+      items.push({ kind: "signal", key: `ci-${repo.id}`, bucket: "today", urgent: true, title: `CI 실패 · ${repo.fullName}`, url: repo.summary.ci.url || null, repositoryId: repo.id, sortAt: "" });
+    }
+  }
+  for (const project of product?.projects || []) {
+    const { bucket, overdue } = projectBucket(project, today);
+    items.push({
+      kind: "work",
+      key: `work-${project.id}`,
+      bucket,
+      urgent: project.status === "blocked" || overdue,
+      overdue,
+      workType: project.workType || null,
+      project,
+      title: project.name,
+      sortAt: project.dueAt || project.updatedAt || "",
+    });
+  }
+  for (const inquiry of product?.inquiries || []) {
+    const bucket = INQUIRY_BUCKET[inquiry.status];
+    if (!bucket) continue;
+    items.push({ kind: "inquiry", key: `inq-${inquiry.id}`, bucket, urgent: false, inquiry, title: inquiry.subject, sortAt: inquiry.receivedAt || "" });
+  }
+  return FLOW_BUCKETS.map((bucket) => ({
+    ...bucket,
+    items: items
+      .filter((item) => item.bucket === bucket.key)
+      .sort((a, b) => Number(b.urgent) - Number(a.urgent)
+        || (bucket.key === "past" ? String(b.sortAt).localeCompare(String(a.sortAt)) : String(a.sortAt).localeCompare(String(b.sortAt)))),
+  }));
+}
+
+// 거르기 칩의 키: all · feature · maintenance · contact · inquiry
+export function flowFilter(item, filter) {
+  if (filter === "all") return true;
+  if (filter === "inquiry") return item.kind === "inquiry";
+  return item.kind === "work" && item.workType === filter;
+}
+
+export function openWorkCounts(product) {
+  const counts = { feature: 0, maintenance: 0, contact: 0, other: 0 };
+  for (const project of product?.projects || []) {
+    if (project.status === "completed" || project.status === "archived") continue;
+    counts[WORK_BY_VALUE[project.workType] ? project.workType : "other"] += 1;
+  }
+  return counts;
+}
+
+// 한 달 숫자 — 없는 값은 null(모름). 순이익은 매출·비용이 둘 다 있을 때만 계산한다.
+export function monthNumbers(product, month) {
+  const row = (product?.metrics || []).find((entry) => entry.month === month) || null;
+  const revenue = row?.revenue ?? null;
+  const cost = row?.cost ?? null;
+  return {
+    month,
+    activeUsers: row?.activeUsers ?? null,
+    revenue,
+    cost,
+    net: revenue !== null && cost !== null ? revenue - cost : revenue !== null ? revenue : cost !== null ? -cost : null,
+    known: Boolean(row),
+  };
+}
+
+export function openInquiries(product) {
+  return (product?.inquiries || []).filter((inquiry) => inquiry.status !== "closed" && inquiry.status !== "ignored");
+}
+
+// 포트폴리오 요약 4칸 — 모르는 값은 합계에서 빼고, 빠진 제품 수를 함께 돌려준다.
+export function portfolioSummary(products, inquiries, month) {
+  const list = products || [];
+  const byOps = Object.fromEntries(PRODUCT_OPS.map((ops) => [ops.value, 0]));
+  let users = 0, usersKnown = 0, revenue = 0, cost = 0, moneyKnown = 0;
+  for (const product of list) {
+    byOps[product.opsStatus || "dev"] = (byOps[product.opsStatus || "dev"] || 0) + 1;
+    const numbers = monthNumbers(product, month);
+    if (numbers.activeUsers !== null) { users += numbers.activeUsers; usersKnown += 1; }
+    if (numbers.revenue !== null || numbers.cost !== null) {
+      revenue += numbers.revenue || 0;
+      cost += numbers.cost || 0;
+      moneyKnown += 1;
+    }
+  }
+  const open = (inquiries || []).filter((inquiry) => inquiry.status !== "closed" && inquiry.status !== "ignored");
+  return {
+    total: list.length,
+    byOps,
+    users: usersKnown ? users : null,
+    usersMissing: list.filter((p) => p.opsStatus !== "ended").length - usersKnown,
+    revenue, cost, net: moneyKnown ? revenue - cost : null, moneyKnown,
+    openInquiries: open.length,
+    newInquiries: open.filter((inquiry) => inquiry.status === "new").length,
+    waitingInquiries: open.filter((inquiry) => inquiry.status === "waiting").length,
+    unassignedInquiries: open.filter((inquiry) => !inquiry.productId).length,
+  };
+}
+
+// 지금 볼 것 — 깨졌거나 기한이 닥친 것만. 없으면 빈 배열(섹션을 그리지 않는다).
+export function portfolioAttention(products, inquiries, { today = seoulDay() } = {}) {
+  const out = [];
+  for (const product of products || []) {
+    const blocker = productBlocker(product);
+    if (blocker?.kind === "ci") out.push({ key: `ci-${product.id}`, productId: product.id, name: product.name, text: blocker.label, urgent: true });
+    for (const project of product.projects || []) {
+      if (project.status === "completed" || project.status === "archived") continue;
+      const { overdue } = projectBucket(project, today);
+      if (project.status === "blocked") out.push({ key: `blk-${project.id}`, productId: product.id, name: product.name, text: `막힘 · ${project.name}`, urgent: true });
+      else if (overdue) out.push({ key: `due-${project.id}`, productId: product.id, name: product.name, text: `기한 지남 · ${project.name}`, urgent: true, when: seoulDay(project.dueAt)?.slice(5) });
+    }
+  }
+  const fresh = (inquiries || []).filter((inquiry) => inquiry.status === "new");
+  if (fresh.length) {
+    const unassigned = fresh.filter((inquiry) => !inquiry.productId).length;
+    out.push({ key: "inbox", inbox: true, name: "문의함", text: `새 문의 ${fresh.length}건${unassigned ? ` · 제품 미정 ${unassigned}건` : ""}`, urgent: false });
+  }
+  return out;
+}
+
+// 다음 행동 한 줄(포트폴리오 표): 깨진 것 → 오늘 급한 일 → 운영자가 적은 것 → 기한 가까운 일 → 단계 조건.
+export function productNextStep(product, { today = seoulDay() } = {}) {
+  const blocker = productBlocker(product);
+  if (blocker) return blocker.label;
+  const flow = productFlow(product, { today });
+  const urgent = flow[0].items.find((item) => item.kind === "work" && item.urgent);
+  if (urgent) return `${urgent.overdue ? "기한 지남" : "막힘"} · ${urgent.title}`;
+  const explicit = typeof product?.details?.nextAction === "string" ? product.details.nextAction.trim() : "";
+  if (explicit) return explicit;
+  const soon = flow.slice(0, 3).flatMap((bucket) => bucket.items).find((item) => item.kind === "work");
+  if (soon) return soon.title;
+  return productNextAction(product, { repositories: product?.repositories?.length || 0, projects: product?.projects?.length || 0 })?.text || null;
 }

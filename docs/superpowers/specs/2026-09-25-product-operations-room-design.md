@@ -26,6 +26,21 @@
 **뺀 것**: 돈 화면(→ 포트폴리오 순이익 열·제품 카드), 개발·보수 체크 매트릭스, 체크리스트 %·6칸 지표, 사고 기록(→ 보수 일의 메모), 릴리스 5단계 체크 전용 객체.
 그래서 §3의 `product_releases`·`maintenance_check_kinds`·`maintenance_checks`·`product_incidents`는 **당분간 만들지 않는다**. 필요한 새 값은 프로젝트의 종류·반복 주기, 제품의 운영 상태, 월 사용자·매출·비용 입력뿐이다.
 
+### 0.1 구현 기록 (2026-09-25, 브랜치 `claude/product-lens`, 운영 DB 0049 미적용)
+
+운영자 기본값 승인("이어서"): 사용자 수 = 최근 7일 활성, 운영 상태 4개(개발 중·사용 중·일시 중지·종료 — 기획은 `products.stage`의 아이디어 단계로 갈음).
+
+| 무엇 | 어디 |
+| --- | --- |
+| 스키마(0049 안): `products.ops_status`·`ops_note`, `product_monthly_metrics`(제품×월: 활성·매출·비용, null=모름), `product_inquiry_links.project_id` | `supabase/migrations/20260925_0049_products.sql` |
+| Engine: `update_product` 운영 상태(중지·종료는 이유 필수, 이력은 `stage_history`에 `kind: ops`), `record_month`, `link_inquiry`의 `projectId`(같은 제품의 일만), `create/update_project`의 `workType`(feature·maintenance·contact)·`recurrence`(weekly·monthly·quarterly·yearly) meta | `apps/engine/lib/product-command.ts`, `pms-command.ts` |
+| Hub 읽기: 제품마다 운영 상태·이달/지난달 숫자·일(할 일 완료/전체·요청 수)·문의, 문의함용 전체 문의(제품 미정 포함)·업무 분야 | `apps/hub/lib/repositories/products-ledger.js` |
+| 규칙: 흐름 버킷, 거르기, 포트폴리오 요약·지금 볼 것, 다음 행동 한 줄 | `apps/hub/lib/product-catalog.js` |
+| 화면: 프로젝트 탭 `제품` 보기 = 포트폴리오 · `?product=` 제품 흐름 페이지(새 일·월 숫자·운영 상태 드로어, 카드·설정은 기존 드로어) · `?pview=inbox` 문의함(목록·상세, 제품·일 고르기, 상태, 연락/신기능 만들기) | `pages/project-products-view.jsx`, `product-portfolio.jsx`, `product-page.jsx`, `product-inbox.jsx` |
+| 보드: 프로젝트 탭 Board `?taskProduct=<id>` 거르기 + 카드 종류 칩 | `pages/projects.jsx`, `project-board-view.jsx`, `lib/pms-ui.js` |
+
+남은 것: 문의 "답장 기록"은 문의 명령에 발신 기록 동작이 없어 기존 문의 화면으로 넘긴다(`문의 화면에서 열기`). 반복 보수의 다음 회차 자동 생성은 없다(주기는 표시만).
+
 ## 1. 두 관점, 같은 기록
 
 | 관점 | 묻는 것 | 입구 |

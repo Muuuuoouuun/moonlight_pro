@@ -40,7 +40,7 @@ async function forward(req, action) {
   if (parsed.error) return parsed.error;
   const result = await forwardPmsCommand({
     inquiryId: parsed.data?.inquiryId,
-    ...(action === "link_inquiry" ? { productId: parsed.data?.productId } : {}),
+    ...(action === "link_inquiry" ? { productId: parsed.data?.productId, projectId: parsed.data?.projectId ?? null } : {}),
     action,
     workspaceId: resolveDefaultWorkspaceId(),
   }, { path: "/api/products/command" });

@@ -90,10 +90,17 @@ export const disconnectRepository = (id) => send("/api/hub/products/repositories
 // 프로젝트 ↔ 제품 연결은 기존 프로젝트 쓰기 경로(update_project)의 productId 한 칸이다.
 export const linkProject = (projectId, productId) => send("/api/hub/projects", "PATCH", { id: projectId, productId });
 
-// 문의 ↔ 제품. productId가 null이면 연결을 푼다.
-export const linkInquiry = (inquiryId, productId) => productId
-  ? send("/api/hub/products/inquiries", "POST", { inquiryId, productId })
+// 문의 ↔ 제품(·일). productId가 null이면 연결을 푼다. projectId는 같은 제품의 일만.
+export const linkInquiry = (inquiryId, productId, projectId = null) => productId
+  ? send("/api/hub/products/inquiries", "POST", { inquiryId, productId, projectId })
   : send("/api/hub/products/inquiries", "DELETE", { inquiryId });
+
+// 월 숫자(주간 사용자·매출·비용) 수동 기록 — 들어온 칸만 고친다.
+export const recordMonth = (body) => send("/api/hub/products/metrics", "POST", body);
+
+// 제품에 붙은 일(프로젝트) 만들기 — 기존 프로젝트 쓰기 경로(create_project)에 productId·workType을 싣는다.
+export const createWork = (body) => send("/api/hub/projects", "POST", body);
+export const updateWork = (body) => send("/api/hub/projects", "PATCH", body);
 
 export async function readInquiryProduct(inquiryId, signal) {
   try {

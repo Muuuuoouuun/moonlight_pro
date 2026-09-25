@@ -391,9 +391,15 @@ export function Projects({ workspace }) {
     return queriedProjects.filter(p => classifyProjectPortfolio(p, window)[summaryFilter]);
   }, [queriedProjects, summaryFilter]);
 
+  // 제품 운영실 "보드로 보기"(2026-09-25): ?taskProduct=<제품 id>면 그 제품에 붙은 일의 할 일만 보드에 올린다.
+  // 새 보드를 만들지 않고 이 Board에 거르기 하나만 더한 것이다.
+  const productFilter = searchParams.get('taskProduct') || '';
   const visibleColumns = React.useMemo(() => {
-    return buildTaskBoardColumns(taskExecution.items, allProjects);
-  }, [taskExecution.items, allProjects]);
+    const items = productFilter
+      ? taskExecution.items.filter(item => projectById.get(item.project)?.productId === productFilter)
+      : taskExecution.items;
+    return buildTaskBoardColumns(items, allProjects);
+  }, [taskExecution.items, allProjects, productFilter, projectById]);
   const openTodoCount = React.useMemo(() => brandTodos.filter(t => !t.done).length, [brandTodos]);
   const projectReadPartial = ledger.partialSources?.includes('projects') === true;
   const projectHeaderSummary = (() => {
@@ -2807,6 +2813,13 @@ export function Projects({ workspace }) {
           />
         )}
 
+        {view === 'board' && productFilter && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px var(--section-gap) 0', fontSize: 12.5, color: 'var(--fg-muted)' }}>
+            <span>제품 하나의 일만 보는 중</span>
+            <Button variant="ghost" size="sm" onClick={() => { const params = new URLSearchParams(searchParams.toString()); params.delete('taskProduct'); router.replace(`${pathname}?${params.toString()}`, { scroll: false }); }}>거르기 풀기</Button>
+            <Button variant="ghost" size="sm" onClick={() => router.push(`${pathname}?view=products&product=${encodeURIComponent(productFilter)}`)}>← 제품으로</Button>
+          </div>
+        )}
         {view === 'board' && canWriteTasks && (
           <ProjectBoardView
             visibleColumns={visibleColumns}

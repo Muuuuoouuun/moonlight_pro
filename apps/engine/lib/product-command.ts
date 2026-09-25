@@ -34,13 +34,18 @@ export const PRODUCT_STAGES = ["idea", "validation", "mvp", "launch", "growth", 
 const STAGE_SET = new Set<string>(PRODUCT_STAGES);
 // 유지·종료로 내릴 때는 이유 한 줄이 게이트다(§4.1 "유지 · 종료 | 이유 한 줄").
 const STAGES_REQUIRING_REASON = new Set(["maintain", "sunset"]);
+// 운영 상태 — "지금 어떤가"(제품 운영실 §2). 일시 중지·종료로 갈 때만 이유 한 줄을 받는다.
+export const PRODUCT_OPS_STATUSES = ["dev", "live", "paused", "ended"] as const;
+const OPS_SET = new Set<string>(PRODUCT_OPS_STATUSES);
+const OPS_REQUIRING_NOTE = new Set(["paused", "ended"]);
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 const ORG_SCOPES = new Set(["personal", "classin"]);
 const PRICING_MODELS = new Set(["undecided", "free", "monthly", "per_use", "one_time"]);
 const REPOSITORY_STATUSES = new Set(["connected", "disabled"]);
 
 export const PRODUCT_ACTIONS = new Set([
   "create_product", "update_product", "connect_repository", "update_repository", "disconnect_repository",
-  "link_inquiry", "unlink_inquiry",
+  "link_inquiry", "unlink_inquiry", "record_month",
 ]);
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -221,7 +226,7 @@ function contractSignature(details: Row) {
 }
 
 type Normalized =
-  | { ok: true; action: string; table: "products" | "product_repositories" | "product_inquiry_links"; record?: Row; filters?: Array<[string, string]>; patch?: Row; stageReason?: string }
+  | { ok: true; action: string; table: "products" | "product_repositories" | "product_inquiry_links" | "product_monthly_metrics"; record?: Row; filters?: Array<[string, string]>; patch?: Row; stageReason?: string; opsNote?: string }
   | { ok: false; reason: string };
 
 export function normalizeProductCommand(input: Row = {}, context: Context = {}): Normalized {
@@ -242,6 +247,8 @@ export function normalizeProductCommand(input: Row = {}, context: Context = {}):
     if (!summary || summary.length > 200) return { ok: false, reason: "missing-summary" };
     if (!ORG_SCOPES.has(orgScope)) return { ok: false, reason: "invalid-org-scope" };
     if (!STAGE_SET.has(stage)) return { ok: false, reason: "invalid-stage" };
+    const opsStatus = text(input.opsStatus ?? input.ops_status, 20).toLowerCase() || "dev";
+    if (!OPS_SET.has(opsStatus)) return { ok: false, reason: "invalid-ops-status" };
     const details = has(input, "details") ? normalizeProductDetails(input.details) : { ok: true as const, value: {} };
     if (!details.ok) return { ok: false, reason: details.reason };
     return {
@@ -255,6 +262,7 @@ export function normalizeProductCommand(input: Row = {}, context: Context = {}):
         summary,
         org_scope: orgScope,
         stage,
+        ops_status: opsStatus,
         details: { ...emptyProductDetails(), ...details.value },
         version: 1,
         stage_history: [{ at: now, from: null, to: stage, reason: "제품 등록" }],
@@ -298,9 +306,17 @@ export function normalizeProductCommand(input: Row = {}, context: Context = {}):
       if (!details.ok) return { ok: false, reason: details.reason };
       patch.details = details.value;
     }
+    let opsNote = "";
+    if (has(input, "opsStatus") || has(input, "ops_status")) {
+      const opsStatus = text(input.opsStatus ?? input.ops_status, 20).toLowerCase();
+      if (!OPS_SET.has(opsStatus)) return { ok: false, reason: "invalid-ops-status" };
+      opsNote = text(input.opsNote ?? input.ops_note, 301);
+      if (opsNote.length > 300) return { ok: false, reason: "invalid-ops-note" };
+      patch.ops_status = opsStatus;
+    }
     if (!Object.keys(patch).length) return { ok: false, reason: "empty-patch" };
     patch.updated_at = now;
-    return { ok: true, action, table: "products", filters, patch, stageReason };
+    return { ok: true, action, table: "products", filters, patch, stageReason, opsNote };
   }
 
   if (action === "connect_repository") {
@@ -342,12 +358,47 @@ export function normalizeProductCommand(input: Row = {}, context: Context = {}):
     if (action === "unlink_inquiry") return { ok: true, action, table: "product_inquiry_links", filters };
     const productId = uuid(input.productId ?? input.product_id);
     if (!productId) return { ok: false, reason: "invalid-product-id" };
+    // 일(프로젝트)은 선택 — 같은 요청을 한 일에 모아 "요청 N건"으로 센다.
+    const rawProject = input.projectId ?? input.project_id;
+    const projectId = rawProject === null || rawProject === undefined || rawProject === "" ? null : uuid(rawProject);
+    if (rawProject && !projectId) return { ok: false, reason: "invalid-project-id" };
     return {
       ok: true,
       action,
       table: "product_inquiry_links",
       filters,
-      record: { workspace_id: workspaceId, inquiry_id: inquiryId, product_id: productId, linked_at: now },
+      record: { workspace_id: workspaceId, inquiry_id: inquiryId, product_id: productId, project_id: projectId, linked_at: now },
+    };
+  }
+
+  if (action === "record_month") {
+    // 월 숫자 수동 입력. 들어온 칸만 쓴다 — 없는 칸은 건드리지 않고, null은 "모름"으로 지운다.
+    const productId = uuid(input.productId ?? input.product_id);
+    const month = text(input.month, 7);
+    if (!productId) return { ok: false, reason: "invalid-product-id" };
+    if (!MONTH_PATTERN.test(month)) return { ok: false, reason: "invalid-month" };
+    const record: Row = { workspace_id: workspaceId, product_id: productId, month, updated_at: now };
+    const NUMBERS: Array<[string, string, number]> = [["activeUsers", "active_users", 100_000_000], ["revenue", "revenue", 100_000_000_000], ["cost", "cost", 100_000_000_000]];
+    for (const [key, column, max] of NUMBERS) {
+      if (!has(input, key)) continue;
+      const raw = input[key];
+      if (raw === null || raw === "") { record[column] = null; continue; }
+      const value = Number(raw);
+      if (!Number.isInteger(value) || value < 0 || value > max) return { ok: false, reason: `invalid-${column.replace("_", "-")}` };
+      record[column] = value;
+    }
+    if (has(input, "note")) {
+      const note = text(input.note, 301);
+      if (note.length > 300) return { ok: false, reason: "invalid-note" };
+      record.note = note || null;
+    }
+    if (Object.keys(record).length <= 4) return { ok: false, reason: "empty-patch" };
+    return {
+      ok: true,
+      action,
+      table: "product_monthly_metrics",
+      record,
+      filters: [["workspace_id", `eq.${workspaceId}`], ["product_id", `eq.${productId}`], ["month", `eq.${month}`]],
     };
   }
 
@@ -411,6 +462,7 @@ export async function executeProductCommand(input: Row, context: Context, deps: 
   const workspaceId = String(context.workspaceId);
 
   if (command.table === "product_inquiry_links") return executeInquiryLink(command, workspaceId, deps);
+  if (command.table === "product_monthly_metrics") return executeRecordMonth(command, workspaceId, deps);
 
   if (command.record) {
     if (command.table === "product_repositories") {
@@ -495,6 +547,19 @@ export async function executeProductCommand(input: Row, context: Context, deps: 
       history.push({ at: now, from: current.stage ?? null, to: patch.stage, reason: command.stageReason || null });
       patch.stage_history = history.slice(-50);
     }
+    if (patch.ops_status && patch.ops_status !== current.ops_status) {
+      if (OPS_REQUIRING_NOTE.has(String(patch.ops_status)) && !command.opsNote) {
+        return { status: "invalid-input", action: command.action, error: "ops-note-required" };
+      }
+      // 운영 상태 이력도 같은 이력 배열에 kind로 구분해 남긴다.
+      const history = Array.isArray(patch.stage_history) ? patch.stage_history as Row[]
+        : Array.isArray(current.stage_history) ? [...current.stage_history as Row[]] : [];
+      history.push({ at: now, kind: "ops", from: current.ops_status ?? null, to: patch.ops_status, reason: command.opsNote || null });
+      patch.stage_history = history.slice(-50);
+      patch.ops_note = command.opsNote || null;
+    } else if (patch.ops_status && command.opsNote) {
+      patch.ops_note = command.opsNote;
+    }
     if (!expected) {
       if (!current.updated_at) return { status: "error", error: "missing-product-version" };
       filters.push(["updated_at", `eq.${current.updated_at}`]);
@@ -541,10 +606,21 @@ async function executeInquiryLink(
   if (products === null || inquiries === null) return { status: "error", error: "relationship-check-failed" };
   if (!products[0]) return { status: "invalid-input", error: "invalid-product-reference" };
   if (!inquiries[0]) return { status: "invalid-input", error: "invalid-inquiry-reference" };
+  if (record.project_id) {
+    const projects = await deps.fetchRows("projects", {
+      select: "id,product_id",
+      filters: [["id", `eq.${record.project_id}`], ["workspace_id", `eq.${workspaceId}`]],
+      limit: 1,
+    });
+    if (projects === null) return { status: "error", error: "relationship-check-failed" };
+    if (!projects[0]) return { status: "invalid-input", error: "invalid-project-reference" };
+    // 문의가 붙는 일은 그 제품의 일이어야 한다 — 다른 제품의 요청 수를 부풀리지 않는다.
+    if (projects[0].product_id !== record.product_id) return { status: "invalid-input", error: "project-product-mismatch" };
+  }
   const current = await deps.fetchRows("product_inquiry_links", { filters, limit: 1 });
   if (current === null) return { status: "error", error: "current-entity-read-failed" };
-  if (current[0]?.product_id === record.product_id) {
-    return { status: "duplicate", action: command.action, entity: { inquiryId: record.inquiry_id, productId: record.product_id } };
+  if (current[0]?.product_id === record.product_id && (current[0]?.project_id ?? null) === record.project_id) {
+    return { status: "duplicate", action: command.action, entity: { inquiryId: record.inquiry_id, productId: record.product_id, projectId: record.project_id } };
   }
   if (current[0]) {
     const removed = await deps.remove("product_inquiry_links", filters);
@@ -556,5 +632,37 @@ async function executeInquiryLink(
       ? { status: "conflict", action: command.action, error: "inquiry-link-changed", retryable: true }
       : { status: "error", error: inserted.reason, detail: inserted.detail || null };
   }
-  return { status: "saved", action: command.action, entity: { inquiryId: record.inquiry_id, productId: record.product_id } };
+  return { status: "saved", action: command.action, entity: { inquiryId: record.inquiry_id, productId: record.product_id, projectId: record.project_id } };
+}
+
+// 월 숫자 — 있으면 들어온 칸만 고치고, 없으면 새 행. 제품은 같은 워크스페이스여야 한다.
+async function executeRecordMonth(
+  command: Extract<Normalized, { ok: true }>,
+  workspaceId: string,
+  deps: ProductDependencies,
+) {
+  const record = command.record as Row;
+  const filters = command.filters || [];
+  const products = await deps.fetchRows("products", {
+    select: "id",
+    filters: [["id", `eq.${record.product_id}`], ["workspace_id", `eq.${workspaceId}`]],
+    limit: 1,
+  });
+  if (products === null) return { status: "error", error: "relationship-check-failed" };
+  if (!products[0]) return { status: "invalid-input", error: "invalid-product-reference" };
+  const current = await deps.fetchRows("product_monthly_metrics", { filters, limit: 1 });
+  if (current === null) return { status: "error", error: "current-entity-read-failed" };
+  if (current[0]) {
+    const { workspace_id: _w, product_id: _p, month: _m, ...patch } = record;
+    const updated = await deps.update("product_monthly_metrics", filters, patch);
+    if (!updated.persisted && updated.reason !== "no-matching-row") return { status: "error", error: updated.reason };
+    return { status: "saved", action: command.action, entity: updated.records?.[0] || { ...current[0], ...patch } };
+  }
+  const inserted = await deps.insert("product_monthly_metrics", record);
+  if (!inserted.persisted) {
+    return inserted.reason === "duplicate"
+      ? { status: "conflict", action: command.action, error: "month-changed", retryable: true }
+      : { status: "error", error: inserted.reason, detail: inserted.detail || null };
+  }
+  return { status: "saved", action: command.action, entity: inserted.record || record };
 }

@@ -182,7 +182,7 @@ test("an inquiry links to one product; relinking moves it and unlinking is idemp
   const moved = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: PRODUCT }, ctx, deps);
   assert.equal(moved.status, "saved");
   assert.deepEqual(calls.remove[0].filters, [["workspace_id", `eq.${WS}`], ["inquiry_id", `eq.${INQUIRY}`]]);
-  assert.deepEqual(calls.insert[0].record, { workspace_id: WS, inquiry_id: INQUIRY, product_id: PRODUCT, linked_at: NOW });
+  assert.deepEqual(calls.insert[0].record, { workspace_id: WS, inquiry_id: INQUIRY, product_id: PRODUCT, project_id: null, linked_at: NOW });
 
   const same = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: OTHER }, ctx, deps);
   assert.equal(same.status, "duplicate");
@@ -197,3 +197,51 @@ test("an inquiry links to one product; relinking moves it and unlinking is idemp
   assert.deepEqual(normalizeProductCommand({ action: "link_inquiry", inquiryId: "x", productId: PRODUCT }, ctx), { ok: false, reason: "invalid-inquiry-id" });
 });
 
+
+test("ops status: paused/ended need a note and the change is kept in history", async () => {
+  const current = { id: PRODUCT, stage: "mvp", ops_status: "live", updated_at: "2026-09-24T00:00:00Z", details: {}, stage_history: [] };
+  const blocked = await executeProductCommand({ action: "update_product", id: PRODUCT, opsStatus: "paused" }, ctx, fakeDeps({ products: () => [current] }).deps);
+  assert.equal(blocked.error, "ops-note-required");
+  const { deps, calls } = fakeDeps({ products: () => [current] });
+  const saved = await executeProductCommand({ action: "update_product", id: PRODUCT, opsStatus: "paused", opsNote: "비용 대비 사용 적음" }, ctx, deps);
+  assert.equal(saved.status, "saved");
+  assert.equal(calls.update[0].patch.ops_status, "paused");
+  assert.equal(calls.update[0].patch.ops_note, "비용 대비 사용 적음");
+  assert.deepEqual(calls.update[0].patch.stage_history.at(-1), { at: NOW, kind: "ops", from: "live", to: "paused", reason: "비용 대비 사용 적음" });
+  assert.deepEqual(normalizeProductCommand({ action: "update_product", id: PRODUCT, opsStatus: "beta" }, ctx), { ok: false, reason: "invalid-ops-status" });
+  const created = normalizeProductCommand({ action: "create_product", id: PRODUCT, name: "x", summary: "y", orgScope: "personal" }, ctx);
+  assert.equal(created.record.ops_status, "dev");
+});
+
+test("record_month upserts only the numbers given; null means unknown", async () => {
+  const base = { action: "record_month", productId: PRODUCT, month: "2026-09" };
+  const fresh = fakeDeps({ products: () => [{ id: PRODUCT }], product_monthly_metrics: () => [] });
+  const inserted = await executeProductCommand({ ...base, activeUsers: 18, revenue: "190000" }, ctx, fresh.deps);
+  assert.equal(inserted.status, "saved");
+  assert.deepEqual(fresh.calls.insert[0].record, { workspace_id: WS, product_id: PRODUCT, month: "2026-09", updated_at: NOW, active_users: 18, revenue: 190000 });
+
+  const existing = fakeDeps({ products: () => [{ id: PRODUCT }], product_monthly_metrics: () => [{ month: "2026-09", active_users: 18 }] });
+  await executeProductCommand({ ...base, cost: 68000, revenue: null }, ctx, existing.deps);
+  assert.deepEqual(existing.calls.update[0].patch, { updated_at: NOW, cost: 68000, revenue: null });
+
+  for (const [patch, reason] of [[{ month: "2026-13", cost: 1 }, "invalid-month"], [{ cost: -1 }, "invalid-cost"], [{ activeUsers: 1.5 }, "invalid-active-users"], [{}, "empty-patch"]]) {
+    assert.deepEqual(normalizeProductCommand({ ...base, ...patch }, ctx), { ok: false, reason });
+  }
+});
+
+test("an inquiry can attach to one of the product's projects, never another product's", async () => {
+  const INQUIRY = "88888888-8888-4888-8888-888888888888";
+  const PROJECT = "99999999-9999-4999-8999-999999999999";
+  const deps = (projectProduct) => fakeDeps({
+    products: () => [{ id: PRODUCT }],
+    inquiries: () => [{ id: INQUIRY }],
+    projects: () => [{ id: PROJECT, product_id: projectProduct }],
+    product_inquiry_links: () => [],
+  });
+  const ok = deps(PRODUCT);
+  const saved = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: PRODUCT, projectId: PROJECT }, ctx, ok.deps);
+  assert.equal(saved.status, "saved");
+  assert.equal(ok.calls.insert[0].record.project_id, PROJECT);
+  const other = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: PRODUCT, projectId: PROJECT }, ctx, deps("33333333-3333-4333-8333-333333333399").deps);
+  assert.equal(other.error, "project-product-mismatch");
+});

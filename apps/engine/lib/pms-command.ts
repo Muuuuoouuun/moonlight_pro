@@ -40,6 +40,25 @@ const PROJECT_STATUSES = new Set(["draft", "active", "blocked", "completed", "ar
 const TASK_STATUSES = new Set(["inbox", "todo", "doing", "blocked", "done"]);
 const PRIORITIES = new Set(["low", "medium", "high", "critical"]);
 const PROJECT_GENRES = new Set(["company", "sales", "it", "content", "other"]);
+// 제품에 붙는 일의 종류(제품 운영실 §0): 신기능·보수·연락. 보수는 반복 주기를 가질 수 있다.
+const PROJECT_WORK_TYPES = new Set(["feature", "maintenance", "contact"]);
+const PROJECT_RECURRENCES = new Set(["weekly", "monthly", "quarterly", "yearly"]);
+
+// workType/recurrence 입력 → meta 조각. null·""는 지운다. 잘못된 값은 오류 코드.
+function workMeta(input: Record<string, unknown>): { ok: true; meta: Record<string, unknown> } | { ok: false; reason: string } {
+  const meta: Record<string, unknown> = {};
+  if (has(input, "workType")) {
+    const raw = input.workType === null || input.workType === "" ? null : text(input.workType, 20).toLowerCase();
+    if (raw !== null && !PROJECT_WORK_TYPES.has(raw)) return { ok: false, reason: "invalid-work-type" };
+    meta.work_type = raw;
+  }
+  if (has(input, "recurrence")) {
+    const raw = input.recurrence === null || input.recurrence === "" ? null : text(input.recurrence, 20).toLowerCase();
+    if (raw !== null && !PROJECT_RECURRENCES.has(raw)) return { ok: false, reason: "invalid-recurrence" };
+    meta.recurrence = raw;
+  }
+  return { ok: true, meta };
+}
 // PMS container (brand) taxonomy — mirrors the Hub 2026-07-15 spec §4.1.
 const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
 const BRAND_ORG_SCOPES = new Set(["classin", "personal"]);
@@ -194,6 +213,8 @@ export function normalizePmsCommand(
     }
     const hasInitialProgress = has(input, "progress");
     const initialProgress = hasInitialProgress ? progress(input.progress) : null;
+    const work = workMeta(input);
+    if (!work.ok) return { ok: false, reason: work.reason };
 
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!areaId) return { ok: false, reason: "invalid-area-id" };
@@ -235,6 +256,7 @@ export function normalizePmsCommand(
           source: text(input.source || "manual", 80),
           org_scope: orgScope,
           ...(dealId.value ? { origin_deal_id: dealId.value } : {}),
+          ...Object.fromEntries(Object.entries(work.meta).filter(([, value]) => value !== null)),
           ...(delivery ? { delivery: { ...delivery, originalDueAt: dueAt.value, history: [] } } : {}),
         },
       },
@@ -467,6 +489,11 @@ export function normalizePmsCommand(
       const raw = input.genre === null || input.genre === "" ? null : text(input.genre, 20).toLowerCase();
       if (raw !== null && !PROJECT_GENRES.has(raw)) return { ok: false, reason: "invalid-genre" };
       patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), genre: raw };
+    }
+    if (has(input, "workType") || has(input, "recurrence")) {
+      const work = workMeta(input);
+      if (!work.ok) return { ok: false, reason: work.reason };
+      patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), ...work.meta };
     }
     if (has(input, "delivery")) {
       const delivery = parseDelivery(input.delivery);
