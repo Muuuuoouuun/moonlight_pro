@@ -153,7 +153,9 @@ struct CompanionPanelView: View {
         case .memo: MemoCaptureContent(model: model, surface: persistent ? .widget : .quick,
                                       openRevision: openRevision, close: close, openConnection: showConnection)
         case .calendar: CalendarCompanionContent(model: model, openConnection: showConnection)
-        case .office, .council: browserContent
+        case .office: browserContent
+        case .council: CouncilCompanionContent(model: model)
+        case .notifications: NotificationContent(model: model, openConnection: showConnection)
         case .focus: focusSetup
         }
     }

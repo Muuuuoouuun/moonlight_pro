@@ -3,7 +3,7 @@ import Foundation
 import Combine
 
 enum QuickMode: String, CaseIterable, Identifiable {
-    case tasks, memo, calendar, office, council, focus
+    case tasks, memo, calendar, office, council, focus, notifications
 
     var id: String { rawValue }
 
@@ -15,6 +15,7 @@ enum QuickMode: String, CaseIterable, Identifiable {
         case .office: return "Office"
         case .council: return "Council"
         case .focus: return "집중"
+        case .notifications: return "알림"
         }
     }
 
@@ -26,6 +27,7 @@ enum QuickMode: String, CaseIterable, Identifiable {
         case .office: return "person.2.fill"
         case .council: return "bubble.left.and.bubble.right.fill"
         case .focus: return "timer"
+        case .notifications: return "bell"
         }
     }
 
@@ -37,6 +39,7 @@ enum QuickMode: String, CaseIterable, Identifiable {
         case .office: return "4"
         case .council: return "5"
         case .focus: return "6"
+        case .notifications: return "7"
         }
     }
 
@@ -48,6 +51,7 @@ enum QuickMode: String, CaseIterable, Identifiable {
         case .office: return "/dashboard/agents/office-council"
         case .council: return "/dashboard/agents/council"
         case .focus: return nil
+        case .notifications: return "/dashboard/revenue/inquiries?filter=unread"
         }
     }
 }
@@ -93,6 +97,10 @@ final class AppModel: ObservableObject {
 
     var onFocusFinished: (() -> Void)?
     let hub: HubStore
+    let activity: PetActivityStore
+    let council: CouncilDraftStore
+    var onOpenMode: ((QuickMode) -> Void)?
+    private var featureObservers: Set<AnyCancellable> = []
     private var hubObserver: AnyCancellable?
     private var refreshLoop: Task<Void, Never>?
     private let defaults: UserDefaults
@@ -102,6 +110,8 @@ final class AppModel: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         hub = HubStore(defaults: defaults)
+        activity = PetActivityStore(defaults: defaults)
+        council = CouncilDraftStore(defaults: defaults)
         if let data = defaults.data(forKey: "petPreview.tasks"),
            let decoded = try? JSONDecoder().decode([LocalTask].self, from: data) {
             tasks = decoded
@@ -124,7 +134,10 @@ final class AppModel: ObservableObject {
 
     func startHubConnection() {
         hubObserver = hub.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
-        guard hub.isEnabled else { return }
+        activity.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
+        council.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
+        hub.onConnectionChanged = { [weak self] service, origin in self?.activity.configure(service: service, origin: origin) }
+        guard hub.isEnabled else { activity.configure(service: nil, origin: nil); return }
         Task { await hub.connect(baseURL: hubBaseURL) }
     }
 
@@ -191,14 +204,37 @@ final class AppModel: ObservableObject {
         defaults.set(savedMemo, forKey: "petPreview.memo")
     }
 
-    /// The user explicitly chooses this action; no message is submitted to Council.
-    func continueMemoInCouncil() {
+    func continueMemoInCouncil() { prepareCouncilFromMemo() }
+
+    func prepareCouncilFromMemo() {
         saveMemo()
-        if !memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(memoDraft, forType: .string)
+        council.prepare(memoDraft, source: .memo)
+        onOpenMode?(.council)
+    }
+    func prepareCouncilFromTask(_ task: LocalTask) {
+        council.prepare(task.title, source: .task)
+        onOpenMode?(.council)
+    }
+    func openCouncilDraft() {
+        do {
+            let url = try council.handoffURL(baseURL: hubBaseURL)
+            council.handoffMessage = NSWorkspace.shared.open(url)
+                ? "브라우저에서 안건을 검토해 주세요. 초안은 이 Mac에도 남아 있어요."
+                : "브라우저를 열지 못했어요. 초안은 그대로 보관돼요."
+        } catch { council.handoffMessage = "안건과 Hub 주소를 확인해 주세요. 초안은 그대로 보관돼요." }
+    }
+    func showNotifications() { onOpenMode?(.notifications) }
+    func openNotification(_ notice: PetNotice) {
+        if notice.kind == .calendar {
+            hub.selectedDate = notice.eventDate ?? Date()
+            onOpenMode?(.calendar)
+        } else {
+            guard let base = URL(string: hubBaseURL), let origin = try? HubTransport.validatedBaseURL(base),
+                  notice.path.hasPrefix("/dashboard/revenue/inquiries?"),
+                  let url = URL(string: notice.path, relativeTo: origin)?.absoluteURL else { return }
+            NSWorkspace.shared.open(url)
         }
-        openHub(.council)
+        activity.dismissBanner()
     }
 
     func saveHubURL() {

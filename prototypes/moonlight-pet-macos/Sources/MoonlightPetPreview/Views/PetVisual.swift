@@ -63,6 +63,13 @@ struct PetVisual: View {
                 .id(model.selectedCharacter)
                 .transition(.opacity.combined(with: .scale(scale: 0.94)))
         }
+        .overlay(alignment: .topTrailing) {
+            if model.activity.unreadCount > 0 {
+                Circle().fill(Palette.glassInk).frame(width: 7, height: 7)
+                    .shadow(color: .black.opacity(0.4), radius: 1)
+                    .padding(3).allowsHitTesting(false)
+            }
+        }
         .scaleEffect(scale)
         .rotationEffect(.degrees(isLifted ? -1.2 : 0))
         .offset(x: isLifted ? -0.7 : 0, y: verticalOffset)
