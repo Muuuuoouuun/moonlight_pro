@@ -256,6 +256,17 @@ final class AppModel: ObservableObject {
         defaults.set(savedMemo, forKey: "petPreview.memo")
     }
 
+    /// Primary keyboard action stays in the current surface; navigation is explicit.
+    func performPrimaryShortcut(for mode: QuickMode) {
+        guard !isFocused, !isConnectionVisible else { return }
+        switch mode {
+        case .memo:
+            if hub.isEnabled { saveMemoToHub() } else { saveMemo() }
+        case .council: sendCouncilMessage()
+        default: openHub(mode)
+        }
+    }
+
     func continueMemoInCouncil() { prepareCouncilFromMemo() }
 
     func prepareCouncilFromMemo() {

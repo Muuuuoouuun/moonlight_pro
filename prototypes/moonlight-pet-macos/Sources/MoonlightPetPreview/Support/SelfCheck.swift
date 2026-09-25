@@ -63,6 +63,21 @@ enum SelfCheck {
             fputs("Draft recovery check failed\n", stderr)
             return false
         }
+        var shortcutNavigations = 0
+        recovered.onOpenMode = { _ in shortcutNavigations += 1 }
+        recovered.chat.draft = "기존 Council 입력"
+        for surface in [CompanionSurface.quick, .widget] {
+            recovered.activeCompanion = surface
+            recovered.mode = .memo; recovered.compactMode = .memo
+            recovered.performPrimaryShortcut(for: .memo)
+            guard shortcutNavigations == 0, recovered.savedMemo == recovered.memoDraft,
+                  recovered.chat.draft == "기존 Council 입력",
+                  recovered.mode == .memo, recovered.compactMode == .memo else {
+                fputs("Memo Command-Return must save in place without Council navigation\n", stderr)
+                return false
+            }
+        }
+        recovered.activeCompanion = nil
         recovered.focusMinutes = 1
         recovered.startFocus()
         recovered.focusMinutes = 50
@@ -93,7 +108,7 @@ enum SelfCheck {
         recovered.connectionSurface = nil
         guard recovered.activity.unreadCount == 0 else { return false }
         recovered.activeCompanion = nil
-        print("PASS: press/drag tint reset, shared reading tint callback, continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save, draft recovery and visible-only Council acknowledgments")
+        print("PASS: press/drag tint reset, shared reading tint callback, continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save, draft recovery, memo shortcut stays in place and visible-only Council acknowledgments")
         return true
     }
 
