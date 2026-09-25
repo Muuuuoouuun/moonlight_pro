@@ -71,7 +71,7 @@ struct NotificationContent: View {
         HStack(alignment: .top, spacing: 8) {
             Button { model.openNotification(notice) } label: {
                 HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: notice.kind == .calendar ? "calendar" : "tray")
+                    Image(systemName: notice.kind == .calendar ? "calendar" : notice.kind == .agent ? "bubble.left.and.bubble.right" : "tray")
                         .font(.system(size: 15)).frame(width: 18)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 6) {

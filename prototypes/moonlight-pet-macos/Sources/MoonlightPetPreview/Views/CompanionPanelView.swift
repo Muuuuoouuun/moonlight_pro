@@ -154,7 +154,7 @@ struct CompanionPanelView: View {
                                       openRevision: openRevision, close: close, openConnection: showConnection)
         case .calendar: CalendarCompanionContent(model: model, openConnection: showConnection)
         case .office: browserContent
-        case .council: CouncilCompanionContent(model: model)
+        case .council: CouncilCompanionContent(model: model, openConnection: showConnection)
         case .notifications: NotificationContent(model: model, openConnection: showConnection)
         case .focus: focusSetup
         }

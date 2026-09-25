@@ -164,6 +164,71 @@ func runPetActivityStoreTests() async throws -> Int {
         count += 1
     }
 
+    // A newly received local reply contributes to the same badge without changing Hub unread state.
+    do {
+        let api = ControlledActivity(), store = PetActivityStore(defaults: defaults)
+        let inquiry = testInquiry(), replyID = UUID().uuidString
+        await api.set(inquiries: [inquiry], total: 7)
+        var delivered: [String] = []
+        store.onBanner = { delivered.append($0.id); return true }
+        store.configure(service: api, origin: "https://agent-reply.example.test")
+        defer { store.configure(service: nil, origin: nil) }
+        try await waitForLoad(store, api: api)
+        store.addAgentReply(id: replyID, agentID: "sylveon", scope: "personal", title: "님피아의 답변", detail: "답변이 도착했어요.")
+        try petCheck(store.unreadCount == 2 && store.totalInquiryCount == 7, "Local agent reply must increment the visible badge without modifying server inquiry count")
+        try petCheck(store.banner?.id == "agent:" + replyID && delivered == ["agent:" + replyID], "A new agent reply must be eligible for one banner immediately")
+        try petCheck(store.banner?.kind == .agent && store.banner?.agentID == "sylveon" && store.banner?.scope == "personal" && store.banner?.path == "", "Reply notice must preserve its native agent and scope destination")
+        store.dismissBanner()
+        await store.refresh()
+        store.presentNext()
+        try petCheck(store.unreadCount == 2 && store.banner == nil && delivered.count == 1, "Dismissal only ends presentation; refreshing must retain the unread reply without a repeated banner")
+        count += 1
+    }
+
+    // Viewing one conversation cannot acknowledge a different owner, scope, or an inquiry.
+    do {
+        let api = ControlledActivity(), store = PetActivityStore(defaults: defaults)
+        let inquiry = testInquiry(), firstID = UUID().uuidString, secondID = UUID().uuidString, thirdID = UUID().uuidString
+        await api.set(inquiries: [inquiry])
+        var dismissed = 0
+        store.onBanner = { _ in true }
+        store.onBannerDismissed = { dismissed += 1 }
+        store.configure(service: api, origin: "https://agent-acknowledge.example.test")
+        defer { store.configure(service: nil, origin: nil) }
+        try await waitForLoad(store, api: api)
+        store.addAgentReply(id: firstID, agentID: "eevee", scope: "personal", title: "첫 답변", detail: "개인 범위")
+        store.addAgentReply(id: secondID, agentID: "eevee", scope: "classin", title: "다른 범위", detail: "회사 범위")
+        store.addAgentReply(id: thirdID, agentID: "sylveon", scope: "personal", title: "다른 담당", detail: "개인 범위")
+        store.acknowledgeAgentReplies(agentID: "eevee", scope: "all")
+        try petCheck(store.unreadCount == 4 && store.banner?.id == "agent:" + firstID, "A nonmatching scope must not consume a reply or dismiss its banner")
+        store.acknowledgeAgentReplies(agentID: "eevee", scope: "personal")
+        try petCheck(Set(store.notices.map(\.id)) == Set(["agent:" + secondID, "agent:" + thirdID, inquiry.token]), "Acknowledgment must require exact owner and scope and preserve unrelated inquiries")
+        try petCheck(store.unreadCount == 3 && store.banner == nil && dismissed == 1, "Acknowledging the currently presented reply must dismiss that banner and decrement the badge")
+        store.presentNext()
+        try petCheck(store.banner?.id == "agent:" + thirdID, "Another owner's pending reply must remain eligible after acknowledgment")
+        store.acknowledgeAgentReplies(agentID: "eevee", scope: "classin")
+        try petCheck(store.unreadCount == 2 && store.banner?.id == "agent:" + thirdID && dismissed == 1, "Acknowledging a different conversation must leave the current banner intact")
+        count += 1
+    }
+
+    do {
+        let oldAPI = ControlledActivity(), newAPI = ControlledActivity(), store = PetActivityStore(defaults: defaults)
+        var delivered: [String] = []
+        store.onBanner = { delivered.append($0.id); return true }
+        store.configure(service: oldAPI, origin: "https://agent-old.example.test")
+        defer { store.configure(service: nil, origin: nil) }
+        try await waitForLoad(store, api: oldAPI)
+        store.addAgentReply(id: UUID().uuidString, agentID: "umbreon", scope: "all", title: "이전 Hub 답변", detail: "표시 중")
+        store.addAgentReply(id: UUID().uuidString, agentID: "leafeon", scope: "personal", title: "이전 Hub 대기 답변", detail: "대기 중")
+        try petCheck(store.unreadCount == 2 && store.banner != nil && delivered.count == 1, "Origin-change test must begin with visible and queued local replies")
+        store.configure(service: newAPI, origin: "https://agent-new.example.test")
+        try petCheck(store.unreadCount == 0 && store.notices.isEmpty && store.banner == nil, "Switching Hub origin must clear local replies and its badge immediately")
+        try await waitForLoad(store, api: newAPI)
+        store.presentNext()
+        try petCheck(store.notices.isEmpty && store.banner == nil && delivered.count == 1, "Neither delivered nor queued prior-origin replies may surface after reconnecting")
+        count += 1
+    }
+
     do {
         let text = "한글과 🌓, 이브이 👨‍👩‍👧‍👦\n줄바꿈 e\u{301} &?#=+/% ", store = CouncilDraftStore(defaults: defaults)
         store.prepare(text, source: .memo)

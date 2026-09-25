@@ -36,7 +36,7 @@ final class HubStore: ObservableObject {
     var hasPendingMemo: Bool { pending.memo != nil }
     var hasConnection: Bool { api != nil }
 
-    var onConnectionChanged: (((any HubActivityServing)?, String?) -> Void)?
+    var onConnectionChanged: (((any HubServing)?, String?) -> Void)?
 
     private let defaults: UserDefaults
     private let makeAPI: (URL) throws -> any HubServing
@@ -71,7 +71,7 @@ final class HubStore: ObservableObject {
             guard ticket == generation else { return }
             api = service
             let origin = normalizedURL.absoluteString
-            onConnectionChanged?(service as? any HubActivityServing, origin)
+            onConnectionChanged?(service, origin)
             storageKey = "petHub.pending.v1." + origin
             if let data = defaults.data(forKey: storageKey!), let restored = try? JSONDecoder().decode(HubPendingState.self, from: data) { pending = restored }
             defaults.set(origin, forKey: "petPreview.hubURL")

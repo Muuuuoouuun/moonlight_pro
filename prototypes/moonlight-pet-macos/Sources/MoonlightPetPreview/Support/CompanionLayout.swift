@@ -15,7 +15,7 @@ enum CompanionLayout {
         case .calendar: return CGSize(width: 336, height: 484 + rise)
         case .memo: return CGSize(width: 520, height: 386 + rise)
         case .office: return CGSize(width: 424, height: 296 + rise)
-        case .council: return CGSize(width: 460, height: 460 + rise)
+        case .council: return CGSize(width: 460, height: 580 + rise)
         case .notifications: return CGSize(width: 360, height: 480 + rise)
         case .focus: return CGSize(width: 380, height: 320 + rise)
         }
