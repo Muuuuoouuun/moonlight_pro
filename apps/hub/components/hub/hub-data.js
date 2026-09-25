@@ -88,13 +88,13 @@ export const NAV_TREE = [
     ],
   },
   {
-    key: 'content', label: 'Content', icon: 'content', secondary: true,
+    key: 'content', label: '콘텐츠', icon: 'content', secondary: true,
     children: [
-      { key: 'performance', label: '성과', icon: 'signal', path: 'dashboard/content/performance', keywords: ['요약', '이번 주', '월별', '발행량', '조회수', '공유', '답글', 'analytics'] },
-      { key: 'news', label: '뉴스 탐색', icon: 'globe', path: 'dashboard/content/news', keywords: ['리서치', 'Brave', '정치', '교육', 'AI', '테크', '뉴스'] },
-      { key: 'queue', label: 'Queue', icon: 'queue', path: 'dashboard/content/queue', keywords: ['콘텐츠', '발행 큐'] },
-      { key: 'studio', label: 'Studio', icon: 'studio', path: 'dashboard/content/studio', keywords: ['스튜디오', '작성'] },
-      { key: 'campaigns', label: 'Campaigns', icon: 'campaigns', path: 'dashboard/content/campaigns' },
+      { key: 'performance', label: '성과', icon: 'signal', path: 'dashboard/content/performance', keywords: ['content', '요약', '이번 주', '월별', '발행량', '조회수', '공유', '답글', 'analytics'] },
+      { key: 'news', label: '뉴스 탐색', icon: 'globe', path: 'dashboard/content/news', keywords: ['content', '리서치', 'Brave', '정치', '교육', 'AI', '테크', '뉴스'] },
+      { key: 'queue', label: '소재·제작', icon: 'queue', path: 'dashboard/content/queue', keywords: ['queue', 'content', '콘텐츠', '발행 큐'] },
+      { key: 'studio', label: '원고 작성', icon: 'studio', path: 'dashboard/content/studio', keywords: ['studio', 'content', '스튜디오', '작성'] },
+      { key: 'campaigns', label: 'Campaigns', icon: 'campaigns', path: 'dashboard/content/campaigns', keywords: ['content'] },
     ],
   },
   {

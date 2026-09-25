@@ -417,7 +417,7 @@
 }
 
 /* Sidebar anchor row — same contract as .hub-row (CSS hover, no JS handlers),
-   sized for the consolidated eight-anchor nav: one tap target, no accordion. */
+   sized for the consolidated nine-anchor nav (주요 9개 앵커): one tap target, no accordion. */
 .hub-app .hub-nav-item {
   width: 100%;
   display: flex;

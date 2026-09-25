@@ -92,8 +92,7 @@ const REVENUE_PERSONAL_CHILDREN = [
   { key: 'rev-cashflow', tab: 'cashflow', label: '현금 흐름', path: 'dashboard/revenue/overview?scope=personal' },
 ];
 // ClassIn 스코프: 거래는 workspace="classin" Deals(classin/pipeline). 고객 목록(Customers)은
-// 아직 scope를 읽지 않으므로 ClassIn으로 걸러진 가장 가까운 표면인 classin Leads 별칭을
-// 고객 탭으로 쓴다 — Customers가 scope=classin을 소비하게 되면 그 경로로 바꾼다(스펙 미정 항목).
+// `?scope=classin`을 지원함에 따라 `dashboard/revenue/customers?scope=classin`으로 직접 연결된다(스펙 Q-RR1 해소).
 // 세그먼트는 ClassIn CRM에만 있는 표면이라 이 스코프에서만 다섯 번째 탭이다.
 const REVENUE_CLASSIN_CHILDREN = [
   { key: 'rev-followups', tab: 'followups', label: '오늘 연락', path: 'dashboard/revenue/followups' },
