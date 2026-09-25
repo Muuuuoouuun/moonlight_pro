@@ -149,6 +149,28 @@ Legend ── 주간 카드만 · 에스컬레이션 목적지 아님 · Office 
 - **db:check 미등록**: 회의 0045·0046은 위 방식으로 직접 대조했다 — 테이블 2개(RLS 켜짐), 함수 11개(service_role 실행). 예외 하나는 `journal_task_plan_receipt_v1`이 anon 실행 권한을 가진 것인데, 이 함수는 `returns trigger`라 Postgres가 트리거 밖 직접 호출을 거절하므로 노출 경로는 없다. 다른 트리거 함수(`enforce_task_focus_cap_v1`)처럼 revoke하는 것은 위생 항목이다.
 - 따라서 `docs/README.md` §3의 "0047 미적용"과 리뷰 종합의 "0045·0046 미적용"은 둘 다 낡은 서술이다.
 
+### 6.5 에이전트 운영·지침 점검 — 2026-09-25 (5영역: 코딩 에이전트 지침, MCP·Agent API, 앱 안 에이전트 정책, 문서 상태, 로컬 스킬 흐름)
+
+같은 날 운영 마이그레이션 0050(하루 리뷰 시간대 검사)·0051(DB 위생)을 적용했다(`db:check` 28/28 PASS).
+
+바로 고친 것(확정 결정·검증된 사실에 맞추기만 한 것):
+- 엔진 Agent 권한 목록을 계약 패키지 목록으로 통일 — 목표·AI 권한을 공용 env에 넣는 순간 할 일·연락 명령이 전부 503이 되던 지뢰 제거.
+- 브랜드 멘토 기본 모드의 "4. 승인 큐 후보(work_order로 올릴 제목)" 출력 지시 삭제(큐 설계 A·09-24 카드 규칙).
+- MCP 서버 지침과 복사되는 로컬 스킬 요청서에 처리 순서·증거 형식·"복사나 채팅의 완료는 완료가 아님"·안전선(범위 안, 휴지통, 일괄 이동·삭제 전 확인)을 넣음.
+- CLAUDE.md·AGENTS.md: `db:migrate --expect-ref`, 0044 이후 `begin/commit` 금지, 번호 +1 규칙, 에이전트 작업 전 이 문서 읽기, `apps/hub/AGENTS.md`는 Next.js 자동 생성 파일.
+- 문서 상태: README의 마이그레이션 "미적용" 표기, Office 검증 상태, 09-21 스펙 4건의 설계 기준 표시, 평가 README의 버전 표기, MCP README의 스킬 요청 라우트.
+- 새 Claude Code 세션에서 `get_hub_health`·`get_skill_request` 호출 성공 확인(§6.2의 운영자 확인 항목 ② 해소).
+
+운영자 결정이 필요한 것:
+1. **행위자 분리** — Claude Code와 Codex가 같은 토큰·행위자(`codex`)를 써서 명령·receipt 기록에서 구분되지 않는다. 분리하려면 클라이언트별 토큰·행위자 매핑 코드가 필요하다.
+2. **로컬 스킬 파일** — 요청서 처리 절차 스킬(`moonlight-skill-request`)을 `~/.claude/skills`·`~/.codex/skills`에 둘지. 요청서 문구에 절차를 넣었으므로 필수는 아니다. 폴더 정리·영수증 정리 자체의 규칙(허용 폴더 등)은 운영자가 정한다.
+3. **크론 예약** — `content-flywheel`이 매일 proposed 작업 지시를 만들고 `chief-of-staff`가 브리핑 기록을 만든다. §3 "자동으로 일을 만들지 않는다"와 충돌한다(Vercel env 0이라 지금은 돌지 않음).
+4. **목표·AI 권한 켜기** — 이제 `goals:write`·`ai:write`를 켜도 안전하다. 켜면 MCP assistant 프로필의 목표·AI 후보 도구 5개가 동작한다.
+5. **Claude Desktop MCP 재등록** — 구형 등록이라 허브 `.env.local` 전체를 MCP 프로세스에 싣는다(`npm run mcp:connect -- install claude-desktop` 후 앱 재시작).
+6. **Claude Code 권한 설정** — `.claude/settings.local.json`이 `git add`·`git commit`·`git reset`·`git push`와 `npm` 전체를 와일드카드로 허용한다. CLAUDE.md의 `git add -A` 금지·공유 워크트리 규칙과 맞지 않는다.
+7. **보류 문서 재분류** — README "보류된 기능 설계"의 Agent/Council·Sales Guru 항목과 두 문서의 처분(현재는 현행 구현을 가리키는 메모만 추가).
+8. 5인 로스터·persona-chat 폐기(§7 기존 항목).
+
 ## 7. 미정 (이번 빌드에서 답하지 않음)
 
 - dissent가 남을 때 Legend 트라이어드를 두 번째 목적지로 둘지.
