@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-enum PetNoticeKind: String, Codable { case inquiry, calendar }
+enum PetNoticeKind: String, Codable { case inquiry, calendar, agent }
 struct PetNotice: Identifiable, Equatable {
     let id: String
     let title: String
@@ -10,6 +10,8 @@ struct PetNotice: Identifiable, Equatable {
     let createdAt: Date
     let path: String
     var eventDate: Date? = nil
+    var agentID: String? = nil
+    var scope: String? = nil
 }
 
 /// Local presentation state only. Hiding a notice never changes Hub unread state.
@@ -38,6 +40,7 @@ final class PetActivityStore: ObservableObject {
     private var state = DeliveryState()
     private var inquiryNotices: [PetNotice] = []
     private var calendarNotices: [PetNotice] = []
+    private var agentNotices: [PetNotice] = []
     private var eligible: Set<String> = []
     private var hasInquiryBaseline = false
     private var receivedInquiries: Set<String> = []
@@ -52,7 +55,7 @@ final class PetActivityStore: ObservableObject {
     }
     func configure(service: (any HubActivityServing)?, origin: String?) {
         loop?.cancel(); generation += 1; api = service; isRefreshing = false
-        dismissBanner(); notices = []; inquiryNotices = []; calendarNotices = []
+        dismissBanner(); notices = []; inquiryNotices = []; calendarNotices = []; agentNotices = []
         totalInquiryCount = 0; eligible = []; hasInquiryBaseline = false; receivedInquiries = []; sourcesReady = []
         storageKey = origin.map { "petNotices.delivery.v1." + $0 }
         state = storageKey.flatMap { defaults.data(forKey: $0) }.flatMap { try? JSONDecoder().decode(DeliveryState.self, from: $0) } ?? DeliveryState()
@@ -122,6 +125,20 @@ final class PetActivityStore: ObservableObject {
         if onBanner?(next) == true { state.delivered.append(next.id); persist() }
         else { banner = nil }
     }
+    func addAgentReply(id: String, agentID: String, scope: String, title: String, detail: String) {
+        let token = "agent:" + id
+        agentNotices.insert(PetNotice(id: token, title: title, detail: detail, kind: .agent,
+            createdAt: Date(), path: "", agentID: agentID, scope: scope), at: 0)
+        agentNotices = Array(agentNotices.prefix(30))
+        sourcesReady.insert(.agent); eligible.insert(token)
+        presentNext()
+    }
+    func acknowledgeAgentReplies(agentID: String, scope: String) {
+        let ids = Set(agentNotices.filter { $0.agentID == agentID && $0.scope == scope }.map(\.id))
+        agentNotices.removeAll { ids.contains($0.id) }
+        if let banner, ids.contains(banner.id) { dismissBanner() }
+        rebuild(now: Date())
+    }
     func dismiss(id: String) {
         state.hidden.append(id); persist()
         if banner?.id == id { dismissBanner() }
@@ -134,7 +151,7 @@ final class PetActivityStore: ObservableObject {
     }
     private func rebuild(now: Date) {
         let hidden = Set(state.hidden)
-        notices = (calendarNotices + inquiryNotices).filter {
+        notices = (agentNotices + calendarNotices + inquiryNotices).filter {
             !hidden.contains($0.id) && ($0.eventDate == nil || $0.eventDate! >= now)
         }
         if let banner, !notices.contains(where: { $0.id == banner.id }) { dismissBanner() }

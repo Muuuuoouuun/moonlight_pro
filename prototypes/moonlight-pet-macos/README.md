@@ -1,6 +1,6 @@
 # Moonlight Pet Preview
 
-macOS 가장자리에서 쓰는 네이티브 펫 위젯이다. 기존 Hub의 할 일·메모·캘린더에 연결한다. UI와 집중 차단은 아직 프로토타입 단계다.
+macOS 가장자리에서 쓰는 네이티브 펫 위젯이다. 기존 Hub의 할 일·메모·캘린더에 연결하고, 선택한 Office 담당자와 펫 안에서 대화한다. UI와 집중 차단은 아직 프로토타입 단계다.
 
 [승인 시안 적용 스펙](../../docs/superpowers/specs/2026-09-24-pet-approved-glass-design.md)이 현재 레이아웃의 기준이다. [four-states.svg](design/four-states.svg)는 초기 배치 참고용으로 남긴다.
 
@@ -17,18 +17,20 @@ cd prototypes/moonlight-pet-macos
 
 오른쪽 가장자리의 펫을 한 번 누르면 빠른 기능을 연다. 두 번 누르거나 헤더의 핀을 누르면 지속 위젯으로 바뀐다. 할 일·일정은 세로형 `오늘`, 메모는 가로형 입력면, 집중은 별도의 전체 화면으로 구성한다. 더보기에서 Office·Council·알림·집중·Hub 연결 설정으로 이동한다.
 
-빠른 기능 창은 그림자 여백을 포함해 할 일 336×504pt, 일정 336×484pt, 메모 520×440pt다. 메모는 빠른 창부터 위쪽 54pt 공간에 캐릭터가 걸치는 형태이고, 헤더에 할 일·메모 전환과 아래쪽에 접기 버튼을 둔다. 지속 위젯의 할 일·일정은 위쪽 공간 54pt를 더해 각각 558·538pt 높이이며, 메모는 빠른 창과 같은 크기다. 전환할 때 창의 위쪽·오른쪽 기준점을 유지하며 화면 경계를 넘지 않게 보정한다. 헤더 핸들로 위아래 이동하거나 접근성 이동 동작을 쓸 수 있다. 할 일 행 전체를 눌러 완료한다. Hub 항목의 자세한 편집·삭제는 브라우저에서 한다. 로컬 모드에만 우클릭 삭제가 있다.
+빠른 기능 창은 그림자 여백을 포함해 할 일 336×504pt, 일정 336×484pt, 메모 520×440pt, Council 대화 460×580pt다. 메모는 빠른 창부터 위쪽 54pt 공간에 캐릭터가 걸치는 형태이고, 헤더에 할 일·메모 전환과 아래쪽에 접기 버튼을 둔다. 지속 위젯의 할 일·일정은 위쪽 공간 54pt를 더해 각각 558·538pt 높이이며, 메모는 빠른 창과 같은 크기다. Council 지속 위젯은 캐릭터가 걸치는 54pt를 더해 460×634pt다. 전환할 때 창의 위쪽·오른쪽 기준점을 유지하며 화면 경계를 넘지 않게 보정한다. 헤더 핸들로 위아래 이동하거나 접근성 이동 동작을 쓸 수 있다. 할 일 행 전체를 눌러 완료한다. Hub 항목의 자세한 편집·삭제는 브라우저에서 한다. 로컬 모드에만 우클릭 삭제가 있다.
 
 | 단축키 | 동작 |
 | --- | --- |
 | ⌃⌥M | 어느 앱에서든 빠른 기능 열기 |
 | ⌘1 / ⌘2 / ⌘3 | 할 일 / 메모 / 일정 |
 | ⌘4 / ⌘5 / ⌘6 / ⌘7 | Office / Council / 집중 설정 / 알림 |
-| ⌘Return | 현재 기능을 Hub에서 열기. 메모는 아래의 Council 동작 |
+| ⌘Return | Council 대화에서 질문 보내기. 메모는 Council 입력창으로 가져오기. 그 밖의 기능은 Hub에서 열기 |
 | ⌘S | 메모 화면에서 Hub에 저장. 로컬 모드에서는 Mac 저장 |
 | Esc | 패널 접기. 집중 중에는 1.3초 길게 눌러 중지 확인 |
 
-메모 더보기의 `Council에서 이어서`(⌘Return)는 원문을 유지한 채 Council 안건 입력창으로 가져온다. 할 일 우클릭에도 `Council 안건으로 준비`가 있다. 직접 입력·현재 메모·할 일 중 안건을 고르고 수정한 뒤 **Council에서 검토**(Council 화면의 ⌘Return)를 누르면 브라우저의 브랜드 Council 입력란으로 전달한다. 최대 4,000 UTF-16자이며 초안은 Mac에도 남긴다. AI에게 자동 전송하지 않는다. 웹에서 전략 자문·3자 토의를 눌러 실행한다. 기존 웹 입력이 있으면 대기열로 보존하고 직접 뒤에 붙일 수 있다. 로그인 경유 때도 정확한 Council 목적지에 한해 안건을 메모리로 이어준다. 안건 URL fragment는 수신 즉시 주소에서 제거한다. 기본 Hub 주소는 `http://127.0.0.1:3000`이며 더보기의 `Hub 연결 설정`에서 바꾼다.
+메모 더보기의 `Council에서 이어서`(⌘Return)는 원문을 유지한 채 펫의 Council 대화 입력창으로 가져온다. 할 일 우클릭에도 `Council 안건으로 준비`가 있다. 직접 입력·현재 메모·할 일 중 안건을 고르고 수정한 뒤 **보내기** 또는 ⌘Return을 누르면 선택한 Office 담당자에게 바로 묻고, 같은 창에서 답변을 읽으며 이어서 질문한다. 선택한 펫이 기본 담당자이며, 대화 헤더에서 9명 중 담당자와 전체·회사·개인 범위를 고른다. 질문은 최대 6,000 UTF-16자다. 대화 헤더의 담당·범위 선택은 전송 중 잠기며, `기다림 중단` 후 변경할 수 있다. 중단 뒤 다시 보내기는 새 요청이며 자동 재전송하지 않는다.
+
+브랜드 Council로 넘기려면 대화 더보기의 **브랜드 Council에서 검토**를 누른다. 이 별도 경로는 최대 4,000 UTF-16자의 현재 초안을 브라우저 입력란으로 전달하고 전달본을 Mac에도 보관한다. 웹에서 전략 자문·3자 토의를 눌러야 실행한다. 기존 웹 입력이 있으면 대기열로 보존하고 직접 뒤에 붙일 수 있다. 로그인 경유 때도 정확한 Council 목적지에 한해 안건을 메모리로 이어준다. 안건 URL fragment는 수신 즉시 주소에서 제거한다. Office 보드와 상세 업무 화면은 계속 브라우저로 연다.
 
 ## 펫·재질·움직임
 
@@ -48,7 +50,9 @@ macOS 26에서는 창 경계의 `NSGlassEffectView(.clear)`가 배경 재질을 
 - **실패·부분 데이터:** 연결 오류, 로그인 필요, 일부 조회를 빈 목록이나 저장 완료로 표시하지 않는다. 저장 결과가 불확실하면 빈 입력창에서도 **저장 확인**으로 동일 요청을 재확인한다.
 - **기존 Mac 기록:** 자동 업로드하지 않으며 기존 UserDefaults를 보존한다. 연결 설정에서 **이 Mac에만 저장**을 누르면 이전 로컬 할 일을 다시 볼 수 있다. 두 목록을 혼합하지 않는다.
 - **알림:** 앱이 실행 중이면 실제 Hub 미확인 문의(최신 25개·전체 개수)와 10분 안에 시작하는 시간 지정 일정을 60초 간격으로 확인한다. 처음 연결한 기존 문의는 목록만 채우고, 새 수신 메시지와 다가오는 일정은 한 번 말풍선으로 알린다. 포커스를 가져오지 않으며 집중·패널 사용 중 보류하고, 지난 일정은 다시 알리지 않는다. 알림은 펫 우클릭·메뉴 막대·⌘7에서 연다. 알림 더보기에서 말풍선을 끌 수 있다. ‘이 Mac에서 숨기기’는 Hub 읽음 상태를 바꾸지 않는다. 같은 Hub별 전달·숨김 이력은 최대 1,000개 보관한다.
-- **브라우저·AI:** Office와 상세 화면은 계속 브라우저로 연다. Council은 펫에서 안건을 준비한 뒤 브라우저에서 검토·실행한다. 앱 종료 중 시스템 푸시, AI 작업 완료 알림, 외부 메시지 자동 발송은 연결하지 않는다.
+- **담당자 대화:** 대화와 미전송 초안은 Hub origin·담당자·업무 범위별로 분리해 앱 실행 중 메모리에 보관한다. 앱 종료 후 자유 대화 복원은 제공하지 않는다. 화면에는 최근 30판을 유지하고 요청에는 최근 4왕복 중 길이 제한에 맞는 문맥만 전달한다. 실패·중단 때 입력을 유지하며, 성공해도 기다리는 동안 수정한 초안은 지우지 않는다.
+- **답변 알림:** 앱을 종료하지 않고 패널만 접어도 답변 기다림을 이어간다. 다른 화면을 보는 동안 도착한 답변은 로컬 알림함에 남고 펫에 빨간 개수 배지를 표시한다. 99개 초과는 `99+`로 보인다. 알림을 누르면 해당 담당자·범위의 대화로 돌아가며, 대화를 열면 해당 답변 알림을 읽은 것으로 처리한다. 앱 종료 중 알림이나 서버의 모든 AI 실행 완료를 감시하는 기능은 아니다.
+- **브라우저·AI:** Office 보드와 상세 화면은 브라우저로 연다. 브랜드 Council은 대화 더보기에서 명시적으로 초안을 넘겨 웹에서 검토·실행한다. 외부 메시지 자동 발송이나 업무 자동 변경은 하지 않는다.
 
 새 데이터베이스나 공개 API는 추가하지 않는다. 기존 Hub 세션·쓰기 경계와 API를 재사용한다. [연결 설계](../../docs/superpowers/specs/2026-09-25-pet-hub-connection-design.md)와 [검증 기록](../../docs/superpowers/plans/2026-09-25-pet-hub-connection.md)을 참고한다.
 
@@ -65,9 +69,13 @@ swift run MoonlightPetPreview --self-check
 ./script/test_hub_domain.sh
 ./script/test_hub_activity.sh
 ./script/test_pet_activity_store.sh
+./script/test_office_chat_api.sh
+./script/test_office_chat_store.sh
 # 실제 localhost Hub를 조회만 하는 선택 검사
 ./script/test_hub_domain.sh --live-read
 ```
+
+Office 검사는 메모리 응답으로 요청·응답 계약, 담당·범위·Hub별 기록과 초안 분리, 취소·지연 응답·중복 전송 보호를 확인한다. 실제 AI 생성 호출은 이 검증에 포함하지 않는다.
 
 ### Optical glass comparison
 
@@ -79,4 +87,4 @@ The default and typing state use native clear glass with zero character-wash opa
 
 Character hues are separated in lightness and saturation while keeping the existing press-only opacity (Sylveon 60%, others 76%). Local reading materials keep fixed white text usable on busy backgrounds; the outer clear glass and blank areas stay transmissive. The custom prism is an edge-reflection treatment, not a public control over macOS desktop refraction. See [reading and prism design](../../docs/superpowers/specs/2026-09-25-pet-prism-readability-design.md).
 
-알림과 Council의 현재 범위는 [설계](../../docs/superpowers/specs/2026-09-25-pet-notifications-council-design.md)와 [검증 기록](../../docs/superpowers/plans/2026-09-25-pet-notifications-council.md)에 정리했다.
+브라우저 안건 전달과 문의·일정 알림의 선행 범위는 [설계](../../docs/superpowers/specs/2026-09-25-pet-notifications-council-design.md)와 [검증 기록](../../docs/superpowers/plans/2026-09-25-pet-notifications-council.md)에 정리했다.

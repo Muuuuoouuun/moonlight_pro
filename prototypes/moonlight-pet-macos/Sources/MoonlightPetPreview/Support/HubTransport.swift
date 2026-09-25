@@ -50,6 +50,7 @@ actor HubTransport: HubTransporting {
     private let baseURL: URL
     private let origin: String
     private let session: URLSession
+    private let officeChatSession: URLSession
     private let cookies: HTTPCookieStorage
 
     init(baseURL: URL, configuration: URLSessionConfiguration = .ephemeral) throws {
@@ -70,15 +71,39 @@ actor HubTransport: HubTransporting {
         guard let privateCookies = privateConfiguration.httpCookieStorage else { throw HubTransportError.invalidResponse }
         self.cookies = privateCookies
         self.session = URLSession(configuration: privateConfiguration, delegate: HubSessionDelegate(), delegateQueue: nil)
+
+        // Office runs generation and review before returning one response (Hub: 60 seconds).
+        // Keep the same private authentication jar; ordinary CRUD retains its smaller budget.
+        guard let officeConfiguration = privateConfiguration.copy() as? URLSessionConfiguration else {
+            throw HubTransportError.invalidResponse
+        }
+        officeConfiguration.timeoutIntervalForRequest = 60
+        officeConfiguration.timeoutIntervalForResource = 70
+        officeConfiguration.httpCookieStorage = privateCookies
+        self.officeChatSession = URLSession(configuration: officeConfiguration, delegate: HubSessionDelegate(), delegateQueue: nil)
     }
 
-    deinit { session.invalidateAndCancel() }
+    deinit {
+        session.invalidateAndCancel()
+        officeChatSession.invalidateAndCancel()
+    }
+
+    private func sessionForRequest(path: String, method: String) -> URLSession {
+        path == "/api/hub/office/chat" && method.uppercased() == "POST" ? officeChatSession : session
+    }
+
+    // Read-only diagnostics expose the configured budget, never the session or its credentials.
+    func timeoutIntervals(path: String, method: String = "GET") -> (request: TimeInterval, resource: TimeInterval) {
+        let selected = sessionForRequest(path: path, method: method)
+        return (selected.configuration.timeoutIntervalForRequest, selected.configuration.timeoutIntervalForResource)
+    }
 
     func request(path: String, method: String = "GET", body: Data? = nil) async throws -> HubResponse {
         let url = try requestURL(path)
         let method = method.uppercased()
         guard ["GET", "POST", "PATCH", "DELETE"].contains(method) else { throw HubTransportError.rejectedURL }
-        var request = URLRequest(url: url)
+        let selectedSession = sessionForRequest(path: path, method: method)
+        var request = URLRequest(url: url, timeoutInterval: selectedSession.configuration.timeoutIntervalForRequest)
         request.httpMethod = method
         request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -95,7 +120,7 @@ actor HubTransport: HubTransporting {
 
         let data: Data
         let response: URLResponse
-        do { (data, response) = try await session.data(for: request) }
+        do { (data, response) = try await selectedSession.data(for: request) }
         catch is CancellationError { throw CancellationError() }
         catch let error as URLError {
             switch error.code {

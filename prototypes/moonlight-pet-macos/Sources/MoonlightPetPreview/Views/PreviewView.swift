@@ -7,6 +7,10 @@ struct PreviewView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             PetPortrait(character: model.selectedCharacter, size: 42, pose: .portrait)
+                .overlay(alignment: .topTrailing) {
+                    NotificationCountBadge(count: model.activity.unreadCount)
+                        .offset(x: 4, y: -4)
+                }
             Group {
                 if let notice = model.activity.banner {
                     bannerContent(notice)

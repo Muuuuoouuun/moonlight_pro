@@ -51,6 +51,65 @@ struct HubTransportTests {
         expectEqual(methods, ["GET", "POST", "PATCH", "DELETE"])
     }
 
+    func testOnlyExactOfficeChatPOSTReceivesLongerTimeouts() async throws {
+        let client = try transport()
+        let routes: [(String, String, TimeInterval, TimeInterval)] = [
+            ("/api/hub/office/chat", "POST", 60, 70),
+            ("/api/hub/office/chat", "post", 60, 70),
+            ("/api/hub/office/chat", "GET", 20, 45),
+            ("/api/hub/office/chat", "PATCH", 20, 45),
+            ("/api/hub/office/chat?scope=personal", "POST", 20, 45),
+            ("/api/hub/office/chat?", "POST", 20, 45),
+            ("/api/hub/office/chat/", "POST", 20, 45),
+            ("/api/hub/office/chat-extra", "POST", 20, 45),
+            ("/api/hub/office/ch%61t", "POST", 20, 45),
+            ("/api/hub/office/assignment", "POST", 20, 45),
+            ("/api/hub/tasks", "POST", 20, 45),
+        ]
+        for (path, method, requestLimit, resourceLimit) in routes {
+            let intervals = await client.timeoutIntervals(path: path, method: method)
+            expectEqual(intervals.request, requestLimit)
+            expectEqual(intervals.resource, resourceLimit)
+            TransportURLProtocol.handler = { request, protocolInstance in
+                expectEqual(request.timeoutInterval, requestLimit)
+                protocolInstance.respond(json: "{\"status\":\"ok\"}")
+            }
+            _ = try await client.request(path: path, method: method, body: method == "GET" ? nil : Data("{}".utf8))
+        }
+    }
+
+    func testOfficeChatSharesOnlyItsClientsPrivateAuthentication() async throws {
+        let client = try transport()
+        TransportURLProtocol.handler = { _, protocolInstance in
+            protocolInstance.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=test-session; Path=/; HttpOnly; Secure"])
+        }
+        try await client.login(username: "test-operator", password: "test-password")
+        TransportURLProtocol.handler = { request, protocolInstance in
+            expectEqual(request.timeoutInterval, 60)
+            expectEqual(request.value(forHTTPHeaderField: "Origin"), "https://hub.example.test")
+            expectEqual(request.value(forHTTPHeaderField: "Cookie"), "com_moon_operator_session=test-session")
+            expectNil(request.value(forHTTPHeaderField: "Authorization"))
+            expectNil(request.value(forHTTPHeaderField: "x-com-moon-hub-secret"))
+            protocolInstance.respond(json: "{\"status\":\"generated\"}", headers: ["Set-Cookie": "com_moon_operator_session=updated-session; Path=/; HttpOnly; Secure"])
+        }
+        _ = try await client.request(path: "/api/hub/office/chat", method: "POST", body: Data("{}".utf8))
+        TransportURLProtocol.handler = { request, protocolInstance in
+            expectEqual(request.value(forHTTPHeaderField: "Cookie"), "com_moon_operator_session=updated-session")
+            protocolInstance.respond(json: "{\"status\":\"ok\"}")
+        }
+        _ = try await client.request(path: "/api/hub/tasks")
+        await client.clearSession()
+        let otherClient = try transport()
+        TransportURLProtocol.handler = { request, protocolInstance in
+            expectNil(request.value(forHTTPHeaderField: "Cookie"))
+            protocolInstance.respond(status: 401, json: "{\"status\":\"unauthorized\"}")
+        }
+        for instance in [client, otherClient] {
+            do { _ = try await instance.request(path: "/api/hub/office/chat", method: "POST", body: Data("{}".utf8)); recordFailure("Expected authentication failure") }
+            catch { expectEqual(error as? HubTransportError, .unauthorized) }
+        }
+    }
+
     func testRejectsAbsolutePathsAndCrossOriginTargetsBeforeRequest() async throws {
         let client = try transport()
         TransportURLProtocol.handler = { _, _ in recordFailure("Rejected URLs must never reach the network") }
@@ -106,12 +165,14 @@ struct HubTransportTests {
 
     func testTimeoutAndOfflineAreMappedWithoutRetriedWrites() async throws {
         let client = try transport()
-        for (code, expected) in [(URLError.Code.timedOut, HubTransportError.timeout), (.notConnectedToInternet, .offline)] {
-            var count = 0
-            TransportURLProtocol.handler = { _, _ in count += 1; throw URLError(code) }
-            do { _ = try await client.request(path: "/api/hub/tasks", method: "POST", body: Data("{}".utf8)); recordFailure("Expected transport failure") }
-            catch { expectEqual(error as? HubTransportError, expected) }
-            expectEqual(count, 1)
+        for path in ["/api/hub/tasks", "/api/hub/office/chat"] {
+            for (code, expected) in [(URLError.Code.timedOut, HubTransportError.timeout), (.notConnectedToInternet, .offline)] {
+                var count = 0
+                TransportURLProtocol.handler = { _, _ in count += 1; throw URLError(code) }
+                do { _ = try await client.request(path: path, method: "POST", body: Data("{}".utf8)); recordFailure("Expected transport failure") }
+                catch { expectEqual(error as? HubTransportError, expected) }
+                expectEqual(count, 1)
+            }
         }
     }
 
@@ -176,6 +237,10 @@ struct HubTransportTests {
         do { try await client.login(username: "test-operator", password: "test-password"); recordFailure("Redirect must fail") }
         catch { expectEqual(error as? HubTransportError, .redirectRejected) }
         expectEqual(source.requestCount, 1)
+        expectEqual(destination.requestCount, 0)
+        do { _ = try await client.request(path: "/api/hub/office/chat", method: "POST", body: Data("{}".utf8)); recordFailure("Office redirect must fail") }
+        catch { expectEqual(error as? HubTransportError, .redirectRejected) }
+        expectEqual(source.requestCount, 2)
         expectEqual(destination.requestCount, 0)
     }
 
@@ -286,6 +351,8 @@ private struct HubTransportTestRunner {
         let cases: [(String, () async throws -> Void)] = [
             ("origin validation", { try tests.testOnlyHTTPSAndExactHTTPLoopbackOriginsAreAccepted() }),
             ("write headers", tests.testRequestCarriesOriginOnlyForWritesAndNeverServerCredentials),
+            ("exact Office chat timeout budget", tests.testOnlyExactOfficeChatPOSTReceivesLongerTimeouts),
+            ("Office chat shared private authentication", tests.testOfficeChatSharesOnlyItsClientsPrivateAuthentication),
             ("path isolation", tests.testRejectsAbsolutePathsAndCrossOriginTargetsBeforeRequest),
             ("error envelopes", tests.testHTTP200ErrorEnvelopeIsNeverReturnedAsEmptySuccess),
             ("preview provenance", tests.testPreviewRemainsExplicitAndDoesNotBecomeLive),

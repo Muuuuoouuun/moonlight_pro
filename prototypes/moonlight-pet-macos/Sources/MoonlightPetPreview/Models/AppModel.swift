@@ -92,13 +92,17 @@ final class AppModel: ObservableObject {
     @Published var showStopConfirmation = false
     @Published var hubBaseURL = "http://127.0.0.1:3000"
     @Published var selectedCharacter: PetCharacter = .silver {
-        didSet { defaults.set(selectedCharacter.rawValue, forKey: "petPreview.character") }
+        didSet {
+            defaults.set(selectedCharacter.rawValue, forKey: "petPreview.character")
+            if !chat.isSending { chat.agent = selectedCharacter.officeAgent }
+        }
     }
 
     var onFocusFinished: (() -> Void)?
     let hub: HubStore
     let activity: PetActivityStore
     let council: CouncilDraftStore
+    let chat = OfficeChatStore()
     var onOpenMode: ((QuickMode) -> Void)?
     private var featureObservers: Set<AnyCancellable> = []
     private var hubObserver: AnyCancellable?
@@ -121,6 +125,7 @@ final class AppModel: ObservableObject {
         taskDraft = defaults.string(forKey: "petPreview.taskDraft") ?? ""
         hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? "http://127.0.0.1:3000"
         selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
+        chat.agent = selectedCharacter.officeAgent
     }
 
     var displayedTasks: [LocalTask] { hub.isEnabled ? hub.tasks.map(\.local) : tasks }
@@ -136,7 +141,21 @@ final class AppModel: ObservableObject {
         hubObserver = hub.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         activity.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         council.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
-        hub.onConnectionChanged = { [weak self] service, origin in self?.activity.configure(service: service, origin: origin) }
+        chat.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
+        hub.onConnectionChanged = { [weak self] service, origin in
+            self?.activity.configure(service: service as? any HubActivityServing, origin: origin)
+            self?.chat.configure(service: service as? any HubOfficeServing, origin: origin)
+        }
+        chat.onReply = { [weak self] turn in
+            guard let self else { return }
+            let isReading = !self.isFocused && ((self.activeCompanion == .quick && self.mode == .council)
+                || (self.activeCompanion == .widget && self.compactMode == .council))
+            if !isReading {
+                self.activity.addAgentReply(id: turn.id.uuidString, agentID: turn.agent.rawValue,
+                    scope: turn.scope.rawValue, title: "\(turn.agent.title)의 답변이 왔어요",
+                    detail: String(turn.reply.answer.prefix(80)))
+            }
+        }
         guard hub.isEnabled else { activity.configure(service: nil, origin: nil); return }
         Task { await hub.connect(baseURL: hubBaseURL) }
     }
@@ -208,12 +227,28 @@ final class AppModel: ObservableObject {
 
     func prepareCouncilFromMemo() {
         saveMemo()
-        council.prepare(memoDraft, source: .memo)
+        chat.draft = memoDraft; chat.source = .memo
         onOpenMode?(.council)
     }
     func prepareCouncilFromTask(_ task: LocalTask) {
-        council.prepare(task.title, source: .task)
+        chat.draft = task.title; chat.source = .task
         onOpenMode?(.council)
+    }
+    var canSendCouncil: Bool {
+        chat.hasConnection && !chat.isSending && chat.draft.utf16.count <= 6000
+            && !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    func sendCouncilMessage() {
+        guard canSendCouncil else { return }
+        chat.sendDraft()
+    }
+    var canOpenChatInCouncil: Bool {
+        !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && chat.draft.utf16.count <= 4000
+    }
+    func openChatInCouncil() {
+        guard canOpenChatInCouncil else { return }
+        council.prepare(chat.draft, source: chat.source)
+        openCouncilDraft()
     }
     func openCouncilDraft() {
         do {
@@ -223,9 +258,18 @@ final class AppModel: ObservableObject {
                 : "브라우저를 열지 못했어요. 초안은 그대로 보관돼요."
         } catch { council.handoffMessage = "안건과 Hub 주소를 확인해 주세요. 초안은 그대로 보관돼요." }
     }
+    func markCouncilRepliesRead() {
+        activity.acknowledgeAgentReplies(agentID: chat.agent.rawValue, scope: chat.scope.rawValue)
+    }
     func showNotifications() { onOpenMode?(.notifications) }
     func openNotification(_ notice: PetNotice) {
-        if notice.kind == .calendar {
+        if notice.kind == .agent {
+            guard let id = notice.agentID, let agent = OfficeAgent(rawValue: id),
+                  let scope = notice.scope, let scopeValue = OfficeChatScope(rawValue: scope) else { return }
+            chat.agent = agent; chat.scope = scopeValue
+            activity.dismiss(id: notice.id)
+            onOpenMode?(.council)
+        } else if notice.kind == .calendar {
             hub.selectedDate = notice.eventDate ?? Date()
             onOpenMode?(.calendar)
         } else {

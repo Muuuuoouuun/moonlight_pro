@@ -268,7 +268,7 @@ final class WindowCoordinator: NSObject {
                event.modifierFlags.contains(.command) {
                 let mode = widgetVisible ? self.model.compactMode : self.model.mode
                 if mode == .memo { self.model.continueMemoInCouncil() }
-                else if mode == .council { self.model.openCouncilDraft() }
+                else if mode == .council { self.model.sendCouncilMessage() }
                 else { self.model.openHub(mode) }
                 return nil
             }
