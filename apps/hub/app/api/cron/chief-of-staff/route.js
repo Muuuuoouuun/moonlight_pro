@@ -12,11 +12,15 @@ export const dynamic = "force-dynamic";
 
 // Chief of Staff (안3) — the active morning brief that orchestrates the other two lanes.
 //
+// NOT SCHEDULED since 2026-09-26 (operator decision: AI does not create work on its own schedule —
+// docs/superpowers/specs/2026-09-24-agent-layer-direction.md §6.6). The route stays callable by hand;
+// scripts/guru-autonomy.test.mjs keeps it out of vercel.json.
+//
 // Runs before the operator wakes, assembles cross-lane state (the approval backlog that 안1
 // Guru Autopilot + 안2 Content Flywheel queued overnight, top stalled deals, brand cadence),
 // and composes ONE prioritized "오늘 이 3개만" list — not a dump. It:
-//   1. records an agent_run under the 'order' persona → wires a dormant persona to a real
-//      scheduled run (the roster/agents page shows a live "last run" with zero UI change), and
+//   1. records an agent_run under the 'order' persona (the roster display that showed it was
+//      removed on 2026-09-26; the row stays in agent_runs), and
 //   2. writes a project_update (the same brief sink the Engine AI brief uses) so it lands in
 //      the Daily Brief feed.
 //

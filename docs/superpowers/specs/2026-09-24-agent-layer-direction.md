@@ -64,7 +64,7 @@ Legend ── 주간 카드만 · 에스컬레이션 목적지 아님 · Office 
 - 고객 답장은 고객 상세에서 부스터 초안 → 복사 → 카톡 직접 발송 → 연락 결과 기록. 복사는 발송 기록이 아니다.
 - 막힌 할 일은 회의실에 안건으로 올린다. 이브이가 담당·참석자를 추천하고 운영자가 확인한 뒤 회의를 연다. 발언이 스레드로 보이고, 종합 카드에서 복사·수정 요청·할 일로 연결한다.
 - 판단이 안 서면 종합 카드의 **다른 관점으로 검토**로 멘토에게 한 번 묻는다. 답은 같은 카드 아래 참고 자료로 접힌다. 더 얘기해야 하면 **이어서 상담**으로 멘토 스레드에 들어간다.
-- 폴더 정리 같은 실행은 Claude Code·Codex 세션에서 스킬로 돌리고, MCP로 할 일 완료만 남긴다.
+- 폴더 정리 같은 실행은 Claude Code·Codex 세션에서 로컬 스킬 `moonlight-skill-request`로 돌리고, MCP로 결과 receipt(필요할 때만 할 일 완료)를 남긴다.
 - 숫자는 새로 세지 않는다. Office 하단의 7일 요약만 본다.
 
 ## 5. 진입문 (줄이는 방향)
@@ -171,11 +171,31 @@ Legend ── 주간 카드만 · 에스컬레이션 목적지 아님 · Office 
 7. **보류 문서 재분류** — README "보류된 기능 설계"의 Agent/Council·Sales Guru 항목과 두 문서의 처분(현재는 현행 구현을 가리키는 메모만 추가).
 8. 5인 로스터·persona-chat 폐기(§7 기존 항목).
 
+### 6.6 운영자 결정 처리 — 2026-09-26 ("전부 다 진행")
+
+§6.5의 결정 대기 8건을 운영자가 모두 진행하라고 지시했다. 처리 결과:
+
+| # | 항목 | 처리 | 확인 |
+|---|---|---|---|
+| 1 | 행위자 분리 | 코드 병합(`0eba717d`·`a1d24352`·`66a4def8`). Hub는 공용 토큰 외에 `COM_MOON_AGENT_CLIENT_TOKEN_HASHES`(`actor:sha256hex` 쌍, 해시만 보관)의 클라이언트 토큰을 받고, Engine은 목록의 actor 이름을 허용한다. 형식이 틀리면 둘 다 503으로 닫힌다. `get_hub_health`가 `permissions.actorId`를 돌려준다. **토큰 파일 생성은 자동 모드 안전 검사가 막아 운영자가 직접 한다** — `npm run mcp:connect -- client-token <actor> --out ~/.moonlight/mcp/<actor>.env` 3회 → 출력 쌍을 루트 `.env.local`에 → `install <client> --mcp-env-file <그 파일>` → 클라이언트 재시작. 그 전까지는 세 클라이언트 모두 `codex`로 기록된다 | Hub capabilities가 `actorId: codex` 반환(새 코드 로드 확인) |
+| 2 | 로컬 스킬 파일 | `~/.claude/skills/moonlight-skill-request/SKILL.md`와 `~/.codex/skills/moonlight-skill-request/SKILL.md`(같은 내용, 저장소 밖). 서버 원문 읽기 → 범위·계획 확인 → 휴지통·덮어쓰기 금지·작업 기록 파일 → receipt → 필요할 때만 `complete_task`(같은 세션) 순서다. Gemini 키는 스크립트 안에서만 읽는다 | Claude Code 스킬 목록에 로드됨 |
+| 3 | 크론 예약 | `content-flywheel`·`chief-of-staff`를 `apps/hub/vercel.json`에서 뺐다. 두 라우트는 수동 호출용으로 남는다. `scripts/guru-autonomy.test.mjs`가 재등록을 막는다 | `fe7a6737` |
+| 4 | 목표·AI 권한 | 공용 env `COM_MOON_AGENT_SCOPES`에 `goals:write`·`ai:write`를 더했다. **§6.5의 "이제 켜도 안전하다"는 틀렸다** — 0032의 `agent_command_v1`·`agent_command_receipt_v1`이 권한 5개만 받아, 켠 순간 할 일·연락 명령과 receipt 조회가 403이 됐다(약 00:38~01:11, 약 33분 — 그 사이 시도는 저장 없이 실패). env를 되돌린 뒤 Engine이 두 함수에 아는 권한만 넘기게 고치고(`efc049dc`) 다시 켰다 | capabilities 권한 7·행동 8, receipt 조회 404(정상), 없는 할 일 `complete_task` → `task-not-found`·저장 없음 |
+| 5 | Claude Desktop 재등록 | 허브 `.env.local` 전체를 싣던 `node --env-file=…` 등록을 런처 등록으로 바꿨다. 원본은 `~/.moonlight/mcp/backups/`에 백업. 새 등록은 앱을 재시작해야 읽힌다(운영자) | `mcp:connect status --probe` 세 클라이언트 모두 정상·도구 10개 |
+| 6 | Claude Code 권한 설정 | 보안 설정이라 바꾸지 않았다. `git reset`·`git push`·`npm` 전체·`node` 전체 허용을 빼고 `git add -A`·`commit -a`·`reset --hard`·`push --force`·`db:migrate` 거부를 더한 제안 파일을 운영자에게 넘겼다 | 운영자 적용 대기 |
+| 7 | 보류 문서 재분류 | `agent-tab-mvp-ui-spec.md`·`sales-guru-mentor-agent-plan.md`를 SUPERSEDED로 바꾸고 README의 보류 목록에서 §6 과거 참고 문서로 옮겼다 | `fe7a6737` |
+| 8 | 5인 로스터 | 브랜드 자문 화면에서 로스터 카드·`/api/hub/agents` 호출을 뺐다. ⌘K의 AI 항목 5개가 모두 없는 경로(`dashboard/system/agents`)를 가리켜 깨져 있었다 — Council·Guru는 코칭·대화로 고치고 로스터 3개는 뺐다. `agents` 테이블·`/api/hub/agents`(MCP `list_agents`)·persona-chat·페르소나 문서·`check:personas`는 유지한다 | `ac2c8071`·`62acf4eb`, 화면·⌘K 브라우저 확인 |
+
+행위자 분리 뒤 알아 둘 것(일회용 로컬 Postgres 실측):
+- Hub의 Codex 작업 화면은 기본 actor의 job만 보여 준다. Codex CLI의 클라이언트 actor는 `codex`로 둔다.
+- 명령 receipt는 actor 단위로 조회된다. 토큰을 바꾸기 전에 만든 명령은 `codex`로만 보인다.
+- 스킬 receipt의 `commandId`는 같은 actor가 남긴 `complete_task`만 인정한다. 할 일 완료와 receipt는 같은 클라이언트가 한다.
+- `receiptActorId`는 API에만 있고 Hub 화면에는 아직 표시되지 않는다.
+
 ## 7. 미정 (이번 빌드에서 답하지 않음)
 
 - dissent가 남을 때 Legend 트라이어드를 두 번째 목적지로 둘지.
-- 크론 content-flywheel·chief-of-staff 예약 해제 시점(큐 설계 B7과 함께).
-- 2026-09-26 운영자 지시로 브랜드 자문 화면의 5인 로스터 표시를 제거(테이블·/api/hub/agents·persona-chat은 유지).
 - 중복 진입점 수렴 순서(11월).
 - 월별 AI 비용 표시(프로필 §11 확정, 구현 0) — 스킬이 Gemini 키를 쓰기 시작하면 먼저 필요해진다.
+- 같은 `commandId`를 다른 actor가 보내면 `create_task`는 충돌로 막히지만 `record_contact_outcome`은 한 번 더 기록된다(로컬 실측, `crm_activities` 2행). 클라이언트마다 commandId를 새로 만들므로 지금 경로에서는 생기지 않는다. `unconfirmed` 스킬 receipt는 다른 actor가 덮어쓸 수 있다.
 - Office 의미 품질 독립 재채점 시점(replan P3).

@@ -246,7 +246,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - Daily note/Obsidian: [`daily-operating-note-todo.md`](daily-operating-note-todo.md) — P1-5·P1-6·P2-8·P2-10은 [`superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md`](superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md)가 흡수했다(그 문서도 아직 DRAFT). P0-2 Quick Capture는 구현 완료. 남은 고유 범위는 P1-7 Obsidian export(역방향)다
 - GitHub Work OS: [`github-workos-mvp-mockup.md`](github-workos-mvp-mockup.md)
 - ClassIn CRM 결합: [`sales-os-crm-integration-plan.md`](sales-os-crm-integration-plan.md) — 문서 자체가 보류 상태이며 새 정본 경계를 먼저 적용
-- AI Sales 팀 운영: [`sales-os/team-operating-layer.md`](sales-os/team-operating-layer.md), [`sales-os/personas/`](sales-os/personas/)
+- AI Sales 팀 운영: [`sales-os/team-operating-layer.md`](sales-os/team-operating-layer.md), [`sales-os/personas/`](sales-os/personas/) — 2026-09-26 브랜드 자문 화면의 5인 로스터 표시와 ⌘K 진입점을 뺐다. 페르소나 문서·`check:personas`·`agents` 테이블·persona-chat 엔진은 남는다([에이전트 계층 방향](superpowers/specs/2026-09-24-agent-layer-direction.md) §6.6)
 
 이 문서들은 폐기된 것은 아니지만 현재 Phase 1B·1C보다 먼저 구현하지 않는다.
 
