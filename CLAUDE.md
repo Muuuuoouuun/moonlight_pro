@@ -8,6 +8,7 @@
 - Supabase REST ledger 중심: Hub는 운영 판단 UI, Engine은 webhook/intake/실행 기록
 - Hub(`/dashboard/**`)와 Engine(`/api/**`)이 현역 실행 표면이며, public web은 active workspace에서 분리됨
 - `packages/*`: `supabase-rest`(Hub·Engine·gateway가 공유하는 단일 Supabase REST 클라이언트 `@com-moon/supabase-rest`), `hub-gateway`, `content-manager`, `ui`(공유 CSS 토큰 `--cm-*`와 구 TS 프리미티브 — Hub UI 프리미티브의 정본은 `apps/hub/components/hub/hub-primitives.jsx`), `mcp-server`(`.mcp.json`의 `moonlight` MCP 서버, Claude Code에는 `mcp__moonlight__*` 도구로 노출 — 클라이언트 등록 점검·설치는 `npm run mcp:connect`, 다른 툴용 HTTP는 `npm run mcp:http`)
+- MCP 클라이언트(Claude Code·Codex·Claude Desktop)는 각자 자기 Agent 토큰을 쓴다 — 공용 `COM_MOON_AGENT_API_TOKEN`을 나눠 쓰면 명령·스킬 receipt가 모두 기본 actor(`codex`)로 남아 누가 했는지 구분되지 않는다. 만들기·등록 절차는 `packages/mcp-server/README.md`의 Per-client identity(`npm run mcp:connect -- client-token` → Hub·Engine env `COM_MOON_AGENT_CLIENT_TOKEN_HASHES` → `install <client> --mcp-env-file`)
 - 워크트리에서 `packages/*`를 고치면 그 워크트리 루트에서 `npm install`을 먼저 해야 dev/build에 반영된다
 
 ## 운영자 업무 기준
