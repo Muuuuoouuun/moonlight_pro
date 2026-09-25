@@ -162,3 +162,62 @@ test('deal review never focuses a personal deal even when its ref matches exactl
   assert.equal(classin.focus.found, true);
   assert.equal(classin.focus.item_id, 'deal-classin');
 });
+
+// 2026-09-25: the Today ✦ Guru sent the customer's display name as ref, and a
+// substring match pulled another customer's deal into the coaching prompt.
+test('a display name, partial or whole, never attaches a deal as the coaching focus', async () => {
+  state.ledger.deals.push({ id: 'deal-other', workspace: 'classin', type: 'company', leadId: 'lead-classin', name: '강남학원 재계약' });
+  for (const mode of ['deal-review', 'followup-draft']) {
+    for (const ref of ['강남', '강남학원 재계약', 'ClassIn', 'ClassIn 거래', '거래']) {
+      const context = await assembleSalesContext({ mode, ref });
+      assert.equal(context.focus.found, false, `${mode} · ${ref}`);
+      assert.equal(context.focus.item_id, null, `${mode} · ${ref}`);
+      assert.equal(context.focus.entity, undefined, `${mode} · ${ref}`);
+      assert.doesNotMatch(JSON.stringify(context.focus), /deal-other|deal-classin|lead-classin/, `${mode} · ${ref}`);
+    }
+  }
+});
+
+test('a lead or account id is not a deal id, so it attaches no deal context', async () => {
+  for (const ref of ['lead-classin', 'account-classin']) {
+    const context = await assembleSalesContext({ mode: 'deal-review', ref });
+    assert.equal(context.focus.found, false, ref);
+    assert.deepEqual(context.focus.missing.map(item => item.source), ['deals'], ref);
+  }
+});
+
+test('a deal without lead_id takes the contact from a lead of its own company, never from a lead whose name contains the deal name', async () => {
+  // 운영 딜은 lead_id가 대개 비어 있다. 이름 부분 일치 폴백은 다른 고객의 연락처를 초안에 넘겼다.
+  state.ledger.deals.push({ id: 'deal-nolead', workspace: 'classin', type: 'company', companyId: 'company-classin', name: '재계약' });
+  state.ledger.leads.push({ id: 'lead-other-company', workspace: 'classin', type: 'company', companyId: 'company-other', name: '강남학원 재계약 문의', contactName: '다른 원장' });
+  state.ledger.leads[0] = { ...state.ledger.leads[0], contactName: '김원장' };
+  const { focus } = await assembleSalesContext({ mode: 'followup-draft', ref: 'deal-nolead' });
+  assert.equal(focus.found, true);
+  assert.equal(focus.entity.lead_id, 'lead-classin');
+  assert.equal(focus.entity.contact, '김원장');
+
+  state.ledger.leads[0] = { ...state.ledger.leads[0], companyId: 'company-elsewhere' };
+  const unlinked = await assembleSalesContext({ mode: 'followup-draft', ref: 'deal-nolead' });
+  assert.notEqual(unlinked.focus.entity.lead_id, 'lead-other-company');
+  assert.notEqual(unlinked.focus.entity.contact, '다른 원장');
+});
+
+test('an exact deal id keeps the same focus for deal review and follow-up drafts', async () => {
+  state.ledger.deals.push({ id: 'deal-linked', workspace: 'classin', type: 'company', leadId: 'lead-classin', name: '연결된 거래', stage: 'proposal', value: 1200000 });
+  state.ledger.leads[0] = { ...state.ledger.leads[0], score: 72, nextAction: '견적 확인', contactName: '김원장' };
+  state.outcomes.outcomes.push({ id: 'activity-linked', dealId: 'deal-linked', note: '견적 전달', occurredAt: '2026-09-20T01:00:00Z' });
+  for (const mode of ['deal-review', 'followup-draft']) {
+    for (const ref of ['deal-linked', 'DEAL-LINKED']) {
+      const { focus } = await assembleSalesContext({ mode, ref });
+      assert.equal(focus.found, true, `${mode} · ${ref}`);
+      assert.equal(focus.item_id, 'deal-linked');
+      assert.deepEqual(focus.entity, {
+        company: '연결된 거래', contact: '김원장', lead_id: 'lead-classin', deal_id: 'deal-linked',
+        stage: 'proposal', amount: 1200000, owner_id: focus.entity.owner_id,
+      });
+      assert.equal(focus.ledger.score, 72);
+      assert.equal(focus.ledger.next_action_hint, '견적 확인');
+      assert.deepEqual(focus.ledger.recent_outcomes.map(item => item.note), ['견적 전달']);
+    }
+  }
+});

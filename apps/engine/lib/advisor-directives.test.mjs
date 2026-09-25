@@ -90,6 +90,23 @@ test('default mentor knowledge does not claim an approval backlog or unsupported
   }
 });
 
+test('default operator values carry no fixed information share or time box', () => {
+  const rules = [
+    ...DEFAULT_OPERATOR_VALUES.coreValues,
+    ...DEFAULT_OPERATOR_VALUES.pivotConditions,
+    ...DEFAULT_OPERATOR_VALUES.tradeOffRules,
+  ];
+  for (const rule of rules) {
+    assert.doesNotMatch(rule, /\d+\s*%|퍼센트|\d+\s*분 안에/, rule);
+  }
+  const reversible = DEFAULT_OPERATOR_VALUES.coreValues.find((value) => value.startsWith('가역적 학습 속도'));
+  assert.match(reversible, /되돌릴 수 있고 손실을 감당할 수 있는/);
+  assert.match(reversible, /되돌리기 어렵거나 영향 범위가 큰 결정은 검토를 깊게 한다/);
+  const block = formatValuesDirective({ ...DEFAULT_OPERATOR_VALUES, legendIds: ['bezos'] });
+  assert.doesNotMatch(block, /70%|90%/);
+  assert.match(block, /제프 베이조스/);
+});
+
 test('resolveDirectives honors explicit overrides from payload or context', () => {
   const customValues = { coreValues: ['단 하나의 본질 집중'] };
   const customKnowledge = { facts: ['시나브로 론칭 준비'] };

@@ -82,30 +82,17 @@ const PERSONA_PROFILES: Record<string, { nameKo: string; role: string; systemPro
   },
 };
 
-const LEGEND_LENSES: Record<string, { nameKo: string; rule: string }> = {
-  jobs: {
-    nameKo: "스티브 잡스 (경험과 단순성)",
-    rule: "기술 나열이나 부가 기능을 쳐내고, 사용자가 직관적으로 사랑할 수 있는 단순하고 완전한 사용자 경험에 집중하라.",
-  },
-  bezos: {
-    nameKo: "제프 베이조스 (장기 고객가치 & 가역성)",
-    rule: "당장의 편의보다 장기적인 고객 가치를 우선하고, 되돌릴 수 있는 결정(Type 2)은 빠르게 실험하며 되돌릴 수 없는 결정(Type 1)은 극도로 신중하라.",
-  },
-  chouinard: {
-    nameKo: "이본 쉬나드 (목적의 지속성 & 단순한 해법)",
-    rule: "불필요한 성장을 경계하고, 본래의 목적과 윤리적 일치성을 지키며 가장 튼튼하고 단순한 방식으로 문제를 해결하라.",
-  },
-  socrates: {
-    nameKo: "소크라테스 (지적 정직성)",
-    rule: "모르는 것을 안다고 착각하지 말고, 선택의 전제를 집요하게 질문하여 스스로 명료하게 설명할 수 있는지 점검하라.",
-  },
+// 대화 렌즈는 Guru 방법론만 둔다. Legend 인물은 주간 카드로만 산다(agent-layer-direction
+// §2.1 ⑧, 2026-09-25 운영자 재확인) — 잡스·베이조스·쉬나드·소크라테스 렌즈를 뺐고, UI가
+// 보내던 카네기·힐은 원래 여기 없어서 조용히 버려지던 값이다.
+const GURU_LENSES: Record<string, { nameKo: string; rule: string }> = {
   voss: {
     nameKo: "크리스 보스 (협상과 저항 극복)",
     rule: "상대의 거절(No)을 두려워하지 말고 시작점으로 삼아라. 감정을 라벨링하고, '어떻게'/'무엇을' 질문으로 상대가 스스로 주도권을 쥐게 하라.",
   },
   ogilvy: {
     nameKo: "데이비드 오길비 (사실 기반 카피)",
-    rule: "헤드라인이 80%다. 모호한 형용사나 미사여구를 배제하고 구체적인 숫자와 검증된 사실로 고객의 마음을 움직여라.",
+    rule: "헤드라인에 공을 들이되, 헤드라인이 본문보다 많이 읽힌다는 오길비의 당시 인쇄 광고 관찰을 모든 채널에 통하는 비율 법칙으로 단정하지 마라. 모호한 형용사나 미사여구를 배제하고 구체적인 숫자와 검증된 사실로 고객의 마음을 움직여라.",
   },
   godin: {
     nameKo: "세스 고딘 (가장 작은 유효 시장)",
@@ -113,7 +100,7 @@ const LEGEND_LENSES: Record<string, { nameKo: string; rule: string }> = {
   },
   rackham: {
     nameKo: "닐 랙햄 (SPIN 질문법)",
-    rule: "제품을 설명하려 들지 말고 질문하라: 상황(Situation) -> 문제(Problem) -> 시사점(Implication) -> 해결가치(Need-Payoff).",
+    rule: "제품을 설명하려 들기 전에 질문하라. 상황(Situation)·문제(Problem)·시사점(Implication)·해결가치(Need-Payoff)는 정해진 순서가 아니라 대화에서 필요한 질문을 고르는 네 가지 유형이다.",
   },
   goldratt: {
     nameKo: "엘리 골드랫 (제약 이론)",
@@ -144,9 +131,9 @@ function buildPrompt({
   lines.push(`[담당 페르소나]: ${profile.nameKo}`);
   lines.push(`[작업 모드]: ${mode.toUpperCase()}`);
 
-  if (lens && LEGEND_LENSES[lens]) {
-    const l = LEGEND_LENSES[lens];
-    lines.push(`[적용할 사상가/구루 렌즈]: ${l.nameKo}`);
+  if (lens && Object.hasOwn(GURU_LENSES, lens)) {
+    const l = GURU_LENSES[lens];
+    lines.push(`[적용할 구루 렌즈]: ${l.nameKo}`);
     lines.push(`- 판단 기준: ${l.rule}`);
   }
 
@@ -266,7 +253,7 @@ export async function GET() {
     integration: "gemini",
     endpoint: "persona-chat",
     personas: Object.keys(PERSONA_PROFILES),
-    lenses: Object.keys(LEGEND_LENSES),
+    lenses: Object.keys(GURU_LENSES),
     status: getGeminiIntegrationStatus(),
   });
 }
@@ -287,7 +274,7 @@ export async function POST(req: Request) {
 
   const personaId = typeof payload.personaId === "string" && payload.personaId in PERSONA_PROFILES ? payload.personaId : "order";
   const mode = typeof payload.mode === "string" ? payload.mode : "advice";
-  const lens = typeof payload.lens === "string" && payload.lens in LEGEND_LENSES ? payload.lens : null;
+  const lens = typeof payload.lens === "string" && Object.hasOwn(GURU_LENSES, payload.lens) ? payload.lens : null;
   const message = typeof payload.message === "string" ? payload.message : null;
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const context = payload.context ?? {};
@@ -376,7 +363,7 @@ export async function POST(req: Request) {
       source: `persona.${personaId}`,
       event_type: `ai.${mode}`,
       status: "reported",
-      title: `${profile.nameKo} · ${mode === "weekly-review" ? "한 주 정리" : "스파링 토론"}${lens ? ` (${LEGEND_LENSES[lens]?.nameKo})` : ""}`,
+      title: `${profile.nameKo} · ${mode === "weekly-review" ? "한 주 정리" : "스파링 토론"}${lens ? ` (${GURU_LENSES[lens]?.nameKo})` : ""}`,
       summary: result.text.slice(0, 500),
       progress: null,
       milestone: null,

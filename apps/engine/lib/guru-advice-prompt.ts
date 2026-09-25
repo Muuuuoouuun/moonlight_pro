@@ -1,4 +1,5 @@
 import { guidancePromptFrame } from '@com-moon/guru-guidance';
+import { guidanceSourcePrompt } from '@com-moon/guru-guidance/source-prompt';
 
 export const GURU_ADVICE_MODES = {
   'open-question': {
@@ -40,6 +41,9 @@ export function buildGuruAdvicePrompt({ mode, context, draft, guidanceId }: {
   // A freeform question without a selected card must not acquire an unrelated
   // person's method or a source attribution by default.
   const frame = requestedFrame || (mode === 'open-question' ? '' : guidancePromptFrame(config.defaultCardId));
+  // Only a card the operator chose brings its verbatim playbook original (agent-layer-direction
+  // §2.1 ⑥); a mode's default card stays a short frame.
+  const original = requestedFrame ? guidanceSourcePrompt(guidanceId as string) : '';
   const lines = [
     config.question,
     frame
@@ -50,6 +54,7 @@ export function buildGuruAdvicePrompt({ mode, context, draft, guidanceId }: {
     'context.memory.recent_runs는 이전 생성 조언이며 현재 고객 사실 근거가 아닙니다. 검증된 원장 기록과 구분하십시오.',
     ...(mode === 'open-question' ? ['질문과 직접 관련 없는 다른 고객·거래·파이프라인 상태를 끌어오지 마십시오. 질문과 선택 카드에 필요한 확인된 사실만 사용하십시오.'] : []),
     frame || '선택된 자료 카드가 없으므로 특정 인물·방법론·출처를 임의로 붙이지 마십시오.',
+    ...(original ? [original] : []),
   ];
   if (draft?.trim()) lines.push('운영자가 제공한 질문 또는 초안:', draft.trim());
   lines.push('Sales ledger snapshot (자료 카드와 별개인 사실 근거):', JSON.stringify(context ?? {}, null, 2));

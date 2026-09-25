@@ -1,3 +1,20 @@
+export {
+  LEGEND_IDS,
+  LEGEND_LIBRARY,
+  LEGEND_LIBRARY_VERSION,
+  LEGEND_MICRO_CARDS,
+  getLegendEntry,
+  isLegendId,
+  toLegendMicroCard,
+} from './legend-library.ts';
+export type {
+  LegendCategory,
+  LegendEntry,
+  LegendMicroCard,
+  LegendOriginRef,
+  LegendStatus,
+} from './legend-library.ts';
+
 export type GuidanceDomain = 'sales' | 'marketing' | 'content';
 export type GuidanceCadence = 'daily' | 'weekly';
 
@@ -259,7 +276,7 @@ export const LEGEND_CARDS: readonly GuidanceCard[] = [
     text: '이번 주 더할 일보다, 내 능력 범위 밖에서 붙잡고 있는 일을 돌아보세요.',
     useWhen: '새 프로젝트를 시작하기 전에 집중의 비용을 판단할 때',
     question: '이 일을 위해 이번 주 무엇을 내려놓을 수 있나요?',
-    source: { title: 'Legend 마이크로 카드', path: 'apps/engine/lib/legend-cards.ts', section: 'buffett', url: 'https://www.berkshirehathaway.com/letters/1996.html', application: 'adapted', note: '투자에서 말한 능력 범위를 주간 업무 선택에 적용한 Moonlight 해석' },
+    source: { title: 'Legend 마이크로 카드', path: 'packages/guru-guidance/legend-library.ts', section: 'buffett', url: 'https://www.berkshirehathaway.com/letters/1996.html', application: 'adapted', note: '투자에서 말한 능력 범위를 주간 업무 선택에 적용한 Moonlight 해석' },
   },
   {
     id: 'legend-feynman', kind: 'legend', domain: 'perspective', person: 'Richard Feynman · 불리한 근거',
@@ -267,7 +284,7 @@ export const LEGEND_CARDS: readonly GuidanceCard[] = [
     text: '지금 결정을 지지하는 근거와 함께, 결론을 흔들 수 있는 사실도 적어 보세요.',
     useWhen: '익숙한 설명이 반례와 불확실성을 가릴 수 있을 때',
     question: '이 판단에 불리한 근거는 무엇이며, 확인하면 결론을 바꿀 사실은 무엇인가요?',
-    source: { title: 'Legend 마이크로 카드', path: 'apps/engine/lib/legend-cards.ts', section: 'feynman', url: 'https://calteches.library.caltech.edu/3043/' },
+    source: { title: 'Legend 마이크로 카드', path: 'packages/guru-guidance/legend-library.ts', section: 'feynman', url: 'https://calteches.library.caltech.edu/3043/' },
   },
   {
     id: 'legend-carnegie', kind: 'legend', domain: 'perspective', person: 'Dale Carnegie · 상대 관점',
@@ -275,7 +292,7 @@ export const LEGEND_CARDS: readonly GuidanceCard[] = [
     text: '내 주장을 더 설명하기 전에 상대가 중요하게 여기는 것을 먼저 들어보세요.',
     useWhen: '고객과 이견을 풀거나 관계를 회복할 때',
     question: '상대는 지금 무엇을 지키려고 하나요?',
-    source: { title: 'Legend 마이크로 카드', path: 'apps/engine/lib/legend-cards.ts', section: 'carnegie', url: 'https://www.dalecarnegie.com/en/culture', application: 'adapted', note: '공식 인간관계 원칙을 고객과의 이견 상황에 적용한 Moonlight 해석' },
+    source: { title: 'Legend 마이크로 카드', path: 'packages/guru-guidance/legend-library.ts', section: 'carnegie', url: 'https://www.dalecarnegie.com/en/culture', application: 'adapted', note: '공식 인간관계 원칙을 고객과의 이견 상황에 적용한 Moonlight 해석' },
   },
 ];
 
@@ -348,6 +365,28 @@ export function listGuidanceCardsForPerson(personId: string): readonly GuidanceC
   return GURU_CARDS.filter(card => card.personId === personId);
 }
 
+// Weekly cards advance one step per Seoul week. The seed is the week number: Mondays are
+// day 4 (mod 7) from 1970-01-01, so floor(day / 7) counts weeks. The earlier Monday day
+// number moved 7 steps a week and showed only 1 of 7 or 2 of 14 cards. The offset keeps
+// the three-card rotation exactly as before (2026-09-21 Carnegie, 2026-09-28 Buffett).
+const WEEKLY_ROTATION_OFFSET = 1;
+
+function rotationSeed(cadence: GuidanceCadence, now: Date): number {
+  if (cadence === 'daily') {
+    const window = guidanceDailyWindow(now);
+    return dayNumber(window.date) * 3 + window.slot;
+  }
+  return Math.floor(dayNumber(guidancePeriodKey('weekly', now)) / 7) + WEEKLY_ROTATION_OFFSET;
+}
+
+// Position of the scheduled card in a catalogue of `length` cards.
+export function guidanceRotationIndex({ cadence, now = new Date(), offset = 0, length }: {
+  cadence: GuidanceCadence; now?: Date; offset?: number; length: number;
+}): number {
+  if (!Number.isInteger(length) || length < 1) throw new RangeError('Guidance rotation needs at least one card');
+  return ((rotationSeed(cadence, now) + Math.trunc(offset)) % length + length) % length;
+}
+
 export function selectGuidanceCard({ cadence, domain, now = new Date(), offset = 0, contextKey }: {
   cadence: GuidanceCadence; domain?: GuidanceDomain; now?: Date; offset?: number; contextKey?: string;
 }): GuidanceCard {
@@ -360,12 +399,7 @@ export function selectGuidanceCard({ cadence, domain, now = new Date(), offset =
   // Unknown or narrow context falls back to cards safe without a matched signal.
   const cards = matched.length >= 3 ? matched : general;
   if (!cards.length) throw new Error(`No guidance cards for ${cadence}/${domain ?? ''}`);
-  const window = cadence === 'daily' ? guidanceDailyWindow(now) : null;
-  const seed = window
-    ? dayNumber(window.date) * 3 + window.slot
-    : dayNumber(guidancePeriodKey(cadence, now));
-  const index = ((seed + Math.trunc(offset)) % cards.length + cards.length) % cards.length;
-  return cards[index];
+  return cards[guidanceRotationIndex({ cadence, now, offset, length: cards.length })];
 }
 
 export function guidancePromptFrame(id: string): string {

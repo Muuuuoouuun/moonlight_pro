@@ -41,7 +41,7 @@ registerHooks({
 });
 
 const { POST } = await import("../app/api/hub/persona-chat/route.js");
-const { PERSONA_MODE_LABEL, LEGEND_LENS_MAP } = await import("../components/hub/persona-client.js");
+const { PERSONA_MODE_LABEL, GURU_LENS_MAP } = await import("../components/hub/persona-client.js");
 
 beforeEach((t) => {
   for (const key of Object.keys(state)) delete state[key];
@@ -74,7 +74,7 @@ const request = (body) =>
     body: JSON.stringify(body),
   });
 
-test("persona-client exposes mode labels and legend lenses", () => {
+test("persona-client exposes mode labels and Guru-only lenses", () => {
   assert.equal(PERSONA_MODE_LABEL.advice, "조언");
   assert.equal(PERSONA_MODE_LABEL.critique, "평가/진단");
   assert.equal(PERSONA_MODE_LABEL.sparring, "3자 토론");
@@ -82,11 +82,10 @@ test("persona-client exposes mode labels and legend lenses", () => {
   assert.equal(PERSONA_MODE_LABEL["outreach-draft"], "연락 초안");
   assert.equal(PERSONA_MODE_LABEL["extract-actions"], "액션 추출");
   assert.equal(PERSONA_MODE_LABEL["daily-dispatch"], "오더 브리핑");
-  assert.ok(LEGEND_LENS_MAP.jobs);
-  assert.ok(LEGEND_LENS_MAP.bezos);
-  assert.ok(LEGEND_LENS_MAP.chouinard);
-  assert.ok(LEGEND_LENS_MAP.carnegie);
-  assert.ok(LEGEND_LENS_MAP.hill);
+  assert.ok(GURU_LENS_MAP.voss);
+  assert.ok(GURU_LENS_MAP.ogilvy);
+  // Legend 인물은 주간 카드로만 산다(agent-layer-direction §2.1 ⑧).
+  for (const legend of ["jobs", "bezos", "chouinard", "socrates", "carnegie", "hill"]) assert.equal(GURU_LENS_MAP[legend], undefined, legend);
 });
 
 test("POST forwards personaId, mode and lens to engine and logs agent run", async () => {
@@ -94,7 +93,7 @@ test("POST forwards personaId, mode and lens to engine and logs agent run", asyn
     request({
       personaId: "order",
       mode: "advice",
-      lens: "jobs",
+      lens: "voss",
       message: "오늘 우선순위 정리",
     }),
   );
@@ -102,12 +101,23 @@ test("POST forwards personaId, mode and lens to engine and logs agent run", asyn
   assert.equal(res.status, 200);
   assert.equal(data.personaId, "order");
   assert.equal(data.mode, "advice");
-  assert.equal(data.lens, "jobs");
+  assert.equal(data.lens, "voss");
   assert.equal(data.runId, "persona-run-1");
   assert.equal(state.calledBody.personaId, "order");
-  assert.equal(state.calledBody.lens, "jobs");
+  assert.equal(state.calledBody.lens, "voss");
   assert.equal(state.run.agent, "persona.order");
   assert.equal(state.run.mode, "advice");
+  assert.equal(state.run.ref, "lens=voss");
+});
+
+test("POST never forwards or logs a lens the Engine does not apply", async () => {
+  for (const lens of ["jobs", "carnegie", "hill", "constructor"]) {
+    const res = await POST(request({ personaId: "sales", mode: "advice", lens, message: "관점 요청" }));
+    assert.equal(res.status, 200, lens);
+    assert.equal(state.calledBody.lens, null, lens);
+    assert.equal(state.run.ref, null, lens);
+    assert.match(state.run.inputSummary, /lens=none/, lens);
+  }
 });
 
 test("POST supports critique and sparring modes", async () => {

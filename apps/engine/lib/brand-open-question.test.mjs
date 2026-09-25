@@ -54,6 +54,9 @@ test('open-question uses the selected marketing source and operator question wit
   assert.match(instruction, /docs\/marketing-branding-gurus\.md/);
   assert.match(instruction, /자료 요약, 인용 아님/);
   assert.match(instruction, /이전 생성 조언.*사실 근거가 아닙니다/);
+  // The office-review memory warning is separate; the open-question wording is unchanged.
+  assert.match(instruction, /context\.memory\.recent_runs는 이전 생성 조언이며 현재 독자·고객의 사실 근거가 아닙니다\. 원장 기록과 구분하십시오\./);
+  assert.doesNotMatch(instruction, /이전 Office 검토 포함/);
   assert.match(instruction, /질문과 직접 관련 없는 다른 프로젝트 상태/);
   assert.match(instruction, /관찰.*프레임.*질문 또는 선택/s);
   assert.doesNotMatch(instruction, /Seth Godin|Donald Miller|Eliyahu Goldratt/);

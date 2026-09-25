@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Badge, Button, IconButton, Dot } from "./hub-primitives";
+import { Badge, Button, IconButton, Dot, TruthBadge } from "./hub-primitives";
 import { Iconed } from "./hub-icons";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 import { requestCouncilAdvice } from "./council-client";
 import { requestGuruCoaching } from "./guru-client";
-import { requestPersonaChat, LEGEND_LENS_MAP } from "./persona-client";
+import { requestPersonaChat, GURU_LENS_MAP, GURU_LENS_CHIPS } from "./persona-client";
 import { createAdviceTaskWriter } from "@/lib/ai-workflow-client";
 
 function renderAdviceWithCallouts(text) {
@@ -86,6 +86,14 @@ export function FloatingMentorWidget({
   onCreateTask,
 }) {
   const isGuru = agent ? agent === "guru" : ["deal", "customer", "sales"].includes(contextType);
+  // Guru resolves its record by exact id only (2026-09-25). A display name can match another
+  // customer's deal in the Hub context assembler and shares memory across same-name customers,
+  // so it never stands in for `ref`. A linked deal id wins because the deal is the coaching
+  // focus; without one the widget says so rather than letting the server guess.
+  const linkedDealId = contextData?.dealId || (contextType === "deal" ? contextData?.id || contextData?.ref || null : null);
+  const recordRef = isGuru
+    ? linkedDealId || contextData?.id || contextData?.ref || null
+    : contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
   const contextKey = JSON.stringify([agent, contextType, contextData?.id || contextData?.ref || contextTitle, guidanceId, initialQuestion]);
   const [minimized, setMinimized] = useState(false);
   const defaultTab = initialTab || (contextData?.mode === "critique" ? "critique" : "quick");
@@ -179,8 +187,8 @@ export function FloatingMentorWidget({
         parts.push(`최근 업데이트: ${contextData.updates.slice(0, 3).map(u => u.title).join(' / ')}`);
       }
     }
-    if (selectedLens && LEGEND_LENS_MAP[selectedLens]) {
-      parts.push(`[적용 렌즈: ${LEGEND_LENS_MAP[selectedLens].name} 관점 적용]`);
+    if (selectedLens && GURU_LENS_MAP[selectedLens]) {
+      parts.push(`[적용 렌즈: ${GURU_LENS_MAP[selectedLens].name} 관점 적용]`);
     }
     if (userPrompt) {
       parts.push(`\n[운영자 요청/질문]:\n${userPrompt}`);
@@ -198,7 +206,7 @@ export function FloatingMentorWidget({
     setTaskSaved(false);
     setDealSaved(false);
     const draft = buildContextPrompt(customDraft);
-    const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
+    const ref = recordRef;
 
     // Use persona-chat when lens is selected or in critique / weekly-review / outreach / extract-actions mode
     let res;
@@ -259,17 +267,20 @@ export function FloatingMentorWidget({
     const draft = buildContextPrompt(
       `이전 대화:\n${chatThread.map(m => `${m.role === 'user' ? '운영자' : isGuru ? 'Guru' : 'Council'}: ${m.text}`).join('\n')}\n\n새 질문:\n${text}`
     );
-    const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
+    const ref = recordRef;
 
     const chatMode = activeTab === "critique" ? "critique" : activeTab === "sparring" ? "sparring" : "chat";
     let res;
     if (selectedLens) {
+      // 조언 경로와 같은 컨텍스트를 넘긴다. 비워 두면 Hub가 범위 없는 최근 거래 15건을 붙여
+      // 이 레코드와 무관한 고객(개인 레인 포함)이 답변에 섞였다.
       res = await requestPersonaChat({
         personaId: isGuru ? "sales" : "council",
         mode: chatMode,
         lens: selectedLens,
         draft,
         message: text,
+        context: contextData,
       });
     } else {
       res = isGuru
@@ -556,6 +567,27 @@ export function FloatingMentorWidget({
         </div>
       </div>
 
+      {/* 1.2 Deal link truth — a record without an exact deal id gets no guessed deal (2026-09-25). */}
+      {isGuru && ["customer", "deal"].includes(contextType) && !linkedDealId && (
+        <div
+          role="status"
+          style={{
+            padding: "6px 14px",
+            borderBottom: "1px solid var(--line-soft)",
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 6,
+            fontSize: 11,
+            color: "var(--fg-muted)",
+            flexShrink: 0,
+          }}
+        >
+          <TruthBadge state="partial" label="거래 기록 연결 안 됨" />
+          <span>거래를 추정하지 않고 이 기록만 참고합니다.</span>
+        </div>
+      )}
+
       {/* 1.5 Recent Advice History Dropdown */}
       {showHistory && visibleAdviceHistory.length > 0 && (
         <div
@@ -693,8 +725,8 @@ export function FloatingMentorWidget({
         >
           기본
         </button>
-        {["jobs", "bezos", "chouinard", "voss", "ogilvy", "carnegie", "hill"].map((lid) => {
-          const l = LEGEND_LENS_MAP[lid];
+        {GURU_LENS_CHIPS.map((lid) => {
+          const l = GURU_LENS_MAP[lid];
           const active = selectedLens === lid;
           return (
             <button

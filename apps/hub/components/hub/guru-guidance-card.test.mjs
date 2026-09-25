@@ -21,6 +21,17 @@ test('card keeps browsing separate from advice generation and lets the reader hi
   assert.doesNotMatch(card, /fetch\(|requestGuruCoaching\(|createWorkOrder\(/);
 });
 
+test('Home and Today carry only record-based recommendations, never the rotating Guru card (2026-09-25 ⑦)', () => {
+  const home = read('./pages/home.jsx');
+  const today = read('./pages/daily-brief.jsx');
+  for (const [name, source] of [['home', home], ['today', today]]) {
+    assert.doesNotMatch(source, /<GuruGuidanceCard/, name);
+    assert.match(source, /<GuruRecommendationList result=\{guruRecommendations\}/, name);
+  }
+  // 홈의 신호 상세는 그 신호가 가리키는 기록의 추천만 붙인다.
+  assert.match(home, /recommendationForSubject\(guruRecommendations, active\.subject\.id\)/);
+});
+
 test('Guru cards take existing surface space and stay out of Home and Today triage', () => {
   const chat = read('./pages/agents.jsx');
   const revenue = read('./pages/revenue.jsx');

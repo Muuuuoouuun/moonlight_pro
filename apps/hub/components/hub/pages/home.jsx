@@ -6,6 +6,8 @@ import { Button, Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives
 import { CalendarOutcome } from "../calendar-outcome";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 import { DailyReviewCue } from '../daily-review-cue';
+import { GuruRecommendation, GuruRecommendationList } from '../guru-recommendation';
+import { useGuruRecommendations, recommendationForSubject } from '../guru-recommendations-client';
 
 // Home — Futura 텍스처의 첫 화면 (DESIGN.md §15, 2026-09-18).
 //
@@ -99,7 +101,7 @@ function useTodaySchedule(reloadKey) {
   return state;
 }
 
-function TriageDetail({ signal, onDecide }) {
+function TriageDetail({ signal, onDecide, recommendation = null, onGuidanceAsk }) {
   if (!signal) {
     return (
       <div className="fx-card">
@@ -126,6 +128,12 @@ function TriageDetail({ signal, onDecide }) {
 
       <h3 className="fx-card-title">{signal.title}</h3>
       {signal.summary ? <p className="fx-card-body">{signal.summary}</p> : null}
+      {/* 이 신호의 거래·고객에 저장된 사실이 있을 때만 — 결정 바로 옆에서 읽는 추천(§2.1 ⑦). */}
+      {recommendation ? (
+        <div style={{ marginTop: 16 }}>
+          <GuruRecommendation recommendation={recommendation} onAsk={onGuidanceAsk} compact />
+        </div>
+      ) : null}
 
       {decisions.length ? (
         <>
@@ -203,9 +211,10 @@ function TodaySchedule({ onNavigate, reloadKey, onReload }) {
   );
 }
 
-export function Home({ onNavigate }) {
+export function Home({ onNavigate, onGuidanceAsk }) {
   const [reloadKey, reload] = React.useReducer(value => value + 1, 0);
   const { status, signals } = useDailyBriefSignals(reloadKey);
+  const guruRecommendations = useGuruRecommendations();
   const [resolved, setResolved] = React.useState(() => new Set());
   const [cursor, setCursor] = React.useState(0);
 
@@ -302,9 +311,16 @@ export function Home({ onNavigate }) {
             ))}
           </ul>
 
-          <TriageDetail signal={active} onDecide={decide} />
+          <TriageDetail
+            signal={active}
+            onDecide={decide}
+            recommendation={active?.subject?.id ? recommendationForSubject(guruRecommendations, active.subject.id) : null}
+            onGuidanceAsk={onGuidanceAsk}
+          />
         </div>
       )}
+
+      <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onRetry={guruRecommendations.reload} />
 
       <TodaySchedule onNavigate={onNavigate} reloadKey={reloadKey} onReload={reload} />
 

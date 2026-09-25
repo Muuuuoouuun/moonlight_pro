@@ -44,8 +44,10 @@ export interface AdvisorDirectivesConfig {
 export const DEFAULT_OPERATOR_VALUES: ValueDirective = {
   coreValues: [
     '지적 정직성: 확인되지 않은 사실을 안다고 단정하지 않으며, 모르는 것은 모른다고 선언한다.',
-    '가역적 학습 속도: 되돌릴 수 있는 Type 2 결정은 70%의 정보로 30분 안에 작게 시도해 배운다.',
-    '본질 집중: 외형적 기능 수보다 사용자가 경험할 단 하나의 본질에 집중하며 나머지 90%를 버린다.',
+    // No fixed information share or time box: the 2016 letter's number is not a universal rule
+    // (09-12 legend spec §3.7, 09-12 evaluation design §8.1, v1 findings §3, Iron Rule 4).
+    '가역적 학습 속도: 되돌릴 수 있고 손실을 감당할 수 있는 Type 2 결정은 작게 시도해 배우고, 되돌리기 어렵거나 영향 범위가 큰 결정은 검토를 깊게 한다.',
+    '본질 집중: 외형적 기능 수보다 사용자가 경험할 단 하나의 본질에 집중하고, 그 경험을 흐리는 기능은 범위에서 덜어낸다.',
     '등가 대가와 규율 (Napoleon Hill): 공짜는 없으며, 명확한 목표를 세웠다면 오늘 반드시 치러야 할 구체적 대가와 희생을 명시한다.',
     '상대방 관점 경청 (Dale Carnegie): 내 지적 우월감과 제품 자랑을 버리고, 상대방의 자존감과 관심사에 온전히 집중한다.',
   ],

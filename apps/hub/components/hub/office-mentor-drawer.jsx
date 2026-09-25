@@ -2,11 +2,18 @@
 
 import React from 'react';
 import { Button, CertaintyBadge, Drawer, SegmentedControl, TextAreaField, TruthBadge } from './hub-primitives';
-import { OFFICE_MENTOR_FOLLOWUP_LIMIT, requestOfficeMentor } from './office-mentor-client';
+import { OFFICE_MENTOR_FOLLOWUP_LIMIT, officeMentorPartialNote, requestOfficeMentor } from './office-mentor-client';
 import { officeMentorSessions } from './office-mentor-session';
 import './office-mentor-drawer.css';
 
 const LANE_LABEL = { classin: '영업 멘토', personal: '브랜드 멘토' };
+
+// Shown beside an answer written from a cut Office source. The full text stays in the result card.
+function PartialSourceNote({ sourceTruncation }) {
+  const note = officeMentorPartialNote(sourceTruncation);
+  if (!note) return null;
+  return <p className="office-mentor__partial"><TruthBadge state="partial" label="원문 일부 전달" /><span>{note}</span></p>;
+}
 
 function useCompactDrawer() {
   const [compact, setCompact] = React.useState(false);
@@ -22,12 +29,14 @@ function useCompactDrawer() {
 
 // The result card can mount this without opening another surface or calling a model.
 // Its disclosure starts closed; only the explicit continuation button opens chat.
-export function OfficeMentorReferenceCard({ answer, target = '멘토', onContinue }) {
+export function OfficeMentorReferenceCard({ answer, target = '멘토', onContinue, sourceTruncation = null }) {
   if (!answer) return null;
+  const partial = Boolean(officeMentorPartialNote(sourceTruncation));
   return <details className="office-mentor__reference">
-    <summary tabIndex={0}>다른 관점 · {target} 답변 보기</summary>
+    <summary tabIndex={0}>다른 관점 · {target} 답변 보기{partial ? ' · 원문 일부 전달' : ''}</summary>
     <div className="office-mentor__reference-body">
       <div className="office-mentor__reference-meta"><CertaintyBadge state="recommended" /> <span>판단에 참고할 의견입니다.</span></div>
+      <PartialSourceNote sourceTruncation={sourceTruncation} />
       <p>{answer}</p>
       {onContinue ? <Button variant="outline" size="sm" onClick={onContinue}>이어서 상담</Button> : null}
     </div>
@@ -96,10 +105,10 @@ export function OfficeMentorDrawer({ sessionId, store = officeMentorSessions, on
     <OfficeResultSource session={session} summaryRef={sourceRef} />
 
     {session.turns.map((turn, index) => index === 0
-      ? <OfficeMentorReferenceCard key={turn.id} answer={turn.answer} target={target} />
+      ? <OfficeMentorReferenceCard key={turn.id} answer={turn.answer} target={target} sourceTruncation={turn.sourceTruncation} />
       : <article key={turn.id} className="office-mentor__turn">
         <div className="office-mentor__turn-question"><span>나 · {index + 1}번째 질문</span><p>{turn.question}</p></div>
-        <div className="office-mentor__turn-answer"><span>{target}</span><p>{turn.answer}</p></div>
+        <div className="office-mentor__turn-answer"><span>{target}</span><PartialSourceNote sourceTruncation={turn.sourceTruncation} /><p>{turn.answer}</p></div>
       </article>)}
 
     {hasAnswer ? <TextAreaField

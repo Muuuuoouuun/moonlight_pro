@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
+import {
+  LEGEND_IDS,
+  LEGEND_MICRO_CARDS as LIBRARY_MICRO_CARDS,
+} from '@com-moon/guru-guidance';
 import {
   LEGEND_MICRO_CARDS,
   getLegendCard,
@@ -207,5 +212,52 @@ describe('Legend Micro-Cards Formatting Helpers', () => {
     assert.equal(blocks.length, 2, 'Triad should filter out invalid cards and retain valid ones');
     assert.ok(mixed.includes('소크라테스'));
     assert.ok(mixed.includes('리처드 파인만'));
+  });
+
+  it('never treats object prototype keys as Legend ids', () => {
+    for (const id of ['constructor', '__proto__', 'toString']) {
+      assert.equal(getLegendCard(id), undefined, id);
+      assert.equal(formatLegendMicroCard(id), '', id);
+    }
+    assert.equal(formatLegendTriad(['constructor', 'hasOwnProperty']), '');
+  });
+});
+
+describe('Legend Micro-Cards Single Source', () => {
+  it('serves the shared guru-guidance library text, not a local copy', () => {
+    assert.equal(LEGEND_MICRO_CARDS, LIBRARY_MICRO_CARDS);
+    assert.deepEqual(getAllLegendCards().map((card) => card.id), [...LEGEND_IDS]);
+    assert.deepEqual([...LEGEND_IDS].sort(), [...ALL_16_IDS].sort());
+  });
+
+  it('gives the model a Bezos and Drucker card without percentage rules', () => {
+    const block = formatLegendTriad(['bezos', 'drucker']);
+    assert.doesNotMatch(block, /70%|퍼센트|지금 당장/);
+    assert.match(formatLegendMicroCard('bezos'), /되돌릴 수 있고 손실을 감당할 수 있는 문이라면/);
+    for (const card of getAllLegendCards()) {
+      assert.doesNotMatch(card.pivotCondition, /\d+\s*%|퍼센트/, card.id);
+    }
+  });
+
+  it('keeps persona-chat lenses Guru-only, since Legend lives only as the weekly card', () => {
+    const route = readFileSync(new URL('../app/api/ai/persona-chat/route.ts', import.meta.url), 'utf8').replace(/\r\n?/g, '\n');
+    assert.doesNotMatch(route, /LEGEND_LENSES/);
+    const start = route.indexOf('const GURU_LENSES');
+    const block = route.slice(start, route.indexOf('\n};', start));
+    const lenses = [...block.matchAll(/^ {2}([a-z]+): \{\n\s+nameKo: "([^"]+)",\n\s+rule: "([^"]+)",/gm)]
+      .map(([, id, nameKo, rule]) => ({ id, nameKo, rule }));
+    // agent-layer-direction §2.1 ⑧ — Legend 인물(잡스·베이조스·쉬나드·소크라테스 등)은 렌즈로 쓰지 않는다.
+    assert.deepEqual(lenses.map((lens) => lens.id), ['voss', 'ogilvy', 'godin', 'rackham', 'goldratt']);
+    for (const lens of lenses) assert.ok(!LEGEND_IDS.includes(lens.id), lens.id);
+    for (const lens of lenses) assert.doesNotMatch(lens.rule, /\d+\s*%/, lens.id);
+    const ogilvy = lenses.find((lens) => lens.id === 'ogilvy');
+    assert.doesNotMatch(ogilvy.rule, /헤드라인이 80%/);
+    assert.match(ogilvy.rule, /인쇄 광고/);
+    // 09-24 출처 점검: SPIN은 고정 순서가 아니라 네 가지 질문 유형이다.
+    const rackham = lenses.find((lens) => lens.id === 'rackham');
+    assert.doesNotMatch(rackham.rule, /->/);
+    assert.match(rackham.rule, /정해진 순서가 아니라/);
+    // 프로토타입 키(constructor 등)는 렌즈로 받지 않는다.
+    assert.match(route, /Object\.hasOwn\(GURU_LENSES, payload\.lens\)/);
   });
 });

@@ -176,18 +176,13 @@ test("Customer360Drawer keeps the 1-click VIP toggle and the 3-step focus contro
   assert.doesNotMatch(customersSource, /inset 1px 0 0 var\(--moon-300\)/);
 });
 
-test("Customer360Drawer lets a reader request Guru after seeing a source-backed card", () => {
+test("Customer360Drawer asks Guru through the source-card question drawer, never the deal-review widget", () => {
   assert.match(customersSource, /<GuruGuidanceCard domain="sales" compact onAsk=/);
-  assert.match(customersSource, /setGuruQuestion\(''\)/, 'a card must open a blank operator question');
-  assert.doesNotMatch(customersSource, /setGuruQuestion\(card\.question\)/);
-  assert.match(customersSource, /guidanceId=\{guruGuidanceId\}/);
-  assert.match(customersSource, /initialQuestion=\{guruQuestion\}/);
+  assert.match(customersSource, /<GuidanceQuestionDrawer card=\{guruCard\}/);
   assert.doesNotMatch(customersSource, /Guru 전략 코칭 \(⌘J\)/);
-  assert.match(customersSource, /FloatingMentorWidget/);
-  assert.match(customersSource, /agent="guru"/);
-  assert.match(customersSource, /contextType="customer"/);
-  // 적용한 문장은 표시 모델 키가 아니라 약속 쓰기 계약(next_action)으로 저장된다.
-  assert.match(customersSource, /onApplyText=\{\(text\) => \{[\s\S]*?savePromise\(\{ what: text\.slice\(0, 100\) \}\)/);
+  // 2026-09-25: 위젯의 대화는 deal-review로 보내져 레코드와 무관한 거래 초점을 찾았고, 매 턴
+  // Engine이 project_updates 행을 남겼다. 고객 상세는 open-question 질문 경로만 쓴다.
+  assert.doesNotMatch(customersSource, /FloatingMentorWidget|deal-review|initialQuestion=/);
 });
 
 test("customer help has one scope-aware reply draft and no unscoped sales persona generator", () => {
@@ -246,6 +241,10 @@ const deleteContract = await import("../../../lib/sales-os/customer-delete-contr
 const followupScoring = await import("../../../lib/sales-os/followup-scoring.js");
 const uuid = await import("../../../lib/uuid.js");
 const workspaceMap = await import("../workspace-map.js");
+const { guidanceRequest } = await import("../guidance-advice-client.js");
+const { GURU_CARDS } = await import("@com-moon/guru-guidance");
+const { adviceScopeForRecord } = await import("../../../lib/sales-os/advice-scope.js");
+const { recommendationForSubject } = await import("../guru-recommendations-client.js");
 
 const pageJs = ts.transpileModule(
   customersSource.replace(/^import[\s\S]*?;\s*$/gm, "").replace("export function Customers", "function Customers"),
@@ -257,9 +256,10 @@ const HOST_COMPONENTS = [
   "Avatar", "EmptyState", "TruthBadge", "Kbd", "Drawer", "SegmentedControl", "CheckboxRow", "TextField", "TextAreaField",
   "SelectField", "Skeleton", "CertaintyBadge", "ChipToggle", "LifecycleBadge", "DateQuickPresets", "ContactRecordForm",
   "LeadEnrichmentPanel", "SortHead", "FloatingMentorWidget", "GuruGuidanceCard", "ContextMentorRail",
+  "GuidanceQuestionDrawer", "GuruRecommendation",
 ];
 
-function mountCustomers({ state = "live", leads = [], accounts = [], params = "" } = {}) {
+function mountCustomers({ state = "live", leads = [], accounts = [], params = "", guruRecommendations = [] } = {}) {
   // 훅 상태는 컴포넌트 경로별로 둔다 — 드로어가 기록 모드로 바뀌면 자식 구성이 달라지므로
   // 전역 인덱스 하나로는 React처럼 인스턴스별 상태를 흉내 낼 수 없다.
   const slots = new Map();
@@ -305,6 +305,9 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     LEAD_SUBJECTS: leadLabels.LEAD_SUBJECTS, subjectLabels: leadLabels.subjectLabels,
     ...customerLabels,
     REACTION_LABEL: followupScoring.REACTION_LABEL,
+    adviceScopeForRecord,
+    useGuruRecommendations: ({ enabled } = {}) => ({ status: enabled ? "live" : "idle", recommendations: enabled ? guruRecommendations : [], reload() {} }),
+    recommendationForSubject,
     ...helpers,
   };
   for (const name of HOST_COMPONENTS) deps[name] = name;
@@ -425,6 +428,41 @@ test("render: opening a row shows the promise first and one primary record actio
   assert.equal(app.findAll((n) => n.type === "Drawer")[0].props.title, "연락 기록");
 });
 
+test("render: a stored-fact recommendation takes the rotating card's place and asks through this drawer's own question", () => {
+  const company = { ...renderLeads()[0], workspace: "classin", type: "company" };
+  const recommendation = {
+    id: `positive-no-date:lead:${company.id}`, ruleId: "positive-no-date", cardId: "sales-voss-feasibility", severity: "act", basis: "record",
+    subject: { type: "lead", id: company.id, name: company.name, lane: "classin", laneBlocked: false },
+    facts: ["9/20 통화 · 긍정 반응", "날짜 정한 다음 단계 없음"],
+  };
+  const app = mountCustomers({ leads: [company], params: "scope=classin", guruRecommendations: [recommendation] });
+  rowsOf(app)[0].props.onClick();
+  app.render();
+  const shown = app.findAll((n) => n.type === "GuruRecommendation");
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0].props.recommendation.id, recommendation.id);
+  assert.equal(app.findAll((n) => n.type === "GuruGuidanceCard").length, 0, "the rotating card is the fallback only");
+  assert.match(app.text(), /기록 기반 추천 있음/);
+  shown[0].props.onAsk(GURU_CARDS.find((card) => card.id === "sales-voss-feasibility"));
+  app.render();
+  const question = app.findAll((n) => n.type === "GuidanceQuestionDrawer")[0];
+  assert.equal(question.props.card.id, "sales-voss-feasibility");
+  assert.equal(question.props.context.ref, company.id);
+
+  // 다른 고객의 추천은 이 드로어에 붙지 않고, 순환 카드가 그대로 남는다.
+  const other = mountCustomers({ leads: [company], params: "scope=classin", guruRecommendations: [{ ...recommendation, subject: { ...recommendation.subject, id: "someone-else" } }] });
+  rowsOf(other)[0].props.onClick();
+  other.render();
+  assert.equal(other.findAll((n) => n.type === "GuruRecommendation").length, 0);
+  assert.equal(other.findAll((n) => n.type === "GuruGuidanceCard").length, 1);
+
+  // ClassIn 범위 화면이 아니면 추천을 읽을 수만 있다(질문은 ClassIn 화면·ClassIn 고객일 때만).
+  const allApp = mountCustomers({ leads: [company], params: "scope=all", guruRecommendations: [recommendation] });
+  rowsOf(allApp)[0].props.onClick();
+  allApp.render();
+  assert.equal(allApp.findAll((n) => n.type === "GuruRecommendation")[0].props.onAsk, undefined);
+});
+
 test("render: customer Guru is readable across scopes but asks only for a ClassIn customer in the ClassIn scope", () => {
   const personal = { ...renderLeads()[0], workspace: "brand", type: "personal" };
   const personalApp = mountCustomers({ leads: [personal], params: "scope=personal" });
@@ -435,6 +473,7 @@ test("render: customer Guru is readable across scopes but asks only for a ClassI
   assert.equal(personalCard.props.onAsk, undefined);
   assert.equal(personalApp.findAll((n) => n.type === "OfficeWorkflowPanel")[0].props.scope, "personal");
   assert.equal(personalApp.findAll((n) => n.type === "FloatingMentorWidget").length, 0);
+  assert.equal(personalApp.findAll((n) => n.type === "GuidanceQuestionDrawer").length, 0);
 
   const company = { ...renderLeads()[0], workspace: "classin", type: "company" };
   const allApp = mountCustomers({ leads: [company], params: "scope=all" });
@@ -448,12 +487,13 @@ test("render: customer Guru is readable across scopes but asks only for a ClassI
   const classinCard = classinApp.findAll((n) => n.type === "GuruGuidanceCard")[0];
   assert.equal(typeof classinCard.props.onAsk, "function");
   assert.equal(classinApp.findAll((n) => n.type === "OfficeWorkflowPanel")[0].props.scope, "classin");
-  classinCard.props.onAsk({ id: "sales-gap" });
+  classinCard.props.onAsk(GURU_CARDS.find((card) => card.id === "sales-gap"));
   classinApp.render();
-  const mentor = classinApp.findAll((n) => n.type === "FloatingMentorWidget")[0];
-  assert.ok(mentor);
-  assert.equal(mentor.props.agent, "guru");
-  assert.equal(mentor.props.guidanceId, "sales-gap");
+  const question = classinApp.findAll((n) => n.type === "GuidanceQuestionDrawer")[0];
+  assert.ok(question);
+  assert.equal(question.props.card.id, "sales-gap");
+  assert.equal(question.props.context.ref, company.id);
+  assert.equal(classinApp.findAll((n) => n.type === "FloatingMentorWidget").length, 0);
 
   const mislabeledPersonal = { ...personal, workspace: "classin" };
   const inconsistentApp = mountCustomers({ leads: [mislabeledPersonal], params: "scope=classin" });
@@ -520,6 +560,66 @@ test("render: explicit brand ownership must agree with company type before custo
   const { card, office } = openedClassinRecord(classinBrand, "lead");
   assert.equal(typeof card.props.onAsk, "function");
   assert.equal(office.props.scope, "classin");
+});
+
+// 2026-09-25: 고객 상세의 Guru는 deal-review 위젯이었다. 리드·계정 id는 거래 초점으로 풀리지
+// 않았고(focus 없음), 대화 매 턴 Engine이 project_updates 행을 남겼다(open-question 외 모드).
+test("render: customer Guru asks the open-question path with this record's id and visible facts", () => {
+  const company = {
+    ...renderLeads()[0], workspace: "classin", type: "company", region: "서울",
+    contactName: "김원장", contactPhone: "010-1234-5678", contactEmail: "kim@academy.kr",
+  };
+  const app = mountCustomers({ leads: [company], params: "scope=classin" });
+  rowsOf(app)[0].props.onClick();
+  app.render();
+  const card = GURU_CARDS.find((item) => item.id === "sales-gap");
+  app.findAll((n) => n.type === "GuruGuidanceCard")[0].props.onAsk(card);
+  app.render();
+
+  assert.equal(app.findAll((n) => n.type === "FloatingMentorWidget").length, 0, "no deal-review widget from customer detail");
+  const questions = app.findAll((n) => n.type === "GuidanceQuestionDrawer");
+  assert.equal(questions.length, 1);
+  // 활성 오버레이는 하나 — 질문 드로어가 고객 드로어를 대신하고, 닫으면 같은 고객으로 돌아온다.
+  assert.equal(app.findAll((n) => n.type === "Drawer").length, 0);
+  const { card: asked, context } = questions[0].props;
+  assert.equal(asked.id, "sales-gap");
+  assert.equal(context.ref, company.id);
+  assert.equal(context.label, "김원장 · 테스트학원 A");
+  assert.deepEqual(context.facts, [
+    "고객: 김원장",
+    "소속: 테스트학원 A",
+    "구분: 리드",
+    "단계: 연락 중",
+    "다음 약속: 견적서 보내기 · 2일 지남",
+    "마지막 연락: 긍정 · 5일 전",
+    "분류: 서울",
+  ]);
+
+  // 실제 질문 경로로 보낼 요청 — open-question(Engine이 project_updates를 쓰지 않는 모드),
+  // 레코드 id를 ref로, 화면의 사실만. 연락처는 조언에 필요 없어 보내지 않는다.
+  const request = guidanceRequest(asked, "무엇을 먼저 확인할까?", context);
+  assert.equal(request.endpoint, "/api/hub/sales-mentor");
+  assert.equal(request.body.mode, "open-question");
+  assert.equal(request.body.ref, company.id);
+  assert.equal(request.body.guidanceId, "sales-gap");
+  assert.match(request.body.draft, /- 다음 약속: 견적서 보내기 · 2일 지남/);
+  assert.match(request.body.draft, /무엇을 먼저 확인할까\?$/);
+  assert.doesNotMatch(request.body.draft, /010-1234-5678|kim@academy\.kr/);
+
+  questions[0].props.onClose();
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "GuidanceQuestionDrawer").length, 0);
+  assert.equal(app.findAll((n) => n.type === "Drawer")[0].props.title, "김원장");
+});
+
+test("render: customer Guru closes without a stored record id", () => {
+  const unsaved = { ...renderAccounts()[0], id: null, workspace: "classin", type: "company" };
+  const app = mountCustomers({ accounts: [unsaved], params: "scope=classin" });
+  app.findAll((n) => n.type === "SegmentedControl" && n.props.label === "고객 구분")[0].props.onChange("won");
+  app.render();
+  rowsOf(app)[0].props.onClick();
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "GuruGuidanceCard")[0].props.onAsk, undefined);
 });
 
 test("render: an unsupported explicit workspace blocks customer advice despite company type", () => {

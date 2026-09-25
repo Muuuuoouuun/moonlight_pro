@@ -1,9 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { extractCards, buildSystem, blindText, scoreAssessment, validateGeneration, validateAssessment } from './evaluate-legend-personas.mjs';
 import * as evaluator from './evaluate-legend-personas.mjs';
 import { createServer } from 'node:http';
+
+const CARD_URL = new URL('../docs/superpowers/specs/2026-09-12-legend-values-persona-cards.md', import.meta.url);
+const FIXTURE_URL = new URL('./fixtures/legend-persona-eval.json', import.meta.url);
+
+test('CRLF and LF checkouts parse the same nine cards and hash the frozen sources alike', () => {
+  const lf = readFileSync(CARD_URL, 'utf8').replace(/\r\n?/g, '\n');
+  const crlf = lf.replace(/\n/g, '\r\n');
+  const cards = extractCards(crlf);
+  assert.equal(cards.length, 9);
+  assert.deepEqual(cards, extractCards(lf));
+  assert.ok(cards.every(card => !/\r/.test(`${card.title}${card.source}${card.directives}`)));
+  const sha = text => createHash('sha256').update(text).digest('hex');
+  assert.deepEqual(evaluator.sourceHashes(), {
+    cards: sha(lf),
+    fixtures: sha(readFileSync(FIXTURE_URL, 'utf8').replace(/\r\n?/g, '\n')),
+  });
+  assert.doesNotMatch(evaluator.readSource(CARD_URL), /\r/);
+});
 
 test('source-only baseline excludes persona directives and C adds the exact card', () => {
   const cards = extractCards(readFileSync(new URL('../docs/superpowers/specs/2026-09-12-legend-values-persona-cards.md', import.meta.url), 'utf8'));

@@ -47,6 +47,7 @@
 .contextState { margin:12px 0 8px; }
 .request { margin-top:12px; }
 .request ul { margin:8px 0 0; padding-left:20px; }
+.guidanceLinks { display:grid; gap:8px; margin-top:8px; }
 .pending { display:grid; gap:16px; padding:20px 0; }
 .pending strong { font-size:13px; }
 .composer { position:sticky; bottom:0; z-index:1; background:var(--surface); border-top:1px solid var(--line); padding:12px 20px calc(12px + env(safe-area-inset-bottom)); display:grid; gap:10px; min-width:0; max-height:60dvh; overflow-y:auto; }

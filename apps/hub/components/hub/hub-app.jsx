@@ -210,8 +210,8 @@ function LegacyPlaceholder({ path, onNavigate }) {
 }
 
 const PAGE_MAP = {
-  'dashboard/home': (n) => <Home onNavigate={n} />,
-  'dashboard/daily-brief': (n, inquiries) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} />,
+  'dashboard/home': (n, _inquiries, _scope, ask) => <Home onNavigate={n} onGuidanceAsk={ask} />,
+  'dashboard/daily-brief': (n, inquiries, _scope, ask) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} onGuidanceAsk={ask} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
   'dashboard/work/memos': () => <Memos />,
@@ -237,7 +237,7 @@ const PAGE_MAP = {
   'dashboard/revenue/heatmap': (n) => <RevenueHeatmap onNavigate={n} />,
   'dashboard/revenue/leads': () => <Leads />,
   'dashboard/revenue/inquiries': (n) => <Inquiries onNavigate={n} />,
-  'dashboard/revenue/deals': (n) => <Deals onNavigate={n} />,
+  'dashboard/revenue/deals': (n, _inquiries, _scope, ask) => <Deals onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/revenue/cases': () => <Cases />,
   'dashboard/revenue/accounts': (n) => <Accounts onNavigate={n} />,
   'dashboard/revenue/followups': (n) => <Followups onNavigate={n} />,
@@ -247,7 +247,7 @@ const PAGE_MAP = {
   'dashboard/automations/webhooks': (n) => <Webhooks onNavigate={n} />,
   'dashboard/automations/runs': (n) => <Runs onNavigate={n} />,
   'dashboard/automations/sheets': () => <SheetsSync />,
-  'dashboard/agents/office-council': (n, notifications, scope) => <OfficeCouncil scope={scope} />,
+  'dashboard/agents/office-council': (n, notifications, scope, ask) => <OfficeCouncil scope={scope} onGuidanceAsk={ask} />,
   'dashboard/agents/chat': (n, _inquiries, _scope, ask) => <MentorShelf onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
@@ -255,7 +255,7 @@ const PAGE_MAP = {
   'dashboard/settings': (n) => <Settings onNavigate={n} />,
 
   // ── real_v1.1 workspaces → existing pages scoped by org_scope ──
-  'dashboard/classin/pipeline': (n) => <Deals workspace="classin" onNavigate={n} />,
+  'dashboard/classin/pipeline': (n, _inquiries, _scope, ask) => <Deals workspace="classin" onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/classin/revenue': () => <Leads workspace="classin" />,
   'dashboard/classin/segments': (n) => <Segments workspace="classin" onNavigate={n} />,
   'dashboard/classin/accounts': (n) => <Accounts workspace="classin" onNavigate={n} />,

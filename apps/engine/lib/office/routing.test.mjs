@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { OFFICE_ROUTING_VERSION } from '@com-moon/agent-contracts/office-routing';
-import { generateOfficeRouting, createOfficeRoutingEngineHandler } from './routing.ts';
+import { OFFICE_ROUTING_MAX_BODY_BYTES, generateOfficeRouting, createOfficeRoutingEngineHandler } from './routing.ts';
 
 const request = { message: '고객 견적 답장을 준비해 주세요.', scope: 'classin' };
 const recommendation = { ownerId: 'flareon', reviewerIds: ['leafeon'], reason: '고객 답장과 가격 부담을 나눠 검토합니다.', scope: 'classin' };
@@ -45,4 +45,20 @@ test('Engine authorizes first, validates request and has no write step', async (
   assert.equal(response.status, 200);
   assert.equal((await response.json()).ownerId, 'flareon');
   assert.equal(calls, 1);
+});
+
+test('Engine accepts the full 6,000-character Korean agenda; the character contract, not bytes, decides', async () => {
+  const seen = [];
+  const handler = createOfficeRoutingEngineHandler(() => ({ ok: true }), async value => {
+    seen.push(value);
+    return { status: 'recommended', version: OFFICE_ROUTING_VERSION, ...recommendation, scope: value.scope };
+  });
+  const agenda = '가'.repeat(6000);
+  const response = await handler(httpRequest({ message: agenda, scope: 'classin' }));
+  assert.equal(response.status, 200);
+  assert.equal(seen[0].message, agenda);
+  assert.equal((await handler(httpRequest({ message: '가'.repeat(6001), scope: 'classin' }))).status, 400);
+  assert.ok(Buffer.byteLength(JSON.stringify({ message: '\u0001'.repeat(6000), scope: 'personal' })) <= OFFICE_ROUTING_MAX_BODY_BYTES);
+  assert.equal((await handler(httpRequest({ message: '가'.repeat(13000), scope: 'classin' }))).status, 413);
+  assert.equal(seen.length, 1);
 });

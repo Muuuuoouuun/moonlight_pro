@@ -1,6 +1,6 @@
 # 에이전트 계층 방향 정본 — Office · Guru/Mentor · Legend · 스킬 실행
 
-> 상태: **확정 (2026-09-24 운영자 결정 5건)** · 구현은 이 문서 §6의 빌드 플랜을 따르며 2026-09-28(월) 실사용 시작 전에 마친다.
+> 상태: **확정 (2026-09-24 운영자 결정 5건 · 2026-09-25 추가 결정 3건 §2.1)** · 구현은 이 문서 §6의 빌드 플랜을 따르며 2026-09-28(월) 실사용 시작 전에 마친다.
 > 작성일: 2026-09-24 (Asia/Seoul) · 에이전트 전수 실측(허브 UI·엔진·허브 API·패키지·문서 5갈래) → 관점 3개 제안·심사 3명·종합·완결성 검사 → 운영자 결정.
 > 운영자 원안(운영자의 말): ① Office는 Guru·Mentor·Legend와 조금 별개 ② 이브이와 9인이 Office의 주된 내용이고 업무를 다룬다 ③ Office에서 해결 안 되면 Guru·Mentor에게 얘기한다 ④ 폴더 정리·영수증 정리 같은 특정 업무는 스킬을 발동해 처리한다.
 > 관계: [업무 안의 Eevee Office 심화 설계](2026-09-21-eevee-office-embedded-workflow-deep-design.md)의 권한·기록·승인 경계, [P0 교정](../plans/2026-09-23-office-p0-fixes.md)의 말투·역할 카드 동결, [작업 지시 큐 재평가](2026-09-23-work-order-queue-reassessment-design.md) A, [Guru 카드 방향](2026-09-24-guru-guidance-cards-design.md), [회의실 레이아웃 A](2026-09-24-office-meeting-room-layout.md)를 그대로 둔다. 이 문서는 그 위에 **계층 간 경계와 연결 방향**을 확정한다. 2026-09-21 스펙 4건(C-Suite OS·전문화 9인·voice v4·Council·Mentor·Guru·Legend 통합 프레임워크)이 각자 "정본"을 주장하던 상태는 이 문서로 닫는다 — 그 넷은 설계 기준 기록이며 현행 경계는 여기와 심화 설계 §2가 정본이다.
@@ -30,6 +30,16 @@
 | ⑤ | 브랜드 Council | **Office에 흡수하지 않고 별개로 유지** | brand-mentor는 개인 레인 자문으로 남는다 |
 
 OKR v3 확정 12(10월 Moonlight 개발 동결)와의 관계: 이 빌드는 9월 안에 마치는 것으로 운영자가 소화했다. 10월에는 쓰기·고치기만 한다.
+
+### 2.1 추가 결정 (2026-09-25 운영자)
+
+운영자가 바란 것(운영자의 말): "기존 원문 내용들 과도하게 압축되지 않기", "시스템에 녹아 있는 추천 기능", "서브에이전트 동원 가능".
+
+| # | 질문 | 결정 | 뜻 |
+|---|---|---|---|
+| ⑥ | 원문을 AI 조언에도 넘길지 | **원문 절 전달 + 수치 가드** | 운영자가 카드·인물을 골라 질문하면 멘토는 한 줄 카드 요약 대신 그 인물의 플레이북 원문 절(분량 상한 있음)을 받는다. 원문 속 인용·수치·사례 문구는 답변에 옮기지 않고 개념·질문 방식만 쓰도록 가드한다. [09-24 출처 점검](../../research/2026-09-24-guru-source-quality.md)의 "긴 플레이북을 AI 답변으로 자동 가져오지 않는다"는 이 가드로 대체한다. 서가에서는 원문 전체를 그대로 열람하고 원전 대조 상태를 함께 표시한다 |
+| ⑦ | 기록된 사실에 근거한 추천의 위치 | **고객·거래 상세, Office 결과 카드, 오늘·홈 화면** | 저장된 사건이 있을 때만 원문 속 구체 기법을 추천하고 "왜 이 추천인가"(근거 사실)를 보인다. 모델 호출·업무 생성·알림·발송은 없다. 09-24 Guru 카드 방향의 "홈·오늘 승인 대기·Office에는 카드를 넣지 않는다"를 **사실 근거 추천에 한해** 해제한다. 주간 Legend의 기록 기반 선택은 채택하지 않았다 |
+| ⑧ | Legend 범위 | **주간 카드만 유지(09-24 재확인)** | 멘토 위젯·코칭 화면의 Legend 렌즈 칩을 정리한다(당시 Carnegie·Hill 렌즈는 선택해도 Engine이 조용히 버렸다). §7의 "dissent → Legend 트라이어드"는 채택하지 않은 상태로 둔다 |
 
 ## 3. 계층과 경계 (확정)
 
@@ -82,7 +92,7 @@ Legend ── 주간 카드만 · 에스컬레이션 목적지 아님 · Office 
 |---|---|---|
 | 1 | **09-25 · 회의실 A** | `apps/hub/components/hub/office-session.js`·`office-session.test.mjs`: 기본 관점 `[]`, 안건 복사본·범위별 reset, 후속 `chat` 1회와 6,000자 오류. `pages/office-council.jsx`·`office-council.module.css`: 안건 바, 할 일 가져오기(`GET /api/hub/tasks` 소비), 참석자 드로어, 시간순 발언 스레드, 하단 입력·순서 예고·결과 카드. `office-deliberation-controls.jsx`의 기존 발언 자료를 재사용한다. 할 일 read 실패를 빈 목록으로 보이지 않게 하고, 390px 첫 화면에 입력·가져오기·보내기가 보이면 통과. **A에서는 Engine·Office 계약·DB, 할 일 쪽 입구와 원래 할 일 자동 반영을 바꾸지 않는다.** |
 | 2 | **09-26 · 이브이 배분** | `packages/agent-contracts/office-routing.js`와 테스트에 추천 결과(주관 1명·관점 0~2명·이유·범위)를 한정한다. `apps/engine/lib/office/routing.ts`·`apps/engine/app/api/ai/office-assignment/route.ts`, `apps/hub/app/api/hub/office/assignment/route.js`와 라우트 테스트는 **운영자가 `담당 추천`을 누를 때만** 안건 복사본을 읽고 추천한다. `pages/office-council.jsx`는 추천을 확인 카드로 보여 주고 운영자가 적용·수정·무시한다. 명시 선택이 추천보다 우선하며 실패·미설정 때는 수동 선택이 그대로 작동한다. Office 생성 프롬프트와 역할 카드 v25는 건드리지 않는다. |
-| 3 | **09-26 · Office→Mentor 한 홉** | `apps/hub/components/hub/office-mentor-client.js`·테스트에서 Office 종합의 본문·근거·이견·다음 행동을 길이 제한된 질문으로 만들고 출처 `requestId/runId`를 보존한다. `pages/office-council.jsx` 결과 카드의 `다른 관점으로 검토`는 운영자가 누른 뒤에만 호출한다. `classin`은 기존 `/api/hub/sales-mentor`의 `open-question`, `personal`은 새 `office-review` 모드를 `apps/engine/app/api/ai/brand-mentor/route.ts`·`apps/engine/lib/brand-office-review.test.mjs`와 `apps/hub/lib/sales-os/brand-context.js`에 추가해 호출한다. 개인 범위에서 첫 브랜드 목소리를 임의로 선택하거나 출처 없는 질문에 Guru 카드 ID를 꾸미지 않는다. `all`은 회사/개인을 먼저 고르게 한다. `createWorkOrder:false`, 답변은 접힌 참고 카드, Office에 자동 재주입 없음. |
+| 3 | **09-26 · Office→Mentor 한 홉** | `apps/hub/components/hub/office-mentor-client.js`·테스트에서 Office 종합의 본문·근거·이견·다음 행동을 길이 제한된 질문으로 만들고 출처 `requestId/runId`를 보존한다(2026-09-25 갱신: 발췌 대신 원문 그대로, 두 레인 공통 25,000자 상한, 회사 레인도 출처 기록·반환 — [원문 보존 스펙](2026-09-25-source-fidelity-and-embedded-recommendations.md) §2.3). `pages/office-council.jsx` 결과 카드의 `다른 관점으로 검토`는 운영자가 누른 뒤에만 호출한다. `classin`은 기존 `/api/hub/sales-mentor`의 `open-question`, `personal`은 새 `office-review` 모드를 `apps/engine/app/api/ai/brand-mentor/route.ts`·`apps/engine/lib/brand-office-review.test.mjs`와 `apps/hub/lib/sales-os/brand-context.js`에 추가해 호출한다. 개인 범위에서 첫 브랜드 목소리를 임의로 선택하거나 출처 없는 질문에 Guru 카드 ID를 꾸미지 않는다. `all`은 회사/개인을 먼저 고르게 한다. `createWorkOrder:false`, 답변은 접힌 참고 카드, Office에 자동 재주입 없음. |
 | 4 | **09-27 · 이어서 상담** | `apps/hub/components/hub/office-mentor-session.js`·테스트, `office-mentor-drawer.jsx`·CSS에서 한 홉의 답을 첫 턴으로 삼고 운영자 질문·멘토 답을 같은 스레드에 쌓는다. `office-mentor-client.js`가 직전 대화의 길이·턴 수를 제한해 **선택된 한 레인의 같은 멘토**에 넘긴다. 실패 시 입력·이전 턴을 보존하고 재전송은 명시 버튼으로만 한다. 최소 완료선은 실제 후속 두 턴이 앞선 답을 참고하며 이어지는 것. 세션 밖 복원이 없으면 UI에 그 한계를 밝히고 `영구 보관된 상담`으로 표현하지 않는다. |
 | 5 | **09-27 · 로컬 스킬 요청·receipt** | `apps/hub/components/hub/office-skill-request.js`·테스트와 Office 결과 카드의 `더보기`에 **명시적 요청서 생성**(요청 ID, 할 일 링크, 수행 범위, 완료 증거)과 복사를 둔다. `supabase/migrations/20260925_0047_local_skill_requests.sql`(착수 시 번호 재확인), `apps/hub/lib/skill-requests.js`·테스트, 인증된 `apps/hub/app/api/hub/skill-requests/route.js`와 `apps/hub/app/api/agent/v1/skill-requests/[id]/route.js`·`receipts/route.js`, `packages/mcp-server/src/agent-tools.js`·테스트에 동일 요청 ID의 결과 receipt 읽기·기록만 더한다. Claude Code·Codex의 **로컬 스킬이** 폴더/영수증을 처리하고, Moonlight는 `요청됨/완료/실패/미확인`과 증거·연결된 기존 `complete_task` 명령 receipt만 기록한다. 저장 실패한 요청서는 실행 대기로 표시하지 않는다. 요청서 복사나 모델의 `완료` 문장만으로 task를 완료 처리하지 않는다. 실행·재시도·비밀키·파일 내용은 Hub/Office로 옮기지 않는다. |
 

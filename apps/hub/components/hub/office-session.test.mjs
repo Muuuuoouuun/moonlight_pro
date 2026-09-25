@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION, officeMessageLength, officeTaskAgendaBlock, officeTasksForScope, loadOfficeTasks } from './office-session.js';
+import fs from 'node:fs';
+import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION, officeMessageLength, officeTaskAgendaBlock, officeTasksForScope, loadOfficeTasks, officeUnloadGuard } from './office-session.js';
+import { createOfficeMentorSessionStore } from './office-mentor-session.js';
 
 const generated = (request, answer = '요청한 결과입니다.') => ({ status: 'generated', ...request, answer, nextAction: '추가 행동 없음' });
 
@@ -208,4 +210,37 @@ test('task reader distinguishes live, partial, preview and failed HTTP or read e
   assert.equal((await read(502, { status: 'error', tasks: [] })).status, 'error');
   assert.equal((await read(200, { status: 'error', tasks: [] })).status, 'error');
   assert.equal((await loadOfficeTasks({ fetcher: async () => { throw new Error('offline'); } })).status, 'error');
+});
+
+test('one leave-page guard covers Office drafts and unsent mentor follow-ups', () => {
+  const office = createOfficeSessionStore();
+  const mentor = createOfficeMentorSessionStore();
+  const guard = officeUnloadGuard([office, mentor]);
+  const event = () => ({ prevented: 0, returnValue: undefined, preventDefault() { this.prevented += 1; } });
+  const quiet = event();
+  assert.equal(guard(quiet), false);
+  assert.equal(quiet.prevented, 0);
+  assert.equal(quiet.returnValue, undefined);
+
+  const source = { requestId: '10000000-0000-4000-8000-000000000001', runId: null };
+  const result = { status: 'generated', scope: 'personal', answer: 'Office 종합', evidence: [], dissent: [], nextAction: '' };
+  const id = mentor.open({ result, officeSource: source, scope: 'personal', initialAdvice: { status: 'generated', text: '첫 답변' } });
+  mentor.setDraft(id, '아직 보내지 않은 멘토 질문');
+  const mentorDraft = event();
+  assert.equal(guard(mentorDraft), true);
+  assert.equal(mentorDraft.prevented, 1);
+  assert.equal(mentorDraft.returnValue, '');
+
+  mentor.setDraft(id, '');
+  office.update('personal', { draft: 'Office 입력' });
+  assert.equal(guard(event()), true);
+  assert.equal(officeUnloadGuard([])(event()), false);
+});
+
+test('the Hub shell installs the shared guard with the mentor session store', () => {
+  const provider = fs.readFileSync(new URL('./office-session-provider.jsx', import.meta.url), 'utf8');
+  assert.match(provider, /mentorStore = officeMentorSessions/);
+  assert.match(provider, /officeUnloadGuard\(\[store, mentorStore\]\)/);
+  assert.match(provider, /addEventListener\('beforeunload', guard\)/);
+  assert.match(provider, /removeEventListener\('beforeunload', guard\)/);
 });

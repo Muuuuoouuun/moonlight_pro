@@ -1,0 +1,23 @@
+/* 기록 기반 추천 카드 — 토큰만, 1px 선. 추천은 강조색이 아니라 명도와 위계로만 구분한다(DESIGN.md §5.2). */
+.guru-rec { min-width: 0; border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--surface-2); padding: 12px 14px; color: var(--fg); }
+.guru-rec--compact { padding: 10px 12px; }
+.guru-rec__head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+.guru-rec__eyebrow { color: var(--fg-dim); font-size: 10.5px; letter-spacing: 0.06em; }
+.guru-rec__subject { color: var(--fg-muted); font-size: 12px; font-weight: 500; }
+.guru-rec__method { margin: 6px 0 0; font-size: 13px; font-weight: 600; line-height: 1.4; }
+.guru-rec__question { margin: 4px 0 0; color: var(--fg); font-size: 13px; line-height: 1.55; }
+.guru-rec__why { display: flex; gap: 8px; margin: 8px 0 0; color: var(--fg-muted); font-size: 12px; line-height: 1.5; }
+.guru-rec__why-label { flex: none; color: var(--fg-dim); font-size: 10.5px; line-height: 1.75; }
+.guru-rec__note { margin-top: 8px; }
+.guru-rec__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 16px; margin-top: 6px; }
+.guru-rec__action { border: 0; background: transparent; color: var(--fg-muted); padding: 5px 0; min-height: 34px; font-size: 11.5px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.guru-rec__action--ask { color: var(--fg); font-weight: 600; }
+.guru-rec__action:focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
+.guru-rec__reader { margin-top: 10px; }
+.guru-rec-list { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.guru-rec-list__head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+.guru-rec-list__status { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+.guru-rec-list__items { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+@media (max-width: 720px), (pointer: coarse) {
+  .guru-rec__action { min-height: 44px; }
+}

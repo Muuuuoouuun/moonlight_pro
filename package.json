@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "icons:generate": "node ./scripts/generate-brand-icons.mjs",
+    "guidance:sources": "node ./scripts/build-guidance-source-library.mjs",
+    "check:guidance-sources": "node ./scripts/build-guidance-source-library.mjs --check",
     "build": "turbo run build",
     "check:contracts": "node ./scripts/check-contracts.mjs",
     "check:connections": "node ./scripts/check-connections.mjs",

@@ -25,6 +25,18 @@ test('question drawer keeps a customer-facing card prompt out of the mentor mess
   }
 });
 
+test('a sales question names the customer record it is about, not a brand', () => {
+  const card = GURU_CARDS.find(item => item.domain === 'sales');
+  const html = renderToStaticMarkup(React.createElement(GuidanceQuestionDrawer, {
+    card,
+    context: { ref: 'lead-7', label: '김원장 · 테스트학원 A', facts: ['고객: 김원장'] },
+    onClose: () => {},
+  }));
+  assert.match(html, /대상 고객 · 김원장 · 테스트학원 A/);
+  assert.doesNotMatch(html, /대상 브랜드/);
+  assert.match(html, /영업 Guru에게 보내기/);
+});
+
 test('question drawer keeps mobile input and send targets usable', () => {
   const css = readFileSync(new URL('./guidance-question-drawer.css', import.meta.url), 'utf8');
   assert.match(css, /textarea\.guidance-question__input\s*\{[^}]*font-size:\s*16px/);

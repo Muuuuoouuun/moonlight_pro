@@ -5,6 +5,7 @@ import { recordAgentRun } from "@/lib/sales-os/agent-runs";
 import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
 import { fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
+import { isGuruLens } from "@/components/hub/persona-client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -137,7 +138,10 @@ export async function POST(req) {
   const input = parsed.data || {};
   const personaId = typeof input.personaId === "string" ? input.personaId.trim() : "order";
   const mode = typeof input.mode === "string" ? input.mode.trim() : "advice";
-  const lens = typeof input.lens === "string" ? input.lens.trim() || null : null;
+  // Engine이 아는 Guru 렌즈만 넘긴다. 모르는 값을 그대로 보내면 Engine은 조용히 버리는데
+  // 실행 기록에는 `lens=…`가 적용된 것처럼 남았다(예전 카네기·힐).
+  const requestedLens = typeof input.lens === "string" ? input.lens.trim() : "";
+  const lens = isGuruLens(requestedLens) ? requestedLens : null;
   const message = typeof input.message === "string" ? input.message : null;
   const draft = typeof input.draft === "string" ? input.draft : null;
   const customContext = input.context && typeof input.context === "object" ? input.context : null;

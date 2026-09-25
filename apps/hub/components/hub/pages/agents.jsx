@@ -12,7 +12,7 @@ import { GURU_CARDS } from '@com-moon/guru-guidance';
 import { GuruGuidanceCard } from '../guru-guidance-card';
 import { requestCouncilAdvice, councilChatPath } from "../council-client";
 import { RECOMMENDED_TRIADS } from "../council-legends";
-import { requestPersonaChat, PERSONA_MODE_LABEL, LEGEND_LENS_MAP } from "../persona-client";
+import { requestPersonaChat, PERSONA_MODE_LABEL, GURU_LENS_MAP, GURU_LENS_CHIPS } from "../persona-client";
 import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
 
 const DEFAULT_PERSONA_KEY = PERSONA_CONTRACT[0]?.id || 'order';
@@ -484,8 +484,8 @@ export function AgentsChat({ onNavigate }) {
               >
                 기본
               </button>
-              {['jobs', 'bezos', 'chouinard', 'voss', 'ogilvy', 'carnegie', 'hill'].map((lid) => {
-                const l = LEGEND_LENS_MAP[lid];
+              {GURU_LENS_CHIPS.map((lid) => {
+                const l = GURU_LENS_MAP[lid];
                 const active = activeLens === lid;
                 return (
                   <button

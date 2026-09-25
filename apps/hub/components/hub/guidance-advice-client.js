@@ -1,5 +1,16 @@
 import { GURU_CARDS } from '@com-moon/guru-guidance';
 
+// A question about one open record (the customer-detail Guru) names that record by its exact
+// id and carries only the facts the screen already showed. Without both, the question stays
+// general and sends no ref — a name is never a lookup key (2026-09-25).
+function recordQuestion(context) {
+  const ref = typeof context?.ref === 'string' ? context.ref.trim() : '';
+  const facts = Array.isArray(context?.facts)
+    ? context.facts.filter(fact => typeof fact === 'string' && fact.trim()).map(fact => fact.trim())
+    : [];
+  return ref && facts.length ? { ref, facts } : null;
+}
+
 export function guidanceRequest(card, question, context = {}) {
   if (card?.kind === 'legend') throw new Error('read-only');
   const text = String(question || '').trim();
@@ -8,10 +19,18 @@ export function guidanceRequest(card, question, context = {}) {
   if (!known) throw new Error('unknown-guidance-card');
 
   if (known.domain === 'sales') {
+    const record = recordQuestion(context);
     return {
       endpoint: '/api/hub/sales-mentor',
       target: '영업 Guru',
-      body: { mode: 'open-question', draft: text, guidanceId: known.id },
+      body: record
+        ? {
+            mode: 'open-question',
+            draft: ['[질문 대상 기록 — 화면에서 확인된 사실]', ...record.facts.map(fact => `- ${fact}`), '', '[운영자 질문]', text].join('\n'),
+            guidanceId: known.id,
+            ref: record.ref,
+          }
+        : { mode: 'open-question', draft: text, guidanceId: known.id },
     };
   }
   return {

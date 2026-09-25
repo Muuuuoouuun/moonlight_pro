@@ -85,7 +85,7 @@ function QuestionDrawerBody({ card, context, onClose }) {
     >
       <section className="guidance-question__frame" aria-label="선택한 멘토 관점">
         <span className="guidance-question__eyebrow">{DOMAIN_LABELS[card.domain]} · 선택한 관점</span>
-        {context?.label && <span className="guidance-question__context">대상 브랜드 · {context.label}</span>}
+        {context?.label && <span className="guidance-question__context">{card.domain === 'sales' ? '대상 고객' : '대상 브랜드'} · {context.label}</span>}
         <h3>{card.person}</h3>
         <p>{card.frame}</p>
         <GuidanceSource source={card.source} className="guidance-question__source" />

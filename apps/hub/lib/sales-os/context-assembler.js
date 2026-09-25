@@ -123,18 +123,20 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
   // deal-review AND followup-draft both need the deal-scoped focus (buyer style, recent
   // outcomes, next-action hint) — followup-draft writes the message off exactly this slice.
   if (ref && (mode === "deal-review" || mode === "followup-draft")) {
-    const needle = ref.toLowerCase();
-    const deal =
-      classInDeals.find(
-        (d) => String(d.id).toLowerCase() === needle || (d.name || "").toLowerCase().includes(needle),
-      ) || null;
-    const account =
-      classInAccounts.find((a) => (a.name || "").toLowerCase().includes(needle)) || null;
-    // Lead match: prefer the deal's own lead_id link, fall back to a name-substring match —
-    // this is what fills score/next_action_hint/contact in the focus context.
+    const needle = String(ref).toLowerCase();
+    // Exact deal id only (2026-09-25). A display name — or any fragment of one — can match
+    // another customer's deal, so a ref that is not a ClassIn deal id attaches no deal
+    // context: focus.found stays false and the caller says the deal is not linked. The old
+    // account lookup (account name contains the ref) is gone for the same reason; with an
+    // id ref it could only match a name containing that id, so id callers see the same focus.
+    const deal = classInDeals.find((d) => d.id != null && String(d.id).toLowerCase() === needle) || null;
+    // Lead match: the deal's own lead_id link first, then a lead of the same company — this
+    // fills score/next_action_hint/contact in the focus context. Live deals rarely carry
+    // lead_id, and the old fallback (a lead whose name contains the deal name) could hand a
+    // follow-up draft another customer's contact, so a name is never the key (2026-09-25).
     const lead = deal
       ? classInLeads.find((l) => deal.leadId && l.id === deal.leadId) ||
-        classInLeads.find((l) => (l.name || "").toLowerCase().includes((deal.name || "").toLowerCase())) ||
+        (deal.companyId ? classInLeads.find((l) => l.companyId && l.companyId === deal.companyId) : null) ||
         null
       : null;
     const entityOutcomes = deal ? outcomesForEntity(scopedOutcomes, { dealId: deal.id }) : [];
@@ -143,7 +145,7 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
     const crmFacts = deal
       ? await settled(getCrmPipeline({ ownerId: OWNER_ID, dealId: deal.id }), "crm-pipeline", missing)
       : null;
-    context.focus = buildFocusOperatingContext({ deal, account, lead, entityOutcomes, brand, crmFacts });
+    context.focus = buildFocusOperatingContext({ deal, lead, entityOutcomes, brand, crmFacts });
   }
 
   return context;
