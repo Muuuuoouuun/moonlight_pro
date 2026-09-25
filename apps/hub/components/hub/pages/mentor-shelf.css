@@ -77,6 +77,29 @@
   gap: 16px;
 }
 
+.mentor-shelf__reading {
+  display: block;
+  min-width: 0;
+  margin-top: 18px;
+  padding: 0 15px 16px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.mentor-shelf__reading:hover .mentor-shelf__read-more,
+.mentor-shelf__reading:focus-visible .mentor-shelf__read-more {
+  color: var(--fg);
+}
+
+.mentor-shelf__read-more {
+  display: inline-block;
+  margin-top: 20px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .mentor-shelf__guru,
 .mentor-shelf__legend {
   min-width: 0;
@@ -115,6 +138,11 @@
   letter-spacing: -0.035em;
   line-height: 1.28;
   word-break: keep-all;
+}
+
+.mentor-shelf__guru .mentor-shelf__reading h4,
+.mentor-shelf__person-detail .mentor-shelf__reading h4 {
+  margin-top: 16px;
 }
 
 .mentor-shelf__frame {
@@ -194,6 +222,12 @@
   flex-direction: column;
 }
 
+.mentor-shelf__reading--legend {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
 .mentor-shelf__rule {
   width: 24px;
   margin-top: 28px;
@@ -219,9 +253,13 @@
 
 .mentor-shelf__question--legend {
   display: block;
-  margin: 0 0 18px;
+  margin: auto 0 0;
   padding-top: 16px;
   border-top: 1px solid var(--line);
+}
+
+.mentor-shelf__reading--legend .mentor-shelf__read-more {
+  margin-top: 17px;
 }
 
 .mentor-shelf__question--legend p {
@@ -258,16 +296,48 @@
 
 .mentor-shelf__browse {
   margin-top: 48px;
+  padding-top: 30px;
+  border-top: 1px solid var(--line);
 }
 
 .mentor-shelf__browse h3 {
+  margin-top: 9px;
+  font-size: 22px;
+  font-weight: 450;
+  letter-spacing: -0.035em;
   scroll-margin-top: 20px;
+}
+
+.mentor-shelf__browse .mentor-shelf__section-head p {
+  margin: 8px 0 0;
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.mentor-shelf__atlas-tools {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
 .mentor-shelf__browse-mode {
   width: max-content;
   max-width: 100%;
-  margin-bottom: 18px;
+}
+
+.mentor-shelf__search {
+  width: min(310px, 100%);
+}
+
+.mentor-shelf__search .hub-input {
+  font-size: 12px;
+}
+
+.mentor-shelf__search label {
+  font-size: 10.5px;
 }
 
 .mentor-shelf__people-head {
@@ -377,6 +447,14 @@
   letter-spacing: -0.035em;
   line-height: 1.28;
   word-break: keep-all;
+}
+
+.mentor-shelf__person-detail .mentor-shelf__reading {
+  margin-top: 16px;
+}
+
+.mentor-shelf__no-results {
+  min-width: 0;
 }
 
 .mentor-shelf__person-method {
@@ -498,6 +576,20 @@
 
   .mentor-shelf__browse {
     margin-top: 39px;
+  }
+
+  .mentor-shelf__atlas-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mentor-shelf__search {
+    width: 100%;
+  }
+
+  .mentor-shelf__search .hub-input {
+    min-height: 44px;
+    font-size: 16px;
   }
 
   .mentor-shelf__person-list {

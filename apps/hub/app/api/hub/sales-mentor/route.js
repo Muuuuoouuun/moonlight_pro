@@ -111,8 +111,9 @@ export async function POST(req) {
   if (input.guidanceId != null && !isGuidanceCardForDomain(input.guidanceId, ["sales"])) {
     return NextResponse.json({ status: "error", error: "세일즈 카드만 영업 Guru에 사용할 수 있습니다." }, { status: 400 });
   }
+  const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
   const mode = typeof input.mode === "string" ? input.mode.trim() : "pipeline-triage";
-  if (input.history !== undefined && (mode !== "open-question" || !isValidGuruConversationHistory(input.history))) {
+  if (input.history !== undefined && (mode !== "open-question" || !isValidGuruConversationHistory(input.history, { guidanceId }))) {
     return NextResponse.json({ status: "error", error: "이전 대화의 형식을 확인해 주세요." }, { status: 400 });
   }
   const ref = typeof input.ref === "string" ? input.ref.trim() || null : null;
@@ -120,7 +121,6 @@ export async function POST(req) {
   const directives = input.directives && typeof input.directives === "object" ? input.directives : undefined;
   const values = input.values && typeof input.values === "object" ? input.values : undefined;
   const knowledge = input.knowledge && typeof input.knowledge === "object" ? input.knowledge : undefined;
-  const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
   const history = mode === "open-question" ? input.history : undefined;
 
   // A follow-up may explicitly refer to a previous card even though no card

@@ -248,7 +248,7 @@ const PAGE_MAP = {
   'dashboard/automations/runs': (n) => <Runs onNavigate={n} />,
   'dashboard/automations/sheets': () => <SheetsSync />,
   'dashboard/agents/office-council': (n, notifications, scope) => <OfficeCouncil scope={scope} />,
-  'dashboard/agents/chat': (n, _inquiries, _scope, ask) => <MentorShelf onNavigate={n} onGuidanceAsk={ask} />,
+  'dashboard/agents/chat': (n, _inquiries, _scope, ask, query) => <MentorShelf onNavigate={n} onGuidanceAsk={ask} requestedCardId={query?.get('card')} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
   'dashboard/evolution': (n) => <Evolution onNavigate={n} />,
@@ -393,7 +393,6 @@ export function HubApp({ memoDraftContext = "preview" }) {
     router.push('/' + target + suffix);
   }, [router]);
 
-  React.useEffect(() => { setGuidanceQuestion(null); }, [pathname]);
   const openGuidanceQuestion = React.useCallback((card, context = {}) => setGuidanceQuestion({ card, context }), []);
 
   // ⌘J·탑바 ✦ → Office (2026-09-23 운영자 확정). 페이지 맥락 위젯은 딜·신호 카드 버튼에만 남는다.
@@ -581,7 +580,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const page = chatRequested
     ? <AgentsChat key={searchParams.toString()} onNavigate={navigate} />
     : render
-      ? render(navigate, inquiryNotifications, routeScope || navScope, openGuidanceQuestion)
+      ? render(navigate, inquiryNotifications, routeScope || navScope, openGuidanceQuestion, searchParams)
       : <LegacyPlaceholder path={path} onNavigate={navigate} />;
   // 아이콘 레일은 데스크톱 전용 — 모바일 드로어(navOpen은 모바일에서만 true)는 항상 펼친 상태로 그린다.
   const sidebarCollapsed = collapsed && !isMobileViewport;
@@ -651,7 +650,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
             </main>
           </div>
         </div>
-      <GuidanceQuestionDrawer card={guidanceQuestion?.card} context={guidanceQuestion?.context} onClose={() => setGuidanceQuestion(null)} />
+      <GuidanceQuestionDrawer key={`${guidanceQuestion?.card?.id || 'free'}:${guidanceQuestion?.context?.ref || ''}`} card={guidanceQuestion?.card} context={guidanceQuestion?.context} onClose={() => setGuidanceQuestion(null)} />
       <GlobalQuickCapture openRequest={captureOpenRequest} initialRaw={initialCaptureRaw} onNavigate={navigate} />
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open || Boolean(guidanceQuestion)} openRequest={memoOpenRequest} onNavigate={navigate} />
       <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />

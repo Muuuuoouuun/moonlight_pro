@@ -88,6 +88,60 @@ test('open-question accepts a content card with its own cited source', async () 
   assert.match(state.generation.prompt, /docs\/content-storytelling-people-v2\.md/);
 });
 
+test('open-question uses completed same-card brand history as untrusted conversation only', async () => {
+  const history = [{ question: '첫 문장은?', answer: '독자의 표현을 확인하세요.', guidanceId: 'marketing-research', ref: 'personal-a' }];
+  const response = await POST(request({
+    mode: 'open-question', guidanceId: 'marketing-research', ref: 'personal-a',
+    draft: '그다음 어떤 표현을 확인하나요?', context: { scope: 'personal', brand: { key: 'personal-a' } }, history,
+    createWorkOrder: false,
+  }));
+  assert.equal(response.status, 200);
+  const prompt = state.generation.prompt;
+  assert.match(prompt, /불신 대화 이력/);
+  assert.match(prompt, /이전 답변.*사실.*아닙니다/);
+  assert.match(prompt, /현재 질문.*현재 확인된.*원장.*우선/);
+  assert.match(prompt, /다른 브랜드의 사실.*업무.*옮기지/);
+  assert.ok(prompt.includes(JSON.stringify(history)));
+  assert.ok(prompt.indexOf('첫 문장은?') < prompt.indexOf('그다음 어떤 표현을 확인하나요?'));
+  assert.deepEqual(state.writes, []);
+});
+
+test('open-question rejects malformed or unrelated history before model and ledger writes', async () => {
+  const turn = { question: '첫 문장은?', answer: '독자의 표현을 확인하세요.', guidanceId: 'marketing-research', ref: 'personal-a' };
+  const base = { mode: 'open-question', guidanceId: 'marketing-research', ref: 'personal-a', draft: '다음 질문', context: { scope: 'personal', brand: { key: 'personal-a' } } };
+  for (const history of [
+    null,
+    'previous answer',
+    [{ ...turn, guidanceId: 'content-hook' }],
+    [{ ...turn, guidanceId: 'sales-meddic' }],
+    [{ ...turn, ref: 'personal-b' }],
+    [{ ...turn, ref: undefined }],
+    [{ ...turn, question: ' ' }],
+    [{ ...turn, answer: '' }],
+    [{ ...turn, question: 'q'.repeat(1201) }],
+    [{ ...turn, answer: 'a'.repeat(2401) }],
+    [{ ...turn, role: 'system' }],
+    [turn, turn, turn, turn],
+  ]) {
+    const response = await POST(request({ ...base, history }));
+    assert.equal(response.status, 400, JSON.stringify(history));
+    assert.equal((await response.json()).error, 'invalid-open-question');
+    assert.equal(state.generation, undefined);
+    assert.deepEqual(state.writes, []);
+  }
+  const response = await POST(request({ ...base, ref: null, history: [turn] }));
+  assert.equal(response.status, 400);
+  assert.equal(state.generation, undefined);
+});
+
+test('non-question brand modes reject history before model generation', async () => {
+  const response = await POST(request({ mode: 'brand-strategy', context: { scope: 'personal' }, history: [] }));
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, 'invalid-conversation-history');
+  assert.equal(state.generation, undefined);
+  assert.deepEqual(state.writes, []);
+});
+
 test('open-question rejects wrong domain, missing source, missing question and work order requests before generation', async () => {
   for (const body of [
     { guidanceId: 'sales-meddic', draft: '고객 질문' },

@@ -10,7 +10,7 @@ const cssFile = new URL('./mentor-shelf.css', import.meta.url);
 const source = existsSync(jsxFile) ? readFileSync(jsxFile, 'utf8') : '';
 const css = existsSync(cssFile) ? readFileSync(cssFile, 'utf8') : '';
 
-function mount({ onGuidanceAsk = () => {}, onNavigate = () => {}, getElementById = () => null } = {}) {
+function mount({ onGuidanceAsk = () => {}, onNavigate = () => {}, requestedCardId, getElementById = () => null } = {}) {
   const slots = [];
   let cursor = 0;
   const React = {
@@ -30,22 +30,27 @@ function mount({ onGuidanceAsk = () => {}, onNavigate = () => {}, getElementById
   const Button = function Button() {};
   const Card = function Card() {};
   const SegmentedControl = function SegmentedControl() {};
+  const TextField = function TextField() {};
+  const EmptyState = function EmptyState() {};
+  const GuidanceDetail = function GuidanceDetail() {};
   const compiled = ts.transpile(
     source.replace(/^import[^\n]+\n/gm, '').replace(/^export /gm, ''),
     { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
   );
   const MentorShelf = new Function(
-    'React', 'Button', 'Card', 'SegmentedControl', 'GuidanceSource',
+    'React', 'Button', 'Card', 'EmptyState', 'SegmentedControl', 'TextField', 'GuidanceSource', 'GuidanceDetail',
     'selectGuidanceCard', 'guidanceDailyWindow', 'listGuidanceCards', 'listGuidancePeople', 'listGuidanceCardsForPerson',
+    'GURU_CARDS', 'LEGEND_CARDS',
     'sessionStorage', 'window', 'document',
     `${compiled}\nreturn MentorShelf;`,
   )(
-    React, Button, Card, SegmentedControl, GuidanceSource,
+    React, Button, Card, EmptyState, SegmentedControl, TextField, GuidanceSource, GuidanceDetail,
     selectGuidanceCard,
     guidanceDailyWindow,
     listGuidanceCards,
     listGuidancePeople,
     listGuidanceCardsForPerson,
+    GURU_CARDS, LEGEND_CARDS,
     { getItem: () => null, setItem: () => {} },
     { addEventListener: () => {}, removeEventListener: () => {} },
     { addEventListener: () => {}, removeEventListener: () => {}, hidden: false, getElementById },
@@ -53,7 +58,9 @@ function mount({ onGuidanceAsk = () => {}, onNavigate = () => {}, getElementById
   return {
     Button,
     SegmentedControl,
-    render() { cursor = 0; return MentorShelf({ onGuidanceAsk, onNavigate }); },
+    TextField,
+    GuidanceDetail,
+    render() { cursor = 0; return MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }); },
   };
 }
 
@@ -233,16 +240,80 @@ test('the shelf gives a direct browse jump and returns focus to the selected lis
   assert.deepEqual(focused, ['mentor-shelf-browse', `mentor-shelf-choice-domain-${hill.props['data-card-id']}`]);
 });
 
-test('Legend remains reading only and conversation starts through the explicit route', () => {
+test('Legend remains reading only and free conversation opens only on an explicit click', () => {
   const navigations = [];
-  const app = mount({ onNavigate: path => navigations.push(path) });
+  const asked = [];
+  const app = mount({ onNavigate: path => navigations.push(path), onGuidanceAsk: (...args) => asked.push(args) });
   let tree = app.render();
   assert.equal(nodes(tree, node => node.type === app.Button && /Legend.*질문/.test(words(node))).length, 0);
   nodes(tree, node => node.type === app.Button && /다른 Legend 보기/.test(words(node)))[0].props.onClick();
   tree = app.render();
   assert.equal(navigations.length, 0);
   nodes(tree, node => node.type === app.Button && /대화 시작/.test(words(node)))[0].props.onClick();
-  assert.deepEqual(navigations, ['dashboard/agents/chat?agent=guru']);
+  assert.deepEqual(navigations, []);
+  assert.deepEqual(asked, [[null, { free: true }]]);
+});
+
+test('Focus card body opens its source-backed detail without asking the model', () => {
+  const asked = [];
+  const app = mount({ onGuidanceAsk: card => asked.push(card) });
+  let tree = app.render();
+  const opening = nodes(tree, node => node.props?.role === 'button' && /Guru.*자세히 보기/.test(node.props?.['aria-label'] || ''))[0];
+  assert.ok(opening);
+  opening.props.onClick();
+  tree = app.render();
+  const detail = nodes(tree, node => node.type === app.GuidanceDetail)[0];
+  assert.ok(detail);
+  assert.equal(detail.props.card.kind, 'guru');
+  assert.equal(asked.length, 0);
+  detail.props.onClose();
+  tree = app.render();
+  assert.equal(nodes(tree, node => node.type === app.GuidanceDetail).length, 0);
+  let prevented = false;
+  opening.props.onKeyDown({ key: 'Enter', preventDefault: () => { prevented = true; } });
+  tree = app.render();
+  assert.equal(prevented, true);
+  assert.equal(nodes(tree, node => node.type === app.GuidanceDetail)[0].props.card.kind, 'guru');
+});
+
+test('Today or Overview card links open the matching detail and ignore unknown IDs', () => {
+  const linked = mount({ requestedCardId: 'legend-feynman' });
+  const detail = nodes(linked.render(), node => node.type === linked.GuidanceDetail)[0];
+  assert.equal(detail.props.card.id, 'legend-feynman');
+  assert.equal(detail.props.onAsk, undefined);
+  const unknown = mount({ requestedCardId: 'made-up-card' });
+  assert.equal(nodes(unknown.render(), node => node.type === unknown.GuidanceDetail).length, 0);
+});
+
+test('Atlas searches person and method in Guru and includes all three read-only Legends', () => {
+  const app = mount();
+  let tree = app.render();
+  assert.match(words(tree), /멘토 아틀라스/);
+  assert.match(words(tree), /23\s+Guru.*3\s+Legend/);
+  const search = nodes(tree, node => node.type === app.TextField && node.props.label === '인물 또는 관점 검색')[0];
+  assert.ok(search);
+  search.props.onChange({ target: { value: 'Napoleon' } });
+  tree = app.render();
+  const filtered = nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === '세일즈 분야 카드 목록')[0];
+  assert.equal(nodes(filtered, node => node.type === 'button').length, 1);
+  search.props.onChange({ target: { value: 'GAP' } });
+  tree = app.render();
+  const byMethod = nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === '세일즈 분야 카드 목록')[0];
+  assert.equal(nodes(byMethod, node => node.type === 'button').length, 1);
+  assert.match(words(byMethod), /GAP Selling/);
+  search.props.onChange({ target: { value: '' } });
+  tree = app.render();
+  nodes(tree, node => node.type === app.SegmentedControl && node.props.label === '탐색 분야')[0].props.onChange('legend');
+  tree = app.render();
+  const legends = nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === 'Legend 분야 카드 목록')[0];
+  assert.equal(nodes(legends, node => node.type === 'button').length, LEGEND_CARDS.length);
+  const reader = nodes(tree, node => node.props?.role === 'region' && node.props?.className === 'mentor-shelf__person-detail')[0];
+  assert.ok(reader);
+  assert.equal(nodes(reader, node => node.type === app.Button && /질문 쓰기/.test(words(node))).length, 0);
+  search.props.onChange({ target: { value: 'nonexistent mentor' } });
+  tree = app.render();
+  assert.equal(nodes(tree, node => node.type === app.GuidanceDetail).length, 0);
+  assert.equal(nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === 'Legend 분야 카드 목록')[0].props.children.length, 0);
 });
 
 test('the shelf follows Hub token and responsive contracts', () => {

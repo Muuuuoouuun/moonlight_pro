@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-24 (영업·매출 4탭 재구성 스펙 추가·사이드바 앵커 서술을 9+2로 갱신 — `고객 연락` 앵커가 영업·매출 첫 탭 `오늘 연락`으로 흡수. Guru 도움 카드 개발 서버 시범 설계·구현 위치 추가. main·생활 루틴 통합과 운영 DB 0043 적용 기록 반영. Office P0 교정 6건 — 역할 카드 v25·말투 튜닝 동결, 의미 품질 인증 대기. DESIGN.md를 코드 실측과 대조해 정정)
+> 마지막 정리: 2026-09-25 (Guru 집중 서가·하단 멘토 아틀라스·카드 원문 상세·플로팅 대화 및 오늘·현황 한 줄 팁의 최신 운영자 결정을 추가. 영업·매출 4탭 재구성, Office P0 교정, 운영 DB 적용 기록은 아래 상태표 참조)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -233,7 +233,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - 빠른 메모: [`quick-memo-plan-2026-09-09.md`](quick-memo-plan-2026-09-09.md) — 공통 우측 하단 입력창·초안 복원·기존 메모 저장 경로 재사용. **2026-09-10 로컬 구현·검증 완료, 운영 배포 별도**
 - Agent/Council API·MCP: [`agent-council-api-mcp-operating-plan-2026-09-09.md`](agent-council-api-mcp-operating-plan-2026-09-09.md) — 현재 연동 구현과 권장 운영법. 아래 보류된 전체 Agent UI·자율 실행 설계를 승인한 것은 아님
 - 작업 지시 큐·Guru: [A→B 승인 설계](superpowers/specs/2026-09-23-work-order-queue-reassessment-design.md)가 제품 기준이며 A0~A5는 로컬 구현·검증됐다([큐 정리 구현 기록](superpowers/plans/2026-09-23-work-order-queue-a.md), [신호 소음 차단 구현 기록](superpowers/plans/2026-09-23-guru-signal-core.md)). [입력→결과 연결 점검](superpowers/specs/2026-09-23-guru-input-to-outcome-audit.md)은 현재 코드·운영 기록의 관찰과 B 단계 후속 권장을 구분한다.
-- Guru 도움 카드: [분야·인물별 멘토 서가](superpowers/specs/2026-09-24-guru-person-domain-library-design.md)가 세일즈 플레이북의 12명과 별도 MEDDIC 창안자 Dick Dunkel을 두 탐색 방식에 연결한다. [하루 세 번·상황 적합성·출처 품질](superpowers/specs/2026-09-24-guru-three-slot-context-quality-design.md)의 서울 09·14·19시 한 장 선택(시각은 시범 기본값)과 [멘토 서가·조용한 레일](superpowers/specs/2026-09-24-guru-dual-experience-design.md)의 무알림 원칙은 유지한다. 자동 팁과 수동 카드 서가를 구분하고 [참고 자료 품질 점검](research/2026-09-24-guru-source-quality.md)을 통과한 카드만 질문에 연결한다. [2026-09-25 객관 점검](research/2026-09-25-guru-objective-evaluation.md)은 세일즈 자동 5장·수동 8장으로 좁힌 이유와 남은 다양성·실효성 한계를 기록한다. 격리 개발 서버 구현·실사용 확인을 마쳤고 운영 반영은 별도다. 홈·오늘 승인 대기·Studio 본문에는 카드를 넣지 않고, 카드 열람으로 업무를 생성하지 않는다.
+- Guru 도움 카드: [집중 서가·하단 멘토 아틀라스·플로팅 대화](superpowers/specs/2026-09-25-guru-focus-atlas-floating-chat-design.md)가 **최신 운영자 확정 화면**이다. 상단은 현재 Guru와 주간 Legend, 하단은 분야·인물별 23 Guru·3 Legend 탐색이다. 카드를 누르면 원문 확인 상태와 Moonlight 해석을 구분한 상세가 열리고, 질문은 사용자가 전송할 때만 떠 있는 챗봇 창에서 이어진다. `오늘`·`현황`에는 각각 일반 관점 한 줄 팁을 두고 해당 상세로 연결한다. [하루 세 번·상황 적합성·출처 품질](superpowers/specs/2026-09-24-guru-three-slot-context-quality-design.md)의 서울 09·14·19시 선택과 [멘토 서가·조용한 레일](superpowers/specs/2026-09-24-guru-dual-experience-design.md)의 무알림·무자동업무 원칙은 유지한다. [분야·인물별 정본](superpowers/specs/2026-09-24-guru-person-domain-library-design.md), [참고 자료 품질 점검](research/2026-09-24-guru-source-quality.md), [객관 점검](research/2026-09-25-guru-objective-evaluation.md)을 콘텐츠 기준으로 읽는다. 격리 개발 서버 실화면과 전체 테스트·빌드는 통과했고, 샌드박스에 Engine 연결이 없어 실제 모델 답변 왕복은 미검증이다. 운영 반영은 별도다. 홈 승인 대기·Studio 본문에는 카드를 넣지 않고, 카드 열람은 AI 요청·업무를 생성하지 않는다.
 - Sales OS: [`sales-os-direction.md`](sales-os-direction.md), [`sales-os/`](sales-os/), [`sales-daily-loop-playbook.md`](sales-daily-loop-playbook.md)
 - Content OS: [`content-os-deep-plan.md`](content-os-deep-plan.md)
 - Hub/Engine 경계: [`engine-os-separation-ui-plan.md`](engine-os-separation-ui-plan.md)

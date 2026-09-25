@@ -6,6 +6,7 @@ import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { createWorkOrder } from "@/lib/sales-os/work-orders";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
 import { isGuidanceCardForDomain, isValidAdvisorInput } from "@/lib/advisor-input";
+import { isValidBrandGuruConversationHistory } from "@/lib/guru-chat-history";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -179,6 +180,12 @@ export async function POST(req) {
   const knowledge = input.knowledge && typeof input.knowledge === "object" ? input.knowledge : undefined;
   const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
   const officeSource = mode === "office-review" ? parseOfficeSource(input.officeSource) : null;
+  if (input.history !== undefined && (
+    mode !== "open-question"
+    || !isValidBrandGuruConversationHistory(input.history, { guidanceId, ref })
+  )) {
+    return NextResponse.json({ status: "error", error: "invalid-conversation-history" }, { status: 400 });
+  }
   if (mode === "office-review" && (
     input.scope !== "personal" || !officeSource || !draft?.trim() || draft.length > OFFICE_REVIEW_DRAFT_LIMIT
     || input.createWorkOrder !== false || input.guidanceId != null || (legendIds?.length || 0) > 0
@@ -214,6 +221,7 @@ export async function POST(req) {
   }
   const result = await callEngine({
     mode, ref, draft, context, legendIds, directives, values, knowledge, guidanceId,
+    ...(mode === "open-question" ? { createWorkOrder: false, ...(input.history !== undefined ? { history: input.history } : {}) } : {}),
     ...(officeSource ? { scope: "personal", officeSource, createWorkOrder: false } : {}),
   });
   // Keep requested Guru questions separate from ordinary Council advice in episodic memory.

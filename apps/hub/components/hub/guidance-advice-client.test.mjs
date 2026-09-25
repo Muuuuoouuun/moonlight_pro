@@ -35,6 +35,33 @@ test('Legend and blank questions cannot be submitted', () => {
   assert.throws(() => guidanceRequest(sales, '  '), /question-required/);
 });
 
+test('a free chatbot question uses Guru without assigning a mentor card', () => {
+  assert.deepEqual(guidanceRequest(null, '지금 판단을 같이 봐줘', { free: true }), {
+    endpoint: '/api/hub/sales-mentor',
+    target: '영업 Guru',
+    body: { mode: 'open-question', draft: '지금 판단을 같이 봐줘' },
+  });
+  assert.throws(() => guidanceRequest(null, '질문'), /unknown-guidance-card/);
+});
+
+test('follow-up sends at most three completed turns from the same card and brand', () => {
+  const turns = [
+    { question: '다른 카드', answer: '범위 밖', guidanceId: content.id, ref: 'other' },
+    ...Array.from({ length: 4 }, (_, index) => ({
+      question: `질문 ${index + 1}`, answer: `답변 ${index + 1}`, guidanceId: marketing.id, ref: 'sinabro',
+    })),
+  ];
+  assert.deepEqual(guidanceRequest(marketing, '이어서 설명해줘', { ref: 'sinabro' }, turns).body, {
+    mode: 'open-question', draft: '이어서 설명해줘', guidanceId: marketing.id,
+    createWorkOrder: false, ref: 'sinabro',
+    history: turns.slice(-3),
+  });
+  assert.deepEqual(guidanceRequest(sales, '다음 질문', {}, [
+    { question: '처음 질문', answer: '첫 답변', guidanceId: sales.id },
+    { question: '다른 카드', answer: '범위 밖', guidanceId: marketing.id },
+  ]).body.history, [{ question: '처음 질문', answer: '첫 답변', guidanceId: sales.id }]);
+});
+
 test('request sends only when called and reports preview honestly', async () => {
   const previous = globalThis.fetch;
   const requests = [];
