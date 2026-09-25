@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct TaskCaptureContent: View {
@@ -7,7 +6,6 @@ struct TaskCaptureContent: View {
     let openRevision: Int
     let openConnection: () -> Void
     @FocusState private var focused: Bool
-    @State private var listContentHeight: CGFloat = 0
 
     private var canChangeTasks: Bool { model.hub.canWriteTasks && !model.hub.isSavingTask }
     private var readMessage: String? {
@@ -21,7 +19,7 @@ struct TaskCaptureContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 9) {
-                Image(systemName: "plus")
+                Image(systemName: "plus").modifier(GlassGlyphShadow())
                     .font(.system(size: 15, weight: .light))
                     .foregroundStyle(Palette.glassInkMuted)
                 TextField("새 할 일", text: $model.taskDraft,
@@ -29,8 +27,9 @@ struct TaskCaptureContent: View {
                     .textFieldStyle(.plain).font(.system(size: 13))
                     .focused($focused).onSubmit(addTask)
                     .accessibilityLabel("새 할 일")
+                    .modifier(GlassGlyphShadow())
                 Button(action: addTask) {
-                    Image(systemName: "arrow.up").font(.system(size: 14, weight: .medium))
+                    Image(systemName: "arrow.up").modifier(GlassGlyphShadow()).font(.system(size: 14, weight: .medium))
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(GlassActionStyle(compact: true))
@@ -43,7 +42,7 @@ struct TaskCaptureContent: View {
             .modifier(GlassInputSurface(focused: focused))
 
             if model.displayedTasks.isEmpty {
-                taskCount.modifier(GlassReadability(radius: 12, inset: 10))
+                taskCount
                 emptyContent.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 taskList
@@ -57,8 +56,7 @@ struct TaskCaptureContent: View {
                 Button { model.openHub(.tasks) } label: { Label("Hub에서 열기", systemImage: "arrow.up.right") }
                     .buttonStyle(GlassQuietStyle())
             }
-            .font(.system(size: 11))
-            .modifier(GlassReadability(radius: 16, inset: 10, feather: 10))
+            .font(.system(size: 11.5, weight: .medium))
         }
         .onAppear { focusInput() }
         .onChange(of: openRevision) { _, _ in focusInput() }
@@ -70,7 +68,7 @@ struct TaskCaptureContent: View {
     private var taskCount: some View {
         Text(model.displayedTasks.isEmpty && (readMessage != nil || isLoading)
              ? (isLoading ? "불러오는 중…" : "할 일 확인 필요") : "남은 \(model.openTaskCount)개")
-            .font(.system(size: 11.5)).monospacedDigit()
+            .font(.system(size: 11.5, weight: .medium)).monospacedDigit()
             .foregroundStyle(Palette.glassInkMuted)
             .frame(height: 18, alignment: .leading)
     }
@@ -87,28 +85,10 @@ struct TaskCaptureContent: View {
                         ForEach(model.displayedTasks) { task in taskRow(task) }
                     }
                 }
-                .background {
-                    GeometryReader { geometry in
-                        Color.clear.preference(key: TaskListHeight.self, value: geometry.size.height)
-                    }
-                }
             }
             .scrollIndicators(.hidden)
             .frame(maxHeight: .infinity)
         }
-        .environment(\.glassReadingProtected, true)
-        .background(alignment: .top) {
-            // Keep the material fixed as rows scroll, and leave unused space clear
-            // when the list is short. Count and rows share one reading surface.
-            GeometryReader { geometry in
-                Color.clear
-                    .frame(height: min(geometry.size.height, max(50, listContentHeight) + 28))
-                    .modifier(GlassReadability(radius: 20, inset: 10, feather: 10))
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
-        .onPreferenceChange(TaskListHeight.self) { listContentHeight = $0 }
     }
 
     @ViewBuilder private var emptyContent: some View {
@@ -118,12 +98,11 @@ struct TaskCaptureContent: View {
             HubReadNotice(message: message, symbol: "exclamationmark.circle", action: openConnection)
         } else {
             VStack(spacing: 9) {
-                Image(systemName: "checklist").font(.system(size: 23, weight: .ultraLight))
+                Image(systemName: "checklist").modifier(GlassGlyphShadow()).font(.system(size: 23, weight: .ultraLight))
                 Text("할 일 하나부터 적어볼까요?").font(.system(size: 12))
             }
             .foregroundStyle(Palette.glassInkMuted)
             .padding(12)
-            .modifier(GlassReadability(radius: 14, inset: 3))
         }
     }
 
@@ -133,7 +112,7 @@ struct TaskCaptureContent: View {
             withAnimation(PetMotion.hover) { model.toggleTask(task.id) }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
+                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle").modifier(GlassGlyphShadow())
                     .font(.system(size: 19, weight: .ultraLight))
                     .foregroundStyle(Palette.glassInkMuted)
                 Text(task.title).font(.system(size: 13))
@@ -182,11 +161,6 @@ struct TaskCaptureContent: View {
     }
 }
 
-private struct TaskListHeight: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
-}
-
 struct MemoCaptureContent: View {
     @ObservedObject var model: AppModel
     let surface: CompanionSurface
@@ -209,24 +183,20 @@ struct MemoCaptureContent: View {
                     .scrollIndicators(.hidden)
                     .focused($focused)
                     .accessibilityLabel("메모 입력")
+                    .modifier(GlassGlyphShadow())
             }
             .font(.system(size: 16, weight: .regular))
             .lineSpacing(6)
             .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background {
-                GeometryReader { geometry in
-                    Color.clear
-                        .frame(height: readingHeight(in: geometry.size))
-                        .modifier(GlassReadability(radius: 16))
-                }
-                .allowsHitTesting(false)
-            }
-            .overlay { GlassRim(radius: 16, strength: 0.25) }
+            .background(Palette.glassControlFill.opacity(focused ? 0.075 : 0.045),
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { GlassRim(radius: 16, strength: focused ? 0.5 : 0.25) }
+            .animation(PetMotion.hover, value: focused)
 
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(model.memoStatusLabel).font(.system(size: 11))
+                    Text(model.memoStatusLabel).font(.system(size: 11.5, weight: .medium))
                     if let message = model.hub.errorMessage, model.hub.isEnabled {
                         Button(action: openConnection) {
                             Label(message, systemImage: "exclamationmark.circle")
@@ -239,7 +209,6 @@ struct MemoCaptureContent: View {
                     }
                 }
                 .foregroundStyle(Palette.glassInkMuted)
-                .modifier(GlassReadability(radius: 8, inset: 8))
                 Spacer(minLength: 0)
                 Button(action: model.saveMemoToHub) {
                     Label(model.hub.isSavingMemo ? "저장 중…" : model.hub.hasPendingMemo ? "저장 확인" : "Hub에 저장",
@@ -251,7 +220,7 @@ struct MemoCaptureContent: View {
                               && model.memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 .help("현재 메모를 Hub에 저장합니다. 이 Mac의 초안은 그대로 유지됩니다.")
                 Button(action: close) {
-                    Image(systemName: "chevron.down")
+                    Image(systemName: "chevron.down").modifier(GlassGlyphShadow())
                         .font(.system(size: 15, weight: .medium))
                         .frame(width: 36, height: 36)
                 }
@@ -273,18 +242,5 @@ struct MemoCaptureContent: View {
             guard model.activeCompanion == surface else { return }
             focused = true
         }
-    }
-
-    private func readingHeight(in size: CGSize) -> CGFloat {
-        // Protect written lines and the insertion line, not the whole empty
-        // notebook. Once text fills the viewport, its full scroll area is covered.
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = 6
-        let text = model.memoDraft.isEmpty ? " " : model.memoDraft + " "
-        let bounds = (text as NSString).boundingRect(
-            with: CGSize(width: max(1, size.width - 38), height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: NSFont.systemFont(ofSize: 16), .paragraphStyle: paragraph])
-        return min(size.height, max(54, ceil(bounds.height) + 34))
     }
 }

@@ -12,6 +12,9 @@ test('worker endpoint rejects agent bearer and caller-selected workspace before 
   assert.equal((await service.handleWorkerRequest(request({ action: 'claim' }, 'agent-token'), { env, rpc })).status, 401);
   assert.equal((await service.handleWorkerRequest(request({ action: 'claim', workspaceId }), { env, rpc })).status, 400);
   assert.equal((await service.handleWorkerRequest(request({ action: 'claim' }), { env: { ...env, COM_MOON_AGENT_API_TOKEN: env.COM_MOON_CODEX_WORKER_TOKEN }, rpc })).status, 503);
+  const { createHash } = await import('node:crypto');
+  const clientHashes = `claude-code:${createHash('sha256').update(env.COM_MOON_CODEX_WORKER_TOKEN).digest('hex')}`;
+  assert.equal((await service.handleWorkerRequest(request({ action: 'claim' }), { env: { ...env, COM_MOON_AGENT_CLIENT_TOKEN_HASHES: clientHashes }, rpc })).status, 503, 'a worker token reused as a client Agent token');
 });
 
 test('claim passes server identity and registered project capabilities to typed RPC', async () => {

@@ -6,8 +6,8 @@ import SwiftUI
 struct GlassUniforms {
     var viewport: SIMD4<Float> = .zero
     var rect: SIMD4<Float> = .zero
-    var material = SIMD4<Float>(26, 10, 1, 0)
-    var light: SIMD4<Float> = .zero
+    var material = SIMD4<Float>(26, 9, 1, 0)
+    var light = SIMD4<Float>(0, 0, 0, GlassStudy.edgeReflection)
 }
 
 /// Shared device, queue and pipeline. Compilation happens once, never on pointer updates.
@@ -86,7 +86,7 @@ final class GlassOpticsRenderer {
 @MainActor
 final class OpticalGlassView: MTKView, MTKViewDelegate {
     var radius: CGFloat = 26 { didSet { needsDisplay = true } }
-    var bevel: Float = 10 { didSet { needsDisplay = true } }
+    var bevel: Float = 9 { didSet { needsDisplay = true } }
     var refraction: Float = 1 { didSet { needsDisplay = true } }
     var grid = false { didSet { needsDisplay = true } }
     var laboratory = false
@@ -139,7 +139,7 @@ final class OpticalGlassView: MTKView, MTKViewDelegate {
         u.viewport = SIMD4(Float(bounds.width),Float(bounds.height),Float(drawableSize.width/bounds.width),laboratory ? 1 : 0)
         u.rect = SIMD4(Float(rect.minX),Float(rect.minY),Float(rect.width),Float(rect.height))
         u.material = SIMD4(Float(radius),bevel,refraction,grid ? 1 : 0)
-        u.light = SIMD4(pointer.x,pointer.y,accessible ? 1 : 0,0)
+        u.light = SIMD4(pointer.x,pointer.y,accessible ? 1 : 0,GlassStudy.edgeReflection)
         guard renderer.encode(u, pass: pass, buffer: buffer) else { return }
         buffer.present(drawable)
         buffer.commit()

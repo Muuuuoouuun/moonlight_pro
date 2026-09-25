@@ -14,6 +14,7 @@ import { SUBJECT_KEY_SET } from "./lead-labels.js";
 import { normalizeGenreLabels } from "./customer-labels.js";
 import { promiseColumns, promiseMetaPatch } from "./customer-promise.js";
 import { normalizePayments, normalizePlanBaseline } from "../deal-payments.js";
+import { normalizeRecurring } from "../deal-recurring.js";
 import {
   deleteSupabaseRecord,
   insertSupabaseRecord,
@@ -188,6 +189,15 @@ export function buildDealWrite(payload = {}) {
   if (payload.planBaseline !== undefined) {
     const baseline = normalizePlanBaseline(payload.planBaseline);
     if (baseline) metaPatch.plan_baseline = baseline;
+  }
+  // 매달 정기(2026-09-26 돈 보기, deal-recurring.js) — 계획 전체를 다시 쓴다. null이면 계획을 지운다.
+  // 유효하지 않은 계획(금액·날·시작 달 중 하나라도 없음)은 저장하지 않는다(₩0 정기를 만들지 않는다).
+  if (payload.recurring !== undefined) {
+    if (payload.recurring === null) metaPatch.recurring = null;
+    else {
+      const recurring = normalizeRecurring(payload.recurring);
+      if (recurring) metaPatch.recurring = recurring;
+    }
   }
 
   return { columns, metaPatch };

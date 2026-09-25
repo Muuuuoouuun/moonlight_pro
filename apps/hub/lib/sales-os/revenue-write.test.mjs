@@ -458,3 +458,16 @@ test("persistRevenueRecord reads the legacy stage column so a first move into cl
   const patch = calls.find(call => call.method === "PATCH" && call.url.includes("/deals"));
   assert.ok(Number.isFinite(Date.parse(patch.body.won_at)));
 });
+
+test("buildDealWrite carries a valid recurring plan into meta.recurring, clears it with null, and drops an invalid one", () => {
+  const { metaPatch } = buildDealWrite({ recurring: { amount: "600000", day: 3, startMonth: "2026-10" } });
+  assert.deepEqual(metaPatch.recurring, { amount: 600000, day: 3, startMonth: "2026-10", endMonth: null });
+  assert.equal(buildDealWrite({ recurring: null }).metaPatch.recurring, null);
+  assert.equal("recurring" in buildDealWrite({ recurring: { amount: 0, day: 3, startMonth: "2026-10" } }).metaPatch, false);
+  assert.equal("recurring" in buildDealWrite({ name: "x" }).metaPatch, false);
+});
+
+test("buildDealWrite keeps a recurring payment's month marker through normalizePayments", () => {
+  const { metaPatch } = buildDealWrite({ payments: [{ id: "rec-2026-10", recurringMonth: "2026-10", expectedAmount: 600000, expectedAt: "2026-10-03T03:00:00.000Z", status: "paid", paidAmount: 600000, paidAt: "2026-10-03T03:00:00.000Z" }] });
+  assert.equal(metaPatch.payments[0].recurringMonth, "2026-10");
+});

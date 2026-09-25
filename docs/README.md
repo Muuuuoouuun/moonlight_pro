@@ -231,7 +231,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 
 - 빠른 메모: [`quick-memo-plan-2026-09-09.md`](quick-memo-plan-2026-09-09.md) — 공통 우측 하단 입력창·초안 복원·기존 메모 저장 경로 재사용. **2026-09-10 로컬 구현·검증 완료, 운영 배포 별도**
-- Agent/Council API·MCP: [`agent-council-api-mcp-operating-plan-2026-09-09.md`](agent-council-api-mcp-operating-plan-2026-09-09.md) — 현재 연동 구현과 권장 운영법. 아래 보류된 전체 Agent UI·자율 실행 설계를 승인한 것은 아님
+- Agent/Council API·MCP: [`agent-council-api-mcp-operating-plan-2026-09-09.md`](agent-council-api-mcp-operating-plan-2026-09-09.md) — 현재 연동 구현과 권장 운영법. 전체 Agent UI 설계(§6 과거 참고 문서)나 자율 실행 설계를 승인한 것은 아님
 - 작업 지시 큐·Guru: [A→B 승인 설계](superpowers/specs/2026-09-23-work-order-queue-reassessment-design.md)가 제품 기준이며 A0~A5는 로컬 구현·검증됐다([큐 정리 구현 기록](superpowers/plans/2026-09-23-work-order-queue-a.md), [신호 소음 차단 구현 기록](superpowers/plans/2026-09-23-guru-signal-core.md)). [입력→결과 연결 점검](superpowers/specs/2026-09-23-guru-input-to-outcome-audit.md)은 현재 코드·운영 기록의 관찰과 B 단계 후속 권장을 구분한다.
 - Guru 도움 카드: [집중 서가·하단 멘토 아틀라스·플로팅 대화](superpowers/specs/2026-09-25-guru-focus-atlas-floating-chat-design.md)가 **확정 화면**이며, [카드별 내부 읽기 글](superpowers/specs/2026-09-25-guru-internal-reading-articles-design.md)이 상세의 최신 확정 내용이다. 상단은 현재 Guru와 주간 Legend, 하단은 분야·인물별 23 Guru·3 Legend 탐색이다. 카드마다 Moonlight가 참고자료를 재구성한 MD 해설 글을 열고, 검증된 직접 인용만 별도로 표시한다. 글은 인물의 개념·판단 과정·업무 응용·적용 경계를 구분한다. 글마다 이미지 모델로 만든 **한국어 2D 요약 인포그래픽** 한 장에 판단 단계 또는 비교·적용 경계를 담고 핵심 주장을 실제 텍스트 캡션으로 보여 준다([제작·검수 기록](superpowers/plans/2026-09-25-guru-infographics.md)). 앞서 만든 26장 개념 일러스트는 앱·Git에서 제거하고 로컬에만 별도 보관한다. 나중에 콘텐츠 참고로 쓰더라도 그때 다시 생성한다. Markdown 글이 내용의 정본이며, 작은 화면·이미지 실패 시 같은 요약을 HTML로 읽는다. 외부 원전 링크와 저장소 파일 경로는 화면에서 제거했다. 질문은 사용자가 전송할 때만 떠 있는 챗봇 창에서 이어진다. `오늘`·`현황`에는 각각 일반 관점 한 줄 팁을 두고 해당 글로 연결한다. [하루 세 번·상황 적합성·출처 품질](superpowers/specs/2026-09-24-guru-three-slot-context-quality-design.md)의 서울 09·14·19시 선택과 [멘토 서가·조용한 레일](superpowers/specs/2026-09-24-guru-dual-experience-design.md)의 무알림·무자동업무 원칙은 유지한다. [분야·인물별 정본](superpowers/specs/2026-09-24-guru-person-domain-library-design.md), [참고 자료 품질 점검](research/2026-09-24-guru-source-quality.md), [객관 점검](research/2026-09-25-guru-objective-evaluation.md)을 콘텐츠 기준으로 읽는다. 인포그래픽 교체분은 26장 시각 대조, 실화면·390px·이미지 실패 복구, 전체 테스트·타입 검사·빌드와 파일 추적까지 로컬 검증했다. 샌드박스에 Engine 연결이 없어 실제 모델 답변 왕복은 미검증이며, 운영 반영은 별도다. 홈 승인 대기·Studio 본문에는 카드를 넣지 않고, 카드 열람은 AI 요청·업무를 생성하지 않는다.
 - Sales OS: [`sales-os-direction.md`](sales-os-direction.md), [`sales-os/`](sales-os/), [`sales-daily-loop-playbook.md`](sales-daily-loop-playbook.md)
@@ -243,12 +243,10 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 보류된 기능 설계
 
-- Agent/Council: [`agent-tab-mvp-ui-spec.md`](agent-tab-mvp-ui-spec.md) — 현행 에이전트 경계와 구현은 [에이전트 계층 방향](superpowers/specs/2026-09-24-agent-layer-direction.md)이 정본이다(이 문서의 `dashboard/ai` 라우트 전제는 코드에 없음)
 - Daily note/Obsidian: [`daily-operating-note-todo.md`](daily-operating-note-todo.md) — P1-5·P1-6·P2-8·P2-10은 [`superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md`](superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md)가 흡수했다(그 문서도 아직 DRAFT). P0-2 Quick Capture는 구현 완료. 남은 고유 범위는 P1-7 Obsidian export(역방향)다
 - GitHub Work OS: [`github-workos-mvp-mockup.md`](github-workos-mvp-mockup.md)
-- Sales Guru: [`sales-guru-mentor-agent-plan.md`](sales-guru-mentor-agent-plan.md) — 현행 Guru는 [Guru 도움 카드](superpowers/specs/2026-09-24-guru-guidance-cards-design.md)·Office→멘토 한 홉으로 구현됐다(이 문서가 가리키는 `COUNCIL` 배열은 제거됨)
 - ClassIn CRM 결합: [`sales-os-crm-integration-plan.md`](sales-os-crm-integration-plan.md) — 문서 자체가 보류 상태이며 새 정본 경계를 먼저 적용
-- AI Sales 팀 운영: [`sales-os/team-operating-layer.md`](sales-os/team-operating-layer.md), [`sales-os/personas/`](sales-os/personas/)
+- AI Sales 팀 운영: [`sales-os/team-operating-layer.md`](sales-os/team-operating-layer.md), [`sales-os/personas/`](sales-os/personas/) — 2026-09-26 브랜드 자문 화면의 5인 로스터 표시와 ⌘K 진입점을 뺐다. 페르소나 문서·`check:personas`·`agents` 테이블·persona-chat 엔진은 남는다([에이전트 계층 방향](superpowers/specs/2026-09-24-agent-layer-direction.md) §6.6)
 
 이 문서들은 폐기된 것은 아니지만 현재 Phase 1B·1C보다 먼저 구현하지 않는다.
 
@@ -293,6 +291,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 | [`design-guidelines.md`](design-guidelines.md) | light/white 중심의 구 디자인 토큰 | DESIGN.md |
 | [`brand-efficiency-operating-model.md`](brand-efficiency-operating-model.md) | 2026-05 office-hours DRAFT | 운영자 프로필 + 심화 설계 |
 | [`detail-tab-ui-overhaul-prep.md`](detail-tab-ui-overhaul-prep.md) | 특정 UI 개편 준비 기록 | DESIGN.md + 현재 Phase 설계 |
+| [`agent-tab-mvp-ui-spec.md`](agent-tab-mvp-ui-spec.md) | 코드에 없는 `dashboard/ai` 라우트를 전제한 Agent 탭 MVP 사양. 2026-09-26 운영자 지시로 보류 문서에서 옮김 | [에이전트 계층 방향](superpowers/specs/2026-09-24-agent-layer-direction.md) |
+| [`sales-guru-mentor-agent-plan.md`](sales-guru-mentor-agent-plan.md) | 제거된 `COUNCIL` 배열 기반 Guru 설계. 2026-09-26 운영자 지시로 보류 문서에서 옮김 | [Guru 도움 카드](superpowers/specs/2026-09-24-guru-guidance-cards-design.md) + 에이전트 계층 방향 |
 
 ## 7. 정리 규칙
 

@@ -92,3 +92,31 @@ test('Engine bounds raw entities returned by an older RPC on writes, receipt rea
   assert.equal(result.data.entity.meta, undefined);
   assert.equal(result.data.entityRef.type, 'tasks');
 });
+
+// 2026-09-26: enabling goals:write/ai:write in COM_MOON_AGENT_SCOPES broke every task command and receipt
+// read, because 0032's functions reject scopes outside their five-item list. The service passes only those.
+test('command RPCs receive only the scopes their SQL functions accept', async () => {
+  const wide = { ...context, scopes: ['ai:write', 'contact-outcomes:write', 'goals:write', 'jobs:read', 'jobs:write', 'read', 'tasks:write'] };
+  const expected = ['contact-outcomes:write', 'jobs:read', 'jobs:write', 'read', 'tasks:write'];
+  const seen = [];
+  await execute(command, wide, { rpc: async (name, params) => { seen.push([name, params.p_scopes]); return { ok: true, data: saved }; } });
+  await receipt(commandId, wide, { rpc: async (name, params) => { seen.push([name, params.p_scopes]); return { ok: true, data: saved }; } });
+  assert.deepEqual(seen, [['agent_command_v1', expected], ['agent_command_receipt_v1', expected]]);
+});
+
+test('the command RPC scope list matches the latest SQL definition of both functions', async () => {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const dir = new URL('../../../supabase/migrations/', import.meta.url);
+  const lists = [];
+  for (const fn of ['agent_command_v1', 'agent_command_receipt_v1']) {
+    const file = readdirSync(dir).filter(name => name.endsWith('.sql')).sort()
+      .filter(name => new RegExp(`function public\\.${fn}\\(`).test(readFileSync(new URL(name, dir), 'utf8'))).at(-1);
+    assert.ok(file, `${fn} is defined in a migration`);
+    const sql = readFileSync(new URL(file, dir), 'utf8');
+    const body = sql.slice(sql.indexOf(`function public.${fn}(`));
+    const list = /p_scopes <@ array\[([^\]]+)\]::text\[\]/.exec(body);
+    assert.ok(list, `${fn} in ${file} still has a fixed scope list`);
+    lists.push(list[1].split(',').map(item => item.trim().replace(/^'|'$/g, '')).sort());
+  }
+  for (const list of lists) assert.deepEqual(list, [...service.COMMAND_RPC_SCOPES].sort());
+});

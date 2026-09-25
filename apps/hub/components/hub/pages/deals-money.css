@@ -1,0 +1,508 @@
+/* 거래 탭 — 페이지 셸 · 돈 보기(매출 · 현금흐름, 운영자 승인 목업 10 · 2026-09-26)
+ *
+ * 색은 토큰만. 확실성은 색이 아니라 선 모양으로 말한다(DESIGN §5.3):
+ *   들어옴 = 꽉 찬 채움(--fg) · 확실 예정 = 리본 점선 윤곽 / 차트 Moonstone 명도 채움 · 가능 = 점(dotted).
+ * danger는 계약됐는데 밀린 돈 한 곳 — 1px inset 레일과 직접 라벨(예산은 lib/deal-money.js railKeys).
+ * 셀렉터는 `.hub-app`으로 올린다 — `.hub-app button` 리셋(0,1,1)이 단일 클래스를 이긴다.
+ */
+
+/* ── 페이지 ─────────────────────────────────────────────────────── */
+/* .hub-futura(0,2,0)의 44px 섹션 간격을 이 밀도 높은 운영 화면에서만 --section-gap으로 줄인다 */
+.hub-app .hub-futura.deals-page {
+  gap: var(--section-gap);
+  min-height: 100%;
+}
+
+.hub-app .deals-page__head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 단계 보기의 머리 — 제목 · 보기 전환 · 생성 */
+.hub-app .deals-hero {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.hub-app .deals-hero__text { flex: 1 1 320px; min-width: 0; }
+.hub-app .deals-hero__eyebrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; }
+.hub-app .deals-hero .fx-page-title { margin-top: 8px; }
+
+.hub-app .deals-hero__actions,
+.hub-app .deals-money-top__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hub-app .deals-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .deals-toolbar__spacer { flex: 1; }
+
+/* ── 돈 보기 ─────────────────────────────────────────────────────── */
+.hub-app .deals-money {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.hub-app .deals-money-empty { display: flex; flex-direction: column; gap: 10px; }
+.hub-app .deals-money-empty p { margin: 0; font-size: 13px; color: var(--fg-muted); }
+
+/* 스크린리더 전용 — 제목의 문맥 · 차트와 같은 숫자의 표 */
+.hub-app .deals-money-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── 머리 카드 ───────────────────────────────────────────────────── */
+.hub-app .fx-card.deals-money-top { padding: 20px 22px 18px; }
+
+.hub-app .deals-money-top__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px 24px;
+  flex-wrap: wrap;
+}
+
+.hub-app .deals-money-top__title { flex: 1 1 260px; min-width: 0; }
+
+.hub-app .deals-money-top__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.hub-app .deals-money-top__figure {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.hub-app .deals-money-top .fx-page-title.deals-money-top__h {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.hub-app .deals-money-top__h .stat { font-size: 34px; font-weight: 500; }
+
+/* "/ 목표 ₩6M" — 조용한 인라인 텍스트 버튼(눌러서 고침). 없으면 흐린 "목표 정하기" */
+.hub-app .deals-money-target {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+  transition: color var(--dur-hover) ease;
+}
+
+.hub-app .deals-money-target:hover { color: var(--fg); }
+.hub-app .deals-money-target--set { font-size: 13px; color: var(--fg-dim); text-decoration: underline dotted; text-underline-offset: 3px; }
+
+.hub-app .deals-money-target-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.hub-app .deals-money-target-form .hub-input { width: 140px; height: 30px; }
+
+/* KPI 넷 — 늦은 입금(있을 때만 danger) · 월말 확실 · 가능까지 · 매달 정기 */
+.hub-app .deals-money-kpis {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.hub-app .deals-money-kpi { min-width: 0; }
+.hub-app .deals-money-kpi dt { font-size: 11.5px; color: var(--fg-dim); }
+.hub-app .deals-money-kpi dd { margin: 2px 0 0; }
+.hub-app .deals-money-kpi .stat { display: inline-flex; align-items: center; gap: 4px; font-size: 18px; font-weight: 500; color: var(--fg); }
+.hub-app .deals-money-kpi[data-kind="late"] .stat { color: var(--danger); }
+.hub-app .deals-money-kpi[data-kind="maybe"] .stat { color: var(--fg-dim); }
+.hub-app .deals-money-kpi[data-kind="recurring"] .stat { color: var(--moon-200); }
+.hub-app .deals-money-kpi__none { font-size: 13px; color: var(--fg-faint); }
+
+/* 리본 — 이번 달 돈의 구성. 목표 눈금은 1px 실선 */
+.hub-app .deals-money-ribbon { margin-top: 26px; }
+
+.hub-app .deals-money-ribbon__bar {
+  position: relative;
+  display: flex;
+  gap: 3px;
+  height: 12px;
+}
+
+.hub-app .deals-money-ribbon__bar[data-empty] { border: 1px dotted var(--line); border-radius: var(--r-xs); }
+
+.hub-app .deals-money-seg {
+  flex-basis: 0;
+  min-width: 4px;
+  border-radius: var(--r-xs);
+}
+
+.hub-app .deals-money-seg[data-kind="paid"] { background: var(--fg); }
+.hub-app .deals-money-seg[data-kind="late"] { background: var(--surface-2); border: 1px solid var(--line-strong); box-shadow: inset 1px 0 0 var(--danger); }
+.hub-app .deals-money-seg[data-kind="sure"] { background: var(--surface-2); border: 1px dashed var(--line-strong); }
+.hub-app .deals-money-seg[data-kind="maybe"] { border: 1px dotted var(--line-strong); }
+.hub-app .deals-money-seg[data-kind="gap"] { background: transparent; }
+
+.hub-app .deals-money-ribbon__target {
+  position: absolute;
+  top: -5px;
+  height: 22px;
+  border-left: 1px solid var(--fg);
+  pointer-events: none;
+}
+
+.hub-app .deals-money-ribbon__target span {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  transform: translateX(-50%);
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+/* 끝에 붙은 목표는 글자를 카드 안쪽으로 — 선은 제자리 */
+.hub-app .deals-money-ribbon__target[data-edge="end"] span { left: auto; right: 0; transform: none; }
+.hub-app .deals-money-ribbon__target[data-edge="start"] span { transform: none; }
+
+.hub-app .deals-money-legend {
+  display: flex;
+  gap: 6px 16px;
+  flex-wrap: wrap;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .deals-money-legend li { display: inline-flex; align-items: center; }
+.hub-app .deals-money-legend__amt { margin-left: 5px; color: var(--fg); font-weight: 500; }
+.hub-app .deals-money-legend__note { color: var(--fg-dim); }
+
+.hub-app .deals-money-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+}
+
+.hub-app .deals-money-swatch[data-kind="paid"] { background: var(--fg); }
+.hub-app .deals-money-swatch[data-kind="late"] { background: var(--surface-2); border: 1px solid var(--line-strong); box-shadow: inset 1px 0 0 var(--danger); }
+.hub-app .deals-money-swatch[data-kind="sure"] { background: var(--surface-2); border: 1px dashed var(--line-strong); }
+.hub-app .deals-money-swatch[data-kind="sure-fill"] { background: var(--moon-300); }
+.hub-app .deals-money-swatch[data-kind="maybe"] { border: 1px dotted var(--line-strong); }
+.hub-app .deals-money-swatch[data-kind="floor"] { height: 0; border-radius: 0; border-top: 1px dashed var(--fg-dim); }
+
+/* ── 현금흐름 차트 ─────────────────────────────────────────────────── */
+.hub-app .fx-card.deals-money-flow { padding: 18px 22px 16px; }
+
+.hub-app .deals-money-flow__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.hub-app .deals-money-flow__head h3 { flex: 1; margin: 0; }
+
+.hub-app .deals-money-flow__scroll { overflow-x: auto; }
+
+.hub-app .deals-money-chart {
+  --plot-h: 120px;
+  --col-gap: 8px;
+  min-width: calc(var(--cols) * 40px);
+}
+
+.hub-app .deals-money-chart[data-unit="month"] { --col-gap: 28px; }
+
+.hub-app .deals-money-chart__plot,
+.hub-app .deals-money-chart__axis {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: var(--col-gap);
+}
+
+.hub-app .deals-money-chart__plot {
+  position: relative;
+  height: var(--plot-h);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.hub-app .deals-money-col { position: relative; min-width: 0; height: 100%; }
+
+.hub-app .deals-money-col__plot {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 100%;
+}
+
+.hub-app .deals-money-col__bar {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 1px;
+  width: 100%;
+  max-width: 44px;
+  min-height: 3px;
+}
+
+.hub-app .deals-money-chart[data-unit="month"] .deals-money-col__bar { max-width: 64px; }
+
+.hub-app .deals-money-col__seg { flex-basis: 0; min-height: 2px; }
+/* column-reverse — 마지막 조각이 맨 위. 위쪽 끝만 둥글고 바닥은 각지다 */
+.hub-app .deals-money-col__seg:last-child { border-radius: var(--r-xs) var(--r-xs) 0 0; }
+.hub-app .deals-money-col__seg[data-kind="paid"] { background: var(--fg); }
+.hub-app .deals-money-col__seg[data-kind="sure"] { background: var(--moon-300); }
+.hub-app .deals-money-col__seg[data-kind="maybe"] { border: 1px dotted var(--line-strong); border-bottom: 0; }
+.hub-app .deals-money-col__seg[data-kind="late"] { background: var(--surface-2); border: 1px solid var(--line-strong); box-shadow: inset 1px 0 0 var(--danger); }
+
+/* 월 차트의 목표 눈금 — 이번 달 막대 위 1px 실선 */
+.hub-app .deals-money-col__target {
+  position: absolute;
+  left: 50%;
+  width: min(80px, 100%);
+  transform: translateX(-50%);
+  border-top: 1px solid var(--fg);
+}
+
+/* 매달 정기 바닥 — 주당 정기(한 달 ÷ 4.33) 높이의 1px 점선 기준선 */
+.hub-app .deals-money-floor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  border-top: 1px dashed var(--fg-dim);
+  pointer-events: none;
+}
+
+.hub-app .deals-money-floor span {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  padding-left: 4px;
+  background: var(--surface);
+  font-size: 10.5px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.hub-app .deals-money-axis__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 6px;
+}
+
+.hub-app .deals-money-axis__v { font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
+.hub-app .deals-money-axis__v[data-kind="maybe"] { color: var(--fg-dim); }
+.hub-app .deals-money-axis__v[data-kind="none"] { color: var(--fg-faint); }
+
+.hub-app .deals-money-axis__l {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.hub-app .deals-money-axis__cell[data-current] .deals-money-axis__l { color: var(--fg); font-weight: 600; }
+.hub-app .deals-money-axis__goal { font-weight: 400; color: var(--fg-dim); }
+
+/* 현재 위치 점 — Moonstone은 "지금 여기"만 뜻한다(§5.2) */
+.hub-app .deals-money-now {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--fx-pill);
+  background: var(--accent);
+}
+
+.hub-app .deals-money-legend--flow { margin-top: 12px; font-size: 11.5px; }
+
+/* ── 들어올 돈 목록 ─────────────────────────────────────────────────── */
+.hub-app .fx-card.deals-money-list { padding: 16px 22px 14px; }
+.hub-app .deals-money-list > h3 { margin: 0 0 2px; }
+
+.hub-app .deals-money-grp + .deals-money-grp { margin-top: 6px; }
+
+.hub-app .deals-money-grp__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0 4px;
+}
+
+.hub-app .deals-money-grp__head h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--fg-dim);
+}
+
+.hub-app .deals-money-grp__head b { font-size: 12px; font-weight: 500; color: var(--fg-muted); }
+.hub-app .deals-money-grp__count { color: var(--danger); letter-spacing: 0; }
+
+.hub-app .deals-money-rows { margin: 0; padding: 0; list-style: none; }
+
+.hub-app .deals-money-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto minmax(96px, auto);
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 -8px;
+  padding: 9px 8px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+/* 늦은 입금 레일 — 앞의 3건만(§5.3 red budget), 1px inset */
+.hub-app .deals-money-row[data-rail] { box-shadow: inset 1px 0 0 var(--danger); }
+.hub-app .deals-money-row[data-rail] .deals-money-row__d { color: var(--danger); }
+
+/* 독이 이 거래로 열려 있다 — 선택은 Moonstone 윤곽(§5.3 outer outline), 레일과 겹치지 않게 안쪽 1px */
+.hub-app .deals-money-row[data-selected] { outline: 1px solid var(--moon-300); outline-offset: -2px; }
+
+.hub-app .deals-money-row__d { font-size: 12.5px; color: var(--fg-muted); }
+.hub-app .deals-money-row[data-group="undated"] .deals-money-row__d { color: var(--fg-faint); }
+
+.hub-app .deals-money-row__who {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.hub-app .deals-money-row__org {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hub-app .deals-money-row__hint { font-size: 12px; color: var(--fg-dim); }
+
+.hub-app .deals-money-row__late {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+/* 예산 안(레일 있는 행)은 글자까지 danger, 넘친 행은 작은 danger 글리프만 */
+.hub-app .deals-money-row__late svg { color: var(--danger); }
+.hub-app .deals-money-row[data-rail] .deals-money-row__late { color: var(--danger); font-weight: 500; }
+
+.hub-app .deals-money-tag {
+  padding: 0 7px;
+  border: 1px dotted var(--line-strong);
+  border-radius: var(--fx-pill);
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.hub-app .deals-money-row__amt { font-size: 13px; text-align: right; white-space: nowrap; }
+.hub-app .deals-money-row__amt[data-certainty="sure"] { color: var(--moon-200); font-weight: 500; }
+.hub-app .deals-money-row__amt[data-certainty="maybe"] { color: var(--fg-dim); }
+.hub-app .deals-money-row__amt[data-unknown] { color: var(--fg-faint); font-weight: 400; }
+
+.hub-app .deals-money-row__act {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 6px;
+  cursor: default;
+}
+
+.hub-app .deals-money-row__act:empty { display: none; }
+
+.hub-app .deals-money-row__form { grid-column: 1 / -1; cursor: default; }
+.hub-app .deals-money-row__form .deals-form { margin: 2px 0 0; }
+
+.hub-app .deals-money-more { margin-top: 6px; }
+
+/* ── 반응형 ───────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .hub-app .fx-card.deals-money-top,
+  .hub-app .fx-card.deals-money-flow,
+  .hub-app .fx-card.deals-money-list { padding: 16px 14px 14px; }
+  .hub-app .deals-money-top .fx-page-title.deals-money-top__h,
+  .hub-app .deals-money-top__h .stat { font-size: 26px; }
+  .hub-app .deals-money-target { font-size: 15px; }
+  /* KPI는 2×2 */
+  .hub-app .deals-money-kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 14px;
+    width: 100%;
+  }
+  .hub-app .deals-money-top__actions { width: 100%; }
+  .hub-app .deals-money-target-form .hub-input { height: 44px; font-size: 16px; }
+
+  /* 차트는 카드 안에서 가로로 스크롤 — 칸을 줄이지 않는다 */
+  .hub-app .deals-money-chart { min-width: calc(var(--cols) * 52px); }
+  .hub-app .deals-money-chart[data-unit="month"] { min-width: 0; --col-gap: 12px; }
+
+  /* 행은 쌓는다 — 행동은 자기 줄(44px) */
+  .hub-app .deals-money-row { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .hub-app .deals-money-row__act { grid-column: 1 / -1; justify-content: flex-start; }
+  .hub-app .deals-money-row__act > .hub-btn,
+  .hub-app .deals-money-more { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .deals-money-target { transition: none; }
+}

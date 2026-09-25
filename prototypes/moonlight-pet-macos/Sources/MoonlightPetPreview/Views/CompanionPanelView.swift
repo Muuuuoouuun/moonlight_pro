@@ -24,7 +24,6 @@ struct CompanionPanelView: View {
                 header
                 if isToday && !showsAddress { todayTabs }
             }
-            .modifier(GlassReadability(radius: 22, inset: 12, feather: 12))
             .padding(.bottom, isToday ? 18 : 12)
             if showsAddress {
                 HubConnectionContent(model: model) {
@@ -56,7 +55,7 @@ struct CompanionPanelView: View {
                 if isToday && !showsAddress {
                     TimelineView(.periodic(from: .now, by: 60)) { context in
                         Text(CompanionDate.label(context.date))
-                            .font(.system(size: 11.5))
+                            .font(.system(size: 11.5, weight: .medium))
                             .foregroundStyle(Palette.glassInkMuted)
                     }
                 }
@@ -67,13 +66,13 @@ struct CompanionPanelView: View {
             }
             modeMenu
             if let pin, mode != .memo {
-                Button(action: pin) { Image(systemName: "pin").frame(width: 28, height: 32) }
+                Button(action: pin) { Image(systemName: "pin").modifier(GlassGlyphShadow()).frame(width: 28, height: 32) }
                     .buttonStyle(GlassQuietStyle())
                     .help("위젯으로 고정")
                     .accessibilityLabel("위젯으로 고정")
             }
             if mode != .memo || showsAddress {
-                Button(action: close) { Image(systemName: "xmark").frame(width: 28, height: 32) }
+                Button(action: close) { Image(systemName: "xmark").modifier(GlassGlyphShadow()).frame(width: 28, height: 32) }
                     .buttonStyle(GlassQuietStyle())
                     .accessibilityLabel(persistent ? "위젯 접기" : "빠른 기능 닫기")
             }
@@ -103,7 +102,7 @@ struct CompanionPanelView: View {
             }
             Button("펫으로 접기", action: close)
         } label: {
-            Image(systemName: "ellipsis").frame(width: 28, height: 32)
+            Image(systemName: "ellipsis").modifier(GlassGlyphShadow()).frame(width: 28, height: 32)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -126,7 +125,7 @@ struct CompanionPanelView: View {
             ForEach(destinations) { destination in
                 Button { select(destination) } label: {
                     Text(destination.title)
-                        .font(.system(size: 12, weight: mode == destination ? .semibold : .regular))
+                        .font(.system(size: 12, weight: mode == destination ? .semibold : .medium))
                         .foregroundStyle(mode == destination ? Palette.glassInk : Palette.glassInkMuted)
                         .frame(maxWidth: .infinity)
                         .frame(height: 34)

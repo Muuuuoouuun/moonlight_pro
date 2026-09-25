@@ -600,31 +600,6 @@ export function AgentsChat({ onNavigate }) {
   );
 }
 
-// Real seeded persona roster (order/sales/content/production/review) + each one's
-// most recent agent_runs row. Was previously the static COUNCIL array — a fictional
-// 6-persona roster (strategist/analyst/writer/operator/coach/guru) with fabricated
-// "last output" quotes that had no backend at all.
-function useAgentRoster() {
-  const [state, setState] = React.useState({ status: 'loading', personas: [] });
-
-  React.useEffect(() => {
-    let active = true;
-    fetch('/api/hub/agents', { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
-      .then((d) => {
-        if (!active) return;
-        setState({
-          status: d?.status === 'live' ? 'live' : 'preview',
-          personas: Array.isArray(d?.personas) ? d.personas : [],
-        });
-      })
-      .catch(() => active && setState({ status: 'preview', personas: [] }));
-    return () => { active = false; };
-  }, []);
-
-  return state;
-}
-
 // Council advisory panel — the brand-side counterpart of GuruCoachPanel (revenue.jsx). Calls
 // the Hub proxy (/api/hub/brand-mentor) which enriches the request with the content/project
 // ledger and forwards to the Engine; renders the idle/loading/done/preview/error states the
@@ -884,19 +859,16 @@ function CouncilCoachPanel({ onNavigate }) {
 }
 
 export function AgentsCouncil({ onNavigate }) {
-  const roster = useAgentRoster();
-
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>브랜드 자문</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>
-            {roster.personas.length}명의 페르소나가 함께 의논. 브리핑·결정에 근거 제공.
+            브랜드 Council이 기록을 근거로 브리핑·결정에 자문을 제공합니다.
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Badge tone="neutral" size="xs">{roster.status === 'live' ? 'live' : 'preview'}</Badge>
         <Button variant="outline" size="sm" icon="sparkle" onClick={() => onNavigate?.('dashboard/agents/chat?prompt=council')}>자문 대화 열기</Button>
       </div>
 
@@ -905,51 +877,6 @@ export function AgentsCouncil({ onNavigate }) {
         <Button variant="ghost" size="sm" onClick={() => onNavigate?.('dashboard/agents/orders?view=jobs')}>코드 작업 열기</Button>
       </div>
       <CouncilCoachPanel onNavigate={onNavigate} />
-      {roster.status === 'loading' && (
-        <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>페르소나 로스터 불러오는 중…</div>
-      )}
-      {roster.status !== 'loading' && roster.personas.length === 0 && (
-        <EmptyState
-          icon="agents"
-          title="페르소나 로스터가 비어 있습니다"
-          description="Supabase agents 기록이 준비되지 않았습니다."
-        />
-      )}
-      <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--gap)' }}>
-        {roster.personas.map(a => (
-          <Card
-            key={a.id}
-            role="button"
-            tabIndex={0}
-            aria-label={`${a.nameKo || a.id} 채팅 열기`}
-            style={{ cursor: 'pointer' }}
-            onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.id}`)}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(`dashboard/agents/chat?agent=${a.id}`); } }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              {/* §4/§13: 컬러 라디얼 그라디언트·glow 금지 — 단색 서피스 + 헤어라인으로 교체(7차 디자인) */}
-              <div style={{
-                width: 36, height: 36, borderRadius: 999,
-                background: 'var(--surface-3)',
-                border: '1px solid var(--line)',
-                flexShrink: 0,
-              }} />
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 500 }}>{a.nameKo || a.id}</span>
-                  <Dot tone={a.status === 'idle' ? 'neutral' : 'moon'} size={6} />
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.role}</div>
-              </div>
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
-              <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', marginBottom: 5 }}>Recent</div>
-              {a.lastRun
-                ? <>{shortWhen(a.lastRun.ranAt)} · {a.lastRun.summary || `${a.emits} 산출`}</>
-                : (a.status === 'idle' ? '아직 실행 기록 없음' : '실행 대기')}
-            </div>
-          </Card>
-        ))}
-      </div>
     </div>
   );
 }

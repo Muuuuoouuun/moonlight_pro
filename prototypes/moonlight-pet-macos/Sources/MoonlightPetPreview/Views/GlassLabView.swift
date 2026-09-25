@@ -24,7 +24,7 @@ final class GlassLabWindowController: NSWindowController {
 
 private struct GlassLabView: View {
     @State private var strength = 1.0
-    @State private var bevel = 12.0
+    @State private var bevel = 9.0
     @State private var grid = false
     @State private var character: PetCharacter = .silver
     @State private var previewsTint = false
@@ -100,10 +100,13 @@ private struct GlassLabStage: NSViewRepresentable {
             let readingTone = GlassReadingTone()
             self.readingTone = readingTone
             background = GlassOpticsRenderer.shared.map { OpticalGlassView(renderer: $0) }
-            native = GlassPanel.host(LabContent().environment(\.glassReadsWithinWindow, true),cornerRadius: 30)
+            native = GlassPanel.host(LabContent().environment(\.glassReadsWithinWindow, true),
+                                     cornerRadius: 30, protectsText: true)
             let content = NSHostingView(rootView: LabContent().environment(\.colorScheme,.dark)
                 .environment(\.glassReadsWithinWindow, true)
-                .environment(\.glassReadingTone, readingTone))
+                .environment(\.glassReadingTone, readingTone)
+                .environment(\.glassReadingProtected, true)
+                .modifier(GlassTextProtection()))
             content.sizingOptions = []
             foreground = content
             super.init(frame: frame)
@@ -159,6 +162,7 @@ private struct LabContent: View {
             TextField("입력 질감 확인",text: $text,
                       prompt: Text("입력 질감 확인").foregroundStyle(Palette.glassInkFaint))
                 .textFieldStyle(.plain).font(.system(size: 15))
+                .modifier(GlassGlyphShadow())
                 .padding(14).modifier(GlassInputSurface(focused: false))
                 .accessibilityLabel("재질 비교용 입력")
             Spacer()

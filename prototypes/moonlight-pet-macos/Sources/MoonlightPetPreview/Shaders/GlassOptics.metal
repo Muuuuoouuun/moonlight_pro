@@ -6,7 +6,7 @@ struct GlassUniforms {
     float4 viewport; // point width, height, backing scale, mode (0 edge / 1 lab)
     float4 rect;     // glass bounds in top-left point coordinates
     float4 material; // radius, bevel, refraction strength, calibration pattern
-    float4 light;    // pointer x/y normalized, accessibility fallback, reserved
+    float4 light;    // pointer x/y normalized, accessibility fallback, reflection
 };
 struct VertexOut { float4 position [[position]]; };
 vertex VertexOut glassVertex(uint id [[vertex_id]]) {
@@ -88,10 +88,13 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     // direction follows the surface normal; wavelength peaks are subpoint
     // offsets and vanish before the flat face. On desktop this is a simulated
     // reflected light, not refraction of windows behind the application.
-    float dispersion = .36*clamp(u.material.z,0.0,1.8);
+    // Scale the spectral lip with the bevel: production 9pt is 90% of the
+    // previous 10pt band. The outer hairline stays one physical pixel.
+    float lipScale = min(1.0,bevel/10.0);
+    float dispersion = .36*lipScale*clamp(u.material.z,0.0,1.8);
     float direction = dot(outward,normalize(float2(-.7,-.5))) >= 0 ? 1.0 : -1.0;
-    float center = min(1.35,bevel*.18);
-    float width = max(.52,.72/u.viewport.z);
+    float center = min(1.35*lipScale,bevel*.18);
+    float width = max(.52,.72/u.viewport.z)*lipScale;
     float3 spectrum = float3(reflectionBand(depth,center-dispersion*direction,width),
                               reflectionBand(depth,center,width),
                               reflectionBand(depth,center+dispersion*direction,width));
@@ -99,7 +102,9 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     float3 prism = spectrum * (.11*litArc*(1.0-t));
     if (!lab) {
         // Premultiplied alpha; exactly transparent center, pass-through input.
-        float3 reflection = float3(highlight) + prism;
+        // Approved study raised edge intensity from .45 to .66; preserve the
+        // 9pt geometry and color separation, raising only neutral reflection.
+        float3 reflection = float3(highlight * clamp(u.light.w / .45,0.0,1.6)) + prism;
         float a = (max(reflection.r,max(reflection.g,reflection.b))+shadow)*coverage;
         return float4(reflection*coverage,a);
     }
