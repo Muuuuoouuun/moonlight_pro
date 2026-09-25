@@ -20,13 +20,17 @@ struct CompanionPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             PanelDragHandle(move: moveVertically).frame(height: 20)
-            header.padding(.bottom, isToday ? 18 : 12)
+            VStack(spacing: 18) {
+                header
+                if isToday && !showsAddress { todayTabs }
+            }
+            .modifier(GlassReadability(radius: 22, inset: 12, feather: 12))
+            .padding(.bottom, isToday ? 18 : 12)
             if showsAddress {
                 HubConnectionContent(model: model) {
                     withAnimation(PetMotion.panel) { showsAddress = false }
                 }
             } else {
-                if isToday { todayTabs.padding(.bottom, 18) }
                 modeContent
                     .id(mode)
                     .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 4)),
@@ -75,7 +79,6 @@ struct CompanionPanelView: View {
             }
         }
         .frame(height: 52)
-        .modifier(GlassReadability(radius: 16, inset: 10))
     }
 
     private var modeMenu: some View {
@@ -142,8 +145,8 @@ struct CompanionPanelView: View {
             }
         }
         .padding(3)
-        .modifier(GlassReadability(radius: 13))
-        .overlay { GlassRim(radius: 13, strength: 0.35) }
+        .background(Palette.glassInk.opacity(0.035), in: RoundedRectangle(cornerRadius: 13))
+        .overlay { GlassRim(radius: 13, strength: 0.20) }
     }
 
     @ViewBuilder private var modeContent: some View {
