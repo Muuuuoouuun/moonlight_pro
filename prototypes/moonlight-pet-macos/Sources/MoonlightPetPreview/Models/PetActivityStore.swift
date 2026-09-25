@@ -29,13 +29,14 @@ final class PetActivityStore: ObservableObject {
     }
     @Published private(set) var banner: PetNotice?
     @Published private(set) var totalInquiryCount = 0
-    var unreadCount: Int { notices.count }
+    var unreadCount: Int { notices.filter { isUnread($0.id) }.count }
     var onBanner: ((PetNotice) -> Bool)?
     var onBannerDismissed: (() -> Void)?
     private let defaults: UserDefaults
     private var api: (any HubActivityServing)?
     private var generation = 0
     private var loop: Task<Void, Never>?
+    private var nextBanner: Task<Void, Never>?
     private var storageKey: String?
     private var state = DeliveryState()
     private var inquiryNotices: [PetNotice] = []
@@ -48,6 +49,15 @@ final class PetActivityStore: ObservableObject {
     private struct DeliveryState: Codable {
         var delivered: [String] = []
         var hidden: [String] = []
+        var read: [String] = []
+        init() {}
+        private enum CodingKeys: String, CodingKey { case delivered, hidden, read }
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            delivered = try values.decodeIfPresent([String].self, forKey: .delivered) ?? []
+            hidden = try values.decodeIfPresent([String].self, forKey: .hidden) ?? []
+            read = try values.decodeIfPresent([String].self, forKey: .read) ?? []
+        }
     }
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -55,7 +65,7 @@ final class PetActivityStore: ObservableObject {
     }
     func configure(service: (any HubActivityServing)?, origin: String?) {
         loop?.cancel(); generation += 1; api = service; isRefreshing = false
-        dismissBanner(); notices = []; inquiryNotices = []; calendarNotices = []; agentNotices = []
+        dismissBanner(); nextBanner?.cancel(); nextBanner = nil; notices = []; inquiryNotices = []; calendarNotices = []; agentNotices = []
         totalInquiryCount = 0; eligible = []; hasInquiryBaseline = false; receivedInquiries = []; sourcesReady = []
         storageKey = origin.map { "petNotices.delivery.v1." + $0 }
         state = storageKey.flatMap { defaults.data(forKey: $0) }.flatMap { try? JSONDecoder().decode(DeliveryState.self, from: $0) } ?? DeliveryState()
@@ -119,8 +129,8 @@ final class PetActivityStore: ObservableObject {
     }
     func presentNext(now: Date = Date()) {
         rebuild(now: now)
-        guard bannersEnabled, banner == nil else { return }
-        guard let next = notices.first(where: { eligible.contains($0.id) && !state.delivered.contains($0.id) && sourcesReady.contains($0.kind) }) else { return }
+        guard bannersEnabled, banner == nil, nextBanner == nil else { return }
+        guard let next = notices.first(where: { eligible.contains($0.id) && isUnread($0.id) && !state.delivered.contains($0.id) && sourcesReady.contains($0.kind) }) else { return }
         banner = next
         if onBanner?(next) == true { state.delivered.append(next.id); persist() }
         else { banner = nil }
@@ -139,6 +149,18 @@ final class PetActivityStore: ObservableObject {
         if let banner, ids.contains(banner.id) { dismissBanner() }
         rebuild(now: Date())
     }
+    func isUnread(_ id: String) -> Bool { !state.read.contains(id) }
+    func acknowledge(id: String) {
+        guard notices.contains(where: { $0.id == id }), isUnread(id) else { return }
+        objectWillChange.send()
+        state.read.append(id); persist()
+        if banner?.id == id { dismissBanner() }
+    }
+    func acknowledgeAll() {
+        objectWillChange.send()
+        state.read.append(contentsOf: notices.map(\.id)); persist()
+        dismissBanner()
+    }
     func dismiss(id: String) {
         state.hidden.append(id); persist()
         if banner?.id == id { dismissBanner() }
@@ -148,6 +170,14 @@ final class PetActivityStore: ObservableObject {
         guard banner != nil else { return }
         banner = nil
         onBannerDismissed?()
+        nextBanner?.cancel()
+        let ticket = generation
+        nextBanner = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            guard let self, self.generation == ticket else { return }
+            self.nextBanner = nil
+            self.presentNext()
+        }
     }
     private func rebuild(now: Date) {
         let hidden = Set(state.hidden)
@@ -160,6 +190,7 @@ final class PetActivityStore: ObservableObject {
         // Bounded preferences: enough history for repeated refreshes without unbounded growth.
         state.delivered = Self.recentUnique(state.delivered)
         state.hidden = Self.recentUnique(state.hidden)
+        state.read = Self.recentUnique(state.read)
         if let key = storageKey, let data = try? JSONEncoder().encode(state) { defaults.set(data, forKey: key) }
     }
     nonisolated private static func recentUnique(_ values: [String]) -> [String] {
