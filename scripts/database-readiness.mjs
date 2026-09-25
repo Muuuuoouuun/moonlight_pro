@@ -13,6 +13,7 @@ const CONTENT_WORKFLOW = 'content_workflow_v1(uuid,uuid,text,jsonb)';
 const GOAL_COMMAND = 'operating_goal_command_v1(uuid,text,jsonb)';
 const AI_COMMAND = 'operating_ai_command_v1(uuid,text,jsonb,jsonb)';
 const CONTACT_OUTCOME = 'record_contact_outcome_v1(uuid,text,uuid,uuid,text,text,text,text,text,boolean)';
+const DAILY_REVIEW = 'save_daily_review_v1(uuid,date,text,integer,text,jsonb,text,bigint,uuid)';
 export const DATABASE_FEATURES = [
   { name: '콘텐츠', migration: '20260912_0026_content_workflow.sql',
     tables: ['content_revisions', 'content_workflow_receipts', 'content_transform_runs'], functions: [CONTENT_WORKFLOW] },
@@ -65,6 +66,18 @@ export const DATABASE_FEATURES = [
       ['enforce_task_focus_cap_v1()', 'for no key update']],
     triggers: [['tasks', 'task_focus_cap_v1', 'enforce_task_focus_cap_v1()']] },
   { name: 'Studio AI 템플릿', migration: '20260923_0045_content_prompt_templates.sql', tables: ['content_prompt_templates'], functions: [] },
+  // 회의 텍스트 검토: 테이블은 RPC 전용(service_role 직접 쓰기 없음), 4개 RPC만 service_role 실행.
+  { name: '회의 텍스트 검토', migration: '20260923_0045_meeting_text_review.sql',
+    tables: ['meeting_review_runs', 'meeting_review_proposals'],
+    functions: ['meeting_review_snapshot_v1(uuid,uuid,uuid)', 'meeting_review_claim_v1(uuid,uuid,bigint,uuid)',
+      'meeting_review_finish_v1(uuid,uuid,uuid,jsonb)', 'meeting_review_decide_v1(uuid,uuid,uuid,text,text)'],
+    tableNoWrite: [['meeting_review_runs', 'service_role'], ['meeting_review_proposals', 'service_role']] },
+  // meeting_review_execution_valid_v1은 service_role grant가 없는 내부 헬퍼라 넣지 않는다(넣으면 service_role EXECUTE 부재로 FAIL).
+  { name: '회의 액션 플랜', migration: '20260923_0046_meeting_action_plans.sql', tables: [],
+    functions: ['meeting_review_finish_v2(uuid,uuid,uuid,jsonb)', 'meeting_review_snapshot_v2(uuid,uuid,uuid)',
+      'meeting_review_claim_v2(uuid,uuid,bigint,uuid)', 'meeting_review_decide_v2(uuid,uuid,uuid,text,text,jsonb)',
+      'meeting_review_watchlist_v1(uuid,integer)'],
+    triggers: [['journal_workflow_receipts', 'journal_task_plan_receipt', 'journal_task_plan_receipt_v1()']] },
   // 로컬 스킬 요청서: 테이블은 RPC 전용(service_role 직접 쓰기 없음), 4개 RPC만 service_role 실행. 조회용 helper 2개는
   // 모든 역할에서 revoke돼 있어 함수 검사 목록에 넣지 않는다(넣으면 service_role EXECUTE 부재로 FAIL).
   { name: '로컬 스킬 요청서', migration: '20260925_0047_local_skill_requests.sql', tables: ['local_skill_requests'],
@@ -72,6 +85,10 @@ export const DATABASE_FEATURES = [
       'local_skill_request_list_v1(uuid,text,integer)', 'local_skill_receipt_record_v1(uuid,text,text,uuid,jsonb)'],
     tableNoWrite: [['local_skill_requests', 'service_role']] },
   { name: '제품 카탈로그·저장소', migration: '20260925_0049_products.sql', tables: ['products', 'product_repositories', 'product_inquiry_links', 'product_monthly_metrics'], functions: [] },
+  { name: '하루 리뷰 시간대 검사', migration: '20260925_0050_daily_review_timezone_check.sql', tables: [], functions: [DAILY_REVIEW],
+    bodyIncludes: [[DAILY_REVIEW, 'v_timezone_ok']], bodyExcludes: [[DAILY_REVIEW, 'pg_timezone_names']] },
+  { name: 'DB 위생 — 트리거 함수 실행 권한', migration: '20260925_0051_db_hygiene.sql', tables: [],
+    functions: ['journal_task_plan_receipt_v1()', 'guard_social_connection_brand_key()', 'set_updated_at()'] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {
