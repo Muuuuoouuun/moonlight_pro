@@ -1,5 +1,6 @@
 # Eevee Office 9인 비서단 — 성격·말투 심화 설계 및 인지 프레임워크 v4
 
+> **상태 변경(2026-09-25): 설계 기준 기록.** 현행 경계는 [에이전트 계층 방향](2026-09-24-agent-layer-direction.md)과 [업무 안의 Eevee Office 심화 설계](2026-09-21-eevee-office-embedded-workflow-deep-design.md) §2가 정본이다(2026-09-24 운영자 확정). 아래의 정본·ACTIVE 표기는 작성 당시 기록이고, 목표 수치와 성과 표현은 실측이 아니다.  
 > **상태**: 정본 확정 및 Engine 프롬프트 반영 완료 (2026-09-21, 9인 전원 심화 디벨롭 완료)  
 > **상위 정본**: [`docs/operator-workflow-profile.md`](../../operator-workflow-profile.md), [`docs/README.md`](../../README.md), [`docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`](2026-07-13-moonlight-personal-operator-os-deep-design.md)  
 > **관계**: 이 문서는 [`2026-09-15-eevee-office-council-personas.md`](2026-09-15-eevee-office-council-personas.md)의 §3~14(말투, 성격, 협업 대화)를 **기본 존댓말 전환, 포켓몬 공식 생태 모티프의 비즈니스 인지 프레임워크화, 3단계 반응 수위(Tier 1~3), 언어적 텍스처(호흡/어휘), Few-shot 대화 패턴**으로 전면 발전·대체한다. 역할 ID와 Council 라우팅 경계(§19~24)는 보존한다.

@@ -1,5 +1,6 @@
 # 세일즈 구루 멘토 에이전트 — 적용 기획
 
+> 2026-09-25 메모: 이 문서의 `COUNCIL` 배열 기반 설계(§7.3·§9·§13)는 코드에서 제거됐다(`apps/hub/components/hub/pages/agents.jsx` 주석). 현행 Guru는 [Guru 도움 카드](superpowers/specs/2026-09-24-guru-guidance-cards-design.md)와 [에이전트 계층 방향](superpowers/specs/2026-09-24-agent-layer-direction.md)을 따른다.  
 > 상태: DEFERRED FEATURE SPEC — 기존 Guru 자산은 유지하지만 현재 Phase 1B·1C보다 먼저 확장하지 않는다.
 
 ## 1. 문서 목적

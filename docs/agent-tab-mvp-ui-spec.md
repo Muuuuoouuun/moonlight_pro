@@ -1,5 +1,6 @@
 # Com_Moon Agent 탭 MVP UI / 제품 스펙
 
+> 2026-09-25 메모: 이 문서가 전제한 `/dashboard/ai` 라우트는 코드에 없다. 현행 AI 영역(Office·코칭·자동화)의 경계와 구현은 [에이전트 계층 방향](superpowers/specs/2026-09-24-agent-layer-direction.md)이 정본이다.  
 > 상태: DEFERRED FEATURE SPEC — 현재 Phase 1B·1C보다 먼저 구현하지 않는다. Agent/Council 자산은 보존하되 현재 제품 우선순위는 `docs/README.md`와 Personal Operator OS 심화 설계를 따른다.
 
 ## 1. 문서 목적

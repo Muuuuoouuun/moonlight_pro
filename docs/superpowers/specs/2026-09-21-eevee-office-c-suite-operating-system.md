@@ -1,5 +1,6 @@
 # Eevee Office — 상위 1% C-Suite 워크플로우 OS 초고도화 명세
 
+> **상태 변경(2026-09-25): 설계 기준 기록.** 현행 경계는 [에이전트 계층 방향](2026-09-24-agent-layer-direction.md)과 [업무 안의 Eevee Office 심화 설계](2026-09-21-eevee-office-embedded-workflow-deep-design.md) §2가 정본이다(2026-09-24 운영자 확정). 아래의 정본·ACTIVE 표기는 작성 당시 기록이고, 목표 수치와 성과 표현은 실측이 아니다.  
 > 상태: **ACTIVE OPERATING SPECIFICATION · 초고도화 운영 정본 (2026-09-21)**  
 > 날짜: 2026-09-21  
 > 핵심 목적: 운영자 인지 부하 1/3 감소, 고객 연락 및 프로젝트 후속 조치 누락 0건, 상태 왜곡 없는 즉시 사용 가능한 완성품(Artifact) 산출  

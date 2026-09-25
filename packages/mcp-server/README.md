@@ -141,8 +141,10 @@ Every v1 GET/POST requires `Authorization: Bearer <COM_MOON_AGENT_API_TOKEN>`. W
 | `GET /jobs/{id}/events?after=0` | Event page; `Accept: text/event-stream` enables cursor replay |
 | `POST /jobs/{id}/cancel` | Cancel the observed `expectedTurnCount` |
 | `POST /jobs/{id}/resume` | Continue with stable `requestId` and `expectedTurnCount` |
+| `GET /skill-requests/{id}` | One operator-approved local skill request by exact ID (`read`) |
+| `POST /skill-requests/{id}/receipts` | Record the actual local outcome (`tasks:write`): `state` completed/failed/unconfirmed, `summary` ≤2000 chars, `evidence` ≤8 `{kind: path|url|note, value}` (completed needs ≥1), optional `commandId` of a same-task `complete_task` (completed only). Never completes the task |
 
-Route prefixes above are `/api/agent/v1`. Request body limits are 64 KiB, or 256 KiB for commands. The worker prompt limit is separately 16 KiB UTF-8. See [worker inputs and budgets](../codex-worker/README.md#durable-api-contract).
+Route prefixes above are `/api/agent/v1`. Request body limits are 64 KiB, 256 KiB for commands, and 16 KiB for skill-request receipts. The worker prompt limit is separately 16 KiB UTF-8. See [worker inputs and budgets](../codex-worker/README.md#durable-api-contract).
 
 A narrow query example:
 
