@@ -1,33 +1,100 @@
-.guidance-question__frame {
-  padding: 16px;
+.guidance-chat {
+  position: fixed;
+  z-index: calc(var(--z-drawer-overlay) - 1);
+  right: 20px;
+  bottom: 20px;
+  width: min(540px, calc(100vw - 40px));
+  height: min(690px, calc(100dvh - 40px));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--fg);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  background: var(--surface-2);
+  box-shadow: var(--shadow-pop);
 }
 
-.guidance-question__eyebrow,
-.guidance-question__source {
+.guidance-chat__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px 12px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  flex: none;
+}
+.guidance-chat__heading { min-width: 0; }
+.guidance-chat__eyebrow {
   display: block;
   color: var(--fg-faint);
   font-size: 11px;
   line-height: 1.5;
+  letter-spacing: 0.06em;
 }
+.guidance-chat__heading h2 { margin: 2px 0 0; font-size: 15px; font-weight: 600; line-height: 1.35; }
+.guidance-chat__header-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.hub-app .guidance-chat__minimize { min-width: 44px; min-height: 44px; font-size: 20px; line-height: 1; }
 
-.guidance-question__eyebrow { letter-spacing: 0.06em; }
-.guidance-question__context { display: block; margin-top: 5px; color: var(--fg-muted); font-size: 11px; }
-.guidance-question__frame h3 { margin: 9px 0 7px; font-size: 17px; font-weight: 500; }
-.guidance-question__frame p { margin: 0 0 12px; color: var(--fg-muted); font-size: 13px; line-height: 1.65; }
-.guidance-question__answer {
-  padding: 16px;
+.guidance-chat__scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px; }
+.guidance-chat__lens {
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface-2);
 }
-.guidance-question__answer-body { margin: 12px 0 16px; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
-.guidance-question__answer-body h4 { margin: 18px 0 8px; font-size: 13px; font-weight: 600; }
+.guidance-chat__context { display: block; margin-top: 4px; color: var(--fg-muted); font-size: 11px; }
+.guidance-chat__lens h3 { margin: 8px 0 6px; font-size: 15px; font-weight: 600; }
+.guidance-chat__lens p { margin: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.55; }
+.guidance-chat__lens .guidance-chat__sample { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--fg); }
+.guidance-chat__source { margin-top: 10px; }
+.guidance-chat__thread { display: flex; flex-direction: column; gap: 12px; padding: 18px 0 4px; }
+.guidance-chat__empty { margin: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.guidance-chat__message { max-width: 94%; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); overflow-wrap: anywhere; }
+.guidance-chat__message--user { align-self: flex-end; background: var(--surface-3); }
+.guidance-chat__message--mentor { align-self: flex-start; background: var(--surface-2); }
+.guidance-chat__message-label { display: block; color: var(--fg-faint); font-size: 10.5px; line-height: 1.5; }
+.guidance-chat__message p { margin: 7px 0 0; font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; }
+.guidance-chat__message--mentor .guidance-question__answer-body { margin: 8px 0 0; }
+.guidance-chat__message--mentor .guidance-question__answer-body p { margin: 0 0 9px; }
+.guidance-chat__message--mentor .guidance-question__answer-body p:last-child { margin-bottom: 0; }
+.guidance-chat__feedback { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.55; }
+
+.guidance-chat__composer { flex: none; padding: 12px 16px 14px; border-top: 1px solid var(--line-soft); background: var(--surface); }
+.hub-app textarea.guidance-chat__input { min-height: 72px; max-height: 160px; resize: vertical; font-size: 13px; }
+.guidance-chat__composer .hub-field-msg { font-size: 10.5px; }
+.guidance-chat__composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.guidance-chat__composer-actions > span { color: var(--fg-faint); font-size: 10.5px; }
+.hub-app .guidance-chat__send { min-height: 44px; }
+
+.guidance-chat-dock {
+  position: fixed;
+  z-index: calc(var(--z-drawer-overlay) - 1);
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+.hub-app .guidance-chat-dock__restore { min-height: 44px; }
+
+.guidance-question__answer-body { font-size: 12.5px; line-height: 1.65; overflow-wrap: anywhere; }
+.guidance-question__answer-notice { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.guidance-question__answer-body h4 { margin: 12px 0 6px; font-size: 12.5px; font-weight: 600; }
 .guidance-question__answer-body h4:first-child { margin-top: 0; }
-.guidance-question__answer-body p { margin: 0 0 10px; white-space: pre-wrap; }
-.guidance-question__answer-body ul { margin: 0 0 14px; padding-left: 19px; }
-.guidance-question__answer-body li + li { margin-top: 6px; }
-.guidance-question__answer small { color: var(--fg-faint); font-size: 10.5px; }
-.guidance-question__feedback { color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.guidance-question__answer-body ul { margin: 0 0 12px; padding-left: 18px; }
+.guidance-question__answer-body li + li { margin-top: 5px; }
+
+@media (max-width: 600px) {
+  .guidance-chat { inset: 0; width: 100%; height: 100dvh; border-radius: 0; }
+  .guidance-chat__scroll { padding: 14px; }
+  .guidance-chat__composer { padding: 10px 14px max(12px, env(safe-area-inset-bottom)); }
+  .hub-app textarea.guidance-chat__input { font-size: 16px; }
+  .guidance-chat-dock { right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
+}

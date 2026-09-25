@@ -524,6 +524,10 @@ export function Brands({ onNavigate, onGuidanceAsk }) {
         {(scope === 'personal' || selected?.orgScope === 'personal') && (
           <ContextMentorRail
             domain="marketing"
+            contextKey={syncState === 'live' && selected?.orgScope === 'personal'
+              ? !hasIdentityValue(selected.audience) ? 'marketing:audience-unrecorded'
+                : !hasIdentityValue(selected.promise) ? 'marketing:promise-unrecorded' : 'marketing:general'
+              : 'marketing:general'}
             contextLabel={selected?.name || '브랜드'}
             disabled={selected?.orgScope !== 'personal'}
             onGuidanceAsk={card => onGuidanceAsk?.(card, { ref: selected?.key, label: selected?.name })}

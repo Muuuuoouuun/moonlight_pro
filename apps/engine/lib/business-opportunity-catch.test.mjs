@@ -26,7 +26,9 @@ const stubs = {
   `,
   'knowledge-retriever.ts': `
     export async function retrieveKnowledge() {
-      return { status: 'live', items: globalThis.__businessCatchTest.knowledge || [] };
+      const state = globalThis.__businessCatchTest;
+      state.knowledgeReads = (state.knowledgeReads || 0) + 1;
+      return { status: 'live', items: state.knowledge || [] };
     }
   `,
 };
@@ -80,18 +82,42 @@ test('Council advice and brand strategy share catch criteria, while content crit
   assert.doesNotMatch(instruction(), /개인 사업 기회 포착/);
 });
 
-test('Guru open-question records generation without creating a project update, while deal review keeps its report', async () => {
-  const question = await sales.POST(request({ mode: 'open-question', draft: '고객의 결정 기준을 어떻게 확인할까요?', context: {} }));
+test('Guru advisory modes stay as requested advice without creating project updates', async () => {
+  const question = await sales.POST(request({ mode: 'open-question', draft: '고객의 결정 기준을 어떻게 확인할까요?', context: {}, history: [{ question: '이전 질문', answer: '이전 답변' }] }));
   assert.equal(question.status, 200);
   const questionData = await question.json();
   assert.equal(questionData.status, 'generated');
   assert.equal(questionData.persistence.mentorUpdate, null);
   assert.match(state.generation.prompt, /고객의 결정 기준을 어떻게 확인할까요/);
+  assert.match(state.generation.prompt, /이전 질문/);
+  assert.match(state.generation.prompt, /이전 답변/);
   assert.deepEqual(state.writes, []);
 
-  const review = await sales.POST(request({ mode: 'deal-review', context: {} }));
-  assert.equal(review.status, 200);
-  assert.deepEqual(state.writes.map(({ table }) => table), ['project_updates']);
+  for (const mode of ['deal-review', 'pipeline-triage', 'proposal-critique', 'weekly-retro', 'sparring']) {
+    const response = await sales.POST(request({ mode, context: {} }));
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).persistence.mentorUpdate, null);
+  }
+  assert.deepEqual(state.writes, []);
+});
+
+test('conversation-only legend sparring remains in the chat and does not write a Home update', async () => {
+  const response = await persona.POST(request({ personaId: 'sales', mode: 'sparring', lens: 'voss', conversationOnly: true }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(state.writes, []);
+  assert.match(instruction(), /요청하지 않은 후속 업무를 제안하지/);
+  assert.doesNotMatch(instruction(), /항상 '다음 한 수'로 끝맺습니다/);
+});
+
+test('conversation-only legend advice excludes unrelated RAG notes and accepts both visible lenses', async () => {
+  state.knowledge = [{ id: 'other-contact', sourceTable: 'journal_entries', kind: 'note', title: '다른 고객', snippet: '다른 고객의 협상', occurredAt: '2026-09-22' }];
+  for (const lens of ['carnegie', 'hill']) {
+    const response = await persona.POST(request({ personaId: 'sales', mode: 'chat', lens, conversationOnly: true, draft: '현재 고객의 대화만 평가' }));
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).lens, lens);
+    assert.equal(state.knowledgeReads || 0, 0);
+    assert.doesNotMatch(state.generation.prompt, /다른 고객의 협상/);
+  }
 });
 
 test('company scope and company sales personas do not receive personal monetization instructions', async () => {
@@ -110,8 +136,25 @@ test('company scope and company sales personas do not receive personal monetizat
 test('retrieved evidence retains its source ID so reports can distinguish original records from AI summaries', async () => {
   state.knowledge = [{ id: 'record-reference', sourceTable: 'journal_entries', kind: 'note', title: '업무 기록', snippet: '확인할 문제', occurredAt: '2026-09-22' }];
   await persona.POST(request({ personaId: 'council', mode: 'weekly-review', message: '이번 주 정리' }));
+  assert.equal(state.knowledgeReads, 1);
   assert.match(state.generation.prompt, /journal_entries:record-reference/);
   assert.match(instruction(), /AI.*요약.*독립/);
+});
+
+test('single-contact outreach and outcome extraction keep the supplied record without retrieving other notes', async () => {
+  state.knowledge = [{ id: 'other-contact', sourceTable: 'journal_entries', kind: 'note', title: '다른 고객', snippet: '다른 고객의 가격 협상', occurredAt: '2026-09-22' }];
+  for (const mode of ['outreach-draft', 'extract-contact-outcome']) {
+    const response = await persona.POST(request({
+      personaId: 'sales', mode,
+      draft: '이 고객의 통화 원문',
+      context: { name: '이 고객', latestContact: '오늘 통화' },
+    }));
+    assert.equal(response.status, 200);
+    assert.equal(state.knowledgeReads || 0, 0);
+    assert.match(state.generation.prompt, /이 고객의 통화 원문/);
+    assert.match(state.generation.prompt, /오늘 통화/);
+    assert.doesNotMatch(state.generation.prompt, /다른 고객의 가격 협상/);
+  }
 });
 
 test('general memo analysis receives catch criteria while preserving the structured candidate output', async () => {

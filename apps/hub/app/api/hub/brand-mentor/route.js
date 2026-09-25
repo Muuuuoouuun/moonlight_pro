@@ -6,6 +6,7 @@ import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { createWorkOrder } from "@/lib/sales-os/work-orders";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
 import { isGuidanceCardForDomain, isValidAdvisorInput } from "@/lib/advisor-input";
+import { isValidBrandGuruConversationHistory } from "@/lib/guru-chat-history";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -179,6 +180,12 @@ export async function POST(req) {
   const knowledge = input.knowledge && typeof input.knowledge === "object" ? input.knowledge : undefined;
   const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
   const officeSource = mode === "office-review" ? parseOfficeSource(input.officeSource) : null;
+  if (input.history !== undefined && (
+    mode !== "open-question"
+    || !isValidBrandGuruConversationHistory(input.history, { guidanceId, ref })
+  )) {
+    return NextResponse.json({ status: "error", error: "invalid-conversation-history" }, { status: 400 });
+  }
   if (mode === "office-review" && (
     input.scope !== "personal" || !officeSource || !draft?.trim() || draft.length > OFFICE_REVIEW_DRAFT_LIMIT
     || input.createWorkOrder !== false || input.guidanceId != null || (legendIds?.length || 0) > 0
@@ -195,22 +202,33 @@ export async function POST(req) {
     return NextResponse.json({ status: "error", error: "질문과 마케팅·콘텐츠 카드 출처를 확인해 주세요." }, { status: 400 });
   }
 
-  const context = await assembleBrandContext({ mode, ref, draft });
+  const context = await assembleBrandContext({ mode, ref, draft, guidanceId });
   if ((mode === "open-question" || mode === "office-review") && ["preview", "error"].includes(context?.source)) {
     return NextResponse.json(
       { status: context.source, error: context.error || "브랜드 자료를 읽을 수 없습니다." },
       { status: context.source === "preview" ? 202 : 502 },
     );
   }
+  if (mode === "open-question" && ref && (
+    context?.focus?.found !== true
+    || context.focus.kind !== "brand"
+    || context?.brand?.key !== ref
+  )) {
+    return NextResponse.json(
+      { status: "error", error: "선택한 개인 브랜드를 현재 원장에서 확인할 수 없습니다." },
+      { status: 409 },
+    );
+  }
   const result = await callEngine({
     mode, ref, draft, context, legendIds, directives, values, knowledge, guidanceId,
+    ...(mode === "open-question" ? { createWorkOrder: false, ...(input.history !== undefined ? { history: input.history } : {}) } : {}),
     ...(officeSource ? { scope: "personal", officeSource, createWorkOrder: false } : {}),
   });
-  // Episodic memory: log what the Council recommended so the next call can remember it (best-effort).
+  // Keep requested Guru questions separate from ordinary Council advice in episodic memory.
   let run = { persisted: false, id: null, reason: "agent-run-write-failed" };
   try {
     run = await recordAgentRun({
-      agent: "council",
+      agent: mode === "open-question" ? "guru.brand" : "council",
       mode,
       ref,
       inputSummary: `${summarizeContext(context, legendIds) || ""}${officeSource ? ` office-request=${officeSource.requestId}${officeSource.runId ? ` office-run=${officeSource.runId}` : ""}` : ""}`.trim(),

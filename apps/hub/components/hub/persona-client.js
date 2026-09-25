@@ -33,12 +33,13 @@ export async function requestPersonaChat({
   message = null,
   draft = null,
   context = null,
+  conversationOnly = false,
 } = {}, { signal, fetchImpl = fetch } = {}) {
   try {
     const res = await fetchImpl("/api/hub/persona-chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ personaId, mode, lens, message, draft, context }),
+      body: JSON.stringify({ personaId, mode, lens, message, draft, context, ...(conversationOnly ? { conversationOnly: true } : {}) }),
       signal,
     });
     const data = await res.json().catch(() => null);

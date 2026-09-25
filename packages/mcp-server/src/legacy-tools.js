@@ -67,7 +67,7 @@ export function registerMoonlightTools(server) {
     title: "Read Agent Run History",
     description: "Read recent recommendations and their run IDs before requesting more advice or retrying. Read-only; not a job polling endpoint.",
     inputSchema: {
-      agent: z.enum(["council", "guru", "order", "sales", "content", "production", "review"]).optional(),
+      agent: z.enum(["council", "guru", "guru.brand", "order", "sales", "content", "production", "review"]).optional(),
       ref: z.string().trim().min(1).max(300).optional(),
       limit: z.number().int().min(1).max(50).default(10),
     },

@@ -5,6 +5,7 @@ import ts from 'typescript';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { RECOMMENDED_TRIADS } from './council-legends.js';
+import { COUNCIL_HANDOFF_DRAFT_LIMIT, createCouncilDraftState, reduceCouncilDraft } from './council-desktop-handoff.js';
 
 // Run the real component bodies; external services and hooks stay local to each test.
 function componentBody(path, name) {
@@ -24,6 +25,18 @@ function mountCouncil() {
   let index = 0, tree;
   const hooks = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(Boolean) } }),
+    useReducer: (reducer, initial, initialize) => {
+      const key = index++;
+      if (!(key in slots)) slots[key] = initialize ? initialize(initial) : initial;
+      return [slots[key], action => { slots[key] = reducer(slots[key], action); }];
+    },
+    useRef: initial => {
+      const key = index++;
+      if (!(key in slots)) slots[key] = { current: initial };
+      return slots[key];
+    },
+    // Browser fragment reception is covered by council-desktop-handoff.test.mjs.
+    useEffect: () => {},
     useState: initial => {
       const key = index++;
       if (!(key in slots)) slots[key] = initial;
@@ -31,9 +44,9 @@ function mountCouncil() {
     },
   };
   const dependencies = {
-    React: hooks, RECOMMENDED_TRIADS,
+    React: hooks, RECOMMENDED_TRIADS, COUNCIL_HANDOFF_DRAFT_LIMIT, createCouncilDraftState, reduceCouncilDraft,
     requestCouncilAdvice: input => new Promise(resolve => pending.push({ input, resolve })),
-    councilChatPath: () => '/dashboard/agents/chat', Card: 'Card', Badge: 'Badge', Button: 'Button', Dot: 'Dot',
+    councilChatPath: () => '/dashboard/agents/chat', Card: 'Card', Badge: 'Badge', Button: 'Button', Dot: 'Dot', TextAreaField: 'TextAreaField',
   };
   const Panel = new Function(...Object.keys(dependencies), `${councilCode}; return CouncilCoachPanel;`)(...Object.values(dependencies));
   function render() { index = 0; tree = Panel({}); return tree; }

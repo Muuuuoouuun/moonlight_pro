@@ -2,9 +2,10 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { guidancePeriodKey, selectGuidanceCard } from '@com-moon/guru-guidance';
+import { guidanceDailyWindow, guidancePeriodKey, selectGuidanceCard } from '@com-moon/guru-guidance';
 import { Button, Drawer, SegmentedControl } from './hub-primitives';
 import { Iconed } from './hub-icons';
+import { GuidanceSource } from './guidance-source';
 import './context-mentor-rail.css';
 
 const DOMAIN_LABELS = { sales: '세일즈', marketing: '마케팅', content: '콘텐츠' };
@@ -13,12 +14,13 @@ const MODES = [
   { key: 'weekly', label: 'Legend · 판단' },
 ];
 
-export function ContextMentorRail({ domain = 'sales', onGuidanceAsk, onNavigate, contextLabel, disabled = false }) {
+export function ContextMentorRail({ domain = 'sales', contextKey, onGuidanceAsk, onNavigate, contextLabel, disabled = false }) {
   const [open, setOpen] = React.useState(false);
   const [compact, setCompact] = React.useState(false);
   const [cadence, setCadence] = React.useState('daily');
   const [offset, setOffset] = React.useState(0);
   const [now, setNow] = React.useState(() => new Date());
+  const [newWindowReady, setNewWindowReady] = React.useState(false);
   const selectedDomain = Object.hasOwn(DOMAIN_LABELS, domain) ? domain : 'sales';
   const domainLabel = DOMAIN_LABELS[selectedDomain];
 
@@ -34,13 +36,40 @@ export function ContextMentorRail({ domain = 'sales', onGuidanceAsk, onNavigate,
     setOpen(false);
     setCadence('daily');
     setOffset(0);
-  }, [selectedDomain]);
+  }, [selectedDomain, contextKey]);
 
-  const card = selectGuidanceCard({ cadence, domain: selectedDomain, now, offset });
-  const period = guidancePeriodKey(cadence, now);
+  React.useEffect(() => {
+    if (!open || cadence !== 'daily' || newWindowReady) return;
+    const windowInfo = guidanceDailyWindow(now);
+    const delay = Math.max(0, new Date(windowInfo.nextAt).getTime() - Date.now()) + 100;
+    const timer = window.setTimeout(() => {
+      if (!document.hidden && guidanceDailyWindow(new Date()).key !== windowInfo.key) setNewWindowReady(true);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [open, cadence, now, newWindowReady]);
+
+  React.useEffect(() => {
+    if (!open || cadence !== 'daily') return;
+    const markNewWindow = () => {
+      if (!document.hidden && guidanceDailyWindow(new Date()).key !== guidanceDailyWindow(now).key) setNewWindowReady(true);
+    };
+    window.addEventListener('focus', markNewWindow);
+    document.addEventListener('visibilitychange', markNewWindow);
+    return () => {
+      window.removeEventListener('focus', markNewWindow);
+      document.removeEventListener('visibilitychange', markNewWindow);
+    };
+  }, [open, cadence, now]);
+
+  const dailyWindow = guidanceDailyWindow(now);
+  const card = selectGuidanceCard({ cadence, domain: selectedDomain, contextKey, now, offset });
+  const period = cadence === 'daily' ? dailyWindow.date : guidancePeriodKey('weekly', now);
+  const nextTime = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(dailyWindow.nextAt));
   const close = () => setOpen(false);
   const openRail = () => {
     setNow(new Date());
+    setOffset(0);
+    setNewWindowReady(false);
     setOpen(true);
   };
   const changeMode = value => {
@@ -52,9 +81,14 @@ export function ContextMentorRail({ domain = 'sales', onGuidanceAsk, onNavigate,
     setOpen(false);
     onGuidanceAsk?.(card);
   };
+  const showCurrentWindow = () => {
+    setNow(new Date());
+    setOffset(0);
+    setNewWindowReady(false);
+  };
   const visitShelf = () => {
     setOpen(false);
-    onNavigate?.('dashboard/agents/chat');
+    onNavigate?.(`dashboard/agents/chat?card=${encodeURIComponent(card.id)}`);
   };
 
   return <div className="context-mentor-rail">
@@ -88,10 +122,10 @@ export function ContextMentorRail({ domain = 'sales', onGuidanceAsk, onNavigate,
           fill
         />
 
-        <article className="context-mentor-rail__card" aria-label={cadence === 'daily' ? '오늘의 Guru 관점' : '이번 주의 Legend 관점'}>
+        <article className="context-mentor-rail__card" aria-label={cadence === 'daily' ? '현재의 Guru 관점' : '이번 주의 Legend 관점'}>
           <div className="context-mentor-rail__meta">
-            <span>{cadence === 'daily' ? '오늘의 실무 관점' : '이번 주의 판단 관점'}</span>
-            <span className="mono">{period} · {offset ? '직접 넘겨본 카드' : cadence === 'daily' ? '일간' : '주간'}</span>
+            <span>{cadence === 'daily' ? '지금의 실무 관점' : '이번 주의 판단 관점'}</span>
+            <span className="mono">{period} · {offset ? '직접 넘겨본 카드' : cadence === 'daily' ? `${dailyWindow.label} · ${newWindowReady ? '새 관점 준비됨' : `다음 ${nextTime}`}` : '주간'}</span>
           </div>
           <p className="context-mentor-rail__eyebrow">{cadence === 'daily' ? domainLabel : 'Legend'}</p>
           <h3>{card.person}</h3>
@@ -106,22 +140,18 @@ export function ContextMentorRail({ domain = 'sales', onGuidanceAsk, onNavigate,
             <p>{card.question}</p>
           </div>
           <div className="context-mentor-rail__actions">
+            {cadence === 'daily' && newWindowReady && <Button variant="outline" onClick={showCurrentWindow}>새 시간대 관점 보기</Button>}
             {cadence === 'daily' && !disabled && onGuidanceAsk && <Button variant="primary" onClick={ask}>이 관점으로 질문하기</Button>}
             <Button variant="outline" onClick={() => setOffset(value => value + 1)}>다른 카드 보기</Button>
           </div>
           {cadence === 'daily' && disabled && <p className="context-mentor-rail__read-only">이 맥락에서는 관점만 읽을 수 있습니다.</p>}
         </article>
 
-        <details className="context-mentor-rail__source" key={card.id}>
-          <summary>출처와 적용 범위</summary>
-          <p>자료 요약 · 인용 아님</p>
-          <p>{card.source.title}</p>
-          <p className="mono">{card.source.path} § {card.source.section}</p>
-        </details>
+        <GuidanceSource source={card.source} className="context-mentor-rail__source" />
 
         <div className="context-mentor-rail__footer">
-          <p>열람과 카드 넘김은 조언을 생성하거나 업무를 추가하지 않습니다.</p>
-          <Button variant="ghost" iconRight="arrowRight" onClick={visitShelf}>멘토 서가에서 더 보기</Button>
+          <p>Guru 관점은 서울 기준 09·14·19시에 준비됩니다. 열람과 넘김은 조언이나 업무를 생성하지 않습니다.</p>
+          <Button variant="ghost" iconRight="arrowRight" onClick={visitShelf}>이 글 읽기</Button>
         </div>
       </div>
     </Drawer>, document.querySelector('.hub-app') || document.body)}

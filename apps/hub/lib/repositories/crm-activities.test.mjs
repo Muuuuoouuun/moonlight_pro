@@ -76,11 +76,13 @@ test("read failure surfaces as null, never as an empty list", async () => {
 });
 
 test("getRecentContactActivities keeps the outcomes envelope, drops non-contact kinds, folds action", async () => {
+  state.rows.crm_activities[0].account_id = 'account-1';
   const res = await getRecentContactActivities({ limit: 30 });
   assert.equal(res.source, "supabase");
   assert.deepEqual(res.outcomes.map((o) => o.id), ["a1", "a3"]);
   assert.equal(res.outcomes[0].action, "replied");
   assert.equal(res.outcomes[0].channel, "call");
+  assert.equal(res.outcomes[0].accountId, 'account-1');
   assert.deepEqual(res.outcomes[0].meta, { reaction: "concern" });
   assert.equal(res.outcomes[1].action, "sent");
   // read 실패는 error 봉투 — preview로 위장하지 않는다.

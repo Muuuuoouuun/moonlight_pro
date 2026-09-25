@@ -12,16 +12,16 @@ import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Guru Autopilot (안1 Phase A) — the morning follow-up SDR.
+// Guru follow-up draft endpoint — retained for authenticated manual use.
 //
-// Chain: Hub Vercel Cron → Engine AI (followup-draft, shared secret) → Hub work_orders.
-// Every night it scans the top-risk stalled DEALS (getFollowups, the same scoring the
+// Chain: Hub → Engine AI (followup-draft, shared secret) → Hub work_orders.
+// It scans the top-risk stalled DEALS (getFollowups, the same scoring the
 // Follow-up screen uses), asks Guru to write a send-ready draft, and drops it into the
 // approval queue as 'proposed'. Nothing is sent — gates.no_auto_send=true holds. The
 // operator approves/edits/dismisses in the Daily Brief cockpit (1-click gate).
 //
-// Auth: Vercel injects `Authorization: Bearer <CRON_SECRET>`. Set the Vercel env
-// CRON_SECRET = COM_MOON_HUB_WRITE_SECRET so assertHubWriteAllowed accepts the cron.
+// The Vercel schedule was removed for request-only Guru guidance. The route keeps
+// the Hub write guard so a future explicit server call must be authenticated.
 const ENGINE_PATH = "/api/ai/sales-mentor";
 // 자동화 화면(automation_runs)에 남기는 이 크론의 안정 키·이름 — F-0 가시성(2026-09-03 R-2).
 const AUTOMATION_KEY = "followup-autopilot";
@@ -102,7 +102,7 @@ async function runFollowupAutopilot(workspaceId) {
       };
     }
     if (follow.source !== "supabase") {
-      // No Supabase (or no data) → honest no-op, not an error. Retry is the next schedule.
+      // No Supabase (or no data) → honest no-op, not an error.
       return { body: { status: "skipped", reason: follow.configured ? "no-data" : "missing-config", ...summary } };
     }
 
@@ -132,6 +132,17 @@ async function runFollowupAutopilot(workspaceId) {
         }
 
         const context = await assembleSalesContext({ mode: FOLLOWUP_DRAFT_MODE, ref: deal.id });
+        // Follow-up candidates span personal and company revenue. Only a verified
+        // ClassIn deal focus may reach paid generation or the approval queue.
+        if (context?.source !== "supabase" && context?.source !== "partial") {
+          summary.errored += 1;
+          if (!summary.errorReason) summary.errorReason = context?.error || "sales-context-unavailable";
+          continue;
+        }
+        if (context.focus?.found !== true || context.focus.item_id !== deal.id) {
+          summary.skipped += 1;
+          continue;
+        }
 
         // A paid generation is never retried automatically after an ambiguous result.
         let engine = null;

@@ -115,6 +115,7 @@ test('run and weekly reads forward exact filters; all tools declare operation hi
   const originalFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = originalFetch; });
   const tools = registeredTools();
+  assert.equal(tools.get('list_agent_runs').definition.inputSchema.agent.safeParse('guru.brand').success, true);
   const urls = [];
   globalThis.fetch = async (url) => { urls.push(new URL(url)); return Response.json({ status: 'preview' }); };
   assert.equal((await tools.get('list_agent_runs').handler({ agent: 'guru', ref: 'deal-1', limit: 3 })).isError, undefined);

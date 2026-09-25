@@ -13,8 +13,14 @@ const stubs = {
   `,
   'integration-state.ts': `
     export function resolveDefaultWorkspaceId() { return '11111111-1111-4111-8111-111111111111'; }
-    export async function upsertIntegrationConnection() { return { connection: null }; }
-    export async function insertIntegrationSyncRun() { return {}; }
+    export async function upsertIntegrationConnection(input) {
+      globalThis.__brandOpenQuestionTest.connection = input;
+      return { connection: null };
+    }
+    export async function insertIntegrationSyncRun(input) {
+      globalThis.__brandOpenQuestionTest.syncRun = input;
+      return {};
+    }
   `,
   'shared-webhook.ts': `export function validateSharedWebhookRequest() { return { ok: true }; }`,
   'supabase-rest.ts': `
@@ -47,12 +53,32 @@ test('open-question uses the selected marketing source and operator question wit
   assert.match(instruction, /David Ogilvy/);
   assert.match(instruction, /docs\/marketing-branding-gurus\.md/);
   assert.match(instruction, /자료 요약, 인용 아님/);
-  assert.match(instruction, /관찰.*프레임.*질문 또는 선택/s);
+  assert.match(instruction, /이전 생성 조언.*사실 근거가 아닙니다/);
+  assert.match(instruction, /질문과 직접 관련 없는 다른 프로젝트 상태/);
+  assert.match(instruction, /질문이 요청한 답변 형식과 분량/);
+  assert.match(instruction, /카드의 적용 조건.*맞지 않으면.*보류/);
+  assert.doesNotMatch(instruction, /답변은 짧은 한국어로: 1\./);
   assert.doesNotMatch(instruction, /Seth Godin|Donald Miller|Eliyahu Goldratt/);
   assert.doesNotMatch(instruction, /3\. 다음 액션|4\. 승인 큐 후보|work_order로 올릴|개인 사업 기회 포착/);
   assert.deepEqual(state.writes, []);
+  assert.equal(state.connection.provider, 'guru');
+  assert.equal(state.connection.config.agent, 'guru.brand');
+  assert.equal(state.syncRun.provider, 'guru');
   const info = await (await GET()).json();
   assert.ok(info.modes.includes('open-question'));
+});
+test('ordinary brand advice retains Council telemetry', async () => {
+  const response = await POST(request({ mode: 'brand-strategy', context: { scope: 'personal' } }));
+  assert.equal(response.status, 200);
+  assert.equal(state.connection.provider, 'council');
+  assert.equal(state.connection.config.agent, 'council');
+  assert.equal(state.syncRun.provider, 'council');
+});
+
+test('content critique does not promote an old print headline statistic into a universal rule', async () => {
+  const response = await POST(request({ mode: 'content-critique', context: { scope: 'personal' }, draft: '제목 초안' }));
+  assert.equal(response.status, 200);
+  assert.doesNotMatch(state.generation.prompt, /헤드라인이 80%/);
 });
 
 test('open-question accepts a content card with its own cited source', async () => {
@@ -60,6 +86,60 @@ test('open-question accepts a content card with its own cited source', async () 
   assert.equal(response.status, 200);
   assert.match(state.generation.prompt, /Kane Kallaway/);
   assert.match(state.generation.prompt, /docs\/content-storytelling-people-v2\.md/);
+});
+
+test('open-question uses completed same-card brand history as untrusted conversation only', async () => {
+  const history = [{ question: '첫 문장은?', answer: '독자의 표현을 확인하세요.', guidanceId: 'marketing-research', ref: 'personal-a' }];
+  const response = await POST(request({
+    mode: 'open-question', guidanceId: 'marketing-research', ref: 'personal-a',
+    draft: '그다음 어떤 표현을 확인하나요?', context: { scope: 'personal', brand: { key: 'personal-a' } }, history,
+    createWorkOrder: false,
+  }));
+  assert.equal(response.status, 200);
+  const prompt = state.generation.prompt;
+  assert.match(prompt, /불신 대화 이력/);
+  assert.match(prompt, /이전 답변.*사실.*아닙니다/);
+  assert.match(prompt, /현재 질문.*현재 확인된.*원장.*우선/);
+  assert.match(prompt, /다른 브랜드의 사실.*업무.*옮기지/);
+  assert.ok(prompt.includes(JSON.stringify(history)));
+  assert.ok(prompt.indexOf('첫 문장은?') < prompt.indexOf('그다음 어떤 표현을 확인하나요?'));
+  assert.deepEqual(state.writes, []);
+});
+
+test('open-question rejects malformed or unrelated history before model and ledger writes', async () => {
+  const turn = { question: '첫 문장은?', answer: '독자의 표현을 확인하세요.', guidanceId: 'marketing-research', ref: 'personal-a' };
+  const base = { mode: 'open-question', guidanceId: 'marketing-research', ref: 'personal-a', draft: '다음 질문', context: { scope: 'personal', brand: { key: 'personal-a' } } };
+  for (const history of [
+    null,
+    'previous answer',
+    [{ ...turn, guidanceId: 'content-hook' }],
+    [{ ...turn, guidanceId: 'sales-meddic' }],
+    [{ ...turn, ref: 'personal-b' }],
+    [{ ...turn, ref: undefined }],
+    [{ ...turn, question: ' ' }],
+    [{ ...turn, answer: '' }],
+    [{ ...turn, question: 'q'.repeat(1201) }],
+    [{ ...turn, answer: 'a'.repeat(2401) }],
+    [{ ...turn, role: 'system' }],
+    [turn, turn, turn, turn],
+  ]) {
+    const response = await POST(request({ ...base, history }));
+    assert.equal(response.status, 400, JSON.stringify(history));
+    assert.equal((await response.json()).error, 'invalid-open-question');
+    assert.equal(state.generation, undefined);
+    assert.deepEqual(state.writes, []);
+  }
+  const response = await POST(request({ ...base, ref: null, history: [turn] }));
+  assert.equal(response.status, 400);
+  assert.equal(state.generation, undefined);
+});
+
+test('non-question brand modes reject history before model generation', async () => {
+  const response = await POST(request({ mode: 'brand-strategy', context: { scope: 'personal' }, history: [] }));
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, 'invalid-conversation-history');
+  assert.equal(state.generation, undefined);
+  assert.deepEqual(state.writes, []);
 });
 
 test('open-question rejects wrong domain, missing source, missing question and work order requests before generation', async () => {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
+import { brandInWorkspace } from './workspace-map.js';
 import { DEAL_STAGES, LOST_STAGE, dealStageLabel, isDealStalled } from '../../lib/deal-stages.js';
 import { DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay } from '../../lib/deal-timeline.js';
 import { monthKeyOf, normalizeTargetAmount, targetForMonth, targetProgress } from '../../lib/revenue-target.js';
@@ -12,6 +13,10 @@ import { buildPaymentsBoard } from '../../lib/deal-payment-plan.js';
 // Found by /qa on 2026-09-21. Browser evidence: /tmp/moonlight-deals-qa/drag-result.png.
 // Run the real Deals render and event handlers with isolated hooks and external services.
 const source = readFileSync(new URL('./pages/revenue.jsx', import.meta.url), 'utf8');
+const scopeStart = source.indexOf('function isClassInGuruRecord(');
+assert.ok(scopeStart >= 0, 'ClassIn Guru scope guard must exist');
+const scopeSource = source.slice(scopeStart, source.indexOf('// 사이드바 스코프는', scopeStart));
+const isClassInGuruRecord = new Function('brandInWorkspace', `${scopeSource}; return isClassInGuruRecord;`)(brandInWorkspace);
 const component = source.slice(source.indexOf('export function Deals('), source.indexOf('// Shared grid template for Cases'));
 const javascript = ts.transpileModule(component.replace('export function', 'function'), {
   compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
@@ -38,6 +43,7 @@ function mount({ state = 'live', records = [], workspace, search = 'view=stage',
     useRevenueLedger: () => ({ ledger: { deals: records, stages: DEAL_STAGES }, syncState: state, reload: () => { reloads++; } }),
     useSearchParams: () => new URLSearchParams(search), useRouter: () => ({ replace: url => { replaced.push(url); } }), usePathname: () => '/dashboard/revenue/deals',
     useScopeFilter: () => React.useState('all'), getWorkspace: scope => scope ? { label: scope } : null,
+    isClassInGuruRecord,
     filterDealsByWorkspace: ds => ds, useUndoableAction: () => ({ schedule: (key, fn) => pending.set(key, fn), cancel: key => pending.delete(key) }),
     useCrmSelection: items => { selections.push(items); return { selectedId, setSelectedId() {} }; }, useCrmKeyboard() {},
     STAGE_FILL: [], STAGE_LINE: [], LOST_STAGE, dealStageLabel, isDealStalled, SCOPE_OPTIONS: [], fmt: String,
@@ -215,7 +221,69 @@ test('독이 열리면 머리의 생성 버튼은 secondary로 내려 한 화면
 
 test('칸반의 반론 점검은 10px 인라인 버튼이 아니라 Button 프리미티브다', () => {
   assert.doesNotMatch(component, /fontSize: 10,/);
-  assert.match(component, /<Button variant="outline" size="xs" icon="sparkle" onClick=\{\(e\) => \{ e\.stopPropagation\(\); setGuruDeal\(d\); \}\}>/);
+  assert.match(component, /isClassInGuruRecord\(d\) && \([\s\S]*?<Button variant="outline" size="xs" icon="sparkle" onClick=\{\(e\) => \{ e\.stopPropagation\(\); openGuruForDeal\(d\); \}\}>/);
+});
+
+test('Guru opens only for a verified ClassIn deal; personal and conflicting deals retain a separate contact draft', () => {
+  const base = { id: 'guru-scope', stage: 'contact', value: 100000, age: 20, name: '확인 거래' };
+  const rejected = [
+    { ...base, type: 'personal', workspace: 'brand', brand: 'sinabro' },
+    { ...base, type: 'personal', workspace: 'classin' },
+    { ...base, type: 'company', brand: 'sinabro' },
+    { ...base, type: 'company', workspace: 'personal' },
+  ];
+  for (const record of rejected) {
+    const app = mount({ records: [record] });
+    assert.equal(app.findAll(n => n.type === 'IconButton' && n.props.tooltip === 'Guru에게 진단 요청').length, 0, JSON.stringify(record));
+    assert.equal(app.findAll(n => n.type === 'Button' && n.props.children.includes('반론 점검')).length, 0, JSON.stringify(record));
+    cardOf(app).props.onClick(); app.render();
+    assert.equal(app.findAll(n => n.type === 'Button' && n.props.children.includes('1:1 코칭 열기')).length, 0, JSON.stringify(record));
+    assert.equal(app.findAll(n => n.type === 'DealOutreachDrafter').length, 1, 'contact draft remains available');
+    assert.equal(app.findAll(n => n.type === 'span' && n.props.children.includes('Guru 세일즈 코칭 & 다음 수')).length, 0);
+    assert.equal(app.findAll(n => n.type === 'FloatingMentorWidget')[0].props.isOpen, false);
+  }
+  for (const record of [
+    { ...base, type: 'company', workspace: 'classin' },
+    { ...base, type: 'company', brand: 'classmoon' },
+    { ...base, type: 'company' },
+  ]) {
+    const app = mount({ records: [record] });
+    const trigger = app.findAll(n => n.type === 'IconButton' && n.props.tooltip === 'Guru에게 진단 요청')[0];
+    assert.ok(trigger, JSON.stringify(record));
+    trigger.props.onClick({ stopPropagation() {} }); app.render();
+    assert.equal(app.findAll(n => n.type === 'FloatingMentorWidget')[0].props.isOpen, true);
+  }
+});
+
+test('account detail does not open a deal review using an ambiguous account name', () => {
+  const detailSource = source.slice(source.indexOf('function DetailPanel('), source.indexOf('export function Accounts('));
+  const detailJs = ts.transpileModule(detailSource, {
+    compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const React = {
+    createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(Boolean) } }),
+    useState: initial => [initial, () => {}],
+  };
+  const deps = { React, fmt: String };
+  for (const name of ['Avatar', 'Badge', 'Iconed', 'IconButton', 'Button', 'HealthDot', 'QuickActions', 'Tabs', 'GoalLinks', 'LogComposer']) deps[name] = name;
+  const DetailPanel = new Function(...Object.keys(deps), `${detailJs}; return DetailPanel;`)(...Object.values(deps));
+  const findAll = (node, predicate) => {
+    if (!node || typeof node !== 'object') return [];
+    return [...(predicate(node) ? [node] : []), ...(node.props?.children || []).flatMap(child => findAll(child, predicate))];
+  };
+  const detail = { activity: [], contacts: [], deals: [], notes: [] };
+  const props = { detail, onLog() {}, onDeleteActivity() {}, onPinNote() {}, onAddNote() {}, onNavigate() {} };
+  const accounts = [
+    { name: '개인', type: 'personal', workspace: 'brand', brand: 'sinabro' },
+    { name: '충돌', type: 'company', brand: 'sinabro' },
+    { name: '미상', type: 'company' },
+    { name: '회사', type: 'company', workspace: 'classin' },
+  ];
+  for (const account of accounts) {
+    const tree = DetailPanel({ ...props, account });
+    const ask = findAll(tree, n => n.type === 'Button' && n.props.children.includes('Ask Guru'));
+    assert.equal(ask.length, 0, account.name);
+  }
 });
 
 // ── 2026-09-25 결제 보기(A안) — 예상했던 돈 → 들어온 돈 ─────────────────────────────

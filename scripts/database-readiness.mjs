@@ -6,6 +6,9 @@
 //   bodyExcludes       [[functionSignature, substring]]        the function exists and its body lacks substring
 //   constraintIncludes [[table, constraintName, substring]]    pg_get_constraintdef contains substring
 //   tableNoWrite       [[table, role]]                         role holds no INSERT/UPDATE/DELETE/TRUNCATE
+//   columns            [[table, column]]                       text NOT NULL with empty-string default
+//   indexIncludes      [[table, indexName, keyColumns]]        valid unique index with those key columns
+//   indexAbsent        [[table, indexName]]                    obsolete index has been removed
 // Markers are copied verbatim (case-sensitive) from the migration body; database-readiness.test.mjs
 // proves each one is in its migration and absent from the version that migration replaces.
 const JOURNAL_SEARCH = 'journal_search_v1(uuid,text,timestamptz,timestamptz,text,text,uuid,text,timestamptz,uuid,integer)';
@@ -78,6 +81,10 @@ export const DATABASE_FEATURES = [
       'meeting_review_claim_v2(uuid,uuid,bigint,uuid)', 'meeting_review_decide_v2(uuid,uuid,uuid,text,text,jsonb)',
       'meeting_review_watchlist_v1(uuid,integer)'],
     triggers: [['journal_workflow_receipts', 'journal_task_plan_receipt', 'journal_task_plan_receipt_v1()']] },
+  { name: '소셜 계정 다중 연결', migration: '20260924_0046_social_multiaccount_connections.sql', tables: [], functions: [],
+    columns: [['integration_connections', 'account_key']],
+    indexIncludes: [['integration_connections', 'uq_integration_connections_workspace_provider_account', '(workspace_id, provider, account_key)']],
+    indexAbsent: [['integration_connections', 'uq_integration_connections_workspace_provider']] },
   // 로컬 스킬 요청서: 테이블은 RPC 전용(service_role 직접 쓰기 없음), 4개 RPC만 service_role 실행. 조회용 helper 2개는
   // 모든 역할에서 revoke돼 있어 함수 검사 목록에 넣지 않는다(넣으면 service_role EXECUTE 부재로 FAIL).
   { name: '로컬 스킬 요청서', migration: '20260925_0047_local_skill_requests.sql', tables: ['local_skill_requests'],
@@ -99,6 +106,9 @@ export function featureChecks(feature) {
     ...(feature.bodyExcludes ?? []).map(([name, detail]) => ({ kind: 'body_excludes', name, subject: '', detail })),
     ...(feature.constraintIncludes ?? []).map(([name, subject, detail]) => ({ kind: 'constraint_includes', name, subject, detail })),
     ...(feature.tableNoWrite ?? []).map(([name, subject]) => ({ kind: 'table_no_write', name, subject, detail: '' })),
+    ...(feature.columns ?? []).map(([name, subject]) => ({ kind: 'column', name, subject, detail: '' })),
+    ...(feature.indexIncludes ?? []).map(([name, subject, detail]) => ({ kind: 'index_includes', name, subject, detail })),
+    ...(feature.indexAbsent ?? []).map(([name, subject]) => ({ kind: 'index_absent', name, subject, detail: '' })),
     ...(feature.triggers ?? []).map(([name, subject, detail]) => ({ kind: 'trigger', name, subject, detail })),
   ];
 }
@@ -111,11 +121,22 @@ export function readinessSql(features = DATABASE_FEATURES) {
     else to_regclass('public.'||name)::oid end as object_id from required),
   facts as (select *,(select p.prosrc from pg_proc p where p.oid=object_id and kind in ('body_includes','body_excludes')) as body,
     (select pg_get_constraintdef(c.oid) from pg_constraint c where kind='constraint_includes' and c.conrelid=object_id and c.conname=subject limit 1) as constraint_def
+    ,(select a.attnum from pg_attribute a where kind='column' and a.attrelid=object_id and a.attname=subject and a.attnum>0 and not a.attisdropped limit 1) as column_id,
+    (select a.atttypid='text'::regtype and a.attnotnull and pg_get_expr(d.adbin,d.adrelid)=quote_literal('')||'::text'
+       from pg_attribute a left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
+       where kind='column' and a.attrelid=object_id and a.attname=subject and a.attnum>0 and not a.attisdropped limit 1) as column_valid,
+    (select i.indexrelid from pg_index i where kind in ('index_includes','index_absent') and i.indrelid=object_id
+       and i.indexrelid=to_regclass('public.'||subject)::oid limit 1) as index_id,
+    (select i.indisunique and i.indisvalid and i.indisready and i.indpred is null
+       and strpos(pg_get_indexdef(i.indexrelid),detail)>0
+       from pg_index i where kind='index_includes' and i.indrelid=object_id
+       and i.indexrelid=to_regclass('public.'||subject)::oid limit 1) as index_valid
     ,(select t.oid from pg_trigger t where kind='trigger' and t.tgrelid=object_id and t.tgname=subject and not t.tgisinternal limit 1) as trigger_id,
     (select t.tgenabled in ('O','A') and t.tgfoid=to_regprocedure('public.'||detail)::oid
        from pg_trigger t where kind='trigger' and t.tgrelid=object_id and t.tgname=subject and not t.tgisinternal limit 1) as trigger_valid
     from objects)
   select migration,kind,name,subject,detail,object_id is not null and (kind<>'constraint_includes' or constraint_def is not null)
+    and (kind<>'column' or column_id is not null) and (kind<>'index_includes' or index_id is not null)
     and (kind<>'trigger' or trigger_id is not null) as present,
     case when object_id is null then false when kind='table' then coalesce((select relrowsecurity from pg_class where oid=object_id),false)
       when kind='function' then has_function_privilege('service_role',object_id,'EXECUTE') and not has_function_privilege('anon',object_id,'EXECUTE')
@@ -124,6 +145,9 @@ export function readinessSql(features = DATABASE_FEATURES) {
       when kind='body_excludes' then coalesce(strpos(body,detail)=0,false)
       when kind='constraint_includes' then coalesce(strpos(constraint_def,detail)>0,false)
       when kind='table_no_write' then not has_table_privilege(subject,object_id,'INSERT,UPDATE,DELETE,TRUNCATE')
+      when kind='column' then coalesce(column_valid,false)
+      when kind='index_includes' then coalesce(index_valid,false)
+      when kind='index_absent' then index_id is null
       when kind='trigger' then coalesce(trigger_valid,false)
       else false end as protected
   from facts order by migration,kind,name,subject,detail`;
@@ -134,6 +158,9 @@ function failureReason(check, row) {
   if (kind === 'table' || kind === 'function') return name;
   const present = row?.present === true;
   if (kind === 'constraint_includes') return present ? `${name}.${subject}에 ${detail} 없음 (이전 버전)` : `${name}.${subject} 없음`;
+  if (kind === 'column') return present ? `${name}.${subject} 형식·기본값 불일치` : `${name}.${subject} 없음`;
+  if (kind === 'index_includes') return present ? `${subject} 유니크 키 ${detail} 불일치` : `${subject} 없음`;
+  if (kind === 'index_absent') return present ? `${subject} 남음 (이전 버전)` : `${name} 없음`;
   if (kind === 'trigger') return present ? `${name}.${subject} 비활성 또는 함수 불일치` : `${name}.${subject} 없음`;
   if (kind === 'table_no_write') return present ? `${name}: ${subject} 직접 쓰기 권한 남음` : `${name} 없음`;
   if (!present) return `${name} 없음`;

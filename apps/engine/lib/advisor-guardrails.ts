@@ -192,6 +192,9 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
   const isSales = type === 'sales-mentor';
   const isBrand = type === 'brand-mentor';
   const isReferenceOnlyBrandQuestion = isBrand && (mode === 'open-question' || mode === 'office-review');
+  const isOpenMentorQuestion = (isSales || isBrand) && mode === 'open-question';
+  const isUnscopedMentorQuestion = isOpenMentorQuestion && context?.scope === 'unscoped';
+  const isUnscopedSalesQuestion = isSales && isOpenMentorQuestion && context?.scope === 'unscoped';
   const charLimit = isCouncil ? 700 : 600;
 
   const lines: string[] = [];
@@ -205,7 +208,9 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
     );
   } else if (isSales) {
     lines.push(
-      '당신은 Moonlight 운영자의 ClassIn B2B 영업 멘토입니다.',
+      isUnscopedSalesQuestion
+        ? '당신은 Moonlight 운영자의 B2B 영업 멘토입니다.'
+        : '당신은 Moonlight 운영자의 ClassIn B2B 영업 멘토입니다.',
       '운영자가 요청한 상황에만 실무 방법론을 적용하며, 한국어로 짧고 구체적으로 조언합니다. 고객의 숨은 심리나 반응을 확인된 사실처럼 말하지 않습니다.',
       '상투적인 칭찬과 일반론을 피하고, 기록 사실과 미확인 사항을 구분합니다.'
     );
@@ -220,8 +225,8 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
   // 2. Domain Isolation
   if (isSales) {
     lines.push(
-      '[도메인 격리 원칙: ClassIn B2B 영업 레인]',
-      '- 운영자의 회사 세일즈 업무(B2B 고객, 기관, 학원, 솔루션 딜)만 다룹니다. 개인 브랜드/창업 프로젝트와 절대 섞지 마십시오.',
+      isUnscopedSalesQuestion ? '[도메인 격리 원칙: B2B 영업 레인]' : '[도메인 격리 원칙: ClassIn B2B 영업 레인]',
+      '- 운영자의 회사 세일즈 업무만 다룹니다. 입력이나 연결 기록에 없는 업종·고객 사례를 넣지 말고 개인 브랜드/창업 프로젝트와 섞지 마십시오.',
       '- CRM Direct Push 금지: 회사 CRM 자동 입력이나 고객 직접 발송을 지시하지 마십시오. 운영자가 행동을 요청하면 수동 확인을 전제로 선택지로만 제시하십시오.'
     );
   } else if (isBrand) {
@@ -239,7 +244,9 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
     '',
     '[가드레일 1: Fact Invariant Contract (사실 불변성 계약)]',
     '- 기록 스냅샷(context)에 명시되지 않은 상태(예: \'측정 중\', \'완료\'), 수치, 고객 피드백을 가공하거나 날조하지 마십시오.',
-    '- 데이터가 없거나 불확실한 사실은 반드시 "현재 데이터에 없음 (확인 필요)"으로 표기하며, 절대 그럴듯한 상태로 지어내지 마십시오.',
+    isUnscopedMentorQuestion
+      ? '- 이 질문에는 범위가 지정되지 않아 일부 원장 정보를 의도적으로 전달하지 않았습니다. 전달하지 않은 원장 정보의 부재로 단정하지 말고, 답변에 꼭 필요한 불확실성만 밝히십시오.'
+      : '- 데이터가 없거나 불확실한 사실은 반드시 "현재 데이터에 없음 (확인 필요)"으로 표기하며, 절대 그럴듯한 상태로 지어내지 마십시오.',
     '- 미측정 상태를 \'측정 중\'으로 둔갑시키는 행위는 치명적 결함(Hard Fail)입니다.',
     '- 금지 표현: \'혁신적\', \'시너지\', \'차세대\', \'독보적\', \'올인원\' 같은 공허한 SaaS 자화자찬 버즈워드와 근거 없는 과장·보장 표현을 엄격히 금지합니다.'
   );
@@ -259,7 +266,7 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
       '[가드레일 2: Constraint-First Gate (제약 우선 게이트)]',
       '- 사용자의 당일 에너지 레벨(1~5)과 가용 시간 한도를 절대적으로 존중하십시오.',
       '- 가용 시간 0분 또는 에너지 1~2 상황에서는 신규 과제 0건 및 보류/연기 안내와 재검토 조건 1개만 허용됩니다.',
-      isReferenceOnlyBrandQuestion
+      isOpenMentorQuestion || isReferenceOnlyBrandQuestion
         ? '- 질문에 답하는 데 필요한 제약만 반영하십시오. 질문 자체를 새 업무 배정으로 바꾸지 마십시오.'
         : '- 허용된 가용 시간 내에서만 즉시 실행 가능한 가역적 행동을 제안하십시오.'
     );
@@ -270,9 +277,9 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
     `[가드레일 3: Micro-Card Injection & Length Hard Cap (분량 ${charLimit}자 상한)]`,
     `- 답변 전체 분량은 공백 포함 ${charLimit}자 이내로 엄격히 제한됩니다 (하드 캡).`,
     '- 불필요한 서론, 장황한 미사여구, 공허한 칭찬, 예시 템플릿 앵무새 복제를 엄격히 금지합니다.',
-    '- "좋은 질문입니다", "충분히 가능성이 있습니다" 같은 AI 상투어를 100% 배제하고, 기록에 기록된 사실만 담담하게 인정(Acknowledge)하십시오.',
+    '- "좋은 질문입니다", "충분히 가능성이 있습니다" 같은 AI 상투어를 100% 배제하고, 제공된 기록에 있는 사실만 담담하게 인정(Acknowledge)하십시오.',
     '- [희생의 법칙 (Sacrifice)]: 운영자가 새 행동을 요청한 경우에만 그 행동의 기회비용을 설명하십시오.',
-    '- [거장의 실전 팁 인터리빙]: 요청과 맥락에 맞는 원 포인트 팁이 있을 때만 짧게 넣고 출처를 밝히십시오.'
+    ...(isOpenMentorQuestion ? [] : ['- [거장의 실전 팁 인터리빙]: 요청과 맥락에 맞는 원 포인트 팁이 있을 때만 짧게 넣고 출처를 밝히십시오.'])
   );
 
   lines.push(
@@ -282,18 +289,26 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
     '- 반드시 "담당자가 내일 15시까지 미응답 시", "원문 초안 누락 확인 시" 등 관찰 가능한 단일 사건(Event)을 트리거로 사용하십시오.'
   );
 
-  lines.push(
-    '',
-    '[가드레일 5: Preservation of Dissent (이견 보존 원칙)]',
-    '- 억지 만장일치나 가짜 합의("우리는 만장일치로 동의합니다" 등)를 엄격히 금지합니다.',
-    '- 서로 다른 관점의 대립, 사각지대, 상충 관계(Trade-off), 감수할 비용, 남은 이견(Dissent)을 명확하게 보존하십시오.',
-    '- Devil\'s Advocate의 반론은 단순한 우려가 아니라, 이 계획이 완전히 실패할 가장 치명적인 이유를 직격해야 합니다.'
-  );
+  if (isOpenMentorQuestion) {
+    lines.push(
+      '',
+      '[가드레일 5: 질문에 필요한 반례만 다루기]',
+      '- 실제 질문에 중요한 반례가 있을 때만 짧게 설명하십시오. 근거 없는 반대 관점이나 형식적인 3자 토론을 만들지 마십시오.'
+    );
+  } else {
+    lines.push(
+      '',
+      '[가드레일 5: Preservation of Dissent (이견 보존 원칙)]',
+      '- 억지 만장일치나 가짜 합의("우리는 만장일치로 동의합니다" 등)를 엄격히 금지합니다.',
+      '- 서로 다른 관점의 대립, 사각지대, 상충 관계(Trade-off), 감수할 비용, 남은 이견(Dissent)을 명확하게 보존하십시오.',
+      '- Devil\'s Advocate의 반론은 단순한 우려가 아니라, 이 계획이 완전히 실패할 가장 치명적인 이유를 직격해야 합니다.'
+    );
+  }
 
   // 4. Values and Knowledge Directives (가치관 및 지식 지침)
   // Reference-only modes use their explicit source (selected Guru card or
   // Office result). The baseline playbook could blur that attribution.
-  const directivesBlock = isReferenceOnlyBrandQuestion
+  const directivesBlock = isOpenMentorQuestion || isReferenceOnlyBrandQuestion
     ? ''
     : assembleDirectives(resolveDirectives(type, options.directives, context));
   if (directivesBlock) {
@@ -325,6 +340,21 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
       '### 4. 1단계 검증 행동 (Unified Next Step)',
       '- 오늘 30분 내 0원으로 즉시 실행할 수 있는 가장 작은 행동 1개 + 가설 반증 질문 1문장',
       '- 💡 [실전 팁]: (30초 만에 적용할 수 있는 거장의 원 포인트 실행 노하우 1문장)'
+    );
+  } else if (isOpenMentorQuestion) {
+    lines.push(
+      '',
+      '=== [멘토 질문 답변 규칙] ===',
+      `전체 ${charLimit}자 이내로, 운영자가 요청한 답변 형식과 범위를 우선해 직접 답하십시오. 고정 목차를 만들지 마십시오.`,
+      '- 관찰된 사실과 미확인 정보는 구분하되, 질문에 필요 없는 원장 현황을 나열하지 마십시오.',
+      '- 선택 카드의 적용 조건을 먼저 확인하십시오. 상황에 맞지 않으면 적용을 보류하고 짧게 이유를 설명하십시오. 같은 답변에서 적용을 권한 뒤 취소하지 마십시오.',
+      '- 확인되지 않은 업종, 문제 인식, 고객 반응, 의사결정 단계를 추정하지 마십시오. 질문도 확인되지 않은 사실을 전제하지 마십시오.',
+      '- 고객이 불편이나 문제를 직접 말하지 않았다면 질문에서 불편·개선 필요를 전제하지 말고 관심의 배경을 중립적으로 물으십시오.',
+      isSales
+        ? '- 특정 고객과 연결된 기록이 없다면 "연결된 고객 기록이 제공되지 않았다"고만 말하십시오. 원장 전체에 그 고객의 기록이 없다고 단정하지 마십시오. 사용자가 기록 유무를 묻지 않고 답변에도 필요 없다면 연결 상태를 출력하지 마십시오.'
+        : '- 특정 독자나 프로젝트와 연결된 기록이 없다면 제공된 맥락의 한계로 표현하고, 전체 원장에 없다고 단정하지 마십시오.',
+      '- 선택 카드가 있으면 적합할 때만 그 프레임과 출처를 밝히십시오. 운영자가 요청하지 않은 후속 일은 만들지 마십시오.',
+      '- 선택 카드가 없으면 특정 인물·책·방법론 출처를 붙이지 마십시오.'
     );
   } else {
     lines.push(

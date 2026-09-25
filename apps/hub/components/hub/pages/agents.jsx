@@ -7,7 +7,8 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState, SegmentedControl, TruthBadge, Skeleton, LifecycleBadge, Checkbox, TextAreaField } from "../hub-primitives";
 import { useUndoableAction } from '../use-undoable-action';
 import { ContactRecordDrawer } from '../contact-record-form';
-import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
+import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE, guruUiModeForRequestMode, shouldAutoRunGuruOnOpen } from "../guru-client";
+import { collectGuruConversationHistory } from '@/lib/guru-chat-history';
 import { GURU_CARDS } from '@com-moon/guru-guidance';
 import { GuruGuidanceCard } from '../guru-guidance-card';
 import { requestCouncilAdvice, councilChatPath } from "../council-client";
@@ -40,7 +41,6 @@ CHAT_PERSONAS.guru = {
     name: 'Guru',
     role: '영업 멘토 · 딜 코칭',
     title: '영업 멘토 세션',
-    model: 'Gemini 3.1 Pro (Thinking)',
     intro: [
       { role: 'agent', name: 'Guru', text: '필요한 순간에만 관점을 빌려드릴게요. 아래 카드는 읽고 지나가도 됩니다.' },
     ],
@@ -81,32 +81,38 @@ export function AgentsChat({ onNavigate }) {
   const [thread, setThread] = React.useState([]);
   const [conversations, setConversations] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
+  const [guruModel, setGuruModel] = React.useState(null);
   const [guruGuidanceId, setGuruGuidanceId] = React.useState(null);
   const guruInputRef = React.useRef(null);
   const [taskSavedMap, setTaskSavedMap] = React.useState({});
   const [copiedMap, setCopiedMap] = React.useState({});
   const busyRef = React.useRef(false);
+  const routeHandledRef = React.useRef(false);
   const persona = CHAT_PERSONAS[agentKey] || CHAT_PERSONAS[DEFAULT_PERSONA_KEY];
 
   // Run a real coaching pass against Guru
-  const runGuru = React.useCallback(async (mode, { ref = null, draft = null, label, guidanceId = null } = {}) => {
+  const runGuru = React.useCallback(async (mode, { ref = null, draft = null, label, guidanceId = null, history = [] } = {}) => {
     if (busyRef.current) return;
     busyRef.current = true;
     const userText = label || draft || GURU_MODE_LABEL[mode] || '코칭 요청';
     setBusy(true);
     setThread(prev => [
       ...prev,
-      { role: 'user', text: userText },
-      { role: 'agent', name: 'Guru', pending: true },
+      { role: 'user', agent: 'guru', mode, guidanceId, text: userText },
+      { role: 'agent', agent: 'guru', mode, name: 'Guru', pending: true },
     ]);
-    const r = await requestGuruCoaching({ mode, ref, draft, guidanceId });
+    const r = await requestGuruCoaching({ mode, ref, draft, guidanceId, history });
+    setGuruModel(r.state === 'done' ? r.model : null);
     setThread(prev => {
       const next = prev.slice();
       for (let i = next.length - 1; i >= 0; i--) {
         if (next[i].pending) {
           next[i] = {
             role: 'agent',
+            agent: 'guru',
+            mode,
             name: 'Guru',
+            generated: r.state === 'done',
             text:
               r.state === 'done'
                 ? r.text
@@ -202,6 +208,8 @@ export function AgentsChat({ onNavigate }) {
   // ?prompt=council runs real Council convene synthesis.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (routeHandledRef.current) return;
+    routeHandledRef.current = true;
     const q = new URLSearchParams(window.location.search);
     const a = q.get('agent');
     const prompt = q.get('prompt');
@@ -243,13 +251,12 @@ export function AgentsChat({ onNavigate }) {
       const mode = q.get('mode');
       const ref = q.get('ref');
       const guidanceId = q.get('guidanceId');
-      const guidanceCard = a === 'guru' ? GURU_CARDS.find(card => card.id === guidanceId) : null;
+      const guidanceCard = a === 'guru' ? GURU_CARDS.find(card => card.id === guidanceId && card.domain === 'sales') : null;
       if (guidanceCard) {
         setGuruGuidanceId(guidanceCard.id);
-        setInput(guidanceCard.question);
       }
-      if (mode) setActiveMode(mode);
-      if (a === 'guru' && mode && GURU_MODE_LABEL[mode]) {
+      if (mode) setActiveMode(a === 'guru' ? guruUiModeForRequestMode(mode) : mode);
+      if (a === 'guru' && shouldAutoRunGuruOnOpen(mode)) {
         const label = ref ? `${GURU_MODE_LABEL[mode]}: ${ref}` : GURU_MODE_LABEL[mode];
         runGuru(mode, { ref, label });
       } else if (a === 'council' && mode === 'sparring') {
@@ -271,7 +278,12 @@ export function AgentsChat({ onNavigate }) {
         : activeMode === 'critique' ? 'proposal-critique'
         : activeMode === 'weekly-review' ? 'weekly-retro'
         : 'sparring';
-      runGuru(mode, { draft: text, label: text, guidanceId: guruGuidanceId });
+      runGuru(mode, {
+        draft: text,
+        label: text,
+        guidanceId: guruGuidanceId,
+        history: mode === 'open-question' ? collectGuruConversationHistory(thread) : [],
+      });
       setGuruGuidanceId(null);
       return;
     }
@@ -285,6 +297,7 @@ export function AgentsChat({ onNavigate }) {
     ]);
     setThread(persona.intro || []);
     setGuruGuidanceId(null);
+    setGuruModel(null);
     setInput('');
   };
   return (
@@ -328,9 +341,8 @@ export function AgentsChat({ onNavigate }) {
         <div className="scroll-y" style={{ flex: 1, padding: '20px 20px 10px' }}>
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
             {agentKey === 'guru' && thread.length <= 1 && (
-              <GuruGuidanceCard allowDomains onBrowse={() => setGuruGuidanceId(null)} onAsk={card => {
+              <GuruGuidanceCard domain="sales" onBrowse={() => setGuruGuidanceId(null)} onAsk={card => {
                 setGuruGuidanceId(card.id);
-                setInput(card.question);
                 guruInputRef.current?.focus();
               }} />
             )}
@@ -366,14 +378,16 @@ export function AgentsChat({ onNavigate }) {
                       >
                         {copiedMap[i] ? "복사됨 ✓" : "복사"}
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        icon={taskSavedMap[i] ? "check" : "plus"}
-                        onClick={() => handleSaveTask(m.text, i)}
-                      >
-                        {taskSavedMap[i] ? "태스크 등록됨 ✓" : agentKey === 'council' && activeMode === 'weekly-review' ? "실험 태스크로 등록" : "태스크로 등록"}
-                      </Button>
+                      {(agentKey !== 'guru' || m.generated === true) && (
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          icon={taskSavedMap[i] ? "check" : "plus"}
+                          onClick={() => handleSaveTask(m.text, i)}
+                        >
+                          {taskSavedMap[i] ? "태스크 등록됨 ✓" : agentKey === 'council' && activeMode === 'weekly-review' ? "실험 태스크로 등록" : "태스크로 등록"}
+                        </Button>
+                      )}
 
                       {agentKey === 'order' && (
                         <>
@@ -562,16 +576,21 @@ export function AgentsChat({ onNavigate }) {
             </span>
           </div>
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
-            <textarea ref={guruInputRef} value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
+            {agentKey === 'guru' && guruGuidanceId && <div style={{ padding: '2px 3px 8px', color: 'var(--fg-muted)', fontSize: 11.5 }}>
+              선택한 관점 · {GURU_CARDS.find(card => card.id === guruGuidanceId)?.person} · 질문은 직접 작성해 주세요
+            </div>}
+            <textarea ref={guruInputRef} value={input} onChange={e => setInput(e.target.value)} placeholder={agentKey === 'guru' ? 'Guru에게 직접 물어볼 내용을 적어 주세요' : `Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
               background: 'transparent', border: 'none',
-              color: 'var(--fg)', fontSize: 13.5, lineHeight: 1.5,
+              color: 'var(--fg)', fontSize: 16, lineHeight: 1.5,
             }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
               <Button variant="ghost" size="xs" icon="upload" onClick={() => setInput(v => v ? `${v}\n[첨부: context]` : '[첨부: context]')}>Attach</Button>
               <Button variant="ghost" size="xs" icon="link" onClick={() => onNavigate?.('dashboard/work/decisions?new=decision')}>Link decision</Button>
               <div style={{ flex: 1 }} />
-              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{persona.name} · {persona.model}</span>
+              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>
+                {persona.name} · {agentKey === 'guru' ? (guruModel ? `최근 응답 ${guruModel}` : '요청 시 연결') : persona.model}
+              </span>
               <Button variant="primary" size="xs" icon="send" onClick={send} disabled={busy}>Send</Button>
             </div>
           </div>

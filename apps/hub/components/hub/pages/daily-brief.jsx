@@ -8,6 +8,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton, CertaintyBadge, useToast } from "../hub-primitives";
 import { REACTION_LABEL as FOCUS_REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
+import { GuidanceInlineTip } from "../guidance-inline-tip";
 import { requestPersonaChat } from "../persona-client";
 import {
   buildDailyDispatchContext,
@@ -2032,6 +2033,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
       <DailyReviewCue />
 
       <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
+      <GuidanceInlineTip variant="today" onNavigate={onNavigate} />
 
       {/* Q118·Q119: 월(개인)·목(회사) 아침에만 뜨는 주간 정리 — 다른 요일은 null. */}
       <WeeklyReportCard
