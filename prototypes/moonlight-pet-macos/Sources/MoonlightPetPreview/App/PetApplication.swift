@@ -28,6 +28,7 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         let coordinator = WindowCoordinator(model: model)
         self.coordinator = coordinator
         coordinator.showPet()
+        model.startHubConnection()
         if CommandLine.arguments.contains("--glass-lab") {
             let lab = GlassLabWindowController()
             glassLab = lab

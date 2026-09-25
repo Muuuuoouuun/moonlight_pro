@@ -22,7 +22,9 @@ struct CompanionPanelView: View {
             PanelDragHandle(move: moveVertically).frame(height: 20)
             header.padding(.bottom, isToday ? 18 : 12)
             if showsAddress {
-                connectionSettings
+                HubConnectionContent(model: model) {
+                    withAnimation(PetMotion.panel) { showsAddress = false }
+                }
             } else {
                 if isToday { todayTabs.padding(.bottom, 18) }
                 modeContent
@@ -80,6 +82,9 @@ struct CompanionPanelView: View {
         Menu {
             if mode == .memo {
                 Button("Council에서 이어서", action: model.continueMemoInCouncil)
+                Button("새 항목으로 Hub에 저장", action: model.saveMemoAsNewToHub)
+                    .disabled(!model.hub.canSaveMemoAsNew
+                              || model.memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 if let pin { Button("위젯으로 고정", action: pin) }
                 Divider()
             }
@@ -90,7 +95,9 @@ struct CompanionPanelView: View {
                 .keyboardShortcut(KeyEquivalent(destination.shortcut), modifiers: .command)
             }
             Divider()
-            Button("Hub 주소 설정") { withAnimation(PetMotion.panel) { showsAddress.toggle() } }
+            Button(showsAddress ? "빠른 기능으로 돌아가기" : "Hub 연결·저장 위치") {
+                withAnimation(PetMotion.panel) { showsAddress.toggle() }
+            }
             Button("펫으로 접기", action: close)
         } label: {
             Image(systemName: "ellipsis").frame(width: 28, height: 32)
@@ -141,10 +148,11 @@ struct CompanionPanelView: View {
 
     @ViewBuilder private var modeContent: some View {
         switch mode {
-        case .tasks: TaskCaptureContent(model: model, surface: persistent ? .widget : .quick, openRevision: openRevision)
+        case .tasks: TaskCaptureContent(model: model, surface: persistent ? .widget : .quick,
+                                       openRevision: openRevision, openConnection: showConnection)
         case .memo: MemoCaptureContent(model: model, surface: persistent ? .widget : .quick,
-                                      openRevision: openRevision, close: close)
-        case .calendar: CalendarCompanionContent(model: model)
+                                      openRevision: openRevision, close: close, openConnection: showConnection)
+        case .calendar: CalendarCompanionContent(model: model, openConnection: showConnection)
         case .office, .council: browserContent
         case .focus: focusSetup
         }
@@ -199,20 +207,6 @@ struct CompanionPanelView: View {
         }
     }
 
-    private var connectionSettings: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("브라우저에서 열 Hub 주소")
-                .font(.system(size: 12)).foregroundStyle(Palette.glassInkMuted)
-                .modifier(GlassReadability(radius: 8, inset: 6))
-            TextField("http://127.0.0.1:3000", text: $model.hubBaseURL)
-                .textFieldStyle(.plain).font(.system(size: 13)).padding(12)
-                .modifier(GlassInputSurface(focused: false))
-                .onSubmit(saveAddress).accessibilityLabel("Hub 주소")
-            Button("저장", action: saveAddress).buttonStyle(GlassActionStyle())
-            Spacer(minLength: 0)
-        }
-    }
-
     private func select(_ destination: QuickMode) {
         showsAddress = false
         guard mode != destination else { return }
@@ -220,8 +214,7 @@ struct CompanionPanelView: View {
         modeChanged()
     }
 
-    private func saveAddress() {
-        model.saveHubURL()
-        withAnimation(PetMotion.panel) { showsAddress = false }
+    private func showConnection() {
+        withAnimation(PetMotion.panel) { showsAddress = true }
     }
 }

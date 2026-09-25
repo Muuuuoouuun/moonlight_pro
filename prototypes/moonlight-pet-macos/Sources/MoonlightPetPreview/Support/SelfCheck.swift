@@ -15,6 +15,7 @@ enum SelfCheck {
         let suite = "MoonlightPetPreview.SelfCheck.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suite) else { return false }
         defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(false, forKey: "petHub.enabled")
         let model = AppModel(defaults: defaults)
         guard model.selectedCharacter == .silver else {
             fputs("Default character check failed\n", stderr)
