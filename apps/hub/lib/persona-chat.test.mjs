@@ -41,7 +41,22 @@ registerHooks({
 });
 
 const { POST } = await import("../app/api/hub/persona-chat/route.js");
-const { PERSONA_MODE_LABEL, LEGEND_LENS_MAP } = await import("../components/hub/persona-client.js");
+const { PERSONA_MODE_LABEL, LEGEND_LENS_MAP, requestPersonaChat } = await import("../components/hub/persona-client.js");
+
+test("Guru widget persona lens keeps a conversation-only flag through client and Hub", async () => {
+  await requestPersonaChat({ personaId: "sales", mode: "sparring", lens: "voss", conversationOnly: true });
+  assert.equal(state.calledBody.conversationOnly, true);
+  await POST(request({ personaId: "sales", mode: "sparring", lens: "voss", conversationOnly: true }));
+  assert.equal(state.calledBody.conversationOnly, true);
+  assert.deepEqual(state.readTables || [], []);
+});
+
+test("conversation-only persona chat does not read a recent deals snapshot", async () => {
+  state.rowsByTable = { deals: [{ name: '다른 고객', stage: 'Won' }] };
+  await POST(request({ personaId: 'sales', mode: 'chat', lens: 'voss', conversationOnly: true, message: '이 고객 질문' }));
+  assert.deepEqual(state.readTables || [], []);
+  assert.deepEqual(state.calledBody.context, { source: 'operator-provided', scope: 'unscoped' });
+});
 
 beforeEach((t) => {
   for (const key of Object.keys(state)) delete state[key];

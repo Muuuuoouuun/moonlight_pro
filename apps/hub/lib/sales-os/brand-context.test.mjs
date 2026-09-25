@@ -22,6 +22,7 @@ registerHooks({ resolve(specifier, context, next) {
 const { assembleBrandContext } = await import('./brand-context.js');
 
 beforeEach(() => {
+  state.runQuery = undefined;
   state.content = {
     source: 'supabase',
     brands: [{ key: 'personal-a', orgScope: 'personal', voice: 'A' }, { key: 'personal-b', orgScope: 'personal', voice: 'B' }, { key: 'company', orgScope: 'classin' }],
@@ -51,6 +52,29 @@ test('open-question without a ref keeps personal context without choosing a bran
   assert.ok(ctx.brands.every((b) => !Object.hasOwn(b, 'voice')));
   assert.deepEqual(ctx.content.idea_queue_top.map((i) => i.id), ['idea-a']);
   assert.equal(ctx.campaigns.some((campaign) => campaign.brandKey === 'company'), false);
+});
+test('a selected card without a brand ref receives no unrelated portfolio facts or generated memory', async () => {
+  state.projects.projects.push({ id: 'project-b', workspace: 'brand', brand: 'personal-b', name: 'Unrelated launch', summary: 'Other readers responded' });
+  state.memory.runs = [{ id: 'prior-advice', agent: 'guru.brand', mode: 'open-question', ref: null, recommendation: 'No responses' }];
+  const ctx = await assembleBrandContext({ mode: 'open-question', guidanceId: 'marketing-research' });
+  assert.equal(ctx.source, 'supabase');
+  assert.equal(ctx.scope, 'unscoped');
+  assert.match(ctx.contextBoundary, /전달하지 않았/);
+  assert.match(ctx.contextBoundary, /부재.*아닙/);
+  assert.deepEqual(Object.keys(ctx).sort(), ['contextBoundary', 'missing', 'scope', 'source']);
+  assert.equal(state.runQuery, undefined);
+});
+test('an unscoped card keeps partial and unavailable ledger status visible', async () => {
+  state.projects.partial = true;
+  state.projects.failedSources = ['project_tasks'];
+  const partial = await assembleBrandContext({ mode: 'open-question', guidanceId: 'content-hook' });
+  assert.equal(partial.source, 'partial');
+  assert.ok(partial.missing.some(item => item.source === 'operating-ledger' && item.reason === 'project-ledger-partial-read'));
+
+  state.content = { source: 'error', error: 'content-read-failed', brands: [], items: [], ideaQueue: [] };
+  state.projects = { source: 'preview', projects: [] };
+  const unavailable = await assembleBrandContext({ mode: 'open-question', guidanceId: 'content-hook' });
+  assert.equal(unavailable.source, 'error');
 });
 test('a Guru brand question reads only its own runs while ordinary advice keeps Council memory', async () => {
   state.memory.runs = [
@@ -86,7 +110,7 @@ test('an explicit brand question limits projects, campaigns and ideas to that br
     { id: 'project-a', workspace: 'brand', brand: 'personal-a', name: 'A work' },
     { id: 'project-b', workspace: 'brand', brand: 'personal-b', name: 'B work' },
   );
-  const context = await assembleBrandContext({ mode: 'open-question', ref: 'personal-b' });
+  const context = await assembleBrandContext({ mode: 'open-question', guidanceId: 'marketing-research', ref: 'personal-b' });
   assert.deepEqual(context.brands.map(brand => brand.key), ['personal-b']);
   assert.deepEqual(context.projects.map(project => project.id), ['project-b']);
   assert.deepEqual(context.campaigns.map(campaign => campaign.id), ['campaign-b']);

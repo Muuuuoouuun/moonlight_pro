@@ -375,9 +375,36 @@ export function guidancePromptFrame(id: string): string {
   return [
     `참고 방법론(${application}): ${card.person} — ${card.frame}.`,
     `카드 관점: ${card.text}`,
-    `적용할 때: ${card.useWhen}.`,
+    `이 카드의 추천 적용 상황(Moonlight 편집 기준, 방법론 전체의 적용 시기를 한정하지 않음): ${card.useWhen}.`,
+    `카드의 예시 질문(적용 조건이 맞을 때만 참고): ${card.question}`,
     card.source.note ? `응용 범위: ${card.source.note}.` : '',
     `출처 메타데이터: ${card.source.path} §${card.source.section}; ${card.source.url || '원전 URL 미확인'}.`,
     '원전 본문을 직접 읽은 것으로 주장하지 마십시오. 현재 원장 사실과 분리하고 상황에 맞을 때만 적용하십시오.',
   ].filter(Boolean).join(' ');
+}
+
+// A prior card is provenance for a follow-up, never a sticky selection. Both
+// Hub context scoping and Engine prompting use this decision so they cannot
+// disagree about whether the current question refers to the previous card.
+export function referencedPriorCardId(draft: string | null | undefined, history: unknown): string | null {
+  if (typeof draft !== 'string' || !Array.isArray(history)) return null;
+  const text = draft.trim().toLowerCase();
+  if (!text) return null;
+  const turns = history.slice(-3);
+  const salesCardForTurn = (turn: unknown) => {
+    if (!turn || typeof turn !== 'object' || Array.isArray(turn)) return null;
+    const id = (turn as { guidanceId?: unknown }).guidanceId;
+    return typeof id === 'string' ? GURU_CARDS.find(card => card.domain === 'sales' && card.id === id) || null : null;
+  };
+  for (const turn of [...turns].reverse()) {
+    const card = salesCardForTurn(turn);
+    if (!card) continue;
+    const person = card.personName?.toLowerCase();
+    const method = card.methodLabel?.toLowerCase();
+    if ((person && text.includes(person))
+      || (method && /^[a-z0-9 ]{4,}$/.test(method) && text.includes(method))) return card.id;
+  }
+  const latest = salesCardForTurn(turns.at(-1));
+  return latest && /(?:방금|아까|그)\s*(?:카드|관점|프레임|방법론|답변|질문)/.test(draft)
+    ? latest.id : null;
 }

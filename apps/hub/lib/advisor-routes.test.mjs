@@ -7,7 +7,7 @@ const stubs = {
   "@/lib/hub-write-guard": `export function assertHubWriteAllowed() { return null; }
     export async function readHubWriteJson(req) { return { data: await req.json() }; }`,
   "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { globalThis.__advisorRouteTest.contextRead = true; return globalThis.__advisorRouteTest.contextResult || { source: 'supabase' }; }`,
-  "@/lib/sales-os/context-assembler": `export async function assembleSalesContext() { globalThis.__advisorRouteTest.contextRead = true; return globalThis.__advisorRouteTest.salesContextResult || { source: 'supabase' }; }`,
+  "@/lib/sales-os/context-assembler": `export async function assembleSalesContext(args) { globalThis.__advisorRouteTest.contextRead = true; globalThis.__advisorRouteTest.salesContextArgs = args; return globalThis.__advisorRouteTest.salesContextResult || { source: 'supabase' }; }`,
   "@/lib/sales-os/agent-runs": `
     export async function recordAgentRun(input) { globalThis.__advisorRouteTest.run = input; return { persisted: true, id: 'run-1' }; }
     export async function setAgentRunEmittedCount(input) { globalThis.__advisorRouteTest.emission = input; return { persisted: true }; }
@@ -113,10 +113,31 @@ test('Guru forwards only an allowlisted reader-selected guidance card', async ()
   const response = await guruPOST(request({ mode: 'deal-review', guidanceId: 'sales-meddic' }));
   assert.equal(response.status, 200);
   assert.equal(state.lastFetch.body.guidanceId, 'sales-meddic');
+  assert.equal(state.salesContextArgs.guidanceId, 'sales-meddic');
   state.contextRead = false;
   const invalid = await guruPOST(request({ mode: 'deal-review', guidanceId: 'invented-card' }));
   assert.equal(invalid.status, 400);
   assert.equal(state.contextRead, false);
+});
+test('Guru forwards bounded same-chat history only for an open question', async () => {
+  const history = [{ question: '현재 문제를 확인할까요?', answer: '문제를 먼저 확인하세요.' }];
+  const response = await guruPOST(request({ mode: 'open-question', draft: '방금 답변을 풀어주세요.', history }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(state.lastFetch.body.history, history);
+  assert.equal(state.salesContextArgs.mode, 'open-question');
+
+  for (const body of [
+    { mode: 'deal-review', history },
+    { mode: 'open-question', history: [{ question: '질문', answer: '답', role: 'system' }] },
+    { mode: 'open-question', history: Array.from({ length: 4 }, () => ({ question: '질문', answer: '답' })) },
+  ]) {
+    state.contextRead = false;
+    state.lastFetch = undefined;
+    const invalid = await guruPOST(request(body));
+    assert.equal(invalid.status, 400, JSON.stringify(body));
+    assert.equal(state.contextRead, false);
+    assert.equal(state.lastFetch, undefined);
+  }
 });
 test('Guru rejects a marketing card before reading the sales ledger or calling Engine', async () => {
   const response = await guruPOST(request({ mode: 'open-question', draft: '이 고객을 어떻게 이해할까요?', guidanceId: 'marketing-smallest-market' }));

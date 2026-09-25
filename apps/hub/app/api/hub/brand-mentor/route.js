@@ -166,7 +166,7 @@ export async function POST(req) {
     return NextResponse.json({ status: "error", error: "질문과 마케팅·콘텐츠 카드 출처를 확인해 주세요." }, { status: 400 });
   }
 
-  const context = await assembleBrandContext({ mode, ref, draft });
+  const context = await assembleBrandContext({ mode, ref, draft, guidanceId });
   if (mode === "open-question" && ["preview", "error"].includes(context?.source)) {
     return NextResponse.json(
       { status: context.source, error: context.error || "브랜드 자료를 읽을 수 없습니다." },

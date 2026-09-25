@@ -69,14 +69,17 @@ function selectFocusBrand(brands, ownKeys, ref, strict = false) {
   return strict ? null : list.find((b) => ownKeys.includes(b.key)) || null;
 }
 
-export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, workspace = "brand" } = {}) {
+export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, guidanceId = null, workspace = "brand" } = {}) {
   const missing = [];
+  const unscopedCardQuestion = mode === "open-question" && guidanceId && !ref;
   const memoryAgent = mode === "open-question" ? BRAND_GURU_AGENT : COUNCIL_AGENT;
   let [content, projectLedger, runsRes] = await Promise.all([
     settled(getContentLedger(), "content-ledger", missing),
     settled(getProjectLedger(), "operating-ledger", missing),
-    settled(getRecentAgentRuns({ agent: memoryAgent, ref, ...(mode === "open-question"
-      ? { mode: "open-question", ...(!ref ? { unscopedOnly: true } : {}) } : {}), limit: 5 }), "agent_runs", missing),
+    unscopedCardQuestion
+      ? Promise.resolve(null)
+      : settled(getRecentAgentRuns({ agent: memoryAgent, ref, ...(mode === "open-question"
+        ? { mode: "open-question", ...(!ref ? { unscopedOnly: true } : {}) } : {}), limit: 5 }), "agent_runs", missing),
   ]);
   const coreReadFailed = !content || content.source === "error" || !projectLedger || projectLedger.source === "error";
 
@@ -121,6 +124,17 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
     return {
       source: coreReadFailed ? "error" : "preview",
       error: "brand ledgers unavailable",
+      missing,
+    };
+  }
+
+  // A shelf card carries a method, not an entity key. Portfolio rows would let
+  // the model misread unrelated project or audience evidence as this reader's.
+  if (unscopedCardQuestion) {
+    return {
+      source: missing.length ? "partial" : content?.source || projectLedger?.source || "preview",
+      scope: "unscoped",
+      contextBoundary: "브랜드나 프로젝트가 지정되지 않아 원장 기록을 전달하지 않았습니다. 전달되지 않은 정보는 원장에 기록이 부재한다는 뜻이 아닙니다.",
       missing,
     };
   }

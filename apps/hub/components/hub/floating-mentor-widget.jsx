@@ -8,6 +8,7 @@ import { requestCouncilAdvice } from "./council-client";
 import { requestGuruCoaching } from "./guru-client";
 import { requestPersonaChat, LEGEND_LENS_MAP } from "./persona-client";
 import { createAdviceTaskWriter } from "@/lib/ai-workflow-client";
+import { collectGuruConversationHistory } from "@/lib/guru-chat-history";
 
 function renderAdviceWithCallouts(text) {
   if (!text || typeof text !== "string") return null;
@@ -91,6 +92,7 @@ export function FloatingMentorWidget({
   const defaultTab = initialTab || (contextData?.mode === "critique" ? "critique" : "quick");
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [selectedLens, setSelectedLens] = useState(null);
+  const [pendingGuidanceId, setPendingGuidanceId] = useState(guidanceId);
   const [loading, setLoading] = useState(false);
   const [resultText, setResultText] = useState("");
   const [statusNote, setStatusNote] = useState("");
@@ -116,6 +118,7 @@ export function FloatingMentorWidget({
     setResultText("");
     setChatThread([]);
     setChatInput(initialQuestion);
+    setPendingGuidanceId(guidanceId);
     setStatusNote("");
     setTaskSaved(false);
     setDealSaved(false);
@@ -199,21 +202,26 @@ export function FloatingMentorWidget({
     setDealSaved(false);
     const draft = buildContextPrompt(customDraft);
     const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
+    const selectedGuidanceId = pendingGuidanceId;
+    if (isGuru) setPendingGuidanceId(null);
 
     // Use persona-chat when lens is selected or in critique / weekly-review / outreach / extract-actions mode
     let res;
-    if (selectedLens || mode === "critique" || mode === "weekly-review" || mode === "outreach-draft" || mode === "extract-actions" || mode === "daily-dispatch") {
+    if ((selectedLens && (!isGuru || mode === "critique" || mode === "sparring")) || mode === "critique" || mode === "weekly-review" || mode === "outreach-draft" || mode === "extract-actions" || mode === "daily-dispatch") {
       res = await requestPersonaChat({
         personaId: isGuru ? "sales" : contextType === "content" ? "content" : mode === "extract-actions" ? "order" : "council",
         mode,
         lens: selectedLens,
         draft,
         message: customDraft || null,
-        context: contextData,
+        context: isGuru
+          ? { source: "operator-provided", scope: ref ? "selected-record" : "unscoped" }
+          : contextData,
+        conversationOnly: isGuru,
       });
     } else {
       res = isGuru
-        ? await requestGuruCoaching({ mode, draft, ref, guidanceId })
+        ? await requestGuruCoaching({ mode, draft, ref, guidanceId: selectedGuidanceId })
         : await requestCouncilAdvice({ mode, draft, ref });
     }
 
@@ -247,8 +255,14 @@ export function FloatingMentorWidget({
     if (!text || requestPending.current) return;
     requestPending.current = true;
     const epoch = requestEpoch.current;
+    const selectedGuidanceId = pendingGuidanceId;
+    if (isGuru) setPendingGuidanceId(null);
 
-    const newThread = [...chatThread, { role: "user", text }];
+    const history = isGuru ? collectGuruConversationHistory(chatThread) : [];
+    const newThread = [...chatThread, {
+      role: "user", text,
+      ...(isGuru ? { agent: "guru", mode: "open-question", guidanceId: selectedGuidanceId } : {}),
+    }];
     setChatThread(newThread);
     setChatInput("");
     setLoading(true);
@@ -256,9 +270,9 @@ export function FloatingMentorWidget({
     setTaskSaved(false);
     setDealSaved(false);
 
-    const draft = buildContextPrompt(
-      `이전 대화:\n${chatThread.map(m => `${m.role === 'user' ? '운영자' : isGuru ? 'Guru' : 'Council'}: ${m.text}`).join('\n')}\n\n새 질문:\n${text}`
-    );
+    const draft = buildContextPrompt(isGuru
+      ? text
+      : `이전 대화:\n${chatThread.map(m => `${m.role === 'user' ? '운영자' : 'Council'}: ${m.text}`).join('\n')}\n\n새 질문:\n${text}`);
     const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
 
     const chatMode = activeTab === "critique" ? "critique" : activeTab === "sparring" ? "sparring" : "chat";
@@ -270,14 +284,19 @@ export function FloatingMentorWidget({
         lens: selectedLens,
         draft,
         message: text,
+        context: isGuru
+          ? { source: "operator-provided", scope: ref ? "selected-record" : "unscoped" }
+          : undefined,
+        conversationOnly: isGuru,
       });
     } else {
       res = isGuru
         ? await requestGuruCoaching({
-            mode: activeTab === "sparring" ? "sparring" : "deal-review",
+            mode: "open-question",
             draft,
             ref,
-            guidanceId,
+            guidanceId: selectedGuidanceId,
+            history,
           })
         : await requestCouncilAdvice({
             mode: activeTab === "sparring" ? "sparring" : "brand-strategy",
@@ -291,7 +310,9 @@ export function FloatingMentorWidget({
     setLoading(false);
 
     if (res.state === "done") {
-      setChatThread([...newThread, { role: isGuru ? "guru" : "council", text: res.text }]);
+      setChatThread([...newThread, isGuru && !selectedLens
+        ? { role: "agent", agent: "guru", mode: "open-question", generated: true, text: res.text }
+        : { role: isGuru ? "guru" : "council", text: res.text }]);
     } else {
       setChatThread([...newThread, { role: isGuru ? "guru" : "council", state: "error", text: res.note || "응답을 생성하지 못했습니다." }]);
     }
@@ -638,6 +659,7 @@ export function FloatingMentorWidget({
               key={tab.key}
               onClick={() => {
                 setActiveTab(tab.key);
+                if (isGuru && tab.key === "quick") setSelectedLens(null);
                 if (tab.key === "critique" && !resultText) {
                   handleRequest("critique");
                 } else if (tab.key === "sparring" && !resultText) {
@@ -663,7 +685,7 @@ export function FloatingMentorWidget({
       </div>
 
       {/* 2.5 Legend Lens Switcher Bar */}
-      <div
+      {(!isGuru || activeTab !== "quick") && <div
         style={{
           padding: "4px 10px",
           background: "var(--surface-2)",
@@ -716,7 +738,7 @@ export function FloatingMentorWidget({
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* 3. Sub-Action / Presets */}
       {activeTab === "critique" && (

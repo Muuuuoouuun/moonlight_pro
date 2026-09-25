@@ -14,7 +14,7 @@ import {
   guidancePromptFrame,
 } from './index.ts';
 
-const { listGuidancePeople, listGuidanceCardsForPerson } = guidance;
+const { listGuidancePeople, listGuidanceCardsForPerson, referencedPriorCardId } = guidance;
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -205,11 +205,25 @@ test('selected frame names its source without turning a tip into a required acti
   assert.match(frame, /Dick Dunkel/);
   assert.match(frame, /검토가 길어지면/);
   assert.match(frame, /제안 후 내부 검토/);
+  assert.match(frame, /이 카드의 추천 적용 상황\(Moonlight 편집 기준/);
+  assert.doesNotMatch(frame, /적용할 때:/);
+  assert.match(frame, /카드의 예시 질문/);
   assert.match(frame, /docs\/sales-guru-knowledge-base\.md/);
   assert.match(frame, /https:\/\/meddicc\.com\/resources\/who-created-meddic/);
   assert.match(frame, /원전 본문을 직접 읽은 것으로 주장하지/);
   assert.doesNotMatch(frame, /work_order|승인 큐|반드시.*다음/);
   assert.equal(guidancePromptFrame('missing-card'), '');
+});
+
+test('prior card source resolves only for an explicit follow-up reference within bounded chat history', () => {
+  assert.equal(typeof referencedPriorCardId, 'function');
+  const cardTurn = { question: '무엇을 물을까요?', answer: '현재 방식을 물어보세요.', guidanceId: 'sales-gap' };
+  assert.equal(referencedPriorCardId('방금 Keenan 카드의 출처는?', [cardTurn]), 'sales-gap');
+  assert.equal(referencedPriorCardId('방금 질문을 짧게 바꿔주세요.', [cardTurn]), 'sales-gap');
+  assert.equal(referencedPriorCardId('이번 주 일정은?', [cardTurn]), null);
+  assert.equal(referencedPriorCardId('그 카드 출처는?', [cardTurn, { question: '별개 일정', answer: '일정' }]), null);
+  assert.equal(referencedPriorCardId('Keenan 카드 출처는?', [{ guidanceId: 'marketing-research' }]), null);
+  assert.equal(referencedPriorCardId('Keenan 카드 출처는?', [cardTurn, {}, {}, {}]), null);
 });
 
 test('every published card has an HTTPS source, with editorial applications labeled separately', () => {

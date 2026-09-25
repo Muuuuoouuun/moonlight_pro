@@ -55,7 +55,9 @@ test('open-question uses the selected marketing source and operator question wit
   assert.match(instruction, /자료 요약, 인용 아님/);
   assert.match(instruction, /이전 생성 조언.*사실 근거가 아닙니다/);
   assert.match(instruction, /질문과 직접 관련 없는 다른 프로젝트 상태/);
-  assert.match(instruction, /관찰.*프레임.*질문 또는 선택/s);
+  assert.match(instruction, /질문이 요청한 답변 형식과 분량/);
+  assert.match(instruction, /카드의 적용 조건.*맞지 않으면.*보류/);
+  assert.doesNotMatch(instruction, /답변은 짧은 한국어로: 1\./);
   assert.doesNotMatch(instruction, /Seth Godin|Donald Miller|Eliyahu Goldratt/);
   assert.doesNotMatch(instruction, /3\. 다음 액션|4\. 승인 큐 후보|work_order로 올릴|개인 사업 기회 포착/);
   assert.deepEqual(state.writes, []);
