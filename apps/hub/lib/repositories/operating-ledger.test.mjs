@@ -751,3 +751,42 @@ test("marks a capped exact selected detail source partial instead of complete", 
   assert.equal(ledger.partialSources.includes("notes"), true);
   assert.equal(ledger.notes.filter((note) => note.projectId === selectedProjectId).length, 80);
 });
+
+test("narrows project_updates, decisions, notes and routine_checks reads to the fields their mappers use", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  const selectedProjectId = "44444444-4444-4444-8444-444444444444";
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 0 };
+  state.rows = { brands: [], projects: [], tasks: [] };
+  state.rowQueues = {
+    project_updates: [[], []],
+    decisions: [[], []],
+    notes: [[], []],
+    routine_checks: [[], []],
+  };
+
+  await operatingLedger.getProjectLedger({ projectId: selectedProjectId });
+
+  const EXPECTED_SELECT = {
+    project_updates: "id,project_id,source,event_type,status,title,summary,progress,milestone,next_action,correlation_id,provider_event_id,happened_at,created_at",
+    decisions: "id,project_id,title,summary,rationale,decided_at,created_at",
+    notes: "id,project_id,title,body,created_at",
+    routine_checks: "id,project_id,check_type,status,note,checked_at,created_at",
+  };
+
+  for (const [table, select] of Object.entries(EXPECTED_SELECT)) {
+    const calls = state.calls.filter((call) => call.kind === "fetch" && call.table === table);
+    assert.equal(
+      calls.length,
+      2,
+      `${table} must be fetched once for the bounded list and once for the exact selected project`,
+    );
+    for (const call of calls) {
+      assert.equal(call.options.select, select);
+      assert.ok(!call.options.select.includes("payload"), `${table} select must not read payload`);
+      assert.ok(!call.options.select.includes("meta"), `${table} select must not read meta`);
+    }
+  }
+});

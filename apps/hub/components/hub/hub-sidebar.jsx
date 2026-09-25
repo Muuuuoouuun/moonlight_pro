@@ -61,8 +61,9 @@ function useAnchorCounts() {
 
   React.useEffect(() => {
     let active = true;
+    const controller = new AbortController();
 
-    fetch('/api/hub/followups', { cache: 'no-store' })
+    fetch('/api/hub/followups', { cache: 'no-store', signal: controller.signal })
       .then(r => {
         if (!r.ok) throw new Error(`followups ${r.status}`); // 실패 시 뱃지 생략(0으로 위장 금지)
         return r.json();
@@ -78,9 +79,9 @@ function useAnchorCounts() {
         // 고객 연락 앵커가 2026-09-24 영업·매출의 첫 탭(오늘 연락)이 되면서 뱃지도 따라왔다.
         setCounts(c => ({ ...c, revenue: due }));
       })
-      .catch(() => {});
+      .catch(() => {}); // 기존 오류 무시 — abort도 이 경로로 흡수되어 뱃지 상태를 바꾸지 않는다.
 
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, []);
 
   return counts;

@@ -18,6 +18,8 @@ const ENTITY_TYPE_ORDER = new Map([
   ["lead", 0],
   ["customer_account", 1],
 ]);
+const ENTITY_CATALOG_SELECT = "id,name,status";
+const AREA_SELECT = "id,name,slug,status";
 
 function clampProgress(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -137,6 +139,7 @@ export function buildProjectCatalogFetchPlan() {
     areas: {
       table: "areas",
       options: {
+        select: AREA_SELECT,
         order: "name.asc",
         filters: [["status", "eq.active"]],
       },
@@ -144,6 +147,7 @@ export function buildProjectCatalogFetchPlan() {
     leads: {
       table: "leads",
       options: {
+        select: ENTITY_CATALOG_SELECT,
         limit: 160,
         order: "name.asc",
         filters: [["status", `in.(${LEAD_STATUS_VALUES.join(",")})`]],
@@ -152,6 +156,7 @@ export function buildProjectCatalogFetchPlan() {
     accounts: {
       table: "customer_accounts",
       options: {
+        select: ENTITY_CATALOG_SELECT,
         limit: 80,
         order: "name.asc",
         filters: [["status", `in.(${CUSTOMER_ACCOUNT_STATUS_VALUES.join(",")})`]],
@@ -160,11 +165,18 @@ export function buildProjectCatalogFetchPlan() {
   };
 }
 
+const REFERENCE_SELECT_BY_TABLE = {
+  areas: AREA_SELECT,
+  leads: ENTITY_CATALOG_SELECT,
+  customer_accounts: ENTITY_CATALOG_SELECT,
+};
+
 function referenceFetch(table, ids) {
   if (ids.length === 0) return null;
   return {
     table,
     options: {
+      select: REFERENCE_SELECT_BY_TABLE[table],
       limit: ids.length,
       filters: [["id", `in.(${ids.join(",")})`]],
     },

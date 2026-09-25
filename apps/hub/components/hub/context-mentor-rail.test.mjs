@@ -28,7 +28,8 @@ test('rail reads the same source-backed daily Guru and weekly Legend cards witho
   assert.match(source, /GuidanceSource source=\{card\.source\}/);
   assert.match(source, /setOffset\(/);
   assert.match(source, /onGuidanceAsk\?\.\(card\)/);
-  assert.match(source, /onNavigate\?\.\('dashboard\/agents\/chat'\)/);
+  assert.match(source, /onNavigate\?\.\(`dashboard\/agents\/chat\?card=\$\{encodeURIComponent\(card\.id\)\}`\)/);
+  assert.match(source, /이 글 읽기/);
   assert.doesNotMatch(source, /fetch\(|requestGuruCoaching\(|createWorkOrder\(|work_order/);
   const now = new Date('2026-09-24T00:00:00Z');
   assert.ok(GURU_CARDS.some(card => card.id === selectGuidanceCard({ cadence: 'daily', domain: 'marketing', now }).id));

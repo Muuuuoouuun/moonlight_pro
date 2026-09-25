@@ -38,6 +38,9 @@ struct FocusShieldView: View {
         }
         .tint(Palette.moon300)
         .environment(\.colorScheme, .dark)
+        // The opaque focus scene already protects its text; never sample other
+        // windows through a button's behind-window reading material.
+        .environment(\.glassReadingProtected, true)
     }
 
     private var timerCard: some View {

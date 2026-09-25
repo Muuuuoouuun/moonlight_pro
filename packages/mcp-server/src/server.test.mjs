@@ -17,4 +17,7 @@ test('readOnly keeps exactly the tools annotated readOnlyHint, in every profile'
 test('the package version and operating instructions are exported for every transport',()=>{
   assert.match(version,/^\d+\.\d+\.\d+$/);
   assert.match(INSTRUCTIONS,/commandId/);
+  assert.match(INSTRUCTIONS,/get_skill_request/);
+  assert.match(INSTRUCTIONS,/record_skill_receipt/);
+  assert.match(INSTRUCTIONS,/never completes the linked task/);
 });

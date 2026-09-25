@@ -1,8 +1,9 @@
 import AppKit
 import Foundation
+import Combine
 
 enum QuickMode: String, CaseIterable, Identifiable {
-    case tasks, memo, calendar, office, council, focus
+    case tasks, memo, calendar, office, council, focus, notifications
 
     var id: String { rawValue }
 
@@ -14,6 +15,7 @@ enum QuickMode: String, CaseIterable, Identifiable {
         case .office: return "Office"
         case .council: return "Council"
         case .focus: return "집중"
+        case .notifications: return "알림"
         }
     }
 
@@ -25,6 +27,7 @@ enum QuickMode: String, CaseIterable, Identifiable {
         case .office: return "person.2.fill"
         case .council: return "bubble.left.and.bubble.right.fill"
         case .focus: return "timer"
+        case .notifications: return "bell"
         }
     }
 
@@ -36,6 +39,7 @@ enum QuickMode: String, CaseIterable, Identifiable {
         case .office: return "4"
         case .council: return "5"
         case .focus: return "6"
+        case .notifications: return "7"
         }
     }
 
@@ -47,6 +51,7 @@ enum QuickMode: String, CaseIterable, Identifiable {
         case .office: return "/dashboard/agents/office-council"
         case .council: return "/dashboard/agents/council"
         case .focus: return nil
+        case .notifications: return "/dashboard/revenue/inquiries?filter=unread"
         }
     }
 }
@@ -54,12 +59,6 @@ enum QuickMode: String, CaseIterable, Identifiable {
 typealias CompactMode = QuickMode
 
 enum CompanionSurface { case quick, widget }
-
-struct LocalTask: Codable, Identifiable, Equatable {
-    var id: UUID
-    var title: String
-    var isDone: Bool
-}
 
 struct FocusClock: Equatable {
     let endsAt: Date
@@ -71,7 +70,9 @@ struct FocusClock: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var activeCompanion: CompanionSurface?
+    @Published var activeCompanion: CompanionSurface? {
+        didSet { updateHubRefresh() }
+    }
     @Published var mode: QuickMode = .tasks
     @Published var compactMode: CompactMode = .tasks
     @Published var compactOpenRevision = 0
@@ -91,16 +92,30 @@ final class AppModel: ObservableObject {
     @Published var showStopConfirmation = false
     @Published var hubBaseURL = "http://127.0.0.1:3000"
     @Published var selectedCharacter: PetCharacter = .silver {
-        didSet { defaults.set(selectedCharacter.rawValue, forKey: "petPreview.character") }
+        didSet {
+            defaults.set(selectedCharacter.rawValue, forKey: "petPreview.character")
+            if !chat.isSending { chat.agent = selectedCharacter.officeAgent }
+        }
     }
 
     var onFocusFinished: (() -> Void)?
+    let hub: HubStore
+    let activity: PetActivityStore
+    let council: CouncilDraftStore
+    let chat = OfficeChatStore()
+    var onOpenMode: ((QuickMode) -> Void)?
+    private var featureObservers: Set<AnyCancellable> = []
+    private var hubObserver: AnyCancellable?
+    private var refreshLoop: Task<Void, Never>?
     private let defaults: UserDefaults
     private var focusClock: FocusClock?
     private var timer: Timer?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        hub = HubStore(defaults: defaults)
+        activity = PetActivityStore(defaults: defaults)
+        council = CouncilDraftStore(defaults: defaults)
         if let data = defaults.data(forKey: "petPreview.tasks"),
            let decoded = try? JSONDecoder().decode([LocalTask].self, from: data) {
             tasks = decoded
@@ -110,11 +125,67 @@ final class AppModel: ObservableObject {
         taskDraft = defaults.string(forKey: "petPreview.taskDraft") ?? ""
         hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? "http://127.0.0.1:3000"
         selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
+        chat.agent = selectedCharacter.officeAgent
     }
 
-    var openTaskCount: Int { tasks.filter { !$0.isDone }.count }
+    var displayedTasks: [LocalTask] { hub.isEnabled ? hub.tasks.map(\.local) : tasks }
+    var openTaskCount: Int { displayedTasks.filter { !$0.isDone }.count }
+    var taskStatusLabel: String { hub.isEnabled ? (hub.isRefreshing ? "Hub 새로고침 중…" : hub.connectionLabel) : "이 Mac에 저장" }
+    var memoStatusLabel: String {
+        if hub.isSavingMemo { return "Mac에 보관 · Hub 저장 중…" }
+        if hub.isEnabled, hub.savedMemoBody == memoDraft, !hub.hasPendingMemo { return "Hub에 저장됨 · Mac에 보관" }
+        return memoDraft.isEmpty ? "이 Mac에 자동 저장" : "Mac에 자동 저장됨"
+    }
+
+    func startHubConnection() {
+        hubObserver = hub.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        activity.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
+        council.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
+        chat.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
+        hub.onConnectionChanged = { [weak self] service, origin in
+            self?.activity.configure(service: service as? any HubActivityServing, origin: origin)
+            self?.chat.configure(service: service as? any HubOfficeServing, origin: origin)
+        }
+        chat.onReply = { [weak self] turn in
+            guard let self else { return }
+            let isReading = !self.isFocused && ((self.activeCompanion == .quick && self.mode == .council)
+                || (self.activeCompanion == .widget && self.compactMode == .council))
+            if !isReading {
+                self.activity.addAgentReply(id: turn.id.uuidString, agentID: turn.agent.rawValue,
+                    scope: turn.scope.rawValue, title: "\(turn.agent.title)의 답변이 왔어요",
+                    detail: String(turn.reply.answer.prefix(80)))
+            }
+        }
+        guard hub.isEnabled else { activity.configure(service: nil, origin: nil); return }
+        Task { await hub.connect(baseURL: hubBaseURL) }
+    }
+
+    func saveMemoToHub() {
+        saveMemo()
+        let body = memoDraft
+        Task { await hub.saveMemo(body: body) }
+    }
+
+    func saveMemoAsNewToHub() {
+        saveMemo()
+        let body = memoDraft
+        Task { await hub.saveMemoAsNew(body: body) }
+    }
+
+    private func updateHubRefresh() {
+        refreshLoop?.cancel()
+        guard activeCompanion != nil else { return }
+        refreshLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                if self.hub.isEnabled { await self.hub.refresh() }
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            }
+        }
+    }
 
     var previewText: String {
+        if hub.isEnabled && !hub.taskReady { return hub.connectionLabel + " · 펫에서 연결 상태를 확인해요." }
         if openTaskCount > 0 { return "할 일 \(openTaskCount)개가 남아 있어요." }
         if !savedMemo.isEmpty { return "저장한 메모가 있어요." }
         return "새 알림은 없어요. 펫을 눌러 빠른 기능을 열어요."
@@ -122,19 +193,27 @@ final class AppModel: ObservableObject {
 
     func addTask() {
         let value = taskDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return }
+        guard !value.isEmpty || (hub.isEnabled && hub.hasPendingTask) else { return }
+        if hub.isEnabled {
+            Task {
+                if let saved = await hub.createTask(title: value), taskDraft.trimmingCharacters(in: .whitespacesAndNewlines) == saved { taskDraft = "" }
+            }
+            return
+        }
         tasks.insert(LocalTask(id: UUID(), title: value, isDone: false), at: 0)
         taskDraft = ""
         persistTasks()
     }
 
     func toggleTask(_ id: UUID) {
+        if hub.isEnabled { Task { await hub.toggleTask(id) }; return }
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].isDone.toggle()
         persistTasks()
     }
 
     func removeTask(_ id: UUID) {
+        guard !hub.isEnabled else { return }
         tasks.removeAll { $0.id == id }
         persistTasks()
     }
@@ -144,18 +223,68 @@ final class AppModel: ObservableObject {
         defaults.set(savedMemo, forKey: "petPreview.memo")
     }
 
-    /// The user explicitly chooses this action; no message is submitted to Council.
-    func continueMemoInCouncil() {
+    func continueMemoInCouncil() { prepareCouncilFromMemo() }
+
+    func prepareCouncilFromMemo() {
         saveMemo()
-        if !memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(memoDraft, forType: .string)
+        chat.draft = memoDraft; chat.source = .memo
+        onOpenMode?(.council)
+    }
+    func prepareCouncilFromTask(_ task: LocalTask) {
+        chat.draft = task.title; chat.source = .task
+        onOpenMode?(.council)
+    }
+    var canSendCouncil: Bool {
+        chat.hasConnection && !chat.isSending && chat.draft.utf16.count <= 6000
+            && !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    func sendCouncilMessage() {
+        guard canSendCouncil else { return }
+        chat.sendDraft()
+    }
+    var canOpenChatInCouncil: Bool {
+        !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && chat.draft.utf16.count <= 4000
+    }
+    func openChatInCouncil() {
+        guard canOpenChatInCouncil else { return }
+        council.prepare(chat.draft, source: chat.source)
+        openCouncilDraft()
+    }
+    func openCouncilDraft() {
+        do {
+            let url = try council.handoffURL(baseURL: hubBaseURL)
+            council.handoffMessage = NSWorkspace.shared.open(url)
+                ? "브라우저에서 안건을 검토해 주세요. 초안은 이 Mac에도 남아 있어요."
+                : "브라우저를 열지 못했어요. 초안은 그대로 보관돼요."
+        } catch { council.handoffMessage = "안건과 Hub 주소를 확인해 주세요. 초안은 그대로 보관돼요." }
+    }
+    func markCouncilRepliesRead() {
+        activity.acknowledgeAgentReplies(agentID: chat.agent.rawValue, scope: chat.scope.rawValue)
+    }
+    func showNotifications() { onOpenMode?(.notifications) }
+    func openNotification(_ notice: PetNotice) {
+        if notice.kind == .agent {
+            guard let id = notice.agentID, let agent = OfficeAgent(rawValue: id),
+                  let scope = notice.scope, let scopeValue = OfficeChatScope(rawValue: scope) else { return }
+            chat.agent = agent; chat.scope = scopeValue
+            activity.dismiss(id: notice.id)
+            onOpenMode?(.council)
+        } else if notice.kind == .calendar {
+            hub.selectedDate = notice.eventDate ?? Date()
+            onOpenMode?(.calendar)
+        } else {
+            guard let base = URL(string: hubBaseURL), let origin = try? HubTransport.validatedBaseURL(base),
+                  notice.path.hasPrefix("/dashboard/revenue/inquiries?"),
+                  let url = URL(string: notice.path, relativeTo: origin)?.absoluteURL else { return }
+            NSWorkspace.shared.open(url)
         }
-        openHub(.council)
+        activity.dismissBanner()
     }
 
     func saveHubURL() {
-        hubBaseURL = hubBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: hubBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let validated = try? HubTransport.validatedBaseURL(url) else { return }
+        hubBaseURL = validated.absoluteString
         defaults.set(hubBaseURL, forKey: "petPreview.hubURL")
     }
 

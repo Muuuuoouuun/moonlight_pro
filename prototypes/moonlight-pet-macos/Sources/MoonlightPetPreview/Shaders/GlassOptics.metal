@@ -22,6 +22,10 @@ float2 glassNormal(float2 p, float2 size, float r) {
                       glassDistance(p + float2(0,.25), size,r) - glassDistance(p - float2(0,.25),size,r));
     return g / max(length(g), .0001);
 }
+float reflectionBand(float depth, float center, float width) {
+    float distance = (depth-center)/width;
+    return exp(-distance*distance);
+}
 // App-owned calibration scene. Both lab halves evaluate precisely the same field.
 // Re-evaluating it at displaced positions is genuine refraction of this scene;
 // it does not capture, reconstruct or sample any desktop windows.
@@ -65,31 +69,54 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     float2 outward = glassNormal(p,u.rect.zw,r);
     float3 normal = normalize(float3(outward*slope,1));
     float3 lamp = normalize(float3(-.55 + u.light.x*.22,-.65 + u.light.y*.22,.72));
-    float specular = pow(max(0.0,dot(normal,normalize(lamp+float3(0,0,1)))),22.0);
+    float specular = pow(max(0.0,dot(normal,normalize(lamp+float3(0,0,1)))),40.0);
+    float3 bounce = normalize(float3(.62-u.light.x*.12,.48-u.light.y*.12,.52));
+    float reflected = pow(max(0.0,dot(normal,normalize(bounce+float3(0,0,1)))),52.0);
     float fresnel = .035 + .965 * pow(1.0-normal.z,5.0);
-    float hairline = 1.0-smoothstep(.35/u.viewport.z,1.25/u.viewport.z,depth);
-    float highlight = clamp(.58*specular*(1.0-t) + .42*fresnel*(1.0-t) + .30*hairline,0.0,.82);
+    float hairline = 1.0-smoothstep(.20/u.viewport.z,.95/u.viewport.z,depth);
+    // Separate the crisp lip, curved key light and weaker reflected light.
+    // None of these spread across the content-bearing flat face.
+    float highlight = clamp((.46*specular + .17*reflected + .26*fresnel)*(1.0-t)
+                            + .22*hairline,0.0,.68);
     float shadow = (1.0-t) * .09 * exp(-pow((depth-bevel*.75)/(bevel*.32),2.0)) * max(0.0,dot(outward,float2(.7,.7)));
     if (u.light.z > .5) {
         if (lab) return float4(mix(backdrop,float3(.92)*(1-hairline*.6),coverage),1);
         float a = hairline*.65*coverage;
         return float4(float3(.15)*a,a);
     }
+    // A restrained spectrum in the rounded lip, not a rainbow frame. Its
+    // direction follows the surface normal; wavelength peaks are subpoint
+    // offsets and vanish before the flat face. On desktop this is a simulated
+    // reflected light, not refraction of windows behind the application.
+    float dispersion = .36*clamp(u.material.z,0.0,1.8);
+    float direction = dot(outward,normalize(float2(-.7,-.5))) >= 0 ? 1.0 : -1.0;
+    float center = min(1.35,bevel*.18);
+    float width = max(.52,.72/u.viewport.z);
+    float3 spectrum = float3(reflectionBand(depth,center-dispersion*direction,width),
+                              reflectionBand(depth,center,width),
+                              reflectionBand(depth,center+dispersion*direction,width));
+    float litArc = .24 + .76*pow(abs(dot(outward,normalize(float2(-.7+u.light.x*.1,-.5+u.light.y*.1)))),3.0);
+    float3 prism = spectrum * (.11*litArc*(1.0-t));
     if (!lab) {
         // Premultiplied alpha; exactly transparent center, pass-through input.
-        float a = (highlight+shadow)*coverage;
-        return float4(float3(highlight)*coverage,a);
+        float3 reflection = float3(highlight) + prism;
+        float a = (max(reflection.r,max(reflection.g,reflection.b))+shadow)*coverage;
+        return float4(reflection*coverage,a);
     }
+    // Wavelength-dependent IOR samples only the app-owned calibration field.
+    float travel = (bevel*.28 + height*bevel) * u.material.z;
     float3 ray = refract(float3(0,0,-1),normal,1.0/1.46);
-    float2 displacement = ray.xy / max(.1,-ray.z) * (bevel*.28 + height*bevel) * u.material.z;
+    float3 redRay = refract(float3(0,0,-1),normal,1.0/1.453);
+    float3 blueRay = refract(float3(0,0,-1),normal,1.0/1.472);
+    float2 displacement = ray.xy / max(.1,-ray.z) * travel;
     float2 samplePoint = point + displacement;
     float blur = .7 * (1.0-t); // edge softness; the flat center remains clear
     float3 glass = softened(samplePoint,u,blur);
     // Small edge dispersion; never offsets or blurs the foreground text.
-    glass.r = softened(point + displacement*.992,u,blur).r;
-    glass.b = softened(point + displacement*1.012,u,blur).b;
+    glass.r = softened(point + redRay.xy/max(.1,-redRay.z)*travel,u,blur).r;
+    glass.b = softened(point + blueRay.xy/max(.1,-blueRay.z)*travel,u,blur).b;
     // Preserve the background: no white floor, panel tint or central blur.
     // Specular light belongs to the bevel rather than a fill across the card.
-    glass = glass*(1-shadow) + highlight*.54;
+    glass = glass*(1-shadow) + highlight*.54 + prism*.65;
     return float4(mix(backdrop,clamp(glass,0.0,1.0),coverage),1);
 }

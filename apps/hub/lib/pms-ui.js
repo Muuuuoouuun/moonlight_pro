@@ -897,6 +897,7 @@ export function buildTaskBoardColumns(todos = [], projects = []) {
       checklist: readTaskChecklist(todo),
     ...(projectItemType(todo) !== "task" ? { itemType: projectItemType(todo) } : {}),
       tag: project?.tag || null,
+      ...(project?.workType ? { workType: project.workType } : {}),
       priority: todo.priority,
       project: project?.name || "미지정",
       projectId: project?.id || null,

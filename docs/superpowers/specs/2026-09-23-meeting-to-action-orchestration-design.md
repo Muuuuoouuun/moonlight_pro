@@ -1,6 +1,6 @@
 # 회의·녹음·메모에서 실행까지 — 통합 정리와 배분 설계
 
-> 상태: **DRAFT · 권장안 / M0 텍스트 검토와 M0.5 실행 계획 코드 구현(2026-09-23)**. 운영 DB 적용·배포·실사용 품질 인증을 뜻하지 않는다. 실제 구현과 이 설계의 차이는 [M0 구현 기록](../plans/2026-09-23-meeting-text-review-m0.md)을 따른다.
+> 상태: **DRAFT · 권장안 / M0 텍스트 검토와 M0.5 실행 계획 코드 구현(2026-09-23)**. 0045·0046 마이그레이션은 2026-09-24 22:51 KST 운영 DB에 적용됐지만, 배포·실사용 품질 인증을 뜻하지 않는다. 실제 구현과 이 설계의 차이는 [M0 구현 기록](../plans/2026-09-23-meeting-text-review-m0.md)을 따른다.
 > 상위 정본: [운영자 업무 프로필](../../operator-workflow-profile.md) §음성·메시지 분석, [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md) §15, [업무 안의 Eevee Office](2026-09-21-eevee-office-embedded-workflow-deep-design.md).
 > 관계: 위 문서의 확정 정책을 **대체하지 않는다**. [CRM 기록·리드 스코어링 지침](2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md)의 근거 중심 방향과 [Office 품질 재기획](../plans/2026-09-23-office-agent-quality-replan.md)을 실행 입력 관점에서 연결한다. 이 문서의 UI·스키마·라우팅은 권장안이다.
 

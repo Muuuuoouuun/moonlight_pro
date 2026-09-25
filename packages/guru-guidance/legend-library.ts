@@ -51,7 +51,9 @@ export interface LegendEntry extends LegendMicroCard {
   status: LegendStatus;
 }
 
-export const LEGEND_LIBRARY_VERSION = '2026-09-25.1';
+// 2026-09-26.1: Hill's card says 기록, not 원장 — the operator retired 원장 for the ledger sense
+// on 2026-09-22 (only 학원 원장, the person, stays).
+export const LEGEND_LIBRARY_VERSION = '2026-09-26.1';
 
 const LONG_CARD_SPEC = 'docs/superpowers/specs/2026-09-12-legend-values-persona-cards.md';
 const MICRO_CARD_SPEC = 'docs/superpowers/specs/2026-09-21-council-mentor-guru-legend-operating-framework.md';
@@ -387,8 +389,8 @@ const ENTRIES: readonly LegendEntry[] = [
     category: 'resilience',
     coreValue: '명확한 목표(Definite Chief Aim)에 대한 절대적 자기 확신을 갖고, 반드시 그에 상응하는 대가를 치른다.',
     acceptableCost: '막연한 희망에 기대는 안일함을 버리고, 목표 달성을 위해 바쳐야 할 시간과 규율의 고통을 감수한다.',
-    pivotCondition: '목표를 달성하기 위해 지불할 구체적인 대가(노력, 시간, 포기할 것)가 원장에 명시되지 않았을 때 계획을 전면 수정한다.',
-    piercingQuestion: '이 목표를 위해 오늘 정확히 어떤 대가(Stop-Doing과 구체적 땀)를 치르기로 원장에 기록했습니까?',
+    pivotCondition: '목표를 달성하기 위해 지불할 구체적인 대가(노력, 시간, 포기할 것)가 기록에 명시되지 않았을 때 계획을 전면 수정한다.',
+    piercingQuestion: '이 목표를 위해 오늘 정확히 어떤 대가(Stop-Doing과 구체적 땀)를 치르기로 기록에 남겼습니까?',
     boundaryCondition: '구체적 행동과 정량적 데이터가 결여된 맹목적인 주문이나 긍정 확언에 기대지 않는다.',
     sourceCitation: '1937년 『생각하라 그리고 부자가 되어라(Think and Grow Rich)』, 1928년 『성공의 법칙』',
     sourceUrls: [],

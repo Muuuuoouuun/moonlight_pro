@@ -27,6 +27,33 @@ function useCompactDrawer() {
   return compact;
 }
 
+export function renderFormattedMentorText(text) {
+  if (typeof text !== 'string') return null;
+  const lines = text.split('\n');
+  return lines.map((line, lineIndex) => {
+    const parts = [];
+    const regex = /\*\*(.+?)\*\*/g;
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(line)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(line.slice(lastIndex, match.index));
+      }
+      parts.push(<strong key={`b-${lineIndex}-${match.index}`}>{match[1]}</strong>);
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < line.length) {
+      parts.push(line.slice(lastIndex));
+    }
+    return (
+      <React.Fragment key={`l-${lineIndex}`}>
+        {lineIndex > 0 ? <br /> : null}
+        {parts.length > 0 ? parts : null}
+      </React.Fragment>
+    );
+  });
+}
+
 // The result card can mount this without opening another surface or calling a model.
 // Its disclosure starts closed; only the explicit continuation button opens chat.
 export function OfficeMentorReferenceCard({ answer, target = '멘토', onContinue, sourceTruncation = null }) {
@@ -37,7 +64,7 @@ export function OfficeMentorReferenceCard({ answer, target = '멘토', onContinu
     <div className="office-mentor__reference-body">
       <div className="office-mentor__reference-meta"><CertaintyBadge state="recommended" /> <span>판단에 참고할 의견입니다.</span></div>
       <PartialSourceNote sourceTruncation={sourceTruncation} />
-      <p>{answer}</p>
+      <p>{renderFormattedMentorText(answer)}</p>
       {onContinue ? <Button variant="outline" size="sm" onClick={onContinue}>이어서 상담</Button> : null}
     </div>
   </details>;
@@ -108,7 +135,7 @@ export function OfficeMentorDrawer({ sessionId, store = officeMentorSessions, on
       ? <OfficeMentorReferenceCard key={turn.id} answer={turn.answer} target={target} sourceTruncation={turn.sourceTruncation} />
       : <article key={turn.id} className="office-mentor__turn">
         <div className="office-mentor__turn-question"><span>나 · {index + 1}번째 질문</span><p>{turn.question}</p></div>
-        <div className="office-mentor__turn-answer"><span>{target}</span><PartialSourceNote sourceTruncation={turn.sourceTruncation} /><p>{turn.answer}</p></div>
+        <div className="office-mentor__turn-answer"><span>{target}</span><PartialSourceNote sourceTruncation={turn.sourceTruncation} /><p>{renderFormattedMentorText(turn.answer)}</p></div>
       </article>)}
 
     {hasAnswer ? <TextAreaField

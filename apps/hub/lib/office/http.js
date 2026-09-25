@@ -3,7 +3,7 @@ import { assertHubWriteAllowed,readHubWriteJson } from '../hub-write-guard.js';
 import { readOfficeContext } from '../repositories/office-context.js';
 import { recordAgentRun } from '../sales-os/agent-runs.js';
 import { callOfficeEngine } from './engine-client.js';
-export function createOfficeHubHandler({guard=assertHubWriteAllowed,readContext=readOfficeContext,callEngine=callOfficeEngine,recordRun=recordAgentRun}={}) {
+export function createOfficeHubHandler({guard=assertHubWriteAllowed,readContext=readOfficeContext,callEngine=(req,ctx)=>callOfficeEngine(req,ctx,{retries:1}),recordRun=recordAgentRun}={}) {
  return async req=>{
   const denied=guard(req);if(denied)return denied;
   const body=await readHubWriteJson(req,{maxBytes:90000});if(body.error)return body.error;

@@ -267,6 +267,8 @@ test('verification notes follow the source-quality review and never claim a full
     const { verification } = doc;
     assert.equal(verification.basis, QUALITY_REVIEW_PATH);
     assert.equal(verification.basisSha256, sha256(review));
+    // The screen shows the review's own title, not its repository path (09-25 reading-article decision).
+    assert.equal(verification.basisTitle, /^# (.+)$/m.exec(review)[1].trim());
     assert.ok(verification.unverified.length > 10, doc.path);
     const reviewed = review.includes(`\`${doc.path}\``);
     assert.equal(verification.status, reviewed ? 'partial' : 'not-reviewed', doc.path);

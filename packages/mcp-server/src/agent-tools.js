@@ -4,14 +4,13 @@ import {agentRequest,agentToolResult} from './agent-client.js';
 const uuid=()=>z.string().uuid();
 const text=(max)=>z.string().max(max);
 const utf8Text=(maxBytes)=>z.string().max(maxBytes).refine(value=>Buffer.byteLength(value,'utf8')<=maxBytes,`Must fit ${maxBytes} UTF-8 bytes`).describe(`Maximum ${maxBytes} UTF-8 bytes.`);
-const outputSchema=z.object({status:z.string()}).passthrough();
 const listSchema={detail:z.enum(['summary','rows','full']).optional(),limit:z.number().int().min(1).max(100).optional(),cursor:text(4096).optional(),fields:z.array(text(80)).max(30).optional(),fresh:z.boolean().optional()};
 const checklist=z.array(z.object({id:uuid(),title:z.string().min(1).max(200),done:z.boolean(),note:text(500).optional()})).max(50).optional();
 const taskFields={checklist,title:text(300).optional(),description:text(4000).nullable().optional(),projectId:uuid().nullable().optional(),dealId:uuid().nullable().optional(),status:z.enum(['inbox','todo','doing','blocked','done']).optional(),priority:z.enum(['low','medium','high','critical']).optional(),nextAction:text(1000).nullable().optional(),dueAt:text(100).nullable().optional()};
 const {dealId: _createOnlyDealId,...taskUpdateFields}=taskFields;
 const output=(result)=>agentToolResult(result);
 function register(server,name,description,inputSchema,handler,{write=false,idempotent=true}={}){
-  server.registerTool(name,{title:name.replaceAll('_',' '),description,inputSchema,outputSchema,annotations:{readOnlyHint:!write,destructiveHint:false,idempotentHint:idempotent,openWorldHint:write}},handler);
+  server.registerTool(name,{title:name.replaceAll('_',' '),description,inputSchema,annotations:{readOnlyHint:!write,destructiveHint:false,idempotentHint:idempotent,openWorldHint:write}},handler);
 }
 export function registerAgentTools(server,{replaceLegacy=true}={}){
   register(server,'get_hub_health','Check Agent API authentication, sources, granted actions, and worker availability. No writes.',{},async()=>output(await agentRequest('/capabilities')));

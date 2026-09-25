@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { OkrSummaryCard } from "../okr-summary-card";
 import { Iconed } from "../hub-icons";
 import { BrandIcon } from "../brand-icons";
+import { GuidanceInlineTip } from "../guidance-inline-tip";
 import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress, Skeleton } from "../hub-primitives";
 import {
   activitySeriesAvailability,
@@ -769,6 +770,8 @@ function OverviewSummary({ onNavigate }) {
           )
         )}
       </Card>
+
+      <GuidanceInlineTip variant="overview" onNavigate={onNavigate} />
 
       {/* 좌: 도메인 분포(무엇이 어디에 쌓여 있나) · 우: 흐름 레일(리듬 + 최근 활동).
           이전에는 7개 카드가 3+3+1 균등 격자로 늘어서 위계가 없었다(§3.1 "5초 안에 무엇이

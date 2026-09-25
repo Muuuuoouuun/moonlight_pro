@@ -222,7 +222,9 @@ function assignPriority(item, leadScoreByDealEntityId) {
 // 원본 기록(projectLedger/revenue/calendar)을 함께 받는다 — 첫 화면은 §7 확정 슬롯(KA·집중
 // 고객·오늘 일정·할 일 레인)을 원본 위에 프로젝션해야 하는데, 이걸 위해 같은 기록을 라우트가
 // 따로 또 읽으면(기존 구조) 우선순위 판정이 두 벌로 갈라진다. my-work 등 기존 소비자는
-// 옵션 미지정으로 기존 계약 그대로.
+// 옵션 미지정으로 기존 계약 그대로. revenue는 "full"이 아니라 "brief" 프로젝션을 쓴다 —
+// daily-brief/route.js·operator-revenue-scope.js·daily-focus.js 어디도 raw.revenue.accounts/
+// .cases를 읽지 않으므로(응답에도 실리지 않음) 그 두 테이블 읽기를 건너뛴다.
 export async function getAttentionLedger({ includeRaw = false } = {}) {
   const now = new Date();
   const todayKey = dateKey(now);
@@ -237,7 +239,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
       failedSources: ["tasks"],
       todos: [],
     })),
-    getRevenueLedger({ projection: includeRaw ? "full" : "attention" }).catch(() => ({
+    getRevenueLedger({ projection: includeRaw ? "brief" : "attention" }).catch(() => ({
       source: "error",
       error: "revenue-ledger-request-failed",
       failedSources: ["deals"],

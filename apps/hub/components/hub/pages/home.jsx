@@ -101,7 +101,7 @@ function useTodaySchedule(reloadKey) {
   return state;
 }
 
-function TriageDetail({ signal, onDecide, recommendation = null, onGuidanceAsk }) {
+function TriageDetail({ signal, onDecide, recommendation = null, onGuidanceAsk, onNavigate }) {
   if (!signal) {
     return (
       <div className="fx-card">
@@ -131,7 +131,7 @@ function TriageDetail({ signal, onDecide, recommendation = null, onGuidanceAsk }
       {/* 이 신호의 거래·고객에 저장된 사실이 있을 때만 — 결정 바로 옆에서 읽는 추천(§2.1 ⑦). */}
       {recommendation ? (
         <div style={{ marginTop: 16 }}>
-          <GuruRecommendation recommendation={recommendation} onAsk={onGuidanceAsk} compact />
+          <GuruRecommendation recommendation={recommendation} onAsk={onGuidanceAsk} onNavigate={onNavigate} compact />
         </div>
       ) : null}
 
@@ -316,11 +316,12 @@ export function Home({ onNavigate, onGuidanceAsk }) {
             onDecide={decide}
             recommendation={active?.subject?.id ? recommendationForSubject(guruRecommendations, active.subject.id) : null}
             onGuidanceAsk={onGuidanceAsk}
+            onNavigate={onNavigate}
           />
         </div>
       )}
 
-      <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onRetry={guruRecommendations.reload} />
+      <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onNavigate={onNavigate} onRetry={guruRecommendations.reload} />
 
       <TodaySchedule onNavigate={onNavigate} reloadKey={reloadKey} onReload={reload} />
 

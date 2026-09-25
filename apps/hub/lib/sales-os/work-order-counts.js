@@ -3,10 +3,16 @@ import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from '../server-writ
 
 const STATUSES = ['proposed', 'approved', 'executing', 'executed', 'dismissed'];
 
-export async function getWorkOrderCounts({ workspaceId = resolveDefaultWorkspaceId() } = {}) {
+export async function getWorkOrderCounts({ workspaceId = resolveDefaultWorkspaceId(), statuses = STATUSES } = {}) {
   if (!resolveSupabaseConfig() || !workspaceId) return { source: 'preview', counts: null };
 
-  const values = await Promise.all(STATUSES.map((status) =>
+  // Callers that only need one lifecycle count (e.g. daily-brief's approval-queue badge just
+  // reads counts.proposed) pass a narrower `statuses` so we don't count all five every time.
+  // An empty/unknown-only intersection falls back to the full set rather than counting nothing.
+  const requestedStatuses = statuses.filter((status) => STATUSES.includes(status));
+  const countedStatuses = requestedStatuses.length ? requestedStatuses : STATUSES;
+
+  const values = await Promise.all(countedStatuses.map((status) =>
     countSupabaseRows('work_orders', [
       ['workspace_id', eqFilter(workspaceId)],
       ['source', 'neq.inbox'],
@@ -17,5 +23,5 @@ export async function getWorkOrderCounts({ workspaceId = resolveDefaultWorkspace
     return { source: 'error', counts: null };
   }
 
-  return { source: 'supabase', counts: Object.fromEntries(STATUSES.map((status, index) => [status, values[index]])) };
+  return { source: 'supabase', counts: Object.fromEntries(countedStatuses.map((status, index) => [status, values[index]])) };
 }

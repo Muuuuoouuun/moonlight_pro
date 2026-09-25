@@ -56,7 +56,7 @@ export async function runOfficeResponse(request: OfficeRequest, context: OfficeC
         dissent: latest.map(turn => turn.objection).filter(Boolean).slice(0, 5),
       };
       const review = officeSourceReviewPrompt(discussionSynthesisPrompt(buildOfficeReview(request, context, draft), roles), sourceCatalog);
-      const reviewed = await call('synthesis', { ...review, model: roles.model, maxOutputTokens: 8192, signal, responseJsonSchema: reviewSchema, thinkingLevel: 'high' });
+      const reviewed = await call('synthesis', { ...review, model: roles.model, maxOutputTokens: 8192, signal, responseJsonSchema: reviewSchema, thinkingLevel: 'high', retries: 1 });
       if (!reviewed.ok || reviewed.model !== roles.model) {
         diagnostic('synthesis', signal.aborted ? 'deadline' : !reviewed.ok ? 'provider' : 'model-mismatch');
         throw new OfficeDiscussionError('synthesis-failed');
@@ -67,7 +67,7 @@ export async function runOfficeResponse(request: OfficeRequest, context: OfficeC
       checkDeadline('synthesis');
       return { ...meta, status: 'generated', ...answer, model: reviewed.model, discussion, generation: generation() };
     }
-    const result = await call('draft', { ...buildOfficePrompt(request, context), maxOutputTokens: 8192, signal, responseJsonSchema });
+    const result = await call('draft', { ...buildOfficePrompt(request, context), maxOutputTokens: 8192, signal, responseJsonSchema, retries: 1 });
     if (!result.ok) {
       diagnostic('draft', signal.aborted ? 'deadline' : 'provider');
       return { ...meta, status: result.reason === 'missing-api-key' ? 'preview' : 'error', error: result.reason === 'missing-api-key' ? 'AI 연결이 필요합니다. 입력은 보존됩니다.' : 'AI 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요.' };
@@ -76,7 +76,7 @@ export async function runOfficeResponse(request: OfficeRequest, context: OfficeC
     const draft = read('draft', 'contract', () => parseOfficeAnswer(raw, request.mode));
     checkDeadline('draft');
     const review = officeSourceReviewPrompt(buildOfficeReview(request, context, draft), sourceCatalog);
-    const reviewed = await call('review', { ...review, model: result.model, maxOutputTokens: 8192, signal, responseJsonSchema: reviewSchema, thinkingLevel: 'high' });
+    const reviewed = await call('review', { ...review, model: result.model, maxOutputTokens: 8192, signal, responseJsonSchema: reviewSchema, thinkingLevel: 'high', retries: 1 });
     if (!reviewed.ok || reviewed.model !== result.model) {
       diagnostic('review', signal.aborted ? 'deadline' : !reviewed.ok ? 'provider' : 'model-mismatch');
       return { ...meta, status: 'error', error: '답변 검수를 마치지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.' };

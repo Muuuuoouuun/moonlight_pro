@@ -7,11 +7,13 @@ import { GuidanceSourceReader } from "./guidance-source-reader";
 import "./guru-recommendation.css";
 
 // 기록 기반 추천 한 장 — 오늘·홈·고객 상세·거래 상세·Office 결과가 같은 모양을 쓴다
-// (agent-layer-direction §2.1 ⑦). 근거 사실을 항상 함께 보이고, 원문 열람과 질문은 운영자가
+// (agent-layer-direction §2.1 ⑦). 근거 사실을 항상 함께 보이고, 글 읽기·원문 열람·질문은 운영자가
 // 누를 때만 일어난다. 카드를 여는 것만으로는 조언·알림·업무를 만들지 않는다.
 //
 // recommendation: guru-recommendations.js(기록) 또는 agenda-guidance.js(안건 문구)의 결과.
 // onAsk(card, context): 있으면 "이 관점으로 질문" — ClassIn 레인이 확인된 기록에만 넘긴다.
+// onNavigate(path): 있으면 "이 글 읽기" — 카드의 Moonlight 글(서가 ?card=)이 주 읽기다
+//   (2026-09-25 내부 읽기 글 결정). "참고 원문"은 검수 전 인용·수치가 섞인 바탕 문서 절의 보조 읽기다.
 
 const CARD_BY_ID = new Map(GURU_CARDS.map((card) => [card.id, card]));
 
@@ -26,7 +28,7 @@ export function recommendationAskContext(recommendation) {
   return { label: subject.name || "", ref: String(subject.id), facts: [...(recommendation.facts || [])] };
 }
 
-export function GuruRecommendation({ recommendation, onAsk, showSubject = false, compact = false, className = "" }) {
+export function GuruRecommendation({ recommendation, onAsk, onNavigate, showSubject = false, compact = false, className = "" }) {
   const card = guruRecommendationCard(recommendation);
   const [sourceOpen, setSourceOpen] = React.useState(false);
   const readerId = React.useId();
@@ -55,6 +57,11 @@ export function GuruRecommendation({ recommendation, onAsk, showSubject = false,
         <div className="guru-rec__note"><TruthBadge state="partial" label="소속 확인 필요" reason="회사·개인 소속이 엇갈려 질문은 열지 않습니다" /></div>
       ) : null}
       <div className="guru-rec__actions">
+        {typeof onNavigate === "function" ? (
+          <button type="button" className="guru-rec__action" onClick={() => onNavigate(`dashboard/agents/chat?card=${encodeURIComponent(card.id)}`)}>
+            이 글 읽기
+          </button>
+        ) : null}
         <button
           type="button"
           className="guru-rec__action"
@@ -62,7 +69,7 @@ export function GuruRecommendation({ recommendation, onAsk, showSubject = false,
           aria-controls={sourceOpen ? readerId : undefined}
           onClick={() => setSourceOpen((open) => !open)}
         >
-          {sourceOpen ? "원문 접기" : "원문 보기"}
+          {sourceOpen ? "참고 원문 접기" : "참고 원문"}
         </button>
         {canAsk ? (
           <button type="button" className="guru-rec__action guru-rec__action--ask" onClick={() => onAsk(card, askContext)}>
@@ -79,7 +86,7 @@ export function GuruRecommendation({ recommendation, onAsk, showSubject = false,
 
 // 목록 표면(오늘·홈)용 — 지금 할 것(act) 몇 개만. 읽기 실패는 숨기지 않고, 추천이 없으면 아무것도
 // 그리지 않는다(첫 화면에 빈 칸을 늘리지 않는다). preview는 다른 첫 화면 영역이 이미 알린다.
-export function GuruRecommendationList({ result, onAsk, limit = 3, title = "기록 기반 추천", onRetry, className = "" }) {
+export function GuruRecommendationList({ result, onAsk, onNavigate, limit = 3, title = "기록 기반 추천", onRetry, className = "" }) {
   if (!result || result.status === "loading" || result.status === "idle" || result.status === "preview") return null;
   if (result.status === "error") {
     return (
@@ -104,7 +111,7 @@ export function GuruRecommendationList({ result, onAsk, limit = 3, title = "기�
       </div>
       <ul className="guru-rec-list__items">
         {items.map((rec) => (
-          <li key={rec.id}><GuruRecommendation recommendation={rec} onAsk={onAsk} showSubject compact /></li>
+          <li key={rec.id}><GuruRecommendation recommendation={rec} onAsk={onAsk} onNavigate={onNavigate} showSubject compact /></li>
         ))}
       </ul>
     </section>

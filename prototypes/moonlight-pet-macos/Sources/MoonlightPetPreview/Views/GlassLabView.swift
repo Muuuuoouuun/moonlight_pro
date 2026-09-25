@@ -93,15 +93,23 @@ private struct GlassLabStage: NSViewRepresentable {
         let background: OpticalGlassView?
         private let native: GlassPanel
         private let wash = PetGlassWash(radius: 30)
+        private let readingTone: GlassReadingTone
         private let foreground: NSView
         override var isFlipped: Bool { true }
         override init(frame: NSRect) {
+            let readingTone = GlassReadingTone()
+            self.readingTone = readingTone
             background = GlassOpticsRenderer.shared.map { OpticalGlassView(renderer: $0) }
-            native = GlassPanel.host(LabContent(),cornerRadius: 30)
-            let content = NSHostingView(rootView: LabContent().environment(\.colorScheme,.dark))
+            native = GlassPanel.host(LabContent().environment(\.glassReadsWithinWindow, true),cornerRadius: 30)
+            let content = NSHostingView(rootView: LabContent().environment(\.colorScheme,.dark)
+                .environment(\.glassReadsWithinWindow, true)
+                .environment(\.glassReadingTone, readingTone))
             content.sizingOptions = []
             foreground = content
             super.init(frame: frame)
+            wash.onPresentationChange = { [weak readingTone] character, opacity, solid in
+                readingTone?.update(character: character, opacity: opacity, solidForAccessibility: solid)
+            }
             if let background {
                 background.laboratory = true
                 background.radius = 30
@@ -147,7 +155,9 @@ private struct LabContent: View {
                 Spacer()
                 Image(systemName: "ellipsis").accessibilityHidden(true)
             }
-            TextField("입력 질감 확인",text: $text)
+            .modifier(GlassReadability(radius: 14, inset: 10))
+            TextField("입력 질감 확인",text: $text,
+                      prompt: Text("입력 질감 확인").foregroundStyle(Palette.glassInkFaint))
                 .textFieldStyle(.plain).font(.system(size: 15))
                 .padding(14).modifier(GlassInputSurface(focused: false))
                 .accessibilityLabel("재질 비교용 입력")
@@ -156,9 +166,11 @@ private struct LabContent: View {
                 Image(systemName: "checklist").font(.system(size: 26,weight: .light))
                 Text("빛, 곡면, 그리고 여백").font(.system(size: 15,weight: .medium))
                 Text("내용은 선명하게, 가장자리는 부드럽게.").font(.system(size: 12))
-            }.foregroundStyle(Palette.glassInkMuted).frame(maxWidth: .infinity)
+            }.foregroundStyle(Palette.glassInkMuted)
+                .padding(12).modifier(GlassReadability(radius: 14, inset: 3)).frame(maxWidth: .infinity)
             Spacer()
             Text("재질 비교 · 입력은 저장되지 않음").font(.system(size: 10.5)).foregroundStyle(Palette.glassInkMuted)
+                .modifier(GlassReadability(radius: 8, inset: 8))
         }.padding(24).foregroundStyle(Palette.glassInk)
     }
 }

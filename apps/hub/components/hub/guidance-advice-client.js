@@ -1,5 +1,24 @@
 import { GURU_CARDS } from '@com-moon/guru-guidance';
 
+const MAX_HISTORY_TURNS = 3;
+const MAX_QUESTION_CHARS = 1200;
+const MAX_ANSWER_CHARS = 2400;
+
+function scopedHistory(card, ref, history) {
+  if (!Array.isArray(history)) return [];
+  return history.filter(turn => turn && typeof turn === 'object'
+    && typeof turn.question === 'string' && turn.question.trim()
+    && typeof turn.answer === 'string' && turn.answer.trim()
+    && turn.guidanceId === card?.id
+    && (turn.ref || '') === ref,
+  ).slice(-MAX_HISTORY_TURNS).map(turn => ({
+    question: turn.question.trim().slice(0, MAX_QUESTION_CHARS),
+    answer: turn.answer.trim().slice(0, MAX_ANSWER_CHARS),
+    ...(card ? { guidanceId: card.id } : {}),
+    ...(ref ? { ref } : {}),
+  }));
+}
+
 // A question about one open record (the customer-detail Guru) names that record by its exact
 // id and carries only the facts the screen already showed. Without both, the question stays
 // general and sends no ref — a name is never a lookup key (2026-09-25).
@@ -11,26 +30,30 @@ function recordQuestion(context) {
   return ref && facts.length ? { ref, facts } : null;
 }
 
-export function guidanceRequest(card, question, context = {}) {
+export function guidanceRequest(card, question, context = {}, history = []) {
   if (card?.kind === 'legend') throw new Error('read-only');
   const text = String(question || '').trim();
   if (!text) throw new Error('question-required');
-  const known = GURU_CARDS.find(item => item.id === card?.id && item.domain === card?.domain);
-  if (!known) throw new Error('unknown-guidance-card');
+  const free = !card && context?.free === true;
+  const known = free ? null : GURU_CARDS.find(item => item.id === card?.id && item.domain === card?.domain);
+  if (!known && !free) throw new Error('unknown-guidance-card');
+  const ref = typeof context?.ref === 'string' ? context.ref.trim() : '';
+  const previous = scopedHistory(known, known?.domain === 'sales' || free ? '' : ref, history);
 
-  if (known.domain === 'sales') {
-    const record = recordQuestion(context);
+  if (free || known.domain === 'sales') {
+    const record = free ? null : recordQuestion(context);
     return {
       endpoint: '/api/hub/sales-mentor',
       target: '영업 Guru',
-      body: record
-        ? {
-            mode: 'open-question',
-            draft: ['[질문 대상 기록 — 화면에서 확인된 사실]', ...record.facts.map(fact => `- ${fact}`), '', '[운영자 질문]', text].join('\n'),
-            guidanceId: known.id,
-            ref: record.ref,
-          }
-        : { mode: 'open-question', draft: text, guidanceId: known.id },
+      body: {
+        mode: 'open-question',
+        draft: record
+          ? ['[질문 대상 기록 — 화면에서 확인된 사실]', ...record.facts.map(fact => `- ${fact}`), '', '[운영자 질문]', text].join('\n')
+          : text,
+        ...(known ? { guidanceId: known.id } : {}),
+        ...(record ? { ref: record.ref } : {}),
+        ...(previous.length ? { history: previous } : {}),
+      },
     };
   }
   return {
@@ -38,13 +61,14 @@ export function guidanceRequest(card, question, context = {}) {
     target: '브랜드 멘토',
     body: {
       mode: 'open-question', draft: text, guidanceId: known.id, createWorkOrder: false,
-      ...(typeof context.ref === 'string' && context.ref.trim() ? { ref: context.ref.trim() } : {}),
+      ...(ref ? { ref } : {}),
+      ...(previous.length ? { history: previous } : {}),
     },
   };
 }
 
-export async function requestGuidanceAdvice(card, question, context) {
-  const request = guidanceRequest(card, question, context);
+export async function requestGuidanceAdvice(card, question, context, history) {
+  const request = guidanceRequest(card, question, context, history);
   try {
     const response = await fetch(request.endpoint, {
       method: 'POST',

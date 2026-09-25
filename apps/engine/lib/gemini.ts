@@ -3,6 +3,11 @@ export interface GeminiMediaPart {
   base64: string;
 }
 
+export interface GeminiSafetySetting {
+  category: string;
+  threshold: string;
+}
+
 export interface GeminiGenerateInput {
   prompt: string;
   systemInstruction?: string;
@@ -19,6 +24,9 @@ export interface GeminiGenerateInput {
   // packages/content-manager/card-news/generator.ts.
   responseMimeType?: string;
   thinkingBudget?: number;
+  retries?: number;
+  temperature?: number;
+  safetySettings?: GeminiSafetySetting[];
 }
 
 const FAILURE_CATEGORIES = new Set([
@@ -173,6 +181,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       // thinking + a full answer. maxOutputTokens is a cap, not a charge — billing is per
       // actual token — so a generous default is safe.
       maxOutputTokens: input.maxOutputTokens || 8192,
+      ...(typeof input.temperature === 'number' ? { temperature: input.temperature } : {}),
       ...(input.responseJsonSchema ? {
         responseMimeType: "application/json", responseJsonSchema: input.responseJsonSchema,
       } : {}),
@@ -181,6 +190,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
         thinkingConfig: { thinkingLevel: input.thinkingLevel },
       } : {}),
     },
+    ...(Array.isArray(input.safetySettings) && input.safetySettings.length ? { safetySettings: input.safetySettings } : {}),
   };
 
   const generationConfig = body.generationConfig as Record<string, unknown>;
@@ -209,66 +219,87 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
 
   const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(45_000)]) : AbortSignal.timeout(45_000);
   let httpStatus: number | null = null;
-  try {
-    const response = await fetch(
-      `${status.apiBaseUrl.replace(/\/$/, "")}/models/${targetModel}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-goog-api-key": apiKey,
+  const maxRetries = typeof input.retries === 'number' && input.retries > 0 ? Math.min(input.retries, 2) : 0;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(
+        `${status.apiBaseUrl.replace(/\/$/, "")}/models/${targetModel}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-goog-api-key": apiKey,
+          },
+          body: JSON.stringify(body),
+          cache: "no-store",
+          signal,
         },
-        body: JSON.stringify(body),
-        cache: "no-store",
-        signal,
-      },
-    );
-    httpStatus = response.status;
-    const bodyText = await response.text();
-    let data: unknown = null;
-    let invalidJson = false;
-    try { data = bodyText ? JSON.parse(bodyText) : null; }
-    catch { invalidJson = true; }
-    const diagnostics = getGeminiResponseDiagnostics(data);
+      );
+      httpStatus = response.status;
+      if (attempt < maxRetries && (response.status === 502 || response.status === 503) && !signal.aborted) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      const bodyText = await response.text();
+      let data: unknown = null;
+      let invalidJson = false;
+      try { data = bodyText ? JSON.parse(bodyText) : null; }
+      catch { invalidJson = true; }
+      const diagnostics = getGeminiResponseDiagnostics(data);
 
-    if (!response.ok) {
+      if (!response.ok) {
+        return {
+          ok: false,
+          status: response.status,
+          reason: `http-${response.status}`,
+          failureCategory: classifyGeminiFailure({ status: response.status }),
+          ...diagnostics,
+          text: "",
+          model: targetModel,
+        };
+      }
+
+      const text = extractGeminiText(data);
+      const { finishReason, promptFeedback } = diagnostics;
+      const failureCategory = invalidJson ? 'invalid-json'
+        : promptFeedback && promptFeedback.blockReason !== 'BLOCK_REASON_UNSPECIFIED' ? 'blocked-prompt'
+        : finishReason !== 'STOP' ? (finishReason ? classifyGeminiFailure(diagnostics) : text ? 'incomplete-output' : 'empty-output')
+        : !text ? 'empty-output' : null;
+
+      return {
+        ok: failureCategory === null,
+        status: response.status,
+        reason: failureCategory ? finishReason && finishReason !== 'STOP' ? finishReason.toLowerCase() : failureCategory : 'ok',
+        failureCategory,
+        ...diagnostics,
+        text: failureCategory ? '' : text,
+        model: targetModel,
+      };
+    } catch (error) {
+      if (attempt < maxRetries && !signal.aborted) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      const failureCategory = classifyGeminiFailure(error, signal);
       return {
         ok: false,
-        status: response.status,
-        reason: `http-${response.status}`,
-        failureCategory: classifyGeminiFailure({ status: response.status }),
-        ...diagnostics,
+        status: httpStatus,
+        reason: failureCategory,
+        failureCategory,
+        ...emptyDiagnostics,
         text: "",
         model: targetModel,
       };
     }
-
-    const text = extractGeminiText(data);
-    const { finishReason, promptFeedback } = diagnostics;
-    const failureCategory = invalidJson ? 'invalid-json'
-      : promptFeedback && promptFeedback.blockReason !== 'BLOCK_REASON_UNSPECIFIED' ? 'blocked-prompt'
-      : finishReason !== 'STOP' ? (finishReason ? classifyGeminiFailure(diagnostics) : text ? 'incomplete-output' : 'empty-output')
-      : !text ? 'empty-output' : null;
-
-    return {
-      ok: failureCategory === null,
-      status: response.status,
-      reason: failureCategory ? finishReason && finishReason !== 'STOP' ? finishReason.toLowerCase() : failureCategory : 'ok',
-      failureCategory,
-      ...diagnostics,
-      text: failureCategory ? '' : text,
-      model: targetModel,
-    };
-  } catch (error) {
-    const failureCategory = classifyGeminiFailure(error, signal);
-    return {
-      ok: false,
-      status: httpStatus,
-      reason: failureCategory,
-      failureCategory,
-      ...emptyDiagnostics,
-      text: "",
-      model: targetModel,
-    };
   }
+
+  return {
+    ok: false,
+    status: httpStatus,
+    reason: 'provider-error',
+    failureCategory: 'provider-error',
+    ...emptyDiagnostics,
+    text: '',
+    model: targetModel,
+  };
 }

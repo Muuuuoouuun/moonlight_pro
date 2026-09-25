@@ -18,6 +18,8 @@ import { Iconed } from "../hub-icons";
 import { Avatar, Button, DateQuickPresets, EmptyState, Input, Kbd, Skeleton, TextField, TruthBadge, useToast } from "../hub-primitives";
 import { ContactRecordDrawer } from "../contact-record-form";
 import { RecordCandidates, resolveRecordCandidate } from "../record-candidates";
+import { SuggestionTip } from "../suggestion-tip";
+import { TIP_RULE_IDS, nudgeTipReason, useCrmNudges } from "../crm-nudge";
 import { KIND_LABEL, REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
@@ -185,7 +187,7 @@ function RescheduleChooser({ item, state, onPick, onCancel }) {
   );
 }
 
-function ContactRow({ item, variant, rail = false, leaving = false, selected = false, todayKey, onNavigate, onRecord, onReschedule, reschedule, onRescheduleOpen, onRescheduleClose }) {
+function ContactRow({ item, variant, rail = false, leaving = false, selected = false, todayKey, tip, onNavigate, onRecord, onReschedule, reschedule, onRescheduleOpen, onRescheduleClose }) {
   const org = item.company && item.company !== item.name ? item.company : null;
   const initial = String(org || item.name || "?").trim().slice(0, 1);
   const stage = stageLabel(item);
@@ -239,6 +241,17 @@ function ContactRow({ item, variant, rail = false, leaving = false, selected = f
               {promise}
               {why && <span className="today-contact__why"> · {why}</span>}
             </div>
+            {tip && (
+              <div className="today-contact__tip">
+                <SuggestionTip
+                  reason={tip.reason}
+                  action={tip.action}
+                  onAction={tip.onAction}
+                  onSnooze={tip.onSnooze}
+                  onDismiss={tip.onDismiss}
+                />
+              </div>
+            )}
             <div className="today-contact__meta">
               {lateDays != null && lateDays > 0 && (
                 // 레일 예산을 넘긴 '지남' 행은 색 대신 글리프 + 직접 라벨로 같은 사실을 말한다(§5.3).
@@ -366,6 +379,18 @@ function SectionHead({ title, count, danger = false, hint }) {
 export function Followups({ onNavigate }) {
   const toast = useToast();
   const { syncState, items, upcoming, dormant, week, failedSources, reload } = useFollowups();
+  // 넛지는 더 이상 전용 섹션이 아니다(운영자 2026-09-24) — 행 하나당 제안 팁 하나로 붙는다.
+  // 이미 다른 요소가 같은 사실을 말하는 규칙(놓친 약속 자체·기록할까요 섹션 등)은
+  // TIP_RULE_IDS가 걸러 낸다.
+  const crmNudges = useCrmNudges();
+  const nudgesBySubjectId = React.useMemo(() => {
+    const map = new Map();
+    for (const nudge of crmNudges.nudges || []) {
+      if (!TIP_RULE_IDS.has(nudge.ruleId)) continue;
+      map.set(String(nudge.subject.id), nudge);
+    }
+    return map;
+  }, [crmNudges.nudges]);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -449,6 +474,36 @@ export function Followups({ onNavigate }) {
       subtitle: `${item.name}${org ? ` · ${org}` : ""}${promise}`,
       aiContext: `${org || item.name} · ${KIND_TAG[item.kind] || "고객"}${stageLabel(item) ? ` (${stageLabel(item)})` : ""}`,
     });
+  };
+
+  // 제안 팁의 [행동] 버튼 — 넛지가 가리키는 대상으로 같은 기록 시트를 연다(§8.1 표준 편집 동선).
+  const openRecordForNudge = (nudge) => {
+    setRecordTarget({
+      target: { kind: nudge.subject.type, id: nudge.subject.id, companyId: nudge.subject.companyId || null, name: nudge.subject.name, org: null },
+      preset: nudge.action?.prefill?.kind ? { kind: nudge.action.prefill.kind } : {},
+      subtitle: `${nudge.subject.name} — ${nudge.title}`,
+    });
+  };
+
+  const onTipEscape = async (nudge, action, until) => {
+    const res = await crmNudges.suppress(nudge, action, until);
+    if (!res.ok) toast.error(`제안을 처리하지 못했어요 — ${res.reason || "다시 시도해 주세요"}`);
+  };
+
+  const tipFor = (item) => {
+    const nudge = nudgesBySubjectId.get(String(item.id));
+    if (!nudge) return null;
+    // dormant_recheck는 이 페이지의 '기약 없음' 행이 이미 같은 문구("N일 지남 — 다시
+    // 볼까요?")를 직접 보여준다(위 promise/why 분기) — 여기서 또 붙이면 같은 말 반복.
+    if (nudge.ruleId === "dormant_recheck") return null;
+    const escapes = Array.isArray(nudge.escape) ? nudge.escape : [];
+    return {
+      reason: nudgeTipReason(nudge),
+      action: nudge.action?.label,
+      onAction: () => openRecordForNudge(nudge),
+      onSnooze: escapes.includes("snooze") ? (until) => onTipEscape(nudge, "snooze", until) : undefined,
+      onDismiss: escapes.includes("dismiss") ? () => onTipEscape(nudge, "dismiss") : undefined,
+    };
   };
 
   const onCandidateRecord = (candidate) => {
@@ -569,6 +624,7 @@ export function Followups({ onNavigate }) {
       leaving={leaving.has(rowKey(item))}
       selected={kbSelection.selectedId === kbId(item)}
       onRecord={(it) => openRecordFor(it, variant)}
+      tip={tipFor(item)}
       {...rowProps}
     />
   ));

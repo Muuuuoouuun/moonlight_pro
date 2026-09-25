@@ -6,6 +6,8 @@ import { assembleSalesContext } from "@/lib/sales-os/context-assembler";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
 import { isGuidanceCardForDomain, isValidAdvisorInput } from "@/lib/advisor-input";
 import { OFFICE_MENTOR_DRAFT_LIMIT } from "@/components/hub/office-mentor-client";
+import { isValidGuruConversationHistory } from "@/lib/guru-chat-history";
+import { referencedPriorCardId } from "@com-moon/guru-guidance";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,7 +38,7 @@ function resolveSharedSecret() {
   return process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() || "";
 }
 
-async function callEngine(body) {
+async function callEngine(body, { retries = 1 } = {}) {
   const engineUrl = resolveEngineUrl();
 
   if (!engineUrl) {
@@ -52,22 +54,38 @@ async function callEngine(body) {
     headers["x-com-moon-shared-secret"] = sharedSecret;
   }
 
-  const response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    cache: "no-store",
-    signal: AbortSignal.timeout(60_000),
-    redirect: "error",
-  });
-  const text = await response.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = text || null;
+  const attempts = Math.max(0, Math.min(retries, 2));
+  for (let attempt = 0; attempt <= attempts; attempt++) {
+    try {
+      const response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        cache: "no-store",
+        signal: AbortSignal.timeout(60_000),
+        redirect: "error",
+      });
+      if (!response.ok && attempt < attempts && (response.status === 502 || response.status === 503)) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = text || null;
+      }
+      return { status: response.status, data };
+    } catch {
+      if (attempt < attempts) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      return { status: 502, data: { status: "error", reason: "engine-request-failed" } };
+    }
   }
-  return { status: response.status, data };
+  return { status: 502, data: { status: "error", reason: "engine-request-failed" } };
 }
 
 // One-line fingerprint of the assembled context for the episodic-memory log.
@@ -114,7 +132,14 @@ export async function POST(req) {
   if (!isValidAdvisorInput(input)) {
     return NextResponse.json({ status: "error", error: "자문 설정의 형식을 확인해 주세요." }, { status: 400 });
   }
+  if (input.guidanceId != null && !isGuidanceCardForDomain(input.guidanceId, ["sales"])) {
+    return NextResponse.json({ status: "error", error: "세일즈 카드만 영업 Guru에 사용할 수 있습니다." }, { status: 400 });
+  }
+  const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
   const mode = typeof input.mode === "string" ? input.mode.trim() : "pipeline-triage";
+  if (input.history !== undefined && (mode !== "open-question" || !isValidGuruConversationHistory(input.history, { guidanceId }))) {
+    return NextResponse.json({ status: "error", error: "이전 대화의 형식을 확인해 주세요." }, { status: 400 });
+  }
   const ref = typeof input.ref === "string" ? input.ref.trim() || null : null;
   const draft = typeof input.draft === "string" ? input.draft : null;
   const officeSource = fromOffice ? parseOfficeSource(input.officeSource) : null;
@@ -127,15 +152,17 @@ export async function POST(req) {
   )) {
     return NextResponse.json({ status: "error", error: "invalid-office-review" }, { status: 400 });
   }
-  if (input.guidanceId != null && !isGuidanceCardForDomain(input.guidanceId, ["sales"])) {
-    return NextResponse.json({ status: "error", error: "세일즈 카드만 영업 Guru에 사용할 수 있습니다." }, { status: 400 });
-  }
   const directives = input.directives && typeof input.directives === "object" ? input.directives : undefined;
   const values = input.values && typeof input.values === "object" ? input.values : undefined;
   const knowledge = input.knowledge && typeof input.knowledge === "object" ? input.knowledge : undefined;
-  const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
+  const history = mode === "open-question" ? input.history : undefined;
 
-  const context = await assembleSalesContext({ mode, ref });
+  // A follow-up may explicitly refer to a previous card even though no card
+  // is newly selected. Scope the ledger for that card without re-selecting it
+  // in the Engine request; the Engine resolves the same provenance from history.
+  const contextGuidanceId = guidanceId || (mode === "open-question"
+    ? referencedPriorCardId(draft, history) : null);
+  const context = await assembleSalesContext({ mode, ref, guidanceId: contextGuidanceId || undefined });
   if (mode === "open-question" && ["preview", "error"].includes(context?.source)) {
     return NextResponse.json(
       { status: context.source, error: context.error || "영업 자료를 읽을 수 없습니다." },
@@ -145,7 +172,7 @@ export async function POST(req) {
   let result;
   try {
     result = await callEngine({
-      mode, ref, draft, context, directives, values, knowledge, guidanceId,
+      mode, ref, draft, context, directives, values, knowledge, guidanceId, history,
       ...(officeSource ? { scope: "classin", officeSource, createWorkOrder: false } : {}),
     });
   }

@@ -844,3 +844,19 @@ test("links a project to a product or clears the link (product lens §3)", () =>
   }, context);
   assert.equal("product_id" in plain.record, false, "제품 없는 생성은 열을 보내지 않는다(마이그레이션 전 DB 호환)");
 });
+
+test("projects carry a work type (feature·maintenance·contact) and an optional recurrence", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-25T01:00:00.000Z" };
+  const id = "11111111-1111-4111-8111-111111111111";
+  const set = pmsCommand.normalizePmsCommand({ action: "update_project", id, workType: "Maintenance", recurrence: "yearly" }, context);
+  assert.deepEqual(set.patch.meta, { work_type: "maintenance", recurrence: "yearly" });
+  const cleared = pmsCommand.normalizePmsCommand({ action: "update_project", id, recurrence: null }, context);
+  assert.deepEqual(cleared.patch.meta, { recurrence: null });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_project", id, workType: "bug" }, context), { ok: false, reason: "invalid-work-type" });
+  const created = pmsCommand.normalizePmsCommand({
+    action: "create_project", id, areaId: "44444444-4444-4444-8444-444444444444", title: "엑셀 내보내기", orgScope: "personal",
+    productId: "22222222-2222-4222-8222-222222222222", workType: "feature",
+  }, context);
+  assert.equal(created.record.meta.work_type, "feature");
+  assert.equal("recurrence" in created.record.meta, false);
+});

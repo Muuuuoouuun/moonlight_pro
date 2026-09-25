@@ -44,6 +44,15 @@ test('Hub assignment requires write guard, rejects caller-owned state, and never
   assert.equal(calls, 1);
 });
 
+test('a 6,000-character Korean agenda (contract max) stays under the hub byte cap and reaches the Engine call', async () => {
+  let calls = 0;
+  const handler = createOfficeRoutingHubHandler({ callEngine: async () => { calls++; return { ...result }; } });
+  const longRequest = { message: '가'.repeat(6000), scope: 'classin' };
+  const response = await handler(hubRequest(longRequest));
+  assert.equal(response.status, 200);
+  assert.equal(calls, 1);
+});
+
 test('Hub preserves manual selection on preview and error', async () => {
   for (const [status, httpStatus] of [['preview', 202], ['error', 502]]) {
     const handler = createOfficeRoutingHubHandler({ callEngine: async () => ({ status, error: '직접 선택해 주세요.' }) });

@@ -4,7 +4,7 @@ const uuid = () => z.string().uuid();
 const source = { entityType: z.enum(['tasks', 'projects', 'content_items']), entityId: uuid(), scope: z.enum(['personal', 'company']) };
 const assistance = { commandId: uuid(), ...source, expectedSourceUpdatedAt: z.string().max(60), operation: z.enum(['draft', 'rewrite', 'critique', 'analyze']), instruction: z.string().max(4000).optional() };
 function register(server, name, description, inputSchema, handler, write = false) {
-  server.registerTool(name, { description, inputSchema, outputSchema: z.object({ status: z.string() }).passthrough(), annotations: { readOnlyHint: !write, destructiveHint: false, idempotentHint: true, openWorldHint: name === 'request_ai_assist' } }, async args => agentToolResult(await handler(args || {})));
+  server.registerTool(name, { description, inputSchema, annotations: { readOnlyHint: !write, destructiveHint: false, idempotentHint: true, openWorldHint: name === 'request_ai_assist' } }, async args => agentToolResult(await handler(args || {})));
 }
 const params = input => new URLSearchParams(Object.entries(input).filter(([, value]) => value !== undefined)).toString();
 function command(args, action) { const { commandId, ...input } = args; return agentRequest('/ai-assistance', { method: 'POST', body: { commandId, action, input }, timeoutMs: 90000 }); }

@@ -83,8 +83,9 @@ const PERSONA_PROFILES: Record<string, { nameKo: string; role: string; systemPro
 };
 
 // 대화 렌즈는 Guru 방법론만 둔다. Legend 인물은 주간 카드로만 산다(agent-layer-direction
-// §2.1 ⑧, 2026-09-25 운영자 재확인) — 잡스·베이조스·쉬나드·소크라테스 렌즈를 뺐고, UI가
-// 보내던 카네기·힐은 원래 여기 없어서 조용히 버려지던 값이다.
+// §2.1 ⑧, 2026-09-25 운영자 재확인) — 잡스·베이조스·쉬나드·소크라테스 렌즈를 뺐다. UI가
+// 보내던 카네기·힐은 여기 없어 조용히 버려지던 값이었고, 09.bigmac1.5는 이를 여기에 더해 고쳤지만
+// 병합에서는 ⑧대로 Hub 칩에서 뺀 쪽을 따른다(Hub GURU_LENS_MAP과 키가 같아야 한다 — 테스트 고정).
 const GURU_LENSES: Record<string, { nameKo: string; rule: string }> = {
   voss: {
     nameKo: "크리스 보스 (협상과 저항 극복)",
@@ -116,6 +117,7 @@ function buildPrompt({
   context,
   draft,
   ragSnippets,
+  conversationOnly,
 }: {
   personaId: string;
   mode: string;
@@ -124,6 +126,7 @@ function buildPrompt({
   context?: any;
   draft?: string | null;
   ragSnippets?: KnowledgeItem[];
+  conversationOnly?: boolean;
 }) {
   const profile = PERSONA_PROFILES[personaId] || PERSONA_PROFILES.order;
   const lines: string[] = [];
@@ -151,10 +154,14 @@ function buildPrompt({
   } else if (mode === "sparring") {
     lines.push(
       "【3자 토론 (스파링) 모드】",
-      "찬반과 검증 행동이 명확히 격돌하는 3단 구조로 답변하라 (칭찬·잡담 금지):",
+      conversationOnly
+        ? "찬반과 판단을 바꿀 확인 질문을 3단 구조로 답변하라 (칭찬·잡담 금지):"
+        : "찬반과 검증 행동이 명확히 격돌하는 3단 구조로 답변하라 (칭찬·잡담 금지):",
       "1. 🟢 [추진 논거 (Strategist)] (왜 이 방향이 유효한가, 잠재 기회와 고객 가치)",
       "2. 🔴 [Devil's Advocate 맹점/비판] (숨은 비용, 실패 가능성, 타협하면 안 되는 약점)",
-      "3. 🟡 [1단계 가역적 검증 행동 (Operator)] (위험을 줄이며 이번 주 안에 검증할 1가지 실험과 관찰 질문)",
+      conversationOnly
+        ? "3. 🟡 [판단을 바꿀 확인 질문] (추가 업무를 배정하지 않고 미확인 사실 하나를 묻기)"
+        : "3. 🟡 [1단계 가역적 검증 행동 (Operator)] (위험을 줄이며 이번 주 안에 검증할 1가지 실험과 관찰 질문)",
     );
   } else if (mode === "weekly-review") {
     lines.push(
@@ -283,7 +290,7 @@ export async function POST(req: Request) {
 
   let ragSnippets: KnowledgeItem[] = [];
   // One contact is already supplied in draft/context; unrelated workspace notes can contaminate it.
-  if (!recordLocalMode && workspaceId && (message || draft || context?.summary || context?.title)) {
+  if (!recordLocalMode && payload.conversationOnly !== true && workspaceId && (message || draft || context?.summary || context?.title)) {
     const searchQuery = [message, draft, context?.title, context?.summary].filter(Boolean).join(" ");
     try {
       const ragResult = await retrieveKnowledge(
@@ -303,12 +310,14 @@ export async function POST(req: Request) {
     `당신은 Moonlight 개인 운영 OS의 전문 페르소나 [${profile.nameKo}]입니다.`,
     profile.systemPrompt,
     "운영자의 언어는 한국어이며, 실무적이고 직설적인 문체를 사용합니다.",
-    "모호한 일반론이나 칭찬은 금지하고 항상 '다음 한 수'로 끝맺습니다.",
+    payload.conversationOnly === true
+      ? "모호한 일반론이나 칭찬은 피하고 질문에 직접 답하십시오. 요청하지 않은 후속 업무를 제안하지 마십시오. 페르소나의 작업 형식보다 이 대화 전용 지시가 우선합니다."
+      : "모호한 일반론이나 칭찬은 금지하고 항상 '다음 한 수'로 끝맺습니다.",
     "사실(기록 데이터)에 없는 내용을 지어내지 않으며, 외부 발송/공개 행동은 인간 승인 게이트(Human Approval)를 거치도록 제안합니다.",
     buildBusinessOpportunityCatchInstruction({ surface: "persona", personaId, mode, context }),
   ].join("\n\n");
 
-  const prompt = buildPrompt({ personaId, mode, lens, message, context, draft, ragSnippets });
+  const prompt = buildPrompt({ personaId, mode, lens, message, context, draft, ragSnippets, conversationOnly: payload.conversationOnly === true });
   const startedAt = new Date().toISOString();
 
   const isThinkingRole = personaId === "council" || personaId === "guru" || mode === "sparring" || mode === "weekly-review";
@@ -323,6 +332,7 @@ export async function POST(req: Request) {
     prompt,
     model: modelToUse,
     maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192,
+    retries: 1,
   });
 
   const finishedAt = new Date().toISOString();
@@ -356,7 +366,7 @@ export async function POST(req: Request) {
     errorMessage: result.ok ? null : result.reason,
   });
 
-  if (result.ok && workspaceId && (mode === "weekly-review" || mode === "sparring")) {
+  if (result.ok && workspaceId && payload.conversationOnly !== true && (mode === "weekly-review" || mode === "sparring")) {
     await insertSupabaseRecord("project_updates", {
       workspace_id: workspaceId,
       project_id: null,

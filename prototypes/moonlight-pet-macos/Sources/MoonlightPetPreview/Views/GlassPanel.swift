@@ -7,7 +7,9 @@ import SwiftUI
 final class GlassPanel: NSView {
     static func host<Content: View>(_ content: Content, cornerRadius: CGFloat, ornament: AnyView? = nil,
                                     model: AppModel? = nil) -> GlassPanel {
-        let host = FirstMouseHostingView(rootView: content.environment(\.colorScheme, .dark))
+        let readingTone = GlassReadingTone()
+        let host = FirstMouseHostingView(rootView: content.environment(\.colorScheme, .dark)
+            .environment(\.glassReadingTone, readingTone))
         host.sizingOptions = []
         host.focusRingType = .none
         let accessory = ornament.map { view -> NSView in
@@ -16,7 +18,8 @@ final class GlassPanel: NSView {
             host.focusRingType = .none
             return host
         }
-        let panel = GlassPanel(content: host, cornerRadius: cornerRadius, ornament: accessory)
+        let panel = GlassPanel(content: host, cornerRadius: cornerRadius, ornament: accessory,
+                               readingTone: readingTone)
         if let model {
             panel.characterSubscription = model.$selectedCharacter.removeDuplicates().sink { [weak panel] character in
                 panel?.setCharacter(character)
@@ -31,6 +34,7 @@ final class GlassPanel: NSView {
     private let foreground: NSView
     private let ornament: NSView?
     private let wash: PetGlassWash
+    private let readingTone: GlassReadingTone
     private var characterSubscription: AnyCancellable?
 
     func setCharacter(_ character: PetCharacter) { wash.character = character }
@@ -42,8 +46,9 @@ final class GlassPanel: NSView {
         }
     }
 
-    private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?) {
+    private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?, readingTone: GlassReadingTone) {
         radius = cornerRadius
+        self.readingTone = readingTone
         self.ornament = ornament
         foreground = content
         wash = PetGlassWash(radius: cornerRadius)
@@ -76,6 +81,9 @@ final class GlassPanel: NSView {
             material = backdrop
         }
         super.init(frame: .zero)
+        wash.onPresentationChange = { [weak readingTone] character, opacity, solid in
+            readingTone?.update(character: character, opacity: opacity, solidForAccessibility: solid)
+        }
         wantsLayer = true
         layer?.shadowColor = NSColor.black.cgColor
         layer?.shadowOpacity = 0.18

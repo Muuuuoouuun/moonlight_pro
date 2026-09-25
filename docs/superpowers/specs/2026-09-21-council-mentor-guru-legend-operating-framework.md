@@ -1,5 +1,6 @@
 # Council · Mentor · Guru · Legend 통합 운영 체계 및 고도화 지침
 
+> **상태 변경(2026-09-25): 설계 기준 기록.** 현행 경계는 [에이전트 계층 방향](2026-09-24-agent-layer-direction.md)과 [업무 안의 Eevee Office 심화 설계](2026-09-21-eevee-office-embedded-workflow-deep-design.md) §2가 정본이다(2026-09-24 운영자 확정). 아래의 정본·ACTIVE 표기는 작성 당시 기록이고, 목표 수치와 성과 표현은 실측이 아니다.  
 > 상태: **ACTIVE SPEC & OPERATING DIRECTIVE**  
 > 날짜: 2026-09-21  
 > 상위 정본: [`operator-workflow-profile.md`](../../operator-workflow-profile.md), [`README.md`](../../README.md), [`2026-07-13-moonlight-personal-operator-os-deep-design.md`](2026-07-13-moonlight-personal-operator-os-deep-design.md), [`master-directive.md`](../../master-directive.md)  

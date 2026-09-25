@@ -88,7 +88,7 @@ export function ContextMentorRail({ domain = 'sales', contextKey, onGuidanceAsk,
   };
   const visitShelf = () => {
     setOpen(false);
-    onNavigate?.('dashboard/agents/chat');
+    onNavigate?.(`dashboard/agents/chat?card=${encodeURIComponent(card.id)}`);
   };
 
   return <div className="context-mentor-rail">
@@ -151,7 +151,7 @@ export function ContextMentorRail({ domain = 'sales', contextKey, onGuidanceAsk,
 
         <div className="context-mentor-rail__footer">
           <p>Guru 관점은 서울 기준 09·14·19시에 준비됩니다. 열람과 넘김은 조언이나 업무를 생성하지 않습니다.</p>
-          <Button variant="ghost" iconRight="arrowRight" onClick={visitShelf}>멘토 서가에서 더 보기</Button>
+          <Button variant="ghost" iconRight="arrowRight" onClick={visitShelf}>이 글 읽기</Button>
         </div>
       </div>
     </Drawer>, document.querySelector('.hub-app') || document.body)}

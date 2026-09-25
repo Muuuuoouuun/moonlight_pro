@@ -45,7 +45,7 @@ test('personal Office result routes to brand office-review with its provenance a
   for (const part of [officeResult().answer, officeResult().recommendation, officeResult().evidence[0], officeResult().evidence[1], officeResult().dissent[0], officeResult().nextAction, requestId, runId]) {
     assert.ok(request.body.draft.includes(part), part);
   }
-  assert.match(request.body.draft, /확정된 원장 사실은 아닙니다/);
+  assert.match(request.body.draft, /확정된 기록 사실은 아닙니다/);
 });
 
 test('company Office result routes to sales open-question without assigning a Guru card', () => {
@@ -136,7 +136,7 @@ test('a source over the cap cuts only the longest field, marks the cut and repor
   assert.ok(draft.includes(result.answer.slice(0, sourceTruncation[0].sent)));
   assert.ok(draft.includes(`[원문 30,000자 중 ${sourceTruncation[0].sent.toLocaleString('ko-KR')}자 전달]`));
   for (const field of [result.recommendation, ...result.evidence, ...result.dissent, result.nextAction]) assert.ok(draft.includes(field));
-  assert.match(draft, /확정된 원장 사실은 아닙니다/);
+  assert.match(draft, /확정된 기록 사실은 아닙니다/);
   assert.match(draft, /이번 질문: 후속 질문/);
   assert.match(officeMentorPartialNote(sourceTruncation), /^멘토는 Office 원문 일부만 받았습니다 · 본문 30,000자 중 [\d,]+자\. 전체 원문은 Office 결과 카드에 있습니다\.$/);
   assert.equal(officeMentorPartialNote(null), null);

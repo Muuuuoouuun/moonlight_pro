@@ -19,6 +19,20 @@ enum PetCharacter: String, CaseIterable, Identifiable {
         }
     }
 
+    var officeAgent: OfficeAgent {
+        switch self {
+        case .brown: return .eevee
+        case .blue: return .vaporeon
+        case .gold: return .jolteon
+        case .red: return .flareon
+        case .lilac: return .espeon
+        case .dark: return .umbreon
+        case .olive: return .leafeon
+        case .silver: return .glaceon
+        case .pink: return .sylveon
+        }
+    }
+
     var imageName: String { "pet-\(rawValue)" }
 
     var artwork: NSImage? { Self.artworks[self] }

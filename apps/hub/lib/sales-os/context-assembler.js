@@ -52,8 +52,66 @@ async function settled(promise, source, missing) {
   }
 }
 
-export async function assembleSalesContext({ mode = "pipeline-triage", ref = null } = {}) {
+export async function assembleSalesContext({ mode = "pipeline-triage", ref = null, guidanceId = null } = {}) {
   const missing = [];
+  // A selected card or a customer-specific question receives no unrelated
+  // ledger rows. A customer key always requires an exact ClassIn match.
+  if (mode === "open-question" && (guidanceId || ref)) {
+    // A card-only question can be answered from its reviewed reference. Reading
+    // the ledger here adds latency and makes unrelated DB outages block advice.
+    if (!ref) return { source: "reference", scope: "unscoped", missing };
+    const ledger = await settled(getRevenueLedger(), "revenue-ledger", missing);
+    if (!ledger || ledger.source === "preview" || ledger.source === "error") {
+      missing.push({ source: "revenue-ledger", reason: ledger?.error || "revenue-ledger-unavailable" });
+      return { source: ledger?.source === "preview" ? "preview" : "error", error: ledger?.error || "revenue ledger unavailable", missing };
+    }
+    if (ledger.partial) {
+      missing.push({ source: "revenue-ledger", reason: "partial-read", failedSources: ledger.failedSources || [] });
+    }
+    const needle = String(ref).trim().toLowerCase();
+    const classInDeals = (ledger.deals || []).filter(belongsToClassIn);
+    const classInLeads = (ledger.leads || []).filter(belongsToClassIn);
+    const classInAccounts = (ledger.accounts || []).filter(belongsToClassIn);
+    const selectedDeal = classInDeals.find(row => row.id && String(row.id).toLowerCase() === needle) || null;
+    const selectedLead = classInLeads.find(row => row.id && String(row.id).toLowerCase() === needle) || null;
+    const selectedAccount = classInAccounts.find(row => row.id && String(row.id).toLowerCase() === needle) || null;
+    const selected = selectedDeal || selectedLead || selectedAccount;
+    if (!selected) {
+      missing.push({ source: "revenue-ledger", reason: "reference-not-in-read" });
+      return {
+        source: "partial", scope: "unlinked", missing,
+        contextBoundary: "요청한 식별자와 일치하는 ClassIn 기록이 이번 제한된 조회에 포함되지 않았습니다. 전체 원장의 부재를 뜻하지 않습니다.",
+      };
+    }
+
+    const deals = selectedDeal ? [selectedDeal]
+      : selectedLead ? classInDeals.filter(row => row.leadId === selectedLead.id
+        || (!row.leadId && selectedLead.companyId && row.companyId === selectedLead.companyId)).slice(0, 5)
+        : selectedAccount?.companyId ? classInDeals.filter(row => row.companyId === selectedAccount.companyId).slice(0, 5) : [];
+    const leads = selectedLead ? [selectedLead]
+      : selectedDeal?.leadId ? classInLeads.filter(row => row.id === selectedDeal.leadId).slice(0, 1)
+        : selectedAccount?.companyId ? classInLeads.filter(row => row.companyId === selectedAccount.companyId).slice(0, 5) : [];
+    const accounts = selectedAccount ? [selectedAccount] : [];
+    let activities = await settled(getRecentContactActivities({ limit: 500 }), "crm_activities", missing);
+    if (activities?.source === "error" || activities?.source === "preview") {
+      missing.push({ source: "crm_activities", reason: activities.error || `crm_activities-${activities.source}` });
+      activities = null;
+    }
+    const leadIds = new Set(leads.map(row => row.id));
+    const dealIds = new Set(deals.map(row => row.id));
+    const accountIds = new Set(accounts.map(row => row.id));
+    const recent = (activities?.outcomes || []).map(normalizeOutcome).filter(Boolean)
+      .filter(outcome => isLinkedClassInOutcome(outcome, leadIds, dealIds, accountIds));
+    return {
+      source: missing.length ? "partial" : ledger.source,
+      scope: "linked",
+      focus: { found: true, item_id: selected.id, item_type: selectedDeal ? "deal" : selectedLead ? "lead" : "account" },
+      contextBoundary: "선택한 ClassIn 기록과 ID 또는 회사 ID로 연결된 기록만 포함합니다. 회사 ID로 연결된 거래는 조직 수준 참고이며 특정 리드 자체의 거래로 확정하지 않습니다. 다른 회사의 기록은 제공하지 않았습니다.",
+      deals, leads, accounts,
+      outcomes: { source: activities?.source || "preview", recent: trim(recent, 10) },
+      missing,
+    };
+  }
   let [ledger, outcomesRes, content, runsRes] = await Promise.all([
     settled(getRevenueLedger(), "revenue-ledger", missing),
     // 0a: 연락 기록의 단일 원천은 crm_activities — 봉투·필드명은 예전 outcomes와 같다.
@@ -61,8 +119,9 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
     // slot available for ClassIn contacts. The underlying read stays bounded.
     settled(getRecentContactActivities({ limit: 500 }), "crm_activities", missing),
     settled(getContentLedger(), "content-ledger", missing),
-    settled(getRecentAgentRuns({ agent: "guru", ref, ...(mode === "open-question"
-      ? { mode: "open-question", ...(!ref ? { unscopedOnly: true } : {}) } : {}), limit: 5 }), "agent_runs", missing),
+    mode === "open-question"
+      ? Promise.resolve(null)
+      : settled(getRecentAgentRuns({ agent: "guru", ref, limit: 5 }), "agent_runs", missing),
   ]);
 
   if (!ledger || ledger.source === "preview" || ledger.source === "error") {
@@ -99,6 +158,7 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
 
   const context = {
     source: missing.length ? "partial" : ledger.source,
+    ...(mode === "open-question" && !ref ? { scope: "unscoped" } : {}),
     // Repository aggregates and content cadence span personal and company lanes.
     // Until scoped aggregates exist, omission is more truthful than reuse.
     summary: null,
@@ -113,10 +173,9 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
     },
     content: null,
     brand,
-    memory: {
-      recent_runs: trim((runsRes?.runs || []).filter(run => run.agent === "guru"
-        && (mode !== "open-question" || (run.mode === "open-question" && (ref ? run.ref === ref : !run.ref)))), 5),
-    },
+    ...(mode === "open-question" ? {} : { memory: {
+      recent_runs: trim((runsRes?.runs || []).filter(run => run.agent === "guru"), 5),
+    } }),
     missing,
   };
 

@@ -248,6 +248,9 @@ function entryId(collection, slug) {
 export function buildSourceLibrary({ root = REPO_ROOT, config = SOURCE_CONFIG } = {}) {
   const review = readNormalized(root, QUALITY_REVIEW_PATH);
   const reviewSha256 = sha256(review);
+  // The screen names the review by its own H1, never by its repository path.
+  const reviewTitle = /^# (.+)$/m.exec(review)?.[1]?.trim();
+  if (!reviewTitle) throw new Error(`${QUALITY_REVIEW_PATH} has no H1 title`);
   const documents = [];
   const entries = [];
 
@@ -310,6 +313,7 @@ export function buildSourceLibrary({ root = REPO_ROOT, config = SOURCE_CONFIG } 
         checked: [...doc.verification.checked],
         unverified: doc.verification.unverified,
         basis: QUALITY_REVIEW_PATH,
+        basisTitle: reviewTitle,
         basisSha256: reviewSha256,
       },
     });

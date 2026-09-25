@@ -95,13 +95,6 @@
   overflow-wrap: anywhere;
 }
 
-.source-reader__path {
-  margin: 2px 0 0;
-  color: var(--fg-dim);
-  font-size: 10.5px;
-  overflow-wrap: anywhere;
-}
-
 .source-reader__honesty {
   display: flex;
   align-items: center;

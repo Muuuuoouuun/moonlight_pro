@@ -90,16 +90,16 @@ function OfficeMentorAction({ turn, onOpenDrawer }) {
 
 // 안건과 맞는 원문 기법(agent-layer-direction §2.1 ⑦) — 운영자가 쓴 안건·질문의 낱말만 근거로
 // 1~2개를 잇는다. 모델을 부르지 않고, 어떤 낱말 때문에 이었는지를 그대로 보인다.
-function OfficeAgendaGuidance({ text, scope, onGuidanceAsk }) {
+function OfficeAgendaGuidance({ text, scope, onGuidanceAsk, onNavigate }) {
   const matches = React.useMemo(() => matchAgendaGuidance(text, { scope }), [text, scope]);
   const names = matches.map(match => guruRecommendationCard(match)).filter(Boolean).map(card => card.methodLabel);
   if (!matches.length || !names.length) return null;
   return <details className={styles.request}><summary>안건과 맞는 원문 기법 · {names.join(' · ')}</summary>
-    <div className={styles.guidanceLinks}>{matches.map(match => <GuruRecommendation key={match.id} recommendation={match} onAsk={onGuidanceAsk} compact />)}</div>
+    <div className={styles.guidanceLinks}>{matches.map(match => <GuruRecommendation key={match.id} recommendation={match} onAsk={onGuidanceAsk} onNavigate={onNavigate} compact />)}</div>
   </details>;
 }
 
-function ResultTurn({ turn, onRevise, onCopy, onSkill, onOpenMentor, onGuidanceAsk, skillAvailable, copyStatus, latestRef }) {
+function ResultTurn({ turn, onRevise, onCopy, onSkill, onOpenMentor, onGuidanceAsk, onNavigate, skillAvailable, copyStatus, latestRef }) {
   const result = turn.result;
   const owner = OFFICE_ROSTER.find(person => person.id === result.ownerId);
   return <article className={styles.turn} ref={latestRef}>
@@ -119,7 +119,7 @@ function ResultTurn({ turn, onRevise, onCopy, onSkill, onOpenMentor, onGuidanceA
         <strong>남은 이견</strong><ul>{result.dissent.length ? result.dissent.map((text, index) => <li key={index}>{text}</li>) : <li>기록된 이견 없음</li>}</ul>
       </details> : null}
       <div className={styles.next}><strong>다음 행동</strong><p>{result.nextAction}</p></div>
-      <OfficeAgendaGuidance text={turn.message} scope={result.scope} onGuidanceAsk={onGuidanceAsk} />
+      <OfficeAgendaGuidance text={turn.message} scope={result.scope} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate} />
       <div className={styles.receipt}><span>{result.log?.persisted === true ? '호출 로그 저장됨' : '답변 생성됨 · 호출 로그 미저장'}</span><span>업무 변경 없음</span></div>
       {skillAvailable ? <details className={styles.request}><summary>더보기</summary><div className={styles.answerActions}>
         <Button variant="outline" size="sm" onClick={() => onSkill(turn)}>로컬 스킬 요청서</Button>
@@ -158,7 +158,7 @@ function OfficeUsageLine({ refreshKey }) {
     {' · '}실패 <span className="mono">{usage.failed}</span>{failures ? ' (' + failures + ')' : ''}</p>;
 }
 
-export function OfficeCouncil({ scope = 'all', onGuidanceAsk }) {
+export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const { session, store, update } = useOfficeSession(scope);
   const { ownerId, mode, reviewers, includeProjects, minimumOnly } = session;
   const [rosterOpen, setRosterOpen] = React.useState(false);
@@ -288,7 +288,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk }) {
   async function submit(event) {
     event.preventDefault();
     if (composing.current || tooLong) return;
-    const override = session.turns.length && followUpMode === 'chat' ? { mode: 'chat' } : undefined;
+    const override = session.turns.length && followUpMode === 'chat' && session.mode === 'council' ? { mode: 'chat' } : undefined;
     const pending = store.begin(scope, crypto.randomUUID(), override);
     if (!pending) return;
     invalidateAssignment();
@@ -337,7 +337,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk }) {
       <div className={styles.thread} ref={threadRef} tabIndex={-1} aria-live="polite" aria-label="Office 요청 결과">
         {session.turns.length === 0 && !busy ? <EmptyState icon="chat" title="회의할 안건을 올려 주세요" description="아래 안건 가져오기로 할 일을 넣거나 직접 적어 주세요." /> : null}
         {session.turns.map((turn, index) => <ResultTurn key={turn.id} turn={turn} latestRef={index === session.turns.length - 1 ? latestTurnRef : undefined}
-          onRevise={revise} onCopy={copy} onSkill={setSkillTurn} onOpenMentor={setMentorDrawerId} onGuidanceAsk={onGuidanceAsk}
+          onRevise={revise} onCopy={copy} onSkill={setSkillTurn} onOpenMentor={setMentorDrawerId} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}
           skillAvailable={Boolean(officeSkillRequestDraft({ agenda: session.agenda, officeScope: scope, result: turn.result }))} copyStatus={copyStatus} />)}
         {busy ? <div ref={pendingRef}><PendingTurn pending={session.pending} /></div> : null}
       </div>
@@ -380,7 +380,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk }) {
     {skillTurn ? <OfficeSkillRequestDrawer key={skillTurn.id} agenda={session.agenda} officeScope={scope} result={skillTurn.result} onClose={() => setSkillTurn(null)} /> : null}
     {mentorDrawerId ? <OfficeMentorDrawer sessionId={mentorDrawerId} onClose={() => setMentorDrawerId(null)} /> : null}
     {rosterOpen ? <Drawer title="참석자 바꾸기" subtitle="주관 한 명과 관점 최대 두 명을 고르세요." onClose={() => setRosterOpen(false)} width="min(480px, 94vw)" footer={<Button variant="primary" onClick={() => setRosterOpen(false)}>완료</Button>}>
-      <div className={styles.roster}><strong>주관</strong>{OFFICE_ROSTER.map(person => <button type="button" key={person.id} className={'hub-row ' + styles.member} aria-pressed={person.id === ownerId} onClick={() => { invalidateAssignment(); update({ ownerId: person.id, reviewers: reviewers.filter(id => id !== person.id), presetId: null }); }}>
+      <div className={styles.roster}><strong>주관</strong>{OFFICE_ROSTER.map(person => <button type="button" key={person.id} className={'hub-row ' + styles.member} aria-label={`${person.name} (${person.role}) 주관 선택`} aria-pressed={person.id === ownerId} onClick={() => { invalidateAssignment(); update({ ownerId: person.id, reviewers: reviewers.filter(id => id !== person.id), presetId: null }); }}>
         <OfficeAvatar agentId={person.id} size="large" /><span><strong>{person.name} <small>{person.role}</small></strong><span className={styles.memberPitch}>{person.pitch}</span></span></button>)}
         <strong>함께 볼 관점</strong>{['draft', 'review'].includes(mode) ? <p className={styles.note}>초안·검토는 주관 혼자 씁니다. 더보기에서 대화로 바꾸면 관점을 추가할 수 있습니다.</p> : null}
         <div className={styles.views}>{OFFICE_ROSTER.filter(person => person.id !== ownerId).map(person => <CheckboxRow key={person.id} text={person.name + ' · ' + person.role} leading={<OfficeAvatar agentId={person.id} size="small" />} checked={reviewers.includes(person.id)}
@@ -398,7 +398,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk }) {
         {mode === 'council' ? <OfficeDeliberationControls value={session.deliberation} participants={participants} disabled={busy} onChange={deliberation => update({ deliberation })} /> : null}
         <CheckboxRow text="현재 범위의 최근 프로젝트 참고" checked={includeProjects} disabled={busy} onChange={() => update({ includeProjects: !includeProjects })} />
         <CheckboxRow text="오늘은 최소한만" checked={minimumOnly} disabled={busy} onChange={() => update({ minimumOnly: !minimumOnly })} />
-        {includeProjects ? <p className={styles.note}>현재 범위의 최근 프로젝트 최대 8개를 참고합니다. 고객·일정 원장은 이 자유 요청에 자동 연결되지 않습니다.</p> : null}
+        {includeProjects ? <p className={styles.note}>현재 범위의 최근 프로젝트 최대 8개를 참고합니다. 고객·일정 기록은 이 자유 요청에 자동 연결되지 않습니다.</p> : null}
         {minimumOnly ? <p className={styles.note}>이미 정한 약속을 지키는 데 필요한 내용만 요청합니다. 추가 행동이 필요 없으면 남기지 않습니다.</p> : null}
       </div></Drawer> : null}
     {tasksOpen ? <Drawer title="안건 가져오기" subtitle="할 일의 현재 텍스트를 복사해 안건으로 올립니다. 원본 할 일은 바뀌지 않습니다." onClose={() => setTasksOpen(false)} width="min(480px, 94vw)">
@@ -407,7 +407,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk }) {
         {taskState.status === 'error' ? <div className={styles.notice} role="alert"><TruthBadge state="error" /><p>할 일 읽기 실패 · {taskState.error}</p><Button variant="ghost" size="sm" onClick={loadTasks}>다시 시도</Button></div> : null}
         {taskState.status === 'preview' ? <div className={styles.notice}><TruthBadge state="preview" /><p>Preview · 연결 필요</p></div> : null}
         {taskState.status === 'partial' ? <p className={styles.note}><TruthBadge state="partial" /> 일부 할 일만 확인됐습니다.</p> : null}
-        {['live', 'partial'].includes(taskState.status) ? <>{visibleTasks.length ? <div className={styles.taskList}>{visibleTasks.map(task => <button type="button" key={task.id} className={'hub-row ' + styles.taskRow} onClick={() => importTask(task)}><strong>{task.title}</strong><span>{[task.nextAction, task.due || task.dueAt].filter(Boolean).join(' · ') || '다음 행동 미정'}</span></button>)}</div>
+        {['live', 'partial'].includes(taskState.status) ? <>{visibleTasks.length ? <div className={styles.taskList}>{visibleTasks.map(task => <button type="button" key={task.id} className={'hub-row ' + styles.taskRow} aria-label={`안건으로 가져오기: ${task.title}`} onClick={() => importTask(task)}><strong>{task.title}</strong><span>{[task.nextAction, task.due || task.dueAt].filter(Boolean).join(' · ') || '다음 행동 미정'}</span></button>)}</div>
           : <EmptyState icon="check" title="이 범위에서 찾은 할 일이 없습니다" description="다른 제목을 검색하거나 전체 범위에서 확인해 주세요." />}
           {scope !== 'all' && unassignedCount ? <p className={styles.note}>범위 미정 {unassignedCount}개 · 전체 범위에서 보입니다</p> : null}</> : null}
       </div></Drawer> : null}

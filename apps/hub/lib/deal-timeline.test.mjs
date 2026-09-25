@@ -8,8 +8,10 @@ import {
   closeDatePresets,
   dateInputValue,
   dealCustomerKey,
+  dealDockItem,
   dealLaneKey,
   dealPromise,
+  formatSignedWon,
   formatWon,
   isTimelineDeal,
   isoFromDateInput,
@@ -27,10 +29,12 @@ const NOW = new Date("2026-09-24T01:00:00Z");
 const ctx = timelineContext(NOW);
 const kst = (ymd) => `${ymd}T03:00:00.000Z`; // KST 정오
 
-test("보기 키는 언제·단계·지역 셋이고 모르는 값은 언제로 떨어진다", () => {
-  assert.deepEqual(DEAL_VIEW_OPTIONS.map((o) => o.label), ["언제", "단계", "지역"]);
+test("보기 키는 언제·단계·결제·지역 넷이고 모르는 값은 언제로 떨어진다", () => {
+  assert.deepEqual(DEAL_VIEW_OPTIONS.map((o) => o.label), ["언제", "단계", "결제", "지역"]);
+  assert.deepEqual(DEAL_VIEW_OPTIONS.map((o) => o.key), ["time", "stage", "payments", "region"]);
   assert.equal(resolveDealView(null), "time");
   assert.equal(resolveDealView("stage"), "stage");
+  assert.equal(resolveDealView("payments"), "payments");
   assert.equal(resolveDealView("REGION"), "region");
   assert.equal(resolveDealView("kanban"), "time");
 });
@@ -69,13 +73,58 @@ test("제목 금액은 이번 달 확정만, 잘 풀리면은 확정 + 가능성
   assert.equal(timeline.month.confirmed, 1800000);
   assert.equal(timeline.month.upside, 4200000);
   assert.equal(timeline.month.total, 5400000);
+  assert.equal(timeline.month.paid, 0, "입금 기록이 없으면 입금됨은 0 — 사실 그대로");
   assert.equal(timeline.month.count, 3, "예상일이 10월·미정인 건은 이번 달 리본 밖");
   assert.deepEqual(timeline.month.segments.map((s) => [s.key, s.label]), [
+    ["paid", "입금됨"],
     ["confirmed", CERTAINTY_BY_STAGE.closing.label],
     ["recommended", CERTAINTY_BY_STAGE.final.label],
     ["unknown", CERTAINTY_BY_STAGE.potential.label],
   ]);
   assert.equal(timeline.count, 5);
+});
+
+test("입금됨은 결제 완료·paidAt이 이 달인 금액만 센다 — 레인에서 빠진(완결) 딜도 포함", () => {
+  const timeline = buildDealTimeline([
+    // 명시 일정 2건 — 계약금은 이 달에 입금 완료, 잔금은 다음 달 예상.
+    {
+      id: "split", stage: "final", value: 3000000,
+      payments: [
+        { id: "p1", label: "계약금", expectedAmount: 1500000, expectedAt: kst("2026-09-20"), status: "paid", paidAmount: 1500000, paidAt: kst("2026-09-18") },
+        { id: "p2", label: "잔금", expectedAmount: 1500000, expectedAt: kst("2026-10-20"), status: "expected" },
+      ],
+    },
+    // 완결된 딜(전액 입금) — 레인에서 빠지지만 입금됨 합계에는 잡힌다.
+    {
+      id: "done", stage: "closing", value: 900000,
+      payments: [{ id: "q1", expectedAmount: 900000, expectedAt: kst("2026-09-10"), status: "paid", paidAmount: 900000, paidAt: kst("2026-09-10") }],
+    },
+  ], { now: NOW });
+  assert.equal(timeline.month.paid, 2400000);
+  assert.equal(timeline.count, 1, "완결된 딜은 카드 수에서 빠진다");
+  assert.deepEqual(timeline.ordered.map((i) => i.id), ["split"], "잔금만 미입금 카드로 남는다");
+  assert.equal(timeline.ordered[0].installmentTotal, 1, "미입금 1건뿐이면 여러 레인에 걸치지 않는다");
+});
+
+test("여러 미입금 결제는 각자의 예상일 레인에 서고 '2회 중 N회'로 셀 수 있다", () => {
+  const timeline = buildDealTimeline([
+    {
+      id: "installment", stage: "final", value: 2000000,
+      payments: [
+        { id: "p1", label: "계약금", expectedAmount: 1000000, expectedAt: kst("2026-09-25"), status: "expected" },
+        { id: "p2", label: "잔금", expectedAmount: 1000000, expectedAt: kst("2026-10-20"), status: "expected" },
+      ],
+    },
+  ], { now: NOW });
+  assert.equal(timeline.count, 1, "카드는 둘이어도 거래 수는 하나");
+  assert.equal(timeline.ordered.length, 2);
+  assert.deepEqual(timeline.ordered.map((i) => i.id).sort(), ["installment::p1", "installment::p2"]);
+  const [thisWeek, , later] = timeline.lanes;
+  assert.deepEqual(thisWeek.items.map((i) => i.paymentId), ["p1"]);
+  assert.deepEqual(later.items.map((i) => i.paymentId), ["p2"]);
+  assert.equal(thisWeek.items[0].installmentIndex, 1);
+  assert.equal(thisWeek.items[0].installmentTotal, 2);
+  assert.equal(later.items[0].installmentIndex, 2);
 });
 
 test("칸은 이번 주·다음 주·나중에·날짜 미정 넷이고 나중에는 월별로 묶인다", () => {
@@ -179,4 +228,40 @@ test("금액 라벨은 revenue.jsx와 같은 K/M 임계값", () => {
   assert.equal(formatWon(900000), "₩900K");
   assert.equal(formatWon(1800000), "₩1.8M");
   assert.equal(formatWon(500), "₩500");
+});
+
+test("차이 금액은 부호를 붙인다 — 음수는 U+2212, 0은 부호 없이", () => {
+  assert.equal(formatSignedWon(-200000), "−₩200K");
+  assert.equal(formatSignedWon(300000), "+₩300K");
+  assert.equal(formatSignedWon(0), "₩0");
+  assert.equal(formatSignedWon("nope"), "₩0");
+});
+
+test("명시 결제 카드는 그 결제의 예상일을 들고 있다 — 칸 이동이 결제 예상일을 옮기도록", () => {
+  const timeline = buildDealTimeline([
+    { id: "split", stage: "final", value: 2000000,
+      payments: [{ id: "p1", label: "계약금", expectedAmount: 1000000, expectedAt: kst("2026-09-25") }] },
+    { id: "plain", stage: "quote", value: 10, closeAt: kst("2026-09-26") },
+  ], { now: NOW });
+  const split = timeline.ordered.find((i) => i.deal.id === "split");
+  assert.equal(split.explicitPayment, true);
+  assert.equal(split.paymentId, "p1");
+  assert.equal(split.expectedAt, new Date(kst("2026-09-25")).toISOString());
+  const plain = timeline.ordered.find((i) => i.deal.id === "plain");
+  assert.equal(plain.explicitPayment, false);
+  assert.equal(plain.expectedAt, kst("2026-09-26"));
+});
+
+test("결제 보기의 독 항목은 거래 하나 — 완결된(레인을 떠난) 거래도 열 수 있다", () => {
+  const done = { id: "done", stage: "closing", value: 900000, closeAt: kst("2026-09-10"), companyName: "끝난 곳",
+    payments: [{ id: "q", expectedAmount: 900000, expectedAt: kst("2026-09-10"), status: "paid", paidAmount: 900000, paidAt: kst("2026-09-10") }] };
+  assert.equal(buildDealTimeline([done], { now: NOW }).ordered.length, 0, "언제 보기 레인에는 없다");
+  const item = dealDockItem(done, { now: NOW });
+  assert.equal(item.id, "done");
+  assert.equal(item.deal, done);
+  assert.equal(item.amount, 900000);
+  assert.equal(item.closeLabel, "9/10 목");
+  assert.equal(item.explicitPayment, false, "독의 예상일 바꾸기는 거래의 예상일");
+  assert.equal(item.certainty.key, "confirmed");
+  assert.equal(dealDockItem(null), null);
 });

@@ -144,3 +144,51 @@ test("feature check toggles one feature's verification date", () => {
   assert.equal(toggleFeatureVerified(p, "b", false, "2026-09-25")[1].verifiedAt, null);
 });
 
+
+test("flow buckets: blocked/overdue/today → 오늘, 7 days → 이번 주, later → 다음, no due → 언젠가, done → 지난", async () => {
+  const { productFlow } = await import("./product-catalog.js");
+  const p = {
+    repositories: [{ id: "r", fullName: "o/r", status: "connected", summary: { ci: { state: "failure" } } }],
+    projects: [
+      { id: "a", name: "막힌 일", status: "blocked" },
+      { id: "b", name: "지난 기한", status: "active", dueAt: "2026-09-20T00:00:00Z" },
+      { id: "c", name: "이번 주", status: "active", dueAt: "2026-09-28T00:00:00Z" },
+      { id: "d", name: "다음", status: "draft", dueAt: "2026-10-20T00:00:00Z" },
+      { id: "e", name: "언젠가", status: "draft" },
+      { id: "f", name: "끝", status: "completed" },
+    ],
+    inquiries: [{ id: "q1", subject: "새", status: "new" }, { id: "q2", subject: "대기", status: "waiting", receivedAt: "2026-09-29T00:00:00Z" }, { id: "q3", subject: "끝", status: "closed" }, { id: "q4", subject: "제외", status: "ignored" }],
+  };
+  const flow = Object.fromEntries(productFlow(p, { today: "2026-09-25" }).map((b) => [b.key, b.items.map((i) => i.title)]));
+  assert.deepEqual(flow.today, ["CI 실패 · o/r", "막힌 일", "지난 기한", "새"]);
+  assert.deepEqual(flow.week, ["이번 주", "대기"]);
+  assert.deepEqual(flow.next, ["다음"]);
+  assert.deepEqual(flow.someday, ["언젠가"]);
+  assert.deepEqual(flow.past, ["끝", "끝"]);
+});
+
+test("month numbers keep unknown as null and portfolio sums only what is known", async () => {
+  const { monthNumbers, portfolioSummary, portfolioAttention, previousMonth } = await import("./product-catalog.js");
+  const a = { id: "a", name: "A", opsStatus: "live", metrics: [{ month: "2026-09", activeUsers: 18, revenue: 190000, cost: 68000 }] };
+  const b = { id: "b", name: "B", opsStatus: "dev", metrics: [{ month: "2026-09", activeUsers: null, revenue: null, cost: 15000 }] };
+  const c = { id: "c", name: "C", opsStatus: "paused", metrics: [] };
+  assert.deepEqual(monthNumbers(a, "2026-09"), { month: "2026-09", activeUsers: 18, revenue: 190000, cost: 68000, net: 122000, known: true });
+  assert.equal(monthNumbers(b, "2026-09").net, -15000);
+  assert.equal(monthNumbers(c, "2026-09").net, null);
+  const inquiries = [{ status: "new" }, { status: "new", productId: "a" }, { status: "waiting", productId: "a" }, { status: "closed" }];
+  const s = portfolioSummary([a, b, c], inquiries, "2026-09");
+  assert.deepEqual([s.byOps.live, s.users, s.usersMissing, s.net, s.openInquiries, s.newInquiries, s.unassignedInquiries], [1, 18, 2, 107000, 3, 2, 1]);
+  const attention = portfolioAttention([{ ...a, projects: [{ id: "x", name: "키 교체", status: "active", dueAt: "2026-09-20" }] }], inquiries, { today: "2026-09-25" });
+  assert.deepEqual(attention.map((i) => i.text), ["기한 지남 · 키 교체", "새 문의 2건 · 제품 미정 1건"]);
+  assert.equal(previousMonth("2026-01"), "2025-12");
+});
+
+test("next step reads broken → urgent work → operator note → nearest work → stage gate", async () => {
+  const { productNextStep } = await import("./product-catalog.js");
+  const today = "2026-09-25";
+  assert.equal(productNextStep({ repositories: [{ id: "r", fullName: "o/r", status: "connected", summary: { ci: { state: "failure" } } }] }, { today }), "CI 실패 · o/r");
+  assert.equal(productNextStep({ projects: [{ id: "a", name: "키 교체", status: "active", dueAt: "2026-09-20" }] }, { today }), "기한 지남 · 키 교체");
+  assert.equal(productNextStep({ details: { nextAction: "결제 테스트" }, projects: [{ id: "b", name: "요금제", status: "draft", dueAt: "2026-09-28" }] }, { today }), "결제 테스트");
+  assert.equal(productNextStep({ projects: [{ id: "b", name: "요금제", status: "draft", dueAt: "2026-09-28" }] }, { today }), "요금제");
+  assert.equal(productNextStep({ name: "A", summary: "B", stage: "idea", details: {} }, { today }), "검증으로 올리려면 해결하는 문제가 필요해요");
+});

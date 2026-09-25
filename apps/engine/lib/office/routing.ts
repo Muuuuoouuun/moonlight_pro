@@ -28,9 +28,10 @@ export async function generateOfficeRouting(request: OfficeRoutingRequest, gener
         },
         required: ['ownerId', 'reviewerIds', 'reason', 'scope'],
       },
-      maxOutputTokens: 1200,
+      maxOutputTokens: 4096,
       thinkingLevel: 'low',
       signal: AbortSignal.timeout(48_000),
+      retries: 1,
     });
     if (!response.ok) return response.reason === 'missing-api-key' ? preview : failure;
     const recommendation = parseOfficeRoutingRecommendation(JSON.parse(response.text), input);

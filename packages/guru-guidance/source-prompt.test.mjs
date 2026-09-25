@@ -49,7 +49,9 @@ test('the prompt block carries location, the guard and the untouched original be
   assert.match(prompt, /docs\/sales-guru-knowledge-base\.md\) \d+–\d+줄/);
   assert.match(prompt, /인용문·수치·성과 주장·사례 문구를 답변에 옮기거나 사실처럼 말하지 마십시오/);
   assert.match(prompt, /원전\(책·강연\)이 아닙니다/);
-  assert.match(prompt, /원장 사실이 아닙니다/);
+  assert.match(prompt, /운영자의 기록 사실이 아닙니다/);
+  // 2026-09-22 운영자 결정: 장부 뜻의 '원장'은 쓰지 않는다(사람 뜻의 학원 원장만 남는다).
+  assert.doesNotMatch(prompt.split('<<<원문 시작>>>')[0], /원장/);
   assert.equal(between(prompt), excerpt.text);
 });
 

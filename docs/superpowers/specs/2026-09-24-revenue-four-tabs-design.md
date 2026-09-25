@@ -16,9 +16,9 @@
 
 | # | 결정 | 운영자 말 | 상태 |
 |---|---|---|---|
-| 1 | 영업·매출을 4탭(오늘 연락 · 고객 · 거래 · 문의)으로 재구성하고, 별도 사이드바 앵커 `고객 연락`을 첫 탭으로 흡수한다 | "상당히 좋은 것 같아… 진행" | 확정 · 내비 구현됨 |
-| 2 | Futura 페이지 텍스처(`hub-futura.css`의 `.hub-futura`·`fx-head`·`fx-page-title`·`fx-card`·`fx-pill-btn`·`fx-eyebrow`)를 오늘 연락·고객·거래 세 페이지로 넓힌다 | "2번 오케이" | 확정 · 구현 중 |
-| 3 | 운영자의 휴대폰은 갤럭시(Android)다. 통화·문자·카카오톡 알림은 Android 자동화 앱(MacroDroid 또는 Tasker)의 HTTP POST로 Engine intake에 보내고, Hub는 그것을 **기록 후보**로만 보여 준다. 운영자가 한 번 눌러 확인해야 기록이 된다 — 자동 저장 없음. 카카오톡은 공식 API가 없어 받은 알림과 대화 내보내기만 쓸 수 있다 | 운영자 답변(2026-09-24) | 확정 · 구현 중 |
+| 1 | 영업·매출을 4탭(오늘 연락 · 고객 · 거래 · 문의)으로 재구성하고, 별도 사이드바 앵커 `고객 연락`을 첫 탭으로 흡수한다 | "상당히 좋은 것 같아… 진행" | 확정 · 1차 구현 |
+| 2 | Futura 페이지 텍스처(`hub-futura.css`의 `.hub-futura`·`fx-head`·`fx-page-title`·`fx-card`·`fx-pill-btn`·`fx-eyebrow`)를 오늘 연락·고객·거래 세 페이지로 넓힌다 | "2번 오케이" | 확정 · 1차 구현 |
+| 3 | 운영자의 휴대폰은 갤럭시(Android)다. 통화·문자·카카오톡 알림은 Android 자동화 앱(MacroDroid 또는 Tasker)의 HTTP POST로 Engine intake에 보내고, Hub는 그것을 **기록 후보**로만 보여 준다. 운영자가 한 번 눌러 확인해야 기록이 된다 — 자동 저장 없음. 카카오톡은 공식 API가 없어 받은 알림과 대화 내보내기만 쓸 수 있다 | 운영자 답변(2026-09-24) | 확정 · 후보 흐름 구현, 실제 폰 연결 대기 |
 
 ---
 
@@ -47,7 +47,7 @@
 | 탭(역할) | 전체 | 개인 | ClassIn |
 |---|---|---|---|
 | 오늘 연락 (`followups`) | `revenue/followups` | `revenue/followups` | `revenue/followups` |
-| 고객 (`customers`) | `revenue/customers` | `revenue/customers` | `classin/revenue` (ClassIn Leads 별칭) |
+| 고객 (`customers`) | `revenue/customers` | `revenue/customers?scope=personal` | `revenue/customers?scope=classin` |
 | 거래 (`deals`) | `revenue/deals` | `revenue/deals?scope=personal` | `classin/pipeline` |
 | 문의 (`inquiries`) | `revenue/inquiries` | `revenue/inquiries?scope=personal` | `revenue/inquiries?scope=classin` |
 | 현금 흐름 (`cashflow`) | — | `revenue/overview?scope=personal` | — |
@@ -55,8 +55,7 @@
 
 경로는 모두 `dashboard/` 아래다.
 
-- `?scope=`는 **그 쿼리를 실제로 읽는 화면에만** 붙인다(5차 재감사 S — 과약속 금지). 2026-09-24 실측으로 거래(`Deals`의 `useScopeFilter`)와 문의(`inquiryScopeForWorkspace`)만 읽는다. 오늘 연락(전역 큐)과 고객(`Customers` 전역 목록)은 읽지 않으므로 붙이지 않았다. 이 화면들이 스코프를 읽게 되면 `hub-nav.js`의 `SCOPE_CONSUMING_CHILD_KEYS`에 키를 더한다.
-- ClassIn의 고객 탭은 `Customers`가 `scope=classin`을 읽지 않기 때문에, ClassIn으로 걸러지는 가장 가까운 화면인 `dashboard/classin/revenue`(`Leads workspace="classin"`)를 쓴다. 전역 고객 목록을 걸러지지 않은 채 ClassIn 탭에 두면 스코프가 걸린 척하게 된다. `Customers`가 스코프를 읽게 되면 이 탭을 `revenue/customers?scope=classin`으로 바꾼다(§9 Q-RR1).
+- `?scope=`는 **그 쿼리를 실제로 읽는 화면에만** 붙인다. 현재 고객(`Customers`), 거래(`Deals`), 문의(`inquiryScopeForWorkspace`)가 소비하고 오늘 연락은 전역 큐다. `hub-nav.js`의 `SCOPE_CONSUMING_CHILD_KEYS`에 고객 키가 추가됐으며, ClassIn 고객 탭도 `dashboard/revenue/customers?scope=classin`을 직접 연다(§9 Q-RR1 해소).
 - 개인 스코프의 `현금 흐름`은 2026-08-31 30일 현금 흐름 로드맵(운영자 확정 기능)이다. 개요가 탭에서 내려가도 이 로드맵은 한 번에 닿아야 해서 다섯 번째 탭으로 남긴다.
 - 같은 역할은 스코프가 달라도 같은 이름이다. `hub-nav.test.mjs`가 탭 구성과 이름을 고정한다.
 - 탭 줄은 계속 탑바가 그린다(`PAGE_OWNS_TABS` 불변). 목업도 탑바 탭을 그린다.
@@ -231,11 +230,11 @@ Leads(영업 중) · Accounts(계약) · 고객 DB가 같은 사람을 세 번 �
 
 ---
 
-## 9. 미정 — 운영자 확인 필요
+## 9. 결정·미정 — 운영자 확인 필요
 
 | # | 질문 | 지금 둔 값 | 메모 |
 |---|---|---|---|
-| Q-RR1 | ~~ClassIn 고객 탭을 언제 새 고객 목록으로 바꾸나~~ **해소(2026-09-24)**: 고객 화면이 `?scope=classin|personal`을 읽게 되어 ClassIn·개인 고객 탭 모두 `revenue/customers?scope=…`로 연결 | ClassIn Leads 별칭(`classin/revenue`) | `Customers`가 `scope=classin`을 읽게 되는 커밋에서 탭 경로를 바꾼다 |
+| Q-RR1 | ~~ClassIn 고객 탭을 언제 새 고객 목록으로 바꾸나~~ **해소(2026-09-24)**: 고객 화면이 `?scope=classin|personal`을 읽게 됐다 | 개인·ClassIn 모두 `revenue/customers?scope=…` | `Customers` 스코프 필터와 탭 경로 구현 완료 |
 | Q-RR2 | 개인 스코프 착지 | 오늘 연락 | 이전 개인 착지는 현금 흐름이었다. 매일 여는 탭 하나라는 결정에 맞췄다 |
 | Q-RR3 | 건수 뱃지 — 사이드바는 오늘 약속 수인가 놓친 약속 수인가, 탑바 탭에도 건수를 다나 | 사이드바 = 오늘 약속 수(이전과 같음), 탑바 탭 = 없음 | 목업은 앵커 = 놓친 약속 수, 탭 = 오늘 챙길 사람·미확인 문의 |
 | Q-RR4 | Cases의 끝 | ⌘K 전용, 라우트 유지 | CRM 기획 Q141과 같다. 삭제·이관은 실사용 관찰 뒤 |
@@ -245,7 +244,7 @@ Leads(영업 중) · Accounts(계약) · 고객 DB가 같은 사람을 세 번 �
 | Q-RR8 | 입금 사실을 어디에 적나 | 없음 → 입금됨 조각 없음 | 현금 흐름 설계(2026-09-13)와 같이 정한다 |
 | Q-RR9 | 휴대폰 후보 보존 기간과 원문 보관 기본값 | 다음 날 사라짐 · 원문 보관 안 함 | 목업의 방향. 확정 전 권장 |
 | Q-RR10 | 카톡 표시 이름 ↔ 고객 연결을 어디에 저장하나 | 휴대폰 기록 후보 스트림이 정함 | 한 번 연결, 이후 자동 |
-| Q-RR11 | 오늘 연락·고객에서 탑바 `New`가 무엇을 만드나 — **고객은 해소**(`customers?new=customer`) | 고객 → 기존 `leads?new=lead`, 오늘 연락 → 팔레트 폴백 | 두 페이지가 `?new=` 딥링크를 내놓으면 `hub-app.jsx` `createTargetForPath`에 매핑한다 |
+| Q-RR11 | 오늘 연락·고객에서 탑바 `New`가 무엇을 만드나 — **고객은 해소** | 고객 → `customers?new=customer`, 오늘 연락 → 팔레트 폴백 | 고객 딥링크는 구현됐다. 오늘 연락의 생성 동작은 별도 결정이 남았다 |
 
 ---
 
@@ -276,4 +275,32 @@ Leads(영업 중) · Accounts(계약) · 고객 DB가 같은 사람을 세 번 �
 - 입금·매출 목표 원천 없음(Q-RR7·8) → 리본의 입금됨 조각·목표선은 그리지 않는다. 고객 목록에 채널 데이터가 없어 마지막 연락은 반응·날짜만.
 - 폰 이벤트가 자동화 화면의 webhook 이벤트 목록에 섞여 보인다. 카톡 표시 이름 연결(`meta.kakao_names`) 편집 화면 없음. MacroDroid의 통화 시간 변수는 앱에서 확인 필요.
 - 히트맵은 워크스페이스 인지가 없어 `classin/pipeline`의 지역 보기는 전체 데이터다.
+
+---
+
+## 12. 2차 구현 (2026-09-25) — 제안 팁 · 템플릿 약속 · 목표·결제
+
+운영자 결정(2026-09-24): ① 넛지는 별도 섹션이 아니라 **디자인 요소·추천 팁·제안** ② 이관 템플릿 다음 행동은 약속이 아니라 제안 ③ 매출 목표·입금은 **처음엔 월 목표 러프하게 → 딜별 결제 일정 상세 → 결제되면 예상치와 확정치를 나눠 표기**.
+
+**제안 팁** — 공용 `SuggestionTip`(`components/hub/suggestion-tip.jsx`): `◇ 제안 · <이유> [행동 하나]` 한 줄, `CertaintyBadge state="recommended"`(점선 + 빈 마름모)만 쓰고 채움·빨강·모션 없음. 대상 하나에 팁 하나. 되살린 규칙은 `reaction_open`(우려·거절 뒤 후속 없음)과 `dormant_recheck`(기약 없음 30일)뿐이다 — `meeting_unrecorded`는 기록할까요, `promise_missed`·`promise_due`는 놓친/오늘 약속 행, `no_next_action`은 템플릿 제안·`약속 정하기`가 이미 말한다(`crm-nudge.jsx`의 `TIP_RULE_IDS`). 위치: 오늘 연락 행(약속 줄 아래)·고객 목록 다음 약속 칸(정보 전용 compact)·고객 드로어 약속 카드. 옛 `CrmNudgeSection`은 제거.
+
+**템플릿 약속** — `customerPromise()`가 날짜 없는 템플릿 다음 행동을 `state: "template"`로 돌려 `다음 약속 없음` + `◇ 제안 · <문구>`로 보이고, 헤더의 "약속 없는 진행 중"·정렬에서 약속으로 세지 않는다. 판정은 기존 `isTemplateNextAction`(`lead-enrichment.js` 문구 목록). 날짜가 붙은 템플릿 문구는 운영자가 날짜를 고른 것으로 보고 약속으로 둔다.
+
+**목표·결제(마이그레이션 없음)** — 월 목표 `workspaces.meta.revenue_targets = {"YYYY-MM": 금액}`(`POST /api/hub/revenue/target`, 쓰기 가드), 딜 결제 `deals.meta.payments = [{ id, label, expectedAmount, expectedAt, paidAmount, paidAt, status }]`(기존 meta 병합 저장). 일정이 없으면 딜 금액·예상일이 **암묵 결제 1건**(저장하지 않고 파생). 거래 히어로는 `이번 달 들어온 돈`(확정치 = 실제 입금)과 `들어올 예정`(예상치)을 나눠 말하고, 목표가 있으면 남은 금액 한 줄·없으면 인라인 `목표 정하기`. 리본에 `입금됨` 조각과 1px 목표선이 돌아왔다. 레인은 딜이 아니라 **미입금 결제** 단위라 분할 결제는 여러 레인에 `N회 중 n회`로 걸치고, 전액 입금된 딜은 빠진다. 독의 결제 블록: 입금 확인(실제 금액·날짜 수정 가능)·편집·일정 취소·일정 추가(금액을 채운 뒤에만 저장). 현금 흐름 탭은 같은 결제를 읽기 전용으로 보여 준다.
+
+**통합 검증에서 고친 것** — 결제 일정 나누기가 ₩0 행을 먼저 저장해 정규화에서 사라지던 문제·금액 없는 딜에 결제 입구가 없던 문제(인라인 폼), 목표 폼이 `<p>` 안에 있던 잘못된 중첩.
+
+**남은 것** — `meta.next_action_source`를 연락 기록 RPC가 쓰지 않아 운영자가 고친 약속과 템플릿의 구분이 문구 목록에 기대고 있다(결정 C, 마이그레이션 필요). "전년 결제한 확정치"는 §13 A안(딜별 예상 → 확정)으로 정리됐다. `입금됨` 리본 조각을 누르면 입금된 결제는 이미 레인을 떠나 카드가 0건이 된다. 목표 삭제 UI 없음(API는 `amount: null` 지원). 거래 카드·독에는 아직 제안 팁이 없다.
+
+---
+
+## 13. 결제 보기 — 딜별 "예상했던 돈 → 실제 들어온 돈" (2026-09-25, A안)
+
+운영자가 목업 두 안(A 딜별 예상→확정 · B 올해 vs 작년 같은 달) 중 **A**를 골랐다. B(전년 비교)는 작년 입금 기록이 쌓이면 별도 보기로 붙일 수 있게 남긴다.
+
+- **예상 기준선(마이그레이션 없음)** — 결제마다 `plannedAmount`·`plannedAt`을 둔다. 만들 때 예상값과 같고, 이후 편집·날짜 이동은 `expected*`만 바꾼다(옛 결제는 예상값으로 읽음). 명시 일정이 없는 딜은 `deals.meta.plan_baseline = { amount, closeAt, at }`를 금액·예상일을 처음 바꿀 때 **한 번만** 쓰고(서버도 덮어쓰지 않음), 암묵 결제의 기준선으로 읽는다. 그래서 날짜를 뒤로 미뤄도 원래 달의 "예상했던 입금"이 남는다.
+- **차이 이유** — 입금 확인 때 실제 금액이 예상과 다를 때만 `차이 이유(선택)`(40자)를 받아 `paidNote`로 저장한다.
+- **보기** — 거래 탭 보기 전환 `언제 · 단계 · 결제 · 지역`(`?view=payments`). 언제 보기에는 패널을 더하지 않았다(표면 예산). 결제 보기: 지난 3달 ~ 앞 3달 월별 막대(들어온 돈 = 채움, 남은 예상 = 점선, 그 달에 예상했던 입금 = 점선 눈금, 지난달은 `예상 X · ±Δ`) + ‹ 달 › 로 넘기는 딜별 결제 표(거래 · 회차 · 예상 · 확정(입금) · 차이·이유, 날짜가 밀린 결제는 `원래 M/D → M/D`). 행을 누르면 기존 하단 독이 그 거래로 열린다(전액 입금된 거래 포함). 히어로에 `예상했던 이번 달 입금 ₩P 중 ₩C 확정 (±Δ)` 한 줄.
+- **구현 판단(운영자 확인 대상)** — ① 빨강은 받을 돈이 늦은 경우(성사·일부 입금된 거래)에만, 성사 전 거래의 지난 예상일은 중립 문구 `예상일 N일 지남` ② `PAYMENT_RECORDS_SINCE = "2026-09"` — 그 전 달은 입금 기록이 없어 확정·차이를 적자처럼 그리지 않고 `기록 이전`으로 둔다(더 이른 입금을 소급해 적으면 그 달부터 기록 있음) ③ 잃은(lost) 거래도 그 달 "예상했던 입금"에는 넣고 남은 예상·늦음에서는 뺀다 ④ 히어로의 (±Δ)는 입금이 하나라도 있을 때만 ⑤ 예상 눈금은 지난달·이번 달에만.
+- **검증** — 전체 테스트 통과. 운영 데이터에는 금액이 잡힌 거래가 없어 빈 상태로 보였고, 로컬 전용 샌드박스 DB(개발 거래)에서 월별 막대·결제 표·지난 결제 표시·독 결제 블록을 화면으로 확인했다(쓰기는 하지 않음). 이 과정에서 명시 결제 카드를 다른 칸으로 끌면 딜 예상일만 바뀌어 카드가 제자리에 남던 기존 버그도 고쳤다(그 결제의 예상일을 옮긴다).
 

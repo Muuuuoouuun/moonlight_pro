@@ -11,6 +11,7 @@ import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { GuruRecommendationList } from "../guru-recommendation";
 import { useGuruRecommendations } from "../guru-recommendations-client";
 import { brandInWorkspace } from "../workspace-map";
+import { GuidanceInlineTip } from "../guidance-inline-tip";
 import { requestPersonaChat } from "../persona-client";
 import {
   buildDailyDispatchContext,
@@ -2063,6 +2064,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
       <DailyReviewCue />
 
       <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
+      <GuidanceInlineTip variant="today" onNavigate={onNavigate} />
 
       {/* Q118·Q119: 월(개인)·목(회사) 아침에만 뜨는 주간 정리 — 다른 요일은 null. */}
       <WeeklyReportCard
@@ -2076,8 +2078,9 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
             tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다. */}
         <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} onRecord={setRecordTarget} />
         {/* 저장된 사실이 있는 고객·거래에만 원문 기법을 잇는다(agent-layer-direction §2.1 ⑦).
-            시간대로 도는 Guru 카드는 여전히 오늘 화면에 두지 않는다. */}
-        <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onRetry={guruRecommendations.reload} />
+            시간대로 도는 Guru 관점은 위의 한 줄 팁(GuidanceInlineTip)만 두고 카드로 늘리지 않는다 —
+            이 목록은 act 추천이 있을 때만 그려지고, 없으면 아무것도 그리지 않는다. */}
+        <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onNavigate={onNavigate} onRetry={guruRecommendations.reload} />
         <DailyDispatchCard
           dailyFocus={ledger.dailyFocus}
           taskToday={ledger.taskToday}

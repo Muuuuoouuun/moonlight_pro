@@ -20,7 +20,10 @@ import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE, LOST_STAGE, dealStageLabel, isDealStalled } from "@/lib/deal-stages";
 import { DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay } from "@/lib/deal-timeline";
-import { DealsTimeline, DealsRegionView } from "./deals-timeline";
+import { DealsTimeline, DealsRegionView, RevenueTargetControl } from "./deals-timeline";
+import { monthKeyOf, normalizeTargetAmount, targetForMonth, targetProgress } from "@/lib/revenue-target";
+import { planBaselineFor } from "@/lib/deal-payments";
+import { buildPaymentsBoard } from "@/lib/deal-payment-plan";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
@@ -214,6 +217,9 @@ const EMPTY_REVENUE_LEDGER = {
   cases: [],
   contacts: [],
   companies: [],
+  // null = 아직 읽지 않음/읽기 실패(§8.1 read 봉투) — 월별 목표 미정({})과 구분해야
+  // 거래 히어로가 "이번 달 목표가 없다"를 "아직 모른다"로 잘못 말하지 않는다.
+  revenueTargets: null,
   summary: null,
 };
 
@@ -261,6 +267,8 @@ export function useRevenueLedger() {
           cases: Array.isArray(data.cases) ? data.cases : [],
           contacts: Array.isArray(data.contacts) ? data.contacts : [],
           companies: Array.isArray(data.companies) ? data.companies : [],
+          // 서버가 워크스페이스 meta를 못 읽었으면 null 그대로 넘어온다 — 여기서 {}로 뭉개지 않는다.
+          revenueTargets: data.revenueTargets && typeof data.revenueTargets === 'object' ? data.revenueTargets : null,
           summary: data.summary || null,
         };
         const nextState = data.source === 'supabase'
@@ -1736,7 +1744,8 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   const effectiveWorkspace = workspace || (queryScope === 'personal' ? 'brand' : queryScope === 'classin' ? 'classin' : undefined);
   const router = useRouter();
   const pathname = usePathname();
-  // 보기: 언제(기본 · 예상일 칸) · 단계(칸반) · 지역(히트맵). `?view=`로 남겨 새로고침·공유에도 유지.
+  // 보기: 언제(기본 · 예상일 칸) · 단계(칸반) · 결제(예상했던 돈 → 들어온 돈) · 지역(히트맵).
+  // `?view=`로 남겨 새로고침·공유에도 유지.
   const view = resolveDealView(searchParams?.get('view'));
   const changeView = (next) => {
     const params = new URLSearchParams(searchParams?.toString() || '');
@@ -1893,17 +1902,21 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   };
   // 언제 보기의 칸 이동·독 프리셋 = 예상일(expected_close_at) 변경. 단계 이동과 같은 지연 쓰기
   // 계약 — 낙관 반영 → 되돌리기 창 → 창이 닫힌 뒤 PATCH, 실패하면 원래 날짜로 롤백하고 명명한다.
-  const pendingCloseRef = React.useRef(new Map()); // key → 최초 { closeAt, close }
+  // 처음 계획(2026-09-25 A안): 계획이 완성된 딜의 예상일을 처음 옮길 때 옮기기 전 값을
+  // meta.plan_baseline으로 한 번 같이 싣는다(planBaselineFor). 되돌리기 창 안에서 연달아 옮겨도
+  // 기준은 창이 열리기 전 값(base)이라 "예상했던" 날짜가 중간값으로 바뀌지 않는다.
+  const pendingCloseRef = React.useRef(new Map()); // key → 최초 { closeAt, close, planBaseline }
   const moveCloseDate = (id, nextCloseAt, label) => {
     const current = deals.find(d => d.id === id);
     const next = nextCloseAt || '';
     if (!current || sameCloseDay(current.closeAt, next)) return;
     const key = `deal-close-${id}`;
-    const base = pendingCloseRef.current.get(key) ?? { closeAt: current.closeAt || '', close: current.close };
+    const base = pendingCloseRef.current.get(key) ?? { closeAt: current.closeAt || '', close: current.close, planBaseline: current.planBaseline ?? null };
     pendingCloseRef.current.set(key, base);
-    setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: next, close: formatCloseLabel(next) } : d)));
+    const planBaseline = planBaselineFor({ ...current, closeAt: base.closeAt, planBaseline: base.planBaseline }, { closeAt: next });
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: next, close: formatCloseLabel(next), ...(planBaseline ? { planBaseline } : {}) } : d)));
     if (String(id).toLowerCase().startsWith('local-')) { pendingCloseRef.current.delete(key); return; }
-    const restore = () => setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: base.closeAt, close: base.close } : d)));
+    const restore = () => setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: base.closeAt, close: base.close, planBaseline: base.planBaseline } : d)));
     const undoCloseMove = () => {
       if (cancelUndoable(key)) {
         pendingCloseRef.current.delete(key);
@@ -1913,7 +1926,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
     };
     scheduleUndoable(key, () => {
       pendingCloseRef.current.delete(key);
-      saveRevenueRecord('deal', 'update', { id, closeAt: next }).then((r) => {
+      saveRevenueRecord('deal', 'update', { id, closeAt: next, ...(planBaseline ? { planBaseline } : {}) }).then((r) => {
         if (r.ok) return;
         restore();
         toast.error(r.status === 'preview'
@@ -1922,6 +1935,38 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
       });
     });
     toast.success(label, { action: { label: '되돌리기', onClick: undoCloseMove } });
+  };
+  // 결제 일정 변경(결제 나누기·입금 확인·편집·취소) — 위 두 지연 쓰기와 같은 계약. 낙관 반영은
+  // deal.payments 배열 전체를 교체하고, 실패하면 되돌린다. deal-payments.js의 뮤테이터가
+  // 이미 새 배열을 만들어 넘기므로 여기는 저장·되돌리기 배선만 한다.
+  const pendingPaymentsRef = React.useRef(new Map()); // key → 최초 payments 배열
+  const updateDealPayments = (id, nextPayments, label) => {
+    const current = deals.find(d => d.id === id);
+    if (!current) return;
+    const key = `deal-payments-${id}`;
+    const base = pendingPaymentsRef.current.get(key) ?? (current.payments || []);
+    pendingPaymentsRef.current.set(key, base);
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, payments: nextPayments } : d)));
+    if (String(id).toLowerCase().startsWith('local-')) { pendingPaymentsRef.current.delete(key); return; }
+    const restore = () => setDeals(ds => ds.map(d => (d.id === id ? { ...d, payments: base } : d)));
+    const undoPaymentsChange = () => {
+      if (cancelUndoable(key)) {
+        pendingPaymentsRef.current.delete(key);
+        restore();
+      }
+      toast.info('결제 변경을 취소했습니다.');
+    };
+    scheduleUndoable(key, () => {
+      pendingPaymentsRef.current.delete(key);
+      saveRevenueRecord('deal', 'update', { id, payments: nextPayments }).then((r) => {
+        if (r.ok) return;
+        restore();
+        toast.error(r.status === 'preview'
+          ? 'Supabase 미연결 — 결제 변경이 저장되지 않아 되돌렸습니다'
+          : `결제 저장 실패 (${r.status}) — 되돌렸습니다`);
+      });
+    });
+    toast.success(label, { action: { label: '되돌리기', onClick: undoPaymentsChange } });
   };
   // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 기록에서 meta.deal_id로
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
@@ -1972,16 +2017,18 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   const persistDeal = async () => {
     if (!editingDeal) return { ok: false, status: 'error' };
     const isNew = String(editDealId).toLowerCase().startsWith('local-');
-    const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', editingDeal);
+    const prevDeal = deals.find(d => d.id === editDealId);
+    // 금액·예상일을 바꾸는 편집이면 바꾸기 전 계획을 한 번만 같이 싣는다(moveCloseDate와 같은 규칙).
+    const planBaseline = isNew ? null : planBaselineFor(prevDeal, { value: editingDeal.value, closeAt: editingDeal.closeAt });
+    const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', planBaseline ? { ...editingDeal, planBaseline } : editingDeal);
     if (r.ok) {
       // 저장 성공 시점에 드래프트를 보드에 커밋 — 타이핑 중에는 보드가 재계산되지 않는다.
       const draft = dealDrafts[editDealId];
       const realId = isNew && r.id ? r.id : editDealId;
-      const prevDeal = deals.find(d => d.id === editDealId);
       if (editingDeal.stage === 'closing' && prevDeal?.stage !== 'closing') {
         triggerCelebration({ mode: 'confetti' });
       }
-      setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, ...(draft || {}), id: realId } : d)));
+      setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, ...(draft || {}), ...(planBaseline ? { planBaseline } : {}), id: realId } : d)));
       setDealDrafts(prev => { if (!prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
       if (isNew && r.id) setEditDealId(realId);
       toast.success(isNew ? '새 딜을 저장했습니다.' : '딜 정보를 저장했습니다.');
@@ -2064,32 +2111,97 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
     () => buildDealTimeline(timelineSource, { stages: DEAL_STAGES }),
     [timelineSource, DEAL_STAGES],
   );
-  const selection = useCrmSelection(view === 'time' ? dealTimeline.ordered : boardItems);
-  const dockOpen = view === 'time' && selection.selectedId != null
-    && dealTimeline.ordered.some(item => item.id === selection.selectedId);
+  // 결제 보기 — 같은 딜 집합의 달별 "예상했던 돈 → 들어온 돈"(lib/deal-payment-plan.js). 표의 달은
+  // 여기서 소유한다(null = 이번 달). 히어로의 "예상했던 이번 달 입금" 한 줄도 같은 결과(current)를 읽는다.
+  const [paymentsMonth, setPaymentsMonth] = React.useState(null);
+  const paymentsBoard = React.useMemo(
+    () => buildPaymentsBoard(timelineSource, { monthKey: paymentsMonth }),
+    [timelineSource, paymentsMonth],
+  );
+  // 결제 보기의 j/k는 표에 보이는 거래 순서(같은 거래의 여러 회차는 한 번)로 움직인다.
+  const paymentSelectionItems = React.useMemo(
+    () => [...new Set(paymentsBoard.rows.map(row => row.dealId))].map(id => ({ id })),
+    [paymentsBoard.rows],
+  );
+  const selection = useCrmSelection(view === 'time' ? dealTimeline.ordered : view === 'payments' ? paymentSelectionItems : boardItems);
+  const dockOpen = selection.selectedId != null && (
+    view === 'time'
+      ? dealTimeline.ordered.some(item => item.id === selection.selectedId)
+      : view === 'payments' && timelineSource.some(d => d.id === selection.selectedId)
+  );
   // 읽는 중·읽기 실패·미연결(preview)에는 ₩0을 사실처럼 제목에 올리지 않는다.
   const heroUnknown = ledgerUnavailable || syncState === 'preview';
+
+  // 이번 달 매출 목표 — workspaces.meta.revenue_targets(마이그레이션 없음, 운영자 2026-09-24
+  // 결정 1층). ledger.revenueTargets가 null이면 "아직 못 읽음"이라 목표선·CTA 둘 다 숨긴다.
+  // 저장 직후에는 재조회를 기다리지 않고 로컬 override로 즉시 반영한다.
+  const [targetOverride, setTargetOverride] = React.useState(null); // { month, amount } | null
+  const [targetSaving, setTargetSaving] = React.useState(false);
+  const targetsKnown = ledger.revenueTargets != null;
+  const effectiveTargets = React.useMemo(() => {
+    if (!targetsKnown) return null;
+    if (!targetOverride) return ledger.revenueTargets;
+    return { ...ledger.revenueTargets, [targetOverride.month]: targetOverride.amount };
+  }, [targetsKnown, ledger.revenueTargets, targetOverride]);
+  const monthKey = monthKeyOf(dealTimeline.ctx);
+  const currentTarget = targetsKnown ? targetForMonth(effectiveTargets, dealTimeline.ctx) : null;
+  const targetInfo = currentTarget != null
+    ? targetProgress({ target: currentTarget, paid: dealTimeline.month.paid, expected: dealTimeline.month.total })
+    : null;
+  const saveTarget = async (amount) => {
+    const normalized = normalizeTargetAmount(amount);
+    if (!normalized) { toast.error('올바른 금액을 입력하세요.'); return false; }
+    setTargetSaving(true);
+    try {
+      const resp = await fetch('/api/hub/revenue/target', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ month: monthKey, amount: normalized }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (data.status === 'saved') {
+        setTargetOverride({ month: monthKey, amount: normalized });
+        toast.success(`${monthKey} 목표를 ${fmt(normalized)}로 정했습니다.`);
+        return true;
+      }
+      toast.error(data.status === 'preview' ? 'Supabase 미연결 — 목표가 저장되지 않았습니다.' : '목표 저장에 실패했습니다.');
+      return false;
+    } catch {
+      toast.error('목표 저장에 실패했습니다.');
+      return false;
+    } finally {
+      setTargetSaving(false);
+    }
+  };
+
+  // 언제 보기의 선택은 결제 카드 단위(item.id — 딜 하나가 2회 걸치면 값이 갈린다)라, 딜
+  // 자체를 다루는 키보드 동작(e 편집·1–5 단계 이동)은 카드가 들고 있는 실제 딜 id로 되돌린다.
+  const selectedDealIdInTime = React.useMemo(() => {
+    if (view !== 'time' || selection.selectedId == null) return selection.selectedId;
+    return dealTimeline.ordered.find(item => item.id === selection.selectedId)?.deal.id ?? selection.selectedId;
+  }, [view, selection.selectedId, dealTimeline.ordered]);
   useCrmKeyboard({
     enabled: !ledgerUnavailable,
     selection,
     onNew: () => createDeal(),
-    onEditSelected: (id) => setEditDealId(id),
+    onEditSelected: () => setEditDealId(selectedDealIdInTime),
     onStageMove: (stageIndex) => {
-      if (!selection.selectedId) return;
+      if (!selectedDealIdInTime) return;
       const stage = DEAL_STAGES[stageIndex];
-      if (stage) move(selection.selectedId, stage.key);
+      if (stage) move(selectedDealIdInTime, stage.key);
     },
   });
   React.useEffect(() => {
     if (!selection.selectedId) return;
-    document.querySelector(`[data-deal-card="${CSS.escape(String(selection.selectedId))}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const key = CSS.escape(String(selection.selectedId));
+    document.querySelector(`[data-deal-card="${key}"], [data-deal-row="${key}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [selection.selectedId]);
 
   return (
     <div className="hub-futura hub-page fade-up deals-page" style={view === 'stage' ? { height: '100%' } : undefined}>
-      {/* 제목이 숫자다(목업 3) — 개요 탭의 KPI 카드 대신 "확정된 돈 / 잘 풀리면" 한 문장.
-          제목 금액은 이번 달 예상일의 확정(클로징)만 — 입금 필드와 목표 금액이 기록에 없어
-          "입금됨"·"목표까지" 문구는 만들지 않는다(lib/deal-timeline.js). */}
+      {/* 제목이 숫자다(목업 3) — 개요 탭의 KPI 카드 대신 "들어온 돈 / 들어올 예정" 한 문장
+          (2026-09-24 라운드 2: 결제 기록이 생겨 확정치=실제 입금, 예상치=미입금 예정으로
+          갈렸다 — 둘을 절대 하나로 합치지 않는다). 목표는 있을 때만 세 번째 줄에 붙는다. */}
       <header>
         <div className="deals-hero">
           <div className="deals-hero__text">
@@ -2098,10 +2210,34 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
               <SyncBadge state={syncState} />
             </p>
             <h2 className="fx-page-title">
-              {heroUnknown ? '거래' : <>이번 달 확정된 돈 <span className="stat">{fmt(dealTimeline.month.confirmed)}</span></>}
+              {heroUnknown ? '거래' : <>이번 달 들어온 돈 <span className="stat">{fmt(dealTimeline.month.paid)}</span></>}
             </h2>
-            {!heroUnknown && dealTimeline.month.upside > dealTimeline.month.confirmed && (
-              <p className="fx-page-sub">잘 풀리면 <span className="stat deals-hero__value">{fmt(dealTimeline.month.upside)}</span></p>
+            {/* 예상했던 이번 달 입금(2026-09-25 A안) — 처음 계획이 이번 달인 결제 중 얼마가 들어왔나.
+                괄호는 들어온 것 − 계획(아직 들어온 게 없으면 계획 금액과 같은 말이라 생략). */}
+            {!heroUnknown && (dealTimeline.month.total > 0 || paymentsBoard.current.planned > 0) && (
+              <p className="fx-page-sub">
+                {dealTimeline.month.total > 0 && <>들어올 예정 <span className="stat deals-hero__value">{fmt(dealTimeline.month.total)}</span></>}
+                {paymentsBoard.current.planned > 0 && (
+                  <span className="deals-hero__plan">
+                    {dealTimeline.month.total > 0 ? ' · ' : ''}예상했던 이번 달 입금 <span className="mono">{fmt(paymentsBoard.current.planned)}</span> 중 <span className="mono">{fmt(paymentsBoard.current.plannedConfirmed)}</span> 확정
+                    {paymentsBoard.current.plannedConfirmed > 0 && paymentsBoard.current.plannedDelta !== 0 && (
+                      <> (<span className="mono">{paymentsBoard.current.plannedDelta > 0 ? '+' : '−'}{fmt(Math.abs(paymentsBoard.current.plannedDelta))}</span>)</>
+                    )}
+                  </span>
+                )}
+              </p>
+            )}
+            {!heroUnknown && (
+              // 목표 편집기는 <form>을 그린다 — <p> 안의 <form>은 잘못된 중첩(하이드레이션 오류)이라 div로 감싼다.
+              <div className="fx-page-sub">
+                <RevenueTargetControl
+                  targetsKnown={targetsKnown}
+                  progress={targetInfo}
+                  monthLabel={dealTimeline.month.monthLabel}
+                  saving={targetSaving}
+                  onSave={saveTarget}
+                />
+              </div>
             )}
           </div>
           <div className="deals-hero__actions">
@@ -2175,8 +2311,12 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
         </Card>
       )}
 
-      {view === 'time' && !ledgerUnavailable && !wsEmpty && (
+      {(view === 'time' || view === 'payments') && !ledgerUnavailable && !wsEmpty && (
         <DealsTimeline
+          view={view}
+          deals={timelineSource}
+          paymentsBoard={view === 'payments' ? paymentsBoard : null}
+          onPaymentsMonth={setPaymentsMonth}
           timeline={dealTimeline}
           stages={dealTimeline.stages}
           ledger={ledger}
@@ -2190,6 +2330,8 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
           canCreate={!ledgerUnavailable}
           onNavigate={onNavigate}
           onReload={reloadLedger}
+          target={currentTarget}
+          onUpdatePayments={updateDealPayments}
         />
       )}
 
@@ -2396,7 +2538,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
               </Button>
             </div>
             {dealRecommendation ? (
-              <GuruRecommendation recommendation={dealRecommendation} onAsk={onGuidanceAsk} compact />
+              <GuruRecommendation recommendation={dealRecommendation} onAsk={onGuidanceAsk} onNavigate={onNavigate} compact />
             ) : (!editingDeal.nextAction || isDealStalled(editingDeal)) && (
               <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Iconed name="clock" size={12} aria-hidden="true" />

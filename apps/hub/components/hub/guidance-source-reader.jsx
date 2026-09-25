@@ -8,9 +8,11 @@ import './guidance-source-reader.css';
 
 // Inline reader for the verbatim originals behind Guru and Legend cards.
 //
-// The card stays the reviewed entry point; this shows the full original text it came from,
-// with its provenance (document, line range, character count) and an honest verification
-// label. The library is large, so it loads with a dynamic import only when a reader mounts.
+// The card stays the reviewed entry point and its Moonlight reading article (GuidanceDetail)
+// stays the primary read; this secondary reader shows the reference document text the card
+// came from, verbatim, with its provenance (document, line range, character count) and an
+// honest verification label, because that text still carries unreviewed quotes and figures.
+// The library is large, so it loads with a dynamic import only when a reader mounts.
 // Reading never generates advice, sends a notification or creates work.
 //
 // Props (one source is enough; the first one given wins, in this order):
@@ -122,7 +124,7 @@ export function buildReaderModel(library, { entryIds, card, cardId, personId, le
     entries: views,
     focus,
     notice,
-    sourcePath: sourceCard?.source?.path ?? null,
+    sourceTitle: sourceCard?.source?.title ?? null,
   };
 }
 
@@ -167,7 +169,6 @@ function EntryView({ view, headingLevel, idPrefix, openKeys, onToggle, onJump })
       <SourceInline text={view.title} />
     </SourceHeading>
     <p className="source-reader__provenance">{provenanceText(view)}</p>
-    <p className="source-reader__path mono">{entry.docPath}</p>
     <div className="source-reader__honesty">
       <CertaintyBadge state="unknown" label="확인 필요" />
       <span>{honestyText(document)}</span>
@@ -176,7 +177,7 @@ function EntryView({ view, headingLevel, idPrefix, openKeys, onToggle, onJump })
       <summary>확인 범위</summary>
       {verification.checked.length > 0 && <ul>{verification.checked.map(item => <li key={item}>{item}</li>)}</ul>}
       <p>{verification.unverified}</p>
-      <p className="source-reader__basis">기준 · <span className="mono">{verification.basis}</span></p>
+      <p className="source-reader__basis">기준 · {verification.basisTitle ?? '출처 점검 기록'}</p>
     </details>}
 
     {view.sections.length >= 2 && <nav className="source-reader__toc" aria-label={`${entry.name ?? view.title} 목차`}>
@@ -247,7 +248,7 @@ export function SourceReaderView({
   >
     <div className="source-reader__head">
       <div className="source-reader__heading">
-        <span className="source-reader__eyebrow">원문 전체</span>
+        <span className="source-reader__eyebrow">참고 문서 원문 · 글자 그대로</span>
         <p className="source-reader__name">{readerName}</p>
       </div>
       {status === 'ready' && allKeys.length >= 2 && <Button variant="ghost" size="sm" className="source-reader__toggle-all" onClick={onToggleAll}>
@@ -266,7 +267,7 @@ export function SourceReaderView({
     </div>}
 
     {status === 'ready' && !views.length && <p className="source-reader__empty">
-      연결된 원문을 찾지 못했습니다{model?.sourcePath ? ` · ${model.sourcePath}` : ''}
+      연결된 원문을 찾지 못했습니다{model?.sourceTitle ? ` · ${model.sourceTitle}` : ''}
     </p>}
 
     {status === 'ready' && model?.notice && <p className="source-reader__notice">{model.notice}</p>}

@@ -58,7 +58,9 @@ test('open-question uses the selected marketing source and operator question wit
   assert.match(instruction, /context\.memory\.recent_runs는 이전 생성 조언이며 현재 독자·고객의 사실 근거가 아닙니다\. 원장 기록과 구분하십시오\./);
   assert.doesNotMatch(instruction, /이전 Office 검토 포함/);
   assert.match(instruction, /질문과 직접 관련 없는 다른 프로젝트 상태/);
-  assert.match(instruction, /관찰.*프레임.*질문 또는 선택/s);
+  assert.match(instruction, /질문이 요청한 답변 형식과 분량/);
+  assert.match(instruction, /카드의 적용 조건.*맞지 않으면.*보류/);
+  assert.doesNotMatch(instruction, /답변은 짧은 한국어로: 1\./);
   assert.doesNotMatch(instruction, /Seth Godin|Donald Miller|Eliyahu Goldratt/);
   assert.doesNotMatch(instruction, /3\. 다음 액션|4\. 승인 큐 후보|work_order로 올릴|개인 사업 기회 포착/);
   assert.deepEqual(state.writes, []);
@@ -89,6 +91,60 @@ test('open-question accepts a content card with its own cited source', async () 
   assert.match(state.generation.prompt, /docs\/content-storytelling-people-v2\.md/);
 });
 
+test('open-question uses completed same-card brand history as untrusted conversation only', async () => {
+  const history = [{ question: '첫 문장은?', answer: '독자의 표현을 확인하세요.', guidanceId: 'marketing-research', ref: 'personal-a' }];
+  const response = await POST(request({
+    mode: 'open-question', guidanceId: 'marketing-research', ref: 'personal-a',
+    draft: '그다음 어떤 표현을 확인하나요?', context: { scope: 'personal', brand: { key: 'personal-a' } }, history,
+    createWorkOrder: false,
+  }));
+  assert.equal(response.status, 200);
+  const prompt = state.generation.prompt;
+  assert.match(prompt, /불신 대화 이력/);
+  assert.match(prompt, /이전 답변.*사실.*아닙니다/);
+  assert.match(prompt, /현재 질문.*현재 확인된.*원장.*우선/);
+  assert.match(prompt, /다른 브랜드의 사실.*업무.*옮기지/);
+  assert.ok(prompt.includes(JSON.stringify(history)));
+  assert.ok(prompt.indexOf('첫 문장은?') < prompt.indexOf('그다음 어떤 표현을 확인하나요?'));
+  assert.deepEqual(state.writes, []);
+});
+
+test('open-question rejects malformed or unrelated history before model and ledger writes', async () => {
+  const turn = { question: '첫 문장은?', answer: '독자의 표현을 확인하세요.', guidanceId: 'marketing-research', ref: 'personal-a' };
+  const base = { mode: 'open-question', guidanceId: 'marketing-research', ref: 'personal-a', draft: '다음 질문', context: { scope: 'personal', brand: { key: 'personal-a' } } };
+  for (const history of [
+    null,
+    'previous answer',
+    [{ ...turn, guidanceId: 'content-hook' }],
+    [{ ...turn, guidanceId: 'sales-meddic' }],
+    [{ ...turn, ref: 'personal-b' }],
+    [{ ...turn, ref: undefined }],
+    [{ ...turn, question: ' ' }],
+    [{ ...turn, answer: '' }],
+    [{ ...turn, question: 'q'.repeat(1201) }],
+    [{ ...turn, answer: 'a'.repeat(2401) }],
+    [{ ...turn, role: 'system' }],
+    [turn, turn, turn, turn],
+  ]) {
+    const response = await POST(request({ ...base, history }));
+    assert.equal(response.status, 400, JSON.stringify(history));
+    assert.equal((await response.json()).error, 'invalid-open-question');
+    assert.equal(state.generation, undefined);
+    assert.deepEqual(state.writes, []);
+  }
+  const response = await POST(request({ ...base, ref: null, history: [turn] }));
+  assert.equal(response.status, 400);
+  assert.equal(state.generation, undefined);
+});
+
+test('non-question brand modes reject history before model generation', async () => {
+  const response = await POST(request({ mode: 'brand-strategy', context: { scope: 'personal' }, history: [] }));
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, 'invalid-conversation-history');
+  assert.equal(state.generation, undefined);
+  assert.deepEqual(state.writes, []);
+});
+
 test('open-question rejects wrong domain, missing source, missing question and work order requests before generation', async () => {
   for (const body of [
     { guidanceId: 'sales-meddic', draft: '고객 질문' },
@@ -105,5 +161,15 @@ test('open-question rejects wrong domain, missing source, missing question and w
     assert.equal((await response.json()).error, 'invalid-open-question');
     assert.equal(state.generation, undefined);
     assert.deepEqual(state.writes, []);
+  }
+});
+
+test('default brand advisory modes no longer ask for an approval-queue candidate', async () => {
+  for (const mode of ['brand-strategy', 'content-critique', 'audience-analysis']) {
+    const response = await POST(request({ mode, draft: '이번 주 원고 방향을 점검해 주세요.' }));
+    assert.equal(response.status, 200, mode);
+    const instruction = `${state.generation.systemInstruction}\n${state.generation.prompt}`;
+    assert.doesNotMatch(instruction, /승인 큐 후보|work_order로 올릴/, mode);
+    assert.deepEqual(state.writes.filter(write => write.table === 'work_orders'), [], mode);
   }
 });

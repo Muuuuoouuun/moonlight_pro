@@ -115,7 +115,7 @@ export async function runOfficeDiscussion(request: DiscussionRequest, context: u
       const call = officeSourceReviewPrompt({ systemInstruction, prompt }, sourceCatalog);
       let response: Awaited<ReturnType<typeof generateGeminiText>>;
       try {
-        response = await generate({ ...call, ...(model ? { model } : {}), signal: sharedSignal, maxOutputTokens: 4096, thinkingLevel: kind === 'response' && settings.depth === 3 ? 'high' : 'low', responseJsonSchema: officeSourceReviewSchema(turnSchema(request.participants, ownerId, kind), sourceCatalog) });
+        response = await generate({ ...call, ...(model ? { model } : {}), signal: sharedSignal, maxOutputTokens: 4096, thinkingLevel: kind === 'response' && settings.depth === 3 ? 'high' : 'low', responseJsonSchema: officeSourceReviewSchema(turnSchema(request.participants, ownerId, kind), sourceCatalog), retries: 1 });
       } catch (error) { providerFailure(); throw error; }
       if (!response.ok) { providerFailure(); throw new OfficeDiscussionError(response.reason || 'provider-failed'); }
       checkDeadline();

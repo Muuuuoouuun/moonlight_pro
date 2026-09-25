@@ -51,3 +51,14 @@ Added a GPU regression check comparing corresponding foreground-center/backgroun
 ### Text composition correction — 2026-09-25
 
 Removing the whole-content light shadow reduced small-text halos, but native lab headings still appeared distorted compared with the Metal panel's identical content. Moving the SwiftUI host out of `NSGlassEffectView.contentView` and above the material/rim made both headings sharp in the native comparison. This observed difference supports the composition change; the private native rendering mechanism is not assumed. The glass gets an empty content view; the shared parent owns the interactive host with the same frame and first-mouse behavior. Korean paste into the native lab field was also verified. No material tint, opacity, blur or shader change was needed for this correction.
+
+
+### Prism and local reading contrast — 2026-09-25
+
+The operator's bright-desktop screenshots exposed the clear material's central legibility limit. [Apple's Materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials) and [Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/) support local dimming where clear glass must carry white content. Reflection strength alone cannot suppress code behind the center.
+
+The new reading regions use AppKit HUD material, masked to title/control/content bounds, plus a 28% neutral black layer. Real desktop regions use [behind-window blending](https://developer.apple.com/documentation/appkit/nsvisualeffectview/blendingmode-swift.enum/behindwindow); the owned lab uses within-window blending. Fixed white text remains a separate, unfiltered foreground. Nested controls inherit a protected scope instead of adding another material, and the opaque focus shield opts out. Regions share their parent glass's transient color state so the neutral reading material does not hide character identity during interaction.
+
+The Metal edge now separates a fine outer lip, curved key light and weaker bounce light, with a restrained spectral reflection in the first 1–3pt. The default bevel is 10pt; the flat center is exactly transparent. In the owned lab only, red/green/blue rays use IOR 1.453/1.46/1.472. No public desktop refraction-index API is claimed and no screen capture is added.
+
+Integrated GPU check: 2,356 prismatic pixels, peak channel separation 19/255, 560 displaced edge pixels in the calibrated refraction comparison, clear shader center drift 0.00/255. These validate the custom layer, not native desktop compositing or contrast across all possible wallpapers.

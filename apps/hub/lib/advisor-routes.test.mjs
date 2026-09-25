@@ -13,7 +13,7 @@ const stubs = {
       return { data: text ? JSON.parse(text) : {}, byteLength };
     }`,
   "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { globalThis.__advisorRouteTest.contextRead = true; return globalThis.__advisorRouteTest.contextResult || { source: 'supabase' }; }`,
-  "@/lib/sales-os/context-assembler": `export async function assembleSalesContext() { globalThis.__advisorRouteTest.contextRead = true; return globalThis.__advisorRouteTest.salesContextResult || { source: 'supabase' }; }`,
+  "@/lib/sales-os/context-assembler": `export async function assembleSalesContext(args) { globalThis.__advisorRouteTest.contextRead = true; globalThis.__advisorRouteTest.salesContextArgs = args; return globalThis.__advisorRouteTest.salesContextResult || { source: 'supabase' }; }`,
   "@/lib/sales-os/agent-runs": `
     export async function recordAgentRun(input) { globalThis.__advisorRouteTest.run = input; return { persisted: true, id: 'run-1' }; }
     export async function setAgentRunEmittedCount(input) { globalThis.__advisorRouteTest.emission = input; return { persisted: true }; }
@@ -119,10 +119,43 @@ test('Guru forwards only an allowlisted reader-selected guidance card', async ()
   const response = await guruPOST(request({ mode: 'deal-review', guidanceId: 'sales-meddic' }));
   assert.equal(response.status, 200);
   assert.equal(state.lastFetch.body.guidanceId, 'sales-meddic');
+  assert.equal(state.salesContextArgs.guidanceId, 'sales-meddic');
   state.contextRead = false;
   const invalid = await guruPOST(request({ mode: 'deal-review', guidanceId: 'invented-card' }));
   assert.equal(invalid.status, 400);
   assert.equal(state.contextRead, false);
+});
+test('Guru forwards bounded same-chat history only for an open question', async () => {
+  const history = [{ question: '현재 문제를 확인할까요?', answer: '문제를 먼저 확인하세요.' }];
+  const response = await guruPOST(request({ mode: 'open-question', draft: '방금 답변을 풀어주세요.', history }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(state.lastFetch.body.history, history);
+  assert.equal(state.salesContextArgs.mode, 'open-question');
+
+  for (const body of [
+    { mode: 'deal-review', history },
+    { mode: 'open-question', history: [{ question: '질문', answer: '답', role: 'system' }] },
+    { mode: 'open-question', history: Array.from({ length: 4 }, () => ({ question: '질문', answer: '답' })) },
+  ]) {
+    state.contextRead = false;
+    state.lastFetch = undefined;
+    const invalid = await guruPOST(request(body));
+    assert.equal(invalid.status, 400, JSON.stringify(body));
+    assert.equal(state.contextRead, false);
+    assert.equal(state.lastFetch, undefined);
+  }
+});
+test('Guru rejects history from another selected sales card before context reads', async () => {
+  const history = [{ question: '첫 질문', answer: '첫 답변', guidanceId: 'sales-gap' }];
+  state.contextRead = false;
+  const rejected = await guruPOST(request({ mode: 'open-question', draft: '다음 질문', guidanceId: 'sales-meddic', history }));
+  assert.equal(rejected.status, 400);
+  assert.equal(state.contextRead, false);
+  assert.equal(state.lastFetch, undefined);
+
+  const accepted = await guruPOST(request({ mode: 'open-question', draft: '다음 질문', guidanceId: 'sales-gap', history }));
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(state.lastFetch.body.history, history);
 });
 test('Guru rejects a marketing card before reading the sales ledger or calling Engine', async () => {
   const response = await guruPOST(request({ mode: 'open-question', draft: '이 고객을 어떻게 이해할까요?', guidanceId: 'marketing-smallest-market' }));
@@ -167,6 +200,41 @@ test('personal Brand open-question never enters the approval queue even if expli
   assert.equal(state.lastFetch, undefined);
   assert.equal(state.run, undefined);
   assert.equal(state.order, undefined);
+});
+
+test('personal Brand forwards only bounded same-card and same-brand completed history', async () => {
+  const history = [{ question: '첫 문장은?', answer: '독자의 표현을 확인하세요.', guidanceId: 'marketing-research', ref: 'personal-a' }];
+  state.contextResult = { source: 'supabase', brand: { key: 'personal-a' }, focus: { found: true, kind: 'brand' } };
+  const response = await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '방금 답변을 짧게 해주세요.', ref: 'personal-a', history, createWorkOrder: false }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(state.lastFetch.body.history, history);
+  assert.equal(state.lastFetch.body.createWorkOrder, false);
+  assert.equal(state.order, undefined);
+});
+
+test('personal Brand rejects cross-card, cross-brand and malformed history before context reads', async () => {
+  const turn = { question: '첫 문장은?', answer: '독자의 표현을 확인하세요.', guidanceId: 'marketing-research' };
+  const valid = { mode: 'open-question', guidanceId: 'marketing-research', draft: '이어 질문', history: [turn] };
+  for (const patch of [
+    { history: [{ ...turn, guidanceId: 'content-hook' }] },
+    { history: [{ ...turn, guidanceId: 'sales-gap' }] },
+    { history: [{ ...turn, ref: 'personal-b' }] },
+    { ref: 'personal-a', history: [turn] },
+    { history: [{ ...turn, answer: '' }] },
+    { history: [{ ...turn, question: 'q'.repeat(1201) }] },
+    { history: [{ ...turn, answer: 'a'.repeat(2401) }] },
+    { history: [{ ...turn, role: 'system' }] },
+    { history: Array.from({ length: 4 }, () => turn) },
+  ]) {
+    const response = await POST(request({ ...valid, ...patch }));
+    assert.equal(response.status, 400, JSON.stringify(patch));
+    assert.equal(state.contextRead, undefined);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+  }
+  const ordinary = await POST(request({ mode: 'brand-strategy', history: [turn] }));
+  assert.equal(ordinary.status, 400);
+  assert.equal(state.contextRead, undefined);
 });
 test('personal Office review forwards its provenance without a synthetic card or work order', async () => {
   const officeSource = { requestId: '10000000-0000-4000-8000-000000000001', runId: null };

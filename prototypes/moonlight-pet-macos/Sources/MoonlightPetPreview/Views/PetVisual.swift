@@ -63,6 +63,10 @@ struct PetVisual: View {
                 .id(model.selectedCharacter)
                 .transition(.opacity.combined(with: .scale(scale: 0.94)))
         }
+        .overlay(alignment: .topTrailing) {
+            NotificationCountBadge(count: model.activity.unreadCount)
+                .accessibilityHidden(true)
+        }
         .scaleEffect(scale)
         .rotationEffect(.degrees(isLifted ? -1.2 : 0))
         .offset(x: isLifted ? -0.7 : 0, y: verticalOffset)
@@ -70,6 +74,7 @@ struct PetVisual: View {
         .animation(interaction.isPressed ? PetMotion.petPress : PetMotion.petRelease, value: motionState)
         .animation(PetMotion.petCharacter, value: model.selectedCharacter)
         .accessibilityLabel("Moonlight \(model.selectedCharacter.title) 펫, 누르면 빠른 기능, 우클릭하면 캐릭터 선택")
+        .accessibilityValue("알림 \(model.activity.unreadCount)개")
     }
 }
 

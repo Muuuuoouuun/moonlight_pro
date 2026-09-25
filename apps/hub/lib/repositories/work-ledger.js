@@ -4,6 +4,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { WORKSPACE_ROW_SELECT } from "@/lib/workspace-row-select";
 import {
   resolveRhythmTimeZone,
   routineLocalDateKey,
@@ -495,13 +496,16 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
       ),
     }),
     fetchSupabaseRows("workspaces", {
-      select: "id,timezone",
+      select: WORKSPACE_ROW_SELECT,
       limit: 1,
       filters: [["id", eqFilter(workspaceId)]],
     }),
+    // No `select` (and limit 80, not 40) — matches operating-ledger.js getTaskLedger's and
+    // content-ledger.js getContentLedger's brands read option-for-option, so the same request
+    // reading brands from more than one of these ledgers collapses to one network call via
+    // packages/supabase-rest's dedupedRead (URL match). mapRoadmapBrands only reads id/slug/name.
     fetchSupabaseRows("brands", {
-      select: "id,slug,name",
-      limit: 40,
+      limit: 80,
       order: "name.asc",
       filters: withWorkspaceFilter([["status", eqFilter("active")]]),
     }),

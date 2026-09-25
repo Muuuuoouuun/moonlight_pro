@@ -17,11 +17,9 @@ import {
 import { generateGeminiText, getGeminiIntegrationStatus } from "../../../../lib/gemini.ts";
 import {
   insertIntegrationSyncRun,
-  resolveDefaultWorkspaceId,
   upsertIntegrationConnection,
 } from "../../../../lib/integration-state.ts";
 import { validateSharedWebhookRequest } from "../../../../lib/shared-webhook.ts";
-import { insertSupabaseRecord } from "../../../../lib/supabase-rest.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -133,6 +131,7 @@ export async function POST(req: Request) {
     mode !== "open-question" || payload.scope !== "classin" || !officeSource
     || !draft?.trim() || draft.length > OFFICE_SOURCE_DRAFT_LIMIT
     || payload.createWorkOrder !== false || payload.guidanceId != null
+    || payload.history != null
     || (Array.isArray(payload.legendIds) && payload.legendIds.length > 0)
     || payload.directives != null || payload.values != null || payload.knowledge != null
     || [context?.scope, context?.orgScope].some((scope: unknown) => scope === "personal" || scope === "brand")
@@ -145,7 +144,7 @@ export async function POST(req: Request) {
       { status: context.source === "preview" ? 202 : 502 },
     );
   }
-  const workspaceId = resolveDefaultWorkspaceId();
+  const history = mode === "open-question" ? payload.history : null;
   const explicitDirectives = payload.directives ?? (payload.values || payload.knowledge ? { values: payload.values, knowledge: payload.knowledge } : null);
   const maxOutputTokens =
     typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192;
@@ -160,6 +159,7 @@ export async function POST(req: Request) {
           prompt: buildFollowupDraftPrompt(context),
           maxOutputTokens,
           ...DRAFT_GENERATION_BOUNDS,
+          retries: 1,
         }
       : {
           systemInstruction: buildAdvisorySystemInstruction({
@@ -168,8 +168,9 @@ export async function POST(req: Request) {
             context,
             directives: explicitDirectives,
           }),
-          prompt: buildGuruAdvicePrompt({ mode: mode as GuruAdviceMode, context, draft, guidanceId }),
+          prompt: buildGuruAdvicePrompt({ mode: mode as GuruAdviceMode, context, draft, guidanceId, history }),
           maxOutputTokens,
+          retries: 1,
         },
   );
   const finishedAt = new Date().toISOString();
@@ -227,27 +228,11 @@ export async function POST(req: Request) {
     );
   }
 
-  let mentorUpdate = null;
-
-  if (result.ok && workspaceId && mode !== "open-question") {
-    mentorUpdate = await insertSupabaseRecord("project_updates", {
-      workspace_id: workspaceId,
-      project_id: null,
-      source: "guru",
-      event_type: "ai.sales_mentor",
-      status: "reported",
-      title: `Guru ${mode}${ref ? ` · ${ref}` : ""}`,
-      summary: result.text.slice(0, 500),
-      progress: null,
-      milestone: null,
-      next_action: null,
-      payload: { mode, ref, model: result.model, text: result.text },
-      happened_at: finishedAt,
-    });
-  }
-
+  // Mentor advice belongs to the requested conversation. Persist telemetry and
+  // the Hub agent_run, but never turn a coaching reply into a Home update.
   // For advisory modes generationOk/failureReason equal result.ok/result.reason unless the
-  // request came from Office, so other callers see the same envelope as before.
+  // request came from Office (an empty Office answer is a failure), so other callers see
+  // the same envelope as before.
   return NextResponse.json(
     {
       status: generationOk ? "generated" : "error",
@@ -257,7 +242,7 @@ export async function POST(req: Request) {
       model: result.model,
       text: result.text,
       reason: failureReason,
-      persistence: { connection, syncRun, mentorUpdate },
+      persistence: { connection, syncRun, mentorUpdate: null },
     },
     { status: generationOk ? 200 : 502 },
   );

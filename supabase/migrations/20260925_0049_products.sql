@@ -13,6 +13,10 @@ create table if not exists public.products (
   org_scope text not null check (org_scope in ('personal', 'classin')),
   stage text not null default 'idea'
     check (stage in ('idea', 'validation', 'mvp', 'launch', 'growth', 'maintain', 'sunset')),
+  -- 운영 상태: "지금 어떤가"(단계 = "얼마나 자랐나"와 별개, 제품 운영실 §2). 개발 중·사용 중·일시 중지·종료.
+  ops_status text not null default 'dev' check (ops_status in ('dev', 'live', 'paused', 'ended')),
+  -- 일시 중지·종료 이유 한 줄, 다시 볼 날 등.
+  ops_note text check (ops_note is null or length(ops_note) <= 300),
   -- 분야·대상 고객·해결하는 문제·기능(점검 여부)·필수 조건·가격·링크·특이사항(§4 설명 계약).
   -- 과목·지역처럼 특정 분야에 묶인 칸은 두지 않는다 — 그런 세부는 특이사항 자유 서술로(2026-09-25 운영자).
   details jsonb not null default '{}'::jsonb check (jsonb_typeof(details) = 'object'),
@@ -67,20 +71,42 @@ create index if not exists project_updates_product_happened_idx
   on public.project_updates (workspace_id, product_id, happened_at desc)
   where product_id is not null;
 
--- 문의 ↔ 제품: 어떤 제품으로 들어온 문의인가. inquiries는 RPC로만 쓰이므로(0028) 열을 더하지 않고
--- 연결 행을 따로 둔다. 문의 하나는 제품 하나에만 붙는다(primary key).
+-- 문의 ↔ 제품(·일): 어떤 제품으로 들어온 문의이고 어느 일(프로젝트)에 붙었나. inquiries는 RPC로만 쓰이므로(0028)
+-- 열을 더하지 않고 연결 행을 따로 둔다. 문의 하나는 제품 하나·일 하나에만 붙는다(primary key).
+-- 같은 요청이 여러 번 오면 같은 일에 붙어 "요청 N건"으로 쌓인다(제품 운영실 §0).
 create table if not exists public.product_inquiry_links (
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   inquiry_id uuid not null,
   product_id uuid not null references public.products(id) on delete cascade,
+  project_id uuid references public.projects(id) on delete set null,
   linked_at timestamptz not null default now(),
   primary key (workspace_id, inquiry_id),
   foreign key (inquiry_id, workspace_id) references public.inquiries(id, workspace_id) on delete cascade
 );
 create index if not exists product_inquiry_links_product_idx
   on public.product_inquiry_links (workspace_id, product_id, linked_at desc);
+create index if not exists product_inquiry_links_project_idx
+  on public.product_inquiry_links (workspace_id, project_id)
+  where project_id is not null;
 alter table public.product_inquiry_links enable row level security;
 revoke all on public.product_inquiry_links from public, anon, authenticated;
 grant select, insert, update, delete on public.product_inquiry_links to service_role;
+
+-- 월 숫자(수동 입력): 사용자(최근 7일 활성)·매출·비용. 하트비트·결제 연결 전까지 운영자가 적는다(제품 운영실 M2).
+-- 없는 값은 null — 0이 아니라 "모름"이다.
+create table if not exists public.product_monthly_metrics (
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  product_id uuid not null references public.products(id) on delete cascade,
+  month text not null check (month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  active_users integer check (active_users is null or active_users between 0 and 100000000),
+  revenue bigint check (revenue is null or revenue between 0 and 100000000000),
+  cost bigint check (cost is null or cost between 0 and 100000000000),
+  note text check (note is null or length(note) <= 300),
+  updated_at timestamptz not null default now(),
+  primary key (workspace_id, product_id, month)
+);
+alter table public.product_monthly_metrics enable row level security;
+revoke all on public.product_monthly_metrics from public, anon, authenticated;
+grant select, insert, update, delete on public.product_monthly_metrics to service_role;
 
 notify pgrst, 'reload schema';

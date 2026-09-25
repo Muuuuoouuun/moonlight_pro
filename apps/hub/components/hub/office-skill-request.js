@@ -45,7 +45,12 @@ export function officeSkillRequestText(request) {
     `범위: ${request.scope === 'classin' ? '회사' : '개인'}`,
     `수행할 일: ${request.instruction}`,
     `완료 증거: ${request.expectedEvidence}`,
-    '실행 전 범위와 파일을 직접 확인하고, 완료 후 같은 요청 ID로 receipt를 기록해 주세요. 요청서 복사는 할 일 완료가 아닙니다.',
+    '',
+    '처리 방법(Claude Code·Codex, moonlight MCP):',
+    '1. get_skill_request로 위 요청 ID를 읽어 서버 원문과 상태를 확인한다. 이미 completed·failed면 다시 실행하지 않는다.',
+    '2. 수행할 일에 적힌 범위(폴더·파일)만 다룬다. 삭제는 휴지통으로 보내고, 여러 파일을 한꺼번에 옮기거나 지우기 전에는 할 일을 먼저 보여 주고 확인을 받는다.',
+    '3. 끝나면 record_skill_receipt로 실제 결과를 기록한다. state는 completed(증거 1개 이상)·failed·unconfirmed, evidence는 path·url·note로 확인 가능한 것만 적는다.',
+    '4. 요청서 복사나 채팅의 "완료" 문장은 완료가 아니다. receipt도 할 일을 완료시키지 않는다 — 할 일까지 끝내려면 complete_task를 따로 부르고 그 commandId를 receipt에 넣는다.',
   ].join('\n');
 }
 
@@ -68,7 +73,11 @@ export async function saveOfficeSkillRequest(input, { fetcher = fetch } = {}) {
     if (data?.status === 'preview') return { status: 'preview', persisted: false, error: '저장 연결이 없어 요청서를 만들지 못했습니다.' };
     return { status: 'error', persisted: false, error: data?.error === 'task-scope-or-owner-mismatch'
       ? '할 일의 범위가 서버 기록과 일치하지 않습니다. 할 일의 프로젝트를 확인해 주세요.'
-      : data?.error || '요청서를 저장하지 못했습니다. 다시 확인해 주세요.' };
+      : data?.error === 'skill-storage-unavailable'
+        ? '요청서 저장소가 아직 준비되지 않았습니다.'
+        : data?.error === 'skill-storage-not-configured'
+          ? '요청서 저장소 연결이 설정되지 않았습니다.'
+          : data?.error || '요청서를 저장하지 못했습니다. 다시 확인해 주세요.' };
   } catch {
     return { status: 'error', persisted: false, error: '요청서를 저장하지 못했습니다. 연결을 확인해 주세요.' };
   }

@@ -18,11 +18,21 @@ export function officeTaskAgendaBlock(task) {
   return lines.join('\n').slice(0, 1500);
 }
 
+// /api/hub/tasks reports failures as internal codes (project-ledger-core-read-failed,
+// task-ledger-unexpected-error, …) — never show those verbatim to the operator.
+const TASK_READ_ERROR_LABELS = Object.freeze({
+  'project-ledger-core-read-failed': '업무 저장소에 연결하지 못했습니다.',
+  'task-ledger-unexpected-error': '할 일을 불러오는 중 오류가 발생했습니다.',
+});
+function taskReadErrorMessage(code) {
+  return TASK_READ_ERROR_LABELS[code] || '할 일을 읽지 못했습니다.';
+}
+
 export async function loadOfficeTasks({ fetcher = fetch } = {}) {
   try {
     const response = await fetcher('/api/hub/tasks', { cache: 'no-store' });
     const data = await response.json().catch(() => null);
-    if (!response.ok || !data || data.status === 'error') return { status: 'error', tasks: [], error: data?.error || '할 일을 읽지 못했습니다.' };
+    if (!response.ok || !data || data.status === 'error') return { status: 'error', tasks: [], error: taskReadErrorMessage(data?.error) };
     if (data.status === 'preview') return { status: 'preview', tasks: [] };
     if (!['live', 'partial'].includes(data.status)) return { status: 'error', tasks: [], error: '할 일 읽기 상태를 확인하지 못했습니다.' };
     return { status: data.status, tasks: Array.isArray(data.tasks) ? data.tasks : [] };
@@ -33,7 +43,8 @@ function officeRequestMessage(session) {
   const draft = session.draft.trim();
   const block = session.agenda?.block;
   const recentHasAgenda = block && session.turns.slice(-4).some(turn => turn.message.includes(block));
-  const prefix = block && !recentHasAgenda && !draft.includes(block) ? `${block}\n\n` : '';
+  // Nothing has scrolled out of history yet on the very first turn — never reattach then.
+  const prefix = session.turns.length > 0 && block && !recentHasAgenda && !draft.includes(block) ? `${block}\n\n` : '';
   return (session.minimumOnly ? OFFICE_MINIMUM_INSTRUCTION : '') + prefix + draft;
 }
 
@@ -89,20 +100,26 @@ export function createOfficeSessionStore() {
       if (request.mode === 'council' && request.participants.length < 2) return null;
       if (request.mode === 'council') request.deliberation = officeDeliberationForParticipants(session.deliberation, request.participants);
       const pending = { id: requestId, rawDraft: session.draft, request };
-      const firstLine = session.draft.trim().split('\n')[0].trim();
-      const agenda = session.agenda || (session.turns.length === 0 ? { title: firstLine.slice(0, 40), source: 'manual', block: session.draft.trim().slice(0, 1500) } : null);
-      update(scope, { pending, error: null, agenda });
+      // Do not pin a manual agenda here — a failed first request must not leave a stale
+      // agenda/block behind (see complete()'s generated branch, which pins it on success only).
+      update(scope, { pending, error: null });
       return pending;
     },
     complete(scope, requestId, result) {
       const session = get(scope);
       if (session.pending?.id !== requestId) return false;
       const pending = session.pending;
-      update(scope, result.status === 'generated' ? {
-        pending: null, error: null,
+      if (result.status !== 'generated') {
+        update(scope, { pending: null, error: result });
+        return true;
+      }
+      const firstLine = pending.rawDraft.trim().split('\n')[0].trim();
+      const agenda = session.agenda || (session.turns.length === 0 ? { title: firstLine.slice(0, 40), source: 'manual', block: pending.rawDraft.trim().slice(0, 1500) } : null);
+      update(scope, {
+        pending: null, error: null, agenda,
         draft: session.draft === pending.rawDraft ? '' : session.draft,
         turns: [...session.turns, { id: requestId, message: pending.rawDraft.trim(), request: pending.request, result }],
-      } : { pending: null, error: result });
+      });
       return true;
     },
   };

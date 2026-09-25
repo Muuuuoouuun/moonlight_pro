@@ -62,3 +62,15 @@ test('Engine accepts the full 6,000-character Korean agenda; the character contr
   assert.equal((await handler(httpRequest({ message: '가'.repeat(13000), scope: 'classin' }))).status, 413);
   assert.equal(seen.length, 1);
 });
+
+test('a 6,000-character Korean agenda (contract max) stays under the byte cap and reaches generation', async () => {
+  let calls = 0;
+  const longRequest = { message: '가'.repeat(6000), scope: 'classin' };
+  const handler = createOfficeRoutingEngineHandler(() => ({ ok: true }), async () => {
+    calls++;
+    return { status: 'recommended', version: OFFICE_ROUTING_VERSION, ...recommendation, scope: 'classin' };
+  });
+  const response = await handler(httpRequest(longRequest));
+  assert.equal(response.status, 200);
+  assert.equal(calls, 1);
+});

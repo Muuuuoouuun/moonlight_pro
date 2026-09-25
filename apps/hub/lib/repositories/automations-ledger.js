@@ -14,6 +14,15 @@ const RUN_STATUSES = ["queued", "running", "success", "failure", "ignored"];
 const WEBHOOK_STATUSES = ["received", "processed", "ignored", "failed"];
 const INTEGRATION_STATUSES = ["pending", "connected", "error", "disabled"];
 
+// mapRuns·mapWebhookEvents·mapIntegrations·mapErrors·aggregateRuns가 읽는 필드와
+// 1:1 — automations·triggers는 triggers.config를 쓰므로 넓게 둔다. 소비자는
+// /api/hub/automations와 daily-brief 둘뿐. integration_connections.config에는
+// accessToken·refreshToken이 들어 있어(google-calendar.js) select에서 제외한다.
+const RUN_SELECT = "id,automation_id,status,correlation_id,provider_event_id,output_payload,error_message,created_at,finished_at";
+const WEBHOOK_EVENT_SELECT = "id,event_type,source,status,correlation_id,provider_event_id,error_message,received_at,processed_at";
+const INTEGRATION_SELECT = "id,provider,status,external_account_id,last_synced_at";
+const ERROR_LOG_SELECT = "id,context,level,source,resolved,timestamp,correlation_id,automation_run_id";
+
 const AUTOMATION_STATUS_LABEL = {
   draft: "Paused",
   active: "Active",
@@ -295,21 +304,25 @@ export async function getAutomationsLedger() {
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("automation_runs", {
+      select: RUN_SELECT,
       limit: 120,
       order: "created_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("webhook_events", {
+      select: WEBHOOK_EVENT_SELECT,
       limit: 60,
       order: "received_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("integration_connections", {
+      select: INTEGRATION_SELECT,
       limit: 40,
       order: "last_synced_at.desc.nullslast",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("error_logs", {
+      select: ERROR_LOG_SELECT,
       limit: 40,
       order: "timestamp.desc",
       filters: withWorkspaceFilter([["resolved", eqFilter("false")]]),

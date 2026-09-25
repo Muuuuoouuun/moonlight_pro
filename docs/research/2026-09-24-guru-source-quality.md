@@ -42,3 +42,8 @@ Hill·Cardone·Belfort는 자기점검 또는 제한된 기법이라 자동 팁�
 고객 목록의 `new`·`active`·`dormant`는 넓은 구분이다. 제안의 내부 검토, 고객이 말한 문제, 긍정 답변을 확인하지 않으므로 해당 사건을 사용 조건으로 둔 MEDDIC·SPIN·Voss 카드도 자동 순환에서 제외하고 직접 열람에 남겼다. 세일즈 13장 중 자동 5장·직접 열람 8장이 현재 편집 상태다. 자동 후보 네 장은 관찰되지 않은 사건을 단정하지 않는 질문으로 고쳤고, Ross의 신규 고객 적합성 질문은 `new` 구분에서만 고른다.
 
 콘텐츠의 Harry Dry 카드가 가리키던 2차 정리 글은 [Harry Dry 본인의 세 가지 문장 점검 게시물](https://www.linkedin.com/posts/harrydry_three-tests-for-any-line-you-write-activity-7219696153288683521-ao7k)로 교체했다. 이는 카드의 출처 추적을 개선한 것이며 한국어 문구가 원전의 직접 인용이라는 뜻은 아니다.
+
+## 2026-09-25 내부 읽기 글 보강에서 확인한 콘텐츠 범위
+
+- [Justin Welsh의 본인 글 `Leverage is the solopreneur cheat code`](https://justinwelsh.me/essays/leverage)의 `The content multiplication effect` 절에는 본인 제작 기준인 5-12-3(처음 5초의 관심, 12개월 뒤의 관련성, 세 플랫폼 이상으로 재구성 가능성)과 매체별 재구성 흐름이 있다. `content-multiplication.md`는 이를 인물의 작업 방식으로 설명하고, Moonlight의 발행 의무나 성과 공식으로 옮기지 않는다.
+- [Dan Koe의 본인 글 `How To Think Originally`](https://thedankoe.com/letters/how-to-think-originally/)에는 자신의 시각으로 알려진 생각 다시 보기, 덜 알려진 자료 찾기, 다른 분야의 생각 연결하기가 있다. `content-perspective.md`는 이 중 업무 글에 필요한 관찰·해석·제안의 구분을 Moonlight의 편집 응용으로 둔다. 새로운 조합만으로 사실이나 효과가 증명되지는 않는다.

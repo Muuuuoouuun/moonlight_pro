@@ -11,7 +11,7 @@ const failure = { status: 'error', error: '담당 추천을 확인하지 못했�
 // Engine's office routing handler.
 export const OFFICE_ROUTING_MAX_BODY_BYTES = 6000 * 6 + 1024;
 
-export function createOfficeRoutingHubHandler({ guard = assertHubWriteAllowed, callEngine = callOfficeRoutingEngine } = {}) {
+export function createOfficeRoutingHubHandler({ guard = assertHubWriteAllowed, callEngine = req => callOfficeRoutingEngine(req, { retries: 1 }) } = {}) {
   return async req => {
     const denied = guard(req);
     if (denied) return denied;

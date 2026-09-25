@@ -60,7 +60,8 @@ test('a card opens its person chapter with provenance, an honesty label, a conte
   assert.match(html, /data-certainty="unknown" aria-label="확정도: 확인 필요"/);
   assert.match(html, /원전 대조 일부 · 인용·수치는 확인 전/);
   assert.match(html, /<summary>확인 범위<\/summary>/);
-  assert.match(html, /docs\/research\/2026-09-24-guru-source-quality\.md/);
+  assert.match(html, /기준 · Guru 참고 자료 출처 점검 — 2026-09-24/);
+  assert.doesNotMatch(html, /docs\/[\w./-]+\.md/, 'repository paths stay off the screen');
   assert.match(html, /<nav class="source-reader__toc" aria-label="Zig Ziglar 목차">/);
   for (const title of ['📖 핵심 철학 &amp; 마인드셋', '📚 책 요약 &amp; 프레임워크', '🎯 실전 기법 &amp; 스크립트', '🔑 Ziglar 핵심 공식 요약']) {
     assert.ok(html.includes(title), title);
@@ -121,8 +122,9 @@ test('people without a card, explicit entries, card ids and a focus heading all 
   assert.equal(states[holder], 'true');
   assert.equal(states.filter(state => state === 'true').length, 1, 'the focused section opens instead of the first');
   assert.match(focused, new RegExp(`id="[^"]+-l${mirroring.line}" class="source-md__heading" tabindex="-1">핵심 프레임워크 6: <strong>Mirroring</strong>`));
-  const missing = render({ card: { id: 'x', kind: 'guru', personId: 'nobody', source: { path: 'docs/none.md', section: '없음' } } });
-  assert.match(missing, /연결된 원문을 찾지 못했습니다 · docs\/none\.md/);
+  const missing = render({ card: { id: 'x', kind: 'guru', personId: 'nobody', source: { path: 'docs/none.md', title: '없는 플레이북', section: '없음' } } });
+  assert.match(missing, /연결된 원문을 찾지 못했습니다 · 없는 플레이북/);
+  assert.doesNotMatch(missing, /docs\/none\.md/);
 });
 
 test('open-state helpers back the section toggles and 모두 펼치기/접기', () => {

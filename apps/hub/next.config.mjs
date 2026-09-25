@@ -2,6 +2,10 @@
 const nextConfig = {
   transpilePackages: ["@com-moon/ui", "@com-moon/guru-guidance"],
   serverExternalPackages: ["node-ical"],
+  outputFileTracingIncludes: {
+    '/api/hub/guidance-articles/*': ['./content/guru/*.md'],
+    '/api/hub/guidance-articles/*/infographic': ['./content/guru/infographics/*.webp'],
+  },
   experimental: {
     // 대시보드 라우트는 force-dynamic이라 클라이언트 라우터 캐시 수명이 0초 —
     // 사이드바 내비 클릭마다 동일한 셸 RSC를 서버 왕복으로 다시 받는다(클릭당 100-400ms).
