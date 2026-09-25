@@ -7,6 +7,7 @@ struct TaskCaptureContent: View {
     let openRevision: Int
     let openConnection: () -> Void
     @FocusState private var focused: Bool
+    @State private var listContentHeight: CGFloat = 0
 
     private var canChangeTasks: Bool { model.hub.canWriteTasks && !model.hub.isSavingTask }
     private var readMessage: String? {
@@ -41,29 +42,11 @@ struct TaskCaptureContent: View {
             .padding(.leading, 13).padding(.trailing, 6).frame(height: 46)
             .modifier(GlassInputSurface(focused: focused))
 
-            Text(model.displayedTasks.isEmpty && (readMessage != nil || isLoading)
-                 ? (isLoading ? "불러오는 중…" : "할 일 확인 필요") : "남은 \(model.openTaskCount)개")
-                .font(.system(size: 11.5)).monospacedDigit()
-                .foregroundStyle(Palette.glassInkMuted)
-                .modifier(GlassReadability(radius: 8, inset: 8))
-
             if model.displayedTasks.isEmpty {
+                taskCount.modifier(GlassReadability(radius: 12, inset: 10))
                 emptyContent.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    VStack(spacing: 10) {
-                        if let message = readMessage {
-                            HubReadNotice(message: message, action: openConnection)
-                        }
-                        LazyVStack(spacing: 0) {
-                            ForEach(model.displayedTasks) { task in taskRow(task) }
-                        }
-                        .modifier(GlassReadability(radius: 12))
-                    }
-                }
-                .scrollIndicators(.hidden)
-                .frame(maxHeight: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                taskList
             }
 
             HStack(spacing: 6) {
@@ -75,13 +58,57 @@ struct TaskCaptureContent: View {
                     .buttonStyle(GlassQuietStyle())
             }
             .font(.system(size: 11))
-            .modifier(GlassReadability(radius: 10, inset: 8))
+            .modifier(GlassReadability(radius: 16, inset: 10, feather: 10))
         }
         .onAppear { focusInput() }
         .onChange(of: openRevision) { _, _ in focusInput() }
         .onChange(of: model.activeCompanion) { _, active in
             if active == surface { focusInput() } else { focused = false }
         }
+    }
+
+    private var taskCount: some View {
+        Text(model.displayedTasks.isEmpty && (readMessage != nil || isLoading)
+             ? (isLoading ? "불러오는 중…" : "할 일 확인 필요") : "남은 \(model.openTaskCount)개")
+            .font(.system(size: 11.5)).monospacedDigit()
+            .foregroundStyle(Palette.glassInkMuted)
+            .frame(height: 18, alignment: .leading)
+    }
+
+    private var taskList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            taskCount.padding(.horizontal, 4)
+            ScrollView {
+                VStack(spacing: 10) {
+                    if let message = readMessage {
+                        HubReadNotice(message: message, action: openConnection)
+                    }
+                    LazyVStack(spacing: 0) {
+                        ForEach(model.displayedTasks) { task in taskRow(task) }
+                    }
+                }
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear.preference(key: TaskListHeight.self, value: geometry.size.height)
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            .frame(maxHeight: .infinity)
+        }
+        .environment(\.glassReadingProtected, true)
+        .background(alignment: .top) {
+            // Keep the material fixed as rows scroll, and leave unused space clear
+            // when the list is short. Count and rows share one reading surface.
+            GeometryReader { geometry in
+                Color.clear
+                    .frame(height: min(geometry.size.height, max(50, listContentHeight) + 28))
+                    .modifier(GlassReadability(radius: 20, inset: 10, feather: 10))
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+        .onPreferenceChange(TaskListHeight.self) { listContentHeight = $0 }
     }
 
     @ViewBuilder private var emptyContent: some View {
@@ -153,6 +180,11 @@ struct TaskCaptureContent: View {
         guard !model.hub.isEnabled else { return }
         withAnimation(PetMotion.panel) { model.removeTask(id) }
     }
+}
+
+private struct TaskListHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 struct MemoCaptureContent: View {
