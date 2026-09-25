@@ -189,7 +189,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
               <span className="mono">{dailyWindow.label} · {newWindowReady ? '새 관점 준비됨' : `다음 ${nextTime}`}</span>
             </div>
             <SegmentedControl label="Guru 분야" options={DOMAINS} value={domain} onChange={chooseDomain} className="mentor-shelf__domains" />
-            <div role="button" tabIndex={0} className="mentor-shelf__reading hub-card-link" aria-label={`${guruCard.person} Guru 주장 자세히 보기`}
+            <div role="button" tabIndex={0} className="mentor-shelf__reading hub-card-link" aria-label={`${guruCard.person} Moonlight 글 읽기`}
               onClick={() => setDetailCard(guruCard)} onKeyDown={event => openWithKeyboard(event, () => setDetailCard(guruCard))}>
               <h4 aria-live="polite">{guruCard.person}</h4>
               <p className="mentor-shelf__frame">{guruCard.frame}</p>
@@ -202,7 +202,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
                 <strong>물어볼 질문</strong>
                 <p>{guruCard.question}</p>
               </div>
-              <span className="mentor-shelf__read-more">인물·주장·원문 자세히 보기 ↗</span>
+              <span className="mentor-shelf__read-more">Moonlight 글 읽기 →</span>
             </div>
             <GuidanceSource source={guruCard.source} className="mentor-shelf__source" />
             <div className="mentor-shelf__actions">
@@ -220,7 +220,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
               <strong>LEGEND / 판단 관점</strong>
               <span className="mono">매주 한 장</span>
             </div>
-            <div role="button" tabIndex={0} className="mentor-shelf__reading mentor-shelf__reading--legend hub-card-link" aria-label={`${legendCard.person} Legend 주장 자세히 보기`}
+            <div role="button" tabIndex={0} className="mentor-shelf__reading mentor-shelf__reading--legend hub-card-link" aria-label={`${legendCard.person} Moonlight 글 읽기`}
               onClick={() => setDetailCard(legendCard)} onKeyDown={event => openWithKeyboard(event, () => setDetailCard(legendCard))}>
               <div className="mentor-shelf__rule" aria-hidden="true" />
               <h4 aria-live="polite">{legendCard.person}</h4>
@@ -230,7 +230,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
                 <strong>생각해 볼 질문</strong>
                 <p>{legendCard.question}</p>
               </div>
-              <span className="mentor-shelf__read-more">인물·주장·원문 자세히 보기 ↗</span>
+              <span className="mentor-shelf__read-more">Moonlight 글 읽기 →</span>
             </div>
             <div className="mentor-shelf__legend-bottom">
               <GuidanceSource source={legendCard.source} className="mentor-shelf__source" />
@@ -311,7 +311,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
                   <Button variant="ghost" size="sm" className="mentor-shelf__return" onClick={returnToList}>목록으로 ↑</Button>
                 </div>
               </div>
-              <div role="button" tabIndex={0} className="mentor-shelf__reading hub-card-link" aria-label={`${browseCard.person} 주장 자세히 보기`}
+              <div role="button" tabIndex={0} className="mentor-shelf__reading hub-card-link" aria-label={`${browseCard.person} Moonlight 글 읽기`}
                 onClick={() => setDetailCard(browseCard)} onKeyDown={event => openWithKeyboard(event, () => setDetailCard(browseCard))}>
                 <h4>{personName(browseCard)}</h4>
                 <p className="mentor-shelf__person-method">{methodLabel(browseCard)}</p>
@@ -326,7 +326,7 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
                   <strong>{browseCard.kind === 'legend' ? '생각해 볼 질문' : '물어볼 질문'}</strong>
                   <p>{browseCard.question}</p>
                 </div>
-                <span className="mentor-shelf__read-more">인물·주장·원문 자세히 보기 ↗</span>
+                <span className="mentor-shelf__read-more">Moonlight 글 읽기 →</span>
               </div>
               <GuidanceSource source={browseCard.source} className="mentor-shelf__source" />
               <div className="mentor-shelf__actions">

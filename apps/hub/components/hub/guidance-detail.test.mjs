@@ -42,34 +42,30 @@ test('unknown cards cannot borrow an authored claim or quotation', () => {
   assert.equal(getGuidanceDetailContent({ id: 'unknown', source: {} }), null);
 });
 
-test('detail labels editorial interpretation, excerpt, full source and question distinctly', () => {
+test('detail opens the internal article reader with explicit editorial and loading states', () => {
   const html = render('sales-gap');
   assert.match(html, /Keenan/);
-  assert.match(html, /Moonlight 편집 요약 · 원문의 직접 인용 아님/);
-  assert.match(html, /주장 풀어보기 · Moonlight 해석/);
-  assert.match(html, /현재 상태/);
-  assert.match(html, /써볼 때/);
-  assert.match(html, /적용 경계/);
-  assert.match(html, /스스로 묻는 질문/);
-  assert.match(html, /원문에서 확인한 짧은 발췌/);
-  assert.match(html, /In every sale, there&#x27;s a gap\./);
-  assert.match(html, /href="https:\/\/salesgrowth\.com\/gap-selling-book\/"/);
+  assert.match(html, /참고자료를 바탕으로 Moonlight가 재구성한 글/);
+  assert.match(html, /멘토 글 불러오는 중/);
+  assert.match(html, /class="guidance-detail__read-status"/);
+  assert.match(html, /aria-live="polite"/);
+  assert.match(html, /세일즈 구루 12인 플레이북/);
+  assert.doesNotMatch(html, /<a\b|href=|원전 열기|원자료 · 원문 확인/);
   assert.match(html, /data-presentation="compact"/);
 });
 
-test('an unverified Legend shows the missing-excerpt state and cannot start a chat', () => {
+test('an unverified Legend can be read but cannot start a chat', () => {
   const html = render('legend-feynman', { onAsk: () => {} });
-  assert.match(html, /검증된 직접 인용 미등록/);
-  assert.match(html, /원전 열기/);
+  assert.match(html, /Legend 마이크로 카드/);
   assert.doesNotMatch(html, /질문 쓰기/);
   assert.doesNotMatch(html, /<blockquote/);
 });
 
-test('Guru question action is optional and unsafe source URLs never render as links', () => {
+test('Guru question action is optional and source URLs never render as links', () => {
   const html = render('marketing-research', { onAsk: () => {} });
   assert.match(html, /질문 쓰기/);
   const unsafe = { ...card('marketing-research'), source: { ...card('marketing-research').source, url: 'javascript:alert(1)' } };
   const unsafeHtml = renderToStaticMarkup(React.createElement(GuidanceDetail, { card: unsafe, onClose: () => {} }));
-  assert.doesNotMatch(unsafeHtml, /href="javascript:/);
-  assert.match(unsafeHtml, /내부 요약 · 원전 링크 미확인/);
+  assert.doesNotMatch(unsafeHtml, /href=/);
+  assert.match(unsafeHtml, /Moonlight 재구성/);
 });

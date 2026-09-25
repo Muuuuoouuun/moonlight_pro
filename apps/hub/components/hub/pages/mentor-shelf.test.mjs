@@ -91,8 +91,8 @@ test('the shelf reads the current Seoul Guru window and weekly Legend together w
   assert.match(words(tree), /서울 기준 09·14·19시 교체/);
   assert.match(words(tree), /매주 한 장/);
   assert.match(words(tree), /다음\s+\d\d:\d\d/);
-  assert.match(words(tree), /docs\/sales-guru-knowledge-base\.md/);
-  assert.match(words(tree), /apps\/engine\/lib\/legend-cards\.ts/);
+  assert.match(words(tree), /세일즈 구루 12인 플레이북/);
+  assert.match(words(tree), /Legend 마이크로 카드/);
   assert.equal(nodes(tree, node => node.type === 'h2').length, 1);
   const [guruPerson, legendPerson] = nodes(tree, node => node.type === 'h4').map(node => words(node));
   const guru = GURU_CARDS.find(card => card.person === guruPerson);
@@ -171,7 +171,7 @@ test('the shelf lets the operator switch from domain browsing to a person and re
   person.props.onClick();
   tree = app.render();
   assert.equal(nodes(tree, node => node.type === 'h4')[0].props.children[0], scheduled);
-  assert.match(words(tree), /docs\/sales-guru-knowledge-base\.md/);
+  assert.match(words(tree), /세일즈 구루 12인 플레이북/);
   assert.match(words(tree), /Keenan/);
   assert.equal(asked.length, 0, 'opening a person must stay read only');
   const ask = nodes(tree, node => node.type === app.Button && /선택한 관점으로 질문 쓰기/.test(words(node)))[0];
@@ -258,7 +258,7 @@ test('Focus card body opens its source-backed detail without asking the model', 
   const asked = [];
   const app = mount({ onGuidanceAsk: card => asked.push(card) });
   let tree = app.render();
-  const opening = nodes(tree, node => node.props?.role === 'button' && /Guru.*자세히 보기/.test(node.props?.['aria-label'] || ''))[0];
+  const opening = nodes(tree, node => node.props?.role === 'button' && /Moonlight 글 읽기/.test(node.props?.['aria-label'] || ''))[0];
   assert.ok(opening);
   opening.props.onClick();
   tree = app.render();
