@@ -1,9 +1,9 @@
-// Brand context assembler — the richer input for the Council brand-mentor (the brand-side
-// counterpart of context-assembler.js, which feeds the ClassIn sales Guru).
+// Brand context assembler — the richer input for Council and requested brand Guru questions
+// (the brand-side counterpart of context-assembler.js, which feeds ClassIn sales Guru).
 //
 // Where the sales assembler pulls the revenue ledger, this one pulls the content + project
 // ledgers (brands with voice guardrails, publishing cadence, idea queue, brand projects) plus
-// episodic memory (agent_runs where agent='council'). It scopes projects to the 브랜드 workspace
+// episodic memory (Council and Guru-brand runs kept separate). It scopes projects to the 브랜드 workspace
 // brand set (workspace-map is the SSOT) and degrades honestly: a source failure lands in
 // missing[] and the advice continues on whatever slices resolved.
 
@@ -13,6 +13,7 @@ import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
 import { filterBrandsByWorkspace } from "@/components/hub/workspace-map";
 
 const COUNCIL_AGENT = "council";
+const BRAND_GURU_AGENT = "guru.brand";
 const trim = (arr, n) => (Array.isArray(arr) ? arr.slice(0, n) : []);
 
 // Brand keys that belong to a workspace — real_v1.1 replacement for the removed
@@ -70,13 +71,19 @@ function selectFocusBrand(brands, ownKeys, ref, strict = false) {
 
 const strictFocusMode = (mode) => mode === "open-question" || mode === "office-review";
 
-export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, workspace = "brand" } = {}) {
+export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, guidanceId = null, workspace = "brand" } = {}) {
   const missing = [];
+  const unscopedCardQuestion = mode === "open-question" && guidanceId && !ref;
+  const memoryAgent = mode === "open-question" ? BRAND_GURU_AGENT : COUNCIL_AGENT;
   let [content, projectLedger, runsRes] = await Promise.all([
     settled(getContentLedger(), "content-ledger", missing),
     settled(getProjectLedger(), "operating-ledger", missing),
-    settled(getRecentAgentRuns({ agent: COUNCIL_AGENT, ref, limit: 5 }), "agent_runs", missing),
+    unscopedCardQuestion
+      ? Promise.resolve(null)
+      : settled(getRecentAgentRuns({ agent: memoryAgent, ref, ...(mode === "open-question"
+        ? { mode: "open-question", ...(!ref ? { unscopedOnly: true } : {}) } : {}), limit: 5 }), "agent_runs", missing),
   ]);
+  const coreReadFailed = !content || content.source === "error" || !projectLedger || projectLedger.source === "error";
 
   if (content?.source === "error") {
     missing.push({
@@ -84,6 +91,10 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
       reason: content.error || "content-ledger-read-failed",
       failedSources: Array.isArray(content.failedSources) ? content.failedSources : [],
     });
+    content = null;
+  }
+  if (content?.source === "preview") {
+    missing.push({ source: "content-ledger", reason: "content-ledger-unconfigured" });
     content = null;
   }
   if (content?.partial) {
@@ -100,6 +111,9 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
       failedSources: Array.isArray(projectLedger.failedSources) ? projectLedger.failedSources : [],
     });
     projectLedger = null;
+  } else if (projectLedger?.source === "preview") {
+    missing.push({ source: "operating-ledger", reason: "operating-ledger-unconfigured" });
+    projectLedger = null;
   } else if (projectLedger?.source === "supabase" && projectLedger.partial) {
     missing.push({
       source: "operating-ledger",
@@ -110,8 +124,19 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
 
   if (!content && !projectLedger) {
     return {
-      source: missing.length ? "error" : "preview",
+      source: coreReadFailed ? "error" : "preview",
       error: "brand ledgers unavailable",
+      missing,
+    };
+  }
+
+  // A shelf card carries a method, not an entity key. Portfolio rows would let
+  // the model misread unrelated project or audience evidence as this reader's.
+  if (unscopedCardQuestion) {
+    return {
+      source: missing.length ? "partial" : content?.source || projectLedger?.source || "preview",
+      scope: "unscoped",
+      contextBoundary: "브랜드나 프로젝트가 지정되지 않아 원장 기록을 전달하지 않았습니다. 전달되지 않은 정보는 원장에 기록이 부재한다는 뜻이 아닙니다.",
       missing,
     };
   }
@@ -153,6 +178,11 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
   const focusBrand = selectFocusBrand(scopedBrands, ownKeys,
     focusCampaign?.brandKey || focusProject?.brand || focusIdea?.brandKey || ref,
     strictFocusMode(mode));
+  const focusedBrandKey = mode === "open-question" && ref && focusBrand ? focusBrand.key : null;
+  const relevantBrands = focusedBrandKey ? scopedBrands.filter((b) => b.key === focusedBrandKey) : scopedBrands;
+  const relevantCampaigns = focusedBrandKey ? scopedCampaigns.filter((c) => c.brandKey === focusedBrandKey) : scopedCampaigns;
+  const relevantProjects = focusedBrandKey ? projects.filter((p) => p.brand === focusedBrandKey) : projects;
+  const relevantIdeas = focusedBrandKey ? ideaQueue.filter((i) => i.brandKey === focusedBrandKey) : ideaQueue;
 
   const context = {
     scope: workspace === "brand" ? "personal" : workspace,
@@ -160,22 +190,23 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
     brand: brandGuardrail(focusBrand),
     // Keep portfolio membership for general questions, but only the explicitly
     // focused brand may contribute voice guidance to a reference-only question.
-    brands: scopedBrands.map((b) => strictFocusMode(mode)
+    brands: relevantBrands.map((b) => strictFocusMode(mode)
       ? { key: b.key, name: b.name, kind: b.kind }
       : { key: b.key, name: b.name, kind: b.kind, voice: b.voice }),
-    campaigns: trim(scopedCampaigns, 10),
+    campaigns: trim(relevantCampaigns, 10),
     content: content
       ? {
           // Existing aggregates cover the whole workspace, including ClassIn.
           cadence_status: "개인 범위 집계 미지원 — 발행 공백을 추정하지 마세요",
           cadence: null,
-          idea_queue_top: ideaQueue,
+          idea_queue_top: relevantIdeas,
           queue_counts: null,
         }
       : null,
-    projects: trim(projects, 30),
+    projects: trim(relevantProjects, 30),
     memory: {
-      recent_runs: trim(runsRes?.runs, 5),
+      recent_runs: trim((runsRes?.runs || []).filter((run) => run.agent === memoryAgent
+        && (mode !== "open-question" || (run.mode === "open-question" && (ref ? run.ref === ref : !run.ref)))), 5),
     },
     missing,
   };

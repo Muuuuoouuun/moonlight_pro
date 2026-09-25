@@ -253,6 +253,7 @@ export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
         {(workspace === 'brand' || selectedBrand?.orgScope === 'personal') && (
           <ContextMentorRail
             domain="content"
+            contextKey={['idea', 'draft', 'review'].includes(tab) ? `content:${tab}` : undefined}
             contextLabel={selectedBrand?.name || '콘텐츠'}
             disabled={selectedBrand?.orgScope !== 'personal'}
             onGuidanceAsk={card => onGuidanceAsk?.(card, { ref: selectedBrand?.key, label: selectedBrand?.name })}

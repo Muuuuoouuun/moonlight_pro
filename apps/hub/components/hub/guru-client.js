@@ -12,6 +12,17 @@ export const GURU_MODE_LABEL = {
   "sparring": "3자 토론",
 };
 
+export function guruUiModeForRequestMode(mode) {
+  if (mode === 'proposal-critique') return 'critique';
+  if (mode === 'weekly-retro') return 'weekly-review';
+  if (mode === 'sparring') return 'sparring';
+  return 'advice';
+}
+
+export function shouldAutoRunGuruOnOpen(mode) {
+  return Boolean(mode && GURU_MODE_LABEL[mode] && mode !== 'open-question');
+}
+
 // Build the canonical Guru chat deep-link. Every entry point funnels into the
 // single mentor thread (plan §9): dashboard/agents/chat?agent=guru&mode=…&ref=…
 export function guruChatPath({ mode, ref, guidanceId } = {}) {
@@ -31,6 +42,7 @@ export async function requestGuruCoaching({
   values = null,
   knowledge = null,
   guidanceId = null,
+  history = null,
 } = {}) {
   try {
     const body = { mode, ref, draft };
@@ -38,6 +50,7 @@ export async function requestGuruCoaching({
     if (values && typeof values === "object") body.values = values;
     if (knowledge && typeof knowledge === "object") body.knowledge = knowledge;
     if (typeof guidanceId === 'string' && guidanceId) body.guidanceId = guidanceId;
+    if (mode === 'open-question' && Array.isArray(history) && history.length) body.history = history;
 
     const res = await fetch("/api/hub/sales-mentor", {
       method: "POST",
@@ -53,6 +66,7 @@ export async function requestGuruCoaching({
         mode: data.mode || mode,
         ref: data.ref ?? ref,
         runId: data.runId || null,
+        model: typeof data.model === "string" ? data.model : null,
       };
     }
     if (data?.status === "preview") {

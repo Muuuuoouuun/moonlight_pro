@@ -5,8 +5,7 @@
   background: var(--surface-2);
 }
 
-.guidance-question__eyebrow,
-.guidance-question__source {
+.guidance-question__eyebrow {
   display: block;
   color: var(--fg-faint);
   font-size: 11px;
@@ -17,6 +16,7 @@
 .guidance-question__context { display: block; margin-top: 5px; color: var(--fg-muted); font-size: 11px; }
 .guidance-question__frame h3 { margin: 9px 0 7px; font-size: 17px; font-weight: 500; }
 .guidance-question__frame p { margin: 0 0 12px; color: var(--fg-muted); font-size: 13px; line-height: 1.65; }
+.guidance-question__source { margin-top: 12px; }
 .guidance-question__answer {
   padding: 16px;
   border: 1px solid var(--line);
@@ -24,6 +24,7 @@
   background: var(--surface-2);
 }
 .guidance-question__answer-body { margin: 12px 0 16px; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.guidance-question__answer-notice { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .guidance-question__answer-body h4 { margin: 18px 0 8px; font-size: 13px; font-weight: 600; }
 .guidance-question__answer-body h4:first-child { margin-top: 0; }
 .guidance-question__answer-body p { margin: 0 0 10px; white-space: pre-wrap; }
@@ -31,3 +32,11 @@
 .guidance-question__answer-body li + li { margin-top: 6px; }
 .guidance-question__answer small { color: var(--fg-faint); font-size: 10.5px; }
 .guidance-question__feedback { color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+
+@media (max-width: 720px), (pointer: coarse) {
+  .hub-app .guidance-question__footer-button { min-height: 44px; }
+}
+
+@media (max-width: 600px) {
+  .hub-app textarea.guidance-question__input { font-size: 16px; }
+}

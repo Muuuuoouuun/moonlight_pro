@@ -290,6 +290,8 @@ export function mapAccount(row, dealStatsByCompany, companyById = new Map()) {
     companyId: row.company_id || null,
     name: row.name,
     type,
+    workspace: resolveWorkspace(row),
+    brand: resolveBrand(row),
     region,
     subjects: Array.isArray(meta.subjects) ? meta.subjects.map(String).filter((key) => SUBJECT_KEY_SET.has(key)) : [],
     genres: normalizeGenreLabels(meta.genres),

@@ -119,6 +119,14 @@ const LEGEND_LENSES: Record<string, { nameKo: string; rule: string }> = {
     nameKo: "엘리 골드랫 (제약 이론)",
     rule: "시스템의 처리량을 결정하는 것은 단 하나의 병목(Bottleneck)이다. 다른 곳을 개선하는 것은 착시일 뿐이다. 병목에만 집중하라.",
   },
+  carnegie: {
+    nameKo: "데일 카네기 (상대 관점과 경청)",
+    rule: "상대에게 진정한 관심을 보이고 경청하며 상대의 관점에서 질문하라. 영업 성과나 반복 접촉 효과를 근거 없이 단정하지 마라.",
+  },
+  hill: {
+    nameKo: "나폴레온 힐 (명확한 목적)",
+    rule: "운영자 자신의 목적과 제공할 가치를 명확히 하라. 확신만으로 고객 반응이나 성공을 보장한다고 말하지 마라.",
+  },
 };
 
 function buildPrompt({
@@ -129,6 +137,7 @@ function buildPrompt({
   context,
   draft,
   ragSnippets,
+  conversationOnly,
 }: {
   personaId: string;
   mode: string;
@@ -137,6 +146,7 @@ function buildPrompt({
   context?: any;
   draft?: string | null;
   ragSnippets?: KnowledgeItem[];
+  conversationOnly?: boolean;
 }) {
   const profile = PERSONA_PROFILES[personaId] || PERSONA_PROFILES.order;
   const lines: string[] = [];
@@ -164,10 +174,14 @@ function buildPrompt({
   } else if (mode === "sparring") {
     lines.push(
       "【3자 토론 (스파링) 모드】",
-      "찬반과 검증 행동이 명확히 격돌하는 3단 구조로 답변하라 (칭찬·잡담 금지):",
+      conversationOnly
+        ? "찬반과 판단을 바꿀 확인 질문을 3단 구조로 답변하라 (칭찬·잡담 금지):"
+        : "찬반과 검증 행동이 명확히 격돌하는 3단 구조로 답변하라 (칭찬·잡담 금지):",
       "1. 🟢 [추진 논거 (Strategist)] (왜 이 방향이 유효한가, 잠재 기회와 고객 가치)",
       "2. 🔴 [Devil's Advocate 맹점/비판] (숨은 비용, 실패 가능성, 타협하면 안 되는 약점)",
-      "3. 🟡 [1단계 가역적 검증 행동 (Operator)] (위험을 줄이며 이번 주 안에 검증할 1가지 실험과 관찰 질문)",
+      conversationOnly
+        ? "3. 🟡 [판단을 바꿀 확인 질문] (추가 업무를 배정하지 않고 미확인 사실 하나를 묻기)"
+        : "3. 🟡 [1단계 가역적 검증 행동 (Operator)] (위험을 줄이며 이번 주 안에 검증할 1가지 실험과 관찰 질문)",
     );
   } else if (mode === "weekly-review") {
     lines.push(
@@ -292,9 +306,11 @@ export async function POST(req: Request) {
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const context = payload.context ?? {};
   const workspaceId = resolveDefaultWorkspaceId();
+  const recordLocalMode = mode === "outreach-draft" || mode === "extract-contact-outcome";
 
   let ragSnippets: KnowledgeItem[] = [];
-  if (workspaceId && (message || draft || context?.summary || context?.title)) {
+  // One contact is already supplied in draft/context; unrelated workspace notes can contaminate it.
+  if (!recordLocalMode && payload.conversationOnly !== true && workspaceId && (message || draft || context?.summary || context?.title)) {
     const searchQuery = [message, draft, context?.title, context?.summary].filter(Boolean).join(" ");
     try {
       const ragResult = await retrieveKnowledge(
@@ -314,12 +330,14 @@ export async function POST(req: Request) {
     `당신은 Moonlight 개인 운영 OS의 전문 페르소나 [${profile.nameKo}]입니다.`,
     profile.systemPrompt,
     "운영자의 언어는 한국어이며, 실무적이고 직설적인 문체를 사용합니다.",
-    "모호한 일반론이나 칭찬은 금지하고 항상 '다음 한 수'로 끝맺습니다.",
+    payload.conversationOnly === true
+      ? "모호한 일반론이나 칭찬은 피하고 질문에 직접 답하십시오. 요청하지 않은 후속 업무를 제안하지 마십시오. 페르소나의 작업 형식보다 이 대화 전용 지시가 우선합니다."
+      : "모호한 일반론이나 칭찬은 금지하고 항상 '다음 한 수'로 끝맺습니다.",
     "사실(기록 데이터)에 없는 내용을 지어내지 않으며, 외부 발송/공개 행동은 인간 승인 게이트(Human Approval)를 거치도록 제안합니다.",
     buildBusinessOpportunityCatchInstruction({ surface: "persona", personaId, mode, context }),
   ].join("\n\n");
 
-  const prompt = buildPrompt({ personaId, mode, lens, message, context, draft, ragSnippets });
+  const prompt = buildPrompt({ personaId, mode, lens, message, context, draft, ragSnippets, conversationOnly: payload.conversationOnly === true });
   const startedAt = new Date().toISOString();
 
   const isThinkingRole = personaId === "council" || personaId === "guru" || mode === "sparring" || mode === "weekly-review";
@@ -368,7 +386,7 @@ export async function POST(req: Request) {
     errorMessage: result.ok ? null : result.reason,
   });
 
-  if (result.ok && workspaceId && (mode === "weekly-review" || mode === "sparring")) {
+  if (result.ok && workspaceId && payload.conversationOnly !== true && (mode === "weekly-review" || mode === "sparring")) {
     await insertSupabaseRecord("project_updates", {
       workspace_id: workspaceId,
       project_id: null,

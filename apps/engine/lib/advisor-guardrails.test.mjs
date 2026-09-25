@@ -160,8 +160,35 @@ describe('buildAdvisorySystemInstruction prompt generation', () => {
     });
     assert.match(prompt, /관찰/);
     assert.match(prompt, /프레임/);
-    assert.match(prompt, /질문 또는 선택/);
+    assert.match(prompt, /요청한 답변 형식과 범위를 우선해 직접 답하십시오/);
+    assert.match(prompt, /실제 질문에 중요한 반례가 있을 때만/);
+    assert.doesNotMatch(prompt, /Devil's Advocate의 반론/);
     assert.doesNotMatch(prompt, /즉시 실행 가능한 가역적 행동을 제안|후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시|승인 큐 후보/);
+  });
+  it('keeps a reader-selected sales question on one source frame without unrelated Guru playbooks', () => {
+    const prompt = guardrails.buildAdvisorySystemInstruction({
+      type: 'sales-mentor', mode: 'open-question', context: { source: 'supabase' },
+    });
+    assert.match(prompt, /ClassIn B2B 영업/);
+    assert.match(prompt, /운영자가 요청한 답변 형식과 범위/);
+    assert.match(prompt, /카드의 적용 조건.*먼저 확인/);
+    assert.match(prompt, /연결된 고객 기록이 제공되지 않았다/);
+    assert.match(prompt, /기록 유무를 묻지.*연결 상태를 출력하지/);
+    assert.match(prompt, /업종.*추정하지/);
+    assert.doesNotMatch(prompt, /기관, 학원, 솔루션 딜/);
+    assert.doesNotMatch(prompt, /1\. 관찰된 사실과 미확인 정보/);
+    assert.doesNotMatch(prompt, /Keenan GAP 4층 진단|Chris Voss 라벨링|Napoleon Hill 명확한 목표/);
+  });
+  it('keeps an unlinked sales question free of brand, industry and unsolicited mentor citations', () => {
+    const prompt = guardrails.buildAdvisorySystemInstruction({
+      type: 'sales-mentor', mode: 'open-question', context: { source: 'supabase', scope: 'unscoped' },
+    });
+    assert.match(prompt, /B2B 영업 멘토/);
+    assert.match(prompt, /선택 카드가 없으면.*출처를 붙이지/);
+    assert.match(prompt, /불편.*전제하지/);
+    assert.doesNotMatch(prompt, /ClassIn|학원|수업|거장의 실전 팁 인터리빙/);
+    assert.match(prompt, /전달하지 않은 원장 정보.*부재로 단정하지/);
+    assert.doesNotMatch(prompt, /반드시 "현재 데이터에 없음/);
   });
 
   it('keeps an Office second opinion source-based and free from invented cards or new work', () => {

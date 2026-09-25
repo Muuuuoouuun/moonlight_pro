@@ -77,6 +77,12 @@ async function callEngine(body, { attempts = 2 } = {}) {
 
 // Assemble lightweight snapshot context based on persona and mode
 async function assemblePersonaContext({ personaId, mode }) {
+  // These requests describe one contact in draft (or an explicit context).
+  // A recent-deals snapshot can introduce a different customer into the answer.
+  if (mode === "outreach-draft" || mode === "extract-contact-outcome") {
+    return null;
+  }
+
   // If brand-related or content/production
   if (personaId === "content" || personaId === "production" || personaId === "council") {
     try {
@@ -147,10 +153,13 @@ export async function POST(req) {
   const lens = typeof input.lens === "string" ? input.lens.trim() || null : null;
   const message = typeof input.message === "string" ? input.message : null;
   const draft = typeof input.draft === "string" ? input.draft : null;
+  const conversationOnly = input.conversationOnly === true;
   const customContext = input.context && typeof input.context === "object" ? input.context : null;
 
-  const context = customContext || (await assemblePersonaContext({ personaId, mode }));
-  const result = await callEngine({ personaId, mode, lens, message, draft, context });
+  const context = conversationOnly
+    ? customContext || { source: "operator-provided", scope: "unscoped" }
+    : customContext || (await assemblePersonaContext({ personaId, mode }));
+  const result = await callEngine({ personaId, mode, lens, message, draft, context, conversationOnly });
 
   // Best-effort episodic memory logging
   let run = { persisted: false, id: null };

@@ -54,3 +54,20 @@ test('request sends only when called and reports preview honestly', async () => 
     globalThis.fetch = previous;
   }
 });
+
+test('an unmatched selected brand gives a specific recoverable explanation', async () => {
+  const previous = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 409,
+    json: async () => ({ status: 'error', error: '선택한 개인 브랜드를 현재 원장에서 확인할 수 없습니다.' }),
+  });
+  try {
+    assert.deepEqual(await requestGuidanceAdvice(marketing, '이 브랜드의 방향은?', { ref: 'missing' }), {
+      state: 'error',
+      note: '선택한 개인 브랜드를 원장에서 확인할 수 없습니다. 브랜드를 다시 선택해 주세요.',
+    });
+  } finally {
+    globalThis.fetch = previous;
+  }
+});

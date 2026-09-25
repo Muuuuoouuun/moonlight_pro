@@ -29,11 +29,10 @@ import { TIP_RULE_IDS, nudgeTipReason, useCrmNudges } from "../crm-nudge";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
 import { useMemoSearch } from "./use-memo-search";
-import { requestPersonaChat } from "../persona-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { GuruGuidanceCard } from '../guru-guidance-card';
 import { ContextMentorRail } from '../context-mentor-rail';
-import { filterLeadsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
+import { brandInWorkspace, filterLeadsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { isCanonicalUuid } from "@/lib/uuid";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
@@ -84,6 +83,20 @@ const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Customer: 3, Lost: 
 const MAX_DANGER_RAILS = 3;
 
 const SCOPE_LABEL = { classin: "ClassIn", personal: "개인" };
+
+function customerAdviceScope(row) {
+  const workspaceScope = row.workspace === 'classin' ? 'classin' : row.workspace === 'brand' ? 'personal' : null;
+  const typeScope = row.type === 'company' ? 'classin' : row.type === 'personal' ? 'personal' : null;
+  const hasBrand = row.brand && row.brand !== 'all' && row.brand?.key !== 'all';
+  const brandScope = hasBrand
+    ? brandInWorkspace(row.brand, 'classin') ? 'classin' : brandInWorkspace(row.brand, 'brand') ? 'personal' : null
+    : null;
+  // Unknown explicit workspace values and conflicting labels cannot choose a ledger.
+  const unsupportedWorkspace = row.workspace != null && row.workspace !== '' && !workspaceScope;
+  const knownScopes = [workspaceScope, typeScope, brandScope].filter(Boolean);
+  const blocked = unsupportedWorkspace || new Set(knownScopes).size > 1;
+  return { scope: blocked ? null : knownScopes[0] || null, blocked };
+}
 
 // 통합 행 모델: 리드와 계정을 같은 컬럼 계약으로 투영
 function toRows(ledger) {
@@ -196,6 +209,8 @@ function toRows(ledger) {
       dormant: Boolean(a.dormant),
       dormantSince: null,
       tags: [],
+      workspace: a.workspace,
+      brand: a.brand,
       type: a.type,
       deals: (a.companyId && dealsByCompany.get(a.companyId)) || [],
       raw: null,
@@ -453,89 +468,6 @@ function CustomerDeleteAction({ row, onConfirm }) {
   );
 }
 
-function CustomerOutreachDrafter({ row }) {
-  const [open, setOpen] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
-  const [draftText, setDraftText] = React.useState("");
-  const [copied, setCopied] = React.useState(false);
-
-  const handleGenerate = async () => {
-    setLoading(true);
-    setOpen(true);
-    try {
-      const res = await requestPersonaChat({
-        personaId: "sales",
-        mode: "outreach-draft",
-        draft: `[고객 360 연락 맥락]\n고객명: ${row.person || row.name}\n조직/소속: ${row.name || "미지정"}${row.personTitle ? ` (${row.personTitle})` : ""}\n유형: ${row.kind === "account" ? "계약 고객" : `리드 (${row.stage})`}\n건강도/상태: ${row.health || "보통"}\n기존 다음 액션: ${row.nextAction || "없음"}\n\n위 고객에게 발송할 3~4문장의 부담 없는 카카오톡/문자 연락 초안을 작성해줘.`,
-      });
-      setLoading(false);
-      if (res.state === "done") {
-        setDraftText(res.text);
-      }
-    } catch (e) {
-      setLoading(false);
-    }
-  };
-
-  const handleCopy = () => {
-    if (!draftText) return;
-    navigator.clipboard.writeText(draftText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, border: "1px solid var(--line-soft)" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Iconed name="sparkle" size={13} style={{ color: "var(--moon-300)" }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>맞춤 연락 초안 (Guru)</span>
-        </div>
-        {!open ? (
-          <Button variant="outline" size="xs" icon="sparkle" onClick={handleGenerate}>
-            {loading ? "작성 중…" : "초안 생성"}
-          </Button>
-        ) : (
-          // 10px 텍스트 버튼은 §8.1 크기 플로어 위반이었다 — 공용 Button(12px)으로.
-          <Button variant="ghost" size="xs" aria-expanded={open} onClick={() => setOpen(false)}>
-            접기
-          </Button>
-        )}
-      </div>
-
-      {open && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {loading ? (
-            <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>고객 맥락에 맞는 초안을 작성하고 있습니다…</div>
-          ) : draftText ? (
-            <>
-              <div
-                style={{
-                  background: "var(--surface-3)",
-                  padding: "8px 10px",
-                  borderRadius: "var(--r-xs)",
-                  fontSize: 12,
-                  lineHeight: 1.55,
-                  whiteSpace: "pre-wrap",
-                  color: "var(--fg)",
-                  border: "1px solid var(--line-soft)",
-                }}
-              >
-                {draftText}
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-                <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
-                  {copied ? "복사됨 ✓" : "본문 복사"}
-                </Button>
-              </div>
-            </>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function CustomerLabelsEditor({ row, onSaved }) {
   const draftTouched = React.useRef(false);
   const [region, setRegion] = React.useState(row.region || "");
@@ -772,7 +704,7 @@ function QuickContactActions({ row, onCopied }) {
   );
 }
 
-function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed, onClose, onNavigate, onDelete, onFocusChange, onLabelsSaved, onPromiseSaved, onRecordPersisted, onRecordFailed, nudge, onNudgeEscape }) {
+function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordRequestConsumed, onClose, onNavigate, onDelete, onFocusChange, onLabelsSaved, onPromiseSaved, onRecordPersisted, onRecordFailed, nudge, onNudgeEscape }) {
   const toast = useToast();
   const mobile = useMediaQuery("(max-width: 600px)");
   const [memoState, setMemoState] = React.useState(null);
@@ -829,6 +761,10 @@ function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed,
       onDismiss: escapes.includes("dismiss") ? () => onNudgeEscape?.(nudge, "dismiss") : undefined,
     };
   }, [nudge, onNudgeEscape, startRecord]);
+  const advice = customerAdviceScope(row);
+  // Sales Guru reads the ClassIn ledger; both the selected page scope and this
+  // customer's ownership must agree before forwarding customer details.
+  const canAskGuru = scopeKey === 'classin' && advice.scope === 'classin';
 
   const [actError, setActError] = React.useState(null);
   const deleteActivity = React.useCallback((activity) => {
@@ -1236,26 +1172,32 @@ function Customer360Drawer({ row, today, recordRequest, onRecordRequestConsumed,
               <span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span>
             </summary>
             <div className="customer-sec__in">
-              <GuruGuidanceCard domain="sales" compact onAsk={card => {
+              <GuruGuidanceCard domain="sales" compact onAsk={canAskGuru ? card => {
                 setGuruGuidanceId(card.id);
-                setGuruQuestion(card.question);
+                setGuruQuestion('');
                 setGuruOpen(true);
-              }} />
-              <OfficeWorkflowPanel
-                key={row.key}
-                intent="customer_reply"
-                scope={row.workspace === 'classin' || row.type === 'company' ? 'classin' : row.workspace === 'brand' || row.type === 'personal' ? 'personal' : null}
-                originRef={{ entityType: row.kind === 'account' ? 'customer_account' : 'lead', entityId: row.id }}
-                title="답장 초안"
-                onNavigate={onNavigate}
-              />
-              <CustomerOutreachDrafter row={row} />
+              } : undefined} />
+              {advice.blocked ? (
+                <div role="status" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <CertaintyBadge state="unknown" label="고객 소속 확인 필요" />
+                  <span className="customer-drawer-id__none">고객 소속의 범위·유형·브랜드를 확인할 수 없어 답장 초안을 열 수 없습니다.</span>
+                </div>
+              ) : (
+                <OfficeWorkflowPanel
+                  key={row.key}
+                  intent="customer_reply"
+                  scope={advice.scope}
+                  originRef={{ entityType: row.kind === 'account' ? 'customer_account' : 'lead', entityId: row.id }}
+                  title="답장 초안"
+                  onNavigate={onNavigate}
+                />
+              )}
             </div>
           </details>
         </div>
       )}
 
-      {guruOpen && (
+      {guruOpen && canAskGuru && (
         <FloatingMentorWidget
           isOpen={guruOpen}
           onClose={() => { setGuruOpen(false); setGuruGuidanceId(null); }}
@@ -1971,6 +1913,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
           </Button>
           {!openRow && !newCustomer && <ContextMentorRail
             domain="sales"
+            contextKey={scopeKey === 'classin' && ['active', 'new', 'dormant'].includes(segment) ? `sales:${segment}` : undefined}
             contextLabel={scopeKey === 'classin' ? 'ClassIn 고객' : scopeKey === 'personal' ? '개인 고객' : '전체 고객'}
             disabled={scopeKey !== 'classin'}
             onGuidanceAsk={onGuidanceAsk}
@@ -2054,6 +1997,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
         <Customer360Drawer
           key={openRow.key}
           row={openRow}
+          scopeKey={scopeKey}
           today={todayKey}
           recordRequest={recordRequest}
           onRecordRequestConsumed={onRecordRequestConsumed}

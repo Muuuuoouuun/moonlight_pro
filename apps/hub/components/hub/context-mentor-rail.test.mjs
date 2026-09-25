@@ -15,16 +15,17 @@ test('quiet rail starts closed and only opens the shared accessible drawer on re
   assert.match(source, /presentation=\{compact \? 'compact' : 'side'\}/);
   assert.match(source, /<SegmentedControl/);
   assert.match(source, /<Button/);
-  assert.doesNotMatch(source, /setInterval|setTimeout|Math\.random/);
+  assert.match(source, /window\.setTimeout/);
+  assert.match(source, /newWindowReady && <Button[^>]*>새 시간대 관점 보기/);
+  assert.doesNotMatch(source, /setInterval|Math\.random/);
 });
 
 test('rail reads the same source-backed daily Guru and weekly Legend cards without side effects', () => {
   const source = read('./context-mentor-rail.jsx');
   assert.match(source, /selectGuidanceCard\(/);
+  assert.match(source, /guidanceDailyWindow\(/);
   assert.match(source, /guidancePeriodKey\(/);
-  assert.match(source, /source\.title/);
-  assert.match(source, /source\.path/);
-  assert.match(source, /source\.section/);
+  assert.match(source, /GuidanceSource source=\{card\.source\}/);
   assert.match(source, /setOffset\(/);
   assert.match(source, /onGuidanceAsk\?\.\(card\)/);
   assert.match(source, /onNavigate\?\.\('dashboard\/agents\/chat'\)/);
@@ -43,6 +44,21 @@ test('Legend stays read only while Guru questions honor disabled contexts', () =
   assert.match(source, /Legend · 판단/);
 });
 
+test('screen context keys are passed only from verified, relevant surfaces', () => {
+  const rail = read('./context-mentor-rail.jsx');
+  const customers = read('./pages/customers.jsx');
+  const brands = read('./pages/brands.jsx');
+  const content = read('./pages/content.jsx');
+  assert.match(rail, /selectGuidanceCard\(\{ cadence, domain: selectedDomain, contextKey, now, offset \}\)/);
+  assert.match(rail, /\[selectedDomain, contextKey\]/);
+  assert.match(customers, /contextKey=\{scopeKey === 'classin' && \['active', 'new', 'dormant'\]\.includes\(segment\) \? `sales:\$\{segment\}` : undefined\}/);
+  assert.match(brands, /contextKey=\{syncState === 'live' && selected\?\.orgScope === 'personal'/);
+  assert.match(brands, /marketing:audience-unrecorded/);
+  assert.match(brands, /marketing:promise-unrecorded/);
+  assert.match(content, /contextKey=\{\['idea', 'draft', 'review'\]\.includes\(tab\) \? `content:\$\{tab\}` : undefined\}/);
+  assert.doesNotMatch(read('./pages/mentor-shelf.jsx'), /contextKey=/);
+});
+
 test('desktop trigger is a 58px vertical edge rail without taking layout width', () => {
   const source = read('./context-mentor-rail.jsx');
   const css = read('./context-mentor-rail.css');
@@ -59,6 +75,7 @@ test('shell-narrow trigger returns to horizontal flow while only <=600px uses th
   const source = read('./context-mentor-rail.jsx');
   const css = read('./context-mentor-rail.css');
   assert.match(css, /min-height:\s*44px/);
+  assert.match(css, /\.context-mentor-rail__content \.hub-seg__btn\s*\{[^}]*min-height:\s*44px/);
   assert.match(css, /@media\s*\(max-width:\s*900px\)/);
   assert.match(css, /@media\s*\(max-width:\s*900px\)[\s\S]*position:\s*static/);
   assert.match(css, /@media\s*\(max-width:\s*900px\)[\s\S]*flex-direction:\s*row/);
