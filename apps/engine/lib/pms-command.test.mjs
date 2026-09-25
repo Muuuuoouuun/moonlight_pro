@@ -824,3 +824,23 @@ test("sets or clears a project genre as a meta key and rejects unknown genres", 
   assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_project", id, genre: "marketing" }, context),
     { ok: false, reason: "invalid-genre" });
 });
+
+test("links a project to a product or clears the link (product lens §3)", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-25T01:00:00.000Z" };
+  const id = "11111111-1111-4111-8111-111111111111";
+  const productId = "22222222-2222-4222-8222-222222222222";
+  const linked = pmsCommand.normalizePmsCommand({ action: "update_project", id, productId }, context);
+  assert.equal(linked.patch.product_id, productId);
+  const cleared = pmsCommand.normalizePmsCommand({ action: "update_project", id, productId: null }, context);
+  assert.equal(cleared.patch.product_id, null);
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_project", id, productId: "omr" }, context),
+    { ok: false, reason: "invalid-product-id" });
+  const created = pmsCommand.normalizePmsCommand({
+    action: "create_project", id, areaId: "44444444-4444-4444-8444-444444444444", title: "결제 붙이기", orgScope: "personal", productId,
+  }, context);
+  assert.equal(created.record.product_id, productId);
+  const plain = pmsCommand.normalizePmsCommand({
+    action: "create_project", id, areaId: "44444444-4444-4444-8444-444444444444", title: "결제 붙이기", orgScope: "personal",
+  }, context);
+  assert.equal("product_id" in plain.record, false, "제품 없는 생성은 열을 보내지 않는다(마이그레이션 전 DB 호환)");
+});

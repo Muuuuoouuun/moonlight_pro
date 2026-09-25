@@ -5,6 +5,7 @@ import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, SyncBadge, SegmentedControl, SelectField, EditDrawer, Drawer, Kbd, Skeleton } from "../hub-primitives";
+import { ProjectProductsView } from "./project-products-view";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
@@ -1588,6 +1589,8 @@ export function Projects({ workspace }) {
 
   React.useEffect(() => {
     const onKey = (event) => {
+      // 제품 보기의 N은 그 보기가 소유한다(usePageCreateHotkey — 제품 등록).
+      if (view === 'products') return;
       if (!shouldOpenGlobalProjectCreate(event, { drawerOpen })) return;
       // 첫 기록 로드 전에는 areas가 비어 "업무 분야가 없습니다" 오탐 에러가 뜬다 —
       // ?new=project 딥링크 이펙트와 같은 로드 완료 가드를 공유한다.
@@ -2010,7 +2013,7 @@ export function Projects({ workspace }) {
           </div>
           <div style={{ flex: 1 }} />
           {/* 검색 — `/`로 포커스(useCrmKeyboard), ESC는 검색어가 있을 때만 지우고 소비. */}
-          {view !== 'tree' && view !== 'memos' && <span
+          {view !== 'tree' && view !== 'memos' && view !== 'products' && <span
             className="hub-project-search"
             style={{ display: 'contents' }}
             onKeyDown={(e) => {
@@ -2059,8 +2062,8 @@ export function Projects({ workspace }) {
           {taskView && (
             <Button className="hub-project-task-create" variant="primary" size="sm" icon="plus" disabled={!canWriteTasks || pendingTaskIds.size > 0} onClick={() => createTodo(null, view === 'backlog' ? 'inbox' : 'todo')}>작업 추가 <Kbd>N</Kbd></Button>
           )}
-          <Button className="hub-project-primary-control" variant={taskView || view === 'tree' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
-            Project {!taskView && <Kbd>N</Kbd>}
+          <Button className="hub-project-primary-control" variant={taskView || view === 'tree' || view === 'products' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
+            Project {!taskView && view !== 'products' && <Kbd>N</Kbd>}
           </Button>
         </div>
 
@@ -2100,6 +2103,8 @@ export function Projects({ workspace }) {
             )}
           />
         )}
+
+        {view === 'products' && <ProjectProductsView onOpenProject={openProjectDetail} />}
 
         {view === 'memos' && <MemoWorkspace
           projects={projects}

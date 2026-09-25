@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
-  getGitHubIntegrationStatus,
+  getGitHubIntegrationStatusDetailed,
   syncGitHubRepositories,
 } from "../../../../../lib/github-sync";
 import { validateSharedWebhookRequest } from "../../../../../lib/shared-webhook";
@@ -13,7 +13,7 @@ export async function GET() {
   return NextResponse.json({
     service: "com-moon-engine",
     integration: "github",
-    status: getGitHubIntegrationStatus(),
+    status: await getGitHubIntegrationStatusDetailed(),
   });
 }
 

@@ -7,6 +7,7 @@ import { InquiryConnection } from '../inquiry-connection';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { inquiryScopeForWorkspace } from '../workspace-map';
 import { INQUIRY_KINDS, INQUIRY_SCOPES, INQUIRY_SOURCES, INQUIRY_STATUSES, inquiryReadState, inquirySeenSequence, inquiryTime, optionsFor, safeInquiryUrl, writeInquiry } from '../inquiry-view-state';
+import { linkInquiry, readInquiryProduct } from './product-client.js';
 import './inquiries.css';
 
 const FILTERS = [{ key: 'active', label: '진행 중' }, { key: 'unread', label: '미확인' }, { key: 'closed', label: '완료' }, { key: 'ignored', label: '제외' }, { key: 'all', label: '전체' }];
@@ -80,6 +81,34 @@ function CreateInquiry({ onClose, onSaved, scope }) {
   </Drawer>;
 }
 
+// 어떤 제품으로 들어온 문의인가(제품 렌즈, 2026-09-25 운영자). 연결 행은 product_inquiry_links에 따로 두어
+// 문의 RPC를 건드리지 않는다. 제품 저장소가 아직 없는 DB(0049 전)에서는 칸을 그리지 않는다.
+function InquiryProductLink({ inquiryId, onNavigate }) {
+  const [state, setState] = React.useState({ status: 'loading', products: [], productId: null });
+  const [busy, setBusy] = React.useState(false), [message, setMessage] = React.useState('');
+  React.useEffect(() => {
+    const controller = new AbortController();
+    readInquiryProduct(inquiryId, controller.signal).then(data => { if (!controller.signal.aborted) setState(data); }).catch(() => {});
+    return () => controller.abort();
+  }, [inquiryId]);
+  if (state.status === 'loading' || state.status === 'preview' || state.error === 'products-table-missing') return null;
+  if (state.status !== 'live') return <p className="inquiry-notice">제품 연결을 읽지 못했습니다.</p>;
+  const choose = async productId => {
+    setBusy(true); setMessage('');
+    const outcome = await linkInquiry(inquiryId, productId || null);
+    setBusy(false);
+    if (outcome.ok) setState(prev => ({ ...prev, productId: productId || null }));
+    else setMessage(outcome.message);
+  };
+  const options = [{ value: '', label: '제품 없음' }, ...state.products.map(p => ({ value: p.id, label: p.name })),
+    ...(state.productId && !state.products.some(p => p.id === state.productId) ? [{ value: state.productId, label: '종료한 제품' }] : [])];
+  return <div className="inquiry-toolbar" aria-label="문의 제품">
+    <SelectField label="어떤 제품 문의인가요" value={state.productId || ''} disabled={busy} options={options} onChange={e => choose(e.target.value)} fieldStyle={{ flex: '1 1 220px' }} />
+    {state.productId && <Button onClick={() => onNavigate?.(`dashboard/work/projects?view=products&product=${state.productId}`)}>제품 보기 ↗</Button>}
+    {message && <span role="alert" className="inquiry-notice" style={{ color: 'var(--danger)' }}>{message}</span>}
+  </div>;
+}
+
 function InquiryDetail({ id, onClose, onSelect, onChanged, onNavigate }) {
   const [detail, setDetail] = React.useState({ status: 'loading', events: [] });
   const [revision, reload] = React.useReducer(n => n + 1, 0);
@@ -140,6 +169,7 @@ function InquiryDetail({ id, onClose, onSelect, onChanged, onNavigate }) {
             : <span className="inquiry-notice" key={link.type}>{link.typeLabel} 연결 {link.status === 'not-found' ? '내역 없음' : '확인 실패'}</span>)
             : <span className="inquiry-notice">연결된 고객·거래·지원 건 없음</span>}
         </div>
+        <InquiryProductLink inquiryId={id} onNavigate={onNavigate} />
         {(detail.events || []).map(event => {
           const url = safeInquiryUrl(event.source_url);
           return <article className="inquiry-event" key={event.id}>

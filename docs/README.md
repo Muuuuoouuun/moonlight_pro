@@ -188,6 +188,10 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
+- [`superpowers/specs/2026-09-25-product-operations-room-design.md`](superpowers/specs/2026-09-25-product-operations-room-design.md) — **DRAFT · 목업 단계 / 전부 권장안 / 연결 없음**. 제품 운영실: 포트폴리오(상태·사용자·매출·비용·건강), 제품별 전용 페이지, 개발(릴리스 5단계)·보수(전역 점검 종류 × 제품) 체크, 돈 월 마감, 단계와 분리한 운영 상태 5개, 제품 하트비트 push 계약, 매일·매주·매월·분기 리듬, M1~M5. 목업은 비공개 아티팩트.
+
+- [`superpowers/specs/2026-09-24-product-dev-projects-draft.md`](superpowers/specs/2026-09-24-product-dev-projects-draft.md) — **v0.3 · 방향 확정(갈래 B) / 결정 4건 확정(2026-09-25) / 0~2단계 구현(브랜치 `claude/product-lens`) · 운영 DB 미적용**. 제품은 새 `products` 테이블(컨테이너 재사용 권장안을 운영자가 뒤집음), 프로젝트는 `projects.product_id`로 붙는다. 저장소는 `product_repositories`(저장소→제품 1:1), GitHub 폴링 + HMAC webhook을 Engine이 받아 `project_updates.product_id`에 기록, 프로젝트 탭 `제품` 보기와 개요/개발 드로어. 동시 진행 상한은 나중에 정함, ClassIn 고객 ↔ 개인 제품 교차 후보는 표시만 허용. 템플릿·적합도·돈·점수는 3~5단계로 남았다(§13 구현 기록).
+
 - [`superpowers/specs/2026-09-21-reference-capture-and-browse-usability-design.md`](superpowers/specs/2026-09-21-reference-capture-and-browse-usability-design.md) — **입력·모아보기 우선순위 운영자 확정 / 상세 동작 권장안 / 구현 전**. 한 칸에 링크·생각 입력, 저장 후 연속 입력, 전체 검색·상세·수정·즐겨찾기·복귀, 기존 자료 이관을 첫 출시로 제안한다. 09-20 기획의 Studio 우선 순서를 대체하며 AI 초안 연결은 후속이다.
 
 - [`superpowers/specs/2026-09-20-reference-library-writing-workflow-design.md`](superpowers/specs/2026-09-20-reference-library-writing-workflow-design.md) — **DRAFT · 권장안 / 구현 미착수**. 저장 레퍼런스에서 질문·출처 1–3개를 골라 내 관점을 기록하고 기존 소재함·Studio 초안으로 연결한다. item의 선별 출처 사본, 확인 범위, AI 생성 근거와 재시도 계약을 제안한다. 전체 DB 이관·자동 수집·발행은 후속 범위다.

@@ -178,6 +178,8 @@ export function normalizePmsCommand(
     // A/S graduation: a closed deal can spawn its 판매 후 실행 follow-up project. The origin
     // deal id lives in meta so the project can point back at the sale that created it.
     const dealId = nullableUuidField(input, "dealId", "deal_id");
+    // 제품 아래에 붙는 프로젝트(2026-09-24 제품 렌즈 §3) — 없으면 null.
+    const productId = nullableUuidField(input, "productId", "product_id");
     const entityRef = projectEntityRef(input.entityRef ?? input.entity_ref);
     const orgScope = text(input.orgScope ?? input.org_scope, 30).toLowerCase();
     const status = text(input.status || "active", 30).toLowerCase();
@@ -198,6 +200,7 @@ export function normalizePmsCommand(
     if (!title) return { ok: false, reason: "missing-title" };
     if (!brandId.ok) return { ok: false, reason: "invalid-brand-id" };
     if (!dealId.ok) return { ok: false, reason: "invalid-deal-id" };
+    if (!productId.ok) return { ok: false, reason: "invalid-product-id" };
     if (!entityRef.ok) return { ok: false, reason: "invalid-entity-ref" };
     if (!BRAND_ORG_SCOPES.has(orgScope)) return { ok: false, reason: "invalid-org-scope" };
     if (!PROJECT_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
@@ -216,6 +219,7 @@ export function normalizePmsCommand(
         workspace_id: workspaceId,
         area_id: areaId,
         brand_id: brandId.value,
+        ...(productId.value ? { product_id: productId.value } : {}),
         lead_id: entityRef.leadId,
         customer_account_id: entityRef.customerAccountId,
         owner_id: ownerId,
@@ -413,6 +417,11 @@ export function normalizePmsCommand(
       const brandId = nullableUuidField(input, "brandId", "brand_id");
       if (!brandId.ok) return { ok: false, reason: "invalid-brand-id" };
       patch.brand_id = brandId.value;
+    }
+    if (has(input, "productId") || has(input, "product_id")) {
+      const productId = nullableUuidField(input, "productId", "product_id");
+      if (!productId.ok) return { ok: false, reason: "invalid-product-id" };
+      patch.product_id = productId.value;
     }
     if (has(input, "entityRef") || has(input, "entity_ref")) {
       const entityRef = projectEntityRef(input.entityRef ?? input.entity_ref);
