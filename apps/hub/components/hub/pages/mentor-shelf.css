@@ -396,7 +396,7 @@
   gap: 12px;
   width: 100%;
   min-height: 52px;
-  padding: 10px 15px;
+  padding: 12px 16px;
   border: 1px solid var(--line-soft);
   border-radius: var(--r-lg);
   background: var(--surface);
@@ -429,6 +429,11 @@
   justify-content: center;
   gap: 3px;
   min-height: 60px;
+}
+
+/* The Hub button reset has higher specificity than the base card class. */
+.hub-app button.mentor-shelf__person-choice {
+  padding: 12px 16px;
 }
 
 .mentor-shelf__person-choice--card span {
