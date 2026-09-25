@@ -69,6 +69,23 @@ test("buildDealWrite rejects non-canonical stage values", () => {
   assert.equal("stage" in columns, false); // only lead/qual/prop/neg/won/lost pass through
 });
 
+test("buildDealWrite normalizes payments and drops invalid rows (deal-payments.js)", () => {
+  const { metaPatch } = buildDealWrite({
+    payments: [
+      { id: "p1", label: "계약금", expectedAmount: 900000, expectedAt: "2026-09-25" },
+      { expectedAmount: 0 }, // 금액 없음 — 버려진다
+    ],
+  });
+  assert.equal(metaPatch.payments.length, 1);
+  assert.equal(metaPatch.payments[0].id, "p1");
+  assert.equal(metaPatch.payments[0].expectedAmount, 900000);
+});
+
+test("buildDealWrite leaves meta.payments untouched when the field is absent (no-payments deals unaffected)", () => {
+  const { metaPatch } = buildDealWrite({ name: "이름만 바꿈" });
+  assert.equal("payments" in metaPatch, false);
+});
+
 test("buildCaseWrite maps display status/priority labels back to DB enums", () => {
   const { columns, metaPatch } = buildCaseWrite({
     title: "결제 영수증 재발행",

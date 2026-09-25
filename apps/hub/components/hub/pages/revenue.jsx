@@ -18,7 +18,8 @@ import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE, LOST_STAGE, dealStageLabel, isDealStalled } from "@/lib/deal-stages";
 import { DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay } from "@/lib/deal-timeline";
-import { DealsTimeline, DealsRegionView } from "./deals-timeline";
+import { DealsTimeline, DealsRegionView, RevenueTargetControl } from "./deals-timeline";
+import { monthKeyOf, normalizeTargetAmount, targetForMonth, targetProgress } from "@/lib/revenue-target";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
@@ -202,6 +203,9 @@ const EMPTY_REVENUE_LEDGER = {
   cases: [],
   contacts: [],
   companies: [],
+  // null = 아직 읽지 않음/읽기 실패(§8.1 read 봉투) — 월별 목표 미정({})과 구분해야
+  // 거래 히어로가 "이번 달 목표가 없다"를 "아직 모른다"로 잘못 말하지 않는다.
+  revenueTargets: null,
   summary: null,
 };
 
@@ -249,6 +253,8 @@ export function useRevenueLedger() {
           cases: Array.isArray(data.cases) ? data.cases : [],
           contacts: Array.isArray(data.contacts) ? data.contacts : [],
           companies: Array.isArray(data.companies) ? data.companies : [],
+          // 서버가 워크스페이스 meta를 못 읽었으면 null 그대로 넘어온다 — 여기서 {}로 뭉개지 않는다.
+          revenueTargets: data.revenueTargets && typeof data.revenueTargets === 'object' ? data.revenueTargets : null,
           summary: data.summary || null,
         };
         const nextState = data.source === 'supabase'
@@ -1904,6 +1910,38 @@ export function Deals({ workspace, onNavigate }) {
     });
     toast.success(label, { action: { label: '되돌리기', onClick: undoCloseMove } });
   };
+  // 결제 일정 변경(결제 나누기·입금 확인·편집·취소) — 위 두 지연 쓰기와 같은 계약. 낙관 반영은
+  // deal.payments 배열 전체를 교체하고, 실패하면 되돌린다. deal-payments.js의 뮤테이터가
+  // 이미 새 배열을 만들어 넘기므로 여기는 저장·되돌리기 배선만 한다.
+  const pendingPaymentsRef = React.useRef(new Map()); // key → 최초 payments 배열
+  const updateDealPayments = (id, nextPayments, label) => {
+    const current = deals.find(d => d.id === id);
+    if (!current) return;
+    const key = `deal-payments-${id}`;
+    const base = pendingPaymentsRef.current.get(key) ?? (current.payments || []);
+    pendingPaymentsRef.current.set(key, base);
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, payments: nextPayments } : d)));
+    if (String(id).toLowerCase().startsWith('local-')) { pendingPaymentsRef.current.delete(key); return; }
+    const restore = () => setDeals(ds => ds.map(d => (d.id === id ? { ...d, payments: base } : d)));
+    const undoPaymentsChange = () => {
+      if (cancelUndoable(key)) {
+        pendingPaymentsRef.current.delete(key);
+        restore();
+      }
+      toast.info('결제 변경을 취소했습니다.');
+    };
+    scheduleUndoable(key, () => {
+      pendingPaymentsRef.current.delete(key);
+      saveRevenueRecord('deal', 'update', { id, payments: nextPayments }).then((r) => {
+        if (r.ok) return;
+        restore();
+        toast.error(r.status === 'preview'
+          ? 'Supabase 미연결 — 결제 변경이 저장되지 않아 되돌렸습니다'
+          : `결제 저장 실패 (${r.status}) — 되돌렸습니다`);
+      });
+    });
+    toast.success(label, { action: { label: '되돌리기', onClick: undoPaymentsChange } });
+  };
   // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 기록에서 meta.deal_id로
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
   // 방금 추가·완료한 항목이 보드에 바로 반영되게 한다.
@@ -2050,15 +2088,64 @@ export function Deals({ workspace, onNavigate }) {
     && dealTimeline.ordered.some(item => item.id === selection.selectedId);
   // 읽는 중·읽기 실패·미연결(preview)에는 ₩0을 사실처럼 제목에 올리지 않는다.
   const heroUnknown = ledgerUnavailable || syncState === 'preview';
+
+  // 이번 달 매출 목표 — workspaces.meta.revenue_targets(마이그레이션 없음, 운영자 2026-09-24
+  // 결정 1층). ledger.revenueTargets가 null이면 "아직 못 읽음"이라 목표선·CTA 둘 다 숨긴다.
+  // 저장 직후에는 재조회를 기다리지 않고 로컬 override로 즉시 반영한다.
+  const [targetOverride, setTargetOverride] = React.useState(null); // { month, amount } | null
+  const [targetSaving, setTargetSaving] = React.useState(false);
+  const targetsKnown = ledger.revenueTargets != null;
+  const effectiveTargets = React.useMemo(() => {
+    if (!targetsKnown) return null;
+    if (!targetOverride) return ledger.revenueTargets;
+    return { ...ledger.revenueTargets, [targetOverride.month]: targetOverride.amount };
+  }, [targetsKnown, ledger.revenueTargets, targetOverride]);
+  const monthKey = monthKeyOf(dealTimeline.ctx);
+  const currentTarget = targetsKnown ? targetForMonth(effectiveTargets, dealTimeline.ctx) : null;
+  const targetInfo = currentTarget != null
+    ? targetProgress({ target: currentTarget, paid: dealTimeline.month.paid, expected: dealTimeline.month.total })
+    : null;
+  const saveTarget = async (amount) => {
+    const normalized = normalizeTargetAmount(amount);
+    if (!normalized) { toast.error('올바른 금액을 입력하세요.'); return false; }
+    setTargetSaving(true);
+    try {
+      const resp = await fetch('/api/hub/revenue/target', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ month: monthKey, amount: normalized }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (data.status === 'saved') {
+        setTargetOverride({ month: monthKey, amount: normalized });
+        toast.success(`${monthKey} 목표를 ${fmt(normalized)}로 정했습니다.`);
+        return true;
+      }
+      toast.error(data.status === 'preview' ? 'Supabase 미연결 — 목표가 저장되지 않았습니다.' : '목표 저장에 실패했습니다.');
+      return false;
+    } catch {
+      toast.error('목표 저장에 실패했습니다.');
+      return false;
+    } finally {
+      setTargetSaving(false);
+    }
+  };
+
+  // 언제 보기의 선택은 결제 카드 단위(item.id — 딜 하나가 2회 걸치면 값이 갈린다)라, 딜
+  // 자체를 다루는 키보드 동작(e 편집·1–5 단계 이동)은 카드가 들고 있는 실제 딜 id로 되돌린다.
+  const selectedDealIdInTime = React.useMemo(() => {
+    if (view !== 'time' || selection.selectedId == null) return selection.selectedId;
+    return dealTimeline.ordered.find(item => item.id === selection.selectedId)?.deal.id ?? selection.selectedId;
+  }, [view, selection.selectedId, dealTimeline.ordered]);
   useCrmKeyboard({
     enabled: !ledgerUnavailable,
     selection,
     onNew: () => createDeal(),
-    onEditSelected: (id) => setEditDealId(id),
+    onEditSelected: () => setEditDealId(selectedDealIdInTime),
     onStageMove: (stageIndex) => {
-      if (!selection.selectedId) return;
+      if (!selectedDealIdInTime) return;
       const stage = DEAL_STAGES[stageIndex];
-      if (stage) move(selection.selectedId, stage.key);
+      if (stage) move(selectedDealIdInTime, stage.key);
     },
   });
   React.useEffect(() => {
@@ -2068,9 +2155,9 @@ export function Deals({ workspace, onNavigate }) {
 
   return (
     <div className="hub-futura hub-page fade-up deals-page" style={view === 'stage' ? { height: '100%' } : undefined}>
-      {/* 제목이 숫자다(목업 3) — 개요 탭의 KPI 카드 대신 "확정된 돈 / 잘 풀리면" 한 문장.
-          제목 금액은 이번 달 예상일의 확정(클로징)만 — 입금 필드와 목표 금액이 기록에 없어
-          "입금됨"·"목표까지" 문구는 만들지 않는다(lib/deal-timeline.js). */}
+      {/* 제목이 숫자다(목업 3) — 개요 탭의 KPI 카드 대신 "들어온 돈 / 들어올 예정" 한 문장
+          (2026-09-24 라운드 2: 결제 기록이 생겨 확정치=실제 입금, 예상치=미입금 예정으로
+          갈렸다 — 둘을 절대 하나로 합치지 않는다). 목표는 있을 때만 세 번째 줄에 붙는다. */}
       <header>
         <div className="deals-hero">
           <div className="deals-hero__text">
@@ -2079,10 +2166,21 @@ export function Deals({ workspace, onNavigate }) {
               <SyncBadge state={syncState} />
             </p>
             <h2 className="fx-page-title">
-              {heroUnknown ? '거래' : <>이번 달 확정된 돈 <span className="stat">{fmt(dealTimeline.month.confirmed)}</span></>}
+              {heroUnknown ? '거래' : <>이번 달 들어온 돈 <span className="stat">{fmt(dealTimeline.month.paid)}</span></>}
             </h2>
-            {!heroUnknown && dealTimeline.month.upside > dealTimeline.month.confirmed && (
-              <p className="fx-page-sub">잘 풀리면 <span className="stat deals-hero__value">{fmt(dealTimeline.month.upside)}</span></p>
+            {!heroUnknown && dealTimeline.month.total > 0 && (
+              <p className="fx-page-sub">들어올 예정 <span className="stat deals-hero__value">{fmt(dealTimeline.month.total)}</span></p>
+            )}
+            {!heroUnknown && (
+              <p className="fx-page-sub">
+                <RevenueTargetControl
+                  targetsKnown={targetsKnown}
+                  progress={targetInfo}
+                  monthLabel={dealTimeline.month.monthLabel}
+                  saving={targetSaving}
+                  onSave={saveTarget}
+                />
+              </p>
             )}
           </div>
           <div className="deals-hero__actions">
@@ -2171,6 +2269,8 @@ export function Deals({ workspace, onNavigate }) {
           canCreate={!ledgerUnavailable}
           onNavigate={onNavigate}
           onReload={reloadLedger}
+          target={currentTarget}
+          onUpdatePayments={updateDealPayments}
         />
       )}
 

@@ -40,6 +40,33 @@
   font-weight: 500;
 }
 
+/* 목표 정하기 — 조용한 인라인 텍스트 버튼. 없으면 흐린 글자, 있으면 진행 문장 + 연필 */
+.hub-app .deals-hero__target {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.hub-app .deals-hero__target:hover { color: var(--fg); }
+.hub-app .deals-hero__target--set { color: var(--fg-dim); }
+
+.hub-app .deals-hero__target-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.hub-app .deals-hero__target-form .hub-input { width: 140px; height: 30px; }
+
 .hub-app .deals-hero__actions {
   display: flex;
   align-items: center;
@@ -71,6 +98,7 @@
 .hub-app .deals-tl-ribbon { padding: 22px 24px 16px; }
 
 .hub-app .deals-tl-bar {
+  position: relative;
   display: flex;
   gap: 3px;
   height: 40px;
@@ -79,6 +107,16 @@
 .hub-app .deals-tl-bar--empty {
   border: 1px dashed var(--line);
   border-radius: var(--r-sm);
+}
+
+/* 목표선 — 지금 막대에 보이는 금액을 분모로 목표 지점을 표시하는 1px 세로선 */
+.hub-app .deals-tl-bar__target {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 1px;
+  background: var(--fg);
+  pointer-events: none;
 }
 
 .hub-app .deals-tl-bar__seg {
@@ -92,6 +130,9 @@
 
 .hub-app .deals-tl-bar__seg:hover { transform: translateY(-1px); }
 
+/* 입금됨은 실제로 들어온 돈이라 파이프라인의 확정(입금 대기)보다 한 단계 밝은 명도로 — 색이
+   아니라 luminance로 구분한다(§5.3 charts). */
+.hub-app .deals-tl-bar__seg[data-certainty="paid"] { background: var(--fg); border-color: var(--fg); }
 .hub-app .deals-tl-bar__seg[data-certainty="confirmed"] { background: var(--fg-muted); border-color: var(--fg-muted); }
 .hub-app .deals-tl-bar__seg[data-certainty="recommended"] { background: var(--surface-3); border: 1px dashed var(--line-strong); }
 .hub-app .deals-tl-bar__seg[data-certainty="unknown"] { background: transparent; border: 1px dotted var(--line-strong); }
@@ -101,7 +142,7 @@
 
 .hub-app .deals-tl-legend {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   margin-top: 12px;
 }
@@ -154,6 +195,7 @@
   flex-shrink: 0;
 }
 
+.hub-app .deals-tl-swatch[data-certainty="paid"] { background: var(--fg); border-color: var(--fg); }
 .hub-app .deals-tl-swatch[data-certainty="confirmed"] { background: var(--fg-muted); border-color: var(--fg-muted); }
 .hub-app .deals-tl-swatch[data-certainty="recommended"] { background: var(--surface-3); border: 1px dashed var(--line-strong); }
 .hub-app .deals-tl-swatch[data-certainty="unknown"] { border: 1px dotted var(--line-strong); }
@@ -341,6 +383,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 결제 일정이 있는 카드의 회차 라벨("계약금"·"2회 중 1회") */
+.hub-app .deals-tl-card__installment {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+/* 일부 입금됐을 때 딜 전체 진행을 압축("₩1.8M 예정 · ₩1.2M 입금") */
+.hub-app .deals-tl-card__paidline {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--fg-muted);
 }
 
 .hub-app .deals-tl-card__amount {
@@ -566,6 +622,99 @@
 
 .hub-app .deals-tl-dock__date .hub-input { width: auto; height: 28px; padding: 0 8px; }
 
+/* ── 결제(운영자 2026-09-24 결정) — 딜 하나에 여러 예상 입금, 예상치·확정치 분리 ── */
+.hub-app .deals-pay {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.hub-app .deals-pay__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.hub-app .deals-pay__summary { font-size: 12.5px; color: var(--fg-muted); }
+.hub-app .deals-pay__paid { color: var(--fg); }
+
+.hub-app .deals-pay__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-app .deals-pay-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.hub-app .deals-pay-row[data-status="paid"] { border-style: solid; }
+.hub-app .deals-pay-row[data-status="cancelled"] { opacity: 0.6; }
+
+.hub-app .deals-pay-row--form { align-items: flex-end; background: var(--surface-3); }
+
+.hub-app .deals-pay-row__label {
+  flex: 1 1 auto;
+  min-width: 80px;
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+.hub-app .deals-pay-row__expected {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.hub-app .deals-pay-row__date { color: var(--fg-dim); }
+
+.hub-app .deals-pay-row__paid {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+.hub-app .deals-pay-row__cancelled { font-size: 12px; color: var(--fg-faint); }
+
+.hub-app .deals-pay-row__acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.hub-app .deals-pay-row__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 auto;
+}
+
+.hub-app .deals-pay-row__fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.hub-app .deals-pay-row__fields .hub-input { width: 120px; height: 28px; padding: 0 8px; }
+
 /* ── 지역 보기 — 히트맵 페이지를 그대로 품는다. 히트맵 루트의 인라인 페이지 여백만 상쇄 ── */
 .hub-app .deals-region { margin: calc(-1 * var(--section-gap)); min-width: 0; }
 
@@ -595,10 +744,19 @@
     margin: 0;
     padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
     border-radius: var(--r-xl) var(--r-xl) 0 0;
+    /* 결제 블록이 붙어 내용이 늘어날 수 있다 — 시트 자체는 스크롤, 화면은 그대로 */
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
   }
   .hub-app .deals-tl-dock__acts > .hub-btn { flex: 1 1 calc(50% - 4px); min-height: 44px; }
   .hub-app .deals-tl-stepper > li { font-size: 10.5px; }
-  .hub-app .deals-tl-dock__date .hub-input { height: 44px; font-size: 16px; }
+  .hub-app .deals-tl-dock__date .hub-input,
+  .hub-app .deals-pay-row__fields .hub-input { height: 44px; font-size: 16px; }
+  .hub-app .deals-pay-row__fields { width: 100%; }
+  .hub-app .deals-pay-row__fields label { flex: 1 1 90px; }
+  .hub-app .deals-pay-row__fields .hub-input { width: 100%; }
+  .hub-app .deals-pay-row__acts { width: 100%; justify-content: flex-start; }
+  .hub-app .deals-pay-row__acts > .hub-btn { min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

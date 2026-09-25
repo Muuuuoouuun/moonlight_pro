@@ -14,6 +14,7 @@ import { isTemplateNextAction } from "../sales-os/lead-enrichment.js";
 import { SUBJECT_KEY_SET, absorbSubjectTags } from "../sales-os/lead-labels.js";
 import { normalizeGenreLabels } from "../sales-os/customer-labels.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
+import { normalizeRevenueTargets } from "../revenue-target.js";
 
 const LEAD_STAGE_LABEL = {
   new: "New",
@@ -266,6 +267,9 @@ export function mapDeal(row, companyById, trackingStartedAt = null) {
     nextMeeting: (row.meta?.next_meeting && typeof row.meta.next_meeting === "object")
       ? row.meta.next_meeting
       : null,
+    // 결제 일정(운영자 2026-09-24 결정, lib/deal-payments.js) — 원시 배열 그대로 넘긴다.
+    // 정규화·암묵적 결제 파생은 소비자(deal-timeline.js, deal-payments.js)가 매번 한다.
+    payments: Array.isArray(row.meta?.payments) ? row.meta.payments : [],
   };
 }
 
@@ -383,6 +387,7 @@ function emptyLedger(configured, workspaceId) {
     contacts: [],
     companies: [],
     stages: DEAL_STAGES,
+    revenueTargets: null,
     summary: {
       mrr: 0,
       mrrPrev: 0,
@@ -456,7 +461,7 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
     return emptyLedger(false, workspaceId || null);
   }
 
-  const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows, trackingStartedAt] = await Promise.all([
+  const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows, trackingStartedAt, workspaceRows] = await Promise.all([
     fetchSupabaseRows("leads", {
       ...(attentionOnly ? { select: "id,score" } : {}),
       limit: 120,
@@ -493,6 +498,13 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
       filters: withWorkspaceFilter(),
     }),
     attentionOnly ? null : getContactTrackingStartedAt(workspaceId),
+    // 이번 달 매출 목표(운영자 2026-09-24 결정 1층) — workspaces.meta.revenue_targets.
+    // My Work 프로젝션은 거래 화면을 그리지 않으므로 읽지 않는다.
+    attentionOnly ? null : fetchSupabaseRows("workspaces", {
+      select: "meta",
+      filters: [["id", eqFilter(workspaceId)]],
+      limit: 1,
+    }),
   ]);
 
   if (!leadRows || !dealRows || !accountRows || !caseRows) {
@@ -513,12 +525,18 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
     };
   }
 
-  // 보강 소스(companies/contacts) 실패는 코어를 죽이지 않되 partial로 명명한다 —
-  // live 배지 아래에서 회사명/연락처가 조용히 사라지던 무언 강등 제거.
+  // 보강 소스(companies/contacts/workspace 목표) 실패는 코어를 죽이지 않되 partial로
+  // 명명한다 — live 배지 아래에서 회사명/연락처/목표가 조용히 사라지던 무언 강등 제거.
+  // attentionOnly는 workspaceRows를 애초에 요청하지 않으므로(null) 실패로 세지 않는다.
   const enrichmentFailedSources = [
     ["companies", companyRows],
     ["contacts", contactRows],
+    ...(attentionOnly ? [] : [["revenue_targets", workspaceRows]]),
   ].filter(([, rows]) => !Array.isArray(rows)).map(([key]) => key);
+  // null = 못 읽음(정직성 규칙 — {}로 뭉개면 "목표 없음"과 구분이 안 된다).
+  const revenueTargets = Array.isArray(workspaceRows)
+    ? normalizeRevenueTargets(workspaceRows[0]?.meta?.revenue_targets)
+    : null;
   const companyById = new Map((companyRows || []).map(c => [c.id, c]));
   const contactById = new Map((contactRows || []).map(c => [c.id, c]));
 
@@ -574,6 +592,7 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
       ka: Boolean(c.meta?.ka),
     })),
     stages: DEAL_STAGES,
+    revenueTargets,
     summary,
   };
 }

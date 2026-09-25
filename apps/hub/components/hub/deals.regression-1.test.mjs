@@ -4,6 +4,7 @@ import test from 'node:test';
 import ts from 'typescript';
 import { DEAL_STAGES, LOST_STAGE, dealStageLabel, isDealStalled } from '../../lib/deal-stages.js';
 import { DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay } from '../../lib/deal-timeline.js';
+import { monthKeyOf, normalizeTargetAmount, targetForMonth, targetProgress } from '../../lib/revenue-target.js';
 
 // Regression: ISSUE-001 — column moves unmount the drag source before dragend.
 // Found by /qa on 2026-09-21. Browser evidence: /tmp/moonlight-deals-qa/drag-result.png.
@@ -40,8 +41,9 @@ function mount({ state = 'live', records = [], workspace, search = 'view=stage',
     STAGE_FILL: [], STAGE_LINE: [], LOST_STAGE, dealStageLabel, isDealStalled, SCOPE_OPTIONS: [], fmt: String,
     triggerCelebration() {}, saveRevenueRecord: save || (async () => ({ ok: true, status: 'saved' })),
     DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay,
+    monthKeyOf, normalizeTargetAmount, targetForMonth, targetProgress,
   };
-  for (const name of ['Button', 'Kbd', 'SyncBadge', 'Checkbox', 'CheckboxRow', 'LifecycleBadge', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget', 'DealsTimeline', 'DealsRegionView']) dependencies[name] = name;
+  for (const name of ['Button', 'Kbd', 'SyncBadge', 'Checkbox', 'CheckboxRow', 'LifecycleBadge', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget', 'DealsTimeline', 'DealsRegionView', 'RevenueTargetControl']) dependencies[name] = name;
   const Deals = new Function(...Object.keys(dependencies), `${javascript}; return Deals;`)(...Object.values(dependencies));
   function render() { index = 0; tree = Deals({ workspace }); return tree; }
   function findAll(predicate, node = tree) {
@@ -145,7 +147,7 @@ test('숨긴 Lost 딜은 Lost 토글 건수에 세지 않는다 — 켜도 빈 �
 const todayIso = () => new Date().toISOString();
 const text = node => (node && typeof node === 'object' ? (node.props?.children || []).map(text).join('') : String(node ?? ''));
 
-test('기본 보기는 언제 — 칸반 대신 시간 칸을 그리고 제목은 이번 달 확정 금액만 말한다', () => {
+test('기본 보기는 언제 — 칸반 대신 시간 칸을 그리고 제목은 이번 달 들어온 돈(확정치)만 말한다', () => {
   const app = mount({ search: '', records: [
     { id: 'won', stage: 'closing', value: 1800000, closeAt: todayIso() },
     { id: 'quote', stage: 'quote', value: 2400000, closeAt: todayIso() },
@@ -157,8 +159,9 @@ test('기본 보기는 언제 — 칸반 대신 시간 칸을 그리고 제목�
   assert.equal(timeline.length, 1);
   assert.equal(timeline[0].props.timeline.count, 3);
   const title = app.findAll(n => n.type === 'h2')[0];
-  assert.equal(text(title), '이번 달 확정된 돈 1800000', '확정(클로징)만 — 가능성은 부제로');
-  assert.match(text(app.findAll(n => n.type === 'p' && n.props.className === 'fx-page-sub')[0]), /잘 풀리면 4200000/);
+  // 결제 기록이 없으면 입금됨은 0 — 사실 그대로. 예상(확정·가능성·확인 필요 합)은 부제로.
+  assert.equal(text(title), '이번 달 들어온 돈 0', '아직 입금 기록이 없으면 확정치(들어온 돈)는 0');
+  assert.match(text(app.findAll(n => n.type === 'p' && n.props.className === 'fx-page-sub')[0]), /들어올 예정 5400000/);
   assert.equal(app.findAll(n => n.type === 'h2').length, 1, '페이지 제목은 하나');
 });
 

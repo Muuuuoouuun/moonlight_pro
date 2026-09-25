@@ -140,8 +140,10 @@ test("an acknowledged old task deadline keeps a deliberate today focus without r
 test("attention returns the same items and scoring with three revenue reads instead of seven", async () => {
   const { raw, ...full } = await getAttentionLedger({ includeRaw: true });
   const fullCalls = state.calls;
+  // 두 번째 "workspaces"는 이번 달 매출 목표 읽기(revenue-target.js) — 접점 추적 시작일과
+  // 별개 쿼리라 같은 테이블을 두 번 읽는다.
   assert.deepEqual(fullCalls.map(call => call.table), [
-    "leads", "deals", "customer_accounts", "operation_cases", "companies", "contacts", "workspaces",
+    "leads", "deals", "customer_accounts", "operation_cases", "companies", "contacts", "workspaces", "workspaces",
   ]);
   assert.equal(raw.revenue.accounts.length, 1);
   assert.equal(raw.revenue.cases.length, 1);

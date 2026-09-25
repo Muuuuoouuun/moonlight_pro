@@ -4,6 +4,8 @@ import test from "node:test";
 import ts from "typescript";
 
 import * as timelineLib from "../../../lib/deal-timeline.js";
+import * as paymentsLib from "../../../lib/deal-payments.js";
+import { targetProgress } from "../../../lib/revenue-target.js";
 import { DEAL_STAGES, STALLED_DAYS } from "../../../lib/deal-stages.js";
 
 // 거래 "언제" 보기(목업 3, 2026-09-24) — 실제 컴포넌트 코드를 격리된 훅으로 돌려
@@ -54,7 +56,9 @@ function mount(props) {
     useToast: () => ({ success: (m) => toasts.push(["success", m]), error: (m) => toasts.push(["error", m]), info: (m) => toasts.push(["info", m]) }),
     UNDO_WINDOW_MS: 3500,
     STALLED_DAYS,
+    targetProgress,
     ...timelineLib,
+    ...paymentsLib,
   };
   for (const name of ["Button", "CertaintyBadge", "EmptyState", "IconButton", "Kbd", "LifecycleBadge", "Skeleton", "TruthBadge", "Iconed", "ContactRecordDrawer"]) deps[name] = name;
   const { DealsTimeline } = new Function(...Object.keys(deps), `${javascript}; return { DealsTimeline, DealsRegionView };`)(...Object.values(deps));
@@ -123,11 +127,11 @@ test("리본 라벨 버튼으로 거르고 다시 누르면 푼다", () => {
     { id: "b", stage: "contact", value: 200, closeAt: dayIso(0) },
   ]));
   const legend = () => app.findAll((n) => n.type === "button" && n.props.className === "deals-tl-legend__item");
-  assert.deepEqual(legend().map((b) => b.props["data-certainty"]), ["confirmed", "recommended", "unknown"]);
-  legend()[2].props.onClick(); app.render();
-  assert.equal(legend()[2].props["aria-pressed"], true);
+  assert.deepEqual(legend().map((b) => b.props["data-certainty"]), ["paid", "confirmed", "recommended", "unknown"]);
+  legend()[3].props.onClick(); app.render();
+  assert.equal(legend()[3].props["aria-pressed"], true);
   assert.deepEqual(cards(app).map((c) => c.props["data-deal-card"]), ["b"]);
-  legend()[2].props.onClick(); app.render();
+  legend()[3].props.onClick(); app.render();
   assert.equal(cards(app).length, 2);
 });
 
