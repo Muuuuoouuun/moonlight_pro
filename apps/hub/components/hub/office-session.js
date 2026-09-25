@@ -10,6 +10,21 @@ export function officeTasksForScope(tasks, scope) {
     && (scope === 'all' || task.workspace === (scope === 'classin' ? 'classin' : 'brand')));
 }
 
+// V4 회의실 왼쪽 레일: 완료 전 할 일을 막힘 → 오래 그대로인 순으로 몇 개만 보인다.
+// "막혔다"는 기록된 상태(blocked)만 뜻하고, 나머지는 마지막 수정 뒤 지난 날수로만 말한다.
+export function officeRailTasks(tasks, scope, { now = Date.now(), limit = 6 } = {}) {
+  const day = 24 * 60 * 60 * 1000;
+  const staleDays = task => {
+    const at = Date.parse(task.updatedAt || '');
+    return Number.isFinite(at) ? Math.max(0, Math.floor((now - at) / day)) : null;
+  };
+  return officeTasksForScope(tasks, scope)
+    .map(task => ({ task, staleDays: staleDays(task) }))
+    .sort((a, b) => (b.task.status === 'blocked') - (a.task.status === 'blocked')
+      || (b.staleDays ?? -1) - (a.staleDays ?? -1))
+    .slice(0, limit);
+}
+
 export function officeTaskAgendaBlock(task) {
   const lines = ['[할 일 안건]', `제목: ${String(task.title || '').trim()}`];
   if (task.nextAction?.trim()) lines.push(`다음 행동: ${task.nextAction.trim()}`);

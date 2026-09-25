@@ -52,6 +52,34 @@ test('Office meeting room presents agenda, chronological speeches, and a sticky 
   assert.doesNotMatch(css, /\.composerTop\s*\{\s*display:none;/);
 });
 
+test('V4 meeting room: agenda rail, conclusion-first center, attendee rail, and one-column tabs', () => {
+  const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
+  // Three columns in reading order: stuck work on the left, the meeting, then who is in it.
+  assert.ok(page.indexOf('styles.agendaRail') < page.indexOf('className={styles.main}'));
+  assert.ok(page.indexOf('className={styles.main}') < page.indexOf('styles.seatRail'));
+  assert.match(page, /officeRailTasks\(taskState\.tasks, scope\)/);
+  assert.match(page, /aria-label=\{`안건으로 가져오기: \$\{task\.title\}`\}/);
+  // Rounds are chosen from the rail; the center shows one round, conclusion before speeches.
+  assert.match(page, /aria-label="회의 판"/);
+  assert.match(page, /aria-pressed=\{!busy && turn\.id === shownTurn\?\.id\}/);
+  const resultTurn = page.slice(page.indexOf('function ResultTurn'), page.indexOf('function speakingOrder'));
+  assert.ok(resultTurn.indexOf('styles.summary') < resultTurn.indexOf('<ThreadDiscussion'));
+  assert.ok(resultTurn.indexOf('styles.verdictMain') < resultTurn.indexOf('styles.verdictSide'));
+  assert.match(page, /styles\.lanes/);
+  // Waiting shows the planned order, never a fake progress bar.
+  assert.match(page, /순서 예고 · 실제 진행률 아님/);
+  assert.match(page, /speakingOrder\(session\.pending\.request\)/);
+  // Narrow page: tabs are the shared SegmentedControl, not a hand-built toggle.
+  assert.match(page, /<SegmentedControl label="회의실 보기"/);
+  for (const label of ['안건', '회의', '참석자']) assert.ok(page.includes(`label: '${label}'`));
+  assert.match(css, /\.page\s*\{[^}]*container-type:inline-size/);
+  assert.match(css, /@container \(max-width:1060px\) \{\s*\.room \{[^}]*\}\s*\.seatRail \{ display:none; \}/);
+  assert.match(css, /@container \(max-width:720px\)/);
+  assert.match(css, /\.room\[data-view="agenda"\] \.agendaRail/);
+  assert.match(css, /\.lanes \{ display:grid; grid-template-columns:repeat\(var\(--lane-count,2\),minmax\(0,1fr\)\)/);
+});
+
 test('Eevee assignment is explicit, source-bound, reviewable, and cannot override manual selection', () => {
   const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
   const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
