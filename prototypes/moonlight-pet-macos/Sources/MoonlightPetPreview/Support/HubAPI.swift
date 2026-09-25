@@ -61,8 +61,8 @@ struct HubAPI: HubServing {
         try requireSaved(response)
         struct Receipt: Decodable { let entry: HubMemoEntry? }
         let receipt = try JSONDecoder().decode(Receipt.self, from: response.data)
-        guard let written = receipt.entry, written.id.uuidString.lowercased() == command.entryId,
-              written.body == command.body, written.revision >= command.expectedRevision + 1 else { throw HubDataError.conflict }
+        guard let written = receipt.entry, written.id.uuidString.lowercased() == command.entryId else { throw HubDataError.unverifiedSave }
+        guard written.body == command.body, written.revision >= command.expectedRevision + 1 else { throw HubDataError.conflict }
         let verified = try await memo(id: written.id)
         guard verified.body == command.body, verified.revision == written.revision else { throw HubDataError.conflict }
         return verified

@@ -663,8 +663,9 @@ export function DealsMoney({
       </div>
     );
   } else {
+    // 시안 B(운영자 2026-09-26): 차트와 목록은 한 장의 판 안에서 선으로만 나뉜다.
     body = (
-      <>
+      <div className="fx-card deals-money-sheet">
         <CashflowChart model={model} />
         <MoneyList
           model={model}
@@ -675,7 +676,7 @@ export function DealsMoney({
           onLumpSum={lumpSumRow}
           onRecurring={recurringRow}
         />
-      </>
+      </div>
     );
   }
 

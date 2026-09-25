@@ -111,6 +111,7 @@ struct HubPendingState: Codable {
     var task: HubTaskCommand?
     var memo: HubMemoCommand?
     var savedMemo: HubMemoEntry?
+    var memoConflict: Bool?
 }
 
 struct HubCalendarEvent: Identifiable, Equatable, Sendable {

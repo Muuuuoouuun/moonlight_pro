@@ -254,22 +254,20 @@ final class WindowCoordinator: NSObject {
                     }
                     return nil
                 }
-                if event.charactersIgnoringModifiers == "s" {
+                if event.charactersIgnoringModifiers == "s", !self.model.isConnectionVisible {
                     let mode = widgetVisible ? self.model.compactMode : self.model.mode
                     if mode == .memo && self.model.hub.isEnabled { self.model.saveMemoToHub() }
                     else { self.model.saveMemo() }
                     return nil
                 }
             }
-            if !self.model.isFocused,
+            if !self.model.isFocused, !self.model.isConnectionVisible,
                utilityVisible,
                event.type == .keyDown,
                event.keyCode == 36,
-               event.modifierFlags.contains(.command) {
+               event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command {
                 let mode = widgetVisible ? self.model.compactMode : self.model.mode
-                if mode == .memo { self.model.continueMemoInCouncil() }
-                else if mode == .council { self.model.sendCouncilMessage() }
-                else { self.model.openHub(mode) }
+                self.model.performPrimaryShortcut(for: mode)
                 return nil
             }
             guard event.keyCode == 53 else { return event }
@@ -378,7 +376,11 @@ final class WindowCoordinator: NSObject {
         guard !model.isFocused else { return }
         model.activity.dismissBanner()
         if isRequestedVisible(widgetWindow) {
+            model.compactMode = mode
+            model.compactOpenRevision += 1
+            resizeWidget()
             widgetWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
         hideNow(previewWindow)

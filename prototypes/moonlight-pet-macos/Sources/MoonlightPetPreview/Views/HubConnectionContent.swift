@@ -117,10 +117,9 @@ struct HubConnectionContent: View {
         let submittedPassword = password
         password = ""
         Task {
-            await model.hub.connect(baseURL: submittedAddress,
-                                    username: submittedUsername, password: submittedPassword)
-            if model.hub.hasConnection {
-                model.hubBaseURL = submittedAddress.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if let origin = await model.hub.connect(baseURL: submittedAddress,
+                                                    username: submittedUsername, password: submittedPassword) {
+                model.hubBaseURL = origin
             }
         }
     }

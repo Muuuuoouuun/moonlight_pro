@@ -288,5 +288,19 @@ func runHubAPIContractTests() async throws -> Int {
         count += 1
     }
 
+    do {
+        let command = HubMemoCommand(body: "충돌 분류", previous: nil)
+        let changed = ScriptedHubTransport([try contractResponse(["status": "duplicate", "entry": try memoJSON(command, body: "원격 변경")])])
+        do {
+            _ = try await HubAPI(transport: changed).saveMemo(command)
+            throw HubContractFailure(description: "Changed duplicate must report a confirmed conflict")
+        } catch HubDataError.conflict {}
+        let unrelated = ScriptedHubTransport([try contractResponse(["status": "saved", "entry": try memoJSON(command, id: UUID().uuidString.lowercased())])])
+        do {
+            _ = try await HubAPI(transport: unrelated).saveMemo(command)
+            throw HubContractFailure(description: "Unrelated receipt must remain unverified")
+        } catch HubDataError.unverifiedSave {}
+        count += 1
+    }
     return count
 }

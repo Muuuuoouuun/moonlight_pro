@@ -506,3 +506,42 @@
 @media (prefers-reduced-motion: reduce) {
   .hub-app .deals-money-target { transition: none; }
 }
+
+
+/* ── 시안 B · 먹색 머리 + 한 장 (운영자 2026-09-26) ───────────────────────────
+   머리 카드만 반전된 먹색 면이다. 새 색을 만들지 않고 카드 안에서 토큰을 다시 묶는다 —
+   면은 --moon-50(라이트에선 먹색, 다크에선 밝은 면), 글자는 --surface 쪽으로 섞어 두 테마
+   모두 반전된다. 차트와 목록은 한 장(.deals-money-sheet) 안에서 1px 선으로만 나뉜다. */
+.hub-app .fx-card.deals-money-top {
+  --ink-fg: var(--surface);
+  --ink-muted: color-mix(in oklch, var(--surface) 70%, var(--moon-50));
+  --ink-dim: color-mix(in oklch, var(--surface) 52%, var(--moon-50));
+  --ink-line: color-mix(in oklch, var(--surface) 26%, var(--moon-50));
+  --ink-soft: color-mix(in oklch, var(--surface) 10%, var(--moon-50));
+  --ink-danger: color-mix(in oklch, var(--danger) 72%, var(--surface));
+  background: var(--moon-50);
+  color: var(--ink-fg);
+  --fg: var(--ink-fg);
+  --fg-muted: var(--ink-muted);
+  --fg-dim: var(--ink-dim);
+  --fg-faint: var(--ink-dim);
+  --moon-200: var(--ink-fg);
+  --line: var(--ink-line);
+  --line-soft: var(--ink-line);
+  --line-strong: var(--ink-muted);
+  --surface-2: var(--ink-soft);
+  --surface-3: var(--ink-soft);
+  --danger: var(--ink-danger);
+}
+.hub-app .fx-card.deals-money-top .hub-seg { background: var(--ink-soft); box-shadow: none; }
+.hub-app .fx-card.deals-money-top .hub-seg__btn[aria-pressed="true"] { background: var(--ink-fg); color: var(--moon-50); }
+
+.hub-app .fx-card.deals-money-sheet { padding: 0; overflow: hidden; }
+.hub-app .deals-money-sheet > .fx-card { background: transparent; box-shadow: none; border-radius: 0; }
+.hub-app .deals-money-sheet > .fx-card + .fx-card { border-top: 1px solid var(--line-soft); }
+/* 반전 면 위의 주 버튼 — 카드 안에서 다시 묶은 --moon-200/--fg가 버튼 글자와 면을 같게 만들지 않도록
+   반전 면의 반대 톤으로 명시한다. */
+.hub-app .fx-card.deals-money-top .hub-btn--primary { background: var(--ink-fg); border-color: var(--ink-fg); color: var(--moon-50); }
+.hub-app .fx-card.deals-money-top .hub-btn--primary:hover { background: var(--ink-muted); border-color: var(--ink-muted); }
+/* Kbd는 인라인 스타일이 토큰을 읽으므로 버튼 범위에서 토큰을 다시 묶는다. */
+.hub-app .fx-card.deals-money-top .hub-btn--primary { --surface-2: transparent; --moon-300: var(--moon-50); --line: var(--ink-muted); }
