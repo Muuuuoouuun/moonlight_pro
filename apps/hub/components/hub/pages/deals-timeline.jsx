@@ -24,13 +24,23 @@ import {
   laneDropDate,
   sameCloseDay,
 } from "@/lib/deal-timeline";
+import {
+  addInstallment,
+  cancelPayment,
+  dealExpectedTotal,
+  dealPaidTotal,
+  effectivePayments,
+  markPaid,
+  updatePayment,
+} from "@/lib/deal-payments";
+import { targetProgress } from "@/lib/revenue-target";
 import "./deals-timeline.css";
 
 // 지역 보기는 기존 매출 히트맵을 그대로 쓴다. 지도 모양 데이터가 커서 정적 import로 거래 청크에
 // 끌어오지 않고, 보기를 고를 때만 불러온다(히트맵 모듈도 ./revenue를 import하는 순환을 피한다).
 const RevenueHeatmapView = React.lazy(() => import("./revenue-heatmap").then((m) => ({ default: m.RevenueHeatmap })));
 
-const CERTAINTY_MARK = { confirmed: "●", recommended: "◇", unknown: "?" };
+const CERTAINTY_MARK = { paid: "✓", confirmed: "●", recommended: "◇", unknown: "?" };
 const STALL_PILL_LIMIT = 4;
 
 // 입력 중이거나 드로어·팔레트 같은 레이어가 떠 있으면 페이지 단축키는 양보한다
@@ -54,8 +64,67 @@ export function DealsRegionView({ onNavigate }) {
   );
 }
 
-function CertaintyRibbon({ month, filter, onToggle }) {
+// 히어로의 "목표 정하기" 인라인 편집 — 없으면 조용한 텍스트 버튼, 있으면 진행 문장 + 수정.
+// 저장은 Deals(revenue.jsx)가 소유한 onSave(amount) 프라미스가 처리(§8.1 저장 봉투와 같은
+// {ok} 계약). 이 컴포넌트는 입력만 맡고 목표값의 출처(workspaces.meta)는 모른다.
+export function RevenueTargetControl({ targetsKnown, progress, monthLabel, saving, onSave }) {
+  const [open, setOpen] = React.useState(false);
+  const [value, setValue] = React.useState(progress ? String(progress.target) : "");
+
+  if (!targetsKnown) return null; // 읽기 실패 — 미정처럼 보이게 하지 않는다(정직성 규칙)
+
+  if (!open) {
+    return progress ? (
+      <button type="button" className="deals-hero__target" onClick={() => { setValue(String(progress.target)); setOpen(true); }}>
+        목표 <span className="mono">{formatWon(progress.target)}</span>
+        {progress.reached ? (
+          <> · 달성했어요</>
+        ) : (
+          <> · 남은 <span className="stat">{formatWon(progress.remaining)}</span>{progress.coveredByExpected ? " · 예상대로면 채워요" : ""}</>
+        )}
+        <Iconed name="edit" size={11} />
+      </button>
+    ) : (
+      <button type="button" className="deals-hero__target deals-hero__target--set" onClick={() => { setValue(""); setOpen(true); }}>
+        {monthLabel} 목표 정하기
+      </button>
+    );
+  }
+
+  return (
+    <form
+      className="deals-hero__target-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const amount = Number(value);
+        if (!Number.isFinite(amount) || amount <= 0) return;
+        const ok = await onSave(amount);
+        if (ok) setOpen(false);
+      }}
+    >
+      <span aria-hidden="true">₩</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        className="hub-input"
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ""))}
+        placeholder="5000000"
+        aria-label={`${monthLabel} 목표 금액`}
+      />
+      <Button type="submit" size="xs" variant="primary" disabled={saving}>{saving ? "저장 중…" : "저장"}</Button>
+      <Button type="button" size="xs" variant="ghost" onClick={() => setOpen(false)}>취소</Button>
+    </form>
+  );
+}
+
+function CertaintyRibbon({ month, filter, onToggle, target }) {
   const drawn = month.segments.filter((segment) => segment.amount > 0);
+  const barTotal = drawn.reduce((sum, segment) => sum + segment.amount, 0);
+  // 목표선은 지금 막대에 보이는 금액(입금됨+예상 전부)을 분모로 위치를 잡는다 — 목표가
+  // 그 총합을 넘으면 막대 오른쪽 끝(100%)에 선을 둔다("여기까지 채워도 모자람"이라는 뜻).
+  const targetPct = target != null && barTotal > 0 ? Math.min(100, (target / barTotal) * 100) : null;
   return (
     <section className="fx-card deals-tl-ribbon" aria-label={`${month.monthLabel} 확실성별 금액`}>
       {drawn.length > 0 ? (
@@ -73,6 +142,9 @@ function CertaintyRibbon({ month, filter, onToggle }) {
               onClick={() => onToggle(segment.key)}
             />
           ))}
+          {targetPct != null && (
+            <span className="deals-tl-bar__target" style={{ left: `${targetPct}%` }} title={`목표 ${formatWon(target)}`} />
+          )}
         </div>
       ) : (
         <div className="deals-tl-bar deals-tl-bar--empty" aria-hidden="true" />
@@ -143,19 +215,24 @@ function DealTimeCard({ item, stages, describe, selected, rail, dragging, onActi
   const { org, who } = describe(deal);
   const amountLabel = item.amount ? formatWon(item.amount) : "₩ ?";
   const promiseLabel = promise ? `다음 약속 ${promise.text}${promise.dueLabel ? ` ${promise.dueLabel}` : ""}` : "다음 약속 없음";
+  const installments = item.installmentTotal > 1;
+  // 결제 일정이 있고 이미 일부 입금됐으면 카드에 "예정 · 입금"을 압축해 보여준다 — 이 카드의
+  // 금액(item.amount)은 미입금 이 회차뿐이라 딜 전체 진행을 놓치지 않게.
+  const paidTotal = dealPaidTotal(deal);
+  const expectedTotal = dealExpectedTotal(deal);
   return (
     <div
       role="button"
       tabIndex={0}
       draggable
       className="deals-tl-card"
-      data-deal-card={deal.id}
+      data-deal-card={item.id}
       data-certainty={certainty.key}
       data-selected={selected ? "true" : undefined}
       data-rail={rail ? "true" : undefined}
       data-dragging={dragging ? "true" : undefined}
       aria-pressed={selected}
-      aria-label={`${org}, ${item.amount ? amountLabel : "금액 미정"}, ${certainty.label}${lifecycle ? ` · ${lifecycle.label}` : ""}, ${item.stageLabel}, ${promiseLabel}`}
+      aria-label={`${org}, ${item.amount ? amountLabel : "금액 미정"}${installments ? `, ${item.installmentTotal}회 중 ${item.installmentIndex}회` : ""}, ${certainty.label}${lifecycle ? ` · ${lifecycle.label}` : ""}, ${item.stageLabel}, ${promiseLabel}`}
       onClick={() => onActivate(item, false)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -170,9 +247,19 @@ function DealTimeCard({ item, stages, describe, selected, rail, dragging, onActi
         <div className="deals-tl-card__id">
           <div className="deals-tl-card__org">{org}</div>
           {who && <div className="deals-tl-card__who">{who}</div>}
+          {(installments || item.paymentLabel) && (
+            <div className="deals-tl-card__installment mono">
+              {item.paymentLabel || `${item.installmentTotal}회 중 ${item.installmentIndex}회`}
+            </div>
+          )}
         </div>
         <span className="stat deals-tl-card__amount" data-unknown={item.amount ? undefined : "true"}>{amountLabel}</span>
       </div>
+      {paidTotal > 0 && (
+        <p className="deals-tl-card__paidline">
+          <span className="mono">{formatWon(expectedTotal)}</span> 예정 · <span className="mono">{formatWon(paidTotal)}</span> 입금
+        </p>
+      )}
       <StageSteps stages={stages} index={item.stageIndex} />
       <div className="deals-tl-card__row">
         <span className="deals-tl-card__badges">
@@ -205,13 +292,159 @@ function DealTimeCard({ item, stages, describe, selected, rail, dragging, onActi
   );
 }
 
-function DealDock({ item, stages, describe, customerKey, primaryRef, onClose, onRecord, onAdvance, onMoveDate, onEdit, onOpenCustomer }) {
+// 결제 — 딜 하나에 여러 예상 입금(계약금·잔금 등)을 걸고, 입금됐을 때 예상치와 확정치를
+// 나눠 기록한다(운영자 2026-09-24 결정, lib/deal-payments.js). 한 번에 한 행만 편집 모드다.
+function DealPaymentsBlock({ deal, onUpdatePayments }) {
+  const payments = React.useMemo(() => effectivePayments(deal), [deal]);
+  const expectedTotal = dealExpectedTotal(deal);
+  const paidTotal = dealPaidTotal(deal);
+  const [active, setActive] = React.useState(null); // { id, mode: 'confirm' | 'edit' }
+  const [draft, setDraft] = React.useState({});
+  React.useEffect(() => { setActive(null); }, [deal.id]);
+
+  const startConfirm = (payment) => {
+    setActive({ id: payment.id, mode: "confirm" });
+    setDraft({ paidAmount: String(payment.expectedAmount), paidAt: dateInputValue(new Date().toISOString()) });
+  };
+  const startEdit = (payment) => {
+    setActive({ id: payment.id, mode: "edit" });
+    setDraft({ label: payment.label || "", expectedAmount: String(payment.expectedAmount || ""), expectedAt: dateInputValue(payment.expectedAt) });
+  };
+
+  if (!payments.length) return null;
+
+  return (
+    <div className="deals-pay">
+      <div className="deals-pay__head">
+        <span className="fx-eyebrow">결제</span>
+        <span className="deals-pay__summary">
+          <span className="stat">{formatWon(expectedTotal)}</span> 예정
+          {paidTotal > 0 && <> · <span className="stat deals-pay__paid">{formatWon(paidTotal)}</span> 입금</>}
+        </span>
+      </div>
+      <ul className="deals-pay__list">
+        {payments.map((payment, i) => {
+          const rowLabel = payment.label || (payments.length > 1 ? `${i + 1}회` : "전액");
+          if (active?.id === payment.id && active.mode === "confirm") {
+            return (
+              <li key={payment.id} className="deals-pay-row deals-pay-row--form">
+                <span className="deals-pay-row__label">{rowLabel} 입금 확인</span>
+                <span className="deals-pay-row__fields">
+                  <label>
+                    <span>입금액</span>
+                    <input type="number" inputMode="numeric" min="0" className="hub-input" value={draft.paidAmount}
+                      onChange={(e) => setDraft((d) => ({ ...d, paidAmount: e.target.value }))} />
+                  </label>
+                  <label>
+                    <span>입금일</span>
+                    <input type="date" className="hub-input" value={draft.paidAt}
+                      onChange={(e) => setDraft((d) => ({ ...d, paidAt: e.target.value }))} />
+                  </label>
+                </span>
+                <span className="deals-pay-row__acts">
+                  <Button
+                    size="xs" variant="primary"
+                    onClick={() => {
+                      onUpdatePayments(
+                        markPaid(deal, payment.id, { paidAmount: Number(draft.paidAmount) || payment.expectedAmount, paidAt: isoFromDateInput(draft.paidAt) }),
+                        `${rowLabel} 입금을 확인했습니다`,
+                      );
+                      setActive(null);
+                    }}
+                  >확인</Button>
+                  <Button size="xs" variant="ghost" onClick={() => setActive(null)}>취소</Button>
+                </span>
+              </li>
+            );
+          }
+          if (active?.id === payment.id && active.mode === "edit") {
+            return (
+              <li key={payment.id} className="deals-pay-row deals-pay-row--form">
+                <span className="deals-pay-row__fields">
+                  <label>
+                    <span>이름(선택)</span>
+                    <input type="text" className="hub-input" value={draft.label} placeholder="계약금 등" maxLength={40}
+                      onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))} />
+                  </label>
+                  <label>
+                    <span>예상 금액</span>
+                    <input type="number" inputMode="numeric" min="0" className="hub-input" value={draft.expectedAmount}
+                      onChange={(e) => setDraft((d) => ({ ...d, expectedAmount: e.target.value }))} />
+                  </label>
+                  <label>
+                    <span>예상일</span>
+                    <input type="date" className="hub-input" value={draft.expectedAt}
+                      onChange={(e) => setDraft((d) => ({ ...d, expectedAt: e.target.value }))} />
+                  </label>
+                </span>
+                <span className="deals-pay-row__acts">
+                  <Button
+                    size="xs" variant="primary"
+                    onClick={() => {
+                      onUpdatePayments(
+                        updatePayment(deal, payment.id, {
+                          label: draft.label,
+                          expectedAmount: Number(draft.expectedAmount) || payment.expectedAmount,
+                          expectedAt: draft.expectedAt ? isoFromDateInput(draft.expectedAt) : null,
+                        }),
+                        `${rowLabel} 결제 정보를 수정했습니다`,
+                      );
+                      setActive(null);
+                    }}
+                  >저장</Button>
+                  <Button size="xs" variant="ghost" onClick={() => setActive(null)}>취소</Button>
+                  {payments.length > 1 && (
+                    <Button
+                      size="xs" variant="danger"
+                      onClick={() => { onUpdatePayments(cancelPayment(deal, payment.id), `${rowLabel} 결제 일정을 취소했습니다`); setActive(null); }}
+                    >일정 취소</Button>
+                  )}
+                </span>
+              </li>
+            );
+          }
+          return (
+            <li key={payment.id} className="deals-pay-row" data-status={payment.status}>
+              <span className="deals-pay-row__label">{rowLabel}</span>
+              <span className="deals-pay-row__expected">
+                <span className="mono">{formatWon(payment.expectedAmount)}</span>
+                <span className="mono deals-pay-row__date">
+                  {payment.expectedAt ? formatDayLabel(kstDayNumber(payment.expectedAt)) : "날짜 미정"}
+                </span>
+              </span>
+              {payment.status === "paid" ? (
+                <span className="deals-pay-row__paid">
+                  <Iconed name="check" size={12} />
+                  <span className="mono">{formatWon(payment.paidAmount)}</span>
+                  <span className="mono deals-pay-row__date">{formatDayLabel(kstDayNumber(payment.paidAt))}</span>
+                </span>
+              ) : payment.status === "cancelled" ? (
+                <span className="deals-pay-row__cancelled">취소됨</span>
+              ) : (
+                <span className="deals-pay-row__acts">
+                  <Button size="xs" variant="secondary" onClick={() => startConfirm(payment)}>입금 확인</Button>
+                  <IconButton icon="edit" size={24} iconSize={12} tooltip="결제 편집" onClick={() => startEdit(payment)} />
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <Button
+        variant="ghost" size="xs" icon="plus"
+        onClick={() => onUpdatePayments(addInstallment(deal), "결제 일정을 나눴습니다 — 새 일정을 채워 주세요")}
+      >결제 일정 나누기</Button>
+    </div>
+  );
+}
+
+function DealDock({ item, stages, describe, customerKey, primaryRef, onClose, onRecord, onAdvance, onMoveDate, onEdit, onOpenCustomer, onUpdatePayments }) {
   const [dateOpen, setDateOpen] = React.useState(false);
   const presets = React.useMemo(() => closeDatePresets(new Date()), []);
   const { deal, certainty, lifecycle, promise } = item;
   const { org } = describe(deal);
   const nextStage = stages[item.stageIndex + 1] || null;
-  const local = isLocalId(item.id);
+  const local = isLocalId(item.deal.id);
   React.useEffect(() => { setDateOpen(false); }, [item.id]);
 
   return (
@@ -301,6 +534,7 @@ function DealDock({ item, stages, describe, customerKey, primaryRef, onClose, on
           </label>
         </div>
       )}
+      {!local && <DealPaymentsBlock deal={deal} onUpdatePayments={onUpdatePayments} />}
     </section>
   );
 }
@@ -319,6 +553,8 @@ export function DealsTimeline({
   canCreate = true,
   onNavigate,
   onReload,
+  target,
+  onUpdatePayments,
 }) {
   const toast = useToast();
   const [filter, setFilter] = React.useState(null);
@@ -376,13 +612,13 @@ export function DealsTimeline({
   }, [selectedItem]);
 
   const openRecord = React.useCallback((item, preset) => {
-    if (isLocalId(item.id)) {
+    if (isLocalId(item.deal.id)) {
       toast.info("거래를 저장한 뒤 기록할 수 있어요.");
       return;
     }
     const { org } = describe(item.deal);
     setRecord({
-      target: { kind: "deal", id: item.id, name: org, companyId: item.deal.companyId || null },
+      target: { kind: "deal", id: item.deal.id, name: org, companyId: item.deal.companyId || null },
       preset: preset || null,
     });
   }, [describe, toast]);
@@ -417,7 +653,7 @@ export function DealsTimeline({
 
   const moveTo = (item, iso, dateLabel) => {
     const { org } = describe(item.deal);
-    onMoveDate(item.id, iso, `${org} · 예상일 ${iso ? `→ ${dateLabel}` : "미정으로"}`);
+    onMoveDate(item.deal.id, iso, `${org} · 예상일 ${iso ? `→ ${dateLabel}` : "미정으로"}`);
   };
 
   const finishDrag = () => {
@@ -538,7 +774,7 @@ export function DealsTimeline({
 
   return (
     <div className="deals-tl" data-dock-open={selectedItem ? "true" : undefined}>
-      <CertaintyRibbon month={timeline.month} filter={filter} onToggle={(key) => setFilter((cur) => (cur === key ? null : key))} />
+      <CertaintyRibbon month={timeline.month} filter={filter} onToggle={(key) => setFilter((cur) => (cur === key ? null : key))} target={target} />
       {timeline.stalled.length > 0 && (
         <StalledStrip items={timeline.stalled} describe={describe} onAsk={(item) => openRecord(item, { kind: "kakao" })} />
       )}
@@ -558,10 +794,11 @@ export function DealsTimeline({
           primaryRef={dockPrimaryRef}
           onClose={closeDock}
           onRecord={() => openRecord(selectedItem)}
-          onAdvance={(stageKey) => onAdvanceStage(selectedItem.id, stageKey)}
+          onAdvance={(stageKey) => onAdvanceStage(selectedItem.deal.id, stageKey)}
           onMoveDate={(iso, dateLabel) => moveTo(selectedItem, iso, dateLabel)}
-          onEdit={() => onEdit(selectedItem.id)}
+          onEdit={() => onEdit(selectedItem.deal.id)}
           onOpenCustomer={() => onNavigate?.(`dashboard/revenue/customers?customer=${encodeURIComponent(customerKey)}`)}
+          onUpdatePayments={(next, label) => onUpdatePayments?.(selectedItem.deal.id, next, label)}
         />
       )}
 

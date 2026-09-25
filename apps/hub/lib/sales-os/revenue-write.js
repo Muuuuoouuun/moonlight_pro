@@ -13,6 +13,7 @@ import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./
 import { SUBJECT_KEY_SET } from "./lead-labels.js";
 import { normalizeGenreLabels } from "./customer-labels.js";
 import { promiseColumns, promiseMetaPatch } from "./customer-promise.js";
+import { normalizePayments } from "../deal-payments.js";
 import {
   deleteSupabaseRecord,
   insertSupabaseRecord,
@@ -175,6 +176,12 @@ export function buildDealWrite(payload = {}) {
   // {eventId, summary, startAt, htmlLink}만 남긴다 (projects.meta.origin_deal_id와 같은 성격).
   if (payload.next_meeting !== undefined) {
     metaPatch.next_meeting = payload.next_meeting || null;
+  }
+  // 결제 일정(운영자 2026-09-24 결정, deal-payments.js) — 배열 전체를 항상 다시 쓴다(부분
+  // patch 없음). persistRevenueRecord가 기존 meta와 얕게 병합하므로 다른 meta 키는 그대로
+  // 남는다. normalizePayments가 유효하지 않은 항목(금액 없음 등)을 걸러 저장한다.
+  if (payload.payments !== undefined) {
+    metaPatch.payments = normalizePayments(payload.payments);
   }
 
   return { columns, metaPatch };

@@ -14,6 +14,7 @@ import {
 } from "../hub-primitives";
 import { filterDealsByWorkspace } from "../workspace-map";
 import { buildPersonalRevenueRoadmap } from "@/lib/personal-revenue-roadmap";
+import { dealExpectedTotal, dealPaidTotal } from "@/lib/deal-payments";
 
 const DRAWER_ID = "personal-revenue-deal-drawer";
 
@@ -241,6 +242,14 @@ function DealDrawer({ deal, closeDrawer, closeButtonRef, onNavigate }) {
         <span>{deal.stageLabel}</span>
         <span>예정 {deal.closeLabel}</span>
       </div>
+
+      {dealPaidTotal(deal) > 0 && (
+        // 거래 탭의 결제 기록(운영자 2026-09-24 결정)을 읽기 전용으로 보여준다 — 이 화면은
+        // 결제를 편집하지 않는다. "Deals에서 열기"가 편집 표면이다.
+        <p className="mono" style={{ margin: "8px 0 0", fontSize: 12.5, color: "var(--fg-muted)" }}>
+          {formatMoney(dealExpectedTotal(deal))} 예정 · {formatMoney(dealPaidTotal(deal))} 입금
+        </p>
+      )}
 
       <div className="personal-revenue-detail-grid">
         <div>
