@@ -78,6 +78,8 @@ final class AppModel: ObservableObject {
     @Published var compactOpenRevision = 0
     @Published var quickOpenRevision = 0
     @Published var tasks: [LocalTask] = []
+    @Published var showsCompletedTasks = false
+    let completionFeedback = TaskCompletionFeedback()
     @Published var taskDraft = "" {
         didSet { defaults.set(taskDraft, forKey: "petPreview.taskDraft") }
     }
@@ -126,9 +128,16 @@ final class AppModel: ObservableObject {
         hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? "http://127.0.0.1:3000"
         selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
         chat.agent = selectedCharacter.officeAgent
+        completionFeedback.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }.store(in: &featureObservers)
     }
 
-    var displayedTasks: [LocalTask] { hub.isEnabled ? hub.tasks.map(\.local) : tasks }
+    private var sourceTasks: [LocalTask] { hub.isEnabled ? hub.tasks.map(\.local) : tasks }
+    var displayedTasks: [LocalTask] {
+        completionFeedback.visible(in: sourceTasks, includeCompleted: showsCompletedTasks)
+    }
+    var completedTaskCount: Int { sourceTasks.filter(\.isDone).count }
     var openTaskCount: Int { displayedTasks.filter { !$0.isDone }.count }
     var taskStatusLabel: String { hub.isEnabled ? (hub.isRefreshing ? "Hub 새로고침 중…" : hub.connectionLabel) : "이 Mac에 저장" }
     var memoStatusLabel: String {
@@ -143,6 +152,7 @@ final class AppModel: ObservableObject {
         council.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         chat.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         hub.onConnectionChanged = { [weak self] service, origin in
+            self?.completionFeedback.reset()
             self?.activity.configure(service: service as? any HubActivityServing, origin: origin)
             self?.chat.configure(service: service as? any HubOfficeServing, origin: origin)
         }
@@ -206,14 +216,25 @@ final class AppModel: ObservableObject {
     }
 
     func toggleTask(_ id: UUID) {
-        if hub.isEnabled { Task { await hub.toggleTask(id) }; return }
+        let order = displayedTasks.map(\.id)
+        if hub.isEnabled {
+            Task {
+                guard let saved = await hub.toggleTask(id) else { return }
+                if saved.isDone { completionFeedback.retain(id, in: order) }
+                else { completionFeedback.cancel(id) }
+            }
+            return
+        }
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].isDone.toggle()
+        if tasks[index].isDone { completionFeedback.retain(id, in: order) }
+        else { completionFeedback.cancel(id) }
         persistTasks()
     }
 
     func removeTask(_ id: UUID) {
         guard !hub.isEnabled else { return }
+        completionFeedback.cancel(id)
         tasks.removeAll { $0.id == id }
         persistTasks()
     }
@@ -272,11 +293,13 @@ final class AppModel: ObservableObject {
         } else if notice.kind == .calendar {
             hub.selectedDate = notice.eventDate ?? Date()
             onOpenMode?(.calendar)
+            activity.acknowledge(id: notice.id)
         } else {
             guard let base = URL(string: hubBaseURL), let origin = try? HubTransport.validatedBaseURL(base),
                   notice.path.hasPrefix("/dashboard/revenue/inquiries?"),
                   let url = URL(string: notice.path, relativeTo: origin)?.absoluteURL else { return }
-            NSWorkspace.shared.open(url)
+            guard NSWorkspace.shared.open(url) else { return }
+            activity.acknowledge(id: notice.id)
         }
         activity.dismissBanner()
     }

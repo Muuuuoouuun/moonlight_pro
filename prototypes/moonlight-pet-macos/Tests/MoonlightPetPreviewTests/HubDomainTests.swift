@@ -7,6 +7,12 @@ private func check(_ value: @autoclosure () -> Bool, _ message: String) throws {
 
 private actor ControlledHub: HubServing {
     var failsRead = false
+    var failToggle = false
+    var holdToggle = false
+    var startedToggle = false
+    var releaseToggle: CheckedContinuation<Void, Never>?
+    func configureToggle(fails: Bool = false, hold: Bool = false) { failToggle = fails; holdToggle = hold }
+    func releaseTaskToggle() { holdToggle = false; releaseToggle?.resume(); releaseToggle = nil }
     var failCreateOnce = false
     var failMemoOnce = false
     var conflictCreateOnce = false
@@ -55,7 +61,9 @@ private actor ControlledHub: HubServing {
         return HubTask(id: UUID(uuidString: command.id)!, title: command.title, status: "todo", updatedAt: "2026-09-25T01:00:00Z")
     }
     func setTask(_ task: HubTask, done: Bool) async throws -> HubTask {
-        HubTask(id: task.id, title: task.title, status: done ? "done" : "todo", updatedAt: "2026-09-25T02:00:00Z")
+        if holdToggle { startedToggle = true; await withCheckedContinuation { releaseToggle = $0 } }
+        if failToggle { throw HubTransportError.conflict }
+        return HubTask(id: task.id, title: task.title, status: done ? "done" : "todo", updatedAt: "2026-09-25T02:00:00Z")
     }
     func memo(id: UUID) async throws -> HubMemoEntry {
         guard let savedMemo else { throw HubDataError.invalidResponse }
@@ -118,6 +126,15 @@ struct HubDomainTests {
         let store = HubStore(defaults: defaults, makeAPI: { _ in api })
         await store.connect(baseURL: "https://hub.test")
         try check(store.taskReady && store.calendarReady && store.tasks.count == 1 && store.canWriteTasks, "Live read enables mutations")
+        let taskID = store.tasks[0].id
+        let completed = await store.toggleTask(taskID)
+        try check(completed?.isDone == true && !store.isSavingTask, "Grace period requires a confirmed completion receipt")
+        let undone = await store.toggleTask(taskID)
+        try check(undone?.isDone == false, "Undo must confirm the source is open")
+        await api.configureToggle(fails: true)
+        let failed = await store.toggleTask(taskID)
+        try check(failed == nil && store.tasks.first?.isDone == false && !store.isSavingTask, "A failed completion must not supply a grace-period receipt")
+        await api.configureToggle()
         await api.configure(readError: true)
         await store.refresh()
         try check(!store.taskReady && !store.canWriteTasks && store.tasks.count == 1 && store.taskMessage != nil, "Read failure preserves rows and blocks writes")
@@ -173,6 +190,18 @@ struct HubDomainTests {
         lateWrite.useLocalStorage()
         await lateAPI.releaseWrite(); _ = await pendingWrite.value
         try check(lateWrite.tasks.isEmpty && !lateWrite.isEnabled, "Late save receipt cannot restore disconnected state")
+
+        let togglingAPI = ControlledHub()
+        let toggling = HubStore(defaults: defaults, makeAPI: { _ in togglingAPI })
+        await toggling.connect(baseURL: "https://toggle.test")
+        let togglingID = toggling.tasks[0].id
+        await togglingAPI.configureToggle(hold: true)
+        let pendingToggle = Task { await toggling.toggleTask(togglingID) }
+        while !(await togglingAPI.startedToggle) { await Task.yield() }
+        toggling.useLocalStorage()
+        await togglingAPI.releaseTaskToggle()
+        let lateReceipt = await pendingToggle.value
+        try check(lateReceipt == nil && toggling.tasks.isEmpty, "A late completion cannot reintroduce an old-origin row")
 
         let conflictAPI = ControlledHub()
         let conflict = HubStore(defaults: defaults, makeAPI: { _ in conflictAPI })

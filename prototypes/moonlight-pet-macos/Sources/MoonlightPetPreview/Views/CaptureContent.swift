@@ -58,6 +58,7 @@ struct TaskCaptureContent: View {
             }
             .font(.system(size: 11.5, weight: .medium))
         }
+        .animation(PetMotion.panel, value: model.displayedTasks.map(\.id))
         .onAppear { focusInput() }
         .onChange(of: openRevision) { _, _ in focusInput() }
         .onChange(of: model.activeCompanion) { _, active in
@@ -66,11 +67,22 @@ struct TaskCaptureContent: View {
     }
 
     private var taskCount: some View {
-        Text(model.displayedTasks.isEmpty && (readMessage != nil || isLoading)
-             ? (isLoading ? "불러오는 중…" : "할 일 확인 필요") : "남은 \(model.openTaskCount)개")
-            .font(.system(size: 11.5, weight: .medium)).monospacedDigit()
-            .foregroundStyle(Palette.glassInkMuted)
-            .frame(height: 18, alignment: .leading)
+        HStack(spacing: 6) {
+            Text(model.displayedTasks.isEmpty && (readMessage != nil || isLoading)
+                 ? (isLoading ? "불러오는 중…" : "할 일 확인 필요") : "남은 \(model.openTaskCount)개")
+                .monospacedDigit()
+            Spacer(minLength: 0)
+            Menu {
+                Toggle("완료한 할 일 포함", isOn: $model.showsCompletedTasks)
+            } label: {
+                Text(model.showsCompletedTasks ? "완료 포함" : "목록 보기")
+            }
+            .menuStyle(.borderlessButton).fixedSize()
+            .accessibilityLabel("할 일 목록 보기 설정")
+        }
+        .font(.system(size: 11.5, weight: .medium))
+        .foregroundStyle(Palette.glassInkMuted)
+        .frame(height: 18, alignment: .leading)
     }
 
     private var taskList: some View {
@@ -99,7 +111,7 @@ struct TaskCaptureContent: View {
         } else {
             VStack(spacing: 9) {
                 Image(systemName: "checklist").modifier(GlassGlyphShadow()).font(.system(size: 23, weight: .ultraLight))
-                Text("할 일 하나부터 적어볼까요?").font(.system(size: 12))
+                Text(model.completedTaskCount > 0 ? "남은 할 일을 모두 마쳤어요." : "할 일 하나부터 적어볼까요?").font(.system(size: 12))
             }
             .foregroundStyle(Palette.glassInkMuted)
             .padding(12)
@@ -127,7 +139,7 @@ struct TaskCaptureContent: View {
         }
         .buttonStyle(GlassQuietStyle())
         .disabled(!canChangeTasks)
-        .help(task.title + (model.hub.isEnabled ? " · 우클릭하여 Hub에서 열기" : " · 우클릭하여 삭제"))
+        .help(task.isDone ? "완료했어요 · 다시 눌러 취소 · 기본 목록에서 3초 뒤 숨김" : task.title + (model.hub.isEnabled ? " · 우클릭하여 Hub에서 열기" : " · 우클릭하여 삭제"))
         .accessibilityLabel("\(task.title) \(task.isDone ? "완료 취소" : "완료")")
         .accessibilityAction(named: Text(model.hub.isEnabled ? "Hub에서 열기" : "삭제")) {
             if model.hub.isEnabled { model.openHub(.tasks) } else { remove(task.id) }

@@ -178,23 +178,26 @@ final class HubStore: ObservableObject {
         }
     }
 
-    func toggleTask(_ id: UUID) async {
-        guard isEnabled, canWriteTasks, let service = api, let task = tasks.first(where: { $0.id == id }) else { return }
+    @discardableResult
+    func toggleTask(_ id: UUID) async -> HubTask? {
+        guard isEnabled, canWriteTasks, let service = api, let task = tasks.first(where: { $0.id == id }) else { return nil }
         let ticket = generation
         taskVersion += 1; isSavingTask = true; errorMessage = nil
+        defer { if ticket == generation { isSavingTask = false } }
         do {
             let saved = try await service.setTask(task, done: !task.isDone)
-            guard ticket == generation else { return }
+            guard ticket == generation else { return nil }
             upsert(saved)
+            return saved
         } catch {
-            guard ticket == generation else { return }
+            guard ticket == generation else { return nil }
             record(error)
             // A fresh read must resolve an uncertain write before another toggle.
             taskVersion += 1; taskReady = false
             isSavingTask = false
             await refresh()
+            return nil
         }
-        if ticket == generation { isSavingTask = false }
     }
 
     func saveMemo(body: String) async {

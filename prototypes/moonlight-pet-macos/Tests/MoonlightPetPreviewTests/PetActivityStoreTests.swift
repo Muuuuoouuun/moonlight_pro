@@ -205,6 +205,7 @@ func runPetActivityStoreTests() async throws -> Int {
         try petCheck(Set(store.notices.map(\.id)) == Set(["agent:" + secondID, "agent:" + thirdID, inquiry.token]), "Acknowledgment must require exact owner and scope and preserve unrelated inquiries")
         try petCheck(store.unreadCount == 3 && store.banner == nil && dismissed == 1, "Acknowledging the currently presented reply must dismiss that banner and decrement the badge")
         store.presentNext()
+        try await waitForActivity { store.banner?.id == "agent:" + thirdID }
         try petCheck(store.banner?.id == "agent:" + thirdID, "Another owner's pending reply must remain eligible after acknowledgment")
         store.acknowledgeAgentReplies(agentID: "eevee", scope: "classin")
         try petCheck(store.unreadCount == 2 && store.banner?.id == "agent:" + thirdID && dismissed == 1, "Acknowledging a different conversation must leave the current banner intact")
@@ -271,6 +272,53 @@ func runPetActivityStoreTests() async throws -> Int {
             throw PetActivityCheckFailure(description: "Unsafe Council origin accepted: \(address)")
         }
         try petCheck(store.draft == "안건 검증" && store.source == .task, "Rejected origins must leave Council draft intact")
+        count += 1
+    }
+    // Local read status survives restart without changing server unread records.
+    do {
+        let api = ControlledActivity(), inquiry = testInquiry(), hidden = testInquiry()
+        let origin = "https://read-state.example.test"
+        let key = "petNotices.delivery.v1." + origin
+        // Upgrade an older preference file that does not contain the read key.
+        defaults.set(try JSONSerialization.data(withJSONObject: ["delivered": [inquiry.token], "hidden": [hidden.token]]), forKey: key)
+        await api.set(inquiries: [inquiry, hidden], total: 8)
+        let store = PetActivityStore(defaults: defaults)
+        store.configure(service: api, origin: origin)
+        try await waitForLoad(store, api: api)
+        try petCheck(store.notices.count == 1 && store.unreadCount == 1, "Old delivery preferences must migrate without losing hidden IDs")
+        store.acknowledge(id: inquiry.token)
+        try petCheck(store.unreadCount == 0 && store.notices.count == 1 && store.totalInquiryCount == 8, "Reading must retain the local list and server count")
+        store.configure(service: nil, origin: nil)
+        let reopened = PetActivityStore(defaults: defaults)
+        reopened.configure(service: api, origin: origin)
+        defer { reopened.configure(service: nil, origin: nil) }
+        try await waitForLoad(reopened, api: api)
+        try petCheck(reopened.unreadCount == 0 && reopened.notices.count == 1, "Read state must survive restart")
+        await api.set(inquiries: [testInquiry(inquiry.id, sequence: 2)])
+        await reopened.refresh()
+        try petCheck(reopened.unreadCount == 1, "A new inbound revision must remain unread")
+        count += 1
+    }
+
+    do {
+        let api = ControlledActivity(), store = PetActivityStore(defaults: defaults)
+        var delivered: [String] = []
+        store.onBanner = { delivered.append($0.id); return true }
+        store.configure(service: api, origin: "https://queue.example.test")
+        defer { store.configure(service: nil, origin: nil) }
+        try await waitForLoad(store, api: api)
+        let first = UUID().uuidString, next = UUID().uuidString
+        store.addAgentReply(id: first, agentID: "eevee", scope: "personal", title: "첫 답변", detail: "")
+        store.addAgentReply(id: next, agentID: "eevee", scope: "personal", title: "다음 답변", detail: "")
+        store.dismissBanner()
+        store.presentNext()
+        try petCheck(store.banner == nil && store.unreadCount == 2, "Ending a banner must not mark it read or let refresh bypass the interval")
+        try await waitForActivity { store.banner?.id == "agent:" + next }
+        try petCheck(delivered == ["agent:" + first, "agent:" + next], "Queued banners must continue without a refresh")
+        store.addAgentReply(id: UUID().uuidString, agentID: "eevee", scope: "personal", title: "확인할 답변", detail: "")
+        store.acknowledgeAll()
+        store.presentNext()
+        try petCheck(store.unreadCount == 0 && store.notices.count == 3 && store.banner == nil, "Read-all must retain records and suppress pending banners")
         count += 1
     }
     return count
