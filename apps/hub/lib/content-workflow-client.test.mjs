@@ -91,3 +91,22 @@ test('opens a captured Threads idea and retains its distinct type on save', () =
   assert.equal(c.buildStudioSave(draft, 'save-capture').variant.variantType, 'threads_post');
   assert.equal(c.emptyStudioDraft().variantType, 'threads_post');
 });
+
+test('buildStudioTransformCommand carries the operator request only when non-empty and keeps selection rules', async () => {
+  const { buildStudioTransformCommand } = await import('./content-workflow-client.js');
+  const saved = { contentId: 'c', variantId: 'v', variantUpdatedAt: 't', channel: 'threads', variantType: 'threads_post', body: '첫 문단\n\n둘째 문단' };
+  const base = { saved, tone: 'brand', targetChannel: 'instagram', requestId: 'r' };
+  const polish = buildStudioTransformCommand({ ...base, operation: 'polish', selection: { start: 0, end: 3, body: saved.body }, operatorRequest: '  반말로  ' });
+  assert.equal(polish.request, '반말로');
+  assert.deepEqual(polish.selection, { start: 0, end: 3 });
+  assert.deepEqual(polish.target, { variantType: 'threads_post', channel: 'threads' });
+  const blank = buildStudioTransformCommand({ ...base, operation: 'polish', selection: null, operatorRequest: '   ' });
+  assert.equal('request' in blank, false, 'empty request must not change the legacy command shape');
+  assert.deepEqual(blank.selection, { start: 0, end: saved.body.length });
+  const stale = buildStudioTransformCommand({ ...base, operation: 'polish', selection: { start: 0, end: 3, body: 'older body' } });
+  assert.deepEqual(stale.selection, { start: 0, end: saved.body.length }, 'a selection from an older body is ignored');
+  assert.deepEqual(buildStudioTransformCommand({ ...base, operation: 'hooks', selection: null }).selection, { start: 0, end: 4 }, 'hooks defaults to the first paragraph');
+  assert.deepEqual(buildStudioTransformCommand({ ...base, operation: 'draft', selection: { start: 0, end: 3, body: saved.body } }).selection, { start: 0, end: saved.body.length });
+  const repurpose = buildStudioTransformCommand({ ...base, operation: 'repurpose', selection: null });
+  assert.deepEqual(repurpose.target, { variantType: 'card_news', channel: 'instagram' });
+});

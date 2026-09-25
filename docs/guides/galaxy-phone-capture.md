@@ -59,8 +59,8 @@ curl -s -X POST https://<Mac 이름>.<tailnet>.ts.net/api/intake/phone-events \
 
 | 응답 | 뜻 |
 |---|---|
-| `{"status":"ignored","reason":"not-a-customer"}` 200 | 정상 — 인증 통과, 고객 번호가 아니라 버림 |
-| `{"status":"saved", ...}` 201 | 고객과 맞아 후보가 됨(`notice`에 짧은 확인 문구) |
+| `{"status":"ignored","reason":"not-a-customer"}` 200 | 정상 — 인증 통과, 고객 번호가 아니라 버림 (기본값) |
+| `{"status":"saved", ...}` 201 | 고객과 맞아 후보가 됨 (`notice`에 짧은 확인 문구). `captureUnmatched: true`인 경우 미등록 번호도 "새 고객으로" 등록 후보 생성 |
 | `{"status":"duplicate"}` 200 | 같은 사건을 이미 받음 |
 | `{"status":"ignored","reason":"no-conversation"}` 200 | 부재중·0초 통화 — 후보로 만들지 않음 |
 | `{"status":"ignored","reason":"ambiguous-customer"}` 200 | 같은 이름·번호가 서로 다른 고객 둘 이상 — 추측하지 않고 버림 |

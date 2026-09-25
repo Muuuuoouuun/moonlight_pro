@@ -56,3 +56,35 @@ macOS 14~25 폴백, 밝은 OS 외관으로 변경한 상태, VoiceOver 전체 �
 - Native CUA verification: one-click quick panel and double-click perched widget each accept the first typed character; memo switches wide and schedule switches tall; Escape returns to the original portrait. Temporary test characters were removed and the user's existing task was preserved.
 - Native CUA comparison: grid switch and bevel slider change the output. A clipboard timeout exposed missing Cocoa edit-menu routing in the accessory app; adding standard responder-chain Edit commands fixed Korean paste and Cmd+A/Delete in the lab.
 - Limits: window-only screenshots do not capture the desktop behind floating panels, so they are not proof of desktop transmission quality. The in-window lab does show its full owned background. No claim of screenshot-identical quality or measured FPS is made. macOS Reduce Transparency/Increase Contrast are respected by the custom shader and native material; system preferences were not changed during QA.
+
+
+## Clear material correction — 2026-09-25
+
+User rejected the milky appearance. Floating panels now default to NSGlassEffectView.clear (regular only for Reduce Transparency/Increase Contrast). The custom lab removes its whole-panel white floor and center blur. The earlier contrast-compression choice above is superseded. The initial one-point content halo was removed in the subsequent text correction; the glass itself has no added white sheet.
+
+GPU backdrop-preservation test failed against the previous implementation (75.42/255 mean drift), passed after correction (0.00/255). Native comparison inspection confirms transmitted background patterns and working input. A transparent panel over a plain white background naturally remains white; its appearance must be judged over the actual background, not a window-only screenshot that omits the desktop.
+
+## Sharp text correction — 2026-09-25
+
+The operator's screenshot showed thick headings and outlined small text. Removing the full-content light shadow reduced the outlines. Native lab headings remained distorted until the SwiftUI content host became a sibling above the glass material and edge renderer. Native-vs-Metal inspection then showed sharp headings and Korean field input. This preserves clear material, accessibility material switching, foreground geometry and first-mouse handling. Text contrast over arbitrary dark desktop backgrounds is a separate remaining limitation; this correction does not claim universal contrast.
+
+## White text and character tint — 2026-09-25
+
+The operator subsequently chose white-family text and subtle character-colored translucent panels. All three floating hosts observe the selected character; the foreground host is preserved during updates. The theme wash attenuates transmitted lettering and supports white text. Input/action fills use a separate dark token. This deliberately reduces body transparency without adding a white haze or glyph halo. Sylveon's tint was first strengthened to rose pink, then softened to a lighter blush pink after live operator feedback.
+
+Native/Metal lab inspection confirmed the revised pink tint, transmitted folds, sharp title/body text and Korean paste in the native field. The lab picker is local and does not modify the saved pet. Shader/self-check results remain valid for the underlying optics; they do not measure contrast of the new wash. The wash is a visual calibration, not a claim of WCAG compliance over every desktop background.
+
+## Clear resting state restored — 2026-09-25
+
+The operator rejected the permanent colored body above. Default and typing now use zero wash opacity; only an active press/drag shows character color, with Sylveon's interaction wash reduced to 60%. Release, key loss, app deactivation and detachment clear the tint. A timer exists only during the press to cover mouse-up consumed inside native tracking loops. Accessibility solid mode still takes priority. The material lab has an explicit preview switch, off by default, for inspecting the temporary color without holding the pointer.
+
+Build and self-check passed, including the new press/release-to-clear state regression. Native widget inspection showed the resting body without the prior persistent pink fill. These checks do not establish contrast over every desktop image or an exact match to the native compositor's inactive appearance.
+
+
+## Quick memo perch and direct drag feedback — 2026-09-25
+
+The user's next reference is applied to quick memo as a 520×440pt landscape window: larger title, inline task/memo tabs, an inset editor, bottom-right collapse, and the selected transparent character perched at the upper right. This composition now works from the one-click quick panel as well as the pinned widget. The separate idle portrait hides while quick memo is open and returns on collapse or switching back to the vertical quick task panel. The glass keeps its rounded native outline; the reference's concave notch is not introduced.
+
+The earlier local mouse monitor missed drags originating in the separate pet window. Both the native handle and the companion pet now send explicit drag start/update/end to the glass window that moves. The wash also retains the release watchdog and key/app/detach cleanup, so interaction tint cannot latch onto ordinary typing.
+
+Verification: Swift build and self-check passed, including external drag without a local mouse-down, repeated updates, release, persistence and GPU rendering (554 displaced edge pixels, clear center drift 0.00/255). Native CUA confirmed one-click opening, quick memo's perched character and inline tabs, task/memo transitions with the existing task draft intact, and collapse restoring the original portrait. A real native handle drag logged wash opacity 1 on begin and 0 on release with `activated=true`. This is event-delivery evidence; the automation's drag finishes before its screenshot, so no mid-drag optical screenshot or FPS claim is made. Existing records were not edited during QA.

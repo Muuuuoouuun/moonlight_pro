@@ -83,14 +83,13 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     float3 ray = refract(float3(0,0,-1),normal,1.0/1.46);
     float2 displacement = ray.xy / max(.1,-ray.z) * (bevel*.28 + height*bevel) * u.material.z;
     float2 samplePoint = point + displacement;
-    float blur = mix(.35,2.0,t);
+    float blur = .7 * (1.0-t); // edge softness; the flat center remains clear
     float3 glass = softened(samplePoint,u,blur);
     // Small edge dispersion; never offsets or blurs the foreground text.
     glass.r = softened(point + displacement*.992,u,blur).r;
     glass.b = softened(point + displacement*1.012,u,blur).b;
-    // Compress backdrop contrast into a silver luminance range so dark foreground
-    // labels remain readable on both bright folds and the dark calibration grid.
-    glass = float3(.56,.57,.58) + glass*.35;
+    // Preserve the background: no white floor, panel tint or central blur.
+    // Specular light belongs to the bevel rather than a fill across the card.
     glass = glass*(1-shadow) + highlight*.54;
     return float4(mix(backdrop,clamp(glass,0.0,1.0),coverage),1);
 }

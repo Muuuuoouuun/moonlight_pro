@@ -1,4 +1,4 @@
-import { eqFilter, fetchSupabaseRows } from '@/lib/server-read';
+import { eqFilter, fetchSupabaseRows, fetchSupabaseRowsDetailed } from '@/lib/server-read';
 import { deleteSupabaseRecord, insertSupabaseRecord, updateSupabaseRecord, resolveDefaultWorkspaceId, resolveSupabaseConfig } from '@/lib/server-write';
 import { isCanonicalUuid } from '../uuid.js';
 
@@ -20,6 +20,7 @@ function templateFromRow(row, workspaceId) {
     || !text(row.skeleton, TEMPLATE_LIMITS.skeleton) || !Number.isSafeInteger(row.revision) || row.revision < 1) return null;
   return { id: row.id, name: row.name, request: row.request, skeleton: row.skeleton, revision: row.revision, updatedAt: row.updated_at || null };
 }
+const tableMissing = (error) => error.status === 404 || /PGRST205|42P01/.test(String(error.detail || ''));
 const readError = () => ({ status: 'error', templates: [], message: 'AI 템플릿을 불러오지 못했어요. 다시 시도해 주세요.' });
 const writeError = (httpStatus = 502) => ({ status: 'error', httpStatus, template: null, message: '템플릿 저장을 확인하지 못했어요. 입력은 유지됩니다. 다시 시도해 주세요.' });
 const invalid = (message = '템플릿 입력을 확인해 주세요.') => ({ status: 'invalid-input', httpStatus: 400, template: null, message });
@@ -28,7 +29,9 @@ export async function listContentTemplates() {
   const workspaceId = context();
   if (!workspaceId) return { status: 'preview', templates: [], message: 'AI 템플릿 저장 연결이 필요합니다.' };
   try {
-    const rows = await fetchSupabaseRows(TABLE, { select: SELECT, filters: [['workspace_id', eqFilter(workspaceId)]], order: 'name.asc', limit: TEMPLATE_LIMITS.count });
+    const { rows, error } = await fetchSupabaseRowsDetailed(TABLE, { select: SELECT, filters: [['workspace_id', eqFilter(workspaceId)]], order: 'name.asc', limit: TEMPLATE_LIMITS.count });
+    // 마이그레이션 0045 적용 전(테이블 없음)은 장애가 아니라 설정 대기 상태다.
+    if (error && tableMissing(error)) return { status: 'preview', templates: [], message: 'AI 템플릿 테이블이 아직 없습니다. 마이그레이션 적용이 필요합니다.' };
     if (!Array.isArray(rows)) return readError();
     const templates = rows.map((row) => templateFromRow(row, workspaceId));
     if (templates.some((template) => !template)) return readError();

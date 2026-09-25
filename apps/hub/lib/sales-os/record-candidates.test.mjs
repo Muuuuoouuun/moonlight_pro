@@ -159,3 +159,29 @@ test("copy helpers speak in operator voice", () => {
     when: "오늘 11:20", name: "문가영", tail: " 문자", meta: "새봄국어 · 갤럭시 문자", quote: "자료 잘 받았습니다",
   });
 });
+
+test("unregistered phone candidate describes as 미등록 연락처 with phone and isUnregistered flag", () => {
+  const row = {
+    id: "unreg-row-1",
+    status: "received",
+    event_type: "phone.call",
+    payload: {
+      v: 1,
+      occurredAt: kst("2026-09-24T15:30:00"),
+      durationSec: 130,
+      customer: {
+        key: "unregistered:010-9999-8888",
+        name: "010-9999-8888",
+        phone: "010-9999-8888",
+        isUnregistered: true,
+      },
+    },
+  };
+  const [candidate] = buildPhoneCandidates({ rows: [row], now: NOW });
+  assert.ok(candidate);
+  assert.equal(candidate.customer.isUnregistered, true);
+  assert.equal(candidate.customer.phone, "010-9999-8888");
+  const desc = describeCandidate(candidate, NOW);
+  assert.equal(desc.name, "010-9999-8888");
+  assert.equal(desc.meta, "미등록 연락처 · 갤럭시 통화 기록");
+});

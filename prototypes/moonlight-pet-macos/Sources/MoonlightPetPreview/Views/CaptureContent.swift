@@ -103,6 +103,7 @@ struct MemoCaptureContent: View {
     @ObservedObject var model: AppModel
     let surface: CompanionSurface
     let openRevision: Int
+    let close: () -> Void
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -122,24 +123,24 @@ struct MemoCaptureContent: View {
             }
             .font(.system(size: 16, weight: .regular))
             .lineSpacing(6)
+            .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Palette.glassControlFill.opacity(0.07),
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { GlassRim(radius: 16, strength: 0.25) }
 
-            HStack(alignment: .bottom, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 Text(model.memoDraft.isEmpty ? "이 Mac에 자동 저장" : "자동 저장됨 · 이 Mac")
                     .font(.system(size: 11)).foregroundStyle(Palette.glassInkMuted)
                 Spacer(minLength: 0)
-                VStack(alignment: .trailing, spacing: 5) {
-                    Button(action: model.continueMemoInCouncil) {
-                        HStack(spacing: 12) {
-                            Label("Council에서 이어서", systemImage: "arrow.up.right")
-                            Text("⌘↵").font(.system(size: 11)).foregroundStyle(Palette.glassInkMuted)
-                        }
-                    }
-                    .buttonStyle(GlassActionStyle())
-                    .help("메모를 복사하고 Council을 브라우저에서 엽니다")
-                    Text("메모 복사 · 브라우저 열기")
-                        .font(.system(size: 10.5)).foregroundStyle(Palette.glassInkFaint)
+                Button(action: close) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 15, weight: .medium))
+                        .frame(width: 36, height: 36)
                 }
+                .buttonStyle(GlassActionStyle(compact: true))
+                .accessibilityLabel("메모 접기")
+                .help("펫으로 접기 · Esc")
             }
         }
         .onAppear { focusInput() }

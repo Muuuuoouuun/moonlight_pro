@@ -72,6 +72,9 @@ export function buildLeadWrite(payload = {}) {
   if (typeof payload.name === "string" && payload.name.trim()) {
     columns.name = payload.name.trim();
   }
+  if (typeof payload.phone === "string") {
+    columns.phone = payload.phone.trim() || null;
+  }
   if (payload.source != null) {
     columns.source = String(payload.source).trim() || null;
   }

@@ -3,6 +3,7 @@
 import React from "react";
 import { Iconed } from "./hub-icons";
 import { IconButton, Button } from "./hub-primitives";
+import { DailyReviewTopButton } from "./daily-review-cue";
 import { pageOwnsTabs, topNavigationForRoute } from "./hub-nav";
 import { InquiryBell } from './inquiry-notifications';
 
@@ -102,6 +103,8 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
           <span className="mono" style={{ color: 'var(--fg)' }}>{weekday} · {m}/{d} · {hh}:{mm}</span>
         </div>
 
+        {/* 하루 리뷰 — 어느 화면에서든 오늘 기록 열기(2026-09-23 지속 루프 설계 §12) */}
+        <DailyReviewTopButton className="hub-topbar__secondary" />
         {/* Office (⌘J) — 2026-09-23 운영자 확정 */}
         <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="Office (⌘J)" onClick={onOfficeOpen} />
         {/* 보류 스코프(Agents) 상시 버튼 제거 — 코어 루프(오늘 연락, 영업·매출 첫 탭)가 그 자리를 갖는다. */}

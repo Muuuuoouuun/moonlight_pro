@@ -26,6 +26,8 @@ private struct GlassLabView: View {
     @State private var strength = 1.0
     @State private var bevel = 12.0
     @State private var grid = false
+    @State private var character: PetCharacter = .silver
+    @State private var previewsTint = false
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
@@ -45,9 +47,15 @@ private struct GlassLabView: View {
                     Slider(value: $bevel,in: 4...24).accessibilityLabel("곡면 깊이")
                 }
                 Toggle("격자 배경",isOn: $grid).toggleStyle(.switch).font(.system(size: 12))
+                Picker("캐릭터", selection: $character) {
+                    ForEach(PetCharacter.allCases) { pet in Text(pet.title).tag(pet) }
+                }.frame(width: 170)
             }
             if GlassOpticsRenderer.shared != nil {
-                GlassLabStage(strength: Float(strength),bevel: Float(bevel),grid: grid)
+                Toggle("반투명 색상 미리보기", isOn: $previewsTint)
+                    .toggleStyle(.switch).font(.system(size: 12))
+                GlassLabStage(strength: Float(strength),bevel: Float(bevel),grid: grid, character: character,
+                              previewsTint: previewsTint)
                     .clipShape(RoundedRectangle(cornerRadius: 22))
             } else {
                 ContentUnavailableView("Metal을 사용할 수 없습니다",systemImage: "display.trianglebadge.exclamationmark",
@@ -70,22 +78,27 @@ private struct GlassLabStage: NSViewRepresentable {
     let strength: Float
     let bevel: Float
     let grid: Bool
+    let character: PetCharacter
+    let previewsTint: Bool
     func makeNSView(context: Context) -> StageView { StageView() }
     func updateNSView(_ view: StageView, context: Context) {
         view.background?.refraction = strength
         view.background?.bevel = bevel
         view.background?.grid = grid
+        view.setCharacter(character)
+        view.previewTint(previewsTint)
     }
 
     final class StageView: NSView {
         let background: OpticalGlassView?
-        private let native: NSView
+        private let native: GlassPanel
+        private let wash = PetGlassWash(radius: 30)
         private let foreground: NSView
         override var isFlipped: Bool { true }
         override init(frame: NSRect) {
             background = GlassOpticsRenderer.shared.map { OpticalGlassView(renderer: $0) }
             native = GlassPanel.host(LabContent(),cornerRadius: 30)
-            let content = NSHostingView(rootView: LabContent().environment(\.colorScheme,.light))
+            let content = NSHostingView(rootView: LabContent().environment(\.colorScheme,.dark))
             content.sizingOptions = []
             foreground = content
             super.init(frame: frame)
@@ -95,9 +108,20 @@ private struct GlassLabStage: NSViewRepresentable {
                 addSubview(background)
             }
             addSubview(native)
+            addSubview(wash)
             addSubview(foreground)
         }
         required init?(coder: NSCoder) { nil }
+        func setCharacter(_ character: PetCharacter) {
+            native.setCharacter(character)
+            wash.character = character
+            wash.solidForAccessibility = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+                || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        }
+        func previewTint(_ preview: Bool) {
+            native.previewCharacterTint(preview)
+            wash.previewsTint = preview
+        }
         override func layout() {
             super.layout()
             background?.frame = bounds
@@ -107,6 +131,7 @@ private struct GlassLabStage: NSViewRepresentable {
             native.frame = card.insetBy(dx: -CompanionLayout.gutter,dy: -CompanionLayout.gutter)
             let right = card.offsetBy(dx: half,dy: 0)
             foreground.frame = right
+            wash.frame = right
             background?.glassRect = right
         }
     }

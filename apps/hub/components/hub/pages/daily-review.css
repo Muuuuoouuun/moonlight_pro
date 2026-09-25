@@ -71,10 +71,24 @@
 .daily-review-basics { display: grid; gap: 24px; }
 .daily-review-field { display: grid; gap: 10px; min-width: 0; }
 .daily-review-field-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
-.daily-review-energy-label { color: var(--fg-muted); font-size: 11px; font-weight: 400; }
-.daily-review-energy button { min-height: 46px; transition: background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub); }
-.daily-review-energy button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--line-strong); transform: translateY(-1px); }
-.daily-review-scale { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--fg-faint); }
+.daily-review-energy-label { color: var(--fg-muted); font-size: 12px; font-weight: 400; }
+.daily-review-energy-label:empty { display: none; }
+/* 에너지 칸 — 숫자 + 오름 막대 + 단어. 선택은 표면 한 단계 + 1px 선(§5.2 hover·선택은 accent 없이). */
+.hub-app .daily-review-energy .hub-seg__btn { min-height: 64px; color: var(--fg-muted); transition: background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub); }
+.hub-app .daily-review-energy .hub-seg__btn[aria-pressed="true"] { background: var(--surface-3); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-strong); transform: translateY(-1px); }
+.daily-review-energy-opt { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+.daily-review-energy-opt .mono { font-size: 14px; line-height: 1; }
+.daily-review-energy-word { font-size: 11px; line-height: 1.2; color: var(--fg-dim); white-space: nowrap; }
+.hub-seg__btn[aria-pressed="true"] .daily-review-energy-word { color: var(--fg-muted); }
+/* 오늘 한 일 — 읽기 전용 칩. 0뿐인 조각은 그리지 않는다. */
+.daily-review-did { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 22px; font-size: 12px; }
+.daily-review-did-label { margin-right: 2px; font-size: 11px; color: var(--fg-dim); }
+.daily-review-did-chip { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--fg); background: var(--surface-2); }
+.daily-review-did-empty { color: var(--fg-muted); }
+.daily-review-note-field { display: grid; gap: 6px; }
+.daily-review-starters { display: flex; flex-wrap: wrap; gap: 4px; }
+.daily-review-footer-week { display: inline-flex; justify-content: center; align-items: center; gap: 10px; font-size: 11.5px; color: var(--fg-muted); }
+.daily-review-footer-week .daily-review-weekstrip { flex: none; padding: 0; gap: 6px; }
 .daily-review-keyhint { display: inline-flex; align-items: center; gap: 3px; color: var(--fg-dim); }
 .daily-review-composer textarea { min-height: 88px; max-height: 180px; line-height: 1.7; resize: vertical; }
 .daily-review-disclosure { margin-top: 16px; width: 100%; }
@@ -109,7 +123,7 @@
 .daily-review-cue[data-kind="done"] .daily-review-cue-main { color: var(--fg-muted); }
 /* 원탭 에너지 — 선택 없이 누르는 즉시 저장. 휴지 상태는 중립, hover는 surface 한 단계(§5.2). */
 .daily-review-cue-energy { display: inline-flex; gap: 4px; }
-.hub-app .daily-review-cue-energy-btn { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--fg); font-size: 13px; cursor: pointer; transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub); }
+.hub-app .daily-review-cue-energy-btn { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 40px; height: 44px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--fg); font-size: 12px; line-height: 1; cursor: pointer; transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub); }
 .hub-app .daily-review-cue-energy-btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--line-strong); }
 .hub-app .daily-review-cue-energy-btn:disabled { cursor: default; color: var(--fg-faint); }
 .hub-app .daily-review-cue-energy-btn[aria-busy="true"] { color: var(--fg); border-color: var(--line-strong); background: var(--surface-2); }
@@ -158,8 +172,14 @@
   .daily-review-day { min-height: 44px; }
   .daily-review-suggestion { flex-direction: column; align-items: stretch; }
   .daily-review-cue-energy { flex: 1 1 100%; }
-  .hub-app .daily-review-cue-energy-btn { flex: 1; height: 44px; }
+  .hub-app .daily-review-cue-energy-btn { flex: 1; height: 50px; }
   .daily-review-weekstrip { flex: 1 1 100%; justify-content: space-between; padding: 2px 10px 4px; }
+  .daily-review-open kbd { display: none; }
+  .daily-review-heat { padding: 14px 12px 12px; }
+  .daily-review-heat-rows, .daily-review-heat-col { grid-template-rows: 16px repeat(7, 13px); row-gap: 3px; line-height: 13px; }
+  .daily-review-heat-grid { grid-auto-columns: 13px; column-gap: 3px; }
+  .hub-app .daily-review-heat-cell { width: 13px; height: 13px; }
+  .daily-review-heat-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; min-width: 0; margin-top: 4px; }
   .daily-review-open { width: 100%; }
   .daily-review-history li button { gap: 16px; padding: 14px 8px; }
   .daily-review-actions { flex-direction: column; align-items: stretch; }
@@ -170,3 +190,54 @@
 .daily-review-weekline .daily-review-weekstrip { padding: 0; }
 .daily-review-header .daily-review-week-last { margin: 0; font-size: 12px; color: var(--fg-dim); }
 .daily-review-cue-scale { font-size: 11px; color: var(--fg-dim); }
+/* ── 활동 흐름(§12) — GitHub 기여 그래프 응용. 진하기 = 포그라운드 명도 한 계열(초록·카테고리 색 없음, §4·§5.3).
+   다크에서는 밝아지고 라이트에서는 어두워진다 — 둘 다 "진해진다". 레벨 0은 빈 칸(표면 + 하이라인). */
+.daily-review-heat-cell[data-level="0"] { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-soft); }
+.daily-review-heat-cell[data-level="1"] { background: color-mix(in oklch, var(--fg) 18%, var(--surface)); }
+.daily-review-heat-cell[data-level="2"] { background: color-mix(in oklch, var(--fg) 38%, var(--surface)); }
+.daily-review-heat-cell[data-level="3"] { background: color-mix(in oklch, var(--fg) 62%, var(--surface)); }
+.daily-review-heat-cell[data-level="4"] { background: color-mix(in oklch, var(--fg) 88%, var(--surface)); }
+.daily-review-heat { margin-bottom: 16px; padding: 16px 20px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.daily-review-heat-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 12px; }
+.daily-review-heat-head h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.daily-review-heat-sub { font-size: 12px; color: var(--fg-muted); }
+.daily-review-heat-layout { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 28px; flex-wrap: wrap; }
+.daily-review-heat-body { display: flex; gap: 6px; min-width: 0; max-width: 100%; }
+.daily-review-heat-summary { display: grid; gap: 12px; margin: 16px 0 0; min-width: 180px; }
+.daily-review-heat-summary > div { display: grid; gap: 2px; }
+.daily-review-heat-summary dt { font-size: 11px; color: var(--fg-dim); }
+.daily-review-heat-summary dd { margin: 0; font-size: 13px; color: var(--fg); }
+.daily-review-heat-summary dd .num { font-size: 16px; font-weight: 600; margin-right: 1px; }
+.daily-review-heat-vs { color: var(--fg-muted); font-size: 12px; }
+.daily-review-heat-rows { display: grid; grid-template-rows: 16px repeat(7, 16px); row-gap: 4px; font-size: 10.5px; color: var(--fg-dim); line-height: 16px; }
+.daily-review-heat-scroll { flex: 1; min-width: 0; overflow-x: auto; }
+.daily-review-heat-grid { display: grid; grid-auto-flow: column; grid-auto-columns: 16px; column-gap: 4px; width: max-content; }
+.daily-review-heat-col { display: grid; grid-template-rows: 16px repeat(7, 16px); row-gap: 4px; }
+.daily-review-heat-month { font-size: 10.5px; color: var(--fg-dim); white-space: nowrap; line-height: 16px; overflow: visible; }
+.hub-app .daily-review-heat-cell { display: block; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 3px; cursor: pointer; transition: box-shadow var(--dur-hover) var(--ease-hub); }
+.hub-app .daily-review-heat-cell:disabled, .hub-app .daily-review-heat-cell[data-future] { cursor: default; background: transparent; box-shadow: none; }
+.hub-app span.daily-review-heat-cell { cursor: default; }
+.hub-app .daily-review-heat-cell[data-today] { box-shadow: inset 0 0 0 1px var(--moon-300); }
+.hub-app .daily-review-heat-cell[data-active]:not(:disabled), .hub-app .daily-review-heat-cell:hover:not(:disabled) { box-shadow: 0 0 0 1px var(--fg-muted); }
+.hub-app .daily-review-heat-cell:focus-visible { outline: 1px solid var(--moon-300); outline-offset: 1px; }
+.daily-review-heat-foot { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; font-size: 12px; color: var(--fg-muted); }
+.daily-review-heat-detail { min-height: 18px; }
+.daily-review-heat-detail .mono { font-size: 12px; color: var(--fg); margin-right: 6px; }
+.daily-review-heat-legend { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--fg-dim); }
+.daily-review-heat-legend .daily-review-heat-cell { display: inline-block; width: 11px; min-width: 11px; height: 11px; border-radius: 3px; cursor: default; margin: 0 1px; }
+.daily-review-heat-legend .daily-review-heat-cell:first-child { margin-left: 5px; }
+/* 월 캘린더 칸도 같은 척도로 칠한다. 진한 칸(3·4)에서는 글자·마크를 표면색으로 뒤집어 대비를 지킨다. */
+.hub-app .daily-review-day[data-level="1"] { background: color-mix(in oklch, var(--fg) 12%, var(--surface)); }
+.hub-app .daily-review-day[data-level="2"] { background: color-mix(in oklch, var(--fg) 28%, var(--surface)); }
+.hub-app .daily-review-day[data-level="3"] { background: color-mix(in oklch, var(--fg) 52%, var(--surface)); color: var(--surface); }
+.hub-app .daily-review-day[data-level="4"] { background: color-mix(in oklch, var(--fg) 78%, var(--surface)); color: var(--surface); }
+.hub-app .daily-review-day[data-level="3"] .mono, .hub-app .daily-review-day[data-level="4"] .mono { color: var(--surface); }
+.hub-app .daily-review-day:is([data-level="3"], [data-level="4"])[data-state="recorded"] .daily-review-day-mark { background: var(--surface); border-color: var(--surface); }
+.hub-app .daily-review-day:is([data-level="3"], [data-level="4"])[data-state="missed"] .daily-review-day-mark { border-color: var(--surface); }
+.hub-app .daily-review-day[data-level][aria-current="date"] { box-shadow: inset 0 0 0 1px var(--fg-muted); }
+.hub-app .daily-review-day[data-level]:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--line-strong); }
+.daily-review-legend .daily-review-heat-cell { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+/* 상단바 하루 리뷰 버튼 — 기록한 날은 작은 ✓ 배지(이름도 함께 바뀐다). */
+.daily-review-topbtn { position: relative; display: inline-flex; }
+.daily-review-topbtn-check { position: absolute; right: 1px; bottom: 1px; display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 999px; background: var(--fg); color: var(--surface); pointer-events: none; }
+.daily-review-open .hub-kbd, .daily-review-open kbd { margin-left: 8px; }

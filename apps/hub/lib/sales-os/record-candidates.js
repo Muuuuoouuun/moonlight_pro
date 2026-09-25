@@ -159,7 +159,7 @@ export function phoneEventRecorded(occurredAt, customer, activities = []) {
 }
 
 function phoneIdentity(customer) {
-  return customer.key || (customer.contactId ? `contact:${customer.contactId}` : null);
+  return customer.key || (customer.contactId ? `contact:${customer.contactId}` : customer.isUnregistered && customer.phone ? `unregistered:${customer.phone}` : null);
 }
 
 // webhook_events 행들 → 고객·채널당 후보 하나(가장 최근 것이 대표, 개수는 count).
@@ -198,10 +198,11 @@ export function buildPhoneCandidates({ rows = [], activities = [], nameByKey = n
         key: c.key || null,
         kind: c.kind === "lead" || c.kind === "account" ? c.kind : null,
         id: c.id || null,
-        name: currentName || c.name || c.person || "이름 없는 고객",
+        name: currentName || c.name || c.person || c.phone || "이름 없는 고객",
         org: c.org && c.org !== (currentName || c.name) ? c.org : null,
         person: c.person || null,
         companyId: c.companyId || null,
+        ...(c.isUnregistered ? { isUnregistered: true, phone: c.phone || null } : {}),
       },
       text: typeof latest.payload.text === "string" ? latest.payload.text : null,
       promiseHint: hinted,
@@ -351,7 +352,9 @@ export function describeCandidate(candidate, now = Date.now()) {
     };
   }
   const name = customer.person || customer.name;
-  const context = customer.person && customer.person !== customer.name ? customer.name : customer.org;
+  const context = customer.isUnregistered
+    ? "미등록 연락처"
+    : customer.person && customer.person !== customer.name ? customer.name : customer.org;
   const minutes = durationLabel(c.durationSec);
   const tail = c.channel === "call"
     ? `${withJosa(name)} ${minutes ? `${minutes} ` : ""}통화`

@@ -17,6 +17,7 @@ import {
   PHONE_EVENT_SOURCE,
   type DirectoryRows,
   type PhoneEvent,
+  type PhoneMatch,
 } from './phone-capture.ts';
 
 export const PHONE_SECRET_HEADER = 'x-com-moon-phone-secret';
@@ -92,7 +93,35 @@ export async function handlePhoneEventIntake(req: Request, deps: PhoneIntakeDeps
   if (!rows) return respond({ status: 'error', error: 'customer-directory-read-failed', retryable: true }, 502);
 
   const match = matchPhoneEvent(event, buildPhoneDirectory(rows));
-  if (match.status !== 'matched') {
+  let candidateMatch: Extract<PhoneMatch, { status: 'matched' }> | null = match.status === 'matched' ? match : null;
+  if (!candidateMatch) {
+    const wantsUnregistered = Boolean(body.captureUnmatched || body.newLead || body.isNewLead);
+    if (match.status === 'unmatched' && wantsUnregistered && event.number) {
+      const formatted = event.number.length === 11 && event.number.startsWith('010')
+        ? `${event.number.slice(0, 3)}-${event.number.slice(3, 7)}-${event.number.slice(7)}`
+        : event.number;
+      candidateMatch = {
+        status: 'matched',
+        matchedOn: 'phone',
+        customer: {
+          kind: null,
+          id: null,
+          key: `unregistered:${event.number}`,
+          name: event.name || formatted,
+          org: null,
+          person: event.name || null,
+          companyId: null,
+          leadId: null,
+          accountId: null,
+          contactId: null,
+          phone: formatted,
+          isUnregistered: true,
+        },
+      };
+    }
+  }
+
+  if (!candidateMatch) {
     // 고객이 아니거나(unmatched) 누구인지 가를 수 없으면(ambiguous) 내용 없이 버린다.
     // 응답에도 이름·번호를 싣지 않는다.
     try { await deps.countDiscard?.(event.type, now); } catch { /* 개수는 보조 정보다 */ }
@@ -104,7 +133,7 @@ export async function handlePhoneEventIntake(req: Request, deps: PhoneIntakeDeps
     stored = await deps.store({
       eventType: `phone.${event.type}`,
       providerEventId: phoneEventDedupeKey(event),
-      payload: phoneCandidatePayload(event, match),
+      payload: phoneCandidatePayload(event, candidateMatch),
       receivedAt: now.toISOString(),
     });
   } catch {
@@ -114,5 +143,5 @@ export async function handlePhoneEventIntake(req: Request, deps: PhoneIntakeDeps
   if (stored.status !== 'saved') return respond({ status: 'failed', error: 'phone-event-save-failed', retryable: true }, 502);
 
   try { await deps.afterStore?.(now); } catch { /* 보존 정리는 다음 intake에서 다시 돈다 */ }
-  return respond({ status: 'saved', id: stored.id ?? null, notice: phoneNotice(event, match.customer) }, 201);
+  return respond({ status: 'saved', id: stored.id ?? null, notice: phoneNotice(event, candidateMatch.customer) }, 201);
 }

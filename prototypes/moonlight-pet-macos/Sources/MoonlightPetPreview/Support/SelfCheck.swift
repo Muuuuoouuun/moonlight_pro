@@ -71,11 +71,39 @@ enum SelfCheck {
             return false
         }
         recovered.stopFocus()
-        print("PASS: continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save and draft recovery")
+        print("PASS: press/drag tint reset, continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save and draft recovery")
         return true
     }
 
     private static func checkPanelInteraction() -> Bool {
+        var glass = GlassPressState()
+        guard !glass.showsTint(accessibilityRequiresSolid: false) else { return false }
+        glass.press()
+        guard glass.showsTint(accessibilityRequiresSolid: false) else { return false }
+        glass.release()
+        guard !glass.showsTint(accessibilityRequiresSolid: false),
+              glass.showsTint(accessibilityRequiresSolid: true) else {
+            fputs("Glass must return to clear after release; accessibility stays solid\n", stderr)
+            return false
+        }
+        // Dragging from the pet window must work without the panel receiving
+        // mouse-down. Repeated drag updates must remain active until release.
+        for _ in 0..<3 {
+            glass.drag()
+            guard glass.showsTint(accessibilityRequiresSolid: false) else {
+                fputs("Glass drag without a local press check failed\n", stderr)
+                return false
+            }
+        }
+        glass.release()
+        guard !glass.showsTint(accessibilityRequiresSolid: false) else {
+            fputs("Glass drag release must restore clear glass\n", stderr)
+            return false
+        }
+        glass.press()
+        glass.drag()
+        glass.release()
+        guard !glass.showsTint(accessibilityRequiresSolid: false) else { return false }
         var drag = ScreenDragTracker()
         drag.begin(at: CGPoint(x: 100, y: 100))
         guard drag.translation(to: CGPoint(x: 101, y: 101)) == nil,

@@ -142,9 +142,21 @@ function CandidateRow({ candidate, now, busy, onRecord, onNavigate, onDismiss })
           {line.meta && <div style={{ fontSize: 11.5, color: "var(--fg-dim)", marginTop: 3 }}>{line.meta}</div>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <Button variant="outline" size="sm" icon={promise ? "calendar" : "edit"} disabled={busy} onClick={() => onRecord?.(candidate)}>
-            {promise ? "약속으로" : "기록 남기기"}
-          </Button>
+          {candidate.customer?.isUnregistered ? (
+            <Button
+              variant="outline"
+              size="sm"
+              icon="plus"
+              disabled={busy}
+              onClick={() => onNavigate?.(`dashboard/revenue/customers?new=customer&phone=${encodeURIComponent(candidate.customer?.phone || "")}&q=${encodeURIComponent(candidate.customer?.name !== candidate.customer?.phone ? candidate.customer?.name : "")}`)}
+            >
+              새 고객으로
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" icon={promise ? "calendar" : "edit"} disabled={busy} onClick={() => onRecord?.(candidate)}>
+              {promise ? "약속으로" : "기록 남기기"}
+            </Button>
+          )}
           {candidate.source === "calendar" ? (
             <>
               <Button variant="ghost" size="xs" disabled={busy} onClick={() => onDismiss(candidate, "cancelled")}>취소·노쇼</Button>

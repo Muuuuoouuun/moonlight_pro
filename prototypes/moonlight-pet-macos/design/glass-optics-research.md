@@ -17,7 +17,7 @@ Repository claims of physical accuracy or measured Apple matching are the author
 ## What is implemented
 
 - Original Metal shader and AppKit integration; no vendored third-party code.
-- Actual widgets: native regular background plus transparent optical edge. Rounded-rectangle distance, circular bevel normals, directional reflection, grazing-angle brightness and a one-pixel hairline. The central area of the custom edge has exactly zero alpha.
+- Actual widgets: native clear background plus transparent optical edge. Rounded-rectangle distance, circular bevel normals, directional reflection, grazing-angle brightness and a one-pixel hairline. The central area of the custom edge has exactly zero alpha.
 - Pointer changes the light direction slightly. Reduce Motion freezes it. Reduce Transparency / Increase Contrast disable decorative optics; native contrast behavior remains in charge of the desktop background.
 - Focus card uses the same optical rim through one narrow NSViewRepresentable. Control/input borders stay thin; foreground text is not processed by the shader.
 - Metal device, command queue and pipeline are cached. The shader is copied as a resource and compiled once on first use. MTKView is paused and invalidated by pointer, resize or accessibility changes. No capture permission, snapshot polling, network activity or continuous timer is added.
@@ -33,8 +33,21 @@ The right side is a stylized optical model (one curved entrance surface, backgro
 
 ## Desktop limitation
 
-Custom refraction needs a known background. The app-owned lab can supply that field; the floating panel cannot sample other apps with an ordinary SwiftUI layerEffect or Metal overlay. Native Liquid Glass performs desktop compositing, while this custom layer adds only edge reflection. A future desktop texture implementation would need an explicit ScreenCaptureKit design and permission, app exclusion to prevent feedback, latency/power checks and a privacy decision. This iteration adds none of that.
+Custom refraction needs a known background. The app-owned lab can supply that field; the floating panel cannot sample other apps with an ordinary SwiftUI layerEffect or Metal overlay. Native clear Liquid Glass performs desktop compositing, while this custom layer adds only edge reflection. A future desktop texture implementation would need an explicit ScreenCaptureKit design and permission, app exclusion to prevent feedback, latency/power checks and a privacy decision. This iteration adds none of that.
 
 ## Integration fixes found during verification
 
 The optional lab exposed an app-wide key monitor: normal widget shortcuts are now limited to the coordinator's own windows. Focus mode retains its app-wide emergency Escape. The accessory app also now installs Cocoa's standard Edit menu so text fields receive paste/select-all commands; no new quit shortcut bypasses the focus flow.
+
+
+## 2026-09-25 correction: preserve transparency
+
+The operator rejected the white/foggy appearance. The earlier regular material decision is superseded for floating panels: `.clear` is now the default, `.regular` only when Reduce Transparency or Increase Contrast is enabled, updated through NSWorkspace notifications. macOS <26 retains its existing native material fallback. The opaque focus shield/card keeps its separate presentation.
+
+The lab's `0.56 + background * 0.35` luminance compression was the direct source of the new milky fill. It is removed, and center blur is zero. Only edge refraction/reflection/softness remains. The initial one-point content-alpha halo was subsequently removed after the operator reported blurred text; see the text-composition correction below. Clear glass does not guarantee text contrast over every desktop image; the accessible material remains available through system settings.
+
+Added a GPU regression check comparing corresponding foreground-center/background pixels: the old material failed with mean RGB deviation 75.42/255; the corrected shader measured 0.00/255 on this calibration scene. Native CUA inspection showed both clear panels transmitting the silver folds; the native input accepted Korean paste. No OS accessibility preferences were changed.
+
+### Text composition correction — 2026-09-25
+
+Removing the whole-content light shadow reduced small-text halos, but native lab headings still appeared distorted compared with the Metal panel's identical content. Moving the SwiftUI host out of `NSGlassEffectView.contentView` and above the material/rim made both headings sharp in the native comparison. This observed difference supports the composition change; the private native rendering mechanism is not assumed. The glass gets an empty content view; the shared parent owns the interactive host with the same frame and first-mouse behavior. Korean paste into the native lab field was also verified. No material tint, opacity, blur or shader change was needed for this correction.

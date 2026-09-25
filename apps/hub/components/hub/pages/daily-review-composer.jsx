@@ -4,13 +4,23 @@ import React from 'react';
 import { Button, CertaintyBadge, Drawer, Kbd, SegmentedControl, Skeleton, TextAreaField, TextField, TruthBadge, useToast } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
 import { shiftDateKey } from '@/lib/rhythm-calendar';
-import { savedMessage, suggestFromFocus } from '@/lib/daily-review-rhythm';
+import { savedMessage, suggestFromFocus, weekProgress } from '@/lib/daily-review-rhythm';
+import { dayTotal } from '@/lib/review-activity';
+import { ReviewWeekStrip } from '../daily-review-weekstrip';
+import { EnergyMoon } from '../energy-moon';
 import { DailyReviewCoach } from './daily-review-coach';
 import { ENERGY_LABELS, PROGRESS, progressLabel } from './daily-review-labels';
 
 export { ENERGY_LABELS, progressLabel };
 
-const ENERGY = [1, 2, 3, 4, 5].map((key) => ({ key, label: String(key) }));
+// 에너지 칸 — 달 위상 + 숫자 + 짧은 단어. 색이 아니라 밝은 면의 넓이와 단어가 값을 말한다(§5.3).
+const ENERGY_WORDS = ['지침', '조금 지침', '보통', '여유', '활기'];
+const ENERGY = [1, 2, 3, 4, 5].map((key) => ({
+  key,
+  label: <span className="daily-review-energy-opt"><EnergyMoon level={key} size={22} /><span className="mono">{key}</span><span className="daily-review-energy-word">{ENERGY_WORDS[key - 1]}</span></span>,
+}));
+// 메모 머리말 — 필드를 늘리지 않고(09-20 §6.3 "회고 질문 없음") 한 줄을 시작하게만 돕는다.
+const NOTE_STARTERS = ['잘된 일', '걸린 일', '내일 첫 일'];
 const hasProgress = (draft) => Boolean(draft.focus.trim() || draft.progress !== null);
 // 메모 필드는 늘리지 않고(09-20 §6.3) 예시 문장만 날마다 바꾼다.
 const NOTE_PROMPTS = ['오늘 기억하고 싶은 일은…', '오늘 잘 풀린 한 가지는…', '오늘 걸렸던 한 가지는…', '내일의 나에게 남길 한 줄은…'];
@@ -46,9 +56,38 @@ export function DailyReviewComposer({ model, onClose }) {
   // 읽기 전용 두 줄(2026-09-20 §6.3) — 오늘 3개 k/n · 연락 N건. 서버가 못 읽으면 날짜만 남는다.
   // 연락 수가 null이면 읽기가 상한에 잘린 것이라 그 조각만 뺀다 — 적게 센 수를 확신에 차서
   // 보여주지 않는다(허브 read 계약).
-  const todayLine = today && today.date === date
-    ? ` · 오늘 3개 ${today.focusDone}/${today.focusPicked}${Number.isFinite(today.contacts) ? ` · 연락 ${today.contacts}건` : ''}`
-    : '';
+  // 팝업 맨 위 "오늘 한 일" — 활동 흐름(§12)과 같은 원천. 0뿐인 조각("오늘 3개 0/0")은 말하지 않는다.
+  const activityDay = model.activity && date >= model.activity.from && date <= model.activity.to ? model.activity.days[date] || null : undefined;
+  const didParts = [];
+  if (today && today.date === date && today.focusPicked > 0) didParts.push(`오늘 3개 ${today.focusDone}/${today.focusPicked}`);
+  if (activityDay !== undefined) {
+    if (activityDay?.tasks) didParts.push(`완료 ${activityDay.tasks}`);
+    if (activityDay?.contacts) didParts.push(`연락 ${activityDay.contacts}`);
+    if (activityDay?.memos) didParts.push(`메모 ${activityDay.memos}`);
+  } else if (today && today.date === date && Number.isFinite(today.contacts) && today.contacts > 0) {
+    didParts.push(`연락 ${today.contacts}`);
+  }
+  const didUnknown = activityDay === undefined && !(today && today.date === date);
+  const quietDay = activityDay !== undefined && !dayTotal(activityDay) && !didParts.length;
+  const week = weekProgress(todayKey, model.recent);
+  const noteRef = React.useRef(null);
+  const focusNoteRef = React.useRef(false);
+
+  // 머리말을 넣은 뒤 커서를 메모 끝으로 — 값이 반영된 렌더 직후에 옮겨야 이어서 바로 쓸 수 있다.
+  React.useLayoutEffect(() => {
+    if (!focusNoteRef.current) return;
+    focusNoteRef.current = false;
+    const node = noteRef.current;
+    if (!node) return;
+    node.focus();
+    node.setSelectionRange(node.value.length, node.value.length);
+  }, [draft.note]);
+
+  function addStarter(starter) {
+    const current = draft.note.replace(/\s+$/, '');
+    focusNoteRef.current = true;
+    edit('note', `${current ? `${current}\n` : ''}${starter}: `.slice(0, 4000));
+  }
 
   React.useEffect(() => {
     if (source !== 'loading' && !initialized.current) {
@@ -105,20 +144,36 @@ export function DailyReviewComposer({ model, onClose }) {
     edit('energy', draft.energy === energy ? null : energy);
   }
 
-  return <Drawer title="하루 리뷰" subtitle={`${dateLabel}${todayLine}`} presentation="compact" width="460px" exiting={exiting} onClose={requestClose} initialFocusRef={formRef}
+  return <Drawer title="하루 리뷰" subtitle={dateLabel} presentation="compact" width="460px" exiting={exiting} onClose={requestClose} initialFocusRef={formRef}
     footer={<div className="daily-review-composer-footer">
       {!conflict && <Button form="daily-review-composer" type="submit" variant="primary" size="md" icon={saveState === 'saved' ? 'check' : undefined} disabled={locked || source !== 'live' || !dirty}>{saveState === 'saving' ? '저장 중…' : saveState === 'saved' ? '저장했어요' : saveState === 'error' ? '다시 저장' : review ? '수정 저장' : '저장'}</Button>}
-      <span className="daily-review-footer-hint">{source !== 'live' && source !== 'loading' ? '연결 후 저장할 수 있어요' : dirty ? <>닫아도 작성 중인 내용은 유지돼요 · <Kbd>⌘</Kbd><Kbd>Enter</Kbd> 저장</> : '한 항목만 남겨도 좋아요'}</span>
+      <span className="daily-review-footer-hint">{source !== 'live' && source !== 'loading' ? '연결 후 저장할 수 있어요' : dirty ? <>닫아도 작성 중인 내용은 유지돼요 · <Kbd>⌘</Kbd><Kbd>Enter</Kbd> 저장</> : '에너지 하나만 골라도 저장돼요'}</span>
+      {week && source === 'live' && <span className="daily-review-footer-week">
+        <ReviewWeekStrip week={week} />
+        <span>이번 주 <span className="num">{week.recorded}</span>/{week.workdays}일{week.recorded >= week.target ? ' · 목표 달성' : ''}</span>
+      </span>}
     </div>}>
     <form id="daily-review-composer" className="daily-review-composer" ref={formRef} tabIndex={-1} aria-busy={busy} onKeyDown={onKeyDown} onSubmit={(event) => { event.preventDefault(); if (!conflict) submit(); }}>
       {source === 'loading' ? <Skeleton lines={4} height={14} gap={14} width={['40%', '100%', '30%', '100%']} label="기록 불러오는 중" /> : <>
+        {!didUnknown && <p className="daily-review-did" aria-label={`오늘 한 일: ${didParts.join(', ') || '기록된 활동 없음'}`}>
+          <span className="daily-review-did-label">{date === todayKey ? '오늘 한 일' : '이날 한 일'}</span>
+          {quietDay || !didParts.length ? <span className="daily-review-did-empty">기록된 활동 없음 — 쉬어 간 날도 기록이 돼요</span>
+            : didParts.map((part) => <span key={part} className="daily-review-did-chip">{part}</span>)}
+        </p>}
         <fieldset disabled={locked} className="daily-review-basics">
           <section className="daily-review-field">
-            <div className="daily-review-field-heading"><span>에너지는 어땠나요?</span><span className="daily-review-energy-label" aria-live="polite">{draft.energy === null ? '선택' : ENERGY_LABELS[draft.energy - 1]}</span></div>
+            <div className="daily-review-field-heading"><span>에너지는 어땠나요?</span>
+              {draft.energy === null && <span className="daily-review-keyhint" aria-hidden="true">숫자 키 <Kbd>1</Kbd>–<Kbd>5</Kbd></span>}
+              <span className="daily-review-energy-label" aria-live="polite">{draft.energy === null ? '' : `에너지 ${draft.energy} · ${ENERGY_LABELS[draft.energy - 1]}`}</span>
+            </div>
             <SegmentedControl className="daily-review-energy" label="에너지, 1 많이 지침부터 5 활기참까지" options={ENERGY} value={draft.energy} onChange={(value) => edit('energy', draft.energy === value ? null : value)} fill size="md" />
-            <div className="daily-review-scale"><span>많이 지침</span><span className="daily-review-keyhint">숫자 키 <Kbd>1</Kbd>–<Kbd>5</Kbd></span><span>활기참</span></div>
           </section>
-          <TextAreaField id="daily-review-note" label="한 줄 메모" value={draft.note} rows={3} maxLength={4000} placeholder={notePrompt} onCmdEnter={() => { if (!conflict && dirty) submit(); }} onChange={(event) => edit('note', event.target.value)} />
+          <div className="daily-review-note-field">
+          <TextAreaField ref={noteRef} id="daily-review-note" label="한 줄 메모" value={draft.note} rows={3} maxLength={4000} placeholder={notePrompt} onCmdEnter={() => { if (!conflict && dirty) submit(); }} onChange={(event) => edit('note', event.target.value)} />
+          <div className="daily-review-starters" role="group" aria-label="메모 머리말 넣기">
+            {NOTE_STARTERS.map((starter) => <Button key={starter} variant="ghost" size="xs" icon="plus" onClick={() => addStarter(starter)}>{starter}</Button>)}
+          </div>
+          </div>
         </fieldset>
 
         {suggestion && <section className="daily-review-suggestion" aria-label="오늘 3개로 채우기">

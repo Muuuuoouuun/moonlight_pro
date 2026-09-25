@@ -15,6 +15,8 @@ final class PetClickView: NSView {
     var onClick: (() -> Void)?
     var onDoubleClick: (() -> Void)?
     var onMoved: (() -> Void)?
+    var onDragBegan: (() -> Void)?
+    var onDragEnded: (() -> Void)?
     private var drag = ScreenDragTracker()
 
     init(frame frameRect: NSRect, model: AppModel) {
@@ -71,6 +73,7 @@ final class PetClickView: NSView {
 
     override func mouseUp(with event: NSEvent) {
         defer {
+            onDragEnded?()
             drag.end()
             interaction.isPressed = false
             interaction.isDragging = false
@@ -82,7 +85,9 @@ final class PetClickView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        let wasDragging = drag.isDragging
         guard let window, let offset = drag.translation(to: window.convertPoint(toScreen: event.locationInWindow)) else { return }
+        if !wasDragging { onDragBegan?() }
         interaction.isPressed = false
         interaction.isDragging = true
         var frame = window.frame
@@ -127,13 +132,29 @@ final class WindowCoordinator: NSObject {
         let petClickView = PetClickView(frame: NSRect(origin: .zero, size: petWindow.frame.size), model: model)
         petClickView.onClick = { [weak self] in self?.toggleBar() }
         petClickView.onDoubleClick = { [weak self] in self?.showWidget() }
-        petClickView.onMoved = { [weak self] in self?.placeTransientWindows() }
+        petClickView.onDragBegan = { [weak self] in
+            guard let self else { return }
+            for panel in [self.previewWindow, self.barWindow, self.widgetWindow] where self.isRequestedVisible(panel) {
+                PetGlassDrag.begin(in: panel)
+            }
+        }
+        petClickView.onMoved = { [weak self] in
+            guard let self else { return }
+            self.placeTransientWindows()
+            for panel in [self.previewWindow, self.barWindow, self.widgetWindow] where self.isRequestedVisible(panel) {
+                PetGlassDrag.update(in: panel)
+            }
+        }
+        petClickView.onDragEnded = { [weak self] in
+            guard let self else { return }
+            for panel in [self.previewWindow, self.barWindow, self.widgetWindow] { PetGlassDrag.end(in: panel) }
+        }
         petWindow.contentView = petClickView
         petWindow.hasShadow = false
 
         previewWindow.contentView = GlassPanel.host(PreviewView(model: model) { [weak self] in
             self?.showBar()
-        }, cornerRadius: 14)
+        }, cornerRadius: 14, model: model)
         barWindow.contentView = GlassPanel.host(QuickBarView(
             model: model,
             close: { [weak self] in self?.dismissBar() },
@@ -144,7 +165,9 @@ final class WindowCoordinator: NSObject {
                 self.showWidget(mode: self.model.mode)
             },
             moveVertically: { [weak self] offset in self?.moveBarVertically(by: offset) }
-        ), cornerRadius: CompanionLayout.glassRadius)
+        ), cornerRadius: CompanionLayout.glassRadius,
+           ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.dismissBar() })),
+           model: model)
         widgetWindow.contentView = GlassPanel.host(CompactWidgetView(
             model: model,
             collapse: { [weak self] in self?.collapseWidget() },
@@ -152,7 +175,8 @@ final class WindowCoordinator: NSObject {
             moveVertically: { [weak self] offset in self?.moveWidgetVertically(by: offset) },
             startFocus: { [weak self] in self?.startFocus() }
         ), cornerRadius: CompanionLayout.glassRadius,
-           ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.collapseWidget() })))
+           ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.collapseWidget() })),
+           model: model)
 
         model.onFocusFinished = { [weak self] in self?.endFocus() }
         placePetInitially()
@@ -318,7 +342,7 @@ final class WindowCoordinator: NSObject {
         guard isRequestedVisible(widgetWindow) else { return }
         dismiss(widgetWindow) { [weak self] in
             guard let self, !self.model.isFocused else { return }
-            self.petWindow.orderFrontRegardless()
+            self.syncCompanionPet()
         }
     }
 
@@ -339,6 +363,7 @@ final class WindowCoordinator: NSObject {
         else if window === widgetWindow { model.activeCompanion = .widget }
         advanceRevision(for: window)
         desiredVisibility[ObjectIdentifier(window)] = true
+        syncCompanionPet()
         let targetFrame = window.frame
         let wasVisible = window.isVisible
         if PetMotion.reduceMotion {
@@ -386,6 +411,7 @@ final class WindowCoordinator: NSObject {
                       !self.isRequestedVisible(window) else { return }
                 window.orderOut(nil)
                 window.alphaValue = 1
+                self.syncCompanionPet()
                 completion?()
             }
         }
@@ -404,6 +430,7 @@ final class WindowCoordinator: NSObject {
         desiredVisibility[ObjectIdentifier(window)] = false
         window.orderOut(nil)
         window.alphaValue = 1
+        syncCompanionPet()
     }
 
     private func placePetInitially() {
@@ -415,6 +442,7 @@ final class WindowCoordinator: NSObject {
     }
 
     private func placeTransientWindows() {
+        (barWindow.contentView as? GlassPanel)?.showsOrnament = model.mode == .memo
         let pet = petWindow.frame
         let visible = petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? pet
         for window in [previewWindow, barWindow] {
@@ -470,6 +498,7 @@ final class WindowCoordinator: NSObject {
     }
 
     private func resizeBar() {
+        syncCompanionPet()
         let size = Self.barSize(for: model.mode)
         let visible = petWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? barWindow.frame
         let frame = PanelGeometry.resizedKeepingTopRight(barWindow.frame, size: size, in: visible)
@@ -486,7 +515,16 @@ final class WindowCoordinator: NSObject {
     }
 
     private static func barSize(for mode: QuickMode) -> NSSize {
-        CompanionLayout.size(for: mode, perched: false)
+        CompanionLayout.size(for: mode, perched: mode == .memo)
+    }
+
+    private func syncCompanionPet() {
+        (barWindow.contentView as? GlassPanel)?.showsOrnament = model.mode == .memo
+        guard !model.isFocused else { return }
+        let perched = isRequestedVisible(widgetWindow)
+            || (isRequestedVisible(barWindow) && model.mode == .memo)
+        if perched { petWindow.orderOut(nil) }
+        else { petWindow.orderFrontRegardless() }
     }
 
     private func moveBarVertically(by offset: CGFloat) {
