@@ -127,6 +127,7 @@ struct TaskCaptureContent: View {
             if model.hub.isEnabled { model.openHub(.tasks) } else { remove(task.id) }
         }
         .contextMenu {
+            Button("Council 안건으로 준비") { model.prepareCouncilFromTask(task) }
             if model.hub.isEnabled {
                 Button("Hub에서 열기") { model.openHub(.tasks) }
             } else {

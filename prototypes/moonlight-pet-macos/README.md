@@ -15,7 +15,7 @@ cd prototypes/moonlight-pet-macos
 
 ## 조작
 
-오른쪽 가장자리의 펫을 한 번 누르면 빠른 기능을 연다. 두 번 누르거나 헤더의 핀을 누르면 지속 위젯으로 바뀐다. 할 일·일정은 세로형 `오늘`, 메모는 가로형 입력면, 집중은 별도의 전체 화면으로 구성한다. 더보기에서 Office·Council·집중·Hub 연결 설정으로 이동한다.
+오른쪽 가장자리의 펫을 한 번 누르면 빠른 기능을 연다. 두 번 누르거나 헤더의 핀을 누르면 지속 위젯으로 바뀐다. 할 일·일정은 세로형 `오늘`, 메모는 가로형 입력면, 집중은 별도의 전체 화면으로 구성한다. 더보기에서 Office·Council·알림·집중·Hub 연결 설정으로 이동한다.
 
 빠른 기능 창은 그림자 여백을 포함해 할 일 336×504pt, 일정 336×484pt, 메모 520×440pt다. 메모는 빠른 창부터 위쪽 54pt 공간에 캐릭터가 걸치는 형태이고, 헤더에 할 일·메모 전환과 아래쪽에 접기 버튼을 둔다. 지속 위젯의 할 일·일정은 위쪽 공간 54pt를 더해 각각 558·538pt 높이이며, 메모는 빠른 창과 같은 크기다. 전환할 때 창의 위쪽·오른쪽 기준점을 유지하며 화면 경계를 넘지 않게 보정한다. 헤더 핸들로 위아래 이동하거나 접근성 이동 동작을 쓸 수 있다. 할 일 행 전체를 눌러 완료한다. Hub 항목의 자세한 편집·삭제는 브라우저에서 한다. 로컬 모드에만 우클릭 삭제가 있다.
 
@@ -23,12 +23,12 @@ cd prototypes/moonlight-pet-macos
 | --- | --- |
 | ⌃⌥M | 어느 앱에서든 빠른 기능 열기 |
 | ⌘1 / ⌘2 / ⌘3 | 할 일 / 메모 / 일정 |
-| ⌘4 / ⌘5 / ⌘6 | Office / Council / 집중 설정 |
+| ⌘4 / ⌘5 / ⌘6 / ⌘7 | Office / Council / 집중 설정 / 알림 |
 | ⌘Return | 현재 기능을 Hub에서 열기. 메모는 아래의 Council 동작 |
 | ⌘S | 메모 화면에서 Hub에 저장. 로컬 모드에서는 Mac 저장 |
 | Esc | 패널 접기. 집중 중에는 1.3초 길게 눌러 중지 확인 |
 
-메모 더보기의 `Council에서 이어서`(⌘Return)는 내용을 클립보드에 복사하고 Council을 브라우저에서 연다. AI에게 자동 전송하지 않는다. 기본 Hub 주소는 `http://127.0.0.1:3000`이며 더보기의 `Hub 연결 설정`에서 바꾼다.
+메모 더보기의 `Council에서 이어서`(⌘Return)는 원문을 유지한 채 Council 안건 입력창으로 가져온다. 할 일 우클릭에도 `Council 안건으로 준비`가 있다. 직접 입력·현재 메모·할 일 중 안건을 고르고 수정한 뒤 **Council에서 검토**(Council 화면의 ⌘Return)를 누르면 브라우저의 브랜드 Council 입력란으로 전달한다. 최대 4,000 UTF-16자이며 초안은 Mac에도 남긴다. AI에게 자동 전송하지 않는다. 웹에서 전략 자문·3자 토의를 눌러 실행한다. 기존 웹 입력이 있으면 대기열로 보존하고 직접 뒤에 붙일 수 있다. 로그인 경유 때도 정확한 Council 목적지에 한해 안건을 메모리로 이어준다. 안건 URL fragment는 수신 즉시 주소에서 제거한다. 기본 Hub 주소는 `http://127.0.0.1:3000`이며 더보기의 `Hub 연결 설정`에서 바꾼다.
 
 ## 펫·재질·움직임
 
@@ -47,7 +47,8 @@ macOS 26에서는 창 경계의 `NSGlassEffectView(.clear)`가 배경 재질을 
 - **일정:** 실제 주간 일정을 가져오고 날짜를 눌러 그날의 시간·제목·장소를 확인한다. 종일 일정은 현지 날짜와 종료일 제외 규칙을 따른다. 일정 편집은 Hub에서 한다.
 - **실패·부분 데이터:** 연결 오류, 로그인 필요, 일부 조회를 빈 목록이나 저장 완료로 표시하지 않는다. 저장 결과가 불확실하면 빈 입력창에서도 **저장 확인**으로 동일 요청을 재확인한다.
 - **기존 Mac 기록:** 자동 업로드하지 않으며 기존 UserDefaults를 보존한다. 연결 설정에서 **이 Mac에만 저장**을 누르면 이전 로컬 할 일을 다시 볼 수 있다. 두 목록을 혼합하지 않는다.
-- **브라우저·AI:** Office/Council과 상세 화면은 계속 브라우저로 연다. AI 알림이나 외부 메시지 자동 발송은 연결하지 않는다.
+- **알림:** 앱이 실행 중이면 실제 Hub 미확인 문의(최신 25개·전체 개수)와 10분 안에 시작하는 시간 지정 일정을 60초 간격으로 확인한다. 처음 연결한 기존 문의는 목록만 채우고, 새 수신 메시지와 다가오는 일정은 한 번 말풍선으로 알린다. 포커스를 가져오지 않으며 집중·패널 사용 중 보류하고, 지난 일정은 다시 알리지 않는다. 알림은 펫 우클릭·메뉴 막대·⌘7에서 연다. 알림 더보기에서 말풍선을 끌 수 있다. ‘이 Mac에서 숨기기’는 Hub 읽음 상태를 바꾸지 않는다. 같은 Hub별 전달·숨김 이력은 최대 1,000개 보관한다.
+- **브라우저·AI:** Office와 상세 화면은 계속 브라우저로 연다. Council은 펫에서 안건을 준비한 뒤 브라우저에서 검토·실행한다. 앱 종료 중 시스템 푸시, AI 작업 완료 알림, 외부 메시지 자동 발송은 연결하지 않는다.
 
 새 데이터베이스나 공개 API는 추가하지 않는다. 기존 Hub 세션·쓰기 경계와 API를 재사용한다. [연결 설계](../../docs/superpowers/specs/2026-09-25-pet-hub-connection-design.md)와 [검증 기록](../../docs/superpowers/plans/2026-09-25-pet-hub-connection.md)을 참고한다.
 
@@ -62,6 +63,8 @@ cd prototypes/moonlight-pet-macos
 swift run MoonlightPetPreview --self-check
 ./script/test_hub_transport.sh
 ./script/test_hub_domain.sh
+./script/test_hub_activity.sh
+./script/test_pet_activity_store.sh
 # 실제 localhost Hub를 조회만 하는 선택 검사
 ./script/test_hub_domain.sh --live-read
 ```
@@ -75,3 +78,5 @@ Run `./script/build_and_run.sh --glass-lab` for the optional native-vs-Metal mat
 The default and typing state use native clear glass with zero character-wash opacity. Character tint appears only while pressing/dragging and fades out on release; Sylveon's blush wash is 60% during that interaction. White-family text stays above the material and optical rim without a readability halo. Reduce Transparency / Increase Contrast select regular glass and a solid theme body. The lab's explicit tint-preview switch is off by default and never affects the real panels or the saved pet.
 
 Character hues are separated in lightness and saturation while keeping the existing press-only opacity (Sylveon 60%, others 76%). Local reading materials keep fixed white text usable on busy backgrounds; the outer clear glass and blank areas stay transmissive. The custom prism is an edge-reflection treatment, not a public control over macOS desktop refraction. See [reading and prism design](../../docs/superpowers/specs/2026-09-25-pet-prism-readability-design.md).
+
+알림과 Council의 현재 범위는 [설계](../../docs/superpowers/specs/2026-09-25-pet-notifications-council-design.md)와 [검증 기록](../../docs/superpowers/plans/2026-09-25-pet-notifications-council.md)에 정리했다.

@@ -13,6 +13,7 @@ final class PetClickView: NSView {
     private let model: AppModel
     private let interaction = PetInteraction()
     var onClick: (() -> Void)?
+    var onNotifications: (() -> Void)?
     var onDoubleClick: (() -> Void)?
     var onMoved: (() -> Void)?
     var onDragBegan: (() -> Void)?
@@ -44,6 +45,10 @@ final class PetClickView: NSView {
 
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu(title: "펫 캐릭터")
+        let notices = NSMenuItem(title: "알림 보기", action: #selector(openNotifications), keyEquivalent: "")
+        notices.target = self
+        menu.addItem(notices)
+        menu.addItem(.separator())
         for character in PetCharacter.allCases {
             let item = NSMenuItem(title: character.title, action: #selector(selectCharacter(_:)), keyEquivalent: "")
             item.target = self
@@ -57,6 +62,8 @@ final class PetClickView: NSView {
         }
         NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
+
+    @objc private func openNotifications() { onNotifications?() }
 
     @objc private func selectCharacter(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
@@ -116,6 +123,7 @@ final class WindowCoordinator: NSObject {
     private var resignObserver: NSObjectProtocol?
     private var keyMonitor: Any?
     private var escapeTimer: Timer?
+    private var bannerTimer: Timer?
     private var hotKeyRef: EventHotKeyRef?
     private var hotKeyHandler: EventHandlerRef?
     private var desiredVisibility: [ObjectIdentifier: Bool] = [:]
@@ -131,6 +139,7 @@ final class WindowCoordinator: NSObject {
 
         let petClickView = PetClickView(frame: NSRect(origin: .zero, size: petWindow.frame.size), model: model)
         petClickView.onClick = { [weak self] in self?.toggleBar() }
+        petClickView.onNotifications = { [weak self] in self?.openMode(.notifications) }
         petClickView.onDoubleClick = { [weak self] in self?.showWidget() }
         petClickView.onDragBegan = { [weak self] in
             guard let self else { return }
@@ -178,6 +187,13 @@ final class WindowCoordinator: NSObject {
            ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.collapseWidget() })),
            model: model)
 
+        model.onOpenMode = { [weak self] mode in self?.openMode(mode) }
+        model.activity.onBanner = { [weak self] notice in self?.presentNotice(notice) ?? false }
+        model.activity.onBannerDismissed = { [weak self] in
+            guard let self else { return }
+            self.bannerTimer?.invalidate()
+            self.dismiss(self.previewWindow)
+        }
         model.onFocusFinished = { [weak self] in self?.endFocus() }
         placePetInitially()
         placeTransientWindows()
@@ -252,6 +268,7 @@ final class WindowCoordinator: NSObject {
                event.modifierFlags.contains(.command) {
                 let mode = widgetVisible ? self.model.compactMode : self.model.mode
                 if mode == .memo { self.model.continueMemoInCouncil() }
+                else if mode == .council { self.model.openCouncilDraft() }
                 else { self.model.openHub(mode) }
                 return nil
             }
@@ -284,11 +301,44 @@ final class WindowCoordinator: NSObject {
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         escapeTimer?.invalidate()
+        bannerTimer?.invalidate()
         if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
         if let hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
     }
 
     func showPet() { petWindow.orderFrontRegardless() }
+
+    func openMode(_ mode: QuickMode) {
+        guard !model.isFocused else { return }
+        model.activity.dismissBanner()
+        if isRequestedVisible(widgetWindow) {
+            model.compactMode = mode
+            model.compactOpenRevision += 1
+            resizeWidget()
+            widgetWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
+            model.mode = mode
+            resizeBar()
+            showBar()
+        }
+    }
+
+    private func presentNotice(_ notice: PetNotice) -> Bool {
+        guard !model.isFocused, model.activeCompanion == nil,
+              !isRequestedVisible(previewWindow) else { return false }
+        placeTransientWindows()
+        // Passive pet messages must never steal an editor's key window.
+        present(previewWindow, activate: false)
+        bannerTimer?.invalidate()
+        bannerTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.model.activity.banner?.id == notice.id else { return }
+                self.model.activity.dismissBanner()
+            }
+        }
+        return true
+    }
 
     func togglePreview() {
         interactionLog.info("toggle preview")
@@ -312,6 +362,7 @@ final class WindowCoordinator: NSObject {
     func showBar() {
         interactionLog.info("show bar")
         guard !model.isFocused else { return }
+        model.activity.dismissBanner()
         if isRequestedVisible(widgetWindow) { collapseWidget() }
         dismiss(previewWindow)
         placeTransientWindows()
@@ -325,6 +376,7 @@ final class WindowCoordinator: NSObject {
     func showWidget(mode: QuickMode = .tasks) {
         interactionLog.info("show dedicated widget")
         guard !model.isFocused else { return }
+        model.activity.dismissBanner()
         if isRequestedVisible(widgetWindow) {
             widgetWindow.makeKeyAndOrderFront(nil)
             return
@@ -360,7 +412,7 @@ final class WindowCoordinator: NSObject {
         return next
     }
 
-    private func present(_ window: KeyPanel) {
+    private func present(_ window: KeyPanel, activate: Bool = true) {
         if window === barWindow { model.activeCompanion = .quick }
         else if window === widgetWindow { model.activeCompanion = .widget }
         advanceRevision(for: window)
@@ -370,7 +422,7 @@ final class WindowCoordinator: NSObject {
         let wasVisible = window.isVisible
         if PetMotion.reduceMotion {
             window.alphaValue = 1
-            window.makeKeyAndOrderFront(nil)
+            if activate { window.makeKeyAndOrderFront(nil) } else { window.orderFrontRegardless() }
             return
         }
         if !wasVisible {
@@ -379,7 +431,7 @@ final class WindowCoordinator: NSObject {
             startFrame.origin.x += 4
             window.setFrame(startFrame, display: false)
         }
-        window.makeKeyAndOrderFront(nil)
+        if activate { window.makeKeyAndOrderFront(nil) } else { window.orderFrontRegardless() }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = PetMotion.overlayDuration
             context.timingFunction = PetMotion.timingFunction
@@ -414,6 +466,7 @@ final class WindowCoordinator: NSObject {
                 window.orderOut(nil)
                 window.alphaValue = 1
                 self.syncCompanionPet()
+                self.resumeNotices(after: window)
                 completion?()
             }
         }
@@ -433,6 +486,16 @@ final class WindowCoordinator: NSObject {
         window.orderOut(nil)
         window.alphaValue = 1
         syncCompanionPet()
+        resumeNotices(after: window)
+    }
+
+    private func resumeNotices(after window: KeyPanel) {
+        guard window === barWindow || window === widgetWindow else { return }
+        Task { @MainActor [weak self] in
+            guard let self, self.model.activeCompanion == nil,
+                  !self.isRequestedVisible(self.barWindow), !self.isRequestedVisible(self.widgetWindow) else { return }
+            self.model.activity.presentNext()
+        }
     }
 
     private func placePetInitially() {
@@ -539,6 +602,7 @@ final class WindowCoordinator: NSObject {
     }
 
     private func startFocus() {
+        model.activity.dismissBanner()
         model.startFocus()
         guard model.isFocused else { return }
         petWindow.orderOut(nil)
@@ -584,6 +648,7 @@ final class WindowCoordinator: NSObject {
         shieldWindows.removeAll()
         NSApp.presentationOptions = previousPresentationOptions
         petWindow.orderFrontRegardless()
+        model.activity.presentNext()
     }
 
     private static func panel(size: NSSize) -> KeyPanel {

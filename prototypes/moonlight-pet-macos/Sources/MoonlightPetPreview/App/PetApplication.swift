@@ -49,6 +49,12 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         let messageItem = NSMenuItem(title: "짧은 메시지 보기", action: #selector(togglePreview), keyEquivalent: "")
         messageItem.target = self
         menu.addItem(messageItem)
+        let noticesItem = NSMenuItem(title: "알림 보기", action: #selector(showNotifications), keyEquivalent: "")
+        noticesItem.target = self
+        menu.addItem(noticesItem)
+        let councilItem = NSMenuItem(title: "Council 안건 준비", action: #selector(showCouncil), keyEquivalent: "")
+        councilItem.target = self
+        menu.addItem(councilItem)
         let hubItem = NSMenuItem(title: "Hub 열기", action: #selector(openHub), keyEquivalent: "")
         hubItem.target = self
         menu.addItem(hubItem)
@@ -85,6 +91,8 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleBar() { coordinator?.toggleBar() }
     @objc private func showWidget() { coordinator?.showWidget() }
     @objc private func togglePreview() { coordinator?.togglePreview() }
+    @objc private func showNotifications() { coordinator?.openMode(.notifications) }
+    @objc private func showCouncil() { coordinator?.openMode(.council) }
     @objc private func openHub() { model.openHub(.tasks) }
     @objc private func quit() {
         if model.isFocused { model.stopFocus() }

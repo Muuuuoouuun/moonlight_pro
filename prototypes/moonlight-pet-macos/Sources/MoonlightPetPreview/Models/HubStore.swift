@@ -36,6 +36,8 @@ final class HubStore: ObservableObject {
     var hasPendingMemo: Bool { pending.memo != nil }
     var hasConnection: Bool { api != nil }
 
+    var onConnectionChanged: (((any HubActivityServing)?, String?) -> Void)?
+
     private let defaults: UserDefaults
     private let makeAPI: (URL) throws -> any HubServing
     private var api: (any HubServing)?
@@ -52,6 +54,7 @@ final class HubStore: ObservableObject {
 
     func connect(baseURL: String, username: String = "", password: String = "") async {
         generation += 1
+        onConnectionChanged?(nil, nil)
         let ticket = generation
         isEnabled = true; defaults.set(true, forKey: "petHub.enabled")
         api = nil; tasks = []; events = []; lastSyncedAt = nil
@@ -68,6 +71,7 @@ final class HubStore: ObservableObject {
             guard ticket == generation else { return }
             api = service
             let origin = normalizedURL.absoluteString
+            onConnectionChanged?(service as? any HubActivityServing, origin)
             storageKey = "petHub.pending.v1." + origin
             if let data = defaults.data(forKey: storageKey!), let restored = try? JSONDecoder().decode(HubPendingState.self, from: data) { pending = restored }
             defaults.set(origin, forKey: "petPreview.hubURL")
@@ -82,6 +86,7 @@ final class HubStore: ObservableObject {
     }
 
     func useLocalStorage() {
+        onConnectionChanged?(nil, nil)
         generation += 1; api = nil; isEnabled = false; refreshRequested = false
         defaults.set(false, forKey: "petHub.enabled")
         isConnecting = false; isRefreshing = false; isSavingTask = false; isSavingMemo = false

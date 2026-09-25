@@ -4,13 +4,14 @@ import React from "react";
 import { useSearchParams } from 'next/navigation';
 import { CodexJobsPanel } from "./codex-jobs";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState, SegmentedControl, TruthBadge, Skeleton, LifecycleBadge, Checkbox } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState, SegmentedControl, TruthBadge, Skeleton, LifecycleBadge, Checkbox, TextAreaField } from "../hub-primitives";
 import { useUndoableAction } from '../use-undoable-action';
 import { ContactRecordDrawer } from '../contact-record-form';
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
 import { GURU_CARDS } from '@com-moon/guru-guidance';
 import { GuruGuidanceCard } from '../guru-guidance-card';
 import { requestCouncilAdvice, councilChatPath } from "../council-client";
+import { COUNCIL_HANDOFF_DRAFT_LIMIT, consumeCouncilDesktopHandoff, createCouncilDraftState, reduceCouncilDraft } from '../council-desktop-handoff';
 import { RECOMMENDED_TRIADS } from "../council-legends";
 import { requestPersonaChat, PERSONA_MODE_LABEL, LEGEND_LENS_MAP } from "../persona-client";
 import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
@@ -610,6 +611,19 @@ function useAgentRoster() {
 // ledger and forwards to the Engine; renders the idle/loading/done/preview/error states the
 // same way Guru does. Default mode is 브랜드 전략 (brand-strategy).
 function CouncilCoachPanel({ onNavigate }) {
+  const [draftState, dispatchDraft] = React.useReducer(reduceCouncilDraft, undefined, createCouncilDraftState);
+  const requestInFlight = React.useRef(false);
+  React.useEffect(() => {
+    const receive = () => {
+      const result = consumeCouncilDesktopHandoff(window);
+      if (result?.ok) dispatchDraft({ type: 'receive', payload: result.payload });
+      else if (result) dispatchDraft({ type: 'error', error: result.error });
+    };
+    // replaceState removes only our fragment. StrictMode's next setup sees no new input.
+    receive();
+    window.addEventListener('hashchange', receive);
+    return () => window.removeEventListener('hashchange', receive);
+  }, []);
   const [state, setState] = React.useState('idle'); // idle | loading | done | preview | error
   const [text, setText] = React.useState('');
   const [note, setNote] = React.useState('');
@@ -621,6 +635,9 @@ function CouncilCoachPanel({ onNavigate }) {
   const [currentMode, setCurrentMode] = React.useState('brand-strategy');
 
   const runMode = async (mode = 'brand-strategy', triadId = selectedTriadId) => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
+    const draft = draftState.draft.trim() ? draftState.draft : null;
     setCurrentMode(mode);
     setState('loading');
     setText('');
@@ -630,7 +647,8 @@ function CouncilCoachPanel({ onNavigate }) {
     const triad = RECOMMENDED_TRIADS.find((t) => t.id === triadId);
     setRequestedTriadId(triad?.id || null);
     const legendIds = triad ? triad.legendIds : undefined;
-    const r = await requestCouncilAdvice({ mode, legendIds });
+    const r = await requestCouncilAdvice({ mode, legendIds, draft, createWorkOrder: false });
+    requestInFlight.current = false;
     if (r.state === 'done') {
       setText(r.text);
       setCouncilData(r.council || null);
@@ -703,10 +721,28 @@ function CouncilCoachPanel({ onNavigate }) {
         })}
       </div>
 
-      {state === 'idle' && (
-        <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
-          Council에게 브랜드/프로젝트 기록 기준의 자문을 요청하세요. 정체된 프로젝트·발행 케이던스 공백·
-          다음 마일스톤을 근거로 먼저 손댈 액션 3건과 이유를 우선순위로 제시합니다. 트라이어드를 선택하면 해당 레전드의 가치관·비용 판단 프레임이 적용됩니다.
+      <TextAreaField
+        label="검토할 안건"
+        value={draftState.draft}
+        onChange={event => dispatchDraft({ type: 'edit', draft: event.target.value })}
+        rows={4}
+        maxLength={COUNCIL_HANDOFF_DRAFT_LIMIT}
+        showCount
+        hint="내용을 확인한 뒤 ‘전략 자문’ 또는 ‘3자 토의’를 누르세요. 비워 두면 브랜드·프로젝트 기록으로 자문합니다."
+        error={draftState.error || undefined}
+        fieldStyle={{ marginBottom: 12 }}
+      />
+      {draftState.notice && <p role="status" style={{ fontSize: 12, color: 'var(--fg-muted)', margin: '0 0 12px' }}>{draftState.notice}</p>}
+      {draftState.pending.length > 0 && (
+        <div style={{ paddingBottom: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginBottom: 6 }}>
+            가져올 안건 <span className="num">{draftState.pending.length}</span>건 · 기존 입력을 유지하고 뒤에 붙일 수 있습니다.
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--fg)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 120, overflowY: 'auto', margin: '0 0 8px' }}>{draftState.pending[0].draft}</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <Button variant="outline" size="xs" onClick={() => dispatchDraft({ type: 'append' })}>기존 입력 뒤에 붙이기</Button>
+            <Button variant="ghost" size="xs" onClick={() => dispatchDraft({ type: 'dismiss' })}>이 안건 닫기</Button>
+          </div>
         </div>
       )}
 
