@@ -3,10 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
 import { DEAL_STAGES, LOST_STAGE, dealStageLabel, isDealStalled } from '../../lib/deal-stages.js';
-import { DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay } from '../../lib/deal-timeline.js';
-import { monthKeyOf, normalizeTargetAmount, targetForMonth, targetProgress } from '../../lib/revenue-target.js';
+import { DEAL_VIEW_OPTIONS, DEFAULT_DEAL_VIEW, resolveDealView, timelineContext, formatCloseLabel, sameCloseDay } from '../../lib/deal-timeline.js';
+import { monthKeyOf, normalizeTargetAmount, targetForMonth } from '../../lib/revenue-target.js';
 import { planBaselineFor } from '../../lib/deal-payments.js';
-import { buildPaymentsBoard } from '../../lib/deal-payment-plan.js';
+import { buildMoneyModel } from '../../lib/deal-money.js';
 
 // Regression: ISSUE-001 — column moves unmount the drag source before dragend.
 // Found by /qa on 2026-09-21. Browser evidence: /tmp/moonlight-deals-qa/drag-result.png.
@@ -17,7 +17,7 @@ const javascript = ts.transpileModule(component.replace('export function', 'func
   compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-// 2026-09-24: 거래 탭의 기본 보기가 "언제"(예상일 칸)로 바뀌었다. 아래 칸반 회귀들은
+// 2026-09-26: 거래 탭의 기본 보기는 "돈"(매출·현금흐름)이다. 아래 칸반 회귀들은
 // 기존 보드를 그대로 겨냥하도록 `?view=stage`로 마운트한다.
 function mount({ state = 'live', records = [], workspace, search = 'view=stage', save, selectedId = null } = {}) {
   const slots = [], timers = [], pending = new Map(), selections = [], replaced = [];
@@ -42,11 +42,11 @@ function mount({ state = 'live', records = [], workspace, search = 'view=stage',
     useCrmSelection: items => { selections.push(items); return { selectedId, setSelectedId() {} }; }, useCrmKeyboard() {},
     STAGE_FILL: [], STAGE_LINE: [], LOST_STAGE, dealStageLabel, isDealStalled, SCOPE_OPTIONS: [], fmt: String,
     triggerCelebration() {}, saveRevenueRecord: save || (async () => ({ ok: true, status: 'saved' })),
-    DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay,
-    monthKeyOf, normalizeTargetAmount, targetForMonth, targetProgress,
-    planBaselineFor, buildPaymentsBoard,
+    DEAL_VIEW_OPTIONS, DEFAULT_DEAL_VIEW, resolveDealView, timelineContext, formatCloseLabel, sameCloseDay,
+    monthKeyOf, normalizeTargetAmount, targetForMonth,
+    planBaselineFor, buildMoneyModel,
   };
-  for (const name of ['Button', 'Kbd', 'SyncBadge', 'Checkbox', 'CheckboxRow', 'LifecycleBadge', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget', 'DealsTimeline', 'DealsRegionView', 'RevenueTargetControl']) dependencies[name] = name;
+  for (const name of ['Button', 'Kbd', 'TruthBadge', 'Checkbox', 'CheckboxRow', 'LifecycleBadge', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget', 'DealsMoney', 'MoneyHeader']) dependencies[name] = name;
   const Deals = new Function(...Object.keys(dependencies), `${javascript}; return Deals;`)(...Object.values(dependencies));
   function render() { index = 0; tree = Deals({ workspace }); return tree; }
   function findAll(predicate, node = tree) {
@@ -146,71 +146,126 @@ test('숨긴 Lost 딜은 Lost 토글 건수에 세지 않는다 — 켜도 빈 �
   assert.equal(lostToggle.length, 0);
 });
 
-// ── 2026-09-24 거래 탭 재설계: 기본 보기 "언제"(목업 3) ─────────────────────────────
+// ── 2026-09-26 거래 탭: 돈 · 단계 두 보기(목업 10) ─────────────────────────────
 const todayIso = () => new Date().toISOString();
 const text = node => (node && typeof node === 'object' ? (node.props?.children || []).map(text).join('') : String(node ?? ''));
+const moneyOf = app => app.findAll(n => n.type === 'DealsMoney')[0];
+const headerOf = app => app.findAll(n => n.type === 'MoneyHeader')[0];
 
-test('기본 보기는 언제 — 칸반 대신 시간 칸을 그리고 제목은 이번 달 들어온 돈(확정치)만 말한다', () => {
+test('기본 보기는 돈 — 칸반 대신 머리 카드와 들어올 돈을 그리고, 머리는 확정치(들어온 돈)만 숫자로 말한다', () => {
   const app = mount({ search: '', records: [
     { id: 'won', stage: 'closing', value: 1800000, closeAt: todayIso() },
     { id: 'quote', stage: 'quote', value: 2400000, closeAt: todayIso() },
-    { id: 'contact', stage: 'contact', value: 1200000, closeAt: todayIso() },
   ] });
   assert.equal(app.findAll(n => n.type === 'ScrollShadowX').length, 0);
   assert.equal(app.findAll(n => n.type === 'CheckboxRow').length, 0);
-  const timeline = app.findAll(n => n.type === 'DealsTimeline');
-  assert.equal(timeline.length, 1);
-  assert.equal(timeline[0].props.timeline.count, 3);
-  const title = app.findAll(n => n.type === 'h2')[0];
-  // 결제 기록이 없으면 입금됨은 0 — 사실 그대로. 예상(확정·가능성·확인 필요 합)은 부제로.
-  assert.equal(text(title), '이번 달 들어온 돈 0', '아직 입금 기록이 없으면 확정치(들어온 돈)는 0');
-  assert.match(text(app.findAll(n => n.type === 'p' && n.props.className === 'fx-page-sub')[0]), /들어올 예정 5400000/);
-  assert.equal(app.findAll(n => n.type === 'h2').length, 1, '페이지 제목은 하나');
+  const money = moneyOf(app);
+  assert.ok(money, '돈 보기 호스트');
+  const header = headerOf(app);
+  assert.equal(header.props.unknown, false);
+  assert.equal(header.props.model, money.props.model, '머리와 목록은 같은 모델을 읽는다');
+  assert.equal(header.props.model.header.paid, 0, '아직 입금 기록이 없으면 들어온 돈은 0');
+  assert.equal(header.props.model.header.monthEndSure, 1800000);
+  assert.equal(header.props.model.header.withMaybe, 4200000);
+  assert.equal(app.findAll(n => n.type === 'h2').length, 0, '돈 보기의 제목(h2)은 머리 카드가 그린다');
+  const actions = header.props.actions;
+  assert.ok(findIn(actions, n => n.type === 'SegmentedControl' && n.props.label === '보기'));
+  assert.equal(findIn(actions, n => n.type === 'Button' && n.props.icon === 'plus').props.variant, 'primary');
 });
 
-test('보기 전환은 ?view=로 남기고 기본 보기로 돌아오면 쿼리를 지운다', () => {
+function findIn(node, predicate) {
+  if (!node || typeof node !== 'object') return null;
+  if (Array.isArray(node)) { for (const c of node) { const f = findIn(c, predicate); if (f) return f; } return null; }
+  if (predicate(node)) return node;
+  return findIn(node.props?.children || [], predicate);
+}
+
+test('단계 보기는 제목(h2) 하나와 칸반 — 머리 카드·돈 목록은 그리지 않는다', () => {
+  const app = mount({ search: 'view=stage', records: [deal()] });
+  assert.equal(app.findAll(n => n.type === 'h2').length, 1);
+  assert.equal(app.findAll(n => n.type === 'MoneyHeader' || n.type === 'DealsMoney').length, 0);
+  assert.equal(app.findAll(n => n.type === 'ScrollShadowX').length, 1);
+});
+
+test('보기 전환은 돈 · 단계 둘 — ?view=로 남기고 돈으로 돌아오면 쿼리를 지운다', () => {
   const app = mount({ search: 'view=stage&scope=company' });
   const toggle = app.findAll(n => n.type === 'SegmentedControl' && n.props.label === '보기')[0];
-  assert.deepEqual(toggle.props.options.map(o => o.label), ['언제', '단계', '결제', '지역']);
+  assert.deepEqual(toggle.props.options.map(o => o.label), ['돈', '단계']);
   assert.equal(toggle.props.value, 'stage');
-  toggle.props.onChange('region');
-  toggle.props.onChange('time');
-  assert.deepEqual(app.replaced, ['/dashboard/revenue/deals?view=region&scope=company', '/dashboard/revenue/deals?scope=company']);
+  toggle.props.onChange('money');
+  assert.deepEqual(app.replaced, ['/dashboard/revenue/deals?scope=company']);
+  const fromMoney = mount({ search: 'scope=company' });
+  findIn(headerOf(fromMoney).props.actions, n => n.type === 'SegmentedControl').props.onChange('stage');
+  assert.deepEqual(fromMoney.replaced, ['/dashboard/revenue/deals?scope=company&view=stage']);
 });
 
-test('지역 보기는 히트맵에 읽기 상태를 맡긴다 — 거래 쪽 스켈레톤·오류를 겹쳐 그리지 않는다', () => {
-  for (const state of ['loading', 'error', 'live']) {
-    const app = mount({ search: 'view=region', state });
-    assert.equal(app.findAll(n => n.type === 'DealsRegionView').length, 1);
-    assert.equal(app.findAll(n => n.type === 'Skeleton' || n.type === 'LedgerReadError').length, 0, state);
+test('옛 보기 링크(언제 · 결제 · 지역)는 돈 보기로 떨어진다 — 지역 히트맵을 거래 탭에 끼워 그리지 않는다', () => {
+  for (const legacy of ['time', 'payments', 'region']) {
+    const app = mount({ search: `view=${legacy}`, records: [deal()] });
+    assert.ok(moneyOf(app), legacy);
+    assert.equal(app.findAll(n => n.type === 'ScrollShadowX').length, 0, legacy);
   }
+  assert.doesNotMatch(component, /DealsRegionView|RevenueHeatmap/);
 });
 
-test('칸 이동 = 예상일 변경: 낙관 반영 → 되돌리기 창 뒤 저장, 실패하면 원래 날짜로', async () => {
+test('읽는 중·읽기 실패·미연결에는 머리에 ₩0을 사실처럼 쓰지 않는다(unknown), 읽기 실패는 다시 시도', () => {
+  for (const state of ['loading', 'error', 'preview']) {
+    const app = mount({ search: '', state, records: [] });
+    assert.equal(headerOf(app).props.unknown, true, state);
+  }
+  assert.equal(mount({ search: '', state: 'loading' }).findAll(n => n.type === 'Skeleton').length, 1);
+  assert.equal(mount({ search: '', state: 'error' }).findAll(n => n.type === 'LedgerReadError').length, 1);
+  assert.equal(mount({ search: '', state: 'error' }).findAll(n => n.type === 'DealsMoney').length, 0);
+});
+
+test('classin 워크스페이스도 같은 돈 · 단계 보기', () => {
+  const app = mount({ search: '', workspace: 'classin', records: [deal()] });
+  assert.ok(moneyOf(app));
+  const stage = mount({ search: 'view=stage', workspace: 'classin', records: [deal()] });
+  assert.equal(stage.findAll(n => n.type === 'ScrollShadowX').length, 1);
+});
+
+test('독의 예상일 변경: 낙관 반영 → 되돌리기 창 뒤 저장, 실패하면 원래 날짜로', async () => {
   const saved = [];
   let result = { ok: false, status: 'failed' };
   const app = mount({ search: '', records: [{ id: 'd1', stage: 'quote', value: 10, closeAt: '' }], save: async (kind, op, body) => { saved.push([kind, op, body]); return result; } });
-  const timelineOf = () => app.findAll(n => n.type === 'DealsTimeline')[0];
-  timelineOf().props.onMoveDate('d1', '2026-10-15T03:00:00.000Z', '예상일 → 10/15 목');
+  moneyOf(app).props.onMoveDate('d1', '2026-10-15T03:00:00.000Z', '예상일 → 10/15 목');
   app.render();
-  assert.equal(timelineOf().props.timeline.ordered[0].deal.closeAt, '2026-10-15T03:00:00.000Z');
+  assert.equal(moneyOf(app).props.deals[0].closeAt, '2026-10-15T03:00:00.000Z');
   assert.equal(saved.length, 0, '창이 닫히기 전에는 쓰지 않는다');
   assert.equal(app.pending.size, 1);
   [...app.pending.values()][0]();
   await new Promise(resolve => setImmediate(resolve));
   app.render();
   assert.deepEqual(saved[0], ['deal', 'update', { id: 'd1', closeAt: '2026-10-15T03:00:00.000Z' }]);
-  assert.equal(timelineOf().props.timeline.ordered[0].deal.closeAt, '', '실패하면 원래 날짜(미정)로 롤백');
+  assert.equal(moneyOf(app).props.deals[0].closeAt, '', '실패하면 원래 날짜(미정)로 롤백');
   result = { ok: true, status: 'saved' };
+});
+
+test('매달 정기 저장: 낙관 반영 → 되돌리기 창 뒤 meta.recurring 쓰기, 실패하면 원래 계획으로', async () => {
+  const saved = [];
+  const plan = { amount: 600000, day: 3, startMonth: '2026-10', endMonth: null };
+  const app = mount({ search: '', records: [{ id: 'd1', stage: 'closing', value: 600000 }], save: async (kind, op, body) => { saved.push(body); return { ok: false, status: 'preview' }; } });
+  moneyOf(app).props.onUpdateRecurring('d1', plan, '정기');
+  app.render();
+  assert.deepEqual(moneyOf(app).props.deals[0].recurring, plan);
+  assert.equal(saved.length, 0);
+  [...app.pending.values()][0]();
+  await new Promise(resolve => setImmediate(resolve));
+  app.render();
+  assert.deepEqual(saved[0], { id: 'd1', recurring: plan });
+  assert.equal(moneyOf(app).props.deals[0].recurring, null, 'preview는 저장되지 않았다 — 되돌린다');
 });
 
 test('독이 열리면 머리의 생성 버튼은 secondary로 내려 한 화면 한 primary를 지킨다', () => {
   const records = [{ id: 'd1', stage: 'quote', value: 10, closeAt: todayIso() }];
+  const createOf = app => findIn(headerOf(app).props.actions, n => n.type === 'Button' && n.props.icon === 'plus');
   const closed = mount({ search: '', records });
-  assert.equal(closed.findAll(n => n.type === 'Button' && n.props.icon === 'plus')[0].props.variant, 'primary');
+  assert.equal(createOf(closed).props.variant, 'primary');
   const open = mount({ search: '', records, selectedId: 'd1' });
-  assert.equal(open.findAll(n => n.type === 'Button' && n.props.icon === 'plus')[0].props.variant, 'secondary');
-  assert.equal(open.findAll(n => n.type === 'DealsTimeline')[0].props.selectedId, 'd1');
+  assert.equal(createOf(open).props.variant, 'secondary');
+  assert.equal(moneyOf(open).props.selectedId, 'd1');
+  assert.deepEqual(open.lastSelection(), [{ id: 'd1' }], 'j/k는 들어올 돈 목록의 거래 순서');
 });
 
 test('칸반의 반론 점검은 10px 인라인 버튼이 아니라 Button 프리미티브다', () => {
@@ -218,49 +273,11 @@ test('칸반의 반론 점검은 10px 인라인 버튼이 아니라 Button 프�
   assert.match(component, /<Button variant="outline" size="xs" icon="sparkle" onClick=\{\(e\) => \{ e\.stopPropagation\(\); setGuruDeal\(d\); \}\}>/);
 });
 
-// ── 2026-09-25 결제 보기(A안) — 예상했던 돈 → 들어온 돈 ─────────────────────────────
-test('결제 보기는 ?view=payments로 남고 같은 호스트(DealsTimeline)가 결제 모델로 그린다', () => {
-  const app = mount({ search: 'view=payments', records: [{ id: 'd1', stage: 'quote', value: 10, closeAt: todayIso() }] });
-  const toggle = app.findAll(n => n.type === 'SegmentedControl' && n.props.label === '보기')[0];
-  assert.equal(toggle.props.value, 'payments');
-  const host = app.findAll(n => n.type === 'DealsTimeline');
-  assert.equal(host.length, 1);
-  assert.equal(host[0].props.view, 'payments');
-  assert.equal(host[0].props.paymentsBoard.rows.length, 1);
-  assert.deepEqual(app.lastSelection(), [{ id: 'd1' }], 'j/k는 표의 거래 순서');
-  assert.equal(app.findAll(n => n.type === 'ScrollShadowX').length, 0, '칸반을 같이 그리지 않는다');
-  const time = mount({ search: '' , records: [{ id: 'd1', stage: 'quote', value: 10, closeAt: todayIso() }] });
-  assert.equal(time.findAll(n => n.type === 'DealsTimeline')[0].props.paymentsBoard, null, '언제 보기엔 결제 모델을 넘기지 않는다');
-  const switcher = mount({ search: 'scope=company' });
-  switcher.findAll(n => n.type === 'SegmentedControl' && n.props.label === '보기')[0].props.onChange('payments');
-  assert.deepEqual(switcher.replaced, ['/dashboard/revenue/deals?scope=company&view=payments']);
-});
-
-test('히어로의 예상했던 이번 달 입금 — 계획이 있을 때만, 괄호는 들어온 게 있을 때만, 읽기 전엔 숫자 없음', () => {
-  const today = todayIso();
-  const records = [
-    { id: 'a', stage: 'closing', value: 1800000,
-      payments: [{ id: 'p', expectedAmount: 1800000, expectedAt: today, status: 'paid', paidAmount: 1600000, paidAt: today, paidNote: '할인' }] },
-    { id: 'b', stage: 'quote', value: 2400000, closeAt: today },
-  ];
-  const sub = app => app.findAll(n => n.type === 'p' && n.props.className === 'fx-page-sub').map(text).join(' ');
-  const app = mount({ search: '', records });
-  assert.match(sub(app), /예상했던 이번 달 입금 4200000 중 1600000 확정 \(−2600000\)/);
-  const nothingPaid = mount({ search: '', records: [records[1]] });
-  assert.match(sub(nothingPaid), /예상했던 이번 달 입금 2400000 중 0 확정$/);
-  const noPlan = mount({ search: '', records: [{ id: 'c', stage: 'quote', value: 0 }] });
-  assert.doesNotMatch(sub(noPlan), /예상했던/);
-  for (const state of ['loading', 'error', 'preview']) {
-    const unknown = mount({ search: '', state, records });
-    assert.doesNotMatch(sub(unknown), /예상했던/, state);
-  }
-});
-
 test('예상일을 처음 옮기면 옮기기 전 계획을 plan_baseline으로 한 번만 싣는다 — 창 안 연속 이동도 원래 값', async () => {
   const saved = [];
   const original = '2026-09-15T03:00:00.000Z';
   const app = mount({ search: '', records: [{ id: 'd1', stage: 'quote', value: 1800000, closeAt: original }], save: async (kind, op, body) => { saved.push(body); return { ok: true, status: 'saved' }; } });
-  const host = () => app.findAll(n => n.type === 'DealsTimeline')[0];
+  const host = () => moneyOf(app);
   host().props.onMoveDate('d1', '2026-10-02T03:00:00.000Z', 'a');
   app.render();
   host().props.onMoveDate('d1', '2026-10-15T03:00:00.000Z', 'b');

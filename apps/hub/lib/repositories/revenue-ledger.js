@@ -273,6 +273,8 @@ export function mapDeal(row, companyById, trackingStartedAt = null) {
     payments: Array.isArray(row.meta?.payments) ? row.meta.payments : [],
     // 암묵 결제의 처음 계획(2026-09-25) — 원시 객체 그대로, 정규화는 deal-payments.js가 한다.
     planBaseline: (row.meta?.plan_baseline && typeof row.meta.plan_baseline === "object") ? row.meta.plan_baseline : null,
+    // 매달 정기(2026-09-26 돈 보기) — 원시 객체 그대로, 정규화는 deal-recurring.js가 한다.
+    recurring: (row.meta?.recurring && typeof row.meta.recurring === "object") ? row.meta.recurring : null,
   };
 }
 

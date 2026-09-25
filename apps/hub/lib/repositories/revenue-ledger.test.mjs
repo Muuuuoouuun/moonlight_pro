@@ -165,3 +165,10 @@ test('projection:"brief" skips customer_accounts/operation_cases and leaves acco
   assert.deepEqual(brief.revenueTargets, full.revenueTargets);
   assert.deepEqual(brief.revenueTargets, { "2026-09": 5000000 });
 });
+
+test("mapDeal reads back the monthly recurring plan (meta.recurring) and rejects a non-object", () => {
+  const recurring = { amount: 600000, day: 3, startMonth: "2026-10", endMonth: null };
+  assert.deepEqual(mapDeal({ id: "deal-r", title: "x", meta: { recurring } }, new Map()).recurring, recurring);
+  assert.equal(mapDeal({ id: "deal-s", title: "x", meta: {} }, new Map()).recurring, null);
+  assert.equal(mapDeal({ id: "deal-t", title: "x", meta: { recurring: "매달" } }, new Map()).recurring, null);
+});
