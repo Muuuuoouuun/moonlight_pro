@@ -31,7 +31,6 @@ struct CalendarCompanionContent: View {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(events) { event in eventRow(event) }
                         }
-                        .modifier(GlassReadability(radius: 12))
                     } else if isLoading {
                         HubReadNotice(message: "Hub에서 일정을 불러오고 있어요.", symbol: "arrow.triangle.2.circlepath")
                     } else if readMessage == nil {
@@ -43,7 +42,6 @@ struct CalendarCompanionContent: View {
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .modifier(GlassReadability(radius: 14))
                     }
                 }
             }
@@ -62,7 +60,6 @@ struct CalendarCompanionContent: View {
                 .buttonStyle(GlassQuietStyle())
             }
             .font(.system(size: 11))
-            .modifier(GlassReadability(radius: 10, inset: 8))
         }
         .onChange(of: model.hub.selectedDate) { previous, selected in
             if CompanionDate.week(containing: previous).first != CompanionDate.week(containing: selected).first {
@@ -102,7 +99,6 @@ struct CalendarCompanionContent: View {
                     .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
-            .modifier(GlassReadability(radius: 16, inset: 5))
         }
     }
 

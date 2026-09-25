@@ -36,11 +36,11 @@ cd prototypes/moonlight-pet-macos
 
 펫을 우클릭하면 이브이와 진화체 아홉 캐릭터 중 하나를 선택한다. 기본 대기 아이콘과 짧은 메시지에는 처음 제공된 얼굴 이미지를 쓴다. 빠른 메모·두 번 눌러 펼친 위젯·집중 모드에서는 팔을 걸친 별도 투명 배경 캐릭터가 유리 상단에 올라온다. 원 테두리는 없다. 블래키는 추가 제공된 일자 앞머리, 에브이는 뒤로 묶은 머리를 살린 자산이다. 원본 이미지는 보존한다. 기본값은 글레이시아이고 선택은 이 Mac에 저장된다. 메뉴 막대의 달 아이콘에는 선택한 펫이 나오는 `짧은 메시지 보기`도 있다.
 
-macOS 26에서는 창 경계의 `NSGlassEffectView(.clear)`가 배경 재질을 처리한다. 기본·입력 상태에는 캐릭터 색상층을 넣지 않는다. 밝거나 복잡한 바탕에서도 읽을 수 있도록 제목·입력·목록·일정 설명에만 네이티브 배경 흐림과 중성 바탕을 둔다. 글자가 없는 여백과 외곽 유리는 투명하게 남긴다. 패널을 누르거나 드래그하는 동안에만 반투명 캐릭터색이 보이며, 해제하면 투명 상태로 돌아온다. 헤더 핸들과 별도 펫 아이콘 드래그 모두 실제로 움직이는 패널에 직접 시작·이동·종료 신호를 전달한다. 글자·아이콘은 화이트 계열이다. 투명도 감소·대비 증가 설정에서는 `.regular`와 불투명 테마 바탕을 사용한다. 빛 반사 윤곽과 그림자 여백을 분리하고 외곽 1~3pt에는 약한 프리즘 색 분리를 둔다. 읽기 바탕은 같은 창의 클릭·드래그 상태를 공유하며, 색상은 반응이 끝나면 사라진다. 글자와 입력창은 유리 위의 별도 호스트에 그려 번짐을 피한다. 이전 macOS는 `NSVisualEffectView(.popover, .behindWindow)`를 사용한다.
+macOS 26에서는 창 경계의 `NSGlassEffectView(.clear)`가 배경 재질을 처리한다. 기본·입력 상태에는 캐릭터 색상층을 넣지 않는다. 빠른 기능·지속 위젯은 네이티브 읽기 재질 한 장을 공유한다. 제목·목록·빈 상태·하단 뒤에 별도 검정 바탕을 겹치지 않으며, 남는 공간에도 같은 재질이 이어진다. 외곽 유리와 선명한 윤곽은 그대로 유지한다. 패널을 누르거나 드래그하는 동안에만 반투명 캐릭터색이 보이며, 해제하면 투명 상태로 돌아온다. 헤더 핸들과 별도 펫 아이콘 드래그 모두 실제로 움직이는 패널에 직접 시작·이동·종료 신호를 전달한다. 글자·아이콘은 화이트 계열이다. 투명도 감소·대비 증가 설정에서는 `.regular`와 불투명 테마 바탕을 사용한다. 빛 반사 윤곽과 그림자 여백을 분리하고 외곽 1~3pt에는 약한 프리즘 색 분리를 둔다. 읽기 바탕은 같은 창의 클릭·드래그 상태를 공유하며, 색상은 반응이 끝나면 사라진다. 글자와 입력창은 유리 위의 별도 호스트에 그려 번짐을 피한다. 이전 macOS는 `NSVisualEffectView(.popover, .behindWindow)`를 사용한다.
 
 펫은 호버·누름·해제에 작게 반응한다. 패널과 본문·선택 표시가 함께 전환되며 무한 장식 모션은 없다. macOS 동작 줄이기를 켜면 장식적 전환은 즉시 완료된다. [프론트 품질 평가 및 검증](design/frontend-quality.md)에 적용 근거와 검증 범위를 기록했다.
 
-읽기 배경은 제목·탭과 할 일 건수·목록을 각각 묶고, 가장자리만 서서히 투명해지는 네이티브 마스크로 유리 면에 연결한다. 목록 배경은 스크롤에 따라 움직이지 않으며 짧은 목록의 남는 공간은 투명하다. 입력창과 버튼의 얇은 경계·선명한 글자는 유지한다. [읽기 배경 조정 및 검증](../../docs/superpowers/specs/2026-09-25-pet-soft-reading-design.md)을 참고한다.
+읽기 배경은 패널 크기에 고정되며 스크롤·글자 수와 함께 움직이지 않는다. 이전의 8~12pt 페더와 항목별 검은 띠를 제거했다. 메모 입력 면은 전체 높이에 옅은 채움을 사용하고, 입력창·선택 탭·버튼만 가는 윤곽으로 구분한다. 캐릭터색은 공통 읽기 재질 위에 한 번만 그리며, 누름·드래그 중 님피아 42%, 나머지 52%로 표시한다. [연속된 유리 표면과 검증](../../docs/superpowers/specs/2026-09-25-pet-continuous-glass-design.md)을 참고한다.
 
 ## 저장과 연결 범위
 
@@ -85,8 +85,8 @@ The floating panels now pair native clear glass with a Metal optical rim (curved
 
 Run `./script/build_and_run.sh --glass-lab` for the optional native-vs-Metal material comparison. The sliders affect the custom material on the right; the calibration backgrounds belong to the app. Normal launch keeps the pet-only experience. `swift run -j 2 MoonlightPetPreview --self-check` also checks real GPU output for edge clipping, premultiplied alpha, Retina geometry and refractive displacement.
 
-The default and typing state use native clear glass with zero character-wash opacity. Character tint appears only while pressing/dragging and fades out on release; Sylveon's blush wash is 60% during that interaction. White-family text stays above the material and optical rim without a readability halo. Reduce Transparency / Increase Contrast select regular glass and a solid theme body. The lab's explicit tint-preview switch is off by default and never affects the real panels or the saved pet.
+The default and typing state use native clear glass with zero character-wash opacity. Character tint appears only while pressing/dragging and fades out on release; Sylveon's blush wash is 42% during that interaction (52% for the other characters). White-family text stays above the material and optical rim without a readability halo. Reduce Transparency / Increase Contrast select regular glass and a solid theme body. The lab's explicit tint-preview switch is off by default and never affects the real panels or the saved pet.
 
-Character hues are separated in lightness and saturation while keeping the existing press-only opacity (Sylveon 60%, others 76%). Local reading materials keep fixed white text usable on busy backgrounds; the outer clear glass and blank areas stay transmissive. The custom prism is an edge-reflection treatment, not a public control over macOS desktop refraction. See [reading and prism design](../../docs/superpowers/specs/2026-09-25-pet-prism-readability-design.md).
+Character hues remain separated in lightness and saturation, with a lighter press-only wash (Sylveon 42%, others 52%). Expanded companion panels use one continuous native reading plane; foreground protection prevents nested reading materials from adding dark patches. The developer optical lab retains its localized reading samples for comparison. The custom prism is an edge-reflection treatment, not a public control over macOS desktop refraction. See [reading and prism design](../../docs/superpowers/specs/2026-09-25-pet-prism-readability-design.md).
 
 브라우저 안건 전달과 문의·일정 알림의 선행 범위는 [설계](../../docs/superpowers/specs/2026-09-25-pet-notifications-council-design.md)와 [검증 기록](../../docs/superpowers/plans/2026-09-25-pet-notifications-council.md)에 정리했다.
