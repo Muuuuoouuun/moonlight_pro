@@ -93,7 +93,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [에이전트 계층 방향](superpowers/specs/2026-09-24-agent-layer-direction.md) — **운영자 확정(2026-09-24) · 연결 코드 로컬 구현, 운영 검증 전**. Office 9인·이브이 접수, Guru/Mentor 에스컬레이션, Legend 주간 카드, 로컬 스킬 실행기의 경계와 연결을 확정한다. Office는 도구 없이 판단·초안·검토만 수행하고, 외부 발송과 작업 변경은 운영자 확인을 거친다.
 - [Office 회의실 레이아웃 A](superpowers/specs/2026-09-24-office-meeting-room-layout.md) — **운영자 승인(2026-09-24) · 화면 로컬 구현·390px 검증 완료, 실제 호출 전**. 막힌 할 일 안건을 회의 스레드로 보여 주는 Office 화면 설계다. 메모 기반 회의 텍스트 검토 M0·M0.5와는 별개이며, Engine·계약은 유지한다.
 
-- [macOS 가장자리 펫 목업](superpowers/specs/2026-09-24-macos-edge-pet-mockup-design.md) — **시연용 목업 · Hub 연동/운영 배포 전**. 오른쪽 펫 → 미리보기 → 빠른 기능 바 → Mac 화면 집중 차단의 네 상태. [독립 SwiftPM 목업](../prototypes/moonlight-pet-macos/README.md)은 할 일·메모를 이 Mac에만 저장하고 기존 Hub는 브라우저로 연다. 전체 화면 앱·다중 화면·Spaces 동작은 실장비 검증 항목이다.
+- [macOS 가장자리 펫 목업](superpowers/specs/2026-09-24-macos-edge-pet-mockup-design.md) — **네이티브 프로토타입 · Hub 연결 구현(2026-09-25)**. 오른쪽 펫 → 빠른 기능/고정 위젯 → Mac 화면 집중 차단. [SwiftPM 앱](../prototypes/moonlight-pet-macos/README.md)은 Hub 할 일 조회·추가·완료, 명시적 메모 저장, 실제 주간 일정 조회를 지원한다. 기존 Mac 기록은 보존하며 상세 화면은 브라우저로 연다. [연결·검증 범위](superpowers/plans/2026-09-25-pet-hub-connection.md): 실제 조회 확인, 운영 데이터 시험 쓰기 없음. 전체 화면 앱·다중 화면·Spaces 동작은 실장비 검증 항목이다.
 
 - [회의·녹음·메모에서 실행까지](superpowers/specs/2026-09-23-meeting-to-action-orchestration-design.md) — **DRAFT · M0 텍스트 코드 일부 구현 / M1~M3 권장·미구현(2026-09-23)**. 메모/멀티모달/Office/MCP/Codex의 연결 상태를 점검하고, 근거 검토→선택 저장→역할 배분→실행 영수증의 단계별 설계를 제안한다. 실제 구현 범위는 [M0 기록](superpowers/plans/2026-09-23-meeting-text-review-m0.md)을 따른다. 운영자 프로필의 직접 녹음·30일 원본 삭제·월 비용 표시 요구는 아직 남아 있다.
 

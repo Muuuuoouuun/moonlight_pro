@@ -239,7 +239,9 @@ final class WindowCoordinator: NSObject {
                     return nil
                 }
                 if event.charactersIgnoringModifiers == "s" {
-                    self.model.saveMemo()
+                    let mode = widgetVisible ? self.model.compactMode : self.model.mode
+                    if mode == .memo && self.model.hub.isEnabled { self.model.saveMemoToHub() }
+                    else { self.model.saveMemo() }
                     return nil
                 }
             }

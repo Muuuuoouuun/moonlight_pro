@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Combine
 
 enum QuickMode: String, CaseIterable, Identifiable {
     case tasks, memo, calendar, office, council, focus
@@ -55,12 +56,6 @@ typealias CompactMode = QuickMode
 
 enum CompanionSurface { case quick, widget }
 
-struct LocalTask: Codable, Identifiable, Equatable {
-    var id: UUID
-    var title: String
-    var isDone: Bool
-}
-
 struct FocusClock: Equatable {
     let endsAt: Date
 
@@ -71,7 +66,9 @@ struct FocusClock: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var activeCompanion: CompanionSurface?
+    @Published var activeCompanion: CompanionSurface? {
+        didSet { updateHubRefresh() }
+    }
     @Published var mode: QuickMode = .tasks
     @Published var compactMode: CompactMode = .tasks
     @Published var compactOpenRevision = 0
@@ -95,12 +92,16 @@ final class AppModel: ObservableObject {
     }
 
     var onFocusFinished: (() -> Void)?
+    let hub: HubStore
+    private var hubObserver: AnyCancellable?
+    private var refreshLoop: Task<Void, Never>?
     private let defaults: UserDefaults
     private var focusClock: FocusClock?
     private var timer: Timer?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        hub = HubStore(defaults: defaults)
         if let data = defaults.data(forKey: "petPreview.tasks"),
            let decoded = try? JSONDecoder().decode([LocalTask].self, from: data) {
             tasks = decoded
@@ -112,9 +113,47 @@ final class AppModel: ObservableObject {
         selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
     }
 
-    var openTaskCount: Int { tasks.filter { !$0.isDone }.count }
+    var displayedTasks: [LocalTask] { hub.isEnabled ? hub.tasks.map(\.local) : tasks }
+    var openTaskCount: Int { displayedTasks.filter { !$0.isDone }.count }
+    var taskStatusLabel: String { hub.isEnabled ? (hub.isRefreshing ? "Hub 새로고침 중…" : hub.connectionLabel) : "이 Mac에 저장" }
+    var memoStatusLabel: String {
+        if hub.isSavingMemo { return "Mac에 보관 · Hub 저장 중…" }
+        if hub.isEnabled, hub.savedMemoBody == memoDraft, !hub.hasPendingMemo { return "Hub에 저장됨 · Mac에 보관" }
+        return memoDraft.isEmpty ? "이 Mac에 자동 저장" : "Mac에 자동 저장됨"
+    }
+
+    func startHubConnection() {
+        hubObserver = hub.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        guard hub.isEnabled else { return }
+        Task { await hub.connect(baseURL: hubBaseURL) }
+    }
+
+    func saveMemoToHub() {
+        saveMemo()
+        let body = memoDraft
+        Task { await hub.saveMemo(body: body) }
+    }
+
+    func saveMemoAsNewToHub() {
+        saveMemo()
+        let body = memoDraft
+        Task { await hub.saveMemoAsNew(body: body) }
+    }
+
+    private func updateHubRefresh() {
+        refreshLoop?.cancel()
+        guard activeCompanion != nil else { return }
+        refreshLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                if self.hub.isEnabled { await self.hub.refresh() }
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            }
+        }
+    }
 
     var previewText: String {
+        if hub.isEnabled && !hub.taskReady { return hub.connectionLabel + " · 펫에서 연결 상태를 확인해요." }
         if openTaskCount > 0 { return "할 일 \(openTaskCount)개가 남아 있어요." }
         if !savedMemo.isEmpty { return "저장한 메모가 있어요." }
         return "새 알림은 없어요. 펫을 눌러 빠른 기능을 열어요."
@@ -122,19 +161,27 @@ final class AppModel: ObservableObject {
 
     func addTask() {
         let value = taskDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return }
+        guard !value.isEmpty || (hub.isEnabled && hub.hasPendingTask) else { return }
+        if hub.isEnabled {
+            Task {
+                if let saved = await hub.createTask(title: value), taskDraft.trimmingCharacters(in: .whitespacesAndNewlines) == saved { taskDraft = "" }
+            }
+            return
+        }
         tasks.insert(LocalTask(id: UUID(), title: value, isDone: false), at: 0)
         taskDraft = ""
         persistTasks()
     }
 
     func toggleTask(_ id: UUID) {
+        if hub.isEnabled { Task { await hub.toggleTask(id) }; return }
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].isDone.toggle()
         persistTasks()
     }
 
     func removeTask(_ id: UUID) {
+        guard !hub.isEnabled else { return }
         tasks.removeAll { $0.id == id }
         persistTasks()
     }
@@ -155,7 +202,9 @@ final class AppModel: ObservableObject {
     }
 
     func saveHubURL() {
-        hubBaseURL = hubBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: hubBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let validated = try? HubTransport.validatedBaseURL(url) else { return }
+        hubBaseURL = validated.absoluteString
         defaults.set(hubBaseURL, forKey: "petPreview.hubURL")
     }
 
