@@ -235,3 +235,16 @@ test("스타일은 토큰과 선 모양만 — 원색·두꺼운 보더·raw 모
   assert.doesNotMatch(source, /onMouseEnter|onMouseLeave/);
   assert.doesNotMatch(source, /\b14일/, "멈춤 기준은 STALLED_DAYS 상수로만 말한다");
 });
+
+test("결제 일정 추가는 금액을 채운 뒤에만 저장한다 — 빈 행을 먼저 저장하지 않는다", () => {
+  // 2026-09-25 통합 검증: addInstallment가 만든 ₩0 행을 바로 저장하면 normalizePayment가 그 행을
+  // 버려 편집할 틈 없이 사라졌다. 금액 없는 딜은 결제 블록 자체가 숨어 일정을 넣을 길이 없었다.
+  const source = readFileSync(new URL("./deals-timeline.jsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /onUpdatePayments\(addInstallment\(deal\)/, "빈 행을 곧바로 저장하지 않는다");
+  assert.match(source, /결제 일정 추가/, "금액 없는 딜에도 일정 추가 입구가 있다");
+  const block = source.slice(source.indexOf("function DealPaymentsBlock"), source.indexOf("function DealDock"));
+  assert.doesNotMatch(block, /if \(!payments\.length\) return null;/, "결제가 없어도 블록을 숨기지 않는다");
+  // 빈 행은 정규화에서 버려진다 — 그래서 폼이 금액을 먼저 받아야 한다.
+  const dropped = paymentsLib.effectivePayments({ id: "d", value: null, payments: paymentsLib.addInstallment({ id: "d", value: null }) });
+  assert.equal(dropped.length, 0);
+});

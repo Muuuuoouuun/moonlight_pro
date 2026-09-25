@@ -300,7 +300,10 @@ function DealPaymentsBlock({ deal, onUpdatePayments }) {
   const paidTotal = dealPaidTotal(deal);
   const [active, setActive] = React.useState(null); // { id, mode: 'confirm' | 'edit' }
   const [draft, setDraft] = React.useState({});
-  React.useEffect(() => { setActive(null); }, [deal.id]);
+  // 새 결제 일정은 로컬 폼에서 금액을 채운 뒤에만 저장한다 — 빈(₩0) 행을 먼저 저장하면
+  // normalizePayment가 그 행을 버려 편집할 틈도 없이 사라진다(2026-09-25 통합 검증).
+  const [adding, setAdding] = React.useState(null); // { label, expectedAmount, expectedAt } | null
+  React.useEffect(() => { setActive(null); setAdding(null); }, [deal.id]);
 
   const startConfirm = (payment) => {
     setActive({ id: payment.id, mode: "confirm" });
@@ -311,16 +314,33 @@ function DealPaymentsBlock({ deal, onUpdatePayments }) {
     setDraft({ label: payment.label || "", expectedAmount: String(payment.expectedAmount || ""), expectedAt: dateInputValue(payment.expectedAt) });
   };
 
-  if (!payments.length) return null;
+  const addAmount = Number(adding?.expectedAmount);
+  const canAdd = Number.isFinite(addAmount) && addAmount > 0;
+  const saveNew = () => {
+    if (!canAdd) return;
+    const rows = addInstallment(deal);
+    rows[rows.length - 1] = {
+      ...rows[rows.length - 1],
+      label: adding.label || null,
+      expectedAmount: addAmount,
+      expectedAt: adding.expectedAt ? isoFromDateInput(adding.expectedAt) : null,
+    };
+    onUpdatePayments(rows, payments.length ? "결제 일정을 나눴습니다" : "결제 일정을 추가했습니다");
+    setAdding(null);
+  };
 
   return (
     <div className="deals-pay">
       <div className="deals-pay__head">
         <span className="fx-eyebrow">결제</span>
-        <span className="deals-pay__summary">
-          <span className="stat">{formatWon(expectedTotal)}</span> 예정
-          {paidTotal > 0 && <> · <span className="stat deals-pay__paid">{formatWon(paidTotal)}</span> 입금</>}
-        </span>
+        {payments.length > 0 ? (
+          <span className="deals-pay__summary">
+            <span className="stat">{formatWon(expectedTotal)}</span> 예정
+            {paidTotal > 0 && <> · <span className="stat deals-pay__paid">{formatWon(paidTotal)}</span> 입금</>}
+          </span>
+        ) : (
+          <span className="deals-pay__summary">금액이 아직 없어요 — 대략이라도 적어 두면 이번 달 예상에 들어갑니다</span>
+        )}
       </div>
       <ul className="deals-pay__list">
         {payments.map((payment, i) => {
@@ -430,10 +450,37 @@ function DealPaymentsBlock({ deal, onUpdatePayments }) {
           );
         })}
       </ul>
-      <Button
-        variant="ghost" size="xs" icon="plus"
-        onClick={() => onUpdatePayments(addInstallment(deal), "결제 일정을 나눴습니다 — 새 일정을 채워 주세요")}
-      >결제 일정 나누기</Button>
+      {adding ? (
+        <div className="deals-pay-row deals-pay-row--form">
+          <span className="deals-pay-row__fields">
+            <label>
+              <span>이름(선택)</span>
+              <input type="text" className="hub-input" value={adding.label} placeholder="계약금 등" maxLength={40}
+                onChange={(e) => setAdding((d) => ({ ...d, label: e.target.value }))} />
+            </label>
+            <label>
+              <span>예상 금액</span>
+              <input type="number" inputMode="numeric" min="0" className="hub-input" value={adding.expectedAmount} autoFocus
+                onChange={(e) => setAdding((d) => ({ ...d, expectedAmount: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveNew(); } }} />
+            </label>
+            <label>
+              <span>예상일</span>
+              <input type="date" className="hub-input" value={adding.expectedAt}
+                onChange={(e) => setAdding((d) => ({ ...d, expectedAt: e.target.value }))} />
+            </label>
+          </span>
+          <span className="deals-pay-row__acts">
+            <Button size="xs" variant="primary" disabled={!canAdd} onClick={saveNew}>추가</Button>
+            <Button size="xs" variant="ghost" onClick={() => setAdding(null)}>취소</Button>
+          </span>
+        </div>
+      ) : (
+        <Button
+          variant="ghost" size="xs" icon="plus"
+          onClick={() => { setActive(null); setAdding({ label: "", expectedAmount: "", expectedAt: dateInputValue(deal.closeAt) || "" }); }}
+        >{payments.length ? "결제 일정 나누기" : "결제 일정 추가"}</Button>
+      )}
     </div>
   );
 }
