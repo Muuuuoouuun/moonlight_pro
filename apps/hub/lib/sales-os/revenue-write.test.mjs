@@ -6,6 +6,7 @@ import {
   buildCaseWrite,
   buildDealWrite,
   buildLeadWrite,
+  mergeRecordMeta,
   parseMoneyLabel,
   persistRevenueRecord,
 } from "./revenue-write.js";
@@ -86,6 +87,42 @@ test("buildDealWrite normalizes payments and drops invalid rows (deal-payments.j
 test("buildDealWrite leaves meta.payments untouched when the field is absent (no-payments deals unaffected)", () => {
   const { metaPatch } = buildDealWrite({ name: "이름만 바꿈" });
   assert.equal("payments" in metaPatch, false);
+});
+
+test("buildDealWrite carries a valid planBaseline into meta.plan_baseline and drops an invalid one", () => {
+  const { metaPatch } = buildDealWrite({ planBaseline: { amount: 1800000, closeAt: "2026-09-15T03:00:00.000Z", at: "2026-09-25T01:00:00.000Z" } });
+  assert.deepEqual(metaPatch.plan_baseline, { amount: 1800000, closeAt: "2026-09-15T03:00:00.000Z", at: "2026-09-25T01:00:00.000Z" });
+  assert.equal("plan_baseline" in buildDealWrite({ planBaseline: { amount: 0 } }).metaPatch, false);
+  assert.equal("plan_baseline" in buildDealWrite({ planBaseline: null }).metaPatch, false);
+  assert.equal("plan_baseline" in buildDealWrite({ name: "x" }).metaPatch, false);
+});
+
+test("buildDealWrite keeps each payment's first plan (planned*) and the paid-difference note", () => {
+  const { metaPatch } = buildDealWrite({
+    payments: [{
+      id: "p1", expectedAmount: 1800000, expectedAt: "2026-10-02T03:00:00.000Z",
+      plannedAmount: 1800000, plannedAt: "2026-09-15T03:00:00.000Z",
+      status: "paid", paidAmount: 1600000, paidAt: "2026-10-01T03:00:00.000Z", paidNote: "첫 달 할인",
+    }],
+  });
+  assert.equal(metaPatch.payments[0].plannedAt, "2026-09-15T03:00:00.000Z");
+  assert.equal(metaPatch.payments[0].paidNote, "첫 달 할인");
+});
+
+test("mergeRecordMeta writes a deal's plan_baseline once — an existing baseline always wins", () => {
+  const existing = { brand: "sinabro", payments: [{ id: "p1" }], plan_baseline: { amount: 1800000, closeAt: "2026-09-15T03:00:00.000Z" } };
+  const merged = mergeRecordMeta({ table: "deals", existingMeta: existing, metaPatch: { plan_baseline: { amount: 999, closeAt: "2026-12-01" }, next_action: "회신" } });
+  assert.deepEqual(merged.plan_baseline, existing.plan_baseline);
+  assert.equal(merged.brand, "sinabro");
+  assert.deepEqual(merged.payments, [{ id: "p1" }]);
+  assert.equal(merged.next_action, "회신");
+  const first = mergeRecordMeta({ table: "deals", existingMeta: { brand: "sinabro" }, metaPatch: { plan_baseline: { amount: 5, closeAt: null } } });
+  assert.deepEqual(first, { brand: "sinabro", plan_baseline: { amount: 5, closeAt: null } });
+  // 잘못 저장된 옛 값(금액 없음)은 기준선이 아니다 — 새 값이 들어간다.
+  const repaired = mergeRecordMeta({ table: "deals", existingMeta: { plan_baseline: { amount: 0 } }, metaPatch: { plan_baseline: { amount: 7 } } });
+  assert.deepEqual(repaired.plan_baseline, { amount: 7 });
+  // 딜이 아닌 표는 평범한 얕은 병합 그대로
+  assert.deepEqual(mergeRecordMeta({ table: "leads", existingMeta: { a: 1 }, metaPatch: { b: 2 } }), { a: 1, b: 2 });
 });
 
 test("buildCaseWrite maps display status/priority labels back to DB enums", () => {
@@ -243,6 +280,22 @@ test("persistRevenueRecord update merges meta instead of clobbering provenance",
   assert.equal(patch.body.status, "qualified");
   // Sibling meta keys survive; only value is overwritten.
   assert.deepEqual(patch.body.meta, { brand: "sinabro", lane: "classin_sales", value: 2_000_000 });
+});
+
+test("persistRevenueRecord keeps an existing deal plan_baseline and sibling meta when a later save carries another one", async () => {
+  const baseline = { amount: 1800000, closeAt: "2026-09-15T03:00:00.000Z", at: "2026-09-20T00:00:00.000Z" };
+  installSupabaseFetch({ existingMeta: { brand: "sinabro", payments: [], plan_baseline: baseline }, existingStage: "proposal" });
+  const result = await persistRevenueRecord({
+    table: "deals",
+    op: "update",
+    id: "existing-id",
+    payload: { closeAt: "2026-11-02T03:00:00.000Z", planBaseline: { amount: 2000000, closeAt: "2026-10-02T03:00:00.000Z" } },
+    build: buildDealWrite,
+  });
+  assert.equal(result.status, "saved");
+  const patch = calls.find(c => c.method === "PATCH");
+  assert.equal(patch.body.expected_close_at, "2026-11-02T03:00:00.000Z");
+  assert.deepEqual(patch.body.meta, { brand: "sinabro", payments: [], plan_baseline: baseline });
 });
 
 test("persistRevenueRecord delete issues a filtered DELETE scoped to the workspace", async () => {

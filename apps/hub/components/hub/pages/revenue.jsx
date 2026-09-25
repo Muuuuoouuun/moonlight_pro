@@ -20,6 +20,8 @@ import { DEAL_STAGES, STAGE_FILL, STAGE_LINE, LOST_STAGE, dealStageLabel, isDeal
 import { DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay } from "@/lib/deal-timeline";
 import { DealsTimeline, DealsRegionView, RevenueTargetControl } from "./deals-timeline";
 import { monthKeyOf, normalizeTargetAmount, targetForMonth, targetProgress } from "@/lib/revenue-target";
+import { planBaselineFor } from "@/lib/deal-payments";
+import { buildPaymentsBoard } from "@/lib/deal-payment-plan";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
@@ -1730,7 +1732,8 @@ export function Deals({ workspace, onNavigate }) {
   const effectiveWorkspace = workspace || (queryScope === 'personal' ? 'brand' : queryScope === 'classin' ? 'classin' : undefined);
   const router = useRouter();
   const pathname = usePathname();
-  // 보기: 언제(기본 · 예상일 칸) · 단계(칸반) · 지역(히트맵). `?view=`로 남겨 새로고침·공유에도 유지.
+  // 보기: 언제(기본 · 예상일 칸) · 단계(칸반) · 결제(예상했던 돈 → 들어온 돈) · 지역(히트맵).
+  // `?view=`로 남겨 새로고침·공유에도 유지.
   const view = resolveDealView(searchParams?.get('view'));
   const changeView = (next) => {
     const params = new URLSearchParams(searchParams?.toString() || '');
@@ -1880,17 +1883,21 @@ export function Deals({ workspace, onNavigate }) {
   };
   // 언제 보기의 칸 이동·독 프리셋 = 예상일(expected_close_at) 변경. 단계 이동과 같은 지연 쓰기
   // 계약 — 낙관 반영 → 되돌리기 창 → 창이 닫힌 뒤 PATCH, 실패하면 원래 날짜로 롤백하고 명명한다.
-  const pendingCloseRef = React.useRef(new Map()); // key → 최초 { closeAt, close }
+  // 처음 계획(2026-09-25 A안): 계획이 완성된 딜의 예상일을 처음 옮길 때 옮기기 전 값을
+  // meta.plan_baseline으로 한 번 같이 싣는다(planBaselineFor). 되돌리기 창 안에서 연달아 옮겨도
+  // 기준은 창이 열리기 전 값(base)이라 "예상했던" 날짜가 중간값으로 바뀌지 않는다.
+  const pendingCloseRef = React.useRef(new Map()); // key → 최초 { closeAt, close, planBaseline }
   const moveCloseDate = (id, nextCloseAt, label) => {
     const current = deals.find(d => d.id === id);
     const next = nextCloseAt || '';
     if (!current || sameCloseDay(current.closeAt, next)) return;
     const key = `deal-close-${id}`;
-    const base = pendingCloseRef.current.get(key) ?? { closeAt: current.closeAt || '', close: current.close };
+    const base = pendingCloseRef.current.get(key) ?? { closeAt: current.closeAt || '', close: current.close, planBaseline: current.planBaseline ?? null };
     pendingCloseRef.current.set(key, base);
-    setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: next, close: formatCloseLabel(next) } : d)));
+    const planBaseline = planBaselineFor({ ...current, closeAt: base.closeAt, planBaseline: base.planBaseline }, { closeAt: next });
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: next, close: formatCloseLabel(next), ...(planBaseline ? { planBaseline } : {}) } : d)));
     if (String(id).toLowerCase().startsWith('local-')) { pendingCloseRef.current.delete(key); return; }
-    const restore = () => setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: base.closeAt, close: base.close } : d)));
+    const restore = () => setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: base.closeAt, close: base.close, planBaseline: base.planBaseline } : d)));
     const undoCloseMove = () => {
       if (cancelUndoable(key)) {
         pendingCloseRef.current.delete(key);
@@ -1900,7 +1907,7 @@ export function Deals({ workspace, onNavigate }) {
     };
     scheduleUndoable(key, () => {
       pendingCloseRef.current.delete(key);
-      saveRevenueRecord('deal', 'update', { id, closeAt: next }).then((r) => {
+      saveRevenueRecord('deal', 'update', { id, closeAt: next, ...(planBaseline ? { planBaseline } : {}) }).then((r) => {
         if (r.ok) return;
         restore();
         toast.error(r.status === 'preview'
@@ -1991,16 +1998,18 @@ export function Deals({ workspace, onNavigate }) {
   const persistDeal = async () => {
     if (!editingDeal) return { ok: false, status: 'error' };
     const isNew = String(editDealId).toLowerCase().startsWith('local-');
-    const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', editingDeal);
+    const prevDeal = deals.find(d => d.id === editDealId);
+    // 금액·예상일을 바꾸는 편집이면 바꾸기 전 계획을 한 번만 같이 싣는다(moveCloseDate와 같은 규칙).
+    const planBaseline = isNew ? null : planBaselineFor(prevDeal, { value: editingDeal.value, closeAt: editingDeal.closeAt });
+    const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', planBaseline ? { ...editingDeal, planBaseline } : editingDeal);
     if (r.ok) {
       // 저장 성공 시점에 드래프트를 보드에 커밋 — 타이핑 중에는 보드가 재계산되지 않는다.
       const draft = dealDrafts[editDealId];
       const realId = isNew && r.id ? r.id : editDealId;
-      const prevDeal = deals.find(d => d.id === editDealId);
       if (editingDeal.stage === 'closing' && prevDeal?.stage !== 'closing') {
         triggerCelebration({ mode: 'confetti' });
       }
-      setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, ...(draft || {}), id: realId } : d)));
+      setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, ...(draft || {}), ...(planBaseline ? { planBaseline } : {}), id: realId } : d)));
       setDealDrafts(prev => { if (!prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
       if (isNew && r.id) setEditDealId(realId);
       toast.success(isNew ? '새 딜을 저장했습니다.' : '딜 정보를 저장했습니다.');
@@ -2083,9 +2092,24 @@ export function Deals({ workspace, onNavigate }) {
     () => buildDealTimeline(timelineSource, { stages: DEAL_STAGES }),
     [timelineSource, DEAL_STAGES],
   );
-  const selection = useCrmSelection(view === 'time' ? dealTimeline.ordered : boardItems);
-  const dockOpen = view === 'time' && selection.selectedId != null
-    && dealTimeline.ordered.some(item => item.id === selection.selectedId);
+  // 결제 보기 — 같은 딜 집합의 달별 "예상했던 돈 → 들어온 돈"(lib/deal-payment-plan.js). 표의 달은
+  // 여기서 소유한다(null = 이번 달). 히어로의 "예상했던 이번 달 입금" 한 줄도 같은 결과(current)를 읽는다.
+  const [paymentsMonth, setPaymentsMonth] = React.useState(null);
+  const paymentsBoard = React.useMemo(
+    () => buildPaymentsBoard(timelineSource, { monthKey: paymentsMonth }),
+    [timelineSource, paymentsMonth],
+  );
+  // 결제 보기의 j/k는 표에 보이는 거래 순서(같은 거래의 여러 회차는 한 번)로 움직인다.
+  const paymentSelectionItems = React.useMemo(
+    () => [...new Set(paymentsBoard.rows.map(row => row.dealId))].map(id => ({ id })),
+    [paymentsBoard.rows],
+  );
+  const selection = useCrmSelection(view === 'time' ? dealTimeline.ordered : view === 'payments' ? paymentSelectionItems : boardItems);
+  const dockOpen = selection.selectedId != null && (
+    view === 'time'
+      ? dealTimeline.ordered.some(item => item.id === selection.selectedId)
+      : view === 'payments' && timelineSource.some(d => d.id === selection.selectedId)
+  );
   // 읽는 중·읽기 실패·미연결(preview)에는 ₩0을 사실처럼 제목에 올리지 않는다.
   const heroUnknown = ledgerUnavailable || syncState === 'preview';
 
@@ -2150,7 +2174,8 @@ export function Deals({ workspace, onNavigate }) {
   });
   React.useEffect(() => {
     if (!selection.selectedId) return;
-    document.querySelector(`[data-deal-card="${CSS.escape(String(selection.selectedId))}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const key = CSS.escape(String(selection.selectedId));
+    document.querySelector(`[data-deal-card="${key}"], [data-deal-row="${key}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [selection.selectedId]);
 
   return (
@@ -2168,8 +2193,20 @@ export function Deals({ workspace, onNavigate }) {
             <h2 className="fx-page-title">
               {heroUnknown ? '거래' : <>이번 달 들어온 돈 <span className="stat">{fmt(dealTimeline.month.paid)}</span></>}
             </h2>
-            {!heroUnknown && dealTimeline.month.total > 0 && (
-              <p className="fx-page-sub">들어올 예정 <span className="stat deals-hero__value">{fmt(dealTimeline.month.total)}</span></p>
+            {/* 예상했던 이번 달 입금(2026-09-25 A안) — 처음 계획이 이번 달인 결제 중 얼마가 들어왔나.
+                괄호는 들어온 것 − 계획(아직 들어온 게 없으면 계획 금액과 같은 말이라 생략). */}
+            {!heroUnknown && (dealTimeline.month.total > 0 || paymentsBoard.current.planned > 0) && (
+              <p className="fx-page-sub">
+                {dealTimeline.month.total > 0 && <>들어올 예정 <span className="stat deals-hero__value">{fmt(dealTimeline.month.total)}</span></>}
+                {paymentsBoard.current.planned > 0 && (
+                  <span className="deals-hero__plan">
+                    {dealTimeline.month.total > 0 ? ' · ' : ''}예상했던 이번 달 입금 <span className="mono">{fmt(paymentsBoard.current.planned)}</span> 중 <span className="mono">{fmt(paymentsBoard.current.plannedConfirmed)}</span> 확정
+                    {paymentsBoard.current.plannedConfirmed > 0 && paymentsBoard.current.plannedDelta !== 0 && (
+                      <> (<span className="mono">{paymentsBoard.current.plannedDelta > 0 ? '+' : '−'}{fmt(Math.abs(paymentsBoard.current.plannedDelta))}</span>)</>
+                    )}
+                  </span>
+                )}
+              </p>
             )}
             {!heroUnknown && (
               // 목표 편집기는 <form>을 그린다 — <p> 안의 <form>은 잘못된 중첩(하이드레이션 오류)이라 div로 감싼다.
@@ -2255,8 +2292,12 @@ export function Deals({ workspace, onNavigate }) {
         </Card>
       )}
 
-      {view === 'time' && !ledgerUnavailable && !wsEmpty && (
+      {(view === 'time' || view === 'payments') && !ledgerUnavailable && !wsEmpty && (
         <DealsTimeline
+          view={view}
+          deals={timelineSource}
+          paymentsBoard={view === 'payments' ? paymentsBoard : null}
+          onPaymentsMonth={setPaymentsMonth}
           timeline={dealTimeline}
           stages={dealTimeline.stages}
           ledger={ledger}

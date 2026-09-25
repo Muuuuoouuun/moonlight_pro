@@ -13,7 +13,7 @@ import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./
 import { SUBJECT_KEY_SET } from "./lead-labels.js";
 import { normalizeGenreLabels } from "./customer-labels.js";
 import { promiseColumns, promiseMetaPatch } from "./customer-promise.js";
-import { normalizePayments } from "../deal-payments.js";
+import { normalizePayments, normalizePlanBaseline } from "../deal-payments.js";
 import {
   deleteSupabaseRecord,
   insertSupabaseRecord,
@@ -182,6 +182,12 @@ export function buildDealWrite(payload = {}) {
   // 남는다. normalizePayments가 유효하지 않은 항목(금액 없음 등)을 걸러 저장한다.
   if (payload.payments !== undefined) {
     metaPatch.payments = normalizePayments(payload.payments);
+  }
+  // 암묵 결제의 처음 계획(2026-09-25 A안, deal-payments.js planBaselineFor) — 유효할 때만 싣는다.
+  // 한 번 쓰면 끝이다: 이미 기록에 있으면 mergeRecordMeta가 기존 값을 지킨다.
+  if (payload.planBaseline !== undefined) {
+    const baseline = normalizePlanBaseline(payload.planBaseline);
+    if (baseline) metaPatch.plan_baseline = baseline;
   }
 
   return { columns, metaPatch };
@@ -354,6 +360,18 @@ function persistFailure(res) {
     : { status: "failed", reason: res.reason, detail: res.detail };
 }
 
+// 기존 meta 위에 이번 patch를 얕게 병합한다 — 형제 키(brand·lane·payments…)는 그대로 남는다.
+// 딜의 plan_baseline(처음 계획)은 한 번만 쓴다: 기록에 이미 유효한 값이 있으면 patch가 무엇을
+// 싣든 기존 값을 지킨다(탭 두 개·늦게 도착한 저장이 "예상했던" 값을 바꾸지 못하게).
+export function mergeRecordMeta({ table, existingMeta, metaPatch }) {
+  const base = existingMeta && typeof existingMeta === "object" ? existingMeta : {};
+  const merged = { ...base, ...metaPatch };
+  if (table === "deals" && metaPatch && Object.hasOwn(metaPatch, "plan_baseline") && normalizePlanBaseline(base.plan_baseline)) {
+    merged.plan_baseline = base.plan_baseline;
+  }
+  return merged;
+}
+
 // 딜 단계 이동 한 줄 — crm_activities(kind='deal', meta.from/to). 주간 리포트의 "이동 딜"이 이 행을
 // 센다(2026-09-20 §6.3). 기존 stage_detail이 없던 레거시 딜의 첫 분류는 이동이 아니므로 남기지
 // 않고, 같은 값 재저장도 남기지 않는다. 기록 실패는 딜 저장 결과를 바꾸지 않는다.
@@ -464,7 +482,7 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
       // 병합 기준을 못 읽었으면 저장을 중단한다 — 빈 meta 위에 덮어쓰면 무언 데이터 파괴.
       return { status: "failed", reason: "meta-read-failed", detail: "existing meta unreadable; save aborted to avoid wiping sibling keys" };
     }
-    mergedMeta = { ...existingMeta, ...metaPatch };
+    mergedMeta = mergeRecordMeta({ table, existingMeta, metaPatch });
   }
   const patch = { ...columns, ...dealWonAtPatch({ table, existingMeta, existingStage, metaPatch }), ...(mergedMeta ? { meta: mergedMeta } : {}) };
   if (!Object.keys(patch).length) return { status: "noop" };

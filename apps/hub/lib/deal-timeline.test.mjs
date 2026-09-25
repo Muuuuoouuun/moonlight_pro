@@ -8,8 +8,10 @@ import {
   closeDatePresets,
   dateInputValue,
   dealCustomerKey,
+  dealDockItem,
   dealLaneKey,
   dealPromise,
+  formatSignedWon,
   formatWon,
   isTimelineDeal,
   isoFromDateInput,
@@ -27,10 +29,12 @@ const NOW = new Date("2026-09-24T01:00:00Z");
 const ctx = timelineContext(NOW);
 const kst = (ymd) => `${ymd}T03:00:00.000Z`; // KST 정오
 
-test("보기 키는 언제·단계·지역 셋이고 모르는 값은 언제로 떨어진다", () => {
-  assert.deepEqual(DEAL_VIEW_OPTIONS.map((o) => o.label), ["언제", "단계", "지역"]);
+test("보기 키는 언제·단계·결제·지역 넷이고 모르는 값은 언제로 떨어진다", () => {
+  assert.deepEqual(DEAL_VIEW_OPTIONS.map((o) => o.label), ["언제", "단계", "결제", "지역"]);
+  assert.deepEqual(DEAL_VIEW_OPTIONS.map((o) => o.key), ["time", "stage", "payments", "region"]);
   assert.equal(resolveDealView(null), "time");
   assert.equal(resolveDealView("stage"), "stage");
+  assert.equal(resolveDealView("payments"), "payments");
   assert.equal(resolveDealView("REGION"), "region");
   assert.equal(resolveDealView("kanban"), "time");
 });
@@ -224,4 +228,40 @@ test("금액 라벨은 revenue.jsx와 같은 K/M 임계값", () => {
   assert.equal(formatWon(900000), "₩900K");
   assert.equal(formatWon(1800000), "₩1.8M");
   assert.equal(formatWon(500), "₩500");
+});
+
+test("차이 금액은 부호를 붙인다 — 음수는 U+2212, 0은 부호 없이", () => {
+  assert.equal(formatSignedWon(-200000), "−₩200K");
+  assert.equal(formatSignedWon(300000), "+₩300K");
+  assert.equal(formatSignedWon(0), "₩0");
+  assert.equal(formatSignedWon("nope"), "₩0");
+});
+
+test("명시 결제 카드는 그 결제의 예상일을 들고 있다 — 칸 이동이 결제 예상일을 옮기도록", () => {
+  const timeline = buildDealTimeline([
+    { id: "split", stage: "final", value: 2000000,
+      payments: [{ id: "p1", label: "계약금", expectedAmount: 1000000, expectedAt: kst("2026-09-25") }] },
+    { id: "plain", stage: "quote", value: 10, closeAt: kst("2026-09-26") },
+  ], { now: NOW });
+  const split = timeline.ordered.find((i) => i.deal.id === "split");
+  assert.equal(split.explicitPayment, true);
+  assert.equal(split.paymentId, "p1");
+  assert.equal(split.expectedAt, new Date(kst("2026-09-25")).toISOString());
+  const plain = timeline.ordered.find((i) => i.deal.id === "plain");
+  assert.equal(plain.explicitPayment, false);
+  assert.equal(plain.expectedAt, kst("2026-09-26"));
+});
+
+test("결제 보기의 독 항목은 거래 하나 — 완결된(레인을 떠난) 거래도 열 수 있다", () => {
+  const done = { id: "done", stage: "closing", value: 900000, closeAt: kst("2026-09-10"), companyName: "끝난 곳",
+    payments: [{ id: "q", expectedAmount: 900000, expectedAt: kst("2026-09-10"), status: "paid", paidAmount: 900000, paidAt: kst("2026-09-10") }] };
+  assert.equal(buildDealTimeline([done], { now: NOW }).ordered.length, 0, "언제 보기 레인에는 없다");
+  const item = dealDockItem(done, { now: NOW });
+  assert.equal(item.id, "done");
+  assert.equal(item.deal, done);
+  assert.equal(item.amount, 900000);
+  assert.equal(item.closeLabel, "9/10 목");
+  assert.equal(item.explicitPayment, false, "독의 예상일 바꾸기는 거래의 예상일");
+  assert.equal(item.certainty.key, "confirmed");
+  assert.equal(dealDockItem(null), null);
 });

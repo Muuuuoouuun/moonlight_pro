@@ -270,6 +270,8 @@ export function mapDeal(row, companyById, trackingStartedAt = null) {
     // 결제 일정(운영자 2026-09-24 결정, lib/deal-payments.js) — 원시 배열 그대로 넘긴다.
     // 정규화·암묵적 결제 파생은 소비자(deal-timeline.js, deal-payments.js)가 매번 한다.
     payments: Array.isArray(row.meta?.payments) ? row.meta.payments : [],
+    // 암묵 결제의 처음 계획(2026-09-25) — 원시 객체 그대로, 정규화는 deal-payments.js가 한다.
+    planBaseline: (row.meta?.plan_baseline && typeof row.meta.plan_baseline === "object") ? row.meta.plan_baseline : null,
   };
 }
 

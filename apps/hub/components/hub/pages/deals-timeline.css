@@ -40,6 +40,12 @@
   font-weight: 500;
 }
 
+/* "예상했던 이번 달 입금 ₩P 중 ₩C 확정 (±Δ)" — 조용한 한 조각. 줄이 좁으면 통째로 다음 줄로 */
+.hub-app .deals-hero__plan {
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+
 /* 목표 정하기 — 조용한 인라인 텍스트 버튼. 없으면 흐린 글자, 있으면 진행 문장 + 연필 */
 .hub-app .deals-hero__target {
   display: inline-flex;
@@ -715,6 +721,284 @@
 
 .hub-app .deals-pay-row__fields .hub-input { width: 120px; height: 28px; padding: 0 8px; }
 
+/* 입금 확인 — 입금액이 예상과 다를 때만 열리는 "차이 이유" 한 줄(40자) */
+.hub-app .deals-pay-row__fields .deals-pay-row__note { flex: 1 1 220px; }
+.hub-app .deals-pay-row__fields .deals-pay-row__note .hub-input { width: 100%; }
+
+/* 처음 계획과 지금 예상일이 다를 때 "원래 9/15 월" · 입금 차이와 이유 */
+.hub-app .deals-pay-row__was { color: var(--fg-dim); font-size: 11.5px; }
+.hub-app .deals-pay-row__diff { font-size: 12px; color: var(--fg-muted); }
+
+/* ── 결제 보기(운영자 2026-09-25 A안) — 예상했던 돈 → 들어온 돈 ───────────────────
+ * 확정 = 꽉 찬 중립 채움(--fg) · 남은 예정 = 1px 점선 윤곽(--surface-2) · 그 달에 예상했던 입금 =
+ * 1px 점선 가로 눈금. 색은 명도만(§5.3 charts), 빨강은 늦은 입금 글자·1px 레일뿐. */
+.hub-app .deals-pm-chart,
+.hub-app .deals-pm-table-card { padding: 22px 24px 18px; min-width: 0; }
+
+.hub-app .deals-pm-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.hub-app .deals-pm-head h3 { margin: 0; }
+
+.hub-app .deals-pm-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.hub-app .deals-pm-scroll { overflow-x: auto; }
+
+.hub-app .deals-pm-cols {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(64px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.hub-app .deals-pm-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 2px 8px;
+  border-radius: var(--r);
+  text-align: center;
+}
+
+/* 표가 보고 있는 달 — 선택은 배경 한 단계(중립), 현재 위치는 아래 Moonstone 점이 따로 말한다 */
+.hub-app .deals-pm-col[data-selected] { background: var(--surface-2); }
+
+.hub-app .deals-pm-stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 40px;
+  height: 150px;
+  margin-bottom: 6px;
+}
+
+.hub-app .deals-pm-bar { display: block; min-height: 2px; }
+
+.hub-app .deals-pm-bar--confirmed {
+  background: var(--fg);
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
+}
+
+.hub-app .deals-pm-bar--expected {
+  background: var(--surface-2);
+  border: 1px dashed var(--line-strong);
+  border-bottom: 0;
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
+}
+
+/* 예정 위에 확정이 쌓이면 둘 사이는 각지게 — 위쪽 끝만 둥글다 */
+.hub-app .deals-pm-bar--expected + .deals-pm-bar--confirmed { border-radius: 0; }
+
+.hub-app .deals-pm-plan {
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  height: 0;
+  border-top: 1px dashed var(--fg-muted);
+  pointer-events: none;
+}
+
+.hub-app .deals-pm-amount {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--moon-200);
+  white-space: nowrap;
+}
+
+.hub-app .deals-pm-amount[data-unknown] { color: var(--fg-faint); font-weight: 400; }
+
+.hub-app .deals-pm-sub {
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.hub-app .deals-pm-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.hub-app .deals-pm-col[data-current] .deals-pm-label { color: var(--fg); font-weight: 600; }
+
+.hub-app .deals-pm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .deals-pm-legend li { display: inline-flex; align-items: center; gap: 6px; }
+
+.hub-app .deals-pm-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 10px;
+  border-radius: var(--r-xs);
+}
+
+.hub-app .deals-pm-swatch[data-kind="confirmed"] { background: var(--fg); }
+.hub-app .deals-pm-swatch[data-kind="expected"] { background: var(--surface-2); border: 1px dashed var(--line-strong); }
+.hub-app .deals-pm-swatch[data-kind="plan"] { width: 14px; height: 0; border-radius: 0; border-top: 1px dashed var(--fg-muted); }
+
+/* 스크린리더 전용 표 — 막대 그림과 같은 숫자 */
+.hub-app .deals-pm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 달 이동 ‹ 9월 › */
+.hub-app .deals-pm-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hub-app .deals-pm-step__label {
+  min-width: 44px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  text-align: center;
+}
+
+.hub-app .deals-pm-notes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: -4px 0 12px;
+}
+
+.hub-app .deals-pm-note { font-size: 12.5px; color: var(--fg-muted); }
+
+/* 딜별 결제 표 */
+.hub-app .deals-pm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.hub-app .deals-pm-table th {
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+  text-align: left;
+}
+
+.hub-app .deals-pm-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+}
+
+.hub-app .deals-pm-table tbody tr:last-child td { border-bottom: 0; }
+
+.hub-app .deals-pm-table .deals-pm-r { text-align: right; }
+
+.hub-app .deals-pm-row { cursor: pointer; }
+
+/* 늦은 입금 레일 — 앞의 3건만(§5.3 red budget), 1px inset. 표 행 대신 첫 칸에 그린다(행 그림자는 브라우저마다 다르다) */
+.hub-app .deals-pm-row[data-rail] > td:first-child { box-shadow: inset 1px 0 0 var(--danger); }
+
+/* 독이 이 거래로 열려 있다 — 선택은 Moonstone 윤곽(§5.3 outer outline), 레일(첫 칸)과 겹치지 않게 안쪽 1px */
+.hub-app .deals-pm-row[data-selected] { outline: 1px solid var(--accent); outline-offset: -1px; }
+.hub-app .deals-pm-row[data-selected] .deals-pm-org { text-decoration: underline; text-underline-offset: 3px; }
+
+.hub-app .deals-pm-org {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hub-app .deals-pm-org:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.hub-app .deals-pm-who {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.hub-app .deals-pm-inst { color: var(--fg-muted); white-space: nowrap; }
+
+/* 예상 금액 = 점선 밑줄(아직 예상), 확정 = 실선 없이 ✓ — 선 모양이 확실성을 말한다 */
+.hub-app .deals-pm-exp {
+  padding-bottom: 1px;
+  border-bottom: 1px dashed var(--line-strong);
+  color: var(--moon-200);
+}
+
+.hub-app .deals-pm-money {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--moon-200);
+}
+
+.hub-app .deals-pm-when {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--fg-dim);
+}
+
+.hub-app .deals-pm-why {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .deals-pm-diff { color: var(--fg); }
+
+.hub-app .deals-pm-wait { color: var(--fg-dim); }
+
+.hub-app .deals-pm-late {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--danger);
+  white-space: nowrap;
+}
+
 /* ── 지역 보기 — 히트맵 페이지를 그대로 품는다. 히트맵 루트의 인라인 페이지 여백만 상쇄 ── */
 .hub-app .deals-region { margin: calc(-1 * var(--section-gap)); min-width: 0; }
 
@@ -757,10 +1041,56 @@
   .hub-app .deals-pay-row__fields .hub-input { width: 100%; }
   .hub-app .deals-pay-row__acts { width: 100%; justify-content: flex-start; }
   .hub-app .deals-pay-row__acts > .hub-btn { min-height: 44px; }
+
+  /* 결제 보기 — 막대는 카드 안에서 가로로 스크롤(7달을 줄이지 않는다), 표는 행마다 쌓는다 */
+  .hub-app .deals-pm-chart,
+  .hub-app .deals-pm-table-card { padding: 16px 14px 14px; }
+  .hub-app .deals-pm-hint { margin-left: 0; flex-basis: 100%; }
+  .hub-app .deals-pm-cols { grid-template-columns: repeat(7, 72px); gap: 6px; }
+  .hub-app .deals-pm-stack { width: 32px; height: 120px; }
+  .hub-app .deals-pm-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .hub-app .deals-pm-table,
+  .hub-app .deals-pm-table tbody,
+  .hub-app .deals-pm-table tr { display: block; }
+  .hub-app .deals-pm-row {
+    padding: 8px 0 10px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .hub-app .deals-pm-table tbody tr:last-child { border-bottom: 0; }
+  .hub-app .deals-pm-row[data-rail] { box-shadow: inset 1px 0 0 var(--danger); padding-left: 10px; }
+  .hub-app .deals-pm-row[data-rail] > td:first-child { box-shadow: none; }
+  /* 칸마다 한 줄 — 왼쪽에 열 이름(data-label), 오른쪽에 값 */
+  .hub-app .deals-pm-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    padding: 3px 0;
+    border-bottom: 0;
+  }
+  .hub-app .deals-pm-table td::before {
+    content: attr(data-label);
+    margin-right: auto;
+    font-size: 11px;
+    color: var(--fg-dim);
+  }
+  .hub-app .deals-pm-table td:first-child { display: block; }
+  .hub-app .deals-pm-table td:first-child::before { content: none; }
+  .hub-app .deals-pm-table .deals-pm-when,
+  .hub-app .deals-pm-table .deals-pm-why { display: inline; margin: 0; }
+  .hub-app .deals-pm-org { min-height: 44px; font-size: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hub-app .deals-tl-dock { animation: none; }
+  .hub-app .deals-pm-row { transition: none; }
   .hub-app .deals-tl-card,
   .hub-app .deals-tl-bar__seg,
   .hub-app .deals-tl-lane,

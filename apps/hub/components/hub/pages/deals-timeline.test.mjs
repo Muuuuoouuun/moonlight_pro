@@ -5,6 +5,7 @@ import ts from "typescript";
 
 import * as timelineLib from "../../../lib/deal-timeline.js";
 import * as paymentsLib from "../../../lib/deal-payments.js";
+import { buildPaymentsBoard } from "../../../lib/deal-payment-plan.js";
 import { targetProgress } from "../../../lib/revenue-target.js";
 import { DEAL_STAGES, STALLED_DAYS } from "../../../lib/deal-stages.js";
 
@@ -247,4 +248,169 @@ test("결제 일정 추가는 금액을 채운 뒤에만 저장한다 — 빈 �
   // 빈 행은 정규화에서 버려진다 — 그래서 폼이 금액을 먼저 받아야 한다.
   const dropped = paymentsLib.effectivePayments({ id: "d", value: null, payments: paymentsLib.addInstallment({ id: "d", value: null }) });
   assert.equal(dropped.length, 0);
+});
+
+// ── 결제 보기(2026-09-25 A안) — 예상했던 돈 → 들어온 돈 ─────────────────────────────
+// 보드 모델은 고정 시각으로 만든다(달 경계에서 테스트가 흔들리지 않게). 컴포넌트는 모델을 그리기만 한다.
+const PAY_NOW = new Date("2026-09-25T01:00:00Z");
+const kstNoon = (ymd) => `${ymd}T03:00:00.000Z`;
+
+function paymentDeals() {
+  return [
+    { id: "paid", companyName: "유진수학", stage: "closing", value: 1800000,
+      payments: [{ id: "p1", expectedAmount: 1800000, expectedAt: kstNoon("2026-09-02"), status: "paid", paidAmount: 1600000, paidAt: kstNoon("2026-09-03"), paidNote: "첫 달 할인" }] },
+    { id: "late", companyName: "한빛수학", stage: "closing", value: 2400000, closeAt: kstNoon("2026-09-22") },
+    { id: "moved", companyName: "리드인", stage: "quote", value: 2400000, closeAt: kstNoon("2026-10-05"),
+      planBaseline: { amount: 2400000, closeAt: kstNoon("2026-09-20") } },
+  ];
+}
+
+function paymentsProps(deals, extra = {}) {
+  return baseProps(deals, {
+    view: "payments",
+    deals,
+    paymentsBoard: buildPaymentsBoard(deals, { now: PAY_NOW, monthKey: extra.monthKey || null }),
+    onPaymentsMonth: () => {},
+    ...extra,
+  });
+}
+
+const rowsOf = (app) => app.findAll((n) => n.type === "tr" && n.props["data-deal-row"]);
+
+test("결제 보기는 월별 막대와 딜별 결제 표만 — 언제 보기의 리본·칸·멈춘 거래 줄은 그리지 않는다", () => {
+  const app = mount(paymentsProps(paymentDeals()));
+  assert.equal(app.findAll((n) => n.type === "section" && /확실성별 금액/.test(n.props["aria-label"] || "")).length, 0);
+  assert.equal(app.findAll((n) => n.props?.className === "deals-tl-lanes").length, 0);
+  assert.equal(app.findAll((n) => n.props?.className === "fx-card deals-pm-chart").length, 1);
+  const cols = app.findAll((n) => n.props?.className === "deals-pm-col");
+  assert.equal(cols.length, 7);
+  assert.equal(cols.filter((c) => c.props["data-current"]).length, 1, "이번 달만 현재 위치");
+  assert.equal(app.findAll((n) => n.props?.className === "deals-pm-plan").length > 0, true, "예상했던 입금 눈금");
+  const sr = app.findAll((n) => n.type === "table" && n.props.className === "deals-pm-sr")[0];
+  assert.match(text(sr), /9월 \(이번 달\)/, "막대의 숫자를 스크린리더용 표로도 싣는다");
+  assert.deepEqual(rowsOf(app).map((r) => r.props["data-deal-row"]), ["paid", "moved", "late"]);
+  const moved = rowsOf(app).find((r) => r.props["data-deal-row"] === "moved");
+  assert.match(text(moved), /원래 9\/20 → 10\/5/);
+  const paid = rowsOf(app).find((r) => r.props["data-deal-row"] === "paid");
+  assert.match(text(paid), /−₩200K/);
+  assert.match(text(paid), /첫 달 할인/);
+  const late = rowsOf(app).find((r) => r.props["data-deal-row"] === "late");
+  assert.equal(late.props["data-state"], "overdue");
+  assert.match(text(late), /3일 지남/);
+});
+
+test("표의 행을 누르면 그 거래의 독이 열린다 — 레인을 떠난(전액 입금) 거래도, 다시 누르면 닫힌다", () => {
+  const calls = [];
+  const app = mount(paymentsProps(paymentDeals(), { onSelect: (id) => calls.push(id) }));
+  const row = rowsOf(app).find((r) => r.props["data-deal-row"] === "paid");
+  row.props.onClick();
+  assert.deepEqual(calls, ["paid"]);
+  // 이름 버튼은 키보드·스크린리더 경로 — 행 클릭과 같은 토글
+  app.render({ selectedId: "paid" });
+  const dock = app.findAll((n) => n.props?.className === "deals-tl-dock")[0];
+  assert.ok(dock, "완결 거래도 독으로 연다");
+  assert.match(dock.props["aria-label"], /유진수학/);
+  assert.match(text(dock), /−₩200K · 첫 달 할인/, "독의 결제 줄도 차이와 이유를 말한다");
+  const orgButton = app.findAll((n) => n.type === "button" && n.props.className === "deals-pm-org" && text(n) === "유진수학")[0];
+  assert.equal(orgButton.props["aria-pressed"], true);
+  orgButton.props.onClick({ stopPropagation() {}, detail: 1 });
+  assert.deepEqual(calls, ["paid", null], "같은 거래를 다시 누르면 닫는다");
+});
+
+test("달 이동은 ‹ › 과 이번 달 — 상태는 페이지(Deals)가 가진다", () => {
+  const months = [];
+  const app = mount(paymentsProps(paymentDeals(), { onPaymentsMonth: (key) => months.push(key) }));
+  const [prev, next] = app.findAll((n) => n.type === "IconButton" && (n.props.tooltip === "이전 달" || n.props.tooltip === "다음 달"));
+  prev.props.onClick();
+  next.props.onClick();
+  assert.deepEqual(months, ["2026-08", "2026-10"]);
+  assert.equal(app.findAll((n) => n.type === "Button" && text(n) === "이번 달").length, 0, "이번 달에서는 숨긴다");
+  const october = mount(paymentsProps(paymentDeals(), { monthKey: "2026-10", onPaymentsMonth: (key) => months.push(key) }));
+  october.findAll((n) => n.type === "Button" && text(n) === "이번 달")[0].props.onClick();
+  assert.equal(months.at(-1), null);
+  assert.match(text(october.findAll((n) => n.type === "h3" && n.props.id === "deals-pm-table-title")[0]), /딜별 결제 · 10월/);
+});
+
+test("기록 이전 달은 일부 데이터로 밝히고, 늦은 입금 레일은 예산만큼·넘치면 합계 한 줄", () => {
+  const aug = mount(paymentsProps(paymentDeals(), { monthKey: "2026-08" }));
+  assert.equal(aug.findAll((n) => n.type === "TruthBadge" && n.props.state === "partial").length, 1);
+  const late = Array.from({ length: 5 }, (_, i) => ({ id: `l${i}`, companyName: `곳${i}`, stage: "closing", value: 10, closeAt: kstNoon(`2026-09-1${i}`) }));
+  const app = mount(paymentsProps(late));
+  assert.equal(rowsOf(app).filter((r) => r.props["data-rail"]).length, timelineLib.MAX_DANGER_RAILS);
+  assert.match(text(app.findAll((n) => n.props?.className === "deals-pm-late" && n.props.role === "status")[0]), /늦은 입금 5건/);
+});
+
+test("결제 보기의 빈 상태 — preview는 연결 필요, 결제가 하나도 없으면 생성 안내", () => {
+  const preview = mount(paymentsProps([], { syncState: "preview" }));
+  assert.equal(preview.findAll((n) => n.type === "TruthBadge" && n.props.state === "preview").length, 1);
+  assert.equal(preview.findAll((n) => n.props?.className === "fx-card deals-pm-chart").length, 0, "숫자를 그리지 않는다");
+  const live = mount(paymentsProps([{ id: "z", stage: "quote", value: 0 }]));
+  assert.equal(live.findAll((n) => n.type === "EmptyState").length, 1);
+  assert.equal(live.findAll((n) => n.props?.className === "fx-card deals-pm-chart").length, 0);
+});
+
+test("언제 보기에는 결제 보기의 패널을 붙이지 않는다(표면 예산)", () => {
+  const app = mount(baseProps([
+    { id: "a", stage: "closing", value: 100, closeAt: dayIso(0),
+      payments: [{ id: "p", expectedAmount: 100, expectedAt: dayIso(0), status: "paid", paidAmount: 90, paidAt: dayIso(0) }, { id: "q", expectedAmount: 50, expectedAt: dayIso(3) }] },
+  ]));
+  assert.equal(app.findAll((n) => /deals-pm-/.test(String(n.props?.className || ""))).length, 0);
+  assert.equal(app.findAll((n) => n.type === "section" && /확실성별 금액/.test(n.props["aria-label"] || "")).length, 1);
+});
+
+test("입금 확인 — 금액이 예상과 다를 때만 차이 이유 한 줄이 열리고 그 이유를 저장한다", () => {
+  const saved = [];
+  const deal = { id: "d1", stage: "closing", value: 1800000, closeAt: dayIso(1), companyName: "하늘과학" };
+  const app = mount(baseProps([deal], { selectedId: "d1", onUpdatePayments: (...args) => saved.push(args) }));
+  app.findAll((n) => n.type === "Button" && text(n) === "입금 확인")[0].props.onClick();
+  app.render();
+  const noteInput = () => app.findAll((n) => n.type === "input" && n.props.maxLength === paymentsLib.PAID_NOTE_MAX);
+  assert.equal(noteInput().length, 0, "예상 금액 그대로면 묻지 않는다");
+  const amount = app.findAll((n) => n.type === "input" && n.props.type === "number")[0];
+  amount.props.onChange({ target: { value: "1600000" } });
+  app.render();
+  assert.equal(noteInput().length, 1);
+  assert.match(text(app.findAll((n) => n.type === "label" && n.props.className === "deals-pay-row__note")[0]), /차이 이유\(선택\) · 예상보다 −₩200K/);
+  noteInput()[0].props.onChange({ target: { value: "첫 달 할인" } });
+  app.render();
+  app.findAll((n) => n.type === "Button" && text(n) === "확인")[0].props.onClick();
+  assert.equal(saved.length, 1);
+  const [dealId, payments] = saved[0];
+  assert.equal(dealId, "d1");
+  assert.equal(payments[0].status, "paid");
+  assert.equal(payments[0].paidAmount, 1600000);
+  assert.equal(payments[0].paidNote, "첫 달 할인");
+  assert.equal(payments[0].plannedAmount, 1800000, "암묵 결제를 옮겨 적어도 처음 계획은 남는다");
+});
+
+test("명시 결제 카드를 다른 칸에 놓으면 그 결제의 예상일만 옮긴다 — 처음 계획은 그대로", () => {
+  const updates = [];
+  const moves = [];
+  const deal = { id: "s", stage: "final", value: 2000000, companyName: "분할",
+    payments: [{ id: "p1", label: "계약금", expectedAmount: 1000000, expectedAt: dayIso(0), plannedAmount: 1000000, plannedAt: dayIso(0) }] };
+  const app = mount(baseProps([deal], { onUpdatePayments: (...args) => updates.push(args), onMoveDate: (...args) => moves.push(args) }));
+  const lanes = () => app.findAll((n) => n.type === "section" && n.props.className === "deals-tl-lane");
+  cards(app)[0].props.onDragStart({ dataTransfer: { setData() {} } });
+  app.render();
+  lanes()[2].props.onDrop({ preventDefault() {} });
+  assert.equal(moves.length, 0, "딜의 예상일은 건드리지 않는다");
+  assert.equal(updates.length, 1);
+  const [dealId, payments, label] = updates[0];
+  assert.equal(dealId, "s");
+  assert.equal(payments[0].expectedAt, timelineLib.laneDropDate("later").iso);
+  assert.equal(payments[0].plannedAt, new Date(dayIso(0)).toISOString());
+  assert.match(label, /분할 계약금 · 예상일 →/);
+});
+
+test("결제 보기 스타일 — 토큰·1px 점선 눈금·1px 레일, 모바일은 행을 쌓고 44px", () => {
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b|oklch\(|rgba?\(/);
+  assert.match(css, /\.deals-pm-plan \{[^}]*border-top: 1px dashed var\(--fg-muted\)/);
+  assert.match(css, /\.deals-pm-bar--confirmed \{[^}]*background: var\(--fg\)/);
+  assert.match(css, /\.deals-pm-bar--expected \{[^}]*border: 1px dashed var\(--line-strong\)/);
+  assert.match(css, /\.deals-pm-row\[data-rail\] > td:first-child \{ box-shadow: inset 1px 0 0 var\(--danger\); \}/);
+  const mobile = css.slice(css.indexOf("@media (max-width: 600px)"));
+  assert.match(mobile, /\.deals-pm-table tr \{ display: block; \}/);
+  assert.match(mobile, /\.deals-pm-table td::before \{\s*content: attr\(data-label\)/);
+  assert.match(mobile, /\.deals-pm-org \{ min-height: 44px/);
+  assert.match(mobile, /\.deals-pm-cols \{ grid-template-columns: repeat\(7, 72px\)/);
 });

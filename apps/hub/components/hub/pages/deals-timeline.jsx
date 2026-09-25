@@ -1,10 +1,12 @@
 "use client";
 
-// 거래 탭의 "언제" 보기(기본)와 "지역" 보기 — 운영자 승인 목업 3(2026-09-24).
-// 확실성 리본 · 멈춘 거래 줄 · 시간 칸(이번 주/다음 주/나중에/날짜 미정) · 카드 선택 시 하단 독.
+// 거래 탭의 "언제" 보기(기본)·"결제" 보기·"지역" 보기 — 운영자 승인 목업 3(2026-09-24)·05 A안(2026-09-25).
+// 언제: 확실성 리본 · 멈춘 거래 줄 · 시간 칸(이번 주/다음 주/나중에/날짜 미정) · 카드 선택 시 하단 독.
+// 결제: 월별 "예상했던 돈 → 들어온 돈" 막대 · 딜별 결제 표 — 행을 누르면 같은 하단 독이 그 거래로 열린다.
 // "단계" 보기(기존 칸반)는 pages/revenue.jsx의 Deals가 그대로 그린다. 상태(딜 목록·낙관 반영·
-// 되돌리기·편집 드로어·키보드 선택)는 Deals가 소유하고, 여기는 그리기와 이 보기 전용 상호작용만 맡는다.
-// 판정(칸·확실성·약속·멈춤·예상일 프리셋)은 lib/deal-timeline.js가 소유한다.
+// 되돌리기·편집 드로어·키보드 선택·결제 보기의 달)는 Deals가 소유하고, 여기는 그리기와 이 보기 전용
+// 상호작용만 맡는다. 판정은 lib/deal-timeline.js(칸·확실성·약속·멈춤·예상일 프리셋)와
+// lib/deal-payment-plan.js(달별 계획·확정·표 행)가 소유한다.
 
 import React from "react";
 import { Button, CertaintyBadge, EmptyState, IconButton, Kbd, LifecycleBadge, Skeleton, TruthBadge, useToast } from "../hub-primitives";
@@ -17,7 +19,9 @@ import {
   closeDatePresets,
   dateInputValue,
   dealCustomerKey,
+  dealDockItem,
   formatDayLabel,
+  formatSignedWon,
   formatWon,
   isoFromDateInput,
   kstDayNumber,
@@ -25,6 +29,7 @@ import {
   sameCloseDay,
 } from "@/lib/deal-timeline";
 import {
+  PAID_NOTE_MAX,
   addInstallment,
   cancelPayment,
   dealExpectedTotal,
@@ -307,7 +312,7 @@ function DealPaymentsBlock({ deal, onUpdatePayments }) {
 
   const startConfirm = (payment) => {
     setActive({ id: payment.id, mode: "confirm" });
-    setDraft({ paidAmount: String(payment.expectedAmount), paidAt: dateInputValue(new Date().toISOString()) });
+    setDraft({ paidAmount: String(payment.expectedAmount), paidAt: dateInputValue(new Date().toISOString()), paidNote: "" });
   };
   const startEdit = (payment) => {
     setActive({ id: payment.id, mode: "edit" });
@@ -318,13 +323,12 @@ function DealPaymentsBlock({ deal, onUpdatePayments }) {
   const canAdd = Number.isFinite(addAmount) && addAmount > 0;
   const saveNew = () => {
     if (!canAdd) return;
-    const rows = addInstallment(deal);
-    rows[rows.length - 1] = {
-      ...rows[rows.length - 1],
+    // 새 결제는 만들 때의 금액·날짜가 곧 처음 계획(planned*)이다 — addInstallment가 같이 적는다.
+    const rows = addInstallment(deal, {
       label: adding.label || null,
       expectedAmount: addAmount,
       expectedAt: adding.expectedAt ? isoFromDateInput(adding.expectedAt) : null,
-    };
+    });
     onUpdatePayments(rows, payments.length ? "결제 일정을 나눴습니다" : "결제 일정을 추가했습니다");
     setAdding(null);
   };
@@ -346,6 +350,9 @@ function DealPaymentsBlock({ deal, onUpdatePayments }) {
         {payments.map((payment, i) => {
           const rowLabel = payment.label || (payments.length > 1 ? `${i + 1}회` : "전액");
           if (active?.id === payment.id && active.mode === "confirm") {
+            // 입금액이 예상과 다를 때만 "차이 이유" 한 줄을 연다 — 같으면 묻지 않고 저장도 안 한다.
+            const enteredPaid = Math.round(Number(draft.paidAmount));
+            const paidDiff = Number.isFinite(enteredPaid) && enteredPaid > 0 ? enteredPaid - payment.expectedAmount : 0;
             return (
               <li key={payment.id} className="deals-pay-row deals-pay-row--form">
                 <span className="deals-pay-row__label">{rowLabel} 입금 확인</span>
@@ -360,13 +367,25 @@ function DealPaymentsBlock({ deal, onUpdatePayments }) {
                     <input type="date" className="hub-input" value={draft.paidAt}
                       onChange={(e) => setDraft((d) => ({ ...d, paidAt: e.target.value }))} />
                   </label>
+                  {paidDiff !== 0 && (
+                    <label className="deals-pay-row__note">
+                      <span>차이 이유(선택) · 예상보다 <span className="mono">{formatSignedWon(paidDiff)}</span></span>
+                      <input type="text" className="hub-input" value={draft.paidNote || ""} maxLength={PAID_NOTE_MAX}
+                        placeholder="할인·축소·지연 등"
+                        onChange={(e) => setDraft((d) => ({ ...d, paidNote: e.target.value }))} />
+                    </label>
+                  )}
                 </span>
                 <span className="deals-pay-row__acts">
                   <Button
                     size="xs" variant="primary"
                     onClick={() => {
                       onUpdatePayments(
-                        markPaid(deal, payment.id, { paidAmount: Number(draft.paidAmount) || payment.expectedAmount, paidAt: isoFromDateInput(draft.paidAt) }),
+                        markPaid(deal, payment.id, {
+                          paidAmount: Number(draft.paidAmount) || payment.expectedAmount,
+                          paidAt: isoFromDateInput(draft.paidAt),
+                          paidNote: draft.paidNote,
+                        }),
                         `${rowLabel} 입금을 확인했습니다`,
                       );
                       setActive(null);
@@ -423,20 +442,32 @@ function DealPaymentsBlock({ deal, onUpdatePayments }) {
               </li>
             );
           }
+          const plannedDay = kstDayNumber(payment.plannedAt);
+          const expectedDay = kstDayNumber(payment.expectedAt);
+          const paidDiff = payment.status === "paid" ? payment.paidAmount - payment.expectedAmount : 0;
           return (
             <li key={payment.id} className="deals-pay-row" data-status={payment.status}>
               <span className="deals-pay-row__label">{rowLabel}</span>
               <span className="deals-pay-row__expected">
                 <span className="mono">{formatWon(payment.expectedAmount)}</span>
                 <span className="mono deals-pay-row__date">
-                  {payment.expectedAt ? formatDayLabel(kstDayNumber(payment.expectedAt)) : "날짜 미정"}
+                  {payment.expectedAt ? formatDayLabel(expectedDay) : "날짜 미정"}
                 </span>
+                {plannedDay !== expectedDay && (
+                  <span className="mono deals-pay-row__was">원래 {plannedDay == null ? "미정" : formatDayLabel(plannedDay)}</span>
+                )}
               </span>
               {payment.status === "paid" ? (
                 <span className="deals-pay-row__paid">
                   <Iconed name="check" size={12} />
                   <span className="mono">{formatWon(payment.paidAmount)}</span>
                   <span className="mono deals-pay-row__date">{formatDayLabel(kstDayNumber(payment.paidAt))}</span>
+                  {paidDiff !== 0 && (
+                    <span className="deals-pay-row__diff">
+                      <span className="mono">{formatSignedWon(paidDiff)}</span>
+                      {payment.paidNote && <> · {payment.paidNote}</>}
+                    </span>
+                  )}
                 </span>
               ) : payment.status === "cancelled" ? (
                 <span className="deals-pay-row__cancelled">취소됨</span>
@@ -492,6 +523,8 @@ function DealDock({ item, stages, describe, customerKey, primaryRef, onClose, on
   const { org } = describe(deal);
   const nextStage = stages[item.stageIndex + 1] || null;
   const local = isLocalId(item.deal.id);
+  // 명시 결제 일정의 카드는 그 결제의 예상일을 옮긴다(딜의 예상일이 아니라) — 프리셋 활성·날짜 칸도 같은 값.
+  const currentAt = item.explicitPayment ? item.expectedAt : deal.closeAt;
   React.useEffect(() => { setDateOpen(false); }, [item.id]);
 
   return (
@@ -557,7 +590,7 @@ function DealDock({ item, stages, describe, customerKey, primaryRef, onClose, on
               key={preset.key}
               variant="outline"
               size="xs"
-              active={preset.iso ? sameCloseDay(deal.closeAt, preset.iso) : !deal.closeAt}
+              active={preset.iso ? sameCloseDay(currentAt, preset.iso) : !currentAt}
               title={preset.dateLabel}
               onClick={() => onMoveDate(preset.iso, preset.dateLabel)}
             >
@@ -569,8 +602,8 @@ function DealDock({ item, stages, describe, customerKey, primaryRef, onClose, on
             <input
               type="date"
               className="hub-input"
-              defaultValue={dateInputValue(deal.closeAt)}
-              key={`${item.id}-${deal.closeAt || "none"}`}
+              defaultValue={dateInputValue(currentAt)}
+              key={`${item.id}-${currentAt || "none"}`}
               onChange={(e) => {
                 // 연도를 타이핑하는 중간값(0002-…)에 저장이 예약되지 않게 20xx만 받는다.
                 if (!/^20\d{2}-/.test(e.target.value)) return;
@@ -586,7 +619,260 @@ function DealDock({ item, stages, describe, customerKey, primaryRef, onClose, on
   );
 }
 
+// ── 결제 보기(운영자 2026-09-25 A안) ────────────────────────────────────────
+// 월별 막대: 확정 = 꽉 찬 중립 채움(--fg) · 남은 예정 = 점선 윤곽(--surface-2) · 그 달에 예상했던
+// 입금 = 1px 점선 가로 눈금. 이번 달은 Moonstone 점(현재 위치). 숫자는 막대 밑 직접 라벨로 말하고,
+// 같은 내용을 스크린리더용 표로도 싣는다(막대 그림은 aria-hidden).
+
+function planColumnLabels(m) {
+  if (m.isPast && !m.recorded) {
+    return { amount: "기록 이전", sub: null, plan: m.planned > 0 ? `예상 ${formatWon(m.planned)}` : null, delta: null };
+  }
+  if (m.isPast) {
+    return {
+      amount: formatWon(m.confirmed),
+      sub: null,
+      plan: m.planned > 0 ? `예상 ${formatWon(m.planned)}` : "예상 없음",
+      delta: m.planned > 0 ? formatSignedWon(m.delta) : null,
+    };
+  }
+  if (m.isCurrent) {
+    return {
+      amount: formatWon(m.confirmed),
+      sub: m.remainingExpected > 0 ? `+${formatWon(m.remainingExpected)} 예정` : null,
+      plan: m.planned > 0 ? `예상 ${formatWon(m.planned)}` : null,
+      delta: null,
+    };
+  }
+  return { amount: m.remainingExpected > 0 ? formatWon(m.remainingExpected) : "—", sub: null, plan: m.remainingExpected > 0 ? "예정" : null, delta: null };
+}
+
+function PaymentsChart({ board }) {
+  const pct = (amount) => (board.max > 0 ? Math.max(0, Math.min(100, (amount / board.max) * 100)) : 0);
+  return (
+    <section className="fx-card deals-pm-chart" aria-labelledby="deals-pm-chart-title">
+      <header className="deals-pm-head">
+        <h3 id="deals-pm-chart-title" className="fx-eyebrow">월별 · 예상했던 돈과 들어온 돈</h3>
+        <span className="deals-pm-hint">지난달은 확정, 이번 달부터는 예정</span>
+      </header>
+      <div className="deals-pm-scroll">
+        <div className="deals-pm-cols" aria-hidden="true">
+          {board.series.map((m) => {
+            const labels = planColumnLabels(m);
+            // 눈금은 지난달·이번 달만 — 앞으로의 달은 아직 계획이 곧 예정이라 겹쳐 그리면 소음이다.
+            const showPlan = m.planned > 0 && (m.isPast || m.isCurrent);
+            return (
+              <div
+                key={m.key}
+                className="deals-pm-col"
+                data-current={m.isCurrent ? "true" : undefined}
+                data-selected={m.key === board.monthKey ? "true" : undefined}
+              >
+                <div className="deals-pm-stack">
+                  {showPlan && <span className="deals-pm-plan" style={{ bottom: `${pct(m.planned)}%` }} />}
+                  {m.remainingExpected > 0 && (
+                    <span className="deals-pm-bar deals-pm-bar--expected" style={{ height: `${pct(m.remainingExpected)}%` }} />
+                  )}
+                  {m.confirmed > 0 && (
+                    <span className="deals-pm-bar deals-pm-bar--confirmed" style={{ height: `${pct(m.confirmed)}%` }} />
+                  )}
+                </div>
+                <span className="mono deals-pm-amount" data-unknown={m.confirmed == null && m.isPast ? "true" : undefined}>{labels.amount}</span>
+                {labels.sub && <span className="mono deals-pm-sub">{labels.sub}</span>}
+                {labels.plan && <span className="mono deals-pm-sub">{labels.plan}</span>}
+                {labels.delta && <span className="mono deals-pm-sub">{labels.delta}</span>}
+                <span className="deals-pm-label">
+                  {m.isCurrent && <span className="deals-tl-now" />}
+                  {m.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <ul className="deals-pm-legend">
+        <li><i className="deals-pm-swatch" data-kind="confirmed" aria-hidden="true" />들어온 돈(확정)</li>
+        <li><i className="deals-pm-swatch" data-kind="expected" aria-hidden="true" />들어올 예정</li>
+        <li><i className="deals-pm-swatch" data-kind="plan" aria-hidden="true" />그 달에 예상했던 입금</li>
+      </ul>
+      <table className="deals-pm-sr">
+        <caption>월별 예상했던 입금과 들어온 돈</caption>
+        <thead>
+          <tr><th scope="col">달</th><th scope="col">들어온 돈</th><th scope="col">들어올 예정</th><th scope="col">예상했던 입금</th><th scope="col">차이</th></tr>
+        </thead>
+        <tbody>
+          {board.series.map((m) => (
+            <tr key={m.key}>
+              <th scope="row">{m.label}{m.isCurrent ? " (이번 달)" : ""}</th>
+              <td>{m.confirmed == null ? "기록 이전" : formatWon(m.confirmed)}</td>
+              <td>{m.isPast ? "—" : formatWon(m.remainingExpected)}</td>
+              <td>{formatWon(m.planned)}</td>
+              <td>{m.delta == null ? "—" : formatSignedWon(m.delta)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+// 확정(입금) 칸 — 입금됐으면 ✓ 금액·날짜, 아니면 상태를 직접 말한다. 빨강은 받을 돈이 늦은 것뿐.
+function PaymentStateCell({ row }) {
+  if (row.paid) {
+    return (
+      <>
+        <span className="mono deals-pm-money"><Iconed name="check" size={11} /> {formatWon(row.paid.amount)}</span>
+        <span className="mono deals-pm-when">{row.paid.dayLabel ? `${row.paid.dayLabel} 입금` : "입금"}</span>
+      </>
+    );
+  }
+  if (row.state === "overdue") {
+    return <span className="deals-pm-late"><Iconed name="clock" size={11} /> {row.daysLate}일 지남</span>;
+  }
+  const text = {
+    slipped: `예상일 ${row.daysLate}일 지남`,
+    unrecorded: "입금 기록 없음",
+    lost: "거래 잃음",
+    undated: "날짜 미정",
+  }[row.state] || "대기";
+  return <span className="deals-pm-wait">{text}</span>;
+}
+
+function PaymentDiffCell({ row }) {
+  if (row.difference == null) return <span className="deals-pm-wait">—</span>;
+  const timing = row.timing ? `${Math.abs(row.timing)}일 ${row.timing < 0 ? "빠름" : "늦음"}` : null;
+  return (
+    <>
+      <span className="mono deals-pm-diff">{row.difference === 0 ? "0" : formatSignedWon(row.difference)}</span>
+      {(row.paidNote || timing) && <span className="deals-pm-why">{row.paidNote || timing}</span>}
+    </>
+  );
+}
+
+function PaymentsTable({ board, describe, selectedDealId, onActivate, onMonth }) {
+  const { summary } = board;
+  return (
+    <section className="fx-card deals-pm-table-card" aria-labelledby="deals-pm-table-title">
+      <header className="deals-pm-head">
+        <h3 id="deals-pm-table-title" className="fx-eyebrow">딜별 결제 · {board.monthLabel}</h3>
+        <div className="deals-pm-step" role="group" aria-label="달 이동">
+          <IconButton icon="chevronL" tooltip="이전 달" disabled={!board.prevKey} onClick={() => onMonth?.(board.prevKey)} />
+          <span className="deals-pm-step__label" aria-live="polite">{board.monthLabel}</span>
+          <IconButton icon="chevronR" tooltip="다음 달" disabled={!board.nextKey} onClick={() => onMonth?.(board.nextKey)} />
+          {!board.isCurrentMonth && <Button variant="ghost" size="xs" onClick={() => onMonth?.(null)}>이번 달</Button>}
+        </div>
+        <span className="deals-pm-hint">확정이 예상과 다르면 차이와 이유 한 줄</span>
+      </header>
+      {(!board.recorded || summary.moved.count > 0 || board.overdueCount > MAX_DANGER_RAILS) && (
+        <div className="deals-pm-notes">
+          {!board.recorded && <TruthBadge state="partial" reason="결제 기록 시작 전 — 입금 여부를 모를 수 있어요" />}
+          {summary.moved.count > 0 && (
+            <span className="deals-pm-note">
+              {board.monthLabel} 예상에서 뒤로 옮긴 <span className="num">{summary.moved.count}</span>건 · <span className="mono">{formatWon(summary.moved.amount)}</span>
+            </span>
+          )}
+          {board.overdueCount > MAX_DANGER_RAILS && (
+            <span className="deals-pm-late" role="status">
+              <Iconed name="clock" size={12} /> 늦은 입금 <span className="num">{board.overdueCount}</span>건
+            </span>
+          )}
+        </div>
+      )}
+      {board.rows.length === 0 ? (
+        <EmptyState
+          icon="deals"
+          title={`${board.monthLabel}에 예상·입금된 결제가 없어요`}
+          description="거래에 금액과 예상일을 적으면 그 달의 결제로 잡힙니다. 화살표로 다른 달을 볼 수 있어요."
+          style={{ minHeight: 140 }}
+        />
+      ) : (
+        <table className="deals-pm-table">
+          <thead>
+            <tr>
+              <th scope="col">거래</th>
+              <th scope="col">회차</th>
+              <th scope="col" className="deals-pm-r">예상</th>
+              <th scope="col" className="deals-pm-r">확정(입금)</th>
+              <th scope="col" className="deals-pm-r">차이</th>
+            </tr>
+          </thead>
+          <tbody>
+            {board.rows.map((row) => {
+              const { who } = describe(row.deal);
+              const selected = selectedDealId === row.dealId;
+              return (
+                <tr
+                  key={row.key}
+                  className="hub-row deals-pm-row"
+                  data-deal-row={row.dealId}
+                  data-state={row.state}
+                  data-rail={board.railKeys.has(row.key) ? "true" : undefined}
+                  data-selected={selected ? "true" : undefined}
+                  onClick={() => onActivate(row.dealId, false)}
+                >
+                  <td data-label="거래">
+                    {/* 표의 행은 버튼이 아니다 — 거래 이름 버튼이 키보드·스크린리더 경로, 행 클릭은 마우스 지름길. */}
+                    <button
+                      type="button"
+                      className="deals-pm-org"
+                      aria-pressed={selected}
+                      onClick={(e) => { e.stopPropagation(); onActivate(row.dealId, e.detail === 0); }}
+                    >
+                      {row.org}
+                    </button>
+                    {who && <small className="deals-pm-who">{who}</small>}
+                  </td>
+                  <td data-label="회차" className="deals-pm-inst">{row.installment.text}</td>
+                  <td data-label="예상" className="deals-pm-r">
+                    <span className="mono deals-pm-exp">{formatWon(row.expected.amount)}</span>
+                    <span className="mono deals-pm-when">{row.expected.dayLabel ? `${row.expected.dayLabel} 예정` : "날짜 미정"}</span>
+                    {row.expected.movedLabel && <span className="mono deals-pm-why">{row.expected.movedLabel}</span>}
+                    {row.expected.amountChanged && <span className="mono deals-pm-why">원래 {formatWon(row.planned.amount)}</span>}
+                  </td>
+                  <td data-label="확정(입금)" className="deals-pm-r"><PaymentStateCell row={row} /></td>
+                  <td data-label="차이" className="deals-pm-r"><PaymentDiffCell row={row} /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function DealsPaymentsBoard({ board, describe, syncState, selectedDealId, onActivate, onMonth, onCreate, canCreate }) {
+  if (!board || !board.hasAny) {
+    return syncState === "preview" ? (
+      <div className="fx-card deals-tl-empty">
+        <TruthBadge state="preview" />
+        <p>Supabase가 연결되지 않아 결제 기록을 읽지 않았어요. 연결되면 달마다 예상했던 돈과 들어온 돈이 쌓입니다.</p>
+      </div>
+    ) : (
+      <div className="fx-card deals-tl-empty">
+        <EmptyState
+          icon="deals"
+          title="아직 결제로 잡힌 거래가 없어요"
+          description="거래에 금액과 예상일을 적으면 결제 예상이 되고, 입금 확인을 하면 확정치가 달마다 쌓입니다."
+          action={canCreate ? <Button variant="secondary" size="sm" icon="plus" onClick={onCreate}>거래 등록</Button> : undefined}
+          style={{ minHeight: 180 }}
+        />
+      </div>
+    );
+  }
+  return (
+    <>
+      <PaymentsChart board={board} />
+      <PaymentsTable board={board} describe={describe} selectedDealId={selectedDealId} onActivate={onActivate} onMonth={onMonth} />
+    </>
+  );
+}
+
 export function DealsTimeline({
+  view = "time",
+  deals = [],
+  paymentsBoard = null,
+  onPaymentsMonth,
   timeline,
   stages,
   ledger,
@@ -629,7 +915,15 @@ export function DealsTimeline({
   }, [contactByCompany]);
 
   const itemsById = React.useMemo(() => new Map(timeline.ordered.map((item) => [item.id, item])), [timeline.ordered]);
-  const selectedItem = selectedId != null ? itemsById.get(selectedId) || null : null;
+  // 결제 보기의 선택은 결제 카드가 아니라 거래(딜 id) — 레인을 떠난(완결) 거래도 독으로 연다.
+  const paymentsDockItem = React.useMemo(() => {
+    if (view !== "payments" || selectedId == null) return null;
+    const deal = (Array.isArray(deals) ? deals : []).find((d) => d.id === selectedId);
+    return deal ? dealDockItem(deal, { stages }) : null;
+  }, [view, deals, selectedId, stages]);
+  const selectedItem = view === "payments"
+    ? paymentsDockItem
+    : (selectedId != null ? itemsById.get(selectedId) || null : null);
   const customerKey = selectedItem ? dealCustomerKey(selectedItem.deal, { leads: ledger?.leads, accounts: ledger?.accounts }) : null;
 
   const closeDock = React.useCallback((restoreFocus = false) => {
@@ -637,7 +931,8 @@ export function DealsTimeline({
     onSelect(null);
     if (!restoreFocus || id == null || typeof document === "undefined") return;
     requestAnimationFrame(() => {
-      document.querySelector(`[data-deal-card="${CSS.escape(String(id))}"]`)?.focus();
+      const key = CSS.escape(String(id));
+      document.querySelector(`[data-deal-card="${key}"], [data-deal-row="${key}"] .deals-pm-org`)?.focus();
     });
   }, [onSelect, selectedId]);
 
@@ -649,6 +944,16 @@ export function DealsTimeline({
     }
     focusDockRef.current = viaKeyboard;
     onSelect(item.id);
+  };
+
+  // 결제 표의 행 — 같은 거래의 행을 다시 누르면 닫는다(카드와 같은 토글 계약).
+  const activateDeal = (dealId, viaKeyboard) => {
+    if (selectedId === dealId) {
+      closeDock(viaKeyboard);
+      return;
+    }
+    focusDockRef.current = viaKeyboard;
+    onSelect(dealId);
   };
 
   // 키보드로 연 독은 첫 행동(연락 기록)으로 초점을 옮긴다. 마우스로 연 독은 초점을 뺏지 않는다.
@@ -691,7 +996,7 @@ export function DealsTimeline({
       const target = e.target;
       if (!(target instanceof Element)) return;
       if (document.querySelector('[role="dialog"]')) return;
-      if (target.closest(".deals-tl-dock, [data-deal-card], .hub-toast-viewport")) return;
+      if (target.closest(".deals-tl-dock, [data-deal-card], [data-deal-row], .hub-toast-viewport")) return;
       onSelect(null);
     };
     document.addEventListener("pointerdown", onDown);
@@ -700,6 +1005,18 @@ export function DealsTimeline({
 
   const moveTo = (item, iso, dateLabel) => {
     const { org } = describe(item.deal);
+    // 명시 결제 일정의 카드는 그 결제의 예상일만 옮긴다 — 딜의 예상일을 바꾸면 카드가 제자리에
+    // 남는다(레인은 결제 예상일로 선다). 처음 계획(planned*)은 updatePayment가 건드리지 않는다.
+    if (item.explicitPayment && item.paymentId) {
+      if (sameCloseDay(item.expectedAt, iso)) return;
+      const which = item.paymentLabel || (item.installmentTotal > 1 ? `${item.installmentIndex}회` : "");
+      onUpdatePayments?.(
+        item.deal.id,
+        updatePayment(item.deal, item.paymentId, { expectedAt: iso || null }),
+        `${org}${which ? ` ${which}` : ""} · 예상일 ${iso ? `→ ${dateLabel}` : "미정으로"}`,
+      );
+      return;
+    }
     onMoveDate(item.deal.id, iso, `${org} · 예상일 ${iso ? `→ ${dateLabel}` : "미정으로"}`);
   };
 
@@ -745,7 +1062,20 @@ export function DealsTimeline({
   );
 
   let body;
-  if (timeline.count === 0) {
+  if (view === "payments") {
+    body = (
+      <DealsPaymentsBoard
+        board={paymentsBoard}
+        describe={describe}
+        syncState={syncState}
+        selectedDealId={selectedId}
+        onActivate={activateDeal}
+        onMonth={onPaymentsMonth}
+        onCreate={onCreate}
+        canCreate={canCreate}
+      />
+    );
+  } else if (timeline.count === 0) {
     body = syncState === "preview" ? (
       <div className="fx-card deals-tl-empty">
         <TruthBadge state="preview" />
@@ -820,12 +1150,14 @@ export function DealsTimeline({
   }
 
   return (
-    <div className="deals-tl" data-dock-open={selectedItem ? "true" : undefined}>
-      <CertaintyRibbon month={timeline.month} filter={filter} onToggle={(key) => setFilter((cur) => (cur === key ? null : key))} target={target} />
-      {timeline.stalled.length > 0 && (
+    <div className="deals-tl" data-view={view} data-dock-open={selectedItem ? "true" : undefined}>
+      {view === "time" && (
+        <CertaintyRibbon month={timeline.month} filter={filter} onToggle={(key) => setFilter((cur) => (cur === key ? null : key))} target={target} />
+      )}
+      {view === "time" && timeline.stalled.length > 0 && (
         <StalledStrip items={timeline.stalled} describe={describe} onAsk={(item) => openRecord(item, { kind: "kakao" })} />
       )}
-      {timeline.overdueCount > MAX_DANGER_RAILS && (
+      {view === "time" && timeline.overdueCount > MAX_DANGER_RAILS && (
         <p className="deals-tl-overdue" role="status">
           <Iconed name="clock" size={13} /> 약속이 지난 거래 <span className="num">{timeline.overdueCount}</span>건
         </p>

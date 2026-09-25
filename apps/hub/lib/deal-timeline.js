@@ -37,9 +37,11 @@ const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 // 칸반 카드의 danger 레일 예산(§5.3 red budget) — 고객 연락 큐의 MAX_DANGER_RAILS와 같은 값.
 export const MAX_DANGER_RAILS = 3;
 
+// 결제(2026-09-25 A안, lib/deal-payment-plan.js) — 딜별 "예상했던 돈 → 실제 들어온 돈".
 export const DEAL_VIEW_OPTIONS = [
   { key: "time", label: "언제" },
   { key: "stage", label: "단계" },
+  { key: "payments", label: "결제" },
   { key: "region", label: "지역" },
 ];
 
@@ -114,6 +116,13 @@ export function formatWon(value) {
   if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
   if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
   return `₩${n}`;
+}
+
+// 차이 금액 — "+₩300K" · "−₩200K"(U+2212) · 0은 "₩0". 예상 대비 확정의 차이를 말할 때만 쓴다.
+export function formatSignedWon(value) {
+  const n = Math.round(Number(value) || 0);
+  if (n === 0) return "₩0";
+  return `${n > 0 ? "+" : "−"}${formatWon(Math.abs(n))}`;
 }
 
 // 이번 주(월–일)·다음 주·그 뒤의 경계. 모두 KST 일련번호.
@@ -305,6 +314,31 @@ function decorateDealBase(deal, ctx, stages) {
 // 레인에 서는 카드 하나는 미입금 예상 결제 한 건이다 — buildDealTimeline이 딜마다
 // unpaidPayments()를 순회해 직접 조립한다(id 규칙은 그 주석 참고).
 
+// 결제 보기(표의 행)에서 여는 독은 결제 한 건이 아니라 딜 하나를 다룬다 — 레인을 떠난(완결)
+// 딜도 열 수 있어야 한다. 카드 항목과 같은 모양이되 금액은 딜 전체 예상, 예상일은 딜의 것.
+export function dealDockItem(deal, { now = new Date(), stages = DEAL_STAGES } = {}) {
+  if (!deal) return null;
+  const ctx = timelineContext(now);
+  const stageList = Array.isArray(stages) && stages.length ? stages : DEAL_STAGES;
+  const closeDay = dealCloseDay(deal);
+  const payments = effectivePayments(deal);
+  return {
+    ...decorateDealBase(deal, ctx, stageList),
+    id: deal.id,
+    paymentId: null,
+    explicitPayment: false,
+    expectedAt: deal.closeAt || null,
+    paymentLabel: null,
+    installmentIndex: 1,
+    installmentTotal: 1,
+    amount: payments.reduce((sum, p) => sum + p.expectedAmount, 0) || amountOf(deal),
+    lane: laneKeyForDay(closeDay, ctx),
+    closeDay,
+    closeLabel: closeDay == null ? null : formatDayLabel(closeDay),
+    closeOverdue: false,
+  };
+}
+
 const byDateThenAmount = (a, b) => (a.closeDay - b.closeDay) || (b.amount - a.amount);
 const byAmountThenAge = (a, b) => (b.amount - a.amount) || ((Number(b.deal.age) || 0) - (Number(a.deal.age) || 0));
 
@@ -379,6 +413,8 @@ export function buildDealTimeline(deals, { now = new Date(), stages = DEAL_STAGE
         ...base,
         id: payments.length > 1 ? `${deal.id}::${payment.id}` : deal.id,
         paymentId: payment.id,
+        explicitPayment: hasPaymentSchedule(deal),
+        expectedAt: payment.expectedAt || null,
         paymentLabel: payment.label,
         installmentIndex: i + 1,
         installmentTotal: payments.length,

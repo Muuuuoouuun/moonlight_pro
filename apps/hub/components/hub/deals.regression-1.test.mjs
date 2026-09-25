@@ -5,6 +5,8 @@ import ts from 'typescript';
 import { DEAL_STAGES, LOST_STAGE, dealStageLabel, isDealStalled } from '../../lib/deal-stages.js';
 import { DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay } from '../../lib/deal-timeline.js';
 import { monthKeyOf, normalizeTargetAmount, targetForMonth, targetProgress } from '../../lib/revenue-target.js';
+import { planBaselineFor } from '../../lib/deal-payments.js';
+import { buildPaymentsBoard } from '../../lib/deal-payment-plan.js';
 
 // Regression: ISSUE-001 — column moves unmount the drag source before dragend.
 // Found by /qa on 2026-09-21. Browser evidence: /tmp/moonlight-deals-qa/drag-result.png.
@@ -42,6 +44,7 @@ function mount({ state = 'live', records = [], workspace, search = 'view=stage',
     triggerCelebration() {}, saveRevenueRecord: save || (async () => ({ ok: true, status: 'saved' })),
     DEAL_VIEW_OPTIONS, resolveDealView, buildDealTimeline, formatCloseLabel, sameCloseDay,
     monthKeyOf, normalizeTargetAmount, targetForMonth, targetProgress,
+    planBaselineFor, buildPaymentsBoard,
   };
   for (const name of ['Button', 'Kbd', 'SyncBadge', 'Checkbox', 'CheckboxRow', 'LifecycleBadge', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget', 'DealsTimeline', 'DealsRegionView', 'RevenueTargetControl']) dependencies[name] = name;
   const Deals = new Function(...Object.keys(dependencies), `${javascript}; return Deals;`)(...Object.values(dependencies));
@@ -168,7 +171,7 @@ test('기본 보기는 언제 — 칸반 대신 시간 칸을 그리고 제목�
 test('보기 전환은 ?view=로 남기고 기본 보기로 돌아오면 쿼리를 지운다', () => {
   const app = mount({ search: 'view=stage&scope=company' });
   const toggle = app.findAll(n => n.type === 'SegmentedControl' && n.props.label === '보기')[0];
-  assert.deepEqual(toggle.props.options.map(o => o.label), ['언제', '단계', '지역']);
+  assert.deepEqual(toggle.props.options.map(o => o.label), ['언제', '단계', '결제', '지역']);
   assert.equal(toggle.props.value, 'stage');
   toggle.props.onChange('region');
   toggle.props.onChange('time');
@@ -213,4 +216,89 @@ test('독이 열리면 머리의 생성 버튼은 secondary로 내려 한 화면
 test('칸반의 반론 점검은 10px 인라인 버튼이 아니라 Button 프리미티브다', () => {
   assert.doesNotMatch(component, /fontSize: 10,/);
   assert.match(component, /<Button variant="outline" size="xs" icon="sparkle" onClick=\{\(e\) => \{ e\.stopPropagation\(\); setGuruDeal\(d\); \}\}>/);
+});
+
+// ── 2026-09-25 결제 보기(A안) — 예상했던 돈 → 들어온 돈 ─────────────────────────────
+test('결제 보기는 ?view=payments로 남고 같은 호스트(DealsTimeline)가 결제 모델로 그린다', () => {
+  const app = mount({ search: 'view=payments', records: [{ id: 'd1', stage: 'quote', value: 10, closeAt: todayIso() }] });
+  const toggle = app.findAll(n => n.type === 'SegmentedControl' && n.props.label === '보기')[0];
+  assert.equal(toggle.props.value, 'payments');
+  const host = app.findAll(n => n.type === 'DealsTimeline');
+  assert.equal(host.length, 1);
+  assert.equal(host[0].props.view, 'payments');
+  assert.equal(host[0].props.paymentsBoard.rows.length, 1);
+  assert.deepEqual(app.lastSelection(), [{ id: 'd1' }], 'j/k는 표의 거래 순서');
+  assert.equal(app.findAll(n => n.type === 'ScrollShadowX').length, 0, '칸반을 같이 그리지 않는다');
+  const time = mount({ search: '' , records: [{ id: 'd1', stage: 'quote', value: 10, closeAt: todayIso() }] });
+  assert.equal(time.findAll(n => n.type === 'DealsTimeline')[0].props.paymentsBoard, null, '언제 보기엔 결제 모델을 넘기지 않는다');
+  const switcher = mount({ search: 'scope=company' });
+  switcher.findAll(n => n.type === 'SegmentedControl' && n.props.label === '보기')[0].props.onChange('payments');
+  assert.deepEqual(switcher.replaced, ['/dashboard/revenue/deals?scope=company&view=payments']);
+});
+
+test('히어로의 예상했던 이번 달 입금 — 계획이 있을 때만, 괄호는 들어온 게 있을 때만, 읽기 전엔 숫자 없음', () => {
+  const today = todayIso();
+  const records = [
+    { id: 'a', stage: 'closing', value: 1800000,
+      payments: [{ id: 'p', expectedAmount: 1800000, expectedAt: today, status: 'paid', paidAmount: 1600000, paidAt: today, paidNote: '할인' }] },
+    { id: 'b', stage: 'quote', value: 2400000, closeAt: today },
+  ];
+  const sub = app => app.findAll(n => n.type === 'p' && n.props.className === 'fx-page-sub').map(text).join(' ');
+  const app = mount({ search: '', records });
+  assert.match(sub(app), /예상했던 이번 달 입금 4200000 중 1600000 확정 \(−2600000\)/);
+  const nothingPaid = mount({ search: '', records: [records[1]] });
+  assert.match(sub(nothingPaid), /예상했던 이번 달 입금 2400000 중 0 확정$/);
+  const noPlan = mount({ search: '', records: [{ id: 'c', stage: 'quote', value: 0 }] });
+  assert.doesNotMatch(sub(noPlan), /예상했던/);
+  for (const state of ['loading', 'error', 'preview']) {
+    const unknown = mount({ search: '', state, records });
+    assert.doesNotMatch(sub(unknown), /예상했던/, state);
+  }
+});
+
+test('예상일을 처음 옮기면 옮기기 전 계획을 plan_baseline으로 한 번만 싣는다 — 창 안 연속 이동도 원래 값', async () => {
+  const saved = [];
+  const original = '2026-09-15T03:00:00.000Z';
+  const app = mount({ search: '', records: [{ id: 'd1', stage: 'quote', value: 1800000, closeAt: original }], save: async (kind, op, body) => { saved.push(body); return { ok: true, status: 'saved' }; } });
+  const host = () => app.findAll(n => n.type === 'DealsTimeline')[0];
+  host().props.onMoveDate('d1', '2026-10-02T03:00:00.000Z', 'a');
+  app.render();
+  host().props.onMoveDate('d1', '2026-10-15T03:00:00.000Z', 'b');
+  app.render();
+  assert.equal(app.pending.size, 1);
+  [...app.pending.values()][0]();
+  await new Promise(resolve => setImmediate(resolve));
+  app.render();
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].closeAt, '2026-10-15T03:00:00.000Z');
+  assert.equal(saved[0].planBaseline.amount, 1800000);
+  assert.equal(saved[0].planBaseline.closeAt, original, '중간값(10/2)이 아니라 창이 열리기 전 날짜');
+  assert.equal(host().props.deals[0].planBaseline.closeAt, original, '화면도 곧바로 기준선을 안다');
+  // 두 번째 이동부터는 싣지 않는다
+  app.pending.clear();
+  host().props.onMoveDate('d1', '2026-11-02T03:00:00.000Z', 'c');
+  [...app.pending.values()][0]();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(saved.length, 2);
+  assert.equal('planBaseline' in saved[1], false);
+});
+
+test('편집 드로어로 금액을 바꾸면 바꾸기 전 계획을 한 번 싣고, 이미 있으면 새로 만들지 않는다', async () => {
+  const saved = [];
+  const save = async (kind, op, body) => { saved.push(body); return { ok: true, status: 'saved' }; };
+  const original = { id: 'd1', stage: DEAL_STAGES[0].key, value: 1000000, closeAt: '2026-09-15T03:00:00.000Z' };
+  const app = mount({ records: [original], save });
+  cardOf(app).props.onClick(); app.render();
+  drawerOf(app).props.onChange('value', '1200000'); app.render();
+  await drawerOf(app).props.onSave();
+  assert.equal(saved[0].value, '1200000');
+  assert.equal(saved[0].planBaseline.amount, 1000000);
+  assert.equal(saved[0].planBaseline.closeAt, '2026-09-15T03:00:00.000Z');
+
+  const kept = { amount: 900000, closeAt: '2026-09-10T03:00:00.000Z' };
+  const second = mount({ records: [{ ...original, planBaseline: kept }], save });
+  cardOf(second).props.onClick(); second.render();
+  drawerOf(second).props.onChange('value', '1500000'); second.render();
+  await drawerOf(second).props.onSave();
+  assert.deepEqual(saved[1].planBaseline, kept, '기존 기준선을 그대로 — 새 값을 만들지 않는다');
 });

@@ -3,6 +3,13 @@ import { test } from "node:test";
 
 import { mapAccount, mapDeal, mapLead } from "./revenue-ledger.js";
 
+test("mapDeal reads back the implicit payment's first plan (meta.plan_baseline) and rejects a non-object", () => {
+  const baseline = { amount: 1800000, closeAt: "2026-09-15T03:00:00.000Z", at: "2026-09-20T00:00:00.000Z" };
+  assert.deepEqual(mapDeal({ id: "deal-1", title: "x", meta: { plan_baseline: baseline } }, new Map()).planBaseline, baseline);
+  assert.equal(mapDeal({ id: "deal-2", title: "x", meta: {} }, new Map()).planBaseline, null);
+  assert.equal(mapDeal({ id: "deal-3", title: "x", meta: { plan_baseline: "2026-09-15" } }, new Map()).planBaseline, null);
+});
+
 test("mapDeal reads back the next-meeting breadcrumb and rejects a non-object", () => {
   const breadcrumb = {
     eventId: "evt-1",
