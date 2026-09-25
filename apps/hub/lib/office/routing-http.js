@@ -5,7 +5,7 @@ import { callOfficeRoutingEngine } from './routing-engine-client.js';
 
 const failure = { status: 'error', error: '담당 추천을 확인하지 못했습니다. 담당자를 직접 선택해 주세요.' };
 
-export function createOfficeRoutingHubHandler({ guard = assertHubWriteAllowed, callEngine = callOfficeRoutingEngine } = {}) {
+export function createOfficeRoutingHubHandler({ guard = assertHubWriteAllowed, callEngine = req => callOfficeRoutingEngine(req, { retries: 1 }) } = {}) {
   return async req => {
     const denied = guard(req);
     if (denied) return denied;

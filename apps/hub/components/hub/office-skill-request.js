@@ -60,7 +60,11 @@ export async function saveOfficeSkillRequest(input, { fetcher = fetch } = {}) {
     if (data?.status === 'preview') return { status: 'preview', persisted: false, error: '저장 연결이 없어 요청서를 만들지 못했습니다.' };
     return { status: 'error', persisted: false, error: data?.error === 'task-scope-or-owner-mismatch'
       ? '할 일의 범위가 일치하지 않습니다. 범위를 바꿔 다시 확인해 주세요.'
-      : data?.error || '요청서를 저장하지 못했습니다. 다시 확인해 주세요.' };
+      : data?.error === 'skill-storage-unavailable'
+        ? '요청서 저장소가 아직 준비되지 않았습니다.'
+        : data?.error === 'skill-storage-not-configured'
+          ? '요청서 저장소 연결이 설정되지 않았습니다.'
+          : data?.error || '요청서를 저장하지 못했습니다. 다시 확인해 주세요.' };
   } catch {
     return { status: 'error', persisted: false, error: '요청서를 저장하지 못했습니다. 연결을 확인해 주세요.' };
   }

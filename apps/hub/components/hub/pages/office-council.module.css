@@ -13,7 +13,7 @@
 .mobileCount { display:none; }
 .agendaTools { display:flex; align-items:center; justify-content:flex-end; gap:4px; flex-wrap:wrap; }
 .attendees { color:var(--fg-muted); font-size:12px; white-space:nowrap; }
-.thread { flex:1 1 auto; min-height:100px; overflow-y:auto; overscroll-behavior:contain; padding:0 20px 16px; scroll-padding-top:16px; scroll-padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
+.thread { flex:1 1 auto; min-height:100px; overflow-y:auto; overscroll-behavior:contain; padding:0 20px 32px; scroll-padding-top:16px; scroll-padding-bottom:calc(32px + env(safe-area-inset-bottom)); }
 .turn { padding:20px 0; scroll-margin-top:16px; }
 .turn + .turn { border-top:1px solid var(--line-soft); }
 .userMessage { display:grid; gap:6px; padding:12px 14px; margin-bottom:16px; background:var(--surface-2); border:1px solid var(--line-soft); border-radius:var(--r-sm); overflow-wrap:anywhere; }
@@ -46,6 +46,7 @@
 .receipt { display:flex; gap:12px; flex-wrap:wrap; margin:16px 0 8px; font-size:12px; color:var(--fg-muted); }
 .contextState { margin:12px 0 8px; }
 .request { margin-top:12px; }
+.request[open] { padding-bottom:12px; }
 .request ul { margin:8px 0 0; padding-left:20px; }
 .pending { display:grid; gap:16px; padding:20px 0; }
 .pending strong { font-size:13px; }
@@ -94,7 +95,7 @@
   .mobileCount { display:inline; white-space:nowrap; font-size:12px; color:var(--fg-muted); }
   .sourceChip,.attendees { display:none; }
   .agendaTools button:not(:last-child) { display:none; }
-  .thread { padding:0 12px 12px; scroll-padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
+  .thread { padding:0 12px 28px; scroll-padding-bottom:calc(28px + env(safe-area-inset-bottom)); }
   .turn { padding:12px 0; }
   .speech { margin-left:0; }
   .composer { padding:10px 12px calc(10px + env(safe-area-inset-bottom)); }

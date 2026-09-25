@@ -35,7 +35,12 @@ test('a request is ready only after a matching persisted receipt, and preview or
   };
   assert.equal((await saveOfficeSkillRequest(input, { fetcher })).status, 'ready');
   assert.equal((await saveOfficeSkillRequest(input, { fetcher: async () => Response.json({ status: 'ready', persisted: true, request: { ...input, requestId: crypto.randomUUID() } }) })).persisted, false);
-  assert.equal((await saveOfficeSkillRequest(input, { fetcher: async () => Response.json({ status: 'preview', persisted: false }, { status: 202 }) })).status, 'preview');
   assert.equal((await saveOfficeSkillRequest(input, { fetcher: async () => Response.json({ status: 'error' }) })).status, 'error');
+  const unavailable = await saveOfficeSkillRequest(input, { fetcher: async () => Response.json({ status: 'error', error: 'skill-storage-unavailable' }, { status: 502 }) });
+  assert.equal(unavailable.status, 'error');
+  assert.equal(unavailable.error, '요청서 저장소가 아직 준비되지 않았습니다.');
+  const notConfigured = await saveOfficeSkillRequest(input, { fetcher: async () => Response.json({ status: 'error', error: 'skill-storage-not-configured' }, { status: 502 }) });
+  assert.equal(notConfigured.status, 'error');
+  assert.equal(notConfigured.error, '요청서 저장소 연결이 설정되지 않았습니다.');
   assert.equal((await saveOfficeSkillRequest(input, { fetcher: async () => { throw new Error('offline'); } })).persisted, false);
 });

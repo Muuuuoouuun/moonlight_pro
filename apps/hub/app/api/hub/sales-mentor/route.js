@@ -19,7 +19,7 @@ function resolveSharedSecret() {
   return process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() || "";
 }
 
-async function callEngine(body) {
+async function callEngine(body, { retries = 1 } = {}) {
   const engineUrl = resolveEngineUrl();
 
   if (!engineUrl) {
@@ -35,22 +35,38 @@ async function callEngine(body) {
     headers["x-com-moon-shared-secret"] = sharedSecret;
   }
 
-  const response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    cache: "no-store",
-    signal: AbortSignal.timeout(60_000),
-    redirect: "error",
-  });
-  const text = await response.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = text || null;
+  const attempts = Math.max(0, Math.min(retries, 2));
+  for (let attempt = 0; attempt <= attempts; attempt++) {
+    try {
+      const response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        cache: "no-store",
+        signal: AbortSignal.timeout(60_000),
+        redirect: "error",
+      });
+      if (!response.ok && attempt < attempts && (response.status === 502 || response.status === 503)) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = text || null;
+      }
+      return { status: response.status, data };
+    } catch {
+      if (attempt < attempts) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      return { status: 502, data: { status: "error", reason: "engine-request-failed" } };
+    }
   }
-  return { status: response.status, data };
+  return { status: 502, data: { status: "error", reason: "engine-request-failed" } };
 }
 
 // One-line fingerprint of the assembled context for the episodic-memory log.
