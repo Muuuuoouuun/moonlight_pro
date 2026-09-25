@@ -11,6 +11,15 @@ const invalid = (reason: string) => error(['insufficient-scope', 'invalid-actor'
 const record = (value: unknown): value is Envelope => !!value && typeof value === 'object' && !Array.isArray(value);
 const unknown = (commandId: string) => error(502, 'command-outcome-unknown', 'command-outcome-unknown', { commandId, persisted: null, nextAction: 'get_command_receipt' });
 
+// agent_command_v1 and agent_command_receipt_v1 (migration 0032) accept only the five scopes that
+// existed when they were written. goals:write and ai:write authorize other routes and never reach
+// these functions, but the full configured list used to be passed through, so enabling them made
+// every task/contact command fail as invalid-agent-context and every receipt read as
+// insufficient-scope (2026-09-26 live incident). The SQL only checks the scope that authorizes the
+// action (and read for receipts), so it receives the subset it knows.
+export const COMMAND_RPC_SCOPES: readonly string[] = Object.freeze(['read', 'tasks:write', 'contact-outcomes:write', 'jobs:read', 'jobs:write']);
+export const commandRpcScopes = (scopes: readonly string[] = []) => scopes.filter(scope => COMMAND_RPC_SCOPES.includes(scope));
+
 function storageFailure(result: RpcResult, commandId: string, write: boolean): Result {
   if (result.error === 'missing-config') return { httpStatus: 202, data: { status: 'preview', error: 'missing-config', persisted: false, commandId } };
   if (result.status === 404 || /(?:agent_command|record_contact_outcome|relation).*?(?:does not exist|schema cache)|could not find.*?(?:agent_command|record_contact_outcome)/i.test(result.detail || '')) return error(503, 'agent-commands-migration-required', 'agent-commands-migration-required', { commandId });
@@ -39,7 +48,7 @@ export async function executeAgentCommand(input: unknown, context: AgentCommandC
   if (!normalized.ok) return invalid(normalized.reason);
   const { command } = normalized;
   let result: RpcResult;
-  try { result = await rpc('agent_command_v1', { p_workspace_id: context.workspaceId, p_actor_id: context.actorId, p_scopes: context.scopes, p_command: command }); }
+  try { result = await rpc('agent_command_v1', { p_workspace_id: context.workspaceId, p_actor_id: context.actorId, p_scopes: commandRpcScopes(context.scopes), p_command: command }); }
   catch { return unknown(command.commandId); }
   return result.ok ? fromEnvelope(result.data, command.commandId, true, command.action) : storageFailure(result, command.commandId, true);
 }
@@ -50,7 +59,7 @@ export async function getAgentCommandReceipt(id: unknown, context: AgentCommandC
   if (!isAgentUuid(id)) return invalid('invalid-command-id');
   const commandId = id.toLowerCase();
   let result: RpcResult;
-  try { result = await rpc('agent_command_receipt_v1', { p_workspace_id: context.workspaceId, p_actor_id: context.actorId, p_scopes: context.scopes, p_command_id: commandId }); }
+  try { result = await rpc('agent_command_receipt_v1', { p_workspace_id: context.workspaceId, p_actor_id: context.actorId, p_scopes: commandRpcScopes(context.scopes), p_command_id: commandId }); }
   catch { return error(502, 'receipt-read-unavailable', undefined, { commandId, persisted: null, retryable: true }); }
   return result.ok ? fromEnvelope(result.data, commandId, false) : storageFailure(result, commandId, false);
 }
