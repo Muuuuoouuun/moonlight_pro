@@ -9,7 +9,7 @@ export function createOfficeRoutingHubHandler({ guard = assertHubWriteAllowed, c
   return async req => {
     const denied = guard(req);
     if (denied) return denied;
-    const body = await readHubWriteJson(req, { maxBytes: 12000 });
+    const body = await readHubWriteJson(req, { maxBytes: 24000 });
     if (body.error) return body.error;
     let request;
     try { request = parseOfficeRoutingRequest(body.data); }
