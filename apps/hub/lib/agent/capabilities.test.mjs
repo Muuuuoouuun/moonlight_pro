@@ -37,6 +37,8 @@ test('health distinguishes authenticated read access from configured write secre
   assert.equal(health.persistence.verified, false);
   assert.equal(health.writeVerification, 'receipt-required');
   assert.ok(health.permissions.actions.includes('create_task'));
+  assert.equal(health.permissions.actorId, 'codex');
+  assert.equal((await getAgentCapabilities({ ...context, actorId: 'claude-code' })).data.data.permissions.actorId, 'claude-code');
   assert.equal(health.connections.engine.authenticated, null);
   assert.equal(JSON.stringify(result).includes('private-'), false);
   assert.ok(calls.every((call) => call.options.method === 'GET'));

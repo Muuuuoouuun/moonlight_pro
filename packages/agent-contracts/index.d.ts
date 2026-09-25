@@ -37,6 +37,11 @@ export class AgentInputError extends Error { code: string; constructor(message: 
 export function isAgentUuid(value: unknown): value is string;
 export function stableStringify(value: unknown): string;
 export function agentHash(value: unknown): string;
+export const AGENT_ACTOR_PATTERN: RegExp;
+export interface AgentClientTokenHash { actorId: string; digest: string }
+export type AgentClientTokenHashes = { ok: true; entries: AgentClientTokenHash[] } | { ok: false; reason: 'invalid-value' | 'invalid-entry' | 'duplicate-actor' | 'duplicate-digest' | 'shared-token-digest' };
+export function agentClientTokenDigest(token: string): string;
+export function parseAgentClientTokenHashes(value: unknown, options?: { sharedToken?: string }): AgentClientTokenHashes;
 export function parseAgentQuery(input: unknown): AgentQuery;
 export function parseAgentEntityQuery(type: string, id: string, input?: unknown): AgentEntityQuery;
 export function sealAgentCursor(payload: Record<string, unknown>, binding: unknown, secret: string, options?: { now?: number }): string;

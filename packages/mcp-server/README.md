@@ -17,6 +17,8 @@ Configure Hub's private `apps/hub/.env.local`:
 ```dotenv
 COM_MOON_AGENT_API_TOKEN=<distinct-random-secret>
 COM_MOON_AGENT_ACTOR_ID=codex
+# Optional — one own token per MCP client, see Per-client identity below:
+# COM_MOON_AGENT_CLIENT_TOKEN_HASHES=claude-code:<sha256hex>,codex:<sha256hex>
 COM_MOON_AGENT_SCOPES=read,tasks:write,contact-outcomes:write,jobs:read,jobs:write
 COM_MOON_DEFAULT_WORKSPACE_ID=<existing-workspace-uuid>
 COM_MOON_HUB_URL=http://localhost:3000
@@ -24,7 +26,7 @@ COM_MOON_ENGINE_URL=http://localhost:3001
 COM_MOON_SHARED_WEBHOOK_SECRET=<existing-shared-secret>
 ```
 
-Mirror workspace, actor, scopes and the shared webhook secret in Engine's private environment. The API token stays in Hub and the MCP client; Engine validates the shared secret and server-derived identity/scopes. Keep worker credentials distinct. Scope defaults to `read` when omitted; capability discovery reports grants separately from verified persistence.
+Mirror workspace, actor, scopes, the shared webhook secret and (when used) `COM_MOON_AGENT_CLIENT_TOKEN_HASHES` in Engine's private environment. The API token stays in Hub and the MCP client; Engine validates the shared secret and server-derived identity/scopes. Keep worker credentials distinct. Scope defaults to `read` when omitted; capability discovery reports grants separately from verified persistence.
 
 Start Hub and Engine in separate terminals with `npm run dev:hub` and `npm run dev:engine`, then register the clients you use (see [Connecting AI clients](#connecting-ai-clients)):
 
@@ -70,6 +72,45 @@ node packages/mcp-server/bin/moonlight-mcp.js [--profile core|pms|sales|content|
 - `print <client>` prints the snippet for manual setup; `print <client> --http` prints the HTTP form (token read from `MOONLIGHT_MCP_TOKEN` or an input prompt, never inline).
 
 Claude Desktop, Cursor and VS Code read their file at start; restart the app after `install`.
+
+## Per-client identity
+
+With one shared `COM_MOON_AGENT_API_TOKEN`, every command, job and local skill receipt records the actor `COM_MOON_AGENT_ACTOR_ID` (default `codex`) — including work Claude Code did. Give each client its own token so receipts name who acted:
+
+1. Create one private env file per client. Each gets a new random 32-byte base64url `COM_MOON_AGENT_API_TOKEN` plus what the launcher would otherwise have loaded from Hub's env file: `COM_MOON_HUB_URL`, `COM_MOON_HUB_WRITE_SECRET` (legacy tools such as `get_daily_brief` still send it) and `COM_MOON_MCP_*` such as `COM_MOON_MCP_PROFILE`/`COM_MOON_MCP_API_MODE`. The file is mode 0600, must lie outside any checkout, and an existing file is kept unless `--force` (which rotates its token). The token is never printed — stdout is only the `actor:sha256hex` pair. `--hub-env FILE` copies from another Hub env file.
+
+   ```sh
+   npm run mcp:connect -- client-token claude-code --out ~/.moonlight/mcp/claude-code.env
+   npm run mcp:connect -- client-token codex --out ~/.moonlight/mcp/codex.env
+   npm run mcp:connect -- client-token claude-desktop --out ~/.moonlight/mcp/claude-desktop.env
+   ```
+
+2. Put the printed pairs, comma-separated, in Hub's env and Engine's env (locally both read the same `.env.local`), then restart Hub and Engine:
+
+   ```dotenv
+   COM_MOON_AGENT_CLIENT_TOKEN_HASHES=claude-code:<sha256hex>,codex:<sha256hex>,claude-desktop:<sha256hex>
+   ```
+
+3. Point each registration at its own file, then restart that client:
+
+   ```sh
+   npm run mcp:connect -- install claude-code --mcp-env-file ~/.moonlight/mcp/claude-code.env
+   npm run mcp:connect -- install codex --mcp-env-file ~/.moonlight/mcp/codex.env
+   npm run mcp:connect -- install claude-desktop --mcp-env-file ~/.moonlight/mcp/claude-desktop.env
+   ```
+
+   This writes `COM_MOON_MCP_ENV_FILE` into that one registration (the flag is not `--env-file` because Node validates that runtime flag anywhere on the command line). It refuses several clients or `--all`, a relative or missing path and Hub's own env file. A `COM_MOON_AGENT_API_TOKEN` left in the registration's `env` would win over the file, so install warns about it. `status` lists each client's env file.
+
+4. In each client, `get_hub_health` reports `data.permissions.actorId`. Check it before relying on the client's receipts.
+
+How the servers decide:
+
+- Hub stores only digests. A bearer equal to `COM_MOON_AGENT_API_TOKEN` is the default actor — the Hub's own Codex jobs screen uses it. A bearer whose SHA-256 matches an entry is that entry's actor. Every entry is compared in constant time.
+- The list is strict: each entry is `actor:<64 lowercase hex>` with an actor matching `^[a-zA-Z0-9._:@/-]{1,128}$`, no actor or digest twice, and no digest of the shared token. Unset or blank keeps the single shared identity. A malformed value closes the Agent API with 503 `agent-auth-not-configured` (Engine: `agent-engine-not-configured`) instead of silently dropping an identity. Engine accepts the default actor or a listed actor name in `x-com-moon-agent-actor`; digests are never credentials there, and the shared webhook secret is still required.
+- Scopes are not per actor: every client gets `COM_MOON_AGENT_SCOPES`.
+- Records belong to the actor that wrote them. `get_command_receipt` finds only the caller's own commands, so check a command made before switching tokens under the old identity. A job is listed, cancelled and resumed only by the actor that started it, and the Hub's Codex jobs screen acts as the default actor — keeping Codex's client actor `codex` keeps its jobs visible there; jobs started as `claude-code` are not. `record_skill_receipt` with a `commandId` needs a `complete_task` saved by the same client. Command IDs are idempotent per actor, so retry an unknown outcome from the same client.
+- Rotate: `client-token <actor> --out <same file> --force`, replace that actor's pair, restart Hub, Engine and the client. Revoke: delete the pair.
+- HTTP transport tokens (`token create`) only admit tools to `npm run mcp:http`; that process calls Hub with its own single Agent token, so its HTTP clients share one actor.
 
 ## HTTP transport (other tools)
 
@@ -126,7 +167,7 @@ Transports are stdio and local Streamable HTTP ([above](#http-transport-other-to
 
 ## HTTP contract
 
-Every v1 GET/POST requires `Authorization: Bearer <COM_MOON_AGENT_API_TOKEN>`. Workspace and actor come from server configuration, never request fields. Requests accept allowlisted fields/actions rather than SQL, arbitrary URLs or shell commands.
+Every v1 GET/POST requires `Authorization: Bearer <COM_MOON_AGENT_API_TOKEN>` or a client token listed in `COM_MOON_AGENT_CLIENT_TOKEN_HASHES` ([Per-client identity](#per-client-identity)). Workspace and actor come from server configuration, never request fields. Requests accept allowlisted fields/actions rather than SQL, arbitrary URLs or shell commands.
 
 | Route | Purpose |
 | --- | --- |
