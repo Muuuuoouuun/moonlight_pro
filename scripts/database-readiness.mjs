@@ -65,6 +65,12 @@ export const DATABASE_FEATURES = [
       ['enforce_task_focus_cap_v1()', 'for no key update']],
     triggers: [['tasks', 'task_focus_cap_v1', 'enforce_task_focus_cap_v1()']] },
   { name: 'Studio AI 템플릿', migration: '20260923_0045_content_prompt_templates.sql', tables: ['content_prompt_templates'], functions: [] },
+  // 로컬 스킬 요청서: 테이블은 RPC 전용(service_role 직접 쓰기 없음), 4개 RPC만 service_role 실행. 조회용 helper 2개는
+  // 모든 역할에서 revoke돼 있어 함수 검사 목록에 넣지 않는다(넣으면 service_role EXECUTE 부재로 FAIL).
+  { name: '로컬 스킬 요청서', migration: '20260925_0047_local_skill_requests.sql', tables: ['local_skill_requests'],
+    functions: ['local_skill_request_create_v1(uuid,text,jsonb)', 'local_skill_request_get_v1(uuid,text,uuid)',
+      'local_skill_request_list_v1(uuid,text,integer)', 'local_skill_receipt_record_v1(uuid,text,text,uuid,jsonb)'],
+    tableNoWrite: [['local_skill_requests', 'service_role']] },
   { name: '제품 카탈로그·저장소', migration: '20260925_0049_products.sql', tables: ['products', 'product_repositories', 'product_inquiry_links', 'product_monthly_metrics'], functions: [] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
