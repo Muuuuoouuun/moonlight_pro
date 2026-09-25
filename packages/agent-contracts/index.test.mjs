@@ -93,3 +93,21 @@ test('legacy conflict and contact outcome projections do not invent unsupported 
   assert.equal(contact.outcome.activityId, id);
   assert.equal(contact.outcome.privateField, undefined);
 });
+
+test('client token hashes: unset means none, a complete list parses, anything malformed fails closed', () => {
+  const { parseAgentClientTokenHashes: parse, agentClientTokenDigest: digest } = contracts;
+  const a = digest('claude-code-token'); const b = digest('desktop-token');
+  assert.match(a, /^[0-9a-f]{64}$/);
+  for (const unset of [undefined, null, '', '  ']) assert.deepEqual(parse(unset), { ok: true, entries: [] });
+  assert.deepEqual(parse(`claude-code:${a}, codex:local/operator:${b}`), { ok: true, entries: [{ actorId: 'claude-code', digest: a }, { actorId: 'codex:local/operator', digest: b }] });
+  const reason = (value, options) => parse(value, options).reason;
+  for (const value of [`claude-code:${a},`, `,claude-code:${a}`, `claude-code ${a}`, `:${a}`, 'claude-code:', `claude code:${a}`, `${'x'.repeat(129)}:${a}`,
+    `claude-code:${a.toUpperCase()}`, `claude-code:${a.slice(1)}`, `claude-code:${a}0`, `claude-code:${a};codex:${b}`]) assert.equal(reason(value), 'invalid-entry', value);
+  assert.equal(reason(42), 'invalid-value');
+  assert.equal(reason(`claude-code:${a},claude-code:${b}`), 'duplicate-actor');
+  assert.equal(reason(`claude-code:${a},codex:${a}`), 'duplicate-digest');
+  assert.equal(reason(`claude-code:${digest('shared')}`, { sharedToken: 'shared' }), 'shared-token-digest');
+  assert.equal(parse(`claude-code:${a}`, { sharedToken: 'shared' }).ok, true);
+  assert.equal(contracts.AGENT_ACTOR_PATTERN.test('codex:local/operator'), true);
+  assert.equal(contracts.AGENT_ACTOR_PATTERN.test('actor with spaces'), false);
+});

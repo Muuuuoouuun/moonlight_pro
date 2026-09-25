@@ -26,7 +26,8 @@ export async function getAgentCapabilities(context) {
   const data = {
     configured: Boolean(config), reachable: true, authenticated: true, canRead: false,
     canWrite: actions.length && config && engineConfigured ? null : false,
-    permissions: { scopes, actions }, writeVerification: 'receipt-required',
+    // The authenticated actor lets each MCP client confirm which identity its receipts will carry.
+    permissions: { actorId: context.actorId, scopes, actions }, writeVerification: 'receipt-required',
     persistence: { verified: false, evidence: 'Only a persisted command receipt proves a write.' },
     connections: {
       database: { configured: Boolean(config), reachable: null, authenticated: null },
