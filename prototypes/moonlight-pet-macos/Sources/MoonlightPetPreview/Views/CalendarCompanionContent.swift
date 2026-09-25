@@ -27,6 +27,7 @@ struct CalendarCompanionContent: View {
                         .accessibilityLabel(CompanionDate.label(date) + (isToday ? " 오늘" : ""))
                     }
                 }
+                .modifier(GlassReadability(radius: 16, inset: 5))
                 Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 10) {
                     Text("일정은 Hub에서 이어서")
@@ -35,6 +36,7 @@ struct CalendarCompanionContent: View {
                         .font(.system(size: 12)).foregroundStyle(Palette.glassInkMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .modifier(GlassReadability(radius: 14, inset: 12))
                 Button { model.openHub(.calendar) } label: {
                     Label("Hub 일정 열기", systemImage: "arrow.up.right")
                         .frame(maxWidth: .infinity)
@@ -43,6 +45,7 @@ struct CalendarCompanionContent: View {
                 Spacer(minLength: 0)
                 Text("브라우저에서 열기")
                     .font(.system(size: 11)).foregroundStyle(Palette.glassInkFaint)
+                    .modifier(GlassReadability(radius: 8, inset: 8))
             }
         }
     }

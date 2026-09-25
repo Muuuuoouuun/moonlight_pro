@@ -2,7 +2,7 @@ import AppKit
 import OSLog
 import SwiftUI
 
-/// A thin control layer on the shared material, without another glass surface.
+/// Controls use a localized reading material on the clear outer glass.
 struct GlassActionStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.colorSchemeContrast) private var contrast
@@ -28,8 +28,9 @@ private struct GlassActionBody<Label: View>: View {
             .foregroundStyle(Palette.glassInk)
             .padding(.horizontal, compact ? 0 : 16)
             .frame(minWidth: 32, minHeight: compact ? 32 : 38)
-            .background(Palette.glassControlFill.opacity(pressed ? 0.20 : hovered ? 0.10 : 0.16),
+            .background(Palette.glassInk.opacity(pressed ? 0.10 : hovered ? 0.06 : 0),
                         in: RoundedRectangle(cornerRadius: compact ? 10 : 19, style: .continuous))
+            .modifier(GlassReadability(radius: compact ? 10 : 19))
             .overlay {
                 GlassRim(radius: compact ? 10 : 19, strength: increasedContrast ? 1 : 0.65)
             }
@@ -48,8 +49,7 @@ struct GlassInputSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(Palette.glassControlFill.opacity(focused ? 0.10 : 0.16),
-                        in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .modifier(GlassReadability(radius: 13))
             .overlay {
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .strokeBorder(Palette.glassInk.opacity(contrast == .increased ? 0.65 : focused ? 0.32 : 0.12),

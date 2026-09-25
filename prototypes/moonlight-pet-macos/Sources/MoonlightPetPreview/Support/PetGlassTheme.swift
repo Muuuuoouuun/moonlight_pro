@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import OSLog
 
 /// Operator-approved character identity colors, confined to the native pet panels.
@@ -13,18 +14,38 @@ enum PetGlassTheme {
 
     static func color(for character: PetCharacter) -> NSColor {
         let rgb: (CGFloat, CGFloat, CGFloat)
+        // Keep each portrait's hue readable through the neutral native glass.
+        // Separation comes from color, not a denser interaction wash.
         switch character {
-        case .brown: rgb = (0.15, 0.115, 0.085)
-        case .blue: rgb = (0.075, 0.135, 0.18)
-        case .gold: rgb = (0.16, 0.14, 0.075)
-        case .red: rgb = (0.18, 0.09, 0.065)
-        case .lilac: rgb = (0.145, 0.105, 0.18)
-        case .dark: rgb = (0.08, 0.085, 0.11)
-        case .olive: rgb = (0.11, 0.145, 0.09)
-        case .silver: rgb = (0.09, 0.145, 0.175)
+        case .brown: rgb = (0.41, 0.27, 0.18)
+        case .blue: rgb = (0.17, 0.32, 0.48)
+        case .gold: rgb = (0.49, 0.39, 0.17)
+        case .red: rgb = (0.48, 0.22, 0.14)
+        case .lilac: rgb = (0.35, 0.255, 0.47)
+        case .dark: rgb = (0.21, 0.20, 0.225)
+        case .olive: rgb = (0.30, 0.38, 0.19)
+        case .silver: rgb = (0.29, 0.425, 0.50)
         case .pink: rgb = (0.44, 0.28, 0.35)
         }
         return NSColor(srgbRed: rgb.0, green: rgb.1, blue: rgb.2, alpha: 1)
+    }
+}
+
+/// One transient presentation source per glass panel. Reading materials use the
+/// wash's actual state instead of installing their own pointer observers.
+final class GlassReadingTone: ObservableObject {
+    struct State: Equatable {
+        var character: PetCharacter = .silver
+        var opacity: CGFloat = 0
+        var solidForAccessibility = false
+    }
+
+    @Published private(set) var state = State()
+
+    func update(character: PetCharacter, opacity: CGFloat, solidForAccessibility: Bool) {
+        let next = State(character: character, opacity: opacity, solidForAccessibility: solidForAccessibility)
+        guard state != next else { return }
+        state = next
     }
 }
 
@@ -45,8 +66,11 @@ enum PetGlassDrag {
 
 /// No blur/shadow on glyphs and no hit-testing surface above the text host.
 final class PetGlassWash: NSView {
-    var character: PetCharacter = .silver { didSet { updateColor() } }
+    var character: PetCharacter = .silver { didSet { updateColor(); updatePresentation() } }
     var solidForAccessibility = false { didSet { updateColor(); updatePresentation() } }
+    var onPresentationChange: ((PetCharacter, CGFloat, Bool) -> Void)? {
+        didSet { updatePresentation() }
+    }
     // Only the developer material lab uses this explicit preview override.
     var previewsTint = false { didSet { updatePresentation() } }
     private var interaction = GlassPressState()
@@ -145,6 +169,7 @@ final class PetGlassWash: NSView {
     private func updatePresentation() {
         guard let layer else { return }
         let target: Float = previewsTint || interaction.showsTint(accessibilityRequiresSolid: solidForAccessibility) ? 1 : 0
+        onPresentationChange?(character, CGFloat(target), solidForAccessibility)
         guard layer.opacity != target else { return }
         let current = layer.presentation()?.opacity ?? layer.opacity
         CATransaction.begin()
