@@ -1,12 +1,13 @@
 import { eqFilter, fetchSupabaseRowsDetailed } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig, updateSupabaseRecord } from "@/lib/server-write";
+import { WORKSPACE_ROW_SELECT } from "@/lib/workspace-row-select";
 import { collectLegacyDeadlines, readDeadlineAlertReset, weekStartDayKey } from "../deadline-alert-reset.js";
 
 const READ_LIMIT = 1000;
 
 async function readWorkspace(workspaceId) {
   const result = await fetchSupabaseRowsDetailed("workspaces", {
-    select: "id,meta,updated_at",
+    select: WORKSPACE_ROW_SELECT,
     filters: [["id", eqFilter(workspaceId)]],
     limit: 1,
     strictRows: true,

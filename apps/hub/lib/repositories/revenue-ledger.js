@@ -5,6 +5,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { WORKSPACE_ROW_SELECT } from "@/lib/workspace-row-select";
 import {
   getContactTrackingStartedAt,
   isContactTrackingEligible,
@@ -458,6 +459,12 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
   // for CRM and Daily Brief's raw slots, without reading unrelated account/case/
   // contact/cutover data on every task completion and reload.
   const attentionOnly = projection === "attention";
+  // "brief" is the Daily Brief raw slot (attention-ledger's includeRaw): it needs the same
+  // leads/deals/companies/contacts/targets shape as "full" (mapLead/mapDeal, revenueTargets,
+  // summary all run), but the accounts/cases lanes never render there (no accounts/cases
+  // reference in daily-brief/route.js, operator-revenue-scope.js, or daily-focus.js) — so skip
+  // those two reads for "brief" the same way "attention" already does.
+  const skipAccountsCases = attentionOnly || projection === "brief";
 
   if (!workspaceId || !supabaseConfig) {
     return emptyLedger(false, workspaceId || null);
@@ -480,12 +487,12 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
         ["stage", inFilter(LEGACY_DB_STAGE_VALUES)],
       ]),
     }),
-    attentionOnly ? [] : fetchSupabaseRows("customer_accounts", {
+    skipAccountsCases ? [] : fetchSupabaseRows("customer_accounts", {
       limit: 120,
       order: "updated_at.desc.nullslast",
       filters: withWorkspaceFilter([["status", inFilter(["active", "paused", "closed"])]]),
     }),
-    attentionOnly ? [] : fetchSupabaseRows("operation_cases", {
+    skipAccountsCases ? [] : fetchSupabaseRows("operation_cases", {
       limit: 120,
       order: "opened_at.desc.nullslast",
       filters: withWorkspaceFilter(),
@@ -503,7 +510,7 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
     // 이번 달 매출 목표(운영자 2026-09-24 결정 1층) — workspaces.meta.revenue_targets.
     // My Work 프로젝션은 거래 화면을 그리지 않으므로 읽지 않는다.
     attentionOnly ? null : fetchSupabaseRows("workspaces", {
-      select: "meta",
+      select: WORKSPACE_ROW_SELECT,
       filters: [["id", eqFilter(workspaceId)]],
       limit: 1,
     }),

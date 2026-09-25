@@ -5,6 +5,7 @@
 // and only outcomes recorded after it participate in contact counts.
 
 import { eqFilter, fetchSupabaseRows } from "../server-read.js";
+import { WORKSPACE_ROW_SELECT } from "../workspace-row-select.js";
 
 export const CONTACT_TRACKING_META_KEY = "contact_tracking_started_at";
 
@@ -40,7 +41,7 @@ export async function getContactTrackingStartedAt(workspaceId) {
   if (!workspaceId) return null;
 
   const rows = await fetchSupabaseRows("workspaces", {
-    select: "id,meta",
+    select: WORKSPACE_ROW_SELECT,
     filters: [["id", eqFilter(workspaceId)]],
     limit: 1,
   });
