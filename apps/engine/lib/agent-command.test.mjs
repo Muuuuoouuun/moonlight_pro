@@ -50,3 +50,13 @@ test('contact outcomes use one workspace target and preserve authoritative RPC i
   assert.equal(normalize({ ...request, input: { ...request.input, dormant: 'false' } }).reason, 'invalid-dormant');
   assert.equal(normalize(request, { ...context, scopes: ['tasks:write'] }).reason, 'insufficient-scope');
 });
+
+test('the engine accepts every contract scope so goals:write or ai:write in the shared env cannot disable commands', async () => {
+  assert.ok(module, 'Agent command normalizer exists');
+  const { AGENT_SCOPES: contractScopes } = await import('@com-moon/agent-contracts');
+  assert.deepEqual([...module.AGENT_SCOPES], [...contractScopes]);
+  const wide = { workspaceId, actorId: 'codex', scopes: [...contractScopes] };
+  assert.equal(module.validateAgentContext(wide), null);
+  assert.equal(module.validateAgentContext(wide, 'tasks:write'), null);
+  assert.equal(module.validateAgentContext({ ...wide, scopes: ['read', 'admin:write'] }), 'invalid-scopes');
+});

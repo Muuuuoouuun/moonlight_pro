@@ -80,3 +80,13 @@ test('open-question rejects wrong domain, missing source, missing question and w
     assert.deepEqual(state.writes, []);
   }
 });
+
+test('default brand advisory modes no longer ask for an approval-queue candidate', async () => {
+  for (const mode of ['brand-strategy', 'content-critique', 'audience-analysis']) {
+    const response = await POST(request({ mode, draft: '이번 주 원고 방향을 점검해 주세요.' }));
+    assert.equal(response.status, 200, mode);
+    const instruction = `${state.generation.systemInstruction}\n${state.generation.prompt}`;
+    assert.doesNotMatch(instruction, /승인 큐 후보|work_order로 올릴/, mode);
+    assert.deepEqual(state.writes.filter(write => write.table === 'work_orders'), [], mode);
+  }
+});

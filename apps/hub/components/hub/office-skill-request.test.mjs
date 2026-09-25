@@ -24,7 +24,14 @@ test('an operator must provide bounded instructions and completion evidence', ()
   assert.match(validateOfficeSkillRequest({ ...input, expectedEvidence: '' }), /증거/);
   assert.match(validateOfficeSkillRequest({ ...input, instruction: '가'.repeat(4001) }), /4,000자/);
   assert.match(validateOfficeSkillRequest({ ...input, scope: 'all' }), /범위/);
-  assert.match(officeSkillRequestText(input), /요청서 복사는 할 일 완료가 아닙니다/);
+  const text = officeSkillRequestText(input);
+  assert.match(text, new RegExp(requestId));
+  assert.match(text, /get_skill_request/);
+  assert.match(text, /record_skill_receipt/);
+  assert.match(text, /휴지통/);
+  assert.match(text, /completed\(증거 1개 이상\)·failed·unconfirmed/);
+  assert.match(text, /요청서 복사나 채팅의 "완료" 문장은 완료가 아니다/);
+  assert.match(text, /complete_task를 따로 부르고 그 commandId를 receipt에 넣는다/);
 });
 
 test('a request is ready only after a matching persisted receipt, and preview or read failure stays unsaved', async () => {

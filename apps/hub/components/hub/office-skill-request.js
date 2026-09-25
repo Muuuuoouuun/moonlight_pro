@@ -37,7 +37,12 @@ export function officeSkillRequestText(request) {
     `범위: ${request.scope === 'classin' ? '회사' : '개인'}`,
     `수행할 일: ${request.instruction}`,
     `완료 증거: ${request.expectedEvidence}`,
-    '실행 전 범위와 파일을 직접 확인하고, 완료 후 같은 요청 ID로 receipt를 기록해 주세요. 요청서 복사는 할 일 완료가 아닙니다.',
+    '',
+    '처리 방법(Claude Code·Codex, moonlight MCP):',
+    '1. get_skill_request로 위 요청 ID를 읽어 서버 원문과 상태를 확인한다. 이미 completed·failed면 다시 실행하지 않는다.',
+    '2. 수행할 일에 적힌 범위(폴더·파일)만 다룬다. 삭제는 휴지통으로 보내고, 여러 파일을 한꺼번에 옮기거나 지우기 전에는 할 일을 먼저 보여 주고 확인을 받는다.',
+    '3. 끝나면 record_skill_receipt로 실제 결과를 기록한다. state는 completed(증거 1개 이상)·failed·unconfirmed, evidence는 path·url·note로 확인 가능한 것만 적는다.',
+    '4. 요청서 복사나 채팅의 "완료" 문장은 완료가 아니다. receipt도 할 일을 완료시키지 않는다 — 할 일까지 끝내려면 complete_task를 따로 부르고 그 commandId를 receipt에 넣는다.',
   ].join('\n');
 }
 

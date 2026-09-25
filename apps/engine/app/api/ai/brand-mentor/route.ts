@@ -240,7 +240,6 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legend
           "1. 진단 (지금 무엇이 보이고 무엇을 착각하고 있는가 — 프레임워크 출처 명시)",
           "2. 리스크 (놓치면 잃는 것과 당장 삭제해야 할 사족/집착 90%)",
           "3. 다음 액션 (오늘 30분 내 1단계 가역적 행동 1개 + 독자/고객 반응 검증 질문 1문장 + 💡 [거장의 실전 팁 1문장])",
-          "4. 승인 큐 후보 (work_order로 올릴 제목 1개와 gate/human approval 표기)",
         ]),
   ];
 
