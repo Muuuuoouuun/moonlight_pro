@@ -1,0 +1,165 @@
+[
+  {
+    "id": "marketing-clear-plan",
+    "title": "관심을 첫 행동으로 잇기",
+    "takeaway": "고객의 준비 정도에 맞는 첫 행동과 실제 다음 절차를 보여 준다.",
+    "layout": "path",
+    "nodes": [
+      { "label": "현재 질문", "detail": "지금 알아보는 정보·준비 정도" },
+      { "label": "경로 선택", "detail": "탐색·결정 중 맞는 길" },
+      { "label": "첫 행동", "detail": "지금 가능한 행동 한 가지" },
+      { "label": "다음 확인", "detail": "행동 뒤 받을 정보·절차" }
+    ],
+    "boundary": "없는 상담·시연·성과를 약속하지 않는다."
+  },
+  {
+    "id": "marketing-permission",
+    "title": "발송 전에 받는 사람 보기",
+    "takeaway": "발송자 일정보다 수신자가 기대한 주제와 시점을 먼저 확인한다.",
+    "layout": "filter",
+    "nodes": [
+      { "label": "대상", "detail": "직접 메시지의 요청·기대 기록" },
+      { "label": "내용", "detail": "약속한 주제·채널·빈도" },
+      { "label": "시점", "detail": "현재 질문에 도움이 되는가" },
+      { "label": "다음 선택", "detail": "계속·중단 선택을 남기는가" }
+    ],
+    "boundary": "공개 글·직접 메시지를 구분하고 수신 동의도 확인한다."
+  },
+  {
+    "id": "marketing-research",
+    "title": "문장보다 먼저 모을 재료",
+    "takeaway": "고객의 실제 표현, 확인된 제공 사실, 아직 모르는 것을 나눈다.",
+    "layout": "layers",
+    "nodes": [
+      { "label": "고객 표현", "detail": "실제 표현과 공개 가능 범위" },
+      { "label": "제공 사실", "detail": "지금 제공할 기능·절차·조건" },
+      { "label": "남은 질문", "detail": "모르는 기대는 가설로 기록" }
+    ],
+    "boundary": "한 번의 관찰을 전체 시장의 목소리로 쓰지 않는다."
+  },
+  {
+    "id": "marketing-smallest-market",
+    "title": "먼저 도울 사람을 고르는 기준",
+    "takeaway": "직함보다 반복되는 문제, 원하는 변화, 제공 근거로 시작 집단을 정한다.",
+    "layout": "filter",
+    "nodes": [
+      { "label": "같은 곤란", "detail": "같은 문제가 반복되는가" },
+      { "label": "원하는 변화", "detail": "무엇을 이해·실행하려는가" },
+      { "label": "제공 근거", "detail": "현재 경험이 약속을 받치는가" },
+      { "label": "대상 대조", "detail": "대상이 뜻대로 읽는가" }
+    ],
+    "boundary": "시작 집단을 좁혀도 다른 고객을 배제하는 선언은 아니다."
+  },
+  {
+    "id": "marketing-specific-promise",
+    "title": "검증 가능한 이점 한 가지",
+    "takeaway": "고객 이점에 현재의 증거와 적용 조건을 붙여 약속의 범위를 정한다.",
+    "layout": "layers",
+    "nodes": [
+      { "label": "고객 이점", "detail": "특징이 돕는 일 한 가지" },
+      { "label": "보일 증거", "detail": "현재 보여 줄 자료가 있는가" },
+      { "label": "적용 조건", "detail": "누가 어떤 조건에서 얻는가" }
+    ],
+    "boundary": "측정되지 않은 성과를 모든 고객의 결과로 약속하지 않는다."
+  },
+  {
+    "id": "content-hook",
+    "title": "첫 장의 질문을 끝까지 갚기",
+    "takeaway": "첫 장이 연 질문을 본문에서 좁혀 끝에 답이나 미답 이유를 남긴다.",
+    "layout": "path",
+    "nodes": [
+      { "label": "첫 장 질문", "detail": "첫 장이 연 질문 한 문장" },
+      { "label": "중간 맥락", "detail": "배경·근거가 질문에 이어지는가" },
+      { "label": "답 구체화", "detail": "답에 필요한 조건을 밝힌다" },
+      { "label": "마지막 해소", "detail": "답 또는 답 못할 이유를 남긴다" }
+    ],
+    "boundary": "못 풀 질문으로 끌거나 공지에 긴장을 만들지 않는다."
+  },
+  {
+    "id": "content-multiplication",
+    "title": "한 생각을 채널에 맞게 다시 쓰기",
+    "takeaway": "핵심 사실은 지키고 독자의 맥락에 맞춰 설명 형식을 다시 설계한다.",
+    "layout": "path",
+    "nodes": [
+      { "label": "핵심 생각", "detail": "다시 쓸 핵심 생각 하나" },
+      { "label": "반응 확인", "detail": "질문·저장 등 반응, 없으면 가설" },
+      { "label": "독자 맥락", "detail": "새 독자의 배경과 목적" },
+      { "label": "형식 재구성", "detail": "사실 유지, 순서·깊이 조정" }
+    ],
+    "boundary": "복제·횟수 경쟁을 피하고 비공개 질문은 허용을 확인한다."
+  },
+  {
+    "id": "content-perspective",
+    "title": "관찰에서 관점까지",
+    "takeaway": "직접 본 것, 그 해석, 독자에게 건넬 질문을 분리해 쓴다.",
+    "layout": "layers",
+    "nodes": [
+      { "label": "관찰", "detail": "직접 확인한 기록 범위" },
+      { "label": "해석", "detail": "다른 설명 가능성도 남긴다" },
+      { "label": "독자 질문", "detail": "자기 조건과 대조할 질문" }
+    ],
+    "boundary": "미확인·비공개 사례를 경험처럼 쓰지 않는다."
+  },
+  {
+    "id": "content-storybrand",
+    "title": "소개 문장의 중심 옮기기",
+    "takeaway": "독자의 과제를 먼저 보이고 브랜드가 돕는 범위와 경로를 잇는다.",
+    "layout": "compare",
+    "nodes": [
+      { "label": "회사부터", "detail": "회사 소개에 독자 과제가 가려진다" },
+      { "label": "독자부터", "detail": "독자 질문 뒤에 실제 도움을 잇기" }
+    ],
+    "boundary": "독자의 감정이나 성공 결과를 이야기 구조에 맞춰 만들지 않는다."
+  },
+  {
+    "id": "content-three-tests",
+    "title": "첫 문장의 세 가지 시험",
+    "takeaway": "장면, 근거, 브랜드와의 관계를 서로 다른 질문으로 살핀다.",
+    "layout": "filter",
+    "nodes": [
+      { "label": "그려지는가", "detail": "대상과 상황이 떠오르는가" },
+      { "label": "확인되는가", "detail": "근거와 제공 조건을 보일 수 있나" },
+      { "label": "구별되는가", "detail": "이름을 바꿔도 같은 말인가" }
+    ],
+    "boundary": "세 검사를 통과해도 반응은 보장되지 않는다."
+  },
+  {
+    "id": "legend-buffett",
+    "title": "새 기회의 책임 범위",
+    "takeaway": "기회의 매력과 이해한 위험, 밀려날 약속을 함께 본다.",
+    "layout": "filter",
+    "nodes": [
+      { "label": "이해 범위", "detail": "가치·비용·책임을 아는가" },
+      { "label": "포기의 비용", "detail": "어떤 약속이 밀리는가" },
+      { "label": "작은 탐색", "detail": "작은 시험으로 확인 가능한가" },
+      { "label": "결정 크기", "detail": "시작·탐색·보류 중 선택" }
+    ],
+    "boundary": "낯설다는 이유로 자동 거절하거나 조사만 끝없이 늘리지 않는다."
+  },
+  {
+    "id": "legend-carnegie",
+    "title": "이견을 읽는 대화 순서",
+    "takeaway": "상대의 관심을 확인한 뒤 사실과 내 경계, 남은 이견을 분명히 둔다.",
+    "layout": "path",
+    "nodes": [
+      { "label": "관심 듣기", "detail": "상대가 지키려는 것 묻기" },
+      { "label": "뜻 되짚기", "detail": "내가 들은 뜻이 맞는지 확인" },
+      { "label": "사실 대조", "detail": "기록과 제공 범위 대조" },
+      { "label": "경계 남기기", "detail": "가능한 조정과 남은 이견" }
+    ],
+    "boundary": "경청을 양보나 사실 오류 은폐로 바꾸지 않는다."
+  },
+  {
+    "id": "legend-feynman",
+    "title": "결론에 불리한 자료도 함께",
+    "takeaway": "사실과 해석, 반례와 수정 조건을 한 판단에 함께 둔다.",
+    "layout": "layers",
+    "nodes": [
+      { "label": "관찰 사실", "detail": "확인한 사실만 따로 둔다" },
+      { "label": "내 해석", "detail": "현재 설명과 확신 수준" },
+      { "label": "반대 자료", "detail": "결론에 안 맞는 관찰도 놓기" },
+      { "label": "수정 조건", "detail": "결론 바꿀 조건을 정한다" }
+    ],
+    "boundary": "모든 결정을 실험실처럼 증명하려다 실행을 멈추지 않는다."
+  }
+]

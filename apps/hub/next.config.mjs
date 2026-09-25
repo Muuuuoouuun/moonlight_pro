@@ -4,6 +4,7 @@ const nextConfig = {
   serverExternalPackages: ["node-ical"],
   outputFileTracingIncludes: {
     '/api/hub/guidance-articles/*': ['./content/guru/*.md'],
+    '/api/hub/guidance-articles/*/infographic': ['./content/guru/infographics/*.webp'],
   },
   experimental: {
     // 대시보드 라우트는 force-dynamic이라 클라이언트 라우터 캐시 수명이 0초 —

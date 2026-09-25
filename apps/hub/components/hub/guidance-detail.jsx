@@ -6,6 +6,7 @@ import { GuidanceSource } from './guidance-source';
 import { getGuidanceDetailContent } from './guidance-detail-content';
 import { fetchGuruArticle } from './guidance-detail-client';
 import { GuruArticleBody, parseGuruArticle } from './guru-article-markdown';
+import { GuruArticleInfographic } from './guru-article-infographic';
 import './guidance-detail.css';
 
 export function GuidanceDetail({ card, onClose, onAsk }) {
@@ -75,6 +76,7 @@ export function GuidanceDetail({ card, onClose, onAsk }) {
           <span>MOONLIGHT / MENTOR NOTE</span>
           <h2>{visibleState.article.title}</h2>
         </div>
+        <GuruArticleInfographic key={cardId} card={card} />
         <GuruArticleBody article={visibleState.article} />
         <section className="guidance-detail__closing" aria-label="생각해 볼 질문">
           <span>읽고 나서 묻기</span>
