@@ -83,6 +83,8 @@
 .hub-app .customers-next__when [data-late="true"] { display: inline-flex; align-items: center; gap: 3px; color: var(--danger); font-weight: 500; }
 .hub-app .customers-next__glyph { display: inline-flex; }
 .hub-app .customers-next[data-empty="true"] .customers-next__what { color: var(--fg-dim); font-weight: 400; }
+/* 제안 팁(SuggestionTip, compact) — 다음 약속이 없을 때만, 한 줄로 잘림. */
+.hub-app .customers-next__tip { margin-top: 2px; max-width: 100%; }
 
 .hub-app .customers-last { display: flex; flex-direction: column; font-size: 12.5px; color: var(--fg-muted); min-width: 0; }
 .hub-app .customers-last small { font-size: 12px; color: var(--fg-dim); }
@@ -122,6 +124,9 @@
 .hub-app .customer-promise__dates { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
 .hub-app .customer-promise__msg { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--fg-muted); }
 .hub-app .customer-promise__msg[data-error="true"] { color: var(--danger); }
+/* 제안 팁(SuggestionTip) — 넛지 또는 템플릿 문구 제안, 액션·actions 버튼이 있으면 그 아래. */
+.hub-app .customer-promise__tip { margin-top: 12px; }
+.hub-app .customer-promise__actions + .customer-promise__tip { margin-top: 8px; }
 
 /* 기록 — 활동 + 연결 메모의 한 줄기 */
 .hub-app .customer-record { display: flex; flex-direction: column; gap: 8px; }
