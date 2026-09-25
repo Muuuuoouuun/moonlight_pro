@@ -28,7 +28,7 @@ struct GlassTextRenderer: TextRenderer {
             if shadows {
                 // Two shadow-only draws; draw the unchanged glyphs once at the end.
                 var soft = context
-                soft.addFilter(.shadow(color: Palette.glassShadow.opacity(GlassStudy.glyphShadow * 0.5), radius: 1.6,
+                soft.addFilter(.shadow(color: Palette.glassShadow.opacity(GlassStudy.softGlyphShadow), radius: 1.6,
                                        x: 0, y: 0.5, options: .shadowOnly))
                 soft.draw(line)
                 var contact = context
@@ -52,7 +52,7 @@ struct GlassGlyphShadow: ViewModifier {
         content
             .modifier(GlassTextProtection(enabled: false))
             .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.glyphShadow), radius: 0.65, y: 0.35)
-            .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.glyphShadow * 0.5), radius: 1.6, y: 0.5)
+            .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.softGlyphShadow), radius: 1.6, y: 0.5)
     }
 }
 
