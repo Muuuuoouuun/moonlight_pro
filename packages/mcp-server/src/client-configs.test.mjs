@@ -134,3 +134,40 @@ test('snippets are valid for their client format',()=>{
     assert.match(server.headers.Authorization,/^Bearer \$/,`${id} reads the token from env/input, never inline`);
   }
 });
+
+test('install --mcp-env-file points one registration at its own env file, replacing any previous file',()=>{
+  const OWN='/Users/me/.moonlight/mcp/codex.env';
+  const next=upsertTomlEntry(CODEX,{command:'/opt/homebrew/bin/node',args:[LAUNCHER],envFile:OWN});
+  assert.deepEqual(findTomlBlock(next).entry.env,{COM_MOON_MCP_ENV_FILE:OWN,COM_MOON_MCP_PROFILE:'pms'});
+  const outside=text=>text.replace(/\[mcp_servers\.moonlight\][\s\S]*?(?=\n\[mcp_servers\.computer-use\])/,'');
+  assert.equal(outside(next),outside(CODEX),'other servers stay byte for byte');
+  assert.equal(upsertTomlEntry(next,{command:'/opt/homebrew/bin/node',args:[LAUNCHER],envFile:OWN}),next,'idempotent');
+  assert.equal(upsertTomlEntry(next,{command:'/opt/homebrew/bin/node',args:[LAUNCHER]}),next,'a later plain install keeps the file');
+  const moved=upsertTomlEntry(next,{command:'/opt/homebrew/bin/node',args:[LAUNCHER],envFile:'/Users/me/.moonlight/mcp/other.env'});
+  assert.deepEqual(findTomlBlock(moved).entry.env,{COM_MOON_MCP_ENV_FILE:'/Users/me/.moonlight/mcp/other.env',COM_MOON_MCP_PROFILE:'pms'});
+  assert.equal((moved.match(/COM_MOON_MCP_ENV_FILE/g)||[]).length,1);
+  const legacy=upsertTomlEntry('[mcp_servers.moonlight]\ncommand = "node"\nargs = ["--env-file=/private/old.env", "/r/src/index.js"]\n',{command:'/n',args:[LAUNCHER],envFile:OWN});
+  assert.deepEqual(findTomlBlock(legacy).entry,{command:'/n',args:[LAUNCHER],env:{COM_MOON_MCP_ENV_FILE:OWN}},'the explicit file wins over a carried-over private file');
+  const fresh=upsertTomlEntry('model = "gpt-5"\n',{command:'/n',args:[LAUNCHER],envFile:OWN});
+  assert.deepEqual(findTomlBlock(fresh).entry,{command:'/n',args:[LAUNCHER],startup_timeout_sec:30,env:{COM_MOON_MCP_ENV_FILE:OWN}});
+  assert.match(fresh,/^model = "gpt-5"\n\n\[mcp_servers\.moonlight\]\n/);
+
+  const target=clientTargets({home:'/h',root:'/r'}).find(t=>t.id==='claude-desktop');
+  const before=JSON.stringify({mcpServers:{moonlight:{command:'/old/node',args:[LAUNCHER],env:{COM_MOON_MCP_PROFILE:'core',COM_MOON_MCP_ENV_FILE:'/old.env'}}}});
+  const entry=mergeStdioEntry(readEntry(before,target),{command:'/n',launcher:LAUNCHER,flags:[],envFile:OWN});
+  assert.deepEqual(entry,{command:'/n',args:[LAUNCHER],env:{COM_MOON_MCP_PROFILE:'core',COM_MOON_MCP_ENV_FILE:OWN}});
+  assert.deepEqual(mergeStdioEntry(null,{command:'/n',launcher:LAUNCHER,flags:[],envFile:OWN}),{command:'/n',args:[LAUNCHER],env:{COM_MOON_MCP_ENV_FILE:OWN}});
+});
+
+test('status names a client env file and breaks on one that is missing or relative',()=>{
+  const ok=()=>true;
+  const entry=env=>({command:'/opt/homebrew/bin/node',args:[LAUNCHER],env});
+  const own=inspectEntry(entry({COM_MOON_MCP_ENV_FILE:'/Users/me/.moonlight/mcp/codex.env'}),{exists:()=>true,isExecutable:ok});
+  assert.equal(own.state,'ok');
+  assert.ok(own.issues.some(i=>i.level==='info'&&i.message.includes('/Users/me/.moonlight/mcp/codex.env')));
+  const missing=inspectEntry(entry({COM_MOON_MCP_ENV_FILE:'/gone/codex.env'}),{exists:path=>!path.startsWith('/gone'),isExecutable:ok});
+  assert.equal(missing.state,'broken');
+  assert.ok(missing.issues.some(i=>i.level==='error'&&i.message.includes('/gone/codex.env')));
+  assert.equal(inspectEntry(entry({COM_MOON_MCP_ENV_FILE:'codex.env'}),{exists:()=>true,isExecutable:ok}).state,'broken');
+  assert.equal(inspectEntry(entry({COM_MOON_MCP_PROFILE:'core'}),{exists:()=>true,isExecutable:ok}).state,'ok');
+});

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {execFile} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {chmodSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,statSync,symlinkSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -90,4 +91,71 @@ test('token commands never echo a stored secret',async()=>{
   assert.equal(url.code,1);
   assert.match(url.stderr,/URL tokens are read-only/);
   assert.match((await run(dir,'token','revoke','n8n')).stdout,/폐기함: n8n/);
+});
+
+// Per-client identity: every path below is a throwaway file; no real client config or env is read.
+function hubEnv(dir){
+  const file=join(dir,'hub.env');
+  writeFileSync(file,'COM_MOON_HUB_URL=http://127.0.0.1:9\nCOM_MOON_AGENT_API_TOKEN=shared-agent-token\nCOM_MOON_HUB_WRITE_SECRET=write-secret\nGEMINI_API_KEY=model-secret\n');
+  return file;
+}
+
+test('client-token prints only the digest pair and keeps the token in a private file',async()=>{
+  const dir=home();const out=join(dir,'.moonlight/mcp/claude-code.env');
+  const created=await run(dir,'client-token','claude-code','--out',out,'--hub-env',hubEnv(dir));
+  assert.equal(created.code,0,created.stderr);
+  const token=/^COM_MOON_AGENT_API_TOKEN=(.+)$/m.exec(readFileSync(out,'utf8'))[1];
+  assert.equal(created.stdout,`claude-code:${createHash('sha256').update(token).digest('hex')}\n`);
+  for(const stream of [created.stdout,created.stderr])for(const secret of [token,'shared-agent-token','write-secret','model-secret'])assert.equal(stream.includes(secret),false,secret);
+  assert.match(created.stderr,/install <client> --mcp-env-file/);
+  assert.equal(statSync(out).mode&0o777,0o600);
+  const again=await run(dir,'client-token','claude-code','--out',out,'--hub-env',hubEnv(dir));
+  assert.equal(again.code,1);assert.match(again.stderr,/--force/);assert.equal(again.stdout,'');
+  assert.equal((await run(dir,'client-token','claude-code')).code,2,'--out is required');
+  const inside=join(REPO_ROOT,'packages/mcp-server/.client-token-test.env');
+  const refused=await run(dir,'client-token','claude-code','--out',inside,'--hub-env',hubEnv(dir));
+  assert.equal(refused.code,1);assert.match(refused.stderr,/저장소/);
+  assert.throws(()=>statSync(inside),'nothing is written inside the checkout');
+});
+
+test('install --mcp-env-file gives exactly one client its own env file, verified at startup',async()=>{
+  const dir=home();const own=join(dir,'.moonlight/mcp/codex.env');
+  assert.equal((await run(dir,'client-token','codex','--out',own,'--hub-env',hubEnv(dir))).code,0);
+  const {code,stdout}=await run(dir,'install','codex','--mcp-env-file',own);
+  assert.equal(code,0,stdout);
+  assert.match(stdout,/codex: 등록 갱신 · 기동 확인 \d+개 도구/);
+  const {entry}=findTomlBlock(readFileSync(join(dir,'.codex/config.toml'),'utf8'));
+  assert.deepEqual(entry.args,[LAUNCHER]);
+  assert.deepEqual(entry.env,{COM_MOON_MCP_ENV_FILE:own});
+  const desktopFile=join(dir,'Library/Application Support/Claude/claude_desktop_config.json');
+  const desktopOwn=join(dir,'.moonlight/mcp/claude-desktop.env');
+  assert.equal((await run(dir,'client-token','claude-desktop','--out',desktopOwn,'--hub-env',hubEnv(dir))).code,0);
+  assert.equal((await run(dir,'install','claude-desktop','--mcp-env-file',desktopOwn)).code,0);
+  assert.deepEqual(JSON.parse(readFileSync(desktopFile,'utf8')).mcpServers.moonlight.env,{COM_MOON_MCP_PROFILE:'pms',COM_MOON_MCP_ENV_FILE:desktopOwn});
+  const status=JSON.parse((await run(dir,'status','--json')).stdout);
+  const codex=status.clients.find(client=>client.id==='codex');
+  assert.equal(codex.state,'ok');
+  assert.ok(codex.issues.some(issue=>issue.message.includes(own)));
+});
+
+test('install --mcp-env-file refuses a shared, missing, relative or Hub env file',async()=>{
+  const dir=home();const own=join(dir,'.moonlight/mcp/codex.env');
+  assert.equal((await run(dir,'client-token','codex','--out',own,'--hub-env',hubEnv(dir))).code,0);
+  const hubLike=join(dir,'checkout/apps/hub/.env.local');mkdirSync(join(dir,'checkout/apps/hub'),{recursive:true});writeFileSync(hubLike,'COM_MOON_AGENT_API_TOKEN=shared\n');
+  for(const [args,pattern] of [[['codex','claude-desktop','--mcp-env-file',own],/하나에만/],[['--all','--mcp-env-file',own],/하나에만/],[['codex','--mcp-env-file','codex.env'],/절대 경로/],[['codex','--mcp-env-file',join(dir,'missing.env')],/env 파일이 없습니다/],[['codex','--mcp-env-file',hubLike],/Hub env/]]){
+    const result=await run(dir,'install',...args);
+    assert.equal(result.code,2,args.join(' '));
+    assert.match(result.stderr,pattern);
+  }
+  assert.match(readFileSync(join(dir,'.codex/config.toml'),'utf8'),/cwd = "\/gone"/,'refusals write nothing');
+});
+
+test('install --mcp-env-file warns when the registration env still pins a token that would win',async()=>{
+  const dir=home();const own=join(dir,'.moonlight/mcp/claude-desktop.env');
+  assert.equal((await run(dir,'client-token','claude-desktop','--out',own,'--hub-env',hubEnv(dir))).code,0);
+  const desktopFile=join(dir,'Library/Application Support/Claude/claude_desktop_config.json');
+  writeFileSync(desktopFile,JSON.stringify({mcpServers:{moonlight:{command:'/old/node',args:['/gone/index.js'],env:{COM_MOON_AGENT_API_TOKEN:'pinned'}}}}));
+  const result=await run(dir,'install','claude-desktop','--mcp-env-file',own);
+  assert.match(result.stdout,/COM_MOON_AGENT_API_TOKEN이 env 파일보다 우선/);
+  assert.equal(result.stdout.includes('pinned'),false);
 });
