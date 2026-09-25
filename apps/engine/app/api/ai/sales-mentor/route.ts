@@ -127,6 +127,7 @@ export async function POST(req: Request) {
           prompt: buildFollowupDraftPrompt(context),
           maxOutputTokens,
           ...DRAFT_GENERATION_BOUNDS,
+          retries: 1,
         }
       : {
           systemInstruction: buildAdvisorySystemInstruction({
@@ -137,6 +138,7 @@ export async function POST(req: Request) {
           }),
           prompt: buildGuruAdvicePrompt({ mode: mode as GuruAdviceMode, context, draft, guidanceId }),
           maxOutputTokens,
+          retries: 1,
         },
   );
   const finishedAt = new Date().toISOString();
