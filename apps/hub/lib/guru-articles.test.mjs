@@ -15,8 +15,8 @@ test('all reviewed cards have private authored Markdown articles', async () => {
     const result = await loadGuruArticle(card.id);
     assert.equal(result.status, 'ok', card.id);
     assert.match(result.markdown, /^# [^\n]+\n/);
-    assert.ok(result.markdown.length >= 450, card.id);
-    assert.ok((result.markdown.match(/^## /gm) || []).length >= 3, card.id);
+    assert.ok(result.markdown.length >= 1200, `${card.id}: article needs substantive explanation`);
+    assert.ok((result.markdown.match(/^## /gm) || []).length >= 4, `${card.id}: article needs distinct reading sections`);
     assert.doesNotMatch(result.markdown, /https?:\/\/|<\/?[a-z][^>]*>/i, card.id);
   }
 });
