@@ -46,3 +46,15 @@ test('Engine authorizes first, validates request and has no write step', async (
   assert.equal((await response.json()).ownerId, 'flareon');
   assert.equal(calls, 1);
 });
+
+test('a 6,000-character Korean agenda (contract max) stays under the byte cap and reaches generation', async () => {
+  let calls = 0;
+  const longRequest = { message: '가'.repeat(6000), scope: 'classin' };
+  const handler = createOfficeRoutingEngineHandler(() => ({ ok: true }), async () => {
+    calls++;
+    return { status: 'recommended', version: OFFICE_ROUTING_VERSION, ...recommendation, scope: 'classin' };
+  });
+  const response = await handler(httpRequest(longRequest));
+  assert.equal(response.status, 200);
+  assert.equal(calls, 1);
+});

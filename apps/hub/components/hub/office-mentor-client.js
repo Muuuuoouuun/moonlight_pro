@@ -53,7 +53,7 @@ export function buildOfficeMentorQuestion({ result, officeSource, question, turn
     .map(turn => ({ question: excerpt(turn?.question, 200), answer: excerpt(turn?.answer, 360) }))
     .filter(turn => turn.question && turn.answer);
   const assemble = () => [
-    '아래 Office 결과는 운영자가 선택한 자문 원문이며, 확정된 원장 사실은 아닙니다. 새 업무나 외부 행동을 만들지 마세요.',
+    '아래 Office 결과는 운영자가 선택한 자문 원문이며, 확정된 기록 사실은 아닙니다. 새 업무나 외부 행동을 만들지 마세요.',
     sourceBlock,
     ...(history.length ? ['이전 대화 · 같은 멘토:', ...history.map((turn, index) => `${index + 1}. 운영자: ${turn.question}\n   멘토: ${turn.answer}`)] : []),
     `이번 질문: ${current}`,

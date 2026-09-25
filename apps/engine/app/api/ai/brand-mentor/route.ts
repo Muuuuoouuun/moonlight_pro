@@ -42,7 +42,7 @@ const MODES = {
   "office-review": {
     lens: "Mentor",
     question: "운영자가 가져온 개인 범위 Office 결과를 별도의 관점에서 한 번 검토합니다. 확인된 근거와 이견을 구분하고, 원래 결론을 자동 승인하거나 새 업무로 바꾸지 않습니다.",
-    frames: "Office 결과와 개인 브랜드 원장만 참고합니다. Guru 카드를 임의로 고르지 않습니다.",
+    frames: "Office 결과와 개인 브랜드 기록만 참고합니다. Guru 카드를 임의로 고르지 않습니다.",
   },
   "content-critique": {
     lens: "Writer",
@@ -181,7 +181,7 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legend
   if (mode === "office-review") {
     const lines = [
       config.question,
-      "요청자가 제공한 Office 결과는 확정된 원장 사실이나 독립 검증이 아닙니다. 근거의 출처·불확실성과 남은 이견을 구분하십시오.",
+      "요청자가 제공한 Office 결과는 확정된 기록 사실이나 독립 검증이 아닙니다. 근거의 출처·불확실성과 남은 이견을 구분하십시오.",
       "다른 관점의 판단과 운영자가 확인할 질문 또는 선택만 답하십시오. 업무·승인 큐·발행·발송을 만들거나 실행했다고 주장하지 마십시오.",
       "출처 식별자(요청자가 전달한 값, 서버 검증 완료를 뜻하지 않음):",
       `requestId: ${officeSource?.requestId || "없음"}`,
@@ -191,14 +191,14 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legend
     ];
     const digest = digestBrand(context);
     if (digest) lines.push("", digest);
-    lines.push("", "Personal brand ledger snapshot (Office와 별개의 원장 근거):", JSON.stringify(context ?? {}, null, 2));
+    lines.push("", "Personal brand ledger snapshot (Office와 별개의 기록 근거):", JSON.stringify(context ?? {}, null, 2));
     return lines.join("\n");
   }
   if (mode === "open-question") {
     const lines = [
       config.question,
       "답변은 짧은 한국어로: 1. 관찰된 사실과 미확인 정보 2. 적용한 프레임과 자료 출처 3. 운영자가 고려할 질문 또는 선택.",
-      "후속 행동, 승인 제안, 업무 등록을 자동으로 붙이지 마십시오. 선택 카드는 원장 사실이 아닌 참고 방법론입니다.",
+      "후속 행동, 승인 제안, 업무 등록을 자동으로 붙이지 마십시오. 선택 카드는 기록 사실이 아닌 참고 방법론입니다.",
       guidancePromptFrame(guidanceId || ""),
       "운영자가 제공한 질문:",
       draft?.trim() || "",

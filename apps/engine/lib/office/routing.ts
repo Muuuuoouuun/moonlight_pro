@@ -24,7 +24,7 @@ export async function generateOfficeRouting(request: OfficeRoutingRequest, gener
         },
         required: ['ownerId', 'reviewerIds', 'reason', 'scope'],
       },
-      maxOutputTokens: 1200,
+      maxOutputTokens: 4096,
       thinkingLevel: 'low',
       signal: AbortSignal.timeout(48_000),
       retries: 1,
@@ -42,7 +42,7 @@ export function createOfficeRoutingEngineHandler(auth: (request: Request) => { o
     if (!auth(req).ok) return Response.json({ status: 'error', error: 'Office 인증에 실패했습니다.' }, { status: 401 });
     try {
       const body = await req.text();
-      if (Buffer.byteLength(body) > 12000) return Response.json({ status: 'error', error: '요청이 너무 큽니다.' }, { status: 413 });
+      if (Buffer.byteLength(body) > 24000) return Response.json({ status: 'error', error: '요청이 너무 큽니다.' }, { status: 413 });
       const request = parseOfficeRoutingRequest(JSON.parse(body));
       const result = await generate(request);
       if (result.status === 'recommended') return Response.json(parseOfficeRoutingResult(result, request));

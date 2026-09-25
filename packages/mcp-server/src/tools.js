@@ -25,7 +25,7 @@ export function registerMoonlightTools(server,{profile='all',mode='auto',readOnl
   registerLegacyTools({registerTool(name,definition,handler){
     const read=/^(get_|list_)/.test(name);
     const schema=read?{...definition.inputSchema,detail:z.enum(['summary','rows','full']).optional(),limit:definition.inputSchema.limit??z.number().int().min(1).max(100).optional(),offset:z.number().int().min(0).optional()}:definition.inputSchema;
-    collector.registerTool(name,{...definition,inputSchema:schema,outputSchema:z.object({status:z.string().optional()}).passthrough(),annotations:{readOnlyHint:read,destructiveHint:name==='decide_work_order',idempotentHint:read,openWorldHint:true,...definition.annotations}},async(args={})=>{
+    collector.registerTool(name,{...definition,inputSchema:schema,annotations:{readOnlyHint:read,destructiveHint:name==='decide_work_order',idempotentHint:read,openWorldHint:true,...definition.annotations}},async(args={})=>{
       const result=await handler(args);if(result.isError)return result;
       try{let data=JSON.parse(result.content[0].text);if(read)data=name==='get_weekly_report'?projectWeeklyPayload(data):projectLegacyPayload(data,args);return {...result,content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data};}catch{return result;}
     });

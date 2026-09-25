@@ -266,7 +266,7 @@ export function OfficeCouncil({ scope = 'all' }) {
   async function submit(event) {
     event.preventDefault();
     if (composing.current || tooLong) return;
-    const override = session.turns.length && followUpMode === 'chat' ? { mode: 'chat' } : undefined;
+    const override = session.turns.length && followUpMode === 'chat' && session.mode === 'council' ? { mode: 'chat' } : undefined;
     const pending = store.begin(scope, crypto.randomUUID(), override);
     if (!pending) return;
     invalidateAssignment();
@@ -376,7 +376,7 @@ export function OfficeCouncil({ scope = 'all' }) {
         {mode === 'council' ? <OfficeDeliberationControls value={session.deliberation} participants={participants} disabled={busy} onChange={deliberation => update({ deliberation })} /> : null}
         <CheckboxRow text="현재 범위의 최근 프로젝트 참고" checked={includeProjects} disabled={busy} onChange={() => update({ includeProjects: !includeProjects })} />
         <CheckboxRow text="오늘은 최소한만" checked={minimumOnly} disabled={busy} onChange={() => update({ minimumOnly: !minimumOnly })} />
-        {includeProjects ? <p className={styles.note}>현재 범위의 최근 프로젝트 최대 8개를 참고합니다. 고객·일정 원장은 이 자유 요청에 자동 연결되지 않습니다.</p> : null}
+        {includeProjects ? <p className={styles.note}>현재 범위의 최근 프로젝트 최대 8개를 참고합니다. 고객·일정 기록은 이 자유 요청에 자동 연결되지 않습니다.</p> : null}
         {minimumOnly ? <p className={styles.note}>이미 정한 약속을 지키는 데 필요한 내용만 요청합니다. 추가 행동이 필요 없으면 남기지 않습니다.</p> : null}
       </div></Drawer> : null}
     {tasksOpen ? <Drawer title="안건 가져오기" subtitle="할 일의 현재 텍스트를 복사해 안건으로 올립니다. 원본 할 일은 바뀌지 않습니다." onClose={() => setTasksOpen(false)} width="min(480px, 94vw)">
