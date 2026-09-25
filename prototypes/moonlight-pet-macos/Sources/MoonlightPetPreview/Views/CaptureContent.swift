@@ -19,7 +19,7 @@ struct TaskCaptureContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 9) {
-                Image(systemName: "plus")
+                Image(systemName: "plus").modifier(GlassGlyphShadow())
                     .font(.system(size: 15, weight: .light))
                     .foregroundStyle(Palette.glassInkMuted)
                 TextField("새 할 일", text: $model.taskDraft,
@@ -27,8 +27,9 @@ struct TaskCaptureContent: View {
                     .textFieldStyle(.plain).font(.system(size: 13))
                     .focused($focused).onSubmit(addTask)
                     .accessibilityLabel("새 할 일")
+                    .modifier(GlassGlyphShadow())
                 Button(action: addTask) {
-                    Image(systemName: "arrow.up").font(.system(size: 14, weight: .medium))
+                    Image(systemName: "arrow.up").modifier(GlassGlyphShadow()).font(.system(size: 14, weight: .medium))
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(GlassActionStyle(compact: true))
@@ -55,7 +56,7 @@ struct TaskCaptureContent: View {
                 Button { model.openHub(.tasks) } label: { Label("Hub에서 열기", systemImage: "arrow.up.right") }
                     .buttonStyle(GlassQuietStyle())
             }
-            .font(.system(size: 11))
+            .font(.system(size: 11.5, weight: .medium))
         }
         .onAppear { focusInput() }
         .onChange(of: openRevision) { _, _ in focusInput() }
@@ -67,7 +68,7 @@ struct TaskCaptureContent: View {
     private var taskCount: some View {
         Text(model.displayedTasks.isEmpty && (readMessage != nil || isLoading)
              ? (isLoading ? "불러오는 중…" : "할 일 확인 필요") : "남은 \(model.openTaskCount)개")
-            .font(.system(size: 11.5)).monospacedDigit()
+            .font(.system(size: 11.5, weight: .medium)).monospacedDigit()
             .foregroundStyle(Palette.glassInkMuted)
             .frame(height: 18, alignment: .leading)
     }
@@ -97,7 +98,7 @@ struct TaskCaptureContent: View {
             HubReadNotice(message: message, symbol: "exclamationmark.circle", action: openConnection)
         } else {
             VStack(spacing: 9) {
-                Image(systemName: "checklist").font(.system(size: 23, weight: .ultraLight))
+                Image(systemName: "checklist").modifier(GlassGlyphShadow()).font(.system(size: 23, weight: .ultraLight))
                 Text("할 일 하나부터 적어볼까요?").font(.system(size: 12))
             }
             .foregroundStyle(Palette.glassInkMuted)
@@ -111,7 +112,7 @@ struct TaskCaptureContent: View {
             withAnimation(PetMotion.hover) { model.toggleTask(task.id) }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
+                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle").modifier(GlassGlyphShadow())
                     .font(.system(size: 19, weight: .ultraLight))
                     .foregroundStyle(Palette.glassInkMuted)
                 Text(task.title).font(.system(size: 13))
@@ -182,6 +183,7 @@ struct MemoCaptureContent: View {
                     .scrollIndicators(.hidden)
                     .focused($focused)
                     .accessibilityLabel("메모 입력")
+                    .modifier(GlassGlyphShadow())
             }
             .font(.system(size: 16, weight: .regular))
             .lineSpacing(6)
@@ -194,7 +196,7 @@ struct MemoCaptureContent: View {
 
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(model.memoStatusLabel).font(.system(size: 11))
+                    Text(model.memoStatusLabel).font(.system(size: 11.5, weight: .medium))
                     if let message = model.hub.errorMessage, model.hub.isEnabled {
                         Button(action: openConnection) {
                             Label(message, systemImage: "exclamationmark.circle")
@@ -218,7 +220,7 @@ struct MemoCaptureContent: View {
                               && model.memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 .help("현재 메모를 Hub에 저장합니다. 이 Mac의 초안은 그대로 유지됩니다.")
                 Button(action: close) {
-                    Image(systemName: "chevron.down")
+                    Image(systemName: "chevron.down").modifier(GlassGlyphShadow())
                         .font(.system(size: 15, weight: .medium))
                         .frame(width: 36, height: 36)
                 }

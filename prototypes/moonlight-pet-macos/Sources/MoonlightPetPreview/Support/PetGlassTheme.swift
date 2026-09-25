@@ -64,7 +64,7 @@ enum PetGlassDrag {
     }
 }
 
-/// No blur/shadow on glyphs and no hit-testing surface above the text host.
+/// Transient backdrop color only; glyph protection belongs to the separate text host.
 final class PetGlassWash: NSView {
     var character: PetCharacter = .silver { didSet { updateColor(); updatePresentation() } }
     var solidForAccessibility = false { didSet { updateColor(); updatePresentation() } }

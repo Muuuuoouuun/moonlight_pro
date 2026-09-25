@@ -38,7 +38,7 @@ struct CalendarCompanionContent: View {
                             Text("이날 예정된 일정이 없어요.")
                                 .font(.system(size: 15, weight: .medium))
                             Text(CompanionDate.label(model.hub.selectedDate))
-                                .font(.system(size: 12)).foregroundStyle(Palette.glassInkMuted)
+                                .font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.glassInkMuted)
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -59,7 +59,7 @@ struct CalendarCompanionContent: View {
                 }
                 .buttonStyle(GlassQuietStyle())
             }
-            .font(.system(size: 11))
+            .font(.system(size: 11.5, weight: .medium))
         }
         .onChange(of: model.hub.selectedDate) { previous, selected in
             if CompanionDate.week(containing: previous).first != CompanionDate.week(containing: selected).first {
@@ -78,9 +78,9 @@ struct CalendarCompanionContent: View {
                         withAnimation(PetMotion.hover) { model.hub.selectedDate = date }
                     } label: {
                         VStack(spacing: 12) {
-                            Text(CompanionDate.weekday(date)).font(.system(size: 10.5))
+                            Text(CompanionDate.weekday(date)).font(.system(size: 11, weight: .medium))
                             Text("\(Calendar.current.component(.day, from: date))")
-                                .font(.system(size: 14, weight: selected || isToday ? .semibold : .regular))
+                                .font(.system(size: 14, weight: selected || isToday ? .semibold : .medium))
                                 .monospacedDigit()
                         }
                         .foregroundStyle(selected ? Palette.glassInk : Palette.glassInkMuted)

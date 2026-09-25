@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Protect only the reading area. The surrounding clear glass and its optical
-/// edge remain transparent; glyphs are never blurred or shadowed.
+/// Legacy localized material for standalone preview surfaces. Companion panels
+/// suppress it through glassReadingProtected and use glyph-local shadows instead.
 struct GlassReadability: ViewModifier {
     var radius: CGFloat = 12
     var inset: CGFloat = 0

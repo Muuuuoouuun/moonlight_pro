@@ -6,11 +6,12 @@ import SwiftUI
 @MainActor
 final class GlassPanel: NSView {
     static func host<Content: View>(_ content: Content, cornerRadius: CGFloat, ornament: AnyView? = nil,
-                                    model: AppModel? = nil, readsContinuously: Bool = false) -> GlassPanel {
+                                    model: AppModel? = nil, protectsText: Bool = false) -> GlassPanel {
         let readingTone = GlassReadingTone()
         let host = FirstMouseHostingView(rootView: content.environment(\.colorScheme, .dark)
             .environment(\.glassReadingTone, readingTone)
-            .environment(\.glassReadingProtected, readsContinuously))
+            .environment(\.glassReadingProtected, protectsText)
+            .modifier(GlassTextProtection(enabled: protectsText)))
         host.sizingOptions = []
         host.focusRingType = .none
         let accessory = ornament.map { view -> NSView in
@@ -20,7 +21,7 @@ final class GlassPanel: NSView {
             return host
         }
         let panel = GlassPanel(content: host, cornerRadius: cornerRadius, ornament: accessory,
-                               readingTone: readingTone, readsContinuously: readsContinuously)
+                               readingTone: readingTone)
         if let model {
             panel.characterSubscription = model.$selectedCharacter.removeDuplicates().sink { [weak panel] character in
                 panel?.setCharacter(character)
@@ -31,7 +32,6 @@ final class GlassPanel: NSView {
 
     private let radius: CGFloat
     private let material: NSView
-    private let readingMaterial: ReadingMaterialView?
     private let rim: NSView
     private let foreground: NSView
     private let ornament: NSView?
@@ -48,22 +48,13 @@ final class GlassPanel: NSView {
         }
     }
 
-    private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?, readingTone: GlassReadingTone,
-                 readsContinuously: Bool) {
+    private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?, readingTone: GlassReadingTone) {
         radius = cornerRadius
         self.readingTone = readingTone
         self.ornament = ornament
         foreground = content
         wash = PetGlassWash(radius: cornerRadius)
         rim = makeOpticalRim(radius: cornerRadius)
-        if readsContinuously {
-            let reading = ReadingMaterialView()
-            reading.blendingMode = .behindWindow
-            reading.setMask(radius: cornerRadius - 1, feather: 0)
-            readingMaterial = reading
-        } else {
-            readingMaterial = nil
-        }
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
             // Clear is the requested default; regular is reserved for accessibility.
@@ -101,9 +92,7 @@ final class GlassPanel: NSView {
         layer?.shadowRadius = 6
         layer?.shadowOffset = CGSize(width: 0, height: -2)
         addSubview(material)
-        // A single compositor-backed reading plane replaces individual dark
-        // patches. The wash is above it exactly once; glyphs remain siblings.
-        if let readingMaterial { addSubview(readingMaterial) }
+        // No HUD reading plane: transparency is continuous, contrast follows glyphs.
         addSubview(wash)
         addSubview(rim)
         addSubview(foreground)
@@ -135,7 +124,6 @@ final class GlassPanel: NSView {
                                     width: CompanionLayout.perchSize, height: CompanionLayout.perchSize)
         }
         material.frame = frame
-        readingMaterial?.frame = frame.insetBy(dx: 1, dy: 1)
         wash.frame = frame
         foreground.frame = frame
         rim.frame = frame

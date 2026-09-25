@@ -2,7 +2,7 @@ import AppKit
 import OSLog
 import SwiftUI
 
-/// Controls add shallow separation above the panel's shared reading material.
+/// Controls add shallow separation above the panel's clear optical material.
 struct GlassActionStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.colorSchemeContrast) private var contrast
