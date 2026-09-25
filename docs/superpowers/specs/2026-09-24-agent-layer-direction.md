@@ -175,7 +175,7 @@ Legend ── 주간 카드만 · 에스컬레이션 목적지 아님 · Office 
 
 - dissent가 남을 때 Legend 트라이어드를 두 번째 목적지로 둘지.
 - 크론 content-flywheel·chief-of-staff 예약 해제 시점(큐 설계 B7과 함께).
-- 5인 로스터·agents 테이블·브랜드 자문 탭 폐기(P0에서 미정).
+- 2026-09-26 운영자 지시로 브랜드 자문 화면의 5인 로스터 표시를 제거(테이블·/api/hub/agents·persona-chat은 유지).
 - 중복 진입점 수렴 순서(11월).
 - 월별 AI 비용 표시(프로필 §11 확정, 구현 0) — 스킬이 Gemini 키를 쓰기 시작하면 먼저 필요해진다.
 - Office 의미 품질 독립 재채점 시점(replan P3).
