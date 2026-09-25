@@ -73,6 +73,7 @@ struct CompanionPanelView: View {
             }
         }
         .frame(height: 52)
+        .modifier(GlassReadability(radius: 16, inset: 10))
     }
 
     private var modeMenu: some View {
@@ -134,7 +135,7 @@ struct CompanionPanelView: View {
             }
         }
         .padding(3)
-        .background(Palette.glassInk.opacity(0.035), in: RoundedRectangle(cornerRadius: 13))
+        .modifier(GlassReadability(radius: 13))
         .overlay { GlassRim(radius: 13, strength: 0.35) }
     }
 
@@ -154,9 +155,11 @@ struct CompanionPanelView: View {
             Text(mode == .office ? "함께 진행할 작업을 열어요." : "다른 관점이 필요할 때, Council을 불러요.")
                 .font(.system(size: 15))
                 .fixedSize(horizontal: false, vertical: true)
+                .modifier(GlassReadability(inset: 9))
             Text("브라우저의 기존 Hub에서 이어집니다.")
                 .font(.system(size: 12))
                 .foregroundStyle(Palette.glassInkMuted)
+                .modifier(GlassReadability(inset: 8))
             Spacer(minLength: 4)
             HStack {
                 Spacer()
@@ -171,6 +174,7 @@ struct CompanionPanelView: View {
     private var focusSetup: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("잠깐, 한 가지에만 집중해요.").font(.system(size: 14))
+                .modifier(GlassReadability(inset: 8))
             HStack(spacing: 8) {
                 ForEach([15, 25, 50], id: \.self) { minutes in
                     Button("\(minutes)분") { model.focusMinutes = minutes }
@@ -191,6 +195,7 @@ struct CompanionPanelView: View {
             .buttonStyle(GlassActionStyle())
             Text("중지 버튼 · Esc 길게 눌러 해제")
                 .font(.system(size: 11)).foregroundStyle(Palette.glassInkMuted)
+                .modifier(GlassReadability(radius: 8, inset: 6))
         }
     }
 
@@ -198,6 +203,7 @@ struct CompanionPanelView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("브라우저에서 열 Hub 주소")
                 .font(.system(size: 12)).foregroundStyle(Palette.glassInkMuted)
+                .modifier(GlassReadability(radius: 8, inset: 6))
             TextField("http://127.0.0.1:3000", text: $model.hubBaseURL)
                 .textFieldStyle(.plain).font(.system(size: 13)).padding(12)
                 .modifier(GlassInputSurface(focused: false))

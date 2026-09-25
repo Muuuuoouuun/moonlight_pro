@@ -20,6 +20,7 @@ struct PreviewView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Palette.glassInkMuted)
             }
+            .modifier(GlassReadability(radius: 12, inset: 6))
             Spacer(minLength: 0)
         }
         .padding(16)

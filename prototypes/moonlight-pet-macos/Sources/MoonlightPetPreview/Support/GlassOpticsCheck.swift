@@ -19,11 +19,39 @@ enum GlassOpticsCheck {
             return false
         }
         // Every channel must be <= alpha: transparent overlays must be premultiplied.
+        // The prism must produce measurable but restrained channel separation,
+        // with no colored veil or white fill crossing the content area.
+        var prismaticPixels = 0
+        var strongestSeparation = 0
         for pixel in stride(from: 0,to: edge.count,by: 4) {
             guard edge[pixel] <= edge[pixel+3], edge[pixel+1] <= edge[pixel+3], edge[pixel+2] <= edge[pixel+3] else {
                 fputs("Glass edge is not premultiplied\n",stderr); return false
             }
+            let channels = [Int(edge[pixel]),Int(edge[pixel+1]),Int(edge[pixel+2])]
+            let separation = channels.max()! - channels.min()!
+            if separation > 2 { prismaticPixels += 1 }
+            strongestSeparation = max(strongestSeparation,separation)
         }
+        guard prismaticPixels > 100, strongestSeparation >= 4, strongestSeparation < 32 else {
+            fputs("Glass prism is absent or oversaturated: \(prismaticPixels) pixels, \(strongestSeparation)/255 separation\n",stderr)
+            return false
+        }
+        for y in 48..<192 {
+            for x in 48..<272 where alpha(edge,x,y) != 0 {
+                fputs("Glass reflection leaked into readable content at \(x),\(y)\n",stderr)
+                return false
+            }
+        }
+        u.light.z = 1
+        guard let accessible = renderer.pixels(u,width: width,height: height),
+              alpha(accessible,160,120) == 0 else { return false }
+        for pixel in stride(from: 0,to: accessible.count,by: 4) {
+            guard accessible[pixel] == accessible[pixel+1], accessible[pixel+1] == accessible[pixel+2] else {
+                fputs("Accessible glass must remove decorative dispersion\n",stderr)
+                return false
+            }
+        }
+        u.light.z = 0
         u.viewport.w = 1
         u.rect = SIMD4(176,20,128,200)
         u.material = SIMD4(24,16,0,1)
@@ -65,7 +93,7 @@ enum GlassOpticsCheck {
         u.rect = SIMD4(10,10,300,220)
         guard let retina = renderer.pixels(u,width: 640,height: 480),
               retina[(240*640+320)*4+3] == 0, retina[(20*640+20)*4+3] == 0 else { return false }
-        print("PASS: Metal compilation/render, premultiplied transparent rim, Retina geometry, edge refraction (\(changedEdge) displaced pixels), stable center, clear backdrop drift \(String(format: "%.2f", meanDeviation))/255")
+        print("PASS: Metal compilation/render, premultiplied transparent rim, subtle prism (\(prismaticPixels) pixels, peak \(strongestSeparation)/255), accessible neutral edge, Retina geometry, edge refraction (\(changedEdge) displaced pixels), stable center, clear backdrop drift \(String(format: "%.2f", meanDeviation))/255")
         return true
     }
 }

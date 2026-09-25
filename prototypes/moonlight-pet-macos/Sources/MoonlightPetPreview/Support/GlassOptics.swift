@@ -6,7 +6,7 @@ import SwiftUI
 struct GlassUniforms {
     var viewport: SIMD4<Float> = .zero
     var rect: SIMD4<Float> = .zero
-    var material = SIMD4<Float>(26, 9, 1, 0)
+    var material = SIMD4<Float>(26, 10, 1, 0)
     var light: SIMD4<Float> = .zero
 }
 
@@ -86,7 +86,7 @@ final class GlassOpticsRenderer {
 @MainActor
 final class OpticalGlassView: MTKView, MTKViewDelegate {
     var radius: CGFloat = 26 { didSet { needsDisplay = true } }
-    var bevel: Float = 9 { didSet { needsDisplay = true } }
+    var bevel: Float = 10 { didSet { needsDisplay = true } }
     var refraction: Float = 1 { didSet { needsDisplay = true } }
     var grid = false { didSet { needsDisplay = true } }
     var laboratory = false

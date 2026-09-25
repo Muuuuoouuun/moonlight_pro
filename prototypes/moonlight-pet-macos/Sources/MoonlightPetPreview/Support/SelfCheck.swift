@@ -3,7 +3,7 @@ import AppKit
 enum SelfCheck {
     @MainActor
     static func run() -> Bool {
-        guard GlassOpticsCheck.run(), checkPanelInteraction() else { return false }
+        guard GlassOpticsCheck.run(), checkPanelInteraction(), checkReadingTone() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,
@@ -71,7 +71,54 @@ enum SelfCheck {
             return false
         }
         recovered.stopFocus()
-        print("PASS: press/drag tint reset, continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save and draft recovery")
+        print("PASS: press/drag tint reset, shared reading tint callback, continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save and draft recovery")
+        return true
+    }
+
+    @MainActor
+    private static func checkReadingTone() -> Bool {
+        let wash = PetGlassWash(radius: 12)
+        // Isolate this view from the operator's current accessibility settings.
+        // These overrides do not change NSWorkspace or any saved preference.
+        wash.solidForAccessibility = false
+        wash.previewsTint = false
+        let tone = GlassReadingTone()
+        var updates = 0
+        wash.onPresentationChange = { character, opacity, solid in
+            updates += 1
+            tone.update(character: character, opacity: opacity, solidForAccessibility: solid)
+        }
+        guard updates == 1, tone.state.opacity == 0, !tone.state.solidForAccessibility else {
+            fputs("Reading tint initial callback must be clear\n", stderr)
+            return false
+        }
+        wash.previewsTint = true
+        guard tone.state.opacity == 1 else {
+            fputs("Reading tint must follow the visible wash\n", stderr)
+            return false
+        }
+        for character in [PetCharacter.pink, .blue] {
+            wash.character = character
+            guard tone.state.character == character, tone.state.opacity == 1 else {
+                fputs("Reading tint character must update even when opacity stays unchanged\n", stderr)
+                return false
+            }
+        }
+        wash.previewsTint = false
+        guard tone.state.opacity == 0 else {
+            fputs("Reading tint must clear when preview ends\n", stderr)
+            return false
+        }
+        wash.solidForAccessibility = true
+        guard tone.state.opacity == 1, tone.state.solidForAccessibility else {
+            fputs("Reading tint must follow the accessibility solid wash\n", stderr)
+            return false
+        }
+        wash.solidForAccessibility = false
+        guard tone.state.opacity == 0, !tone.state.solidForAccessibility else {
+            fputs("Reading tint must clear when the accessibility override ends\n", stderr)
+            return false
+        }
         return true
     }
 
