@@ -102,6 +102,12 @@ export async function POST(req) {
   const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
 
   const context = await assembleSalesContext({ mode, ref });
+  if (mode === "open-question" && ["preview", "error"].includes(context?.source)) {
+    return NextResponse.json(
+      { status: context.source, error: context.error || "영업 자료를 읽을 수 없습니다." },
+      { status: context.source === "preview" ? 202 : 502 },
+    );
+  }
   let result;
   try { result = await callEngine({ mode, ref, draft, context, directives, values, knowledge, guidanceId }); }
   catch { result = { status: 502, data: { status: "error", reason: "engine-request-failed" } }; }

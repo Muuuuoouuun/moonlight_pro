@@ -178,6 +178,8 @@ test("Customer360Drawer keeps the 1-click VIP toggle and the 3-step focus contro
 
 test("Customer360Drawer lets a reader request Guru after seeing a source-backed card", () => {
   assert.match(customersSource, /<GuruGuidanceCard domain="sales" compact onAsk=/);
+  assert.match(customersSource, /setGuruQuestion\(''\)/, 'a card must open a blank operator question');
+  assert.doesNotMatch(customersSource, /setGuruQuestion\(card\.question\)/);
   assert.match(customersSource, /guidanceId=\{guruGuidanceId\}/);
   assert.match(customersSource, /initialQuestion=\{guruQuestion\}/);
   assert.doesNotMatch(customersSource, /Guru 전략 코칭 \(⌘J\)/);
@@ -186,6 +188,11 @@ test("Customer360Drawer lets a reader request Guru after seeing a source-backed 
   assert.match(customersSource, /contextType="customer"/);
   // 적용한 문장은 표시 모델 키가 아니라 약속 쓰기 계약(next_action)으로 저장된다.
   assert.match(customersSource, /onApplyText=\{\(text\) => \{[\s\S]*?savePromise\(\{ what: text\.slice\(0, 100\) \}\)/);
+});
+
+test("customer help has one scope-aware reply draft and no unscoped sales persona generator", () => {
+  assert.match(customersSource, /<OfficeWorkflowPanel/);
+  assert.doesNotMatch(customersSource, /CustomerOutreachDrafter|requestPersonaChat|outreach-draft/);
 });
 
 test("contact record form provides AI Smart Autofill from conversation or call notes, and the customer detail enables it", () => {
@@ -289,6 +296,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     saveRevenueRecord: async (...args) => { saves.push(args); return { ok: true, status: "saved" }; },
     useMemoSearch: () => ({ status: "live", entries: [], refresh() {} }),
     requestPersonaChat: async () => ({ state: "done", text: "" }),
+    brandInWorkspace: workspaceMap.brandInWorkspace,
     filterLeadsByWorkspace: workspaceMap.filterLeadsByWorkspace,
     filterAccountsByWorkspace: workspaceMap.filterAccountsByWorkspace,
     DEAL_STAGES: dealStages.DEAL_STAGES, STAGE_FILL: dealStages.STAGE_FILL,
@@ -415,6 +423,125 @@ test("render: opening a row shows the promise first and one primary record actio
   assert.equal(form.props.draft.summary, "견적서 보내기");
   assert.equal(app.findAll((n) => n.type === "Drawer").length, 1);
   assert.equal(app.findAll((n) => n.type === "Drawer")[0].props.title, "연락 기록");
+});
+
+test("render: customer Guru is readable across scopes but asks only for a ClassIn customer in the ClassIn scope", () => {
+  const personal = { ...renderLeads()[0], workspace: "brand", type: "personal" };
+  const personalApp = mountCustomers({ leads: [personal], params: "scope=personal" });
+  rowsOf(personalApp)[0].props.onClick();
+  personalApp.render();
+  const personalCard = personalApp.findAll((n) => n.type === "GuruGuidanceCard")[0];
+  assert.ok(personalCard, "the source-backed card remains readable");
+  assert.equal(personalCard.props.onAsk, undefined);
+  assert.equal(personalApp.findAll((n) => n.type === "OfficeWorkflowPanel")[0].props.scope, "personal");
+  assert.equal(personalApp.findAll((n) => n.type === "FloatingMentorWidget").length, 0);
+
+  const company = { ...renderLeads()[0], workspace: "classin", type: "company" };
+  const allApp = mountCustomers({ leads: [company], params: "scope=all" });
+  rowsOf(allApp)[0].props.onClick();
+  allApp.render();
+  assert.equal(allApp.findAll((n) => n.type === "GuruGuidanceCard")[0].props.onAsk, undefined);
+
+  const classinApp = mountCustomers({ leads: [company], params: "scope=classin" });
+  rowsOf(classinApp)[0].props.onClick();
+  classinApp.render();
+  const classinCard = classinApp.findAll((n) => n.type === "GuruGuidanceCard")[0];
+  assert.equal(typeof classinCard.props.onAsk, "function");
+  assert.equal(classinApp.findAll((n) => n.type === "OfficeWorkflowPanel")[0].props.scope, "classin");
+  classinCard.props.onAsk({ id: "sales-gap" });
+  classinApp.render();
+  const mentor = classinApp.findAll((n) => n.type === "FloatingMentorWidget")[0];
+  assert.ok(mentor);
+  assert.equal(mentor.props.agent, "guru");
+  assert.equal(mentor.props.guidanceId, "sales-gap");
+
+  const mislabeledPersonal = { ...personal, workspace: "classin" };
+  const inconsistentApp = mountCustomers({ leads: [mislabeledPersonal], params: "scope=classin" });
+  rowsOf(inconsistentApp)[0].props.onClick();
+  inconsistentApp.render();
+  assert.equal(inconsistentApp.findAll((n) => n.type === "GuruGuidanceCard")[0].props.onAsk, undefined);
+  assert.equal(inconsistentApp.findAll((n) => n.type === "OfficeWorkflowPanel").length, 0);
+  assert.ok(inconsistentApp.findAll((n) => n.props?.role === "status" && /고객 소속/.test(inconsistentApp.text(n))).length);
+
+  const conflictingCompany = { ...company, workspace: "brand" };
+  const companyConflictApp = mountCustomers({ leads: [conflictingCompany], params: "scope=classin" });
+  rowsOf(companyConflictApp)[0].props.onClick();
+  companyConflictApp.render();
+  assert.equal(companyConflictApp.findAll((n) => n.type === "GuruGuidanceCard")[0].props.onAsk, undefined);
+  assert.equal(companyConflictApp.findAll((n) => n.type === "OfficeWorkflowPanel").length, 0);
+
+  const taggedAccount = { ...renderAccounts()[0], workspace: "classin" };
+  const accountApp = mountCustomers({ accounts: [taggedAccount], params: "scope=classin" });
+  const segments = accountApp.findAll((n) => n.type === "SegmentedControl" && n.props.label === "고객 구분")[0];
+  segments.props.onChange("won");
+  accountApp.render();
+  rowsOf(accountApp)[0].props.onClick();
+  accountApp.render();
+  assert.equal(typeof accountApp.findAll((n) => n.type === "GuruGuidanceCard")[0].props.onAsk, "function");
+
+  const unknownApp = mountCustomers({ leads: [renderLeads()[0]], params: "scope=all" });
+  rowsOf(unknownApp)[0].props.onClick();
+  unknownApp.render();
+  assert.equal(unknownApp.findAll((n) => n.type === "OfficeWorkflowPanel")[0].props.scope, null);
+  assert.equal(unknownApp.findAll((n) => n.props?.role === "status" && /고객 소속/.test(unknownApp.text(n))).length, 0);
+});
+
+test("render: explicit brand ownership must agree with company type before customer advice uses ClassIn", () => {
+  const openedClassinRecord = (record, kind) => {
+    const app = mountCustomers({
+      [kind === "account" ? "accounts" : "leads"]: [record],
+      params: "scope=classin",
+    });
+    if (kind === "account") {
+      const segments = app.findAll((n) => n.type === "SegmentedControl" && n.props.label === "고객 구분")[0];
+      segments.props.onChange("won");
+      app.render();
+    }
+    const row = rowsOf(app)[0];
+    assert.ok(row, "company type keeps the row visible in the ClassIn list");
+    row.props.onClick();
+    app.render();
+    return {
+      card: app.findAll((n) => n.type === "GuruGuidanceCard")[0],
+      office: app.findAll((n) => n.type === "OfficeWorkflowPanel")[0],
+    };
+  };
+
+  for (const [kind, record] of [
+    ["lead", { ...renderLeads()[0], workspace: null, type: "company", brand: "sinabro" }],
+    ["account", { ...renderAccounts()[0], workspace: null, type: "company", brand: "sinabro" }],
+  ]) {
+    const { card, office } = openedClassinRecord(record, kind);
+    assert.equal(card.props.onAsk, undefined, `${kind} Guru must not send personal-brand details to ClassIn`);
+    assert.equal(office, undefined, `${kind} Office must not generate from conflicting ownership`);
+  }
+
+  const classinBrand = { ...renderLeads()[0], workspace: null, type: "company", brand: "classmoon" };
+  const { card, office } = openedClassinRecord(classinBrand, "lead");
+  assert.equal(typeof card.props.onAsk, "function");
+  assert.equal(office.props.scope, "classin");
+});
+
+test("render: an unsupported explicit workspace blocks customer advice despite company type", () => {
+  for (const [kind, record] of [
+    ["lead", { ...renderLeads()[0], workspace: "personal", type: "company" }],
+    ["account", { ...renderAccounts()[0], workspace: "personal", type: "company" }],
+  ]) {
+    const app = mountCustomers({
+      [kind === "account" ? "accounts" : "leads"]: [record],
+      params: "scope=classin",
+    });
+    if (kind === "account") {
+      const segments = app.findAll((n) => n.type === "SegmentedControl" && n.props.label === "고객 구분")[0];
+      segments.props.onChange("won");
+      app.render();
+    }
+    rowsOf(app)[0].props.onClick();
+    app.render();
+    assert.equal(app.findAll((n) => n.type === "GuruGuidanceCard")[0].props.onAsk, undefined, kind);
+    assert.equal(app.findAll((n) => n.type === "OfficeWorkflowPanel").length, 0, kind);
+    assert.ok(app.findAll((n) => n.props?.role === "status" && /고객 소속/.test(app.text(n))).length, kind);
+  }
 });
 
 test("render: 날짜 다시 moves only the promise date through the lead update route", async () => {

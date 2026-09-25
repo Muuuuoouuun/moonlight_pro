@@ -15,6 +15,9 @@ test('a freeform question uses an open-question mode rather than proposal critiq
   const prompt = buildGuruAdvicePrompt({ mode: 'open-question', context: {}, draft: '고객에게 무엇을 확인할까요?' });
   assert.match(prompt, /운영자가 묻는 상황/);
   assert.match(prompt, /고객에게 무엇을 확인할까요/);
+  assert.match(prompt, /선택된 자료 카드가 없으므로/);
+  assert.match(prompt, /질문과 직접 관련 없는 다른 고객/);
+  assert.doesNotMatch(prompt, /docs\/sales-guru-knowledge-base\.md|Dick Dunkel|Keenan/);
   assert.ok(Object.hasOwn(GURU_ADVICE_MODES, 'open-question'));
 });
 
@@ -26,6 +29,7 @@ test('user-selected card changes the frame without asserting it as ledger fact',
   assert.match(prompt, /Dick Dunkel/);
   assert.match(prompt, /자료 요약, 인용 아님/);
   assert.match(prompt, /원장 사실과 분리/);
+  assert.match(prompt, /이전 생성 조언.*사실 근거가 아닙니다/);
   assert.match(prompt, /내부 검토 중인 제안입니다/);
 });
 

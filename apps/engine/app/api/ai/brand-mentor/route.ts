@@ -49,7 +49,7 @@ const MODES = {
     question:
       "붙여 넣은 초안(제목·본문/슬라이드)을 브랜드 보이스 기준으로 진단하고, 더 좋게 만들 개선점 3가지를 제시하라. 훅·구조·구체성·CTA를 본다.",
     frames:
-      "Ogilvy 카피(헤드라인이 80%, 구체적 사실), Miller StoryBrand SB7(독자=영웅, 브랜드=가이드), Sutherland 관점 전환, 한국어 에세이 호흡(짧은 문장·구체 예시).",
+      "Ogilvy 카피(확인된 고객 사실과 구체적인 이점), Miller StoryBrand SB7(독자=영웅, 브랜드=가이드), Sutherland 관점 전환, 한국어 에세이 호흡(짧은 문장·구체 예시).",
   },
   "brand-strategy": {
     lens: "Strategist",
@@ -199,6 +199,8 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legend
       config.question,
       "답변은 짧은 한국어로: 1. 관찰된 사실과 미확인 정보 2. 적용한 프레임과 자료 출처 3. 운영자가 고려할 질문 또는 선택.",
       "후속 행동, 승인 제안, 업무 등록을 자동으로 붙이지 마십시오. 선택 카드는 원장 사실이 아닌 참고 방법론입니다.",
+      "context.memory.recent_runs는 이전 생성 조언이며 현재 독자·고객의 사실 근거가 아닙니다. 원장 기록과 구분하십시오.",
+      "질문과 직접 관련 없는 다른 프로젝트 상태나 포트폴리오 우선순위를 끌어오지 마십시오. 질문과 선택 카드에 필요한 확인된 사실만 사용하십시오.",
       guidancePromptFrame(guidanceId || ""),
       "운영자가 제공한 질문:",
       draft?.trim() || "",
@@ -402,19 +404,21 @@ export async function POST(req: Request) {
   const generationOk = isDraftMode ? draftOk : result.ok && !emptyOfficeReview;
   const failureReason =
     isDraftMode && result.ok && !draftOk ? "invalid-draft-json" : emptyOfficeReview ? "empty-office-review" : result.reason;
+  const integrationProvider = mode === "open-question" ? "guru" : "council";
+  const integrationAgent = mode === "open-question" ? "guru.brand" : "council";
 
   const connection = await upsertIntegrationConnection({
-    provider: "council",
+    provider: integrationProvider,
     status: generationOk ? "connected" : "error",
     config: {
       ...getGeminiIntegrationStatus(),
-      agent: "council",
+      agent: integrationAgent,
       lastResult: { ok: generationOk, status: result.status, reason: failureReason, mode },
     },
     lastSyncedAt: generationOk ? finishedAt : null,
   });
   const syncRun = await insertIntegrationSyncRun({
-    provider: "council",
+    provider: integrationProvider,
     connectionId: connection.connection?.id || null,
     status: generationOk ? "success" : "failure",
     payload: {

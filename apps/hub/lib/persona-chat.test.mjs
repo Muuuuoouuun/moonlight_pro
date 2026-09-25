@@ -18,7 +18,11 @@ const stubs = {
     }
   `,
   "@/lib/server-read": `
-    export async function fetchSupabaseRows() { return []; }
+    export async function fetchSupabaseRows(table) {
+      const state = globalThis.__personaRouteTest;
+      (state.readTables ||= []).push(table);
+      return state.rowsByTable?.[table] || [];
+    }
     export function withWorkspaceFilter(f = []) { return f; }
   `,
 };
@@ -169,4 +173,39 @@ test("POST supports outreach-draft, extract-actions, and daily-dispatch modes", 
   );
   assert.equal(resDispatch.status, 200);
   assert.equal(state.calledBody.mode, "daily-dispatch");
+});
+
+test("record-local sales modes do not mix unrelated deals into a supplied record", async () => {
+  state.rowsByTable = {
+    deals: [{ name: "다른 고객의 딜", stage: "Qualified", value: 3000000 }],
+  };
+
+  const outreach = await POST(request({
+    personaId: "sales",
+    mode: "outreach-draft",
+    draft: "김 고객에게 보낼 문자를 써줘",
+  }));
+  assert.equal(outreach.status, 200);
+  assert.equal(state.calledBody.context, null);
+  assert.deepEqual(state.readTables || [], []);
+
+  const extraction = await POST(request({
+    personaId: "sales",
+    mode: "extract-contact-outcome",
+    draft: "박 고객과 통화한 원문",
+  }));
+  assert.equal(extraction.status, 200);
+  assert.equal(state.calledBody.context, null);
+  assert.deepEqual(state.readTables || [], []);
+
+  const localContext = { id: "target-1", name: "이 고객" };
+  const scoped = await POST(request({
+    personaId: "sales",
+    mode: "outreach-draft",
+    draft: "이 고객에게 보낼 문자를 써줘",
+    context: localContext,
+  }));
+  assert.equal(scoped.status, 200);
+  assert.deepEqual(state.calledBody.context, localContext);
+  assert.deepEqual(state.readTables || [], []);
 });

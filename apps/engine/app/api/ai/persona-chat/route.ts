@@ -292,9 +292,11 @@ export async function POST(req: Request) {
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const context = payload.context ?? {};
   const workspaceId = resolveDefaultWorkspaceId();
+  const recordLocalMode = mode === "outreach-draft" || mode === "extract-contact-outcome";
 
   let ragSnippets: KnowledgeItem[] = [];
-  if (workspaceId && (message || draft || context?.summary || context?.title)) {
+  // One contact is already supplied in draft/context; unrelated workspace notes can contaminate it.
+  if (!recordLocalMode && workspaceId && (message || draft || context?.summary || context?.title)) {
     const searchQuery = [message, draft, context?.title, context?.summary].filter(Boolean).join(" ");
     try {
       const ragResult = await retrieveKnowledge(

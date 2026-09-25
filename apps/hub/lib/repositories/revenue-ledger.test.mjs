@@ -69,3 +69,11 @@ test('account labels use account values and company region only as a fallback', 
   assert.equal(explicit.labelSource.region, 'operator');
   assert.equal(mapAccount({ id: 'account-1', name: '학원', company_id: 'company-1', meta: { region: null } }, new Map(), companies).region, '');
 });
+test('account projection retains explicit workspace and brand scope for contact joins', () => {
+  const account = mapAccount({
+    id: 'account-personal', company_id: 'shared-company',
+    meta: { workspace: 'brand', brand: 'sinabro', type: 'company' },
+  }, new Map());
+  assert.equal(account.workspace, 'brand');
+  assert.equal(account.brand, 'sinabro');
+});

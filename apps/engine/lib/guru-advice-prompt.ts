@@ -37,13 +37,19 @@ export function buildGuruAdvicePrompt({ mode, context, draft, guidanceId }: {
 }): string {
   const config = GURU_ADVICE_MODES[mode];
   const requestedFrame = guidanceId ? guidancePromptFrame(guidanceId) : '';
-  const frame = requestedFrame || guidancePromptFrame(config.defaultCardId);
+  // A freeform question without a selected card must not acquire an unrelated
+  // person's method or a source attribution by default.
+  const frame = requestedFrame || (mode === 'open-question' ? '' : guidancePromptFrame(config.defaultCardId));
   const lines = [
     config.question,
-    '답변은 짧은 한국어로: 1. 관찰된 사실과 미확인 정보 2. 적용할 프레임과 출처 3. 운영자가 고려할 질문 또는 선택.',
+    frame
+      ? '답변은 짧은 한국어로: 1. 관찰된 사실과 미확인 정보 2. 적용할 프레임과 출처 3. 운영자가 고려할 질문 또는 선택.'
+      : '답변은 짧은 한국어로: 1. 관찰된 사실과 미확인 정보 2. 도움이 되는 판단 기준 3. 운영자가 고려할 질문 또는 선택.',
     '후속 행동이나 업무 등록은 운영자가 명시적으로 요청했을 때만 제안하십시오. 카드 조회 자체는 업무 요청이 아닙니다.',
     '고객에게 직접 발송하거나 회사 CRM을 자동 입력하지 마십시오.',
-    frame,
+    'context.memory.recent_runs는 이전 생성 조언이며 현재 고객 사실 근거가 아닙니다. 검증된 원장 기록과 구분하십시오.',
+    ...(mode === 'open-question' ? ['질문과 직접 관련 없는 다른 고객·거래·파이프라인 상태를 끌어오지 마십시오. 질문과 선택 카드에 필요한 확인된 사실만 사용하십시오.'] : []),
+    frame || '선택된 자료 카드가 없으므로 특정 인물·방법론·출처를 임의로 붙이지 마십시오.',
   ];
   if (draft?.trim()) lines.push('운영자가 제공한 질문 또는 초안:', draft.trim());
   lines.push('Sales ledger snapshot (자료 카드와 별개인 사실 근거):', JSON.stringify(context ?? {}, null, 2));

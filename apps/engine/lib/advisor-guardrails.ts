@@ -191,7 +191,10 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
   const isCouncil = type === 'council';
   const isSales = type === 'sales-mentor';
   const isBrand = type === 'brand-mentor';
-  const isReferenceOnlyBrandQuestion = isBrand && (mode === 'open-question' || mode === 'office-review');
+  const isOpenMentorQuestion = (isSales || isBrand) && mode === 'open-question';
+  // Office review is a reference-only brand question too: answer from the
+  // named Office result without turning it into a new assignment.
+  const isReferenceOnlyQuestion = isOpenMentorQuestion || (isBrand && mode === 'office-review');
   const charLimit = isCouncil ? 700 : 600;
 
   const lines: string[] = [];
@@ -259,7 +262,7 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
       '[가드레일 2: Constraint-First Gate (제약 우선 게이트)]',
       '- 사용자의 당일 에너지 레벨(1~5)과 가용 시간 한도를 절대적으로 존중하십시오.',
       '- 가용 시간 0분 또는 에너지 1~2 상황에서는 신규 과제 0건 및 보류/연기 안내와 재검토 조건 1개만 허용됩니다.',
-      isReferenceOnlyBrandQuestion
+      isReferenceOnlyQuestion
         ? '- 질문에 답하는 데 필요한 제약만 반영하십시오. 질문 자체를 새 업무 배정으로 바꾸지 마십시오.'
         : '- 허용된 가용 시간 내에서만 즉시 실행 가능한 가역적 행동을 제안하십시오.'
     );
@@ -282,18 +285,26 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
     '- 반드시 "담당자가 내일 15시까지 미응답 시", "원문 초안 누락 확인 시" 등 관찰 가능한 단일 사건(Event)을 트리거로 사용하십시오.'
   );
 
-  lines.push(
-    '',
-    '[가드레일 5: Preservation of Dissent (이견 보존 원칙)]',
-    '- 억지 만장일치나 가짜 합의("우리는 만장일치로 동의합니다" 등)를 엄격히 금지합니다.',
-    '- 서로 다른 관점의 대립, 사각지대, 상충 관계(Trade-off), 감수할 비용, 남은 이견(Dissent)을 명확하게 보존하십시오.',
-    '- Devil\'s Advocate의 반론은 단순한 우려가 아니라, 이 계획이 완전히 실패할 가장 치명적인 이유를 직격해야 합니다.'
-  );
+  if (isOpenMentorQuestion) {
+    lines.push(
+      '',
+      '[가드레일 5: 질문에 필요한 반례만 다루기]',
+      '- 실제 질문에 중요한 반례가 있을 때만 짧게 설명하십시오. 근거 없는 반대 관점이나 형식적인 3자 토론을 만들지 마십시오.'
+    );
+  } else {
+    lines.push(
+      '',
+      '[가드레일 5: Preservation of Dissent (이견 보존 원칙)]',
+      '- 억지 만장일치나 가짜 합의("우리는 만장일치로 동의합니다" 등)를 엄격히 금지합니다.',
+      '- 서로 다른 관점의 대립, 사각지대, 상충 관계(Trade-off), 감수할 비용, 남은 이견(Dissent)을 명확하게 보존하십시오.',
+      '- Devil\'s Advocate의 반론은 단순한 우려가 아니라, 이 계획이 완전히 실패할 가장 치명적인 이유를 직격해야 합니다.'
+    );
+  }
 
   // 4. Values and Knowledge Directives (가치관 및 지식 지침)
   // Reference-only modes use their explicit source (selected Guru card or
   // Office result). The baseline playbook could blur that attribution.
-  const directivesBlock = isReferenceOnlyBrandQuestion
+  const directivesBlock = isReferenceOnlyQuestion
     ? ''
     : assembleDirectives(resolveDirectives(type, options.directives, context));
   if (directivesBlock) {
@@ -335,7 +346,7 @@ export function buildAdvisorySystemInstruction(options: AdvisoryInstructionOptio
       '2. 적용한 프레임과 자료 출처',
       activeConstraintMode === 'rest-first'
         ? '3. 안전한 보류나 재검토 조건에 관한 질문 또는 선택 (신규 과제 배정 0건)'
-        : isReferenceOnlyBrandQuestion
+        : isReferenceOnlyQuestion
           ? '3. 운영자가 판단할 질문 또는 선택. 후속 일을 만들지 마십시오.'
           : '3. 운영자가 고려할 질문 또는 선택. 후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시하십시오.'
     );
