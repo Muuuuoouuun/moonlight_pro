@@ -2,6 +2,7 @@
 
 import React from "react";
 import { CalendarOutcome } from "../calendar-outcome";
+import { ReviewWaitingList } from "../review-waiting";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
@@ -2115,6 +2116,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
           <RhythmPanel onNavigate={onNavigate} />
           <MorningBriefCard brief={ledger.morningBrief} taskToday={ledger.taskToday} onNavigate={onNavigate} />
           <ApprovalQueueCard onNavigate={onNavigate} />
+          <ReviewWaitingList onNavigate={onNavigate} />
         </MoreDetail>
       </div>
 

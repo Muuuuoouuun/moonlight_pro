@@ -11,6 +11,7 @@ import { officeDiscussionState } from '../office-deliberation-client';
 import { officeSkillRequestDraft } from '../office-skill-request';
 import { OfficeSkillRequestDrawer } from '../office-skill-request-drawer';
 import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-drawer';
+import { ReviewWaitingList } from '../review-waiting';
 import { OfficeAvatar } from '../office-avatar';
 import { officeMentorSessions } from '../office-mentor-session';
 import { requestOfficeMentor } from '../office-mentor-client';
@@ -162,7 +163,7 @@ function OfficeUsageLine({ refreshKey }) {
     {' · '}실패 <span className="mono">{usage.failed}</span>{failures ? ' (' + failures + ')' : ''}</p>;
 }
 
-export function OfficeCouncil({ scope = 'all' }) {
+export function OfficeCouncil({ scope = 'all', onNavigate }) {
   const { session, store, update } = useOfficeSession(scope);
   const { ownerId, mode, reviewers, includeProjects, minimumOnly } = session;
   const [rosterOpen, setRosterOpen] = React.useState(false);
@@ -421,6 +422,7 @@ export function OfficeCouncil({ scope = 'all' }) {
     </div>
     <p className={styles.sessionNote}>범위를 바꾸면 해당 범위의 입력과 대화를 엽니다. 새로고침·탭 종료 시 자유 요청의 미전송 원문과 답변은 사라집니다.</p>
     <OfficeUsageLine refreshKey={session.turns.length} />
+    <ReviewWaitingList onNavigate={onNavigate} />
     {assignment ? <Drawer title="이브이 담당 추천" subtitle="추천은 선택 사항입니다. 적용 전까지 참석자는 바뀌지 않습니다." onClose={invalidateAssignment} width="min(440px, 94vw)">
       <div className={styles.assignmentCard} role={assignment.status === 'error' ? 'alert' : 'status'}>
         {assignment.status === 'loading' ? <><strong>안건 복사본을 읽고 담당을 추천하는 중</strong><Skeleton lines={2} label="이브이 담당 추천 확인 중" /><Button variant="ghost" size="sm" onClick={editAssignment}>직접 선택</Button></> : null}
