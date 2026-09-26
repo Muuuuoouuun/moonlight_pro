@@ -1,6 +1,16 @@
 // Moonlight 데스크톱 셸 — 허브 주소 하나를 창에 띄우고, 트레이·빠른 입력 단축키만 더한다.
 'use strict';
-const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, screen, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, dialog, globalShortcut, ipcMain, nativeImage, screen, session, shell } = require('electron');
+// 펫 스모크는 운영자 화면에서 돈다 — Electron 오류 창을 띄우지 않고 기록한 뒤 종료 코드 1로 끝낸다.
+if (process.argv.includes('--smoke-pet')) {
+  dialog.showErrorBox = () => {};
+  const fatal = (error) => {
+    console.log(`smoke:fail ${(error && error.stack) || error}`);
+    app.exit(1);
+  };
+  process.on('uncaughtException', fatal);
+  process.on('unhandledRejection', fatal);
+}
 const fs = require('node:fs');
 const path = require('node:path');
 const { normalizeHubUrl, resolveHubUrl, isSameOrigin, dashboardUrl, isExternalOpenable } = require('./hub-url');
@@ -38,6 +48,10 @@ const SMOKE_CAPTURE = argValue('smoke-quick-capture') !== null; // 스모크에�
 // --smoke-widget --smoke-hub=<허브 주소>: 창 규칙 검사 대신 그 허브의 실제 /widget 페이지를 찍는다(개발 서버 확인용).
 const SMOKE_HUB = argValue('smoke-hub');
 const SMOKE_THEME = argValue('smoke-theme'); // light | dark — 찍기 전에 허브 테마 설정(mlp.theme)을 이 값으로
+// --smoke-pet: 펫 창(Acrylic + DWM)을 실제 화면에 띄워 확인하고 화면 영역을 찍는다(pet/main/pet-smoke.js).
+// GPU 합성을 끄지 않는다 — Acrylic 블러는 실제 합성 경로에서만 보인다.
+const SMOKE_PET = argValue('smoke-pet') !== null;
+const SMOKE_PET_PAGE = argValue('smoke-pet-page'); // 펫 페이지 폴더(pet.html·panel.html…) 또는 파일 하나
 const userDataDir = argValue('user-data-dir');
 if (userDataDir) app.setPath('userData', path.resolve(userDataDir));
 // 스모크 캡처는 GPU 합성 없이도 찍혀야 한다(CI·원격 세션에서 UnknownVizError 방지).
@@ -77,6 +91,7 @@ function iconPath() {
 // ── 창 ────────────────────────────────────────────────────────────────────
 let win = null;
 let tray = null;
+let pet = null; // Moonlight 펫(pet/main/pet-main.js) — 트레이 항목과 허브 주소 변경을 받는다
 let quitting = false;
 
 function restoredBounds() {
@@ -462,6 +477,7 @@ function refreshMenus() {
     { label: '열기', click: showWindow },
     { label: '빠른 입력', accelerator: QUICK_CAPTURE_ACCELERATOR, registerAccelerator: false, click: quickCapture },
     widgetMenuItem(),
+    ...(pet ? [{ type: 'separator' }, ...pet.trayItems(), { type: 'separator' }] : []),
     { label: '허브 주소 바꾸기', click: () => showSettings() },
     { type: 'separator' },
     { label: '종료', click: quit },
@@ -492,6 +508,7 @@ function registerIpc() {
     if (!result.ok) return result;
     writeJson(userFile('settings.json'), { ...readSettings(), hubUrl: result.url });
     hideWidget(); // 위젯은 다음에 열 때 새 주소의 /widget을 다시 불러온다(isWidgetPage가 origin을 본다)
+    if (pet) pet.hubUrlChanged();
     loadHub();
     return result;
   });
@@ -796,6 +813,24 @@ async function runWidgetHubSmoke() {
   app.exit(0);
 }
 
+// ── Moonlight 펫 ─────────────────────────────────────────────────────────
+// 화면 가장자리의 작은 캐릭터와 Acrylic 빠른 패널(pet/main). 허브 호출은 메인 창과 같은 기본 세션 쿠키를 쓴다.
+// 펫을 띄우지 못해도 허브 창·위젯은 그대로 동작해야 하므로 실패는 경고만 남긴다.
+function installPet() {
+  try {
+    return require('./pet/main/pet-main').install({
+      app,
+      getHubUrl: currentHubUrl,
+      openMainUrl,
+      showSettings: () => showSettings(),
+      openExternal,
+    });
+  } catch (error) {
+    console.warn(`pet: ${error && error.message}`);
+    return null;
+  }
+}
+
 // ── 시작 ─────────────────────────────────────────────────────────────────
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -806,6 +841,12 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => app.quit());
 
   app.whenReady().then(() => {
+    if (SMOKE_PET) {
+      // 펫 창만 띄운다 — 메인 창·트레이·전역 단축키는 만들지 않는다.
+      // --smoke-pet-activate: 패널에 실제 포커스를 주고 blur 접기까지 본다(운영자 화면의 포커스를 옮긴다).
+      require('./pet/main/pet-smoke').run({ app, out: SMOKE_OUT, page: SMOKE_PET_PAGE, activate: argValue('smoke-pet-activate') !== null });
+      return;
+    }
     // 허브 origin의 권한 요청만 받는다(알림·클립보드 등). 그 밖은 거절.
     session.defaultSession.setPermissionRequestHandler((contents, _permission, callback, details) => {
       callback(isSameOrigin(details.requestingUrl || contents.getURL(), currentHubUrl()));
@@ -830,6 +871,8 @@ if (!app.requestSingleInstanceLock()) {
       for (const [accelerator, action] of [[QUICK_CAPTURE_ACCELERATOR, quickCapture], [WIDGET_ACCELERATOR, toggleWidget]]) {
         if (!globalShortcut.register(accelerator, action)) console.warn(`shortcut ${accelerator} is taken by another app`);
       }
+      pet = installPet();
+      refreshMenus();
     }
     loadHub();
   });

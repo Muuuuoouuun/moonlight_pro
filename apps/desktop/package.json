@@ -30,6 +30,8 @@
       "hub-url.js",
       "widget-window.js",
       "widget-preload.js",
+      "pet/**",
+      "!pet/**/*.test.js",
       "app.config.json",
       "settings/**",
       "package.json",
