@@ -8,6 +8,7 @@
 - Supabase REST ledger 중심: Hub는 운영 판단 UI, Engine은 webhook/intake/실행 기록
 - Hub(`/dashboard/**`)와 Engine(`/api/**`)이 현역 실행 표면이며, public web은 active workspace에서 분리됨
 - `packages/*`: `supabase-rest`(Hub·Engine·gateway가 공유하는 단일 Supabase REST 클라이언트 `@com-moon/supabase-rest`), `hub-gateway`, `content-manager`, `ui`(공유 CSS 토큰 `--cm-*`와 구 TS 프리미티브 — Hub UI 프리미티브의 정본은 `apps/hub/components/hub/hub-primitives.jsx`), `mcp-server`(`.mcp.json`의 `moonlight` MCP 서버, Claude Code에는 `mcp__moonlight__*` 도구로 노출 — 클라이언트 등록 점검·설치는 `npm run mcp:connect`, 다른 툴용 HTTP는 `npm run mcp:http`)
+- MCP 클라이언트(Claude Code·Codex·Claude Desktop)는 각자 자기 Agent 토큰을 쓴다 — 공용 `COM_MOON_AGENT_API_TOKEN`을 나눠 쓰면 명령·스킬 receipt가 모두 기본 actor(`codex`)로 남아 누가 했는지 구분되지 않는다. 만들기·등록 절차는 `packages/mcp-server/README.md`의 Per-client identity(`npm run mcp:connect -- client-token` → Hub·Engine env `COM_MOON_AGENT_CLIENT_TOKEN_HASHES` → `install <client> --mcp-env-file`)
 - 워크트리에서 `packages/*`를 고치면 그 워크트리 루트에서 `npm install`을 먼저 해야 dev/build에 반영된다
 
 ## 운영자 업무 기준
@@ -86,7 +87,7 @@ python3 .agents/skills/ui-ux-pro-max/scripts/search.py "data table status badge"
 - `main`: 프로덕션. CI push 트리거는 `main`·`codex/**`뿐이라 그 밖의 브랜치는 PR을 열어야 CI가 돈다
 - `codex/*`: Codex 작업 브랜치 · `claude/*`: Claude Code 워크트리 브랜치 · `real_v*`: 운영자 통합 브랜치
 - 고정된 "현재 작업 브랜치"를 문서에 적지 않는다. 작업 시작 시 Git 상태를 직접 확인한다.
-- 메인 워크트리는 여러 세션이 동시에 쓴다. 여러 파일에 걸친 기능·리팩터는 전용 worktree(`git worktree add ../moonlight_pro-<slug> -b <branch>`)에서 시작하고, 병합 뒤 `git worktree remove`까지 마친다(2026-07-16 운영자 확정). 1~2줄 수정과 조사는 예외
+- 메인 워크트리는 여러 세션이 동시에 쓴다. 여러 파일에 걸친 기능·리팩터는 전용 worktree(`git worktree add ../moonlight_pro-<slug> -b <branch>`)에서 시작하고, 병합 뒤 `git worktree remove`까지 마친다(2026-07-16 운영자 확정). 1~2줄 수정과 조사는 예외 세션 수는 제한하지 않지만 **체크아웃 하나에 세션 하나**다 — 메인 체크아웃은 한 세션만 쓰고 나머지는 각자 워크트리에서 일한다. 다른 세션이 메인 체크아웃의 브랜치를 바꿀 수 있으므로 커밋·push 직전 `git branch --show-current`를 다시 확인하고, push는 방금 확인한 브랜치로 한다(2026-09-26 운영자 확정)
 - `git add -A`·`git commit -am` 금지 — 내가 만진 파일만 명시 경로로 stage하고, 커밋 직후 `git show --stat`으로 ±라인이 편집 규모와 맞는지 확인한다. `foo 2.jsx`처럼 " 2"가 붙은 중복 파일이 보이면 동기화 충돌부터 의심한다
 
 ## Skill routing

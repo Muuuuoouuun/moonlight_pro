@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { invokeSupabaseRpc } from '@com-moon/supabase-rest';
+import { agentClientTokenDigest, parseAgentClientTokenHashes } from '@com-moon/agent-contracts';
 import { readInquiryJson } from './inquiry-http.ts';
 import { UUID, record, bytes, strictKeys, readProjects, jobHttpStatus } from '../../../packages/codex-worker/contracts.mjs';
 
@@ -13,7 +14,9 @@ export async function handleWorkerRequest(request: Request, { env = process.env,
   const workspaceId = env.COM_MOON_DEFAULT_WORKSPACE_ID;
   const workerId = env.COM_MOON_CODEX_WORKER_ID || 'local-codex';
   if (!expected || !UUID.test(workspaceId || '') || !/^[a-zA-Z0-9._-]{1,100}$/.test(workerId)) return error('worker-not-configured', 503);
-  if (expected === env.COM_MOON_AGENT_API_TOKEN?.trim() || expected === env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim()) return error('worker-credential-must-be-isolated', 503);
+  // Same isolation for per-client Agent tokens: compare the configured worker token with their digests.
+  const clients = parseAgentClientTokenHashes(env.COM_MOON_AGENT_CLIENT_TOKEN_HASHES);
+  if (expected === env.COM_MOON_AGENT_API_TOKEN?.trim() || expected === env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() || (clients.ok && clients.entries.some(entry => entry.digest === agentClientTokenDigest(expected)))) return error('worker-credential-must-be-isolated', 503);
   const candidate = /^Bearer\s+(.+)$/i.exec(request.headers.get('authorization') || '')?.[1]?.trim() || '';
   const digest = (s: string) => createHash('sha256').update(s).digest();
   if (!candidate || !timingSafeEqual(digest(candidate), digest(expected))) return error('invalid-worker-credential', 401);

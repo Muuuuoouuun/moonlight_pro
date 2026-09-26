@@ -24,8 +24,14 @@
 //   담는다. 거래 화면이 금액·예상일을 처음 바꿀 때 한 번만 쓴다(planBaselineFor, 서버도 덮어쓰지
 //   않는다 — sales-os/revenue-write.js mergeRecordMeta). 없으면 지금 값이 곧 계획이다.
 // - 입금액이 예상과 다르면 이유 한 줄(paidNote, 40자)을 선택으로 남긴다. 같으면 저장하지 않는다.
+//
+// 매달 정기(운영자 2026-09-26, deal-recurring.js): deals.meta.recurring이 있으면 딜의 금액·예상일을
+// 암묵 결제로 파생하지 않는다 — 돈은 달마다의 가상 회차로 들어온다. 한 달 치를 입금 확인하면
+// recurringMonth: 'YYYY-MM'가 붙은 명시 결제가 생긴다(markRecurringPaid). normalizePayment은 그
+// 표시를 보존한다(없는 결제에는 키를 붙이지 않는다).
 
 import { kstDayKey } from "./kst-day.js";
+import { isRecurringMonthKey, normalizeRecurring, recurringDueIso, recurringMonthLabel } from "./deal-recurring.js";
 
 export const PAYMENT_STATUSES = ["expected", "paid", "cancelled"];
 export const IMPLICIT_PAYMENT_ID = "implicit";
@@ -81,6 +87,7 @@ export function normalizePayment(raw) {
   const paidAmount = status === "paid" ? (rawPaid || expectedAmount) : rawPaid;
   const plannedAmount = toPositiveNumber(raw.plannedAmount);
   const paidNote = status === "paid" && paidAmount !== expectedAmount ? toPaidNoteOrNull(raw.paidNote) : null;
+  const recurringMonth = isRecurringMonthKey(raw.recurringMonth) ? raw.recurringMonth : null;
   return {
     id: typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : newPaymentId(),
     label: toLabelOrNull(raw.label),
@@ -92,6 +99,7 @@ export function normalizePayment(raw) {
     paidAt: status === "paid" ? (toIsoOrNull(raw.paidAt) || new Date().toISOString()) : toIsoOrNull(raw.paidAt),
     paidNote,
     status,
+    ...(recurringMonth ? { recurringMonth } : {}),
   };
 }
 
@@ -141,10 +149,12 @@ export function planBaselineFor(prevDeal, nextFields = {}, now = new Date()) {
 }
 
 // 명시 일정이 없으면 딜의 금액·예상일 그대로 암묵적 결제 1건 — 중복 저장 없이 매번 파생한다.
-// 처음 계획은 plan_baseline이 있으면 그것, 없으면 지금 값.
+// 처음 계획은 plan_baseline이 있으면 그것, 없으면 지금 값. 매달 정기 계획이 있는 딜은 암묵
+// 결제를 만들지 않는다(돈은 달마다의 회차로 들어온다 — deal-recurring.js).
 export function effectivePayments(deal) {
   const explicit = normalizePayments(deal?.payments);
   if (explicit.length > 0) return explicit;
+  if (normalizeRecurring(deal?.recurring)) return [];
   const expectedAmount = toPositiveNumber(deal?.value);
   if (!expectedAmount) return [];
   const expectedAt = toIsoOrNull(deal?.closeAt) || null;
@@ -253,4 +263,58 @@ export function unmarkPaid(deal, paymentId) {
 export function removeInstallment(deal, paymentId) {
   const base = materialize(deal);
   return base.filter((p) => p.id !== paymentId);
+}
+
+// ── 돈 보기(운영자 2026-09-26)의 빠른 일정 ────────────────────────────────────────
+
+// "일시불" — 계약됐는데 일정이 없는 거래에 금액·날짜 한 건을 건다. 이미 들어온(또는 취소된)
+// 결제와 날짜가 있는 결제·정기 기록은 그대로 두고, 날짜 없는 미입금 결제(암묵 결제 포함)만 이
+// 한 건으로 바꾼다. 날짜가 없던 것을 처음 채우는 것은 계획을 세우는 것이라 처음 계획도 같은 값.
+export function scheduleLumpSum(deal, { amount, at } = {}) {
+  const value = toPositiveNumber(amount);
+  const base = normalizePayments(deal?.payments);
+  if (!value) return base;
+  const kept = base.filter((p) => p.status !== "expected" || p.expectedAt || p.recurringMonth);
+  const expectedAt = toIsoOrNull(at);
+  return [...kept, {
+    id: newPaymentId(),
+    label: null,
+    expectedAmount: value,
+    expectedAt,
+    plannedAmount: value,
+    plannedAt: expectedAt,
+    paidAmount: 0,
+    paidAt: null,
+    paidNote: null,
+    status: "expected",
+  }];
+}
+
+// 매달 정기의 한 달 치 "입금 확인" — 그 달의 가상 회차를 명시 결제 한 건으로 적는다
+// (recurringMonth로 짝지어져 다음 로드부터 그 달 회차가 입금됨이 된다). 이미 그 달 기록이 있으면
+// 그 기록을 바꾼다(중복 없음). 기본값은 계획 금액 전액·오늘. 계획이 없거나 달 키가 틀리면
+// 명시 결제를 그대로 돌려준다(아무것도 바꾸지 않음).
+export function markRecurringPaid(deal, monthKey, { paidAmount, paidAt, paidNote } = {}) {
+  const base = normalizePayments(deal?.payments);
+  const rec = normalizeRecurring(deal?.recurring);
+  if (!rec || !isRecurringMonthKey(monthKey)) return base;
+  const existing = base.find((p) => p.recurringMonth === monthKey) || null;
+  const dueAt = recurringDueIso(rec, monthKey);
+  const expectedAmount = existing ? existing.expectedAmount : rec.amount;
+  const expectedAt = existing ? (existing.expectedAt || dueAt) : dueAt;
+  const amount = toPositiveNumber(paidAmount) || expectedAmount;
+  const record = {
+    id: existing ? existing.id : `rec-${monthKey}`,
+    label: existing?.label || recurringMonthLabel(monthKey),
+    expectedAmount,
+    expectedAt,
+    plannedAmount: existing ? existing.plannedAmount : expectedAmount,
+    plannedAt: existing ? existing.plannedAt : expectedAt,
+    paidAmount: amount,
+    paidAt: toIsoOrNull(paidAt) || new Date().toISOString(),
+    paidNote: amount !== expectedAmount ? toPaidNoteOrNull(paidNote) : null,
+    status: "paid",
+    recurringMonth: monthKey,
+  };
+  return existing ? base.map((p) => (p.id === existing.id ? record : p)) : [...base, record];
 }

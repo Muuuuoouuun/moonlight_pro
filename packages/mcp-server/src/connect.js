@@ -1,29 +1,35 @@
 #!/usr/bin/env node
-// npm run mcp:connect -- <status|install|print|token> …
-// Keeps every AI client's `moonlight` registration pointed at a path that exists, and manages
-// the per-client tokens used by the HTTP transport.
+// npm run mcp:connect -- <status|install|print|token|client-token> …
+// Keeps every AI client's `moonlight` registration pointed at a path that exists, manages the
+// per-client tokens used by the HTTP transport, and creates per-client Agent API identities.
 import {execFileSync} from 'node:child_process';
 import {chmodSync,copyFileSync,existsSync,lstatSync,mkdirSync,readFileSync,realpathSync,renameSync,statSync,writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
-import {dirname,join} from 'node:path';
-import {parseArgs} from 'node:util';
+import {dirname,isAbsolute,join} from 'node:path';
+import {parseArgs,parseEnv} from 'node:util';
 import {REPO_ROOT} from './env.js';
 import {PROFILE_NAMES} from './tools.js';
 import {version} from './server.js';
 import {clientsFile,createClient,readClients,revokeClient} from './clients.js';
-import {LAUNCHER_PATH,clientTargets,httpSnippet,inspectEntry,launcherFlags,mergeStdioEntry,readEntry,stdioSnippet,upsertJsonEntry,upsertTomlEntry} from './client-configs.js';
+import {LAUNCHER_PATH,clientTargets,httpSnippet,inspectEntry,isHubEnvFile,launcherFlags,mergeStdioEntry,readEntry,stdioSnippet,upsertJsonEntry,upsertTomlEntry} from './client-configs.js';
+import {createClientTokenFile} from './client-token.js';
 
 const USAGE=`사용법: npm run mcp:connect -- <명령>
   status [--probe] [--json]            모든 클라이언트의 moonlight 등록 상태 (--probe: 실제로 띄워 도구 목록 확인)
   install <client…|--all> [--profile P] [--read-only] [--dry-run] [--root DIR]
                                        등록을 런처 기준으로 쓰거나 고친다 (원본은 .bak으로 백업)
+  install <client> --mcp-env-file FILE
+                                       그 클라이언트만 자기 비공개 env 파일(자기 Agent 토큰)을 쓰게 한다
+  client-token <actor> --out FILE [--force] [--hub-env FILE]
+                                       클라이언트 전용 Agent 토큰 파일(0600)을 만들고, Hub의
+                                       COM_MOON_AGENT_CLIENT_TOKEN_HASHES에 넣을 actor:sha256 한 줄만 출력
   print <client> [--http] [--url URL]  직접 붙여 넣을 설정 조각
   token create <name> [--profile P] [--read-only] [--allow-url]
   token list | token revoke <name>     HTTP 클라이언트 토큰 관리
 클라이언트: claude-code, claude-desktop, codex, cursor, vscode, gemini
 프로필: ${PROFILE_NAMES.join(', ')}`;
 
-const {values:opts,positionals}=(()=>{try{return parseArgs({allowPositionals:true,options:{probe:{type:'boolean'},json:{type:'boolean'},all:{type:'boolean'},profile:{type:'string'},'read-only':{type:'boolean'},'dry-run':{type:'boolean'},root:{type:'string'},http:{type:'boolean'},url:{type:'string'},'allow-url':{type:'boolean'},help:{type:'boolean',short:'h'}}});}catch(error){console.error(`${error.message}\n\n${USAGE}`);process.exit(2);}})();
+const {values:opts,positionals}=(()=>{try{return parseArgs({allowPositionals:true,options:{probe:{type:'boolean'},json:{type:'boolean'},all:{type:'boolean'},profile:{type:'string'},'read-only':{type:'boolean'},'dry-run':{type:'boolean'},root:{type:'string'},http:{type:'boolean'},url:{type:'string'},'allow-url':{type:'boolean'},'mcp-env-file':{type:'string'},out:{type:'string'},force:{type:'boolean'},'hub-env':{type:'string'},help:{type:'boolean',short:'h'}}});}catch(error){console.error(`${error.message}\n\n${USAGE}`);process.exit(2);}})();
 const [command='status',...rest]=positionals;
 const die=(message,code=1)=>{console.error(message);process.exit(code);};
 if(opts.help)(console.log(USAGE),process.exit(0));
@@ -49,6 +55,24 @@ const targets=clientTargets({home:homedir(),root});
 const targetById=id=>targets.find(target=>target.id===id)||die(`알 수 없는 클라이언트: ${id}\n${USAGE}`,2);
 const launcher=join(root,LAUNCHER_PATH);
 const readText=file=>existsSync(file)?readFileSync(file,'utf8'):null;
+const hubEnvFile=join(root,'apps/hub/.env.local');
+// `~/…` survives quoting (--out='~/x'); anything else must already be absolute.
+const userPath=path=>path==='~'||path.startsWith('~/')?join(homedir(),path.slice(2)):path;
+const sameFile=(a,b)=>{try{return realpathSync(a)===realpathSync(b);}catch{return false;}};
+
+// A client's own env file: absolute, present, never the Hub env (that holds the shared token).
+// The flag is not `--env-file`: Node validates that runtime flag anywhere in argv before a script sees it.
+function clientEnvFile(value,chosen){
+  if(opts.all||chosen.length!==1)die('--mcp-env-file은 클라이언트 하나에만 씁니다 — 클라이언트마다 자기 토큰 파일을 둡니다.',2);
+  const file=userPath(value);
+  if(!isAbsolute(file))die(`--mcp-env-file은 절대 경로여야 합니다: ${value}`,2);
+  if(isHubEnvFile(file)||[hubEnvFile,join(REPO_ROOT,'apps/hub/.env.local')].some(hub=>sameFile(file,hub)))die('--mcp-env-file이 Hub env입니다. 런처가 기본으로 읽는 공용 토큰이라 클라이언트가 구분되지 않습니다 — client-token으로 만든 파일을 주세요.',2);
+  if(!existsSync(file)||!statSync(file).isFile())die(`env 파일이 없습니다: ${file} — 먼저 npm run mcp:connect -- client-token <actor> --out ${file}`,2);
+  if(statSync(file).mode&0o077)console.log(`! ${file}: 다른 사용자도 읽을 수 있습니다 — chmod 600 ${file}`);
+  let keys=[];try{keys=Object.keys(parseEnv(readFileSync(file,'utf8')));}catch{}
+  if(!keys.includes('COM_MOON_AGENT_API_TOKEN'))console.log(`! ${file}: COM_MOON_AGENT_API_TOKEN이 없어 Agent 도구가 동작하지 않습니다.`);
+  return file;
+}
 
 async function probe(entry,target){
   const {Client}=await import('@modelcontextprotocol/sdk/client/index.js');
@@ -100,6 +124,7 @@ async function install(ids){
   const node=stableNode();
   const chosen=opts.all?targets.filter(target=>existsSync(target.file)):ids.map(targetById);
   if(!chosen.length)die(`설치할 클라이언트를 지정하세요.\n${USAGE}`,2);
+  const envFile=opts['mcp-env-file']===undefined?undefined:clientEnvFile(opts['mcp-env-file'],chosen);
   if(node.includes('/.nvm/'))console.log(`! Homebrew Node를 못 찾아 ${node}을 씁니다. Node를 올린 뒤에는 install을 다시 실행하세요.`);
   for(const target of chosen){
     const before=readText(target.file)??'';
@@ -108,8 +133,10 @@ async function install(ids){
       const existing=before?readEntry(before,target):null;
       const flags=launcherFlags(existing,{profile:opts.profile,readOnly:opts['read-only']?true:undefined});
       after=target.format==='toml'
-        ?upsertTomlEntry(before,{command:node,args:[launcher,...flags]})
-        :upsertJsonEntry(before,target,mergeStdioEntry(existing,{command:node,launcher,flags,typed:target.typed}));
+        ?upsertTomlEntry(before,{command:node,args:[launcher,...flags],envFile})
+        :upsertJsonEntry(before,target,mergeStdioEntry(existing,{command:node,launcher,flags,typed:target.typed,envFile}));
+      // Values in the registration's env win over the file (env.js), including a token.
+      if(envFile&&existing?.env?.COM_MOON_AGENT_API_TOKEN!==undefined)console.log(`! ${target.id}: 등록 env의 COM_MOON_AGENT_API_TOKEN이 env 파일보다 우선합니다 — 그 값을 지워야 이 파일의 토큰(actor)이 쓰입니다.`);
     }catch(error){
       console.log(`✖ ${target.id}: 자동 수정하지 않음 (${error.message}). 아래를 직접 넣으세요:\n${stdioSnippet(target.id,{command:node,launcher})}\n`);
       process.exitCode=1;continue;
@@ -141,6 +168,23 @@ function print(id){
   console.log(`# ${target.label} → ${target.file}\n${stdioSnippet(target.id,{command:stableNode(),launcher,flags:launcherFlags(null,{profile:opts.profile,readOnly:opts['read-only']})})}`);
 }
 
+function clientToken([actorId]){
+  if(!actorId)die(USAGE,2);
+  if(!opts.out)die('--out <비공개 env 파일의 절대 경로>가 필요합니다. 예: --out ~/.moonlight/mcp/claude-code.env',2);
+  const from=opts['hub-env']?userPath(opts['hub-env']):hubEnvFile;
+  const result=createClientTokenFile({actorId,out:userPath(opts.out),hubEnvFile:from,force:opts.force,protectedRoots:[root,REPO_ROOT]});
+  // stdout carries only the non-secret digest pair; the token itself exists only in the file.
+  process.stdout.write(`${result.pair}\n`);
+  const copied=result.keys.filter(key=>key!=='COM_MOON_AGENT_API_TOKEN');
+  process.stderr.write(`✔ ${result.file} (0600) — 새 COM_MOON_AGENT_API_TOKEN(값은 출력하지 않음)${copied.length?` + ${from}에서 옮긴 ${copied.join(', ')}`:''}
+${result.warnings.map(warning=>`! ${warning}\n`).join('')}다음:
+  1. 위 actor:sha256 한 줄을 Hub env의 COM_MOON_AGENT_CLIENT_TOKEN_HASHES에 쉼표로 더한다 (Engine도 같은 값 — 로컬은 같은 .env.local).
+  2. Hub·Engine을 다시 띄운다.
+  3. npm run mcp:connect -- install <client> --mcp-env-file ${result.file}
+  4. 클라이언트를 재시작하고 get_hub_health의 permissions.actorId가 "${actorId}"인지 확인한다.
+`);
+}
+
 function token([action,name]){
   const file=clientsFile();
   if(action==='list'){
@@ -169,5 +213,6 @@ try{
   else if(command==='install')await install(rest);
   else if(command==='print')print(rest[0]||die(USAGE,2));
   else if(command==='token')token(rest);
+  else if(command==='client-token')clientToken(rest);
   else die(USAGE,2);
 }catch(error){die(`✖ ${error.message}`);}

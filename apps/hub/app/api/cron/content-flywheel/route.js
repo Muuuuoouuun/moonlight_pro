@@ -13,6 +13,10 @@ export const dynamic = "force-dynamic";
 
 // Content Flywheel (안2) — keeps the personal-brand publishing cadence alive without the operator.
 //
+// NOT SCHEDULED since 2026-09-26 (operator decision: AI does not create work on its own schedule —
+// docs/superpowers/specs/2026-09-24-agent-layer-direction.md §6.6). The route stays callable by hand;
+// scripts/guru-autonomy.test.mjs keeps it out of vercel.json.
+//
 // Chain: Hub Vercel Cron → Engine AI (content-draft, shared secret) → Hub work_orders.
 // When this week's cadence is BEHIND goal, it picks the top own-brand idea, asks the Council
 // to write a self-critiqued publishable draft, and drops it in the approval queue as 'proposed'.

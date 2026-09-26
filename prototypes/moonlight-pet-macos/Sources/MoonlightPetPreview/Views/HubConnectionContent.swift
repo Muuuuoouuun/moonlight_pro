@@ -27,6 +27,7 @@ struct HubConnectionContent: View {
                     fieldLabel("Hub 주소")
                     TextField("https://…", text: $address)
                         .textFieldStyle(.plain)
+                        .modifier(GlassGlyphShadow())
                         .font(.system(size: 13)).padding(12)
                         .focused($focusedField, equals: .address)
                         .modifier(GlassInputSurface(focused: focusedField == .address))
@@ -38,6 +39,7 @@ struct HubConnectionContent: View {
                     fieldLabel("운영자 아이디")
                     TextField("아이디", text: $username)
                         .textFieldStyle(.plain)
+                        .modifier(GlassGlyphShadow())
                         .font(.system(size: 13)).padding(12)
                         .focused($focusedField, equals: .username)
                         .modifier(GlassInputSurface(focused: focusedField == .username))
@@ -49,6 +51,7 @@ struct HubConnectionContent: View {
                     fieldLabel("비밀번호")
                     SecureField("비밀번호", text: $password)
                         .textFieldStyle(.plain)
+                        .modifier(GlassGlyphShadow())
                         .font(.system(size: 13)).padding(12)
                         .focused($focusedField, equals: .password)
                         .modifier(GlassInputSurface(focused: focusedField == .password))
@@ -114,10 +117,9 @@ struct HubConnectionContent: View {
         let submittedPassword = password
         password = ""
         Task {
-            await model.hub.connect(baseURL: submittedAddress,
-                                    username: submittedUsername, password: submittedPassword)
-            if model.hub.hasConnection {
-                model.hubBaseURL = submittedAddress.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if let origin = await model.hub.connect(baseURL: submittedAddress,
+                                                    username: submittedUsername, password: submittedPassword) {
+                model.hubBaseURL = origin
             }
         }
     }
@@ -155,7 +157,7 @@ struct HubRefreshButton: View {
 
     var body: some View {
         Button { Task { await model.hub.refresh() } } label: {
-            Image(systemName: "arrow.clockwise").frame(width: 28, height: 28)
+            Image(systemName: "arrow.clockwise").modifier(GlassGlyphShadow()).frame(width: 28, height: 28)
         }
         .buttonStyle(GlassQuietStyle())
         .disabled(model.hub.isRefreshing || model.hub.isConnecting)

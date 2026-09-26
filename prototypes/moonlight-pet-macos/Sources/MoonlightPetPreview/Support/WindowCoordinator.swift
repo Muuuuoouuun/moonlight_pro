@@ -176,7 +176,7 @@ final class WindowCoordinator: NSObject {
             moveVertically: { [weak self] offset in self?.moveBarVertically(by: offset) }
         ), cornerRadius: CompanionLayout.glassRadius,
            ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.dismissBar() })),
-           model: model)
+           model: model, protectsText: true)
         widgetWindow.contentView = GlassPanel.host(CompactWidgetView(
             model: model,
             collapse: { [weak self] in self?.collapseWidget() },
@@ -185,7 +185,7 @@ final class WindowCoordinator: NSObject {
             startFocus: { [weak self] in self?.startFocus() }
         ), cornerRadius: CompanionLayout.glassRadius,
            ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.collapseWidget() })),
-           model: model)
+           model: model, protectsText: true)
 
         model.onOpenMode = { [weak self] mode in self?.openMode(mode) }
         model.activity.onBanner = { [weak self] notice in self?.presentNotice(notice) ?? false }
@@ -254,22 +254,19 @@ final class WindowCoordinator: NSObject {
                     }
                     return nil
                 }
-                if event.charactersIgnoringModifiers == "s" {
+                if event.charactersIgnoringModifiers == "s", !self.model.isConnectionVisible {
                     let mode = widgetVisible ? self.model.compactMode : self.model.mode
-                    if mode == .memo && self.model.hub.isEnabled { self.model.saveMemoToHub() }
+                    if mode == .memo { self.model.saveMemoToHub() }
                     else { self.model.saveMemo() }
                     return nil
                 }
             }
-            if !self.model.isFocused,
+            if !self.model.isFocused, !self.model.isConnectionVisible,
                utilityVisible,
                event.type == .keyDown,
-               event.keyCode == 36,
-               event.modifierFlags.contains(.command) {
+               MemoShortcut.matches(event, mode: widgetVisible ? self.model.compactMode : self.model.mode) {
                 let mode = widgetVisible ? self.model.compactMode : self.model.mode
-                if mode == .memo { self.model.continueMemoInCouncil() }
-                else if mode == .council { self.model.sendCouncilMessage() }
-                else { self.model.openHub(mode) }
+                self.model.performPrimaryShortcut(for: mode)
                 return nil
             }
             guard event.keyCode == 53 else { return event }
@@ -378,7 +375,11 @@ final class WindowCoordinator: NSObject {
         guard !model.isFocused else { return }
         model.activity.dismissBanner()
         if isRequestedVisible(widgetWindow) {
+            model.compactMode = mode
+            model.compactOpenRevision += 1
+            resizeWidget()
             widgetWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
         hideNow(previewWindow)
@@ -684,5 +685,14 @@ final class WindowCoordinator: NSObject {
             return noErr
         }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &hotKeyHandler)
         if installation != noErr { interactionLog.error("hot key handler failed: \(installation)") }
+    }
+}
+
+/// Control-Return is a memo-only alias; plain Return still inserts a newline.
+enum MemoShortcut {
+    static func matches(_ event: NSEvent, mode: QuickMode) -> Bool {
+        guard event.keyCode == 36 || event.keyCode == 76 else { return false }
+        let flags = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        return flags == .command || (mode == .memo && flags == .control)
     }
 }

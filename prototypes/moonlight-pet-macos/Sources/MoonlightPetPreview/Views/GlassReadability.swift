@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Protect only the reading area. The surrounding clear glass and its optical
-/// edge remain transparent; glyphs are never blurred or shadowed.
+/// Legacy localized material for standalone preview surfaces. Companion panels
+/// suppress it through glassReadingProtected and use glyph-local shadows instead.
 struct GlassReadability: ViewModifier {
     var radius: CGFloat = 12
     var inset: CGFloat = 0
@@ -114,7 +114,7 @@ private struct ReadingMaterial: NSViewRepresentable {
     }
 }
 
-private final class ReadingMaterialView: NSVisualEffectView {
+final class ReadingMaterialView: NSVisualEffectView {
     private var maskRadius: CGFloat = -1
     private var maskFeather: CGFloat = -1
 
@@ -137,7 +137,7 @@ private final class ReadingMaterialView: NSVisualEffectView {
 
 /// The same nine-slice alpha mask softens the native material and its color wash.
 /// Only the backdrop is masked; text, focus rings and hit regions stay sharp.
-private enum ReadingMask {
+enum ReadingMask {
     private static let cache = NSCache<NSString, NSImage>()
 
     static func image(radius: CGFloat, feather: CGFloat) -> NSImage {

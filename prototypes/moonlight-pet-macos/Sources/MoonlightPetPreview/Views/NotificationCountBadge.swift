@@ -9,6 +9,8 @@ struct NotificationCountBadge: View {
             Text(count > 99 ? "99+" : String(count))
                 .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                 .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(PetMotion.hover, value: count)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 4)
                 .frame(minWidth: 18, minHeight: 18)

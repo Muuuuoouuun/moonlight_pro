@@ -15,7 +15,7 @@ struct CompanionPanelView: View {
     @Namespace private var selection
     @State private var showsAddress = false
     private var isToday: Bool { mode == .tasks || mode == .calendar }
-    private var title: String { isToday ? "오늘" : mode == .memo ? "빠른 메모" : mode.title }
+    private var title: String { mode == .tasks ? "오늘" : mode == .memo ? "빠른 메모" : mode.title }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,7 +24,6 @@ struct CompanionPanelView: View {
                 header
                 if isToday && !showsAddress { todayTabs }
             }
-            .modifier(GlassReadability(radius: 22, inset: 12, feather: 12))
             .padding(.bottom, isToday ? 18 : 12)
             if showsAddress {
                 HubConnectionContent(model: model) {
@@ -43,6 +42,11 @@ struct CompanionPanelView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(Palette.glassInk)
         .tint(Palette.glassInk)
+        .onChange(of: showsAddress) { _, visible in
+            let surface: CompanionSurface = persistent ? .widget : .quick
+            if visible { model.connectionSurface = surface }
+            else if model.connectionSurface == surface { model.connectionSurface = nil }
+        }
         .onChange(of: mode) { _, _ in showsAddress = false }
         .onChange(of: openRevision) { _, _ in showsAddress = false }
     }
@@ -55,8 +59,8 @@ struct CompanionPanelView: View {
                     .tracking(-0.6)
                 if isToday && !showsAddress {
                     TimelineView(.periodic(from: .now, by: 60)) { context in
-                        Text(CompanionDate.label(context.date))
-                            .font(.system(size: 11.5))
+                        Text(CompanionDate.label(mode == .calendar ? model.hub.selectedDate : context.date))
+                            .font(.system(size: 11.5, weight: .medium))
                             .foregroundStyle(Palette.glassInkMuted)
                     }
                 }
@@ -67,13 +71,13 @@ struct CompanionPanelView: View {
             }
             modeMenu
             if let pin, mode != .memo {
-                Button(action: pin) { Image(systemName: "pin").frame(width: 28, height: 32) }
+                Button(action: pin) { Image(systemName: "pin").modifier(GlassGlyphShadow()).frame(width: 28, height: 32) }
                     .buttonStyle(GlassQuietStyle())
                     .help("위젯으로 고정")
                     .accessibilityLabel("위젯으로 고정")
             }
             if mode != .memo || showsAddress {
-                Button(action: close) { Image(systemName: "xmark").frame(width: 28, height: 32) }
+                Button(action: close) { Image(systemName: "xmark").modifier(GlassGlyphShadow()).frame(width: 28, height: 32) }
                     .buttonStyle(GlassQuietStyle())
                     .accessibilityLabel(persistent ? "위젯 접기" : "빠른 기능 닫기")
             }
@@ -83,7 +87,22 @@ struct CompanionPanelView: View {
 
     private var modeMenu: some View {
         Menu {
+            if mode == .calendar {
+                Button("오늘 일정") { model.hub.selectedDate = Date() }
+                Button("이전 주") { moveCalendarWeek(by: -1) }
+                Button("다음 주") { moveCalendarWeek(by: 1) }
+                Divider()
+            }
             if mode == .memo {
+                Menu("저장한 메모 다시 열기") {
+                    ForEach(model.capturedMemos.indices, id: \.self) { index in
+                        Button(String(model.capturedMemos[index].prefix(32)).replacingOccurrences(of: "\n", with: " ")) {
+                            model.restoreCapturedMemo(at: index)
+                        }
+                    }
+                }
+                .disabled(model.capturedMemos.isEmpty || !model.memoDraft.isEmpty
+                          || model.isCapturingMemo || model.hub.hasPendingMemo)
                 Button("Council에서 이어서", action: model.continueMemoInCouncil)
                 Button("새 항목으로 Hub에 저장", action: model.saveMemoAsNewToHub)
                     .disabled(!model.hub.canSaveMemoAsNew
@@ -103,7 +122,7 @@ struct CompanionPanelView: View {
             }
             Button("펫으로 접기", action: close)
         } label: {
-            Image(systemName: "ellipsis").frame(width: 28, height: 32)
+            Image(systemName: "ellipsis").modifier(GlassGlyphShadow()).frame(width: 28, height: 32)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -111,6 +130,12 @@ struct CompanionPanelView: View {
         .foregroundStyle(Palette.glassInkMuted)
         .help("메모 · Office · Council · 집중")
         .accessibilityLabel("빠른 기능 더보기")
+    }
+
+    private func moveCalendarWeek(by offset: Int) {
+        if let date = Calendar.current.date(byAdding: .weekOfYear, value: offset, to: model.hub.selectedDate) {
+            withAnimation(PetMotion.panel) { model.hub.selectedDate = date }
+        }
     }
 
     private var todayTabs: some View {
@@ -126,7 +151,7 @@ struct CompanionPanelView: View {
             ForEach(destinations) { destination in
                 Button { select(destination) } label: {
                     Text(destination.title)
-                        .font(.system(size: 12, weight: mode == destination ? .semibold : .regular))
+                        .font(.system(size: 12, weight: mode == destination ? .semibold : .medium))
                         .foregroundStyle(mode == destination ? Palette.glassInk : Palette.glassInkMuted)
                         .frame(maxWidth: .infinity)
                         .frame(height: 34)

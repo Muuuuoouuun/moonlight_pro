@@ -1,8 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION, officeMessageLength, officeTaskAgendaBlock, officeTasksForScope, loadOfficeTasks, officeUnloadGuard } from './office-session.js';
+import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION, officeMessageLength, officeTaskAgendaBlock, officeTasksForScope, officeRailTasks, loadOfficeTasks, officeUnloadGuard } from './office-session.js';
 import { createOfficeMentorSessionStore } from './office-mentor-session.js';
+
+test('meeting-room rail lists open in-scope tasks, recorded blockers first, then the longest untouched', () => {
+  const now = Date.parse('2026-09-26T09:00:00+09:00');
+  const tasks = [
+    { id: 'fresh', title: '오늘 고친 일', status: 'active', workspace: 'brand', updatedAt: '2026-09-26T08:00:00+09:00' },
+    { id: 'old', title: '오래된 일', status: 'inbox', workspace: 'brand', updatedAt: '2026-09-20T09:00:00+09:00' },
+    { id: 'blocked', title: '막힌 일', status: 'blocked', workspace: 'brand', updatedAt: '2026-09-25T09:00:00+09:00' },
+    { id: 'undated', title: '날짜 없음', status: 'inbox', workspace: 'brand' },
+    { id: 'done', title: '끝난 일', status: 'done', workspace: 'brand', updatedAt: '2026-09-01T09:00:00+09:00' },
+    { id: 'company', title: '회사 일', status: 'inbox', workspace: 'classin', updatedAt: '2026-09-01T09:00:00+09:00' },
+  ];
+  const rail = officeRailTasks(tasks, 'personal', { now });
+  assert.deepEqual(rail.map(item => item.task.id), ['blocked', 'old', 'fresh', 'undated']);
+  assert.deepEqual(rail.map(item => item.staleDays), [1, 6, 0, null]);
+  assert.equal(officeRailTasks(tasks, 'all', { now, limit: 2 }).length, 2);
+  assert.deepEqual(officeRailTasks(null, 'all'), []);
+});
 
 const generated = (request, answer = '요청한 결과입니다.') => ({ status: 'generated', ...request, answer, nextAction: '추가 행동 없음' });
 

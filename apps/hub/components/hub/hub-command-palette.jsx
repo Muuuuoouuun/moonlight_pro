@@ -44,12 +44,10 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
     // 하루 리뷰 팝업 직행(2026-09-23 지속 루프 설계 §4.2) — 셸 Provider가 ?review=를 1회 소비한다.
     flat.push({ kind: 'Action', label: '하루 리뷰 쓰기', path: 'dashboard/work/daily-review?review=today', icon: 'brief', keywords: ['하루', '리뷰', '회고', '에너지', '마무리', 'daily review'] });
     flat.push({ kind: 'Action', label: 'Start 15m focus timer', path: 'dashboard/work/calendar?focus=15', icon: 'clock' });
-    // AI Council & Persona Actions
-    flat.push({ kind: 'Action', label: 'AI Council: 3자 토의 & 주간 회고', path: 'dashboard/system/agents?agent=council&mode=sparring', icon: 'sparkle', keywords: ['council', '카운슬', '자문', '토의', '스파링', 'ai', '회고'] });
-    flat.push({ kind: 'Action', label: 'AI Guru: 세일즈 딜 코칭', path: 'dashboard/system/agents?agent=guru&mode=pipeline-triage', icon: 'sparkle', keywords: ['guru', '구루', '영업', '세일즈', '딜 코칭', 'ai'] });
-    flat.push({ kind: 'Action', label: 'AI 00 오더: 지시서 조립', path: 'dashboard/system/agents?agent=order&mode=dispatch', icon: 'sparkle', keywords: ['오더', '지시서', 'dispatch', '우선순위', 'ai'] });
-    flat.push({ kind: 'Action', label: 'AI 02 콘텐츠: 앵글 기획', path: 'dashboard/system/agents?agent=content', icon: 'sparkle', keywords: ['콘텐츠', '앵글', '아이디어', '발행', 'ai'] });
-    flat.push({ kind: 'Action', label: 'AI 04 검수: 게이트 판정', path: 'dashboard/system/agents?agent=review', icon: 'sparkle', keywords: ['검수', '게이트', '판정', '가드레일', 'ai'] });
+    // AI Council & Guru Actions — both open the 코칭·대화 chat (dashboard/agents/chat), which runs the chosen
+    // mode on arrival. The retired 5-persona roster (order·content·review …) has no palette entry (2026-09-26).
+    flat.push({ kind: 'Action', label: 'AI Council: 3자 토의 & 주간 회고', path: 'dashboard/agents/chat?agent=council&mode=sparring', icon: 'sparkle', keywords: ['council', '카운슬', '자문', '토의', '스파링', 'ai', '회고'] });
+    flat.push({ kind: 'Action', label: 'AI Guru: 세일즈 딜 코칭', path: 'dashboard/agents/chat?agent=guru&mode=pipeline-triage', icon: 'sparkle', keywords: ['guru', '구루', '영업', '세일즈', '딜 코칭', 'ai'] });
     return flat;
   }, [scope]);
 

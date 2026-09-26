@@ -65,9 +65,13 @@ test('local skill SQL keeps operator ownership, evidence and completion command 
     assert.equal(record(requestId, { ...receipt, evidence: [{ value: 'untyped' }] }).error, 'invalid-skill-evidence');
     assert.equal(record(requestId, { ...receipt, commandId }).error, 'completion-command-receipt-not-found');
     sql(`insert into public.agent_command_receipts values('${workspace}','codex','${commandId}','complete_task','${taskId}');`);
+    // Per-client identities: a receipt may cite only a completion the same actor made.
+    assert.equal(record(requestId, { ...receipt, commandId }, 'claude-code').error, 'completion-command-receipt-not-found');
     const done = record(requestId, { ...receipt, commandId });
     assert.equal(done.request.state, 'completed');
+    assert.equal(done.request.receiptActorId, 'codex');
     assert.equal(done.request.receipt.commandReceiptVerified, true);
+    assert.equal(record(requestId, { ...receipt, commandId }, 'claude-code').error, 'terminal-receipt-exists');
     assert.equal(record(requestId, { ...receipt, commandId }).replayed, true);
     assert.equal(record(requestId, { ...receipt, summary: '달라진 결과', commandId }).status, 'conflict');
     assert.equal(sql(`select status from public.tasks where id='${taskId}'`), 'todo');

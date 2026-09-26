@@ -210,6 +210,7 @@ struct CouncilCompanionContent: View {
                     .scrollContentBackground(.hidden)
                     .focused($focused)
                     .accessibilityLabel("담당 Office에게 질문")
+                    .modifier(GlassGlyphShadow())
             }
             .font(.system(size: 13)).lineSpacing(4)
             .padding(10).frame(height: 82)

@@ -1,3 +1,4 @@
+import { parseAgentClientTokenHashes } from '@com-moon/agent-contracts';
 import { AGENT_COMMAND_BODY_BYTES, AGENT_SCOPES, validateAgentContext, type AgentCommandContext } from './agent-command.ts';
 import { validateSharedWebhookRequest } from './shared-webhook.ts';
 
@@ -8,11 +9,15 @@ export function authorizeAgentEngineRequest(req: Request): Authorized {
   // Agent commands never inherit the local open-webhook exception.
   if (!process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() || !validateSharedWebhookRequest(req).ok) return denied(401, 'invalid-shared-secret');
   const workspaceId = process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim();
-  const actorId = process.env.COM_MOON_AGENT_ACTOR_ID?.trim() || 'codex';
+  const defaultActorId = process.env.COM_MOON_AGENT_ACTOR_ID?.trim() || 'codex';
   const configuredScopes = [...new Set((process.env.COM_MOON_AGENT_SCOPES ?? 'read').split(',').map(value => value.trim()).filter(Boolean))];
-  const context = { workspaceId, actorId, scopes: configuredScopes };
-  if (validateAgentContext(context)) return denied(503, 'agent-engine-not-configured');
-  if (req.headers.get('x-com-moon-agent-workspace')?.toLowerCase() !== workspaceId!.toLowerCase() || req.headers.get('x-com-moon-agent-actor') !== actorId) return denied(403, 'agent-context-mismatch');
+  // Hub authenticates each client token; Engine needs only the configured actor names. Digests
+  // here are never credentials — the shared secret above is what authenticates the Hub.
+  const clients = parseAgentClientTokenHashes(process.env.COM_MOON_AGENT_CLIENT_TOKEN_HASHES);
+  if (!clients.ok || validateAgentContext({ workspaceId, actorId: defaultActorId, scopes: configuredScopes })) return denied(503, 'agent-engine-not-configured');
+  const actorId = req.headers.get('x-com-moon-agent-actor') ?? '';
+  const actors = new Set([defaultActorId, ...clients.entries.map(entry => entry.actorId)]);
+  if (req.headers.get('x-com-moon-agent-workspace')?.toLowerCase() !== workspaceId!.toLowerCase() || !actors.has(actorId)) return denied(403, 'agent-context-mismatch');
   const scopes = [...new Set((req.headers.get('x-com-moon-agent-scopes') || '').split(',').map(value => value.trim()).filter(Boolean))].sort();
   if (scopes.some(scope => !AGENT_SCOPES.includes(scope) || !configuredScopes.includes(scope))) return denied(403, 'insufficient-scope');
   return { ok: true, context: { workspaceId: workspaceId!.toLowerCase(), actorId, scopes } };

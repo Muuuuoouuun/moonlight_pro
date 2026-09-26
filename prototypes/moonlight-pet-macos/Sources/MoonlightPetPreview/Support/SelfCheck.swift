@@ -1,9 +1,51 @@
 import AppKit
 
 enum SelfCheck {
+    @MainActor private static func checkHubMemoCapture() -> Bool {
+        var result: Bool?
+        Task { @MainActor in
+            let suite = "pet-capture-check-" + UUID().uuidString
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let service = CaptureCheckService()
+            let hub = HubStore(defaults: defaults, makeAPI: { _ in service })
+            let model = AppModel(defaults: defaults, hub: hub)
+            await hub.connect(baseURL: "http://127.0.0.1:3000")
+            model.memoDraft = "저장 대기 중"
+            let saving = Task { await model.captureMemo() }
+            while !(await service.started) { await Task.yield() }
+            model.memoDraft = "저장 대기 중 수정"
+            model.memoDraft = "저장 대기 중" // even an edit-and-undo must preserve this draft
+            await service.release(fail: false)
+            await saving.value
+            guard model.memoDraft == "저장 대기 중", model.capturedMemos.count == 1 else {
+                result = false; return
+            }
+            let failing = Task { await model.captureMemo() }
+            while !(await service.started) { await Task.yield() }
+            await service.release(fail: true)
+            await failing.value
+            guard model.memoDraft == "저장 대기 중", model.capturedMemos.count == 1 else {
+                result = false; return
+            }
+            let retrying = Task { await model.captureMemo() }
+            while !(await service.started) { await Task.yield() }
+            await service.release(fail: false)
+            await retrying.value
+            result = model.memoDraft.isEmpty && model.capturedMemos.count == 2
+                && AppModel(defaults: defaults).memoDraft.isEmpty
+        }
+        let deadline = Date().addingTimeInterval(5)
+        while result == nil && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        if result != true { fputs("Memo capture: pending edits/failure/retry check failed\n", stderr) }
+        return result == true
+    }
+
     @MainActor
     static func run() -> Bool {
-        guard GlassOpticsCheck.run(), checkPanelInteraction(), checkReadingTone() else { return false }
+        guard checkHubMemoCapture(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkReadingTone() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,
@@ -63,6 +105,44 @@ enum SelfCheck {
             fputs("Draft recovery check failed\n", stderr)
             return false
         }
+        var shortcutNavigations = 0
+        recovered.onOpenMode = { _ in shortcutNavigations += 1 }
+        recovered.chat.draft = "기존 Council 입력"
+        for surface in [CompanionSurface.quick, .widget] {
+            recovered.activeCompanion = surface
+            recovered.mode = .memo; recovered.compactMode = .memo
+            let captured = "메모 저장 검사 \(surface)"
+            recovered.memoDraft = captured
+            recovered.performPrimaryShortcut(for: .memo)
+            let deadline = Date().addingTimeInterval(3)
+            while !recovered.memoDraft.isEmpty && Date() < deadline {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+            }
+            guard AppModel(defaults: defaults).memoDraft.isEmpty,
+                  recovered.capturedMemos.first == captured else {
+                fputs("Capture must persist its archive and blank draft across restart\n", stderr)
+                return false
+            }
+            guard shortcutNavigations == 0, recovered.memoDraft.isEmpty,
+                  recovered.chat.draft == "기존 Council 입력",
+                  recovered.mode == .memo, recovered.compactMode == .memo else {
+                fputs("Memo Command-Return must save in place without Council navigation\n", stderr)
+                return false
+            }
+        }
+        recovered.restoreCapturedMemo(at: 0)
+        guard recovered.memoDraft == recovered.capturedMemos.first else { return false }
+        recovered.memoDraft = "새 초안 보호"
+        recovered.restoreCapturedMemo(at: 1)
+        guard recovered.memoDraft == "새 초안 보호" else { return false }
+        for flags: NSEvent.ModifierFlags in [.command, .control, [], [.command, .shift], [.command, .control]] {
+            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+                timestamp: 0, windowNumber: 0, context: nil, characters: "\r", charactersIgnoringModifiers: "\r",
+                isARepeat: false, keyCode: 36)!
+            guard MemoShortcut.matches(event, mode: .memo) == (flags == .command || flags == .control),
+                  MemoShortcut.matches(event, mode: .council) == (flags == .command) else { return false }
+        }
+        recovered.activeCompanion = nil
         recovered.focusMinutes = 1
         recovered.startFocus()
         recovered.focusMinutes = 50
@@ -72,7 +152,28 @@ enum SelfCheck {
             return false
         }
         recovered.stopFocus()
-        print("PASS: press/drag tint reset, shared reading tint callback, continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save and draft recovery")
+        recovered.activity.addAgentReply(id: "visibility-check", agentID: recovered.chat.agent.rawValue,
+            scope: recovered.chat.scope.rawValue, title: "표시 상태 검증", detail: "")
+        recovered.markCouncilRepliesRead()
+        guard recovered.activity.unreadCount == 1 else {
+            fputs("Hidden Council views must not consume unread replies\n", stderr)
+            return false
+        }
+        recovered.mode = .council
+        recovered.activeCompanion = .quick
+        guard recovered.activity.unreadCount == 0 else {
+            fputs("Reopening Council must acknowledge the visible conversation\n", stderr)
+            return false
+        }
+        recovered.connectionSurface = .quick
+        recovered.activity.addAgentReply(id: "settings-check", agentID: recovered.chat.agent.rawValue,
+            scope: recovered.chat.scope.rawValue, title: "설정 표시 검증", detail: "")
+        recovered.markCouncilRepliesRead()
+        guard recovered.activity.unreadCount == 1, recovered.isConnectionVisible else { return false }
+        recovered.connectionSurface = nil
+        guard recovered.activity.unreadCount == 0 else { return false }
+        recovered.activeCompanion = nil
+        print("PASS: press/drag tint reset, shared reading tint callback, continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save, draft recovery, memo shortcut stays in place and visible-only Council acknowledgments")
         return true
     }
 
@@ -190,5 +291,25 @@ enum SelfCheck {
             return false
         }
         return true
+    }
+}
+
+/// In-memory protocol probe used only by --self-check; it never contacts a Hub.
+private actor CaptureCheckService: HubServing {
+    var started = false
+    private var continuation: CheckedContinuation<Bool, Never>?
+    func release(fail: Bool) { started = false; continuation?.resume(returning: fail); continuation = nil }
+    func login(username: String, password: String) async throws {}
+    func tasks() async throws -> HubTaskPage { HubTaskPage(tasks: [], partial: false) }
+    func calendar(from: Date, to: Date) async throws -> HubCalendarPage { HubCalendarPage(events: [], partial: false) }
+    func createTask(_ command: HubTaskCommand) async throws -> HubTask { throw HubDataError.invalidResponse }
+    func setTask(_ task: HubTask, done: Bool) async throws -> HubTask { throw HubDataError.invalidResponse }
+    func memo(id: UUID) async throws -> HubMemoEntry { throw HubDataError.invalidResponse }
+    func saveMemo(_ command: HubMemoCommand) async throws -> HubMemoEntry {
+        let fails = await withCheckedContinuation { continuation = $0; started = true }
+        if fails { throw HubTransportError.timeout }
+        return HubMemoEntry(id: UUID(uuidString: command.entryId)!, body: command.body, title: command.title,
+            occurredAt: command.occurredAt, revision: command.expectedRevision + 1,
+            noteMeta: command.noteMeta, contexts: command.contexts)
     }
 }
