@@ -94,6 +94,15 @@ struct CompanionPanelView: View {
                 Divider()
             }
             if mode == .memo {
+                Menu("저장한 메모 다시 열기") {
+                    ForEach(model.capturedMemos.indices, id: \.self) { index in
+                        Button(String(model.capturedMemos[index].prefix(32)).replacingOccurrences(of: "\n", with: " ")) {
+                            model.restoreCapturedMemo(at: index)
+                        }
+                    }
+                }
+                .disabled(model.capturedMemos.isEmpty || !model.memoDraft.isEmpty
+                          || model.isCapturingMemo || model.hub.hasPendingMemo)
                 Button("Council에서 이어서", action: model.continueMemoInCouncil)
                 Button("새 항목으로 Hub에 저장", action: model.saveMemoAsNewToHub)
                     .disabled(!model.hub.canSaveMemoAsNew

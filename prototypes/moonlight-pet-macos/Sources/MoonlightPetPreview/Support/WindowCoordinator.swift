@@ -256,7 +256,7 @@ final class WindowCoordinator: NSObject {
                 }
                 if event.charactersIgnoringModifiers == "s", !self.model.isConnectionVisible {
                     let mode = widgetVisible ? self.model.compactMode : self.model.mode
-                    if mode == .memo && self.model.hub.isEnabled { self.model.saveMemoToHub() }
+                    if mode == .memo { self.model.saveMemoToHub() }
                     else { self.model.saveMemo() }
                     return nil
                 }
@@ -264,8 +264,7 @@ final class WindowCoordinator: NSObject {
             if !self.model.isFocused, !self.model.isConnectionVisible,
                utilityVisible,
                event.type == .keyDown,
-               event.keyCode == 36,
-               event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command {
+               MemoShortcut.matches(event, mode: widgetVisible ? self.model.compactMode : self.model.mode) {
                 let mode = widgetVisible ? self.model.compactMode : self.model.mode
                 self.model.performPrimaryShortcut(for: mode)
                 return nil
@@ -686,5 +685,14 @@ final class WindowCoordinator: NSObject {
             return noErr
         }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &hotKeyHandler)
         if installation != noErr { interactionLog.error("hot key handler failed: \(installation)") }
+    }
+}
+
+/// Control-Return is a memo-only alias; plain Return still inserts a newline.
+enum MemoShortcut {
+    static func matches(_ event: NSEvent, mode: QuickMode) -> Bool {
+        guard event.keyCode == 36 || event.keyCode == 76 else { return false }
+        let flags = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        return flags == .command || (mode == .memo && flags == .control)
     }
 }

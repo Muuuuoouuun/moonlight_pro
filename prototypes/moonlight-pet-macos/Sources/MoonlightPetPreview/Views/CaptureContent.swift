@@ -201,10 +201,8 @@ struct MemoCaptureContent: View {
             .lineSpacing(6)
             .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Palette.glassControlFill.opacity(focused ? 0.075 : 0.045),
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay { GlassRim(radius: 16, strength: focused ? 0.5 : 0.25) }
-            .animation(PetMotion.hover, value: focused)
+            // The panel owns backdrop diffusion. A second filled editor rectangle
+            // makes the middle read as a dark card instead of one continuous glass sheet.
 
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -216,6 +214,8 @@ struct MemoCaptureContent: View {
                         }
                         .buttonStyle(GlassQuietStyle()).font(.system(size: 11))
                         .help(message + " · Hub 연결 확인")
+                    } else if model.memoDraft.isEmpty, let receipt = model.memoCaptureReceipt {
+                        Text(receipt).font(.system(size: 11)).lineLimit(2)
                     } else if let receipt = model.hub.memoReceipt {
                         Text(receipt).font(.system(size: 11)).lineLimit(2)
                     }
@@ -223,14 +223,14 @@ struct MemoCaptureContent: View {
                 .foregroundStyle(Palette.glassInkMuted)
                 Spacer(minLength: 0)
                 Button(action: model.saveMemoToHub) {
-                    Label(model.hub.isSavingMemo ? "저장 중…" : model.hub.hasPendingMemo ? "저장 확인" : "Hub에 저장",
+                    Label(model.hub.isSavingMemo ? "저장 중…" : model.hub.hasPendingMemo ? "저장 확인" : model.hub.isEnabled ? "Hub에 저장" : "Mac에 저장",
                           systemImage: "arrow.up.doc")
                 }
                 .buttonStyle(GlassActionStyle())
-                .disabled(!model.hub.canSaveMemo || model.hub.isSavingMemo
+                .disabled((model.hub.isEnabled && !model.hub.canSaveMemo) || model.isCapturingMemo || model.hub.isSavingMemo
                           || (!model.hub.hasPendingMemo
                               && model.memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-                .help("현재 메모를 Hub에 저장합니다. 이 Mac의 초안은 그대로 유지됩니다.")
+                .help("저장 확인 후 새 메모로 시작합니다 · ⌃Enter / ⌘Enter. 저장 중 바꾼 내용은 유지됩니다.")
                 Button(action: close) {
                     Image(systemName: "chevron.down").modifier(GlassGlyphShadow())
                         .font(.system(size: 15, weight: .medium))

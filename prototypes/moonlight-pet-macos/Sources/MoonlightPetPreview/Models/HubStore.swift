@@ -219,10 +219,11 @@ final class HubStore: ObservableObject {
 
     private var memoConflictMessage: String { "Hub에서 메모가 바뀌었어요. 로컬 입력을 새 항목으로 저장하려면 더보기를 이용해 주세요." }
 
-    func saveMemo(body: String) async {
-        guard canSaveMemo, let service = api else { return }
-        guard pending.memoConflict != true else { memoReceipt = memoConflictMessage; return }
-        guard pending.memo != nil || (!body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && body.utf16.count <= 20_000) else { errorMessage = HubDataError.invalidMemo.localizedDescription; return }
+    @discardableResult
+    func saveMemo(body: String) async -> HubMemoEntry? {
+        guard canSaveMemo, let service = api else { return nil }
+        guard pending.memoConflict != true else { memoReceipt = memoConflictMessage; return nil }
+        guard pending.memo != nil || (!body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && body.utf16.count <= 20_000) else { errorMessage = HubDataError.invalidMemo.localizedDescription; return nil }
         let ticket = generation
         isSavingMemo = true; errorMessage = nil; memoReceipt = "Hub에 저장 중…"
         defer { if ticket == generation { isSavingMemo = false } }
@@ -234,37 +235,48 @@ final class HubStore: ObservableObject {
                 var prior = pending.savedMemo
                 if let saved = prior {
                     let remote = try await service.memo(id: saved.id)
-                    guard ticket == generation else { return }
+                    guard ticket == generation else { return nil }
                     guard remote.revision == saved.revision, remote.body == saved.body else { throw HubDataError.conflict }
                     prior = remote // preserve title, tags and contexts from full detail
-                    if remote.body == body { memoReceipt = "Hub에 저장됨"; return }
+                    if remote.body == body { memoReceipt = "Hub에 저장됨"; return remote }
                 }
                 command = HubMemoCommand(body: body, previous: prior)
                 pending.memo = command; persistPending()
             }
             let saved = try await service.saveMemo(command)
-            guard ticket == generation else { return }
+            guard ticket == generation else { return nil }
             pending.savedMemo = saved; pending.memo = nil; persistPending()
             memoReceipt = saved.body == body ? "Hub에 저장됨" : "이전 저장을 확인했어요. 변경한 내용은 다시 저장해 주세요."
+            return saved
         } catch {
-            guard ticket == generation else { return }
+            guard ticket == generation else { return nil }
             if (error as? HubTransportError) == .conflict || (error as? HubDataError) == .conflict {
                 // Never replay known-conflicting commands or implicitly create duplicates.
                 pending.memo = nil; pending.memoConflict = true; persistPending()
                 memoReceipt = memoConflictMessage
             } else { memoReceipt = "Mac에 보관됨 · Hub 저장 확인 필요" }
             record(error)
+            return nil
         }
     }
 
-    func saveMemoAsNew(body: String) async {
-        guard canSaveMemoAsNew else { return }
+    @discardableResult
+    func saveMemoAsNew(body: String) async -> HubMemoEntry? {
+        guard canSaveMemoAsNew else { return nil }
         guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, body.utf16.count <= 20_000 else {
             errorMessage = HubDataError.invalidMemo.localizedDescription
-            return
+            return nil
         }
         pending.savedMemo = nil; pending.memoConflict = nil; persistPending()
-        await saveMemo(body: body)
+        return await saveMemo(body: body)
+    }
+
+    /// A confirmed quick capture ends this document. The next input gets a new ID.
+    func finishMemoCapture(_ saved: HubMemoEntry) {
+        guard pending.memo == nil, pending.savedMemo?.id == saved.id,
+              pending.savedMemo?.revision == saved.revision else { return }
+        pending.savedMemo = nil
+        persistPending()
     }
 
     private func upsert(_ task: HubTask) {

@@ -94,8 +94,12 @@ final class AppModel: ObservableObject {
     }
     @Published var savedMemo = ""
     @Published var memoDraft = "" {
-        didSet { if memoDraft != oldValue { saveMemo() } }
+        didSet { if memoDraft != oldValue { memoEditRevision += 1; saveMemo() } }
     }
+    @Published private(set) var capturedMemos: [String] = []
+    private var memoEditRevision = 0
+    @Published private(set) var isCapturingMemo = false
+    @Published private(set) var memoCaptureReceipt: String?
     @Published var focusMinutes = 25
     @Published var remainingSeconds = 0
     @Published private(set) var focusTotalSeconds = 0
@@ -123,9 +127,9 @@ final class AppModel: ObservableObject {
     private var focusClock: FocusClock?
     private var timer: Timer?
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, hub: HubStore? = nil) {
         self.defaults = defaults
-        hub = HubStore(defaults: defaults)
+        self.hub = hub ?? HubStore(defaults: defaults)
         activity = PetActivityStore(defaults: defaults)
         council = CouncilDraftStore(defaults: defaults)
         if let data = defaults.data(forKey: "petPreview.tasks"),
@@ -134,6 +138,7 @@ final class AppModel: ObservableObject {
         }
         savedMemo = defaults.string(forKey: "petPreview.memo") ?? ""
         memoDraft = savedMemo
+        capturedMemos = defaults.stringArray(forKey: "petPreview.capturedMemos") ?? []
         taskDraft = defaults.string(forKey: "petPreview.taskDraft") ?? ""
         hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? "http://127.0.0.1:3000"
         selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
@@ -182,16 +187,44 @@ final class AppModel: ObservableObject {
         Task { await hub.connect(baseURL: hubBaseURL) }
     }
 
-    func saveMemoToHub() {
-        saveMemo()
+    func saveMemoToHub() { Task { await captureMemo() } }
+
+    func saveMemoAsNewToHub() { Task { await captureMemo(asNew: true) } }
+
+    /// Clear only the exact draft revision acknowledged by the storage layer.
+    func captureMemo(asNew: Bool = false) async {
+        guard !isCapturingMemo, hub.hasPendingMemo
+            || !memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        isCapturingMemo = true
+        defer { isCapturingMemo = false }
         let body = memoDraft
-        Task { await hub.saveMemo(body: body) }
+        let revision = memoEditRevision
+        saveMemo()
+        if hub.isEnabled {
+            let saved = asNew ? await hub.saveMemoAsNew(body: body) : await hub.saveMemo(body: body)
+            guard let saved else { return }
+            rememberCapture(saved.body)
+            hub.finishMemoCapture(saved)
+            guard saved.body == body, memoEditRevision == revision else { return }
+            memoCaptureReceipt = "Hub에 저장했어요 · 새 메모를 적어보세요"
+        } else {
+            guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            rememberCapture(body)
+            memoCaptureReceipt = "Mac에 저장했어요 · 더보기에서 다시 열 수 있어요"
+        }
+        memoDraft = ""
     }
 
-    func saveMemoAsNewToHub() {
-        saveMemo()
-        let body = memoDraft
-        Task { await hub.saveMemoAsNew(body: body) }
+    private func rememberCapture(_ body: String) {
+        capturedMemos.insert(body, at: 0)
+        defaults.set(capturedMemos, forKey: "petPreview.capturedMemos")
+    }
+
+    func restoreCapturedMemo(at index: Int) {
+        guard memoDraft.isEmpty, !isCapturingMemo, !hub.hasPendingMemo,
+              capturedMemos.indices.contains(index) else { return }
+        memoDraft = capturedMemos[index]
+        memoCaptureReceipt = nil
     }
 
     private func updateHubRefresh() {
@@ -261,7 +294,7 @@ final class AppModel: ObservableObject {
         guard !isFocused, !isConnectionVisible else { return }
         switch mode {
         case .memo:
-            if hub.isEnabled { saveMemoToHub() } else { saveMemo() }
+            saveMemoToHub()
         case .council: sendCouncilMessage()
         default: openHub(mode)
         }

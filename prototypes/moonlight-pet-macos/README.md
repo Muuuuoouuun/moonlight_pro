@@ -24,7 +24,7 @@ cd prototypes/moonlight-pet-macos
 | ⌃⌥M | 어느 앱에서든 빠른 기능 열기 |
 | ⌘1 / ⌘2 / ⌘3 | 할 일 / 메모 / 일정 |
 | ⌘4 / ⌘5 / ⌘6 / ⌘7 | Office / Council / 집중 설정 / 알림 |
-| ⌘Return | 메모 화면을 유지하며 저장(연결 시 Hub, 로컬 모드에서는 Mac). Council 대화에서는 질문 보내기. 그 밖의 기능은 Hub에서 열기 |
+| ⌘Return / 메모에서 ⌃Return | 메모를 저장하고 입력창을 비움(연결 시 Hub 확인 후, 로컬 모드에서는 Mac 보관 후). Council 대화에서는 질문 보내기. 그 밖의 기능은 Hub에서 열기 |
 | ⌘S | 메모 화면에서 Hub에 저장. 로컬 모드에서는 Mac 저장 |
 | Esc | 패널 접기. 집중 중에는 1.3초 길게 눌러 중지 확인 |
 
@@ -47,7 +47,7 @@ macOS 26에서는 창 경계의 `NSGlassEffectView(.clear)`가 배경 재질을 
 기본 Hub 주소는 `http://127.0.0.1:3000`이다. 실행 시 읽기 연결하고, 패널을 열 때와 열린 동안 60초 간격으로 새로고침한다. 더보기 → **Hub 연결 설정**에서 HTTPS 주소와 운영자 로그인을 설정할 수 있다. 개발 서버의 loopback 인증 동작은 서버가 판정한다. 비밀번호는 저장하지 않으며 세션 쿠키도 앱 전용 메모리에만 보관한다. 운영 서버는 앱 재시작 후 다시 로그인이 필요하다.
 
 - **할 일:** Hub 목록·빠른 추가·완료/취소. 서버 저장 확인 후 반영한다. 저장 실패 시 입력과 동일 요청 ID를 보존한다. 우클릭의 Hub 열기에서 상세 편집을 이어간다.
-- **메모:** 입력은 Mac에 즉시 자동 저장된다. 아래 **Hub에 저장**을 누르면 현재 메모함(journal)에 저장·재조회한다. 후속 저장은 같은 메모의 revision을 확인하며 제목·태그·연결 문맥을 보존한다. **더보기 → 새 항목으로 Hub에 저장**은 현재 내용을 독립된 새 메모로 저장한다. 저장해도 초안은 지우지 않는다.
+- **메모:** 입력은 Mac에 즉시 자동 저장된다. 아래 **Hub에 저장**을 누르면 현재 메모함(journal)에 저장·재조회한다. 저장 확인 후 입력창을 비우고 다음 입력은 독립된 새 메모로 저장한다. 실패·이전 저장 재확인·저장 중 수정 시에는 현재 입력을 보존한다. **더보기 → 저장한 메모 다시 열기**에서 Mac에 보관된 저장본을 빈 입력창에 불러올 수 있다. **새 항목으로 Hub에 저장**은 충돌 시 기존 기록을 덮어쓰지 않고 복구하는 동작이다.
 - **일정:** 실제 주간 일정을 가져오고 날짜를 눌러 그날의 시간·제목·장소를 확인한다. 종일 일정은 현지 날짜와 종료일 제외 규칙을 따른다. 일정 편집은 Hub에서 한다.
 - **실패·부분 데이터:** 연결 오류, 로그인 필요, 일부 조회를 빈 목록이나 저장 완료로 표시하지 않는다. 저장 결과가 불확실하면 빈 입력창에서도 **저장 확인**으로 동일 요청을 재확인한다.
 - **기존 Mac 기록:** 자동 업로드하지 않으며 기존 UserDefaults를 보존한다. 연결 설정에서 **이 Mac에만 저장**을 누르면 이전 로컬 할 일을 다시 볼 수 있다. 두 목록을 혼합하지 않는다.
@@ -102,3 +102,5 @@ The default and typing state use native clear glass with zero character-wash opa
 Character hues remain separated in lightness and saturation, with a lighter press-only wash (Sylveon 42%, others 52%). Expanded companion panels use clear native glass and glyph-local protection, suppressing nested reading materials. The developer optical lab uses the same foreground rendering. The custom prism is an edge-reflection treatment, not a public control over macOS desktop refraction. See [reading and prism design](../../docs/superpowers/specs/2026-09-25-pet-prism-readability-design.md).
 
 브라우저 안건 전달과 문의·일정 알림의 선행 범위는 [설계](../../docs/superpowers/specs/2026-09-25-pet-notifications-council-design.md)와 [검증 기록](../../docs/superpowers/plans/2026-09-25-pet-notifications-council.md)에 정리했다.
+
+메모 입력면에는 별도 사각 채움·테두리를 얹지 않는다. 패널 전체의 네이티브 배경 확산·중앙 베일과 글자 그림자가 읽기를 보정한다.

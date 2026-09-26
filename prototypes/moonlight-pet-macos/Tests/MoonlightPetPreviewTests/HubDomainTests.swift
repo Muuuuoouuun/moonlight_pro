@@ -92,6 +92,7 @@ struct HubDomainTests {
             try modelChecks()
             try await recoveryChecks()
             try await storeChecks()
+            try await captureChecks()
             let apiChecks = try await runHubAPIContractTests()
             if CommandLine.arguments.contains("--live-read") { try await liveRead() }
             print("PASS: Hub model/state checks, API contract checks (\(apiChecks))")
@@ -99,6 +100,28 @@ struct HubDomainTests {
             fputs("FAIL: \(error)\n", stderr)
             exit(1)
         }
+    }
+
+    @MainActor static func captureChecks() async throws {
+        let suite = "pet-capture-contract-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let api = ControlledHub()
+        let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+        await store.connect(baseURL: "http://127.0.0.1:3000")
+        await api.configure(memoError: true)
+        let failed = await store.saveMemo(body: "이전 메모")
+        try check(failed == nil && store.hasPendingMemo, "Unconfirmed save must not acknowledge clearing")
+        let receipt = await store.saveMemo(body: "새로 작성한 메모")
+        try check(receipt?.body == "이전 메모", "Retry must identify the older saved body, not acknowledge newer input")
+        store.finishMemoCapture(receipt!)
+        let next = await store.saveMemo(body: "새로 작성한 메모")
+        try check(next != nil && next?.id != receipt?.id, "The next capture must not overwrite the completed memo")
+        store.finishMemoCapture(next!)
+        let reopened = HubStore(defaults: defaults, makeAPI: { _ in api })
+        await reopened.connect(baseURL: "http://127.0.0.1:3000")
+        let third = await reopened.saveMemo(body: "다음 실행에서 작성")
+        try check(third?.id != next?.id, "Completed capture binding must stay detached across restart")
     }
 
     static func modelChecks() throws {
