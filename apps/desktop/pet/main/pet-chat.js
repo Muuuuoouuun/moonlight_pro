@@ -53,6 +53,15 @@ function createChat(options = {}) {
   const activity = options.activity || null;
   const onReply = typeof options.onReply === 'function' ? options.onReply : null;
   const nameOf = typeof options.characterName === 'function' ? options.characterName : (id) => id;
+  // 대화 화면이 지금 보이는가(패널 열림 + office 모드). 보고 있던 대화라도 보이지 않으면 답변을 알림으로 남긴다.
+  const isVisible = () => {
+    if (typeof options.isVisible !== 'function') return true;
+    try {
+      return options.isVisible() === true;
+    } catch {
+      return false;
+    }
+  };
   const sessions = new Map();
   let api = null;
   let origin = null;
@@ -150,7 +159,7 @@ function createChat(options = {}) {
           // 이벤트 전달 실패는 대화 기록을 되돌리지 않는다.
         }
       }
-      if (activity && viewing !== key) {
+      if (activity && !(viewing === key && isVisible())) {
         activity.addAgentReply({
           id: exchange.id, ownerId, scope, title: `${nameOf(ownerId)}의 답변 · ${SCOPE_TITLE[scope]}`,
           body: prefixUtf16(reply.answer, 120), at: exchange.repliedAt,

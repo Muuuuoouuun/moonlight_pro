@@ -2,7 +2,12 @@
 // Moonlight Pet — 셸이 쓰는 `hub` 객체. 전송(pet-hub-client)·엔드포인트(pet-hub-api)·보류 명령(pet-pending)·
 // 알림(pet-activity)·대화(pet-chat)·Council 전달을 한데 묶는다. Electron 을 require 하지 않는다.
 //
-// 셸 연결 예(main 프로세스):
+// 셸 연결 — 두 가지 모양을 모두 받는다.
+//   (a) 셸 hubContext 그대로(pet-main 의 loadDefaultHub → createPetHub(ctx) → hub.attach(ctx)):
+//       ctx = { emit, store, getHubUrl, session, openMainUrl, getState, ... }. origin·쿠키·이벤트·대화 표시 여부를
+//       ctx 에서 읽고, attach 가 60초 폴링을 시작하며, hub.invoke(channel, payload) 가 채널을 메서드로 보낸다.
+//       hub.hubUrlChanged(url) 은 허브 주소 변경.
+//   (b) 직접 옵션:
 //   const { createPetHub } = require('./pet/main/pet-hub');
 //   const { electronCookieBridge } = require('./pet/main/pet-hub-client');
 //   const bridge = electronCookieBridge(session.defaultSession);
@@ -17,7 +22,7 @@
 
 const { randomUUID } = require('node:crypto');
 const { LIMITS, CHARACTERS } = require('../shared/contract');
-const { canonicalOrigin, createHubClient, fail, okEnvelope, errorEnvelope, HubError } = require('./pet-hub-client');
+const { canonicalOrigin, createHubClient, electronCookieBridge, fail, okEnvelope, errorEnvelope, HubError } = require('./pet-hub-client');
 const { createHubApi, isUuid } = require('./pet-hub-api');
 const { createPending } = require('./pet-pending');
 const { createActivity, badgeLabel } = require('./pet-activity');
@@ -25,6 +30,11 @@ const { createChat } = require('./pet-chat');
 const { councilHandoffPath, SOURCE_KINDS } = require('./pet-council-handoff');
 
 const HUB_STATUSES = Object.freeze(['connected', 'unauthorized', 'not-configured', 'offline', 'unknown']);
+// invoke(channel) 가 부를 수 있는 채널 메서드(계약의 허브 채널 — 집중 타이머·셸 채널은 셸 소유).
+const CHANNEL_METHODS = Object.freeze([
+  'session', 'tasksList', 'tasksAdd', 'tasksToggle', 'journalRead', 'journalSave', 'calendarWeek',
+  'noticesList', 'noticesRead', 'noticesHide', 'noticesReadAll', 'chatSend', 'chatCancel', 'chatSession', 'councilHandoff',
+]);
 // 이 상태에서는 폴링이 알림 원천(문의·일정)을 읽지 않고 세션만 가볍게 확인한다 — 401 을 60초마다 쌓지 않는다.
 const PROBE_ONLY_STATUSES = Object.freeze(['unauthorized', 'not-configured']);
 
@@ -63,6 +73,26 @@ function councilHandoffUrl(draft, sourceKind = 'text') {
   return councilHandoffPath(draft, sourceKind);
 }
 
+// 이 상태에서 알림 목록을 달라고 하면 목록 대신 이 실패 봉투를 준다(빈 목록을 'live' 로 위장하지 않는다).
+function probeFailure(status) {
+  return status === 'not-configured' ? fail('not-configured', 'operator-login-not-configured') : fail('unauthorized', 'unauthorized');
+}
+
+// 셸(pet-bridge)이 봉투만 보고 정하는 상태 — live/partial/conflict=connected. 허브 모델의 판단과 다르면 뒤이어 바로잡는다.
+function shellReadStatus(envelope) {
+  if (!envelope) return null;
+  if (envelope.kind === 'unauthorized') return 'unauthorized';
+  if (envelope.kind === 'not-configured') return 'not-configured';
+  if (envelope.kind === 'live' || envelope.kind === 'partial' || envelope.kind === 'conflict') return 'connected';
+  return null;
+}
+
+function channelMethod(channel) {
+  if (channel === 'pet:hub-session') return 'session';
+  if (typeof channel !== 'string' || !channel.startsWith('pet:')) return null;
+  return channel.slice(4).replace(/-([a-z])/g, (_, ch) => ch.toUpperCase());
+}
+
 function defaultInterval(fn, ms) {
   const timer = setInterval(fn, ms);
   if (timer && typeof timer.unref === 'function') timer.unref();
@@ -77,14 +107,42 @@ function defaultInterval(fn, ms) {
 //   store             { get(key), set(key, value) } — userData/pet-store.json
 //   onEvent           (name, payload) → void — contract.PET_EVENTS 이름으로 부른다
 //   canPresentBanner  (notice) → boolean — 집중·누름·패널 사용 중이면 false(말풍선 보류, 나중에 presentNext)
+//   isChatVisible     () → boolean — 대화 화면이 지금 보이는가(패널이 열려 있고 모드가 office). 보고 있던 대화라도
+//                     이 값이 false 면 새 답변은 'reply' 알림이 된다. 셸 ctx 의 getState() 가 있으면 거기서 읽는다.
 //   now, uuid, schedule(fn, ms)→cancel, setInterval(fn, ms)→cancel — 테스트 주입
-function createPetHub(options = {}) {
+// 셸 hubContext 모양(emit·getHubUrl·session·getState)도 받는다 — 위 옵션이 비어 있을 때만 거기서 채운다.
+function fromShellContext(input) {
+  const options = input !== null && typeof input === 'object' ? { ...input } : {};
+  if (options.origin === undefined && typeof options.getHubUrl === 'function') {
+    try {
+      options.origin = options.getHubUrl();
+    } catch {
+      options.origin = null;
+    }
+  }
+  if (!options.cookieHeader && options.session && options.session.cookies) {
+    Object.assign(options, electronCookieBridge(options.session));
+  }
+  if (!options.onEvent && typeof options.emit === 'function') options.onEvent = options.emit;
+  if (!options.isChatVisible && typeof options.getState === 'function') {
+    const getState = options.getState;
+    options.isChatVisible = () => {
+      const state = getState();
+      return Boolean(state && state.mode === 'office' && state.panelOpen !== false);
+    };
+  }
+  return options;
+}
+
+function createPetHub(input = {}) {
+  const options = fromShellContext(input);
   const clock = options.now || Date.now;
   const uuid = options.uuid || randomUUID;
   const store = options.store || null;
   const startInterval = options.setInterval || defaultInterval;
   let onEvent = typeof options.onEvent === 'function' ? options.onEvent : () => {};
   let bannerGate = typeof options.canPresentBanner === 'function' ? options.canPresentBanner : () => true;
+  let chatVisible = typeof options.isChatVisible === 'function' ? options.isChatVisible : () => true;
 
   let conn = null; // { origin, client, api, pending, ready }
   let hubStatus = 'unknown';
@@ -126,6 +184,7 @@ function createPetHub(options = {}) {
 
   const chat = createChat({
     now: clock, uuid, activity, characterName: characterNameByOffice,
+    isVisible: () => chatVisible(),
     onReply: (payload) => emit('pet:chat-reply', payload),
   });
 
@@ -172,6 +231,15 @@ function createPetHub(options = {}) {
     return envelope;
   }
 
+  // 실패 봉투에도 보류 명령 요약을 싣는다 — 로그인 필요·오프라인 뒤 다시 보낼 할 일/메모가 있는지 렌더러가 바로 안다.
+  function withPendingOnFailure(envelope) {
+    const current = conn;
+    if (envelope.kind !== 'live' && envelope.kind !== 'partial' && envelope.error !== 'stale-origin' && current && envelope.data === null) {
+      envelope.data = { pending: current.pending.summary() };
+    }
+    return envelope;
+  }
+
   const sortTasks = (tasks) => tasks.filter((t) => t.status !== 'cancelled')
     .map((t, index) => ({ t, index }))
     .sort((a, b) => (a.t.status === 'done') - (b.t.status === 'done') || a.index - b.index)
@@ -199,7 +267,7 @@ function createPetHub(options = {}) {
       return run(async (c) => {
         const result = await c.pending.addTask({ title: payload.title, id: payload.id });
         return { data: { ...result, pending: c.pending.summary() } };
-      });
+      }).then(withPendingOnFailure);
     },
 
     // 'pet:tasks-toggle' {id, status:'done'|'todo', expectedUpdatedAt} → { task }
@@ -216,8 +284,11 @@ function createPetHub(options = {}) {
     journalRead(input) {
       const payload = payloadOf(input);
       return run(async (c) => {
-        const id = isUuid(payload.entryId) ? payload.entryId : c.pending.savedMemoId();
+        const explicit = isUuid(payload.entryId);
+        const id = explicit ? payload.entryId : c.pending.savedMemoId();
         const entry = id ? await c.api.memo(id) : null;
+        // 렌더러가 그 메모를 다시 읽었다 — 명시 편집 충돌 표시를 거둔다(다음 저장은 새 revision 으로 다시 확인된다).
+        if (explicit && entry) c.pending.noteMemoRead(payload.entryId);
         return { data: { entry, pending: c.pending.summary() } };
       });
     },
@@ -230,13 +301,7 @@ function createPetHub(options = {}) {
       return run(async (c) => {
         const result = await c.pending.saveMemo(payload);
         return { data: { ...result, pending: c.pending.summary() } };
-      }).then((envelope) => {
-        const current = conn;
-        if (envelope.kind !== 'live' && envelope.error !== 'stale-origin' && current && envelope.data === null) {
-          envelope.data = { pending: current.pending.summary() };
-        }
-        return envelope;
-      });
+      }).then(withPendingOnFailure);
     },
 
     // 확인된 캡처를 끝낸다(렌더러가 finish 플래그 대신 따로 부를 때).
@@ -256,12 +321,18 @@ function createPetHub(options = {}) {
     // 'pet:notices-list' → { notices, unreadCount, badge(숫자 = unreadCount), badgeLabel(표시 문자열: ''|'1'…'99'|'99+'), totalInquiryCount, message,
     //   bannersEnabled, sources:{inquiry, event}('ok'|오류 코드) }
     // 한 원천만 실패하면 partial, 둘 다 실패하면 그 오류 kind — 어느 쪽이든 이전 목록(data)은 함께 준다.
+    // 로그인 필요·허브 로그인 미설정이면(세션을 한 번 다시 확인한 뒤에도) 목록을 'live' 로 주지 않고 그 실패 봉투를 준다 —
+    // 읽지 못한 목록을 빈 목록·예전 목록으로 위장하지 않는다(CLAUDE.md 읽기 실패 봉투 규칙).
     async noticesList() {
-      if (!conn) return errorEnvelope(fail('not-configured', 'hub-url-missing'));
-      await conn.ready;
-      if (!activity.isLoaded()) await hub.tick();
+      const current = conn;
+      if (!current) return errorEnvelope(fail('not-configured', 'hub-url-missing'));
+      await current.ready;
+      if (!activity.isLoaded() || PROBE_ONLY_STATUSES.includes(hubStatus)) await hub.tick();
+      if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
       const list = activity.list();
+      if (PROBE_ONLY_STATUSES.includes(hubStatus)) return { ...errorEnvelope(probeFailure(hubStatus)), data: list };
       const failed = activity.sourceErrors();
+      if (!activity.isLoaded()) return { ...errorEnvelope(failed[0] || fail('error', 'not-loaded')), data: list };
       if (!failed.length) return okEnvelope('live', list);
       if (failed.length === 1) return okEnvelope('partial', list);
       return { ...errorEnvelope(failed[0]), data: list };
@@ -298,9 +369,15 @@ function createPetHub(options = {}) {
       return Promise.resolve(okEnvelope('live', { cancelled: chat.cancel() }));
     },
     // 'pet:chat-session' {ownerId, scope, draft?} → { turns, draft, busy(이 대화가 보내는 중: boolean), sending(=busy), busyWith(보내는 대화 {ownerId,scope,message}|null), error }
-    // 이 대화를 '보고 있음'으로 표시하고 그 대화의 답변 알림을 거둔다. 창을 접으면 셸이 hub.chatLeave() 를 부른다.
+    // 이 대화를 '보고 있음'으로 표시하고 그 대화의 답변 알림을 거둔다. 실제로 보이는지는 isChatVisible()(셸 ctx 면
+    // 패널이 열려 있고 모드가 office)로 답이 올 때 다시 확인한다 — 다른 모드로 옮기거나 접으면 답변은 알림이 된다.
+    // payload.leave === true 면 보고 있음을 지운다(렌더러가 대화 화면을 떠날 때).
     chatSession(input) {
       const payload = payloadOf(input);
+      if (payload.leave === true) {
+        chat.clearViewing();
+        return Promise.resolve(okEnvelope('live', { left: true }));
+      }
       try {
         const data = chat.session(payload);
         chat.view(payload);
@@ -313,16 +390,24 @@ function createPetHub(options = {}) {
     chatLeave() {
       chat.clearViewing();
     },
+    setChatVisibility(fn) {
+      chatVisible = typeof fn === 'function' ? fn : () => true;
+    },
 
     // 'pet:council-handoff' {draft, source?:'text'|'memo'|'task'} → { path, url }
-    // path 는 허브 상대 경로 — 셸이 'pet:open-hub' 와 같은 방식으로 메인 창에서 연다. AI 호출은 허브에서 사용자가 누를 때만.
+    // path 는 허브 상대 경로(조각 '#moonlight-council=…' 포함) — 셸이 'pet:open-hub' 와 같은 방식(widget-window.resolveMainPath,
+    // 같은 origin 의 경로·쿼리·조각 허용)으로 메인 창에서 연다. pathname·hash 는 조각을 따로 다루는 셸을 위한 같은 값의 분해.
+    // AI 호출은 허브에서 사용자가 누를 때만.
     councilHandoff(input) {
       const payload = payloadOf(input);
       if (!conn) return Promise.resolve(errorEnvelope(fail('not-configured', 'hub-url-missing')));
       const kind = SOURCE_KINDS.includes(payload.source) ? payload.source : 'text';
       try {
         const path = councilHandoffUrl(payload.draft, kind);
-        return Promise.resolve(okEnvelope('live', { path, url: conn.origin + path }));
+        const hashAt = path.indexOf('#');
+        return Promise.resolve(okEnvelope('live', {
+          path, url: conn.origin + path, pathname: path.slice(0, hashAt), hash: path.slice(hashAt),
+        }));
       } catch {
         return Promise.resolve(errorEnvelope(fail('error', 'invalid-input')));
       }
@@ -387,9 +472,44 @@ function createPetHub(options = {}) {
     setEventSink(fn) {
       onEvent = typeof fn === 'function' ? fn : () => {};
     },
-    // 공유 세션이라 메인 창도 로그아웃된다 — 사용자가 명시적으로 고를 때만.
+    // 공유 세션이라 메인 창도 로그아웃된다 — 사용자가 명시적으로 고를 때만. 성공하면 곧바로 '로그인 필요'.
     logout() {
-      return run(async (c) => ({ data: await c.client.logout() }));
+      return run(async (c) => ({ data: await c.client.logout() }),
+        (envelope) => (envelope.kind === 'live' ? 'unauthorized' : statusFromEnvelope(envelope)));
+    },
+    // ── 셸 hubContext 연결(pet-main) ──────────────────────────────────
+    // 채널 이름 → 메서드. 셸이 봉투로 상태를 정한 뒤(live=connected) 허브 모델의 판단과 다르면
+    // 다음 틱에 'pet:hub-status' 를 다시 보내 바로잡는다(예: 세션 확인은 live 지만 anonymous → unauthorized).
+    async invoke(channel, payload) {
+      const name = channelMethod(channel);
+      const method = name && CHANNEL_METHODS.includes(name) ? hub[name] : null;
+      if (typeof method !== 'function') return errorEnvelope(fail('error', 'invalid-input'));
+      const envelope = await method(payload);
+      const naive = shellReadStatus(envelope);
+      if (naive && naive !== hubStatus) {
+        const status = hubStatus;
+        const timer = setTimeout(() => {
+          if (status === hubStatus) emit('pet:hub-status', { status });
+        }, 0);
+        if (timer && typeof timer.unref === 'function') timer.unref();
+      }
+      return envelope;
+    },
+    attach(ctx) {
+      const context = ctx !== null && typeof ctx === 'object' ? ctx : {};
+      if (typeof context.emit === 'function') onEvent = context.emit;
+      if (typeof context.getState === 'function' && !options.isChatVisible) {
+        chatVisible = () => {
+          const state = context.getState();
+          return Boolean(state && state.mode === 'office' && state.panelOpen !== false);
+        };
+      }
+      hub.startPolling();
+    },
+    hubUrlChanged(url) {
+      const ready = connect(url);
+      ready.then(() => (conn ? hub.tick() : null)).catch(() => {});
+      return ready;
     },
     dispose() {
       hub.stopPolling();
@@ -406,4 +526,7 @@ function createPetHub(options = {}) {
   return hub;
 }
 
-module.exports = { createPetHub, councilHandoffUrl, statusFromEnvelope, statusFromSession, characterNameByOffice, HUB_STATUSES, PROBE_ONLY_STATUSES };
+module.exports = {
+  createPetHub, councilHandoffUrl, statusFromEnvelope, statusFromSession, characterNameByOffice, channelMethod,
+  HUB_STATUSES, PROBE_ONLY_STATUSES, CHANNEL_METHODS,
+};

@@ -4,7 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { randomUUID } = require('node:crypto');
-const { createPetHub, statusFromEnvelope } = require('./pet-hub');
+const { createPetHub, statusFromEnvelope, channelMethod: hubChannelMethod, CHANNEL_METHODS } = require('./pet-hub');
+const { resolveMainPath } = require('../../widget-window');
 const { PET_INVOKE, ENVELOPE_KINDS } = require('../shared/contract');
 
 function memoryStore() {
@@ -33,6 +34,11 @@ function startHubDouble() {
       const origin = `http://127.0.0.1:${server.address().port}`;
       if (url.pathname === '/api/operator/session' && req.method === 'GET') {
         return send(200, { status: req.headers.cookie === state.cookie ? 'authenticated' : 'anonymous', configured: true, reason: null });
+      }
+      if (url.pathname === '/api/operator/session' && req.method === 'POST' && body && body.action === 'logout') {
+        if (req.headers.origin !== origin) return send(403, { status: 'forbidden', error: 'same-origin-required' });
+        state.cookie = 'com_moon_operator_session=logged-out';
+        return send(200, { status: 'logged_out' });
       }
       if (req.headers.cookie !== state.cookie) return send(401, { status: 'unauthorized' });
       if (req.method !== 'GET' && req.headers.origin !== origin) return send(403, { status: 'forbidden', error: 'same-origin-required' });
@@ -513,4 +519,238 @@ test('실제 http: 로그인 필요 동안 폴링은 세션만 확인하고, 메
   } finally {
     double.server.close();
   }
+});
+
+const settle = (ms = 5) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('실제 http: 익명 세션에서 알림 목록은 빈 live 가 아니라 unauthorized 봉투(읽기 실패를 빈 상태로 위장하지 않는다)', async () => {
+  const double = await startHubDouble();
+  try {
+    let cookie = '';
+    const { hub } = hubFor(double, { cookieHeader: async () => cookie });
+    const session = await hub.session();
+    assert.equal(session.data.status, 'anonymous');
+    const list = await hub.noticesList();
+    assert.equal(list.kind, 'unauthorized');
+    assert.equal(list.error, 'unauthorized');
+    assert.equal(list.data.loaded, false);
+    assert.deepEqual(list.data.notices, []);
+    // 로그인 뒤: 목록 요청이 세션을 다시 확인하고 원천을 읽어 live 로 준다.
+    double.state.inquiries = [inquiryRow()];
+    double.state.unreadCount = 1;
+    cookie = double.state.cookie;
+    const live = await hub.noticesList();
+    assert.equal(live.kind, 'live');
+    assert.equal(live.data.loaded, true);
+    assert.equal(live.data.totalInquiryCount, 1);
+    // 다른 채널에서 로그인 필요가 확인되면 예전 목록을 live 로 주지 않는다.
+    cookie = '';
+    const tasks = await hub.tasksList();
+    assert.equal(tasks.kind, 'unauthorized');
+    const stale = await hub.noticesList();
+    assert.equal(stale.kind, 'unauthorized');
+    assert.equal(stale.data.totalInquiryCount, 1, '예전 목록은 data 로만, kind 는 실패');
+  } finally {
+    double.server.close();
+  }
+});
+
+test('허브 로그인 미설정이면 알림 목록은 not-configured 봉투', async () => {
+  const hub = createPetHub({
+    origin: 'http://127.0.0.1:9',
+    store: memoryStore(),
+    fetch: async () => new Response(JSON.stringify({ status: 'anonymous', configured: false, reason: 'operator-login-not-configured' }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    schedule: () => () => {},
+  });
+  await hub.session();
+  assert.equal(hub.status, 'not-configured');
+  const list = await hub.noticesList();
+  assert.equal(hub.status, 'not-configured');
+  assert.equal(list.kind, 'not-configured');
+  assert.equal(list.error, 'operator-login-not-configured');
+});
+
+test('실제 http: 로그아웃이 성공하면 곧바로 unauthorized(연결됨으로 두지 않는다), Origin 을 붙인다', async () => {
+  const double = await startHubDouble();
+  try {
+    const { hub, events } = hubFor(double, { cookieHeader: async () => double.state.cookie });
+    await hub.session();
+    assert.equal(hub.status, 'connected');
+    const out = await hub.logout();
+    assert.equal(out.kind, 'live');
+    assert.equal(hub.status, 'unauthorized');
+    assert.deepEqual(events.filter(([n]) => n === 'pet:hub-status').map(([, p]) => p.status), ['connected', 'unauthorized']);
+    const post = double.state.seen.find((x) => x.method === 'POST' && x.path === '/api/operator/session');
+    assert.equal(post.headers.origin, double.origin);
+  } finally {
+    double.server.close();
+  }
+});
+
+test('실제 http: 할 일 추가가 실패해도 봉투 data.pending 으로 다시 보낼 할 일이 보인다', async () => {
+  const double = await startHubDouble();
+  try {
+    let cookie = '';
+    const { hub } = hubFor(double, { cookieHeader: async () => cookie });
+    const failed = await hub.tasksAdd({ title: '로그인 전에 적은 일' });
+    assert.equal(failed.kind, 'unauthorized');
+    assert.equal(failed.data.pending.hasPendingTask, true);
+    assert.equal(failed.data.pending.pendingTaskTitle, '로그인 전에 적은 일');
+    cookie = double.state.cookie;
+    const replay = await hub.tasksAdd({ title: '새 입력' });
+    assert.equal(replay.kind, 'live');
+    assert.equal(replay.data.title, '로그인 전에 적은 일');
+    assert.equal(replay.data.pending.hasPendingTask, false);
+    const invalid = await hub.tasksAdd({ title: '' });
+    assert.equal(invalid.error, 'invalid-input');
+    assert.equal(invalid.data.pending.hasPendingTask, false, '입력 거절에도 pending 요약');
+  } finally {
+    double.server.close();
+  }
+});
+
+test('실제 http: 명시 편집 충돌은 그 메모만 막고 journal-read 로 다시 읽으면 풀린다, 캡처 저장은 계속 캡처 메모로', async () => {
+  const double = await startHubDouble();
+  try {
+    const { hub } = hubFor(double);
+    const a = (await hub.journalSave({ body: '캡처 A' })).data.entry.id;
+    const b = randomUUID();
+    double.state.memos.set(b, { id: b, body: 'B 원문', title: 'B', occurredAt: '2026-09-27T00:00:00Z', revision: 2, noteMeta: { kind: 'note', enhancement: '' }, contexts: [] });
+    const stale = await hub.journalSave({ entryId: b, expectedRevision: 1, body: '낡은 B 편집' });
+    assert.equal(stale.kind, 'conflict');
+    assert.deepEqual(stale.data.pending.memoConflictIds, [b]);
+    assert.equal(stale.data.pending.savedMemoId, a);
+    const capture = await hub.journalSave({ body: '캡처 A 이어 쓰기' });
+    assert.equal(capture.kind, 'live');
+    assert.equal(capture.data.entry.id, a);
+    const blocked = await hub.journalSave({ entryId: b, expectedRevision: 2, body: 'B 편집' });
+    assert.equal(blocked.error, 'memo-conflict');
+    const read = await hub.journalRead({ entryId: b });
+    assert.equal(read.data.pending.memoConflict, false);
+    const ok = await hub.journalSave({ entryId: b, expectedRevision: read.data.entry.revision, body: 'B 편집' });
+    assert.equal(ok.kind, 'live');
+    assert.equal(double.state.memos.get(b).body, 'B 편집');
+    assert.equal(double.state.memos.get(a).body, '캡처 A 이어 쓰기');
+  } finally {
+    double.server.close();
+  }
+});
+
+test('실제 http: 보고 있던 대화라도 office 모드를 떠나면(또는 leave) 답변은 reply 알림이 된다', async () => {
+  const double = await startHubDouble();
+  try {
+    const shellState = { mode: 'office', panelOpen: true };
+    const { hub, events } = hubFor(double, { isChatVisible: () => shellState.mode === 'office' && shellState.panelOpen });
+    await hub.session();
+    const who = { ownerId: 'glaceon', scope: 'personal' };
+    await hub.chatSession(who);
+    await hub.chatSend({ ...who, message: '보는 중' });
+    assert.equal(hub.activity.list().notices.filter((n) => n.kind === 'reply').length, 0);
+    shellState.mode = 'tasks'; // pet:set-mode 로 할 일 모드로 옮김 — 셸은 chatLeave 를 부르지 않았다
+    await hub.chatSend({ ...who, message: '다른 모드로 옮긴 뒤' });
+    assert.equal(hub.activity.list().notices.filter((n) => n.kind === 'reply').length, 1);
+    shellState.mode = 'office';
+    await hub.chatSession(who);
+    const left = await hub.chatSession({ leave: true });
+    assert.equal(left.kind, 'live');
+    await hub.chatSend({ ...who, message: '떠난 뒤' });
+    assert.equal(hub.activity.list().notices.filter((n) => n.kind === 'reply').length, 1, '다시 보면 앞 알림은 거두고, leave 뒤 답변은 새 알림');
+    assert.ok(events.some(([n]) => n === 'pet:chat-reply'));
+  } finally {
+    double.server.close();
+  }
+});
+
+test('Council 전달 경로는 셸의 open-hub 규칙(resolveMainPath)을 통과하고 조각을 보존한다', async () => {
+  const { hub } = hubFor({ origin: 'https://hub.example.com', state: { cookie: '' } });
+  const envelope = await hub.councilHandoff({ draft: '이번 주 우선순위를 같이 보자', source: 'memo' });
+  assert.equal(envelope.kind, 'live');
+  assert.ok(envelope.data.path.startsWith('/dashboard/agents/council#moonlight-council='));
+  assert.equal(envelope.data.pathname + envelope.data.hash, envelope.data.path);
+  const resolved = resolveMainPath(envelope.data.path, 'https://hub.example.com');
+  assert.equal(resolved.ok, true);
+  assert.equal(new URL(resolved.url).hash, envelope.data.hash);
+  assert.equal(resolved.url, envelope.data.url);
+});
+
+// 셸 pet-main 이 하는 그대로: loadDefaultHub → createPetHub(ctx) → attach(ctx), 채널은 hub.invoke, 상태는 봉투로 먼저 정한다.
+function fakeSession(cookieJar) {
+  return {
+    cookies: {
+      get: async ({ url }) => (cookieJar.value && url.startsWith(cookieJar.origin) ? [{ name: 'com_moon_operator_session', value: cookieJar.value }] : []),
+      set: async (details) => { cookieJar.value = details.value; },
+      remove: async () => { cookieJar.value = ''; },
+    },
+  };
+}
+
+test('셸 hubContext 로 만들고 invoke 로 부른다 — 쿠키·이벤트·대화 표시·폴링을 ctx 에서 읽는다', async () => {
+  const double = await startHubDouble();
+  const intervals = [];
+  try {
+    const jar = { origin: double.origin, value: '' };
+    const shellState = { mode: 'tasks', panelOpen: false, hubStatus: 'unknown' };
+    const emitted = [];
+    const ctx = {
+      emit: (name, payload) => {
+        emitted.push([name, payload]);
+        if (name === 'pet:hub-status') shellState.hubStatus = payload.status;
+        return true;
+      },
+      store: memoryStore(),
+      getHubUrl: () => double.origin,
+      session: fakeSession(jar),
+      openMainUrl: () => {},
+      getState: () => ({ ...shellState }),
+      setInterval: (fn, ms) => { intervals.push(ms); return () => {}; },
+    };
+    // pet-main 의 loadDefaultHub 는 require('./pet-hub-client').createPetHub(ctx) 를 부른다.
+    const clientModule = require('./pet-hub-client');
+    assert.equal(typeof clientModule.createPetHub, 'function');
+    const hub = clientModule.createPetHub(ctx);
+    hub.attach(ctx);
+    assert.deepEqual(intervals, [60000], 'attach 가 60초 폴링을 시작한다');
+    // 셸 handler: callHub → 봉투로 상태(live=connected)를 정한다. 익명 세션이면 허브가 뒤이어 unauthorized 로 바로잡는다.
+    const session = await hub.invoke('pet:hub-session', {});
+    assert.equal(session.data.status, 'anonymous');
+    shellState.hubStatus = 'connected'; // 셸 statusFromEnvelope(live) 의 결과를 흉내
+    await settle();
+    assert.equal(shellState.hubStatus, 'unauthorized');
+    const list = await hub.invoke('pet:notices-list', {});
+    assert.equal(list.kind, 'unauthorized');
+    // 메인 창에서 로그인(같은 세션 쿠키) → 다음 호출부터 연결됨.
+    jar.value = double.state.cookie.split('=')[1];
+    const tasks = await hub.invoke('pet:tasks-list', {});
+    assert.equal(tasks.kind, 'live');
+    assert.equal(hub.status, 'connected');
+    const seen = double.state.seen.find((x) => x.path === '/api/hub/tasks');
+    assert.equal(seen.headers.cookie, double.state.cookie);
+    // 대화: 패널이 닫힌 tasks 모드면 보고 있던 대화라도 답변은 알림.
+    const who = { ownerId: 'glaceon', scope: 'all' };
+    await hub.invoke('pet:chat-session', who);
+    await hub.invoke('pet:chat-send', { ...who, message: '닫힌 패널' });
+    assert.equal(hub.activity.list().notices.filter((n) => n.kind === 'reply').length, 1);
+    shellState.mode = 'office';
+    shellState.panelOpen = true;
+    await hub.invoke('pet:chat-session', who);
+    await hub.invoke('pet:chat-send', { ...who, message: '열린 대화' });
+    assert.equal(hub.activity.list().notices.filter((n) => n.kind === 'reply').length, 0, '보고 있는 대화의 답은 알림이 아니다(앞 알림도 거둠)');
+    assert.ok(emitted.some(([n]) => n === 'pet:chat-reply'));
+    // 모르는 채널·셸 채널은 거절 봉투.
+    assert.equal((await hub.invoke('pet:focus-start', { minutes: 25 })).error, 'invalid-input');
+    assert.equal((await hub.invoke('nope', {})).error, 'invalid-input');
+    // 허브 주소 변경.
+    await hub.hubUrlChanged('');
+    assert.equal(hub.status, 'not-configured');
+    assert.equal((await hub.invoke('pet:tasks-list', {})).kind, 'not-configured');
+    hub.dispose();
+  } finally {
+    double.server.close();
+  }
+});
+
+test('invoke 채널표: 계약의 허브 채널 전부가 메서드로 이어진다', () => {
+  const { PET_INVOKE } = require('../shared/contract');
+  const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-)/.test(c));
+  assert.deepEqual(hubChannels.map(hubChannelMethod).sort(), [...CHANNEL_METHODS].sort());
 });

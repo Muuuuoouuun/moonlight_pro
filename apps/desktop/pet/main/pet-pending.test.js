@@ -233,8 +233,18 @@ test('origin 마다 따로 보관하고, 모양이 틀린 저장값은 버린다
   await assert.rejects(one.addTask({ title: '한 곳' }));
   const two = await open(api, store, 'https://two.test');
   assert.equal(two.summary().hasPendingTask, false);
-  assert.deepEqual(sanitizePending({ task: { id: 'nope', title: 'x' }, memo: { action: 'drop' }, memoConflict: 'yes' }),
-    { task: null, memo: null, savedMemo: null, memoConflict: false, memoConflictId: null });
+  assert.deepEqual(sanitizePending({ task: { id: 'nope', title: 'x' }, memo: { action: 'drop' }, memoConflict: 'yes', explicitConflicts: ['nope', 7] }),
+    { task: null, memo: null, memoRole: null, memoRecovers: null, savedMemo: null, captureConflict: false, explicitConflicts: [] });
+  // 이전 형식(memoConflict + memoConflictId): 캡처 메모 id 면 캡처 충돌, 다른 id 면 명시 충돌로 옮긴다.
+  const a = randomUUID();
+  const b = randomUUID();
+  const saved = { id: a, body: 'A', revision: 1, title: '', occurredAt: '2026-09-27T00:00:00Z', noteMeta: { kind: 'note', enhancement: '' }, contexts: [] };
+  const legacyCapture = sanitizePending({ savedMemo: saved, memoConflict: true, memoConflictId: a });
+  assert.equal(legacyCapture.captureConflict, true);
+  assert.deepEqual(legacyCapture.explicitConflicts, []);
+  const legacyExplicit = sanitizePending({ savedMemo: saved, memoConflict: true, memoConflictId: b });
+  assert.equal(legacyExplicit.captureConflict, false);
+  assert.deepEqual(legacyExplicit.explicitConflicts, [b]);
 });
 
 // 여러 메모를 id 로 보관하는 허브 대역(렌더러가 journal-read 로 연 다른 메모를 고치는 경로).
@@ -280,10 +290,67 @@ test('렌더러가 명시한 다른 메모(entryId·expectedRevision)는 마지�
   assert.equal(api.memos.get(b).title, `제목 ${b.slice(0, 4)}`, '다시 읽은 B 의 제목을 보존한다');
   assert.equal(api.saves[1].entryId, b);
   assert.equal(api.saves[1].expectedRevision, 3);
-  // 이제 마지막 저장 메모는 B — 대상 없는 후속 저장도 B 로 간다.
-  const follow = await pending.saveMemo({ body: 'B 한 번 더' });
-  assert.equal(follow.entry.id, b);
-  assert.equal(api.memos.get(a).body, 'A 첫 저장');
+  assert.equal(edit.role, 'explicit');
+  // 명시 편집은 캡처 대상을 바꾸지 않는다 — 대상 없는 후속 저장(Ctrl+S 빠른 캡처)은 여전히 A 로 간다.
+  assert.equal(pending.summary().savedMemoId, a);
+  const follow = await pending.saveMemo({ body: 'A 에 이어 쓴 캡처' });
+  assert.equal(follow.entry.id, a);
+  assert.equal(follow.role, 'capture');
+  assert.equal(api.memos.get(a).body, 'A 에 이어 쓴 캡처');
+  assert.equal(api.memos.get(b).body, 'B 를 고친 글', 'B 는 캡처 글로 덮이지 않는다');
+});
+
+test('검증 재현 1: 캡처 A → 명시 편집 B → 캡처 저장은 A 에 쓰고 B 를 덮지 않는다(재시작 뒤에도)', async () => {
+  const api = journalHub();
+  const b = randomUUID();
+  api.seed(b, 'hub note B', 1);
+  const store = memoryStore();
+  const pending = await open(api, store);
+  const a = (await pending.saveMemo({ body: 'capture A v1' })).entry.id;
+  await pending.saveMemo({ body: 'hub note B edited', entryId: b, expectedRevision: 1 });
+  const reopened = await open(api, store);
+  const v2 = await reopened.saveMemo({ body: 'capture A v2 (typed in capture box)' });
+  assert.equal(v2.entry.id, a);
+  assert.deepEqual(api.saves.map((x) => [x.entryId, x.body]), [
+    [a, 'capture A v1'], [b, 'hub note B edited'], [a, 'capture A v2 (typed in capture box)'],
+  ]);
+  assert.equal(api.memos.get(b).body, 'hub note B edited');
+  assert.equal(api.memos.get(a).revision, 2);
+});
+
+test('명시 편집 보류분은 명시 편집으로 재생되고 캡처 대상을 바꾸지 않는다', async () => {
+  const api = journalHub();
+  const b = randomUUID();
+  api.seed(b, 'B 원문', 2);
+  const pending = await open(api, memoryStore());
+  const a = (await pending.saveMemo({ body: 'A' })).entry.id;
+  const realSave = api.saveMemo;
+  api.saveMemo = async (command) => { api.saves.push(command); throw fail('error', 'timeout'); };
+  await assert.rejects(pending.saveMemo({ body: 'B 편집', entryId: b, expectedRevision: 2 }), (e) => e.error === 'timeout');
+  assert.equal(pending.summary().pendingMemoEntryId, b);
+  assert.equal(pending.summary().pendingMemoRole, 'explicit');
+  api.saveMemo = realSave;
+  // 캡처 저장이 와도 보류분(B)을 먼저 같은 명령으로 확인한다 — 캡처 글은 저장되지 않았다고 replayed 로 알린다.
+  const replay = await pending.saveMemo({ body: '캡처 글' });
+  assert.equal(replay.entry.id, b);
+  assert.equal(replay.role, 'explicit');
+  assert.equal(replay.replayed, true);
+  assert.equal(pending.summary().savedMemoId, a, '보류된 명시 편집이 확인돼도 캡처 대상은 A');
+  const next = await pending.saveMemo({ body: '캡처 글' });
+  assert.equal(next.entry.id, a);
+  assert.equal(api.memos.get(b).body, 'B 편집');
+});
+
+test('캡처 메모를 명시 편집하면 캡처 기록이 새 revision 으로 맞춰져 다음 캡처 저장이 충돌하지 않는다', async () => {
+  const api = journalHub();
+  const pending = await open(api, memoryStore());
+  const a = (await pending.saveMemo({ body: 'A1' })).entry.id;
+  const edit = await pending.saveMemo({ body: 'A2 (열어서 고침)', entryId: a, expectedRevision: 1 });
+  assert.equal(edit.role, 'explicit');
+  assert.equal(pending.summary().savedMemoRevision, 2);
+  const capture = await pending.saveMemo({ body: 'A3 캡처' });
+  assert.equal(capture.entry.id, a);
+  assert.equal(capture.entry.revision, 3);
 });
 
 test('다른 메모를 명시했는데 revision 이 없으면 invalid-input, 아무것도 쓰지 않는다', async () => {
@@ -297,7 +364,7 @@ test('다른 메모를 명시했는데 revision 이 없으면 invalid-input, 아
   assert.equal(api.memos.get(b).body, 'B 원문');
 });
 
-test('충돌은 그 메모에만 걸린다: 같은 메모·대상 없는 저장은 막고, 다른 메모 명시 저장과 새 항목은 허용', async () => {
+test('충돌은 그 메모에만 걸린다: 명시 편집 B 의 충돌은 B 만 막고 캡처 A·다른 메모 C 는 막지 않는다', async () => {
   const api = journalHub();
   const b = randomUUID();
   const c = randomUUID();
@@ -310,18 +377,67 @@ test('충돌은 그 메모에만 걸린다: 같은 메모·대상 없는 저장�
   await assert.rejects(pending.saveMemo({ body: 'B 수정', entryId: b, expectedRevision: 4 }), (e) => e.kind === 'conflict');
   assert.equal(pending.summary().memoConflict, true);
   assert.equal(pending.summary().memoConflictId, b);
+  assert.deepEqual(pending.summary().memoConflictIds, [b]);
+  assert.equal(pending.summary().captureConflict, false);
+  assert.equal(pending.summary().savedMemoId, a, '캡처 메모 A 는 숨기지 않는다');
   assert.equal(api.memos.get(b).body, 'B 원문');
-  // 대상 없는 평소 저장은 막는다(A 로 새지 않는다). 충돌한 B 도 막는다.
-  await assert.rejects(pending.saveMemo({ body: '어디로?' }), (e) => e.error === 'memo-conflict');
+  // 검증 재현 2: 대상 없는 캡처 저장과 A 명시 저장은 B 의 충돌에 막히지 않는다.
+  const capture = await pending.saveMemo({ body: 'A 캡처 이어 쓰기' });
+  assert.equal(capture.entry.id, a);
+  const explicitA = await pending.saveMemo({ body: 'A 명시 편집', entryId: a, expectedRevision: 2 });
+  assert.equal(explicitA.entry.id, a);
+  // 충돌한 B 는 다시 읽기 전까지 막는다(렌더러가 새 revision 을 추측해 덮지 못하게).
   await assert.rejects(pending.saveMemo({ body: 'B 다시', entryId: b, expectedRevision: 5 }), (e) => e.error === 'memo-conflict');
-  assert.equal(api.memos.get(a).body, 'A');
+  assert.equal(api.memos.get(b).body, 'B 원문');
   // 재시작 뒤에도 같은 표시.
   const reopened = await open(api, store);
-  assert.equal(reopened.summary().memoConflictId, b);
-  // 충돌 없는 C 를 명시하면 저장되고, 그 캡처는 C 로 넘어가 충돌 표시를 거둔다.
+  assert.deepEqual(reopened.summary().memoConflictIds, [b]);
+  // 충돌 없는 C 는 명시 저장되고, 캡처 대상은 A 그대로, B 의 표시는 남는다.
   const cSaved = await reopened.saveMemo({ body: 'C 수정', entryId: c, expectedRevision: 1 });
   assert.equal(cSaved.entry.id, c);
+  assert.equal(reopened.summary().savedMemoId, a);
+  assert.deepEqual(reopened.summary().memoConflictIds, [b]);
+  // 렌더러가 B 를 다시 읽으면 표시가 풀리고 새 revision 으로 저장할 수 있다.
+  assert.equal(reopened.noteMemoRead(b), true);
   assert.equal(reopened.summary().memoConflict, false);
+  const bSaved = await reopened.saveMemo({ body: 'B 다시 읽고 수정', entryId: b, expectedRevision: 5 });
+  assert.equal(bSaved.entry.revision, 6);
+  assert.equal(api.memos.get(a).body, 'A 명시 편집');
+});
+
+test('캡처 메모 충돌은 대상 없는 저장만 막고, 다시 읽어도 풀리지 않는다(새 항목으로만 — Mac 규칙)', async () => {
+  const api = journalHub();
+  const b = randomUUID();
+  api.seed(b, 'B 원문', 1);
+  const pending = await open(api, memoryStore());
+  const a = (await pending.saveMemo({ body: 'A' })).entry.id;
+  api.memos.get(a).revision = 7;
+  api.memos.get(a).body = 'Hub 에서 고친 A';
+  await assert.rejects(pending.saveMemo({ body: 'A 캡처' }), (e) => e.kind === 'conflict');
+  assert.equal(pending.summary().captureConflict, true);
+  assert.equal(pending.summary().savedMemoId, null);
+  assert.equal(pending.noteMemoRead(a), false);
+  await assert.rejects(pending.saveMemo({ body: 'A 캡처' }), (e) => e.error === 'memo-conflict');
+  // 다른 메모 B 의 명시 편집은 막지 않는다.
+  const bSaved = await pending.saveMemo({ body: 'B 편집', entryId: b, expectedRevision: 1 });
+  assert.equal(bSaved.entry.id, b);
+  assert.equal(pending.summary().captureConflict, true);
+  assert.equal(api.memos.get(a).body, 'Hub 에서 고친 A');
+});
+
+test('명시 편집 충돌의 새 항목 복구는 캡처 대상을 바꾸지 않는다', async () => {
+  const api = journalHub();
+  const b = randomUUID();
+  api.seed(b, 'B 원문', 3);
+  const pending = await open(api, memoryStore());
+  const a = (await pending.saveMemo({ body: 'A' })).entry.id;
+  await assert.rejects(pending.saveMemo({ body: 'B 편집', entryId: b, expectedRevision: 2 }), (e) => e.kind === 'conflict');
+  const copy = await pending.saveMemo({ body: 'B 편집', asNew: true, entryId: b });
+  assert.notEqual(copy.entry.id, b);
+  assert.notEqual(copy.entry.id, a);
+  assert.equal(copy.role, 'explicit');
+  assert.equal(pending.summary().memoConflict, false);
+  assert.equal(pending.summary().savedMemoId, a);
   assert.equal(api.memos.get(b).body, 'B 원문');
 });
 
