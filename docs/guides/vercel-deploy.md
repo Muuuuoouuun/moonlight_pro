@@ -15,11 +15,11 @@
 | 항목 | 누가 | 어디에 |
 | --- | --- | --- |
 | Vercel CLI 로그인 | 운영자(브라우저 승인) | `npx vercel login` → 표시된 `https://vercel.com/oauth/device?user_code=…` 승인 |
-| 서울 Supabase `SUPABASE_SERVICE_ROLE_KEY`·`SUPABASE_ANON_KEY` | 운영자 | 두 env 파일의 `__FILL_ME__` |
-| 운영자 로그인 3줄 | 운영자(`generate-operator-login.mjs`) | `apps/hub/.env.production.local` |
+| 서울 Supabase `SUPABASE_SERVICE_ROLE_KEY`·`SUPABASE_ANON_KEY` | 운영자 입력 완료(2026-09-26) | 두 env 파일 |
+| 운영자 로그인 3줄 | 운영자 입력 완료(2026-09-26, `generate-operator-login.mjs`) | `apps/hub/.env.production.local` |
 | `COM_MOON_HUB_WRITE_SECRET`·`CRON_SECRET`·`COM_MOON_OAUTH_STATE_SECRET`·`COM_MOON_PHONE_INTAKE_SECRET` | 생성 완료(2026-09-26) | 두 env 파일 |
 | `COM_MOON_SHARED_WEBHOOK_SECRET`·`GEMINI_API_KEY`·`COM_MOON_DEFAULT_WORKSPACE_ID` | 이 PC `.env.local`에서 복사 완료 | 두 env 파일 |
-| 도메인 3종(`COM_MOON_HUB_URL`·`NEXT_PUBLIC_APP_URL`·`COM_MOON_ENGINE_URL`) | 1차 배포 뒤 확정 | §4 2패스 |
+| 도메인 3종(`COM_MOON_HUB_URL`·`NEXT_PUBLIC_APP_URL`·`COM_MOON_ENGINE_URL`) | 확정·반영 완료 | §3 표 |
 
 ## 3. 프로젝트 (2026-09-26 구성 완료)
 
@@ -47,6 +47,13 @@ node scripts/vercel-env-push.mjs --app engine
 # 프로덕션 배포 — 저장소 파일이 15,000개를 넘어 --archive=tgz 가 필수. 루트 .vercelignore가 docs·design-system·테스트를 제외한다.
 (cd apps/engine && npx vercel deploy --prod --yes --archive=tgz --scope muuuuoouuuns-projects)
 (cd apps/hub    && npx vercel deploy --prod --yes --archive=tgz --scope muuuuoouuuns-projects)
+```
+
+PowerShell 5.1은 `&&`와 `(cd … && …)`를 읽지 못한다 — 거기서는 한 줄씩:
+
+```powershell
+Set-Location apps\engine; npx vercel deploy --prod --yes --archive=tgz --scope muuuuoouuuns-projects; Set-Location ..\..
+Set-Location apps\hub;    npx vercel deploy --prod --yes --archive=tgz --scope muuuuoouuuns-projects; Set-Location ..\..
 ```
 
 환경 변수를 바꾼 뒤에는 재배포해야 반영된다. Git 연동 자동 배포는 프로덕션 브랜치(`main`)에만 붙어 있으므로, 작업 브랜치(`09.WIN1.6`)를 올릴 때는 위 CLI `--prod` 배포를 쓴다(다른 브랜치 push는 프리뷰 배포만 만든다).
