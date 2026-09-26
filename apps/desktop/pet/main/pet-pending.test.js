@@ -234,5 +234,152 @@ test('origin 마다 따로 보관하고, 모양이 틀린 저장값은 버린다
   const two = await open(api, store, 'https://two.test');
   assert.equal(two.summary().hasPendingTask, false);
   assert.deepEqual(sanitizePending({ task: { id: 'nope', title: 'x' }, memo: { action: 'drop' }, memoConflict: 'yes' }),
-    { task: null, memo: null, savedMemo: null, memoConflict: false });
+    { task: null, memo: null, savedMemo: null, memoConflict: false, memoConflictId: null });
+});
+
+// 여러 메모를 id 로 보관하는 허브 대역(렌더러가 journal-read 로 연 다른 메모를 고치는 경로).
+function journalHub() {
+  const hub = {
+    memos: new Map(), saves: [], hold: null,
+    seed(id, body, revision) {
+      hub.memos.set(id, { id, body, title: `제목 ${id.slice(0, 4)}`, occurredAt: '2026-09-27T00:00:00Z', revision, noteMeta: { kind: 'note', enhancement: '' }, contexts: [] });
+    },
+    async memo(id) {
+      const entry = hub.memos.get(id);
+      if (!entry) throw fail('error', 'save-not-verified');
+      return { ...entry };
+    },
+    async saveMemo(command) {
+      hub.saves.push(JSON.parse(JSON.stringify(command)));
+      if (hub.hold) await hub.hold;
+      const previous = hub.memos.get(command.entryId);
+      if ((previous ? previous.revision : 0) !== command.expectedRevision) throw fail('conflict', 'memo-conflict', 409);
+      const entry = { id: command.entryId, body: command.body, title: command.title, occurredAt: command.occurredAt, revision: command.expectedRevision + 1, noteMeta: command.noteMeta, contexts: command.contexts };
+      hub.memos.set(command.entryId, entry);
+      return { ...entry };
+    },
+  };
+  return hub;
+}
+
+test('렌더러가 명시한 다른 메모(entryId·expectedRevision)는 마지막 저장 메모가 있어도 그 메모에 쓴다', async () => {
+  const api = journalHub();
+  const a = randomUUID();
+  const b = randomUUID();
+  api.seed(b, 'B 원문', 3);
+  const pending = await open(api, memoryStore());
+  const first = await pending.saveMemo({ body: 'A 첫 저장', entryId: a });
+  assert.equal(first.entry.id, a);
+  assert.equal(first.entry.revision, 1);
+  const edit = await pending.saveMemo({ body: 'B 를 고친 글', entryId: b, expectedRevision: 3 });
+  assert.equal(edit.entry.id, b);
+  assert.equal(edit.entry.revision, 4);
+  assert.equal(api.memos.get(a).body, 'A 첫 저장', 'A 는 건드리지 않는다');
+  assert.equal(api.memos.get(a).revision, 1);
+  assert.equal(api.memos.get(b).body, 'B 를 고친 글');
+  assert.equal(api.memos.get(b).title, `제목 ${b.slice(0, 4)}`, '다시 읽은 B 의 제목을 보존한다');
+  assert.equal(api.saves[1].entryId, b);
+  assert.equal(api.saves[1].expectedRevision, 3);
+  // 이제 마지막 저장 메모는 B — 대상 없는 후속 저장도 B 로 간다.
+  const follow = await pending.saveMemo({ body: 'B 한 번 더' });
+  assert.equal(follow.entry.id, b);
+  assert.equal(api.memos.get(a).body, 'A 첫 저장');
+});
+
+test('다른 메모를 명시했는데 revision 이 없으면 invalid-input, 아무것도 쓰지 않는다', async () => {
+  const api = journalHub();
+  const b = randomUUID();
+  api.seed(b, 'B 원문', 2);
+  const pending = await open(api, memoryStore());
+  await pending.saveMemo({ body: 'A' });
+  await assert.rejects(pending.saveMemo({ body: 'B 로 가려던 글', entryId: b }), (e) => e.error === 'invalid-input');
+  assert.equal(api.saves.length, 1);
+  assert.equal(api.memos.get(b).body, 'B 원문');
+});
+
+test('충돌은 그 메모에만 걸린다: 같은 메모·대상 없는 저장은 막고, 다른 메모 명시 저장과 새 항목은 허용', async () => {
+  const api = journalHub();
+  const b = randomUUID();
+  const c = randomUUID();
+  api.seed(b, 'B 원문', 5);
+  api.seed(c, 'C 원문', 1);
+  const store = memoryStore();
+  const pending = await open(api, store);
+  const a = (await pending.saveMemo({ body: 'A' })).entry.id;
+  // B 를 낡은 revision 으로 고치려 하면 충돌 — B 에만 표시.
+  await assert.rejects(pending.saveMemo({ body: 'B 수정', entryId: b, expectedRevision: 4 }), (e) => e.kind === 'conflict');
+  assert.equal(pending.summary().memoConflict, true);
+  assert.equal(pending.summary().memoConflictId, b);
+  assert.equal(api.memos.get(b).body, 'B 원문');
+  // 대상 없는 평소 저장은 막는다(A 로 새지 않는다). 충돌한 B 도 막는다.
+  await assert.rejects(pending.saveMemo({ body: '어디로?' }), (e) => e.error === 'memo-conflict');
+  await assert.rejects(pending.saveMemo({ body: 'B 다시', entryId: b, expectedRevision: 5 }), (e) => e.error === 'memo-conflict');
+  assert.equal(api.memos.get(a).body, 'A');
+  // 재시작 뒤에도 같은 표시.
+  const reopened = await open(api, store);
+  assert.equal(reopened.summary().memoConflictId, b);
+  // 충돌 없는 C 를 명시하면 저장되고, 그 캡처는 C 로 넘어가 충돌 표시를 거둔다.
+  const cSaved = await reopened.saveMemo({ body: 'C 수정', entryId: c, expectedRevision: 1 });
+  assert.equal(cSaved.entry.id, c);
+  assert.equal(reopened.summary().memoConflict, false);
+  assert.equal(api.memos.get(b).body, 'B 원문');
+});
+
+test('충돌 뒤 새 항목으로 저장하면 새 id 로 쓰고 충돌 표시를 거둔다', async () => {
+  const api = journalHub();
+  const pending = await open(api, memoryStore());
+  const a = (await pending.saveMemo({ body: 'A' })).entry.id;
+  api.memos.get(a).revision = 9;
+  await assert.rejects(pending.saveMemo({ body: 'A 수정' }), (e) => e.kind === 'conflict');
+  assert.equal(pending.summary().memoConflictId, a);
+  const fresh = await pending.saveMemo({ body: 'A 수정', asNew: true, entryId: a });
+  assert.notEqual(fresh.entry.id, a, 'asNew 는 명시한 entryId 도 쓰지 않는다');
+  assert.equal(fresh.entry.revision, 1);
+  assert.equal(pending.summary().memoConflict, false);
+  assert.equal(pending.summary().savedMemoId, fresh.entry.id);
+});
+
+test('보류 명령이 있으면 다른 메모를 명시한 저장은 pending-memo 로 거절한다', async () => {
+  const api = journalHub();
+  const b = randomUUID();
+  api.seed(b, 'B 원문', 2);
+  const pending = await open(api, memoryStore());
+  const realSave = api.saveMemo;
+  api.saveMemo = async (command) => { api.saves.push(command); throw fail('error', 'timeout'); };
+  await assert.rejects(pending.saveMemo({ body: '보류될 글' }), (e) => e.error === 'timeout');
+  assert.equal(pending.summary().hasPendingMemo, true);
+  await assert.rejects(pending.saveMemo({ body: 'B 글', entryId: b, expectedRevision: 2 }), (e) => e.error === 'pending-memo');
+  assert.equal(api.saves.length, 1);
+  assert.equal(api.memos.get(b).body, 'B 원문');
+  // 보류분이 확인된 뒤에야 B 를 고칠 수 있다.
+  api.saveMemo = realSave;
+  const replay = await pending.saveMemo({ body: '' });
+  assert.equal(replay.entry.body, '보류될 글');
+  const edit = await pending.saveMemo({ body: 'B 글', entryId: b, expectedRevision: 2 });
+  assert.equal(edit.entry.id, b);
+});
+
+test('저장 중에 온 asNew 는 busy 로 거절하고 상태를 건드리지 않는다', async () => {
+  const api = journalHub();
+  const pending = await open(api, memoryStore());
+  const a = (await pending.saveMemo({ body: 'A' })).entry.id;
+  let release;
+  api.hold = new Promise((resolve) => { release = resolve; });
+  const inFlight = pending.saveMemo({ body: 'A 수정 중' });
+  while (api.saves.length < 2) await new Promise((resolve) => setImmediate(resolve));
+  const before = pending.state();
+  await assert.rejects(pending.saveMemo({ body: '새 항목', asNew: true }), (e) => e.error === 'busy');
+  assert.deepEqual(pending.state(), before, 'busy 거절은 savedMemo·보류 명령·충돌 표시를 바꾸지 않는다');
+  release();
+  const done = await inFlight;
+  assert.equal(done.entry.id, a);
+  assert.equal(done.entry.revision, 2);
+  assert.equal(pending.summary().savedMemoId, a);
+});
+
+test('null payload 는 던지지 않고 invalid-input 으로 거절한다', async () => {
+  const api = journalHub();
+  const pending = await open(api, memoryStore());
+  await assert.rejects(pending.saveMemo(null), (e) => e.error === 'invalid-input');
+  assert.equal(api.saves.length, 0);
 });

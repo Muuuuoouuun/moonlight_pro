@@ -239,7 +239,8 @@ test('실제 http: 알림 — 첫 연결은 조용히, 새 문의는 게이트�
     const first = await hub.noticesList();
     assert.equal(first.kind, 'live');
     assert.equal(first.data.unreadCount, 1);
-    assert.equal(first.data.badge, '1');
+    assert.equal(first.data.badge, 1);
+    assert.equal(first.data.badgeLabel, '1');
     assert.equal(events.filter(([n]) => n === 'pet:notice').length, 0);
     assert.deepEqual(events.find(([n]) => n === 'pet:badge')[1], { count: 1, label: '1' });
     double.state.inquiries = [inquiryRow(id, 4)];
@@ -308,7 +309,8 @@ test('실제 http: 대화 취소는 늦은 답을 버리고 cancelled', async ()
     assert.equal(result.error, 'cancelled');
     const session = await hub.chatSession({ ownerId: 'eevee', scope: 'all' });
     assert.equal(session.data.turns.length, 0);
-    assert.equal(session.data.busy, null);
+    assert.equal(session.data.busy, false);
+    assert.equal(session.data.busyWith, null);
   } finally {
     double.server.close();
   }
@@ -400,4 +402,115 @@ test('알림 목록: 한 원천 실패는 partial, 모두 실패는 그 오류 �
   assert.equal(live.kind, 'live');
   assert.deepEqual(live.data.sources, { inquiry: 'ok', event: 'ok' });
   assert.equal(live.data.message, null);
+});
+
+test('실제 http: 익명 세션은 hub-status 를 unauthorized 한 번만 보낸다(connected 를 거치지 않는다)', async () => {
+  const double = await startHubDouble();
+  try {
+    const { hub, events } = hubFor(double, { cookieHeader: async () => '' });
+    await hub.session();
+    assert.deepEqual(events.filter(([n]) => n === 'pet:hub-status').map(([, p]) => p.status), ['unauthorized']);
+    const authed = hubFor(double);
+    await authed.hub.session();
+    assert.deepEqual(authed.events.filter(([n]) => n === 'pet:hub-status').map(([, p]) => p.status), ['connected']);
+  } finally {
+    double.server.close();
+  }
+});
+
+test('모든 허브 채널은 null·배열·원시값 payload 에도 던지지 않고 계약 봉투로 풀린다', async () => {
+  const double = await startHubDouble();
+  try {
+    const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-)/.test(c));
+    for (const origin of [double.origin, '']) {
+      const { hub } = hubFor({ ...double, origin });
+      for (const channel of hubChannels) {
+        const method = channel === 'pet:hub-session' ? 'session' : channelMethod(channel);
+        for (const payload of [null, [], 7, 'x', undefined]) {
+          let envelope;
+          try {
+            envelope = await hub[method](payload);
+          } catch (error) {
+            assert.fail(`${channel}(${JSON.stringify(payload)}) threw ${error && error.message}`);
+          }
+          assert.ok(ENVELOPE_KINDS.includes(envelope.kind), `${channel}: ${envelope.kind}`);
+          assert.deepEqual(Object.keys(envelope).sort(), ['data', 'error', 'httpStatus', 'kind']);
+        }
+      }
+    }
+  } finally {
+    double.server.close();
+  }
+});
+
+test('실제 http: journal-read 로 연 다른 메모를 고치면 그 메모에 쓴다(마지막 저장 메모로 새지 않는다)', async () => {
+  const double = await startHubDouble();
+  try {
+    const { hub } = hubFor(double);
+    const a = await hub.journalSave({ body: '펫 메모 A' });
+    assert.equal(a.kind, 'live');
+    const b = randomUUID();
+    double.state.memos.set(b, { id: b, body: 'B 원문', title: 'B 제목', occurredAt: '2026-09-27T00:00:00Z', revision: 3, noteMeta: { kind: 'note', enhancement: '' }, contexts: [] });
+    const read = await hub.journalRead({ entryId: b });
+    assert.equal(read.data.entry.revision, 3);
+    const saved = await hub.journalSave({ entryId: b, expectedRevision: read.data.entry.revision, body: 'B 를 고친 글' });
+    assert.equal(saved.kind, 'live');
+    assert.equal(saved.data.entry.id, b);
+    assert.equal(saved.data.verified, true);
+    assert.equal(double.state.memos.get(b).body, 'B 를 고친 글');
+    assert.equal(double.state.memos.get(b).title, 'B 제목');
+    assert.equal(double.state.memos.get(a.data.entry.id).body, '펫 메모 A');
+    assert.equal(double.state.memos.get(a.data.entry.id).revision, 1);
+  } finally {
+    double.server.close();
+  }
+});
+
+test('실제 http: 대화 busy 는 이 대화가 보내는 중일 때만 true, 보내는 대화는 busyWith', async () => {
+  const double = await startHubDouble();
+  try {
+    double.state.chatDelay = 150;
+    const { hub } = hubFor(double);
+    const sending = hub.chatSend({ ownerId: 'eevee', scope: 'all', message: '느린 질문' });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const same = await hub.chatSession({ ownerId: 'eevee', scope: 'all' });
+    assert.equal(same.data.busy, true);
+    const other = await hub.chatSession({ ownerId: 'sylveon', scope: 'personal' });
+    assert.equal(other.data.busy, false, '다른 대화에는 스피너를 그리지 않는다');
+    assert.deepEqual(other.data.busyWith, { ownerId: 'eevee', scope: 'all', message: '느린 질문' });
+    await sending;
+    const after = await hub.chatSession({ ownerId: 'eevee', scope: 'all' });
+    assert.equal(after.data.busy, false);
+    assert.equal(after.data.busyWith, null);
+  } finally {
+    double.server.close();
+  }
+});
+
+test('실제 http: 로그인 필요 동안 폴링은 세션만 확인하고, 메인 창 로그인 뒤 원천을 다시 읽는다', async () => {
+  const double = await startHubDouble();
+  try {
+    let cookie = '';
+    const { hub, events } = hubFor(double, { cookieHeader: async () => cookie });
+    await hub.tick();
+    assert.equal(hub.status, 'unauthorized');
+    const countSince = (start, path) => double.state.seen.slice(start).filter((s) => s.path === path).length;
+    let mark = double.state.seen.length;
+    await hub.tick();
+    await hub.tick();
+    assert.equal(countSince(mark, '/api/hub/inquiries'), 0, '401 을 쌓지 않는다');
+    assert.equal(countSince(mark, '/api/calendar/google/event'), 0);
+    assert.equal(countSince(mark, '/api/operator/session'), 2);
+    cookie = double.state.cookie; // 메인 창에서 로그인
+    mark = double.state.seen.length;
+    const result = await hub.tick();
+    assert.equal(hub.status, 'connected');
+    assert.ok(!result.skipped && !result.probed);
+    assert.equal(countSince(mark, '/api/operator/session'), 1);
+    assert.equal(countSince(mark, '/api/hub/inquiries'), 1);
+    const statuses = events.filter(([n]) => n === 'pet:hub-status').map(([, p]) => p.status);
+    assert.deepEqual(statuses.slice(-2), ['unauthorized', 'connected']);
+  } finally {
+    double.server.close();
+  }
 });

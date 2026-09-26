@@ -212,7 +212,8 @@ test('에이전트 답변은 배지를 올리되 허브 문의 수는 바꾸지 
   activity.addAgentReply({ id: replyId, ownerId: 'sylveon', scope: 'personal', title: '님피아의 답변', body: '답변이 도착했어요.' });
   const list = activity.list();
   assert.equal(list.unreadCount, 2);
-  assert.equal(list.badge, '2');
+  assert.equal(list.badge, 2, 'badge 는 state.badge 와 같은 숫자');
+  assert.equal(list.badgeLabel, '2');
   assert.equal(list.totalInquiryCount, 7);
   assert.equal(list.banner.id, `reply:${replyId}`);
   assert.deepEqual(delivered, [`reply:${replyId}`]);

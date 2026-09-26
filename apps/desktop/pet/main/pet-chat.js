@@ -88,7 +88,8 @@ function createChat(options = {}) {
     viewing = null;
   }
 
-  function view({ ownerId, scope } = {}) {
+  function view(payload) {
+    const { ownerId, scope } = payload !== null && typeof payload === 'object' ? payload : {};
     if (!origin || !validTarget(ownerId, scope)) return null;
     viewing = sessionKey(origin, ownerId, scope);
     return viewing;
@@ -98,7 +99,8 @@ function createChat(options = {}) {
   }
 
   // draft 가 문자열이면 그 대화의 미전송 초안으로 저장한다.
-  function session({ ownerId, scope, draft } = {}) {
+  function session(payload) {
+    const { ownerId, scope, draft } = payload !== null && typeof payload === 'object' ? payload : {};
     if (!validTarget(ownerId, scope)) throw fail('error', 'invalid-input');
     if (!origin) throw fail('not-configured', 'hub-url-missing');
     const key = sessionKey(origin, ownerId, scope);
@@ -107,14 +109,16 @@ function createChat(options = {}) {
     return {
       turns: s.exchanges.flatMap((x) => [userTurn(x), assistantTurn(x)]),
       draft: s.draft,
-      busy: busyInfo(),
-      sending: Boolean(sending && sending.key === key),
+      busy: Boolean(sending && sending.key === key), // 이 대화가 보내는 중인가(bridge 계약의 boolean)
+      sending: Boolean(sending && sending.key === key), // busy 와 같은 값(이전 이름, 호환용)
+      busyWith: busyInfo(), // 어느 대화든 보내는 중이면 {ownerId, scope, message} — 다른 대화에서 보내기 버튼을 잠글 때
       error: s.error,
     };
   }
 
   // 반환: 봉투. 성공 data = { turn, userTurn }
-  async function send({ ownerId, scope, message } = {}) {
+  async function send(payload) {
+    const { ownerId, scope, message } = payload !== null && typeof payload === 'object' ? payload : {};
     if (!api || !origin) return errorEnvelope(fail('not-configured', 'hub-url-missing'));
     if (!validTarget(ownerId, scope)) return errorEnvelope(fail('error', 'invalid-input'));
     if (sending) return errorEnvelope(fail('error', 'busy'));
@@ -176,7 +180,8 @@ function createChat(options = {}) {
     return true;
   }
 
-  function clear({ ownerId, scope } = {}) {
+  function clear(payload) {
+    const { ownerId, scope } = payload !== null && typeof payload === 'object' ? payload : {};
     if (sending || !origin || !validTarget(ownerId, scope)) return false;
     const s = sessionFor(sessionKey(origin, ownerId, scope));
     s.exchanges = [];

@@ -25,6 +25,17 @@ const { createChat } = require('./pet-chat');
 const { councilHandoffPath, SOURCE_KINDS } = require('./pet-council-handoff');
 
 const HUB_STATUSES = Object.freeze(['connected', 'unauthorized', 'not-configured', 'offline', 'unknown']);
+// 이 상태에서는 폴링이 알림 원천(문의·일정)을 읽지 않고 세션만 가볍게 확인한다 — 401 을 60초마다 쌓지 않는다.
+const PROBE_ONLY_STATUSES = Object.freeze(['unauthorized', 'not-configured']);
+
+// IPC 로 온 payload 는 null·배열·원시값일 수 있다 — 채널 메서드는 던지지 않고 빈 객체로 읽는다.
+const payloadOf = (value) => (value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {});
+
+// 세션 응답 → 연결 상태.
+function statusFromSession(data) {
+  if (!data || !data.configured) return 'not-configured';
+  return data.status === 'authenticated' ? 'connected' : 'unauthorized';
+}
 
 function characterNameByOffice(officeId) {
   const found = CHARACTERS.find((c) => c.officeId === officeId);
@@ -143,7 +154,9 @@ function createPetHub(options = {}) {
   }
 
   // 공통 실행기: 연결 확인 → 실행 → 봉투. 도중에 origin 이 바뀌면 늦은 결과를 현재 화면에 넣지 않는다.
-  async function run(fn) {
+  // statusOf(envelope) 가 있으면 연결 상태를 그 값으로 한 번만 정한다(세션 확인처럼 성공 봉투가 곧 '연결됨'이 아닐 때).
+  // fn 이 HubError 가 아닌 예외를 던지면 error 'unexpected'.
+  async function run(fn, statusOf = statusFromEnvelope) {
     const current = conn;
     if (!current) return errorEnvelope(fail('not-configured', 'hub-url-missing'));
     await current.ready;
@@ -155,7 +168,7 @@ function createPetHub(options = {}) {
       envelope = errorEnvelope(error instanceof HubError ? error : fail('error', 'unexpected'));
     }
     if (current !== conn) return errorEnvelope(fail('error', 'stale-origin'));
-    setHubStatus(statusFromEnvelope(envelope));
+    setHubStatus(statusOf(envelope));
     return envelope;
   }
 
@@ -167,13 +180,9 @@ function createPetHub(options = {}) {
   // ── 채널 ─────────────────────────────────────────────────────────────
   const hub = {
     // 'pet:hub-session' → { status:'authenticated'|'anonymous', configured, reason }
-    async session() {
-      const envelope = await run(async (c) => ({ data: await c.client.sessionStatus() }));
-      if (envelope.kind === 'live') {
-        const { status, configured } = envelope.data;
-        setHubStatus(!configured ? 'not-configured' : status === 'authenticated' ? 'connected' : 'unauthorized');
-      }
-      return envelope;
+    session() {
+      return run(async (c) => ({ data: await c.client.sessionStatus() }),
+        (envelope) => (envelope.kind === 'live' ? statusFromSession(envelope.data) : statusFromEnvelope(envelope)));
     },
 
     // 'pet:tasks-list' → { tasks, partial, pending }
@@ -185,7 +194,8 @@ function createPetHub(options = {}) {
     },
 
     // 'pet:tasks-add' {title, id?} → { task, title(확인된 명령의 제목), replayed, recovered, pending }
-    tasksAdd(payload = {}) {
+    tasksAdd(input) {
+      const payload = payloadOf(input);
       return run(async (c) => {
         const result = await c.pending.addTask({ title: payload.title, id: payload.id });
         return { data: { ...result, pending: c.pending.summary() } };
@@ -193,7 +203,8 @@ function createPetHub(options = {}) {
     },
 
     // 'pet:tasks-toggle' {id, status:'done'|'todo', expectedUpdatedAt} → { task }
-    tasksToggle(payload = {}) {
+    tasksToggle(input) {
+      const payload = payloadOf(input);
       return run(async (c) => {
         if (!isUuid(payload.id) || (payload.status !== 'done' && payload.status !== 'todo')) throw fail('error', 'invalid-input');
         const task = await c.api.setTask({ id: payload.id, updatedAt: payload.expectedUpdatedAt }, payload.status === 'done');
@@ -202,7 +213,8 @@ function createPetHub(options = {}) {
     },
 
     // 'pet:journal-read' {entryId?} → { entry|null, pending } — entryId 가 없으면 이 펫이 마지막으로 저장한 메모.
-    journalRead(payload = {}) {
+    journalRead(input) {
+      const payload = payloadOf(input);
       return run(async (c) => {
         const id = isUuid(payload.entryId) ? payload.entryId : c.pending.savedMemoId();
         const entry = id ? await c.api.memo(id) : null;
@@ -213,7 +225,8 @@ function createPetHub(options = {}) {
     // 'pet:journal-save' {body, requestId?, entryId?, expectedRevision?, title?, occurredAt?, asNew?, finish?}
     //   → { entry, verified:true, replayed, unchanged, pending }
     //   asNew:true = '새 항목으로 Hub에 저장'(충돌 복구). finish:true = 빠른 캡처 끝(다음 입력은 새 메모).
-    journalSave(payload = {}) {
+    journalSave(input) {
+      const payload = payloadOf(input);
       return run(async (c) => {
         const result = await c.pending.saveMemo(payload);
         return { data: { ...result, pending: c.pending.summary() } };
@@ -232,14 +245,15 @@ function createPetHub(options = {}) {
     },
 
     // 'pet:calendar-week' {dateISO} → { events:[{key,id,title,start,end,allDay,location,source,startMs,endMs,dates}], status, weekStart, weekEnd, partial }
-    calendarWeek(payload = {}) {
+    calendarWeek(input) {
+      const payload = payloadOf(input);
       return run(async (c) => {
         const week = await c.api.calendarWeek(payload.dateISO, clock());
         return { kind: week.partial ? 'partial' : 'live', data: week };
       });
     },
 
-    // 'pet:notices-list' → { notices, unreadCount, badge(표시 문자열: ''|'1'…'99'|'99+'), totalInquiryCount, message,
+    // 'pet:notices-list' → { notices, unreadCount, badge(숫자 = unreadCount), badgeLabel(표시 문자열: ''|'1'…'99'|'99+'), totalInquiryCount, message,
     //   bannersEnabled, sources:{inquiry, event}('ok'|오류 코드) }
     // 한 원천만 실패하면 partial, 둘 다 실패하면 그 오류 kind — 어느 쪽이든 이전 목록(data)은 함께 준다.
     async noticesList() {
@@ -255,12 +269,14 @@ function createPetHub(options = {}) {
 
     // 'pet:notices-read' {id} → { target, …목록 } — target: {type:'hub',path} | {type:'calendar',dateISO} | {type:'chat',ownerId,scope}
     // 허브의 미확인 상태는 바꾸지 않는다(허브 상세 화면이 읽음 처리를 한다).
-    noticesRead(payload = {}) {
+    noticesRead(input) {
+      const payload = payloadOf(input);
       const target = activity.read(payload.id);
       if (!target) return Promise.resolve(errorEnvelope(fail('error', 'invalid-input')));
       return Promise.resolve(okEnvelope('live', { target, ...activity.list() }));
     },
-    noticesHide(payload = {}) {
+    noticesHide(input) {
+      const payload = payloadOf(input);
       if (!activity.hide(payload.id)) return Promise.resolve(errorEnvelope(fail('error', 'invalid-input')));
       return Promise.resolve(okEnvelope('live', activity.list()));
     },
@@ -270,10 +286,10 @@ function createPetHub(options = {}) {
     },
 
     // 'pet:chat-send' {ownerId, scope, message} → { turn, userTurn }
-    async chatSend(payload = {}) {
+    async chatSend(input) {
       const current = conn;
       if (current) await current.ready;
-      const envelope = await chat.send(payload);
+      const envelope = await chat.send(payloadOf(input));
       if (current && current === conn) setHubStatus(statusFromEnvelope(envelope));
       return envelope;
     },
@@ -281,9 +297,10 @@ function createPetHub(options = {}) {
     chatCancel() {
       return Promise.resolve(okEnvelope('live', { cancelled: chat.cancel() }));
     },
-    // 'pet:chat-session' {ownerId, scope, draft?} → { turns, draft, busy, sending, error }
+    // 'pet:chat-session' {ownerId, scope, draft?} → { turns, draft, busy(이 대화가 보내는 중: boolean), sending(=busy), busyWith(보내는 대화 {ownerId,scope,message}|null), error }
     // 이 대화를 '보고 있음'으로 표시하고 그 대화의 답변 알림을 거둔다. 창을 접으면 셸이 hub.chatLeave() 를 부른다.
-    chatSession(payload = {}) {
+    chatSession(input) {
+      const payload = payloadOf(input);
       try {
         const data = chat.session(payload);
         chat.view(payload);
@@ -299,7 +316,8 @@ function createPetHub(options = {}) {
 
     // 'pet:council-handoff' {draft, source?:'text'|'memo'|'task'} → { path, url }
     // path 는 허브 상대 경로 — 셸이 'pet:open-hub' 와 같은 방식으로 메인 창에서 연다. AI 호출은 허브에서 사용자가 누를 때만.
-    councilHandoff(payload = {}) {
+    councilHandoff(input) {
+      const payload = payloadOf(input);
       if (!conn) return Promise.resolve(errorEnvelope(fail('not-configured', 'hub-url-missing')));
       const kind = SOURCE_KINDS.includes(payload.source) ? payload.source : 'text';
       try {
@@ -324,12 +342,18 @@ function createPetHub(options = {}) {
       return { count, label: badgeLabel(count) };
     },
     // 알림 원천을 한 번 읽는다(폴링 한 칸). 결과로 연결 상태도 갱신한다.
+    // 로그인 필요·허브 로그인 미설정 상태에서는 원천을 읽지 않고 세션만 확인한다 — 메인 창에서 로그인하면
+    // 다음 칸에서 'connected' 로 돌아와 그 칸에서 바로 원천을 읽는다.
     async tick(nowMs) {
       const current = conn;
       if (!current) return { skipped: true };
       await current.ready;
       if (pollInFlight) return pollInFlight;
       pollInFlight = (async () => {
+        if (PROBE_ONLY_STATUSES.includes(hubStatus)) {
+          await hub.session();
+          if (current !== conn || hubStatus !== 'connected') return { skipped: true, probed: true, status: hubStatus };
+        }
         const result = await activity.tick(nowMs ?? clock());
         if (current === conn && !result.skipped) {
           if (result.succeeded > 0) setHubStatus('connected');
@@ -382,4 +406,4 @@ function createPetHub(options = {}) {
   return hub;
 }
 
-module.exports = { createPetHub, councilHandoffUrl, statusFromEnvelope, characterNameByOffice, HUB_STATUSES };
+module.exports = { createPetHub, councilHandoffUrl, statusFromEnvelope, statusFromSession, characterNameByOffice, HUB_STATUSES, PROBE_ONLY_STATUSES };

@@ -131,7 +131,8 @@ function createActivity(options = {}) {
     return {
       notices: notices.map(publicNotice),
       unreadCount: count,
-      badge: badgeLabel(count),
+      badge: count, // 숫자(state.badge 와 같은 타입). 표시 문자열은 badgeLabel
+      badgeLabel: badgeLabel(count),
       totalInquiryCount,
       message,
       bannersEnabled,
