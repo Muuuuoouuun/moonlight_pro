@@ -158,7 +158,7 @@ test("the route lives outside /dashboard, stays dynamic and keeps the session ga
   assert.doesNotMatch(access, /["']\/widget/);
   const source = read("./quick-widget.jsx");
   assert.match(source, /hint 'inbox'/);
-  assert.match(source, /submitQuickCapture\(session\)/);
+  assert.match(source, /submitQuickCapture\(session, \{ fetchImpl \}\)/);
   assert.match(source, /useDailyBriefSignals\(reloadKey, \{ keepPrevious: true \}\)/);
   assert.match(source, /shouldSubmitQuickTask\(event, saving\)/);
   assert.doesNotMatch(source, /setInterval|setTimeout/, "다시 읽기는 포커스·가시성 이벤트뿐");
