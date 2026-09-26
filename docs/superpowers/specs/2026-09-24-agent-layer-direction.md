@@ -192,6 +192,10 @@ Legend ── 주간 카드만 · 에스컬레이션 목적지 아님 · Office 
 - 스킬 receipt의 `commandId`는 같은 actor가 남긴 `complete_task`만 인정한다. 할 일 완료와 receipt는 같은 클라이언트가 한다.
 - `receiptActorId`는 API에만 있고 Hub 화면에는 아직 표시되지 않는다.
 
+### 6.7 자동화 역할 재정렬 — 2026-09-26
+
+운영자가 요청형 AI·정기 수집/동기화 분리를 승인했다. [최신 자동화 스펙](2026-09-26-automation-guru-realignment-design.md)이 §6.6의 구형 크론 수동 유지 부분을 대체한다. 세 일괄 GET 엔드포인트는 인증 후410 중단 응답으로 폐기하고, 기존 고객·Office·Studio 요청형 생성은 유지한다. 홈은 활성 정기 운영의 최근 미회복 실패만 표시하며 과거 실행 기록은 보존한다. Vercel 운영 배포98d920c3에 세 구형 예약이 실제로 남아 있음을 확인했으므로 §6.5의 env0/미가동 서술은 과거 상태다. [적용·검증 기록](../plans/2026-09-26-automation-guru-realignment.md).
+
 ## 7. 미정 (이번 빌드에서 답하지 않음)
 
 - dissent가 남을 때 Legend 트라이어드를 두 번째 목적지로 둘지.

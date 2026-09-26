@@ -172,3 +172,11 @@ test("Overview projection performs no reads without Supabase configuration", asy
     "preview", "preview", "preview", "preview", "preview",
   ]);
 });
+
+test('overview preserves retired orphan run names and excludes retired active rows', async () => {
+  state.rows.automations = [{id:'retired',name:'Guru Autopilot',status:'active',meta:{key:'followup-autopilot'}}];
+  state.rows.automation_runs = [{id:'orphan',automation_id:null,status:'failure',output_payload:{key:'followup-autopilot'},created_at:'2026-09-26T02:00:00Z'}];
+  const snapshot=await getOverviewLedger({now:new Date('2026-09-26T12:00:00Z')});
+  assert.equal(snapshot.automations.summary.activeAutomations,0);
+  assert.equal(snapshot.automations.runs[0].flow,'Guru Autopilot');
+});

@@ -12,6 +12,7 @@ export function withWorkspaceFilter(filters = []) {
 export async function fetchSupabaseRows(table, options = {}) {
   const state = globalThis.__automationsLedgerTestState;
   state.calls.push({ table, options });
+  if (table === "automation_runs" && options.limit === 501 && Object.hasOwn(state.rows, "incident_runs")) return state.rows.incident_runs;
   return Object.hasOwn(state.rows, table) ? state.rows[table] : [];
 }
 `;
@@ -87,7 +88,7 @@ test("narrows automation_runs, webhook_events, integration_connections and error
 
   for (const [table, select] of Object.entries(EXPECTED_SELECT)) {
     const calls = state.calls.filter((call) => call.table === table);
-    assert.equal(calls.length, 1, `${table} must be fetched exactly once`);
+    assert.equal(calls.length, table === "automation_runs" ? 2 : 1, `${table} uses bounded history and a separate incident window`);
     assert.equal(calls[0].options.select, select);
     assert.ok(!calls[0].options.select.includes("input_payload"), `${table} select must not read input_payload`);
     assert.ok(!calls[0].options.select.includes("config"), `${table} select must not read config`);
@@ -173,4 +174,80 @@ test("maps run detail from output_payload and surfaces integration identity fiel
   assert.equal(ledger.integrations[0].externalAccountId, "account-1");
   assert.equal(ledger.errors[0].automationRunId, "run-1");
   assert.equal(ledger.webhookEvents[0].eventType, "lead.created");
+});
+
+test('retired active rows and orphan run keys keep history without home incidents', async () => {
+  const state = globalThis.__automationsLedgerTestState;
+  state.rows.automations = [{ id: 'retired', name: 'Guru Autopilot', status: 'active', meta: { key: 'followup-autopilot' } }];
+  state.rows.automation_runs = [{ id: 'orphan', automation_id: null, status: 'failure', created_at: new Date().toISOString(), output_payload: { key: 'followup-autopilot' }, error_message: 'engine-202' }];
+  const result = await automationsLedger.getAutomationsLedger();
+  assert.equal(result.automations[0].statusKey, 'disabled');
+  assert.equal(result.automations[0].executionMode, 'retired');
+  assert.equal(result.summary.activeAutomations, 0);
+  assert.equal(result.runs[0].flow, 'Guru Autopilot');
+  assert.equal(result.runs[0].automationId, 'retired');
+  assert.equal(result.runs[0].executionMode, 'retired');
+  assert.equal(result.runs[0].detail, 'engine-202');
+  assert.ok(result.runs[0].dateLabel.includes(String(new Date().getFullYear())));
+  assert.deepEqual(result.incidents, []);
+});
+test('operational failures are grouped before the visible history limit', async () => {
+  const state = globalThis.__automationsLedgerTestState;
+  state.rows.automations = [{ id: 'sync', name: '문의 동기화', status: 'active', meta: { key: 'inquiries-sync' } }];
+  state.rows.automation_runs = Array.from({ length: 41 }, (_, i) => ({ id: `run-${i}`, automation_id: 'sync', status: 'failure', created_at: new Date(Date.now() - i * 60000).toISOString() }));
+  const result = await automationsLedger.getAutomationsLedger();
+  assert.equal(result.runs.length, 40);
+  assert.equal(result.incidents?.length, 1);
+  assert.equal(result.incidents[0].failureCount, 41);
+  assert.equal(result.summary.attentionCount, 1);
+});
+test('source failures remain explicit instead of reporting no incidents', async () => {
+  const state = globalThis.__automationsLedgerTestState;
+  state.rows.automation_runs = null;
+  const result = await automationsLedger.getAutomationsLedger();
+  assert.equal(result.source, 'error');
+  assert.ok(result.failedSources.includes('automation_runs'));
+});
+
+test('missing triggers cannot silently classify operational failures as requested', async () => {
+  const state=globalThis.__automationsLedgerTestState;
+  state.rows.triggers=null;
+  const result=await automationsLedger.getAutomationsLedger();
+  assert.equal(result.source,'error');
+  assert.ok(result.failedSources.includes('triggers'));
+});
+
+test('unidentified legacy heartbeats retain the existing System filter label', async () => {
+  const state=globalThis.__automationsLedgerTestState;
+  state.rows.automation_runs=[{id:'heartbeat',status:'success',created_at:new Date().toISOString(),output_payload:{summary:'Engine is alive.'}}];
+  const result=await automationsLedger.getAutomationsLedger();
+  assert.equal(result.runs[0].flow,'System');
+});
+
+
+test('home incidents use a separate settled-result window, not the global history cap', async () => {
+  const state=globalThis.__automationsLedgerTestState;
+  state.rows.automations=[{id:'sync',status:'active',meta:{key:'inquiries-sync'}}];
+  const start=Date.now()-3600000;
+  const failed={id:'fail',automation_id:'sync',status:'failure',created_at:new Date(start+60000).toISOString(),finished_at:new Date(start+120000).toISOString()};
+  const success={id:'recovery',automation_id:'sync',status:'success',created_at:new Date(start).toISOString(),finished_at:new Date(start+180000).toISOString()};
+  state.rows.automation_runs=[failed];
+  state.rows.incident_runs=[failed,success];
+  const result=await automationsLedger.getAutomationsLedger();
+  assert.deepEqual(result.incidents,[]);
+  const query=state.calls.find(call=>call.options.limit===501);
+  assert.ok(query?.options.filters.some(([key,value])=>key==='status'&&value==='in.(success,failure)'));
+  assert.ok(query?.options.filters.some(([key])=>key==='or'));
+});
+test('truncated or failed incident windows cannot report zero current problems', async () => {
+  const state=globalThis.__automationsLedgerTestState;
+  state.rows.incident_runs=Array.from({length:501},(_,i)=>({id:`overflow-${i}`,status:'success',created_at:new Date().toISOString()}));
+  let result=await automationsLedger.getAutomationsLedger();
+  assert.equal(result.partial,true);
+  assert.equal(result.summary.attentionCount,null);
+  assert.ok(result.partialSources.includes('automation_incidents'));
+  state.rows.incident_runs=null;
+  result=await automationsLedger.getAutomationsLedger();
+  assert.equal(result.source,'error');
+  assert.ok(result.failedSources.includes('automation_incidents'));
 });
