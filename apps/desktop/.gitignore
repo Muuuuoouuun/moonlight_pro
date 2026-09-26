@@ -2,3 +2,4 @@ node_modules/
 dist/
 *.pfx
 *.p12
+smoke*.png
