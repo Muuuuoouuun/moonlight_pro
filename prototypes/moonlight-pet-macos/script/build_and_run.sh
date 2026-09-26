@@ -39,6 +39,13 @@ cat > "$APP_CONTENTS/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 
+# Sign the assembled bundle: the Swift linker signature does not bind Info.plist
+# or resources and fails strict bundle verification. A real development identity
+# can be supplied to preserve TCC identity across code changes.
+/usr/bin/codesign --force --sign "${MOONLIGHT_CODE_SIGN_IDENTITY:--}" --timestamp=none \
+  --identifier "$BUNDLE_ID" "$APP_BUNDLE"
+/usr/bin/codesign --verify --strict --verbose=2 "$APP_BUNDLE"
+
 open_app() { /usr/bin/open -n "$APP_BUNDLE"; }
 
 case "$MODE" in
@@ -57,7 +64,9 @@ case "$MODE" in
   --verify|verify)
     open_app
     sleep 1
-    cmp -s "$BUILD_BINARY" "$APP_BINARY"
+    # Signing changes the executable bytes; the Mach-O build UUID must match.
+    [[ "$(/usr/bin/dwarfdump --uuid "$BUILD_BINARY" | awk '{print $2}')" == \
+       "$(/usr/bin/dwarfdump --uuid "$APP_BINARY" | awk '{print $2}')" ]]
     RUNNING_PIDS="$(pgrep -x "$APP_NAME")"
     [[ "$(printf '%s\n' "$RUNNING_PIDS" | wc -l | tr -d ' ')" == "1" ]]
     [[ "$(ps -p "$RUNNING_PIDS" -o command=)" == "$APP_BINARY" ]]

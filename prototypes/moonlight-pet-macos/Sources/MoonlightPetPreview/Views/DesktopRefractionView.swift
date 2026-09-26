@@ -9,6 +9,9 @@ import CoreVideo
 /// ScreenCaptureKit excludes this entire process, including the pet and its panels.
 @MainActor
 final class DesktopRefractionView: MTKView, MTKViewDelegate, SCStreamOutput, SCStreamDelegate {
+    // Shared across quick/pinned windows. A denied build must not prompt again
+    // on window movement, display changes, or panel transitions in this process.
+    private static var permissionDenied = false
     private let renderer: GlassOpticsRenderer
     private let blur: MPSImageGaussianBlur
     private var cache: CVMetalTextureCache?
@@ -115,6 +118,10 @@ final class DesktopRefractionView: MTKView, MTKViewDelegate, SCStreamOutput, SCS
         }
         // ScreenCaptureKit performs authorization itself. Legacy CoreGraphics
         // preflight can disagree with the permission granted to this app build.
+        guard !Self.permissionDenied else {
+            onStatus?("화면 접근이 거부됐어요 · 권한 변경 후 앱을 다시 실행하세요")
+            return
+        }
         let ticket = generation
         onStatus?("배경 굴절 연결 중…")
         Task { [weak self] in
@@ -148,7 +155,12 @@ final class DesktopRefractionView: MTKView, MTKViewDelegate, SCStreamOutput, SCS
                 guard ticket == self.generation else { return }
                 self.stop()
                 let failure = error as NSError
-                self.onStatus?("배경 연결 실패 (\(failure.domain):\(failure.code)) · 기본 유리 사용 중")
+                if failure.domain == SCStreamErrorDomain && failure.code == SCStreamError.Code.userDeclined.rawValue {
+                    Self.permissionDenied = true
+                    self.onStatus?("화면 접근이 거부됐어요 · 권한 변경 후 앱을 다시 실행하세요")
+                } else {
+                    self.onStatus?("배경 연결 실패 (\(failure.code)) · 기본 유리 사용 중")
+                }
             }
         }
     }

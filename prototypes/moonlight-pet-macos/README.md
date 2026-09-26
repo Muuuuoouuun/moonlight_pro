@@ -13,6 +13,12 @@ cd prototypes/moonlight-pet-macos
 ./script/build_and_run.sh --verify
 ```
 
+### 화면 기록 권한과 개발용 서명
+
+실행 스크립트는 리소스·Info.plist를 배치한 **최종 앱 번들**을 서명하고 strict 검증 후 실행한다. 기본은 로컬 ad-hoc 서명이다. 소스가 바뀌면 이 서명의 식별 조건도 달라져 macOS 화면 기록 권한을 다시 허용해야 할 수 있다. 고정된 개발 인증서가 설치돼 있다면 `MOONLIGHT_CODE_SIGN_IDENTITY`에 해당 인증서 이름 또는 SHA-1을 지정한다. 임의의 느슨한 designated requirement로 권한을 우회하지 않는다.
+
+배경 굴절은 더보기에서 켜는 실험 기능이다. macOS가 접근을 거부하면 해당 실행 세션의 자동 재시도를 멈춘다. 설정에서 현재 `dist/MoonlightPetPreview.app`의 화면 기록을 허용한 뒤 앱을 재실행하고 실험을 다시 켠다. 허용 후 확인 중에는 재빌드하지 않는다.
+
 ## 조작
 
 오른쪽 가장자리의 펫을 한 번 누르면 빠른 기능을 연다. 두 번 누르거나 헤더의 핀을 누르면 지속 위젯으로 바뀐다. 할 일·일정은 세로형 `오늘`, 메모는 가로형 입력면, 집중은 별도의 전체 화면으로 구성한다. 더보기에서 Office·Council·알림·집중·Hub 연결 설정으로 이동한다.
