@@ -31,7 +31,7 @@ enum DesktopRefractionCheck {
         u.viewport = SIMD4(Float(size), Float(size), 1, 0)
         u.material = SIMD4(26, 9, 0, 0)
         guard let straight = renderer.pixels(u, width: size, height: size, backdrop: texture) else { return false }
-        u.material.z = 6
+        u.material.z = 8
         guard let bent = renderer.pixels(u, width: size, height: size, backdrop: texture) else { return false }
         var displaced = 0
         for y in 32..<128 {
@@ -44,6 +44,23 @@ enum DesktopRefractionCheck {
         guard displaced > 500, bent[3] == 0 else {
             fputs("Desktop lens must displace the interior without a new luminance floor\n",stderr)
             return false
+        }
+        // A plain backdrop must remain plain: reflections must not invent
+        // a central rectangle, bright veil or colored patches.
+        let uniform = [UInt8](repeating: 128, count: size*size*4)
+        uniform.withUnsafeBytes { bytes in
+            texture.replace(region: MTLRegionMake2D(0,0,size,size), mipmapLevel: 0,
+                withBytes: bytes.baseAddress!, bytesPerRow: size*4)
+        }
+        guard let flat = renderer.pixels(u, width: size, height: size, backdrop: texture) else { return false }
+        for y in 20..<140 {
+            for x in 20..<140 {
+                let i = (y*size+x)*4
+                guard (0..<3).allSatisfy({ abs(Int(flat[i+$0])-128) <= 1 }) else {
+                    fputs("Desktop lens added a fill to a uniform backdrop\n", stderr)
+                    return false
+                }
+            }
         }
         u.light.z = 1
         guard let accessible = renderer.pixels(u, width: size, height: size, backdrop: texture),

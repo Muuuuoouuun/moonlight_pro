@@ -92,7 +92,7 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     // Scale the spectral lip with the bevel: production 9pt is 90% of the
     // previous 10pt band. The outer hairline stays one physical pixel.
     float lipScale = min(1.0,bevel/10.0);
-    float dispersion = .44*lipScale*clamp(u.material.z,0.0,1.8);
+    float dispersion = .54*lipScale*clamp(u.material.z,0.0,1.8);
     float direction = dot(outward,normalize(float2(-.7,-.5))) >= 0 ? 1.0 : -1.0;
     float center = min(1.35*lipScale,bevel*.18);
     float width = max(.52,.72/u.viewport.z)*lipScale;
@@ -101,10 +101,10 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
                               reflectionBand(depth,center+dispersion*direction,width));
     float litArc = .24 + .76*pow(abs(dot(outward,normalize(float2(-.7+u.light.x*.1,-.5+u.light.y*.1)))),3.0);
     // More distinct wavelengths at the lit corners, with the same 9pt bevel.
-    float3 prism = spectrum * (.16*litArc*(1.0-t));
+    float3 prism = spectrum * (.22*litArc*(1.0-t));
     // A faint inner return gives the lip depth without extending into the face.
     float innerReturn = reflectionBand(depth, bevel*.48, bevel*.095)
-                        * .024 * litArc * (1.0-t);
+                        * .040 * litArc * (1.0-t);
     if (!lab) {
         // Premultiplied alpha; exactly transparent center, pass-through input.
         // Approved study raised edge intensity from .45 to .66; preserve the
@@ -149,6 +149,11 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     bend -= outward * edge * u.material.z * 1.8;
     float2 uv = u.backdrop.xy + ((point + bend) / size) * u.backdrop.zw;
     float3 color = scene.sample(linearSampler, uv).rgb;
+    // Background-only chromatic dispersion follows the curved rim. Keep the
+    // content-bearing center achromatic and preserve uniform backgrounds.
+    float2 spectralOffset = outward * edge * u.material.z * .075 / size * u.backdrop.zw;
+    color.r = scene.sample(linearSampler, uv + spectralOffset).r;
+    color.b = scene.sample(linearSampler, uv - spectralOffset).b;
     // Blend into the unchanged native optical lip; no dark inner rectangle.
     float alpha = smoothstep(0.0, 9.0, depth);
     return float4(color * alpha, alpha);

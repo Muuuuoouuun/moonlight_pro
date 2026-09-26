@@ -32,7 +32,7 @@ enum GlassOpticsCheck {
             if separation > 2 { prismaticPixels += 1 }
             strongestSeparation = max(strongestSeparation,separation)
         }
-        guard prismaticPixels > 100, strongestSeparation >= 24, strongestSeparation < 40 else {
+        guard prismaticPixels > 100, strongestSeparation >= 38, strongestSeparation < 58 else {
             fputs("Glass prism is absent or oversaturated: \(prismaticPixels) pixels, \(strongestSeparation)/255 separation\n",stderr)
             return false
         }
