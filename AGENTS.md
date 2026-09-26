@@ -87,7 +87,7 @@ python3 .agents/skills/ui-ux-pro-max/scripts/search.py "data table status badge"
 - `main`: 프로덕션. CI push 트리거는 `main`·`codex/**`뿐이라 그 밖의 브랜치는 PR을 열어야 CI가 돈다
 - `codex/*`: Codex 작업 브랜치 · `claude/*`: Claude Code 워크트리 브랜치 · `real_v*`: 운영자 통합 브랜치
 - 고정된 "현재 작업 브랜치"를 문서에 적지 않는다. 작업 시작 시 Git 상태를 직접 확인한다.
-- 메인 워크트리는 여러 세션이 동시에 쓴다. 여러 파일에 걸친 기능·리팩터는 전용 worktree(`git worktree add ../moonlight_pro-<slug> -b <branch>`)에서 시작하고, 병합 뒤 `git worktree remove`까지 마친다(2026-07-16 운영자 확정). 1~2줄 수정과 조사는 예외
+- 메인 워크트리는 여러 세션이 동시에 쓴다. 여러 파일에 걸친 기능·리팩터는 전용 worktree(`git worktree add ../moonlight_pro-<slug> -b <branch>`)에서 시작하고, 병합 뒤 `git worktree remove`까지 마친다(2026-07-16 운영자 확정). 1~2줄 수정과 조사는 예외 세션 수는 제한하지 않지만 **체크아웃 하나에 세션 하나**다 — 메인 체크아웃은 한 세션만 쓰고 나머지는 각자 워크트리에서 일한다. 다른 세션이 메인 체크아웃의 브랜치를 바꿀 수 있으므로 커밋·push 직전 `git branch --show-current`를 다시 확인하고, push는 방금 확인한 브랜치로 한다(2026-09-26 운영자 확정)
 - `git add -A`·`git commit -am` 금지 — 내가 만진 파일만 명시 경로로 stage하고, 커밋 직후 `git show --stat`으로 ±라인이 편집 규모와 맞는지 확인한다. `foo 2.jsx`처럼 " 2"가 붙은 중복 파일이 보이면 동기화 충돌부터 의심한다
 
 ## Skill routing
