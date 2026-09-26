@@ -353,6 +353,7 @@ export async function POST(req: Request) {
     model: modelToUse,
     maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192,
     retries: 1,
+    usageSurface: "persona-chat",
   });
 
   const finishedAt = new Date().toISOString();

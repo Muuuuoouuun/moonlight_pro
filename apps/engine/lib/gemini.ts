@@ -1,3 +1,5 @@
+import { recordAiUsage } from "./ai-usage-log.ts";
+
 export interface GeminiMediaPart {
   mimeType: string;
   base64: string;
@@ -27,6 +29,9 @@ export interface GeminiGenerateInput {
   retries?: number;
   temperature?: number;
   safetySettings?: GeminiSafetySetting[];
+  // Short caller key for the AI usage log (ai_usage_log.surface, e.g. "persona-chat").
+  // Only this key, the model name and token counts are recorded — never prompt or output.
+  usageSurface?: string;
 }
 
 const FAILURE_CATEGORIES = new Set([
@@ -246,6 +251,9 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       try { data = bodyText ? JSON.parse(bodyText) : null; }
       catch { invalidJson = true; }
       const diagnostics = getGeminiResponseDiagnostics(data);
+      // Billed tokens are recorded whether or not the answer is usable (a truncated answer is
+      // still charged). Fire-and-forget: the log write never delays or fails this response.
+      recordAiUsage({ surface: input.usageSurface || "engine", model: targetModel, usageMetadata: diagnostics.usageMetadata });
 
       if (!response.ok) {
         return {

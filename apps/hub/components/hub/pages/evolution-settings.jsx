@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd, EmptyState, SelectField } from "../hub-primitives";
 import { SOCIAL_BRAND_OPTIONS, socialBrandTarget, socialBrandUrl } from "./social-brand-target";
+import { AiUsageSection } from "./ai-usage-section";
 
 const EVOLUTION_EVENTS = [];
 
@@ -700,6 +701,8 @@ export function Settings({ onNavigate }) {
           </div>
         </Card>
       </div>
+
+      <AiUsageSection />
 
       <div>
         <SectionTitle>Integrations</SectionTitle>
