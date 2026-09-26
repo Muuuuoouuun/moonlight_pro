@@ -5,9 +5,12 @@
   "workspaces": [
     "apps/hub",
     "apps/engine",
+    "apps/android",
     "packages/*"
   ],
   "scripts": {
+    "app:android:sync": "npm --workspace @com-moon/android run config:sync --",
+    "app:android:build": "npm --workspace @com-moon/android run apk --",
     "icons:generate": "node ./scripts/generate-brand-icons.mjs",
     "guidance:sources": "node ./scripts/build-guidance-source-library.mjs",
     "check:guidance-sources": "node ./scripts/build-guidance-source-library.mjs --check",
