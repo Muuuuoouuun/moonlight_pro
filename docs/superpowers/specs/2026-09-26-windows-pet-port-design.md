@@ -1,6 +1,6 @@
 # Windows 펫 이식 설계 (Moonlight Pet → apps/desktop)
 
-> 상태: **구현 중**(2026-09-26 운영자 결정 3건 확정, 병렬 구현 진행). 관계: macOS 프로토타입 [`prototypes/moonlight-pet-macos`](../../../prototypes/moonlight-pet-macos/README.md)의 승인 스펙([승인 시안 적용](2026-09-24-pet-approved-glass-design.md) · [허브 연결](2026-09-25-pet-hub-connection-design.md) · [담당자 대화](2026-09-25-pet-agent-chat-design.md) · [메모 퍼치·드래그](2026-09-25-pet-memo-perch-and-drag-design.md) · [알림·Council](2026-09-25-pet-notifications-council-design.md) · [중간값 매핑](../plans/2026-09-26-pet-balanced-glass.md))을 **그대로 유지**하고, macOS 전용 부분만 Windows 방식으로 바꾼다. 같은 Electron 앱의 380×200 빠른 입력 위젯(`/widget`, Ctrl+Shift+M)과 **공존**한다.
+> 상태: **구현 완료**(2026-09-27 — 운영자 결정 3건 확정, 세 패키지 병합 뒤 통합·강화. 검증 결과는 §6, 실화면 Acrylic 캡처는 세션 잠금으로 남은 빈틈). 관계: macOS 프로토타입 [`prototypes/moonlight-pet-macos`](../../../prototypes/moonlight-pet-macos/README.md)의 승인 스펙([승인 시안 적용](2026-09-24-pet-approved-glass-design.md) · [허브 연결](2026-09-25-pet-hub-connection-design.md) · [담당자 대화](2026-09-25-pet-agent-chat-design.md) · [메모 퍼치·드래그](2026-09-25-pet-memo-perch-and-drag-design.md) · [알림·Council](2026-09-25-pet-notifications-council-design.md) · [중간값 매핑](../plans/2026-09-26-pet-balanced-glass.md))을 **그대로 유지**하고, macOS 전용 부분만 Windows 방식으로 바꾼다. 같은 Electron 앱의 380×200 빠른 입력 위젯(`/widget`, Ctrl+Shift+M)과 **공존**한다.
 
 ## 1. 운영자 결정 (2026-09-26, 확정)
 
@@ -47,3 +47,55 @@
 ## 5. v1 범위 밖
 
 WebGL 프리즘 림(Mac Metal 셰이더 이식) · 글라스 랩 · "이 Mac에만 저장" 로컬 모드 · 앱 전환 차단 · 앱 종료 중 알림 · 로그인 시 자동 실행.
+
+## 6. 검증 결과 (2026-09-27, 세 패키지 병합 뒤 통합·강화)
+
+셸(`pet/main` 창·입력·상태)·허브 모델(`pet-hub.js` + 전송·보류·알림·대화)·렌더러(`pet/renderer`)를 따로 만든 세 패키지를 한 트리에서
+이었다. 통합 중 고친 것은 아래와 같고, 각 줄은 자동 테스트나 E2E 단계 하나로 확인했다.
+
+**통합에서 고친 것**
+- 허브 모델 경로를 하나로: 셸은 `pet-hub.js`의 `createPetHub(ctx)`만 쓴다. 폴링은 창이 다 뜬 뒤 켠다. 연결 상태의 정본은 허브 모델이다.
+- 말풍선: 허브가 첫 새 알림을 쥔 채 놓지 않아 그 뒤 알림이 멈추던 문제(다가오는 일정 알림 유실 포함) — 셸 ctx 에서는 셸 줄에 넘기고 바로 다음 후보로 간다.
+- 같은 주소로 설정을 다시 저장하면 상태가 `unknown`에 멈추던 문제, 익명 세션이 잠깐 `연결됨`으로 보이던 문제.
+- 대화 화면은 Council 모드다(허브는 Office 모드로 보고 있었다). 셸이 그 화면을 떠날 때 `chatLeave()`를 부른다.
+- 메모: 렌더러가 따로 만들던 요청 ID·revision·보류 기록(허브와 같은 저장 키를 덮어썼다)을 걷어 내고 허브 모델의 보류·충돌 요약만 읽는다.
+  새 캡처 메모가 첫 저장에서 부딪혀도 캡처 충돌로 막고 ‘새 항목으로 Hub에 저장’으로 푼다. origin 이 붙는 허브 키는 렌더러가 쓰지 못한다.
+- 말풍선 ✕는 말풍선만 내린다. Council 안건 넘기기는 셸이 메인 창을 `#moonlight-council=…` 경로로 연다. 집중 중지 확인은 닫을 수 있고
+  다시 뜨지 않으며, Esc 가 페이지에도 간다. 위젯 → 빠른 패널 전환, 포인터를 잃은 누름, 저장소 한 인스턴스.
+- 렌더러: Council 요청 표·질문 → 답 순서·busy boolean, IME 조합 중 단축키 무시, 할 일 Ctrl+Enter = 추가, ‘이 PC에서 숨기기’는 읽음이 아님,
+  집중 채널 봉투 읽기, 허브 사유 코드를 한국어로(‘server’ 같은 코드를 그대로 보이지 않는다), `Hub 로그인 미설정`과 `Hub 주소 필요` 구별.
+
+**자동 테스트** — `npm --workspace @com-moon/desktop test` 251 통과(병합 직후 225). `pet/main/pet-integration.test.js`가 Electron 대역과
+로컬 허브 대역으로 `install()`을 띄워 채널표(계약의 invoke 채널마다 핸들러 하나), 허브 모델 연결, 저장소 한 인스턴스, 채널별 응답을
+렌더러 뷰 모델이 그대로 읽는 모양(할 일·메모·일정·알림·Council·집중), 말풍선 줄, 허브 열기 규칙(조각 허용, 스킴·호스트 거절)을 고정한다.
+루트 `npm test`는 알려진 Windows 전용 실패 31건(codex-worker·mcp-server·office-codex-*·office-quality)만 남는다. `scripts/no-mock-data.test.mjs` 통과.
+
+**E2E (a) 스텁 허브 + 실제 앱** — `apps/desktop/main.js`를 그대로 띄우고(격리한 `--user-data-dir`, `settings.json` 허브 주소 = 스텁)
+펫 창을 실제 IPC·실제 렌더러로 몰았다. 스텁은 10개 엔드포인트를 LIVE 봉투로 답하고 세션 쿠키가 없으면 401, 쓰기에 허브 Origin 이
+없으면 403이다. 36/36 단계 통과: 쿠키 없음 → `로그인 필요`(빈 목록 아님) → 메인 창 `/login`에서 로그인 → 같은 기본 세션 쿠키로 펫 연결 →
+할 일 추가(Enter·Ctrl+Enter, POST에 Origin·쿠키)·완료(3초 유예 뒤 숨김)·낡은 완료는 충돌 안내 → 메모 저장·재조회 확인·충돌 → 새 항목 →
+주간 일정(종일·5분 뒤 일정) → Council 질문·답(질문 → 답 순서)·안건 넘기기(메인 창이 조각 경로로) → 새 문의 두 건이 말풍선으로 차례로,
+✕ 뒤 1초 간격으로 다음 것 → 알림 목록·배지(숫자) → 숨기기 → Esc 접기 → 펫 클릭·두 번 클릭(실제 포인터 경로)·걸친 캐릭터 →
+Ctrl+Alt+M 위젯 → 빠른 패널 → 캐릭터 바꾸기(저장) → 집중 시작·Esc 1.3초 확인·Esc 로 닫기(캐릭터를 바꿔도 다시 뜨지 않음)·중지 →
+투명도 줄이기(불투명 면) → 허브 주소를 닿지 않는 곳으로 바꾸면 `연결 안 됨`, 되돌리면 `연결됨`. 스텁이 거절한 요청은 모두 쿠키나 Origin 이 없던 것.
+
+**E2E (b) 실제 허브 개발 서버**(`apps/hub`, `NEXT_DIST_DIR=.next.pet`, `127.0.0.1:3151`, Supabase·운영자 로그인 환경 변수 없음) — 실제 앱으로
+할 일·일정·알림은 `Preview · 연결 필요`(목록을 채우지 않음), 할 일 추가·Council 질문은 `아직 저장되지 않았어요`(입력 유지), 메모는 허브가
+`missing-persistence`로 답해 `저장 확인`으로 남고, 연결 상태 화면은 `Hub 로그인 미설정`. 펫의 쓰기는 모두 허브 Origin 과 쿠키를 실었고,
+쓰기 가드는 같은 origin POST 를 받아들이고(202 preview) Origin 이 없거나 다른 POST 는 403으로 막았다. 개발 서버와 `.next.pet`은 지웠다.
+
+**패키징** — `electron-builder --win --x64`: `Moonlight-Setup-0.1.0.exe` 113,068,322바이트, `Moonlight-Portable-0.1.0.exe` 112,830,603바이트,
+`app.asar` 1,708,933바이트(99개 항목, `pet/**` 85개 — 페이지 5·자산 18·`pet/fonts/` 글꼴 2, 테스트·`test-support`·렌더러 README 없음).
+`dist\win-unpacked\Moonlight.exe --smoke-pet`·`--smoke-test`·`--smoke-widget` 모두 통과(DWM 두 속성 HRESULT 0).
+
+**캡처** — 이 실행 내내 작업 스테이션이 잠겨 있어(LogonUI 실행 중) `desktopCapturer` 실화면 캡처(바쁜 배경 창 위 대기 펫·배지, 빠른 패널
+할 일 휴지·누름, 위젯과 걸친 캐릭터, 메모, 일정, Council, 알림, 말풍선, 집중 화면, 투명도 줄이기)는 모두 검게 나왔다. 같은 순간의 페이지
+렌더(`webContents.capturePage`, Acrylic 없이 CSS 층만)는 남겼고 레이아웃·글자 잘림을 그것으로 확인했다(Council 질문 → 답 순서 오류를
+여기서 찾아 고쳤다). 캡처 파일은 작업 스크래치에만 있고 저장소에 넣지 않는다.
+
+**남은 빈틈**
+- 실제 Acrylic 블러·림과 비활성일 때 블러 유지의 눈 확인 — 잠금이 풀린 화면에서 `--smoke-pet`(또는 E2E 하네스)을 다시 돌려 확인해야 한다.
+- 투명도 줄이기는 `nativeTheme` 갱신을 흉내 내 확인했다. Windows ‘투명 효과’ 스위치가 이 값을 실제로 바꾸는지는 보지 못했다.
+- 펫 오른쪽 클릭(Windows 기본 메뉴)의 얼굴 아이콘 + 체크 표시는 화면으로 보지 못했다.
+- 말풍선에서 연 일정·답변 알림은 모드만 연다(날짜·대화 선택은 알림 모드 안에서만).
+- 운영자 로그인이 없는 개발 허브에서는 세션 확인(`not-configured`)과 loopback 읽기(preview → 연결됨)가 번갈아 상태를 바꿀 수 있다(운영 허브는 게이트가 둘 다 막아 한 상태).
