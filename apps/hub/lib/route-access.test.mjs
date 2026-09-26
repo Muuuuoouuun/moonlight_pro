@@ -66,6 +66,24 @@ test("공개 법률·앱 소개 페이지만 비로그인 접근을 허용한다
   }
 });
 
+test("Android App Links 검증 파일만 세션 없이 열고 .well-known 의 다른 경로는 닫는다", async () => {
+  const path = "/.well-known/assetlinks.json";
+  assert.equal(deployed({ pathname: path }).action, "allow");
+  // 로그인 설정이 불완전해도 앱 링크 검증은 막히지 않는다(공개 지문뿐이다).
+  assert.equal(deployed({ pathname: path, secretConfigured: false }).action, "allow");
+  for (const closed of ["/.well-known", "/.well-known/", "/.well-known/other.json", `${path}/x`, "/.well-known/assetlinks.json.bak"]) {
+    assert.notEqual(deployed({ pathname: closed }).action, "allow", closed);
+  }
+  // 파일이 실제로 있고, 앱 패키지와 대문자·콜론 구분 SHA-256 지문을 담는다.
+  const links = JSON.parse(await readFile(new URL("../public/.well-known/assetlinks.json", import.meta.url), "utf8"));
+  const target = links.find((entry) => entry.target?.namespace === "android_app")?.target;
+  assert.equal(target?.package_name, "app.moonlight.hub");
+  assert.ok(target.sha256_cert_fingerprints.length >= 1);
+  for (const fingerprint of target.sha256_cert_fingerprints) {
+    assert.match(fingerprint, /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/, fingerprint);
+  }
+});
+
 test("로컬(loopback)은 세션 없이 통과한다", () => {
   for (const host of ["localhost:3000", "127.0.0.1:3010", "[::1]:3000", "LOCALHOST:3000"]) {
     assert.equal(resolveRouteAccess({ pathname: "/api/hub/revenue", host, secretConfigured: true, hasSession: false }).action, "allow", host);

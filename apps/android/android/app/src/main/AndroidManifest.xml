@@ -20,6 +20,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- App Links: 허브 주소(https://<hub_host>/…)를 누르면 브라우저 대신 이 앱이 그 경로를 연다.
+                 host 는 scripts/write-cap-config.mjs 가 app.config.json 에서 생성하는 res/values/hub_config.xml 의 값이다.
+                 검증은 허브의 /.well-known/assetlinks.json(apps/hub/public)이 릴리스 서명 지문을 내줄 때 성립한다. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="@string/hub_host" />
+            </intent-filter>
+
+            <!-- 런처 아이콘 길게 누르기 → 빠른 입력·오늘 연락·리듬 (res/xml/shortcuts.xml, write-cap-config.mjs 생성물). -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+
             <!-- 공유 시트: 텍스트·링크 한 건을 허브 빠른 입력(/dashboard?title&text&url)으로 보낸다. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -40,4 +54,6 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 대체 화면이 navigator.onLine·online 이벤트로 연결 복구를 알아채려면 WebView 가 네트워크 상태를 읽어야 한다(일반 권한, 사용자 확인 없음). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 </manifest>

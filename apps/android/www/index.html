@@ -5,21 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark" />
   <title>Moonlight</title>
+  <!--
+    허브를 열지 못했을 때의 대체 화면(Capacitor server.errorPath, https://localhost/index.html).
+    MainActivity 가 이 화면을 연 뒤 window.moonlightShowFailure({ from, reason, hub }) 로 실패한 허브 경로·이유·허브 주소를 건넨다.
+    URL 에 싣지 않는 이유: Capacitor 로컬 서버는 요청 URL 전체가 errorPath 와 같을 때만 이 파일을 내준다(쿼리·fragment 불가).
+    같은 이유로 hub-config.js 는 이 화면에서 대개 읽히지 않는다 — 네이티브가 건넨 hub 가 우선이고 hub-config.js 는 보조다.
+  -->
   <style>
     :root {
       --bg: #141c27;
       --surface: #1b2430;
       --line: rgba(160, 172, 190, 0.22);
+      --line-strong: rgba(160, 172, 190, 0.42);
       --fg: #e3e7ee;
       --fg-muted: #a0acbe;
       --fg-dim: #7d889a;
+      --moon-100: #e3e7ee;
+      --moon-200: #d5dae2;
       --moon-300: #bcc4d0;
+      --danger: #e5776a;
       --r-sm: 6px;
       --r-lg: 14px;
+      --dur-hover: 120ms;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; }
+    html, body { margin: 0; min-height: 100%; }
     body {
+      min-height: 100vh;
       background: var(--bg);
       color: var(--fg);
       font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif;
@@ -45,52 +57,223 @@
       text-transform: uppercase;
       color: var(--fg-dim);
     }
-    h1 { margin: 0 0 12px; font-size: 20px; font-weight: 500; }
+    h1 { margin: 0 0 8px; font-size: 20px; font-weight: 500; line-height: 1.4; }
     p { margin: 0 0 12px; color: var(--fg-muted); }
+    .reason {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      color: var(--fg);
+    }
+    .reason svg { flex: none; margin-top: 4px; color: var(--danger); }
+    dl {
+      margin: 16px 0;
+      padding: 12px 0 0;
+      border-top: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 12px;
+      font-size: 13px;
+    }
+    dt { color: var(--fg-dim); }
+    dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
     code {
       font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
       font-size: 13px;
       color: var(--moon-300);
     }
-    a.retry {
+    .note { font-size: 13px; color: var(--fg-dim); }
+    button.retry {
       display: inline-flex;
       align-items: center;
-      min-height: 44px;
-      margin-top: 8px;
+      justify-content: center;
+      width: 100%;
+      min-height: 48px;
+      margin-top: 4px;
       padding: 0 16px;
-      border: 1px solid var(--line);
+      border: 1px solid var(--moon-100);
       border-radius: var(--r-sm);
-      color: var(--fg);
-      text-decoration: none;
+      background: var(--moon-200);
+      color: var(--bg);
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color var(--dur-hover) ease-out;
     }
-    a.retry:focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
+    button.retry:active { background: var(--moon-100); }
+    button.retry:disabled { cursor: default; background: var(--moon-300); }
+    button.retry:focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
+    .status { margin: 12px 0 0; min-height: 1.6em; font-size: 13px; color: var(--fg-dim); }
     [hidden] { display: none !important; }
+    @media (prefers-reduced-motion: reduce) {
+      button.retry { transition: none; }
+    }
   </style>
 </head>
 <body>
   <main>
     <p class="eyebrow">Moonlight</p>
-    <section id="unset">
+    <section id="unset" hidden>
       <h1>허브 주소가 설정되지 않았습니다</h1>
       <p><code>apps/android/app.config.json</code>의 <code>hubUrl</code>을 배포 주소로 바꾸고 다시 빌드하세요.</p>
       <p><code>npm run app:android:sync</code> → <code>npm run app:android:build</code></p>
     </section>
     <section id="offline" hidden>
       <h1>허브에 연결하지 못했습니다</h1>
-      <p>네트워크를 확인하고 다시 여세요.</p>
-      <p><code id="hub-url"></code></p>
-      <a class="retry" id="retry" href="#">다시 열기</a>
+      <p class="reason">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+          <path d="M8 4.5v4.5M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+        <span id="reason">네트워크를 확인하고 다시 시도하세요.</span>
+      </p>
+      <dl>
+        <dt>다시 열 화면</dt>
+        <dd><code id="target">/dashboard</code></dd>
+        <dt id="hub-label">허브</dt>
+        <dd id="hub-row"><code id="hub-url"></code></dd>
+      </dl>
+      <p class="note" id="target-note" hidden>원래 열려던 화면을 알 수 없어 대시보드를 엽니다.</p>
+      <button class="retry" id="retry" type="button">다시 시도</button>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
     </section>
   </main>
   <script src="hub-config.js"></script>
   <script>
     (function () {
-      var hubUrl = window.MOONLIGHT_HUB_URL || "";
-      if (!hubUrl || hubUrl === "https://moonlight.invalid") return;
-      document.getElementById("unset").hidden = true;
-      document.getElementById("offline").hidden = false;
-      document.getElementById("hub-url").textContent = hubUrl;
-      document.getElementById("retry").href = hubUrl + "/dashboard";
+      var PLACEHOLDER = "https://moonlight.invalid";
+      var RETRY_MS = 15000;
+      var FALLBACK_PATH = "/dashboard";
+
+      var el = function (id) { return document.getElementById(id); };
+      var timer = null;
+      var probing = false;
+      var leaving = false;
+      var state = { hub: "", target: FALLBACK_PATH, reason: "", auto: true };
+      var failure = {};
+
+      // https origin 만 받는다(경로·쿼리 없는 허브 주소).
+      function toOrigin(value) {
+        if (!value) return "";
+        try {
+          var u = new URL(value);
+          return u.protocol === "https:" && u.pathname === "/" && !u.search && !u.hash ? u.origin : "";
+        } catch (e) { return ""; }
+      }
+
+      // 같은 허브 안의 경로만 받는다("//host" 나 역슬래시로 다른 곳으로 새지 않게).
+      function toPath(value) {
+        return typeof value === "string" && value.charAt(0) === "/" && value.charAt(1) !== "/" && value.indexOf("\\") < 0
+          ? value
+          : "";
+      }
+
+      // Android WebViewClient.ERROR_* 코드와 HTTP 상태를 운영자 말로 옮긴다.
+      function describe(reason) {
+        if (navigator.onLine === false) return "기기가 오프라인입니다. Wi-Fi나 모바일 데이터를 확인하세요.";
+        var m = /^(net|http):(-?\d+)$/.exec(reason || "");
+        if (!m) return "네트워크를 확인하고 다시 시도하세요.";
+        var code = Number(m[2]);
+        if (m[1] === "http") {
+          if (code === 404) return "허브에 그 화면이 없습니다 (HTTP 404).";
+          if (code === 503) return "허브가 잠시 응답하지 않습니다 (HTTP 503).";
+          if (code >= 500) return "허브 서버에 오류가 났습니다 (HTTP " + code + ").";
+          return "허브가 HTTP " + code + "로 응답했습니다.";
+        }
+        if (code === -2) return "허브 주소를 찾지 못했습니다(DNS). 네트워크를 확인하세요.";
+        if (code === -6) return "허브 서버에 연결하지 못했습니다.";
+        if (code === -8) return "허브 응답이 너무 늦습니다(시간 초과).";
+        if (code === -11) return "허브와 보안 연결(SSL)을 맺지 못했습니다.";
+        return "네트워크 오류로 허브를 열지 못했습니다 (코드 " + code + ").";
+      }
+
+      function setStatus(text) { el("status").textContent = text; }
+
+      function stopTimer() {
+        if (timer) { clearInterval(timer); timer = null; }
+      }
+
+      function startTimer() {
+        stopTimer();
+        if (!state.auto || !state.hub || leaving) return;
+        timer = setInterval(probe, RETRY_MS);
+        setStatus("연결되면 자동으로 다시 엽니다 · 15초마다 확인");
+      }
+
+      function go() {
+        if (leaving) return;
+        leaving = true;
+        stopTimer();
+        el("retry").disabled = true;
+        setStatus("다시 여는 중…");
+        if (state.hub) {
+          // replace: 대체 화면을 기록에 남기지 않는다(뒤로 가기가 이 화면으로 돌아오지 않게).
+          location.replace(state.hub + state.target);
+        } else if (history.length > 1) {
+          history.back();
+        } else {
+          location.reload();
+        }
+      }
+
+      // 자동 재시도는 먼저 허브에 닿는지만 가볍게 확인하고(정적 아이콘, 쿠키·기록 없음) 닿을 때만 이동한다.
+      function probe() {
+        if (probing || leaving || !state.hub) return;
+        if (navigator.onLine === false) { setStatus("아직 오프라인입니다 · 15초마다 확인"); return; }
+        probing = true;
+        setStatus("허브에 닿는지 확인하는 중…");
+        fetch(state.hub + "/icon.svg?retry=" + Date.now(), { mode: "no-cors", cache: "no-store" })
+          .then(function () { probing = false; go(); })
+          .catch(function () { probing = false; setStatus("아직 연결되지 않았습니다 · 15초마다 확인"); });
+      }
+
+      function render() {
+        var configured = toOrigin(window.MOONLIGHT_HUB_URL);
+        var fromNative = toOrigin(failure.hub);
+        state.hub = fromNative || configured;
+        if (state.hub === PLACEHOLDER) {
+          el("unset").hidden = false;
+          el("offline").hidden = true;
+          return;
+        }
+        var path = toPath(failure.from);
+        state.target = path || FALLBACK_PATH;
+        state.reason = typeof failure.reason === "string" ? failure.reason : "";
+        // HTTP 오류는 네트워크가 멀쩡하다는 뜻이라 자동으로 되풀이하지 않는다(같은 오류로 돌아오는 고리 방지).
+        state.auto = !/^http:/.test(state.reason);
+        el("unset").hidden = true;
+        el("offline").hidden = false;
+        el("reason").textContent = describe(state.reason);
+        el("target").textContent = state.target;
+        el("target-note").hidden = Boolean(path);
+        el("hub-url").textContent = state.hub ? state.hub.replace(/^https:\/\//, "") : "";
+        el("hub-label").hidden = !state.hub;
+        el("hub-row").hidden = !state.hub;
+        if (state.auto && state.hub) startTimer();
+        else setStatus(state.hub ? "" : "허브 주소를 알 수 없어 이전 화면으로 돌아갑니다.");
+      }
+
+      el("retry").addEventListener("click", go);
+      window.addEventListener("online", function () {
+        el("reason").textContent = describe(state.reason);
+        if (state.auto) probe();
+      });
+      window.addEventListener("offline", function () {
+        el("reason").textContent = describe(state.reason);
+      });
+      // 화면이 가려져 있는 동안은 확인하지 않는다. 다시 보이면 바로 한 번 확인한다.
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) { stopTimer(); return; }
+        if (state.auto && !leaving) { startTimer(); probe(); }
+      });
+      // 네이티브(MainActivity)가 화면을 다 읽은 뒤 실패 정보를 건넨다. 건네지 않으면 hub-config.js 와 /dashboard 로 그린다.
+      window.moonlightShowFailure = function (next) {
+        failure = next && typeof next === "object" ? next : {};
+        leaving = false;
+        el("retry").disabled = false;
+        render();
+      };
+      render();
     })();
   </script>
 </body>

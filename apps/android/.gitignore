@@ -7,6 +7,8 @@ keystore.properties
 # app.config.json 에서 생성되는 파일 (허브 주소의 정본은 app.config.json 하나)
 capacitor.config.json
 www/hub-config.js
+android/app/src/main/res/values/hub_config.xml
+android/app/src/main/res/xml/shortcuts.xml
 
 # @capacitor/assets 임시 입력
 .assets-tmp/
