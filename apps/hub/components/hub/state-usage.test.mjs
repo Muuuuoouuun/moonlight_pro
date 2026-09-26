@@ -12,7 +12,9 @@ test('decision certainty uses the shared geometry-based badge', () => {
 
 test('automation status uses lifecycle semantics instead of decorative status colors', () => {
   const source = page('automations');
-  assert.match(source, /<LifecycleBadge state=\{automationLifecycle\(a\.status\)\} label=\{a\.status\}/);
+  assert.match(source, /<LifecycleBadge state=\{automationLifecycle\(a\.status\)\}/);
+  assert.match(source, /Disabled: 'cancelled'/);
+  assert.match(source, /Disabled: '중단'/);
   assert.doesNotMatch(source, /const sTone = \{ Active: 'success', Paused: 'warning', Error: 'danger' \}/);
 });
 

@@ -72,9 +72,7 @@ function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = 
   const blocked = (Array.isArray(projects.projects) ? projects.projects : []).filter(
     (p) => p.status === "Blocked",
   );
-  const failedRuns = (Array.isArray(automations.runs) ? automations.runs : []).filter(
-    (r) => r.status === "err" || r.statusKey === "failure",
-  );
+  const failedRuns = Array.isArray(automations.incidents) ? automations.incidents : [];
 
   // (a) name-overlap join — same account on two fronts
   for (const deal of staleDeals) {
@@ -221,47 +219,20 @@ function buildContentSignals(content) {
 }
 
 function buildAutomationSignals(automations) {
-  const runs = Array.isArray(automations.runs) ? automations.runs : [];
-  const flows = Array.isArray(automations.automations) ? automations.automations : [];
-  const signals = [];
-
-  runs
-    .filter((run) => run.status === "err" || run.statusKey === "failure")
-    .slice(0, 2)
-    .forEach((run) => {
-      signals.push({
-        id: `automation-failed-${run.id}`,
-        tone: "danger",
-        kind: "Automation",
-        title: `${run.flow} 실패`,
-        summary: run.detail || "실패 로그를 열고 재시도 후보인지 확인해야 합니다.",
-        meta: `Run · ${run.at} · ${run.ms}ms`,
-        source: { from: "Runs", ref: run.correlationId || run.id },
-        decisions: [
-          action("로그 열기", "review", true),
-          action("Flow 확인", "flows"),
-        ],
-      });
-    });
-
-  const paused = flows.find((flow) => flow.status === "Paused");
-  if (paused && signals.length < 2) {
-    signals.push({
-      id: `automation-paused-${paused.id}`,
-      tone: "neutral",
-      kind: "Automation",
-      title: `${paused.name} paused`,
-      summary: "중요 flow라면 다시 켜고 최근 실행 로그를 확인하세요.",
-      meta: `Flow · ${paused.lastRun}`,
-      source: { from: "Automations", ref: paused.id },
-      decisions: [
-        action("Flow 열기", "flows", true),
-        action("Run log", "review"),
-      ],
-    });
-  }
-
-  return signals;
+  const incidents = Array.isArray(automations.incidents) ? automations.incidents : [];
+  return incidents.slice(0, 2).map((run) => ({
+    id: `automation-failed-${run.id}`,
+    tone: "danger",
+    kind: "Automation",
+    title: `${run.flow} · 확인 필요`,
+    summary: run.detail || "실행 기록에서 실패 원인을 확인하세요.",
+    meta: `${run.dateLabel} · 최근 24시간 실패 ${run.failureCount}건`,
+    source: { from: "Runs", ref: run.correlationId || run.id },
+    decisions: [
+      action("실행 기록", "review", true),
+      action("자동화 확인", "flows"),
+    ],
+  }));
 }
 
 function buildWorkSignals(projects, work) {
@@ -316,7 +287,7 @@ function buildMetrics(revenue, content, automations, projects) {
   // "Runs failed 0"으로, 매출 블립이 "₩0 MRR"로 위장되던 경로(5차 재감사 M).
   const revenueReadable = revenue?.source === "supabase";
   const contentReadable = content?.source === "supabase";
-  const automationsReadable = automations?.source === "supabase";
+  const automationsReadable = automations?.source === "supabase" && automations.summary?.attentionCount != null;
   const revenueSummary = revenue.summary || {};
   const contentSummary = content.summary || {};
   const automationSummary = automations.summary || {};
@@ -337,8 +308,8 @@ function buildMetrics(revenue, content, automations, projects) {
       ? metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "neutral")
       : metric("Published", "—", content?.source === "error" ? "content read failed" : "ledger unavailable", "neutral"),
     automationsReadable
-      ? metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "danger" : "neutral")
-      : metric("Runs failed", "—", automations?.source === "error" ? "automation read failed" : "ledger unavailable", automations?.source === "error" ? "danger" : "neutral"),
+      ? metric("자동화 확인 필요", String(automationSummary.attentionCount || 0), "최근 24시간 · 미회복", automationSummary.attentionCount ? "danger" : "neutral")
+      : metric("자동화 확인 필요", "—", automations?.source === "error" ? "automation read failed" : "ledger unavailable", automations?.source === "error" ? "danger" : "neutral"),
     metric("Open work", openProjects === null ? "—" : String(openProjects), projectsReadable ? "active projects" : "project ledger unavailable", "neutral"),
   ].slice(0, 5);
 }

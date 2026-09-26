@@ -1,3 +1,5 @@
+import { getActionableAutomationFailures, resolveAutomationPolicy } from "@/lib/automation-policy";
+
 import {
   eqFilter,
   fetchSupabaseRows,
@@ -24,10 +26,10 @@ const INTEGRATION_SELECT = "id,provider,status,external_account_id,last_synced_a
 const ERROR_LOG_SELECT = "id,context,level,source,resolved,timestamp,correlation_id,automation_run_id";
 
 const AUTOMATION_STATUS_LABEL = {
-  draft: "Paused",
+  draft: "Draft",
   active: "Active",
   paused: "Paused",
-  disabled: "Paused",
+  disabled: "Disabled",
 };
 
 const RUN_STATUS_TONE = {
@@ -97,6 +99,14 @@ function formatClock(value) {
   }).format(date);
 }
 
+function formatRunDate(value) {
+  if (!value || !Number.isFinite(new Date(value).getTime())) return "—";
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(new Date(value));
+}
+
 function computeDurationMs(startedAt, finishedAt) {
   if (!startedAt) return null;
   const start = new Date(startedAt).getTime();
@@ -155,12 +165,17 @@ function mapAutomations(rows, triggerById, runsByAutomation) {
   return rows.map((row) => {
     const trigger = row.trigger_id ? triggerById.get(row.trigger_id) : null;
     const stats = runsByAutomation.get(row.id) || { runs24: 0, success: 0 };
-    const statusKey = AUTOMATION_STATUSES.includes(row.status) ? row.status : "draft";
+    const policy = resolveAutomationPolicy(row, trigger);
+    const statusKey = policy.statusKey;
 
     return {
       id: row.id,
-      name: row.name || "Untitled flow",
-      trigger: resolveTriggerLabel(trigger),
+      name: policy.name,
+      key: policy.key,
+      statusKey,
+      executionMode: policy.executionMode,
+      trigger: policy.executionMode === "retired" ? "자동 실행 중단"
+        : policy.executionMode === "requested" ? "요청할 때 실행" : resolveTriggerLabel(trigger),
       status: AUTOMATION_STATUS_LABEL[statusKey] || "Paused",
       lastRun: formatRelative(row.last_run_at),
       runs24: stats.runs24,
@@ -170,15 +185,23 @@ function mapAutomations(rows, triggerById, runsByAutomation) {
 }
 
 function mapRuns(rows, automationById) {
+  const automationByKey = new Map([...automationById.values()].filter((a) => a.key).map((a) => [a.key, a]));
   return rows.map((row) => {
-    const automation = row.automation_id ? automationById.get(row.automation_id) : null;
+    const key = row.output_payload?.key;
+    const automation = automationById.get(row.automation_id) || automationByKey.get(key);
+    const policy = resolveAutomationPolicy({}, null, key);
     const duration = computeDurationMs(row.created_at, row.finished_at);
     const statusKey = RUN_STATUSES.includes(row.status) ? row.status : "queued";
 
     return {
       id: row.id,
       at: formatClock(row.created_at),
-      flow: automation?.name || "System",
+      dateLabel: formatRunDate(row.created_at),
+      flow: automation?.name || policy.name,
+      automationId: automation?.id || row.automation_id || null,
+      automationKey: automation?.key || policy.key,
+      automationStatus: automation?.statusKey || policy.statusKey,
+      executionMode: automation?.executionMode || policy.executionMode,
       status: RUN_STATUS_TONE[statusKey] || "ok",
       statusKey,
       ms: duration == null ? 0 : duration,
@@ -291,7 +314,7 @@ export async function getAutomationsLedger() {
   const since = last24hThreshold();
   const sinceDayStart = startOfOperatorDay();
 
-  const [automationRows, triggerRows, runRows, webhookRows, integrationRows, errorRows] = await Promise.all([
+  const [automationRows, triggerRows, runRows, webhookRows, integrationRows, errorRows, incidentRows] = await Promise.all([
     fetchSupabaseRows("automations", {
       limit: 40,
       order: "last_run_at.desc.nullslast",
@@ -327,9 +350,20 @@ export async function getAutomationsLedger() {
       order: "timestamp.desc",
       filters: withWorkspaceFilter([["resolved", eqFilter("false")]]),
     }),
+    // Recent settled results are independent of the globally capped history.
+    // A long-running recovery can start before that history's oldest row.
+    fetchSupabaseRows("automation_runs", {
+      select: RUN_SELECT,
+      limit: 501,
+      order: "finished_at.desc.nullslast,created_at.desc",
+      filters: withWorkspaceFilter([
+        ["status", inFilter(["success", "failure"])],
+        ["or", `(finished_at.gte.${since.toISOString()},and(finished_at.is.null,created_at.gte.${since.toISOString()}))`],
+      ]),
+    }),
   ]);
 
-  if (!automationRows || !runRows || !webhookRows) {
+  if (!automationRows || !triggerRows || !runRows || !webhookRows || !incidentRows) {
     // 코어 read 실패는 error — preview("미구성")로 두면 실패한 웹훅/실행이 "기록 없음"으로
     // 위장된다(6차 재감사 M — revenue/content 10차와 동일 클래스, Engine 실행 피드백 §1 코어).
     return {
@@ -338,6 +372,8 @@ export async function getAutomationsLedger() {
       error: "automations-ledger-core-read-failed",
       failedSources: [
         ["automations", automationRows],
+        ["triggers", triggerRows],
+        ["automation_incidents", incidentRows],
         ["automation_runs", runRows],
         ["webhook_events", webhookRows],
       ].filter(([, rows]) => !Array.isArray(rows)).map(([key]) => key),
@@ -349,7 +385,10 @@ export async function getAutomationsLedger() {
   const { byAutomation, runsToday, failuresToday } = aggregateRuns(runRows, since);
   const automations = mapAutomations(automationRows, triggerById, byAutomation);
   const automationById = new Map(automations.map((a) => [a.id, a]));
-  const runs = mapRuns(runRows.slice(0, 40), automationById);
+  const allRuns = mapRuns(runRows, automationById);
+  const incidentsPartial = incidentRows.length > 500;
+  const incidents = incidentsPartial ? [] : getActionableAutomationFailures(mapRuns(incidentRows, automationById));
+  const runs = allRuns.slice(0, 40);
   const webhookEvents = mapWebhookEvents(webhookRows);
   const integrations = mapIntegrations(integrationRows || []);
   const errors = mapErrors(errorRows || []);
@@ -365,13 +404,17 @@ export async function getAutomationsLedger() {
     workspaceId,
     automations,
     runs,
+    incidents,
+    partial: incidentsPartial,
+    partialSources: incidentsPartial ? ["automation_incidents"] : [],
     webhookEvents,
     errors,
     integrations,
     summary: {
       runsToday,
       failuresToday,
-      activeAutomations: automations.filter((a) => a.status === "Active").length,
+      attentionCount: incidentsPartial ? null : incidents.length,
+      activeAutomations: automations.filter((a) => a.statusKey === "active" && a.executionMode === "operational").length,
       webhookEventsToday,
       integrationsConnected: integrations.filter((i) => i.status === "connected").length,
     },

@@ -1,58 +1,68 @@
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
-import { test } from "node:test";
+import { after, beforeEach, afterEach, mock, test } from "node:test";
+import { assertHubWriteAllowed } from "../../../../lib/hub-write-guard.js";
 
-const stubs = {
-  "next/server": `export const NextResponse = { json: (body, init) => new Response(JSON.stringify(body), { status: init?.status ?? 200 }) };`,
-  "@/lib/hub-write-guard": `export function assertHubWriteAllowed() { return null; }`,
-  "@/lib/repositories/followups-ledger": `export async function getFollowups() { return globalThis.__chiefFollowups; }`,
-  "@/lib/sales-os/agent-runs": `export async function recordAgentRun() { globalThis.__chiefRuns += 1; return { id: "run-1" }; }`,
-  "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { return globalThis.__chiefBrand; }`,
-  "@/lib/sales-os/work-orders": `export async function getWorkOrders() { return globalThis.__chiefOrders; }`,
-  "@/lib/server-write": `
-    export function resolveDefaultWorkspaceId() { return "ws-1"; }
-    export async function insertSupabaseRecord() { globalThis.__chiefBriefs += 1; return { persisted: true }; }
-  `,
-};
-
-registerHooks({
+const routeUrl = new URL("./route.js", import.meta.url).href;
+const dependencies = new Set();
+const hooks = registerHooks({
   resolve(specifier, context, nextResolve) {
-    const source = stubs[specifier];
-    if (source) return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };
+    if (context.parentURL?.startsWith(routeUrl)) dependencies.add(specifier);
+    if (specifier === "next/server") return nextResolve("next/server.js", context);
     return nextResolve(specifier, context);
   },
 });
+after(() => hooks.deregister());
+const { GET } = await import("./route.js");
+let env;
+let network;
+beforeEach(() => {
+  env = { ...process.env };
+  process.env.NODE_ENV = "production";
+  process.env.COM_MOON_HUB_WRITE_SECRET = "retired-cron-test-secret";
+  process.env.COM_MOON_ENGINE_URL = "https://engine.test";
+  process.env.COM_MOON_SHARED_WEBHOOK_SECRET = "engine-test-secret";
+  network = mock.method(globalThis, "fetch", async () => {
+    throw new Error("A retired automation must not call the network");
+  });
+});
+afterEach(() => {
+  process.env = env;
+  mock.restoreAll();
+});
 
-const { GET } = await import("./route.js?chief-of-staff-read-failure");
-
-async function runWith(overrides = {}) {
-  globalThis.__chiefRuns = 0;
-  globalThis.__chiefBriefs = 0;
-  globalThis.__chiefFollowups = { source: "supabase", items: [] };
-  globalThis.__chiefOrders = { source: "supabase", orders: [] };
-  globalThis.__chiefBrand = { source: "supabase", content: { cadence: null } };
-  Object.assign(globalThis, overrides);
-  const response = await GET(new Request("https://hub.test/api/cron/chief-of-staff"));
-  return response.json();
+function request(headers = {}) {
+  return new Request("https://hub.test/api/cron/chief-of-staff", { headers });
 }
 
-test("a failed approval queue read cannot persist a queue-empty morning brief", async () => {
-  const body = await runWith({ __chiefOrders: { source: "error", error: "work-orders-read-failed", orders: [] } });
-  assert.equal(body.status, "error");
-  assert.equal(globalThis.__chiefRuns, 0);
-  assert.equal(globalThis.__chiefBriefs, 0);
+test("authenticated legacy execution returns 410 and directs requests to Office", async () => {
+  const response = await GET(request({ authorization: "Bearer retired-cron-test-secret" }));
+  assert.equal(response.status, 410);
+  const body = await response.json();
+  assert.equal(body.status, "disabled");
+  assert.equal(body.reason, "automation-retired");
+  assert.match(body.message, /Office/);
+  assert.match(body.message, /요청/);
+  assert.equal(network.mock.callCount(), 0, "no model, database, or run-record requests");
 });
 
-test("a failed deal read cannot persist a queue-empty morning brief", async () => {
-  const body = await runWith({ __chiefFollowups: { source: "error", items: [] } });
-  assert.equal(body.status, "error");
-  assert.equal(globalThis.__chiefRuns, 0);
-  assert.equal(globalThis.__chiefBriefs, 0);
+test("retired route loads only the response and authentication dependencies", () => {
+  assert.deepEqual([...dependencies].sort(), ["@/lib/hub-write-guard", "next/server"].sort());
 });
 
-test("a failed brand read cannot persist a queue-empty morning brief", async () => {
-  const body = await runWith({ __chiefBrand: { source: "error", content: null } });
-  assert.equal(body.status, "error");
-  assert.equal(globalThis.__chiefRuns, 0);
-  assert.equal(globalThis.__chiefBriefs, 0);
-});
+for (const [label, headers, secret, status] of [
+  ["missing credential", {}, "retired-cron-test-secret", 401],
+  ["wrong credential", { authorization: "Bearer wrong-secret" }, "retired-cron-test-secret", 401],
+  ["unconfigured secret", {}, "", 403],
+  ["unauthenticated production browser", { origin: "https://hub.test" }, "retired-cron-test-secret", 401],
+]) {
+  test(`preserves the existing guard response for ${label}`, async () => {
+    process.env.COM_MOON_HUB_WRITE_SECRET = secret;
+    const expected = assertHubWriteAllowed(request(headers));
+    const response = await GET(request(headers));
+    assert.equal(response.status, status);
+    assert.equal(response.status, expected.status);
+    assert.deepEqual(await response.json(), await expected.json());
+    assert.equal(network.mock.callCount(), 0);
+  });
+}
