@@ -136,7 +136,8 @@ P/Invoke로 부른다(`pet-dwm.js`, `-EncodedCommand`, 숫자 HWND만). 실패�
 
 허브 모델이 60초마다(창이 다 뜬 뒤부터) 알림 원천을 읽는다. 첫 연결의 기존 미확인 문의는 조용히 목록만 채우고, 그 뒤 새로 온
 문의와 곧 시작하는 일정이 **한 번씩** 말풍선이 된다. 말풍선 줄은 셸이 가진다 — 8초 보이고 다음 것은 1초 뒤, 패널·집중 화면이
-열려 있으면 기다린다. 말풍선의 ✕는 그 말풍선만 내린다(읽음 아님, 알림 목록에 남는다). 내용 보기는 읽음으로 하고 목적지를 연다.
+열려 있으면 기다린다. 기다린 알림은 보이기 직전에 허브 목록으로 다시 거른다: 그 사이 읽었거나(패널·메인 창) 이 PC에서 숨겼거나
+일정이 이미 시작했거나 말풍선을 껐으면 건너뛴다. 알림 목록이 열려 있으면 새 알림이 바로 목록에 들어온다. 말풍선의 ✕는 그 말풍선만 내린다(읽음 아님, 알림 목록에 남는다). 내용 보기는 읽음으로 하고 목적지를 연다.
 펫의 숫자 배지는 이 PC 목록의 미확인 수다(99개 넘으면 99+).
 
 ### Hub 연결 — 메인 창 세션 공유
@@ -187,7 +188,8 @@ Alt+Tab은 막지 않는다. 시작하면 패널·말풍선을 접고 펫을 숨
 (`install({ hub })`로 바꿔 끼울 수 있고, `hub: null`이면 모든 허브 채널이 `{ kind: 'not-configured' }`). ctx는
 `{ emit, store, getHubUrl, session, openMainUrl, getState, contract, log }`이고 `store`는 셸과 같은 `pet-store` 인스턴스다(파일마다 하나).
 돌아온 값은 계약의 봉투 `{ kind, data, error, httpStatus }`로 맞춘다(모르는 `kind`는 `invalid`, 예외는 `error`). 연결 상태의 정본은
-허브 모델(`hub.status`)이고, 허브는 `pet:hub-status`·`pet:badge`·`pet:chat-reply`를 보내며 `pet:notice`는 셸 말풍선 줄로 넘긴다.
+허브 모델(`hub.status`)이고, 허브는 `pet:hub-status`·`pet:badge`·`pet:chat-reply`를 보내며 `pet:notice`는 셸 말풍선 줄로 넘긴다
+(열린 패널에도 같이 보낸다). 줄은 띄우기 직전에 `hub.isNoticePresentable(id)`로 아직 유효한지 묻는다.
 패널이 Council 모드를 떠나거나 접히면 셸이 `hub.chatLeave()`를 불러 그 뒤의 답은 알림이 된다. `pet:council-handoff`가 성공하면 셸이
 허브 경로를 메인 창에서 열고 `data.opened`를 싣는다. 채널별 응답 모양은 `pet/main/pet-integration.test.js`가 셸·허브 모델·렌더러
 뷰 모델을 한 번에 이어 고정한다.
@@ -202,8 +204,9 @@ dist\win-unpacked\Moonlight.exe --smoke-pet --smoke-out=pet.png --user-data-dir=
 펫·빠른 패널(할 일)·위젯과 걸친 캐릭터·메모·짧은 메시지·집중 화면을 차례로 실제 화면에 띄워 크기·자리(계약 값), 클릭 모델,
 세로 끌기와 저장, 다리(허용 채널·거절·Node 없음), DWM 두 속성, Esc 1.3초를 확인하고 실제 화면 영역을 `pet.png`·`-widget`·
 `-memo`·`-bubble`·`-focus`로 남긴 뒤 `smoke:pet ok`(실패하면 종료 코드 1). 운영자 포커스를 빼앗지 않도록 패널은 비활성으로
-띄운다. 화면이 잠겨 있으면 캡처가 검게 나온다(`smoke:warn session locked`). 허브 없이 돌리므로 허브 채널은 `not-configured`다 —
-허브까지 이은 흐름은 `pet-integration.test.js`(로컬 허브 대역)와 설계 문서 §6의 E2E 기록을 본다.
+띄운다. 화면이 잠겨 있으면 캡처가 검게 나온다(`smoke:warn session locked`). 허브 모델은 기본 경로(`pet-hub.js`)로 싣되 주소를
+비워 두므로 허브 채널은 `not-configured`(`hub-url-missing`)다 — 패키지 안의 허브 모듈이 실제로 읽히는지만 본다. 허브까지 이은
+흐름은 `pet-integration.test.js`(허브 계약을 흉내 내는 프로세스 안 fetch 대역, 포트를 열지 않는다)와 설계 문서 §6의 E2E 기록을 본다.
 
 ### 알려진 빈틈
 
