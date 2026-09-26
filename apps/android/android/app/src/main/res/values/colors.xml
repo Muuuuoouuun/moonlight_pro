@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="moonlight_bg">#141C27</color>
+    <color name="colorPrimary">#141C27</color>
+    <color name="colorPrimaryDark">#141C27</color>
+    <color name="colorAccent">#BCC4D0</color>
+</resources>

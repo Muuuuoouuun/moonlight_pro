@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>Moonlight</title>
+  <style>
+    :root {
+      --bg: #141c27;
+      --surface: #1b2430;
+      --line: rgba(160, 172, 190, 0.22);
+      --fg: #e3e7ee;
+      --fg-muted: #a0acbe;
+      --fg-dim: #7d889a;
+      --moon-300: #bcc4d0;
+      --r-sm: 6px;
+      --r-lg: 14px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    main {
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      padding: 24px;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--fg-dim);
+    }
+    h1 { margin: 0 0 12px; font-size: 20px; font-weight: 500; }
+    p { margin: 0 0 12px; color: var(--fg-muted); }
+    code {
+      font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+      font-size: 13px;
+      color: var(--moon-300);
+    }
+    a.retry {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      margin-top: 8px;
+      padding: 0 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      color: var(--fg);
+      text-decoration: none;
+    }
+    a.retry:focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Moonlight</p>
+    <section id="unset">
+      <h1>허브 주소가 설정되지 않았습니다</h1>
+      <p><code>apps/android/app.config.json</code>의 <code>hubUrl</code>을 배포 주소로 바꾸고 다시 빌드하세요.</p>
+      <p><code>npm run app:android:sync</code> → <code>npm run app:android:build</code></p>
+    </section>
+    <section id="offline" hidden>
+      <h1>허브에 연결하지 못했습니다</h1>
+      <p>네트워크를 확인하고 다시 여세요.</p>
+      <p><code id="hub-url"></code></p>
+      <a class="retry" id="retry" href="#">다시 열기</a>
+    </section>
+  </main>
+  <script src="hub-config.js"></script>
+  <script>
+    (function () {
+      var hubUrl = window.MOONLIGHT_HUB_URL || "";
+      if (!hubUrl || hubUrl === "https://moonlight.invalid") return;
+      document.getElementById("unset").hidden = true;
+      document.getElementById("offline").hidden = false;
+      document.getElementById("hub-url").textContent = hubUrl;
+      document.getElementById("retry").href = hubUrl + "/dashboard";
+    })();
+  </script>
+</body>
+</html>
