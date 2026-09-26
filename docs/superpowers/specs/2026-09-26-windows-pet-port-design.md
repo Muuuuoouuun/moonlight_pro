@@ -1,6 +1,6 @@
 # Windows 펫 이식 설계 (Moonlight Pet → apps/desktop)
 
-> 상태: **구현 완료**(2026-09-27 — 운영자 결정 3건 확정, 세 패키지 병합 뒤 통합·강화. 검증 결과는 §6, 실화면 Acrylic 캡처는 세션 잠금으로 남은 빈틈). 관계: macOS 프로토타입 [`prototypes/moonlight-pet-macos`](../../../prototypes/moonlight-pet-macos/README.md)의 승인 스펙([승인 시안 적용](2026-09-24-pet-approved-glass-design.md) · [허브 연결](2026-09-25-pet-hub-connection-design.md) · [담당자 대화](2026-09-25-pet-agent-chat-design.md) · [메모 퍼치·드래그](2026-09-25-pet-memo-perch-and-drag-design.md) · [알림·Council](2026-09-25-pet-notifications-council-design.md) · [중간값 매핑](../plans/2026-09-26-pet-balanced-glass.md))을 **그대로 유지**하고, macOS 전용 부분만 Windows 방식으로 바꾼다. 같은 Electron 앱의 380×200 빠른 입력 위젯(`/widget`, Ctrl+Shift+M)과 **공존**한다.
+> 상태: **구현 완료**(2026-09-27 — 운영자 결정 3건 확정, 세 패키지 병합 뒤 통합·강화. 검증 결과는 §6, 남은 빈틈도 §6). 관계: macOS 프로토타입 [`prototypes/moonlight-pet-macos`](../../../prototypes/moonlight-pet-macos/README.md)의 승인 스펙([승인 시안 적용](2026-09-24-pet-approved-glass-design.md) · [허브 연결](2026-09-25-pet-hub-connection-design.md) · [담당자 대화](2026-09-25-pet-agent-chat-design.md) · [메모 퍼치·드래그](2026-09-25-pet-memo-perch-and-drag-design.md) · [알림·Council](2026-09-25-pet-notifications-council-design.md) · [중간값 매핑](../plans/2026-09-26-pet-balanced-glass.md))을 **그대로 유지**하고, macOS 전용 부분만 Windows 방식으로 바꾼다. 같은 Electron 앱의 380×200 빠른 입력 위젯(`/widget`, Ctrl+Shift+M)과 **공존**한다.
 
 ## 1. 운영자 결정 (2026-09-26, 확정)
 
@@ -88,13 +88,9 @@ Ctrl+Alt+M 위젯 → 빠른 패널 → 캐릭터 바꾸기(저장) → 집중 �
 `app.asar` 1,708,933바이트(99개 항목, `pet/**` 85개 — 페이지 5·자산 18·`pet/fonts/` 글꼴 2, 테스트·`test-support`·렌더러 README 없음).
 `dist\win-unpacked\Moonlight.exe --smoke-pet`·`--smoke-test`·`--smoke-widget` 모두 통과(DWM 두 속성 HRESULT 0).
 
-**캡처** — 이 실행 내내 작업 스테이션이 잠겨 있어(LogonUI 실행 중) `desktopCapturer` 실화면 캡처(바쁜 배경 창 위 대기 펫·배지, 빠른 패널
-할 일 휴지·누름, 위젯과 걸친 캐릭터, 메모, 일정, Council, 알림, 말풍선, 집중 화면, 투명도 줄이기)는 모두 검게 나왔다. 같은 순간의 페이지
-렌더(`webContents.capturePage`, Acrylic 없이 CSS 층만)는 남겼고 레이아웃·글자 잘림을 그것으로 확인했다(Council 질문 → 답 순서 오류를
-여기서 찾아 고쳤다). 캡처 파일은 작업 스크래치에만 있고 저장소에 넣지 않는다.
+**캡처** — 처음 실행들은 작업 스테이션이 잠겨 있어(LogonUI) 실화면이 검게 나왔고, 그동안 페이지 렌더(`webContents.capturePage`)로 레이아웃을 보며 Council 질문 → 답 순서 오류와 입력 칸의 네모 초점 윤곽을 찾아 고쳤다. 잠금이 풀린 뒤 E2E (a)를 다시 돌려(36/36) 바쁜 배경 창(색 줄무늬 + 글자) 위에서 `desktopCapturer` 실화면 캡처를 남겼다 — 대기 펫 + 배지(님피아), 빠른 패널 할 일(휴지·누름 워시·뗀 뒤 워시 사라짐), 위젯과 걸친 캐릭터, 메모(빠른 메모 + 걸친 캐릭터), 일정(종일·시각 일정), Council(질문 → 답), 알림, 말풍선, 집중 화면·중지 확인, 투명도 줄이기(불투명 면). 모두 읽어 확인했다: Acrylic 블러가 배경 글자를 흐리고 8px 둥근 모서리·림이 맞으며, 패널이 포커스를 잃은 뒤(메인 창·다른 창이 앞일 때)에도 블러가 남는다. 캡처 파일은 작업 스크래치에만 두고 저장소에 넣지 않는다.
 
 **남은 빈틈**
-- 실제 Acrylic 블러·림과 비활성일 때 블러 유지의 눈 확인 — 잠금이 풀린 화면에서 `--smoke-pet`(또는 E2E 하네스)을 다시 돌려 확인해야 한다.
 - 투명도 줄이기는 `nativeTheme` 갱신을 흉내 내 확인했다. Windows ‘투명 효과’ 스위치가 이 값을 실제로 바꾸는지는 보지 못했다.
 - 펫 오른쪽 클릭(Windows 기본 메뉴)의 얼굴 아이콘 + 체크 표시는 화면으로 보지 못했다.
 - 말풍선에서 연 일정·답변 알림은 모드만 연다(날짜·대화 선택은 알림 모드 안에서만).
