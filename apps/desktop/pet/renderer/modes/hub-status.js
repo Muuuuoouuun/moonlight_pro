@@ -15,7 +15,7 @@
 
       function render() {
         const s = ctx.state;
-        const v = P.hubStatusView(s.hubStatus);
+        const v = P.hubStatusView(s.hubStatus, s.hubUrl);
         U.clear(el);
         el.append(h('div', { class: 'state-line', role: 'status' }, U.icon(v.glyph, 16), h('span', { text: v.label })));
         el.append(h('div', { class: 'detail', text: v.detail }));
@@ -43,6 +43,8 @@
         const data = (res && res.data) || {};
         if (res && res.kind === 'live' && data.status === 'authenticated') {
           checkView = { state: 'live', label: '연결됨', message: '메인 창의 로그인 세션으로 Hub에 닿았어요.' };
+        } else if (res && res.kind === 'live' && data.configured === false) {
+          checkView = M.envelope.describeRead({ kind: 'not-configured', error: 'operator-login-not-configured' }, 'Hub 연결');
         } else if (res && res.kind === 'live' && data.status === 'anonymous') {
           checkView = M.envelope.describeRead({ kind: 'unauthorized' });
         } else {

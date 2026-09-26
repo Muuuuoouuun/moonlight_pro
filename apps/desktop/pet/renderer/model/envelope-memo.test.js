@@ -21,9 +21,23 @@ test('모든 봉투 종류가 읽기 화면 상태를 가진다', () => {
   assert.equal(E.describeRead({ kind: 'unauthorized' }).label, '로그인 필요');
   assert.equal(E.describeRead({ kind: 'unauthorized' }).action.kind, 'login');
   assert.equal(E.describeRead({ kind: 'error', error: '시간 초과' }).message, '시간 초과');
+  // 허브 모델의 사유 코드는 사람이 읽는 말로 — 'server' 같은 코드를 그대로 보여 주지 않는다.
+  assert.equal(E.describeRead({ kind: 'error', error: 'offline' }).message, 'Hub에 연결하지 못했어요.');
+  assert.equal(E.describeWrite({ kind: 'error', error: 'server' }).message, 'Hub가 요청을 처리하지 못했어요.');
+  assert.doesNotMatch(E.describeWrite({ kind: 'error', error: 'some-new-code' }).message, /some-new-code/);
   assert.equal(E.describeRead({ kind: 'error' }).action.kind, 'retry');
   assert.equal(E.describeRead(null).state, 'invalid', '봉투가 아니면 invalid');
   assert.equal(E.describeRead({ kind: 'surprise' }).state, 'invalid');
+});
+
+test('허브 로그인 미설정은 "주소 필요"가 아니다(읽기·쓰기)', () => {
+  const read = E.describeRead({ kind: 'not-configured', error: 'operator-login-not-configured' }, '할 일');
+  assert.equal(read.label, 'Hub 로그인 미설정');
+  assert.equal(read.showData, false);
+  assert.equal(E.describeRead({ kind: 'not-configured', error: 'hub-url-missing' }).label, 'Hub 주소 필요');
+  const write = E.describeWrite({ kind: 'not-configured', error: 'operator-login-not-configured' }, '메모');
+  assert.equal(write.ok, false);
+  assert.match(write.message, /저장되지 않았어요/);
 });
 
 test('쓰기 preview 는 저장 성공이 아니다', () => {

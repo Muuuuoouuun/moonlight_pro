@@ -54,7 +54,12 @@
     offline: Object.freeze({ glyph: 'alert', label: '연결 안 됨', detail: 'Hub에 닿지 못했어요. 입력은 이 PC에 보관돼요.' }),
     unknown: Object.freeze({ glyph: 'info', label: '확인 중', detail: 'Hub 연결을 확인하고 있어요.' }),
   });
-  const hubStatusView = (status) => HUB_STATUS[status] || HUB_STATUS.unknown;
+  // not-configured 는 두 가지다: 주소가 없거나(메인 창에서 정한다), 주소는 있는데 허브에 운영자 로그인 설정이 없거나.
+  const LOGIN_NOT_CONFIGURED = Object.freeze({ glyph: 'info', label: 'Hub 로그인 미설정', detail: 'Hub 서버에 운영자 로그인 설정이 아직 없어요. 서버 설정이 끝나면 펫도 이어서 써요.' });
+  const hubStatusView = (status, hubUrl) => {
+    if (status === 'not-configured' && hubUrl) return LOGIN_NOT_CONFIGURED;
+    return HUB_STATUS[status] || HUB_STATUS.unknown;
+  };
 
   function hostOf(url) {
     try { return new URL(url).host; } catch (_) { return ''; }

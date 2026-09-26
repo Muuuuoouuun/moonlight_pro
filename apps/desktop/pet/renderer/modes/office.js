@@ -21,6 +21,7 @@
         U.clear(statusBox);
         U.clear(bottom);
         const blocked = state.hubStatus === 'unauthorized' ? { label: '로그인 필요', message: '메인 창에서 로그인하면 Office 보드가 열려요.', button: '메인 창에서 로그인', path: '/login', glyph: 'lock' }
+          : state.hubStatus === 'not-configured' && state.hubUrl ? { label: 'Hub 로그인 미설정', message: 'Hub 서버에 운영자 로그인 설정이 아직 없어요.', button: '메인 창 열기', path: '/dashboard', glyph: 'info' }
           : state.hubStatus === 'not-configured' ? { label: 'Hub 주소 필요', message: '메인 창에서 Hub 주소를 먼저 정해 주세요.', button: '메인 창 열기', path: '/dashboard', glyph: 'info' }
             : null;
         who.hidden = !!blocked;

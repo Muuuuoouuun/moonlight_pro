@@ -84,6 +84,13 @@ test('집중 시간은 1~120분, 남은 시간 mm:ss, 진행률 0~1', () => {
   assert.deepEqual([...F.PRESETS], [15, 25, 50]);
 });
 
+test('not-configured 는 주소 없음과 허브 로그인 미설정을 구별한다', () => {
+  assert.equal(P.hubStatusView('not-configured', '').label, 'Hub 주소 없음');
+  assert.equal(P.hubStatusView('not-configured', 'https://hub.example.com').label, 'Hub 로그인 미설정');
+  assert.match(N.bubbleSummary({ hubStatus: 'not-configured', badge: 0, hubUrl: 'https://hub.example.com' }), /운영자 로그인 설정/);
+  assert.match(N.bubbleSummary({ hubStatus: 'not-configured', badge: 0, hubUrl: '' }), /Hub 주소/);
+});
+
 test('IME 조합 중의 Esc·Ctrl+S·Ctrl+Enter 는 패널 동작이 아니다', () => {
   assert.equal(P.keyAction(key({ key: 'Escape', code: 'Escape', isComposing: true })), null);
   assert.equal(P.keyAction(key({ ctrlKey: true, key: 's', code: 'KeyS', keyCode: 229 })), null);
