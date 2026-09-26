@@ -73,7 +73,7 @@ const turnSchema = (participants: string[], ownerId: string, round: OfficeDiscus
 // Each role sees the same bounded source material, never another role's hidden reasoning.
 // Position calls run in parallel; a single optional response round consumes those public
 // positions. The caller then makes ONE synthesis call within the existing shared deadline.
-export async function runOfficeDiscussion(request: DiscussionRequest, context: unknown, signal: AbortSignal, generate = generateGeminiText, onDiagnostic?: OfficeDiagnosticCallback) {
+export async function runOfficeDiscussion(request: DiscussionRequest, context: unknown, signal: AbortSignal, generate: typeof generateGeminiText = input => generateGeminiText({ ...input, usageSurface: input.usageSurface || 'office-council' }), onDiagnostic?: OfficeDiagnosticCallback) {
   const settings = readOfficeWithDiagnostic({ phase: 'position', category: 'contract', ownerId: request.ownerId }, onDiagnostic, () => parseOfficeDeliberation(request.deliberation, request.participants));
   const abort = new AbortController();
   const sharedSignal = AbortSignal.any([signal, abort.signal]);

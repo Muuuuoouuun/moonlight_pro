@@ -251,6 +251,15 @@ export async function extractMultimodalIntakeHub(input = {}) {
   }
 
   const parsedResponse = raw ? safeJson(raw) : null;
+  // Token counts only, fire-and-forget: the usage log never delays or fails this answer.
+  // Loaded lazily because a client page imports this file for formatMeetingBriefForShare;
+  // the Supabase write client must not enter that bundle's static graph.
+  const usageRecord = { surface: "hub-multimodal-intake", model, usageMetadata: parsedResponse?.usageMetadata };
+  if (typeof input.recordUsage === "function") {
+    try { input.recordUsage(usageRecord); } catch { /* never block the answer */ }
+  } else {
+    import("./ai-usage-log.js").then((module) => module.recordAiUsage(usageRecord)).catch(() => null);
+  }
   if (!response.ok) {
     return {
       ok: false,

@@ -1,5 +1,6 @@
 // Manual, text-only meeting analysis. The source text remains the authority:
 // model-provided quotes are accepted only when they anchor to one exact span.
+import { recordAiUsage } from "./ai-usage-log.js";
 
 export const MAX_MEETING_REVIEW_TEXT_LENGTH = 20_000;
 
@@ -295,10 +296,12 @@ export async function extractMeetingReviewText(input = {}) {
     return { ok: false, reason: "provider-unavailable", error: "회의 분석 요청에 실패했습니다. 다시 시도해 주세요.", data: null };
   }
 
+  const parsed = parseJson(raw);
+  // Token counts only, fire-and-forget: the usage log never delays or fails this answer.
+  recordAiUsage({ surface: "hub-meeting-review", model, usageMetadata: parsed?.usageMetadata });
   if (!response.ok) {
     return { ok: false, reason: "provider-error", error: `회의 분석 공급자가 HTTP ${response.status}를 반환했습니다.`, data: null };
   }
-  const parsed = parseJson(raw);
   const generated = parseJson(modelText(parsed));
   if (!isObject(generated) || !isBoundedText(generated.summary, 2000) || !generated.summary.trim()
     || !Array.isArray(generated.proposals) || generated.proposals.length > MAX_PROPOSALS

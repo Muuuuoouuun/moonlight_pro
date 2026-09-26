@@ -142,6 +142,7 @@ export async function POST(req: Request) {
     prompt: buildPrompt(context, typeof payload.prompt === "string" ? payload.prompt : undefined),
     maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 4096,
     retries: 1,
+    usageSurface: "brief",
   });
   const finishedAt = new Date().toISOString();
   const connection = await upsertIntegrationConnection({

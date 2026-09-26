@@ -414,12 +414,14 @@ export async function POST(req: Request) {
           maxOutputTokens,
           ...DRAFT_GENERATION_BOUNDS,
           retries: 1,
+          usageSurface: "brand-mentor",
         }
       : {
           systemInstruction,
           prompt: buildPrompt(mode as Mode, context, draft, legendIds, guidanceId, officeSource, Array.isArray(payload.history) ? payload.history : []),
           maxOutputTokens: mode === "office-review" ? Math.min(maxOutputTokens, 1536) : maxOutputTokens,
           retries: 1,
+          usageSurface: "brand-mentor",
         },
   );
   const councilAnalysis = (isCouncilMode && result.ok && !isDraftMode) ? parseCouncilResponse(result.text) : null;

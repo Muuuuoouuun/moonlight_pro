@@ -6,7 +6,7 @@ import { generateGeminiText } from '../gemini.ts';
 const failure = { status: 'error', error: '담당 추천을 확인하지 못했습니다. 담당자를 직접 선택해 주세요.' };
 const preview = { status: 'preview', error: 'AI 연결이 필요합니다. 담당자를 직접 선택해 주세요.' };
 
-export async function generateOfficeRouting(request: OfficeRoutingRequest, generate = generateGeminiText) {
+export async function generateOfficeRouting(request: OfficeRoutingRequest, generate: typeof generateGeminiText = input => generateGeminiText({ ...input, usageSurface: input.usageSurface || 'office-routing' })) {
   const input = parseOfficeRoutingRequest(request);
   const roster = OFFICE_ROSTER.map(({ id, name, role, pitch }) => `${id}: ${name} · ${role} · ${pitch}`).join('\n');
   try {
