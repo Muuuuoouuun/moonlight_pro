@@ -113,10 +113,8 @@ final class DesktopRefractionView: MTKView, MTKViewDelegate, SCStreamOutput, SCS
             onStatus?("대비 설정에 따라 기본 유리 사용 중")
             return
         }
-        guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
-            onStatus?("화면 기록 권한 필요 · 허용 후 실험을 다시 켜세요")
-            return
-        }
+        // ScreenCaptureKit performs authorization itself. Legacy CoreGraphics
+        // preflight can disagree with the permission granted to this app build.
         let ticket = generation
         onStatus?("배경 굴절 연결 중…")
         Task { [weak self] in
@@ -149,7 +147,8 @@ final class DesktopRefractionView: MTKView, MTKViewDelegate, SCStreamOutput, SCS
             } catch {
                 guard ticket == self.generation else { return }
                 self.stop()
-                self.onStatus?("배경을 읽지 못했어요 · 기본 유리 사용 중")
+                let failure = error as NSError
+                self.onStatus?("배경 연결 실패 (\(failure.domain):\(failure.code)) · 기본 유리 사용 중")
             }
         }
     }
