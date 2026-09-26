@@ -8,6 +8,7 @@ import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 import { DailyReviewCue } from '../daily-review-cue';
 import { GuruRecommendation, GuruRecommendationList } from '../guru-recommendation';
 import { useGuruRecommendations, recommendationForSubject } from '../guru-recommendations-client';
+import { readEnvelope, useDailyBriefSignals } from '../daily-brief-signals';
 
 // Home — Futura 텍스처의 첫 화면 (DESIGN.md §15, 2026-09-18).
 //
@@ -32,40 +33,7 @@ function formatClock(iso) {
   }).format(d);
 }
 
-// 허브 read 봉투(CLAUDE.md): read 실패는 5xx가 아니라 HTTP 200 + status:"error"로 온다.
-// `!r.ok`만 보면 read 실패가 빈 상태("대기 없음")로 위장된다.
-function readEnvelope(res, data) {
-  if (!res.ok || !data) return 'error';
-  if (data.status === 'error' || data.source === 'error') return 'error';
-  return data.status || 'preview';
-}
-
-function useDailyBriefSignals(reloadKey) {
-  const [state, setState] = React.useState({ status: 'loading', signals: [] });
-
-  React.useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-    setState({ status: 'loading', signals: [] });
-    (async () => {
-      try {
-        const res = await fetch('/api/hub/daily-brief', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]) });
-        const data = await res.json().catch(() => null);
-        if (!active) return;
-        const status = readEnvelope(res, data);
-        setState({
-          status,
-          signals: status === 'error' ? [] : (Array.isArray(data?.signals) ? data.signals : []),
-        });
-      } catch {
-        if (active) setState({ status: 'error', signals: [] });
-      }
-    })();
-    return () => { active = false; controller.abort(); };
-  }, [reloadKey]);
-
-  return state;
-}
+// 허브 read 봉투 해석과 daily-brief 신호 읽기는 데스크톱 위젯과 공유한다(daily-brief-signals.js).
 
 function useTodaySchedule(reloadKey) {
   const [state, setState] = React.useState({ status: 'loading', events: [] });

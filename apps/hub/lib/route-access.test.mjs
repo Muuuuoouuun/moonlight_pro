@@ -18,6 +18,16 @@ test("배포 호스트에서 세션 없이 화면을 열면 로그인으로 보�
   }
 });
 
+test("데스크톱 위젯 화면(/widget)은 다른 화면과 같이 세션을 요구한다", () => {
+  // 위젯은 /dashboard 밖(HubApp 없이)에 있지만 공개 경로가 아니다. 앱 창은 로그인으로 가면
+  // 스스로 숨고 메인 창에서 로그인한다(apps/desktop/main.js) — 게이트를 열 이유가 없다.
+  assert.equal(isOpenPath("/widget"), false);
+  assert.equal(deployed({ pathname: "/widget" }).action, "login");
+  assert.equal(deployed({ pathname: "/widget", hasSession: true }).action, "allow");
+  assert.equal(deployed({ pathname: "/widget", secretConfigured: false }).action, "not-configured");
+  assert.equal(resolveRouteAccess({ pathname: "/widget", host: "localhost:3141", hasSession: false, secretConfigured: true, allowLoopback: false }).action, "login");
+});
+
 test("유효한 세션이 있으면 통과한다", () => {
   assert.equal(deployed({ pathname: "/api/hub/revenue", hasSession: true }).action, "allow");
   assert.equal(deployed({ pathname: "/dashboard", hasSession: true }).action, "allow");
