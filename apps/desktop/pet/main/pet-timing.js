@@ -4,6 +4,8 @@ const C = require('../shared/contract');
 
 // 짧은 메시지(326×130): 8초 보이고, 다음 것은 1초 뒤. 패널·집중 화면이 열려 있으면 기다린다(Mac PetActivityStore).
 // canShow() → 지금 띄워도 되는가, show(notice) / hide() → 창 조작.
+// isValid(notice) → 줄에서 기다린 알림이 보이기 직전에도 유효한가(선택). false 면 건너뛰고 다음 것을 본다 —
+// 패널·집중 화면이 열려 있는 동안 읽음·숨김·시작한 일정이 된 알림을 나중에 띄우지 않는다.
 function createBubbleQueue(options) {
   const set = options.setTimeout || setTimeout;
   const clear = options.clearTimeout || clearTimeout;
@@ -16,10 +18,24 @@ function createBubbleQueue(options) {
   let gapTimer = null;
   let last = null;
 
+  function stillValid(notice) {
+    if (typeof options.isValid !== 'function') return true;
+    try {
+      return options.isValid(notice) !== false;
+    } catch {
+      return false;
+    }
+  }
+
   function pump() {
     if (current || gapTimer !== null || !queue.length || !options.canShow()) return false;
-    present(queue.shift());
-    return true;
+    while (queue.length) {
+      const next = queue.shift();
+      if (!stillValid(next)) continue;
+      present(next);
+      return true;
+    }
+    return false;
   }
 
   function present(notice) {

@@ -404,8 +404,14 @@ function install(options = {}) {
   }
 
   // ── 짧은 메시지 ─────────────────────────────────────────────────────────
+  const fromHub = new WeakSet(); // 허브가 넘긴 알림(셸이 직접 넣은 것 — pushNotice — 은 다시 거르지 않는다)
   const bubbles = createBubbleQueue({
     canShow: () => !state.panelOpen && !focusRunning(),
+    // 허브가 넘긴 알림은 보이기 직전에 허브 목록으로 다시 거른다(줄에서 기다리는 동안 읽음·숨김·시작한 일정).
+    isValid: (notice) => {
+      if (!notice || !fromHub.has(notice) || !hub || typeof hub.isNoticePresentable !== 'function') return true;
+      return hub.isNoticePresentable(notice.id) === true;
+    },
     show: (notice) => {
       setBoundsExact(bubble, G.bubbleBounds(petBounds, workArea()));
       bubble.webContents.send('pet:notice', { notice: notice || null });
@@ -504,7 +510,12 @@ function install(options = {}) {
   function hubEmit(event, payload) {
     if (!C.PET_EVENTS.includes(event) || event === 'pet:state-changed' || event === 'pet:wash' || event === 'pet:focus-tick') return false;
     const data = asObject(payload);
-    if (event === 'pet:notice') return bubbles.push(data.notice);
+    if (event === 'pet:notice') {
+      // 알림 목록이 열려 있으면 새 알림을 바로 반영한다(말풍선 창은 줄이 보여 줄 때 받는다).
+      if (!panel.isDestroyed()) panel.webContents.send('pet:notice', payload);
+      if (data.notice && typeof data.notice === 'object') fromHub.add(data.notice);
+      return bubbles.push(data.notice);
+    }
     if (event === 'pet:hub-status') state.setHubStatus(data.status);
     if (event === 'pet:badge') state.setBadge(data.count);
     broadcast(event, payload);

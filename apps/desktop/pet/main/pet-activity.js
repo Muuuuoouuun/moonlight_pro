@@ -295,6 +295,16 @@ function createActivity(options = {}) {
     }, gapMs);
   }
 
+  // 넘겨준 말풍선이 지금도 띄울 만한가 — 셸 말풍선 줄이 보이기 직전에 묻는다. 그 사이 읽었거나(패널·메인 창),
+  // 이 PC에서 숨겼거나, 일정이 이미 시작했거나, 말풍선을 껐으면 false(Mac presentNext 가 목록을 다시 거르는 규칙).
+  function isPresentable(id, nowMs = clock()) {
+    if (!bannersEnabled || typeof id !== 'string' || !id) return false;
+    const before = unreadCount();
+    rebuild(nowMs);
+    if (unreadCount() !== before) changed();
+    return notices.some((n) => n.id === id) && isUnread(id);
+  }
+
   function addAgentReply({ id, ownerId, scope, title, body = '', at } = {}) {
     if (!id || !ownerId || !scope) return null;
     const token = `reply:${id}`;
@@ -376,6 +386,7 @@ function createActivity(options = {}) {
     tick: (nowMs) => refresh(nowMs ?? clock()),
     presentNext,
     dismissBanner,
+    isPresentable,
     addAgentReply,
     acknowledgeAgentReplies,
     read,

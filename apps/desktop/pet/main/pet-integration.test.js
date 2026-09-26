@@ -8,7 +8,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { createElectronDouble, useElectron } = require('./test-support/electron-double');
-const { startHubDouble, inquiryRow } = require('./test-support/hub-double');
+const { createHubDouble, inquiryRow } = require('./test-support/hub-double');
+const { createPetHub } = require('./pet-hub');
 const C = require('../shared/contract');
 const E = require('../renderer/model/envelope-view');
 const T = require('../renderer/model/tasks-view-model');
@@ -27,8 +28,10 @@ async function until(check, label, ms = 3000) {
   }
 }
 
-async function boot(t, extra = {}) {
-  const double = await startHubDouble();
+// hub: 기본은 pet-main 이 받는 hubContext 그대로 createPetHub 에 넘기고 전송만 fetch 대역으로 바꾼다.
+// wrapHub(hub) 로 허브 객체를 감쌀 수 있다. defaultHub: true 면 pet-main 의 기본 경로(loadDefaultHub)를 쓴다.
+async function boot(t, { wrapHub, defaultHub = false, hubUrl: initialUrl, ...extra } = {}) {
+  const double = createHubDouble();
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pet-integration-'));
   const E2 = createElectronDouble({ userData, cookies: [{ origin: double.origin, name: 'com_moon_operator_session', value: 'operator-session' }] });
   const restore = useElectron(E2);
@@ -36,7 +39,13 @@ async function boot(t, extra = {}) {
   for (const key of Object.keys(require.cache)) if (/[\\/]pet[\\/]main[\\/]pet-(main|windows)\.js$/.test(key)) delete require.cache[key];
   const { install } = require('./pet-main');
   const opened = [];
-  let hubUrl = double.origin;
+  let hubUrl = initialUrl === undefined ? double.origin : initialUrl;
+  const hubOption = defaultHub ? {} : {
+    hub: (ctx) => {
+      const hub = createPetHub({ ...ctx, fetch: double.fetch });
+      return wrapHub ? wrapHub(hub) : hub;
+    },
+  };
   const pet = install({
     app: E2.electron.app,
     getHubUrl: () => hubUrl,
@@ -46,13 +55,13 @@ async function boot(t, extra = {}) {
     registerShortcut: false,
     activate: false,
     log: () => {},
+    ...hubOption,
     ...extra,
   });
   await pet.ready;
   t.after(() => {
     pet.dispose();
     restore();
-    double.server.close();
   });
   const w = pet.windows;
   const call = (channel, payload, win = w.panel) => E2.invoke(channel, win, payload);
@@ -60,7 +69,10 @@ async function boot(t, extra = {}) {
 }
 
 test('채널표: 계약의 invoke 채널마다 정확히 한 번 등록하고, 펫 창 밖의 호출은 거절한다', async (t) => {
-  const { E2, call } = await boot(t);
+  // 기본 경로(loadDefaultHub → pet-hub.createPetHub). 주소가 비어 있어 네트워크에 나가지 않는다.
+  const { E2, call, pet } = await boot(t, { defaultHub: true, hubUrl: '' });
+  assert.equal(pet.state().hubStatus, 'not-configured', '기본 허브가 만들어져 주소 없음을 알린다');
+  assert.equal((await call('pet:tasks-list', {})).kind, 'not-configured');
   assert.deepEqual([...E2.handleCalls].sort(), [...C.PET_INVOKE].sort());
   assert.equal(new Set(E2.handleCalls).size, E2.handleCalls.length, '두 번 등록한 채널이 없다');
   await assert.rejects(E2.invoke('pet:state', { webContents: {} }, {}), /pet windows only/);
@@ -177,12 +189,42 @@ test('알림: 새 문의마다 말풍선, 닫기(X)는 말풍선만 내리고 �
   assert.equal(double.state.seen.filter((s) => s.method !== 'GET').length, 0, '알림 조작은 허브에 쓰지 않는다');
 });
 
+test('알림: 패널이 열린 동안 넘겨받은 알림은 보이기 직전에 다시 거른다 — 읽은 문의·시작한 일정은 말풍선에 뜨지 않는다', async (t) => {
+  const { call, double, w, pet } = await boot(t);
+  const baseline = randomUUID();
+  double.state.inquiries = [inquiryRow(baseline)];
+  double.state.unreadCount = 1;
+  await pet.hubUrlChanged(); // 첫 연결: 기존 미확인은 조용히
+  const bubbleShown = () => w.bubble.webContents.sent.filter(([c, p]) => c === 'pet:notice' && p && p.notice).map(([, p]) => p.notice.id);
+  const handed = () => w.panel.webContents.sent.filter(([c, p]) => c === 'pet:notice' && p && p.notice).map(([, p]) => p.notice.id);
+  pet.openQuick();
+  const readInPanel = randomUUID();
+  const stillUnread = randomUUID();
+  double.state.inquiries = [inquiryRow(readInPanel, 3, '패널 열린 동안 온 문의'), inquiryRow(stillUnread, 3, '아직 안 읽은 문의'), inquiryRow(baseline)];
+  double.state.unreadCount = 3;
+  const startsAt = Date.now() + 400;
+  double.state.events = [{
+    id: 'soon', title: '곧 시작 일정', start: new Date(startsAt).toISOString(), end: new Date(startsAt + 1800000).toISOString(), allDay: false, source: 'google',
+  }];
+  await pet.hubUrlChanged(); // 같은 주소: 폴링 한 칸
+  await until(() => handed().length === 3, 'hub hands every new notice over', 4000);
+  assert.equal(bubbleShown().length, 0, '패널이 열려 있으면 말풍선은 기다린다');
+  assert.equal(w.bubble.isVisible(), false);
+  await call('pet:notices-read', { id: `inquiry:${readInPanel}:3` }); // 패널에서 읽음
+  await until(() => Date.now() > startsAt + 50, 'event started', 2000);
+  pet.collapse();
+  await until(() => bubbleShown().length === 1, 'bubble after collapse');
+  assert.deepEqual(bubbleShown(), [`inquiry:${stillUnread}:3`], '읽은 문의·시작한 일정은 건너뛴다');
+  await call('pet:collapse', {}, w.bubble); // 말풍선 X
+  await settle(1300);
+  assert.equal(bubbleShown().length, 1, '줄에 남은 낡은 알림이 뒤늦게 뜨지 않는다');
+  assert.equal(w.bubble.isVisible(), false);
+});
+
 test('Council: 대화 busy 는 boolean, 답이 오면 이 대화, 패널을 접으면 셸이 chatLeave 를 불러 다음 답은 알림', async (t) => {
   let leaves = 0;
-  const { createPetHub } = require('./pet-hub');
   const { call, pet } = await boot(t, {
-    hub: (ctx) => {
-      const hub = createPetHub(ctx);
+    wrapHub: (hub) => {
       const leave = hub.chatLeave;
       hub.chatLeave = () => { leaves += 1; leave(); };
       return hub;
@@ -281,10 +323,16 @@ test('누름을 잃으면(cancel) 워시를 끄고 클릭으로 치지 않는다
 });
 
 test('허브 주소를 같은 값으로 다시 저장해도 상태가 unknown 에 멈추지 않고, 바꾸면 새 origin 으로 간다', async (t) => {
-  const { pet, setHubUrl } = await boot(t);
+  const { pet, setHubUrl, double } = await boot(t);
   await until(() => pet.state().hubStatus === 'connected', 'connected');
   await pet.hubUrlChanged();
   assert.equal(pet.state().hubStatus, 'connected');
+  setHubUrl('http://127.0.0.1:3158'); // 닿지 않는 허브
+  await pet.hubUrlChanged();
+  assert.equal(pet.state().hubStatus, 'offline', '연결 실패는 offline(unknown 에 머물지 않는다)');
+  setHubUrl(double.origin);
+  await pet.hubUrlChanged();
+  assert.equal(pet.state().hubStatus, 'connected', '돌아오면 다시 연결됨');
   setHubUrl('');
   await pet.hubUrlChanged();
   assert.equal(pet.state().hubStatus, 'not-configured');

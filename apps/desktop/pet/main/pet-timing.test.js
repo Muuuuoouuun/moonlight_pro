@@ -96,3 +96,34 @@ test('집중 시간 1~120분, 남은 초는 올림', () => {
   assert.equal(T.remainingSeconds(10000, 9001), 1);
   assert.equal(T.remainingSeconds(10000, 12000), 0);
 });
+
+test('짧은 메시지: 줄에서 기다린 알림은 보이기 직전에 다시 거른다(isValid false 는 건너뛴다)', () => {
+  const clock = timers();
+  const blocked = { value: true };
+  const stale = new Set();
+  const log = [];
+  let visible = false;
+  const q = T.createBubbleQueue({
+    canShow: () => !blocked.value,
+    isValid: (n) => !stale.has(n.id),
+    show: (n) => { visible = true; log.push(['show', n.id]); },
+    hide: () => { visible = false; log.push(['hide']); },
+    isVisible: () => visible,
+    setTimeout: clock.setTimeout,
+    clearTimeout: clock.clearTimeout,
+  });
+  q.push({ id: 'read-meanwhile' });
+  q.push({ id: 'started-event' });
+  q.push({ id: 'still-new' });
+  stale.add('read-meanwhile');
+  stale.add('started-event');
+  blocked.value = false;
+  assert.equal(q.pump(), true);
+  assert.deepEqual(log, [['show', 'still-new']]);
+  assert.equal(q.queued, 0);
+  clock.advance(8000 + 1000);
+  assert.deepEqual(log, [['show', 'still-new'], ['hide']], '낡은 알림은 뒤늦게 뜨지 않는다');
+  const throwing = T.createBubbleQueue({ canShow: () => true, isValid: () => { throw new Error('x'); }, show: () => log.push(['show-throw']), hide: () => {} });
+  throwing.push({ id: 'x' });
+  assert.equal(log.some(([k]) => k === 'show-throw'), false, '판정이 실패하면 띄우지 않는다');
+});

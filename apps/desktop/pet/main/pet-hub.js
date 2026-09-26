@@ -477,6 +477,8 @@ function createPetHub(input = {}) {
       stopPollingFn = null;
     },
     presentNext: () => activity.presentNext(),
+    // 셸 말풍선 줄이 넘겨받은 알림을 띄우기 직전에 묻는다 — 줄에서 기다리는 동안 낡았으면 false.
+    isNoticePresentable: (id) => activity.isPresentable(id),
     dismissBanner: () => activity.dismissBanner(),
     setBannersEnabled: (enabled) => activity.setBannersEnabled(enabled),
     setBannerGate(fn) {
