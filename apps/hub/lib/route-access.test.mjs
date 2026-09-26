@@ -125,10 +125,13 @@ test("matcher 가 확장자 캐치올로 게이트를 끄지 않는다", async (
   for (const path of [
     "/_next/static/chunk.js", "/fonts/SUIT-Variable.woff2", "/favicon.ico", "/manifest.json",
     "/icon.svg", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/apple-touch-icon.png",
+    // Android App Links 검증 파일 — Google 검증 서버의 요청이 미들웨어를 거치며 리다이렉트됐다
+    // (2026-09-26 실측, 국내 curl 은 200). 다른 공개 자산처럼 매처 밖에 둔다.
+    "/.well-known/assetlinks.json",
   ]) {
     assert.ok(!pattern.test(path), `${path} 는 정적 자산이라 통과해야 한다`);
   }
-  for (const path of ["/icon-512.png/private", "/icon-512.png.evil", "/api/hub/icon-512.png"]) {
+  for (const path of ["/icon-512.png/private", "/icon-512.png.evil", "/api/hub/icon-512.png", "/.well-known/other.json", "/api/.well-known/assetlinks.json"]) {
     assert.ok(pattern.test(path), `${path} 는 자산 이름을 흉내 내도 인증을 거쳐야 한다`);
   }
 });
