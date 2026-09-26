@@ -1,0 +1,57 @@
+{
+  "name": "@com-moon/desktop",
+  "productName": "Moonlight",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Moonlight 허브를 여는 Windows 데스크톱 셸",
+  "author": "Moonlight",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "build": "electron-builder --win --x64",
+    "icons:generate": "node scripts/generate-icons.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "^26.15.3",
+    "png-to-ico": "^3.0.2"
+  },
+  "build": {
+    "appId": "app.moonlight.hub",
+    "productName": "Moonlight",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "hub-url.js",
+      "app.config.json",
+      "settings/**",
+      "package.json",
+      {
+        "from": "../hub/public",
+        "to": "assets",
+        "filter": ["icon-192.png"]
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "Moonlight-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Moonlight-Portable-${version}.${ext}"
+    }
+  }
+}
