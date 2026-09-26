@@ -10,6 +10,7 @@ const {
   WIDGET_CHANNELS,
   widgetUrl,
   isLoginUrl,
+  mainLoginUrl,
   isWidgetPage,
   resolveMainPath,
   clampWidgetHeight,
@@ -34,6 +35,9 @@ const SMOKE_WIDGET = argValue('smoke-widget') !== null; // 위젯 창만 띄워 
 const SMOKE = argValue('smoke-test') !== null || SMOKE_WIDGET;
 const SMOKE_OUT = argValue('smoke-out') || path.join(process.cwd(), 'smoke.png');
 const SMOKE_CAPTURE = argValue('smoke-quick-capture') !== null; // 스모크에서 빠른 입력 경로까지 찍기
+// --smoke-widget --smoke-hub=<허브 주소>: 창 규칙 검사 대신 그 허브의 실제 /widget 페이지를 찍는다(개발 서버 확인용).
+const SMOKE_HUB = argValue('smoke-hub');
+const SMOKE_THEME = argValue('smoke-theme'); // light | dark — 찍기 전에 허브 테마 설정(mlp.theme)을 이 값으로
 const userDataDir = argValue('user-data-dir');
 if (userDataDir) app.setPath('userData', path.resolve(userDataDir));
 // 스모크 캡처는 GPU 합성 없이도 찍혀야 한다(CI·원격 세션에서 UnknownVizError 방지).
@@ -363,11 +367,13 @@ function createWidget() {
     hideWidget();
   });
   // 세션이 끝나 /login으로 가면 작은 창에 로그인 폼을 그리지 않고 메인 창에서 연다.
+  // 메인 창은 next=/widget을 물려받지 않는다(로그인 뒤 위젯 페이지가 큰 창에 뜨지 않게 — mainLoginUrl).
   const toLogin = (event, url) => {
-    if (!isLoginUrl(url, currentHubUrl())) return;
+    const target = mainLoginUrl(url, currentHubUrl());
+    if (!target) return;
     if (event) event.preventDefault();
     hideWidget();
-    openMainUrl(url);
+    openMainUrl(target);
   };
   contents.on('will-navigate', toLogin);
   contents.on('will-redirect', toLogin);
@@ -698,11 +704,95 @@ async function runWidgetSmoke() {
   await sleep(1000);
   check(!widgetVisible(), 'widget stays hidden on login');
   check(!isLoginUrl(widget.webContents.getURL(), hubUrlOverride), 'widget never renders login');
+  check(!new URL(win.webContents.getURL()).searchParams.has('next'), 'main login drops next=/widget');
   console.log(`smoke:widget-login ok main=${win.webContents.getURL()} widget=${widget.webContents.getURL() || '(blank)'}`);
   server.close();
 
   clearTimeout(giveUp);
   console.log('smoke:widget ok');
+  app.exit(0);
+}
+
+// ── 위젯 허브 스모크: 실제 허브의 /widget을 위젯 창에 띄워 기본 모습과 Enter 뒤 영수증을 찍는다 ──
+// 허브 쪽 화면 확인용이다(개발 서버에서는 loopback이 로그인을 통과한다). 결과 PNG는 --smoke-out과
+// 같은 이름에 -after-enter를 붙인 것까지 둘이다. 저장이 되는 허브라면 메모가 실제로 한 건 남는다 —
+// Supabase를 연결하지 않은 개발 서버에서 돌리면 preview 영수증("저장하지 않았습니다")만 찍힌다.
+async function runWidgetHubSmoke() {
+  const giveUp = setTimeout(() => {
+    console.log('smoke:fail timeout');
+    app.exit(1);
+  }, 150000);
+  const check = (ok, label) => {
+    if (!ok) throw new Error(label);
+  };
+  const target = normalizeHubUrl(SMOKE_HUB);
+  check(target.ok, `smoke-hub ${SMOKE_HUB}`);
+  hubUrlOverride = target.url;
+
+  const probe = () => widget.webContents.executeJavaScript(`(() => {
+    const q = (s) => document.querySelector(s);
+    const card = q('.quick-widget');
+    return {
+      url: location.href,
+      app: Boolean(q('.quick-widget-page.is-app')),
+      theme: q('.quick-widget-page') ? q('.quick-widget-page').dataset.theme : null,
+      pin: q('.quick-widget__pin') ? q('.quick-widget__pin').getAttribute('aria-pressed') : null,
+      close: Boolean(q('[aria-label="닫기"]')),
+      slot: q('.quick-widget__slot') ? q('.quick-widget__slot').dataset.slot : null,
+      receipt: q('.quick-widget__receipt') ? q('.quick-widget__receipt').textContent : null,
+      focused: Boolean(document.activeElement && document.activeElement.classList.contains('quick-widget__input')),
+      viewport: [innerWidth, innerHeight],
+      card: card ? [Math.round(card.getBoundingClientRect().width), Math.round(card.getBoundingClientRect().height)] : null,
+      overflow: card ? card.scrollHeight - card.clientHeight : null,
+    };
+  })()`).catch(() => ({}));
+  const settle = async (ready, label) => {
+    const started = Date.now();
+    for (;;) {
+      const state = await probe();
+      if (ready(state)) return state;
+      if (Date.now() - started > 60000) throw new Error(`wait ${label} ${JSON.stringify(state)}`);
+      await sleep(250);
+    }
+  };
+  const capture = async (suffix) => {
+    const image = await widget.webContents.capturePage(undefined, { stayHidden: true });
+    const out = path.resolve(suffix ? SMOKE_OUT.replace(/(\.png)?$/i, `-${suffix}.png`) : SMOKE_OUT);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, image.toPNG());
+    console.log(`smoke:png ${out} ${image.getSize().width}x${image.getSize().height}`);
+  };
+  const firstActionSettled = (s) => Boolean(s.slot) && s.slot !== 'loading';
+
+  toggleWidget();
+  await waitFor(widgetVisible, 'widget visible', 90000);
+  if (SMOKE_THEME === 'light' || SMOKE_THEME === 'dark') {
+    await widget.webContents.executeJavaScript(`localStorage.setItem('mlp.theme', ${JSON.stringify(SMOKE_THEME)})`);
+    widget.webContents.reload();
+    await sleep(500);
+    await settle((s) => s.theme === SMOKE_THEME && firstActionSettled(s), 'theme');
+  }
+  const ready = await settle(firstActionSettled, 'first action');
+  await sleep(600);
+  console.log(`smoke:widget-page ${JSON.stringify(ready)}`);
+  check(ready.app && ready.pin !== null && ready.close, 'bridge controls on the page');
+  check(ready.viewport[0] === WIDGET_WIDTH && ready.viewport[1] === WIDGET_HEIGHT, 'page viewport 380x200');
+  check(ready.overflow === 0, 'widget content fits 200px');
+  await capture('');
+
+  await widget.webContents.executeJavaScript(`document.querySelector('.quick-widget__input').focus()`);
+  widget.webContents.insertText('위젯 스모크 메모');
+  widget.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+  widget.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
+  widget.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+  const after = await settle((s) => typeof s.receipt === 'string' && !/보관합니다|저장 중/.test(s.receipt), 'receipt');
+  await sleep(400);
+  console.log(`smoke:widget-after-enter ${JSON.stringify(await probe())}`);
+  check(!/저장됨/.test(after.receipt) || !/Preview/.test(after.receipt), 'preview never says saved');
+  await capture('after-enter');
+
+  clearTimeout(giveUp);
+  console.log('smoke:widget-hub ok');
   app.exit(0);
 }
 
@@ -723,7 +813,12 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc();
     createWindow();
     buildMenus();
-    if (SMOKE_WIDGET) {
+    if (SMOKE_WIDGET && SMOKE_HUB) {
+      runWidgetHubSmoke().catch((error) => {
+        console.log(`smoke:fail ${error.message}`);
+        app.exit(1);
+      });
+    } else if (SMOKE_WIDGET) {
       hubUrlOverride = 'https://example.com';
       runWidgetSmoke().catch((error) => {
         console.log(`smoke:fail ${error.message}`);

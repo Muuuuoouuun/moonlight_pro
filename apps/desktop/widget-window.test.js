@@ -7,6 +7,7 @@ const {
   WIDGET_CHANNELS,
   widgetUrl,
   isLoginUrl,
+  mainLoginUrl,
   isWidgetPage,
   resolveMainPath,
   clampWidgetHeight,
@@ -34,6 +35,24 @@ test('로그인 화면으로 간 것만 로그인으로 본다', () => {
   assert.equal(isLoginUrl('https://hub.example.com/loginx', HUB), false);
   assert.equal(isLoginUrl('https://other.example.com/login', HUB), false);
   assert.equal(isLoginUrl('https://hub.example.com/login', ''), false);
+});
+
+test('메인 창은 위젯의 로그인 주소에서 next=/widget을 물려받지 않는다', () => {
+  // 허브 미들웨어가 보내는 모양 그대로 → next를 지워 로그인 뒤 /dashboard로 간다.
+  assert.equal(mainLoginUrl('https://hub.example.com/login?next=%2Fwidget', HUB), 'https://hub.example.com/login');
+  assert.equal(mainLoginUrl('https://hub.example.com/login?next=%2Fwidget%3Fx%3D1', HUB), 'https://hub.example.com/login');
+  assert.equal(mainLoginUrl('https://hub.example.com/login?next=%2Fwidget%2Fsub', HUB), 'https://hub.example.com/login');
+  assert.equal(mainLoginUrl('https://hub.example.com/login?next=https%3A%2F%2Fhub.example.com%2Fwidget', HUB), 'https://hub.example.com/login');
+  // 다른 쿼리는 남기고 next만 지운다.
+  assert.equal(mainLoginUrl('https://hub.example.com/login?next=%2Fwidget&reason=expired', HUB), 'https://hub.example.com/login?reason=expired');
+  // 위젯이 아닌 목적지는 그대로 둔다(/widgets는 위젯 화면이 아니다).
+  assert.equal(mainLoginUrl('https://hub.example.com/login?next=%2Fdashboard%2Fhome', HUB), 'https://hub.example.com/login?next=%2Fdashboard%2Fhome');
+  assert.equal(mainLoginUrl('https://hub.example.com/login?next=%2Fwidgets', HUB), 'https://hub.example.com/login?next=%2Fwidgets');
+  assert.equal(mainLoginUrl('https://hub.example.com/login', HUB), 'https://hub.example.com/login');
+  // 로그인 주소가 아니면 판정하지 않는다.
+  assert.equal(mainLoginUrl('https://hub.example.com/widget', HUB), null);
+  assert.equal(mainLoginUrl('https://other.example.com/login?next=%2Fwidget', HUB), null);
+  assert.equal(mainLoginUrl('https://hub.example.com/login?next=%2Fwidget', ''), null);
 });
 
 test('위젯 화면 판정', () => {

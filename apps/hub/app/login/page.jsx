@@ -115,8 +115,11 @@ function LoginForm() {
   }
 
   return (
-    <div className="hub-app" data-theme="dark" style={{ minHeight: "100dvh", display: "grid", placeItems: "center", background: "var(--bg)", padding: 16 }}>
-      <Card style={{ width: "min(380px, 100%)", padding: 24 }}>
+    // 한 칸짜리 grid 트랙은 기본(auto)이면 카드의 min-content만큼 자라 화면 밖으로 밀린다 — 안드로이드
+    // WebView가 시스템 글자 크기를 키우면(1080×2400, 412px) 입력 칸의 고유 폭 때문에 오른쪽으로 넘쳤다.
+    // 트랙을 minmax(0, 1fr)로 묶고 카드는 그 안에서만 줄어든다.
+    <div className="hub-app" data-theme="dark" style={{ minHeight: "100dvh", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", placeItems: "center", background: "var(--bg)", padding: 16 }}>
+      <Card style={{ width: "min(380px, 100%)", maxWidth: "100%", minWidth: 0, boxSizing: "border-box", padding: 24 }}>
         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500, color: "var(--fg)" }}>Moonlight</h1>
         <p style={{ margin: "6px 0 20px", fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.5 }}>
           아이디와 비밀번호로 로그인하세요.
