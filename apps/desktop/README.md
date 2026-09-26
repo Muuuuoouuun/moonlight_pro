@@ -96,8 +96,12 @@ keydown 이벤트를 페이지에 보낸다. 로그인 화면에 있을 때는 �
 **Acrylic + DWM.** 유리 창(빠른 패널·위젯·짧은 메시지)은 `backgroundMaterial: 'acrylic'`, `frame:false`, `transparent:false`,
 `backgroundColor: '#00000000'`, `thickFrame:false`로 만든다. `thickFrame:false`는 Windows 11의 둥근 모서리를 없애므로 DWM 속성
 두 개를 창마다 한 번 건다 — `DWMWA_WINDOW_CORNER_PREFERENCE(33) = 2`(둥글게), `DWMWA_BORDER_COLOR(34) = 0xFFFFFFFE`(테두리 없음).
-이 둘이 있어야 포커스를 잃어도 블러가 살아 있고 창 크기가 요청과 정확히 같다. Electron에 API가 없어 숨긴 PowerShell 자식이
+이 둘이 있어야 창 크기가 요청과 정확히 같다. Electron에 API가 없어 숨긴 PowerShell 자식이
 P/Invoke로 부른다(`pet-dwm.js`, `-EncodedCommand`, 숫자 HWND만). 실패하면 모서리가 각질 뿐 나머지는 그대로 동작한다.
+초점을 받았다가 잃은 Acrylic 창은 DWM이 재질을 끄고 단색으로 그린다(한 번도 활성이 아니었던 말풍선은 블러가 남는다). 그래서
+패널이 초점을 잃고도 남아 있으면(지속 위젯, 유예 안의 빠른 패널) 셸이 그 창에 `WM_NCACTIVATE(TRUE)`를 보내 블러를 되살린다 —
+키보드 초점은 옮기지 않는다. 처음 필요할 때 숨긴 PowerShell 도우미 하나를 띄워 두고 표준 입력으로 HWND를 넘긴다
+(`createActivationKeeper`, 앱이 끝나면 같이 끝난다). 도우미가 없으면 그 동안 단색일 뿐 기능은 그대로다.
 중앙 음영·림·캐릭터 워시·글자 그림자는 렌더러 CSS가 Acrylic 위에 그린다. 시스템에서 투명 효과를 끄거나 고대비를 켜면
 블러 대신 불투명 면(`setBackgroundMaterial('none')`)으로 바꾸고 `prefs`로 렌더러에 알린다.
 
