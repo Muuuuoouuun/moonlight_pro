@@ -70,9 +70,30 @@
 
   function sameSession(a, b) { return !!a && !!b && a.ownerId === b.ownerId && a.scope === b.scope; }
 
+  // pet:chat-session 봉투 data → 이 화면의 잠금. busy 는 이 대화가 보내는 중(boolean), busyWith 는 어느 대화든 보내는 중인 것.
+  // 다른 대화가 보내는 중이면 허브가 새 전송을 'busy' 로 거절하므로 보내기만 잠근다(담당·범위는 바꿀 수 있다).
+  function sessionLock(data, session) {
+    const d = data && typeof data === 'object' ? data : {};
+    const busy = d.busy === true;
+    const other = !busy && !!d.busyWith && !sameSession(d.busyWith, session);
+    return { busy, lockedByOther: other };
+  }
+
+  // 보내기 요청 표. 보낼 때마다 새 표를 받고, 응답은 표가 아직 현재일 때만 화면에 반영한다.
+  // '기다림 중단' 뒤 다시 보내면 앞 요청의 늦은 응답(중단됨·오류·답)이 새 요청의 잠금·입력을 풀지 못한다.
+  function createSendGate() {
+    let current = 0;
+    return {
+      begin() { current += 1; return current; },
+      isCurrent(token) { return token === current; },
+      cancel() { current += 1; },
+    };
+  }
+
   return {
     LIMIT, SHOWN, HANDOFF_LIMIT, SCOPES,
     length, counterLabel, overLimit, canSend, canHandoff, agents, agentFor, defaultOwner, scopeLabel, isScope,
     pickerLocked, visibleTurns, draftAfterSuccess, footerNote, sourceLabel, draftFromTask, draftFromMemo, sameSession,
+    sessionLock, createSendGate,
   };
 });

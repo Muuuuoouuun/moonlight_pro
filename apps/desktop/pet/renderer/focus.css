@@ -13,7 +13,7 @@
   --moon-400: oklch(0.68 0.009 250);
   --dur-hover: 120ms;
   --dur-overlay: 160ms;
-  --dur-panel: 240ms;
+  --dur-panel: 180ms; /* hub-tokens.css 와 같은 값 */
   --ease-hub: cubic-bezier(0.2, 0.7, 0.3, 1);
   color-scheme: dark;
 }

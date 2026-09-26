@@ -114,5 +114,12 @@
     return text.length > limit ? `${text.slice(0, limit)}…` : text;
   }
 
-  return { MAX_TITLE, GRACE_MS, isDone, validateTitle, orderTasks, createGrace, openCount, countLabel, emptyMessage, shortTitle };
+  // pet:tasks-add 성공 봉투가 지금 입력이 아니라 확인이 안 됐던 앞 명령을 저장한 것인가(허브 보류 명령 규칙: data.replayed + data.title).
+  function isReplayedAdd(result, currentTitle) {
+    const data = result && result.data;
+    if (!data || data.replayed !== true) return false;
+    return typeof data.title === 'string' && data.title !== String(currentTitle || '').trim();
+  }
+
+  return { MAX_TITLE, GRACE_MS, isDone, validateTitle, orderTasks, createGrace, openCount, countLabel, emptyMessage, shortTitle, isReplayedAdd };
 });

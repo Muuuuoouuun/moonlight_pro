@@ -59,13 +59,15 @@
         render();
         const res = await B.invoke('pet:focus-start', { minutes });
         starting = false;
-        if (res && res.ok === false) error = res.error || '집중 화면을 열지 못했어요.';
+        error = F.startError(res); // 셸 봉투 { kind, data:state.focus } — live 가 아니면 시작하지 못했다
+        const started = F.focusFrom(res);
+        if (started) focus = { ...focus, ...started };
         render();
       }
       function stop() { confirming = false; B.invoke('pet:focus-stop', {}); }
 
       render();
-      B.invoke('pet:focus-state', {}).then((s) => { if (s && typeof s === 'object' && 'running' in s) { focus = { ...focus, ...s }; render(); } });
+      B.invoke('pet:focus-state', {}).then((res) => { const f = F.focusFrom(res); if (f) { focus = { ...focus, ...f }; render(); } });
 
       return {
         el,
@@ -78,8 +80,9 @@
           render();
         },
         onFocusTick(p) {
-          if (!p || typeof p.remainingSec !== 'number') return;
-          focus = { ...focus, running: true, remainingSec: p.remainingSec };
+          // 중지 뒤 늦게 온 틱이 진행 화면을 되살리지 않게 — 진행 중일 때만 남은 시간을 바꾼다.
+          if (!p || typeof p.remainingSec !== 'number' || !focus.running) return;
+          focus = { ...focus, remainingSec: p.remainingSec };
           const t = el.querySelector('.timer');
           const bar = el.querySelector('.progress > i');
           if (t && bar) {

@@ -193,7 +193,16 @@
         if (!alive) return;
         saving = false;
         const w = E.describeWrite(res, '할 일');
-        if (w.ok) {
+        const replayed = w.ok && T.isReplayedAdd(res, v.value);
+        if (w.ok && replayed) {
+          // 확인이 안 됐던 앞 할 일을 먼저 저장했다(새 입력이 앞지르지 않는다). 지금 입력은 그대로 두고 다시 누르게 한다.
+          const saved = res.data.task && res.data.task.id != null ? res.data.task : null;
+          if (saved) tasks = [saved].concat(tasks.filter((t) => t.id !== saved.id));
+          draftId = null;
+          lastDraftTitle = '';
+          B.store.set('petPreview.taskDraft', input.value ? { title: input.value, id: null } : null);
+          setNote({ text: `확인이 필요했던 ‘${T.shortTitle(res.data.title)}’을 먼저 저장했어요. 지금 입력은 한 번 더 추가해 주세요.` });
+        } else if (w.ok) {
           const saved = res.data && res.data.task && res.data.task.id != null ? res.data.task : null;
           if (saved) tasks = [saved].concat(tasks.filter((t) => t.id !== saved.id));
           if (input.value.trim() === v.value) input.value = '';
@@ -229,7 +238,8 @@
       return {
         el,
         focus() { input.focus(); },
-        primary() { ctx.openHub(C.HUB_PATHS.tasks); },
+        // Ctrl+Enter: 적어 둔 할 일을 추가한다(Hub 열기는 아래 ‘Hub에서 열기’). 빈 입력이면 입력 칸으로.
+        primary() { if (input.value.trim()) add(); else input.focus(); },
         menuItems() {
           return [
             { label: '완료한 할 일 포함', checked: includeCompleted, onSelect: () => { includeCompleted = !includeCompleted; renderList(); } },

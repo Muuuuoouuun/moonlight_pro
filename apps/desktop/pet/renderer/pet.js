@@ -50,8 +50,8 @@
   pet.addEventListener('dragstart', (e) => e.preventDefault());
 
   window.PetDrag.applyMotionPref(null);
-  setCharacter(C.DEFAULT_CHARACTER);
-  B.invoke('pet:state').then(onState);
+  // 저장된 캐릭터로 바로 그린다 — 기본(글레이시아)을 먼저 그렸다 바꾸면 켤 때마다 한 번 깜빡인다. 다리가 없을 때만 기본.
+  B.invoke('pet:state').then((s) => onState(s || { character: C.DEFAULT_CHARACTER }));
   B.on('pet:state-changed', onState);
   B.on('pet:badge', (p) => setBadge(p && p.count));
   document.documentElement.dataset.ready = '1';

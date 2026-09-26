@@ -34,6 +34,8 @@
   // 키 이벤트 → 동작. Alt·Meta 가 섞이면 무시(전역 Ctrl+Alt+M 과 겹치지 않게).
   function keyAction(e) {
     if (!e) return null;
+    // IME 조합 중(한글 입력)의 키는 입력기 몫 — Esc 로 조합을 취소하거나 Enter 로 확정하는 중에 패널이 접히거나 저장되지 않게.
+    if (e.isComposing || e.keyCode === 229) return null;
     const ctrl = !!e.ctrlKey && !e.altKey && !e.metaKey;
     if (ctrl && !e.shiftKey) {
       const m = /^Digit([1-7])$/.exec(e.code || '') || /^([1-7])$/.exec(e.key || '');

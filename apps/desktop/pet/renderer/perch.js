@@ -19,8 +19,7 @@
   window.PetDrag.wirePressDrag(perch, { source: 'panel', onTap: () => B.invoke('pet:collapse', {}) });
   perch.addEventListener('contextmenu', (e) => { e.preventDefault(); B.invoke('pet:context-menu', {}); });
   window.PetDrag.applyMotionPref(null);
-  onState({ character: C.DEFAULT_CHARACTER });
-  B.invoke('pet:state').then(onState);
+  B.invoke('pet:state').then((s) => onState(s || { character: C.DEFAULT_CHARACTER }));
   B.on('pet:state-changed', onState);
   document.documentElement.dataset.ready = '1';
 })();

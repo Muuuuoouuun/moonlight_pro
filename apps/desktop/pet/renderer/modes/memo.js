@@ -1,5 +1,6 @@
 // 빠른 메모 — 넓은 입력면. 매 키 입력은 이 PC(petPreview.memo)에 남고, Hub 저장은 버튼·Ctrl+S·Ctrl+Enter 로만.
 // 저장이 확인되면 입력을 비우고 다음 입력은 새 메모다. 충돌이면 입력을 지키고 ⋯ 의 ‘새 항목으로 Hub에 저장’을 연다.
+// 확인되지 않은 저장·충돌 표시는 메인의 허브 모델이 가진다(data.pending) — 이 화면은 그 요약만 읽는다.
 'use strict';
 (function () {
   const Modes = (window.PetModes = window.PetModes || {});
@@ -11,12 +12,12 @@
       const h = U.h;
 
       let saving = false;
-      let pending = { memo: null, savedMemo: null, memoConflict: false };
-      let pendingKey = MM.pendingKey(ctx.state.hubUrl);
+      let pending = null; // MM.pendingFrom — { hasPendingMemo, pendingMemoRole, captureConflict, conflictId }
       let captured = [];
       let savedBody = null;
-      let receipt = null; // { text, danger, action }
+      let receipt = null; // { text, danger, action, keep }
       let alive = true;
+      let hubUrl = ctx.state.hubUrl;
 
       const editor = h('textarea', {
         class: 'memo-editor', placeholder: '떠오른 생각을 적어보세요.', 'aria-label': '메모 입력', spellcheck: 'false',
@@ -34,10 +35,6 @@
         render();
       });
 
-      function persistPending() {
-        if (pendingKey) B.store.set(pendingKey, pending);
-      }
-
       function render() {
         const draft = editor.value;
         s1.textContent = MM.statusLabel({ saving, draft, savedBody });
@@ -51,28 +48,20 @@
             s2.append(h('button', { type: 'button', text: receipt.action.label, onclick: () => ctx.handleAction(receipt.action, () => save()) }));
           }
         }
-        saveBtn.querySelector('.label').textContent = MM.saveButtonLabel({ saving, pending: pending.memo });
-        saveBtn.disabled = !MM.canSave({ saving, draft, pending: pending.memo });
+        saveBtn.querySelector('.label').textContent = MM.saveButtonLabel({ saving, pending });
+        saveBtn.disabled = !MM.canSave({ saving, draft, pending });
       }
 
       async function run(request) {
         saving = true;
-        pending.memo = request;
-        persistPending();
         receipt = null;
         render();
         const res = await B.invoke('pet:journal-save', request);
         if (!alive) return;
-        finish(request, res);
-      }
-
-      function finish(request, res) {
         saving = false;
         const r = MM.interpretSave(res, request, editor.value);
-        pending.memo = r.pendingMemo;
+        if (r.pending) pending = r.pending;
         if (r.outcome === 'saved') {
-          pending.savedMemo = r.savedEntry || { id: request.entryId };
-          pending.memoConflict = false;
           captured = MM.pushCaptured(captured, request.body);
           B.store.set('petPreview.capturedMemos', captured);
           savedBody = request.body;
@@ -82,55 +71,36 @@
             savedBody = null;
           }
           receipt = { text: `Hub에 저장했어요 · ${U.clock(new Date())}${r.clearDraft ? ' · 새 메모로 시작해요' : ''}`, keep: true };
-        } else if (r.conflict) {
-          pending.memoConflict = true;
+        } else if (r.outcome === 'replayed') {
+          receipt = { text: r.message, keep: true };
+        } else if (r.outcome === 'conflict') {
           receipt = { text: r.message, keep: true };
         } else {
           receipt = { text: r.message, danger: ['error', 'invalid'].includes(res && res.kind), action: r.action && r.action.kind !== 'retry' ? r.action : null, keep: true };
         }
-        persistPending();
         render();
       }
 
-      async function save() {
-        if (saving) return;
+      function save() {
+        if (saving) return undefined;
         const body = editor.value;
-        // 빈 입력창에서도 미확인 요청은 확인할 수 있다.
-        if (!body.trim() && pending.memo) return confirmPending();
-        const v = MM.validateBody(body);
-        if (!v.ok) { receipt = { text: v.error, danger: true }; render(); return; }
-        if (pending.memoConflict && !(pending.memo && pending.memo.body === body)) {
+        // 보류 중인 저장은 빈 입력창에서도 확인한다 — 허브가 같은 명령을 먼저 다시 보낸다.
+        if (pending && pending.hasPendingMemo) return run(MM.captureRequest(body));
+        if (pending && pending.captureConflict) {
           receipt = { text: '충돌한 메모는 덮어쓰지 않아요. 더보기의 ‘새 항목으로 Hub에 저장’을 눌러 주세요.', keep: true };
           render();
-          return;
+          return undefined;
         }
-        const request = MM.requestFor(body, pending, () => globalThis.crypto.randomUUID());
-        if (pending.memo && pending.memo === request) return confirmPending();
-        return run(request);
-      }
-
-      // 불확실한 저장: 먼저 같은 entryId 를 읽어 이미 남았는지 보고, 없으면 같은 요청을 다시 보낸다.
-      async function confirmPending() {
-        const request = pending.memo;
-        saving = true;
-        render();
-        const res = await B.invoke('pet:journal-read', { entryId: request.entryId });
-        if (!alive) return;
-        const entry = res && res.kind === 'live' && res.data ? res.data.entry : null;
-        if (entry && entry.body === request.body) {
-          finish(request, { kind: 'live', data: { entry, verified: true } });
-          return;
-        }
-        saving = false;
-        run(request);
+        const v = MM.validateBody(body);
+        if (!v.ok) { receipt = { text: v.error, danger: true }; render(); return undefined; }
+        return run(MM.captureRequest(body));
       }
 
       function saveAsNew() {
         const body = editor.value;
         const v = MM.validateBody(body);
         if (!v.ok) { receipt = { text: v.error, danger: true }; render(); return; }
-        pending.memoConflict = false;
-        run(MM.buildSaveRequest(body, () => globalThis.crypto.randomUUID()));
+        run(MM.asNewRequest(body, pending));
       }
 
       function continueInCouncil() {
@@ -141,21 +111,23 @@
         ctx.setMode('council');
       }
 
+      // 허브 모델의 보류·충돌 요약. 대상 없는 journal-read 는 확인된 캡처 메모가 없으면 네트워크를 쓰지 않는다.
+      async function loadPending() {
+        const res = await B.invoke('pet:journal-read', {});
+        if (!alive) return;
+        pending = MM.pendingFrom(res);
+        if (pending && pending.captureConflict) receipt = { text: '다른 곳에서 먼저 바뀐 메모예요. 입력은 보관했어요 — 더보기에서 새 항목으로 저장할 수 있어요.', keep: true };
+        else if (pending && pending.hasPendingMemo) receipt = { text: '저장 결과 확인이 필요해요. ‘저장 확인’으로 같은 요청을 다시 확인해요.', keep: true };
+        render();
+      }
+
       async function restore() {
-        const [draft, list, stored] = await Promise.all([
-          B.store.get('petPreview.memo'),
-          B.store.get('petPreview.capturedMemos'),
-          pendingKey ? B.store.get(pendingKey) : null,
-        ]);
+        const [draft, list] = await Promise.all([B.store.get('petPreview.memo'), B.store.get('petPreview.capturedMemos')]);
         if (!alive) return;
         if (typeof draft === 'string' && !editor.value) editor.value = draft;
         captured = Array.isArray(list) ? list.filter((m) => typeof m === 'string') : [];
-        if (stored && typeof stored === 'object') {
-          pending = { memo: stored.memo || null, savedMemo: stored.savedMemo || null, memoConflict: !!stored.memoConflict, task: stored.task };
-          if (pending.memoConflict) receipt = { text: '다른 곳에서 먼저 바뀐 메모예요. 입력은 보관했어요 — 더보기에서 새 항목으로 저장할 수 있어요.', keep: true };
-          else if (pending.memo) receipt = { text: '저장 결과 확인이 필요해요. ‘저장 확인’으로 같은 요청을 다시 확인해요.', keep: true };
-        }
         render();
+        loadPending();
       }
 
       render();
@@ -171,20 +143,20 @@
           return [
             {
               label: '저장한 메모 다시 열기', icon: 'pencil',
-              disabled: !captured.length || !!draft || saving || !!pending.memo,
+              disabled: !captured.length || !!draft || saving || !!(pending && pending.hasPendingMemo),
               submenu: () => captured.map((body) => ({ label: MM.capturedLabel(body), onSelect: () => { editor.value = body; B.store.set('petPreview.memo', body); receipt = null; render(); editor.focus(); } })),
             },
             { label: 'Council에서 이어서', icon: 'people', disabled: !draft.trim(), onSelect: continueInCouncil },
-            { label: '새 항목으로 Hub에 저장', icon: 'arrowUp', disabled: !pending.memoConflict || !draft.trim() || saving, onSelect: saveAsNew },
+            { label: '새 항목으로 Hub에 저장', icon: 'arrowUp', disabled: !(pending && pending.captureConflict) || !draft.trim() || saving, onSelect: saveAsNew },
             ctx.state.presentation === 'widget'
               ? { label: '빠른 기능으로 되돌리기', icon: 'pin', onSelect: ctx.togglePresentation }
               : { label: '위젯으로 고정', icon: 'pin', onSelect: ctx.togglePresentation },
           ];
         },
-        onState(state, prev) {
-          const key = MM.pendingKey(state.hubUrl);
-          if (prev && key !== pendingKey) { pendingKey = key; pending = { memo: null, savedMemo: null, memoConflict: false }; restore(); }
+        onState(state) {
+          if (state.hubUrl !== hubUrl) { hubUrl = state.hubUrl; pending = null; receipt = null; loadPending(); }
         },
+        onHubStatus(status, before) { if (status === 'connected' && before !== 'connected') loadPending(); },
         destroy() { alive = false; },
       };
     },

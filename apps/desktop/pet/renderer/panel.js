@@ -210,16 +210,17 @@
       lastY = e.screenY;
       if (!frame) frame = requestAnimationFrame(flush);
     });
-    const end = (e) => {
+    const end = (e, cancelled) => {
       if (!dragging) return;
       dragging = false;
       if (frame) { cancelAnimationFrame(frame); frame = 0; }
       els.handle.classList.remove('dragging');
-      B.invoke('pet:drag', { phase: 'end', screenY: e && typeof e.screenY === 'number' ? e.screenY : lastY });
+      if (cancelled) B.invoke('pet:drag', { phase: 'cancel' });
+      else B.invoke('pet:drag', { phase: 'end', screenY: e && typeof e.screenY === 'number' ? e.screenY : lastY });
     };
-    els.handle.addEventListener('pointerup', end);
-    els.handle.addEventListener('pointercancel', end);
-    els.handle.addEventListener('lostpointercapture', end);
+    els.handle.addEventListener('pointerup', (e) => end(e, false));
+    els.handle.addEventListener('pointercancel', (e) => end(e, true));
+    els.handle.addEventListener('lostpointercapture', (e) => end(e, true));
     // 키보드: 위아래 화살표로 24px 씩.
     els.handle.addEventListener('keydown', (e) => {
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
@@ -233,6 +234,8 @@
   }
 
   function onKey(e) {
+    // 한글 조합 중의 Esc·Ctrl+S·Ctrl+Enter 는 입력기의 것이다(조합 확정·취소) — 패널 동작으로 읽지 않는다.
+    if (e.isComposing || e.keyCode === 229) return;
     const act = P.keyAction(e);
     if (!act) return;
     if (act.type === 'collapse') {

@@ -83,3 +83,40 @@ test('집중 시간은 1~120분, 남은 시간 mm:ss, 진행률 0~1', () => {
   assert.equal(F.HOLD_MS, 1300);
   assert.deepEqual([...F.PRESETS], [15, 25, 50]);
 });
+
+test('IME 조합 중의 Esc·Ctrl+S·Ctrl+Enter 는 패널 동작이 아니다', () => {
+  assert.equal(P.keyAction(key({ key: 'Escape', code: 'Escape', isComposing: true })), null);
+  assert.equal(P.keyAction(key({ ctrlKey: true, key: 's', code: 'KeyS', keyCode: 229 })), null);
+  assert.equal(P.keyAction(key({ ctrlKey: true, key: 'Enter', code: 'Enter', isComposing: true })), null);
+  assert.deepEqual(P.keyAction(key({ key: 'Escape', code: 'Escape', isComposing: false, keyCode: 27 })), { type: 'collapse' });
+});
+
+test('허브 모델의 알림 목적지 모양(type:calendar·chat)과 목록 봉투', () => {
+  assert.deepEqual(N.resolveTarget({ kind: 'event', target: { type: 'calendar', dateISO: '2026-09-28', eventKey: 'google:e1' } }),
+    { kind: 'mode', mode: 'calendar', date: '2026-09-28' });
+  assert.deepEqual(N.resolveTarget({ kind: 'reply', target: { type: 'chat', ownerId: 'eevee', scope: 'classin' } }),
+    { kind: 'mode', mode: 'council', date: null, ownerId: 'eevee', scope: 'classin' });
+  assert.equal(N.resolveTarget({ kind: 'inquiry', target: { type: 'hub', path: '/dashboard/revenue/inquiries?inquiry=1' } }).kind, 'hub');
+  const list = N.listFrom({ kind: 'live', data: { notices: [{ id: 'a', read: false }, { id: 'b', read: true }], unreadCount: 1, badge: 1, badgeLabel: '1' } });
+  assert.equal(list.unreadCount, 1);
+  assert.deepEqual(list.notices.map((n) => n.id), ['a', 'b']);
+  assert.equal(N.listFrom({ kind: 'unauthorized', data: null }), null);
+});
+
+test('집중 채널 봉투: 시작 성공·실패, 확인은 새 revision 에만 열린다', () => {
+  const running = { running: true, remainingSec: 1500, minutes: 25, totalSec: 1500, confirmStop: false, confirmRevision: 0 };
+  assert.deepEqual(F.focusFrom({ kind: 'live', data: running, error: null, httpStatus: 0 }), running);
+  assert.equal(F.focusFrom({ ok: true }), null, '봉투가 아닌 값은 읽지 않는다');
+  assert.equal(F.startError({ kind: 'live', data: running }), null);
+  assert.match(F.startError({ kind: 'invalid', data: null, error: 'minutes' }), /1~120분/);
+  assert.match(F.startError({ kind: 'error', data: null }), /열지 못했어요/);
+  let view = { confirming: false, seenRevision: 0 };
+  view = F.confirmAfterState(view, { ...running, confirmStop: true, confirmRevision: 1 });
+  assert.equal(view.confirming, true, 'Esc 1.3초 → 확인');
+  view = { ...view, confirming: false }; // 계속 집중
+  view = F.confirmAfterState(view, { ...running, confirmStop: true, confirmRevision: 1 });
+  assert.equal(view.confirming, false, '같은 revision 의 다른 상태 방송은 다시 열지 않는다');
+  view = F.confirmAfterState(view, { ...running, confirmStop: true, confirmRevision: 2 });
+  assert.equal(view.confirming, true, '다시 길게 누르면 다시 연다');
+  assert.equal(F.confirmAfterState(view, { ...running, running: false }).confirming, false);
+});

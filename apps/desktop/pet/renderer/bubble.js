@@ -18,10 +18,11 @@
   function openNotifications() {
     B.invoke('pet:set-mode', { mode: 'notifications' }).then(openQuick);
   }
+  // 닫기: 말풍선 창만 내린다(셸이 보낸 창으로 가려 패널 접기와 구별한다). 읽음 처리가 아니다.
   function dismiss() {
     notice = null;
     render();
-    B.invoke('pet:collapse', { surface: 'bubble' });
+    B.invoke('pet:collapse', {});
   }
   function openNotice(n) {
     if (!n.read) B.invoke('pet:notices-read', { id: n.id });
@@ -29,8 +30,7 @@
     if (t.kind === 'hub') B.invoke('pet:open-hub', { path: t.path });
     else if (t.kind === 'external') B.invoke('pet:open-external', { url: t.url });
     else B.invoke('pet:set-mode', { mode: t.mode }).then(openQuick);
-    notice = null;
-    render();
+    dismiss();
   }
 
   function render() {

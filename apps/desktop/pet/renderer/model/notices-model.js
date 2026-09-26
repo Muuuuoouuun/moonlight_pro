@@ -65,6 +65,9 @@
       if (/^https?:\/\//i.test(t)) return { kind: 'external', url: t };
     } else if (t && typeof t === 'object') {
       if (typeof t.path === 'string' && t.path.startsWith('/') && !t.path.startsWith('//')) return { kind: 'hub', path: t.path };
+      // 허브 모델(pet-activity)의 목적지: {type:'calendar', dateISO} · {type:'chat', ownerId, scope}
+      if (t.type === 'calendar') return { kind: 'mode', mode: 'calendar', date: typeof t.dateISO === 'string' ? t.dateISO : null };
+      if (t.type === 'chat') return { kind: 'mode', mode: 'council', date: null, ownerId: t.ownerId || null, scope: t.scope || null };
       if (typeof t.mode === 'string' && C.MODES.includes(t.mode)) return { kind: 'mode', mode: t.mode, date: t.date || null, ownerId: t.ownerId || null, scope: t.scope || null };
       if (typeof t.url === 'string' && /^https?:\/\//i.test(t.url)) return { kind: 'external', url: t.url };
     }
@@ -83,5 +86,15 @@
     return '새 알림은 없어요. 펫을 눌러 빠른 기능을 열어요.';
   }
 
-  return { KIND, badgeText, kindInfo, relativeTime, visibleNotices, headerLabel, resolveTarget, bubbleSummary };
+  // 알림 목록 봉투(notices-list·notices-read·notices-hide·notices-read-all 가 모두 같은 목록을 돌려준다) → 화면 목록.
+  // 로컬에서 read·unread 를 고쳐 쓰지 않는다 — 숨기기는 허브 읽음 상태를 바꾸지 않고, 수는 허브 모델이 센다.
+  function listFrom(result) {
+    const data = result && result.data;
+    if (!data || !Array.isArray(data.notices)) return null;
+    const notices = data.notices.filter((n) => n && n.id != null);
+    const unreadCount = Number.isFinite(data.unreadCount) ? data.unreadCount : notices.filter((n) => !n.read && !n.hidden).length;
+    return { notices, unreadCount };
+  }
+
+  return { KIND, badgeText, kindInfo, relativeTime, visibleNotices, headerLabel, resolveTarget, bubbleSummary, listFrom };
 });

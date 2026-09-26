@@ -1,5 +1,7 @@
 // 집중 화면(모니터마다 한 창). 주 모니터 창만 타이머·중지를 그리고, 나머지는 ?controls=0 으로 한 줄만.
-// 중지는 확인을 거친다. Esc 를 1.3초 누르고 있으면 중지 확인이 열린다. 앱 전환 차단은 하지 않는다(운영자 결정 2026-09-26).
+// 중지는 확인을 거친다. Esc 를 1.3초 누르고 있으면 중지 확인이 열린다 — 길이는 메인이 재고(state.focus.confirmStop·
+// confirmRevision), 이 페이지는 누르는 동안 진행선만 그린다. 확인이 떠 있을 때 Esc 는 확인을 닫는다('계속 집중'과 같다).
+// 앱 전환 차단은 하지 않는다(운영자 결정 2026-09-26).
 'use strict';
 (function () {
   const C = window.PetContract;
@@ -10,7 +12,7 @@
 
   let focus = { running: false, remainingSec: 0, minutes: F.DEFAULT };
   let confirming = false;
-  let holdTimer = 0;
+  let seenRevision = 0;
 
   if (!controlsOn) {
     $('stack').hidden = true;
@@ -35,7 +37,7 @@
       q.textContent = '집중을 중지할까요?';
       const row = document.createElement('div');
       row.className = 'row';
-      const keep = button('계속 집중', '', () => { confirming = false; renderControls(); });
+      const keep = button('계속 집중', '', keepFocus);
       row.append(keep, button('중지', '', stop));
       box.append(q, row);
       box.classList.add('fade');
@@ -60,42 +62,53 @@
     B.invoke('pet:focus-stop', {});
   }
 
+  // 확인 닫기 — 메인의 confirmStop 도 거둔다(다음 상태 방송에 다시 뜨지 않게).
+  function keepFocus() {
+    confirming = false;
+    renderControls();
+    B.invoke('pet:focus-state', { dismissConfirm: true });
+  }
+
+  function applyFocus(next) {
+    const wasConfirming = confirming;
+    focus = { ...focus, ...next };
+    const view = F.confirmAfterState({ confirming, seenRevision }, focus);
+    confirming = view.confirming;
+    seenRevision = view.seenRevision;
+    renderTime();
+    if (confirming !== wasConfirming) { stopHold(); renderControls(); }
+  }
+
   function onState(s) {
     if (!s) return;
     const prefersReduced = !!(s.prefs && s.prefs.reduceMotion);
     document.documentElement.classList.toggle('reduce-motion', prefersReduced);
     const c = C.characterByKey(s.character);
     $('perched').src = `../assets/${c.cutout}`;
-    if (s.focus) { focus = { ...focus, ...s.focus }; renderTime(); }
+    if (s.focus) applyFocus(s.focus);
   }
 
-  // Esc 1.3초 길게 누르기 → 중지 확인.
+  // Esc: 확인이 떠 있으면 닫고, 아니면 누르는 동안 1.3초 진행선(확인을 여는 것은 메인의 판정).
+  function stopHold() { $('hold').classList.remove('run'); }
   document.addEventListener('keydown', (e) => {
-    if (!controlsOn) return;
-    if (e.key !== 'Escape' || e.repeat) { if (e.key === 'Escape') e.preventDefault(); return; }
+    if (!controlsOn || e.key !== 'Escape') return;
     e.preventDefault();
-    if (confirming) { confirming = false; renderControls(); return; }
+    if (e.repeat || e.isComposing) return;
+    if (confirming) { keepFocus(); return; }
     const hold = $('hold');
     hold.classList.remove('run');
     void hold.offsetWidth;
     hold.classList.add('run');
-    clearTimeout(holdTimer);
-    holdTimer = setTimeout(() => { confirming = true; renderControls(); hold.classList.remove('run'); }, F.HOLD_MS);
   });
-  document.addEventListener('keyup', (e) => {
-    if (e.key !== 'Escape') return;
-    clearTimeout(holdTimer);
-    $('hold').classList.remove('run');
-  });
-  window.addEventListener('blur', () => { clearTimeout(holdTimer); $('hold').classList.remove('run'); });
+  document.addEventListener('keyup', (e) => { if (e.key === 'Escape') stopHold(); });
+  window.addEventListener('blur', stopHold);
 
   renderControls();
   renderTime();
-  onState({ character: C.DEFAULT_CHARACTER });
-  B.invoke('pet:state').then(onState);
-  B.invoke('pet:focus-state', {}).then((s) => { if (s && typeof s === 'object' && 'remainingSec' in s) { focus = { ...focus, ...s }; renderTime(); } });
+  B.invoke('pet:state').then((st) => onState(st || { character: C.DEFAULT_CHARACTER }));
+  B.invoke('pet:focus-state', {}).then((res) => { const f = F.focusFrom(res); if (f) applyFocus(f); });
   B.on('pet:state-changed', onState);
-  B.on('pet:focus-tick', (p) => { if (p && typeof p.remainingSec === 'number') { focus.remainingSec = p.remainingSec; renderTime(); } });
+  B.on('pet:focus-tick', (p) => { if (p && typeof p.remainingSec === 'number' && focus.running !== false) { focus.remainingSec = p.remainingSec; renderTime(); } });
   window.PetFocusScreen = { get confirming() { return confirming; } };
   document.documentElement.dataset.ready = '1';
 })();

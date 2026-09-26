@@ -52,3 +52,22 @@ test('브랜드 Council 전달은 4,000자 이내 초안만', () => {
   assert.equal(V.sourceLabel('task'), '할 일');
   assert.equal(V.draftFromTask({ title: '  견적 검토 ' }), '견적 검토');
 });
+
+test('전송 요청 표: 중단 뒤 다시 보내면 앞 요청의 늦은 응답은 현재가 아니다', () => {
+  const gate = V.createSendGate();
+  const first = gate.begin();
+  assert.equal(gate.isCurrent(first), true);
+  gate.cancel(); // 기다림 중단
+  assert.equal(gate.isCurrent(first), false);
+  const second = gate.begin();
+  assert.equal(gate.isCurrent(first), false, '첫 요청의 응답이 두 번째 요청의 잠금을 풀지 못한다');
+  assert.equal(gate.isCurrent(second), true);
+});
+
+test('대화 잠금: busy 는 이 대화, busyWith 가 다른 대화면 보내기만 잠근다(허브 pet:chat-session 모양)', () => {
+  const me = { ownerId: 'glaceon', scope: 'all' };
+  assert.deepEqual(V.sessionLock({ busy: true, busyWith: { ...me, message: 'q' } }, me), { busy: true, lockedByOther: false });
+  assert.deepEqual(V.sessionLock({ busy: false, busyWith: { ownerId: 'eevee', scope: 'all', message: 'q' } }, me), { busy: false, lockedByOther: true });
+  assert.deepEqual(V.sessionLock({ busy: false, busyWith: null }, me), { busy: false, lockedByOther: false });
+  assert.deepEqual(V.sessionLock({ busy: 'yes' }, me), { busy: false, lockedByOther: false }, 'boolean 만 믿는다');
+});

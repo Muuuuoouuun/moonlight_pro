@@ -7,6 +7,10 @@
   let session = null; // { ownerId, scope } — 패널을 다시 열어도 유지
 
   Modes.council = {
+    // 알림(답변)에서 열 때 그 담당·범위 대화로 — 다음 create 가 이 세션으로 연다.
+    selectSession(next) {
+      if (next && typeof next.ownerId === 'string' && typeof next.scope === 'string') session = { ownerId: next.ownerId, scope: next.scope };
+    },
     create(ctx) {
       const { C, B, U, M } = ctx;
       const V = M.chat;
@@ -19,7 +23,8 @@
       let sessionView = null;
       let loadingSession = false;
       let pendingMessage = null;
-      let cancelled = false;
+      let lockedByOther = false; // 다른 대화가 답을 기다리는 중(허브가 보내기를 busy 로 거절한다)
+      const gate = V.createSendGate();
       let feedback = null; // { text, danger, action }
       let source = { kind: 'text' };
       let alive = true;
@@ -75,7 +80,9 @@
         const data = (res && res.data) || {};
         if (sessionView.showData) {
           turns = Array.isArray(data.turns) ? data.turns : [];
-          busy = !!data.busy;
+          const lock = V.sessionLock(data, session);
+          busy = lock.busy;
+          lockedByOther = lock.lockedByOther;
           if (!textarea.value && typeof data.draft === 'string' && data.draft) textarea.value = data.draft;
         }
         render();
@@ -146,7 +153,11 @@
         if (busy) {
           footerAction.append(U.action('기다림 중단', { title: '기다림을 중단하고 입력을 보관해요. 다시 보내면 새 요청이에요.', onClick: cancel }));
         } else {
-          footerAction.append(U.action('질문 보내기', { icon: 'arrowUp', iconSize: 13, iconFirst: true, title: '질문 보내기 · Ctrl+Enter', disabled: !V.canSend({ draft, busy }), onClick: send }));
+          footerAction.append(U.action('질문 보내기', {
+            icon: 'arrowUp', iconSize: 13, iconFirst: true,
+            title: lockedByOther ? '다른 담당자의 답을 기다리는 중이에요. 답이 오면 보낼 수 있어요.' : '질문 보내기 · Ctrl+Enter',
+            disabled: !V.canSend({ draft, busy: busy || lockedByOther }), onClick: send,
+          }));
         }
       }
 
@@ -155,30 +166,32 @@
 
       async function send() {
         const message = textarea.value;
-        if (!V.canSend({ draft: message, busy })) return;
+        if (!V.canSend({ draft: message, busy: busy || lockedByOther })) return;
         const at = session;
+        const token = gate.begin();
         busy = true;
-        cancelled = false;
         pendingMessage = message;
         feedback = null;
         render();
         scrollToEnd();
         const res = await B.invoke('pet:chat-send', { ownerId: at.ownerId, scope: at.scope, message });
-        if (!alive) return;
+        // 중단한 뒤 다시 보냈으면 이 응답은 지난 요청의 것 — 새 요청의 잠금·입력·안내를 건드리지 않는다.
+        if (!alive || !gate.isCurrent(token)) return;
         busy = false;
         pendingMessage = null;
         const w = E.describeWrite(res, '질문');
         const turn = w.ok && res.data && res.data.turn && typeof res.data.turn.text === 'string' ? res.data.turn : null;
         if (turn) {
           if (V.sameSession(at, session)) {
-            turns = turns.concat([{ id: `local-${Date.now()}`, role: 'user', text: message, at: new Date().toISOString() }]);
-            if (!turns.some((t) => t.id === turn.id)) turns = turns.concat([{ ...turn, ownerId: at.ownerId, scope: at.scope }]);
+            // 답 이벤트(pet:chat-reply)가 이 응답보다 먼저 와 있을 수 있다 — 질문 다음에 답이 오도록 순서를 다시 세운다.
+            turns = turns.filter((t) => t.id !== turn.id).concat([
+              { id: `local-${Date.now()}`, role: 'user', text: message, at: new Date().toISOString() },
+              { ...turn, ownerId: at.ownerId, scope: at.scope },
+            ]);
           }
           textarea.value = V.draftAfterSuccess(message, textarea.value);
           B.store.set('petCouncil.draft', textarea.value);
           if (!textarea.value) { source = { kind: 'text' }; B.store.set('petCouncil.source', source); }
-        } else if (cancelled) {
-          feedback = { text: '기다림을 중단했어요. 질문은 보관돼 있어요 — 다시 보내면 새 요청이에요.', glyph: 'info' };
         } else {
           feedback = { label: w.label, text: w.ok ? '담당자의 답변을 확인하지 못했어요. 질문은 보관돼 있어요.' : w.message, danger: !w.ok && (w.kind === 'error' || w.kind === 'invalid'), action: w.action && w.action.kind !== 'retry' ? w.action : null };
         }
@@ -187,7 +200,7 @@
       }
 
       function cancel() {
-        cancelled = true;
+        gate.cancel();
         B.invoke('pet:chat-cancel', {});
         busy = false;
         pendingMessage = null;
@@ -198,11 +211,12 @@
       async function handoff() {
         const draft = textarea.value;
         if (!V.canHandoff(draft)) return;
-        const res = await B.invoke('pet:council-handoff', { draft });
+        // 셸이 허브 경로(조각 포함)를 메인 창에서 연다 — data.opened 가 true 일 때만 넘긴 것이다.
+        const res = await B.invoke('pet:council-handoff', { draft, source: source.kind });
         if (!alive) return;
         const w = E.describeWrite(res, '안건');
-        feedback = w.ok
-          ? { text: '브랜드 Council 입력란으로 넘겼어요. 웹에서 실행을 눌러야 시작해요.', glyph: 'arrowUpRight' }
+        feedback = w.ok && res.data && res.data.opened === true
+          ? { text: '메인 창의 브랜드 Council 입력란으로 넘겼어요. 웹에서 실행을 눌러야 시작해요.', glyph: 'arrowUpRight' }
           : { label: w.label, text: w.message, danger: w.kind === 'error', action: w.action && w.action.kind !== 'retry' ? w.action : null };
         render();
         scrollToEnd();
@@ -266,6 +280,8 @@
         onChatReply(p) {
           if (!p || !p.turn || !V.sameSession(p, session)) return;
           if (turns.some((t) => t.id === p.turn.id)) return;
+          // 이 화면이 보낸 질문의 답이면 send() 가 질문과 함께 순서대로 넣는다.
+          if (pendingMessage) return;
           turns = turns.concat([{ ...p.turn, ownerId: p.ownerId, scope: p.scope }]);
           if (!pendingMessage) busy = false;
           render();

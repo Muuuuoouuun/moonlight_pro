@@ -32,5 +32,27 @@
 
   function startLabel(minutes) { return `${clampMinutes(minutes)}분 집중 시작`; }
 
-  return { PRESETS, MIN, MAX, DEFAULT, HOLD_MS, clampMinutes, formatRemaining, progress, startLabel };
+  // 셸의 집중 채널(pet:focus-start·stop·state)은 계약 봉투 { kind, data, error } 로 답한다. data 는 state.focus 모양.
+  function focusFrom(result) {
+    const data = result && result.kind === 'live' ? result.data : null;
+    return data && typeof data === 'object' && typeof data.running === 'boolean' ? data : null;
+  }
+  // 시작 실패 문구(성공이면 null).
+  function startError(result) {
+    if (focusFrom(result)) return null;
+    if (result && result.kind === 'invalid') return '집중 시간은 1~120분으로 골라 주세요.';
+    return '집중 화면을 열지 못했어요. 다시 시도해 주세요.';
+  }
+  // 중지 확인은 메인이 Esc 1.3초를 잴 때마다 confirmRevision 을 올린다. 새 revision 에만 확인을 연다 —
+  // 캐릭터·배지 같은 다른 상태 방송에 이미 닫은 확인이 다시 뜨지 않게. 집중이 끝나면 닫는다.
+  function confirmAfterState(view, focus) {
+    const v = view || { confirming: false, seenRevision: 0 };
+    const f = focus || {};
+    if (!f.running) return { confirming: false, seenRevision: Number(f.confirmRevision) || v.seenRevision };
+    const revision = Number(f.confirmRevision) || 0;
+    if (f.confirmStop === true && revision > v.seenRevision) return { confirming: true, seenRevision: revision };
+    return { confirming: v.confirming, seenRevision: Math.max(v.seenRevision, revision) };
+  }
+
+  return { PRESETS, MIN, MAX, DEFAULT, HOLD_MS, clampMinutes, formatRemaining, progress, startLabel, focusFrom, startError, confirmAfterState };
 });

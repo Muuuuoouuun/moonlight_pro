@@ -1,5 +1,7 @@
-// 빠른 메모의 순수 규칙 — 저장 요청 만들기(재시도는 같은 requestId·entryId), 결과 해석, 상태 문구,
-// 저장한 메모 보관 목록. 입력은 매 키 입력마다 로컬(petPreview.memo)에 남고, Hub 저장은 명시적 동작이다.
+// 빠른 메모의 순수 규칙 — 저장 요청 만들기, 결과 해석, 상태 문구, 저장한 메모 보관 목록.
+// 입력은 매 키 입력마다 로컬(petPreview.memo)에 남고, Hub 저장은 명시적 동작이다.
+// 확인되지 않은 저장(보류 명령)과 충돌 표시는 메인 프로세스의 허브 모델(pet-pending)이 origin 별로 가진다 —
+// 렌더러는 그 요약(data.pending)을 읽기만 하고 요청 ID·revision 을 만들지 않는다. 빠른 캡처는 확인되면 끝난다(finish).
 'use strict';
 (function (root, factory) {
   const C = typeof require === 'function' ? require('../../shared/contract.js') : root.PetContract;
@@ -20,57 +22,71 @@
     return { ok: true, error: null };
   }
 
-  // 새 메모는 새 entryId·requestId·revision 0. uuid 는 주입한다(브라우저는 crypto.randomUUID).
-  function buildSaveRequest(body, uuid, now) {
-    const id = uuid || (() => globalThis.crypto.randomUUID());
+  // 허브 요약(pet-pending summary) → 이 화면이 쓰는 세 가지. 모양이 틀리면 '보류 없음'.
+  function pendingFrom(result) {
+    const p = result && result.data && result.data.pending;
+    if (!p || typeof p !== 'object') return null;
     return {
-      requestId: id(),
-      entryId: id(),
-      expectedRevision: 0,
-      body,
-      title: '',
-      occurredAt: (now || new Date()).toISOString(),
+      hasPendingMemo: p.hasPendingMemo === true,
+      pendingMemoRole: typeof p.pendingMemoRole === 'string' ? p.pendingMemoRole : null,
+      captureConflict: p.captureConflict === true,
+      conflictId: typeof p.memoConflictId === 'string' ? p.memoConflictId : null,
     };
   }
 
-  // 같은 내용의 불확실한 요청이 남아 있으면 그 요청을 그대로 다시 보낸다(서버가 중복을 가린다).
-  function requestFor(body, pending, uuid, now) {
-    if (pending && pending.memo && pending.memo.body === body) return pending.memo;
-    return buildSaveRequest(body, uuid, now);
+  // 빠른 캡처 저장(Ctrl+S·버튼). 확인이 안 된 앞 저장이 있으면 허브가 그 명령을 먼저 다시 보낸다.
+  function captureRequest(body) {
+    return { body: String(body == null ? '' : body), finish: true };
   }
 
-  // 결과 해석. clearDraft: 서버가 확인했고 보내는 사이 입력이 바뀌지 않았을 때만.
+  // '새 항목으로 Hub에 저장' — 충돌한 메모(conflictId)를 덮어쓰지 않고 새 메모로 남긴다.
+  function asNewRequest(body, pending) {
+    const request = { body: String(body == null ? '' : body), finish: true, asNew: true };
+    if (pending && pending.conflictId) request.entryId = pending.conflictId;
+    return request;
+  }
+
+  // 결과 해석. clearDraft: 서버가 이 입력을 확인했고 보내는 사이 입력이 바뀌지 않았을 때만.
+  //   saved    — 이 입력이 저장·재조회로 확인됐다
+  //   replayed — 확인이 필요했던 앞 메모를 먼저 저장했다(지금 입력은 아직 저장 전)
+  //   conflict — 다른 곳에서 먼저 바뀌어 덮어쓰지 않았다(captureConflict 면 새 항목으로만)
+  //   pending  — 결과를 모른다. 허브가 같은 명령을 보관했다가 다음 저장에서 먼저 다시 보낸다
+  //   failed   — 저장되지 않았다(preview·로그인 필요·주소 없음·입력 오류)
   function interpretSave(result, request, currentDraft) {
     const w = E.describeWrite(result, '메모');
     const data = (result && result.data) || {};
+    const pending = pendingFrom(result);
     if (w.ok && data.verified === true) {
-      return {
-        outcome: 'saved', clearDraft: currentDraft === request.body, pendingMemo: null, conflict: false,
-        savedEntry: data.entry || null, message: null, label: null,
-      };
+      if (data.replayed === true) {
+        return {
+          outcome: 'replayed', clearDraft: false, pending, savedEntry: data.entry || null,
+          label: '앞 메모 저장', message: '확인이 필요했던 앞 메모를 먼저 저장했어요. 지금 입력은 한 번 더 저장해 주세요.',
+        };
+      }
+      return { outcome: 'saved', clearDraft: currentDraft === request.body, pending, savedEntry: data.entry || null, label: null, message: null };
     }
     if (w.ok) {
       return {
-        outcome: 'unverified', clearDraft: false, pendingMemo: request, conflict: false, savedEntry: null,
-        label: '저장 확인 필요', message: '저장 결과 확인이 필요해요. 같은 요청으로 다시 확인할 수 있어요.',
+        outcome: 'pending', clearDraft: false, pending, savedEntry: null,
+        label: '저장 확인 필요', message: '저장 결과 확인이 필요해요. ‘저장 확인’으로 같은 요청을 다시 확인해요.',
       };
     }
     if (w.kind === 'conflict') {
       return {
-        outcome: 'conflict', clearDraft: false, pendingMemo: null, conflict: true, savedEntry: null,
-        label: w.label, message: '다른 곳에서 먼저 바뀌어 덮어쓰지 않았어요. 더보기의 ‘새 항목으로 Hub에 저장’으로 남길 수 있어요.',
+        outcome: 'conflict', clearDraft: false, pending, savedEntry: null, label: w.label,
+        message: '다른 곳에서 먼저 바뀌어 덮어쓰지 않았어요. 더보기의 ‘새 항목으로 Hub에 저장’으로 남길 수 있어요.',
       };
     }
+    const held = Boolean(pending && pending.hasPendingMemo);
     return {
-      outcome: w.uncertain ? 'unverified' : 'failed', clearDraft: false,
-      pendingMemo: w.uncertain ? request : null, conflict: false, savedEntry: null,
-      label: w.label, message: w.message, action: w.action,
+      outcome: held ? 'pending' : 'failed', clearDraft: false, pending, savedEntry: null,
+      label: w.label, message: held ? `${w.message} ‘저장 확인’으로 같은 요청을 다시 보내요.` : w.message, action: w.action,
     };
   }
 
   function saveButtonLabel({ saving, pending }) {
     if (saving) return '저장 중…';
-    if (pending) return '저장 확인';
+    if (pending && pending.hasPendingMemo) return '저장 확인';
     return 'Hub에 저장';
   }
 
@@ -80,9 +96,11 @@
     return draft ? '이 PC에 자동 저장됨' : '이 PC에 자동 저장';
   }
 
+  // 빈 입력창에서도 보류 중인 저장은 확인할 수 있다. 캡처 충돌이면 대상 없는 저장은 막힌다(새 항목으로만).
   function canSave({ saving, draft, pending }) {
     if (saving) return false;
-    if (pending) return true;
+    if (pending && pending.hasPendingMemo) return true;
+    if (pending && pending.captureConflict) return false;
     return String(draft || '').trim().length > 0;
   }
 
@@ -98,10 +116,8 @@
     return line.length > 32 ? `${line.slice(0, 32)}…` : line;
   }
 
-  // petHub.pending.v1.<origin> — origin 별로 미확인 요청을 나눠 보관한다.
-  function pendingKey(hubUrl) {
-    try { return `petHub.pending.v1.${new URL(hubUrl).origin}`; } catch (_) { return null; }
-  }
-
-  return { MAX_BODY, CAPTURED_MAX, validateBody, buildSaveRequest, requestFor, interpretSave, saveButtonLabel, statusLabel, canSave, pushCaptured, capturedLabel, pendingKey };
+  return {
+    MAX_BODY, CAPTURED_MAX, validateBody, pendingFrom, captureRequest, asNewRequest, interpretSave,
+    saveButtonLabel, statusLabel, canSave, pushCaptured, capturedLabel,
+  };
 });

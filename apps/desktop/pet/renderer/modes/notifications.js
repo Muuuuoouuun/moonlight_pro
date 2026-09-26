@@ -38,10 +38,10 @@
         loading = false;
         view = E.describeRead(res, '알림');
         if (view.showData) {
-          const data = (res && res.data) || {};
-          if (Array.isArray(data.notices)) {
-            notices = data.notices;
-            unread = Number(data.unreadCount) || notices.filter((n) => !n.read && !n.hidden).length;
+          const list = N.listFrom(res);
+          if (list) {
+            notices = list.notices;
+            unread = list.unreadCount;
             loaded = true;
           } else view = E.describeRead({ kind: 'invalid' }, '알림');
         }
@@ -85,14 +85,18 @@
         return h('div', { class: `n-row${n.read ? ' read' : ''}`, role: 'listitem' }, open, more);
       }
 
+      // 확인·숨기기의 응답은 허브 모델이 센 새 목록이다 — 그대로 쓴다('이 PC에서 숨기기'는 읽음이 아니다).
       async function mark(n, channel) {
         const res = await B.invoke(channel, { id: n.id });
         if (!alive) return;
         const w = E.describeWrite(res, '알림');
-        if (w.ok) {
-          notices = notices.map((x) => (x.id === n.id ? { ...x, read: true, hidden: channel === 'pet:notices-hide' ? true : x.hidden } : x));
-          if (!n.read) unread = Math.max(0, unread - 1);
+        const list = w.ok ? N.listFrom(res) : null;
+        if (list) {
+          notices = list.notices;
+          unread = list.unreadCount;
           render();
+        } else if (w.ok) {
+          load();
         } else {
           view = { state: w.kind, showData: true, label: w.label, message: w.message, action: w.action };
           render();
@@ -106,6 +110,7 @@
         else if (t.kind === 'external') B.invoke('pet:open-external', { url: t.url });
         else if (t.kind === 'mode') {
           if (t.mode === 'calendar' && t.date && window.PetModes.calendar.selectDate) window.PetModes.calendar.selectDate(t.date);
+          if (t.mode === 'council' && t.ownerId && window.PetModes.council.selectSession) window.PetModes.council.selectSession({ ownerId: t.ownerId, scope: t.scope || 'all' });
           ctx.setMode(t.mode);
         }
       }
@@ -114,7 +119,9 @@
         const res = await B.invoke('pet:notices-read-all', {});
         if (!alive) return;
         const w = E.describeWrite(res, '알림');
-        if (w.ok) { notices = notices.map((x) => ({ ...x, read: true })); unread = 0; render(); }
+        const list = w.ok ? N.listFrom(res) : null;
+        if (list) { notices = list.notices; unread = list.unreadCount; render(); }
+        else if (w.ok) load();
         else { view = { state: w.kind, showData: true, label: w.label, message: w.message, action: w.action }; render(); }
       }
 

@@ -39,7 +39,9 @@
       down = null;
       if (frame) { cancelAnimationFrame(frame); frame = 0; }
       el.classList.remove('pressed', 'dragging');
-      B.invoke('pet:drag', { phase: 'end', screenY: e && typeof e.screenY === 'number' ? e.screenY : d.lastY });
+      // 포인터를 잃었으면(pointercancel·lostpointercapture·창 blur) 'cancel' — 메인이 클릭으로 치지 않는다.
+      if (cancelled) B.invoke('pet:drag', { phase: 'cancel' });
+      else B.invoke('pet:drag', { phase: 'end', screenY: e && typeof e.screenY === 'number' ? e.screenY : d.lastY });
       B.invoke('pet:press', { pressed: false, source: o.source || 'pet' });
       if (!cancelled && !d.moved && o.onTap) o.onTap();
     };
