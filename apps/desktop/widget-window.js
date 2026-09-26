@@ -43,6 +43,24 @@ function isLoginUrl(target, hubUrl) {
   }
 }
 
+// 위젯이 로그인으로 밀려났을 때 메인 창이 열 로그인 주소. 허브 미들웨어는 `/login?next=%2Fwidget`로
+// 보내는데, 메인 창이 그 next를 물려받으면 로그인 뒤 380px 위젯 페이지를 큰 창 전체로 띄운다.
+// next가 위젯 화면을 가리키면 지운다 — 로그인 화면의 기본 목적지(/dashboard)로 간다. 다른 목적지와
+// 나머지 쿼리는 그대로 둔다. 허브 origin의 로그인 주소가 아니면 null.
+function mainLoginUrl(target, hubUrl) {
+  if (!isLoginUrl(target, hubUrl)) return null;
+  const url = new URL(target);
+  const next = url.searchParams.get('next');
+  if (next !== null) {
+    let pointsAtWidget = true; // 읽을 수 없는 next도 위젯에서 온 것이므로 버린다
+    try {
+      pointsAtWidget = isWidgetPage(new URL(next, url.origin).href, hubUrl);
+    } catch { /* keep true */ }
+    if (pointsAtWidget) url.searchParams.delete('next');
+  }
+  return url.href;
+}
+
 // 위젯이 떠 있는 페이지가 위젯 화면인가(로그인·실패로 다른 곳에 있으면 다시 불러야 한다).
 function isWidgetPage(target, hubUrl) {
   const origin = originOf(hubUrl);
@@ -133,6 +151,7 @@ module.exports = {
   WIDGET_CHANNELS,
   widgetUrl,
   isLoginUrl,
+  mainLoginUrl,
   isWidgetPage,
   resolveMainPath,
   clampWidgetHeight,
