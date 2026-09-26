@@ -163,3 +163,40 @@ test("the route lives outside /dashboard, stays dynamic and keeps the session ga
   assert.match(source, /shouldSubmitQuickTask\(event, saving\)/);
   assert.doesNotMatch(source, /setInterval|setTimeout/, "다시 읽기는 포커스·가시성 이벤트뿐");
 });
+
+// 2026-09-26 검증 지적: 위젯이 열린 채 세션이 끝나면 API가 401로 답한다. 읽기 실패로 위장하지 않고
+// 로그인으로 보내되, 초안은 같은 origin의 localStorage에 맡겼다가 되찾는다.
+test("세션 만료(401)는 읽기 실패가 아니라 로그인 필요다 — 위젯은 초안을 맡기고 로그인으로 간다", async () => {
+  const { readEnvelope } = await import("./daily-brief-signals.js");
+  const { stashWidgetDraft, takeWidgetDraft, WIDGET_LOGIN_PATH, WIDGET_DRAFT_KEY } = await import("./quick-widget.jsx");
+  assert.equal(readEnvelope({ ok: false, status: 401 }, { status: "unauthorized", error: "operator-session-required" }), "unauthorized");
+  assert.equal(readEnvelope({ ok: true, status: 200 }, { status: "unauthorized" }), "unauthorized");
+  assert.equal(readEnvelope({ ok: false, status: 500 }, null), "error");
+  assert.equal(readEnvelope({ ok: true, status: 200 }, { status: "live", signals: [] }), "live");
+
+  assert.deepEqual(firstActionView({ status: "unauthorized", signals: [] }), { kind: "unauthorized" });
+  const html = render(FirstActionSlot, { status: "unauthorized", signals: [] });
+  assert.match(html, /data-slot="unauthorized"/);
+  assert.match(html, /로그인이 필요합니다/);
+  assert.match(html, /로그인</);
+  assert.doesNotMatch(html, /읽기 실패|data-truth="error"/, "세션 만료를 읽기 실패로 그리지 않는다");
+
+  assert.equal(WIDGET_LOGIN_PATH, "/login?next=%2Fwidget");
+  assert.equal(WIDGET_DRAFT_KEY, "mlp.widgetDraft");
+  const store = new Map();
+  const storage = { setItem: (k, v) => store.set(k, v), getItem: (k) => (store.has(k) ? store.get(k) : null), removeItem: (k) => store.delete(k) };
+  stashWidgetDraft("   ", storage);
+  assert.equal(takeWidgetDraft(storage), "", "빈 초안은 맡기지 않는다");
+  stashWidgetDraft("김원장 견적서 보내기", storage);
+  assert.equal(takeWidgetDraft(storage), "김원장 견적서 보내기");
+  assert.equal(takeWidgetDraft(storage), "", "되찾은 초안은 한 번만 쓴다");
+  const broken = { setItem() { throw new Error("blocked"); }, getItem() { throw new Error("blocked"); }, removeItem() {} };
+  stashWidgetDraft("x", broken);
+  assert.equal(takeWidgetDraft(broken), "", "저장소가 막혀도 던지지 않는다");
+
+  const source = read("./quick-widget.jsx");
+  assert.match(source, /res\.status === 401\) leaveForLogin\(\)/, "저장 401은 로그인으로 보낸다");
+  assert.match(source, /brief\.status === "unauthorized"\) leaveForLogin\(\)/, "읽기 401도 로그인으로 보낸다");
+  assert.match(source, /submitQuickCapture\(session, \{ fetchImpl \}\)/, "위젯 저장은 401을 보는 fetch를 쓴다");
+  assert.match(source, /takeWidgetDraft\(storage\)/, "마운트 때 맡긴 초안을 되찾는다");
+});

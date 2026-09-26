@@ -8,6 +8,8 @@ import React from "react";
 // 허브 read 봉투(CLAUDE.md): read 실패는 5xx가 아니라 HTTP 200 + status:"error"로 온다.
 // `!r.ok`만 보면 read 실패가 빈 상태("대기 없음")로 위장된다.
 export function readEnvelope(res, data) {
+  // 세션 만료: 미들웨어가 401 + {status:'unauthorized'}로 답한다 — 읽기 실패가 아니라 로그인 필요다.
+  if (res.status === 401 || data?.status === 'unauthorized') return 'unauthorized';
   if (!res.ok || !data) return 'error';
   if (data.status === 'error' || data.source === 'error') return 'error';
   return data.status || 'preview';
@@ -15,7 +17,7 @@ export function readEnvelope(res, data) {
 
 export const DAILY_BRIEF_TIMEOUT_MS = 20000;
 
-// 한 번 읽는다. → { status: live|partial|preview|error, signals }
+// 한 번 읽는다. → { status: live|partial|preview|error|unauthorized, signals }
 export async function fetchDailyBriefSignals({ signal, fetchImpl = globalThis.fetch } = {}) {
   const timeout = AbortSignal.timeout(DAILY_BRIEF_TIMEOUT_MS);
   const res = await fetchImpl('/api/hub/daily-brief', { cache: 'no-store', signal: signal ? AbortSignal.any([signal, timeout]) : timeout });

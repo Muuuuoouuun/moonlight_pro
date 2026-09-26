@@ -20,8 +20,40 @@ import { readHubPreferences, watchHubTheme, DEFAULT_HUB_PREFERENCES } from "@/li
 
 export const WIDGET_HOME_PATH = "/dashboard/home";
 export const WIDGET_CAPTURE_HINT = "inbox";
+// 세션이 끝나면(401) 위젯은 로그인 폼을 그리지 않는다 — 초안을 같은 origin의 localStorage에 잠깐 맡기고
+// 로그인 화면으로 간다. 앱(apps/desktop/main.js)은 /login 이동을 보면 위젯을 숨기고 메인 창에서 로그인을
+// 열며, 로그인 뒤 위젯을 다시 열면 /widget이 다시 마운트되어 초안을 되찾는다. 브라우저에서는 next로 돌아온다.
+export const WIDGET_LOGIN_PATH = "/login?next=%2Fwidget";
+export const WIDGET_DRAFT_KEY = "mlp.widgetDraft";
 
 const useIsoLayoutEffect = typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
+
+export function stashWidgetDraft(raw, storage) {
+  try {
+    if (typeof raw === "string" && raw.trim()) storage.setItem(WIDGET_DRAFT_KEY, raw);
+    else storage.removeItem(WIDGET_DRAFT_KEY);
+  } catch { /* storage can be blocked */ }
+}
+
+export function takeWidgetDraft(storage) {
+  try {
+    const value = storage.getItem(WIDGET_DRAFT_KEY);
+    if (value !== null) storage.removeItem(WIDGET_DRAFT_KEY);
+    return typeof value === "string" ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+function localStorageOrNull() {
+  try { return window.localStorage; } catch { return null; }
+}
+
+function goToLogin(raw) {
+  const storage = localStorageOrNull();
+  if (storage) stashWidgetDraft(raw, storage);
+  window.location.assign(WIDGET_LOGIN_PATH);
+}
 
 // 저장 봉투(DESIGN.md §8.1) → 영수증 한 줄의 종류. preview는 저장이 아니다 — "저장됨"을 절대 말하지 않는다.
 export function widgetReceiptKind(snapshot) {
@@ -69,6 +101,7 @@ export function WidgetReceipt({ snapshot, onRetry }) {
 // 읽기 봉투 → 첫 행동 칸의 모양. partial도 행을 그린다(배지 없음). 0건은 조용한 한 줄.
 export function firstActionView({ status, signals }) {
   if (status === "loading") return { kind: "loading" };
+  if (status === "unauthorized") return { kind: "unauthorized" };
   if (status === "error") return { kind: "error" };
   if (status === "preview") return { kind: "preview" };
   const signal = Array.isArray(signals) ? signals[0] : null;
@@ -110,11 +143,18 @@ export function FirstActionRow({ signal, urgent, bridge }) {
   );
 }
 
-export function FirstActionSlot({ status, signals, bridge = null, onRetry }) {
+export function FirstActionSlot({ status, signals, bridge = null, onRetry, onLogin }) {
   const view = firstActionView({ status, signals });
   let body;
   if (view.kind === "loading") {
     body = <Skeleton lines={2} width={["68%", "42%"]} style={{ padding: "11px 6px 0" }} />;
+  } else if (view.kind === "unauthorized") {
+    body = (
+      <div className="quick-widget__slot-center">
+        <span className="quick-widget__quiet">로그인이 필요합니다</span>
+        <Button variant="ghost" size="xs" onClick={onLogin}>로그인</Button>
+      </div>
+    );
   } else if (view.kind === "error") {
     body = (
       <div className="quick-widget__slot-center">
@@ -198,9 +238,27 @@ export function QuickWidget() {
   const inputRef = React.useRef(null);
   const saving = snapshot.status === "saving";
 
+  // 로그인으로 밀려나기 전에 맡겨 둔 초안이 있으면 되찾는다(한 번만).
+  useIsoLayoutEffect(() => {
+    const storage = localStorageOrNull();
+    const draft = storage ? takeWidgetDraft(storage) : "";
+    if (draft && !session.snapshot().raw) session.setRaw(draft);
+  }, [session]);
+
+  const leaveForLogin = React.useCallback(() => goToLogin(session.snapshot().raw), [session]);
+  // 저장 요청이 401로 돌아오면 세션이 끝난 것이다 — 실패 영수증 대신 로그인으로 간다(초안은 맡긴다).
+  const fetchImpl = React.useCallback(async (input, init) => {
+    const res = await fetch(input, init);
+    if (res.status === 401) leaveForLogin();
+    return res;
+  }, [leaveForLogin]);
+
   // 창이 다시 보이거나 포커스를 받을 때만 다시 읽는다 — 타이머 없음.
   const [reloadKey, reload] = React.useReducer((value) => value + 1, 0);
   const brief = useDailyBriefSignals(reloadKey, { keepPrevious: true });
+  React.useEffect(() => {
+    if (brief.status === "unauthorized") leaveForLogin();
+  }, [brief.status, leaveForLogin]);
   React.useEffect(() => {
     const onFocus = () => {
       reload();
@@ -225,8 +283,8 @@ export function QuickWidget() {
 
   const submit = React.useCallback(async () => {
     if (!session.snapshot().raw.trim()) return;
-    await submitQuickCapture(session);
-  }, [session]);
+    await submitQuickCapture(session, { fetchImpl });
+  }, [session, fetchImpl]);
 
   const togglePin = React.useCallback(async () => {
     if (!bridge) return;
@@ -269,7 +327,7 @@ export function QuickWidget() {
 
         <section className="quick-widget__first" aria-label="오늘 첫 행동">
           <SectionTitle style={{ marginBottom: 6 }}>오늘 첫 행동</SectionTitle>
-          <FirstActionSlot status={brief.status} signals={brief.signals} bridge={bridge} onRetry={reload} />
+          <FirstActionSlot status={brief.status} signals={brief.signals} bridge={bridge} onRetry={reload} onLogin={leaveForLogin} />
         </section>
       </main>
     </div>
