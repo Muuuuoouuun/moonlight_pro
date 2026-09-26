@@ -43,6 +43,7 @@ open_app() { /usr/bin/open -n "$APP_BUNDLE"; }
 
 case "$MODE" in
   run) open_app ;;
+  --desktop-refraction) /usr/bin/open -n "$APP_BUNDLE" --args --desktop-refraction ;;
   --glass-lab) /usr/bin/open -n "$APP_BUNDLE" --args --glass-lab ;;
   --debug|debug) lldb -- "$APP_BINARY" ;;
   --logs|logs)
@@ -63,7 +64,7 @@ case "$MODE" in
     echo "Verified running build: $APP_BINARY (pid $RUNNING_PIDS)"
     ;;
   *)
-    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify|--glass-lab]" >&2
+    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify|--glass-lab|--desktop-refraction]" >&2
     exit 2
     ;;
 esac

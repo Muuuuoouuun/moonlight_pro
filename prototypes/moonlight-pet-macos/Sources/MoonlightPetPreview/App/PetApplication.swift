@@ -29,6 +29,10 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         self.coordinator = coordinator
         coordinator.showPet()
         model.startHubConnection()
+        if CommandLine.arguments.contains("--desktop-refraction") {
+            model.usesDesktopRefraction = true
+            coordinator.showBar()
+        }
         if CommandLine.arguments.contains("--glass-lab") {
             let lab = GlassLabWindowController()
             glassLab = lab

@@ -120,6 +120,11 @@ struct CompanionPanelView: View {
             Button(showsAddress ? "빠른 기능으로 돌아가기" : "Hub 연결·저장 위치") {
                 withAnimation(PetMotion.panel) { showsAddress.toggle() }
             }
+            Divider()
+            Toggle("배경 굴절 실험", isOn: $model.usesDesktopRefraction)
+            if model.usesDesktopRefraction {
+                Text(model.desktopRefractionStatus)
+            }
             Button("펫으로 접기", action: close)
         } label: {
             Image(systemName: "ellipsis").modifier(GlassGlyphShadow()).frame(width: 28, height: 32)

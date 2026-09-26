@@ -1,6 +1,6 @@
 import AppKit
 
-/// Approved refinement: blur 12px, veil 9%, contact shadow 73%, soft shadow 37%, edge 66%.
+/// Approved refinement: blur 12px, veil 9%, contact shadow 73%, soft shadow 37%, edge 72%.
 /// AppKit owns the actual blur radius. The native material mix is a visual
 /// approximation, not a claim that its kernel is the CSS 12px kernel.
 enum GlassStudy {
@@ -8,7 +8,7 @@ enum GlassStudy {
     static let centerVeil: CGFloat = 0.09
     static let glyphShadow = 0.73
     static let softGlyphShadow = 0.37
-    static let edgeReflection: Float = 0.66
+    static let edgeReflection: Float = 0.72
     static let edgeFeather: CGFloat = 24
 }
 

@@ -104,3 +104,9 @@ Character hues remain separated in lightness and saturation, with a lighter pres
 브라우저 안건 전달과 문의·일정 알림의 선행 범위는 [설계](../../docs/superpowers/specs/2026-09-25-pet-notifications-council-design.md)와 [검증 기록](../../docs/superpowers/plans/2026-09-25-pet-notifications-council.md)에 정리했다.
 
 메모 입력면에는 별도 사각 채움·테두리를 얹지 않는다. 패널 전체의 네이티브 배경 확산·중앙 베일과 글자 그림자가 읽기를 보정한다.
+
+## 배경 굴절 실험 (선택)
+
+더보기 → **배경 굴절 실험**. macOS 화면 기록 권한이 필요하고, 기본 실행에서는 꺼져 있다. 현재 위젯이 놓인 디스플레이를 읽되 MoonlightPetPreview의 모든 창을 제외한다. 배경만 GPU로 흐리게 하고 굴절시켜 표시하며, 글자는 별도 원래 해상도로 유지한다. 음성·파일 저장·전송은 없고 패널을 접거나 실험을 끄면 캡처를 중지한다. 권한 없음·중단·대비 접근성 설정에서는 기존 유리로 돌아간다.
+
+실험 실행: `./script/build_and_run.sh --desktop-refraction`. 화면 기록 권한을 허용한 뒤 메뉴에서 껐다 켜거나 앱을 재실행한다. 실제 화면에서의 가독성·프레임 비용은 실험 검증 대상이며 기본 재질 확정이 아니다.

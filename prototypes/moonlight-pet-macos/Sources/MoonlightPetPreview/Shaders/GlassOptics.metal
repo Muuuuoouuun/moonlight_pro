@@ -7,6 +7,7 @@ struct GlassUniforms {
     float4 rect;     // glass bounds in top-left point coordinates
     float4 material; // radius, bevel, refraction strength, calibration pattern
     float4 light;    // pointer x/y normalized, accessibility fallback, reflection
+    float4 backdrop; // display UV origin and extent
 };
 struct VertexOut { float4 position [[position]]; };
 vertex VertexOut glassVertex(uint id [[vertex_id]]) {
@@ -91,7 +92,7 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     // Scale the spectral lip with the bevel: production 9pt is 90% of the
     // previous 10pt band. The outer hairline stays one physical pixel.
     float lipScale = min(1.0,bevel/10.0);
-    float dispersion = .36*lipScale*clamp(u.material.z,0.0,1.8);
+    float dispersion = .44*lipScale*clamp(u.material.z,0.0,1.8);
     float direction = dot(outward,normalize(float2(-.7,-.5))) >= 0 ? 1.0 : -1.0;
     float center = min(1.35*lipScale,bevel*.18);
     float width = max(.52,.72/u.viewport.z)*lipScale;
@@ -99,12 +100,16 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
                               reflectionBand(depth,center,width),
                               reflectionBand(depth,center+dispersion*direction,width));
     float litArc = .24 + .76*pow(abs(dot(outward,normalize(float2(-.7+u.light.x*.1,-.5+u.light.y*.1)))),3.0);
-    float3 prism = spectrum * (.11*litArc*(1.0-t));
+    // More distinct wavelengths at the lit corners, with the same 9pt bevel.
+    float3 prism = spectrum * (.16*litArc*(1.0-t));
+    // A faint inner return gives the lip depth without extending into the face.
+    float innerReturn = reflectionBand(depth, bevel*.48, bevel*.095)
+                        * .024 * litArc * (1.0-t);
     if (!lab) {
         // Premultiplied alpha; exactly transparent center, pass-through input.
         // Approved study raised edge intensity from .45 to .66; preserve the
         // 9pt geometry and color separation, raising only neutral reflection.
-        float3 reflection = float3(highlight * clamp(u.light.w / .45,0.0,1.6)) + prism;
+        float3 reflection = float3(highlight * clamp(u.light.w / .45,0.0,1.6)) + prism + innerReturn;
         float a = (max(reflection.r,max(reflection.g,reflection.b))+shadow)*coverage;
         return float4(reflection*coverage,a);
     }
@@ -122,6 +127,29 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     glass.b = softened(point + blueRay.xy/max(.1,-blueRay.z)*travel,u,blur).b;
     // Preserve the background: no white floor, panel tint or central blur.
     // Specular light belongs to the bevel rather than a fill across the card.
-    glass = glass*(1-shadow) + highlight*.54 + prism*.65;
+    glass = glass*(1-shadow) + highlight*.54 + prism*.65 + innerReturn;
     return float4(mix(backdrop,clamp(glass,0.0,1.0),coverage),1);
+}
+
+// Experimental desktop path: an app-excluded ScreenCaptureKit texture, blurred
+// on the GPU before this pass. Foreground glyphs never enter either pipeline.
+fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
+    constant GlassUniforms &u [[buffer(0)]], texture2d<float> scene [[texture(0)]]) {
+    constexpr sampler linearSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+    float2 point = in.position.xy / u.viewport.z;
+    float2 size = u.viewport.xy;
+    float depth = -glassDistance(point, size, u.material.x);
+    if (depth <= 0 || u.light.z > .5) return float4(0);
+    float2 q = point / size * 2.0 - 1.0;
+    // A shallow continuous lens; fade at the boundary so it meets native glass.
+    float dome = pow(max(0.0, 1.0 - dot(q,q)*.5), 2.0);
+    float2 bend = q * dome * u.material.z;
+    float2 outward = glassNormal(point,size,u.material.x);
+    float edge = exp(-depth / 7.0) * smoothstep(0.0, 3.0, depth);
+    bend -= outward * edge * u.material.z * 1.8;
+    float2 uv = u.backdrop.xy + ((point + bend) / size) * u.backdrop.zw;
+    float3 color = scene.sample(linearSampler, uv).rgb;
+    // Blend into the unchanged native optical lip; no dark inner rectangle.
+    float alpha = smoothstep(0.0, 9.0, depth);
+    return float4(color * alpha, alpha);
 }

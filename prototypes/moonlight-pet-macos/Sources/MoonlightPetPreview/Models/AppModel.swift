@@ -100,6 +100,8 @@ final class AppModel: ObservableObject {
     private var memoEditRevision = 0
     @Published private(set) var isCapturingMemo = false
     @Published private(set) var memoCaptureReceipt: String?
+    @Published var usesDesktopRefraction = false
+    @Published var desktopRefractionStatus = "화면 기록 권한 필요 · 영상 저장 안 함"
     @Published var focusMinutes = 25
     @Published var remainingSeconds = 0
     @Published private(set) var focusTotalSeconds = 0
