@@ -75,3 +75,43 @@ test('적용: 한 번의 자식 프로세스, 실패해도 resolve', async () =>
   const skipped = await D.applyGlassFrame([fakeWindow(111)], { platform: 'darwin', execFile: () => assert.fail('no spawn') });
   assert.equal(skipped.error, 'platform');
 });
+
+test('초점을 잃은 Acrylic 창: 도우미 하나를 처음에만 띄우고 HWND 를 줄마다 보낸다(WM_NCACTIVATE)', () => {
+  const { EventEmitter } = require('node:events');
+  const spawned = [];
+  const spawn = (file, args, options) => {
+    const child = new EventEmitter();
+    child.written = [];
+    child.stdin = new EventEmitter();
+    child.stdin.write = (line) => { child.written.push(line); return true; };
+    child.stdin.end = () => { child.ended = true; };
+    child.kill = () => { child.killed = true; };
+    spawned.push({ file, args, options, child });
+    return child;
+  };
+  const win = (n, visible = true) => {
+    const buffer = Buffer.alloc(8);
+    buffer.writeBigUInt64LE(BigInt(n));
+    return { isDestroyed: () => false, isVisible: () => visible, getNativeWindowHandle: () => buffer };
+  };
+  const keeper = D.createActivationKeeper({ spawn, platform: 'win32' });
+  assert.equal(keeper.keep(win(4242)), true);
+  assert.equal(keeper.keep(win(77)), true);
+  assert.equal(keeper.keep(win(5, false)), false, '숨은 창은 건너뛴다');
+  assert.equal(spawned.length, 1, '도우미는 한 번만');
+  assert.equal(spawned[0].file, 'powershell.exe');
+  assert.equal(spawned[0].options.windowsHide, true);
+  assert.deepEqual(spawned[0].child.written, ['4242\n', '77\n']);
+  const script = Buffer.from(spawned[0].args.at(-1), 'base64').toString('utf16le');
+  assert.match(script, /PostMessage/);
+  assert.ok(script.includes(`${D.WM_NCACTIVATE}, new IntPtr(1)`), 'WM_NCACTIVATE(TRUE)');
+  spawned[0].child.emit('exit', 0);
+  assert.equal(keeper.running, false);
+  keeper.keep(win(9));
+  assert.equal(spawned.length, 2, '끝났으면 다음에 다시 띄운다');
+  keeper.dispose();
+  assert.equal(spawned[1].child.killed, true);
+  assert.equal(D.createActivationKeeper({ spawn, platform: 'darwin' }).keep(win(1)), false, 'Windows 가 아니면 아무것도 하지 않는다');
+  const broken = D.createActivationKeeper({ spawn: () => { throw new Error('ENOENT'); }, platform: 'win32' });
+  assert.equal(broken.keep(win(1)), false);
+});

@@ -11,7 +11,7 @@ const G = require('./pet-geometry');
 const { createPetStore, isAllowedStoreKey, STORE_FILE } = require('./pet-store');
 const { createPetState, CHARACTER_KEY } = require('./pet-state');
 const { createPointerGesture, applyPointerSignal, createEscHold, escHoldInput, registerShortcut, PET_QUICK_ACCELERATOR } = require('./pet-input');
-const { applyGlassFrame } = require('./pet-dwm');
+const { applyGlassFrame, createActivationKeeper } = require('./pet-dwm');
 const { createWindowFactory, setBoundsExact, applyGlassMaterial } = require('./pet-windows');
 const { petTrayItems, characterMenuTemplate } = require('./pet-tray');
 const { HUB_CHANNELS, envelope, statusFromEnvelope, createHubBridge, hubFromModule } = require('./pet-hub-bridge');
@@ -126,6 +126,9 @@ function install(options = {}) {
     if (!result.ok) log(`pet:dwm degraded ${result.error || JSON.stringify(result.applied)}`);
     return result;
   });
+
+  // 초점을 잃은 Acrylic 패널(지속 위젯, 유예 안의 빠른 패널)은 DWM 이 단색으로 바꾼다 — WM_NCACTIVATE(TRUE)로 블러를 되살린다.
+  const activationKeeper = options.activationKeeper || createActivationKeeper({ log });
 
   // ── 위치 ───────────────────────────────────────────────────────────────
   const displays = () => screen.getAllDisplays().map((d) => ({ id: d.id, bounds: d.bounds, workArea: d.workArea }));
@@ -300,9 +303,12 @@ function install(options = {}) {
 
   // 빠른 패널은 밖을 누르거나 다른 앱으로 가면 접힌다. 지속 위젯은 남는다.
   panel.on('blur', () => {
-    if (!state.panelOpen || state.presentation !== 'quick') return;
-    if (Date.now() < blurGraceUntil) return;
-    collapse();
+    if (state.panelOpen && state.presentation === 'quick' && Date.now() >= blurGraceUntil) {
+      collapse();
+      return;
+    }
+    // 남아 있는 패널: 투명도 줄이기(불투명 면)가 아니면 블러를 되살린다.
+    if (state.panelOpen && !solidGlass && panel.isVisible()) activationKeeper.keep(panel);
   });
 
   // ── 끌기·누름·클릭 ──────────────────────────────────────────────────────
@@ -740,6 +746,7 @@ function install(options = {}) {
     clearTimeout(gestureWatch.pet);
     clearTimeout(gestureWatch.panel);
     escHold.cancel();
+    activationKeeper.dispose();
     bubbles.dismiss({ gap: false });
     if (hub && typeof hub.dispose === 'function') {
       try {

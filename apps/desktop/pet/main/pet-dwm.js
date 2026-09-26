@@ -98,6 +98,92 @@ function applyGlassFrame(windows, options = {}) {
   });
 }
 
+// ── 포커스를 잃은 Acrylic 창의 블러 유지 ─────────────────────────────────
+// 실측(2026-09-27, 줄무늬 배경 위 네 창 비교): 초점을 받았다가 잃은 Acrylic 창은 DWM 이 재질을 끄고 단색으로 그린다.
+// 한 번도 활성이 아니었던 창(말풍선, showInactive)은 블러가 남는다. 초점을 잃은 창에 WM_NCACTIVATE(TRUE)를 보내면
+// DWM 이 활성 모양으로 다시 그려 블러가 돌아오고, 키보드 초점은 옮기지 않는다. 숨긴 PowerShell 하나를 처음 필요할 때
+// 띄워 두고 표준 입력으로 받은 HWND(숫자만)에 PostMessage 한다 — 창이 초점을 잃을 때마다 새 프로세스를 띄우지 않는다.
+const WM_NCACTIVATE = 0x0086;
+
+function buildKeeperScript() {
+  return [
+    "$ErrorActionPreference = 'Continue'",
+    'Add-Type -TypeDefinition @"',
+    'using System; using System.Runtime.InteropServices;',
+    'public static class MoonlightPetActivation {',
+    '  [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);',
+    `  public static bool Keep(long hwnd) { return PostMessage(new IntPtr(hwnd), ${WM_NCACTIVATE}, new IntPtr(1), IntPtr.Zero); }`,
+    '}',
+    '"@',
+    'while ($null -ne ($line = [Console]::In.ReadLine())) {',
+    "  if ($line -match '^[0-9]+$') { [void][MoonlightPetActivation]::Keep([long]$line) }",
+    '}',
+  ].join('\n');
+}
+
+function buildKeeperCommand() {
+  return {
+    file: 'powershell.exe',
+    args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(buildKeeperScript(), 'utf16le').toString('base64')],
+    options: { windowsHide: true, stdio: ['pipe', 'ignore', 'ignore'] },
+  };
+}
+
+// keep(win) → 보냈으면 true. Windows 가 아니거나 도우미를 띄우지 못하면 false(블러 대신 단색일 뿐 기능은 그대로).
+function createActivationKeeper(options = {}) {
+  const spawn = options.spawn || require('node:child_process').spawn;
+  const platform = options.platform || process.platform;
+  const log = options.log || (() => {});
+  let child = null;
+  let failed = false;
+
+  function ensure() {
+    if (child || failed) return child;
+    const command = buildKeeperCommand();
+    try {
+      child = spawn(command.file, command.args, command.options);
+    } catch (error) {
+      failed = true;
+      log(`pet:dwm keeper spawn failed ${error && error.message}`);
+      return null;
+    }
+    const current = child;
+    current.on('error', (error) => {
+      failed = true;
+      log(`pet:dwm keeper failed ${error && error.message}`);
+      if (child === current) child = null;
+    });
+    current.on('exit', () => { if (child === current) child = null; });
+    if (current.stdin) current.stdin.on('error', () => {});
+    return current;
+  }
+
+  return {
+    keep(win) {
+      if (platform !== 'win32' || !win || win.isDestroyed() || !win.isVisible()) return false;
+      let hwnd = null;
+      try {
+        hwnd = hwndFromBuffer(win.getNativeWindowHandle());
+      } catch {
+        hwnd = null;
+      }
+      if (!hwnd || !/^[0-9]+$/.test(hwnd)) return false;
+      const proc = ensure();
+      if (!proc || !proc.stdin || proc.stdin.destroyed) return false;
+      proc.stdin.write(`${hwnd}\n`);
+      return true;
+    },
+    dispose() {
+      const proc = child;
+      child = null;
+      if (!proc) return;
+      try { proc.stdin.end(); } catch { /* 이미 닫힘 */ }
+      try { proc.kill(); } catch { /* 이미 끝남 */ }
+    },
+    get running() { return child !== null; },
+  };
+}
+
 module.exports = {
   DWMWA_WINDOW_CORNER_PREFERENCE,
   DWMWA_BORDER_COLOR,
@@ -108,4 +194,8 @@ module.exports = {
   buildDwmCommand,
   parseDwmOutput,
   applyGlassFrame,
+  WM_NCACTIVATE,
+  buildKeeperScript,
+  buildKeeperCommand,
+  createActivationKeeper,
 };
