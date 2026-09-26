@@ -249,7 +249,7 @@ function createPending({ api, store, origin, now = Date.now }) {
       if (targetRole === 'capture') {
         state.savedMemo = saved;
         state.captureConflict = false;
-        state.captureConflictId = null;
+    state.captureConflictId = null;
       } else if (state.savedMemo && state.savedMemo.id.toLowerCase() === savedEntryId) {
         // 캡처 메모를 명시 편집으로 고쳤다 — 캡처 기록을 새 revision 으로 맞춘다(Hub 와 같아졌으니 캡처 충돌도 풀린다).
         state.savedMemo = saved;

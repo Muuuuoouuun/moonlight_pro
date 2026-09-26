@@ -78,31 +78,36 @@ function applyPointerSignal(gesture, channel, payload) {
   return [];
 }
 
-// 집중 화면의 Esc 길게 누르기. 자동 반복 keyDown은 타이머를 다시 시작하지 않는다.
+// 집중 화면의 Esc 길게 누르기. 자동 반복 keyDown은 타이머를 다시 시작하지 않는다 — 길게 누르기가 한 번 끝난 뒤에도
+// 키를 뗄 때까지는 다시 재지 않는다(계속 누르고 있어도 확인은 한 번).
 function createEscHold(options = {}) {
   const holdMs = options.holdMs || ESC_HOLD_MS;
   const set = options.setTimeout || setTimeout;
   const clear = options.clearTimeout || clearTimeout;
   const onHold = options.onHold || (() => {});
   let timer = null;
+  let fired = false; // 이번 누름에서 이미 onHold 를 불렀다 — keyUp·cancel 까지 다시 재지 않는다
   return {
     keyDown() {
-      if (timer !== null) return false;
+      if (timer !== null || fired) return false;
       timer = set(() => {
         timer = null;
+        fired = true;
         onHold();
       }, holdMs);
       return true;
     },
     keyUp() {
-      if (timer === null) return false;
-      clear(timer);
+      const wasTiming = timer !== null;
+      if (wasTiming) clear(timer);
       timer = null;
-      return true;
+      fired = false;
+      return wasTiming;
     },
     cancel() {
       if (timer !== null) clear(timer);
       timer = null;
+      fired = false;
     },
     get holding() { return timer !== null; },
   };

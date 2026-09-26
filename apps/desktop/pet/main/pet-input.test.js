@@ -94,3 +94,25 @@ test('전역 단축키: Ctrl+Alt+M, 이미 쓰이면 경고만', () => {
   assert.equal(I.registerShortcut({ register: () => { throw new Error('bad'); } }, 'x', () => {}, (m) => warnings.push(m)), false);
   assert.equal(warnings.length, 2);
 });
+
+test('Esc 길게 누르기가 끝난 뒤 계속 누르고 있어도(자동 반복) 다시 재지 않는다 — 떼면 다음 누름은 새로', () => {
+  const timers = [];
+  let held = 0;
+  const hold = I.createEscHold({
+    onHold: () => { held += 1; },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, cleared: false }); return timers.length - 1; },
+    clearTimeout: (id) => { timers[id].cleared = true; },
+  });
+  I.escHoldInput(hold, { type: 'keyDown', key: 'Escape' });
+  timers[0].fn();
+  assert.equal(held, 1);
+  I.escHoldInput(hold, { type: 'keyDown', key: 'Escape', isAutoRepeat: true });
+  I.escHoldInput(hold, { type: 'keyDown', key: 'Escape', isAutoRepeat: true });
+  assert.equal(timers.length, 1, '자동 반복이 타이머를 다시 걸지 않는다');
+  I.escHoldInput(hold, { type: 'keyUp', key: 'Escape' });
+  I.escHoldInput(hold, { type: 'keyDown', key: 'Escape' });
+  assert.equal(timers.length, 2, '뗀 뒤 새 누름은 다시 잰다');
+  hold.cancel();
+  I.escHoldInput(hold, { type: 'keyDown', key: 'Escape' });
+  assert.equal(timers.length, 3, '취소(창 blur) 뒤에도 새로 잰다');
+});

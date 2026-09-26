@@ -84,7 +84,8 @@ async function run({ app, out, page, activate = false }) {
     openExternal: (url) => console.log(`smoke:external ${url}`),
     registerShortcut: false,
     activate,
-    hub: null,
+    // 허브는 기본 경로(pet-main loadDefaultHub → pet-hub.js)로 만든다 — 패키지(asar) 안의 허브 모듈이 실제로 읽히는지 본다.
+    // 주소가 비어 있어 네트워크에는 나가지 않는다.
     log: (message) => console.log(message),
     ...pageOptions,
   });
@@ -125,7 +126,7 @@ async function run({ app, out, page, activate = false }) {
       || glass.y + glass.height === wa.y + wa.height - G.SAFE_INSET, 'quick panel vertically centred on pet', glass);
     check(!w.perch.isVisible() && w.pet.isVisible(), 'quick tasks: no perch, pet stays');
 
-    // 다리: 허용 채널, 거절, Node 없음, 허브 없음 = not-configured.
+    // 다리: 허용 채널, 거절, Node 없음, 허브 주소 없음 = not-configured(허브 모델이 답한다: 'hub-url-missing').
     const pageUrl = w.panel.webContents.getURL();
     if (pageUrl.startsWith('file:')) {
       const probe = await w.panel.webContents.executeJavaScript(`(async () => {
@@ -150,6 +151,7 @@ async function run({ app, out, page, activate = false }) {
       check(probe.bridge && probe.keys === 'invoke,on', 'bridge keys', probe);
       check(probe.character === 'silver' && probe.characters === 9, 'default character silver', probe);
       check(probe.hubStatus === 'not-configured' && probe.tasks.kind === 'not-configured', 'no hub → not-configured', probe);
+      check(probe.tasks.error === 'hub-url-missing', 'hub model loaded (pet-hub.js answered, not the no-hub fallback)', probe);
       check(probe.rejected && probe.badEvent, 'unknown channels rejected', probe);
       check(probe.store.ok && probe.back === '스모크' && probe.denied.ok === false, 'store allowlist', probe);
       check(probe.hub.ok === false && probe.hub.reason === 'no-hub' && opened.includes('settings'), 'open-hub without hub → settings', probe);
