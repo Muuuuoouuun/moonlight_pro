@@ -32,6 +32,8 @@
       "widget-preload.js",
       "pet/**",
       "!pet/**/*.test.js",
+      "!pet/**/test-support/**",
+      "!pet/renderer/README.md",
       "app.config.json",
       "settings/**",
       "package.json",
@@ -39,6 +41,11 @@
         "from": "../hub/public",
         "to": "assets",
         "filter": ["icon-192.png"]
+      },
+      {
+        "from": "../hub/public/fonts",
+        "to": "pet/fonts",
+        "filter": ["SUIT-Variable.woff2", "JetBrainsMono-Variable.woff2"]
       }
     ],
     "win": {

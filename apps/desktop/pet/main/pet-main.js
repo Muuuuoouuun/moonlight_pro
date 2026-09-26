@@ -25,6 +25,7 @@ const BLUR_GRACE_MS = 400; // 패널을 띄우는 순간의 포커스 흔들림�
 const CLICK_DEDUPE_MS = 600; // 펫 클릭을 렌더러가 set-presentation으로 한 번 더 보내도 두 번 처리하지 않는다
 const FOCUS_TICK_MS = 500;
 const REFIT_DELAY_MS = 200;
+const GESTURE_STALE_MS = 15000; // 누른 채 이만큼 신호가 없으면 잃은 포인터로 보고 취소
 
 // 시스템 접근성 설정 → prefs. Electron 버전에 따라 없는 값은 false.
 function readPrefs() {
@@ -41,13 +42,12 @@ function readPrefs() {
   };
 }
 
-// 허브 패키지 모듈(pet/main/pet-hub-client.js)이 있으면 쓴다. 없으면 null(허브 채널은 not-configured).
+// 허브 모델은 pet-hub.js 하나다: createPetHub(ctx) → hub. 불러오지 못하면 null(허브 채널은 not-configured).
 function loadDefaultHub(ctx, log) {
   let mod;
   try {
-    mod = require('./pet-hub-client');
+    mod = require('./pet-hub');
   } catch (error) {
-    if (error && error.code === 'MODULE_NOT_FOUND' && String(error.message).includes('pet-hub-client')) return null;
     log(`pet:hub load failed ${error && error.message}`);
     return null;
   }
@@ -82,7 +82,22 @@ function install(options = {}) {
     for (const win of alive) if (!win.isDestroyed()) win.webContents.send(event, payload);
   };
   const assetUrl = (name) => pathToFileURL(path.join(assetsDir, name)).href;
-  const state = createPetState({ store, assetUrl, hubUrl: getHubUrl(), onChange: (snapshot) => broadcast('pet:state-changed', snapshot) });
+  let hub = null; // 허브 모델(pet-hub.js createPetHub) — 아래 '허브'에서 만든다
+  // 대화 화면(Council 모드가 열린 패널)을 떠나면 허브에 알려 새 답을 알림으로 돌린다(계약 채널 없이 셸이 부른다).
+  let chatWasVisible = false;
+  function onStateChange(snapshot) {
+    broadcast('pet:state-changed', snapshot);
+    const chatVisible = Boolean(snapshot.panelOpen && snapshot.mode === 'council');
+    if (chatWasVisible && !chatVisible && hub && typeof hub.chatLeave === 'function') {
+      try {
+        hub.chatLeave();
+      } catch (error) {
+        log(`pet:hub chatLeave failed ${error && error.message}`);
+      }
+    }
+    chatWasVisible = chatVisible;
+  }
+  const state = createPetState({ store, assetUrl, hubUrl: getHubUrl(), onChange: onStateChange });
 
   let quitting = false;
   const factory = createWindowFactory({ pagesDir: options.pagesDir, pageFile: options.pageFile, openExternal, log });
@@ -184,6 +199,8 @@ function install(options = {}) {
   // ── 패널: 빠른 패널·지속 위젯·접기 ─────────────────────────────────────
   function openQuick() {
     if (focusRunning()) return state.get();
+    // 지속 위젯에서 빠른 패널로: 먼저 위젯을 접어 펫을 위젯 위 끝에 맞춘 뒤(Mac alignPet) 그 자리에서 연다.
+    if (state.panelOpen && state.presentation === 'widget') collapse({ resume: false });
     bubbles.dismiss();
     contentHeight = null;
     perched = G.isPerched({ presentation: 'quick', mode: state.mode });
@@ -226,6 +243,7 @@ function install(options = {}) {
     state.patch({ panelOpen: false, pinned: false, presentation: 'quick', perched: false });
     panel.hide();
     perch.hide();
+    cancelGesture('panel'); // 숨긴 창에서는 pointerup 이 오지 않는다
     setWash(false);
     syncPet();
     if (resume) bubbles.pump();
@@ -319,9 +337,25 @@ function install(options = {}) {
   }
 
   const gestures = { pet: createPointerGesture(), panel: createPointerGesture() };
+  // 누른 채 신호가 끊기면(창이 사라짐·pointerup 유실) 워시가 남고 다음 누름이 옛 제스처에 섞인다.
+  // 신호가 GESTURE_STALE_MS 동안 없으면 그 제스처를 클릭 없이 취소한다.
+  const gestureWatch = { pet: null, panel: null };
+  function cancelGesture(from) {
+    clearTimeout(gestureWatch[from]);
+    gestureWatch[from] = null;
+    const actions = gestures[from].cancel();
+    if (actions.some((a) => a.type === 'drag-end')) savePosition();
+    if (!gestures.pet.isDown && !gestures.panel.isDown) setWash(false);
+  }
+  function watchGesture(from) {
+    clearTimeout(gestureWatch[from]);
+    gestureWatch[from] = gestures[from].isDown ? setTimeout(() => cancelGesture(from), GESTURE_STALE_MS) : null;
+  }
   function onPointer(surface, channel, payload) {
     const from = surface === 'pet' ? 'pet' : 'panel';
-    for (const action of applyPointerSignal(gestures[from], channel, payload)) {
+    const actions = applyPointerSignal(gestures[from], channel, payload);
+    watchGesture(from);
+    for (const action of actions) {
       if (action.type === 'press' || action.type === 'drag-begin') setWash(true);
       else if (action.type === 'release') setWash(false);
       else if (action.type === 'drag-move') {
@@ -412,8 +446,10 @@ function install(options = {}) {
         if (!quitting && focusRunning()) event.preventDefault(); // 중지는 확인을 거친다
       });
       win.on('blur', () => escHold.cancel());
-      win.webContents.on('before-input-event', (event, input) => {
-        if (escHoldInput(escHold, input)) event.preventDefault();
+      // Esc 길이는 메인이 잰다. 키는 페이지에도 그대로 간다 — 페이지는 누르는 동안 진행선을 그리고,
+      // 확인이 떠 있을 때 Esc 로 그 확인을 닫는다(메인이 막으면 페이지가 Esc 를 영영 받지 못한다).
+      win.webContents.on('before-input-event', (_event, input) => {
+        escHoldInput(escHold, input);
       });
       setBoundsExact(win, display.bounds);
       if (primary && activate) {
@@ -434,6 +470,7 @@ function install(options = {}) {
     if (minutes === null) return envelope('invalid', null, 'minutes');
     bubbles.dismiss();
     collapse({ resume: false });
+    cancelGesture('pet');
     focusEndsAt = Date.now() + minutes * 60000;
     state.patch({ focus: { running: true, minutes, totalSec: minutes * 60, remainingSec: minutes * 60, confirmStop: false } });
     syncPet();
@@ -483,7 +520,6 @@ function install(options = {}) {
     contract: C,
     log,
   });
-  let hub = null;
   if (options.hub === undefined) hub = loadDefaultHub(hubContext, log);
   else if (typeof options.hub === 'function') hub = options.hub(hubContext) || null;
   else hub = options.hub || null;
@@ -496,17 +532,25 @@ function install(options = {}) {
   }
   const callHub = createHubBridge(() => hub);
   const initialHubStatus = () => (getHubUrl() && hub ? 'unknown' : 'not-configured');
-  state.patch({ hubStatus: initialHubStatus() }, { silent: true });
+  // 연결 상태의 정본은 허브 모델이다(세션 확인·폴링 결과). 모델이 상태를 내놓지 않으면 봉투로 짐작한다.
+  const hubModelStatus = () => (hub && typeof hub.status === 'string' ? hub.status : null);
+  state.patch({ hubStatus: hubModelStatus() || initialHubStatus() }, { silent: true });
 
+  // 설정 저장마다 불린다(main.js). 주소가 그대로면 상태를 'unknown'으로 되돌리지 않는다 — 허브가 확인 뒤 상태를 다시 알린다.
   function hubUrlChanged() {
-    state.patch({ hubUrl: getHubUrl(), hubStatus: initialHubStatus() });
+    const url = getHubUrl();
+    const changed = url !== state.get().hubUrl;
+    state.patch(changed ? { hubUrl: url, hubStatus: initialHubStatus() } : { hubUrl: url });
     if (hub && typeof hub.hubUrlChanged === 'function') {
       try {
-        hub.hubUrlChanged(getHubUrl());
+        const done = hub.hubUrlChanged(url);
+        if (done && typeof done.catch === 'function') done.catch((error) => log(`pet:hub url change failed ${error && error.message}`));
+        return done;
       } catch (error) {
         log(`pet:hub url change failed ${error && error.message}`);
       }
     }
+    return Promise.resolve();
   }
 
   function openHub(target) {
@@ -542,8 +586,19 @@ function install(options = {}) {
       if (p.presentation === 'quick') return state.panelOpen && state.presentation === 'quick' ? state.get() : openQuick();
       return state.get();
     },
-    'pet:collapse': () => collapse(),
-    'pet:open-hub': (p) => openHub(p.path),
+    // 말풍선의 닫기(X)는 그 말풍선만 내린다(읽음 아님) — 패널 접기와 다르다. 보낸 창(surface)으로 가른다.
+    'pet:collapse': (_p, surface) => {
+      if (surface === 'bubble') {
+        bubbles.dismiss();
+        return state.get();
+      }
+      return collapse();
+    },
+    'pet:open-hub': (p, surface) => {
+      const result = openHub(p.path);
+      if (surface === 'bubble' && result.ok) bubbles.dismiss(); // 말풍선에서 연 알림은 메인 창으로 넘어갔다
+      return result;
+    },
     'pet:open-external': (p) => ({ ok: openExternal(p.url) }),
     'pet:drag': (p, surface) => onPointer(surface, 'pet:drag', p),
     'pet:press': (p, surface) => onPointer(surface, 'pet:press', p),
@@ -562,15 +617,27 @@ function install(options = {}) {
     },
     'pet:focus-start': (p) => startFocus(p.minutes),
     'pet:focus-stop': () => stopFocus(),
-    'pet:focus-state': () => focusEnvelope(),
+    // 읽기. {dismissConfirm:true} 면 떠 있던 중지 확인을 거둔다('계속 집중'·확인 중 Esc) — 다음 상태 방송에 다시 뜨지 않게.
+    'pet:focus-state': (p) => {
+      if (p.dismissConfirm === true && state.focus.confirmStop) state.patch({ focus: { confirmStop: false } });
+      return focusEnvelope();
+    },
   };
   for (const channel of HUB_CHANNELS) {
     handlers[channel] = async (p, surface) => {
       const result = await callHub(channel, p, { surface });
-      const status = statusFromEnvelope(result);
+      const status = hubModelStatus() || statusFromEnvelope(result, channel);
       if (status) state.setHubStatus(status);
+      if (channel === 'pet:council-handoff') return openHandoff(result);
       return result;
     };
+  }
+  // Council 안건: 허브 모델이 만든 허브 상대 경로(조각 '#moonlight-council=…' 포함)를 메인 창에서 연다. AI 실행은 웹에서 누를 때만.
+  function openHandoff(result) {
+    if (result.kind !== 'live' || !result.data || typeof result.data.path !== 'string') return result;
+    const opened = openHub(result.data.path);
+    if (opened.ok) return { ...result, data: { ...result.data, opened: true } };
+    return envelope('error', { ...result.data, opened: false }, opened.reason === 'no-hub' ? 'hub-url-missing' : 'rejected-url');
   }
   const missing = C.PET_INVOKE.filter((channel) => !handlers[channel]);
   if (missing.length) throw new Error(`pet-main: no handler for ${missing.join(', ')}`);
@@ -610,6 +677,8 @@ function install(options = {}) {
       buildFocusWindows();
       return;
     }
+    // 위젯이 떠 있으면 펫은 숨어 있고 옛 자리에 있다 — 먼저 위젯 위 끝에 맞춘 뒤 다시 잰다(위젯이 제자리에 남는다).
+    if (state.panelOpen && state.presentation === 'widget' && companion) placePet(G.petAlignedToCompanion(companion, workArea()));
     placePet(G.resolvePetBounds({ x: petBounds.x, y: petBounds.y }, displays(), primaryDisplay()));
     const wa = workArea();
     if (state.panelOpen) {
@@ -635,8 +704,16 @@ function install(options = {}) {
   app.on('before-quit', onBeforeQuit);
 
   // 첫 화면: 펫 페이지가 그려지면 대기 얼굴을 띄운다.
+  // 창이 다 그려진 뒤에 허브 폴링을 켠다 — 첫 새 알림이 아직 불러오지 않은 말풍선 페이지로 가지 않게.
   const ready = Promise.all([pet.petLoaded, panel.petLoaded, perch.petLoaded, bubble.petLoaded]).then(() => {
     if (!pet.isDestroyed()) syncPet();
+    if (hub && typeof hub.startPolling === 'function' && !quitting) {
+      try {
+        hub.startPolling();
+      } catch (error) {
+        log(`pet:hub polling failed ${error && error.message}`);
+      }
+    }
     return true;
   });
 
@@ -649,6 +726,8 @@ function install(options = {}) {
     if (options.registerShortcut !== false) globalShortcut.unregister(PET_QUICK_ACCELERATOR);
     clearInterval(focusTimer);
     clearTimeout(refitTimer);
+    clearTimeout(gestureWatch.pet);
+    clearTimeout(gestureWatch.panel);
     escHold.cancel();
     bubbles.dismiss({ gap: false });
     if (hub && typeof hub.dispose === 'function') {
@@ -683,6 +762,7 @@ function install(options = {}) {
     trayItems: () => petTrayItems({ toggleQuick, showWidget, toggleBubble, openMode, openHub }),
     setPetHidden(hidden) {
       petHidden = Boolean(hidden);
+      if (petHidden) cancelGesture('pet');
       syncPet();
     },
     windows: {

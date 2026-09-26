@@ -1,14 +1,17 @@
 'use strict';
 // 펫 로컬 저장 — userData/pet-store.json 하나에 키별 JSON 값을 둔다(Mac UserDefaults 이름 그대로).
 // 쓰기는 모아서(기본 150ms) 임시 파일 → 이름 바꾸기로 원자적으로 남기고, 종료 전에 flush()한다.
-// 허브 패키지(pet-hub-client)도 이 모듈을 이름으로 가져다 쓴다: createPetStore(file) → { get, set, … }.
+// 한 파일에는 한 인스턴스만 — 같은 경로로 다시 만들면 같은 객체를 돌려준다(두 메모리 사본이 서로의 쓰기를 덮지 않게).
+// 허브 모델(pet-hub)은 셸이 넘기는 ctx.store 를 쓴다.
 const fs = require('node:fs');
 const path = require('node:path');
 
 const STORE_FILE = 'pet-store.json';
 const MAX_VALUE_BYTES = 4 * 1024 * 1024; // 알림 전달 기록(noticesKept 1000건)도 넉넉히 담는다
 
-// 렌더러가 pet:store-get/set으로 만질 수 있는 키. 정확히 같은 이름 또는 origin이 붙는 접두사.
+// 렌더러가 pet:store-get/set으로 만질 수 있는 키(정확히 같은 이름만).
+// origin이 붙는 허브 키(petHub.pending.v1.<origin> 보류 명령, petNotices.delivery.v1.<origin> 알림 전달 기록)는
+// 메인 프로세스의 허브 모델만 쓴다 — 렌더러가 쓰면 보류 명령이 주입되거나 메모리 사본과 어긋난다.
 const STORE_KEYS = Object.freeze([
   'petPreview.character',
   'petPreview.memo',
@@ -19,13 +22,12 @@ const STORE_KEYS = Object.freeze([
   'petCouncil.source',
   'pet.position',
 ]);
-const STORE_KEY_PREFIXES = Object.freeze(['petHub.pending.v1.', 'petNotices.delivery.v1.']);
+const MAIN_ONLY_PREFIXES = Object.freeze(['petHub.pending.v1.', 'petNotices.delivery.v1.']);
 
 function isAllowedStoreKey(key) {
   if (typeof key !== 'string' || key.length === 0 || key.length > 300) return false;
   if (/[\u0000-\u001f\u007f]/.test(key)) return false;
-  if (STORE_KEYS.includes(key)) return true;
-  return STORE_KEY_PREFIXES.some((prefix) => key.startsWith(prefix) && key.length > prefix.length);
+  return STORE_KEYS.includes(key);
 }
 
 // 값은 JSON으로 왕복할 수 있어야 한다. undefined·함수·순환 참조·너무 큰 값은 거절한다.
@@ -51,7 +53,18 @@ function readFileSafe(file) {
   }
 }
 
+const instances = new Map();
+
 function createPetStore(file, options = {}) {
+  const resolved = path.resolve(file);
+  const existing = instances.get(resolved.toLowerCase());
+  if (existing) return existing;
+  const store = openPetStore(resolved, options);
+  instances.set(resolved.toLowerCase(), store);
+  return store;
+}
+
+function openPetStore(file, options = {}) {
   const delayMs = Number.isFinite(options.delayMs) ? options.delayMs : 150;
   const data = readFileSafe(file);
   let timer = null;
@@ -117,4 +130,4 @@ function createPetStore(file, options = {}) {
   };
 }
 
-module.exports = { STORE_FILE, STORE_KEYS, STORE_KEY_PREFIXES, MAX_VALUE_BYTES, isAllowedStoreKey, encodeValue, createPetStore };
+module.exports = { STORE_FILE, STORE_KEYS, MAIN_ONLY_PREFIXES, MAX_VALUE_BYTES, isAllowedStoreKey, encodeValue, createPetStore };

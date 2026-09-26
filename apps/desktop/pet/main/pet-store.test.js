@@ -8,13 +8,12 @@ const { createPetStore, isAllowedStoreKey, STORE_FILE } = require('./pet-store')
 
 const tempFile = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pet-store-')), STORE_FILE);
 
-test('키 허용 목록: Mac UserDefaults 이름과 origin 접두사만', () => {
+test('키 허용 목록: Mac UserDefaults 이름만 — origin 이 붙는 허브 키는 메인 전용', () => {
   for (const key of ['petPreview.character', 'petPreview.memo', 'petPreview.capturedMemos', 'petPreview.taskDraft',
-    'petNotices.banners', 'petCouncil.draft', 'petCouncil.source', 'pet.position',
-    'petHub.pending.v1.https://hub.example.com', 'petNotices.delivery.v1.http://127.0.0.1:3000']) {
+    'petNotices.banners', 'petCouncil.draft', 'petCouncil.source', 'pet.position']) {
     assert.equal(isAllowedStoreKey(key), true, key);
   }
-  for (const key of ['', 'petHub.pending.v1.', 'other', '__proto__', 'petPreview.characterX', 'pet.position\n', 42, null]) {
+  for (const key of ['', 'petHub.pending.v1.', 'petHub.pending.v1.https://hub.example.com', 'petNotices.delivery.v1.http://127.0.0.1:3000', 'other', '__proto__', 'petPreview.characterX', 'pet.position\n', 42, null]) {
     assert.equal(isAllowedStoreKey(key), false, String(key));
   }
 });
@@ -61,4 +60,16 @@ test('깨진 파일은 빈 저장소로 연다', () => {
   assert.deepEqual(createPetStore(file).keys(), []);
   fs.writeFileSync(file, '[1,2]');
   assert.deepEqual(createPetStore(file).keys(), []);
+});
+
+test('한 파일에는 한 인스턴스 — 두 번 만들어도 같은 메모리 사본을 쓴다', () => {
+  const file = tempFile();
+  const a = createPetStore(file, { delayMs: 0 });
+  const b = createPetStore(path.join(path.dirname(file), '.', STORE_FILE));
+  assert.equal(a, b);
+  a.set('petPreview.memo', '하나');
+  b.set('petCouncil.draft', '둘');
+  const onDisk = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(onDisk['petPreview.memo'], '하나');
+  assert.equal(onDisk['petCouncil.draft'], '둘');
 });

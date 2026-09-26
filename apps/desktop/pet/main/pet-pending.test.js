@@ -234,7 +234,7 @@ test('origin 마다 따로 보관하고, 모양이 틀린 저장값은 버린다
   const two = await open(api, store, 'https://two.test');
   assert.equal(two.summary().hasPendingTask, false);
   assert.deepEqual(sanitizePending({ task: { id: 'nope', title: 'x' }, memo: { action: 'drop' }, memoConflict: 'yes', explicitConflicts: ['nope', 7] }),
-    { task: null, memo: null, memoRole: null, memoRecovers: null, savedMemo: null, captureConflict: false, explicitConflicts: [] });
+    { task: null, memo: null, memoRole: null, memoRecovers: null, savedMemo: null, captureConflict: false, captureConflictId: null, explicitConflicts: [] });
   // 이전 형식(memoConflict + memoConflictId): 캡처 메모 id 면 캡처 충돌, 다른 id 면 명시 충돌로 옮긴다.
   const a = randomUUID();
   const b = randomUUID();

@@ -47,6 +47,10 @@ test('봉투 → 허브 상태', () => {
   assert.equal(B.statusFromEnvelope({ kind: 'partial' }), 'connected');
   assert.equal(B.statusFromEnvelope({ kind: 'not-configured' }), 'not-configured');
   assert.equal(B.statusFromEnvelope({ kind: 'error' }), null);
+  // 세션 확인은 성공 봉투여도 익명이면 로그인 필요 — '연결됨'을 거치지 않는다.
+  assert.equal(B.statusFromEnvelope({ kind: 'live', data: { status: 'anonymous', configured: true } }, 'pet:hub-session'), 'unauthorized');
+  assert.equal(B.statusFromEnvelope({ kind: 'live', data: { status: 'authenticated', configured: true } }, 'pet:hub-session'), 'connected');
+  assert.equal(B.statusFromEnvelope({ kind: 'live', data: { status: 'anonymous', configured: false } }, 'pet:hub-session'), 'not-configured');
 });
 
 test('허브 모듈 모양: 팩토리·함수·객체', () => {

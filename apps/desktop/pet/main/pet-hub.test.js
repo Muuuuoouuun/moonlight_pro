@@ -636,11 +636,11 @@ test('실제 http: 명시 편집 충돌은 그 메모만 막고 journal-read 로
   }
 });
 
-test('실제 http: 보고 있던 대화라도 office 모드를 떠나면(또는 leave) 답변은 reply 알림이 된다', async () => {
+test('실제 http: 보고 있던 대화라도 council 모드를 떠나면(또는 leave) 답변은 reply 알림이 된다', async () => {
   const double = await startHubDouble();
   try {
-    const shellState = { mode: 'office', panelOpen: true };
-    const { hub, events } = hubFor(double, { isChatVisible: () => shellState.mode === 'office' && shellState.panelOpen });
+    const shellState = { mode: 'council', panelOpen: true };
+    const { hub, events } = hubFor(double, { isChatVisible: () => shellState.mode === 'council' && shellState.panelOpen });
     await hub.session();
     const who = { ownerId: 'glaceon', scope: 'personal' };
     await hub.chatSession(who);
@@ -649,7 +649,7 @@ test('실제 http: 보고 있던 대화라도 office 모드를 떠나면(또는 
     shellState.mode = 'tasks'; // pet:set-mode 로 할 일 모드로 옮김 — 셸은 chatLeave 를 부르지 않았다
     await hub.chatSend({ ...who, message: '다른 모드로 옮긴 뒤' });
     assert.equal(hub.activity.list().notices.filter((n) => n.kind === 'reply').length, 1);
-    shellState.mode = 'office';
+    shellState.mode = 'council';
     await hub.chatSession(who);
     const left = await hub.chatSession({ leave: true });
     assert.equal(left.kind, 'live');
@@ -704,12 +704,12 @@ test('셸 hubContext 로 만들고 invoke 로 부른다 — 쿠키·이벤트·�
       getState: () => ({ ...shellState }),
       setInterval: (fn, ms) => { intervals.push(ms); return () => {}; },
     };
-    // pet-main 의 loadDefaultHub 는 require('./pet-hub-client').createPetHub(ctx) 를 부른다.
-    const clientModule = require('./pet-hub-client');
-    assert.equal(typeof clientModule.createPetHub, 'function');
-    const hub = clientModule.createPetHub(ctx);
+    // pet-main 의 loadDefaultHub 는 require('./pet-hub') 의 createPetHub(ctx) → attach(ctx), 창이 뜬 뒤 startPolling().
+    const hub = createPetHub(ctx);
     hub.attach(ctx);
-    assert.deepEqual(intervals, [60000], 'attach 가 60초 폴링을 시작한다');
+    assert.deepEqual(intervals, [], 'attach 는 폴링을 켜지 않는다');
+    hub.startPolling();
+    assert.deepEqual(intervals, [60000], 'startPolling 이 60초 폴링을 켠다');
     // 셸 handler: callHub → 봉투로 상태(live=connected)를 정한다. 익명 세션이면 허브가 뒤이어 unauthorized 로 바로잡는다.
     const session = await hub.invoke('pet:hub-session', {});
     assert.equal(session.data.status, 'anonymous');
@@ -730,7 +730,7 @@ test('셸 hubContext 로 만들고 invoke 로 부른다 — 쿠키·이벤트·�
     await hub.invoke('pet:chat-session', who);
     await hub.invoke('pet:chat-send', { ...who, message: '닫힌 패널' });
     assert.equal(hub.activity.list().notices.filter((n) => n.kind === 'reply').length, 1);
-    shellState.mode = 'office';
+    shellState.mode = 'council';
     shellState.panelOpen = true;
     await hub.invoke('pet:chat-session', who);
     await hub.invoke('pet:chat-send', { ...who, message: '열린 대화' });
@@ -753,4 +753,149 @@ test('invoke 채널표: 계약의 허브 채널 전부가 메서드로 이어진
   const { PET_INVOKE } = require('../shared/contract');
   const hubChannels = PET_INVOKE.filter((c) => /^pet:(hub-session|tasks-|journal-|calendar-|notices-|chat-|council-)/.test(c));
   assert.deepEqual(hubChannels.map(hubChannelMethod).sort(), [...CHANNEL_METHODS].sort());
+});
+
+// 셸 ctx 로 만든 허브 — pet-main 이 넘기는 모양 그대로(emit·store·getHubUrl·session·getState).
+function shellContext(double, jar, extra = {}) {
+  const emitted = [];
+  const shellState = { mode: 'tasks', panelOpen: false, hubStatus: 'unknown' };
+  const ctx = {
+    emit: (name, payload) => {
+      emitted.push([name, payload]);
+      if (name === 'pet:hub-status') shellState.hubStatus = payload.status;
+      return true;
+    },
+    store: memoryStore(),
+    getHubUrl: () => double.origin,
+    session: fakeSession(jar),
+    openMainUrl: () => {},
+    getState: () => ({ ...shellState }),
+    setInterval: () => () => {},
+    // 말풍선 사이 1초 간격을 마이크로태스크로 줄인다(순서는 같다).
+    schedule: (fn) => {
+      let live = true;
+      queueMicrotask(() => { if (live) fn(); });
+      return () => { live = false; };
+    },
+    ...extra,
+  };
+  return { ctx, emitted, shellState };
+}
+
+const signedIn = (double) => ({ origin: double.origin, value: double.state.cookie.split('=')[1] });
+
+test('셸 ctx: 새 알림은 넘겨주기 — dismissBanner 를 부르지 않아도 새 문의마다 말풍선이 하나씩 간다', async () => {
+  const double = await startHubDouble();
+  try {
+    const { ctx, emitted } = shellContext(double, signedIn(double));
+    const hub = createPetHub(ctx);
+    hub.attach(ctx);
+    double.state.inquiries = [inquiryRow()];
+    double.state.unreadCount = 1;
+    await hub.tick(); // 첫 연결: 기존 미확인은 조용히
+    assert.equal(emitted.filter(([n]) => n === 'pet:notice').length, 0);
+    const fresh = [];
+    for (let i = 0; i < 4; i += 1) {
+      const id = randomUUID();
+      fresh.push(`inquiry:${id}:3`);
+      double.state.inquiries = [inquiryRow(id), ...double.state.inquiries].slice(0, 25);
+      double.state.unreadCount = double.state.inquiries.length;
+      await hub.tick();
+      await settle();
+    }
+    const bubbled = emitted.filter(([n]) => n === 'pet:notice').map(([, p]) => p.notice.id);
+    assert.deepEqual(bubbled.sort(), fresh.sort(), '새 문의 넷이 각각 한 번씩');
+    assert.equal(hub.activity.list().banner, null, '허브는 말풍선을 쥐고 있지 않다(셸 줄이 가진다)');
+    hub.dispose();
+  } finally {
+    double.server.close();
+  }
+});
+
+test('셸 ctx: 다가오는 일정 알림은 앞 문의 말풍선이 있어도 막히지 않는다', async () => {
+  const double = await startHubDouble();
+  try {
+    const { ctx, emitted } = shellContext(double, signedIn(double));
+    const hub = createPetHub(ctx);
+    hub.attach(ctx);
+    await hub.tick();
+    double.state.inquiries = [inquiryRow()];
+    double.state.unreadCount = 1;
+    const soon = new Date(Date.now() + 5 * 60000);
+    double.state.events = [{ id: 'evt-soon', title: '고객 통화', start: soon.toISOString(), end: new Date(soon.getTime() + 30 * 60000).toISOString(), allDay: false, source: 'google' }];
+    await hub.tick();
+    await settle();
+    const kinds = emitted.filter(([n]) => n === 'pet:notice').map(([, p]) => p.notice.kind).sort();
+    assert.deepEqual(kinds, ['event', 'inquiry']);
+    hub.dispose();
+  } finally {
+    double.server.close();
+  }
+});
+
+test('셸 ctx: 같은 주소로 설정을 다시 저장해도 연결 상태를 다시 알린다(unknown 에 멈추지 않는다)', async () => {
+  const double = await startHubDouble();
+  try {
+    const { ctx, emitted, shellState } = shellContext(double, signedIn(double));
+    const hub = createPetHub(ctx);
+    hub.attach(ctx);
+    await hub.tick();
+    assert.equal(hub.status, 'connected');
+    shellState.hubStatus = 'unknown'; // 셸 hubUrlChanged 가 저장 순간 하는 일
+    const before = emitted.length;
+    await hub.hubUrlChanged(double.origin);
+    assert.equal(shellState.hubStatus, 'connected');
+    assert.ok(emitted.slice(before).some(([n, p]) => n === 'pet:hub-status' && p.status === 'connected'));
+    hub.dispose();
+  } finally {
+    double.server.close();
+  }
+});
+
+test('셸 ctx: 대화 화면은 Council 모드 — Office 카드 모드로 옮기면 답이 reply 알림이 된다', async () => {
+  const double = await startHubDouble();
+  try {
+    const { ctx, shellState } = shellContext(double, signedIn(double));
+    const hub = createPetHub(ctx);
+    hub.attach(ctx);
+    const who = { ownerId: 'glaceon', scope: 'all' };
+    Object.assign(shellState, { mode: 'council', panelOpen: true });
+    await hub.invoke('pet:chat-session', who);
+    await hub.invoke('pet:chat-send', { ...who, message: 'Council 에서 보는 중' });
+    assert.equal(hub.activity.list().notices.filter((n) => n.kind === 'reply').length, 0);
+    shellState.mode = 'office';
+    await hub.invoke('pet:chat-send', { ...who, message: 'Office 카드로 옮긴 뒤' });
+    assert.equal(hub.activity.list().notices.filter((n) => n.kind === 'reply').length, 1);
+    hub.dispose();
+  } finally {
+    double.server.close();
+  }
+});
+
+test('실제 http: 새 캡처 메모가 첫 저장에서 부딪히면 캡처 충돌 — 다음 캡처는 막히고 새 항목 저장으로 풀린다', async () => {
+  const double = await startHubDouble();
+  try {
+    const { hub } = hubFor(double);
+    await hub.session();
+    const taken = randomUUID();
+    double.state.memos.set(taken, {
+      id: taken, body: '다른 곳에서 쓴 글', title: '', occurredAt: '2026-09-27T00:00:00Z', revision: 3, noteMeta: { kind: 'note', enhancement: '' }, contexts: [],
+    });
+    const first = await hub.journalSave({ body: '펫 메모', entryId: taken });
+    assert.equal(first.kind, 'conflict');
+    assert.equal(first.data.pending.captureConflict, true);
+    assert.equal(first.data.pending.memoConflictId, taken);
+    const blocked = await hub.journalSave({ body: '펫 메모' });
+    assert.equal(blocked.kind, 'conflict', '대상 없는 저장은 막힌다');
+    const read = await hub.journalRead({});
+    assert.equal(read.data.entry, null, '캡처 충돌 중 대상 없는 읽기는 요약과 같이 비어 있다');
+    const recovered = await hub.journalSave({ body: '펫 메모', asNew: true, entryId: taken });
+    assert.equal(recovered.kind, 'live');
+    assert.equal(recovered.data.role, 'capture');
+    assert.notEqual(recovered.data.entry.id, taken);
+    assert.equal(recovered.data.pending.captureConflict, false);
+    assert.equal(double.state.memos.get(taken).body, '다른 곳에서 쓴 글', '부딪힌 메모는 덮어쓰지 않는다');
+  } finally {
+    double.server.close();
+  }
 });

@@ -300,15 +300,9 @@ function parseSetCookie(header, url) {
   return expired ? { remove: true, name } : { remove: false, name, details };
 }
 
-// 셸(pet-main loadDefaultHub)은 이 모듈에서 createPetHub(ctx) 를 찾는다 — pet-hub 로 넘긴다(순환 require 를 피해 늦게 부른다).
-function createPetHub(ctx) {
-  return require('./pet-hub').createPetHub(ctx);
-}
-
 module.exports = {
   HubError, fail, okEnvelope, errorEnvelope,
   canonicalOrigin, resolveApiUrl, timeoutsFor, parseEnvelope,
   createHubClient, electronCookieBridge, parseSetCookie,
   OFFICE_CHAT_PATH,
-  createPetHub,
 };

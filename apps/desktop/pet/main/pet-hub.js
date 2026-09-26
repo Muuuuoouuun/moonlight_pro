@@ -124,14 +124,19 @@ function fromShellContext(input) {
     Object.assign(options, electronCookieBridge(options.session));
   }
   if (!options.onEvent && typeof options.emit === 'function') options.onEvent = options.emit;
-  if (!options.isChatVisible && typeof options.getState === 'function') {
-    const getState = options.getState;
-    options.isChatVisible = () => {
-      const state = getState();
-      return Boolean(state && state.mode === 'office' && state.panelOpen !== false);
-    };
-  }
+  if (!options.isChatVisible && typeof options.getState === 'function') options.isChatVisible = chatVisibleFrom(options.getState);
+  // 셸 ctx 로 만들면 말풍선 줄은 셸(pet-timing 말풍선 줄)이 가진다 — 허브는 알림을 넘기기만 하고 바로 다음 후보로 간다.
+  if (options.bannerHandoff === undefined && typeof options.emit === 'function') options.bannerHandoff = true;
   return options;
+}
+
+// 대화(담당 Office 에게 묻고 답 읽기)는 Council 모드 화면이다(renderer/modes/council.js). Office 모드는 허브로 가는 카드.
+const CHAT_MODE = 'council';
+function chatVisibleFrom(getState) {
+  return () => {
+    const state = getState();
+    return Boolean(state && state.mode === CHAT_MODE && state.panelOpen === true);
+  };
 }
 
 function createPetHub(input = {}) {
@@ -172,7 +177,11 @@ function createPetHub(input = {}) {
     } catch {
       allowed = false;
     }
-    if (allowed) emit('pet:notice', { notice });
+    if (allowed) {
+      emit('pet:notice', { notice });
+      // 넘겨주기: 셸이 8초 보이기·1초 간격을 맡는다. 허브가 이 말풍선을 계속 쥐고 있으면 다음 새 알림이 영영 뜨지 않는다.
+      if (options.bannerHandoff) queueMicrotask(() => activity.dismissBanner());
+    }
     return allowed;
   };
   activity.onChange = (snapshot) => {
@@ -281,16 +290,20 @@ function createPetHub(input = {}) {
     },
 
     // 'pet:journal-read' {entryId?} → { entry|null, pending } — entryId 가 없으면 이 펫이 마지막으로 저장한 메모.
+    // 읽을 메모가 없으면(확인된 캡처 메모 없음) Hub 에 묻지 않고 보류 요약만 준다 — 그 성공 봉투로 연결 상태를 바꾸지 않는다.
     journalRead(input) {
       const payload = payloadOf(input);
+      let asked = false;
       return run(async (c) => {
         const explicit = isUuid(payload.entryId);
-        const id = explicit ? payload.entryId : c.pending.savedMemoId();
+        // 대상 없는 읽기는 캡처 메모 — 캡처 충돌 중에는 요약(summary.savedMemoId)과 같이 비워 둔다.
+        const id = explicit ? payload.entryId : c.pending.summary().savedMemoId;
+        asked = Boolean(id);
         const entry = id ? await c.api.memo(id) : null;
         // 렌더러가 그 메모를 다시 읽었다 — 명시 편집 충돌 표시를 거둔다(다음 저장은 새 revision 으로 다시 확인된다).
         if (explicit && entry) c.pending.noteMemoRead(payload.entryId);
         return { data: { entry, pending: c.pending.summary() } };
-      });
+      }, (envelope) => (asked || envelope.kind !== 'live' ? statusFromEnvelope(envelope) : null));
     },
 
     // 'pet:journal-save' {body, requestId?, entryId?, expectedRevision?, title?, occurredAt?, asNew?, finish?}
@@ -495,21 +508,24 @@ function createPetHub(input = {}) {
       }
       return envelope;
     },
+    // 이벤트·대화 표시 여부를 셸 ctx 에서 다시 읽는다. 폴링은 셸이 창을 다 띄운 뒤 startPolling() 으로 따로 켠다.
     attach(ctx) {
       const context = ctx !== null && typeof ctx === 'object' ? ctx : {};
-      if (typeof context.emit === 'function') onEvent = context.emit;
-      if (typeof context.getState === 'function' && !options.isChatVisible) {
-        chatVisible = () => {
-          const state = context.getState();
-          return Boolean(state && state.mode === 'office' && state.panelOpen !== false);
-        };
+      if (typeof context.emit === 'function') {
+        onEvent = context.emit;
+        if (options.bannerHandoff === undefined) options.bannerHandoff = true;
       }
-      hub.startPolling();
+      if (typeof context.getState === 'function' && typeof input.isChatVisible !== 'function') chatVisible = chatVisibleFrom(context.getState);
     },
+    // 설정 저장마다 불린다(주소가 같아도). 같은 origin 이면 연결을 유지한 채 한 번 확인하고, 끝나면 지금 상태를
+    // 반드시 다시 알린다 — 셸이 저장 순간 상태를 'unknown' 으로 돌려 놓았어도 거기 멈춰 있지 않게.
+    // 돌려주는 Promise 는 그 확인까지 끝난 뒤 풀린다.
     hubUrlChanged(url) {
       const ready = connect(url);
-      ready.then(() => (conn ? hub.tick() : null)).catch(() => {});
-      return ready;
+      return ready
+        .then(() => (conn ? hub.tick() : null))
+        .catch(() => {})
+        .then(() => { emit('pet:hub-status', { status: hubStatus }); });
     },
     dispose() {
       hub.stopPolling();

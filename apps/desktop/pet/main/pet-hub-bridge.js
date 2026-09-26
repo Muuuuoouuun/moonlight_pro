@@ -29,9 +29,15 @@ function normalizeEnvelope(result) {
   );
 }
 
-// 봉투에서 읽히는 허브 상태(허브가 'pet:hub-status'를 따로 보내도 같은 결론이 된다).
-function statusFromEnvelope(result) {
+// 봉투에서 읽히는 허브 상태 — 허브 모델이 상태(hub.status)를 내놓지 않을 때만 쓰는 짐작이다.
+// 세션 확인은 성공 봉투여도 익명(anonymous)이면 로그인 필요, 운영자 로그인 미설정(configured:false)이면 not-configured.
+function statusFromEnvelope(result, channel) {
   if (!result) return null;
+  if (channel === 'pet:hub-session' && result.kind === 'live') {
+    const data = result.data || {};
+    if (data.configured === false) return 'not-configured';
+    return data.status === 'authenticated' ? 'connected' : 'unauthorized';
+  }
   if (result.kind === 'unauthorized') return 'unauthorized';
   if (result.kind === 'not-configured') return 'not-configured';
   if (result.kind === 'live' || result.kind === 'partial' || result.kind === 'conflict') return 'connected';

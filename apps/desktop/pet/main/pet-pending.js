@@ -23,7 +23,9 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 const MAX_EXPLICIT_CONFLICTS = 20;
 
 function emptyPending() {
-  return { task: null, memo: null, memoRole: null, memoRecovers: null, savedMemo: null, captureConflict: false, explicitConflicts: [] };
+  return {
+    task: null, memo: null, memoRole: null, memoRecovers: null, savedMemo: null, captureConflict: false, captureConflictId: null, explicitConflicts: [],
+  };
 }
 
 // 저장소에서 읽은 값은 신뢰하지 않는다 — 모양이 틀린 칸은 버린다.
@@ -56,7 +58,9 @@ function sanitizePending(value) {
     if (!legacyId || legacyId === savedId) captureConflict = true;
     else explicit.push(legacyId);
   }
-  state.captureConflict = captureConflict && Boolean(state.savedMemo);
+  const conflictId = isUuid(value.captureConflictId) ? value.captureConflictId.toLowerCase() : savedId;
+  state.captureConflict = captureConflict && Boolean(conflictId);
+  state.captureConflictId = state.captureConflict ? conflictId : null;
   state.explicitConflicts = [...new Set(explicit)].slice(-MAX_EXPLICIT_CONFLICTS);
   return state;
 }
@@ -94,7 +98,7 @@ function createPending({ api, store, origin, now = Date.now }) {
 
   function summary() {
     const capture = state.savedMemo && !state.captureConflict ? state.savedMemo : null;
-    const conflictIds = [...(state.captureConflict && state.savedMemo ? [state.savedMemo.id] : []), ...state.explicitConflicts];
+    const conflictIds = [...(state.captureConflict && state.captureConflictId ? [state.captureConflictId] : []), ...state.explicitConflicts];
     return {
       hasPendingTask: Boolean(state.task),
       pendingTaskTitle: state.task ? state.task.title : null,
@@ -105,7 +109,7 @@ function createPending({ api, store, origin, now = Date.now }) {
       memoConflict: conflictIds.length > 0,
       memoConflictId: conflictIds.length ? conflictIds[0] : null,
       memoConflictIds: conflictIds,
-      captureConflict: Boolean(state.captureConflict && state.savedMemo),
+      captureConflict: Boolean(state.captureConflict),
       // 캡처 메모(대상 없는 저장이 쓰는 곳). 캡처 충돌 중에는 숨긴다.
       savedMemoId: capture ? capture.id : null,
       savedMemoRevision: capture ? capture.revision : null,
@@ -186,8 +190,8 @@ function createPending({ api, store, origin, now = Date.now }) {
       role = state.memoRole || 'capture';
     } else if (asNew) {
       if (!validMemoBody(body)) throw fail('error', 'invalid-input');
-      role = explicitId && explicitId !== savedId ? 'explicit' : 'capture';
-      recovers = role === 'explicit' ? explicitId : savedId;
+      role = explicitId && explicitId !== savedId && explicitId !== state.captureConflictId ? 'explicit' : 'capture';
+      recovers = role === 'explicit' ? explicitId : savedId || state.captureConflictId;
     } else if (explicitId && hasExpected) {
       role = 'explicit';
       if (state.explicitConflicts.includes(explicitId)) throw fail('conflict', 'memo-conflict');
@@ -196,7 +200,7 @@ function createPending({ api, store, origin, now = Date.now }) {
       // 기존 메모를 고치려면 읽어 둔 revision 이 있어야 한다. 새 메모의 id 로 쓰는 경우는 캡처 메모가 없을 때만.
       if (explicitId && savedId && explicitId !== savedId) throw fail('error', 'invalid-input');
       role = 'capture';
-      if (state.captureConflict && state.savedMemo) throw fail('conflict', 'memo-conflict');
+      if (state.captureConflict) throw fail('conflict', 'memo-conflict');
       if (!validMemoBody(body)) throw fail('error', 'invalid-input');
     }
     savingMemo = true;
@@ -245,10 +249,12 @@ function createPending({ api, store, origin, now = Date.now }) {
       if (targetRole === 'capture') {
         state.savedMemo = saved;
         state.captureConflict = false;
+        state.captureConflictId = null;
       } else if (state.savedMemo && state.savedMemo.id.toLowerCase() === savedEntryId) {
         // 캡처 메모를 명시 편집으로 고쳤다 — 캡처 기록을 새 revision 으로 맞춘다(Hub 와 같아졌으니 캡처 충돌도 풀린다).
         state.savedMemo = saved;
         state.captureConflict = false;
+        state.captureConflictId = null;
       }
       clearExplicitConflict(savedEntryId);
       if (recovered) clearExplicitConflict(recovered);
@@ -261,7 +267,11 @@ function createPending({ api, store, origin, now = Date.now }) {
         state.memo = null;
         state.memoRole = null;
         state.memoRecovers = null;
-        if (targetRole === 'capture' && state.savedMemo && targetId === savedId) state.captureConflict = true;
+        if (targetRole === 'capture' && targetId && (!state.savedMemo || targetId === savedId)) {
+          // 캡처 대상(저장된 캡처 메모 또는 막 새로 만들던 캡처 메모)이 Hub 에서 부딪혔다 — 대상 없는 저장을 막는다(Mac 규칙).
+          state.captureConflict = true;
+          state.captureConflictId = targetId;
+        }
         else if (targetId) addExplicitConflict(targetId);
         persist();
       }
@@ -285,6 +295,7 @@ function createPending({ api, store, origin, now = Date.now }) {
     if (!entry || state.memo || !state.savedMemo || state.savedMemo.id !== entry.id || state.savedMemo.revision !== entry.revision) return false;
     state.savedMemo = null;
     state.captureConflict = false;
+        state.captureConflictId = null;
     persist();
     return true;
   }

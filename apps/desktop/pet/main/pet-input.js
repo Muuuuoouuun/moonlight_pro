@@ -4,7 +4,8 @@
 // 클릭 모델(Mac PetClickView): 한 번 클릭 → 빠른 패널을 바로 연다(두 번째 클릭을 기다리지 않는다),
 // 두 번 클릭 → 지속 위젯, 오른쪽 클릭 → 캐릭터 메뉴(렌더러가 pet:context-menu), 3px 넘게 움직이면 끌기(세로만).
 // 펫 렌더러는 포인터 신호만 보낸다 — pointerdown: pet:press {pressed:true} + pet:drag {phase:'begin', screenY},
-// pointermove: pet:drag {phase:'move', screenY}, pointerup: pet:drag {phase:'end'} + pet:press {pressed:false}.
+// pointermove: pet:drag {phase:'move', screenY}, pointerup: pet:drag {phase:'end'} + pet:press {pressed:false},
+// 포인터를 잃으면 pet:drag {phase:'cancel'} (그 뒤의 pet:press {pressed:false} 는 이미 뗀 제스처라 아무 일도 없다).
 // 순서가 섞여 와도 한 제스처로 묶고, 클릭·더블 클릭 판정은 메인이 한다.
 const { createDragTracker, DRAG_THRESHOLD } = require('./pet-geometry');
 
@@ -71,6 +72,8 @@ function applyPointerSignal(gesture, channel, payload) {
     if (p.phase === 'begin') return gesture.down(screenY);
     if (p.phase === 'move') return gesture.move(screenY);
     if (p.phase === 'end') return gesture.up();
+    // 렌더러가 포인터를 잃었다(pointercancel·lostpointercapture·창 blur) — 클릭으로 치지 않는다.
+    if (p.phase === 'cancel') return gesture.cancel();
   }
   return [];
 }
@@ -105,7 +108,8 @@ function createEscHold(options = {}) {
   };
 }
 
-// before-input-event 입력 → Esc 길게 누르기. 수정 키 없는 Escape만, 페이지로는 넘기지 않는다.
+// before-input-event 입력 → Esc 길게 누르기. 수정 키 없는 Escape만 잰다(결과: 이 입력을 쟀는가). 키는 막지 않는다 —
+// 페이지가 같은 Esc 로 진행선을 그리고 떠 있는 중지 확인을 닫는다.
 function escHoldInput(escHold, input) {
   if (!input || input.key !== 'Escape') return false;
   if (input.alt || input.control || input.meta || input.shift) return false;
