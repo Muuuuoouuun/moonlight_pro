@@ -173,3 +173,31 @@ The image-generation comparison `exec-88b6cea0-501f-4713-a65e-db411fe65abb.png` 
 The latest **lab-only** shader replaces the repeated point-space sinusoid along the rim with one broad normalized area-light footprint per side. Reflection length now scales with tall/wide geometry instead of repeating short colored patches as the perimeter grows. This changes the spatial distribution of the return, not bevel thickness, center opacity, text shadow, or character tint. Neutral three-background lab inspection confirms continuity, but the overall material gap remains visible. Existing user-entered lab calibration strings were restored after rebuild.
 
 Fresh full self-check passes: 6,484 prismatic pixels, peak 140/255; 541 calibration edge displacements; 5,646 desktop interior displacements; 938 polished lip pixels; unchanged highlight steps [152, 160, 165], crisp foreground at 1x/2x, accessibility bypass and interaction/memo checks. These are regression results, not a visual-quality score. The latest reflection-footprint change is not deployed to the capture app yet, intentionally preserving its freshly verified identity. No new nine-theme score is assigned. Last full provisional matrix remains 81.56 average / 78 minimum; goal remains unmet.
+
+## Neutral return review and white-background constraint — 2026-09-28
+
+Tested a smoothly varying convex highlight-transfer profile (`+1.25*dome` in the shoulder coefficient). GPU checks passed, but native screenshots still read as a gray face, merely slightly darker in the center. Rejected and removed this change. It does not appear in the final shader.
+
+Strengthened the existing neutral inner reflection and reduced spectral gain from 1.05 to 0.85. The 9pt optical section and 0.54pt outer glint are unchanged. This favors a second reflected light image over a colored outline. Inspected all nine pressed themes in the native three-background lab, then returned Sylveon to the untinted resting state. Inputs remain ephemeral and preserved. Full self-check passes: 6,417 prismatic pixels, peak 118/255; 472 analytic edge displacements; production desktop 5,646 interior displacements / 938 polished lip pixels. Highlight transfer, text, accessibility and interaction tests remain unchanged and passing.
+
+### Provisional visual matrix (lab, pressed theme)
+
+Scores are subjective inspection, not measured perceptual accuracy. Same weighting as prior rounds: rim 25, material 25, foreground 30, identity/integration 20. The modest improvement is concentrated in the neutral rim return; the central material limitation remains.
+
+| Theme | White | Mixed | Black | Remaining deduction |
+|---|---:|---:|---:|---|
+| 이브이 | 79 | 85 | 83 | White brown-gray looks flat; dark brown still resembles coating |
+| 샤미드 | 80 | 86 | 84 | Clear cobalt distinction; bright face is gray-blue, rear-text haze |
+| 쥬피썬더 | 79 | 84 | 83 | Cream color retained; dark material remains slightly muddy |
+| 부스터 | 79 | 84 | 83 | Warm red clear; broad tinted face still feels shallow |
+| 에브이 | 80 | 86 | 84 | Lilac distinct; pale face lacks transmitted depth |
+| 블래키 | 81 | 85 | 84 | Neutral restraint helps white; black material lacks optical volume |
+| 리피아 | 79 | 84 | 83 | Green distinct; coating impression remains on black |
+| 글레이시아 | 80 | 86 | 84 | Ice-blue differs from cobalt; flat bright face persists |
+| 님피아 | 80 | 85 | 83 | Pale pink and clear release preserved; dark pink haze remains |
+
+Average **82.70**, minimum **79**. Goal is not met; this is not a full live-desktop or physical-release matrix. Actual capture app remains the authorized a8820000 bundle. Latest lab shader is not deployed yet.
+
+Rechecked [Apple Materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials): Clear glass over bright backgrounds needs contrast treatment; Apple suggests a dimming layer, while Regular adapts luminosity/foreground. Also reviewed the [anuero/LiquidGlass README](https://github.com/anuero/LiquidGlass) for coupled surface-height/refraction and adaptive luminance concepts; no source copied or package installed, and its claims about Apple's exact profile are not independently verified.
+
+Asked the operator whether fixed white foreground may switch to dark gray **only on bright backgrounds**, because the present white-foreground constraint is what forces bright transmission toward gray. This is an exception to an explicit operator preference and is not implemented without an answer. The alternative is retaining white foreground with a visible brightness correction. The question remains pending at this checkpoint; no acceptance or changed requirement is inferred from silence.

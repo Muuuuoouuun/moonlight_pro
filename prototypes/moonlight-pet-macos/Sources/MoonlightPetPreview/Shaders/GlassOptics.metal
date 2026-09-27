@@ -119,7 +119,7 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     float along = dot(p/u.rect.zw,alongWeights)/max(.001,alongWeights.x+alongWeights.y);
     float sweep = .5+.5*cos((along-.32+u.light.x*.08)*M_PI_F);
     float spectralArc = corner + (1.0-corner)*(.08+.48*pow(sweep,4.0));
-    float3 prism = spectrum * (1.05*spectralArc*litArc*(1.0-t));
+    float3 prism = spectrum * (.85*spectralArc*litArc*(1.0-t));
     // A polished round section: bright outer glint, a broad soft shoulder,
     // then a weaker inner return. All three stay inside the existing 9pt lip.
     float outerReturn = reflectionBand(depth,.85*lipScale,sqrt(pow(.54*lipScale,2.0)+footprint))
@@ -131,7 +131,7 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     // while the primary glint retains its thin, stable silhouette.
     float innerReturn = reflectionBand(depth,(5.35+.65*corner+.45*sweep)*lipScale,
                                       sqrt(pow(.55*lipScale,2.0)+footprint))
-                        * (.20+.60*litArc) * (1.0-t);
+                        * (.25+1.05*litArc) * (1.0-t);
     // The polished shoulder rolls into the face: a low-energy reflection
     // behind the thin lip, localized to the light-facing arcs. A compact
     // support keeps every content-bearing center pixel transparent.
