@@ -227,7 +227,12 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     // Preserve black/midtones, a continuous slope at 0.5, and the same 0.67
     // white endpoint; this changes contrast distribution, not opacity.
     float high = max(0.0,peak-.5);
-    float transmitted = min(peak,.5)+high/(1.0+3.882353*high);
+    // The polished section transmits more highlight energy than the diffuse
+    // face. Vary only within the existing lip, before the first text inset.
+    // This creates a rounded optical section on white scenes without adding
+    // a gray/white fill to dark scenes or changing center readability.
+    float shoulderCompression = mix(3.882353,1.1,polish);
+    float transmitted = min(peak,.5)+high/(1.0+shoulderCompression*high);
     color *= transmitted/max(peak,.0001);
     // Blend into the unchanged native optical lip; no dark inner rectangle.
     float alpha = smoothstep(0.0, 2.5, depth);

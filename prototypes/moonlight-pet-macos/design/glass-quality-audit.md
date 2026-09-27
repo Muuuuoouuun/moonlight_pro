@@ -147,3 +147,9 @@ All nine pressed themes were visually inspected on all three backgrounds through
 | 님피아 | 79 | 84 | 82 | Pale pink and clear preview-off return; rear-text haze remains |
 
 Average 81.56, minimum 78. No case reaches the completion gate. Foreground remains sharp, but a brighter, coherent curved lip and convincing center depth still need work. The improved transfer preserves information; it does not by itself make a featureless white background look dimensional. The next material change should address the optical cross-section and its reflected/transmitted light balance, rather than increasing whole-panel opacity or darkening text rectangles.
+
+### Polished-section highlight transmission follow-up
+
+The bright-scene compression was also applied identically to the polished lip, despite its sharper transmission path. A new regression probe reproduced white face/lip output of 171/171. The shoulder coefficient now follows the existing polished-section mask only inside 17 pt; it preserves the face's 0.67 endpoint and all foreground rendering. The probe requires the white lip to exceed the face by at least 12/255 while a black lip stays within 1/255 of the black face. Full self-check passes, including fine-detail rejection and preserved center midtone values; 938 coarse lip pixels retain displaced detail.
+
+After rebuilding the isolated lab, neutral Glaceon was inspected on all three backgrounds. The white lip is brighter and more separated from the face, without a new central plate. The current input strings in the lab were entered externally during inspection and were left intact; their glyphs are visibly crisp on all three specimens. This last profile change has only neutral inspection, so do not treat the preceding nine-theme table as a verified score for it. Physical desktop deployment/release checks still remain.

@@ -124,6 +124,12 @@ enum DesktopRefractionCheck {
                 fputs("Desktop glass highlight/black transmission failed for \(input)\n",stderr)
                 return false
             }
+            let face = Int(rendered[(80*size+80)*4])
+            let lip = Int(rendered[(80*size+5)*4])
+            guard input == 255 ? lip-face >= 12 : abs(lip-face) <= 1 else {
+                fputs("Polished transmission must recover highlights without lifting black: face \(face), lip \(lip)\n",stderr)
+                return false
+            }
         }
         // Distinct upper midtones must not collapse into the same gray band.
         // This is where bright window contours used to lose visible depth.
