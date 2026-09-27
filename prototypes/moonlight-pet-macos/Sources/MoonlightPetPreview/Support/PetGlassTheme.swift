@@ -25,7 +25,7 @@ enum PetGlassTheme {
         switch character {
         case .brown: rgb = (0.68, 0.46, 0.28)
         case .blue: rgb = (0.25, 0.48, 0.82)
-        case .gold: rgb = (0.90, 0.72, 0.28)
+        case .gold: rgb = (0.96, 0.84, 0.58)
         case .red: rgb = (0.90, 0.38, 0.25)
         case .lilac: rgb = (0.63, 0.48, 0.81)
         case .dark: rgb = (0.22, 0.22, 0.26)

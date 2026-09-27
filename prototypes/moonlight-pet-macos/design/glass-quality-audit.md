@@ -91,3 +91,31 @@ Scores cluster around an edge-depth contribution of 18–19/25, material 16–20
 - Use the production explicit placeholder token in the specimen (the earlier default native placeholder underrepresented the app's configured color).
 - Reduce the hard contact shadow and broaden the soft glyph-only shadow to avoid embossed/outlined small text. Crisp white glyph pixels and untouched accessibility strings pass at 1x and 2x.
 - Fresh self-check: 5,558 displaced interior pixels; 5,936 prismatic edge pixels, peak separation 139/255; transparent center, smooth pointer response and existing interaction checks pass. These are renderer checks only. Do not carry Round 2's aesthetic score forward without inspection.
+
+## Live desktop verification — initial permission failure
+
+Launched the unchanged signed `32c6f619` worktree bundle with `--desktop-refraction`. The real widget's menu explicitly reported screen access denied; therefore the live surface was the native fallback, not the desktop refraction shader. System Settings simultaneously showed the old MoonlightPetPreview entry enabled. This is evidence that the existing grant was not usable by the current build, not evidence of optical shader failure.
+
+Reset only `ScreenCapture` for `app.moonlight.pet-preview`, then used System Settings' Add action to re-register the current bundle. macOS opened its password authentication sheet. User handoff was requested; authentication was pending at that checkpoint. Do not type credentials, weaken TCC, reset other apps, or rebuild the bundle while refreshing its grant. The next step is to finish registration of this exact bundle and verify actual captured refraction before another material iteration. This live-path blocker has occurred on one goal continuation so far; the goal remains active and the visual score gate remains unmet.
+
+
+## Permission resolved; isolated iteration — 2026-09-27
+
+After the operator authenticated, registration of the exact worktree bundle and macOS Quit & Reopen completed. The actual widget menu now reports **배경 굴절 실험 중 · 영상 저장 안 함**. White/mixed/dark browser background changes were observed through the widget. Rechecked the live menu after further lab builds: capture remains active. This proves the current bundle's grant, not permanent grant stability across future ad-hoc builds.
+
+Authorized actual bundle: `dist/MoonlightPetPreview.app`, executable SHA256 `b0c977361af11bf6e78803e079f37f3ea346882b569d8a00c5557be3ab4dfc99`, running process 17743 at inspection. It remains the 32c6f619 build. The latest optical changes have **not** replaced that executable yet.
+
+`--glass-lab` now packages `dist/MoonlightGlassLab.app` with its own bundle identifier and executable. Lab startup returns before pet windows, Hub connection and capture setup. Rebuilding the lab leaves the authorized actual app hash and process unchanged. This avoids repeatedly invalidating its identity while tuning materials.
+
+## Polished transmission and thin double return — partial review
+
+- Production desktop renderer accepts both the blurred and original texture from the same captured frame. The curved lip regains sharper displaced detail; the content-bearing center still uses the blurred texture. Existing capture-frame retention covers both inputs until GPU completion.
+- A faint secondary scene sample follows the lip's curved section. This is a screen-space approximation, not room-scale ray tracing. It adds no luminance to a uniform field and does not affect foreground glyphs.
+- Outer glint width reduced 10%, from 0.60 to 0.54 pt before pixel-footprint filtering. The inner reflected line varies slowly along the rim; coherent spectral patches extend onto straight sides. Overall lip width remains 9 pt.
+- Jolteon's interaction color changed from ochre to cream gold at unchanged opacity. Dark-background review confirms less yellow-brown saturation; depth still falls short of the target.
+- Fresh full self-check passes: 5,558 displaced interior pixels, 968 polished lip detail pixels, 5,592 prismatic rim pixels, peak separation 139/255; no central reflection fill, no midtone/black drift, no accessibility regression, crisp glyph interiors at 1x/2x. These metrics prove selected rendering invariants, not aesthetic quality.
+- Native lab inspected after rebuilding: neutral Glaceon plus pressed Eevee, Vaporeon, and Jolteon in all three columns. Latest cream-gold/reflected-scene build was inspected with Jolteon. The white specimen remains too uniformly gray; the rim change is subtle at normal scale. No new full-matrix score is awarded. Last complete provisional matrix remains average 80.70, minimum 76; **goal gate not met**.
+
+Generated target 02: `/Users/bigmac_moon/.codex/generated_images/01a0ce32-7ac2-7453-b884-e62b822e9bc4/exec-04cb1e04-fee2-4d56-9989-0a424d73b399.png`. Mixed/dark targets clarify continuous reflections and transmission; white target still has excessive milkiness and glyph shadow. Concept only; it is not runtime proof.
+
+Remaining: close the visual depth gap, inspect every theme at rest/press/release on the final material, deploy that final material to the actual capture app once, and verify white/mixed/black desktop scenes, tall/wide geometry and physical drag. Keep the goal active.

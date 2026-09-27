@@ -62,6 +62,31 @@ enum DesktopRefractionCheck {
                 }
             }
         }
+        // Sharp background detail may return only at the polished lip. It
+        // must not defeat center diffusion or enter the foreground layer.
+        guard let polished = renderer.device.makeTexture(descriptor: descriptor) else { return false }
+        pattern.withUnsafeBytes { bytes in
+            polished.replace(region: MTLRegionMake2D(0,0,size,size),mipmapLevel: 0,
+                             withBytes: bytes.baseAddress!,bytesPerRow: size*4)
+        }
+        guard let separated = renderer.pixels(u,width: size,height: size,backdrop: texture,
+                                              polishedBackdrop: polished) else { return false }
+        var restoredLipDetail = 0
+        for y in 32..<128 {
+            for x in 3..<17 {
+                let i = (y*size+x)*4
+                if abs(Int(separated[i])-Int(flat[i])) > 8 { restoredLipDetail += 1 }
+            }
+            for x in 32..<128 {
+                let i = (y*size+x)*4
+                guard Array(separated[i..<i+4]) == Array(flat[i..<i+4]) else {
+                    fputs("Polished detail leaked into the diffuse face\n",stderr); return false
+                }
+            }
+        }
+        guard restoredLipDetail > 150 else {
+            fputs("Polished lip lost its sharp refracted detail\n",stderr); return false
+        }
         // Highlight compression must protect fixed white glyphs without lifting
         // blacks or adding a spatial rectangle to the captured backdrop.
         for (input, range) in [(UInt8(255), 158...176), (UInt8(5), 4...6)] {
@@ -80,7 +105,7 @@ enum DesktopRefractionCheck {
         u.light.z = 1
         guard let accessible = renderer.pixels(u, width: size, height: size, backdrop: texture),
               accessible.allSatisfy({ $0 == 0 }) else { return false }
-        print("PASS: desktop lens \(displaced) interior pixels displaced, highlight rolloff with preserved midtones/blacks, clipped corners, accessibility bypass, secondary-screen UV mapping")
+        print("PASS: desktop lens \(displaced) interior pixels displaced, \(restoredLipDetail) polished lip pixels, diffuse face preserved, highlight rolloff with preserved midtones/blacks, clipped corners, accessibility bypass, secondary-screen UV mapping")
         return true
     }
 }

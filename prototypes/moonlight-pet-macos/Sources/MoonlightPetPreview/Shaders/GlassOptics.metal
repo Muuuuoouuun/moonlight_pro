@@ -109,17 +109,20 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     // Long, low-frequency caustic patches also reach the straight sides.
     // Their envelope follows the glass surface; no noise or pixel-scale sparks.
     float sweep = .5+.5*sin((p.x+p.y)*.026+u.light.x*.3);
-    float spectralArc = corner + (1.0-corner)*(.10+.28*pow(sweep,4.0));
+    float spectralArc = corner + (1.0-corner)*(.08+.48*pow(sweep,4.0));
     float3 prism = spectrum * (1.05*spectralArc*litArc*(1.0-t));
     // A polished round section: bright outer glint, a broad soft shoulder,
     // then a weaker inner return. All three stay inside the existing 9pt lip.
-    float outerReturn = reflectionBand(depth,.85*lipScale,sqrt(pow(.60*lipScale,2.0)+footprint))
+    float outerReturn = reflectionBand(depth,.85*lipScale,sqrt(pow(.54*lipScale,2.0)+footprint))
                         * (.72+.30*litArc);
     float shoulder = reflectionBand(depth,3.15*lipScale,2.1*lipScale)
                         * (.16+.25*litArc) * (1.0-t);
-    float innerReturn = reflectionBand(depth,(5.75+.4*corner)*lipScale,
+    // The second image of the light follows a different curved optical path.
+    // Vary separation slowly along the rim so it reads as reflected depth,
+    // while the primary glint retains its thin, stable silhouette.
+    float innerReturn = reflectionBand(depth,(5.35+.65*corner+.45*sweep)*lipScale,
                                       sqrt(pow(.55*lipScale,2.0)+footprint))
-                        * (.12+.38*litArc) * (1.0-t);
+                        * (.20+.60*litArc) * (1.0-t);
     // The polished shoulder rolls into the face: a low-energy reflection
     // behind the thin lip, localized to the light-facing arcs. A compact
     // support keeps every content-bearing center pixel transparent.
@@ -161,7 +164,8 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
 // Experimental desktop path: an app-excluded ScreenCaptureKit texture, blurred
 // on the GPU before this pass. Foreground glyphs never enter either pipeline.
 fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
-    constant GlassUniforms &u [[buffer(0)]], texture2d<float> scene [[texture(0)]]) {
+    constant GlassUniforms &u [[buffer(0)]], texture2d<float> scene [[texture(0)]],
+    texture2d<float> polishedScene [[texture(1)]]) {
     constexpr sampler linearSampler(coord::normalized, address::clamp_to_edge, filter::linear);
     float2 point = in.position.xy / u.viewport.z;
     float2 size = u.viewport.xy;
@@ -181,6 +185,27 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     float2 spectralOffset = outward * edge * u.material.z * .24 / size * u.backdrop.zw;
     color.r = scene.sample(linearSampler, uv + spectralOffset).r;
     color.b = scene.sample(linearSampler, uv - spectralOffset).b;
+    // Polished glass carries sharper, displaced detail at the curved lip.
+    // Keep diffusion through the face; never sharpen the content-bearing center
+    // or blur the foreground. Both textures are from the same captured frame.
+    float polish = .82*(1.0-smoothstep(4.0,17.0,depth));
+    if (polish > 0.0) {
+        float3 clear = polishedScene.sample(linearSampler,uv).rgb;
+        clear.r = polishedScene.sample(linearSampler,uv+spectralOffset).r;
+        clear.b = polishedScene.sample(linearSampler,uv-spectralOffset).b;
+        color = mix(color,clear,polish);
+        // A faint secondary background image follows the polished section.
+        // This is a screen-space optical approximation, not a ray-traced room:
+        // sample inward so even a cropped reference texture has valid context.
+        // Uniform scenes remain uniform; only the lip carries this reflection.
+        float curvature = 2.0*abs(outward.x*outward.y);
+        float2 reflectedPoint = point-outward*(12.0+14.0*curvature);
+        float2 reflectedUV = u.backdrop.xy+(reflectedPoint/size)*u.backdrop.zw;
+        float3 reflectedScene = polishedScene.sample(linearSampler,reflectedUV).rgb;
+        float reflection = reflectionBand(depth,5.0+curvature,2.8)
+                         * (.12+.12*curvature);
+        color = mix(color,reflectedScene,reflection);
+    }
     // Neutral highlight roll-off protects fixed white foreground text. This
     // follows captured luminance, never a rectangular readability mask. Midtones
     // and blacks transmit unchanged, so dark scenes are not given a gray floor.

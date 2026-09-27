@@ -4,6 +4,12 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="MoonlightPetPreview"
 BUNDLE_ID="app.moonlight.pet-preview"
+# Material studies have their own executable/bundle identity. Iterating the
+# lab must not replace or stop the screen-recording-authorized desktop app.
+if [[ "$MODE" == "--glass-lab" ]]; then
+  APP_NAME="MoonlightGlassLab"
+  BUNDLE_ID="app.moonlight.glass-lab"
+fi
 MIN_SYSTEM_VERSION="14.0"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
@@ -12,8 +18,8 @@ APP_BINARY="$APP_CONTENTS/MacOS/$APP_NAME"
 
 swift build -j 2 --package-path "$ROOT_DIR"
 BUILD_DIR="$(swift build --package-path "$ROOT_DIR" --show-bin-path)"
-BUILD_BINARY="$BUILD_DIR/$APP_NAME"
-RESOURCE_BUNDLE="$BUILD_DIR/${APP_NAME}_${APP_NAME}.bundle"
+BUILD_BINARY="$BUILD_DIR/MoonlightPetPreview"
+RESOURCE_BUNDLE="$BUILD_DIR/MoonlightPetPreview_MoonlightPetPreview.bundle"
 
 if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
   echo "missing SwiftPM resource bundle: $RESOURCE_BUNDLE" >&2

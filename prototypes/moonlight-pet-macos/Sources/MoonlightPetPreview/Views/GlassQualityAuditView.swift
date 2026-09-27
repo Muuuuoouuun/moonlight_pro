@@ -192,6 +192,7 @@ private struct AuditContent: View {
 @MainActor private final class AuditLens: MTKView, MTKViewDelegate {
     private let renderer: GlassOpticsRenderer
     private var texture: MTLTexture?
+    private var polishedTexture: MTLTexture?
     private let blur: MPSImageGaussianBlur
     private var sceneSize = CGSize.zero
     init(renderer: GlassOpticsRenderer) {
@@ -222,6 +223,7 @@ private struct AuditContent: View {
         guard let result = renderer.device.makeTexture(descriptor: descriptor) else { return }
         blur.encode(commandBuffer: buffer, sourceTexture: source, destinationTexture: result)
         buffer.commit()
+        polishedTexture = source
         texture = result
         needsDisplay = true
     }
@@ -234,7 +236,7 @@ private struct AuditContent: View {
         u.viewport = SIMD4(Float(bounds.width),Float(bounds.height),Float(drawableSize.width/bounds.width),0)
         u.material = SIMD4(Float(CompanionLayout.glassRadius),9,8,0)
         u.backdrop = SIMD4(0,0,1,1)
-        guard renderer.encode(u,pass: pass,buffer: buffer,backdrop: texture) else { return }
+        guard renderer.encode(u,pass: pass,buffer: buffer,backdrop: texture,polishedBackdrop: polishedTexture) else { return }
         buffer.present(drawable)
         buffer.commit()
     }
