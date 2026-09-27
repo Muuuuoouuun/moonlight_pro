@@ -80,36 +80,70 @@ function applyPointerSignal(gesture, channel, payload) {
 
 // 집중 화면의 Esc 길게 누르기. 자동 반복 keyDown은 타이머를 다시 시작하지 않는다 — 길게 누르기가 한 번 끝난 뒤에도
 // 키를 뗄 때까지는 다시 재지 않는다(계속 누르고 있어도 확인은 한 번).
+// 중지 확인이 떠 있을 때(isConfirming() → true)의 Esc keyDown 은 확인을 닫고(onDismiss) 새 1.3초를 재지 않는다 —
+// 그 누름은 keyUp 까지 잠겨서, 닫은 뒤에도 Esc 를 계속 누르고 있으면 확인이 다시 열리지 않는다.
+// latch() 는 페이지가 확인을 닫았을 때(버튼으로 연 확인을 Esc 로 닫은 경우 등) 지금 눌린 Esc 를 같은 방식으로 잠근다.
 function createEscHold(options = {}) {
   const holdMs = options.holdMs || ESC_HOLD_MS;
   const set = options.setTimeout || setTimeout;
   const clear = options.clearTimeout || clearTimeout;
   const onHold = options.onHold || (() => {});
+  const onDismiss = options.onDismiss || (() => {});
+  const isConfirming = typeof options.isConfirming === 'function' ? options.isConfirming : () => false;
   let timer = null;
-  let fired = false; // 이번 누름에서 이미 onHold 를 불렀다 — keyUp·cancel 까지 다시 재지 않는다
+  let pressed = false; // keyDown 을 받고 아직 keyUp·cancel 이 없다
+  let latched = false; // 이번 누름은 이미 쓰였다(확인을 열었거나 닫았다) — keyUp·cancel 까지 다시 재지 않는다
+
+  function stopTimer() {
+    if (timer !== null) clear(timer);
+    timer = null;
+  }
+
+  function confirming() {
+    try {
+      return isConfirming() === true;
+    } catch {
+      return false;
+    }
+  }
+
   return {
     keyDown() {
-      if (timer !== null || fired) return false;
+      pressed = true;
+      if (timer !== null || latched) return false;
+      if (confirming()) {
+        latched = true;
+        onDismiss();
+        return false;
+      }
       timer = set(() => {
         timer = null;
-        fired = true;
+        latched = true;
         onHold();
       }, holdMs);
       return true;
     },
     keyUp() {
       const wasTiming = timer !== null;
-      if (wasTiming) clear(timer);
-      timer = null;
-      fired = false;
+      stopTimer();
+      pressed = false;
+      latched = false;
       return wasTiming;
     },
     cancel() {
-      if (timer !== null) clear(timer);
-      timer = null;
-      fired = false;
+      stopTimer();
+      pressed = false;
+      latched = false;
+    },
+    // 지금 눌린 Esc 를 keyUp 까지 잠근다(재던 1.3초도 버린다). 눌린 키가 없으면 아무 일도 없다 — 다음 누름을 삼키지 않게.
+    latch() {
+      if (!pressed) return false;
+      stopTimer();
+      latched = true;
+      return true;
     },
     get holding() { return timer !== null; },
+    get latched() { return latched; },
   };
 }
 

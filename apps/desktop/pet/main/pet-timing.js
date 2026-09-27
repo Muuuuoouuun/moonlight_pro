@@ -77,11 +77,14 @@ function createBubbleQueue(options) {
     pump,
     dismiss,
     // 트레이 "짧은 메시지 보기": 떠 있으면 내리고, 아니면 마지막 메시지(없으면 null)를 띄운다.
+    // 마지막 메시지도 pump() 와 같은 isValid 로 다시 거른다 — 그사이 읽음·숨김·시작한 일정이 됐으면
+    // 그 알림 대신 기본 인사(null)를 띄우고 잊는다.
     toggle() {
       if (current !== null || options.isVisible?.()) {
         dismiss();
         return false;
       }
+      if (last && !stillValid(last)) last = null;
       present(last);
       return true;
     },

@@ -107,22 +107,30 @@ https 주소가 아니면 무시한다(포트·userinfo가 붙은 주소도 무�
   `hub_host`는 `write-cap-config.mjs`가 `app.config.json`에서 생성한다(host가 저장소 한 곳에만 있다).
 - 허브: `apps/hub/public/.well-known/assetlinks.json`이 패키지 `app.moonlight.hub`와 서명 지문 두 개를 내준다 —
   릴리스 키(`A2:C4:EC:CE:…:1A:D7`)와 이 PC의 디버그 키(`61:73:16:8E:…:57:38`, `~/.android/debug.keystore`).
-  허브 미들웨어는 이 파일 한 경로만 세션 없이 연다(`apps/hub/lib/route-access.js`의 `OPEN_EXACT`,
-  `route-access.test.mjs`가 고정 — `/.well-known/` 접두사 전체는 열지 않는다).
+  이 파일은 **허브 미들웨어를 아예 거치지 않는다** — `apps/hub/middleware.js`의 `config.matcher`가 `manifest.json`·
+  아이콘과 함께 `\.well-known/assetlinks\.json`을 제외한다(`335e851e`, 2026-09-26). `apps/hub/lib/route-access.js`의
+  `OPEN_EXACT` 항목(`route-access.test.mjs`가 고정 — `/.well-known/` 접두사 전체는 열지 않는다)은 매처가 바뀌어도
+  닫히지 않도록 이중으로 남겨 둔다. 매처 제외가 필요했던 이유: `OPEN_EXACT`만으로는 국내 `curl`이 200을 받았지만
+  Google Digital Asset Links 검증 서버(`digitalassetlinks.googleapis.com`)는 같은 주소에서 `Redirect encountered`로
+  실패했다. 매처를 다시 고칠 때 이 경로를 빼먹으면 검증이 조용히 `1024`로 돌아간다.
 - 릴리스 키를 바꾸면 지문을 다시 읽어 `assetlinks.json`을 고친다(비밀번호는 출력하지 않는다):
   `keytool -list -v -keystore apps/android/keystore/moonlight-release.jks -storepass:env KSPASS` 의 `SHA256:` 줄.
-- **검증은 허브를 다시 배포해야 성립한다.** 배포 전에는 `/.well-known/assetlinks.json`이 로그인으로 리다이렉트되어
-  검증이 실패한다. 배포 뒤 확인:
+- **검증됨(2026-09-26/27, 에뮬레이터 API 35)**: 매처 제외를 배포한 뒤 `pm get-app-links`가
+  `moonlight-pro-hub.vercel.app: verified`를 돌려준다. 다시 확인하는 명령(허브를 다시 배포했거나 지문을 바꿨을 때):
 
   ```bash
-  curl -sI https://moonlight-pro-hub.vercel.app/.well-known/assetlinks.json   # 200 + application/json, 리다이렉트 없음
+  # 1) 허브가 리다이렉트 없이 JSON을 내주는가 — 200 + application/json, Location 헤더 없음
+  curl -sI https://moonlight-pro-hub.vercel.app/.well-known/assetlinks.json
+  # 2) Google 검증 서버가 같은 파일을 읽는가 — statements 에 app.moonlight.hub 가 보이고 debugString 에 오류가 없다
+  curl -s "https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://moonlight-pro-hub.vercel.app&relation=delegate_permission/common.handle_all_urls"
+  # 3) 기기에서 다시 검증하고 상태를 읽는다
   adb shell pm verify-app-links --re-verify app.moonlight.hub
   adb shell pm get-app-links app.moonlight.hub                                 # moonlight-pro-hub.vercel.app: verified
   ```
 
-  2026-09-26 에뮬레이터(API 35) 실측: 설치 직후 `none`, `--re-verify` 뒤 `1024`(검증기 정의 실패 코드) — 허브가 아직
-  파일을 내주지 않기 때문이다. 검증 전에도 앱을 지정한 인텐트(런처 바로가기·`am start -n`)는 앱으로 열리고, 일반 링크는
-  브라우저/앱 선택 창이 뜬다.
+  기록: 2026-09-26 첫 실측은 설치 직후 `none`, `--re-verify` 뒤 `1024`(검증기 정의 실패 코드)였다 — 그때는
+  `/.well-known/assetlinks.json`이 미들웨어를 거쳐 Google 검증 서버에 리다이렉트로 보였다. 검증 전에도 앱을 지정한
+  인텐트(런처 바로가기·`am start -n`)는 앱으로 열리고, 일반 링크는 브라우저/앱 선택 창이 뜬다.
 
 ## 런처 바로가기 (아이콘 길게 누르기)
 

@@ -127,3 +127,46 @@ test('집중 채널 봉투: 시작 성공·실패, 확인은 새 revision 에만
   assert.equal(view.confirming, true, '다시 길게 누르면 다시 연다');
   assert.equal(F.confirmAfterState(view, { ...running, running: false }).confirming, false);
 });
+
+test('집중 확인: 메인이 거두면(새 dismissRevision) 닫히고, 버튼으로 연 확인은 다른 방송에 닫히지 않는다', () => {
+  const running = { running: true, remainingSec: 1500, minutes: 25, totalSec: 1500, confirmStop: false, confirmRevision: 0, dismissRevision: 0 };
+  let view = F.confirmAfterState({ confirming: false, seenRevision: 0, seenDismiss: 0 }, { ...running, confirmStop: true, confirmRevision: 1 });
+  assert.equal(view.confirming, true);
+  view = F.confirmAfterState(view, { ...running, confirmStop: false, confirmRevision: 1, dismissRevision: 1 });
+  assert.equal(view.confirming, false, '보조 모니터 창의 Esc 로 거둬도 닫힌다');
+  assert.equal(view.seenDismiss, 1);
+  view = { ...view, confirming: true }; // '중지' 버튼으로 연 확인(메인은 모른다)
+  view = F.confirmAfterState(view, { ...running, confirmRevision: 1, dismissRevision: 1 });
+  assert.equal(view.confirming, true, '같은 dismissRevision 의 다른 방송은 닫지 않는다');
+  view = F.confirmAfterState(view, { ...running, confirmStop: true, confirmRevision: 2, dismissRevision: 2 });
+  assert.equal(view.confirming, true, '새 확인 revision 이 같이 오면 연다');
+  assert.equal(F.confirmAfterState({ confirming: false, seenRevision: 0 }, { ...running, dismissRevision: 3 }).seenDismiss, 3, '옛 view(seenDismiss 없음)도 읽는다');
+});
+
+test('집중 Esc keydown: 확인 중이면 닫기, 닫은 누름·자동 반복·조합 중은 무시, 아니면 진행선', () => {
+  assert.equal(F.escDownAction({ confirming: true }), 'dismiss');
+  assert.equal(F.escDownAction({ confirming: false, latched: true }), 'ignore');
+  assert.equal(F.escDownAction({ confirming: true, repeat: true }), 'ignore');
+  assert.equal(F.escDownAction({ composing: true }), 'ignore');
+  assert.equal(F.escDownAction({ confirming: false, latched: false }), 'hold');
+  assert.equal(F.escDownAction(null), 'hold');
+});
+
+test('알림 목적지: 일정은 그 날, 답변은 그 대화 — set-mode payload 와 패널의 새 seq 판정', () => {
+  const ev = N.resolveTarget({ kind: 'event', target: { type: 'calendar', dateISO: '2026-09-28', eventKey: 'google:e1' } });
+  assert.deepEqual(N.modePayload(ev), { mode: 'calendar', date: '2026-09-28' });
+  const at = new Date(2026, 8, 29, 8, 0).toISOString();
+  assert.deepEqual(N.modePayload(N.resolveTarget({ kind: 'event', at })), { mode: 'calendar', date: '2026-09-29' }, '목적지 없는 일정 알림은 알림 시각의 날짜');
+  assert.equal(N.resolveTarget({ kind: 'event', at: 'x' }).date, null);
+  const reply = N.resolveTarget({ kind: 'reply', target: { type: 'chat', ownerId: 'eevee', scope: 'classin' } });
+  assert.deepEqual(N.modePayload(reply), { mode: 'council', ownerId: 'eevee', scope: 'classin' });
+  assert.deepEqual(N.modePayload(N.resolveTarget({ kind: 'reply' })), { mode: 'council' }, '담당을 모르면 모드만');
+  assert.deepEqual(N.modePayload({ mode: 'calendar', date: null }), { mode: 'calendar' });
+
+  assert.deepEqual(P.modeTargetStep(0, null, 'calendar'), { seen: 0, target: null });
+  const t1 = { seq: 1, mode: 'calendar', date: '2026-09-28' };
+  assert.deepEqual(P.modeTargetStep(0, t1, 'calendar'), { seen: 1, target: t1 });
+  assert.deepEqual(P.modeTargetStep(1, t1, 'calendar'), { seen: 1, target: null }, '같은 seq 의 다른 방송은 다시 고르지 않는다');
+  assert.deepEqual(P.modeTargetStep(0, t1, 'tasks'), { seen: 1, target: null }, '모드가 다르면 고르지 않고 넘긴다');
+  assert.deepEqual(P.modeTargetStep(0, { mode: 'calendar' }, 'calendar'), { seen: 0, target: null }, 'seq 없는 값은 읽지 않는다');
+});

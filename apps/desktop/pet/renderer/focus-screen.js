@@ -13,6 +13,8 @@
   let focus = { running: false, remainingSec: 0, minutes: F.DEFAULT };
   let confirming = false;
   let seenRevision = 0;
+  let seenDismiss = 0;
+  let escLatched = false; // 이번 Esc 누름으로 확인을 닫았다 — 뗄 때까지 진행선을 다시 그리지 않는다
 
   if (!controlsOn) {
     $('stack').hidden = true;
@@ -72,10 +74,13 @@
   function applyFocus(next) {
     const wasConfirming = confirming;
     focus = { ...focus, ...next };
-    const view = F.confirmAfterState({ confirming, seenRevision }, focus);
+    const view = F.confirmAfterState({ confirming, seenRevision, seenDismiss }, focus);
     confirming = view.confirming;
     seenRevision = view.seenRevision;
+    seenDismiss = view.seenDismiss;
     renderTime();
+    // 메인이 확인을 거뒀다(확인 중 Esc — 그 keydown 이 이 페이지에 닿기 전일 수 있다): 그 누름으로 진행선을 새로 그리지 않는다.
+    if (wasConfirming && !confirming && focus.running) escLatched = true;
     if (confirming !== wasConfirming) { stopHold(); renderControls(); }
   }
 
@@ -89,19 +94,23 @@
   }
 
   // Esc: 확인이 떠 있으면 닫고, 아니면 누르는 동안 1.3초 진행선(확인을 여는 것은 메인의 판정).
+  // 확인을 닫은 누름은 뗄 때까지 잠긴다 — 메인도 같은 누름을 keyUp 까지 재지 않는다(pet-input createEscHold).
   function stopHold() { $('hold').classList.remove('run'); }
+  function releaseEsc() { stopHold(); escLatched = false; }
   document.addEventListener('keydown', (e) => {
     if (!controlsOn || e.key !== 'Escape') return;
     e.preventDefault();
-    if (e.repeat || e.isComposing) return;
-    if (confirming) { keepFocus(); return; }
+    const action = F.escDownAction({ repeat: e.repeat, composing: e.isComposing, confirming, latched: escLatched });
+    if (action === 'dismiss') { escLatched = true; keepFocus(); return; }
+    if (action !== 'hold') return;
     const hold = $('hold');
     hold.classList.remove('run');
     void hold.offsetWidth;
     hold.classList.add('run');
   });
-  document.addEventListener('keyup', (e) => { if (e.key === 'Escape') stopHold(); });
-  window.addEventListener('blur', stopHold);
+  document.addEventListener('keyup', (e) => { if (e.key === 'Escape') releaseEsc(); });
+  window.addEventListener('blur', releaseEsc);
+  window.addEventListener('focus', releaseEsc); // 다른 모니터 창의 Esc 로 닫혔으면 이 창의 다음 누름은 새로
 
   renderControls();
   renderTime();

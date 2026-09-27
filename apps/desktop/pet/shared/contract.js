@@ -92,6 +92,9 @@ const LIMITS = Object.freeze({
 });
 
 // 프리로드 다리 `window.moonlightPet` — invoke 채널(요청/응답)과 이벤트 채널(메인→렌더러).
+// 'pet:set-mode' payload: {mode} — 모드만. 알림에서 열 때 {mode:'calendar', date:'YYYY-MM-DD'} · {mode:'council', ownerId, scope?}
+// 로 그 날짜·그 대화를 함께 고른다(셸이 state.modeTarget {seq, …} 로 패널에 전한다 — pet-state.js modeTargetFrom).
+// 'pet:focus-state' payload: {} 읽기 · {dismissConfirm:true} 중지 확인을 거두고 지금 눌린 Esc 를 뗄 때까지 잠근다.
 const PET_INVOKE = Object.freeze([
   'pet:state', 'pet:set-character', 'pet:set-mode', 'pet:set-presentation', 'pet:collapse', 'pet:open-hub', 'pet:open-external',
   'pet:drag', 'pet:press', 'pet:resize-content', 'pet:context-menu',

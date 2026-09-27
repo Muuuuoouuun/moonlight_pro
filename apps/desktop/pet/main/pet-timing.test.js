@@ -127,3 +127,32 @@ test('짧은 메시지: 줄에서 기다린 알림은 보이기 직전에 다시
   throwing.push({ id: 'x' });
   assert.equal(log.some(([k]) => k === 'show-throw'), false, '판정이 실패하면 띄우지 않는다');
 });
+
+test('트레이 "짧은 메시지 보기": 마지막 알림도 isValid 로 다시 거르고, 낡았으면 기본 인사를 띄운다', () => {
+  const clock = timers();
+  const stale = new Set();
+  const log = [];
+  let visible = false;
+  const q = T.createBubbleQueue({
+    canShow: () => true,
+    isValid: (n) => !stale.has(n.id),
+    show: (n) => { visible = true; log.push(['show', n ? n.id : null]); },
+    hide: () => { visible = false; log.push(['hide']); },
+    isVisible: () => visible,
+    setTimeout: clock.setTimeout,
+    clearTimeout: clock.clearTimeout,
+  });
+  q.push({ id: 'hub-notice' });
+  q.dismiss();
+  assert.equal(q.toggle(), true);
+  assert.deepEqual(log.at(-1), ['show', 'hub-notice'], '아직 유효하면 그 알림을 다시');
+  q.toggle();
+  stale.add('hub-notice');
+  assert.equal(q.toggle(), true);
+  assert.deepEqual(log.at(-1), ['show', null], '그사이 읽음·숨김이 됐으면 기본 인사');
+  assert.equal(q.last, null, '낡은 알림은 잊는다');
+  q.toggle();
+  stale.delete('hub-notice');
+  q.toggle();
+  assert.deepEqual(log.at(-1), ['show', null], '한 번 잊은 알림은 되살아나지 않는다');
+});

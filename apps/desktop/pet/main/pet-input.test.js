@@ -116,3 +116,59 @@ test('Esc 길게 누르기가 끝난 뒤 계속 누르고 있어도(자동 반�
   I.escHoldInput(hold, { type: 'keyDown', key: 'Escape' });
   assert.equal(timers.length, 3, '취소(창 blur) 뒤에도 새로 잰다');
 });
+
+test('중지 확인이 떠 있을 때 Esc keyDown 은 확인을 닫고, 뗄 때까지 새 1.3초를 재지 않는다', () => {
+  const timers = [];
+  let confirming = false;
+  let held = 0;
+  let dismissed = 0;
+  const hold = I.createEscHold({
+    onHold: () => { held += 1; confirming = true; },
+    isConfirming: () => confirming,
+    onDismiss: () => { dismissed += 1; confirming = false; },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, cleared: false }); return timers.length - 1; },
+    clearTimeout: (id) => { timers[id].cleared = true; },
+  });
+  // 1.3초 눌러 확인을 연 뒤 뗀다.
+  I.escHoldInput(hold, { type: 'keyDown', key: 'Escape' });
+  timers[0].fn();
+  I.escHoldInput(hold, { type: 'keyUp', key: 'Escape' });
+  assert.equal(held, 1);
+  // 확인이 떠 있는 동안 새로 누르면 닫기만 한다.
+  assert.equal(hold.keyDown(), false);
+  assert.equal(dismissed, 1, 'Esc keyDown 이 확인을 닫는다');
+  assert.equal(timers.length, 1, '닫은 누름은 1.3초를 재지 않는다');
+  assert.equal(hold.latched, true);
+  // 계속 누르고 있어도(자동 반복) 다시 열리지 않는다.
+  I.escHoldInput(hold, { type: 'keyDown', key: 'Escape', isAutoRepeat: true });
+  I.escHoldInput(hold, { type: 'keyDown', key: 'Escape', isAutoRepeat: true });
+  assert.equal(timers.length, 1);
+  assert.equal(held, 1, '확인이 다시 열리지 않는다');
+  // 떼고 새로 누르면 다시 잰다.
+  I.escHoldInput(hold, { type: 'keyUp', key: 'Escape' });
+  assert.equal(hold.latched, false);
+  I.escHoldInput(hold, { type: 'keyDown', key: 'Escape' });
+  assert.equal(timers.length, 2, '뗀 뒤 새 누름은 다시 잰다');
+  assert.equal(dismissed, 1);
+});
+
+test('latch(): 페이지가 확인을 닫은 지금 눌린 Esc 를 keyUp 까지 잠그고, 눌린 키가 없으면 다음 누름을 삼키지 않는다', () => {
+  const timers = [];
+  let held = 0;
+  const hold = I.createEscHold({
+    onHold: () => { held += 1; },
+    isConfirming: () => { throw new Error('판정 실패는 확인이 없는 것으로'); },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, cleared: false }); return timers.length - 1; },
+    clearTimeout: (id) => { timers[id].cleared = true; },
+  });
+  // 버튼으로 연 확인(메인은 모른다)을 Esc 로 닫는 경우: 메인은 이미 재기 시작했다.
+  assert.equal(hold.keyDown(), true);
+  assert.equal(hold.latch(), true);
+  assert.equal(timers[0].cleared, true, '재던 1.3초를 버린다');
+  hold.keyDown();
+  assert.equal(timers.length, 1, '잠긴 누름은 다시 재지 않는다');
+  assert.equal(held, 0);
+  hold.keyUp();
+  assert.equal(hold.latch(), false, '눌린 키가 없으면 잠그지 않는다');
+  assert.equal(hold.keyDown(), true, '다음 누름은 새로 잰다');
+});

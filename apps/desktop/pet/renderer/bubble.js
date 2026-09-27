@@ -29,7 +29,8 @@
     const t = N.resolveTarget(n);
     if (t.kind === 'hub') B.invoke('pet:open-hub', { path: t.path });
     else if (t.kind === 'external') B.invoke('pet:open-external', { url: t.url });
-    else B.invoke('pet:set-mode', { mode: t.mode }).then(openQuick);
+    // 일정은 그 날(그 날이 든 주)을 고른 일정 모드로, 답변은 그 담당·범위 대화로 연다.
+    else B.invoke('pet:set-mode', N.modePayload(t)).then(openQuick);
     dismiss();
   }
 

@@ -7,9 +7,11 @@
   let session = null; // { ownerId, scope } — 패널을 다시 열어도 유지
 
   Modes.council = {
-    // 알림(답변)에서 열 때 그 담당·범위 대화로 — 다음 create 가 이 세션으로 연다.
+    // 알림(답변)에서 열 때 그 담당·범위 대화로 — 다음 create 가 이 세션으로 연다. 모르는 범위는 '전체'.
     selectSession(next) {
-      if (next && typeof next.ownerId === 'string' && typeof next.scope === 'string') session = { ownerId: next.ownerId, scope: next.scope };
+      if (!next || typeof next.ownerId !== 'string' || typeof next.scope !== 'string') return;
+      const V = window.PetModel && window.PetModel.chat;
+      session = { ownerId: next.ownerId, scope: V && V.isScope && !V.isScope(next.scope) ? 'all' : next.scope };
     },
     create(ctx) {
       const { C, B, U, M } = ctx;
