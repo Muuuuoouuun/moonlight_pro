@@ -140,14 +140,16 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     // then a weaker inner return. All three stay inside the existing 9pt lip.
     float outerReturn = reflectionBand(depth,.85*lipScale,sqrt(pow(.54*lipScale,2.0)+footprint))
                         * (.72+.30*litArc)*sourceFootprint;
-    float shoulder = reflectionBand(depth,3.15*lipScale,2.1*lipScale)
-                        * (.16+.25*litArc) * (1.0-t)*(.5+.5*sourceFootprint);
+    // Join the spectral shoulder and softer secondary image within the lip;
+    // keep the primary silhouette thin instead of drawing two hard wires.
+    float shoulder = reflectionBand(depth,3.15*lipScale,2.6*lipScale)
+                        * (.26+.45*litArc) * (1.0-t)*(.5+.5*sourceFootprint);
     // The second image of the light follows a different curved optical path.
     // Vary separation slowly along the rim so it reads as reflected depth,
     // while the primary glint retains its thin, stable silhouette.
     float innerReturn = reflectionBand(depth,(5.35+.65*corner+.45*sweep)*lipScale,
-                                      sqrt(pow(.55*lipScale,2.0)+footprint))
-                        * (.25+1.05*litArc) * (1.0-t)*(.35+.65*sourceFootprint);
+                                      sqrt(pow(.85*lipScale,2.0)+footprint))
+                        * (.20+.75*litArc) * (1.0-t)*(.35+.65*sourceFootprint);
     // The polished shoulder rolls into the face: a low-energy reflection
     // behind the thin lip, localized to the light-facing arcs. A compact
     // support keeps every content-bearing center pixel transparent.
