@@ -145,6 +145,24 @@ private final class AuditScene: NSView {
             let width = bounds.width*(row.isMultiple(of: 3) ? 0.62 : 0.79)
             NSBezierPath(roundedRect: NSRect(x: 24, y: y, width: width, height: 3), xRadius: 1.5, yRadius: 1.5).fill()
         }
+        // A low-contrast ruler alone can hide background/foreground interference.
+        // Include fine high-contrast glyphs and a continuous sloping contour,
+        // like the small text and window boundaries behind a desktop widget.
+        // These are optical calibration marks, not simulated work records.
+        let marks = NSAttributedString(string: "Aa 0123456789 · 가나다라",
+            attributes: [.font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
+                         .foregroundColor: ink.withAlphaComponent(0.42)])
+        for row in 0..<7 {
+            marks.draw(at: NSPoint(x: 18+CGFloat(row%2)*39, y: 88+CGFloat(row)*55))
+        }
+        ink.withAlphaComponent(0.20).setStroke()
+        let contour = NSBezierPath()
+        contour.move(to: NSPoint(x: -10,y: bounds.height*0.37))
+        contour.curve(to: NSPoint(x: bounds.width+10,y: bounds.height*0.56),
+                      controlPoint1: NSPoint(x: bounds.width*0.3,y: bounds.height*0.32),
+                      controlPoint2: NSPoint(x: bounds.width*0.6,y: bounds.height*0.60))
+        contour.lineWidth = 2
+        contour.stroke()
     }
 }
 

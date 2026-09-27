@@ -161,6 +161,16 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     return float4(mix(backdrop,clamp(glass,0.0,1.0),coverage),1);
 }
 
+// A small optical footprint removes individual text pixels from the polished
+// reflection without giving it the face's much wider diffusion kernel.
+float3 polishedSample(texture2d<float> scene, sampler linearSampler, float2 uv, float2 texel) {
+    float2 d = texel*.5;
+    return (scene.sample(linearSampler,uv+float2(d.x,d.y)).rgb
+           +scene.sample(linearSampler,uv+float2(-d.x,d.y)).rgb
+           +scene.sample(linearSampler,uv+float2(d.x,-d.y)).rgb
+           +scene.sample(linearSampler,uv-d).rgb)*.25;
+}
+
 // Experimental desktop path: an app-excluded ScreenCaptureKit texture, blurred
 // on the GPU before this pass. Foreground glyphs never enter either pipeline.
 fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
@@ -190,9 +200,10 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     // or blur the foreground. Both textures are from the same captured frame.
     float polish = .82*(1.0-smoothstep(4.0,17.0,depth));
     if (polish > 0.0) {
-        float3 clear = polishedScene.sample(linearSampler,uv).rgb;
-        clear.r = polishedScene.sample(linearSampler,uv+spectralOffset).r;
-        clear.b = polishedScene.sample(linearSampler,uv-spectralOffset).b;
+        float2 texel = u.backdrop.zw/size;
+        float3 clear = polishedSample(polishedScene,linearSampler,uv,texel);
+        clear.r = polishedSample(polishedScene,linearSampler,uv+spectralOffset,texel).r;
+        clear.b = polishedSample(polishedScene,linearSampler,uv-spectralOffset,texel).b;
         color = mix(color,clear,polish);
         // A faint secondary background image follows the polished section.
         // This is a screen-space optical approximation, not a ray-traced room:
@@ -201,7 +212,7 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
         float curvature = 2.0*abs(outward.x*outward.y);
         float2 reflectedPoint = point-outward*(12.0+14.0*curvature);
         float2 reflectedUV = u.backdrop.xy+(reflectedPoint/size)*u.backdrop.zw;
-        float3 reflectedScene = polishedScene.sample(linearSampler,reflectedUV).rgb;
+        float3 reflectedScene = polishedSample(polishedScene,linearSampler,reflectedUV,texel);
         float reflection = reflectionBand(depth,5.0+curvature,2.8)
                          * (.12+.12*curvature);
         color = mix(color,reflectedScene,reflection);
@@ -210,7 +221,13 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     // follows captured luminance, never a rectangular readability mask. Midtones
     // and blacks transmit unchanged, so dark scenes are not given a gray floor.
     float peak = max(color.r,max(color.g,color.b));
-    float transmitted = peak-.33*smoothstep(.5,1.0,peak);
+    // A monotone photographic shoulder preserves bright contour separation.
+    // The former subtractive smoothstep had an almost-zero derivative around
+    // 0.75, flattening several distinct bright tones into one gray band.
+    // Preserve black/midtones, a continuous slope at 0.5, and the same 0.67
+    // white endpoint; this changes contrast distribution, not opacity.
+    float high = max(0.0,peak-.5);
+    float transmitted = min(peak,.5)+high/(1.0+3.882353*high);
     color *= transmitted/max(peak,.0001);
     // Blend into the unchanged native optical lip; no dark inner rectangle.
     float alpha = smoothstep(0.0, 2.5, depth);

@@ -87,6 +87,29 @@ enum DesktopRefractionCheck {
         guard restoredLipDetail > 150 else {
             fputs("Polished lip lost its sharp refracted detail\n",stderr); return false
         }
+        // Single-pixel background texture must not become colored sparkling
+        // dots at the lip. Coarse detail above must survive this same filter.
+        for y in 0..<size {
+            for x in 0..<size {
+                for c in 0..<3 { pattern[(y*size+x)*4+c] = (x+y).isMultiple(of: 2) ? 32 : 224 }
+            }
+        }
+        pattern.withUnsafeBytes { bytes in
+            polished.replace(region: MTLRegionMake2D(0,0,size,size),mipmapLevel: 0,
+                             withBytes: bytes.baseAddress!,bytesPerRow: size*4)
+        }
+        guard let filtered = renderer.pixels(u,width: size,height: size,backdrop: texture,
+                                            polishedBackdrop: polished) else { return false }
+        var fineDetailLeak = 0
+        for y in 32..<128 {
+            for x in 3..<17 {
+                let i = (y*size+x)*4
+                for c in 0..<3 { fineDetailLeak = max(fineDetailLeak,abs(Int(filtered[i+c])-Int(flat[i+c]))) }
+            }
+        }
+        guard fineDetailLeak <= 3 else {
+            fputs("Single-pixel background detail sparkles at the lip: \(fineDetailLeak)/255\n",stderr); return false
+        }
         // Highlight compression must protect fixed white glyphs without lifting
         // blacks or adding a spatial rectangle to the captured backdrop.
         for (input, range) in [(UInt8(255), 158...176), (UInt8(5), 4...6)] {
@@ -102,10 +125,26 @@ enum DesktopRefractionCheck {
                 return false
             }
         }
+        // Distinct upper midtones must not collapse into the same gray band.
+        // This is where bright window contours used to lose visible depth.
+        var highlightSteps: [Int] = []
+        for input: UInt8 in [166, 191, 217] {
+            var field = [UInt8](repeating: input, count: size*size*4)
+            for i in stride(from: 3,to: field.count,by: 4) { field[i] = 255 }
+            field.withUnsafeBytes { bytes in
+                texture.replace(region: MTLRegionMake2D(0,0,size,size),mipmapLevel: 0,
+                                withBytes: bytes.baseAddress!,bytesPerRow: size*4)
+            }
+            guard let rendered = renderer.pixels(u,width: size,height: size,backdrop: texture) else { return false }
+            highlightSteps.append(Int(rendered[(80*size+80)*4]))
+        }
+        guard zip(highlightSteps,highlightSteps.dropFirst()).allSatisfy({ $1-$0 >= 4 }) else {
+            fputs("Bright background contours collapsed: \(highlightSteps)\n",stderr); return false
+        }
         u.light.z = 1
         guard let accessible = renderer.pixels(u, width: size, height: size, backdrop: texture),
               accessible.allSatisfy({ $0 == 0 }) else { return false }
-        print("PASS: desktop lens \(displaced) interior pixels displaced, \(restoredLipDetail) polished lip pixels, diffuse face preserved, highlight rolloff with preserved midtones/blacks, clipped corners, accessibility bypass, secondary-screen UV mapping")
+        print("PASS: desktop lens \(displaced) interior pixels displaced, \(restoredLipDetail) polished lip pixels, diffuse face preserved, highlight steps \(highlightSteps), preserved midtones/blacks, clipped corners, accessibility bypass, secondary-screen UV mapping")
         return true
     }
 }

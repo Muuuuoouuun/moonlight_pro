@@ -119,3 +119,31 @@ Authorized actual bundle: `dist/MoonlightPetPreview.app`, executable SHA256 `b0c
 Generated target 02: `/Users/bigmac_moon/.codex/generated_images/01a0ce32-7ac2-7453-b884-e62b822e9bc4/exec-04cb1e04-fee2-4d56-9989-0a424d73b399.png`. Mixed/dark targets clarify continuous reflections and transmission; white target still has excessive milkiness and glyph shadow. Concept only; it is not runtime proof.
 
 Remaining: close the visual depth gap, inspect every theme at rest/press/release on the final material, deploy that final material to the actual capture app once, and verify white/mixed/black desktop scenes, tall/wide geometry and physical drag. Keep the goal active.
+
+## Highlight contour preservation — 2026-09-27 resumed inspection
+
+Mac unlock was verified via the native lab. No application restart or permission reset was needed for that verification.
+
+Found a concrete transmission defect: subtracting a scaled smoothstep made the transfer derivative almost zero around input 0.75. Three different bright grayscale inputs (166, 191, 217) rendered as 148, 149, 151. A GPU regression check reproduced this failure before the fix. Replaced that transfer with a monotone rational shoulder, preserving its black/midtone behavior, continuous derivative at 0.5, and the original 0.67 white endpoint. Outputs are now 152, 160, 165. Opacity and glyph shadows were not changed.
+
+Strengthened the specimen background with fine calibration glyphs and a continuous sloping contour. The earlier low-contrast rulers underrepresented busy-window interference. The new scene exposed small colored background fragments at the polished lip. Added a four-sample optical footprint only to polished background sampling; the independently drawn geometric rim and foreground are unaffected. A single-pixel checker now differs from its mean by at most 3/255 through the tested lip region, while 931 coarse-detail pixels still differ by more than 8/255. This tests rejection of pixel noise and retention of larger optical detail together.
+
+Full self-check passes after these changes: 5,646 displaced interior pixels; 5,592 prismatic edge pixels, peak separation 139/255; white glyph interiors preserved at 1x/2x; interaction reset and memo-save checks pass. The isolated lab builds and signs successfully. The live authorized app still runs the prior 32c6f619 bundle; these latest changes are not yet deployed to it.
+
+### Revised specimen review (stronger background chart)
+
+All nine pressed themes were visually inspected on all three backgrounds through CUA. Neutral resting Glaceon and Sylveon's preview-off return were inspected. This remains a **provisional material review**, not the final physical press/drag/release or live-desktop gate. The chart changed, so the average is not a controlled before/after improvement measurement.
+
+| Theme | White | Mixed | Black | Remaining deduction |
+|---|---:|---:|---:|---|
+| 이브이 | 78 | 84 | 81 | Warm gray is still flat on white; brown coating impression on black |
+| 샤미드 | 79 | 85 | 83 | Good blue separation; faint prism depth and visible blurred rear text |
+| 쥬피썬더 | 78 | 83 | 82 | Cream gold is less ochre; the face remains shallow |
+| 부스터 | 78 | 83 | 81 | Red identity is distinct; dark background still resembles tinted plastic |
+| 에브이 | 79 | 85 | 83 | Clear lilac identity; white surface lacks dimensional return |
+| 블래키 | 80 | 84 | 82 | Restrained white tint; dark material still lacks convincing reflected depth |
+| 리피아 | 78 | 83 | 81 | Green recognizable; relatively strong color wash on black |
+| 글레이시아 | 79 | 85 | 83 | Ice tint differs from cobalt; white face is uniformly gray |
+| 님피아 | 79 | 84 | 82 | Pale pink and clear preview-off return; rear-text haze remains |
+
+Average 81.56, minimum 78. No case reaches the completion gate. Foreground remains sharp, but a brighter, coherent curved lip and convincing center depth still need work. The improved transfer preserves information; it does not by itself make a featureless white background look dimensional. The next material change should address the optical cross-section and its reflected/transmitted light balance, rather than increasing whole-panel opacity or darkening text rectangles.
