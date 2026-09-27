@@ -45,6 +45,30 @@ enum DesktopRefractionCheck {
             fputs("Desktop lens must displace the interior without a new luminance floor\n",stderr)
             return false
         }
+        // A convex face enlarges the rear scene: samples on both sides move
+        // toward its center. Count-only displacement checks cannot distinguish
+        // a magnifying lens from the previous shrinking (concave) field.
+        var ramp = [UInt8](repeating: 255, count: size*size*4)
+        for y in 0..<size {
+            for x in 0..<size {
+                for c in 0..<3 { ramp[(y*size+x)*4+c] = UInt8(32+x/2) }
+            }
+        }
+        ramp.withUnsafeBytes { bytes in
+            texture.replace(region: MTLRegionMake2D(0,0,size,size),mipmapLevel: 0,
+                            withBytes: bytes.baseAddress!,bytesPerRow: size*4)
+        }
+        u.material.z = 0
+        guard let rampStraight = renderer.pixels(u,width: size,height: size,backdrop: texture) else { return false }
+        u.material.z = 8
+        guard let rampBent = renderer.pixels(u,width: size,height: size,backdrop: texture) else { return false }
+        let left = (80*size+48)*4, right = (80*size+112)*4
+        let leftShift = Int(rampBent[left])-Int(rampStraight[left])
+        let rightShift = Int(rampBent[right])-Int(rampStraight[right])
+        guard leftShift >= 3, rightShift <= -3 else {
+            fputs("Convex face must magnify, not shrink the rear scene: left \(leftShift), right \(rightShift)\n",stderr)
+            return false
+        }
         // A plain backdrop must remain plain: reflections must not invent
         // a central rectangle, bright veil or colored patches.
         let uniform = [UInt8](repeating: 128, count: size*size*4)

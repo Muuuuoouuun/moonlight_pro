@@ -27,6 +27,18 @@ float reflectionBand(float depth, float center, float width) {
     float distance = (depth-center)/width;
     return exp(-distance*distance);
 }
+// One rounded optical section for lighting and scene transmission. xyz is the
+// surface normal; w is normalized section height. The face joins with zero
+// slope, so its reflected highlight and refracted image share the same lip.
+float4 glassSection(float depth, float bevel, float2 outward) {
+    float t = clamp(depth/max(1.0,bevel), .002, 1.0);
+    float height = sqrt(max(.0001,t*(2.0-t)));
+    return float4(normalize(float3(outward*((1.0-t)/height),1)),height);
+}
+float2 sectionRay(float3 normal, float travel, float ior) {
+    float3 ray = refract(float3(0,0,-1),normal,1.0/ior);
+    return ray.xy/max(.1,-ray.z)*travel;
+}
 // App-owned calibration scene. Both lab halves evaluate precisely the same field.
 // Re-evaluating it at displaced positions is genuine refraction of this scene;
 // it does not capture, reconstruct or sample any desktop windows.
@@ -65,10 +77,10 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     float depth = max(0.0,-sd);
     float bevel = max(1.0,u.material.y);
     float t = clamp(depth/bevel, .002, 1.0);
-    float height = sqrt(max(.0001, t*(2.0-t)));
-    float slope = (1.0-t)/height;
     float2 outward = glassNormal(p,u.rect.zw,r);
-    float3 normal = normalize(float3(outward*slope,1));
+    float4 section = glassSection(depth,bevel,outward);
+    float height = section.w;
+    float3 normal = section.xyz;
     float3 lamp = normalize(float3(-.55 + u.light.x*.22,-.65 + u.light.y*.22,.72));
     float specular = pow(max(0.0,dot(normal,normalize(lamp+float3(0,0,1)))),40.0);
     float3 bounce = normalize(float3(.62-u.light.x*.12,.48-u.light.y*.12,.52));
@@ -191,19 +203,24 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     float depth = -glassDistance(point, size, u.material.x);
     if (depth <= 0 || u.light.z > .5) return float4(0);
     float2 q = point / size * 2.0 - 1.0;
-    // A shallow continuous lens; fade at the boundary so it meets native glass.
+    // A shallow convex face magnifies the rear scene by sampling inward.
+    // Fade this broad lens before the polished section, where the same curved
+    // normal as the reflection shader determines the refracted ray instead.
     float dome = pow(max(0.0, 1.0 - dot(q,q)*.5), 2.0);
-    float2 bend = q * dome * u.material.z * 6.0;
     float2 outward = glassNormal(point,size,u.material.x);
-    float edge = exp(-depth / 7.0) * smoothstep(0.0, 3.0, depth);
-    bend -= outward * edge * u.material.z * 1.8;
+    float bevel = max(1.0,u.material.y);
+    float4 section = glassSection(depth,bevel,outward);
+    float travel = (bevel*.28+section.w*bevel)*u.material.z*.18;
+    float2 lipBend = sectionRay(section.xyz,travel,1.46);
+    float2 bend = -q*dome*u.material.z*6.0*smoothstep(bevel,bevel*3.5,depth)+lipBend;
     float2 uv = u.backdrop.xy + ((point + bend) / size) * u.backdrop.zw;
     float3 color = scene.sample(linearSampler, uv).rgb;
     // Background-only chromatic dispersion follows the curved rim. Keep the
     // content-bearing center achromatic and preserve uniform backgrounds.
-    float2 spectralOffset = outward * edge * u.material.z * .24 / size * u.backdrop.zw;
-    color.r = scene.sample(linearSampler, uv + spectralOffset).r;
-    color.b = scene.sample(linearSampler, uv - spectralOffset).b;
+    float2 redOffset = (sectionRay(section.xyz,travel,1.453)-lipBend)/size*u.backdrop.zw;
+    float2 blueOffset = (sectionRay(section.xyz,travel,1.472)-lipBend)/size*u.backdrop.zw;
+    color.r = scene.sample(linearSampler, uv + redOffset).r;
+    color.b = scene.sample(linearSampler, uv + blueOffset).b;
     // Polished glass carries sharper, displaced detail at the curved lip.
     // Keep diffusion through the face; never sharpen the content-bearing center
     // or blur the foreground. Both textures are from the same captured frame.
@@ -211,8 +228,8 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     if (polish > 0.0) {
         float2 texel = u.backdrop.zw/size;
         float3 clear = polishedSample(polishedScene,linearSampler,uv,texel);
-        clear.r = polishedSample(polishedScene,linearSampler,uv+spectralOffset,texel).r;
-        clear.b = polishedSample(polishedScene,linearSampler,uv-spectralOffset,texel).b;
+        clear.r = polishedSample(polishedScene,linearSampler,uv+redOffset,texel).r;
+        clear.b = polishedSample(polishedScene,linearSampler,uv+blueOffset,texel).b;
         color = mix(color,clear,polish);
         // A faint secondary background image follows the polished section.
         // This is a screen-space optical approximation, not a ray-traced room:
