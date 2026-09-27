@@ -104,15 +104,23 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
                               reflectionBand(depth,center+dispersion*direction,width));
     // Overlapping wavelengths sit inside one neutral specular reflection.
     spectrum = mix(spectrum,float3(dot(spectrum,float3(1.0/3.0))),.18);
-    float3 prism = spectrum * (.78*corner*litArc*(1.0-t));
-    float outerReturn = reflectionBand(depth,.60*lipScale,sqrt(pow(.32*lipScale,2.0)+footprint))
-                        * (.28+.36*litArc);
-    float innerReturn = reflectionBand(depth,4.25*lipScale,sqrt(pow(.36*lipScale,2.0)+footprint))
-                        * (.07+.20*corner*litArc) * (1.0-t);
+    // Long, low-frequency caustic patches also reach the straight sides.
+    // Their envelope follows the glass surface; no noise or pixel-scale sparks.
+    float sweep = .5+.5*sin((p.x+p.y)*.026+u.light.x*.3);
+    float spectralArc = corner + (1.0-corner)*(.10+.28*pow(sweep,4.0));
+    float3 prism = spectrum * (.78*spectralArc*litArc*(1.0-t));
+    // A polished round section: bright outer glint, a broad soft shoulder,
+    // then a weaker inner return. All three stay inside the existing 9pt lip.
+    float outerReturn = reflectionBand(depth,.85*lipScale,sqrt(pow(.60*lipScale,2.0)+footprint))
+                        * (.90+.08*litArc);
+    float shoulder = reflectionBand(depth,2.65*lipScale,1.65*lipScale)
+                        * (.17+.10*litArc) * (1.0-t);
+    float innerReturn = reflectionBand(depth,4.45*lipScale,sqrt(pow(.48*lipScale,2.0)+footprint))
+                        * (.24+.16*litArc) * (1.0-t);
     if (!lab) {
         // Premultiplied source-over: narrow neutral lines, localized dispersion,
         // and no broad gray shoulder or content-area fill.
-        float neutral = (outerReturn + innerReturn + highlight*.16)
+        float neutral = (outerReturn + shoulder + innerReturn + highlight*.16)
                         * clamp(u.light.w/.72,0.0,1.3);
         float3 reflection = clamp(float3(neutral)+prism,0.0,.92);
         float a = max(reflection.r,max(reflection.g,reflection.b))*coverage;
@@ -132,7 +140,7 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     glass.b = softened(point + blueRay.xy/max(.1,-blueRay.z)*travel,u,blur).b;
     // Preserve the background: no white floor, panel tint or central blur.
     // Specular light belongs to the bevel rather than a fill across the card.
-    glass = glass*(1-shadow) + highlight*.54 + prism*.65 + innerReturn;
+    glass = glass*(1-shadow) + outerReturn*.65 + shoulder + highlight*.16 + prism*.65 + innerReturn;
     return float4(mix(backdrop,clamp(glass,0.0,1.0),coverage),1);
 }
 

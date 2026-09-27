@@ -18,6 +18,16 @@ enum GlassOpticsCheck {
             fputs("Glass edge failed: center=\(alpha(edge,160,120)), corner=\(alpha(edge,10,10)), rim=\(alpha(edge,160,10))\n",stderr)
             return false
         }
+        // A glass lip needs a visible achromatic glint and a softer inner
+        // shoulder, not just isolated saturated pixels at the corners.
+        let lipPeak = (10...13).map { y in
+            (0..<3).map { Int(edge[(y*width+160)*4+$0]) }.min()!
+        }.max()!
+        let shoulder = Int(alpha(edge,160,13))
+        guard lipPeak >= 175, shoulder >= 25 else {
+            fputs("Glass cross-section is too flat: white glint \(lipPeak), shoulder \(shoulder)\n",stderr)
+            return false
+        }
         // Every channel must be <= alpha: transparent overlays must be premultiplied.
         // The prism must produce measurable but restrained channel separation,
         // with no colored veil or white fill crossing the content area.
