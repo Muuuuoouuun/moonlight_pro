@@ -111,7 +111,13 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     spectrum = mix(spectrum,float3(dot(spectrum,float3(1.0/3.0))),.18);
     // Long, low-frequency caustic patches also reach the straight sides.
     // Their envelope follows the glass surface; no noise or pixel-scale sparks.
-    float sweep = .5+.5*sin((p.x+p.y)*.026+u.light.x*.3);
+    // Follow one broad area-light footprint per side. The former point-space
+    // sine repeated several times on a tall panel, breaking the dispersed
+    // return into short decorative patches. Normalized arc coordinates keep
+    // the reflection coherent on both a tall widget and a wide memo panel.
+    float2 alongWeights = abs(outward.yx);
+    float along = dot(p/u.rect.zw,alongWeights)/max(.001,alongWeights.x+alongWeights.y);
+    float sweep = .5+.5*cos((along-.32+u.light.x*.08)*M_PI_F);
     float spectralArc = corner + (1.0-corner)*(.08+.48*pow(sweep,4.0));
     float3 prism = spectrum * (1.05*spectralArc*litArc*(1.0-t));
     // A polished round section: bright outer glint, a broad soft shoulder,
