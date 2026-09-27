@@ -253,18 +253,18 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     // follows captured luminance, never a rectangular readability mask. Midtones
     // and blacks transmit unchanged, so dark scenes are not given a gray floor.
     float peak = max(color.r,max(color.g,color.b));
-    // A monotone photographic shoulder preserves bright contour separation.
-    // The former subtractive smoothstep had an almost-zero derivative around
-    // 0.75, flattening several distinct bright tones into one gray band.
-    // Preserve black/midtones, a continuous slope at 0.5, and the same 0.67
-    // white endpoint; this changes contrast distribution, not opacity.
+    // Preserve the range above middle gray with a constant highlight slope.
+    // The previous rational shoulder spent most of the available contrast
+    // close to 0.5, leaving pale window contours nearly indistinguishable.
+    // Black, middle gray and the white endpoint remain fixed.
     float high = max(0.0,peak-.5);
     // The polished section transmits more highlight energy than the diffuse
     // face. Vary only within the existing lip, before the first text inset.
     // This creates a rounded optical section on white scenes without adding
     // a gray/white fill to dark scenes or changing center readability.
     float shoulderCompression = mix(3.882353,1.1,polish);
-    float transmitted = min(peak,.5)+high/(1.0+shoulderCompression*high);
+    float highlightSlope = 1.0/(1.0+shoulderCompression*.5);
+    float transmitted = min(peak,.5)+high*highlightSlope;
     // Developer comparison only: the white specimen can transmit highlights
     // without the fixed-white-foreground protection. Live capture sets w=0.
     transmitted = mix(transmitted,peak,clamp(u.material.w,0.0,1.0));

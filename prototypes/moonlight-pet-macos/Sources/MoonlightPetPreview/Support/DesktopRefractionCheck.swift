@@ -155,10 +155,10 @@ enum DesktopRefractionCheck {
                 return false
             }
         }
-        // Distinct upper midtones must not collapse into the same gray band.
-        // This is where bright window contours used to lose visible depth.
+        // Include the last highlight steps as well as upper midtones. Testing
+        // only up to 217 missed the pale contours on near-white windows.
         var highlightSteps: [Int] = []
-        for input: UInt8 in [166, 191, 217] {
+        for input: UInt8 in [166, 191, 217, 242, 255] {
             var field = [UInt8](repeating: input, count: size*size*4)
             for i in stride(from: 3,to: field.count,by: 4) { field[i] = 255 }
             field.withUnsafeBytes { bytes in
