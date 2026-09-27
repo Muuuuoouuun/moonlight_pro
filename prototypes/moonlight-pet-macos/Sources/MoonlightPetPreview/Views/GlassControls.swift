@@ -45,6 +45,7 @@ private struct GlassActionBody<Label: View>: View {
 
 struct GlassInputSurface: ViewModifier {
     var focused: Bool
+    var inkOverride: Color? = nil
     @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
@@ -54,7 +55,7 @@ struct GlassInputSurface: ViewModifier {
             .modifier(GlassReadability(radius: 13, feather: 0))
             .overlay {
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .strokeBorder(Palette.glassInk.opacity(contrast == .increased ? 0.65 : focused ? 0.32 : 0.12),
+                    .strokeBorder((inkOverride ?? Palette.glassInk).opacity(contrast == .increased ? 0.65 : focused ? 0.32 : 0.12),
                                   lineWidth: 1)
                     .allowsHitTesting(false)
             }

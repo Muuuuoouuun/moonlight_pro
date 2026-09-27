@@ -44,11 +44,12 @@ struct GlassTextRenderer: TextRenderer {
 /// Native input views and standalone symbols do not use TextRenderer. Apply
 /// before padding/background, only to a transparent input or symbol leaf.
 struct GlassGlyphShadow: ViewModifier {
+    var enabled = true
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
-        let protected = reduceTransparency || contrast == .increased
+        let protected = !enabled || reduceTransparency || contrast == .increased
         content
             .modifier(GlassTextProtection(enabled: false))
             .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.glyphShadow), radius: 0.7, y: 0.35)

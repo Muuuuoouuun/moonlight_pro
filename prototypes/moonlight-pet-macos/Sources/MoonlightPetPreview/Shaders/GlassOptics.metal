@@ -242,6 +242,9 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     // a gray/white fill to dark scenes or changing center readability.
     float shoulderCompression = mix(3.882353,1.1,polish);
     float transmitted = min(peak,.5)+high/(1.0+shoulderCompression*high);
+    // Developer comparison only: the white specimen can transmit highlights
+    // without the fixed-white-foreground protection. Live capture sets w=0.
+    transmitted = mix(transmitted,peak,clamp(u.material.w,0.0,1.0));
     color *= transmitted/max(peak,.0001);
     // Blend into the unchanged native optical lip; no dark inner rectangle.
     float alpha = smoothstep(0.0, 2.5, depth);

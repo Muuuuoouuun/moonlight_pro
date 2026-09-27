@@ -233,6 +233,7 @@ struct CompanionPanelView: View {
 struct GlassModeTabs: View {
     let destinations: [QuickMode]
     let mode: QuickMode
+    var inkOverride: Color? = nil
     let select: (QuickMode) -> Void
     @Namespace private var selection
     var body: some View {
@@ -241,13 +242,13 @@ struct GlassModeTabs: View {
                 Button { select(destination) } label: {
                     Text(destination.title)
                         .font(.system(size: 12, weight: mode == destination ? .semibold : .medium))
-                        .foregroundStyle(mode == destination ? Palette.glassInk : Palette.glassInkMuted)
+                        .foregroundStyle(inkOverride ?? (mode == destination ? Palette.glassInk : Palette.glassInkMuted))
                         .frame(maxWidth: .infinity)
                         .frame(height: 34)
                         .background {
                             if mode == destination {
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(Palette.glassInk.opacity(0.10))
+                                    .fill((inkOverride ?? Palette.glassInk).opacity(0.10))
                                     .overlay { GlassRim(radius: 10, strength: 0.5) }
                                     .matchedGeometryEffect(id: "today-selection", in: selection)
                             }
@@ -259,7 +260,7 @@ struct GlassModeTabs: View {
             }
         }
         .padding(3)
-        .background(Palette.glassInk.opacity(0.035), in: RoundedRectangle(cornerRadius: 13))
+        .background((inkOverride ?? Palette.glassInk).opacity(0.035), in: RoundedRectangle(cornerRadius: 13))
         .overlay { GlassRim(radius: 13, strength: 0.20) }
     }
 }

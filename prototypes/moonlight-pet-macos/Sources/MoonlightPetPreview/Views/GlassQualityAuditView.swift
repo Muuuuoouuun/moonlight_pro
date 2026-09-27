@@ -8,12 +8,13 @@ struct GlassQualityAuditView: View {
     @State private var character: PetCharacter = .silver
     @State private var interaction = false
     @State private var optical = true
+    @State private var brightInkStudy = false
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("유리 품질 · 세 배경 비교").font(.system(size: 21, weight: .semibold))
-                    Text("실제 위젯 재질 · 흰 글자 · 원본 캐릭터 · 입력은 저장되지 않음")
+                    Text("실제 위젯 재질 · 원본 캐릭터 · 입력은 저장되지 않음")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -22,17 +23,25 @@ struct GlassQualityAuditView: View {
                 }.frame(width: 190)
                 Toggle("누름·드래그 색상", isOn: $interaction).toggleStyle(.switch)
             }
-            Toggle("실제 배경 굴절 셰이더 · 앱 내부 배경", isOn: $optical).toggleStyle(.switch).font(.system(size: 12))
+            HStack {
+                Toggle("실제 배경 굴절 셰이더 · 앱 내부 배경", isOn: $optical).toggleStyle(.switch)
+                Spacer()
+                Toggle("흰 배경 시안 · 짙은 글자 + 밝은 투과", isOn: $brightInkStudy).toggleStyle(.switch)
+                    .disabled(!optical)
+            }.font(.system(size: 12))
             HStack(spacing: 12) {
                 ForEach(AuditBackdrop.allCases) { backdrop in
                     VStack(spacing: 8) {
                         Text(backdrop.title).font(.system(size: 12, weight: .medium))
-                        GlassAuditSpecimen(character: character, interaction: interaction, backdrop: backdrop, optical: optical)
+                        GlassAuditSpecimen(character: character, interaction: interaction, backdrop: backdrop,
+                                           optical: optical, brightInkStudy: brightInkStudy && optical)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
             }
-            Text("같은 유리와 같은 글자를 비교합니다. 화면 기록을 사용하지 않는 배경 평가이며, 실제 데스크톱 굴절 검증은 별도입니다.")
+            Text(brightInkStudy && optical
+                 ? "미적용 시안: 흰 배경 열에만 글자·투과를 바꿉니다. 배경 자동 감지 구현이 아니며 실제 위젯은 바뀌지 않습니다."
+                 : "같은 유리와 같은 글자를 비교합니다. 화면 기록을 사용하지 않는 배경 평가이며, 실제 데스크톱 굴절 검증은 별도입니다.")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
         }.padding(18).foregroundStyle(Color.black).background(Color.white)
             .environment(\.colorScheme, .light)
@@ -52,9 +61,11 @@ private struct GlassAuditSpecimen: NSViewRepresentable {
     let interaction: Bool
     let backdrop: AuditBackdrop
     let optical: Bool
+    let brightInkStudy: Bool
     func makeNSView(context: Context) -> Specimen { Specimen(backdrop: backdrop, character: character) }
     func updateNSView(_ view: Specimen, context: Context) {
         view.setOptical(optical)
+        view.setBrightInkStudy(brightInkStudy && backdrop == .white)
         view.panel.setCharacter(character)
         view.panel.previewCharacterTint(interaction)
         view.ornament.rootView = AuditOrnament(character: character)
@@ -64,10 +75,11 @@ private struct GlassAuditSpecimen: NSViewRepresentable {
         let panel: GlassPanel
         let lens = GlassOpticsRenderer.shared.map { AuditLens(renderer: $0) }
         private var optical = false
+        private let inkStudy = AuditInkStudy()
         let ornament: NSHostingView<AuditOrnament>
         init(backdrop: AuditBackdrop, character: PetCharacter) {
             scene = AuditScene(backdrop: backdrop)
-            panel = GlassPanel.host(AuditContent(), cornerRadius: CompanionLayout.glassRadius,
+            panel = GlassPanel.host(AuditContent(inkStudy: inkStudy), cornerRadius: CompanionLayout.glassRadius,
                                     protectsText: true, withinWindow: true)
             ornament = NSHostingView(rootView: AuditOrnament(character: character))
             ornament.sizingOptions = []
@@ -80,6 +92,10 @@ private struct GlassAuditSpecimen: NSViewRepresentable {
             addSubview(ornament)
         }
         required init?(coder: NSCoder) { nil }
+        func setBrightInkStudy(_ value: Bool) {
+            if inkStudy.dark != value { inkStudy.dark = value }
+            lens?.brightInkStudy = value
+        }
         func setOptical(_ value: Bool) {
             guard optical != value else { return }
             optical = value
@@ -169,9 +185,15 @@ private final class AuditScene: NSView {
     }
 }
 
+@MainActor private final class AuditInkStudy: ObservableObject {
+    @Published var dark = false
+}
+
 private struct AuditContent: View {
+    @ObservedObject var inkStudy: AuditInkStudy
     @State private var text = ""
     @State private var selection = QuickMode.tasks
+    private var ink: Color { inkStudy.dark ? Palette.surface3 : Palette.glassInk }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
@@ -184,12 +206,13 @@ private struct AuditContent: View {
                 Image(systemName: "ellipsis")
                 Image(systemName: "pin").padding(.leading, 8)
             }
-            GlassModeTabs(destinations: [.tasks,.calendar], mode: selection) { selection = $0 }
+            GlassModeTabs(destinations: [.tasks,.calendar], mode: selection,
+                          inkOverride: inkStudy.dark ? ink : nil) { selection = $0 }
             TextField("선명도 확인용 입력", text: $text,
-                      prompt: Text("선명도 확인용 입력").foregroundStyle(Palette.glassInkFaint))
+                      prompt: Text("선명도 확인용 입력").foregroundStyle(inkStudy.dark ? ink.opacity(0.7) : Palette.glassInkFaint))
                 .textFieldStyle(.plain).font(.system(size: 15))
-                .modifier(GlassGlyphShadow())
-                .padding(13).modifier(GlassInputSurface(focused: false))
+                .modifier(GlassGlyphShadow(enabled: !inkStudy.dark))
+                .padding(13).modifier(GlassInputSurface(focused: false, inkOverride: inkStudy.dark ? ink : nil))
             VStack(alignment: .leading, spacing: 9) {
                 Text("유리 너머의 빛, 선명한 글자")
                     .font(.system(size: 16, weight: .semibold))
@@ -204,7 +227,8 @@ private struct AuditContent: View {
                 Image(systemName: "arrow.up.right")
                 Text("12 pt")
             }.font(.system(size: 12, weight: .medium))
-        }.padding(22).foregroundStyle(Palette.glassInk)
+        }.padding(22).foregroundStyle(ink).tint(ink)
+            .modifier(GlassTextProtection(enabled: !inkStudy.dark))
     }
 }
 
@@ -217,6 +241,9 @@ private struct AuditContent: View {
     private let blur: MPSImageGaussianBlur
     private var sceneSize = CGSize.zero
     private var sceneRegion = SIMD4<Float>(0,0,1,1)
+    var brightInkStudy = false {
+        didSet { if oldValue != brightInkStudy { needsDisplay = true } }
+    }
     init(renderer: GlassOpticsRenderer) {
         self.renderer = renderer
         blur = MPSImageGaussianBlur(device: renderer.device, sigma: 5)
@@ -261,6 +288,8 @@ private struct AuditContent: View {
         var u = GlassUniforms()
         u.viewport = SIMD4(Float(bounds.width),Float(bounds.height),Float(drawableSize.width/bounds.width),0)
         u.material = SIMD4(Float(CompanionLayout.glassRadius),9,8,0)
+        // Explicit developer-only comparison; desktop capture always passes 0.
+        u.material.w = brightInkStudy ? 1 : 0
         u.backdrop = sceneRegion
         guard renderer.encode(u,pass: pass,buffer: buffer,backdrop: texture,polishedBackdrop: polishedTexture) else { return }
         buffer.present(drawable)
