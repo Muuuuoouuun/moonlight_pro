@@ -253,3 +253,23 @@ The rendered rim still resembled an equally bright wire. Added a GPU regression 
 Full self-check passes: 6,267 prismatic pixels / peak channel separation 117; 5,808 desktop interior displacements; 880 polished-detail lip pixels; preserved highlight steps [152, 160, 165], transparent center, pointer continuity, accessibility fallback and crisp 1x/2x glyphs. The isolated Lab builds and passes strict signature verification. Inspected neutral Glaceon and pressed Sylveon in all three Lab columns, restoring the ephemeral input strings. The reflection now has brighter and quieter regions, but the central material gap remains; no full nine-theme score increase is claimed. The last full matrix remains historical evidence for `39055d38`, not a newly scored matrix for this envelope change.
 
 The latest reflected-source envelope is **Lab-only**; the actual capture bundle was intentionally kept unchanged to preserve its current grant. Further work must improve optical depth and the dark theme-wash impression before a final live nine-theme evaluation. The bright-background ink exception is still not applied. Goal remains unmet.
+
+## Interaction color depth — 2026-09-28
+
+The existing source-over theme gradient lifts a broad dark scene toward the character color. Added a smooth, stretchable rounded-section mask: full color at the perimeter, tapering over 48pt to 35% of the prior wash strength through the face. Original character hues and gradient values remain; this changes where their contribution is strongest. It is a compositing approximation, not spectral absorption or a new refraction model. The mask is prepared once per view and stretched on resize; no capture or per-frame bitmap generation is added. Accessibility's solid color bypasses this mask, and resting opacity is still zero.
+
+Built the isolated Lab and visually inspected every pressed theme across the three columns with dark-ink study off. The center is less coated on black, while colored perimeter reflection remains recognizable. The pale themes are intentionally restrained; fixed-white text still requires the gray bright-scene transmission. Sylveon was returned to the neutral rest state after inspection. Ephemeral calibration inputs were restored after rebuilding. Full self-check and strict Lab bundle signature verification pass; existing crisp 1x/2x foreground, interaction reset and accessibility checks remain green.
+
+| Theme | White | Mixed | Black | Remaining deduction |
+|---|---:|---:|---:|---|
+| 이브이 | 79 | 85 | 84 | Gray bright face; warm edge is clearer but optical volume remains shallow |
+| 샤미드 | 80 | 86 | 85 | Cobalt rim separates from ice blue; center still lacks rich reflected depth |
+| 쥬피썬더 | 79 | 84 | 84 | Cream edge is subtle; white field remains flat |
+| 부스터 | 79 | 84 | 84 | Red edge retained, reduced center haze; colored band remains visible |
+| 에브이 | 80 | 86 | 85 | Lilac perimeter restrained; gray face and blurred rear contours remain |
+| 블래키 | 81 | 85 | 84 | Neutral tint had less coating to remove; no score increase |
+| 리피아 | 79 | 84 | 84 | Green perimeter distinct; lacks polished transmitted depth |
+| 글레이시아 | 80 | 86 | 85 | Ice rim differentiated from cobalt; gray bright face persists |
+| 님피아 | 80 | 85 | 84 | Pale pink edges retained and center cleaner; depth remains modest |
+
+Subjective Lab average **83.00**, minimum **79**, using the same rim/material/foreground/identity weighting. The one-point changes on eight dark specimens reflect reduced coating only, not a solution to the bright-background or optical-depth gap. This matrix includes the reflected-source envelope from `f01bda19`. It is not an actual-desktop nine-theme matrix. Both latest improvements remain in the Lab build; the authorized actual app is unchanged. The requested 90/88 gate is not achieved.

@@ -82,6 +82,7 @@ final class PetGlassWash: NSView {
     // Only the developer material lab uses this explicit preview override.
     var previewsTint = false { didSet { updatePresentation() } }
     private let colorDepth = CAGradientLayer()
+    private let depthMask = CALayer()
     private var interaction = GlassPressState()
     private var eventMonitor: Any?
     private var releaseTimer: Timer?
@@ -99,6 +100,28 @@ final class PetGlassWash: NSView {
         colorDepth.startPoint = CGPoint(x: 0, y: 1)
         colorDepth.endPoint = CGPoint(x: 1, y: 0)
         colorDepth.locations = [0, 0.52, 1]
+        // Concentrate interaction color in the rounded section, preserving
+        // more rear-scene contrast through the face. This is a continuous
+        // optical-depth envelope, not a separate rectangle behind the text.
+        let feather: CGFloat = 48
+        let cap = radius + feather
+        let diameter = cap*2+1
+        let mask = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.setBlendMode(.copy)
+            for step in 0...128 {
+                let t = CGFloat(step)/128
+                let distance = feather*t
+                let alpha = 1-0.65*t*t*(3-2*t)
+                context.setFillColor(NSColor.white.withAlphaComponent(alpha).cgColor)
+                context.addPath(CGPath(roundedRect: rect.insetBy(dx: distance, dy: distance),
+                    cornerWidth: max(0,radius-distance), cornerHeight: max(0,radius-distance), transform: nil))
+                context.fillPath()
+            }
+            return true
+        }
+        depthMask.contents = mask.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        depthMask.contentsCenter = CGRect(x: cap/diameter,y: cap/diameter,width: 1/diameter,height: 1/diameter)
         layer?.addSublayer(colorDepth)
         updateColor()
         NotificationCenter.default.addObserver(self, selector: #selector(resetInteraction),
@@ -215,6 +238,7 @@ final class PetGlassWash: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         colorDepth.frame = bounds
+        depthMask.frame = bounds
         CATransaction.commit()
     }
 
@@ -225,6 +249,7 @@ final class PetGlassWash: NSView {
         let opacity = PetGlassTheme.opacity(for: character)
         let depths: [CGFloat] = solidForAccessibility ? [1, 1, 1] : [opacity, opacity*0.38, opacity*0.78]
         colorDepth.colors = depths.map { color.withAlphaComponent($0).cgColor }
+        colorDepth.mask = solidForAccessibility ? nil : depthMask
         CATransaction.commit()
     }
 }
