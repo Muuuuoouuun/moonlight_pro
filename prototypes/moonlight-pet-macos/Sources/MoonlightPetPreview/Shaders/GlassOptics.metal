@@ -265,8 +265,8 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     float shoulderCompression = mix(3.882353,1.1,polish);
     float highlightSlope = 1.0/(1.0+shoulderCompression*.5);
     float transmitted = min(peak,.5)+high*highlightSlope;
-    // Developer comparison only: the white specimen can transmit highlights
-    // without the fixed-white-foreground protection. Live capture sets w=0.
+    // Recover part of the highlights for the deployed white-ink/contact-shadow
+    // profile. Lab alternatives can compare zero recovery or full recovery.
     transmitted = mix(transmitted,peak,clamp(u.material.w,0.0,1.0));
     color *= transmitted/max(peak,.0001);
     // Blend into the unchanged native optical lip; no dark inner rectangle.

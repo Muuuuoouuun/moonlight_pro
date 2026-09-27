@@ -215,7 +215,7 @@ final class DesktopRefractionView: MTKView, MTKViewDelegate, SCStreamOutput, SCS
         let global = window.convertToScreen(convert(bounds, to: nil))
         var u = GlassUniforms()
         u.viewport = SIMD4(Float(bounds.width), Float(bounds.height), Float(drawableSize.width / bounds.width), 0)
-        u.material = SIMD4(Float(radius), 9, 8, 0)
+        u.material = SIMD4(Float(radius), 9, 8, GlassStudy.highlightRecovery)
         u.backdrop = Self.textureRegion(panel: global, screen: screenFrame)
         guard renderer.encode(u, pass: pass, buffer: buffer, backdrop: blurred, polishedBackdrop: source) else { return }
         // Retain the IOSurface-backed frame through GPU completion, without copies or disk output.

@@ -23,8 +23,8 @@ struct GlassTextRenderer: TextRenderer {
     var shadows = true
     var contactOpacity = GlassStudy.glyphShadow
     var softOpacity = GlassStudy.softGlyphShadow
-    var contactRadius: CGFloat = 0.7
-    var softRadius: CGFloat = 2.2
+    var contactRadius: CGFloat = GlassStudy.contactRadius
+    var softRadius: CGFloat = GlassStudy.softRadius
     var displayPadding: EdgeInsets { EdgeInsets(top: 3, leading: 3, bottom: 3, trailing: 3) }
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
@@ -56,8 +56,8 @@ struct GlassGlyphShadow: ViewModifier {
         let protected = !enabled || reduceTransparency || contrast == .increased
         content
             .modifier(GlassTextProtection(enabled: false))
-            .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.glyphShadow), radius: 0.7, y: 0.35)
-            .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.softGlyphShadow), radius: 2.2, y: 0.5)
+            .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.glyphShadow), radius: GlassStudy.contactRadius, y: 0.35)
+            .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.softGlyphShadow), radius: GlassStudy.softRadius, y: 0.5)
     }
 }
 

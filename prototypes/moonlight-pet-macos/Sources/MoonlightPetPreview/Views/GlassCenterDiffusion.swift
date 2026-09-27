@@ -7,8 +7,11 @@ import AppKit
 enum GlassStudy {
     static let nativeDiffusionMix: CGFloat = 0.28
     static let centerVeil: CGFloat = 0.055
-    static let glyphShadow = 0.20
-    static let softGlyphShadow = 0.32
+    static let glyphShadow = 0.73
+    static let softGlyphShadow = 0.37
+    static let contactRadius: CGFloat = 0.65
+    static let softRadius: CGFloat = 1.6
+    static let highlightRecovery: Float = 0.45
     static let edgeReflection: Float = 0.72
     static let edgeFeather: CGFloat = 24
 }
