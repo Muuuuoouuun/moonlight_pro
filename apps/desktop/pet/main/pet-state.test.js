@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('../shared/contract');
-const { createPetState, CHARACTER_KEY } = require('./pet-state');
+const { createPetState, modeTargetFrom, CHARACTER_KEY } = require('./pet-state');
 
 function memoryStore(initial = {}) {
   const data = { ...initial };
@@ -59,4 +59,34 @@ test('바뀔 때만 알리고, 저장은 캐릭터만', () => {
   assert.equal(s.get().mode, 'memo');
   assert.equal(s.patch({ characters: [] }), false);
   assert.equal(s.patch({ unknownKey: 1 }), false);
+});
+
+test('모드 목적지: 일정은 그 날짜(날짜시각은 이 PC 날짜), Council 은 담당·범위 — 같은 모드여도 새 seq 로 알린다', () => {
+  assert.deepEqual(modeTargetFrom('calendar', { mode: 'calendar', date: '2026-09-28' }), { mode: 'calendar', date: '2026-09-28' });
+  const local = new Date(2026, 8, 28, 9, 30);
+  assert.deepEqual(modeTargetFrom('calendar', { date: local.toISOString() }), { mode: 'calendar', date: '2026-09-28' });
+  assert.equal(modeTargetFrom('calendar', { date: '2026-02-30' }), null, '없는 날짜');
+  assert.equal(modeTargetFrom('calendar', { date: 'tomorrow' }), null);
+  assert.equal(modeTargetFrom('calendar', {}), null);
+  assert.deepEqual(modeTargetFrom('council', { ownerId: 'eevee', scope: 'classin' }), { mode: 'council', ownerId: 'eevee', scope: 'classin' });
+  assert.deepEqual(modeTargetFrom('council', { ownerId: 'eevee' }), { mode: 'council', ownerId: 'eevee', scope: 'all' });
+  assert.equal(modeTargetFrom('council', { ownerId: '' }), null);
+  assert.equal(modeTargetFrom('council', { ownerId: 'x'.repeat(65) }), null);
+  assert.equal(modeTargetFrom('tasks', { date: '2026-09-28' }), null, '목적지가 없는 모드');
+  assert.equal(modeTargetFrom('calendar', null), null);
+
+  const seen = [];
+  const s = createPetState({ onChange: (snap) => seen.push(snap) });
+  assert.equal(s.get().modeTarget, null);
+  s.setMode('calendar', modeTargetFrom('calendar', { date: '2026-09-28' }));
+  assert.deepEqual(s.get().modeTarget, { mode: 'calendar', date: '2026-09-28', seq: 1 });
+  assert.equal(s.get().mode, 'calendar');
+  const count = seen.length;
+  s.setMode('calendar', modeTargetFrom('calendar', { date: '2026-09-28' }));
+  assert.equal(seen.length, count + 1, '같은 모드·같은 날짜여도 다시 알린다');
+  assert.equal(s.get().modeTarget.seq, 2);
+  s.setMode('tasks');
+  assert.equal(s.get().modeTarget.seq, 2, '목적지 없는 전환은 목적지를 건드리지 않는다');
+  s.setMode('tasks', { mode: 'calendar', date: '2026-09-28' });
+  assert.equal(s.get().modeTarget.seq, 2, '다른 모드의 목적지는 무시한다');
 });

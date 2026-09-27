@@ -65,5 +65,13 @@
     try { return new URL(url).host; } catch (_) { return ''; }
   }
 
-  return { TODAY, CAPTURE, titleFor, isLargeTitle, showsDate, tabsFor, hotkeyLabel, keyAction, hubStatusView, hostOf };
+  // 셸의 state.modeTarget({ seq, mode, date? | ownerId?, scope? }) → 이번 상태 방송에서 고를 목적지.
+  // 새 seq 이고 지금 모드와 같을 때만 target 을 준다(말풍선의 '내용 보기'가 그 날짜·그 대화로 연다). 결과 { seen, target }.
+  function modeTargetStep(seen, target, mode) {
+    const s = Number(seen) || 0;
+    if (!target || typeof target !== 'object' || !Number.isFinite(target.seq) || target.seq <= s) return { seen: s, target: null };
+    return { seen: target.seq, target: target.mode === mode ? target : null };
+  }
+
+  return { TODAY, CAPTURE, titleFor, isLargeTitle, showsDate, tabsFor, hotkeyLabel, keyAction, hubStatusView, hostOf, modeTargetStep };
 });

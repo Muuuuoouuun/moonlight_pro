@@ -21,6 +21,7 @@
   let pendingMode = null;
   let tabs = null; // { place, key, el }
   let dateOverride = null;
+  let seenTargetSeq = 0; // 셸이 알린 마지막 목적지(state.modeTarget.seq)
 
   function normalizeState(raw) {
     const s = raw && typeof raw === 'object' ? raw : {};
@@ -35,6 +36,7 @@
       badge: Number(s.badge) || 0,
       prefs: s.prefs || {},
       focus: s.focus || { running: false, remainingSec: 0, minutes: M.focus.DEFAULT },
+      modeTarget: s.modeTarget && typeof s.modeTarget === 'object' ? s.modeTarget : null,
     };
   }
 
@@ -155,12 +157,26 @@
   }
 
   // ── 상태·이벤트 ───────────────────────────────────────
+  // 알림에서 연 목적지: 모드 모듈이 다음 create 에서 그 날짜(그 날이 든 주)·그 담당·범위 대화로 연다.
+  function takeModeTarget() {
+    const step = P.modeTargetStep(seenTargetSeq, state.modeTarget, state.mode);
+    seenTargetSeq = step.seen;
+    const t = step.target;
+    if (!t) return false;
+    const Modes = window.PetModes || {};
+    if (t.mode === 'calendar' && t.date && Modes.calendar && Modes.calendar.selectDate) Modes.calendar.selectDate(t.date);
+    if (t.mode === 'council' && t.ownerId && Modes.council && Modes.council.selectSession) Modes.council.selectSession({ ownerId: t.ownerId, scope: t.scope || 'all' });
+    pendingMode = null; // 목적지가 모드를 정했다
+    return true;
+  }
+
   function onState(raw) {
     const prev = state;
     state = normalizeState(raw);
     U.applyPrefs(state.prefs);
+    const retarget = takeModeTarget();
     const nextMode = pendingMode && state.mode !== pendingMode ? mode : state.mode;
-    if (nextMode !== mode) {
+    if (nextMode !== mode || retarget) {
       mode = nextMode;
       view = 'mode';
       mount();
@@ -255,6 +271,7 @@
     U.applyPrefs();
     state = normalizeState(await B.invoke('pet:state'));
     U.applyPrefs(state.prefs);
+    takeModeTarget();
     mode = state.mode;
     els.more.append(U.icon('dots', 18));
     els.more.addEventListener('click', openMainMenu);

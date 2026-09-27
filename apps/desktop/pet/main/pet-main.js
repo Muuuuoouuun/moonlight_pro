@@ -9,7 +9,7 @@ const electron = require('electron');
 const C = require('../shared/contract');
 const G = require('./pet-geometry');
 const { createPetStore, isAllowedStoreKey, STORE_FILE } = require('./pet-store');
-const { createPetState, CHARACTER_KEY } = require('./pet-state');
+const { createPetState, modeTargetFrom, CHARACTER_KEY } = require('./pet-state');
 const { createPointerGesture, applyPointerSignal, createEscHold, escHoldInput, registerShortcut, PET_QUICK_ACCELERATOR } = require('./pet-input');
 const { applyGlassFrame, createActivationKeeper } = require('./pet-dwm');
 const { createWindowFactory, setBoundsExact, applyGlassMaterial } = require('./pet-windows');
@@ -269,10 +269,14 @@ function install(options = {}) {
     syncPet();
   }
 
-  function setMode(mode) {
-    if (!C.MODES.includes(mode) || mode === state.mode) return state.get();
-    contentHeight = null;
-    state.setMode(mode);
+  // payload 는 'pet:set-mode' 그대로 — {mode, date?} · {mode, ownerId?, scope?} 면 그 날짜·대화를 목적지로 함께 알린다
+  // (알림에서 열 때). 목적지가 있으면 같은 모드여도 패널이 다시 고른다.
+  function setMode(mode, payload) {
+    if (!C.MODES.includes(mode)) return state.get();
+    const target = modeTargetFrom(mode, payload);
+    if (mode === state.mode && !target) return state.get();
+    if (mode !== state.mode) contentHeight = null;
+    state.setMode(mode, target);
     relayout();
     return state.get();
   }
@@ -435,11 +439,19 @@ function install(options = {}) {
   // ── 집중 화면(타이머만 — 앱 전환은 막지 않는다) ─────────────────────────
   let focusEndsAt = 0;
   let focusTimer = null;
+  // 중지 확인을 거둔다 — dismissRevision 을 올려 모든 집중 창(보조 모니터에서 누른 Esc 포함)이 닫게 한다.
+  function dismissStopConfirm() {
+    if (!state.focus.confirmStop) return;
+    state.patch({ focus: { confirmStop: false, dismissRevision: (state.focus.dismissRevision || 0) + 1 } });
+  }
   const escHold = createEscHold({
     onHold: () => {
       if (!focusRunning()) return;
       state.patch({ focus: { confirmStop: true, confirmRevision: state.focus.confirmRevision + 1 } });
     },
+    // 확인이 떠 있을 때의 Esc 는 닫기만 하고, 그 누름은 뗄 때까지 새 1.3초를 재지 않는다.
+    isConfirming: () => focusRunning() && state.focus.confirmStop === true,
+    onDismiss: dismissStopConfirm,
   });
 
   function destroyFocusWindows() {
@@ -595,7 +607,9 @@ function install(options = {}) {
   const handlers = {
     'pet:state': () => state.get(),
     'pet:set-character': (p) => setCharacter(p.key),
-    'pet:set-mode': (p) => setMode(p.mode),
+    // {mode} — 모드만. 알림에서 열 때는 {mode:'calendar', date:'YYYY-MM-DD'} · {mode:'council', ownerId, scope?}
+    // 로 그 날짜·그 대화를 함께 고른다(state.modeTarget 의 새 seq 로 패널에 전한다).
+    'pet:set-mode': (p) => setMode(p.mode, p),
     'pet:set-presentation': (p, surface) => {
       // 펫 클릭은 메인이 이미 처리했다 — 렌더러가 같은 뜻으로 한 번 더 보내면 무시.
       if (surface === 'pet' && Date.now() - lastPetClickAt < CLICK_DEDUPE_MS) return state.get();
@@ -635,8 +649,12 @@ function install(options = {}) {
     'pet:focus-start': (p) => startFocus(p.minutes),
     'pet:focus-stop': () => stopFocus(),
     // 읽기. {dismissConfirm:true} 면 떠 있던 중지 확인을 거둔다('계속 집중'·확인 중 Esc) — 다음 상태 방송에 다시 뜨지 않게.
+    // 지금 Esc 가 눌려 있으면(페이지가 그 Esc 로 확인을 닫았다) 뗄 때까지 새 1.3초를 재지 않는다.
     'pet:focus-state': (p) => {
-      if (p.dismissConfirm === true && state.focus.confirmStop) state.patch({ focus: { confirmStop: false } });
+      if (p.dismissConfirm === true) {
+        escHold.latch();
+        dismissStopConfirm();
+      }
       return focusEnvelope();
     },
   };

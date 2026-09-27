@@ -18,6 +18,7 @@ const N = require('../renderer/model/notices-model');
 const V = require('../renderer/model/chat-view-model');
 const F = require('../renderer/model/focus-model');
 const K = require('../renderer/model/calendar-model');
+const P = require('../renderer/model/panel-model');
 
 const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(check, label, ms = 3000) {
@@ -290,6 +291,69 @@ test('집중: 시작·상태는 계약 봉투, Esc 길게 → 확인, 렌더러�
   const stopped = await call('pet:focus-stop', {}, screens[0]);
   assert.equal(F.focusFrom(stopped).running, false);
   assert.equal(pet.windows.focus().length, 0);
+});
+
+test('집중: 확인 중 Esc 는 확인을 닫고, 계속 누르고 있어도 뗄 때까지 다시 열지 않는다', async (t) => {
+  const { call, pet } = await boot(t);
+  await call('pet:focus-start', { minutes: 25 });
+  const screens = pet.windows.focus();
+  const input = (type, extra = {}) => { screens[0].webContents.emit('before-input-event', { preventDefault() {} }, { type, key: 'Escape', ...extra }); };
+  input('keyDown');
+  await settle(1400);
+  input('keyUp');
+  assert.equal(pet.state().focus.confirmStop, true);
+  const before = pet.state().focus;
+  // 확인이 떠 있는 동안 Esc 를 누르고 계속 누르고 있다.
+  input('keyDown');
+  assert.equal(pet.state().focus.confirmStop, false, 'Esc keyDown 이 확인을 닫는다');
+  assert.equal(pet.state().focus.dismissRevision, before.dismissRevision + 1, '모든 집중 창이 닫도록 dismissRevision 을 올린다');
+  input('keyDown', { isAutoRepeat: true });
+  await settle(1400);
+  input('keyDown', { isAutoRepeat: true });
+  assert.equal(pet.state().focus.confirmStop, false, '계속 누르고 있어도 다시 열리지 않는다');
+  assert.equal(pet.state().focus.confirmRevision, before.confirmRevision);
+  input('keyUp');
+  // 떼고 새로 1.3초 누르면 다시 연다.
+  input('keyDown');
+  await settle(1400);
+  input('keyUp');
+  assert.equal(pet.state().focus.confirmStop, true);
+  assert.equal(pet.state().focus.confirmRevision, before.confirmRevision + 1);
+  // 페이지가 '중지' 버튼으로 연 확인을 Esc 로 닫은 경우: 메인이 재기 시작한 누름을 dismissConfirm 이 잠근다.
+  await call('pet:focus-state', { dismissConfirm: true }, screens[0]);
+  input('keyDown');
+  await call('pet:focus-state', { dismissConfirm: true }, screens[0]);
+  await settle(1400);
+  assert.equal(pet.state().focus.confirmStop, false, '페이지가 닫은 누름도 뗄 때까지 재지 않는다');
+  input('keyUp');
+  await call('pet:focus-stop', {}, screens[0]);
+});
+
+test('말풍선 ‘내용 보기’: 일정 알림은 그 날을, 답변 알림은 그 담당·범위 대화를 목적지로 패널에 알린다', async (t) => {
+  const { call, pet, w } = await boot(t);
+  const eventPayload = N.modePayload(N.resolveTarget({ kind: 'event', target: { type: 'calendar', dateISO: '2026-09-28', eventKey: 'google:e1' } }));
+  await call('pet:set-mode', eventPayload, w.bubble);
+  await call('pet:set-presentation', { presentation: 'quick' }, w.bubble);
+  let st = pet.state();
+  assert.equal(st.mode, 'calendar');
+  assert.equal(st.panelOpen, true);
+  assert.deepEqual(st.modeTarget, { mode: 'calendar', date: '2026-09-28', seq: 1 });
+  const step = P.modeTargetStep(0, st.modeTarget, st.mode);
+  assert.equal(step.target.date, '2026-09-28', '패널이 그 날을 고른다');
+  // 이미 일정 모드여도 다른 날짜 알림은 새 seq 로 다시 알린다.
+  await call('pet:set-mode', { mode: 'calendar', date: '2026-10-02' }, w.bubble);
+  assert.equal(pet.state().modeTarget.seq, 2);
+  assert.equal(P.modeTargetStep(step.seen, pet.state().modeTarget, 'calendar').target.date, '2026-10-02');
+  // 답변 알림 → 그 담당·범위 대화.
+  const replyPayload = N.modePayload(N.resolveTarget({ kind: 'reply', target: { type: 'chat', ownerId: 'eevee', scope: 'classin' } }));
+  await call('pet:set-mode', replyPayload, w.bubble);
+  st = pet.state();
+  assert.equal(st.mode, 'council');
+  assert.deepEqual(st.modeTarget, { mode: 'council', ownerId: 'eevee', scope: 'classin', seq: 3 });
+  // 패널 탭 전환({mode} 만)은 목적지를 바꾸지 않는다.
+  await call('pet:set-mode', { mode: 'tasks' });
+  assert.equal(pet.state().modeTarget.seq, 3);
+  assert.equal(pet.state().mode, 'tasks');
 });
 
 test('위젯 → 빠른 패널: 위젯을 접어 펫을 위젯 위 끝에 맞춘 뒤 빠른 패널을 연다', async (t) => {

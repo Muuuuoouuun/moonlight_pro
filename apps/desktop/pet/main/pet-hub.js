@@ -107,7 +107,7 @@ function defaultInterval(fn, ms) {
 //   store             { get(key), set(key, value) } — userData/pet-store.json
 //   onEvent           (name, payload) → void — contract.PET_EVENTS 이름으로 부른다
 //   canPresentBanner  (notice) → boolean — 집중·누름·패널 사용 중이면 false(말풍선 보류, 나중에 presentNext)
-//   isChatVisible     () → boolean — 대화 화면이 지금 보이는가(패널이 열려 있고 모드가 office). 보고 있던 대화라도
+//   isChatVisible     () → boolean — 대화 화면이 지금 보이는가(패널이 열려 있고 모드가 council). 보고 있던 대화라도
 //                     이 값이 false 면 새 답변은 'reply' 알림이 된다. 셸 ctx 의 getState() 가 있으면 거기서 읽는다.
 //   now, uuid, schedule(fn, ms)→cancel, setInterval(fn, ms)→cancel — 테스트 주입
 // 셸 hubContext 모양(emit·getHubUrl·session·getState)도 받는다 — 위 옵션이 비어 있을 때만 거기서 채운다.
@@ -383,7 +383,7 @@ function createPetHub(input = {}) {
     },
     // 'pet:chat-session' {ownerId, scope, draft?} → { turns, draft, busy(이 대화가 보내는 중: boolean), sending(=busy), busyWith(보내는 대화 {ownerId,scope,message}|null), error }
     // 이 대화를 '보고 있음'으로 표시하고 그 대화의 답변 알림을 거둔다. 실제로 보이는지는 isChatVisible()(셸 ctx 면
-    // 패널이 열려 있고 모드가 office)로 답이 올 때 다시 확인한다 — 다른 모드로 옮기거나 접으면 답변은 알림이 된다.
+    // 패널이 열려 있고 모드가 council)로 답이 올 때 다시 확인한다 — 다른 모드로 옮기거나 접으면 답변은 알림이 된다.
     // payload.leave === true 면 보고 있음을 지운다(렌더러가 대화 화면을 떠날 때).
     chatSession(input) {
       const payload = payloadOf(input);

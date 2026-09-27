@@ -7,8 +7,34 @@ const PRESENTATIONS = Object.freeze(['quick', 'widget']);
 const HUB_STATUSES = Object.freeze(['connected', 'unauthorized', 'not-configured', 'offline', 'unknown']);
 const CHARACTER_KEY = 'petPreview.character';
 
+// 'pet:set-mode' 의 목적지(선택). 알림에서 열 때 그 날짜·그 대화로 연다 — 채널 이름은 그대로, payload 만 넓혔다.
+//   { mode: 'calendar', date: 'YYYY-MM-DD' | ISO 날짜시각 }  → 그 날이 든 주, 그 날을 고른 일정
+//   { mode: 'council', ownerId, scope? }                     → 그 담당·범위 대화(scope 없으면 'all')
+// 읽을 수 없는 값은 null(모드만 바꾼다). 날짜시각은 이 PC 시간대의 날짜로 바꾼다.
+function localDateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function modeTargetFrom(mode, payload) {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  if (mode === 'calendar' && typeof p.date === 'string' && p.date.length <= 40) {
+    const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(p.date);
+    if (plain) {
+      const d = new Date(Number(plain[1]), Number(plain[2]) - 1, Number(plain[3]));
+      return d.getMonth() === Number(plain[2]) - 1 && d.getDate() === Number(plain[3]) ? { mode, date: p.date } : null;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(p.date)) return null;
+    const ms = Date.parse(p.date);
+    return Number.isFinite(ms) ? { mode, date: localDateKey(new Date(ms)) } : null;
+  }
+  if (mode === 'council' && typeof p.ownerId === 'string' && p.ownerId && p.ownerId.length <= 64) {
+    const scope = typeof p.scope === 'string' && p.scope && p.scope.length <= 32 ? p.scope : 'all';
+    return { mode, ownerId: p.ownerId, scope };
+  }
+  return null;
+}
+
 function emptyFocus() {
-  return { running: false, remainingSec: 0, minutes: 25, totalSec: 0, confirmStop: false, confirmRevision: 0 };
+  return { running: false, remainingSec: 0, minutes: 25, totalSec: 0, confirmStop: false, confirmRevision: 0, dismissRevision: 0 };
 }
 
 // characters: 렌더러가 그대로 쓰는 목록. assetUrl(fileName) → 이미지 주소(file://…).
@@ -43,6 +69,8 @@ function createPetState(options = {}) {
     badge: 0,
     prefs: { reduceTransparency: false, highContrast: false, reduceMotion: false },
     focus: emptyFocus(),
+    // 마지막 목적지 { seq, mode, date? | ownerId?, scope? } — 패널은 새 seq 에만 그 날짜·대화를 고른다.
+    modeTarget: null,
   };
 
   const snapshot = () => JSON.parse(JSON.stringify(state));
@@ -78,9 +106,15 @@ function createPetState(options = {}) {
       patch({ character: key });
       return true;
     },
-    setMode(mode) {
+    // target(modeTargetFrom 결과)이 있으면 같은 모드여도 새 seq 로 알린다 — 패널이 그 날짜·대화를 다시 고른다.
+    setMode(mode, target = null) {
       if (!C.MODES.includes(mode)) return false;
-      patch({ mode });
+      if (target && target.mode === mode) {
+        const seq = (state.modeTarget ? state.modeTarget.seq : 0) + 1;
+        patch({ mode, modeTarget: { ...target, seq } });
+      } else {
+        patch({ mode });
+      }
       return true;
     },
     setHubStatus(status) {
@@ -97,4 +131,4 @@ function createPetState(options = {}) {
   };
 }
 
-module.exports = { PRESENTATIONS, HUB_STATUSES, CHARACTER_KEY, emptyFocus, characterList, createPetState };
+module.exports = { PRESENTATIONS, HUB_STATUSES, CHARACTER_KEY, emptyFocus, characterList, modeTargetFrom, createPetState };

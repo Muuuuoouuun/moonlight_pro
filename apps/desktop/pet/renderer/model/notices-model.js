@@ -71,9 +71,25 @@
       if (typeof t.mode === 'string' && C.MODES.includes(t.mode)) return { kind: 'mode', mode: t.mode, date: t.date || null, ownerId: t.ownerId || null, scope: t.scope || null };
       if (typeof t.url === 'string' && /^https?:\/\//i.test(t.url)) return { kind: 'external', url: t.url };
     }
-    if (notice && notice.kind === 'event') return { kind: 'mode', mode: 'calendar', date: null };
+    if (notice && notice.kind === 'event') return { kind: 'mode', mode: 'calendar', date: eventDateOf(notice) };
     if (notice && notice.kind === 'reply') return { kind: 'mode', mode: 'council' };
     return { kind: 'hub', path: C.HUB_PATHS.notifications };
+  }
+
+  // 목적지가 없는 일정 알림: 알림 시각(pet-activity 는 일정 시작 시각)의 이 PC 날짜.
+  function eventDateOf(notice) {
+    const ms = typeof notice.at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(notice.at) ? Date.parse(notice.at) : NaN;
+    if (!Number.isFinite(ms)) return null;
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  // resolveTarget 의 mode 목적지 → 'pet:set-mode' payload. 셸이 그 날짜·그 대화를 패널에 전한다(pet-state modeTargetFrom).
+  function modePayload(target) {
+    const t = target || {};
+    if (t.mode === 'calendar' && t.date) return { mode: 'calendar', date: t.date };
+    if (t.mode === 'council' && t.ownerId) return { mode: 'council', ownerId: t.ownerId, scope: t.scope || 'all' };
+    return { mode: t.mode };
   }
 
   // 펫 옆 말풍선 첫 줄. 알림 수·연결 상태에서만 만든다(업무 데이터는 말풍선이 따로 읽지 않는다).
@@ -96,5 +112,5 @@
     return { notices, unreadCount };
   }
 
-  return { KIND, badgeText, kindInfo, relativeTime, visibleNotices, headerLabel, resolveTarget, bubbleSummary, listFrom };
+  return { KIND, badgeText, kindInfo, relativeTime, visibleNotices, headerLabel, resolveTarget, modePayload, bubbleSummary, listFrom };
 });

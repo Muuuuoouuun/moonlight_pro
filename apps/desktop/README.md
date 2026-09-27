@@ -141,7 +141,9 @@ P/Invoke로 부른다(`pet-dwm.js`, `-EncodedCommand`, 숫자 HWND만). 실패�
 허브 모델이 60초마다(창이 다 뜬 뒤부터) 알림 원천을 읽는다. 첫 연결의 기존 미확인 문의는 조용히 목록만 채우고, 그 뒤 새로 온
 문의와 곧 시작하는 일정이 **한 번씩** 말풍선이 된다. 말풍선 줄은 셸이 가진다 — 8초 보이고 다음 것은 1초 뒤, 패널·집중 화면이
 열려 있으면 기다린다. 기다린 알림은 보이기 직전에 허브 목록으로 다시 거른다: 그 사이 읽었거나(패널·메인 창) 이 PC에서 숨겼거나
-일정이 이미 시작했거나 말풍선을 껐으면 건너뛴다. 알림 목록이 열려 있으면 새 알림이 바로 목록에 들어온다. 말풍선의 ✕는 그 말풍선만 내린다(읽음 아님, 알림 목록에 남는다). 내용 보기는 읽음으로 하고 목적지를 연다.
+일정이 이미 시작했거나 말풍선을 껐으면 건너뛴다. 알림 목록이 열려 있으면 새 알림이 바로 목록에 들어온다. 말풍선의 ✕는 그 말풍선만 내린다(읽음 아님, 알림 목록에 남는다). 내용 보기는 읽음으로 하고 목적지를 연다 — 일정 알림은 일정
+모드를 그 날이 든 주·그 날 선택으로, 답변 알림은 Council 을 그 담당·범위 대화로 연다. 트레이 **짧은 메시지 보기**가 마지막 알림을
+다시 띄울 때도 같은 허브 목록 재확인을 거치고, 그사이 읽음·숨김·시작한 일정이 됐으면 기본 인사를 띄운다.
 펫의 숫자 배지는 이 PC 목록의 미확인 수다(99개 넘으면 99+).
 
 ### Hub 연결 — 메인 창 세션 공유
@@ -167,7 +169,8 @@ P/Invoke로 부른다(`pet-dwm.js`, `-EncodedCommand`, 숫자 HWND만). 실패�
 타이머 화면만 띄운다(운영자 결정) — 모니터마다 불투명 전체 화면 창 하나, 주 모니터에 남은 시간·진행선·중지. 앱 전환·Win 키·
 Alt+Tab은 막지 않는다. 시작하면 패널·말풍선을 접고 펫을 숨긴다. 중지는 확인을 거친다: 중지 버튼, 또는 Esc 1.3초(메인이
 `before-input-event`로 재고, 페이지는 누르는 동안 진행선만 그린다). 확인을 닫으면 메인의 확인 표시도 거둬 다른 상태 변화에
-다시 뜨지 않는다. 시간이 다 되면 저절로 끝나고 펫과 기다리던 말풍선이 돌아온다.
+다시 뜨지 않는다. 확인이 떠 있을 때의 Esc 는 확인을 닫기만 하고, 그 누름은 뗄 때까지 잠겨 Esc 를 계속 누르고 있어도 확인이 다시
+열리지 않는다(보조 모니터 창에서 누른 Esc 로도 닫힌다 — `state.focus.dismissRevision`). 시간이 다 되면 저절로 끝나고 펫과 기다리던 말풍선이 돌아온다.
 
 ### 페이지와 다리
 
@@ -186,7 +189,11 @@ Alt+Tab은 막지 않는다. 시작하면 패널·말풍선을 접고 펫을 숨
 펫 창은 포인터 신호만 보낸다 — `pointerdown`에 `pet:press {pressed:true}` + `pet:drag {phase:'begin', screenY}`, `pointermove`에
 `pet:drag {phase:'move'}`, `pointerup`에 `pet:drag {phase:'end'}` + `pet:press {pressed:false}`, 포인터를 잃으면 `pet:drag {phase:'cancel'}`.
 한 번·두 번 클릭 판정과 3px 끌기 문턱, 화면 맞춤은 메인이 한다. 오른쪽 클릭은 `pet:context-menu`. 말풍선이 보낸 `pet:collapse`는
-말풍선만 내린다. `pet:focus-state {dismissConfirm:true}`는 중지 확인을 거둔다.
+말풍선만 내린다. `pet:focus-state {dismissConfirm:true}`는 중지 확인을 거두고, 지금 눌린 Esc 를 뗄 때까지 잠근다.
+`pet:set-mode`는 `{mode}` 외에 목적지를 받는다(채널 이름은 그대로, payload 만 넓혔다) — `{mode:'calendar', date:'YYYY-MM-DD'}`(ISO 날짜시각이면
+이 PC 날짜로)는 그 날이 든 주·그 날 선택, `{mode:'council', ownerId, scope?}`(scope 없으면 `all`)는 그 담당·범위 대화. 셸은 이를
+`state.modeTarget {seq, mode, date | ownerId, scope}`로 방송하고(같은 모드여도 새 seq), 패널은 새 seq 에만 그 날짜·대화를 고른다.
+읽을 수 없는 목적지는 버리고 모드만 바꾼다(`pet-state.js`의 `modeTargetFrom`).
 
 허브 채널(`pet:hub-session` … `pet:council-handoff`)은 셸이 `pet-hub.js`의 `createPetHub(ctx)`로 만든 허브 모델에 넘긴다
 (`install({ hub })`로 바꿔 끼울 수 있고, `hub: null`이면 모든 허브 채널이 `{ kind: 'not-configured' }`). ctx는
