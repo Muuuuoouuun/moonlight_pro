@@ -85,32 +85,31 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
         float a = hairline*.65*coverage;
         return float4(float3(.15)*a,a);
     }
-    // A restrained spectrum in the rounded lip, not a rainbow frame. Its
-    // direction follows the surface normal; wavelength peaks are subpoint
-    // offsets and vanish before the flat face. On desktop this is a simulated
-    // reflected light, not refraction of windows behind the application.
-    // Scale the spectral lip with the bevel: production 9pt is 90% of the
-    // previous 10pt band. The outer hairline stays one physical pixel.
-    float lipScale = min(1.0,bevel/10.0);
-    float dispersion = .54*lipScale*clamp(u.material.z,0.0,1.8);
-    float direction = dot(outward,normalize(float2(-.7,-.5))) >= 0 ? 1.0 : -1.0;
-    float center = min(1.35*lipScale,bevel*.18);
-    float width = max(.52,.72/u.viewport.z)*lipScale;
+    // Two thin reflections on a curved lip. Concentrate the spectrum at
+    // the corners instead of painting a continuous rainbow around the frame.
+    float lipScale = min(1.0,bevel/9.0);
+    float corner = pow(clamp(2.0*abs(outward.x*outward.y),0.0,1.0),.65);
+    float facing = dot(outward,normalize(float2(-.72+u.light.x*.16,-.69+u.light.y*.16)));
+    float litArc = .32 + .68*pow(abs(facing),4.0);
+    float direction = facing >= 0 ? 1.0 : -1.0;
+    float center = 2.15*lipScale;
+    float dispersion = .90*lipScale*clamp(u.material.z,0.0,1.8);
+    float width = .65*lipScale;
     float3 spectrum = float3(reflectionBand(depth,center-dispersion*direction,width),
                               reflectionBand(depth,center,width),
                               reflectionBand(depth,center+dispersion*direction,width));
-    float litArc = .24 + .76*pow(abs(dot(outward,normalize(float2(-.7+u.light.x*.1,-.5+u.light.y*.1)))),3.0);
-    // More distinct wavelengths at the lit corners, with the same 9pt bevel.
-    float3 prism = spectrum * (.22*litArc*(1.0-t));
-    // A faint inner return gives the lip depth without extending into the face.
-    float innerReturn = reflectionBand(depth, bevel*.48, bevel*.095)
-                        * .040 * litArc * (1.0-t);
+    float3 prism = spectrum * (.68*corner*litArc*(1.0-t));
+    float outerReturn = reflectionBand(depth,.60*lipScale,.32*lipScale)
+                        * (.28+.36*litArc);
+    float innerReturn = reflectionBand(depth,4.25*lipScale,.36*lipScale)
+                        * (.07+.20*corner*litArc) * (1.0-t);
     if (!lab) {
-        // Premultiplied alpha; exactly transparent center, pass-through input.
-        // Approved study raised edge intensity from .45 to .66; preserve the
-        // 9pt geometry and color separation, raising only neutral reflection.
-        float3 reflection = float3(highlight * clamp(u.light.w / .45,0.0,1.6)) + prism + innerReturn;
-        float a = (max(reflection.r,max(reflection.g,reflection.b))+shadow)*coverage;
+        // Premultiplied source-over: narrow neutral lines, localized dispersion,
+        // and no broad gray shoulder or content-area fill.
+        float neutral = (outerReturn + innerReturn + highlight*.16)
+                        * clamp(u.light.w/.72,0.0,1.3);
+        float3 reflection = clamp(float3(neutral)+prism,0.0,.92);
+        float a = max(reflection.r,max(reflection.g,reflection.b))*coverage;
         return float4(reflection*coverage,a);
     }
     // Wavelength-dependent IOR samples only the app-owned calibration field.

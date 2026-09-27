@@ -43,6 +43,7 @@ final class GlassPanel: NSView {
     private let centerVeil: GlassCenterVeil?
     private let desktopRefraction: DesktopRefractionView?
     private var captureSubscription: AnyCancellable?
+    private let nativeEdgeMask = CALayer()
     private let rim: NSView
     private let foreground: NSView
     private let ornament: NSView?
@@ -104,7 +105,7 @@ final class GlassPanel: NSView {
         }
         wantsLayer = true
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.18
+        layer?.shadowOpacity = 0.12
         layer?.shadowRadius = 6
         layer?.shadowOffset = CGSize(width: 0, height: -2)
         // The under-window diffusion is the lowest native effect. It softens
@@ -117,6 +118,18 @@ final class GlassPanel: NSView {
         addSubview(rim)
         addSubview(foreground)
         if let ornament { addSubview(ornament) }
+        // The optical layer owns the lip. Feather only the native material's
+        // outer 8pt so its broad dark bevel does not bury the spectral reflection.
+        if rim is OpticalGlassView {
+            let feather: CGFloat = 8
+            let cap = radius + feather
+            let diameter = cap*2+1
+            nativeEdgeMask.contents = ReadingMask.image(radius: radius, feather: feather)
+                .cgImage(forProposedRect: nil, context: nil, hints: nil)
+            nativeEdgeMask.contentsCenter = CGRect(x: cap/diameter,y: cap/diameter,
+                                                   width: 1/diameter,height: 1/diameter)
+            material.wantsLayer = true
+        }
         updateMaterialAccessibility()
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(updateMaterialAccessibility),
             name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
@@ -128,6 +141,7 @@ final class GlassPanel: NSView {
         wash.solidForAccessibility = accessible
         centerDiffusion?.isHidden = accessible
         centerVeil?.isHidden = accessible
+        material.layer?.mask = !accessible && rim is OpticalGlassView ? nativeEdgeMask : nil
         if #available(macOS 26.0, *), let glass = material as? NSGlassEffectView {
             glass.style = accessible ? .regular : .clear
             glass.tintColor = nil
@@ -146,6 +160,10 @@ final class GlassPanel: NSView {
                                     width: CompanionLayout.perchSize, height: CompanionLayout.perchSize)
         }
         material.frame = frame
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        nativeEdgeMask.frame = material.bounds
+        CATransaction.commit()
         desktopRefraction?.frame = frame
         centerDiffusion?.frame = frame
         centerVeil?.frame = frame
