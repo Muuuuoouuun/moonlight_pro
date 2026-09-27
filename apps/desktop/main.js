@@ -53,7 +53,12 @@ const SMOKE_THEME = argValue('smoke-theme'); // light | dark — 찍기 전에 �
 const SMOKE_PET = argValue('smoke-pet') !== null;
 const SMOKE_PET_PAGE = argValue('smoke-pet-page'); // 펫 페이지 폴더(pet.html·panel.html…) 또는 파일 하나
 const userDataDir = argValue('user-data-dir');
-if (userDataDir) app.setPath('userData', path.resolve(userDataDir));
+if (userDataDir) {
+  app.setPath('userData', path.resolve(userDataDir));
+  // Electron 28+는 쿠키·캐시를 sessionData에 둔다(기본값은 시작 시점의 userData). userData만 바꾸면
+  // 격리 실행(스모크·검증)이 설치본과 로그인 세션을 공유한다 — 2026-09-27 실측(격리 실행에 대시보드가 로그인된 채 떴다).
+  app.setPath('sessionData', path.resolve(userDataDir));
+}
 // 스모크 캡처는 GPU 합성 없이도 찍혀야 한다(CI·원격 세션에서 UnknownVizError 방지).
 if (SMOKE) {
   app.disableHardwareAcceleration();
