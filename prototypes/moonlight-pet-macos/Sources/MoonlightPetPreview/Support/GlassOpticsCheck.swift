@@ -28,6 +28,15 @@ enum GlassOpticsCheck {
             fputs("Glass cross-section is too flat: white glint \(lipPeak), shoulder \(shoulder)\n",stderr)
             return false
         }
+        // A broad reflected source should have a coherent bright and quiet
+        // region along a straight side, rather than an equally bright wire.
+        func neutralLip(_ x: Int) -> Int {
+            (0..<3).map { Int(edge[(11*width+x)*4+$0]) }.min()!
+        }
+        guard neutralLip(90) - neutralLip(250) >= 35 else {
+            fputs("Glass reflection reads as uniform wire: bright \(neutralLip(90)), quiet \(neutralLip(250))\n",stderr)
+            return false
+        }
         // Every channel must be <= alpha: transparent overlays must be premultiplied.
         // The prism must produce measurable but restrained channel separation,
         // with no colored veil or white fill crossing the content area.

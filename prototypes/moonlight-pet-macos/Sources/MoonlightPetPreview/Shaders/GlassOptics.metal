@@ -130,20 +130,24 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     float2 alongWeights = abs(outward.yx);
     float along = dot(p/u.rect.zw,alongWeights)/max(.001,alongWeights.x+alongWeights.y);
     float sweep = .5+.5*cos((along-.32+u.light.x*.08)*M_PI_F);
+    // The neutral source has the same long footprint as its dispersed return.
+    // A uniform white wire obscures reflected depth, especially against black.
+    // Keep a quiet continuous silhouette, with one broad light image per side.
+    float sourceFootprint = .28+.90*pow(sweep,3.0);
     float spectralArc = corner + (1.0-corner)*(.08+.48*pow(sweep,4.0));
     float3 prism = spectrum * (.85*spectralArc*litArc*(1.0-t));
     // A polished round section: bright outer glint, a broad soft shoulder,
     // then a weaker inner return. All three stay inside the existing 9pt lip.
     float outerReturn = reflectionBand(depth,.85*lipScale,sqrt(pow(.54*lipScale,2.0)+footprint))
-                        * (.72+.30*litArc);
+                        * (.72+.30*litArc)*sourceFootprint;
     float shoulder = reflectionBand(depth,3.15*lipScale,2.1*lipScale)
-                        * (.16+.25*litArc) * (1.0-t);
+                        * (.16+.25*litArc) * (1.0-t)*(.5+.5*sourceFootprint);
     // The second image of the light follows a different curved optical path.
     // Vary separation slowly along the rim so it reads as reflected depth,
     // while the primary glint retains its thin, stable silhouette.
     float innerReturn = reflectionBand(depth,(5.35+.65*corner+.45*sweep)*lipScale,
                                       sqrt(pow(.55*lipScale,2.0)+footprint))
-                        * (.25+1.05*litArc) * (1.0-t);
+                        * (.25+1.05*litArc) * (1.0-t)*(.35+.65*sourceFootprint);
     // The polished shoulder rolls into the face: a low-energy reflection
     // behind the thin lip, localized to the light-facing arcs. A compact
     // support keeps every content-bearing center pixel transparent.
