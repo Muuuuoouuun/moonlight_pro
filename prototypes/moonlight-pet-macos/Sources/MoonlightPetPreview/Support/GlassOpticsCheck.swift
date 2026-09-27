@@ -42,6 +42,24 @@ enum GlassOpticsCheck {
                 return false
             }
         }
+        // Small pointer changes must not flip the wavelength order abruptly.
+        var priorFrame: [UInt8]?
+        var largestStep = 0
+        for step in 0...50 {
+            u.light.x = Float(step) / 50 - 0.5
+            guard let frame = renderer.pixels(u,width: width,height: height) else { return false }
+            if let priorFrame {
+                for channel in frame.indices {
+                    largestStep = max(largestStep, abs(Int(frame[channel])-Int(priorFrame[channel])))
+                }
+            }
+            priorFrame = frame
+        }
+        guard largestStep <= 12 else {
+            fputs("Prism reflection pops during pointer movement: \(largestStep)/255 per step\n",stderr)
+            return false
+        }
+        u.light.x = 0
         u.light.z = 1
         guard let accessible = renderer.pixels(u,width: width,height: height),
               alpha(accessible,160,120) == 0 else { return false }

@@ -88,20 +88,26 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     // Two thin reflections on a curved lip. Concentrate the spectrum at
     // the corners instead of painting a continuous rainbow around the frame.
     float lipScale = min(1.0,bevel/9.0);
-    float corner = pow(clamp(2.0*abs(outward.x*outward.y),0.0,1.0),.65);
+    float corner = smoothstep(0.0,1.0,2.0*abs(outward.x*outward.y));
     float facing = dot(outward,normalize(float2(-.72+u.light.x*.16,-.69+u.light.y*.16)));
     float litArc = .32 + .68*pow(abs(facing),4.0);
-    float direction = facing >= 0 ? 1.0 : -1.0;
+    // Continuous wavelength orientation: no sign flip across the corner.
+    float direction = tanh(facing*3.0);
     float center = 2.15*lipScale;
-    float dispersion = .90*lipScale*clamp(u.material.z,0.0,1.8);
-    float width = .65*lipScale;
+    float dispersion = .78*lipScale*clamp(u.material.z,0.0,1.8);
+    // Convolve the reflection with the pixel footprint. Thin highlights must
+    // remain continuous on both 1x and Retina rather than sparkle as RGB dots.
+    float footprint = 1.0/(6.0*u.viewport.z*u.viewport.z);
+    float width = sqrt(pow(.95*lipScale,2.0)+footprint);
     float3 spectrum = float3(reflectionBand(depth,center-dispersion*direction,width),
                               reflectionBand(depth,center,width),
                               reflectionBand(depth,center+dispersion*direction,width));
-    float3 prism = spectrum * (.68*corner*litArc*(1.0-t));
-    float outerReturn = reflectionBand(depth,.60*lipScale,.32*lipScale)
+    // Overlapping wavelengths sit inside one neutral specular reflection.
+    spectrum = mix(spectrum,float3(dot(spectrum,float3(1.0/3.0))),.18);
+    float3 prism = spectrum * (.78*corner*litArc*(1.0-t));
+    float outerReturn = reflectionBand(depth,.60*lipScale,sqrt(pow(.32*lipScale,2.0)+footprint))
                         * (.28+.36*litArc);
-    float innerReturn = reflectionBand(depth,4.25*lipScale,.36*lipScale)
+    float innerReturn = reflectionBand(depth,4.25*lipScale,sqrt(pow(.36*lipScale,2.0)+footprint))
                         * (.07+.20*corner*litArc) * (1.0-t);
     if (!lab) {
         // Premultiplied source-over: narrow neutral lines, localized dispersion,
