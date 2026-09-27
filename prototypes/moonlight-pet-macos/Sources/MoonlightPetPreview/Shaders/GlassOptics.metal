@@ -90,7 +90,10 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     float lipScale = min(1.0,bevel/9.0);
     float corner = smoothstep(0.0,1.0,2.0*abs(outward.x*outward.y));
     float facing = dot(outward,normalize(float2(-.72+u.light.x*.16,-.69+u.light.y*.16)));
-    float litArc = .32 + .68*pow(abs(facing),4.0);
+    // Broad area-light response keeps the return visible along a continuous
+    // side arc. A tight fourth-power lobe hid most of the polished section
+    // except at the diagonal corners, making dispersion look like isolated flecks.
+    float litArc = .45 + .55*pow(abs(facing),2.0);
     // Continuous wavelength orientation: no sign flip across the corner.
     float direction = tanh(facing*3.0);
     // The colored return sits behind the outer glint, like light travelling

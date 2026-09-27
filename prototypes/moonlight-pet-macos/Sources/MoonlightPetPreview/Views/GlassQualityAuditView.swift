@@ -92,7 +92,10 @@ private struct GlassAuditSpecimen: NSViewRepresentable {
             panel.frame = NSRect(x: 10, y: 14, width: bounds.width-20, height: bounds.height-80)
             if optical {
                 let region = panel.frame.insetBy(dx: CompanionLayout.gutter, dy: CompanionLayout.gutter)
-                lens?.setScene(scene.image(region: region))
+                // Supply the complete scene, just as desktop capture supplies
+                // the complete display. Cropping to the panel clamps displaced
+                // rim samples and conceals the optical boundary behavior.
+                lens?.setScene(scene.image(region: scene.bounds), region: region, logicalSize: scene.bounds.size)
             }
             ornament.frame = NSRect(x: bounds.width-102, y: bounds.height-88, width: 78, height: 78)
         }
@@ -213,6 +216,7 @@ private struct AuditContent: View {
     private var polishedTexture: MTLTexture?
     private let blur: MPSImageGaussianBlur
     private var sceneSize = CGSize.zero
+    private var sceneRegion = SIMD4<Float>(0,0,1,1)
     init(renderer: GlassOpticsRenderer) {
         self.renderer = renderer
         blur = MPSImageGaussianBlur(device: renderer.device, sigma: 5)
@@ -228,7 +232,11 @@ private struct AuditContent: View {
     required init(coder: NSCoder) { fatalError("init(coder:) unavailable") }
     override var isOpaque: Bool { false }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
-    func setScene(_ image: CGImage?) {
+    func setScene(_ image: CGImage?, region: CGRect, logicalSize: CGSize) {
+        guard logicalSize.width > 0, logicalSize.height > 0 else { return }
+        sceneRegion = DesktopRefractionView.textureRegion(panel: region,
+            screen: CGRect(origin: .zero, size: logicalSize))
+        needsDisplay = true
         guard let image, sceneSize != CGSize(width: image.width,height: image.height) else { return }
         sceneSize = CGSize(width: image.width,height: image.height)
         guard let source = try? MTKTextureLoader(device: renderer.device).newTexture(cgImage: image,
@@ -253,7 +261,7 @@ private struct AuditContent: View {
         var u = GlassUniforms()
         u.viewport = SIMD4(Float(bounds.width),Float(bounds.height),Float(drawableSize.width/bounds.width),0)
         u.material = SIMD4(Float(CompanionLayout.glassRadius),9,8,0)
-        u.backdrop = SIMD4(0,0,1,1)
+        u.backdrop = sceneRegion
         guard renderer.encode(u,pass: pass,buffer: buffer,backdrop: texture,polishedBackdrop: polishedTexture) else { return }
         buffer.present(drawable)
         buffer.commit()
