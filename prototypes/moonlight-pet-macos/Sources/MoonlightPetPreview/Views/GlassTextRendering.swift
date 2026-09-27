@@ -21,6 +21,10 @@ struct GlassTextProtection: ViewModifier {
 @available(macOS 15.0, *)
 struct GlassTextRenderer: TextRenderer {
     var shadows = true
+    var contactOpacity = GlassStudy.glyphShadow
+    var softOpacity = GlassStudy.softGlyphShadow
+    var contactRadius: CGFloat = 0.7
+    var softRadius: CGFloat = 2.2
     var displayPadding: EdgeInsets { EdgeInsets(top: 3, leading: 3, bottom: 3, trailing: 3) }
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
@@ -28,12 +32,12 @@ struct GlassTextRenderer: TextRenderer {
             if shadows {
                 // Two shadow-only draws; draw the unchanged glyphs once at the end.
                 var soft = context
-                soft.addFilter(.shadow(color: Palette.glassShadow.opacity(GlassStudy.softGlyphShadow), radius: 2.2,
+                soft.addFilter(.shadow(color: Palette.glassShadow.opacity(softOpacity), radius: softRadius,
                                        x: 0, y: 0.5, options: .shadowOnly))
                 soft.draw(line)
                 var contact = context
-                contact.addFilter(.shadow(color: Palette.glassShadow.opacity(GlassStudy.glyphShadow),
-                                          radius: 0.7, x: 0, y: 0.35, options: .shadowOnly))
+                contact.addFilter(.shadow(color: Palette.glassShadow.opacity(contactOpacity),
+                                          radius: contactRadius, x: 0, y: 0.35, options: .shadowOnly))
                 contact.draw(line)
             }
             context.draw(line)

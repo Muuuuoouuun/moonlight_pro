@@ -8,7 +8,9 @@ struct GlassQualityAuditView: View {
     @State private var character: PetCharacter = .silver
     @State private var interaction = false
     @State private var optical = true
-    @State private var brightInkStudy = false
+    @State private var study = AuditStudy.baseline
+    private var brightInkStudy: Bool { study == .darkInk }
+    private var contactStudy: Bool { study == .whiteContact }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -26,26 +28,37 @@ struct GlassQualityAuditView: View {
             HStack {
                 Toggle("실제 배경 굴절 셰이더 · 앱 내부 배경", isOn: $optical).toggleStyle(.switch)
                 Spacer()
-                Toggle("흰 배경 시안 · 짙은 글자 + 밝은 투과", isOn: $brightInkStudy).toggleStyle(.switch)
-                    .disabled(!optical)
+                Picker("비교", selection: $study) {
+                    ForEach(AuditStudy.allCases) { Text($0.rawValue).tag($0) }
+                }.frame(width: 340).disabled(!optical)
             }.font(.system(size: 12))
             HStack(spacing: 12) {
                 ForEach(AuditBackdrop.allCases) { backdrop in
                     VStack(spacing: 8) {
                         Text(backdrop.title).font(.system(size: 12, weight: .medium))
                         GlassAuditSpecimen(character: character, interaction: interaction, backdrop: backdrop,
-                                           optical: optical, brightInkStudy: brightInkStudy && optical)
+                                           optical: optical, brightInkStudy: brightInkStudy && optical,
+                                           contactStudy: contactStudy && optical)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
             }
-            Text(brightInkStudy && optical
+            Text(contactStudy && optical
+                 ? "미적용 시안: 흰 글자 · 밀착 그림자 73% / 넓은 그림자 37% · 밝은 투과. 흐림과 음영은 네이티브 기준이며 CSS 수치와 동일하지 않습니다."
+                 : brightInkStudy && optical
                  ? "미적용 시안: 흰 배경 열에만 글자·투과를 바꿉니다. 배경 자동 감지 구현이 아니며 실제 위젯은 바뀌지 않습니다."
                  : "같은 유리와 같은 글자를 비교합니다. 화면 기록을 사용하지 않는 배경 평가이며, 실제 데스크톱 굴절 검증은 별도입니다.")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
         }.padding(18).foregroundStyle(Color.black).background(Color.white)
             .environment(\.colorScheme, .light)
     }
+}
+
+private enum AuditStudy: String, CaseIterable, Identifiable {
+    case baseline = "기존 재질"
+    case whiteContact = "흰 글자 · 밝은 투과 + 밀착 그림자"
+    case darkInk = "흰 배경 · 짙은 글자 + 밝은 투과"
+    var id: Self { self }
 }
 
 private enum AuditBackdrop: String, CaseIterable, Identifiable {
@@ -62,10 +75,12 @@ private struct GlassAuditSpecimen: NSViewRepresentable {
     let backdrop: AuditBackdrop
     let optical: Bool
     let brightInkStudy: Bool
+    let contactStudy: Bool
     func makeNSView(context: Context) -> Specimen { Specimen(backdrop: backdrop, character: character) }
     func updateNSView(_ view: Specimen, context: Context) {
         view.setOptical(optical)
         view.setBrightInkStudy(brightInkStudy && backdrop == .white)
+        view.setContactStudy(contactStudy)
         view.panel.setCharacter(character)
         view.panel.previewCharacterTint(interaction)
         view.ornament.rootView = AuditOrnament(character: character)
@@ -95,6 +110,10 @@ private struct GlassAuditSpecimen: NSViewRepresentable {
         func setBrightInkStudy(_ value: Bool) {
             if inkStudy.dark != value { inkStudy.dark = value }
             lens?.brightInkStudy = value
+        }
+        func setContactStudy(_ value: Bool) {
+            if inkStudy.contact != value { inkStudy.contact = value }
+            lens?.contactStudy = value
         }
         func setOptical(_ value: Bool) {
             guard optical != value else { return }
@@ -187,10 +206,14 @@ private final class AuditScene: NSView {
 
 @MainActor private final class AuditInkStudy: ObservableObject {
     @Published var dark = false
+    @Published var contact = false
 }
 
 private struct AuditContent: View {
     @ObservedObject var inkStudy: AuditInkStudy
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    private var contactActive: Bool { inkStudy.contact && !reduceTransparency && contrast != .increased }
     @State private var text = ""
     @State private var selection = QuickMode.tasks
     private var ink: Color { inkStudy.dark ? Palette.surface3 : Palette.glassInk }
@@ -211,7 +234,9 @@ private struct AuditContent: View {
             TextField("선명도 확인용 입력", text: $text,
                       prompt: Text("선명도 확인용 입력").foregroundStyle(inkStudy.dark ? ink.opacity(0.7) : Palette.glassInkFaint))
                 .textFieldStyle(.plain).font(.system(size: 15))
-                .modifier(GlassGlyphShadow(enabled: !inkStudy.dark))
+                .modifier(GlassGlyphShadow(enabled: !inkStudy.dark && !contactActive))
+                .shadow(color: .black.opacity(contactActive ? 0.73 : 0), radius: 0.65, y: 0.35)
+                .shadow(color: .black.opacity(contactActive ? 0.37 : 0), radius: 1.6, y: 0.5)
                 .padding(13).modifier(GlassInputSurface(focused: false, inkOverride: inkStudy.dark ? ink : nil))
             VStack(alignment: .leading, spacing: 9) {
                 Text("유리 너머의 빛, 선명한 글자")
@@ -228,7 +253,23 @@ private struct AuditContent: View {
                 Text("12 pt")
             }.font(.system(size: 12, weight: .medium))
         }.padding(22).foregroundStyle(ink).tint(ink)
-            .modifier(GlassTextProtection(enabled: !inkStudy.dark))
+            .modifier(AuditForeground(dark: inkStudy.dark, contact: inkStudy.contact))
+    }
+}
+
+/// Lab-only values taken from the operator's HTML study. No actual widget overrides.
+private struct AuditForeground: ViewModifier {
+    let dark: Bool
+    let contact: Bool
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    func body(content: Content) -> some View {
+        if contact && !reduceTransparency && contrast != .increased, #available(macOS 15.0, *) {
+            content.textRenderer(GlassTextRenderer(contactOpacity: 0.73, softOpacity: 0.37,
+                                                  contactRadius: 0.65, softRadius: 1.6))
+        } else {
+            content.modifier(GlassTextProtection(enabled: !dark))
+        }
     }
 }
 
@@ -241,6 +282,9 @@ private struct AuditContent: View {
     private let blur: MPSImageGaussianBlur
     private var sceneSize = CGSize.zero
     private var sceneRegion = SIMD4<Float>(0,0,1,1)
+    var contactStudy = false {
+        didSet { if oldValue != contactStudy { needsDisplay = true } }
+    }
     var brightInkStudy = false {
         didSet { if oldValue != brightInkStudy { needsDisplay = true } }
     }
@@ -289,7 +333,7 @@ private struct AuditContent: View {
         u.viewport = SIMD4(Float(bounds.width),Float(bounds.height),Float(drawableSize.width/bounds.width),0)
         u.material = SIMD4(Float(CompanionLayout.glassRadius),9,8,0)
         // Explicit developer-only comparison; desktop capture always passes 0.
-        u.material.w = brightInkStudy ? 1 : 0
+        u.material.w = brightInkStudy ? 1 : (contactStudy ? 0.45 : 0)
         u.backdrop = sceneRegion
         guard renderer.encode(u,pass: pass,buffer: buffer,backdrop: texture,polishedBackdrop: polishedTexture) else { return }
         buffer.present(drawable)
