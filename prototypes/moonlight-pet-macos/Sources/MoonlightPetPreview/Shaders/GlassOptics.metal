@@ -93,12 +93,14 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     float litArc = .32 + .68*pow(abs(facing),4.0);
     // Continuous wavelength orientation: no sign flip across the corner.
     float direction = tanh(facing*3.0);
-    float center = 2.15*lipScale;
-    float dispersion = .78*lipScale*clamp(u.material.z,0.0,1.8);
+    // The colored return sits behind the outer glint, like light travelling
+    // through a rounded section. Curvature changes its depth continuously.
+    float center = (3.35+.65*corner)*lipScale;
+    float dispersion = 1.25*lipScale*clamp(u.material.z,0.0,1.8);
     // Convolve the reflection with the pixel footprint. Thin highlights must
     // remain continuous on both 1x and Retina rather than sparkle as RGB dots.
     float footprint = 1.0/(6.0*u.viewport.z*u.viewport.z);
-    float width = sqrt(pow(.95*lipScale,2.0)+footprint);
+    float width = sqrt(pow(1.55*lipScale,2.0)+footprint);
     float3 spectrum = float3(reflectionBand(depth,center-dispersion*direction,width),
                               reflectionBand(depth,center,width),
                               reflectionBand(depth,center+dispersion*direction,width));
@@ -108,22 +110,34 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     // Their envelope follows the glass surface; no noise or pixel-scale sparks.
     float sweep = .5+.5*sin((p.x+p.y)*.026+u.light.x*.3);
     float spectralArc = corner + (1.0-corner)*(.10+.28*pow(sweep,4.0));
-    float3 prism = spectrum * (.78*spectralArc*litArc*(1.0-t));
+    float3 prism = spectrum * (1.05*spectralArc*litArc*(1.0-t));
     // A polished round section: bright outer glint, a broad soft shoulder,
     // then a weaker inner return. All three stay inside the existing 9pt lip.
     float outerReturn = reflectionBand(depth,.85*lipScale,sqrt(pow(.60*lipScale,2.0)+footprint))
-                        * (.90+.08*litArc);
-    float shoulder = reflectionBand(depth,2.65*lipScale,1.65*lipScale)
-                        * (.17+.10*litArc) * (1.0-t);
-    float innerReturn = reflectionBand(depth,4.45*lipScale,sqrt(pow(.48*lipScale,2.0)+footprint))
-                        * (.24+.16*litArc) * (1.0-t);
+                        * (.72+.30*litArc);
+    float shoulder = reflectionBand(depth,3.15*lipScale,2.1*lipScale)
+                        * (.16+.25*litArc) * (1.0-t);
+    float innerReturn = reflectionBand(depth,(5.75+.4*corner)*lipScale,
+                                      sqrt(pow(.55*lipScale,2.0)+footprint))
+                        * (.12+.38*litArc) * (1.0-t);
+    // The polished shoulder rolls into the face: a low-energy reflection
+    // behind the thin lip, localized to the light-facing arcs. A compact
+    // support keeps every content-bearing center pixel transparent.
+    float faceReturn = reflectionBand(depth,8.5*lipScale,4.8*lipScale)
+                     * (.035+.105*corner)*litArc
+                     * (1.0-smoothstep(14.0*lipScale,20.0*lipScale,depth));
     if (!lab) {
         // Premultiplied source-over: narrow neutral lines, localized dispersion,
         // and no broad gray shoulder or content-area fill.
-        float neutral = (outerReturn + shoulder + innerReturn + highlight*.16)
+        float neutral = (outerReturn + shoulder + innerReturn + faceReturn + highlight*.16)
                         * clamp(u.light.w/.72,0.0,1.3);
         float3 reflection = clamp(float3(neutral)+prism,0.0,.92);
-        float a = max(reflection.r,max(reflection.g,reflection.b))*coverage;
+        float reflectionAlpha = max(reflection.r,max(reflection.g,reflection.b));
+        // A narrow inner attenuation provides a curved cross-section on bright
+        // scenes. It ends inside the bevel and never forms a content-area plate.
+        float innerAttenuation = reflectionBand(depth,7.1*lipScale,1.0*lipScale)
+                               * (.08+.07*(1.0-litArc));
+        float a = (reflectionAlpha + innerAttenuation*(1.0-reflectionAlpha))*coverage;
         return float4(reflection*coverage,a);
     }
     // Wavelength-dependent IOR samples only the app-owned calibration field.
@@ -140,7 +154,7 @@ fragment float4 glassFragment(VertexOut in [[stage_in]], constant GlassUniforms 
     glass.b = softened(point + blueRay.xy/max(.1,-blueRay.z)*travel,u,blur).b;
     // Preserve the background: no white floor, panel tint or central blur.
     // Specular light belongs to the bevel rather than a fill across the card.
-    glass = glass*(1-shadow) + outerReturn*.65 + shoulder + highlight*.16 + prism*.65 + innerReturn;
+    glass = glass*(1-shadow) + outerReturn*.65 + shoulder + highlight*.16 + prism*.65 + innerReturn + faceReturn;
     return float4(mix(backdrop,clamp(glass,0.0,1.0),coverage),1);
 }
 
@@ -156,7 +170,7 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     float2 q = point / size * 2.0 - 1.0;
     // A shallow continuous lens; fade at the boundary so it meets native glass.
     float dome = pow(max(0.0, 1.0 - dot(q,q)*.5), 2.0);
-    float2 bend = q * dome * u.material.z;
+    float2 bend = q * dome * u.material.z * 6.0;
     float2 outward = glassNormal(point,size,u.material.x);
     float edge = exp(-depth / 7.0) * smoothstep(0.0, 3.0, depth);
     bend -= outward * edge * u.material.z * 1.8;
@@ -164,10 +178,16 @@ fragment float4 desktopGlassFragment(VertexOut in [[stage_in]],
     float3 color = scene.sample(linearSampler, uv).rgb;
     // Background-only chromatic dispersion follows the curved rim. Keep the
     // content-bearing center achromatic and preserve uniform backgrounds.
-    float2 spectralOffset = outward * edge * u.material.z * .075 / size * u.backdrop.zw;
+    float2 spectralOffset = outward * edge * u.material.z * .24 / size * u.backdrop.zw;
     color.r = scene.sample(linearSampler, uv + spectralOffset).r;
     color.b = scene.sample(linearSampler, uv - spectralOffset).b;
+    // Neutral highlight roll-off protects fixed white foreground text. This
+    // follows captured luminance, never a rectangular readability mask. Midtones
+    // and blacks transmit unchanged, so dark scenes are not given a gray floor.
+    float peak = max(color.r,max(color.g,color.b));
+    float transmitted = peak-.33*smoothstep(.5,1.0,peak);
+    color *= transmitted/max(peak,.0001);
     // Blend into the unchanged native optical lip; no dark inner rectangle.
-    float alpha = smoothstep(0.0, 9.0, depth);
+    float alpha = smoothstep(0.0, 2.5, depth);
     return float4(color * alpha, alpha);
 }

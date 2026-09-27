@@ -6,28 +6,36 @@ import OSLog
 /// Character color belongs to transient interaction, not the resting glass.
 enum PetGlassTheme {
     static func opacity(for character: PetCharacter) -> CGFloat {
-        character == .pink ? 0.42 : 0.52
+        switch character {
+        case .pink: 0.30
+        case .brown: 0.32
+        case .gold: 0.26
+        case .lilac, .silver: 0.28
+        default: 0.30
+        }
     }
     static let primary: CGFloat = 0.98
     static let secondary: CGFloat = 0.92
     static let tertiary: CGFloat = 0.86
 
-    static func color(for character: PetCharacter) -> NSColor {
+    static func color(for character: PetCharacter, accessibility: Bool = false) -> NSColor {
         let rgb: (CGFloat, CGFloat, CGFloat)
         // Keep each portrait's hue readable through the neutral native glass.
         // Separation comes from color, not a denser interaction wash.
         switch character {
-        case .brown: rgb = (0.41, 0.27, 0.18)
-        case .blue: rgb = (0.17, 0.32, 0.48)
-        case .gold: rgb = (0.49, 0.39, 0.17)
-        case .red: rgb = (0.48, 0.22, 0.14)
-        case .lilac: rgb = (0.35, 0.255, 0.47)
-        case .dark: rgb = (0.21, 0.20, 0.225)
-        case .olive: rgb = (0.30, 0.38, 0.19)
-        case .silver: rgb = (0.29, 0.425, 0.50)
-        case .pink: rgb = (0.44, 0.28, 0.35)
+        case .brown: rgb = (0.68, 0.46, 0.28)
+        case .blue: rgb = (0.25, 0.48, 0.82)
+        case .gold: rgb = (0.90, 0.72, 0.28)
+        case .red: rgb = (0.90, 0.38, 0.25)
+        case .lilac: rgb = (0.63, 0.48, 0.81)
+        case .dark: rgb = (0.22, 0.22, 0.26)
+        case .olive: rgb = (0.55, 0.73, 0.34)
+        case .silver: rgb = (0.50, 0.78, 0.88)
+        case .pink: rgb = (0.88, 0.58, 0.72)
         }
-        return NSColor(srgbRed: rgb.0, green: rgb.1, blue: rgb.2, alpha: 1)
+        let transmission: CGFloat = accessibility ? 0.45 : 1
+        return NSColor(srgbRed: rgb.0*transmission, green: rgb.1*transmission,
+                       blue: rgb.2*transmission, alpha: 1)
     }
 }
 
@@ -73,6 +81,7 @@ final class PetGlassWash: NSView {
     }
     // Only the developer material lab uses this explicit preview override.
     var previewsTint = false { didSet { updatePresentation() } }
+    private let colorDepth = CAGradientLayer()
     private var interaction = GlassPressState()
     private var eventMonitor: Any?
     private var releaseTimer: Timer?
@@ -85,6 +94,12 @@ final class PetGlassWash: NSView {
         layer?.cornerRadius = radius
         layer?.cornerCurve = .continuous
         layer?.opacity = 0
+        colorDepth.cornerRadius = radius
+        colorDepth.cornerCurve = .continuous
+        colorDepth.startPoint = CGPoint(x: 0, y: 1)
+        colorDepth.endPoint = CGPoint(x: 1, y: 0)
+        colorDepth.locations = [0, 0.52, 1]
+        layer?.addSublayer(colorDepth)
         updateColor()
         NotificationCenter.default.addObserver(self, selector: #selector(resetInteraction),
             name: NSApplication.didResignActiveNotification, object: nil)
@@ -195,11 +210,21 @@ final class PetGlassWash: NSView {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        colorDepth.frame = bounds
+        CATransaction.commit()
+    }
+
     private func updateColor() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        layer?.backgroundColor = PetGlassTheme.color(for: character)
-            .withAlphaComponent(solidForAccessibility ? 1 : PetGlassTheme.opacity(for: character)).cgColor
+        let color = PetGlassTheme.color(for: character, accessibility: solidForAccessibility)
+        let opacity = PetGlassTheme.opacity(for: character)
+        let depths: [CGFloat] = solidForAccessibility ? [1, 1, 1] : [opacity, opacity*0.38, opacity*0.78]
+        colorDepth.colors = depths.map { color.withAlphaComponent($0).cgColor }
         CATransaction.commit()
     }
 }

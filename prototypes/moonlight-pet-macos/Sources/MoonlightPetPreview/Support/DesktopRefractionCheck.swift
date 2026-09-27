@@ -62,10 +62,25 @@ enum DesktopRefractionCheck {
                 }
             }
         }
+        // Highlight compression must protect fixed white glyphs without lifting
+        // blacks or adding a spatial rectangle to the captured backdrop.
+        for (input, range) in [(UInt8(255), 158...176), (UInt8(5), 4...6)] {
+            var field = [UInt8](repeating: input, count: size*size*4)
+            for i in stride(from: 3,to: field.count,by: 4) { field[i] = 255 }
+            field.withUnsafeBytes { bytes in
+                texture.replace(region: MTLRegionMake2D(0,0,size,size), mipmapLevel: 0,
+                    withBytes: bytes.baseAddress!,bytesPerRow: size*4)
+            }
+            guard let rendered = renderer.pixels(u,width: size,height: size,backdrop: texture),
+                  range.contains(Int(rendered[(80*size+80)*4])) else {
+                fputs("Desktop glass highlight/black transmission failed for \(input)\n",stderr)
+                return false
+            }
+        }
         u.light.z = 1
         guard let accessible = renderer.pixels(u, width: size, height: size, backdrop: texture),
               accessible.allSatisfy({ $0 == 0 }) else { return false }
-        print("PASS: desktop lens \(displaced) interior pixels displaced, no dark/white fill, clipped corners, accessibility bypass, secondary-screen UV mapping")
+        print("PASS: desktop lens \(displaced) interior pixels displaced, highlight rolloff with preserved midtones/blacks, clipped corners, accessibility bypass, secondary-screen UV mapping")
         return true
     }
 }
