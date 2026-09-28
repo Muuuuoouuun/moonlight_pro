@@ -54,6 +54,7 @@
 | 프로젝트 빠른 생성 드로어(1-1) · PMS 커맨드 센터 | 구현됨 | 스펙 `2026-07-17-project-create-drawer-design.md`, 플랜 `2026-07-17-*` 2건. `codex/project-fast-create-1-1` 병합 완료(2026-07 브랜치 정리). 잔여 범위는 플랜 문서 기준 |
 | 프로젝트 실행 백로그 | 구현·로컬 검증 완료 | 프로젝트·우선순위·기한 필터, 보드/할 일 연결, 선택 작업의 상태·기한 일괄 변경, 다음 행동 편집, 충돌·부분 실패 처리. [구현·검증 기록](superpowers/plans/2026-09-13-pms-execution.md). 운영 배포는 별도 |
 | 하위 아이템 체크리스트 | 구현·로컬 검증 완료 | 항목별 진행 게이지, 클릭 상세·체크리스트 탭, 세부 메모·순서 변경·삭제 되돌리기, 저장·재조회 및 동시 수정 선택. [구현·검증 기록](superpowers/plans/2026-09-13-pms-task-checklists.md). 운영 배포는 별도 |
+| 제품 카탈로그 0·1단계 | 구현·로컬 검증 완료 | 프로젝트 탭 `제품` 보기, 제품 카드(설명·대상 고객·제공 범위·필수 조건·가격·저장소), 단계 게이트, MVP 이상 동시 3개 상한, 제품 저장소 GitHub 동기화. [기획·구현 기록](superpowers/specs/2026-09-24-product-dev-projects-draft.md) §13. 운영 DB 왕복·배포는 별도 |
 | 백엔드 통합 | 완료 | `0c5e522` real_v1.3(bm) UI + real_v1.4 백엔드 병합, `adcf619` `@com-moon/supabase-rest` 단일 클라이언트 추출 |
 | 브랜드 탭 | P0·P1 구현, P2~P5 제안 | `2026-08-29-brand-tab-design.md`, `3627eef` |
 | 개인 매출 30일 로드맵 | 출시, 디자인 QA `blocked` | `2026-08-31-personal-revenue-roadmap.md`, `68517ec`, 루트 `design-qa.md`. 2026-09-23 통합: 정체 판정 `STALLED_DAYS` 단일 상수화·정체 스캔 `won`→`closing` 교정·Deals 칸반 Lost 컬럼(`2aa1d21`·`da146bb`) |
@@ -115,6 +116,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **프로젝트 · PMS (2026-09-13 실행 백로그·하위 아이템 보강)**
 
+- [`superpowers/specs/2026-09-24-product-dev-projects-draft.md`](superpowers/specs/2026-09-24-product-dev-projects-draft.md) — **v0.3 · 방향·핵심 정책 확정 / 0·1단계 구현·로컬 검증(2026-09-28) / 2단계 이후 권장안**. 수익형 코드 제품을 PMS 컨테이너(`brands`, `meta.category = product`)로 두는 제품 카탈로그. 2026-09-24 갈래 B(Moonlight 안) 확정, 2026-09-28 `product` 분류 추가·MVP 이상 동시 3개 집중·ClassIn 고객↔개인 제품은 같은 소속끼리만 확정. 구현: 프로젝트 탭 `제품` 보기(`?view=products`)·제품 카드 드로어·단계 게이트, Engine `update_product`(버전·단계 이력·집중 상한), 제품 카드 저장소로 GitHub 동기화, 브랜드 탭에서 제품 제외. 마이그레이션 0. 실제 Supabase 왕복·GitHub 실동기화는 미확인. `product_repositories`·webhook·개발 탭·템플릿·고객 적합도(09-13 리드 스펙 F축 재사용)는 2단계 이후. 2026-07-15 PMS 분류 D2(3종)를 4종으로 확장한다.
 - [`superpowers/plans/2026-09-13-pms-task-checklists.md`](superpowers/plans/2026-09-13-pms-task-checklists.md) — **구현·로컬 검증 완료**. 하위 아이템 상세와 체크리스트 기반 진척, 항목별 메모·정렬·저장·충돌 선택. `tasks.meta.checklist`를 사용하며 작업 상태와 체크리스트 완료율은 별도로 유지한다.
 
 - [`superpowers/plans/2026-09-13-pms-execution.md`](superpowers/plans/2026-09-13-pms-execution.md) — **구현·로컬 검증 완료**. 기존 tasks 기록의 실행 백로그, 공통 필터, 일괄 변경, 다음 행동, 정확한 버전 비교와 회사/개인 범위 구분. 새 스키마 없이 개인 운영 방향을 유지한다.
@@ -161,8 +163,6 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md`](superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md) — **1차 승인·구현 / 후속 분석·추천 DRAFT**. 내 작업 → 메모에서 제목 없는 빠른 기록·선택 보강·업무 연결·발췌의 할 일/Studio 생성과 원문 복귀를 연결한다. 같은 탭 새로고침 복구·충돌 비교·중복 방지 포함. [구현·검증·운영 적용 전제](superpowers/plans/2026-09-13-memo-workflow.md). 0027 운영 DB는 2026-09-14 적용 완료. 코드 배포는 별도다.
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
-
-- [`superpowers/specs/2026-09-24-product-dev-projects-draft.md`](superpowers/specs/2026-09-24-product-dev-projects-draft.md) — **v0.2 · 방향 확정(갈래 B: Moonlight 안에 넣기, 2026-09-24) / 상세 설계 권장안 / 구현 전**. 제품 = PMS 컨테이너(`brands` 행, `meta.category = product`)에 설명·대상 고객·제공 범위·필수 조건·단계를 담는 카드, 저장소는 `product_repositories`(저장소→제품 1:1), GitHub 폴링 + HMAC webhook을 Engine이 받아 `project_updates`에 기록, 프로젝트 탭 `제품` 보기와 개요/개발/고객 3탭 드로어, 체크리스트 템플릿 DB화. 고객 적합도는 09-13 리드 스펙 F축(F0~F3, 퍼센트 금지)을 그대로 쓰고 L1 규칙 대조 → 기회 탐색 후보 → 확인으로 등급화(L2 닮은 고객은 딜↔리드 연결 0/22로 막힘). 단계 0~6과 결정 8건(1건 확정).
 
 - [`superpowers/specs/2026-09-21-reference-capture-and-browse-usability-design.md`](superpowers/specs/2026-09-21-reference-capture-and-browse-usability-design.md) — **입력·모아보기 우선순위 운영자 확정 / 상세 동작 권장안 / 구현 전**. 한 칸에 링크·생각 입력, 저장 후 연속 입력, 전체 검색·상세·수정·즐겨찾기·복귀, 기존 자료 이관을 첫 출시로 제안한다. 09-20 기획의 Studio 우선 순서를 대체하며 AI 초안 연결은 후속이다.
 

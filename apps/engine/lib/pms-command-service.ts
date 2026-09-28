@@ -1,4 +1,13 @@
 import { deliveryDraft, validateDelivery, completionIssue, dayKey } from "../../../packages/project-delivery/index.ts";
+import {
+  FOCUS_STAGES,
+  MAX_FOCUS_PRODUCTS,
+  PRODUCT_CATEGORY,
+  isFocusStage,
+  mergeProductServerFields,
+  readProduct,
+} from "../../../packages/product-catalog/index.ts";
+import type { ProductCard } from "../../../packages/product-catalog/index.ts";
 
 import { MAX_FOCUS_PER_DAY, normalizePmsCommand, zonedDateKey } from "./pms-command.ts";
 import type { TaskFocusToggle } from "./pms-command.ts";
@@ -180,6 +189,55 @@ async function applyFocusToggle(
   return { ok: true, focusDates: [...current, date].sort() };
 }
 
+// 제품 카드 — 제품 컨테이너인지 확인하고, 서버 관리 필드(version·stageHistory)를 이전 기록에서
+// 이어 붙이며, 집중 단계(MVP·출시·성장)로 새로 들어올 때만 동시 집중 상한을 센다.
+// 이미 집중 단계에 있던 제품의 저장은 상한과 무관하다 — 상한은 새 진입만 막는다.
+async function prepareProductPatch(
+  patch: Record<string, unknown>,
+  meta: Record<string, unknown>,
+  input: {
+    id: string;
+    workspaceFilters: Array<[string, string]>;
+    now: string;
+    fetchRows: Dependencies["fetchRows"];
+  },
+): Promise<Record<string, unknown> | null> {
+  if (meta.category !== PRODUCT_CATEGORY) {
+    return { status: "invalid-input", error: "제품 컨테이너가 아닙니다. 분류를 제품으로 바꾼 뒤 다시 저장하세요." };
+  }
+  const supplied = (patch.meta as Record<string, unknown>).product as ProductCard;
+  const previous = meta.product;
+  const previousStage = previous ? readProduct(previous).stage : null;
+  if (isFocusStage(supplied.stage) && !isFocusStage(previousStage)) {
+    // 상한 조회는 반드시 워크스페이스로 좁힌다. 워크스페이스를 모르면 쓰지 않고 닫는다.
+    if (!input.workspaceFilters.length) return { status: "error", error: "missing-workspace" };
+    const focused = await input.fetchRows("brands", {
+      select: "id,name",
+      filters: [
+        ...input.workspaceFilters,
+        ["status", "eq.active"],
+        ["meta->>category", `eq.${PRODUCT_CATEGORY}`],
+        ["meta->product->>stage", `in.(${[...FOCUS_STAGES].join(",")})`],
+      ],
+      limit: MAX_FOCUS_PRODUCTS + 1,
+    });
+    if (focused === null) return { status: "error", error: "product-focus-count-read-failed" };
+    const others = focused.filter((row) => String(row.id) !== input.id);
+    if (others.length >= MAX_FOCUS_PRODUCTS) {
+      return {
+        status: "conflict",
+        error: "product-focus-limit",
+        retryable: false,
+        limit: MAX_FOCUS_PRODUCTS,
+        focused: others.map((row) => ({ id: row.id, name: row.name })),
+        message: `이미 ${MAX_FOCUS_PRODUCTS}개 제품에 집중하고 있습니다. 하나를 유지·종료로 내린 뒤 올려주세요.`,
+      };
+    }
+  }
+  (patch.meta as Record<string, unknown>).product = mergeProductServerFields(previous, supplied, input.now);
+  return null;
+}
+
 async function validateRelationship(
   command: Extract<ReturnType<typeof normalizePmsCommand>, { ok: true }>,
   dependencies: Dependencies,
@@ -308,8 +366,17 @@ export async function executePmsCommand(
         return { status: "conflict", error: "stale-update", entity: current };
       }
       const meta = current.meta && typeof current.meta === "object" ? current.meta as Record<string, unknown> : {};
-      command.patch.meta = { ...meta, ...command.patch.meta as Record<string, unknown> };
       command.patch.updated_at ||= context.now || new Date().toISOString();
+      if (command.action === "update_product") {
+        const productError = await prepareProductPatch(command.patch, meta, {
+          id: String(current.id),
+          workspaceFilters: command.filters.filter(([key]) => key === "workspace_id"),
+          now: String(command.patch.updated_at),
+          fetchRows: dependencies.fetchRows,
+        });
+        if (productError) return productError;
+      }
+      command.patch.meta = { ...meta, ...command.patch.meta as Record<string, unknown> };
       if (!expected) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
     }
     // Read + compare-and-swap protects the metadata merge and schedule history.

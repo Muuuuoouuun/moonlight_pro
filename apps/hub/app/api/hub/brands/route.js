@@ -52,9 +52,15 @@ export async function PATCH(req) {
   const parsed = await readHubWriteJson(req);
   if (parsed.error) return parsed.error;
 
+  // identity → 브랜드 탭 정체성, product → 제품 카드(제품 개발 기획 §4), 그 외 → 이름·분류·소속.
+  const action = parsed.data.identity
+    ? "update_brand_identity"
+    : parsed.data.product
+      ? "update_product"
+      : "update_brand";
   const result = await forwardPmsCommand({
     ...parsed.data,
-    action: parsed.data.identity ? "update_brand_identity" : "update_brand",
+    action,
     workspaceId: resolveDefaultWorkspaceId(),
   });
   return NextResponse.json(

@@ -247,6 +247,29 @@ test("brand create rejects unknown category and org scope", () => {
   );
 });
 
+test("product is the fourth container category and a product save needs the row version", () => {
+  const ctx = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-28T00:00:00.000Z" };
+  const created = pmsCommand.normalizePmsCommand({
+    action: "create_brand", id: "66666666-6666-4666-8666-666666666666",
+    name: "OMR 메이커", slug: "omr-maker", category: "product", orgScope: "personal",
+  }, ctx);
+  assert.equal(created.ok, true);
+  assert.equal(created.record.meta.category, "product");
+
+  const base = { action: "update_product", id: "66666666-6666-4666-8666-666666666666", product: { stage: "idea" } };
+  assert.deepEqual(pmsCommand.normalizePmsCommand(base, ctx), { ok: false, reason: "missing-brand-version" });
+
+  const saved = pmsCommand.normalizePmsCommand({ ...base, expectedUpdatedAt: "2026-09-27T00:00:00.000Z", summary: "학원 OMR 채점" }, ctx);
+  assert.equal(saved.ok, true);
+  assert.equal(saved.table, "brands");
+  assert.equal(saved.patch.description, "학원 OMR 채점");
+  assert.equal(saved.patch.meta.product.stage, "idea");
+  assert.deepEqual(saved.filters.at(-1), ["updated_at", "eq.2026-09-27T00:00:00.000Z"]);
+
+  const tooLong = pmsCommand.normalizePmsCommand({ ...base, expectedUpdatedAt: "2026-09-27T00:00:00.000Z", summary: "x".repeat(201) }, ctx);
+  assert.deepEqual(tooLong, { ok: false, reason: "invalid-summary" });
+});
+
 test("accepts PostgreSQL UUID values used by the live seeded workspace", () => {
   const result = pmsCommand.normalizePmsCommand(
     {

@@ -4,11 +4,15 @@ import {
   upsertIntegrationConnection,
 } from "./integration-state";
 import { insertSupabaseRecord } from "./supabase-rest";
+import {
+  mergeRepositoryConfigs,
+  normalizeRepo,
+  parseProductRepositories,
+  type GitHubRepoConfig,
+  type ProductRepositoryInput,
+} from "./github-product-repos";
 
-interface GitHubRepoConfig {
-  fullName: string;
-  projectId: string | null;
-}
+export { parseProductRepositories };
 
 interface GitHubApiResult<T> {
   ok: boolean;
@@ -71,10 +75,6 @@ function normalizeApiBaseUrl() {
   return (process.env.GITHUB_API_BASE_URL?.trim() || "https://api.github.com").replace(/\/$/, "");
 }
 
-function normalizeRepo(value: string) {
-  return value.trim().replace(/^https:\/\/github\.com\//i, "").replace(/\.git$/i, "");
-}
-
 function parseProjectMap() {
   const raw = process.env.GITHUB_PROJECT_MAP?.trim() || "";
   const map = new Map<string, string>();
@@ -94,17 +94,8 @@ function parseProjectMap() {
   return map;
 }
 
-export function resolveGitHubRepositories(): GitHubRepoConfig[] {
-  const projectMap = parseProjectMap();
-  const repos = (process.env.GITHUB_REPOSITORIES?.trim() || "")
-    .split(",")
-    .map(normalizeRepo)
-    .filter((repo) => /^[^/\s]+\/[^/\s]+$/.test(repo));
-
-  return Array.from(new Set(repos)).map((fullName) => ({
-    fullName,
-    projectId: projectMap.get(fullName.toLowerCase()) || null,
-  }));
+export function resolveGitHubRepositories(productRepositories: ProductRepositoryInput[] = []): GitHubRepoConfig[] {
+  return mergeRepositoryConfigs(process.env.GITHUB_REPOSITORIES?.trim() || "", parseProjectMap(), productRepositories);
 }
 
 export function getGitHubIntegrationStatus() {
@@ -190,6 +181,7 @@ function buildRepoSummary(
   return {
     repository: repo.fullName,
     projectId: repo.projectId,
+    productId: repo.productId || null,
     openIssues: issues.length,
     openPullRequests: pulls.length,
     reviewRequests,
@@ -306,8 +298,8 @@ async function writeProjectUpdates(summaries: Array<ReturnType<typeof buildRepoS
   return writes;
 }
 
-export async function syncGitHubRepositories() {
-  const repositories = resolveGitHubRepositories();
+export async function syncGitHubRepositories({ productRepositories = [] }: { productRepositories?: ProductRepositoryInput[] } = {}) {
+  const repositories = resolveGitHubRepositories(productRepositories);
   const startedAt = new Date().toISOString();
 
   if (!repositories.length) {

@@ -25,6 +25,8 @@ export const PROJECT_VIEW_OPTIONS = [
   { key: 'memos', label: '메모' },
   { key: 'timeline', label: 'Timeline' },
   { key: 'todos', label: 'To-dos' },
+  // 제품 카탈로그 (2026-09-24 제품 개발 기획 §6) — 제품 컨테이너만 모아 단계·집중 상한을 본다.
+  { key: 'products', label: '제품' },
 ];
 const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
 
@@ -46,11 +48,14 @@ export const STATUS_LINE_TOKEN = {
 // Container category folders (2026-07-15 spec §4.2). The ledger resolves
 // `category` (meta.category → canonical map → 'general'); empty folders are
 // never rendered. Collapse state is UI-only.
+// `product`는 2026-09-28 운영자 확정으로 더한 네 번째 분류다 (제품 개발 기획 §3·§12).
 export const PROJECT_CATEGORIES = [
   { key: 'sns-channel', label: 'SNS 채널' },
   { key: 'ka-deal', label: 'KA·딜' },
+  { key: 'product', label: '제품' },
   { key: 'general', label: '일반' },
 ];
+export const PRODUCT_CONTAINER_CATEGORY = 'product';
 // 브랜드 탭이 소유하는 분류 (2026-08-29 브랜드 탭 설계 §3). PMS는 이 분류의
 // 컨테이너를 *렌더*는 하되 — 이미 프로젝트가 붙어 있을 수 있으므로 —
 // 새로 만들지는 않고, 폴더는 기본 접힘으로 연다 (§4 P0-2·P0-3).
@@ -187,6 +192,7 @@ export function normalizeProjectView(raw) {
   // 2026-09-15 09-mac1: 홈/개요·목록 별칭도 받는다 (뷰 라벨 한글화와 함께).
   if (v === 'home' || v === 'overview') return 'tree';
   if (v === 'list') return 'table';
+  if (v === 'product') return 'products';
   return PROJECT_VIEWS.has(v) ? v : 'tree';
 }
 

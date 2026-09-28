@@ -220,9 +220,10 @@ test("EditDrawer protects dirty drafts and uses explicit save copy", () => {
   assert.match(projectsSource, /<ProjectTaskDetailDrawer[\s\S]*editing=\{Boolean\(taskEditSource\)\}/);
   assert.match(taskDrawerSource, /saveLabel=\{editing \? ['"]변경사항 저장['"] : `\$\{itemLabel\} 만들기`\}/);
   assert.match(taskDrawerSource, /itemType === 'task' \? '할 일'/);
+  // 2026-09-28: 제품 분류로 시드한 드로어는 "제품 만들기"로 말한다(제품 개발 기획 §3.1).
   assert.match(
     projectsSource,
-    /saveLabel=\{containerDraft\?\.isNew === false \? ['"]변경사항 저장['"] : ['"]컨테이너 만들기['"]\}/,
+    /saveLabel=\{containerDraft\?\.isNew === false \? ['"]변경사항 저장['"] : containerDraft\?\.category === PRODUCT_CONTAINER_CATEGORY \? ['"]제품 만들기['"] : ['"]컨테이너 만들기['"]\}/,
   );
 });
 

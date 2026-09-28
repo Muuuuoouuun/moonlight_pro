@@ -955,3 +955,130 @@ test("a client-sent focus_dates array is refused before any read or write", asyn
   assert.equal(updates.length, 0);
   assert.equal(reads.length, 0);
 });
+
+// ── 제품 카드 — 서버 관리 필드와 집중 3개 상한 (2026-09-24 제품 개발 기획 §4) ─────────────
+
+const PRODUCT_ID = "77777777-7777-4777-8777-777777777777";
+const PRODUCT_VERSION = "2026-09-27T00:00:00.000Z";
+
+function productDependencies({ meta = { category: "product", org_scope: "personal" }, focused = 0, updates = [], reads = [] } = {}) {
+  return {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async (table, filters, patch) => {
+      updates.push({ table, filters, patch });
+      return { persisted: true, reason: "ok", records: [{ id: PRODUCT_ID, ...patch }] };
+    },
+    fetchRows: async (table, options = {}) => {
+      reads.push({ table, options });
+      const filters = options.filters || [];
+      if (filters.some(([key]) => key === "meta->product->>stage")) {
+        return Array.from({ length: focused }, (_, i) => ({ id: `other-${i}`, name: `제품 ${i + 1}` }));
+      }
+      return [{ id: PRODUCT_ID, meta, updated_at: PRODUCT_VERSION }];
+    },
+  };
+}
+
+function productCommand(product, extra = {}) {
+  return { action: "update_product", id: PRODUCT_ID, expectedUpdatedAt: PRODUCT_VERSION, product, ...extra };
+}
+
+test("a product card save merges into brand meta and stamps server-owned fields", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand(
+    productCommand({ stage: "validation", problem: "채점이 오래 걸린다", version: 99 }, { summary: " 학원 OMR 자동 채점 " }),
+    { workspaceId: FOCUS_WS, now: "2026-09-28T01:00:00.000Z" },
+    productDependencies({ meta: { category: "product", org_scope: "personal", glyph: "○" }, updates }),
+  );
+
+  assert.equal(result.status, "saved");
+  assert.equal(updates.length, 1);
+  const { patch, filters } = updates[0];
+  assert.deepEqual(filters.find(([key]) => key === "updated_at"), ["updated_at", `eq.${PRODUCT_VERSION}`]);
+  assert.equal(patch.description, "학원 OMR 자동 채점");
+  // 브랜드 메타의 다른 키는 보존되고, 클라이언트가 보낸 version은 버려진다.
+  assert.equal(patch.meta.category, "product");
+  assert.equal(patch.meta.glyph, "○");
+  assert.equal(patch.meta.product.version, 1);
+  assert.deepEqual(patch.meta.product.stageHistory, [{ at: "2026-09-28T01:00:00.000Z", from: null, to: "validation" }]);
+});
+
+test("a product save is refused on a container that is not a product", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand(
+    productCommand({ stage: "idea" }),
+    { workspaceId: FOCUS_WS, now: "2026-09-28T01:00:00.000Z" },
+    productDependencies({ meta: { category: "general" }, updates }),
+  );
+  assert.equal(result.status, "invalid-input");
+  assert.match(result.error, /제품 컨테이너가 아닙니다/);
+  assert.equal(updates.length, 0);
+});
+
+test("entering a focus stage is refused once three other products hold focus", async () => {
+  const updates = [];
+  const reads = [];
+  const result = await pmsService.executePmsCommand(
+    productCommand({ stage: "mvp", repos: ["acme/omr"] }),
+    { workspaceId: FOCUS_WS, now: "2026-09-28T01:00:00.000Z" },
+    productDependencies({ meta: { category: "product", product: { stage: "validation" } }, focused: 3, updates, reads }),
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.equal(result.error, "product-focus-limit");
+  assert.equal(result.limit, 3);
+  assert.equal(result.focused.length, 3);
+  assert.equal(updates.length, 0);
+  const capRead = reads.find(({ options }) => (options.filters || []).some(([key]) => key === "meta->product->>stage"));
+  assert.deepEqual(capRead.options.filters, [
+    ["workspace_id", `eq.${FOCUS_WS}`],
+    ["status", "eq.active"],
+    ["meta->>category", "eq.product"],
+    ["meta->product->>stage", "in.(mvp,launch,growth)"],
+  ]);
+});
+
+test("a product already in focus saves without counting, and two others still leave room", async () => {
+  const stay = [];
+  const stayReads = [];
+  const kept = await pmsService.executePmsCommand(
+    productCommand({ stage: "launch" }),
+    { workspaceId: FOCUS_WS, now: "2026-09-28T01:00:00.000Z" },
+    productDependencies({ meta: { category: "product", product: { stage: "mvp" } }, focused: 5, updates: stay, reads: stayReads }),
+  );
+  assert.equal(kept.status, "saved");
+  assert.equal(stayReads.some(({ options }) => (options.filters || []).some(([key]) => key === "meta->product->>stage")), false);
+
+  const enter = [];
+  const entered = await pmsService.executePmsCommand(
+    productCommand({ stage: "mvp" }),
+    { workspaceId: FOCUS_WS, now: "2026-09-28T01:00:00.000Z" },
+    productDependencies({ meta: { category: "product", product: { stage: "idea" } }, focused: 2, updates: enter }),
+  );
+  assert.equal(entered.status, "saved");
+  assert.deepEqual(enter[0].patch.meta.product.stageHistory.at(-1), { at: "2026-09-28T01:00:00.000Z", from: "idea", to: "mvp" });
+});
+
+test("a stale product version conflicts before any focus count or write", async () => {
+  const updates = [];
+  const result = await pmsService.executePmsCommand(
+    { ...productCommand({ stage: "mvp" }), expectedUpdatedAt: "2026-09-01T00:00:00.000Z" },
+    { workspaceId: FOCUS_WS, now: "2026-09-28T01:00:00.000Z" },
+    productDependencies({ updates }),
+  );
+  assert.equal(result.status, "conflict");
+  assert.equal(result.error, "stale-update");
+  assert.equal(updates.length, 0);
+});
+
+test("invalid product input never reaches a read", async () => {
+  const reads = [];
+  const result = await pmsService.executePmsCommand(
+    productCommand({ repos: ["not a repo"] }),
+    { workspaceId: FOCUS_WS, now: "2026-09-28T01:00:00.000Z" },
+    productDependencies({ reads }),
+  );
+  assert.equal(result.status, "invalid-input");
+  assert.match(result.error, /owner\/repo/);
+  assert.equal(reads.length, 0);
+});

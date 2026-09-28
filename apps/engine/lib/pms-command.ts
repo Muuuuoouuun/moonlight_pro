@@ -1,4 +1,5 @@
 import { parseDelivery, validateDelivery, completionIssue, validDay } from "../../../packages/project-delivery/index.ts";
+import { PRODUCT_CATEGORY, parseProductInput } from "../../../packages/product-catalog/index.ts";
 
 // 오늘 Top 3 — 하루에 고를 수 있는 할 일 수. Hub task-today.js MAX_FOCUS_PER_DAY와 같은 값
 // (2026-09-20 세 축·Action KPI 기획 §6.2). 상한은 행을 읽는 pms-command-service가 강제한다.
@@ -40,7 +41,8 @@ const PROJECT_STATUSES = new Set(["draft", "active", "blocked", "completed", "ar
 const TASK_STATUSES = new Set(["inbox", "todo", "doing", "blocked", "done"]);
 const PRIORITIES = new Set(["low", "medium", "high", "critical"]);
 // PMS container (brand) taxonomy — mirrors the Hub 2026-07-15 spec §4.1.
-const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
+// `product` is the fourth folder (2026-09-28 operator decision, product-dev spec §3).
+const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general", PRODUCT_CATEGORY]);
 const BRAND_ORG_SCOPES = new Set(["classin", "personal"]);
 // PostgreSQL's uuid type accepts the full 8-4-4-4-12 hexadecimal form. The live
 // workspace and brand seeds intentionally use readable non-RFC variant values.
@@ -605,6 +607,29 @@ export function normalizePmsCommand(
     return { ok: true, action, table: "brands",
       filters: [["id", `eq.${id}`], ["workspace_id", `eq.${workspaceId}`], ["updated_at", `eq.${text(input.expectedUpdatedAt, 100)}`]],
       patch: { meta, updated_at: now.value } };
+  }
+
+  // 제품 카드 저장 — 제품 컨테이너만 받는다(서비스가 현재 meta.category를 확인한다).
+  // version·stageHistory·집중 3개 상한은 현재 행을 읽는 서비스가 계산·강제한다.
+  if (action === "update_product") {
+    const id = uuid(input.id);
+    const expected = dateTime(input.expectedUpdatedAt);
+    if (!id) return { ok: false, reason: "invalid-id" };
+    if (!expected.ok || !expected.value) return { ok: false, reason: "missing-brand-version" };
+    const parsed = parseProductInput(input.product);
+    if (!parsed.ok) return { ok: false, reason: parsed.error };
+    const patch: Record<string, unknown> = { meta: { product: parsed.product }, updated_at: now.value };
+    if (has(input, "summary")) {
+      if (typeof input.summary !== "string" || input.summary.length > 200) return { ok: false, reason: "invalid-summary" };
+      patch.description = input.summary.trim() || null;
+    }
+    return {
+      ok: true,
+      action,
+      table: "brands",
+      filters: [["id", `eq.${id}`], ["workspace_id", `eq.${workspaceId}`], ["updated_at", `eq.${text(input.expectedUpdatedAt, 100)}`]],
+      patch,
+    };
   }
 
   if (action === "update_brand") {

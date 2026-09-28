@@ -70,6 +70,7 @@ import {
   LIST_STATUS_GROUPS,
   PROJECT_CATEGORIES,
   PROJECT_VIEW_OPTIONS,
+  PRODUCT_CONTAINER_CATEGORY,
   SIDEBAR_HIDDEN_KEY,
   SUMMARY_FILTER_LABELS,
   buildLocalContainer,
@@ -83,6 +84,7 @@ import {
 import { ProjectTimelineView } from "./project-timeline-view";
 import { ProjectTodosView } from "./project-todos-view";
 import { ProjectBoardView } from "./project-board-view";
+import { ProjectProductView } from "./project-product-view";
 import { classifyProjectPortfolio, portfolioWindow } from "./project-pms-metrics";
 import {
   getWorkspace,
@@ -1155,6 +1157,18 @@ export function Projects({ workspace }) {
     });
   }, [workspace]);
 
+  // `제품` 보기의 제품 추가 — 같은 컨테이너 드로어를 제품 분류로 시드한다(제품 개발 기획 §3.1).
+  const createProductContainer = React.useCallback(() => {
+    setContainerDraft({
+      kind: 'container',
+      isNew: true,
+      id: createClientId(),
+      name: '',
+      category: PRODUCT_CONTAINER_CATEGORY,
+      orgScope: workspace === 'classin' ? 'classin' : 'personal',
+    });
+  }, [workspace]);
+
   // 기존 컨테이너 편집 — 이름·분류·소속만. glyph는 드로어에 없지만 update_brand의
   // meta 통째-교체에서 유실되지 않도록 draft에 실어 보낸다.
   const editContainer = React.useCallback((container) => {
@@ -1927,7 +1941,7 @@ export function Projects({ workspace }) {
           </div>
           <div style={{ flex: 1 }} />
           {/* 검색 — `/`로 포커스(useCrmKeyboard), ESC는 검색어가 있을 때만 지우고 소비. */}
-          {view !== 'tree' && view !== 'memos' && <span
+          {view !== 'tree' && view !== 'memos' && view !== 'products' && <span
             className="hub-project-search"
             style={{ display: 'contents' }}
             onKeyDown={(e) => {
@@ -1976,7 +1990,7 @@ export function Projects({ workspace }) {
           {taskView && (
             <Button className="hub-project-task-create" variant="primary" size="sm" icon="plus" disabled={!canWriteTasks || pendingTaskIds.size > 0} onClick={() => createTodo(null, view === 'backlog' ? 'inbox' : 'todo')}>작업 추가 <Kbd>N</Kbd></Button>
           )}
-          <Button className="hub-project-primary-control" variant={taskView || view === 'tree' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
+          <Button className="hub-project-primary-control" variant={taskView || view === 'tree' || view === 'products' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
             Project {!taskView && <Kbd>N</Kbd>}
           </Button>
         </div>
@@ -2018,6 +2032,19 @@ export function Projects({ workspace }) {
           />
         )}
 
+        {view === 'products' && (
+          <ProjectProductView
+            containers={brands}
+            allContainers={rawBrands}
+            projects={allProjects}
+            todos={scopedTodos}
+            scope={workspace}
+            sourceState={syncState}
+            onCreateProduct={createProductContainer}
+            onOpenProjects={(key) => { setBrand(key); setView('table'); }}
+            onSaved={() => loadLedger()}
+          />
+        )}
         {view === 'memos' && <MemoWorkspace
           projects={projects}
           initialProjectId={selectedProjectId || ''}
@@ -2848,8 +2875,12 @@ export function Projects({ workspace }) {
       )}
 
       <EditDrawer
-        title={containerDraft?.isNew === false ? '컨테이너 편집' : '새 컨테이너'}
-        subtitle={containerDraft?.isNew === false ? '이름·분류·소속을 변경한다 (key는 유지)' : 'KA·딜 또는 일반 컨테이너를 분류와 함께 만든다 · 브랜드는 브랜드 탭에서'}
+        title={containerDraft?.isNew === false ? '컨테이너 편집' : containerDraft?.category === PRODUCT_CONTAINER_CATEGORY ? '새 제품' : '새 컨테이너'}
+        subtitle={containerDraft?.isNew === false
+          ? '이름·분류·소속을 변경한다 (key는 유지)'
+          : containerDraft?.category === PRODUCT_CONTAINER_CATEGORY
+            ? '이름만 적으면 제품이 생긴다 · 설명·대상 고객·저장소는 제품 보기에서 채운다'
+            : 'KA·딜·제품 또는 일반 컨테이너를 분류와 함께 만든다 · 브랜드는 브랜드 탭에서'}
         record={containerDraft}
         fields={[
           { key: 'name', label: '이름', placeholder: '예: 우리학원 KA · 신규 브랜드' },
@@ -2877,7 +2908,7 @@ export function Projects({ workspace }) {
         ]}
         onChange={(key, value) => setContainerDraft(current => ({ ...current, [key]: value }))}
         onSave={persistContainer}
-        saveLabel={containerDraft?.isNew === false ? '변경사항 저장' : '컨테이너 만들기'}
+        saveLabel={containerDraft?.isNew === false ? '변경사항 저장' : containerDraft?.category === PRODUCT_CONTAINER_CATEGORY ? '제품 만들기' : '컨테이너 만들기'}
         onClose={() => setContainerDraft(null)}
       />
 

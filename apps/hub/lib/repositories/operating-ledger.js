@@ -9,6 +9,7 @@ import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-w
 import { canonicalOrgScopeForKey } from "../brand-org-scope.js";
 import { buildProjectProgress } from "../pms-ui.js";
 import { readTaskChecklist, projectItemType } from "../task-checklist.js";
+import { PRODUCT_CATEGORY, readProduct } from "../../../../packages/product-catalog/index.ts";
 import {
   buildProjectCatalogFetchPlan,
   buildProjectEntities,
@@ -29,7 +30,8 @@ const OPTIONAL_READ_LIMIT = 80;
 // 'general'. meta.category overrides; unknown values read as "general" — the
 // code never guesses. The canonical list is the operator-confirmed 2026-07-15
 // assignment (every existing container is an SNS channel).
-const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
+// 'product' (2026-09-28): 제품 컨테이너 — 카드 필드는 meta.product (제품 개발 기획 §3).
+const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general", PRODUCT_CATEGORY]);
 const CANONICAL_BRAND_CATEGORY = {
   sinabro: "sns-channel",
   gore: "sns-channel",
@@ -186,6 +188,7 @@ function mapBrands(rows, projects, todos, updates) {
   const brands = rows.map((row, index) => {
     const key = row.slug || row.id;
     const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
+    const category = resolveBrandCategory(key, meta);
 
     return {
       key,
@@ -193,7 +196,11 @@ function mapBrands(rows, projects, todos, updates) {
       name: row.name,
       glyph: meta.glyph || BRAND_GLYPHS[index % BRAND_GLYPHS.length],
       tone: meta.tone || normalizeBrandKind(row.kind),
-      category: resolveBrandCategory(key, meta),
+      category,
+      // 제품 카드 저장은 버전 비교(update_product)가 필요하다 — 제품 행에만 싣는다.
+      ...(category === PRODUCT_CATEGORY
+        ? { product: readProduct(meta.product), summary: row.description || "", updatedAt: row.updated_at || null }
+        : {}),
       orgScope: resolveBrandOrgScope(key, meta),
       kind: row.kind || "brand",
       desc: row.description || "운영 브랜드",

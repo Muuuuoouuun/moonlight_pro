@@ -1,12 +1,13 @@
 # 수익형 제품 개발 관리 — 제품 카탈로그·GitHub·프로젝트·고객 적합도
 
-> 상태: **v0.2 · 방향 확정(갈래 B) / 상세 설계 권장안 / 구현 전**
+> 상태: **v0.3 · 방향·핵심 정책 확정 / 0·1단계 구현·로컬 검증(2026-09-28) / 2단계 이후 권장안**
 > - 2026-09-24 운영자 확정: **갈래 B — Moonlight 안에 넣는다.** 별도 서비스(갈래 A)는 판매·팀 공유 결정이 생길 때만 다시 검토한다.
 > - 2026-09-24 운영자 요청 범위: 제품이 하나씩 늘어나는 것을 전제로 ① 제품별 설명 ② 프로젝트·GitHub 연결 ③ 프로젝트 탭 연결 ④ 어떤 고객이 어떤 제품을 살 수 있는지(유사도) 관리.
-> - 나머지(§12 결정 목록)는 모두 **권장**이며 확정 결정처럼 구현하지 않는다.
+> - 2026-09-28 운영자 확정("ㄱㅊ, ㄱㄱ, 3개 집중, ㄱㄱ"): ClassIn 고객 ↔ 개인 제품은 **같은 소속끼리만** 후보, PMS 분류에 **`product`(제품) 추가**, MVP 이상 **동시 3개 집중**, 진행. 구현 기록은 §13.
+> - §12의 나머지(제품 저장 위치 세부, 에러 도구, L3 AI, 첫 제품 선정)는 **권장**이며 확정 결정처럼 구현하지 않는다. 저장 위치는 0·1단계를 위해 권장안(PMS 컨테이너 재사용)으로 구현했다.
 >
 > 상위 정본: `operator-workflow-profile.md`(§2 개인 전용·SaaS 아님, §11 PMS 분야 `IT`·`AI 기반 서드파티 개발` 세부 단계 **미정**), `master-directive.md`(모든 흐름은 같은 command loop), `2026-09-09-project-delivery-lifecycle.md`, `2026-07-15-sidebar-second-level-and-pms-taxonomy.md` §4, `2026-08-29-brand-tab-design.md`
-> 관계: 고객 적합도는 `2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md` §5.1 **F축(상품·업무 적합도 0~3 또는 미확인)**을 그대로 쓴다. 새 점수 체계를 만들지 않는다. 그 스펙이 "승인된 상품 자료"와 "상품별 필수 조건 확인 틀"이 없어 닫아 둔 F2·F3 자동 산정의 **입력원**을 이 문서의 제품 카탈로그가 제공한다. 후보 노출은 `2026-09-13-opportunity-discovery-design.md`(기회 탐색)를 재사용한다.
+> 관계: `2026-07-15-sidebar-second-level-and-pms-taxonomy.md` §2 D2(PMS 분류 3종)를 `product`를 더한 4종으로 확장한다(2026-09-28). 고객 적합도는 `2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md` §5.1 **F축(상품·업무 적합도 0~3 또는 미확인)**을 그대로 쓴다. 새 점수 체계를 만들지 않는다. 그 스펙이 "승인된 상품 자료"와 "상품별 필수 조건 확인 틀"이 없어 닫아 둔 F2·F3 자동 산정의 **입력원**을 이 문서의 제품 카탈로그가 제공한다. 후보 노출은 `2026-09-13-opportunity-discovery-design.md`(기회 탐색)를 재사용한다.
 > v0.1(같은 날): 현황 점수 29/100과 두 갈래 비교. §1·§2에 요약으로 남겼다.
 
 ---
@@ -99,9 +100,9 @@
 
 게이트는 **막지 않고 알려준다**: 조건이 빠지면 "출시로 올리려면 배포 URL이 필요해요"처럼 빠진 칸으로 바로 데려간다.
 
-### 4.2 발산 억제 (권장, 수치는 운영자 결정)
+### 4.2 발산 억제 (상한 3개는 2026-09-28 확정, 나머지는 권장)
 
-- 동시에 `MVP`·`출시`·`성장`인 제품은 **최대 N개**(권장 2~3).
+- 동시에 `MVP`·`출시`·`성장`인 제품은 **최대 3개**. Engine `update_product`가 새 진입만 막는다(§13).
 - 넘치면 새 제품은 `아이디어`·`검증`에만 머무르고, 하나를 `유지`·`종료`로 내리라는 결정 카드가 뜬다. 자동으로 내리지 않는다.
 - 30일간 돈 축 0 + 모멘텀 축 0이면 "종료 또는 유지 전환" 결정 카드.
 
@@ -232,8 +233,8 @@ OMR 메이커 × ○○수학학원      ◇ 권장 · 후보
 
 ClassIn은 회사 공식 객체의 정본이고, 개인 프로젝트는 ClassIn으로 보내지 않는다(프로필 §2·§11). 회사 고객에게 개인 제품을 제안하는 것은 이해 충돌이 될 수 있다.
 
-- 권장 기본값: **같은 소속끼리만 후보를 만든다**(`personal` 제품 ↔ `personal` 고객, `classin` 제품 ↔ `classin` 고객).
-- 교차 허용 여부는 운영자 결정(§12-4). 허용하더라도 ClassIn 쪽으로는 아무것도 보내지 않는다.
+- **2026-09-28 확정: 같은 소속끼리만 후보를 만든다**(`personal` 제품 ↔ `personal` 고객, `classin` 제품 ↔ `classin` 고객). 교차 후보는 만들지 않는다.
+- ClassIn 쪽으로는 어떤 적합도 정보도 보내지 않는다.
 
 ## 9. 제품 점수 (100점, 읽을 때 계산)
 
@@ -278,13 +279,42 @@ ClassIn은 회사 공식 객체의 정본이고, 개인 프로젝트는 ClassIn�
 
 ## 12. 운영자 결정 목록
 
-| # | 결정 | 권장 |
+| # | 결정 | 상태 |
 | --- | --- | --- |
-| 1 | ~~A/B~~ | **B 확정 (2026-09-24)** |
-| 2 | PMS 분류에 `product`(제품)를 4번째로 추가 | 추가 |
-| 3 | 제품 저장 위치: PMS 컨테이너 재사용 vs 새 `products` 테이블 | 컨테이너 재사용 |
-| 4 | ClassIn 고객 ↔ 개인 제품 교차 후보 허용 | 불허(같은 소속끼리만) |
-| 5 | 동시에 MVP 이상인 제품 수 상한 | 2 또는 3 |
-| 6 | 에러 수집 도구 | Sentry 무료 등급 또는 당분간 없음 |
-| 7 | L3 AI 근거 사용 여부와 월 비용 상한 | 5단계 이후 결정 |
-| 8 | 1단계에서 넣어 볼 제품 2~3개 | 인벤토리 22개 중 매출에 가장 가까운 것 |
+| 1 | A/B | **확정 (2026-09-24)** · B |
+| 2 | PMS 분류에 `product`(제품)를 4번째로 추가 | **확정 (2026-09-28)** · 추가 |
+| 3 | 제품 저장 위치: PMS 컨테이너 재사용 vs 새 `products` 테이블 | 권장 · 컨테이너 재사용 (1단계는 이 안으로 구현) |
+| 4 | ClassIn 고객 ↔ 개인 제품 교차 후보 허용 | **확정 (2026-09-28)** · 불허, 같은 소속끼리만 (4단계에서 적용) |
+| 5 | 동시에 MVP 이상인 제품 수 상한 | **확정 (2026-09-28)** · 3개 |
+| 6 | 에러 수집 도구 | 권장 · Sentry 무료 등급 또는 당분간 없음 |
+| 7 | L3 AI 근거 사용 여부와 월 비용 상한 | 권장 · 5단계 이후 결정 |
+| 8 | 1단계에서 넣어 볼 제품 2~3개 | 진행 승인, 제품은 미지정 · 운영자가 `제품` 보기에서 직접 등록 (코드에 제품 데이터를 넣지 않는다 — no-mock-data) |
+
+## 13. 구현 기록 — 0·1단계 (2026-09-28, 로컬 검증)
+
+**들어간 것**
+
+| 영역 | 내용 | 파일 |
+| --- | --- | --- |
+| 공용 규칙 | 단계 6개, 집중 단계(MVP·출시·성장)와 상한 3, 카드 검증(`parseProductInput`), 관대한 읽기(`readProduct`), 서버 관리 필드 병합(제공 범위·필수 조건 문구가 바뀌면 버전 +1, 단계가 바뀌면 이력 1줄), 단계 게이트 | `packages/product-catalog/index.ts` |
+| Engine | `create_brand`·`update_brand`가 `product` 분류를 받는다. 새 `update_product` 명령 — 행 버전 필수, 제품 컨테이너가 아니면 거절, 집중 단계로 **새로 들어올 때만** 워크스페이스의 다른 집중 제품을 세어 3개면 `conflict · product-focus-limit`. 한 줄 설명은 `brands.description` | `apps/engine/lib/pms-command.ts`, `pms-command-service.ts` |
+| GitHub (0단계) | 동기화 요청 본문의 `productRepositories`(제품 카드 저장소)를 환경 변수 목록과 합쳐 읽는다. 저장소 요약에 `productId`가 붙는다 | `apps/engine/lib/github-product-repos.ts`, `github-sync.ts`, `app/api/integrations/github/sync/route.ts` |
+| Hub 읽기 | 제품 컨테이너에 `product`·`summary`·`updatedAt`를 싣는다. 브랜드 탭 목록에서 제품을 뺀다 | `apps/hub/lib/repositories/operating-ledger.js`, `brand-ledger.js` |
+| Hub 쓰기 | `PATCH /api/hub/brands`에 `product`가 오면 `update_product`로 보낸다 | `apps/hub/app/api/hub/brands/route.js` |
+| Hub 화면 | 프로젝트 탭 `제품` 보기(`?view=products`): 집중 N/3, 제품 한 줄씩(단계 · 다음 단계까지 빠진 칸 또는 다음 행동 · 프로젝트/작업/저장소 수), `GitHub 동기화`, `제품 추가`(컨테이너 드로어를 제품 분류로 시드). 행을 누르면 제품 카드 `EditDrawer`(단계·한 줄 설명·문제·다음 행동·대상 고객·과목 12키·제공 범위·필수 조건·가격·저장소·링크, 유지·종료 시 이유)와 현재 단계 조건 목록. 3개가 찬 상태에서 집중 단계로 올리려 하면 저장 전에 거절 사유를 보여준다 | `apps/hub/lib/product-catalog.js`, `components/hub/pages/project-product-view.jsx`, `projects.jsx`, `project-view-constants.js` |
+
+**기획과 달라진 점**
+
+- 저장소는 1단계에서 `meta.product.repos`(owner/repo 목록)에 둔다. 저장소→제품 1:1 보장과 webhook 라우팅용 `product_repositories` 테이블은 2단계에서 만든다. 지금은 같은 저장소를 두 제품에 적으면 동기화 때 먼저 나온 제품이 가진다.
+- GitHub 동기화 결과는 화면에 그 세션 동안만 제품별로 보인다. 기록은 기존처럼 `project_updates`에 남는다(`project_id` 없이, `payload.productId` 포함). 제품 상세의 `개발` 탭과 지속 표시는 2단계다.
+- 집중 상한은 Engine이 저장 직전에 세서 막는다. 두 창에서 동시에 네 번째를 올리는 경쟁은 DB 제약으로 막지 않았다(개인 전용 도구라 수용, 할 일 Top 3의 0043 같은 DB 트리거는 필요해지면 추가).
+- 제품 보기에서는 헤더 `Project` 버튼을 보조 스타일로 낮춰 주요 버튼을 하나로 유지한다(DESIGN §5.2).
+
+**검증**
+
+- 새 테스트: `packages/product-catalog/index.test.mjs`, `apps/engine/lib/github-product-repos.test.mjs`, `apps/hub/lib/product-catalog.test.mjs`, `apps/hub/lib/repositories/brand-ledger.test.mjs`, `pms-command.test.mjs`·`pms-command-service.test.mjs`에 제품 저장·상한·버전 충돌 케이스 추가.
+- `npm test`: 2287건 중 통과 2262 · 실패 7 · skip 18. 실패 7건은 변경 전 기준선에서도 똑같이 실패한다 — 이 컨테이너가 root로 돌아 `initdb`가 거부하는 PostgreSQL 테스트 6건과 프로세스 그룹 종료 테스트 1건.
+- Engine `tsc --noEmit` 통과, Hub·Engine `next build` 통과.
+- 브라우저: dev 서버(Supabase 미연결)에서 `?view=products`가 빈 상태·집중 0/3·비활성 동기화 버튼으로 렌더링되는 것을 확인. **실제 Supabase 왕복(제품 생성·카드 저장·상한 거절)과 GitHub 실동기화는 확인하지 않았다** — 운영 DB 연결과 Engine 배포 뒤 확인이 필요하다. 스키마 변경은 없다(마이그레이션 0).
+
+**남은 것 (2단계 이후)**: `product_repositories` 테이블과 저장소 연결 화면, GitHub webhook(CI 실패·PR 리뷰), 제품 상세 `개발` 탭, Codex 넘기기, cron(Vercel 환경 변수가 0개라 배포 구성 뒤), 체크리스트 템플릿, 고객 적합도.
