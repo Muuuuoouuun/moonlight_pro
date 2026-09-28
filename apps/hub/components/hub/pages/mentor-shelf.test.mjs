@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { GURU_CARDS, LEGEND_CARDS, guidanceDailyWindow, listGuidanceCards, listGuidanceCardsForPerson, listGuidancePeople, selectGuidanceCard } from '../../../../../packages/guru-guidance/index.ts';
+import { SOURCE_PEOPLE } from '../../../../../packages/guru-guidance/source-people.generated.js';
 import { GuidanceSource } from '../guidance-source.jsx';
 
 const jsxFile = new URL('./mentor-shelf.jsx', import.meta.url);
@@ -33,18 +34,20 @@ function mount({ onGuidanceAsk = () => {}, onNavigate = () => {}, requestedCardI
   const TextField = function TextField() {};
   const EmptyState = function EmptyState() {};
   const GuidanceDetail = function GuidanceDetail() {};
+  // The reader loads the original text lazily; here it only records what the shelf asked for.
+  const GuidanceSourceReader = function GuidanceSourceReader() {};
   const compiled = ts.transpile(
     source.replace(/^import[^\n]+\n/gm, '').replace(/^export /gm, ''),
     { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
   );
   const MentorShelf = new Function(
-    'React', 'Button', 'Card', 'EmptyState', 'SegmentedControl', 'TextField', 'GuidanceSource', 'GuidanceDetail',
+    'React', 'Button', 'Card', 'EmptyState', 'SegmentedControl', 'TextField', 'GuidanceSource', 'GuidanceDetail', 'GuidanceSourceReader', 'SOURCE_PEOPLE',
     'selectGuidanceCard', 'guidanceDailyWindow', 'listGuidanceCards', 'listGuidancePeople', 'listGuidanceCardsForPerson',
     'GURU_CARDS', 'LEGEND_CARDS',
     'sessionStorage', 'window', 'document',
     `${compiled}\nreturn MentorShelf;`,
   )(
-    React, Button, Card, EmptyState, SegmentedControl, TextField, GuidanceSource, GuidanceDetail,
+    React, Button, Card, EmptyState, SegmentedControl, TextField, GuidanceSource, GuidanceDetail, GuidanceSourceReader, SOURCE_PEOPLE,
     selectGuidanceCard,
     guidanceDailyWindow,
     listGuidanceCards,
@@ -59,7 +62,9 @@ function mount({ onGuidanceAsk = () => {}, onNavigate = () => {}, requestedCardI
     Button,
     SegmentedControl,
     TextField,
+    EmptyState,
     GuidanceDetail,
+    GuidanceSourceReader,
     render() { cursor = 0; return MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }); },
   };
 }
@@ -314,6 +319,143 @@ test('Atlas searches person and method in Guru and includes all three read-only 
   tree = app.render();
   assert.equal(nodes(tree, node => node.type === app.GuidanceDetail).length, 0);
   assert.equal(nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === 'Legend 분야 카드 목록')[0].props.children.length, 0);
+});
+
+const readerNodes = (app, tree) => nodes(tree, node => node.type === app.GuidanceSourceReader);
+const buttonNamed = (app, tree, pattern) => nodes(tree, node => node.type === app.Button && pattern.test(words(node)))[0];
+
+test('browse detail keeps the Moonlight article primary and opens the reference original only as a secondary, read-only action', () => {
+  const asked = [];
+  const navigations = [];
+  const app = mount({ onGuidanceAsk: card => asked.push(card), onNavigate: path => navigations.push(path) });
+  let tree = app.render();
+  assert.equal(readerNodes(app, tree).length, 0, 'the original stays closed until asked for');
+  const domainList = nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === '세일즈 분야 카드 목록')[0];
+  nodes(domainList, node => node.type === 'button' && /MEDDIC/.test(words(node)))[0].props.onClick();
+  tree = app.render();
+  const detail = nodes(tree, node => node.props?.role === 'region' && node.props?.className === 'mentor-shelf__person-detail')[0];
+  const open = buttonNamed(app, detail, /참고 문서 원문/);
+  assert.ok(open, 'the card detail offers the reference original as a secondary action');
+  assert.equal(open.props.variant, 'ghost', 'the reading article and the question stay the stronger actions');
+  assert.ok(nodes(detail, node => node.props?.role === 'button' && /Moonlight 글 읽기/.test(node.props?.['aria-label'] || '')).length, 'the card itself still opens the Moonlight article');
+  assert.equal(open.props['aria-expanded'], false);
+  open.props.onClick();
+  tree = app.render();
+  const openDetail = nodes(tree, node => node.props?.role === 'region' && node.props?.className === 'mentor-shelf__person-detail')[0];
+  const [reader] = readerNodes(app, openDetail);
+  assert.ok(reader, 'the reader renders inline inside the selected card');
+  assert.equal(reader.props.card.id, 'sales-meddic');
+  assert.equal(reader.props.card.source.section, 'Qualification — MEDDIC 프레임워크');
+  assert.equal(reader.props.id, 'mentor-shelf-source-reader');
+  assert.equal(typeof reader.props.onClose, 'function');
+  const close = buttonNamed(app, openDetail, /참고 원문 닫기/);
+  assert.equal(close.props['aria-expanded'], true);
+  assert.equal(close.props['aria-controls'], 'mentor-shelf-source-reader');
+  assert.deepEqual([asked.length, navigations.length], [0, 0], 'reading the original never asks a mentor or navigates');
+  nodes(tree, node => node.type === 'button' && /GAP Selling/.test(words(node)))[0].props.onClick();
+  tree = app.render();
+  assert.equal(readerNodes(app, tree).length, 0, 'choosing another card closes the previous original');
+});
+
+test('person browsing opens the same original for the selected person card', () => {
+  const app = mount();
+  let tree = app.render();
+  nodes(tree, node => node.type === app.SegmentedControl && node.props.label === '멘토 탐색 방식')[0].props.onChange('person');
+  tree = app.render();
+  nodes(tree, node => node.type === 'button' && /Keenan/.test(words(node)))[0].props.onClick();
+  tree = app.render();
+  const detail = () => nodes(tree, node => node.props?.role === 'region' && node.props?.className === 'mentor-shelf__person-detail')[0];
+  buttonNamed(app, detail(), /참고 문서 원문/).props.onClick();
+  tree = app.render();
+  const [reader] = readerNodes(app, detail());
+  assert.equal(reader.props.card.personId, 'keenan');
+  assert.equal(reader.props.headingLevel, 5, 'original headings sit below the card h4, never h1/h2');
+});
+
+test('the weekly Legend card opens its long card and micro-card originals across the full row', () => {
+  const navigations = [];
+  const app = mount({ onNavigate: path => navigations.push(path) });
+  let tree = app.render();
+  const legendArticle = nodes(tree, node => node.props?.['aria-label'] === '이번 주 Legend 카드')[0];
+  const open = buttonNamed(app, legendArticle, /참고 문서 원문/);
+  assert.ok(open);
+  assert.equal(open.props.variant, 'ghost');
+  open.props.onClick();
+  tree = app.render();
+  const legendPerson = nodes(tree, node => node.type === 'h4').map(node => words(node))[1];
+  const legend = LEGEND_CARDS.find(card => card.person === legendPerson);
+  const wrapper = nodes(tree, node => node.props?.className === 'mentor-shelf__legend-reader')[0];
+  assert.ok(wrapper, 'the Legend original spans the row below both cards');
+  const [reader] = readerNodes(app, wrapper);
+  assert.equal(reader.props.card.id, legend.id, 'resolved by card id, never by source.path');
+  assert.equal(reader.props.headingLevel, 4);
+  assert.match(reader.props.label, /이번 주 Legend/);
+  assert.equal(navigations.length, 0);
+  buttonNamed(app, tree, /다른 Legend 보기/).props.onClick();
+  tree = app.render();
+  assert.equal(readerNodes(app, tree).length, 0, 'the next Legend starts closed');
+});
+
+test('person browsing lists people with originals but no reviewed card and reads them directly', () => {
+  const asked = [];
+  const app = mount({ onGuidanceAsk: card => asked.push(card) });
+  let tree = app.render();
+  nodes(tree, node => node.type === app.SegmentedControl && node.props.label === '멘토 탐색 방식')[0].props.onChange('person');
+  tree = app.render();
+  nodes(tree, node => node.type === app.SegmentedControl && node.props.label === '탐색 분야')[0].props.onChange('content');
+  tree = app.render();
+  const withCards = new Set(listGuidancePeople().map(person => person.id));
+  const expected = SOURCE_PEOPLE.filter(person => person.collection === 'content' && !withCards.has(person.personId));
+  assert.ok(expected.length >= 6, 'the content original names people the cards never covered');
+  const sourceList = nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === '콘텐츠 원문만 있는 인물 목록')[0];
+  assert.ok(sourceList);
+  const choices = nodes(sourceList, node => node.type === 'button');
+  assert.deepEqual(choices.map(node => words(nodes(node, item => item.type === 'strong')[0])),
+    expected.map(person => person.name).sort((a, b) => a.localeCompare(b, 'en')));
+  assert.ok(choices.every(node => /원문만 · 검수 카드 없음/.test(words(node))));
+  assert.match(words(tree), new RegExp(`원문만\\s+${expected.length}\\s*명`));
+  const cardList = nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === '콘텐츠 멘토 목록')[0];
+  assert.deepEqual(nodes(cardList, node => node.type === 'button').map(node => words(nodes(node, item => item.type === 'strong')[0])),
+    listGuidancePeople({ domain: 'content' }).map(person => person.name), 'reviewed people keep their order ahead of originals');
+
+  const hormozi = choices.find(node => /Alex Hormozi/.test(words(node)));
+  hormozi.props.onClick();
+  tree = app.render();
+  const region = nodes(tree, node => node.props?.role === 'region' && node.props?.id === 'mentor-shelf-person-detail')[0];
+  assert.match(region.props.className, /mentor-shelf__person-detail--source/);
+  assert.match(words(region), /Alex Hormozi/);
+  assert.match(words(region), /원문만 · 검수 카드 없음/);
+  const [reader] = readerNodes(app, region);
+  assert.equal(reader.props.personId, 'alex-hormozi');
+  assert.equal(reader.props.card, undefined, 'no card is invented for a person without one');
+  assert.equal(reader.props.autoFocus, false, 'selecting from the list keeps focus in the list');
+  assert.equal(nodes(region, node => node.type === app.Button && /질문 쓰기/.test(words(node))).length, 0);
+  assert.equal(nodes(tree, node => node.props?.className === 'mentor-shelf__person-detail').length, 0, 'no reviewed card detail beside it');
+  assert.equal(asked.length, 0);
+});
+
+test('Atlas search narrows the source-only people as well as the reviewed ones', () => {
+  const app = mount();
+  let tree = app.render();
+  nodes(tree, node => node.type === app.SegmentedControl && node.props.label === '멘토 탐색 방식')[0].props.onChange('person');
+  tree = app.render();
+  nodes(tree, node => node.type === app.SegmentedControl && node.props.label === '탐색 분야')[0].props.onChange('content');
+  tree = app.render();
+  nodes(tree, node => node.type === app.TextField && node.props.label === '인물 또는 관점 검색')[0].props.onChange({ target: { value: 'hormozi' } });
+  tree = app.render();
+  const sourceList = nodes(tree, node => node.type === 'ul' && node.props['aria-label'] === '콘텐츠 원문만 있는 인물 목록')[0];
+  assert.deepEqual(nodes(sourceList, node => node.type === 'button').map(node => words(nodes(node, item => item.type === 'strong')[0])), ['Alex Hormozi']);
+  assert.equal(nodes(tree, node => node.type === app.EmptyState).length, 1, 'no reviewed card matches, so the empty state explains it');
+  nodes(sourceList, node => node.type === 'button')[0].props.onClick();
+  tree = app.render();
+  assert.equal(nodes(tree, node => node.type === app.EmptyState).length, 0, 'a chosen original replaces the empty state');
+  assert.equal(readerNodes(app, tree)[0].props.personId, 'alex-hormozi');
+});
+
+test('the shelf keeps the full original library out of its own bundle', () => {
+  assert.match(source, /from '@com-moon\/guru-guidance\/source-people'/);
+  assert.doesNotMatch(source, /@com-moon\/guru-guidance\/source-library/);
+  assert.doesNotMatch(source, /source-library\.generated/);
 });
 
 test('the shelf follows Hub token and responsive contracts', () => {

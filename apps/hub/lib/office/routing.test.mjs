@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { OFFICE_ROUTING_VERSION } from '@com-moon/agent-contracts/office-routing';
 import { callOfficeRoutingEngine } from './routing-engine-client.js';
-import { createOfficeRoutingHubHandler } from './routing-http.js';
+import { OFFICE_ROUTING_MAX_BODY_BYTES, createOfficeRoutingHubHandler } from './routing-http.js';
 
 const request = { message: '고객 견적 답장을 준비해 주세요.', scope: 'classin' };
 const result = { status: 'recommended', version: OFFICE_ROUTING_VERSION, ownerId: 'flareon', reviewerIds: ['leafeon'], reason: '고객 답장과 가격 부담을 나눠 검토합니다.', scope: 'classin' };
@@ -60,4 +60,25 @@ test('Hub preserves manual selection on preview and error', async () => {
     assert.equal(response.status, httpStatus);
     assert.equal((await response.json()).status, status);
   }
+});
+
+test('Hub accepts the full 6,000-character Korean agenda and leaves the limit to the character contract', async () => {
+  const seen = [];
+  const handler = createOfficeRoutingHubHandler({ callEngine: async value => { seen.push(value); return { ...result, scope: value.scope }; } });
+  const agenda = '가'.repeat(6000);
+  assert.ok(Buffer.byteLength(JSON.stringify({ message: agenda, scope: 'classin' })) > 12000, 'the old byte cap rejected this agenda');
+  const response = await handler(hubRequest({ message: agenda, scope: 'classin' }));
+  assert.equal(response.status, 200);
+  assert.equal(seen[0].message, agenda);
+  const tooLong = await handler(hubRequest({ message: '가'.repeat(6001), scope: 'classin' }));
+  assert.equal(tooLong.status, 400);
+  assert.equal((await tooLong.json()).error, '안건 길이를 확인해 주세요.');
+  assert.equal(seen.length, 1);
+  // Even a worst-case JSON encoding of a contract-valid agenda fits the byte guard.
+  assert.ok(Buffer.byteLength(JSON.stringify({ message: '\u0001'.repeat(6000), scope: 'personal' })) <= OFFICE_ROUTING_MAX_BODY_BYTES);
+  const oversized = await handler(new Request('http://localhost:3100/api/hub/office/assignment', {
+    method: 'POST', headers: { origin: 'http://localhost:3100' }, body: JSON.stringify({ message: '가'.repeat(13000), scope: 'classin' }),
+  }));
+  assert.equal(oversized.status, 413);
+  assert.equal(seen.length, 1);
 });

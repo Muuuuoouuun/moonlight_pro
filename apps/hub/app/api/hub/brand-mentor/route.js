@@ -6,13 +6,19 @@ import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { createWorkOrder } from "@/lib/sales-os/work-orders";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
 import { isGuidanceCardForDomain, isValidAdvisorInput } from "@/lib/advisor-input";
+import { OFFICE_MENTOR_DRAFT_LIMIT } from "@/components/hub/office-mentor-client";
 import { isValidBrandGuruConversationHistory } from "@/lib/guru-chat-history";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ENGINE_PATH = "/api/ai/brand-mentor";
-const OFFICE_REVIEW_DRAFT_LIMIT = 6000;
+// Office escalations carry the Office result verbatim (see office-mentor-client).
+const OFFICE_REVIEW_DRAFT_LIMIT = OFFICE_MENTOR_DRAFT_LIMIT;
+// JSON may spend up to 6 bytes per UTF-16 unit (\uXXXX escapes; Korean needs 3), so any
+// draft within the character limit fits. Every other caller keeps the default 64 KiB cap.
+const OFFICE_REVIEW_MAX_JSON_BYTES = 160 * 1024;
+const DEFAULT_MAX_JSON_BYTES = 64 * 1024;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
 function parseOfficeSource(value) {
@@ -159,12 +165,18 @@ export async function POST(req) {
     return guard;
   }
 
-  const parsed = await readHubWriteJson(req);
+  const parsed = await readHubWriteJson(req, { maxBytes: OFFICE_REVIEW_MAX_JSON_BYTES });
   if (parsed.error) {
     return parsed.error;
   }
 
   const input = parsed.data;
+  if (parsed.byteLength > DEFAULT_MAX_JSON_BYTES && input?.mode !== "office-review") {
+    return NextResponse.json(
+      { status: "payload-too-large", error: `JSON payload must be ${DEFAULT_MAX_JSON_BYTES} bytes or smaller.` },
+      { status: 413 },
+    );
+  }
   if (!isValidAdvisorInput(input)) {
     return NextResponse.json({ status: "error", error: "자문 설정의 형식을 확인해 주세요." }, { status: 400 });
   }

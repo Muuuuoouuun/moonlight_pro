@@ -6,6 +6,9 @@
   "main": "index.ts",
   "types": "index.ts",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./source-library": "./source-library.js",
+    "./source-prompt": "./source-prompt.js",
+    "./source-people": "./source-people.generated.js"
   }
 }

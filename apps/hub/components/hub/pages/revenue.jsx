@@ -8,6 +8,8 @@ import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, Emp
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { GuruGuidanceCard } from '../guru-guidance-card';
+import { GuruRecommendation } from '../guru-recommendation';
+import { useGuruRecommendations, recommendationForSubject } from '../guru-recommendations-client';
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
@@ -1734,7 +1736,7 @@ function DealNextMeetingPanel({ deal, onNavigate }) {
   );
 }
 
-export function Deals({ workspace, onNavigate }) {
+export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   const toast = useToast();
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
@@ -1815,6 +1817,10 @@ export function Deals({ workspace, onNavigate }) {
   const editingDeal = editingBase
     ? (dealDrafts[editDealId] ? { ...editingBase, ...dealDrafts[editDealId] } : editingBase)
     : null;
+  // 기록 기반 추천(agent-layer-direction §2.1 ⑦) — 드로어가 열린 동안만 읽는다. 저장된 사실만
+  // 근거로 쓰므로 편집 중인 초안 값이 아니라 원장에 있는 딜 id로 찾는다.
+  const guruRecommendations = useGuruRecommendations({ enabled: Boolean(editingBase && !String(editingBase.id).toLowerCase().startsWith('local-')) });
+  const dealRecommendation = editingBase ? recommendationForSubject(guruRecommendations, editingBase.id) : null;
 
   const toggleDealHidden = (id, nextHidden) => {
     setDeals(ds => ds.map(d => (d.id === id ? { ...d, hidden: nextHidden } : d)));
@@ -2519,13 +2525,16 @@ export function Deals({ workspace, onNavigate }) {
                 1:1 코칭 열기
               </Button>
             </div>
-            {(!editingDeal.nextAction || isDealStalled(editingDeal)) && (
+            {dealRecommendation ? (
+              <GuruRecommendation recommendation={dealRecommendation} onAsk={onGuidanceAsk} onNavigate={onNavigate} compact />
+            ) : (!editingDeal.nextAction || isDealStalled(editingDeal)) && (
               <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Iconed name="clock" size={12} aria-hidden="true" />
                 <span>
+                  {/* 정체는 "편집·활동이 없었다"는 사실일 뿐 고객의 반론이 아니다 — 원인을 추정하지 않는다. */}
                   {!editingDeal.nextAction
                     ? '현재 등록된 다음 행동이 없습니다. Guru에게 다음 액션 추천을 받아보세요.'
-                    : `${editingDeal.age}일간 정체되었습니다. 고객 저항 반론 점검을 추천합니다.`}
+                    : `${editingDeal.age}일째 기록 변화가 없습니다.`}
                 </span>
               </div>
             )}

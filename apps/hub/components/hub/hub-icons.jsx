@@ -63,6 +63,8 @@ const I = {
   moreV:     (<><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></>),
   menu:      (<><path d="M4 6h16M4 12h16M4 18h16"/></>),
   star:      (<><path d="M12 3l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18l-5.9 3 1.2-6.5L2.5 9.9 9.1 9z"/></>),
+  // 고정 핀 — 첫 path가 머리다. 눌린 상태는 CSS가 머리만 채운다(.quick-widget__pin[aria-pressed="true"]).
+  pin:       (<><path d="M9 3.5h6l-1 5.5 3.5 3.5V14h-11v-1.5L10 9 9 3.5Z"/><path d="M12 14v6.5"/></>),
   bolt:      (<><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></>),
   signal:    (<><path d="M3 18v-3M9 18V9M15 18V5M21 18v-2"/></>),
   clock:     (<><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>),

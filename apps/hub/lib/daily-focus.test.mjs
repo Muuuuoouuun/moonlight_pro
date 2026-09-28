@@ -200,3 +200,43 @@ test("focus customer rows carry the last reaction so they stop repeating one sen
   // 반응 기록이 없으면 빈 문자열이 아니라 null — 화면이 그 자리를 그리지 않는다.
   assert.equal(rows[1].lastReaction, null);
 });
+
+// 2026-09-25: 첫 화면 ✦ Guru는 ClassIn 영업 기록에만 열린다. 행이 레코드의 소속 태그를
+// 들고 가지 않으면 화면은 개인 고객과 회사 고객을 구분할 수 없다(소유자 필터만 있었다).
+test("focus and KA rows carry the record's own scope tags for the ClassIn Guru gate", () => {
+  const revenue = revenueFixture({
+    leads: [
+      { id: "l-classin", owner: "Me", companyId: "co-1", name: "회사 리드", nextAction: "견적 확인", type: "company", workspace: "classin", brand: null },
+      { id: "l-personal", owner: "Me", companyId: "co-2", name: "개인 리드", nextAction: "코칭 안내", type: "personal", workspace: "brand", brand: "sinabro" },
+      { id: "l-ka", owner: "Me", companyId: "co-ka", name: "KA 리드", nextAction: "재계약", nextActionAt: "2026-08-04", type: "company", workspace: null, brand: "classmoon" },
+    ],
+    deals: [{ id: "d-ka", owner: "Me", companyId: "co-ka", name: "KA 딜", age: 20, type: "company", workspace: "classin", brand: null }],
+  });
+
+  const focus = buildDailyFocus({ revenue, calendar: { ok: false }, now: NOW });
+  const byId = Object.fromEntries(focus.focusCustomers.items.map((item) => [item.id, item]));
+  assert.deepEqual(
+    [byId["l-classin"].type, byId["l-classin"].workspace, byId["l-classin"].brand],
+    ["company", "classin", null],
+  );
+  assert.deepEqual(
+    [byId["l-personal"].type, byId["l-personal"].workspace, byId["l-personal"].brand],
+    ["personal", "brand", "sinabro"],
+  );
+  // 긴급 KA 후보는 딜과 리드 모두 자기 소속을 들고 간다(가장 오래된 딜이 이긴다).
+  assert.deepEqual(
+    [focus.urgentKa.item.kind, focus.urgentKa.item.type, focus.urgentKa.item.workspace, focus.urgentKa.item.brand],
+    ["deal", "company", "classin", null],
+  );
+  const leadKa = selectUrgentKa({ ...revenue, deals: [] }, NOW);
+  assert.deepEqual([leadKa.kind, leadKa.type, leadKa.workspace, leadKa.brand], ["lead", "company", null, "classmoon"]);
+
+  // 태그가 없는 레코드는 추정하지 않고 null로 싣는다 — 화면이 '확인 안 됨'으로 닫는다.
+  const bare = buildDailyFocus({
+    revenue: revenueFixture({ leads: [{ id: "l-bare", owner: "Me", name: "태그 없음", nextAction: "연락" }] }),
+    calendar: { ok: false },
+    now: NOW,
+  });
+  const [row] = bare.focusCustomers.items;
+  assert.deepEqual([row.type, row.workspace, row.brand], [null, null, null]);
+});

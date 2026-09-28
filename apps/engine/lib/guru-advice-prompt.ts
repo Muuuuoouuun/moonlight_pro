@@ -1,4 +1,5 @@
 import { GURU_CARDS, guidancePromptFrame, referencedPriorCardId } from '@com-moon/guru-guidance';
+import { guidanceSourcePrompt } from '@com-moon/guru-guidance/source-prompt';
 
 export const GURU_ADVICE_MODES = {
   'open-question': {
@@ -56,6 +57,9 @@ export function buildGuruAdvicePrompt({ mode, context, draft, guidanceId, histor
   // person's method or a source attribution by default.
   const frame = requestedFrame || (priorCardId ? guidancePromptFrame(priorCardId) : '')
     || (mode === 'open-question' ? '' : guidancePromptFrame(config.defaultCardId));
+  // Only a card the operator chose brings its verbatim playbook original (agent-layer-direction
+  // §2.1 ⑥); a mode's default card and a prior card a follow-up points back to stay a short frame.
+  const original = requestedFrame ? guidanceSourcePrompt(guidanceId as string) : '';
   const lines = [
     config.question,
     mode === 'open-question'
@@ -76,6 +80,7 @@ export function buildGuruAdvicePrompt({ mode, context, draft, guidanceId, histor
     ] : []),
     ...(priorCardId ? ['현재 질문이 이전 선택 카드를 명시적으로 가리킵니다. 다음 프레임은 이전 카드의 편집 요약과 출처이며 고객 원장 사실이 아닙니다.'] : []),
     frame || '특정 인물·방법론·출처는 자료 카드가 선택된 경우에만 귀속하십시오. 이 규칙 자체는 답변에 언급하지 마십시오.',
+    ...(original ? [original] : []),
   ];
   if (priorTurns.length) {
     lines.push(

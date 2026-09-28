@@ -2,9 +2,11 @@
 
 import React from 'react';
 import { GURU_CARDS, LEGEND_CARDS, guidanceDailyWindow, listGuidanceCards, listGuidanceCardsForPerson, listGuidancePeople, selectGuidanceCard } from '@com-moon/guru-guidance';
+import { SOURCE_PEOPLE } from '@com-moon/guru-guidance/source-people';
 import { Button, Card, EmptyState, SegmentedControl, TextField } from '../hub-primitives';
 import { GuidanceDetail } from '../guidance-detail';
 import { GuidanceSource } from '../guidance-source';
+import { GuidanceSourceReader } from '../guidance-source-reader';
 import './mentor-shelf.css';
 
 const HIDDEN_KEY = 'mlp.mentorShelfHidden';
@@ -18,6 +20,10 @@ const BROWSE_MODES = [
   { key: 'domain', label: '분야별' },
   { key: 'person', label: '인물별' },
 ];
+const SOURCE_READER_ID = 'mentor-shelf-source-reader';
+const SOURCE_TOGGLE_ID = 'mentor-shelf-source-toggle';
+const LEGEND_READER_ID = 'mentor-shelf-legend-reader';
+const LEGEND_TOGGLE_ID = 'mentor-shelf-legend-source-toggle';
 const ALL_CARDS = [...GURU_CARDS, ...LEGEND_CARDS];
 const personName = card => card.personName || card.person.split(' · ')[0];
 const methodLabel = card => card.methodLabel || card.person.split(' · ').slice(1).join(' · ') || '판단 관점';
@@ -27,6 +33,16 @@ const openWithKeyboard = (event, open) => {
   event.preventDefault();
   open();
 };
+
+// People whose original chapter exists but who have no reviewed card in any domain. The
+// roster carries names only; the original text loads when a reader opens.
+function listSourceOnlyPeople(domain) {
+  const withCards = new Set(listGuidancePeople().map(person => person.id));
+  return SOURCE_PEOPLE
+    .filter(person => person.collection === domain && person.personId && !withCards.has(person.personId))
+    .map(person => ({ id: person.personId, name: person.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'en'));
+}
 
 export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
   const [domain, setDomain] = React.useState('sales');
@@ -42,6 +58,9 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
   const [hidden, setHidden] = React.useState(false);
   const [now, setNow] = React.useState(() => new Date());
   const [newWindowReady, setNewWindowReady] = React.useState(false);
+  // Card id whose original text is open. A different card closes it; reading stays local.
+  const [sourceReaderFor, setSourceReaderFor] = React.useState(null);
+  const [legendReaderFor, setLegendReaderFor] = React.useState(null);
 
   React.useEffect(() => {
     try { setHidden(sessionStorage.getItem(HIDDEN_KEY) === '1'); } catch {}
@@ -95,7 +114,12 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
     .filter(person => !query || person.name.toLocaleLowerCase().includes(query) || (browseDomain === 'legend'
       ? LEGEND_CARDS : listGuidanceCardsForPerson(person.id))
       .some(card => (browseDomain === 'legend' ? card.id === person.id : card.domain === browseDomain) && matchingCard(card, query)));
-  const selectedPerson = people.find(person => person.id === selectedPersonId)
+  const sourceOnlyPeople = listSourceOnlyPeople(browseDomain)
+    .filter(person => !query || person.name.toLocaleLowerCase().includes(query));
+  const selectedSourceOnly = browseMode === 'person'
+    ? sourceOnlyPeople.find(person => person.id === selectedPersonId) || null
+    : null;
+  const selectedPerson = selectedSourceOnly ? null : people.find(person => person.id === selectedPersonId)
     || (browseMode === 'person' ? people[0] : null);
   const personCards = selectedPerson
     ? (browseDomain === 'legend' ? LEGEND_CARDS.filter(card => card.id === selectedPerson.id)
@@ -143,9 +167,21 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
   };
   const returnToList = () => {
     const choiceId = browseMode === 'person'
-      ? `mentor-shelf-choice-person-${selectedPerson?.id}`
+      ? `mentor-shelf-choice-person-${selectedSourceOnly?.id ?? selectedPerson?.id}`
       : `mentor-shelf-choice-domain-${browseCard?.id}`;
     document.getElementById(choiceId)?.focus();
+  };
+  const sourceReaderOpen = Boolean(browseCard) && sourceReaderFor === browseCard.id;
+  const legendReaderOpen = legendReaderFor === legendCard.id;
+  const toggleSourceReader = () => setSourceReaderFor(sourceReaderOpen ? null : browseCard?.id ?? null);
+  const closeSourceReader = () => {
+    setSourceReaderFor(null);
+    document.getElementById(SOURCE_TOGGLE_ID)?.focus();
+  };
+  const toggleLegendReader = () => setLegendReaderFor(legendReaderOpen ? null : legendCard.id);
+  const closeLegendReader = () => {
+    setLegendReaderFor(null);
+    document.getElementById(LEGEND_TOGGLE_ID)?.focus();
   };
   const jumpToBrowse = () => {
     const heading = document.getElementById('mentor-shelf-browse');
@@ -234,9 +270,29 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
             </div>
             <div className="mentor-shelf__legend-bottom">
               <GuidanceSource source={legendCard.source} className="mentor-shelf__source" />
-              <Button variant="ghost" size="md" onClick={() => setLegendOffset(value => value + 1)}>다른 Legend 보기 →</Button>
+              <div className="mentor-shelf__legend-actions">
+                <Button variant="ghost" size="md" onClick={() => setLegendOffset(value => value + 1)}>다른 Legend 보기 →</Button>
+                <Button
+                  variant="ghost"
+                  size="md"
+                  id={LEGEND_TOGGLE_ID}
+                  aria-expanded={legendReaderOpen}
+                  aria-controls={legendReaderOpen ? LEGEND_READER_ID : undefined}
+                  onClick={toggleLegendReader}
+                >{legendReaderOpen ? '참고 원문 닫기' : '참고 문서 원문'}</Button>
+              </div>
             </div>
           </Card>
+          {legendReaderOpen && <Card className="mentor-shelf__legend-reader">
+            <GuidanceSourceReader
+              key={legendCard.id}
+              id={LEGEND_READER_ID}
+              card={legendCard}
+              label={`이번 주 Legend · ${legendCard.person}`}
+              headingLevel={4}
+              onClose={closeLegendReader}
+            />
+          </Card>}
         </div>
         <p className="mentor-shelf__foot">Guru 관점은 분야별로 지금 한 장씩 서울 기준 하루 세 번 준비됩니다. 읽는 동안 자동으로 넘어가지 않으며, 열람과 넘김은 조언·알림·업무를 생성하지 않습니다.</p>
       </>}
@@ -259,7 +315,9 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
           <div className="mentor-shelf__people-head">
             <div>
               <strong>{browseDomainLabel} {browseMode === 'person' ? '멘토' : '관점'}</strong>
-              <span>{browseMode === 'person' ? `검수 카드가 있는 인물 ${people.length}명` : `검수 카드 ${domainCards.length}장`} · 직접 골라 읽기</span>
+              <span>{browseMode === 'person'
+                ? `검수 카드가 있는 인물 ${people.length}명${sourceOnlyPeople.length ? ` · 원문만 ${sourceOnlyPeople.length}명` : ''}`
+                : `검수 카드 ${domainCards.length}장`} · 직접 골라 읽기</span>
             </div>
             <SegmentedControl label="탐색 분야" options={ATLAS_DOMAINS} value={browseDomain} onChange={chooseBrowseDomain} className="mentor-shelf__people-domains" />
           </div>
@@ -279,24 +337,45 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
                   <span>{personName(card)}</span>
                 </button>
               </li>)}
-            </ul> : <ul className="mentor-shelf__person-list" aria-label={`${browseDomainLabel} 멘토 목록`}>
-              {people.map(person => {
-                const count = browseDomain === 'legend' ? 1 : listGuidanceCardsForPerson(person.id).filter(card => card.domain === browseDomain).length;
-                return <li key={person.id}>
-                  <button
-                    type="button"
-                    id={`mentor-shelf-choice-person-${person.id}`}
-                    className="mentor-shelf__person-choice hub-card-link"
-                    aria-pressed={selectedPerson?.id === person.id}
-                    aria-controls={selectedPerson?.id === person.id ? 'mentor-shelf-person-detail' : undefined}
-                    onClick={() => choosePerson(person.id)}
-                  >
-                    <strong>{person.name}</strong>
-                    <span>{count}장</span>
-                  </button>
-                </li>;
-              })}
-            </ul>}
+            </ul> : <div className="mentor-shelf__person-lists">
+              <ul className="mentor-shelf__person-list" aria-label={`${browseDomainLabel} 멘토 목록`}>
+                {people.map(person => {
+                  const count = browseDomain === 'legend' ? 1 : listGuidanceCardsForPerson(person.id).filter(card => card.domain === browseDomain).length;
+                  return <li key={person.id}>
+                    <button
+                      type="button"
+                      id={`mentor-shelf-choice-person-${person.id}`}
+                      className="mentor-shelf__person-choice hub-card-link"
+                      aria-pressed={selectedPerson?.id === person.id}
+                      aria-controls={selectedPerson?.id === person.id ? 'mentor-shelf-person-detail' : undefined}
+                      onClick={() => choosePerson(person.id)}
+                    >
+                      <strong>{person.name}</strong>
+                      <span>{count}장</span>
+                    </button>
+                  </li>;
+                })}
+              </ul>
+              {sourceOnlyPeople.length > 0 && <>
+                <p className="mentor-shelf__list-label">원문만 있는 인물 · 검수 카드 없음</p>
+                <ul className="mentor-shelf__person-list" aria-label={`${browseDomainLabel} 원문만 있는 인물 목록`}>
+                  {sourceOnlyPeople.map(person => <li key={person.id}>
+                    <button
+                      type="button"
+                      id={`mentor-shelf-choice-person-${person.id}`}
+                      data-source-only="true"
+                      className="mentor-shelf__person-choice mentor-shelf__person-choice--source hub-card-link"
+                      aria-pressed={selectedSourceOnly?.id === person.id}
+                      aria-controls={selectedSourceOnly?.id === person.id ? 'mentor-shelf-person-detail' : undefined}
+                      onClick={() => choosePerson(person.id)}
+                    >
+                      <strong>{person.name}</strong>
+                      <span>원문만 · 검수 카드 없음</span>
+                    </button>
+                  </li>)}
+                </ul>
+              </>}
+            </div>}
             {browseCard ? <Card
               id="mentor-shelf-person-detail"
               role="region"
@@ -332,7 +411,47 @@ export function MentorShelf({ onGuidanceAsk, onNavigate, requestedCardId }) {
               <div className="mentor-shelf__actions">
                 {browseCard.kind === 'guru' && onGuidanceAsk && <Button variant="primary" size="md" onClick={() => onGuidanceAsk(browseCard)}>선택한 관점으로 질문 쓰기</Button>}
                 {browseMode === 'person' && personCards.length > 1 && <Button variant="outline" size="md" onClick={() => setPersonOffset(value => value + 1)}>이 인물의 다른 카드</Button>}
+                <Button
+                  variant="ghost"
+                  size="md"
+                  id={SOURCE_TOGGLE_ID}
+                  aria-expanded={sourceReaderOpen}
+                  aria-controls={sourceReaderOpen ? SOURCE_READER_ID : undefined}
+                  onClick={toggleSourceReader}
+                >{sourceReaderOpen ? '참고 원문 닫기' : '참고 문서 원문'}</Button>
               </div>
+              {sourceReaderOpen && <GuidanceSourceReader
+                key={browseCard.id}
+                id={SOURCE_READER_ID}
+                card={browseCard}
+                label={`${personName(browseCard)} · ${methodLabel(browseCard)}`}
+                headingLevel={5}
+                onClose={closeSourceReader}
+              />}
+            </Card> : selectedSourceOnly ? <Card
+              id="mentor-shelf-person-detail"
+              role="region"
+              tabIndex={-1}
+              aria-label={`${selectedSourceOnly.name} · 원문`}
+              className="mentor-shelf__person-detail mentor-shelf__person-detail--source"
+            >
+              <div className="mentor-shelf__card-head">
+                <strong>{browseDomainLabel.toUpperCase()} / 인물별 원문</strong>
+                <div className="mentor-shelf__detail-tools">
+                  <Button variant="ghost" size="sm" className="mentor-shelf__return" onClick={returnToList}>목록으로 ↑</Button>
+                </div>
+              </div>
+              <h4>{selectedSourceOnly.name}</h4>
+              <p className="mentor-shelf__source-only">원문만 · 검수 카드 없음</p>
+              <p className="mentor-shelf__manual-note">검수한 관점 카드와 Moonlight 글이 아직 없어 참고 문서 원문을 그대로 보여 줍니다. 질문 쓰기에는 연결하지 않습니다.</p>
+              <GuidanceSourceReader
+                key={selectedSourceOnly.id}
+                id={SOURCE_READER_ID}
+                personId={selectedSourceOnly.id}
+                label={selectedSourceOnly.name}
+                headingLevel={5}
+                autoFocus={false}
+              />
             </Card> : <Card pad={false} className="mentor-shelf__no-results"><EmptyState icon="search" title="검색 결과 없음" description="해당 인물이나 관점이 없습니다. 다른 검색어를 입력해 보세요." /></Card>}
           </div>
         </div>

@@ -20,6 +20,16 @@ function timeLabel(value) {
   }).format(date);
 }
 
+// 레코드 자신의 소속 태그(revenue-ledger의 type·workspace·brand). 첫 화면 ✦ Guru(ClassIn
+// 영업)는 이 태그로만 열린다 — 추정하지 않고 없는 값은 null로 싣는다(2026-09-25 경계 교정).
+function recordScopeTags(record) {
+  return {
+    type: record?.type ?? null,
+    workspace: record?.workspace ?? null,
+    brand: record?.brand ?? null,
+  };
+}
+
 // 긴급 KA: KA 표시 회사(companies.meta.ka)에 걸린 운영자 소유 레코드 중 가장 급한 1건.
 // 리드는 다음 행동 기한이 오늘이거나 지났을 때, 딜은 7일 이상 방치됐을 때 후보가 된다.
 // 후보가 없으면 null — 빈 슬롯을 자리표시자로 채우지 않는다(§2 최대 1건).
@@ -40,6 +50,7 @@ export function selectUrgentKa(revenue = {}, now = new Date()) {
     candidates.push({
       kind: "lead",
       id: lead.id,
+      ...recordScopeTags(lead),
       name: lead.name,
       company: kaCompanies.get(lead.companyId)?.name || lead.companyName || null,
       nextAction: lead.nextAction || "",
@@ -56,6 +67,7 @@ export function selectUrgentKa(revenue = {}, now = new Date()) {
     candidates.push({
       kind: "deal",
       id: deal.id,
+      ...recordScopeTags(deal),
       name: deal.name,
       company: kaCompanies.get(deal.companyId)?.name || null,
       nextAction: "정체 딜 재가동",
@@ -147,6 +159,7 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
         const overdueDays = dueKey ? diffKstDays(dueKey, todayKey) : 0;
         return {
           id: lead.id,
+          ...recordScopeTags(lead),
           name: lead.name,
           company: lead.companyName || null,
           // 기록창이 원문 메모를 회사에도 연결하도록(buildRawNoteWrite) — 상세·큐와 같은 범위.

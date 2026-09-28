@@ -42,6 +42,17 @@
 .office-mentor__feedback,
 .office-mentor__retention { margin: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
 .office-mentor__retention { color: var(--fg-dim); font-size: 10.5px; }
+.office-mentor__reference-body p.office-mentor__partial,
+.office-mentor__turn-answer p.office-mentor__partial {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 0 0 10px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
 
 @media (max-width: 600px) {
   .office-mentor__reference summary,

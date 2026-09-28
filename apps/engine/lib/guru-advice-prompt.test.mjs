@@ -49,9 +49,28 @@ test('user-selected card changes the frame without asserting it as ledger fact',
   assert.match(prompt, /내부 검토 중인 제안입니다/);
 });
 
+test('only a card the operator chose brings its verbatim playbook original with the quote-and-figure guard', () => {
+  const chosen = buildGuruAdvicePrompt({
+    mode: 'open-question', guidanceId: 'sales-meddic', context: {}, draft: '견적 뒤 결정이 멈췄어요.',
+  });
+  assert.match(chosen, /\[플레이북 원문 — 운영자가 고른 카드의 출처, 글자 그대로\]/);
+  assert.match(chosen, /카드가 가리키는 절: 기법 4: Qualification — MEDDIC 프레임워크/);
+  assert.match(chosen, /인용문·수치·성과 주장·사례 문구를 답변에 옮기거나 사실처럼 말하지 마십시오/);
+  assert.match(chosen, /<<<원문 시작>>>[\s\S]*MEDDIC[\s\S]*<<<원문 끝>>>/);
+  // The original sits before the operator's question and the ledger snapshot, apart from both.
+  assert.ok(chosen.indexOf('<<<원문 끝>>>') < chosen.indexOf('견적 뒤 결정이 멈췄어요.'));
+
+  // A mode's default card is a short frame; no card at all adds no source.
+  const defaulted = buildGuruAdvicePrompt({ mode: 'deal-review', context: {} });
+  assert.doesNotMatch(defaulted, /플레이북 원문|<<<원문 시작>>>/);
+  const freeform = buildGuruAdvicePrompt({ mode: 'open-question', context: {}, draft: '무엇을 물을까요?' });
+  assert.doesNotMatch(freeform, /플레이북 원문|<<<원문 시작>>>/);
+});
+
 test('unsupported card IDs add no untrusted frame to a mentor prompt', () => {
   const prompt = buildGuruAdvicePrompt({ mode: 'deal-review', guidanceId: 'fake-card', context: {} });
   assert.doesNotMatch(prompt, /fake-card/);
+  assert.doesNotMatch(prompt, /<<<원문 시작>>>/);
   assert.ok(Object.keys(GURU_ADVICE_MODES).includes('pipeline-triage'));
   assert.equal(Object.hasOwn(GURU_ADVICE_MODES, 'followup-draft'), false);
 });

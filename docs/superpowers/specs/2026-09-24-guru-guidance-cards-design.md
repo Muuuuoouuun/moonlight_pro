@@ -12,7 +12,7 @@ Guru는 매 판단을 대신하거나 일을 생성하지 않는다. 운영자�
 ## 카드와 출처 계약
 
 - **하나의 선별된 카드 라이브러리**가 화면 문구와 요청형 조언의 참고 프레임을 공급한다. 카드에는 안정 ID, 분야, 인물, 방법론, 한 문장 요약, 쓸 때, 질문, 문서 경로·절을 둔다.
-- 출처는 `docs/sales-guru-knowledge-base.md`, `docs/marketing-branding-gurus.md`, `docs/content-storytelling-people-v2.md`, `apps/engine/lib/legend-cards.ts`와 09-21 통합 프레임워크다. 문구는 **자료를 재서술한 요약**으로 밝히고, 명언이나 검증되지 않은 효과 수치를 인용하지 않는다. MEDDIC는 Dick Dunkel의 틀로 표기하며 Aaron Ross의 창안으로 적지 않는다.
+- 출처는 `docs/sales-guru-knowledge-base.md`, `docs/marketing-branding-gurus.md`, `docs/content-storytelling-people-v2.md`, `apps/engine/lib/legend-cards.ts`와 09-21 통합 프레임워크다(2026-09-25부터 Legend 문구의 단일 원천은 `packages/guru-guidance/legend-library.ts`이고 `legend-cards.ts`는 그것을 다시 내보낸다 — [원문 보존 스펙](2026-09-25-source-fidelity-and-embedded-recommendations.md) §2.4). 문구는 **자료를 재서술한 요약**으로 밝히고, 명언이나 검증되지 않은 효과 수치를 인용하지 않는다. MEDDIC는 Dick Dunkel의 틀로 표기하며 Aaron Ross의 창안으로 적지 않는다.
 - 일간 Guru는 서울 달력 날짜와 분야로, 주간 Legend는 서울 주차로 안정적으로 선택한다. 화면을 보고 있는 동안 자동 전환하거나 알림을 보내지 않는다. `다른 카드 보기`는 사용자가 직접 누를 때만 움직인다.
 - `이 세션에서 숨기기`는 브라우저 세션에서만 기억한다. 카드 종류와 분야를 바꿨을 때도 숨김을 유지하며 `다시 보기`로 해제한다. 읽기·넘김·숨김은 API와 원장에 기록하지 않는다.
 - 카드가 특정 고객의 사실을 읽지 못한 경우 “이 고객이 그렇다”는 추정을 하지 않는다. 상황 팁은 해당 화면에서 쓸 수 있는 **질문**으로만 표현한다. 고객별 진단은 사용자가 Guru를 직접 호출한 뒤에만 한다.

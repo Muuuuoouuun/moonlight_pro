@@ -7,16 +7,31 @@ import * as guidance from './index.ts';
 import {
   GURU_CARDS,
   LEGEND_CARDS,
+  LEGEND_IDS,
+  LEGEND_LIBRARY,
+  LEGEND_LIBRARY_VERSION,
+  LEGEND_MICRO_CARDS,
+  getLegendEntry,
   guidanceDailyWindow,
   guidancePeriodKey,
+  guidanceRotationIndex,
+  isLegendId,
   listGuidanceCards,
   selectGuidanceCard,
   guidancePromptFrame,
+  toLegendMicroCard,
 } from './index.ts';
 
 const { listGuidancePeople, listGuidanceCardsForPerson, referencedPriorCardId } = guidance;
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const readDoc = path => readFileSync(resolve(repoRoot, path), 'utf8').replace(/\r\n?/g, '\n');
+const RUNTIME_FIELDS = [
+  'id', 'name', 'nameKo', 'category', 'coreValue', 'acceptableCost',
+  'pivotCondition', 'piercingQuestion', 'boundaryCondition', 'sourceCitation',
+];
+// 10:00 Seoul on the Monday `week` weeks after 2026-09-21.
+const seoulMonday = week => new Date(Date.parse('2026-09-21T01:00:00Z') + week * 7 * 86_400_000);
 
 test('Guru catalogue covers each practice domain with attributable source sections', () => {
   assert.deepEqual([...new Set(GURU_CARDS.map(card => card.domain))].sort(), ['content', 'marketing', 'sales']);
@@ -256,6 +271,130 @@ test('Feynman card follows the cited integrity address rather than an unrelated 
   const card = LEGEND_CARDS.find(item => item.id === 'legend-feynman');
   assert.match(`${card?.frame} ${card?.text} ${card?.question}`, /불리한 근거|반례/);
   assert.doesNotMatch(`${card?.frame} ${card?.text} ${card?.question}`, /한 문장|전문 용어/);
+});
+
+test('the legend library is the one ordered source of all sixteen Council legends', () => {
+  assert.deepEqual([...LEGEND_IDS], [
+    'socrates', 'einstein', 'lincoln', 'theodore-roosevelt', 'franklin-roosevelt',
+    'jobs', 'bezos', 'buffett', 'chouinard',
+    'feynman', 'deming', 'drucker', 'ostrom', 'epictetus',
+    'carnegie', 'hill',
+  ]);
+  assert.deepEqual(LEGEND_LIBRARY.map(entry => entry.id), [...LEGEND_IDS]);
+  assert.deepEqual(Object.keys(LEGEND_MICRO_CARDS), [...LEGEND_IDS]);
+  for (const entry of LEGEND_LIBRARY) {
+    for (const field of RUNTIME_FIELDS) {
+      assert.ok(typeof entry[field] === 'string' && entry[field].trim(), `${entry.id}.${field}`);
+    }
+    assert.ok(['philosophy', 'science', 'management', 'governance', 'resilience'].includes(entry.category), entry.id);
+    assert.equal(entry.version, LEGEND_LIBRARY_VERSION);
+    assert.match(entry.version, /^\d{4}-\d{2}-\d{2}\.\d+$/);
+    assert.equal(entry.status, 'active');
+    assert.equal(getLegendEntry(entry.id), entry);
+    assert.deepEqual(Object.keys(LEGEND_MICRO_CARDS[entry.id]), RUNTIME_FIELDS);
+    assert.deepEqual(LEGEND_MICRO_CARDS[entry.id], toLegendMicroCard(entry));
+  }
+  assert.equal(getLegendEntry('chouinard').category, 'management', 'the Engine category is canonical');
+  assert.ok(Object.isFrozen(LEGEND_MICRO_CARDS) && Object.isFrozen(LEGEND_MICRO_CARDS.bezos));
+  assert.ok(Object.isFrozen(LEGEND_LIBRARY) && Object.isFrozen(LEGEND_LIBRARY[0].originRefs[0]));
+});
+
+test('Legend ids are validated by exact library membership, never by object prototype keys', () => {
+  for (const id of LEGEND_IDS) assert.equal(isLegendId(id), true, id);
+  for (const value of ['constructor', '__proto__', 'toString', '', 'unknown', 'Bezos', null, undefined, 7, ['bezos']]) {
+    assert.equal(isLegendId(value), false, String(value));
+  }
+  assert.equal(getLegendEntry('constructor'), undefined);
+});
+
+test('every legend links to the exact heading of its original card text', () => {
+  const headings = new Map();
+  const headingsOf = path => {
+    if (!headings.has(path)) {
+      headings.set(path, new Set(readDoc(path).split('\n').filter(line => /^#{1,6} /.test(line)).map(line => line.replace(/^#{1,6} /, ''))));
+    }
+    return headings.get(path);
+  };
+  const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  LEGEND_LIBRARY.forEach((entry, index) => {
+    const micro = entry.originRefs.filter(ref => ref.kind === 'micro-card');
+    const long = entry.originRefs.filter(ref => ref.kind === 'long-card');
+    assert.equal(micro.length, 1, entry.id);
+    assert.equal(micro[0].path, 'docs/superpowers/specs/2026-09-21-council-mentor-guru-legend-operating-framework.md');
+    assert.match(micro[0].heading, new RegExp(`^${index + 1}\\. .+ \\(${escape(entry.name)}\\) — `), entry.id);
+    assert.equal(long.length, index < 9 ? 1 : 0, `${entry.id}: only the core nine have a 09-12 long card`);
+    if (long.length) {
+      assert.equal(long[0].path, 'docs/superpowers/specs/2026-09-12-legend-values-persona-cards.md');
+      assert.match(long[0].heading, new RegExp(`^3\\.${index + 1} `), entry.id);
+    }
+    for (const ref of entry.originRefs) {
+      assert.ok(headingsOf(ref.path).has(ref.heading), `${entry.id}: ${ref.path} § ${ref.heading}`);
+    }
+  });
+});
+
+test('Legend source URLs are links the governing docs give, and Hill has none', () => {
+  const docs = [
+    'docs/superpowers/specs/2026-09-12-legend-values-persona-cards.md',
+    'docs/superpowers/specs/2026-09-12-council-mentor-legend-evaluation-design.md',
+    'docs/research/2026-09-24-guru-source-quality.md',
+  ].map(readDoc).join('\n');
+  for (const entry of LEGEND_LIBRARY) {
+    assert.equal(new Set(entry.sourceUrls).size, entry.sourceUrls.length, entry.id);
+    for (const url of entry.sourceUrls) {
+      assert.match(url, /^https:\/\/\S+$/, entry.id);
+      assert.ok(docs.includes(`](${url})`), `${entry.id}: ${url} is not a link in the governing docs`);
+    }
+    if (entry.id !== 'hill') assert.ok(entry.sourceUrls.length >= 1, entry.id);
+  }
+  assert.deepEqual(getLegendEntry('hill').sourceUrls, []);
+});
+
+test('Legend pivots and questions use observable events instead of made-up percentages', () => {
+  for (const entry of LEGEND_LIBRARY) {
+    assert.doesNotMatch(entry.pivotCondition, /\d+\s*%|퍼센트/, entry.id);
+  }
+  const bezos = getLegendEntry('bezos').piercingQuestion;
+  assert.doesNotMatch(bezos, /\d+\s*%|퍼센트|지금 당장/);
+  assert.match(bezos, /되돌릴 수 있고 손실을 감당할 수 있는/);
+  assert.match(bezos, /무엇이 확인되면 멈추/);
+  assert.doesNotMatch(getLegendEntry('drucker').piercingQuestion, /\d+\s*%|퍼센트/);
+  const feynman = getLegendEntry('feynman');
+  assert.doesNotMatch(Object.values(toLegendMicroCard(feynman)).join(' '), /초등학생|전문 용어/);
+  assert.match(feynman.sourceCitation, /Cargo Cult Science/);
+});
+
+test('weekly Legend cards keep their ids and cite the shared library by legend id', () => {
+  assert.deepEqual(LEGEND_CARDS.map(card => card.id), ['legend-buffett', 'legend-feynman', 'legend-carnegie']);
+  for (const card of LEGEND_CARDS) {
+    assert.equal(card.source.path, 'packages/guru-guidance/legend-library.ts', card.id);
+    const entry = getLegendEntry(card.source.section);
+    assert.ok(entry, card.id);
+    assert.equal(card.id, `legend-${entry.id}`);
+    assert.ok(card.person.startsWith(`${entry.name} · `), card.id);
+    assert.ok(entry.sourceUrls.includes(card.source.url), card.id);
+  }
+});
+
+test('weekly Legend keeps this and next week, then advances one card per Seoul week', () => {
+  assert.deepEqual([0, 1, 2, 3].map(week => selectGuidanceCard({ cadence: 'weekly', now: seoulMonday(week) }).id),
+    ['legend-carnegie', 'legend-buffett', 'legend-feynman', 'legend-carnegie']);
+  assert.equal(selectGuidanceCard({ cadence: 'weekly', now: new Date('2026-09-27T15:00:00Z') }).id, 'legend-buffett', 'Monday 00:00 Seoul');
+  assert.equal(selectGuidanceCard({ cadence: 'weekly', now: new Date('2026-10-04T14:59:00Z') }).id, 'legend-buffett', 'Sunday 23:59 Seoul');
+  assert.equal(selectGuidanceCard({ cadence: 'weekly', now: seoulMonday(0), offset: 1 }).id, 'legend-buffett');
+});
+
+test('weekly rotation visits every card once per cycle for catalogues of 3, 7, 14 and 16', () => {
+  for (const length of [3, 7, 14, 16]) {
+    const indexes = Array.from({ length }, (_, week) => guidanceRotationIndex({ cadence: 'weekly', now: seoulMonday(week), length }));
+    assert.equal(new Set(indexes).size, length, `${length} cards`);
+    indexes.forEach((index, week) => {
+      if (week) assert.equal(index, (indexes[week - 1] + 1) % length, `${length} cards, week ${week}`);
+    });
+    assert.equal(guidanceRotationIndex({ cadence: 'weekly', now: seoulMonday(length), length }), indexes[0], `${length}-card cycle repeats`);
+    assert.equal(guidanceRotationIndex({ cadence: 'weekly', now: seoulMonday(0), offset: 1, length }), indexes[1]);
+  }
+  assert.throws(() => guidanceRotationIndex({ cadence: 'weekly', now: seoulMonday(0), length: 0 }), RangeError);
 });
 
 test('MEDDIC reference credits its origin and omits an unsupported win-rate multiplier', () => {

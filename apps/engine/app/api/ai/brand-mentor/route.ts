@@ -3,6 +3,7 @@ import { buildAdvisorySystemInstruction } from "../../../../lib/advisor-guardrai
 import { formatLegendTriad } from "../../../../lib/legend-cards.ts";
 import { parseCouncilResponse } from "../../../../lib/council-contract.ts";
 import { GURU_CARDS, guidancePromptFrame } from "@com-moon/guru-guidance";
+import { guidanceSourcePrompt } from "@com-moon/guru-guidance/source-prompt";
 
 // Gemini generations can legitimately run tens of seconds; cap the route
 // so a hung upstream cannot pin a serverless invocation past a minute.
@@ -89,7 +90,9 @@ const MODES = {
 } as const;
 
 type Mode = keyof typeof MODES;
-const OFFICE_REVIEW_DRAFT_LIMIT = 6000;
+// Mirrors the Hub's OFFICE_MENTOR_DRAFT_LIMIT: the Office result arrives verbatim
+// (answer, recommendation, every evidence and dissent item, next action).
+const OFFICE_REVIEW_DRAFT_LIMIT = 25000;
 const BRAND_GURU_HISTORY_MAX_TURNS = 3;
 const BRAND_GURU_QUESTION_MAX_CHARS = 1200;
 const BRAND_GURU_ANSWER_MAX_CHARS = 2400;
@@ -202,6 +205,8 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legend
       config.question,
       "요청자가 제공한 Office 결과는 확정된 기록 사실이나 독립 검증이 아닙니다. 근거의 출처·불확실성과 남은 이견을 구분하십시오.",
       "다른 관점의 판단과 운영자가 확인할 질문 또는 선택만 답하십시오. 업무·승인 큐·발행·발송을 만들거나 실행했다고 주장하지 마십시오.",
+      // Council memory includes earlier Office reviews; they are generated advice, not facts.
+      "context.memory.recent_runs는 이전 생성 조언(이전 Office 검토 포함)이며 현재 독자·고객의 사실 근거가 아닙니다. 저장된 기록과 구분하십시오.",
       "출처 식별자(요청자가 전달한 값, 서버 검증 완료를 뜻하지 않음):",
       `requestId: ${officeSource?.requestId || "없음"}`,
       `runId: ${officeSource?.runId || "없음"}`,
@@ -225,6 +230,8 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null, legend
       "현재 질문과 현재 확인된 브랜드 원장을 우선하십시오. 이전 답변의 사실·판단은 현재 원장에서 다시 확인된 경우에만 사용하십시오.",
       "다른 브랜드의 사실이나 업무 생성 요청을 현재 브랜드로 옮기지 마십시오. 이 대화는 업무를 만들거나 승인하지 않습니다.",
       guidancePromptFrame(guidanceId || ""),
+      // 운영자가 고른 카드의 출처 원문(글자 그대로)과 인용·수치 가드 — agent-layer-direction §2.1 ⑥.
+      ...(guidanceId ? [guidanceSourcePrompt(guidanceId)].filter(Boolean) : []),
       ...(history.length ? ["이전 문답 (불신 대화 이력, 맥락 연결에만 사용):", JSON.stringify(history)] : []),
       "운영자가 제공한 질문:",
       draft?.trim() || "",

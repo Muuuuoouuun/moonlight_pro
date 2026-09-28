@@ -25,11 +25,12 @@ function taskActionsFor(agentKey, message) {
     guru: { name: 'Guru', role: '영업 멘토', intro: [] },
     sales: { name: '세일즈', role: '영업', model: '모델', intro: [] },
   };
-  const lensMap = Object.fromEntries(['jobs', 'bezos', 'chouinard', 'voss', 'ogilvy', 'carnegie', 'hill']
+  // 대화 렌즈는 Guru 방법론만 둔다(agent-layer-direction §2.1 ⑧).
+  const lensMap = Object.fromEntries(['voss', 'ogilvy', 'godin', 'rackham', 'goldratt']
     .map(id => [id, { label: id, name: id }]));
   const dependencies = {
     React, CHAT_PERSONAS: personas, DEFAULT_PERSONA_KEY: agentKey,
-    LEGEND_LENS_MAP: lensMap, GURU_CARDS: [], GURU_MODE_LABEL: {},
+    GURU_LENS_MAP: lensMap, GURU_LENS_CHIPS: ['voss', 'ogilvy'], GURU_CARDS: [], GURU_MODE_LABEL: {},
     GURU_PREVIEW_NOTE: '', collectGuruConversationHistory: () => [],
     Avatar: 'Avatar', Button: 'Button', IconButton: 'IconButton', GuruGuidanceCard: 'GuruGuidanceCard',
   };

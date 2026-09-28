@@ -8,6 +8,9 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, ProgressRing, Sparkline, SyncBadge, TruthBadge, EmptyState, Kbd, Skeleton, CertaintyBadge, useToast } from "../hub-primitives";
 import { REACTION_LABEL as FOCUS_REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
+import { GuruRecommendationList } from "../guru-recommendation";
+import { useGuruRecommendations } from "../guru-recommendations-client";
+import { brandInWorkspace } from "../workspace-map";
 import { GuidanceInlineTip } from "../guidance-inline-tip";
 import { requestPersonaChat } from "../persona-client";
 import {
@@ -1565,6 +1568,35 @@ function DailyDispatchCard({ dailyFocus, taskToday, signals = [], sourceState, o
 // 집중 고객 행의 마지막 접점 라벨은 crm_activities.reaction 어휘(0016 CHECK)의 정본
 // followup-scoring REACTION_LABEL을 쓴다(파일 상단 import).
 
+// ✦ Guru는 ClassIn 영업 Guru다. 행 레코드 자신의 소속이 회사로 확인될 때만 연다 — revenue.jsx
+// isClassInGuruRecord와 같은 판정(2026-09-25 경계 교정). 개인·상충·태그 없는 행과 레코드 id가
+// 없는 행은 버튼을 숨긴다. 레거시 회사 유형(작업공간·브랜드 태그 없음)은 ClassIn으로 인정한다.
+function isClassInGuruFocus(item) {
+  if (!item?.id || item.type !== 'company') return false;
+  if (item.workspace != null && item.workspace !== '' && item.workspace !== 'classin') return false;
+  const hasBrand = item.brand && item.brand !== 'all' && item.brand?.key !== 'all';
+  return !hasBrand || brandInWorkspace(item.brand, 'classin');
+}
+
+// 위젯에 넘기는 초점은 이름이 아니라 레코드 id로 식별된다 — 같은 이름의 다른 고객 거래가 붙지
+// 않게. 정확한 거래 id는 딜 행에만 있으므로 리드는 dealId 없이 가고, 위젯이 '거래 기록 연결
+// 안 됨'을 말한다.
+function guruFocusOf(item, kind, extra) {
+  return {
+    kind,
+    id: item.id,
+    dealId: kind === 'deal' ? item.id : null,
+    type: item.type,
+    workspace: item.workspace,
+    brand: item.brand,
+    name: item.name,
+    company: item.company,
+    nextAction: item.nextAction,
+    reason: item.reason,
+    ...extra,
+  };
+}
+
 function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
   if (!dailyFocus) return null;
   const [guruFocusItem, setGuruFocusItem] = React.useState(null);
@@ -1625,25 +1657,22 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
                   {ka.item.reason && <span style={{ color: 'var(--fg-faint)' }}> · {ka.item.reason}</span>}
                 </div>
               </div>
-              <IconButton
-                icon="sparkle"
-                label="Guru 세일즈 코칭"
-                size="sm"
-                tone="moon"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setGuruFocusItem({
-                    id: ka.item.id || 'urgent-ka',
-                    name: ka.item.name,
-                    company: ka.item.company,
-                    stage: '긴급 KA',
-                    nextAction: ka.item.nextAction,
-                    reason: ka.item.reason,
-                    notes: `긴급 KA: ${ka.item.name} (${ka.item.company || ''}) - ${ka.item.reason || ''}. 다음 행동: ${ka.item.nextAction || ''}`
-                  });
-                }}
-                style={{ color: 'var(--moon-300)', flexShrink: 0 }}
-              />
+              {isClassInGuruFocus(ka.item) && (
+                <IconButton
+                  icon="sparkle"
+                  label="Guru 세일즈 코칭"
+                  size="sm"
+                  tone="moon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setGuruFocusItem(guruFocusOf(ka.item, ka.item.kind, {
+                      stage: '긴급 KA',
+                      notes: `긴급 KA: ${ka.item.name} (${ka.item.company || ''}) - ${ka.item.reason || ''}. 다음 행동: ${ka.item.nextAction || ''}`,
+                    }));
+                  }}
+                  style={{ color: 'var(--moon-300)', flexShrink: 0 }}
+                />
+              )}
               <Iconed name="chevronR" size={13} className="daily-brief__row-arrow" />
             </div>
           </div>
@@ -1721,27 +1750,24 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
                   }}
                   style={{ flexShrink: 0 }}
                 />
-                <IconButton
-                  icon="sparkle"
-                  label="Guru 세일즈 코칭"
-                  size="sm"
-                  tone="moon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setGuruFocusItem({
-                      id: item.id,
-                      name: item.name,
-                      company: item.company,
-                      stage: '집중 고객',
-                      nextAction: item.nextAction,
-                      reason: item.reason,
-                      dueLabel: item.dueLabel,
-                      lastTouch: item.lastTouch,
-                      notes: `집중 고객 #${i + 1}: ${item.name} (${item.company || ''}). 이유: ${item.reason || ''}. 다음 행동: ${item.nextAction || ''}. 기한: ${item.dueLabel || ''}`
-                    });
-                  }}
-                  style={{ color: 'var(--moon-300)', flexShrink: 0 }}
-                />
+                {isClassInGuruFocus(item) && (
+                  <IconButton
+                    icon="sparkle"
+                    label="Guru 세일즈 코칭"
+                    size="sm"
+                    tone="moon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setGuruFocusItem(guruFocusOf(item, 'lead', {
+                        stage: '집중 고객',
+                        dueLabel: item.dueLabel,
+                        lastTouch: item.lastTouch,
+                        notes: `집중 고객 #${i + 1}: ${item.name} (${item.company || ''}). 이유: ${item.reason || ''}. 다음 행동: ${item.nextAction || ''}. 기한: ${item.dueLabel || ''}`,
+                      }));
+                    }}
+                    style={{ color: 'var(--moon-300)', flexShrink: 0 }}
+                  />
+                )}
                 <Iconed name="chevronR" size={12} className="daily-brief__row-arrow" />
               </div>
             ))}
@@ -1795,12 +1821,16 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
       </Card>
 
       <FloatingMentorWidget
-        isOpen={Boolean(guruFocusItem)}
+        isOpen={Boolean(guruFocusItem && isClassInGuruFocus(guruFocusItem))}
         onClose={() => setGuruFocusItem(null)}
         agent="guru"
         contextType="customer"
         contextTitle={guruFocusItem?.name || guruFocusItem?.company || "고객 코칭"}
         contextData={{
+          // 레코드는 정확한 id로만 식별한다 — 이름은 표시용이다.
+          id: guruFocusItem?.id,
+          kind: guruFocusItem?.kind,
+          dealId: guruFocusItem?.dealId ?? null,
           name: guruFocusItem?.name,
           company: guruFocusItem?.company,
           stage: guruFocusItem?.stage,
@@ -1969,10 +1999,11 @@ export function WeeklyReportCard({ onNavigate, onAdvisorOpen, overrideScope, onT
   );
 }
 
-export function DailyBrief({ onNavigate, inquiryNotifications }) {
+export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [advisorSignal, setAdvisorSignal] = React.useState(null);
   const ledger = useDailyBriefLedger(refreshKey);
+  const guruRecommendations = useGuruRecommendations();
   const [queueExpanded, setQueueExpanded] = React.useState(false);
   // 기록창 대상 — 집중 고객 행에서 열고, 저장은 공용 폼(contact-record-form)이 소유한다.
   // 늦은 실패면 { draft, error }를 얹어 입력 그대로 다시 연다(드로어를 먼저 닫았어도 무언 소실 금지).
@@ -2046,6 +2077,10 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
         {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
             tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다. */}
         <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} onRecord={setRecordTarget} />
+        {/* 저장된 사실이 있는 고객·거래에만 원문 기법을 잇는다(agent-layer-direction §2.1 ⑦).
+            시간대로 도는 Guru 관점은 위의 한 줄 팁(GuidanceInlineTip)만 두고 카드로 늘리지 않는다 —
+            이 목록은 act 추천이 있을 때만 그려지고, 없으면 아무것도 그리지 않는다. */}
+        <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onNavigate={onNavigate} onRetry={guruRecommendations.reload} />
         <DailyDispatchCard
           dailyFocus={ledger.dailyFocus}
           taskToday={ledger.taskToday}

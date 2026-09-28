@@ -5,6 +5,7 @@ import ts from 'typescript';
 import { brandInWorkspace } from './workspace-map.js';
 import { DEAL_STAGES, LOST_STAGE, dealStageLabel, isDealStalled } from '../../lib/deal-stages.js';
 import { DEAL_VIEW_OPTIONS, DEFAULT_DEAL_VIEW, resolveDealView, timelineContext, formatCloseLabel, sameCloseDay } from '../../lib/deal-timeline.js';
+import { recommendationForSubject } from './guru-recommendations-client.js';
 import { monthKeyOf, normalizeTargetAmount, targetForMonth } from '../../lib/revenue-target.js';
 import { planBaselineFor } from '../../lib/deal-payments.js';
 import { buildMoneyModel } from '../../lib/deal-money.js';
@@ -24,8 +25,8 @@ const javascript = ts.transpileModule(component.replace('export function', 'func
 
 // 2026-09-26: 거래 탭의 기본 보기는 "돈"(매출·현금흐름)이다. 아래 칸반 회귀들은
 // 기존 보드를 그대로 겨냥하도록 `?view=stage`로 마운트한다.
-function mount({ state = 'live', records = [], workspace, search = 'view=stage', save, selectedId = null } = {}) {
-  const slots = [], timers = [], pending = new Map(), selections = [], replaced = [];
+function mount({ state = 'live', records = [], workspace, search = 'view=stage', save, selectedId = null, guruRecommendations = [] } = {}) {
+  const slots = [], timers = [], pending = new Map(), selections = [], replaced = [], recommendationReads = [];
   let index = 0, tree, reloads = 0;
   const React = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(Boolean) } }),
@@ -49,10 +50,12 @@ function mount({ state = 'live', records = [], workspace, search = 'view=stage',
     STAGE_FILL: [], STAGE_LINE: [], LOST_STAGE, dealStageLabel, isDealStalled, SCOPE_OPTIONS: [], fmt: String,
     triggerCelebration() {}, saveRevenueRecord: save || (async () => ({ ok: true, status: 'saved' })),
     DEAL_VIEW_OPTIONS, DEFAULT_DEAL_VIEW, resolveDealView, timelineContext, formatCloseLabel, sameCloseDay,
+    useGuruRecommendations: ({ enabled } = {}) => { recommendationReads.push(Boolean(enabled)); return { status: enabled ? 'live' : 'idle', recommendations: enabled ? guruRecommendations : [], reload() {} }; },
+    recommendationForSubject,
     monthKeyOf, normalizeTargetAmount, targetForMonth,
     planBaselineFor, buildMoneyModel,
   };
-  for (const name of ['Button', 'Kbd', 'TruthBadge', 'Checkbox', 'CheckboxRow', 'LifecycleBadge', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget', 'DealsMoney', 'MoneyHeader']) dependencies[name] = name;
+  for (const name of ['Button', 'Kbd', 'TruthBadge', 'Checkbox', 'CheckboxRow', 'LifecycleBadge', 'SegmentedControl', 'ScrollShadowX', 'Card', 'EmptyState', 'LedgerReadError', 'Skeleton', 'IconButton', 'Badge', 'Iconed', 'EditDrawer', 'DealOutreachDrafter', 'DealTaskPanel', 'DealNextMeetingPanel', 'DealLinkedProjectsPanel', 'GoalLinks', 'FloatingMentorWidget', 'DealsMoney', 'MoneyHeader', 'GuruRecommendation']) dependencies[name] = name;
   const Deals = new Function(...Object.keys(dependencies), `${javascript}; return Deals;`)(...Object.values(dependencies));
   function render() { index = 0; tree = Deals({ workspace }); return tree; }
   function findAll(predicate, node = tree) {
@@ -60,7 +63,7 @@ function mount({ state = 'live', records = [], workspace, search = 'view=stage',
     return [...(predicate(node) ? [node] : []), ...(node.props?.children || []).flatMap(child => findAll(predicate, child))];
   }
   render();
-  return { render, findAll, pending, replaced, flush: () => { timers.splice(0).forEach(fn => fn()); }, reloads: () => reloads, lastSelection: () => selections[selections.length - 1] };
+  return { render, findAll, pending, replaced, flush: () => { timers.splice(0).forEach(fn => fn()); }, reloads: () => reloads, lastSelection: () => selections[selections.length - 1], recommendationReads };
 }
 
 function deal() { return { id: 'stage-regression', stage: DEAL_STAGES[0].key, value: 0 }; }
@@ -310,6 +313,27 @@ test('Guru opens only for a verified ClassIn deal; personal and conflicting deal
   }
 });
 
+test('the deal drawer shows the record-based recommendation, and a stalled deal is a fact, not a customer objection', () => {
+  const stalled = { id: 'deal-rec', stage: 'quote', value: 100000, age: 20, name: '견적 거래', type: 'company', workspace: 'classin', nextAction: '견적 회신 확인' };
+  const recommendation = { id: 'quote-date-passed:deal:deal-rec', ruleId: 'quote-date-passed', cardId: 'sales-meddic', severity: 'act', basis: 'record', subject: { type: 'deal', id: 'deal-rec', name: '견적 거래', lane: 'classin' }, facts: ['견적 단계'] };
+
+  const withRec = mount({ records: [stalled], guruRecommendations: [recommendation] });
+  assert.deepEqual(withRec.recommendationReads, [false], 'nothing is read while the drawer is closed');
+  cardOf(withRec).props.onClick(); withRec.render();
+  assert.ok(withRec.recommendationReads.includes(true));
+  const shown = withRec.findAll(n => n.type === 'GuruRecommendation');
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0].props.recommendation.id, 'quote-date-passed:deal:deal-rec');
+  assert.equal(withRec.findAll(n => n.type === 'span' && JSON.stringify(n.props.children).includes('반론')).length, 0);
+
+  const without = mount({ records: [stalled] });
+  cardOf(without).props.onClick(); without.render();
+  assert.equal(without.findAll(n => n.type === 'GuruRecommendation').length, 0);
+  const text = JSON.stringify(drawerOf(without).props.children);
+  assert.match(text, /20일째 기록 변화가 없습니다/);
+  assert.doesNotMatch(text, /고객 저항 반론 점검을 추천/);
+});
+
 test('account detail does not open a deal review using an ambiguous account name', () => {
   const detailSource = source.slice(source.indexOf('function DetailPanel('), source.indexOf('export function Accounts('));
   const detailJs = ts.transpileModule(detailSource, {
@@ -339,6 +363,18 @@ test('account detail does not open a deal review using an ambiguous account name
     const ask = findAll(tree, n => n.type === 'Button' && n.props.children.includes('Ask Guru'));
     assert.equal(ask.length, 0, account.name);
   }
+});
+
+// 2026-09-25 caller audit: the Deals Guru already hands the widget the exact deal id. The
+// widget now resolves Guru refs by id only, so this caller must keep its id pass-through.
+test('Deals Guru hands the widget the exact deal id, never only its display name', () => {
+  const app = mount({ records: [{ id: 'deal-exact', stage: 'contact', value: 100000, age: 20, name: '같은 이름 학원', account: '같은 이름 학원', type: 'company', workspace: 'classin' }] });
+  app.findAll(n => n.type === 'IconButton' && n.props.tooltip === 'Guru에게 진단 요청')[0].props.onClick({ stopPropagation() {} });
+  app.render();
+  const mentor = app.findAll(n => n.type === 'FloatingMentorWidget')[0];
+  assert.equal(mentor.props.isOpen, true);
+  assert.equal(mentor.props.contextType, 'deal');
+  assert.equal(mentor.props.contextData.id, 'deal-exact');
 });
 
 test('예상일을 처음 옮기면 옮기기 전 계획을 plan_baseline으로 한 번만 싣는다 — 창 안 연속 이동도 원래 값', async () => {

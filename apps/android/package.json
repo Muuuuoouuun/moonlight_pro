@@ -1,0 +1,20 @@
+{
+  "name": "@com-moon/android",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Moonlight 허브를 원격 사이트로 여는 Capacitor 안드로이드(갤럭시) 셸",
+  "type": "module",
+  "scripts": {
+    "config:write": "node ./scripts/write-cap-config.mjs",
+    "config:sync": "node ./scripts/write-cap-config.mjs --sync",
+    "assets:generate": "node ./scripts/generate-assets.mjs",
+    "apk": "node ./scripts/gradle-build.mjs assembleDebug assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

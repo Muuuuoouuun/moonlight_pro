@@ -1,0 +1,62 @@
+/* 집중 화면 — 모니터마다 불투명 전체 창. 이 페이지만 허브 토큰(apps/hub/components/hub/hub-tokens.css 다크 값)을 쓴다. */
+:root {
+  --bg: oklch(0.155 0.005 250);
+  --surface: oklch(0.195 0.006 250);
+  --surface-2: oklch(0.225 0.007 250);
+  --surface-3: oklch(0.255 0.008 250);
+  --line: oklch(0.30 0.008 250 / 0.6);
+  --line-soft: oklch(0.30 0.008 250 / 0.3);
+  --line-strong: oklch(0.40 0.009 250 / 0.8);
+  --moon-100: oklch(0.92 0.005 250);
+  --moon-200: oklch(0.86 0.006 250);
+  --moon-300: oklch(0.78 0.008 250);
+  --moon-400: oklch(0.68 0.009 250);
+  --dur-hover: 120ms;
+  --dur-overlay: 160ms;
+  --dur-panel: 180ms; /* hub-tokens.css 와 같은 값 */
+  --ease-hub: cubic-bezier(0.2, 0.7, 0.3, 1);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+body { font-family: 'SUIT', 'Segoe UI Variable Text', 'Malgun Gothic', system-ui, sans-serif; color: var(--moon-100); -webkit-user-select: none; user-select: none; cursor: default; }
+.shield {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 50%, var(--surface-3) 0, var(--bg) 600px);
+}
+.stack { display: flex; flex-direction: column; align-items: center; }
+.perched { width: 80px; height: 80px; object-fit: contain; object-position: 50% 100%; margin-bottom: -9px; position: relative; z-index: 1; }
+.card {
+  position: relative; width: 420px; padding: 34px 32px 20px; border-radius: 32px;
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+  background: var(--surface-2); box-shadow: 0 5px 12px rgba(0, 0, 0, .18), inset 0 0 0 1px var(--line);
+}
+.lock { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--moon-300); }
+.timer { font-size: 82px; font-weight: 200; letter-spacing: -3px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--moon-100); }
+.caption { font-size: 13px; color: var(--moon-300); }
+.progress { width: calc(100% - 52px); height: 3px; border-radius: 2px; background: color-mix(in oklch, var(--moon-100) 12%, transparent); overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; border-radius: 2px; background: color-mix(in oklch, var(--moon-300) 72%, transparent); transition: width var(--dur-panel) var(--ease-hub); }
+.controls { height: 66px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; }
+.controls .q { font-size: 12px; color: var(--moon-300); }
+.controls .row { display: flex; gap: 12px; }
+.btn {
+  min-height: 38px; padding: 0 18px; border: 0; border-radius: 19px; font: inherit; font-size: 13px; font-weight: 500;
+  color: var(--moon-100); background: color-mix(in oklch, var(--moon-100) 6%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line); display: inline-flex; align-items: center; gap: 6px;
+  transition: background-color var(--dur-hover) var(--ease-hub);
+}
+.btn:hover { background: color-mix(in oklch, var(--moon-100) 10%, transparent); }
+.btn:active { background: color-mix(in oklch, var(--moon-100) 14%, transparent); }
+.btn.stop { width: 160px; justify-content: center; }
+.btn:focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
+.hint { position: relative; margin-top: 28px; display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--moon-300); }
+.hint kbd { font: 500 11px 'JetBrains Mono', Consolas, monospace; padding: 7px 11px; border-radius: 8px; background: color-mix(in oklch, var(--moon-100) 3.5%, transparent); box-shadow: inset 0 0 0 1px var(--line-soft); }
+.hint .hold { position: absolute; left: 0; bottom: -8px; height: 1px; width: 0; background: var(--moon-300); }
+.hint .hold.run { width: 100%; transition: width 1300ms linear; }
+.minimal { font-size: 14px; font-weight: 500; color: var(--moon-400); }
+.minimal[hidden], .stack[hidden] { display: none; }
+.fade { animation: focusIn var(--dur-overlay) var(--ease-hub); }
+@keyframes focusIn { from { opacity: 0; } to { opacity: 1; } }
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; } }
+@media (forced-colors: active) { .card, .btn { border: 1px solid CanvasText; } }
