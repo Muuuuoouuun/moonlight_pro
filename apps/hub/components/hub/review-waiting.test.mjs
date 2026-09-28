@@ -51,11 +51,11 @@ test('daily-brief.jsx mounts the shared component with a single import + mount l
 test('office-council.jsx mounts the shared component next to the existing 7-day usage line, no new panel', () => {
   assert.match(officeCouncil, /import \{ ReviewWaitingList \} from '\.\.\/review-waiting';/);
   assert.match(officeCouncil, /<OfficeUsageLine refreshKey=\{session\.turns\.length\} \/>\s*<ReviewWaitingList onNavigate=\{onNavigate\} \/>/);
-  assert.match(officeCouncil, /export function OfficeCouncil\(\{ scope = 'all', onNavigate \}\)/);
+  assert.match(officeCouncil, /export function OfficeCouncil\(\{ scope = 'all', onGuidanceAsk, onNavigate \}\)/);
 });
 
 test('hub-app.jsx threads navigate into OfficeCouncil so the review-waiting deep link works', () => {
-  assert.match(hubApp, /'dashboard\/agents\/office-council': \(n, notifications, scope\) => <OfficeCouncil scope=\{scope\} onNavigate=\{n\} \/>,/);
+  assert.match(hubApp, /'dashboard\/agents\/office-council': \(n, notifications, scope, ask\) => <OfficeCouncil scope=\{scope\} onGuidanceAsk=\{ask\} onNavigate=\{n\} \/>,/);
 });
 
 test('surface budget: neither mount site adds a new Button, Card, or panel wrapper around the bundle', () => {
