@@ -6,6 +6,11 @@ struct OfficeConversationKey: Hashable, Sendable {
     let topicID: String
 }
 
+struct OfficeSpeechReference: Equatable, Sendable {
+    let turnID: UUID
+    let speechIndex: Int
+}
+
 /// A local copy of supplied material. It is never evidence of a full Hub read.
 struct OfficeTopicSource: Equatable, Sendable {
     let title: String

@@ -105,7 +105,7 @@ private enum OfficeChatStoreChecks {
         try sent.validate()
         let participants = sent.participants
         let speeches = ["position", "response"].flatMap { round in participants.map { agent in
-            OfficeDiscussionTurn(ownerId: agent, round: round, position: agent == .umbreon ? "블래키 실제 쟁점: 효과 근거를 확인한다" : "실제 제공 자료를 검토한다", evidence: [], objection: "", revisionCondition: "자료가 추가될 때", changed: false, replyTo: round == "response" ? participants.filter { $0 != agent } : [], changeReason: round == "response" ? "추가 근거 없음" : "")
+            OfficeDiscussionTurn(ownerId: agent, round: round, position: agent == .umbreon ? "블래키 실제 쟁점 · \(round): 효과 근거를 확인한다" : "실제 제공 자료를 검토한다", evidence: [], objection: "", revisionCondition: "자료가 추가될 때", changed: false, replyTo: round == "response" ? participants.filter { $0 != agent } : [], changeReason: round == "response" ? "추가 근거 없음" : "")
         } }
         let discussion = OfficeDiscussion(version: "2026-09-22.v1", settings: .init(profile: "balanced", challenge: 2, depth: 2, warmth: 2, convergence: 2, influence: Dictionary(uniqueKeysWithValues: participants.map { ($0.rawValue, 1) })), turns: speeches, modelCalls: 7)
         let council = OfficeCouncilResult(recommendation: "근거 확인 뒤 제안", evidence: ["입력 원문"], dissent: ["효과는 확인되지 않음"], discussion: discussion)
@@ -148,6 +148,69 @@ private enum OfficeChatStoreChecks {
         try require(latest.history.count <= 8 && latest.history.first?.role == "user", "source plus recent exchanges remain bounded")
         try latest.validate()
         try require(try JSONEncoder().encode(latest).count < 90000, "complete request fits Hub byte budget")
+        let oldTurn = store.turns[0], clickedIndex = 5
+        let beforeClick = store.draft
+        try require(store.continueDiscussion(turnID: oldTurn.id, speechIndex: clickedIndex), "visible old speech can be selected exactly")
+        try require(store.draft == beforeClick && store.topicSource == source && store.conversationKey == key, "selecting a speech preserves draft, source and topic")
+        let anchor = store.followUp
+        try require(anchor?.turnID == oldTurn.id && anchor?.speechIndex == clickedIndex && store.followUpLabel?.contains("재검토") == true, "selection identifies the exact parent exchange and response round")
+        try require(await api.commands.count == 9, "selecting an old speech does not call the model")
+        store.draft = String(repeating: "가", count: 6000)
+        let oldSpeechFollowUp = Task { await store.send(message: store.draft) }
+        while await api.commands.count < 10 { await Task.yield() }
+        let anchored = await api.commands.last!
+        try require(anchored.history.contains { $0.role == "assistant" && $0.text.contains(speeches[clickedIndex].position) && $0.text.contains("블래키 · response (사실 인증 아님)") }, "a clicked old council speech remains in the next request after six newer exchanges")
+        try require(anchored.message.utf16.count == 6000 && anchored.history.count <= 8, "selected old speech preserves the full question and history budget")
+        try anchored.validate()
+        try require(!store.continueDiscussion(turnID: oldTurn.id, speechIndex: 2) && store.followUp == anchor, "in-flight selected speech cannot be replaced")
+        await api.fail(); _ = await oldSpeechFollowUp.value
+        try require(store.followUp == anchor && store.draft.utf16.count == 6000, "failure preserves selected speech and draft")
+        store.scope = .personal
+        try require(store.followUp == nil, "speech selection cannot leak into another scope")
+        store.scope = .all
+        _ = store.selectTopic("notice:two", scope: .all, owner: .eevee)
+        try require(store.followUp == nil, "speech selection cannot leak into another topic")
+        _ = store.restoreConversation(key)
+        store.configure(service: api, origin: "https://different.example")
+        try require(store.followUp == nil, "speech selection cannot leak into another origin")
+        store.configure(service: api, origin: origin)
+        try require(store.restoreConversation(key) && store.followUp == anchor, "returning restores the exact selected speech")
+        let canceledFollowUp = Task { await store.send(message: store.draft) }
+        while await api.commands.count < 11 { await Task.yield() }
+        store.cancelWaiting()
+        try require(store.followUp == anchor && store.draft.utf16.count == 6000, "cancel preserves selected speech and draft")
+        _ = store.continueDiscussion(turnID: oldTurn.id, speechIndex: 2)
+        let newerAnchor = store.followUp
+        await api.finish(); _ = await canceledFollowUp.value
+        try require(store.followUp == newerAnchor && newerAnchor != anchor, "late canceled completion cannot clear a newer selection")
+        let successfulFollowUp = Task { await store.send(message: store.draft) }
+        while await api.commands.count < 12 { await Task.yield() }
+        let nextCommand = await api.commands.last!
+        try require(nextCommand.history.contains { $0.role == "assistant" && $0.text.contains(speeches[2].position) }, "next send follows the newly selected actual position")
+        await api.finish(); _ = await successfulFollowUp.value
+        try require(store.followUp == nil && store.draft.isEmpty, "only confirmed success consumes the selected speech")
+        try await focusedBudgetChecks(council)
+    }
+
+    @MainActor static func focusedBudgetChecks(_ council: OfficeCouncilResult) async throws {
+        let api = ChatGate(), store = OfficeChatStore()
+        store.configure(service: api, origin: "https://budget.example")
+        _ = store.selectTopic("escaped-source", scope: .all, owner: .vaporeon,
+                              source: .init(title: "이스케이프 크기 검사", detail: String(repeating: "\u{0001}", count: 4000), date: nil, path: nil, isNoticeSummary: true))
+        store.draft = String(repeating: "\u{0001}", count: 6000)
+        let first = Task { await store.send(message: store.draft) }
+        while await api.commands.isEmpty { await Task.yield() }
+        await api.finish(.init(answer: "회의 종합", nextAction: "확인", contextNote: "입력 기준", contextSource: "provided", logPersisted: false, runId: nil, council: council))
+        _ = await first.value
+        _ = store.continueDiscussion(turnID: store.turns[0].id, speechIndex: 5)
+        store.draft = String(repeating: "가", count: 6000)
+        let follow = Task { await store.send(message: store.draft) }
+        while await api.commands.count < 2 { await Task.yield() }
+        let command = await api.commands.last!
+        try require(command.history.first?.text.contains("자료 일부만 전달") == true, "JSON escaping pressure reduces surrounding context instead of dropping the selected speech")
+        try require(command.message.utf16.count == 6000 && command.history.count <= 8 && command.history.contains { $0.role == "assistant" && $0.text.contains(council.discussion.turns[5].position) }, "escaped history preserves the exact speech and full question budget")
+        try command.validate()
+        await api.finish(); _ = await follow.value
     }
 
 }

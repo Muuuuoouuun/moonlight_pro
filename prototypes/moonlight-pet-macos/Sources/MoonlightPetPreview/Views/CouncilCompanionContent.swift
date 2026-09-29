@@ -140,8 +140,8 @@ struct CouncilCompanionContent: View {
         VStack(alignment: .leading, spacing: 9) {
             question(turn.message)
             if let council = turn.reply.council {
-                OfficeDiscussionContent(discussion: council.discussion, isSending: model.chat.isSending) { agent in
-                    _ = model.chat.continueWithAgent(agent); focused = true
+                OfficeDiscussionContent(discussion: council.discussion, isSending: model.chat.isSending) { speechIndex in
+                    _ = model.chat.continueDiscussion(turnID: turn.id, speechIndex: speechIndex); focused = true
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
@@ -222,6 +222,10 @@ struct CouncilCompanionContent: View {
             }
             .font(.system(size: 10.5)).foregroundStyle(Palette.glassInkMuted)
             .modifier(GlassReadability(radius: 8, inset: 3))
+            if let label = model.chat.followUpLabel {
+                Text(label).font(.system(size: 10.5)).foregroundStyle(Palette.glassInkMuted)
+                    .lineLimit(2).help(label)
+            }
             ZStack(alignment: .topLeading) {
                 if model.chat.draft.isEmpty {
                     Text("담당자에게 물어볼 내용을 적어보세요.")

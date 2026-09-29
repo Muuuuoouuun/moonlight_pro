@@ -32,6 +32,7 @@ final class OfficeChatStore: ObservableObject {
     @Published var source: CouncilDraftSource = .text { didSet { if !restoring { saveSession() } } }
     @Published private(set) var topicID = "general"
     @Published private(set) var topicSource: OfficeTopicSource?
+    @Published private(set) var followUp: OfficeSpeechReference?
     @Published private(set) var reviewers: [OfficeAgent] = []
     @Published private(set) var turns: [OfficeChatTurn] = []
     @Published private(set) var isSending = false
@@ -54,11 +55,22 @@ final class OfficeChatStore: ObservableObject {
         var draft = ""
         var source: CouncilDraftSource = .text
         var topicSource: OfficeTopicSource?
+        var followUp: OfficeSpeechReference?
     }
     private var sessions: [OfficeConversationKey: Session] = [:]
     var conversationKey: OfficeConversationKey { .init(origin: origin ?? "", scope: scope, topicID: topicID) }
     var participants: [OfficeAgent] { reviewers.isEmpty ? [] : [agent] + reviewers }
     var conversationTitle: String { reviewers.isEmpty ? "Office 대화" : "Office 회의실" }
+    var followUpLabel: String? {
+        guard let (_, speech) = followedSpeech else { return nil }
+        return "\(speech.ownerId.title) \(speech.round == "position" ? "첫 의견" : "재검토")에 이어 묻기 · \(OfficeConversationText.prefix(speech.position, limit: 70))"
+    }
+    private var followedSpeech: (OfficeChatTurn, OfficeDiscussionTurn)? {
+        guard let followUp, let turn = turns.first(where: { $0.id == followUp.turnID }),
+              let speeches = turn.reply.council?.discussion.turns,
+              speeches.indices.contains(followUp.speechIndex) else { return nil }
+        return (turn, speeches[followUp.speechIndex])
+    }
 
     func configure(service: (any HubOfficeServing)?, origin: String?) {
         // Re-checking the same connection must not discard a pending generation.
@@ -78,6 +90,16 @@ final class OfficeChatStore: ObservableObject {
     @discardableResult func continueWithAgent(_ agent: OfficeAgent) -> Bool {
         guard selectAgent(agent) else { return false }
         reviewers = []; selectionRevision += 1; saveSession()
+        return true
+    }
+    @discardableResult func continueDiscussion(turnID: UUID, speechIndex: Int) -> Bool {
+        guard !isSending else { refuseSelection(); return false }
+        guard let turn = turns.first(where: { $0.id == turnID }),
+              let speeches = turn.reply.council?.discussion.turns,
+              speeches.indices.contains(speechIndex) else { return false }
+        guard continueWithAgent(speeches[speechIndex].ownerId) else { return false }
+        followUp = OfficeSpeechReference(turnID: turnID, speechIndex: speechIndex)
+        selectionRevision += 1; saveSession()
         return true
     }
     @discardableResult func toggleReviewer(_ reviewer: OfficeAgent) -> Bool {
@@ -128,7 +150,7 @@ final class OfficeChatStore: ObservableObject {
         let command = OfficeChatCommand(ownerId: owner, scope: scope, message: value,
                                         history: boundedHistory(), participants: participants)
         do { try command.validate() } catch { errorMessage = error.localizedDescription; return nil }
-        let ticket = generation, revision = draftRevision
+        let ticket = generation, revision = draftRevision, sentFollowUp = followUp
         isSending = true; pendingMessage = value; errorMessage = nil; connectionInterruption = nil
         let task = Task { try await service.chat(command) }
         requestTask = task
@@ -139,6 +161,7 @@ final class OfficeChatStore: ObservableObject {
             let turn = OfficeChatTurn(id: UUID(), conversation: key, agent: owner, scope: key.scope, message: value, reply: reply)
             turns = Array((turns + [turn]).suffix(30))
             if draftRevision == revision, draft == message { draft = "" }
+            if followUp == sentFollowUp { followUp = nil }
             saveSession(); onReply?(turn)
             return value
         } catch {
@@ -157,21 +180,43 @@ final class OfficeChatStore: ObservableObject {
     }
     func clearConversation() {
         guard !isSending else { refuseSelection(); return }
-        turns = []; errorMessage = nil; saveSession()
+        turns = []; followUp = nil; errorMessage = nil; saveSession()
     }
     private func boundedHistory() -> [OfficeChatHistory] {
         let summary = topicSource.map { OfficeChatHistory(role: "user", text: $0.boundedSummary(origin: origin)) }
-        var exchanges = Array(turns.suffix(summary == nil ? 4 : 3))
+        let anchored = followedSpeech
+        let exchangeLimit = summary == nil ? 4 : 3
+        var recent = Array(turns.filter { $0.id != anchored?.0.id }.suffix(exchangeLimit - (anchored == nil ? 0 : 1)))
         let encoder = JSONEncoder(); encoder.outputFormatting = [.withoutEscapingSlashes]
         while true {
+            // Keep actual chronological exchanges, reserving the explicitly selected speech even when old.
+            let selectedIDs = Set(recent.map(\.id) + (anchored.map { [$0.0.id] } ?? []))
+            let exchanges = turns.filter { selectedIDs.contains($0.id) }
             let history = (summary.map { [$0] } ?? []) + exchanges.flatMap { turn in
-                [OfficeChatHistory(role: "user", text: OfficeConversationText.prefix(turn.message)),
-                 OfficeChatHistory(role: "assistant", text: historyText(turn, following: agent))]
+                let answer: String
+                if let (selected, speech) = anchored, selected.id == turn.id {
+                    answer = focusedHistoryText(turn, speech: speech)
+                } else { answer = historyText(turn, following: agent) }
+                return [OfficeChatHistory(role: "user", text: OfficeConversationText.prefix(turn.message)),
+                        OfficeChatHistory(role: "assistant", text: answer)]
             }
             if let data = try? encoder.encode(history), let json = String(data: data, encoding: .utf8), json.utf16.count <= 20_000 { return history }
-            guard !exchanges.isEmpty else { return [] }
-            exchanges.removeFirst()
+            if !recent.isEmpty { recent.removeFirst(); continue }
+            // JSON escaping can expand control characters sixfold. Preserve the full selected
+            // position (wire limit 600), reducing surrounding excerpts instead of losing it.
+            if let (turn, speech) = anchored {
+                return (summary.map { [OfficeChatHistory(role: "user", text: OfficeConversationText.prefix($0.text, limit: 1000) + "\n[자료 일부만 전달]")] } ?? []) + [
+                    OfficeChatHistory(role: "user", text: OfficeConversationText.prefix(turn.message, limit: 500)),
+                    OfficeChatHistory(role: "assistant", text: focusedHistoryText(turn, speech: speech, surrounding: false))
+                ]
+            }
+            return []
         }
+    }
+    private func focusedHistoryText(_ turn: OfficeChatTurn, speech: OfficeDiscussionTurn, surrounding: Bool = true) -> String {
+        let selected = "이어 묻기로 선택한 실제 생성 발언 · \(speech.ownerId.title) · \(speech.round) (사실 인증 아님)\n\(speech.position)"
+        let context = surrounding ? "\n" + historyText(turn, following: speech.ownerId) : ""
+        return OfficeConversationText.prefix(selected + context, limit: 1950) + "\n[선택 발언과 이전 회의 일부 전달]"
     }
     private func historyText(_ turn: OfficeChatTurn, following owner: OfficeAgent) -> String {
         let header = "Office 생성 답변 · 주관 \(turn.agent.title) (사실 인증 아님)"
@@ -190,13 +235,13 @@ final class OfficeChatStore: ObservableObject {
 
     private func saveSession() {
         guard !restoring else { return }
-        sessions[conversationKey] = Session(owner: agent, reviewers: reviewers, turns: turns, draft: draft, source: source, topicSource: topicSource)
+        sessions[conversationKey] = Session(owner: agent, reviewers: reviewers, turns: turns, draft: draft, source: source, topicSource: topicSource, followUp: followUp)
     }
     private func restoreSession(defaultOwner: OfficeAgent) {
         let session = sessions[conversationKey] ?? Session(owner: defaultOwner)
         restoring = true
         agent = session.owner; reviewers = session.reviewers; turns = session.turns
-        draft = session.draft; source = session.source; topicSource = session.topicSource
+        draft = session.draft; source = session.source; topicSource = session.topicSource; followUp = session.followUp
         restoring = false; errorMessage = nil
         saveSession()
     }
