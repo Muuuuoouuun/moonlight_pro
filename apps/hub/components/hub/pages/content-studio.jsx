@@ -10,6 +10,8 @@ import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { BRIEF_FIELDS, STUDIO_CHANNELS, channelLabel, channelForType, formatForChannel, exportStudioVariant, studioTextForCopy } from '@/lib/content-workflow-client';
 import { useContentStudio } from './use-content-studio';
 import { useContentTemplates } from './use-content-templates';
+import { useContentSchedule } from './use-content-schedule';
+import { formatKstShort, schedulePresets } from '@/lib/content-schedule';
 import { DraftEditor } from './content-studio-editors';
 import { StudioAI } from './content-studio-ai';
 import { FloatingMentorWidget } from '../floating-mentor-widget';
@@ -45,6 +47,9 @@ export function ContentStudio({ workspace, ledger }) {
   const [mentorMode, setMentorMode] = React.useState('advice');
   const [newChannel, setNewChannel] = React.useState('instagram'), [notice, setNotice] = React.useState('');
   const templates = useContentTemplates();
+  // 예약 — 결과물마다 올릴 시각 하나. 알림 방식이라 올리는 것은 직접 한다(자동 업로드는 보류 결정).
+  const schedules = useContentSchedule('all');
+  const [scheduleAt, setScheduleAt] = React.useState(''), [scheduleError, setScheduleError] = React.useState(''), [scheduleSaving, setScheduleSaving] = React.useState(false);
   // AI 요청은 작업마다 쓰는 지시문이라 콘텐츠에 저장하지 않는다. 실행한 요청은 AI 작업 기록(run)에 남는다.
   // 같은 지시를 매일 다시 쓰므로 이 브라우저에 마지막 요청을 기억한다(편의용 — 실패해도 동작에는 영향 없음).
   const [aiRequest, setAiRequestState] = React.useState(''), [templateId, setTemplateId] = React.useState('');
@@ -105,6 +110,9 @@ export function ContentStudio({ workspace, ledger }) {
     setPublicationError('');
     const result = await studio.recordPublication(publicationUrl, publicationDate);
     if (result.ok) {
+      // 발행을 기록했으면 예약도 끝난 것 — 실패해도 밤 정리가 결과물 상태로 같은 결론에 이른다.
+      const active = schedules.forVariant(draft.variantId);
+      if (active) schedules.complete(active.variantId, active.revision);
       setDrawer(null);
       setPublicationUrl(''); setPublicationDate('');
       setNotice(PUBLISHED_NOTICE);
@@ -157,6 +165,37 @@ export function ContentStudio({ workspace, ledger }) {
     if (result.status === 'deleted') { if (templateId === template.id) setTemplateId(''); toast.success('템플릿을 삭제했습니다.'); }
     else toast.error(result.message || '템플릿을 삭제하지 못했습니다.');
   };
+  const currentSchedule = schedules.forVariant(draft.variantId);
+  const toLocalInput = (iso) => { const t = new Date(iso); return new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+  const openSchedule = () => {
+    setScheduleError('');
+    setScheduleAt(toLocalInput(currentSchedule && currentSchedule.state !== 'missed' ? currentSchedule.scheduledAt : schedulePresets()[1].at));
+    setDrawer('schedule');
+  };
+  const submitSchedule = async () => {
+    setScheduleError('');
+    const when = new Date(scheduleAt);
+    if (!scheduleAt || Number.isNaN(when.getTime())) { setScheduleError('올릴 시각을 확인해 주세요.'); return; }
+    setScheduleSaving(true);
+    const saved = await studio.save(true);
+    if (!saved?.variantId) { setScheduleSaving(false); setScheduleError('글을 먼저 서버에 저장해야 예약할 수 있습니다. 저장이 확인된 뒤 다시 눌러 주세요.'); return; }
+    const result = await schedules.set({ variantId: saved.variantId, contentId: saved.contentId, scheduledAt: when.toISOString(),
+      title: saved.variantTitle || saved.title || '', channel: saved.channel, expectedRevision: schedules.anyForVariant(saved.variantId)?.revision || 0 });
+    setScheduleSaving(false);
+    if (['saved', 'duplicate'].includes(result.status)) { setDrawer(null); toast.success(`${formatKstShort(result.schedule.scheduledAt)}에 알려 드릴게요. 올리는 것은 직접 합니다.`); }
+    else setScheduleError(result.message || '예약을 저장하지 못했습니다.');
+  };
+  const cancelSchedule = async () => {
+    if (!currentSchedule) return;
+    setScheduleSaving(true);
+    const result = await schedules.cancel(currentSchedule.variantId, currentSchedule.revision);
+    setScheduleSaving(false);
+    if (['saved', 'duplicate'].includes(result.status)) { setDrawer(null); toast.success('예약을 해제했습니다.'); }
+    else setScheduleError(result.message || '예약을 해제하지 못했습니다.');
+  };
+  const scheduleLabel = !currentSchedule ? '예약'
+    : currentSchedule.state === 'missed' ? '놓침 · 다시 예약'
+      : `${formatKstShort(currentSchedule.scheduledAt)} 예약`;
   const openMentor = (mode) => { setDrawer(null); setMentorMode(mode); setMentorOpen(true); };
   const createVariantFor = async (channel) => {
     const type = formatForChannel(channel);
@@ -238,6 +277,7 @@ export function ContentStudio({ workspace, ledger }) {
               {/* 본문이 있을 때만 하단에 붙인다 — 빈 초안에서는 비활성 복사 바가 AI 초안 버튼을 가린다. */}
               <div className="studio-export-bar" data-sticky={draft.body.trim() ? 'true' : undefined}>
                 <Button variant="primary" icon="copy" onClick={copy} disabled={!draft.body.trim()}>복사</Button>
+                <Button variant={currentSchedule ? 'secondary' : 'outline'} icon="clock" onClick={openSchedule} disabled={disabled || !draft.body.trim()} aria-expanded={drawer === 'schedule'}>{scheduleLabel}</Button>
                 <Button variant="outline" onClick={openPublication} disabled={disabled || !draft.body.trim()}>발행했음</Button>
               </div>
             </div>
@@ -320,6 +360,23 @@ export function ContentStudio({ workspace, ledger }) {
         <TextField label="이름" value={templateDraft.name} maxLength={60} placeholder="예: 후킹 스레드" onChange={(event) => setTemplateDraft({ ...templateDraft, name: event.target.value })} disabled={templateSaving} />
         <TextAreaField label="AI 요청문" value={templateDraft.request} maxLength={2000} showCount rows={4} placeholder="예: 첫 줄은 질문으로, 세 문단 이내, 반말, 마지막 줄은 한 줄 결론" onChange={(event) => setTemplateDraft({ ...templateDraft, request: event.target.value })} disabled={templateSaving} />
         <TextAreaField label="글 틀" hint="템플릿을 고를 때 본문이 비어 있으면 이 틀을 채웁니다." value={templateDraft.skeleton} maxLength={4000} showCount rows={6} placeholder={'예:\n[훅 — 질문 한 줄]\n\n[공감 — 독자가 겪는 상황]\n\n[사례 — 실제 수업 장면]\n\n[한 줄 결론]'} onChange={(event) => setTemplateDraft({ ...templateDraft, skeleton: event.target.value })} disabled={templateSaving} />
+      </div>
+    </Drawer>}
+    {drawer === 'schedule' && <Drawer title="올릴 시각" subtitle="그 시각에 홈의 '지금 올릴 글'에 뜹니다. 올리는 것은 직접 합니다(자동 업로드는 꺼져 있습니다)." presentation="compact" onClose={() => { if (!scheduleSaving) setDrawer(null); }}
+      footer={<div className="studio-actions">
+        <Button variant="primary" disabled={scheduleSaving || schedules.status === 'preview'} onClick={submitSchedule}>{scheduleSaving ? '저장 중…' : currentSchedule && currentSchedule.state !== 'missed' ? '시각 바꾸기' : '이 시각으로 예약'}</Button>
+        {currentSchedule && <Button variant="outline" disabled={scheduleSaving} onClick={cancelSchedule}>예약 해제</Button>}
+      </div>}>
+      <div className="studio-stack">
+        {schedules.status === 'preview' && <TruthBadge state="preview" label="예약 저장소 연결 필요" />}
+        {schedules.status === 'error' && <div className="studio-actions"><TruthBadge state="error" label="예약 목록 불러오기 실패" /><Button size="xs" onClick={schedules.reload}>다시 불러오기</Button></div>}
+        {currentSchedule?.state === 'missed' && <p className="studio-muted studio-small">이 예약은 시각이 지나 '놓침'으로 정리됐습니다. 새 시각으로 다시 예약할 수 있습니다.</p>}
+        <div className="studio-actions" role="group" aria-label="빠른 선택">
+          {schedulePresets().map((preset) => <Button key={preset.key} size="xs" variant="outline" disabled={scheduleSaving} onClick={() => setScheduleAt(toLocalInput(preset.at))}>{preset.label}</Button>)}
+        </div>
+        <TextField label="직접 정하기" type="datetime-local" value={scheduleAt} onChange={(event) => setScheduleAt(event.target.value)} disabled={scheduleSaving}
+          onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); submitSchedule(); } }} />
+        {scheduleError && <p role="alert" className="studio-error">{scheduleError}</p>}
       </div>
     </Drawer>}
     {drawer === 'publication' && <Drawer title="발행 기록" subtitle="외부 채널에 게시한 URL과 시각을 기록합니다. 운영자 확인이며 외부 게시 여부를 자동 검증하지 않습니다." presentation="compact" onClose={() => { if (!studio.busy) setDrawer(null); }} footer={<Button variant="primary" disabled={disabled} onClick={submitPublication}>{studio.busy ? '확인 중…' : '발행 기록 저장'}</Button>}>

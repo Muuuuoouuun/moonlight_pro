@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Button, Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
 import { CalendarOutcome } from "../calendar-outcome";
+import { PublishDue } from "./publish-due";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 
 // Home — Futura 텍스처의 첫 화면 (DESIGN.md §15, 2026-09-18).
@@ -301,6 +302,8 @@ export function Home({ onNavigate }) {
           <TriageDetail signal={active} onDecide={decide} />
         </div>
       )}
+
+      <PublishDue />
 
       <TodaySchedule onNavigate={onNavigate} reloadKey={reloadKey} onReload={reload} />
 
