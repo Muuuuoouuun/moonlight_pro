@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>허브 주소 · Moonlight</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <main class="panel">
+    <p class="eyebrow">Moonlight</p>
+    <h1>허브 주소</h1>
+    <p class="lead">배포한 허브 주소를 넣으면 이 창에서 바로 열립니다.</p>
+
+    <p class="notice" id="failure" role="alert" hidden></p>
+
+    <form id="form" novalidate>
+      <label for="hub-url">주소</label>
+      <input id="hub-url" name="hubUrl" type="url" inputmode="url" autocomplete="url" spellcheck="false"
+             placeholder="https://허브주소.vercel.app" required>
+      <p class="hint" id="hint">https 주소만 받습니다. 개발 중에는 http://localhost·127.0.0.1도 됩니다.</p>
+      <p class="error" id="error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="submit" class="primary">저장</button>
+        <button type="button" id="back" hidden>돌아가기</button>
+      </div>
+    </form>
+  </main>
+  <script src="settings.js"></script>
+</body>
+</html>

@@ -324,6 +324,8 @@ ClassIn은 회사 공식 객체의 정본이고, 개인 프로젝트는 ClassIn�
 | 7 | L3 AI 근거 사용 여부와 월 비용 상한 | 5단계 이후 결정 |
 | 8 | 1단계에서 넣어 볼 제품 2~3개 | 인벤토리 22개 중 매출에 가장 가까운 것 |
 
+**병행 구현 흡수 기록 (2026-09-29, 확인 필요)** — 브랜치 `claude/loving-lamport-4tffhr`(`d52e9006`)는 v0.2를 바탕으로 제품을 PMS 컨테이너(`brands`, `meta.category = product`)로 구현하고, 2026-09-28 운영자 답("ㄱㅊ, ㄱㄱ, 3개 집중, ㄱㄱ")을 ① `product` 분류 추가 ② 교차 후보 불허(같은 소속끼리만) ③ MVP 이상 동시 3개 상한으로 기록했다. 그 구현은 3번(새 `products` 테이블, 2026-09-25 확정)과 저장 위치가 달라 병합 때 코드(`packages/product-catalog`, `github-product-repos`, `project-product-view.jsx`, Engine `update_product` 컨테이너 경로, 브랜드 탭 제품 제외)를 **가져오지 않았다** — 제품 보기·카드·GitHub 저장소 연결은 §13 구현이 이미 맡는다. 09-28 답 중 ①은 3번 확정으로 해당 없음, ②는 4번(허용·표시만)과 **충돌**, ③은 5번(나중에 정함)을 채울 수 있는 값이지만 v0.2 질문지에 대한 답이라 적용하지 않았다. ②·③은 운영자 재확인 전까지 위 표가 정본이다.
+
 ## 13. 구현 기록 (2026-09-25, 브랜치 `claude/product-lens`)
 
 운영자 범위 결정 "0~2단계". 아래는 코드에 들어간 것이고, 운영 DB에는 **아직 적용하지 않았다**(운영자가 직접 적용).
@@ -341,6 +343,8 @@ ClassIn은 회사 공식 객체의 정본이고, 개인 프로젝트는 ClassIn�
 | 2 저장소·신호 | 상세 `개발` 탭: 저장소별 CI·리뷰 요청·릴리스·동기화 시각, 저장소 연결 폼, 프로젝트 붙이기/빼기, 최근 신호. CI 실패 행의 `Codex에 맡기기`는 sessionStorage로 초안만 넘기고(URL에 싣지 않음) 보내기는 운영자가 누른다 | `product-detail-drawer.jsx`, `codex-jobs.jsx` |
 
 2026-09-25 추가(운영자 피드백): 카드 칸 단순화(§4.0), 전체 체크리스트·진척률·기능별 점검(§4.3), 문의 ↔ 제품 연결(§4.4, `link_inquiry`/`unlink_inquiry`, Hub `/api/hub/products/inquiries`).
+
+2026-09-29 수정: 문의함에서 `연락 만들기`·`신기능으로`로 만든 일에 고객이 빠지던 문제. 제품 읽기 모델이 문의의 `lead_id`·`deal_id`를 읽고, 문의에 리드가 붙어 있으면 새 일에 그 리드를 기존 `create_project`의 `entityRef`(→ `projects.lead_id`)로 붙인다. 드로어 안내 한 줄과 문의 상세 연락처 줄(`· 고객 연결됨`)이 그 사실을 말한다. 거래만 붙은 문의는 고객을 추측하지 않고(운영 `deals.lead_id`가 거의 비어 있음), 화면을 연 뒤 리드가 지워져 Engine이 거절하면(`invalid-reference`) 저장 실패로 알린다 — 고객을 빼고 다시 만들지 않는다. 일은 만들었는데 문의 붙이기만 실패하면 드로어가 연 채로 남아 `문의 다시 붙이기`가 그 일에 문의만 붙이고(두 번째 일을 만들지 않음), 그대로 닫으면 danger 토스트로 남긴다. `apps/hub/lib/product-catalog.js`(`inquiryWorkSeed`·`workCreateBody`·`saveWork`), `products-ledger.js`.
 
 하지 않은 것(다음 결정·단계):
 

@@ -84,6 +84,18 @@ test('floating chat opens with a source lens and an empty operator input without
   }
 });
 
+test('a sales question names the customer record it is about, not a brand', () => {
+  const card = GURU_CARDS.find(item => item.domain === 'sales');
+  const html = renderToStaticMarkup(React.createElement(GuidanceQuestionDrawer, {
+    card,
+    context: { ref: 'lead-7', label: '김원장 · 테스트학원 A', facts: ['고객: 김원장'] },
+    onClose: () => {},
+  }));
+  assert.match(html, /대상 고객 · 김원장 · 테스트학원 A/);
+  assert.doesNotMatch(html, /대상 브랜드/);
+  assert.match(html, /영업 Guru에게 보내기/);
+});
+
 test('floating chatbot can begin without attributing a question to an arbitrary card', () => {
   const html = renderToStaticMarkup(React.createElement(GuidanceQuestionDrawer, {
     context: { free: true }, onClose: () => {},

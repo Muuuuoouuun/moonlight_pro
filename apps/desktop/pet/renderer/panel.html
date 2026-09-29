@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'">
+<title>Moonlight 빠른 기능</title>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="glass.css">
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div class="glass" id="glass">
+  <div class="layer veil"></div>
+  <div class="layer shade"></div>
+  <div class="layer wash" id="wash"></div>
+  <div class="layer section"></div>
+  <div class="layer section-fine"></div>
+  <div class="layer prism"></div>
+  <div class="layer rim"></div>
+  <div class="content" id="content">
+    <div class="handle" id="handle" tabindex="0" role="button" aria-label="위젯 위치 이동 · 위아래 화살표로도 움직여요" title="위아래로 드래그하여 이동"><i></i></div>
+    <header class="header" id="header">
+      <div class="title-block">
+        <h1 class="title" id="title">오늘</h1>
+        <div class="date" id="date"></div>
+      </div>
+      <div class="header-tabs" id="header-tabs"></div>
+      <button type="button" class="quiet icon-only" id="more" aria-haspopup="menu" aria-label="빠른 기능 더보기" title="더보기 · 메모 · Office · Council · 집중"></button>
+      <button type="button" class="quiet icon-only" id="pin" aria-label="위젯으로 고정" title="위젯으로 고정"></button>
+      <button type="button" class="quiet icon-only" id="close" aria-label="빠른 기능 닫기" title="빠른 기능 닫기" hidden></button>
+    </header>
+    <div class="tabs-row" id="tabs-row"></div>
+    <main class="mode-root" id="mode-root" aria-live="polite"></main>
+  </div>
+</div>
+<script src="core/contract-begin.js"></script>
+<script src="../shared/contract.js"></script>
+<script src="core/contract-end.js"></script>
+<script src="model/platform.js"></script>
+<script src="model/envelope-view.js"></script>
+<script src="model/tasks-view-model.js"></script>
+<script src="model/calendar-model.js"></script>
+<script src="model/chat-view-model.js"></script>
+<script src="model/memo-model.js"></script>
+<script src="model/notices-model.js"></script>
+<script src="model/focus-model.js"></script>
+<script src="model/panel-model.js"></script>
+<script src="core/bridge.js"></script>
+<script src="core/ui.js"></script>
+<script src="modes/tasks.js"></script>
+<script src="modes/memo.js"></script>
+<script src="modes/calendar.js"></script>
+<script src="modes/office.js"></script>
+<script src="modes/council.js"></script>
+<script src="modes/focus.js"></script>
+<script src="modes/notifications.js"></script>
+<script src="modes/hub-status.js"></script>
+<script src="panel.js"></script>
+</body>
+</html>

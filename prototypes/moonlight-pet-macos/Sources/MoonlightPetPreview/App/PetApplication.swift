@@ -25,6 +25,12 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installEditingMenu()
+        if CommandLine.arguments.contains("--glass-lab") {
+            let lab = GlassLabWindowController()
+            glassLab = lab
+            lab.present()
+            return
+        }
         let coordinator = WindowCoordinator(model: model)
         self.coordinator = coordinator
         coordinator.showPet()
@@ -32,11 +38,6 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--desktop-refraction") {
             model.usesDesktopRefraction = true
             coordinator.showBar()
-        }
-        if CommandLine.arguments.contains("--glass-lab") {
-            let lab = GlassLabWindowController()
-            glassLab = lab
-            lab.present()
         }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -68,6 +69,10 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quitItem)
         item.menu = menu
         statusItem = item
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        CommandLine.arguments.contains("--glass-lab")
     }
 
     // Accessory apps still need an Edit menu for Cocoa text-command routing.

@@ -22,8 +22,10 @@ const rows = {
   product_monthly_metrics: [{ product_id: PRODUCT, month: "2026-09", active_users: 18, revenue: "190000", cost: "68000" }],
   areas: [{ id: "a1", name: "개인 사업" }],
 };
+const LEAD = "33333333-3333-4333-8333-333333333333";
+const DEAL = "44444444-4444-4444-8444-444444444444";
 const INQUIRIES = [
-  { id: "q-old", subject: "채점 문의", status: "in_progress", received_at: "2026-08-01T00:00:00Z" },
+  { id: "q-old", subject: "채점 문의", status: "in_progress", lead_id: LEAD, deal_id: DEAL, received_at: "2026-08-01T00:00:00Z" },
   { id: "q-new", subject: "새 문의", status: "new", received_at: "2026-09-24T00:00:00Z" },
 ];
 
@@ -60,6 +62,16 @@ test("each product carries ops status, month numbers, work with task counts and 
   const monthRead = r.seen.find((s) => s.table === "product_monthly_metrics");
   assert.ok(monthRead.options.filters.some(([k, v]) => k === "month" && v === "in.(2026-09,2026-08)"));
   assert.ok(r.seen.every(({ options }) => options.filters.some(([k, v]) => k === "workspace_id" && v === `eq.${WS}`)));
+});
+
+test("inquiries carry their customer (lead) and deal ids so work made from them can attach the customer", async () => {
+  const r = reader();
+  const ledger = await getProductLedger({ fetchRows: r.fetchRows, configured: true, now: NOW });
+  const inquiryReads = r.seen.filter((s) => s.table === "inquiries");
+  assert.equal(inquiryReads.length, 2, "최근 목록 + 최근 목록 밖 연결 문의");
+  for (const { options } of inquiryReads) assert.deepEqual(options.select.split(",").filter((c) => c === "lead_id" || c === "deal_id"), ["lead_id", "deal_id"]);
+  assert.deepEqual(ledger.inquiries.map((q) => [q.id, q.leadId, q.dealId]), [["q-new", null, null], ["q-old", LEAD, DEAL]]);
+  assert.deepEqual(ledger.products[0].inquiries.map((q) => q.leadId), [LEAD]);
 });
 
 test("a failed products read is an error envelope, and a missing table says so", async () => {

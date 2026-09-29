@@ -21,7 +21,9 @@ import {
   productStageLabel,
   projectStateLabel,
   recurrenceLabel,
+  saveWork,
   seoulDay,
+  workDrawerSubtitle,
   workType,
 } from "../../../lib/product-catalog.js";
 import { INQUIRY_STATUSES } from "../inquiry-view-state";
@@ -45,7 +47,11 @@ function defaultArea(product, areas) {
   return top || areas[0]?.id || "";
 }
 
-// ＋ 일 — 이 제품에 붙은 프로젝트를 만든다(신기능·보수·연락). 문의에서 만들 때는 제목·종류가 채워져 온다.
+// ＋ 일 — 이 제품에 붙은 프로젝트를 만든다(신기능·보수·연락). 문의에서 만들 때는 제목·종류가 채워져 오고,
+// 문의에 고객(리드)이 붙어 있으면 seed.customer로 와서 그 고객이 일에 붙는다(workCreateBody → entityRef).
+// 고객을 붙이지 못하면(리드 삭제 등) 저장 실패로 알린다 — 고객을 빼고 몰래 다시 만들지 않는다.
+// 일은 만들었는데 문의 붙이기가 실패하면 드로어를 연 채로 두고, 다시 누르면 그 일에 문의만 붙인다(saveWork createdId).
+// 그대로 닫으면 부모가 새로 읽고 danger 토스트로 남긴다 — 조용히 닫혀 성공처럼 보이지 않게.
 export function WorkDrawer({ product, areas, seed, onClose, onSaved }) {
   const [draft, setDraft] = React.useState(() => ({
     title: seed?.title || "",
@@ -55,54 +61,44 @@ export function WorkDrawer({ product, areas, seed, onClose, onSaved }) {
     areaId: defaultArea(product, areas),
   }));
   const [state, setState] = React.useState({ saving: false, message: "" });
+  const [created, setCreated] = React.useState(null); // 만들었지만 문의가 아직 안 붙은 일의 id
   const titleRef = React.useRef(null);
   const save = async (event) => {
     event?.preventDefault();
-    if (!draft.title.trim()) { setState({ saving: false, message: "일 제목을 적어 주세요." }); return; }
-    if (!draft.areaId) { setState({ saving: false, message: "업무 분야를 골라 주세요." }); return; }
+    if (!created && !draft.title.trim()) { setState({ saving: false, message: "일 제목을 적어 주세요." }); return; }
+    if (!created && !draft.areaId) { setState({ saving: false, message: "업무 분야를 골라 주세요." }); return; }
     setState({ saving: true, message: "" });
-    const id = newId();
-    const outcome = await createWork({
-      id,
-      title: draft.title.trim(),
-      areaId: draft.areaId,
-      orgScope: product.orgScope,
-      status: "active",
-      priority: "medium",
-      productId: product.id,
-      workType: draft.workType,
-      ...(draft.dueAt ? { dueAt: draft.dueAt } : {}),
-      ...(draft.workType === "maintenance" && draft.recurrence ? { recurrence: draft.recurrence } : {}),
-      source: "hub-products",
-    });
-    if (!outcome.ok) { setState({ saving: false, message: outcome.message }); return; }
-    if (seed?.inquiryId) {
-      const linked = await linkInquiry(seed.inquiryId, product.id, outcome.entity?.id || id);
-      if (!linked.ok) { setState({ saving: false, message: `일은 만들었지만 문의를 붙이지 못했어요: ${linked.message}` }); onSaved(null); return; }
-    }
+    const result = await saveWork({ createWork, linkInquiry }, { product, draft, seed, id: newId(), createdId: created });
+    if (!result.ok) { setCreated(result.createdId); setState({ saving: false, message: result.message }); return; }
     onSaved(`‘${draft.title.trim()}’ ${workType(draft.workType)?.label || "일"}을(를) 만들었어요.`);
   };
+  const close = () => (created
+    ? onSaved(`‘${draft.title.trim()}’ 일은 만들었지만 문의는 붙지 않았어요. 문의의 ‘붙은 일’에서 골라 주세요.`, { tone: "danger" })
+    : onClose());
   return (
     <Drawer
       title={`${product.name} · 새 일`}
-      subtitle={seed?.inquiryId ? "문의에서 만드는 일 — 만들면 문의가 이 일에 붙어요." : "프로젝트 탭의 프로젝트로 만들어지고 이 제품에 붙어요."}
+      subtitle={workDrawerSubtitle(seed)}
       presentation="compact"
-      onClose={state.saving ? undefined : onClose}
+      onClose={state.saving ? undefined : close}
       initialFocusRef={titleRef}
-      footer={<><span className={styles.spacer} />{state.message && <span role="alert" className={styles.danger} style={{ fontSize: 12 }}>{state.message}</span>}<Button variant="ghost" size="sm" onClick={onClose} disabled={state.saving}>닫기</Button><Button variant="primary" size="sm" onClick={save} disabled={state.saving}>{state.saving ? "만드는 중…" : "일 만들기"}</Button></>}
+      footer={<><span className={styles.spacer} />{state.message && <span role="alert" className={styles.danger} style={{ fontSize: 12 }}>{state.message}</span>}<Button variant="ghost" size="sm" onClick={close} disabled={state.saving}>닫기</Button><Button variant="primary" size="sm" onClick={save} disabled={state.saving}>{state.saving ? (created ? "붙이는 중…" : "만드는 중…") : created ? "문의 다시 붙이기" : "일 만들기"}</Button></>}
     >
-      <form onSubmit={save} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <TextField ref={titleRef} label="제목" required value={draft.title} maxLength={300} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="예: 채점 결과 엑셀 내보내기" />
-        <SegmentedControl label="종류" options={WORK_TYPES.map((type) => ({ key: type.value, label: `${type.glyph} ${type.label}` }))} value={draft.workType} onChange={(value) => setDraft({ ...draft, workType: value })} />
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <TextField label="기한" type="date" value={draft.dueAt} onChange={(event) => setDraft({ ...draft, dueAt: event.target.value })} fieldStyle={{ flex: "1 1 150px" }} />
-          {draft.workType === "maintenance" && (
-            <SelectField label="반복" value={draft.recurrence} onChange={(event) => setDraft({ ...draft, recurrence: event.target.value })}
-              options={[{ value: "", label: "한 번" }, ...RECURRENCES]} fieldStyle={{ flex: "1 1 120px" }} />
-          )}
-        </div>
-        <SelectField label="업무 분야" value={draft.areaId} onChange={(event) => setDraft({ ...draft, areaId: event.target.value })}
-          options={areas.length ? areas.map((area) => ({ value: area.id, label: area.name })) : [{ value: "", label: "업무 분야가 없어요" }]} />
+      <form onSubmit={save}>
+        {/* 일을 이미 만들었으면 입력은 잠근다 — 다시 누르면 문의만 붙고 제목·종류는 바뀌지 않는다. */}
+        <fieldset disabled={Boolean(created)} style={{ display: "flex", flexDirection: "column", gap: 12, border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <TextField ref={titleRef} label="제목" required value={draft.title} maxLength={300} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="예: 채점 결과 엑셀 내보내기" />
+          <SegmentedControl label="종류" options={WORK_TYPES.map((type) => ({ key: type.value, label: `${type.glyph} ${type.label}` }))} value={draft.workType} onChange={(value) => setDraft({ ...draft, workType: value })} />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <TextField label="기한" type="date" value={draft.dueAt} onChange={(event) => setDraft({ ...draft, dueAt: event.target.value })} fieldStyle={{ flex: "1 1 150px" }} />
+            {draft.workType === "maintenance" && (
+              <SelectField label="반복" value={draft.recurrence} onChange={(event) => setDraft({ ...draft, recurrence: event.target.value })}
+                options={[{ value: "", label: "한 번" }, ...RECURRENCES]} fieldStyle={{ flex: "1 1 120px" }} />
+            )}
+          </div>
+          <SelectField label="업무 분야" value={draft.areaId} onChange={(event) => setDraft({ ...draft, areaId: event.target.value })}
+            options={areas.length ? areas.map((area) => ({ value: area.id, label: area.name })) : [{ value: "", label: "업무 분야가 없어요" }]} />
+        </fieldset>
       </form>
     </Drawer>
   );
@@ -249,9 +245,9 @@ export function ProductPage({ product, month, areas, onBack, onOpenProject, onOp
   const active = (product.projects || []).filter((project) => project.status !== "completed" && project.status !== "archived");
   const wanted = active.filter((project) => project.workType === "feature" && project.requests > 0).sort((a, b) => b.requests - a.requests);
   const details = product.details || {};
-  const saved = (message) => {
+  const saved = (message, options) => {
     setDrawer(null);
-    if (message) toast(message);
+    if (message) toast(message, options);
     onChanged();
   };
 

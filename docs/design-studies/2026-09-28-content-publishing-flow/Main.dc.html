@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>콘텐츠 발행 흐름 구조</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans KR',system-ui,sans-serif;color:#1E2228;background:#F7F8FA}
+a{color:#5274A8}a:hover{color:#3E5C8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 48px 56px; display: flex; flex-direction: column; gap: 28px; background: #F7F8FA; font-family: 'IBM Plex Sans KR', system-ui, sans-serif; color: #1E2228;">
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 11px; letter-spacing: 0.1em; color: #737C86; font-weight: 500;">CONTENT OS · 구조안</div>
+      <h1 style="margin: 0; font-size: 30px; font-weight: 600; letter-spacing: -0.01em;">소재에서 성과까지, 한 줄로 흐르는 발행 구조</h1>
+      <p style="margin: 0; font-size: 14px; color: #545C66; line-height: 1.6;">글 하나가 거치는 다섯 단계와, 각 단계에서 내가 하는 일 · 허브가 하는 일 · 자동으로 도는 일을 나눴습니다.</p>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center; font-size: 12px; color: #545C66;">
+      <span style="padding: 6px 10px; border: 1px solid #9AA2AB; border-radius: 6px; background: #FFFFFF;">지금 있음</span>
+      <span style="padding: 6px 10px; border: 1px dashed #5274A8; border-radius: 6px; background: #FFFFFF; color: #3E5C8C;">이번에 만들 것</span>
+      <span style="padding: 6px 10px; border: 1px dotted #9AA2AB; border-radius: 6px; background: #FFFFFF; color: #737C86;">나중 · 결정 필요</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 140px 1fr 20px 1fr 20px 1fr 20px 1fr 20px 1fr; gap: 0; align-items: stretch;">
+    <div></div>
+    <div style="background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #737C86;">01</span><span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; color: #545C66;">아이디어</span></div>
+      <div style="font-size: 18px; font-weight: 600;">소재</div>
+      <div style="font-size: 12.5px; color: #545C66; line-height: 1.55;">떠오른 생각을 한 곳에 모은다</div>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: center; color: #9AA2AB;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+    <div style="background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #737C86;">02</span><span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; color: #545C66;">초안</span></div>
+      <div style="font-size: 18px; font-weight: 600;">원고</div>
+      <div style="font-size: 12.5px; color: #545C66; line-height: 1.55;">메모 → AI 초안 → 다듬기</div>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: center; color: #9AA2AB;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+    <div style="background: #FFFFFF; border: 1px dashed #5274A8; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #737C86;">03</span><span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #EAF0F8; color: #3E5C8C;">예약됨</span></div>
+      <div style="font-size: 18px; font-weight: 600;">예약</div>
+      <div style="font-size: 12.5px; color: #545C66; line-height: 1.55;">올릴 시각을 정해 둔다</div>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: center; color: #9AA2AB;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+    <div style="background: #FFFFFF; border: 1px dashed #5274A8; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #737C86;">04</span><span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; color: #545C66;">발행됨</span></div>
+      <div style="font-size: 18px; font-weight: 600;">발행</div>
+      <div style="font-size: 12.5px; color: #545C66; line-height: 1.55;">시각이 되면 알림 → 복사 → 올리기</div>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: center; color: #9AA2AB;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+    <div style="background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #737C86;">05</span><span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; color: #545C66;">성과 기록</span></div>
+      <div style="font-size: 18px; font-weight: 600;">성과</div>
+      <div style="font-size: 12.5px; color: #545C66; line-height: 1.55;">조회 · 공유 · 답글</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 140px repeat(5, minmax(0, 1fr)); column-gap: 20px; row-gap: 12px; font-size: 13px; line-height: 1.55;">
+    <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px;"><span style="font-weight: 600;">내가 하는 일</span><span style="font-size: 11.5px; color: #737C86;">판단과 확인만</span></div>
+    <div style="background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 8px; padding: 12px 14px;">떠오르면 한 줄 적기<br><span style="color: #737C86;">빠른 메모 · 소재함</span></div>
+    <div style="background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 8px; padding: 12px 14px;">AI 초안 · 다듬기 · 확정<br><span style="color: #737C86;">원고 작성 화면</span></div>
+    <div style="background: #FFFFFF; border: 1px dashed #5274A8; border-radius: 8px; padding: 12px 14px;">올릴 시각 한 번 누르기<br><span style="color: #737C86;">추천 시간대 중 선택</span></div>
+    <div style="background: #FFFFFF; border: 1px dashed #5274A8; border-radius: 8px; padding: 12px 14px;">알림 → 복사 → 붙여넣기 → URL<br><span style="color: #737C86;">폰에서 30초</span></div>
+    <div style="background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 8px; padding: 12px 14px;">다음 날 숫자 3개 입력<br><span style="color: #737C86;">조회 · 공유 · 답글</span></div>
+
+    <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px;"><span style="font-weight: 600;">허브가 하는 일</span><span style="font-size: 11.5px; color: #737C86;">정리 · 보여 주기</span></div>
+    <div style="background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 8px; padding: 12px 14px;">소재를 브랜드별로 모아 보여 줌</div>
+    <div style="background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 8px; padding: 12px 14px;">자동 저장 · 버전 · 템플릿</div>
+    <div style="background: #FFFFFF; border: 1px dashed #5274A8; border-radius: 8px; padding: 12px 14px;">예약 목록 · 주간 캘린더</div>
+    <div style="background: #FFFFFF; border: 1px dashed #5274A8; border-radius: 8px; padding: 12px 14px;">홈에 "지금 올릴 글" · 놓친 예약 표시</div>
+    <div style="background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 8px; padding: 12px 14px;">성과 탭 · 주간 발행량</div>
+
+    <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px;"><span style="font-weight: 600;">자동으로 도는 일</span><span style="font-size: 11.5px; color: #737C86;">엔진 · 예약 작업</span></div>
+    <div style="background: #FFFFFF; border: 1px dotted #9AA2AB; border-radius: 8px; padding: 12px 14px; color: #545C66;">발행이 밀리면 소재 골라 초안 제안<br><span style="color: #737C86;">Content Flywheel · 배포 설정 필요</span></div>
+    <div style="background: #F1F3F6; border: 1px solid #E9ECEF; border-radius: 8px; padding: 12px 14px; color: #9AA2AB;">—</div>
+    <div style="background: #FFFFFF; border: 1px dashed #5274A8; border-radius: 8px; padding: 12px 14px;">예약 시각이 오면 알림 보내기<br><span style="color: #737C86;">5분마다 확인</span></div>
+    <div style="background: #FFFFFF; border: 1px dotted #9AA2AB; border-radius: 8px; padding: 12px 14px; color: #545C66;">승인한 글만 Threads에 자동 업로드<br><span style="color: #737C86;">Threads API 연결 · 보류 해제 필요</span></div>
+    <div style="background: #FFFFFF; border: 1px dotted #9AA2AB; border-radius: 8px; padding: 12px 14px; color: #545C66;">성과 수치 자동 수집<br><span style="color: #737C86;">자동 업로드 뒤 같은 연결로</span></div>
+  </div>
+
+  <div style="margin-top: auto; background: #FFFFFF; border: 1px solid #DCE0E5; border-radius: 12px; padding: 18px 22px; display: flex; align-items: center; gap: 24px;">
+    <div style="display: flex; flex-direction: column; gap: 2px; min-width: 150px;"><span style="font-size: 13px; font-weight: 600;">로그 한 줄 원칙</span><span style="font-size: 11.5px; color: #737C86;">모든 상태 변화는 기록된다</span></div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; flex-wrap: wrap;">
+      <span style="padding: 4px 10px; border-radius: 999px; background: #F1F3F6;">아이디어</span><span style="color: #9AA2AB;">→</span>
+      <span style="padding: 4px 10px; border-radius: 999px; background: #F1F3F6;">초안</span><span style="color: #9AA2AB;">→</span>
+      <span style="padding: 4px 10px; border-radius: 999px; background: #EAF0F8; color: #3E5C8C;">예약됨</span><span style="color: #9AA2AB;">→</span>
+      <span style="padding: 4px 10px; border-radius: 999px; background: #EAF0F8; color: #3E5C8C;">올릴 시각</span><span style="color: #9AA2AB;">→</span>
+      <span style="padding: 4px 10px; border-radius: 999px; background: #F1F3F6;">발행됨</span><span style="color: #9AA2AB;">→</span>
+      <span style="padding: 4px 10px; border-radius: 999px; background: #F1F3F6;">성과 기록</span>
+      <span style="color: #9AA2AB; margin-left: 8px;">|</span>
+      <span style="padding: 4px 10px; border-radius: 999px; border: 1px solid #B8412F; color: #B8412F;">놓침 — 예약 시각 +2시간</span>
+    </div>
+    <div style="margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #545C66; text-align: right; line-height: 1.6;">누가 · 언제 · 방식(수동/자동)<br>09-28 12:34 · 운영자 · 수동</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -192,7 +192,9 @@ struct MemoCaptureContent: View {
                 }
                 TextEditor(text: $model.memoDraft)
                     .scrollContentBackground(.hidden)
-                    .scrollIndicators(.hidden)
+                    // .hidden can reserve a legacy scroller gutter on macOS
+                    // (e.g. with a mouse). Keep the memo's glass edge clear.
+                    .scrollIndicators(.never)
                     .focused($focused)
                     .accessibilityLabel("메모 입력")
                     .modifier(GlassGlyphShadow())
@@ -201,8 +203,7 @@ struct MemoCaptureContent: View {
             .lineSpacing(6)
             .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            // The panel owns backdrop diffusion. A second filled editor rectangle
-            // makes the middle read as a dark card instead of one continuous glass sheet.
+            .modifier(GlassInputSurface(focused: focused))
 
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {

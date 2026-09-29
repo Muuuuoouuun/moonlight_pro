@@ -109,9 +109,11 @@ test('conversation-only legend sparring remains in the chat and does not write a
   assert.doesNotMatch(instruction(), /항상 '다음 한 수'로 끝맺습니다/);
 });
 
-test('conversation-only legend advice excludes unrelated RAG notes and accepts both visible lenses', async () => {
+// 09.bigmac1.5 병합: 보이는 렌즈 칩은 Guru 방법론(보스·오길비)뿐이다(agent-layer-direction §2.1 ⑧).
+// 카네기·힐 렌즈는 칩에서 빠졌으므로 Engine도 적용하지 않는다.
+test('conversation-only lens advice excludes unrelated RAG notes for every visible Guru lens', async () => {
   state.knowledge = [{ id: 'other-contact', sourceTable: 'journal_entries', kind: 'note', title: '다른 고객', snippet: '다른 고객의 협상', occurredAt: '2026-09-22' }];
-  for (const lens of ['carnegie', 'hill']) {
+  for (const lens of ['voss', 'ogilvy']) {
     const response = await persona.POST(request({ personaId: 'sales', mode: 'chat', lens, conversationOnly: true, draft: '현재 고객의 대화만 평가' }));
     assert.equal(response.status, 200);
     assert.equal((await response.json()).lens, lens);

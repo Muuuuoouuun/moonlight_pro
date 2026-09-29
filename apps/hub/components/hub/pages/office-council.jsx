@@ -11,9 +11,12 @@ import { officeDiscussionState } from '../office-deliberation-client';
 import { officeSkillRequestDraft } from '../office-skill-request';
 import { OfficeSkillRequestDrawer } from '../office-skill-request-drawer';
 import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-drawer';
+import { ReviewWaitingList } from '../review-waiting';
 import { OfficeAvatar } from '../office-avatar';
 import { officeMentorSessions } from '../office-mentor-session';
 import { requestOfficeMentor } from '../office-mentor-client';
+import { GuruRecommendation, guruRecommendationCard } from '../guru-recommendation';
+import { matchAgendaGuidance } from '@/lib/sales-os/agenda-guidance';
 import styles from './office-council.module.css';
 
 const MODES = [{ key: 'chat', label: '대화' }, { key: 'draft', label: '초안' }, { key: 'review', label: '검토' }, { key: 'council', label: '회의' }];
@@ -86,7 +89,7 @@ function OfficeMentorAction({ turn, onOpenDrawer }) {
     officeMentorSessions.complete(id, pending.id, response);
   }
   return <div className={styles.mentorAction}>
-    {firstAnswer ? <OfficeMentorReferenceCard answer={firstAnswer} target={target} onContinue={() => onOpenDrawer(turn.id)} />
+    {firstAnswer ? <OfficeMentorReferenceCard answer={firstAnswer} target={target} sourceTruncation={mentorSession.turns[0].sourceTruncation} onContinue={() => onOpenDrawer(turn.id)} />
       : <Button variant="outline" size="sm" disabled={busy} onClick={ask}>{busy ? '멘토 답변 대기 중…' : mentorSession?.error ? '다른 관점 다시 묻기' : '다른 관점으로 검토'}</Button>}
     {mentorSession?.error ? <p className={styles.note} role={mentorSession.error.status === 'error' ? 'alert' : 'status'}>
       <TruthBadge state={mentorSession.error.status === 'preview' ? 'preview' : 'error'} /> {mentorSession.error.note || '멘토 답변을 확인하지 못했습니다.'}</p> : null}
@@ -94,8 +97,19 @@ function OfficeMentorAction({ turn, onOpenDrawer }) {
   </div>;
 }
 
+// 안건과 맞는 원문 기법(agent-layer-direction §2.1 ⑦) — 운영자가 쓴 안건·질문의 낱말만 근거로
+// 1~2개를 잇는다. 모델을 부르지 않고, 어떤 낱말 때문에 이었는지를 그대로 보인다.
+function OfficeAgendaGuidance({ text, scope, onGuidanceAsk, onNavigate }) {
+  const matches = React.useMemo(() => matchAgendaGuidance(text, { scope }), [text, scope]);
+  const names = matches.map(match => guruRecommendationCard(match)).filter(Boolean).map(card => card.methodLabel);
+  if (!matches.length || !names.length) return null;
+  return <details className={styles.request}><summary>안건과 맞는 원문 기법 · {names.join(' · ')}</summary>
+    <div className={styles.guidanceLinks}>{matches.map(match => <GuruRecommendation key={match.id} recommendation={match} onAsk={onGuidanceAsk} onNavigate={onNavigate} compact />)}</div>
+  </details>;
+}
+
 // V4(2026-09-26 운영자 선택 "2-3 섞어서"): 한 판은 결론 먼저 — 요청 한 줄 → 결론·다음 행동 → 역할별 발언 비교.
-function ResultTurn({ turn, index, onRevise, onCopy, onSkill, onOpenMentor, skillAvailable, copyStatus, latestRef }) {
+function ResultTurn({ turn, index, onRevise, onCopy, onSkill, onOpenMentor, onGuidanceAsk, onNavigate, skillAvailable, copyStatus, latestRef }) {
   const result = turn.result;
   const owner = OFFICE_ROSTER.find(person => person.id === result.ownerId);
   const firstDissent = result.dissent?.[0];
@@ -119,6 +133,7 @@ function ResultTurn({ turn, index, onRevise, onCopy, onSkill, onOpenMentor, skil
       </div>
       <div className={styles.verdictSide}>
         <div className={styles.next}><strong>다음 행동</strong><p>{result.nextAction}</p></div>
+        <OfficeAgendaGuidance text={turn.message} scope={result.scope} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate} />
         <div className={styles.receipt}><span>{result.log?.persisted === true ? '호출 로그 저장됨' : '답변 생성됨 · 호출 로그 미저장'}</span><span>업무 변경 없음</span></div>
         {result.context?.source && result.context.source !== 'provided' ? <div className={styles.contextState}><TruthBadge state={result.context.source} /></div> : null}
         <p className={styles.note}>{result.context?.note}</p>
@@ -162,7 +177,7 @@ function OfficeUsageLine({ refreshKey }) {
     {' · '}실패 <span className="mono">{usage.failed}</span>{failures ? ' (' + failures + ')' : ''}</p>;
 }
 
-export function OfficeCouncil({ scope = 'all' }) {
+export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const { session, store, update } = useOfficeSession(scope);
   const { ownerId, mode, reviewers, includeProjects, minimumOnly } = session;
   const [rosterOpen, setRosterOpen] = React.useState(false);
@@ -216,7 +231,10 @@ export function OfficeCouncil({ scope = 'all' }) {
     const message = assignmentMessage;
     let request;
     try { request = parseOfficeRoutingRequest({ message, scope }); }
-    catch { setAssignment({ status: 'error', error: '먼저 안건을 입력해 주세요. 담당자는 직접 고를 수도 있습니다.' }); return; }
+    catch {
+      setAssignment({ status: 'error', error: message.length > 6000 ? '안건이 6,000자를 넘습니다. 줄이거나 담당자를 직접 선택해 주세요.' : '먼저 안건을 입력해 주세요. 담당자는 직접 고를 수도 있습니다.' });
+      return;
+    }
     const readId = ++assignmentReadRef.current;
     setMoreOpen(false);
     setAssignment({ status: 'loading' });
@@ -269,9 +287,14 @@ export function OfficeCouncil({ scope = 'all' }) {
     update({ ownerId: selected.ownerId, mode: 'council', reviewers: [selected.reviewerId], presetId: selected.id });
     setMoreOpen(false);
   }
+  // Clearing a meeting also drops its mentor consultations: they are unreachable afterwards.
+  function clearMeeting() {
+    officeMentorSessions.discard(session.turns.map(turn => turn.id));
+    store.reset(scope);
+  }
   function importTask(task) {
     if (session.turns.length && !window.confirm('현재 회의를 비우고 새 안건을 올릴까요?')) return;
-    if (session.turns.length) store.reset(scope);
+    if (session.turns.length) clearMeeting();
     invalidateAssignment();
     setSkillTurn(null);
     setMentorDrawerId(null);
@@ -287,7 +310,7 @@ export function OfficeCouncil({ scope = 'all' }) {
     invalidateAssignment();
     setSkillTurn(null);
     setMentorDrawerId(null);
-    store.reset(scope); setFollowUpMode('chat'); setSelectedTurnId(null);
+    clearMeeting(); setFollowUpMode('chat'); setSelectedTurnId(null);
     requestAnimationFrame(() => inputRef.current?.focus());
   }
   async function submit(event) {
@@ -376,7 +399,7 @@ export function OfficeCouncil({ scope = 'all' }) {
           {session.turns.length === 0 && !busy ? <EmptyState icon="chat" title="회의할 안건을 올려 주세요" description="할 일을 안건으로 가져오거나 아래에 직접 적어 주세요." /> : null}
           {busy ? <div ref={pendingRef}><PendingTurn pending={session.pending} /></div>
             : shownTurn ? <ResultTurn key={shownTurn.id} turn={shownTurn} index={shownIndex} latestRef={latestTurnRef}
-              onRevise={revise} onCopy={copy} onSkill={setSkillTurn} onOpenMentor={setMentorDrawerId}
+              onRevise={revise} onCopy={copy} onSkill={setSkillTurn} onOpenMentor={setMentorDrawerId} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}
               skillAvailable={Boolean(officeSkillRequestDraft({ agenda: session.agenda, officeScope: scope, result: shownTurn.result }))} copyStatus={copyStatus} /> : null}
           {otherTurns.length ? <div className={styles.otherRounds}><SectionTitle>{busy ? '앞 판' : '다른 판'}</SectionTitle>
             {otherTurns.map(turn => <button type="button" key={turn.id} className={'hub-row ' + styles.otherRound} disabled={busy} onClick={() => showTurn(turn.id)}>
@@ -421,6 +444,7 @@ export function OfficeCouncil({ scope = 'all' }) {
     </div>
     <p className={styles.sessionNote}>범위를 바꾸면 해당 범위의 입력과 대화를 엽니다. 새로고침·탭 종료 시 자유 요청의 미전송 원문과 답변은 사라집니다.</p>
     <OfficeUsageLine refreshKey={session.turns.length} />
+    <ReviewWaitingList onNavigate={onNavigate} />
     {assignment ? <Drawer title="이브이 담당 추천" subtitle="추천은 선택 사항입니다. 적용 전까지 참석자는 바뀌지 않습니다." onClose={invalidateAssignment} width="min(440px, 94vw)">
       <div className={styles.assignmentCard} role={assignment.status === 'error' ? 'alert' : 'status'}>
         {assignment.status === 'loading' ? <><strong>안건 복사본을 읽고 담당을 추천하는 중</strong><Skeleton lines={2} label="이브이 담당 추천 확인 중" /><Button variant="ghost" size="sm" onClick={editAssignment}>직접 선택</Button></> : null}

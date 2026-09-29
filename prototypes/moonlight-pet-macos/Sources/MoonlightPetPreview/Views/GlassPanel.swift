@@ -6,7 +6,7 @@ import SwiftUI
 @MainActor
 final class GlassPanel: NSView {
     static func host<Content: View>(_ content: Content, cornerRadius: CGFloat, ornament: AnyView? = nil,
-                                    model: AppModel? = nil, protectsText: Bool = false, captureSurface: CompanionSurface? = nil) -> GlassPanel {
+                                    model: AppModel? = nil, protectsText: Bool = false, captureSurface: CompanionSurface? = nil, withinWindow: Bool = false) -> GlassPanel {
         let readingTone = GlassReadingTone()
         let host = FirstMouseHostingView(rootView: content.environment(\.colorScheme, .dark)
             .environment(\.glassReadingTone, readingTone)
@@ -22,6 +22,7 @@ final class GlassPanel: NSView {
         }
         let panel = GlassPanel(content: host, cornerRadius: cornerRadius, ornament: accessory,
                                readingTone: readingTone, allowsCapture: captureSurface != nil)
+        panel.centerDiffusion?.blendingMode = withinWindow ? .withinWindow : .behindWindow
         if let model {
             panel.characterSubscription = model.$selectedCharacter.removeDuplicates().sink { [weak panel] character in
                 panel?.setCharacter(character)
@@ -43,6 +44,7 @@ final class GlassPanel: NSView {
     private let centerVeil: GlassCenterVeil?
     private let desktopRefraction: DesktopRefractionView?
     private var captureSubscription: AnyCancellable?
+    private var referenceRefraction: NSView?
     private let nativeEdgeMask = CALayer()
     private let rim: NSView
     private let foreground: NSView
@@ -50,6 +52,15 @@ final class GlassPanel: NSView {
     private let wash: PetGlassWash
     private let readingTone: GlassReadingTone
     private var characterSubscription: AnyCancellable?
+
+    // The developer quality surface supplies an app-owned scene through the
+    // same desktop shader; no desktop capture or permission is involved.
+    func setReferenceRefraction(_ view: NSView?) {
+        referenceRefraction?.removeFromSuperview()
+        referenceRefraction = view
+        if let view { addSubview(view, positioned: .above, relativeTo: material) }
+        needsLayout = true
+    }
 
     func setCharacter(_ character: PetCharacter) { wash.character = character }
     func previewCharacterTint(_ preview: Bool) { wash.previewsTint = preview }
@@ -164,6 +175,7 @@ final class GlassPanel: NSView {
         CATransaction.setDisableActions(true)
         nativeEdgeMask.frame = material.bounds
         CATransaction.commit()
+        referenceRefraction?.frame = frame
         desktopRefraction?.frame = frame
         centerDiffusion?.frame = frame
         centerVeil?.frame = frame

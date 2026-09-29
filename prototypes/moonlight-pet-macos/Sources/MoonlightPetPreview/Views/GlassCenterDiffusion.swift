@@ -1,13 +1,17 @@
 import AppKit
 
-/// Approved refinement: blur 12px, veil 9%, contact shadow 73%, soft shadow 37%, edge 72%.
+/// Three-background quality study: one restrained diffusion layer, a light veil,
+/// and low-energy glyph shadows. Optical edge intensity is independent.
 /// AppKit owns the actual blur radius. The native material mix is a visual
 /// approximation, not a claim that its kernel is the CSS 12px kernel.
 enum GlassStudy {
-    static let nativeDiffusionMix: CGFloat = 0.48
-    static let centerVeil: CGFloat = 0.09
+    static let nativeDiffusionMix: CGFloat = 0.28
+    static let centerVeil: CGFloat = 0.055
     static let glyphShadow = 0.73
     static let softGlyphShadow = 0.37
+    static let contactRadius: CGFloat = 0.65
+    static let softRadius: CGFloat = 1.6
+    static let highlightRecovery: Float = 0.45
     static let edgeReflection: Float = 0.72
     static let edgeFeather: CGFloat = 24
 }

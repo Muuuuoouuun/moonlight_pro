@@ -270,8 +270,25 @@
   margin: 0;
 }
 
-.mentor-shelf__legend-bottom .hub-btn {
+.mentor-shelf__legend-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 19px;
+}
+
+/* The Legend original spans both columns below the two cards, so opening it never
+   stretches the Guru card beside it. */
+.mentor-shelf__legend-reader {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.mentor-shelf__legend-reader .source-reader {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .mentor-shelf__foot {
@@ -376,6 +393,20 @@
   gap: 16px;
 }
 
+.mentor-shelf__person-lists {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+}
+
+.mentor-shelf__list-label {
+  margin: 9px 0 0;
+  color: var(--fg-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
 .mentor-shelf__person-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -439,6 +470,36 @@
 .mentor-shelf__person-choice--card span {
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+/* Originals without a reviewed card: the dashed edge and direct label mark "no card yet"
+   (DESIGN.md §5.3 certainty geometry), never a colour. */
+.mentor-shelf__person-choice--source {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  min-height: 60px;
+}
+
+/* Outranks `.hub-app .hub-card-link`, whose border shorthand would reset the style. */
+.mentor-shelf .mentor-shelf__person-choice.mentor-shelf__person-choice--source {
+  border-style: dashed;
+}
+
+.mentor-shelf__person-choice--source span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.mentor-shelf__source-only {
+  display: inline-block;
+  margin: 9px 0 0;
+  padding: 3px 8px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  color: var(--fg-muted);
+  font-size: 10.5px;
 }
 
 .mentor-shelf__person-detail {

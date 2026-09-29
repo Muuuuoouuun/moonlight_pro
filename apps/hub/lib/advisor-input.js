@@ -1,12 +1,11 @@
-import { LEGEND_CARDS } from '../components/hub/council-legends.js';
-import { GURU_CARDS } from '@com-moon/guru-guidance';
+import { GURU_CARDS, isLegendId } from '@com-moon/guru-guidance';
 
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
 const optional = (value, validate) => value === undefined || value === null || validate(value);
 const strings = value => Array.isArray(value) && value.every(item => typeof item === 'string');
 
 function legendIds(value) {
-  return Array.isArray(value) && new Set(value).size === value.length && value.every(id => typeof id === 'string' && Object.hasOwn(LEGEND_CARDS, id));
+  return Array.isArray(value) && new Set(value).size === value.length && value.every(isLegendId);
 }
 
 function values(value) {

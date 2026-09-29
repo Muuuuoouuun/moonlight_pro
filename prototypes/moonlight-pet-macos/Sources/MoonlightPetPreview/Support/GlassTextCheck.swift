@@ -5,6 +5,21 @@ import SwiftUI
 /// shadows must be local, and turning them off must match ordinary text.
 enum GlassTextCheck {
     @MainActor static func run() -> Bool {
+        // The pastel interaction palette must never become an unreadable solid
+        // fill when Reduce Transparency/Increase Contrast requires opacity.
+        for character in PetCharacter.allCases {
+            let color = PetGlassTheme.color(for: character, accessibility: true)
+            func linear(_ channel: CGFloat) -> Double {
+                let value = Double(channel)
+                return value <= 0.04045 ? value/12.92 : pow((value+0.055)/1.055,2.4)
+            }
+            let luminance = 0.2126*linear(color.redComponent)+0.7152*linear(color.greenComponent)
+                          + 0.0722*linear(color.blueComponent)
+            guard 1.05/(luminance+0.05) >= 4.5 else {
+                fputs("Accessible theme has inadequate white-text contrast: \(character.title)\n",stderr)
+                return false
+            }
+        }
         guard #available(macOS 15.0, *) else { return true }
         for scale in [1.0, 2.0] {
             let text = Text("27 · Hub에서 열기")

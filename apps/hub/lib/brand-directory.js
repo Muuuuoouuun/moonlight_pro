@@ -27,6 +27,12 @@ const CADENCE_LABEL = {
   low_frequency_high_quality: "저빈도 · 고품질",
   low_frequency_moment_based: "저빈도 · 순간 중심",
   personal_archive: "개인 아카이브",
+  // 2026-04-27 시드가 채웠지만 이 맵엔 없던 3개(moonpm·classmoon·studyseagull) —
+  // 라벨만 보강한다. 주간 목표 없음(CADENCE_WEEKLY_GOAL 미등재)은 의도적 유지:
+  // 셋 다 발행 리듬이 아니라 역할·포지셔닝 결정이 먼저다(growth plan §8 B-4, §12 Q2).
+  archive_and_selective_share: "아카이브 · 선별 공유",
+  priority_1_case_led: "사례 우선",
+  observational_meme: "관찰형 밈",
 };
 
 export function cadenceLabel(cadence) {

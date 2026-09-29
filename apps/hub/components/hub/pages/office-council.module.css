@@ -96,6 +96,7 @@
 .speechDetails dl > div { display:grid; gap:3px; }
 .speechDetails dt { font-size:11px; color:var(--fg-dim); }
 .speechDetails dd { margin:0; font-size:12px; line-height:1.6; white-space:pre-wrap; }
+.guidanceLinks { display:grid; gap:8px; margin-top:8px; }
 
 .otherRounds { display:grid; gap:6px; padding-top:24px; }
 .otherRound { display:flex; align-items:baseline; gap:10px; width:100%; min-width:0; text-align:left; padding:10px 12px; border:1px solid var(--line-soft); border-radius:var(--r-sm); background:var(--surface); color:var(--fg-muted); font-size:13px; cursor:pointer; }

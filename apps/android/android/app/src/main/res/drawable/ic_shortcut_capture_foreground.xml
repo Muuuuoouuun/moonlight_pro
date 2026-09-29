@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 적응형 바로가기 아이콘의 전경(빠른 입력 — 더하기): 108dp 캔버스 가운데 48dp(안전 영역 66dp 안). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="30" android:translateY="30" android:scaleX="2" android:scaleY="2">
+        <path android:fillColor="@color/colorAccent" android:pathData="M11,5h2v6h6v2h-6v6h-2v-6H5v-2h6z" />
+    </group>
+</vector>

@@ -66,8 +66,17 @@ test('office-review gives a source-labelled personal second opinion without inve
   assert.doesNotMatch(state.generation.systemInstruction, /승인 큐 후보|work_order로 올릴/);
   assert.deepEqual(state.writes, []);
   assert.equal(state.syncRun.payload.officeSource.requestId, requestId);
+  // Council memory mixes earlier Office reviews into context; the prompt says they are not facts.
+  assert.match(state.generation.prompt, /context\.memory\.recent_runs는 이전 생성 조언\(이전 Office 검토 포함\)이며 현재 독자·고객의 사실 근거가 아닙니다/);
   const info = await (await GET()).json();
   assert.ok(info.modes.includes('office-review'));
+});
+
+test('office-review accepts the verbatim Office source up to 25,000 characters', async () => {
+  const draft = `Office 종합 원문: ${'가'.repeat(24980)}`.slice(0, 25000);
+  const response = await POST(request({ ...valid, draft }));
+  assert.equal(response.status, 200);
+  assert.ok(state.generation.prompt.includes(draft.trim()));
 });
 
 test('office-review accepts an absent logged run only when the originating request is identified', async () => {
@@ -85,7 +94,7 @@ test('office-review rejects unknown lane, missing provenance, oversized text, in
     { context: { ...valid.context, brands: [{ key: 'company', orgScope: 'classin' }] } },
     { officeSource: undefined }, { officeSource: { requestId: 'bad', runId } },
     { officeSource: { requestId, runId: 'bad' } },
-    { draft: ' ' }, { draft: '가'.repeat(6001) },
+    { draft: ' ' }, { draft: '가'.repeat(25001) },
     { guidanceId: 'marketing-research' }, { legendIds: ['jobs'] },
     { createWorkOrder: true }, { createWorkOrder: undefined },
   ];

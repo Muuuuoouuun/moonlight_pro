@@ -1,0 +1,17 @@
+/* 글꼴은 복사하지 않고 허브 원본(apps/hub/public/fonts)을 쓴다.
+   첫 번째 주소는 패키징된 앱(electron-builder 가 pet/fonts 로 넣는다), 두 번째는 개발 트리의 상대 경로다.
+   브라우저는 첫 주소를 못 읽으면 다음 주소로 넘어간다. */
+@font-face {
+  font-family: 'SUIT';
+  src: url('../fonts/SUIT-Variable.woff2') format('woff2'),
+       url('../../../hub/public/fonts/SUIT-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: block;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../fonts/JetBrainsMono-Variable.woff2') format('woff2'),
+       url('../../../hub/public/fonts/JetBrainsMono-Variable.woff2') format('woff2');
+  font-weight: 100 800;
+  font-display: block;
+}

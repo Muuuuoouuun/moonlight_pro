@@ -5,11 +5,17 @@ import { callOfficeRoutingEngine } from './routing-engine-client.js';
 
 const failure = { status: 'error', error: '담당 추천을 확인하지 못했습니다. 담당자를 직접 선택해 주세요.' };
 
+// The routing contract bounds the agenda at 6,000 characters. JSON may spend up to 6 bytes
+// per UTF-16 unit (\uXXXX escapes; Korean needs 3), so size the byte guard to fit any
+// contract-valid agenda and let the contract's character check decide. Mirrored in the
+// Engine's office routing handler.
+export const OFFICE_ROUTING_MAX_BODY_BYTES = 6000 * 6 + 1024;
+
 export function createOfficeRoutingHubHandler({ guard = assertHubWriteAllowed, callEngine = req => callOfficeRoutingEngine(req, { retries: 1 }) } = {}) {
   return async req => {
     const denied = guard(req);
     if (denied) return denied;
-    const body = await readHubWriteJson(req, { maxBytes: 24000 });
+    const body = await readHubWriteJson(req, { maxBytes: OFFICE_ROUTING_MAX_BODY_BYTES });
     if (body.error) return body.error;
     let request;
     try { request = parseOfficeRoutingRequest(body.data); }

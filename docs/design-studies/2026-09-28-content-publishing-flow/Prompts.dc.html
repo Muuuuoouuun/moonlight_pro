@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>프롬프트 문안 모음</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans KR',system-ui,sans-serif;color:#1E2228;background:#F7F8FA}
+a{color:#5274A8}a:hover{color:#3E5C8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1720px; box-sizing: border-box; padding: 48px 56px; display: flex; flex-direction: column; gap: 24px; background: #F7F8FA; font-family: 'IBM Plex Sans KR', system-ui, sans-serif; color: #1E2228;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 11px; letter-spacing: 0.1em; color: #737C86; font-weight: 500;">PROMPT LIBRARY · 형식 기본 요청문</div>
+      <h1 style="margin: 0; font-size: 28px; font-weight: 600;">버튼 하나에 요청문 하나</h1>
+      <p style="margin: 0; font-size: 14px; color: #545C66; line-height: 1.6; max-width: 820px;">각 문안은 ① 형식 기본 층입니다. 여기에 ② 브랜드 말투와 ③ 이번 글 요청이 덧붙습니다. 모든 문안 공통 규칙: 원문 메모에 없는 사실·수치·경험은 만들지 않고 '확인 필요'로 돌려준다.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #545C66; text-align: right;"><span>{원문}: 원문 메모 + 기획</span><span>{본문}: 지금 편집 중인 결과물</span><span>{선택}: 편집기에서 고른 부분</span></div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px;">
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 16px; font-weight: 600;">스레드 · AI 초안</span><span style="font-size: 12px; color: #737C86;">버튼: AI 초안 · 입력 {원문}</span></div>
+      <div style="background: #F7F8FA; border: 1px solid #E9ECEF; border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.8; white-space: pre-line;">{원문}을 Threads 글로 써 주세요.
+- 3~5개 블록, 블록 사이는 빈 줄 하나
+- 첫 블록 첫 줄은 장면이나 질문, 40자 이내
+- 한 블록에 한 생각, 블록당 500자 이내
+- 마지막 블록은 독자가 오늘 할 수 있는 행동 하나
+- 해시태그·이모지는 넣지 않음</div>
+      <span style="font-size: 12px; color: #545C66;">나오는 것: 본문 1안 + 빠진 근거 목록</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 16px; font-weight: 600;">스레드 · 첫 줄 3안</span><span style="font-size: 12px; color: #737C86;">버튼: 첫 줄 3안 · 입력 {본문}</span></div>
+      <div style="background: #F7F8FA; border: 1px solid #E9ECEF; border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.8; white-space: pre-line;">{본문}의 첫 줄을 세 가지로 다시 써 주세요.
+A. 질문 — 독자가 스스로 답을 떠올리게
+B. 장면 — 원문에 있는 실제 순간 하나
+C. 단언 — 통념을 뒤집는 한 문장
+각 40자 이내. 본문 나머지는 바꾸지 않음.</div>
+      <span style="font-size: 12px; color: #545C66;">나오는 것: 3안 비교 → 하나 골라 적용</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 16px; font-weight: 600;">카드뉴스 · 원문에서 6장</span><span style="font-size: 12px; color: #737C86;">버튼: AI 초안 · 입력 {원문}</span></div>
+      <div style="background: #F7F8FA; border: 1px solid #E9ECEF; border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.8; white-space: pre-line;">{원문}을 인스타 카드뉴스 6장으로 구성해 주세요.
+1장 표지: 독자가 얻을 결과를 약속, 제목 18자 이내
+2장 문제: 독자가 겪는 장면 하나
+3~5장 방법·예시·근거: 장당 한 메시지, 본문 60자 이내
+6장 마무리: 저장하거나 공유할 이유 한 줄
+근거가 없는 장은 비워 두고 '확인 필요'로 표시.
+캡션 2~3문장과 해시태그 3~5개를 따로.</div>
+      <span style="font-size: 12px; color: #545C66;">나오는 것: 장별 제목·본문 + 캡션</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 16px; font-weight: 600;">유튜브 쇼츠 · 대본</span><span style="font-size: 12px; color: #737C86;">버튼: AI 초안 · 입력 {원문}</span></div>
+      <div style="background: #F7F8FA; border: 1px solid #E9ECEF; border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.8; white-space: pre-line;">{원문}으로 60초 쇼츠 대본을 써 주세요.
+장면마다 화면(보여 줄 것) · 대사(말할 것) · 자막(대사 핵심 한 줄) · 초를 나눔.
+- 훅 3초: 결론이나 반전을 먼저
+- 문제 10초 → 본론 30초 → 행동 10초 안팎
+- 대사는 입말, 한 문장 15자 안팎
+- 마지막은 행동 하나 + 댓글로 물어볼 질문
+합계 60초를 넘기지 않음.</div>
+      <span style="font-size: 12px; color: #545C66;">나오는 것: 장면 표 + 총 길이</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 16px; font-weight: 600;">카피라이트 · 유형별 5안</span><span style="font-size: 12px; color: #737C86;">버튼: 유형별 5안 · 입력 {원문}+쓸 곳</span></div>
+      <div style="background: #F7F8FA; border: 1px solid #E9ECEF; border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.8; white-space: pre-line;">먼저 {원문}에서 독자가 얻는 것을 한 문장으로 정리하고,
+그 한 가지만 말하는 {쓸 곳} 문구를 다섯 유형으로 써 주세요.
+질문형 · 숫자형 · 반전형 · 장면형 · 약속형
+- {쓸 곳}의 글자 수 한도를 지킴
+- 형용사보다 구체적인 장면·행동
+- 원문에 없는 숫자는 쓰지 않음(쓴다면 '근거 없음' 표시)</div>
+      <span style="font-size: 12px; color: #545C66;">나오는 것: 5안 + 글자 수 + 근거 표시</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 16px; font-weight: 600;">종합 패키지 · 한 번에</span><span style="font-size: 12px; color: #737C86;">버튼: 패키지 만들기 · 입력 {원문}</span></div>
+      <div style="background: #F7F8FA; border: 1px solid #E9ECEF; border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.8; white-space: pre-line;">1) {원문}의 핵심 메시지를 한 문장으로 확정합니다. (운영자 확인)
+2) 확정 문장을 기준으로 위 형식별 요청문을 각각 실행합니다.
+   스레드 · 카드뉴스 6장 · 쇼츠 60초 · 카피 5안
+3) 메시지는 같게, 길이와 호흡만 형식에 맞춥니다.
+4) 발행 순서를 제안: 반응을 먼저 볼 짧은 형식부터.</div>
+      <span style="font-size: 12px; color: #545C66;">나오는 것: 형식별 초안 4개 + 순서 제안</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px dashed #5274A8; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 16px; font-weight: 600;">발행 뒤 · 왜 반응이 좋았나</span><span style="font-size: 12px; color: #737C86;">버튼: 해석 보기 · 입력 {본문}+성과+답글</span></div>
+      <div style="background: #F7F8FA; border: 1px solid #E9ECEF; border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.8; white-space: pre-line;">{본문}과 입력된 조회·공유·답글 수, 답글 원문을 보고
+반응을 만든 요소를 세 가지 이내로 짚어 주세요.
+- 첫 줄 · 구조 · 마지막 행동 · 답글 내용 중 근거를 댈 것
+- 숫자를 추정하거나 비교 기준을 만들지 않음
+- 확신이 낮은 해석은 '추정'이라고 표시</div>
+      <span style="font-size: 12px; color: #545C66;">나오는 것: 권장(◇) 표시가 붙은 해석 3줄</span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px dashed #5274A8; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 16px; font-weight: 600;">발행 뒤 · 후속편 3안</span><span style="font-size: 12px; color: #737C86;">버튼: 후속편 쓰기 · 입력 {본문}+해석</span></div>
+      <div style="background: #F7F8FA; border: 1px solid #E9ECEF; border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.8; white-space: pre-line;">{본문}을 읽은 독자가 다음에 궁금해할 글 세 가지를 제안해 주세요.
+A. 더 깊이 — 방법을 구체적으로 (예: 실제 질문 목록)
+B. 그 뒤 — 해 보고 달라진 것 (운영자 경험 필요 표시)
+C. 반대편 — 잘 안 통한 경우와 이유
+각 제목 한 줄 + 첫 줄 한 줄. 고르면 원고 작성으로 열림.</div>
+      <span style="font-size: 12px; color: #545C66;">나오는 것: 제목·첫 줄 3쌍 → 시리즈로 연결</span>
+    </section>
+  </div>
+
+  <div style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 12px; padding: 16px 20px; display: flex; gap: 28px; align-items: center; font-size: 12.5px; color: #545C66;">
+    <span style="font-weight: 600; color: #1E2228;">공통 규칙 (모든 문안 끝에 자동으로 붙음)</span>
+    <span>원문에 없는 사실 · 수치 · 1인칭 경험 금지</span>
+    <span>모자란 근거는 '확인 필요' 목록으로</span>
+    <span>이번 글 요청(③)은 형식·길이·말투만 바꿀 수 있음</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1720}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

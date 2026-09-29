@@ -21,6 +21,10 @@ struct GlassTextProtection: ViewModifier {
 @available(macOS 15.0, *)
 struct GlassTextRenderer: TextRenderer {
     var shadows = true
+    var contactOpacity = GlassStudy.glyphShadow
+    var softOpacity = GlassStudy.softGlyphShadow
+    var contactRadius: CGFloat = GlassStudy.contactRadius
+    var softRadius: CGFloat = GlassStudy.softRadius
     var displayPadding: EdgeInsets { EdgeInsets(top: 3, leading: 3, bottom: 3, trailing: 3) }
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
@@ -28,12 +32,12 @@ struct GlassTextRenderer: TextRenderer {
             if shadows {
                 // Two shadow-only draws; draw the unchanged glyphs once at the end.
                 var soft = context
-                soft.addFilter(.shadow(color: Palette.glassShadow.opacity(GlassStudy.softGlyphShadow), radius: 1.6,
+                soft.addFilter(.shadow(color: Palette.glassShadow.opacity(softOpacity), radius: softRadius,
                                        x: 0, y: 0.5, options: .shadowOnly))
                 soft.draw(line)
                 var contact = context
-                contact.addFilter(.shadow(color: Palette.glassShadow.opacity(GlassStudy.glyphShadow),
-                                          radius: 0.65, x: 0, y: 0.35, options: .shadowOnly))
+                contact.addFilter(.shadow(color: Palette.glassShadow.opacity(contactOpacity),
+                                          radius: contactRadius, x: 0, y: 0.35, options: .shadowOnly))
                 contact.draw(line)
             }
             context.draw(line)
@@ -44,15 +48,16 @@ struct GlassTextRenderer: TextRenderer {
 /// Native input views and standalone symbols do not use TextRenderer. Apply
 /// before padding/background, only to a transparent input or symbol leaf.
 struct GlassGlyphShadow: ViewModifier {
+    var enabled = true
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
-        let protected = reduceTransparency || contrast == .increased
+        let protected = !enabled || reduceTransparency || contrast == .increased
         content
             .modifier(GlassTextProtection(enabled: false))
-            .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.glyphShadow), radius: 0.65, y: 0.35)
-            .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.softGlyphShadow), radius: 1.6, y: 0.5)
+            .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.glyphShadow), radius: GlassStudy.contactRadius, y: 0.35)
+            .shadow(color: Palette.glassShadow.opacity(protected ? 0 : GlassStudy.softGlyphShadow), radius: GlassStudy.softRadius, y: 0.5)
     }
 }
 

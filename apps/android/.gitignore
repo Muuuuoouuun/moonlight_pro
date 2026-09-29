@@ -1,0 +1,23 @@
+# 릴리스 서명 비밀 — 절대 커밋하지 않는다
+keystore/
+keystore.properties
+*.jks
+*.keystore
+
+# app.config.json 에서 생성되는 파일 (허브 주소의 정본은 app.config.json 하나)
+capacitor.config.json
+www/hub-config.js
+android/app/src/main/res/values/hub_config.xml
+android/app/src/main/res/xml/shortcuts.xml
+
+# @capacitor/assets 임시 입력
+.assets-tmp/
+
+# Gradle·빌드 산출물 (android/.gitignore 도 같은 규칙을 가진다)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab

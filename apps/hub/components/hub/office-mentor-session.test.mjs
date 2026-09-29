@@ -89,3 +89,39 @@ test('invalid follow-up stays editable and does not enter pending state', () => 
   assert.equal(store.get(id).draft.length, 1201);
   assert.equal(store.get(id).pending, null);
 });
+
+test('an answer written from a cut Office source keeps that fact on its turn', () => {
+  const store = createOfficeMentorSessionStore();
+  const long = { ...result(), answer: '가'.repeat(30000) };
+  const id = store.open({ result: long, officeSource: source, scope: 'personal' });
+  const pending = store.begin(id, 'mentor-1');
+  assert.equal(pending.request.sourceTruncation[0].label, '본문');
+  store.complete(id, 'mentor-1', advice('부분 원문 기준 답변'));
+  assert.deepEqual(store.get(id).turns[0].sourceTruncation, pending.request.sourceTruncation);
+
+  const whole = createOfficeMentorSessionStore();
+  const wholeId = whole.open({ result: result(), officeSource: source, scope: 'personal' });
+  whole.begin(wholeId, 'mentor-1');
+  whole.complete(wholeId, 'mentor-1', advice('전체 원문 기준 답변'));
+  assert.equal(whole.get(wholeId).turns[0].sourceTruncation, null);
+});
+
+test('unsent follow-ups are reported until sent or discarded with their cleared meeting', () => {
+  const store = createOfficeMentorSessionStore();
+  let notified = 0;
+  store.subscribe(() => { notified += 1; });
+  const id = store.open({ result: result(), officeSource: source, scope: 'personal', initialAdvice: advice('첫 답변') });
+  assert.equal(store.hasUnsentDrafts(), false);
+  store.setDraft(id, '   ');
+  assert.equal(store.hasUnsentDrafts(), false);
+  store.setDraft(id, '보내지 않은 질문');
+  assert.equal(store.hasUnsentDrafts(), true);
+  const before = notified;
+  assert.equal(store.discard(['unknown-id']), false);
+  assert.equal(notified, before);
+  assert.equal(store.discard([id]), true);
+  assert.equal(notified, before + 1);
+  assert.equal(store.get(id), null);
+  assert.equal(store.hasUnsentDrafts(), false);
+  assert.equal(store.complete(id, 'late', advice('늦은 답')), false);
+});

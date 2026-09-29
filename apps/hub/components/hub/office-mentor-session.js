@@ -31,7 +31,8 @@ export function createOfficeMentorSessionStore() {
       const selectedLane = scope === 'all' ? (['personal', 'classin'].includes(lane) ? lane : null) : scope;
       if (scope === 'all' && initialAdvice?.status === 'generated' && !selectedLane) throw new Error('lane-required');
       const first = initialAdvice?.status === 'generated' && typeof initialAdvice.text === 'string' && initialAdvice.text.trim()
-        ? [{ id: 'initial', question: OFFICE_MENTOR_FIRST_QUESTION, answer: initialAdvice.text.trim(), mentorRunId: initialAdvice.mentorRunId || null }]
+        ? [{ id: 'initial', question: OFFICE_MENTOR_FIRST_QUESTION, answer: initialAdvice.text.trim(), mentorRunId: initialAdvice.mentorRunId || null,
+          sourceTruncation: Array.isArray(initialAdvice.sourceTruncation) && initialAdvice.sourceTruncation.length ? initialAdvice.sourceTruncation : null }]
         : [];
       sessions.set(id, { id, result, officeSource: { requestId: id, runId: officeSource.runId ?? null }, scope,
         lane: selectedLane, ref: typeof ref === 'string' && ref.trim() ? ref.trim() : null,
@@ -77,7 +78,9 @@ export function createOfficeMentorSessionStore() {
       if (response?.status === 'generated' && typeof response.text === 'string' && response.text.trim()) {
         update(id, { pending: null, error: null,
           draft: session.draft === pending.rawDraft ? '' : session.draft,
-          turns: [...session.turns, { id: requestId, question: pending.question, answer: response.text.trim(), mentorRunId: response.mentorRunId || null }],
+          // Remember whether this answer was written from a cut Office source.
+          turns: [...session.turns, { id: requestId, question: pending.question, answer: response.text.trim(), mentorRunId: response.mentorRunId || null,
+            sourceTruncation: pending.request.sourceTruncation || null }],
         });
       } else {
         update(id, { pending: null, error: response?.status === 'preview' || response?.status === 'error'
@@ -86,6 +89,14 @@ export function createOfficeMentorSessionStore() {
       return true;
     },
     hasUnsentDrafts() { return [...sessions.values()].some(session => session.draft.trim()); },
+    // A cleared Office agenda can no longer reach its consultations. Dropping them keeps
+    // the leave-page guard from warning about a draft the operator cannot see.
+    discard(ids) {
+      let removed = false;
+      for (const id of Array.isArray(ids) ? ids : []) removed = sessions.delete(id) || removed;
+      if (removed) for (const listener of listeners) listener();
+      return removed;
+    },
   };
 }
 
