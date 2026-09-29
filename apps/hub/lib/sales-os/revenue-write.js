@@ -7,10 +7,14 @@
 // close label) are intentionally left untouched — best-effort, never clobbered.
 
 import { eqFilter, fetchSupabaseRows } from "../server-read.js";
-import { dealStageLabel } from "../deal-stages.js";
+import { dealStageLabel, STAGE_ALIASES } from "../deal-stages.js";
 import { recordActivity } from "../repositories/crm-activities.js";
 import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./customer-delete.js";
 import { SUBJECT_KEY_SET } from "./lead-labels.js";
+import { normalizeGenreLabels } from "./customer-labels.js";
+import { promiseColumns, promiseMetaPatch } from "./customer-promise.js";
+import { normalizePayments, normalizePlanBaseline } from "../deal-payments.js";
+import { normalizeRecurring } from "../deal-recurring.js";
 import {
   deleteSupabaseRecord,
   insertSupabaseRecord,
@@ -70,6 +74,9 @@ export function buildLeadWrite(payload = {}) {
   if (typeof payload.name === "string" && payload.name.trim()) {
     columns.name = payload.name.trim();
   }
+  if (typeof payload.phone === "string") {
+    columns.phone = payload.phone.trim() || null;
+  }
   if (payload.source != null) {
     columns.source = String(payload.source).trim() || null;
   }
@@ -105,6 +112,7 @@ export function buildLeadWrite(payload = {}) {
     const list = Array.isArray(payload.subjects) ? payload.subjects.map(String) : [];
     metaPatch.subjects = [...new Set(list.filter((key) => SUBJECT_KEY_SET.has(key)))];
   }
+  if (payload.genres !== undefined) metaPatch.genres = normalizeGenreLabels(payload.genres);
   if (payload.labelSource !== undefined) {
     const src = payload.labelSource && typeof payload.labelSource === "object" ? payload.labelSource : {};
     const valid = new Set(["operator", "derived", "searched"]);
@@ -122,6 +130,8 @@ export function buildLeadWrite(payload = {}) {
   if (payload.snooze_until !== undefined) {
     metaPatch.snooze_until = String(payload.snooze_until).trim() || null;
   }
+  // 약속 날짜만 옮기기(고객 드로어 "날짜 다시") — 연락 기록이 아니므로 RPC를 거치지 않는다.
+  Object.assign(metaPatch, promiseMetaPatch(payload));
 
   return { columns, metaPatch };
 }
@@ -167,6 +177,27 @@ export function buildDealWrite(payload = {}) {
   // {eventId, summary, startAt, htmlLink}만 남긴다 (projects.meta.origin_deal_id와 같은 성격).
   if (payload.next_meeting !== undefined) {
     metaPatch.next_meeting = payload.next_meeting || null;
+  }
+  // 결제 일정(운영자 2026-09-24 결정, deal-payments.js) — 배열 전체를 항상 다시 쓴다(부분
+  // patch 없음). persistRevenueRecord가 기존 meta와 얕게 병합하므로 다른 meta 키는 그대로
+  // 남는다. normalizePayments가 유효하지 않은 항목(금액 없음 등)을 걸러 저장한다.
+  if (payload.payments !== undefined) {
+    metaPatch.payments = normalizePayments(payload.payments);
+  }
+  // 암묵 결제의 처음 계획(2026-09-25 A안, deal-payments.js planBaselineFor) — 유효할 때만 싣는다.
+  // 한 번 쓰면 끝이다: 이미 기록에 있으면 mergeRecordMeta가 기존 값을 지킨다.
+  if (payload.planBaseline !== undefined) {
+    const baseline = normalizePlanBaseline(payload.planBaseline);
+    if (baseline) metaPatch.plan_baseline = baseline;
+  }
+  // 매달 정기(2026-09-26 돈 보기, deal-recurring.js) — 계획 전체를 다시 쓴다. null이면 계획을 지운다.
+  // 유효하지 않은 계획(금액·날·시작 달 중 하나라도 없음)은 저장하지 않는다(₩0 정기를 만들지 않는다).
+  if (payload.recurring !== undefined) {
+    if (payload.recurring === null) metaPatch.recurring = null;
+    else {
+      const recurring = normalizeRecurring(payload.recurring);
+      if (recurring) metaPatch.recurring = recurring;
+    }
   }
 
   return { columns, metaPatch };
@@ -246,12 +277,29 @@ export function buildAccountWrite(payload = {}) {
   const type = normalizeType(payload.type);
   if (type) metaPatch.account_kind = type;
   if (payload.note != null) metaPatch.note = String(payload.note).trim() || null;
+  if (payload.region !== undefined) metaPatch.region = String(payload.region).trim() || null;
+  if (payload.subjects !== undefined) {
+    const list = Array.isArray(payload.subjects) ? payload.subjects.map(String) : [];
+    metaPatch.subjects = [...new Set(list.filter((key) => SUBJECT_KEY_SET.has(key)))];
+  }
+  if (payload.genres !== undefined) metaPatch.genres = normalizeGenreLabels(payload.genres);
+  if (payload.labelSource !== undefined) {
+    const source = payload.labelSource && typeof payload.labelSource === 'object' ? payload.labelSource : {};
+    const valid = new Set(['operator', 'derived', 'searched']);
+    const next = {};
+    if (valid.has(source.subjects)) next.subjects = source.subjects;
+    if (valid.has(source.region)) next.region = source.region;
+    metaPatch.label_source = next;
+  }
   if (payload.workspace) metaPatch.workspace = payload.workspace;
   if (payload.focusOverride !== undefined) {
     metaPatch.focus_override = payload.focusOverride === "raise" || payload.focusOverride === "lower"
       ? payload.focusOverride
       : null;
   }
+  // 계약 고객의 약속(customer_accounts.next_action + meta.next_action_at) — 고객 드로어가 쓴다.
+  Object.assign(columns, promiseColumns(payload));
+  Object.assign(metaPatch, promiseMetaPatch(payload));
 
   return { columns, metaPatch };
 }
@@ -294,9 +342,10 @@ export function buildActivityWrite(payload = {}) {
   return { columns, metaPatch };
 }
 
-async function readExistingMeta(table, id, workspaceId) {
+// 딜은 성사 시각 판정(dealWonAtPatch)에 이전 stage 컬럼도 필요해 함께 읽는다.
+async function readExistingRow(table, id, workspaceId) {
   const rows = await fetchSupabaseRows(table, {
-    select: "meta",
+    select: table === "deals" ? "meta,stage" : "meta",
     filters: [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]],
     limit: 1,
   });
@@ -305,7 +354,7 @@ async function readExistingMeta(table, id, workspaceId) {
   // (2026-08-05 재감사 안정성 M: meta-wipe).
   if (!Array.isArray(rows)) return null;
   const meta = rows[0] ? rows[0].meta : null;
-  return meta && typeof meta === "object" ? meta : {};
+  return { meta: meta && typeof meta === "object" ? meta : {}, stage: typeof rows[0]?.stage === "string" ? rows[0].stage : null };
 }
 
 // Shared insert/update path for both the lead and deal routes. Returns a small status
@@ -321,6 +370,18 @@ function persistFailure(res) {
     : { status: "failed", reason: res.reason, detail: res.detail };
 }
 
+// 기존 meta 위에 이번 patch를 얕게 병합한다 — 형제 키(brand·lane·payments…)는 그대로 남는다.
+// 딜의 plan_baseline(처음 계획)은 한 번만 쓴다: 기록에 이미 유효한 값이 있으면 patch가 무엇을
+// 싣든 기존 값을 지킨다(탭 두 개·늦게 도착한 저장이 "예상했던" 값을 바꾸지 못하게).
+export function mergeRecordMeta({ table, existingMeta, metaPatch }) {
+  const base = existingMeta && typeof existingMeta === "object" ? existingMeta : {};
+  const merged = { ...base, ...metaPatch };
+  if (table === "deals" && metaPatch && Object.hasOwn(metaPatch, "plan_baseline") && normalizePlanBaseline(base.plan_baseline)) {
+    merged.plan_baseline = base.plan_baseline;
+  }
+  return merged;
+}
+
 // 딜 단계 이동 한 줄 — crm_activities(kind='deal', meta.from/to). 주간 리포트의 "이동 딜"이 이 행을
 // 센다(2026-09-20 §6.3). 기존 stage_detail이 없던 레거시 딜의 첫 분류는 이동이 아니므로 남기지
 // 않고, 같은 값 재저장도 남기지 않는다. 기록 실패는 딜 저장 결과를 바꾸지 않는다.
@@ -330,6 +391,22 @@ export function dealStageMove({ table, existingMeta, metaPatch }) {
   const to = metaPatch.stage_detail;
   if (!from || from === to) return null;
   return { from, to, body: `단계: ${dealStageLabel(from)} → ${dealStageLabel(to)}` };
+}
+
+// 성사 시각 — 주간 회사 리포트의 "성사일 확인된 딜"은 deals.won_at만 믿는다(추정 금지). 이전 단계를
+// 아는 전환에서만 찍는다: 모르는 레거시 딜은 이미 성사였을 수 있어 지금 시각을 찍으면 옛 성사가
+// 이번 주 성사로 둔갑한다. 성사에서 벗어나면 비운다(won_at = 현재 성사의 시작 시각). 이동 이력은
+// crm_activities(kind='deal')가 따로 남긴다.
+// 이관 딜처럼 stage_detail이 없으면 stage 컬럼을 별칭으로 읽는다 — won은 closing이므로 옛 성사를 다시 찍지 않는다.
+export function dealWonAtPatch({ table, existingMeta, existingStage = null, metaPatch, now = new Date() }) {
+  if (table !== "deals" || !existingMeta || typeof metaPatch?.stage_detail !== "string") return {};
+  const from = typeof existingMeta.stage_detail === "string" ? existingMeta.stage_detail
+    : typeof existingStage === "string" ? STAGE_ALIASES[existingStage.toLowerCase()] || null : null;
+  const to = metaPatch.stage_detail;
+  if (!from || from === to) return {};
+  if (to === "closing") return { won_at: now.toISOString() };
+  if (from === "closing") return { won_at: null };
+  return {};
 }
 
 async function recordDealStageMove({ table, id, workspaceId, existingMeta, metaPatch }) {
@@ -406,15 +483,18 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
   // Merge meta against the live row so we never drop sibling keys (brand, lane, campaign…).
   let mergedMeta = null;
   let existingMeta = null;
+  let existingStage = null;
   if (hasMeta) {
-    existingMeta = await readExistingMeta(table, id, workspaceId);
+    const existing = await readExistingRow(table, id, workspaceId);
+    existingMeta = existing ? existing.meta : null;
+    existingStage = existing ? existing.stage : null;
     if (existingMeta === null) {
       // 병합 기준을 못 읽었으면 저장을 중단한다 — 빈 meta 위에 덮어쓰면 무언 데이터 파괴.
       return { status: "failed", reason: "meta-read-failed", detail: "existing meta unreadable; save aborted to avoid wiping sibling keys" };
     }
-    mergedMeta = { ...existingMeta, ...metaPatch };
+    mergedMeta = mergeRecordMeta({ table, existingMeta, metaPatch });
   }
-  const patch = { ...columns, ...(mergedMeta ? { meta: mergedMeta } : {}) };
+  const patch = { ...columns, ...dealWonAtPatch({ table, existingMeta, existingStage, metaPatch }), ...(mergedMeta ? { meta: mergedMeta } : {}) };
   if (!Object.keys(patch).length) return { status: "noop" };
 
   const res = await updateSupabaseRecord(

@@ -18,7 +18,11 @@ const stubs = {
     }
   `,
   "@/lib/server-read": `
-    export async function fetchSupabaseRows() { return []; }
+    export async function fetchSupabaseRows(table) {
+      const state = globalThis.__personaRouteTest;
+      (state.readTables ||= []).push(table);
+      return state.rowsByTable?.[table] || [];
+    }
     export function withWorkspaceFilter(f = []) { return f; }
   `,
 };
@@ -37,7 +41,22 @@ registerHooks({
 });
 
 const { POST } = await import("../app/api/hub/persona-chat/route.js");
-const { PERSONA_MODE_LABEL, LEGEND_LENS_MAP } = await import("../components/hub/persona-client.js");
+const { PERSONA_MODE_LABEL, GURU_LENS_MAP, requestPersonaChat } = await import("../components/hub/persona-client.js");
+
+test("Guru widget persona lens keeps a conversation-only flag through client and Hub", async () => {
+  await requestPersonaChat({ personaId: "sales", mode: "sparring", lens: "voss", conversationOnly: true });
+  assert.equal(state.calledBody.conversationOnly, true);
+  await POST(request({ personaId: "sales", mode: "sparring", lens: "voss", conversationOnly: true }));
+  assert.equal(state.calledBody.conversationOnly, true);
+  assert.deepEqual(state.readTables || [], []);
+});
+
+test("conversation-only persona chat does not read a recent deals snapshot", async () => {
+  state.rowsByTable = { deals: [{ name: '다른 고객', stage: 'Won' }] };
+  await POST(request({ personaId: 'sales', mode: 'chat', lens: 'voss', conversationOnly: true, message: '이 고객 질문' }));
+  assert.deepEqual(state.readTables || [], []);
+  assert.deepEqual(state.calledBody.context, { source: 'operator-provided', scope: 'unscoped' });
+});
 
 beforeEach((t) => {
   for (const key of Object.keys(state)) delete state[key];
@@ -70,7 +89,7 @@ const request = (body) =>
     body: JSON.stringify(body),
   });
 
-test("persona-client exposes mode labels and legend lenses", () => {
+test("persona-client exposes mode labels and Guru-only lenses", () => {
   assert.equal(PERSONA_MODE_LABEL.advice, "조언");
   assert.equal(PERSONA_MODE_LABEL.critique, "평가/진단");
   assert.equal(PERSONA_MODE_LABEL.sparring, "3자 토론");
@@ -78,9 +97,10 @@ test("persona-client exposes mode labels and legend lenses", () => {
   assert.equal(PERSONA_MODE_LABEL["outreach-draft"], "연락 초안");
   assert.equal(PERSONA_MODE_LABEL["extract-actions"], "액션 추출");
   assert.equal(PERSONA_MODE_LABEL["daily-dispatch"], "오더 브리핑");
-  assert.ok(LEGEND_LENS_MAP.jobs);
-  assert.ok(LEGEND_LENS_MAP.bezos);
-  assert.ok(LEGEND_LENS_MAP.chouinard);
+  assert.ok(GURU_LENS_MAP.voss);
+  assert.ok(GURU_LENS_MAP.ogilvy);
+  // Legend 인물은 주간 카드로만 산다(agent-layer-direction §2.1 ⑧).
+  for (const legend of ["jobs", "bezos", "chouinard", "socrates", "carnegie", "hill"]) assert.equal(GURU_LENS_MAP[legend], undefined, legend);
 });
 
 test("POST forwards personaId, mode and lens to engine and logs agent run", async () => {
@@ -88,7 +108,7 @@ test("POST forwards personaId, mode and lens to engine and logs agent run", asyn
     request({
       personaId: "order",
       mode: "advice",
-      lens: "jobs",
+      lens: "voss",
       message: "오늘 우선순위 정리",
     }),
   );
@@ -96,12 +116,23 @@ test("POST forwards personaId, mode and lens to engine and logs agent run", asyn
   assert.equal(res.status, 200);
   assert.equal(data.personaId, "order");
   assert.equal(data.mode, "advice");
-  assert.equal(data.lens, "jobs");
+  assert.equal(data.lens, "voss");
   assert.equal(data.runId, "persona-run-1");
   assert.equal(state.calledBody.personaId, "order");
-  assert.equal(state.calledBody.lens, "jobs");
+  assert.equal(state.calledBody.lens, "voss");
   assert.equal(state.run.agent, "persona.order");
   assert.equal(state.run.mode, "advice");
+  assert.equal(state.run.ref, "lens=voss");
+});
+
+test("POST never forwards or logs a lens the Engine does not apply", async () => {
+  for (const lens of ["jobs", "carnegie", "hill", "constructor"]) {
+    const res = await POST(request({ personaId: "sales", mode: "advice", lens, message: "관점 요청" }));
+    assert.equal(res.status, 200, lens);
+    assert.equal(state.calledBody.lens, null, lens);
+    assert.equal(state.run.ref, null, lens);
+    assert.match(state.run.inputSummary, /lens=none/, lens);
+  }
 });
 
 test("POST supports critique and sparring modes", async () => {
@@ -167,4 +198,39 @@ test("POST supports outreach-draft, extract-actions, and daily-dispatch modes", 
   );
   assert.equal(resDispatch.status, 200);
   assert.equal(state.calledBody.mode, "daily-dispatch");
+});
+
+test("record-local sales modes do not mix unrelated deals into a supplied record", async () => {
+  state.rowsByTable = {
+    deals: [{ name: "다른 고객의 딜", stage: "Qualified", value: 3000000 }],
+  };
+
+  const outreach = await POST(request({
+    personaId: "sales",
+    mode: "outreach-draft",
+    draft: "김 고객에게 보낼 문자를 써줘",
+  }));
+  assert.equal(outreach.status, 200);
+  assert.equal(state.calledBody.context, null);
+  assert.deepEqual(state.readTables || [], []);
+
+  const extraction = await POST(request({
+    personaId: "sales",
+    mode: "extract-contact-outcome",
+    draft: "박 고객과 통화한 원문",
+  }));
+  assert.equal(extraction.status, 200);
+  assert.equal(state.calledBody.context, null);
+  assert.deepEqual(state.readTables || [], []);
+
+  const localContext = { id: "target-1", name: "이 고객" };
+  const scoped = await POST(request({
+    personaId: "sales",
+    mode: "outreach-draft",
+    draft: "이 고객에게 보낼 문자를 써줘",
+    context: localContext,
+  }));
+  assert.equal(scoped.status, 200);
+  assert.deepEqual(state.calledBody.context, localContext);
+  assert.deepEqual(state.readTables || [], []);
 });

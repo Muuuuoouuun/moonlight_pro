@@ -1,13 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 import {
   buildInstagramApiSetupUrls,
-  fetchLatestInstagramApiConnection,
+  fetchInstagramApiConnections,
   hasInstagramApiOAuthStateSecret,
   resolveInstagramApiConfig,
   summarizeInstagramApiConnection,
 } from "@/lib/instagram-api";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { summarizeSocialAccountStatus } from "@/lib/social-account-status";
+import { matchesMetaOAuthConnection, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,27 +17,39 @@ export const dynamic = "force-dynamic";
 export async function GET(req) {
   const { origin } = req.nextUrl;
   const workspaceId = resolveDefaultWorkspaceId();
-  const config = resolveInstagramApiConfig();
-  const connection = workspaceId
-    ? await fetchLatestInstagramApiConnection(workspaceId)
-    : null;
-  const connected = connection?.status === "connected";
+  const legacyConfig = resolveInstagramApiConfig();
+  const requestedHandle = (req.nextUrl.searchParams.get("brand") || legacyConfig.brandHandle)
+    .replace(/^@+/, "").toLowerCase();
+  const config = resolveMetaOAuthApp({
+    provider: "instagram_api",
+    brandKey: req.nextUrl.searchParams.get("brandKey"),
+    brandHandle: requestedHandle,
+  });
+  const accountId = req.nextUrl.searchParams.get("accountId") || "";
+  const { connections, available } = await fetchInstagramApiConnections(workspaceId);
+  const visibleConnections = connections.filter((row) => matchesMetaOAuthConnection(row, config));
+  const summary = summarizeSocialAccountStatus({
+    rows: visibleConnections,
+    configured: Boolean(config?.configured && hasInstagramApiOAuthStateSecret()),
+    available,
+    selector: (row) => !accountId || row.account_key === accountId,
+    summarize: summarizeInstagramApiConnection,
+  });
 
   return NextResponse.json({
-    status: connected
-      ? "connected"
-      : config.configured && hasInstagramApiOAuthStateSecret()
-        ? "ready"
-        : "missing-config",
+    status: summary.status,
     provider: "instagram_api",
     workspaceId: workspaceId || null,
-    brandHandle: config.brandHandle,
-    configured: config.configured,
-    hasAppId: config.hasAppId,
-    hasAppSecret: config.hasAppSecret,
+    brandHandle: requestedHandle,
+    brandKey: config?.brandKey || null,
+    configured: Boolean(config?.configured),
+    appKey: config?.appKey || null,
+    hasAppId: Boolean(config?.hasAppId),
+    hasAppSecret: Boolean(config?.hasAppSecret),
     hasOAuthStateSecret: hasInstagramApiOAuthStateSecret(),
-    scopes: config.scopes,
-    connection: connection ? summarizeInstagramApiConnection(connection) : null,
+    scopes: config?.scopes || [],
+    connection: summary.connection,
+    connections: summary.connections,
     setup: buildInstagramApiSetupUrls(origin),
   });
 }

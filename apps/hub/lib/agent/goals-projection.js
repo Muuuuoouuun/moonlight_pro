@@ -1,5 +1,5 @@
 import {AgentInputError,openAgentCursor,sealAgentCursor} from '@com-moon/agent-contracts';
-import {GOAL_ENTITY_TYPES,isGoalUuid} from '@com-moon/goal-contracts';
+import {GOAL_ENTITY_TYPES,isGoalUuid,isGoalEntityUuid} from '@com-moon/goal-contracts';
 
 const MAX_BYTES=32768;
 const text=(value,max)=>typeof value==='string'?value.slice(0,max):null;
@@ -10,7 +10,7 @@ export function parseAgentGoalsQuery(input={}) {
   if(!Number.isInteger(limit)||limit<1||limit>20)throw new AgentInputError('Goal limit must be between 1 and 20.');
   if(input.scope!=null&&!['personal','company'].includes(input.scope))throw new AgentInputError('Invalid goal scope.');
   if(input.objectiveId!=null&&!isGoalUuid(input.objectiveId))throw new AgentInputError('Invalid objective ID.');
-  if((input.entityType!=null||input.entityId!=null)&&(!GOAL_ENTITY_TYPES.includes(input.entityType)||!isGoalUuid(input.entityId)))throw new AgentInputError('Invalid linked entity.');
+  if((input.entityType!=null||input.entityId!=null)&&(!GOAL_ENTITY_TYPES.includes(input.entityType)||!isGoalEntityUuid(input.entityId)))throw new AgentInputError('Invalid linked entity.');
   if(input.cursor!=null&&(typeof input.cursor!=='string'||input.cursor.length>4096))throw new AgentInputError('Invalid goal cursor.');
   return {...pick(input,['scope','objectiveId','entityType','entityId','cursor']),limit};
 }

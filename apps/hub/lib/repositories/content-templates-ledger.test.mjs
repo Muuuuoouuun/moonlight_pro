@@ -80,3 +80,10 @@ test('rejects invalid input and reports preview or error honestly', async () => 
   assert.equal((await ledger.listContentTemplates()).status, 'preview');
   assert.equal((await ledger.saveContentTemplate(input())).status, 'error');
 });
+
+test('a missing table before migration 0044 reads as preview, not a failure', async () => {
+  globalThis.fetch = async () => Response.json({ code: 'PGRST205', message: "Could not find the table 'public.content_prompt_templates'" }, { status: 404 });
+  const result = await ledger.listContentTemplates();
+  assert.equal(result.status, 'preview');
+  assert.match(result.message, /마이그레이션/);
+});

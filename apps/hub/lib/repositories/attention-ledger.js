@@ -22,6 +22,8 @@ import { getInquiriesLedger } from './inquiries-ledger.js';
 // reload가 타는 핫패스다.
 import { getTaskLedger } from "./operating-ledger.js";
 import { getRevenueLedger } from "./revenue-ledger.js";
+import { getDeadlineAlertSettings } from "./deadline-alert-settings.js";
+import { isDeadlineAlertSuppressed } from "../deadline-alert-reset.js";
 import { isDealStalled } from "../deal-stages.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
 import { dueBucket, kstDayKey } from "../kst-day.js";
@@ -84,6 +86,9 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
         // 내 작업의 할 일 편집 드로어가 설명을 보여주고 고칠 수 있도록 실어 보낸다 —
         // 없으면 드로어 저장이 기존 설명을 확인할 길 없이 진행된다.
         description: t.description || "",
+        nextAction: t.nextAction || "",
+        checklist: Array.isArray(t.checklist) ? t.checklist : [],
+        updatedAt: t.updatedAt || "",
         sourceRefs: t.sourceRefs || [],
         // 오늘 고른 "오늘 3개"(§6.2)는 `focus` 버킷으로 올리고, 기한 버킷은 dueBucket에 보존한다.
         // 내 작업의 BUCKETS·보드 열·시그널 타일이 `focus`를 1급 버킷으로 다룬다.
@@ -176,9 +181,12 @@ function assignPriority(item, leadScoreByDealEntityId) {
   const leadScore = item.lane === "deal" ? leadScoreByDealEntityId.get(item.entityId) || 0 : 0;
   const stageRank = item.lane === "deal" ? STAGE_PRIORITY_RANK[item.status] || 0 : 0;
 
-  // 0. 오늘 3개 — 운영자가 직접 고른 할 일은 시스템 규칙보다 앞선다(2026-09-20 §6.2).
+  // A deliberate "오늘 3개" pick stays first even when its old deadline alert was cleared.
   if (item.lane === "task" && item.focusToday) {
     return { priorityScore: 6000, priorityReason: "오늘 3개" };
+  }
+  if (item.deadlineAlertSuppressed) {
+    return { priorityScore: 900, priorityReason: "이전 기한 · 알림 해제" };
   }
 
   // 1. 기한 지난 약속 — older overdue first (larger daysPast → higher).
@@ -214,7 +222,9 @@ function assignPriority(item, leadScoreByDealEntityId) {
 // 원본 기록(projectLedger/revenue/calendar)을 함께 받는다 — 첫 화면은 §7 확정 슬롯(KA·집중
 // 고객·오늘 일정·할 일 레인)을 원본 위에 프로젝션해야 하는데, 이걸 위해 같은 기록을 라우트가
 // 따로 또 읽으면(기존 구조) 우선순위 판정이 두 벌로 갈라진다. my-work 등 기존 소비자는
-// 옵션 미지정으로 기존 계약 그대로.
+// 옵션 미지정으로 기존 계약 그대로. revenue는 "full"이 아니라 "brief" 프로젝션을 쓴다 —
+// daily-brief/route.js·operator-revenue-scope.js·daily-focus.js 어디도 raw.revenue.accounts/
+// .cases를 읽지 않으므로(응답에도 실리지 않음) 그 두 테이블 읽기를 건너뛴다.
 export async function getAttentionLedger({ includeRaw = false } = {}) {
   const now = new Date();
   const todayKey = dateKey(now);
@@ -222,14 +232,14 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
   const startOfTodayIso = new Date(`${todayKey}T00:00:00+09:00`).toISOString();
   const weekEndIso = new Date(now.getTime() + 7 * DAY_MS).toISOString();
 
-  const [projectLedger, revenueLedger, calendar, inquiries] = await Promise.all([
+  const [projectLedger, revenueLedger, calendar, inquiries, deadlineAlerts] = await Promise.all([
     getTaskLedger().catch(() => ({
       source: "error",
       error: "project-ledger-request-failed",
       failedSources: ["tasks"],
       todos: [],
     })),
-    getRevenueLedger({ projection: includeRaw ? "full" : "attention" }).catch(() => ({
+    getRevenueLedger({ projection: includeRaw ? "brief" : "attention" }).catch(() => ({
       source: "error",
       error: "revenue-ledger-request-failed",
       failedSources: ["deals"],
@@ -240,6 +250,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
       () => ({ ok: false, reason: "calendar-read-failed", items: [] }),
     ),
     getInquiriesLedger({ filter: 'unread', pageSize: 3 }).catch(() => ({ status: 'error', source: 'error', rows: [], unreadCount: null, error: 'inquiries-read-failed' })),
+    getDeadlineAlertSettings().catch(() => ({ status: "error", error: "deadline-alert-settings-read-failed", reset: null })),
   ]);
 
   const taskAggregationPartial = projectLedger?.source === "supabase"
@@ -282,6 +293,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     inquiries: inquiries.status,
     tasks: taskSourceState,
     deals: dealSourceState,
+    deadlineAlerts: deadlineAlerts.status,
     calendar: calendar?.ok
       ? "live"
       : ["calendar-not-connected", "missing-connection", "missing-access-token", "missing-config"].includes(calendar?.reason || "calendar-not-connected")
@@ -290,6 +302,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
   };
 
   if (inquiries.status === 'error') sourceFailures.push({ source: 'inquiries', error: inquiries.error, failedSources: ['inquiries'] });
+  if (deadlineAlerts.status === 'error') sourceFailures.push({ source: 'deadlineAlerts', error: deadlineAlerts.error, failedSources: ['deadlineAlerts'] });
 
   // Deal entityId → linked lead's follow-up score (0–100). Deals carry lead_id; leads carry
   // the recomputed momentum score — this join is the pipeline↔lead-score bridge.
@@ -313,7 +326,13 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     ),
     ...mapDealItems(revenueLedger?.deals, revenueLedger?.stages, todayKey, weekEndKey),
     ...mapEventItems(calendar?.items, todayKey, weekEndKey),
-  ].map((item) => ({ ...item, ...assignPriority(item, leadScoreByDealEntityId) }));
+  ].map((item) => {
+    const suppressed = isDeadlineAlertSuppressed(deadlineAlerts.reset, item.lane, item.entityId, item.whenAt);
+    const displayed = suppressed
+      ? { ...item, bucket: item.focusToday ? "focus" : "later", whenLabel: `${shortDate(item.whenAt)} · 알림 해제`, deadlineAlertSuppressed: true }
+      : item;
+    return { ...displayed, ...assignPriority(displayed, leadScoreByDealEntityId) };
+  });
 
   // 오늘 3개 요약(선택 수·완료 수) — 완료된 선택은 items에서 빠지므로 목록만 세면 3건 상한을
   // 잘못 읽는다. 할 일 기록 전체(todos, 완료 포함)에서 세어 내 작업 타일·토글 비활성이 서버 판정과 같게.

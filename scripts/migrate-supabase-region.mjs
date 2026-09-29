@@ -3,7 +3,8 @@
 // Moonlight — Supabase 리전 이전 (구 프로젝트 → 한국 리전 신규 프로젝트)
 //
 // 왜 마이그레이션 재생이 아니라 덤프 복제인가:
-//   supabase/migrations 45개는 번호가 7쌍 충돌하고(0003·0004·0012·0013·0014·0018·0025)
+//   2026-09-20 당시 supabase/migrations 45개는 번호가 7쌍 충돌하고
+//   (0003·0004·0012·0013·0014·0018·0025)
 //   빈 DB에 처음부터 적용된 적이 한 번도 없다. setup/00_live_schema.sql에도 2026-09에
 //   추가된 inquiries·journal_notes·content_revisions·agent_jobs가 빠져 있다.
 //   현재 운영 프로젝트는 실제로 동작하는 상태이므로 그 스키마가 정본이다.
@@ -51,10 +52,16 @@ function psql(url, sql, { tuplesOnly = true } = {}) {
 
 function tableCounts(url) {
   // 행 수는 count(*)로 실측한다. pg_class.reltuples는 ANALYZE 시점에 따라 틀린다.
-  const names = psql(url, `select tablename from pg_tables where schemaname='public' order by tablename`)
-    .split('\n').map(s => s.trim()).filter(Boolean);
+  const names = psql(url, `select schemaname, tablename from pg_tables
+    where schemaname='public'
+       or (schemaname='moonlight_ops' and tablename='applied_migrations')
+    order by schemaname, tablename`)
+    .split('\n').map(s => s.trim().split('|')).filter(parts => parts.length === 2);
   if (!names.length) return new Map();
-  const union = names.map(n => `select '${n}' as t, count(*)::bigint as n from public."${n}"`).join(' union all ');
+  const quoted = value => '"' + value.replaceAll('"', '""') + '"';
+  const literal = value => "'" + value.replaceAll("'", "''") + "'";
+  const union = names.map(([schema, table]) =>
+    `select ${literal(`${schema}.${table}`)} as t, count(*)::bigint as n from ${quoted(schema)}.${quoted(table)}`).join(' union all ');
   const rows = psql(url, `${union} order by t`).split('\n').map(s => s.trim()).filter(Boolean);
   return new Map(rows.map(line => { const [t, n] = line.split('|'); return [t, Number(n)]; }));
 }
@@ -81,7 +88,7 @@ function stagePreflight() {
 
   const counts = tableCounts(SOURCE);
   const withRows = [...counts.entries()].filter(([, n]) => n > 0);
-  log(`[PASS] 원본 public 테이블 ${counts.size}개, 데이터 있는 테이블 ${withRows.length}개`);
+  log(`[PASS] 원본 앱 테이블 ${counts.size}개, 데이터 있는 테이블 ${withRows.length}개`);
   for (const [t, n] of withRows.sort((a, b) => b[1] - a[1]).slice(0, 12)) log(`       ${t.padEnd(28)} ${n}`);
 
   const targetCounts = tableCounts(TARGET);
@@ -102,6 +109,9 @@ function stageDump() {
   // Supabase 프로젝트는 anon·authenticated·service_role 표준 역할을 공유하고, GRANT 를 빼면
   // 함수 EXECUTE 가 PUBLIC 기본값으로 풀려 anon 까지 RPC 를 부를 수 있게 된다(db:check 가 잡는 보안 계약).
   const common = ['--dbname', SOURCE, '--schema', 'public', '--no-owner', '--quote-all-identifiers'];
+  if (psql(SOURCE, "select to_regclass('moonlight_ops.applied_migrations') is not null") === 't') {
+    common.push('--schema', 'moonlight_ops');
+  }
 
   log('스키마 추출 중...');
   execFileSync('pg_dump', [...common, '--schema-only', '--file', SCHEMA_FILE], { stdio: ['ignore', 'inherit', 'inherit'] });

@@ -5,6 +5,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { WORKSPACE_ROW_SELECT } from "@/lib/workspace-row-select";
 import {
   getContactTrackingStartedAt,
   isContactTrackingEligible,
@@ -12,7 +13,9 @@ import {
 import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
 import { isTemplateNextAction } from "../sales-os/lead-enrichment.js";
 import { SUBJECT_KEY_SET, absorbSubjectTags } from "../sales-os/lead-labels.js";
+import { normalizeGenreLabels } from "../sales-os/customer-labels.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
+import { normalizeRevenueTargets } from "../revenue-target.js";
 
 const LEAD_STAGE_LABEL = {
   new: "New",
@@ -190,6 +193,7 @@ export function mapLead(row, companyById, contactById, trackingStartedAt = null,
     // buildLeadWrite. '' fallbacks keep the drawer inputs controlled.
     region: enrichmentView.region,
     subjects,
+    genres: normalizeGenreLabels(meta.genres),
     labelSource,
     scale: meta.scale || "",
     situation: meta.situation || "",
@@ -264,11 +268,21 @@ export function mapDeal(row, companyById, trackingStartedAt = null) {
     nextMeeting: (row.meta?.next_meeting && typeof row.meta.next_meeting === "object")
       ? row.meta.next_meeting
       : null,
+    // 결제 일정(운영자 2026-09-24 결정, lib/deal-payments.js) — 원시 배열 그대로 넘긴다.
+    // 정규화·암묵적 결제 파생은 소비자(deal-timeline.js, deal-payments.js)가 매번 한다.
+    payments: Array.isArray(row.meta?.payments) ? row.meta.payments : [],
+    // 암묵 결제의 처음 계획(2026-09-25) — 원시 객체 그대로, 정규화는 deal-payments.js가 한다.
+    planBaseline: (row.meta?.plan_baseline && typeof row.meta.plan_baseline === "object") ? row.meta.plan_baseline : null,
+    // 매달 정기(2026-09-26 돈 보기) — 원시 객체 그대로, 정규화는 deal-recurring.js가 한다.
+    recurring: (row.meta?.recurring && typeof row.meta.recurring === "object") ? row.meta.recurring : null,
   };
 }
 
-function mapAccount(row, dealStatsByCompany) {
+export function mapAccount(row, dealStatsByCompany, companyById = new Map()) {
   const type = resolveType(row);
+  const meta = row.meta || {};
+  const companyRegion = companyById.get(row.company_id)?.meta?.region || '';
+  const region = String(Object.hasOwn(meta, 'region') ? (meta.region || '') : companyRegion).trim();
   const stats = (row.company_id && dealStatsByCompany.get(row.company_id)) || {
     deals: 0,
     value: 0,
@@ -281,6 +295,15 @@ function mapAccount(row, dealStatsByCompany) {
     companyId: row.company_id || null,
     name: row.name,
     type,
+    workspace: resolveWorkspace(row),
+    brand: resolveBrand(row),
+    region,
+    subjects: Array.isArray(meta.subjects) ? meta.subjects.map(String).filter((key) => SUBJECT_KEY_SET.has(key)) : [],
+    genres: normalizeGenreLabels(meta.genres),
+    labelSource: {
+      subjects: meta.label_source?.subjects || null,
+      region: meta.label_source?.region || (region && !meta.region ? 'derived' : null),
+    },
     deals: stats.deals,
     value: stats.value,
     last: formatRelative(lastAt),
@@ -371,6 +394,7 @@ function emptyLedger(configured, workspaceId) {
     contacts: [],
     companies: [],
     stages: DEAL_STAGES,
+    revenueTargets: null,
     summary: {
       mrr: 0,
       mrrPrev: 0,
@@ -439,12 +463,18 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
   // for CRM and Daily Brief's raw slots, without reading unrelated account/case/
   // contact/cutover data on every task completion and reload.
   const attentionOnly = projection === "attention";
+  // "brief" is the Daily Brief raw slot (attention-ledger's includeRaw): it needs the same
+  // leads/deals/companies/contacts/targets shape as "full" (mapLead/mapDeal, revenueTargets,
+  // summary all run), but the accounts/cases lanes never render there (no accounts/cases
+  // reference in daily-brief/route.js, operator-revenue-scope.js, or daily-focus.js) — so skip
+  // those two reads for "brief" the same way "attention" already does.
+  const skipAccountsCases = attentionOnly || projection === "brief";
 
   if (!workspaceId || !supabaseConfig) {
     return emptyLedger(false, workspaceId || null);
   }
 
-  const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows, trackingStartedAt] = await Promise.all([
+  const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows, trackingStartedAt, workspaceRows] = await Promise.all([
     fetchSupabaseRows("leads", {
       ...(attentionOnly ? { select: "id,score" } : {}),
       limit: 120,
@@ -461,12 +491,12 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
         ["stage", inFilter(LEGACY_DB_STAGE_VALUES)],
       ]),
     }),
-    attentionOnly ? [] : fetchSupabaseRows("customer_accounts", {
+    skipAccountsCases ? [] : fetchSupabaseRows("customer_accounts", {
       limit: 120,
       order: "updated_at.desc.nullslast",
       filters: withWorkspaceFilter([["status", inFilter(["active", "paused", "closed"])]]),
     }),
-    attentionOnly ? [] : fetchSupabaseRows("operation_cases", {
+    skipAccountsCases ? [] : fetchSupabaseRows("operation_cases", {
       limit: 120,
       order: "opened_at.desc.nullslast",
       filters: withWorkspaceFilter(),
@@ -481,6 +511,13 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
       filters: withWorkspaceFilter(),
     }),
     attentionOnly ? null : getContactTrackingStartedAt(workspaceId),
+    // 이번 달 매출 목표(운영자 2026-09-24 결정 1층) — workspaces.meta.revenue_targets.
+    // My Work 프로젝션은 거래 화면을 그리지 않으므로 읽지 않는다.
+    attentionOnly ? null : fetchSupabaseRows("workspaces", {
+      select: WORKSPACE_ROW_SELECT,
+      filters: [["id", eqFilter(workspaceId)]],
+      limit: 1,
+    }),
   ]);
 
   if (!leadRows || !dealRows || !accountRows || !caseRows) {
@@ -501,12 +538,18 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
     };
   }
 
-  // 보강 소스(companies/contacts) 실패는 코어를 죽이지 않되 partial로 명명한다 —
-  // live 배지 아래에서 회사명/연락처가 조용히 사라지던 무언 강등 제거.
+  // 보강 소스(companies/contacts/workspace 목표) 실패는 코어를 죽이지 않되 partial로
+  // 명명한다 — live 배지 아래에서 회사명/연락처/목표가 조용히 사라지던 무언 강등 제거.
+  // attentionOnly는 workspaceRows를 애초에 요청하지 않으므로(null) 실패로 세지 않는다.
   const enrichmentFailedSources = [
     ["companies", companyRows],
     ["contacts", contactRows],
+    ...(attentionOnly ? [] : [["revenue_targets", workspaceRows]]),
   ].filter(([, rows]) => !Array.isArray(rows)).map(([key]) => key);
+  // null = 못 읽음(정직성 규칙 — {}로 뭉개면 "목표 없음"과 구분이 안 된다).
+  const revenueTargets = Array.isArray(workspaceRows)
+    ? normalizeRevenueTargets(workspaceRows[0]?.meta?.revenue_targets)
+    : null;
   const companyById = new Map((companyRows || []).map(c => [c.id, c]));
   const contactById = new Map((contactRows || []).map(c => [c.id, c]));
 
@@ -535,7 +578,7 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
   });
 
   const accountRaw = new Map(accountRows.map(a => [a.id, a]));
-  const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany));
+  const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany, companyById));
   const leads = leadRows.map(row => mapLead(row, companyById, contactById, trackingStartedAt, dealStatsByCompany));
   const cases = caseRows.map(row => mapCase(row, accountRaw));
   const summary = buildSummary(leads, deals);
@@ -562,6 +605,7 @@ export async function getRevenueLedger({ projection = "full" } = {}) {
       ka: Boolean(c.meta?.ka),
     })),
     stages: DEAL_STAGES,
+    revenueTargets,
     summary,
   };
 }

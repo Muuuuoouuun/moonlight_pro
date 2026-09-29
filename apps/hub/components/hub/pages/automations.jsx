@@ -47,7 +47,7 @@ function useAutomationsLedger({ autoRefresh = false, refreshIntervalMs = 6000 } 
       if (data.source === 'supabase') {
         const nextState = {
           source: 'supabase',
-          syncState: 'live',
+          syncState: data.partial ? 'partial' : 'live',
           automations: Array.isArray(data.automations) ? data.automations : [],
           runs: Array.isArray(data.runs) ? data.runs : [],
           webhookEvents: Array.isArray(data.webhookEvents) ? data.webhookEvents : [],
@@ -81,10 +81,10 @@ function useAutomationsLedger({ autoRefresh = false, refreshIntervalMs = 6000 } 
 }
 
 export function AutomationsIndex({ onNavigate }) {
-  const automationLifecycle = (status) => ({ Active: 'active', Paused: 'waiting', Error: 'blocked' }[status] || 'queued');
+  const automationLifecycle = (status) => ({ Active: 'active', Paused: 'waiting', Disabled: 'cancelled', Draft: 'queued', Error: 'blocked' }[status] || 'queued');
   const { automations, summary, syncState, reload } = useAutomationsLedger();
   const rows = automations;
-  const activeCount = rows.filter(a => a.status === 'Active').length || summary?.activeAutomations || 0;
+  const activeCount = summary?.activeAutomations ?? 0;
   const runsTodayCount = summary?.runsToday ?? 0;
   const failuresTodayCount = summary?.failuresToday ?? 0;
   const webhooksTodayCount = summary?.webhookEventsToday ?? 0;
@@ -93,9 +93,9 @@ export function AutomationsIndex({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Automations</h2>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>자동화</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>{activeCount} active flows · {runsTodayCount} runs in last 24h</span>
+            <span>정기 운영 {activeCount}개 · 최근 24시간 실행 {runsTodayCount}건</span>
             <SyncBadge state={syncState} />
           </div>
         </div>
@@ -112,19 +112,19 @@ export function AutomationsIndex({ onNavigate }) {
         gap: 'var(--gap)',
       }}>
         <Card pad style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>활성 자동화 Flow</div>
-          <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--fg)', marginTop: 4 }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>활성 정기 운영</div>
+          <div className="stat" style={{ fontSize: 22, fontWeight: 600, color: 'var(--fg)', marginTop: 4 }}>
             {activeCount}
             <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>개</span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>
-            총 {rows.length}개 정의됨
+            총 {rows.length}개 · 중단된 기록 포함
           </div>
         </Card>
 
         <Card pad style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>오늘 총 실행</div>
-          <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--fg)', marginTop: 4 }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>최근 24시간 실행</div>
+          <div className="stat" style={{ fontSize: 22, fontWeight: 600, color: 'var(--fg)', marginTop: 4 }}>
             {runsTodayCount}
             <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
           </div>
@@ -135,10 +135,10 @@ export function AutomationsIndex({ onNavigate }) {
 
         <Card pad style={{
           padding: '12px 16px',
-          borderLeft: failuresTodayCount > 0 ? '2px solid var(--danger)' : undefined,
+          boxShadow: failuresTodayCount > 0 ? 'inset 1px 0 0 var(--danger-line)' : undefined,
         }}>
-          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>실행 실패 / 오류</div>
-          <div className="mono" style={{
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>과거 실행 실패</div>
+          <div className="stat" style={{
             fontSize: 22,
             fontWeight: 600,
             color: failuresTodayCount > 0 ? 'var(--danger)' : 'var(--fg)',
@@ -148,13 +148,13 @@ export function AutomationsIndex({ onNavigate }) {
             <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
           </div>
           <div style={{ fontSize: 11, color: failuresTodayCount > 0 ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}>
-            {failuresTodayCount > 0 ? 'Runs 탭에서 오류 확인' : '정상 작동 중'}
+            {failuresTodayCount > 0 ? 'Runs 탭에서 오류 확인' : '최근 24시간 실패 기록 없음'}
           </div>
         </Card>
 
         <Card pad style={{ padding: '12px 16px' }}>
           <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>웹훅 이벤트</div>
-          <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--moon-200)', marginTop: 4 }}>
+          <div className="stat" style={{ fontSize: 22, fontWeight: 600, color: 'var(--moon-200)', marginTop: 4 }}>
             {webhooksTodayCount}
             <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
           </div>
@@ -166,7 +166,7 @@ export function AutomationsIndex({ onNavigate }) {
 
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px 110px 130px 140px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span>Flow</span><span>Trigger</span><span>Status</span><span>Last run</span><span>Success (24h)</span><span style={{ textAlign: 'right' }} />
+          <span>자동화</span><span>실행 방식</span><span>상태</span><span>마지막 실행</span><span>성공 / 실행 (24h)</span><span style={{ textAlign: 'right' }} />
         </div>
         {automations.length === 0 && (
           <EmptyState
@@ -189,7 +189,7 @@ export function AutomationsIndex({ onNavigate }) {
               <span style={{ fontSize: 13 }}>{a.name}</span>
             </div>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.trigger}</span>
-            <LifecycleBadge state={automationLifecycle(a.status)} label={a.status} />
+            <LifecycleBadge state={automationLifecycle(a.status)} label={{ Active: '사용 중', Paused: '일시 중지', Disabled: '중단', Draft: '준비 중' }[a.status] || a.status} />
             <span style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>{a.lastRun}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {/* 성공률은 일상 지표 — 신호등 색 금지(§5.2), 수치 자체가 정보를 전달한다. */}
@@ -547,8 +547,8 @@ export function Runs({ onNavigate } = {}) {
         gap: 'var(--gap)',
       }}>
         <Card pad style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>오늘 실행</div>
-          <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--fg)', marginTop: 4 }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>최근 24시간 실행</div>
+          <div className="stat" style={{ fontSize: 22, fontWeight: 600, color: 'var(--fg)', marginTop: 4 }}>
             {summary?.runsToday ?? rows.length}
             <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
           </div>
@@ -559,10 +559,10 @@ export function Runs({ onNavigate } = {}) {
 
         <Card pad style={{
           padding: '12px 16px',
-          borderLeft: failureRuns.length > 0 ? '2px solid var(--danger)' : undefined,
+          boxShadow: failureRuns.length > 0 ? 'inset 1px 0 0 var(--danger-line)' : undefined,
         }}>
           <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>오류 / 실패</div>
-          <div className="mono" style={{
+          <div className="stat" style={{
             fontSize: 22,
             fontWeight: 600,
             color: failureRuns.length > 0 ? 'var(--danger)' : 'var(--fg)',
@@ -594,7 +594,7 @@ export function Runs({ onNavigate } = {}) {
 
         <Card pad style={{ padding: '12px 16px' }}>
           <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>평균 응답 속도</div>
-          <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--moon-200)', marginTop: 4 }}>
+          <div className="stat" style={{ fontSize: 22, fontWeight: 600, color: 'var(--moon-200)', marginTop: 4 }}>
             {avgLatency}
             <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 4, fontWeight: 400 }}>ms</span>
           </div>
@@ -692,7 +692,7 @@ export function Runs({ onNavigate } = {}) {
                   onClick={() => setSelectedRunId(isSelected ? null : r.id)}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '90px 24px 170px 65px 1fr 20px',
+                    gridTemplateColumns: '140px 24px 170px 65px 1fr 20px',
                     padding: '6px 8px',
                     borderRadius: 'var(--r-sm)',
                     borderBottom: i < displayRows.length - 1 && !isSelected ? '1px dashed var(--line-soft)' : 'none',
@@ -705,9 +705,11 @@ export function Runs({ onNavigate } = {}) {
                   onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--surface)'; }}
                   onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                 >
-                  <span style={{ color: 'var(--fg-faint)' }}>{r.at}</span>
+                  <span style={{ color: 'var(--fg-faint)' }} title={r.dateLabel}>
+                    {r.dateLabel || r.at}
+                  </span>
                   <span style={{ color: sIcon[r.status].c, textAlign: 'center' }}>{sIcon[r.status].t}</span>
-                  <span style={{ color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.flow}</span>
+                  <span style={{ color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.flow}{r.executionMode === 'retired' ? ' · 중단됨' : ''}</span>
                   <span style={{ color: 'var(--fg-faint)', textAlign: 'right' }}>{r.ms}ms</span>
                   <span style={{ color: r.status === 'err' ? 'var(--danger)' : 'var(--fg-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {r.detail}
@@ -749,7 +751,7 @@ export function Runs({ onNavigate } = {}) {
                         >
                           {copiedId === r.id ? '복사됨' : 'JSON 복사'}
                         </Button>
-                        {r.status === 'err' && onNavigate && (
+                        {r.status === 'err' && r.executionMode !== 'retired' && onNavigate && (
                           <Button
                             variant="secondary"
                             size="xs"

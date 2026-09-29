@@ -73,7 +73,7 @@ const turnSchema = (participants: string[], ownerId: string, round: OfficeDiscus
 // Each role sees the same bounded source material, never another role's hidden reasoning.
 // Position calls run in parallel; a single optional response round consumes those public
 // positions. The caller then makes ONE synthesis call within the existing shared deadline.
-export async function runOfficeDiscussion(request: DiscussionRequest, context: unknown, signal: AbortSignal, generate = generateGeminiText, onDiagnostic?: OfficeDiagnosticCallback) {
+export async function runOfficeDiscussion(request: DiscussionRequest, context: unknown, signal: AbortSignal, generate: typeof generateGeminiText = input => generateGeminiText({ ...input, usageSurface: input.usageSurface || 'office-council' }), onDiagnostic?: OfficeDiagnosticCallback) {
   const settings = readOfficeWithDiagnostic({ phase: 'position', category: 'contract', ownerId: request.ownerId }, onDiagnostic, () => parseOfficeDeliberation(request.deliberation, request.participants));
   const abort = new AbortController();
   const sharedSignal = AbortSignal.any([signal, abort.signal]);
@@ -115,12 +115,12 @@ export async function runOfficeDiscussion(request: DiscussionRequest, context: u
       const call = officeSourceReviewPrompt({ systemInstruction, prompt }, sourceCatalog);
       let response: Awaited<ReturnType<typeof generateGeminiText>>;
       try {
-        response = await generate({ ...call, ...(model ? { model } : {}), signal: sharedSignal, maxOutputTokens: 4096, thinkingLevel: kind === 'response' && settings.depth === 3 ? 'high' : 'low', responseJsonSchema: officeSourceReviewSchema(turnSchema(request.participants, ownerId, kind), sourceCatalog) });
+        response = await generate({ ...call, ...(model ? { model } : {}), signal: sharedSignal, maxOutputTokens: 4096, thinkingLevel: kind === 'response' && settings.depth === 3 ? 'high' : 'low', responseJsonSchema: officeSourceReviewSchema(turnSchema(request.participants, ownerId, kind), sourceCatalog), retries: 1 });
       } catch (error) { providerFailure(); throw error; }
       if (!response.ok) { providerFailure(); throw new OfficeDiscussionError(response.reason || 'provider-failed'); }
       checkDeadline();
       const parsed = read('json', () => JSON.parse(response.text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')));
-      const raw = read('source-review', () => readSourceReviewedOutput(parsed, request, context, sourceCatalog));
+      const raw = read('source-review', () => readSourceReviewedOutput(parsed, request, context, sourceCatalog).answer);
       // Reject model attempts to supply identities; attribution belongs to the call.
       const turn = read('contract', () => {
         if (raw.ownerId !== undefined || raw.round !== undefined) throw new OfficeDiscussionError('forged-attribution');

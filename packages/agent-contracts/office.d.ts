@@ -23,3 +23,11 @@ export function parseOfficeDeliberation(value?:unknown,participants?:readonly Of
 export function officeDiscussionRounds(settings:OfficeDeliberation):number;
 export function parseOfficeDiscussion(value:unknown,request:{mode:OfficeMode;participants:OfficeId[];deliberation?:OfficeDeliberation}):OfficeDiscussion;
 export function parseOfficeDiscussionTurn(value:unknown,context:{ownerId:OfficeId;round:OfficeDiscussionTurn['round'];participants:OfficeId[]}):OfficeDiscussionTurn;
+export type OfficeFailurePhase = 'draft'|'review'|'position'|'response'|'synthesis';
+export type OfficeFailureCategory = 'provider'|'json'|'source-review'|'contract'|'deadline'|'model-mismatch';
+export interface OfficeFailure {phase:OfficeFailurePhase;category:OfficeFailureCategory}
+export const OFFICE_FAILURE_PHASES:readonly OfficeFailurePhase[];
+export const OFFICE_FAILURE_CATEGORIES:readonly OfficeFailureCategory[];
+export const OFFICE_FAILURE_LABELS:Readonly<Record<OfficeFailureCategory|'unknown',string>>;
+export function parseOfficeFailure(value:unknown):OfficeFailure|null;
+export function officeFailureMessage(failure:{category?:string}|null|undefined):string;

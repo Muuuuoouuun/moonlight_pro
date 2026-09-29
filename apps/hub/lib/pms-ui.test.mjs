@@ -184,7 +184,9 @@ test("builds an edit draft from raw project fields and preserves its concurrency
     orgScope: "classin",
     summary: "",
     status: "blocked",
+    blocker: "",
     priority: "high",
+    genre: "",
     nextAction: "원본 다음 행동",
     dueAt: "2026-07-30",
     updatedAt: "2026-07-17T03:04:05.000Z",
@@ -233,13 +235,16 @@ test("builds a dirty-only project patch without materializing display fallbacks"
 });
 
 test("opening a table detail preserves the current view and filter query", () => {
-  const params = pmsUi.mergeProjectDetailQuery("view=table&scope=personal&keep=yes&new=project&task=old", "project-durable");
+  const params = pmsUi.mergeProjectDetailQuery("view=table&scope=personal&keep=yes&new=project&task=old&focus=overview&item=item-1&check=check-1", "project-durable");
   assert.equal(params.get("view"), "table");
   assert.equal(params.get("scope"), "personal");
   assert.equal(params.get("keep"), "yes");
   assert.equal(params.get("project"), "project-durable");
   assert.equal(params.has("new"), false);
   assert.equal(params.has("task"), false);
+  assert.equal(params.has("focus"), false);
+  assert.equal(params.has("item"), false);
+  assert.equal(params.has("check"), false);
 });
 
 test("merges the durable project selection into the canonical list query", () => {
@@ -390,7 +395,9 @@ test("rebases stale edit state while preserving only user-dirty fields", () => {
     orgScope: "classin",
     summary: "Operator goal",
     status: "blocked",
+    blocker: "",
     priority: "high",
+    genre: "",
     nextAction: "Operator action",
     dueAt: "2026-07-31",
     updatedAt: "2026-07-17T02:00:00.000Z",
@@ -402,6 +409,25 @@ test("rebases stale edit state while preserving only user-dirty fields", () => {
     summary: "Operator goal",
     nextAction: "Operator action",
   });
+});
+
+test("status edit carries a blocker into blocked and clears it on resume", () => {
+  const source = {
+    id: "project-1", name: "진행할 일", areaId: "area-1", statusKey: "active",
+    delivery: { deliverable: "결과", blocker: "", criteria: [] }, updatedAt: "v1",
+  };
+  const blocked = { ...pmsUi.buildProjectEditDraft(source), status: "blocked", blocker: "담당자 답변 대기" };
+  const pausePatch = pmsUi.buildProjectPatch(source, blocked);
+  assert.equal(pausePatch.status, "blocked");
+  assert.equal(pausePatch.delivery.blocker, "담당자 답변 대기");
+  assert.equal(pausePatch.delivery.deliverable, "결과");
+
+  const pausedSource = { ...source, statusKey: "blocked", delivery: pausePatch.delivery };
+  const resumed = { ...pmsUi.buildProjectEditDraft(pausedSource), status: "active", blocker: "" };
+  const resumePatch = pmsUi.buildProjectPatch(pausedSource, resumed);
+  assert.equal(resumePatch.status, "active");
+  assert.equal(resumePatch.delivery.blocker, "");
+  assert.equal(resumePatch.delivery.deliverable, "결과");
 });
 
 test("rotates only the project client id for conflict recovery", () => {
@@ -1087,4 +1113,11 @@ test("roadmap items carry their brand so a row can name it without a second look
 
   assert.equal(projection.items[0].brandKey, "sinabro");
   assert.equal(projection.items[0].brandName, "시나브로");
+});
+
+test("project edit patch carries only a changed genre, and an emptied genre clears it", () => {
+  const source = { id: "p1", name: "Launch", genre: "it", updatedAt: "2026-09-24T00:00:00Z" };
+  assert.deepEqual(pmsUi.buildProjectPatch(source, { ...pmsUi.buildProjectEditDraft(source) }), { id: "p1", expectedUpdatedAt: source.updatedAt });
+  assert.equal(pmsUi.buildProjectPatch(source, { ...pmsUi.buildProjectEditDraft(source), genre: "sales" }).genre, "sales");
+  assert.equal(pmsUi.buildProjectPatch(source, { ...pmsUi.buildProjectEditDraft(source), genre: "" }).genre, "");
 });

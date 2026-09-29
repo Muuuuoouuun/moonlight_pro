@@ -8,7 +8,6 @@ test('every decision emitted by the daily brief API has a destination in both ho
   const actions = [...route.matchAll(/action\("[^\"]+",\s*"([^\"]+)"/g)].map(match => match[1]);
   assert.ok(actions.length > 10, 'the producer action contract must be inspected');
   for (const action of actions) assert.ok(SIGNAL_TARGETS[action]?.startsWith('dashboard/'), `missing destination: ${action}`);
-  assert.equal(SIGNAL_TARGETS.queueApprovals, 'dashboard/agents/orders');
   assert.equal(SIGNAL_TARGETS.write, 'dashboard/content/studio');
   assert.equal(SIGNAL_TARGETS.review, 'dashboard/automations/runs');
   assert.equal(SIGNAL_TARGETS.decision, 'dashboard/work/decisions?new=decision');

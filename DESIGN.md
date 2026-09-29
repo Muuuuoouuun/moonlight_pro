@@ -1,6 +1,12 @@
 # Moonlight Design System
 
 > Current version — reflects the Moonlight Pro bundle now shipped in `apps/hub`.
+> Last reconciled against the code: 2026-09-23 (`10854ed`). Statements about the code below were re-measured on
+> that tree. Where the code and a §15 decision disagree, the gap is named in place — it is not silently resolved.
+> Scope: tokens, components, interaction, motion, accessibility. On product questions (priority, screens, IA) the
+> order in `docs/README.md` §1 wins — operator profile → personal operator OS deep design → latest topic spec →
+> this file. `docs/design-guidelines.md` is SUPERSEDED history; never cite it as a design source.
+> Status words follow the operator docs: `confirmed`/확정 is an operator decision, `recommended`/권장 is not yet one.
 > Existing token names below match `apps/hub/components/hub/hub-tokens.css` verbatim.
 > The old "Com_Moon" product name is retired from design copy. "Moonstone Command Deck" remains the working
 > visual direction (§4). Code namespaces (`COM_MOON_*` env vars, `@com-moon/*` packages) are unchanged.
@@ -31,7 +37,13 @@ If the product feels "busy", "crypto-like", or "default SaaS blue", we missed.
 1. **Show signal first.** The first screen answers "what matters right now?" in under 5 seconds.
 2. **Make action obvious.** Every section has a primary next step, not just density.
 3. **Close the loop.** Intake, ledger state, and operator action should feel like one system.
-4. **Respect mobile reality.** The founder checks numbers, captures ideas, and triggers workflows from a phone.
+4. **Respect mobile reality.** Every surface must stay usable on a phone: at 390×844 the first screen shows the
+   Quick Capture and the first actionable item, touch targets are 44px, and inputs are at least 16px (deep design §17·§20).
+   The current state of each floor is measured in §7 Responsive.
+   Read `mobile-first` (§2) as this quality floor. Phone-only features (push notifications, share sheet) are later
+   by operator decision (operator profile §4 "휴대폰 푸시 알림은 후순위"); `docs/README.md` §2 summarizes the
+   2026-07-13 interview more broadly as "모바일은 후순위". The two phrasings have not been reconciled by the
+   operator — do not use either one to drop the 390px floor or to reorder product priorities.
 5. **Restraint wins.** One accent, a small surface vocabulary, deliberate typography.
 
 ## 4. Visual Direction — Moonlight Pro
@@ -42,7 +54,10 @@ panel or a surgical console. Premium because it is calibrated, not decorated.
 **Reference blend:** Linear (dark operational density) × Apple Pro (cool silver machining) ×
 Bloomberg (command-deck rhythm: status / count / next action).
 
-- `apps/hub`: dark-native. Void surfaces, moonstone silver accents, hairline borders.
+- `apps/hub`: dark-native. Void surfaces, moonstone silver accents, hairline borders. "Dark-native" describes
+  where the palette was designed, not the daytime default: automatic mode shows light from 07:00 to 18:00 (§5),
+  and the Futura texture (§15 2026-09-18) was drawn on the light theme. Both themes are first-class;
+  check every change in both.
 - `apps/engine`: invisible by default, surfaced through health, status, run logs, and webhook outcomes.
 - `Content / Studio` surfaces: slightly lower density inside Hub so drafting and review have breathing room.
 
@@ -58,15 +73,20 @@ Bloomberg (command-deck rhythm: status / count / next action).
 The palette has **two theme modes** (automatic is the hub default: light from 07:00 to 18:00, dark overnight, using the device local clock) sharing one
 cool moonstone accent stack. The initial server render is light; after hydration the local clock
 resolves automatic mode. The top-bar theme control cycles automatic → light → dark → automatic;
-existing saved light/dark choices remain explicit overrides. Color does not classify product domains or ordinary workflow
+existing saved light/dark choices remain explicit overrides. The preference is stored as `mlp.theme`
+(`lib/hub-preferences.js`), and automatic mode re-checks the clock at the 07:00/18:00 boundary and on window
+focus/visibility change. Color does not classify product domains or ordinary workflow
 stages. It communicates only interaction emphasis and true urgency; certainty and lifecycle
 use line style, shape, icon, label, and luminance instead.
 
 ### 5.1 Canonical tokens (CSS custom properties)
 
-Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`.
+Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`. The dark block is also the
+base (`.hub-app, .hub-app[data-theme="dark"]`), so an element without `data-theme` renders dark; the light block
+overrides it.
 
 ```css
+.hub-app,
 .hub-app[data-theme="dark"] {
   /* Surfaces — void-black stack */
   --bg:            oklch(0.155 0.005 250);
@@ -112,9 +132,15 @@ Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`.
   --surface:    oklch(1 0 0);
   --surface-2:  oklch(0.965 0.004 250);
   --surface-3:  oklch(0.935 0.005 250);
+  --elevated:   oklch(1 0 0);
+  /* Text is set with literals here, not through the moon ramp */
   --fg:         oklch(0.20 0.008 250);
   --fg-muted:   oklch(0.42 0.008 250);
-  /* …moonstone + semantic stacks shift accordingly */
+  --fg-dim:     oklch(0.50 0.008 250);
+  --fg-faint:   oklch(0.55 0.007 250);
+  /* The moon ramp runs the other way (--moon-50 ≈ L 0.22 … --moon-700 ≈ L 0.88), so
+     "--moon-200 fill" stays high-contrast against the surface in both themes.
+     Semantic stacks shift accordingly — read hub-tokens.css for the exact values. */
 }
 ```
 
@@ -124,22 +150,44 @@ Also defined in `hub-tokens.css` (names verbatim, both themes):
 - Semantic hairlines and low-alpha fills: `--success-line` / `--warning-line` / `--danger-line` / `--info-line` /
   `--personal-line` / `--company-line` (left rails and chip outlines only) and the matching `--*-bg`
   (compact banners only, never full cards or rows).
-- Layering: `--z-project-detail: 61`, `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100`.
+- Layering: `--z-quick-memo: 60`, `--z-project-detail: 61`, `--z-navigation-overlay: 64`, `--z-navigation: 65`,
+  `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100` (defined once on the base block).
 - Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-pop`.
-- Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7).
-- Motion: `--dur-hover`, `--dur-enter`, `--dur-panel`, `--dur-overlay`, `--ease-hub`, `--stagger-step` (§9).
+- Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7). Call sites use `--r` for the middle step; the undefined `--r-md` references were removed (§15 2026-09-24).
+- Motion: `--dur-hover`, `--dur-enter`, `--dur-panel`, `--dur-overlay`, `--dur-celebrate`, `--dur-gauge`, `--ease-hub`, `--ease-gauge`, `--stagger-step` (§9).
+- Selected project gauge only (§5.2 exception): `--project-gauge-0/25/50/75/100` (hue 255 → 218 → 190 → 280 → 325,
+  i.e. blue → cyan → teal → violet → magenta), `--project-gauge-spark`, `--project-gauge-glow`, `--project-gauge-tip-line`.
+  No other surface may read these tokens.
+
+Futura layer tokens live in `apps/hub/components/hub/hub-futura.css`, also on `.hub-app` (so they resolve on every
+dashboard page, §7 Futura): spacing `--fx-page-pad: 48px`, `--fx-section-gap: 44px`, `--fx-card-pad: 26px`, `--fx-gap: 16px`;
+type `--fx-hero: 44px`, `--fx-hero-weight: 300`, `--fx-title: 27px`, `--fx-stat: 38px` (currently unused),
+`--fx-eyebrow: 11px`; `--fx-pill: 999px`; and the two-step `--fx-shadow` / `--fx-shadow-lift` (re-set for dark).
 
 ### 5.2 Usage rules
 
 - **Accent anchor:** `--accent` is the theme-stable Moonstone `#5274a8` alias. Accent means current position, selection,
   focus, or the single primary action. It never means a category.
-- **Primary CTA:** use `--moon-200` fill with `--moon-100` border. Keep one visually dominant
+- **Primary CTA:** use `--moon-200` fill with `--moon-100` border (`.hub-btn--primary`; hover one rung up to
+  `--moon-100` / `--moon-50`). Keep one visually dominant
   primary CTA per view; global and page-level create actions must not compete.
 - **Surface order:** `--bg` → `--surface` → `--surface-2` → `--surface-3` for nested elevation.
 - **Borders:** always `1px`. Never thicken. Use `--line-soft` for hairlines, `--line` for dividers,
   `--line-strong` only for pressed/emphasized states.
 - **Gradients:** reserved for the brand mark and the moonstone CTA rim. Never fill a hero, card,
-  or section background with a colored gradient.
+  or section background with a colored gradient. The Moonlight symbol uses a cool silver gradient in
+  `public/icon.svg` (§15 2026-09-24); the primary rim remains an inset shadow and is no longer overridden
+  by Futura's generic button shadow. The gauge track below is the only other sanctioned colored gradient. Neutral utility
+  gradients (`ScrollShadowX` edge fades to `--bg`, the `Placeholder`
+  surface stripe, a `currentColor` strike line) are mechanics, not decoration, and stay allowed. Other colored
+  gradients in the code are recorded debt, not precedent (§14 Known gaps 7): the completed / overachieved
+  `Progress` fills (moonstone gradient, infinite shimmer, gold end stop), Home's `.fx-progress--completed`
+  moonstone fill, and the `--moon-300 → #ffd166` fills in personal revenue and the revenue heatmap.
+- **Selected project progress gauge exception (2026-09-23):** its narrow track alone may use a
+  five-stop gradient (blue → cyan → teal → violet → magenta, `--project-gauge-*` in §5.1) across fixed
+  0/25/50/75/100% positions. Numeric scale marks and the evidence
+  label remain visible; the colors describe percentage position, not lifecycle, urgency, or actual
+  work velocity. Do not extend the gradient to the surrounding summary/card or other status surfaces.
 - **Danger red:** reserved for immediate-loss states: overdue/missed, a blocker that prevents the
   next action, persistence/sync/automation failure, urgent KA, and destructive actions. It lives on
   an icon, direct label, or 1px left rail. A low-alpha background is allowed only for a compact
@@ -236,9 +284,9 @@ Moonstone `확정하기` action. It does not turn the entire recommendation red 
 | -------- | --------------------- | ----------------------------------------------- |
 | UI Sans  | `SUIT Variable`       | Everything except numbers and display headings. Loaded via `@font-face` in `app/globals.css` (Korean + Latin). `Inter Tight` is an optional future upgrade, not currently shipped. |
 | Data Mono| `JetBrains Mono`      | IDs, timestamps, keybindings, diffs, and inline/instrument metrics (< 18px). **Bundled** as `JetBrainsMono-Variable.woff2` (Latin + digits; Hangul falls back to SUIT) via `@font-face` in `app/globals.css`. |
-| Display  | `SUIT Variable`       | Page-level moments only; avoid decorative display type in dense Hub surfaces. |
+| Display  | `SUIT Variable`       | Page-level moments only; avoid decorative display type in dense Hub surfaces. Two display scales are sanctioned (§11): the Daily Brief hero (`clamp(26px, 3.2vw, 32px)` / 700, inline in `daily-brief.jsx`) and the Futura scale (`--fx-hero` 44px / 300, 30px at ≤900px) used by `.fx-hero` and `.fx-page-title`. There is no `--font-display` token. |
 
-Fallbacks: `'Inter Tight', ui-sans-serif, system-ui, sans-serif` for sans, `'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace` for mono (JetBrains Mono is now bundled and first in `--font-mono`).
+Fallbacks: `'Inter Tight', ui-sans-serif, system-ui, sans-serif` for sans, `'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace` for mono (JetBrains Mono is now bundled and first in `--font-mono` inside `.hub-app`; outside the hub scope `globals.css` maps `--font-mono` to `@com-moon/ui`'s stack, which starts with IBM Plex Mono).
 
 Hub fonts are exactly two: SUIT Variable and JetBrains Mono. The former `MaruBuri` serif (five weights) and the
 `--font-display` alias were removed from `app/globals.css` and `public/fonts/` in the 2609 merge. Only the family
@@ -250,35 +298,103 @@ system serif. Do not introduce serif display type.
 - **Hybrid number rule.** Hero / display figures (KPI values, big metrics ≥ 18px) use `.stat` — SUIT **sans** with `tabular-nums lining-nums` and a touch of display tracking (`-0.015em`), for a premium, non-code read. Instrument data (IDs, timestamps, inline values, counts < 18px) uses `.mono` — bundled JetBrains Mono, `letter-spacing: 0`. Don't set large display numbers in mono; don't set IDs/timestamps in sans.
 - 데이터 숫자는 크기로 나눔: 큰 지표는 `.stat`(sans tabular), 인라인/계기 데이터는 `.mono`(JetBrains Mono) + `tabular-nums` (column-stable). 사인에 남는 소형 카운트는 `.num` 유틸.
 - 데이터 값의 최소 크기 12px — 10–11px은 라벨 / eyebrow 전용.
-- Section eyebrow is 11px, uppercase, `letter-spacing: 0.1em`, `color: var(--fg-dim)`.
+- Section eyebrow comes from the `SectionTitle` primitive: an `<h3>` at 11px, uppercase, `letter-spacing: 0.12em`,
+  `color: var(--fg-dim)`, weight 500. Inside Futura pages `.fx-eyebrow` uses 11px / `0.14em` / 500. This file
+  used to say `0.1em`, and many shell and page labels still do (`.hub-topbar__section`, `.daily-brief__card-head`,
+  `.fx-triage-kind`, several inline labels) — that spread is drift. §8 makes the primitive the source of truth:
+  reach for `SectionTitle` (or `.fx-eyebrow` in Futura scope) rather than restyling an eyebrow inline.
 - Never mix more than two families on one screen.
 
 ## 7. Layout System
 
 ### Widths
-- Public container: `min(1120px, calc(100vw - 32px))`
-- Hub container: `min(1440px, calc(100vw - 24px))` — but most hub pages use full width,
-  two-column grids, or sidebars; the container rule only applies to editorial pages.
+- Hub pages fill the shell's main pane; no hub page uses a shared container. The formulas this file used to
+  list survive only as unused `@com-moon/ui` tokens (`--cm-container-hub: min(1440px, calc(100vw - 24px))`,
+  `--cm-container-public: min(1120px, calc(100vw - 32px))` in `packages/ui/tokens.css`, loaded through
+  `globals.css`). Pages that cap their width do it with a plain `max-width`, and the values have drifted: 1440px
+  (personal revenue), 1280px (revenue, overview), 1120px (inquiries, content performance), 1100px (automations,
+  follow-ups, sheets sync, settings, project timeline). The public web is detached (§1, §12).
+- The expanded sidebar is 232px by default and resizable from 200 to 360px (`mlp.sidebarWidth`); collapsed it is
+  a 56px icon rail (`mlp.sidebarCollapsed`). Both are desktop-only (§15 2026-09-22, 2026-09-23).
+- Shell navigation is one level deep: 9 primary + 2 utility anchors in the sidebar (`hub-nav.js`, pinned by
+  `hub-nav.test.mjs`; 10 + 2 until 2026-09-24, when the 고객 연락 anchor became 영업·매출's first tab, §15). An
+  anchor's second-level destinations render as the top-bar tab row (`topNavigationForRoute`), not as a sidebar
+  accordion — since 2026-08-04 (`5a3d506`), guarded by the test "sidebar is one level deep and the top bar owns
+  contextual tabs". Pages in `PAGE_OWNS_TABS` draw those tabs in their own header instead.
+- A route that left the tab row but stays routable lights the nearest tab through the anchor's role table and
+  keeps its own title in the top bar (`routeTabs`/`routeLabels`, today only 영업·매출's `REVENUE_ROUTE_TABS`):
+  Leads/Accounts → 고객, 개요/히트맵 → 거래, Cases → no tab but still titled. An exact tab path always wins over a
+  role alias (개인 스코프 개요 = 현금 흐름).
 
 ### Spacing scale
-`4, 8, 12, 16, 24, 32, 48, 64, 96`
+`4, 8, 12, 16, 24, 32, 48, 64, 96` — Futura pages add `44` and `26` as layer tokens only (below).
 
 ### Density (fixed)
-The hub ships one fixed density — no user-facing toggle. Values: `row-h: 36`, `pad-y: 10`,
-`pad-x: 14`, `gap: 12`, `section-gap: 24`, `card-pad: 20`.
+The hub ships one fixed density — no user-facing toggle. Values (CSS custom properties on `.hub-app` in
+`hub-tokens.css`): `--row-h: 36px`, `--pad-y: 10px`, `--pad-x: 14px`, `--gap: 12px`, `--section-gap: 24px`,
+`--card-pad: 20px`. Small screens tighten two of them: ≤900px `--section-gap`/`--card-pad` 16px, ≤560px 12px/14px.
 
 ### Radius
 - Micro elements (chips, checkbox faces): `4px` (`--r-xs`)
-- Small controls: `6px` (`--r-sm`)
+- Small controls: `6px` (`--r-sm`) — what `Button`, `IconButton` and the `SegmentedControl` track render today
+  (inline in the primitive; segment buttons are 4–5px). `Input` gets `--r-sm` from its `.hub-field` wrapper;
+  `TextField`/`TextAreaField` get it from `.hub-input`.
 - Popover / menu containers: `10px` (`--r`) — text inputs use `--r-sm`
-- Standard cards: `14px` (`--r-lg`)
+- Standard cards: `14px` (`--r-lg`) — `Card` keeps a 1px `--line-soft` border plus `--shadow-card`
 - Feature panels: `20px` (`--r-xl`)
-- Floating pills / buttons: `999px`
+- Pills: `999px` — `Badge`, `select.hub-input` (`SelectField`), and `.fx-pill-btn` inside Futura pages
+
+**Open gap with §15 2026-09-19 (b), confirmed.** That decision gives `Button`, `IconButton`, `Input` and
+`SegmentedControl` a pill radius and lets `Card` separate by shadow instead of border. The code does not render
+it: `hub-futura.css` carries the pill/shadow rules, but the primitives set `borderRadius: 'var(--r-sm)'` inline
+(which beats any class rule, §8.1 Hover), `button-hover.test.mjs` pins that inline value, and the `.hub-card`
+selector matches no element. 2026-09-21 later narrowed inputs back to `--r-sm` except `select`. Until the
+operator re-confirms the scope and the primitive itself changes, pages must not restyle control radius locally —
+use the primitive as it renders.
 
 Writing fields (titles, notes, and multi-line content) keep `--r-sm` (6px), including
 inside the Futura shell. The pill treatment applies to selection controls, not writing
 surfaces. Shared `TextAreaField` controls and quick memo use 1.7 line-height and
 12px vertical padding; the Studio body uses 16px padding and 1.8 line-height.
+
+### Futura texture layer
+`hub-app.jsx` imports `hub-futura.css` after `hub-tokens.css`, so it reaches every page `HubApp` mounts (all of
+`/dashboard`; `/login` loads only `hub-tokens.css`). It works at two depths. (Its own header comment still says it
+applies only inside `.hub-futura`; that is true of the page texture, not the shell block.)
+
+| Depth | Where | What it changes | Status |
+| --- | --- | --- | --- |
+| Shell + shared components | every dashboard page | renders: sidebar surface `--surface-2`; nav rows 34px/13px with the current row as a `--surface` pill + `--fx-shadow` (icon + label, §15 2026-09-23); `.fx-shell-card` search and user card; `--fx-shadow` on non-ghost `.hub-btn`; pill `select`; `--fx-shadow-lift` on raw `.hub-card-link:hover` buttons. Declared but beaten by inline styles or unmatched: pill `.hub-btn`/`.hub-iconbtn`/`.hub-seg`, shadow `.hub-card` (§7 Radius) | confirmed 2026-09-19 · icons 2026-09-23 |
+| Page texture | inside `.hub-futura` only | 48/44/26 spacing, 44px/300 display title (§11), `.fx-card` shadow surfaces, `.fx-pill-btn`, triage and timeline blocks | `dashboard/home` confirmed 2026-09-18 · `work/decisions` confirmed 2026-09-19 · `work/rhythm` **recommended** 2026-09-23 · 영업·매출 `revenue/followups`·`revenue/customers`·`revenue/deals` confirmed 2026-09-24 (being implemented) |
+
+Adding `.hub-futura` to any other page is a separate decision (§15 2026-09-18) — every other page keeps §7
+density and §8.1 hairlines. That includes the rest of 영업·매출: the 문의 tab and the screens that left its tab
+row (개요·히트맵·Leads·Accounts·Cases, ClassIn aliases, 세그먼트) stay on §7 density until decided separately.
+Only `work/decisions` owns its own tabs (`PAGE_OWNS_TABS`); Rhythm and the three 영업·매출 pages keep the
+top-bar tab row (the approved mockups draw it there).
+`dashboard/agents/chat`의 멘토 서가는 운영자 승인 목업에 따라 제목 한 곳만 42px 디스플레이로 읽는다.
+이 예외는 `.hub-futura` 페이지 텍스처를 그 경로나 다른 AI 화면으로 확장하지 않는다(§15 2026-09-24).
+
+### Responsive
+The hub has no Tailwind. CSS is desktop-default with `max-width` step-downs in `hub-tokens.css`, `globals.css`,
+`hub-futura.css` and page stylesheets. Measured breakpoints (2026-09-23):
+
+| Width | Role |
+| --- | --- |
+| `≤900px` | **Shell breakpoint** (`MOBILE_NAV_QUERY` in `hub-app.jsx`): the sidebar becomes an overlay drawer (`min(84vw, 304px)`), the collapsed rail and width handle disappear, density tightens, Futura titles drop to 30px |
+| `≤720px` or `pointer: coarse` | Touch floor: `button` and `[role="button"]` ≥44px (bare `role="checkbox"` exempt, a labelled `.hub-checkbox-row` keeps 44px), inputs ≥44px, `.hub-input` 48px, `textarea.hub-input` 112px |
+| `≤600px` | Page and drawer step-downs (most common page query); `Drawer presentation="compact"` becomes a bottom sheet |
+| `≤560px` | `--section-gap` 12px, `--card-pad` 14px |
+
+Other widths are drift: 768 and 960 also sit in the shared `hub-tokens.css`/`globals.css`, and 640, 700, 1200
+plus single uses live in page stylesheets. Unifying them is an open TODO, not a rule (`TODOS.md`). Reusing the
+four widths above for new queries is **recommended**, not decided.
+
+Mobile floor status against deep design §17 (390×844):
+- Met: 44px touch floor (above); segmented controls stay horizontal on phones (no forced `flex-basis: 100%`).
+- Met: inputs ≥16px at ≤720px or coarse pointer through the shared mobile rule; desktop `.hub-input` remains 13.5px.
+- Not met: Calendar should default to an agenda on phones. `work.jsx` Calendar opens in `week` with no mobile
+  branch. Agenda-style lists exist elsewhere (`WeekAgenda` on 내 작업, the 오늘 일정 list on Daily Brief), not in Calendar.
 
 ## 8. Component Language
 
@@ -290,21 +406,36 @@ truth. Do not recreate them ad-hoc inside pages.
 - `Dot`, `Kbd`, `Avatar`, `Divider`
 - `Card` (padded / unpadded), `SectionTitle`, `Tabs`
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
-- `Input`, `Checkbox`, `Progress`, `Sparkline`, `Placeholder`, `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
-- Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` (contract in `form-fields.test.mjs`)
-- `SegmentedControl`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
+- `Input`, `Checkbox`, `Progress`, `ProgressRing`, `Sparkline`, `Placeholder` (0 call sites), `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
+- Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` — defined in
+  `hub-primitives.jsx` itself (there is no `form-fields.jsx`); the contract lives in `form-fields.test.mjs`
+- `SegmentedControl`, `ChipToggle`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
+- Toast: `useToast` / `ToastProvider` (re-exported from `hub-toast.jsx`, provided once in `hub-app.jsx`). One
+  `aria-live="polite"` viewport; danger items get `role="alert"`, others `role="status"`; tones neutral (bell) ·
+  success (check glyph in `--moon-200`, never green) · danger (x in `--danger`); optional ghost-`Button` action; at
+  most three visible. Use it for save/undo receipts instead of ad-hoc
+  banners. A toast never announces `완료` for a write that was not persisted (§8.1 Save envelope).
 - `Drawer`, `EditDrawer` — the only overlay / edit surfaces (§8.1)
   - `Drawer presentation="compact"` is the short capture variant: centered on desktop, bottom sheet at ≤600px, with the same ESC and focus handling. Default `side` remains the edit drawer. New task capture uses `compact`; optional description/next-action fields are disclosed on demand. Compact capture uses a 6px backdrop blur. Callers preserve drafts and guard dismissal while saving.
 - State primitives `AttentionRail`, `CertaintyBadge`, `LifecycleBadge`, `TruthBadge` (§8.2). `SyncBadge`
   survives only as a compatibility wrapper over `TruthBadge`; new call sites use `TruthBadge` directly.
 
+**Shared composites outside the primitives file** (reuse before rebuilding)
+- `BrandMark`, `ProjectProgressGauge`, `ProjectStatusBadge` — `pages/project-pms-components.jsx`.
+  `BrandIcon` (`brand-icons.jsx`) is used by the brand directory, Overview, Revenue and PMS brand references.
+- `StreakMark` — `burning-streak.jsx` (neutral ascending bars, §15 2026-09-22)
+- `CalendarOutcome` (`calendar-outcome.jsx`, compact mode on Home), `ContactRecordForm` / `ContactRecordDrawer`
+  (`contact-record-form.jsx`), `GlobalQuickCapture` (`quick-capture.jsx`), `GoalLinks` (`goal-links.jsx`)
+- `SortHead` — exported from `pages/revenue.jsx`, reused by `customers.jsx` (§8.1 Table sort)
+
 **Hub-specific composites** (page-level, see `components/hub/pages/*`)
 - Signal card (Daily Brief)
 - Metric card w/ sparkline
-- Brand-organized project tree (PMS)
+- Brand-organized project tree (PMS `tree` view, `buildContainerTree`)
 - Deal kanban
-- Flow canvas (drag-pan, node kinds: trigger · logic · ai · action)
-- Key / webhook copy rows (masked, reveal, copy button)
+- Key / webhook copy rows (`CopyRow` in `evolution-settings.jsx`)
+- Not shipped: the Flow canvas listed here earlier. `dashboard/automations/flows` renders an `EmptyState`
+  ("등록된 Flow가 없습니다") and the sidebar row is `deferred`; there is no drag-pan canvas or node kinds in code.
 
 **Behavior rules**
 - Buttons have clear primary / secondary / ghost hierarchy.
@@ -314,22 +445,34 @@ truth. Do not recreate them ad-hoc inside pages.
 
 ### 8.1 Interaction Conventions (표준 동작 — 새 서피스는 이 계약을 따른다)
 
-**Primitives first.** 페이지 안에서 pill 토글·sync 라벨·빈 상태·체크박스를 다시 만들지 않는다.
-`SegmentedControl`(필터/뷰 토글), `SyncBadge`(live·mock·preview·syncing·error),
-`EmptyState`(+ `action` CTA), `Checkbox`(`label` prop 필수), `EditDrawer`가 canonical.
-인라인 복제는 이미 두 번 드리프트 사고를 냈다(2026-07 design-review FINDING-002/003).
+**Primitives first.** 페이지 안에서 pill 토글·sync 라벨·빈 상태·체크박스·로딩 자리를 다시 만들지 않는다.
+`SegmentedControl`(필터/뷰 토글), `TruthBadge`(live·partial·syncing·loading·preview·error — 새 호출처),
+`EmptyState`(+ `action` CTA), `Checkbox`(`label` prop 필수), `Skeleton`(로딩), `Drawer`/`EditDrawer`가 canonical.
+`SyncBadge`는 같은 상태를 받는 `TruthBadge` 호환 래퍼일 뿐이다(§8.2). `mock` 상태는 없다 — 목업 데이터를 코드에
+두지 않으므로(CLAUDE.md, `scripts/no-mock-data.test.mjs`) 표시할 일도 없고, 모르는 값은 `읽기 실패`(danger)로
+떨어진다. 인라인 복제는 이미 두 번 드리프트 사고를 냈다(2026-07 design-review FINDING-002/003).
 
 **생성(Create).**
 - 모든 리스트 서피스는 헤더에 primary 생성 버튼 + `<Kbd>N</Kbd>` 힌트.
-- 페이지 레벨 `N` 단축키: 드로어 닫힘 + 포커스가 input/textarea/select/contentEditable 밖일 때만.
+- 페이지 레벨 `N` 단축키: 드로어 닫힘 + 포커스가 input/textarea/select/contentEditable 밖일 때만. 새 페이지는
+  손으로 쓰지 말고 `use-crm-keyboard.js`의 `usePageCreateHotkey`(또는 CRM 목록은 `useCrmKeyboard`의 `onNew`)를 쓴다.
+  내 작업은 인라인 빠른 추가 칸이 생성 표면이라 `N`이 그 칸으로 포커스한다.
+- 전역 단축키(`hub-app.jsx`): `C` 어디서든 빠른 입력(`GlobalQuickCapture`, compact Drawer — 2026-09-20)과 `?` 단축키
+  치트시트(`ShortcutOverlay`)는 입력 요소 안·팔레트 열림이면 무시한다. `⌘K` 팔레트와 `⌘J` AI 어드바이저는 수정키 조합이라
+  입력 중에도 동작한다. 페이지 단축키는 이 네 키와 겹치지 않게 고른다.
 - 빈 상태(워크스페이스 빈 화면·검색 0건)는 반드시 생성 CTA 또는 "검색 지우기"를 포함.
 - 칸반 컬럼 하단에 점선 "+ 추가" — 클릭하면 **그 컬럼의 stage로 시드**된 레코드가 생성되고 드로어가 즉시 열린다.
 
 **편집(Edit).**
 - 행/카드 클릭 → `EditDrawer`. `role="button" tabIndex={0}` + Enter/Space 핸들러 동반.
 - 닫기: ESC + 오버레이 클릭 + 닫기 버튼 3중 지원 (Drawer primitive가 처리).
-- 저장은 `{ ok, status }` 봉투 — `saved`(영속) / `preview`(백엔드 미설정, 낙관적 로컬 행 유지) / `error`.
-- 딥링크: `?lead=<id>` `?deal=<id>`는 기록 로드 후 해당 드로어를 1회만 열고 쿼리를 소거한다.
+- 저장은 `{ ok, status }` 봉투(Save envelope). 어휘는 심화 설계 §16과 같다 — 성공 `saved`(영속) · `accepted` ·
+  `duplicate`(이미 저장됨, 같은 요청 재시도), 실패 `failed` · `conflict`(다른 곳에서 먼저 바뀜 — 비교·선택 제공) ·
+  `degraded`. 여러 라우트가 쓰는 `error`(읽기 실패 봉투와 같은 값)도 실패로 읽는다. `preview`는 백엔드 미설정이라 **저장되지 않았다**는 뜻이다(`saved: false`). 로컬 행을 남기더라도
+  `Preview · 연결 필요` 표시를 붙이고 `완료`·`저장됨` 문구나 성공 토스트를 쓰지 않는다(심화 설계 §16 금지 항목).
+- 딥링크: `?lead=<id>` `?deal=<id>`는 기록 로드 후 해당 드로어를 1회만 열고 쿼리를 소거한다. 페이지별 딥링크는
+  이 밖에도 `?case=`·`?customer=`·`?project=`/`?task=`/`?item=`·`?memo=`·`?inquiry=`·`?goal=`·`?discovery=` 등이 있다
+  (각 동작은 해당 페이지가 정본). 새 딥링크는 "기록 로드 후 1회 열기 + 소거"를 기본으로 한다.
 
 **테이블 정렬.**
 - 헤더 클릭: asc → desc → 해제(기록 순서) 3단 토글, 방향 캐럿은 비활성일 때도 폭 예약.
@@ -371,6 +514,16 @@ composable primitives so pages declare semantics and the primitive owns presenta
 </AttentionRail>
 ```
 
+Adoption measured 2026-09-23 (JSX call sites, tests excluded):
+
+| Primitive | Call sites | Note |
+| --- | --- | --- |
+| `TruthBadge` | 54 in 31 files | direct use, not counting `SyncBadge`'s own delegation; new code starts here |
+| `SyncBadge` | 35 in 16 page files | compatibility wrapper, same states; migrate when the file is touched |
+| `CertaintyBadge` | 11 in 7 files | Daily Brief, Decisions, Brands, Office, Revenue, Customers, personal revenue |
+| `LifecycleBadge` | 12 in 8 files | incl. `CalendarOutcome`, Discovery, Codex jobs, PMS status |
+| `AttentionRail` | 0 | the example above is illustrative. Rails stay the §8.1 inline 1px `box-shadow` (§15 2026-08-05) and `state-usage.test.mjs` asserts the PMS timeline does not adopt it |
+
 Implementation rules:
 
 - The props above are semantic enums, not color names.
@@ -394,15 +547,22 @@ Deliberate, never playful. Since 2026-07-29 the only sanctioned durations and cu
 | `--dur-enter` | `200ms` | page reveal (`.fade-up`), card cascade (`.stagger-up`), list exits |
 | `--dur-panel` | `180ms` | drawer slide-in (`hubDrawerIn`), project detail panel |
 | `--dur-overlay` | `160ms` | overlay fade (`hubFadeIn`), ⌘K palette overlay |
+| `--dur-celebrate` | `420ms` | one-shot completion moment only — Rhythm check pop/ripple and the day ring closing (`rhythm-today.css`). Never loops |
+| `--dur-gauge` | `1080ms` | selected project evidence gauge reveal and one-shot sparkle |
 | `--ease-hub` | `cubic-bezier(0.2, 0.7, 0.3, 1)` | every entrance / exit curve |
-| `--stagger-step` | `45ms` | per-child delay in `.stagger-up`, capped after the seventh child |
+| `--ease-gauge` | `cubic-bezier(0.58, 0.06, 0.22, 1)` | gauge-only slow start, faster middle, settled end |
+| `--stagger-step` | `45ms` | per-child delay in `.stagger-up`; the delay grows through the 8th child (7 steps, 315ms) and stays there for every later child |
 
 - Page reveal: `.fade-up` (opacity + 4px translateY). Card lists cascade with `.stagger-up`; do not hand-roll delays.
 - Hover travel: no more than `4px`.
 - Compact capture: enter/exit and disclosure use `--dur-panel`, backdrop enters with `--dur-overlay`. A successful save closes only after the server acknowledgement; reduced-motion skips the exit delay.
 - Live indicators: `mlMoonPulse 1.4s ease-in-out infinite` — one duration everywhere. Loading skeletons (`Skeleton`) reuse it as-is, with no per-line phase offset (a wave reads as playful).
-- `motion.test.mjs` sweeps every hub stylesheet and page for raw `ms` literals and inline `cubic-bezier(` inside transition/animation values — the §9 token rule is enforced, not advisory (2026-09-16).
+- `motion.test.mjs` sweeps every hub stylesheet and page for raw `ms` **and `s`** literals and inline `cubic-bezier(` inside transition/animation values — the §9 token rule is enforced, not advisory (2026-09-16, `s` added 2026-09-22). Allowed without a token: `mlMoonPulse 1.4s` and `0s`.
+- Recorded debt, not precedent: the completed `Progress` bar loops `hubProgressShimmer 2.4s ease-in-out infinite`, and `hubSparklePop` still appears once with an inline `0.8s` next to a gold glyph (`overview.jsx`). The motion guard exempts exactly these two names until the celebration question (Q134, `2026-09-21-home-screen-design-development.md`) is decided. New work uses `--dur-celebrate` one-shots instead.
 - Urgent/critical indicators do not loop, blink, or pulse. Red already carries sufficient emphasis.
+- The selected project gauge may replay its fill and one sparkle when the selected project or its
+  displayed percentage changes. This is visual acceleration, not a claim that work velocity rose.
+  No continuous shimmer; reduced motion renders the final value without sparkle.
 - Certainty changes may transition dashed → solid and marker → verified over `--dur-overlay`…`--dur-enter`;
   do not add a green celebration state.
 
@@ -418,7 +578,10 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 
 ## 11. Accessibility And Quality Bar
 
-- Touch targets: minimum 44px (모바일 미디어쿼리가 button에 44px 플로어를 강제 — 예외는 `role="checkbox"`뿐).
+- Touch targets: minimum 44px. `hub-tokens.css`의 `(pointer: coarse), (max-width: 720px)` 쿼리가 `button`·`[role="button"]`·
+  입력에 44px 플로어를 강제한다 — 예외는 라벨 없는 `role="checkbox"`뿐이고, 글자를 가진 `.hub-checkbox-row`는 44px를 유지한다.
+  이 쿼리는 셸 기준점(900px)과 다르다(§7 Responsive).
+- Mobile inputs: 16px 이상(심화 설계 §17, iOS 확대 방지). 공통 `(pointer: coarse), (max-width: 720px)` 규칙이 입력 컴포넌트와 인라인 작은 글자 선언보다 우선해 이 플로어를 보장한다.
 - Text contrast: WCAG AA minimum.
 - Keyboard navigation works for all core flows (⌘K palette is the fast path).
 - Focus uses `outline: 1px solid var(--moon-300)` with 2px offset — never relies on browser defaults. A focus rule changes only the outline; it never sets `border-radius` (the ring follows the element's own radius — see §15 2026-09-16).
@@ -431,11 +594,20 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 - 클릭 가능한 `<div>`는 `role="button"` + `tabIndex={0}` + Enter/Space 핸들러 3종 세트 없이는 금지.
   펼침/접힘 토글에는 `aria-expanded`.
 - `Checkbox`는 `label` prop으로 스크린리더 이름을 전달한다 (행 제목 등).
-- 각 페이지는 정확히 하나의 `<h2>` 페이지 타이틀(20px/500)을 메인 페인에 가진다 — 브레드크럼만으로 대체 금지. 카브아웃: Daily Brief 히어로(`오늘의 실행`)만 §6 Display 스케일(27–32px/700)을 쓴다 — 첫 화면의 페이지 레벨 모먼트 1곳으로 한정하며, 다른 페이지로 확장 금지.
+- 각 페이지는 정확히 하나의 `<h2>` 페이지 타이틀(20px/500)을 메인 페인에 가진다 — 브레드크럼만으로 대체 금지. 공용
+  PageHeader 프리미티브는 없다: 대부분 인라인 `style={{ margin: 0, fontSize: 20, fontWeight: 500 }}`이거나 페이지 CSS가 같은
+  값을 준다. 승인된 카브아웃은 두 가지다(개인 매출 헤더의 `clamp(22px, 2.5vw, 28px)` h2는 승인되지 않은 이탈 — §14 Known gaps 12).
+  - Daily Brief 히어로(`오늘의 실행`): §6 Display 스케일 `clamp(26px, 3.2vw, 32px)`/700 — 첫 화면의 페이지 레벨 모먼트 1곳.
+  - Futura 페이지(§7 Futura): `<h2 className="fx-hero">`/`"fx-page-title">` 44px/300(≤900px 30px) — `dashboard/home`(확정
+    2026-09-18)·`work/decisions`(확정 2026-09-19)·`work/rhythm`(권장 2026-09-23)·영업·매출의 `revenue/followups`(오늘 연락)·
+    `revenue/customers`(고객)·`revenue/deals`(거래)(확정 2026-09-24, 구현 중).
+  그 밖의 페이지로 확장하지 않는다 — 같은 영업·매출 안의 문의 탭과 탭에서 내려온 화면도 20px/500 그대로다.
 
 ## 12. Public vs Hub Rules
 
 **Public** — story first. Fewer elements per fold. Bigger headings. Strong proof + CTA rhythm.
+_Dormant: this workspace has no public web app (`apps/` holds only `hub` and the API-only `engine`). Keep the
+rule for when a public surface returns; it does not apply to anything shipped today._
 
 **Hub** — signal first. Compact layout. Fast scan pattern. Every metric paired with status or next action.
 
@@ -462,15 +634,19 @@ Do not ship:
 | Concern                            | Source of truth                                              |
 | ---------------------------------- | ------------------------------------------------------------ |
 | Tokens                             | `apps/hub/components/hub/hub-tokens.css`                     |
-| Futura 텍스처 레이어 (Home 전용)   | `apps/hub/components/hub/hub-futura.css`                     |
+| Futura 텍스처 레이어 (셸·공용 컴포넌트 전역 + `.hub-futura` 페이지 — 홈·결정·리듬 + 2026-09-24 영업·매출 3곳, §7) | `apps/hub/components/hub/hub-futura.css` |
 | Icons                              | `apps/hub/components/hub/hub-icons.jsx`                      |
-| Primitives                         | `apps/hub/components/hub/hub-primitives.jsx`                 |
+| Brand and app icons | `apps/hub/public/icon.svg` → `npm run icons:generate` (`scripts/generate-brand-icons.mjs`) |
+| Primitives (incl. form fields)     | `apps/hub/components/hub/hub-primitives.jsx`                 |
+| Drawer / toast styles              | `apps/hub/components/hub/hub-{compact-drawer,edit-drawer,toast}.css`, `hub-toast.jsx` |
+| Theme mode + sidebar width/collapse preferences | `apps/hub/lib/hub-preferences.js` (`mlp.*` keys)  |
+| Keyboard (global `C` `⌘K` `?` `⌘J`; page `N`) | `hub-app.jsx`; `apps/hub/components/hub/use-crm-keyboard.js` |
 | ⌘K catalog (`NAV_TREE`, `LEGACY_REDIRECTS`) | `apps/hub/components/hub/hub-data.js`                 |
-| Sidebar anchors (visible IA)       | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs`    |
+| Sidebar anchors (visible IA — 9 primary + 2 utility) and tab role aliases (`REVENUE_ROUTE_TABS`) | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs` |
 | Workspace membership (`org_scope`) | `apps/hub/components/hub/workspace-map.js`                   |
 | Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette}.jsx` |
 | Pages + `PAGE_MAP`                 | `apps/hub/components/hub/pages/*.jsx`, `hub-app.jsx`         |
-| Route mount                        | `apps/hub/app/dashboard/[[...path]]/page.jsx`; `app/dashboard/content/{studio,queue}/page.jsx` mount the same `HubApp`, `content/publish` redirects to `queue` |
+| Route mount                        | `apps/hub/app/dashboard/layout.jsx` mounts `HubApp` once; `dashboard/[[...path]]` and `content/{studio,queue}` pages render `null`; `content/publish` redirects to `queue`. `lazyPage` keeps `ssr: false` (CLAUDE.md). The desktop quick-capture widget page `app/widget/{layout,page}.jsx` (+ `widget.css`, `components/hub/quick-widget.jsx`) sits outside `/dashboard`, so `HubApp` does not mount; it stays behind the session gate |
 
 Build order when adding a new surface:
 1. Confirm tokens cover every color / size needed — do not hardcode hex values.
@@ -479,6 +655,42 @@ Build order when adding a new surface:
 4. Register the route in `NAV_TREE` (`hub-data.js`) so ⌘K can reach it. That alone does not add a sidebar
    row: to surface it in the sidebar, add or extend an anchor in `hub-nav.js` and update `hub-nav.test.mjs`.
    Workspace-scoped pages resolve membership through `workspace-map.js`, never a hardcoded brand list.
+
+**Guards** — these tests read the code on every `npm test` and turn the rules above into failures:
+
+| Rule | Test (`apps/hub/components/hub/` unless noted) |
+| --- | --- |
+| §4 warm gold/amber literals only (hex/rgb) — per-file ratchet, brand content log exempt. Other raw colors are not machine-checked | `palette.test.mjs` |
+| §9 motion tokens, raw `ms`/`s`, inline `cubic-bezier(` | `motion.test.mjs` |
+| §11 focus ring 1px, no `border-radius` in `:focus-visible` | `focus-ring.test.mjs` |
+| §8.1 `Button` hover/chrome in CSS, 1px token borders, inline radius | `button-hover.test.mjs` |
+| §8.1 `SegmentedControl` chrome in CSS | `segmented-control.test.mjs` |
+| §8.2/§5.3 state primitives, truth labels, rails, lifecycle danger | `state-primitives.test.mjs`, `state-usage.test.mjs` |
+| §11 `Skeleton` contract | `skeleton.test.mjs` |
+| Form field contract | `form-fields.test.mjs` |
+| Sidebar anchors (9 + 2) and icons in both states; 영업·매출 4 tabs + legacy route aliases; width handle | `hub-nav.test.mjs`; `sidebar-resizer.test.mjs` |
+| Toast a11y and tokens | `hub-toast.test.mjs` |
+| No mock/demo work records in code | `scripts/no-mock-data.test.mjs` |
+
+**Known gaps (measured 2026-09-23 — debt or open questions, never precedent)**
+
+1. §15 2026-09-19 (b) pill controls and shadow-separated cards are confirmed but not rendered (§7 Radius).
+2. `hub-btn--subtle` (`pages/agents.jsx`) has no CSS rule.
+3. Rails outside §8.1: `inset 2px 0 0 var(--moon-500)` in `floating-mentor-widget.jsx` and `pages/agents.jsx`;
+   gold `border-left: 2px solid #ffd166` in `hub-tokens.css` (personal revenue) and `pages/revenue-heatmap.jsx`.
+4. Style-mutating JS hover still in `hub-topbar.jsx` and `pages/automations.jsx` (§8.1 Hover).
+5. Celebration vocabulary pending Q134: completed/overachieved `Progress` gradient, shimmer loop and gold stop,
+   Home's `.fx-progress--completed` gradient, the gold-ended fills in `.personal-revenue-progress-fill.is-all-confirmed`
+   and `pages/revenue-heatmap.jsx`, and `hubSparklePop`; the palette ratchet still carries warm literals in
+   `celebration-fx.jsx`, `hub-tokens.css`, `pages/overview.jsx` and `pages/revenue-heatmap.jsx`.
+6. Mobile floor: Calendar has no phone agenda (§7 Responsive). The input size floor is now global at ≤720px or coarse pointer.
+7. Stale code comments: the `hub-futura.css` header ("only inside `.hub-futura`") and `hub-tokens.css`
+    ("eight-anchor nav") — the pinned count is 9 + 2 since 2026-09-24 (`hub-nav.js`'s "Nine primary" is accurate
+    again); and `motion.test.mjs`'s opening comment
+    still says `s` units are not checked, though the test now checks them.
+8. Focus-ring color is mixed (`--moon-300`, `--accent`, raw rgba) and breakpoints drift — both open in `TODOS.md`.
+9. ~~Unsanctioned title scale: `.personal-revenue-header h2` used `clamp(22px, 2.5vw, 28px)`~~ — resolved 2026-09-24
+    (20px/500 per §11, revenue P0 pass).
 
 ## 15. Decisions Log
 
@@ -513,3 +725,28 @@ Build order when adding a new surface:
 | 2026-09-22 | 사이드바 병합 해소: **펼친 상태는 Futura 텍스트 전용 행**(2026-09-19 행)을 그대로 두고, **아이콘은 접힌 56px 상시 레일에서만** 이름을 맡는다(`fae8416` — 아이콘 + tooltip·`aria-label`, 건수는 점 하나). 행 렌더러 하나가 두 상태를 모두 그려 접기 토글 뒤에도 같은 DOM·포커스를 유지한다. 접힌 사용자 카드는 좌우 6px margin의 44px 폭 타일로 좁혀 36px 알림 버튼이 레일 안에 들어가게 한다. 테마 기본값은 `auto`(기기 시계 07:00–18:00 라이트, 그 밖 다크 — §5)이고, `sidebarCollapsed`가 같은 환경설정 저장소(`mlp.sidebarCollapsed`, hydration 이후 복구)에 함께 저장된다 | recommended | 구성 요소는 각각 따로 정해졌다 — 텍스트 전용 행은 2026-09-19 운영자 확정, 56px 아이콘 레일은 2026-09-22 운영자 요청(`docs/superpowers/plans/2026-09-22-sidebar-icon-rail.md`), `auto` 테마는 §5 본문(`25b8abe`). 두 브랜치가 같은 사이드바를 반대 방향(행 아이콘 제거 vs 아이콘 레일)으로 고쳐 충돌했고, "펼침=텍스트, 접힘=아이콘"으로 둘을 함께 살렸다. 이 **조합 상태**는 운영자가 아직 한 화면으로 검토하지 않았으므로 권장으로 둔다 — 확정되면 이 행의 상태만 바꾼다. `hub-nav.test.mjs`가 행 렌더러를 collapsed=false/true로 그려 레일의 아이콘·접근 가능한 이름을 고정하고(펼친 행 단언은 2026-09-23 행에서 "아이콘이 있어야 한다"로 반전), `fx-nav-child`·`sidebarChildren(a.key, scope)` 재등장도 계속 막는다 |
 | 2026-09-23 | §15 2026-09-19 (a)를 부분 되돌림 — 사이드바 내비 행은 펼친 상태에서도 `Iconed name={a.icon}`을 라벨과 같이 그린다(접힌 56px 레일과 동일 아이콘, 같은 `currentColor` 상속). 색점·pill 현재 항목 표시 등 나머지 09-19 결정은 그대로 둔다 | confirmed | 운영자가 접힌 레일 스크린샷과 펼친 텍스트 전용 스크린샷을 나란히 보고 "아이콘도 같이 표시"로 확정 — 전체 메뉴 항목(주요 10 + 유틸리티 2) 대상. `hub-nav.test.mjs`의 "expanded sidebar nav rows carry no icon glyph" 단언을 반대로 뒤집었다. 위 2026-09-22 사이드바 병합 해소 행의 "펼친 상태는 텍스트 전용" 부분을 이 행이 대체하고, 접힌 56px 레일·`auto` 테마·`sidebarCollapsed` 저장은 그대로 둔다 |
 | 2026-09-23 | Futura 텍스처를 `dashboard/work/rhythm`으로 확장 — 페이지 셸이 `hub-futura hub-page`, 헤더가 `fx-head`·`fx-page-title`, 카드가 `fx-card`를 쓴다(`RhythmVisualizer` 포함). 2026-09-18 행이 Futura를 `dashboard/home` 한 화면으로 한정하고 09-19 행이 셸·공용 컴포넌트·`work/decisions`까지만 열거했으므로, Rhythm은 세 번째 서피스다 | recommended | rhythm-redesign 병합(b7ddf9a)이 코드를 먼저 올렸고 결정 로그가 따라오지 못했다 — 기록해 두지 않으면 다음 세션이 "어디까지가 Futura인가"를 코드에서 역추적해야 한다. 밀도·타이포는 09-18 행과 같은 이유로 `.hub-futura` 스코프 안에 머물고 §7 고정 밀도·§8.1 1px 하이라인 계약은 다른 40여 페이지에서 그대로다. 운영자가 화면을 직접 보고 확정하기 전까지 `recommended`로 둔다 |
+| 2026-09-23 | 선택한 프로젝트의 진척 게이지 트랙에만 25% 구간별 색·고정 위치 그라데이션을 쓰고, 선택/진척 변경 시 가속 채움과 1회 반짝임을 재생한다. 0/25/50/75/100 눈금과 근거 텍스트를 유지하고 감소 모션에서는 완성 상태만 표시한다 | confirmed | 운영자 직접 요청 “더 화려하고 애니매이션 있는 게이지 ui, 단계별 색, 그라데이션, 가속 붙으면 반짝임 효과”. 현재 데이터에는 작업별 진척 이력이 없어 반짝임은 시각적 채움의 가속을 뜻하며 실제 업무 속도 상승을 뜻하지 않는다. §5.2 그라데이션·단계색 제한의 이 트랙 한정 예외 |
+| 2026-09-23 | Rhythm을 **할 일과 분리된 생활 루틴 표면**으로 재구성. 할 일 완료를 섞던 `RhythmVisualizer`(몰입도×성과 매트릭스)를 제거하고 `rhythm-today.jsx`의 "오늘의 리듬"(시간대별 한 탭 체크·체크 취소·하루 링·최근 7일 그리드)으로 대체. 완료는 `--fg` 채움 + 그려지는 체크 + 이름 취소선 + 명도 한 단계 하강(초록 없음, §5.3), "지금" 시간대만 `--accent`(현재 위치), 주 N회 목표를 채운 루틴은 점선 원 + "쉬어도 돼요". 1회성 축하 연출용 `--dur-celebrate: 420ms` 토큰 신설(위 2026-09-16 행이 예고한 경로). 분류에 `spirit`(신앙)·`home`(집안일) 추가 | recommended | 운영자 지시 "리듬은 매일 루틴적으로 행하는 것들 — 오늘 할 일과 별개, 기도·청소·운동 같은 생활 루틴을 설정·표시·체크하고 했을 때 만족되는 디자인·애니메이션". 체크 취소는 `DELETE /api/routine/check`가 POST와 같은 멱등 키로 오늘 행만 지운다. 연속은 `pendingStreak`(어제까지)을 따로 실어 "N일 연속 · 오늘 이어가기"로 동기를 주되 빨강을 쓰지 않는다(§5.2 no warning-by-default). 운영자가 화면을 직접 보고 확정하기 전까지 `recommended` |
+| 2026-09-23 | 펼친 사이드바 폭을 오른쪽 경계 드래그로 조절한다(200–360px, 기본 232px, `mlp.sidebarWidth`에 저장). 핸들은 경계에 걸친 8px `role="separator"` — ←/→ 16px·Home/End 최소/최대·더블클릭 기본값. 휴지 상태엔 기존 1px 보더만, hover·드래그 중엔 같은 자리에 `--line-strong` 1px 선. 접힌 56px 레일과 모바일 드로어(고정 폭)에는 핸들이 없다 | confirmed | 운영자가 "여기 드래그로 조절 가능하게 해놨던거 적용이 안된듯"으로 요청 — 저장소·stash·원격 브랜치 어디에도 구현이 없어 새로 만들었다. 드래그 중에는 셸의 `--hub-sidebar-w`만 바꾸고 손을 뗄 때 한 번 상태로 확정한다(셸 상태를 매 프레임 바꾸면 현재 페이지 전체가 다시 그려진다). 폭 범위는 구현 기본값이라 운영자가 바꿔도 된다. `sidebar-resizer.test.mjs`가 드래그·취소·키보드·모바일 숨김을 고정한다 |
+| 2026-09-23 | Rhythm에 **리듬 기록**(주·월·분기·연) 섹션 추가 — `rhythm-history.jsx` + `GET /api/hub/rhythm-history?range&offset&project`. 주는 루틴×요일 체크 격자, 월은 달력, 분기·연은 주 단위 잔디 격자 + 월별 막대, 모든 기간에 요약 4칸(달성률·다 해낸 날·최장 연속·가장 꾸준한 루틴)과 루틴별 달성 목록. 날짜 칸 진하기는 `--fg`를 `--surface-2`에 섞은 5단계 명도 램프 하나(hue 없음, srgb 혼합)이고 기준은 "매일 루틴을 얼마나 채웠나". 기간은 달력 기준(주=월요일 시작), 기대 횟수는 루틴을 만든 날 이후 지난 날 수 × 주간 목표/7의 올림. 앞서 두었던 오늘의 리듬 아래 "최근 7일" 격자는 이 섹션의 주 보기가 대체 | recommended | 운영자 지시 "주-월-분기-연으로 나의 루틴들 어떻게 해왔는지 볼 수 있게". work-ledger의 Rhythm 읽기는 최근 240행뿐이라 연 단위를 담지 못해, 기간 창 안의 완료 행만 1000행씩 최대 8쪽 읽는 별도 저장소를 두고 상한에 닿으면 `partial`로 밝힌다. 운영자가 화면을 보고 확정하기 전까지 `recommended` |
+| 2026-09-23 | 리듬 기록의 막대 차트를 정식 컬럼 차트로 재설계 — 연은 월별, 분기는 **주별** 막대. 막대 폭 ≤ 24px·위 끝만 4px 라운드·바닥 각짐, 뒤에 100%까지의 캡슐 트랙(`--fg` 5%), 1px 실선 격자(0/50/100%)와 눈금, **평균은 1px 점선 기준선 하나**(버킷 비율 평균이 아니라 지난 칸 전체 합), 숫자는 이번 기간·최고 기간에만 고정하고 나머지는 CSS `:hover`/`:focus-visible` 툴팁(JS hover 없음 §8.1), 가리키는 동안 다른 막대는 명도 한 단계 후퇴(불투명도 아님), 미래 기간은 점선 빈 트랙. 진입은 바닥에서 1회 성장(`--dur-celebrate` + `--stagger-step`) | recommended | 운영자 지시 "막대그래프 디자인 더 고급". 색은 명도 램프만(§5.3 charts), 포커스 링의 radius는 기본 규칙에 두고 포커스 규칙은 outline만(§11, `focus-ring.test.mjs`). 운영자가 화면을 보고 확정하기 전까지 `recommended` |
+| 2026-09-23 | **OKR·KPI** 탭(`dashboard/work/goals`) 신설 — 위치는 **내 작업** 하위(실행 목록·메모·하루 리뷰·OKR·KPI), 경로 소유자도 내 작업(`owns`에 추가). 새 화면을 만들지 않고 기존 `Goals` 화면(목표 → 측정 지표 → 관측, 빠른 체크)을 열며, `goalHref`에 `base`를 넘겨 탭 안의 링크·드로어·생성 딥링크가 그 탭에 머문다. **현황에도 띄운다**: 현황의 `?view=goals` 탭 이름을 `목표·성과` → `OKR·KPI`로 맞추고, 현황 집계 화면 KPI 줄 아래에 `OkrSummaryCard`(진행 중 목표·지표 수, 핵심 지표 4줄 — 현재값·목표·진척, 근거 확인 필요 수, 본체 탭 링크)를 둔다. 카드의 읽기 상태는 목표 화면과 같은 truth(loading→Skeleton, error/preview→TruthBadge, 빈 상태는 live/partial일 때만) | recommended | 운영자 지시 "OKR KPI 트래킹하는 부분 탭 신설" → "위치는 내 작업 하위로, 현황에도 띄우기"(처음 넣었던 Work 탭 줄 위치를 대체). 목표 저장소(`operating_objectives`·`operating_metrics`·관측)는 이미 있어 스키마 변경이 없다. 루틴 체크를 KPI 자동 원천으로 잇는 것(`source_key`에 routine 추가)은 마이그레이션이 필요한 별도 결정으로 남긴다 |
+| 2026-09-23 | 하루 리뷰의 습관 표시는 **연속 일수가 아니라 "이번 주 k/5일"**(근무일 분모, 주말 기록은 보이되 분모 제외)이고, 월 캘린더 셀은 색이 아니라 ● 채움(기록)·○ 1px 테두리(빈 근무일)·표시 없음(주말)·점선(오늘 미기록)으로 말한다. 오늘 셀만 `--moon-300` 테두리(현재 위치). 기록을 읽지 못한 달은 빈 근무일로 그리지 않는다(`unknown`). 오늘·홈의 하루 마무리 한 줄은 ○/✓/시계 글리프 + 직접 라벨의 중립 행이며, 끊김 경고·붉은 미기록·축하 연출은 두지 않는다. 오늘 3개 권장값과 AI 코칭은 `CertaintyBadge recommended` + dashed 1px 카드 | recommended | 운영자 요청 "정말 꾸준히 달성할 수 있을 법한" 하루 평가(2026-09-23, "전부 다 진행"으로 구현 승인). 연속 일수는 하루 빠지면 0이 되어 포기를 부르고, 주 단위는 같은 주 안에서 회복된다 — 주간 리포트 `reviewDays`와 같은 정의다. 화면 직접 확인 전이라 권장으로 둔다. 상세는 `docs/superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md` |
+| 2026-09-24 | 프로젝트 목록(프로젝트 선택 인덱스)의 모노그램 타일에 한해 **장르별 은은한 색**을 허용한다 — 장르는 프로젝트마다 고르는 `meta.genre`(회사·세일즈·IT·콘텐츠·기타, 편집 드로어 `장르`). 색은 `--genre-{company,sales,it,content}-{bg,fg,line}`(저채도 oklch, hue 255·20·200·310, 두 테마)이고 기타·미지정은 중립 타일 그대로다. 타일에만 칠하고 행 배경·레일·배지로 넓히지 않으며, 장르 라벨은 타일 `title`과 행의 접근 가능한 이름에 함께 싣는다 | confirmed | 운영자 지시 "프로젝트 장르별로 색을 조금 나눴으면 — 은은한 색 차이로 회사인지 세일즈인지 IT인지 콘텐츠인지 바로 알았으면"(2026-09-24, 장르 출처=프로젝트별 선택·범위=모노그램 타일만을 운영자가 직접 골랐다). §5.2 "색은 카테고리를 분류하지 않는다"의 운영자 확정 예외이며 2026-09-01 브랜드 콘텐츠 로그와 같은 형식이다(라벨 동반·한 표면 한정). 다른 표면으로의 확장은 별도 결정. Engine `update_project`는 `meta`를 통째 교체하던 경로에 병합(버전 가드 포함)을 더해 org_scope·delivery를 보존한다 |
+| 2026-09-24 | 사이드바 10+2 앵커의 아이콘을 전용 `nav*` 24px 선 아이콘으로 통일하고, 펼친 행과 56px 레일에서 같은 형태를 쓴다. `M` 문자 타일과 구 `DE` 초록 아이콘을 초승달·기준점 Moonlight 심볼 하나로 교체한다. `icon.svg`가 정본이며 ICO·PNG 192/512·마스커블·Apple touch 자산은 `npm run icons:generate`로 만든다. 메뉴 구조·라우팅·상태 색은 바꾸지 않는다 | recommended | 운영자 요청 “왼쪽 사이드바 로고들 더 디벨롭… 브라우저 탭 아이콘 앱 아이콘들”. 작은 크기에서의 선명도와 다크·라이트 공통 사용을 위해 저장소 고유 SVG를 택했다. 운영자 시각 검토 전이라 형태의 최종 확정은 아니다 |
+| 2026-09-24 | 브랜드 목록의 `meta.glyph` 기하 기호를 브랜드별 단색 SVG로 바꾼다. 22th.Nomad=로봇, BridgeMaker=다리, Class.Moon=책, ClassIn Side=대화, HolyFunCollector=웃는 대화, MoonPM=워크플로, Politic_Officer=저울, Study.Seagull=갈매기, 고래=고래, 시나브로=펜촉이다. 이름·DB의 glyph 데이터는 유지하며 브랜드 목록·상세·현황·프로젝트 소속 표시에 같은 심볼을 쓴다. 새 학원은 교육 아이콘, 식별되지 않은 브랜드는 중립 기하 아이콘으로 표시한다 | recommended | 운영자가 브랜드별 의미를 드러내는 아이콘을 요청하고 다리·IT/로봇·고래·펜의 방향을 제시했다. 정확한 모양은 구현안이므로 시각 검토 전까지 권장으로 둔다 |
+| 2026-09-24 | 브랜드 아이콘 네 개를 재정리한다. BridgeMaker=십자가, HolyFunCollector=천사, Study.Seagull=새 윤곽, MoonPM=연결된 작업 흐름이다. 위 행의 해당 네 아이콘 설명을 이 행이 대체하며 나머지 브랜드·표면·DB 계약은 유지한다 | recommended | 운영자가 BridgeMaker·HolyFunCollector·Study.Seagull의 재제작 방향을 지정했다. 네 번째 MoonPM은 기존 세로 칸 아이콘이 18px에서 빽빽해 보여 선정했다. BridgeMaker의 대안으로 기존 아치형 다리 아이콘을 먼저 비교했으나 작은 크기에서 문처럼 보여 십자가를 택했다 |
+| 2026-09-24 | 고래(Go;Re)는 SVG Repo Animals 24의 물뿜는 고래 실루엣, 시나브로는 Phosphor Pen Nib의 잉크 펜촉 아이콘을 쓴다. 위 브랜드 아이콘 행의 해당 두 형태를 이 행이 대체한다 | recommended | 운영자가 기존 아이콘 중 더 어울리는 고래와 잉크 펜을 요청했다. 18px 비교에서 고래의 분수와 꼬리, 펜촉의 외곽이 분명한 자산을 골랐다. 출처와 라이선스는 `brand-icons.LICENSE`에 기록했다 |
+| 2026-09-24 | 브랜드 목록의 운영 상태·집중점이 모두 비었으면 긴 문구 두 개 대신 `운영 방향 정하기` 한 줄을 표시하고 상세의 기존 편집 흐름으로 연결한다. 모바일 목록은 중복 `컨텐츠 로그` 버튼과 시각적 검색·필터 라벨을 덜어 첫 브랜드를 앞당기며, 라벨의 접근 가능한 이름·필터 동작은 유지한다. 모바일 입력은 16px 이상, 미정의 `--r-md` 참조는 `--r`로, Futura 기본 버튼 그림자는 primary를 제외해 CTA rim을 보존한다. Revenue의 마지막 `glyph` 소비자는 `BrandIcon`을 쓴다 | confirmed | 운영자가 디자인 개선 네 항목과 모바일 입력 크기까지 모두 진행하라고 지시했다. 390px 검토에서 첫 브랜드 위치와 입력 글자 크기를 직접 측정했다. 데이터·라우트·상태 의미는 바꾸지 않는다 |
+| 2026-09-24 | 영업·매출을 **4탭**으로 재구성한다 — 이전 9개 목적지(탭 개요·문의 내역·고객 DB·매출 히트맵·Leads·Deals·Accounts·Cases + 별도 primary 앵커 `고객 연락`)를 `오늘 연락`(`revenue/followups`, 첫 탭·앵커 착지) · `고객`(`revenue/customers`) · `거래`(`revenue/deals`) · `문의`(`revenue/inquiries`)로. 개인 스코프는 5번째 탭 `현금 흐름`(`revenue/overview?scope=personal`, 2026-08-31 30일 로드맵), ClassIn 스코프는 `세그먼트`를 더한다. `고객 연락` 앵커가 빠져 사이드바는 주요 9 + 유틸리티 2가 되고 건수 뱃지는 영업·매출로 옮긴다. 탭에서 내려온 화면은 삭제하지 않는다 — PAGE_MAP·⌘K·딥링크로 계속 열리고, 거기 서 있으면 가장 가까운 탭이 켜지고(Leads·Accounts → 고객, 개요·히트맵 → 거래, Cases → 없음) 탑바 제목은 그 화면 이름을 유지한다(§7 Widths). 같은 역할은 스코프가 달라도 같은 이름이다(07-15 D4의 원칙 유지, D4의 영어 CRM 탭 이름은 대체) | confirmed | 운영자가 목업 4장(오늘 연락·고객·거래·휴대폰 기록 후보)을 보고 "상당히 좋은 것 같아… 진행". 매일 여는 표면은 오늘 연락 하나이고 나머지는 찾아볼 때만 간다 — Leads·Accounts는 사람이 아니라 단계가 바뀌는 것이라 고객 목록의 세그먼트, 개요·히트맵은 거래의 보기다. CRM 탭 디벨롭 기획 §4.1이 "2단계 실사용 뒤"로 미뤄 둔 IA 재배치를 운영자 결정으로 앞당겼다. 단 §4.1의 `기록` 렌즈 신설과 `문의`의 고객 흡수(Q142)는 채택하지 않았다 — 목업은 문의를 별도 탭으로 둔다. `hub-nav.test.mjs`가 탭 구성·역할 별칭·제목을 고정한다. 상세 `docs/superpowers/specs/2026-09-24-revenue-four-tabs-design.md` |
+| 2026-09-24 | Futura 페이지 텍스처(`.hub-futura`·`fx-head`·`fx-page-title`·`fx-card`·`fx-pill-btn`·`fx-eyebrow`)를 영업·매출의 `오늘 연락`·`고객`·`거래` 세 페이지로 넓힌다. 탭 줄은 페이지가 그리지 않고 탑바에 남는다(`PAGE_OWNS_TABS` 불변 — 목업이 탑바 탭을 그린다). 확실성은 §5.3 선 모양(입금됨 꽉 참·확정 옅은 채움·가능성 높음 점선·확인 필요 점)으로, 빨강은 놓친 약속 한 곳(개수 + 1px 레일)으로 한정한다. **바뀌지 않는 것**: 같은 영업·매출의 `문의` 탭, 탭에서 내려온 화면(개요·히트맵·Leads·Accounts·Cases·ClassIn 별칭·세그먼트), 나머지 모든 페이지는 §7 고정 밀도·§8.1 1px 하이라인·§11 20px/500 제목 그대로다. 컨트롤 radius는 프리미티브가 렌더하는 값 그대로(§7 Radius) | confirmed | 운영자 "2번 오케이" — 목업 검토 뒤 Futura 확장안을 골랐다. 09-18 행이 정한 "화면 하나씩 먼저 살아 보고 넓힌다"는 방식을 따른다: 세 화면만 열고, 운영자가 실제 화면을 본 뒤 문의·다른 영업 화면으로 넓힐지 다시 정한다. 구현은 브랜치 `claude/revenue-redesign`에서 진행 중이며, 이 행은 결정을 기록할 뿐 세 화면이 이미 Futura로 렌더된다는 뜻이 아니다 |
+| 2026-09-24 | 코칭·대화 기본 화면에 Guru·Legend 멘토 서가를 두고, 고객 목록·개인 브랜드·개인 콘텐츠 큐에 닫힌 멘토 레일을 둔다. 서가 제목만 목업의 42px 디스플레이를 허용하며 `.hub-futura` 전체 텍스처는 확장하지 않는다. 레일은 데스크톱 오른쪽 58px 세로 진입점, 600px 이하는 44px 가로 버튼·하단 시트다. 카드는 수동 열람이고 질문 생성은 별도 전송을 요구한다 | confirmed, 화면 배치 일부 2026-09-25 대체 | 운영자가 A 서가와 B 레일 목업을 둘 다 승인했다. 오늘·현황의 한 줄 팁과 코칭·대화 상세·질문 표면은 다음 2026-09-25 행이 대체한다. 상세는 `docs/superpowers/specs/2026-09-24-guru-dual-experience-design.md` |
+| 2026-09-25 | 코칭·대화는 Focus 서가를 상단에 두고 Atlas의 분야·인물·Legend 탐색을 하단에 둔다. 카드 본문은 클릭·키보드로 원문 상태/해석을 구분한 상세를 열며, 요청형 질문은 우측 Drawer 대신 비모달 플로팅 챗봇에서 이어진다. 최소화·재열기 동안 초안과 대화가 남고, 모바일 ≤600px은 전체 화면과 16px 입력·44px 조작 영역이다. 오늘·현황에는 카드 하나를 증설하지 않고 각각 한 줄 팁만 두어 상세로 보낸다. 기존 무알림·무자동업무·서울 09·14·19시 선택을 유지한다 | confirmed | 운영자가 1안을 기준으로 하단에 3안을 넣고 대화를 띄워 두는 챗봇으로 바꾸라고 확정했다. 상세 `docs/superpowers/specs/2026-09-25-guru-focus-atlas-floating-chat-design.md` |
+| 2026-09-25 | Guru·Legend 카드 상세는 카드별 Moonlight 재구성 MD 글을 중심으로 읽는다. 본문 폭은 최대 65ch로 제한하고 인물·분야, 편집 안내, 제목, 관점·적용·경계, 생각할 질문, 바탕 자료 순으로 배열한다. 확인된 직접 인용만 별도 블록으로 표시한다. 공유 출처 표시는 외부 원전 링크·저장소 파일 경로 없이 자료 이름과 적용 성격만 말한다. 로딩은 Skeleton, 실패는 재시도이며 Guru 질문 버튼은 명시적 요청으로 남긴다 | confirmed | 운영자가 원자료 링크 대신 자체 MD와 참고자료 재구성 블로그 글을 요청하고 카드별 짧은 글 26편을 선택했다. 바로 위 행의 카드 상세 부분을 대체한다. 상세 `docs/superpowers/specs/2026-09-25-guru-internal-reading-articles-design.md` |
+| 2026-09-24 | 하루 리뷰의 **활동 흐름**(GitHub 기여 그래프 응용): 최근 16주 × 월~일 정사각형 잔디와 월 캘린더 칸 배경을 **포그라운드 명도 한 계열 4단계**(`color-mix(in oklch, var(--fg) 18·38·62·88%, var(--surface))`)로 칠한다 — 라이트는 어두워지고 다크는 밝아진다. 단계 경계는 16주 활동일의 사분위, 숫자는 상세 줄·`aria-label`이 말한다. 모바일(≤600px)에서 잔디 칸은 버튼이 아니라 표시 전용이다(§11 44px 플로어의 예외를 늘리지 않음) | recommended | 운영자가 GitHub 잔디 스크린샷과 함께 "활동량 더 색 진함으로 한눈에" 요청. 초록은 §4·§5.3 위반이라 쓰지 않았고, 색상이 아니라 명도가 양을 말하므로 흑백·색각 차이에서도 읽힌다(§5.3 charts). 화면 확정 전이라 권장. 상세는 `docs/superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md` §12 |
+| 2026-09-25 | 하루 리뷰 **에너지 입력**(오늘·홈의 원탭 1~5 버튼, 리뷰 팝업 선택지)은 숫자 옆에 **달 위상** 아이콘(`EnergyMoon`, `components/hub/energy-moon.jsx`)을 함께 그린다 — 1 점선 빈 달 → 2 초승 → 3 반달 → 4 볼록 → 5 보름. 색은 `currentColor` 하나이고 값은 밝은 면의 넓이가 말한다(§5.3). 숫자·단어 라벨과 접근 가능한 이름은 그대로이며, 팝업의 작은 오름 막대 글리프를 대체한다. 기록 표시(요약·캘린더·주간 줄·코칭)는 글자로 둔다 | confirmed | 운영자 "그냥 숫자만 나오니 체감이 안됨 — 약→강 비교되는 아이콘". 후보 셋(달 위상·배터리·오름 막대 확대) 중 달 위상을, 범위는 "입력하는 곳만"을 운영자가 직접 골랐다. 배터리는 1칸이 '배터리 부족' 경고처럼 읽혀 §5.2 no warning-by-default와 부딪힌다. `energy-moon.test.mjs`가 5단계 구분·색 없음·두 입력 표면 사용을 고정한다 |
+| 2026-09-25 | 연속(버닝) 표시 `StreakMark`를 오름 막대 4칸에서 **단색 불꽃 5단계**로 바꾼다 — 0 점선 빈 불꽃 · 1 불씨(1일+) · 2 윤곽 불꽃(3일+) · 3 채운 불꽃(7일+) · 4 속불 + 불티 둘(14일+) · 5 원 안의 불꽃 + 불티 셋(30일, 한 달). 단계 판정은 `burning-streak.jsx`의 `streakLevel` 하나로 모아 리듬 오늘·리듬 기록·오늘 화면·할 일 연속 배지가 같이 쓴다. 색은 `--fg`/`--fg-muted`만, 4·5단계만 나타날 때 한 번 불이 붙고 불티가 튄다(`--dur-celebrate` + `--stagger-step`, 반복 없음, 감소 모션에서 끔). 2026-09-22 행의 "오름차순 막대 4개" 부분을 이 행이 대체하고, 앰버색·무한 깜빡임 금지는 그대로다 | confirmed | 운영자가 후보 넷(불꽃·새싹→나무·반짝임·막대+별) 중 불꽃을 고르고 "4·5단계에서 불꽃 이펙트 더 잘 보이게", 범위는 연속 표시 전부로 지정했다. 09-22에 화염을 뺀 이유는 원색 앰버와 `mlFlameFlicker` 무한 애니메이션이었지 모양이 아니었다. 한 달 단계는 운영자가 요청한 새 구간이다. `burning-streak.test.mjs`가 단계 경계·6가지 모양·단색·1회 모션·공용 판정을 고정한다 |
+| 2026-09-25 | 넛지는 별도 섹션이 아니라 **대상에 붙는 제안 팁**이다 — 공용 `SuggestionTip`(`components/hub/suggestion-tip.jsx`) 한 줄 `◇ 제안 · <이유> [행동 하나]`, `CertaintyBadge state="recommended"`의 점선·빈 마름모와 직접 라벨만 쓰고 채움·빨강·영속 모션을 쓰지 않는다. 대상(고객·거래) 하나에 팁 하나, 팁은 저장하지 않고 기존 시트·흐름을 미리 채워 연다. 이관 템플릿 다음 행동도 약속이 아니라 같은 팁으로 보인다. 위치: 오늘 연락 행·고객 목록(정보 전용)·고객 드로어 약속 카드 | confirmed | 운영자 "넛지는 디자인 요소나 추천 팁 혹은 제안 같은 쪽으로" + 템플릿 약속 구분 동의(2026-09-24). §5.3 권장 확실성 문법을 그대로 쓰므로 새 색·모양 어휘가 없다. 옛 `CrmNudgeSection` 패널은 제거. 상세 `docs/superpowers/specs/2026-09-24-revenue-four-tabs-design.md` §12 |
+| 2026-09-26 | 거래 탭의 보기를 **돈 · 단계** 둘로 줄인다. 돈 보기는 매출·현금흐름만 — 머리 카드 한 장(월 매출/목표 + KPI 넷 + 확실성 띠), 현금흐름 주·월 차트, 들어올 돈 목록. 지난 달은 그리지 않는다. 확실(계약)·가능(계약 전)은 §5.3 선 모양으로, 빨강은 계약됐는데 늦은 돈에만. 시간축 막대·입금 달력·결제 표·언제 레인은 넣지 않는다(프로젝트 타임라인·오늘 연락과 겹침) | confirmed | 운영자가 목업 다섯 안을 비교한 뒤 "더 컴팩트하고 본질(매출·현금흐름)에만 집중한 버전"을 골랐다(2026-09-26). 2026-09-24 행의 거래 탭 "언제" 기본 보기와 2026-09-25 결제 보기를 대체한다. 상세 `docs/superpowers/specs/2026-09-24-revenue-four-tabs-design.md` §14 |
+| 2026-09-26 | 거래 돈 보기의 패널 처리 = **먹색 머리 + 한 장**: 월 매출 카드만 반전 면(`--moon-50` 면, 글자는 `--surface` 쪽 — 라이트에선 먹색 카드, 다크에선 밝은 카드)이고, 새 색 없이 카드 범위에서 `--fg`·`--line*`·`--danger` 등을 `color-mix`로 다시 묶는다. 현금흐름과 들어올 돈은 한 장(`.deals-money-sheet`) 안에서 1px 선으로만 나뉜다. 이 반전 면은 거래 돈 보기 머리 카드 한 곳 한정 | confirmed | 운영자가 패널 처리 시안 A(층 나누기)·B(먹색 머리 + 한 장) 중 B를 골랐다(2026-09-26). 세 덩어리가 모두 같은 흰 카드라 위계가 없던 문제를 톤으로 푼다 |
+| 2026-09-26 | 데스크톱 빠른 입력 위젯 페이지 `/widget`(`components/hub/quick-widget.jsx`, `app/widget/widget.css`) — Windows 앱의 380×200 위젯 창(`apps/desktop/widget-window.js`)이 띄운다. 380px 창은 `hub-tokens.css`의 `(pointer: coarse), (max-width: 720px)` 터치 플로어에 **폭만으로** 걸리므로, 위젯 스코프(`.hub-app.quick-widget-page`) 안에서 `(pointer: fine)`일 때만 44px 버튼·16px 입력 플로어를 되돌린다(거친 포인터는 플로어 유지). 앱 안에서는 창 모서리를 OS가 둥글리고 페이지는 1px `--line` 선만 긋는다(`--shadow-pop`·`--r-lg` 없음, 브라우저 탭에서는 카드로 그린다). 입력 칸 포커스 링은 §11 1px `--moon-300` 그대로 `outline-offset: -1px`(§15 2026-09-15 선례) | recommended | 운영자가 2026-09-26 위젯 목업을 그대로 승인했다. §7 Responsive·§11 터치 플로어의 위젯 한정 예외라 결정 로그에 남기고, 실사용으로 확인하기 전까지 권장으로 둔다. `quick-widget.test.mjs`가 스코프·고정 높이·포커스 규칙을 고정한다 |

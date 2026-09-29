@@ -1,5 +1,5 @@
 // Browser-safe workflow contract. Keep the existing Office v2 chat contract independent.
-import { OFFICE_IDS, OFFICE_MODES, OfficeInputError, parseOfficeDeliberation, parseOfficeDiscussion } from './office.js';
+import { OFFICE_IDS, OFFICE_MODES, OfficeInputError, parseOfficeDeliberation, parseOfficeDiscussion, parseOfficeFailure } from './office.js';
 
 export const OFFICE_WORKFLOW_VERSION = '2026-09-21.v1';
 export const OFFICE_WORKFLOW_INTENTS = Object.freeze(['weekly_report', 'customer_reply', 'freeform']);
@@ -108,38 +108,62 @@ export function parseOfficeWorkflowContext(value, request) {
   return { status: value.status, scope: value.scope, originRef, originKey: text(value.originKey, 300), facts, sourceRefs, missing: strings(value.missing), asOf: timestamp(value.asOf), contextHash: value.contextHash, capabilities: { ...value.capabilities } };
 }
 
-function nextStep(value, context) {
-  if (value === null) return null;
-  keys(value, ['kind', 'label', 'fields']);
-  check(value.kind === 'create_task', '지원하지 않는 다음 행동입니다.');
-  keys(value.fields, ['title', 'description', 'nextAction', 'dueAt', 'projectId', 'dealId', 'priority']);
-  const fields = { title: text(value.fields.title, 300) };
-  for (const key of ['description', 'nextAction']) if (value.fields[key] !== undefined) fields[key] = text(value.fields[key], key === 'description' ? 4000 : 1000);
-  if (value.fields.dueAt !== undefined && value.fields.dueAt !== null) fields.dueAt = /^\d{4}-\d{2}-\d{2}$/.test(value.fields.dueAt) ? date(value.fields.dueAt) : timestamp(value.fields.dueAt);
-  for (const key of ['projectId', 'dealId']) if (value.fields[key] !== undefined && value.fields[key] !== null) {
-    fields[key] = uuid(value.fields[key]);
-    const types = key === 'projectId' ? ['project', 'projects'] : ['deal', 'deals'];
-    check(context.sourceRefs.some(ref => types.includes(ref.type) && ref.entityId === fields[key]), '다음 행동의 대상은 참고 자료에 있어야 합니다.');
-  }
-  if (value.fields.priority !== undefined) {
-    check(['low', 'medium', 'high', 'critical'].includes(value.fields.priority), '우선순위가 올바르지 않습니다.');
-    fields.priority = value.fields.priority;
-  }
-  return { kind: 'create_task', label: text(value.label, 160), fields };
+export const OFFICE_SOURCE_CHECKS = Object.freeze(['traced', 'none', 'untraced']);
+const NOTE_NEXT_STEP_DROPPED = '다음 행동 제안을 확인하지 못해 제외했습니다. 필요하면 할 일을 직접 만들어 주세요.';
+const NOTE_NEXT_STEP_TRIMMED = '다음 행동 제안의 일부 항목(기한·우선순위 등)을 확인하지 못해 뺐습니다.';
+const attempt = parse => { try { return parse(); } catch { return undefined; } };
+
+// Model output: a bad optional part must not discard a reviewed body (2026-09-23 운영자 확정).
+// The proposal still grants nothing — only these typed fields survive, and projectId is chosen
+// by the operator at the linking step, never by the model.
+function nextStep(value, context, notes) {
+  if (value === null || value === undefined) return null;
+  const typed = plain(value) && value.kind === 'create_task' && plain(value.fields);
+  const title = typed ? attempt(() => text(value.fields.title, 300)) : undefined;
+  const label = typed ? attempt(() => text(value.label, 160)) : undefined;
+  if (!title || !label || Object.keys(value).some(key => !['kind', 'label', 'fields'].includes(key))) { notes.push(NOTE_NEXT_STEP_DROPPED); return null; }
+  const fields = { title };
+  let trimmed = Object.keys(value.fields).some(key => !['title', 'description', 'nextAction', 'dueAt', 'dealId', 'priority'].includes(key));
+  const keep = (key, parse) => {
+    if (value.fields[key] === undefined || value.fields[key] === null) return;
+    const parsed = attempt(parse);
+    if (parsed === undefined) trimmed = true; else fields[key] = parsed;
+  };
+  keep('description', () => text(value.fields.description, 4000));
+  keep('nextAction', () => text(value.fields.nextAction, 1000));
+  keep('dueAt', () => /^\d{4}-\d{2}-\d{2}$/.test(value.fields.dueAt) ? date(value.fields.dueAt) : timestamp(value.fields.dueAt));
+  keep('dealId', () => {
+    const dealId = uuid(value.fields.dealId);
+    check(context.sourceRefs.some(ref => ['deal', 'deals'].includes(ref.type) && ref.entityId === dealId), '다음 행동의 대상은 참고 자료에 있어야 합니다.');
+    return dealId;
+  });
+  keep('priority', () => { check(['low', 'medium', 'high', 'critical'].includes(value.fields.priority), '우선순위가 올바르지 않습니다.'); return value.fields.priority; });
+  if (trimmed) notes.push(NOTE_NEXT_STEP_TRIMMED);
+  return { kind: 'create_task', label, fields };
 }
 
 export function parseOfficeWorkflowAnswer(value, request, context) {
-  keys(value, ['summary', 'artifact', 'evidence', 'uncertainties', 'dissent', 'council', 'nextStep']);
+  keys(value, ['summary', 'artifact', 'evidence', 'uncertainties', 'dissent', 'council', 'nextStep', 'sourceCheck']);
   check(byteLength(value) <= OFFICE_WORKFLOW_LIMITS.resultBytes, '결과가 너무 큽니다. 요청 범위를 줄여 주세요.');
   keys(value.artifact, ['kind', 'body']);
   check(['text', 'markdown', 'code'].includes(value.artifact.kind), '결과물 종류가 올바르지 않습니다.');
   check(Array.isArray(value.evidence) && value.evidence.length <= 20, '근거 목록이 올바르지 않습니다.');
-  const evidence = value.evidence.map(ref => {
-    keys(ref, ['sourceRefId', 'explanation']);
-    check(context.sourceRefs.some(source => source.id === ref.sourceRefId), '근거는 실제로 전달된 자료만 참조할 수 있습니다.');
-    return { sourceRefId: ref.sourceRefId, explanation: text(ref.explanation, 1000) };
+  check(value.sourceCheck === undefined || OFFICE_SOURCE_CHECKS.includes(value.sourceCheck), '근거 확인 상태가 올바르지 않습니다.');
+  // A citation outside the sent sources is dropped, not trusted and not fatal (2026-09-23 운영자 확정).
+  const evidence = value.evidence.flatMap(ref => {
+    const parsed = attempt(() => {
+      keys(ref, ['sourceRefId', 'explanation']);
+      check(context.sourceRefs.some(source => source.id === ref.sourceRefId), '근거는 실제로 전달된 자료만 참조할 수 있습니다.');
+      return { sourceRefId: ref.sourceRefId, explanation: text(ref.explanation, 1000) };
+    });
+    return parsed ? [parsed] : [];
   });
-  const result = { summary: text(value.summary, 1800), artifact: { kind: value.artifact.kind, body: text(value.artifact.body, 24000) }, evidence, uncertainties: strings(value.uncertainties), dissent: strings(value.dissent, 8), nextStep: nextStep(value.nextStep, context) };
+  const notes = [];
+  if (evidence.length < value.evidence.length) notes.push(`근거 ${value.evidence.length - evidence.length}건은 전달된 자료에서 찾지 못해 제외했습니다.`);
+  const step = nextStep(value.nextStep, context, notes);
+  const uncertainties = [...strings(value.uncertainties).slice(0, Math.max(0, 12 - notes.length)), ...notes];
+  const sourceCheck = value.evidence.length > 0 && evidence.length === 0 ? 'untraced' : value.sourceCheck;
+  const result = { summary: text(value.summary, 1800), artifact: { kind: value.artifact.kind, body: text(value.artifact.body, 24000) }, evidence, uncertainties, dissent: strings(value.dissent, 8), nextStep: step, ...(sourceCheck ? { sourceCheck } : {}) };
   if (request.mode === 'council') {
     keys(value.council, ['perspectives', 'recommendation']);
     const rows = value.council.perspectives;
@@ -157,17 +181,18 @@ export function parseOfficeWorkflowAnswer(value, request, context) {
 // Only Engine output enters here. Persistence, application and permissions belong to Hub.
 export function parseOfficeWorkflowResult(value, request, context) {
   const metadata = ['version', 'requestId', 'resultRevision', 'status', 'ownerId', 'mode', 'participants', 'scope', 'context', 'generation', 'discussion'];
-  const answerKeys = ['summary', 'artifact', 'evidence', 'uncertainties', 'dissent', 'council', 'nextStep'];
-  keys(value, [...metadata, ...answerKeys, 'error']);
+  const answerKeys = ['summary', 'artifact', 'evidence', 'uncertainties', 'dissent', 'council', 'nextStep', 'sourceCheck'];
+  keys(value, [...metadata, ...answerKeys, 'error', 'failure']);
   check(byteLength(value) <= OFFICE_WORKFLOW_LIMITS.resultBytes, '결과가 너무 큽니다. 요청 범위를 줄여 주세요.');
   check(value.version === OFFICE_WORKFLOW_VERSION && value.requestId === request.requestId && value.ownerId === request.ownerId && value.mode === request.mode && value.scope === request.scope && stable(value.participants) === stable(request.participants), '생성 결과의 요청 정보가 일치하지 않습니다.');
   check(['generated', 'preview', 'error'].includes(value.status), '생성 상태가 올바르지 않습니다.');
   const base = { version: value.version, requestId: value.requestId, ownerId: value.ownerId, mode: value.mode, participants: [...value.participants], scope: value.scope, status: value.status };
   if (value.status !== 'generated') {
     check(answerKeys.every(key => value[key] === undefined) && value.generation === undefined && value.resultRevision === undefined && value.context === undefined && value.discussion === undefined, '실패한 결과에 생성 본문을 넣을 수 없습니다.');
-    return { ...base, error: text(value.error, 1000) };
+    const failure = parseOfficeFailure(value.failure);
+    return { ...base, error: text(value.error, 1000), ...(failure ? { failure } : {}) };
   }
-  check(value.error === undefined && value.resultRevision === 1, '결과 버전이 올바르지 않습니다.');
+  check(value.error === undefined && value.failure === undefined && value.resultRevision === 1, '결과 버전이 올바르지 않습니다.');
   keys(value.context, ['asOf', 'contextHash', 'missing']);
   check(value.context.contextHash === context.contextHash && value.context.asOf === context.asOf && stable(value.context.missing) === stable(context.missing), '결과의 업무 문맥이 일치하지 않습니다.');
   keys(value.generation, ['policyVersion', 'promptHash', 'model', 'usage', 'elapsedMs']);

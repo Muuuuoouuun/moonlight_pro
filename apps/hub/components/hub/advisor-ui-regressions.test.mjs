@@ -5,6 +5,7 @@ import ts from 'typescript';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { RECOMMENDED_TRIADS } from './council-legends.js';
+import { COUNCIL_HANDOFF_DRAFT_LIMIT, createCouncilDraftState, reduceCouncilDraft } from './council-desktop-handoff.js';
 
 // Run the real component bodies; external services and hooks stay local to each test.
 function componentBody(path, name) {
@@ -24,6 +25,18 @@ function mountCouncil() {
   let index = 0, tree;
   const hooks = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(Boolean) } }),
+    useReducer: (reducer, initial, initialize) => {
+      const key = index++;
+      if (!(key in slots)) slots[key] = initialize ? initialize(initial) : initial;
+      return [slots[key], action => { slots[key] = reducer(slots[key], action); }];
+    },
+    useRef: initial => {
+      const key = index++;
+      if (!(key in slots)) slots[key] = { current: initial };
+      return slots[key];
+    },
+    // Browser fragment reception is covered by council-desktop-handoff.test.mjs.
+    useEffect: () => {},
     useState: initial => {
       const key = index++;
       if (!(key in slots)) slots[key] = initial;
@@ -31,9 +44,9 @@ function mountCouncil() {
     },
   };
   const dependencies = {
-    React: hooks, RECOMMENDED_TRIADS,
+    React: hooks, RECOMMENDED_TRIADS, COUNCIL_HANDOFF_DRAFT_LIMIT, createCouncilDraftState, reduceCouncilDraft,
     requestCouncilAdvice: input => new Promise(resolve => pending.push({ input, resolve })),
-    councilChatPath: () => '/dashboard/agents/chat', Card: 'Card', Badge: 'Badge', Button: 'Button', Dot: 'Dot',
+    councilChatPath: () => '/dashboard/agents/chat', Card: 'Card', Badge: 'Badge', Button: 'Button', Dot: 'Dot', TextAreaField: 'TextAreaField',
   };
   const Panel = new Function(...Object.keys(dependencies), `${councilCode}; return CouncilCoachPanel;`)(...Object.values(dependencies));
   function render() { index = 0; tree = Panel({}); return tree; }
@@ -84,6 +97,27 @@ test('a default Council result is not relabeled when a triad is selected for the
   triadButton(app, RECOMMENDED_TRIADS[0]).props.onClick(); app.render();
   assert.equal(badges(app).some(label => label.endsWith('트라이어드')), false);
   assert.ok(app.findAll(node => node.props.children.includes('기본 자문')).length);
+});
+
+test('Council renders tactical tip with moon tone badge and inset line when present', async () => {
+  const app = mountCouncil();
+  const running = launch(app); app.render();
+  const answerWithTip = {
+    state: 'done',
+    text: '자문 본문',
+    council: {
+      lenses: [{ lens: '카네기', verdict: '경청하라', cost: '반박 포기' }],
+      dissent: '남은 이견',
+      conditionalVerdict: '조건부 결론',
+      nextAction: '1:1 대화 요청',
+      tacticalTip: '논쟁에서 이기는 유일한 방법은 논쟁을 피하는 것임을 명심하십시오.',
+    },
+  };
+  app.pending[0].resolve(answerWithTip); await running; app.render();
+  assert.ok(app.findAll(node => node.props?.children?.includes('논쟁에서 이기는 유일한 방법은 논쟁을 피하는 것임을 명심하십시오.')).length);
+  const tipBadge = app.findAll(node => node.type === 'Badge' && node.props?.children?.includes('💡 거장의 실전 팁'))[0];
+  assert.ok(tipBadge);
+  assert.equal(tipBadge.props.tone, 'moon');
 });
 
 test('ProgressRing exposes a bounded progress value and retains excess completion in accessible text', () => {

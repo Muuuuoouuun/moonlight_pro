@@ -34,8 +34,12 @@ test("the conditional drawer supports Escape, close, focus restoration, and the 
 });
 
 test("the Personal view exposes honest source and empty states", () => {
-  assert.match(personalRevenueSource, /<SyncBadge\s+state=\{syncState\}/);
+  assert.match(personalRevenueSource, /<TruthBadge\s+state=\{syncState\}/);
   assert.match(personalRevenueSource, /syncState\s*===\s*["']loading["']/);
+  // 로딩은 Skeleton, 읽기 실패는 "딜 없음"이 아니라 실패 + 다시 읽기(§5.3 loading·error ≠ empty).
+  assert.match(personalRevenueSource, /<Skeleton\b/);
+  assert.match(personalRevenueSource, /syncState\s*===\s*["']error["']/);
+  assert.match(personalRevenueSource, /매출 기록을 읽지 못했습니다/);
   assert.match(personalRevenueSource, /model\.events\.length\s*===\s*0/);
   assert.match(personalRevenueSource, /예정일이 있는 개인 딜이 없습니다/);
 });

@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Moonlight</string>
+    <string name="title_activity_main">Moonlight</string>
+    <string name="package_name">app.moonlight.hub</string>
+    <string name="custom_url_scheme">app.moonlight.hub</string>
+    <!-- 런처 바로가기 라벨. shortcuts.xml 자체는 scripts/write-cap-config.mjs 가 허브 URL 을 넣어 생성한다. -->
+    <string name="shortcut_capture_short">빠른 입력</string>
+    <string name="shortcut_capture_long">빠른 입력 열기</string>
+    <string name="shortcut_followups_short">오늘 연락</string>
+    <string name="shortcut_followups_long">오늘 연락할 고객 보기</string>
+    <string name="shortcut_rhythm_short">리듬</string>
+    <string name="shortcut_rhythm_long">오늘의 리듬 체크</string>
+</resources>

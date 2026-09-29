@@ -4,6 +4,7 @@
 .hub-studio-toolbar .hub-segmented { max-width: 100%; }
 .hub-studio-context { min-width: 0; }
 .hub-content-queue-row { grid-template-columns: minmax(0, 1fr) 110px 120px 100px; }
+.content-queue-split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: var(--gap); align-items: start; }
 @media (max-width: 1279px) {
   .hub-studio-shell { grid-template-columns: minmax(0, 1fr) !important; height: auto !important; min-height: 100%; overflow: visible !important; }
   .hub-studio-main { overflow: visible !important; }
@@ -14,4 +15,5 @@
   .hub-studio-toolbar { padding: 12px !important; gap: 8px !important; }
   .hub-content-queue-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; }
   .hub-content-queue-row > :first-child { grid-column: 1 / -1; }
+  .content-queue-split { grid-template-columns: 1fr; }
 }

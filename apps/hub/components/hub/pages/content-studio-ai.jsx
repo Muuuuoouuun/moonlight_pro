@@ -3,9 +3,9 @@
 import React from 'react';
 import { Badge, Button, SelectField, TextAreaField } from '../hub-primitives';
 import {
-  STUDIO_CHANNELS, formatForChannel, isTransformStale, previewCandidate, studioErrorMessage,
+  STUDIO_CHANNELS, buildStudioTransformCommand, isTransformStale, previewCandidate, studioErrorMessage,
 } from '@/lib/content-workflow-client';
-import { postStudio } from './use-content-studio';
+import { postStudio } from './content-studio-api';
 import { ResultPreview } from './content-studio-editors';
 import { getEditorialGuidance } from '@com-moon/content-manager/editorial-criteria';
 import { isOfficeStudioOperation } from '@com-moon/agent-contracts/office-studio';
@@ -32,7 +32,7 @@ function ChangePreview({ before, after }) {
   </div>;
 }
 
-export function StudioAI({ studio, selection, onOpenHistory, request = '', onRequestChange, templates, templateId = '', onPickTemplate, onSaveAsTemplate }) {
+export function StudioAI({ studio, selection, onOpenHistory, request = '', onRequestChange, templates, templateId = '', onPickTemplate, onSaveAsTemplate, runRef }) {
   const { draft, save, mutate, busy, recovery } = studio;
   const [operation, setOperation] = React.useState('draft'), [tone, setTone] = React.useState('brand');
   const [targetChannel, setTargetChannel] = React.useState('instagram');
@@ -87,19 +87,10 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
       setState((current) => ({ ...current, phase: 'error', message: '콘텐츠를 서버에 먼저 저장해야 AI로 작업할 수 있습니다.' }));
       return;
     }
-    const channel = op === 'repurpose' ? targetChannel : saved.channel;
-    const sameSelection = activeSelection && activeSelection.body === saved.body;
-    let range = sameSelection ? { start: activeSelection.start, end: activeSelection.end } : { start: 0, end: saved.body.length };
-    if (op === 'draft' || op === 'repurpose' || structured) range = { start: 0, end: saved.body.length };
-    if (op === 'hooks' && !sameSelection) range.end = saved.body.indexOf('\n\n') >= 0 ? saved.body.indexOf('\n\n') : saved.body.length;
-    const request = {
-      requestId: crypto.randomUUID(), contentId: saved.contentId, variantId: saved.variantId,
-      expectedVariantUpdatedAt: saved.variantUpdatedAt, operation: op, selection: range, tone,
-      ...(request.trim() ? { request: request.trim() } : {}),
-      target: { variantType: op === 'repurpose' ? formatForChannel(channel) : saved.variantType, channel },
-    };
-    requestRef.current = request;
-    await dispatch(request);
+    const command = buildStudioTransformCommand({ saved, operation: op, selection: activeSelection, tone, targetChannel,
+      operatorRequest: request, structured, requestId: crypto.randomUUID() });
+    requestRef.current = command;
+    await dispatch(command);
   };
   const apply = async (candidate, mode) => {
     const result = await mutate({ action: 'apply_candidate', runId: state.run.id, candidateId: candidate.id, mode });
@@ -111,18 +102,21 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
   const moreOperations = OPERATIONS.filter((entry) => !['draft', 'polish'].includes(entry.value) && (!structured || !['hooks', 'shorten'].includes(entry.value)));
   const moreOperation = moreOperations.some((entry) => entry.value === operation) ? operation : moreOperations[0]?.value;
   const moreGuidance = getEditorialGuidance(moreOperation);
+  // 원문 메모의 ⌘↵ 같은 바깥 단축키가 버튼과 같은 조건으로 실행하게 한다.
+  if (runRef) runRef.current = (op) => { if (canRun(op)) generate(op); };
   // 자주 쓰는 두 작업(초안·다듬기)만 버튼으로 드러내고, 나머지 작업·말투·기준은 '다른 작업'에 접어 둔다.
   const templateName = templates?.templates?.find((t) => t.id === templateId)?.name;
+  const requestSummary = templateName || (request.trim() ? (request.trim().length > 24 ? request.trim().slice(0, 24).trimEnd() + '…' : request.trim()) : '없음');
   const templateOptions = [{ value: '', label: templates?.status === 'loading' ? '불러오는 중…' : '템플릿 없이' },
     ...(templates?.templates || []).map((t) => ({ value: t.id, label: t.name }))];
   return <div className="studio-ai" aria-label="AI 작업">
     <div className="studio-stack">
       <details className="studio-ai-request">
-        <summary>AI 요청 · 템플릿 <span className="studio-summary-count">{templateName || (request.trim() ? '직접 입력' : '없음')}</span></summary>
+        <summary>AI 요청 · 템플릿 <span className="studio-summary-count">{requestSummary}</span></summary>
         <div className="studio-stack studio-source-fields">
           <SelectField label="템플릿" options={templateOptions} value={templateId} disabled={generating || templates?.status !== 'live'} onChange={(event) => onPickTemplate?.(event.target.value)} />
           {['preview', 'error'].includes(templates?.status) && <p role="status" className="studio-muted studio-small">
-            {templates.status === 'preview' ? '템플릿 저장소 연결이 필요합니다. 요청은 이번 작업에만 쓸 수 있습니다.' : templates.message}
+            {templates.status === 'preview' ? (templates.message || '템플릿 저장소 연결이 필요합니다.') + ' 요청은 이번 작업에만 쓸 수 있습니다.' : templates.message}
             {templates.status === 'error' && <> <Button size="xs" onClick={templates.reload}>다시 불러오기</Button></>}
           </p>}
           <TextAreaField label="AI에게 부탁할 것" hint="구성·길이·말투·강조를 적어 주세요. 여기 적은 사실·수치는 근거로 쓰지 않습니다 — 근거는 원문 메모에." placeholder="예: 첫 줄은 질문으로, 세 문단 이내, 반말, 마지막 줄은 한 줄 결론"
@@ -132,8 +126,8 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
       </details>
       <div className="studio-actions studio-ai-actions">
         <Button variant="outline" icon="sparkle" disabled={!canRun('draft')} onClick={() => generate('draft')}>{generating && operation === 'draft' ? 'AI 초안 작성 중…' : 'AI 초안'}</Button>
-        <Button variant="outline" icon="sparkle" disabled={!canRun('polish')} onClick={() => generate('polish')}>{generating && operation === 'polish' ? 'AI 다듬는 중…' : activeSelection ? '선택 부분 AI 다듬기' : 'AI 다듬기'}</Button>
-        {!draft.sourceIdea.trim() && !draft.brief.message.trim() && !draft.body.trim() && <span className="studio-muted studio-small">원문 메모를 적으면 AI 초안을 만들 수 있습니다.</span>}
+        <Button variant="outline" icon="sparkle" disabled={!canRun('polish')} onClick={() => generate('polish')} title="본문에서 문장을 선택하면 그 부분만 다듬습니다.">{generating && operation === 'polish' ? 'AI 다듬는 중…' : activeSelection ? '선택 부분 AI 다듬기' : 'AI 다듬기'}</Button>
+        {!draft.sourceIdea.trim() && !draft.brief.message.trim() && <span className="studio-muted studio-small">원문 메모를 적으면 AI 초안을 만들 수 있습니다.</span>}
       </div>
       <details className="studio-ai-more">
         <summary>다른 작업 · 말투</summary>
@@ -148,7 +142,7 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
           <div className="studio-actions"><Button variant="outline" icon="sparkle" disabled={!moreOperation || !canRun(moreOperation)} onClick={() => generate(moreOperation)}>{generating && operation === moreOperation ? 'AI 작업 중…' : '실행'}</Button></div>
         </div>
       </details>
-      {generating && <p role="status" className="studio-muted studio-small">{officeEditing ? '님피아 편집 지침으로 작업 중입니다. ' : ''}작업 중에도 글을 쓸 수 있습니다. 본문이 바뀌면 새 내용으로 다시 생성해야 합니다.</p>}
+      {generating && <p role="status" className="studio-muted studio-small">{officeEditing ? '님피아 편집 지침으로 작업 중입니다. ' : ''}생성이 끝날 때까지 제목·메모·본문을 고치지 않으면 결과를 바로 적용할 수 있습니다.</p>}
       {state.message && <p role="status" className={['error', 'unknown'].includes(state.phase) ? 'studio-error' : 'studio-muted'}>{state.message}</p>}
       {state.phase === 'applied' && onOpenHistory && <Button variant="outline" onClick={onOpenHistory}>이전 버전 확인·복원</Button>}
       {['running', 'unknown', 'error'].includes(state.phase) && requestRef.current && <Button variant="outline" onClick={() => dispatch(requestRef.current)} disabled={generating}>같은 요청 상태 확인</Button>}
@@ -171,7 +165,7 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
           {!structured && state.run.operation !== 'repurpose' ? <ChangePreview before={source?.selectionText || source?.body || draft.sourceIdea} after={candidate.body} /> : <ResultPreview body={candidate.body} type={candidate.variantType} />}
           {candidate.missing?.length > 0 && <div className="studio-missing"><strong>확인이 필요한 내용</strong><ul>{candidate.missing.map((missing, i) => <li key={i}>{missing}</li>)}</ul></div>}
           <div className="studio-actions">
-            {state.run.operation !== 'repurpose' && <Button variant="primary" disabled={!state.persisted || stale || busy || generating || !!recovery} onClick={() => apply(candidate, 'replace')}>이 후보 적용</Button>}
+            {state.run.operation !== 'repurpose' && <Button variant={candidates.length > 1 ? 'outline' : 'primary'} disabled={!state.persisted || stale || busy || generating || !!recovery} onClick={() => apply(candidate, 'replace')}>이 후보 적용</Button>}
             <Button variant={state.run.operation === 'repurpose' ? 'primary' : 'outline'} disabled={!state.persisted || stale || busy || generating || !!recovery || Boolean(source?.prefix || source?.suffix)} onClick={() => apply(candidate, 'new_variant')}>새 결과물로 저장</Button>
           </div>
           {source && (source.prefix || source.suffix) && <details className="studio-source-compare"><summary>적용 후 전체 글 보기</summary><pre>{previewCandidate(source, candidate)}</pre></details>}

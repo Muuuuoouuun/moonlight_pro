@@ -55,6 +55,22 @@ export function buildStudioSave(draft, requestId, checkpoint = false) {
     variant: { title: draft.variantTitle, body: draft.body, variantType: draft.variantType, channel: draft.channel }, checkpoint,
   };
 }
+// Studio AI 작업 명령을 만든다(순수 함수). saved는 방금 서버에 저장된 초안, selection은 편집기 선택 범위.
+// operatorRequest는 'AI 요청' 칸 — 비어 있으면 명령에 넣지 않아 기존 요청 해시가 그대로다.
+export function buildStudioTransformCommand({ saved, operation, selection, tone, targetChannel, operatorRequest = '', structured = false, requestId }) {
+  const channel = operation === 'repurpose' ? targetChannel : saved.channel;
+  const sameSelection = Boolean(selection && selection.body === saved.body && selection.end > selection.start);
+  let range = sameSelection ? { start: selection.start, end: selection.end } : { start: 0, end: saved.body.length };
+  if (operation === 'draft' || operation === 'repurpose' || structured) range = { start: 0, end: saved.body.length };
+  if (operation === 'hooks' && !sameSelection) range.end = saved.body.indexOf('\n\n') >= 0 ? saved.body.indexOf('\n\n') : saved.body.length;
+  const trimmed = typeof operatorRequest === 'string' ? operatorRequest.trim() : '';
+  return {
+    requestId, contentId: saved.contentId, variantId: saved.variantId,
+    expectedVariantUpdatedAt: saved.variantUpdatedAt, operation, selection: range, tone,
+    ...(trimmed ? { request: trimmed } : {}),
+    target: { variantType: operation === 'repurpose' ? formatForChannel(channel) : saved.variantType, channel },
+  };
+}
 export function studioFingerprint(draft) {
   const { item, variant } = buildStudioSave(draft, '');
   return JSON.stringify({ item, variant });

@@ -34,7 +34,7 @@ test('stdio: loads credentials from the Hub env file and honours --profile/--rea
   await client.connect(new StdioClientTransport({command:process.execPath,args:[LAUNCHER,'--profile','core','--read-only'],cwd:'/',env,stderr:'pipe'}),{timeout:10_000});
   assert.equal(client.getServerVersion()?.version,version);
   const {tools}=await client.listTools();
-  assert.deepEqual(tools.map(tool=>tool.name).sort(),['get_command_receipt','get_daily_brief','get_hub_health','get_task','list_tasks']);
+  assert.deepEqual(tools.map(tool=>tool.name).sort(),['get_command_receipt','get_daily_brief','get_hub_health','get_skill_request','get_task','list_tasks']);
   const result=await client.callTool({name:'list_tasks',arguments:{limit:1}});
   assert.deepEqual(result.structuredContent,payload);
   assert.deepEqual(seen,['Bearer file-agent-token']);
@@ -61,7 +61,7 @@ test('http: serves registered clients on an ephemeral loopback port',async t=>{
   const client=new Client({name:'launcher-http',version:'1.0'},{capabilities:{}});
   t.after(()=>client.close());
   await client.connect(new StreamableHTTPClientTransport(new URL(url),{requestInit:{headers:{authorization:`Bearer ${token}`}}}));
-  assert.equal((await client.listTools()).tools.length,8);
+  assert.equal((await client.listTools()).tools.length,10);
   assert.deepEqual((await client.callTool({name:'list_tasks',arguments:{limit:1}})).structuredContent,payload);
   assert.deepEqual(seen,['Bearer file-agent-token']);
 });

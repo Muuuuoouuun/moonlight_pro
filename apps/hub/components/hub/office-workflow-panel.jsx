@@ -2,11 +2,12 @@
 
 import React from 'react';
 import {OFFICE_ROSTER} from '@com-moon/agent-contracts/office';
-import {Button,CheckboxRow,EditDrawer,EmptyState,SegmentedControl,SelectField,Skeleton,TextAreaField,TruthBadge} from './hub-primitives';
+import {Button,CertaintyBadge,CheckboxRow,EditDrawer,SegmentedControl,SelectField,Skeleton,TextAreaField,TruthBadge} from './hub-primitives';
 import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowQuery,officeWorkflowNote,readOfficeWorkflow,sendOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowReviewers,officeWorkflowGenerationRequest} from './office-workflow-client';
 import {OfficeDeliberationControls,OfficeDiscussion} from './office-deliberation-controls';
 import {officeDeliberationForParticipants} from './office-deliberation-client';
 import styles from './office-workflow-panel.module.css';
+import {WEEKLY_MISSING_LABELS} from '@/lib/weekly-report-fields';
 
 const Sessions=React.createContext(null);
 export function OfficeWorkflowSessionProvider({children}) {
@@ -20,7 +21,7 @@ export function OfficeWorkflowSessionProvider({children}) {
 }
 const WORKFLOW_MODES=[{key:'draft',label:'초안'},{key:'council',label:'관점 비교'}];
 const initialMessage={weekly_report:'선택한 7일의 확인된 기록으로 주간 정리를 작성해 주세요. 확인된 활동, 변화와 막힘, 다음 주 남길 행동을 구분하고 미측정 값은 그대로 표시해 주세요.',customer_reply:'선택한 고객의 실제 기록과 약속을 참고해 보낼 답장 초안 한 개와 이번 접촉 목적을 작성해 주세요. 자료에 없는 약속이나 고객 발언을 만들지 마세요.'};
-const missingLabels={'recorded-customer-words-unavailable':'직접 연결된 발언 기록 없음','activities-limited-to-latest-five':'최근 기록 5건만 참고','contacts_recorded':'고객 연락 미측정','tasks_completed':'완료 할 일 미측정','content_published':'발행 미측정','goals':'목표 조회 미완료','deals':'거래 조회 미완료','deal-win-timestamps':'성사일 일부 미확인'};
+const missingLabels={...WEEKLY_MISSING_LABELS,'recorded-customer-words-unavailable':'직접 연결된 발언 기록 없음','activities-limited-to-latest-five':'최근 기록 5건만 참고','contacts_recorded':'고객 연락 미측정','tasks_completed':'완료 할 일 미측정','content_published':'발행 미측정','goals':'목표 조회 미완료','deals':'거래 조회 미완료','deal-win-timestamps':'성사일 일부 미확인'};
 
 export function OfficeWorkflowPanel({intent,scope,originRef,title,onTaskCreated,onNavigate}) {
   const [pickedScope,setPickedScope]=React.useState('');
@@ -102,12 +103,18 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
     const choices=(projects.projects||[]).filter(project=>project.orgScope===scope);
     if(!choices.length){patch({note:'같은 범위의 프로젝트를 먼저 선택해야 합니다. 프로젝트 없이 등록하려면 기존 할 일 화면을 이용해 주세요.'});return;}
     const proposed=result?.nextStep?.fields||{};
-    patch({projects:choices,taskFields:{id:receipt.requestId,title:proposed.title||'',description:proposed.description||'',nextAction:proposed.nextAction||'',dealId:proposed.dealId||null,projectId:choices.some(p=>p.id===proposed.projectId)?proposed.projectId:'',dueAt:(proposed.dueAt||'').slice(0,10),priority:proposed.priority||'medium'}});
+    patch({projects:choices,contextChange:null,acknowledgeChange:false,taskFields:{id:receipt.requestId,title:proposed.title||'',description:proposed.description||'',nextAction:proposed.nextAction||'',dealId:proposed.dealId||null,projectId:choices.some(p=>p.id===proposed.projectId)?proposed.projectId:'',dueAt:(proposed.dueAt||'').slice(0,10),priority:proposed.priority||'medium'}});
   };
-  const apply=async(fields)=>{
+  const apply=async(fields,acknowledge=false)=>{
     if(store.get(sessionKey).pending)return {ok:false,status:'error'};
     patch({pending:true,inspectToken:null,applyInput:fields||state.applyInput});
-    const data=await writeOfficeWorkflow(`requests/${receipt.requestId}/apply`,{resultRevision:result?.resultRevision||1,...(fields?{fields}: {})},{requestId:receipt.requestId,scope});
+    const data=await writeOfficeWorkflow(`requests/${receipt.requestId}/apply`,{resultRevision:result?.resultRevision||1,...(fields?{fields}: {}),...(acknowledge?{acknowledgeContextChange:true}:{})},{requestId:receipt.requestId,scope});
+    // 2026-09-23 운영자 확정: 생성 뒤 기록이 바뀌었으면 막지 않고 알린다 — 편집 중인 할 일은 그대로 두고 확인만 받는다.
+    if(data.error==='office-context-changed'){
+      const note=officeWorkflowNote(data);
+      patch({pending:false,applyInput:null,contextChange:data.contextChange||{},acknowledgeChange:false,note});
+      return {ok:false,status:'conflict',message:note};
+    }
     const uncertain=['unknown','running'].includes(data.status);
     patch({pending:false,receipt:{...receipt,application:data.application||receipt.application,capabilities:data.application?data.capabilities:receipt.capabilities},note:officeWorkflowNote(data),applicationUnknown:uncertain,
       ...(uncertain?{taskFields:null}:{}),...(['saved','conflict','error'].includes(data.status)?{applyInput:null}:{})});
@@ -122,7 +129,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
     if(!fields?.projectId||!fields.title.trim())return {ok:false,status:'error',message:'할 일 제목과 같은 범위의 프로젝트를 선택해 주세요.'};
     if(fields.title.trim().length>300 || fields.description.trim().length>4000 || (fields.nextAction||'').trim().length>1000)return {ok:false,status:'error',message:'제목은 300자, 상세는 4,000자, 다음 행동은 1,000자 이내로 입력해 주세요.'};
     const payload={title:fields.title.trim(),projectId:fields.projectId,priority:fields.priority,...(fields.description.trim()?{description:fields.description.trim()}:{}),...(fields.nextAction?.trim()?{nextAction:fields.nextAction.trim()}:{}),...(fields.dealId?{dealId:fields.dealId}:{}),...(fields.dueAt?{dueAt:`${fields.dueAt}T09:00:00+09:00`}:{})};
-    return apply(payload);
+    return apply(payload,store.get(sessionKey).acknowledgeChange===true);
   };
   const showTask=()=>onNavigate?onNavigate(`dashboard/work/projects?view=todos&task=${encodeURIComponent(application.entityId)}`):window.location.assign(`/dashboard/work/projects?view=todos&task=${encodeURIComponent(application.entityId)}`);
   return <section className={styles.panel} aria-label={title}>
@@ -130,7 +137,9 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
       {state.open&&<span className={styles.meta}>{scope==='classin'?'회사':'개인'} · 선택한 업무의 자료</span>}
     </div>
     {state.open&&<div className={styles.stack} onKeyDown={event=>{if(event.key==='Escape'&&!state.taskFields){event.stopPropagation();patch({open:false});trigger.current?.focus();}}}>
-      {state.loading?<Skeleton lines={2} label="Office 자료와 이전 결과 확인 중" />:state.context?.status!=='ready'?<EmptyState icon="sparkle" title="업무 연결 확인 필요" description={officeWorkflowNote(state.context)||'자료를 확인할 수 없습니다.'} action={<Button size="xs" onClick={load}>다시 확인</Button>} />:null}
+      {state.loading?<Skeleton lines={2} label="Office 자료와 이전 결과 확인 중" />:state.context?.status!=='ready'?<div className={styles.truth} role={state.context?.status==='preview'?'status':'alert'}>
+        {/* DESIGN §5.3: 연결 전·오류는 '비어 있음'(EmptyState)이 아니라 truth 상태 + 원인 + 재시도다. */}
+        <TruthBadge state={state.context?.status==='preview'?'preview':'error'} /><p className={styles.note}>{officeWorkflowNote(state.context)||'자료를 확인할 수 없습니다.'}</p><Button size="xs" onClick={load}>다시 확인</Button></div>:null}
       {state.context?.status==='ready'&&<>
         <div className={styles.actions}><TruthBadge state={state.context.missing?.length?'partial':'live'} /><Button size="xs" variant="ghost" onClick={load} disabled={state.pending}>자료·이전 결과 새로고침</Button></div>
         {!!state.context.missing?.length&&<p className={styles.note}>{state.context.missing.map(reason=>missingLabels[reason]||reason).join(' · ')}</p>}
@@ -157,7 +166,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
         {!state.pending&&<details><summary>새 요청이 필요한 경우</summary><p className={styles.note}>{receipt.status==='unsaved'?'저장되지 않은 본문을 먼저 복사해 주세요. 새 결과를 만들면 현재 본문이 바뀝니다.':'이전 요청이 계속 처리될 수 있습니다. 새 요청은 별도로 실행되며 비용이 중복될 수 있습니다.'}</p><Button size="xs" onClick={()=>patch({receipt:{...receipt,status:'error'},note:'이전 요청을 목록에 보존했습니다. 새 요청을 보낼 수 있습니다.'})}>별도 요청 준비</Button></details>}
       </div>}
       {result&&<article className={styles.result}>
-        <div className={styles.actions}><strong>{result.summary}</strong><TruthBadge state={receipt.persistence?.persisted===true?'live':'partial'} label={receipt.persistence?.persisted===true?'초안 저장됨':'저장 확인 필요'} /></div>
+        <div className={styles.actions}><strong>{result.summary}</strong><TruthBadge state={receipt.persistence?.persisted===true?'live':'partial'} label={receipt.persistence?.persisted===true?'초안 저장됨':'저장 확인 필요'} />{result.sourceCheck === 'untraced' ? <CertaintyBadge state="unknown" label="근거 확인 안 됨" /> : null}</div>
         <pre className={styles.body}>{result.artifact.body}</pre>
         <div className={styles.actions}><Button size="xs" onClick={copy}>{state.copied?'복사됨':'복사'}</Button>
           {result.nextStep && !hasApplication && <Button size="xs" onClick={openTask} disabled={!receipt.capabilities?.applyTask || receipt.persistence?.persisted!==true || state.pending || state.applicationUnknown}>할 일로 연결</Button>}
@@ -174,7 +183,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
         {application.entityId?<Button size="xs" onClick={showTask}>연결된 할 일</Button>:null}
         {!['saved','rejected'].includes(application.state)&&<Button size="xs" onClick={()=>apply(state.applyInput)} disabled={state.pending}>같은 명령으로 저장 확인</Button>}
       </div>}
-      {!!state.requests.length&&<details><summary>이 업무의 요청 기록 ({state.requests.length})</summary><ul className={styles.history}>{state.requests.map(item=><li key={item.requestId}><Button size="xs" variant="ghost" onClick={()=>inspect(item.requestId)} disabled={state.pending || receipt?.status==='unsaved' || state.applicationUnknown}>{new Date(item.createdAt).toLocaleString('ko-KR')} · {item.expired?'본문 만료':({generated:'초안 저장됨',running:'처리 중',unknown:'확인 필요',error:'생성 실패'}[item.state]||item.state)}</Button></li>)}</ul>
+      {!!state.requests.length&&<details><summary>이 업무의 요청 기록 ({state.requests.length})</summary><ul className={styles.history}>{state.requests.map(item=><li key={item.requestId}><Button size="xs" variant="ghost" onClick={()=>inspect(item.requestId)} disabled={state.pending || receipt?.status==='unsaved' || state.applicationUnknown}><span className={`mono ${styles.historyTime}`}>{new Date(item.createdAt).toLocaleString('ko-KR')}</span> · {item.expired?'본문 만료':({generated:'초안 저장됨',running:'처리 중',unknown:'확인 필요',error:'생성 실패'}[item.state]||item.state)}</Button></li>)}</ul>
         {state.nextCursor&&<Button size="xs" onClick={async()=>{const list=await readOfficeWorkflow(`requests?${query}&cursor=${encodeURIComponent(state.nextCursor)}`);if(Array.isArray(list.requests))patch(current=>({requests:[...current.requests,...list.requests.filter(item=>!current.requests.some(old=>old.requestId===item.requestId))],nextCursor:list.nextCursor||null}));else patch({note:officeWorkflowNote(list)});}}>이전 요청 더 보기</Button>}
       </details>}
       <p className={styles.meta}>초안 생성·복사는 실제 연락이나 업무 완료를 기록하지 않습니다.</p>
@@ -182,6 +191,8 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
     {state.taskFields&&<EditDrawer title="Office 제안을 할 일로 연결" subtitle="같은 범위의 프로젝트에 저장합니다." record={state.taskFields} presentation="compact" onChange={(field,value)=>patch(current=>({taskFields:{...current.taskFields,[field]:value}}))} onClose={()=>patch({taskFields:null})} onSave={saveTask} saveLabel="할 일 등록" fields={[
       {key:'title',label:'할 일',type:'text',required:true},{key:'projectId',label:'프로젝트',type:'select',options:[{value:'',label:'프로젝트 선택'},...state.projects.map(project=>({value:project.id,label:project.name}))]},
       {key:'dueAt',label:'기한',inputType:'date',optional:true},{key:'nextAction',label:'다음 행동',type:'text',optional:true},{key:'description',label:'상세',type:'textarea',optional:true},
-    ]}><p className={styles.note}>저장 확인이 끊기면 새 할 일을 만들지 않고 같은 명령을 확인합니다.</p></EditDrawer>}
+    ]}>{state.contextChange&&<div className={styles.changeNotice} role="status"><p className={styles.note}>{officeWorkflowNote({error:'office-context-changed',contextChange:state.contextChange})}</p>
+        <CheckboxRow text="바뀐 기록을 확인했고 이 내용 그대로 연결합니다" checked={state.acknowledgeChange===true} onChange={()=>patch(current=>({acknowledgeChange:!current.acknowledgeChange}))} /></div>}
+      <p className={styles.note}>저장 확인이 끊기면 새 할 일을 만들지 않고 같은 명령을 확인합니다.</p></EditDrawer>}
   </section>;
 }

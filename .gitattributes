@@ -1,0 +1,13 @@
+# Windows 체크아웃에서도 LF를 유지한다 — 소스를 잘라 읽는 *.test.mjs가 CRLF에서 깨진다(2026-09-26 실측 20건).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.zip binary

@@ -44,6 +44,20 @@ test('Top 3 readiness requires its cap function and attached trigger', () => {
   assert.match(readinessSql([feature]), /pg_trigger/);
 });
 
+test('social multi-account readiness requires the account key, new unique index and removal of the old unique index', () => {
+  const feature = DATABASE_FEATURES.find(f => f.migration === '20260924_0046_social_multiaccount_connections.sql');
+  assert.ok(feature);
+  assert.deepEqual(featureChecks(feature).map(check => check.kind), ['column', 'index_includes', 'index_absent']);
+  const ready = rowsFor([feature]);
+  assert.equal(summarizeReadiness(ready, [feature])[0].ready, true);
+  for (const kind of ['column', 'index_includes', 'index_absent']) {
+    const missing = summarizeReadiness(ready.filter(row => row.kind !== kind), [feature])[0];
+    assert.equal(missing.ready, false, kind);
+    assert.equal(missing.missingOrUnprotected.length, 1, kind);
+  }
+  assert.match(readinessSql([feature]), /pg_index/);
+});
+
 // One synthetic feature per check kind so each failure mode is isolated.
 const SYNTHETIC = [
   { name: '본문 포함', migration: 'a.sql', tables: [], functions: [], bodyIncludes: [['probe_v1(uuid)', 'sha256(convert_to']] },
@@ -213,6 +227,31 @@ test('readinessSql runs read-only on PostgreSQL and tells old and new versions a
     assert.equal(sql("select has_table_privilege('service_role','public.probe','SELECT')"), 't');
     sql('alter table public.probe drop constraint probe_kind_check;');
     assert.deepEqual(featureOf(check(SYNTHETIC), '제약 포함').missingOrUnprotected, [FAILURES['제약 포함'].absent]);
+
+    const social = DATABASE_FEATURES.filter(f => f.migration === '20260924_0046_social_multiaccount_connections.sql');
+    sql(`create table public.integration_connections(workspace_id uuid not null, provider text not null,
+      external_account_id text, config jsonb not null default '{}'::jsonb);
+      create unique index uq_integration_connections_workspace_provider
+        on public.integration_connections(workspace_id, provider);`);
+    assert.deepEqual(check(social)[0].missingOrUnprotected, [
+      'integration_connections.account_key 없음',
+      'uq_integration_connections_workspace_provider_account 없음',
+      'uq_integration_connections_workspace_provider 남음 (이전 버전)',
+    ]);
+    sql(await migration('20260924_0046_social_multiaccount_connections.sql'));
+    assert.equal(check(social)[0].ready, true);
+    sql('create unique index uq_integration_connections_workspace_provider on public.integration_connections(workspace_id, provider);');
+    assert.deepEqual(check(social)[0].missingOrUnprotected, ['uq_integration_connections_workspace_provider 남음 (이전 버전)']);
+    sql('drop index public.uq_integration_connections_workspace_provider; drop index public.uq_integration_connections_workspace_provider_account;');
+    assert.deepEqual(check(social)[0].missingOrUnprotected, ['uq_integration_connections_workspace_provider_account 없음']);
+    sql('create index uq_integration_connections_workspace_provider_account on public.integration_connections(workspace_id, provider, account_key);');
+    assert.deepEqual(check(social)[0].missingOrUnprotected,
+      ['uq_integration_connections_workspace_provider_account 유니크 키 (workspace_id, provider, account_key) 불일치']);
+    sql(`drop index public.uq_integration_connections_workspace_provider_account;
+      create unique index uq_integration_connections_workspace_provider_account
+      on public.integration_connections(workspace_id, provider, account_key) where provider = 'youtube';`);
+    assert.deepEqual(check(social)[0].missingOrUnprotected,
+      ['uq_integration_connections_workspace_provider_account 유니크 키 (workspace_id, provider, account_key) 불일치']);
   } finally {
     if (running) spawnSync(join(bin, 'pg_ctl'), ['-D', join(root, 'data'), '-m', 'fast', '-w', 'stop'], { encoding: 'utf8', timeout: 30000, env });
     await rm(root, { recursive: true, force: true });

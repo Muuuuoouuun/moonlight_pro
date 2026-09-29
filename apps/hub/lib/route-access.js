@@ -18,7 +18,7 @@ export const OPEN_PREFIXES = [
   "/login", // 로그인 화면
 ];
 
-// OAuth 제공자가 돌려보내는 콜백. 세션 쿠키가 없을 수 있으므로 열어 둔다.
+// OAuth 콜백과 공급자 심사용 정적 법률 페이지는 세션 없이 접근해야 한다.
 // 명시 목록으로 둔다 — 접미사 매칭은 새 경로가 조용히 열리는 길을 만든다(fail-closed).
 export const OPEN_EXACT = [
   "/api/calendar/google/callback",
@@ -26,6 +26,17 @@ export const OPEN_EXACT = [
   "/api/integrations/sheets/callback",
   "/api/social/instagram/callback",
   "/api/social/meta/threads/callback",
+  "/api/social/meta/threads/deauthorize",
+  "/api/social/meta/threads/data-deletion",
+  "/api/social/youtube/callback",
+  "/legal/about",
+  "/legal/privacy",
+  "/legal/terms",
+  "/legal/data-deletion",
+  // Android App Links 검증 파일(public/.well-known/assetlinks.json) — 공개 서명 지문뿐이다.
+  // Google 검증기는 쿠키 없이 리다이렉트도 따르지 않고 읽으므로 로그인으로 보내면 검증이 실패한다.
+  // `/.well-known/` 접두사가 아니라 이 파일 하나만 연다(fail-closed).
+  "/.well-known/assetlinks.json",
 ];
 
 export function isOpenPath(pathname) {

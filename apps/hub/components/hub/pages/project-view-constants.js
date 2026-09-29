@@ -18,13 +18,15 @@ export const EMPTY_ALL_BRAND = {
 };
 
 export const PROJECT_VIEW_OPTIONS = [
-  { key: 'tree', label: '홈' },
+  { key: 'tree', label: '개요' },
   { key: 'table', label: '목록' },
   { key: 'backlog', label: '백로그' },
   { key: 'board', label: 'Board' },
   { key: 'memos', label: '메모' },
   { key: 'timeline', label: 'Timeline' },
   { key: 'todos', label: 'To-dos' },
+  // 제품 = 오래 사는 것(2026-09-24 제품 렌즈 §6). 프로젝트 목록과 따로 제품 카탈로그를 본다.
+  { key: 'products', label: '제품' },
 ];
 const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
 
@@ -42,6 +44,23 @@ export const STATUS_LINE_TOKEN = {
 };
 // 상태 라벨과 lifecycle 열거값의 정본은 ./project-pms-components 의
 // PROJECT_STATUS_LABEL_KO / PROJECT_LIFECYCLE_STATE 다 — 상세 패널과 공유한다(§8.2).
+
+// 프로젝트 장르 — 목록 모노그램 타일의 은은한 색 구분(DESIGN §15 2026-09-24 운영자 확정 예외).
+// 색은 언제나 라벨과 함께 쓴다. 'other'와 미지정은 중립 타일 그대로다.
+export const PROJECT_GENRES = [
+  { key: 'company', label: '회사' },
+  { key: 'sales', label: '세일즈' },
+  { key: 'it', label: 'IT' },
+  { key: 'content', label: '콘텐츠' },
+  { key: 'other', label: '기타' },
+];
+const TINTED_GENRES = new Set(['company', 'sales', 'it', 'content']);
+export function projectGenreLabel(genre) {
+  return PROJECT_GENRES.find(item => item.key === genre)?.label || null;
+}
+export function projectGenreTint(genre) {
+  return TINTED_GENRES.has(genre) ? genre : null;
+}
 
 // Container category folders (2026-07-15 spec §4.2). The ledger resolves
 // `category` (meta.category → canonical map → 'general'); empty folders are
@@ -80,7 +99,7 @@ export const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
 // (2026-09-01 2609 병합 리뷰에서 페이지 지역 술어 isBrandActive를 흡수).
 // 리스트(tree) 뷰 상태 그룹 — 렌더와 j/k 평탄화(23차)가 같은 순서를 공유한다.
 export const LIST_STATUS_GROUPS = [
-  { key: 'In progress', label: '진행중', tone: 'var(--line-strong)' },
+  { key: 'In progress', label: '진행 중', tone: 'var(--line-strong)' },
   { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
   { key: 'Review',      label: '검토',   tone: 'var(--line-strong)' },
   { key: 'Planning',    label: '계획',   tone: 'var(--line-strong)' },

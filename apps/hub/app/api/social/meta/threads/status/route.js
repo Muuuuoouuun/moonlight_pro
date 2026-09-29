@@ -1,13 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 import {
   buildMetaThreadsSetupUrls,
-  fetchLatestMetaThreadsConnection,
+  fetchMetaThreadsConnections,
   hasMetaThreadsOAuthStateSecret,
   resolveMetaThreadsConfig,
   summarizeMetaThreadsConnection,
 } from "@/lib/meta-threads";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { summarizeSocialAccountStatus } from "@/lib/social-account-status";
+import { matchesMetaOAuthConnection, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,26 +17,38 @@ export const dynamic = "force-dynamic";
 export async function GET(req) {
   const { origin } = req.nextUrl;
   const workspaceId = resolveDefaultWorkspaceId();
-  const config = resolveMetaThreadsConfig();
-  const connection = workspaceId
-    ? await fetchLatestMetaThreadsConnection(workspaceId)
-    : null;
-  const connected = connection?.status === "connected";
+  const legacyConfig = resolveMetaThreadsConfig();
+  const requestedHandle = (req.nextUrl.searchParams.get("brand") || legacyConfig.brandHandle)
+    .replace(/^@+/, "").toLowerCase();
+  const config = resolveMetaOAuthApp({
+    provider: "meta_threads",
+    brandKey: req.nextUrl.searchParams.get("brandKey"),
+    brandHandle: requestedHandle,
+  });
+  const accountId = req.nextUrl.searchParams.get("accountId") || "";
+  const { connections, available } = await fetchMetaThreadsConnections(workspaceId);
+  const visibleConnections = connections.filter((row) => matchesMetaOAuthConnection(row, config));
+  const summary = summarizeSocialAccountStatus({
+    rows: visibleConnections,
+    configured: Boolean(config?.configured && hasMetaThreadsOAuthStateSecret()),
+    available,
+    selector: (row) => !accountId || row.account_key === accountId,
+    summarize: summarizeMetaThreadsConnection,
+  });
 
   return NextResponse.json({
-    status: connected
-      ? "connected"
-      : config.configured && hasMetaThreadsOAuthStateSecret()
-        ? "ready"
-        : "missing-config",
+    status: summary.status,
     provider: "meta_threads",
     workspaceId: workspaceId || null,
-    brandHandle: config.brandHandle,
-    configured: config.configured,
-    hasAppId: config.hasAppId,
-    hasAppSecret: config.hasAppSecret,
+    brandHandle: requestedHandle,
+    brandKey: config?.brandKey || null,
+    configured: Boolean(config?.configured),
+    appKey: config?.appKey || null,
+    hasAppId: Boolean(config?.hasAppId),
+    hasAppSecret: Boolean(config?.hasAppSecret),
     hasOAuthStateSecret: hasMetaThreadsOAuthStateSecret(),
-    connection: connection ? summarizeMetaThreadsConnection(connection) : null,
+    connection: summary.connection,
+    connections: summary.connections,
     setup: buildMetaThreadsSetupUrls(origin),
   });
 }

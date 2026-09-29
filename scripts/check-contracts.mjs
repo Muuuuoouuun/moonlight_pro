@@ -184,7 +184,6 @@ const nullableProjectProgressSql = existsSync(path.join(root, nullableProjectPro
 const liveSchemaSql = readText("supabase/setup/00_live_schema.sql");
 const pendingMigrationSql = readText("supabase/apply-pending.sql");
 const pmsCommandSql = readText("apps/engine/lib/pms-command.ts");
-const migrationRunnerSql = readText("scripts/apply-migrations.mjs");
 const supabaseReadme = readText("supabase/README.md");
 assert(
   nullableProjectProgressSql.includes("alter column progress drop default") &&
@@ -193,7 +192,6 @@ assert(
     liveSchemaSql.includes("alter column progress drop default") &&
     liveSchemaSql.includes("alter column progress drop not null") &&
     pendingMigrationSql.includes("20260717_0020_nullable_project_progress.sql") &&
-    migrationRunnerSql.includes("20260717_0020_nullable_project_progress.sql") &&
     supabaseReadme.includes("0019~0023") &&
     supabaseReadme.includes("`0020`(nullable project progress)") &&
     pmsCommandSql.includes("hasInitialProgress ? { progress: initialProgress } : {}"),

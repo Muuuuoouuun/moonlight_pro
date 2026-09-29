@@ -1,8 +1,11 @@
+import { AGENT_SCOPES as CONTRACT_AGENT_SCOPES } from '@com-moon/agent-contracts';
 import { normalizePmsCommand } from './pms-command.ts';
 
 export type AgentCommandContext = { workspaceId?: string; actorId?: string; scopes?: string[] };
 export type AgentCommand = { commandId: string; action: string; targetId: string; expectedUpdatedAt: string | null; payload: Record<string, unknown> };
-export const AGENT_SCOPES = ['read', 'tasks:write', 'contact-outcomes:write', 'jobs:read', 'jobs:write'];
+// The Hub validates scopes against the same contract list. A local copy here drifted (5 vs 7) and made the Engine
+// reject its own configuration as soon as goals:write or ai:write appeared in the shared env.
+export const AGENT_SCOPES: readonly string[] = CONTRACT_AGENT_SCOPES;
 export const AGENT_COMMAND_BODY_BYTES = 256 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACTOR = /^[a-zA-Z0-9._:@/-]{1,128}$/;

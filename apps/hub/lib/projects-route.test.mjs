@@ -56,6 +56,9 @@ registerHooks({
     if (specifier === "@/lib/repositories/operating-ledger") {
       return { url: `data:text/javascript,${encodeURIComponent(ledgerStub)}`, shortCircuit: true };
     }
+    if (specifier === "@/lib/repositories/deadline-alert-settings") {
+      return { url: `data:text/javascript,${encodeURIComponent('export async function getDeadlineAlertSettings() { return { status: "live", reset: globalThis.__projectsRouteTestState.deadlineReset || null }; }')}`, shortCircuit: true };
+    }
     if (specifier === "@/lib/hub-write-guard") {
       return { url: `data:text/javascript,${encodeURIComponent(writeGuardStub)}`, shortCircuit: true };
     }
@@ -88,6 +91,7 @@ beforeEach(() => {
   globalThis.__projectsRouteTestState.readJson = null;
   globalThis.__projectsRouteTestState.forwarded = [];
   globalThis.__projectsRouteTestState.ledgerArgs = [];
+  globalThis.__projectsRouteTestState.deadlineReset = null;
   globalThis.__projectsRouteTestState.ledger = {
     source: "preview",
     configured: false,
@@ -161,7 +165,22 @@ test("projects API preserves optional ledger failures as named partial data", as
   assert.equal(body.source, "supabase");
   assert.equal(body.partial, true);
   assert.deepEqual(body.failedSources, ["project_updates", "notes"]);
-  assert.deepEqual(body.projects, [{ id: "project-1" }]);
+  assert.deepEqual(body.projects, [{ id: "project-1", deadlineAlertSuppressed: false }]);
+});
+
+test("projects API keeps the old due date while clearing its risk alert", async () => {
+  const dueAt = "2026-05-08T07:20:52.676457+00:00";
+  globalThis.__projectsRouteTestState.ledger = {
+    source: "supabase", configured: true,
+    projects: [{ id: "project-1", name: "Past project", dueAt }], todos: [],
+  };
+  globalThis.__projectsRouteTestState.deadlineReset = {
+    resetAt: "2026-09-23T00:00:00Z", beforeDay: "2026-09-21",
+    items: [{ kind: "project", id: "project-1", dueAt }],
+  };
+  const body = await (await GET()).json();
+  assert.equal(body.projects[0].dueAt, dueAt);
+  assert.equal(body.projects[0].deadlineAlertSuppressed, true);
 });
 
 test("projects API forwards a canonical selected project to the repository", async () => {

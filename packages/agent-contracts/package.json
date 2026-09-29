@@ -14,6 +14,10 @@
       "types": "./office.d.ts",
       "default": "./office.js"
     },
+    "./office-routing": {
+      "types": "./office-routing.d.ts",
+      "default": "./office-routing.js"
+    },
     "./office-workflow": {
       "types": "./office-workflow.d.ts",
       "default": "./office-workflow.js"

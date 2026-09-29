@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server.js";
 import { buildAdvisorySystemInstruction } from "../../../../lib/advisor-guardrails.ts";
+import { buildGuruAdvicePrompt, GURU_ADVICE_MODES, type GuruAdviceMode } from "../../../../lib/guru-advice-prompt.ts";
 
 // Gemini generations can legitimately run tens of seconds; cap the route
 // so a hung upstream cannot pin a serverless invocation past a minute.
@@ -16,67 +17,43 @@ import {
 import { generateGeminiText, getGeminiIntegrationStatus } from "../../../../lib/gemini.ts";
 import {
   insertIntegrationSyncRun,
-  resolveDefaultWorkspaceId,
   upsertIntegrationConnection,
 } from "../../../../lib/integration-state.ts";
 import { validateSharedWebhookRequest } from "../../../../lib/shared-webhook.ts";
-import { insertSupabaseRecord } from "../../../../lib/supabase-rest.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Mentor modes — see docs/sales-guru-mentor-agent-plan.md §5 / §14.
-// Each mode declares the question and which knowledge-base frames to lean on.
-const MODES = {
-  "pipeline-triage": {
-    question:
-      "ClassIn 월간 계약/유닛/매출 목표를 기준으로 이번 주 가장 먼저 손대야 할 딜·리드 3건과 그 이유를 우선순위로 제시하라. 설명회 신청, Threads 관심, 광고 리드의 접촉 공백을 특히 봐라.",
-    frames: "Cardone 10X Contact(80%는 5번째 이후 접촉), Ross MEDDIC 자격, Tracy 시간 우선순위.",
-  },
-  "deal-review": {
-    question:
-      "이 딜의 정체 원인을 진단하고, 다음 미팅 전 해야 할 액션을 제시하라. 가능하면 구매자 의사결정 스타일을 먼저 추정하고 같은 액션을 그 스타일의 언어로 번역하라.",
-    frames:
-      "Keenan GAP 4층(표면→프로세스→매출 영향→개인 임팩트), Voss 보정된 질문, Belfort 확신 온도(제품·사람·회사), Ziglar 5장애물(No need/money/hurry/desire/trust), 의사결정 7스타일(논리·관계·권위·직관·안정·체면·집단합의).",
-  },
-  "proposal-critique": {
-    question:
-      "붙여 넣은 초안의 구조와 설득력을 진단하고 개선점 3가지를 제시하라.",
-    frames:
-      "Miller StoryBrand SB7(고객=영웅, 브랜드=가이드, 외부·내부·철학 문제), Ogilvy 카피(헤드라인이 80%, 구체적 사실), Rackham SPIN·Benefit, Godin SVM(가장 작은 실행 가능한 시장).",
-  },
-  "weekly-retro": {
-    question:
-      "지난 주 딜 이동, won/lost, 리드 소스, 콘텐츠 성과에서 패턴을 찾고, 다음 주에 시도할 매출 실험 1개를 제시하라.",
-    frames:
-      "Girard 팔로업·고객 파일, Lemkin churn·expansion, Hill 목표 재정렬.",
-  },
-  "sparring": {
-    question:
-      "이 딜 또는 영업 상황에 대해 3자 균형 토론(스파링)을 진행하라. 칭찬 없이, [Closer 추진 논거] vs [Devil's Advocate 맹점·거절 이유·리스크] vs [Operator 1단계 가역적 다음 한 수]로 격돌하라.",
-    frames:
-      "Cardone 10X Contact & Belfort 확신도 vs Voss 협상 저항 & Ziglar 5장애물(No need/money/hurry/desire/trust) vs Keenan 3단계 영향 질문 & 의사결정 7스타일 번역.",
-  },
-} as const;
-
-type Mode = keyof typeof MODES;
-
-const SYSTEM_INSTRUCTION = [
+const DRAFT_SYSTEM_INSTRUCTION = [
   "당신은 Moonlight 운영자(파운더)의 영업 멘토입니다.",
   "노련한 세일즈 코치처럼 직설적이고 구체적으로, 한국어로 조언합니다.",
-  "칭찬·일반론·마케팅 카피는 금지하고 항상 '다음 한 수'로 끝맺습니다.",
+  "요청받은 후속 초안만 작성하고, 근거 없는 고객 반응이나 기한을 만들지 않습니다.",
   "판단 프레임은 12인 세일즈 구루 플레이북에서 가져오되, 사실(딜 상태·금액·접촉 이력)은",
   "제공된 ledger snapshot에서만 인용하고, 데이터에 없는 사실은 단정하지 않습니다.",
   "ClassIn은 Moonlight 전체가 아니라 운영자의 현재 회사 영업 lane입니다. 개인 사업/브랜드 확장과 섞어 판단하지 않습니다.",
   "주요 리드 공급원은 Meta 광고/마케팅팀 Google Sheet이고, 보조 소스는 기존 고객 연락과 Threads입니다.",
-  "회사 CRM은 현재 read/get 중심입니다. 회사 CRM에 자동 push하거나 고객에게 직접 발송하라고 지시하지 말고, Moonlight work_orders 승인 큐에 올릴 액션으로 제안합니다.",
+  "회사 CRM은 현재 read/get 중심입니다. 회사 CRM에 자동 push하거나 고객에게 직접 발송하지 않습니다.",
   "문자·카카오톡·Threads DM·전화 중심으로 제안하고, 이메일을 기본 채널로 두지 않습니다.",
-  "고객 직접 전달과 콘텐츠 업로드는 human approval gate 이후의 실행으로 표기합니다. 회사 CRM push/자동 입력은 승인으로도 허용하지 말고 수동 체크리스트로만 제안합니다.",
+  "고객 직접 전달과 콘텐츠 업로드는 사람의 확인 이후에만 실행합니다. 회사 CRM push/자동 입력은 수동 체크리스트로만 다룹니다.",
   "근거가 된 프레임은 한 줄로 출처를 밝힙니다 (예: \"Keenan 4층 기준 Layer 3이 비어 있음\").",
   "context.brand(classmoon) 가드레일을 지키고, 금지 표현(과장·보장·단정, 혁신적·차세대·시너지 같은 default SaaS 톤)을 쓰지 않습니다.",
   "context.outcomes.recent는 실제 접촉 이력이니 다음 액션의 근거로 삼고, context.memory.recent_runs(이전 코칭)와 중복되지 않게 연속성을 유지합니다.",
   "context.missing[]에 적힌 소스는 데이터 공백이므로 그 슬라이스의 사실은 추정하지 않습니다.",
 ].join("\n");
+
+// A company-scope Office escalation: an open question that names its Office source and
+// carries the Office result verbatim. Mirrors the Hub's OFFICE_MENTOR_DRAFT_LIMIT and the
+// personal lane's office-review limit in brand-mentor.
+const OFFICE_SOURCE_DRAFT_LIMIT = 25000;
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function parseOfficeSource(value: any) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some(key => !["requestId", "runId"].includes(key))
+    || typeof value.requestId !== "string" || !UUID.test(value.requestId)
+    || (value.runId != null && (typeof value.runId !== "string" || !UUID.test(value.runId)))) return null;
+  return { requestId: value.requestId, runId: value.runId ?? null };
+}
 
 async function readJson(req: Request) {
   const text = await req.text();
@@ -88,102 +65,10 @@ async function readJson(req: Request) {
 // 'followup-draft' mode that did not exist here, the old fallback quietly answered with
 // pipeline-triage prose instead, and every scheduled run burned a Gemini call to produce a
 // response the cron could never accept. An unknown mode is now a 400 that names itself.
-function resolveAdvisoryMode(value: unknown): Mode | null {
+function resolveAdvisoryMode(value: unknown): GuruAdviceMode | null {
   const key = typeof value === "string" ? value.trim() : "";
   if (!key) return "pipeline-triage";
-  return (key in MODES ? key : null) as Mode | null;
-}
-
-// Readable digest of the 360 context-assembler slices, so the model attends to the
-// brand guardrails / contact history / prior-coaching memory instead of only the raw blob.
-// Defensive: tolerates the old flat context shape (every slice optional).
-function digest360(context: any): string {
-  if (!context || typeof context !== "object") return "";
-  const lines: string[] = [];
-
-  const brand = context.brand;
-  if (brand && (brand.forbidden?.length || brand.rules?.length)) {
-    lines.push(`브랜드 가드레일 (${brand.voice ?? "classmoon"}): 금지=${(brand.forbidden ?? []).join(", ") || "-"}`);
-  }
-
-  const outcomes = context.outcomes?.recent;
-  if (Array.isArray(outcomes) && outcomes.length) {
-    const recent = outcomes
-      .slice(0, 5)
-      .map((o: any) => `${o.action ?? "?"}${o.at ? `(${String(o.at).slice(0, 10)})` : ""}`)
-      .join(" · ");
-    lines.push(`최근 접촉 결과: ${recent}`);
-  }
-
-  const runs = context.memory?.recent_runs;
-  if (Array.isArray(runs) && runs.length) {
-    lines.push(`이전 코칭 ${runs.length}건 기록됨 — 연속성을 유지하고 같은 조언을 반복하지 마라.`);
-  }
-
-  const focus = context.focus;
-  if (focus && focus.found) {
-    lines.push(`포커스 딜: ${focus.entity?.company ?? "?"} · ${focus.entity?.stage ?? "?"} · last_touch=${focus.ledger?.last_touch ?? "무접촉"}`);
-  }
-
-  const operator = context.operator;
-  if (operator && typeof operator === "object") {
-    const target = operator.targets || {};
-    const actual = operator.monthlyKpi?.actual || {};
-    lines.push(
-      `ClassIn 목표: 계약 ${target.monthlyContractTarget ?? "?"}건 · 유닛 ${target.monthlyUnitTarget ?? "?"}대 · 매출 ${target.monthlyRevenueTargetCny ?? "?"} CNY`,
-    );
-    lines.push(
-      `ClassIn 현재 월간: 계약 ${actual.contracts ?? 0}건 · 유닛 ${actual.units ?? 0}대 · 매출 ${actual.revenueCny ?? 0} CNY`,
-    );
-    if (Array.isArray(operator.sourcePriority)) {
-      lines.push(`리드 우선순위: ${operator.sourcePriority.join(" > ")}`);
-    }
-    lines.push("운영 경계: 회사 CRM 자동 push/입력 금지 · 고객 전달/콘텐츠 업로드는 승인 큐 이후 사람 실행");
-  }
-
-  const missing = context.missing;
-  if (Array.isArray(missing) && missing.length) {
-    lines.push(`데이터 공백(추정 금지): ${missing.map((m: any) => m.source).join(", ")}`);
-  }
-
-  return lines.length ? ["360 컨텍스트 요약:", ...lines].join("\n") : "";
-}
-
-function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
-  const config = MODES[mode];
-  const lines = [
-    config.question,
-    "",
-    `참고 프레임: ${config.frames}`,
-    ...(mode === "sparring"
-      ? [
-          "다음 형식의 한국어로 날카롭게 답하라 (인사말·잡담·에코챔버 절대 금지):",
-          "0. 구매자 스타일 (추정/미확인 표기)",
-          "1. 🟢 [Closer 추진 논거] (왜 밀어붙여야 하는가, 클로징 명분, Cardone 10X / Belfort 확신도)",
-          "2. 🔴 [Devil's Advocate 맹점과 거절 이유] (고객이 숨긴 거절 이유, Ziglar 5대 장애물, 놓치면 잃는 리스크)",
-          "3. 🟡 [Operator 1단계 다음 한 수] (상대방 스타일 언어로 번역된 첫 질문 1개와 팔로업 일정)",
-        ]
-      : [
-          "다음 형식의 한국어로 답하라:",
-          mode === "deal-review" ? "0. 구매자 스타일 (추정/미확인 표기)" : null,
-          "1. 진단 (지금 무엇이 보이는가)",
-          "2. 리스크 (놓치면 잃는 것)",
-          "3. 다음 액션 (구체적 1~3개, 담당/기한 포함)",
-          "4. 승인 큐 후보 (work_order로 올릴 제목 1개와 gate/human approval 표기)",
-        ].filter(Boolean)),
-  ];
-
-  if (draft && draft.trim()) {
-    lines.push("", "검토할 초안:", draft.trim());
-  }
-
-  const digest = digest360(context);
-  if (digest) {
-    lines.push("", digest);
-  }
-
-  lines.push("", "Sales ledger snapshot:", JSON.stringify(context ?? {}, null, 2));
-  return lines.join("\n");
+  return (key in GURU_ADVICE_MODES ? key : null) as GuruAdviceMode | null;
 }
 
 export async function GET() {
@@ -191,7 +76,7 @@ export async function GET() {
     service: "com-moon-engine",
     integration: "gemini",
     agent: "guru",
-    modes: Object.keys(MODES),
+    modes: Object.keys(GURU_ADVICE_MODES),
     draftModes: [FOLLOWUP_DRAFT_MODE],
     status: getGeminiIntegrationStatus(),
   });
@@ -227,18 +112,39 @@ export async function POST(req: Request) {
         status: "invalid-input",
         error: "unsupported-mode",
         detail: `Unsupported mode '${requestedMode}'.`,
-        modes: Object.keys(MODES),
+        modes: Object.keys(GURU_ADVICE_MODES),
         draftModes: [FOLLOWUP_DRAFT_MODE],
       },
       { status: 400 },
     );
   }
 
-  const mode = isDraftMode ? FOLLOWUP_DRAFT_MODE : (advisoryMode as Mode);
+  const mode = isDraftMode ? FOLLOWUP_DRAFT_MODE : (advisoryMode as GuruAdviceMode);
   const ref = typeof payload.ref === "string" ? payload.ref.trim() || null : null;
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const context = payload.context ?? {};
-  const workspaceId = resolveDefaultWorkspaceId();
+  const guidanceId = typeof payload.guidanceId === "string" ? payload.guidanceId : null;
+  // Callers without an Office source keep the existing behavior exactly.
+  const fromOffice = payload.officeSource !== undefined;
+  const officeSource = fromOffice ? parseOfficeSource(payload.officeSource) : null;
+  if (fromOffice && (
+    mode !== "open-question" || payload.scope !== "classin" || !officeSource
+    || !draft?.trim() || draft.length > OFFICE_SOURCE_DRAFT_LIMIT
+    || payload.createWorkOrder !== false || payload.guidanceId != null
+    || payload.history != null
+    || (Array.isArray(payload.legendIds) && payload.legendIds.length > 0)
+    || payload.directives != null || payload.values != null || payload.knowledge != null
+    || [context?.scope, context?.orgScope].some((scope: unknown) => scope === "personal" || scope === "brand")
+  )) {
+    return NextResponse.json({ status: "invalid-input", error: "invalid-office-review" }, { status: 400 });
+  }
+  if (officeSource && ["preview", "error"].includes(context.source)) {
+    return NextResponse.json(
+      { status: context.source, mode, officeSource, error: "sales-ledger-unavailable" },
+      { status: context.source === "preview" ? 202 : 502 },
+    );
+  }
+  const history = mode === "open-question" ? payload.history : null;
   const explicitDirectives = payload.directives ?? (payload.values || payload.knowledge ? { values: payload.values, knowledge: payload.knowledge } : null);
   const maxOutputTokens =
     typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192;
@@ -249,10 +155,12 @@ export async function POST(req: Request) {
   const result = await generateGeminiText(
     isDraftMode
       ? {
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: DRAFT_SYSTEM_INSTRUCTION,
           prompt: buildFollowupDraftPrompt(context),
           maxOutputTokens,
           ...DRAFT_GENERATION_BOUNDS,
+          retries: 1,
+          usageSurface: "sales-mentor",
         }
       : {
           systemInstruction: buildAdvisorySystemInstruction({
@@ -261,8 +169,10 @@ export async function POST(req: Request) {
             context,
             directives: explicitDirectives,
           }),
-          prompt: buildPrompt(mode as Mode, context, draft),
+          prompt: buildGuruAdvicePrompt({ mode: mode as GuruAdviceMode, context, draft, guidanceId, history }),
           maxOutputTokens,
+          retries: 1,
+          usageSurface: "sales-mentor",
         },
   );
   const finishedAt = new Date().toISOString();
@@ -271,9 +181,11 @@ export async function POST(req: Request) {
   // recorded as the failure it is, instead of showing the integration as healthy.
   const parsedDraft = isDraftMode && result.ok ? parseFollowupDraft(result.text) : null;
   const draftOk = isDraftMode ? Boolean(parsedDraft) : false;
-  const generationOk = isDraftMode ? draftOk : result.ok;
+  // An Office escalation with an empty answer is a failure, as in brand-mentor office-review.
+  const emptyOfficeAnswer = Boolean(officeSource) && result.ok && !result.text?.trim();
+  const generationOk = isDraftMode ? draftOk : result.ok && !emptyOfficeAnswer;
   const failureReason =
-    isDraftMode && result.ok && !draftOk ? "invalid-draft-json" : result.reason;
+    isDraftMode && result.ok && !draftOk ? "invalid-draft-json" : emptyOfficeAnswer ? "empty-office-review" : result.reason;
 
   const connection = await upsertIntegrationConnection({
     provider: "guru",
@@ -294,6 +206,7 @@ export async function POST(req: Request) {
       finishedAt,
       mode,
       ref,
+      ...(officeSource ? { officeSource } : {}),
       model: result.model,
       usageMetadata: result.usageMetadata || null,
     },
@@ -317,35 +230,22 @@ export async function POST(req: Request) {
     );
   }
 
-  let mentorUpdate = null;
-
-  if (result.ok && workspaceId) {
-    mentorUpdate = await insertSupabaseRecord("project_updates", {
-      workspace_id: workspaceId,
-      project_id: null,
-      source: "guru",
-      event_type: "ai.sales_mentor",
-      status: "reported",
-      title: `Guru ${mode}${ref ? ` · ${ref}` : ""}`,
-      summary: result.text.slice(0, 500),
-      progress: null,
-      milestone: null,
-      next_action: "Guru 코칭의 다음 액션을 deal/account에 반영하세요.",
-      payload: { mode, ref, model: result.model, text: result.text },
-      happened_at: finishedAt,
-    });
-  }
-
+  // Mentor advice belongs to the requested conversation. Persist telemetry and
+  // the Hub agent_run, but never turn a coaching reply into a Home update.
+  // For advisory modes generationOk/failureReason equal result.ok/result.reason unless the
+  // request came from Office (an empty Office answer is a failure), so other callers see
+  // the same envelope as before.
   return NextResponse.json(
     {
-      status: result.ok ? "generated" : "error",
+      status: generationOk ? "generated" : "error",
       mode,
       ref,
+      ...(officeSource ? { officeSource } : {}),
       model: result.model,
       text: result.text,
-      reason: result.reason,
-      persistence: { connection, syncRun, mentorUpdate },
+      reason: failureReason,
+      persistence: { connection, syncRun, mentorUpdate: null },
     },
-    { status: result.ok ? 200 : 502 },
+    { status: generationOk ? 200 : 502 },
   );
 }

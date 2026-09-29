@@ -27,7 +27,9 @@ test("a failed activity read stays an error instead of a proven empty state", ()
   const panel = revenue.slice(revenue.indexOf("function LeadActivityPanel"), revenue.indexOf("function DetailPanel"));
   assert.match(panel, /if \(!r\.ok\) throw new Error\(`activity \$\{r\.status\}`\)/);
   assert.match(panel, /syncState === 'error' \? \(\s*<EmptyState[\s\S]*?title="활동 기록을 읽지 못했습니다"/);
-  assert.match(panel, /<SyncBadge state=\{syncState\} \/>/);
+  assert.match(panel, /<TruthBadge state=\{syncState\}/);
+  // 로딩은 텍스트 한 줄이 아니라 Skeleton(§11).
+  assert.match(panel, /syncState === 'loading' \? \(\s*<Skeleton\b/);
   // 건수 배지는 읽기 전·실패에 0을 주장하지 않는다.
   assert.match(panel, /syncState === 'loading' \|\| syncState === 'error' \? null : activities\.length/);
 });

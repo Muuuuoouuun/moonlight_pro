@@ -1,0 +1,30 @@
+.guru-guidance { min-width: 0; color: var(--fg); }
+.guru-guidance__selectors { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-bottom: 14px; }
+.guru-guidance__group { display: flex; flex-wrap: wrap; gap: 6px; }
+.guru-guidance__group button { border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--fg-muted); min-height: 34px; padding: 5px 12px; font-size: 11.5px; }
+.guru-guidance__group button[aria-pressed="true"] { border-color: var(--line-strong); background: var(--surface-2); color: var(--fg); }
+.guru-guidance__card { min-width: 0; max-width: 620px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 20px 22px; }
+.guru-guidance__top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; color: var(--fg-muted); font-size: 11px; }
+.guru-guidance__domain { margin-top: 20px; color: var(--fg-muted); font-size: 11px; }
+.guru-guidance__card h3 { margin: 4px 0 0; font-size: 17px; font-weight: 500; line-height: 1.35; }
+.guru-guidance__text { margin: 14px 0 0; font-size: 13px; line-height: 1.65; }
+.guru-guidance__use { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.guru-guidance__use span { color: var(--fg-muted); font-size: 10.5px; }
+.guru-guidance__use p { margin: 5px 0 0; color: var(--fg-muted); font-size: 12px; line-height: 1.55; }
+.guru-guidance__source { margin: 12px 0 0; color: var(--fg-muted); font-size: 10.5px; line-height: 1.5; }
+.guru-guidance__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 16px; margin-top: 18px; }
+.guru-guidance__actions button, .guru-guidance--hidden button { border: 0; background: transparent; color: var(--fg-muted); padding: 5px 0; min-height: 34px; font-size: 11.5px; text-decoration: underline; text-underline-offset: 3px; }
+.guru-guidance__actions .guru-guidance__ask { color: var(--fg); font-weight: 600; }
+.guru-guidance__foot { margin: 10px 0 0; color: var(--fg-muted); font-size: 11.5px; line-height: 1.5; }
+.guru-guidance--hidden { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; max-width: 620px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 12px 18px; color: var(--fg-muted); font-size: 12px; }
+.guru-guidance--compact .guru-guidance__card { padding: 14px 16px; }
+.guru-guidance--compact .guru-guidance__domain { margin-top: 13px; }
+.guru-guidance--compact .guru-guidance__card h3 { font-size: 14px; }
+.guru-guidance--compact .guru-guidance__text { margin-top: 9px; font-size: 12.5px; }
+.guru-guidance--compact .guru-guidance__actions { margin-top: 10px; }
+@media (max-width: 720px), (pointer: coarse) {
+  .guru-guidance__group button, .guru-guidance__actions button, .guru-guidance--hidden button { min-height: 44px; }
+}
+@media (max-width: 600px) {
+  .guru-guidance__card { padding: 17px 18px; }
+}

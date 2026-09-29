@@ -1,5 +1,6 @@
 import { isCanonicalUuid } from './uuid.js';
 import { normalizeJournalTags } from './journal-tags.js';
+import { validateTaskChecklist } from './task-checklist.js';
 
 export const JOURNAL_NOTE_KINDS = Object.freeze(['note', 'conversation', 'idea', 'learning', 'blocked', 'decision']);
 export const JOURNAL_CONTEXT_TYPES = Object.freeze(['project', 'lead', 'account', 'brand']);
@@ -54,8 +55,19 @@ export function validateJournalInput(payload) {
     || !object(target) || !text(target.title, 200, true)) return invalid();
   let normalizedTarget;
   if (payload.action === 'create_task') {
-    if ((target.dueAt != null && !isJournalTimestamp(target.dueAt)) || (target.projectId != null && !isCanonicalUuid(target.projectId))) return invalid();
+    if ((target.dueAt != null && !isJournalTimestamp(target.dueAt)) || (target.projectId != null && !isCanonicalUuid(target.projectId))
+      || ((target.nextAction !== undefined || target.checklist !== undefined) && !Array.isArray(target.checklist))
+      || (target.nextAction !== undefined && target.nextAction !== null && !text(target.nextAction, 1000))
+      || (Array.isArray(target.checklist) && target.checklist.some((item) => !object(item)))
+      || (target.checklist !== undefined && validateTaskChecklist(target.checklist))) return invalid();
     normalizedTarget = { title: target.title, dueAt: target.dueAt ?? null, projectId: target.projectId?.toLowerCase() ?? null };
+    if (target.nextAction !== undefined || target.checklist !== undefined) {
+      // Preserve the reviewed plan in the receipt identity; the SQL receipt
+      // trigger writes it to the task in the same transaction as its source link.
+      normalizedTarget.nextAction = target.nextAction?.trim() || null;
+      normalizedTarget.checklist = target.checklist.map((item) => ({ id: item.id.toLowerCase(), title: item.title.trim(),
+        done: item.done, note: item.note || '', ...(item.dueAt ? { dueAt: item.dueAt } : {}) }));
+    }
   } else {
     if ((target.brandId != null && !isCanonicalUuid(target.brandId)) || (target.channel !== undefined && !JOURNAL_CONTENT_CHANNELS.includes(target.channel))) return invalid();
     normalizedTarget = { title: target.title, brandId: target.brandId?.toLowerCase() ?? null, channel: target.channel ?? 'threads' };

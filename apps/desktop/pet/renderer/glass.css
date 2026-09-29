@@ -1,0 +1,338 @@
+/* 펫 유리 공용 — 빠른 패널·말풍선이 함께 쓴다.
+   창 자체가 Windows 11 Acrylic / macOS vibrancy(실제 블러)이다. 페이지 바탕은 투명 검정이고, 그 위에
+   (mac 베일) → 중앙 음영 → 캐릭터 색(누름·드래그 중에만) → 곡면 단면 → 1px 반사 윤곽 → 글자 순서로 쌓는다(아래 '유리 층').
+   값은 pet/shared/contract.js 의 GLASS·MOTION 과 같다(승인 중간값 2026-09-26). */
+:root {
+  --ink: rgba(255, 255, 255, .98);
+  --ink-2: rgba(255, 255, 255, .92);
+  --ink-3: rgba(255, 255, 255, .86);
+  --ink-dim: rgba(255, 255, 255, .60);
+  --glyph: 0 .35px .65px rgba(0, 0, 0, .73), 0 .5px 1.6px rgba(0, 0, 0, .37);
+  --glyph-f: drop-shadow(0 .35px .65px rgba(0, 0, 0, .73)) drop-shadow(0 .5px 1.6px rgba(0, 0, 0, .37));
+  --radius: 8px; /* Acrylic 창의 DWM 둥근 모서리 — macOS 는 아래 data-platform 규칙이 시스템 창 반경(10px)으로 바꾼다 */
+  --wash-color: transparent;
+  --wash-opacity: .52;
+  --dur-hover: 120ms;
+  --dur-panel: 240ms;
+  --dur-overlay: 160ms;
+  --dur-wash: 120ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --font: 'SUIT', 'Segoe UI Variable Text', 'Malgun Gothic', -apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'SF Mono', Menlo, monospace;
+  --opaque-bg: #141C27;
+  color-scheme: dark;
+}
+html[data-platform="mac"] { --radius: 10px; } /* platform.js 가 <html data-platform> 을 단다. 유리 층이 창 모서리와 같은 곡률이어야 모서리에 맨 블러가 비치지 않는다 */
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; width: 100%; height: 100%; overflow: hidden;
+  background: transparent;
+}
+body {
+  font-family: var(--font);
+  font-size: 13px;
+  font-feature-settings: 'ss01';
+  color: var(--ink);
+  text-shadow: var(--glyph);
+  -webkit-user-select: none; user-select: none;
+  cursor: default;
+  -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.num { font-variant-numeric: tabular-nums; }
+svg.g { display: block; flex: none; filter: var(--glyph-f); overflow: visible; }
+button { font: inherit; color: inherit; text-shadow: inherit; }
+input, textarea { font: inherit; color: var(--ink); text-shadow: var(--glyph); }
+:focus { outline: none; }
+:focus-visible { outline: 1px solid rgba(255, 255, 255, .72); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── 유리 층 ───────────────────────────────────────────── */
+/* 쌓는 순서(아래 → 위): 베일(mac) → 중앙 음영 → 캐릭터 색 → 곡면 단면(어깨·안쪽 반사·분광) → 1px 입술 → 글자.
+   곡면 단면은 네이티브 프로토타입(prototypes/moonlight-pet-macos) 의 배포값을 CSS 로 옮긴 근사다 —
+   Shaders/GlassOptics.metal glassFragment(!lab) 의 깊이별 반사 띠를 고리(링) 몇 개 + 흐림으로 그린다.
+   굴절(ScreenCaptureKit 화면 캡처)은 옮기지 않는다(권한이 필요한 실험 경로). 가운데 평면은 투명 그대로다. */
+.glass {
+  position: absolute; inset: 0; border-radius: var(--radius); overflow: hidden; isolation: isolate;
+  /* 단면 두께 9pt(GlassUniforms.material.y = 9) 안에 모든 반사가 들어간다. 값은 px(= 1x 의 pt). */
+  --section-gain: .75;               /* 전체 단면 세기. 1 = Swift 배포값(GlassStudy.edgeReflection .72 / .72). CSS 층은 투명 유리가 아니라
+                                        베일 위에 얹히므로 같은 알파가 더 두꺼운 테로 보인다 — 실화면 비교(2026-09-29)로 .75 */
+  --shoulder-a: .38;                 /* 어깨: (.26+.45·litArc .72)·(1−t .35)·(.5+.5·sourceFootprint) 봉우리 ≈ .41 */
+  --return-a: .30;                   /* 안쪽 반사: (.20+.75·.72)·(1−t .62)·(.35+.65·sf) 봉우리 ≈ .34 */
+  --attenuation-a: .10;              /* 안쪽 감쇠(어두운 선): .08+.07·(1−litArc) */
+  --prism-a: .34;                    /* 분광: .85·spectralArc·litArc·(1−t) 모서리 봉우리 .54 를 색 알파로(단일 채널 가산이 아니라 색 띠 전체라 더 세 보인다) — × gain .75 ≈ .26 */
+  --prism-side: .22;                 /* 곧은 변의 분광 = 모서리 × (.08+.48·sweep⁴)/1 → ≈ .2 */
+}
+.layer { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+/* 중앙 음영: 반경 35%까지 9% 평탄, 가장자리에서 0 */
+.shade { background: radial-gradient(circle farthest-corner at 50% 50%, rgba(0, 0, 0, .09) 0%, rgba(0, 0, 0, .09) 35%, rgba(0, 0, 0, 0) 100%); }
+
+/* 베일(mac 전용). macOS vibrancy('hud')는 시스템 모양을 따른다 — 라이트 모양에서는 재질이 흰 바탕 위에서 밝은 회색(≈ #D6D6D8)이
+   되어 흰 글자가 묻힌다(2026-09-29 실화면). 프로토타입은 NSAppearance.darkAqua 를 강제하지만 Electron 은 창마다 외형을 정할 수 없어
+   베일로 명도를 맞춘다. 판(사각형)이 아니라 글자 열(여백 22px 안쪽)에서 가장 짙고 곡면 단면 쪽으로 옅어져 입술 너머가 맑게 비친다
+   (GlassCenterVeil·ReadingMask 와 같은 방향. 다만 Swift 의 깃털 24pt 는 투명 유리 기준이라, 여기서는 단면 9pt 안에서만 옅어진다).
+   세기는 모양별: 라이트 .48 — 흰 바탕에서 흰 글자 대비(글자 그림자 빼고) 4.4:1 — .52 = 4.9:1, .46 = 4.1:1 실측. 대비는 글자 그림자(접촉 .73)가 채운다 /
+   다크 .24 (다크 hud 도 흰 바탕 위에서 ≈ #949495 라 베일 없이는 흰 글자 대비 3:1 뿐이다). */
+.veil { display: none; }
+html[data-platform="mac"] .veil {
+  display: block;
+  --veil-a: .24;
+  --veil-edge: .55;                  /* 입술에서 남는 베일 비율(모서리는 두 축이 겹쳐 ≈ .3) */
+  --veil-feather: 9px;               /* 곡면 단면 9pt 안에서만 옅어진다 — 더 넓히면(20px 시험) 액자처럼 두꺼운 테가 된다 */
+  background: rgb(12 16 22 / var(--veil-a));
+  -webkit-mask:
+    linear-gradient(to right, rgb(0 0 0 / var(--veil-edge)) 0, #000 var(--veil-feather), #000 calc(100% - var(--veil-feather)), rgb(0 0 0 / var(--veil-edge)) 100%),
+    linear-gradient(to bottom, rgb(0 0 0 / var(--veil-edge)) 0, #000 var(--veil-feather), #000 calc(100% - var(--veil-feather)), rgb(0 0 0 / var(--veil-edge)) 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+@media (prefers-color-scheme: light) {
+  /* 라이트: 베일이 입술에서 옅어지면 흰 바탕의 밝은 회색 hud 가 그대로 비쳐 9px 테가 면보다 밝은 '액자'가 된다
+     (2026-09-29 흰 바탕 실화면 — 감사 문서가 결함으로 적은 '두꺼운 회색 입술'). 베일은 가장자리까지 거의 평탄하게 두고,
+     단면 반사는 흰 바탕 위에서 더 세 보이므로 세기를 줄인다. 다크 모양은 위 값 그대로. */
+  html[data-platform="mac"] .veil { --veil-a: .48; --veil-edge: .92; }
+  html[data-platform="mac"] .glass { --section-gain: .55; --attenuation-a: .06; }
+}
+
+/* 캐릭터 색: 평소 0 → pet:wash {on} 때 120ms 에 걸쳐 캐릭터색 × wash.
+   면 전체를 덮지 않고 곡면 단면 쪽에 모인다(PetGlassWash depthMask): 가장자리 1 → 48pt 에 걸쳐 35% 로(1 − .65·smoothstep).
+   색 자체는 왼쪽 위 → 오른쪽 아래 대각선 [1, .38, .78] (PetGlassWash.updateColor 의 depths, locations 0 / .52 / 1). */
+.wash {
+  opacity: 0; transition: opacity var(--dur-wash) var(--ease);
+  --wash-feather: 48px;
+  background: linear-gradient(to bottom right,
+    var(--wash-color) 0%,
+    color-mix(in srgb, var(--wash-color) 38%, transparent) 52%,
+    color-mix(in srgb, var(--wash-color) 78%, transparent) 100%);
+  /* 가장자리 네 띠(1 − smoothstep 근사: 0 → 1, ¼ → .84, ½ → .5, ¾ → .16, 1 → 0) + 면 전체 35% 를 겹친다 */
+  -webkit-mask:
+    linear-gradient(to bottom, #000 0, rgb(0 0 0 / .84) calc(var(--wash-feather) * .25), rgb(0 0 0 / .5) calc(var(--wash-feather) * .5), rgb(0 0 0 / .16) calc(var(--wash-feather) * .75), transparent var(--wash-feather)),
+    linear-gradient(to top, #000 0, rgb(0 0 0 / .84) calc(var(--wash-feather) * .25), rgb(0 0 0 / .5) calc(var(--wash-feather) * .5), rgb(0 0 0 / .16) calc(var(--wash-feather) * .75), transparent var(--wash-feather)),
+    linear-gradient(to right, #000 0, rgb(0 0 0 / .84) calc(var(--wash-feather) * .25), rgb(0 0 0 / .5) calc(var(--wash-feather) * .5), rgb(0 0 0 / .16) calc(var(--wash-feather) * .75), transparent var(--wash-feather)),
+    linear-gradient(to left, #000 0, rgb(0 0 0 / .84) calc(var(--wash-feather) * .25), rgb(0 0 0 / .5) calc(var(--wash-feather) * .5), rgb(0 0 0 / .16) calc(var(--wash-feather) * .75), transparent var(--wash-feather)),
+    linear-gradient(rgb(0 0 0 / .35) 0 0);
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
+}
+.wash.on { opacity: var(--wash-opacity); }
+
+/* 곡면 단면 — 깊이(가장자리에서 안쪽 px)마다 반사 띠 하나씩, 흐림으로 가우스 폭을 준다.
+   ::before/::after 가 각각 고리 하나: inset = 띠 시작 깊이, padding = 띠 두께, 반경은 유리와 동심원.
+   띠의 밝기는 변을 따라 한 번 크게 밝아졌다 잦아든다(반사된 광원 하나 — sourceFootprint = .28 + .90·sweep³,
+   sweep = .5 + .5·cos((along − .32)·π) 를 [0 .16 .32 .5 .75 1] 에서 정규화: .72 .93 1 .90 .62 .52) — 입술이 고르게 밝은 철사가 되지 않게.
+   왼쪽 위(주광)·오른쪽 아래(되비침) 모서리는 litArc(.45 + .55·facing²)가 1 이라 더 밝다. */
+.section, .section-fine, .prism { --in: 0px; }
+.section::before, .section::after, .section-fine::before, .section-fine::after, .prism::before, .prism::after {
+  content: ''; position: absolute; inset: var(--in); padding: var(--w);
+  border-radius: max(0px, calc(var(--radius) - var(--in)));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  --strip: calc(var(--radius) + var(--w) + 2px);
+  --k: calc(var(--a) * var(--section-gain));
+  --env-x: linear-gradient(to right, rgb(var(--c) / calc(var(--k) * .72)) 0%, rgb(var(--c) / calc(var(--k) * .93)) 16%, rgb(var(--c) / var(--k)) 32%, rgb(var(--c) / calc(var(--k) * .90)) 50%, rgb(var(--c) / calc(var(--k) * .62)) 75%, rgb(var(--c) / calc(var(--k) * .52)) 100%);
+  --env-y: linear-gradient(to bottom, rgb(var(--c) / calc(var(--k) * .72)) 0%, rgb(var(--c) / calc(var(--k) * .93)) 16%, rgb(var(--c) / var(--k)) 32%, rgb(var(--c) / calc(var(--k) * .90)) 50%, rgb(var(--c) / calc(var(--k) * .62)) 75%, rgb(var(--c) / calc(var(--k) * .52)) 100%);
+  background:
+    radial-gradient(circle at 0 0, rgb(var(--c) / calc(var(--k) * .45)) 0, transparent 44px),
+    radial-gradient(circle at 100% 100%, rgb(var(--c) / calc(var(--k) * .35)) 0, transparent 44px),
+    var(--env-x) top / 100% var(--strip) no-repeat,
+    var(--env-x) bottom / 100% var(--strip) no-repeat,
+    var(--env-y) left / var(--strip) 100% no-repeat,
+    var(--env-y) right / var(--strip) 100% no-repeat;
+}
+/* 어깨(넓고 부드러운 반사): 중심 3.15pt · 폭 2.6pt → 1.5–4.8px 고리 + 흐림 1.2px */
+.section { filter: blur(1.2px); }
+.section::before { --in: 1.5px; --w: 3.3px; --c: 255 255 255; --a: var(--shoulder-a); }
+.section::after { content: none; }
+/* 안쪽 반사(두 번째 광원 상): 중심 5.35–6.45pt · 폭 .85pt → 5–6.2px 고리.
+   안쪽 감쇠(곡면이 면으로 이어지는 어두운 선): 중심 7.1pt · 폭 1pt → 6.6–7.6px 고리. 둘 다 흐림 .5px */
+.section-fine { filter: blur(.5px); }
+.section-fine::before { --in: 5px; --w: 1.2px; --c: 255 255 255; --a: var(--return-a); }
+.section-fine::after { --in: 6.6px; --w: 1px; --c: 0 0 0; --a: var(--attenuation-a); background: rgb(0 0 0 / calc(var(--a) * var(--section-gain))); }
+/* 분광(프리즘): 3.35pt 를 가운데로 파장별 ±1.25pt 어긋난 띠(폭 1.55pt). 빛을 보는 위·왼쪽 변은 바깥이 붉고 안이 푸르며,
+   되비침을 받는 아래·오른쪽 변은 반대다(direction = tanh(3·facing)). 모서리(spectralArc = 1)에 모이고 곧은 변은 옅다.
+   오른쪽 위·왼쪽 아래 모서리는 facing ≈ 0 이라 색이 갈라지지 않는다. 흐림 .8px 로 1x·Retina 모두 점이 아니라 이어진 띠. */
+.prism { filter: blur(.8px); }
+.prism::before, .prism::after {
+  --red: 255 92 80; --blue: 86 126 255;
+  --pk: calc(var(--prism-a) * var(--section-gain));
+  --ps: calc(var(--pk) * var(--prism-side));
+  background:
+    radial-gradient(circle at 0 0, rgb(var(--tl) / var(--pk)) 0, rgb(var(--tl) / calc(var(--pk) * .4)) 26px, transparent 60px),
+    radial-gradient(circle at 100% 100%, rgb(var(--br) / var(--pk)) 0, rgb(var(--br) / calc(var(--pk) * .4)) 26px, transparent 60px),
+    linear-gradient(to right, rgb(var(--tl) / var(--ps)) 0%, rgb(var(--tl) / calc(var(--ps) * 1.4)) 32%, transparent 90%) top / 100% var(--strip) no-repeat,
+    linear-gradient(to bottom, rgb(var(--tl) / var(--ps)) 0%, rgb(var(--tl) / calc(var(--ps) * 1.4)) 32%, transparent 90%) left / var(--strip) 100% no-repeat,
+    linear-gradient(to left, rgb(var(--br) / var(--ps)) 0%, rgb(var(--br) / calc(var(--ps) * 1.4)) 32%, transparent 90%) bottom / 100% var(--strip) no-repeat,
+    linear-gradient(to top, rgb(var(--br) / var(--ps)) 0%, rgb(var(--br) / calc(var(--ps) * 1.4)) 32%, transparent 90%) right / var(--strip) 100% no-repeat;
+}
+.prism::before { --in: 1.4px; --w: 1.4px; --a: 1; --tl: var(--red); --br: var(--blue); }  /* 바깥 파장 ≈ 2.1pt */
+.prism::after { --in: 3.9px; --w: 1.4px; --a: 1; --tl: var(--blue); --br: var(--red); }   /* 안쪽 파장 ≈ 4.6pt */
+/* 반사 윤곽: 1px 그라디언트 선(왼쪽 위 → 오른쪽 아래 60% → 10% → 12% → 36%) */
+.rim {
+  padding: 1px;
+  background: linear-gradient(to bottom right,
+    rgba(255, 255, 255, .60) 0%, rgba(255, 255, 255, .10) 38%,
+    rgba(255, 255, 255, .12) 66%, rgba(255, 255, 255, .36) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.mini-rim {
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.rim-20 { background: linear-gradient(to bottom right, rgba(255,255,255,.124), rgba(255,255,255,.028), rgba(255,255,255,.02), rgba(255,255,255,.068)); }
+.rim-50 { background: linear-gradient(to bottom right, rgba(255,255,255,.31), rgba(255,255,255,.07), rgba(255,255,255,.05), rgba(255,255,255,.17)); }
+.rim-65 { background: linear-gradient(to bottom right, rgba(255,255,255,.403), rgba(255,255,255,.091), rgba(255,255,255,.065), rgba(255,255,255,.221)); }
+
+/* ── 컨트롤 ───────────────────────────────────────────── */
+.action {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 38px; min-width: 32px; padding: 0 16px; border: 0; border-radius: 19px;
+  background: rgba(255, 255, 255, .035);
+  font-size: 12px; font-weight: 500; color: var(--ink); white-space: nowrap;
+  transition: background-color var(--dur-hover) var(--ease), transform var(--dur-hover) var(--ease), opacity var(--dur-hover) var(--ease);
+}
+.action.compact { min-height: 32px; padding: 0; width: 32px; border-radius: 10px; }
+.action.small { min-height: 32px; padding: 0 12px; border-radius: 16px; }
+.action.wide { width: 100%; }
+.action:hover:not(:disabled) { background: rgba(255, 255, 255, .08); }
+.action:active:not(:disabled) { background: rgba(255, 255, 255, .12); transform: scale(.97); }
+.action:disabled { opacity: .4; }
+.action[aria-pressed="true"] { background: rgba(255, 255, 255, .10); }
+.action[aria-pressed="false"] { opacity: .66; }
+.action[aria-pressed="false"]:hover { opacity: 1; }
+.action .label { position: relative; }
+
+.quiet {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 28px; height: 32px; padding: 0 6px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ink-2); font-size: 11.5px; font-weight: 500; white-space: nowrap;
+  transition: background-color var(--dur-hover) var(--ease), opacity var(--dur-hover) var(--ease);
+}
+.quiet:hover:not(:disabled) { background: rgba(255, 255, 255, .05); }
+.quiet:active:not(:disabled) { opacity: .65; }
+.quiet:disabled { opacity: .4; }
+.quiet[aria-pressed="true"] { color: var(--ink); background: rgba(255, 255, 255, .06); }
+
+.seg {
+  position: relative; display: flex; gap: 2px; padding: 3px; border-radius: 13px;
+  background: rgba(255, 255, 255, .035);
+}
+.seg-pill {
+  position: absolute; left: 3px; top: 3px; bottom: 3px; border-radius: 10px;
+  background: rgba(255, 255, 255, .10);
+  transition: transform var(--dur-panel) var(--ease);
+}
+.seg-pill.no-anim { transition: none; }
+.seg-btn {
+  position: relative; flex: 1; height: 34px; border: 0; border-radius: 10px; background: transparent;
+  font-size: 12px; font-weight: 500; color: var(--ink-2);
+  transition: color var(--dur-hover) var(--ease);
+}
+.seg-btn[aria-pressed="true"] { font-weight: 600; color: var(--ink); }
+.seg-btn:hover { color: var(--ink); }
+
+.field {
+  position: relative; display: flex; align-items: center; gap: 9px; height: 46px;
+  padding: 0 6px 0 13px; border-radius: 13px;
+  background: rgba(0, 0, 0, .045);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+  transition: background-color var(--dur-hover) var(--ease), box-shadow var(--dur-hover) var(--ease);
+}
+.field:focus-within { background: rgba(0, 0, 0, .075); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .32); }
+/* 글 입력 칸은 둥근 칸 전체(:focus-within)가 초점을 보인다 — 입력 요소의 네모 윤곽을 겹쳐 그리지 않는다. */
+.field input:focus-visible, .field textarea:focus-visible, textarea.memo-editor:focus-visible { outline: none; }
+.field input, .field textarea {
+  flex: 1; min-width: 0; height: 100%; border: 0; padding: 0; background: transparent; font-size: 13px;
+  -webkit-user-select: text; user-select: text;
+}
+input::placeholder, textarea::placeholder { color: var(--ink-3); opacity: 1; }
+.field > svg.g { color: var(--ink-2); }
+
+.row {
+  position: relative; min-height: 50px; padding: 0 4px; display: flex; align-items: center; gap: 12px;
+  border-radius: 8px; transition: background-color var(--dur-hover) var(--ease), opacity var(--dur-hover) var(--ease);
+}
+.row::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: rgba(255, 255, 255, .08); pointer-events: none; }
+button.row, .row[role="button"] { width: 100%; border: 0; background: transparent; text-align: left; font: inherit; color: inherit; }
+.row:hover { background: rgba(255, 255, 255, .05); }
+
+/* 봉투 안내 — 판 없이 기호 + 직접 문구. 실패만 붉은 기호(색 단독 의미 금지: 문구 동반) */
+.notice { display: flex; gap: 10px; padding: 12px 4px; align-items: flex-start; }
+.notice .notice-glyph { color: var(--ink-2); margin-top: 1px; }
+.notice[data-tone="danger"] .notice-glyph { color: #ff8f86; }
+.notice-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.notice-label { font-size: 12px; font-weight: 600; color: var(--ink); }
+.notice-text { font-size: 12px; line-height: 17px; color: var(--ink-3); }
+.notice-actions { margin-top: 6px; display: flex; gap: 8px; }
+.notice.compact { padding: 6px 4px; }
+.notice-link { font-size: 12px; }
+.linkish { border: 0; background: none; padding: 0; color: var(--ink); font-size: inherit; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+
+.skeleton { display: flex; flex-direction: column; }
+.sk-row { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 0 4px; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+.sk-dot { width: 20px; height: 20px; border-radius: 50%; background: rgba(255, 255, 255, .10); flex: none; }
+.sk-lines { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.sk-line { height: 10px; border-radius: 5px; background: rgba(255, 255, 255, .10); }
+.sk-line.short { height: 8px; background: rgba(255, 255, 255, .07); }
+@media (prefers-reduced-motion: no-preference) {
+  .sk-row { animation: petPulse 1.4s ease-in-out infinite; }
+}
+@keyframes petPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+
+/* ── 창 안 메뉴 ───────────────────────────────────────── */
+#menu-layer { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+.menu {
+  position: fixed; pointer-events: auto; min-width: 188px; max-width: calc(100vw - 16px);
+  border-radius: 10px; overflow: hidden;
+  background: rgba(22, 28, 38, .94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .34), 0 1px 3px rgba(0, 0, 0, .3);
+  animation: petMenuIn var(--dur-overlay) var(--ease);
+}
+.menu-inner { position: relative; padding: 5px; overflow-y: auto; max-height: inherit; }
+.menu-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 0 10px 0 4px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12.5px; text-align: left;
+}
+.menu-item:hover:not(:disabled), .menu-item:focus-visible { background: rgba(255, 255, 255, .09); outline: none; }
+.menu-item:disabled { opacity: .4; }
+.menu-item.danger { color: #ff9d95; }
+.menu-check { width: 16px; display: grid; place-items: center; flex: none; }
+.menu-icon { color: var(--ink-2); }
+.menu-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-hint { font-size: 11px; color: var(--ink-3); }
+.menu-sub { color: var(--ink-3); }
+.menu-item.back { color: var(--ink-2); padding-left: 8px; }
+.menu-divider { height: 1px; margin: 4px 6px; background: rgba(255, 255, 255, .10); }
+.menu-heading { padding: 6px 10px 4px 24px; font-size: 11px; font-weight: 500; color: var(--ink-3); }
+.menu-empty { padding: 10px; font-size: 12px; color: var(--ink-3); }
+@keyframes petMenuIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+
+/* ── 불투명 테마: 투명도 줄이기·대비 높이기·강제 색 ─────────────────── */
+html.opaque, html.opaque body { background: var(--opaque-bg); }
+html.opaque body { text-shadow: none; }
+html.opaque svg.g { filter: none; }
+html.opaque .shade, html.opaque .veil, html.opaque .section, html.opaque .section-fine, html.opaque .prism { display: none; }
+html.opaque .wash { -webkit-mask: none; mask: none; background: var(--wash-color); }
+html.opaque .wash.on { opacity: 1; }
+html.opaque .rim { background: rgba(255, 255, 255, .30); }
+html.opaque .mini-rim { background: rgba(255, 255, 255, .22); }
+html.opaque .menu { background: #1C2533; }
+html.high-contrast .rim, html.high-contrast .mini-rim { background: rgba(255, 255, 255, .72); }
+html.high-contrast .field { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .65); }
+html.high-contrast { --ink-2: #fff; --ink-3: rgba(255, 255, 255, .92); --ink-dim: rgba(255, 255, 255, .8); }
+@media (forced-colors: active) {
+  .rim, .mini-rim, .shade, .veil, .wash, .section, .section-fine, .prism { display: none; }
+  .action, .field, .seg, .menu { border: 1px solid CanvasText; }
+}
+
+/* ── 동작 줄이기: 전환은 즉시 끝난다 ─────────────────── */
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
+  transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; }
+}

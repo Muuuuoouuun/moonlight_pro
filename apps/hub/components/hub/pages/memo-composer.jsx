@@ -8,7 +8,9 @@ import { requestPersonaChat } from '../persona-client';
 import { NOTE_QUESTIONS, selectedNoteExcerpt } from '@/lib/journal-client';
 import { JOURNAL_TAG_LIMIT, JOURNAL_TAG_LENGTH, normalizeJournalTags } from '@/lib/journal-tags';
 import { freezeTaskCommand, saveTaskCommand, TASK_OUTCOME } from '@/lib/memo-intake-tasks';
+import { readMemoFile } from '@/lib/memo-capture';
 import { MemoContextPicker } from './memo-context-picker';
+import { MeetingReviewController } from './meeting-review-controller';
 
 const localTime = (value) => { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0,16); };
 export const memoTime = (value) => new Date(value).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -175,7 +177,15 @@ function MemoActionExtractor({ text, contexts }) {
 export function MemoComposer({ model, isNew, onClose, onReload, focused = false }) {
   const { draft, entry, ready, locked, busy, dirty, pending, conflict, source, edit } = model;
   const [selection, setSelection] = React.useState(null), [helper, setHelper] = React.useState(Boolean(draft?.noteMeta.enhancement));
+  const [pendingImport, setPendingImport] = React.useState(null), [importMessage, setImportMessage] = React.useState('');
+  const [reviewOpen, setReviewOpen] = React.useState(false);
   const bodyRef = React.useRef(null);
+  const fileRef = React.useRef(null);
+  const draftRef = React.useRef(draft);
+  const importSerial = React.useRef(0);
+  draftRef.current = draft;
+  React.useEffect(() => () => { importSerial.current++; }, []);
+  React.useEffect(() => { setPendingImport(null); setImportMessage(''); }, [draft?.id, draft?.expectedRevision]);
   React.useEffect(() => { if (ready) bodyRef.current?.focus(); }, [ready]);
   React.useEffect(() => { setSelection(null); }, [draft?.body]);
   React.useEffect(() => { if (ready && draft?.noteMeta.enhancement) setHelper(true); }, [ready]);
@@ -189,12 +199,51 @@ export function MemoComposer({ model, isNew, onClose, onReload, focused = false 
   const invalidTags = normalizedTags === null;
   const canSave = Boolean(!invalidTags && ready && draft && dirty && !locked && !conflict && source === 'live');
   const canUse = Boolean(entry && !dirty && !locked && source === 'live' && useExcerpt);
+  const reviewDisabledReason = dirty ? '변경한 원문을 먼저 저장해 주세요.'
+    : locked || conflict || pending ? '메모 저장 결과를 확인한 뒤 분석할 수 있어요.'
+      : source !== 'live' ? '메모 저장소 연결을 확인해 주세요.' : null;
   const truth = busy ? 'syncing' : model.saveState === 'error' || conflict ? 'error' : model.saveState === 'saved' || (entry && !dirty && !pending) ? 'live' : 'preview';
   const truthLabel = busy ? '저장 중' : pending ? '저장 결과 확인 필요' : conflict ? '원문 변경 확인' : dirty ? '작성 중 · 서버 미저장' : entry ? '저장된 메모' : '아직 저장되지 않음';
   function selectionChanged(event) {
     setSelection(selectedNoteExcerpt(event.currentTarget.value, event.currentTarget.selectionStart, event.currentTarget.selectionEnd));
   }
   function copy() { navigator.clipboard.writeText([draft.body, draft.noteMeta.enhancement].filter(Boolean).join('\n\n')).catch(() => bodyRef.current?.select()); }
+  async function importTranscript(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || locked || !draft) return;
+    const startingDraft = draft;
+    const ticket = ++importSerial.current;
+    try {
+      const incoming = await readMemoFile(file);
+      if (ticket !== importSerial.current) return;
+      if (draftRef.current !== startingDraft) {
+        setImportMessage('파일을 읽는 동안 원문이 바뀌었어요. 다시 가져오기를 선택해 주세요.');
+        return;
+      }
+      if (draft.body.trim()) {
+        setPendingImport({ incoming, draftId: draft.id, revision: draft.expectedRevision });
+        setImportMessage('현재 원문이 있어요. 교체할지 확인해 주세요.');
+      } else {
+        edit({ body: incoming.body, title: draft.title || incoming.title });
+        setImportMessage('전사문을 불러왔어요. 원문을 확인한 뒤 저장해 주세요.');
+      }
+    } catch (error) {
+      if (ticket !== importSerial.current) return;
+      setImportMessage(error instanceof Error ? error.message : '전사문을 읽지 못했어요.');
+    }
+  }
+  function applyTranscriptImport() {
+    if (!pendingImport || locked) return;
+    if (pendingImport.draftId !== draft?.id || pendingImport.revision !== draft?.expectedRevision) {
+      setPendingImport(null);
+      setImportMessage('메모 저장본이 바뀌었어요. 전사문을 다시 가져와 주세요.');
+      return;
+    }
+    edit({ body: pendingImport.incoming.body, title: draft.title || pendingImport.incoming.title });
+    setPendingImport(null);
+    setImportMessage('전사문으로 원문을 교체했어요. 확인한 뒤 저장해 주세요.');
+  }
   // 본문에서 손을 떼지 않고 저장한다 — 빠른 메모·기록하기와 같은 ⌘/Ctrl + Enter 계약.
   function saveShortcut(event) {
     if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey)) return;
@@ -227,6 +276,14 @@ export function MemoComposer({ model, isNew, onClose, onReload, focused = false 
         {model.localError && <div className="memo-feedback" role="alert"><p>이 탭의 복구 사본을 저장하지 못했어요. 입력을 복사해 보관해 주세요.</p><Button onClick={copy}>입력 복사</Button></div>}
         <TextAreaField ref={bodyRef} label="원문 메모" placeholder="기억하고 싶은 일이나 떠오른 생각을 한 줄로…" value={draft.body} rows={isNew && !entry ? focused ? 5 : 3 : 9} style={isNew && !entry ? { minHeight: focused ? 160 : 80 } : undefined} maxLength={20000} disabled={locked} spacious showCount autoResize
           onChange={(event) => edit({ body: event.target.value })} onSelect={selectionChanged} hint={entry ? '일부만 쓰려면 문장을 선택하세요. 선택하지 않으면 메모 전체(3,500자까지)를 보냅니다.' : '제목이나 분류 없이 바로 저장할 수 있어요.'} />
+        <div className="memo-actions">
+          <input ref={fileRef} type="file" accept=".txt,text/plain" aria-label="전사 텍스트 파일 선택" style={{ display: 'none' }} onChange={importTranscript} />
+          <Button type="button" variant="outline" size="xs" disabled={locked} onClick={() => fileRef.current?.click()}>전사 TXT 가져오기</Button>
+          <span className="memo-muted">UTF-8 · 2만 자 이하 · 저장 전 확인</span>
+        </div>
+        {importMessage && <div className="memo-feedback" role={pendingImport ? 'alert' : 'status'}><p>{importMessage}</p>
+          {pendingImport && <div className="memo-actions"><Button type="button" variant="outline" disabled={locked} onClick={applyTranscriptImport}>원문 교체</Button><Button type="button" variant="ghost" onClick={() => { setPendingImport(null); setImportMessage(''); }}>취소</Button></div>}
+        </div>}
         {!focused && <MemoActionExtractor text={draft.body} contexts={draft.contexts} />}
         <div className={focused ? 'memo-options' : 'memo-stack'}>
         <div className="memo-metadata">
@@ -254,6 +311,10 @@ export function MemoComposer({ model, isNew, onClose, onReload, focused = false 
           {model.target && <Link className="memo-target-link hub-row" href={model.target.href}>{model.target.type === 'task' ? '만든 할 일 열기' : '콘텐츠 스튜디오 열기'} →</Link>}
         </div>}
         {entry && <GoalLinks entityType="journal_entries" entityId={entry.id} />}
+        {entry && <section className="memo-section"><Button variant="outline" type="button" aria-expanded={reviewOpen}
+          onClick={() => setReviewOpen((value) => !value)}>회의 내용 AI 정리 · 근거 검토 <span className="memo-muted">선택</span></Button>
+          {reviewOpen && <MeetingReviewController key={`${entry.id}:${entry.revision}`} entry={entry} disabledReason={reviewDisabledReason} onApplied={onReload} />}
+        </section>}
         {entry && <section className="memo-section"><h3>다음 행동으로 잇기</h3>
           <p className="memo-muted">{dirty ? '변경 내용을 저장한 뒤 이어서 쓸 수 있어요.'
             : selection ? '선택한 발췌와 원문 링크만 전달됩니다.'

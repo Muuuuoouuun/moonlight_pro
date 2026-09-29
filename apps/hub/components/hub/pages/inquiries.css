@@ -12,7 +12,11 @@
 .inquiry-event pre { font-family: inherit; font-size: 13px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
 .inquiry-notice { font-size: 12px; line-height: 1.6; color: var(--fg-muted); }
 .inquiry-error { font-size: 12px; line-height: 1.6; color: var(--danger); }
+/* 보조 필터 토글은 좁은 화면 전용 — 데스크톱에서는 세 필터가 항상 펼쳐져 있다. */
+.inquiry-filter-toggle { display: none; }
 @media (max-width: 600px) {
   .hub-app .inquiry-row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 14px; }
   .inquiry-filters { grid-template-columns: minmax(0, 1fr); }
+  .inquiry-filter-toggle { display: block; }
+  .inquiry-filters[data-open="false"] { display: none; }
 }

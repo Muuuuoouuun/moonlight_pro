@@ -8,6 +8,7 @@ import {
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 import { canonicalOrgScopeForKey } from "@/lib/brand-org-scope";
 import { normalizeCampaignBusinessTruth } from "@/lib/campaign-business-truth";
+import { normalizeJournalTags } from "@/lib/journal-tags";
 
 const ITEM_STATUSES = ["idea", "draft", "review", "scheduled", "published", "archived"];
 const VARIANT_STATUSES = ["draft", "ready", "published", "archived"];
@@ -186,6 +187,8 @@ function buildContentMeta(payload, action) {
     ...(payload.sourceUrl !== undefined ? { source_url: normalizeNullableString(payload.sourceUrl) } : {}),
     ...(payload.sourceNoteId !== undefined ? { source_note_id: normalizeNullableString(payload.sourceNoteId) } : {}),
     ...(payload.orgScope !== undefined ? { org_scope: payload.orgScope === "company" ? "company" : "personal" } : {}),
+    // 태그는 journal 메모와 같은 규칙(최대 8개·32자, #제거·중복제거) — null이면 값을 건드리지 않는다.
+    ...(payload.tags !== undefined ? { tags: normalizeJournalTags(payload.tags) || [] } : {}),
   };
 }
 
@@ -368,6 +371,7 @@ function mapItems(rows, variants, brandById) {
       sourceUrl: row.meta?.source_url || null,
       sourceNoteId: row.meta?.source_note_id || null,
       orgScope: row.meta?.org_scope || brand?.orgScope || null,
+      tags: Array.isArray(meta.tags) ? meta.tags : [],
       slug: row.slug || null,
       status,
       statusLabel: ITEM_STATUS_LABEL[status] || "Draft",
@@ -685,6 +689,38 @@ function buildCadence(items, goal = 5) {
   };
 }
 
+const TAG_TREND_WINDOW_MS = 30 * ISO_DAY_MS;
+
+// 최근 태그 추세: 최근 30일 vs 그 이전 30일 사용 빈도. cadence처럼 달력 주 단위로 묶으면
+// 저빈도 개인 사용자는 거의 항상 빈 결과가 나와서(캡처가 몰아서 발생) 30일 창을 쓴다.
+// 집계 대상은 mapItems가 이미 담은 최근 80건 — cadence·ideaQueue와 같은 상한을 공유한다.
+function buildTagTrends(items, limit = 6) {
+  const now = Date.now();
+  const currentCounts = new Map();
+  const priorCounts = new Map();
+  for (const item of items) {
+    const createdAt = new Date(item.createdAt).getTime();
+    if (!Number.isFinite(createdAt)) continue;
+    const age = now - createdAt;
+    if (age < 0 || age > TAG_TREND_WINDOW_MS * 2) continue;
+    const bucket = age <= TAG_TREND_WINDOW_MS ? currentCounts : priorCounts;
+    for (const tag of item.tags || []) {
+      bucket.set(tag, (bucket.get(tag) || 0) + 1);
+    }
+  }
+  const tags = new Set([...currentCounts.keys(), ...priorCounts.keys()]);
+  return [...tags]
+    .map((tag) => {
+      const count = currentCounts.get(tag) || 0;
+      const previous = priorCounts.get(tag) || 0;
+      const trend = previous === 0 && count > 0 ? "new" : count > previous ? "up" : count < previous ? "down" : "flat";
+      return { tag, count, trend };
+    })
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
 export function buildContentDraftRecords(payload = {}) {
   const workspaceId = normalizeString(payload.workspaceId) || resolveDefaultWorkspaceId();
   const timestamp = new Date().toISOString();
@@ -965,6 +1001,7 @@ export async function getContentLedger() {
       summary: buildSummary([], []),
       ideaQueue: [],
       cadence: buildCadence([]),
+      tagTrends: [],
     };
   }
 
@@ -1032,6 +1069,7 @@ export async function getContentLedger() {
       summary: buildSummary([], []),
       ideaQueue: [],
       cadence: buildCadence([]),
+      tagTrends: [],
     };
   }
 
@@ -1068,5 +1106,6 @@ export async function getContentLedger() {
     summary: buildSummary(items, publishLogs),
     ideaQueue: buildIdeaQueue(items),
     cadence: buildCadence(items),
+    tagTrends: buildTagTrends(items),
   };
 }

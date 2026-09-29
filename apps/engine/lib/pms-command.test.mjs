@@ -459,6 +459,47 @@ test("normalizes an editable project patch without changing workspace ownership"
   });
 });
 
+test("archives a project without overwriting its completion date", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    status: "archived",
+    expectedUpdatedAt: "2026-09-20T01:00:00.123456+00:00",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-09-23T01:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.patch, {
+    status: "archived",
+    last_activity_at: "2026-09-23T01:00:00.000Z",
+    updated_at: "2026-09-23T01:00:00.000Z",
+  });
+  assert.deepEqual(result.filters, [
+    ["id", "eq.11111111-1111-4111-8111-111111111111"],
+    ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
+    ["updated_at", "eq.2026-09-20T01:00:00.123456+00:00"],
+  ]);
+});
+
+test("project reopening clears the completion date while completion records its timestamp", () => {
+  const now = "2026-09-23T01:00:00.000Z";
+  for (const status of ["draft", "active", "blocked", "completed"]) {
+    const result = pmsCommand.normalizePmsCommand({
+      action: "update_project",
+      id: "11111111-1111-4111-8111-111111111111",
+      status,
+    }, {
+      workspaceId: "33333333-3333-4333-8333-333333333333",
+      now,
+    });
+
+    assert.equal(result.ok, true, status);
+    assert.equal(result.patch.completed_at, status === "completed" ? now : null, status);
+  }
+});
+
 test("keeps Postgres microsecond precision in the optimistic-lock filter", () => {
   // Regression: dateTime()'s toISOString() truncated …52.676457+00:00 to
   // …52.676Z, so the eq.updated_at filter never matched microsecond rows and
@@ -770,4 +811,52 @@ test("zonedDateKey renders the operator day in Asia/Seoul", () => {
   // 2026-09-20 23:30 UTC is already 2026-09-21 in Seoul.
   assert.equal(pmsCommand.zonedDateKey("2026-09-20T23:30:00.000Z"), "2026-09-21");
   assert.equal(pmsCommand.MAX_FOCUS_PER_DAY, 3);
+});
+
+test("sets or clears a project genre as a meta key and rejects unknown genres", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-24T01:00:00.000Z" };
+  const id = "11111111-1111-4111-8111-111111111111";
+  const set = pmsCommand.normalizePmsCommand({ action: "update_project", id, genre: "Sales" }, context);
+  assert.equal(set.ok, true);
+  assert.deepEqual(set.patch.meta, { genre: "sales" });
+  const cleared = pmsCommand.normalizePmsCommand({ action: "update_project", id, genre: "" }, context);
+  assert.deepEqual(cleared.patch.meta, { genre: null });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_project", id, genre: "marketing" }, context),
+    { ok: false, reason: "invalid-genre" });
+});
+
+test("links a project to a product or clears the link (product lens §3)", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-25T01:00:00.000Z" };
+  const id = "11111111-1111-4111-8111-111111111111";
+  const productId = "22222222-2222-4222-8222-222222222222";
+  const linked = pmsCommand.normalizePmsCommand({ action: "update_project", id, productId }, context);
+  assert.equal(linked.patch.product_id, productId);
+  const cleared = pmsCommand.normalizePmsCommand({ action: "update_project", id, productId: null }, context);
+  assert.equal(cleared.patch.product_id, null);
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_project", id, productId: "omr" }, context),
+    { ok: false, reason: "invalid-product-id" });
+  const created = pmsCommand.normalizePmsCommand({
+    action: "create_project", id, areaId: "44444444-4444-4444-8444-444444444444", title: "결제 붙이기", orgScope: "personal", productId,
+  }, context);
+  assert.equal(created.record.product_id, productId);
+  const plain = pmsCommand.normalizePmsCommand({
+    action: "create_project", id, areaId: "44444444-4444-4444-8444-444444444444", title: "결제 붙이기", orgScope: "personal",
+  }, context);
+  assert.equal("product_id" in plain.record, false, "제품 없는 생성은 열을 보내지 않는다(마이그레이션 전 DB 호환)");
+});
+
+test("projects carry a work type (feature·maintenance·contact) and an optional recurrence", () => {
+  const context = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-09-25T01:00:00.000Z" };
+  const id = "11111111-1111-4111-8111-111111111111";
+  const set = pmsCommand.normalizePmsCommand({ action: "update_project", id, workType: "Maintenance", recurrence: "yearly" }, context);
+  assert.deepEqual(set.patch.meta, { work_type: "maintenance", recurrence: "yearly" });
+  const cleared = pmsCommand.normalizePmsCommand({ action: "update_project", id, recurrence: null }, context);
+  assert.deepEqual(cleared.patch.meta, { recurrence: null });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({ action: "update_project", id, workType: "bug" }, context), { ok: false, reason: "invalid-work-type" });
+  const created = pmsCommand.normalizePmsCommand({
+    action: "create_project", id, areaId: "44444444-4444-4444-8444-444444444444", title: "엑셀 내보내기", orgScope: "personal",
+    productId: "22222222-2222-4222-8222-222222222222", workType: "feature",
+  }, context);
+  assert.equal(created.record.meta.work_type, "feature");
+  assert.equal("recurrence" in created.record.meta, false);
 });

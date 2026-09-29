@@ -1,5 +1,6 @@
 // Gemini vision: business-card image -> structured fields. Raw fetch, no SDK.
 // Matches the engine's lib/gemini auth/parsing pattern (x-goog-api-key header).
+import { recordAiUsage } from "./ai-usage-log.js";
 
 function resolveBaseUrl() {
   return (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
@@ -64,6 +65,8 @@ export async function extractBusinessCard(imageBase64, mimeType = "image/jpeg") 
   }
 
   const data = raw ? safeJson(raw) : null;
+  // Token counts only, fire-and-forget: the usage log never delays or fails this answer.
+  recordAiUsage({ surface: "hub-business-card", model, usageMetadata: data?.usageMetadata });
   if (!response.ok) {
     return { ok: false, error: data?.error?.message || `vision HTTP ${response.status}`, fields: null };
   }

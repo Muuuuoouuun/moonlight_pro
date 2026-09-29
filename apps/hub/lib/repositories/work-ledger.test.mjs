@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { beforeEach, test } from "node:test";
 
+import { WORKSPACE_ROW_SELECT } from "../workspace-row-select.js";
+
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
 const PROJECT_TARGET_ID = "22222222-2222-4222-8222-222222222222";
 const PROJECT_OTHER_ID = "33333333-3333-4333-8333-333333333333";
@@ -479,6 +481,53 @@ test("weekly bitmap uses the workspace timezone at the UTC to KST date boundary"
   assert.equal(ledger.rituals[0].streak, 0);
   const workspaceCall = state.calls.find((entry) => entry.table === "workspaces");
   assert.deepEqual(workspaceCall.options.filters, [["id", `eq.${WORKSPACE_ID}`]]);
+});
+
+test("workspaces read uses the shared WORKSPACE_ROW_SELECT and the roadmap brands read matches operating/content-ledger's option shape", async () => {
+  const state = globalThis.__workLedgerTestState;
+
+  await workLedger.getWorkLedger();
+
+  const workspaceCall = state.calls.find((entry) => entry.table === "workspaces");
+  // Same select as operating-ledger.js/revenue-ledger.js/contact-tracking.js/
+  // deadline-alert-settings.js's workspaces reads — packages/supabase-rest's dedupedRead only
+  // coalesces concurrent GETs whose URL (built from table+select+filters+limit) matches exactly.
+  assert.equal(workspaceCall.options.select, WORKSPACE_ROW_SELECT);
+
+  const brandCall = state.calls.find((entry) => entry.table === "brands");
+  // No `select` (mapRoadmapBrands only reads id/slug/name off the full row) and limit 80, not
+  // 40 — matches operating-ledger.js getTaskLedger's and content-ledger.js getContentLedger's
+  // brands read option-for-option so the same request reading brands from more than one of
+  // these ledgers collapses to a single network call.
+  assert.equal(brandCall.options.select, undefined);
+  assert.equal(brandCall.options.limit, 80);
+  assert.equal(brandCall.options.order, "name.asc");
+  assert.deepEqual(brandCall.options.filters, [
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
+    ["status", "eq.active"],
+  ]);
+});
+
+test("pendingStreak carries the streak through yesterday so today's check can continue it", async () => {
+  const state = globalThis.__workLedgerTestState;
+  const done = (id, iso) => ({
+    id, project_id: null, check_type: "morning", status: "done", checked_at: iso,
+    meta: { ritual_key: "pray", name: "기도" },
+  });
+  // KST 기준 9/21·9/22 완료, 9/23(오늘) 미완료.
+  state.rows.routine_checks = [
+    done("c-1", "2026-09-21T00:00:00.000Z"),
+    done("c-2", "2026-09-22T00:00:00.000Z"),
+  ];
+
+  const pending = await workLedger.getWorkLedger({ now: new Date("2026-09-23T03:00:00.000Z") });
+  assert.equal(pending.rituals[0].streak, 0);
+  assert.equal(pending.rituals[0].pendingStreak, 2);
+
+  state.rows.routine_checks.push(done("c-3", "2026-09-23T00:00:00.000Z"));
+  const checked = await workLedger.getWorkLedger({ now: new Date("2026-09-23T03:00:00.000Z") });
+  assert.equal(checked.rituals[0].streak, 3);
+  assert.equal(checked.rituals[0].pendingStreak, 2);
 });
 
 test("a configured routine ledger read failure is error rather than preview", async () => {

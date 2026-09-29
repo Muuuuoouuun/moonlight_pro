@@ -1,20 +1,19 @@
 'use client';
 import React from 'react';
-import { createOfficeSessionStore } from './office-session';
+import { createOfficeSessionStore, officeUnloadGuard } from './office-session';
+import { officeMentorSessions } from './office-mentor-session';
 
 const OfficeSessionContext = React.createContext(null);
 
-export function OfficeSessionProvider({ children }) {
+// Mentor consultations live in a module store that outlives page navigation, so the
+// Hub shell guards their unsent questions together with the Office composer drafts.
+export function OfficeSessionProvider({ children, mentorStore = officeMentorSessions }) {
   const [store] = React.useState(createOfficeSessionStore);
   React.useEffect(() => {
-    const guard = event => {
-      if (!store.hasUnsentDrafts()) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
+    const guard = officeUnloadGuard([store, mentorStore]);
     window.addEventListener('beforeunload', guard);
     return () => window.removeEventListener('beforeunload', guard);
-  }, [store]);
+  }, [store, mentorStore]);
   return <OfficeSessionContext.Provider value={store}>{children}</OfficeSessionContext.Provider>;
 }
 

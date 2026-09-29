@@ -42,12 +42,15 @@ test('wires exact scoped REST reads, a durable claim and one Gemini call, then r
   assert.ok(route);
   await withEnv(async () => {
     const calls = [];
+    const usageRows = [];
     let run;
     globalThis.fetch = async (value, init) => {
       const url = new URL(value);
       calls.push({ url, init });
       const table = url.pathname.split('/').at(-1);
       if (url.hostname.includes('googleapis')) return new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ candidates: [candidate] }) }] } }], usageMetadata: { totalTokenCount: 80 } }));
+      // AI usage log (0052): counts only, written fire-and-forget beside the transform run.
+      if (table === 'ai_usage_log') { usageRows.push(JSON.parse(init.body)); return new Response(null, { status: 201 }); }
       if (init.method === 'POST') {
         run = JSON.parse(init.body);
         return new Response(JSON.stringify([run]), { status: 201 });
@@ -72,6 +75,7 @@ test('wires exact scoped REST reads, a durable claim and one Gemini call, then r
     const duplicate = await route.POST(request(body));
     assert.equal((await duplicate.json()).status, 'duplicate');
     assert.equal(calls.filter(({ url }) => url.hostname.includes('googleapis')).length, 1);
+    assert.deepEqual(usageRows, [{ workspace_id: workspaceId, surface: 'content-transform', model: 'test-gemini', prompt_tokens: 0, output_tokens: 0, thinking_tokens: 0, total_tokens: 80 }]);
     assert.doesNotMatch(JSON.stringify(data), /provider-secret|db-secret|transform-secret/);
   });
 });

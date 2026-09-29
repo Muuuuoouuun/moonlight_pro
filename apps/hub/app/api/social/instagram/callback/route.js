@@ -1,16 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 import {
+  checkInstagramApiProfileMatch,
   decodeInstagramApiState,
   exchangeInstagramApiCode,
   exchangeInstagramApiLongLivedToken,
   fetchInstagramApiProfile,
-  isExpectedInstagramApiProfile,
   recordInstagramApiSync,
   resolveInstagramApiRedirectUri,
   saveInstagramApiConnection,
 } from "@/lib/instagram-api";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { assertPersistedSocialConnection } from "@/lib/social-oauth-persistence";
+import { consumeSocialOAuthFlow } from "@/lib/social-oauth-flow";
+import { resolveMetaOAuthAppFromState } from "@/lib/meta-oauth-apps";
+import { resolveSocialOAuthReturnUrl } from "@/lib/social-oauth-return";
 
 export const runtime = "nodejs";
 
@@ -25,21 +29,29 @@ export async function GET(req) {
   const state = decodeInstagramApiState(searchParams.get("state"));
   const fallbackReturnPath = "/dashboard/settings";
 
-  if (state.invalid) {
-    const target = new URL(fallbackReturnPath, origin);
+  const app = state.invalid ? null : resolveMetaOAuthAppFromState(state);
+  if (!app) {
+    const target = resolveSocialOAuthReturnUrl(fallbackReturnPath, origin);
+    target.searchParams.set("instagram", "invalid-state");
+    return NextResponse.redirect(target);
+  }
+
+  if (!await consumeSocialOAuthFlow(state)) {
+    const target = resolveSocialOAuthReturnUrl(fallbackReturnPath, origin);
     target.searchParams.set("instagram", "invalid-state");
     return NextResponse.redirect(target);
   }
 
   const workspaceId = state.workspaceId || resolveDefaultWorkspaceId();
   const brandHandle = state.brandHandle || "moon.classin";
+  const brandKey = state.brandKey || null;
   const returnPath =
     typeof state.returnPath === "string" &&
     state.returnPath.startsWith("/") &&
     !state.returnPath.startsWith("//")
       ? state.returnPath
       : fallbackReturnPath;
-  const target = new URL(returnPath, origin);
+  const target = resolveSocialOAuthReturnUrl(returnPath, origin);
 
   if (error) {
     await recordInstagramApiSync({
@@ -64,20 +76,33 @@ export async function GET(req) {
     const tokenData = await exchangeInstagramApiCode({
       code,
       redirectUri: resolveInstagramApiRedirectUri(origin),
+      app,
     });
     const longLivedTokenData = await exchangeInstagramApiLongLivedToken(
-      tokenData?.access_token,
+      tokenData?.access_token, app,
     );
     const accessToken = longLivedTokenData?.access_token || tokenData?.access_token;
     const profile = await fetchInstagramApiProfile(accessToken);
-    const profileMatch = isExpectedInstagramApiProfile(profile, brandHandle);
-    const saved = await saveInstagramApiConnection({
+    const { profileMatch, rejected } = await checkInstagramApiProfileMatch({
       workspaceId,
       brandHandle,
+      expectedAccountId: state.expectedAccountId,
+      profile,
+    });
+    if (rejected || profileMatch !== true || !profile?.id) {
+      target.searchParams.set("instagram", "account-mismatch");
+      return NextResponse.redirect(target);
+    }
+
+    const saved = assertPersistedSocialConnection(await saveInstagramApiConnection({
+      workspaceId,
+      brandHandle,
+      brandKey,
       tokenData,
       longLivedTokenData,
       profile,
-    });
+      app,
+    }));
 
     await recordInstagramApiSync({
       workspaceId,
@@ -93,7 +118,7 @@ export async function GET(req) {
       },
     });
 
-    target.searchParams.set("instagram", profileMatch === false ? "connected-mismatch" : "connected");
+    target.searchParams.set("instagram", "connected");
     return NextResponse.redirect(target);
   } catch (callbackError) {
     await recordInstagramApiSync({

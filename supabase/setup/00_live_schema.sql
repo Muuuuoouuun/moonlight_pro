@@ -495,6 +495,7 @@ create table if not exists public.integration_connections (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   provider text not null,
+  account_key text not null default '',
   external_account_id text,
   status text not null default 'pending' check (status in ('pending', 'connected', 'error', 'disabled')),
   config jsonb not null default '{}'::jsonb,
@@ -971,6 +972,7 @@ create index if not exists idx_error_logs_workspace_timestamp on public.error_lo
 create index if not exists idx_error_logs_correlation on public.error_logs (workspace_id, correlation_id) where correlation_id is not null;
 create index if not exists idx_activity_logs_workspace_created on public.activity_logs (workspace_id, created_at desc);
 create index if not exists idx_integration_connections_workspace_provider on public.integration_connections (workspace_id, provider, status);
+create unique index if not exists uq_integration_connections_workspace_provider_account on public.integration_connections (workspace_id, provider, account_key);
 create index if not exists idx_integration_connections_external_account on public.integration_connections (workspace_id, provider, external_account_id) where external_account_id is not null;
 
 -- ============================================================================

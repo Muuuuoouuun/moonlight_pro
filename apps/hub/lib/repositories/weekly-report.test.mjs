@@ -124,3 +124,68 @@ test('summarizeFocusWindow treats a reopened task as not done and ignores out-of
 
   assert.deepEqual(summary, { picked: 3, done: 1, days: 2, rate: 33 });
 });
+
+test('a focus pick counts as done only while the task is still done — same rule as tasks_completed and the evening review', () => {
+  // 재오픈 경로가 completed_at을 남겨도(상태는 todo) 완료로 세지 않는다. status가 없는 todo 모델은 completed_at만 본다.
+  const summary = summarizeFocusWindow([
+    { status: 'todo', completed_at: '2026-09-16T05:00:00.000Z', meta: { focus_dates: ['2026-09-16'] } },
+    { status: 'done', completed_at: '2026-09-17T05:00:00.000Z', meta: { focus_dates: ['2026-09-17'] } },
+    { completedAt: '2026-09-18T05:00:00.000Z', focusDates: ['2026-09-18'] },
+    // todo 모델의 done:false는 완료 시각이 남아 있어도 완료가 아니다(task-today isDoneTask와 같은 판정).
+    { done: false, completedAt: '2026-09-19T05:00:00.000Z', focusDates: ['2026-09-19'] },
+  ], { since: '2026-09-14', until: '2026-09-20' });
+  assert.deepEqual(summary, { picked: 4, done: 2, days: 4, rate: 50 });
+});
+
+test('a history read can skip goals without reporting the goal source as failed', async () => {
+  let goalReads = 0;
+  const report = await getWeeklyReport(dependencies({ includeGoals: false, periodStart: '2026-09-07', periodEnd: '2026-09-13', getGoals: async () => { goalReads += 1; return { status: 'error' }; } }));
+  assert.equal(goalReads, 0);
+  assert.equal(report.goals, null);
+  assert.equal(report.partial, false);
+  assert.deepEqual(report.failedSources, []);
+  assert.equal(report.periodStart, '2026-09-07');
+  assert.equal(report.stats.contacts, 0);
+});
+
+test('a history read with every source unavailable is still an error, not an empty week', async () => {
+  const down = { rows: [], coverage: 'unmeasured' };
+  const report = await getWeeklyReport(dependencies({ includeGoals: false, reader: {
+    measure: async ({ sourceKey }) => measurement(sourceKey, null, 'unmeasured'),
+    scopedRows: async () => down, read: async () => down,
+  } }));
+  assert.equal(report.source, 'error');
+  assert.equal(report.stats, null);
+});
+
+test('every weekly stat the Hub returns survives the MCP projection with null kept as null', async () => {
+  const { projectWeeklyPayload } = await import('../../../../packages/mcp-server/src/weekly-projection.js');
+  for (const scope of ['personal', 'company']) {
+    const report = await getWeeklyReport(dependencies({ scope }));
+    const nulled = Object.fromEntries(Object.keys(report.stats).map(key => [key, null]));
+    const projected = projectWeeklyPayload({ ...report, stats: nulled });
+    assert.deepEqual(Object.keys(projected.stats).sort(), Object.keys(report.stats).sort(), `${scope} stats`);
+    assert.ok(Object.values(projected.stats).every(value => value === null));
+    for (const key of Object.keys(report.stats).filter(key => typeof report.definitions[key] === 'string')) {
+      assert.equal(typeof projected.definitions[key], 'string', `${scope} definition ${key}`);
+    }
+  }
+});
+
+test('an undated legacy win untouched since before the week cannot have been won in it; one touched inside stays unmeasured', async () => {
+  // deals.updated_at은 트리거가 유지한다 — 성사 전환도 행 수정이므로, 창 시작 전에 마지막으로 수정된 딜은
+  // 창 안에서 성사됐을 수 없다. 창 안(또는 뒤)에 수정된 미상 성사는 여전히 판단할 수 없다.
+  const rows = extra => ({ coverage: 'complete', rows: [
+    { id: 'legacy', stage: 'won', amount: 500, updated_at: '2026-08-01T00:00:00Z' },
+    { id: 'dated', stage: 'won', amount: 200, currency: 'KRW', won_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-17T00:00:00Z' },
+    ...extra,
+  ] });
+  const clean = await getWeeklyReport(dependencies({ scope: 'company', reader: { scopedRows: async table => table === 'deals' ? rows([]) : { rows: [], coverage: 'complete' } } }));
+  assert.equal(clean.stats.wonDeals, 1);
+  assert.equal(clean.stats.wonAmount, 200);
+  assert.equal(clean.failedSources.includes('deal-win-timestamps'), false);
+
+  const touched = await getWeeklyReport(dependencies({ scope: 'company', reader: { scopedRows: async table => table === 'deals' ? rows([{ id: 'edited', stage: 'won', updated_at: '2026-09-18T00:00:00Z' }]) : { rows: [], coverage: 'complete' } } }));
+  assert.equal(touched.stats.wonDeals, null);
+  assert.ok(touched.failedSources.includes('deal-win-timestamps'));
+});

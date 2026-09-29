@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 import {
   decodeMetaThreadsState,
@@ -11,6 +11,10 @@ import {
   saveMetaThreadsConnection,
 } from "@/lib/meta-threads";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { assertPersistedSocialConnection } from "@/lib/social-oauth-persistence";
+import { consumeSocialOAuthFlow } from "@/lib/social-oauth-flow";
+import { resolveMetaOAuthAppFromState } from "@/lib/meta-oauth-apps";
+import { resolveSocialOAuthReturnUrl } from "@/lib/social-oauth-return";
 
 export const runtime = "nodejs";
 
@@ -21,21 +25,29 @@ export async function GET(req) {
   const state = decodeMetaThreadsState(searchParams.get("state"));
   const fallbackReturnPath = "/dashboard/settings";
 
-  if (state.invalid) {
-    const target = new URL(fallbackReturnPath, origin);
+  const app = state.invalid ? null : resolveMetaOAuthAppFromState(state);
+  if (!app) {
+    const target = resolveSocialOAuthReturnUrl(fallbackReturnPath, origin);
+    target.searchParams.set("metaThreads", "invalid-state");
+    return NextResponse.redirect(target);
+  }
+
+  if (!await consumeSocialOAuthFlow(state)) {
+    const target = resolveSocialOAuthReturnUrl(fallbackReturnPath, origin);
     target.searchParams.set("metaThreads", "invalid-state");
     return NextResponse.redirect(target);
   }
 
   const workspaceId = state.workspaceId || resolveDefaultWorkspaceId();
   const brandHandle = state.brandHandle || "moon.classin";
+  const brandKey = state.brandKey || null;
   const returnPath =
     typeof state.returnPath === "string" &&
     state.returnPath.startsWith("/") &&
     !state.returnPath.startsWith("//")
       ? state.returnPath
       : fallbackReturnPath;
-  const target = new URL(returnPath, origin);
+  const target = resolveSocialOAuthReturnUrl(returnPath, origin);
 
   if (error) {
     await recordMetaThreadsSync({
@@ -60,15 +72,16 @@ export async function GET(req) {
     const tokenData = await exchangeMetaThreadsCode({
       code,
       redirectUri: resolveMetaThreadsRedirectUri(origin),
+      app,
     });
     const longLivedTokenData = await exchangeMetaThreadsLongLivedToken(
-      tokenData?.access_token,
+      tokenData?.access_token, app,
     );
     const accessToken = longLivedTokenData?.access_token || tokenData?.access_token;
     const profile = await fetchMetaThreadsProfile(accessToken);
-    const profileMatch = isExpectedMetaThreadsProfile(profile, brandHandle);
+    const profileMatch = isExpectedMetaThreadsProfile(profile, brandHandle, state.expectedAccountId);
 
-    if (profileMatch === false) {
+    if (profileMatch !== true || !profile?.id) {
       await recordMetaThreadsSync({
         workspaceId,
         status: "failure",
@@ -84,13 +97,15 @@ export async function GET(req) {
       return NextResponse.redirect(target);
     }
 
-    const saved = await saveMetaThreadsConnection({
+    const saved = assertPersistedSocialConnection(await saveMetaThreadsConnection({
       workspaceId,
       brandHandle,
+      brandKey,
       tokenData,
       longLivedTokenData,
       profile,
-    });
+      app,
+    }));
 
     await recordMetaThreadsSync({
       workspaceId,

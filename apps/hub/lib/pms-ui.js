@@ -384,7 +384,9 @@ export function buildProjectEditDraft(project = {}) {
     orgScope: project.orgScope || "personal",
     summary: project.projectSummary ?? "",
     status: project.statusKey || "active",
+    blocker: project.delivery?.blocker || "",
     priority: project.priority || "medium",
+    genre: project.genre || "",
     nextAction: project.projectNextAction ?? "",
     dueAt: dateInputValue(project.dueAt),
     updatedAt: project.updatedAt || null,
@@ -399,8 +401,12 @@ function currentProjectValue(current, keys, fallback) {
 }
 
 export function rebaseProjectEditSource(source = {}, current = {}) {
+  // genre lives in meta on raw rows; only carry the key when either side knows it.
+  const genre = currentProjectValue(current, ["genre"],
+    current.meta && typeof current.meta === "object" ? current.meta.genre ?? null : source.genre);
   return {
     ...source,
+    ...(genre !== undefined ? { genre } : {}),
     id: currentProjectValue(current, ["id"], source.id),
     name: currentProjectValue(current, ["name", "title"], source.name),
     brand: currentProjectValue(current, ["brand"], source.brand),
@@ -416,6 +422,8 @@ export function rebaseProjectEditSource(source = {}, current = {}) {
       source.projectSummary,
     ),
     statusKey: currentProjectValue(current, ["statusKey", "status"], source.statusKey),
+    ...(("delivery" in current || current.meta?.delivery !== undefined || "delivery" in source)
+      ? { delivery: currentProjectValue(current, ["delivery"], current.meta?.delivery ?? source.delivery) } : {}),
     priority: currentProjectValue(current, ["priority"], source.priority),
     projectNextAction: currentProjectValue(
       current,
@@ -432,7 +440,7 @@ export function buildProjectPatch(source = {}, draft = {}) {
   const patch = { id: source.id };
   if (source.updatedAt) patch.expectedUpdatedAt = source.updatedAt;
 
-  const fields = ["title", "areaId", "brandId", "summary", "status", "priority", "nextAction", "dueAt"];
+  const fields = ["title", "areaId", "brandId", "summary", "status", "priority", "genre", "nextAction", "dueAt"];
   fields.forEach((field) => {
     if (field === "areaId" && !draft.areaId) return;
     const next = field === "dueAt" ? dateInputValue(draft[field]) : (draft[field] ?? "");
@@ -440,6 +448,16 @@ export function buildProjectPatch(source = {}, draft = {}) {
   });
   if (draft.entityKey !== undefined && draft.entityKey !== original.entityKey) {
     patch.entityRef = parseProjectEntityKey(draft.entityKey);
+  }
+  const statusChanged = draft.status !== original.status;
+  const blockerChanged = (draft.blocker || "") !== original.blocker;
+  if ((draft.status === "blocked" && (statusChanged || blockerChanged))
+    || (original.status === "blocked" && statusChanged)) {
+    patch.delivery = {
+      ...deliveryDraft(source.delivery),
+      blocker: draft.status === "blocked" ? (draft.blocker || "").trim() : "",
+      nextAction: draft.nextAction ?? original.nextAction,
+    };
   }
   return patch;
 }
@@ -453,6 +471,10 @@ export function rebaseProjectEditState(source = {}, draft = {}, current = {}) {
   const nextDraft = buildProjectEditDraft(nextSource);
 
   dirtyKeys.forEach((key) => {
+    if (key === "delivery") {
+      nextDraft.blocker = draft.blocker;
+      return;
+    }
     const draftKey = key === "entityRef" ? "entityKey" : key;
     nextDraft[draftKey] = draft[draftKey];
   });
@@ -468,6 +490,9 @@ export function mergeProjectDetailQuery(current, projectId) {
   if (params.get("view") !== "table") params.delete("view");
   params.delete("new");
   params.delete("task");
+  params.delete("focus");
+  params.delete("item");
+  params.delete("check");
   params.set("project", projectId);
   return params;
 }
@@ -872,6 +897,7 @@ export function buildTaskBoardColumns(todos = [], projects = []) {
       checklist: readTaskChecklist(todo),
     ...(projectItemType(todo) !== "task" ? { itemType: projectItemType(todo) } : {}),
       tag: project?.tag || null,
+      ...(project?.workType ? { workType: project.workType } : {}),
       priority: todo.priority,
       project: project?.name || "미지정",
       projectId: project?.id || null,

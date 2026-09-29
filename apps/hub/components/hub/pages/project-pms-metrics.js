@@ -30,7 +30,7 @@ export function classifyProjectPortfolio(project, { now, soon }) {
   const status = normalizedStatus(project);
   const terminal = TERMINAL_PROJECT_STATUSES.has(status);
   const due = validDate(project?.dueAt);
-  const overdue = !terminal && due && due.getTime() < now;
+  const overdue = !terminal && !project?.deadlineAlertSuppressed && due && due.getTime() < now;
   const progress = project?.displayProgress;
   return {
     active: status === "active" || status === "in progress",

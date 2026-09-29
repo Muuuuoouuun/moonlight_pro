@@ -1,0 +1,31 @@
+/* 현황의 OKR·KPI 요약 카드 — okr-summary-card.jsx. 토큰만(§5), 숫자는 .stat/.num(§6). */
+.hub-app .okr-summary__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.hub-app .okr-summary__title { font-size: 13px; font-weight: 500; color: var(--fg); }
+.hub-app .okr-summary__sub { margin-top: 2px; font-size: 12px; color: var(--fg-muted); }
+.hub-app .okr-summary__actions { display: flex; align-items: center; gap: 8px; }
+.hub-app .okr-summary__link,
+.hub-app .okr-summary__more { font-size: 12.5px; color: var(--fg-muted); text-decoration: none; padding: 6px 8px; border-radius: var(--r-sm); }
+.hub-app .okr-summary__more { display: inline-block; margin-top: 8px; }
+.hub-app .okr-summary__note { margin: 0; font-size: 12.5px; color: var(--fg-muted); }
+.hub-app .okr-summary__list { list-style: none; margin: 0; padding: 0; }
+.hub-app .okr-summary__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(120px, 0.8fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.hub-app .okr-summary__list > .okr-summary__row:first-child { border-top: 0; }
+.hub-app .okr-summary__identity { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hub-app .okr-summary__metric { font-size: 13.5px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .okr-summary__objective { font-size: 12px; color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-app .okr-summary__value { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.hub-app .okr-summary__value .stat { font-size: 18px; font-weight: 500; color: var(--fg); }
+.hub-app .okr-summary__target { font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
+.hub-app .okr-summary__state { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg-muted); }
+
+@media (max-width: 640px) {
+  .hub-app .okr-summary__row { grid-template-columns: minmax(0, 1fr) auto; }
+  .hub-app .okr-summary__state { grid-column: 1 / -1; }
+}

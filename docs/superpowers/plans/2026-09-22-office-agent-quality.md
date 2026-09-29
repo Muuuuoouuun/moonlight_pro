@@ -110,6 +110,8 @@
 
 평가용 Codex CLI adapter는 원문 전달·완료·취소·프로세스 종료를 검증했으나, 실제 기존 Office 경로 비교에서는 두 추론 설정 모두 5건 중 3건만 생성했다. 48초 제한 초과와 CLI 실패를 그대로 보존했으며 기본 모델·인증·운영 DB를 바꾸지 않았다. [호출 원문과 적용 한계](../../evaluations/2026-09-22-office-agent-quality/diagnostics/codex-pipeline/README.md)를 먼저 확인한다.
 
+`fbb371d`는 HTTP wrapper의 48초 제한을 보존하며 취소 가능한 Office 코어를 분리했다. 새 평가 전용 경로의 [전체 개발 기록](../../evaluations/2026-09-22-office-agent-quality/diagnostics/codex-async-core/README.md)은 39건 중 생성 33·오류 5·종속 차단 1이며 미채점이다. 실패한 공급자 호출과 누락된 역할·회의 관찰이 있어 전 역할 인증이나 운영 비동기 연결의 근거가 되지 않는다.
+
 후속 [경계 분리 진단](../../evaluations/2026-09-22-office-agent-quality/diagnostics/boundary/README.md)은 지침 미전달 가설을 반증했으며 최소 지침·출력 형식 변경·별도 Pro 오류 검수에서도 의미 실패가 남았다. 이 결과를 제품 프롬프트 개정이나 모델 교체로 승격하지 않는다. 공급자 완료 상태·실제 모델 버전과 Office JSON/인용/계약 실패 단계를 보존해 다음 수정의 근거부터 명확히 한다.
 
 1. 최종 런타임·역할 지침·모델 설정·rubric·시나리오와 파일 해시를 고정한다. 실행 도중 변경된 정책의 결과를 같은 버전으로 합치지 않는다.

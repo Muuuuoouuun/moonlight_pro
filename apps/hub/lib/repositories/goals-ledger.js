@@ -1,13 +1,17 @@
 import { fetchSupabaseRowsDetailed, invokeSupabaseRpc, resolveDefaultWorkspaceId, resolveSupabaseConfig } from '@com-moon/supabase-rest';
-import { GOAL_ENTITY_TYPES, isGoalUuid, validateGoalCommand, calculateGoalProgress, projectObjective, projectMetric, projectObservation, projectGoalLink } from '@com-moon/goal-contracts';
+import { GOAL_ENTITY_TYPES, isGoalUuid, isGoalEntityUuid, validateGoalCommand, calculateGoalProgress, projectObjective, projectMetric, projectObservation, projectGoalLink } from '@com-moon/goal-contracts';
 import { createMetricReader } from '../metrics/source-adapters.js';
+import { isCanonicalUuid } from '../uuid.js';
 
 const empty = () => ({objectives:[],metrics:[],observations:[],links:[],asOf:new Date().toISOString()});
 const readError = error => ({...empty(),status:'error',source:'error',error,retryable:true});
 function resolveContext(context) {
   const workspaceId = context?.workspaceId ?? resolveDefaultWorkspaceId();
   const actorId = context?.actorId ?? 'operator';
-  return isGoalUuid(workspaceId) && typeof actorId === 'string' && /^[a-zA-Z0-9._:@/-]{1,128}$/.test(actorId) ? {workspaceId:workspaceId.toLowerCase(),actorId} : null;
+  // Existing database workspace IDs may predate RFC version/variant conventions.
+  // Goal, metric and command IDs keep their stricter contract; this trusted context
+  // only needs the canonical UUID syntax PostgreSQL already accepted.
+  return isCanonicalUuid(workspaceId) && typeof actorId === 'string' && /^[a-zA-Z0-9._:@/-]{1,128}$/.test(actorId) ? {workspaceId:workspaceId.toLowerCase(),actorId} : null;
 }
 const configured = dependencies => dependencies.configured ?? Boolean(resolveSupabaseConfig());
 const noMeasurement = (metric,objective,reason) => ({value:null,coverage:'unmeasured',evidence:[],observedAt:null,sourceKey:metric.sourceKey,periodStart:objective.periodStart,periodEnd:objective.periodEnd,reason});
@@ -19,7 +23,7 @@ export async function getGoalsLedger(options = {}, context = {}, dependencies = 
   if (!configured(dependencies) || (!ctx && !context.workspaceId && !resolveDefaultWorkspaceId())) return {...empty(),status:'preview',source:'preview'};
   if (!ctx) return readError('invalid-workspace');
   const {scope,objectiveId,entityType,entityId} = options;
-  if ((scope != null && !['personal','company'].includes(scope)) || (objectiveId != null && !isGoalUuid(objectiveId)) || ((entityType != null || entityId != null) && (!GOAL_ENTITY_TYPES.includes(entityType) || !isGoalUuid(entityId)))) return readError('invalid-goal-filter');
+  if ((scope != null && !['personal','company'].includes(scope)) || (objectiveId != null && !isGoalUuid(objectiveId)) || ((entityType != null || entityId != null) && (!GOAL_ENTITY_TYPES.includes(entityType) || !isGoalEntityUuid(entityId)))) return readError('invalid-goal-filter');
   const fetchRows = dependencies.fetchRows ?? fetchSupabaseRowsDetailed;
   const now = new Date(dependencies.now ?? Date.now());
   const reader = dependencies.metricReader ?? createMetricReader({workspaceId:ctx.workspaceId,now});
@@ -58,7 +62,7 @@ export async function getGoalsLedger(options = {}, context = {}, dependencies = 
       read('operating_metrics',[['objective_id',`in.(${ids})`]],1000),
       read('operating_goal_links',[['objective_id',`in.(${ids})`]],1000,'objective_id.asc,entity_type.asc,entity_id.asc'),
     ]);
-    if (metricRows?.some(row=>!isGoalUuid(row.id)||!objectiveMap.has(row.objective_id)) || linkRows?.some(row=>!objectiveMap.has(row.objective_id)||!GOAL_ENTITY_TYPES.includes(row.entity_type)||!isGoalUuid(row.entity_id))) return readError('invalid-goal-relationship');
+    if (metricRows?.some(row=>!isGoalUuid(row.id)||!objectiveMap.has(row.objective_id)) || linkRows?.some(row=>!objectiveMap.has(row.objective_id)||!GOAL_ENTITY_TYPES.includes(row.entity_type)||!isGoalEntityUuid(row.entity_id))) return readError('invalid-goal-relationship');
     const metrics = (metricRows || []).map(projectMetric);
     const metricIds = metrics.map(value=>value.id);
     const observationRows = metricIds.length ? await read('operating_observations',[['metric_id',`in.(${metricIds.join(',')})`]],1000,'created_at.desc,id.desc') : [];
@@ -141,11 +145,25 @@ async function runRpc(name,params,commandId,write,dependencies) {
     return write ? unknownWrite(commandId) : unknownReceipt(commandId);
   } catch {return write ? unknownWrite(commandId) : unknownReceipt(commandId);}
 }
+// 개인 전용 원천 — 소속 없는 하루 리뷰는 회사 목표에서 영원히 측정된 0이 된다. RPC(0036)는 원천과
+// 소속의 조합을 모르므로 여기서 막는다. 목표의 소속은 생성 뒤 바뀌지 않아 한 번 읽으면 충분하다.
+const PERSONAL_ONLY_SOURCES = new Set(['reviews_completed']);
+async function metricScopeError(command,ctx,dependencies) {
+  if (command.action!=='create_metric' || !PERSONAL_ONLY_SOURCES.has(command.input.sourceKey)) return null;
+  try {
+    const result = await (dependencies.fetchRows ?? fetchSupabaseRowsDetailed)('operating_objectives',{select:'id,workspace_id,scope',filters:[['workspace_id',`eq.${ctx.workspaceId}`],['id',`eq.${command.input.objectiveId}`]],limit:1,strictRows:true});
+    const row = Array.isArray(result?.rows) && !result.error ? result.rows[0] : undefined;
+    if (!Array.isArray(result?.rows) || result.error) return writeError(503,'goal-storage-unavailable',{commandId:command.commandId,retryable:true});
+    return row?.scope==='company' ? {status:'invalid-input',httpStatus:400,error:'source-scope-mismatch',persisted:false,retryable:false,commandId:command.commandId} : null;
+  } catch {return writeError(503,'goal-storage-unavailable',{commandId:command.commandId,retryable:true});}
+}
 export async function executeGoalCommand(payload,context={},dependencies={}) {
   const validated = validateGoalCommand(payload);
   if (!validated.ok) return {status:'invalid-input',httpStatus:400,error:validated.error,persisted:false,retryable:false};
   const ctx = resolveContext(context);
   if (!configured(dependencies) || !ctx) return writeError(503,'missing-persistence',{commandId:validated.value.commandId});
+  const scopeError = await metricScopeError(validated.value,ctx,dependencies);
+  if (scopeError) return scopeError;
   return runRpc('operating_goal_command_v1',{p_workspace_id:ctx.workspaceId,p_actor_id:ctx.actorId,p_command:validated.value},validated.value.commandId,true,dependencies);
 }
 export async function getGoalCommandReceipt(commandId,context={},dependencies={}) {

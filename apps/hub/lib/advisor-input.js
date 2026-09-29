@@ -1,11 +1,11 @@
-import { LEGEND_CARDS } from '../components/hub/council-legends.js';
+import { GURU_CARDS, isLegendId } from '@com-moon/guru-guidance';
 
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
 const optional = (value, validate) => value === undefined || value === null || validate(value);
 const strings = value => Array.isArray(value) && value.every(item => typeof item === 'string');
 
 function legendIds(value) {
-  return Array.isArray(value) && new Set(value).size === value.length && value.every(id => typeof id === 'string' && Object.hasOwn(LEGEND_CARDS, id));
+  return Array.isArray(value) && new Set(value).size === value.length && value.every(isLegendId);
 }
 
 function values(value) {
@@ -24,10 +24,17 @@ function knowledge(value) {
       && optional(item.source, source => typeof source === 'string')));
 }
 
+export function isGuidanceCardForDomain(id, allowedDomains) {
+  return typeof id === 'string'
+    && Array.isArray(allowedDomains)
+    && GURU_CARDS.some(card => card.id === id && allowedDomains.includes(card.domain));
+}
+
 // The write guard bounds the complete JSON body. Preserve extension metadata, but
 // validate every field the Engine formatter consumes before any context read/call.
 export function isValidAdvisorInput(input) {
   return plain(input)
+    && optional(input.guidanceId, id => typeof id === 'string' && GURU_CARDS.some(card => card.id === id))
     && optional(input.legendIds, legendIds)
     && optional(input.values, values)
     && optional(input.knowledge, knowledge)

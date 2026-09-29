@@ -6,6 +6,7 @@ import {
   buildCaseWrite,
   buildDealWrite,
   buildLeadWrite,
+  mergeRecordMeta,
   parseMoneyLabel,
   persistRevenueRecord,
 } from "./revenue-write.js";
@@ -30,6 +31,7 @@ test("parseMoneyLabel reverses the display money projection", () => {
 test("buildLeadWrite maps display label → status and splits meta", () => {
   const { columns, metaPatch } = buildLeadWrite({
     name: "  Studio Park  ",
+    phone: " 010-1234-5678 ",
     stage: "Contact",
     source: "Referral",
     type: "company",
@@ -37,6 +39,7 @@ test("buildLeadWrite maps display label → status and splits meta", () => {
     workspace: "classin",
   });
   assert.equal(columns.name, "Studio Park");
+  assert.equal(columns.phone, "010-1234-5678");
   assert.equal(columns.status, "nurturing"); // Contact → nurturing
   assert.equal(columns.source, "Referral");
   assert.deepEqual(metaPatch, { account_kind: "company", value: 1_200_000, workspace: "classin" });
@@ -69,6 +72,59 @@ test("buildDealWrite rejects non-canonical stage values", () => {
   assert.equal("stage" in columns, false); // only lead/qual/prop/neg/won/lost pass through
 });
 
+test("buildDealWrite normalizes payments and drops invalid rows (deal-payments.js)", () => {
+  const { metaPatch } = buildDealWrite({
+    payments: [
+      { id: "p1", label: "계약금", expectedAmount: 900000, expectedAt: "2026-09-25" },
+      { expectedAmount: 0 }, // 금액 없음 — 버려진다
+    ],
+  });
+  assert.equal(metaPatch.payments.length, 1);
+  assert.equal(metaPatch.payments[0].id, "p1");
+  assert.equal(metaPatch.payments[0].expectedAmount, 900000);
+});
+
+test("buildDealWrite leaves meta.payments untouched when the field is absent (no-payments deals unaffected)", () => {
+  const { metaPatch } = buildDealWrite({ name: "이름만 바꿈" });
+  assert.equal("payments" in metaPatch, false);
+});
+
+test("buildDealWrite carries a valid planBaseline into meta.plan_baseline and drops an invalid one", () => {
+  const { metaPatch } = buildDealWrite({ planBaseline: { amount: 1800000, closeAt: "2026-09-15T03:00:00.000Z", at: "2026-09-25T01:00:00.000Z" } });
+  assert.deepEqual(metaPatch.plan_baseline, { amount: 1800000, closeAt: "2026-09-15T03:00:00.000Z", at: "2026-09-25T01:00:00.000Z" });
+  assert.equal("plan_baseline" in buildDealWrite({ planBaseline: { amount: 0 } }).metaPatch, false);
+  assert.equal("plan_baseline" in buildDealWrite({ planBaseline: null }).metaPatch, false);
+  assert.equal("plan_baseline" in buildDealWrite({ name: "x" }).metaPatch, false);
+});
+
+test("buildDealWrite keeps each payment's first plan (planned*) and the paid-difference note", () => {
+  const { metaPatch } = buildDealWrite({
+    payments: [{
+      id: "p1", expectedAmount: 1800000, expectedAt: "2026-10-02T03:00:00.000Z",
+      plannedAmount: 1800000, plannedAt: "2026-09-15T03:00:00.000Z",
+      status: "paid", paidAmount: 1600000, paidAt: "2026-10-01T03:00:00.000Z", paidNote: "첫 달 할인",
+    }],
+  });
+  assert.equal(metaPatch.payments[0].plannedAt, "2026-09-15T03:00:00.000Z");
+  assert.equal(metaPatch.payments[0].paidNote, "첫 달 할인");
+});
+
+test("mergeRecordMeta writes a deal's plan_baseline once — an existing baseline always wins", () => {
+  const existing = { brand: "sinabro", payments: [{ id: "p1" }], plan_baseline: { amount: 1800000, closeAt: "2026-09-15T03:00:00.000Z" } };
+  const merged = mergeRecordMeta({ table: "deals", existingMeta: existing, metaPatch: { plan_baseline: { amount: 999, closeAt: "2026-12-01" }, next_action: "회신" } });
+  assert.deepEqual(merged.plan_baseline, existing.plan_baseline);
+  assert.equal(merged.brand, "sinabro");
+  assert.deepEqual(merged.payments, [{ id: "p1" }]);
+  assert.equal(merged.next_action, "회신");
+  const first = mergeRecordMeta({ table: "deals", existingMeta: { brand: "sinabro" }, metaPatch: { plan_baseline: { amount: 5, closeAt: null } } });
+  assert.deepEqual(first, { brand: "sinabro", plan_baseline: { amount: 5, closeAt: null } });
+  // 잘못 저장된 옛 값(금액 없음)은 기준선이 아니다 — 새 값이 들어간다.
+  const repaired = mergeRecordMeta({ table: "deals", existingMeta: { plan_baseline: { amount: 0 } }, metaPatch: { plan_baseline: { amount: 7 } } });
+  assert.deepEqual(repaired.plan_baseline, { amount: 7 });
+  // 딜이 아닌 표는 평범한 얕은 병합 그대로
+  assert.deepEqual(mergeRecordMeta({ table: "leads", existingMeta: { a: 1 }, metaPatch: { b: 2 } }), { a: 1, b: 2 });
+});
+
 test("buildCaseWrite maps display status/priority labels back to DB enums", () => {
   const { columns, metaPatch } = buildCaseWrite({
     title: "결제 영수증 재발행",
@@ -91,6 +147,25 @@ test("buildAccountWrite reverses the health band to a representative score", () 
   assert.equal(columns.name, "Studio Park");
   assert.equal("owner_id" in columns, false); // owner is best-effort, never reversed
   assert.deepEqual(metaPatch, { account_kind: "company", note: "킥오프 예정" });
+});
+
+test("customer label writes support lead genres and account region, subjects and genres", () => {
+  const lead = buildLeadWrite({ genres: [' 음악 ', '음악'], region: '경기-안양' }).metaPatch;
+  assert.deepEqual(lead.genres, ['음악']);
+  assert.equal(lead.region, '경기-안양');
+
+  const account = buildAccountWrite({
+    region: ' 서울-강남 ', subjects: ['math', 'bogus', 'english', 'math'], genres: ['국악', '국악'],
+    labelSource: { region: 'operator', subjects: 'operator' },
+  }).metaPatch;
+  assert.equal(account.region, '서울-강남');
+  assert.deepEqual(account.subjects, ['math', 'english']);
+  assert.deepEqual(account.genres, ['국악']);
+  assert.deepEqual(account.label_source, { region: 'operator', subjects: 'operator' });
+  assert.deepEqual(buildAccountWrite({ region: '', subjects: [], genres: [] }).metaPatch, {
+    region: null, subjects: [], genres: [],
+  });
+  assert.deepEqual(buildAccountWrite({ name: 'Only name' }).metaPatch, {});
 });
 
 test("buildLeadWrite maps next_action to a column and snooze_until into meta", () => {
@@ -127,7 +202,7 @@ test("buildDealWrite carries the next-meeting breadcrumb into meta untouched", (
 
 let calls;
 
-function installSupabaseFetch({ existingMeta, deleteReturnsRows = true } = {}) {
+function installSupabaseFetch({ existingMeta, existingStage, deleteReturnsRows = true } = {}) {
   calls = [];
   globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
@@ -136,7 +211,7 @@ function installSupabaseFetch({ existingMeta, deleteReturnsRows = true } = {}) {
 
     if (method === "GET") {
       // meta read for the merge step
-      return jsonResponse([{ meta: existingMeta || {} }]);
+      return jsonResponse([{ meta: existingMeta || {}, ...(existingStage ? { stage: existingStage } : {}) }]);
     }
     if (method === "POST") {
       return jsonResponse([{ id: "real-id-123", ...(init.body ? JSON.parse(init.body) : {}) }]);
@@ -205,6 +280,22 @@ test("persistRevenueRecord update merges meta instead of clobbering provenance",
   assert.equal(patch.body.status, "qualified");
   // Sibling meta keys survive; only value is overwritten.
   assert.deepEqual(patch.body.meta, { brand: "sinabro", lane: "classin_sales", value: 2_000_000 });
+});
+
+test("persistRevenueRecord keeps an existing deal plan_baseline and sibling meta when a later save carries another one", async () => {
+  const baseline = { amount: 1800000, closeAt: "2026-09-15T03:00:00.000Z", at: "2026-09-20T00:00:00.000Z" };
+  installSupabaseFetch({ existingMeta: { brand: "sinabro", payments: [], plan_baseline: baseline }, existingStage: "proposal" });
+  const result = await persistRevenueRecord({
+    table: "deals",
+    op: "update",
+    id: "existing-id",
+    payload: { closeAt: "2026-11-02T03:00:00.000Z", planBaseline: { amount: 2000000, closeAt: "2026-10-02T03:00:00.000Z" } },
+    build: buildDealWrite,
+  });
+  assert.equal(result.status, "saved");
+  const patch = calls.find(c => c.method === "PATCH");
+  assert.equal(patch.body.expected_close_at, "2026-11-02T03:00:00.000Z");
+  assert.deepEqual(patch.body.meta, { brand: "sinabro", payments: [], plan_baseline: baseline });
 });
 
 test("persistRevenueRecord delete issues a filtered DELETE scoped to the workspace", async () => {
@@ -319,4 +410,64 @@ test("persistRevenueRecord update does not log a move when the stage is unchange
   });
   assert.equal(result.status, "saved");
   assert.equal(calls.some((c) => c.url.includes("/rest/v1/crm_activities")), false);
+});
+
+// ---- 성사 시각 won_at — 주간 회사 리포트 "성사일 확인된 딜"의 유일한 원천 ----
+
+import { dealWonAtPatch } from "./revenue-write.js";
+
+test("dealWonAtPatch stamps won_at only on a known move into closing and clears it on a known move out", () => {
+  const now = new Date("2026-09-23T05:00:00.000Z");
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: { stage_detail: "final" }, metaPatch: { stage_detail: "closing" }, now }), { won_at: "2026-09-23T05:00:00.000Z" });
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: { stage_detail: "closing" }, metaPatch: { stage_detail: "quote" }, now }), { won_at: null });
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: { stage_detail: "closing" }, metaPatch: { stage_detail: "closing" }, now }), {}, "재저장은 성사 시각을 새로 찍지 않는다");
+  // 이전 단계를 모르는 레거시 딜은 이미 성사였을 수 있다 — 지금 시각을 찍으면 옛 성사가 이번 주 성사로 둔갑한다.
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: {}, metaPatch: { stage_detail: "closing" }, now }), {});
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: { stage_detail: "final" }, metaPatch: { next_action: "x" }, now }), {});
+  assert.deepEqual(dealWonAtPatch({ table: "leads", existingMeta: { stage_detail: "final" }, metaPatch: { stage_detail: "closing" }, now }), {});
+});
+
+test("persistRevenueRecord writes won_at in the same update as the move into closing", async () => {
+  installSupabaseFetch({ existingMeta: { stage_detail: "final", workspace: "classin" } });
+  const result = await persistRevenueRecord({
+    table: "deals", op: "update", id: "deal-1", payload: { stage: "closing" }, build: buildDealWrite,
+  });
+  assert.equal(result.status, "saved");
+  const patch = calls.find(call => call.method === "PATCH" && call.url.includes("/deals"));
+  assert.ok(patch, "deal update must be sent");
+  const body = patch.body;
+  assert.ok(Number.isFinite(Date.parse(body.won_at)), "won_at must be a timestamp");
+  assert.equal(body.meta.stage_detail, "closing");
+});
+
+test("a legacy deal without stage_detail uses its stage column as the known previous stage", () => {
+  const now = new Date("2026-09-23T05:00:00.000Z");
+  // 이관 딜은 stage_detail 없이 stage 컬럼만 가진다. won 컬럼은 closing으로 읽히므로 옛 성사가 다시 찍히지 않는다.
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: {}, existingStage: "negotiation", metaPatch: { stage_detail: "closing" }, now }), { won_at: "2026-09-23T05:00:00.000Z" });
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: {}, existingStage: "won", metaPatch: { stage_detail: "closing" }, now }), {});
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: {}, existingStage: "won", metaPatch: { stage_detail: "final" }, now }), { won_at: null });
+  assert.deepEqual(dealWonAtPatch({ table: "deals", existingMeta: {}, existingStage: "mystery", metaPatch: { stage_detail: "closing" }, now }), {}, "모르는 컬럼 값은 이전 단계를 알려주지 않는다");
+});
+
+test("persistRevenueRecord reads the legacy stage column so a first move into closing is dated", async () => {
+  installSupabaseFetch({ existingMeta: { workspace: "classin" }, existingStage: "negotiation" });
+  const result = await persistRevenueRecord({ table: "deals", op: "update", id: "deal-1", payload: { stage: "closing" }, build: buildDealWrite });
+  assert.equal(result.status, "saved");
+  const read = calls.find(call => call.method === "GET" && call.url.includes("/deals"));
+  assert.match(decodeURIComponent(read.url), /select=meta,stage/);
+  const patch = calls.find(call => call.method === "PATCH" && call.url.includes("/deals"));
+  assert.ok(Number.isFinite(Date.parse(patch.body.won_at)));
+});
+
+test("buildDealWrite carries a valid recurring plan into meta.recurring, clears it with null, and drops an invalid one", () => {
+  const { metaPatch } = buildDealWrite({ recurring: { amount: "600000", day: 3, startMonth: "2026-10" } });
+  assert.deepEqual(metaPatch.recurring, { amount: 600000, day: 3, startMonth: "2026-10", endMonth: null });
+  assert.equal(buildDealWrite({ recurring: null }).metaPatch.recurring, null);
+  assert.equal("recurring" in buildDealWrite({ recurring: { amount: 0, day: 3, startMonth: "2026-10" } }).metaPatch, false);
+  assert.equal("recurring" in buildDealWrite({ name: "x" }).metaPatch, false);
+});
+
+test("buildDealWrite keeps a recurring payment's month marker through normalizePayments", () => {
+  const { metaPatch } = buildDealWrite({ payments: [{ id: "rec-2026-10", recurringMonth: "2026-10", expectedAmount: 600000, expectedAt: "2026-10-03T03:00:00.000Z", status: "paid", paidAmount: 600000, paidAt: "2026-10-03T03:00:00.000Z" }] });
+  assert.equal(metaPatch.payments[0].recurringMonth, "2026-10");
 });

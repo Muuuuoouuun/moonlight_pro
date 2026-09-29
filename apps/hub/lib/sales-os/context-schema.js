@@ -29,6 +29,7 @@ export function normalizeOutcome(o) {
     note: o.note ?? null,
     // operational extras (spine §3 step8: preserve if needed; personas read only the 6 above)
     deal_id: o.dealId ?? null,
+    account_id: o.accountId ?? null,
     company_id: o.companyId ?? null,
     channel: o.channel ?? null,
   };

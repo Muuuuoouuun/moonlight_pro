@@ -97,10 +97,38 @@ test('job submission and resume uncertainty retain retry identity and disable au
 test('core profile is small and all profile retains legacy aliases',()=>{
   const core=registry({mode:'agent',profile:'core'});
   for(const name of ['get_hub_health','get_daily_brief','list_tasks','get_task','create_task','update_task','complete_task','get_command_receipt']) assert.ok(core.has(name),name);
-  assert.ok(core.size<=9);assert.equal(core.has('get_revenue'),false);
+  assert.ok(core.size<=10);assert.equal(core.has('get_revenue'),false);
   const all=registry({mode:'agent',profile:'all'});
   for(const name of ['get_content','get_content_queue','create_calendar_event'])assert.ok(all.has(name));
   assert.throws(()=>registry({profile:'misspelled'}),/profile/i);
+});
+
+test('local skill MCP tools read the exact request and record evidence without a task mutation', async t => {
+  const sent = [];
+  setup(t, async (url, init) => { sent.push({ url: String(url), method: init.method, body: init.body && JSON.parse(init.body) });
+    return response({ status: 'ready', persisted: true, request: { requestId: commandId, state: 'completed' } }); });
+  const tools = registry({ mode: 'agent', profile: 'core' });
+  assert.equal(tools.get('get_skill_request').definition.annotations.readOnlyHint, true);
+  assert.equal(tools.get('record_skill_receipt').definition.annotations.readOnlyHint, false);
+  await tools.get('get_skill_request').handler({ requestId: commandId });
+  await tools.get('record_skill_receipt').handler({ requestId: commandId, state: 'completed', summary: '정리함', evidence: [{ kind: 'note', value: '수동 검토 완료' }] });
+  assert.deepEqual(sent.map(item => [item.url, item.method]), [
+    [`http://localhost:3000/api/agent/v1/skill-requests/${commandId}`, 'GET'],
+    [`http://localhost:3000/api/agent/v1/skill-requests/${commandId}/receipts`, 'POST'],
+  ]);
+  assert.deepEqual(sent[1].body, { state: 'completed', summary: '정리함', evidence: [{ kind: 'note', value: '수동 검토 완료' }] });
+});
+
+test('unknown local skill receipt write retains request ID for lookup, without auto retry', async t => {
+  let calls = 0;
+  setup(t, async () => { calls++; throw Object.assign(new Error('timeout'), { name: 'TimeoutError' }); });
+  const result = await registry({ mode: 'agent', profile: 'core' }).get('record_skill_receipt').handler({ requestId: commandId,
+    state: 'unconfirmed', summary: '응답 없음', evidence: [] });
+  assert.equal(calls, 1);
+  assert.equal(result.structuredContent.persisted, null);
+  assert.equal(result.structuredContent.retryable, false);
+  assert.equal(result.structuredContent.requestId, commandId);
+  assert.match(result.structuredContent.error, /get_skill_request/);
 });
 
 test('search_knowledge queries the Agent API search endpoint with query and limit', async t => {

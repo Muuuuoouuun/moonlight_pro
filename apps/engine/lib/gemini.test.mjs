@@ -193,3 +193,41 @@ test('network and abort failures use bounded categories instead of raw exception
     assert.doesNotMatch(JSON.stringify(result), /private abort reason/);
   });
 });
+
+test('transient 503 is retried when retries option is specified', async () => {
+  let callCount = 0;
+  await withLocalProvider(async () => {
+    callCount++;
+    if (callCount === 1) return new Response('unavailable', { status: 503 });
+    return Response.json({
+      modelVersion: 'gemini-3.5-flash-001',
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '재시도 성공' }] } }],
+    });
+  }, async () => {
+    const result = await generateGeminiText({ prompt: '테스트', retries: 1 });
+    assert.equal(callCount, 2);
+    assert.equal(result.ok, true);
+    assert.equal(result.text, '재시도 성공');
+  });
+});
+
+test('temperature and safetySettings are included in payload when specified', async () => {
+  let capturedBody = null;
+  await withLocalProvider(async (_url, options) => {
+    capturedBody = JSON.parse(options.body);
+    return Response.json({
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '설정 반영 완료' }] } }],
+    });
+  }, async () => {
+    const safetySettings = [{ category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' }];
+    const res = await generateGeminiText({
+      prompt: '안전성 테스트',
+      temperature: 0.2,
+      safetySettings,
+    });
+    assert.equal(res.ok, true);
+    assert.equal(capturedBody.generationConfig.temperature, 0.2);
+    assert.deepEqual(capturedBody.safetySettings, safetySettings);
+  });
+});
+

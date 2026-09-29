@@ -62,15 +62,14 @@ export function validateDelivery(plan: DeliveryPlan, dueAt: unknown): string | n
 
 export function completionIssue(plan: DeliveryPlan, prototypeVerifiedAt?: unknown): string | null {
   if (!plan.deliverable.trim()) return "이번에 남길 결과물을 입력하세요.";
-  if (!plan.criteria.length || plan.criteria.some((item) => !item.done)) return "완료 조건을 등록하고 모두 확인하세요.";
-  if (!prototypeVerifiedAt) return "프로토타입의 실제 작동을 먼저 확인하세요.";
-  if (!safeResultUrl(plan.resultUrl)) return "검증할 수 있는 결과물 링크를 남겨주세요.";
+  if (plan.criteria.some((item) => !item.done)) return "등록한 완료 조건을 모두 확인하세요.";
+  if (plan.prototypeDate && !prototypeVerifiedAt) return "예정한 프로토타입의 실제 작동을 확인하세요.";
   if (plan.blocker.trim()) return "남아 있는 병목을 해결하거나 다음 버전으로 옮겨주세요.";
   return null;
 }
 
 export function deliveryAssessment(plan: DeliveryPlan, options: { dueAt?: unknown; now?: string; completed?: boolean; prototypeVerifiedAt?: unknown; paused?: boolean } = {}) {
-  if (options.completed) return { key: "completed", label: "완료", reason: "결과물과 검증 기록을 남겼습니다." };
+  if (options.completed) return { key: "completed", label: "완료", reason: "결과와 완료 기록을 남겼습니다." };
   if (options.paused) return { key: "paused", label: "보류", reason: plan.blocker || "범위와 일정을 검토한 뒤 다시 진행하세요." };
   const due = dayKey(options.dueAt);
   const today = dayKey(options.now || new Date().toISOString());

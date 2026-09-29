@@ -19,6 +19,7 @@ export interface ParsedCouncilResponse {
   dissent: string;
   conditionalVerdict: string;
   nextAction: string;
+  tacticalTip?: string;
 }
 
 export interface FidelityViolation {
@@ -75,11 +76,31 @@ export function parseCouncilResponse(text: string): ParsedCouncilResponse {
               cost: String(l.cost ?? l.acceptableCost ?? '').trim(),
             }))
           : [];
+
+        let nextAction = String(data.nextAction ?? data.next_action ?? data.action ?? '').trim();
+        let tacticalTip = data.tacticalTip ?? data.tactical_tip ?? data.tip ?? data.tactical;
+        if (!tacticalTip && nextAction.includes('\n')) {
+          const lines = nextAction.split('\n').map((l: string) => l.trim()).filter(Boolean);
+          const rem: string[] = [];
+          for (const line of lines) {
+            const m = line.replace(/^[-*•]\s+/, '').match(/^(?:💡\s*(?:\[?(?:거장의\s*)?실전\s*팁\]?)?|\[(?:거장의\s*)?실전\s*팁\])\s*[-:–—]?\s*(.+)$/i);
+            if (m && !tacticalTip) {
+              tacticalTip = m[1].trim();
+            } else {
+              rem.push(line);
+            }
+          }
+          if (tacticalTip) {
+            nextAction = rem.join('\n').trim();
+          }
+        }
+
         return {
           lenses,
           dissent: String(data.dissent ?? '').trim(),
           conditionalVerdict: String(data.conditionalVerdict ?? data.conditional_verdict ?? data.verdict ?? '').trim(),
-          nextAction: String(data.nextAction ?? data.next_action ?? data.action ?? '').trim(),
+          nextAction,
+          ...(tacticalTip ? { tacticalTip: String(tacticalTip).trim() } : {}),
         };
       }
     } catch {
@@ -163,11 +184,31 @@ export function parseCouncilResponse(text: string): ParsedCouncilResponse {
       .trim();
   };
 
+  let nextAction = '';
+  let tacticalTip: string | undefined = undefined;
+
+  const rawSec4 = sections.sec4 || '';
+  if (rawSec4) {
+    const lines = rawSec4.split('\n').map((l) => l.trim()).filter(Boolean);
+    const actionLines: string[] = [];
+    for (const line of lines) {
+      const cleanLine = line.replace(/^[-*•]\s+/, '').trim();
+      const tipMatch = cleanLine.match(/^(?:💡\s*(?:\[?(?:거장의\s*)?실전\s*팁\]?)?|\[(?:거장의\s*)?실전\s*팁\])\s*[-:–—]?\s*(.+)$/i);
+      if (tipMatch) {
+        tacticalTip = tipMatch[1].trim();
+      } else {
+        actionLines.push(cleanLine);
+      }
+    }
+    nextAction = actionLines.join('\n').trim();
+  }
+
   return {
     lenses,
     dissent: cleanSectionText(sections.sec2),
     conditionalVerdict: cleanSectionText(sections.sec3),
-    nextAction: cleanSectionText(sections.sec4),
+    nextAction,
+    ...(tacticalTip ? { tacticalTip } : {}),
   };
 }
 

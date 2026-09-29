@@ -4,18 +4,26 @@ import { GoalLinks } from '../goal-links';
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, CheckboxRow, Progress, CertaintyBadge, LifecycleBadge, ChipToggle, useToast } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Skeleton, TruthBadge, SelectField, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, CheckboxRow, Progress, CertaintyBadge, LifecycleBadge, ChipToggle, useToast } from "../hub-primitives";
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
+import { GuruGuidanceCard } from '../guru-guidance-card';
+import { GuruRecommendation } from '../guru-recommendation';
+import { useGuruRecommendations, recommendationForSubject } from '../guru-recommendations-client';
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
-import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
+import { brandInWorkspace, getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE, LOST_STAGE, dealStageLabel, isDealStalled } from "@/lib/deal-stages";
+import { DEAL_VIEW_OPTIONS, DEFAULT_DEAL_VIEW, resolveDealView, timelineContext, formatCloseLabel, sameCloseDay } from "@/lib/deal-timeline";
+import { DealsMoney, MoneyHeader } from "./deals-money";
+import { monthKeyOf, normalizeTargetAmount, targetForMonth } from "@/lib/revenue-target";
+import { planBaselineFor } from "@/lib/deal-payments";
+import { buildMoneyModel } from "@/lib/deal-money";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
@@ -53,6 +61,16 @@ const SCOPE_OPTIONS = [
   { key: 'personal', label: 'Personal', dot: 'personal' },
   { key: 'company', label: 'Company', dot: 'company' },
 ];
+
+function isClassInGuruRecord(record) {
+  if (!record || record.type !== 'company') return false;
+  if (record.workspace != null && record.workspace !== '' && record.workspace !== 'classin') return false;
+  const hasBrand = record.brand && record.brand !== 'all' && record.brand?.key !== 'all';
+  const classinBrand = hasBrand && brandInWorkspace(record.brand, 'classin');
+  if (hasBrand && !classinBrand) return false;
+  // Legacy revenue rows use company type without a workspace or brand tag.
+  return true;
+}
 
 // 사이드바 스코프는 `?scope=`로만 도착하고 pathname은 그대로다 — hub-app이 pathname으로
 // 페이지를 키잉하므로 리마운트가 없다. 마운트 1회 초기화로는 스코프 전환이 목록에
@@ -199,6 +217,9 @@ const EMPTY_REVENUE_LEDGER = {
   cases: [],
   contacts: [],
   companies: [],
+  // null = 아직 읽지 않음/읽기 실패(§8.1 read 봉투) — 월별 목표 미정({})과 구분해야
+  // 거래 히어로가 "이번 달 목표가 없다"를 "아직 모른다"로 잘못 말하지 않는다.
+  revenueTargets: null,
   summary: null,
 };
 
@@ -246,6 +267,8 @@ export function useRevenueLedger() {
           cases: Array.isArray(data.cases) ? data.cases : [],
           contacts: Array.isArray(data.contacts) ? data.contacts : [],
           companies: Array.isArray(data.companies) ? data.companies : [],
+          // 서버가 워크스페이스 meta를 못 읽었으면 null 그대로 넘어온다 — 여기서 {}로 뭉개지 않는다.
+          revenueTargets: data.revenueTargets && typeof data.revenueTargets === 'object' ? data.revenueTargets : null,
           summary: data.summary || null,
         };
         const nextState = data.source === 'supabase'
@@ -340,11 +363,11 @@ function GuruCoachPanel({ onNavigate }) {
   const [text, setText] = React.useState('');
   const [note, setNote] = React.useState('');
 
-  const run = async () => {
+  const run = async (guidanceId = null) => {
     setState('loading');
     setText('');
     setNote('');
-    const r = await requestGuruCoaching({ mode: 'pipeline-triage' });
+    const r = await requestGuruCoaching({ mode: 'pipeline-triage', guidanceId });
     if (r.state === 'done') {
       setText(r.text);
       setState('done');
@@ -365,16 +388,13 @@ function GuruCoachPanel({ onNavigate }) {
           <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>이번 주 파이프라인 분류 — 무엇부터 손댈지</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="sparkle" onClick={run} disabled={state === 'loading'}>
+        <Button variant="primary" size="sm" icon="sparkle" onClick={() => run()} disabled={state === 'loading'}>
           {state === 'loading' ? '분석 중…' : state === 'done' ? '다시 분류' : '파이프라인 분류'}
         </Button>
       </div>
 
       {state === 'idle' && (
-        <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
-          Guru에게 이번 주 파이프라인 분류를 요청하세요. 정체 딜·신규 리드·Won 신호를 근거로
-          가장 먼저 손대야 할 3건과 이유를 우선순위로 제시합니다.
-        </div>
+        <GuruGuidanceCard domain="sales" compact onAsk={card => onNavigate?.(guruChatPath({ guidanceId: card.id }))} />
       )}
 
       {state === 'loading' && (
@@ -409,14 +429,14 @@ function GuruCoachPanel({ onNavigate }) {
 }
 
 export function RevenueOverview({ onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const scope = searchParams?.get('scope');
   // 개인 스코프의 Revenue 개요는 30일 캐시플로 로드맵이 본체다 (2026-08-31 계획).
   // 이 지점 아래로 훅이 없어 조기 반환이 안전하다 — 훅을 추가하게 되면 이 분기를
   // JSX 레벨로 내려야 한다.
   if (scope === 'personal') {
-    return <PersonalRevenueRoadmap ledger={ledger} syncState={syncState} onNavigate={onNavigate} />;
+    return <PersonalRevenueRoadmap ledger={ledger} syncState={syncState} onRetry={reloadLedger} onNavigate={onNavigate} />;
   }
   const LEADS = ledger.leads;
   const DEALS = ledger.deals;
@@ -437,9 +457,9 @@ export function RevenueOverview({ onNavigate }) {
   const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'closing').reduce((a, b) => a + b.value, 0);
   const newThisMonth = summary?.newThisMonth ?? 0;
   const wonDealsCount = DEALS.filter(d => d.stage === 'closing').length;
-  const byBrand = [];
-  const totalBrandMRR = byBrand.reduce((a, b) => a + b.mrr, 0);
   const attentionItems = buildRevenueAttention(LEADS, DEALS);
+  // 첫 로드·읽기 실패 중에는 ₩0 KPI와 "딜이 없습니다"를 사실처럼 그리지 않는다(§5.3 loading·error ≠ empty).
+  const ledgerReady = syncState !== 'loading' && syncState !== 'error';
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
@@ -447,7 +467,7 @@ export function RevenueOverview({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Revenue overview</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {new Intl.DateTimeFormat('ko-KR', { month: 'long' }).format(new Date())} · 이번 달 요약<SyncBadge state={syncState} />
+            {new Intl.DateTimeFormat('ko-KR', { month: 'long' }).format(new Date())} · 이번 달 요약<TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -456,6 +476,10 @@ export function RevenueOverview({ onNavigate }) {
             생길 때 실데이터와 함께 복귀한다. */}
       </div>
 
+      {syncState === 'loading' && <Skeleton lines={3} height={96} gap={12} label="매출 요약 불러오는 중" />}
+      {syncState === 'error' && <LedgerReadError noun="매출 기록" onRetry={reloadLedger} />}
+
+      {ledgerReady && (
       <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {[
           { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: 'neutral' },
@@ -470,8 +494,10 @@ export function RevenueOverview({ onNavigate }) {
           </Card>
         ))}
       </div>
+      )}
 
-      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--gap)' }}>
+      {/* 브랜드별 매출 패널 제거 — 데이터 원천(브랜드 join)이 없어 항상 비어 있던 패널이었다(표면 예산). */}
+      {ledgerReady && (
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Pipeline by stage</div>
@@ -499,34 +525,9 @@ export function RevenueOverview({ onNavigate }) {
             ))}
           </div>
         </Card>
+      )}
 
-        <Card>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Revenue by brand</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {byBrand.length === 0 && (
-              <EmptyState
-                icon="revenue"
-                title="브랜드별 매출 집계 없음"
-                description="Supabase revenue 기록은 live입니다. 브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다."
-                style={{ minHeight: 170, padding: '22px 12px' }}
-              />
-            )}
-            {byBrand.map(b => (
-              <div key={b.key} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 72px', gap: 10, alignItems: 'center' }}>
-                <span style={{ fontSize: 14 }}>{b.glyph}</span>
-                <div>
-                  <div style={{ fontSize: 12, marginBottom: 4 }}>{b.name}</div>
-                  <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{ width: totalBrandMRR > 0 ? `${(b.mrr / totalBrandMRR) * 100}%` : '0%', height: '100%', background: 'var(--moon-400)' }} />
-                  </div>
-                </div>
-                <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right' }}>{fmt(b.mrr)}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
+      {ledgerReady && (
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Top deals</div>
@@ -545,7 +546,7 @@ export function RevenueOverview({ onNavigate }) {
                 <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2 }}>{DEAL_STAGES.find(s => s.key === d.stage)?.label} · {d.close}</div>
               </div>
               <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(d.value)}</span>
-              <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">{d.type === 'personal' ? 'Personal' : 'Company'}</Badge>
+              <Badge tone="neutral" size="xs" variant="outline">{d.type === 'personal' ? 'Personal' : 'Company'}</Badge>
             </div>
           ))}
         </Card>
@@ -571,6 +572,7 @@ export function RevenueOverview({ onNavigate }) {
           ))}
         </Card>
       </div>
+      )}
 
       <GuruCoachPanel onNavigate={onNavigate} />
     </div>
@@ -694,6 +696,11 @@ export function Leads({ workspace }) {
   );
   const LEADS = React.useMemo(() => filterLeadsByWorkspace(mergedLeads, workspace), [mergedLeads, workspace]);
   const wsEmpty = Boolean(ws) && LEADS.length === 0;
+  // 첫 로드·읽기 실패는 빈 목록과 다른 사실이다(§5.3) — 행이 하나도 없을 때만 표 대신 스켈레톤/실패 화면.
+  // 캐시가 있는 재검증 실패는 partial로 떨어져 목록을 유지하므로 여기 걸리지 않는다.
+  const leadsLoading = syncState === 'loading' && LEADS.length === 0;
+  const leadsReadFailed = syncState === 'error' && LEADS.length === 0;
+  const showLeadTable = !wsEmpty && !leadsLoading && !leadsReadFailed;
   const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
   // 드로어 필드 라벨 옆 확정도 배지 (spec §4) — 값이 있고 출처가 알려진 경우만.
   // operator=확정(실선), derived/searched=권장(파선 ◇). 출처 미상(기존 값)은 배지 없음.
@@ -960,7 +967,7 @@ export function Leads({ workspace }) {
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 8 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Leads</h2>
           {deleteNotice && (
@@ -971,7 +978,7 @@ export function Leads({ workspace }) {
           )}
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {LEADS.length} leads · {LEADS.filter(l => l.type === 'personal').length} personal · {LEADS.filter(l => l.type === 'company').length} company
-            <SyncBadge state={syncState} />
+            <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -1016,7 +1023,7 @@ export function Leads({ workspace }) {
         );
       })()}
 
-      {!wsEmpty && (
+      {showLeadTable && (
         <ScrollShadowX>
           <div role="group" aria-label="과목·지역 필터" style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 2 }}>
             {LEAD_SUBJECTS.map(s => (
@@ -1031,15 +1038,14 @@ export function Leads({ workspace }) {
                 })}
               />
             ))}
-            <select
+            <SelectField
               aria-label="지역 필터 (시도)"
+              className="hub-field--sm"
+              fieldStyle={{ flex: '0 0 auto', minWidth: 128 }}
               value={regionSido}
               onChange={e => setRegionSido(e.target.value)}
-              style={{ height: 26, padding: '0 8px', borderRadius: 'var(--r-sm)', border: '1px solid var(--line)', background: 'var(--surface)', color: regionSido === 'all' ? 'var(--fg-muted)' : 'var(--fg)', fontSize: 12, flexShrink: 0 }}
-            >
-              <option value="all">전체 지역</option>
-              {sidoOptions.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              options={[{ value: 'all', label: '전체 지역' }, ...sidoOptions.map(s => ({ value: s, label: s }))]}
+            />
             {labelFiltersActive && (
               <Button variant="ghost" size="xs" onClick={clearLabelFilters} style={{ flexShrink: 0 }}>전체 해제</Button>
             )}
@@ -1047,10 +1053,10 @@ export function Leads({ workspace }) {
         </ScrollShadowX>
       )}
 
-      {wsEmpty && (
-        syncState === 'error' ? (
-          <LedgerReadError noun="리드 목록" onRetry={reloadLedger} />
-        ) : (
+      {leadsLoading && <Skeleton lines={6} height={36} gap={8} label="리드 목록 불러오는 중" />}
+      {leadsReadFailed && <LedgerReadError noun="리드 목록" onRetry={reloadLedger} />}
+
+      {wsEmpty && !leadsLoading && !leadsReadFailed && (
         <Card>
           <EmptyState
             icon="leads"
@@ -1060,29 +1066,28 @@ export function Leads({ workspace }) {
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
-        )
       )}
 
-      {!wsEmpty && (
+      {showLeadTable && (
       <Card pad={false} className="hub-table-card hub-leads-table">
         <div className="hub-leads-grid" style={{ display: 'grid', gridTemplateColumns: leadsGrid, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           {/* Owner 컬럼 없음 — 1인 운영이라 항상 Me이고 buildLeadWrite가 owner를 저장한 적이 없다(드로어와 동일 결정). */}
           <span /><SortHead k="name" sort={sort} onToggle={toggleSort}>Name</SortHead>{leadCols.type && <span className="hub-lc-m">Type</span>}{leadCols.source && <SortHead k="source" sort={sort} onToggle={toggleSort} className="hub-lc-m">Source</SortHead>}{leadCols.subjects && <SortHead k="subjects" sort={sort} onToggle={toggleSort} className="hub-lc-m">과목</SortHead>}{leadCols.region && <SortHead k="region" sort={sort} onToggle={toggleSort} className="hub-lc-m">지역</SortHead>}<SortHead k="stage" sort={sort} onToggle={toggleSort}>Stage</SortHead>{leadCols.score && <SortHead k="score" sort={sort} onToggle={toggleSort} className="hub-lc-m">Score</SortHead>}<span className="hub-lc-m" style={{ textAlign: 'right' }}>Last</span>
         </div>
         {sortedLeads.length === 0 && (
-          <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <Iconed name="search" size={20} style={{ color: 'var(--fg-faint)' }} />
-            <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>일치하는 리드가 없습니다.</div>
-            <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>
-              {term ? <>"<span className="mono">{search}</span>" 검색 결과 0건 · 필터: {filter}</> : <>필터: {filter} · {LEADS.length}건 중 0건</>}
-            </div>
-            <div style={{ marginTop: 6, display: 'flex', gap: 6, justifyContent: 'center' }}>
-              {labelFiltersActive && <Button variant="ghost" size="xs" onClick={clearLabelFilters}>필터 해제</Button>}
-              {term
-                ? <Button variant="ghost" size="xs" onClick={() => setSearch('')}>검색 지우기</Button>
-                : <Button variant="secondary" size="xs" icon="plus" onClick={createLead}>리드 추가</Button>}
-            </div>
-          </div>
+          <EmptyState
+            icon="search"
+            title={LEADS.length === 0 ? '리드가 없습니다' : '일치하는 리드가 없습니다'}
+            description={term ? `"${search}" 검색 결과 0건 · 필터: ${filter}` : `필터: ${filter} · ${LEADS.length}건 중 0건`}
+            action={(
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+                {labelFiltersActive && <Button variant="ghost" size="sm" onClick={clearLabelFilters}>필터 해제</Button>}
+                {term
+                  ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                  : <Button variant="secondary" size="sm" icon="plus" onClick={createLead}>리드 추가</Button>}
+              </div>
+            )}
+          />
         )}
         {sortedLeads.map((l, i) => (
           <div key={l.id} className="hub-row hub-leads-grid"
@@ -1103,7 +1108,7 @@ export function Leads({ workspace }) {
             }}
           >
             <span style={{ paddingRight: 4, display: 'flex' }}>
-              <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone={l.type === 'personal' ? 'personal' : 'company'} />
+              <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone="neutral" />
             </span>
             <span style={{ minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
@@ -1114,7 +1119,7 @@ export function Leads({ workspace }) {
             </span>
             {leadCols.type && (
             <span className="hub-lc-m" style={{ paddingRight: 8, minWidth: 0 }}>
-              <Badge tone={l.type === 'personal' ? 'personal' : 'company'} size="xs">
+              <Badge tone="neutral" size="xs" variant="outline">
                 <Iconed name={l.type === 'personal' ? 'user' : 'building'} size={9} />
                 {l.type === 'personal' ? 'Personal' : 'Company'}
               </Badge>
@@ -1190,24 +1195,21 @@ export function Leads({ workspace }) {
 
       {/* 벌크 바 — x로 담은 선택이 있을 때만 뜨는 하단 플로팅 바(§2.8 첫 실채택). */}
       <BulkBar count={selection.selectedIds.size} onClear={selection.clearSelected}>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fg-muted)' }}>
-          단계 일괄 변경
-          <select
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fg-muted)' }}>
+          <span aria-hidden="true">단계 일괄 변경</span>
+          <SelectField
             aria-label="선택한 리드 단계 일괄 변경"
+            className="hub-field--sm"
+            fieldStyle={{ flex: '0 0 auto', minWidth: 120 }}
             disabled={bulkBusy}
             value=""
             onChange={(e) => { if (e.target.value) applyBulkStage(e.target.value); }}
-            style={{
-              height: 26, padding: '0 8px', fontSize: 12, borderRadius: 'var(--r-sm)',
-              background: 'var(--surface-2)', color: 'var(--fg)', border: '1px solid var(--line)',
-            }}
-          >
-            <option value="">{bulkBusy ? '저장 중…' : '단계 선택'}</option>
-            {['New', 'Contact', 'Qualified', 'Customer', 'Lost'].map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </label>
+            options={[
+              { value: '', label: bulkBusy ? '저장 중…' : '단계 선택' },
+              ...['New', 'Contact', 'Qualified', 'Customer', 'Lost'].map((s) => ({ value: s, label: s })),
+            ]}
+          />
+        </div>
       </BulkBar>
     </div>
   );
@@ -1734,7 +1736,7 @@ function DealNextMeetingPanel({ deal, onNavigate }) {
   );
 }
 
-export function Deals({ workspace, onNavigate }) {
+export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   const toast = useToast();
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
@@ -1742,6 +1744,17 @@ export function Deals({ workspace, onNavigate }) {
   const effectiveWorkspace = workspace || (queryScope === 'personal' ? 'brand' : queryScope === 'classin' ? 'classin' : undefined);
   const router = useRouter();
   const pathname = usePathname();
+  // 보기(운영자 2026-09-26): 돈(기본 · 매출과 현금흐름) · 단계(칸반) 둘. `?view=`로 남겨 새로고침·
+  // 공유에도 유지하고, 옛 보기(언제·결제·지역) 링크는 돈으로 떨어진다(resolveDealView). 지역(히트맵)은
+  // dashboard/revenue/heatmap과 ⌘K로 계속 열린다.
+  const view = resolveDealView(searchParams?.get('view'));
+  const changeView = (next) => {
+    const params = new URLSearchParams(searchParams?.toString() || '');
+    if (next === DEFAULT_DEAL_VIEW) params.delete('view');
+    else params.set('view', next);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
   const DEAL_STAGES = ledger.stages;
   const ledgerUnavailable = syncState === 'loading' || syncState === 'error';
   const [deals, setDeals] = React.useState(ledger.deals);
@@ -1755,6 +1768,9 @@ export function Deals({ workspace, onNavigate }) {
   const [showLost, setShowLost] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
   const [guruDeal, setGuruDeal] = React.useState(null);
+  const openGuruForDeal = (deal) => {
+    if (isClassInGuruRecord(deal)) setGuruDeal(deal);
+  };
   const [boardNotice, setBoardNotice] = React.useState(null); // { key?, tone, label, undo? } — 이동 되돌리기·저장 실패 안내
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   React.useEffect(() => {
@@ -1801,6 +1817,10 @@ export function Deals({ workspace, onNavigate }) {
   const editingDeal = editingBase
     ? (dealDrafts[editDealId] ? { ...editingBase, ...dealDrafts[editDealId] } : editingBase)
     : null;
+  // 기록 기반 추천(agent-layer-direction §2.1 ⑦) — 드로어가 열린 동안만 읽는다. 저장된 사실만
+  // 근거로 쓰므로 편집 중인 초안 값이 아니라 원장에 있는 딜 id로 찾는다.
+  const guruRecommendations = useGuruRecommendations({ enabled: Boolean(editingBase && !String(editingBase.id).toLowerCase().startsWith('local-')) });
+  const dealRecommendation = editingBase ? recommendationForSubject(guruRecommendations, editingBase.id) : null;
 
   const toggleDealHidden = (id, nextHidden) => {
     setDeals(ds => ds.map(d => (d.id === id ? { ...d, hidden: nextHidden } : d)));
@@ -1881,6 +1901,105 @@ export function Deals({ workspace, onNavigate }) {
     });
     toast.success(`${stageLabel}(으)로 이동됨`, { action: { label: '되돌리기', onClick: undoStageMove } });
   };
+  // 독의 예상일 프리셋·날짜 = 예상일(expected_close_at) 변경. 단계 이동과 같은 지연 쓰기
+  // 계약 — 낙관 반영 → 되돌리기 창 → 창이 닫힌 뒤 PATCH, 실패하면 원래 날짜로 롤백하고 명명한다.
+  // 처음 계획(2026-09-25 A안): 계획이 완성된 딜의 예상일을 처음 옮길 때 옮기기 전 값을
+  // meta.plan_baseline으로 한 번 같이 싣는다(planBaselineFor). 되돌리기 창 안에서 연달아 옮겨도
+  // 기준은 창이 열리기 전 값(base)이라 "예상했던" 날짜가 중간값으로 바뀌지 않는다.
+  const pendingCloseRef = React.useRef(new Map()); // key → 최초 { closeAt, close, planBaseline }
+  const moveCloseDate = (id, nextCloseAt, label) => {
+    const current = deals.find(d => d.id === id);
+    const next = nextCloseAt || '';
+    if (!current || sameCloseDay(current.closeAt, next)) return;
+    const key = `deal-close-${id}`;
+    const base = pendingCloseRef.current.get(key) ?? { closeAt: current.closeAt || '', close: current.close, planBaseline: current.planBaseline ?? null };
+    pendingCloseRef.current.set(key, base);
+    const planBaseline = planBaselineFor({ ...current, closeAt: base.closeAt, planBaseline: base.planBaseline }, { closeAt: next });
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: next, close: formatCloseLabel(next), ...(planBaseline ? { planBaseline } : {}) } : d)));
+    if (String(id).toLowerCase().startsWith('local-')) { pendingCloseRef.current.delete(key); return; }
+    const restore = () => setDeals(ds => ds.map(d => (d.id === id ? { ...d, closeAt: base.closeAt, close: base.close, planBaseline: base.planBaseline } : d)));
+    const undoCloseMove = () => {
+      if (cancelUndoable(key)) {
+        pendingCloseRef.current.delete(key);
+        restore();
+      }
+      toast.info('예상일 변경을 취소했습니다.');
+    };
+    scheduleUndoable(key, () => {
+      pendingCloseRef.current.delete(key);
+      saveRevenueRecord('deal', 'update', { id, closeAt: next, ...(planBaseline ? { planBaseline } : {}) }).then((r) => {
+        if (r.ok) return;
+        restore();
+        toast.error(r.status === 'preview'
+          ? 'Supabase 미연결 — 예상일이 저장되지 않아 원래 날짜로 되돌렸습니다'
+          : `예상일 저장 실패 (${r.status}) — 원래 날짜로 되돌렸습니다`);
+      });
+    });
+    toast.success(label, { action: { label: '되돌리기', onClick: undoCloseMove } });
+  };
+  // 결제 일정 변경(결제 나누기·입금 확인·일시불·정기 한 달 치 입금·편집·취소) — 위 두 지연 쓰기와 같은 계약. 낙관 반영은
+  // deal.payments 배열 전체를 교체하고, 실패하면 되돌린다. deal-payments.js의 뮤테이터가
+  // 이미 새 배열을 만들어 넘기므로 여기는 저장·되돌리기 배선만 한다.
+  const pendingPaymentsRef = React.useRef(new Map()); // key → 최초 payments 배열
+  const updateDealPayments = (id, nextPayments, label) => {
+    const current = deals.find(d => d.id === id);
+    if (!current) return;
+    const key = `deal-payments-${id}`;
+    const base = pendingPaymentsRef.current.get(key) ?? (current.payments || []);
+    pendingPaymentsRef.current.set(key, base);
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, payments: nextPayments } : d)));
+    if (String(id).toLowerCase().startsWith('local-')) { pendingPaymentsRef.current.delete(key); return; }
+    const restore = () => setDeals(ds => ds.map(d => (d.id === id ? { ...d, payments: base } : d)));
+    const undoPaymentsChange = () => {
+      if (cancelUndoable(key)) {
+        pendingPaymentsRef.current.delete(key);
+        restore();
+      }
+      toast.info('결제 변경을 취소했습니다.');
+    };
+    scheduleUndoable(key, () => {
+      pendingPaymentsRef.current.delete(key);
+      saveRevenueRecord('deal', 'update', { id, payments: nextPayments }).then((r) => {
+        if (r.ok) return;
+        restore();
+        toast.error(r.status === 'preview'
+          ? 'Supabase 미연결 — 결제 변경이 저장되지 않아 되돌렸습니다'
+          : `결제 저장 실패 (${r.status}) — 되돌렸습니다`);
+      });
+    });
+    toast.success(label, { action: { label: '되돌리기', onClick: undoPaymentsChange } });
+  };
+  // 매달 정기 계획(deals.meta.recurring, lib/deal-recurring.js) — 같은 지연 쓰기 계약. null이면 계획을 지운다.
+  // 창 안에서 연달아 고쳐도 되돌리기는 창이 열리기 전 계획으로 돌아간다.
+  const pendingRecurringRef = React.useRef(new Map()); // key → 최초 recurring
+  const updateDealRecurring = (id, nextRecurring, label) => {
+    const current = deals.find(d => d.id === id);
+    if (!current) return;
+    const key = `deal-recurring-${id}`;
+    const base = pendingRecurringRef.current.has(key) ? pendingRecurringRef.current.get(key) : (current.recurring ?? null);
+    pendingRecurringRef.current.set(key, base);
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, recurring: nextRecurring } : d)));
+    if (String(id).toLowerCase().startsWith('local-')) { pendingRecurringRef.current.delete(key); return; }
+    const restore = () => setDeals(ds => ds.map(d => (d.id === id ? { ...d, recurring: base } : d)));
+    const undoRecurringChange = () => {
+      if (cancelUndoable(key)) {
+        pendingRecurringRef.current.delete(key);
+        restore();
+      }
+      toast.info('매달 정기 변경을 취소했습니다.');
+    };
+    scheduleUndoable(key, () => {
+      pendingRecurringRef.current.delete(key);
+      saveRevenueRecord('deal', 'update', { id, recurring: nextRecurring }).then((r) => {
+        if (r.ok) return;
+        restore();
+        toast.error(r.status === 'preview'
+          ? 'Supabase 미연결 — 매달 정기가 저장되지 않아 되돌렸습니다'
+          : `매달 정기 저장 실패 (${r.status}) — 되돌렸습니다`);
+      });
+    });
+    toast.success(label, { action: { label: '되돌리기', onClick: undoRecurringChange } });
+  };
   // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 기록에서 meta.deal_id로
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
   // 방금 추가·완료한 항목이 보드에 바로 반영되게 한다.
@@ -1930,16 +2049,18 @@ export function Deals({ workspace, onNavigate }) {
   const persistDeal = async () => {
     if (!editingDeal) return { ok: false, status: 'error' };
     const isNew = String(editDealId).toLowerCase().startsWith('local-');
-    const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', editingDeal);
+    const prevDeal = deals.find(d => d.id === editDealId);
+    // 금액·예상일을 바꾸는 편집이면 바꾸기 전 계획을 한 번만 같이 싣는다(moveCloseDate와 같은 규칙).
+    const planBaseline = isNew ? null : planBaselineFor(prevDeal, { value: editingDeal.value, closeAt: editingDeal.closeAt });
+    const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', planBaseline ? { ...editingDeal, planBaseline } : editingDeal);
     if (r.ok) {
       // 저장 성공 시점에 드래프트를 보드에 커밋 — 타이핑 중에는 보드가 재계산되지 않는다.
       const draft = dealDrafts[editDealId];
       const realId = isNew && r.id ? r.id : editDealId;
-      const prevDeal = deals.find(d => d.id === editDealId);
       if (editingDeal.stage === 'closing' && prevDeal?.stage !== 'closing') {
         triggerCelebration({ mode: 'confetti' });
       }
-      setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, ...(draft || {}), id: realId } : d)));
+      setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, ...(draft || {}), ...(planBaseline ? { planBaseline } : {}), id: realId } : d)));
       setDealDrafts(prev => { if (!prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
       if (isNew && r.id) setEditDealId(realId);
       toast.success(isNew ? '새 딜을 저장했습니다.' : '딜 정보를 저장했습니다.');
@@ -2012,12 +2133,67 @@ export function Deals({ workspace, onNavigate }) {
     () => boardStages.flatMap(s => visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter))),
     [boardStages, visibleDeals, filter],
   );
-  const selection = useCrmSelection(boardItems);
+  // 돈 보기 모델 — 워크스페이스·스코프 필터를 거친 같은 딜 집합(숨김·Lost는 lib가 뺀다).
+  const timelineSource = React.useMemo(
+    () => visibleDeals.filter(d => filter === 'all' || d.type === filter),
+    [visibleDeals, filter],
+  );
+  // 읽는 중·읽기 실패·미연결(preview)에는 ₩0을 사실처럼 제목에 올리지 않는다.
+  const heroUnknown = ledgerUnavailable || syncState === 'preview';
+
+  // 이번 달 매출 목표 — workspaces.meta.revenue_targets(마이그레이션 없음, 운영자 2026-09-24
+  // 결정 1층). ledger.revenueTargets가 null이면 "아직 못 읽음"이라 목표선·CTA 둘 다 숨긴다.
+  // 저장 직후에는 재조회를 기다리지 않고 로컬 override로 즉시 반영한다.
+  const [targetOverride, setTargetOverride] = React.useState(null); // { month, amount } | null
+  const [targetSaving, setTargetSaving] = React.useState(false);
+  const targetsKnown = ledger.revenueTargets != null;
+  const effectiveTargets = React.useMemo(() => {
+    if (!targetsKnown) return null;
+    if (!targetOverride) return ledger.revenueTargets;
+    return { ...ledger.revenueTargets, [targetOverride.month]: targetOverride.amount };
+  }, [targetsKnown, ledger.revenueTargets, targetOverride]);
+  const monthCtx = timelineContext();
+  const monthKey = monthKeyOf(monthCtx);
+  const currentTarget = targetsKnown ? targetForMonth(effectiveTargets, monthCtx) : null;
+  const moneyModel = React.useMemo(
+    () => buildMoneyModel(timelineSource, { stages: DEAL_STAGES, target: currentTarget }),
+    [timelineSource, DEAL_STAGES, currentTarget],
+  );
+  // 돈 보기의 j/k는 목록에 보이는 거래 순서(같은 거래의 여러 회차는 한 번) — 선택 = 하단 독이 여는 거래.
+  const moneySelectionItems = React.useMemo(() => moneyModel.dealOrder.map(id => ({ id })), [moneyModel.dealOrder]);
+  const selection = useCrmSelection(view === 'money' ? moneySelectionItems : boardItems);
+  const dockOpen = view === 'money' && selection.selectedId != null && timelineSource.some(d => d.id === selection.selectedId);
+  const saveTarget = async (amount) => {
+    const normalized = normalizeTargetAmount(amount);
+    if (!normalized) { toast.error('올바른 금액을 입력하세요.'); return false; }
+    setTargetSaving(true);
+    try {
+      const resp = await fetch('/api/hub/revenue/target', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ month: monthKey, amount: normalized }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (data.status === 'saved') {
+        setTargetOverride({ month: monthKey, amount: normalized });
+        toast.success(`${monthKey} 목표를 ${fmt(normalized)}로 정했습니다.`);
+        return true;
+      }
+      toast.error(data.status === 'preview' ? 'Supabase 미연결 — 목표가 저장되지 않았습니다.' : '목표 저장에 실패했습니다.');
+      return false;
+    } catch {
+      toast.error('목표 저장에 실패했습니다.');
+      return false;
+    } finally {
+      setTargetSaving(false);
+    }
+  };
+
   useCrmKeyboard({
     enabled: !ledgerUnavailable,
     selection,
     onNew: () => createDeal(),
-    onEditSelected: (id) => setEditDealId(id),
+    onEditSelected: () => setEditDealId(selection.selectedId),
     onStageMove: (stageIndex) => {
       if (!selection.selectedId) return;
       const stage = DEAL_STAGES[stageIndex];
@@ -2026,41 +2202,73 @@ export function Deals({ workspace, onNavigate }) {
   });
   React.useEffect(() => {
     if (!selection.selectedId) return;
-    document.querySelector(`[data-deal-card="${CSS.escape(String(selection.selectedId))}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const key = CSS.escape(String(selection.selectedId));
+    document.querySelector(`[data-deal-card="${key}"], [data-deal-row="${key}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [selection.selectedId]);
 
+  const dealHeadActions = (
+    <>
+      <SegmentedControl label="보기" options={DEAL_VIEW_OPTIONS} value={view} onChange={changeView} />
+      {/* 독이 열리면 독의 "연락 기록"이 그 순간의 주 행동이다 — 머리의 생성은 한 단계 내린다(§5.2 한 화면 한 primary). */}
+      <Button variant={dockOpen ? 'secondary' : 'primary'} size="sm" icon="plus" disabled={ledgerUnavailable} onClick={() => createDeal()}>거래 <Kbd>N</Kbd></Button>
+    </>
+  );
+
   return (
-    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Deals</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {ledgerUnavailable ? '딜 파이프라인' : <>열린 파이프라인 <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(openTotal)}</span> · <span className="mono">{openCount}</span>건</>}
-            {!ledgerUnavailable && closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--moon-200)' }}>{fmt(closingTotal)}</span></>}
-            <SyncBadge state={syncState} />
-            {boardNotice && (
-              <span role={boardNotice.tone === 'err' ? 'alert' : 'status'} aria-live="polite" style={{ marginLeft: 8, fontSize: 11.5, color: boardNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                {boardNotice.label}
-                {boardNotice.undo && <Button variant="ghost" size="xs" onClick={boardNotice.undo}>되돌리기</Button>}
-              </span>
-            )}
+    <div className="hub-futura hub-page fade-up deals-page" style={view === 'stage' ? { height: '100%' } : undefined}>
+      {/* 머리(운영자 2026-09-26 목업 10) — 돈 보기는 카드 한 장이 곧 제목이다: 이번 달 들어온 돈 / 목표,
+          KPI 넷, 리본. 보기 전환과 생성(한 화면 한 primary)은 그 카드 안에. 단계 보기는 제목 한 줄. */}
+      <header className="deals-page__head">
+        {view === 'money' ? (
+          <MoneyHeader
+            model={moneyModel}
+            unknown={heroUnknown}
+            syncState={syncState}
+            targetsKnown={targetsKnown}
+            targetSaving={targetSaving}
+            onSaveTarget={saveTarget}
+            actions={dealHeadActions}
+          />
+        ) : (
+          <div className="deals-hero">
+            <div className="deals-hero__text">
+              <p className="fx-eyebrow deals-hero__eyebrow">
+                <span>단계별 파이프라인</span>
+                {syncState !== 'live' && <TruthBadge state={syncState} />}
+              </p>
+              <h2 className="fx-page-title">거래</h2>
+            </div>
+            <div className="deals-hero__actions">{dealHeadActions}</div>
           </div>
+        )}
+        <div className="deals-toolbar">
+          {view === 'stage' && (
+            <span>
+              {ledgerUnavailable ? '딜 파이프라인' : <>열린 파이프라인 <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(openTotal)}</span> · <span className="mono">{openCount}</span>건</>}
+              {!ledgerUnavailable && closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--moon-200)' }}>{fmt(closingTotal)}</span></>}
+            </span>
+          )}
+          {boardNotice && (
+            <span role={boardNotice.tone === 'err' ? 'alert' : 'status'} aria-live="polite" style={{ fontSize: 11.5, color: boardNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {boardNotice.label}
+              {boardNotice.undo && <Button variant="ghost" size="xs" onClick={boardNotice.undo}>되돌리기</Button>}
+            </span>
+          )}
+          <div className="deals-toolbar__spacer" />
+          {view === 'stage' && hiddenCount > 0 && (
+            <CheckboxRow checked={showHidden} onChange={setShowHidden} size={16} text={`숨긴 딜 ${hiddenCount}건 보기`} />
+          )}
+          {view === 'stage' && lostCount > 0 && (
+            <CheckboxRow checked={showLost} onChange={setShowLost} size={16} text={`${LOST_STAGE.label} ${lostCount}건 보기`} />
+          )}
+          <SegmentedControl className="hub-toolbar" label="소속" options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
         </div>
-        <div style={{ flex: 1 }} />
-        {hiddenCount > 0 && (
-          <CheckboxRow checked={showHidden} onChange={setShowHidden} size={16} text={`숨긴 딜 ${hiddenCount}건 보기`} style={{ marginRight: 10 }} />
-        )}
-        {lostCount > 0 && (
-          <CheckboxRow checked={showLost} onChange={setShowLost} size={16} text={`${LOST_STAGE.label} ${lostCount}건 보기`} style={{ marginRight: 10 }} />
-        )}
-        <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
-        <Button variant="primary" size="sm" icon="plus" disabled={ledgerUnavailable} onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
-      </div>
+      </header>
 
       {/* 게이지 마스트헤드 — 열린 딜 금액의 단계 분포를 한 줄 세그먼트로. 아래 컬럼들의
           top 스트라이프와 같은 heat 토큰을 써서 게이지와 보드가 하나의 계기로 읽힌다.
           (읽기 전용 — 모바일 44px 버튼 플로어와 충돌하는 클릭 타깃을 만들지 않는다.) */}
-      {!ledgerUnavailable && !wsEmpty && openTotal > 0 && (
+      {view === 'stage' && !ledgerUnavailable && !wsEmpty && openTotal > 0 && (
         <div style={{ display: 'flex', gap: 2, height: 6, borderRadius: 999, overflow: 'hidden' }} aria-hidden="true">
           {openStages.map(s => {
             const sum = totals[s.key]?.sum || 0;
@@ -2080,8 +2288,8 @@ export function Deals({ workspace, onNavigate }) {
         </div>
       )}
 
-      {syncState === 'loading' && <Skeleton lines={3} height={64} label="딜 파이프라인 불러오는 중" />}
-      {syncState === 'error' && <LedgerReadError noun="딜 파이프라인" onRetry={reloadLedger} />}
+      {syncState === 'loading' && <Skeleton lines={3} height={64} label="거래 불러오는 중" />}
+      {syncState === 'error' && <LedgerReadError noun="거래 기록" onRetry={reloadLedger} />}
       {syncState === 'partial' && <Button variant="ghost" size="sm" onClick={reloadLedger}>딜 기록 다시 확인</Button>}
 
       {!ledgerUnavailable && wsEmpty && (
@@ -2090,13 +2298,34 @@ export function Deals({ workspace, onNavigate }) {
             icon="deals"
             title={`${ws.label} — 해당하는 딜이 없습니다`}
             description={`이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 기록에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>거래 <Kbd>N</Kbd></Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
       )}
 
-      {!ledgerUnavailable && !wsEmpty && (
+      {view === 'money' && !ledgerUnavailable && !wsEmpty && (
+        <DealsMoney
+          model={moneyModel}
+          deals={timelineSource}
+          stages={DEAL_STAGES}
+          ledger={ledger}
+          syncState={syncState}
+          selectedId={selection.selectedId}
+          onSelect={selection.setSelectedId}
+          onMoveDate={moveCloseDate}
+          onAdvanceStage={move}
+          onEdit={(id) => setEditDealId(id)}
+          onCreate={() => createDeal()}
+          canCreate={!ledgerUnavailable}
+          onNavigate={onNavigate}
+          onReload={reloadLedger}
+          onUpdatePayments={updateDealPayments}
+          onUpdateRecurring={updateDealRecurring}
+        />
+      )}
+
+      {view === 'stage' && !ledgerUnavailable && !wsEmpty && (
       <ScrollShadowX>
         {boardStages.map(s => {
           const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
@@ -2178,13 +2407,15 @@ export function Deals({ workspace, onNavigate }) {
                         tooltip={d.hidden ? '파이프라인에 다시 보이기' : '파이프라인에서 숨기기'}
                         onClick={(e) => { e.stopPropagation(); toggleDealHidden(d.id, !d.hidden); }}
                       />
-                      <IconButton
-                        icon="sparkle"
-                        size={20}
-                        iconSize={12}
-                        tooltip="Guru에게 진단 요청"
-                        onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}
-                      />
+                      {isClassInGuruRecord(d) && (
+                        <IconButton
+                          icon="sparkle"
+                          size={20}
+                          iconSize={12}
+                          tooltip="Guru에게 진단 요청"
+                          onClick={(e) => { e.stopPropagation(); openGuruForDeal(d); }}
+                        />
+                      )}
                       {s.key === 'lost' && <LifecycleBadge state="cancelled" label="종료" />}
                       {d.hidden && <Badge tone="neutral" size="xs" variant="outline">숨김</Badge>}
                       <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">
@@ -2210,21 +2441,12 @@ export function Deals({ workspace, onNavigate }) {
                         <span style={{ fontSize: 10.5, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <Iconed name="clock" size={10} /> {d.age}일 정체
                         </span>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            fontSize: 10, padding: '2px 6px',
-                            borderRadius: 'var(--r-xs)',
-                            border: '1px solid var(--moon-line)',
-                            background: 'var(--surface-3)',
-                            color: 'var(--moon-200)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <Iconed name="sparkle" size={10} /> 반론 점검
-                        </button>
+                        {/* 10px 인라인 버튼이던 것 — 텍스트 플로어(§8.1)와 hover 계약을 Button 프리미티브에 맡긴다. */}
+                        {isClassInGuruRecord(d) && (
+                          <Button variant="outline" size="xs" icon="sparkle" onClick={(e) => { e.stopPropagation(); openGuruForDeal(d); }}>
+                            반론 점검
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2279,12 +2501,12 @@ export function Deals({ workspace, onNavigate }) {
           setEditDealId(null);
         }}
       >
-        {editingDeal && (
+        {editingDeal && isClassInGuruRecord(editingDeal) && (
           <div style={{
             padding: '12px 14px',
             background: 'var(--surface-2)',
             border: '1px solid var(--line-soft)',
-            borderRadius: 'var(--r-md)',
+            borderRadius: 'var(--r)',
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
@@ -2298,34 +2520,37 @@ export function Deals({ workspace, onNavigate }) {
                 variant="outline"
                 size="xs"
                 icon="sparkle"
-                onClick={() => setGuruDeal(editingDeal)}
+                onClick={() => openGuruForDeal(editingDeal)}
               >
                 1:1 코칭 열기
               </Button>
             </div>
-            {(!editingDeal.nextAction || isDealStalled(editingDeal)) && (
+            {dealRecommendation ? (
+              <GuruRecommendation recommendation={dealRecommendation} onAsk={onGuidanceAsk} onNavigate={onNavigate} compact />
+            ) : (!editingDeal.nextAction || isDealStalled(editingDeal)) && (
               <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Iconed name="clock" size={12} aria-hidden="true" />
                 <span>
+                  {/* 정체는 "편집·활동이 없었다"는 사실일 뿐 고객의 반론이 아니다 — 원인을 추정하지 않는다. */}
                   {!editingDeal.nextAction
                     ? '현재 등록된 다음 행동이 없습니다. Guru에게 다음 액션 추천을 받아보세요.'
-                    : `${editingDeal.age}일간 정체되었습니다. 고객 저항 반론 점검을 추천합니다.`}
+                    : `${editingDeal.age}일째 기록 변화가 없습니다.`}
                 </span>
               </div>
             )}
-            <DealOutreachDrafter
-              deal={editingDeal}
-              onApplyNextAction={(act) => {
-                if (editDealId) {
-                  setDealDrafts(prev => ({
-                    ...prev,
-                    [editDealId]: { ...prev[editDealId], nextAction: act },
-                  }));
-                }
-              }}
-            />
           </div>
         )}
+        {editingDeal && <DealOutreachDrafter
+          deal={editingDeal}
+          onApplyNextAction={(act) => {
+            if (editDealId) {
+              setDealDrafts(prev => ({
+                ...prev,
+                [editDealId]: { ...prev[editDealId], nextAction: act },
+              }));
+            }
+          }}
+        />}
         <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
         <DealNextMeetingPanel deal={editingDeal} onNavigate={onNavigate} />
         <DealLinkedProjectsPanel deal={editingDeal} onNavigate={onNavigate} />
@@ -2333,7 +2558,7 @@ export function Deals({ workspace, onNavigate }) {
       </EditDrawer>
 
       <FloatingMentorWidget
-        isOpen={Boolean(guruDeal)}
+        isOpen={Boolean(guruDeal && isClassInGuruRecord(guruDeal))}
         onClose={() => setGuruDeal(null)}
         agent="guru"
         contextType="deal"
@@ -2383,7 +2608,7 @@ function sortCases(rows, sort) {
 
 export function Cases() {
   const toast = useToast();
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -2398,6 +2623,9 @@ export function Cases() {
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
   const cases = sortCases(mergedCases, sort);
   const editingCase = editCaseId ? mergedCases.find(c => c.id === editCaseId) : null;
+  // 첫 로드 중에 "케이스가 없습니다"를, 읽기 실패에 "케이스 추가"를 그리지 않는다(§5.3 · Leads와 같은 계약).
+  const casesLoading = syncState === 'loading' && cases.length === 0;
+  const casesReadFailed = syncState === 'error' && cases.length === 0;
   // asc → desc → 해제(기록 순) 3단 토글 — Leads와 같은 계약.
   const toggleSort = (key) => setSort(s =>
     s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
@@ -2514,13 +2742,16 @@ export function Cases() {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Cases</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            Support & account issues · {cases.filter(c => c.status !== 'Resolved').length} open
-            <SyncBadge state={syncState} />
+            Support & account issues · {casesLoading || casesReadFailed ? '—' : cases.filter(c => c.status !== 'Resolved').length} open
+            <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus" onClick={createCase}>Case <Kbd>N</Kbd></Button>
       </div>
+      {casesLoading && <Skeleton lines={5} height={36} gap={8} label="케이스 불러오는 중" />}
+      {casesReadFailed && <LedgerReadError noun="케이스 목록" onRetry={reloadLedger} />}
+      {!casesLoading && !casesReadFailed && (
       <Card pad={false} className="hub-table-card">
         <div className="hub-table-min" style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>ID</span><SortHead k="title" sort={sort} onToggle={toggleSort}>Title</SortHead><SortHead k="account" sort={sort} onToggle={toggleSort}>Account</SortHead><span>Type</span><SortHead k="priority" sort={sort} onToggle={toggleSort}>Priority</SortHead><SortHead k="status" sort={sort} onToggle={toggleSort}>Status</SortHead><SortHead k="opened" sort={sort} onToggle={toggleSort}>Opened</SortHead><span style={{ textAlign: 'right' }}>Owner</span>
@@ -2553,7 +2784,7 @@ export function Cases() {
             <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</span>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.account}</span>
             <span style={{ paddingRight: 8, minWidth: 0 }}>
-              <Badge tone={c.type === 'personal' ? 'personal' : 'company'} size="xs">{c.type === 'personal' ? 'Personal' : 'Company'}</Badge>
+              <Badge tone="neutral" size="xs" variant="outline">{c.type === 'personal' ? 'Personal' : 'Company'}</Badge>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: pTone[c.priority] === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}>
               <Dot tone={pTone[c.priority]} />{c.priority}
@@ -2566,6 +2797,7 @@ export function Cases() {
           </div>
         ))}
       </Card>
+      )}
 
       <EditDrawer
         title={editingCase ? (editingCase.title || '케이스 편집') : ''}
@@ -2605,18 +2837,35 @@ function emptyDetail() {
   return { mrr: 0, contacts: [], deals: [], activity: [], notes: [] };
 }
 
-function HealthDot({ health }) {
+// 건강도는 색만으로 말하지 않는다(§5.2·§5.3) — 모양(채움 원·빈 원·채움 위험 원) + 직접 라벨.
+// ok와 warning은 같은 중립색이라 이전엔 점만으로는 구분조차 되지 않았다. `label="auto"`는
+// 주의·위험만 글자를 보이고(카드·목록의 소음 억제), "always"는 정상까지 보인다.
+const HEALTH_LABEL = { ok: '양호', warning: '주의', risk: '위험' };
+function HealthDot({ health, label = 'auto' }) {
   const tone = H_TONE[health] || 'neutral';
+  const text = HEALTH_LABEL[health] || '미정';
+  const showText = label === 'always' || (label === 'auto' && (health === 'warning' || health === 'risk'));
+  const hollow = health === 'warning' || !HEALTH_LABEL[health];
   return (
     <span
-      title={health}
-      style={{
-        width: 7, height: 7, borderRadius: 999,
-        background: tone === 'danger' ? 'var(--danger)' : 'var(--moon-500)',
-        display: 'inline-block',
-        flexShrink: 0,
-      }}
-    />
+      data-health={health || 'unknown'}
+      role="img"
+      aria-label={`건강도: ${text}`}
+      title={`건강도: ${text}`}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0, fontSize: 11, color: tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 7, height: 7, borderRadius: 999, boxSizing: 'border-box',
+          background: hollow ? 'transparent' : tone === 'danger' ? 'var(--danger)' : 'var(--moon-500)',
+          border: hollow ? '1px solid var(--moon-500)' : 'none',
+          display: 'inline-block',
+          flexShrink: 0,
+        }}
+      />
+      {showText && <span aria-hidden="true">{text}</span>}
+    </span>
   );
 }
 
@@ -2871,7 +3120,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-        기록<SyncBadge state={syncState} />
+        기록<TruthBadge state={syncState} style={{ marginLeft: 8 }} />
       </div>
 
       {/* 회사 조인은 이 리드 한 건이 아니라 같은 회사의 접촉 이력 전체를 보여준다 — 명시한다. */}
@@ -2903,7 +3152,7 @@ function LeadActivityPanel({ lead, onCountChange }) {
       <LogComposer onLog={logActivity} preset={composerPreset} />
 
       {syncState === 'loading' ? (
-        <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>불러오는 중…</div>
+        <Skeleton lines={3} height={14} gap={10} label="활동 기록 불러오는 중" />
       ) : syncState === 'error' ? (
         <EmptyState
           icon="clock"
@@ -2993,7 +3242,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
       {/* Header */}
       <div style={{ padding: 'var(--card-pad)', borderBottom: '1px solid var(--line-soft)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-          <Avatar name={account.name} size={52} tone={account.type === 'personal' ? 'personal' : 'company'} />
+          <Avatar name={account.name} size={52} tone="neutral" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {renaming ? (
@@ -3014,14 +3263,11 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
               {onRename && !renaming && (
                 <IconButton icon="edit" size={22} iconSize={12} tooltip="이름 변경" onClick={() => setRenaming(true)} />
               )}
-              <Badge tone={account.type === 'personal' ? 'personal' : 'company'} size="xs">
+              <Badge tone="neutral" size="xs" variant="outline">
                 <Iconed name={account.type === 'personal' ? 'user' : 'building'} size={9} />
                 {account.type === 'personal' ? 'Personal' : 'Company'}
               </Badge>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-                <HealthDot health={account.health} />
-                {account.health === 'warning' ? '주의' : account.health === 'risk' ? '위험' : '양호'}
-              </span>
+              <HealthDot health={account.health} label="always" />
             </div>
             <div style={{ display: 'flex', gap: 18, marginTop: 10 }}>
               <div>
@@ -3045,14 +3291,6 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
         </div>
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <QuickActions onAction={handleQuickAction} />
-          <Button
-            variant="secondary"
-            size="xs"
-            icon="sparkle"
-            onClick={() => onNavigate?.(guruChatPath({ mode: 'deal-review', ref: account.name }))}
-          >
-            Ask Guru
-          </Button>
         </div>
         {(account.nextAction || account.dormant) && (
           <div style={{ marginTop: 12, padding: '9px 11px', display: 'flex', alignItems: 'flex-start', gap: 8, border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)' }}>
@@ -3132,7 +3370,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                 border: '1px solid var(--line-soft)',
                 borderRadius: 'var(--r-sm)',
               }}>
-                <Avatar name={c.name} size={34} tone={account.type === 'personal' ? 'personal' : 'company'} />
+                <Avatar name={c.name} size={34} tone="neutral" />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{c.name}</span>
@@ -3256,6 +3494,10 @@ export function Accounts({ workspace, onNavigate }) {
   const ws = getWorkspace(workspace);
   const ACCOUNTS = filterAccountsByWorkspace([...localAccounts, ...ledgerAccounts], workspace);
   const wsEmpty = Boolean(ws) && ACCOUNTS.length === 0;
+  // 첫 로드·읽기 실패는 빈 목록과 다른 사실이다(§5.3) — 워크스페이스 여부와 무관하게 먼저 가른다.
+  const accountsLoading = syncState === 'loading' && ACCOUNTS.length === 0;
+  const accountsReadFailed = syncState === 'error' && ACCOUNTS.length === 0;
+  const accountsSettled = !accountsLoading && !accountsReadFailed;
   const [view, setView] = React.useState('cards'); // cards | list | detail
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = useScopeFilter(searchParams);
@@ -3628,7 +3870,7 @@ export function Accounts({ workspace, onNavigate }) {
           {accountsNotice && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{accountsNotice}</div>}
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {ACCOUNTS.filter(a => a.type === 'company').length} companies · {ACCOUNTS.filter(a => a.type === 'personal').length} individuals
-            <SyncBadge state={syncState} />
+            <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -3651,10 +3893,10 @@ export function Accounts({ workspace, onNavigate }) {
         <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account <Kbd>N</Kbd></Button>
       </div>
 
-      {wsEmpty && (
-        syncState === 'error' ? (
-          <LedgerReadError noun="계정 목록" onRetry={reloadLedger} />
-        ) : (
+      {accountsLoading && <Skeleton lines={3} height={96} gap={12} label="계정 목록 불러오는 중" />}
+      {accountsReadFailed && <LedgerReadError noun="계정 목록" onRetry={reloadLedger} />}
+
+      {wsEmpty && accountsSettled && (
         <Card>
           <EmptyState
             icon="accounts"
@@ -3664,11 +3906,10 @@ export function Accounts({ workspace, onNavigate }) {
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
-        )
       )}
 
       {/* Content by view */}
-      {!wsEmpty && view === 'cards' && (
+      {!wsEmpty && accountsSettled && view === 'cards' && (
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
           {filtered.map(a => (
             <Card
@@ -3689,13 +3930,12 @@ export function Accounts({ workspace, onNavigate }) {
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(a.name); } }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                  <Avatar name={a.name} size={36} tone={a.type === 'personal' ? 'personal' : 'company'} />
+                  <Avatar name={a.name} size={36} tone="neutral" />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                      <Badge tone={a.type === 'personal' ? 'personal' : 'company'} size="xs">{a.type === 'personal' ? 'Personal' : 'Company'}</Badge>
+                      <Badge tone="neutral" size="xs" variant="outline">{a.type === 'personal' ? 'Personal' : 'Company'}</Badge>
                       <HealthDot health={a.health} />
-                      {a.health === 'risk' && <span style={{ fontSize: 10.5, color: 'var(--danger)' }}>위험</span>}
                       {buildAccountRelationshipDetail(a, ledger).contacts.length > 0 && (
                         <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{buildAccountRelationshipDetail(a, ledger).contacts.length}명</span>
                       )}
@@ -3740,7 +3980,7 @@ export function Accounts({ workspace, onNavigate }) {
         </div>
       )}
 
-      {!wsEmpty && view === 'list' && (
+      {!wsEmpty && accountsSettled && view === 'list' && (
         <Card pad={false} className="hub-table-card">
           <div className="hub-table-min" style={{
             display: 'grid',
@@ -3772,21 +4012,20 @@ export function Accounts({ workspace, onNavigate }) {
               }}
             >
               <span style={{ paddingRight: 4, display: 'flex' }}>
-                <Avatar name={a.name} size={24} tone={a.type === 'personal' ? 'personal' : 'company'} />
+                <Avatar name={a.name} size={24} tone="neutral" />
               </span>
               <span style={{ minWidth: 0 }}>
                 <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
                 {(a.nextAction || a.dormant) && <span style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.dormant ? '기약 없음' : a.nextAction}</span>}
               </span>
               <span style={{ paddingRight: 8 }}>
-                <Badge tone={a.type === 'personal' ? 'personal' : 'company'} size="xs">
+                <Badge tone="neutral" size="xs" variant="outline">
                   <Iconed name={a.type === 'personal' ? 'user' : 'building'} size={9} />
                   {a.type === 'personal' ? 'Personal' : 'Company'}
                 </Badge>
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <HealthDot health={a.health} />
-                <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{a.health}</span>
+                <HealthDot health={a.health} label="always" />
               </span>
               <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(a.value)}</span>
               <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.deals}</span>
@@ -3808,7 +4047,7 @@ export function Accounts({ workspace, onNavigate }) {
         </Card>
       )}
 
-      {!wsEmpty && view === 'detail' && (
+      {!wsEmpty && accountsSettled && view === 'detail' && (
         <Card pad={false} className="hub-detail-card" style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
           <div style={{ width: '30%', minWidth: 240, borderRight: '1px solid var(--line-soft)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
@@ -3837,12 +4076,11 @@ export function Accounts({ workspace, onNavigate }) {
                       borderBottom: '1px solid var(--line-soft)',
                     }}
                   >
-                    <Avatar name={a.name} size={28} tone={a.type === 'personal' ? 'personal' : 'company'} />
+                    <Avatar name={a.name} size={28} tone="neutral" />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <span style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
                         <HealthDot health={a.health} />
-                        {a.health === 'risk' && <span style={{ fontSize: 10.5, color: 'var(--danger)', flexShrink: 0 }}>위험</span>}
                       </div>
                       <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
                         {fmt(a.value)} · <span style={{ color: 'var(--fg-faint)' }}>{a.last}</span>

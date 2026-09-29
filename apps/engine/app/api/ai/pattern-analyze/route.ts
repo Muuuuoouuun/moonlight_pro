@@ -47,7 +47,7 @@ export async function POST(req: Request) {
         records: body.records || [],
         question: body.question,
       },
-      { generate: generateGeminiText }
+      { generate: (input) => generateGeminiText({ ...input, usageSurface: "pattern-analysis" }) }
     );
 
     const httpStatus = result.status === "succeeded" ? 200

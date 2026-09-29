@@ -1,0 +1,8 @@
+.goalDisclosure { border-top: 1px solid var(--line-soft); }
+.goalDisclosure > summary { display: flex; align-items: center; gap: 7px; min-height: 36px; list-style: none; cursor: pointer; color: var(--fg-muted); font-size: 12px; }
+.goalDisclosure > summary::-webkit-details-marker { display: none; }
+.goalDisclosure > summary > span { color: var(--fg-faint); font-size: 10.5px; }
+.goalDisclosure > summary > svg:last-child { margin-left: auto; }
+.goalDisclosure[open] > summary > svg:last-child { transform: rotate(180deg); }
+.goalDisclosure :global(.goal-links) { margin-top: 0; padding-top: 8px; border-top: 0; }
+@media (max-width: 600px) { .goalDisclosure > summary { min-height: 44px; } }

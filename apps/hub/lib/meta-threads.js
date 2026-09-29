@@ -1,20 +1,23 @@
 import {
   insertSupabaseRecord,
-  makeSupabaseHeaders,
   resolveDefaultWorkspaceId,
-  resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
-import { createHmac, timingSafeEqual } from "crypto";
+import { fetchSupabaseRowsDetailed } from "@com-moon/supabase-rest";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
+import { configuredMetaOAuthApps, isValidMetaOAuthAppIdentity, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
 const META_THREADS_PROVIDER = "meta_threads";
 const META_THREADS_SYNC_SOURCE = "meta_threads";
 const DEFAULT_BRAND_HANDLE = "moon.classin";
 const DEFAULT_SCOPES = ["threads_basic", "threads_content_publish"];
-const THREADS_AUTH_URL = "https://threads.net/oauth/authorize";
+const THREADS_AUTH_URL = "https://www.threads.com/oauth/authorize";
 const THREADS_TOKEN_URL = "https://graph.threads.net/oauth/access_token";
 const THREADS_LONG_LIVED_TOKEN_URL = "https://graph.threads.net/access_token";
 const THREADS_API_BASE = "https://graph.threads.net/v1.0";
+const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const OAUTH_PROVIDER = "meta_threads";
 
 function normalizeString(value, fallback = "") {
   return typeof value === "string" ? value.trim() || fallback : fallback;
@@ -57,55 +60,6 @@ export function resolveMetaThreadsConfig() {
     hasAppId: Boolean(appId),
     hasAppSecret: Boolean(appSecret),
   };
-}
-
-function buildSupabaseReadUrl(table, { select = "*", filters = [], order, limit } = {}) {
-  const config = resolveSupabaseConfig();
-
-  if (!config) {
-    return null;
-  }
-
-  const params = new URLSearchParams();
-  params.set("select", select);
-
-  if (order) {
-    params.set("order", order);
-  }
-
-  if (typeof limit === "number") {
-    params.set("limit", String(limit));
-  }
-
-  filters.forEach(([key, value]) => {
-    params.append(key, value);
-  });
-
-  return `${config.url}/rest/v1/${table}?${params.toString()}`;
-}
-
-async function fetchSupabaseRows(table, options = {}) {
-  const config = resolveSupabaseConfig();
-  const url = buildSupabaseReadUrl(table, options);
-
-  if (!config || !url) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(url, {
-      headers: makeSupabaseHeaders(config.apiKey),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await response.json();
-  } catch {
-    return null;
-  }
 }
 
 function resolveOAuthStateSecret() {
@@ -161,26 +115,49 @@ function encodeState(value) {
 
 export function decodeMetaThreadsState(value) {
   if (!value) {
-    return {};
+    return { invalid: true };
   }
 
   try {
     const raw = String(value);
-    const [payload, signature] = raw.split(".");
+    const parts = raw.split(".");
+    if (parts.length !== 2) {
+      return { invalid: true };
+    }
+    const [payload, signature] = parts;
     const expected = signStatePayload(payload);
 
     if (!expected || !signature || !safeEquals(expected, signature)) {
       return { invalid: true };
     }
 
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const state = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const now = Date.now();
+    if (
+      !state ||
+      typeof state !== "object" ||
+      Array.isArray(state) ||
+      !Number.isSafeInteger(state.iat) ||
+      state.iat > now ||
+      now - state.iat > OAUTH_STATE_MAX_AGE_MS ||
+      typeof state.workspaceId !== "string" || !state.workspaceId ||
+      typeof state.brandHandle !== "string" || !state.brandHandle ||
+      state.provider !== OAUTH_PROVIDER ||
+      typeof state.nonce !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(state.nonce) ||
+      (state.expectedAccountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(state.expectedAccountId)) ||
+      (state.brandKey != null && !isValidSocialBrandKey(state.brandKey)) ||
+      !isValidMetaOAuthAppIdentity(state)
+    ) {
+      return { invalid: true };
+    }
+
+    return state;
   } catch {
     return { invalid: true };
   }
 }
 
 export function parseMetaThreadsSignedRequest(value) {
-  const config = resolveMetaThreadsConfig();
   const raw = typeof value === "string" ? value.trim() : "";
 
   if (!raw) {
@@ -191,7 +168,8 @@ export function parseMetaThreadsSignedRequest(value) {
     };
   }
 
-  if (!config.appSecret) {
+  const apps = configuredMetaOAuthApps(OAUTH_PROVIDER);
+  if (!apps.length) {
     return {
       valid: false,
       error: "missing-app-secret",
@@ -214,14 +192,12 @@ export function parseMetaThreadsSignedRequest(value) {
       String(encodedSignature).replace(/-/g, "+").replace(/_/g, "/"),
       "base64",
     );
-    const expected = createHmac("sha256", config.appSecret)
-      .update(encodedPayload)
-      .digest();
-
-    if (!safeBufferEquals(signature, expected)) {
+    const matching = apps.filter((app) => safeBufferEquals(signature,
+      createHmac("sha256", app.appSecret).update(encodedPayload).digest()));
+    if (matching.length !== 1) {
       return {
         valid: false,
-        error: "invalid-signature",
+        error: matching.length ? "ambiguous-app-secret" : "invalid-signature",
         payload: null,
       };
     }
@@ -241,6 +217,8 @@ export function parseMetaThreadsSignedRequest(value) {
       valid: true,
       error: null,
       payload,
+      appKey: matching[0].appKey,
+      appId: matching[0].appId,
     };
   } catch (error) {
     return {
@@ -263,6 +241,7 @@ function sanitizeReturnPath(value, fallback) {
 
 function resolveBaseUrl(origin) {
   return (
+    process.env.COM_MOON_SOCIAL_OAUTH_BASE_URL?.trim() ||
     process.env.COM_MOON_HUB_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
     origin ||
@@ -292,11 +271,15 @@ export function buildMetaThreadsAuthUrl({
   origin,
   workspaceId = resolveDefaultWorkspaceId(),
   brandHandle = DEFAULT_BRAND_HANDLE,
+  brandKey = null,
+  expectedAccountId = null,
   returnPath = "/dashboard/settings",
 }) {
-  const config = resolveMetaThreadsConfig();
+  const config = resolveMetaOAuthApp({ provider: OAUTH_PROVIDER, brandKey, brandHandle });
 
-  if (!config.configured || !hasMetaThreadsOAuthStateSecret()) {
+  if (!config?.configured || !hasMetaThreadsOAuthStateSecret() || !workspaceId ||
+    (brandKey != null && !isValidSocialBrandKey(brandKey)) ||
+    (expectedAccountId != null && !/^[A-Za-z0-9_-]{1,128}$/.test(expectedAccountId))) {
     return null;
   }
 
@@ -308,6 +291,12 @@ export function buildMetaThreadsAuthUrl({
     state: encodeState({
       workspaceId: workspaceId || resolveDefaultWorkspaceId(),
       brandHandle: normalizeHandle(brandHandle, config.brandHandle),
+      brandKey,
+      appKey: config.appKey,
+      appId: config.appId,
+      provider: OAUTH_PROVIDER,
+      nonce: randomBytes(32).toString("base64url"),
+      expectedAccountId,
       returnPath: sanitizeReturnPath(returnPath, "/dashboard/settings"),
     }),
   });
@@ -315,12 +304,10 @@ export function buildMetaThreadsAuthUrl({
   return `${THREADS_AUTH_URL}?${params.toString()}`;
 }
 
-async function exchangeThreadsToken(params) {
-  const config = resolveMetaThreadsConfig();
+async function exchangeThreadsToken(params, app) {
+  const config = app;
 
-  if (!config.configured) {
-    return null;
-  }
+  if (!config?.configured) throw new Error("threads-oauth-app-mismatch");
 
   const body = new URLSearchParams({
     client_id: config.appId,
@@ -345,20 +332,18 @@ async function exchangeThreadsToken(params) {
   return await response.json();
 }
 
-export async function exchangeMetaThreadsCode({ code, redirectUri }) {
+export async function exchangeMetaThreadsCode({ code, redirectUri, app }) {
   return exchangeThreadsToken({
     code,
     redirect_uri: redirectUri,
     grant_type: "authorization_code",
-  });
+  }, app);
 }
 
-export async function exchangeMetaThreadsLongLivedToken(accessToken) {
-  const config = resolveMetaThreadsConfig();
+export async function exchangeMetaThreadsLongLivedToken(accessToken, app) {
+  const config = app;
 
-  if (!config.configured || !accessToken) {
-    return null;
-  }
+  if (!config?.configured || !accessToken) throw new Error("threads-oauth-app-mismatch");
 
   const params = new URLSearchParams({
     grant_type: "th_exchange_token",
@@ -429,53 +414,64 @@ export async function fetchMetaThreadsProfile(accessToken) {
 export async function fetchLatestMetaThreadsConnection(
   workspaceId = resolveDefaultWorkspaceId(),
 ) {
-  const filters = [["provider", `eq.${META_THREADS_PROVIDER}`]];
+  const { connections } = await listSocialAccountConnections(META_THREADS_PROVIDER, workspaceId);
+  return connections[0] || null;
+}
 
-  if (workspaceId) {
-    filters.push(["workspace_id", `eq.${workspaceId}`]);
-  }
-
-  const rows = await fetchSupabaseRows("integration_connections", {
-    filters,
-    order: "created_at.desc",
-    limit: 1,
-  });
-
-  return rows?.[0] || null;
+export async function fetchMetaThreadsConnections(workspaceId = resolveDefaultWorkspaceId(), accountId = "") {
+  return listSocialAccountConnections(META_THREADS_PROVIDER, workspaceId, accountId);
 }
 
 export async function fetchMetaThreadsConnectionsByUserId({
   workspaceId = resolveDefaultWorkspaceId(),
   userId,
 }) {
-  if (!userId) {
-    return [];
-  }
+  if (!userId || !workspaceId) throw new Error("threads-connection-identity-missing");
 
   const filters = [
     ["provider", `eq.${META_THREADS_PROVIDER}`],
     ["config->>userId", `eq.${userId}`],
   ];
 
-  if (workspaceId) {
-    filters.push(["workspace_id", `eq.${workspaceId}`]);
+  filters.push(["workspace_id", `eq.${workspaceId}`]);
+
+  const rows = [];
+  const ids = new Set();
+  const pageSize = 100;
+  for (let offset = 0; ; offset += pageSize) {
+    const result = await fetchSupabaseRowsDetailed("integration_connections", {
+      filters,
+      order: "created_at.desc,id.desc",
+      limit: pageSize,
+      offset,
+      strictRows: true,
+    });
+    if (!result.configured || result.error || !Array.isArray(result.rows)) {
+      throw new Error("threads-connection-read-failed");
+    }
+    for (const row of result.rows) {
+      if (!row?.id || ids.has(row.id)) throw new Error("threads-connection-read-failed");
+      ids.add(row.id);
+      rows.push(row);
+    }
+    if (result.rows.length < pageSize) return rows;
   }
-
-  const rows = await fetchSupabaseRows("integration_connections", {
-    filters,
-    order: "created_at.desc",
-    limit: 20,
-  });
-
-  return Array.isArray(rows) ? rows : [];
 }
 
 export async function disableMetaThreadsConnectionsForUser({
   workspaceId = resolveDefaultWorkspaceId(),
   userId,
+  appId = null,
+  appKey = null,
   reason = "deauthorize",
 }) {
-  const rows = await fetchMetaThreadsConnectionsByUserId({ workspaceId, userId });
+  if (!userId || !workspaceId || !appId || !appKey) {
+    throw new Error("threads-connection-identity-missing");
+  }
+  const rows = (await fetchMetaThreadsConnectionsByUserId({ workspaceId, userId }))
+    .filter((row) =>
+      (row.config?.oauthAppId === appId && row.config?.oauthAppKey === appKey) ||
+      (appKey === "moonlight" && !row.config?.oauthAppId && !row.config?.oauthAppKey));
   const now = new Date().toISOString();
 
   if (!rows.length) {
@@ -485,7 +481,7 @@ export async function disableMetaThreadsConnectionsForUser({
     };
   }
 
-  const updates = await Promise.all(rows.map((row) => {
+  for (const row of rows) {
     const config = {
       ...(row.config || {}),
       accessToken: "",
@@ -497,85 +493,73 @@ export async function disableMetaThreadsConnectionsForUser({
       config.dataDeletionRequestedAt = now;
     }
 
-    return updateSupabaseRecord(
+    const result = await updateSupabaseRecord(
       "integration_connections",
-      [["id", `eq.${row.id}`]],
+      [
+        ["id", `eq.${row.id}`],
+        ["workspace_id", `eq.${workspaceId}`],
+        ["provider", `eq.${META_THREADS_PROVIDER}`],
+        ["config->>userId", `eq.${userId}`],
+        ["config->>oauthAppId", row.config?.oauthAppId ? `eq.${row.config.oauthAppId}` : "is.null"],
+        ["config->>oauthAppKey", row.config?.oauthAppKey ? `eq.${row.config.oauthAppKey}` : "is.null"],
+      ],
       {
         status: "disabled",
         config,
         last_synced_at: now,
       },
+      { returnRepresentation: true, select: "id" },
     );
-  }));
+    if (!result.persisted || result.record?.id !== row.id || result.records?.length !== 1) {
+      throw new Error("threads-connection-update-failed");
+    }
+  }
 
   return {
     matched: rows.length,
-    updated: updates.filter((result) => result.persisted).length,
+    updated: rows.length,
   };
 }
 
 export async function saveMetaThreadsConnection({
   workspaceId = resolveDefaultWorkspaceId(),
   brandHandle = DEFAULT_BRAND_HANDLE,
+  brandKey = null,
   tokenData,
   longLivedTokenData,
   profile,
+  app = null,
 }) {
-  const existing = await fetchLatestMetaThreadsConnection(workspaceId);
-  const now = new Date().toISOString();
+  if (!profile?.id || !profile?.username) throw new Error("social-account-id-missing");
   const accessToken =
     longLivedTokenData?.access_token ||
     tokenData?.access_token ||
-    existing?.config?.accessToken ||
     "";
   const expiresIn = longLivedTokenData?.expires_in || tokenData?.expires_in || null;
   const config = {
     provider: "Threads",
     brandHandle: normalizeHandle(brandHandle),
+    brandKey: brandKey || null,
+    ...(app ? { oauthAppKey: app.appKey, oauthAppId: app.appId } : {}),
     scope:
       longLivedTokenData?.scope ||
       tokenData?.scope ||
-      resolveMetaThreadsConfig().scopes.join(","),
+      (app || resolveMetaThreadsConfig()).scopes.join(","),
     accessToken,
     tokenType: longLivedTokenData?.token_type || tokenData?.token_type || "Bearer",
     expiresAt: expiresIn
       ? new Date(Date.now() + expiresIn * 1000).toISOString()
-      : existing?.config?.expiresAt || null,
-    userId: profile?.id || tokenData?.user_id || existing?.config?.userId || null,
-    username: profile?.username || existing?.config?.username || null,
-    profilePictureUrl:
-      profile?.threads_profile_picture_url ||
-      existing?.config?.profilePictureUrl ||
-      null,
-    biography: profile?.threads_biography || existing?.config?.biography || null,
+      : null,
+    userId: profile.id,
+    username: profile.username,
+    profilePictureUrl: profile.threads_profile_picture_url || null,
+    biography: profile.threads_biography || null,
   };
-  const record = {
-    workspace_id: workspaceId || null,
-    provider: META_THREADS_PROVIDER,
-    status: "connected",
-    config,
-    last_synced_at: now,
-  };
-
-  if (existing?.id) {
-    const persistence = await updateSupabaseRecord(
-      "integration_connections",
-      [["id", `eq.${existing.id}`]],
-      record,
-    );
-
-    return {
-      connectionId: existing.id,
-      persistence,
-      config,
-    };
-  }
-
-  const persistence = await insertSupabaseRecord("integration_connections", record);
-  const latest = await fetchLatestMetaThreadsConnection(workspaceId);
-
+  const persistence = await saveSocialAccountConnection({
+    workspaceId, provider: META_THREADS_PROVIDER, accountId: profile.id, config,
+  });
   return {
-    connectionId: latest?.id || null,
+    connectionId: persistence.id || null,
     persistence,
     config,
   };
@@ -610,6 +594,7 @@ export function summarizeMetaThreadsConnection(connection) {
     status: connection?.status || "pending",
     lastSyncedAt: connection?.last_synced_at || null,
     brandHandle: normalizeHandle(config.brandHandle),
+    brandKey: config.brandKey || null,
     userId: config.userId || null,
     username: config.username || null,
     profileHandle: config.username ? `@${config.username}` : null,
@@ -617,10 +602,11 @@ export function summarizeMetaThreadsConnection(connection) {
   };
 }
 
-export function isExpectedMetaThreadsProfile(profile, expectedHandle) {
-  if (!profile?.username) {
+export function isExpectedMetaThreadsProfile(profile, expectedHandle, expectedAccountId = null) {
+  if (!profile?.id || !profile?.username) {
     return null;
   }
 
-  return normalizeHandle(profile.username) === normalizeHandle(expectedHandle);
+  return normalizeHandle(profile.username) === normalizeHandle(expectedHandle) &&
+    (!expectedAccountId || profile.id === expectedAccountId);
 }

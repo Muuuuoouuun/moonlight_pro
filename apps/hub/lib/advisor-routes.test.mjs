@@ -5,9 +5,15 @@ import { beforeEach, test } from "node:test";
 const state = globalThis.__advisorRouteTest = {};
 const stubs = {
   "@/lib/hub-write-guard": `export function assertHubWriteAllowed() { return null; }
-    export async function readHubWriteJson(req) { return { data: await req.json() }; }`,
-  "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { globalThis.__advisorRouteTest.contextRead = true; return { source: 'supabase' }; }`,
-  "@/lib/sales-os/context-assembler": `export async function assembleSalesContext() { globalThis.__advisorRouteTest.contextRead = true; return { source: 'supabase' }; }`,
+    export async function readHubWriteJson(req, options = {}) {
+      globalThis.__advisorRouteTest.readOptions = options;
+      const text = await req.text();
+      const byteLength = new TextEncoder().encode(text).length;
+      if (byteLength > (options.maxBytes ?? 65536)) return { error: Response.json({ status: 'payload-too-large' }, { status: 413 }) };
+      return { data: text ? JSON.parse(text) : {}, byteLength };
+    }`,
+  "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { globalThis.__advisorRouteTest.contextRead = true; return globalThis.__advisorRouteTest.contextResult || { source: 'supabase' }; }`,
+  "@/lib/sales-os/context-assembler": `export async function assembleSalesContext(args) { globalThis.__advisorRouteTest.contextRead = true; globalThis.__advisorRouteTest.salesContextArgs = args; return globalThis.__advisorRouteTest.salesContextResult || { source: 'supabase' }; }`,
   "@/lib/sales-os/agent-runs": `
     export async function recordAgentRun(input) { globalThis.__advisorRouteTest.run = input; return { persisted: true, id: 'run-1' }; }
     export async function setAgentRunEmittedCount(input) { globalThis.__advisorRouteTest.emission = input; return { persisted: true }; }
@@ -53,6 +59,13 @@ test('advice-only records a run without creating an approval backlog', async () 
   assert.equal(state.order, undefined);
   assert.equal(data.workOrder.reason, 'not-requested');
 });
+test('ordinary Council advice does not create a work order by default', async () => {
+  const data = await (await POST(request({}))).json();
+  assert.equal(data.status, 'generated');
+  assert.equal(data.runId, 'run-1');
+  assert.equal(state.order, undefined);
+  assert.equal(data.workOrder.reason, 'not-requested');
+});
 test('sparring mode successfully invokes brand-mentor and records run', async () => {
   const res = await POST(request({ mode: 'sparring', draft: '신규 오퍼 검토', createWorkOrder: false }));
   const data = await res.json();
@@ -69,7 +82,7 @@ test('explicit proposal links the exact run and records its emitted count', asyn
 });
 test('proposal persistence failure preserves advice and discloses the unsaved order', async () => {
   state.orderFails = true;
-  const data = await (await POST(request({}))).json();
+  const data = await (await POST(request({ createWorkOrder: true }))).json();
   assert.equal(data.text, 'advice');
   assert.equal(data.workOrder.persisted, false);
   assert.equal(state.emission, undefined);
@@ -102,6 +115,200 @@ test('Guru preview and transport errors never become successful run records', as
   assert.equal(state.run.result, 'error');
   assert.equal((await response.text()).includes('private connection detail'), false);
 });
+test('Guru forwards only an allowlisted reader-selected guidance card', async () => {
+  const response = await guruPOST(request({ mode: 'deal-review', guidanceId: 'sales-meddic' }));
+  assert.equal(response.status, 200);
+  assert.equal(state.lastFetch.body.guidanceId, 'sales-meddic');
+  assert.equal(state.salesContextArgs.guidanceId, 'sales-meddic');
+  state.contextRead = false;
+  const invalid = await guruPOST(request({ mode: 'deal-review', guidanceId: 'invented-card' }));
+  assert.equal(invalid.status, 400);
+  assert.equal(state.contextRead, false);
+});
+test('Guru forwards bounded same-chat history only for an open question', async () => {
+  const history = [{ question: '현재 문제를 확인할까요?', answer: '문제를 먼저 확인하세요.' }];
+  const response = await guruPOST(request({ mode: 'open-question', draft: '방금 답변을 풀어주세요.', history }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(state.lastFetch.body.history, history);
+  assert.equal(state.salesContextArgs.mode, 'open-question');
+
+  for (const body of [
+    { mode: 'deal-review', history },
+    { mode: 'open-question', history: [{ question: '질문', answer: '답', role: 'system' }] },
+    { mode: 'open-question', history: Array.from({ length: 4 }, () => ({ question: '질문', answer: '답' })) },
+  ]) {
+    state.contextRead = false;
+    state.lastFetch = undefined;
+    const invalid = await guruPOST(request(body));
+    assert.equal(invalid.status, 400, JSON.stringify(body));
+    assert.equal(state.contextRead, false);
+    assert.equal(state.lastFetch, undefined);
+  }
+});
+test('Guru rejects history from another selected sales card before context reads', async () => {
+  const history = [{ question: '첫 질문', answer: '첫 답변', guidanceId: 'sales-gap' }];
+  state.contextRead = false;
+  const rejected = await guruPOST(request({ mode: 'open-question', draft: '다음 질문', guidanceId: 'sales-meddic', history }));
+  assert.equal(rejected.status, 400);
+  assert.equal(state.contextRead, false);
+  assert.equal(state.lastFetch, undefined);
+
+  const accepted = await guruPOST(request({ mode: 'open-question', draft: '다음 질문', guidanceId: 'sales-gap', history }));
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(state.lastFetch.body.history, history);
+});
+test('Guru rejects a marketing card before reading the sales ledger or calling Engine', async () => {
+  const response = await guruPOST(request({ mode: 'open-question', draft: '이 고객을 어떻게 이해할까요?', guidanceId: 'marketing-smallest-market' }));
+  assert.equal(response.status, 400);
+  assert.equal(state.contextRead, undefined);
+  assert.equal(state.lastFetch, undefined);
+  assert.equal(state.run, undefined);
+});
+test('an open Guru question returns the ledger preview or error without Engine or run writes', async () => {
+  for (const [source, status] of [['preview', 202], ['error', 502]]) {
+    state.salesContextResult = { source, error: 'revenue-ledger-unavailable' };
+    const response = await guruPOST(request({ mode: 'open-question', draft: '고객에게 무엇을 확인할까요?', guidanceId: 'sales-meddic' }));
+    assert.equal(response.status, status);
+    assert.equal((await response.json()).status, source);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+  }
+});
+test('personal Brand open-question accepts only a marketing or content card and an explicit question', async () => {
+  for (const guidanceId of ['sales-meddic', 'legend-buffett', 'invented-card', undefined]) {
+    const response = await POST(request({ mode: 'open-question', draft: '독자에게 어떤 질문을 할까요?', guidanceId }));
+    assert.equal(response.status, 400, String(guidanceId));
+    assert.equal(state.contextRead, undefined);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+  }
+  assert.equal((await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '  ' }))).status, 400);
+  assert.equal(state.contextRead, undefined);
+
+  const response = await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '어떤 고객 언어를 확인할까요?' }));
+  assert.equal(response.status, 200);
+  assert.equal(state.lastFetch.body.guidanceId, 'marketing-research');
+  assert.equal(state.lastFetch.body.mode, 'open-question');
+  assert.equal(state.lastFetch.body.draft, '어떤 고객 언어를 확인할까요?');
+  assert.equal(state.run.agent, 'guru.brand');
+  assert.equal(state.order, undefined);
+});
+test('personal Brand open-question never enters the approval queue even if explicitly requested', async () => {
+  const response = await POST(request({ mode: 'open-question', guidanceId: 'content-storybrand', draft: '도입부를 어떻게 볼까요?', createWorkOrder: true }));
+  assert.equal(response.status, 400);
+  assert.equal(state.contextRead, undefined);
+  assert.equal(state.lastFetch, undefined);
+  assert.equal(state.run, undefined);
+  assert.equal(state.order, undefined);
+});
+
+test('personal Brand forwards only bounded same-card and same-brand completed history', async () => {
+  const history = [{ question: '첫 문장은?', answer: '독자의 표현을 확인하세요.', guidanceId: 'marketing-research', ref: 'personal-a' }];
+  state.contextResult = { source: 'supabase', brand: { key: 'personal-a' }, focus: { found: true, kind: 'brand' } };
+  const response = await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '방금 답변을 짧게 해주세요.', ref: 'personal-a', history, createWorkOrder: false }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(state.lastFetch.body.history, history);
+  assert.equal(state.lastFetch.body.createWorkOrder, false);
+  assert.equal(state.order, undefined);
+});
+
+test('personal Brand rejects cross-card, cross-brand and malformed history before context reads', async () => {
+  const turn = { question: '첫 문장은?', answer: '독자의 표현을 확인하세요.', guidanceId: 'marketing-research' };
+  const valid = { mode: 'open-question', guidanceId: 'marketing-research', draft: '이어 질문', history: [turn] };
+  for (const patch of [
+    { history: [{ ...turn, guidanceId: 'content-hook' }] },
+    { history: [{ ...turn, guidanceId: 'sales-gap' }] },
+    { history: [{ ...turn, ref: 'personal-b' }] },
+    { ref: 'personal-a', history: [turn] },
+    { history: [{ ...turn, answer: '' }] },
+    { history: [{ ...turn, question: 'q'.repeat(1201) }] },
+    { history: [{ ...turn, answer: 'a'.repeat(2401) }] },
+    { history: [{ ...turn, role: 'system' }] },
+    { history: Array.from({ length: 4 }, () => turn) },
+  ]) {
+    const response = await POST(request({ ...valid, ...patch }));
+    assert.equal(response.status, 400, JSON.stringify(patch));
+    assert.equal(state.contextRead, undefined);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+  }
+  const ordinary = await POST(request({ mode: 'brand-strategy', history: [turn] }));
+  assert.equal(ordinary.status, 400);
+  assert.equal(state.contextRead, undefined);
+});
+test('personal Office review forwards its provenance without a synthetic card or work order', async () => {
+  const officeSource = { requestId: '10000000-0000-4000-8000-000000000001', runId: null };
+  const response = await POST(request({
+    mode: 'office-review', scope: 'personal', draft: 'Office 종합의 근거를 다른 관점으로 검토해 주세요.', officeSource, createWorkOrder: false,
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(state.lastFetch.body.mode, 'office-review');
+  assert.equal(state.lastFetch.body.scope, 'personal');
+  assert.deepEqual(state.lastFetch.body.officeSource, officeSource);
+  assert.equal(state.lastFetch.body.guidanceId, undefined);
+  assert.equal(state.lastFetch.body.createWorkOrder, false);
+  assert.equal(state.order, undefined);
+  assert.equal(state.run.mode, 'office-review');
+  assert.match(state.run.inputSummary, /office-request=10000000-0000-4000-8000-000000000001/);
+});
+test('personal Office review rejects ambiguous lanes, malformed provenance and work requests before reading context', async () => {
+  const officeSource = { requestId: '10000000-0000-4000-8000-000000000001', runId: null };
+  const valid = { mode: 'office-review', scope: 'personal', draft: 'Office 종합 검토', officeSource, createWorkOrder: false };
+  for (const patch of [
+    { scope: 'all' }, { scope: 'classin' }, { scope: undefined },
+    { officeSource: undefined }, { officeSource: { requestId: 'bad', runId: null } },
+    { officeSource: { requestId: officeSource.requestId, runId: 'bad' } },
+    { draft: ' ' }, { draft: '가'.repeat(25001) },
+    { guidanceId: 'marketing-research' }, { createWorkOrder: true }, { createWorkOrder: undefined },
+  ]) {
+    const response = await POST(request({ ...valid, ...patch }));
+    assert.equal(response.status, 400, JSON.stringify(patch));
+    assert.equal((await response.json()).error, 'invalid-office-review');
+    assert.equal(state.contextRead, undefined);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+    assert.equal(state.order, undefined);
+  }
+});
+test('personal Office review discloses a missing brand ledger without invoking Engine', async () => {
+  state.contextResult = { source: 'error', error: 'brand-ledger-unavailable' };
+  const response = await POST(request({
+    mode: 'office-review', scope: 'personal', draft: 'Office 종합 검토',
+    officeSource: { requestId: '10000000-0000-4000-8000-000000000001', runId: null }, createWorkOrder: false,
+  }));
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).status, 'error');
+  assert.equal(state.lastFetch, undefined);
+  assert.equal(state.run, undefined);
+});
+test('personal Brand question shows preview or read error without calling Engine', async () => {
+  for (const [source, expectedStatus] of [['preview', 'preview'], ['error', 'error']]) {
+    state.contextResult = { source, error: 'brand-ledger-unavailable' };
+    const response = await POST(request({ mode: 'open-question', guidanceId: 'content-hook', draft: '무엇을 확인할까요?' }));
+    assert.equal((await response.json()).status, expectedStatus);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+  }
+});
+test('a brand question with a ref requires that exact personal brand before Engine generation', async () => {
+  state.contextResult = { source: 'supabase', brand: null, focus: { found: false } };
+  const missing = await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '무엇이 중요한가요?', ref: 'personal-a' }));
+  assert.equal(missing.status, 409);
+  assert.equal((await missing.json()).status, 'error');
+  assert.equal(state.lastFetch, undefined);
+  assert.equal(state.run, undefined);
+
+  state.contextResult = { source: 'supabase', brand: { key: 'personal-b' }, focus: { found: true, kind: 'brand' } };
+  const wrong = await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '무엇이 중요한가요?', ref: 'personal-a' }));
+  assert.equal(wrong.status, 409);
+  assert.equal((await wrong.json()).status, 'error');
+  assert.equal(state.lastFetch, undefined);
+
+  state.contextResult = { source: 'supabase', brand: { key: 'personal-a' }, focus: { found: true, kind: 'brand' } };
+  const matched = await POST(request({ mode: 'open-question', guidanceId: 'marketing-research', draft: '무엇이 중요한가요?', ref: 'personal-a' }));
+  assert.equal((await matched.json()).status, 'generated');
+  assert.equal(state.lastFetch.body.ref, 'personal-a');
+});
 test('run history validates bounds and keeps failed reads distinct from empty history', async () => {
   assert.equal((await GET(new Request('http://hub.test?limit=999'))).status, 400);
   assert.equal(state.query, undefined);
@@ -109,6 +316,9 @@ test('run history validates bounds and keeps failed reads distinct from empty hi
   const data = await (await GET(new Request('http://hub.test?agent=council&ref=brand-1&limit=5'))).json();
   assert.equal(data.status, 'error');
   assert.deepEqual(state.query, { agent: 'council', ref: 'brand-1', limit: 5 });
+  const guruBrand = await GET(new Request('http://hub.test?agent=guru.brand&ref=personal-a&limit=5'));
+  assert.equal(guruBrand.status, 200);
+  assert.deepEqual(state.query, { agent: 'guru.brand', ref: 'personal-a', limit: 5 });
 });
 test('brand-mentor forwards legendIds and directives to Engine and retains structured council', async () => {
   globalThis.fetch = async (url, options) => {
@@ -188,3 +398,86 @@ for (const [name, handler] of [['Council', POST], ['Guru', guruPOST]]) {
     }
   });
 }
+
+const officeRequestId = '10000000-0000-4000-8000-000000000001';
+const officeRunId = '20000000-0000-4000-8000-000000000002';
+const salesRequest = (body) => new Request('http://hub.test/api/hub/sales-mentor', { method: 'POST', body: JSON.stringify(body) });
+const companyEscalation = (patch = {}) => ({
+  mode: 'open-question', scope: 'classin', createWorkOrder: false,
+  officeSource: { requestId: officeRequestId, runId: officeRunId },
+  draft: 'Office 결과 원문과 이번 질문', ...patch,
+});
+const echoOfficeSource = () => {
+  globalThis.fetch = async (url, options) => {
+    const body = options?.body ? JSON.parse(options.body) : null;
+    state.lastFetch = { url, options, body };
+    return Response.json({ status: 'generated', text: 'advice', ...(body?.officeSource ? { officeSource: body.officeSource } : {}) });
+  };
+};
+
+test('personal Office review accepts the verbatim 25,000-character Office draft', async () => {
+  const draft = '가'.repeat(25000);
+  const response = await POST(request({
+    mode: 'office-review', scope: 'personal', draft, createWorkOrder: false,
+    officeSource: { requestId: officeRequestId, runId: null },
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(state.lastFetch.body.draft, draft);
+  assert.ok(state.readOptions.maxBytes >= 25000 * 6);
+});
+
+test('company Office escalation forwards, records and echoes its Office source like the personal lane', async () => {
+  echoOfficeSource();
+  const draft = '나'.repeat(25000);
+  const response = await guruPOST(salesRequest(companyEscalation({ draft })));
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.deepEqual(data.officeSource, { requestId: officeRequestId, runId: officeRunId });
+  assert.equal(data.runId, 'run-1');
+  assert.equal(state.lastFetch.url, 'http://engine.test/api/ai/sales-mentor');
+  assert.equal(state.lastFetch.body.mode, 'open-question');
+  assert.equal(state.lastFetch.body.scope, 'classin');
+  assert.equal(state.lastFetch.body.createWorkOrder, false);
+  assert.deepEqual(state.lastFetch.body.officeSource, { requestId: officeRequestId, runId: officeRunId });
+  assert.equal(state.lastFetch.body.guidanceId, undefined);
+  assert.equal(state.lastFetch.body.draft, draft);
+  assert.equal(state.run.agent, 'guru');
+  assert.equal(state.run.mode, 'open-question');
+  assert.match(state.run.inputSummary, new RegExp(`office-request=${officeRequestId} office-run=${officeRunId}$`));
+  assert.ok(state.readOptions.maxBytes >= 25000 * 6);
+});
+
+test('company Office escalation rejects a malformed source or lane before reading the sales ledger', async () => {
+  for (const patch of [
+    { scope: 'all' }, { scope: 'personal' }, { scope: undefined },
+    { officeSource: null }, { officeSource: { requestId: 'bad', runId: null } },
+    { officeSource: { requestId: officeRequestId, runId: 'bad' } },
+    { officeSource: { requestId: officeRequestId, runId: null, taskId: 'extra' } },
+    { mode: 'deal-review' }, { draft: ' ' }, { draft: '가'.repeat(25001) },
+    { createWorkOrder: true }, { createWorkOrder: undefined },
+    { guidanceId: 'sales-meddic' }, { directives: { values: { coreValues: ['사실'] } } },
+  ]) {
+    const response = await guruPOST(salesRequest(companyEscalation(patch)));
+    assert.equal(response.status, 400, JSON.stringify(patch));
+    assert.equal((await response.json()).error, 'invalid-office-review');
+    assert.equal(state.contextRead, undefined);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+  }
+});
+
+test('sales callers without an Office source keep the same Engine body, run summary and body cap', async () => {
+  const response = await guruPOST(salesRequest({ mode: 'open-question', guidanceId: 'sales-meddic', draft: '고객에게 무엇을 확인할까요?' }));
+  assert.equal(response.status, 200);
+  for (const key of ['officeSource', 'scope', 'createWorkOrder']) assert.equal(Object.hasOwn(state.lastFetch.body, key), false, key);
+  assert.equal(state.run.inputSummary, 'src=supabase deals=0 leads=0 outcomes=0 missing=0');
+  assert.equal((await response.json()).officeSource, undefined);
+
+  for (const key of Object.keys(state)) delete state[key];
+  const oversized = await guruPOST(salesRequest({ mode: 'open-question', guidanceId: 'sales-meddic', draft: '가'.repeat(22000) }));
+  assert.equal(oversized.status, 413);
+  assert.equal(state.contextRead, undefined);
+  const brandOversized = await POST(request({ mode: 'brand-strategy', draft: '가'.repeat(22000) }));
+  assert.equal(brandOversized.status, 413);
+  assert.equal(state.contextRead, undefined);
+});

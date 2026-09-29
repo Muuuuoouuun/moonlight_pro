@@ -9,7 +9,7 @@
 import React from 'react';
 
 import { Iconed } from "../hub-icons";
-import { Badge, Button, Card, Dot, EmptyState, Input, SyncBadge, SegmentedControl } from "../hub-primitives";
+import { Badge, Button, Card, Dot, EmptyState, Input, SegmentedControl, Skeleton, TruthBadge } from "../hub-primitives";
 import { filterLeadsByWorkspace, getWorkspace } from "../workspace-map";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger } from "./revenue";
@@ -18,9 +18,10 @@ import { clearExpandedSegments, sortSegmentsByPriority, toggleExpandedSegment } 
 // 로컬 fetch 복제 제거(7차 속도) — Revenue 표면들이 데운 모듈 SWR 캐시를 그대로 재사용해
 // 탭 진입마다 7콜 기록을 다시 받지 않는다(no-store·재시도·error 분류도 훅이 소유).
 function useLeadsLedger() {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload } = useRevenueLedger();
   return {
     syncState,
+    reload,
     source: syncState === 'error' ? 'error' : ledger?.source || 'preview',
     leads: Array.isArray(ledger?.leads) ? ledger.leads : [],
   };
@@ -78,7 +79,7 @@ function groupLeads(leads, dimension) {
 }
 
 export function Segments({ workspace, onNavigate }) {
-  const { syncState, source, leads: allLeads } = useLeadsLedger();
+  const { syncState, source, reload, leads: allLeads } = useLeadsLedger();
   const ws = getWorkspace(workspace);
   // Clicking a member row deep-links to that lead. Mirror the workspace path pick used by
   // the Revenue pages: classin scope opens the classin Leads surface, else the flat leads route.
@@ -99,6 +100,10 @@ export function Segments({ workspace, onNavigate }) {
     : leads;
   const segments = groupLeads(searched, dimension);
   const dimLabel = DIMENSIONS.find((d) => d.key === dimension)?.label || dimension;
+  // 첫 로드 중이거나 읽기에 실패했을 때 0건을 "세그먼트 없음"으로 말하지 않는다(§5.3 loading·error ≠ empty).
+  const ledgerLoading = syncState === 'loading' && allLeads.length === 0;
+  const ledgerFailed = source === 'error';
+  const ledgerUnsettled = ledgerLoading || ledgerFailed;
 
   // 키보드 계층(§8.1 — 24차): j/k 세그먼트 카드 이동 · e/Enter 펼침 토글 · / 검색 포커스.
   // 비코어 표면 중 마지막까지 문법이 없던 목록 — 코어와 같은 훅을 그대로 쓴다.
@@ -121,8 +126,8 @@ export function Segments({ workspace, onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>세그먼트</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {ws ? `${ws.label} · ` : ''}리드 {leads.length}건 · {dimLabel} 기준 {segments.length}개 세그먼트
-            <SyncBadge state={syncState} />
+            {ws ? `${ws.label} · ` : ''}리드 {ledgerUnsettled ? '—' : `${leads.length}건`} · {dimLabel} 기준 {ledgerUnsettled ? '—' : `${segments.length}개`} 세그먼트
+            <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -135,17 +140,33 @@ export function Segments({ workspace, onNavigate }) {
         <Input ref={searchRef} className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" clearable kbd="/" value={search} onChange={setSearch} />
       </div>
 
-      {segments.length === 0 && (
+      {ledgerLoading ? (
+        <Skeleton lines={3} height={96} gap={12} label="세그먼트 불러오는 중" />
+      ) : ledgerFailed ? (
+        // 읽기 실패 — "세그먼트가 없습니다"로 위장하지 않는다. 원인 + 재시도만 둔다(생성 유도 금지).
+        <Card>
+          <div role="alert" style={{ minHeight: 200, padding: '28px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 9, textAlign: 'center' }}>
+            <TruthBadge state="error" reason="리드 기록" />
+            <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--fg)' }}>리드 기록을 읽지 못했습니다</div>
+            <div style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--fg-faint)', maxWidth: 360 }}>
+              지금 화면은 비어 보여도 실제 세그먼트가 있을 수 있습니다. 연결이 복구되면 다시 읽어 확인하세요.
+            </div>
+            <Button variant="secondary" size="sm" icon="runs" onClick={reload}>다시 읽기</Button>
+          </div>
+        </Card>
+      ) : segments.length === 0 && (
         <Card>
           <EmptyState
             icon="filter"
-            title="세그먼트가 없습니다"
-            description={source === 'supabase'
-              ? '리드가 없거나 검색 결과가 비어 있습니다.'
-              : source === 'error'
-                ? '리드 기록을 읽지 못했습니다 — 지금 화면은 비어 보여도 실제 세그먼트가 있을 수 있습니다. 새로고침으로 재시도하세요.'
-                : 'Supabase 연결 후 리드가 쌓이면 유입경로·지역·규모·스코어별로 자동 그룹핑됩니다.'}
-            action={source === 'supabase' ? (
+            title={term ? '검색 결과가 없습니다' : '세그먼트가 없습니다'}
+            description={term
+              ? `"${search.trim()}"와(과) 이름이 일치하는 리드가 없습니다.`
+              : source === 'supabase'
+                ? (ws ? `${ws.label}에 해당하는 리드가 없습니다.` : '아직 리드가 없습니다.')
+                : 'Supabase 연결 후 리드가 쌓이면 유입경로·단계·유형·스코어별로 자동 그룹핑됩니다.'}
+            action={term ? (
+              <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+            ) : source === 'supabase' ? (
               // No intake surface in this branch — send the operator to the classin Leads list.
               <Button variant="primary" size="sm" icon="inbox" onClick={() => onNavigate?.('dashboard/classin/revenue')}>리드 목록 열기</Button>
             ) : null}

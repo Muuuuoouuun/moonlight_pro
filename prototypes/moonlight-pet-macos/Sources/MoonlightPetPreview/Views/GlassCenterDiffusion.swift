@@ -1,0 +1,56 @@
+import AppKit
+
+/// Three-background quality study: one restrained diffusion layer, a light veil,
+/// and low-energy glyph shadows. Optical edge intensity is independent.
+/// AppKit owns the actual blur radius. The native material mix is a visual
+/// approximation, not a claim that its kernel is the CSS 12px kernel.
+enum GlassStudy {
+    static let nativeDiffusionMix: CGFloat = 0.28
+    static let centerVeil: CGFloat = 0.055
+    static let glyphShadow = 0.73
+    static let softGlyphShadow = 0.37
+    static let contactRadius: CGFloat = 0.65
+    static let softRadius: CGFloat = 1.6
+    static let highlightRecovery: Float = 0.45
+    static let edgeReflection: Float = 0.72
+    static let edgeFeather: CGFloat = 24
+}
+
+/// One softly masked backdrop under the clear glass. This layer never contains
+/// text or controls; the foreground remains an unaffected sibling.
+final class GlassCenterDiffusion: NSVisualEffectView {
+    init(radius: CGFloat) {
+        super.init(frame: .zero)
+        material = .underWindowBackground
+        blendingMode = .behindWindow
+        state = .active
+        appearance = NSAppearance(named: .darkAqua)
+        isEmphasized = false
+        alphaValue = GlassStudy.nativeDiffusionMix
+        maskImage = ReadingMask.image(radius: radius, feather: GlassStudy.edgeFeather)
+        setAccessibilityElement(false)
+    }
+    required init?(coder: NSCoder) { nil }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+/// Low-density shade fades toward the clear lip instead of boxing each label.
+final class GlassCenterVeil: NSView {
+    private let radius: CGFloat
+    init(radius: CGFloat) {
+        self.radius = radius
+        super.init(frame: .zero)
+        setAccessibilityElement(false)
+    }
+    required init?(coder: NSCoder) { nil }
+    override var isOpaque: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) {
+        NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).addClip()
+        NSGradient(colorsAndLocations:
+            (NSColor.black.withAlphaComponent(GlassStudy.centerVeil), 0),
+            (NSColor.black.withAlphaComponent(GlassStudy.centerVeil), 0.35),
+            (NSColor.black.withAlphaComponent(0), 1))?
+            .draw(in: bounds, relativeCenterPosition: .zero)
+    }
+}

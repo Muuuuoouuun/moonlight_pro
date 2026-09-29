@@ -12,9 +12,9 @@
 
 import React from "react";
 import { Iconed } from "./hub-icons";
-import { Button, Card, Drawer, Kbd } from "./hub-primitives";
+import { Button, Card, Drawer, Kbd, TruthBadge } from "./hub-primitives";
 import { createClientId } from "@/lib/pms-ui";
-import { createQuickCaptureSession, shouldSubmitQuickTask } from "@/lib/quick-task-capture";
+import { createQuickCaptureSession, shouldSubmitQuickTask, submitQuickCapture } from "@/lib/quick-task-capture";
 
 const HINTS = {
   task: {
@@ -60,28 +60,14 @@ export function QuickCaptureForm({
 
   async function submit(event) {
     event.preventDefault();
-    const capture = session.begin();
-    if (!capture.ok) return;
-    try {
-      const response = await fetch("/api/hub/inbox", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(capture.payload),
-        signal: AbortSignal.timeout(20000),
-      });
-      const data = await response.json().catch(error => { if (error?.name === 'TimeoutError' || error?.name === 'AbortError') throw error; return {}; });
-
-      if (session.settle({ ok: response.ok, data, error: !response.ok && !data.error && !data.status ? `저장 실패 (${response.status})` : null })) {
-        onSaved?.();
-        // 연속 입력이 기본값이다 — 저장 후 닫지 않고 포커스를 유지한다.
-      }
-    } catch (error) {
-      session.settle({ ok: false, error: error?.name === 'TimeoutError' || error?.name === 'AbortError' ? '저장 응답을 확인하지 못했습니다. 입력을 보관했으니 같은 요청으로 다시 시도하세요.' : error instanceof Error ? error.message : null });
-    }
+    // POST /api/hub/inbox 왕복·멱등 키·20초 제한·응답 유실 문구는 데스크톱 위젯과 공유한다.
+    const { durable } = await submitQuickCapture(session);
+    // 연속 입력이 기본값이다 — 저장 후 닫지 않고 포커스를 유지한다.
+    if (durable) onSaved?.();
   }
 
   const saving = state.status === "saving";
-  const message = state.status === 'error' ? state.error : saving ? '저장 중…' : state.status === 'saved' ? state.duplicate ? '이미 저장된 입력입니다.' : state.destinationType === 'work_order' ? HINTS.inbox.saved : HINTS.task.saved : HINTS[hint].idle;
+  const message = state.status === 'error' ? state.error : state.status === 'preview' ? '저장하지 않았습니다. 입력은 남겨 두었습니다.' : saving ? '저장 중…' : state.status === 'saved' ? state.duplicate ? '이미 저장된 입력입니다.' : state.destinationType === 'work_order' ? HINTS.inbox.saved : HINTS.task.saved : HINTS[hint].idle;
   const compact = layout === "compact";
   const stateColor = state.status === "error"
     ? "var(--danger)"
@@ -161,7 +147,8 @@ export function QuickCaptureForm({
         </Button>
       </form>
       <div style={{ marginTop: 6, minHeight: 18, display: "flex", alignItems: "center", gap: 8 }}>
-        <span role={state.status === "error" ? "alert" : "status"} aria-live="polite" style={{ flex: 1, fontSize: 11.5, color: stateColor }}>
+        <span role={state.status === "error" ? "alert" : "status"} aria-live="polite" style={{ flex: 1, fontSize: 11.5, color: stateColor, display: "inline-flex", alignItems: "center", gap: 6 }}>
+          {state.status === "preview" && <TruthBadge state="preview" />}
           {message}
         </span>
         {state.status === "saved" && state.destinationType === "task" && (
@@ -179,16 +166,22 @@ export function QuickCaptureForm({
 }
 
 // 어디서든 C 로 열리는 캡처 드로어. openRequest 가 증가할 때마다 열린다.
-export function GlobalQuickCapture({ openRequest = 0, onNavigate, onSaved }) {
+export function GlobalQuickCapture({ openRequest = 0, initialRaw = "", onNavigate, onSaved }) {
   const [open, setOpen] = React.useState(false);
-  const [session] = React.useState(() => createQuickCaptureSession({ createId: createClientId }));
+  const [session] = React.useState(() => createQuickCaptureSession({ initialRaw, createId: createClientId }));
   const inputRef = React.useRef(null);
   const seen = React.useRef(openRequest);
   const close = () => { if (session.canClose()) setOpen(false); };
 
   React.useEffect(() => {
-    if (openRequest !== seen.current) { seen.current = openRequest; setOpen(true); }
-  }, [openRequest]);
+    if (openRequest !== seen.current) {
+      seen.current = openRequest;
+      if (initialRaw && !session.snapshot().raw) {
+        session.setRaw(initialRaw);
+      }
+      setOpen(true);
+    }
+  }, [openRequest, initialRaw, session]);
 
   if (!open) return null;
   return (

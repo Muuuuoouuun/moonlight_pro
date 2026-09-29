@@ -7,15 +7,18 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 import "./hub-futura.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
-import { goalHref } from "@/lib/goal-client";
+import { DailyReviewProvider } from "./daily-review-provider";
+import { GOAL_WORK_BASE, goalHref, goalView } from "@/lib/goal-client";
 
 import { Button, Skeleton } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
+import { SidebarResizer } from "./sidebar-resizer";
 import { TopBar } from "./hub-topbar";
 import { ToastProvider } from "./hub-toast";
 import { useInquiryNotifications } from './inquiry-notifications';
 import { CommandPalette } from "./hub-command-palette";
 import { QuickMemo } from "./quick-memo";
+import { GuidanceQuestionDrawer } from "./guidance-question-drawer";
 import { GlobalQuickCapture } from "./quick-capture";
 import { OfficeSessionProvider } from "./office-session-provider";
 import { OfficeWorkflowSessionProvider } from "./office-workflow-panel";
@@ -38,15 +41,11 @@ import {
 } from "./hub-nav";
 import {
   DEFAULT_HUB_PREFERENCES,
+  clampSidebarWidth,
   persistHubPreference,
   readHubPreferences,
   watchHubTheme,
 } from "@/lib/hub-preferences";
-
-const FloatingMentorWidget = dynamic(
-  () => import('./floating-mentor-widget').then(module => module.FloatingMentorWidget),
-  { ssr: false },
-);
 
 // Chunk-load placeholder — pages carry their own data loading states, so this
 // only covers the (brief) JS fetch. Keep it calm: no spinner, dim mono text.
@@ -81,6 +80,7 @@ const Calendar = lazyPage(() => import("./pages/work").then(m => m.Calendar));
 const Decisions = lazyPage(() => import("./pages/work").then(m => m.Decisions));
 const Roadmap = lazyPage(() => import("./pages/work").then(m => m.Roadmap));
 const Rhythm = lazyPage(() => import("./pages/work").then(m => m.Rhythm));
+const WorkGoals = lazyPage(() => import("./pages/goals").then(m => m.Goals));
 const MyWork = lazyPage(() => import("./pages/my-work").then(m => m.MyWork));
 const Memos = lazyPage(() => import("./pages/memos").then(m => m.Memos));
 const Discovery = lazyPage(() => import("./pages/discovery").then(m => m.Discovery));
@@ -89,6 +89,7 @@ const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects)
 const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
 const BrandContentLog = lazyPage(() => import("./pages/brand-content-log").then(m => m.BrandContentLog));
 const ContentPerformance = lazyPage(() => import("./pages/content-performance").then(m => m.ContentPerformance));
+const ContentNews = lazyPage(() => import("./pages/content-news").then(m => m.ContentNews));
 const Studio = lazyPage(() => import("./pages/content").then(m => m.Studio));
 const Queue = lazyPage(() => import("./pages/content").then(m => m.Queue));
 const Campaigns = lazyPage(() => import("./pages/content").then(m => m.Campaigns));
@@ -110,6 +111,7 @@ const Flows = lazyPage(() => import("./pages/automations").then(m => m.Flows));
 const SheetsSync = lazyPage(() => import("./pages/sheets-sync").then(m => m.SheetsSync));
 const OfficeCouncil = lazyPage(() => import("./pages/office-council").then(m => m.OfficeCouncil));
 const AgentsChat = lazyPage(() => import("./pages/agents").then(m => m.AgentsChat));
+const MentorShelf = lazyPage(() => import("./pages/mentor-shelf").then(m => m.MentorShelf));
 const AgentsCouncil = lazyPage(() => import("./pages/agents").then(m => m.AgentsCouncil));
 const AgentsOrders = lazyPage(() => import("./pages/agents").then(m => m.AgentsOrders));
 const Evolution = lazyPage(() => import("./pages/evolution-settings").then(m => m.Evolution));
@@ -208,8 +210,8 @@ function LegacyPlaceholder({ path, onNavigate }) {
 }
 
 const PAGE_MAP = {
-  'dashboard/home': (n) => <Home onNavigate={n} />,
-  'dashboard/daily-brief': (n, inquiries) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} />,
+  'dashboard/home': (n, _inquiries, _scope, ask) => <Home onNavigate={n} onGuidanceAsk={ask} />,
+  'dashboard/daily-brief': (n, inquiries, _scope, ask) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} onGuidanceAsk={ask} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
   'dashboard/work/memos': () => <Memos />,
@@ -220,18 +222,22 @@ const PAGE_MAP = {
   'dashboard/work/decisions': (n, _inquiries, scope) => <Decisions onNavigate={n} scope={scope} />,
   'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
-  'dashboard/brands': () => <Brands />,
+  'dashboard/work/goals': () => <WorkGoals />,
+  'dashboard/brands': (n, _inquiries, _scope, ask) => <Brands onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/brands/log': (n) => <BrandContentLog onNavigate={n} />,
   'dashboard/content/performance': () => <ContentPerformance />,
+  'dashboard/content/news': () => <ContentNews />,
   'dashboard/content/studio': () => <Studio />,
-  'dashboard/content/queue': () => <Queue />,
+  'dashboard/content/queue': (n, _inquiries, _scope, ask) => <Queue onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/content/campaigns': () => <Campaigns />,
+  // 영업·매출 탭은 오늘 연락·고객·거래·문의 넷이다(2026-09-24). 개요·히트맵·Leads·Accounts·Cases는
+  // 탭에서 내려왔지만 라우트는 그대로 남아 ⌘K·북마크·딥링크로 열린다(hub-nav.js REVENUE_ROUTE_TABS).
   'dashboard/revenue/overview': (n) => <RevenueOverview onNavigate={n} />,
-  'dashboard/revenue/customers': (n) => <Customers onNavigate={n} />,
+  'dashboard/revenue/customers': (n, _inquiries, _scope, ask) => <Customers onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/revenue/heatmap': (n) => <RevenueHeatmap onNavigate={n} />,
   'dashboard/revenue/leads': () => <Leads />,
   'dashboard/revenue/inquiries': (n) => <Inquiries onNavigate={n} />,
-  'dashboard/revenue/deals': (n) => <Deals onNavigate={n} />,
+  'dashboard/revenue/deals': (n, _inquiries, _scope, ask) => <Deals onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/revenue/cases': () => <Cases />,
   'dashboard/revenue/accounts': (n) => <Accounts onNavigate={n} />,
   'dashboard/revenue/followups': (n) => <Followups onNavigate={n} />,
@@ -241,15 +247,15 @@ const PAGE_MAP = {
   'dashboard/automations/webhooks': (n) => <Webhooks onNavigate={n} />,
   'dashboard/automations/runs': (n) => <Runs onNavigate={n} />,
   'dashboard/automations/sheets': () => <SheetsSync />,
-  'dashboard/agents/office-council': (n, notifications, scope) => <OfficeCouncil scope={scope} />,
-  'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
+  'dashboard/agents/office-council': (n, notifications, scope, ask) => <OfficeCouncil scope={scope} onGuidanceAsk={ask} onNavigate={n} />,
+  'dashboard/agents/chat': (n, _inquiries, _scope, ask, query) => <MentorShelf onNavigate={n} onGuidanceAsk={ask} requestedCardId={query?.get('card')} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
   'dashboard/evolution': (n) => <Evolution onNavigate={n} />,
   'dashboard/settings': (n) => <Settings onNavigate={n} />,
 
   // ── real_v1.1 workspaces → existing pages scoped by org_scope ──
-  'dashboard/classin/pipeline': (n) => <Deals workspace="classin" onNavigate={n} />,
+  'dashboard/classin/pipeline': (n, _inquiries, _scope, ask) => <Deals workspace="classin" onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/classin/revenue': () => <Leads workspace="classin" />,
   'dashboard/classin/segments': (n) => <Segments workspace="classin" onNavigate={n} />,
   'dashboard/classin/accounts': (n) => <Accounts workspace="classin" onNavigate={n} />,
@@ -258,17 +264,18 @@ const PAGE_MAP = {
   'dashboard/classin/projects': () => <Projects workspace="classin" />,
   'dashboard/classin/automations': () => <SheetsSync />,
   'dashboard/classin/cohorts': () => <Projects workspace="classin" />,   // legacy real_v1 bookmark alias
-  'dashboard/classin/content': () => <Queue workspace="classin" />,      // legacy real_v1 bookmark alias
+  'dashboard/classin/content': (n, _inquiries, _scope, ask) => <Queue workspace="classin" onNavigate={n} onGuidanceAsk={ask} />,      // legacy real_v1 bookmark alias
   'dashboard/brand/projects': () => <Projects workspace="brand" />,
   'dashboard/brand/studio': () => <Studio workspace="brand" />,
-  'dashboard/brand/queue': () => <Queue workspace="brand" />,
+  'dashboard/brand/queue': (n, _inquiries, _scope, ask) => <Queue workspace="brand" onNavigate={n} onGuidanceAsk={ask} />,
 };
 
 const PARENT_JUMP = {
   'dashboard': 'dashboard/daily-brief',
   'dashboard/work': 'dashboard/work/projects',
   'dashboard/content': 'dashboard/content/queue',
-  'dashboard/revenue': 'dashboard/revenue/overview',
+  // 영업·매출의 첫 탭은 오늘 연락이다(2026-09-24 4탭 재구성) — 개요는 탭에서 내려가 ⌘K로만 연다.
+  'dashboard/revenue': 'dashboard/revenue/followups',
   'dashboard/agents': 'dashboard/agents/chat',
   'dashboard/classin': 'dashboard/classin/pipeline',
   'dashboard/brand': 'dashboard/brand/projects',
@@ -294,6 +301,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     || (queryScope ? normalizeScope(queryScope) : null);
 
   const [collapsed, setCollapsed] = React.useState(DEFAULT_HUB_PREFERENCES.sidebarCollapsed);
+  const [sidebarWidth, setSidebarWidth] = React.useState(DEFAULT_HUB_PREFERENCES.sidebarWidth);
   const [navOpen, setNavOpen] = React.useState(false);
   const [navScope, setNavScope] = React.useState(routeScope || 'all');
   // SSR and the first client render must use the same values. Persisted browser
@@ -303,15 +311,27 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [theme, setTheme] = React.useState("light");
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
-  const [globalAdvisorOpen, setGlobalAdvisorOpen] = React.useState(false);
-  const [advisorRequested, setAdvisorRequested] = React.useState(false);
-  const toggleGlobalAdvisor = React.useCallback(() => {
-    setAdvisorRequested(true);
-    setGlobalAdvisorOpen(value => !value);
-  }, []);
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
+  const [initialCaptureRaw, setInitialCaptureRaw] = React.useState("");
+  const handledShareRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (handledShareRef.current) return;
+    const shareTitle = searchParams.get("title") || "";
+    const shareText = searchParams.get("text") || "";
+    const shareUrl = searchParams.get("url") || "";
+    const combined = [shareTitle, shareText, shareUrl].map((s) => s.trim()).filter(Boolean).join("\n");
+    if (combined) {
+      handledShareRef.current = true;
+      setInitialCaptureRaw(combined);
+      setCaptureOpenRequest((v) => v + 1);
+    }
+  }, [searchParams]);
+
+  const [guidanceQuestion, setGuidanceQuestion] = React.useState(null);
   const rootRef = React.useRef(null);
+  const shellRef = React.useRef(null);
   const menuButtonRef = React.useRef(null);
   const mobileCloseButtonRef = React.useRef(null);
   const mainRef = React.useRef(null);
@@ -324,6 +344,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     const stored = readHubPreferences(storage);
     setThemePreference(stored.theme);
     setCollapsed(stored.sidebarCollapsed);
+    setSidebarWidth(stored.sidebarWidth);
   }, []);
 
   React.useEffect(() => watchHubTheme(themePreference, setTheme), [themePreference]);
@@ -335,6 +356,21 @@ export function HubApp({ memoDraftContext = "preview" }) {
     try { storage = window.localStorage; } catch { /* session-only preference */ }
     persistHubPreference(storage, "sidebarCollapsed", next);
   }, [collapsed]);
+
+  const commitSidebarWidth = React.useCallback((next) => {
+    const value = clampSidebarWidth(next);
+    setSidebarWidth(value);
+    let storage = null;
+    try { storage = window.localStorage; } catch { /* session-only preference */ }
+    persistHubPreference(storage, "sidebarWidth", value);
+  }, []);
+
+  const collapseSidebar = React.useCallback(() => {
+    setCollapsed(true);
+    let storage = null;
+    try { storage = window.localStorage; } catch { /* session-only preference */ }
+    persistHubPreference(storage, "sidebarCollapsed", true);
+  }, []);
 
   const updateTheme = React.useCallback((nextTheme) => {
     setThemePreference(nextTheme);
@@ -356,6 +392,11 @@ export function HubApp({ memoDraftContext = "preview" }) {
     const target = PARENT_JUMP[basePath] || basePath;
     router.push('/' + target + suffix);
   }, [router]);
+
+  const openGuidanceQuestion = React.useCallback((card, context = {}) => setGuidanceQuestion({ card, context }), []);
+
+  // ⌘J·탑바 ✦ → Office (2026-09-23 운영자 확정). 페이지 맥락 위젯은 딜·신호 카드 버튼에만 남는다.
+  const openOffice = React.useCallback(() => navigate('dashboard/agents/office-council'), [navigate]);
 
   const navigateFromSidebar = React.useCallback((p) => {
     const [basePath, suffix = ''] = String(p || '').split(/(?=[?#])/, 2);
@@ -447,16 +488,18 @@ export function HubApp({ memoDraftContext = "preview" }) {
   // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
-    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: searchParams.get('check') === '1', create: true }).slice(1);
+    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', create: true }).slice(1);
     if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
     if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
-    if (p.startsWith('dashboard/revenue/leads') || p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/leads?new=lead';
+    if (p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/customers?new=customer';
+    if (p.startsWith('dashboard/revenue/leads')) return 'dashboard/revenue/leads?new=lead';
     if (p.startsWith('dashboard/revenue/deals')) return 'dashboard/revenue/deals?new=deal';
     if (p.startsWith('dashboard/revenue/accounts')) return 'dashboard/revenue/accounts?new=account';
     if (p.startsWith('dashboard/revenue/cases')) return 'dashboard/revenue/cases?new=case';
     if (p.startsWith('dashboard/work/projects') || p.startsWith('dashboard/work/roadmap')) return 'dashboard/work/projects?new=project';
     if (p.startsWith('dashboard/work/decisions')) return 'dashboard/work/decisions?new=decision';
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
+    if (p.startsWith('dashboard/work/goals')) return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', create: true, base: GOAL_WORK_BASE }).slice(1);
     if (p.startsWith('dashboard/content')) return 'dashboard/content/studio?new=draft';
     return null;
   }, [queryScope, searchParams]);
@@ -516,71 +559,29 @@ export function HubApp({ memoDraftContext = "preview" }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [paletteOpen, helpOpen]);
 
-  // `⌘J` → 전역 AI 어드바이저 코파일럿 호출
+  // `⌘J` → Office
   React.useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
-        toggleGlobalAdvisor();
+        openOffice();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleGlobalAdvisor]);
-
-  const advisorContext = React.useMemo(() => {
-    const p = String(path || '');
-    if (p.startsWith('dashboard/revenue') || p.startsWith('dashboard/classin/pipeline') || p.startsWith('dashboard/classin/revenue')) {
-      return {
-        agent: 'guru',
-        contextType: 'deal',
-        contextTitle: '영업·파이프라인 코칭',
-        contextData: { path: p, scope: routeScope || navScope },
-      };
-    }
-    if (p.startsWith('dashboard/content') || p.startsWith('dashboard/brand/studio') || p.startsWith('dashboard/brand/queue')) {
-      return {
-        agent: 'council',
-        contextType: 'content',
-        contextTitle: '컨텐츠 기획·검수 코파일럿',
-        contextData: { path: p, scope: routeScope || navScope },
-      };
-    }
-    if (p.startsWith('dashboard/work/decisions')) {
-      return {
-        agent: 'council',
-        contextType: 'project',
-        contextTitle: '의사결정 및 전략 검증',
-        contextData: { path: p, scope: routeScope || navScope },
-      };
-    }
-    if (p.startsWith('dashboard/work') || p.startsWith('dashboard/classin/projects') || p.startsWith('dashboard/brand/projects')) {
-      return {
-        agent: 'council',
-        contextType: 'project',
-        contextTitle: '프로젝트 실행 전략',
-        contextData: { path: p, scope: routeScope || navScope },
-      };
-    }
-    if (p.startsWith('dashboard/daily-brief')) {
-      return {
-        agent: 'council',
-        contextType: 'weekly',
-        contextTitle: '우선순위 브리프 및 리듬 코칭',
-        contextData: { path: p, scope: routeScope || navScope },
-      };
-    }
-    return {
-      agent: 'council',
-      contextType: 'general',
-      contextTitle: 'Moonlight 운영 코파일럿',
-      contextData: { path: p, scope: routeScope || navScope },
-    };
-  }, [path, routeScope, navScope]);
+  }, [openOffice]);
 
   const render = PAGE_MAP[path];
-  // 3번째 인자(scope)는 뒤늦게 붙었다 — 기존 항목은 추가 인자를 무시하므로 하위 호환된다.
-  const page = render ? render(navigate, inquiryNotifications, routeScope || navScope) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
+  // 코칭·대화의 기본은 서가다. 기존 대화/페르소나 딥링크는 명시적으로 열고,
+  // 쿼리만 바뀌어도 대화 마운트를 갱신해 선택한 페르소나가 반영되게 한다.
+  const chatRequested = path === 'dashboard/agents/chat' && (
+    view === 'chat' || searchParams.has('agent') || searchParams.has('prompt')
+  );
+  const page = chatRequested
+    ? <AgentsChat key={searchParams.toString()} onNavigate={navigate} />
+    : render
+      ? render(navigate, inquiryNotifications, routeScope || navScope, openGuidanceQuestion, searchParams)
+      : <LegacyPlaceholder path={path} onNavigate={navigate} />;
   // 아이콘 레일은 데스크톱 전용 — 모바일 드로어(navOpen은 모바일에서만 true)는 항상 펼친 상태로 그린다.
   const sidebarCollapsed = collapsed && !isMobileViewport;
 
@@ -589,7 +590,9 @@ export function HubApp({ memoDraftContext = "preview" }) {
       <ToastProvider>
         <OfficeSessionProvider key={memoDraftContext}>
           <OfficeWorkflowSessionProvider>
-        <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
+          <DailyReviewProvider>
+        {/* --hub-sidebar-w는 펼친 사이드바 폭이다. 드래그 중에는 SidebarResizer가 이 값만 직접 바꾼다. */}
+        <div ref={shellRef} className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'} style={{ '--hub-sidebar-w': `${sidebarWidth}px` }}>
           <div
             className="hub-mobile-backdrop"
             aria-hidden="true"
@@ -612,6 +615,14 @@ export function HubApp({ memoDraftContext = "preview" }) {
             onMobileClose={closeMobileNavigation}
             mobileCloseButtonRef={mobileCloseButtonRef}
           />
+          {!sidebarCollapsed && !isMobileViewport && (
+            <SidebarResizer
+              width={sidebarWidth}
+              shellRef={shellRef}
+              onCommit={commitSidebarWidth}
+              onCollapse={collapseSidebar}
+            />
+          )}
           <div className="hub-main">
             <TopBar
               inquiryNotifications={inquiryNotifications}
@@ -622,7 +633,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
               onNew={createOnCurrentSurface}
               onQuickCapture={() => setCaptureOpenRequest(value => value + 1)}
               onSidebarOpen={openMobileNavigation}
-              onAdvisorOpen={toggleGlobalAdvisor}
+              onOfficeOpen={openOffice}
               navOpen={mobileNavState.open}
               menuButtonRef={menuButtonRef}
               theme={theme}
@@ -639,20 +650,13 @@ export function HubApp({ memoDraftContext = "preview" }) {
             </main>
           </div>
         </div>
-      <GlobalQuickCapture openRequest={captureOpenRequest} onNavigate={navigate} />
-      <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open} openRequest={memoOpenRequest} onNavigate={navigate} />
+      <GuidanceQuestionDrawer key={`${guidanceQuestion?.card?.id || 'free'}:${guidanceQuestion?.context?.ref || ''}`} card={guidanceQuestion?.card} context={guidanceQuestion?.context} onClose={() => setGuidanceQuestion(null)} />
+      <GlobalQuickCapture openRequest={captureOpenRequest} initialRaw={initialCaptureRaw} onNavigate={navigate} />
+      <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open || Boolean(guidanceQuestion)} openRequest={memoOpenRequest} onNavigate={navigate} />
       <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
-      {advisorRequested && <FloatingMentorWidget
-        key={`global-advisor:${path}`}
-        isOpen={globalAdvisorOpen}
-        onClose={() => setGlobalAdvisorOpen(false)}
-        agent={advisorContext.agent}
-        contextType={advisorContext.contextType}
-        contextTitle={advisorContext.contextTitle}
-        contextData={advisorContext.contextData}
-      />}
         <CelebrationCanvas />
+          </DailyReviewProvider>
           </OfficeWorkflowSessionProvider>
         </OfficeSessionProvider>
       </ToastProvider>

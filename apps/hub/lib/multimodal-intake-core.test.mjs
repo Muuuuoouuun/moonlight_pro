@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { extractMultimodalIntakeHub, getMultimodalStatus } from "./multimodal-intake-core.js";
+import { extractMultimodalIntakeHub, formatMeetingBriefForShare, getMultimodalStatus } from "./multimodal-intake-core.js";
 
 test("getMultimodalStatus checks GEMINI_API_KEY", () => {
   const orig = process.env.GEMINI_API_KEY;
@@ -158,5 +158,66 @@ test("intake preserves valid boundary fields and validates actual dates", async 
   } finally {
     if (original === undefined) delete process.env.GEMINI_API_KEY;
     else process.env.GEMINI_API_KEY = original;
+  }
+});
+
+test("formatMeetingBriefForShare formats structured data into ready-to-share text", () => {
+  const data = {
+    title: "10월 마케팅 전략 회의",
+    summary: "신규 고객 획득 채널 다변화 논의",
+    keyDecisions: ["인스타그램 릴스 2회 발행"],
+    openIssues: ["외부 인플루언서 섭외 예산 확정 필요"],
+    actionItems: [{ task: "릴스 콘티 작성", suggestedDue: "2026-09-30", priority: "high" }],
+    detectedEntities: { projects: ["Moonlight"], peopleOrCompanies: ["홍길동 팀장"] },
+  };
+
+  const text = formatMeetingBriefForShare(data);
+  assert.match(text, /📌 \[회의\/메모\] 10월 마케팅 전략 회의/);
+  assert.match(text, /■ 핵심 요약\n신규 고객 획득 채널 다변화 논의/);
+  assert.match(text, /■ 합의 및 결정사항\n• 인스타그램 릴스 2회 발행/);
+  assert.match(text, /■ 미결\/후속 논의 안건\n• 외부 인플루언서 섭외 예산 확정 필요/);
+  assert.match(text, /■ 후속 실행 과제 \(Action Items\)\n□ 릴스 콘티 작성 \(기한: 2026-09-30\)/);
+  assert.match(text, /■ 관련자: 홍길동 팀장/);
+  assert.equal(formatMeetingBriefForShare(null), "");
+});
+
+test("extractMultimodalIntakeHub supports thinkingBudget and parses meeting minutes with usage", async () => {
+  const orig = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = "test-key";
+
+  const extracted = {
+    title: "주간 운영 회의",
+    summary: "운영 현안 및 일정 점검",
+    meetingMinutes: "1. 릴리즈 일정 논의 - 10월 초 목표\n2. 예산 점검",
+    transcription: "전체 녹음 전사 내용",
+    actionItems: [{ task: "배포 파이프라인 확인", priority: "high", suggestedDue: "2026-10-01" }],
+    keyDecisions: ["10월 첫째주 릴리즈"],
+    openIssues: ["서버 증설 여부"],
+    suggestedTags: ["운영", "회의"],
+    detectedEntities: { projects: ["Office"], peopleOrCompanies: ["김대표"] },
+  };
+
+  try {
+    const res = await extractMultimodalIntakeHub({
+      text: "회의 녹취록",
+      thinkingBudget: 1024,
+      fetchImpl: async (_url, options) => {
+        const body = JSON.parse(options.body);
+        assert.equal(body.generationConfig.thinkingConfig.thinkingBudget, 1024);
+        return new Response(JSON.stringify({
+          candidates: [{ content: { parts: [{ text: JSON.stringify(extracted) }] } }],
+          usageMetadata: { promptTokenCount: 150, candidatesTokenCount: 80, totalTokenCount: 230 },
+        }));
+      },
+    });
+
+    assert.equal(res.ok, true);
+    assert.equal(res.data.title, "주간 운영 회의");
+    assert.equal(res.data.meetingMinutes, extracted.meetingMinutes);
+    assert.deepEqual(res.data.openIssues, ["서버 증설 여부"]);
+    assert.deepEqual(res.usage, { promptTokens: 150, candidatesTokens: 80, totalTokens: 230 });
+  } finally {
+    if (orig !== undefined) process.env.GEMINI_API_KEY = orig;
+    else delete process.env.GEMINI_API_KEY;
   }
 });

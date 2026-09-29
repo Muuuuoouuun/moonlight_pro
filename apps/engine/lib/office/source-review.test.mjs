@@ -17,7 +17,8 @@ const indexesFor = (catalog, quotes) => quotes.map(quote => {
   assert.notEqual(index, -1, `missing source quote: ${quote}`);
   return index;
 });
-const readReviewed = (raw, request, context, catalog = buildOfficeSourceCatalog(request, context)) => readSourceReviewedOutput(raw, request, context, catalog);
+const readReviewed = (raw, request, context, catalog = buildOfficeSourceCatalog(request, context)) => readSourceReviewedOutput(raw, request, context, catalog).answer;
+const reviewCheck = (raw, request, context, catalog = buildOfficeSourceCatalog(request, context)) => readSourceReviewedOutput(raw, request, context, catalog).sourceCheck;
 
 test('the private review schema selects bounded integer indexes without changing the public schema', () => {
   const before = structuredClone(publicSchema);
@@ -81,7 +82,9 @@ test('an empty catalog requires an empty index array without an invalid integer 
   assert.equal(quoteSchema.maxItems, 0);
   assert.deepEqual(quoteSchema.items, { type: 'integer', minimum: 0 });
   assert.deepEqual(readReviewed({ answer: '공개 답변', sourceIndexes: [], corrections: [] }, request, {}, catalog), { answer: '공개 답변' });
-  assert.throws(() => readReviewed({ answer: '공개 답변', sourceIndexes: [0], corrections: [] }, request, {}, catalog), /invalid-source-review/);
+  // 가리킬 원문이 없는 인용은 형식 위반이 아니라 추적 실패다 — 본문은 살리고 표시한다(2026-09-23 운영자 확정).
+  assert.equal(reviewCheck({ answer: '공개 답변', sourceIndexes: [0], corrections: [] }, request, {}, catalog), 'untraced');
+  assert.equal(reviewCheck({ answer: '공개 답변', sourceIndexes: [], corrections: [] }, request, {}, catalog), 'none');
 });
 
 test('bounded workflow facts retain every catalog entry in the prompt while schema size stays bounded', () => {
@@ -115,17 +118,20 @@ test('indexes resolve only against the current server catalog and both private f
     assert.deepEqual(readReviewed({ ...answer, sourceIndexes: [], corrections: [] }, request, context, catalog), answer);
     assert.throws(() => readReviewed({ ...raw, sourceQuotes: [request.message] }, request, context, catalog), /invalid-source-review/, 'even valid legacy text cannot bypass index selection');
     assert.throws(() => readReviewed({ ...raw, sourceCatalog: catalog }, request, context, catalog), /invalid-source-review/, 'the provider cannot supply its own catalog');
-    assert.throws(() => readReviewed({ ...raw, sourceIndexes: [0] }, request, context, [{ index: 0, quote: '허용되지 않은 AI 기록' }]), /untraceable-source-review/, 'resolved text still crosses the original substring check');
+    assert.equal(reviewCheck({ ...raw, sourceIndexes: [0] }, request, context, [{ index: 0, quote: '허용되지 않은 AI 기록' }]), 'untraced', 'resolved text still crosses the original substring check');
+    assert.equal(reviewCheck(raw, request, context, catalog), 'traced');
   }
 });
 
-test('missing, noninteger, out-of-range indexes and malformed correction notes are rejected', () => {
+test('missing and noninteger indexes and malformed correction notes are rejected; out-of-range indexes are untraced', () => {
   const request = { message: `valid ${'q'.repeat(301)}` };
   const catalog = buildOfficeSourceCatalog(request, {});
   for (const raw of [null, undefined, [], 'answer', 7, {}, { sourceIndexes: [] }, { corrections: [] }, { sourceQuotes: [], corrections: [] }]) assert.throws(() => readReviewed(raw, request, {}, catalog), /invalid-source-review/);
-  for (const value of [undefined, null, '0', {}, [null], ['0'], [-1], [0.5], [catalog.length], [Number.MAX_SAFE_INTEGER + 1], [NaN], [Infinity], Array(6).fill(0)]) {
+  for (const value of [undefined, null, '0', {}, [null], ['0'], [0.5], [Number.MAX_SAFE_INTEGER + 1], [NaN], [Infinity], Array(6).fill(0)]) {
     assert.throws(() => readReviewed({ answer: 'public', sourceIndexes: value, corrections: [] }, request, {}, catalog), /invalid-source-review/);
   }
+  for (const value of [[-1], [catalog.length], [1e9]]) assert.equal(reviewCheck({ answer: 'public', sourceIndexes: value, corrections: [] }, request, {}, catalog), 'untraced', JSON.stringify(value));
+  assert.equal(reviewCheck({ answer: 'public', sourceIndexes: [0, catalog.length], corrections: [] }, request, {}, catalog), 'traced');
   for (const value of [undefined, null, 'note', {}, [null], [3], [''], [' \n\t'], ['valid\0'], Array(6).fill('valid'), ['q'.repeat(351)]]) {
     assert.throws(() => readReviewed({ answer: 'public', sourceIndexes: [], corrections: value }, request, {}, catalog), /invalid-source-review/);
   }
@@ -250,7 +256,7 @@ for (const [surface, generate] of [['chat', generateOfficeResponse], ['workflow'
 
   test(`${surface} rejects missing or forged final review evidence without publishing its initial draft`, async () => {
     const { request, context } = inputs(surface);
-    for (const patch of [{}, { sourceIndexes: [] }, { corrections: [] }, { sourceIndexes: [-1], corrections: [] }, { sourceIndexes: [0.5], corrections: [] }, { sourceIndexes: [1e9], corrections: [] }, { sourceQuotes: [assistantText], corrections: [] }, { sourceIndexes: [], sourceQuotes: [message], corrections: [] }, { sourceIndexes: [], sourceCatalog: [], corrections: [] }, { sourceIndexes: [], corrections: ['bad\0note'] }]) {
+    for (const patch of [{}, { sourceIndexes: [] }, { corrections: [] }, { sourceIndexes: [0.5], corrections: [] }, { sourceQuotes: [assistantText], corrections: [] }, { sourceIndexes: [], sourceQuotes: [message], corrections: [] }, { sourceIndexes: [], sourceCatalog: [], corrections: [] }, { sourceIndexes: [], corrections: ['bad\0note'] }]) {
       let calls = 0;
       const result = await generate(request, context, async () => providerReply(++calls === 1 ? answer(surface, request, draftText) : { ...answer(surface, request), ...patch }));
       assert.equal(calls, 2);
@@ -261,6 +267,17 @@ for (const [surface, generate] of [['chat', generateOfficeResponse], ['workflow'
       assertPrivateFieldsAbsent(result);
       assert.doesNotMatch(JSON.stringify(result), /UNREVIEWED_DRAFT_ONLY|ASSISTANT_ONLY_CLAIM/);
     }
+  });
+
+  test(`${surface} publishes the reviewed body but marks it untraced when every cited index points nowhere`, async () => {
+    const { request, context } = inputs(surface);
+    let calls = 0;
+    const result = await generate(request, context, async () => providerReply(++calls === 1 ? answer(surface, request, draftText) : { ...answer(surface, request), sourceIndexes: [1e9], corrections: [] }));
+    assert.equal(result.status, 'generated');
+    assert.equal(surface === 'chat' ? result.answer : result.artifact.body, '검수한 공개 답변입니다.');
+    assert.equal(result.sourceCheck, 'untraced');
+    assertPrivateFieldsAbsent(result);
+    assert.doesNotMatch(JSON.stringify(result), /UNREVIEWED_DRAFT_ONLY/);
   });
 
   test(`${surface} strips review fields before exchanging council opinions and publishing the synthesis`, async () => {
@@ -323,7 +340,7 @@ for (const [surface, generate] of [['chat', generateOfficeResponse], ['workflow'
     }
   });
 
-  test(`${surface} rejects out-of-range and noninteger source indexes in every council phase`, async () => {
+  test(`${surface} rejects noninteger source indexes in every council phase and keeps going past out-of-range ones`, async () => {
     for (const failedPhase of ['position', 'response', 'synthesis']) {
       for (const invalidIndex of ['outside', 'fractional']) {
         const { request, context } = inputs(surface, 'council');
@@ -333,12 +350,19 @@ for (const [surface, generate] of [['chat', generateOfficeResponse], ['workflow'
           const shouldFail = (data.phase ?? 'synthesis') === failedPhase && (!data.phase || data.roleId === 'flareon');
           return providerReply({ ...(data.phase ? turn(data) : answer(surface, request)), sourceIndexes: shouldFail ? [invalidIndex === 'outside' ? data.sourceCatalog.length : 0.5] : [0], corrections: [] });
         });
+        assertPrivateFieldsAbsent(result);
+        if (invalidIndex === 'outside') {
+          // 가리킬 원문이 없는 인용은 형식 위반이 아니다 — 끝까지 진행하고, 종합에서만 났다면 결과를 untraced로 표시한다.
+          assert.equal(calls, 5, `${failedPhase}: ${invalidIndex}`);
+          assert.equal(result.status, 'generated', `${failedPhase}: ${invalidIndex}`);
+          assert.equal(result.sourceCheck, failedPhase === 'synthesis' ? 'untraced' : 'traced');
+          continue;
+        }
         assert.equal(calls, { position: 2, response: 4, synthesis: 5 }[failedPhase]);
         assert.equal(result.status, 'error', `${failedPhase}: ${invalidIndex}`);
         assert.equal(result.answer, undefined);
         assert.equal(result.artifact, undefined);
         assert.equal(result.discussion, undefined);
-        assertPrivateFieldsAbsent(result);
       }
     }
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { goalHref } from '@/lib/goal-client';
+import { goalHref, goalView } from '@/lib/goal-client';
 import { InquiryBell } from './inquiry-notifications';
 import { Iconed } from "./hub-icons";
 import { IconButton, Avatar, Kbd, SegmentedControl } from "./hub-primitives";
@@ -17,6 +17,7 @@ import {
   pathnameOf,
   resolveSidebarPath,
   sidebarChildren,
+  tabForRouteRole,
   setElementInert,
   getMobileNavigationTabTarget,
 } from "./hub-nav";
@@ -60,22 +61,27 @@ function useAnchorCounts() {
 
   React.useEffect(() => {
     let active = true;
+    const controller = new AbortController();
 
-    fetch('/api/hub/followups', { cache: 'no-store' })
+    fetch('/api/hub/followups', { cache: 'no-store', signal: controller.signal })
       .then(r => {
         if (!r.ok) throw new Error(`followups ${r.status}`); // 실패 시 뱃지 생략(0으로 위장 금지)
         return r.json();
       })
       .then(d => {
         if (!active) return;
+        // 허브 read 실패는 HTTP 200 + status:"error" 봉투다 — r.ok만 보면 실패가 "0건"으로
+        // 위장된다(CLAUDE.md). 읽지 못한 수는 뱃지로 그리지 않는다. preview도 실제 건수가 아니다.
+        if (d?.status === 'error' || d?.status === 'preview') return;
         const items = Array.isArray(d?.items) ? d.items : [];
         // followups-ledger.js summary shape: { overdue, dueToday, total, shown }.
         const due = Number.isFinite(d?.summary?.dueToday) ? d.summary.dueToday : items.length;
-        setCounts(c => ({ ...c, followups: due }));
+        // 고객 연락 앵커가 2026-09-24 영업·매출의 첫 탭(오늘 연락)이 되면서 뱃지도 따라왔다.
+        setCounts(c => ({ ...c, revenue: due }));
       })
-      .catch(() => {});
+      .catch(() => {}); // 기존 오류 무시 — abort도 이 경로로 흡수되어 뱃지 상태를 바꾸지 않는다.
 
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, []);
 
   return counts;
@@ -84,7 +90,7 @@ function useAnchorCounts() {
 function CountBadge({ n }) {
   if (!n) return null;
   return (
-    <span className="mono" style={{
+    <span className="mono hub-sidebar-count-badge" style={{
       fontSize: 10.5, lineHeight: 1, flexShrink: 0,
       color: 'var(--moon-300)',
       padding: '2px 5px', borderRadius: 999,
@@ -93,6 +99,58 @@ function CountBadge({ n }) {
       {n}
     </span>
   );
+}
+
+// 현재 항목 pill을 행마다 따로 칠하면 메뉴를 옮길 때 이전 행에서 사라지고 새 행에
+// 뚝 나타난다. 영역(주요·유틸리티)마다 pill 면 하나를 두고 현재 행 위치로 옮겨,
+// 이전 행에서 새 행으로 미끄러지게 한다. 처음 나타날 때는 제자리에 바로 놓고(미끄럼
+// 없음), 현재 행이 영역 밖으로 가면 걷힌다. JS가 돌기 전(SSR·hydration 직전)에는
+// data-indicator가 없어 행 자신의 pill이 그대로 보인다.
+function useNavIndicator(regionRef, placementKey) {
+  const shown = React.useRef(false);
+  // row를 주면 그 행으로(클릭 즉시 — 라우트 전환을 기다리지 않는다), 없으면 현재 행으로.
+  const place = React.useCallback((target) => {
+    const region = regionRef.current;
+    const indicator = region?.querySelector(':scope > .hub-nav-indicator');
+    if (!indicator) return;
+    const row = target || region.querySelector(':scope > .hub-nav-item[aria-current="page"]');
+    if (!row || !row.offsetHeight) {
+      region.dataset.indicator = 'off';
+      shown.current = false;
+      return;
+    }
+    const instant = !shown.current;
+    if (instant) indicator.dataset.instant = 'true';
+    indicator.style.width = `${row.offsetWidth}px`;
+    indicator.style.height = `${row.offsetHeight}px`;
+    indicator.style.transform = `translate(${row.offsetLeft}px, ${row.offsetTop}px)`;
+    if (instant) {
+      void indicator.offsetWidth; // 제자리 배치를 확정한 뒤에야 전이를 되살린다
+      delete indicator.dataset.instant;
+    }
+    region.dataset.indicator = 'on';
+    shown.current = true;
+  }, [regionRef]);
+
+  React.useLayoutEffect(() => place(), [place, placementKey]);
+
+  // 폭 드래그·접기·모바일 드로어·늦게 도착한 스타일시트처럼 행 크기가 바뀌면 pill도
+  // 따라간다. 영역 크기는 그대로인데 행만 바뀌는 경우가 있어 행도 함께 지켜본다.
+  React.useEffect(() => {
+    const region = regionRef.current;
+    if (!region || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => place());
+    observer.observe(region);
+    region.querySelectorAll(':scope > .hub-nav-item').forEach((row) => observer.observe(row));
+    return () => observer.disconnect();
+  }, [place, regionRef]);
+
+  // 영역의 onClick에 건다 — 클릭한 행으로 먼저 미끄러지고, 라우트가 바뀌면 위 효과가
+  // 실제 현재 행으로 다시 맞춘다(이동이 막히면 원래 행으로 돌아온다).
+  return React.useCallback((event) => {
+    const row = event.target.closest?.('.hub-nav-item');
+    if (row && row.parentElement === regionRef.current) place(row);
+  }, [place, regionRef]);
 }
 
 export const Sidebar = React.forwardRef(function Sidebar({ active, view, search = '', routeScope, onScopeChange, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false, mobileOpen = false, onMobileClose, mobileCloseButtonRef, inquiryNotifications }, ref) {
@@ -111,6 +169,11 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
     else if (ref) ref.current = node;
   }, [ref]);
   const [scope, setScope] = useScope(active, routeScope);
+  const navRegionRef = React.useRef(null);
+  const utilityRegionRef = React.useRef(null);
+  const indicatorKey = `${active}|${view || ''}|${collapsed ? 'rail' : 'full'}`;
+  const slideNavIndicator = useNavIndicator(navRegionRef, indicatorKey);
+  const slideUtilityIndicator = useNavIndicator(utilityRegionRef, indicatorKey);
   const sidebarA11yProps = {
     id: 'hub-mobile-navigation',
     'aria-hidden': mobileHidden ? true : undefined,
@@ -155,12 +218,14 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
     if (!anchor?.scopeAware) return;
     // 지금 서 있는 자식 탭이 새 스코프에도 같은 pathname으로 존재하면 그 자식으로
     // 재진입한다 — 스코프 불변 표면(컨텐츠 로그 등)은 제자리, 스코프 소비 자식은
-    // 쿼리만 갱신된다. 앵커 루트로 강퇴하지 않는다 (2609 감사 #10).
+    // 쿼리만 갱신된다. 앵커 루트로 강퇴하지 않는다 (2609 감사 #10). 경로가 스코프마다
+    // 다른 탭(영업·매출의 거래 = ClassIn에선 classin/pipeline)은 같은 역할의 탭으로 간다.
     const currentPathname = pathnameOf(active);
     const sibling = sidebarChildren(owner, value)
-      .find(c => pathnameOf(c.path) === currentPathname && (owner !== 'overview' || (new URLSearchParams(c.path.split('?')[1] || '').get('view') === 'goals') === (view === 'goals')));
+      .find(c => pathnameOf(c.path) === currentPathname && (owner !== 'overview' || (new URLSearchParams(c.path.split('?')[1] || '').get('view') === 'goals') === (view === 'goals')))
+      || tabForRouteRole(owner, active, value);
     const target = owner === 'overview' && view === 'goals'
-      ? goalHref(null, value, { check: new URLSearchParams(search).get('check') === '1' }).slice(1)
+      ? goalHref(null, value, { check: goalView(new URLSearchParams(search)) === 'check', weekly: goalView(new URLSearchParams(search)) === 'weekly' }).slice(1)
       : sibling ? sibling.path : resolveSidebarPath(owner, value);
     if (target) onNavigate(target);
   }, [active, view, search, onNavigate, setScope]);
@@ -176,7 +241,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
     // 펼친 행 — 아이콘 + 라벨 + 건수 뱃지 (§15 2026-09-23).
     let content = (
       <>
-        <Iconed name={a.icon} size={small ? 15 : 16} />
+        <Iconed name={a.icon} size={small ? 16 : 17} stroke={1.7} />
         <span className="hub-sidebar-label" style={{ flex: 1 }}>{a.label}</span>
         <CountBadge n={count} />
       </>
@@ -187,7 +252,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
       railLabel = `${a.label}${count ? ` · ${count}건` : ''}`;
       content = (
         <>
-          <Iconed name={a.icon} size={18} />
+          <Iconed name={a.icon} size={19} stroke={1.7} />
           {count > 0 && <span className="hub-sidebar-count-dot" aria-hidden="true" />}
         </>
       );
@@ -210,19 +275,15 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
   return (
     <aside {...sidebarA11yProps} ref={setSidebarRef} onKeyDown={handleMobileKeyDown} className={`hub-sidebar-futura${className ? ` ${className}` : ''}${collapsed ? ' hub-sidebar-root--collapsed' : ''}`} data-collapsed={collapsed} aria-label="주요 메뉴" style={{
       // 면 색은 .hub-sidebar-futura(hub-futura.css)가 소유한다 — 인라인 background는 그 규칙을 이긴다.
-      width: collapsed ? 56 : 232, flexShrink: 0,
+      // 펼친 폭은 셸의 --hub-sidebar-w(경계 드래그로 조절, hub-app.jsx)가 소유한다.
+      width: collapsed ? 56 : 'var(--hub-sidebar-w, 232px)', flexShrink: 0,
       borderRight: '1px solid var(--line-soft)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
     }}>
       <div className="hub-sidebar-header" style={{ padding: '14px 14px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div className="hub-sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <div style={{
-            width: 24, height: 24, borderRadius: 'var(--r-sm)',
-            background: 'var(--fg)', color: 'var(--bg)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 600, letterSpacing: '-0.02em',
-          }} aria-hidden="true">M</div>
+          <img src="/icon.svg" width="28" height="28" alt="" aria-hidden="true" style={{ flexShrink: 0 }} />
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em' }}>Moonlight</div>
             <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.05em', marginTop: -1 }}>HUB · PRO</div>
@@ -270,11 +331,13 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
         />}
       </div>
 
-      <nav className="scroll-y hub-sidebar-nav" aria-label="업무 메뉴" style={{ flex: 1, minHeight: 0, padding: '2px 8px 10px' }}>
+      <nav ref={navRegionRef} onClick={slideNavIndicator} className="scroll-y hub-sidebar-nav" aria-label="업무 메뉴" style={{ flex: 1, minHeight: 0, padding: '2px 8px 10px' }}>
+        <span className="hub-nav-indicator" aria-hidden="true" />
         {SIDEBAR_PRIMARY.map(a => renderAnchor(a, false))}
       </nav>
 
-      <div className="hub-sidebar-utilities" style={{ padding: '6px 8px', borderTop: '1px solid var(--line-soft)' }}>
+      <div ref={utilityRegionRef} onClick={slideUtilityIndicator} className="hub-sidebar-utilities" style={{ padding: '6px 8px', borderTop: '1px solid var(--line-soft)' }}>
+        <span className="hub-nav-indicator" aria-hidden="true" />
         {SIDEBAR_UTILITIES.map(a => renderAnchor(a, true))}
       </div>
 

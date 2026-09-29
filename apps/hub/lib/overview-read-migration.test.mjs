@@ -7,7 +7,6 @@ const migrationUrl = new URL("supabase/migrations/20260902_0024_overview_read_in
 const setupUrl = new URL("supabase/setup/00_live_schema.sql", root);
 const schemaUrl = new URL("supabase/schema.sql", root);
 const applyPendingUrl = new URL("supabase/apply-pending.sql", root);
-const migrationScriptUrl = new URL("scripts/apply-migrations.mjs", root);
 
 const INDEXES = [
   "idx_tasks_workspace_updated",
@@ -17,13 +16,12 @@ const INDEXES = [
   "idx_routine_checks_workspace_checked",
 ];
 
-test("Overview read indexes ship through every supported database setup path", async () => {
-  const [migration, setup, schema, applyPending, migrationScript] = await Promise.all([
+test("Overview read indexes remain in the schema, setup, migration and historical bundle", async () => {
+  const [migration, setup, schema, applyPending] = await Promise.all([
     readFile(migrationUrl, "utf8"),
     readFile(setupUrl, "utf8"),
     readFile(schemaUrl, "utf8"),
     readFile(applyPendingUrl, "utf8"),
-    readFile(migrationScriptUrl, "utf8"),
   ]);
 
   for (const index of INDEXES) {
@@ -31,5 +29,4 @@ test("Overview read indexes ship through every supported database setup path", a
       assert.match(source, new RegExp(`create index(?: if not exists)? ${index}`));
     }
   }
-  assert.match(migrationScript, /20260902_0024_overview_read_indexes\.sql/);
 });

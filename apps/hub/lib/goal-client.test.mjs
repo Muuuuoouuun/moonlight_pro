@@ -5,6 +5,21 @@ import { randomUUID } from 'node:crypto';
 import { validateGoalCommand } from '@com-moon/goal-contracts';
 
 const file = new URL('./goal-client.js', import.meta.url);
+test('goal read failures retain a safe actionable explanation without exposing server errors as content', async () => {
+  const { createGoalReadClient, goalReadErrorMessage } = await import(file);
+  for (const code of ['invalid-workspace', 'entity-scope-unavailable', 'database internal details']) {
+    const reader = createGoalReadClient({ fetchImpl: async () => ({ ok: true,
+      json: async () => ({ status: 'error', error: code, objectives: [{ id: 'stale-goal' }] }),
+    }) });
+    const result = await reader.read('entityType=tasks');
+    assert.equal(result.status, 'error');
+    assert.deepEqual(result.objectives, []);
+    assert.equal(result.error, goalReadErrorMessage(code));
+    assert.equal(result.error.includes(code), false);
+  }
+  assert.match(goalReadErrorMessage('invalid-workspace'), /작업공간 설정/);
+  assert.match(goalReadErrorMessage('entity-scope-unavailable'), /프로젝트·소속/);
+});
 test('goal routes retain the check view and list scope through create and detail navigation', async () => {
   const { goalHref } = await import(file);
   for (const scope of ['all', 'personal', 'classin']) {
@@ -20,6 +35,32 @@ test('goal routes retain the check view and list scope through create and detail
     assert.equal(detail.searchParams.has('new'), false);
   }
 });
+test('the weekly actuals view is its own route state and never combines with the check view', async () => {
+  const { goalHref, goalView } = await import(file);
+  const weekly = new URL(goalHref(null, 'classin', { weekly: true }), 'https://hub.invalid');
+  assert.equal(weekly.searchParams.get('weekly'), '1');
+  assert.equal(weekly.searchParams.has('check'), false);
+  assert.equal(new URL(goalHref(null, 'all', { weekly: true, check: true }), 'https://hub.invalid').searchParams.has('check'), false);
+  assert.equal(goalView(new URLSearchParams('weekly=1&check=1')), 'weekly');
+  assert.equal(goalView(new URLSearchParams('check=1')), 'check');
+  assert.equal(goalView(new URLSearchParams('')), 'goals');
+});
+
+test('the weekly actuals view stays inside 내 작업 › OKR·KPI when opened there', async () => {
+  const { GOAL_WORK_BASE, goalHref, goalView } = await import(file);
+  const weekly = new URL(goalHref(null, 'all', { weekly: true, base: GOAL_WORK_BASE }), 'https://hub.invalid');
+  assert.equal(weekly.pathname, GOAL_WORK_BASE);
+  assert.equal(weekly.searchParams.has('view'), false);
+  assert.equal(goalView(weekly.searchParams), 'weekly');
+});
+
+test('a company objective cannot pick daily reviews, which are personal by definition and would read a permanent 0', async () => {
+  const { goalSourceKeysFor } = await import(file);
+  assert.ok(goalSourceKeysFor('personal').includes('reviews_completed'));
+  assert.equal(goalSourceKeysFor('company').includes('reviews_completed'), false);
+  assert.deepEqual(goalSourceKeysFor('company'), ['manual', 'tasks_completed', 'contacts_recorded', 'content_published']);
+});
+
 test('post-mutation refresh never shares a pre-mutation read or lets it evict the new read', async () => {
   const { createGoalReadClient } = await import(file);
   assert.equal(typeof createGoalReadClient, 'function');
@@ -111,6 +152,9 @@ test('goal client implements failure-safe command and read contracts', async () 
   assert.equal(goalScope('classin'), 'company');
   assert.equal(goalScope('all'), '');
   assert.equal(goalHref('one', 'company'), '/dashboard/overview?view=goals&scope=classin&goal=one');
+  // Work 탭(OKR·KPI)에서 연 목표 화면은 링크가 그 탭 안에 머문다 — view=goals 없이 같은 쿼리 계약.
+  assert.equal(goalHref('one', 'company', { base: '/dashboard/work/goals' }), '/dashboard/work/goals?scope=classin&goal=one');
+  assert.equal(goalHref(null, '', { check: true, create: true, base: '/dashboard/work/goals' }), '/dashboard/work/goals?scope=all&check=1&new=goal');
   assert.equal(measurementLabel({ measurement: { value: null, coverage: 'unmeasured' } }), '미측정');
   assert.equal(measurementLabel({ measurement: { value: 0, coverage: 'complete' }, unit: '건' }), '0 건');
   const requests = [];

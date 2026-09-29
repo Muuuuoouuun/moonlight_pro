@@ -261,6 +261,7 @@ export async function getRecentContactActivities({
         id: a.id,
         leadId: a.leadId,
         dealId: a.dealId,
+        accountId: a.accountId,
         companyId: a.companyId,
         play: null,
         assetId: null,

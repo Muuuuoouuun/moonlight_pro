@@ -21,6 +21,7 @@
     "react": "^18",
     "react-dom": "^18",
     "@com-moon/agent-contracts": "*",
+    "@com-moon/guru-guidance": "*",
     "@com-moon/content-manager": "*"
   }
 }

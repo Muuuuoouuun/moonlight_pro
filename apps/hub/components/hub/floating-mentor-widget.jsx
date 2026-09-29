@@ -1,18 +1,84 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Badge, Button, IconButton, Dot } from "./hub-primitives";
+import { Badge, Button, IconButton, Dot, TruthBadge } from "./hub-primitives";
 import { Iconed } from "./hub-icons";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 import { requestCouncilAdvice } from "./council-client";
 import { requestGuruCoaching } from "./guru-client";
-import { requestPersonaChat, LEGEND_LENS_MAP } from "./persona-client";
+import { requestPersonaChat, GURU_LENS_MAP, GURU_LENS_CHIPS } from "./persona-client";
 import { createAdviceTaskWriter } from "@/lib/ai-workflow-client";
+import { collectGuruConversationHistory } from "@/lib/guru-chat-history";
+
+function renderAdviceWithCallouts(text) {
+  if (!text || typeof text !== "string") return null;
+  if (!text.includes("💡") && !text.includes("실전 팁")) {
+    return <div style={{ whiteSpace: "pre-wrap", fontSize: 12.5, lineHeight: 1.65 }}>{text}</div>;
+  }
+
+  const lines = text.split("\n");
+  const blocks = [];
+  let currentNormal = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isTip = /^(?:[-*•]\s*)?(?:💡|\[?(?:거장의\s*)?실전\s*팁\]?)/i.test(line.trim());
+
+    if (isTip) {
+      if (currentNormal.length > 0) {
+        blocks.push({ type: "normal", text: currentNormal.join("\n") });
+        currentNormal = [];
+      }
+      blocks.push({ type: "tip", text: line.trim() });
+    } else {
+      currentNormal.push(line);
+    }
+  }
+  if (currentNormal.length > 0) {
+    blocks.push({ type: "normal", text: currentNormal.join("\n") });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12.5, lineHeight: 1.65 }}>
+      {blocks.map((b, idx) => {
+        if (b.type === "tip") {
+          return (
+            <div
+              key={idx}
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--moon-line)",
+                boxShadow: "inset 2px 0 0 var(--moon-500)",
+                borderRadius: "var(--r)",
+                padding: "8px 12px",
+                fontSize: 12,
+                color: "var(--fg)",
+                lineHeight: 1.5,
+              }}
+            >
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--moon-200)" }}>💡 거장의 실전 팁</span>
+              </div>
+              <div>{b.text.replace(/^[-*•]\s*/, "")}</div>
+            </div>
+          );
+        }
+        return (
+          <div key={idx} style={{ whiteSpace: "pre-wrap" }}>
+            {b.text}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function FloatingMentorWidget({
   isOpen = false,
   onClose,
   agent, // 'council' | 'guru' (optional, auto-inferred if omitted)
+  guidanceId = null,
+  initialQuestion = "",
   contextType = "content", // 'content' | 'project' | 'deal' | 'customer' | 'sales' | 'weekly' | 'general'
   contextTitle = "",
   contextData = {},
@@ -21,16 +87,25 @@ export function FloatingMentorWidget({
   onCreateTask,
 }) {
   const isGuru = agent ? agent === "guru" : ["deal", "customer", "sales"].includes(contextType);
-  const contextKey = JSON.stringify([agent, contextType, contextData?.id || contextData?.ref || contextTitle]);
+  // Guru resolves its record by exact id only (2026-09-25). A display name can match another
+  // customer's deal in the Hub context assembler and shares memory across same-name customers,
+  // so it never stands in for `ref`. A linked deal id wins because the deal is the coaching
+  // focus; without one the widget says so rather than letting the server guess.
+  const linkedDealId = contextData?.dealId || (contextType === "deal" ? contextData?.id || contextData?.ref || null : null);
+  const recordRef = isGuru
+    ? linkedDealId || contextData?.id || contextData?.ref || null
+    : contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
+  const contextKey = JSON.stringify([agent, contextType, contextData?.id || contextData?.ref || contextTitle, guidanceId, initialQuestion]);
   const [minimized, setMinimized] = useState(false);
   const defaultTab = initialTab || (contextData?.mode === "critique" ? "critique" : "quick");
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [selectedLens, setSelectedLens] = useState(null);
+  const [pendingGuidanceId, setPendingGuidanceId] = useState(guidanceId);
   const [loading, setLoading] = useState(false);
   const [resultText, setResultText] = useState("");
   const [statusNote, setStatusNote] = useState("");
   const [chatThread, setChatThread] = useState([]);
-  const [chatInput, setChatInput] = useState("");
+  const [chatInput, setChatInput] = useState(initialQuestion);
   const [adviceHistory, setAdviceHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const visibleAdviceHistory = adviceHistory.filter(item => item.contextKey === contextKey);
@@ -50,6 +125,8 @@ export function FloatingMentorWidget({
     requestPending.current = false;
     setResultText("");
     setChatThread([]);
+    setChatInput(initialQuestion);
+    setPendingGuidanceId(guidanceId);
     setStatusNote("");
     setTaskSaved(false);
     setDealSaved(false);
@@ -113,8 +190,8 @@ export function FloatingMentorWidget({
         parts.push(`최근 업데이트: ${contextData.updates.slice(0, 3).map(u => u.title).join(' / ')}`);
       }
     }
-    if (selectedLens && LEGEND_LENS_MAP[selectedLens]) {
-      parts.push(`[적용 렌즈: ${LEGEND_LENS_MAP[selectedLens].name} 관점 적용]`);
+    if (selectedLens && GURU_LENS_MAP[selectedLens]) {
+      parts.push(`[적용 렌즈: ${GURU_LENS_MAP[selectedLens].name} 관점 적용]`);
     }
     if (userPrompt) {
       parts.push(`\n[운영자 요청/질문]:\n${userPrompt}`);
@@ -132,22 +209,28 @@ export function FloatingMentorWidget({
     setTaskSaved(false);
     setDealSaved(false);
     const draft = buildContextPrompt(customDraft);
-    const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
+    // Guru의 ref는 레코드 id뿐이다 — 이름·제목은 조회 키가 아니다(2026-09-25).
+    const ref = recordRef;
+    const selectedGuidanceId = pendingGuidanceId;
+    if (isGuru) setPendingGuidanceId(null);
 
     // Use persona-chat when lens is selected or in critique / weekly-review / outreach / extract-actions mode
     let res;
-    if (selectedLens || mode === "critique" || mode === "weekly-review" || mode === "outreach-draft" || mode === "extract-actions" || mode === "daily-dispatch") {
+    if ((selectedLens && (!isGuru || mode === "critique" || mode === "sparring")) || mode === "critique" || mode === "weekly-review" || mode === "outreach-draft" || mode === "extract-actions" || mode === "daily-dispatch") {
       res = await requestPersonaChat({
         personaId: isGuru ? "sales" : contextType === "content" ? "content" : mode === "extract-actions" ? "order" : "council",
         mode,
         lens: selectedLens,
         draft,
         message: customDraft || null,
-        context: contextData,
+        context: isGuru
+          ? { source: "operator-provided", scope: ref ? "selected-record" : "unscoped" }
+          : contextData,
+        conversationOnly: isGuru,
       });
     } else {
       res = isGuru
-        ? await requestGuruCoaching({ mode, draft, ref })
+        ? await requestGuruCoaching({ mode, draft, ref, guidanceId: selectedGuidanceId })
         : await requestCouncilAdvice({ mode, draft, ref });
     }
 
@@ -181,8 +264,14 @@ export function FloatingMentorWidget({
     if (!text || requestPending.current) return;
     requestPending.current = true;
     const epoch = requestEpoch.current;
+    const selectedGuidanceId = pendingGuidanceId;
+    if (isGuru) setPendingGuidanceId(null);
 
-    const newThread = [...chatThread, { role: "user", text }];
+    const history = isGuru ? collectGuruConversationHistory(chatThread) : [];
+    const newThread = [...chatThread, {
+      role: "user", text,
+      ...(isGuru ? { agent: "guru", mode: "open-question", guidanceId: selectedGuidanceId } : {}),
+    }];
     setChatThread(newThread);
     setChatInput("");
     setLoading(true);
@@ -190,27 +279,35 @@ export function FloatingMentorWidget({
     setTaskSaved(false);
     setDealSaved(false);
 
-    const draft = buildContextPrompt(
-      `이전 대화:\n${chatThread.map(m => `${m.role === 'user' ? '운영자' : isGuru ? 'Guru' : 'Council'}: ${m.text}`).join('\n')}\n\n새 질문:\n${text}`
-    );
-    const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
+    const draft = buildContextPrompt(isGuru
+      ? text
+      : `이전 대화:\n${chatThread.map(m => `${m.role === 'user' ? '운영자' : 'Council'}: ${m.text}`).join('\n')}\n\n새 질문:\n${text}`);
+    const ref = recordRef;
 
     const chatMode = activeTab === "critique" ? "critique" : activeTab === "sparring" ? "sparring" : "chat";
     let res;
     if (selectedLens) {
+      // 조언 경로와 같은 컨텍스트를 넘긴다. 비워 두면 Hub가 범위 없는 최근 거래 15건을 붙여
+      // 이 레코드와 무관한 고객(개인 레인 포함)이 답변에 섞였다.
       res = await requestPersonaChat({
         personaId: isGuru ? "sales" : "council",
         mode: chatMode,
         lens: selectedLens,
         draft,
         message: text,
+        context: isGuru
+          ? { source: "operator-provided", scope: ref ? "selected-record" : "unscoped" }
+          : undefined,
+        conversationOnly: isGuru,
       });
     } else {
       res = isGuru
         ? await requestGuruCoaching({
-            mode: activeTab === "sparring" ? "sparring" : "deal-review",
+            mode: "open-question",
             draft,
             ref,
+            guidanceId: selectedGuidanceId,
+            history,
           })
         : await requestCouncilAdvice({
             mode: activeTab === "sparring" ? "sparring" : "brand-strategy",
@@ -224,7 +321,9 @@ export function FloatingMentorWidget({
     setLoading(false);
 
     if (res.state === "done") {
-      setChatThread([...newThread, { role: isGuru ? "guru" : "council", text: res.text }]);
+      setChatThread([...newThread, isGuru && !selectedLens
+        ? { role: "agent", agent: "guru", mode: "open-question", generated: true, text: res.text }
+        : { role: isGuru ? "guru" : "council", text: res.text }]);
     } else {
       setChatThread([...newThread, { role: isGuru ? "guru" : "council", state: "error", text: res.note || "응답을 생성하지 못했습니다." }]);
     }
@@ -489,6 +588,27 @@ export function FloatingMentorWidget({
         </div>
       </div>
 
+      {/* 1.2 Deal link truth — a record without an exact deal id gets no guessed deal (2026-09-25). */}
+      {isGuru && ["customer", "deal"].includes(contextType) && !linkedDealId && (
+        <div
+          role="status"
+          style={{
+            padding: "6px 14px",
+            borderBottom: "1px solid var(--line-soft)",
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 6,
+            fontSize: 11,
+            color: "var(--fg-muted)",
+            flexShrink: 0,
+          }}
+        >
+          <TruthBadge state="partial" label="거래 기록 연결 안 됨" />
+          <span>거래를 추정하지 않고 이 기록만 참고합니다.</span>
+        </div>
+      )}
+
       {/* 1.5 Recent Advice History Dropdown */}
       {showHistory && visibleAdviceHistory.length > 0 && (
         <div
@@ -571,6 +691,7 @@ export function FloatingMentorWidget({
               key={tab.key}
               onClick={() => {
                 setActiveTab(tab.key);
+                if (isGuru && tab.key === "quick") setSelectedLens(null);
                 if (tab.key === "critique" && !resultText) {
                   handleRequest("critique");
                 } else if (tab.key === "sparring" && !resultText) {
@@ -596,7 +717,7 @@ export function FloatingMentorWidget({
       </div>
 
       {/* 2.5 Legend Lens Switcher Bar */}
-      <div
+      {(!isGuru || activeTab !== "quick") && <div
         style={{
           padding: "4px 10px",
           background: "var(--surface-2)",
@@ -626,8 +747,8 @@ export function FloatingMentorWidget({
         >
           기본
         </button>
-        {["jobs", "bezos", "chouinard", "voss", "ogilvy"].map((lid) => {
-          const l = LEGEND_LENS_MAP[lid];
+        {GURU_LENS_CHIPS.map((lid) => {
+          const l = GURU_LENS_MAP[lid];
           const active = selectedLens === lid;
           return (
             <button
@@ -649,7 +770,7 @@ export function FloatingMentorWidget({
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* 3. Sub-Action / Presets */}
       {activeTab === "critique" && (
@@ -759,7 +880,7 @@ export function FloatingMentorWidget({
                     alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
                     maxWidth: "88%",
                     padding: "8px 12px",
-                    borderRadius: "var(--r-md)",
+                    borderRadius: "var(--r)",
                     background: msg.role === "user" ? "var(--surface-3)" : "var(--surface-2)",
                     border: `1px solid ${msg.role === "user" ? "var(--line-strong)" : "var(--line)"}`,
                     whiteSpace: "pre-wrap",
@@ -770,7 +891,7 @@ export function FloatingMentorWidget({
                   <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginBottom: 3 }}>
                     {msg.role === "user" ? "운영자" : isGuru ? "Guru" : "Council"}
                   </div>
-                  {msg.text}
+                  {msg.role === "user" ? msg.text : renderAdviceWithCallouts(msg.text)}
                 </div>
               ))
             )}
@@ -791,9 +912,7 @@ export function FloatingMentorWidget({
                 </div>
               </div>
             ) : resultText ? (
-              <div style={{ whiteSpace: "pre-wrap", fontSize: 12.5, lineHeight: 1.65 }}>
-                {resultText}
-              </div>
+              renderAdviceWithCallouts(resultText)
             ) : (
               <div style={{ padding: "30px 10px", textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>
                 {statusNote || (

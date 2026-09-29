@@ -3,7 +3,10 @@
 import React from "react";
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { OkrSummaryCard } from "../okr-summary-card";
 import { Iconed } from "../hub-icons";
+import { BrandIcon } from "../brand-icons";
+import { GuidanceInlineTip } from "../guidance-inline-tip";
 import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress, Skeleton } from "../hub-primitives";
 import {
   activitySeriesAvailability,
@@ -487,7 +490,7 @@ function BrandActivityBars({ brands = [] }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {brands.map((b) => (
         <div key={b.key} style={{ display: 'grid', gridTemplateColumns: '22px 1fr 28px', gap: 10, alignItems: 'center' }}>
-          <span aria-hidden="true" style={{ fontSize: 13, color: 'var(--fg-muted)', textAlign: 'center' }}>{b.glyph || '●'}</span>
+          <BrandIcon brand={{ key: b.key, name: b.label }} size={18} style={{ color: 'var(--fg-muted)', margin: '0 auto' }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, marginBottom: 4, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</div>
             <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
@@ -734,9 +737,8 @@ function OverviewSummary({ onNavigate }) {
         <SegmentedControl className="hub-page-actions" label="기간" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
       </div>
 
-      <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
-        {kpiCards.map((k) => <KpiCard key={k.label} k={k} onNavigate={onNavigate} />)}
-      </div>
+      {/* OKR·KPI — 추적 본체는 내 작업 › OKR·KPI. 현황에는 핵심 지표만 띄운다(2026-09-23). */}
+      <OkrSummaryCard />
 
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
@@ -769,9 +771,11 @@ function OverviewSummary({ onNavigate }) {
         )}
       </Card>
 
+      <GuidanceInlineTip variant="overview" onNavigate={onNavigate} />
+
       {/* 좌: 도메인 분포(무엇이 어디에 쌓여 있나) · 우: 흐름 레일(리듬 + 최근 활동).
           이전에는 7개 카드가 3+3+1 균등 격자로 늘어서 위계가 없었다(§3.1 "5초 안에 무엇이
-          중요한지", §13 overpacked dashboard). 지표→추세→분포/흐름 순으로 눈이 흐르게 하고,
+          중요한지", §13 overpacked dashboard). OKR·KPI→추세→분포/흐름 순으로 눈이 흐르게 하고,
           최하단에 묻혀 있던 최근 활동을 우측 레일로 끌어올린다. hub-grid--split은 ≤1200px에서
           1열로 접힌다. */}
       <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 'var(--gap)', alignItems: 'start' }}>
@@ -852,6 +856,10 @@ function OverviewSummary({ onNavigate }) {
             </Card>
           </div>
         </div>
+      </div>
+
+      <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+        {kpiCards.map((k) => <KpiCard key={k.label} k={k} onNavigate={onNavigate} />)}
       </div>
     </div>
   );

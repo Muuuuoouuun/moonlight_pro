@@ -176,7 +176,8 @@ export async function readHubWriteJson(req, { maxBytes = DEFAULT_MAX_JSON_BYTES 
 
   const text = await req.text();
 
-  if (Buffer.byteLength(text, "utf8") > maxBytes) {
+  const byteLength = Buffer.byteLength(text, "utf8");
+  if (byteLength > maxBytes) {
     return {
       error: NextResponse.json(
         {
@@ -191,6 +192,7 @@ export async function readHubWriteJson(req, { maxBytes = DEFAULT_MAX_JSON_BYTES 
   try {
     return {
       data: text ? JSON.parse(text) : {},
+      byteLength,
     };
   } catch {
     return {

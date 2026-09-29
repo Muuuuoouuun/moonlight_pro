@@ -25,6 +25,16 @@
   --accent-soft:   oklch(0.52 0.08 250 / 0.16);
   --accent-line:   oklch(0.58 0.09 250 / 0.55);
 
+  /* Project evidence gauge only — percentage quarters, not workflow states. */
+  --project-gauge-0:     oklch(0.67 0.18 255);
+  --project-gauge-25:    oklch(0.75 0.15 218);
+  --project-gauge-50:    oklch(0.78 0.14 190);
+  --project-gauge-75:    oklch(0.75 0.19 280);
+  --project-gauge-100:   oklch(0.80 0.19 325);
+  --project-gauge-spark: oklch(0.99 0.01 250);
+  --project-gauge-tip-line: var(--surface);
+  --project-gauge-glow: oklch(0.81 0.17 280 / 0.7);
+
   --z-quick-memo: 60;
   --z-project-detail: 61;
   --z-navigation-overlay: 64;
@@ -60,6 +70,13 @@
   --personal-line: oklch(0.5 0.05 200 / 0.5);
   --company-line:  oklch(0.5 0.04 290 / 0.5);
 
+  /* Project genre tint — project index monogram tile only (§15 2026-09-24). Low chroma,
+     always paired with the genre label in the row's accessible name. */
+  --genre-company-bg: oklch(0.31 0.045 255); --genre-company-fg: oklch(0.84 0.07 255); --genre-company-line: oklch(0.46 0.06 255 / 0.6);
+  --genre-sales-bg: oklch(0.31 0.045 20); --genre-sales-fg: oklch(0.84 0.07 20); --genre-sales-line: oklch(0.46 0.06 20 / 0.6);
+  --genre-it-bg: oklch(0.31 0.045 200); --genre-it-fg: oklch(0.84 0.07 200); --genre-it-line: oklch(0.46 0.06 200 / 0.6);
+  --genre-content-bg: oklch(0.31 0.045 310); --genre-content-fg: oklch(0.84 0.07 310); --genre-content-line: oklch(0.46 0.06 310 / 0.6);
+
   --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 0 0 1px var(--line-soft);
   --shadow-card:
     0 1px 0 0 oklch(1 0 0 / 0.04) inset,
@@ -91,7 +108,11 @@
   --dur-enter: 200ms;
   --dur-panel: 180ms;
   --dur-overlay: 160ms;
+  /* 완료 축하 1회(리듬 체크 원·하루 링 닫힘). 반복·루프 금지 — §9, §15 2026-09-23 */
+  --dur-celebrate: 420ms;
+  --dur-gauge: 1080ms;
   --ease-hub: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ease-gauge: cubic-bezier(0.58, 0.06, 0.22, 1);
   --stagger-step: 45ms;
 }
 
@@ -121,6 +142,15 @@
   --accent-soft:   oklch(0.90 0.04 250 / 0.7);
   --accent-line:   oklch(0.52 0.10 250 / 0.45);
 
+  --project-gauge-0:     oklch(0.49 0.20 255);
+  --project-gauge-25:    oklch(0.54 0.17 218);
+  --project-gauge-50:    oklch(0.57 0.15 190);
+  --project-gauge-75:    oklch(0.53 0.20 280);
+  --project-gauge-100:   oklch(0.56 0.21 325);
+  --project-gauge-spark: oklch(1 0 0);
+  --project-gauge-tip-line: var(--surface);
+  --project-gauge-glow: oklch(0.58 0.19 280 / 0.45);
+
   --fg:            oklch(0.20 0.008 250);
   --fg-muted:      oklch(0.42 0.008 250);
   /* 라이트 강조 사다리: 밝을수록 옅다 — dim(0.50) < faint(0.55). 이전엔 dim(0.54)이
@@ -149,6 +179,13 @@
   --info-line:     oklch(0.55 0.12 230 / 0.5);
   --personal-line: oklch(0.5 0.09 200 / 0.5);
   --company-line:  oklch(0.5 0.09 290 / 0.5);
+
+  /* Project genre tint — project index monogram tile only (§15 2026-09-24). Low chroma,
+     always paired with the genre label in the row's accessible name. */
+  --genre-company-bg: oklch(0.94 0.035 255); --genre-company-fg: oklch(0.44 0.09 255); --genre-company-line: oklch(0.8 0.06 255 / 0.7);
+  --genre-sales-bg: oklch(0.94 0.035 20); --genre-sales-fg: oklch(0.44 0.09 20); --genre-sales-line: oklch(0.8 0.06 20 / 0.7);
+  --genre-it-bg: oklch(0.94 0.035 200); --genre-it-fg: oklch(0.44 0.09 200); --genre-it-line: oklch(0.8 0.06 200 / 0.7);
+  --genre-content-bg: oklch(0.94 0.035 310); --genre-content-fg: oklch(0.44 0.09 310); --genre-content-line: oklch(0.8 0.06 310 / 0.7);
 
   --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.6) inset, 0 0 0 1px var(--line-soft);
   --shadow-card:
@@ -380,7 +417,7 @@
 }
 
 /* Sidebar anchor row — same contract as .hub-row (CSS hover, no JS handlers),
-   sized for the consolidated eight-anchor nav: one tap target, no accordion. */
+   sized for the consolidated nine-anchor nav (주요 9개 앵커): one tap target, no accordion. */
 .hub-app .hub-nav-item {
   width: 100%;
   display: flex;
@@ -417,21 +454,65 @@
 /* The same sidebar DOM stays mounted so the collapse control keeps keyboard focus. */
 .hub-sidebar-root { transition: width var(--dur-panel) var(--ease-hub); }
 .hub-sidebar-root--collapsed .hub-sidebar-label,
-.hub-sidebar-root--collapsed .hub-sidebar-brand { display: none !important; }
-.hub-sidebar-root--collapsed .hub-sidebar-header { padding: 14px 0 10px !important; justify-content: center !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-brand,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-label,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-brand { display: none !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-header,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-header { padding: 14px 0 10px !important; justify-content: center !important; }
 .hub-sidebar-root--collapsed .hub-sidebar-search,
-.hub-sidebar-root--collapsed .hub-sidebar-scope { padding: 4px 9px 8px !important; }
-.hub-sidebar-root--collapsed .hub-sidebar-search > button { height: 36px !important; padding: 0 !important; justify-content: center; }
-.hub-sidebar-root--collapsed .hub-sidebar-nav { padding: 2px 6px 10px !important; }
-.hub-sidebar-root--collapsed .hub-sidebar-utilities { padding: 6px !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-scope,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-search,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-scope { padding: 4px 9px 8px !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-search > button,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-search > button { height: 36px !important; padding: 0 !important; justify-content: center; }
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-scope { visibility: hidden; }
+.hub-sidebar-root--collapsed .hub-sidebar-nav,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-nav { padding: 2px 6px 10px !important; }
+.hub-sidebar-root--collapsed .hub-sidebar-utilities,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-utilities { padding: 6px !important; }
 /* 사용자 카드는 Futura fx-shell-card(인라인 margin 12px)다 — 56px 레일에서는 32px로 줄어 36px 알림 버튼이
    넘치므로, 내비 pill과 같은 44px 폭 타일로 좁힌다. */
-.hub-sidebar-root--collapsed .hub-sidebar-footer { margin: 8px 6px 10px !important; padding: 4px 0 !important; justify-content: center; }
-.hub-app .hub-sidebar-root--collapsed .hub-nav-item--icon { position: relative; width: 100%; height: 40px; justify-content: center; padding: 0; flex-shrink: 0; }
+.hub-sidebar-root--collapsed .hub-sidebar-footer,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-footer { margin: 8px 6px 10px !important; padding: 4px 0 !important; justify-content: center; }
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-count-badge { display: none !important; }
+.hub-app .hub-sidebar-root--collapsed .hub-nav-item--icon,
+.hub-app .hub-shell[data-sidebar-collapse-preview="true"] .hub-nav-item { position: relative; width: 100%; height: 40px; justify-content: center; padding: 0; flex-shrink: 0; }
 .hub-sidebar-count-dot { position: absolute; top: 6px; right: 6px; width: 4px; height: 4px; border-radius: 50%; background: var(--fg-muted); }
-.hub-sidebar-root--collapsed .hub-sidebar-inquiry { position: relative; }
-.hub-sidebar-root--collapsed .hub-sidebar-inquiry > .num { position: absolute; top: -2px; right: -5px; pointer-events: none; background: var(--surface); padding: 0 2px; border-radius: var(--r-xs); }
+.hub-sidebar-root--collapsed .hub-sidebar-inquiry,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-inquiry { position: relative; }
+.hub-sidebar-root--collapsed .hub-sidebar-inquiry > .num,
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-inquiry > .num { position: absolute; top: -2px; right: -5px; pointer-events: none; background: var(--surface); padding: 0 2px; border-radius: var(--r-xs); }
 .hub-sidebar-search > button:hover { color: var(--fg) !important; border-color: var(--line-strong) !important; }
+
+/* 사이드바 너비 조절 — 경계선 위에 걸친 8px 히트 영역(좌우 -4px margin으로 레이아웃 폭 0).
+   휴지 상태에는 사이드바 자신의 1px 보더만 보이고, hover·드래그 중에는 그 자리에 --line-strong,
+   키보드 포커스에는 --moon-300 선이 겹친다. 셸이 overflow: hidden이라 포커스 링은 안쪽에 그린다(§15 2026-09-15). */
+.hub-app .hub-sidebar-resizer {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 8px;
+  margin: 0 -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.hub-app .hub-sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background-color var(--dur-hover) var(--ease-hub);
+}
+.hub-app .hub-sidebar-resizer:hover::after,
+.hub-shell[data-sidebar-resizing="true"] .hub-sidebar-resizer::after { background: var(--line-strong); }
+.hub-shell[data-sidebar-collapse-preview="true"] .hub-sidebar-resizer::after { background: var(--moon-300); }
+.hub-app .hub-sidebar-resizer:focus-visible { outline-offset: -2px; }
+.hub-app .hub-sidebar-resizer:focus-visible::after { background: var(--moon-300); }
+/* 드래그 중 — 폭 전이를 끄고(포인터를 바로 따라온다) 본문 텍스트가 선택되지 않게 한다. */
+.hub-shell[data-sidebar-resizing="true"] { cursor: col-resize; user-select: none; }
+.hub-shell[data-sidebar-resizing="true"] .hub-sidebar-root { transition: none; }
 
 /* Pinned utilities (AI·자동화 · 설정) — same anchor, quieter weight. */
 .hub-app .hub-nav-item--sm {
@@ -771,8 +852,33 @@
   animation: mlBurnPop var(--dur-enter) var(--ease-hub);
 }
 
+/* 연속 불꽃 4·5단계 — 나타날 때 한 번 불이 붙고 불티가 튄다(2026-09-25). 반복 없음(§9). */
+@keyframes mlFlameIgnite {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+@keyframes mlSparkRise {
+  0% { transform: translateY(3px) scale(0.4); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.hub-app .hub-streak-ignite .hub-streak-flame {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mlFlameIgnite var(--dur-celebrate) var(--ease-hub) both;
+}
+.hub-app .hub-streak-ignite .hub-streak-spark {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: mlSparkRise var(--dur-celebrate) var(--ease-hub) both;
+}
+.hub-app .hub-streak-ignite .hub-streak-spark:nth-of-type(2) { animation-delay: var(--stagger-step); }
+.hub-app .hub-streak-ignite .hub-streak-spark:nth-of-type(3) { animation-delay: calc(var(--stagger-step) * 2); }
+
 @media (prefers-reduced-motion: reduce) {
-  .hub-app .hub-streak-pop {
+  .hub-app .hub-streak-pop,
+  .hub-app .hub-streak-ignite .hub-streak-flame,
+  .hub-app .hub-streak-ignite .hub-streak-spark {
     animation: none;
   }
 }
@@ -1499,6 +1605,8 @@
   .hub-app textarea,
   .hub-app select {
     min-height: 44px;
+    /* 390px 입력 품질 플로어. 기존 컴포넌트/인라인의 작은 글자 선언도 덮는다. */
+    font-size: max(16px, 1em) !important;
   }
 
   /* 캡처 폼은 스캔용 테이블이 아니라 운영자가 직접 쓰는 드래프팅 표면이다(§4) —
@@ -1517,6 +1625,7 @@
 }
 
 @media (max-width: 1200px) {
+  .hub-brand-row > .hub-brand-row__setup { grid-column: 3 / -1; }
   .hub-brand-row {
     grid-template-columns: 18px minmax(0, 1fr) 168px 176px;
   }
@@ -1555,7 +1664,8 @@
 
   .hub-brand-row > .hub-brand-row__rhythm,
   .hub-brand-row > .hub-brand-row__quiet,
-  .hub-brand-row > .hub-brand-row__state {
+  .hub-brand-row > .hub-brand-row__state,
+  .hub-brand-row > .hub-brand-row__setup {
     grid-column: 2 / -1;
     /* 인라인 flex 정렬(우측 정렬)을 눌러 쌓인 행의 모든 줄을 왼쪽에 맞춘다. */
     justify-content: flex-start !important;
@@ -1583,6 +1693,11 @@
   }
 
   .hub-desktop-sidebar-collapse {
+    display: none !important;
+  }
+
+  /* 모바일 사이드바는 고정 폭 드로어다 — 너비 조절 핸들은 데스크톱 전용. */
+  .hub-sidebar-resizer {
     display: none !important;
   }
 
@@ -1817,7 +1932,13 @@
     align-items: flex-start !important;
     flex-direction: column !important;
     gap: 0 !important;
-    padding: 8px 0 8px 8px !important;
+    padding: 8px 0 !important;
+  }
+
+  .hub-project-row__controls .hub-iconbtn,
+  .hub-project-row__controls .hub-project-expand {
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .hub-project-row__open {
@@ -2159,9 +2280,9 @@
   font-weight: 500;
 }
 
+/* §11 페이지 제목 20px/500 — 승인되지 않은 clamp(22–28px) 확대를 걷었다(DESIGN §14 Known gap 12). */
 .personal-revenue-header h2 {
-  font-size: clamp(22px, 2.5vw, 28px);
-  letter-spacing: -0.025em;
+  font-size: 20px;
 }
 
 .personal-revenue-header p,
@@ -2630,16 +2751,6 @@
 
 .personal-revenue-state-card {
   margin: 26px clamp(20px, 3vw, 36px);
-}
-
-.personal-revenue-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 220px;
-  color: var(--fg-faint);
-  font-family: var(--font-mono);
-  font-size: 11px;
 }
 
 @media (max-width: 1120px) {

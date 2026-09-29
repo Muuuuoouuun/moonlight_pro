@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
+import { BrandIcon } from "../brand-icons";
 import { LifecycleBadge } from "../hub-primitives";
 import { Button, Drawer, TextField } from "../hub-primitives";
 import { buildProjectPortfolioMetrics } from "./project-pms-metrics";
@@ -37,7 +38,7 @@ export const PROJECT_LIFECYCLE_STATE = {
 // §8.2 "visible Korean labels and an equivalent accessible name" — LifecycleBadge가
 // 같은 문구로 aria-label('진행 상태: …')을 짜므로 라벨 정본은 여기 하나다.
 export const PROJECT_STATUS_LABEL_KO = {
-  'In progress': '작업 중',
+  'In progress': '진행 중',
   Review: '검토',
   Planning: '계획',
   Blocked: '막힘',
@@ -66,30 +67,26 @@ export function ProjectStatusBadge({ status, style }) {
   );
 }
 
-// 컨테이너 모노그램 마크 — 모양·무게가 제각각인 기하 글리프(◐ ◇ □ △ …)를 렌더에서
-// 대체한다(2026-08-19 운영자 지시 "아이콘 변경"). 이름 첫 글자를 고정 타일에 새겨
-// 목록의 시각 무게를 균일하게 만들고, '전체 브랜드'(kind:index)만 brand 아이콘을 쓴다.
-// meta.glyph 데이터는 그대로 둔다 — 표현만 교체라 되돌리기 쉽다.
-export function BrandMark({ brand, size = 18, active = false, style }) {
+// 브랜드 소속 타일은 브랜드 목록과 같은 상징을 쓴다. '전체 브랜드'만 공용 브랜드
+// 아이콘을 사용한다. 저장된 meta.glyph는 건드리지 않고 화면 표현만 교체한다.
+// `tint` = projectGenreTint(project.genre) — only the project index passes it (§15 2026-09-24).
+export function BrandMark({ brand, size = 18, active = false, tint = null, style }) {
   const isIndex = !brand || brand.kind === 'index' || brand.key === 'all';
-  const letter = isIndex ? '' : (Array.from(String(brand.name || '').trim())[0] || '·').toUpperCase();
   return (
     <span
       aria-hidden="true"
+      data-genre={tint || undefined}
       style={{
         width: size, height: size, flexShrink: 0,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: Math.max(4, Math.round(size * 0.26)),
-        background: active ? 'var(--elevated)' : 'var(--surface-3)',
-        border: '1px solid var(--line-soft)',
-        color: active ? 'var(--fg)' : 'var(--fg-muted)',
-        // 타일 글자도 §6 크기 플로어(10.5px) 아래로 내리지 않는다.
-        fontSize: Math.max(10.5, Math.round(size * 0.55)),
-        fontWeight: 600, lineHeight: 1, letterSpacing: 0,
+        background: tint ? `var(--genre-${tint}-bg)` : active ? 'var(--elevated)' : 'var(--surface-3)',
+        border: `1px solid ${tint ? `var(--genre-${tint}-line)` : 'var(--line-soft)'}`,
+        color: tint ? `var(--genre-${tint}-fg)` : active ? 'var(--fg)' : 'var(--fg-muted)',
         ...style,
       }}
     >
-      {isIndex ? <Iconed name="brand" size={Math.round(size * 0.62)} /> : letter}
+      {isIndex ? <Iconed name="brand" size={Math.round(size * 0.72)} /> : <BrandIcon brand={brand} size={Math.round(size * 0.72)} />}
     </span>
   );
 }

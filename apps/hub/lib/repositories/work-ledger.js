@@ -4,6 +4,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { WORKSPACE_ROW_SELECT } from "@/lib/workspace-row-select";
 import {
   resolveRhythmTimeZone,
   routineLocalDateKey,
@@ -210,6 +211,13 @@ function computeStreak(doneDateKeys, todayKey) {
   return streak;
 }
 
+// 어제까지 이어진 연속 — "오늘 체크하면 N+1일"의 N. streak(오늘 포함 연속)의 정의는
+// 그대로 두고 별도 필드로 싣는다. 오늘 체크를 취소해도 화면이 연속을 되돌릴 수 있게 오늘
+// 완료 여부와 무관하게 어제 기준으로 센다.
+function computePendingStreak(doneDateKeys, todayKey) {
+  return computeStreak(doneDateKeys, shiftDateKey(todayKey, -1));
+}
+
 function mapRituals(rows, projectRows, { timeZone, now, definitionRows = null }) {
   const definitions = buildRitualDefinitionIndex(definitionRows);
   const groups = new Map();
@@ -274,6 +282,7 @@ function mapRituals(rows, projectRows, { timeZone, now, definitionRows = null })
       category,
       targetPerWeek,
       streak: computeStreak(group.doneDateKeys, todayKey),
+      pendingStreak: computePendingStreak(group.doneDateKeys, todayKey),
       weeks: buildWeeksBitmap(group.doneDateKeys, todayKey),
       lastCheckedAt: group.lastCheckedAt ? new Date(group.lastCheckedAt).toISOString() : null,
     };
@@ -487,13 +496,16 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
       ),
     }),
     fetchSupabaseRows("workspaces", {
-      select: "id,timezone",
+      select: WORKSPACE_ROW_SELECT,
       limit: 1,
       filters: [["id", eqFilter(workspaceId)]],
     }),
+    // No `select` (and limit 80, not 40) — matches operating-ledger.js getTaskLedger's and
+    // content-ledger.js getContentLedger's brands read option-for-option, so the same request
+    // reading brands from more than one of these ledgers collapses to one network call via
+    // packages/supabase-rest's dedupedRead (URL match). mapRoadmapBrands only reads id/slug/name.
     fetchSupabaseRows("brands", {
-      select: "id,slug,name",
-      limit: 40,
+      limit: 80,
       order: "name.asc",
       filters: withWorkspaceFilter([["status", eqFilter("active")]]),
     }),

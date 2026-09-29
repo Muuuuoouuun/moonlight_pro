@@ -4,7 +4,7 @@ import React from "react";
 import { JournalSources } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, Button, Checkbox, DateQuickPresets, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, Skeleton, TruthBadge, useToast } from "../hub-primitives";
+import { Badge, Card, Button, Checkbox, CheckboxRow, DateQuickPresets, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, Skeleton, TruthBadge, useToast } from "../hub-primitives";
 import { focusLimitMessage, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
@@ -13,9 +13,12 @@ import { clearSubmittedQuickTaskDraft, shouldSubmitQuickTask } from "@/lib/quick
 import { freezeTaskCommand, saveTaskCommand, TASK_OUTCOME } from "@/lib/memo-intake-tasks";
 import { applyMute, clearMute, mutedIdSet, readMuteStore, seoulDayKey, writeMuteStore } from "./my-work-mute.js";
 import { requestPersonaChat } from "../persona-client";
+import { buildMyWorkChecklistToggle, readMyWorkChecklistReceipt } from './my-work-checklist';
+import { MeetingWatchCard } from './meeting-watch-card';
 
-// 내 작업 — one personal operating surface, three lenses over the cross-lane attention
-// read model (tasks + open deals + calendar week). Design contract from the operator:
+// 내 작업 — one personal operating surface, three attention lenses plus a separate
+// meeting-watch lens. The attention model combines tasks, open deals and calendar week.
+// Design contract from the operator:
 // 핵심 정보만 (one line per item), 최신 기준 default sort, and fast lens/lane/sort toggles.
 // Native surfaces (Deals kanban, Projects board) stay the deep-work views — every item
 // here deep-links back to its home drawer.
@@ -31,6 +34,7 @@ const LENSES = [
   { key: 'list', label: '리스트' },
   { key: 'board', label: '보드' },
   { key: 'week', label: '주간' },
+  { key: 'watch', label: '함께 신경 쓸 일' },
 ];
 
 const LANE_OPTIONS = [
@@ -63,6 +67,8 @@ const BUCKET_RANK = { focus: 0, overdue: 1, today: 2, week: 3, later: 4 };
 const BUCKET_OPTIONS = [{ key: 'all', label: '전체 기한' }, ...BUCKETS];
 // 서버 bucket 키가 넷 밖이면(방어) '나중'으로 흡수 — 그룹/카운트가 항목을 잃지 않게.
 const normalizeBucket = (item) => (BUCKET_RANK[item.bucket] != null ? item.bucket : 'later');
+// 오늘 3개는 원래 기한을 보존하지만, 명시적으로 해제한 과거 알림은 다시 경고하지 않는다.
+const visibleDueBucket = (item) => item.deadlineAlertSuppressed ? 'later' : (item.dueBucket || item.bucket);
 
 // 시그널 스트립 타일 — 클릭하면 리스트 렌즈 + 해당 기한 필터 토글. '나중'은 신호가
 // 아니므로 타일에서 제외 (기한 세그먼트 토글에는 그대로 있다).
@@ -223,8 +229,8 @@ function useAttentionLedger() {
 // `selected` marks the row whose detail panel is open. `hideProject` suppresses the
 // project label inside a project accordion (the header already names it).
 function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded, onDefer, mutedEntry, onMute, onUnmute, onToggleFocus, focusFull }) {
-  // 기한 색·스트라이프는 기한 버킷(dueBucket)을 따른다 — 오늘 3개로 고른 행도 지난 기한은 빨갛다.
-  const dueBucket = item.dueBucket || item.bucket;
+  // 오늘 3개는 원래 기한을 보이되, 해제한 과거 기한은 경고색을 되살리지 않는다.
+  const dueBucket = visibleDueBucket(item);
   // 우선순위 정렬일 때는 meta 자리에 정렬 근거(reason)를 보여준다 — 첫 화면 요구사항
   // "지금 해야 하는 이유"(profile §4)를 행 높이 증가 없이 전달.
   const projectLabel = !hideProject && item.lane === 'task' ? item.projectName || '' : '';
@@ -678,8 +684,10 @@ function DealOutreachSection({ deal }) {
 // 우측 상세 패널 — 행 클릭 시 열리는 간단 요약 + 다음 행동. 딥워크는 각 레인의 네이티브
 // 서피스(할 일 EditDrawer · Deals 드로어 · 프로젝트 · Google Calendar)로 넘긴다.
 // ESC/닫기 버튼으로 접힌다 (§8.1 닫기 계약의 패널 버전).
-function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDefer, onEdit, onNavigate, mutedEntry, onMute, onUnmute, onTaskCreated, onToggleFocus, focusFull }) {
+function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDefer, onEdit, onNavigate, mutedEntry, onMute, onUnmute, onTaskCreated, onToggleFocus, onToggleChecklist, checklistSaving, focusFull }) {
   const bucketMeta = BUCKET_HEADER[normalizeBucket(item)];
+  const checklist = item.lane === 'task' && Array.isArray(item.checklist) ? item.checklist : [];
+  const checklistDone = checklist.filter((step) => step.done).length;
   // mono는 계기 데이터(기한·단계·금액)만 — 상태/프로젝트명/근거 같은 '단어' 값을 mono로
   // 두면 이름이 ID처럼 읽힌다 (DESIGN §6 하이브리드 숫자 규칙).
   const rows = [
@@ -687,7 +695,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
       label: '기한',
       value: item.whenLabel,
       mono: true,
-      tone: (item.dueBucket || item.bucket) === 'overdue' ? 'var(--danger)' : undefined,
+      tone: visibleDueBucket(item) === 'overdue' ? 'var(--danger)' : undefined,
     },
     item.lane === 'task' && item.focusToday && { label: '오늘 3개', value: '고름' },
     item.lane === 'task' && {
@@ -699,6 +707,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
       value: TASK_PRIORITY_OPTIONS.find((o) => o.value === item.priority)?.label || item.priority,
     },
     item.lane === 'task' && item.projectName && { label: '프로젝트', value: item.projectName },
+    item.lane === 'task' && item.nextAction && { label: '다음 행동', value: item.nextAction },
     item.lane === 'deal' && item.meta && { label: '단계·금액', value: item.meta, mono: true },
     item.lane === 'event' && item.meta && { label: '장소', value: item.meta },
     item.priorityReason && { label: '근거', value: item.priorityReason },
@@ -733,6 +742,26 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
             </div>
           ))}
         </div>
+
+        {checklist.length > 0 && (
+          <section aria-label="할 일 체크리스트" aria-busy={checklistSaving ? 'true' : undefined}
+            style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+              <strong style={{ fontSize: 12, fontWeight: 600 }}>체크리스트</strong>
+              <span className="num" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{checklistDone}/{checklist.length}</span>
+              {checklistSaving && <span role="status" style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--fg-muted)' }}>저장 중…</span>}
+            </div>
+            {!item.updatedAt && <p role="status" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>작업 버전을 확인한 뒤 체크할 수 있어요.</p>}
+            {checklist.map((step) => (
+              <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <CheckboxRow checked={step.done} text={step.title} disabled={checklistSaving || !item.updatedAt}
+                  onChange={() => onToggleChecklist?.(item, step.id)}
+                  style={{ flex: 1, minWidth: 0, minHeight: 44, textAlign: 'left', overflowWrap: 'anywhere' }} />
+                {step.dueAt && <span className="mono" style={{ flexShrink: 0, fontSize: 12, color: 'var(--fg-muted)' }}>{step.dueAt}</span>}
+              </div>
+            ))}
+          </section>
+        )}
 
         {/* AI 보조 섹션: 할 일 실행 분해 또는 딜 연락 초안 */}
         {item.lane === 'task' && (
@@ -769,7 +798,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
                   size="sm"
                   icon="projects"
                   style={{ flex: 1 }}
-                  onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(item.projectId)}`)}
+                  onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(item.projectId)}${item.entityId ? `&item=${encodeURIComponent(item.entityId)}` : '&focus=overview'}`)}
                 >
                   프로젝트에서 열기
                 </Button>
@@ -877,6 +906,8 @@ export function MyWork({ onNavigate }) {
   const quickSavingRef = React.useRef(false);
   const [notice, setNotice] = React.useState(null); // { tone, label, action?: { label, onClick } }
   const [taskDraft, setTaskDraft] = React.useState(null);
+  const [checklistSavingId, setChecklistSavingId] = React.useState(null);
+  const checklistSavingRef = React.useRef(false);
   // 방금 추가한 할 일의 attention item.id — 저장 직후 그 행으로 스크롤 + 잠깐 하이라이트해서
   // "나중"(기한 없음) 버킷 맨 아래로 들어가도 추가된 걸 바로 확인하게 한다. 몇 초 뒤 해제.
   const [justAddedId, setJustAddedId] = React.useState(null);
@@ -1155,7 +1186,7 @@ export function MyWork({ onNavigate }) {
       delete next[item.id];
       return next;
     });
-    setItemPatches((p) => ({ ...p, [item.id]: { ...(p[item.id] || {}), bucket: on ? 'focus' : (item.dueBucket || 'later'), focusToday: on } }));
+    setItemPatches((p) => ({ ...p, [item.id]: { ...(p[item.id] || {}), bucket: on ? 'focus' : visibleDueBucket(item), focusToday: on } }));
     const label = on ? '오늘 3개에 넣음' : '오늘 3개에서 뺌';
     setNotice({ tone: 'ok', label });
     try {
@@ -1275,13 +1306,73 @@ export function MyWork({ onNavigate }) {
     // _sourceDescription: 저장 시 "바뀌었을 때만" description을 PATCH에 싣기 위한 원본 스냅샷.
     // 라이브 DB에 0021(task description) 마이그레이션이 아직 없으면 이 키가 포함된 PATCH가
     // 통째로 실패하므로, 건드리지 않은 저장까지 막지 않게 한다.
-    setTaskDraft({ sourceRefs: item.sourceRefs || [], id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '', description: item.description || '', projectId: item.projectId || '', _sourceDescription: item.description || '' });
+    setTaskDraft({ sourceRefs: item.sourceRefs || [], id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '', description: item.description || '', nextAction: item.nextAction || '', projectId: item.projectId || '', updatedAt: item.updatedAt || '', _sourceDescription: item.description || '', _sourceNextAction: item.nextAction || '' });
   };
 
   const detailItem = React.useMemo(
-    () => (detailId ? items.find((i) => i.id === detailId && !hiddenIds.has(i.id)) || null : null),
-    [detailId, items, hiddenIds],
+    () => {
+      if (!detailId) return null;
+      const item = items.find((i) => i.id === detailId && !hiddenIds.has(i.id));
+      return item ? { ...item, ...(itemPatches[item.id] || {}) } : null;
+    },
+    [detailId, items, hiddenIds, itemPatches],
   );
+
+  const toggleChecklist = async (item, checklistId) => {
+    if (checklistSavingRef.current) return;
+    const command = buildMyWorkChecklistToggle(item, checklistId);
+    if (!command) {
+      setNotice({ tone: 'err', label: '체크리스트 버전이나 항목을 확인하지 못했어요. 다시 읽어 주세요.' });
+      return;
+    }
+    checklistSavingRef.current = true;
+    setChecklistSavingId(item.id);
+    let outcome = null;
+    try {
+      const response = await fetch('/api/hub/tasks', {
+        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(command),
+      });
+      const data = await response.json().catch(() => null);
+      outcome = { response, data };
+    } catch {
+      // The response can be lost after the server commits. Read back before declaring failure.
+    }
+    try {
+      const receipt = outcome && readMyWorkChecklistReceipt(outcome.response, outcome.data, command);
+      if (receipt) {
+        setItemPatches((previous) => ({ ...previous, [item.id]: {
+          ...(previous[item.id] || {}), checklist: receipt.checklist, updatedAt: receipt.updatedAt,
+        } }));
+        setNotice({ tone: 'ok', label: '체크리스트 저장됨' });
+        reload().then((fresh) => {
+          if (fresh) setItemPatches((previous) => {
+            if (!(item.id in previous)) return previous;
+            const next = { ...previous };
+            delete next[item.id];
+            return next;
+          });
+        }).catch(() => {});
+        return;
+      }
+      const fresh = await reload();
+      const current = fresh?.items?.find((candidate) => candidate.lane === 'task' && candidate.entityId === command.id);
+      const target = command.checklist.find((step) => step.id === checklistId);
+      const recovered = current?.updatedAt && current.updatedAt !== command.expectedUpdatedAt
+        && current.checklist?.find((step) => step.id === checklistId)?.done === target?.done;
+      if (outcome?.data?.status === 'conflict') {
+        setNotice({ tone: 'err', label: '다른 변경이 먼저 저장됐어요. 최신 체크리스트를 확인해 주세요.' });
+      } else if (recovered) {
+        setNotice({ tone: 'ok', label: '최신 체크 상태가 선택한 값과 일치해요.' });
+      } else if (outcome?.data?.status === 'preview') {
+        setNotice({ tone: 'err', label: '저장소가 연결되지 않아 체크리스트를 저장하지 않았어요.' });
+      } else {
+        setNotice({ tone: 'err', label: '체크리스트 저장 결과를 확인하지 못했어요. 다시 읽어 주세요.' });
+      }
+    } finally {
+      checklistSavingRef.current = false;
+      setChecklistSavingId(null);
+    }
+  };
   const deferTarget = nextDeferTarget();
   const handleItemDefer = React.useCallback((it) => {
     rescheduleTask(it, deferTarget.dueAt, `${deferTarget.label}로 미룸`);
@@ -1319,7 +1410,9 @@ export function MyWork({ onNavigate }) {
 
     taskDeepLinkRef.current = requestedTaskId;
     setLane('task');
-    setBucketFilter('all');
+    // Q120: 전체 기한은 무기한 항목을 숨긴다. 회의에서 만든 무기한 작업의
+    // 딥링크는 나중 렌즈로 열어 실제 행과 체크리스트가 함께 보이게 한다.
+    setBucketFilter(normalizeBucket(item) === 'later' ? 'later' : 'all');
     setSearch('');
     setDetailId(item.id);
     scrollToRow(item.id);
@@ -1363,6 +1456,7 @@ export function MyWork({ onNavigate }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           id: taskDraft.id,
+          ...(taskDraft.updatedAt ? { expectedUpdatedAt: taskDraft.updatedAt } : {}),
           title: taskDraft.title,
           status: taskDraft.status,
           priority: taskDraft.priority,
@@ -1371,12 +1465,20 @@ export function MyWork({ onNavigate }) {
           ...((taskDraft.description ?? '') !== (taskDraft._sourceDescription ?? '')
             ? { description: taskDraft.description ?? '' }
             : {}),
+          ...((taskDraft.nextAction ?? '') !== (taskDraft._sourceNextAction ?? '')
+            ? { nextAction: taskDraft.nextAction ?? '' }
+            : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status !== 'saved') {
         setNotice({ tone: 'err', label: data.error || `저장 실패 (${data.status || res.status})` });
-        return { ok: false, status: data.status || 'error' };
+        return { ok: false, status: data.status || 'error', message: data.status === 'conflict' ? '다른 변경이 먼저 저장됐어요. 최신 작업을 확인한 뒤 다시 편집해 주세요.' : undefined };
+      }
+      if ((taskDraft.nextAction ?? '') !== (taskDraft._sourceNextAction ?? '')
+        && (data.task?.next_action ?? '') !== (taskDraft.nextAction ?? '')) {
+        setNotice({ tone: 'err', label: '다음 행동의 저장 결과를 확인하지 못했어요. 다시 읽어 주세요.' });
+        return { ok: false, status: 'error' };
       }
       setNotice({ tone: 'ok', label: '할 일 업데이트됨' });
       // 저장 영수증이 전체 attention read(10콜+캘린더 체인)를 기다리지 않는다 —
@@ -1389,6 +1491,8 @@ export function MyWork({ onNavigate }) {
             ...(prev[detailItemId] || {}),
             title: taskDraft.title,
             whenAt: taskDraft.dueAt || null,
+            nextAction: taskDraft.nextAction || '',
+            ...(data.task?.updated_at ? { updatedAt: data.task.updated_at } : {}),
           },
         }));
       }
@@ -1483,7 +1587,7 @@ export function MyWork({ onNavigate }) {
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
       if (document.querySelector('[data-drawer-open="true"], [role="dialog"], [data-shortcut-overlay="true"]')) return; // 다이얼로그 위 발화 금지(§8.1)
       if (e.key === 'n' || e.key === 'N') { e.preventDefault(); quickRef.current?.focus(); return; }
-      if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); }
+      if (e.key === '/' && searchRef.current) { e.preventDefault(); searchRef.current.focus(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -1579,11 +1683,11 @@ export function MyWork({ onNavigate }) {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>내 작업</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {lens !== 'watch' && <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span>할 일<SyncBadge state={sources.tasks || 'loading'} /></span>
             <span>딜<SyncBadge state={sources.deals || 'loading'} /></span>
             <span>일정<SyncBadge state={sources.calendar || 'loading'} /></span>
-          </div>
+          </div>}
         </div>
         <div style={{ flex: 1 }} />
         <SegmentedControl className="hub-page-actions" label="보기 렌즈" options={LENSES} value={lens} onChange={setLens} />
@@ -1591,7 +1695,7 @@ export function MyWork({ onNavigate }) {
 
       {/* 시그널 스트립 — "지금 뭐가 급한가"를 숫자로 먼저 답한다 (DESIGN.md 경험 원칙 1).
           타일 클릭 = 리스트 렌즈 + 해당 기한 필터, 다시 클릭하면 전체로 복귀. */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--gap)' }}>
+      {lens !== 'watch' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--gap)' }}>
         {SIGNAL_TILES.map((t) => {
           const count = bucketCounts[t.key] || 0;
           // 오늘 3개 타일만 표시 숫자가 서버 요약(완료한 선택 포함)이고 버킷 카운트는 미완료만
@@ -1623,7 +1727,7 @@ export function MyWork({ onNavigate }) {
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* Quick capture — Enter saves a durable task; N focuses. 상세 토글로 기한·우선순위 추가. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1681,6 +1785,27 @@ export function MyWork({ onNavigate }) {
         )}
       </div>
 
+      {notice && (
+        <span
+          role={notice.tone === 'err' ? 'alert' : 'status'}
+          aria-live="polite"
+          style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+        >
+          {notice.label}
+          {notice.action && (
+            <button
+              onClick={notice.action.onClick}
+              style={{ fontSize: 11.5, color: 'var(--moon-200)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+            >
+              {notice.action.label}
+            </button>
+          )}
+        </span>
+      )}
+
+      {lens === 'watch' ? <MeetingWatchCard /> : (
+      <>
+
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <Input ref={searchRef} icon="search" placeholder="제목 검색" kbd="/" clearable value={search} onChange={setSearch} style={{ width: 190 }} />
         <SegmentedControl
@@ -1711,25 +1836,6 @@ export function MyWork({ onNavigate }) {
           >
             숨김 <span className="num">{mutedCount}</span>
           </Button>
-        )}
-        {notice && (
-          // live region 필수(§11): 되돌리기 창이 열렸다는 사실을 스크린리더도 알아야 한다.
-          // 완료는 중립(§5.3 done ≠ green) — 에러만 danger.
-          <span
-            role={notice.tone === 'err' ? 'alert' : 'status'}
-            aria-live="polite"
-            style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
-          >
-            {notice.label}
-            {notice.action && (
-              <button
-                onClick={notice.action.onClick}
-                style={{ fontSize: 11.5, color: 'var(--moon-200)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
-              >
-                {notice.action.label}
-              </button>
-            )}
-          </span>
         )}
       </div>
 
@@ -2109,10 +2215,14 @@ export function MyWork({ onNavigate }) {
           onUnmute={() => unmuteItem(detailItem)}
           onTaskCreated={reload}
           onToggleFocus={() => toggleFocus(detailItem)}
+          onToggleChecklist={toggleChecklist}
+          checklistSaving={checklistSavingId === detailItem.id}
           focusFull={focusFull}
         />
       )}
       </div>
+      </>
+      )}
 
       <EditDrawer
         title={taskDraft ? (taskDraft.title || '할 일 편집') : ''}
@@ -2123,6 +2233,7 @@ export function MyWork({ onNavigate }) {
           { key: 'status', row: 'task-state', label: '상태', type: 'select', options: TASK_STATUS_OPTIONS },
           { key: 'priority', row: 'task-state', label: '우선순위', type: 'select', options: TASK_PRIORITY_OPTIONS },
           { key: 'dueAt', label: '기한', inputType: 'date' },
+          { key: 'nextAction', optional: true, label: '다음 행동', placeholder: '다음으로 실행할 구체적인 행동' },
           {
             key: 'projectId',
             label: '프로젝트',
@@ -2172,7 +2283,7 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
   // 기한 버킷은 dueBucket이 정본 — '오늘 3개'로 고른 할 일은 bucket이 'focus'로 올라가므로
   // i.bucket만 보면 지난 기한 항목이 주간 렌즈에서 통째로 사라진다(일자별 목록은 앞으로 7일만
   // 담는다). deal/event 레인엔 dueBucket이 없어 폴백이 필요하다.
-  const overdue = items.filter((i) => (i.dueBucket || i.bucket) === 'overdue');
+  const overdue = items.filter((i) => visibleDueBucket(i) === 'overdue');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>

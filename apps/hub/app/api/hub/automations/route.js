@@ -16,7 +16,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      status: ledger.source === "supabase" ? "live" : "preview",
+      status: ledger.source === "supabase" ? (ledger.partial ? "partial" : "live") : "preview",
       ...ledger,
     });
   } catch (error) {

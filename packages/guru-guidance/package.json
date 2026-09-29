@@ -1,0 +1,14 @@
+{
+  "name": "@com-moon/guru-guidance",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./source-library": "./source-library.js",
+    "./source-prompt": "./source-prompt.js",
+    "./source-people": "./source-people.generated.js"
+  }
+}

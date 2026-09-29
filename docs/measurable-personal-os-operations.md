@@ -50,7 +50,7 @@ GEMINI_MODEL=<model-id-enabled-for-this-api-project>
 
 기존 기능에 필요한 Engine Supabase 등 설정은 유지한다. `GEMINI_API_KEY`의 호환 별칭은 `GOOGLE_GENERATIVE_AI_API_KEY`, 모델 별칭은 `AI_DEFAULT_MODEL`이다. 이 도움 기능은 기본적으로 Engine에 구성된 모델을 사용하고 실제 호출 모델명을 기록한다. Gemini API는 API 프로젝트의 자격·할당량·결제를 따른다. 세 클라이언트의 구독이 이 API 호출 비용을 포함한다고 가정하지 않는다. [Gemini API 결제 문서](https://ai.google.dev/gemini-api/docs/billing)에서 실제 프로젝트 상태를 확인한다.
 
-`read`만 부여하면 읽기 전용이다. `goals:write`는 목표 명령, `ai:write`는 후보·검토·Gemini 요청·저장 복구 권한이다. 기존 권한이 필요하면 목록에 병합한다. MCP 설정의 actor/workspace 값으로 권한을 바꿀 수 없고, Hub 서버의 한 actor/workspace 설정을 세 클라이언트가 공유한다. 클라이언트별 별도 사용자 인증을 제공하는 구조는 아니다.
+`read`만 부여하면 읽기 전용이다. `goals:write`는 목표 명령, `ai:write`는 후보·검토·Gemini 요청·저장 복구 권한이다. 기존 권한이 필요하면 목록에 병합한다. MCP 설정의 actor/workspace 값으로 권한을 바꿀 수 없다. 기본은 Hub 서버의 한 actor/workspace 설정을 모든 클라이언트가 공유하고, 클라이언트마다 자기 토큰을 주면(`COM_MOON_AGENT_CLIENT_TOKEN_HASHES`, [MCP README](../packages/mcp-server/README.md#per-client-identity)) receipt의 actor만 클라이언트별로 갈린다. 권한(scope)은 모든 클라이언트가 같다.
 
 ## 데이터베이스 적용
 
@@ -78,7 +78,7 @@ npm run db:migrate -- 20260921_0036_operating_goals.sql 20260921_0037_ai_assista
 
 ```dotenv
 COM_MOON_HUB_URL=http://localhost:3000
-COM_MOON_AGENT_API_TOKEN=<same-agent-token-as-hub>
+COM_MOON_AGENT_API_TOKEN=<Hub와 같은 공용 토큰, 또는 client-token으로 만든 이 클라이언트 전용 토큰>
 ```
 
 Gemini 키·Supabase service-role·공유 webhook 비밀키는 MCP 클라이언트에 필요하지 않다. 등록은 런처 `packages/mcp-server/bin/moonlight-mcp.js` 하나를 절대 경로로 가리키고, 비공개 파일은 `COM_MOON_MCP_ENV_FILE`로 넘긴다. 이 값이 없으면 런처는 Hub `apps/hub/.env.local`을 읽어 쓰기 비밀키까지 싣는다. 아래 경로는 실제 Node 실행 파일·저장소·비공개 환경 파일의 절대 경로로 바꾼다. 기존 서버 목록에 병합하고 전체 파일을 덮어쓰지 않는다. 이 문서는 전역 클라이언트 설정을 자동 변경하지 않는다.

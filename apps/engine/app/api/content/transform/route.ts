@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   try {
     const result = await executeContentTransform(body, { workspaceId, recoverySecret: process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() }, {
       read: fetchSupabaseRowsDetailed, insert: insertSupabaseRecord, update: updateSupabaseRecord,
-      generate: generateGeminiText, provider: getGeminiIntegrationStatus(),
+      generate: (input) => generateGeminiText({ ...input, usageSurface: "content-transform" }), provider: getGeminiIntegrationStatus(),
     });
     const status = ["generated", "duplicate", "unsaved"].includes(result.status) ? 200
       : result.status === "conflict" ? 409 : result.status === "invalid-input" ? 400

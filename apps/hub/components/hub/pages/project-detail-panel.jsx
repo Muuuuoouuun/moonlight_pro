@@ -111,7 +111,7 @@ export function ProjectDetailPanel({
   notesPartial = false, checks = [], syncState, failedSources = [], updateTone = {}, checkTone = {},
   contentTone = {}, orderPending = false, orderResult = null, pendingTodoIds = new Set(),
   taskPartial = false, onClose, onEdit, onToggleTodo, onEditTodo, onCreateTodo, onOpen,
-  onSendOrder, onConsultCouncil, onComplete, onManageDelivery, onArchive,
+  onSendOrder, onConsultCouncil, onComplete, onManageDelivery, onArchive, onRemove,
   onCustomerSaved, onMemo, onOpenMemo, customerInitiallyOpen = false, onCustomerClosed, customerSaving = false, onCustomerPendingChange,
 }) {
   const [tab, setTab] = React.useState('tasks');
@@ -121,6 +121,8 @@ export function ProjectDetailPanel({
   const mainBody = React.useRef(null), savedScroll = React.useRef(0);
   if (!project) return null;
   const doneCount = todos.filter(todo => todo.done).length;
+  const allTasksDone = todos.length > 0 && doneCount === todos.length && !taskPartial;
+  const canReviewCompletion = allTasksDone && !['completed', 'archived'].includes(project.statusKey);
   const failed = new Set(failedSources);
   const displaySummary = project.displaySummary || project.summary || '';
   const displayNextAction = project.displayNextAction || project.nextAction || '';
@@ -139,13 +141,14 @@ export function ProjectDetailPanel({
     <div className="project-focus-top">
       <BrandMark brand={container} size={20} />
       <span className="project-focus-muted project-focus-container">{container?.name || '저장 위치 미정'}</span>
+      <IconButton icon="pencil" size={30} tooltip="프로젝트 편집" disabled={customerSaving} onClick={() => onEdit?.(project)} />
       <IconButton icon="x" size={24} tooltip="상세 닫기" disabled={customerSaving} onClick={onClose} />
     </div>
     <div ref={mainBody} hidden={customerOpen} className="hub-project-detail-body scroll-y project-focus-body">
       <header className="project-focus-identity">
         <h3 className="project-focus-heading">{project.name}</h3>
         <div className="project-focus-actions">
-          <ProjectStatusBadge status={project.status} />
+          <span className="project-focus-muted">프로젝트 상태</span><ProjectStatusBadge status={project.status} />
           <span className="project-focus-due"><Iconed name="calendar" size={12} /><span className="mono project-focus-muted">{project.due || '기한 없음'}</span></span>
         </div>
         <div className="project-focus-customers">
@@ -164,7 +167,7 @@ export function ProjectDetailPanel({
       ]} />
       <div hidden={tab !== 'tasks'} className="project-focus-stack">
         {(todos.length > 0 || taskPartial) && <div className="project-focus-section-heading">
-          <h4>할 일</h4><span className="mono project-focus-muted">{doneCount}/{todos.length} 완료{taskPartial ? ' · 확인된 범위' : ''}</span>
+          <h4>할 일</h4><span className="mono project-focus-muted">{doneCount}/{todos.length} 처리{taskPartial ? ' · 확인된 범위' : ''}</span>
         </div>}
         {todos.map(todo => <div key={todo.id} className="project-focus-task">
           <Checkbox checked={todo.done} onChange={(_next, e) => onToggleTodo?.(todo.id, e)} disabled={pendingTodoIds.has(todo.id)} size={16} label={`${todo.done ? '다시 열기' : '완료'}: ${todo.title}`} />
@@ -175,7 +178,10 @@ export function ProjectDetailPanel({
           <span className="mono project-focus-muted">{todo.due}</span>
         </div>)}
         {!todos.length && <p className="project-focus-muted">{taskPartial ? '할 일을 모두 확인하지 못했어요.' : '할 일을 추가해 다음 행동을 이어가세요.'}</p>}
-        <Button variant="primary" icon="plus" onClick={() => onCreateTodo?.(project.id)}>할 일 추가</Button>
+        {canReviewCompletion && <p className="project-focus-muted">할 일을 모두 처리했습니다. 결과를 확인하면 프로젝트를 완료할 수 있습니다.</p>}
+        {canReviewCompletion
+          ? <Button variant="primary" icon="check" onClick={() => onComplete?.(project)}>결과 확인하고 완료 검토</Button>
+          : <Button variant="primary" icon="plus" onClick={() => onCreateTodo?.(project.id)}>할 일 추가</Button>}
         <details className="project-focus-details"><summary>목표·프로젝트 정보</summary><div className="project-focus-stack">
           <section><h4>목표 결과</h4><p>{displaySummary || '아직 목표 결과를 정하지 않았어요.'}</p></section>
           <ProjectProgressGauge progress={project.displayProgress} ariaLabel={`${project.name} 진척`} />
@@ -214,12 +220,13 @@ export function ProjectDetailPanel({
     </div>}
     <div hidden={customerOpen} className="hub-project-detail-actions project-focus-footer">
       <div className="project-focus-actions">
-        <Button variant="ghost" size="sm" onClick={() => onEdit?.(project)}>프로젝트 편집</Button>
-        <Button variant="outline" size="sm" onClick={() => onOpen?.(project)}>작업 관리</Button>
+        <Button variant="outline" size="sm" onClick={() => onOpen?.(project)}>작업 목록 열기</Button>
       </div>
       <details className="project-focus-details"><summary>더 보기</summary><div className="project-focus-actions">
-        <Button variant="ghost" size="sm" onClick={() => onComplete?.(project)}>{project.statusKey === 'completed' ? '다시 열기' : '완료'}</Button>
-        <Button variant="ghost" size="sm" onClick={() => onArchive?.(project)}>{project.statusKey === 'archived' ? '보관 해제' : '보관'}</Button>
+        {!canReviewCompletion && project.statusKey !== 'archived' && <Button variant="ghost" size="sm" onClick={() => onComplete?.(project)}>{project.statusKey === 'completed' ? '다시 열기' : '완료 검토'}</Button>}
+        {project.statusKey === 'archived'
+          ? <Button variant="ghost" size="sm" onClick={() => onArchive?.(project)}>보관 해제</Button>
+          : <Button variant="ghost" size="sm" onClick={() => onRemove?.(project)}>목록에서 제거</Button>}
         <Button variant="ghost" size="sm" onClick={() => onConsultCouncil?.(project)}>Council 조언</Button>
         <Button variant="ghost" size="sm" disabled={orderPending} onClick={() => onSendOrder?.(project)}>{orderPending ? '전송 중…' : '주문 보내기'}</Button>
       </div></details>

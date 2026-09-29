@@ -11,16 +11,10 @@ import { refreshContentLedger } from '../use-content-ledger';
 import { createStudioSaveQueue, isDefinitiveStudioRejection } from '@/lib/content-studio-save-queue';
 import { readStudioMirror, readStudioDocumentMirror, writeStudioMirror } from '@/lib/content-studio-storage';
 import { resolveStudioBrandId, studioDocumentQuery } from '@/lib/content-studio-routing';
+import { postStudio } from './content-studio-api';
 
-export async function postStudio(path, body) {
-  const response = await fetch('/api/hub/content/' + path, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-    signal: AbortSignal.timeout(path === 'transform' ? 65000 : 20000),
-  });
-  const result = await response.json();
-  if (!result || typeof result.status !== 'string') throw new Error('서버 응답을 확인하지 못했습니다. 같은 요청으로 다시 확인해주세요.');
-  return result;
-}
+export { postStudio };
+
 async function getDetail(contentId) {
   const response = await fetch('/api/hub/content/workflow?item=' + encodeURIComponent(contentId), { cache: 'no-store', signal: AbortSignal.timeout(15000) });
   const result = await response.json();
@@ -238,15 +232,17 @@ export function useContentStudio(workspace) {
     } catch (error) { if (epoch.current === documentEpoch) update({ saveMessage: error.message }); }
     finally { if (epoch.current === documentEpoch) update({ busy: false }); }
   };
+  // 새 초안을 열었으면 true. 현재 글의 저장이 확인되지 않으면 열지 않고 false — 호출처가 이유를 알린다.
   const newDraft = async () => {
     const state = stateRef.current;
-    if ((!state.ready && !state.loadError) || state.busy || state.recovery || state.pendingMutation) return;
+    if ((!state.ready && !state.loadError) || state.busy || state.recovery || state.pendingMutation) return false;
     const documentEpoch = epoch.current, brand = state.draft.brandId;
     update({ busy: true });
     try {
-      if ((state.dirty || state.pendingSave) && !await save()) return;
-      if (epoch.current !== documentEpoch) return;
+      if ((state.dirty || state.pendingSave) && !await save()) return false;
+      if (epoch.current !== documentEpoch) return false;
       adopt(emptyStudioDraft(brand), null, false, { newIdentity: true });
+      return true;
     } finally { if (epoch.current === documentEpoch) update({ busy: false }); }
   };
   const refreshHistory = async (more = false) => {
@@ -335,8 +331,9 @@ export function useContentStudio(workspace) {
     } catch { if (current()) update({ saveMessage: '처리 결과를 확인하지 못했습니다. 이전 작업 상태 확인으로 같은 요청을 재개해주세요.', saveState: 'error' }); return null; }
     finally { if (current()) update({ busy: false }); }
   };
+  // 발행 기록: { ok } 또는 { ok: false, message }. 오류는 발행 드로어가 보여 준다(페이지 저장 알림과 섞지 않는다).
   const recordPublication = async (url, date) => {
-    if (!stateRef.current.ready || stateRef.current.busy || stateRef.current.recovery || stateRef.current.pendingMutation) return false;
+    if (!stateRef.current.ready || stateRef.current.busy || stateRef.current.recovery || stateRef.current.pendingMutation) return { ok: false, message: '진행 중인 작업이 끝난 뒤 다시 시도해주세요.' };
     const documentEpoch = epoch.current;
     const current = () => documentEpoch === epoch.current;
     update({ busy: true });
@@ -346,23 +343,23 @@ export function useContentStudio(workspace) {
       if (!command) {
         const fields = manualPublicationFields(url, date);
         const saved = await save();
-        if (!current() || !saved?.variantId) return false;
+        if (!current() || !saved?.variantId) return { ok: false, message: current() ? '글을 먼저 서버에 저장해야 발행을 기록할 수 있습니다.' : '' };
         command = { action: 'record_publication', contentId: saved.contentId, variantId: saved.variantId,
           logId: crypto.randomUUID(), channel: saved.channel, ...fields };
         publicationAttempt.current = command;
       }
       const response = await fetch('/api/hub/content', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(command), signal: AbortSignal.timeout(20000) });
       const result = await response.json();
-      if (!current()) return false;
+      if (!current()) return { ok: false, message: '' };
       if (!response.ok || !['saved', 'duplicate'].includes(result.status)) {
         if (response.status === 400) publicationAttempt.current = null;
         throw new Error(result.error || '발행 기록을 저장하지 못했습니다. 같은 기록으로 다시 확인해주세요.');
       }
       const ledger = await refreshContentLedger();
-      if (!current()) return false;
+      if (!current()) return { ok: false, message: '' };
       if (!publicationIsVerified(ledger, command)) throw new Error('발행 기록을 다시 확인하지 못했습니다. 같은 기록으로 재시도해주세요.');
       const detail = await getDetail(command.contentId);
-      if (!current()) return false;
+      if (!current()) return { ok: false, message: '' };
       // Refresh exact versions after publication so the next edit does not use stale timestamps.
       const latest = draftFromDetail(detail, command.variantId);
       const dirty = stateRef.current.dirty;
@@ -371,10 +368,9 @@ export function useContentStudio(workspace) {
       adopt(draft, detail, dirty);
       publicationAttempt.current = null;
       window.dispatchEvent(new Event('moonlight:content-saved'));
-      return true;
+      return { ok: true };
     } catch (error) {
-      if (current()) update({ saveMessage: error.message });
-      return false;
+      return { ok: false, message: current() ? error.message : '' };
     } finally { if (current()) update({ busy: false }); }
   };
   return { ...state, edit, save, recordPublication, switchVariant, newDraft, refreshHistory, compareLatest, recover, mutate, retryLoad,

@@ -119,6 +119,7 @@ test("keeps raw project fields separate from latest-update display fallbacks", (
     dueAt: "2026-08-01T00:00:00.000Z",
     owner: "Me",
     tag: "customer",
+    genre: null,
     tasks: 3,
     done: 1,
     changes: 2,
@@ -243,6 +244,7 @@ test("builds exact selector and optional referenced-relation fetch plans", () =>
     areas: {
       table: "areas",
       options: {
+        select: "id,name,slug,status",
         order: "name.asc",
         filters: [["status", "eq.active"]],
       },
@@ -250,6 +252,7 @@ test("builds exact selector and optional referenced-relation fetch plans", () =>
     leads: {
       table: "leads",
       options: {
+        select: "id,name,status",
         limit: 160,
         order: "name.asc",
         filters: [["status", "in.(new,qualified,nurturing,won)"]],
@@ -258,6 +261,7 @@ test("builds exact selector and optional referenced-relation fetch plans", () =>
     accounts: {
       table: "customer_accounts",
       options: {
+        select: "id,name,status",
         limit: 80,
         order: "name.asc",
         filters: [["status", "in.(active,paused)"]],
@@ -273,6 +277,7 @@ test("builds exact selector and optional referenced-relation fetch plans", () =>
     areas: {
       table: "areas",
       options: {
+        select: "id,name,slug,status",
         limit: 2,
         filters: [["id", "in.(area-a,area-b)"]],
       },
@@ -280,6 +285,7 @@ test("builds exact selector and optional referenced-relation fetch plans", () =>
     leads: {
       table: "leads",
       options: {
+        select: "id,name,status",
         limit: 1,
         filters: [["id", "in.(lead-a)"]],
       },
@@ -287,6 +293,7 @@ test("builds exact selector and optional referenced-relation fetch plans", () =>
     accounts: {
       table: "customer_accounts",
       options: {
+        select: "id,name,status",
         limit: 1,
         filters: [["id", "in.(account-a)"]],
       },
@@ -298,6 +305,7 @@ test("builds exact selector and optional referenced-relation fetch plans", () =>
     areas: {
       table: "areas",
       options: {
+        select: "id,name,slug,status",
         limit: 1,
         filters: [["id", "in.(area-only)"]],
       },
@@ -329,6 +337,7 @@ test("fetches referenced relations in parallel scope and names unavailable looku
     {
       table: "areas",
       options: {
+        select: "id,name,slug,status",
         limit: 1,
         filters: [
           ["workspace_id", "eq.workspace-1"],
@@ -339,6 +348,7 @@ test("fetches referenced relations in parallel scope and names unavailable looku
     {
       table: "leads",
       options: {
+        select: "id,name,status",
         limit: 1,
         filters: [
           ["workspace_id", "eq.workspace-1"],
@@ -349,6 +359,7 @@ test("fetches referenced relations in parallel scope and names unavailable looku
     {
       table: "customer_accounts",
       options: {
+        select: "id,name,status",
         limit: 1,
         filters: [
           ["workspace_id", "eq.workspace-1"],

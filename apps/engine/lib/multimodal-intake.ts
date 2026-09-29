@@ -147,7 +147,7 @@ const SYSTEM_INSTRUCTION = `당신은 1인 운영자의 개인 운영체제(Moon
 
 export async function extractMultimodalIntake(
   input: MultimodalIntakeInput,
-  generateFn = generateGeminiText,
+  generateFn: typeof generateGeminiText = input => generateGeminiText({ ...input, usageSurface: input.usageSurface || 'multimodal-intake' }),
 ): Promise<{ ok: boolean; status: number | null; data: MultimodalIntakeResult | null; error?: string }> {
   const invalid = validateInput(input);
   if (invalid) return { ok: false, data: null, ...invalid };

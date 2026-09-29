@@ -39,6 +39,26 @@ export type TaskFocusToggle = { on: boolean; date: string | null };
 const PROJECT_STATUSES = new Set(["draft", "active", "blocked", "completed", "archived"]);
 const TASK_STATUSES = new Set(["inbox", "todo", "doing", "blocked", "done"]);
 const PRIORITIES = new Set(["low", "medium", "high", "critical"]);
+const PROJECT_GENRES = new Set(["company", "sales", "it", "content", "other"]);
+// 제품에 붙는 일의 종류(제품 운영실 §0): 신기능·보수·연락. 보수는 반복 주기를 가질 수 있다.
+const PROJECT_WORK_TYPES = new Set(["feature", "maintenance", "contact"]);
+const PROJECT_RECURRENCES = new Set(["weekly", "monthly", "quarterly", "yearly"]);
+
+// workType/recurrence 입력 → meta 조각. null·""는 지운다. 잘못된 값은 오류 코드.
+function workMeta(input: Record<string, unknown>): { ok: true; meta: Record<string, unknown> } | { ok: false; reason: string } {
+  const meta: Record<string, unknown> = {};
+  if (has(input, "workType")) {
+    const raw = input.workType === null || input.workType === "" ? null : text(input.workType, 20).toLowerCase();
+    if (raw !== null && !PROJECT_WORK_TYPES.has(raw)) return { ok: false, reason: "invalid-work-type" };
+    meta.work_type = raw;
+  }
+  if (has(input, "recurrence")) {
+    const raw = input.recurrence === null || input.recurrence === "" ? null : text(input.recurrence, 20).toLowerCase();
+    if (raw !== null && !PROJECT_RECURRENCES.has(raw)) return { ok: false, reason: "invalid-recurrence" };
+    meta.recurrence = raw;
+  }
+  return { ok: true, meta };
+}
 // PMS container (brand) taxonomy — mirrors the Hub 2026-07-15 spec §4.1.
 const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
 const BRAND_ORG_SCOPES = new Set(["classin", "personal"]);
@@ -177,6 +197,8 @@ export function normalizePmsCommand(
     // A/S graduation: a closed deal can spawn its 판매 후 실행 follow-up project. The origin
     // deal id lives in meta so the project can point back at the sale that created it.
     const dealId = nullableUuidField(input, "dealId", "deal_id");
+    // 제품 아래에 붙는 프로젝트(2026-09-24 제품 렌즈 §3) — 없으면 null.
+    const productId = nullableUuidField(input, "productId", "product_id");
     const entityRef = projectEntityRef(input.entityRef ?? input.entity_ref);
     const orgScope = text(input.orgScope ?? input.org_scope, 30).toLowerCase();
     const status = text(input.status || "active", 30).toLowerCase();
@@ -191,12 +213,15 @@ export function normalizePmsCommand(
     }
     const hasInitialProgress = has(input, "progress");
     const initialProgress = hasInitialProgress ? progress(input.progress) : null;
+    const work = workMeta(input);
+    if (!work.ok) return { ok: false, reason: work.reason };
 
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!areaId) return { ok: false, reason: "invalid-area-id" };
     if (!title) return { ok: false, reason: "missing-title" };
     if (!brandId.ok) return { ok: false, reason: "invalid-brand-id" };
     if (!dealId.ok) return { ok: false, reason: "invalid-deal-id" };
+    if (!productId.ok) return { ok: false, reason: "invalid-product-id" };
     if (!entityRef.ok) return { ok: false, reason: "invalid-entity-ref" };
     if (!BRAND_ORG_SCOPES.has(orgScope)) return { ok: false, reason: "invalid-org-scope" };
     if (!PROJECT_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
@@ -215,6 +240,7 @@ export function normalizePmsCommand(
         workspace_id: workspaceId,
         area_id: areaId,
         brand_id: brandId.value,
+        ...(productId.value ? { product_id: productId.value } : {}),
         lead_id: entityRef.leadId,
         customer_account_id: entityRef.customerAccountId,
         owner_id: ownerId,
@@ -230,6 +256,7 @@ export function normalizePmsCommand(
           source: text(input.source || "manual", 80),
           org_scope: orgScope,
           ...(dealId.value ? { origin_deal_id: dealId.value } : {}),
+          ...Object.fromEntries(Object.entries(work.meta).filter(([, value]) => value !== null)),
           ...(delivery ? { delivery: { ...delivery, originalDueAt: dueAt.value, history: [] } } : {}),
         },
       },
@@ -413,6 +440,11 @@ export function normalizePmsCommand(
       if (!brandId.ok) return { ok: false, reason: "invalid-brand-id" };
       patch.brand_id = brandId.value;
     }
+    if (has(input, "productId") || has(input, "product_id")) {
+      const productId = nullableUuidField(input, "productId", "product_id");
+      if (!productId.ok) return { ok: false, reason: "invalid-product-id" };
+      patch.product_id = productId.value;
+    }
     if (has(input, "entityRef") || has(input, "entity_ref")) {
       const entityRef = projectEntityRef(input.entityRef ?? input.entity_ref);
       if (!entityRef.ok) return { ok: false, reason: "invalid-entity-ref" };
@@ -429,7 +461,8 @@ export function normalizePmsCommand(
       const status = text(input.status, 30).toLowerCase();
       if (!PROJECT_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
       patch.status = status;
-      patch.completed_at = status === "completed" ? now.value : null;
+      // Archiving hides the project without erasing its completion history.
+      if (status !== "archived") patch.completed_at = status === "completed" ? now.value : null;
     }
     if (has(input, "priority")) {
       const priority = text(input.priority, 30).toLowerCase();
@@ -450,12 +483,24 @@ export function normalizePmsCommand(
       patch.due_at = dueAt.value;
     }
 
+    // 프로젝트 장르(회사·세일즈·IT·콘텐츠·기타) — 목록 모노그램의 은은한 색 구분용 한 키.
+    // null이면 장르 해제. 서비스가 현재 meta와 병합하므로 다른 meta 키는 보존된다.
+    if (has(input, "genre")) {
+      const raw = input.genre === null || input.genre === "" ? null : text(input.genre, 20).toLowerCase();
+      if (raw !== null && !PROJECT_GENRES.has(raw)) return { ok: false, reason: "invalid-genre" };
+      patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), genre: raw };
+    }
+    if (has(input, "workType") || has(input, "recurrence")) {
+      const work = workMeta(input);
+      if (!work.ok) return { ok: false, reason: work.reason };
+      patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), ...work.meta };
+    }
     if (has(input, "delivery")) {
       const delivery = parseDelivery(input.delivery);
       if (!delivery) return { ok: false, reason: "invalid-delivery-plan" };
       const issue = validateDelivery(delivery, patch.due_at);
       if (issue) return { ok: false, reason: issue };
-      patch.meta = { delivery };
+      patch.meta = { ...(patch.meta as Record<string, unknown> | undefined), delivery };
     }
     if (has(input, "deliveryEvent")) {
       if (!["start", "prototype", "pause", "resume"].includes(String(input.deliveryEvent))) return { ok: false, reason: "invalid-delivery-event" };

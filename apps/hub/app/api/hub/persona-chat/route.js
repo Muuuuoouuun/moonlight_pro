@@ -5,6 +5,7 @@ import { recordAgentRun } from "@/lib/sales-os/agent-runs";
 import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
 import { fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
+import { isGuruLens } from "@/components/hub/persona-client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ function resolveSharedSecret() {
   return process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() || "";
 }
 
-async function callEngine(body) {
+async function callEngine(body, { attempts = 2 } = {}) {
   const engineUrl = resolveEngineUrl();
 
   if (!engineUrl) {
@@ -35,35 +36,54 @@ async function callEngine(body) {
     headers["x-com-moon-shared-secret"] = sharedSecret;
   }
 
-  let response;
-  try {
-    response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      cache: "no-store",
-      signal: AbortSignal.timeout(60_000),
-      redirect: "error",
-    });
-  } catch {
-    return {
-      status: 502,
-      data: { status: "error", reason: "engine-request-failed" },
-    };
+  let lastStatus = 502;
+  let lastData = { status: "error", reason: "engine-request-failed" };
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        cache: "no-store",
+        signal: AbortSignal.timeout(60_000),
+        redirect: "error",
+      });
+
+      lastStatus = response.status;
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = text || null;
+      }
+      lastData = data;
+
+      if (response.status !== 502 && response.status !== 503) {
+        return { status: response.status, data };
+      }
+    } catch {
+      lastStatus = 502;
+      lastData = { status: "error", reason: "engine-request-failed" };
+    }
+
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
   }
 
-  const text = await response.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = text || null;
-  }
-  return { status: response.status, data };
+  return { status: lastStatus, data: lastData };
 }
 
 // Assemble lightweight snapshot context based on persona and mode
 async function assemblePersonaContext({ personaId, mode }) {
+  // These requests describe one contact in draft (or an explicit context).
+  // A recent-deals snapshot can introduce a different customer into the answer.
+  if (mode === "outreach-draft" || mode === "extract-contact-outcome") {
+    return null;
+  }
+
   // If brand-related or content/production
   if (personaId === "content" || personaId === "production" || personaId === "council") {
     try {
@@ -131,13 +151,19 @@ export async function POST(req) {
   const input = parsed.data || {};
   const personaId = typeof input.personaId === "string" ? input.personaId.trim() : "order";
   const mode = typeof input.mode === "string" ? input.mode.trim() : "advice";
-  const lens = typeof input.lens === "string" ? input.lens.trim() || null : null;
+  // Engine이 아는 Guru 렌즈만 넘긴다. 모르는 값을 그대로 보내면 Engine은 조용히 버리는데
+  // 실행 기록에는 `lens=…`가 적용된 것처럼 남았다(예전 카네기·힐).
+  const requestedLens = typeof input.lens === "string" ? input.lens.trim() : "";
+  const lens = isGuruLens(requestedLens) ? requestedLens : null;
   const message = typeof input.message === "string" ? input.message : null;
   const draft = typeof input.draft === "string" ? input.draft : null;
+  const conversationOnly = input.conversationOnly === true;
   const customContext = input.context && typeof input.context === "object" ? input.context : null;
 
-  const context = customContext || (await assemblePersonaContext({ personaId, mode }));
-  const result = await callEngine({ personaId, mode, lens, message, draft, context });
+  const context = conversationOnly
+    ? customContext || { source: "operator-provided", scope: "unscoped" }
+    : customContext || (await assemblePersonaContext({ personaId, mode }));
+  const result = await callEngine({ personaId, mode, lens, message, draft, context, conversationOnly });
 
   // Best-effort episodic memory logging
   let run = { persisted: false, id: null };

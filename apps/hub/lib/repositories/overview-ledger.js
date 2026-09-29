@@ -1,3 +1,4 @@
+import { resolveAutomationPolicy } from "../automation-policy.js";
 import {
   fetchSupabaseRows,
   fetchSupabaseRowsDetailed,
@@ -410,9 +411,10 @@ function mapAutomationDomain({ workspaceId, automationRows, runRows, webhookRead
   }
   const automations = visibleRows(automationRows, "automations");
   const automationById = new Map(automations.map((row) => [row.id, row]));
+  const automationByKey = new Map(automations.filter(row => row.meta?.key).map(row => [row.meta.key, row]));
   const runs = visibleRows(runRows, "automation_runs").map((row) => ({
     id: row.id,
-    flow: automationById.get(row.automation_id)?.name || "System",
+    flow: resolveAutomationPolicy(automationById.get(row.automation_id) || automationByKey.get(row.output_payload?.key), null, row.output_payload?.key).name,
     statusKey: row.status || "queued",
     detail: compactPayloadValue(row.error_message || row.output_payload?.summary || row.output_payload?.detail || row.output_payload?.message || "ok"),
     startedAt: row.created_at,
@@ -434,7 +436,7 @@ function mapAutomationDomain({ workspaceId, automationRows, runRows, webhookRead
         ? recentRuns.filter((row) => row.status === "failure").length
         : null,
       activeAutomations: Array.isArray(automationRows)
-        ? automations.filter((row) => row.status === "active").length
+        ? automations.filter((row) => resolveAutomationPolicy(row).statusKey === "active").length
         : null,
       webhookEventsToday: Number.isFinite(webhookRead.count) ? webhookRead.count : null,
       integrationsConnected: Array.isArray(integrationRows)
@@ -648,7 +650,7 @@ export async function getOverviewLedger({ now = new Date() } = {}) {
       filters: withWorkspaceFilter([["stage", inFilter(LEGACY_DB_STAGE_VALUES)]]),
     }),
     fetchSupabaseRows("automations", {
-      select: "id,name,status",
+      select: "id,name,status,meta",
       limit: LIMITS.automations + 1,
       filters: withWorkspaceFilter([["status", inFilter(AUTOMATION_STATUSES)]]),
     }),

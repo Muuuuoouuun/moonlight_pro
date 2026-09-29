@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>원고 작성 — 형식 통합 화면</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans KR',system-ui,sans-serif;color:#1E2228;background:#F7F8FA}
+a{color:#5274A8}a:hover{color:#3E5C8C}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 28px 40px; display: flex; flex-direction: column; gap: 16px; background: #F7F8FA; font-family: 'IBM Plex Sans KR', system-ui, sans-serif; color: #1E2228;">
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+    <div><h2 style="margin: 0; font-size: 20px; font-weight: 500;">원고 작성</h2><div style="font-size: 12px; color: #545C66; margin-top: 4px;">{{fmtLabel}} · class.moon · 원문: 수업 끝 3분의 힘</div></div>
+    <div style="display: flex; gap: 16px; align-items: center; font-size: 12.5px; color: #545C66;"><span>저장됨</span><span>+ 새 글</span><span>··· 더보기</span></div>
+  </div>
+
+  <div role="tablist" aria-label="형식" style="display: flex; gap: 4px; padding: 4px; background: #EEF0F3; border-radius: 10px; align-self: flex-start;">
+    <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+      <button type="button" role="tab" aria-selected="{{t.selected}}" onClick="{{t.pick}}" style="{{t.style}}">{{t.label}}</button>
+    </sc-for>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; flex-grow: 1; min-height: 0;">
+
+    <div style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px 0; display: flex; flex-direction: column; gap: 14px; min-width: 0;">
+      <div style="font-size: 17px; font-weight: 500;">복습이 안 되는 진짜 이유</div>
+      <div style="font-size: 13px; color: #737C86; display: flex; gap: 8px;"><span>›</span><span>원문 메모</span><span style="margin-left: auto;">모든 형식이 함께 씀</span></div>
+
+      <div style="flex-grow: 1; min-height: 0; display: flex; flex-direction: column;">
+        <sc-if value="{{isThread}}" hint-placeholder-val="{{true}}">
+          <div style="display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.8;">
+            <div style="display: flex; gap: 12px;"><span style="flex-shrink: 0; width: 24px; height: 24px; border: 1px solid #DCE0E5; border-radius: 50%; font-size: 12px; color: #737C86; display: flex; align-items: center; justify-content: center;">1</span><span>복습이 어려운 이유는 의지가 아니라 시작점이 없어서다.</span></div>
+            <div style="display: flex; gap: 12px;"><span style="flex-shrink: 0; width: 24px; height: 24px; border: 1px solid #DCE0E5; border-radius: 50%; font-size: 12px; color: #737C86; display: flex; align-items: center; justify-content: center;">2</span><span>오늘 수업이 끝나고 한 학생이 물었다. "어디서부터 다시 봐야 해요?"</span></div>
+            <div style="display: flex; gap: 12px;"><span style="flex-shrink: 0; width: 24px; height: 24px; border: 1px solid #DCE0E5; border-radius: 50%; font-size: 12px; color: #737C86; display: flex; align-items: center; justify-content: center;">3</span><span>그래서 수업 마지막 3분을 '다음에 볼 한 줄'을 정하는 시간으로 바꿨다.</span></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{isCard}}" hint-placeholder-val="{{false}}">
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+            <div style="aspect-ratio: 4 / 5; border-radius: 10px; background: #1E2228; color: #FFFFFF; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;"><span style="font-size: 11px; opacity: 0.7;">1 · 표지</span><span style="font-size: 16px; font-weight: 600; line-height: 1.35;">복습 안 하는 반, 3분이면 바뀝니다</span></div>
+            <div style="aspect-ratio: 4 / 5; border-radius: 10px; border: 1px solid #E9ECEF; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; color: #737C86;">2 · 문제</span><span style="font-size: 14px; font-weight: 600;">"어디서부터 봐요?"</span></div>
+            <div style="aspect-ratio: 4 / 5; border-radius: 10px; border: 1px solid #E9ECEF; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 11px; color: #737C86;">3 · 방법</span><span style="font-size: 14px; font-weight: 600;">마지막 3분은 '다음에 볼 한 줄'</span></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{isYt}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 0; font-size: 13px; line-height: 1.6;">
+            <div style="display: flex; gap: 3px; height: 10px; margin-bottom: 12px;"><span style="flex-grow: 3; border-radius: 3px; background: #1E2228;"></span><span style="flex-grow: 10; border-radius: 3px; background: #545C66;"></span><span style="flex-grow: 30; border-radius: 3px; background: #9AA2AB;"></span><span style="flex-grow: 11; border-radius: 3px; background: #C9CED5;"></span></div>
+            <div style="display: grid; grid-template-columns: 52px 140px minmax(0, 1fr) 36px; gap: 12px; padding: 10px 0; border-top: 1px solid #E9ECEF;"><span style="font-weight: 600;">훅</span><span style="color: #545C66;">얼굴 클로즈업</span><span>"복습 안 하는 애들, 의지 문제 아닙니다."</span><span style="font-family: 'JetBrains Mono', monospace; text-align: right;">3</span></div>
+            <div style="display: grid; grid-template-columns: 52px 140px minmax(0, 1fr) 36px; gap: 12px; padding: 10px 0; border-top: 1px solid #E9ECEF;"><span style="font-weight: 600;">문제</span><span style="color: #545C66;">질문 자막</span><span>한 학생이 물었어요. "어디서부터 봐요?"</span><span style="font-family: 'JetBrains Mono', monospace; text-align: right;">10</span></div>
+            <div style="display: grid; grid-template-columns: 52px 140px minmax(0, 1fr) 36px; gap: 12px; padding: 10px 0; border-top: 1px solid #E9ECEF;"><span style="font-weight: 600;">본론</span><span style="color: #545C66;">타이머 3:00</span><span>마지막 3분, 다음에 볼 한 줄을 같이 정해요.</span><span style="font-family: 'JetBrains Mono', monospace; text-align: right;">30</span></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{isCopy}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 0; font-size: 14px;">
+            <div style="display: grid; grid-template-columns: 72px minmax(0, 1fr) 40px; gap: 12px; padding: 12px 0; border-top: 1px solid #E9ECEF;"><span style="font-size: 12px; color: #545C66;">질문형</span><span>복습, 왜 안 하는지 물어보셨나요?</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right;">18</span></div>
+            <div style="display: grid; grid-template-columns: 72px minmax(0, 1fr) 40px; gap: 12px; padding: 12px 0; border-top: 1px solid #E9ECEF;"><span style="font-size: 12px; color: #545C66;">숫자형</span><span>수업 끝 3분, 복습이 시작되는 시간</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right;">18</span></div>
+            <div style="display: grid; grid-template-columns: 72px minmax(0, 1fr) 40px; gap: 12px; padding: 12px 0; border-top: 1px solid #E9ECEF;"><span style="font-size: 12px; color: #545C66;">반전형</span><span>의지가 아니라 시작점이 없었습니다</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right;">16</span></div>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #545C66;"><span>›</span><span>AI 요청 · 템플릿</span><span style="margin-left: auto; padding: 2px 8px; border-radius: 999px; background: #F1F3F6;">{{promptSummary}}</span></div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <sc-for list="{{aiActions}}" as="a" hint-placeholder-count="3">
+            <button type="button" style="height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 5 5 1.5-5 1.5L12 16l-1.5-5-5-1.5 5-1.5z"></path></svg>{{a}}</button>
+          </sc-for>
+          <button type="button" style="height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent; background: transparent; font: inherit; font-size: 13px; color: #545C66;">다른 작업 ›</button>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px; align-items: center; padding: 12px 0 16px; border-top: 1px solid #E9ECEF;">
+        <button type="button" style="height: 36px; padding: 0 16px; border-radius: 6px; border: 1px solid #1E2228; background: #1E2228; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 500;">{{copyLabel}}</button>
+        <button type="button" style="height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>예약</button>
+        <button type="button" style="height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 13px;">발행했음</button>
+        <span style="margin-left: auto; font-size: 12px; color: #737C86;">버튼 자리는 모든 형식에서 같습니다</span>
+      </div>
+    </div>
+
+    <aside style="display: flex; flex-direction: column; gap: 14px;">
+      <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 0; font-size: 13px;">
+        <span style="font-size: 15px; font-weight: 600; padding-bottom: 8px;">이 형식의 검사</span>
+        <sc-for list="{{checks}}" as="c" hint-placeholder-count="3">
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid #E9ECEF;"><span>{{c.rule}}</span><span style="{{c.style}}">{{c.state}}</span></div>
+        </sc-for>
+      </section>
+      <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px; font-size: 13px;">
+        <span style="font-size: 15px; font-weight: 600;">AI에 가는 요청</span>
+        <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 6px 8px; line-height: 1.6;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #737C86;">①</span><span><b style="font-weight: 500;">형식 기본</b><br><span style="color: #545C66;">{{basePrompt}}</span></span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #737C86;">②</span><span><b style="font-weight: 500;">브랜드 말투</b><br><span style="color: #545C66;">class.moon · 교무실 톤, 단정한 존댓말</span></span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #737C86;">③</span><span><b style="font-weight: 500;">이번 글</b><br><span style="color: #545C66;">{{promptSummary}}</span></span>
+        </div>
+        <a href="Prompts.dc.html" style="font-size: 12.5px;">프롬프트 전문 보기</a>
+      </section>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { fmt: 'thread' }; }
+  renderVals() {
+    const fmt = this.state.fmt;
+    const F = {
+      thread: { label: '스레드', copy: '복사', ai: ['AI 초안', 'AI 다듬기', '첫 줄 3안'], prompt: '첫 줄은 장면이나 질문 · 한 블록 한 생각 · 행동 하나로 끝',
+        summary: '템플릿: 후킹 스레드', checks: [['블록당 500자', '통과'], ['첫 줄 40자 이내', '통과'], ['행동 한 가지로 끝남', '통과']] },
+      card: { label: '카드뉴스', copy: '문구 전체 복사', ai: ['표지 문구 5안', '캡션·해시태그', '스레드에서 가져오기'], prompt: '표지는 결과 약속 · 장당 한 메시지 · 마지막 장은 저장할 이유',
+        summary: '6장 · 존댓말', checks: [['장당 한 메시지', '통과'], ['제목 18자 이내', '통과'], ['근거 있는 장', '확인 필요']] },
+      yt: { label: '유튜브 원고', copy: '대본 복사', ai: ['훅 5안', '60초로 줄이기', '썸네일 문구 3안'], prompt: '첫 3초에 결론 · 입말 · 화면과 대사 분리 · 댓글 유도',
+        summary: '반말 금지, 교무실 톤', checks: [['총 60초 이내', '54초'], ['훅 3초 이내', '통과'], ['자막 = 대사 요약', '통과']] },
+      copy: { label: '카피라이트', copy: '선택한 1개 복사', ai: ['유형별 5안', '길이 맞추기', '버튼 문구 3안'], prompt: '독자가 얻는 것 하나 · 형용사 대신 장면 · 없는 숫자 금지',
+        summary: '쓸 곳: 인스타 광고', checks: [['25자 이내', '통과'], ['브랜드 금지어', '없음'], ['근거 없는 숫자', '1개']] },
+    };
+    const cur = F[fmt];
+    const tabs = Object.keys(F).map((key) => ({
+      label: F[key].label, selected: key === fmt ? 'true' : 'false',
+      pick: () => this.setState({ fmt: key }),
+      style: 'height: 36px; padding: 0 16px; border-radius: 7px; border: none; font: inherit; font-size: 13px; cursor: pointer; '
+        + (key === fmt ? 'background: #FFFFFF; color: #1E2228; font-weight: 600; box-shadow: 0 1px 2px rgba(20,24,30,0.08);' : 'background: transparent; color: #545C66;'),
+    }));
+    const checks = cur.checks.map(([rule, state]) => ({ rule, state,
+      style: state === '확인 필요' || state === '1개' ? 'color: #545C66; border-bottom: 1px dotted #9AA2AB;' : 'color: #545C66;' }));
+    return { tabs, fmtLabel: cur.label, copyLabel: cur.copy, aiActions: cur.ai, basePrompt: cur.prompt, promptSummary: cur.summary, checks,
+      isThread: fmt === 'thread', isCard: fmt === 'card', isYt: fmt === 'yt', isCopy: fmt === 'copy' };
+  }
+}
+</script>
+</body>
+</html>

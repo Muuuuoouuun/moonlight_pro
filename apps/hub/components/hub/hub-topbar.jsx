@@ -3,6 +3,7 @@
 import React from "react";
 import { Iconed } from "./hub-icons";
 import { IconButton, Button } from "./hub-primitives";
+import { DailyReviewTopButton } from "./daily-review-cue";
 import { pageOwnsTabs, topNavigationForRoute } from "./hub-nav";
 import { InquiryBell } from './inquiry-notifications';
 
@@ -12,7 +13,7 @@ const LABELS = {
   'classin': '클래스인', 'brand': '브랜드', 'pipeline': '업무·파이프라인', 'segments': '세그먼트',
   'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': 'Decisions', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
   'content': 'Content', 'studio': 'Studio', 'queue': 'Queue', 'campaigns': 'Campaigns',
-  'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts', 'followups': 'Follow-ups',
+  'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts', 'followups': '오늘 연락',
   'automations': 'Automations', 'flows': 'Flows', 'email': 'Email', 'webhooks': 'Webhooks', 'runs': 'Runs',
   'agents': 'Agents', 'chat': 'Chat', 'council': 'Council', 'orders': 'Orders',
   'evolution': 'Evolution', 'settings': 'Settings',
@@ -22,16 +23,19 @@ const LABELS = {
   'integrations': 'Integrations', 'activity': 'Activity', 'issues': 'Issues',
 };
 
-export function TopBar({ path, view, scope, onNavigate, theme, themePreference, onTheme, onSidebarOpen, onNew, onQuickCapture, navOpen, menuButtonRef, inquiryNotifications, onAdvisorOpen }) {
+export function TopBar({ path, view, scope, onNavigate, theme, themePreference, onTheme, onSidebarOpen, onNew, onQuickCapture, navOpen, menuButtonRef, inquiryNotifications, onOfficeOpen }) {
   const [deferredMenuOpen, setDeferredMenuOpen] = React.useState(false);
   const deferredMenuRef = React.useRef(null);
   const segments = path.split('/').filter(Boolean);
   const navigation = topNavigationForRoute(path, scope, view);
-  const pageLabel = navigation.activeTab?.label
+  // routeLabel — 탭에서 내려온 화면(Leads·Cases 등)의 제목. 가장 가까운 탭이 켜져도 제목은
+  // 그 화면의 이름으로 두고, 켤 탭이 없어도 "영업·매출 › Cases"로 한 칸 위를 유지한다.
+  const pageLabel = navigation.routeLabel
+    || navigation.activeTab?.label
     || navigation.anchor?.label
     || LABELS[segments[segments.length - 1]]
     || segments[segments.length - 1];
-  const sectionLabel = navigation.activeTab ? navigation.anchor?.label : 'Moonlight';
+  const sectionLabel = (navigation.activeTab || navigation.routeLabel) ? navigation.anchor?.label : 'Moonlight';
   const now = new Date();
   const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
   const m = now.getMonth() + 1, d = now.getDate();
@@ -99,10 +103,12 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
           <span className="mono" style={{ color: 'var(--fg)' }}>{weekday} · {m}/{d} · {hh}:{mm}</span>
         </div>
 
-        {/* AI 어드바이저 코파일럿 (⌘J) */}
-        <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="AI 어드바이저 (⌘J)" onClick={onAdvisorOpen} />
-        {/* 보류 스코프(Agents) 상시 버튼 제거 — 코어 루프(고객 연락)가 그 자리를 갖는다. */}
-        <IconButton className="hub-topbar__secondary" icon="signal" tooltip="고객 연락 열기" onClick={() => onNavigate('dashboard/revenue/followups')} />
+        {/* 하루 리뷰 — 어느 화면에서든 오늘 기록 열기(2026-09-23 지속 루프 설계 §12) */}
+        <DailyReviewTopButton className="hub-topbar__secondary" />
+        {/* Office (⌘J) — 2026-09-23 운영자 확정 */}
+        <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="Office (⌘J)" onClick={onOfficeOpen} />
+        {/* 보류 스코프(Agents) 상시 버튼 제거 — 코어 루프(오늘 연락, 영업·매출 첫 탭)가 그 자리를 갖는다. */}
+        <IconButton className="hub-topbar__secondary" icon="signal" tooltip="오늘 연락 열기" onClick={() => onNavigate('dashboard/revenue/followups')} />
         <IconButton
           icon={themePreference === 'auto' ? 'clock' : theme === 'dark' ? 'moon' : 'sun'}
           tooltip={themePreference === 'auto'
@@ -173,7 +179,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
                   left: 4,
                   background: 'var(--surface)',
                   border: '1px solid var(--line)',
-                  borderRadius: 'var(--r-md)',
+                  borderRadius: 'var(--r)',
                   boxShadow: '0 8px 24px -4px rgba(0,0,0,0.5)',
                   padding: '4px',
                   minWidth: 150,

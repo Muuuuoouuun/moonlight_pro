@@ -2,9 +2,10 @@ import { logEngineRejection } from "./engine-client-log.js";
 
 const SHARED_SECRET_HEADER = "x-com-moon-shared-secret";
 
+// path: 같은 shared-secret 명령 계약을 쓰는 다른 Engine 명령 라우트(제품은 /api/products/command).
 export async function forwardPmsCommand(
   command,
-  { env = process.env, fetchImpl = fetch, logger = console.error } = {},
+  { env = process.env, fetchImpl = fetch, logger = console.error, path = "/api/pms/command" } = {},
 ) {
   const engineUrl = String(env.COM_MOON_ENGINE_URL || "").trim().replace(/\/$/, "");
   const sharedSecret = String(env.COM_MOON_SHARED_WEBHOOK_SECRET || "").trim();
@@ -25,7 +26,7 @@ export async function forwardPmsCommand(
   }
 
   try {
-    const response = await fetchImpl(`${engineUrl}/api/pms/command`, {
+    const response = await fetchImpl(`${engineUrl}${path}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",

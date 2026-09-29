@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { validateGoalCommand, calculateGoalProgress, isGoalDate, isGoalTimestamp, projectObjective } from './index.js';
+import { validateGoalCommand, calculateGoalProgress, isGoalDate, isGoalTimestamp, isGoalUuid, isGoalEntityUuid, projectObjective } from './index.js';
 const id = '11111111-1111-4111-8111-111111111111';
 const command = (action, input, extra = {}) => ({ commandId: id, action, input, ...extra });
 const metric = { name:'납기 누락', unit:'건', role:'guardrail', direction:'decrease', baseline:5, target:0, sourceKey:'manual', objectiveId:id };
@@ -12,6 +12,24 @@ test('validates dates, strict command fields and immutable metric definitions', 
   assert.equal(validateGoalCommand({...command('create_metric', metric), workspaceId:id}).ok, false);
   assert.equal(validateGoalCommand(command('update_objective', {id, scope:'company'}, {expectedRevision:1})).ok, false);
   assert.equal(validateGoalCommand(command('update_objective', {id, title:'변경'})).ok, false);
+});
+test('legacy linked entity UUIDs are supported without relaxing goal-owned IDs or link fields', () => {
+  const legacy = '44444444-4444-4444-4444-444444444441';
+  assert.equal(isGoalEntityUuid(legacy), true);
+  assert.equal(isGoalUuid(legacy), false);
+  for (const action of ['link_entity', 'unlink_entity']) {
+    const input = { objectiveId: id, entityType: 'tasks', entityId: legacy };
+    const payload = command(action, input, { expectedRevision: 1 });
+    assert.equal(validateGoalCommand(payload).ok, true);
+    assert.equal(validateGoalCommand({ ...payload, commandId: legacy }).error, 'invalid-command');
+    assert.equal(validateGoalCommand({ ...payload, input: { ...input, objectiveId: legacy } }).error, 'invalid-link');
+    for (const entityId of ['not-a-uuid', legacy.replaceAll('-', ''), `${legacy},id.eq.anything`, null]) {
+      assert.equal(validateGoalCommand({ ...payload, input: { ...input, entityId } }).error, 'invalid-link');
+    }
+    assert.equal(validateGoalCommand({ ...payload, input: { ...input, workspaceId: id } }).error, 'invalid-link');
+    assert.equal(validateGoalCommand({ ...payload, input: { ...input, entityType: 'workspaces' } }).error, 'invalid-link');
+  }
+  assert.equal(validateGoalCommand(command('archive_metric', { id: legacy }, { expectedRevision: 1 })).error, 'invalid-metric-id');
 });
 test('manual observations require finite numbers and dated safe evidence', () => {
   const input = { metricId:id, value:0, observedAt:'2026-09-21T01:00:00Z', periodStart:'2026-09-01',periodEnd:'2026-09-30',coverage:'complete',evidence:[{label:'원장 확인',href:'/dashboard/work',occurredAt:'2026-09-21T01:00:00Z'}] };

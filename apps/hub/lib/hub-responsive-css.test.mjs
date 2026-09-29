@@ -82,14 +82,16 @@ test("Daily Brief ledger toggle exposes an accessible 44px mobile target", () =>
   assert.match(dailyBriefSource, /id="daily-brief-ledger-statuses"/);
 });
 
-test("Daily Brief quick capture has a real label and announced save state", () => {
+test("Daily Brief quick capture has a real label and announced save state", async () => {
   assert.match(quickCaptureSource, /<form[\s\S]*?aria-label="빠른 입력"/);
   assert.match(quickCaptureSource, /<label[\s\S]*?htmlFor=\{inputId\}/);
   assert.match(quickCaptureSource, /<input[\s\S]*?id=\{inputId\}/);
   assert.match(quickCaptureSource, /aria-live="polite"/);
   assert.match(quickCaptureSource, /aria-pressed=\{hint === "task"\}/);
   assert.match(quickCaptureSource, /aria-pressed=\{hint === "inbox"\}/);
-  assert.match(quickCaptureSource, /fetch\("\/api\/hub\/inbox"/);
+  // 저장 왕복은 데스크톱 위젯과 공유하는 submitQuickCapture가 소유한다(lib/quick-task-capture.js).
+  assert.match(quickCaptureSource, /submitQuickCapture\(session\)/);
+  assert.match(await readFile(new URL("./quick-task-capture.js", import.meta.url), "utf8"), /QUICK_CAPTURE_ENDPOINT = "\/api\/hub\/inbox"/);
   // 첫 화면은 기존 id·클래스를 그대로 넘겨 라벨 연결과 CSS 훅을 유지한다.
   assert.match(dailyBriefSource, /inputId="daily-brief-quick-task"/);
   assert.match(dailyBriefSource, /inputClassName="daily-brief__quick-input"/);

@@ -12,13 +12,17 @@ test('decision certainty uses the shared geometry-based badge', () => {
 
 test('automation status uses lifecycle semantics instead of decorative status colors', () => {
   const source = page('automations');
-  assert.match(source, /<LifecycleBadge state=\{automationLifecycle\(a\.status\)\} label=\{a\.status\}/);
+  assert.match(source, /<LifecycleBadge state=\{automationLifecycle\(a\.status\)\}/);
+  assert.match(source, /Disabled: 'cancelled'/);
+  assert.match(source, /Disabled: '중단'/);
   assert.doesNotMatch(source, /const sTone = \{ Active: 'success', Paused: 'warning', Error: 'danger' \}/);
 });
 
 test('category-only badges are neutral across work lanes, follow-ups, segments and commands', () => {
   assert.match(page('my-work'), /const LANE_TONE = \{ task: 'neutral', deal: 'neutral', event: 'neutral' \}/);
-  assert.match(page('followups'), /const ACT_TONE = Object\.fromEntries\(Object\.keys\(ACT_ICON\)\.map\(\(key\) => \[key, "neutral"\]\)\)/);
+  // 오늘 연락(2026-09-24)은 종류·단계를 색 배지가 아니라 행 안의 직접 라벨로 말한다.
+  assert.doesNotMatch(page('followups'), /tone="(?:info|warning|success|personal|company)"/);
+  assert.match(page('followups'), /const KIND_TAG = \{ lead: "리드", deal: "거래", account: "계약 고객" \}/);
   assert.match(page('segments'), /const STAGE_TONE = \{ New: 'neutral', Contact: 'neutral', Qualified: 'neutral', Lost: 'neutral' \}/);
   assert.doesNotMatch(page('evolution-settings'), /dest: '[^']+',\s+tone: '(?:info|warning|success|danger)'/);
 });
@@ -37,14 +41,16 @@ test('urgent rails stay one pixel while non-urgent timing remains neutral', () =
   // 내 작업의 레일은 기한 버킷(dueBucket)을 따른다 — 오늘 3개(`focus` 버킷)로 고른 행도
   // 지난 기한이면 빨간 1px 레일을 잃지 않는다(2026-09-20 §6.2, workflow-os-a).
   assert.match(myWork, /dueBucket === 'overdue' \? 'inset 1px 0 0 var\(--danger\)'/);
-  // 주간 렌즈 상단의 '기한 지남' 집계도 같은 기한 버킷을 읽는다 — 옛 `i.bucket`만 보면 오늘 3개로
-  // 고른 지난 기한 할 일이 주간 렌즈의 유일한 노출 지점에서 사라진다.
-  assert.match(myWork, /const overdue = items\.filter\(\(i\) => \(i\.dueBucket \|\| i\.bucket\) === 'overdue'\);/);
-  // 고객 연락의 레일은 2026-09-21부터 예산이 걸려 있다: 어긴 약속 상단 MAX_DANGER_RAILS개만
-  // 레일을 받고 나머지는 시계 글리프 + 직접 라벨로 같은 사실을 말한다(§5.3 red budget).
+  // 오늘 3개는 원래 기한을 보존하되, 명시적으로 해제한 과거 알림은 레일과 주간 집계에서 뺀다.
+  assert.match(myWork, /const visibleDueBucket = \(item\) => item\.deadlineAlertSuppressed \? 'later' : \(item\.dueBucket \|\| item\.bucket\);/);
+  assert.match(myWork, /const overdue = items\.filter\(\(i\) => visibleDueBucket\(i\) === 'overdue'\);/);
+  // 오늘 연락의 레일은 2026-09-21부터 예산이 걸려 있다: 놓친 약속 상단 MAX_DANGER_RAILS개만
+  // 레일을 받고 나머지는 시계 글리프 + 직접 라벨("N일 지남")로 같은 사실을 말한다(§5.3 red budget).
   assert.match(followups, /boxShadow: rail \? "inset 1px 0 0 var\(--danger\)" : undefined/);
-  assert.match(followups, /rail=\{group\.key === "missed" && index < MAX_DANGER_RAILS\}/);
-  assert.match(followups, /item\.bucket === "overdue" && !rail/);
+  assert.match(followups, /rail=\{rails && index < MAX_DANGER_RAILS\}/);
+  assert.match(followups, /renderRows\(missed, "missed", \{ rails: true \}\)/);
+  // 레일 밖의 '지남'은 빨강이 아니다 — 글리프 + 라벨만(data-urgent는 레일 행에만).
+  assert.match(followups, /data-urgent=\{rail \? "true" : undefined\}/);
   assert.doesNotMatch(followups, /inset 2px 0 0/);
 });
 
@@ -54,16 +60,23 @@ test('the follow-up queue puts broken promises first and folds the watch list aw
   // 묶음 정의는 순수 모듈 하나 — 페이지가 저장소 모듈을 import하면 server-read/write가
   // 클라이언트 청크로 끌려온다.
   assert.match(groups, /key: "missed"[\s\S]*?key: "today"[\s\S]*?key: "rest"/);
-  assert.match(followups, /groupFollowups\(visible\)/);
+  assert.match(followups, /groupFollowups\(items\)/);
+  // 화면 순서: 놓친 약속 → 기록할까요 → 오늘 약속 → 접힌 나머지(<details>).
+  const order = ['aria-label="놓친 약속"', '<RecordCandidates', 'aria-label="오늘 약속"', 'className="today-contact__more"'].map((s) => followups.indexOf(s));
+  assert.ok(order.every((i) => i > 0), `sections must render: ${order}`);
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
   // 정렬 축은 약속 날짜(bucket)이지 정체 일수가 아니다.
   assert.doesNotMatch(followups, /BUCKET_OPTIONS/);
 });
 
 test('follow-up truth never turns a failed read into preview or a proven empty state', () => {
   const source = page('followups');
-  assert.match(source, /<SyncBadge state=\{state\.syncState\} \/>/);
-  assert.match(source, /state\.syncState === "error" \? \(\s*<EmptyState[\s\S]*?title="활동 기록을 읽지 못했습니다"/);
-  assert.match(source, /stage && <Badge tone="neutral" size="xs" variant="outline">\{stage\.label\}<\/Badge>/);
+  assert.match(source, /syncState === "error" \? \([\s\S]{0,400}<EmptyState[\s\S]*?title="연락 목록을 읽지 못했습니다"/);
+  // 헤더는 partial·preview·error를 각각 TruthBadge로 말한다 — 새 호출처는 SyncBadge를 쓰지 않는다.
+  assert.match(source, /syncState === "partial" && <TruthBadge state="partial"/);
+  assert.match(source, /syncState === "preview" && <TruthBadge state="preview" \/>/);
+  assert.match(source, /syncState === "error" && <TruthBadge state="error" \/>/);
+  assert.doesNotMatch(source, /SyncBadge/);
 });
 
 // 2026-09-04 회귀 방어. `8a8bcbc`가 허브 read 라우트의 실패를 HTTP 200 + status:"error"
@@ -87,7 +100,12 @@ test('approval queue read failure is never rendered as an empty queue', () => {
       /\.then\(async \(r\) => \(\{ ok: r\.ok, d: await r\.json\(\)\.catch\(\(\) => null\) \}\)\)/,
       `${name}: work-orders 응답을 봉투로 읽지 않는다`,
     );
-    assert.match(source, /if \(!ok \|\| !d \|\| d\.status === 'error'/, `${name}: status 봉투 가드 없음`);
+    if (name === 'agents') {
+      assert.match(source, /if \(!listResponse\?\.ok \|\| !listData \|\| listData\.status === 'error'/, 'agents: 목록 봉투 가드 없음');
+      assert.match(source, /if \(!countResponse\?\.ok \|\| !countData \|\| countData\.status === 'error'/, 'agents: 건수 봉투 가드 없음');
+    } else {
+      assert.match(source, /if \(!ok \|\| !d \|\| d\.status === 'error'/, `${name}: status 봉투 가드 없음`);
+    }
   }
 
   // 첫 화면: !r.ok 단독 감지기로 되돌아가지 않는다.
@@ -157,7 +175,7 @@ test('PMS project status is declared by lifecycle enum, never by a page-level to
   );
   assert.ok(labelMap.length > 0, 'PROJECT_STATUS_LABEL_KO 사전을 찾지 못했다');
   for (const [status, label] of [
-    ['In progress', '작업 중'], ['Review', '검토'], ['Planning', '계획'],
+    ['In progress', '진행 중'], ['Review', '검토'], ['Planning', '계획'],
     ['Blocked', '막힘'], ['Done', '완료'], ['Backlog', '백로그'],
   ]) {
     assert.match(

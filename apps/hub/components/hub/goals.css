@@ -56,3 +56,22 @@
   .goal-filters > :first-child { flex-basis:100%; }
   .goal-filters > :not(:first-child) { flex:1 1 130px; }
 }
+/* 주간 실측 — 열은 주, 행은 지표. 첫 열은 가로 스크롤 중에도 남는다. */
+.goal-weekly { display:flex; flex-direction:column; gap:16px; min-width:0; }
+.goal-weekly-table { width:100%; min-width:440px; border-collapse:collapse; font-size:12px; }
+.goal-weekly-table th,.goal-weekly-table td { padding:10px 12px; text-align:right; vertical-align:top; white-space:nowrap; border-top:1px solid var(--line-soft); }
+.goal-weekly-table thead th { border-top:0; font-weight:400; color:var(--fg-muted); }
+.goal-weekly-table thead th > .mono,.goal-weekly-note { display:block; }
+.goal-weekly-table thead th [data-truth] { margin-top:4px; }
+.goal-weekly-table th:first-child { position:sticky; left:0; z-index:1; text-align:left; background:var(--bg); }
+.goal-weekly-table tbody th { font-weight:400; color:var(--fg-muted); }
+.goal-weekly-table td .mono { font-size:13px; color:var(--fg); }
+.goal-weekly-note { margin-top:2px; font-size:10.5px; color:var(--fg-dim); }
+.goal-weekly-rate { margin-left:6px; font-size:12px; color:var(--fg-muted); }
+.goal-weekly-table td .goal-weekly-empty { color:var(--fg-dim); }
+.goal-weekly-missing { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--fg-muted); }
+.goal-weekly-definitions { margin:12px 0 0; display:flex; flex-direction:column; gap:8px; font-size:12px; }
+.goal-weekly-definitions > div { display:grid; grid-template-columns:96px minmax(0,1fr); gap:8px; }
+.goal-weekly-definitions dt { color:var(--fg-muted); }
+.goal-weekly-definitions dd { margin:0; line-height:1.6; overflow-wrap:anywhere; }
+.goal-weekly > .goal-actions p { flex:1 1 240px; }

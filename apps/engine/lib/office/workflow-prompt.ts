@@ -5,13 +5,13 @@ import { OFFICE_PLAYBOOKS, OFFICE_QUALITY_STANDARD, OFFICE_MODE_GUIDANCE } from 
 import { buildOfficeOperatingPolicy } from './operating-policy.ts';
 import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS } from './source-review.ts';
 
-export const OFFICE_WORKFLOW_POLICY_VERSION = `2026-09-22.workflow-v2/${OFFICE_PERSONA_VERSION}`;
+export const OFFICE_WORKFLOW_POLICY_VERSION = `2026-09-23.workflow-v3/${OFFICE_PERSONA_VERSION}`;
 
 const CONTRACT = `
 JSON 객체만 반환한다. 모델 작성 필드는 summary, artifact:{kind,body}, evidence:[{sourceRefId,explanation}], uncertainties, dissent, nextStep이고 council 모드만 council을 추가한다.
 summary는 짧은 판단, artifact.body는 실제 사용할 본문이다. 초안에는 작성 계획만 쓰지 않는다. artifact.kind는 text/markdown/code 중 하나다. 코드와 HTML 초안은 실행하지 않고 code로 표시한다.
 evidence에는 sourceContext.sourceRefs에 실제 있는 ID만 사용한다. 근거가 없는 사용자 원문은 출처 확인된 원장으로 승격하지 않는다. 근거 목록과 이견은 없으면 빈 배열이다.
-nextStep은 별도 업무가 필요할 때만 {kind:"create_task",label,fields:{title,description?,nextAction?,dueAt?,projectId?,dealId?,priority?}} 제안이다. 별도 할 일이 없으면 null이다. 기한·프로젝트·거래 ID는 제공된 사실만 넣고 없으면 필드를 생략한다. 인사·휴식·가용 시간이 0인 상황에 새 할 일을 강제하지 않는다. 제안은 실행 명령이 아니다.
+nextStep은 별도 업무가 필요할 때만 {kind:"create_task",label,fields:{title,description?,nextAction?,dueAt?,dealId?,priority?}} 제안이다. 별도 할 일이 없으면 null이다. 기한·거래 ID는 제공된 사실만 넣고 없으면 필드를 생략한다. 프로젝트는 운영자가 연결할 때 고른다. 인사·휴식·가용 시간이 0인 상황에 새 할 일을 강제하지 않는다. 제안은 실행 명령이 아니다.
 모델은 requestId/status/resultRevision/context/generation/persistence/application/capabilities/가격/검수통과를 작성하지 않는다. 저장·발송·예약·코드 변경·테스트·조회·지속 감시·담당 호출을 수행했거나 자동으로 수행하겠다고 주장하지 않는다.
 council일 때 council:{perspectives:[{ownerId,judgment,tradeoff}],recommendation}이 필수다. perspectives는 요청 participants와 정확히 같은 집합이며 각 관점의 판단과 감수할 비용을 구별한다. 주관은 수렴 설정에 맞는 추천을 남기고 이견을 지우지 않는다. 탐색이면 결론을 확정하는 대신 대안을 구별할 관측을 추천한다. 같은 모델의 역할별 검토이며 독립 사실 검증이 아니다. 다른 모드에는 council 필드를 쓰지 않는다.
 `;

@@ -2,6 +2,7 @@
 import React from 'react';
 import {Card,Button,TruthBadge,LifecycleBadge,EmptyState,Drawer,SelectField,TextAreaField,Checkbox,SectionTitle} from '../hub-primitives';
 import {requestCodexJobs,CODEX_JOB_LABELS,CODEX_JOB_LIFECYCLE,requiresCodexReconciliation,validCodexReconciliationNote,validCodexPrompt} from './codex-jobs-client';
+import {CODEX_DRAFT_KEY} from './product-client.js';
 const ACTIVE=new Set(['queued','running']);
 const MODE_LABELS={read:'조회·검토',draft:'초안 작성',apply:'파일 수정'};
 const empty={status:'loading',jobs:[],projects:[],availability:null,error:null};
@@ -36,6 +37,8 @@ export function CodexJobsPanel(){
   if(projects?.projects?.length)setProjectId(prev=>projects.projects.some(p=>p.id===prev)?prev:projects.projects[0].id);
  },[]);
  React.useEffect(()=>{mounted.current=true;const controller=new AbortController();load(controller.signal);return()=>{mounted.current=false;controller.abort();};},[load]);
+ // 제품 상세의 "Codex에 맡기기"가 sessionStorage로 넘긴 초안을 한 번만 받는다(10분 이내). 보내기는 운영자가 누른다.
+ React.useEffect(()=>{try{const raw=window.sessionStorage.getItem(CODEX_DRAFT_KEY);if(!raw)return;window.sessionStorage.removeItem(CODEX_DRAFT_KEY);const draft=JSON.parse(raw);if(typeof draft?.prompt==='string'&&Date.now()-Number(draft.at||0)<10*60*1000){setPrompt(draft.prompt);setNotice('제품 상세에서 넘어온 초안이에요. 확인한 뒤 맡기세요.');}}catch{}},[]);
  const hasActive=state.jobs.some(job=>ACTIVE.has(job.state));
  React.useEffect(()=>{
   if(!hasActive)return;

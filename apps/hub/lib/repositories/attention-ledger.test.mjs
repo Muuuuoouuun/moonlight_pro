@@ -25,7 +25,7 @@ export function resolveSupabaseConfig() {
 `;
 const operatingStub = `
 export async function getTaskLedger() {
-  return { source: "supabase", projects: [], todos: [] };
+  return { source: "supabase", projects: [], todos: globalThis.__attentionReadState.todos || [] };
 }
 `;
 const calendarStub = `
@@ -33,6 +33,9 @@ export async function readCombinedGoogleCalendarEvents() { return { ok: true, it
 `;
 const inquiriesStub = `
 export async function getInquiriesLedger() { return { status: "live", rows: [], unreadCount: 0 }; }
+`;
+const deadlineStub = `
+export async function getDeadlineAlertSettings() { return { status: "live", reset: globalThis.__attentionReadState.deadlineReset || null }; }
 `;
 
 registerHooks({
@@ -43,6 +46,7 @@ registerHooks({
       "./operating-ledger.js": operatingStub,
       "../google-calendar.js": calendarStub,
       "./inquiries-ledger.js": inquiriesStub,
+      "./deadline-alert-settings.js": deadlineStub,
     };
     // The real contact-tracking reader uses a relative import. Keep it in the
     // query-count baseline so the full ledger's workspace read is measured too.
@@ -63,6 +67,8 @@ beforeEach((t) => {
   state.configured = true;
   state.calls = [];
   state.gate = null;
+  state.deadlineReset = null;
+  state.todos = [];
   state.rows = {
     leads: [{ id: "lead-1", score: "87.5", name: "Lead", meta: {} }],
     deals: [
@@ -87,14 +93,74 @@ beforeEach((t) => {
   };
 });
 
-test("attention returns the same items and scoring with three revenue reads instead of seven", async () => {
+test("an acknowledged old deal deadline remains visible without an overdue alert", async () => {
+  const dueAt = "2026-08-26T16:00:00+00:00";
+  state.rows.deals[0].expected_close_at = dueAt;
+  state.deadlineReset = {
+    resetAt: "2026-09-22T03:00:00Z", beforeDay: "2026-09-21",
+    items: [{ kind: "deal", id: "deal-1", dueAt }],
+  };
+  const cleared = await getAttentionLedger();
+  const deal = cleared.items.find((item) => item.entityId === "deal-1");
+  assert.equal(deal.whenAt, dueAt);
+  assert.equal(deal.bucket, "later");
+  assert.equal(deal.deadlineAlertSuppressed, true);
+  assert.equal(deal.priorityReason, "이전 기한 · 알림 해제");
+  assert.equal(deal.priorityScore, 900);
+
+  state.rows.deals[0].expected_close_at = "2026-09-20T16:00:00+00:00";
+  const changed = await getAttentionLedger();
+  assert.equal(changed.items.find((item) => item.entityId === "deal-1").bucket, "overdue");
+});
+
+test("an acknowledged old task deadline keeps a deliberate today focus without restoring its alert", async () => {
+  const dueAt = "2026-08-26T16:00:00+00:00";
+  state.todos = [{
+    id: "task-1", title: "Chosen task", dueAt, status: "todo", done: false,
+    focusDates: ["2026-09-22"],
+  }];
+  state.deadlineReset = {
+    resetAt: "2026-09-22T03:00:00Z", beforeDay: "2026-09-21",
+    items: [{ kind: "task", id: "task-1", dueAt }],
+  };
+
+  const focused = (await getAttentionLedger()).items.find((item) => item.entityId === "task-1");
+  assert.equal(focused.bucket, "focus");
+  assert.equal(focused.dueBucket, "overdue");
+  assert.equal(focused.deadlineAlertSuppressed, true);
+  assert.equal(focused.priorityScore, 6000);
+  assert.equal(focused.priorityReason, "오늘 3개");
+
+  state.todos[0].focusDates = [];
+  const unfocused = (await getAttentionLedger()).items.find((item) => item.entityId === "task-1");
+  assert.equal(unfocused.bucket, "later");
+  assert.equal(unfocused.priorityReason, "이전 기한 · 알림 해제");
+});
+
+test("standalone task action, checklist and database version reach My Work detail", async () => {
+  const checklist = [{ id: "22222222-2222-4222-8222-222222222222", title: "후속 연락", done: false, note: "", dueAt: "2026-09-30" }];
+  state.todos = [{ id: "11111111-1111-4111-8111-111111111111", title: "회의 후속", status: "todo", done: false,
+    nextAction: "자료를 보내고 수신 여부 확인", checklist, updatedAt: "2026-09-23T02:10:11.123456Z" }];
+  const result = await getAttentionLedger();
+  const task = result.items.find((item) => item.lane === "task");
+  assert.equal(task.projectId, null);
+  assert.equal(task.nextAction, state.todos[0].nextAction);
+  assert.deepEqual(task.checklist, checklist);
+  assert.equal(task.updatedAt, state.todos[0].updatedAt);
+});
+
+test("attention returns the same items and scoring with three revenue reads instead of five", async () => {
   const { raw, ...full } = await getAttentionLedger({ includeRaw: true });
   const fullCalls = state.calls;
+  // 두 번째 "workspaces"는 이번 달 매출 목표 읽기(revenue-target.js) — 접점 추적 시작일과
+  // 별개 쿼리라 같은 테이블을 두 번 읽는다. includeRaw는 revenue를 "brief" 프로젝션으로 읽어서
+  // (2026-09-25) customer_accounts·operation_cases는 애초에 읽지 않는다 — daily-brief/route.js·
+  // operator-revenue-scope.js·daily-focus.js 어디도 raw.revenue.accounts/.cases를 안 쓴다.
   assert.deepEqual(fullCalls.map(call => call.table), [
-    "leads", "deals", "customer_accounts", "operation_cases", "companies", "contacts", "workspaces",
+    "leads", "deals", "companies", "contacts", "workspaces", "workspaces",
   ]);
-  assert.equal(raw.revenue.accounts.length, 1);
-  assert.equal(raw.revenue.cases.length, 1);
+  assert.deepEqual(raw.revenue.accounts, []);
+  assert.deepEqual(raw.revenue.cases, []);
   assert.equal(raw.revenue.contacts.length, 1);
   assert.equal(raw.revenue.deals[0].trackingEligible, false);
 

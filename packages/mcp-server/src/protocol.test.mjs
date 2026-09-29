@@ -12,7 +12,7 @@ test('real MCP client accepts structured Agent results and preserves all schema 
  const client=new Client({name:'contract-test',version:'1.0'},{capabilities:{}});
  t.after(async()=>{await client.close();await new Promise(resolve=>server.close(resolve));});
  await client.connect(new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('./index.js',import.meta.url))],env:{PATH:process.env.PATH,COM_MOON_AGENT_API_TOKEN:'fixture-token',COM_MOON_HUB_URL:`http://127.0.0.1:${server.address().port}`},stderr:'pipe'}),{timeout:5000});
- const {tools}=await client.listTools();assert.ok(tools.length<=9);
+ const {tools}=await client.listTools();assert.equal(tools.length,10);
  const result=await client.callTool({name:'list_tasks',arguments:{limit:1}});
  assert.deepEqual(result.structuredContent,payload);
 });

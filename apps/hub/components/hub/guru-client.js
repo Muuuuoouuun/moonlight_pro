@@ -4,6 +4,7 @@
 // Overview panel, the Deals/Accounts entry points, and the Agents chat session.
 
 export const GURU_MODE_LABEL = {
+  "open-question": "자유 질문",
   "pipeline-triage": "파이프라인 분류",
   "deal-review": "딜 진단",
   "proposal-critique": "제안 검토",
@@ -11,12 +12,24 @@ export const GURU_MODE_LABEL = {
   "sparring": "3자 토론",
 };
 
+export function guruUiModeForRequestMode(mode) {
+  if (mode === 'proposal-critique') return 'critique';
+  if (mode === 'weekly-retro') return 'weekly-review';
+  if (mode === 'sparring') return 'sparring';
+  return 'advice';
+}
+
+export function shouldAutoRunGuruOnOpen(mode) {
+  return Boolean(mode && GURU_MODE_LABEL[mode] && mode !== 'open-question');
+}
+
 // Build the canonical Guru chat deep-link. Every entry point funnels into the
 // single mentor thread (plan §9): dashboard/agents/chat?agent=guru&mode=…&ref=…
-export function guruChatPath({ mode, ref } = {}) {
+export function guruChatPath({ mode, ref, guidanceId } = {}) {
   const params = new URLSearchParams({ agent: "guru" });
   if (mode) params.set("mode", mode);
   if (ref) params.set("ref", ref);
+  if (guidanceId) params.set("guidanceId", guidanceId);
   return `dashboard/agents/chat?${params.toString()}`;
 }
 
@@ -28,12 +41,16 @@ export async function requestGuruCoaching({
   directives = null,
   values = null,
   knowledge = null,
+  guidanceId = null,
+  history = null,
 } = {}) {
   try {
     const body = { mode, ref, draft };
     if (directives && typeof directives === "object") body.directives = directives;
     if (values && typeof values === "object") body.values = values;
     if (knowledge && typeof knowledge === "object") body.knowledge = knowledge;
+    if (typeof guidanceId === 'string' && guidanceId) body.guidanceId = guidanceId;
+    if (mode === 'open-question' && Array.isArray(history) && history.length) body.history = history;
 
     const res = await fetch("/api/hub/sales-mentor", {
       method: "POST",
@@ -49,6 +66,7 @@ export async function requestGuruCoaching({
         mode: data.mode || mode,
         ref: data.ref ?? ref,
         runId: data.runId || null,
+        model: typeof data.model === "string" ? data.model : null,
       };
     }
     if (data?.status === "preview") {

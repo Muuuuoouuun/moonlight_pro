@@ -2,7 +2,9 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd, EmptyState } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd, EmptyState, SelectField } from "../hub-primitives";
+import { SOCIAL_BRAND_OPTIONS, socialBrandTarget, socialBrandUrl } from "./social-brand-target";
+import { AiUsageSection } from "./ai-usage-section";
 
 const EVOLUTION_EVENTS = [];
 
@@ -22,18 +24,20 @@ const QUICK_COMMANDS = [
 ];
 
 const EMPTY_META_THREADS_STATUS = {
-  status: 'loading',
+  status: 'unselected',
   provider: 'meta_threads',
-  brandHandle: 'moon.classin',
+  brandHandle: '',
+  brandKey: null,
   configured: false,
   connection: null,
   setup: null,
 };
 
 const EMPTY_INSTAGRAM_STATUS = {
-  status: 'loading',
+  status: 'unselected',
   provider: 'instagram_api',
-  brandHandle: 'moon.classin',
+  brandHandle: '',
+  brandKey: null,
   configured: false,
   connection: null,
   setup: null,
@@ -58,9 +62,13 @@ function formatShortDate(value) {
 }
 
 function buildMetaThreadsIntegration(status) {
-  const brandHandle = status?.brandHandle || 'moon.classin';
+  const brandHandle = status?.brandHandle || '';
   const profileHandle = status?.connection?.profileHandle || `@${brandHandle}`;
   const expiresAt = formatShortDate(status?.connection?.expiresAt);
+
+  if (status?.status === 'unselected') {
+    return { n: 'Meta Threads', s: '브랜드 선택', t: 'neutral', i: 'globe', provider: 'meta_threads', detail: '연결할 브랜드를 먼저 선택하세요.', action: 'Connect', disabled: true };
+  }
 
   if (status?.status === 'connected') {
     return {
@@ -99,6 +107,10 @@ function buildMetaThreadsIntegration(status) {
     };
   }
 
+  if (status?.status === 'storage-error') {
+    return { n: 'Meta Threads', s: '읽기 실패', t: 'danger', i: 'globe', provider: 'meta_threads', detail: `@${brandHandle} · 연결 상태를 읽지 못했습니다.`, action: 'Connect', disabled: true };
+  }
+
   return {
     n: 'Meta Threads',
     s: 'Needs config',
@@ -112,10 +124,14 @@ function buildMetaThreadsIntegration(status) {
 }
 
 function buildInstagramIntegration(status) {
-  const brandHandle = status?.brandHandle || 'moon.classin';
+  const brandHandle = status?.brandHandle || '';
   const profileHandle = status?.connection?.profileHandle || `@${brandHandle}`;
   const expiresAt = formatShortDate(status?.connection?.expiresAt);
   const accountType = status?.connection?.accountType;
+
+  if (status?.status === 'unselected') {
+    return { n: 'Instagram API', s: '브랜드 선택', t: 'neutral', i: 'globe', provider: 'instagram_api', detail: '연결할 브랜드를 먼저 선택하세요.', action: 'Connect', disabled: true };
+  }
 
   if (status?.status === 'connected') {
     return {
@@ -152,6 +168,10 @@ function buildInstagramIntegration(status) {
       action: 'Connect',
       disabled: true,
     };
+  }
+
+  if (status?.status === 'storage-error') {
+    return { n: 'Instagram API', s: '읽기 실패', t: 'danger', i: 'globe', provider: 'instagram_api', detail: `@${brandHandle} · 연결 상태를 읽지 못했습니다.`, action: 'Connect', disabled: true };
   }
 
   return {
@@ -485,6 +505,15 @@ export function Settings({ onNavigate }) {
   const incomingWebhooks = [];
   const [metaThreadsStatus, setMetaThreadsStatus] = React.useState(EMPTY_META_THREADS_STATUS);
   const [instagramStatus, setInstagramStatus] = React.useState(EMPTY_INSTAGRAM_STATUS);
+  const [selectedSocialBrandKey, setSelectedSocialBrandKey] = React.useState('');
+  const selectedSocialBrand = socialBrandTarget(selectedSocialBrandKey);
+  React.useEffect(() => {
+    const brandKey = new URLSearchParams(window.location.search).get('socialBrand');
+    if (socialBrandTarget(brandKey)) setSelectedSocialBrandKey(brandKey);
+  }, []);
+  const [deadlineAlerts, setDeadlineAlerts] = React.useState({ status: 'loading', reset: null });
+  const [deadlineBusy, setDeadlineBusy] = React.useState(false);
+  const [deadlineMessage, setDeadlineMessage] = React.useState('');
   const [logoutBusy, setLogoutBusy] = React.useState(false);
   const [logoutError, setLogoutError] = React.useState('');
   const logout = async () => {
@@ -504,8 +533,50 @@ export function Settings({ onNavigate }) {
       setLogoutBusy(false);
     }
   };
+  const loadDeadlineAlerts = React.useCallback(async () => {
+    try {
+      const response = await fetch('/api/hub/settings/deadline-alerts', { cache: 'no-store' });
+      const data = await response.json();
+      setDeadlineAlerts(data?.status === 'live' || data?.status === 'preview'
+        ? { status: data.status, reset: data.reset || null }
+        : { status: 'error', reset: null });
+    } catch {
+      setDeadlineAlerts({ status: 'error', reset: null });
+    }
+  }, []);
+  React.useEffect(() => { loadDeadlineAlerts(); }, [loadDeadlineAlerts]);
+  const changeDeadlineAlerts = async (action) => {
+    if (deadlineBusy) return;
+    setDeadlineBusy(true);
+    setDeadlineMessage('');
+    try {
+      const response = await fetch('/api/hub/settings/deadline-alerts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await response.json();
+      if (!response.ok || data?.status !== 'live') throw new Error(data?.status === 'conflict' ? '다른 설정이 먼저 바뀌었습니다. 다시 시도해 주세요.' : '마감 알림 설정을 저장하지 못했습니다.');
+      setDeadlineAlerts({ status: 'live', reset: data.reset || null });
+      setDeadlineMessage(action === 'reset' ? '이전 마감 경고를 초기화했습니다.' : '이전 마감 경고를 다시 켰습니다.');
+    } catch (error) {
+      setDeadlineMessage(error instanceof Error ? error.message : '다시 시도해 주세요.');
+      await loadDeadlineAlerts();
+    } finally {
+      setDeadlineBusy(false);
+    }
+  };
   React.useEffect(() => {
     let active = true;
+    if (!selectedSocialBrand) {
+      setMetaThreadsStatus(EMPTY_META_THREADS_STATUS);
+      setInstagramStatus(EMPTY_INSTAGRAM_STATUS);
+      return () => { active = false; };
+    }
+
+    const pending = { status: 'loading', brandHandle: selectedSocialBrand.brandHandle, brandKey: selectedSocialBrand.brandKey };
+    setMetaThreadsStatus({ ...EMPTY_META_THREADS_STATUS, ...pending });
+    setInstagramStatus({ ...EMPTY_INSTAGRAM_STATUS, ...pending });
 
     async function loadSocialStatus(path, emptyStatus, setter) {
       try {
@@ -513,34 +584,38 @@ export function Settings({ onNavigate }) {
         const data = await response.json().catch(() => null);
         if (!active) return;
 
-        if (response.ok && data) {
+        if (response.ok && data && data.brandKey === selectedSocialBrand.brandKey && data.brandHandle === selectedSocialBrand.brandHandle) {
           setter({ ...emptyStatus, ...data });
         } else {
-          setter(s => ({ ...s, status: 'missing-config' }));
+          setter(s => ({ ...s, status: 'storage-error' }));
         }
       } catch {
-        if (active) setter(s => ({ ...s, status: 'missing-config' }));
+        if (active) setter(s => ({ ...s, status: 'storage-error' }));
       }
     }
 
-    loadSocialStatus('/api/social/meta/threads/status', EMPTY_META_THREADS_STATUS, setMetaThreadsStatus);
-    loadSocialStatus('/api/social/instagram/status', EMPTY_INSTAGRAM_STATUS, setInstagramStatus);
+    loadSocialStatus(socialBrandUrl('status', 'meta_threads', selectedSocialBrand.brandKey), EMPTY_META_THREADS_STATUS, setMetaThreadsStatus);
+    loadSocialStatus(socialBrandUrl('status', 'instagram_api', selectedSocialBrand.brandKey), EMPTY_INSTAGRAM_STATUS, setInstagramStatus);
     return () => { active = false; };
-  }, []);
+  }, [selectedSocialBrandKey]);
   const integrationRows = React.useMemo(() => {
     const metaRow = buildMetaThreadsIntegration(metaThreadsStatus);
     const instagramRow = buildInstagramIntegration(instagramStatus);
     return [instagramRow, metaRow];
   }, [instagramStatus, metaThreadsStatus]);
   const connectMetaThreads = () => {
-    if (metaThreadsStatus.status !== 'ready' && metaThreadsStatus.status !== 'connected') return;
-    const brand = encodeURIComponent(metaThreadsStatus.brandHandle || 'moon.classin');
-    window.location.href = `/api/social/meta/threads/connect?brand=${brand}&returnPath=/dashboard/settings`;
+    if (!selectedSocialBrand || metaThreadsStatus.brandKey !== selectedSocialBrand.brandKey ||
+      metaThreadsStatus.brandHandle !== selectedSocialBrand.brandHandle || !metaThreadsStatus.configured ||
+      !['ready', 'connected'].includes(metaThreadsStatus.status)) return;
+    const url = socialBrandUrl('connect', 'meta_threads', selectedSocialBrand.brandKey);
+    if (url) window.location.href = url;
   };
   const connectInstagram = () => {
-    if (instagramStatus.status !== 'ready' && instagramStatus.status !== 'connected') return;
-    const brand = encodeURIComponent(instagramStatus.brandHandle || 'moon.classin');
-    window.location.href = `/api/social/instagram/connect?brand=${brand}&returnPath=/dashboard/settings`;
+    if (!selectedSocialBrand || instagramStatus.brandKey !== selectedSocialBrand.brandKey ||
+      instagramStatus.brandHandle !== selectedSocialBrand.brandHandle || !instagramStatus.configured ||
+      !['ready', 'connected'].includes(instagramStatus.status)) return;
+    const url = socialBrandUrl('connect', 'instagram_api', selectedSocialBrand.brandKey);
+    if (url) window.location.href = url;
   };
   const socialSetupRows = React.useMemo(() => {
     const fallbackSetup = instagramStatus.setup || metaThreadsStatus.setup;
@@ -590,7 +665,50 @@ export function Settings({ onNavigate }) {
       </div>
 
       <div>
+        <SectionTitle>마감 알림</SectionTitle>
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 280px' }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>이전 마감 경고 정리</div>
+              <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 5, lineHeight: 1.6 }}>
+                이번 주 이전의 지나간 마감 경고만 해제합니다. 원래 날짜와 업무 기록은 남고, 기한을 새로 바꾸면 알림이 다시 작동합니다.
+              </div>
+              {deadlineAlerts.status === 'live' && deadlineAlerts.reset && (
+                <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 8 }}>
+                  {deadlineAlerts.reset.items.length}건 알림 해제 · {deadlineAlerts.reset.beforeDay} 이전
+                </div>
+              )}
+              {deadlineAlerts.status === 'preview' && <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 8 }}>저장소를 연결하면 사용할 수 있습니다.</div>}
+              {deadlineAlerts.status === 'error' && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 8 }}>알림 설정을 읽지 못했습니다.</div>}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {deadlineAlerts.status === 'live' && deadlineAlerts.reset && (
+                <Button variant="ghost" size="sm" disabled={deadlineBusy} onClick={() => changeDeadlineAlerts('restore')}>이전 경고 다시 켜기</Button>
+              )}
+              {deadlineAlerts.status === 'error' ? (
+                <Button variant="outline" size="sm" onClick={loadDeadlineAlerts}>다시 불러오기</Button>
+              ) : (
+                <Button variant="outline" size="sm" disabled={deadlineBusy || deadlineAlerts.status !== 'live'} onClick={() => changeDeadlineAlerts('reset')}>
+                  {deadlineBusy ? '저장 중…' : '이번 주 이전 경고 초기화'}
+                </Button>
+              )}
+            </div>
+          </div>
+          {deadlineMessage && <div role="status" aria-live="polite" style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 10 }}>{deadlineMessage}</div>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate?.('dashboard/work/my')}>내 작업에서 새 기한 지정</Button>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate?.('dashboard/work/projects')}>프로젝트 마감 보기</Button>
+          </div>
+        </Card>
+      </div>
+
+      <AiUsageSection />
+
+      <div>
         <SectionTitle>Integrations</SectionTitle>
+        <div style={{ maxWidth: 360, marginBottom: 12 }}>
+          <SelectField label="소셜 계정 브랜드" value={selectedSocialBrandKey} options={SOCIAL_BRAND_OPTIONS} onChange={(event) => setSelectedSocialBrandKey(event.target.value)} />
+        </div>
         <Card pad={false}>
           {integrationRows.map((it, i, arr) => (
             <div key={it.n} style={{ padding: '14px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -605,6 +723,7 @@ export function Settings({ onNavigate }) {
               <Button
                 variant="ghost"
                 size="sm"
+                disabled={it.disabled}
                 style={it.disabled ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
                 onClick={() => {
                   if (it.disabled) return;

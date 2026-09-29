@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="520" viewBox="0 0 1440 520" role="img" aria-label="Moonlight 펫의 대기, 미리보기, 빠른 기능, 집중 모드 네 상태 목업">
+  <defs>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif; fill: #e4e6e9; }
+      .title { font-size: 16px; font-weight: 650; }
+      .small { font-size: 11px; fill: #aeb3b9; }
+      .meta { font-size: 12px; fill: #abb2bb; }
+      .stroke { stroke: #50545a; stroke-width: 1; }
+    </style>
+    <g id="pet">
+      <circle cx="0" cy="0" r="28" fill="#202328" stroke="#555b62" stroke-width="1"/>
+      <ellipse cx="-14" cy="-17" rx="6" ry="9" fill="#bfc5cc" transform="rotate(-24 -14 -17)"/>
+      <ellipse cx="14" cy="-17" rx="6" ry="9" fill="#bfc5cc" transform="rotate(24 14 -17)"/>
+      <ellipse cx="0" cy="5" rx="20" ry="18" fill="#bfc5cc"/>
+      <circle cx="-7" cy="3" r="2" fill="#181a1e"/><circle cx="7" cy="3" r="2" fill="#181a1e"/>
+      <rect x="-4" y="11" width="8" height="2" rx="1" fill="#181a1e"/>
+    </g>
+  </defs>
+  <rect width="1440" height="520" fill="#101215"/>
+  <text x="30" y="40" font-size="22" font-weight="650">Moonlight · 가장자리 펫의 네 상태</text>
+  <text x="30" y="63" class="meta">오른쪽 가장자리에서 시작해, 필요한 순간에만 왼쪽으로 펼쳐집니다.</text>
+
+  <g transform="translate(30 90)">
+    <rect width="330" height="390" rx="18" fill="#17191d" stroke="#50545a" stroke-width="1"/>
+    <text x="20" y="32" class="title">01  대기</text><text x="20" y="52" class="small">평소에는 펫 하나만</text>
+    <rect x="20" y="70" width="290" height="285" rx="10" fill="#202328"/>
+    <line x1="298" y1="70" x2="298" y2="355" stroke="#555b62" stroke-width="1"/>
+    <use href="#pet" x="270" y="245"/>
+    <text x="34" y="337" class="small">한 번 클릭 · 미리보기</text>
+  </g>
+
+  <g transform="translate(380 90)">
+    <rect width="330" height="390" rx="18" fill="#17191d" stroke="#50545a" stroke-width="1"/>
+    <text x="20" y="32" class="title">02  미리보기</text><text x="20" y="52" class="small">한 번 눌러 핵심만 읽기</text>
+    <rect x="20" y="70" width="290" height="285" rx="10" fill="#202328"/>
+    <line x1="298" y1="70" x2="298" y2="355" stroke="#555b62" stroke-width="1"/>
+    <rect x="34" y="153" width="218" height="92" rx="13" fill="#26292e" stroke="#53575c" stroke-width="1"/>
+    <text x="49" y="176" font-size="12" fill="#bfc5cc">☾  Moonlight</text>
+    <text x="49" y="200" font-size="12">새 알림은 없어요.</text>
+    <text x="49" y="226" class="small">빠른 기능 열기  →</text>
+    <use href="#pet" x="270" y="245"/>
+  </g>
+
+  <g transform="translate(730 90)">
+    <rect width="330" height="390" rx="18" fill="#17191d" stroke="#50545a" stroke-width="1"/>
+    <text x="20" y="32" class="title">03  빠른 기능 바</text><text x="20" y="52" class="small">두 번 클릭 또는 ⌃⌥M</text>
+    <rect x="20" y="70" width="290" height="285" rx="10" fill="#202328"/>
+    <rect x="32" y="124" width="250" height="188" rx="12" fill="#26292e" stroke="#53575c" stroke-width="1"/>
+    <rect x="32" y="124" width="250" height="46" rx="12" fill="#30343a"/>
+    <text x="45" y="151" class="small">할 일  메모  일정  Office  Council  집중</text>
+    <text x="46" y="194" class="title">할 일</text>
+    <text x="46" y="214" class="small">생각난 일을 바로 적으세요</text>
+    <rect x="46" y="228" width="191" height="30" rx="7" fill="#1d2024" stroke="#555b62" stroke-width="1"/>
+    <text x="56" y="247" class="small">할 일 입력</text>
+    <text x="46" y="289" class="small">이 Mac에 저장                    Hub에서 열기 ↗</text>
+    <use href="#pet" x="284" y="313"/>
+  </g>
+
+  <g transform="translate(1080 90)">
+    <rect width="330" height="390" rx="18" fill="#17191d" stroke="#50545a" stroke-width="1"/>
+    <text x="20" y="32" class="title">04  집중</text><text x="20" y="52" class="small">다른 화면 클릭을 차단</text>
+    <rect x="20" y="70" width="290" height="285" rx="10" fill="#111316"/>
+    <rect x="66" y="122" width="198" height="188" rx="18" fill="#202328" stroke="#50545a" stroke-width="1"/>
+    <text x="165" y="155" font-size="17" text-anchor="middle">☾</text>
+    <text x="165" y="178" class="small" text-anchor="middle">집중 중</text>
+    <text x="165" y="237" font-size="44" font-weight="300" text-anchor="middle">25:00</text>
+    <rect x="133" y="254" width="64" height="26" rx="7" fill="#30343a"/>
+    <text x="165" y="272" font-size="11" text-anchor="middle">중지</text>
+    <text x="165" y="297" font-size="10.5" fill="#aeb3b9" text-anchor="middle">Esc 길게 누르기</text>
+  </g>
+</svg>

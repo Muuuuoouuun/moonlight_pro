@@ -1,0 +1,347 @@
+/* 거래 탭 — 하단 독(거래 하나: 단계 · 다음 약속 · 예상일 · 결제 일정 · 매달 정기)
+ *
+ * 2026-09-24 목업 3의 독을 그대로 두고, 2026-09-26 돈 보기(deals-money.css)의 행이 연다.
+ * 색은 토큰만. danger는 지난 약속의 직접 라벨에만 쓴다(§5.2).
+ * 셀렉터는 `.hub-app`으로 올린다 — `.hub-app button` 리셋(0,1,1)이 단일 클래스를 이긴다.
+ */
+
+/* ── 하단 독 ───────────────────────────────────────────────────── */
+@keyframes dealsDockIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+.hub-app .deals-tl-dock {
+  position: sticky;
+  bottom: 16px;
+  z-index: var(--z-project-detail);
+  align-self: center;
+  width: min(760px, 100%);
+  margin-top: 8px;
+  padding: 16px 18px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  animation: dealsDockIn var(--dur-panel) var(--ease-hub);
+}
+
+.hub-app .deals-tl-dock__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-app .deals-tl-dock__org { font-size: 16px; font-weight: 600; color: var(--fg); }
+
+.hub-app .deals-tl-dock__amount {
+  margin-left: auto;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--moon-200);
+}
+
+.hub-app .deals-tl-stepper {
+  display: flex;
+  align-items: flex-start;
+  margin: 14px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-app .deals-tl-stepper > li {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+/* 단계 사이 1px 선 — 앞 칸 점 중심에서 이 칸 점 중심까지 */
+.hub-app .deals-tl-stepper > li + li::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 50%;
+  width: 100%;
+  height: 1px;
+  background: var(--line);
+}
+
+.hub-app .deals-tl-stepper > li[data-step="done"] + li::before,
+.hub-app .deals-tl-stepper > li[data-step="done"]::before,
+.hub-app .deals-tl-stepper > li[data-step="current"]::before { background: var(--fg-muted); }
+
+.hub-app .deals-tl-stepper > li > i {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--fx-pill);
+  background: var(--surface);
+}
+
+.hub-app .deals-tl-stepper > li[data-step="done"] > i { background: var(--fg-muted); border-color: var(--fg-muted); }
+
+.hub-app .deals-tl-stepper > li[data-step="current"] { color: var(--fg); font-weight: 500; }
+
+/* 현재 단계만 Moonstone 링(현재 위치) */
+.hub-app .deals-tl-stepper > li[data-step="current"] > i {
+  background: var(--fg);
+  border-color: var(--fg);
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--accent);
+}
+
+.hub-app .deals-tl-dock__next {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--fg-muted);
+}
+
+.hub-app .deals-tl-dock__next b { color: var(--fg); font-weight: 500; }
+.hub-app .deals-tl-dock__due {
+  margin-left: 4px;
+  font-size: 11.5px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.hub-app .deals-tl-dock__late {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--danger);
+  white-space: nowrap;
+}
+.hub-app .deals-tl-dock__close { color: var(--fg-dim); font-size: 12.5px; }
+
+.hub-app .deals-tl-dock__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hub-app .deals-tl-dock__dates {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.hub-app .deals-tl-dock__date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.hub-app .deals-tl-dock__date .hub-input { width: auto; height: 28px; padding: 0 8px; }
+
+/* ── 결제(운영자 2026-09-24 결정) — 딜 하나에 여러 예상 입금, 예상치·확정치 분리 ── */
+.hub-app .deals-pay {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.hub-app .deals-pay__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.hub-app .deals-pay__summary { font-size: 12.5px; color: var(--fg-muted); }
+.hub-app .deals-pay__paid { color: var(--fg); }
+
+.hub-app .deals-pay__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-app .deals-pay-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.hub-app .deals-pay-row[data-status="paid"] { border-style: solid; }
+.hub-app .deals-pay-row[data-status="cancelled"] { opacity: 0.6; }
+
+.hub-app .deals-pay-row--form { align-items: flex-end; background: var(--surface-3); }
+
+.hub-app .deals-pay-row__label {
+  flex: 1 1 auto;
+  min-width: 80px;
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+.hub-app .deals-pay-row__expected {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.hub-app .deals-pay-row__date { color: var(--fg-dim); }
+
+.hub-app .deals-pay-row__paid {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+.hub-app .deals-pay-row__cancelled { font-size: 12px; color: var(--fg-faint); }
+
+.hub-app .deals-pay-row__acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.hub-app .deals-pay-row__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 auto;
+}
+
+.hub-app .deals-pay-row__fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.hub-app .deals-pay-row__fields .hub-input { width: 120px; height: 28px; padding: 0 8px; }
+
+/* 입금 확인 — 입금액이 예상과 다를 때만 열리는 "차이 이유" 한 줄(40자) */
+.hub-app .deals-pay-row__fields .deals-pay-row__note { flex: 1 1 220px; }
+.hub-app .deals-pay-row__fields .deals-pay-row__note .hub-input { width: 100%; }
+
+/* 처음 계획과 지금 예상일이 다를 때 "원래 9/15 월" · 입금 차이와 이유 */
+.hub-app .deals-pay-row__was { color: var(--fg-dim); font-size: 11.5px; }
+.hub-app .deals-pay-row__diff { font-size: 12px; color: var(--fg-muted); }
+
+/* 매달 정기 한 줄 — "↻ 매달 3일 · ₩600K · 2026년 10월부터" + 정기 수정 · 이번 달로 끝내기 */
+.hub-app .deals-pay-rec {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+.hub-app .deals-pay-rec__range { color: var(--fg-dim); }
+
+/* 빠른 입력 폼(매달 정기 · 일시불 · 입금 확인) — 독과 돈 보기 목록이 같이 쓴다 */
+.hub-app .deals-form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.hub-app .deals-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.hub-app .deals-form .hub-input { width: 128px; height: 28px; padding: 0 8px; }
+.hub-app .deals-form .deals-form__note { flex: 1 1 220px; }
+.hub-app .deals-form .deals-form__note .hub-input { width: 100%; }
+
+.hub-app .deals-form__hint {
+  flex-basis: 100%;
+  order: 9;
+  margin: 0;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.hub-app .deals-form__acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* ── 반응형 ───────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  /* 독은 하단 시트 — 버튼은 터치 플로어(44px)를 채워 한 줄에 둘씩 */
+  .hub-app [data-dock-open] { padding-bottom: 260px; }
+  .hub-app .deals-tl-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    margin: 0;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    /* 결제 블록이 붙어 내용이 늘어날 수 있다 — 시트 자체는 스크롤, 화면은 그대로 */
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
+  }
+  .hub-app .deals-tl-dock__acts > .hub-btn { flex: 1 1 calc(50% - 4px); min-height: 44px; }
+  .hub-app .deals-tl-stepper > li { font-size: 10.5px; }
+  .hub-app .deals-tl-dock__date .hub-input,
+  .hub-app .deals-pay-row__fields .hub-input,
+  .hub-app .deals-form .hub-input { height: 44px; font-size: 16px; }
+  .hub-app .deals-pay-row__fields,
+  .hub-app .deals-form { width: 100%; }
+  .hub-app .deals-pay-row__fields label,
+  .hub-app .deals-form label { flex: 1 1 90px; }
+  .hub-app .deals-pay-row__fields .hub-input,
+  .hub-app .deals-form .hub-input { width: 100%; }
+  .hub-app .deals-pay-row__acts,
+  .hub-app .deals-form__acts { width: 100%; justify-content: flex-start; margin-left: 0; }
+  .hub-app .deals-pay-row__acts > .hub-btn,
+  .hub-app .deals-form__acts > .hub-btn { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .deals-tl-dock { animation: none; }
+}

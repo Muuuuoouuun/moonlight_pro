@@ -10,6 +10,7 @@ import { test } from "node:test";
 import { promisify } from "node:util";
 
 const migration = new URL("../../../supabase/migrations/20260912_0025_daily_review_journal.sql", import.meta.url);
+const timezoneCheckMigration = new URL("../../../supabase/migrations/20260925_0050_daily_review_timezone_check.sql", import.meta.url);
 const postgresAvailable = process.getuid?.() !== 0 && ["initdb", "pg_ctl", "psql"].every((bin) => spawnSync(bin, ["--version"], { stdio: "ignore" }).status === 0);
 const WORKSPACE = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
@@ -24,6 +25,7 @@ test("daily review PostgreSQL migration, atomic writes and permissions", {
   skip: postgresAvailable ? false : "PostgreSQL binaries and a non-root test user are required",
 }, async (t) => {
   assert.equal(existsSync(migration), true, "daily review migration must exist");
+  assert.equal(existsSync(timezoneCheckMigration), true, "daily review timezone check migration must exist");
   const directory = mkdtempSync(join(tmpdir(), "daily-review-pg-"));
   const data = join(directory, "data");
   const args = ["-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-h", directory, "-p", "55492", "-U", "daily_review_test", "-d", "postgres"];
@@ -41,7 +43,9 @@ test("daily review PostgreSQL migration, atomic writes and permissions", {
       insert into public.workspaces values ('${WORKSPACE}', 'Asia/Seoul', '{}'), ('${OTHER}', 'UTC', '{}');
     `);
     const migrationSql = readFileSync(migration, "utf8");
+    const timezoneCheckSql = readFileSync(timezoneCheckMigration, "utf8");
     sql(migrationSql);
+    sql(timezoneCheckSql);
 
     await t.test("partial answer creates one review and receipt with the target local date", () => {
       const saved = json(saveSql());
@@ -164,11 +168,25 @@ test("daily review PostgreSQL migration, atomic writes and permissions", {
       assert.equal(json(`set role service_role; ${saveSql({ date: "2026-09-05", request: 17 })}`).status, "saved");
     });
 
+    await t.test("timezone check resolves through PostgreSQL instead of trusting the name catalog", () => {
+      for (const timezone of ["KST", "UTC+9", "Mars/Olympus"]) {
+        assert.equal(json(saveSql({ date: "2026-09-04", request: 18, timezone })).status, "invalid-input", timezone);
+      }
+      const seoul = json(saveSql({ date: "2026-09-04", request: 19, timezone: "Asia/Seoul" }));
+      assert.equal(seoul.status, "saved");
+      assert.equal(seoul.review.review_timezone, "Asia/Seoul");
+      const utc = json(saveSql({ date: "2026-09-03", request: 20, timezone: "UTC" }));
+      assert.equal(utc.status, "saved");
+      assert.equal(utc.review.review_timezone, "UTC");
+    });
+
     await t.test("migration can be reapplied without modifying existing reviews", () => {
       const before = sql("select count(*) from public.journal_entries;");
       sql(migrationSql);
+      sql(timezoneCheckSql);
       assert.equal(sql("select count(*) from public.journal_entries;"), before);
       assert.equal(json(saveSql()).review.review_revision, 2);
+      assert.equal(json(saveSql({ date: "2026-09-02", request: 21, timezone: "not/a-zone" })).status, "invalid-input");
     });
   } finally {
     if (started) execFileSync("pg_ctl", ["-D", data, "-m", "fast", "-w", "stop"], { stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });

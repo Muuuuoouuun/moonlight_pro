@@ -68,8 +68,10 @@ export const newMemoDraft = () => ({
 export function appendMemoIntake(draft, data, fileName) {
   const parts = [];
   if (data.summary) parts.push(`[핵심 요약]\n${data.summary}`);
+  if (data.meetingMinutes) parts.push(`[회의/논의 흐름]\n${data.meetingMinutes}`);
   if (data.transcription) parts.push(`[전사/원문 내용]\n${data.transcription}`);
   if (data.keyDecisions?.length) parts.push(`[결정사항]\n${data.keyDecisions.map((item) => `- ${item}`).join("\n")}`);
+  if (data.openIssues?.length) parts.push(`[미결/보류 안건]\n${data.openIssues.map((item) => `- ${item}`).join("\n")}`);
   const body = [draft.body, parts.join("\n\n")].filter(Boolean).join("\n\n");
   // Check before changing either the original body or its recoverable snapshot.
   if (body.length > MAX_MEMO_CHARS) {

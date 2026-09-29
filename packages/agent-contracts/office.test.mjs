@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {OFFICE_IDS,parseOfficeRequest,parseOfficeAnswer,parseOfficeContext} from './office.js';
+import {OFFICE_IDS,parseOfficeRequest,parseOfficeAnswer,parseOfficeContext,parseOfficeFailure,officeFailureMessage,OFFICE_FAILURE_LABELS} from './office.js';
 const base={ownerId:'flareon',mode:'draft',scope:'personal',message:'제안서를 써줘'};
 test('Office has nine distinct IDs and never accepts legacy names or arbitrary fallbacks',()=>{
  assert.equal(new Set(OFFICE_IDS).size,9);
@@ -33,4 +33,12 @@ test('server context validates scope and cannot smuggle projects into preview or
  const context={source:'live',scope:'personal',projects:[row],note:'최근 프로젝트'};
  assert.deepEqual(parseOfficeContext(context,'personal'),context);
  for(const bad of [{...context,scope:'all'},{...context,source:'preview'},{...context,projects:[{...row,scope:'classin'}]}]) assert.throws(()=>parseOfficeContext(bad,'personal'));
+});
+test('office failures are an allow-listed phase/category pair with an operator message',()=>{
+ assert.deepEqual(parseOfficeFailure({phase:'review',category:'deadline',raw:'provider said x'}),{phase:'review',category:'deadline'});
+ for(const value of [null,{phase:'review',category:'boom'},{phase:'elsewhere',category:'json'},'deadline']) assert.equal(parseOfficeFailure(value),null);
+ assert.match(officeFailureMessage({category:'deadline'}),/제한 시간/);
+ assert.match(officeFailureMessage({category:'provider'}),/제공자/);
+ assert.match(officeFailureMessage(null),/한 번 더 보내/);
+ assert.equal(OFFICE_FAILURE_LABELS.deadline,'시간 초과');
 });

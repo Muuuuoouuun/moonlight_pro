@@ -5,7 +5,13 @@ export const metadata = {
   description: "Moonlight Hub — 1인·소규모 창업자용 운영 OS.",
   manifest: "/manifest.json",
   applicationName: "Moonlight",
-  icons: { icon: { url: "/icon.svg", type: "image/svg+xml" } },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml", sizes: "any" },
+      { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export const viewport = {

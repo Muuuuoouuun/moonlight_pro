@@ -82,30 +82,18 @@ const PERSONA_PROFILES: Record<string, { nameKo: string; role: string; systemPro
   },
 };
 
-const LEGEND_LENSES: Record<string, { nameKo: string; rule: string }> = {
-  jobs: {
-    nameKo: "스티브 잡스 (경험과 단순성)",
-    rule: "기술 나열이나 부가 기능을 쳐내고, 사용자가 직관적으로 사랑할 수 있는 단순하고 완전한 사용자 경험에 집중하라.",
-  },
-  bezos: {
-    nameKo: "제프 베이조스 (장기 고객가치 & 가역성)",
-    rule: "당장의 편의보다 장기적인 고객 가치를 우선하고, 되돌릴 수 있는 결정(Type 2)은 빠르게 실험하며 되돌릴 수 없는 결정(Type 1)은 극도로 신중하라.",
-  },
-  chouinard: {
-    nameKo: "이본 쉬나드 (목적의 지속성 & 단순한 해법)",
-    rule: "불필요한 성장을 경계하고, 본래의 목적과 윤리적 일치성을 지키며 가장 튼튼하고 단순한 방식으로 문제를 해결하라.",
-  },
-  socrates: {
-    nameKo: "소크라테스 (지적 정직성)",
-    rule: "모르는 것을 안다고 착각하지 말고, 선택의 전제를 집요하게 질문하여 스스로 명료하게 설명할 수 있는지 점검하라.",
-  },
+// 대화 렌즈는 Guru 방법론만 둔다. Legend 인물은 주간 카드로만 산다(agent-layer-direction
+// §2.1 ⑧, 2026-09-25 운영자 재확인) — 잡스·베이조스·쉬나드·소크라테스 렌즈를 뺐다. UI가
+// 보내던 카네기·힐은 여기 없어 조용히 버려지던 값이었고, 09.bigmac1.5는 이를 여기에 더해 고쳤지만
+// 병합에서는 ⑧대로 Hub 칩에서 뺀 쪽을 따른다(Hub GURU_LENS_MAP과 키가 같아야 한다 — 테스트 고정).
+const GURU_LENSES: Record<string, { nameKo: string; rule: string }> = {
   voss: {
     nameKo: "크리스 보스 (협상과 저항 극복)",
     rule: "상대의 거절(No)을 두려워하지 말고 시작점으로 삼아라. 감정을 라벨링하고, '어떻게'/'무엇을' 질문으로 상대가 스스로 주도권을 쥐게 하라.",
   },
   ogilvy: {
     nameKo: "데이비드 오길비 (사실 기반 카피)",
-    rule: "헤드라인이 80%다. 모호한 형용사나 미사여구를 배제하고 구체적인 숫자와 검증된 사실로 고객의 마음을 움직여라.",
+    rule: "헤드라인에 공을 들이되, 헤드라인이 본문보다 많이 읽힌다는 오길비의 당시 인쇄 광고 관찰을 모든 채널에 통하는 비율 법칙으로 단정하지 마라. 모호한 형용사나 미사여구를 배제하고 구체적인 숫자와 검증된 사실로 고객의 마음을 움직여라.",
   },
   godin: {
     nameKo: "세스 고딘 (가장 작은 유효 시장)",
@@ -113,7 +101,7 @@ const LEGEND_LENSES: Record<string, { nameKo: string; rule: string }> = {
   },
   rackham: {
     nameKo: "닐 랙햄 (SPIN 질문법)",
-    rule: "제품을 설명하려 들지 말고 질문하라: 상황(Situation) -> 문제(Problem) -> 시사점(Implication) -> 해결가치(Need-Payoff).",
+    rule: "제품을 설명하려 들기 전에 질문하라. 상황(Situation)·문제(Problem)·시사점(Implication)·해결가치(Need-Payoff)는 정해진 순서가 아니라 대화에서 필요한 질문을 고르는 네 가지 유형이다.",
   },
   goldratt: {
     nameKo: "엘리 골드랫 (제약 이론)",
@@ -129,6 +117,7 @@ function buildPrompt({
   context,
   draft,
   ragSnippets,
+  conversationOnly,
 }: {
   personaId: string;
   mode: string;
@@ -137,6 +126,7 @@ function buildPrompt({
   context?: any;
   draft?: string | null;
   ragSnippets?: KnowledgeItem[];
+  conversationOnly?: boolean;
 }) {
   const profile = PERSONA_PROFILES[personaId] || PERSONA_PROFILES.order;
   const lines: string[] = [];
@@ -144,9 +134,9 @@ function buildPrompt({
   lines.push(`[담당 페르소나]: ${profile.nameKo}`);
   lines.push(`[작업 모드]: ${mode.toUpperCase()}`);
 
-  if (lens && LEGEND_LENSES[lens]) {
-    const l = LEGEND_LENSES[lens];
-    lines.push(`[적용할 사상가/구루 렌즈]: ${l.nameKo}`);
+  if (lens && Object.hasOwn(GURU_LENSES, lens)) {
+    const l = GURU_LENSES[lens];
+    lines.push(`[적용할 구루 렌즈]: ${l.nameKo}`);
     lines.push(`- 판단 기준: ${l.rule}`);
   }
 
@@ -164,10 +154,14 @@ function buildPrompt({
   } else if (mode === "sparring") {
     lines.push(
       "【3자 토론 (스파링) 모드】",
-      "찬반과 검증 행동이 명확히 격돌하는 3단 구조로 답변하라 (칭찬·잡담 금지):",
+      conversationOnly
+        ? "찬반과 판단을 바꿀 확인 질문을 3단 구조로 답변하라 (칭찬·잡담 금지):"
+        : "찬반과 검증 행동이 명확히 격돌하는 3단 구조로 답변하라 (칭찬·잡담 금지):",
       "1. 🟢 [추진 논거 (Strategist)] (왜 이 방향이 유효한가, 잠재 기회와 고객 가치)",
       "2. 🔴 [Devil's Advocate 맹점/비판] (숨은 비용, 실패 가능성, 타협하면 안 되는 약점)",
-      "3. 🟡 [1단계 가역적 검증 행동 (Operator)] (위험을 줄이며 이번 주 안에 검증할 1가지 실험과 관찰 질문)",
+      conversationOnly
+        ? "3. 🟡 [판단을 바꿀 확인 질문] (추가 업무를 배정하지 않고 미확인 사실 하나를 묻기)"
+        : "3. 🟡 [1단계 가역적 검증 행동 (Operator)] (위험을 줄이며 이번 주 안에 검증할 1가지 실험과 관찰 질문)",
     );
   } else if (mode === "weekly-review") {
     lines.push(
@@ -266,7 +260,7 @@ export async function GET() {
     integration: "gemini",
     endpoint: "persona-chat",
     personas: Object.keys(PERSONA_PROFILES),
-    lenses: Object.keys(LEGEND_LENSES),
+    lenses: Object.keys(GURU_LENSES),
     status: getGeminiIntegrationStatus(),
   });
 }
@@ -287,14 +281,16 @@ export async function POST(req: Request) {
 
   const personaId = typeof payload.personaId === "string" && payload.personaId in PERSONA_PROFILES ? payload.personaId : "order";
   const mode = typeof payload.mode === "string" ? payload.mode : "advice";
-  const lens = typeof payload.lens === "string" && payload.lens in LEGEND_LENSES ? payload.lens : null;
+  const lens = typeof payload.lens === "string" && Object.hasOwn(GURU_LENSES, payload.lens) ? payload.lens : null;
   const message = typeof payload.message === "string" ? payload.message : null;
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const context = payload.context ?? {};
   const workspaceId = resolveDefaultWorkspaceId();
+  const recordLocalMode = mode === "outreach-draft" || mode === "extract-contact-outcome";
 
   let ragSnippets: KnowledgeItem[] = [];
-  if (workspaceId && (message || draft || context?.summary || context?.title)) {
+  // One contact is already supplied in draft/context; unrelated workspace notes can contaminate it.
+  if (!recordLocalMode && payload.conversationOnly !== true && workspaceId && (message || draft || context?.summary || context?.title)) {
     const searchQuery = [message, draft, context?.title, context?.summary].filter(Boolean).join(" ");
     try {
       const ragResult = await retrieveKnowledge(
@@ -314,12 +310,14 @@ export async function POST(req: Request) {
     `당신은 Moonlight 개인 운영 OS의 전문 페르소나 [${profile.nameKo}]입니다.`,
     profile.systemPrompt,
     "운영자의 언어는 한국어이며, 실무적이고 직설적인 문체를 사용합니다.",
-    "모호한 일반론이나 칭찬은 금지하고 항상 '다음 한 수'로 끝맺습니다.",
+    payload.conversationOnly === true
+      ? "모호한 일반론이나 칭찬은 피하고 질문에 직접 답하십시오. 요청하지 않은 후속 업무를 제안하지 마십시오. 페르소나의 작업 형식보다 이 대화 전용 지시가 우선합니다."
+      : "모호한 일반론이나 칭찬은 금지하고 항상 '다음 한 수'로 끝맺습니다.",
     "사실(기록 데이터)에 없는 내용을 지어내지 않으며, 외부 발송/공개 행동은 인간 승인 게이트(Human Approval)를 거치도록 제안합니다.",
     buildBusinessOpportunityCatchInstruction({ surface: "persona", personaId, mode, context }),
   ].join("\n\n");
 
-  const prompt = buildPrompt({ personaId, mode, lens, message, context, draft, ragSnippets });
+  const prompt = buildPrompt({ personaId, mode, lens, message, context, draft, ragSnippets, conversationOnly: payload.conversationOnly === true });
   const startedAt = new Date().toISOString();
 
   const isThinkingRole = personaId === "council" || personaId === "guru" || mode === "sparring" || mode === "weekly-review";
@@ -334,6 +332,8 @@ export async function POST(req: Request) {
     prompt,
     model: modelToUse,
     maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192,
+    retries: 1,
+    usageSurface: "persona-chat",
   });
 
   const finishedAt = new Date().toISOString();
@@ -367,14 +367,14 @@ export async function POST(req: Request) {
     errorMessage: result.ok ? null : result.reason,
   });
 
-  if (result.ok && workspaceId && (mode === "weekly-review" || mode === "sparring")) {
+  if (result.ok && workspaceId && payload.conversationOnly !== true && (mode === "weekly-review" || mode === "sparring")) {
     await insertSupabaseRecord("project_updates", {
       workspace_id: workspaceId,
       project_id: null,
       source: `persona.${personaId}`,
       event_type: `ai.${mode}`,
       status: "reported",
-      title: `${profile.nameKo} · ${mode === "weekly-review" ? "한 주 정리" : "스파링 토론"}${lens ? ` (${LEGEND_LENSES[lens]?.nameKo})` : ""}`,
+      title: `${profile.nameKo} · ${mode === "weekly-review" ? "한 주 정리" : "스파링 토론"}${lens ? ` (${GURU_LENSES[lens]?.nameKo})` : ""}`,
       summary: result.text.slice(0, 500),
       progress: null,
       milestone: null,

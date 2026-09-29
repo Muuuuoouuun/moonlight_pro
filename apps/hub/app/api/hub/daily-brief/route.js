@@ -6,6 +6,7 @@ import { getMorningBrief } from "@/lib/repositories/brief-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
+import { getWorkOrderCounts } from "@/lib/sales-os/work-order-counts";
 import {
   buildContentBrandCatalog,
   filterContentLedgerToBrandLanes,
@@ -71,9 +72,7 @@ function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = 
   const blocked = (Array.isArray(projects.projects) ? projects.projects : []).filter(
     (p) => p.status === "Blocked",
   );
-  const failedRuns = (Array.isArray(automations.runs) ? automations.runs : []).filter(
-    (r) => r.status === "err" || r.statusKey === "failure",
-  );
+  const failedRuns = Array.isArray(automations.incidents) ? automations.incidents : [];
 
   // (a) name-overlap join — same account on two fronts
   for (const deal of staleDeals) {
@@ -121,34 +120,6 @@ function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = 
   }
 
   return [];
-}
-
-// Pending approvals nudge — the proposed work-order queue surfaced in the signal feed.
-// Groups by persona so this reads as "which agents are waiting on me" instead of just
-// a bare count — the same roster Council/Orders show, not a separately invented one.
-function buildApprovalSignals(queue) {
-  const pending = queue?.pending || 0;
-  if (!pending) return [];
-  const orders = queue.orders || [];
-  const byPersona = new Map();
-  orders.forEach((o) => {
-    const key = o.persona || "미지정";
-    byPersona.set(key, (byPersona.get(key) || 0) + 1);
-  });
-  const personaBreakdown = Array.from(byPersona.entries())
-    .map(([persona, count]) => (count > 1 ? `${persona} ${count}` : persona))
-    .join(" · ");
-  const preview = orders.slice(0, 3).map((o) => o.title).join(" · ");
-  return [{
-    id: "queue-approvals",
-    tone: "neutral",
-    kind: "Queue",
-    title: `승인 대기 ${pending}건 — ${personaBreakdown}`,
-    summary: preview || "페르소나·인박스가 제안한 액션이 승인을 기다립니다.",
-    meta: "Work orders · proposed",
-    source: { from: "Agents", ref: "PROPOSED" },
-    decisions: [action("승인 큐 확인", "queueApprovals", true)],
-  }];
 }
 
 function buildRevenueSignals(revenue, staleDealIds = new Set()) {
@@ -248,47 +219,20 @@ function buildContentSignals(content) {
 }
 
 function buildAutomationSignals(automations) {
-  const runs = Array.isArray(automations.runs) ? automations.runs : [];
-  const flows = Array.isArray(automations.automations) ? automations.automations : [];
-  const signals = [];
-
-  runs
-    .filter((run) => run.status === "err" || run.statusKey === "failure")
-    .slice(0, 2)
-    .forEach((run) => {
-      signals.push({
-        id: `automation-failed-${run.id}`,
-        tone: "danger",
-        kind: "Automation",
-        title: `${run.flow} 실패`,
-        summary: run.detail || "실패 로그를 열고 재시도 후보인지 확인해야 합니다.",
-        meta: `Run · ${run.at} · ${run.ms}ms`,
-        source: { from: "Runs", ref: run.correlationId || run.id },
-        decisions: [
-          action("로그 열기", "review", true),
-          action("Flow 확인", "flows"),
-        ],
-      });
-    });
-
-  const paused = flows.find((flow) => flow.status === "Paused");
-  if (paused && signals.length < 2) {
-    signals.push({
-      id: `automation-paused-${paused.id}`,
-      tone: "neutral",
-      kind: "Automation",
-      title: `${paused.name} paused`,
-      summary: "중요 flow라면 다시 켜고 최근 실행 로그를 확인하세요.",
-      meta: `Flow · ${paused.lastRun}`,
-      source: { from: "Automations", ref: paused.id },
-      decisions: [
-        action("Flow 열기", "flows", true),
-        action("Run log", "review"),
-      ],
-    });
-  }
-
-  return signals;
+  const incidents = Array.isArray(automations.incidents) ? automations.incidents : [];
+  return incidents.slice(0, 2).map((run) => ({
+    id: `automation-failed-${run.id}`,
+    tone: "danger",
+    kind: "Automation",
+    title: `${run.flow} · 확인 필요`,
+    summary: run.detail || "실행 기록에서 실패 원인을 확인하세요.",
+    meta: `${run.dateLabel} · 최근 24시간 실패 ${run.failureCount}건`,
+    source: { from: "Runs", ref: run.correlationId || run.id },
+    decisions: [
+      action("실행 기록", "review", true),
+      action("자동화 확인", "flows"),
+    ],
+  }));
 }
 
 function buildWorkSignals(projects, work) {
@@ -343,7 +287,7 @@ function buildMetrics(revenue, content, automations, projects) {
   // "Runs failed 0"으로, 매출 블립이 "₩0 MRR"로 위장되던 경로(5차 재감사 M).
   const revenueReadable = revenue?.source === "supabase";
   const contentReadable = content?.source === "supabase";
-  const automationsReadable = automations?.source === "supabase";
+  const automationsReadable = automations?.source === "supabase" && automations.summary?.attentionCount != null;
   const revenueSummary = revenue.summary || {};
   const contentSummary = content.summary || {};
   const automationSummary = automations.summary || {};
@@ -364,8 +308,8 @@ function buildMetrics(revenue, content, automations, projects) {
       ? metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "neutral")
       : metric("Published", "—", content?.source === "error" ? "content read failed" : "ledger unavailable", "neutral"),
     automationsReadable
-      ? metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "danger" : "neutral")
-      : metric("Runs failed", "—", automations?.source === "error" ? "automation read failed" : "ledger unavailable", automations?.source === "error" ? "danger" : "neutral"),
+      ? metric("자동화 확인 필요", String(automationSummary.attentionCount || 0), "최근 24시간 · 미회복", automationSummary.attentionCount ? "danger" : "neutral")
+      : metric("자동화 확인 필요", "—", automations?.source === "error" ? "automation read failed" : "ledger unavailable", automations?.source === "error" ? "danger" : "neutral"),
     metric("Open work", openProjects === null ? "—" : String(openProjects), projectsReadable ? "active projects" : "project ledger unavailable", "neutral"),
   ].slice(0, 5);
 }
@@ -399,12 +343,15 @@ export async function GET() {
   // 어댑터로 한 번만 읽는다. 예전엔 이 라우트가 같은 세 기록을 attention과 별개로 다시 읽어
   // "지금 중요한 것" 판정이 첫 화면과 내 작업에서 두 벌로 갈라졌다(정체성 캡의 원인).
   // §7 확정 슬롯(KA·집중 고객·오늘 일정·할 일 레인)은 attention.raw 원본 위의 프로젝션.
-  const [attentionResult, workResult, contentResult, automationsResult, ordersResult, briefResult] = await Promise.allSettled([
+  const [attentionResult, workResult, contentResult, automationsResult, ordersResult, countsResult, briefResult] = await Promise.allSettled([
     getAttentionLedger({ includeRaw: true }),
     getWorkLedger(),
     getContentLedger(),
     getAutomationsLedger(),
-    getWorkOrders({ status: "proposed", limit: 20 }),
+    getWorkOrders({ status: "proposed", scope: 'proposals', limit: 12 }),
+    // This route only reads counts.proposed below — narrow the count to the one status
+    // instead of the default five.
+    getWorkOrderCounts({ statuses: ["proposed"] }),
     getMorningBrief(),
   ]);
 
@@ -440,6 +387,7 @@ export async function GET() {
   const automations = readLedger(automationsResult);
   // reject(transport throw)는 read 실패다 — preview로 두면 승인 큐 신호가 "빈 큐"로 위장된다.
   const ordersLedger = readLedger(ordersResult, { source: "error", error: "work-orders-request-failed", orders: [] });
+  const orderCounts = readLedger(countsResult, { source: 'error', error: 'work-order-counts-request-failed', counts: null });
   // Chief of Staff composed brief (ai.morning_brief) — the cron's output finally has a reader.
   const morning = readLedger(briefResult, { source: "preview", brief: null });
   // attention의 캘린더 창은 7일(내 작업과 공유) — 오늘 일정 슬롯은 buildDailyFocus가
@@ -448,26 +396,17 @@ export async function GET() {
   // §2 확정 슬롯: 긴급 KA ≤1 · 집중 고객 ≤5 · 오늘 일정 — tone 정렬 신호 큐와 별개의
   // 명명된 풀. 각 슬롯이 자기 소스 truth 상태를 따로 갖는다.
   const dailyFocus = buildDailyFocus({ revenue: operatorRevenue, calendar });
-  // 컨택 추적 컷오버 이전에 등록된 리드/딜의 follow-up 주문은 승인 큐에서 가린다
-  // (contact-tracking 리셋 계약). 컷오버가 없으면 trackingEligible이 undefined라 전부 통과한다.
-  const isTrackedContactOrder = (order) => {
-    if (!["followup", "followup-draft"].includes(order.kind)) return true;
-    if (order.leadId) {
-      return (revenue.leads || []).some((lead) => lead.id === order.leadId && lead.trackingEligible !== false);
-    }
-    if (order.dealId) {
-      return (revenue.deals || []).some((deal) => deal.id === order.dealId && deal.trackingEligible !== false);
-    }
-    return true;
-  };
-  const visibleOrders = Array.isArray(ordersLedger.orders)
-    ? ordersLedger.orders.filter(isTrackedContactOrder)
-    : [];
+  const queueSource = [ordersLedger.source, orderCounts.source].includes('error')
+    ? 'error'
+    : ordersLedger.source === 'supabase' && orderCounts.source === 'supabase'
+      ? 'supabase'
+      : 'preview';
   const queue = {
-    source: ordersLedger.source || "preview",
-    pending: visibleOrders.length,
-    orders: visibleOrders.slice(0, 12),
+    source: queueSource,
+    pending: queueSource === 'supabase' ? orderCounts.counts.proposed : null,
+    orders: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.slice(0, 12) : [],
   };
+  results.orders = { status: 'fulfilled', value: { source: queueSource, error: queueSource === 'error' ? 'work-orders-read-failed' : null } };
   const sources = buildSources(results);
   sources.push({ key: 'inquiries', label: '문의', state: attention?.inquiries?.status || 'error', error: attention?.inquiries?.error || null });
   const liveCount = sources.filter((source) => source.state === "live").length;
@@ -487,7 +426,6 @@ export async function GET() {
   const signals = withoutFocusDuplicates(
     [
       ...buildUnifiedRiskSignals(operatorRevenue, projects, automations, staleDealIds),
-      ...buildApprovalSignals(queue),
       ...buildRevenueSignals(operatorRevenue, staleDealIds),
       ...buildContentSignals(content),
       ...buildAutomationSignals(automations),

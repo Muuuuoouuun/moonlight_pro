@@ -8,7 +8,7 @@
 // 기간은 전체 · 최근(90/30일) · 월별 · 분기별 — 월/분기 후보는 기록 딜에서 동적으로 뽑는다.
 
 import React from "react";
-import { Badge, Card, Button, SyncBadge, SegmentedControl, EmptyState, IconButton, ScrollShadowX } from "../hub-primitives";
+import { Badge, Card, Button, TruthBadge, SegmentedControl, EmptyState, IconButton, ScrollShadowX, Skeleton } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 import { KoreaHeatmap, fmtMoney, heatFill } from "../heatmap-map";
 import { useRevenueLedger } from "./revenue";
@@ -139,7 +139,7 @@ const CustomerRankRow = React.memo(function CustomerRankRow({ customer, rank, ma
           {isTop && (
             <span
               style={{
-                fontSize: 9.5,
+                fontSize: 10.5,
                 fontWeight: 700,
                 padding: "0 4px",
                 borderRadius: 3,
@@ -423,7 +423,8 @@ const METRICS = [
 
 // ── 페이지 ───────────────────────────────────────────────────────────────────
 
-export function RevenueHeatmap({ onNavigate }) {
+// embedded: 거래 탭 "지역" 보기 안에 들어갈 때 — 페이지 h2는 거래 탭이 소유하므로 섹션 제목(h3)으로 내리고 바깥 여백을 뺀다.
+export function RevenueHeatmap({ onNavigate, embedded = false }) {
   const { ledger, syncState, reload } = useRevenueLedger();
   const [periodMode, setPeriodMode] = React.useState("all");
   const [recentKey, setRecentKey] = React.useState("90d");
@@ -497,13 +498,15 @@ export function RevenueHeatmap({ onNavigate }) {
   const ledgerUnsettled = bodyState === "loading" || bodyState === "error";
 
   return (
-    <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+    <div className={embedded ? undefined : "hub-page"} style={{ padding: embedded ? 0 : "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <div className="hub-page-header" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>매출 히트맵</h2>
+          {embedded
+            ? <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>지역별 매출</h3>
+            : <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>매출 히트맵</h2>}
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             {periodLabel} · {metric.longLabel} · 딜 {ledgerUnsettled ? "—" : `${matchedDeals}건`} · 합계 <span className="num">{ledgerUnsettled ? "—" : fmtMoney(totalValue)}</span>
-            <SyncBadge state={syncState} />
+            <TruthBadge state={syncState} style={{ marginLeft: 8 }} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -541,12 +544,9 @@ export function RevenueHeatmap({ onNavigate }) {
       )}
 
       {bodyState === "loading" ? (
-        // 기록 첫 로드 — 0건 EmptyState 대신 중립 로딩 상태(§5.3: loading ≠ empty). 헤더 SyncBadge가 같은 상태를 말한다.
+        // 기록 첫 로드 — 0건 EmptyState 대신 레이아웃을 예고하는 스켈레톤(§5.3: loading ≠ empty, §11). 헤더 TruthBadge가 같은 상태를 말한다.
         <Card>
-          <div role="status" aria-live="polite" style={{ minHeight: 220, padding: "32px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, textAlign: "center" }}>
-            <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--fg)" }}>매출 기록 불러오는 중…</div>
-            <div style={{ fontSize: 12, color: "var(--fg-faint)" }}>딜이 도착하면 지도와 고객 순위가 채워집니다.</div>
-          </div>
+          <Skeleton lines={5} height={36} gap={12} label="매출 기록 불러오는 중" />
         </Card>
       ) : bodyState === "error" ? (
         // 읽기 실패 — "딜 없음"으로 위장 금지. 필터 초기화 CTA는 실패 화면에 무의미하므로 재시도만 둔다.

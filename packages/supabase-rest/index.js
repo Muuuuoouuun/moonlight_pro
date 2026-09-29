@@ -85,13 +85,17 @@ export function withWorkspaceFilter(filters = []) {
 }
 
 function buildRestUrl(baseUrl, table, options = {}) {
-  const { select = "*", filters = [], limit, order } = options;
+  const { select = "*", filters = [], limit, offset, order } = options;
   const params = new URLSearchParams();
 
   params.set("select", select);
 
   if (typeof limit === "number") {
     params.set("limit", String(limit));
+  }
+
+  if (Number.isSafeInteger(offset) && offset > 0) {
+    params.set("offset", String(offset));
   }
 
   if (order) {

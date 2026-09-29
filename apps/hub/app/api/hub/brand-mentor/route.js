@@ -5,12 +5,29 @@ import { recordAgentRun, setAgentRunEmittedCount } from "@/lib/sales-os/agent-ru
 import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { createWorkOrder } from "@/lib/sales-os/work-orders";
 import { advisorRunResult } from "@/lib/sales-os/advisor-result";
-import { isValidAdvisorInput } from "@/lib/advisor-input";
+import { isGuidanceCardForDomain, isValidAdvisorInput } from "@/lib/advisor-input";
+import { OFFICE_MENTOR_DRAFT_LIMIT } from "@/components/hub/office-mentor-client";
+import { isValidBrandGuruConversationHistory } from "@/lib/guru-chat-history";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ENGINE_PATH = "/api/ai/brand-mentor";
+// Office escalations carry the Office result verbatim (see office-mentor-client).
+const OFFICE_REVIEW_DRAFT_LIMIT = OFFICE_MENTOR_DRAFT_LIMIT;
+// JSON may spend up to 6 bytes per UTF-16 unit (\uXXXX escapes; Korean needs 3), so any
+// draft within the character limit fits. Every other caller keeps the default 64 KiB cap.
+const OFFICE_REVIEW_MAX_JSON_BYTES = 160 * 1024;
+const DEFAULT_MAX_JSON_BYTES = 64 * 1024;
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function parseOfficeSource(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["requestId", "runId"].includes(key))
+    || typeof value.requestId !== "string" || !UUID.test(value.requestId)
+    || (value.runId != null && (typeof value.runId !== "string" || !UUID.test(value.runId)))) return null;
+  return { requestId: value.requestId, runId: value.runId ?? null };
+}
 
 function resolveEngineUrl() {
   return (process.env.COM_MOON_ENGINE_URL?.trim() || "").replace(/\/$/, "");
@@ -20,7 +37,7 @@ function resolveSharedSecret() {
   return process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() || "";
 }
 
-async function callEngine(body) {
+async function callEngine(body, { retries = 1 } = {}) {
   const engineUrl = resolveEngineUrl();
 
   if (!engineUrl) {
@@ -36,33 +53,44 @@ async function callEngine(body) {
     headers["x-com-moon-shared-secret"] = sharedSecret;
   }
 
-  let response;
-  try {
-    response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      cache: "no-store",
-      signal: AbortSignal.timeout(60_000),
-      redirect: "error",
-    });
-  } catch {
-    // Engine configured but unreachable (down / wrong URL): degrade to a clean error the
-    // client normalizes, instead of throwing a 500. Honest preview/error states are part
-    // of the design (never mix preview + live records).
-    return {
-      status: 502,
-      data: { status: "error", reason: "engine-request-failed" },
-    };
+  const attempts = Math.max(0, Math.min(retries, 2));
+  for (let attempt = 0; attempt <= attempts; attempt++) {
+    try {
+      const response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        cache: "no-store",
+        signal: AbortSignal.timeout(60_000),
+        redirect: "error",
+      });
+      if (!response.ok && attempt < attempts && (response.status === 502 || response.status === 503)) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = text || null;
+      }
+      return { status: response.status, data };
+    } catch {
+      if (attempt < attempts) {
+        await new Promise(r => setTimeout(r, 600));
+        continue;
+      }
+      return {
+        status: 502,
+        data: { status: "error", reason: "engine-request-failed" },
+      };
+    }
   }
-  const text = await response.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = text || null;
-  }
-  return { status: response.status, data };
+  return {
+    status: 502,
+    data: { status: "error", reason: "engine-request-failed" },
+  };
 }
 
 // One-line fingerprint of the assembled brand context for the episodic-memory log.
@@ -137,12 +165,18 @@ export async function POST(req) {
     return guard;
   }
 
-  const parsed = await readHubWriteJson(req);
+  const parsed = await readHubWriteJson(req, { maxBytes: OFFICE_REVIEW_MAX_JSON_BYTES });
   if (parsed.error) {
     return parsed.error;
   }
 
   const input = parsed.data;
+  if (parsed.byteLength > DEFAULT_MAX_JSON_BYTES && input?.mode !== "office-review") {
+    return NextResponse.json(
+      { status: "payload-too-large", error: `JSON payload must be ${DEFAULT_MAX_JSON_BYTES} bytes or smaller.` },
+      { status: 413 },
+    );
+  }
   if (!isValidAdvisorInput(input)) {
     return NextResponse.json({ status: "error", error: "자문 설정의 형식을 확인해 주세요." }, { status: 400 });
   }
@@ -156,17 +190,60 @@ export async function POST(req) {
   const directives = input.directives && typeof input.directives === "object" ? input.directives : undefined;
   const values = input.values && typeof input.values === "object" ? input.values : undefined;
   const knowledge = input.knowledge && typeof input.knowledge === "object" ? input.knowledge : undefined;
+  const guidanceId = typeof input.guidanceId === "string" ? input.guidanceId : undefined;
+  const officeSource = mode === "office-review" ? parseOfficeSource(input.officeSource) : null;
+  if (input.history !== undefined && (
+    mode !== "open-question"
+    || !isValidBrandGuruConversationHistory(input.history, { guidanceId, ref })
+  )) {
+    return NextResponse.json({ status: "error", error: "invalid-conversation-history" }, { status: 400 });
+  }
+  if (mode === "office-review" && (
+    input.scope !== "personal" || !officeSource || !draft?.trim() || draft.length > OFFICE_REVIEW_DRAFT_LIMIT
+    || input.createWorkOrder !== false || input.guidanceId != null || (legendIds?.length || 0) > 0
+    || input.directives != null || input.values != null || input.knowledge != null
+  )) {
+    return NextResponse.json({ status: "error", error: "invalid-office-review" }, { status: 400 });
+  }
+  if (mode === "open-question" && (
+    !isGuidanceCardForDomain(guidanceId, ["marketing", "content"])
+    || !draft?.trim()
+    || input.createWorkOrder === true
+    || (legendIds?.length || 0) > 0
+  )) {
+    return NextResponse.json({ status: "error", error: "질문과 마케팅·콘텐츠 카드 출처를 확인해 주세요." }, { status: 400 });
+  }
 
-  const context = await assembleBrandContext({ mode, ref, draft });
-  const result = await callEngine({ mode, ref, draft, context, legendIds, directives, values, knowledge });
-  // Episodic memory: log what the Council recommended so the next call can remember it (best-effort).
+  const context = await assembleBrandContext({ mode, ref, draft, guidanceId });
+  if ((mode === "open-question" || mode === "office-review") && ["preview", "error"].includes(context?.source)) {
+    return NextResponse.json(
+      { status: context.source, error: context.error || "브랜드 자료를 읽을 수 없습니다." },
+      { status: context.source === "preview" ? 202 : 502 },
+    );
+  }
+  if (mode === "open-question" && ref && (
+    context?.focus?.found !== true
+    || context.focus.kind !== "brand"
+    || context?.brand?.key !== ref
+  )) {
+    return NextResponse.json(
+      { status: "error", error: "선택한 개인 브랜드를 현재 원장에서 확인할 수 없습니다." },
+      { status: 409 },
+    );
+  }
+  const result = await callEngine({
+    mode, ref, draft, context, legendIds, directives, values, knowledge, guidanceId,
+    ...(mode === "open-question" ? { createWorkOrder: false, ...(input.history !== undefined ? { history: input.history } : {}) } : {}),
+    ...(officeSource ? { scope: "personal", officeSource, createWorkOrder: false } : {}),
+  });
+  // Keep requested Guru questions separate from ordinary Council advice in episodic memory.
   let run = { persisted: false, id: null, reason: "agent-run-write-failed" };
   try {
     run = await recordAgentRun({
-      agent: "council",
+      agent: mode === "open-question" ? "guru.brand" : "council",
       mode,
       ref,
-      inputSummary: summarizeContext(context, legendIds),
+      inputSummary: `${summarizeContext(context, legendIds) || ""}${officeSource ? ` office-request=${officeSource.requestId}${officeSource.runId ? ` office-run=${officeSource.runId}` : ""}` : ""}`.trim(),
       recommendation: trimRecommendation(result.data),
       result: advisorRunResult(result.status, result.data),
     });
@@ -175,8 +252,8 @@ export async function POST(req) {
   }
 
   let workOrder = { persisted: false, reason: "not-requested" };
-  // UI callers retain the existing proposal behavior; MCP advice-only calls opt out.
-  if (input.createWorkOrder !== false) {
+  // Advice is the default. Only an explicit proposal request enters the work-order queue.
+  if (input.createWorkOrder === true) {
     if (advisorRunResult(result.status, result.data) !== "ok") {
       workOrder = { persisted: false, reason: "not-generated" };
     } else {

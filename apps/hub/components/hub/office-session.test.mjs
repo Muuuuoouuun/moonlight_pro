@@ -1,6 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION } from './office-session.js';
+import fs from 'node:fs';
+import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION, officeMessageLength, officeTaskAgendaBlock, officeTasksForScope, officeRailTasks, loadOfficeTasks, officeUnloadGuard } from './office-session.js';
+import { createOfficeMentorSessionStore } from './office-mentor-session.js';
+
+test('meeting-room rail lists open in-scope tasks, recorded blockers first, then the longest untouched', () => {
+  const now = Date.parse('2026-09-26T09:00:00+09:00');
+  const tasks = [
+    { id: 'fresh', title: '오늘 고친 일', status: 'active', workspace: 'brand', updatedAt: '2026-09-26T08:00:00+09:00' },
+    { id: 'old', title: '오래된 일', status: 'inbox', workspace: 'brand', updatedAt: '2026-09-20T09:00:00+09:00' },
+    { id: 'blocked', title: '막힌 일', status: 'blocked', workspace: 'brand', updatedAt: '2026-09-25T09:00:00+09:00' },
+    { id: 'undated', title: '날짜 없음', status: 'inbox', workspace: 'brand' },
+    { id: 'done', title: '끝난 일', status: 'done', workspace: 'brand', updatedAt: '2026-09-01T09:00:00+09:00' },
+    { id: 'company', title: '회사 일', status: 'inbox', workspace: 'classin', updatedAt: '2026-09-01T09:00:00+09:00' },
+  ];
+  const rail = officeRailTasks(tasks, 'personal', { now });
+  assert.deepEqual(rail.map(item => item.task.id), ['blocked', 'old', 'fresh', 'undated']);
+  assert.deepEqual(rail.map(item => item.staleDays), [1, 6, 0, null]);
+  assert.equal(officeRailTasks(tasks, 'all', { now, limit: 2 }).length, 2);
+  assert.deepEqual(officeRailTasks(null, 'all'), []);
+});
 
 const generated = (request, answer = '요청한 결과입니다.') => ({ status: 'generated', ...request, answer, nextAction: '추가 행동 없음' });
 
@@ -93,7 +112,7 @@ test('clipboard feedback reflects completion and reports permission or capabilit
 
 test('pending council snapshots preserve controls and weights across edits, scope changes and follow-up', () => {
   const store = createOfficeSessionStore();
-  store.update('personal', { draft: '유지할 원문', mode: 'council', deliberation: { profile: 'explore', challenge: 3, influence: { eevee: 2, umbreon: 3 } } });
+  store.update('personal', { draft: '유지할 원문', mode: 'council', reviewers: ['umbreon'], deliberation: { profile: 'explore', challenge: 3, influence: { eevee: 2, umbreon: 3 } } });
   const pending = store.begin('personal', 'configured');
   assert.equal(pending.request.deliberation.challenge, 3);
   store.update('personal', { ownerId: 'vaporeon', reviewers: ['eevee'], deliberation: { profile: 'urgent' } });
@@ -116,4 +135,190 @@ test('ordinary modes retain local settings without sending council-only fields',
   const pending = store.begin('personal', 'draft');
   assert.equal(pending.request.deliberation, undefined);
   assert.equal(store.get('personal').deliberation.profile, 'scrutiny');
+});
+
+test('one host starts without reviewers and adding or removing a perspective determines council mode', () => {
+  const store = createOfficeSessionStore();
+  assert.deepEqual(store.get('personal').reviewers, []);
+  store.update('personal', { draft: '가격 결정', mode: 'draft' });
+  assert.equal(store.begin('personal', 'solo').request.mode, 'draft');
+  store.complete('personal', 'solo', { status: 'error' });
+  store.update('personal', { reviewers: ['umbreon'] });
+  assert.equal(store.get('personal').mode, 'council');
+  store.update('personal', { reviewers: [] });
+  assert.equal(store.get('personal').mode, 'chat');
+});
+
+test('a host follow-up uses chat once without changing the configured council participants', () => {
+  const store = createOfficeSessionStore();
+  store.update('personal', { draft: '가격을 정해요', reviewers: ['umbreon'] });
+  const first = store.begin('personal', 'council');
+  assert.equal(first.request.mode, 'council');
+  store.complete('personal', first.id, generated(first.request));
+  store.update('personal', { draft: '예산이 없어요' });
+  const followUp = store.begin('personal', 'chat-follow-up', { mode: 'chat' });
+  assert.equal(followUp.request.mode, 'chat');
+  assert.deepEqual(followUp.request.participants, []);
+  assert.equal(store.get('personal').mode, 'council');
+  assert.deepEqual(store.get('personal').reviewers, ['umbreon']);
+});
+
+test('task agenda formatting and scope selection use only available task fields', () => {
+  const tasks = [
+    { id: 'a', title: '회사 제안서', workspace: 'classin', status: 'doing', nextAction: '금액 결정', due: '09-30', description: '고객 메모' },
+    { id: 'b', title: '개인 콘텐츠', workspace: 'brand', status: 'inbox' },
+    { id: 'c', title: '범위 없는 일', status: 'inbox' },
+    { id: 'd', title: '끝난 일', workspace: 'classin', status: 'done' },
+  ];
+  assert.deepEqual(officeTasksForScope(tasks, 'classin').map(task => task.id), ['a']);
+  assert.deepEqual(officeTasksForScope(tasks, 'personal').map(task => task.id), ['b']);
+  assert.deepEqual(officeTasksForScope(tasks, 'all').map(task => task.id), ['a', 'b', 'c']);
+  const block = officeTaskAgendaBlock(tasks[0]);
+  for (const line of ['회사 제안서', '금액 결정', '09-30', '고객 메모']) assert.ok(block.includes(line));
+  assert.doesNotMatch(block, /프로젝트:/);
+  assert.ok(officeTaskAgendaBlock({ title: '가'.repeat(2000) }).length <= 1500);
+});
+
+test('agenda stays in the request after the first turn falls outside four-turn history', () => {
+  const store = createOfficeSessionStore();
+  const block = officeTaskAgendaBlock({ title: '제안서 가격', nextAction: '견적 확정' });
+  store.update('classin', { agenda: { title: '제안서 가격', source: 'task', taskId: 't1', importedAt: '2026-09-24T09:00:00.000Z', block }, draft: `${block}\n\n검토해 줘` });
+  for (let index = 0; index < 5; index += 1) {
+    const pending = store.begin('classin', `turn-${index}`);
+    assert.ok(pending);
+    store.complete('classin', pending.id, generated(pending.request));
+    store.update('classin', { draft: `후속 요청 ${index}` });
+  }
+  const sixth = store.begin('classin', 'sixth');
+  assert.ok(sixth.request.message.startsWith(block));
+  assert.equal(sixth.request.message.split(block).length, 2);
+  assert.equal(sixth.request.history.length, 8);
+});
+
+test('manual agenda is derived from the first request and a new agenda clears only its scope', () => {
+  const store = createOfficeSessionStore();
+  store.update('personal', { draft: '첫 줄 안건\n추가 상황' });
+  const pending = store.begin('personal', 'manual');
+  assert.equal(store.get('personal').agenda, null);
+  store.complete('personal', pending.id, generated(pending.request));
+  assert.deepEqual(store.get('personal').agenda, { title: '첫 줄 안건', source: 'manual', block: '첫 줄 안건\n추가 상황' });
+  store.update('classin', { draft: '회사 원문' });
+  store.reset('personal');
+  assert.equal(store.get('personal').turns.length, 0);
+  assert.equal(store.get('personal').agenda, null);
+  assert.equal(store.get('personal').draft, '');
+  assert.equal(store.get('classin').draft, '회사 원문');
+});
+
+test('the full message limit counts a reattached agenda and shows an explicit error', () => {
+  const store = createOfficeSessionStore();
+  const block = '안건'.repeat(250);
+  store.update('personal', { agenda: { title: '긴 안건', source: 'manual', block }, turns: Array.from({ length: 5 }, (_, id) => ({ id, message: `후속 ${id}`, result: { answer: '답변' } })), draft: '가'.repeat(5600) });
+  assert.ok(officeMessageLength(store.get('personal')) > 6000);
+  assert.equal(store.begin('personal', 'too-long'), null);
+  assert.match(store.get('personal').error.error, /6,000자/);
+  assert.equal(store.get('personal').draft.length, 5600);
+});
+
+test('task reader distinguishes live, partial, preview and failed HTTP or read envelopes', async () => {
+  const read = (status, body) => loadOfficeTasks({ fetcher: async () => Response.json(body, { status }) });
+  assert.deepEqual((await read(200, { status: 'live', tasks: [{ id: 'a' }] })).tasks, [{ id: 'a' }]);
+  assert.equal((await read(200, { status: 'partial', tasks: [{ id: 'a' }] })).status, 'partial');
+  assert.equal((await read(200, { status: 'preview', tasks: [] })).status, 'preview');
+  assert.equal((await read(502, { status: 'error', tasks: [] })).status, 'error');
+  assert.equal((await read(200, { status: 'error', tasks: [] })).status, 'error');
+  assert.equal((await loadOfficeTasks({ fetcher: async () => { throw new Error('offline'); } })).status, 'error');
+});
+
+test('one leave-page guard covers Office drafts and unsent mentor follow-ups', () => {
+  const office = createOfficeSessionStore();
+  const mentor = createOfficeMentorSessionStore();
+  const guard = officeUnloadGuard([office, mentor]);
+  const event = () => ({ prevented: 0, returnValue: undefined, preventDefault() { this.prevented += 1; } });
+  const quiet = event();
+  assert.equal(guard(quiet), false);
+  assert.equal(quiet.prevented, 0);
+  assert.equal(quiet.returnValue, undefined);
+
+  const source = { requestId: '10000000-0000-4000-8000-000000000001', runId: null };
+  const result = { status: 'generated', scope: 'personal', answer: 'Office 종합', evidence: [], dissent: [], nextAction: '' };
+  const id = mentor.open({ result, officeSource: source, scope: 'personal', initialAdvice: { status: 'generated', text: '첫 답변' } });
+  mentor.setDraft(id, '아직 보내지 않은 멘토 질문');
+  const mentorDraft = event();
+  assert.equal(guard(mentorDraft), true);
+  assert.equal(mentorDraft.prevented, 1);
+  assert.equal(mentorDraft.returnValue, '');
+
+  mentor.setDraft(id, '');
+  office.update('personal', { draft: 'Office 입력' });
+  assert.equal(guard(event()), true);
+  assert.equal(officeUnloadGuard([])(event()), false);
+});
+
+test('the Hub shell installs the shared guard with the mentor session store', () => {
+  const provider = fs.readFileSync(new URL('./office-session-provider.jsx', import.meta.url), 'utf8');
+  assert.match(provider, /mentorStore = officeMentorSessions/);
+  assert.match(provider, /officeUnloadGuard\(\[store, mentorStore\]\)/);
+  assert.match(provider, /addEventListener\('beforeunload', guard\)/);
+  assert.match(provider, /removeEventListener\('beforeunload', guard\)/);
+});
+
+test('task read errors map known internal codes to short Korean copy and never leak a raw code', async () => {
+  const read = (status, body) => loadOfficeTasks({ fetcher: async () => Response.json(body, { status }) });
+  assert.equal((await read(502, { status: 'error', error: 'project-ledger-core-read-failed' })).error, '업무 저장소에 연결하지 못했습니다.');
+  assert.equal((await read(500, { status: 'error', error: 'task-ledger-unexpected-error' })).error, '할 일을 불러오는 중 오류가 발생했습니다.');
+  const unknown = (await read(502, { status: 'error', error: 'some-unmapped-internal-code' })).error;
+  assert.equal(unknown, '할 일을 읽지 못했습니다.');
+  assert.doesNotMatch(unknown, /-/);
+});
+
+test('page chat override applies only to council sessions; draft/review follow-ups and revise send their stored mode', () => {
+  const store = createOfficeSessionStore();
+  const pageOverride = session => session.turns.length && session.followUpMode === 'chat' && session.mode === 'council' ? { mode: 'chat' } : undefined;
+
+  // Draft mode: first turn, then a revise-like restore of {mode:'draft', reviewers:[]} — a follow-up must still send 'draft'.
+  store.update('personal', { draft: '초안 작성해 줘', mode: 'draft' });
+  const draftFirst = store.begin('personal', 'draft-1');
+  assert.equal(draftFirst.request.mode, 'draft');
+  store.complete('personal', draftFirst.id, generated(draftFirst.request));
+  store.update('personal', { mode: 'draft', reviewers: [] });
+  store.update('personal', { draft: '다시 이어서' });
+  const draftSession = { ...store.get('personal'), followUpMode: 'chat' };
+  const draftSecond = store.begin('personal', 'draft-2', pageOverride(draftSession));
+  assert.equal(draftSecond.request.mode, 'draft');
+
+  // Council mode: the '주관에게' (chat) follow-up choice still sends 'chat' for a council session.
+  store.update('classin', { draft: '회의 안건', reviewers: ['umbreon'] });
+  const councilFirst = store.begin('classin', 'council-1');
+  assert.equal(councilFirst.request.mode, 'council');
+  store.complete('classin', councilFirst.id, generated(councilFirst.request));
+  store.update('classin', { draft: '후속 질문' });
+  const councilSession = { ...store.get('classin'), followUpMode: 'chat' };
+  const councilSecond = store.begin('classin', 'council-2', pageOverride(councilSession));
+  assert.equal(councilSecond.request.mode, 'chat');
+});
+
+test('첫 요청 실패 뒤 원문을 바꾸면 옛 원문이 붙지 않고 안건 제목도 새 원문을 따른다', () => {
+  const store = createOfficeSessionStore();
+  store.update('personal', { draft: '옛 질문 원문' });
+  store.begin('personal', 'first-fail');
+  assert.equal(store.get('personal').agenda, null);
+  store.complete('personal', 'first-fail', { status: 'error', error: '연결 실패' });
+  assert.equal(store.get('personal').agenda, null);
+  store.update('personal', { draft: '완전히 새로 쓴 원문' });
+  const second = store.begin('personal', 'second');
+  assert.equal(second.request.message, '완전히 새로 쓴 원문');
+  assert.doesNotMatch(second.request.message, /옛 질문 원문/);
+  store.complete('personal', second.id, generated(second.request));
+  assert.equal(store.get('personal').agenda.title, '완전히 새로 쓴 원문');
+});
+
+test('a task-imported agenda survives a failed first request unchanged', () => {
+  const store = createOfficeSessionStore();
+  const block = officeTaskAgendaBlock({ title: '가져온 할 일', nextAction: '확인' });
+  const importedAgenda = { title: '가져온 할 일', source: 'task', taskId: 't1', importedAt: '2026-09-25T00:00:00.000Z', block };
+  store.update('personal', { agenda: importedAgenda, draft: block });
+  store.begin('personal', 'task-fail');
+  store.complete('personal', 'task-fail', { status: 'error', error: '연결 실패' });
+  assert.deepEqual(store.get('personal').agenda, importedAgenda);
 });

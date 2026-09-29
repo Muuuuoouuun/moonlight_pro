@@ -15,7 +15,7 @@ test('bounded recent history never injects system roles or overflows the contrac
  assert.equal(history.length,8);assert.ok(JSON.stringify(history).length<20000);assert.ok(history.every(t=>['user','assistant'].includes(t.role)));
 });
 test('new Office destination preserves legacy office alias and has navigation ownership',()=>{
- assert.equal(LEGACY_REDIRECTS['dashboard/agents/office'].to,'dashboard/agents/chat');
+ assert.equal(LEGACY_REDIRECTS['dashboard/agents/office'].to,'dashboard/agents/office-council');
  assert.ok(JSON.stringify(NAV_TREE).includes('dashboard/agents/office-council'));
  assert.ok(JSON.stringify(SIDEBAR_ANCHORS).includes('dashboard/agents/office-council'));
 });
@@ -26,7 +26,74 @@ test('visible checkboxes use labeled rows and request results keep their origina
  assert.match(source,/person\.id === result\.ownerId/);
  assert.match(source,/item\.key === result\.mode/);
  assert.match(source,/같은 모델의 역할별 개별 검토/);
- assert.match(source,/<OfficeDiscussion result=\{result\} request=\{turn.request\}/);
+ assert.match(source, /officeDiscussionState\(result, request\)/);
+ assert.match(source, /discussion\.turns\.map/);
+});
+
+test('Office meeting room presents agenda, chronological speeches, and a sticky composer', () => {
+  const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
+  assert.ok(page.indexOf('styles.agendaBar') < page.indexOf('styles.thread'));
+  assert.ok(page.indexOf('styles.thread') < page.indexOf('styles.composer'));
+  assert.match(page, /session\.turns\.map\(/);
+  assert.doesNotMatch(page, /\[\.\.\.session\.turns\]\.reverse\(\)/);
+  assert.match(page, /officeDiscussionRounds\(/);
+  assert.match(page, /loadOfficeTasks\(/);
+  assert.match(page, /taskState\.status === 'error'/);
+  assert.match(page, /할 일 읽기 실패/);
+  assert.match(page, /다시 시도/);
+  assert.match(page, /taskState\.status === 'preview'/);
+  assert.match(page, /taskState\.status === 'partial'/);
+  assert.match(page, /taskWorkspace: task\.workspace/);
+  assert.match(page, /onDrop=\{handleDrop\}/);
+  assert.match(css, /\.composer\s*\{[^}]*position:sticky;[^}]*bottom:0;/);
+  assert.match(css, /scroll-padding-bottom:/);
+  assert.match(css, /@media\(max-width:600px\) and \(max-height:600px\)/);
+  assert.doesNotMatch(css, /\.composerTop\s*\{\s*display:none;/);
+});
+
+test('V4 meeting room: agenda rail, conclusion-first center, attendee rail, and one-column tabs', () => {
+  const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
+  // Three columns in reading order: stuck work on the left, the meeting, then who is in it.
+  assert.ok(page.indexOf('styles.agendaRail') < page.indexOf('className={styles.main}'));
+  assert.ok(page.indexOf('className={styles.main}') < page.indexOf('styles.seatRail'));
+  assert.match(page, /officeRailTasks\(taskState\.tasks, scope\)/);
+  assert.match(page, /aria-label=\{`안건으로 가져오기: \$\{task\.title\}`\}/);
+  // Rounds are chosen from the rail; the center shows one round, conclusion before speeches.
+  assert.match(page, /aria-label="회의 판"/);
+  assert.match(page, /aria-pressed=\{!busy && turn\.id === shownTurn\?\.id\}/);
+  const resultTurn = page.slice(page.indexOf('function ResultTurn'), page.indexOf('function speakingOrder'));
+  assert.ok(resultTurn.indexOf('styles.summary') < resultTurn.indexOf('<ThreadDiscussion'));
+  assert.ok(resultTurn.indexOf('styles.verdictMain') < resultTurn.indexOf('styles.verdictSide'));
+  assert.match(page, /styles\.lanes/);
+  // Waiting shows the planned order, never a fake progress bar.
+  assert.match(page, /순서 예고 · 실제 진행률 아님/);
+  assert.match(page, /speakingOrder\(session\.pending\.request\)/);
+  // Narrow page: tabs are the shared SegmentedControl, not a hand-built toggle.
+  assert.match(page, /<SegmentedControl label="회의실 보기"/);
+  for (const label of ['안건', '회의', '참석자']) assert.ok(page.includes(`label: '${label}'`));
+  assert.match(css, /\.page\s*\{[^}]*container-type:inline-size/);
+  assert.match(css, /@container \(max-width:1060px\) \{\s*\.room \{[^}]*\}\s*\.seatRail \{ display:none; \}/);
+  assert.match(css, /@container \(max-width:720px\)/);
+  assert.match(css, /\.room\[data-view="agenda"\] \.agendaRail/);
+  assert.match(css, /\.lanes \{ display:grid; grid-template-columns:repeat\(var\(--lane-count,2\),minmax\(0,1fr\)\)/);
+});
+
+test('Eevee assignment is explicit, source-bound, reviewable, and cannot override manual selection', () => {
+  const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
+  assert.match(page, /fetch\('\/api\/hub\/office\/assignment'/);
+  assert.match(page, /parseOfficeRoutingRequest\(\{ message, scope \}\)/);
+  assert.match(page, /parseOfficeRoutingResult\(/);
+  assert.match(page, /businessWrites !== false/);
+  assert.match(page, /session\.agenda\?\.block \|\| session\.draft/);
+  assert.match(page, /onClick=\{requestAssignment\}>담당 추천<\/Button>/);
+  assert.match(page, /assignmentReadRef\.current/);
+  assert.match(page, /invalidateAssignment\(\)/);
+  assert.match(page, /<CertaintyBadge state="recommended" \/>/);
+  for (const label of ['적용', '수정', '무시', '직접 선택']) assert.ok(page.includes(label));
+  assert.match(css, /\.assignmentCard\s*\{[^}]*border:1px solid var\(--line\)/);
 });
 
 test('council completion requires the requested settings and complete recorded turns',async()=>{
@@ -53,4 +120,40 @@ test('browser rejects old policy, foreign scope context, and mismatched particip
  for(const changes of [{version:'older-policy'},{scope:'classin'},{participants:['umbreon']},{context:{...valid.context,scope:'classin'}}]){
   assert.equal((await call({...valid,...changes})).status,'error');
  }
+});
+
+test('⌘J and the top-bar sparkle open the Office page instead of the legacy global widget', () => {
+  const app = fs.readFileSync(new URL('./hub-app.jsx', import.meta.url), 'utf8');
+  const topbar = fs.readFileSync(new URL('./hub-topbar.jsx', import.meta.url), 'utf8');
+  assert.match(app, /navigate\('dashboard\/agents\/office-council'\)/);
+  assert.doesNotMatch(app, /FloatingMentorWidget/);
+  assert.match(topbar, /tooltip="Office \(⌘J\)"/);
+});
+
+test('an untraced result carries an explicit certainty badge on both Office surfaces', () => {
+  const badge = /sourceCheck === 'untraced' \? <CertaintyBadge state="unknown" label="근거 확인 안 됨" \/> : null/;
+  assert.match(fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8'), badge);
+  assert.match(fs.readFileSync(new URL('./office-workflow-panel.jsx', import.meta.url), 'utf8'), badge);
+});
+
+test('Office shows a seven-day usage line that honors the read envelope', () => {
+  const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
+  assert.match(page, /fetch\('\/api\/hub\/office\/usage'/);
+  assert.match(page, /usage\.status === 'preview'/);
+  assert.match(page, /usage\.status !== 'live'/);
+  assert.match(page, /<OfficeUsageLine refreshKey=\{session\.turns\.length\} \/>/);
+  assert.match(page, /OFFICE_FAILURE_LABELS/);
+});
+
+test('Office surfaces follow the truth, selection and announcement contracts', () => {
+  const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
+  const panel = fs.readFileSync(new URL('./office-workflow-panel.jsx', import.meta.url), 'utf8');
+  assert.match(page, /role=\{session\.error\.status === 'error' \? 'alert' : 'status'\}/);
+  assert.match(page, /aria-live="polite" aria-label="Office 요청 결과"/);
+  assert.match(page, /threadRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(css, /\.member\[aria-pressed="true"\][^}]*--accent-line/);
+  assert.match(css, /\.thread:focus-visible \{ outline:1px solid var\(--moon-300\); outline-offset:-2px; \}/);
+  assert.doesNotMatch(panel, /<EmptyState icon="sparkle" title="업무 연결 확인 필요"/);
+  assert.match(panel, /className=\{`mono \$\{styles\.historyTime\}`\}/);
 });

@@ -1,5 +1,6 @@
 # Eevee Office — Moonlight 시스템 전문화 9인 C-Suite 운영 정본 명세
 
+> **상태 변경(2026-09-25): 설계 기준 기록.** 현행 경계는 [에이전트 계층 방향](2026-09-24-agent-layer-direction.md)과 [업무 안의 Eevee Office 심화 설계](2026-09-21-eevee-office-embedded-workflow-deep-design.md) §2가 정본이다(2026-09-24 운영자 확정). 아래의 정본·ACTIVE 표기는 작성 당시 기록이고, 목표 수치와 성과 표현은 실측이 아니다.  
 > 상태: **ACTIVE OPERATING SPECIFICATION · Moonlight 시스템 전문화 운영 정본 (2026-09-21)**  
 > 날짜: 2026-09-21  
 > 핵심 목적: 범용 비즈니스 조언을 배제하고, Moonlight Personal Operator OS의 실제 코드베이스, 화면 표면, 데이터 계약에 100% 직결된 9인 C-Suite의 초전문화 실행 품질 확립  

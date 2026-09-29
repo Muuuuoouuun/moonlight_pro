@@ -145,6 +145,62 @@ describe('buildAdvisorySystemInstruction prompt generation', () => {
     assert.ok(brandPrompt.includes('외부 직접 발행 금지'));
   });
 
+  it('keeps mentor advice optional and out of the approval queue by default', () => {
+    for (const type of ['sales-mentor', 'brand-mentor']) {
+      const prompt = guardrails.buildAdvisorySystemInstruction({ type, mode: 'deal-review', context: {} });
+      assert.match(prompt, /운영자가.*요청/);
+      assert.match(prompt, /질문 또는 선택/);
+      assert.doesNotMatch(prompt, /work_orders 승인 큐|승인 큐 인큐|항상 즉시 실행 가능한|반드시.*다음 한 수/);
+    }
+  });
+
+  it('keeps an open personal brand question to observation, source frame and operator choice', () => {
+    const prompt = guardrails.buildAdvisorySystemInstruction({
+      type: 'brand-mentor', mode: 'open-question', context: { scope: 'personal' },
+    });
+    assert.match(prompt, /관찰/);
+    assert.match(prompt, /프레임/);
+    assert.match(prompt, /요청한 답변 형식과 범위를 우선해 직접 답하십시오/);
+    assert.match(prompt, /실제 질문에 중요한 반례가 있을 때만/);
+    assert.doesNotMatch(prompt, /Devil's Advocate의 반론/);
+    assert.doesNotMatch(prompt, /즉시 실행 가능한 가역적 행동을 제안|후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시|승인 큐 후보/);
+  });
+  it('keeps a reader-selected sales question on one source frame without unrelated Guru playbooks', () => {
+    const prompt = guardrails.buildAdvisorySystemInstruction({
+      type: 'sales-mentor', mode: 'open-question', context: { source: 'supabase' },
+    });
+    assert.match(prompt, /ClassIn B2B 영업/);
+    assert.match(prompt, /운영자가 요청한 답변 형식과 범위/);
+    assert.match(prompt, /카드의 적용 조건.*먼저 확인/);
+    assert.match(prompt, /연결된 고객 기록이 제공되지 않았다/);
+    assert.match(prompt, /기록 유무를 묻지.*연결 상태를 출력하지/);
+    assert.match(prompt, /업종.*추정하지/);
+    assert.doesNotMatch(prompt, /기관, 학원, 솔루션 딜/);
+    assert.doesNotMatch(prompt, /1\. 관찰된 사실과 미확인 정보/);
+    assert.doesNotMatch(prompt, /Keenan GAP 4층 진단|Chris Voss 라벨링|Napoleon Hill 명확한 목표/);
+  });
+  it('keeps an unlinked sales question free of brand, industry and unsolicited mentor citations', () => {
+    const prompt = guardrails.buildAdvisorySystemInstruction({
+      type: 'sales-mentor', mode: 'open-question', context: { source: 'supabase', scope: 'unscoped' },
+    });
+    assert.match(prompt, /B2B 영업 멘토/);
+    assert.match(prompt, /선택 카드가 없으면.*출처를 붙이지/);
+    assert.match(prompt, /불편.*전제하지/);
+    assert.doesNotMatch(prompt, /ClassIn|학원|수업|거장의 실전 팁 인터리빙/);
+    assert.match(prompt, /전달하지 않은 원장 정보.*부재로 단정하지/);
+    assert.doesNotMatch(prompt, /반드시 "현재 데이터에 없음/);
+  });
+
+  it('keeps an Office second opinion source-based and free from invented cards or new work', () => {
+    const prompt = guardrails.buildAdvisorySystemInstruction({
+      type: 'brand-mentor', mode: 'office-review', context: { scope: 'personal', brand: null },
+    });
+    assert.match(prompt, /개인 브랜드/);
+    assert.match(prompt, /관찰된 사실과 미확인 정보/);
+    assert.match(prompt, /운영자가 판단할 질문 또는 선택/);
+    assert.doesNotMatch(prompt, /즉시 실행 가능한 가역적 행동을 제안|후속 행동은 운영자가 명시적으로 요청한 경우에만 1개 제시|승인 큐 후보|work_order/);
+  });
+
   it('embeds values and knowledge directives into system instruction', () => {
     const prompt = guardrails.buildAdvisorySystemInstruction({
       type: 'sales-mentor',
@@ -242,6 +298,44 @@ describe('parseCouncilResponse contract parsing', () => {
     assert.equal(result.dissent, '속도 vs 안전 상충');
     assert.equal(result.conditionalVerdict, '조건 A 확인 시 제안, 불확실 시 보류');
     assert.equal(result.nextAction, '체크리스트 확인');
+  });
+
+  it('extracts tacticalTip when present in markdown section 4', () => {
+    const mdWithTip = `
+### 1. 관점별 진단
+- **[카네기]**: 상대의 체면을 세워주라 / 즉각적 반박 포기
+- **[나폴레온 힐]**: 흔들림 없는 목적의 명확성을 확립하라 / 미온적 타협 배제
+
+### 2. 남은 이견
+관계적 공감 우선(카네기) vs 원칙적 결단 우선(힐)의 긴장
+
+### 3. 조건부 결론
+상대방이 신뢰를 원할 때는 카네기 접근, 합의된 원칙을 요구할 때는 힐 접근으로 결단한다.
+
+### 4. 1단계 검증 행동
+- 내일 오전 10시까지 상대방의 핵심 우려 1가지를 경청하는 1:1 대화 요청.
+- 💡 [실전 팁]: 논쟁에서 이기는 유일한 방법은 논쟁을 피하는 것임을 명심하십시오. (카네기 『인간관계론』 3부 1장)
+`.trim();
+
+    const result = council.parseCouncilResponse(mdWithTip);
+    assert.equal(result.lenses.length, 2);
+    assert.ok(result.nextAction.includes('1:1 대화 요청'));
+    assert.ok(!result.nextAction.includes('💡'));
+    assert.equal(result.tacticalTip, '논쟁에서 이기는 유일한 방법은 논쟁을 피하는 것임을 명심하십시오. (카네기 『인간관계론』 3부 1장)');
+  });
+
+  it('extracts tacticalTip from JSON format', () => {
+    const jsonWithTip = JSON.stringify({
+      lenses: [{ lens: '카네기', verdict: '경청', cost: '반박 포기' }],
+      dissent: '없음',
+      conditionalVerdict: '경청 후 제안',
+      nextAction: '내일 아침 전화',
+      tacticalTip: '통화 시작 10초 동안 상대방 이름을 세 번 기억하고 불러라.',
+    });
+
+    const result = council.parseCouncilResponse(jsonWithTip);
+    assert.equal(result.nextAction, '내일 아침 전화');
+    assert.equal(result.tacticalTip, '통화 시작 10초 동안 상대방 이름을 세 번 기억하고 불러라.');
   });
 });
 

@@ -1,0 +1,28 @@
+.meeting-watch { min-width: 0; overflow: hidden; }
+.meeting-watch__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 16px; border-bottom: 1px solid var(--line-soft); }
+.meeting-watch__head h3 { margin: 0; color: var(--fg); font-size: 14px; font-weight: 600; }
+.meeting-watch__head p { margin: 5px 0 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.meeting-watch__head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.meeting-watch__count { color: var(--fg-muted); font-size: 12px; }
+.meeting-watch__body { display: flex; flex-direction: column; gap: 8px; padding: 10px 16px 14px; min-width: 0; }
+.meeting-watch__message { color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.meeting-watch__message--error { box-shadow: inset 1px 0 0 var(--danger-line); }
+.meeting-watch__list { display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0; list-style: none; }
+.meeting-watch__row { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.meeting-watch__row-main { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; min-width: 0; }
+.meeting-watch__title { min-width: 0; color: var(--fg); font-size: 13px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.meeting-watch__date { flex: 0 0 auto; color: var(--fg-muted); font-size: 12px; }
+.meeting-watch__row-sub { display: flex; align-items: baseline; gap: 8px 16px; min-width: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.5; }
+.meeting-watch__row-sub > :first-child { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.meeting-watch__row-sub .num { flex: 0 0 auto; }
+.meeting-watch__source-link { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; padding: 8px 0; color: var(--fg); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.meeting-watch__more summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--fg); font-size: 12px; }
+.meeting-watch__more .meeting-watch__list { padding-top: 4px; border-top: 1px solid var(--line-soft); }
+.meeting-watch__limit { margin: 0; color: var(--fg-dim); font-size: 11px; line-height: 1.5; }
+
+@media (max-width: 600px) {
+  .meeting-watch__head { padding: 12px; }
+  .meeting-watch__body { padding: 8px 12px 12px; }
+  .meeting-watch__row-main { flex-wrap: wrap; }
+  .meeting-watch__date { flex-basis: 100%; }
+}

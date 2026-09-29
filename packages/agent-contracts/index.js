@@ -54,6 +54,35 @@ export function stableStringify(value) {
 }
 export function agentHash(value) { return createHash('sha256').update(stableStringify(value)).digest('hex'); }
 
+// Agent identity. The shared COM_MOON_AGENT_API_TOKEN keeps mapping to COM_MOON_AGENT_ACTOR_ID
+// (default `codex`). Each MCP client may hold its own token instead, so receipts record who
+// acted; servers keep only `actor:sha256hex` pairs in COM_MOON_AGENT_CLIENT_TOKEN_HASHES.
+export const AGENT_ACTOR_PATTERN = /^[a-zA-Z0-9._:@/-]{1,128}$/;
+const CLIENT_TOKEN_DIGEST = /^[0-9a-f]{64}$/;
+export function agentClientTokenDigest(token) { return createHash('sha256').update(String(token)).digest('hex'); }
+// Unset or blank means no client tokens. Anything else must parse completely — a malformed
+// value fails closed instead of silently dropping an identity. An actor may contain ':', so
+// the digest is what follows the last one. Scopes are not per actor.
+export function parseAgentClientTokenHashes(value, { sharedToken } = {}) {
+  if (value === undefined || value === null || (typeof value === 'string' && !value.trim())) return { ok: true, entries: [] };
+  const fail = (reason) => ({ ok: false, reason });
+  if (typeof value !== 'string') return fail('invalid-value');
+  const shared = typeof sharedToken === 'string' && sharedToken ? agentClientTokenDigest(sharedToken) : null;
+  const entries = []; const actors = new Set(); const digests = new Set();
+  for (const item of value.split(',')) {
+    const entry = item.trim();
+    const at = entry.lastIndexOf(':');
+    const actorId = at > 0 ? entry.slice(0, at) : '';
+    const digest = at > 0 ? entry.slice(at + 1) : '';
+    if (!AGENT_ACTOR_PATTERN.test(actorId) || !CLIENT_TOKEN_DIGEST.test(digest)) return fail('invalid-entry');
+    if (actors.has(actorId)) return fail('duplicate-actor');
+    if (digests.has(digest)) return fail('duplicate-digest');
+    if (digest === shared) return fail('shared-token-digest');
+    actors.add(actorId); digests.add(digest); entries.push({ actorId, digest });
+  }
+  return { ok: true, entries };
+}
+
 function record(value) { return value && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype; }
 function reject(message) { throw new AgentInputError(message); }
 function allowedKeys(value, keys) {

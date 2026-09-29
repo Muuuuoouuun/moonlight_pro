@@ -40,6 +40,10 @@ const COMMON = `당신은 개인 운영자의 판단을 돕는 자문 도우미�
 대화에서 요구한 산출물은 모두 포함하되 한국어 700자 이내(공백·마크다운 포함)로 답한다. 내부 사고 과정은 출력하지 않는다. 외부 행동·발송·등록을 실행하지 않는다.`;
 
 const hash = value => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
+// A core.autocrlf checkout writes CRLF. Parse and hash the LF form so the cards and the
+// frozen-source hashes are the same on every platform.
+const normalizeLineEndings = text => text.replace(/\r\n?/g, '\n');
+export const readSource = path => normalizeLineEndings(readFileSync(path, 'utf8'));
 const readJson = path => JSON.parse(readFileSync(path, 'utf8'));
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 const readRows = path => existsSync(path) ? readFileSync(path, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
@@ -47,7 +51,7 @@ const chars = text => [...text].length;
 const round = n => Math.round(n * 100) / 100;
 
 export function extractCards(markdown) {
-  return [...markdown.matchAll(/^### 3\.(\d+) (.+)\n([\s\S]*?)(?=^### |^## |$(?![\s\S]))/gm)].map(match => {
+  return [...normalizeLineEndings(markdown).matchAll(/^### 3\.(\d+) (.+)\n([\s\S]*?)(?=^### |^## |$(?![\s\S]))/gm)].map(match => {
     const body = match[3].trim();
     const start = body.indexOf('**가치의 우선순위:**');
     if (start < 0) throw new Error(`card ${match[1]} has no values`);
@@ -138,17 +142,21 @@ function options(args) {
   return value;
 }
 
+export function sourceHashes() {
+  return { cards: hash(readSource(join(ROOT, CARD_FILE))), fixtures: hash(readSource(join(ROOT, FIXTURE_FILE))) };
+}
+
 function prepare(out) {
   if (existsSync(join(out, 'manifest.json'))) throw new Error('manifest exists; use another output directory for a new run');
-  const cardText = readFileSync(join(ROOT, CARD_FILE), 'utf8');
-  const fixtureText = readFileSync(join(ROOT, FIXTURE_FILE), 'utf8');
+  const cardText = readSource(join(ROOT, CARD_FILE));
+  const fixtureText = readSource(join(ROOT, FIXTURE_FILE));
   const fixtures = JSON.parse(fixtureText);
   const cards = extractCards(cardText);
   if (cards.length !== 9 || fixtures.scenarios.length !== 11 || fixtures.synthetic !== true) throw new Error('unexpected fixed evaluation coverage');
   const manifest = {
     version: fixtures.version, createdAt: new Date().toISOString(), synthetic: true,
     baseCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(),
-    hashes: { cards: hash(cardText), fixtures: hash(fixtureText), runner: hash(readFileSync(fileURLToPath(import.meta.url), 'utf8')) },
+    hashes: { ...sourceHashes(), runner: hash(readSource(fileURLToPath(import.meta.url))) },
     generationModel: 'gemini-3-flash-preview', judgeModel: 'gemini-3.1-pro-preview',
     generationConfig: { temperature: 1, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'low' } },
     judgeConfig: { temperature: 0, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'low' }, responseMimeType: 'application/json' },
@@ -459,9 +467,10 @@ async function main() {
   const out = resolve(flags.out);
   if (command === 'prepare') return prepare(out);
   const manifest = readJson(join(out, 'manifest.json'));
-  appendFileSync(join(out, 'execution.jsonl'), `${JSON.stringify({ command, startedAt: new Date().toISOString(), runnerHash: hash(readFileSync(fileURLToPath(import.meta.url), 'utf8')), manifestHash: hash(manifest) })}\n`);
+  appendFileSync(join(out, 'execution.jsonl'), `${JSON.stringify({ command, startedAt: new Date().toISOString(), runnerHash: hash(readSource(fileURLToPath(import.meta.url))), manifestHash: hash(manifest) })}\n`);
   if (command === 'report') return report(out, manifest);
-  if (hash(readFileSync(join(ROOT, CARD_FILE), 'utf8')) !== manifest.hashes.cards || hash(readFileSync(join(ROOT, FIXTURE_FILE), 'utf8')) !== manifest.hashes.fixtures) throw new Error('frozen source or fixture changed');
+  const current = sourceHashes();
+  if (current.cards !== manifest.hashes.cards || current.fixtures !== manifest.hashes.fixtures) throw new Error('frozen source or fixture changed');
   const config = apiConfig(flags['env-file']);
   if (command === 'calibrate') return calibrate(out, manifest, config);
   if (command === 'generate') return generate(out, manifest, config);

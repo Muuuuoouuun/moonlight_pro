@@ -27,7 +27,9 @@ test("WeeklyAiDebrief fixes period and scope for the Office panel without a seco
 });
 
 test("DailyDispatchCard includes Council sparring button when dispatch is ready", () => {
-  assert.match(dailyBriefSource, /Council 심층 토의 \(⌘J\)/);
+  assert.match(dailyBriefSource, /Council 심층 토의/);
+  // ⌘J는 Office 단축키다(2026-09-23) — 페이지 위젯 버튼에 붙이지 않는다.
+  assert.doesNotMatch(dailyBriefSource, /Council 심층 토의 \(⌘J\)/);
   assert.match(dailyBriefSource, /contextType:\s*"general"/);
   assert.match(dailyBriefSource, /agent:\s*"council"/);
 });
@@ -43,4 +45,13 @@ test("DailyBrief FloatingMentorWidget supports weekly contextType and task refre
   assert.match(dailyBriefSource, /contextType=\{advisorSignal\.contextType \|\|/);
   assert.match(dailyBriefSource, /\.\.\.advisorSignal\.contextData/);
   assert.match(dailyBriefSource, /onCreateTask=\{[\s\S]*?ledger\.refreshTasks\(\)/);
+});
+
+test("WeeklyReportCard shares the weekly field contract, names missing sources and opens the weekly actuals view", () => {
+  const section = dailyBriefSource.slice(dailyBriefSource.indexOf('export function WeeklyReportCard'), dailyBriefSource.indexOf('export function DailyBrief('));
+  assert.match(section, /WEEKLY_STAT_FIELDS\[scope\]/);
+  assert.match(section, /weeklyStatValue\(/);
+  assert.match(section, /weeklySourceLabels\(report\?\.failedSources\)/);
+  assert.match(section, /goalHref\(null, scope, \{ weekly: true \}\)/);
+  assert.doesNotMatch(section, /label: '이동 딜', value: stats\.movedDeals/, 'rows come from the shared field list, not a second inline copy');
 });

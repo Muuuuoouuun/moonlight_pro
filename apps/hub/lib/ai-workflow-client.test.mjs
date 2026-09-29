@@ -136,6 +136,25 @@ test("buildWeeklySummaryText builds structured fact summary for personal and com
   assert.equal(buildWeeklySummaryText(null, "personal"), "");
 });
 
+test("buildWeeklySummaryText carries the Action KPI stats and never presents a partial week as complete", () => {
+  const partialPersonal = {
+    periodStart: "2026-09-14", periodEnd: "2026-09-20", partial: true,
+    failedSources: ["journal_entries:note", "tasks_completed"],
+    stats: { doneTasks: null, publishes: 1, contacts: 4, personalDeals: 0, focusPicked: 3, focusDone: 2, focusRate: 67, memos: null, reviewDays: 3 },
+  };
+  const text = buildWeeklySummaryText(partialPersonal, "personal");
+  assert.match(text, /오늘 3개: 2\/3 \(67%\)/);
+  assert.match(text, /리뷰 일수: 3일/);
+  assert.match(text, /메모: —/);
+  assert.match(text, /완료 할 일: —/);
+  assert.match(text, /\[측정 상태\] 일부 미측정 — 메모 · 완료 할 일/);
+  assert.match(text, /'—'는 0이 아니라 확인하지 못한 값/);
+
+  const company = buildWeeklySummaryText({ periodStart: "2026-09-10", periodEnd: "2026-09-16", partial: false, failedSources: [], stats: { contacts: 3, newDeals: 1, movedDeals: 2, modifiedOpenDeals: 4, wonDeals: 0 } }, "company");
+  assert.match(company, /이동 딜: 2건/);
+  assert.doesNotMatch(company, /측정 상태/);
+});
+
 test("extractWeeklyExperiment parses experiment titles from council outputs", () => {
   const sample1 = `
 1. 📊 [이번 주 실행 팩트 요약]

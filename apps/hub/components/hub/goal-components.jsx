@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { Button, Card, EmptyState, Kbd, Progress, SelectField, Skeleton, TextAreaField, TextField } from './hub-primitives';
-import { goalMetricInput, goalObjectiveInput, goalObservationInput, goalWriteErrorMessage, measurementLabel, safeGoalEvidenceHref } from '@/lib/goal-client';
+import { goalMetricInput, goalObjectiveInput, goalObservationInput, goalSourceKeysFor, goalWriteErrorMessage, measurementLabel, safeGoalEvidenceHref } from '@/lib/goal-client';
 import { goalPeriodPreset } from '@/lib/goal-input-ux';
 import { useGoalCommand, useGoalDraft } from './use-goals';
 import './goals.css';
@@ -56,7 +56,7 @@ export function GoalMetricSummary({ metric, scope }) {
     {value !== null && measurement?.coverage === 'complete' && <Progress value={value} tone="neutral" />}
     <p className="goal-muted">{GOAL_SOURCE_OPTIONS.find(item => item.value === metric.sourceKey)?.label || '출처 확인 필요'}{measurement?.observedAt ? ` · 관측 ${dateTime(measurement.observedAt)}` : ''}</p>
     {metric.sourceKey !== 'manual' && scope && <p className="goal-muted">{goalScopeLabel(scope)} 전체의 기간 내 기록을 집계합니다. 연결한 업무만의 실적은 아닙니다.</p>}
-    {measurement?.coverage !== 'complete' && measurement?.reason && <p className="goal-muted">이 기간의 근거가 부족해 달성을 확정하지 않습니다.</p>}
+    {measurement?.reason === 'source-personal-only' ? <p className="goal-muted">하루 리뷰는 개인 기록이라 회사 목표에서 집계하지 않습니다. 이 지표를 보관하고 다른 측정 방법으로 새로 만드세요.</p> : measurement?.coverage !== 'complete' && measurement?.reason && <p className="goal-muted">이 기간의 근거가 부족해 달성을 확정하지 않습니다.</p>}
   </div>;
 }
 
@@ -116,7 +116,7 @@ export function GoalMetricForm({ objective, onSaved, onCancel }) {
     <h3>측정 지표 추가</h3><fieldset disabled={command.locked}>
       <TextField label="측정할 변화" required maxLength={240} value={draft.name} onChange={event => change('name', event.target.value)} autoFocus />
       <div className="goal-fields-two"><SelectField label="역할" value={draft.role} options={roles} onChange={event => change('role', event.target.value)} /><TextField label="단위" required maxLength={40} value={draft.unit} onChange={event => change('unit', event.target.value)} /></div>
-      <SelectField label="측정 방법" value={draft.sourceKey} options={GOAL_SOURCE_OPTIONS} onChange={event => { change('sourceKey', event.target.value); if (event.target.value !== 'manual') change('role', 'driver'); }} />
+      <SelectField label="측정 방법" value={draft.sourceKey} options={GOAL_SOURCE_OPTIONS.filter(option => goalSourceKeysFor(objective.scope).includes(option.value))} hint={objective.scope === 'company' ? '하루 리뷰는 개인 기록이라 회사 목표의 측정 방법으로 고를 수 없습니다.' : undefined} onChange={event => { change('sourceKey', event.target.value); if (event.target.value !== 'manual') change('role', 'driver'); }} />
       {draft.sourceKey !== 'manual' && <p className="goal-muted">{goalScopeLabel(objective.scope)} 전체의 {objective.periodStart}–{objective.periodEnd} 기록을 집계합니다. 연결한 업무는 목표의 맥락이며 집계 대상을 그 업무로 제한하지 않습니다.</p>}
       <SelectField label="목표 방향" value={draft.direction} options={directions} onChange={event => change('direction', event.target.value)} />
       <TextField label="기준값 · 선택" type="number" step="any" value={draft.baseline} onChange={event => change('baseline', event.target.value)} hint="시작 시점의 값입니다. 모르면 비워두세요." />
