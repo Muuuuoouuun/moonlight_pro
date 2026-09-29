@@ -71,7 +71,8 @@ const MOTION = Object.freeze({
   hoverMs: 120, panelMs: 240, overlayMs: 160, ease: 'cubic-bezier(0.2, 0.7, 0.3, 1)',
   petHover: { scale: 1.04, rotate: -1.2, shift: -0.7 }, petPress: { scale: 0.93, down: 1 }, petDrag: { scale: 0.97 },
 });
-// 유리 레이어(승인 중간값): 중앙 음영 9%, 글자 그림자 73%/37%, 림 반사 0.66, 아래 확산 48% 24px.
+// Windows Acrylic·Mac HUD 대체 경로의 유리값. macOS 26+ 네이티브 재질은
+// pet/native/mac-glass.mm + 원본 GlassOptics.metal의 별도 계약을 따른다(2026-09-29).
 const GLASS = Object.freeze({
   centerShade: 0.09, textShadowNear: 0.73, textShadowFar: 0.37, rimReflection: 0.66, diffusion: 0.48, diffusionEdge: 24,
   textPrimary: 0.98, textSecondary: 0.92, textFaint: 0.86,

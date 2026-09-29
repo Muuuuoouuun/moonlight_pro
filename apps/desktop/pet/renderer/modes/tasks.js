@@ -36,8 +36,11 @@
       const scroll = h('div', { class: 'scroll' });
       const listWrap = h('div', { class: 'list-wrap' }, metaRow, scroll);
       const status = h('span', { class: 'status' });
+      const refresh = M.platform.isMac() ? U.quiet('', { icon: 'refresh', iconSize: 14, title: 'Hub 새로고침',
+        onClick: () => { if (!loading) load(); } }) : null;
       const footer = h('div', { class: 'footer' }, status,
         U.quiet('Hub에서 열기', { icon: 'arrowUpRight', iconSize: 12, iconAfter: true, onClick: () => ctx.openHub(C.HUB_PATHS.tasks) }));
+      if (refresh) footer.insertBefore(refresh, footer.lastChild);
       let lastDraftTitle = '';
       const el = h('section', { class: 'mode tasks', 'aria-label': '할 일' }, field, note, listWrap, footer);
 
@@ -99,6 +102,7 @@
       function visible() { return grace.visible(tasks, includeCompleted); }
 
       function renderList() {
+        if (refresh) refresh.disabled = loading;
         const failed = view && !view.showData;
         const shown = visible();
         countText.textContent = T.countLabel({ loading: loading && !loadedAt, failed: failed && !loadedAt, visibleTasks: shown });

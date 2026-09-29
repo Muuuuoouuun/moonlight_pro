@@ -41,13 +41,16 @@ test('페이지는 계약을 모델보다 먼저, 다리를 모드보다 먼저 
   for (const mode of [...C.MODES, 'hub-status']) assert.match(panel, new RegExp(`modes/${mode}\\.js`), mode);
 });
 
-test('platform.js 는 계약 다음·다른 모델보다 먼저 읽고, 유리 반경은 mac 에서 10px 로 바뀐다', () => {
+test('플랫폼 감지는 먼저 실행하고 Mac 네이티브·HUD 대체·Windows 반경을 따로 유지한다', () => {
   for (const page of ['panel.html', 'pet.html', 'perch.html', 'bubble.html', 'focus.html']) {
     const order = [...read(page).matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
     assert.equal(order[3], 'model/platform.js', page);
   }
-  assert.match(read('glass.css'), /html\[data-platform="mac"\] \{ --radius: 10px; \}/);
+  assert.match(read('glass.css'), /html\[data-platform="mac"\] \{\s*--radius: 10px;/);
   assert.match(read('bubble.css'), /html\[data-platform="mac"\] \{ --radius: 10px; \}/);
+  assert.match(read('glass.css'), /html\[data-material="native-clear"\] \{ --radius: 26px; \}/);
+  assert.match(read('bubble.css'), /html\[data-platform="mac"\]\[data-material="native-clear"\] \{ --radius: 14px; \}/);
+  assert.match(read('glass.css'), /--radius: 8px;/, 'Windows Acrylic radius');
 });
 
 test('유리 값은 승인값 그대로다', () => {

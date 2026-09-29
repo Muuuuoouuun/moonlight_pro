@@ -1,6 +1,7 @@
 /* 펫 옆 짧은 메시지 — 326×130, 반경 8(Windows Acrylic 창 모서리) · mac 은 10(vibrancy 창 모서리). 입력 포커스를 가져오지 않는다(창은 focusable:false, 페이지는 focus() 를 부르지 않는다). */
 :root { --radius: 8px; } /* 말풍선도 Acrylic + DWM 둥근 모서리(8px) 창이다 — 유리 층이 창 모서리와 같은 곡률이어야 모서리에 맨 블러가 비치지 않는다 */
 html[data-platform="mac"] { --radius: 10px; } /* 위 :root 보다 구체적이라 이긴다(vibrancy 창의 시스템 모서리) */
+html[data-platform="mac"][data-material="native-clear"] { --radius: 14px; } /* 원본 PreviewView의 반경 */
 .bubble { position: absolute; inset: 0; display: flex; gap: 12px; padding: 16px; align-items: flex-start; }
 .face { position: relative; flex: none; width: 42px; height: 42px; }
 .face img { width: 42px; height: 42px; border-radius: 10px; display: block; }
