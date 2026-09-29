@@ -16,7 +16,8 @@ const SIGNALS_PER_PRODUCT = 12;
 const INQUIRY_LINK_LIMIT = 500;
 const RECENT_INQUIRY_LIMIT = 80;
 const TASK_LIMIT = 2000;
-const INQUIRY_COLUMNS = "id,subject,status,kind,org_scope,contact_name,contact_email,received_at,updated_at";
+// lead_id·deal_id: 문의에서 만드는 일에 고객(리드)을 붙이려고 읽는다(0028 통합 문의 스키마).
+const INQUIRY_COLUMNS = "id,subject,status,kind,org_scope,contact_name,contact_email,lead_id,deal_id,received_at,updated_at";
 
 function isMissingTable(error) {
   const detail = `${error?.reason || ""} ${error?.detail || ""}`;
@@ -81,6 +82,8 @@ function mapInquiry(row, link) {
     orgScope: row.org_scope || "unclassified",
     contactName: row.contact_name || "",
     contactEmail: row.contact_email || "",
+    leadId: row.lead_id || null,
+    dealId: row.deal_id || null,
     receivedAt: row.received_at || null,
     updatedAt: row.updated_at || null,
     productId: link?.product_id || null,
