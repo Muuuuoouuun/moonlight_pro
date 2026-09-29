@@ -157,7 +157,7 @@
         } else {
           footerAction.append(U.action('질문 보내기', {
             icon: 'arrowUp', iconSize: 13, iconFirst: true,
-            title: lockedByOther ? '다른 담당자의 답을 기다리는 중이에요. 답이 오면 보낼 수 있어요.' : '질문 보내기 · Ctrl+Enter',
+            title: lockedByOther ? '다른 담당자의 답을 기다리는 중이에요. 답이 오면 보낼 수 있어요.' : `질문 보내기 · ${M.platform.hotkey('Enter')}`,
             disabled: !V.canSend({ draft, busy: busy || lockedByOther }), onClick: send,
           }));
         }

@@ -124,3 +124,18 @@ test('내용 높이 자르기: 160 ~ 작업 영역', () => {
   assert.equal(G.clampContentHeight(5000, WA, true), 852 - 16 - 54);
   assert.equal(G.clampContentHeight('x', WA, false), null);
 });
+
+test('macOS 작업 영역: 메뉴 막대(위 38pt)와 오른쪽 Dock 을 뺀 영역의 오른쪽 가장자리에 붙는다', () => {
+  // 1512×982 화면, 메뉴 막대 38pt, 오른쪽 Dock 70pt → workArea { x:0, y:38, width:1442, height:944 }
+  const mac = { id: 3, bounds: { x: 0, y: 0, width: 1512, height: 982 }, workArea: { x: 0, y: 38, width: 1442, height: 944 } };
+  const pet = G.defaultPetBounds(mac.workArea);
+  assert.equal(pet.x + pet.width, 1442 - C.PET_EDGE_INSET, 'Dock 왼쪽 8pt');
+  assert.ok(pet.y >= 38 + G.SAFE_INSET);
+  // 위로 끌어도 메뉴 막대 아래 8pt 에서 멈춘다.
+  assert.equal(G.petBoundsAt(0, mac.workArea).y, 38 + G.SAFE_INSET);
+  // 저장 위치를 되살릴 때도 Dock 을 넘지 않는다.
+  assert.equal(G.resolvePetBounds({ x: 1448, y: 300 }, [mac], mac).x, 1442 - C.PET_SIZE - C.PET_EDGE_INSET);
+  // 빠른 패널도 메뉴 막대 아래로 밀린다.
+  const quick = G.quickCompanionFrame(G.petBoundsAt(0, mac.workArea), G.panelGlassSize('tasks'), false, mac.workArea);
+  assert.ok(quick.y >= 38 + G.SAFE_INSET);
+});

@@ -231,14 +231,15 @@
         ], { label: '할 일 목록 보기 설정' });
       }
 
-      const timer = setInterval(() => { if (document.visibilityState === 'visible') load(); }, C.LIMITS.pollMs);
+      const timer = setInterval(() => { if (ctx.isShown()) load(); }, C.LIMITS.pollMs);
       updateSend();
       load();
 
       return {
         el,
         focus() { input.focus(); },
-        // Ctrl+Enter: 적어 둔 할 일을 추가한다(Hub 열기는 아래 ‘Hub에서 열기’). 빈 입력이면 입력 칸으로.
+        refresh: load,
+        // Ctrl+Enter(mac ⌘Return): 적어 둔 할 일을 추가한다(Hub 열기는 아래 ‘Hub에서 열기’). 빈 입력이면 입력 칸으로.
         primary() { if (input.value.trim()) add(); else input.focus(); },
         menuItems() {
           return [

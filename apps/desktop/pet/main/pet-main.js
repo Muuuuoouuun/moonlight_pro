@@ -1,7 +1,10 @@
 'use strict';
-// Moonlight 펫(Windows) 셸 — 창·입력·상태·트레이·단축키를 묶고, 허브 채널은 끼워 넣은 hub 객체에 넘긴다.
+// Moonlight 펫(Windows·macOS) 셸 — 창·입력·상태·트레이·단축키를 묶고, 허브 채널은 끼워 넣은 hub 객체에 넘긴다.
 // main.js가 한 번 부른다: const pet = require('./pet/main/pet-main').install({ app, getHubUrl, openMainUrl, … }).
 // 동작 기준: prototypes/moonlight-pet-macos WindowCoordinator + 2026-09-26 운영자 결정(재질 A·세션 공유·타이머 화면만).
+// 플랫폼 차이(options.platform, 기본 process.platform)는 창 재질·띄우기·늦게 만들기뿐이다 — 채널·상태·배치 규칙은 같다.
+//   macOS: 패널·집중 화면은 showInactive + focus(비활성 패널이라 앱을 활성화하지 않는다 → 허브 창이 앞으로 오지 않음),
+//          DWM·활성 유지 도우미 없음(vibrancy 'active'), 걸친 캐릭터·말풍선 창은 처음 쓸 때 만든다(lazyWindows).
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -26,6 +29,7 @@ const CLICK_DEDUPE_MS = 600; // 펫 클릭을 렌더러가 set-presentation으�
 const FOCUS_TICK_MS = 500;
 const REFIT_DELAY_MS = 200;
 const GESTURE_STALE_MS = 15000; // 누른 채 이만큼 신호가 없으면 잃은 포인터로 보고 취소
+const MAC_REFOCUS_MS = 150; // macOS: 띄운 뒤 키 창을 한 번 더 확인하는 시점(BLUR_GRACE_MS 안)
 
 // 시스템 접근성 설정 → prefs. Electron 버전에 따라 없는 값은 false.
 function readPrefs() {
@@ -61,6 +65,21 @@ function loadDefaultHub(ctx, log) {
 
 const asObject = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 
+// 캐릭터 메뉴의 20px 얼굴. macOS 메뉴는 포인트 단위라 1x(20px)만 주면 Retina 에서 흐리다 — 20·40px 두 배율을 한 이미지에
+// 담는다. Windows 는 지금처럼 20px 하나(메뉴가 DPI 를 스스로 맞춘다).
+function menuIcon(nativeImage, image, platform) {
+  const one = image.resize({ width: 20, height: 20, quality: 'best' });
+  if (platform !== 'darwin' || !nativeImage || typeof nativeImage.createEmpty !== 'function') return one;
+  try {
+    const icon = nativeImage.createEmpty();
+    icon.addRepresentation({ scaleFactor: 1, buffer: one.toPNG() });
+    icon.addRepresentation({ scaleFactor: 2, buffer: image.resize({ width: 40, height: 40, quality: 'best' }).toPNG() });
+    return icon.isEmpty() ? one : icon;
+  } catch {
+    return one;
+  }
+}
+
 function install(options = {}) {
   const { BrowserWindow, Menu, globalShortcut, ipcMain, nativeImage, nativeTheme, screen, session, shell } = electron;
   const app = options.app || electron.app;
@@ -70,6 +89,11 @@ function install(options = {}) {
   const log = options.log || ((message) => console.log(message));
   const activate = options.activate !== false; // 스모크는 false — 운영자 화면의 포커스를 빼앗지 않는다
   const assetsDir = options.assetsDir || ASSETS_DIR;
+  const platform = options.platform || process.platform;
+  const mac = platform === 'darwin';
+  // 걸친 캐릭터·말풍선 창을 처음 쓸 때 만든다(대기 중 렌더러 프로세스 둘을 덜 띄운다). macOS 기본. Windows 는 DWM 속성을
+  // 시작할 때 창 둘(패널·말풍선)에 한 번에 거는 흐름을 그대로 두려고 지금처럼 미리 만든다.
+  const lazyWindows = options.lazyWindows === undefined ? mac : Boolean(options.lazyWindows);
   const openExternal = (url) => {
     if (typeof url !== 'string' || !isExternalOpenable(url)) return false;
     (options.openExternal || shell.openExternal)(url);
@@ -100,7 +124,7 @@ function install(options = {}) {
   const state = createPetState({ store, assetUrl, hubUrl: getHubUrl(), onChange: onStateChange });
 
   let quitting = false;
-  const factory = createWindowFactory({ pagesDir: options.pagesDir, pageFile: options.pageFile, openExternal, log });
+  const factory = createWindowFactory({ pagesDir: options.pagesDir, pageFile: options.pageFile, openExternal, log, platform });
   const track = (win) => {
     alive.add(win);
     win.on('closed', () => alive.delete(win));
@@ -117,18 +141,44 @@ function install(options = {}) {
 
   const pet = track(factory.pet());
   const panel = track(factory.panel());
-  const perch = track(factory.perch(panel));
-  const bubble = track(factory.bubble());
+  // 걸친 캐릭터·말풍선: lazyWindows 면 처음 쓸 때 만든다(ensurePerch·ensureBubble). 한 번 만들면 끝날 때까지 둔다.
+  let perch = null;
+  let bubble = null;
   let focusWindows = [];
 
-  // Acrylic 창 둘(패널·말풍선)에 DWM 둥근 모서리·테두리 없음. 실패해도 계속(결과는 스모크가 본다).
-  const dwmReady = applyGlassFrame([panel, bubble]).then((result) => {
-    if (!result.ok) log(`pet:dwm degraded ${result.error || JSON.stringify(result.applied)}`);
+  // Acrylic 창(패널·말풍선)에 DWM 둥근 모서리·테두리 없음. 실패해도 계속(결과는 스모크가 본다).
+  // Windows 가 아니면 applyGlassFrame 이 곧바로 { error: 'platform' } — 프로세스를 띄우지 않고 로그도 남기지 않는다.
+  const glassFrame = (wins) => applyGlassFrame(wins, { platform }).then((result) => {
+    if (!result.ok && result.error !== 'platform') log(`pet:dwm degraded ${result.error || JSON.stringify(result.applied)}`);
     return result;
   });
+  let dwmReady;
 
   // 초점을 잃은 Acrylic 패널(지속 위젯, 유예 안의 빠른 패널)은 DWM 이 단색으로 바꾼다 — WM_NCACTIVATE(TRUE)로 블러를 되살린다.
-  const activationKeeper = options.activationKeeper || createActivationKeeper({ log });
+  // macOS 는 vibrancy visualEffectState 'active' 가 같은 일을 하므로 keep() 이 아무것도 하지 않는다.
+  const activationKeeper = options.activationKeeper || createActivationKeeper({ log, platform });
+  let solidGlass = false; // 투명도 줄이기·고대비(아래 '시스템 설정')
+
+  function ensurePerch() {
+    if (!perch || perch.isDestroyed()) perch = track(factory.perch(panel));
+    return perch;
+  }
+  function ensureBubble() {
+    if (bubble && !bubble.isDestroyed()) return bubble;
+    bubble = track(factory.bubble());
+    if (solidGlass) applyGlassMaterial(bubble, { reduceTransparency: true });
+    if (lazyWindows) glassFrame([bubble]);
+    return bubble;
+  }
+  const perchVisible = () => Boolean(perch && !perch.isDestroyed() && perch.isVisible());
+  const bubbleVisible = () => Boolean(bubble && !bubble.isDestroyed() && bubble.isVisible());
+  if (!lazyWindows) {
+    ensurePerch();
+    ensureBubble();
+    dwmReady = glassFrame([panel, bubble]);
+  } else {
+    dwmReady = glassFrame([panel]);
+  }
 
   // ── 위치 ───────────────────────────────────────────────────────────────
   const displays = () => screen.getAllDisplays().map((d) => ({ id: d.id, bounds: d.bounds, workArea: d.workArea }));
@@ -151,6 +201,7 @@ function install(options = {}) {
   let blurGraceUntil = 0;
   let lastPetClickAt = 0;
   let petHidden = false;
+  let refocusTimer = null;
 
   const focusRunning = () => state.focus.running;
   const glassSizeNow = () => {
@@ -170,16 +221,37 @@ function install(options = {}) {
     const glass = G.glassFromCompanion(frame, isPerchedNow);
     setBoundsExact(panel, glass);
     if (isPerchedNow) {
-      setBoundsExact(perch, G.perchBounds(glass));
+      // 늦게 만든 걸친 창은 페이지가 뜨기 전엔 투명한 빈 창이라 먼저 띄워도 보이는 것이 없다.
+      setBoundsExact(ensurePerch(), G.perchBounds(glass));
       if (panel.isVisible() && !perch.isVisible()) perch.showInactive();
-    } else if (perch.isVisible()) {
+    } else if (perchVisible()) {
       perch.hide();
     }
   }
 
   function revealPanel() {
     blurGraceUntil = Date.now() + BLUR_GRACE_MS;
-    if (activate) {
+    if (activate && mac) {
+      // show()는 앱을 활성화해 허브 창까지 앞으로 올린다. 비활성 패널은 showInactive 로 띄운 뒤 focus()로 키 창이 된다
+      // (앱 활성화 없이 키 입력·Esc 를 받는다). 그래도 키 창이 못 되면 그때만 앱을 활성화한다 — 맨 앞 창이 이 패널이라
+      // 활성화가 허브 창을 올리지 않는다.
+      panel.showInactive();
+      panel.focus();
+      if (!panel.isFocused() && typeof app.focus === 'function') {
+        app.focus({ steal: true });
+        panel.focus();
+      }
+      panel.webContents.focus();
+      // 비활성 패널의 첫 키 창 잡기가 가끔 늦게 풀린다(위젯 창에서 실측 약 3/15) — 띄우는 순간의 유예 안에서 한 번만 다시 잡는다.
+      clearTimeout(refocusTimer);
+      refocusTimer = setTimeout(() => {
+        refocusTimer = null;
+        if (state.panelOpen && panel.isVisible() && !panel.isFocused() && Date.now() < blurGraceUntil) {
+          panel.focus();
+          panel.webContents.focus();
+        }
+      }, MAC_REFOCUS_MS);
+    } else if (activate) {
       panel.show();
       panel.focus();
       if (!panel.isFocused()) {
@@ -194,7 +266,7 @@ function install(options = {}) {
       panel.showInactive();
     }
     if (perched) {
-      perch.showInactive();
+      ensurePerch().showInactive();
       perch.moveTop();
     }
   }
@@ -245,7 +317,7 @@ function install(options = {}) {
     perched = false;
     state.patch({ panelOpen: false, pinned: false, presentation: 'quick', perched: false });
     panel.hide();
-    perch.hide();
+    if (perch) perch.hide();
     cancelGesture('panel'); // 숨긴 창에서는 pointerup 이 오지 않는다
     setWash(false);
     syncPet();
@@ -333,7 +405,7 @@ function install(options = {}) {
     if (state.panelOpen && state.presentation === 'quick') {
       layoutPanel(G.quickCompanionFrame(petBounds, glassSizeNow(), perched, wa), perched);
     }
-    if (bubble.isVisible()) setBoundsExact(bubble, G.bubbleBounds(petBounds, wa));
+    if (bubbleVisible()) setBoundsExact(bubble, G.bubbleBounds(petBounds, wa));
   }
 
   function moveCompanionBy(dy) {
@@ -392,7 +464,7 @@ function install(options = {}) {
     try {
       if (fs.existsSync(file)) {
         const image = nativeImage.createFromPath(file);
-        if (!image.isEmpty()) icon = image.resize({ width: 20, height: 20, quality: 'best' });
+        if (!image.isEmpty()) icon = menuIcon(nativeImage, image, platform);
       }
     } catch { /* 아이콘 없이 */ }
     iconCache.set(character.key, icon);
@@ -415,6 +487,9 @@ function install(options = {}) {
 
   // ── 짧은 메시지 ─────────────────────────────────────────────────────────
   const fromHub = new WeakSet(); // 허브가 넘긴 알림(셸이 직접 넣은 것 — pushNotice — 은 다시 거르지 않는다)
+  // 말풍선 창이 아직 페이지를 불러오는 중이면(늦게 만든 창) 다 불러온 뒤에 내용을 보내고 띄운다 — 그 사이 내리면(hide)
+  // 차례 번호가 바뀌어 띄우지 않는다. 이미 불러온 창은 지금처럼 곧바로.
+  let bubbleTurn = 0;
   const bubbles = createBubbleQueue({
     canShow: () => !state.panelOpen && !focusRunning(),
     // 허브가 넘긴 알림은 보이기 직전에 허브 목록으로 다시 거른다(줄에서 기다리는 동안 읽음·숨김·시작한 일정).
@@ -423,16 +498,26 @@ function install(options = {}) {
       return hub.isNoticePresentable(notice.id) === true;
     },
     show: (notice) => {
-      setBoundsExact(bubble, G.bubbleBounds(petBounds, workArea()));
-      bubble.webContents.send('pet:notice', { notice: notice || null });
-      bubble.showInactive();
+      const win = ensureBubble();
+      const turn = ++bubbleTurn;
+      const present = () => {
+        if (turn !== bubbleTurn || win.isDestroyed()) return;
+        setBoundsExact(win, G.bubbleBounds(petBounds, workArea()));
+        win.webContents.send('pet:notice', { notice: notice || null });
+        win.showInactive();
+      };
+      if (win.petReady) present();
+      else win.petLoaded.then(present);
     },
-    hide: () => bubble.hide(),
-    isVisible: () => bubble.isVisible(),
+    hide: () => {
+      bubbleTurn += 1;
+      if (bubble && !bubble.isDestroyed()) bubble.hide();
+    },
+    isVisible: bubbleVisible,
   });
   function toggleBubble() {
     if (focusRunning()) return false;
-    if (!bubble.isVisible() && state.panelOpen) collapse({ resume: false });
+    if (!bubbleVisible() && state.panelOpen) collapse({ resume: false });
     return bubbles.toggle();
   }
 
@@ -476,12 +561,17 @@ function install(options = {}) {
         escHoldInput(escHold, input);
       });
       setBoundsExact(win, display.bounds);
-      if (primary && activate) {
+      if (primary && activate && mac) {
+        win.showInactive(); // show()는 앱을 활성화해 허브 창을 올린다 — 비활성 패널은 focus()만으로 키 창이 된다
+        win.focus();
+      } else if (primary && activate) {
         win.show();
         win.focus();
       } else {
         win.showInactive();
       }
+      // macOS 는 보이는 순간 창을 메뉴 막대 아래로 밀 수 있다 — 띄운 뒤 화면 전체(메뉴 막대·Dock 포함)로 다시 맞춘다.
+      if (mac) setBoundsExact(win, display.bounds);
       focusWindows.push(win);
     }
   }
@@ -687,13 +777,13 @@ function install(options = {}) {
 
   // ── 시스템 설정·화면 배치·단축키 ─────────────────────────────────────────
   // 재질은 불투명 여부가 바뀔 때만 다시 건다(테마만 바뀐 'updated'에서 Acrylic을 다시 켜지 않는다).
-  let solidGlass = false;
+  // 아직 만들지 않은 말풍선은 만들 때 solidGlass 를 보고 건다(ensureBubble).
   function applyPrefs(prefs) {
     const solid = Boolean(prefs.reduceTransparency || prefs.highContrast);
     if (solid === solidGlass) return;
     solidGlass = solid;
     applyGlassMaterial(panel, prefs);
-    applyGlassMaterial(bubble, prefs);
+    if (bubble) applyGlassMaterial(bubble, prefs);
   }
   function refreshPrefs() {
     const prefs = readPrefs();
@@ -722,7 +812,7 @@ function install(options = {}) {
         : G.quickCompanionFrame(petBounds, glassSizeNow(), perched, wa);
       layoutPanel(frame, perched);
     }
-    if (bubble.isVisible()) setBoundsExact(bubble, G.bubbleBounds(petBounds, wa));
+    if (bubbleVisible()) setBoundsExact(bubble, G.bubbleBounds(petBounds, wa));
   }
   const scheduleRefit = () => {
     clearTimeout(refitTimer);
@@ -739,8 +829,9 @@ function install(options = {}) {
   app.on('before-quit', onBeforeQuit);
 
   // 첫 화면: 펫 페이지가 그려지면 대기 얼굴을 띄운다.
-  // 창이 다 그려진 뒤에 허브 폴링을 켠다 — 첫 새 알림이 아직 불러오지 않은 말풍선 페이지로 가지 않게.
-  const ready = Promise.all([pet.petLoaded, panel.petLoaded, perch.petLoaded, bubble.petLoaded]).then(() => {
+  // 창이 다 그려진 뒤에 허브 폴링을 켠다 — 첫 새 알림이 아직 불러오지 않은 말풍선 페이지로 가지 않게
+  // (늦게 만드는 말풍선은 show 가 불러오기를 기다린다).
+  const ready = Promise.all([pet, panel, perch, bubble].filter(Boolean).map((win) => win.petLoaded)).then(() => {
     if (!pet.isDestroyed()) syncPet();
     if (hub && typeof hub.startPolling === 'function' && !quitting) {
       try {
@@ -761,6 +852,7 @@ function install(options = {}) {
     if (options.registerShortcut !== false) globalShortcut.unregister(PET_QUICK_ACCELERATOR);
     clearInterval(focusTimer);
     clearTimeout(refitTimer);
+    clearTimeout(refocusTimer);
     clearTimeout(gestureWatch.pet);
     clearTimeout(gestureWatch.panel);
     escHold.cancel();
@@ -801,16 +893,19 @@ function install(options = {}) {
       if (petHidden) cancelGesture('pet');
       syncPet();
     },
+    // perch·bubble 은 읽으면 만든다(스모크·테스트용). 만들었는지만 보려면 created().
     windows: {
       pet,
       panel,
-      perch,
-      bubble,
+      get perch() { return ensurePerch(); },
+      get bubble() { return ensureBubble(); },
       focus: () => focusWindows.slice(),
+      created: () => ({ perch: Boolean(perch && !perch.isDestroyed()), bubble: Boolean(bubble && !bubble.isDestroyed()) }),
     },
+    platform,
     get petBounds() { return { ...petBounds }; },
     dispose,
   };
 }
 
-module.exports = { install, readPrefs, POSITION_KEY };
+module.exports = { install, readPrefs, menuIcon, POSITION_KEY };

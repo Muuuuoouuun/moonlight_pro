@@ -1,6 +1,6 @@
-# Moonlight 데스크톱 (Windows)
+# Moonlight 데스크톱 (Windows·macOS)
 
-Moonlight 허브를 Windows 앱 창으로 여는 Electron 셸이다. 허브 화면은 그대로 원격 주소에서 불러오고,
+Moonlight 허브를 Windows·macOS 앱 창으로 여는 Electron 셸이다(같은 코드, `process.platform === 'darwin'`에서만 갈라진다 — 아래 [macOS](#macos)). 허브 화면은 그대로 원격 주소에서 불러오고,
 앱은 창·트레이·빠른 입력 단축키만 더한다. 허브 코드를 복사하지 않으므로 허브를 배포하면 앱도 바로 최신이다.
 
 ## 허브 주소 정하기
@@ -224,9 +224,9 @@ dist\win-unpacked\Moonlight.exe --smoke-pet --smoke-out=pet.png --user-data-dir=
 - 집중 화면은 앱 전환·웹사이트를 막지 않는다(운영자 결정).
 - 창 등장·퇴장의 창 단위 페이드는 없다 — 레이어드 창 불투명도는 Acrylic을 끄므로 움직임은 페이지 CSS가 맡는다.
 - 투명도 줄이기 감지는 Electron `nativeTheme.prefersReducedTransparency`에 기댄다. Windows ‘투명 효과’ 스위치를 따로 읽지 않는다.
-- 펫 오른쪽 클릭 메뉴는 Windows 기본 메뉴다 — 체크와 20px 얼굴이 함께 있는 항목에서 얼굴이 체크 자리를 대신할 수 있다.
+- (Windows) 펫 오른쪽 클릭 메뉴는 Windows 기본 메뉴다 — 체크와 20px 얼굴이 함께 있는 항목에서 얼굴이 체크 자리를 대신할 수 있다.
 - 말풍선에서 연 일정·답변 알림은 해당 모드를 열 뿐 날짜·대화를 고르지 않는다(알림 모드 안에서 열면 고른다).
-- 가상 데스크톱 전체에 띄우는 API가 없어 펫은 지금 데스크톱에만 뜬다.
+- (Windows) 가상 데스크톱 전체에 띄우는 API가 없어 펫은 지금 데스크톱에만 뜬다. macOS는 모든 Space에 뜬다.
 
 ## 개발·빌드
 
@@ -291,7 +291,40 @@ npx electron . --smoke-widget --smoke-hub=http://127.0.0.1:3141 --smoke-theme=da
 `--smoke-theme`은 `light`·`dark`(생략하면 자동). 저장이 연결된 허브에서는 메모가 실제로 한 건 남으므로, Supabase를
 연결하지 않은 개발 서버에서 돌린다 — 그러면 preview 영수증("저장하지 않았습니다")만 찍힌다.
 
-## 코드 서명 없음
+## macOS
+
+같은 Electron 앱을 macOS(Apple Silicon)에서도 빌드해 쓴다. Windows 동작은 그대로 두고, `darwin`에서만 아래가 달라진다.
+
+**셸**
+- 메뉴 막대: 첫 메뉴 **Moonlight**(정보·설정…(허브 주소, ⌘,)·빠른 입력·위젯·서비스·숨기기·종료 ⌘Q) + **편집**(실행 취소·오려두기·복사·붙여넣기·모두 선택 역할 — 이 메뉴가 없으면 허브·펫 입력 칸에서 ⌘C/⌘V/⌘A가 동작하지 않는다) + **보기**(뒤로 ⌘[ · 앞으로 ⌘]) + **윈도우**. 메뉴 모양은 `menu-template.js`(순수 함수, `menu-template.test.js`)가 플랫폼별로 만든다.
+- 메뉴 막대 아이콘: 템플릿 이미지(`build/trayTemplate.png`·`@2x`, 빌드 때 `assets/`로 복사) — 누르면 메뉴만 연다. Dock 아이콘 오른쪽 클릭에 열기·빠른 입력·위젯.
+- 창을 닫아도 앱은 메뉴 막대·펫과 함께 남는다(`window-all-closed`에서 끝내지 않음). Dock 아이콘을 누르면 허브 창을 다시 띄운다(`activate`). 전체 화면 창은 전체 화면을 푼 뒤 숨겨 빈 Space를 남기지 않는다.
+- 빠른 입력 **⌘⇧Space**, 위젯 **⌘⇧M**. 위젯은 비활성 패널(`type:'panel'`)이라 열어도 허브 창을 앞으로 끌어오지 않고, 모든 Space와 전체 화면 앱 위에 뜬다.
+- 설정·세션 폴더: `~/Library/Application Support/Moonlight`(`settings.json`·`window-state.json`·`widget-state.json`·`pet-store.json`). `electron .` 개발 실행도 `--user-data-dir`를 주지 않으면 설치본과 같은 폴더를 쓴다.
+
+**빌드·설치**
+
+```bash
+npm run app:mac:dev      # 개발 실행
+npm run app:mac:build    # dist/Moonlight-<버전>-arm64.dmg · .zip · mac-arm64/Moonlight.app
+```
+
+- 아이콘: `npm --workspace @com-moon/desktop run icons:generate`가 `build/icon.icns`(sips + iconutil)·`icon-dock.png`·`trayTemplate*.png`도 만든다. 맥 자산은 `sharp`가 필요하다(루트에 허브 의존성으로 설치돼 있다 — 없으면 경고만 남기고 건너뛴다).
+- 서명: Developer ID가 없어 애드혹 서명(`identity: "-"`, `hardenedRuntime: false`)이다. `codesign --verify --deep --strict`는 통과하고 `spctl`은 거절한다. 직접 빌드해 `/Applications`로 복사한 앱은 바로 열린다. 브라우저로 받은 dmg·zip은 격리 속성이 붙으므로 처음 한 번 오른쪽 클릭 → **열기**(또는 `xattr -dr com.apple.quarantine /Applications/Moonlight.app`).
+- 처음 실행할 때 키체인이 "Moonlight Safe Storage" 접근을 물으면 **항상 허용** — 로그인 쿠키 암호화 키다. 비밀번호를 넣을 필요는 없다.
+- 설치본 교체: 앱을 종료(⌘Q)한 뒤 `dist/mac-arm64/Moonlight.app`을 `/Applications`에 덮어쓴다.
+- `electronLanguages: ["ko","en"]`로 언어 리소스를 줄였다(약 48MB). x64·universal은 빌드하지 않는다.
+- 스모크: `--smoke-test`·`--smoke-widget`는 그대로 돈다. `--smoke-mac`은 실제 메뉴·메뉴 막대 아이콘·Dock 활성화·빠른 입력·위젯 경로를 확인하고 `smoke:mac ok`를 찍는다(잠시 포커스를 가져간다).
+
+**펫**
+- 유리 재질: Acrylic 대신 macOS 비브런시(`vibrancy:'hud'`, `visualEffectState:'active'`) — 초점을 잃어도 블러가 유지되므로 Windows의 `WM_NCACTIVATE` 도우미가 필요 없다. DWM 단계는 건너뛴다(PowerShell을 띄우지 않는다). 투명도 줄이기·대비 증가를 켜면 `setVibrancy(null)` + 불투명 면. `'popover'`는 라이트 모드에서 밝아져 흰 글자가 묻혀서 `'hud'`를 골랐다. 창 모서리는 시스템 값이라 렌더러가 `html[data-platform="mac"]`에서 `--radius`를 10px로 맞춘다.
+- 창: 펫·패널·걸친 캐릭터·말풍선은 비활성 패널(`type:'panel'`, `acceptFirstMouse`, `hiddenInMissionControl`) — 패널을 열어도 허브 창이 앞으로 오지 않고, 다른 앱이 앞에 있어도 첫 클릭이 먹는다. 모든 Space와 전체 화면 앱 위에 뜬다(`setVisibleOnAllWorkspaces`, `skipTransformProcessType` — 빼면 Dock 아이콘이 사라진다). 패널은 `showInactive()` → `focus()`로 키 창이 되고, 그래도 안 되면 `app.focus({steal:true})`로 한 번 더 잡는다.
+- 집중 화면은 `display.bounds` 그대로 메뉴 막대·Dock까지 덮는다(`enableLargerThanScreen`, 뜬 뒤 자리를 한 번 더 맞춘다). 앱 전환은 막지 않는다.
+- 단축키: 빠른 패널 **⌃⌥M**(Windows Ctrl+Alt+M과 같은 키), 패널 안 **⌘1~7**·**⌘S**·**⌘Return**(Ctrl 대신 ⌘ — Ctrl이 섞이면 무시). 화면 문구는 `이 PC` 대신 `이 Mac`. 판정은 `pet/renderer/model/platform.js` 하나.
+- 최적화: 맥에서는 걸친 캐릭터·말풍선 창을 처음 쓸 때 만든다 — 대기 상태 프로세스 7→5, 렌더러 4→2, 메모리 약 685→498MB(`app.getAppMetrics()` 실측). 처음 쓰는 걸친 캐릭터는 유리보다 100~200ms 늦게 뜰 수 있다. 패널이 접혀 있는 동안은 할 일·일정·날짜 줄 주기 새로고침을 멈추고 다시 열 때 한 번 따라잡는다(`backgroundThrottling:false`라 숨긴 창도 `visible`로 보여서 `state.panelOpen`으로 가른다).
+- 스모크: `--smoke-pet`은 맥에서 DWM 대신 비브런시·모든 Space·집중 창 = `display.bounds`를 보고 `smoke:metrics`를 찍는다. `--smoke-pet-eager`(창을 미리 다 만들기)·`--smoke-pet-hold=<ms>`(띄운 채 기다리기). 화면 캡처는 Electron에 화면 기록 권한이 있어야 찍히고, 없으면 경고로 넘어간다.
+
+## 코드 서명 없음 (Windows)
 
 이 빌드는 코드 서명을 하지 않는다. 처음 실행하면 Windows SmartScreen이 "Windows의 PC 보호" 창을 띄운다 —
 **추가 정보 → 실행**을 눌러야 한다. 인증서를 붙이려면 electron-builder의 `win.signtoolOptions`/`CSC_LINK`를 설정한다

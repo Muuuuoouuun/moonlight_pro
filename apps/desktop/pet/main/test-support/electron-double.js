@@ -36,6 +36,9 @@ function createElectronDouble(options = {}) {
       this.focused = false;
       this.alwaysOnTop = Boolean(opts.alwaysOnTop);
       this.material = opts.backgroundMaterial || 'none';
+      this.vibrancy = opts.vibrancy || null;
+      this.allWorkspaces = null; // setVisibleOnAllWorkspaces(visible, options) 마지막 호출
+      this.calls = []; // show·showInactive·focus 순서(플랫폼별 띄우기 확인용)
       this.webContents = new WebContents(this);
       this.loaded = null;
       windows.push(this);
@@ -59,11 +62,11 @@ function createElectronDouble(options = {}) {
       this.visible = false;
       this.emit('closed');
     }
-    show() { this.visible = true; }
-    showInactive() { this.visible = true; }
+    show() { this.visible = true; this.calls.push('show'); }
+    showInactive() { this.visible = true; this.calls.push('showInactive'); }
     hide() { this.visible = false; }
     isVisible() { return this.visible && !this.destroyed; }
-    focus() { this.focused = true; }
+    focus() { this.focused = true; this.calls.push('focus'); }
     isFocused() { return this.focused; }
     isFocusable() { return this.opts.focusable !== false; }
     moveTop() {}
@@ -72,6 +75,9 @@ function createElectronDouble(options = {}) {
     getContentBounds() { return { ...this.bounds }; }
     getNativeWindowHandle() { throw new Error('no native window in tests'); }
     setBackgroundMaterial(material) { this.material = material; }
+    setVibrancy(type) { this.vibrancy = type; }
+    setVisibleOnAllWorkspaces(visible, opts) { this.allWorkspaces = { visible, options: opts }; }
+    isVisibleOnAllWorkspaces() { return Boolean(this.allWorkspaces && this.allWorkspaces.visible); }
     setBackgroundColor(color) { this.backgroundColor = color; }
     setIgnoreMouseEvents() {}
   }
@@ -87,6 +93,8 @@ function createElectronDouble(options = {}) {
 
   const app = new EventEmitter();
   app.getPath = () => options.userData;
+  app.focusCalls = [];
+  app.focus = (opts) => { app.focusCalls.push(opts); };
 
   const electron = {
     app,
@@ -97,7 +105,13 @@ function createElectronDouble(options = {}) {
       register: (accelerator, fn) => { shortcuts.set(accelerator, fn); return true; },
       unregister: (accelerator) => { shortcuts.delete(accelerator); },
     },
-    nativeImage: { createFromPath: () => ({ isEmpty: () => true, resize: () => null }) },
+    nativeImage: {
+      createFromPath: () => ({ isEmpty: () => true, resize: () => null }),
+      createEmpty: () => {
+        const reps = [];
+        return { reps, addRepresentation: (r) => reps.push(r), isEmpty: () => reps.length === 0 };
+      },
+    },
     nativeTheme: Object.assign(new EventEmitter(), { prefersReducedTransparency: false, shouldUseHighContrastColors: false }),
     screen: Object.assign(new EventEmitter(), {
       getAllDisplays: () => [display],

@@ -13,6 +13,7 @@ if (process.argv.includes('--smoke-pet')) {
 }
 const fs = require('node:fs');
 const path = require('node:path');
+const { fileURLToPath } = require('node:url');
 const { normalizeHubUrl, resolveHubUrl, isSameOrigin, dashboardUrl, isExternalOpenable } = require('./hub-url');
 const {
   WIDGET_WIDTH,
@@ -28,7 +29,12 @@ const {
   clampIntoWorkArea,
   resolveWidgetPosition,
   widgetToggleAction,
+  widgetPlatformOptions,
+  widgetWorkspaceOptions,
 } = require('./widget-window');
+const { buildAppMenuTemplate, buildDockMenuTemplate } = require('./menu-template');
+
+const IS_MAC = process.platform === 'darwin';
 
 const BACKGROUND = '#141C27';
 const QUICK_CAPTURE_ACCELERATOR = 'CommandOrControl+Shift+Space';
@@ -52,6 +58,9 @@ const SMOKE_THEME = argValue('smoke-theme'); // light | dark — 찍기 전에 �
 // GPU 합성을 끄지 않는다 — Acrylic 블러는 실제 합성 경로에서만 보인다.
 const SMOKE_PET = argValue('smoke-pet') !== null;
 const SMOKE_PET_PAGE = argValue('smoke-pet-page'); // 펫 페이지 폴더(pet.html·panel.html…) 또는 파일 하나
+// --smoke-mac (macOS 전용): 트레이·앱 메뉴·Dock 활성화·앱 숨김 상태의 빠른 입력·위젯이 허브 창을 앞으로 내지 않는지 확인한다.
+// 실제 창을 띄우고 포커스를 옮기므로 운영자 화면에서는 짧게만 돌린다(전역 단축키는 등록하지 않는다).
+const SMOKE_MAC = IS_MAC && argValue('smoke-mac') !== null;
 const userDataDir = argValue('user-data-dir');
 if (userDataDir) {
   app.setPath('userData', path.resolve(userDataDir));
@@ -62,9 +71,13 @@ if (userDataDir) {
 // 스모크 캡처는 GPU 합성 없이도 찍혀야 한다(CI·원격 세션에서 UnknownVizError 방지).
 if (SMOKE) {
   app.disableHardwareAcceleration();
-  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 }
+// 같은 스위치를 두 번 넣으면 뒤엣것이 앞엣것을 덮으므로 한 번에 모은다.
+// 허브는 미디어를 재생하지 않는다 — Chromium이 미디어 키·재생 중 컨트롤(Now Playing)을 가로채지 않게 끈다.
+const disabledFeatures = ['HardwareMediaKeyHandling', 'MediaSessionService'];
+if (SMOKE) disabledFeatures.push('CalculateNativeWinOcclusion');
+app.commandLine.appendSwitch('disable-features', disabledFeatures.join(','));
 
 // ── 저장 파일 ─────────────────────────────────────────────────────────────
 const userFile = (name) => path.join(app.getPath('userData'), name);
@@ -93,8 +106,16 @@ function iconPath() {
   return fs.existsSync(packaged) ? packaged : path.join(__dirname, '..', 'hub', 'public', 'icon-192.png');
 }
 
+// macOS 메뉴 막대(트레이) 아이콘: 검은 실루엣 템플릿 이미지 — 시스템이 메뉴 막대 색(라이트·다크)에 맞춰 칠한다.
+// 같은 폴더의 trayTemplate@2x.png는 Electron이 알아서 짝으로 읽는다.
+function trayTemplatePath() {
+  const packaged = path.join(__dirname, 'assets', 'trayTemplate.png');
+  return fs.existsSync(packaged) ? packaged : path.join(__dirname, 'build', 'trayTemplate.png');
+}
+
 // ── 창 ────────────────────────────────────────────────────────────────────
 let win = null;
+let mainReady = false; // Dock 클릭(activate)이 창을 되살려도 되는 시점(스모크·펫 스모크는 제외)
 let tray = null;
 let pet = null; // Moonlight 펫(pet/main/pet-main.js) — 트레이 항목과 허브 주소 변경을 받는다
 let quitting = false;
@@ -137,21 +158,38 @@ function createWindow() {
     saveBounds();
     if (quitting || SMOKE) return;
     event.preventDefault();
+    // macOS 전체 화면 창을 그대로 숨기면 빈 Space가 남는다 — 전체 화면을 먼저 풀고 숨긴다.
+    if (IS_MAC && win.isFullScreen()) {
+      win.once('leave-full-screen', () => win.hide());
+      win.setFullScreen(false);
+      return;
+    }
     win.hide();
   });
   guardNavigation(win.webContents);
 }
 
 function showWindow() {
-  if (!win) return;
+  if (!win || win.isDestroyed()) return;
+  // macOS: ⌘H로 앱이 숨겨져 있으면 win.show()만으로는 나오지 않는다 — 앱부터 보이게 한다.
+  if (IS_MAC && app.isHidden()) app.show();
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
+  // 트레이·단축키에서 불렀을 때 다른 앱이 앞이면 창이 뒤에 깔린다 — 앞으로 가져온다(스모크는 포커스를 뺏지 않는다).
+  if (IS_MAC && !SMOKE) app.focus({ steal: true });
 }
 
 // ── 주소 정책: 허브 origin과 설정 화면만 앱 안에서, 나머지는 시스템 브라우저 ──
 function isInApp(url) {
-  if (url.startsWith('file:')) return decodeURIComponent(new URL(url).pathname).replace(/^\//, '').replace(/\//g, path.sep).toLowerCase() === SETTINGS_PAGE.toLowerCase();
+  if (url.startsWith('file:')) {
+    // fileURLToPath는 플랫폼 경로(Windows C:\…, macOS /Users/…)로 바꾼다 — 예전의 선행 `/` 제거는 macOS 경로를 깨뜨렸다.
+    try {
+      return fileURLToPath(url).toLowerCase() === SETTINGS_PAGE.toLowerCase();
+    } catch {
+      return false;
+    }
+  }
   return isSameOrigin(url, currentHubUrl());
 }
 
@@ -314,6 +352,15 @@ function revealWidget() {
   widget.show();
   widget.focus();
   widget.webContents.focus(); // 페이지가 입력 칸에 autofocus할 수 있게
+  // macOS 비활성 패널은 앱이 뒤에 있을 때 첫 focus()가 키 창을 못 잡는 경우가 있다(스모크 실측) — 한 번 더 건다.
+  // app.focus()는 쓰지 않는다: 앱을 활성화하면 뒤에 있는 허브 창이 같이 앞으로 나온다.
+  if (IS_MAC) {
+    setTimeout(() => {
+      if (!widgetVisible() || widget.isFocused()) return;
+      widget.focus();
+      widget.webContents.focus();
+    }, 150);
+  }
 }
 
 function hideWidget() {
@@ -336,6 +383,7 @@ function createWidget() {
     height: widgetHeight,
     frame: false,
     roundedCorners: true,
+    ...widgetPlatformOptions(process.platform), // macOS: 비활성 패널 — 위젯을 열어도 허브 창이 앞으로 나오지 않는다
     alwaysOnTop: pinned,
     skipTaskbar: true,
     resizable: false,
@@ -355,6 +403,8 @@ function createWidget() {
     },
   });
   if (pinned) widget.setAlwaysOnTop(true, 'floating');
+  const workspace = widgetWorkspaceOptions(process.platform);
+  if (workspace) widget.setVisibleOnAllWorkspaces(workspace.visible, workspace.options); // 전체 화면 앱 위·모든 데스크톱
   placeWidget();
 
   widget.once('ready-to-show', () => {
@@ -448,36 +498,27 @@ function widgetMenuItem() {
 
 function refreshMenus() {
   if (!tray || tray.isDestroyed()) return;
-  const appMenu = Menu.buildFromTemplate([
-    {
-      label: 'Moonlight',
-      submenu: [
-        { label: '빠른 입력', accelerator: QUICK_CAPTURE_ACCELERATOR, registerAccelerator: false, click: quickCapture },
-        widgetMenuItem(),
-        { label: '허브 주소 바꾸기', click: () => showSettings() },
-        { type: 'separator' },
-        { label: '종료', accelerator: 'CommandOrControl+Q', click: quit },
-      ],
-    },
-    {
-      label: '보기',
-      submenu: [
-        { label: '새로고침', role: 'reload' },
-        { label: '강력 새로고침', role: 'forceReload' },
-        { type: 'separator' },
-        { label: '뒤로', accelerator: 'Alt+Left', click: () => win.webContents.navigationHistory.goBack() },
-        { label: '앞으로', accelerator: 'Alt+Right', click: () => win.webContents.navigationHistory.goForward() },
-        { type: 'separator' },
-        { label: '실제 크기', role: 'resetZoom' },
-        { label: '확대', role: 'zoomIn' },
-        { label: '축소', role: 'zoomOut' },
-        { type: 'separator' },
-        { label: '전체 화면', role: 'togglefullscreen' },
-        { label: '개발자 도구', role: 'toggleDevTools' },
-      ],
-    },
-  ]);
-  Menu.setApplicationMenu(appMenu);
+  const actions = {
+    quickCapture,
+    showSettings: () => showSettings(),
+    quit,
+    showWindow,
+    goBack: () => win && !win.isDestroyed() && win.webContents.navigationHistory.goBack(),
+    goForward: () => win && !win.isDestroyed() && win.webContents.navigationHistory.goForward(),
+  };
+  Menu.setApplicationMenu(Menu.buildFromTemplate(buildAppMenuTemplate({
+    platform: process.platform,
+    quickAccelerator: QUICK_CAPTURE_ACCELERATOR,
+    widgetItem: widgetMenuItem(),
+    actions,
+  })));
+  if (IS_MAC && app.dock) {
+    app.dock.setMenu(Menu.buildFromTemplate(buildDockMenuTemplate({
+      quickAccelerator: QUICK_CAPTURE_ACCELERATOR,
+      widgetItem: widgetMenuItem(),
+      actions,
+    })));
+  }
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '열기', click: showWindow },
     { label: '빠른 입력', accelerator: QUICK_CAPTURE_ACCELERATOR, registerAccelerator: false, click: quickCapture },
@@ -490,9 +531,17 @@ function refreshMenus() {
 }
 
 function buildMenus() {
-  tray = new Tray(nativeImage.createFromPath(iconPath()).resize({ width: 16, height: 16, quality: 'best' }));
+  if (IS_MAC) {
+    let image = nativeImage.createFromPath(trayTemplatePath());
+    if (image.isEmpty()) image = nativeImage.createFromPath(iconPath()).resize({ width: 16, height: 16, quality: 'best' });
+    else image.setTemplateImage(true);
+    tray = new Tray(image);
+  } else {
+    tray = new Tray(nativeImage.createFromPath(iconPath()).resize({ width: 16, height: 16, quality: 'best' }));
+  }
   tray.setToolTip('Moonlight');
-  tray.on('click', showWindow);
+  // macOS는 컨텍스트 메뉴가 있으면 클릭이 메뉴를 연다 — 창까지 같이 띄우지 않는다.
+  if (!IS_MAC) tray.on('click', showWindow);
   refreshMenus();
 }
 
@@ -818,6 +867,78 @@ async function runWidgetHubSmoke() {
   app.exit(0);
 }
 
+// ── macOS 스모크: 메뉴·트레이·Dock·앱 숨김 복귀·위젯 비활성 패널 ──────────────
+async function runMacSmoke() {
+  const giveUp = setTimeout(() => {
+    console.log('smoke:fail timeout');
+    app.exit(1);
+  }, 90000);
+  const check = (ok, label) => {
+    if (!ok) throw new Error(label);
+  };
+  await waitFor(() => win && win.isVisible(), 'main visible', 30000);
+
+  // 1) 앱 메뉴: 첫 메뉴 = 앱 이름, 편집 role 전부, 트레이는 템플릿 이미지.
+  const menu = Menu.getApplicationMenu();
+  const top = menu.items.map((item) => item.label);
+  const editRoles = menu.items.find((item) => item.label === '편집').submenu.items.map((item) => item.role);
+  console.log(`smoke:mac-menu ${JSON.stringify(top)} edit=${editRoles.filter(Boolean).join(',')}`);
+  check(top[0] === 'Moonlight' && top.includes('편집') && top.includes('윈도우'), 'menu order');
+  for (const role of ['undo', 'redo', 'cut', 'copy', 'paste', 'selectall']) check(editRoles.includes(role), `edit role ${role}`);
+  const back = menu.items.find((item) => item.label === '보기').submenu.items.find((item) => item.label === '뒤로');
+  check(back.accelerator === 'Command+[', 'back accelerator');
+  check(tray && !tray.isDestroyed(), 'tray');
+  const trayImage = nativeImage.createFromPath(trayTemplatePath());
+  console.log(`smoke:mac-tray template=${trayImage.isTemplateImage()} empty=${trayImage.isEmpty()} size=${JSON.stringify(trayImage.getSize())} scales=${JSON.stringify(trayImage.getScaleFactors())} file=${trayTemplatePath()}`);
+  check(!trayImage.isEmpty() && trayImage.getSize().width === 16, 'tray template image');
+  check(Boolean(app.dock && app.dock.getMenu()), 'dock menu');
+
+  // 2) ⌘H로 앱이 숨겨진 뒤 Dock 클릭(activate) → 허브 창이 돌아온다.
+  app.hide();
+  await sleep(500);
+  check(app.isHidden() && !win.isVisible(), 'app hidden');
+  app.emit('activate');
+  await sleep(800);
+  check(!app.isHidden() && win.isVisible(), 'activate shows main window');
+  console.log('smoke:mac-activate ok');
+
+  // 3) 창을 닫아(=숨김) 트레이에만 남은 상태에서 빠른 입력이 창을 되살린다.
+  win.close();
+  await sleep(500);
+  check(!win.isVisible() && !win.isDestroyed(), 'close hides');
+  await quickCapture();
+  await sleep(500);
+  check(win.isVisible(), 'quick capture shows closed-to-tray window');
+  // 4) 앱이 숨겨진 상태에서도.
+  app.hide();
+  await sleep(500);
+  check(app.isHidden(), 'hidden again');
+  await quickCapture();
+  await sleep(800);
+  check(!app.isHidden() && win.isVisible(), 'quick capture unhides app');
+  console.log('smoke:mac-quick-capture ok');
+
+  // 5) 위젯: 허브 창이 숨은 상태에서 열어도 허브 창이 앞으로 나오지 않는다(비활성 패널).
+  win.hide();
+  await sleep(500);
+  hubUrlOverride = 'https://example.com';
+  toggleWidget();
+  await waitFor(widgetVisible, 'widget visible', 30000);
+  await sleep(1200);
+  console.log(`smoke:mac-widget visible=${widgetVisible()} mainVisible=${win.isVisible()} onAllWorkspaces=${widget.isVisibleOnAllWorkspaces()} pinned=${widget.isAlwaysOnTop()} focused=${widget.isFocused()} docFocus=${await widget.webContents.executeJavaScript('document.hasFocus()')}`);
+  check(!win.isVisible(), 'widget did not bring the main window forward');
+  check(widget.isVisibleOnAllWorkspaces() && widget.isAlwaysOnTop(), 'widget floats on all workspaces');
+  widget.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  widget.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  await waitFor(() => !widgetVisible(), 'esc hides', 5000);
+  check(!win.isVisible(), 'main still hidden after widget hide');
+  console.log('smoke:mac-widget ok');
+
+  clearTimeout(giveUp);
+  console.log('smoke:mac ok');
+  app.exit(0);
+}
+
 // ── Moonlight 펫 ─────────────────────────────────────────────────────────
 // 화면 가장자리의 작은 캐릭터와 Acrylic 빠른 패널(pet/main). 허브 호출은 메인 창과 같은 기본 세션 쿠키를 쓴다.
 // 펫을 띄우지 못해도 허브 창·위젯은 그대로 동작해야 하므로 실패는 경고만 남긴다.
@@ -843,7 +964,18 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', showWindow);
   app.on('before-quit', () => { quitting = true; });
   app.on('will-quit', () => globalShortcut.unregisterAll());
-  app.on('window-all-closed', () => app.quit());
+  // macOS는 창을 다 닫아도(허브 창은 숨김) 메뉴 막대·펫이 계속 산다.
+  app.on('window-all-closed', () => { if (!IS_MAC) app.quit(); });
+  // Dock 아이콘 클릭·앱 재실행: 숨겨진 허브 창을 되살리고, 없으면 다시 만든다.
+  app.on('activate', () => {
+    if (!mainReady) return;
+    if (!win || win.isDestroyed()) {
+      createWindow();
+      loadHub();
+    } else {
+      showWindow();
+    }
+  });
 
   app.whenReady().then(() => {
     if (SMOKE_PET) {
@@ -856,6 +988,14 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((contents, _permission, callback, details) => {
       callback(isSameOrigin(details.requestingUrl || contents.getURL(), currentHubUrl()));
     });
+    if (IS_MAC) {
+      app.setAboutPanelOptions({ applicationName: 'Moonlight', applicationVersion: app.getVersion(), copyright: 'Moonlight' });
+      // 개발 실행(electron .)의 Dock 아이콘은 Electron 기본이다 — 패키징한 앱은 번들 아이콘을 쓴다.
+      if (!app.isPackaged && app.dock) {
+        const dockIcon = nativeImage.createFromPath(path.join(__dirname, 'build', 'icon-dock.png'));
+        if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
+      }
+    }
     registerIpc();
     createWindow();
     buildMenus();
@@ -873,11 +1013,23 @@ if (!app.requestSingleInstanceLock()) {
     } else if (SMOKE) {
       runSmoke();
     } else {
-      for (const [accelerator, action] of [[QUICK_CAPTURE_ACCELERATOR, quickCapture], [WIDGET_ACCELERATOR, toggleWidget]]) {
-        if (!globalShortcut.register(accelerator, action)) console.warn(`shortcut ${accelerator} is taken by another app`);
+      // 허브 요청을 먼저 띄운다 — 펫 설치(창 여러 개 생성)가 첫 화면 로드를 늦추지 않게.
+      mainReady = true;
+      loadHub();
+      if (!SMOKE_MAC) {
+        for (const [accelerator, action] of [[QUICK_CAPTURE_ACCELERATOR, quickCapture], [WIDGET_ACCELERATOR, toggleWidget]]) {
+          if (!globalShortcut.register(accelerator, action)) console.warn(`shortcut ${accelerator} is taken by another app`);
+        }
       }
       pet = installPet();
       refreshMenus();
+      if (SMOKE_MAC) {
+        runMacSmoke().catch((error) => {
+          console.log(`smoke:fail ${error.message}`);
+          app.exit(1);
+        });
+      }
+      return;
     }
     loadHub();
   });

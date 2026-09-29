@@ -41,6 +41,15 @@ test('페이지는 계약을 모델보다 먼저, 다리를 모드보다 먼저 
   for (const mode of [...C.MODES, 'hub-status']) assert.match(panel, new RegExp(`modes/${mode}\\.js`), mode);
 });
 
+test('platform.js 는 계약 다음·다른 모델보다 먼저 읽고, 유리 반경은 mac 에서 10px 로 바뀐다', () => {
+  for (const page of ['panel.html', 'pet.html', 'perch.html', 'bubble.html', 'focus.html']) {
+    const order = [...read(page).matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+    assert.equal(order[3], 'model/platform.js', page);
+  }
+  assert.match(read('glass.css'), /html\[data-platform="mac"\] \{ --radius: 10px; \}/);
+  assert.match(read('bubble.css'), /html\[data-platform="mac"\] \{ --radius: 10px; \}/);
+});
+
 test('유리 값은 승인값 그대로다', () => {
   const css = read('glass.css');
   assert.ok(css.includes('0 .35px .65px rgba(0, 0, 0, .73), 0 .5px 1.6px rgba(0, 0, 0, .37)'), '글자 그림자');

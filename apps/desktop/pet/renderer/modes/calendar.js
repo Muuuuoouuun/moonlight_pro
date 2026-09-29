@@ -126,11 +126,12 @@
       ctx.setDateLine(K.dateLabel(selected));
       renderWeek();
       load();
-      const timer = setInterval(() => { if (document.visibilityState === 'visible') load(); }, C.LIMITS.pollMs);
+      const timer = setInterval(() => { if (ctx.isShown()) load(); }, C.LIMITS.pollMs);
 
       return {
         el,
         focus() { const b = week.querySelector('[aria-pressed="true"]'); if (b) b.focus(); },
+        refresh: load,
         primary() { ctx.openHub(C.HUB_PATHS.calendar); },
         menuItems() {
           return [

@@ -1,6 +1,8 @@
 'use strict';
 // `--smoke-pet` — 펫 셸을 실제 화면에 띄워 확인하고 실제 화면 영역을 PNG로 남긴 뒤 종료한다.
 //   npx electron . --smoke-pet --smoke-out=pet.png --user-data-dir=<빈 폴더> [--smoke-pet-page=<폴더|파일>]
+// macOS 는 DWM 대신 vibrancy·비활성 패널·모든 Space 를 보고, 집중 화면이 메뉴 막대·Dock 까지 덮는지 본다.
+// --smoke-pet-eager: 걸친 캐릭터·말풍선 창을 미리 만든다(늦게 만들기와 대기 중 프로세스·메모리를 비교할 때).
 // 확인: Acrylic 창 + DWM 두 속성, 펫·빠른 패널·걸친 캐릭터·말풍선·집중 화면의 크기·자리, 클릭 모델(한 번 → 빠른 패널,
 // 두 번 → 위젯), 세로 끌기, 프리로드 다리(허용 채널·거절·Node 없음), Esc 1.3초. 창은 찍는 동안만 화면에 둔다.
 // 운영자 화면의 포커스를 빼앗지 않도록 패널은 비활성으로 띄운다(Acrylic이 비활성에서도 블러를 유지하는지도 같이 본다).
@@ -36,14 +38,34 @@ const union = (rects, margin, bounds) => {
 };
 
 // 실제 화면(주 화면)을 찍어 rect(DIP) 부분만 PNG로.
+// macOS 는 화면 기록 권한이 없으면 desktopCapturer 가 'Failed to get sources'로 거절한다 — 그때는 실패로 치지 않고
+// smoke:warn 만 남긴다(창 크기·자리·다리 검사는 그대로 돈다). --smoke-pet-hold=<ms> 면 찍는 자리마다 그만큼 창을 둔다
+// (권한 있는 다른 도구로 화면을 찍을 때).
+const HOLD_MS = (() => {
+  const arg = process.argv.find((a) => a.startsWith('--smoke-pet-hold='));
+  const ms = arg ? Number(arg.split('=')[1]) : 0;
+  return Number.isFinite(ms) && ms > 0 ? Math.min(ms, 30000) : 0;
+})();
+
 async function captureRegion(rect, file) {
   await sleep(700); // 합성·블러가 자리 잡을 시간
+  if (HOLD_MS) {
+    console.log(`smoke:hold ${path.basename(file)} ${JSON.stringify(rect)}`);
+    await sleep(HOLD_MS);
+  }
   const display = screen.getPrimaryDisplay();
   const scale = display.scaleFactor;
-  const sources = await desktopCapturer.getSources({
-    types: ['screen'],
-    thumbnailSize: { width: Math.round(display.bounds.width * scale), height: Math.round(display.bounds.height * scale) },
-  });
+  let sources;
+  try {
+    sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: Math.round(display.bounds.width * scale), height: Math.round(display.bounds.height * scale) },
+    });
+  } catch (error) {
+    if (process.platform !== 'darwin') throw error;
+    console.log(`smoke:warn capture unavailable (${error && error.message ? error.message : String(error)}) — macOS 화면 기록 권한이 필요하다: ${path.basename(file)}`);
+    return false;
+  }
   const source = sources.find((s) => s.display_id === String(display.id)) || sources[0];
   if (!source) throw new Error('no screen source');
   const image = source.thumbnail;
@@ -57,9 +79,23 @@ async function captureRegion(rect, file) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, crop.toPNG());
   console.log(`smoke:png ${file} ${crop.getSize().width}x${crop.getSize().height}`);
+  return true;
 }
 
 const suffixed = (out, suffix) => (suffix ? out.replace(/(\.png)?$/i, `-${suffix}.png`) : out);
+
+// 대기 중 프로세스 수·메모리(app.getAppMetrics). 렌더러 하나가 펫 창 하나다.
+function logMetrics(app, label) {
+  const metrics = app.getAppMetrics();
+  const byType = {};
+  let kb = 0;
+  for (const m of metrics) {
+    byType[m.type] = (byType[m.type] || 0) + 1;
+    kb += (m.memory && m.memory.workingSetSize) || 0;
+  }
+  console.log(`smoke:metrics ${label} processes=${metrics.length} ${JSON.stringify(byType)} workingSetMB=${Math.round(kb / 1024)}`);
+  return { processes: metrics.length, byType, mb: Math.round(kb / 1024) };
+}
 
 async function run({ app, out, page, activate = false }) {
   const giveUp = setTimeout(() => {
@@ -84,6 +120,7 @@ async function run({ app, out, page, activate = false }) {
     openExternal: (url) => console.log(`smoke:external ${url}`),
     registerShortcut: false,
     activate,
+    lazyWindows: process.argv.includes('--smoke-pet-eager') ? false : undefined,
     // 허브는 기본 경로(pet-main loadDefaultHub → pet-hub.js)로 만든다 — 패키지(asar) 안의 허브 모듈이 실제로 읽히는지 본다.
     // 주소가 비어 있어 네트워크에는 나가지 않는다.
     log: (message) => console.log(message),
@@ -95,12 +132,26 @@ async function run({ app, out, page, activate = false }) {
   try {
     await pet.ready;
     const dwm = await pet.dwmReady;
+    const mac = pet.platform === 'darwin';
     console.log(`smoke:dwm ${JSON.stringify(dwm)}`);
-    check(dwm.ok, 'dwm attributes', dwm);
+    if (mac) {
+      // DWM 은 Windows 전용 — 프로세스를 띄우지 않고 건너뛴다. 대신 vibrancy·비활성 패널·모든 Space.
+      check(dwm.error === 'platform', 'dwm skipped on macOS', dwm);
+      const material = { panel: w.panel.petMaterial, type: w.panel.petPlatform, allSpaces: [w.pet, w.panel].map((x) => x.isVisibleOnAllWorkspaces()) };
+      console.log(`smoke:mac-material ${JSON.stringify(material)}`);
+      check(material.panel === 'hud' && material.allSpaces.every(Boolean), 'vibrancy + all Spaces', material);
+    } else {
+      check(dwm.ok, 'dwm attributes', dwm);
+    }
+    await sleep(1500); // 렌더러가 자리 잡은 뒤 잰다
+    logMetrics(app, 'idle');
+    console.log(`smoke:lazy ${JSON.stringify(w.created())}`);
 
     // 1) 대기 펫: 56×56, 오른쪽 가장자리 8px, 아래쪽 1/3, 포커스 없음.
     await waitFor(() => w.pet.isVisible(), 'pet visible');
-    const wa = screen.getDisplayMatching(w.pet.getBounds()).workArea;
+    // macOS 는 메뉴 막대·Dock 이 움직이면 작업 영역이 1pt 씩 바뀐다 — 단계마다 다시 읽는다(freshWorkArea).
+    const freshWorkArea = () => screen.getDisplayMatching(w.pet.getBounds()).workArea;
+    let wa = freshWorkArea();
     const petBox = w.pet.getBounds();
     console.log(`smoke:pet-bounds ${JSON.stringify(petBox)} content=${JSON.stringify(w.pet.getContentBounds())} workArea=${JSON.stringify(wa)}`);
     check(petBox.width === C.PET_SIZE && petBox.height === C.PET_SIZE, 'pet 56x56', petBox);
@@ -185,6 +236,10 @@ async function run({ app, out, page, activate = false }) {
     //    Mac과 같이 첫 클릭이 빠른 패널을 바로 열고, 500ms 안의 두 번째 클릭이 위젯으로 바꾼다.
     pet.collapse();
     await sleep(600);
+    // 숨은 패널이 페이지에 어떻게 보이는지 기록만 한다(backgroundThrottling:false 면 숨어도 'visible').
+    if (w.panel.webContents.getURL().startsWith('file:')) {
+      console.log(`smoke:hidden-panel visibilityState=${await w.panel.webContents.executeJavaScript('document.visibilityState')}`);
+    }
     pet.pointer('pet', 'pet:press', { pressed: true, source: 'pet' });
     pet.pointer('pet', 'pet:press', { pressed: false, source: 'pet' });
     check(pet.state().panelOpen && pet.state().presentation === 'quick', 'first click of a double click opens quick at once');
@@ -199,11 +254,13 @@ async function run({ app, out, page, activate = false }) {
     const pet2 = pet.petBounds;
     console.log(`smoke:widget glass=${JSON.stringify(wGlass)} perch=${JSON.stringify(perchBox)} pet=${JSON.stringify(pet2)}`);
     // 덩어리(유리 + 54px 띠)의 오른쪽 위 = 펫의 오른쪽 위, 화면 아래로 넘치면 작업 영역 안으로 밀린다.
+    wa = freshWorkArea();
     const expected = G.glassFromCompanion(G.widgetCompanionFrame(pet2, G.panelGlassSize('tasks'), true, wa), true);
     check(wGlass.x + wGlass.width === pet2.x + pet2.width, 'widget right = pet right', { wGlass, pet2 });
     check(JSON.stringify(wGlass) === JSON.stringify(expected), 'widget glass under 54px strip, anchored at pet top-right', { wGlass, expected });
     check(expected.y - C.PERCH_STRIP === pet2.y || expected.y + expected.height === wa.y + wa.height - G.SAFE_INSET, 'widget top at pet top unless fitted', expected);
     check(JSON.stringify(perchBox) === JSON.stringify(G.perchBounds(wGlass)), 'perch 20px in, 54px up', { perchBox, wGlass });
+    await sleep(400); // 늦게 만든 걸친 창(macOS)이 캐릭터를 그릴 시간
     await captureRegion(union([w.panel.getBounds(), perchBox], 24, screen.getPrimaryDisplay().bounds), suffixed(outFile, 'widget'));
 
     // 4) 위젯에서 모드 바꾸기(메모) — 오른쪽 위 고정, 걸친 캐릭터가 따라온다.
@@ -217,6 +274,7 @@ async function run({ app, out, page, activate = false }) {
     await captureRegion(union([w.panel.getBounds(), w.perch.getBounds()], 24, screen.getPrimaryDisplay().bounds), suffixed(outFile, 'memo'));
 
     // 5) 패널 손잡이 끌기: 3px 전엔 그대로, 넘으면 덩어리·걸친 캐릭터가 세로로만 같이.
+    wa = freshWorkArea();
     const before = w.panel.getBounds();
     pet.pointer('panel', 'pet:drag', { phase: 'begin', screenY: 500 });
     pet.pointer('panel', 'pet:drag', { phase: 'move', screenY: 502 });
@@ -254,6 +312,7 @@ async function run({ app, out, page, activate = false }) {
     console.log(`smoke:bubble ${JSON.stringify(bubbleBox)} focused=${w.bubble.isFocused()}`);
     check(bubbleBox.width === C.BUBBLE_SIZE.width && bubbleBox.height === C.BUBBLE_SIZE.height, 'bubble 326x130', bubbleBox);
     check(!w.bubble.isFocused() && !w.bubble.isFocusable(), 'bubble never takes focus');
+    if (mac) check(w.bubble.petMaterial === 'hud' && w.bubble.isVisibleOnAllWorkspaces(), 'bubble vibrancy + all Spaces');
     check(bubbleBox.x + bubbleBox.width === moved.x - C.PANEL_GAP, 'bubble left of pet', bubbleBox);
     await captureRegion(union([w.bubble.getBounds(), w.pet.getBounds()], 24, screen.getPrimaryDisplay().bounds), suffixed(outFile, 'bubble'));
     pet.openQuick();
@@ -274,7 +333,10 @@ async function run({ app, out, page, activate = false }) {
     await waitFor(() => focusWins.every((f) => f.isVisible()) && !w.pet.isVisible(), 'focus windows up, pet hidden');
     for (const f of focusWins) {
       const d = screen.getDisplayMatching(f.getBounds());
+      // macOS: display.bounds 는 메뉴 막대·Dock 을 포함한다 — 같으면 둘 다 덮은 것이다.
+      console.log(`smoke:focus-bounds ${JSON.stringify(f.getContentBounds())} display=${JSON.stringify(d.bounds)} workArea=${JSON.stringify(d.workArea)}`);
       check(JSON.stringify(f.getContentBounds()) === JSON.stringify(d.bounds), 'focus covers display', { f: f.getContentBounds(), d: d.bounds });
+      if (mac) check(f.isVisibleOnAllWorkspaces(), 'focus on all Spaces');
     }
     const primaryFocus = focusWins.find((f) => screen.getDisplayMatching(f.getBounds()).id === screen.getPrimaryDisplay().id);
     check(/primary=1/.test(primaryFocus.webContents.getURL()) || !primaryFocus.webContents.getURL().startsWith('file:'), 'primary display has the controls');
@@ -299,7 +361,7 @@ async function run({ app, out, page, activate = false }) {
     pet.dispose();
     app.exit(0);
   } catch (error) {
-    console.log(`smoke:fail ${error.message}`);
+    console.log(`smoke:fail ${error && error.message ? error.message : String(error)}`);
     try {
       pet.dispose();
     } catch { /* 종료 */ }

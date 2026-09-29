@@ -10,6 +10,8 @@
       const N = M.notices;
       const E = M.envelope;
       const h = U.h;
+      // 기기 명사 — 문구는 ‘이 PC’ 로 쓰고 mac 에서는 ‘이 Mac’ 으로 바꿔 보인다.
+      const L = (text) => M.platform.localize(text);
 
       let notices = [];
       let unread = 0;
@@ -58,7 +60,7 @@
         else {
           if (view && view.state !== 'live') list.append(U.notice(view, (a) => ctx.handleAction(a, load), { compact: view.state === 'partial' }));
           if (loaded && !shown.length && view && view.showData) {
-            list.append(U.notice({ state: 'empty', message: '이 PC에 표시할 알림이 없어요.' }, null, { glyph: 'bell' }));
+            list.append(U.notice({ state: 'empty', message: L('이 PC에 표시할 알림이 없어요.') }, null, { glyph: 'bell' }));
           }
           const now = new Date();
           for (const n of shown) list.append(row(n, now));
@@ -76,11 +78,11 @@
             h('span', { class: 'n-meta' }, !n.read ? h('span', { class: 'unread', text: '새 알림' }) : null,
               h('span', { text: info.label }), h('span', { text: N.relativeTime(n.at, now) }))));
         open.addEventListener('click', () => openNotice(n));
-        const more = U.quiet(null, { icon: 'dots', iconSize: 15, ariaLabel: `${n.title} 알림 메뉴`, title: '숨기기는 이 PC의 목록에만 적용돼요', menu: true });
+        const more = U.quiet(null, { icon: 'dots', iconSize: 15, ariaLabel: `${n.title} 알림 메뉴`, title: L('숨기기는 이 PC의 목록에만 적용돼요'), menu: true });
         more.addEventListener('click', () => U.openMenu(more, [
           { label: '내용 보기', onSelect: () => openNotice(n) },
           { label: '확인함', disabled: !!n.read, onSelect: () => mark(n, 'pet:notices-read') },
-          { label: '이 PC에서 숨기기', onSelect: () => mark(n, 'pet:notices-hide') },
+          { label: L('이 PC에서 숨기기'), onSelect: () => mark(n, 'pet:notices-hide') },
         ], { label: `${n.title} 알림 메뉴` }));
         return h('div', { class: `n-row${n.read ? ' read' : ''}`, role: 'listitem' }, open, more);
       }
@@ -133,7 +135,7 @@
         primary() { ctx.openHub(ctx.C.HUB_PATHS.notifications); },
         menuItems() {
           return [
-            { label: '이 PC의 알림 모두 확인', disabled: !unread, onSelect: readAll },
+            { label: L('이 PC의 알림 모두 확인'), disabled: !unread, onSelect: readAll },
             { label: '다시 불러오기', icon: 'refresh', onSelect: load },
             { label: 'Hub에서 문의 열기', icon: 'arrowUpRight', onSelect: () => ctx.openHub(ctx.C.HUB_PATHS.notifications) },
           ];

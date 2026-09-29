@@ -1,6 +1,7 @@
 'use strict';
 // 펫 창 배치 규칙 — Electron 없이 테스트할 수 있게 순수 함수만 둔다.
-// 좌표는 Windows DIP, y는 위에서 아래로 자란다(Mac의 아래→위 좌표를 뒤집어 옮겼다).
+// 좌표는 Electron 화면 좌표(Windows DIP · macOS pt), y는 위에서 아래로 자란다(Mac의 아래→위 좌표를 뒤집어 옮겼다).
+// 작업 영역(workArea)은 Windows 작업 표시줄, macOS 메뉴 막대·Dock(오른쪽 Dock 포함)을 이미 뺀 값이라 같은 규칙이 둘 다 맞는다.
 // 출처: prototypes/moonlight-pet-macos WindowCoordinator·PanelInteraction(PanelGeometry·ScreenDragTracker).
 const C = require('../shared/contract');
 

@@ -21,6 +21,7 @@
   let pendingMode = null;
   let tabs = null; // { place, key, el }
   let dateOverride = null;
+  let headerKey = ''; // renderHeader 가 마지막으로 그린 제목·고정 버튼 상태
   let seenTargetSeq = 0; // 셸이 알린 마지막 목적지(state.modeTarget.seq)
 
   function normalizeState(raw) {
@@ -37,6 +38,8 @@
       prefs: s.prefs || {},
       focus: s.focus || { running: false, remainingSec: 0, minutes: M.focus.DEFAULT },
       modeTarget: s.modeTarget && typeof s.modeTarget === 'object' ? s.modeTarget : null,
+      // 셸이 패널을 띄워 두었는지. 값이 없으면(구 셸·스모크) 열려 있다고 본다.
+      panelOpen: s.panelOpen !== false,
     };
   }
 
@@ -45,6 +48,9 @@
     C, B, U, M,
     get state() { return state; },
     get mode() { return mode; },
+    // 주기 새로고침 판정 — 셸이 패널을 접어 둔 동안은 돌리지 않는다. backgroundThrottling:false 라 숨긴 창도
+    // visibilityState 가 'visible' 로 남으므로 그것만으로는 모자란다.
+    isShown: () => document.visibilityState === 'visible' && (!state || state.panelOpen),
     setMode,
     openHub: (path) => B.invoke('pet:open-hub', { path }),
     showHubStatus,
@@ -69,15 +75,20 @@
 
   function renderHeader() {
     const current = view === 'hub-status' ? 'hub-status' : mode;
-    els.title.textContent = P.titleFor(current);
-    els.title.classList.toggle('large', P.isLargeTitle(current));
     renderDate();
+    // pet:state-changed 는 배지·집중 틱 등으로 자주 온다 — 제목·고정 버튼이 그대로면 DOM(아이콘 SVG)을 다시 만들지 않는다.
     const widget = state.presentation === 'widget';
-    U.clear(els.pin).append(U.icon(widget ? 'pinFilled' : 'pin', 17));
-    els.pin.setAttribute('aria-pressed', String(widget));
-    els.pin.setAttribute('aria-label', widget ? '빠른 기능으로 되돌리기' : '위젯으로 고정');
-    els.pin.title = widget ? '빠른 기능으로 되돌리기' : '위젯으로 고정';
-    els.pin.hidden = view === 'mode' && mode === 'memo';
+    const key = `${current}|${widget}|${view === 'mode' && mode === 'memo'}`;
+    if (key !== headerKey) {
+      headerKey = key;
+      els.title.textContent = P.titleFor(current);
+      els.title.classList.toggle('large', P.isLargeTitle(current));
+      U.clear(els.pin).append(U.icon(widget ? 'pinFilled' : 'pin', 17));
+      els.pin.setAttribute('aria-pressed', String(widget));
+      els.pin.setAttribute('aria-label', widget ? '빠른 기능으로 되돌리기' : '위젯으로 고정');
+      els.pin.title = widget ? '빠른 기능으로 되돌리기' : '위젯으로 고정';
+      els.pin.hidden = view === 'mode' && mode === 'memo';
+    }
     renderTabs();
   }
 
@@ -185,6 +196,11 @@
       if (instance && instance.onState) instance.onState(state, prev);
     }
     if (prev && prev.hubStatus !== state.hubStatus) onHubStatus(state.hubStatus, prev.hubStatus);
+    // 접혀 있다 다시 열리면 멈춰 두었던 새로고침을 한 번 따라잡는다.
+    if (prev && !prev.panelOpen && state.panelOpen) {
+      renderDate();
+      if (instance && instance.refresh) instance.refresh();
+    }
   }
 
   function onHubStatus(status, before) {
@@ -250,7 +266,7 @@
   }
 
   function onKey(e) {
-    // 한글 조합 중의 Esc·Ctrl+S·Ctrl+Enter 는 입력기의 것이다(조합 확정·취소) — 패널 동작으로 읽지 않는다.
+    // 한글 조합 중의 Esc·Ctrl+S·Ctrl+Enter(mac ⌘) 는 입력기의 것이다(조합 확정·취소) — 패널 동작으로 읽지 않는다.
     if (e.isComposing || e.keyCode === 229) return;
     const act = P.keyAction(e);
     if (!act) return;
@@ -295,7 +311,9 @@
     B.on('pet:chat-reply', (p) => { if (instance && instance.onChatReply) instance.onChatReply(p); });
     B.on('pet:notice', (p) => { if (instance && instance.onNotice) instance.onNotice(p); });
     B.on('pet:badge', (p) => { if (instance && instance.onBadge) instance.onBadge(p); });
-    setInterval(renderDate, 60 * 1000);
+    // 날짜 줄은 분 단위로만 고친다 — 패널이 접혀 있거나 숨어 있는 동안은 돌리지 않고, 다시 보일 때 한 번 고친다.
+    setInterval(() => { if (ctx.isShown()) renderDate(); }, 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderDate(); });
     mount();
     document.documentElement.dataset.ready = '1';
   }

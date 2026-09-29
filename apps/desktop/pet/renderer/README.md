@@ -1,4 +1,4 @@
-# 펫 렌더러 (Windows)
+# 펫 렌더러 (Windows · macOS)
 
 번들러 없는 HTML/CSS/JS. 모든 페이지는 `window.moonlightPet`(프리로드 다리)만 쓰고, 채널 이름은
 `../shared/contract.js`의 `PET_INVOKE`·`PET_EVENTS`가 정본이다(`renderer-integrity.test.js`가 확인).
@@ -16,6 +16,7 @@
 - 로컬 보관 키(렌더러가 `pet:store-*`로 씀): `petPreview.memo`·`petPreview.capturedMemos`·`petPreview.taskDraft`
   (`{title,id}` — 불확실한 추가를 같은 ID 로 재시도)·`petCouncil.draft`·`petCouncil.source`·
   `petHub.pending.v1.<origin>`(`{memo, savedMemo, memoConflict}` — 메모 저장 재확인용).
+- 플랫폼: `model/platform.js`(`window.PetModel.platform`)가 navigator 로 win/mac 을 가려 `<html data-platform>` 을 달고, 주 수정키(Ctrl/⌘)·단축키 표시(`Ctrl+S`/`⌘S`, `Ctrl+Enter`/`⌘Return`)·기기 명사(`이 PC`/`이 Mac`)를 준다. 모든 함수가 platform 인자를 받고, 생략하면 렌더러는 현재 창·Node 테스트는 win. 유리 반경은 `--radius` 8px(win) / 10px(mac).
 - 글꼴: `fonts.css`가 `../fonts/*.woff2`(패키징)를 먼저, `../../../hub/public/fonts/*.woff2`(개발 트리)를 다음으로 찾는다.
 - 자산: `node apps/desktop/scripts/pet-assets.mjs`(검사만: `--check`)가 `../assets/portrait-*.png`·`cutout-*.png`를 만든다.
 - 테스트: `npm --workspace @com-moon/desktop test`.

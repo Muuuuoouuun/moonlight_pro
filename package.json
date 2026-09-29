@@ -35,6 +35,8 @@
     "dev:engine": "npm --workspace @com-moon/engine run dev",
     "app:win:dev": "npm --workspace @com-moon/desktop run dev",
     "app:win:build": "npm --workspace @com-moon/desktop run build",
+    "app:mac:dev": "npm --workspace @com-moon/desktop run dev",
+    "app:mac:build": "npm --workspace @com-moon/desktop run build:mac",
     "inventory:project-connections": "node ./scripts/inventory-project-connections.mjs",
     "test": "node --import ./scripts/register-hub-alias.mjs --test --test-concurrency=2 scripts/*.test.mjs apps/hub/lib/*.test.mjs apps/hub/lib/**/*.test.mjs \"apps/hub/app/**/*.test.mjs\" \"apps/hub/components/**/*.test.mjs\" \"apps/engine/**/*.test.mjs\" \"packages/**/*.test.mjs\"",
     "lint": "turbo run lint",

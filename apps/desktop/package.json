@@ -3,12 +3,13 @@
   "productName": "Moonlight",
   "version": "0.1.0",
   "private": true,
-  "description": "Moonlight 허브를 여는 Windows 데스크톱 셸",
+  "description": "Moonlight 허브를 여는 데스크톱 셸 (Windows·macOS)",
   "author": "Moonlight",
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
     "build": "electron-builder --win --x64",
+    "build:mac": "electron-builder --mac --arm64",
     "icons:generate": "node scripts/generate-icons.mjs",
     "test": "node --test"
   },
@@ -30,6 +31,7 @@
       "hub-url.js",
       "widget-window.js",
       "widget-preload.js",
+      "menu-template.js",
       "pet/**",
       "!pet/**/*.test.js",
       "!pet/**/test-support/**",
@@ -37,6 +39,11 @@
       "app.config.json",
       "settings/**",
       "package.json",
+      {
+        "from": "build",
+        "to": "assets",
+        "filter": ["trayTemplate.png", "trayTemplate@2x.png"]
+      },
       {
         "from": "../hub/public",
         "to": "assets",
@@ -53,6 +60,27 @@
       "target": [
         { "target": "nsis", "arch": ["x64"] },
         { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "darkModeSupport": true,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": "-",
+      "electronLanguages": ["ko", "en"],
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ],
+      "artifactName": "Moonlight-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "Moonlight ${version}",
+      "contents": [
+        { "x": 140, "y": 190 },
+        { "x": 400, "y": 190, "type": "link", "path": "/Applications" }
       ]
     },
     "nsis": {

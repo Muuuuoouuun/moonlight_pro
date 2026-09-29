@@ -1,4 +1,4 @@
-// 빠른 메모 — 넓은 입력면. 매 키 입력은 이 PC(petPreview.memo)에 남고, Hub 저장은 버튼·Ctrl+S·Ctrl+Enter 로만.
+// 빠른 메모 — 넓은 입력면. 매 키 입력은 이 PC(petPreview.memo)에 남고, Hub 저장은 버튼·Ctrl+S·Ctrl+Enter(mac ⌘S·⌘Return) 로만.
 // 저장이 확인되면 입력을 비우고 다음 입력은 새 메모다. 충돌이면 입력을 지키고 ⋯ 의 ‘새 항목으로 Hub에 저장’을 연다.
 // 확인되지 않은 저장·충돌 표시는 메인의 허브 모델이 가진다(data.pending) — 이 화면은 그 요약만 읽는다.
 'use strict';
@@ -24,7 +24,7 @@
       });
       const s1 = h('div', { class: 's1' });
       const s2 = h('div', { class: 's2', role: 'status' });
-      const saveBtn = U.action('Hub에 저장', { icon: 'arrowUp', iconFirst: true, iconSize: 13, title: '저장 확인 후 새 메모로 시작해요 · Ctrl+S / Ctrl+Enter', onClick: () => save() });
+      const saveBtn = U.action('Hub에 저장', { icon: 'arrowUp', iconFirst: true, iconSize: 13, title: `저장 확인 후 새 메모로 시작해요 · ${M.platform.hotkey('S')} / ${M.platform.hotkey('Enter')}`, onClick: () => save() });
       const collapseBtn = U.action(null, { compact: true, icon: 'chevronDown', iconSize: 15, className: 'collapse', ariaLabel: '메모 접기', title: '펫으로 접기 · Esc', onClick: () => ctx.collapse() });
       const footer = h('div', { class: 'memo-footer' }, h('div', { class: 'status-col' }, s1, s2), saveBtn, collapseBtn);
       const el = h('section', { class: 'mode memo', 'aria-label': '빠른 메모' }, editor, footer);

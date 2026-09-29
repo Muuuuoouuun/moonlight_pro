@@ -8,6 +8,15 @@
 //   bubble  326×130 Acrylic 말풍선 — 포커스를 받지 않고 showInactive로만 뜬다.
 //   focus   화면마다 하나인 불투명 전체 화면 창(주 화면에만 타이머 조작).
 // 모두 항상 위(floating), 작업 표시줄에 나오지 않는다. 페이지는 UI 패키지가 pet/renderer/에 둔다.
+//
+// macOS(platform 'darwin')는 같은 창을 다른 재질·성질로 만든다(Windows 값은 그대로):
+//   유리    Acrylic 대신 네이티브 vibrancy(MAC_VIBRANCY) + visualEffectState 'active' — 초점을 잃어도 블러가 남는다
+//           (Windows 의 WM_NCACTIVATE 도우미가 하는 일을 AppKit 이 한다). 투명 창 + 알파 0 배경이어야 재질이 보이고,
+//           테두리 없는 vibrancy 창은 roundedCorners 로 시스템 둥근 모서리를 받는다(DWM 호출 없음).
+//   패널    모든 펫 창은 type 'panel'(NSPanel, 비활성 패널) — 키 창이 되어도 앱을 활성화하지 않아 큰 허브 창이 앞으로
+//           나오지 않고, 전체 화면 앱 위에도 뜬다. acceptFirstMouse 로 다른 앱이 앞에 있어도 첫 클릭이 바로 먹는다.
+//           setVisibleOnAllWorkspaces 로 모든 Space 를 따라다닌다(skipTransformProcessType — Dock 아이콘을 건드리지 않는다).
+//   집중    display.bounds 전체(메뉴 막대·Dock 위)를 덮도록 roundedCorners:false(제목 없는 창) + enableLargerThanScreen.
 const fs = require('node:fs');
 const path = require('node:path');
 const { BrowserWindow } = require('electron');
@@ -25,6 +34,13 @@ const DEFAULT_PAGES_DIR = path.join(__dirname, '..', 'renderer');
 const PRELOAD = path.join(__dirname, 'pet-preload.js');
 const FOCUS_BACKGROUND = '#141C27'; // 허브 --bg와 같은 불투명 흑연(main.js BACKGROUND)
 const SOLID_GLASS = '#1B2430'; // 투명도 줄이기·고대비: 블러 대신 불투명 면
+// macOS 유리 재질. 프로토타입은 NSVisualEffectView(.popover)에 darkAqua 외형을 강제했지만 Electron 은 창마다 외형을
+// 정할 수 없다 — 'popover'는 라이트 모드에서 밝게 떠 흰 글자가 묻힌다. 'hud'는 외형과 상관없이 어두운 반투명 재질이다.
+const MAC_VIBRANCY = 'hud';
+// 모든 Space·전체 화면 앱 위. skipTransformProcessType 이 없으면 Electron 이 Dock 아이콘을 숨긴다(허브 창 앱이 사라진다).
+const MAC_WORKSPACES = Object.freeze({ visibleOnFullScreen: true, skipTransformProcessType: true });
+
+const isMac = (platform) => platform === 'darwin';
 
 // 페이지 파일 고르기. pagesDir(기본 pet/renderer) 안의 표면별 파일, 또는 pageFile 하나를 모든 표면에(?surface=).
 function pagePath({ pagesDir, pageFile } = {}, surface) {
@@ -41,6 +57,10 @@ function fallbackUrl(surface) {
   return `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><meta charset="utf-8"><title>Moonlight 펫</title><body style="margin:0;background:${bg}">${body}</body>`)}`;
 }
 
+// backgroundThrottling:false 는 모든 펫 창에 남긴다. 펫·패널·말풍선은 숨었다 나타나기를 자주 하고, 숨은 동안 바뀐
+// 내용(모드·알림·캐릭터)을 보이는 첫 프레임에 그려야 한다 — 숨은 동안 그리기를 멈추면 다시 띄울 때 옛 화면이 한두 프레임
+// 비친다. 집중 화면은 타이머라 가려져도 초를 그려야 한다. 대신 페이지의 visibilityState 가 숨은 동안에도 'visible'이라
+// 가시성으로만 거르는 렌더러 폴링은 숨은 패널에서도 돈다(렌더러 쪽이 state.panelOpen 으로 거르는 게 맞다).
 const webPreferences = () => ({
   preload: PRELOAD,
   contextIsolation: true,
@@ -49,6 +69,67 @@ const webPreferences = () => ({
   spellcheck: false,
   backgroundThrottling: false,
 });
+
+// 표면별 창 옵션(순수 — 테스트가 두 플랫폼을 모두 본다). extra 는 표면 고유 값(크기·focusable·parent).
+// Windows 는 이식 당시 값 그대로, macOS 는 위 머리 설명대로.
+function surfaceOptions(surface, platform, extra = {}) {
+  if (isMac(platform)) {
+    const panel = { type: 'panel', acceptFirstMouse: true, hiddenInMissionControl: true };
+    if (surface === 'panel' || surface === 'bubble') {
+      return {
+        ...panel,
+        transparent: true,
+        backgroundColor: '#00000000',
+        vibrancy: MAC_VIBRANCY,
+        visualEffectState: 'active',
+        roundedCorners: true,
+        hasShadow: true,
+        ...extra,
+      };
+    }
+    if (surface === 'focus') {
+      return {
+        ...panel,
+        backgroundColor: FOCUS_BACKGROUND,
+        transparent: false,
+        hasShadow: false,
+        movable: false,
+        focusable: true,
+        roundedCorners: false, // 제목 있는 창 모양이면 AppKit 이 메뉴 막대 아래로 밀어 넣는다
+        enableLargerThanScreen: true,
+        level: 'screen-saver',
+        ...extra,
+      };
+    }
+    // pet·perch: 투명 창. 둥근 모서리 마스크·그림자 없이(제목 없는 창) 캐릭터 모양만.
+    return { ...panel, transparent: true, backgroundColor: '#00000000', hasShadow: false, roundedCorners: false, ...extra };
+  }
+  if (surface === 'panel' || surface === 'bubble') {
+    // Acrylic 유리: 창 자체는 불투명 취급(transparent:false)이고 배경색 알파 0이 재질을 보이게 한다.
+    return {
+      transparent: false,
+      backgroundMaterial: 'acrylic',
+      backgroundColor: '#00000000',
+      thickFrame: false,
+      roundedCorners: true,
+      hasShadow: true,
+      ...extra,
+    };
+  }
+  if (surface === 'focus') {
+    return {
+      backgroundColor: FOCUS_BACKGROUND,
+      transparent: false,
+      thickFrame: false,
+      hasShadow: false,
+      movable: false,
+      focusable: true,
+      level: 'screen-saver',
+      ...extra,
+    };
+  }
+  return { transparent: true, backgroundColor: '#00000000', hasShadow: false, thickFrame: false, ...extra };
+}
 
 const chrome = {
   frame: false,
@@ -66,6 +147,7 @@ function createWindowFactory(options = {}) {
   const openExternal = options.openExternal || (() => {});
   const log = options.log || (() => {});
   const pages = { pagesDir: options.pagesDir, pageFile: options.pageFile };
+  const platform = options.platform || process.platform;
 
   // 펫 창은 로컬 페이지만 띄운다: 이동은 막고, 새 창 요청은 시스템 브라우저(http·https·mailto)로.
   function guard(win, surface) {
@@ -89,6 +171,9 @@ function createWindowFactory(options = {}) {
     const loaded = new Promise((resolve) => {
       win.webContents.once('did-finish-load', () => resolve(true));
       win.webContents.once('did-fail-load', () => resolve(false));
+    }).then((ok) => {
+      win.petReady = true; // 늦게 만든 창(말풍선)이 불러오기 전에 보낸 메시지를 잃지 않게 셸이 본다
+      return ok;
     });
     if (fs.existsSync(file)) win.loadFile(file, { query: { surface, ...query } }).catch(() => {});
     else {
@@ -99,40 +184,32 @@ function createWindowFactory(options = {}) {
   }
 
   function make(surface, extra, query) {
-    const win = new BrowserWindow({ ...chrome, ...extra, webPreferences: webPreferences() });
-    win.setAlwaysOnTop(true, extra.level || 'floating');
+    const opts = surfaceOptions(surface, platform, extra);
+    const win = new BrowserWindow({ ...chrome, ...opts, webPreferences: webPreferences() });
+    win.setAlwaysOnTop(true, opts.level || 'floating');
+    if (isMac(platform)) {
+      try {
+        win.setVisibleOnAllWorkspaces(true, MAC_WORKSPACES);
+      } catch (error) {
+        log(`pet:${surface} all-workspaces failed ${error && error.message}`);
+      }
+    }
     guard(win, surface);
     win.petSurface = surface;
+    win.petPlatform = platform;
+    win.petMaterial = isMac(platform) ? (opts.vibrancy || null) : (opts.backgroundMaterial || null); // 스모크가 본다
+    win.petReady = false;
     win.petLoaded = load(win, surface, query);
     return win;
   }
 
-  const transparent = { transparent: true, backgroundColor: '#00000000', hasShadow: false, thickFrame: false };
-  // Acrylic 유리: 창 자체는 불투명 취급(transparent:false)이고 배경색 알파 0이 재질을 보이게 한다.
-  const acrylic = {
-    transparent: false,
-    backgroundMaterial: 'acrylic',
-    backgroundColor: '#00000000',
-    thickFrame: false,
-    roundedCorners: true,
-    hasShadow: true,
-  };
-
   return {
-    pet: () => make('pet', { ...transparent, width: C.PET_SIZE, height: C.PET_SIZE, focusable: false }),
-    panel: () => make('panel', { ...acrylic, ...C.glassSize('tasks'), focusable: true }),
-    perch: (parent) => make('perch', { ...transparent, parent, width: C.PERCH_SIZE, height: C.PERCH_SIZE, focusable: false }),
-    bubble: () => make('bubble', { ...acrylic, ...C.BUBBLE_SIZE, focusable: false }),
-    focus: (display, primary) => make('focus', {
-      ...display.bounds,
-      backgroundColor: FOCUS_BACKGROUND,
-      transparent: false,
-      thickFrame: false,
-      hasShadow: false,
-      movable: false,
-      focusable: true,
-      level: 'screen-saver',
-    }, { primary: primary ? '1' : '0', display: String(display.id) }),
+    platform,
+    pet: () => make('pet', { width: C.PET_SIZE, height: C.PET_SIZE, focusable: false }),
+    panel: () => make('panel', { ...C.glassSize('tasks'), focusable: true }),
+    perch: (parent) => make('perch', { parent, width: C.PERCH_SIZE, height: C.PERCH_SIZE, focusable: false }),
+    bubble: () => make('bubble', { ...C.BUBBLE_SIZE, focusable: false }),
+    focus: (display, primary) => make('focus', { ...display.bounds }, { primary: primary ? '1' : '0', display: String(display.id) }),
   };
 }
 
@@ -147,13 +224,18 @@ function setBoundsExact(win, rect) {
 }
 
 // 투명도 줄이기·고대비면 블러 대신 불투명 면. 렌더러 CSS도 prefs를 보고 같이 바꾼다.
-function applyGlassMaterial(win, prefs) {
+// macOS 는 vibrancy 를 떼고(null) 같은 불투명 면, 되돌릴 때 MAC_VIBRANCY 를 다시 건다.
+function applyGlassMaterial(win, prefs, platform = (win && win.petPlatform) || process.platform) {
   if (!win || win.isDestroyed()) return;
   const solid = Boolean(prefs && (prefs.reduceTransparency || prefs.highContrast));
   try {
-    win.setBackgroundMaterial(solid ? 'none' : 'acrylic');
+    if (isMac(platform)) win.setVibrancy(solid ? null : MAC_VIBRANCY);
+    else win.setBackgroundMaterial(solid ? 'none' : 'acrylic');
     win.setBackgroundColor(solid ? SOLID_GLASS : '#00000000');
   } catch { /* 재질을 못 바꾸면 그대로 둔다 */ }
 }
 
-module.exports = { PET_PAGES, DEFAULT_PAGES_DIR, PRELOAD, FOCUS_BACKGROUND, pagePath, fallbackUrl, createWindowFactory, setBoundsExact, applyGlassMaterial };
+module.exports = {
+  PET_PAGES, DEFAULT_PAGES_DIR, PRELOAD, FOCUS_BACKGROUND, SOLID_GLASS, MAC_VIBRANCY, MAC_WORKSPACES,
+  pagePath, fallbackUrl, surfaceOptions, createWindowFactory, setBoundsExact, applyGlassMaterial,
+};

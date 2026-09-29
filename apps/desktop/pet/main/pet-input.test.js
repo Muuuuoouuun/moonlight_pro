@@ -172,3 +172,19 @@ test('latch(): 페이지가 확인을 닫은 지금 눌린 Esc 를 keyUp 까지 
   assert.equal(hold.latch(), false, '눌린 키가 없으면 잠그지 않는다');
   assert.equal(hold.keyDown(), true, '다음 누름은 새로 잰다');
 });
+
+test('전역 단축키는 macOS 에서도 같은 문자열 — Control(⌃)+Alt(⌥)+M, CommandOrControl 이 아니다(프로토타입 ⌃⌥M)', () => {
+  assert.doesNotMatch(I.PET_QUICK_ACCELERATOR, /Command|Cmd|Super|Meta/);
+  assert.deepEqual(I.PET_QUICK_ACCELERATOR.split('+'), ['Control', 'Alt', 'M']);
+});
+
+test('Esc 길게 누르기는 수정키 없는 Esc 만 — macOS 의 ⌘Esc(meta)도 재지 않는다', () => {
+  const calls = [];
+  const hold = { keyDown: () => calls.push('down'), keyUp: () => calls.push('up') };
+  for (const mod of ['meta', 'control', 'alt', 'shift']) {
+    assert.equal(I.escHoldInput(hold, { type: 'keyDown', key: 'Escape', [mod]: true }), false, mod);
+  }
+  assert.equal(I.escHoldInput(hold, { type: 'keyDown', key: 'Escape' }), true);
+  assert.equal(I.escHoldInput(hold, { type: 'keyUp', key: 'Escape' }), true);
+  assert.deepEqual(calls, ['down', 'up']);
+});

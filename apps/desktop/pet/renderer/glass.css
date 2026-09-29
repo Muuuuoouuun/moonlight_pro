@@ -1,5 +1,5 @@
 /* 펫 유리 공용 — 빠른 패널·말풍선이 함께 쓴다.
-   창 자체가 Windows 11 Acrylic(실제 블러)이다. 페이지 바탕은 투명 검정이고, 그 위에
+   창 자체가 Windows 11 Acrylic / macOS vibrancy(실제 블러)이다. 페이지 바탕은 투명 검정이고, 그 위에
    중앙 음영 → 캐릭터 색(누름·드래그 중에만) → 1px 반사 윤곽 → 글자 순서로 쌓는다.
    값은 pet/shared/contract.js 의 GLASS·MOTION 과 같다(승인 중간값 2026-09-26). */
 :root {
@@ -9,7 +9,7 @@
   --ink-dim: rgba(255, 255, 255, .60);
   --glyph: 0 .35px .65px rgba(0, 0, 0, .73), 0 .5px 1.6px rgba(0, 0, 0, .37);
   --glyph-f: drop-shadow(0 .35px .65px rgba(0, 0, 0, .73)) drop-shadow(0 .5px 1.6px rgba(0, 0, 0, .37));
-  --radius: 8px; /* Acrylic 창의 DWM 둥근 모서리 */
+  --radius: 8px; /* Acrylic 창의 DWM 둥근 모서리 — macOS 는 아래 data-platform 규칙이 시스템 창 반경(10px)으로 바꾼다 */
   --wash-color: transparent;
   --wash-opacity: .52;
   --dur-hover: 120ms;
@@ -17,11 +17,12 @@
   --dur-overlay: 160ms;
   --dur-wash: 120ms;
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
-  --font: 'SUIT', 'Segoe UI Variable Text', 'Malgun Gothic', system-ui, sans-serif;
-  --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  --font: 'SUIT', 'Segoe UI Variable Text', 'Malgun Gothic', -apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'SF Mono', Menlo, monospace;
   --opaque-bg: #141C27;
   color-scheme: dark;
 }
+html[data-platform="mac"] { --radius: 10px; } /* platform.js 가 <html data-platform> 을 단다. 유리 층이 창 모서리와 같은 곡률이어야 모서리에 맨 블러가 비치지 않는다 */
 * { box-sizing: border-box; }
 html, body {
   margin: 0; width: 100%; height: 100%; overflow: hidden;
@@ -52,6 +53,21 @@ input, textarea { font: inherit; color: var(--ink); text-shadow: var(--glyph); }
 .layer { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
 /* 중앙 음영: 반경 35%까지 9% 평탄, 가장자리에서 0 */
 .shade { background: radial-gradient(circle farthest-corner at 50% 50%, rgba(0, 0, 0, .09) 0%, rgba(0, 0, 0, .09) 35%, rgba(0, 0, 0, 0) 100%); }
+/* macOS vibrancy('hud')는 시스템 모양을 따른다 — 라이트 모양에서는 재질이 밝은 회색이 되어 흰 글자와 글자 그림자가
+   번져 보인다(2026-09-29 설치본 실화면). 맥에서만 음영 아래에 평탄한 먹색 베일을 깔아 Acrylic 위와 같은 명도로 맞춘다.
+   다크 모양은 재질이 이미 어두워 옅게만. 블러는 베일 너머로 그대로 비친다. */
+html[data-platform="mac"] .shade {
+  background:
+    radial-gradient(circle farthest-corner at 50% 50%, rgba(0, 0, 0, .09) 0%, rgba(0, 0, 0, .09) 35%, rgba(0, 0, 0, 0) 100%),
+    rgba(12, 16, 22, .16);
+}
+@media (prefers-color-scheme: light) {
+  html[data-platform="mac"] .shade {
+    background:
+      radial-gradient(circle farthest-corner at 50% 50%, rgba(0, 0, 0, .09) 0%, rgba(0, 0, 0, .09) 35%, rgba(0, 0, 0, 0) 100%),
+      rgba(12, 16, 22, .52);
+  }
+}
 /* 캐릭터 색: 평소 0 → pet:wash {on} 때 120ms 에 걸쳐 캐릭터색 × wash */
 .wash { background: var(--wash-color); opacity: 0; transition: opacity var(--dur-wash) var(--ease); }
 .wash.on { opacity: var(--wash-opacity); }
