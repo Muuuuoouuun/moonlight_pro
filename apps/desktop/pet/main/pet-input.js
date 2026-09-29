@@ -2,7 +2,9 @@
 // 펫 입력 규칙 — 클릭 모델·세로 끌기·Esc 길게 누르기·전역 단축키. 순수 상태 기계라 Electron 없이 테스트한다.
 //
 // 클릭 모델(Mac PetClickView): 한 번 클릭 → 빠른 패널을 바로 연다(두 번째 클릭을 기다리지 않는다),
-// 두 번 클릭 → 지속 위젯, 오른쪽 클릭 → 캐릭터 메뉴(렌더러가 pet:context-menu), 3px 넘게 움직이면 끌기(세로만).
+// 두 번 클릭 → 지속 위젯, 오른쪽 클릭 → 캐릭터 메뉴(렌더러가 pet:context-menu), 3px 넘게 움직이면 끌기.
+// 끌기는 세로(screenY)가 기본이고, 가로(screenX)까지 오면 drag-move 에 dx 도 싣는다 — 펫은 자유롭게 끌고 놓으면
+// 가까운 가장자리로 붙는다(pet-main). 렌더러가 screenX 를 보내지 않으면 메인이 커서 위치로 채운다.
 // 펫 렌더러는 포인터 신호만 보낸다 — pointerdown: pet:press {pressed:true} + pet:drag {phase:'begin', screenY},
 // pointermove: pet:drag {phase:'move', screenY}, pointerup: pet:drag {phase:'end'} + pet:press {pressed:false},
 // 포인터를 잃으면 pet:drag {phase:'cancel'} (그 뒤의 pet:press {pressed:false} 는 이미 뗀 제스처라 아무 일도 없다).
@@ -24,21 +26,22 @@ function createPointerGesture(options = {}) {
     get isDown() { return down; },
     get isDragging() { return tracker.dragging; },
     // 누름 시작(pet:press true 또는 pet:drag begin). 이미 눌렸는데 시작 좌표가 없었으면 좌표만 채운다.
-    down(screenY) {
+    down(screenY, screenX) {
       if (down) {
-        if (!tracker.active && Number.isFinite(screenY)) tracker.begin(screenY);
+        if (!tracker.active && Number.isFinite(screenY)) tracker.begin(screenY, screenX);
         return [];
       }
       down = true;
-      tracker.begin(screenY);
+      tracker.begin(screenY, screenX);
       return [{ type: 'press' }];
     },
-    move(screenY) {
+    move(screenY, screenX) {
       if (!down) return [];
       const wasDragging = tracker.dragging;
-      const dy = tracker.move(screenY);
+      const dy = tracker.move(screenY, screenX);
       if (dy === null) return [];
-      return wasDragging ? [{ type: 'drag-move', dy }] : [{ type: 'drag-begin' }, { type: 'drag-move', dy }];
+      const step = tracker.tracksX ? { type: 'drag-move', dy, dx: tracker.lastDx } : { type: 'drag-move', dy };
+      return wasDragging ? [step] : [{ type: 'drag-begin' }, step];
     },
     // 뗌(pet:drag end 또는 pet:press false). 끌기였으면 drag-end, 아니면 click / double-click.
     up() {
@@ -67,10 +70,11 @@ function createPointerGesture(options = {}) {
 function applyPointerSignal(gesture, channel, payload) {
   const p = payload && typeof payload === 'object' ? payload : {};
   const screenY = Number.isFinite(p.screenY) ? p.screenY : undefined;
-  if (channel === 'pet:press') return p.pressed === true ? gesture.down(screenY) : gesture.up();
+  const screenX = Number.isFinite(p.screenX) ? p.screenX : undefined;
+  if (channel === 'pet:press') return p.pressed === true ? gesture.down(screenY, screenX) : gesture.up();
   if (channel === 'pet:drag') {
-    if (p.phase === 'begin') return gesture.down(screenY);
-    if (p.phase === 'move') return gesture.move(screenY);
+    if (p.phase === 'begin') return gesture.down(screenY, screenX);
+    if (p.phase === 'move') return gesture.move(screenY, screenX);
     if (p.phase === 'end') return gesture.up();
     // 렌더러가 포인터를 잃었다(pointercancel·lostpointercapture·창 blur) — 클릭으로 치지 않는다.
     if (p.phase === 'cancel') return gesture.cancel();

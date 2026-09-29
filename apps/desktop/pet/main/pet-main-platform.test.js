@@ -82,27 +82,38 @@ test('macOS: 빠른 패널은 showInactive + focus(앱 활성화 없이 키 창)
   assert.deepEqual(E.electron.app.focusCalls, [], '키 창이 되면 앱을 활성화하지 않는다');
 });
 
-test('macOS: 키 창이 못 되면 그때만 앱을 활성화하고 다시 focus', async (t) => {
+test('macOS: 키 창이 못 되어도 앱을 활성화하지 않는다(허브 창이 따라 올라오지 않게) — 150ms 뒤 다시 잡는다', async (t) => {
   const { E, pet } = await boot(t, 'darwin');
   const panel = pet.windows.panel;
   let tries = 0;
   panel.focus = function focus() { tries += 1; this.calls.push('focus'); this.focused = tries >= 2; };
   pet.openQuick();
-  assert.deepEqual(E.electron.app.focusCalls, [{ steal: true }]);
+  assert.deepEqual(E.electron.app.focusCalls, [], 'app.focus({steal}) 없음');
+  assert.deepEqual(panel.calls, ['showInactive', 'focus']);
+  await settle(200);
   assert.deepEqual(panel.calls, ['showInactive', 'focus', 'focus']);
+  assert.equal(panel.isFocused(), true);
   assert.equal(panel.calls.includes('show'), false);
+  await settle(200);
+  assert.equal(tries, 2, '잡은 뒤에는 더 부르지 않는다');
 });
 
-test('macOS: 그래도 키 창이 못 되면 유예 안에서 150ms 뒤 한 번 더 잡는다', async (t) => {
-  const { pet } = await boot(t, 'darwin');
+test('macOS: 그래도 키 창이 못 되면 유예 안에서 300ms 에 한 번 더 — 그 뒤로는 부르지 않는다', async (t) => {
+  const { E, pet } = await boot(t, 'darwin');
   const panel = pet.windows.panel;
   let tries = 0;
   panel.focus = function focus() { tries += 1; this.calls.push('focus'); this.focused = tries >= 3; };
   pet.openQuick();
   assert.equal(panel.isFocused(), false);
   await settle(200);
+  assert.equal(tries, 2);
+  assert.equal(panel.isFocused(), false);
+  await settle(150);
   assert.equal(tries, 3);
   assert.equal(panel.isFocused(), true);
+  await settle(200);
+  assert.equal(tries, 3);
+  assert.deepEqual(E.electron.app.focusCalls, []);
   assert.equal(panel.calls.includes('show'), false);
 });
 

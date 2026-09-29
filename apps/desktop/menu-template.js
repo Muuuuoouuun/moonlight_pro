@@ -23,14 +23,26 @@ function editMenu() {
   };
 }
 
+// '로그인 시 자동 실행' 체크 항목(트레이·macOS 앱 메뉴). Electron 은 누른 뒤의 checked 를 item 에 실어 click 을 부른다.
+function loginItemMenuItem({ checked, onToggle }) {
+  return {
+    label: '로그인 시 자동 실행',
+    type: 'checkbox',
+    checked: Boolean(checked),
+    click: (item) => onToggle(Boolean(item && item.checked)),
+  };
+}
+
 // macOS 앱 메뉴 — 이름은 Moonlight, 종료는 role(⌘Q)이라 before-quit 경로를 그대로 탄다.
-function macAppMenu({ name, quickCapture, widgetItem, showSettings }) {
+// loginItem(선택): 패키징한 앱에서만 main.js 가 넘긴다(개발 실행은 Electron 자체를 로그인 항목에 올리므로 넣지 않는다).
+function macAppMenu({ name, quickCapture, widgetItem, showSettings, loginItem }) {
   return {
     label: name,
     submenu: [
       { label: `${name} 정보`, role: 'about' },
       { type: 'separator' },
       { label: '설정… (허브 주소)', accelerator: 'Command+,', click: showSettings },
+      ...(loginItem ? [loginItem] : []),
       { type: 'separator' },
       quickCapture,
       widgetItem,
@@ -81,13 +93,14 @@ function viewMenu({ platform, goBack, goForward }) {
   };
 }
 
-// options: { platform, name, quickAccelerator, widgetItem, actions: { quickCapture, showSettings, quit, goBack, goForward } }
-function buildAppMenuTemplate({ platform, name = 'Moonlight', quickAccelerator, widgetItem, actions }) {
+// options: { platform, name, quickAccelerator, widgetItem, loginItem?, actions: { quickCapture, showSettings, quit, goBack, goForward } }
+// loginItem 은 macOS 앱 메뉴에만 들어간다(Windows 는 트레이 메뉴에 있다).
+function buildAppMenuTemplate({ platform, name = 'Moonlight', quickAccelerator, widgetItem, loginItem = null, actions }) {
   const quickCapture = { label: '빠른 입력', accelerator: quickAccelerator, registerAccelerator: false, click: actions.quickCapture };
   const view = viewMenu({ platform, goBack: actions.goBack, goForward: actions.goForward });
   if (isMac(platform)) {
     return [
-      macAppMenu({ name, quickCapture, widgetItem, showSettings: actions.showSettings }),
+      macAppMenu({ name, quickCapture, widgetItem, showSettings: actions.showSettings, loginItem }),
       editMenu(),
       view,
       windowMenu(),
@@ -117,4 +130,4 @@ function buildDockMenuTemplate({ quickAccelerator, widgetItem, actions }) {
   ];
 }
 
-module.exports = { buildAppMenuTemplate, buildDockMenuTemplate, editMenu, isMac };
+module.exports = { buildAppMenuTemplate, buildDockMenuTemplate, loginItemMenuItem, editMenu, isMac };

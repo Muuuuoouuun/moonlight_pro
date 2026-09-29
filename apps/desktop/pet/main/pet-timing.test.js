@@ -156,3 +156,52 @@ test('트레이 "짧은 메시지 보기": 마지막 알림도 isValid 로 다�
   q.toggle();
   assert.deepEqual(log.at(-1), ['show', null], '한 번 잊은 알림은 되살아나지 않는다');
 });
+
+test('불러오는 중인 말풍선(show 가 Promise): 실제로 뜬 뒤부터 8초, 못 불러오면(false) 빈 말풍선 없이 거둔다', async () => {
+  const clock = timers();
+  const log = [];
+  let visible = false;
+  let finish;
+  let result = () => new Promise((resolve) => { finish = resolve; });
+  const q = T.createBubbleQueue({
+    canShow: () => true,
+    show: (n) => { log.push(['show', n ? n.id : null]); return result(); },
+    hide: () => { visible = false; log.push(['hide']); },
+    isVisible: () => visible,
+    setTimeout: clock.setTimeout,
+    clearTimeout: clock.clearTimeout,
+  });
+  q.push({ id: 'a' });
+  clock.advance(9000); // 페이지를 불러오는 동안은 재지 않는다
+  assert.deepEqual(log, [['show', 'a']]);
+  visible = true;
+  finish(true);
+  await Promise.resolve();
+  clock.advance(7999);
+  assert.deepEqual(log, [['show', 'a']]);
+  clock.advance(1);
+  assert.deepEqual(log.at(-1), ['hide']);
+  // 못 불러옴(false): 곧바로 거두고 간격 없이 멈춘다(다음 알림은 다음 push 때).
+  q.push({ id: 'b' });
+  clock.advance(1000);
+  assert.deepEqual(log.at(-1), ['show', 'b']);
+  finish(false);
+  await Promise.resolve();
+  assert.equal(q.current, null);
+  clock.advance(20000);
+  assert.deepEqual(log.at(-1), ['hide']);
+  // 동기 false 도 같다.
+  result = () => false;
+  q.push({ id: 'c' });
+  assert.equal(q.current, null);
+  // 늦게 끝난 결과는 그사이 내린 차례의 타이머를 켜지 않는다.
+  result = () => new Promise((resolve) => { finish = resolve; });
+  q.push({ id: 'd' });
+  assert.deepEqual(log.slice(-3), [['show', 'c'], ['hide'], ['show', 'd']]);
+  q.dismiss({ gap: false });
+  finish(true);
+  await Promise.resolve();
+  const before = log.length;
+  clock.advance(20000);
+  assert.equal(log.length, before);
+});

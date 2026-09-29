@@ -4,9 +4,17 @@
 const Module = require('node:module');
 const { EventEmitter } = require('node:events');
 
+// options.displays: [{ id, bounds, workArea }] 로 여러 모니터(첫 번째가 주 모니터). 없으면 1920×1080 하나.
+// screen.displays 를 바꾸고 screen.emit('display-removed') 등으로 모니터 변화를 흉내 낸다.
+// screen.cursor = { x, y } 면 getCursorScreenPoint 가 그 값을 돌려준다(기본 null — 커서 없음).
 function createElectronDouble(options = {}) {
   const workArea = options.workArea || { x: 0, y: 0, width: 1920, height: 1040 };
   const display = { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea, scaleFactor: 1 };
+  const overlap = (a, b) => {
+    const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+    const h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+    return w > 0 && h > 0 ? w * h : 0;
+  };
   const handlers = new Map();
   const handleCalls = [];
   const windows = [];
@@ -113,10 +121,24 @@ function createElectronDouble(options = {}) {
       },
     },
     nativeTheme: Object.assign(new EventEmitter(), { prefersReducedTransparency: false, shouldUseHighContrastColors: false }),
+    // 잠자기·화면 잠금 — 테스트가 powerMonitor.emit('suspend' | 'resume' | 'lock-screen' | 'unlock-screen')로 흉내 낸다.
+    powerMonitor: new EventEmitter(),
     screen: Object.assign(new EventEmitter(), {
-      getAllDisplays: () => [display],
-      getPrimaryDisplay: () => display,
-      getDisplayMatching: () => display,
+      displays: options.displays ? options.displays.map((d) => ({ scaleFactor: 1, ...d })) : [display],
+      cursor: null,
+      getAllDisplays() { return this.displays; },
+      getPrimaryDisplay() { return this.displays[0]; },
+      // 가장 많이 겹치는 화면, 없으면 주 화면(Electron 은 가장 가까운 화면 — 테스트는 겹치는 경우만 쓴다).
+      getDisplayMatching(rect) {
+        let best = this.displays[0];
+        let area = 0;
+        for (const d of this.displays) {
+          const a = overlap(rect, d.bounds);
+          if (a > area) { best = d; area = a; }
+        }
+        return best;
+      },
+      getCursorScreenPoint() { return this.cursor; },
     }),
     session: {
       defaultSession: {

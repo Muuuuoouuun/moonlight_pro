@@ -90,3 +90,16 @@ test('모드 목적지: 일정은 그 날짜(날짜시각은 이 PC 날짜), Cou
   s.setMode('tasks', { mode: 'calendar', date: '2026-09-28' });
   assert.equal(s.get().modeTarget.seq, 2, '다른 모드의 목적지는 무시한다');
 });
+
+test('자리 상태: side 기본 오른쪽·hidden false, 바꾸면 알린다(렌더러가 왼쪽 거울 배치를 안다)', () => {
+  const seen = [];
+  const s = createPetState({ onChange: (snap) => seen.push(snap) });
+  assert.equal(s.get().side, C.DEFAULT_PET_SIDE);
+  assert.equal(s.get().side, 'right');
+  assert.equal(s.get().hidden, false);
+  assert.deepEqual(C.PET_SIDES, ['left', 'right']);
+  assert.equal(s.patch({ side: 'left' }), true);
+  assert.equal(seen.at(-1).side, 'left');
+  assert.equal(s.patch({ hidden: true }), true);
+  assert.equal(seen.at(-1).hidden, true);
+});

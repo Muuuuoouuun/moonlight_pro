@@ -36,4 +36,49 @@ function characterMenuTemplate({ current, onNotifications, onSelect, iconFor = (
   ];
 }
 
-module.exports = { petTrayItems, characterMenuTemplate };
+// 모니터 이름: 주 모니터가 먼저, 나머지는 왼쪽→오른쪽(같으면 위→아래) 순서로 '모니터 2', '모니터 3'…
+// 크기는 화면 좌표(DIP·pt) 그대로 붙인다. displays = [{ id, bounds }], 결과 [{ id, label }].
+function displayChoices(displays, primaryId) {
+  const list = Array.isArray(displays) ? displays.filter((d) => d && d.bounds) : [];
+  const primary = list.filter((d) => d.id === primaryId);
+  const others = list.filter((d) => d.id !== primaryId)
+    .sort((a, b) => (a.bounds.x - b.bounds.x) || (a.bounds.y - b.bounds.y));
+  const size = (d) => `${Math.round(d.bounds.width)}×${Math.round(d.bounds.height)}`;
+  return [
+    ...primary.map((d) => ({ id: d.id, label: `주 모니터 (${size(d)})` })),
+    ...others.map((d, i) => ({ id: d.id, label: `모니터 ${i + (primary.length ? 2 : 1)} (${size(d)})` })),
+  ];
+}
+
+// 펫 자리 항목 — 트레이 펫 묶음과 펫 오른쪽 클릭 메뉴가 같이 쓴다.
+// placement: { displays: [{ id, bounds }], primaryId, displayId, side: 'left'|'right', hidden }
+// actions: { moveToDisplay(id), setSide(side), resetPosition(), setHidden(hidden) }
+// '모니터로 옮기기'는 모니터가 둘 이상일 때만 보인다(하나면 고를 것이 없다).
+function petPlacementItems(placement, actions) {
+  const p = placement || {};
+  const choices = displayChoices(p.displays, p.primaryId);
+  const items = [];
+  if (choices.length > 1) {
+    items.push({
+      label: '모니터로 옮기기',
+      submenu: choices.map((c) => ({
+        label: c.label,
+        type: 'radio',
+        checked: c.id === p.displayId,
+        click: () => actions.moveToDisplay(c.id),
+      })),
+    });
+  }
+  items.push(
+    { label: '왼쪽 가장자리로', type: 'radio', checked: p.side === 'left', click: () => actions.setSide('left') },
+    { label: '오른쪽 가장자리로', type: 'radio', checked: p.side !== 'left', click: () => actions.setSide('right') },
+    { type: 'separator' },
+    { label: '펫 위치 초기화', click: () => actions.resetPosition() },
+    p.hidden
+      ? { label: '펫 보이기', click: () => actions.setHidden(false) }
+      : { label: '펫 숨기기', click: () => actions.setHidden(true) },
+  );
+  return items;
+}
+
+module.exports = { petTrayItems, characterMenuTemplate, displayChoices, petPlacementItems };

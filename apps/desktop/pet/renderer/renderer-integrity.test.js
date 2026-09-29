@@ -62,6 +62,49 @@ test('유리 값은 승인값 그대로다', () => {
   assert.equal(C.GLASS.centerShade, 0.09);
 });
 
+test('유리 층 순서: 베일 → 중앙 음영 → (캐릭터 색) → 곡면 단면 셋 → 1px 입술 — 패널·말풍선 같다', () => {
+  const layers = (page) => [...read(page).matchAll(/class="layer ([a-z-]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(layers('panel.html'), ['veil', 'shade', 'wash', 'section', 'section-fine', 'prism', 'rim']);
+  assert.deepEqual(layers('bubble.html'), ['veil', 'shade', 'section', 'section-fine', 'prism', 'rim']);
+});
+
+test('곡면 단면·베일·캐릭터 색 값은 계약 GLASS 와 같고, 불투명·강제 색에서는 꺼진다', () => {
+  const css = read('glass.css');
+  const G = C.GLASS;
+  // 선언값을 숫자로 읽는다(.30 과 0.3 을 같게). 같은 이름이 여러 번이면 첫 선언(다크·기본).
+  const decl = (name, scope = css) => {
+    const m = scope.match(new RegExp(`${name}: (\\.?[\\d.]+)(px)?;`));
+    assert.ok(m, `${name} 선언 없음`);
+    return Number(m[1]);
+  };
+  assert.equal(decl('--section-gain'), G.sectionGain);
+  assert.equal(decl('--shoulder-a'), G.shoulder);
+  assert.equal(decl('--return-a'), G.innerReturn);
+  assert.equal(decl('--attenuation-a'), G.innerAttenuation);
+  assert.equal(decl('--prism-a'), G.prism);
+  assert.equal(decl('--wash-feather'), G.washFeather);
+  const interior = css.match(/linear-gradient\(rgb\(0 0 0 \/ ([.\d]+)\) 0 0\)/);
+  assert.ok(interior && Number(interior[1]) === G.washInterior, '캐릭터 색의 면 비율');
+  assert.equal(decl('--veil-a'), G.macVeilDark);
+  const light = css.match(/prefers-color-scheme: light\) \{[^}]*\}/);
+  assert.ok(light, '라이트 모양 베일 규칙');
+  assert.equal(decl('--veil-a', light[0]), G.macVeilLight);
+  assert.equal(decl('--veil-edge'), G.macVeilEdge);
+  assert.equal(decl('--veil-feather'), G.macVeilFeather);
+  // 단면 띠는 모두 두께 9px 안(inset + 두께 ≤ bevel)
+  const bands = [...css.matchAll(/--in: ([\d.]+)px; --w: ([\d.]+)px;/g)];
+  assert.equal(bands.length, 5, '어깨·안쪽 반사·안쪽 감쇠·분광 둘');
+  for (const m of bands) assert.ok(Number(m[1]) + Number(m[2]) <= G.bevel, `단면 띠 ${m[0]}`);
+  // 베일은 mac 전용(Windows Acrylic 은 그대로)
+  assert.match(css, /\.veil \{ display: none; \}/);
+  assert.match(css, /html\[data-platform="mac"\] \.veil \{\s*display: block;/);
+  // 접근성: 투명도 줄이기·대비 높이기(html.opaque)와 강제 색에서 단면·베일을 끈다
+  assert.match(css, /html\.opaque \.shade, html\.opaque \.veil, html\.opaque \.section, html\.opaque \.section-fine, html\.opaque \.prism \{ display: none; \}/);
+  assert.match(css, /forced-colors: active\) \{\s*\.rim, \.mini-rim, \.shade, \.veil, \.wash, \.section, \.section-fine, \.prism \{ display: none; \}/);
+  // 새 반복 애니메이션 없음 — 유리 층은 정적이다
+  assert.equal((css.match(/@keyframes/g) || []).length, 2, 'petPulse·petMenuIn 두 개뿐');
+});
+
 test('캐릭터마다 얼굴·컷아웃 자산이 있고 120KB 이하다', () => {
   for (const c of C.CHARACTERS) {
     for (const f of [c.portrait, c.cutout]) {

@@ -9,6 +9,9 @@ const SAFE_INSET = 8; // Mac PanelGeometry.fitted — 작업 영역 가장자리
 const DRAG_THRESHOLD = 3; // 3px 넘게 움직여야 끌기로 본다(그 전은 클릭)
 const MIN_CONTENT_HEIGHT = 160;
 
+const sideOf = (side) => (side === 'left' ? 'left' : 'right'); // 모르는 값은 기본(오른쪽)
+const isLeft = (side) => side === 'left';
+
 const round = (rect) => ({
   x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height),
 });
@@ -42,21 +45,39 @@ function fitted(frame, workArea, inset = SAFE_INSET) {
   return round({ x, y, width, height });
 }
 
-// 처음 위치: 작업 영역 오른쪽 가장자리에서 8px, 아래쪽 1/3 지점(펫 아래 끝이 아래에서 1/3 높이).
-function defaultPetBounds(workArea) {
+// 펫의 가로 자리: 고른 가장자리(side, 기본 오른쪽)에서 8px 안쪽.
+function petEdgeX(workArea, side = 'right') {
+  return isLeft(side)
+    ? workArea.x + C.PET_EDGE_INSET
+    : workArea.x + workArea.width - C.PET_SIZE - C.PET_EDGE_INSET;
+}
+
+// 처음 위치: 작업 영역 가장자리(기본 오른쪽)에서 8px, 아래쪽 1/3 지점(펫 아래 끝이 아래에서 1/3 높이).
+function defaultPetBounds(workArea, side = 'right') {
   return round({
-    x: workArea.x + workArea.width - C.PET_SIZE - C.PET_EDGE_INSET,
+    x: petEdgeX(workArea, side),
     y: workArea.y + workArea.height - workArea.height / 3 - C.PET_SIZE,
     width: C.PET_SIZE,
     height: C.PET_SIZE,
   });
 }
 
-// 펫은 늘 그 화면의 오른쪽 가장자리에 붙는다. 세로 위치만 기억하고 작업 영역 안으로 맞춘다.
-function petBoundsAt(y, workArea) {
-  const x = workArea.x + workArea.width - C.PET_SIZE - C.PET_EDGE_INSET;
+// 펫은 늘 그 화면의 한쪽 가장자리(기본 오른쪽)에 붙는다. 세로 위치만 기억하고 작업 영역 안으로 맞춘다.
+function petBoundsAt(y, workArea, side = 'right') {
   const top = Math.min(Math.max(y, workArea.y + SAFE_INSET), workArea.y + workArea.height - SAFE_INSET - C.PET_SIZE);
-  return round({ x, y: top, width: C.PET_SIZE, height: C.PET_SIZE });
+  return round({ x: petEdgeX(workArea, side), y: top, width: C.PET_SIZE, height: C.PET_SIZE });
+}
+
+// 세로 자리를 작업 영역 안 비율(0 = 위 끝, 1 = 아래 끝)로 — 높이가 다른 모니터로 옮겨도 같은 높이감에 선다.
+function petYRatio(y, workArea) {
+  const top = workArea.y + SAFE_INSET;
+  const span = workArea.height - SAFE_INSET * 2 - C.PET_SIZE;
+  if (!(span > 0)) return 0;
+  return Math.min(1, Math.max(0, (y - top) / span));
+}
+function petYFromRatio(ratio, workArea) {
+  const span = Math.max(0, workArea.height - SAFE_INSET * 2 - C.PET_SIZE);
+  return workArea.y + SAFE_INSET + Math.min(1, Math.max(0, ratio)) * span;
 }
 
 function intersectionArea(a, b) {
@@ -88,13 +109,63 @@ function displayFor(rect, displays) {
   return displays.reduce((a, b) => (distanceToRect(centre, b.workArea) < distanceToRect(centre, a.workArea) ? b : a));
 }
 
-// 저장된 위치(pet.position {x, y}) → 지금 모니터 배치의 펫 자리. 없으면 주 화면 기본 위치.
-// 모니터가 빠지거나 해상도가 바뀌어도 같은 규칙으로 다시 맞춘다(멀티 모니터 refit).
+// 점을 담은 화면(bounds 기준), 없으면 작업 영역이 가장 가까운 화면.
+function displayAt(point, displays) {
+  if (!displays || !displays.length) return null;
+  const inside = displays.find((d) => {
+    const b = d.bounds || d.workArea;
+    return point.x >= b.x && point.x < b.x + b.width && point.y >= b.y && point.y < b.y + b.height;
+  });
+  if (inside) return inside;
+  return displays.reduce((a, b) => (distanceToRect(point, b.workArea) < distanceToRect(point, a.workArea) ? b : a));
+}
+
+// 저장된 자리(pet.position) → 지금 모니터 배치의 { bounds, side, displayId }.
+//   { displayId, side, ratio, x, y } — displayId 화면이 있으면 그 화면의 같은 가장자리·같은 세로 비율.
+//   그 화면이 빠졌으면 x·y 에 가장 가까운 화면으로(가장자리·비율 유지). 예전 모양 { x, y } 는 오른쪽·y 그대로.
+//   아무것도 없으면 주 화면 오른쪽 기본 위치. 모니터가 빠지거나 해상도가 바뀌어도 같은 규칙으로 다시 맞춘다(refit).
+function resolvePetPlacement(saved, displays, primary) {
+  const s = saved && typeof saved === 'object' ? saved : {};
+  const side = sideOf(s.side);
+  const hasRatio = Number.isFinite(s.ratio);
+  const hasXY = Number.isFinite(s.x) && Number.isFinite(s.y);
+  const list = displays && displays.length ? displays : [primary];
+  let display = s.displayId !== undefined && s.displayId !== null ? list.find((d) => d.id === s.displayId) : null;
+  if (!display && hasXY) display = displayFor({ x: s.x, y: s.y, width: C.PET_SIZE, height: C.PET_SIZE }, list);
+  if (!display) display = primary;
+  const wa = display.workArea;
+  let bounds;
+  if (hasRatio) bounds = petBoundsAt(petYFromRatio(s.ratio, wa), wa, side);
+  else if (hasXY) bounds = petBoundsAt(s.y, wa, side);
+  else bounds = defaultPetBounds(wa, side);
+  return { bounds, side, displayId: display.id };
+}
+
+// 예전 호출(자리만). 저장 모양은 resolvePetPlacement 참고.
 function resolvePetBounds(saved, displays, primary) {
-  const valid = saved && Number.isFinite(saved.x) && Number.isFinite(saved.y);
-  if (!valid) return defaultPetBounds(primary.workArea);
-  const display = displayFor({ x: saved.x, y: saved.y, width: C.PET_SIZE, height: C.PET_SIZE }, displays) || primary;
-  return petBoundsAt(saved.y, display.workArea);
+  return resolvePetPlacement(saved, displays, primary).bounds;
+}
+
+// 다른 모니터로 옮기기: 같은 가장자리, 같은 세로 비율.
+function petBoundsOnDisplay(display, side, ratio) {
+  const wa = display.workArea;
+  return petBoundsAt(petYFromRatio(Number.isFinite(ratio) ? ratio : 2 / 3, wa), wa, side);
+}
+
+// 자유 끌기 중의 펫 자리: 펫 가운데가 있는 화면의 작업 영역 안(8px). 가운데가 화면을 넘어가면 그 화면으로 건너간다.
+function freeDragBounds(raw, displays) {
+  const rect = { x: raw.x, y: raw.y, width: C.PET_SIZE, height: C.PET_SIZE };
+  const display = displayAt({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }, displays);
+  return display ? fitted(rect, display.workArea) : round(rect);
+}
+
+// 끌기를 놓으면: 펫 가운데가 있는 화면의 가까운 가장자리(왼쪽·오른쪽)로 붙고, 세로는 그 작업 영역 안.
+function snapPetToEdge(rect, displays) {
+  const centre = { x: rect.x + (rect.width || C.PET_SIZE) / 2, y: rect.y + (rect.height || C.PET_SIZE) / 2 };
+  const display = displayAt(centre, displays);
+  const wa = display.workArea;
+  const side = centre.x < wa.x + wa.width / 2 ? 'left' : 'right';
+  return { bounds: petBoundsAt(rect.y, wa, side), side, displayId: display.id };
 }
 
 // 빠른 패널·위젯은 유리와(걸쳤으면) 그 위 54px 띠를 한 덩어리(companion)로 놓는다.
@@ -102,20 +173,21 @@ function companionSize(glass, perched) {
   return { width: glass.width, height: glass.height + (perched ? C.PERCH_STRIP : 0) };
 }
 
-// 빠른 패널: 펫 왼쪽 10px, 덩어리의 세로 중심을 펫 세로 중심에 맞춘다.
-function quickCompanionFrame(pet, glass, perched, workArea) {
+// 빠른 패널: 펫의 화면 가운데 쪽 10px(오른쪽 가장자리면 왼쪽), 덩어리의 세로 중심을 펫 세로 중심에 맞춘다.
+function quickCompanionFrame(pet, glass, perched, workArea, side = 'right') {
   const size = companionSize(glass, perched);
   return fitted({
-    x: pet.x - C.PANEL_GAP - size.width,
+    x: isLeft(side) ? pet.x + pet.width + C.PANEL_GAP : pet.x - C.PANEL_GAP - size.width,
     y: pet.y + pet.height / 2 - size.height / 2,
     ...size,
   }, workArea);
 }
 
-// 지속 위젯: 덩어리의 오른쪽 위가 펫의 오른쪽 위에 온다(그동안 펫은 숨는다).
-function widgetCompanionFrame(pet, glass, perched, workArea) {
+// 지속 위젯: 덩어리의 바깥쪽 위 모서리가 펫의 바깥쪽 위 모서리에 온다(오른쪽 가장자리면 오른쪽 위, 왼쪽이면 왼쪽 위).
+// 그동안 펫은 숨는다.
+function widgetCompanionFrame(pet, glass, perched, workArea, side = 'right') {
   const size = companionSize(glass, perched);
-  return fitted({ x: pet.x + pet.width - size.width, y: pet.y, ...size }, workArea);
+  return fitted({ x: isLeft(side) ? pet.x : pet.x + pet.width - size.width, y: pet.y, ...size }, workArea);
 }
 
 // 크기를 바꿀 때 오른쪽 위를 고정한다(Mac resizedKeepingTopRight — 위에서 자라는 좌표계라 y는 그대로).
@@ -123,30 +195,38 @@ function resizedKeepingTopRight(frame, size, workArea) {
   return fitted({ x: frame.x + frame.width - size.width, y: frame.y, ...size }, workArea);
 }
 
+// 가장자리 쪽 위 모서리를 고정한다 — 오른쪽 가장자리면 오른쪽 위(위와 같다), 왼쪽이면 왼쪽 위.
+function resizedKeepingOuterTop(frame, size, workArea, side = 'right') {
+  if (!isLeft(side)) return resizedKeepingTopRight(frame, size, workArea);
+  return fitted({ x: frame.x, y: frame.y, ...size }, workArea);
+}
+
 function glassFromCompanion(companion, perched) {
   const strip = perched ? C.PERCH_STRIP : 0;
   return round({ x: companion.x, y: companion.y + strip, width: companion.width, height: companion.height - strip });
 }
 
-// 걸친 캐릭터 창: 유리 오른쪽에서 20px 안쪽, 유리 위 54px에서 시작하는 72×72(유리와 18px 겹침).
-function perchBounds(glass) {
+// 걸친 캐릭터 창: 유리 바깥쪽(오른쪽 가장자리면 오른쪽, 왼쪽이면 왼쪽)에서 20px 안쪽,
+// 유리 위 54px에서 시작하는 72×72(유리와 18px 겹침).
+function perchBounds(glass, side = 'right') {
   return round({
-    x: glass.x + glass.width - C.PERCH_INSET_RIGHT - C.PERCH_SIZE,
+    x: isLeft(side) ? glass.x + C.PERCH_INSET_RIGHT : glass.x + glass.width - C.PERCH_INSET_RIGHT - C.PERCH_SIZE,
     y: glass.y - C.PERCH_STRIP,
     width: C.PERCH_SIZE,
     height: C.PERCH_SIZE,
   });
 }
 
-// 위젯에서 펫이 돌아올 자리: 덩어리 오른쪽 위(Mac alignPet — 펫 위 끝 = 위젯 위 끝).
-function petAlignedToCompanion(companion, workArea) {
-  return petBoundsAt(companion.y, workArea);
+// 위젯에서 펫이 돌아올 자리: 덩어리의 바깥쪽 위(Mac alignPet — 펫 위 끝 = 위젯 위 끝).
+function petAlignedToCompanion(companion, workArea, side = 'right') {
+  return petBoundsAt(companion.y, workArea, side);
 }
 
-// 짧은 메시지: 펫 왼쪽, 세로 중심(Mac previewWindow 자리).
-function bubbleBounds(pet, workArea) {
+// 짧은 메시지: 펫의 화면 가운데 쪽(오른쪽 가장자리면 왼쪽), 세로 중심(Mac previewWindow 자리).
+function bubbleBounds(pet, workArea, side = 'right') {
   const { width, height } = C.BUBBLE_SIZE;
-  return fitted({ x: pet.x - C.PANEL_GAP - width, y: pet.y + pet.height / 2 - height / 2, width, height }, workArea);
+  const x = isLeft(side) ? pet.x + pet.width + C.PANEL_GAP : pet.x - C.PANEL_GAP - width;
+  return fitted({ x, y: pet.y + pet.height / 2 - height / 2, width, height }, workArea);
 }
 
 // 패널이 요청한 유리 높이를 자른다: 최소 160, 최대는 작업 영역 안쪽(걸친 띠 몫은 뺀다).
@@ -157,32 +237,45 @@ function clampContentHeight(value, workArea, perched) {
   return Math.round(Math.min(Math.max(px, MIN_CONTENT_HEIGHT), Math.max(MIN_CONTENT_HEIGHT, max)));
 }
 
-// 세로 끌기(화면 좌표). 3px을 넘기 전엔 클릭 후보(null), 넘은 뒤엔 직전 위치와의 거리(dy)를 돌려준다.
+// 끌기(화면 좌표). 3px을 넘기 전엔 클릭 후보(null), 넘은 뒤엔 직전 위치와의 거리(dy)를 돌려준다.
+// 가로 좌표(screenX)도 받으면 두 축 중 하나라도 3px 을 넘을 때 끌기가 되고, 직전 가로 거리는 lastDx 로 읽는다
+// (가로를 주지 않으면 예전과 같이 세로만 — lastDx 는 0).
 function createDragTracker(threshold = DRAG_THRESHOLD) {
   let previous = null;
+  let previousX = null;
+  let lastDx = 0;
   let dragging = false;
   return {
-    begin(screenY) {
+    begin(screenY, screenX) {
       previous = Number.isFinite(screenY) ? screenY : null;
+      previousX = previous !== null && Number.isFinite(screenX) ? screenX : null;
+      lastDx = 0;
       dragging = false;
     },
-    move(screenY) {
+    move(screenY, screenX) {
       if (previous === null || !Number.isFinite(screenY)) return null;
+      const dx = previousX !== null && Number.isFinite(screenX) ? screenX - previousX : 0;
       if (!dragging) {
-        if (Math.abs(screenY - previous) < threshold) return null;
+        if (Math.abs(screenY - previous) < threshold && Math.abs(dx) < threshold) return null;
         dragging = true;
       }
       const dy = screenY - previous;
       previous = screenY;
+      if (previousX !== null && Number.isFinite(screenX)) previousX = screenX;
+      lastDx = dx;
       return dy;
     },
     // 끝낸 제스처가 끌기였는지 돌려준다.
     end() {
       const was = dragging;
       previous = null;
+      previousX = null;
+      lastDx = 0;
       dragging = false;
       return was;
     },
+    get lastDx() { return lastDx; },
+    get tracksX() { return previousX !== null; },
     get active() { return previous !== null; },
     get dragging() { return dragging; },
   };
@@ -200,14 +293,23 @@ module.exports = {
   panelGlassSize,
   isPerched,
   fitted,
+  petEdgeX,
   defaultPetBounds,
   petBoundsAt,
+  petYRatio,
+  petYFromRatio,
   displayFor,
+  displayAt,
+  resolvePetPlacement,
   resolvePetBounds,
+  petBoundsOnDisplay,
+  freeDragBounds,
+  snapPetToEdge,
   companionSize,
   quickCompanionFrame,
   widgetCompanionFrame,
   resizedKeepingTopRight,
+  resizedKeepingOuterTop,
   glassFromCompanion,
   perchBounds,
   petAlignedToCompanion,

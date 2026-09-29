@@ -1,6 +1,7 @@
 'use strict';
 // 펫 상태 — 메인 프로세스 메모리 하나. 바뀔 때마다 onChange(snapshot)으로 모든 펫 창에 'pet:state-changed'를 보낸다.
-// 캐릭터 선택만 저장한다(petPreview.character, Mac UserDefaults 이름). 창 위치는 pet-main이 pet.position에 둔다.
+// 캐릭터 선택만 저장한다(petPreview.character, Mac UserDefaults 이름). 창 위치·가장자리는 pet-main이 pet.position에,
+// 숨김은 pet.hidden 에 둔다(상태에는 side·hidden 을 비춰 렌더러에 알린다).
 const C = require('../shared/contract');
 
 const PRESENTATIONS = Object.freeze(['quick', 'widget']);
@@ -64,6 +65,10 @@ function createPetState(options = {}) {
     pinned: false,
     panelOpen: false,
     perched: false,
+    // 펫이 붙은 가장자리('left'|'right', contract.PET_SIDES) — 렌더러가 왼쪽 가장자리의 거울 배치를 알 수 있게.
+    side: C.DEFAULT_PET_SIDE,
+    // 운영자가 펫을 숨겼는가(트레이·펫 메뉴 '펫 숨기기'). 저장은 pet-main 이 pet.hidden 에 둔다.
+    hidden: false,
     hubUrl: typeof options.hubUrl === 'string' ? options.hubUrl : '',
     hubStatus: 'unknown',
     badge: 0,

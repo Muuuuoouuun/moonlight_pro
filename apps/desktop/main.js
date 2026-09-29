@@ -32,7 +32,7 @@ const {
   widgetPlatformOptions,
   widgetWorkspaceOptions,
 } = require('./widget-window');
-const { buildAppMenuTemplate, buildDockMenuTemplate } = require('./menu-template');
+const { buildAppMenuTemplate, buildDockMenuTemplate, loginItemMenuItem } = require('./menu-template');
 
 const IS_MAC = process.platform === 'darwin';
 
@@ -74,10 +74,11 @@ if (SMOKE) {
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 }
 // 같은 스위치를 두 번 넣으면 뒤엣것이 앞엣것을 덮으므로 한 번에 모은다.
-// 허브는 미디어를 재생하지 않는다 — Chromium이 미디어 키·재생 중 컨트롤(Now Playing)을 가로채지 않게 끈다.
-const disabledFeatures = ['HardwareMediaKeyHandling', 'MediaSessionService'];
+// macOS: 허브는 미디어를 재생하지 않는다 — Chromium이 미디어 키·재생 중 컨트롤(Now Playing)을 가로채지 않게 끈다.
+// Windows 는 예전 그대로(스모크의 가림 계산 끄기만).
+const disabledFeatures = IS_MAC ? ['HardwareMediaKeyHandling', 'MediaSessionService'] : [];
 if (SMOKE) disabledFeatures.push('CalculateNativeWinOcclusion');
-app.commandLine.appendSwitch('disable-features', disabledFeatures.join(','));
+if (disabledFeatures.length) app.commandLine.appendSwitch('disable-features', disabledFeatures.join(','));
 
 // ── 저장 파일 ─────────────────────────────────────────────────────────────
 const userFile = (name) => path.join(app.getPath('userData'), name);
@@ -117,6 +118,7 @@ function trayTemplatePath() {
 let win = null;
 let mainReady = false; // Dock 클릭(activate)이 창을 되살려도 되는 시점(스모크·펫 스모크는 제외)
 let tray = null;
+let hideAfterFullScreen = false; // 전체 화면을 푼 뒤 숨기기를 기다리는 중(닫기를 거듭 눌러도 한 번만)
 let pet = null; // Moonlight 펫(pet/main/pet-main.js) — 트레이 항목과 허브 주소 변경을 받는다
 let quitting = false;
 
@@ -159,8 +161,15 @@ function createWindow() {
     if (quitting || SMOKE) return;
     event.preventDefault();
     // macOS 전체 화면 창을 그대로 숨기면 빈 Space가 남는다 — 전체 화면을 먼저 풀고 숨긴다.
+    // 닫기를 거듭 눌러도 숨기기 대기는 하나만 건다.
     if (IS_MAC && win.isFullScreen()) {
-      win.once('leave-full-screen', () => win.hide());
+      if (!hideAfterFullScreen) {
+        hideAfterFullScreen = true;
+        win.once('leave-full-screen', () => {
+          hideAfterFullScreen = false;
+          win.hide();
+        });
+      }
       win.setFullScreen(false);
       return;
     }
@@ -349,17 +358,22 @@ function revealWidget() {
     widget.showInactive();
     return;
   }
-  widget.show();
+  // macOS: 위젯은 펫 패널과 같은 비활성 패널(type 'panel')이다 — show()는 앱을 활성화해 허브 창까지 올리므로
+  // showInactive 로 띄운 뒤 focus()로 키 창만 잡는다(pet-main revealPanel 과 같은 길). Windows 는 예전 그대로 show().
+  if (IS_MAC) widget.showInactive();
+  else widget.show();
   widget.focus();
   widget.webContents.focus(); // 페이지가 입력 칸에 autofocus할 수 있게
-  // macOS 비활성 패널은 앱이 뒤에 있을 때 첫 focus()가 키 창을 못 잡는 경우가 있다(스모크 실측) — 한 번 더 건다.
+  // macOS 비활성 패널은 앱이 뒤에 있을 때 첫 focus()가 키 창을 못 잡는 경우가 있다(스모크 실측) — 150ms·300ms 에 다시 건다.
   // app.focus()는 쓰지 않는다: 앱을 활성화하면 뒤에 있는 허브 창이 같이 앞으로 나온다.
   if (IS_MAC) {
-    setTimeout(() => {
+    const retry = (left) => setTimeout(() => {
       if (!widgetVisible() || widget.isFocused()) return;
       widget.focus();
       widget.webContents.focus();
+      if (left > 1 && !widget.isFocused()) retry(left - 1);
     }, 150);
+    retry(2);
   }
 }
 
@@ -496,8 +510,29 @@ function widgetMenuItem() {
   };
 }
 
+// 로그인 시 자동 실행 — 패키징한 앱(macOS·Windows)에서만. 개발 실행(electron .)은 Electron 자체를 로그인 항목에 올리게 되고,
+// 스모크는 운영자 PC 의 로그인 항목을 바꾸면 안 되므로 항목을 아예 만들지 않는다.
+const LOGIN_ITEM_SUPPORTED = app.isPackaged && !SMOKE && !SMOKE_MAC && !SMOKE_PET && (IS_MAC || process.platform === 'win32');
+function openAtLogin() {
+  try {
+    return Boolean(app.getLoginItemSettings().openAtLogin);
+  } catch {
+    return false;
+  }
+}
+function setOpenAtLogin(on) {
+  try {
+    app.setLoginItemSettings({ openAtLogin: Boolean(on) });
+  } catch (error) {
+    console.warn(`login item: ${error && error.message}`);
+  }
+  refreshMenus();
+}
+const loginMenuItem = () => (LOGIN_ITEM_SUPPORTED ? loginItemMenuItem({ checked: openAtLogin(), onToggle: setOpenAtLogin }) : null);
+
 function refreshMenus() {
   if (!tray || tray.isDestroyed()) return;
+  const loginItem = loginMenuItem();
   const actions = {
     quickCapture,
     showSettings: () => showSettings(),
@@ -510,6 +545,7 @@ function refreshMenus() {
     platform: process.platform,
     quickAccelerator: QUICK_CAPTURE_ACCELERATOR,
     widgetItem: widgetMenuItem(),
+    loginItem: IS_MAC ? loginMenuItem() : null,
     actions,
   })));
   if (IS_MAC && app.dock) {
@@ -525,6 +561,7 @@ function refreshMenus() {
     widgetMenuItem(),
     ...(pet ? [{ type: 'separator' }, ...pet.trayItems(), { type: 'separator' }] : []),
     { label: '허브 주소 바꾸기', click: () => showSettings() },
+    ...(loginItem ? [loginItem] : []),
     { type: 'separator' },
     { label: '종료', click: quit },
   ]));
@@ -932,6 +969,17 @@ async function runMacSmoke() {
   widget.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
   await waitFor(() => !widgetVisible(), 'esc hides', 5000);
   check(!win.isVisible(), 'main still hidden after widget hide');
+  // 5b) 허브 창이 보이는 상태에서 열어도 허브 창이 키 창을 가져가지 않는다(앞으로 올라오는지까지는 잴 수 없어 포커스만 본다).
+  showWindow();
+  await sleep(600);
+  toggleWidget();
+  await waitFor(widgetVisible, 'widget visible over hub', 30000);
+  await sleep(800);
+  console.log(`smoke:mac-widget-over-hub widgetFocused=${widget.isFocused()} mainFocused=${win.isFocused()}`);
+  check(win.isFocused() === false, 'widget reveal does not focus the hub window');
+  widget.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  widget.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  await waitFor(() => !widgetVisible(), 'esc hides (over hub)', 5000);
   console.log('smoke:mac-widget ok');
 
   clearTimeout(giveUp);
@@ -950,6 +998,8 @@ function installPet() {
       openMainUrl,
       showSettings: () => showSettings(),
       openExternal,
+      // 펫 자리·숨김·모니터 목록이 바뀌면 트레이 메뉴의 펫 묶음(체크 표시·펫 보이기/숨기기)을 다시 만든다.
+      onMenusChanged: () => refreshMenus(),
     });
   } catch (error) {
     console.warn(`pet: ${error && error.message}`);

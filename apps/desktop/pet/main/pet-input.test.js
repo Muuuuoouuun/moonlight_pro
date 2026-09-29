@@ -188,3 +188,19 @@ test('Esc 길게 누르기는 수정키 없는 Esc 만 — macOS 의 ⌘Esc(meta
   assert.equal(I.escHoldInput(hold, { type: 'keyUp', key: 'Escape' }), true);
   assert.deepEqual(calls, ['down', 'up']);
 });
+
+test('가로 좌표가 오면 끌기는 두 축 — drag-move 에 dx 를 싣고, 가로 3px 만으로도 끌기', () => {
+  const g = I.createPointerGesture({ now: () => 0 });
+  assert.deepEqual(I.applyPointerSignal(g, 'pet:press', { pressed: true }), [{ type: 'press' }]);
+  // press 에는 좌표가 없고 begin 이 두 축을 채운다.
+  assert.deepEqual(I.applyPointerSignal(g, 'pet:drag', { phase: 'begin', screenY: 300, screenX: 1000 }), []);
+  assert.deepEqual(I.applyPointerSignal(g, 'pet:drag', { phase: 'move', screenY: 301, screenX: 1002 }), []);
+  assert.deepEqual(I.applyPointerSignal(g, 'pet:drag', { phase: 'move', screenY: 300, screenX: 997 }),
+    [{ type: 'drag-begin' }, { type: 'drag-move', dy: 0, dx: -3 }]);
+  assert.deepEqual(I.applyPointerSignal(g, 'pet:drag', { phase: 'move', screenY: 320, screenX: 900 }), [{ type: 'drag-move', dy: 20, dx: -97 }]);
+  assert.deepEqual(types(I.applyPointerSignal(g, 'pet:drag', { phase: 'end', screenY: 320, screenX: 900 })), ['drag-end', 'release']);
+  // 가로 없이 오면 예전 모양 그대로(dx 없음).
+  const v = I.createPointerGesture({ now: () => 0 });
+  v.down(500);
+  assert.deepEqual(v.move(510), [{ type: 'drag-begin' }, { type: 'drag-move', dy: 10 }]);
+});

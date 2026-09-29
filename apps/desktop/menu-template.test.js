@@ -62,3 +62,25 @@ test('Dock 메뉴: 열기·빠른 입력·위젯', () => {
   assert.deepEqual(labels(dock), ['열기', '빠른 입력', '위젯 열기']);
   assert.equal(dock[0].click, actions.showWindow);
 });
+
+const { loginItemMenuItem } = require('./menu-template');
+
+test('로그인 시 자동 실행: 체크 항목, 누른 뒤의 checked 를 넘긴다, macOS 앱 메뉴 설정 아래(넘길 때만)', () => {
+  const toggled = [];
+  const item = loginItemMenuItem({ checked: true, onToggle: (on) => toggled.push(on) });
+  assert.equal(item.label, '로그인 시 자동 실행');
+  assert.equal(item.type, 'checkbox');
+  assert.equal(item.checked, true);
+  item.click({ checked: false });
+  item.click({ checked: true });
+  assert.deepEqual(toggled, [false, true]);
+  const [withLogin] = buildAppMenuTemplate({ platform: 'darwin', quickAccelerator: 'X', widgetItem, loginItem: item, actions });
+  const at = withLogin.submenu.indexOf(item);
+  assert.ok(at > 0);
+  assert.equal(withLogin.submenu[at - 1].accelerator, 'Command+,');
+  const [without] = build('darwin');
+  assert.ok(!without.submenu.some((i) => i.label === '로그인 시 자동 실행'), '넘기지 않으면(개발 실행·스모크) 없다');
+  // Windows 앱 메뉴에는 넣지 않는다(트레이에 있다).
+  const win = buildAppMenuTemplate({ platform: 'win32', quickAccelerator: 'X', widgetItem, loginItem: item, actions });
+  assert.ok(!JSON.stringify(win.map((m) => m.submenu.map((i) => i.label))).includes('로그인 시 자동 실행'));
+});

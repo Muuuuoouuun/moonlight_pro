@@ -75,6 +75,12 @@ const MOTION = Object.freeze({
 const GLASS = Object.freeze({
   centerShade: 0.09, textShadowNear: 0.73, textShadowFar: 0.37, rimReflection: 0.66, diffusion: 0.48, diffusionEdge: 24,
   textPrimary: 0.98, textSecondary: 0.92, textFaint: 0.86,
+  // 곡면 단면(glass.css .section·.section-fine·.prism) — 프로토타입 GlassOptics.metal 배포값의 CSS 근사. 깊이는 px(1x = pt).
+  bevel: 9, sectionGain: 0.75, shoulder: 0.38, innerReturn: 0.30, innerAttenuation: 0.10, prism: 0.34,
+  // 캐릭터 색은 곡면 쪽에 모인다(PetGlassWash depthMask): 가장자리 1 → 48px 에 걸쳐 면 35%.
+  washFeather: 48, washInterior: 0.35,
+  // mac 베일(라이트 모양 hud 가 밝은 회색이라 흰 글자를 지키는 층) — 글자 열에서 짙고 단면 9px 안에서 55% 로 옅어진다.
+  macVeilLight: 0.48, macVeilDark: 0.24, macVeilEdge: 0.55, macVeilFeather: 9,
 });
 
 // 허브 봉투 해석(Mac HubTransport 규칙을 그대로) — 메인 프로세스 pet-hub-client 가 만들고 렌더러가 읽는다.
@@ -114,3 +120,8 @@ module.exports = {
   CHARACTERS, DEFAULT_CHARACTER, SOURCE_ASSETS, characterByKey,
   MOTION, GLASS, ENVELOPE_KINDS, HUB_PATHS, LIMITS, PET_INVOKE, PET_EVENTS,
 };
+
+// 펫이 붙는 화면 가장자리(2026-09-29 운영자 요청 "모니터 사이드 바꿀 수 있게"). 기본은 오른쪽 — 오른쪽 숫자는 그대로 두고
+// 왼쪽은 거울로 놓는다(펫 8px·패널·말풍선은 화면 가운데 쪽, 걸친 캐릭터는 바깥쪽 20px). 셸이 state.side 로 알린다.
+module.exports.PET_SIDES = Object.freeze(['left', 'right']);
+module.exports.DEFAULT_PET_SIDE = 'right';

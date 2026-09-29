@@ -10,6 +10,7 @@
     "dev": "electron .",
     "build": "electron-builder --win --x64",
     "build:mac": "electron-builder --mac --arm64",
+    "install:mac": "node scripts/install-mac.mjs",
     "icons:generate": "node scripts/generate-icons.mjs",
     "test": "node --test"
   },
