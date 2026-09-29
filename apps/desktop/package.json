@@ -7,9 +7,11 @@
   "author": "Moonlight",
   "main": "main.js",
   "scripts": {
+    "predev": "node scripts/build-mac-glass.mjs",
     "dev": "electron .",
     "build": "electron-builder --win --x64",
-    "build:mac": "electron-builder --mac --arm64",
+    "build:mac": "node scripts/build-mac-glass.mjs --arch=arm64 && electron-builder --mac --arm64",
+    "build:mac-glass": "node scripts/build-mac-glass.mjs",
     "install:mac": "node scripts/install-mac.mjs",
     "icons:generate": "node scripts/generate-icons.mjs",
     "test": "node --test"
@@ -17,6 +19,7 @@
   "devDependencies": {
     "electron": "44.4.5",
     "electron-builder": "^26.15.3",
+    "node-api-headers": "1.9.0",
     "png-to-ico": "^3.0.2"
   },
   "build": {
@@ -34,6 +37,7 @@
       "widget-preload.js",
       "menu-template.js",
       "pet/**",
+      "!pet/native/**",
       "!pet/**/*.test.js",
       "!pet/**/test-support/**",
       "!pet/renderer/README.md",
@@ -64,6 +68,10 @@
       ]
     },
     "mac": {
+      "extraResources": [
+        { "from": "pet/native/build/mac-glass-${arch}.node", "to": "native/mac-glass.node" },
+        { "from": "pet/native/build/GlassOptics.metal", "to": "native/GlassOptics.metal" }
+      ],
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
       "darkModeSupport": true,

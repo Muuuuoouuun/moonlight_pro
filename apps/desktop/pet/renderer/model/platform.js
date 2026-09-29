@@ -7,7 +7,14 @@
   if (typeof module === 'object' && module && module.exports) module.exports = api;
   else (root.PetModel = root.PetModel || {}).platform = api;
   // 렌더러 페이지면 <html data-platform="mac|win"> 을 가능한 한 일찍 단다(CSS 가 플랫폼별 창 모서리 반경 등을 읽는다).
-  if (typeof document !== 'undefined' && document.documentElement) document.documentElement.dataset.platform = api.current();
+  if (typeof document !== 'undefined' && document.documentElement) {
+    document.documentElement.dataset.platform = api.current();
+    // Set before first paint; a successfully attached native surface owns the
+    // backdrop and rounded corners. A CSS imitation would double its bevel/veil.
+    if (api.isMac() && new URLSearchParams(root.location.search).get('material') === 'native-clear') {
+      document.documentElement.dataset.material = 'native-clear';
+    }
+  }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   const MAC = 'mac';
   const WIN = 'win';

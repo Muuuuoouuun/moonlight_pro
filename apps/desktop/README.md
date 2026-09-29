@@ -314,7 +314,7 @@ npx electron . --smoke-widget --smoke-hub=http://127.0.0.1:3141 --smoke-theme=da
 
 ## macOS
 
-같은 Electron 앱을 macOS(Apple Silicon)에서도 빌드해 쓴다. Windows 동작은 그대로 두고, `darwin`에서만 아래가 달라진다.
+macOS(Apple Silicon)와 Windows는 별도 플랫폼 계약으로 취급한다(2026-09-29 운영자 지시). Hub 세션·데이터 모델은 공유하되 재질·글꼴·창·조작은 각 OS 기준으로 구현한다. Mac은 `prototypes/moonlight-pet-macos`의 승인 원본, Windows는 Acrylic 이식 스펙이 기준이다.
 
 **셸**
 - 메뉴 막대: 첫 메뉴 **Moonlight**(정보·설정…(허브 주소, ⌘,)·빠른 입력·위젯·서비스·숨기기·종료 ⌘Q) + **편집**(실행 취소·오려두기·복사·붙여넣기·모두 선택 역할 — 이 메뉴가 없으면 허브·펫 입력 칸에서 ⌘C/⌘V/⌘A가 동작하지 않는다) + **보기**(뒤로 ⌘[ · 앞으로 ⌘]) + **윈도우**. 메뉴 모양은 `menu-template.js`(순수 함수, `menu-template.test.js`)가 플랫폼별로 만든다.
@@ -331,6 +331,7 @@ npm run app:mac:dev      # 개발 실행
 npm run app:mac:build    # dist/Moonlight-<버전>-arm64.dmg · .zip · mac-arm64/Moonlight.app
 ```
 
+- 네이티브 빌드: Mac 개발 실행·패키징은 `scripts/build-mac-glass.mjs`를 먼저 실행한다. macOS 26+ SDK가 포함된 Xcode Command Line Tools가 필요하다. Node-API 8을 사용해 Electron ABI 재빌드 없이 로드하며, `.node`·원본 셰이더는 Mac 번들의 `Resources/native`에만 포함한다. `npm --workspace @com-moon/desktop run build:mac-glass`로 연결부만 빌드할 수 있다.
 - 아이콘: `npm --workspace @com-moon/desktop run icons:generate`가 `build/icon.icns`(sips + iconutil)·`icon-dock.png`·`trayTemplate*.png`도 만든다. 맥 자산은 `sharp`가 필요하다(루트에 허브 의존성으로 설치돼 있다 — 없으면 경고만 남기고 건너뛴다).
 - 서명: Developer ID가 없어 애드혹 서명(`identity: "-"`, `hardenedRuntime: false`)이다. `codesign --verify --deep --strict`는 통과하고 `spctl`은 거절한다. 직접 빌드해 `/Applications`로 복사한 앱은 바로 열린다. 브라우저로 받은 dmg·zip은 격리 속성이 붙으므로 처음 한 번 오른쪽 클릭 → **열기**(또는 `xattr -dr com.apple.quarantine /Applications/Moonlight.app`).
 - 처음 실행할 때 키체인이 "Moonlight Safe Storage" 접근을 물으면 **항상 허용** — 로그인 쿠키 암호화 키다. 비밀번호를 넣을 필요는 없다.
@@ -339,13 +340,26 @@ npm run app:mac:build    # dist/Moonlight-<버전>-arm64.dmg · .zip · mac-arm6
 - 스모크: `--smoke-test`·`--smoke-widget`는 그대로 돈다. `--smoke-mac`은 실제 메뉴·메뉴 막대 아이콘·Dock 활성화·빠른 입력·위젯 경로를 확인하고 `smoke:mac ok`를 찍는다(잠시 포커스를 가져간다).
 
 **펫**
-- 유리 재질: Acrylic 대신 macOS 비브런시(`vibrancy:'hud'`, `visualEffectState:'active'`) — 초점을 잃어도 블러가 유지되므로 Windows의 `WM_NCACTIVATE` 도우미가 필요 없다. DWM 단계는 건너뛴다(PowerShell을 띄우지 않는다). 투명도 줄이기·대비 증가를 켜면 `setVibrancy(null)` + 불투명 면. `'popover'`는 라이트 모드에서 밝아져 흰 글자가 묻혀서 `'hud'`를 골랐다(2026-09-29 실화면 재측정: 라이트 모양에서는 모든 재질이 흰 바탕 위 ≈ #CBCBCC–#D6D6D8로 같고, 검은 바탕에서 가장 어두운 것이 `hud`). 창 모서리는 시스템 값이라 렌더러가 `html[data-platform="mac"]`에서 `--radius`를 10px로 맞춘다.
-- 베일·곡면 단면: Electron은 창마다 외형(darkAqua)을 정할 수 없어 라이트 모양의 밝은 재질 위에 mac 전용 베일을 깐다 — 글자 열에서 라이트 .48 / 다크 .24, 곡면 단면 9px 안에서 55%로 옅어진다(흰 바탕 흰 글자 대비 약 4.4:1, 기존 평탄 .52는 4.9:1). 그 위에 네이티브 프로토타입의 곡면 단면(어깨·안쪽 반사·분광·안쪽 감쇠)을 CSS 고리로 근사하고, 누름 때 캐릭터 색은 가장자리에 모인다. 층·값은 `pet/renderer/README.md`, 수치는 `pet/shared/contract.js`의 `GLASS`.
+- macOS 26+ 유리: `pet/native/mac-glass.mm`이 공개 `NSGlassEffectView(.clear)` + `darkAqua`를 Chromium 아래 형제 뷰에 연결한다. 원본 최신 커밋 `97794923`의 확산 28%·중앙 음영 5.5%·패널 반경 26pt·말풍선 반경 14pt를 사용한다. 글자와 조작은 위에서 별도로 그려 유리 효과에 들어가지 않는다.
+- 유리 단면: Mac 원본의 `GlassOptics.metal`을 빌드 때 그대로 복사하여 같은 `glassFragment`로 그린다. 네이티브 재질의 바깥 8pt를 마스킹하고 Metal이 9pt 안에서 반사·분광을 맡는다. `MTKView`는 paused이며 크기·포인터·접근성 변경 때만 다시 그린다. ScreenCaptureKit 캡처 경로는 사용하지 않는다.
+- 대체 경로: macOS 26 미만/네이티브 연결 실패는 기존 `hud` 비브런시·CSS 베일(라이트 .48/다크 .24)·10px 모서리로 열린다. Metal만 실패하면 native clear의 기본 윤곽을 쓴다. 투명도 줄이기·대비 증가는 효과를 끄고 둥근 불투명 면으로 전환한다. Windows Acrylic에는 이 Mac 경로를 적용하지 않는다.
+- Mac 조작·글꼴: 시스템 글꼴, 메모를 제외한 헤더의 닫기/위젯 접기, 할 일·일정 하단 새로고침을 원본대로 제공한다. 메모는 걸친 펫이나 더보기·Esc로 접는다. Windows의 기존 헤더·글꼴·조작은 유지한다.
 - 창: 펫·패널·걸친 캐릭터·말풍선은 비활성 패널(`type:'panel'`, `acceptFirstMouse`, `hiddenInMissionControl`) — 패널을 열어도 허브 창이 앞으로 오지 않고, 다른 앱이 앞에 있어도 첫 클릭이 먹는다. 모든 Space와 전체 화면 앱 위에 뜬다(`setVisibleOnAllWorkspaces`, `skipTransformProcessType` — 빼면 Dock 아이콘이 사라진다). 패널은 `showInactive()` → `focus()`로 키 창이 되고, 안 되면 띄우는 유예(0.4초) 안에서 150·300ms 에 다시 잡는다. `app.focus({steal:true})`는 쓰지 않는다 — 다른 앱 뒤에 보이던 허브 창까지 앞으로 올라온다.
 - 집중 화면은 `display.bounds` 그대로 메뉴 막대·Dock까지 덮는다(`enableLargerThanScreen`, 뜬 뒤 자리를 한 번 더 맞춘다). 앱 전환은 막지 않는다.
-- 단축키: 빠른 패널 **⌃⌥M**(Windows Ctrl+Alt+M과 같은 키), 패널 안 **⌘1~7**·**⌘S**·**⌘Return**(Ctrl 대신 ⌘ — Ctrl이 섞이면 무시). 화면 문구는 `이 PC` 대신 `이 Mac`. 판정은 `pet/renderer/model/platform.js` 하나.
+- 단축키: 빠른 패널 **⌃⌥M**(Windows Ctrl+Alt+M과 같은 키), 패널 안 **⌘1~7**·**⌘S**·**⌘Return**(Ctrl 대신 ⌘ — 메모에서만 원본의 ⌃Return 대안도 지원). 화면 문구는 `이 PC` 대신 `이 Mac`. 판정은 `pet/renderer/model/platform.js` 하나.
 - 최적화: 맥에서는 걸친 캐릭터·말풍선 창을 처음 쓸 때 만든다 — 대기 상태 프로세스 7→5, 렌더러 4→2, 메모리 약 685→498MB(`app.getAppMetrics()` 실측). 처음 쓰는 걸친 캐릭터는 유리보다 100~200ms 늦게 뜰 수 있다. 패널이 접혀 있는 동안은 할 일·일정·날짜 줄 주기 새로고침을 멈추고 다시 열 때 한 번 따라잡는다(`backgroundThrottling:false`라 숨긴 창도 `visible`로 보여서 `state.panelOpen`으로 가른다).
-- 스모크: `--smoke-pet`은 맥에서 DWM 대신 비브런시·모든 Space·집중 창 = `display.bounds`를 보고 `smoke:metrics`를 찍는다. `--smoke-pet-eager`(창을 미리 다 만들기)·`--smoke-pet-hold=<ms>`(띄운 채 기다리기). 화면 캡처는 Electron에 화면 기록 권한이 있어야 찍히고, 없으면 경고로 넘어간다.
+- 스모크: `--smoke-pet`은 맥에서 DWM 대신 네이티브 유리/대체 비브런시·모든 Space·집중 창 = `display.bounds`를 보고 `smoke:metrics`를 찍는다. `--smoke-pet-eager`(창을 미리 다 만들기)·`--smoke-pet-hold=<ms>`(띄운 채 기다리기). 화면 캡처는 Electron에 화면 기록 권한이 있어야 찍히고, 없으면 경고로 넘어간다.
+
+### Mac 원본 복원 검사 (2026-09-29)
+
+```bash
+npm --workspace @com-moon/desktop test
+npm --workspace @com-moon/desktop run build:mac-glass
+npx electron apps/desktop --smoke-pet --smoke-native-glass --smoke-out=/tmp/moonlight-pet.png --user-data-dir=/tmp/moonlight-pet-check
+```
+
+`--smoke-native-glass`는 HUD로 조용히 대체되면 실패한다. 네이티브 부착·26pt 반경·CSS 베일 제거와 기존 창/모니터/입력 계약을 검사한다. Windows 실기 검증은 Windows에서 별도로 수행하며 Mac 스모크 통과로 대체하지 않는다.
+
 
 ## 코드 서명 없음 (Windows)
 

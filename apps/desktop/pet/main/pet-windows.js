@@ -10,9 +10,9 @@
 // 모두 항상 위(floating), 작업 표시줄에 나오지 않는다. 페이지는 UI 패키지가 pet/renderer/에 둔다.
 //
 // macOS(platform 'darwin')는 같은 창을 다른 재질·성질로 만든다(Windows 값은 그대로):
-//   유리    Acrylic 대신 네이티브 vibrancy(MAC_VIBRANCY) + visualEffectState 'active' — 초점을 잃어도 블러가 남는다
-//           (Windows 의 WM_NCACTIVATE 도우미가 하는 일을 AppKit 이 한다). 투명 창 + 알파 0 배경이어야 재질이 보이고,
-//           테두리 없는 vibrancy 창은 roundedCorners 로 시스템 둥근 모서리를 받는다(DWM 호출 없음).
+//   유리    macOS 26+는 pet-mac-glass의 NSGlassEffectView(.clear) + 원본 Metal 단면.
+//           구형 OS·연결부 불가 시에만 vibrancy(MAC_VIBRANCY) + visualEffectState 'active'로 대체한다.
+//           두 경로 모두 투명 창 + 알파 0 배경, DWM 호출 없음.
 //   패널    모든 펫 창은 type 'panel'(NSPanel, 비활성 패널) — 키 창이 되어도 앱을 활성화하지 않아 큰 허브 창이 앞으로
 //           나오지 않고, 전체 화면 앱 위에도 뜬다. acceptFirstMouse 로 다른 앱이 앞에 있어도 첫 클릭이 바로 먹는다.
 //           setVisibleOnAllWorkspaces 로 모든 Space 를 따라다닌다(skipTransformProcessType — Dock 아이콘을 건드리지 않는다).
@@ -22,6 +22,7 @@ const path = require('node:path');
 const { BrowserWindow } = require('electron');
 const C = require('../shared/contract');
 const { isExternalOpenable } = require('../../hub-url');
+const { loadMacGlass, attachMacGlass } = require('./pet-mac-glass');
 
 const PET_PAGES = Object.freeze({
   pet: 'pet.html',
@@ -34,8 +35,7 @@ const DEFAULT_PAGES_DIR = path.join(__dirname, '..', 'renderer');
 const PRELOAD = path.join(__dirname, 'pet-preload.js');
 const FOCUS_BACKGROUND = '#141C27'; // 허브 --bg와 같은 불투명 흑연(main.js BACKGROUND)
 const SOLID_GLASS = '#1B2430'; // 투명도 줄이기·고대비: 블러 대신 불투명 면
-// macOS 유리 재질. 프로토타입은 NSVisualEffectView(.popover)에 darkAqua 외형을 강제했지만 Electron 은 창마다 외형을
-// 정할 수 없다 — 'popover'는 라이트 모드에서 밝게 떠 흰 글자가 묻힌다. 'hud'는 외형과 상관없이 어두운 반투명 재질이다.
+// 네이티브 연결부가 없거나 macOS 26 미만이면 기존 HUD로 대체한다.
 const MAC_VIBRANCY = 'hud';
 // 모든 Space·전체 화면 앱 위. skipTransformProcessType 이 없으면 Electron 이 Dock 아이콘을 숨긴다(허브 창 앱이 사라진다).
 const MAC_WORKSPACES = Object.freeze({ visibleOnFullScreen: true, skipTransformProcessType: true });
@@ -148,6 +148,7 @@ function createWindowFactory(options = {}) {
   const log = options.log || (() => {});
   const pages = { pagesDir: options.pagesDir, pageFile: options.pageFile };
   const platform = options.platform || process.platform;
+  const macGlass = options.macGlass === undefined ? loadMacGlass({ platform, log }) : options.macGlass;
 
   // 펫 창은 로컬 페이지만 띄운다: 이동은 막고, 새 창 요청은 시스템 브라우저(http·https·mailto)로.
   function guard(win, surface) {
@@ -185,6 +186,7 @@ function createWindowFactory(options = {}) {
 
   function make(surface, extra, query) {
     const opts = surfaceOptions(surface, platform, extra);
+    if (isMac(platform) && macGlass && (surface === 'panel' || surface === 'bubble')) delete opts.vibrancy;
     const win = new BrowserWindow({ ...chrome, ...opts, webPreferences: webPreferences() });
     win.setAlwaysOnTop(true, opts.level || 'floating');
     if (isMac(platform)) {
@@ -198,8 +200,16 @@ function createWindowFactory(options = {}) {
     win.petSurface = surface;
     win.petPlatform = platform;
     win.petMaterial = isMac(platform) ? (opts.vibrancy || null) : (opts.backgroundMaterial || null); // 스모크가 본다
+    if (isMac(platform) && (surface === 'panel' || surface === 'bubble')) {
+      win.petNativeGlass = attachMacGlass(win, macGlass, surface === 'bubble' ? 14 : C.GLASS_RADIUS, log);
+      if (win.petNativeGlass) win.petMaterial = 'native-clear';
+      else {
+        win.setVibrancy(MAC_VIBRANCY);
+        win.petMaterial = MAC_VIBRANCY;
+      }
+    }
     win.petReady = false;
-    win.petLoaded = load(win, surface, query);
+    win.petLoaded = load(win, surface, { ...query, material: win.petMaterial || 'none' });
     return win;
   }
 
@@ -224,11 +234,18 @@ function setBoundsExact(win, rect) {
 }
 
 // 투명도 줄이기·고대비면 블러 대신 불투명 면. 렌더러 CSS도 prefs를 보고 같이 바꾼다.
-// macOS 는 vibrancy 를 떼고(null) 같은 불투명 면, 되돌릴 때 MAC_VIBRANCY 를 다시 건다.
+// Mac 네이티브는 둥근 면 자체를 불투명하게 전환한다. HUD 대체 경로만 vibrancy를 끄고 켠다.
 function applyGlassMaterial(win, prefs, platform = (win && win.petPlatform) || process.platform) {
   if (!win || win.isDestroyed()) return;
   const solid = Boolean(prefs && (prefs.reduceTransparency || prefs.highContrast));
   try {
+    if (isMac(platform) && win.petNativeGlass) {
+      win.petNativeGlass.setSolid(solid);
+      // Native rounded surface paints the solid accessibility fallback. A window
+      // background would fill the transparent corners with a rectangular plate.
+      win.setBackgroundColor('#00000000');
+      return;
+    }
     if (isMac(platform)) win.setVibrancy(solid ? null : MAC_VIBRANCY);
     else win.setBackgroundMaterial(solid ? 'none' : 'acrylic');
     win.setBackgroundColor(solid ? SOLID_GLASS : '#00000000');

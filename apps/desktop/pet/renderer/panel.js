@@ -11,7 +11,7 @@
 
   const els = {
     glass: $('glass'), wash: $('wash'), handle: $('handle'), header: $('header'), title: $('title'), date: $('date'),
-    headerTabs: $('header-tabs'), more: $('more'), pin: $('pin'), tabsRow: $('tabs-row'), root: $('mode-root'),
+    headerTabs: $('header-tabs'), more: $('more'), pin: $('pin'), close: $('close'), tabsRow: $('tabs-row'), root: $('mode-root'),
   };
 
   let state = null;
@@ -88,6 +88,11 @@
       els.pin.setAttribute('aria-label', widget ? '빠른 기능으로 되돌리기' : '위젯으로 고정');
       els.pin.title = widget ? '빠른 기능으로 되돌리기' : '위젯으로 고정';
       els.pin.hidden = view === 'mode' && mode === 'memo';
+      // Mac 원본은 헤더에서 바로 접는다. 메모는 원본처럼 걸친 펫/더보기로 접고,
+      // Windows의 기존 헤더와 조작은 유지한다.
+      els.close.hidden = !M.platform.isMac() || (view === 'mode' && mode === 'memo');
+      els.close.setAttribute('aria-label', widget ? '위젯 접기' : '빠른 기능 닫기');
+      els.close.title = widget ? '위젯 접기' : '빠른 기능 닫기';
     }
     renderTabs();
   }
@@ -268,7 +273,7 @@
   function onKey(e) {
     // 한글 조합 중의 Esc·Ctrl+S·Ctrl+Enter(mac ⌘) 는 입력기의 것이다(조합 확정·취소) — 패널 동작으로 읽지 않는다.
     if (e.isComposing || e.keyCode === 229) return;
-    const act = P.keyAction(e);
+    const act = P.keyAction(e, undefined, view === 'mode' ? mode : null);
     if (!act) return;
     if (act.type === 'collapse') {
       if (U.closeMenu()) { e.preventDefault(); return; }
@@ -292,6 +297,8 @@
     els.more.append(U.icon('dots', 18));
     els.more.addEventListener('click', openMainMenu);
     els.pin.addEventListener('click', togglePresentation);
+    els.close.append(U.icon('x', 16));
+    els.close.addEventListener('click', collapse);
     wireHandle();
     document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', (e) => { if (e.button === 0) press(true); }, true);

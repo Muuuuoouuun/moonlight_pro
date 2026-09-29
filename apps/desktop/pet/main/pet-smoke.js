@@ -141,7 +141,19 @@ async function run({ app, out, page, activate = false }) {
       check(dwm.error === 'platform', 'dwm skipped on macOS', dwm);
       const material = { panel: w.panel.petMaterial, type: w.panel.petPlatform, allSpaces: [w.pet, w.panel].map((x) => x.isVisibleOnAllWorkspaces()) };
       console.log(`smoke:mac-material ${JSON.stringify(material)}`);
-      check(material.panel === 'hud' && material.allSpaces.every(Boolean), 'vibrancy + all Spaces', material);
+      check(['native-clear', 'hud'].includes(material.panel) && material.allSpaces.every(Boolean), 'mac material + all Spaces', material);
+      if (process.argv.includes('--smoke-native-glass')) check(material.panel === 'native-clear', 'native clear glass required', material);
+      if (w.panel.petNativeGlass) {
+        const native = w.panel.petNativeGlass.inspect();
+        const bounds = w.panel.getContentBounds();
+        check(native.attached && native.radius === C.GLASS_RADIUS && native.width === bounds.width && native.height === bounds.height,
+          'native surface geometry', native);
+        const renderer = await w.panel.webContents.executeJavaScript(`({ material: document.documentElement.dataset.material,
+          radius: getComputedStyle(document.documentElement).getPropertyValue('--radius').trim(),
+          veil: getComputedStyle(document.querySelector('.veil')).display })`);
+        check(renderer.material === 'native-clear' && renderer.radius === '26px' && renderer.veil === 'none', 'native renderer has no HUD veil', renderer);
+        console.log(`smoke:native-glass ${JSON.stringify({ native, renderer })}`);
+      }
     } else {
       check(dwm.ok, 'dwm attributes', dwm);
     }
@@ -316,7 +328,7 @@ async function run({ app, out, page, activate = false }) {
     console.log(`smoke:bubble ${JSON.stringify(bubbleBox)} focused=${w.bubble.isFocused()}`);
     check(bubbleBox.width === C.BUBBLE_SIZE.width && bubbleBox.height === C.BUBBLE_SIZE.height, 'bubble 326x130', bubbleBox);
     check(!w.bubble.isFocused() && !w.bubble.isFocusable(), 'bubble never takes focus');
-    if (mac) check(w.bubble.petMaterial === 'hud' && w.bubble.isVisibleOnAllWorkspaces(), 'bubble vibrancy + all Spaces');
+    if (mac) check(w.bubble.petMaterial === w.panel.petMaterial && w.bubble.isVisibleOnAllWorkspaces(), 'bubble material + all Spaces');
     check(bubbleBox.x + bubbleBox.width === moved.x - C.PANEL_GAP, 'bubble left of pet', bubbleBox);
     await captureRegion(union([w.bubble.getBounds(), w.pet.getBounds()], 24, screen.getPrimaryDisplay().bounds), suffixed(outFile, 'bubble'));
     pet.openQuick();
@@ -330,8 +342,10 @@ async function run({ app, out, page, activate = false }) {
     await waitFor(() => !w.bubble.isVisible(), 'toggle hides bubble');
 
     // 9) 집중 화면: 화면마다 불투명 창 하나, 펫 숨김, Esc 1.3초 → 중지 확인, 중지 → 원래대로.
-    const started = pet.startFocus(1);
-    check(started.kind === 'live' && started.data.running && started.data.remainingSec === 60, 'focus started', started);
+    // Multi-display screen capture can take over a minute on macOS. Keep the
+    // test timer alive until the explicit Escape/stop checks have completed.
+    const started = pet.startFocus(3);
+    check(started.kind === 'live' && started.data.running && started.data.remainingSec === 180, 'focus started', started);
     const focusWins = w.focus();
     check(focusWins.length === screen.getAllDisplays().length, 'one focus window per display', focusWins.length);
     await waitFor(() => focusWins.every((f) => f.isVisible()) && !w.pet.isVisible(), 'focus windows up, pet hidden');
@@ -367,7 +381,7 @@ async function run({ app, out, page, activate = false }) {
     pet.dispose();
     app.exit(0);
   } catch (error) {
-    console.log(`smoke:fail ${error && error.message ? error.message : String(error)}`);
+    console.log(`smoke:fail ${error && error.stack ? error.stack : String(error)}`);
     try {
       pet.dispose();
     } catch { /* 종료 */ }
