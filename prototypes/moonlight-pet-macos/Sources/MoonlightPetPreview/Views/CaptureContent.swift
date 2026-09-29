@@ -192,7 +192,9 @@ struct MemoCaptureContent: View {
                 }
                 TextEditor(text: $model.memoDraft)
                     .scrollContentBackground(.hidden)
-                    .scrollIndicators(.hidden)
+                    // .hidden can reserve a legacy scroller gutter on macOS
+                    // (e.g. with a mouse). Keep the memo's glass edge clear.
+                    .scrollIndicators(.never)
                     .focused($focused)
                     .accessibilityLabel("메모 입력")
                     .modifier(GlassGlyphShadow())
