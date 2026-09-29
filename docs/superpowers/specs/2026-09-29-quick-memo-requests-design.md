@@ -64,3 +64,42 @@ Office는 판단·초안·검토만 담당한다. 위젯에서 AI 도움을 사�
 ## 7. 검토할 경계
 
 운영자가 동의한 것은 위젯 안의 역할 분리와 Moonlight 프로젝트 생성 방식이다. `앱 안에서 | Mac 에이전트`의 최종 문구, 현재 메모 액션 두 개의 이동 방식, Mac 작업의 첫 지원 대상 범위는 이 설계의 권장안이다. 구현 전 실제 worker 등록 상태와 사용 가능한 프로젝트·스킬 종류를 확인하고, 지원되지 않는 예시 문구는 화면에 내지 않는다.
+
+## 8. 앱 안 AI 사용 범위와 공급자 배치 — 2026-09-29 권장안
+
+이 절은 “앱 안 AI는 어느 정도 쓰나”와 Gemini·Codex·Claude의 역할을 비교한 **추가 기획**이다. 운영자가 공급자 선택이나 비용 한도를 확정한 기록은 아직 없다.
+
+### 8.1 네 단계의 처리 깊이
+
+| 단계 | 위젯 요청 예 | 처리 | 모델 호출 |
+| --- | --- | --- | --- |
+| **기록 조회** | “A 프로젝트 진행 상황” · “이번 주 막힌 일” | 서버가 대상·범위·기록 버전을 확인하고 정량 진척, 미완료 할 일, 기한과 다음 행동을 계산. 짧은 문장 템플릿으로 표시 | **0회**. 조회 자체를 AI에 맡기지 않음 |
+| **입력 해석·초안** | “새 프로젝트 만들어줘 …” · “이 메모를 할 일로” | 문장에 필드가 모호할 때만 제한된 구조화 출력을 한 번 요청. 대상 ID와 필수 필드는 서버·기존 폼에서 다시 검증 | 필요할 때 **1회**. 명시적 제목·대상이 있으면 0회 |
+| **근거 있는 설명·변환** | “왜 밀렸는지 정리해줘” · “메모를 제안서 요지로 바꿔줘” | 선택한 프로젝트/메모의 제한된 스냅샷과 출처를 모델에 전달. 결과에 근거·미확인 항목을 분리하고, 적용은 별도 사용자 동작 | 명시 요청 시 **1회부터**. 긴 분석·재검토는 별도 동작 |
+| **실제 실행** | 코드 수정 · 폴더 정리 | 기존 Codex job 또는 로컬 스킬 요청서로 접수·receipt 확인 | 위젯 내부 생성 모델의 도구 호출로 처리하지 않음 |
+
+`진행 상황`의 숫자·상태·날짜는 DB 값과 기존 프로젝트 계산이 정본이다. AI가 그 값을 재계산하거나 없는 진척률·예정일을 채우지 않는다. `왜/무엇을 할까`처럼 해석이 필요한 질문에서만 AI 요약을 붙인다. 조회가 `error`·`preview`이면 모델에 빈 데이터를 보내 그럴듯한 답을 만들지 않는다. `partial`이면 읽은 범위와 빠진 근거를 먼저 표시한다.
+
+### 8.2 공급자 역할
+
+| 공급자·표면 | 이 기능에서 권장 역할 | 현재 저장소의 사실과 도입 경계 |
+| --- | --- | --- |
+| **Gemini API** | 앱 안의 짧은 필드 추출·메모 변환·근거 요약의 **첫 기본 공급자** | Engine의 `generateGeminiText`와 Office·멘토·Studio 등 기존 호출, `ai_usage_log`·설정의 비용 추정이 있다. 현재 기본 모델은 설정이 없으면 `gemini-3.5-flash`다. [구조화 출력](https://ai.google.dev/gemini-api/docs/structured-output)과 [함수 호출](https://ai.google.dev/gemini-api/docs/function-calling)은 지원되지만, 모델의 함수 제안이 실제 DB 권한을 뜻하지 않는다. |
+| **Claude API** | 긴 문맥의 편집·복잡한 판단에서 **비교 후보**. 처음부터 모든 요청에 병렬 호출하거나 자동 재심사하지 않음 | [구조화 출력](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)과 [도구 호출](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview)을 제공한다. 그러나 Moonlight Hub/Engine의 상시 Claude API 어댑터·사용량 원장은 확인되지 않았다. 실제 품질·시간·비용 비교에서 이득이 확인될 때 요청형 경로로 추가한다. **Claude API와 Mac의 Claude Code는 다른 실행 표면**이다. |
+| **Codex SDK worker** | 등록된 코드 저장소의 조사·초안·수정 | 현재 로컬 worker/job 계약을 사용한다. Git worktree, 실행 모드, 오프라인·중단 상태를 따른다. Moonlight 프로젝트 레코드 생성이나 일반 메모 요약의 기본 엔진으로 쓰지 않는다. |
+| **OpenAI API / Agents API** | 나중에 별도 내부 모델 비교 또는 관리형 장기 작업이 필요할 때 검토 | [구조화 출력](https://developers.openai.com/api/docs/guides/structured-outputs), [Responses·SDK·Agents API의 역할 차이](https://developers.openai.com/api/docs/guides/agents)는 공식 문서에 있다. [Agents API](https://developers.openai.com/api/docs/guides/agents-api/overview)는 관리형 Codex harness이며 현재 Moonlight의 로컬 Codex worker와 동일한 서비스가 아니다. 기존 job 원장·격리 계약을 대체하는 첫 구현 근거로 삼지 않는다. |
+| **Claude Code + Moonlight 로컬 스킬** | 폴더·영수증 등 Mac 작업의 수동 실행과 결과 receipt | 기존 `moonlight-skill-request` 절차를 사용한다. 요청서 저장만으로 Claude Code가 자동 기동하지 않는다. |
+
+모델 이름은 위젯 기본 화면에 선택 메뉴로 내지 않는다. 운영자는 `조회/만들기/변환/Mac 작업`이라는 **결과**를 고른다. 결과 상세에는 실제 공급자·모델·요청 시각·사용량을 표시한다. `다른 모델로 검토`는 특정 업무에서 다른 공급자가 실제로 더 나은지 평가한 뒤에만 선택 행동으로 연다. 같은 내용을 Gemini·Claude·OpenAI에 상시 동시 전송하지 않는다.
+
+### 8.3 호출·비용·품질 계약
+
+- 모델 입력은 사용자가 선택한 범위의 작은 스냅샷과 출처 ID·버전으로 제한한다. 개인 메모 전체, 고객 상세 원문, 다른 프로젝트의 기록을 편의상 함께 보내지 않는다. 원문 속 명령은 데이터로만 취급한다.
+- `intent`·`target`·`draft` 같은 작은 schema를 공급자와 무관하게 정의한다. 모델 출력은 후보이며 서버의 허용 동작·scope·필수값 검사와 기존 폼을 통과해야 한다. 단순 조회에는 범용 함수 호출 루프를 만들지 않는다.
+- 한 번 누른 요청의 모델 호출 횟수·입력/출력 크기·시간 제한을 서버에서 묶고, 재시도와 `다른 관점`은 별도 기록으로 센다. 출력이 잘리거나 거절되면 원문·작성 상태를 보존하고 실패를 알린다. 무제한 자동 재시도는 하지 않는다.
+- 현재 설정의 `AI 사용량`은 Moonlight가 호출한 **Gemini** 토큰·추정 비용을 보여 준다. Claude/OpenAI API를 추가하기 전 provider·model·surface·입력/출력/생각/캐시 토큰·추정 비용·과금 불명 상태를 기록하는 공통 사용량 계약이 필요하다. Codex worker의 SDK usage는 별도 job 기록이므로 합산할 때 중복 여부를 정의한다. 월별 경고선·분석 횟수 한도는 운영자 프로필에서 **미정**이다. 실제 위젯 호출량을 측정한 뒤 정하고, 현재 임의 숫자를 확정 한도로 두지 않는다. [Gemini 가격표](https://ai.google.dev/gemini-api/docs/pricing), [Claude 가격표](https://platform.claude.com/docs/en/about-claude/pricing), [OpenAI API 가격표](https://developers.openai.com/api/docs/pricing)는 표시 시점에 다시 확인한다.
+- 첫 평가에는 정확한 프로젝트 선택, 출처 없는 문장 수, 저장 전/후 상태 구분, 재조회 성공, 응답 시간, 호출당 추정 비용을 같은 실제 사용 사례로 비교한다. Gemini 기본 경로에서 품질 또는 비용 문제가 반복 확인될 때 Claude/OpenAI 후보를 같은 계약으로 비교한다. 품질 검증 전 provider failover로 결과의 의미를 바꾸지 않는다.
+
+### 8.4 첫 구현 범위
+
+처음에는 **모델 없는 진행 조회 + Gemini가 필요한 경우의 입력 해석·변환 + 기존 생성 화면 연결**만 위젯의 앱 안 경로에 둔다. Office의 깊은 토론, Guru의 멘토링, 장문 콘텐츠 작성은 각각 현재 전용 화면으로 보내며 위젯에는 시작점과 돌아오는 링크만 둔다. Mac 경로는 현재 연결된 Codex job·스킬 요청서의 가능 상태만 보여 준다. Claude API·OpenAI API를 동시에 새로 붙이거나, 모델이 사업 기록을 자율적으로 수정하는 기능은 이 단계의 결과가 아니다.
