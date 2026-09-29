@@ -3,3 +3,4 @@ dist/
 *.pfx
 *.p12
 smoke*.png
+pet/native/build/

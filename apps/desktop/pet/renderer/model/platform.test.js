@@ -33,6 +33,16 @@ test('mac: ⌘1~7 은 계약 순서대로 모드를 고르고 Ctrl 은 무시한
   assert.equal(P.keyAction(key({ metaKey: true, shiftKey: true, code: 'Digit1', key: '1' }), 'mac'), null, '⌘⇧ 는 무시');
 });
 
+test('mac: 메모만 ⌃Return 대안을 허용하고 다른 모드·수정키 혼합·한글 조합에서는 무시', () => {
+  const enter = key({ ctrlKey: true, key: 'Enter', code: 'Enter' });
+  assert.deepEqual(P.keyAction(enter, 'mac', 'memo'), { type: 'primary' });
+  assert.equal(P.keyAction(enter, 'mac', 'tasks'), null);
+  assert.equal(P.keyAction({ ...enter, shiftKey: true }, 'mac', 'memo'), null);
+  assert.equal(P.keyAction({ ...enter, metaKey: true }, 'mac', 'memo'), null);
+  assert.equal(P.keyAction({ ...enter, isComposing: true }, 'mac', 'memo'), null);
+  assert.deepEqual(P.keyAction(enter, 'win', 'tasks'), { type: 'primary' });
+});
+
 test('mac: ⌘S 저장, ⌘Return/⌘NumpadEnter 주 동작, Esc 접기, IME 조합 중은 무시', () => {
   assert.deepEqual(P.keyAction(key({ metaKey: true, key: 's', code: 'KeyS' }), 'mac'), { type: 'save' });
   assert.deepEqual(P.keyAction(key({ metaKey: true, key: 'S', code: 'KeyS' }), 'mac'), { type: 'save' });

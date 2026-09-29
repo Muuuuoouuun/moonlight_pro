@@ -34,10 +34,13 @@
 
   // 키 이벤트 → 동작. 주 수정키는 Windows Ctrl / macOS ⌘ 이고, Alt 나 반대편 수정키가 섞이면 무시한다
   // (전역 Ctrl+Alt+M · ⌃⌥M 과 겹치지 않게). platform 을 생략하면 현재 창의 플랫폼.
-  function keyAction(e, platform) {
+  function keyAction(e, platform, mode) {
     if (!e) return null;
     // IME 조합 중(한글 입력)의 키는 입력기 몫 — Esc 로 조합을 취소하거나 Enter 로 확정하는 중에 패널이 접히거나 저장되지 않게.
     if (e.isComposing || e.keyCode === 229) return null;
+    // Mac 원본 WindowCoordinator: 메모에서만 ⌃Return을 ⌘Return의 대안으로 허용한다.
+    if (Plat.isMac(platform) && mode === 'memo' && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
+      && (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter')) return { type: 'primary' };
     const ctrl = Plat.primaryDown(e, platform);
     if (ctrl && !e.shiftKey) {
       const m = /^Digit([1-7])$/.exec(e.code || '') || /^([1-7])$/.exec(e.key || '');

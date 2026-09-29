@@ -22,7 +22,10 @@
   --opaque-bg: #141C27;
   color-scheme: dark;
 }
-html[data-platform="mac"] { --radius: 10px; } /* platform.js 가 <html data-platform> 을 단다. 유리 층이 창 모서리와 같은 곡률이어야 모서리에 맨 블러가 비치지 않는다 */
+html[data-platform="mac"] {
+  --radius: 10px;
+  --font: -apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif;
+} /* Mac 원본의 system font. HUD 대체 경로의 창 반경은 10px. */
 * { box-sizing: border-box; }
 html, body {
   margin: 0; width: 100%; height: 100%; overflow: hidden;
@@ -94,6 +97,23 @@ html[data-platform="mac"] .veil {
   html[data-platform="mac"] .veil { --veil-a: .48; --veil-edge: .92; }
   html[data-platform="mac"] .glass { --section-gain: .55; --attenuation-a: .06; }
 }
+
+/* macOS 26+: NSGlassEffectView(.clear), darkAqua + 원본의 28% 확산.
+   Chromium은 위의 형제 뷰로 글자와 조작만 그린다. HUD용 베일·가짜 유리 띠를
+   함께 얹으면 두꺼운 회색 액자가 되므로 네이티브가 붙었을 때만 걷어 낸다. */
+html[data-material="native-clear"] { --radius: 26px; }
+html[data-material="native-clear"] .veil,
+html[data-material="native-clear"] .section,
+html[data-material="native-clear"] .section-fine,
+html[data-material="native-clear"] .prism,
+html[data-material="native-clear"] .rim { display: none; }
+html[data-material="native-clear"] .shade {
+  background: radial-gradient(circle farthest-corner at 50% 50%, rgba(0, 0, 0, .055) 0%, rgba(0, 0, 0, .055) 35%, transparent 100%);
+}
+html[data-material="native-clear"].opaque,
+html[data-material="native-clear"].opaque body { background: transparent; }
+html[data-material="native-clear"].opaque .glass { background: var(--opaque-bg); }
+html[data-material="native-clear"].high-contrast .rim { display: block; }
 
 /* 캐릭터 색: 평소 0 → pet:wash {on} 때 120ms 에 걸쳐 캐릭터색 × wash.
    면 전체를 덮지 않고 곡면 단면 쪽에 모인다(PetGlassWash depthMask): 가장자리 1 → 48pt 에 걸쳐 35% 로(1 − .65·smoothstep).
