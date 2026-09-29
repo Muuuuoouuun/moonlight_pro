@@ -7,7 +7,7 @@ import React from "react";
 import { Button, EmptyState, SegmentedControl, SelectField, Skeleton, TruthBadge } from "../hub-primitives";
 import { useToast } from "../hub-toast";
 import { INQUIRY_SOURCES, INQUIRY_STATUSES, inquiryTime, writeInquiry } from "../inquiry-view-state";
-import { projectStateLabel, seoulDay, workType } from "../../../lib/product-catalog.js";
+import { inquiryCustomer, inquiryWorkSeed, projectStateLabel, seoulDay, workType } from "../../../lib/product-catalog.js";
 import { linkInquiry } from "./product-client.js";
 import { WorkDrawer } from "./product-page";
 import styles from "./product-room.module.css";
@@ -72,7 +72,7 @@ function InquiryDetail({ inquiry, products, areas, onBack, onChanged }) {
       <div>
         <div className="eyebrow">{inquiryTime(inquiry.receivedAt)}</div>
         <h3 style={{ margin: "4px 0 0", fontSize: 17, fontWeight: 600 }}>{inquiry.subject}</h3>
-        <p className={styles.muted} style={{ marginTop: 2 }}>{[inquiry.contactName, inquiry.contactEmail].filter(Boolean).join(" · ") || "연락처 없음"}</p>
+        <p className={styles.muted} style={{ marginTop: 2 }}>{[inquiry.contactName, inquiry.contactEmail].filter(Boolean).join(" · ") || "연락처 없음"}{inquiryCustomer(inquiry) ? " · 고객 연결됨" : ""}</p>
       </div>
       {detail.status === "loading" ? <Skeleton lines={4} height={13} label="문의 원문 불러오는 중" />
         : detail.status !== "live" ? <TruthBadge state="error" reason="원문을 읽지 못했어요" />
@@ -114,8 +114,8 @@ function InquiryDetail({ inquiry, products, areas, onBack, onChanged }) {
         </section>
       )}
       {creating && product && (
-        <WorkDrawer product={product} areas={areas} seed={{ title: inquiry.subject, workType: creating.workType, inquiryId: inquiry.id }}
-          onClose={() => setCreating(null)} onSaved={(done) => { setCreating(null); if (done) toast(done); onChanged(); }} />
+        <WorkDrawer product={product} areas={areas} seed={inquiryWorkSeed(inquiry, creating.workType)}
+          onClose={() => setCreating(null)} onSaved={(done, options) => { setCreating(null); if (done) toast(done, options); onChanged(); }} />
       )}
     </div>
   );

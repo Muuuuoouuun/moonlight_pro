@@ -2,6 +2,8 @@
 // 정본 기획: docs/superpowers/specs/2026-09-24-product-dev-projects-draft.md §4·§5·§6.
 // 제품 = 오래 사는 것(단계만 바뀐다). 프로젝트 = 끝나는 것(projects.product_id로 제품 아래에 붙는다).
 
+import { projectCustomerRef } from "./project-customer-context.js";
+
 export const PRODUCT_STAGES = [
   { key: "idea", label: "아이디어" },
   { key: "validation", label: "검증" },
@@ -368,6 +370,9 @@ const ERROR_TEXT = {
   "missing-title": "일 제목을 적어 주세요.",
   "invalid-area-id": "업무 분야를 골라 주세요.",
   "invalid-work-type": "일 종류를 다시 골라 주세요.",
+  // 프로젝트 쓰기(create_project)의 참조 확인 — 업무 분야·고객(리드·고객사) 중 하나가 워크스페이스에 없다.
+  "invalid-reference": "업무 분야나 고객 기록을 찾지 못했어요. 새로고침 뒤 다시 시도하세요.",
+  "invalid-entity-ref": "고객 연결 값이 올바르지 않아요. 새로고침 뒤 다시 시도하세요.",
   "stale-update": "다른 곳에서 먼저 바뀌었어요. 입력은 유지했으니 새로고침 뒤 다시 저장하세요.",
   "engine-not-configured": "Engine 연결이 없어 저장되지 않았어요.",
   "engine-unreachable": "Engine에 연결하지 못했어요. 잠시 뒤 다시 시도하세요.",
@@ -421,6 +426,65 @@ export const RECURRENCES = [
 ];
 export function recurrenceLabel(value) {
   return RECURRENCES.find((item) => item.value === value)?.label || null;
+}
+
+// ＋ 일 쓰기 몸체(Engine create_project). 문의에서 만들 때 seed.customer가 있으면 그 고객을 entityRef로 붙인다
+// (projects.lead_id·customer_account_id). 고객이 없거나 모양이 틀리면 entityRef를 싣지 않는다 — 추측하지 않는다.
+export function workEntityRef(seed) {
+  const ref = projectCustomerRef(seed?.customer);
+  return ref ? { type: ref.type === "account" ? "customer_account" : "lead", id: ref.id } : null;
+}
+export function workCreateBody(product, draft, seed, id) {
+  const entityRef = workEntityRef(seed);
+  return {
+    id,
+    title: draft.title.trim(),
+    areaId: draft.areaId,
+    orgScope: product.orgScope,
+    status: "active",
+    priority: "medium",
+    productId: product.id,
+    workType: draft.workType,
+    ...(draft.dueAt ? { dueAt: draft.dueAt } : {}),
+    ...(draft.workType === "maintenance" && draft.recurrence ? { recurrence: draft.recurrence } : {}),
+    ...(entityRef ? { entityRef } : {}),
+    source: "hub-products",
+  };
+}
+
+// ＋ 일 저장 흐름(WorkDrawer). 일을 만든 뒤 문의 붙이기가 실패하면 만든 일 id(createdId)를 돌려준다 — 다시 누르면
+// 그 일에 문의만 붙이고, 같은 고객이 붙은 두 번째 일을 만들지 않는다. 쓰기 함수는 주입한다(product-client.js).
+export async function saveWork({ createWork, linkInquiry }, { product, draft, seed, id, createdId = null }) {
+  let workId = createdId;
+  if (!workId) {
+    const outcome = await createWork(workCreateBody(product, draft, seed, id));
+    if (!outcome.ok) return { ok: false, createdId: null, message: outcome.message };
+    workId = outcome.entity?.id || id;
+  }
+  if (seed?.inquiryId) {
+    const linked = await linkInquiry(seed.inquiryId, product.id, workId);
+    if (!linked.ok) return { ok: false, createdId: workId, message: `일은 만들었지만 문의를 붙이지 못했어요: ${linked.message} 다시 누르면 문의만 붙여요.` };
+  }
+  return { ok: true, createdId: workId };
+}
+
+// 문의의 고객 = 문의에 붙은 리드(inquiries.lead_id)뿐이다. 거래(deal_id)만 붙은 문의에서 고객을 추측하지 않는다 —
+// 운영 deals.lead_id는 거의 비어 있어(2026-09 실측 0/22) 거래에서 고른 고객은 틀릴 수 있다.
+// 이름은 문의에 적힌 연락처 이름(contact_name)이고, 없으면 null — 자리표시 이름을 고객 이름처럼 보이지 않는다.
+export function inquiryCustomer(inquiry) {
+  const ref = projectCustomerRef({ type: "lead", id: inquiry?.leadId });
+  return ref ? { ...ref, label: String(inquiry.contactName || "").trim() || null } : null;
+}
+export function inquiryWorkSeed(inquiry, type) {
+  const customer = inquiryCustomer(inquiry);
+  return { title: inquiry?.subject || "", workType: type, inquiryId: inquiry?.id || null, ...(customer ? { customer } : {}) };
+}
+// 조사는 늘 "고객" 뒤에 붙는다 — 이름은 괄호 안이라 자유 입력 이름("ABC학원 (원장)")의 받침을 따지지 않는다.
+export function workDrawerSubtitle(seed) {
+  if (!seed?.inquiryId) return "프로젝트 탭의 프로젝트로 만들어지고 이 제품에 붙어요.";
+  if (!workEntityRef(seed)) return "문의에서 만드는 일 — 만들면 문의가 이 일에 붙어요.";
+  const label = String(seed.customer.label || "").trim();
+  return `문의에서 만드는 일 — 만들면 문의와 고객${label ? `(${label})` : ""}이 이 일에 붙어요.`;
 }
 
 const PROJECT_STATE_LABEL = { draft: "계획", active: "진행", blocked: "막힘", completed: "완료", archived: "보관" };

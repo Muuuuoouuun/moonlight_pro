@@ -342,6 +342,8 @@ ClassIn은 회사 공식 객체의 정본이고, 개인 프로젝트는 ClassIn�
 
 2026-09-25 추가(운영자 피드백): 카드 칸 단순화(§4.0), 전체 체크리스트·진척률·기능별 점검(§4.3), 문의 ↔ 제품 연결(§4.4, `link_inquiry`/`unlink_inquiry`, Hub `/api/hub/products/inquiries`).
 
+2026-09-29 수정: 문의함에서 `연락 만들기`·`신기능으로`로 만든 일에 고객이 빠지던 문제. 제품 읽기 모델이 문의의 `lead_id`·`deal_id`를 읽고, 문의에 리드가 붙어 있으면 새 일에 그 리드를 기존 `create_project`의 `entityRef`(→ `projects.lead_id`)로 붙인다. 드로어 안내 한 줄과 문의 상세 연락처 줄(`· 고객 연결됨`)이 그 사실을 말한다. 거래만 붙은 문의는 고객을 추측하지 않고(운영 `deals.lead_id`가 거의 비어 있음), 화면을 연 뒤 리드가 지워져 Engine이 거절하면(`invalid-reference`) 저장 실패로 알린다 — 고객을 빼고 다시 만들지 않는다. 일은 만들었는데 문의 붙이기만 실패하면 드로어가 연 채로 남아 `문의 다시 붙이기`가 그 일에 문의만 붙이고(두 번째 일을 만들지 않음), 그대로 닫으면 danger 토스트로 남긴다. `apps/hub/lib/product-catalog.js`(`inquiryWorkSeed`·`workCreateBody`·`saveWork`), `products-ledger.js`.
+
 하지 않은 것(다음 결정·단계):
 
 - **오늘 화면 CI 실패 1행**(§6) — 표면 예산 결정이 필요해 넣지 않았다. 신호는 제품 보기의 막힘 열과 상세에만 보인다.
