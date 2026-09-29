@@ -24,5 +24,6 @@
   `GlassCenterDiffusion.swift`이고 값은 `contract.js` `GLASS`와 `renderer-integrity.test.js`가 고정한다. 투명도 줄이기·대비 높이기(`html.opaque`)와 강제 색에서는
   베일·단면을 끄고 불투명 면이다. 옮기지 않은 것: 화면 캡처 굴절(ScreenCaptureKit, 화면 기록 권한 필요 실험), 포인터를 따라 움직이는 빛, 짙은 글자(운영자 미승인).
 - 글꼴: `fonts.css`가 `../fonts/*.woff2`(패키징)를 먼저, `../../../hub/public/fonts/*.woff2`(개발 트리)를 다음으로 찾는다.
+- Mac 메모 입력칸: 원본 `GlassInputSurface`와 같은 옅은 음영·1px 윤곽·포커스 강조를 적용한다. 제목·하단 버튼과 정렬된 입력칸 안에만 채우며, `data-platform="mac"` 규칙으로 한정한다(2026-09-29 운영자 요청).
 - 자산: `node apps/desktop/scripts/pet-assets.mjs`(검사만: `--check`)가 `../assets/portrait-*.png`·`cutout-*.png`를 만든다.
 - 테스트: `npm --workspace @com-moon/desktop test`.
