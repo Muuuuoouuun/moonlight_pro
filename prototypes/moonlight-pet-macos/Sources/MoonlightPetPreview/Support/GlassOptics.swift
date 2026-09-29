@@ -8,6 +8,7 @@ struct GlassUniforms {
     var rect: SIMD4<Float> = .zero
     var material = SIMD4<Float>(26, 9, 1, 0)
     var light = SIMD4<Float>(0, 0, 0, GlassStudy.edgeReflection)
+    var backdrop = SIMD4<Float>(0, 0, 1, 1) // display UV origin and extent
 }
 
 /// Shared device, queue and pipeline. Compilation happens once, never on pointer updates.
@@ -23,6 +24,7 @@ final class GlassOpticsRenderer {
     let device: MTLDevice
     let queue: MTLCommandQueue
     let pipeline: MTLRenderPipelineState
+    let desktopPipeline: MTLRenderPipelineState
 
     private init() throws {
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue(),
@@ -37,12 +39,19 @@ final class GlassOpticsRenderer {
         descriptor.fragmentFunction = library.makeFunction(name: "glassFragment")
         descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
         pipeline = try device.makeRenderPipelineState(descriptor: descriptor)
+        descriptor.fragmentFunction = library.makeFunction(name: "desktopGlassFragment")
+        desktopPipeline = try device.makeRenderPipelineState(descriptor: descriptor)
     }
 
-    func encode(_ uniforms: GlassUniforms, pass: MTLRenderPassDescriptor, buffer: MTLCommandBuffer) -> Bool {
+    func encode(_ uniforms: GlassUniforms, pass: MTLRenderPassDescriptor, buffer: MTLCommandBuffer,
+                backdrop: MTLTexture? = nil, polishedBackdrop: MTLTexture? = nil) -> Bool {
         guard let encoder = buffer.makeRenderCommandEncoder(descriptor: pass) else { return false }
         var uniforms = uniforms
-        encoder.setRenderPipelineState(pipeline)
+        encoder.setRenderPipelineState(backdrop == nil ? pipeline : desktopPipeline)
+        if let backdrop {
+            encoder.setFragmentTexture(backdrop, index: 0)
+            encoder.setFragmentTexture(polishedBackdrop ?? backdrop, index: 1)
+        }
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<GlassUniforms>.stride, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
@@ -50,7 +59,8 @@ final class GlassOpticsRenderer {
     }
 
     /// Offscreen bytes use the same production pipeline, allowing geometry/refraction checks.
-    func pixels(_ uniforms: GlassUniforms, width: Int, height: Int) -> [UInt8]? {
+    func pixels(_ uniforms: GlassUniforms, width: Int, height: Int, backdrop: MTLTexture? = nil,
+                polishedBackdrop: MTLTexture? = nil) -> [UInt8]? {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
         descriptor.usage = [.renderTarget]
         descriptor.storageMode = .private
@@ -64,7 +74,8 @@ final class GlassOpticsRenderer {
         pass.colorAttachments[0].texture = texture
         pass.colorAttachments[0].loadAction = .clear
         pass.colorAttachments[0].storeAction = .store
-        guard encode(uniforms, pass: pass, buffer: buffer), let blit = buffer.makeBlitCommandEncoder() else { return nil }
+        guard encode(uniforms, pass: pass, buffer: buffer, backdrop: backdrop, polishedBackdrop: polishedBackdrop),
+              let blit = buffer.makeBlitCommandEncoder() else { return nil }
         blit.copy(from: texture, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: 0,y: 0,z: 0),
                   sourceSize: MTLSize(width: width,height: height,depth: 1), to: readback,
                   destinationOffset: 0, destinationBytesPerRow: rowBytes, destinationBytesPerImage: rowBytes * height)

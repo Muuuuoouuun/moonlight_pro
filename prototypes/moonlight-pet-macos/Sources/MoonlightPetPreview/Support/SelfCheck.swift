@@ -45,7 +45,7 @@ enum SelfCheck {
 
     @MainActor
     static func run() -> Bool {
-        guard checkHubMemoCapture(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkReadingTone() else { return false }
+        guard checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkReadingTone() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,

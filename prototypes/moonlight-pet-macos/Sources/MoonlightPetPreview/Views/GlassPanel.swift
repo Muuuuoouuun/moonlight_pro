@@ -6,7 +6,7 @@ import SwiftUI
 @MainActor
 final class GlassPanel: NSView {
     static func host<Content: View>(_ content: Content, cornerRadius: CGFloat, ornament: AnyView? = nil,
-                                    model: AppModel? = nil, protectsText: Bool = false) -> GlassPanel {
+                                    model: AppModel? = nil, protectsText: Bool = false, captureSurface: CompanionSurface? = nil, withinWindow: Bool = false) -> GlassPanel {
         let readingTone = GlassReadingTone()
         let host = FirstMouseHostingView(rootView: content.environment(\.colorScheme, .dark)
             .environment(\.glassReadingTone, readingTone)
@@ -21,11 +21,19 @@ final class GlassPanel: NSView {
             return host
         }
         let panel = GlassPanel(content: host, cornerRadius: cornerRadius, ornament: accessory,
-                               readingTone: readingTone)
+                               readingTone: readingTone, allowsCapture: captureSurface != nil)
+        panel.centerDiffusion?.blendingMode = withinWindow ? .withinWindow : .behindWindow
         if let model {
             panel.characterSubscription = model.$selectedCharacter.removeDuplicates().sink { [weak panel] character in
                 panel?.setCharacter(character)
             }
+        }
+        if let model, let captureSurface {
+            panel.desktopRefraction?.onStatus = { [weak model] status in model?.desktopRefractionStatus = status }
+            panel.captureSubscription = model.$usesDesktopRefraction.combineLatest(model.$activeCompanion)
+                .sink { [weak panel] enabled, active in
+                    panel?.desktopRefraction?.setWanted(enabled && active == captureSurface)
+                }
         }
         return panel
     }
@@ -34,12 +42,25 @@ final class GlassPanel: NSView {
     private let material: NSView
     private let centerDiffusion: GlassCenterDiffusion?
     private let centerVeil: GlassCenterVeil?
+    private let desktopRefraction: DesktopRefractionView?
+    private var captureSubscription: AnyCancellable?
+    private var referenceRefraction: NSView?
+    private let nativeEdgeMask = CALayer()
     private let rim: NSView
     private let foreground: NSView
     private let ornament: NSView?
     private let wash: PetGlassWash
     private let readingTone: GlassReadingTone
     private var characterSubscription: AnyCancellable?
+
+    // The developer quality surface supplies an app-owned scene through the
+    // same desktop shader; no desktop capture or permission is involved.
+    func setReferenceRefraction(_ view: NSView?) {
+        referenceRefraction?.removeFromSuperview()
+        referenceRefraction = view
+        if let view { addSubview(view, positioned: .above, relativeTo: material) }
+        needsLayout = true
+    }
 
     func setCharacter(_ character: PetCharacter) { wash.character = character }
     func previewCharacterTint(_ preview: Bool) { wash.previewsTint = preview }
@@ -50,10 +71,11 @@ final class GlassPanel: NSView {
         }
     }
 
-    private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?, readingTone: GlassReadingTone) {
+    private init(content: NSView, cornerRadius: CGFloat, ornament: NSView?, readingTone: GlassReadingTone, allowsCapture: Bool) {
         radius = cornerRadius
         self.readingTone = readingTone
         self.ornament = ornament
+        desktopRefraction = allowsCapture ? GlassOpticsRenderer.shared.map { DesktopRefractionView(renderer: $0) } : nil
         foreground = content
         wash = PetGlassWash(radius: cornerRadius)
         rim = makeOpticalRim(radius: cornerRadius)
@@ -94,18 +116,31 @@ final class GlassPanel: NSView {
         }
         wantsLayer = true
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.18
+        layer?.shadowOpacity = 0.12
         layer?.shadowRadius = 6
         layer?.shadowOffset = CGSize(width: 0, height: -2)
         // The under-window diffusion is the lowest native effect. It softens
         // the center while its mask leaves the clear glass lip exposed.
         if let centerDiffusion { addSubview(centerDiffusion) }
         addSubview(material)
+        if let desktopRefraction { addSubview(desktopRefraction) }
         if let centerVeil { addSubview(centerVeil) }
         addSubview(wash)
         addSubview(rim)
         addSubview(foreground)
         if let ornament { addSubview(ornament) }
+        // The optical layer owns the lip. Feather only the native material's
+        // outer 8pt so its broad dark bevel does not bury the spectral reflection.
+        if rim is OpticalGlassView {
+            let feather: CGFloat = 8
+            let cap = radius + feather
+            let diameter = cap*2+1
+            nativeEdgeMask.contents = ReadingMask.image(radius: radius, feather: feather)
+                .cgImage(forProposedRect: nil, context: nil, hints: nil)
+            nativeEdgeMask.contentsCenter = CGRect(x: cap/diameter,y: cap/diameter,
+                                                   width: 1/diameter,height: 1/diameter)
+            material.wantsLayer = true
+        }
         updateMaterialAccessibility()
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(updateMaterialAccessibility),
             name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
@@ -117,6 +152,7 @@ final class GlassPanel: NSView {
         wash.solidForAccessibility = accessible
         centerDiffusion?.isHidden = accessible
         centerVeil?.isHidden = accessible
+        material.layer?.mask = !accessible && rim is OpticalGlassView ? nativeEdgeMask : nil
         if #available(macOS 26.0, *), let glass = material as? NSGlassEffectView {
             glass.style = accessible ? .regular : .clear
             glass.tintColor = nil
@@ -135,6 +171,12 @@ final class GlassPanel: NSView {
                                     width: CompanionLayout.perchSize, height: CompanionLayout.perchSize)
         }
         material.frame = frame
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        nativeEdgeMask.frame = material.bounds
+        CATransaction.commit()
+        referenceRefraction?.frame = frame
+        desktopRefraction?.frame = frame
         centerDiffusion?.frame = frame
         centerVeil?.frame = frame
         wash.frame = frame

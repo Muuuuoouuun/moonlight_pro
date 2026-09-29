@@ -18,6 +18,25 @@ enum GlassOpticsCheck {
             fputs("Glass edge failed: center=\(alpha(edge,160,120)), corner=\(alpha(edge,10,10)), rim=\(alpha(edge,160,10))\n",stderr)
             return false
         }
+        // A glass lip needs a visible achromatic glint and a softer inner
+        // shoulder, not just isolated saturated pixels at the corners.
+        let lipPeak = (10...13).map { y in
+            (0..<3).map { Int(edge[(y*width+160)*4+$0]) }.min()!
+        }.max()!
+        let shoulder = Int(alpha(edge,160,13))
+        guard lipPeak >= 175, shoulder >= 25 else {
+            fputs("Glass cross-section is too flat: white glint \(lipPeak), shoulder \(shoulder)\n",stderr)
+            return false
+        }
+        // A broad reflected source should have a coherent bright and quiet
+        // region along a straight side, rather than an equally bright wire.
+        func neutralLip(_ x: Int) -> Int {
+            (0..<3).map { Int(edge[(11*width+x)*4+$0]) }.min()!
+        }
+        guard neutralLip(90) - neutralLip(250) >= 35 else {
+            fputs("Glass reflection reads as uniform wire: bright \(neutralLip(90)), quiet \(neutralLip(250))\n",stderr)
+            return false
+        }
         // Every channel must be <= alpha: transparent overlays must be premultiplied.
         // The prism must produce measurable but restrained channel separation,
         // with no colored veil or white fill crossing the content area.
@@ -32,7 +51,7 @@ enum GlassOpticsCheck {
             if separation > 2 { prismaticPixels += 1 }
             strongestSeparation = max(strongestSeparation,separation)
         }
-        guard prismaticPixels > 100, strongestSeparation >= 4, strongestSeparation < 32 else {
+        guard prismaticPixels > 100, strongestSeparation >= 75, strongestSeparation < 165 else {
             fputs("Glass prism is absent or oversaturated: \(prismaticPixels) pixels, \(strongestSeparation)/255 separation\n",stderr)
             return false
         }
@@ -42,6 +61,24 @@ enum GlassOpticsCheck {
                 return false
             }
         }
+        // Small pointer changes must not flip the wavelength order abruptly.
+        var priorFrame: [UInt8]?
+        var largestStep = 0
+        for step in 0...50 {
+            u.light.x = Float(step) / 50 - 0.5
+            guard let frame = renderer.pixels(u,width: width,height: height) else { return false }
+            if let priorFrame {
+                for channel in frame.indices {
+                    largestStep = max(largestStep, abs(Int(frame[channel])-Int(priorFrame[channel])))
+                }
+            }
+            priorFrame = frame
+        }
+        guard largestStep <= 12 else {
+            fputs("Prism reflection pops during pointer movement: \(largestStep)/255 per step\n",stderr)
+            return false
+        }
+        u.light.x = 0
         u.light.z = 1
         guard let accessible = renderer.pixels(u,width: width,height: height),
               alpha(accessible,160,120) == 0 else { return false }

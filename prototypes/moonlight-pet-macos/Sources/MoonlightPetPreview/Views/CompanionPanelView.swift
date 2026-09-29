@@ -12,7 +12,6 @@ struct CompanionPanelView: View {
     let pin: (() -> Void)?
     let moveVertically: (CGFloat) -> Void
 
-    @Namespace private var selection
     @State private var showsAddress = false
     private var isToday: Bool { mode == .tasks || mode == .calendar }
     private var title: String { mode == .tasks ? "오늘" : mode == .memo ? "빠른 메모" : mode.title }
@@ -120,6 +119,11 @@ struct CompanionPanelView: View {
             Button(showsAddress ? "빠른 기능으로 돌아가기" : "Hub 연결·저장 위치") {
                 withAnimation(PetMotion.panel) { showsAddress.toggle() }
             }
+            Divider()
+            Toggle("배경 굴절 실험", isOn: $model.usesDesktopRefraction)
+            if model.usesDesktopRefraction {
+                Text(model.desktopRefractionStatus)
+            }
             Button("펫으로 접기", action: close)
         } label: {
             Image(systemName: "ellipsis").modifier(GlassGlyphShadow()).frame(width: 28, height: 32)
@@ -147,31 +151,7 @@ struct CompanionPanelView: View {
     }
 
     private func modeTabs(_ destinations: [QuickMode]) -> some View {
-        HStack(spacing: 2) {
-            ForEach(destinations) { destination in
-                Button { select(destination) } label: {
-                    Text(destination.title)
-                        .font(.system(size: 12, weight: mode == destination ? .semibold : .medium))
-                        .foregroundStyle(mode == destination ? Palette.glassInk : Palette.glassInkMuted)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 34)
-                        .background {
-                            if mode == destination {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(Palette.glassInk.opacity(0.10))
-                                    .overlay { GlassRim(radius: 10, strength: 0.5) }
-                                    .matchedGeometryEffect(id: "today-selection", in: selection)
-                            }
-                        }
-                        .contentShape(RoundedRectangle(cornerRadius: 10))
-                }
-                .buttonStyle(PetPressStyle())
-                .accessibilityAddTraits(mode == destination ? .isSelected : [])
-            }
-        }
-        .padding(3)
-        .background(Palette.glassInk.opacity(0.035), in: RoundedRectangle(cornerRadius: 13))
-        .overlay { GlassRim(radius: 13, strength: 0.20) }
+        GlassModeTabs(destinations: destinations, mode: mode, select: select)
     }
 
     @ViewBuilder private var modeContent: some View {
@@ -246,5 +226,41 @@ struct CompanionPanelView: View {
 
     private func showConnection() {
         withAnimation(PetMotion.panel) { showsAddress = true }
+    }
+}
+
+/// Shared by production companion panels and the optical quality specimen.
+struct GlassModeTabs: View {
+    let destinations: [QuickMode]
+    let mode: QuickMode
+    var inkOverride: Color? = nil
+    let select: (QuickMode) -> Void
+    @Namespace private var selection
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(destinations) { destination in
+                Button { select(destination) } label: {
+                    Text(destination.title)
+                        .font(.system(size: 12, weight: mode == destination ? .semibold : .medium))
+                        .foregroundStyle(inkOverride ?? (mode == destination ? Palette.glassInk : Palette.glassInkMuted))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 34)
+                        .background {
+                            if mode == destination {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill((inkOverride ?? Palette.glassInk).opacity(0.10))
+                                    .overlay { GlassRim(radius: 10, strength: 0.5) }
+                                    .matchedGeometryEffect(id: "today-selection", in: selection)
+                            }
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(PetPressStyle())
+                .accessibilityAddTraits(mode == destination ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background((inkOverride ?? Palette.glassInk).opacity(0.035), in: RoundedRectangle(cornerRadius: 13))
+        .overlay { GlassRim(radius: 13, strength: 0.20) }
     }
 }

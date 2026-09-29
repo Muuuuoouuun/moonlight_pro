@@ -176,7 +176,7 @@ final class WindowCoordinator: NSObject {
             moveVertically: { [weak self] offset in self?.moveBarVertically(by: offset) }
         ), cornerRadius: CompanionLayout.glassRadius,
            ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.dismissBar() })),
-           model: model, protectsText: true)
+           model: model, protectsText: true, captureSurface: .quick)
         widgetWindow.contentView = GlassPanel.host(CompactWidgetView(
             model: model,
             collapse: { [weak self] in self?.collapseWidget() },
@@ -185,7 +185,7 @@ final class WindowCoordinator: NSObject {
             startFocus: { [weak self] in self?.startFocus() }
         ), cornerRadius: CompanionLayout.glassRadius,
            ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.collapseWidget() })),
-           model: model, protectsText: true)
+           model: model, protectsText: true, captureSurface: .widget)
 
         model.onOpenMode = { [weak self] mode in self?.openMode(mode) }
         model.activity.onBanner = { [weak self] notice in self?.presentNotice(notice) ?? false }

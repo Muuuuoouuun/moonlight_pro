@@ -4,6 +4,12 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="MoonlightPetPreview"
 BUNDLE_ID="app.moonlight.pet-preview"
+# Material studies have their own executable/bundle identity. Iterating the
+# lab must not replace or stop the screen-recording-authorized desktop app.
+if [[ "$MODE" == "--glass-lab" ]]; then
+  APP_NAME="MoonlightGlassLab"
+  BUNDLE_ID="app.moonlight.glass-lab"
+fi
 MIN_SYSTEM_VERSION="14.0"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
@@ -12,8 +18,8 @@ APP_BINARY="$APP_CONTENTS/MacOS/$APP_NAME"
 
 swift build -j 2 --package-path "$ROOT_DIR"
 BUILD_DIR="$(swift build --package-path "$ROOT_DIR" --show-bin-path)"
-BUILD_BINARY="$BUILD_DIR/$APP_NAME"
-RESOURCE_BUNDLE="$BUILD_DIR/${APP_NAME}_${APP_NAME}.bundle"
+BUILD_BINARY="$BUILD_DIR/MoonlightPetPreview"
+RESOURCE_BUNDLE="$BUILD_DIR/MoonlightPetPreview_MoonlightPetPreview.bundle"
 
 if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
   echo "missing SwiftPM resource bundle: $RESOURCE_BUNDLE" >&2
@@ -39,10 +45,18 @@ cat > "$APP_CONTENTS/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 
+# Sign the assembled bundle: the Swift linker signature does not bind Info.plist
+# or resources and fails strict bundle verification. A real development identity
+# can be supplied to preserve TCC identity across code changes.
+/usr/bin/codesign --force --sign "${MOONLIGHT_CODE_SIGN_IDENTITY:--}" --timestamp=none \
+  --identifier "$BUNDLE_ID" "$APP_BUNDLE"
+/usr/bin/codesign --verify --strict --verbose=2 "$APP_BUNDLE"
+
 open_app() { /usr/bin/open -n "$APP_BUNDLE"; }
 
 case "$MODE" in
   run) open_app ;;
+  --desktop-refraction) /usr/bin/open -n "$APP_BUNDLE" --args --desktop-refraction ;;
   --glass-lab) /usr/bin/open -n "$APP_BUNDLE" --args --glass-lab ;;
   --debug|debug) lldb -- "$APP_BINARY" ;;
   --logs|logs)
@@ -56,14 +70,16 @@ case "$MODE" in
   --verify|verify)
     open_app
     sleep 1
-    cmp -s "$BUILD_BINARY" "$APP_BINARY"
+    # Signing changes the executable bytes; the Mach-O build UUID must match.
+    [[ "$(/usr/bin/dwarfdump --uuid "$BUILD_BINARY" | awk '{print $2}')" == \
+       "$(/usr/bin/dwarfdump --uuid "$APP_BINARY" | awk '{print $2}')" ]]
     RUNNING_PIDS="$(pgrep -x "$APP_NAME")"
     [[ "$(printf '%s\n' "$RUNNING_PIDS" | wc -l | tr -d ' ')" == "1" ]]
     [[ "$(ps -p "$RUNNING_PIDS" -o command=)" == "$APP_BINARY" ]]
     echo "Verified running build: $APP_BINARY (pid $RUNNING_PIDS)"
     ;;
   *)
-    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify|--glass-lab]" >&2
+    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify|--glass-lab|--desktop-refraction]" >&2
     exit 2
     ;;
 esac

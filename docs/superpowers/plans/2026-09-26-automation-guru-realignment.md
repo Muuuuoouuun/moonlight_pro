@@ -30,14 +30,14 @@ Files: new apps/hub/lib/automation-policy.js + test, repositories/automations-le
 
 - [x] Inspect local scheduler config, launch agents and DB scheduling read-only, without printing credentials.
 - [x] 운영 Vercel에서 구형 예약 3개가 남은 것을 확인. DB 자동화 2행을 백업 후 disabled로 정리.
-- [ ] 별도 운영 패치 배포: 기존 운영 커밋 98d920c3 기반 7파일, 문의 동기화·점수 재계산 유지. 운영자 답변 대기.
+- [x] 별도 운영 패치 배포: 운영자 승인 후 PR #7 병합(2c5b3882), Vercel Production Ready 및 유지할 예약 2개 확인.
 - [x] Verify via readback; document known and unknown invocation sources.
 
 ## Task 4 — verification and integration
 
 - [x] Run targeted regressions, full npm test, build and browser check on the real data read surface.
 - [x] Independent spec then code review; address actionable findings.
-- [ ] Commit only explicit paths, check git show --stat, merge into the starting integration branch without disturbing concurrent edits, remove worktree after merge.
+- [x] Commit only explicit paths, check git show --stat, merge into the starting integration branch without disturbing concurrent edits, remove worktree after merge.
 - [x] Record evidence and limits here.
 
 
@@ -52,3 +52,9 @@ Files: new apps/hub/lib/automation-policy.js + test, repositories/automations-le
 - Actual scheduler found: Vercel moonlight-pro-hub Production 98d920c3 (2026-09-24) still registers chief-of-staff 22:45, content-flywheel 22:30, followup-autopilot 22:00 UTC plus inquiries-sync21:00 and recompute-scores15:00. Cron Jobs is enabled; Hobby's one-hour execution window agrees with recorded07:40/08:21KST attempts. Source control cleanup never reached this production deployment. Prior documentation stating Vercel env0/no operational runs is stale.
 - Vercel CLI token gets403; signed-in browser shows current settings. Do not switch off all Cron Jobs because it also stops the two retained operational jobs. Prepared isolated production patch at codex/retire-production-crons, based on exact current production98d920c3; targeted auth/no-side-effects tests18/18.
 - No local user crontab or matching LaunchAgent/Codex/Claude scheduled-task definition found. Supabase pg_cron/pg_net extensions absent.
+
+## Production completion — 2026-09-26 19:37 KST
+
+- Patch commit 7392594c, PR https://github.com/Muuuuoouuun/moonlight_pro/pull/7, main merge 2c5b3882. Related tests 18/18 and both GitHub CI checks passed.
+- Vercel deployment C6SjyiTqb5bByXrjRYx8oKEQcAR9 is Ready in Production, attached to moonlight-pro-hub.vercel.app. Cron Jobs remains Enabled with only inquiries-sync (21:00 UTC) and recompute-scores (15:00 UTC); all three retired AI schedules are absent.
+- Local home/ledger changes remain integrated at e014da79 on 09.bigmac1.5. The production patch includes only seven retirement-related files.
