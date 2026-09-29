@@ -470,7 +470,7 @@ Do not ship:
 | Workspace membership (`org_scope`) | `apps/hub/components/hub/workspace-map.js`                   |
 | Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette}.jsx` |
 | Pages + `PAGE_MAP`                 | `apps/hub/components/hub/pages/*.jsx`, `hub-app.jsx`         |
-| Route mount                        | `apps/hub/app/dashboard/[[...path]]/page.jsx`; `app/dashboard/content/{studio,queue}/page.jsx` mount the same `HubApp`, `content/publish` redirects to `queue` |
+| Route mount                        | `apps/hub/app/dashboard/[[...path]]/page.jsx`; `app/dashboard/content/{studio,queue,publish}/page.jsx` mount the same `HubApp` (`content/publish`는 2026-09-29부터 발행 로그 화면 — 예전 큐 리다이렉트는 없앴다) |
 
 Build order when adding a new surface:
 1. Confirm tokens cover every color / size needed — do not hardcode hex values.
