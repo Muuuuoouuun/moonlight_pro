@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Button, Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
 import { CalendarOutcome } from "../calendar-outcome";
+import { PublishDue } from "./publish-due";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 import { DailyReviewCue } from '../daily-review-cue';
 import { GuruRecommendation, GuruRecommendationList } from '../guru-recommendation';
@@ -290,6 +291,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       )}
 
       <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onNavigate={onNavigate} onRetry={guruRecommendations.reload} />
+      <PublishDue />
 
       <TodaySchedule onNavigate={onNavigate} reloadKey={reloadKey} onReload={reload} />
 

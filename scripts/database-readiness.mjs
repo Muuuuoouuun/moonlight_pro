@@ -98,6 +98,7 @@ export const DATABASE_FEATURES = [
     functions: ['journal_task_plan_receipt_v1()', 'guard_social_connection_brand_key()', 'set_updated_at()'] },
   // AI 사용량: 숫자·출처 키·모델명만. service_role은 insert·select만 가진다(update·delete 없음).
   { name: 'AI 사용량 기록', migration: '20260926_0052_ai_usage_log.sql', tables: ['ai_usage_log'], functions: [] },
+  { name: '콘텐츠 예약', migration: '20260929_0055_content_schedules.sql', tables: ['content_schedules'], functions: [] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {
