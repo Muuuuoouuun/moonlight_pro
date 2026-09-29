@@ -6,7 +6,7 @@ import { deriveScheduleState, latestSweepBoundary, validateScheduleInput } from 
 // 콘텐츠 예약 — 결과물마다 올릴 시각 하나(알림 방식). 스펙: docs/design-studies/2026-09-28-content-publishing-flow/.
 // 상태 전이: scheduled → published | missed(밤 정리) | cancelled, missed·cancelled → scheduled(다시 예약).
 const TABLE = 'content_schedules';
-const SELECT = 'workspace_id,variant_id,content_id,title,channel,scheduled_at,status,revision,published_at,missed_at,updated_at';
+const SELECT = 'workspace_id,variant_id,content_id,title,channel,scheduled_at,status,revision,published_at,missed_at,created_at,updated_at';
 const LIST_LIMIT = 100;
 const context = () => {
   const workspaceId = resolveDefaultWorkspaceId();
@@ -22,7 +22,7 @@ function scheduleFromRow(row, workspaceId, now = Date.now()) {
   return {
     variantId: row.variant_id, contentId: row.content_id, title: row.title || '', channel: row.channel || '',
     scheduledAt: new Date(row.scheduled_at).toISOString(), status: row.status, state: deriveScheduleState(row, now),
-    revision: row.revision, publishedAt: row.published_at || null, missedAt: row.missed_at || null, updatedAt: row.updated_at || null,
+    revision: row.revision, publishedAt: row.published_at || null, missedAt: row.missed_at || null, createdAt: row.created_at || null, updatedAt: row.updated_at || null,
   };
 }
 const readError = () => ({ status: 'error', schedules: [], message: '예약 목록을 불러오지 못했어요. 다시 시도해 주세요.' });

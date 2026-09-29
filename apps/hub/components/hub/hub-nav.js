@@ -163,6 +163,7 @@ const CONTENT_CHILDREN = [
   { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
   { key: 'ct-queue', label: '소재·제작', path: 'dashboard/content/queue' },
   { key: 'ct-studio', label: '원고 작성', path: 'dashboard/content/studio' },
+  { key: 'ct-publish', label: '발행', path: 'dashboard/content/publish' },
   { key: 'ct-campaigns', label: 'Campaigns', path: 'dashboard/content/campaigns' },
 ];
 
