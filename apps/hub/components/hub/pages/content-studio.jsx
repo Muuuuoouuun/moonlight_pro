@@ -60,6 +60,7 @@ export function ContentStudio({ workspace, ledger }) {
   const brandOptions = [{ value: '', label: '브랜드 선택' }, ...brands.map((brand) => ({ value: brand.id, label: brand.name || brand.label || brand.key }))];
   if (draft.brandId && !brandOptions.some((brand) => brand.value === draft.brandId)) brandOptions.push({ value: draft.brandId, label: selectedBrand?.name || '저장된 브랜드' });
   const disabled = !studio.ready || studio.busy || !!studio.recovery || !!studio.pendingMutation;
+  const isResearchSource = draft.variantType === 'base_text' && draft.channel === 'unassigned';
   const revisions = studio.history?.revisions || [];
   const variants = studio.detail?.variants || [];
   const briefCount = BRIEF_FIELDS.filter(({ key }) => draft.brief[key]?.trim()).length;
@@ -71,7 +72,7 @@ export function ContentStudio({ workspace, ledger }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(studioTextForCopy(draft));
-      toast.success(`복사했습니다. ${channelLabel(draft.channel)}에 붙여넣으세요.`);
+      toast.success(isResearchSource ? '원본 초안을 복사했습니다.' : `복사했습니다. ${channelLabel(draft.channel)}에 붙여넣으세요.`);
     } catch { toast.error('복사하지 못했습니다. 더보기 → 파일로 내보내기를 쓰거나 본문을 직접 선택해주세요.'); }
   };
   const download = () => {
@@ -213,16 +214,17 @@ export function ContentStudio({ workspace, ledger }) {
               <TextField aria-label="제목" className="studio-title-input" value={draft.title} onChange={(event) => studio.edit({ title: event.target.value })} disabled={disabled} placeholder="제목 (선택 · 목록에서 찾을 이름)" />
               <details className="studio-memo" open={memoIsOpen} onToggle={(event) => { if (event.currentTarget.open !== memoIsOpen) setMemoOpen(event.currentTarget.open); }}>
                 <summary><span>원문 메모</span><span className="studio-summary-count">{draft.sourceIdea?.trim() ? '있음' : '비어 있음'}</span></summary>
-                <TextAreaField aria-label="원문 메모" hint="떠오른 생각·계기를 적어두면 AI 초안의 재료가 됩니다. ⌘↵로 바로 AI 초안. 복사에는 포함하지 않습니다." placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={4} disabled={disabled} onCmdEnter={() => aiRunRef.current?.('draft')} />
+                <TextAreaField aria-label="원문 메모" hint={isResearchSource ? '출처를 확인한 변화 기록입니다. 복사에는 포함하지 않습니다.' : '떠오른 생각·계기를 적어두면 AI 초안의 재료가 됩니다. ⌘↵로 바로 AI 초안. 복사에는 포함하지 않습니다.'} placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={4} disabled={disabled} onCmdEnter={isResearchSource ? undefined : () => aiRunRef.current?.('draft')} />
               </details>
               {variants.length > 1 && <SelectField label="채널별 결과물" value={draft.variantId || ''} options={channelOptions} onChange={(event) => switchVariant(event.target.value)} disabled={disabled} />}
               <DraftEditor draft={draft} edit={studio.edit} disabled={disabled} onSelect={setSelection} />
-              <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} request={aiRequest} onRequestChange={(value) => { setAiRequest(value); setTemplateId(''); }}
-                templates={templates} templateId={templateId} onPickTemplate={pickTemplate} onSaveAsTemplate={() => editTemplate(null)} runRef={aiRunRef} />
+              {isResearchSource ? <p className="studio-muted studio-small">채널 미지정 원본 초안입니다. 발행할 채널을 정하면 더보기에서 해당 채널 결과물을 추가할 수 있습니다.</p> :
+                <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} request={aiRequest} onRequestChange={(value) => { setAiRequest(value); setTemplateId(''); }}
+                  templates={templates} templateId={templateId} onPickTemplate={pickTemplate} onSaveAsTemplate={() => editTemplate(null)} runRef={aiRunRef} />}
               {/* 본문이 있을 때만 하단에 붙인다 — 빈 초안에서는 비활성 복사 바가 AI 초안 버튼을 가린다. */}
               <div className="studio-export-bar" data-sticky={draft.body.trim() ? 'true' : undefined}>
                 <Button variant="primary" icon="copy" onClick={copy} disabled={!draft.body.trim()}>복사</Button>
-                <Button variant="outline" onClick={openPublication} disabled={disabled || !draft.body.trim()}>발행했음</Button>
+                <Button variant="outline" onClick={openPublication} disabled={disabled || !draft.body.trim() || isResearchSource}>발행했음</Button>
               </div>
             </div>
           </Card>
@@ -244,7 +246,7 @@ export function ContentStudio({ workspace, ledger }) {
           <div className="studio-actions">
             <Button variant="outline" icon="plus" onClick={() => setDrawer('variant')} disabled={disabled}>빈 채널 결과물 추가</Button>
           </div>
-          <p className="studio-muted studio-small">지금 글을 다른 채널용으로 바꾸려면 AI의 ‘다른 작업 → 다른 채널로 변형’을 쓰세요.</p>
+          {!isResearchSource && <p className="studio-muted studio-small">지금 글을 다른 채널용으로 바꾸려면 AI의 ‘다른 작업 → 다른 채널로 변형’을 쓰세요.</p>}
           {draft.sourceRefs.some((ref) => ref.variant_id) && draft.sourceRefs[0]?.variant_id && <Button variant="outline" disabled={disabled} onClick={() => { setDrawer(null); studio.switchVariant(draft.sourceRefs[0].variant_id); }}>원본 결과물 열기</Button>}
         </section>
         <section className="studio-stack studio-more-section" aria-label="기록">

@@ -98,6 +98,14 @@ export const DATABASE_FEATURES = [
     functions: ['journal_task_plan_receipt_v1()', 'guard_social_connection_brand_key()', 'set_updated_at()'] },
   // AI 사용량: 숫자·출처 키·모델명만. service_role은 insert·select만 가진다(update·delete 없음).
   { name: 'AI 사용량 기록', migration: '20260926_0052_ai_usage_log.sql', tables: ['ai_usage_log'], functions: [] },
+  { name: '콘텐츠 리서치함', migration: '20260930_0053_research_inbox.sql',
+    tables: ['research_briefs', 'research_brief_revisions', 'research_reviews', 'research_promotions', 'research_request_receipts'],
+    functions: ['research_command_v1(uuid,uuid,text,jsonb)'],
+    tableNoWrite: ['research_briefs', 'research_brief_revisions', 'research_reviews', 'research_promotions', 'research_request_receipts']
+      .map(name => [name, 'service_role']),
+    bodyIncludes: [['content_workflow_channel_v1(text,text)', "p_type = 'base_text'"],
+      ['research_command_v1(uuid,uuid,text,jsonb)', "insert into public.research_promotions"]],
+    constraintIncludes: [['content_variants', 'content_variants_variant_type_check', "'base_text'"]] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

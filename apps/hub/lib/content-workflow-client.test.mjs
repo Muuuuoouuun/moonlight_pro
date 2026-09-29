@@ -26,6 +26,15 @@ test('saved draft carries original source and shared brief independently of titl
   assert.equal(request.variant.title,'새 결과물 제목');
   assert.equal(request.expectedVariantUpdatedAt,variants[1].updated_at);
 });
+test('research draft opens as editable channel-unassigned base text', () => {
+  const c = api();
+  const neutral = { id:'base-1', content_id:item.id, variant_type:'base_text', channel:'unassigned', title:'검토용 원고', body:'근거를 보존한 원고', updated_at:'2026-09-30T00:00:00Z' };
+  const draft = c.draftFromDetail({ item:{ ...item, meta:{ ...item.meta, primary_variant_id:neutral.id } }, variants:[neutral] });
+  assert.equal(draft.channel,'unassigned');
+  assert.equal(c.channelLabel(draft.channel),'채널 미지정');
+  assert.equal(c.buildStudioSave(draft,'request-1').variant.variantType,'base_text');
+  assert.equal(c.buildStudioSave(draft,'request-1').variant.channel,'unassigned');
+});
 test('selection offsets preserve the second identical phrase after an emoji', () => {
   const c=api(),body='같은 말\n🙂 같은 말';
   const start=body.lastIndexOf('같은 말');

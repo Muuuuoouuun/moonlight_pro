@@ -24,8 +24,8 @@ export function emptyStudioDraft(brandId = '') {
   };
 }
 export const formatForChannel = (channel) => STUDIO_CHANNELS.find((v) => v.key === channel)?.type || 'x_thread';
-export const channelLabel = (channel) => STUDIO_CHANNELS.find((v) => v.key === channel)?.label || channel;
-export const channelForType = (type) => ({ threads_post: 'threads', card_news: 'instagram', reels_script: 'reels', blog: 'blog', blog_insight: 'blog', landing_copy: 'blog', newsletter: 'email' })[type] || 'x';
+export const channelLabel = (channel) => channel === 'unassigned' ? '채널 미지정' : STUDIO_CHANNELS.find((v) => v.key === channel)?.label || channel;
+export const channelForType = (type) => ({ base_text: 'unassigned', threads_post: 'threads', card_news: 'instagram', reels_script: 'reels', blog: 'blog', blog_insight: 'blog', landing_copy: 'blog', newsletter: 'email' })[type] || 'x';
 export function draftFromDetail({ item, variants }, variantId) {
   if (!item?.id) throw new Error('콘텐츠를 찾을 수 없습니다.');
   const candidates = (variants || []).filter((variant) => variant.content_id === item.id);
