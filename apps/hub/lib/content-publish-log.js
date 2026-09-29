@@ -18,7 +18,8 @@ export const kstDateKey = (ms) => new Date(ms + KST_OFFSET_MS).toISOString().sli
 export function buildPublishLog({ schedules = [], publishLogs = [], metricsById = {} } = {}, now = Date.now()) {
   const published = new Map();
   for (const log of publishLogs) {
-    if (log?.status !== 'published' || !log.variantId || timeOf(log.publishedAt) === null) continue;
+    if (log?.status !== 'published' || log.provider !== 'manual' || log.event !== 'operator_published'
+      || log.provenance !== 'operator_confirmed' || !log.variantId || timeOf(log.publishedAt) === null) continue;
     const previous = published.get(log.variantId);
     if (!previous || timeOf(log.publishedAt) > timeOf(previous.publishedAt)) published.set(log.variantId, log);
   }

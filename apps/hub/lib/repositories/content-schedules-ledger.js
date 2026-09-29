@@ -32,27 +32,39 @@ const INVALID_MESSAGES = { 'time-in-past': '이미 지난 시각이에요. 지�
 
 // 결과물 상태 교차 확인 — 발행 기록이 있는데 예약이 '올릴 차례'로 남는 일을 막는다(기록 저장 뒤 예약 표시 갱신이 실패해도).
 async function publishedVariantIds(workspaceId, rows) {
-  const ids = rows.filter((row) => row.status === 'scheduled').map((row) => row.variant_id).filter(isCanonicalUuid);
+  const ids = rows.filter((row) => row.status === 'scheduled' || row.status === 'missed').map((row) => row.variant_id).filter(isCanonicalUuid);
   if (!ids.length) return { ids: new Set(), failed: false };
-  const { rows: variants, error } = await fetchSupabaseRowsDetailed('content_variants', {
-    select: 'id,status', filters: [['workspace_id', eqFilter(workspaceId)], ['id', `in.(${ids.join(',')})`]], limit: ids.length,
-  });
-  if (error || !Array.isArray(variants)) return { ids: new Set(), failed: true };
-  return { ids: new Set(variants.filter((variant) => variant.status === 'published').map((variant) => variant.id)), failed: false };
+  const batches = [];
+  for (let offset = 0; offset < ids.length; offset += LIST_LIMIT) {
+    const chunk = ids.slice(offset, offset + LIST_LIMIT);
+    batches.push(fetchSupabaseRowsDetailed('content_variants', {
+      select: 'id,status', filters: [['workspace_id', eqFilter(workspaceId)], ['id', `in.(${chunk.join(',')})`]], limit: chunk.length,
+    }));
+  }
+  const results = await Promise.all(batches);
+  if (results.some(({ rows: variants, error }) => error || !Array.isArray(variants))) return { ids: new Set(), failed: true };
+  return { ids: new Set(results.flatMap(({ rows: variants }) => variants).filter((variant) => variant.status === 'published').map((variant) => variant.id)), failed: false };
 }
 
 /** scope: 'action' = 지금 올릴 글·놓친 글 / 'upcoming' = 앞으로 / 'all' = 최근 이력 포함(발행 로그). */
 export async function listContentSchedules({ scope = 'all', now = Date.now() } = {}) {
   const workspaceId = context();
   if (!workspaceId) return { status: 'preview', schedules: [], message: '예약 저장 연결이 필요합니다.' };
-  const statuses = scope === 'all' ? 'in.(scheduled,missed,published,cancelled)' : 'in.(scheduled,missed)';
+  const baseFilters = [['workspace_id', eqFilter(workspaceId)]];
+  const nowIso = new Date(now).toISOString();
+  const queries = scope === 'action' ? [
+    { order: 'scheduled_at.asc', filters: [...baseFilters, ['status', eqFilter('scheduled')], ['scheduled_at', `lte.${nowIso}`]] },
+    { order: 'scheduled_at.desc', filters: [...baseFilters, ['status', eqFilter('missed')]] },
+  ] : scope === 'upcoming' ? [
+    { order: 'scheduled_at.asc', filters: [...baseFilters, ['status', eqFilter('scheduled')], ['scheduled_at', `gt.${nowIso}`]] },
+  ] : [
+    { order: 'scheduled_at.desc', filters: [...baseFilters, ['status', 'in.(scheduled,missed,published,cancelled)']] },
+  ];
   try {
-    const { rows, error } = await fetchSupabaseRowsDetailed(TABLE, {
-      select: SELECT, order: 'scheduled_at.asc', limit: LIST_LIMIT,
-      filters: [['workspace_id', eqFilter(workspaceId)], ['status', statuses]],
-    });
-    if (error && tableMissing(error)) return { status: 'preview', schedules: [], message: '예약 테이블이 아직 없습니다. 마이그레이션 적용이 필요합니다.' };
-    if (error || !Array.isArray(rows)) return readError();
+    const results = await Promise.all(queries.map((query) => fetchSupabaseRowsDetailed(TABLE, { select: SELECT, limit: LIST_LIMIT, ...query })));
+    if (results.some(({ error }) => error && tableMissing(error))) return { status: 'preview', schedules: [], message: '예약 테이블이 아직 없습니다. 마이그레이션 적용이 필요합니다.' };
+    if (results.some(({ rows, error }) => error || !Array.isArray(rows))) return readError();
+    const rows = results.flatMap((result) => result.rows);
     const mapped = rows.map((row) => scheduleFromRow(row, workspaceId, now));
     if (mapped.some((row) => !row)) return readError();
     const published = await publishedVariantIds(workspaceId, rows);
@@ -128,22 +140,25 @@ export async function sweepContentSchedules({ now = Date.now() } = {}) {
   if (!workspaceId) return { status: 'preview', missed: 0, published: 0 };
   const boundary = new Date(latestSweepBoundary(now)).toISOString();
   try {
-    const { rows, error } = await fetchSupabaseRowsDetailed(TABLE, {
+    // Keep the scheduled work ahead of old missed history; each status gets its own batch.
+    const results = await Promise.all(['scheduled', 'missed'].map((status) => fetchSupabaseRowsDetailed(TABLE, {
       select: SELECT, order: 'scheduled_at.asc', limit: 500,
-      filters: [['workspace_id', eqFilter(workspaceId)], ['status', eqFilter('scheduled')], ['scheduled_at', `lte.${boundary}`]],
-    });
-    if (error && tableMissing(error)) return { status: 'preview', missed: 0, published: 0 };
-    if (error || !Array.isArray(rows)) return { status: 'error', missed: 0, published: 0, error: 'schedule-read-failed' };
+      filters: [['workspace_id', eqFilter(workspaceId)], ['status', eqFilter(status)], ['scheduled_at', `lte.${boundary}`]],
+    })));
+    if (results.some(({ error }) => error && tableMissing(error))) return { status: 'preview', missed: 0, published: 0 };
+    if (results.some(({ rows, error }) => error || !Array.isArray(rows))) return { status: 'error', missed: 0, published: 0, error: 'schedule-read-failed' };
+    const rows = results.flatMap((result) => result.rows);
     const published = await publishedVariantIds(workspaceId, rows);
     // 발행 여부를 확인하지 못하면 놓침으로 단정하지 않는다 — 다음 정리 때 다시 본다.
     if (published.failed) return { status: 'error', missed: 0, published: 0, error: 'variant-read-failed' };
     let missed = 0, done = 0, failed = 0;
     for (const row of rows) {
       const isPublished = published.ids.has(row.variant_id);
+      if (row.status === 'missed' && !isPublished) continue;
       const patch = isPublished
         ? { status: 'published', published_at: new Date(now).toISOString() }
         : { status: 'missed', missed_at: new Date(now).toISOString() };
-      const result = await updateSupabaseRecord(TABLE, [...scoped(workspaceId, row.variant_id), ['revision', eqFilter(row.revision)], ['status', eqFilter('scheduled')]],
+      const result = await updateSupabaseRecord(TABLE, [...scoped(workspaceId, row.variant_id), ['revision', eqFilter(row.revision)], ['status', eqFilter(row.status)]],
         { ...patch, revision: row.revision + 1, updated_at: new Date(now).toISOString() }, { returnRepresentation: true, select: SELECT });
       if (result.persisted) { if (isPublished) done += 1; else missed += 1; } else failed += 1;
     }

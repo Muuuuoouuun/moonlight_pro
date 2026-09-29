@@ -1,14 +1,14 @@
 # Vercel 배포 — Hub · Engine (클라우드 허브)
 
 > 상태: 2026-09-26 운영자 결정 — 윈도우·안드로이드 앱이 접속할 허브를 **Vercel에 먼저 배포**한다(Mac Tailscale 허브 대신). Engine도 **별도 Vercel 프로젝트**로 함께 올린다(허브 33개 파일이 `COM_MOON_ENGINE_URL`로 Engine을 부르고, 클라우드 허브는 Mac의 Tailscale Engine에 닿을 수 없다).
-> 관련: [`docs/README.md`](../README.md) §3 "Supabase 서울 리전 이관"(Vercel 환경 변수 0개 상태), 앱 셸 [`apps/desktop/README.md`](../../apps/desktop/README.md) · [`apps/android/README.md`](../../apps/android/README.md), 폰 캡처 [`galaxy-phone-capture.md`](galaxy-phone-capture.md).
+> 관련: [`docs/README.md`](../README.md) §3 "Supabase 서울 리전 이관"(2026-09-26 Hub·Engine 환경 변수 구성·배포 기록), 앱 셸 [`apps/desktop/README.md`](../../apps/desktop/README.md) · [`apps/android/README.md`](../../apps/android/README.md), 폰 캡처 [`galaxy-phone-capture.md`](galaxy-phone-capture.md).
 
 ## 1. 원칙
 
 - **시크릿 값은 저장소에 두지 않는다.** 프로덕션 값의 원본은 gitignore된 `apps/hub/.env.production.local`·`apps/engine/.env.production.local` 한 곳이고, [`scripts/vercel-env-push.mjs`](../../scripts/vercel-env-push.mjs)가 그 파일을 읽어 Vercel에 올린다. 스크립트는 키 이름만 출력한다.
 - **DB는 서울 프로젝트**(`ncgpnqfulnlshegalmbd`)다. 이 PC의 `.env.local`은 아직 구 싱가포르(`rwqefdxalmbrkybxqwxj`)를 가리키므로 값을 그대로 복사하면 안 된다 — 서울 값은 Mac의 `apps/hub/.env.local`에서 옮긴다.
 - **허브 인증 게이트는 그대로다.** `COM_MOON_OPERATOR_USERNAME`·`PASSWORD_HASH`·`SESSION_SECRET` 셋 중 하나라도 없으면 미들웨어가 503으로 닫는다(CLAUDE.md). 세 값은 운영자가 `node scripts/generate-operator-login.mjs <아이디>`로 직접 만든다 — 비밀번호는 한 번만 출력되므로 비밀번호 관리자에 저장한다.
-- **크론 인증**: 허브 `vercel.json`의 크론 3개는 Vercel이 `Authorization: Bearer $CRON_SECRET`을 붙여 부른다. 코드 주석대로 `CRON_SECRET = COM_MOON_HUB_WRITE_SECRET`로 같은 값을 둔다.
+- **크론 인증**: 허브 `vercel.json`의 크론 4개는 Vercel이 `Authorization: Bearer $CRON_SECRET`을 붙여 부른다. 코드 주석대로 `CRON_SECRET = COM_MOON_HUB_WRITE_SECRET`로 같은 값을 둔다.
 
 ## 2. 준비물 체크리스트
 

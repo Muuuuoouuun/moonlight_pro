@@ -29,6 +29,7 @@ beforeEach(() => {
       if (value.startsWith('eq.')) return String(row[key]) === value.slice(3);
       if (value.startsWith('in.(')) return value.slice(4, -1).split(',').includes(String(row[key]));
       if (value.startsWith('lte.')) return Date.parse(row[key]) <= Date.parse(value.slice(4));
+      if (value.startsWith('gt.')) return Date.parse(row[key]) > Date.parse(value.slice(3));
       return true;
     });
     const rows = tables[table];
@@ -37,7 +38,14 @@ beforeEach(() => {
       rows.push({ ...body }); return Response.json([body], { status: 201 });
     }
     if (options.method === 'PATCH') { const hit = rows.filter(matches); hit.forEach(row => Object.assign(row, body)); return Response.json(hit); }
-    return Response.json(rows.filter(matches));
+    const selected = rows.filter(matches);
+    const order = url.searchParams.get('order');
+    if (order) {
+      const [field, direction] = order.split('.');
+      selected.sort((a, b) => (Date.parse(a[field]) - Date.parse(b[field])) * (direction === 'desc' ? -1 : 1));
+    }
+    const limit = Number(url.searchParams.get('limit'));
+    return Response.json(Number.isSafeInteger(limit) && limit > 0 ? selected.slice(0, limit) : selected);
   };
 });
 after(() => {
@@ -95,6 +103,89 @@ test('list scopes: action shows due and missed only; a published variant never s
   variantReadFails = true;
   const failed = await ledger.listContentSchedules({ scope: 'action', now });
   assert.equal(failed.status, 'error', 'when publication cannot be verified, do not show a possibly-posted item as due');
+});
+
+test('all scope returns recent schedules when history exceeds the list limit', async () => {
+  for (let index = 0; index < 101; index += 1) {
+    tables.content_schedules.push({
+      workspace_id: workspace,
+      variant_id: `33333333-3333-4333-8333-${String(index).padStart(12, '0')}`,
+      content_id: contentId,
+      title: `entry ${index}`,
+      channel: 'threads',
+      scheduled_at: iso(now + index * 60000),
+      status: 'cancelled',
+      revision: 1,
+    });
+  }
+  const result = await ledger.listContentSchedules({ scope: 'all', now });
+  assert.equal(result.status, 'live');
+  assert.equal(result.schedules.length, 100);
+  assert.equal(result.schedules[0].title, 'entry 100');
+  assert.equal(result.schedules.at(-1).title, 'entry 1');
+});
+
+test('old missed history does not hide a newly due action or an upcoming reservation', async () => {
+  for (let index = 0; index < 101; index += 1) {
+    tables.content_schedules.push({
+      workspace_id: workspace,
+      variant_id: `44444444-4444-4444-8444-${String(index).padStart(12, '0')}`,
+      content_id: contentId,
+      title: `old missed ${index}`,
+      channel: 'threads',
+      scheduled_at: iso(kst(2026, 9, 1, 8) + index * 60000),
+      status: 'missed',
+      revision: 1,
+    });
+  }
+  tables.content_schedules.push(
+    { workspace_id: workspace, variant_id: v1, content_id: contentId, title: 'new due', channel: 'threads', scheduled_at: iso(kst(2026, 9, 29, 9)), status: 'scheduled', revision: 1 },
+    { workspace_id: workspace, variant_id: v3, content_id: contentId, title: 'upcoming', channel: 'threads', scheduled_at: iso(now + 3600000), status: 'scheduled', revision: 1 },
+  );
+  const action = await ledger.listContentSchedules({ scope: 'action', now });
+  assert.ok(action.schedules.some((row) => row.title === 'new due'));
+  const upcoming = await ledger.listContentSchedules({ scope: 'upcoming', now });
+  assert.deepEqual(upcoming.schedules.map((row) => row.title), ['upcoming']);
+});
+
+test('a missed schedule with a published variant is corrected on read and by the sweep', async () => {
+  const missed = {
+    workspace_id: workspace, variant_id: v2, content_id: contentId,
+    title: 'posted late', channel: 'threads', scheduled_at: iso(kst(2026, 9, 28, 21)),
+    status: 'missed', revision: 1, missed_at: iso(kst(2026, 9, 28, 22)),
+  };
+  tables.content_schedules.push(missed);
+  const action = await ledger.listContentSchedules({ scope: 'action', now });
+  assert.deepEqual(action.schedules, [], 'a confirmed post is not a missed action');
+  const all = await ledger.listContentSchedules({ scope: 'all', now });
+  assert.equal(all.schedules[0].state, 'published');
+  const swept = await ledger.sweepContentSchedules({ now });
+  assert.equal(swept.published, 1);
+  assert.equal(missed.status, 'published');
+});
+
+test('old missed history cannot crowd a newly due schedule out of the sweep', async () => {
+  for (let index = 0; index < 500; index += 1) {
+    tables.content_schedules.push({
+      workspace_id: workspace,
+      variant_id: `44444444-4444-4444-8444-${String(index).padStart(12, '0')}`,
+      content_id: contentId,
+      title: `old missed ${index}`,
+      channel: 'threads',
+      scheduled_at: iso(kst(2026, 9, 1, 8) + index * 60000),
+      status: 'missed',
+      revision: 1,
+    });
+  }
+  const due = {
+    workspace_id: workspace, variant_id: v1, content_id: contentId,
+    title: 'new due', channel: 'threads', scheduled_at: iso(kst(2026, 9, 28, 9)),
+    status: 'scheduled', revision: 1,
+  };
+  tables.content_schedules.push(due);
+  const result = await ledger.sweepContentSchedules({ now });
+  assert.equal(result.missed, 1);
+  assert.equal(due.status, 'missed');
 });
 
 test('a missing table before the migration reads as preview', async () => {

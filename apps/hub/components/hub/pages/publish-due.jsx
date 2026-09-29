@@ -14,6 +14,13 @@ export function PublishDue() {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = React.useState('');
+  const reload = schedules.reload;
+  React.useEffect(() => {
+    const refreshVisible = () => { if (document.visibilityState === 'visible') reload(); };
+    const timer = window.setInterval(refreshVisible, 60000);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshVisible); };
+  }, [reload]);
   const items = schedules.schedules.filter((row) => row.state === 'due' || row.state === 'missed');
 
   if (schedules.status === 'loading') return null;

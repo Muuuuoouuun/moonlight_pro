@@ -1,4 +1,3 @@
-begin;
 -- 콘텐츠 예약: 결과물(variant)마다 올릴 시각 하나. 알림 방식 — 올리는 것은 운영자다(자동 업로드는 보류 결정).
 -- status: scheduled(예약됨·올릴 시각이 되면 화면에서 '지금') → published | missed(그날 밤 정리 때 미발행) | cancelled(예약 해제).
 -- 행은 지우지 않는다 — 발행 로그의 예약·놓침 이력이다.
@@ -23,4 +22,3 @@ alter table public.content_schedules enable row level security;
 revoke all on public.content_schedules from public, anon, authenticated;
 grant select, insert, update, delete on public.content_schedules to service_role;
 notify pgrst, 'reload schema';
-commit;

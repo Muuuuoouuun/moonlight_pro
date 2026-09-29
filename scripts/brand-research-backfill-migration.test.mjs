@@ -35,7 +35,7 @@ test("0054 writes only researched fields and never confirms an identity", () => 
 
 test("0054 supersedes only strings that 0053 actually wrote", () => {
   const backfilled = new Map();
-  for (const m of read(BACKFILL_0053).matchAll(/'audience', '([^']*)',\s*'promise', '([^']*)',\s*'offer', '([^']*)'\s*\) \|\| coalesce\(meta, '\{\}'::jsonb\), updated_at = now\(\) where slug = '([^']*)';/g)) {
+  for (const m of read(BACKFILL_0053).matchAll(/'audience', '([^']*)',\s*'promise', '([^']*)',\s*'offer', '([^']*)'\s*\) \|\| coalesce\(meta, '\{\}'::jsonb\), updated_at = now\(\) where slug = '([^']*)' and coalesce\(meta ->> 'identity_confirmed_at', ''\) = '';/g)) {
     backfilled.set(`${m[4]}:audience`, m[1]);
     backfilled.set(`${m[4]}:promise`, m[2]);
     backfilled.set(`${m[4]}:offer`, m[3]);
@@ -70,7 +70,12 @@ test("0054 fills blanks, keeps operator input and confirmed identities, and is i
         kind text, status text not null default 'active', color_hex text, description text,
         meta jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now(), unique (workspace_id, slug));`);
     sql(read(SEED));
+    sql(`update public.brands set meta = meta || '{"identity_confirmed_at":"2026-09-20T00:00:00Z"}'::jsonb
+      where slug = 'sinabro';`);
+    const confirmedBefore0053 = sql("select meta::text from public.brands where slug = 'sinabro'");
     sql(read(BACKFILL_0053));
+    assert.equal(sql("select meta::text from public.brands where slug = 'sinabro'"), confirmedBefore0053,
+      "0053 must not fill blank fields after an operator confirms the identity");
 
     // 운영자가 앱에서 이미 손댄 상태를 흉내낸다.
     sql(`update public.brands set meta = meta || '{"audience":"운영자가 직접 쓴 대상"}'::jsonb where slug = 'classmoon';

@@ -12,7 +12,7 @@ const kst = (m, d, h, min = 0) => Date.UTC(2026, m - 1, d, h, min) - 9 * 3600 * 
 const iso = (t) => new Date(t).toISOString();
 const now = kst(9, 29, 12, 40);
 const sched = (id, patch = {}) => ({ variantId: id, contentId: `c-${id}`, title: `글 ${id}`, channel: "threads", scheduledAt: iso(kst(9, 29, 19)), status: "scheduled", revision: 1, createdAt: iso(kst(9, 28, 22)), ...patch });
-const pub = (id, patch = {}) => ({ variantId: id, contentId: `c-${id}`, status: "published", channel: "threads", title: `글 ${id}`, publishedAt: iso(kst(9, 29, 8, 34)), targetUrl: "https://www.threads.net/@a/post/1", provenance: "operator_confirmed", ...patch });
+const pub = (id, patch = {}) => ({ variantId: id, contentId: `c-${id}`, status: "published", provider: "manual", event: "operator_published", channel: "threads", title: `글 ${id}`, publishedAt: iso(kst(9, 29, 8, 34)), targetUrl: "https://www.threads.net/@a/post/1", provenance: "operator_confirmed", ...patch });
 
 function render({ schedules = [], publishLogs = [], metricsById = {}, filter = "all", selectedId = "" } = {}) {
   const allRows = buildPublishLog({ schedules, publishLogs, metricsById }, now);
