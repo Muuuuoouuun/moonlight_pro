@@ -32,6 +32,21 @@ test('Guru catalogue covers each practice domain with attributable source sectio
   assert.equal(new Set([...GURU_CARDS, ...LEGEND_CARDS].map(card => card.id)).size, GURU_CARDS.length + LEGEND_CARDS.length);
 });
 
+test('every advice prompt carries the reviewed non-use boundary from its infographic summary', () => {
+  const summaries = [
+    'apps/hub/content/guru/infographics-sales.json',
+    'apps/hub/content/guru/infographics-other.json',
+  ].flatMap(path => JSON.parse(readFileSync(resolve(repoRoot, path), 'utf8')));
+  const byId = new Map(summaries.map(summary => [summary.id, summary]));
+  for (const card of [...GURU_CARDS, ...LEGEND_CARDS]) {
+    const boundary = byId.get(card.id)?.boundary;
+    assert.ok(boundary, `${card.id}: reviewed boundary is missing`);
+    assert.equal(card.boundary, boundary, `${card.id}: card and reading summary disagree`);
+    assert.match(guidancePromptFrame(card.id), /적용하지 않을 조건:/);
+    assert.ok(guidancePromptFrame(card.id).includes(boundary), `${card.id}: mentor lost the boundary`);
+  }
+});
+
 test('sales person shelf includes every named playbook mentor plus MEDDIC creator', () => {
   assert.equal(typeof listGuidancePeople, 'function');
   const people = listGuidancePeople({ domain: 'sales' });
