@@ -58,6 +58,13 @@ Set-Location apps\hub;    npx vercel deploy --prod --yes --archive=tgz --scope m
 
 환경 변수를 바꾼 뒤에는 재배포해야 반영된다. Git 연동 자동 배포는 프로덕션 브랜치(`main`)에만 붙어 있으므로, 작업 브랜치(`09.WIN1.6`)를 올릴 때는 위 CLI `--prod` 배포를 쓴다(다른 브랜치 push는 프리뷰 배포만 만든다).
 
+### 2026-09-29~30 운영 적용 기록
+
+- `09.bigmac2.0`의 코드 커밋 `8f88824f`를 CLI로 Engine → Hub 순서로 프로덕션 배포했다. Engine `dpl_4EbvZLDfuj95BFZQReGF7RiZCT4L`, Hub `dpl_2MXaS4kxQCvtweZQEY23JochNs6V`가 `Ready`이고 각 고정 운영 URL에 연결됐다. `main` 병합은 하지 않았다.
+- 서울 DB `ncgpnqfulnlshegalmbd`에 `20260929_0053_brand_identity_audience_promise_offer.sql` → `20260929_0054_brand_research_backfill.sql` → `20260929_0055_content_schedules.sql`을 적용했다. 세 파일의 migration ledger 해시를 재조회했고 `db:check` 전 항목이 통과했다. `content_schedules`는 적용 직후 0행이었다.
+- 배포 뒤 Hub·Engine `/api/health`는 HTTP 200·`status: ok`이며 DB와 Hub→Engine 연결을 보고했다. Hub `/login`은 HTTP 200, 비로그인 `/dashboard/home`·`/dashboard/content/publish`는 `/login`으로 이동했다. 운영자 세션을 이용한 예약 저장·발행 로그 화면 왕복과 22:00 KST 크론 실행 결과는 아직 확인하지 않았다.
+- 배포 직전 전체 테스트는 3,679건 중 통과 3,666·실패 0·조건부 건너뜀 13이었다. Vercel 빌드의 Turbo 환경 변수 경고는 있었으나 양쪽 프로덕션 빌드와 런타임 헬스는 통과했다.
+
 ## 5. 확인
 
 1. `https://<hub>/login` 이 **로그인 화면**을 보여야 한다. 503이면 운영자 로그인 3값 중 하나가 빠진 것이다.
