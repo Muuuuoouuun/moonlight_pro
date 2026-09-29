@@ -42,9 +42,14 @@ export function ResearchInbox() {
   const [brandFilter, setBrandFilter] = React.useState(searchParams.get('brief') ? 'all' : searchParams.get('brand') || 'all');
   const [selectedId, setSelectedId] = React.useState(searchParams.get('brief') || null);
   const [mobileDetail, setMobileDetail] = React.useState(Boolean(searchParams.get('brief')));
-  const [drawer, setDrawer] = React.useState(false), [form, setForm] = React.useState(emptyForm);
+  const [drawer, setDrawer] = React.useState(searchParams.get('intake') === '1');
+  const [form, setForm] = React.useState(() => ({ ...emptyForm(),
+    sourceUrl: (searchParams.get('sourceUrl') || '').slice(0, 2000),
+    sourceTitle: (searchParams.get('sourceTitle') || '').slice(0, 240),
+  }));
   const [busy, setBusy] = React.useState(false), [formError, setFormError] = React.useState('');
   const pending = React.useRef(new Map());
+  const brandPrefillApplied = React.useRef(false);
 
   const reload = React.useCallback(async () => {
     setState(current => ({ ...current, status: 'loading' }));
@@ -57,6 +62,13 @@ export function ResearchInbox() {
   React.useEffect(() => {
     readJson('/api/hub/content/catalog').then(data => setCatalog(data)).catch(() => setCatalog({ status: 'error', brands: [] }));
   }, []);
+  React.useEffect(() => {
+    const brand = (catalog.brands || []).find(entry => entry.key === searchParams.get('brandKey'));
+    if (brand && !brandPrefillApplied.current) {
+      brandPrefillApplied.current = true;
+      setForm(current => ({ ...current, brandId: brand.id }));
+    }
+  }, [catalog, searchParams]);
 
   const all = state.briefs || [];
   const visible = all.filter(brief => (statusFilter === 'all' || brief.state === statusFilter)
