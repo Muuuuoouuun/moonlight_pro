@@ -4,7 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { JournalSources } from '../journal-links';
 import { GoalLinks } from '../goal-links';
-import { Button, Card, Drawer, Kbd, Skeleton, TextField, TextAreaField, SelectField, TruthBadge, useToast } from '../hub-primitives';
+import { Button, Card, Drawer, Kbd, SegmentedControl, Skeleton, TextField, TextAreaField, SelectField, TruthBadge, useToast } from '../hub-primitives';
 import { filterBrandsByWorkspace } from '../workspace-map';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { BRIEF_FIELDS, STUDIO_CHANNELS, channelLabel, channelForType, formatForChannel, exportStudioVariant, studioTextForCopy } from '@/lib/content-workflow-client';
@@ -27,6 +27,8 @@ const BLOCKERS = [
 const QUIET_SAVE = { idle: '', editing: '입력 중', saving: '저장 중…', saved: '저장됨' };
 const LOUD_SAVE = { local: '서버 미연결', error: '서버 저장 미확인', conflict: '최신 내용 확인 필요' };
 const REASONS = { checkpoint: '직접 저장한 버전', before_apply: 'AI 적용 전', after_apply: 'AI 적용 후', before_restore: '복원 전', branch_source: '채널 변형에 사용한 원본', branch: '파생 결과물' };
+// 형식 탭 — 기본은 스레드. 채널 7종 전체는 더보기의 '빈 채널 결과물 추가'에 그대로 있다(2026-09-29 확정).
+const FORMAT_TABS = [{ key: 'threads', label: '스레드' }, { key: 'instagram', label: '카드뉴스' }, { key: 'youtube_shorts', label: '유튜브' }];
 const AI_REQUEST_KEY = 'mlp.studio.aiRequest';
 const PUBLISHED_NOTICE = '발행을 기록했습니다. 다음 글로 넘어갈까요?';
 const dateLabel = (value) => value ? new Date(value).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
@@ -156,15 +158,28 @@ export function ContentStudio({ workspace, ledger }) {
     else toast.error(result.message || '템플릿을 삭제하지 못했습니다.');
   };
   const openMentor = (mode) => { setDrawer(null); setMentorMode(mode); setMentorOpen(true); };
-  const createVariant = async () => {
-    const type = formatForChannel(newChannel);
+  const createVariantFor = async (channel) => {
+    const type = formatForChannel(channel);
     const body = type === 'card_news' ? '{"slides":[]}' : type === 'reels_script' ? '{"scenes":[]}' : '';
-    const result = await studio.mutate({ action: 'create_variant', variant: { title: draft.variantTitle || draft.title, body, variantType: type, channel: newChannel } });
+    const result = await studio.mutate({ action: 'create_variant', variant: { title: draft.variantTitle || draft.title, body, variantType: type, channel } });
     if (result) {
       setDrawer(null);
       setSelection(null);
-      toast.success('새 채널 결과물을 추가했습니다.');
+      setMemoOpen(null);
     }
+    return result;
+  };
+  const createVariant = async () => {
+    if (await createVariantFor(newChannel)) toast.success('새 채널 결과물을 추가했습니다.');
+  };
+  // 형식 탭: 이미 있는 결과물이면 전환, 아직 없으면 빈 결과물을 만든다(원문 메모는 모든 형식이 함께 쓴다).
+  const pickFormat = async (channel) => {
+    if (channel === draft.channel || disabled) return;
+    const existing = variants.find((variant) => (variant.channel || channelForType(variant.variant_type)) === channel);
+    if (existing) return switchVariant(existing.id);
+    if (!draft.contentId && !draft.body.trim()) { studio.edit({ channel, variantType: formatForChannel(channel) }); return; }
+    if (await createVariantFor(channel)) toast.success(`${channelLabel(channel)} 결과물을 만들었습니다. 원문 메모로 AI 초안을 만들 수 있습니다.`);
+    else toast.error(`${channelLabel(channel)} 결과물을 만들지 못했습니다. 저장이 확인된 뒤 다시 눌러주세요. 쓰던 글은 그대로입니다.`);
   };
   const loud = studio.loadError ? '불러오기 실패' : LOUD_SAVE[studio.saveState];
   const quiet = !studio.ready ? '' : studio.saveState === 'saved' && draft.status === 'published' ? '발행 기록됨' : QUIET_SAVE[studio.saveState] ?? '';
@@ -207,6 +222,7 @@ export function ContentStudio({ workspace, ledger }) {
             <Button variant="outline" onClick={() => studio.recover(false)}>{studio.recovery.unavailable ? '서버 다시 불러오기' : '서버 저장본 사용'}</Button>
           </div>
         </Card>}
+        <SegmentedControl label="형식" value={draft.channel} options={FORMAT_TABS} onChange={pickFormat} className="studio-format-tabs" />
         <section className="studio-main" aria-label="원고 작성">
           <Card className="studio-editor-card">
             <div className="studio-stack">
