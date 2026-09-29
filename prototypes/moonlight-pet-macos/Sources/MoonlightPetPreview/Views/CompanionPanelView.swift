@@ -103,7 +103,7 @@ struct CompanionPanelView: View {
                 }
                 .disabled(model.capturedMemos.isEmpty || !model.memoDraft.isEmpty
                           || model.isCapturingMemo || model.hub.hasPendingMemo)
-                Button("Council에서 이어서", action: model.continueMemoInCouncil)
+                Button("이 메모로 담당자에게 묻기", action: model.continueMemoInCouncil)
                 Button("새 항목으로 Hub에 저장", action: model.saveMemoAsNewToHub)
                     .disabled(!model.hub.canSaveMemoAsNew
                               || model.memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -133,7 +133,7 @@ struct CompanionPanelView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .foregroundStyle(Palette.glassInkMuted)
-        .help("메모 · Office · Council · 집중")
+        .help("메모 · Office 대화 · 회의실 · 집중")
         .accessibilityLabel("빠른 기능 더보기")
     }
 
