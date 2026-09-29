@@ -1,0 +1,88 @@
+.hub-app .home-morning {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 32px;
+  min-width: 0;
+}
+
+.hub-app .home-morning__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.hub-app .home-morning__heading h3 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.hub-app .home-morning__card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.hub-app .home-morning__intro {
+  padding: 20px var(--fx-card-pad) 14px;
+}
+
+.hub-app .home-morning__intro h4 {
+  margin: 8px 0 0;
+  color: var(--fg);
+  font-size: 21px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.hub-app .home-morning__loading,
+.hub-app .home-morning__rows {
+  margin: 0 var(--fx-card-pad);
+  border-top: 1px solid var(--line-soft);
+}
+
+.hub-app .home-morning__loading { padding: 14px 0; }
+
+.hub-app .home-morning__row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.hub-app .home-morning__row:last-child { border-bottom: 0; }
+.hub-app .home-morning__row dt { color: var(--fg-dim); font-size: 11px; }
+.hub-app .home-morning__row dd { margin: 0; color: var(--fg); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+
+.hub-app .home-morning__tip {
+  margin: 6px var(--fx-card-pad) 18px;
+}
+
+.hub-app .home-morning__tip .guidance-inline-tip {
+  background: var(--surface-2);
+}
+
+.hub-app .home-morning__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px var(--fx-card-pad);
+  background: var(--surface-2);
+}
+
+.hub-app .home-morning__source { color: var(--fg-dim); font-size: 10.5px; line-height: 1.5; }
+.hub-app .home-morning__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 600px) {
+  .hub-app .home-morning { padding-top: 24px; }
+  .hub-app .home-morning__heading { align-items: flex-start; flex-wrap: wrap; }
+  .hub-app .home-morning__row { grid-template-columns: 1fr; gap: 4px; }
+  .hub-app .home-morning__footer { align-items: stretch; flex-direction: column; }
+  .hub-app .home-morning__actions { flex-wrap: nowrap; }
+  .hub-app .home-morning__actions .hub-btn { flex: 1; min-height: 44px; min-width: 0; }
+}

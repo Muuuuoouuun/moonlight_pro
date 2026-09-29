@@ -82,16 +82,20 @@ test('the inline tip renders as one source-backed accessible button without requ
   assert.doesNotMatch(css, /#[\da-fA-F]{3,8}\b|rgba?\(|oklch\(/);
 });
 
-test('Today and Overview each place one tip between the named sections', () => {
+test('Home, Today, and Overview each place one tip in their named section', () => {
   const today = read('./pages/daily-brief.jsx');
   const overview = read('./pages/overview.jsx');
+  const home = read('./pages/home.jsx');
+  const homeBrief = read('./pages/home-morning-brief.jsx');
   assert.equal((today.match(/<GuidanceInlineTip\b/g) || []).length, 1);
   assert.equal((overview.match(/<GuidanceInlineTip\b/g) || []).length, 1);
+  assert.equal((homeBrief.match(/<GuidanceInlineTip\b/g) || []).length, 1);
   assert.match(today, /<TaskToday[\s\S]*?<GuidanceInlineTip\s+variant="today"[\s\S]*?<FocusSlots/);
+  assert.match(home, /<HomeMorningBrief\b/);
+  assert.match(homeBrief, /<GuidanceInlineTip\s+variant="today"/);
   const chartStart = overview.indexOf('작업·기획 활동 추이');
   const tip = overview.indexOf('<GuidanceInlineTip variant="overview"');
   const domainPanels = overview.indexOf('hub-grid--split', chartStart);
   assert.ok(chartStart >= 0 && tip > chartStart && domainPanels > tip);
-  assert.doesNotMatch(read('./pages/home.jsx'), /GuidanceInlineTip/);
   assert.doesNotMatch(read('./pages/content-studio.jsx'), /GuidanceInlineTip/);
 });

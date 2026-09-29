@@ -4,9 +4,13 @@ import { test } from 'node:test';
 
 const moduleUrl = new URL('./home-morning-brief.js', import.meta.url);
 const module = existsSync(moduleUrl) ? await import(moduleUrl.href) : {};
-const { buildHomeMorningBrief } = module;
+const { buildHomeMorningBrief, formatHomeClock } = module;
 
 const now = new Date('2026-09-29T00:15:00.000Z'); // 09:15 Seoul
+
+test('shared Home clock keeps the existing fallback for an invalid schedule time', () => {
+  assert.equal(formatHomeClock('invalid-date'), '--:--');
+});
 
 test('Home morning brief uses a confirmed urgent KA, next timed event, and picked focus progress', () => {
   assert.equal(typeof buildHomeMorningBrief, 'function');
