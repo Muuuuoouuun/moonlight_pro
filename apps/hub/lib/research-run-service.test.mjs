@@ -23,3 +23,37 @@ test('failed discovery with no readable originals is durably recorded as failure
 test('unknown terminal request replay stays an error receipt and never restarts paid work',async()=>{
   const deps=dependencies({rpc:async()=>({ok:true,data:{status:'duplicate',run:{id:R,status:'unknown',reason:'model-outcome-unknown'}}}),discover:async()=>{throw Error('must not discover');}});const result=await runResearchPreparation(command,deps);assert.equal(result.status,'error');assert.equal(result.run.status,'unknown');assert.equal(result.replayed,true);
 });
+
+test('replayed scheduled receipts remain readable without adding another automation run',async()=>{
+  for(const runStatus of ['ok','running','error','partial']){
+    const receipt={status:runStatus,replayed:true,run:{id:R,status:runStatus,preparedCount:1}};
+    const result=await runResearchSweep({now:new Date('2026-10-01T08:15:00+09:00'),env:{COM_MOON_RESEARCH_ENABLED:'true'},
+      run:async()=>receipt,record:async()=>assert.fail('replay must not insert automation rows')});
+    assert.equal(result.status,['error','partial'].includes(runStatus)?'partial':'ok');
+    assert.deepEqual(result.runs,[receipt,receipt,receipt]);
+    assert.equal(result.automationRecorded,false);assert.equal(result.automationLog,'not-needed');
+  }
+});
+
+test('fresh successful, failed, running and interrupted attempts still record their actual sweep',async()=>{
+  for(const fresh of [{status:'ok',run:{id:R}}, {status:'error',run:{id:R}}, {status:'running',attempted:true,replayed:true,run:{id:R}}, null]){
+    let writes=0,logged,index=0;
+    const result=await runResearchSweep({now:new Date('2026-10-01T08:15:00+09:00'),env:{COM_MOON_RESEARCH_ENABLED:'true'},
+      run:async()=>{if(index++===0){if(fresh===null)throw Error('private interrupted exception');return fresh;}return {status:'ok',replayed:true,run:{id:R}};},
+      record:async input=>{writes++;logged=input;return {persisted:true};}});
+    assert.equal(writes,1);assert.equal(result.automationRecorded,true);assert.equal(result.automationLog,'saved');
+    assert.deepEqual(logged.output.runs,result.runs);assert.equal(logged.status,result.status==='ok'?'success':'failure');
+    assert.equal(JSON.stringify(result).includes('private interrupted exception'),false);
+  }
+});
+
+test('automation log failure is visible without throwing or repeating paid preparation',async()=>{
+  for(const record of [async()=>{throw Error('private database exception');},async()=>({persisted:false}),async()=>null]){
+    let attempts=0;
+    const result=await runResearchSweep({now:new Date('2026-10-01T10:15:00+09:00'),env:{COM_MOON_RESEARCH_ENABLED:'true'},
+      run:async()=>{attempts++;return {status:'ok',run:{id:R,preparedCount:1}};},record});
+    assert.equal(attempts,1);assert.equal(result.status,'ok');assert.equal(result.runs[0].run.preparedCount,1);
+    assert.equal(result.automationRecorded,false);assert.equal(result.automationLog,'error');
+    assert.equal(JSON.stringify(result).includes('private database exception'),false);
+  }
+});

@@ -71,12 +71,17 @@ export async function runResearchPreparation(input,{workspaceId=resolveDefaultWo
 }
 
 export async function runResearchSweep({now=new Date(),env=process.env,workspaceId=resolveDefaultWorkspaceId(),run=input=>runResearchPreparation(input,{env,workspaceId}),record=recordAutomationRun}={}) {
-  if(env.COM_MOON_RESEARCH_ENABLED!=='true')return {status:'disabled',reason:'research-not-enabled',runs:[]};
+  if(env.COM_MOON_RESEARCH_ENABLED!=='true')return {status:'disabled',reason:'research-not-enabled',runs:[],automationRecorded:false,automationLog:'not-needed'};
   const requests=scheduledResearchRequests(now),runs=[];
-  if(!requests.length)return {status:'idle',reason:'outside-research-window',runs};
+  if(!requests.length)return {status:'idle',reason:'outside-research-window',runs,automationRecorded:false,automationLog:'not-needed'};
   const settled=await Promise.allSettled(requests.map(request=>run(request)));
   settled.forEach((entry,index)=>{if(entry.status==='fulfilled'){const {httpStatus,...result}=entry.value;runs.push(result);}else runs.push({status:'error',reason:'research-run-interrupted',brand:requests[index].brand});});
   const status=runs.some(result=>['error','unknown','partial'].includes(result.status))?'partial':'ok';
-  const recorded=await record({workspaceId,key:'research-sweep',name:'브랜드 리서치 준비',status:status==='ok'?'success':'error',correlationId:`research-sweep:${requests.map(request=>request.requestId).join(':')}`,input:{brands:requests.map(request=>request.brand),scheduledAt:now.toISOString()},output:{runs,summary:`리서치 ${runs.reduce((sum,item)=>sum+(item.run?.preparedCount||0),0)}개 준비`},errorMessage:status==='partial'?'research-partial':null,startedAt:now.toISOString()});
-  return {status,runs,automationRecorded:recorded.persisted===true};
+  // Re-reading a durable receipt is not another automation execution.
+  if(runs.every(result=>result.replayed===true&&result.attempted!==true&&result.reason!=='research-run-interrupted'))return {status,runs,automationRecorded:false,automationLog:'not-needed'};
+  let recorded;
+  try{recorded=await record({workspaceId,key:'research-sweep',name:'브랜드 리서치 준비',status:status==='ok'?'success':'failure',correlationId:`research-sweep:${requests.map(request=>request.requestId).join(':')}`,input:{brands:requests.map(request=>request.brand),scheduledAt:now.toISOString()},output:{runs,summary:`리서치 ${runs.reduce((sum,item)=>sum+(item.run?.preparedCount||0),0)}개 준비`},errorMessage:status==='partial'?'research-partial':null,startedAt:now.toISOString()});}
+  catch{/* Log availability never discards results or retries paid preparation. */}
+  const automationRecorded=recorded?.persisted===true;
+  return {status,runs,automationRecorded,automationLog:automationRecorded?'saved':'error'};
 }
