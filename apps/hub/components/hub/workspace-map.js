@@ -58,6 +58,13 @@ export function inquiryScopeForWorkspace(workspace) {
   return ['classin', 'personal', 'unclassified'].includes(workspace) ? workspace : 'all';
 }
 
+// Reports keep the explicit content lane; unclassified reports are never inferred from brands.
+export function reportScopeForWorkspace(workspace) {
+  if (workspace === 'classin' || workspace === 'company') return 'company';
+  if (workspace === 'brand' || workspace === 'personal') return 'personal';
+  return workspace === 'content' ? 'content' : 'all';
+}
+
 export function isWorkspace(ws) {
   return Boolean(ws) && Object.prototype.hasOwnProperty.call(WORKSPACES, ws);
 }
