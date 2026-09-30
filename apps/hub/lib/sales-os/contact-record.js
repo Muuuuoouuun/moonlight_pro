@@ -216,6 +216,65 @@ export function recordWindowLayout({ recording = false, mobile = false } = {}) {
   };
 }
 
+// 같은 칸의 두 모드(Q-CR6 · 권장, 화면 확인 뒤 확정) — 연락 기록 | 메모. 모드가 다르면 저장되는 곳이
+// 다르다: 연락 기록은 record_contact_outcome_v1(활동 + 고객 행), 메모는 일지 메모(journal)다.
+export const RECORD_MODES = [
+  { key: "contact", label: "연락 기록" },
+  { key: "memo", label: "메모" },
+];
+
+export function normalizeRecordMode(mode) {
+  return mode === "memo" ? "memo" : "contact";
+}
+
+// 머리 문장 — 저장하면 무엇이 바뀌는지 미리 말한다. 코드가 실제로 하는 일만 적는다:
+//   연락 기록 — RPC(0042)가 고객 행의 last_touch_at(계약 고객은 updated_at)과 next_action을 언제나 새로
+//               쓴다. 다음 약속을 비워 저장하면 약속이 '기약 없음'으로 바뀐다 — "그대로"가 아니다.
+//   메모      — journal_workflow_v1의 save는 journal_* 테이블만 쓴다. 고객 행 · 활동을 건드리지 않는다.
+const RECORD_MODE_SENTENCES = {
+  contact: "연락한 일을 남겨요 · 마지막 연락일과 다음 약속이 바뀌어요",
+  memo: "연락이 아니에요 · 마지막 연락일과 약속은 그대로예요",
+};
+
+export function recordModeSentence(mode) {
+  return RECORD_MODE_SENTENCES[normalizeRecordMode(mode)];
+}
+
+// 모드 전환 칸의 글자. 메모를 쓰는 동안 앞서 누른 연락 기록이 실패하면 그 사실(contactIssue — 저장 줄의
+// 제목과 같은 말: "저장 못 함" · "일부 저장")이 '연락 기록' 칸 이름에 글자로 선다 — 보이지 않는 모드에
+// 원인을 숨겨 두지 않는다(돌아가면 쓰던 글과 원인이 그대로 있다). 연락 기록을 보고 있을 때는 저장 줄이 말한다.
+export function recordModeOptions({ mode = "contact", contactIssue = "" } = {}) {
+  const flag = normalizeRecordMode(mode) === "memo" ? String(contactIssue || "") : "";
+  return RECORD_MODES.map((option) => (
+    option.key === "contact" && flag ? { ...option, label: `${option.label} · ${flag}` } : option
+  ));
+}
+
+// 메모를 쓰는 동안 앞서 누른 연락 기록이 실패했다 — 메모 칸의 저장 줄 위에 서는 원인 줄(RecordSaveLine의
+// note: 1px 위급 레일 + 제목). 전환 칸의 이름(흐린 글자)만으로는 저장 실패가 읽히지 않는다: 영속 실패는
+// 위급 표식과 원인을 함께 말한다(DESIGN §5.3). 빨강은 이 줄의 레일과 제목 한 곳뿐이고, 자세한 원인 · 쓰던 글 ·
+// 다시 저장은 연락 기록 쪽에 그대로 있다 — 여기서는 어디로 가면 되는지만 말한다.
+const MEMO_MODE_CONTACT_TEXT = {
+  "일부 저장": "요약은 저장됐어요 · 연락 기록으로 돌아가면 자세히를 다시 저장할 수 있어요.",
+};
+export function memoModeContactNote(contactIssue = "") {
+  const issue = String(contactIssue || "");
+  if (!issue) return null;
+  return {
+    tone: "error",
+    title: `연락 기록 · ${issue}`,
+    text: MEMO_MODE_CONTACT_TEXT[issue] || "연락 기록으로 돌아가면 쓰던 글과 원인이 그대로 있어요.",
+  };
+}
+
+// 메모 모드가 있는 기록창에서는 '메모만' 채널을 메모 모드가 대신한다 — 같은 뜻의 길을 둘로 두지 않는다
+// ('메모만'으로 남긴 연락 기록은 RPC를 타므로 마지막 연락일과 약속을 바꾼다). 다른 진입점이나 쓰던 초안이
+// 이미 '메모만'을 골라 둔 폼은 그 칸을 남긴다(고른 값이 사라지지 않게).
+export function recordChannelOptions(options = [], kind = "", { memoMode = false } = {}) {
+  if (!memoMode) return options;
+  return options.filter((option) => option.key !== "note" || kind === "note");
+}
+
 // 한글 조합을 끝내는 Enter(isComposing · keyCode 229)는 글자를 확정할 뿐이다 — 어느 단축키도 아니다.
 // React 합성 이벤트(nativeEvent)와 창에서 받은 원래 이벤트 둘 다 읽는다.
 const composingEnter = (event) => Boolean(event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229);

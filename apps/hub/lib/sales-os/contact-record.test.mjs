@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -13,14 +14,20 @@ import {
   draftPlaceLabel,
   draftRestoredCopy,
   RECORD_DRAWER_WIDTH,
+  RECORD_MODES,
   addSavedNoteRow,
   applyReceiptEvent,
   detailFieldHeight,
   isContactChannel,
   isPlainEnter,
   isSaveChord,
+  memoModeContactNote,
+  normalizeRecordMode,
   reactionRequired,
   receiptTimeLabel,
+  recordChannelOptions,
+  recordModeOptions,
+  recordModeSentence,
   recordReceipt,
   recordSaveLabel,
   recordSaveLine,
@@ -445,4 +452,72 @@ test("a titled failure keeps its cause — the wide window names 저장 못 함 
   assert.equal(recordSaveLine({ showMissing: true, state: "error", errorMsg: "x", errorTitle: "저장 못 함" }).note.title, undefined);
   assert.equal(recordSaveLine({ state: "warn", warnCopy: "w", errorTitle: "저장 못 함" }).note.title, undefined);
   assert.equal(recordSaveLine({ draftHint: "초안", errorTitle: "저장 못 함" }).note.title, undefined);
+});
+
+// ── 2026-09-30 넓은 기록창 ⑥ — 같은 칸의 두 모드(Q-CR6) ─────────────────────────────────────
+
+test("the record window has two modes and anything unknown is a contact record", () => {
+  assert.deepEqual(RECORD_MODES, [{ key: "contact", label: "연락 기록" }, { key: "memo", label: "메모" }]);
+  assert.equal(normalizeRecordMode("memo"), "memo");
+  for (const value of ["contact", "", undefined, null, "note", "MEMO"]) assert.equal(normalizeRecordMode(value), "contact", String(value));
+});
+
+test("the mode sentence states what saving changes — and the code it describes really does that", () => {
+  assert.equal(recordModeSentence("contact"), "연락한 일을 남겨요 · 마지막 연락일과 다음 약속이 바뀌어요");
+  assert.equal(recordModeSentence("memo"), "연락이 아니에요 · 마지막 연락일과 약속은 그대로예요");
+  assert.equal(recordModeSentence(), recordModeSentence("contact"));
+
+  // 연락 기록 — record_contact_outcome_v1의 가장 최근 정의가 고객 행의 next_action과 마지막 접점을 언제나 쓴다.
+  const dir = new URL("../../../../supabase/migrations/", import.meta.url);
+  const files = readdirSync(dir).filter((name) => name.endsWith(".sql")).sort();
+  const read = (name) => readFileSync(new URL(name, dir), "utf8");
+  const outcome = files.filter((name) => /create or replace function public\.record_contact_outcome_v1/.test(read(name))).at(-1);
+  assert.ok(outcome, "연락 기록 RPC 정의가 있다");
+  const rpc = read(outcome);
+  assert.match(rpc, /update public\.leads\s+set next_action = v_next_action,\s+last_touch_at = now\(\),/);
+  assert.match(rpc, /update public\.customer_accounts\s+set next_action = v_next_action,\s+updated_at = now\(\),/);
+
+  // 메모 — 일지 메모 RPC(journal_workflow_v1)를 정의하는 어느 마이그레이션도 고객 행 · 활동을 쓰지 않는다.
+  const journal = files.filter((name) => /create or replace function public\.journal_workflow_v1/.test(read(name)));
+  assert.ok(journal.length > 0, "일지 메모 RPC 정의가 있다");
+  for (const name of journal) {
+    assert.doesNotMatch(read(name), /(?:update|insert into)\s+public\.(?:leads|customer_accounts|crm_activities|deals)\b/, name);
+  }
+});
+
+test("a contact record that failed while a memo is being written is named on the mode switch", () => {
+  assert.deepEqual(recordModeOptions(), RECORD_MODES);
+  assert.deepEqual(recordModeOptions({ mode: "memo" }), RECORD_MODES);
+  assert.deepEqual(recordModeOptions({ mode: "memo", contactIssue: "저장 못 함" }).map((o) => [o.key, o.label]), [["contact", "연락 기록 · 저장 못 함"], ["memo", "메모"]]);
+  assert.deepEqual(recordModeOptions({ mode: "memo", contactIssue: "일부 저장" })[0].label, "연락 기록 · 일부 저장");
+  // 연락 기록을 보고 있을 때는 저장 줄이 말한다 — 전환 칸에 같은 말을 두 번 하지 않는다.
+  assert.deepEqual(recordModeOptions({ mode: "contact", contactIssue: "저장 못 함" }), RECORD_MODES);
+  assert.deepEqual(recordModeOptions({ mode: "memo", contactIssue: undefined }), RECORD_MODES);
+});
+
+test("the failed contact record also stands as a railed cause line above the memo save row — dim text alone is not a failure signal", () => {
+  // RecordSaveLine이 그대로 그리는 모양(tone error + title → 1px 위급 레일 + 제목, 본문은 본문색).
+  assert.deepEqual(memoModeContactNote("저장 못 함"), {
+    tone: "error", title: "연락 기록 · 저장 못 함", text: "연락 기록으로 돌아가면 쓰던 글과 원인이 그대로 있어요.",
+  });
+  // 일부 저장은 요약이 이미 남았다는 것과 무엇을 다시 하면 되는지를 말한다.
+  assert.deepEqual(memoModeContactNote("일부 저장"), {
+    tone: "error", title: "연락 기록 · 일부 저장", text: "요약은 저장됐어요 · 연락 기록으로 돌아가면 자세히를 다시 저장할 수 있어요.",
+  });
+  // 실패가 없으면 줄도 없다 — 지어내지 않는다.
+  for (const none of ["", null, undefined]) assert.equal(memoModeContactNote(none), null);
+  assert.equal(memoModeContactNote(), null);
+  // 전환 칸의 이름과 같은 말로 시작한다(한 실패에 이름 하나).
+  assert.equal(memoModeContactNote("저장 못 함").title, recordModeOptions({ mode: "memo", contactIssue: "저장 못 함" })[0].label);
+  for (const note of [memoModeContactNote("저장 못 함"), memoModeContactNote("일부 저장")]) assert.doesNotMatch(JSON.stringify(note), /저장됨|기록됨/);
+});
+
+test("with a memo mode the 메모만 channel steps aside unless it is already chosen", () => {
+  const sheet = [{ key: "call", label: "통화" }, { key: "kakao", label: "카톡·문자" }, { key: "note", label: "메모만" }];
+  assert.equal(recordChannelOptions(sheet, "call"), sheet, "메모 모드가 없으면 그대로");
+  assert.equal(recordChannelOptions(sheet, "call", { memoMode: false }), sheet);
+  assert.deepEqual(recordChannelOptions(sheet, "call", { memoMode: true }).map((o) => o.key), ["call", "kakao"]);
+  // 이미 '메모만'을 골라 둔 폼(다른 진입점의 프리셋 · 쓰던 초안)은 그 칸을 잃지 않는다.
+  assert.deepEqual(recordChannelOptions(sheet, "note", { memoMode: true }).map((o) => o.key), ["call", "kakao", "note"]);
+  assert.deepEqual(recordChannelOptions(undefined, "call", { memoMode: true }), []);
 });

@@ -8,16 +8,21 @@
 // 버튼이 없다. 제안 팁도 이유만 보인다(한 사람에 팁 하나 — 무엇을 보일지는 호출처가 이미 골랐다).
 // 기록 줄은 누르면 그 자리에서 펼쳐진다: 쓰던 글을 떠나지 않는다.
 //
+// 한 줄기, 모양으로 나눈다(Q-CR6): 연락은 원, 메모는 네모 + '메모 · 연락 아님', 그 밖은 흐린 원. 거르기
+// (전체 · 연락 · 메모)는 이 칸 안의 보기 상태일 뿐이다 — 새로 읽지 않고, 받은 줄기를 걸러 최근 다섯 줄을 보인다.
+// 거른 자리가 비었을 때 "메모가 아직 없어요"는 연결 메모를 읽었을 때만 말한다 — 읽는 중이면 Skeleton, 못
+// 읽었으면 못 읽었다고 한다(recordEmptyPlan · truth.memos). 읽기 실패를 빈 상태로 그리지 않는다.
+//
 // 방금 남긴 기록은 맨 윗줄이 영수증이다(RecordReceipt) — 기록 중 → 저장 중 → 저장됨 hh:mm.
 // "저장됨"은 서버가 답한 뒤에만 선다(DESIGN §8.1 Save envelope). 무엇을 보일지는 순수 규칙
 // (lib/sales-os/record-context.js · contact-record.js의 recordReceipt)이 정하고 여기는 그리기만 한다.
 
 import React from "react";
-import { Button, Skeleton, TruthBadge } from "./hub-primitives";
+import { Button, SegmentedControl, Skeleton, TruthBadge } from "./hub-primitives";
 import { Iconed } from "./hub-icons";
 import { SuggestionTip } from "./suggestion-tip";
 import { promiseReadout } from "@/lib/sales-os/customer-list";
-import { RECORD_CONTEXT_LIMIT, recordContextRows } from "@/lib/sales-os/record-context";
+import { RECORD_CONTEXT_LIMIT, RECORD_FILTERS, filterRecordStream, recordContextRows, recordEmptyPlan } from "@/lib/sales-os/record-context";
 import "./record-window.css";
 
 // 기록 줄 영수증 — 고객 드로어의 기록 줄과 이 칸이 같이 쓴다. receipt는 recordReceipt(row)의 결과다.
@@ -88,6 +93,7 @@ function ContextRow({ row, open, onToggle }) {
 // truth: recordContextTruth(...)의 결과. onRetry(which): "activities" | "memos" 읽기를 다시.
 export function RecordContextColumn({ name = "", promise, tipReason = "", rows = [], today, truth, onRetry }) {
   const [opened, setOpened] = React.useState(() => new Set());
+  const [filter, setFilter] = React.useState("all");
   const toggle = (key) => setOpened((prev) => {
     const next = new Set(prev);
     if (next.has(key)) next.delete(key);
@@ -97,8 +103,12 @@ export function RecordContextColumn({ name = "", promise, tipReason = "", rows =
 
   const readout = promiseReadout(promise || {});
   const state = truth?.state || "live";
-  const items = state === "loading" || state === "error" ? [] : recordContextRows(rows, { today });
+  const readable = state !== "loading" && state !== "error";
+  const visible = readable ? filterRecordStream(rows, filter) : [];
+  const items = recordContextRows(visible, { today });
   const retry = truth?.retry && onRetry ? () => onRetry(truth.retry) : null;
+  // 보일 줄이 없을 때 — "없어요"는 읽은 것에만 말한다(메모를 읽는 중 · 못 읽었으면 그렇게 말한다).
+  const empty = recordEmptyPlan({ filter, total: rows.length, state, memos: truth?.memos });
 
   return (
     <aside className="record-ctx" aria-label={name ? `${name} · 읽기만` : "이 고객 · 읽기만"}>
@@ -122,6 +132,10 @@ export function RecordContextColumn({ name = "", promise, tipReason = "", rows =
           {items.length > 0 && <span className="record-ctx__hint">최근 <span className="num">{items.length}</span></span>}
           {(state === "partial" || state === "preview") && <TruthBadge state={state} reason={truth.reason || undefined} />}
           {state === "partial" && retry && <Button variant="ghost" size="xs" icon="refresh" onClick={retry}>다시 읽기</Button>}
+          {/* 거를 것이 있을 때만 — 기록이 하나도 없으면 고를 것도 없다. */}
+          {readable && rows.length > 0 && (
+            <SegmentedControl label="기록 거르기" options={RECORD_FILTERS} value={filter} onChange={setFilter} className="record-ctx__filter" />
+          )}
         </div>
         {state === "loading" ? (
           <Skeleton height={14} lines={3} label="기록 불러오는 중" />
@@ -131,7 +145,9 @@ export function RecordContextColumn({ name = "", promise, tipReason = "", rows =
             {retry && <Button variant="ghost" size="xs" onClick={retry}>다시 시도</Button>}
           </div>
         ) : items.length === 0 ? (
-          <p className="record-ctx__empty">{state === "preview" ? "연결 전이라 지난 기록을 읽을 수 없어요." : "아직 기록이 없어요."}</p>
+          empty.kind === "loading"
+            ? <Skeleton height={14} lines={2} label={empty.label} />
+            : <p className="record-ctx__empty">{empty.text}</p>
         ) : (
           <>
             <ol className="record-ctx__list">
@@ -139,8 +155,8 @@ export function RecordContextColumn({ name = "", promise, tipReason = "", rows =
                 <ContextRow key={row.key} row={row} open={opened.has(row.key)} onToggle={() => toggle(row.key)} />
               ))}
             </ol>
-            {rows.length > RECORD_CONTEXT_LIMIT && (
-              <p className="record-ctx__empty">전체 <span className="num">{rows.length}</span>건은 ‘고객 정보로’에서 봐요.</p>
+            {visible.length > RECORD_CONTEXT_LIMIT && (
+              <p className="record-ctx__empty">{RECORD_FILTERS.find((f) => f.key === filter)?.label || "전체"} <span className="num">{visible.length}</span>건은 ‘고객 정보로’에서 봐요.</p>
             )}
           </>
         )}

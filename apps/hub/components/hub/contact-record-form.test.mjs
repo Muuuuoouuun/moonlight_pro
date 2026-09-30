@@ -249,8 +249,9 @@ test("인라인 되돌리기 창은 '기록 중'이다 — 서버가 답하기 �
   const run = inline.slice(0, inline.indexOf("setPendingUndo({"));
   assert.match(run, /cur\?\.key === key \? \{ key, phase: "sending", undo: null \} : cur/);
   assert.ok(run.indexOf('phase: "sending"') < run.indexOf("persist(payload, snapshot)"), "보내기 전에 단계를 바꾼다");
-  // 답이 오면(성공·실패 모두) 진행 글자를 걷고, 성공일 때만 닫는다.
-  assert.match(run, /persist\(payload, snapshot\)\.then\(\(ok\) => \{\s*setPendingUndo\(\(cur\) => \(cur\?\.key === key \? null : cur\)\);\s*if \(ok\) onDone\?\.\(\);/);
+  // 답이 오면(성공·실패 모두) 진행 글자를 걷고, 성공일 때만 닫는다 — 그 사이 메모 모드로 옮겨 쓰고 있으면
+  // 닫지 않는다(쓰던 메모 밑에서 창이 접히지 않게, 2026-09-30 ⑥).
+  assert.match(run, /persist\(payload, snapshot\)\.then\(\(ok\) => \{\s*setPendingUndo\(\(cur\) => \(cur\?\.key === key \? null : cur\)\);\s*\/\/[^\n]*\n\s*if \(ok && !memoModeRef\.current\) onDone\?\.\(\);/);
   // 저장 줄은 그 단계를 순수 규칙(recordSaveLine)에 넘겨 글자를 받고, 그리기는 RecordSaveLine이 한다.
   assert.match(source, /const saveLine = recordSaveLine\(\{\s*pending: pendingUndo,\s*showMissing,\s*state,\s*warnCopy,\s*errorMsg,/);
   assert.match(source, /<RecordSaveLine line=\{saveLine\} onUndo=\{pendingUndo\?\.undo\} \/>/);
@@ -334,7 +335,7 @@ test("기본 배치는 지금 시트 그대로다 — 넓은 배치는 layout=\"
   // 다른 호출처(오늘 연락 · 거래 독 · 첫 화면의 ContactRecordDrawer)는 배치를 넘기지 않는다 — 작은 창 그대로.
   const shell = source.slice(source.indexOf("export function ContactRecordDrawer"));
   assert.doesNotMatch(shell, /layout=/);
-  assert.match(source, /undoMode = "inline", layout = "compact", children = null \}\) \{/);
+  assert.match(source, /undoMode = "inline", layout = "compact", children = null, mode = "contact", onModeChange, memo = null \}\) \{/);
 });
 
 test("넓은 배치는 요약 한 줄(필수) + 늘 펼친 자세히(선택) 두 칸이다", () => {
@@ -382,11 +383,13 @@ test("자세히는 쓰는 만큼 실제로 길어진다 — 상한은 화면 높
   assert.match(rule, /max-height: var\(--record-detail-max\);/);
   assert.doesNotMatch(rule, /dvh|vh\b|rem\)/);
   assert.match(rule, /resize: none;/);
-  // 높이를 실제로 맞추는 것은 폼의 레이아웃 효과다(값은 순수 detailFieldHeight — contact-record.test.mjs).
-  const effect = source.slice(source.indexOf("useLayoutEffectOnClient(() => {"), source.indexOf("// 일부 저장 — 넓은 기록창은 이미 저장된 것"));
-  assert.match(effect, /const el = detailRef\.current;\s*if \(!wide \|\| !el\) return;/);
+  // 높이를 실제로 맞추는 것은 레이아웃 효과다(값은 순수 detailFieldHeight — contact-record.test.mjs).
+  // 자세히와 메모 모드의 메모 칸이 같은 규칙(useGrowingDetail)을 쓴다 — 넓은 배치의 연락 기록에서만 자세히를 잰다.
+  const effect = source.slice(source.indexOf("export function useGrowingDetail(ref, active, value) {"), source.indexOf("const RAW_NOTE_ERROR"));
+  assert.match(effect, /useLayoutEffectOnClient\(\(\) => \{\s*const el = ref\.current;\s*if \(!active \|\| !el\) return;/);
   assert.match(effect, /el\.style\.height = "auto";\s*el\.style\.height = `\$\{detailFieldHeight\(el\)\}px`;/);
-  assert.match(effect, /\}, \[wide, form\.body\]\);/);
+  assert.match(effect, /\}, \[ref, active, value\]\);/);
+  assert.match(source, /useGrowingDetail\(detailRef, wide && !memoMode, form\.body\);/);
   // 재는 동안 칸이 최소 높이로 줄어 흐르는 칸의 위치가 당겨진다 — 재기 전 위치를 잡아 두었다가 되돌린다.
   assert.ok(effect.indexOf("const top = region ? region.scrollTop : 0;") < effect.indexOf('el.style.height = "auto";'));
   assert.match(effect, /if \(region\.scrollTop !== top\) region\.scrollTop = top;/);
@@ -564,4 +567,145 @@ test("RecordSaveLine은 제목이 있는 실패만 레일로 그린다", () => {
   for (const input of [{ state: "warn", warnCopy: "경고" }, { showMissing: true }, { draftHint: "초안" }]) {
     assert.doesNotMatch(render({ ...input, errorTitle: "저장 못 함" }), /var\(--danger\)/);
   }
+});
+
+// ── 2026-09-30 넓은 기록창 ⑥ — 같은 칸의 두 모드(Q-CR6 · 권장, 화면 확인 뒤 확정) ─────────────
+
+const memoSlot = () => React.createElement("div", { "data-memo-slot": "" }, "메모 칸");
+const modeBarOf = (html) => html.match(/<div class="record-wide__mode">.*?<\/span><\/div>/s)?.[0] || "";
+const pressedOf = (html) => [...html.matchAll(/<button type="button" class="hub-seg__btn" aria-pressed="(true|false)"[^>]*>([^<]*)</g)].map((m) => [m[2], m[1]]);
+
+test("메모 칸을 준 넓은 배치에만 '연락 기록 | 메모' 전환이 선다 — 머리 문장이 저장의 결과를 미리 말한다", () => {
+  // 메모 칸을 주지 않은 호출처(오늘 연락 · 첫 화면)와 좁은 시트에는 전환이 없다.
+  assert.doesNotMatch(renderWide(), /record-wide__mode|무엇을 남기나/);
+  assert.doesNotMatch(withWindow(tabStorage(), () => renderForm({ memo: memoSlot, mode: "memo" })), /record-wide__mode|data-memo-slot/, "좁은 시트는 지금 그대로 — 메모 모드가 없다");
+
+  const contact = renderWide({ memo: memoSlot });
+  const bar = modeBarOf(contact);
+  assert.match(bar, /role="group" aria-label="무엇을 남기나"/);
+  assert.deepEqual(pressedOf(bar), [["연락 기록", "true"], ["메모", "false"]]);
+  assert.match(bar, /<span class="record-wide__say" aria-live="polite">연락한 일을 남겨요 · 마지막 연락일과 다음 약속이 바뀌어요<\/span>/);
+  // 전환 칸은 쓰기 칸 맨 위 제자리 — 흐르는 칸 밖(앞)에 있다. 연락 기록의 칸들은 그대로다.
+  assert.ok(contact.indexOf('class="record-wide__mode"') < contact.indexOf('class="record-wide__scroll"'));
+  assert.match(contact, /record-wide__summary/);
+  assert.match(contact, /aria-label="어떻게 · 반응 · 다음 약속 · 저장"/);
+  assert.doesNotMatch(contact, /data-memo-slot/);
+
+  const memo = renderWide({ memo: memoSlot, mode: "memo" });
+  assert.deepEqual(pressedOf(modeBarOf(memo)), [["연락 기록", "false"], ["메모", "true"]]);
+  assert.match(modeBarOf(memo), />연락이 아니에요 · 마지막 연락일과 약속은 그대로예요<\/span>/);
+  // 모르는 모드 값은 연락 기록이다.
+  assert.deepEqual(pressedOf(modeBarOf(renderWide({ memo: memoSlot, mode: "draft" }))), [["연락 기록", "true"], ["메모", "false"]]);
+  // 이 창의 가장 큰 갈림이라 한 단계 크게 선다(md: 12.5px) — 아래 띠의 '어떻게'(sm: 11.5px)와 같은 급이 아니다.
+  for (const button of bar.match(/<button[^>]*>/g)) assert.match(button, /font-size:12\.5px/);
+  const channel = tagOf(contact, /<div class="hub-seg" role="group" aria-label="어떻게 연락했나"[^>]*>.*?<\/div>/s);
+  for (const button of channel.match(/<button[^>]*>/g)) assert.match(button, /font-size:11\.5px/);
+  // 모드는 호출처가 든다 — 누르면 바뀐 모드를 알리고(같은 모드를 다시 누르면 알리지 않는다), 색이 아니라 글자로 말한다.
+  assert.match(source, /if \(normalizeRecordMode\(next\) === \(memoMode \? "memo" : "contact"\)\) return;/);
+  assert.match(source, /onModeChange\?\.\(normalizeRecordMode\(next\)\);/);
+  const css = readFileSync(new URL("./record-window.css", import.meta.url), "utf8");
+  assert.match(css, /\.hub-app \.record-wide__mode \{ flex: none; [^}]*border-bottom: 1px solid var\(--line-soft\);/);
+  assert.match(css, /\.hub-app \.record-wide__say \{[^}]*font-size: 12px;[^}]*color: var\(--fg-muted\); \}/);
+});
+
+test("메모 모드는 같은 칸에서 어떻게 · 반응 · 다음 약속을 숨기고 메모 칸을 놓는다 — 연락 기록의 칸은 하나도 없다", () => {
+  let slot = null;
+  const html = renderWide({ memo: (given) => { slot = given; return memoSlot(); }, mode: "memo", aiContext: "기록 대상 · 리드" });
+  assert.match(html, /^<div class="record-wide" data-record-mode="memo">/);
+  assert.match(html, /<div data-memo-slot="">메모 칸<\/div><\/div>$/, "전환 칸 다음이 곧 메모 칸이다");
+  assert.doesNotMatch(html, /record-wide__summary|record-wide__detail|record-wide__band|record-wide__row/);
+  assert.doesNotMatch(html, /어떻게 연락했나|고객 반응|다음 약속 · 무엇을|aria-label="언제"|요약 · 한 줄|대화·메모에서 폼 자동 채우기/);
+  assert.doesNotMatch(html, /hub-btn--primary/, "주 버튼은 메모 칸의 것 하나다 — 폼은 연락 기록의 저장을 그리지 않는다");
+  // 메모 칸이 받는 것 — ⌘↵가 부를 저장 자리(saveRef)와, 앞서 누른 연락 기록의 진행 줄(없으면 null).
+  assert.deepEqual(Object.keys(slot).sort(), ["contactLine", "saveRef"]);
+  assert.deepEqual(slot.saveRef, { current: null });
+  assert.equal(slot.contactLine, null);
+  // 이 파일은 일지 메모 코드를 끌고 오지 않는다 — 메모 칸은 호출처가 넘긴다.
+  assert.doesNotMatch(source, /from "\.\/record-memo-pane"|use-memos|journal/);
+
+  // 쓰던 연락 기록은 메모 모드에서 보이지 않고, 연락 기록 모드에서는 그대로 보인다. (두 번 그리는 이 확인은
+  // 각자 같은 탭 초안을 되살린 두 폼이다 — 한 폼이 모드를 오가며 상태를 지키는 것은 아래 두 가지가 고정한다:
+  // 호출처가 폼을 다시 세우지 않는 것(customers.test.mjs — 같은 key), 그리고 메모 분기가 모든 훅 뒤에 있는 것.)
+  const draft = { kind: "meeting", reaction: null, replied: false, summary: "쓰던 요약", body: "쓰던 자세히", nextAction: "", at: "", followup: "dated" };
+  const store = { "crm-record:lead:lead-1": JSON.stringify(draft) };
+  const inMemo = withWindow(tabStorage(store), () => renderForm({ layout: "wide", memo: memoSlot, mode: "memo" }));
+  assert.doesNotMatch(inMemo, /쓰던 요약|쓰던 자세히|쓰던 내용을 불러왔어요/, "메모 모드에는 연락 기록의 글이 보이지 않는다");
+  const back = withWindow(tabStorage(store), () => renderForm({ layout: "wide", memo: memoSlot, mode: "contact" }));
+  assert.match(back, /value="쓰던 요약"/);
+  assert.match(back, />쓰던 자세히<\/textarea>/);
+
+  // 메모 분기(이른 return)는 폼의 모든 훅 뒤에 있다 — 같은 폼이 두 모드를 오가므로, 분기 아래에 훅이 하나라도
+  // 있으면 첫 전환에서 훅 순서가 어긋나 폼이 던진다(서버 렌더는 한 폼을 두 모드로 다시 그리지 않아 잡지 못한다).
+  const component = source.slice(source.indexOf("export function ContactRecordForm("));
+  const body = component.slice(0, component.indexOf("\n}\n") + 3);
+  const branchAt = body.indexOf("if (memoMode) {\n    const contactNote");
+  assert.ok(branchAt > 0, "메모 분기를 찾는다");
+  const hookCall = /\b(?:React\.)?use[A-Z]\w*\(/g;
+  assert.ok((body.slice(0, branchAt).match(hookCall) || []).length > 10, "훅은 분기 위에 있다");
+  assert.deepEqual(body.slice(branchAt).match(hookCall) || [], [], "메모 분기 아래에는 훅이 없다");
+});
+
+test("메모를 쓰는 동안 실패한 연락 기록은 전환 칸의 이름에 글자로 선다 — 돌아가면 글과 원인이 그대로다", () => {
+  const failed = { draft: { summary: "보내지 못한 요약" }, initialError: "서버에 닿지 않았어요 — 입력을 복원했습니다." };
+  const inMemo = renderWide({ memo: memoSlot, mode: "memo", ...failed });
+  assert.deepEqual(pressedOf(modeBarOf(inMemo)), [["연락 기록 · 저장 못 함", "false"], ["메모", "true"]]);
+  assert.doesNotMatch(modeBarOf(inMemo), /var\(--danger\)/, "전환 칸은 색이 아니라 글자로 말한다 — 빨강은 저장 줄 몫");
+  // 흐린 글자만으로는 저장 실패가 읽히지 않는다 — 메모 칸의 저장 줄 위에 원인 줄(1px 레일 + 제목)이 선다. 빨강은 그 한 곳.
+  const lineIn = (props) => {
+    let slot = null;
+    const html = renderWide({ memo: (given) => { slot = given; return React.createElement("div", { "data-memo-slot": "" }, given.contactLine); }, mode: "memo", ...props });
+    return { html, line: slot.contactLine };
+  };
+  const carried = lineIn(failed);
+  assert.match(carried.html, /<div class="record-wide__save"><div[^>]*><span role="alert" style="[^"]*box-shadow:inset 1px 0 0 var\(--danger\)[^"]*"><span style="color:var\(--danger\);font-weight:500">연락 기록 · 저장 못 함<\/span><span[^>]*>연락 기록으로 돌아가면 쓰던 글과 원인이 그대로 있어요\.<\/span><\/span><\/div><\/div>/);
+  assert.equal((carried.html.match(/var\(--danger\)/g) || []).length, 2, "레일과 제목 글자 — 빨강은 한 곳");
+  assert.equal((carried.html.match(/role="alert"/g) || []).length, 1);
+  // 실패가 없으면 그 줄도 없다.
+  assert.equal(lineIn().line, null);
+  // 연락 기록을 보고 있을 때는 저장 줄이 말한다 — 전환 칸에 같은 말을 두 번 하지 않는다.
+  const inContact = renderWide({ memo: memoSlot, ...failed });
+  assert.deepEqual(pressedOf(modeBarOf(inContact)), [["연락 기록", "true"], ["메모", "false"]]);
+  assert.match(inContact, />저장 못 함<\/span>/);
+  assert.match(inContact, /value="보내지 못한 요약"/);
+  // 일부 저장(요약은 됐고 자세히는 아직)도 같은 자리에 그 이름으로 선다.
+  const held = { activityId: "act-1", optimisticId: "local-1", summary: "저장된 요약", body: "못 보낸 자세히" };
+  const partial = withWindow(tabStorage({ "crm-record:lead:lead-1:rawnote": JSON.stringify(held) }), () => renderForm({ layout: "wide", memo: memoSlot, mode: "memo" }));
+  assert.deepEqual(pressedOf(modeBarOf(partial)), [["연락 기록 · 일부 저장", "false"], ["메모", "true"]]);
+  let heldSlot = null;
+  const heldHtml = withWindow(tabStorage({ "crm-record:lead:lead-1:rawnote": JSON.stringify(held) }), () => renderForm({ layout: "wide", mode: "memo", memo: (given) => { heldSlot = given; return React.createElement("div", null, given.contactLine); } }));
+  assert.ok(heldSlot.contactLine);
+  assert.match(heldHtml, />연락 기록 · 일부 저장<\/span><span[^>]*>요약은 저장됐어요 · 연락 기록으로 돌아가면 자세히를 다시 저장할 수 있어요\.<\/span>/);
+});
+
+test("메모 모드가 있으면 '메모만' 채널은 메모 모드가 대신한다 — 이미 골라 둔 값은 남긴다", () => {
+  const channelsOf = (html) => {
+    const group = html.match(/<div class="hub-seg" role="group" aria-label="어떻게 연락했나"[^>]*>.*?<\/div>/s)?.[0] || "";
+    return [...group.matchAll(/<button[^>]*>([^<]+)</g)].map((m) => m[1]);
+  };
+  assert.deepEqual(channelsOf(renderWide()), ["통화", "미팅", "카톡·문자", "메일", "메모만"], "메모 칸이 없는 호출처는 다섯 채널 그대로");
+  assert.deepEqual(channelsOf(renderWide({ memo: memoSlot })), ["통화", "미팅", "카톡·문자", "메일"]);
+  // 다른 진입점 · 쓰던 초안이 이미 '메모만'을 골랐으면 그 칸이 사라지지 않는다.
+  assert.deepEqual(channelsOf(renderWide({ memo: memoSlot, preset: { kind: "note" } })), ["통화", "미팅", "카톡·문자", "메일", "메모만"]);
+  // 좁은 시트는 메모 칸을 줘도 지금 그대로다.
+  assert.deepEqual(channelsOf(withWindow(tabStorage(), () => renderForm({ memo: memoSlot }))), ["통화", "미팅", "카톡·문자", "메일", "메모만"]);
+  assert.match(source, /const wideChannelOptions = recordChannelOptions\(channelOptions, form\.kind, \{ memoMode: memoAvailable \}\);/);
+});
+
+test("메모 모드의 ⌘↵는 메모 저장이다 — 보이지 않는 연락 기록을 저장하지 않고, 앞선 저장의 되돌리기는 메모 칸 위에 남는다", () => {
+  const handler = source.slice(source.indexOf("const onKeyDown = (e) => {"), source.indexOf("// 넓은 기록창의 ⌘↵는 어디서나 저장이다"));
+  assert.match(handler, /if \(memoMode\) \{\s*e\.preventDefault\(\);\s*memoSaveRef\.current\?\.\(\);\s*return;\s*\}/);
+  assert.ok(handler.indexOf("if (memoMode) {") < handler.indexOf("primaryAction();"), "메모 모드에서는 연락 기록의 저장에 닿지 않는다");
+  assert.ok(handler.indexOf("if (!isSaveChord(e)) return;") < handler.indexOf("if (memoMode) {"), "조합 중 Enter는 메모 모드에서도 저장이 아니다");
+  // 창 어디서나(읽기 칸 · 발판)의 ⌘↵도 같은 길을 탄다 — 최신 핸들러를 ref로 부른다.
+  assert.match(source, /saveChordRef\.current = onKeyDown;/);
+  // 메모 모드는 넓은 배치 + 메모 칸을 준 호출처만.
+  assert.match(source, /const memoAvailable = wide && typeof memo === "function";\s*const memoMode = memoAvailable && normalizeRecordMode\(mode\) === "memo";/);
+  // 앞서 누른 연락 기록이 가는 중이면 그 진행(되돌리기 포함)을 메모 칸의 띠 위에 넘긴다 — 어느 기록의 것인지 이름을 붙여서.
+  const branch = source.slice(source.indexOf("if (memoMode) {\n    const contactNote"), source.indexOf("// 넓은 기록창 — 아래 띠(어떻게"));
+  assert.match(branch, /const contactLine = pendingUndo && saveLine\.progress/);
+  // 진행 중인 줄이 없을 때만 실패 줄이 선다(둘이 같이 서지 않는다).
+  assert.match(branch, /: contactNote\s*\? <div className="record-wide__save"><RecordSaveLine line=\{\{ progress: null, note: contactNote \}\} \/><\/div>\s*: null;/);
+  assert.match(branch, /label: `연락 기록 · \$\{saveLine\.progress\.label\}`/);
+  assert.match(branch, /onUndo=\{pendingUndo\.undo\}/);
+  assert.match(branch, /\{memo\(\{ saveRef: memoSaveRef, contactLine \}\)\}/);
 });

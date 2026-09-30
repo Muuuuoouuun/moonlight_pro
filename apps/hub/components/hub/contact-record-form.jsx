@@ -18,6 +18,11 @@
 // 않는다. ⌘↵는 넓은 기록창 어디서나 저장이고(읽기 칸 · 발판 포함), 일부 저장(요약은 됐고 자세히는
 // 아직) 동안에는 이미 저장된 요약 · 띠를 잠그고 자세히만 다시 보낸다.
 //
+// 2026-09-30 넓은 기록창 ⑥(Q-CR6 · 권장): 넓은 배치에 호출처가 memo를 주면 맨 위에 '연락 기록 | 메모'가
+// 선다. 메모 모드는 어떻게 · 반응 · 다음 약속을 숨기고 호출처의 메모 칸(record-memo-pane.jsx — 일지 메모
+// 작성기)을 같은 자리에 놓는다. 이 파일은 일지 메모 코드를 import하지 않는다 — 메모를 쓰지 않는 호출처
+// (오늘 연락 · 첫 화면 · 에이전트)가 그 코드를 끌고 오지 않게. 연락 기록의 상태는 모드를 오가도 남는다.
+//
 // 드로어 껍데기는 ContactRecordDrawer가 씌운다. 상세 안에서는 오버레이를 겹치지 않으려고
 // 폼만 인라인으로 쓴다(CRM 지침 §6.2 — 활성 오버레이는 언제나 하나).
 //
@@ -42,7 +47,12 @@ import {
   draftRestoredCopy,
   isPlainEnter,
   isSaveChord,
+  memoModeContactNote,
+  normalizeRecordMode,
   reactionRequired,
+  recordChannelOptions,
+  recordModeOptions,
+  recordModeSentence,
   recordSaveLine,
   saveChordReachesRecord,
   validateContactRecord,
@@ -118,6 +128,29 @@ const rawNoteKey = (target) => JSON.stringify([target?.kind || "lead", target?.i
 // 자세히 칸의 높이 맞춤은 그리기 전에 끝나야 한 줄 늘 때마다 스크롤 막대가 번쩍이지 않는다.
 // 서버 렌더(테스트 포함)에는 레이아웃 효과가 없으므로 그때만 일반 효과로 내려간다.
 const useLayoutEffectOnClient = typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect;
+
+// 넓은 기록창의 긴 글 칸(자세히 · 메모) — 쓰는 만큼 길어지고(CSS의 최소 · 최대 높이 안에서), 그 뒤로는 칸
+// 안에서 흐른다. 높이는 detailFieldHeight(순수)가 정한다. 재는 동안 칸이 잠깐 최소 높이로 줄어 흐르는 칸의
+// 스크롤 위치가 따라 당겨지므로(글자 하나에 화면이 튄다) 재기 전 위치를 잡아 두었다가 되돌린다.
+// 연락 기록의 자세히와 메모 모드의 메모 칸이 같은 규칙을 쓴다(record-memo-pane.jsx).
+export function useGrowingDetail(ref, active, value) {
+  useLayoutEffectOnClient(() => {
+    const el = ref.current;
+    if (!active || !el) return;
+    const region = el.closest(".record-wide__scroll");
+    const top = region ? region.scrollTop : 0;
+    el.style.height = "auto";
+    el.style.height = `${detailFieldHeight(el)}px`;
+    if (!region) return;
+    if (region.scrollTop !== top) region.scrollTop = top;
+    // 글 끝에서 쓰는 중이면 새로 자란 줄이 흐르는 칸 아래에 걸리지 않게 칸 끝까지 따라 내려간다.
+    if (document.activeElement === el && el.selectionStart >= el.value.length) {
+      const under = el.getBoundingClientRect().bottom - region.getBoundingClientRect().bottom;
+      if (under > 0) region.scrollTop += under + 12;
+    }
+  }, [ref, active, value]);
+}
+
 const RAW_NOTE_ERROR = "요약은 저장됐지만 원문은 저장하지 못했습니다. 원문만 다시 저장하거나 복사해 두세요.";
 // 긴 글 칸의 이름은 배치마다 다르다 — 좁은 시트는 접어 둔 '원문 붙여넣기', 넓은 기록창은 늘 펼친
 // '자세히'다. 같은 일부 저장(요약은 됐고 긴 글은 아직)을 그 화면의 칸 이름으로 말한다.
@@ -359,9 +392,19 @@ export function RecordSaveLine({ line, onUndo }) {
 // optimisticId }): 요약은 저장됐고 긴 글(원문 · 자세히)만 실패했을 때 — 둘 다 부모의 기록 줄
 // 영수증(기록 중 → 저장 중 → 저장됨 · 일부 저장)을 위한 것이고 선택이다.
 // layout="wide"(넓은 기록창): children은 자세히 아래 흐르는 칸에 놓인다(호출처의 보조 입력).
-export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onSending, onSummaryPersisted, onPartial, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "", undoMode = "inline", layout = "compact", children = null }) {
+// memo(넓은 기록창만): ({ saveRef, contactLine }) => 메모 칸. 주면 맨 위에 '연락 기록 | 메모'가 서고,
+// mode="memo"일 때 그 칸이 요약 · 자세히 · 띠 자리를 대신한다. 모드는 호출처가 든다(mode · onModeChange) —
+// 드로어 제목처럼 폼 밖의 것도 모드를 따라가야 해서다. saveRef.current에 메모 저장 함수를 두면 ⌘↵가 부른다.
+export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onSending, onSummaryPersisted, onPartial, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "", undoMode = "inline", layout = "compact", children = null, mode = "contact", onModeChange, memo = null }) {
   const toast = useToast();
   const wide = layout === "wide";
+  // 메모 모드는 넓은 기록창에서, 메모 칸을 준 호출처만 — 좁은 시트는 지금 그대로다.
+  const memoAvailable = wide && typeof memo === "function";
+  const memoMode = memoAvailable && normalizeRecordMode(mode) === "memo";
+  // 앞서 누른 연락 기록의 답이 메모를 쓰는 중에 올 수 있다 — 그때 어느 모드였는지는 최신 값으로 읽는다.
+  const memoModeRef = React.useRef(memoMode);
+  memoModeRef.current = memoMode;
+  const memoSaveRef = React.useRef(null);
   const noteCopy = wide ? RAW_NOTE_COPY.wide : RAW_NOTE_COPY.compact;
   const { form: presetForm, capture } = React.useMemo(() => splitPreset(preset), [preset]);
   const [recoveredRawNote] = React.useState(() => recallRawNote(target));
@@ -452,6 +495,8 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   const channelOptions = SHEET_CHANNELS.some((c) => c.key === form.kind)
     ? SHEET_CHANNELS
     : [...SHEET_CHANNELS, { key: form.kind, label: channelLabel(form.kind) }];
+  // 메모 모드가 있는 기록창에서는 '메모만'을 메모 모드가 대신한다(이미 골라 둔 값이면 남긴다).
+  const wideChannelOptions = recordChannelOptions(channelOptions, form.kind, { memoMode: memoAvailable });
 
   // 다음 약속이 비었는가 — 비면 한 번 알린 뒤 기약 없음으로(직접 고른 날짜면 날짜만) 저장한다.
   const promiseEmpty = !String(form.nextAction || "").trim() && form.followup !== "dormant";
@@ -699,7 +744,8 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       // 사라진 컴포넌트에서 일어나 운영자에게 보이지 않는다.
       persist(payload, snapshot).then((ok) => {
         setPendingUndo((cur) => (cur?.key === key ? null : cur));
-        if (ok) onDone?.();
+        // 그 사이 메모 모드로 옮겨 쓰고 있으면 창을 닫지 않는다 — 쓰던 메모 밑에서 창이 접히지 않게.
+        if (ok && !memoModeRef.current) onDone?.();
       });
     });
     // 문구는 "기록 중"이다 — 이 3.5초 동안은 아무것도 보내지 않았다. "기록됨"은 서버가 saved로
@@ -735,6 +781,12 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     if (!isSaveChord(e)) return;
     // 호출처가 끼운 보조 입력(넓은 기록창의 children)의 ⌘↵는 그 입력의 것이다 — 연락 기록을 저장하지 않는다.
     if (e.target?.closest?.("[data-record-slot]")) return;
+    // 메모 모드의 ⌘↵는 메모 저장이다 — 보이지 않는 연락 기록을 저장하지 않는다.
+    if (memoMode) {
+      e.preventDefault();
+      memoSaveRef.current?.();
+      return;
+    }
     if (rawNoteSaving) return;
     e.preventDefault();
     primaryAction();
@@ -769,24 +821,9 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     detailRef.current?.focus();
   };
 
-  // 넓은 기록창의 자세히 — 쓰는 만큼 길어지고(CSS의 최소 · 최대 높이 안에서), 그 뒤로는 칸 안에서 흐른다.
-  // 높이는 detailFieldHeight(순수)가 정한다. 재는 동안 칸이 잠깐 최소 높이로 줄어 흐르는 칸의 스크롤
-  // 위치가 따라 당겨지므로(글자 하나에 화면이 튄다) 재기 전 위치를 잡아 두었다가 되돌린다.
-  useLayoutEffectOnClient(() => {
-    const el = detailRef.current;
-    if (!wide || !el) return;
-    const region = el.closest(".record-wide__scroll");
-    const top = region ? region.scrollTop : 0;
-    el.style.height = "auto";
-    el.style.height = `${detailFieldHeight(el)}px`;
-    if (!region) return;
-    if (region.scrollTop !== top) region.scrollTop = top;
-    // 글 끝에서 쓰는 중이면 새로 자란 줄이 흐르는 칸 아래에 걸리지 않게 칸 끝까지 따라 내려간다.
-    if (document.activeElement === el && el.selectionStart >= el.value.length) {
-      const under = el.getBoundingClientRect().bottom - region.getBoundingClientRect().bottom;
-      if (under > 0) region.scrollTop += under + 12;
-    }
-  }, [wide, form.body]);
+  // 넓은 기록창의 자세히 — 쓰는 만큼 길어진다(useGrowingDetail). 메모 모드에서는 자세히 칸이 없고,
+  // 돌아오면 칸이 다시 서므로 그때 다시 잰다.
+  useGrowingDetail(detailRef, wide && !memoMode, form.body);
 
   // 일부 저장 — 넓은 기록창은 이미 저장된 것(요약 · 어떻게 · 반응 · 약속)을 잠그고 자세히만 남긴다.
   // 여기서 새로 쓴 요약은 어디에도 가지 않으므로 받지 않는다. 커서는 다시 보낼 자세히로 옮긴다
@@ -851,11 +888,56 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     </>
   );
 
+  // 모드 전환(Q-CR6) — 쓰기 칸 맨 위 제자리. 머리 문장이 저장의 결과를 미리 말한다(recordModeSentence).
+  // 연락 기록의 상태(쓰던 글 · 앞선 저장의 진행 · 실패 원인)는 모드를 오가도 이 폼에 그대로 남는다.
+  const pickMode = (next) => {
+    if (normalizeRecordMode(next) === (memoMode ? "memo" : "contact")) return;
+    // 메모를 쓰다 돌아온 빈 연락 기록은 지금부터 잰다(기록 소요 시간에 메모 쓴 시간을 섞지 않는다).
+    if (next === "contact" && untouched) startedAtRef.current = Date.now();
+    onModeChange?.(normalizeRecordMode(next));
+  };
+  // 메모를 쓰는 동안 실패한 연락 기록의 이름("저장 못 함" · "일부 저장") — 전환 칸과 메모 칸 위의 원인 줄이 같이 쓴다.
+  const contactIssue = state === "error" ? saveLine.note?.title || "" : "";
+  const modeBar = memoAvailable && (
+    <div className="record-wide__mode">
+      {/* 이 창의 가장 큰 갈림이라 아래 띠의 칸(어떻게 · 반응)과 읽기 칸의 거르기보다 한 단계 크게 선다. */}
+      <SegmentedControl
+        label="무엇을 남기나"
+        size="md"
+        options={recordModeOptions({ mode: memoMode ? "memo" : "contact", contactIssue })}
+        value={memoMode ? "memo" : "contact"}
+        onChange={pickMode}
+      />
+      <span className="record-wide__say" aria-live="polite">{recordModeSentence(memoMode ? "memo" : "contact")}</span>
+    </div>
+  );
+
+  // 메모 모드 — 같은 칸, 다른 기록. 요약 · 자세히 · 띠 자리를 호출처의 메모 칸이 대신한다(어떻게 · 반응 ·
+  // 다음 약속 없음). 앞서 누른 연락 기록이 아직 가는 중이면 그 진행(기록 중 · 되돌리기 → 저장 중)을 메모 칸의
+  // 띠 위에 그대로 보인다 — 모드를 옮겼다고 되돌리기가 사라지지 않는다. 그 연락 기록이 실패했으면 같은 자리에
+  // 원인 줄(레일 + 제목)이 선다(memoModeContactNote) — 보이지 않는 모드의 저장 실패를 흐린 글자에만 두지 않는다.
+  // 이 분기는 모든 훅 뒤에 있어야 한다 — 같은 폼이 두 모드를 오가므로 분기 아래에 훅을 두면 순서가 어긋난다.
+  if (memoMode) {
+    const contactNote = memoModeContactNote(contactIssue);
+    const contactLine = pendingUndo && saveLine.progress
+      ? <div className="record-wide__save"><RecordSaveLine line={{ progress: { ...saveLine.progress, label: `연락 기록 · ${saveLine.progress.label}` }, note: null }} onUndo={pendingUndo.undo} /></div>
+      : contactNote
+        ? <div className="record-wide__save"><RecordSaveLine line={{ progress: null, note: contactNote }} /></div>
+        : null;
+    return (
+      <div ref={rootRef} className="record-wide" data-record-mode="memo" onKeyDown={onKeyDown}>
+        {modeBar}
+        {memo({ saveRef: memoSaveRef, contactLine })}
+      </div>
+    );
+  }
+
   // 넓은 기록창 — 아래 띠(어떻게 · 반응 · 다음 약속 · 언제 · 저장)는 제자리에 있고, 그 위(요약 한 줄 +
   // 자세히)만 흐른다. 자세히가 아무리 길어져도 저장 줄이 화면 밖으로 밀리지 않는다.
   if (wide) {
     return (
       <div ref={rootRef} className="record-wide" onKeyDown={onKeyDown}>
+        {modeBar}
         <div className="record-wide__scroll">
           {restoredLine}
           {captureNote}
@@ -910,7 +992,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
               <div className="record-wide__row">
                 <span className="record-wide__k" aria-hidden="true">어떻게</span>
                 <div className="record-wide__ctl">
-                  <SegmentedControl label="어떻게 연락했나" options={channelOptions} value={form.kind} onChange={pickChannel} style={{ flexWrap: "wrap" }} />
+                  <SegmentedControl label="어떻게 연락했나" options={wideChannelOptions} value={form.kind} onChange={pickChannel} style={{ flexWrap: "wrap" }} />
                   {replyToggle}
                   {wantsReaction && (
                     <span ref={reactionRef} className="record-wide__pair">

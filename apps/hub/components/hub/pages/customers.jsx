@@ -15,6 +15,11 @@
 // (480 → 960px, 새 Drawer 종류 · 새 라우트 없음). 왼쪽은 쓰기(요약 한 줄 + 자세히 + 제자리 아래 띠),
 // 오른쪽은 읽던 약속 · 최근 기록(RecordContextColumn, 읽기만). 첫 ESC는 480px로, 두 번째는 닫기.
 // 휴대폰(≤600px)은 지금 바닥 시트 그대로다(전체 높이 시트는 다음 조각).
+//
+// 2026-09-30 넓은 기록창 ⑥(Q-CR6 · 권장): 넓은 기록창 맨 위에 '연락 기록 | 메모'가 선다. 메모 모드는 같은
+// 칸에서 일지 메모(journal, 이 고객 문맥)를 쓴다 — 기록 머리의 '메모' 버튼도 데스크톱에서는 드로어를 바꾸지
+// 않고 이 모드로 넓힌다. 연락이 아닌 한 줄 메모(QuickLog)는 넓은 기록창에서 빠진다. 휴대폰과, 메모를 붙일
+// 수 없는 고객(uuid 아님)은 지금 길 그대로다(QuickLog · 메모 창).
 
 import React from "react";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
@@ -30,6 +35,7 @@ import {
 import { useUndoableAction } from "../use-undoable-action";
 import { ContactRecordForm } from "../contact-record-form";
 import { RecordContextColumn, RecordReceipt } from "../record-context-column";
+import { RecordMemoPane } from "../record-memo-pane";
 import { SuggestionTip } from "../suggestion-tip";
 import { TIP_RULE_IDS, nudgeTipReason, useCrmNudges } from "../crm-nudge";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
@@ -50,7 +56,7 @@ import { CUSTOMER_LABEL_MISSING, customerGenreOptions, customerRegionOptions, ma
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { isTemplateNextAction } from "@/lib/sales-os/lead-enrichment";
 import { addSavedNoteRow, applyReceiptEvent, recordReceipt, recordWindowLayout } from "@/lib/sales-os/contact-record";
-import { ACTIVITY_ICON as ACT_ICON, ACTIVITY_LABEL as ACT_LABEL, recordContextTruth } from "@/lib/sales-os/record-context";
+import { ACTIVITY_ICON as ACT_ICON, memoStreamRows, recordContextTruth, recordRowKind, upsertSavedMemo } from "@/lib/sales-os/record-context";
 import {
   CUSTOMER_FOCUS_FILTERS, CUSTOMER_PHASES, CUSTOMER_SEGMENTS, DEFAULT_CUSTOMER_SEGMENT,
   channelFromPromise, countOpenWithoutPromise, customerDisplayName, customerLastContact,
@@ -263,8 +269,8 @@ function isTypingTarget(el) {
 
 // ── Customer 360 드로어 ──────────────────────────────────────────────────────
 
-// 기록 종류의 글리프 · 이름(ACT_ICON · ACT_LABEL)은 lib/sales-os/record-context.js가 정본이다 —
-// 넓은 기록창의 읽기 칸이 같은 표를 쓴다(파일 상단 import).
+// 기록 종류의 글리프 · 이름 · 모양(ACT_ICON · recordRowKind)은 lib/sales-os/record-context.js가 정본이다 —
+// 넓은 기록창의 읽기 칸이 같은 표를 쓴다(파일 상단 import): 연락은 원, 메모는 네모 + '메모 · 연락 아님'.
 // crm_activities.reaction 어휘(0016 CHECK)의 라벨은 followup-scoring이 정본(파일 상단 import).
 // 컨택 시트가 필수로 받는 반응이 타임라인에 되돌아온다(0a).
 
@@ -284,12 +290,15 @@ function ActivityTimeline({ rows, today, onDeleteActivity, onOpenMemo }) {
         const deletable = onDeleteActivity && a.id && !String(a.id).startsWith("local-") && !memo;
         const when = recordTimeLabel(a.occurredAt, today, a.at || "방금");
         const receipt = recordReceipt(a);
+        // 넓은 기록창의 읽기 칸과 같은 이름 · 같은 모양이다 — 메모(연결 메모 · 활동 노트)는 네모 + '메모 · 연락 아님'.
+        const kind = recordRowKind(a);
         const body = (
           <>
             <span className="customer-tl__title">{a.msg || "—"}</span>
             {a.detail && <span className="customer-tl__detail">{a.detail}</span>}
             <span className="customer-tl__meta">
-              <span>{ACT_LABEL[a.type] || a.type}</span>
+              <span>{kind.typeLabel}</span>
+              {kind.note && <span>{kind.note}</span>}
               {/* 반응은 중립 뱃지 — 우려·거절도 여기서는 사실 표시일 뿐, 위기 표현은 별도 채널(§5.3). */}
               {a.reaction && <Badge tone="neutral" size="xs" variant="outline">{REACTION_LABEL[a.reaction] || a.reaction}</Badge>}
               {receipt ? <RecordReceipt receipt={receipt} /> : <span className="mono">{when}</span>}
@@ -297,7 +306,7 @@ function ActivityTimeline({ rows, today, onDeleteActivity, onOpenMemo }) {
           </>
         );
         return (
-          <li key={a.id || i} className="customer-tl__item">
+          <li key={a.id || i} className="customer-tl__item" data-shape={kind.shape}>
             <span className="customer-tl__dot" aria-hidden="true"><Iconed name={ACT_ICON[a.type] || "edit"} size={11} /></span>
             {memo ? (
               <button type="button" className="hub-row customer-tl__body customer-tl__body--link" onClick={() => onOpenMemo?.(a.noteId)}>{body}</button>
@@ -727,7 +736,8 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   const [focusOverride, setFocusOverride] = React.useState(row.focusOverride || "default");
   React.useEffect(() => { setFocusOverride(row.focusOverride || "default"); }, [row.focusOverride]);
 
-  // 기록 모드 — 같은 드로어 안에서 공용 기록창으로 전환한다. { preset, draft, error }
+  // 기록 모드 — 같은 드로어 안에서 공용 기록창으로 전환한다. { preset, draft, error, mode }
+  // mode: "contact"(연락 기록) | "memo"(메모) — 넓은 기록창 맨 위의 전환 칸이 바꾼다(Q-CR6).
   const [record, setRecord] = React.useState(null);
   const [recordSeq, setRecordSeq] = React.useState(0);
   const recordRef = React.useRef(record);
@@ -737,8 +747,8 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
-  const startRecord = React.useCallback((preset = {}, draft = null, error = "") => {
-    setRecord({ preset: Object.fromEntries(Object.entries(preset || {}).filter(([, v]) => v != null && v !== "")), draft, error });
+  const startRecord = React.useCallback((preset = {}, draft = null, error = "", mode = "contact") => {
+    setRecord({ preset: Object.fromEntries(Object.entries(preset || {}).filter(([, v]) => v != null && v !== "")), draft, error, mode });
     setRecordSeq((n) => n + 1);
   }, []);
   // 기록 모드를 떠나면(첫 ESC · '고객 정보로' · 저장 확인) 폼이 사라져 포커스가 문서 밖으로 떨어진다 —
@@ -857,6 +867,9 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
     ? `${new URLSearchParams({ contextType: row.kind, contextId: String(row.id).toLowerCase() })}&limit=3`
     : "";
   const memos = useMemoSearch(memoQuery, { enabled: memoEnabled });
+  // 메모 모드가 저장을 확인받은 메모의 스냅숏(savedMemoSnapshot) — 다시 읽기가 닿기 전에도 줄로 선다.
+  // 그 메모를 메모 창에서 고쳐 저장하면 스냅숏도 새 글로 바뀐다 — 옛 글이 새 저장본을 가리지 않게.
+  const [savedMemos, setSavedMemos] = React.useState([]);
 
   const stream = React.useMemo(() => {
     const t = (value) => {
@@ -864,16 +877,11 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
       return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER; // 저장 전 낙관 행은 맨 위
     };
     const acts = activities.map(a => ({ ...a, source: "activity" }));
-    const notes = memoEnabled && memos.status === "live"
-      ? memos.entries.map(e => ({
-        id: `memo:${e.id}`, noteId: e.id, source: "memo", type: "memo",
-        msg: e.title || e.excerpt || "제목 없는 메모",
-        detail: e.title ? e.excerpt : "",
-        occurredAt: e.occurredAt,
-      }))
-      : [];
+    // 읽어 온 연결 메모 + 방금 이 창의 메모 모드에서 저장이 확인된 메모(영수증 "저장됨 hh:mm").
+    // 메모 읽기가 실패했어도 방금 저장한 메모는 줄로 선다 — 서버가 답한 것만 온다(memoStreamRows).
+    const notes = memoEnabled ? memoStreamRows(memos.status === "live" ? memos.entries : [], savedMemos) : [];
     return [...acts, ...notes].sort((a, b) => t(b.occurredAt) - t(a.occurredAt));
-  }, [activities, memos.status, memos.entries, memoEnabled]);
+  }, [activities, memos.status, memos.entries, memoEnabled, savedMemos]);
 
   const logActivity = ({ type, body }) => {
     // 저장 요청이 나가는 행만 pending이다 — 되돌리기 창 없이 바로 보내므로 "저장 중"이고,
@@ -944,7 +952,17 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
     ? `dashboard/revenue/leads?lead=${encodeURIComponent(row.id)}`
     : null;
 
-  if (memoState) return <ContextMemoDrawer contexts={memoContexts} noteId={memoState.noteId || null} onClose={() => setMemoState(null)} />;
+  if (memoState) {
+    return (
+      <ContextMemoDrawer
+        contexts={memoContexts}
+        noteId={memoState.noteId || null}
+        onClose={() => setMemoState(null)}
+        // 이 창이 방금 남긴 메모를 메모 창에서 고쳐 저장했다 — 들고 있던 스냅숏을 서버가 답한 글로 바꾼다.
+        onSaved={(entry) => setSavedMemos(prev => upsertSavedMemo(prev, entry, new Date().toISOString(), { add: false }))}
+      />
+    );
+  }
   // Guru 질문도 같은 규칙 — 질문 드로어가 이 드로어를 대신하고(활성 오버레이 하나), 닫으면
   // 같은 고객으로 돌아온다. 요청은 open-question이다: 예전 딜 진단 위젯은 리드·계정 id를 거래
   // 초점으로 풀지 못했고, 매 턴 Engine이 project_updates 행을 남겼다(2026-09-25).
@@ -960,9 +978,13 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   const recordLayout = recordWindowLayout({ recording: Boolean(record), mobile });
   const wideRecord = Boolean(record) && recordLayout.form === "wide";
   const stamp = () => new Date().toISOString(); // 영수증 시각 = 서버의 답을 받은 시각
+  // 메모 모드(Q-CR6) — 넓은 기록창에서, 메모를 이 고객에 붙일 수 있을 때만(일지 메모 문맥은 uuid).
+  const memoModeAvailable = wideRecord && memoEnabled;
+  const memoMode = memoModeAvailable && record.mode === "memo";
 
-  // 연락이 아닌 한 줄 메모 — 메모 모드가 합쳐질 때까지(Q-CR6 조각) 기록 모드 안에 그대로 둔다.
-  const quickMemo = record && (
+  // 연락이 아닌 한 줄 메모(활동 note) — 넓은 기록창에서는 메모 모드가 대신한다. 남는 곳은 둘이다:
+  // 휴대폰의 바닥 시트(전체 높이 시트 조각까지)와, 메모 모드를 열 수 없는 고객(uuid 아님)의 넓은 기록창.
+  const quickMemo = record && !memoModeAvailable && (
     <details className="customer-sec">
       <summary><h4 className="fx-eyebrow customer-eyebrow">연락이 아닌 한 줄 메모</h4><span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span></summary>
       <div className="customer-sec__in">
@@ -984,13 +1006,27 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
     </details>
   );
 
+  // 메모 모드의 메모 칸 — 폼이 요약 · 자세히 · 띠 자리에 놓는다. 저장은 일지 메모 작성기 그대로다
+  // (record-memo-pane.jsx): 연락 기록 RPC를 타지 않으므로 마지막 연락일 · 다음 약속 · 활동 수가 바뀌지 않는다.
+  // 서버가 저장을 확인한 메모만 넘어온다 — 기록 줄기 맨 위에 '메모 · 연락 아님 · 저장됨 hh:mm'으로 선다.
+  const memoPane = memoModeAvailable ? (slot) => (
+    <RecordMemoPane
+      {...slot}
+      contexts={memoContexts}
+      onSaved={(entry) => setSavedMemos(prev => upsertSavedMemo(prev, entry, stamp()))}
+    />
+  ) : null;
+
   // 상세 안에서는 드로어를 겹치지 않고 폼만 인라인으로 쓴다(CRM 지침 §6.2 — 활성 오버레이는
-  // 언제나 하나). 껍데기가 필요한 진입점은 ContactRecordDrawer. 넓은 배치에서는 한 줄 메모가
-  // 폼의 흐르는 칸(자세히 아래)에 놓인다 — 아래 띠가 맨 아래 제자리에 있어야 해서다.
+  // 언제나 하나). 껍데기가 필요한 진입점은 ContactRecordDrawer. 메모 모드를 열 수 없는 넓은 배치에서는
+  // 한 줄 메모가 폼의 흐르는 칸(자세히 아래)에 놓인다 — 아래 띠가 맨 아래 제자리에 있어야 해서다.
   const recordForm = record && (
     <ContactRecordForm
       key={recordSeq}
       layout={recordLayout.form}
+      mode={memoMode ? "memo" : "contact"}
+      onModeChange={(mode) => setRecord(cur => (cur ? { ...cur, mode } : cur))}
+      memo={memoPane}
       target={recordTarget}
       preset={record.preset}
       draft={record.draft}
@@ -1043,7 +1079,7 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
 
   return (
     <Drawer
-      title={record ? "연락 기록" : displayName}
+      title={record ? (memoMode ? "메모" : "연락 기록") : displayName}
       subtitle={record ? `${displayName}${org ? ` · ${org}` : ""}` : [org, phase.label].filter(Boolean).join(" · ")}
       onClose={record ? () => setRecord(null) : onClose}
       presentation={mobile ? "compact" : "side"}
@@ -1126,7 +1162,9 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
               <h3 className="fx-eyebrow customer-eyebrow">기록</h3>
               {actSync !== "live" && actSync !== "loading" && actSync !== "error" && <TruthBadge state={actSync} />}
               <div style={{ flex: 1 }} />
-              <Button variant="ghost" size="xs" icon="pencil" onClick={() => setMemoState({})}>메모</Button>
+              {/* 데스크톱은 같은 드로어가 넓어져 메모 모드로 열린다(드로어를 바꾸지 않는다). 휴대폰과 메모를
+                  붙일 수 없는 고객은 지금처럼 메모 창이다. */}
+              <Button variant="ghost" size="xs" icon="pencil" onClick={() => (memoEnabled && !mobile ? startRecord({}, null, "", "memo") : setMemoState({}))}>메모</Button>
             </div>
             {actNotice && (
               <div role="status" aria-live="polite" className="fade-up customer-inline-notice">

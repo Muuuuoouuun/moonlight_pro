@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { contextMemoKey, projectCustomerHref, projectCustomerPatch, projectCustomerRef, projectMemoContexts } from './project-customer-context.js';
+import { claimContextMemoId, contextMemoKey, contextMemoStorageKey, projectCustomerHref, projectCustomerPatch, projectCustomerRef, projectMemoContexts, releaseContextMemoId } from './project-customer-context.js';
 import { initialMemoContexts, buildNoteSave } from './journal-client.js';
 import { getProjectCustomerContext, searchProjectCustomers } from './repositories/project-customer-context.js';
 
@@ -161,4 +161,65 @@ test('contract accounts use their own schema and never infer a person from their
   });
   assert.equal(result.status, 'live');
   assert.equal(result.contexts[0].description, '경기');
+});
+
+test('a context memo keeps one note id per tab and context set until its save is confirmed', () => {
+  const lead = [{ type: 'lead', id: C, label: '담당자' }];
+  const key = contextMemoStorageKey(W, contextMemoKey(lead));
+  assert.equal(key, `moonlight:context-memo:v1:${W}:lead:${C}`);
+  assert.equal(contextMemoStorageKey(null, contextMemoKey(lead)), `moonlight:context-memo:v1:preview:lead:${C}`, 'preview drafts never share a key with a workspace');
+  assert.notEqual(key, contextMemoStorageKey(W, contextMemoKey([{ type: 'account', id: C }])), 'lead and account drafts stay apart');
+
+  const store = new Map();
+  const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => { store.set(k, String(v)); }, removeItem: (k) => { store.delete(k); } };
+  let made = 0;
+  const createId = () => [P, A][made++];
+  // The first claim mints an id; every later claim in the same tab resumes it (the memo drawer
+  // and the record window's memo mode both go through this function with the same key).
+  assert.equal(claimContextMemoId(storage, key, createId), P);
+  assert.equal(claimContextMemoId(storage, key, createId), P);
+  assert.equal(made, 1);
+  // A confirmed save releases the id so the next memo for this customer starts fresh.
+  releaseContextMemoId(storage, key);
+  assert.equal(store.has(key), false);
+  assert.equal(claimContextMemoId(storage, key, createId), A);
+  // A stored value that is not a uuid is never reused as a note id.
+  store.set(key, 'not-a-uuid');
+  assert.equal(claimContextMemoId(storage, key, () => P), P);
+  assert.equal(store.get(key), P);
+  // Blocked storage (private windows) still yields a usable id and never throws.
+  const blocked = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('SecurityError'); }, removeItem() { throw new Error('SecurityError'); } };
+  assert.equal(claimContextMemoId(blocked, key, () => A), A);
+  assert.doesNotThrow(() => releaseContextMemoId(blocked, key));
+});
+
+test('a tab whose storage rejects writes keeps the same memo id for the life of the page', () => {
+  const key = contextMemoStorageKey(W, contextMemoKey([{ type: 'account', id: C }]));
+  // Quota full or a storage-restricted window: reads come back empty and writes throw. Without a
+  // page-level copy every remount (mode switch, ESC and back) minted a new id and orphaned the
+  // journal store's in-memory draft under the old one.
+  const full = { getItem: () => null, setItem() { throw new Error('QuotaExceededError'); }, removeItem() {} };
+  let made = 0;
+  const createId = () => [P, A][made++];
+  assert.equal(claimContextMemoId(full, key, createId), P);
+  assert.equal(claimContextMemoId(full, key, createId), P, 'the remount resumes the same draft');
+  const blocked = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('SecurityError'); }, removeItem() { throw new Error('SecurityError'); } };
+  assert.equal(claimContextMemoId(blocked, key, createId), P, 'a read that throws falls back to the same copy');
+  assert.equal(made, 1);
+  // Another context set never borrows it.
+  assert.equal(claimContextMemoId(full, `${key}:other`, () => A), A);
+  releaseContextMemoId(full, `${key}:other`);
+  // A confirmed save still starts the next memo from a fresh id.
+  releaseContextMemoId(blocked, key);
+  assert.equal(claimContextMemoId(full, key, createId), A);
+  releaseContextMemoId(full, key);
+  // Once storage takes the write again it is the only copy: the page copy is dropped.
+  const store = new Map();
+  const working = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => { store.set(k, String(v)); }, removeItem: (k) => { store.delete(k); } };
+  assert.equal(claimContextMemoId(full, key, () => P), P);
+  assert.equal(claimContextMemoId(working, key, () => A), P, 'the page copy carries over into storage');
+  assert.equal(store.get(key), P);
+  store.set(key, A);
+  assert.equal(claimContextMemoId(working, key, () => C), A, 'storage wins once it holds an id');
+  releaseContextMemoId(working, key);
 });

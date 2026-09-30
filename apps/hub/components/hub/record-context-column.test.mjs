@@ -25,6 +25,10 @@ const render = (props = {}) => renderToStaticMarkup(React.createElement(RecordCo
   name: "읽기 칸 고객", promise: promiseOf({ nextAction: "견적서 보내기", nextActionAt: "2026-10-05" }), rows: [], today: TODAY, truth: LIVE, ...props,
 }));
 const text = (html) => html.replace(/<[^>]+>/g, "");
+// 이 칸의 버튼은 두 가지뿐이다 — 보기만 바꾸는 거르기(전체 · 연락 · 메모)와, 펼칠 것이 있는 기록 줄.
+const buttonsOf = (html) => html.match(/<button[^>]*>/g) || [];
+const filterButtons = (html) => buttonsOf(html).filter((tag) => /class="hub-seg__btn"/.test(tag));
+const otherButtons = (html) => buttonsOf(html).filter((tag) => !/class="hub-seg__btn"/.test(tag));
 
 test("the column is a read-only aside — a promise card and the record list, no write controls", () => {
   const html = render({ rows: [act()] });
@@ -35,7 +39,9 @@ test("the column is a read-only aside — a promise card and the record list, no
   assert.match(html, /<p class="record-ctx__when">10\/5 약속<\/p>/);
   assert.match(html, /<section class="record-ctx__sec" aria-label="기록">/);
   // 읽기만 — 약속 바꾸기 · 기록 삭제 · 메모 열기 버튼이 없다(한 줄짜리 기록은 누르는 곳도 아니다).
-  assert.doesNotMatch(html, /<button/);
+  // 있는 버튼은 보기만 바꾸는 거르기 셋뿐이다(2026-09-30 ⑥) — 아무것도 저장하지 않고 다시 읽지도 않는다.
+  assert.equal(filterButtons(html).length, 3);
+  assert.deepEqual(otherButtons(html), []);
   assert.doesNotMatch(html, /했어요 · 기록|날짜 다시|약속 정하기|기록 삭제/);
   assert.doesNotMatch(source, /hub-btn--primary|variant="primary"/);
   // 아직 만들지 않는 것 — 기다리는 것 목록(승인 전).
@@ -89,7 +95,7 @@ test("records list newest-first with shape, type, reaction and time — memos sa
 
 test("only a row with more to read is a button, and it expands in place", () => {
   const html = render({ rows: [act({ id: "short" }), act({ id: "long", type: "note", reaction: null, msg: "[요약]\n원장님과 50분 미팅\n[결정사항]\n- 시범 채점" })] });
-  const buttons = html.match(/<button[^>]*>/g) || [];
+  const buttons = otherButtons(html);
   assert.equal(buttons.length, 1);
   assert.match(buttons[0], /type="button" class="hub-row record-ctx__body" aria-expanded="false"/);
   assert.match(html, /<span class="record-ctx__open">자세히 <span class="num">4<\/span>줄<\/span>/);
@@ -107,7 +113,7 @@ test("no row is cut off without a way to read it — the two-line fold applies o
   const middling = "단원평가는 OMR로 채점하고 싶어 하심 · 10월 셋째 주 시범 채점 뒤 11월 본계약 검토";
   assert.ok(middling.length > 40 && middling.length <= 72);
   const plain = render({ rows: [act({ id: "m1", msg: middling })] });
-  assert.doesNotMatch(plain, /<button/, "펼칠 것이 없는 줄은 누르는 곳이 아니다");
+  assert.deepEqual(otherButtons(plain), [], "펼칠 것이 없는 줄은 누르는 곳이 아니다");
   assert.match(plain, new RegExp(`<div class="record-ctx__body"><span class="record-ctx__title">${middling}</span>`));
   // 접힘(말줄임)은 누를 수 있는 줄 안에서만 — 누를 수 없는 줄의 제목에는 걸리지 않는다.
   const titleRule = css.match(/\n\.hub-app \.record-ctx__title \{[^}]*\}/)?.[0] || "";
@@ -216,6 +222,59 @@ test("the two columns scroll on their own and fold to the composer alone at 900p
   assert.doesNotMatch(css, /font-size: (?:\d|10)(?:\.[0-4]\d*)?px/, "10.5px 아래 글자는 없다");
 });
 
+// ── 2026-09-30 넓은 기록창 ⑥ — 한 줄기, 모양과 글자로 나누고 전체 · 연락 · 메모로 거른다(Q-CR6) ──────
+
+test("contact rows are circles, memo rows are squares that also say 메모 · 연락 아님 — shape and label, never color", () => {
+  const html = render({
+    rows: [
+      act({ id: "c1", msg: "채점 기능은 10월 중순이면 좋겠다" }),
+      { id: "memo:1", source: "memo", type: "memo", msg: "원장님 성향", occurredAt: localNoon(9, 27) },
+      act({ id: "n1", type: "note", reaction: null, msg: "연락이 아닌 한 줄", occurredAt: localNoon(9, 26) }),
+    ],
+  });
+  const items = html.match(/<li class="record-ctx__item"[^>]*>.*?<\/li>/gs) || [];
+  assert.deepEqual(items.map((li) => li.match(/data-shape="(\w+)"/)[1]), ["contact", "memo", "memo"]);
+  // 연결 메모(journal)와 활동 노트는 같은 네모, 같은 이름이다 — 글자로도 말한다(모양만으로 뜻을 나르지 않는다).
+  assert.match(text(items[1]), /^원장님 성향메모연락 아님3일 전$/);
+  assert.match(text(items[2]), /^연락이 아닌 한 줄메모연락 아님4일 전$/);
+  assert.doesNotMatch(text(items[0]), /메모|연락 아님/);
+  assert.doesNotMatch(text(html), /노트/, "네모 하나에 이름 둘(노트 · 메모)을 두지 않는다");
+  // 모양은 표식의 모서리와 면뿐이다 — 연락은 원(999px), 메모는 네모(--r-xs). 색 토큰으로 나누지 않는다.
+  assert.match(css, /\.hub-app \.record-ctx__dot \{[^}]*border-radius: 999px;/);
+  const memoRule = css.match(/\.hub-app \.record-ctx__item\[data-shape="memo"\] \.record-ctx__dot \{[^}]*\}/)?.[0] || "";
+  assert.match(memoRule, /border-radius: var\(--r-xs\); background: var\(--surface-2\); \}$/);
+  assert.doesNotMatch(memoRule, /--accent|--moon|--danger|--success|--warning|--info|--personal|--company/);
+});
+
+test("the filter is a view state inside the column — 전체 by default, shown only when there is something to filter", () => {
+  const rows = [
+    act({ id: "c1", msg: "통화 기록" }),
+    { id: "memo:1", source: "memo", type: "memo", msg: "메모 기록", occurredAt: localNoon(9, 27) },
+    act({ id: "e1", type: "deal", reaction: null, msg: "거래 기록", occurredAt: localNoon(9, 22) }),
+  ];
+  const html = render({ rows });
+  const group = html.match(/<div class="hub-seg record-ctx__filter" role="group" aria-label="기록 거르기"[^>]*>.*?<\/div>/s)?.[0] || "";
+  assert.deepEqual([...group.matchAll(/aria-pressed="(true|false)"[^>]*>([^<]+)</g)].map((m) => [m[2], m[1]]), [["전체", "true"], ["연락", "false"], ["메모", "false"]]);
+  assert.equal((html.match(/<li class="record-ctx__item"/g) || []).length, 3, "전체는 거래 같은 흐린 원도 보인다");
+  // 기록이 없으면 고를 것도 없다 — 읽는 중 · 읽기 실패에도 거르기를 두지 않는다.
+  assert.doesNotMatch(render(), /record-ctx__filter/);
+  assert.doesNotMatch(render({ rows, truth: recordContextTruth({ actSync: "loading" }) }), /record-ctx__filter/);
+  assert.doesNotMatch(render({ rows, truth: recordContextTruth({ actSync: "error" }) }), /record-ctx__filter/);
+  // 일부만 읽은 줄기(연결 메모 실패)도 거를 수 있다 — 빠진 출처는 그대로 말한다.
+  const partial = render({ rows, truth: recordContextTruth({ actSync: "live", memoEnabled: true, memoStatus: "error" }), onRetry() {} });
+  assert.match(partial, /record-ctx__filter/);
+  assert.match(partial, /data-truth="partial"/);
+  // 거르기는 이 칸의 상태다 — 새 읽기도 콜백도 없다. 거른 뒤에 최근 다섯 줄을 자른다(순수 규칙 — record-context.test.mjs).
+  assert.match(source, /const \[filter, setFilter\] = React\.useState\("all"\);/);
+  assert.match(source, /const visible = readable \? filterRecordStream\(rows, filter\) : \[\];\s*const items = recordContextRows\(visible, \{ today \}\);/);
+  assert.match(source, /<SegmentedControl label="기록 거르기" options=\{RECORD_FILTERS\} value=\{filter\} onChange=\{setFilter\} className="record-ctx__filter" \/>/);
+  assert.doesNotMatch(source, /onFilter|fetch\(/);
+  // 거른 결과가 비면 그 종류가 없다고 말한다("기록 없음"과 다른 말) — 거른 줄이 다섯을 넘으면 그 종류의 수로 말한다.
+  assert.match(source, /const empty = recordEmptyPlan\(\{ filter, total: rows\.length, state, memos: truth\?\.memos \}\);/);
+  assert.match(source, /\{visible\.length > RECORD_CONTEXT_LIMIT && \(/);
+  assert.match(css, /\.hub-app \.record-ctx__filter \{ margin-left: auto; \}/);
+});
+
 // 그릇은 같은 Drawer다(Q-CR1) — 폭은 이미 있는 width로, 두 칸이 각자 흐르도록 본문 여백만 걷는다.
 test("the same Drawer carries the record window — width through the existing prop, body padding only when asked", () => {
   const bodyOf = (html) => html.match(/<div class="hub-drawer__body scroll-y"[^>]*>/)?.[0] || "";
@@ -233,4 +292,25 @@ test("the same Drawer carries the record window — width through the existing p
   assert.match(asideOf(wide), /role="dialog" aria-modal="true" aria-label="연락 기록"/);
   assert.match(asideOf(wide), /width:min\(960px, calc\(100% - 56px\)\)/);
   assert.match(bodyOf(wide), /style="flex:1;padding:0;display:flex;flex-direction:column;gap:0;overflow:hidden"/);
+});
+
+test("an empty place never reads as 'no memos' while linked memos are loading or unread", () => {
+  // 활동은 읽었고(없음) 연결 메모는 아직 읽는 중 — 빈 말이 아니라 Skeleton이다.
+  const loading = render({ truth: recordContextTruth({ actSync: "live", memoEnabled: true, memoStatus: "loading" }) });
+  assert.match(loading, /role="status"/);
+  assert.match(loading, /메모 불러오는 중/);
+  assert.doesNotMatch(text(loading), /아직 기록이 없어요|메모가 아직 없어요/);
+  // 연결 메모를 못 읽었다 — 머리 줄의 '일부 데이터 · 다시 읽기'와 같은 말을 한다(없다고 하지 않는다).
+  const unread = render({ truth: recordContextTruth({ actSync: "live", memoEnabled: true, memoStatus: "error" }), onRetry() {} });
+  assert.match(unread, /data-truth="partial"[^>]*>.*일부 데이터 · 연결 메모를 읽지 못했어요/s);
+  assert.match(unread, />다시 읽기<\/button>/);
+  assert.match(unread, /<p class="record-ctx__empty">활동 기록은 없어요 · 연결 메모는 읽지 못했어요\.<\/p>/);
+  assert.doesNotMatch(text(unread), /아직 기록이 없어요|메모가 아직 없어요/);
+  assert.doesNotMatch(unread, /role="alert"/, "읽은 활동까지 실패로 말하지 않는다 — 빠진 출처는 '일부 데이터'가 말한다");
+  // 다 읽었고 없다 — 그때만 없다고 말한다. 메모를 읽지 않는 고객(uuid 아님)도 같다.
+  assert.match(render({ truth: recordContextTruth({ actSync: "live", memoEnabled: true, memoStatus: "live" }) }), /<p class="record-ctx__empty">아직 기록이 없어요\.<\/p>/);
+  assert.match(render({ truth: recordContextTruth({ actSync: "live" }) }), /<p class="record-ctx__empty">아직 기록이 없어요\.<\/p>/);
+  // 거른 자리(메모 · 전체)도 같은 규칙이다 — 거르기 값과 메모 읽기 상태가 빈 자리의 말을 정한다(순수 규칙은 record-context.test.mjs).
+  assert.match(source, /empty\.kind === "loading"\s*\? <Skeleton height=\{14\} lines=\{2\} label=\{empty\.label\} \/>\s*: <p className="record-ctx__empty">\{empty\.text\}<\/p>/);
+  assert.doesNotMatch(source, /recordFilterEmptyCopy/, "빈 자리의 말을 읽기 상태 없이 고르지 않는다");
 });

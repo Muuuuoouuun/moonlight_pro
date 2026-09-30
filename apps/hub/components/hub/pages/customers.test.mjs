@@ -144,7 +144,8 @@ test("record mode swaps the same drawer to the shared capture form (one overlay)
   const drawer = slice("function Customer360Drawer", "// ── 새 고객 등록");
   assert.doesNotMatch(drawer, /<ContactRecordDrawer\b/);
   assert.match(drawer, /<ContactRecordForm[\s\S]*?aiContext=\{/);
-  assert.match(drawer, /title=\{record \? "연락 기록" : displayName\}/);
+  // 제목은 기록 모드를 따라간다 — 넓은 기록창의 메모 모드에서는 "메모"(2026-09-30 ⑥).
+  assert.match(drawer, /title=\{record \? \(memoMode \? "메모" : "연락 기록"\) : displayName\}/);
   assert.match(drawer, /onClose=\{record \? \(\) => setRecord\(null\) : onClose\}/);
   // 그릇은 같은 Drawer다 — 폭만 순수 규칙(recordWindowLayout)에서 받고, 새 presentation은 없다(Q-CR1).
   assert.match(drawer, /const recordLayout = recordWindowLayout\(\{ recording: Boolean\(record\), mobile \}\);/);
@@ -272,7 +273,7 @@ const HOST_COMPONENTS = [
   "Avatar", "EmptyState", "TruthBadge", "Kbd", "Drawer", "SegmentedControl", "CheckboxRow", "TextField", "TextAreaField",
   "SelectField", "Skeleton", "CertaintyBadge", "ChipToggle", "LifecycleBadge", "DateQuickPresets", "ContactRecordForm",
   "LeadEnrichmentPanel", "SortHead", "FloatingMentorWidget", "GuruGuidanceCard", "ContextMentorRail", "SuggestionTip",
-  "GuidanceQuestionDrawer", "GuruRecommendation", "RecordContextColumn", "RecordReceipt",
+  "GuidanceQuestionDrawer", "GuruRecommendation", "RecordContextColumn", "RecordReceipt", "RecordMemoPane",
 ];
 
 // memoSearch · nudges · fetch: 드로어가 읽는 것들을 바꿔 끼운다(기본은 읽기 성공 · 넛지 없음 · 네트워크 없음).
@@ -331,8 +332,10 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     recordReceipt: contactRecord.recordReceipt,
     recordWindowLayout: contactRecord.recordWindowLayout,
     ACT_ICON: recordContext.ACTIVITY_ICON,
-    ACT_LABEL: recordContext.ACTIVITY_LABEL,
+    recordRowKind: recordContext.recordRowKind,
     recordContextTruth: recordContext.recordContextTruth,
+    memoStreamRows: recordContext.memoStreamRows,
+    upsertSavedMemo: recordContext.upsertSavedMemo,
     adviceScopeForRecord,
     useGuruRecommendations: ({ enabled } = {}) => ({ status: enabled ? "live" : "idle", recommendations: enabled ? guruRecommendations : [], reload() {} }),
     recommendationForSubject,
@@ -503,7 +506,7 @@ test("render: 연락 기록 widens the same drawer — composer on the left, rea
   // 읽기 칸은 드로어가 이미 아는 것만 받는다 — 약속 · 기록 줄기 · 읽기 상태. 쓰기 콜백은 없다.
   assert.equal(column.props.promise.what, "견적서 보내기");
   assert.equal(column.props.promise.late, 2);
-  assert.deepEqual(column.props.truth, { state: "loading", reason: "", retry: null }, "활동 읽기가 끝나기 전");
+  assert.deepEqual(column.props.truth, { state: "loading", reason: "", retry: null, memos: "live" }, "활동 읽기가 끝나기 전");
   assert.equal(column.props.tipReason, "", "이 사람에게 고른 팁이 없으면 지어내지 않는다");
   assert.deepEqual(column.props.rows, []);
   assert.deepEqual(Object.keys(column.props).filter((key) => /^on[A-Z]/.test(key)), ["onRetry"]);
@@ -511,9 +514,11 @@ test("render: 연락 기록 widens the same drawer — composer on the left, rea
   // 쓰는 동안 쉬는 드로어의 본문(약속 카드 · 거래 · 정보)은 자리를 비키고, primary는 폼의 저장 하나다.
   assert.equal(app.findAll((n) => n.props?.className === "customer-focus").length, 0);
   assert.equal(app.findAll((n) => n.type === "Button" && n.props.variant === "primary" && /연락 기록/.test(app.text(n))).length, 0);
-  // 연락이 아닌 한 줄 메모는 메모 모드가 합쳐질 때까지 폼의 흐르는 칸에 남는다(아래 띠가 맨 아래여야 해서).
-  assert.equal(app.findAll((n) => n.type === "details", form).length, 1);
-  assert.match(app.text(form), /연락이 아닌 한 줄 메모/);
+  // 연락이 아닌 한 줄 메모(QuickLog)는 넓은 기록창에 없다 — 같은 칸의 메모 모드가 대신한다(2026-09-30 ⑥).
+  assert.equal(app.findAll((n) => n.type === "details", form).length, 0);
+  assert.doesNotMatch(app.text(form), /연락이 아닌 한 줄 메모|빠른 메모/);
+  assert.equal(form.props.mode, "contact", "R · 연락 기록 버튼은 연락 기록 모드로 연다");
+  assert.equal(typeof form.props.memo, "function", "메모 칸은 폼의 memo 자리에 넘긴다");
 
   // 첫 ESC(= Drawer의 onClose) → 480px로 돌아오고 폼이 사라진다. 드로어는 열려 있다.
   drawerOf(app).props.onClose();
@@ -654,7 +659,10 @@ test("render: the context column mirrors the drawer's reads — partial when lin
   openWide(app);
   const column = columnOf(app);
   // 활동은 읽었고 연결 메모만 못 읽었다 — 읽은 줄은 보이고, 빠진 출처를 이름으로 말한다.
-  assert.deepEqual(column.props.truth, { state: "partial", reason: "연결 메모를 읽지 못했어요", retry: "memos" });
+  assert.deepEqual(column.props.truth, { state: "partial", reason: "연결 메모를 읽지 못했어요", retry: "memos", memos: "error" });
+  // 메모 읽기 실패는 빈 자리에서도 '메모가 없어요'로 읽히지 않는다 — 읽기 칸이 이 상태로 말을 고른다.
+  assert.deepEqual(recordContext.recordEmptyPlan({ filter: "memo", total: column.props.rows.length, state: column.props.truth.state, memos: column.props.truth.memos }),
+    { kind: "text", text: "메모를 읽지 못했어요 — 없는 게 아니라 못 읽은 거예요." });
   assert.deepEqual(column.props.rows.map((row) => row.id), ["a1"]);
   // 다시 읽기는 못 읽은 그 출처를 다시 읽는다.
   column.props.onRetry("memos");
@@ -670,7 +678,22 @@ test("render: the context column mirrors the drawer's reads — partial when lin
   await settle();
   failing.render();
   openWide(failing);
-  assert.deepEqual(columnOf(failing).props.truth, { state: "error", reason: "활동 기록을 읽지 못했어요", retry: "activities" });
+  assert.deepEqual(columnOf(failing).props.truth, { state: "error", reason: "활동 기록을 읽지 못했어요", retry: "activities", memos: "live" });
+
+  // 연결 메모를 아직 읽는 중이면 읽기 칸은 그 사실을 받는다 — 빈 자리가 Skeleton이지 '메모가 없어요'가 아니다.
+  const reading = mountCustomers({
+    leads: renderLeads(),
+    memoSearch: () => ({ status: "loading", entries: [], refresh() {} }),
+    fetch: async () => ({ ok: true, json: async () => ({ status: "live", activities: [{ id: "a1", type: "call", msg: "지난 통화", occurredAt: ago(2) }] }) }),
+  });
+  openLeadA(reading);
+  reading.runEffects(isActivityRead);
+  await settle();
+  reading.render();
+  openWide(reading);
+  const truth = columnOf(reading).props.truth;
+  assert.deepEqual(truth, { state: "live", reason: "", retry: null, memos: "loading" });
+  assert.deepEqual(recordContext.recordEmptyPlan({ filter: "memo", total: 1, state: truth.state, memos: truth.memos }), { kind: "loading", label: "메모 불러오는 중" });
 });
 
 test("render: a nudge for this customer wins the context column's one tip over the template suggestion", () => {
@@ -741,6 +764,293 @@ test("render: on a phone the record mode keeps today's bottom sheet — no wide 
     if (had) globalThis.window = before;
     else delete globalThis.window;
   }
+});
+
+// ── 2026-09-30 넓은 기록창 ⑥ — 같은 칸에서 메모 쓰기(Q-CR6 · 권장, 화면 확인 뒤 확정) ──────────────
+
+const LEAD_A = "11111111-1111-4111-8111-111111111111";
+const memoButtonOf = (app) => app.findAll((n) => n.type === "Button" && n.props.icon === "pencil" && app.text(n) === "메모")[0];
+const memoPaneOf = (app, slot = { saveRef: { current: null }, contactLine: null }) => formOf(app).props.memo(slot);
+
+test("render: the wide window has two modes — the switch retitles the same drawer and keeps the same form", () => {
+  const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+  openLeadA(app);
+  openWide(app);
+  const opened = formOf(app);
+  assert.equal(opened.props.mode, "contact");
+  assert.equal(drawerOf(app).props.title, "연락 기록");
+
+  // 전환 칸을 누르면(폼이 알린다) 같은 드로어 · 같은 폭 · 같은 폼(key)인 채로 모드와 제목만 바뀐다.
+  opened.props.onModeChange("memo");
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "Drawer").length, 1);
+  assert.equal(drawerOf(app).props.title, "메모");
+  assert.equal(drawerOf(app).props.subtitle, "테스트학원 A");
+  assert.equal(drawerOf(app).props.width, WIDE_WIDTH);
+  assert.equal(formOf(app).props.mode, "memo");
+  assert.equal(formOf(app).props.key, opened.props.key, "폼을 다시 세우지 않는다 — 쓰던 연락 기록이 남는다");
+  assert.equal(formOf(app).props.preset, opened.props.preset);
+  assert.equal(app.findAll((n) => n.type === "RecordContextColumn").length, 1, "읽기 칸은 그대로 옆에 있다");
+  assert.equal(app.findAll((n) => n.type === "ContextMemoDrawer").length, 0, "드로어를 메모 창으로 바꾸지 않는다");
+
+  // 메모 칸 — 이 고객이 문맥으로 붙는다(lead:<id>). 폼이 넘긴 자리(saveRef · contactLine)를 그대로 받는다.
+  const slot = { saveRef: { current: null }, contactLine: "연락 기록 진행 줄" };
+  const pane = memoPaneOf(app, slot);
+  assert.equal(pane.type, "RecordMemoPane");
+  assert.deepEqual(pane.props.contexts, [{ type: "lead", id: LEAD_A, label: "테스트학원 A" }]);
+  assert.equal(pane.props.saveRef, slot.saveRef);
+  assert.equal(pane.props.contactLine, "연락 기록 진행 줄");
+  assert.deepEqual(Object.keys(pane.props).filter((key) => /^on[A-Z]/.test(key)), ["onSaved"]);
+
+  // 다시 연락 기록으로.
+  formOf(app).props.onModeChange("contact");
+  app.render();
+  assert.equal(drawerOf(app).props.title, "연락 기록");
+  assert.equal(formOf(app).props.mode, "contact");
+  // 첫 ESC는 480px로(어느 모드에서든).
+  formOf(app).props.onModeChange("memo");
+  app.render();
+  drawerOf(app).props.onClose();
+  app.render();
+  assert.equal(drawerOf(app).props.width, REST_WIDTH);
+  assert.equal(drawerOf(app).props.title, "테스트학원 A");
+});
+
+test("render: the 메모 button widens the same drawer into memo mode on desktop — it no longer swaps the drawer", () => {
+  const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+  openLeadA(app);
+  memoButtonOf(app).props.onClick();
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "Drawer").length, 1);
+  assert.equal(app.findAll((n) => n.type === "ContextMemoDrawer").length, 0);
+  assert.equal(drawerOf(app).props.title, "메모");
+  assert.equal(drawerOf(app).props.width, WIDE_WIDTH);
+  assert.equal(formOf(app).props.mode, "memo");
+  assert.equal(formOf(app).props.layout, "wide");
+  assert.deepEqual(formOf(app).props.preset, {}, "메모로 열어도 연락 기록 쪽은 빈 폼이다");
+  // R · 연락 기록 버튼은 지금처럼 연락 기록 모드로 연다.
+  drawerOf(app).props.onClose();
+  app.render();
+  openWide(app);
+  assert.equal(formOf(app).props.mode, "contact");
+});
+
+test("render: saving a memo adds a 메모 row with its receipt and changes nothing else — no contact, no promise, no last-contact write", async () => {
+  const reads = [];
+  const entries = [];
+  const app = mountCustomers({
+    leads: renderLeads(),
+    accounts: renderAccounts(),
+    memoSearch: () => ({ status: "live", entries, refresh() {} }),
+    fetch: async (url, init) => {
+      reads.push([String(url), init?.method || "GET"]);
+      return { ok: true, json: async () => ({ status: "live", activities: [{ id: "a1", type: "call", msg: "지난 통화", reaction: "positive", occurredAt: ago(2) }] }) };
+    },
+  });
+  const listRow = () => app.text(rowsOf(app).find((row) => row.props["data-customer-row"] === `lead:${LEAD_A}`));
+  const before = listRow();
+  openLeadA(app);
+  app.runEffects(isActivityRead);
+  await settle();
+  app.render();
+  memoButtonOf(app).props.onClick();
+  app.render();
+  assert.deepEqual(columnOf(app).props.rows.map((row) => row.id), ["a1"]);
+  const promiseBefore = columnOf(app).props.promise;
+
+  // 메모 칸이 서버의 답을 받은 메모를 넘긴다(그 전에는 아무 줄도 서지 않는다 — 메모에는 낙관 줄이 없다).
+  const NOTE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  memoPaneOf(app).props.onSaved({ id: NOTE, title: "", body: "원장님은 숫자로 설명해야 움직이심\n매일 쓸 사람은 부원장", occurredAt: new Date().toISOString(), revision: 1 });
+  app.render();
+  const rows = columnOf(app).props.rows;
+  assert.deepEqual(rows.map((row) => [row.id, row.source, row.type]), [[`memo:${NOTE}`, "memo", "memo"], ["a1", "activity", "call"]], "방금 남긴 메모가 맨 윗줄");
+  const [line] = recordContext.recordContextRows(rows);
+  assert.deepEqual([line.shape, line.typeLabel, line.note, line.receipt.label, line.lineCount], ["memo", "메모", "연락 아님", "저장됨", 2]);
+  assert.match(line.receipt.time, /^\d{2}:\d{2}$/);
+  // 거르기 — 연락에는 통화만, 메모에는 방금 남긴 메모만.
+  assert.deepEqual(recordContext.filterRecordStream(rows, "contact").map((row) => row.id), ["a1"]);
+  assert.deepEqual(recordContext.filterRecordStream(rows, "memo").map((row) => row.id), [`memo:${NOTE}`]);
+
+  // 메모는 연락이 아니다 — 고객 행 쓰기(약속 · 마지막 연락)도, 활동 쓰기도, 연락 기록 RPC도 나가지 않았다.
+  assert.deepEqual(app.saves, [], "saveRevenueRecord(lead update · activity create)를 부르지 않는다");
+  assert.deepEqual(reads, [[`/api/hub/revenue/activity?leadId=${LEAD_A}`, "GET"]], "이 화면에서 나간 요청은 처음의 활동 읽기 하나뿐");
+  assert.deepEqual(columnOf(app).props.promise, promiseBefore, "다음 약속은 그대로");
+  assert.equal(listRow(), before, "목록의 약속 · 마지막 연락도 그대로");
+  // 창은 그대로다 — 메모 모드에 머물러 다음 메모를 이어 쓴다(연락 기록처럼 480px로 돌아가지 않는다).
+  assert.equal(drawerOf(app).props.title, "메모");
+  assert.equal(drawerOf(app).props.width, WIDE_WIDTH);
+
+  // 다시 읽기가 같은 메모를 가져와도 두 줄이 되지 않고, 영수증은 남는다.
+  entries.push({ id: NOTE, title: "", excerpt: "원장님은 숫자로 설명해야 움직이심…", occurredAt: new Date().toISOString() });
+  app.render();
+  assert.deepEqual(columnOf(app).props.rows.map((row) => row.id), [`memo:${NOTE}`, "a1"]);
+  assert.equal(contactRecord.recordReceipt(columnOf(app).props.rows[0]).label, "저장됨");
+  // 쉬는 드로어의 기록 줄에도 같은 메모가 같은 영수증으로 선다(열면 메모 창).
+  drawerOf(app).props.onClose();
+  app.render();
+  const timeline = app.findAll((n) => n.type === "ol" && n.props.className === "customer-tl")[0];
+  const receipts = app.findAll((n) => n.type === "RecordReceipt", timeline).map((n) => n.props.receipt.label);
+  assert.deepEqual(receipts, ["저장됨"]);
+  assert.match(app.text(timeline), /원장님은 숫자로 설명해야 움직이심/);
+  // id 없는 답은 줄로 세우지 않는다.
+  memoButtonOf(app).props.onClick();
+  app.render();
+  memoPaneOf(app).props.onSaved({ body: "id 없는 답" });
+  memoPaneOf(app).props.onSaved(null);
+  app.render();
+  assert.deepEqual(columnOf(app).props.rows.map((row) => row.id), [`memo:${NOTE}`, "a1"]);
+});
+
+test("render: a memo saved here and then edited in the memo drawer shows the edit — the first snapshot never hides a newer save", async () => {
+  const NOTE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const at = new Date().toISOString();
+  const entries = [];
+  const app = mountCustomers({
+    leads: renderLeads(),
+    accounts: renderAccounts(),
+    memoSearch: () => ({ status: "live", entries, refresh() {} }),
+    fetch: async () => ({ ok: true, json: async () => ({ status: "live", activities: [] }) }),
+  });
+  openLeadA(app);
+  app.runEffects(isActivityRead);
+  await settle();
+  app.render();
+  memoButtonOf(app).props.onClick();
+  app.render();
+  memoPaneOf(app).props.onSaved({ id: NOTE, title: "", body: "결정은 부원장", occurredAt: at, revision: 1 });
+  app.render();
+  assert.deepEqual(columnOf(app).props.rows.map((row) => row.msg), ["결정은 부원장"]);
+
+  // 쉬는 드로어로 돌아가 그 메모를 연다 — 메모 창이 이 드로어를 대신한다(제목 · 태그 · 본문을 고치는 길).
+  drawerOf(app).props.onClose();
+  app.render();
+  const timelineOf = () => app.findAll((n) => n.type === "ol" && n.props.className === "customer-tl")[0];
+  app.findAll((n) => n.type === "button" && /customer-tl__body--link/.test(n.props.className || ""), timelineOf())[0].props.onClick();
+  app.render();
+  const memoDrawer = app.findAll((n) => n.type === "ContextMemoDrawer")[0];
+  assert.equal(memoDrawer.props.noteId, NOTE);
+  assert.equal(typeof memoDrawer.props.onSaved, "function", "메모 창의 저장 확인을 이 드로어가 듣는다");
+
+  // 메모 창이 고친 글의 저장을 확인받았다 — 다시 읽기가 닿기 전에도 기록 줄은 고친 글이다(줄은 늘지 않는다).
+  memoDrawer.props.onSaved({ id: NOTE, title: "결정권", body: "결정은 원장님이 직접 (부원장 아님)", occurredAt: at, revision: 2 });
+  memoDrawer.props.onClose();
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "ContextMemoDrawer").length, 0);
+  const lines = () => app.findAll((n) => n.type === "li", timelineOf()).map((li) => app.text(li));
+  assert.equal(lines().length, 1);
+  assert.match(lines()[0], /^결정권결정은 원장님이 직접 \(부원장 아님\)메모연락 아님/);
+  assert.doesNotMatch(lines()[0], /결정은 부원장/);
+  assert.deepEqual(app.findAll((n) => n.type === "RecordReceipt", timelineOf()).map((n) => n.props.receipt.label), ["저장됨"]);
+
+  // 늦게 닿은 옛 읽기(판 1)는 새 글을 되돌리지 않고, 다른 창에서 더 새로 고친 판(3)은 읽어 온 글이 이긴다.
+  entries.push({ id: NOTE, title: "", excerpt: "결정은 부원장", occurredAt: at, revision: 1 });
+  app.render();
+  assert.match(lines()[0], /^결정권결정은 원장님이 직접/);
+  entries[0] = { id: NOTE, title: "결정권 (확인)", excerpt: "원장님 확인 받음", occurredAt: at, revision: 3 };
+  app.render();
+  assert.match(lines()[0], /^결정권 \(확인\)원장님 확인 받음메모연락 아님/);
+
+  // 이 창이 남기지 않은 옛 메모를 메모 창에서 고쳐도 영수증 줄이 새로 생기지 않는다(다시 읽기가 가져온다).
+  const OTHER = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  app.findAll((n) => n.type === "button" && /customer-tl__body--link/.test(n.props.className || ""), timelineOf())[0].props.onClick();
+  app.render();
+  app.findAll((n) => n.type === "ContextMemoDrawer")[0].props.onSaved({ id: OTHER, title: "", body: "옛 메모를 고침", occurredAt: at, revision: 7 });
+  app.findAll((n) => n.type === "ContextMemoDrawer")[0].props.onClose();
+  app.render();
+  assert.equal(lines().length, 1);
+  // 메모 창의 저장은 메모만 바꾼다 — 고객 행 · 활동을 쓰지 않는다.
+  assert.deepEqual(app.saves, []);
+});
+
+test("render: the resting 기록 list names a memo the way the wide window does — a square marker and 메모 · 연락 아님, never 노트", () => {
+  const app = mountCustomers();
+  const today = new Date();
+  const rows = [
+    { id: "a1", source: "activity", type: "call", msg: "견적 검토 통화", reaction: "positive", occurredAt: ago(1) },
+    { id: "memo:1", noteId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", source: "memo", type: "memo", msg: "원장님 성향", occurredAt: ago(2) },
+    { id: "n1", source: "activity", type: "note", msg: "연락이 아닌 한 줄", occurredAt: ago(3) },
+  ];
+  const timeline = app.renderTimeline({ rows, today, onDeleteActivity() {}, onOpenMemo() {} });
+  const items = app.findAll((n) => n.type === "li", timeline);
+  assert.deepEqual(items.map((li) => li.props["data-shape"]), ["contact", "memo", "memo"]);
+  // 연결 메모와 활동 노트는 같은 이름이다 — 넓은 기록창의 읽기 칸과 한 드로어 안에서 두 이름으로 서지 않는다.
+  assert.match(app.text(items[1]), /^원장님 성향메모연락 아님/);
+  assert.match(app.text(items[2]), /^연락이 아닌 한 줄메모연락 아님/);
+  assert.match(app.text(items[0]), /^견적 검토 통화통화긍정/);
+  assert.doesNotMatch(app.text(items[0]), /메모|연락 아님/);
+  assert.doesNotMatch(app.text(timeline), /노트/);
+  // 같은 규칙에서 나온다(읽기 칸의 줄과 같은 함수) — 모양은 모서리와 면뿐, 색으로 나누지 않는다.
+  const timelineSource = slice("function ActivityTimeline", "// 빠른 기록은 메모 전용이다");
+  assert.match(timelineSource, /const kind = recordRowKind\(a\);/);
+  assert.match(timelineSource, /<li key=\{a\.id \|\| i\} className="customer-tl__item" data-shape=\{kind\.shape\}>/);
+  assert.doesNotMatch(customersSource, /ACT_LABEL\[/);
+  const memoRule = cssSource.match(/\.hub-app \.customer-tl__item\[data-shape="memo"\] \.customer-tl__dot \{[^}]*\}/)?.[0] || "";
+  assert.match(memoRule, /border-radius: var\(--r-xs\); background: var\(--surface-2\); \}$/);
+  assert.doesNotMatch(memoRule, /--accent|--moon|--danger|--success|--warning|--info|--personal|--company/);
+});
+
+test("render: a customer a memo cannot be linked to keeps today's paths — QuickLog in the wide window, the memo drawer from 메모", () => {
+  // 일지 메모 문맥은 uuid만 받는다 — uuid가 아닌 고객에는 메모 모드를 열지 않는다(연결 없는 메모를 만들지 않는다).
+  const legacy = { id: "lead-legacy-7", name: "옛날학원 G", stage: "Contact", nextAction: "안부 전화", nextActionAt: dayKey(2), createdAt: ago(20), lastContactAt: ago(4) };
+  const app = mountCustomers({ leads: [legacy] });
+  rowsOf(app)[0].props.onClick();
+  app.render();
+  openWide(app);
+  const form = formOf(app);
+  assert.equal(form.props.layout, "wide");
+  assert.equal(form.props.memo, null, "전환 칸이 서지 않는다");
+  assert.equal(form.props.mode, "contact");
+  assert.equal(app.findAll((n) => n.type === "details", form).length, 1);
+  assert.match(app.text(form), /연락이 아닌 한 줄 메모/);
+  // 메모 버튼은 지금처럼 메모 창을 연다.
+  drawerOf(app).props.onClose();
+  app.render();
+  memoButtonOf(app).props.onClick();
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "ContextMemoDrawer").length, 1);
+  assert.equal(app.findAll((n) => n.type === "ContactRecordForm").length, 0);
+});
+
+test("render: on a phone 메모 still opens the memo drawer and the bottom sheet keeps QuickLog — memo mode is desktop-only for now", () => {
+  const had = Object.hasOwn(globalThis, "window");
+  const before = globalThis.window;
+  globalThis.window = { matchMedia: (query) => ({ matches: query === "(max-width: 600px)", addEventListener() {}, removeEventListener() {} }) };
+  try {
+    const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+    openLeadA(app);
+    openWide(app);
+    // 바닥 시트의 폼에는 메모 칸을 넘기지 않는다 — 전환 칸이 없고, 한 줄 메모는 폼 아래 그대로다.
+    assert.equal(formOf(app).props.layout, "compact");
+    assert.equal(formOf(app).props.memo, null);
+    assert.equal(formOf(app).props.mode, "contact");
+    assert.equal(drawerOf(app).props.title, "연락 기록");
+    assert.equal(app.findAll((n) => n.type === "details" && /연락이 아닌 한 줄 메모/.test(app.text(n))).length, 1);
+    drawerOf(app).props.onClose();
+    app.render();
+    memoButtonOf(app).props.onClick();
+    app.render();
+    assert.equal(app.findAll((n) => n.type === "ContextMemoDrawer").length, 1);
+    assert.equal(app.findAll((n) => n.type === "ContactRecordForm").length, 0);
+  } finally {
+    if (had) globalThis.window = before;
+    else delete globalThis.window;
+  }
+});
+
+test("memo mode writes through the journal only and QuickLog stays for the paths that still need it", () => {
+  const drawer = slice("function Customer360Drawer", "// ── 새 고객 등록");
+  // 메모 모드는 넓은 기록창 + 메모를 붙일 수 있는 고객에서만.
+  assert.match(drawer, /const memoModeAvailable = wideRecord && memoEnabled;\s*const memoMode = memoModeAvailable && record\.mode === "memo";/);
+  assert.match(drawer, /const quickMemo = record && !memoModeAvailable && \(/);
+  assert.match(drawer, /memo=\{memoPane\}/);
+  // 메모 칸의 저장 확인은 기록 줄기에 줄을 세울 뿐이다 — 활동 · 고객 행 · 연락 확인 토스트를 건드리지 않는다.
+  const pane = drawer.slice(drawer.indexOf("const memoPane ="), drawer.indexOf("const recordForm ="));
+  assert.match(pane, /onSaved=\{\(entry\) => setSavedMemos\(prev => upsertSavedMemo\(prev, entry, stamp\(\)\)\)\}/);
+  assert.doesNotMatch(pane, /setActivities|saveRevenueRecord|logActivity|onRecordPersisted|onPromiseSaved|next_action/);
+  // 줄기는 읽어 온 메모 + 방금 저장이 확인된 메모 — 메모 읽기가 실패해도 방금 저장한 메모는 선다.
+  assert.match(drawer, /const notes = memoEnabled \? memoStreamRows\(memos\.status === "live" \? memos\.entries : \[\], savedMemos\) : \[\];/);
+  // 메모 버튼 — 데스크톱은 같은 드로어가 넓어지고, 휴대폰과 uuid 아닌 고객은 메모 창.
+  assert.match(drawer, /onClick=\{\(\) => \(memoEnabled && !mobile \? startRecord\(\{\}, null, "", "memo"\) : setMemoState\(\{\}\)\)\}>메모<\/Button>/);
 });
 
 test("render: a just-saved record row carries a receipt — 기록 중 → 저장 중 → 저장됨 only after the server answers", () => {

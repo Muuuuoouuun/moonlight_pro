@@ -19,6 +19,13 @@
 .hub-app .record-wide__scroll { flex: 1 0 var(--record-scroll-floor); min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding: 16px 28px 20px; }
 .hub-app .record-wide__band { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 28px 12px; border-top: 1px solid var(--line-soft); background: var(--surface); }
 
+/* 모드 전환(Q-CR6) — 연락 기록 | 메모. 쓰기 칸 맨 위 제자리에 서고, 머리 문장이 저장의 결과를 미리 말한다
+   (연락 기록은 마지막 연락일과 약속을 바꾸고, 메모는 그대로 둔다). 글자와 선만 — 색으로 나누지 않는다. */
+.hub-app .record-wide__mode { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 28px; border-bottom: 1px solid var(--line-soft); background: var(--surface); }
+.hub-app .record-wide__say { min-width: 0; font-size: 12px; line-height: 1.5; color: var(--fg-muted); }
+/* 흐르는 칸 안의 한 줄 알림(되살린 초안 · 연결 전 · 메모 칸을 열지 못함). */
+.hub-app .record-wide__notice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 12px; line-height: 1.5; color: var(--fg-muted); }
+
 /* 요약 한 줄 — 목록과 ClassIn에 옮겨질 줄이라 가장 또렷하다. 일부 저장 뒤에는 이미 남은 줄이라 잠긴다. */
 .hub-app input.hub-input.record-wide__summary { height: 48px; padding: 0 14px; font-size: 16px; font-weight: 500; }
 .hub-app input.hub-input.record-wide__summary::placeholder { font-weight: 400; }
@@ -48,8 +55,10 @@
 .hub-app .record-wide__grow { flex: 1 1 220px; }
 .hub-app input.hub-input.record-wide__field { height: 36px; }
 .hub-app .record-wide__save { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
-/* 일부 저장 — 띠에는 저장 줄만 남는다(요약 · 어떻게 · 약속은 이미 저장된 기록의 것이다). */
+/* 일부 저장 · 메모 모드 — 띠에는 저장 줄만 남는다(메모에는 어떻게 · 반응 · 약속이 없다). */
 .hub-app .record-wide__save:first-child { padding-top: 0; border-top: 0; }
+/* 메모 저장 확인 — 저장 줄의 글자 자리에 영수증이 선다(저장됨 hh:mm, 초록 없음). */
+.hub-app .record-wide__saved { flex: 1 1 200px; min-width: 0; min-height: 18px; display: flex; align-items: center; }
 
 /* ── 읽기 칸 ─────────────────────────────────────────────────── */
 .hub-app .record-ctx { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 18px; padding: 16px 18px 24px; background: var(--bg); border-left: 1px solid var(--line-soft); }
@@ -69,6 +78,8 @@
 .hub-app .record-ctx__sec { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .hub-app .record-ctx__sec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-height: 24px; }
 .hub-app .record-ctx__hint { font-size: 11.5px; color: var(--fg-dim); }
+/* 거르기(전체 · 연락 · 메모)는 머리 줄의 오른쪽 끝 — 칸이 좁으면 다음 줄로 내려간다. */
+.hub-app .record-ctx__filter { margin-left: auto; }
 .hub-app .record-ctx__state { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .hub-app .record-ctx__empty { margin: 0; font-size: 12px; line-height: 1.6; color: var(--fg-dim); }
 .hub-app .record-ctx__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -103,6 +114,7 @@
 @media (max-width: 900px) {
   .hub-app .record-window { grid-template-columns: minmax(0, 1fr); }
   .hub-app .record-ctx { display: none; }
+  .hub-app .record-wide__mode,
   .hub-app .record-wide__scroll,
   .hub-app .record-wide__band { padding-inline: 16px; }
 }
