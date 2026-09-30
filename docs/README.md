@@ -3,6 +3,7 @@
 > 상태: ACTIVE DOCUMENTATION INDEX
 > 마지막 정리: 2026-09-25 (09.bigmac1.5와 09.WIN1.0 병합. ① Guru 집중 서가·하단 멘토 아틀라스·카드별 Moonlight 재구성 글·플로팅 대화 및 오늘·현황 한 줄 팁의 최신 운영자 결정을 추가하고, 카드별 이미지는 개념 일러스트에서 내용 요약 인포그래픽으로 요구를 정정. ② Guru·Office·Legend 원문 보존과 기록 기반 추천 — 운영자 결정 ⑥~⑧을 에이전트 계층 방향 §2.1에 추가하고 [원문 보존·추천 스펙](superpowers/specs/2026-09-25-source-fidelity-and-embedded-recommendations.md) 등록: 참고 문서 원문 리더(Moonlight 글의 보조)·AI 원문 전달·기록 기반 추천 5곳·Legend 단일 원천·렌즈 정리·Office 원문 전달, 로컬 구현·테스트, 운영 검증 전. 영업·매출 4탭 재구성, Office P0 교정, 운영 DB 적용 기록은 아래 상태표 참조)
 > 운영 적용 추가: 2026-09-29~30 `09.bigmac2.0`의 브랜드 0053·0054와 콘텐츠 예약 0055를 서울 DB에 적용하고 Hub·Engine을 Vercel에 배포했다. 세부 검증과 남은 실사용 확인은 [배포 기록](guides/vercel-deploy.md#2026-09-2930-운영-적용-기록)을 따른다. 이 배포는 같은 날 `main`(리서치함) 재배포에 덮였고, 2026-09-30 두 브랜치를 `main`에서 통합했다 — 번호가 겹치는 브랜드 `20260929_0053·0054`와 리서치함 `20260930_0053·0054`는 서로 다른 파일이다([통합 기록](guides/vercel-deploy.md#2026-09-30-main--09bigmac20-통합-기록)).
+> 2026-09-30 Git 통합: Mac 펫·캘린더·연락 기록·제품·Studio와 설계 문서를 모은 범위, 회귀 수정 및 검증은 [전체 작업 통합 기록](branch-integration-2026-09-30.md)을 따른다. 운영 배포 상태는 위 배포 기록과 각 주제 문서에 따로 표시한다.
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -85,7 +86,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 파일 범위(2026-09-24 실측): 저장소의 `*.test.mjs`는 **378파일**이고 **전부 루트 글롭 안**이다(글롭 밖 0건). 한때 글롭 밖이던 `apps/hub/app/api/hub/content/transform/route.test.mjs`·`.../workflow/route.test.mjs` 2파일은 2026-09-20에 `apps/hub/app/**` 패턴이 추가되면서(`cc1b5c9`) 해소됐다. 그 전 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장해 이전에 CI 밖이던 20파일과 실패 4건을 해소한 것도 사실이다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬의 범위는 어긋나지 않는다.
 
-사이드바 앵커는 `hub-nav.test.mjs`가 **주요 10 + 유틸리티 2**로 고정한다(2026-09-30 — 홈, 오늘, 현황, 내 작업, 영업·매출, 기회 탐색, 프로젝트, 제품, 브랜드, 콘텐츠 + AI·자동화, 설정). 2026-09-23까지는 `고객 연락` 앵커가 따로 있어 10 + 2였고, 운영자 결정으로 영업·매출의 첫 탭 `오늘 연락`이 됐다([영업·매출 4탭 스펙](superpowers/specs/2026-09-24-revenue-four-tabs-design.md)). 2026-09-30 운영자 결정("별도 탭 ㄱㄱ")으로 `제품`(`dashboard/products`)이 프로젝트 탭의 한 보기에서 나와 앵커가 됐다([제품 렌즈 §14.2](superpowers/specs/2026-09-24-product-dev-projects-draft.md)). 2026-09-04에 맞췄던 "8 primary" 서술은 그 전에 이미 낡았고, 07-15 스펙 §3.1의 숫자는 여전히 과거 기준이고, `hub-tokens.css`·`hub-nav.js`의 주요 9개 앵커 주석은 현재 코드와 맞췄다. 사이드바는 2026-08-04(`5a3d506`)부터 한 단계이며, 07-15 스펙의 2레벨 목적지는 아코디언이 아니라 탑바 탭으로 렌더된다(DESIGN.md §7).
+사이드바 앵커는 `hub-nav.test.mjs`가 **주요 10 + 유틸리티 2**로 고정한다(2026-09-30 — 홈, 오늘, 현황, 내 작업, 영업·매출, 기회 탐색, 프로젝트, 제품, 브랜드, 콘텐츠 + AI·자동화, 설정). 2026-09-23까지는 `고객 연락` 앵커가 따로 있어 10 + 2였고, 운영자 결정으로 영업·매출의 첫 탭 `오늘 연락`이 됐다([영업·매출 4탭 스펙](superpowers/specs/2026-09-24-revenue-four-tabs-design.md)). 2026-09-30 운영자 결정("별도 탭 ㄱㄱ")으로 `제품`(`dashboard/products`)이 프로젝트 탭의 한 보기에서 나와 앵커가 됐다([제품 렌즈 §14.2](superpowers/specs/2026-09-24-product-dev-projects-draft.md)). 2026-09-04에 맞췄던 "8 primary" 서술은 그 전에 이미 낡았고, 07-15 스펙 §3.1의 숫자는 여전히 과거 기준이다. `hub-nav.js`의 주요 10개 앵커 주석은 현재 코드와 맞고, `hub-tokens.css`의 주요 9개 주석은 남아 있다. 사이드바는 2026-08-04(`5a3d506`)부터 한 단계이며, 07-15 스펙의 2레벨 목적지는 아코디언이 아니라 탑바 탭으로 렌더된다(DESIGN.md §7).
 
 ## 4. 현재 문서
 
@@ -97,7 +98,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [원문 보존과 시스템에 녹은 추천](superpowers/specs/2026-09-25-source-fidelity-and-embedded-recommendations.md) — **운영자 결정 ⑥~⑧ 반영 · 로컬 구현·테스트, 운영 검증 전(2026-09-25)**. 카드를 고른 질문의 원문 절 전달과 인용·수치 가드, 저장된 사실 기반 추천 규칙(6개)과 억제·위치, Legend 단일 원천과 Guru 전용 렌즈, Office→멘토 원문 전달, 서가의 `참고 문서 원문` 보조 읽기를 정한다. 이 문서 §7이 09-24 출처 점검·Guru 카드 방향의 해당 규칙을 대체한다. 서가·아틀라스·카드 상세·오늘 한 줄 팁의 화면 구성은 같은 날의 [집중 서가·아틀라스](superpowers/specs/2026-09-25-guru-focus-atlas-floating-chat-design.md)·[내부 읽기 글](superpowers/specs/2026-09-25-guru-internal-reading-articles-design.md) 스펙을 따른다.
 - [Office 회의실 레이아웃 A](superpowers/specs/2026-09-24-office-meeting-room-layout.md) — **운영자 승인(2026-09-24) · 화면 로컬 구현·390px·실제 호출 검증 완료(계층 결정 §6.1), 실사용 전**. 막힌 할 일 안건을 회의 스레드로 보여 주는 Office 화면 설계다. 메모 기반 회의 텍스트 검토 M0·M0.5와는 별개이며, Engine·계약은 유지한다.
 
-- [macOS 가장자리 펫 목업](superpowers/specs/2026-09-24-macos-edge-pet-mockup-design.md) — **네이티브 프로토타입 · Hub 연결 구현(2026-09-25)**. 오른쪽 펫 → 빠른 기능/고정 위젯 → Mac 화면 집중 차단. [SwiftPM 앱](../prototypes/moonlight-pet-macos/README.md)은 Hub 할 일 조회·추가·완료, 명시적 메모 저장, 실제 주간 일정 조회를 지원한다. 기존 Mac 기록은 보존하며 상세 화면은 브라우저로 연다. [연결·검증 범위](superpowers/plans/2026-09-25-pet-hub-connection.md): 실제 조회 확인, 운영 데이터 시험 쓰기 없음. 전체 화면 앱·다중 화면·Spaces 동작은 실장비 검증 항목이다.
+- [macOS 가장자리 펫 목업](superpowers/specs/2026-09-24-macos-edge-pet-mockup-design.md) — **네이티브 프로토타입 · Hub 연결 구현(2026-09-25) · Mac 일반 실행 통합(2026-09-30)**. 오른쪽 펫 → 빠른 기능/고정 위젯 → Mac 화면 집중 차단. [SwiftPM 앱](../prototypes/moonlight-pet-macos/README.md)은 Hub 할 일 조회·추가·완료, 명시적 메모 저장, 실제 주간 일정 조회를 지원한다. 기존 Mac 기록은 보존하며 상세 화면은 브라우저로 연다. Mac의 `Moonlight.app`도 같은 네이티브 펫 한 개를 사용하며 Hub 셸과 펫의 연결 설정·세션은 각각 유지한다([실행·패키징 안내](../apps/desktop/README.md#macos)). [연결·검증 범위](superpowers/plans/2026-09-25-pet-hub-connection.md): 실제 조회 확인, 운영 데이터 시험 쓰기 없음. 모니터 이동·위치 복원·중복 실행은 [Mac 앱 README의 2026-09-30 검증](../prototypes/moonlight-pet-macos/README.md#모니터-사이-이동과-위치-기억)을 따르며, 실제 케이블 분리와 모든 Spaces 동작은 추가 실장비 검증 항목이다.
 - [Windows 펫 이식](superpowers/specs/2026-09-26-windows-pet-port-design.md) — **운영자 결정 3건 확정(2026-09-26) · 구현 완료(2026-09-27)**. macOS 펫을 `apps/desktop/pet/`(Electron)으로 옮긴다 — Acrylic 실제 블러 유리, 메인 창 세션 쿠키 공유(펫 안 로그인 폼 없음), 집중은 모니터마다 타이머 화면만(앱 전환 차단 없음). 세 계층 계약은 `pet/shared/contract.js`, 사용법·단축키(Ctrl+Alt+M)·스모크는 [`apps/desktop/README.md`](../apps/desktop/README.md) 펫 절, 검증 결과와 남은 빈틈은 스펙 §6.
 - 데스크톱 빠른 입력 위젯(2026-09-26) — **운영자 목업 승인 · 구현 완료 / 실사용 확인 전(권장)**. Windows 앱의 380×200 창(Ctrl+Shift+M)이 허브 `/widget`(`components/hub/quick-widget.jsx`)을 띄운다. 창 동작·로그아웃·다리 API는 [`apps/desktop/README.md`](../apps/desktop/README.md) 위젯 절, 터치 플로어 예외·포커스 규칙은 [DESIGN.md](../DESIGN.md) §15 2026-09-26 행.
 
@@ -129,6 +130,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **사이드바 IA · PMS 분류 (최신순, 확정 스펙만 정본)**
 
+- [`superpowers/specs/2026-09-24-product-dev-projects-draft.md`](superpowers/specs/2026-09-24-product-dev-projects-draft.md) — **§14.2의 별도 `제품` 앵커만 확정·구현(2026-09-30)**. 프로젝트와 브랜드 사이 `dashboard/products` 착지로 주요 10 + 유틸리티 2가 됐고, 옛 `?view=products` 링크는 새 탭으로 이어진다. 문서의 나머지 목업·후속 제안은 아래 기획 초안의 상태를 따른다.
 - [`superpowers/specs/2026-09-24-revenue-four-tabs-design.md`](superpowers/specs/2026-09-24-revenue-four-tabs-design.md) — **확정(2026-09-24)** 중 IA 부분(§2): 주요 앵커 9 + 유틸리티 2(`고객 연락` 앵커 흡수), 영업·매출 탭 4개와 스코프별 구성, 탭에서 내려온 라우트의 역할 별칭(`REVENUE_ROUTE_TABS`). 다른 앵커의 2레벨 구성은 아래 07-15 스펙 그대로다.
 - [`superpowers/specs/2026-09-11-scope-as-global-filter.md`](superpowers/specs/2026-09-11-scope-as-global-filter.md) — **결정됨(2026-09-11)**. 스코프(전체·ClassIn·개인)의 의미와 적용 범위 정본. `2026-07-14` 스펙의 "스코프 = 목적지 전환" 해석을 폐기하고 전역 필터로 바꾼다. 앵커·2레벨 구조 자체는 아래 `2026-07-15` 스펙이 계속 정본이다. 구현은 단계별.
 - [`2026-09-11-brand-content-refocus-proposal.md`](superpowers/specs/2026-09-11-brand-content-refocus-proposal.md) — 9월 14일 첫 구현 지시 반영: 브랜드 기준 편집·독립 조회, 소재함·Threads 원고·수동 발행 기록·빠른 메모 연결. §10이 실제 구현 범위이며 나머지는 후속 권장안. 운영 DB 타입 확장은 인증 실패로 미적용.
@@ -183,7 +185,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`superpowers/plans/2026-09-24-brave-news-discovery.md`](superpowers/plans/2026-09-24-brave-news-discovery.md) — **Brave News 수동 탐색 계층 로컬 구현**. 콘텐츠 `뉴스 탐색`에서 세 브랜드·주제·기간을 골라 서버 전용 키로 검색한다. 1회 클릭=API 1회, 최대 10건, URL 중복 제거, 영속 저장 없음. 검색 결과는 원문 확인 전 신호이며, 원문 확인 후 리서치함 입력으로 URL·자료 제목·브랜드만 넘긴다. 사실과 원고는 운영자가 작성한다. AI 선별·원고 생성·정기 실행·유튜브는 아직 구현되지 않았다.
 - [`superpowers/specs/2026-09-23-studio-simplification.md`](superpowers/specs/2026-09-23-studio-simplification.md) — **운영자 확정 · 구현(2026-09-23)**. Studio(원고 작성) 기본 화면을 "Threads 글 한 편 끝내기"로 좁혔다: 제목·원문 메모·본문·AI 초안/다듬기·복사·발행했음. 브랜드·기획 6칸·채널·버전·내보내기·다음 행동·목표·검토는 `더보기` 드로어로 옮겼고 기능·저장 계약·DB는 그대로다. 09-12 스펙의 화면 배치(좌 편집/우 도구 패널)를 대체한다. 표면 예산은 `content-studio-surface.test.mjs`가 고정한다. §7 AI 요청·템플릿(요청문 + 글 틀, 서버 DB)은 구현 완료, 운영 DB 마이그레이션 `20260923_0045`는 2026-09-24 적용됨.
 - [`superpowers/specs/2026-09-21-brand-research-editorial-system-design.md`](superpowers/specs/2026-09-21-brand-research-editorial-system-design.md) — **브랜드별 목적·검토용 원고 주기·우선 리서치 범위 확정 / 수집·선별·첫 가동 계약은 DRAFT, 구현 전**. politic_officer 2시간 간격, class.moon 하루 3개, 22th nomad 하루 1개·큰 행사 때 최대 7개의 근거 있는 검토용 원고를 준비한다. 검토 위치와 콘텐츠 원장 승격은 위 09-23 후속 스펙이 대체한다. §15의 수동 회차와 근거·실패·비용 계약은 유효하다.
-- [`design-studies/2026-09-28-content-publishing-flow/README.md`](design-studies/2026-09-28-content-publishing-flow/README.md) — **결정 6건 확정(09-29) · 1+2단계와 발행 로그 화면 구현**. 예약·알림·발행 로그, 잘 된 글 재구성·후속편·연관, 유형별 전문 기능(스레드·카드뉴스·유튜브·카피·종합), 프롬프트 문안 8종, 버튼·상태 규칙의 시각 목업 18화면. 자동 업로드는 보류 결정 유지, 나중 단계로만 표시.
+- [`design-studies/2026-09-28-content-publishing-flow/README.md`](design-studies/2026-09-28-content-publishing-flow/README.md) — **결정 6건 확정(09-29) · 예약·발행 로그 기존 범위 운영 배포 · 09-30 전용 AI 추가·후속편 코드 구현, 운영 반영 별도**. 시각 목업 18화면과 형식별 프롬프트·버튼·상태 규칙. 스레드 `첫 줄 3안`·카드뉴스 `표지 문구 5안`·쇼츠 `훅 5안`, 발행 로그의 `후속편 쓰기`까지 구현했으며 잘 된 글 분석·시리즈·연관·카피·종합은 후속이다. 자동 업로드는 보류 결정을 유지한다. 실제 적용·검증 범위는 문서의 구현 현황을 따른다.
 
 **콘텐츠 성과 (2026-09-22)**
 
@@ -194,6 +196,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md`](superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md) — **1차 승인·구현 / 후속 분석·추천 DRAFT**. 내 작업 → 메모에서 제목 없는 빠른 기록·선택 보강·업무 연결·발췌의 할 일/Studio 생성과 원문 복귀를 연결한다. 같은 탭 새로고침 복구·충돌 비교·중복 방지 포함. [구현·검증·운영 적용 전제](superpowers/plans/2026-09-13-memo-workflow.md). 0027 운영 DB는 2026-09-14 적용 완료. 코드 배포는 별도다.
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
+
+- [`design-studies/2026-09-29-reports-hub/README.md`](design-studies/2026-09-29-reports-hub/README.md) — **DRAFT · 목업·권장안 / 운영자 확정 전 / 앱·라우트·DB 미반영**. 리포트 허브·템플릿·8종 지도·본문 구성·개인/회사/콘텐츠 리포트의 아트보드 7개. 주차 기준과 사실·AI 해석·운영자 판단의 세 층, 차트·후속 행동 구성을 제안한다. 수치는 모두 예시 값이며 화면 위치·회고 질문·회사/개인 경계 등은 미정이다.
 
 - [`superpowers/specs/2026-09-25-product-operations-room-design.md`](superpowers/specs/2026-09-25-product-operations-room-design.md) — **DRAFT · 목업 단계 / 전부 권장안 / 연결 없음**. 제품 운영실: 포트폴리오(상태·사용자·매출·비용·건강), 제품별 전용 페이지, 개발(릴리스 5단계)·보수(전역 점검 종류 × 제품) 체크, 돈 월 마감, 단계와 분리한 운영 상태 5개, 제품 하트비트 push 계약, 매일·매주·매월·분기 리듬, M1~M5. 목업은 비공개 아티팩트.
 
