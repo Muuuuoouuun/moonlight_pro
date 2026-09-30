@@ -55,6 +55,19 @@ struct PanelDisplay: Equatable {
     let visibleFrame: CGRect
 }
 
+/// A fitted pet can sit on either side of a quick panel, or overlap it when
+/// the screen cannot fit both. Remember that relation instead of guessing it.
+struct CompanionAnchor: Codable, Equatable {
+    enum Side: String, Codable { case left, right }
+    let side: Side
+    let gap: CGFloat
+
+    init(companion: CGRect, pet: CGRect) {
+        side = companion.midX < pet.midX ? .left : .right
+        gap = side == .left ? pet.minX - companion.maxX : companion.minX - pet.maxX
+    }
+}
+
 /// Display-relative coordinates survive resolution/Dock changes. Keep the preferred
 /// display while it is disconnected; only an explicit move changes that preference.
 struct SavedPetPlacement: Codable {
@@ -62,10 +75,12 @@ struct SavedPetPlacement: Codable {
     let visibleFrame: CGRect
     let x: CGFloat
     let y: CGFloat
+    let companionAnchor: CompanionAnchor?
 
-    init(frame: CGRect, display: PanelDisplay) {
+    init(frame: CGRect, display: PanelDisplay, companionAnchor: CompanionAnchor? = nil) {
         displayID = display.id
         visibleFrame = display.visibleFrame
+        self.companionAnchor = companionAnchor
         let safe = visibleFrame.insetBy(dx: 8, dy: 8)
         x = min(1, max(0, (frame.minX - safe.minX) / max(1, safe.width - frame.width)))
         y = min(1, max(0, (frame.minY - safe.minY) / max(1, safe.height - frame.height)))
@@ -85,15 +100,21 @@ struct SavedPetPlacement: Codable {
 }
 
 enum PanelGeometry {
-    static func companion(size: CGSize, pet: CGRect, perched: Bool, in visible: CGRect) -> CGRect {
+    static func companion(size: CGSize, pet: CGRect, perched: Bool,
+                          anchor: CompanionAnchor? = nil, in visible: CGRect) -> CGRect {
         if perched {
             return fitted(CGRect(x: pet.maxX - size.width, y: pet.maxY - size.height,
                                  width: size.width, height: size.height), in: visible)
         }
         let leftRoom = pet.minX - visible.minX
         let rightRoom = visible.maxX - pet.maxX
-        let x = leftRoom >= size.width + 10 || leftRoom >= rightRoom
-            ? pet.minX - size.width - 10 : pet.maxX + 10
+        let x: CGFloat
+        if let anchor, anchor.gap.isFinite {
+            x = anchor.side == .left ? pet.minX - size.width - anchor.gap : pet.maxX + anchor.gap
+        } else {
+            x = leftRoom >= size.width + 10 || leftRoom >= rightRoom
+                ? pet.minX - size.width - 10 : pet.maxX + 10
+        }
         return fitted(CGRect(x: x, y: pet.midY - size.height / 2,
                              width: size.width, height: size.height), in: visible)
     }

@@ -49,6 +49,28 @@ enum PanelInteractionTests {
             check(reopened == frame, "Closing/reopening a quick memo or widget must not drift")
         }
 
+        let small = PanelDisplay(id: 5, frame: CGRect(x: 0, y: 0, width: 320, height: 240),
+                                 visibleFrame: CGRect(x: 0, y: 24, width: 320, height: 216))
+        for display in screens + [small] {
+            for size in [CGSize(width: 336, height: 504), CGSize(width: 520, height: 386),
+                         CGSize(width: 460, height: 580), CGSize(width: 336, height: 1300)] {
+                for x in [display.visibleFrame.minX + 8, display.visibleFrame.midX - size.width / 2,
+                          display.visibleFrame.maxX - size.width - 8] {
+                    for y in [display.visibleFrame.minY + 8, display.visibleFrame.midY - size.height / 2,
+                              display.visibleFrame.maxY - size.height - 8] {
+                        let frame = PanelGeometry.fitted(CGRect(origin: CGPoint(x: x, y: y), size: size), in: display.visibleFrame)
+                        let pet = PanelGeometry.pet(size: CGSize(width: 56, height: 56), companion: frame,
+                                                    perched: false, in: display.visibleFrame)
+                        let anchor = try JSONDecoder().decode(CompanionAnchor.self,
+                            from: JSONEncoder().encode(CompanionAnchor(companion: frame, pet: pet)))
+                        let reopened = PanelGeometry.companion(size: size, pet: pet, perched: false,
+                                                              anchor: anchor, in: display.visibleFrame)
+                        check(reopened == frame, "Quick panel must retain both axes at every screen edge, including fitted/tall panels")
+                    }
+                }
+            }
+        }
+
         let pet = CGRect(x: 2830, y: 800, width: 56, height: 56)
         let saved = SavedPetPlacement(frame: pet, display: portrait)
         let restored = try JSONDecoder().decode(SavedPetPlacement.self, from: JSONEncoder().encode(saved))
@@ -64,6 +86,22 @@ enum PanelInteractionTests {
         check(abs(normalized.x - saved.x) < 0.00001 && abs(normalized.y - saved.y) < 0.00001,
               "Display changes must preserve proportional position")
         check(restored.restored(size: pet.size, displays: []) == nil, "Restoration must tolerate no active displays")
+        let quick = CGRect(x: 1576, y: 300, width: 336, height: 504)
+        let quickPet = PanelGeometry.pet(size: pet.size, companion: quick, perched: false, in: landscape.visibleFrame)
+        let anchor = CompanionAnchor(companion: quick, pet: quickPet)
+        let quickSaved = SavedPetPlacement(frame: quickPet, display: landscape, companionAnchor: anchor)
+        let quickRestored = try JSONDecoder().decode(SavedPetPlacement.self, from: JSONEncoder().encode(quickSaved))
+        check(quickRestored.companionAnchor == anchor, "Relaunch must retain quick-panel side and gap")
+        let restartedQuick = PanelGeometry.companion(size: quick.size,
+            pet: quickRestored.restored(size: pet.size, displays: screens)!, perched: false,
+            anchor: quickRestored.companionAnchor, in: landscape.visibleFrame)
+        check(abs(restartedQuick.minX - quick.minX) < 0.00001 && abs(restartedQuick.minY - quick.minY) < 0.00001,
+              "Relaunch and reopen must restore the same quick-panel position")
+        let legacy = try JSONSerialization.jsonObject(with: JSONEncoder().encode(saved)) as! [String: Any]
+        let legacyData = try JSONSerialization.data(withJSONObject: legacy.filter { $0.key != "companionAnchor" })
+        let legacySaved = try JSONDecoder().decode(SavedPetPlacement.self, from: legacyData)
+        check(legacySaved.companionAnchor == nil && legacySaved.restored(size: pet.size, displays: screens) == pet,
+              "Existing saved placements without a companion anchor must still restore")
         print("PASS: \(checks) panel interaction checks (2D drag, portrait/negative/stacked displays, release, resize, restart, disconnect/reconnect)")
     }
 }

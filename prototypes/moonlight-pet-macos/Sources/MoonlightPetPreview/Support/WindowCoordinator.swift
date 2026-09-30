@@ -132,6 +132,7 @@ final class WindowCoordinator: NSObject {
     private let model: AppModel
     private let defaults: UserDefaults
     private var savedPlacement: SavedPetPlacement?
+    private var companionAnchor: CompanionAnchor?
     private static let placementKey = "petPreview.placement.v1"
     private let petWindow: KeyPanel
     private let previewWindow: KeyPanel
@@ -154,6 +155,7 @@ final class WindowCoordinator: NSObject {
         self.defaults = defaults
         savedPlacement = defaults.data(forKey: Self.placementKey)
             .flatMap { try? JSONDecoder().decode(SavedPetPlacement.self, from: $0) }
+        companionAnchor = savedPlacement?.companionAnchor
         petWindow = Self.panel(size: NSSize(width: 56, height: 56))
         previewWindow = Self.panel(size: NSSize(width: 326, height: 130))
         barWindow = Self.panel(size: Self.barSize(for: model.mode))
@@ -552,7 +554,8 @@ final class WindowCoordinator: NSObject {
         for window in [previewWindow, barWindow] {
             let size = window === barWindow ? Self.barSize(for: model.mode) : NSSize(width: 326, height: 130)
             let frame = PanelGeometry.companion(size: size, pet: pet,
-                perched: window === barWindow && model.mode == .memo, in: visible)
+                perched: window === barWindow && model.mode == .memo,
+                anchor: window === barWindow ? companionAnchor : nil, in: visible)
             window.setFrame(frame, display: true)
         }
         placeWidget()
@@ -641,8 +644,10 @@ final class WindowCoordinator: NSObject {
     }
 
     private func alignPet(to frame: NSRect, companion: KeyPanel, in visible: NSRect) {
+        let perched = companion === widgetWindow || (companion === barWindow && model.mode == .memo)
         let pet = PanelGeometry.pet(size: petWindow.frame.size, companion: frame,
-            perched: companion === widgetWindow || (companion === barWindow && model.mode == .memo), in: visible)
+            perched: perched, in: visible)
+        companionAnchor = perched ? nil : CompanionAnchor(companion: frame, pet: pet)
         petWindow.setFrameOrigin(pet.origin)
     }
 
@@ -651,13 +656,14 @@ final class WindowCoordinator: NSObject {
         // move away from the disconnected preferred display.
         if !userMoved, let savedPlacement, !displays.contains(where: { $0.id == savedPlacement.displayID }) { return }
         guard let display = PanelGeometry.display(for: petWindow.frame, in: displays) else { return }
-        let placement = SavedPetPlacement(frame: petWindow.frame, display: display)
+        let placement = SavedPetPlacement(frame: petWindow.frame, display: display, companionAnchor: companionAnchor)
         guard let data = try? JSONEncoder().encode(placement) else { return }
         savedPlacement = placement
         defaults.set(data, forKey: Self.placementKey)
     }
 
     private func restorePlacement() {
+        companionAnchor = savedPlacement?.companionAnchor
         placePetInitially()
         placeTransientWindows()
     }
