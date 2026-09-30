@@ -6,8 +6,7 @@ import { Button, EmptyState, Skeleton, TruthBadge } from '../hub-primitives';
 import { useContentLedger } from '../use-content-ledger';
 import { useContentSchedule } from './use-content-schedule';
 import { PublishLogView } from './publish-log-view';
-import { buildFollowUpDraft } from '@/lib/content-follow-up';
-import { buildStudioSave, isDurableStudioSave } from '@/lib/content-workflow-client';
+import { createFollowUpStarter } from '@/lib/content-follow-up';
 import { postStudio } from './content-studio-api';
 import { buildPublishLog, countLog, filterLog, weekStrip } from '@/lib/content-publish-log';
 import './content-publish-log.css';
@@ -59,18 +58,21 @@ export function ContentPublishLog() {
   const openDraft = (row) => router.push(`/dashboard/content/studio?item=${encodeURIComponent(row.contentId)}&variant=${encodeURIComponent(row.variantId)}`);
 
   const [followUp, setFollowUp] = React.useState({ busy: false, message: '' });
+  const followUpStarter = React.useRef(null);
+  if (!followUpStarter.current) followUpStarter.current = createFollowUpStarter({
+    read: async (contentId) => {
+      const response = await fetch('/api/hub/content/workflow?item=' + encodeURIComponent(contentId), { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error('원본 글을 불러오지 못했어요.');
+      return response.json();
+    },
+    save: (command) => postStudio('workflow', command),
+  });
   // 발행한 글을 인용한 새 글을 서버에 만들고 원고 작성으로 연다. 만들기가 확인되지 않으면 이동하지 않는다.
   const startFollowUp = async (row) => {
     if (followUp.busy) return;
     setFollowUp({ busy: true, message: '' });
     try {
-      const response = await fetch('/api/hub/content/workflow?item=' + encodeURIComponent(row.contentId), { cache: 'no-store', signal: AbortSignal.timeout(15000) });
-      const detail = await response.json();
-      if (!response.ok || detail.status !== 'live') throw new Error('원본 글을 불러오지 못했어요.');
-      const draft = buildFollowUpDraft(detail, row.variantId);
-      if (!draft) throw new Error('본문이 비어 있어 이어 쓸 수 없어요.');
-      const saved = await postStudio('workflow', buildStudioSave(draft, crypto.randomUUID()));
-      if (!isDurableStudioSave(saved)) throw new Error('새 글 저장을 확인하지 못했어요. 다시 시도해 주세요.');
+      const saved = await followUpStarter.current(row);
       router.push(`/dashboard/content/studio?item=${encodeURIComponent(saved.item.id)}&variant=${encodeURIComponent(saved.variant.id)}`);
     } catch (error) { setFollowUp({ busy: false, message: error?.message || '후속편을 만들지 못했어요.' }); return; }
     setFollowUp({ busy: false, message: '' });
