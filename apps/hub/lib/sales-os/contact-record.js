@@ -171,6 +171,18 @@ export function recordSaveLine({ pending = null, showMissing = false, state = "i
   return { progress, note };
 }
 
+// 저장 버튼의 글자 — 무엇이 일어나는지 버튼이 말한다(주 버튼은 하나).
+//   retry  — 일부 저장 뒤 긴 글만 다시 보낸다(그 칸 이름의 글자). 다음으로 넘어가지 않는다.
+//   queued — 오늘 연락에서 연 넓은 기록창(Q-CR8): 저장하면 창이 다음 사람으로 넘어간다. '저장만'은
+//            넘어가지 않고 창을 닫는 보조 버튼이다. 다른 진입점은 언제나 '저장' 하나다.
+//   sheet  — 휴대폰 시트. ⌘↵ 글자를 달지 않고, 실패 뒤에는 머리 버튼이 '다시 저장'이라고 말한다
+//            (원인 줄이 버튼과 떨어져 있다).
+export function recordSaveButtons({ retry = "", queued = false, sheet = false, failed = false } = {}) {
+  if (retry) return { primary: retry, secondary: "", chord: false };
+  if (queued) return { primary: "저장하고 다음", secondary: "저장만", chord: !sheet };
+  return { primary: sheet && failed ? "다시 저장" : "저장", secondary: "", chord: !sheet };
+}
+
 // 저장 줄이 쉬고 있는가 — 앞선 저장의 진행도, 지금 폼에 대해 할 말(빠진 칸 · 경고 · 실패 원인)도 없다.
 // 남은 것은 쉬는 초안 글자뿐이다. 휴대폰 시트는 이때 키보드 위의 줄을 비우고 칩 줄 하나만 남긴다
 // (초안이 놓인 곳은 머리의 둘째 줄이 말한다) — 글 쓸 높이를 상태 없는 줄에 쓰지 않는다.
@@ -224,6 +236,11 @@ export const RECORD_LAYOUT_QUERIES = {
   sheet: `(max-width: ${RECORD_LAYOUT_BREAKPOINTS.sheet}px)`,
   tabs: `(max-width: ${RECORD_LAYOUT_BREAKPOINTS.tabs}px)`,
 };
+
+// 누르는 곳이 44px로 서는 화면 — 전역 터치 플로어(hub-tokens.css)와 같은 쿼리다. 배치를 고르지 않는다(배치는
+// 위의 둘뿐이다): 버튼이 커지는 화면에서 글자뿐인 줄도 같은 높이로 세워, 버튼이 나타났다 사라질 때 그 아래가
+// 밀리지 않게 하는 데만 쓴다(넓은 기록창의 이어 쓰기 줄).
+export const RECORD_TOUCH_QUERY = "(pointer: coarse), (max-width: 720px)";
 
 // 드로어가 듣는 두 미디어 쿼리(RECORD_LAYOUT_QUERIES)의 답에서 배치를 고른다 — mobile은 sheet
 // 쿼리, narrow는 tabs 쿼리가 맞았는지다. 600px 이하에서는 둘 다 맞으므로 sheet가 이긴다.
@@ -391,9 +408,21 @@ export function isPlainEnter(event = {}) {
 }
 
 // ⌘↵ · Ctrl+↵ — 저장. 기록창 안에서는 폼이, 넓은 기록창에서는 창 어디서나(읽기 칸 · 발판 · 빈 곳) 받는다.
+// 누르고 있는 동안 되풀이되는 keydown(repeat)은 저장이 아니다 — 한 번 누른 것이 한 번의 저장이다. 받아 주면
+// 저장 뒤 비워진 폼(또는 '저장하고 다음'으로 넘어온 다음 사람의 폼)을 같은 손짓이 다시 저장한다.
 export function isSaveChord(event = {}) {
   if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return false;
+  if (event.repeat || event.nativeEvent?.repeat) return false;
   return !composingEnter(event);
+}
+
+// 넘어온 창의 첫 한 박자 — '저장하고 다음'은 창을 곧바로 다음 사람으로 넘기고, 새 폼의 주 버튼은 같은 자리에 선다.
+// 앞 사람을 저장한 손짓의 남은 절반(더블 클릭의 둘째 클릭 · 연달아 누른 ⌘↵)이 그 폼에 닿으면, 미리 채워진 기록
+// 후보는 읽히지도 않고 저장되고 빈 폼은 꾸짖음부터 받는다. 그래서 넘어와 선 폼(handoff)은 선 직후의 저장을 받지
+// 않는다 — 더블 클릭 간격보다 조금 길게. 직접 연 창(handoff 아님)은 언제나 받는다.
+export const RECORD_HANDOFF_GUARD_MS = 600;
+export function recordSaveArmed({ handoff = false, openedAt = 0, now = Date.now(), guardMs = RECORD_HANDOFF_GUARD_MS } = {}) {
+  return !handoff || now - openedAt >= guardMs;
 }
 
 // 넓은 기록창 밖에서 난 ⌘↵를 이 기록창이 받아도 되는가 — 폼 안은 폼이 이미 받았고(inForm), 같은

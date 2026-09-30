@@ -159,6 +159,20 @@ test("reads in flight, failed or partial say so — never an empty list that rea
   const many = render({ rows: Array.from({ length: 7 }, (_, i) => act({ id: `a${i}` })) });
   assert.equal((many.match(/<li class="record-ctx__item"/g) || []).length, 5);
   assert.match(text(many), /전체 7건은 ‘고객 정보로’에서 봐요\./);
+  // 오늘 연락에서 연 창에는 '고객 정보로'가 없다 — 호출처가 어디서 보는지를 넘긴다(2026-09-30 ④).
+  assert.match(text(render({ rows: Array.from({ length: 7 }, (_, i) => act({ id: `a${i}` })), elsewhere: "고객 탭" })), /전체 7건은 고객 탭에서 봐요\./);
+});
+
+// 2026-09-30 넓은 기록창 ④ — 오늘 연락에서 목록 밖의 고객을 골라 연 창은 그 고객의 약속을 모른다.
+test("an unknown promise (null) is said as unknown — the card does not claim there is none", () => {
+  const unknown = render({ promise: null });
+  assert.match(unknown, /<p class="record-ctx__what" data-muted="true">여기서는 약속을 알 수 없어요<\/p>/);
+  assert.match(unknown, /<p class="record-ctx__when">목록에 없는 고객이에요 · 고객 탭에서 확인해요<\/p>/);
+  assert.doesNotMatch(text(unknown), /아직 정하지 않았어요|지남/);
+  assert.doesNotMatch(unknown, /record-ctx__late/);
+  // 약속을 넘기지 않은 호출처(undefined)는 지금처럼 '아직 정하지 않았어요'다.
+  assert.match(render({ promise: undefined }), /아직 정하지 않았어요/);
+  assert.match(source, /const readout = promiseReadout\(promise === null \? null : promise \|\| \{\}\);/);
 });
 
 test("the newest row is the receipt — 기록 중 → 저장 중 → 저장됨 hh:mm, 일부 저장 for a half-saved record", () => {

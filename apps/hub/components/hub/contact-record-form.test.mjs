@@ -4,8 +4,11 @@ import { test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { ContactRecordForm, RecordAwayBar, RecordPrimarySlot, RecordSaveLine, RecordSheetFields, recordDraftStore } from "./contact-record-form.jsx";
-import { recordSaveLine } from "../../lib/sales-os/contact-record.js";
+import { ContactRecordDrawer, ContactRecordForm, RecordAwayBar, RecordPrimarySlot, RecordSaveLine, RecordSheetFields, recordDraftStore } from "./contact-record-form.jsx";
+import { RecordQueueStrip } from "./record-queue-strip.jsx";
+import { Button } from "./hub-primitives.jsx";
+import { RECORD_DRAWER_WIDTH, RECORD_TOUCH_QUERY, recordSaveButtons, recordSaveLine } from "../../lib/sales-os/contact-record.js";
+import { applyTrailEvent, recordNextStop, trailItems } from "../../lib/sales-os/record-queue.js";
 
 const source = readFileSync(new URL("./contact-record-form.jsx", import.meta.url), "utf8");
 
@@ -39,10 +42,15 @@ const blockedStorage = () => {
 test("원문 저장 실패 뒤 재시도는 연락 RPC를 다시 보내지 않고 원문만 저장한다", () => {
   assert.match(source, /setPendingRawNote\(/);
   assert.match(source, /const retryRawNote = async \(\) =>/);
-  assert.match(source, /pendingRawNote \? retryRawNote\(\) : save\(\{/);
+  assert.match(source, /if \(pendingRawNote\) retryRawNote\(\);\s*else save\(\{/);
   // 버튼 글자는 배치의 칸 이름을 따른다 — 좁은 시트는 '원문', 넓은 기록창은 '자세히'(같은 재시도 길).
   // 휴대폰 시트의 머리 버튼만 실패 뒤 '다시 저장'이라고 말한다(원인 줄이 버튼과 떨어져 있다 — 2026-09-30 ③).
-  assert.match(source, /\{pendingRawNote \? noteCopy\.retry : sheet && state === "error" \? "다시 저장" : "저장"\}/);
+  // 글자를 고르는 것은 순수 규칙이다(recordSaveButtons — 2026-09-30 ④에서 '저장하고 다음'이 같은 규칙에 들어왔다).
+  assert.match(source, /const buttons = recordSaveButtons\(\{ retry: pendingRawNote \? noteCopy\.retry : "", queued, sheet, failed: state === "error" \}\);/);
+  assert.match(source, /<Button variant="primary" size=\{wide \? "md" : "sm"\} disabled=\{rawNoteSaving\} onClick=\{primaryAction\}>\s*\{buttons\.primary\}/);
+  assert.equal(recordSaveButtons({ retry: "자세히 다시 저장" }).primary, "자세히 다시 저장");
+  assert.equal(recordSaveButtons({ sheet: true, failed: true }).primary, "다시 저장");
+  assert.equal(recordSaveButtons({ failed: true }).primary, "저장");
   assert.match(source, /retry: "원문 저장 재시도",\s*skip: "원문 저장 건너뛰기",/);
   assert.match(source, /retry: "자세히 다시 저장",\s*skip: "건너뛰기",/);
   assert.match(source, /const noteCopy = wide \? RAW_NOTE_COPY\.wide : RAW_NOTE_COPY\.compact;/);
@@ -128,7 +136,10 @@ test("⌘↵ 저장은 한글 조합 중이면 무시한다", () => {
 });
 
 test("쓰던 입력은 닫아도 같은 탭에 남고, 저장하면 지운다(저장소 실패는 조용히 메모리로)", () => {
-  assert.match(source, /const draftKey = \(target\) => `crm-record:\$\{target\?\.kind \|\| "lead"\}:\$\{target\?\.id \|\| ""\}`;/);
+  // 키는 고객마다 하나다(crm-record:<종류>:<id>). 자리를 나눈 호출처(scope — 오늘 연락의 기록 후보, 2026-09-30 ④)만
+  // 뒤에 그 기록의 이름이 붙는다 — 그 밖의 호출처는 지금 키 그대로다.
+  assert.match(source, /const draftKey = \(target, scope = ""\) => `crm-record:\$\{target\?\.kind \|\| "lead"\}:\$\{target\?\.id \|\| ""\}\$\{scope \? `:\$\{scope\}` : ""\}`;/);
+  assert.match(source, /onNotice, handoff = false, draftScope = "" \}\) \{/, "자리를 나누지 않는 것이 기본이다");
   // 탭 저장소(sessionStorage)에 두고 막히면 메모리로 — 그 규칙은 저장소 모듈이 갖고
   // contact-record-draft.test.mjs가 막힌 창·중간에 막히는 창까지 실제로 돌려 본다.
   assert.match(source, /export const recordDraftStore = createRecordDraftStore\(\(\) => window\.sessionStorage\);/);
@@ -143,7 +154,7 @@ test("쓰던 입력은 닫아도 같은 탭에 남고, 저장하면 지운다(�
   // window가 없는 환경에서도 던지지 않고 메모리 사본으로 버틴다.
   assert.equal(recordDraftStore.probe(), "memory");
   const save = source.slice(source.indexOf("const save = ("), source.indexOf("const showMissing"));
-  assert.match(save, /clearDraft\(target\);/);
+  assert.match(save, /clearDraft\(target, draftScope\);/);
   // 저장한 입력이 되살아나 두 번 저장되지 않게 — 토스트 모드도 폼을 프리셋으로 되돌린 뒤 닫는다.
   assert.match(save, /reset\(\);\s*onDone\?\.\(\);\s*return;/);
 });
@@ -185,7 +196,7 @@ test("초안을 둘 곳이 없거나 실패 원인을 말하는 중이면 남는
   // 저장된 고객이 아니면(id 없음) 초안 키가 없다 — writeDraft가 아무것도 두지 않는다.
   const unsaved = withWindow(tabStorage(), () => renderForm({ target: { kind: "lead", name: "아직 저장 전" } }));
   assert.doesNotMatch(unsaved, /초안/);
-  assert.match(source, /const writeDraft = \(target, form\) => \(target\?\.id \? recordDraftStore\.write\(draftKey\(target\), pickDraft\(form\)\) : null\);/);
+  assert.match(source, /const writeDraft = \(target, form, scope\) => \(target\?\.id \? recordDraftStore\.write\(draftKey\(target, scope\), pickDraft\(form\)\) : null\);/);
   // 실패 뒤 다시 연 창은 원인을 말한다 — 쉬는 글자가 그 자리를 덮지 않는다.
   const failed = withWindow(tabStorage(), () => renderForm({ draft: { summary: "다시 열린 입력" }, initialError: "저장에 실패했습니다." }));
   assert.match(failed, /role="alert"[^>]*>저장에 실패했습니다\./);
@@ -211,7 +222,7 @@ test("막힌 창에서 되살린 초안은 '이 탭'이라고 하지 않는다 �
     recordDraftStore.clear(key);
   }
   // 쓰다가 탭 저장소가 거절하면(용량 등) 그때부터 곳을 낮춰 말한다 — 쓴 결과가 곳을 정한다.
-  assert.match(source, /const place = writeDraft\(target, form\);\s*if \(place\) setDraftPlace\(place\);/);
+  assert.match(source, /const place = writeDraft\(target, form, draftScope\);\s*if \(place\) setDraftPlace\(place\);/);
 });
 
 test("호출처가 미리 채운 값은 쓰던 초안을 덮지 않는다 — 초안이 이기고, 씨앗만 있으면 초안이라고 하지 않는다", () => {
@@ -238,7 +249,7 @@ test("호출처가 미리 채운 값은 쓰던 초안을 덮지 않는다 — �
 
   // 씨앗 그대로인 폼은 초안으로 쓰지 않는다 — 프리셋 그대로인 폼과 같이 지운다.
   assert.match(source, /const untouched = sameDraft\(form, baseForm\(presetForm\)\) \|\| Boolean\(seedForm && sameDraft\(form, seedForm\)\);/);
-  assert.match(source, /if \(untouched\) clearDraft\(target\);\s*else \{\s*const place = writeDraft\(target, form\);/);
+  assert.match(source, /if \(untouched\) clearDraft\(target, draftScope\);\s*else \{\s*const place = writeDraft\(target, form, draftScope\);/);
 });
 
 test("인라인 되돌리기 창은 '기록 중'이다 — 서버가 답하기 전에 기록됨·저장됨을 말하지 않는다", () => {
@@ -333,11 +344,17 @@ test("기본 배치는 지금 시트 그대로다 — 넓은 배치는 layout=\"
   assert.match(compact, />무슨 얘기</);
   assert.match(compact, />원문 붙여넣기</);
   assert.doesNotMatch(compact, />자세히</);
-  // 다른 호출처(오늘 연락 · 거래 독 · 첫 화면의 ContactRecordDrawer)는 배치를 넘기지 않는다 — 작은 창 그대로.
+  // 읽기 칸을 주지 않은 호출처(거래 독 · 첫 화면 · 에이전트의 ContactRecordDrawer)는 배치를 넘기지 않는다 — 작은 창
+  // 그대로. 오늘 연락은 2026-09-30 ④에서 읽기 칸(context)을 주는 호출처가 됐다 — 그 길만 넓은 기록창이다.
   const shell = source.slice(source.indexOf("export function ContactRecordDrawer"));
-  assert.doesNotMatch(shell, /layout=/);
-  // 좁은 화면의 것(머리 저장 자리 · 머리의 초안 자리 · 가려진 동안의 줄 · 쓰기로 돌리기)은 전부 선택이고 기본은 '없음'이다.
-  assert.match(source, /undoMode = "inline", layout = "compact", children = null, mode = "contact", onModeChange, memo = null, saveSlot, statusSlot, away = false, onReturn, onAttention \}\) \{/);
+  const small = shell.slice(shell.indexOf("if (!windowed) {"), shell.indexOf("// ── 넓은 기록창 ──"));
+  assert.ok(small.length > 0);
+  assert.doesNotMatch(small, /layout=/);
+  assert.match(small, /presentation="compact"\s*width="min\(520px, 96vw\)"/);
+  assert.match(shell, /const windowed = typeof context === "function";/);
+  // 좁은 화면의 것(머리 저장 자리 · 머리의 초안 자리 · 가려진 동안의 줄 · 쓰기로 돌리기)과 이어 쓰기의 것(다음 사람 ·
+  // 보조 버튼 자리 · 줄에 세우기 · 넘어가기 · 저장 뒤 덧말 · 넘어와 선 폼 · 초안 자리 나누기)은 전부 선택이고 기본은 '없음'이다.
+  assert.match(source, /undoMode = "inline", layout = "compact", children = null, mode = "contact", onModeChange, memo = null, saveSlot, statusSlot, away = false, onReturn, onAttention, next = null, secondarySlot, onQueued, onAdvance, onNotice, handoff = false, draftScope = "" \}\) \{/);
 });
 
 test("넓은 배치는 요약 한 줄(필수) + 늘 펼친 자세히(선택) 두 칸이다", () => {
@@ -892,9 +909,13 @@ test("빠진 칸이 접혀 있거나 가려져 있으면 저장이 그 칸을 �
   assert.match(warn, /setState\("warn"\);[\s\S]*?onAttention\?\.\(\);\s*return;/);
   // 늦은 실패 · 일부 저장도 같다 — 가려진 탭에서 실패가 조용히 묻히지 않는다.
   const fail = source.slice(source.indexOf("const fail = (snapshot, message) => {"), source.indexOf("const save = ("));
-  assert.match(fail, /setErrorMsg\(message\);\s*onAttention\?\.\(\);/);
+  // 단, '저장하고 다음'으로 보낸 기록(snapshot.queued)은 돌리지 않는다 — 창은 이미 다른 사람의 것이고 그 실패는
+  // 창 머리의 '이전' 줄이 말한다. 앞 사람의 늦은 실패가 지금 사람이 읽던 '이 고객' 탭을 쓰기로 바꾸지 않는다.
+  assert.match(fail, /setErrorMsg\(message\);[\s\S]*?if \(!snapshot\.queued\) onAttention\?\.\(\);/);
+  assert.doesNotMatch(fail.replace(/if \(!snapshot\.queued\) onAttention\?\.\(\);/, ""), /onAttention\?\.\(\)/);
   const persist = source.slice(source.indexOf("const persist = async"), source.indexOf("const retryRawNote"));
-  assert.ok(persist.indexOf("onAttention?.();") > persist.indexOf("setErrorMsg(noteCopy.failed);"));
+  assert.ok(persist.indexOf("if (!snapshot.queued) onAttention?.();") > persist.indexOf("setErrorMsg(noteCopy.failed);"));
+  assert.doesNotMatch(persist.replace(/if \(!snapshot\.queued\) onAttention\?\.\(\);/, ""), /onAttention\?\.\(\)/);
   // 저장이 잘 나가면 돌리지 않는다 — 읽던 '이 고객' 탭에 그대로 머문다.
   assert.equal((save.match(/onAttention\?\.\(\)/g) || []).length, 2);
   // 일부 저장 뒤 머리의 '자세히 다시 저장'도 같다 — '이 고객' 탭에서 눌렀는데 또 실패했거나(서버) 보낼 글이
@@ -1117,4 +1138,466 @@ test("좁은 화면의 스타일 — 탭은 900px, 시트는 폼의 배치가 �
   // 전역 터치 플로어(≤720px: 버튼 44px · 입력 16px)를 시트가 되돌리지 않는다.
   assert.doesNotMatch(added, /min-height: (?:[0-3]?\d|4[0-3])px/);
   assert.doesNotMatch(added, /(?:input|textarea)[^{]*\{[^}]*font-size/, "입력 글자 크기를 다시 정하지 않는다(16px 플로어 그대로)");
+});
+
+// ── 2026-09-30 넓은 기록창 ④ — 오늘 연락에서 같은 넓은 창 · 저장하고 다음(Q-CR2 · Q-CR8, 권장 · 화면 확인 뒤 확정) ──
+
+const NEXT = { kind: "next", name: "다음 사람" };
+// 오늘 연락이 여는 폼 — 토스트 되돌리기 계약 위에 다음 멈출 곳과 '이전' 줄(onQueued)이 있다.
+const queuedProps = (props = {}) => ({ undoMode: "toast", next: NEXT, onQueued() {}, onAdvance() {}, ...props });
+const ghostsOf = (html) => html.match(/<button[^>]*hub-btn--ghost[^>]*>.*?<\/button>/gs) || [];
+
+test("버튼 글자는 진입점이 정한다 — 오늘 연락에서 연 넓은 기록창만 '저장하고 다음 ⌘↵' + 보조 '저장만'", () => {
+  const html = renderWide(queuedProps());
+  const band = html.slice(html.indexOf('class="record-wide__save"'));
+  // 주 버튼은 하나다 — '저장만'은 보조(ghost)이고 주 버튼 앞에 선다.
+  assert.equal(primariesOf(html).length, 1);
+  assert.match(primariesOf(html)[0], />저장하고 다음<kbd[^>]*>⌘↵<\/kbd><\/button>$/);
+  assert.doesNotMatch(primariesOf(html)[0], /disabled/);
+  assert.equal(ghostsOf(band).length, 1);
+  assert.match(ghostsOf(band)[0], />저장만<\/button>$/);
+  assert.ok(band.indexOf(">저장만<") < band.indexOf(">저장하고 다음<"));
+  // 저장 줄은 버튼이 어디로 데려가는지 말한다 — 초안이 놓인 곳의 말 뒤에.
+  assert.match(band, /닫아도 이 탭에 초안으로 남아요 · 저장하면 다음 · 다음 사람/);
+
+  // 다른 진입점 — 다음이 없거나(마지막 사람 · 직접 고른 고객), 토스트 되돌리기가 아니거나(고객 드로어),
+  // '이전' 줄이 없으면(onQueued 없음) 언제나 '저장' 하나다.
+  for (const props of [queuedProps({ next: null }), queuedProps({ undoMode: "inline" }), queuedProps({ onQueued: undefined }), {}]) {
+    const plain = renderWide(props);
+    assert.match(primariesOf(plain)[0], />저장<kbd[^>]*>⌘↵<\/kbd><\/button>$/);
+    assert.doesNotMatch(plain, /저장하고 다음|저장만|저장하면 다음/);
+  }
+  // 좁은 시트(거래 독 · 첫 화면)는 다음을 받아도 지금 그대로다.
+  const compact = withWindow(tabStorage(), () => renderForm(queuedProps()));
+  assert.match(primariesOf(compact)[0], />저장<kbd/);
+  assert.doesNotMatch(compact, /저장하고 다음|저장만/);
+  assert.match(source, /const queued = wide && undoMode === "toast" && Boolean\(next\) && typeof onQueued === "function";/);
+
+  // 저장하지 못한 기록이 남아 있으면 버튼이 데려갈 곳은 그 사람이다 — 저장 줄이 그렇게 말한다.
+  const returning = renderWide(queuedProps({ next: { kind: "return", name: "앞 사람" } }));
+  assert.match(returning, /저장하면 저장 못 한 기록으로 돌아가요 · 앞 사람/);
+  assert.match(primariesOf(returning)[0], />저장하고 다음</);
+
+  // 일부 저장 뒤에는 긴 글만 다시 보낸다 — 넘어가지 않으므로 '다음'도 '저장만'도 없다.
+  const held = { activityId: "act-1", optimisticId: "local-1", summary: "단원평가 채점 상담", body: "[결정사항]" };
+  const partial = withWindow(tabStorage({ "crm-record:lead:lead-1:rawnote": JSON.stringify(held) }), () => renderForm({ layout: "wide", ...queuedProps() }));
+  assert.match(primariesOf(partial)[0], />자세히 다시 저장<\/button>$/);
+  assert.doesNotMatch(partial, />저장만</);
+});
+
+test("휴대폰 시트 — 머리의 주 버튼이 '저장하고 다음'이고, '저장만'은 호출처가 준 자리에만 선다", () => {
+  // 자리를 주지 않은 시트 — 주 버튼은 제자리(⌘↵ 글자 없음), 보조 버튼은 없다(키보드 위의 쉬는 줄을 세우지 않는다).
+  const inline = renderSheet(queuedProps());
+  assert.equal(primariesOf(inline).length, 1);
+  assert.match(primariesOf(inline)[0], />저장하고 다음<\/button>$/);
+  assert.doesNotMatch(inline, />저장만</);
+  // 머리 자리 · 보조 자리를 받기로 했고 아직 서지 않았다(null) — 둘 다 제자리에 그리지 않는다(번쩍임 없음).
+  const waiting = renderSheet(queuedProps({ saveSlot: null, statusSlot: null, secondarySlot: null }));
+  assert.equal(primariesOf(waiting).length, 0);
+  assert.doesNotMatch(waiting, />저장만</);
+  assert.doesNotMatch(waiting, /record-sheet__line/, "쉬는 동안 키보드 위는 칩 줄 하나다");
+  assert.equal(chipsOf(waiting).length, 2);
+  // 보조 버튼은 주 버튼과 같은 규칙(RecordPrimarySlot)으로 자리에 선다 — 뿌리의 제자리에서 그린다.
+  assert.match(source, /<RecordPrimarySlot slot=\{sheet \? secondarySlot : undefined\}>/);
+  assert.match(source, /\{primaryInHead && savePrimary\}\s*\{sheet && saveSecondary\}/);
+  assert.match(source, /const saveSecondary = buttons\.secondary && \(!sheet \|\| secondarySlot !== undefined\) && \(/);
+});
+
+test("저장하고 다음은 같은 3.5초 되돌리기 창이다 — 토스트 대신 '이전' 줄에 넘기고, 받아들여진 저장만 넘어간다", () => {
+  const save = source.slice(source.indexOf("const save = ("), source.indexOf("const showMissing"));
+  // 주 버튼 · ⌘↵는 넘어가고('저장하고 다음'일 때만), 보조 버튼은 넘어가지 않는다.
+  assert.match(source, /const primaryAction = \(\) => \{\s*if \(!armed\(\)\) return;\s*if \(pendingRawNote\) retryRawNote\(\);\s*else save\(\{ ignoreWarning: state === "warn", advance: queued \}\);\s*\};/);
+  assert.match(source, /onClick=\{\(\) => \{ if \(armed\(\)\) save\(\{ ignoreWarning: state === "warn" \}\); \}\}>\{buttons\.secondary\}<\/Button>/);
+  // 넘어와 선 폼은 선 직후의 저장을 받지 않는다(recordSaveArmed — contact-record.test.mjs가 시간 경계를 돌려 본다):
+  // 앞 사람을 저장한 더블 클릭의 둘째 클릭이 같은 자리에 선 이 폼의 주 버튼 · 보조 버튼을 누르지 않게.
+  assert.match(source, /const \[openedAt\] = React\.useState\(\(\) => Date\.now\(\)\);/);
+  assert.match(source, /const armed = \(\) => recordSaveArmed\(\{ handoff, openedAt, now: Date\.now\(\) \}\);/);
+  // 저장을 부르는 길은 셋뿐이고(주 버튼 · ⌘↵ → primaryAction, 보조 버튼) 둘 다 그 문을 지난다.
+  assert.equal((source.match(/(?<![.\w])save\(\{/g) || []).length, 2);
+  const branch = save.slice(save.indexOf('if (undoMode === "toast" && advance && queued) {'), save.indexOf('if (undoMode === "toast") {'));
+  assert.ok(branch.length > 0);
+  // 같은 지연 저장(scheduleDetached · UNDO_WINDOW_MS)이고, 되돌리기는 같은 취소(cancelDetached)다.
+  assert.match(branch, /scheduleDetached\(key, \(\) => \{ persist\(payload, \{ \.\.\.snapshot, queued: true \}\); \}\);/);
+  assert.match(branch, /undo: \(\) => \{\s*if \(!cancelDetached\(key\)\) return false;\s*onUndone\?\.\(optimisticId, target\);\s*writeDraft\(target, snapshot\.form, draftScope\);\s*return true;\s*\},/);
+  // 토스트를 띄우지 않는다(다음 사람의 저장 줄을 가린다) — 진행과 되돌리기는 호출처의 '이전' 줄이 든다.
+  assert.doesNotMatch(branch.replace(/\/\/[^\n]*/g, ""), /toast\(/);
+  assert.match(branch, /onQueued\(\{\s*optimisticId,\s*startedAt: Date\.now\(\),/);
+  // 넘어가는 것은 저장이 받아들여진 뒤다 — 폼을 비우고(두 번 저장되지 않게) 그다음에 넘긴다.
+  assert.match(branch, /reset\(\);\s*onAdvance\?\.\(\);\s*return;/);
+  assert.ok(branch.indexOf("onQueued(") < branch.indexOf("onAdvance?.()"));
+  // 막힌 저장(빠진 칸 · 빈 약속 경고)은 넘어가지 않는다 — 넘기기는 검증 · 경고 뒤에만 있다.
+  assert.equal((save.match(/onAdvance\?\.\(\)/g) || []).length, 1);
+  assert.ok(save.indexOf("onAdvance?.()") > save.indexOf("if ((promiseEmpty || check.warn) && !ignoreWarning) {"));
+  assert.ok(save.indexOf("onAdvance?.()") > save.indexOf("if (!check.ok) {"));
+  // '저장만'은 지금의 토스트 되돌리기 그대로다(창을 닫는다) — 그 길은 바뀌지 않았다.
+  const toastMode = source.slice(source.indexOf('if (undoMode === "toast") {'), source.indexOf("reset();\n    scheduleUndoable("));
+  assert.match(toastMode, /scheduleDetached\(key, \(\) => \{ persist\(payload, snapshot\); \}\);/);
+  assert.match(toastMode, /reset\(\);\s*onDone\?\.\(\);\s*return;/);
+  // 주석은 빼고 — 서버가 답하기 전에 끝난 말을 하지 않는다.
+  assert.doesNotMatch(branch.replace(/\/\/[^\n]*/g, ""), /저장됨|기록됨|완료/);
+});
+
+test("늦은 실패는 쓰던 글을 그 고객의 초안으로도 남긴다 — 창이 이미 다음 사람으로 넘어갔어도 잃지 않는다", () => {
+  const fail = source.slice(source.indexOf("const fail = (snapshot, message) => {"), source.indexOf("// advance: '저장하고 다음'으로 눌렀는가"));
+  assert.ok(fail.length > 0);
+  assert.match(fail, /onUndone\?\.\(snapshot\.optimisticId, target\);[\s\S]*?writeDraft\(target, snapshot\.form, draftScope\);\s*restore\(snapshot\);/);
+  assert.match(fail, /onFailed\?\.\(\{ optimisticId: snapshot\.optimisticId, message, form: snapshot\.form, target \}\);/);
+  // '저장하고 다음'으로 보낸 기록의 일부 저장은 '이전' 줄이 말한다 — 폼이 토스트를 겹치지 않는다(그 밖은 지금 그대로).
+  const persist = source.slice(source.indexOf("const persist = async"), source.indexOf("const retryRawNote"));
+  assert.match(persist, /if \(undoMode === "toast" && !snapshot\.queued\) toast\.error\(RAW_NOTE_ERROR_REOPEN\);/);
+  assert.ok(persist.indexOf("onPartial?.(") < persist.indexOf("!snapshot.queued"));
+  // 실제 연락 시각을 남기지 못했다는 말도 같다 — '저장하고 다음'으로 보낸 기록은 '이전' 줄에 덧말로 달고(onNotice가
+  // 보였다고 답하면), 그 줄이 이미 없을 때만 토스트다. 그 밖의 기록은 지금처럼 토스트다.
+  const annotate = source.slice(source.indexOf("const annotate = (activityId, snapshot) => {"), source.indexOf("const persist = async"));
+  assert.match(annotate, /const missed = \(\) => \{\s*if \(!body\.occurredAt\) return;\s*if \(snapshot\.queued && onNotice\?\.\(\{ optimisticId: snapshot\.optimisticId, note: "[^"]+" \}, target\) === true\) return;\s*toast\.error\("기록은 저장됐지만 실제 연락 시각을 남기지 못했어요 — 저장한 시각으로 남아요\."\);\s*\};/);
+  assert.equal((annotate.match(/toast\.error\(/g) || []).length, 1, "토스트는 그 한 길뿐이다");
+  assert.match(annotate, /\.then\(\(d\) => \{ if \(d\?\.status !== "saved"\) missed\(\); \}\)\s*\.catch\(missed\);/);
+});
+
+// 화면 폭을 세운다 — 껍데기가 듣는 미디어 쿼리(max-width)에 그 폭으로 답한다.
+function withScreen(width, run) {
+  const had = Object.hasOwn(globalThis, "window");
+  const before = globalThis.window;
+  globalThis.window = {
+    sessionStorage: tabStorage(),
+    matchMedia: (query) => ({ matches: width <= Number(/max-width: (\d+)px/.exec(query)?.[1] ?? -1), addEventListener() {}, removeEventListener() {} }),
+  };
+  try { return run(); } finally {
+    if (had) globalThis.window = before;
+    else delete globalThis.window;
+  }
+}
+const stripSvg = (html) => html.replace(/<svg.*?<\/svg>/gs, "");
+const probe = (t) => React.createElement("aside", { className: "ctx-probe" }, `읽기 칸 · ${t.name}`);
+const renderDrawer = (props = {}, width = 1280) => withScreen(width, () => stripSvg(renderToStaticMarkup(React.createElement(ContactRecordDrawer, {
+  target: { kind: "lead", id: "lead-1", name: "기록 대상", org: "시험 학원" }, preset: { kind: "call" }, undoMode: "toast", onClose() {}, ...props,
+}))));
+const asideOf = (html) => tagOf(html, /<aside role="dialog"[^>]*>/);
+
+test("읽기 칸을 주지 않은 껍데기는 지금의 작은 창 그대로다 — 거래 독 · 첫 화면 · 에이전트", () => {
+  // 다음 사람을 받아도(잘못 넘겨도) 작은 창은 넓어지지 않고 '저장' 하나다.
+  for (const width of [1280, 390]) {
+    const html = renderDrawer({ next: { name: "다음 사람" }, onAdvance() {} }, width);
+    assert.match(asideOf(html), /data-presentation="compact"/);
+    assert.match(asideOf(html), /--hub-compact-width:min\(520px, 96vw\)/);
+    assert.doesNotMatch(asideOf(html), /data-sheet=/);
+    assert.doesNotMatch(html, /record-window|record-wide|ctx-probe|저장하고 다음|저장만/);
+    assert.match(html, />무슨 얘기</);
+    assert.match(primariesOf(html)[0], />저장<kbd/);
+  }
+});
+
+test("오늘 연락의 껍데기는 같은 넓은 기록창이다 — 같은 Drawer, 폭만 바뀐다(쓰기 | 읽기 칸)", () => {
+  const html = renderDrawer({ context: probe, next: { name: "다음 사람" }, entry: {}, onAdvance() {} });
+  // 옆 드로어 · 960px(Q-CR3) — 새 presentation도 새 라우트도 없다(Q-CR1).
+  assert.match(asideOf(html), /data-presentation="side"/);
+  assert.ok(asideOf(html).includes(`width:${RECORD_DRAWER_WIDTH.wide}`));
+  assert.equal((html.match(/role="dialog"/g) || []).length, 1, "오버레이는 하나다");
+  // 본문은 칸마다 따로 흐른다 — 쓰기 칸(넓은 배치의 폼)과 호출처가 세운 읽기 칸.
+  assert.match(html, /<div class="hub-drawer__body scroll-y" style="flex:1;padding:0;display:flex;flex-direction:column;gap:0;overflow:hidden">/);
+  assert.match(html, /<div class="record-window" data-layout="wide" data-tab="write"><section class="record-window__main" aria-label="기록 쓰기"><div class="record-wide">/);
+  assert.match(html, /<\/section><aside class="ctx-probe">읽기 칸 · 기록 대상<\/aside><\/div>/);
+  assert.match(html, />요약 · 한 줄</);
+  assert.match(html, />자세히</);
+  assert.doesNotMatch(html, />무슨 얘기<|>원문 붙여넣기</);
+  // 넓은 화면에는 탭 · 머리 저장 자리가 없다.
+  assert.doesNotMatch(html, /record-window__tabs|record-window__save-slot|record-window__peek/);
+  // 저장하고 다음 — 머리 아래 줄이 다음 사람을 말하고, 주 버튼은 하나다.
+  assert.match(html, /<div class="record-window__strip" role="group"[^>]*><span class="record-window__strip-next">다음 <b>다음 사람<\/b><\/span><\/div>/);
+  assert.equal(primariesOf(html).length, 1);
+  assert.match(primariesOf(html)[0], />저장하고 다음<kbd/);
+  assert.match(html, />저장만<\/button>/);
+  // 오늘 연락에서 곧바로 열었다 — '고객 정보로' 발판이 없다.
+  assert.doesNotMatch(html, /고객 정보로|hub-drawer__footer/);
+  // 연락 기록 | 메모 전환은 이 창에 없다(메모 칸을 주지 않았다) — '메모만' 채널이 그대로 남는다.
+  assert.doesNotMatch(html, /record-wide__mode/);
+  assert.match(html, />메모만</);
+
+  // 마지막 사람(다음 없음) — 줄을 두지 않고 '저장' 하나다(저장하면 닫힌다).
+  const last = renderDrawer({ context: probe, next: null, entry: {}, onAdvance() {} });
+  assert.doesNotMatch(last, /record-window__strip|저장하고 다음|저장만/);
+  assert.match(primariesOf(last)[0], />저장<kbd/);
+  // 이어 쓰기는 토스트 되돌리기 계약 위에만 선다 — 그 밖의 호출처에는 '다음'이 없다.
+  const inline = renderDrawer({ context: probe, next: { name: "다음 사람" }, undoMode: "inline" });
+  assert.doesNotMatch(inline, /record-window__strip|저장하고 다음/);
+});
+
+test("넓은 껍데기의 좁은 화면 — 900px 이하는 '쓰기 | 이 고객' 탭, 600px 이하는 전체 높이 시트(저장은 머리에)", () => {
+  const late = { state: "dated", what: "OMR 시안 링크 보내기", late: 3, dateLabel: "9/27", whenLabel: "3일 지남" };
+  const props = { context: probe, promiseFor: () => late, next: { name: "다음 사람" }, entry: {}, onAdvance() {} };
+  const tablet = renderDrawer(props, 800);
+  assert.match(asideOf(tablet), /data-presentation="side"/);
+  assert.match(tablet, /<div class="record-window" data-layout="tabs" data-tab="write"><div class="record-window__tabs">/);
+  assert.match(tablet, /aria-label="보기"[^>]*><button[^>]*aria-pressed="true"[^>]*>쓰기<\/button><button[^>]*aria-pressed="false"[^>]*>이 고객<\/button>/);
+  // 쓰기 탭 맨 위의 약속 한 줄 — 날짜가 무엇보다 앞에 서고, 놓친 약속은 글자 한 곳만 위급 색이다.
+  assert.match(tablet, /<button type="button" class="hub-row record-window__peek"><span class="record-window__peek-text"><b>약속<\/b><span class="record-ctx__late">3일 지남<\/span> · <span class="mono">9\/27<\/span> OMR 시안 링크 보내기<\/span>/);
+  assert.match(tablet, />저장만<\/button>/, "탭 배치는 넓은 폼이다 — 보조 버튼이 저장 줄에 선다");
+  // 약속을 모르는 고객(목록 밖)은 한 줄을 두지 않는다 — 없는 약속을 지어내지 않는다.
+  assert.doesNotMatch(renderDrawer({ ...props, promiseFor: () => null }, 800), /record-window__peek/);
+  assert.doesNotMatch(renderDrawer({ ...props, promiseFor: null }, 800), /record-window__peek/);
+
+  const phone = renderDrawer(props, 390);
+  // 같은 바닥 시트가 전체 높이로 선다(Q-CR11) — 저장 자리와 초안 자리가 머리에.
+  assert.match(asideOf(phone), /data-presentation="compact"/);
+  assert.match(asideOf(phone), /data-sheet="full"/);
+  assert.ok(asideOf(phone).includes(`--hub-compact-width:${RECORD_DRAWER_WIDTH.rest}`));
+  assert.match(phone, /<div class="hub-drawer__action"[^>]*><span class="record-window__save-slot"><\/span><\/div>/);
+  assert.match(phone, /<span class="record-window__sub"><span class="record-window__sub-who">기록 대상 · 시험 학원 · 통화<\/span><span class="record-window__status-slot"><\/span><\/span>/);
+  assert.match(phone, /<div class="record-window" data-layout="sheet" data-tab="write">/);
+  assert.match(phone, /<div class="record-wide record-sheet">/);
+  // 주 버튼은 머리 자리의 것이다(자리가 서기 전이라 아직 없다) — '저장만'의 자리는 머리 아래 줄의 끝이다.
+  assert.equal(primariesOf(phone).length, 0);
+  assert.match(phone, /<span class="record-window__strip-next">다음 <b>다음 사람<\/b><\/span><span class="record-window__strip-slot"><\/span><\/div>/);
+  // 휴대폰의 줄은 한 줄이다(compact) — 누르는 곳이 44px인 화면이라는 것도 같이 알린다(touch).
+  assert.match(phone, /<div class="record-window__strip" data-layout="sheet" data-touch="true" role="group"/);
+  assert.doesNotMatch(phone, /record-sheet__line/);
+  // 넓은 화면에서는 보조 버튼의 자리가 줄에 없다(저장 줄에 선다).
+  assert.doesNotMatch(renderDrawer(props), /record-window__strip-slot/);
+});
+
+test("고객을 고르는 동안은 좁게, 쓰는 동안만 넓게 — 대상 없는 창도 같은 Drawer다", async () => {
+  const searchTargets = async () => ({ status: "live", targets: [] });
+  const picking = renderDrawer({ target: null, preset: {}, context: probe, searchTargets, suggestions: [{ kind: "lead", id: "s-1", name: "오늘 챙길 사람" }] });
+  assert.match(asideOf(picking), /data-presentation="side"/);
+  assert.ok(asideOf(picking).includes(`width:${RECORD_DRAWER_WIDTH.rest}`));
+  assert.match(picking, /누구와 연락했나요\?/);
+  assert.match(picking, /placeholder="이름·학원 검색"/);
+  assert.match(picking, />오늘 챙길 사람</);
+  // 고르기 전에는 기록 칸도 읽기 칸도 줄도 없다 — 읽기 칸은 고른 고객을 받아야 선다.
+  assert.doesNotMatch(picking, /record-window|ctx-probe|record-wide/);
+  // 휴대폰에서 고르는 동안은 지금의 바닥 시트다(전체 높이가 아니다 — 글쓰기 칸이 없다).
+  const phone = renderDrawer({ target: null, preset: {}, context: probe, searchTargets }, 390);
+  assert.match(asideOf(phone), /data-presentation="compact"/);
+  assert.doesNotMatch(asideOf(phone), /data-sheet=/);
+  // 대상도 고르기도 없으면 열리지 않는다(지금 그대로).
+  assert.equal(renderDrawer({ target: null, context: probe }), "");
+  // 직접 고른 고객은 쓰기 칸 맨 위에 누구인지와 바꿀 길이 선다.
+  const shell = source.slice(source.indexOf("// ── 넓은 기록창 ──"));
+  assert.match(shell, /\{pickedWho && tab === "write" && \(\s*<div className="record-window__picked">/);
+  assert.match(shell, /<Button variant="ghost" size="xs" onClick=\{\(\) => setPicked\(null\)\}>다른 고객<\/Button>/);
+});
+
+test("껍데기는 앞 사람의 저장을 '이전' 줄에 얹고, 줄이 이미 말한 사건을 호출처에 알린다(shown)", () => {
+  const shell = source.slice(source.indexOf("// ── 넓은 기록창 ──"));
+  // 사건은 순수 규칙(applyTrailEvent)으로 얹는다 — 줄에 없는 기록 · 닫힌 창의 사건은 보인 것이 아니다.
+  assert.match(shell, /const track = \(event\) => \{\s*const shown = mountedRef\.current && trailTracks\(trailRef\.current, event\.id\);\s*if \(shown\) commitTrail\(\(prev\) => applyTrailEvent\(prev, event\)\);\s*return shown;\s*\};/);
+  // 줄의 정본은 ref다 — 저장을 누른 바로 그 박자에 창이 닫혀도 방금 줄에 선 기록이 넘겨받기에서 빠지지 않는다.
+  assert.match(source, /const commitTrail = \(change\) => \{\s*const before = trailRef\.current;\s*const after = change\(before\);\s*if \(after === before\) return;\s*trailRef\.current = after;\s*setTrail\(after\);\s*\};/);
+  assert.equal((source.match(/setTrail\(/g) || []).length, 1, "줄은 commitTrail로만 바꾼다");
+  assert.doesNotMatch(source, /trailRef\.current = trail;/);
+  // 자리(targetKey)는 그 기록의 것이다 — 고객, 그리고 호출처가 초안 자리를 나눴으면(기록 후보) 그 기록.
+  assert.match(shell, /commitTrail\(\(prev\) => applyTrailEvent\(prev, \{ type: "queued", id: optimisticId, name: t\?\.name, target: t, targetKey: recordSlotKey\(t, draftScope\), scoped: Boolean\(draftScope\), entry, startedAt, undo \}\)\);/);
+  assert.match(source, /const recordSlotKey = \(target, scope = ""\) => \(target\?\.id && scope \? `\$\{targetKeyOf\(target\)\}\|\$\{scope\}` : targetKeyOf\(target\)\);/);
+  assert.match(source, /const targetKey = recordSlotKey\(effectiveTarget, draftScope\);/);
+  // 저장 뒤의 덧말 — 그 기록의 줄이 아직 있으면 거기에 달고, 보였는지를 폼에 돌려준다(없으면 폼이 토스트로 말한다).
+  assert.match(shell, /onNotice=\{\(\{ optimisticId, note \}\) => track\(\{ type: "noted", id: optimisticId, note \}\)\}/);
+  // 넘어와(다음 · 돌아가기) 선 폼 — 같은 손짓의 남은 절반을 저장으로 받지 않는다. 처음 연 창(seq 0)은 아니다.
+  assert.match(shell, /handoff=\{seen\.seq > 0\}\s*draftScope=\{draftScope\}/);
+  assert.match(shell, /onSending=\{\(ids, t\) => \{ track\(\{ type: "sending", id: ids\?\.optimisticId \}\); onSending\?\.\(ids, t\); \}\}/);
+  assert.match(shell, /onUndone=\{\(id, t\) => \{ track\(\{ type: "undone", id \}\); onUndone\?\.\(id, t\); \}\}/);
+  // "저장됨 hh:mm"은 서버가 답한 뒤에만 — saved 사건은 onPersisted(전부 저장됨)에서만 얹는다.
+  assert.equal((shell.match(/type: "saved"/g) || []).length, 1);
+  assert.match(shell, /onPersisted=\{\(ids, t\) => onPersisted\?\.\(ids, t, \{ shown: track\(\{ type: "saved", id: ids\?\.optimisticId, at: stamp\(\) \}\) \}\)\}/);
+  assert.match(shell, /onFailed=\{\(failure\) => onFailed\?\.\(failure, \{ shown: track\(\{ type: "failed", id: failure\?\.optimisticId, message: failure\?\.message, form: failure\?\.form \}\) \}\)\}/);
+  // 요약만 확인된 단계(onSummaryPersisted)는 줄을 바꾸지 않는다 — 자세히까지 확인돼야 저장됨이다.
+  assert.match(shell, /onSummaryPersisted=\{onSummaryPersisted\}/);
+  // 저장하고 다음 — 저장 못 한 기록이 있으면 돌아가고, 다음이 있으면 넘기고, 없으면 닫는다.
+  // 호출처가 넘길 곳을 찾지 못했으면(false) 이 창이 닫는다 — 호출처가 창을 그냥 걷으면 방금 보낸 기록의 되돌리기가 사라진다.
+  assert.match(shell, /const advance = \(\) => \{\s*if \(stop\?\.kind === "return"\) \{ back\(stop\.id\); return; \}\s*const moved = stop\?\.kind === "next" && typeof onAdvance === "function" && onAdvance\(effectiveTarget\) !== false;\s*if \(!moved\) close\(\);\s*\};/);
+  // 다음 사람은 지금 쓰는 고객(직접 고른 고객일 수 있다)으로 묻는다 — 줄이 말한 '다음'과 넘어가는 곳이 같은 규칙이다.
+  assert.match(shell, /const upcoming = recording \? \(typeof next === "function" \? next\(effectiveTarget\) : next\) : null;/);
+  assert.match(shell, /const stop = recording && undoMode === "toast" \? recordNextStop\(\{ next: upcoming, trail, targetKey \}\) : null;/);
+  // 돌아가기 — 저장하지 못한 기록은 쓰던 글과 원인을 들고 간다.
+  assert.match(shell, /onReturn\?\.\(receipt\.entry, \{\s*target: receipt\.target,\s*\.\.\.\(receipt\.phase === "failed" \? \{ draft: receipt\.form, error: receipt\.message \} : \{\}\),\s*\}\);/);
+  // 창이 사라지면 줄도 사라진다 — 아직 되돌릴 수 있는 기록은 남은 시간만큼 토스트로 되돌리기를 이어 준다.
+  // 닫기와 언마운트(호출처가 창을 걷었다 · 화면을 떠났다)가 같은 길을 쓰고, 한 기록은 한 번만 넘긴다.
+  const handoff = source.slice(source.indexOf("const handTrailOff = () => {"), source.indexOf("const handTrailOffRef"));
+  assert.ok(handoff.length > 0);
+  assert.match(handoff, /trailHandoff\(trailRef\.current, \{ now: Date\.now\(\), windowMs: UNDO_WINDOW_MS \}\)/);
+  assert.match(handoff, /if \(handedRef\.current\.has\(left\.id\)\) continue;\s*handedRef\.current\.add\(left\.id\);/);
+  assert.match(handoff, /toast\(`기록 중 · \$\{left\.name\}`, \{\s*id: `contact-\$\{left\.id\}`,\s*duration: left\.remaining,/);
+  assert.match(handoff, /onClick: \(\) => \{ if \(left\.undo\(\)\) toast\(/);
+  // 쓰던 글이 어디 있는지는 그 기록의 자리로 말한다 — 기록 후보의 기록은 고객의 행이 아니라 그 줄이다.
+  assert.match(handoff, /\$\{left\.scoped \? "같은 줄에서" : "같은 고객의"\} 기록창을 다시 열면 쓰던 글이 남아 있어요\./);
+  assert.doesNotMatch(handoff.replace(/\/\/[^\n]*/g, ""), /저장됨|기록됨/);
+  const close = shell.slice(shell.indexOf("const close = () => {"), shell.indexOf("const back = (id) => {"));
+  assert.match(close, /const close = \(\) => \{\s*handTrailOff\(\);\s*onClose\?\.\(\);\s*\};/);
+  assert.match(source, /return \(\) => \{\s*mountedRef\.current = false;\s*handTrailOffRef\.current\(\);\s*\};/);
+  // 넘겨받기는 어느 분기(좁은 창 · 고르는 중)보다 앞의 훅이다 — 훅 순서가 분기를 타지 않는다.
+  assert.ok(source.indexOf("handTrailOffRef.current();") < source.indexOf("if (!windowed) {"));
+  // ESC · 오버레이 · 닫기 · 저장만 뒤의 닫기가 모두 같은 길이다(ESC 겹침은 Drawer의 esc-layers 그대로).
+  assert.match(shell, /initialFocusRef=\{initialFocusRef\}\s*onClose=\{close\}/);
+  assert.match(shell, /onDone=\{close\}/);
+  assert.doesNotMatch(shell, /addEventListener\("keydown"/, "껍데기는 ESC를 따로 듣지 않는다");
+  // 사람이 바뀌면 폼을 새로 세운다 — 같은 고객의 다음 기록 후보로 넘어가도 새 프리셋으로 열린다.
+  assert.match(source, /const formKey = `\$\{seen\.seq\}:\$\{effectiveTarget\?\.kind \|\| "lead"\}:\$\{effectiveTarget\?\.id\}`;/);
+  assert.match(source, /if \(seen\.entry !== entry\) \{\s*setSeen\(\{ entry, seq: seen\.seq \+ 1 \}\);\s*setPicked\(null\);\s*setTabChoice\("write"\);\s*\}/);
+});
+
+// 머리 아래 줄 — 무엇을 보일지는 순수 규칙(trailItems · recordNextStop)이 정하고 줄은 그리기만 한다.
+const trailOf = (...events) => events.reduce((trail, event) => applyTrailEvent(trail, event), []);
+const queuedEvent = (id, name) => ({ type: "queued", id, name, target: { kind: "lead", id: `t-${id}`, name }, targetKey: `lead:t-${id}`, startedAt: 0, undo: () => true });
+const renderStrip = (trail, props = {}) => stripSvg(renderToStaticMarkup(React.createElement(RecordQueueStrip, { items: trailItems(trail), onUndo() {}, onReturn() {}, ...props })));
+
+test("머리 줄의 진행 — 이전: 이름 · 기록 중(되돌리기) → 저장 중 → 저장됨 hh:mm", () => {
+  const pending = renderStrip(trailOf(queuedEvent("a", "앞 사람")));
+  assert.match(pending, /<span class="record-window__strip-item" data-phase="pending"><span class="record-window__strip-who">이전 · 앞 사람<\/span><span class="record-receipt" data-receipt="pending" role="status">/);
+  // 덧말 없이 '기록 중' + 되돌리기 — 기록 칸의 저장 줄과 같은 모양이다.
+  assert.match(pending, /<span>기록 중<\/span><\/span><button/);
+  assert.doesNotMatch(pending, /아직 보내지 않았어요/);
+  assert.match(pending, />되돌리기<\/button>/);
+  assert.doesNotMatch(pending, /저장됨|기록됨|돌아가기/);
+
+  // 보낸 뒤 — 되돌리기가 없다(죽은 버튼을 두지 않는다). 저장 중은 TruthBadge의 syncing 그대로다.
+  const sending = renderStrip(trailOf(queuedEvent("a", "앞 사람"), { type: "sending", id: "a" }));
+  assert.match(sending, /data-phase="sending"><span class="record-window__strip-who">이전 · 앞 사람<\/span><span data-truth="syncing"[^>]*>저장 중<\/span>/);
+  assert.doesNotMatch(sending, /<button|저장됨|기록됨/);
+
+  // 서버가 답했다 — 저장됨 + 그 답을 받은 시각(mono). 초록은 없다.
+  const saved = renderStrip(trailOf(queuedEvent("a", "앞 사람"), { type: "sending", id: "a" }, { type: "saved", id: "a", at: "2026-09-30T01:41:00.000Z" }));
+  assert.match(saved, /data-phase="saved"><span class="record-window__strip-who">이전 · 앞 사람<\/span><span class="record-receipt" data-receipt="saved" role="status"><span>저장됨 <span class="mono">10:41<\/span><\/span><\/span><\/span>/);
+  assert.doesNotMatch(saved, /<button|success/);
+
+  // 줄이 비면 그리지 않는다. 다음 사람만 있으면 그 말만 한다.
+  assert.equal(renderStrip([]), "");
+  assert.match(renderStrip([], { stop: recordNextStop({ next: { name: "다음 사람" } }) }), /^<div class="record-window__strip"[^>]*><span class="record-window__strip-next">다음 <b>다음 사람<\/b><\/span><\/div>$/);
+});
+
+test("머리 줄의 실패 — 저장 못 함은 위급 표식 한 곳과 돌아갈 길, 일부 저장 · 되돌림도 돌아갈 수 있다", () => {
+  const failedTrail = trailOf(queuedEvent("a", "앞 사람"), { type: "failed", id: "a", message: "서버에 닿지 않았어요 — 입력을 복원했습니다.", form: { summary: "쓰던 글" } });
+  const failed = renderStrip(failedTrail, { stop: recordNextStop({ next: { name: "다음 사람" }, trail: failedTrail, targetKey: "lead:t-b" }) });
+  // 1px 레일 + 제목 글자만 위급 색이다(저장 줄의 실패 원인과 같은 표식) — 알림 역할로 읽힌다.
+  assert.match(failed, /<span class="record-window__strip-item" data-phase="failed" role="alert" style="padding-left:10px;box-shadow:inset 1px 0 0 var\(--danger\);color:var\(--fg\)">/);
+  assert.match(failed, /<span style="display:inline-flex;align-items:center;gap:4px;font-weight:500;color:var\(--danger\)">저장 못 함<\/span><span>쓰던 글은 남아 있어요<\/span>/);
+  assert.equal((failed.match(/var\(--danger\)/g) || []).length, 2, "레일 하나 + 제목 하나");
+  assert.match(failed, /<button aria-label="앞 사람 기록으로 돌아가기"[^>]*>돌아가기<\/button>/);
+  assert.doesNotMatch(failed, /되돌리기/);
+  // 실패는 넘어가지 않는다 — 줄이 다음 멈출 곳을 그 사람이라고 말한다.
+  assert.match(failed, /<span class="record-window__strip-next">다음 · 저장 못 한 기록 <b>앞 사람<\/b><\/span>/);
+
+  const partialTrail = trailOf(queuedEvent("a", "앞 사람"), { type: "partial", id: "a", at: "2026-09-30T01:41:00.000Z" });
+  const partial = renderStrip(partialTrail, { stop: recordNextStop({ next: { name: "다음 사람" }, trail: partialTrail, targetKey: "lead:t-b" }) });
+  assert.match(partial, /data-receipt="partial"/);
+  assert.match(partial, />일부 저장 <span class="mono">10:41<\/span> · 요약만 저장됐어요 · 긴 글은 아직</);
+  assert.match(partial, />돌아가기<\/button>/);
+  assert.doesNotMatch(partial, /var\(--danger\)/);
+  // 일부 저장도 넘어가지 않는다 — 다만 "저장 못 한 기록"이라고 부르지 않는다(요약은 저장됐다고 같은 줄이 말한다).
+  assert.match(partial, /<span class="record-window__strip-next">다음 · 자세히가 남은 기록 <b>앞 사람<\/b><\/span>/);
+  assert.doesNotMatch(partial, /저장 못 한 기록|저장 못 함/);
+
+  const undone = renderStrip(trailOf(queuedEvent("a", "앞 사람"), { type: "undone", id: "a" }));
+  assert.match(undone, /data-phase="undone" role="status"><span class="record-window__strip-who">이전 · 앞 사람<\/span><span>되돌렸어요 · 쓰던 글은 초안으로 남아 있어요<\/span>/);
+  assert.match(undone, />돌아가기<\/button>/);
+
+  // 버튼은 그 줄의 ID로 부른다.
+  const calls = [];
+  const tree = RecordQueueStrip({ items: trailItems(failedTrail), onUndo: (id) => calls.push(["undo", id]), onReturn: (id) => calls.push(["return", id]) });
+  const buttons = [];
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== "object") return;
+    if (node.props?.onClick) buttons.push(node);
+    walk(node.props?.children);
+  };
+  walk(tree);
+  buttons.forEach((button) => button.props.onClick());
+  assert.deepEqual(calls, [["return", "a"]]);
+});
+
+test("휴대폰의 줄은 한 줄이다 — 앞 사람의 영수증이 '다음' 자리에 서고, '저장만'의 자리는 그 줄의 끝이다", () => {
+  const phoneStrip = (trail, props = {}) => renderStrip(trail, { compact: true, touch: true, secondaryRef() {}, ...props });
+  const next = { kind: "next", name: "다음 사람" };
+  // 앞 사람이 없으면 '다음'과 보조 버튼의 자리.
+  assert.match(phoneStrip([], { stop: next }), /^<div class="record-window__strip" data-layout="sheet" data-touch="true"[^>]*><span class="record-window__strip-next">다음 <b>다음 사람<\/b><\/span><span class="record-window__strip-slot"><\/span><\/div>$/);
+  // 앞 사람의 영수증이 서면 '다음'은 말하지 않는다 — 한 줄에 영수증 + 버튼 + '저장만'의 자리.
+  const pending = phoneStrip(trailOf(queuedEvent("a", "앞 사람")), { stop: next });
+  assert.doesNotMatch(pending, /record-window__strip-next/);
+  assert.match(pending, /<span class="record-window__strip-item" data-phase="pending" data-lead="true">/);
+  assert.ok(pending.indexOf("record-window__strip-item") < pending.indexOf("record-window__strip-slot"));
+  assert.match(pending, />되돌리기<\/button><\/span><span class="record-window__strip-slot"><\/span><\/div>$/);
+  // 진행이 바뀌어도(기록 중 → 저장 중 → 저장됨) 같은 자리의 한 줄이다.
+  for (const event of [{ type: "sending", id: "a" }, { type: "saved", id: "a", at: "2026-09-30T01:41:00.000Z" }]) {
+    const html = phoneStrip(trailOf(queuedEvent("a", "앞 사람"), event), { stop: next });
+    assert.equal((html.match(/record-window__strip-item/g) || []).length, 1);
+    assert.match(html, /data-lead="true"/);
+    assert.match(html, /<span class="record-window__strip-slot"><\/span><\/div>$/);
+  }
+  // 덧말은 뺀다(한 줄에 들어가지 않는다) — 전부는 돌아간 창이 말한다. 돌아갈 길과 위급 표식은 그대로다.
+  const failedTrail = trailOf(queuedEvent("a", "앞 사람"), { type: "failed", id: "a", message: "서버에 닿지 않았어요", form: {} });
+  const failed = phoneStrip(failedTrail, { stop: recordNextStop({ next, trail: failedTrail, targetKey: "lead:t-b" }) });
+  assert.match(failed, />저장 못 함<\/span><button/);
+  assert.doesNotMatch(failed, /쓰던 글은 남아 있어요|record-window__strip-next/);
+  assert.match(failed, />돌아가기<\/button>/);
+  const partial = phoneStrip(trailOf(queuedEvent("a", "앞 사람"), { type: "partial", id: "a", at: "2026-09-30T01:41:00.000Z" }));
+  assert.match(partial, />일부 저장 <span class="mono">10:41<\/span><\/span><\/span><button/);
+  assert.doesNotMatch(partial, /요약만 저장됐어요/);
+  const undone = phoneStrip(trailOf(queuedEvent("a", "앞 사람"), { type: "undone", id: "a" }));
+  assert.match(undone, /<span>되돌렸어요<\/span><button/);
+  // 풀리지 않은 기록이 둘이면 둘째부터는 자리 뒤(제 줄)에 선다 — 버튼의 자리는 첫 줄 끝 그대로다.
+  const two = phoneStrip(trailOf(queuedEvent("a", "앞 사람"), { type: "failed", id: "a", message: "x" }, queuedEvent("b", "그다음 사람")), { stop: next });
+  assert.equal((two.match(/data-lead="true"/g) || []).length, 1);
+  assert.ok(two.indexOf("그다음 사람") < two.indexOf("record-window__strip-slot"));
+  assert.ok(two.indexOf("record-window__strip-slot") < two.indexOf("이전 · 앞 사람"));
+  // 넓은 화면(compact 아님)은 '다음'과 영수증이 나란히 선다 — 덧말도 그대로.
+  const wide = renderStrip(failedTrail, { stop: next });
+  assert.match(wide, /record-window__strip-next/);
+  assert.match(wide, /쓰던 글은 남아 있어요/);
+  assert.doesNotMatch(wide, /data-layout|data-touch|data-lead/);
+  // 껍데기가 화면을 알린다 — 휴대폰(한 줄)과 터치 플로어(44px 줄).
+  assert.match(source, /compact=\{mobile\}\s*touch=\{touch\}/);
+  assert.match(source, /const touch = useMediaQuery\(windowed \? RECORD_TOUCH_QUERY : ""\);/);
+});
+
+test("저장 뒤의 덧말은 그 기록의 줄에 선다 — 기록은 저장됐으므로 위급 색이 아니다", () => {
+  const noted = trailOf(queuedEvent("a", "앞 사람"), { type: "saved", id: "a", at: "2026-09-30T01:41:00.000Z" }, { type: "noted", id: "a", note: "실제 연락 시각을 남기지 못했어요 · 저장한 시각으로 남아요" });
+  const html = renderStrip(noted);
+  assert.match(html, /data-phase="saved" data-noted="true">/);
+  assert.match(html, /저장됨 <span class="mono">10:41<\/span><\/span><\/span><span class="record-window__strip-note" role="status">실제 연락 시각을 남기지 못했어요 · 저장한 시각으로 남아요<\/span>/);
+  assert.doesNotMatch(html, /var\(--danger\)|role="alert"/);
+  assert.doesNotMatch(renderStrip(trailOf(queuedEvent("a", "앞 사람"))), /record-window__strip-note|data-noted/);
+});
+
+test("다음 사람은 지금 쓰는 고객으로 묻는다 — 쓰고 있는 사람을 '다음'이라고 부르지 않는다", () => {
+  const asked = [];
+  // 호출처의 규칙: 지금 쓰는 고객이 줄의 마지막 남은 사람이면 다음이 없다.
+  const next = (t) => { asked.push(t?.id); return t?.id === "lead-1" ? null : { name: "다음 사람" }; };
+  const last = renderDrawer({ context: probe, next, entry: {}, onAdvance() {} });
+  assert.deepEqual(asked, ["lead-1"]);
+  assert.doesNotMatch(last, /record-window__strip|저장하고 다음|저장만/);
+  assert.match(primariesOf(last)[0], />저장<kbd/);
+  // 다른 고객의 창이면 같은 규칙이 다음 사람을 준다.
+  const other = renderDrawer({ target: { kind: "lead", id: "lead-2", name: "다른 고객" }, context: probe, next, entry: {}, onAdvance() {} });
+  assert.match(other, /<span class="record-window__strip-next">다음 <b>다음 사람<\/b><\/span>/);
+  assert.match(primariesOf(other)[0], />저장하고 다음<kbd/);
+  // 고르는 동안(쓰는 고객이 아직 없다)은 묻지 않는다.
+  asked.length = 0;
+  renderDrawer({ target: null, preset: {}, context: probe, next, searchTargets: async () => ({ status: "live", targets: [] }) });
+  assert.deepEqual(asked, []);
+});
+
+test("이어 쓰기 줄의 스타일 — 자리와 글자만, 토큰 · 1px 선 · 12px 이상", () => {
+  const css = readFileSync(new URL("./record-window.css", import.meta.url), "utf8");
+  const strip = css.match(/\.hub-app \.record-window__strip \{[^}]*\}/)?.[0] || "";
+  assert.match(strip, /flex: none;[^}]*flex-wrap: wrap;[^}]*border-bottom: 1px solid var\(--line-soft\);[^}]*font-size: 12px;/);
+  assert.match(css, /\.hub-app \.record-window__strip-slot \{ margin-left: auto;/);
+  // 줄의 높이는 저장이 진행돼도 그대로다 — 글자 줄의 높이가 작은 버튼(24px: 되돌리기 · 돌아가기)과 같다.
+  assert.match(strip, /line-height: 24px;/);
+  assert.match(renderToStaticMarkup(React.createElement(Button, { size: "xs" }, "되돌리기")), /height:24px/);
+  assert.doesNotMatch(css.match(/\.hub-app \.record-window__strip-item \{[^}]*\}/)?.[0] || "", /gap: [1-9]\d*px \d/, "접힌 줄 사이에 높이를 더하지 않는다");
+  // 누르는 곳이 44px로 서는 화면에서는 글자뿐인 줄도 44px다 — 폭은 드로어가 전역 터치 플로어와 같은 쿼리로 잰다.
+  assert.match(css, /\.hub-app \.record-window__strip\[data-touch="true"\] \.record-window__strip-next,\s*\.hub-app \.record-window__strip\[data-touch="true"\] \.record-window__strip-item \{ min-height: 44px; \}/);
+  assert.ok(readFileSync(new URL("./hub-tokens.css", import.meta.url), "utf8").includes(`@media ${RECORD_TOUCH_QUERY} {`), "전역 터치 플로어와 같은 쿼리다");
+  // 휴대폰 시트는 한 줄 — 이름이 줄고(말줄임) 영수증과 버튼은 잘리지 않는다.
+  assert.match(css, /\.hub-app \.record-window__strip\[data-layout="sheet"\] \.record-window__strip-item\[data-lead="true"\] \{ flex: 1 1 0; \}/);
+  assert.match(css, /\.hub-app \.record-window__strip\[data-layout="sheet"\] \.record-window__strip-item > \.record-window__strip-who \{[^}]*min-width: 0;[^}]*text-overflow: ellipsis;/);
+  assert.match(css, /\.hub-app \.record-window__picked \{[^}]*border-bottom: 1px solid var\(--line-soft\);[^}]*font-size: 12px;/);
+  // 좁은 화면에서는 쓰기 칸과 같은 16px 여백으로 맞춘다.
+  assert.match(css.slice(css.indexOf("@media (max-width: 900px)")), /\.hub-app \.record-window__strip:not\(\[data-inset\]\),\s*\.hub-app \.record-window__picked \{ padding-inline: 16px; \}/);
+  // 고객을 고르는 동안에도 앞 사람의 진행과 되돌리기는 보인다 — 줄이 본문 여백 안에 놓인다(inset).
+  assert.match(source, /<>\{strip\}\{picker\}<\/>/);
+  assert.match(source, /inset=\{!recording\}/);
+  assert.match(renderStrip(trailOf(queuedEvent("a", "앞 사람")), { inset: true }), /^<div class="record-window__strip" data-inset="true"/);
+  assert.doesNotMatch(renderStrip(trailOf(queuedEvent("a", "앞 사람"))), /data-inset/);
+  // 위급 표식은 줄이 직접(인라인) 그린다 — 이 파일의 빨강은 여전히 읽기 칸의 '지남' 글자 한 곳뿐이다.
+  assert.equal((css.match(/var\(--danger\)/g) || []).length, 1);
 });

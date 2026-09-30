@@ -125,6 +125,17 @@ test("the promise peek puts the date before the text — the ellipsis eats the t
   assert.deepEqual(promisePeek(), { what: "아직 정하지 않았어요", late: false, lateLabel: "", date: "", tail: "" });
 });
 
+// 2026-09-30 넓은 기록창 ④ — 오늘 연락에서 목록 밖의 고객을 골라 연 창은 그 고객의 약속을 모른다.
+test("an unknown promise (null) is said as unknown — never as 'not decided yet'", () => {
+  const unknown = promiseReadout(null);
+  assert.deepEqual(unknown, { what: "여기서는 약속을 알 수 없어요", muted: true, late: false, lateLabel: "", when: "목록에 없는 고객이에요 · 고객 탭에서 확인해요" });
+  // 약속이 없는 것(읽었고 비어 있다)과는 다른 말이다.
+  assert.notEqual(unknown.what, promiseReadout({}).what);
+  assert.notEqual(unknown.what, promiseReadout(customerPromise(lead({}), TODAY)).what);
+  // 좁은 화면의 한 줄도 던지지 않는다(날짜 없음).
+  assert.deepEqual(promisePeek(null), { what: unknown.what, late: false, lateLabel: "", date: "", tail: unknown.when });
+});
+
 // 2026-09-24: 이관·시트 동기화 문구는 운영자의 약속이 아니다(CRM 스펙 §4.1 결정 C, DESIGN.md
 // §5.3 certainty). `nextActionIsTemplate`는 mapLead(lead-enrichment.isTemplateNextAction)가
 // 계산해 넘기는 신호이고, customerPromise는 그 신호만 읽는다(문구 재판정 없음).

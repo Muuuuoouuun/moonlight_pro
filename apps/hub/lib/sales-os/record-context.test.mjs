@@ -9,12 +9,14 @@ import {
   TITLE_FOLD,
   filterRecordStream,
   memoStreamRows,
+  recordActivityQuery,
   recordContextRows,
   recordContextTruth,
   recordEmptyPlan,
   recordFilterEmptyCopy,
   recordRowKind,
   recordRowShape,
+  recordStream,
   savedMemoSnapshot,
   upsertSavedMemo,
 } from "./record-context.js";
@@ -271,4 +273,41 @@ test("a memo saved here and then edited elsewhere shows the edit once it is re-r
   // 판을 모르는 옛 스냅숏은 지금처럼 스냅숏이 남는다(비교할 수 없으면 뒤집지 않는다).
   const legacy = memoStreamRows([{ id: C, title: "", excerpt: "읽어 온 글", occurredAt: first.occurredAt, revision: 3 }], [{ id: C, title: "", body: "쓴 글", savedAt: at }]);
   assert.equal(legacy[0].msg, "쓴 글");
+});
+
+// 2026-09-30 넓은 기록창 ④ — 오늘 연락에서 연 창의 읽기 칸은 고객 드로어와 같은 길로 읽는다.
+test("the activity read follows the customer drawer's join rule — company first, else the record's own id", () => {
+  // live crm_activities는 대부분 company_id로만 이어져 있다 — 회사가 있으면 회사로 읽는다.
+  assert.equal(recordActivityQuery({ kind: "lead", id: "lead-1", companyId: "co-1" }), "companyId=co-1");
+  assert.equal(recordActivityQuery({ kind: "deal", id: "deal-1", companyId: "co-1" }), "companyId=co-1");
+  // 회사가 없을 때만 자신의 id로.
+  assert.equal(recordActivityQuery({ kind: "lead", id: "lead-1" }), "leadId=lead-1");
+  assert.equal(recordActivityQuery({ kind: "account", id: "acc-1", companyId: null }), "accountId=acc-1");
+  assert.equal(recordActivityQuery({ kind: "deal", id: "deal-1" }), "dealId=deal-1");
+  assert.equal(recordActivityQuery({ id: "lead-2" }), "leadId=lead-2");
+  // 값은 질의 문자열로 안전하게 옮긴다.
+  assert.equal(recordActivityQuery({ kind: "lead", id: "a b&c" }), "leadId=a%20b%26c");
+  // 저장된 고객이 아니면 읽을 것이 없다.
+  assert.equal(recordActivityQuery({ kind: "lead", companyId: "co-1" }), "");
+  assert.equal(recordActivityQuery(), "");
+  assert.equal(recordActivityQuery(null), "");
+});
+
+test("one stream: activities and linked memos interleave newest first", () => {
+  const acts = [
+    { id: "a-old", type: "call", msg: "옛 통화", occurredAt: localNoon(9, 20) },
+    { id: "a-new", type: "meeting", msg: "최근 미팅", occurredAt: localNoon(9, 28) },
+  ];
+  const memos = memoStreamRows([{ id: "m1", title: "", excerpt: "결정은 원장님", occurredAt: localNoon(9, 25), revision: 1 }]);
+  const stream = recordStream(acts, memos);
+  assert.deepEqual(stream.map((r) => r.id), ["a-new", "memo:m1", "a-old"]);
+  // 활동 줄에는 출처를 붙이고, 메모 줄은 메모 그대로다(모양은 recordRowShape가 읽는다).
+  assert.deepEqual(stream.map((r) => r.source), ["activity", "memo", "activity"]);
+  assert.deepEqual(stream.map((r) => recordRowShape(r)), ["contact", "memo", "contact"]);
+  // 시각을 못 읽는 줄(저장 전 낙관 줄)은 맨 위다.
+  assert.equal(recordStream([...acts, { id: "local-1", type: "call", msg: "방금" }], memos)[0].id, "local-1");
+  // 입력을 바꾸지 않고, 빈 입력에도 던지지 않는다.
+  assert.equal(acts[0].source, undefined);
+  assert.deepEqual(recordStream(), []);
+  assert.deepEqual(recordStream(null, null), []);
 });

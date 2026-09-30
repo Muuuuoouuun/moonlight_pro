@@ -14,10 +14,12 @@ import {
   draftPlaceLabel,
   draftRestoredCopy,
   RECORD_DRAWER_WIDTH,
+  RECORD_HANDOFF_GUARD_MS,
   RECORD_LAYOUT_BREAKPOINTS,
   RECORD_LAYOUT_QUERIES,
   RECORD_MODES,
   RECORD_TABS,
+  RECORD_TOUCH_QUERY,
   addSavedNoteRow,
   applyReceiptEvent,
   detailFieldHeight,
@@ -36,6 +38,8 @@ import {
   recordModeOptions,
   recordModeSentence,
   recordReceipt,
+  recordSaveArmed,
+  recordSaveButtons,
   recordSaveLabel,
   recordSaveLine,
   recordSaveLineResting,
@@ -335,6 +339,8 @@ test("the layout mode follows the viewport width — wide above 900, tabs to 601
   // 중단점은 §7 Responsive의 둘뿐이다 — 새 폭을 만들지 않는다.
   assert.deepEqual(RECORD_LAYOUT_BREAKPOINTS, { sheet: 600, tabs: 900 });
   assert.deepEqual(RECORD_LAYOUT_QUERIES, { sheet: "(max-width: 600px)", tabs: "(max-width: 900px)" });
+  // 터치 플로어의 쿼리는 배치를 고르지 않는다 — 전역 플로어(hub-tokens.css)와 같은 글자여야 한다.
+  assert.equal(RECORD_TOUCH_QUERY, "(pointer: coarse), (max-width: 720px)");
   // 폭 → (드로어가 듣는 두 쿼리의 답) → 배치. 화면이 실제로 타는 길이다: 폭 숫자를 직접 받는 함수는 없다
   // (스타일시트와 같은 자로 재야 소수 폭에서 두 쪽이 어긋나지 않는다). 600 이하는 둘 다 맞고 sheet가 이긴다.
   const modeAt = (width) => recordLayoutModeFromMedia({
@@ -506,6 +512,31 @@ test("⌘↵ · Ctrl+↵ is the save chord — never a plain Enter, never the En
   assert.equal(isSaveChord({ key: "Enter", metaKey: true, isComposing: true }), false);
   assert.equal(isSaveChord({ key: "Enter", ctrlKey: true, keyCode: 229 }), false);
   assert.equal(isSaveChord({ key: "Enter", metaKey: true, nativeEvent: { isComposing: false }, keyCode: 13 }), true);
+});
+
+test("a held ⌘↵ saves once — the repeats the keyboard sends while it is held are not saves", () => {
+  // 첫 keydown만 저장이다. 누르고 있는 동안의 되풀이(repeat)는 저장 뒤 비워진 폼 · 넘어온 다음 사람의 폼을 다시 저장한다.
+  assert.equal(isSaveChord({ key: "Enter", metaKey: true, repeat: false }), true);
+  assert.equal(isSaveChord({ key: "Enter", metaKey: true, repeat: true }), false);
+  assert.equal(isSaveChord({ key: "Enter", ctrlKey: true, repeat: true }), false);
+  // React 합성 이벤트는 nativeEvent에도 같은 값이 있다.
+  assert.equal(isSaveChord({ key: "Enter", metaKey: true, nativeEvent: { repeat: true } }), false);
+});
+
+test("a form the window just moved onto does not take the rest of the gesture that saved the previous person", () => {
+  const openedAt = 10_000;
+  // 넘어와 선 폼 — 더블 클릭의 둘째 클릭 · 연달아 누른 ⌘↵는 저장이 아니다.
+  assert.equal(recordSaveArmed({ handoff: true, openedAt, now: openedAt }), false);
+  assert.equal(recordSaveArmed({ handoff: true, openedAt, now: openedAt + 250 }), false);
+  assert.equal(recordSaveArmed({ handoff: true, openedAt, now: openedAt + RECORD_HANDOFF_GUARD_MS - 1 }), false);
+  // 한 박자 뒤부터는 받는다 — 미리 채워진 기록 후보를 읽고 누른 저장이다.
+  assert.equal(recordSaveArmed({ handoff: true, openedAt, now: openedAt + RECORD_HANDOFF_GUARD_MS }), true);
+  assert.equal(recordSaveArmed({ handoff: true, openedAt, now: openedAt + 5_000 }), true);
+  // 직접 연 창(행 · 기록 후보 · N)은 선 직후에도 받는다 — 넘어온 폼만의 규칙이다.
+  assert.equal(recordSaveArmed({ handoff: false, openedAt, now: openedAt }), true);
+  assert.equal(recordSaveArmed(), true);
+  // 더블 클릭 간격(흔히 500ms)보다 길고, 글을 읽고 누를 시간보다는 짧다.
+  assert.ok(RECORD_HANDOFF_GUARD_MS > 500 && RECORD_HANDOFF_GUARD_MS <= 1000);
 });
 
 test("the wide window takes ⌘↵ from anywhere inside its own drawer, and from nowhere else", () => {
@@ -691,4 +722,24 @@ test("with a memo mode the 메모만 channel steps aside unless it is already ch
   // 이미 '메모만'을 골라 둔 폼(다른 진입점의 프리셋 · 쓰던 초안)은 그 칸을 잃지 않는다.
   assert.deepEqual(recordChannelOptions(sheet, "note", { memoMode: true }).map((o) => o.key), ["call", "kakao", "note"]);
   assert.deepEqual(recordChannelOptions(undefined, "call", { memoMode: true }), []);
+});
+
+// 2026-09-30 넓은 기록창 ④(Q-CR8 · 권장): 버튼 글자는 진입점이 정한다 — '저장하고 다음'은 오늘 연락에서 연 창만.
+test("the save buttons say what happens — 저장하고 다음 only where a next stop exists", () => {
+  // 그 밖의 진입점(고객 드로어 · 거래 독 · 첫 화면 · 에이전트)은 언제나 '저장' 하나다.
+  assert.deepEqual(recordSaveButtons(), { primary: "저장", secondary: "", chord: true });
+  assert.deepEqual(recordSaveButtons({ queued: false, sheet: false }), { primary: "저장", secondary: "", chord: true });
+  // 오늘 연락에서 연 넓은 기록창 — 주 버튼은 하나이고 '저장만'은 보조다.
+  assert.deepEqual(recordSaveButtons({ queued: true }), { primary: "저장하고 다음", secondary: "저장만", chord: true });
+  // 휴대폰 시트는 ⌘↵ 글자를 달지 않는다(키보드가 없다). 글자는 같다.
+  assert.deepEqual(recordSaveButtons({ queued: true, sheet: true }), { primary: "저장하고 다음", secondary: "저장만", chord: false });
+  // 실패 뒤에도 '저장하고 다음'이다 — 누르면 일어나는 일이 그것이다.
+  assert.equal(recordSaveButtons({ queued: true, sheet: true, failed: true }).primary, "저장하고 다음");
+  // 다음이 없는 휴대폰 시트의 머리 버튼은 실패 뒤 '다시 저장'이라고 말한다(원인 줄이 버튼과 떨어져 있다).
+  assert.deepEqual(recordSaveButtons({ sheet: true, failed: true }), { primary: "다시 저장", secondary: "", chord: false });
+  assert.equal(recordSaveButtons({ sheet: true }).primary, "저장");
+  assert.equal(recordSaveButtons({ failed: true }).primary, "저장");
+  // 일부 저장 뒤에는 긴 글만 다시 보낸다 — 넘어가지 않으므로 '다음'도 '저장만'도 없다.
+  assert.deepEqual(recordSaveButtons({ retry: "자세히 다시 저장", queued: true }), { primary: "자세히 다시 저장", secondary: "", chord: false });
+  assert.deepEqual(recordSaveButtons({ retry: "원문 저장 재시도" }), { primary: "원문 저장 재시도", secondary: "", chord: false });
 });

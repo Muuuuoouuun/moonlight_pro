@@ -163,7 +163,11 @@ export function customerPromise(row = {}, today = new Date()) {
 //   what      — 약속 한 줄(없으면 없는 이유).        muted — 약속이 아닌 말(없음 · 기약 없음 · 종료).
 //   late      — 놓친 약속인가.                       lateLabel — "N일 지남"(위급 색은 이 글자 한 곳).
 //   when      — 날짜 줄. 놓친 약속이면 lateLabel 뒤에 붙는 나머지("9/26 약속")만 담는다.
+//   promise === null — 이 창이 약속을 읽지 못한 고객(목록 밖에서 고른 고객). 없다고 말하지 않는다.
 export function promiseReadout(promise = {}) {
+  if (promise === null) {
+    return { what: "여기서는 약속을 알 수 없어요", muted: true, late: false, lateLabel: "", when: "목록에 없는 고객이에요 · 고객 탭에서 확인해요" };
+  }
   const dated = promise.state === "dated";
   const late = dated && promise.late > 0;
   if (dated || promise.state === "undated") {
@@ -185,7 +189,7 @@ export function promiseReadout(promise = {}) {
 // 날짜라서다. 날짜 없는 약속은 그 사실(tail)이 뒤에 붙는다. 전체 문장은 '이 고객' 탭의 약속 카드가 말한다.
 export function promisePeek(promise = {}) {
   const { what, late, lateLabel, when } = promiseReadout(promise);
-  const date = promise.state === "dated" ? promise.dateLabel || "" : "";
+  const date = promise?.state === "dated" ? promise.dateLabel || "" : "";
   return { what, late, lateLabel, date, tail: date ? "" : when };
 }
 

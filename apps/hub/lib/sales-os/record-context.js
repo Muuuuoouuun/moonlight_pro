@@ -146,6 +146,27 @@ export function memoStreamRows(entries = [], saved = []) {
   return rows;
 }
 
+// 기록 한 줄기 — 활동(crm_activities)과 연결 메모 줄을 최신순으로 섞는다. 시각을 못 읽는 줄(저장 전 낙관 줄)은
+// 맨 위에 선다. 고객 드로어의 줄기와 같은 규칙이다(오늘 연락에서 연 기록창의 읽기 칸이 쓴다).
+export function recordStream(activities = [], memoRows = []) {
+  const time = (value) => {
+    const n = Date.parse(value || "");
+    return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+  };
+  const acts = (Array.isArray(activities) ? activities : []).map((row) => ({ ...row, source: "activity" }));
+  return [...acts, ...(Array.isArray(memoRows) ? memoRows : [])].sort((a, b) => time(b.occurredAt) - time(a.occurredAt));
+}
+
+// 이 고객의 활동을 읽는 질의 — 고객 드로어와 같은 길(`/api/hub/revenue/activity`), 같은 조인 규칙이다:
+// live crm_activities는 대부분 company_id로만 이어져 있으므로 회사가 있으면 회사로 읽고, 없을 때만 자신의
+// id로 읽는다(계약 고객 accountId · 거래 dealId · 그 밖은 leadId). id가 없으면 읽을 것이 없다(빈 문자열).
+export function recordActivityQuery(target = {}) {
+  if (!target?.id) return "";
+  if (target.companyId) return `companyId=${encodeURIComponent(target.companyId)}`;
+  const param = target.kind === "account" ? "accountId" : target.kind === "deal" ? "dealId" : "leadId";
+  return `${param}=${encodeURIComponent(target.id)}`;
+}
+
 // 저장이 확인된 메모의 스냅숏 — 서버가 돌려준 메모(entry)에서 줄기가 쓰는 것만. at은 답을 받은 시각이다.
 export function savedMemoSnapshot(entry, at) {
   if (!entry?.id) return null;

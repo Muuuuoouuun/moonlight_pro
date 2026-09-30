@@ -88,10 +88,12 @@ function ContextRow({ row, open, onToggle }) {
   );
 }
 
-// name: 누구의 맥락인지(접근 가능한 이름). promise: customerPromise(row, today)의 결과.
+// name: 누구의 맥락인지(접근 가능한 이름). promise: customerPromise(row, today)의 결과 — null이면 이 창이
+// 약속을 모르는 고객이다(오늘 연락에서 목록 밖의 고객을 골라 연 창): "아직 안 정했다"고 하지 않는다.
 // tipReason: 이 사람에게 이미 고른 제안 팁의 이유(없으면 빈 값). rows: 기록 줄기(활동 + 연결 메모, 최신순).
 // truth: recordContextTruth(...)의 결과. onRetry(which): "activities" | "memos" 읽기를 다시.
-export function RecordContextColumn({ name = "", promise, tipReason = "", rows = [], today, truth, onRetry }) {
+// elsewhere: 다섯 줄을 넘는 기록을 어디서 보는지 — 고객 드로어는 ‘고객 정보로’, 오늘 연락에서 연 창은 고객 탭이다.
+export function RecordContextColumn({ name = "", promise, tipReason = "", rows = [], today, truth, onRetry, elsewhere = "‘고객 정보로’" }) {
   const [opened, setOpened] = React.useState(() => new Set());
   const [filter, setFilter] = React.useState("all");
   const toggle = (key) => setOpened((prev) => {
@@ -101,7 +103,7 @@ export function RecordContextColumn({ name = "", promise, tipReason = "", rows =
     return next;
   });
 
-  const readout = promiseReadout(promise || {});
+  const readout = promiseReadout(promise === null ? null : promise || {});
   const state = truth?.state || "live";
   const readable = state !== "loading" && state !== "error";
   const visible = readable ? filterRecordStream(rows, filter) : [];
@@ -156,7 +158,7 @@ export function RecordContextColumn({ name = "", promise, tipReason = "", rows =
               ))}
             </ol>
             {visible.length > RECORD_CONTEXT_LIMIT && (
-              <p className="record-ctx__empty">{RECORD_FILTERS.find((f) => f.key === filter)?.label || "전체"} <span className="num">{visible.length}</span>건은 ‘고객 정보로’에서 봐요.</p>
+              <p className="record-ctx__empty">{RECORD_FILTERS.find((f) => f.key === filter)?.label || "전체"} <span className="num">{visible.length}</span>건은 {elsewhere}에서 봐요.</p>
             )}
           </>
         )}
