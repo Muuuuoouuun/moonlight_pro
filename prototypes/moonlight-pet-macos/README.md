@@ -19,6 +19,8 @@ cd prototypes/moonlight-pet-macos
 
 `--install`은 `~/Applications/MoonlightPetPreview.app`을 갱신한다. 새 빌드와 서명이 통과한 뒤 기존 펫을 종료하고 교체하며, 이전 번들은 `MoonlightPetPreview.previous.app`으로 남긴다. 앱 자체도 동일한 번들 ID의 실행을 확인하므로 다른 워크트리 빌드를 열어도 펫·조회 루프·전역 단축키가 두 개 생기지 않는다. 현재 CLT의 SwiftUI 매크로 호환 문제는 설치된 macOS 26.5 SDK로 처리하며, `MOONLIGHT_SWIFT_SDK`로 다른 SDK를 명시할 수 있다.
 
+Mac의 `Moonlight.app`도 같은 네이티브 펫을 사용한다. 별도 설치본이 있으면 재사용하고, 없으면 Hub 앱 안에 포함된 펫을 실행한다. Mac 일반 실행에서는 Electron 펫 창을 만들지 않으므로 Hub 앱을 다시 열어도 펫이 추가되지 않는다. Hub 앱과 펫의 연결 주소·로그인 설정은 각각 유지한다.
+
 ### 화면 기록 권한과 개발용 서명
 
 실행 스크립트는 리소스·Info.plist를 배치한 **최종 앱 번들**을 서명하고 strict 검증 후 실행한다. 기본은 로컬 ad-hoc 서명이다. 소스가 바뀌면 이 서명의 식별 조건도 달라져 macOS 화면 기록 권한을 다시 허용해야 할 수 있다. 고정된 개발 인증서가 설치돼 있다면 `MOONLIGHT_CODE_SIGN_IDENTITY`에 해당 인증서 이름 또는 SHA-1을 지정한다. 임의의 느슨한 designated requirement로 권한을 우회하지 않는다.
