@@ -18,6 +18,10 @@
       "types": "./office-routing.d.ts",
       "default": "./office-routing.js"
     },
+    "./office-role-catalog": {
+      "types": "./office-role-catalog.d.ts",
+      "default": "./office-role-catalog.js"
+    },
     "./office-workflow": {
       "types": "./office-workflow.d.ts",
       "default": "./office-workflow.js"

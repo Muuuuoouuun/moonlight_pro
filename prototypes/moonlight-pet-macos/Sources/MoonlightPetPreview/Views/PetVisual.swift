@@ -59,8 +59,8 @@ struct PetVisual: View {
 
     var body: some View {
         ZStack {
-            PetPortrait(character: model.selectedCharacter, size: 52, pose: .portrait)
-                .id(model.selectedCharacter)
+            PetPortrait(character: model.presentationCharacter, size: 52, pose: .portrait)
+                .id(model.presentationCharacter)
                 .transition(.opacity.combined(with: .scale(scale: 0.94)))
         }
         .overlay(alignment: .topTrailing) {
@@ -72,8 +72,8 @@ struct PetVisual: View {
         .offset(x: isLifted ? -0.7 : 0, y: verticalOffset)
         .frame(width: 56, height: 56)
         .animation(interaction.isPressed ? PetMotion.petPress : PetMotion.petRelease, value: motionState)
-        .animation(PetMotion.petCharacter, value: model.selectedCharacter)
-        .accessibilityLabel("Moonlight \(model.selectedCharacter.title) 펫, 누르면 빠른 기능, 우클릭하면 캐릭터 선택")
+        .animation(PetMotion.petCharacter, value: model.presentationCharacter)
+        .accessibilityLabel("Moonlight \(model.presentationCharacter.title) 펫, 누르면 빠른 기능, 우클릭하면 캐릭터 선택")
         .accessibilityValue("알림 \(model.activity.unreadCount)개")
     }
 }
@@ -87,7 +87,7 @@ struct PanelPetOrnament: View {
 
     var body: some View {
         Button(action: close) {
-            PetPortrait(character: model.selectedCharacter, size: CompanionLayout.perchSize)
+            PetPortrait(character: model.presentationCharacter, size: CompanionLayout.perchSize)
                 .contentShape(Rectangle())
         }
         .buttonStyle(PetPressStyle())

@@ -24,9 +24,10 @@ final class GlassPanel: NSView {
                                readingTone: readingTone, allowsCapture: captureSurface != nil)
         panel.centerDiffusion?.blendingMode = withinWindow ? .withinWindow : .behindWindow
         if let model {
-            panel.characterSubscription = model.$selectedCharacter.removeDuplicates().sink { [weak panel] character in
-                panel?.setCharacter(character)
-            }
+            panel.setCharacter(model.presentationCharacter)
+            panel.characterSubscription = model.objectWillChange.receive(on: RunLoop.main)
+                .map { [weak model] _ in model?.presentationCharacter ?? .silver }
+                .removeDuplicates().sink { [weak panel] character in panel?.setCharacter(character) }
         }
         if let model, let captureSurface {
             panel.desktopRefraction?.onStatus = { [weak model] status in model?.desktopRefractionStatus = status }
