@@ -107,7 +107,7 @@ test("template rows count as 약속 없는 진행 중 and sort behind a real und
   );
 });
 
-test("default sort is next promise ascending with no-promise rows last in both directions", () => {
+test("explicit promise sort is ascending with no-promise rows last in both directions", () => {
   const rows = [
     lead({ name: "없음" }),
     lead({ name: "내일", nextActionAt: "2026-09-25" }),
@@ -161,4 +161,29 @@ test("moving a promise date writes meta only through explicit snake keys", () =>
   assert.equal(accountWrite.columns.next_action, "재계약 안내");
   assert.equal(accountWrite.metaPatch.next_action_at, "2026-10-01");
   assert.equal(accountWrite.metaPatch.dormant, false);
+});
+
+test("default order puts recorded contacts first, new contacts/inquiries next, then buyers", () => {
+  const rows = [
+    lead({ name: "가 구매", stage: "Customer" }),
+    lead({ name: "나 신규", createdAt: "2026-09-22", lastContactAt: "2026-09-22" }),
+    lead({ name: "다 연락", createdAt: "2026-09-01", lastContactAt: "2026-09-20" }),
+    lead({ name: "라 문의", createdAt: "2026-09-24", lastContactAt: "2026-09-24" }),
+    lead({ name: "마 연락", lastContactAt: "2026-09-23" }),
+    { kind: "account", name: "바 구매" },
+    lead({ name: "사 날짜없음", createdAt: "invalid", lastContactAt: "invalid" }),
+    lead({ name: "아 종료", stage: "Lost" }),
+  ];
+  const original = [...rows];
+  assert.deepEqual(sortCustomers(rows).map(row => row.name), [
+    "마 연락", "다 연락", "라 문의", "나 신규", "사 날짜없음", "가 구매", "바 구매", "아 종료",
+  ]);
+  assert.deepEqual(rows, original);
+  assert.equal(sortCaption({ key: "recent", dir: "desc" }), "최근 연락 · 최근 컨택·문의 · 구매 고객 순");
+});
+
+test("same-time and missing-time customers retain record order instead of name order", () => {
+  const rows = [lead({ name: "하", lastContactAt: "2026-09-23" }), lead({ name: "가", lastContactAt: "2026-09-23" })];
+  assert.deepEqual(sortCustomers(rows), rows);
+  assert.deepEqual(sortCustomers([lead({ name: "하" }), lead({ name: "가" })]).map(row => row.name), ["하", "가"]);
 });
