@@ -290,7 +290,8 @@ function keepsRest(sourceBody: string, candidateBody: string, variantType: strin
     const key = variantType === "card_news" ? "slides" : "scenes";
     const before = JSON.parse(sourceBody)[key], after = JSON.parse(candidateBody)[key];
     return Array.isArray(before) && Array.isArray(after) && before.length === after.length && before[0]?.id === after[0]?.id
-      && JSON.stringify(before.slice(1)) === JSON.stringify(after.slice(1));
+      && (key !== "scenes" || before[0]?.duration === after[0]?.duration)
+      && stableJson(before.slice(1)) === stableJson(after.slice(1));
   } catch { return false; }
 }
 

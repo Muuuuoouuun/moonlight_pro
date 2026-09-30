@@ -544,3 +544,27 @@ test('openers returns five candidates that change only the cover; anything else 
   const plain = fixture({ candidates: [candidate()] });
   assert.equal((await plain.execute(command({ operation: 'openers' }))).status, 'invalid-input');
 });
+
+test('reels openers keep every scene ID and duration and all later scene content', async () => {
+  const scenes = [
+    { id: 'scene-1', visual: '첫 장면', spoken: '기존 훅', subtitle: '도입', duration: 10, notes: '' },
+    { id: 'scene-2', visual: '둘째 장면', spoken: '본문', subtitle: '설명', duration: 20, notes: '' },
+  ];
+  const source = JSON.stringify({ scenes });
+  const target = { variantType: 'reels_script', channel: 'reels' };
+  const variant = { body: source, variant_type: 'reels_script', channel: 'reels' };
+  const cmd = command({ operation: 'openers', selection: { start: 0, end: source.length }, target });
+  const candidates = (change) => [1, 2, 3, 4, 5].map((n) => candidate({
+    ...target, id: `candidate-${n}`, body: JSON.stringify({ scenes: change([{ ...scenes[0], spoken: `훅 ${n}안` }, scenes[1]]) }),
+  }));
+  assert.equal((await fixture({ variant, candidates: candidates((rows) => rows) }).execute(cmd)).status, 'generated');
+  for (const change of [
+    (rows) => [{ ...rows[0], duration: 600 }, rows[1]],
+    (rows) => [{ ...rows[0], id: 'changed-id' }, rows[1]],
+    (rows) => [rows[0], { ...rows[1], spoken: '바뀐 본문' }],
+  ]) {
+    assert.equal((await fixture({ variant, candidates: candidates(change) }).execute(cmd)).error, 'invalid-provider-output');
+  }
+  const reordered = candidates((rows) => rows.map((row) => Object.fromEntries(Object.entries(row).reverse())));
+  assert.equal((await fixture({ variant, candidates: reordered }).execute(cmd)).status, 'generated', 'JSON key order does not change scene content');
+});
