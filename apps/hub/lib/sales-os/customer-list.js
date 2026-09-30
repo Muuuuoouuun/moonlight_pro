@@ -3,7 +3,7 @@
 // Leads(영업 중)·Accounts(계약)·고객 DB가 같은 사람을 세 번 보여 주던 것을 한 목록으로 합쳤다.
 // "리드냐 계정이냐"는 사람이 바뀌는 게 아니라 단계가 바뀌는 것이므로 여기서는 단계(phase)
 // 하나로 읽는다. 정본은 약속이다(CRM 스펙 §0.5): next_action(무엇) + meta.next_action_at(언제)
-// + dormant(기약 없음). 목록의 기본 정렬도 "다음 약속이 급한 순"이라 목록이 곧 할 일 순서다.
+// + dormant(기약 없음). 기본 목록은 최근 연락 → 최근 컨택·문의 → 구매 고객 순이다.
 //
 // import는 같은 폴더의 순수 모듈만 — node --test로 그대로 돈다.
 
@@ -214,11 +214,31 @@ function byName(a, b) {
   return String(a.name || "").localeCompare(String(b.name || ""), "ko");
 }
 
-export function sortCustomers(rows = [], sort = { key: "promise", dir: "asc" }, today = new Date()) {
+// 생성 시각을 연락으로 취급하지 않는다. 연락 없는 열린 리드는 유입 시각으로,
+// 구매 고객은 그다음으로 읽는다. 같은 시각·기록 없음은 서버 기록 순서를 유지한다.
+function recentCustomerOrder(row, today) {
+  const contactAt = row.lastContactAt ? Date.parse(row.lastContactAt) : NaN;
+  if (Number.isFinite(contactAt) && customerLastContact(row, today).known) {
+    return { rank: 0, at: contactAt };
+  }
+  if (OPEN_PHASES.has(customerPhase(row))) {
+    const createdAt = row.createdAt ? Date.parse(row.createdAt) : NaN;
+    return { rank: 1, at: Number.isFinite(createdAt) ? createdAt : null };
+  }
+  return { rank: customerPhase(row) === "won" ? 2 : 3, at: null };
+}
+
+export function sortCustomers(rows = [], sort = { key: "recent", dir: "desc" }, today = new Date()) {
   if (!sort || !sort.key) return [...rows];
   const dir = sort.dir === "desc" ? -1 : 1;
   const decorated = rows.map((row) => ({ row, promise: customerPromise(row, today) }));
   const compare = (a, b) => {
+    if (sort.key === "recent") {
+      const av = recentCustomerOrder(a.row, today), bv = recentCustomerOrder(b.row, today);
+      if (av.rank !== bv.rank) return av.rank - bv.rank;
+      if (av.at == null || bv.at == null) return av.at == null && bv.at == null ? 0 : av.at == null ? 1 : -1;
+      return (av.at - bv.at) * dir;
+    }
     if (sort.key === "promise") {
       const rank = PROMISE_RANK[a.promise.state] - PROMISE_RANK[b.promise.state];
       if (rank) return rank;
@@ -251,6 +271,7 @@ export function sortCustomers(rows = [], sort = { key: "promise", dir: "asc" }, 
 
 export function sortCaption(sort) {
   if (!sort || !sort.key) return "기록 순서";
+  if (sort.key === "recent") return "최근 연락 · 최근 컨택·문의 · 구매 고객 순";
   const label = { promise: "다음 약속", phase: "단계", last: "마지막 연락", value: "금액", name: "이름" }[sort.key] || sort.key;
   if (sort.key === "promise") return sort.dir === "desc" ? "다음 약속이 먼 순" : "다음 약속이 급한 순";
   return `${label} ${sort.dir === "desc" ? "내림차순" : "오름차순"}`;

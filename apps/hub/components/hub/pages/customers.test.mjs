@@ -53,11 +53,11 @@ test("deep links are consumed once and keep ?scope=", () => {
   assert.match(customersSource, /scopeKey === "classin"[\s\S]*filterLeadsByWorkspace\(ledger\.leads, "classin"\)/);
 });
 
-test("the table has exactly five 3-state sortable columns, next promise ascending by default", () => {
+test("the table has exactly five 3-state sortable columns, recent customer activity by default", () => {
   const head = slice('className="customers-grid customers-head"', "</div>");
   const heads = [...head.matchAll(/<SortHead k="(\w+)"[^>]*>([^<]+)<\/SortHead>/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(heads, [["name", "고객"], ["phase", "단계"], ["promise", "다음 약속"], ["last", "마지막 연락"], ["value", "금액"]]);
-  assert.match(customersSource, /React\.useState\(\{ key: "promise", dir: "asc" \}\)/);
+  assert.match(customersSource, /React\.useState\(\{ key: "recent", dir: "desc" \}\)/);
   assert.match(customersSource, /if \(prev\.dir === "asc"\) return \{ key, dir: "desc" \};\s*return \{ key: null, dir: "asc" \};/);
   assert.match(customersSource, /정렬: \{sortCaption\(sort\)\}/);
   assert.match(cssSource, /grid-template-columns: minmax\(0, 1\.5fr\) minmax\(96px, 0\.7fr\) minmax\(0, 1\.4fr\) minmax\(0, 1fr\) 96px;/);
@@ -370,24 +370,24 @@ const renderAccounts = () => [
 ];
 const rowsOf = (app) => app.findAll((n) => n.props?.["data-customer-row"]);
 
-test("render: 진행 중 lists open customers by next promise, rails the overdue one, counts every segment", () => {
+test("render: 진행 중 lists open customers by recent contact, rails the overdue one, counts every segment", () => {
   const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
   const rows = rowsOf(app);
   assert.deepEqual(rows.map((r) => r.props["data-customer-row"]), [
+    "lead:33333333-3333-4333-8333-333333333333",
     "lead:11111111-1111-4111-8111-111111111111",
     "lead:22222222-2222-4222-8222-222222222222",
-    "lead:33333333-3333-4333-8333-333333333333",
   ]);
-  assert.equal(rows[0].props["data-urgent"], "true");
-  assert.equal(rows[1].props["data-urgent"], undefined);
-  assert.match(app.text(rows[0]), /2일 지남/);
-  assert.match(app.text(rows[0]), /긍정5일 전/);
-  assert.match(app.text(rows[1]), /오늘/);
-  assert.match(app.text(rows[2]), /다음 약속 없음/);
+  assert.equal(rows[1].props["data-urgent"], "true");
+  assert.equal(rows[0].props["data-urgent"], undefined);
+  assert.match(app.text(rows[1]), /2일 지남/);
+  assert.match(app.text(rows[1]), /긍정5일 전/);
+  assert.match(app.text(rows[2]), /오늘/);
+  assert.match(app.text(rows[0]), /다음 약속 없음/);
   const seg = app.findAll((n) => n.type === "SegmentedControl" && n.props.label === "고객 구분")[0];
   assert.deepEqual(seg.props.options.map((o) => [o.key, o.count]), [["active", 3], ["won", 1], ["new", 1], ["dormant", 0], ["all", 5]]);
   assert.match(app.text(), /3명 표시/);
-  assert.match(app.text(), /정렬: 다음 약속이 급한 순/);
+  assert.match(app.text(), /정렬: 최근 연락 · 최근 컨택·문의 · 구매 고객 순/);
 });
 
 test("render: typing switches to 전체, and a miss offers clear and create", () => {
@@ -412,7 +412,7 @@ test("render: a failed read with no rows is an error state, not an empty list", 
 
 test("render: opening a row shows the promise first and one primary record action", () => {
   const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
-  rowsOf(app)[0].props.onClick();
+  rowsOf(app).find(row => row.props["data-customer-row"] === "lead:11111111-1111-4111-8111-111111111111").props.onClick();
   app.render();
   const drawer = app.findAll((n) => n.type === "Drawer")[0];
   assert.ok(drawer, "drawer opens");
@@ -694,7 +694,7 @@ test("render: an unsupported explicit workspace blocks customer advice despite c
 
 test("render: 날짜 다시 moves only the promise date through the lead update route", async () => {
   const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
-  rowsOf(app)[0].props.onClick();
+  rowsOf(app).find(row => row.props["data-customer-row"] === "lead:11111111-1111-4111-8111-111111111111").props.onClick();
   app.render();
   const button = (label) => app.findAll((n) => n.type === "Button" && app.text(n).trim() === label)[0];
   button("날짜 다시").props.onClick();

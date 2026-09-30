@@ -3,8 +3,8 @@
 // 고객 — 영업·매출의 사람 목록 하나 (2026-09-24 운영자 승인 재설계, 목업 02 · Futura).
 // Leads(영업 중)·Accounts(계약)·고객 DB가 같은 기록을 세 번 보여 주던 것을 한 목록으로 합쳤다.
 // "리드냐 계정이냐"는 사람이 바뀌는 게 아니라 단계가 바뀌는 것이라 단계 열 하나로 읽는다.
-// 이 화면은 대부분 검색창으로 쓴다 — 그래서 검색이 제일 크다. 기본 정렬은 "다음 약속이 급한
-// 순"이라 목록이 곧 할 일 순서다. 판정(세그먼트·약속·마지막 연락·정렬·검색)은 전부
+// 이 화면은 대부분 검색창으로 쓴다 — 그래서 검색이 제일 크다. 기본 정렬은 최근 연락 →
+// 최근 컨택·문의 → 구매 고객 순이다. 판정(세그먼트·약속·마지막 연락·정렬·검색)은 전부
 // lib/sales-os/customer-list.js가 소유한다 — 이 파일은 그리기와 저장 계약만 가진다.
 //
 // 한 사람 = 한 드로어(Customer 360). 맨 위는 프로필이 아니라 '약속'이고, 그다음 기록(활동 +
@@ -1521,7 +1521,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
   const [subjectFilter, setSubjectFilter] = React.useState("");
   const [genreFilter, setGenreFilter] = React.useState("");
   const [sourceFilter, setSourceFilter] = React.useState("");
-  const [sort, setSort] = React.useState({ key: "promise", dir: "asc" });
+  const [sort, setSort] = React.useState({ key: "recent", dir: "desc" });
   const [openKey, setOpenKey] = React.useState(null);
   const [createError, setCreateError] = React.useState(null);
   const [focusOverrides, setFocusOverrides] = React.useState({});
@@ -1686,7 +1686,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
   ), [allRows, segment, focusFilter, regionFilter, subjectFilter, genreFilter, sourceFilter, term]);
 
   // 정렬: 헤더 클릭 asc → desc → 해제 3단 (DESIGN §8.1). 해제 시 기록 순서.
-  // 기본은 다음 약속 오름차순(날짜 없는 약속은 방향과 무관하게 뒤).
+  // 기본은 최근 연락 → 최근 컨택·문의 → 구매 고객 순.
   const cycleSort = (key) => {
     setSort(prev => {
       if (prev.key !== key) return { key, dir: "asc" };
