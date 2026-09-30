@@ -3,6 +3,13 @@ import { buildStudioSave, draftFromDetail, emptyStudioDraft, isDurableStudioSave
 // 잘 된 글 → 후속편. 발행한 글을 원문 메모에 그대로 인용해 새 글을 시작한다(사실은 인용한 본문에서만 온다).
 const MAX_QUOTE = 3000;
 
+// UTF-16 길이 상한은 유지하되, 경계에 걸친 이모지의 앞 절반은 남기지 않는다.
+function utf16Prefix(value, limit) {
+  const prefix = value.slice(0, limit);
+  const last = prefix.charCodeAt(prefix.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? prefix.slice(0, -1) : prefix;
+}
+
 function plainBody(body, variantType) {
   if (variantType === 'card_news' || variantType === 'reels_script') {
     try {
@@ -19,11 +26,11 @@ export function buildFollowUpDraft(detail, variantId) {
   const source = draftFromDetail(detail, variantId);
   const quote = plainBody(source.body, source.variantType).trim();
   if (!quote) return null;
-  const clipped = quote.length > MAX_QUOTE ? `${quote.slice(0, MAX_QUOTE).trimEnd()}…` : quote;
+  const clipped = quote.length > MAX_QUOTE ? `${utf16Prefix(quote, MAX_QUOTE).trimEnd()}…` : quote;
   const title = source.title || source.variantTitle || '발행한 글';
   return {
     ...emptyStudioDraft(source.brandId),
-    title: `후속편 · ${title}`.slice(0, 200),
+    title: utf16Prefix(`후속편 · ${title}`, 200),
     sourceIdea: `이전에 발행한 글 「${title}」의 후속편.\n\n[이전 글]\n${clipped}\n\n[이어 쓸 방향]\n`,
   };
 }

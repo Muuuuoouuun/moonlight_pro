@@ -25,6 +25,32 @@ test('long sources are clipped', () => {
   assert.ok(draft.sourceIdea.length < 3300);
 });
 
+test('quote clipping keeps Unicode whole at the 3000 UTF-16 boundary', () => {
+  for (const beforeEmoji of [2998, 2999]) {
+    const body = '가'.repeat(beforeEmoji) + '🙂 이어지는 글';
+    assert.equal(body.isWellFormed(), true);
+    const source = variant({ body });
+    const draft = buildFollowUpDraft({ item, variants: [source] }, source.id);
+    const quote = draft.sourceIdea.split('[이전 글]\n')[1].split('\n\n[이어 쓸 방향]')[0];
+    assert.equal(draft.sourceIdea.isWellFormed(), true);
+    assert.equal(quote, '가'.repeat(beforeEmoji) + (beforeEmoji === 2998 ? '🙂' : '') + '…');
+    assert.ok(quote.length <= 3001, 'the quote prefix remains within 3000 UTF-16 units, plus the ellipsis');
+  }
+});
+
+test('title clipping keeps Unicode whole at the 200 UTF-16 boundary', () => {
+  const prefix = '후속편 · ';
+  for (const beforeEmoji of [198 - prefix.length, 199 - prefix.length]) {
+    const title = '가'.repeat(beforeEmoji) + '🙂끝';
+    assert.equal(title.isWellFormed(), true);
+    const source = variant({ body: '발행한 본문' });
+    const draft = buildFollowUpDraft({ item: { ...item, title }, variants: [source] }, source.id);
+    assert.equal(draft.title.isWellFormed(), true);
+    assert.equal(draft.title, prefix + '가'.repeat(beforeEmoji) + (prefix.length + beforeEmoji === 198 ? '🙂' : ''));
+    assert.ok(draft.title.length <= 200);
+  }
+});
+
 test('an explicit missing source variant cannot fall back to a different post', () => {
   assert.throws(() => buildFollowUpDraft({ item, variants: [variant()] }, 'missing-variant'), /선택한 결과물을 찾을 수 없습니다/);
 });
