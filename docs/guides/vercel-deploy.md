@@ -89,6 +89,16 @@ Set-Location apps\hub;    npx vercel deploy --prod --yes --archive=tgz --scope m
 - 실제 운영 화면 확인에서 상단 시계의 UTC 서버/KST 브라우저 초기 텍스트 차이(React hydration418)를 발견했다. 동일한 초기 표시 후 마운트에서 명시적으로 한국 시각을 갱신하도록 고쳤으며 경고를 숨기지 않는다. 재조회만 하는 리서치 sweep은 자동화 행을 추가하지 않고 기록 실패는 응답에 표시한다. 후속 수정은 [PR #20](https://github.com/Muuuuoouuun/moonlight_pro/pull/20)에 포함한다.
 - 검증: root **3,848 tests · 통과 3,835 · 실패 0 · 조건부 건너뜀 13**, Desktop **345/345**; typecheck, contracts, ClassIn 체크, Next 16.3.8 Hub·Engine build, high-severity audit 통과. Next 보안 패치를 적용했으며 기존 moderate 2건은 이 작업 범위에서 임의 수정하지 않았다. 모델 claim·동시성·복구·RLS는 실제 로컬 PostgreSQL 테스트, 화면은 1440/390px·light/dark로 검증했다.
 
+### 2026-10-01 보고서·인사이트 내용 품질
+
+- 같은 범위·시간대의 직전 7일을 비교하고, 연락 활동/사람 수·딜/리드·계약/입금·개인/전체 집계를 구별하는 근거표를 전달한다. 주간 글은 핵심 판단→근거→해석·다른 설명→다음 확인→한계를 연결한다. 브랜드 원고에는 단일 줄 직접 인용·발표자/조건·반대 경우를 유지하며, 알려진 AI 요약·광고 꼬리와 허위 저자 경험을 제외한다.
+- 주간/리서치 전용 `COM_MOON_CONTENT_QUALITY_MODEL`의 기본은 `gemini-3.1-pro-preview`·thinking low·최대 출력 16,384다. 기존 다른 AI의 기본 모델은 유지한다. 초안/검토 2회와 자동 재시도 없음, 동일 paid claim 재발급 없음은 그대로다. Office 신규 비 Council 주간만 Engine 95초·Hub 105초·DB claim 120초이며 그 외 업무의 기존 예산은 유지한다.
+- 서울 DB 0061(판단 한계의 조회 보존)·0062(신규 주간 claim 기한)를 적용하고 해시 이력을 확인했다. readiness는 이력 포함 40개 항목 전부 통과했다. 이미 적용한 0056 이하 파일을 바꾸지 않았다.
+- 실제 고정 원문/완료 주간 5건의 최종 자동 조합은 독립 검토에서 **4/5 채택 가능**했다. 정치 일정에 남은 의도·원인·논의 시작 이력은 구체 금지 규칙과 수동 편집으로 보강했다. 마지막 규칙의 유료 재생성은 평가하지 않았다. 자동 결과와 [원문 대조 검토](../evaluations/2026-10-01-report-insight-content-quality/README.md), [사람이 편집한 5건](../evaluations/2026-10-01-report-insight-content-quality/examples.md)을 구분한다.
+- 추가 평가 40 provider 요청 중 usage·단가가 있는 34회의 알려진 비용은 **$0.6418315**다. HTTP 404 6회는 usage가 없어 비용 불명이다. 실패 검수와 thinking은 알려진 합계에 포함했다. 실제 5건을 완성한 v4 한 묶음은 $0.307608이며 다른 입력의 고정 비용이나 청구액을 보장하지 않는다. 이전 파일럿 $0.0809925·7 provider 요청과 별개다. 현재 월 상한은 없고 실행별 사용량을 기록한다.
+- 구현 `80e731ed`을 Engine `moonlight-pro-engine-67fmujtus-muuuuoouuuns-projects.vercel.app`→Hub `moonlight-pro-lom3f6ugz-muuuuoouuuns-projects.vercel.app` 순서로 배포했고 둘 다 Ready·고정 운영 URL alias를 확인했다. 인증 보고서 `live`·실패 출처 0, 월 비용 상한 `null`, 비로그인 차단·양쪽 health·야간 due 밖 크론 응답을 확인했다. 새 편집본은 [실제 보고서함](https://moonlight-pro-hub.vercel.app/dashboard/reports?report=stored%3A8654547f-3e9e-41a9-803f-d75609426d4b)에 새 문서로 보관했고 원문 본문·동일 receipt·빈 운영자 판단을 확인했다. 기존 기록을 덮어쓰지 않았다.
+- 검증: root **3,884 tests · 3,871 pass · 13 conditional skips · 0 failures**, typecheck/contracts/ClassIn/Hub·Engine build 통과. 추가 마지막 표현 회귀 18/18, migration·Office 실제 PostgreSQL 23/23 통과. 독립 코드 리뷰는 추가 회귀를 찾지 못했다. CI와 양쪽 Vercel preview도 통과했다. 운영 이후 `main` Git 배포가 이 코드를 보존하는지는 [PR #21](https://github.com/Muuuuoouuun/moonlight_pro/pull/21)의 합병 후 확인한다.
+
 ## 5. 확인
 
 1. `https://<hub>/login` 이 **로그인 화면**을 보여야 한다. 503이면 운영자 로그인 3값 중 하나가 빠진 것이다.
