@@ -37,6 +37,8 @@ test("db:check tracks the ai_usage_log table", () => {
   assert.ok(feature);
   assert.deepEqual(feature.tables, ["ai_usage_log"]);
   assert.ok(DATABASE_FEATURES.at(-1).migration >= FILE, "newer features may follow 0052");
+  const migrations = DATABASE_FEATURES.map((entry) => entry.migration);
+  assert.deepEqual(migrations, migrations.toSorted(), "features stay in filename order");
 });
 
 const available = process.getuid?.() !== 0 && ["initdb", "pg_ctl", "psql"].every((bin) => spawnSync(bin, ["--version"], { stdio: "ignore" }).status === 0);

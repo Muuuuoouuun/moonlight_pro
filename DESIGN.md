@@ -646,7 +646,7 @@ Do not ship:
 | Workspace membership (`org_scope`) | `apps/hub/components/hub/workspace-map.js`                   |
 | Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette}.jsx` |
 | Pages + `PAGE_MAP`                 | `apps/hub/components/hub/pages/*.jsx`, `hub-app.jsx`         |
-| Route mount                        | `apps/hub/app/dashboard/layout.jsx` mounts `HubApp` once; `dashboard/[[...path]]` and `content/{studio,queue}` pages render `null`; `content/publish` redirects to `queue`. `lazyPage` keeps `ssr: false` (CLAUDE.md). The desktop quick-capture widget page `app/widget/{layout,page}.jsx` (+ `widget.css`, `components/hub/quick-widget.jsx`) sits outside `/dashboard`, so `HubApp` does not mount; it stays behind the session gate |
+| Route mount                        | `apps/hub/app/dashboard/layout.jsx` mounts `HubApp` once; `dashboard/[[...path]]` and `content/{studio,queue,publish}` pages render `null`. `content/publish` is the 발행 로그 screen. `lazyPage` keeps `ssr: false` (CLAUDE.md). The desktop quick-capture widget page `app/widget/{layout,page}.jsx` (+ `widget.css`, `components/hub/quick-widget.jsx`) sits outside `/dashboard`, so `HubApp` does not mount; it stays behind the session gate |
 
 Build order when adding a new surface:
 1. Confirm tokens cover every color / size needed — do not hardcode hex values.

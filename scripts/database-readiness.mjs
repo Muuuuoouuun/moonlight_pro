@@ -98,6 +98,8 @@ export const DATABASE_FEATURES = [
     functions: ['journal_task_plan_receipt_v1()', 'guard_social_connection_brand_key()', 'set_updated_at()'] },
   // AI 사용량: 숫자·출처 키·모델명만. service_role은 insert·select만 가진다(update·delete 없음).
   { name: 'AI 사용량 기록', migration: '20260926_0052_ai_usage_log.sql', tables: ['ai_usage_log'], functions: [] },
+  // 파일명 순서(날짜 접두사 우선)라 20260929_0055가 20260930_0053·0054보다 앞에 온다 — 0053·0054는 두 파일씩 겹친다.
+  { name: '콘텐츠 예약', migration: '20260929_0055_content_schedules.sql', tables: ['content_schedules'], functions: [] },
   { name: '콘텐츠 리서치함', migration: '20260930_0053_research_inbox.sql',
     tables: ['research_briefs', 'research_brief_revisions', 'research_reviews', 'research_promotions', 'research_request_receipts'],
     functions: ['research_command_v1(uuid,uuid,text,jsonb)'],

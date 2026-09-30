@@ -127,8 +127,10 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
       <div className="studio-actions studio-ai-actions">
         <Button variant="outline" icon="sparkle" disabled={!canRun('draft')} onClick={() => generate('draft')}>{generating && operation === 'draft' ? 'AI 초안 작성 중…' : 'AI 초안'}</Button>
         <Button variant="outline" icon="sparkle" disabled={!canRun('polish')} onClick={() => generate('polish')} title="본문에서 문장을 선택하면 그 부분만 다듬습니다.">{generating && operation === 'polish' ? 'AI 다듬는 중…' : activeSelection ? '선택 부분 AI 다듬기' : 'AI 다듬기'}</Button>
+        {!structured && <Button variant="outline" icon="sparkle" disabled={!canRun('hooks')} onClick={() => generate('hooks')} title="첫 줄을 질문·장면·단언 세 가지로 제안합니다.">{generating && operation === 'hooks' ? '첫 줄 만드는 중…' : '첫 줄 3안'}</Button>}
         {!draft.sourceIdea.trim() && !draft.brief.message.trim() && <span className="studio-muted studio-small">원문 메모를 적으면 AI 초안을 만들 수 있습니다.</span>}
       </div>
+      {!draft.brandId && tone === 'brand' && <p className="studio-muted studio-small" role="note">브랜드 미지정 — '브랜드 말투' 대신 담백한 말투로 씁니다. 브랜드는 더보기에서 고를 수 있습니다.</p>}
       <details className="studio-ai-more">
         <summary>다른 작업 · 말투</summary>
         <div className="studio-stack studio-source-fields">
@@ -154,6 +156,7 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
       {stale && <p className="studio-error" role="status">후보를 만든 뒤 본문이나 버전이 바뀌었습니다. 현재 내용으로 새 후보를 만들어주세요.</p>}
       {candidates.length > 0 && <div className="studio-candidates">
         <div className="studio-row"><h3 className="studio-section-title">변경 비교</h3><Button size="xs" disabled={generating} onClick={() => setState({ phase: 'idle', message: '', run: null, persisted: false, recoveryToken: null })}>후보 닫기</Button></div>
+        {source?.toneFallback === 'no-brand' && <p className="studio-muted studio-small">브랜드가 없어 담백한 말투로 작성한 후보입니다.</p>}
         {resultOffice && <p className="studio-muted studio-small">님피아 편집 지침으로 생성한 후보 · 비교하고 사실을 확인한 뒤 적용하세요.</p>}
         {resultGuidance && <details className="studio-criteria"><summary>이 후보에 사용한 기준 · {resultGuidance.version}</summary><ul>{resultGuidance.criteria.map(rule => <li key={rule.id} title={rule.source}>{rule.criterion}</li>)}</ul></details>}
         {resultOffice && <details className="studio-criteria"><summary>이 후보의 역할 기준</summary><p className="studio-muted studio-small">정책 {resultOffice.policyVersion} · 역할 {resultOffice.personaVersion}. 생성과 출력 형식 검사를 거친 후보이며 사실 검증 완료를 뜻하지 않습니다.</p></details>}

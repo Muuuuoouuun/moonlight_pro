@@ -8,13 +8,13 @@ import {
   monthNumbers,
   openInquiries,
   openWorkCounts,
+  orderProducts,
   portfolioAttention,
   portfolioSummary,
   productBlocker,
   productNextStep,
   productOps,
   productStageLabel,
-  productStageOrder,
 } from "../../../lib/product-catalog.js";
 import styles from "./product-room.module.css";
 
@@ -34,10 +34,7 @@ export function OpsLabel({ value }) {
 export function ProductPortfolio({ products, inquiries, month, onOpenProduct, onOpenInbox }) {
   const summary = portfolioSummary(products, inquiries, month);
   const attention = portfolioAttention(products, inquiries);
-  const ordered = [...products].sort((a, b) => {
-    const ops = ["live", "dev", "paused", "ended"];
-    return ops.indexOf(a.opsStatus) - ops.indexOf(b.opsStatus) || productStageOrder(a.stage) - productStageOrder(b.stage);
-  });
+  const ordered = orderProducts(products);
   const openKey = (event, id) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
