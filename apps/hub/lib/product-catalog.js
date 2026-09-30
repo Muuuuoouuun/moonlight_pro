@@ -378,7 +378,16 @@ const ERROR_TEXT = {
   "engine-unreachable": "Engine에 연결하지 못했어요. 잠시 뒤 다시 시도하세요.",
 };
 
-export function productErrorText(error) {
+// 집중 상한 거절 — 지금 칸을 차지한 제품 이름을 같이 말해 무엇을 내릴지 바로 고르게 한다(자동으로 내리지 않는다).
+function focusCapText(data) {
+  const names = Array.isArray(data?.focus) ? data.focus.map((row) => row?.name).filter(Boolean) : [];
+  const limit = Number(data?.limit) || 3;
+  const who = names.length ? ` 지금: ${names.join(" · ")}.` : "";
+  return `MVP·출시·성장은 동시에 ${limit}개까지예요.${who} 하나를 유지·종료로 내린 뒤 올려 주세요.`;
+}
+
+export function productErrorText(error, data = null) {
+  if (error === "focus-cap-reached") return focusCapText(data);
   return ERROR_TEXT[error] || (error ? `저장하지 못했어요 (${error}).` : "저장하지 못했어요.");
 }
 

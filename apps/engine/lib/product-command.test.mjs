@@ -245,3 +245,55 @@ test("an inquiry can attach to one of the product's projects, never another prod
   const other = await executeProductCommand({ action: "link_inquiry", inquiryId: INQUIRY, productId: PRODUCT, projectId: PROJECT }, ctx, deps("33333333-3333-4333-8333-333333333399").deps);
   assert.equal(other.error, "project-product-mismatch");
 });
+
+test("focus cap: a fourth product cannot enter MVP·출시·성장 (2026-09-30 확정 — 3개)", async () => {
+  const focus = [
+    { id: "a0000000-0000-4000-8000-000000000001", name: "가", stage: "mvp", ops_status: "dev" },
+    { id: "a0000000-0000-4000-8000-000000000002", name: "나", stage: "launch", ops_status: "live" },
+    { id: "a0000000-0000-4000-8000-000000000003", name: "다", stage: "growth", ops_status: "paused" },
+  ];
+  const current = { id: PRODUCT, name: "OMR", stage: "validation", ops_status: "dev", version: 1, updated_at: "2026-09-24T00:00:00Z", details: {}, stage_history: [] };
+  const { deps, calls } = fakeDeps({
+    products: (options) => (options?.select === "id,name,stage,ops_status" ? [...focus, current] : [current]),
+  });
+
+  const blocked = await executeProductCommand({ action: "update_product", id: PRODUCT, stage: "mvp" }, ctx, deps);
+  assert.equal(blocked.status, "invalid-input");
+  assert.equal(blocked.error, "focus-cap-reached");
+  assert.equal(blocked.limit, 3);
+  assert.deepEqual(blocked.focus.map((row) => row.name), ["가", "나", "다"], "일시 중지도 집중 칸을 차지한다");
+  assert.equal(calls.update.length, 0, "거절하면 쓰지 않는다");
+
+  const created = await executeProductCommand({ action: "create_product", id: REPO, name: "새 제품", summary: "한 줄", orgScope: "personal", stage: "launch" }, ctx, deps);
+  assert.equal(created.error, "focus-cap-reached", "처음부터 집중 단계로 만들 때도 같다");
+  assert.equal(calls.insert.length, 0);
+
+  // 아이디어·검증은 막지 않는다.
+  const idea = await executeProductCommand({ action: "create_product", id: REPO, name: "새 제품", summary: "한 줄", orgScope: "personal" }, ctx, deps);
+  assert.equal(idea.status, "saved");
+});
+
+test("focus cap never blocks products already inside, or after one leaves", async () => {
+  const inside = { id: PRODUCT, name: "OMR", stage: "mvp", ops_status: "dev", version: 1, updated_at: "2026-09-24T00:00:00Z", details: {}, stage_history: [] };
+  const others = [
+    { id: "a0000000-0000-4000-8000-000000000001", name: "가", stage: "mvp", ops_status: "dev" },
+    { id: "a0000000-0000-4000-8000-000000000002", name: "나", stage: "launch", ops_status: "live" },
+    { id: "a0000000-0000-4000-8000-000000000003", name: "다", stage: "growth", ops_status: "live" },
+  ];
+  const { deps, calls } = fakeDeps({
+    products: (options) => (options?.select === "id,name,stage,ops_status" ? [...others, inside] : [inside]),
+  });
+  // 이미 집중 구간 안에서 단계를 옮기거나 카드를 고치는 것은 상한과 무관하다(옛 데이터가 넘쳐 있어도).
+  const moved = await executeProductCommand({ action: "update_product", id: PRODUCT, stage: "launch", name: "OMR 2" }, ctx, deps);
+  assert.equal(moved.status, "saved");
+  assert.equal(calls.update.length, 1);
+
+  // 종료한 제품은 세지 않는다 — 종료에서 다시 살릴 때만 검사한다.
+  const ended = { ...inside, stage: "growth", ops_status: "ended" };
+  const revive = fakeDeps({
+    products: (options) => (options?.select === "id,name,stage,ops_status" ? [others[0], others[1], { ...others[2], ops_status: "ended" }] : [ended]),
+  });
+  const revived = await executeProductCommand({ action: "update_product", id: PRODUCT, opsStatus: "live" }, ctx, revive.deps);
+  assert.equal(revived.error, undefined);
+  assert.equal(revived.status, "saved", "종료한 제품은 칸을 차지하지 않으므로 3번째 칸이 빈다");
+});
