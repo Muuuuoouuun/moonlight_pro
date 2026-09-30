@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>확정 기준 — 토큰 · 예산 · 결정</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'SUIT Variable','IBM Plex Sans KR',system-ui,sans-serif;color:#1E2228;background:#F7F8FA}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1500px; box-sizing: border-box; padding: 48px 56px; display: flex; flex-direction: column; gap: 22px; background: #F7F8FA; font-family: 'SUIT Variable', 'IBM Plex Sans KR', system-ui, sans-serif; color: #1E2228;">
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <div style="font-size: 11px; letter-spacing: 0.1em; color: #737C86; font-weight: 500;">SPEC · 구현으로 넘기기 전 기준</div>
+    <h1 style="margin: 0; font-size: 28px; font-weight: 600;">목업 → 코드: 토큰, 표면 예산, 결정 8가지</h1>
+    <p style="margin: 0; font-size: 14px; color: #545C66; line-height: 1.6; max-width: 900px;">목업의 색·크기는 화면 설명용 값입니다. 구현은 아래 매핑대로 허브 토큰만 씁니다(하드코딩 hex 금지). 권장안과 확정은 구분해서 적습니다.</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px;">
+    <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 0; font-size: 13px;">
+      <span style="font-size: 16px; font-weight: 600; padding-bottom: 10px;">목업 값 → 허브 토큰</span>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 8px 0; font-size: 11px; letter-spacing: 0.06em; color: #737C86; border-bottom: 1px solid #E9ECEF;"><span>쓰임</span><span>목업</span><span>코드(토큰)</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>페이지 바탕</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">#F7F8FA</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">var(--bg)</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>카드</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">#FFFFFF</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">var(--surface)</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>칩 · 탭 바탕</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">#F1F3F6 · #EEF0F3</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">var(--surface-2)</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>카드 테두리</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">1px #E9ECEF</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">1px var(--line-soft)</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>버튼·입력 테두리</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">1px #DCE0E5</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">1px var(--line)</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>글자 · 보조 · 흐림</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">#1E2228 · #545C66 · #737C86</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">--fg · --fg-muted · --fg-dim</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>선택 · 지금</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">#5274A8 · #EAF0F8</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">--accent · --accent-soft/-line</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>놓침 · 실패</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">#B8412F, 왼쪽 1px 선</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">--danger, inset 1px 0 0</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>주 버튼</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">#1E2228 채움</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">Button variant="primary"</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>반경</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">6 · 10 · 14</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">--r-sm · --r · --r-lg</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid #F1F3F6;"><span>글꼴</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">SUIT 계열 · JetBrains Mono</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">기본 sans · .mono · .num</span></div>
+      <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 0;"><span>컴포넌트</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">탭 · 팝오버 · 칩</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">SegmentedControl · Drawer · TruthBadge/LifecycleBadge/CertaintyBadge</span></div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 18px;">
+      <div style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; line-height: 1.6;">
+        <span style="font-size: 16px; font-weight: 600;">표면 예산 (content-studio-surface.test)</span>
+        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid #E9ECEF;"><span>지금</span><span style="color: #545C66;">본문 카드 컨트롤 ≤ 5 · AI 직접 버튼 2 · 헤더 버튼 3</span></div>
+        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid #E9ECEF;"><span>이 목업이 요구하는 변화</span><span style="color: #545C66;">하단 바 +1(예약) · 형식 탭 SegmentedControl 1</span></div>
+        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid #E9ECEF;"><span>제안</span><span style="color: #545C66;">본문 카드 ≤ 6 · AI 직접 버튼 ≤ 3(형식별) · 탭은 예산 밖(내비)</span></div>
+        <span style="font-size: 12px; color: #737C86;">한도를 늘리려면 스펙 §3을 먼저 고치고 테스트를 맞춥니다.</span>
+      </div>
+
+      <div style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; line-height: 1.6;">
+        <span style="font-size: 16px; font-weight: 600;">데이터 · 서버에 필요한 것</span>
+        <div style="padding: 8px 0; border-top: 1px solid #E9ECEF;"><b style="font-weight: 500;">예약</b> — 결과물(variant)에 <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">scheduled_at</span>, 상태 <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">scheduled</span>(이미 있는 "전달됨"과 구분). 새 컬럼 → 마이그레이션 1개.</div>
+        <div style="padding: 8px 0; border-top: 1px solid #E9ECEF;"><b style="font-weight: 500;">알림</b> — 5분 크론이 <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">scheduled_at ≤ now</span> 조회 → 홈 카드 + 푸시. 배포 환경 변수 설정이 선행.</div>
+        <div style="padding: 8px 0; border-top: 1px solid #E9ECEF;"><b style="font-weight: 500;">로그</b> — 기존 publish_logs 재사용, 이벤트 종류만 추가(예약·알림·놓침).</div>
+        <div style="padding: 8px 0; border-top: 1px solid #E9ECEF;"><b style="font-weight: 500;">형식 프롬프트</b> — 코드 상수(엔진) + 운영자 수정본은 템플릿 테이블.</div>
+      </div>
+    </section>
+  </div>
+
+  <section style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 0; font-size: 13px;">
+    <span style="font-size: 16px; font-weight: 600; padding-bottom: 10px;">결정 8가지 — 6개 확정(09-29), 2개 남음</span>
+    <div style="display: grid; grid-template-columns: 40px 280px minmax(0, 1fr) 150px; gap: 14px; padding: 8px 0; font-size: 11px; letter-spacing: 0.06em; color: #737C86; border-bottom: 1px solid #E9ECEF;"><span>#</span><span>결정</span><span>권장 · 이유</span><span>상태</span></div>
+    <div style="display: grid; grid-template-columns: 40px 280px minmax(0, 1fr) 150px; gap: 14px; padding: 11px 0; border-bottom: 1px solid #F1F3F6; align-items: start;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">1</span><span>하단 바에 예약 추가(표면 예산 +1)</span><span style="color: #545C66;">추가 — 예약은 발행 흐름의 필수 자리. 하단 바 +1, 다른 버튼은 늘리지 않음</span><span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; color: #1E2228; justify-self: start;">✓ 확정 09-29</span></div>
+    <div style="display: grid; grid-template-columns: 40px 280px minmax(0, 1fr) 150px; gap: 14px; padding: 11px 0; border-bottom: 1px solid #F1F3F6; align-items: start;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">2</span><span>놓침 · 성과 알림 기준</span><span style="color: #545C66;">그날 밤 정리 때(매일 밤 한 번) 안 올린 예약이 놓침. 낮에는 "시각 지남"(중립). 밤 시각은 상수 하나(기본 22:00, 조정 가능)</span><span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; color: #1E2228; justify-self: start;">✓ 확정 09-29</span></div>
+    <div style="display: grid; grid-template-columns: 40px 280px minmax(0, 1fr) 150px; gap: 14px; padding: 11px 0; border-bottom: 1px solid #F1F3F6; align-items: start;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">3</span><span>성과 입력 알림 시점</span><span style="color: #545C66;">매주 한 번(월요일) — 지난주 발행 글의 성과를 한 번에 입력. 주간 리포트와 같은 자리</span><span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; color: #1E2228; justify-self: start;">✓ 확정 09-29</span></div>
+    <div style="display: grid; grid-template-columns: 40px 280px minmax(0, 1fr) 150px; gap: 14px; padding: 11px 0; border-bottom: 1px solid #F1F3F6; align-items: start;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">4</span><span>형식 탭을 원고 화면 위에 둠</span><span style="color: #545C66;">둠 — 기본 스레드, 다른 형식은 한 번 눌러 전환. 채널 추가는 더보기에 유지</span><span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; color: #1E2228; justify-self: start;">✓ 확정 09-29</span></div>
+    <div style="display: grid; grid-template-columns: 40px 280px minmax(0, 1fr) 150px; gap: 14px; padding: 11px 0; border-bottom: 1px solid #F1F3F6; align-items: start;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">5</span><span>구현 순서</span><span style="color: #545C66;">1+2단계 함께: 예약·알림·로그 + 형식별 프롬프트·전용 AI 버튼. 통합 틀 → 잘 된 글 재구성 → 카피·종합은 그 뒤</span><span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; color: #1E2228; justify-self: start;">✓ 확정 09-29</span></div>
+    <div style="display: grid; grid-template-columns: 40px 280px minmax(0, 1fr) 150px; gap: 14px; padding: 11px 0; border-bottom: 1px solid #F1F3F6; align-items: start;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">6</span><span>브랜드 미지정일 때 AI 말투</span><span style="color: #545C66;">'담백하게'로 자동 전환하고 헤더에 '브랜드 미지정' 표시. 브랜드를 고르면 '브랜드 말투'로 돌아옴</span><span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; color: #1E2228; justify-self: start;">✓ 확정 09-29</span></div>
+    <div style="display: grid; grid-template-columns: 40px 280px minmax(0, 1fr) 150px; gap: 14px; padding: 11px 0; border-bottom: 1px solid #F1F3F6; align-items: start;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">7</span><span>Studio 디자인 방향</span><span style="color: #545C66;">표준 유지(Futura 미도입). 글쓰기 필드 6px 결정과 대형 제목이 원고와 경쟁</span><span style="font-size: 12px; color: #545C66; border-bottom: 1px dashed #5274A8; justify-self: start;">◇ 권장 · 미확정</span></div>
+    <div style="display: grid; grid-template-columns: 40px 280px minmax(0, 1fr) 150px; gap: 14px; padding: 11px 0; align-items: start;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">8</span><span>자동 업로드</span><span style="color: #545C66;">보류 유지. 예약 알림이 몸에 붙은 뒤 별도 결정(Threads 연결·게시 권한 필요)</span><span style="font-size: 12px; color: #737C86; border-bottom: 1px dotted #9AA2AB; justify-self: start;">보류 · 미정</span></div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

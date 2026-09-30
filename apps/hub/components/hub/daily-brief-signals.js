@@ -17,7 +17,7 @@ export function readEnvelope(res, data) {
 
 export const DAILY_BRIEF_TIMEOUT_MS = 20000;
 
-// 한 번 읽는다. → { status: live|partial|preview|error|unauthorized, signals }
+// 한 번 읽는다. Home 브리핑은 같은 응답의 집중 고객·할 일도 사용한다.
 export async function fetchDailyBriefSignals({ signal, fetchImpl = globalThis.fetch } = {}) {
   const timeout = AbortSignal.timeout(DAILY_BRIEF_TIMEOUT_MS);
   const res = await fetchImpl('/api/hub/daily-brief', { cache: 'no-store', signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
@@ -25,11 +25,13 @@ export async function fetchDailyBriefSignals({ signal, fetchImpl = globalThis.fe
   const status = readEnvelope(res, data);
   return {
     status,
-    signals: status === 'error' ? [] : (Array.isArray(data?.signals) ? data.signals : []),
+    signals: status === 'error' || status === 'unauthorized' ? [] : (Array.isArray(data?.signals) ? data.signals : []),
+    dailyFocus: status === 'error' || status === 'unauthorized' ? null : data?.dailyFocus || null,
+    taskToday: status === 'error' || status === 'unauthorized' ? null : data?.taskToday || null,
   };
 }
 
-const LOADING = { status: 'loading', signals: [] };
+const LOADING = { status: 'loading', signals: [], dailyFocus: null, taskToday: null };
 
 // reloadKey가 바뀔 때마다 다시 읽는다. keepPrevious: 이미 읽은 신호(live·partial)가 있으면 다시
 // 읽는 동안 그대로 두고 로딩으로 되돌리지 않는다(위젯이 창 포커스마다 다시 읽을 때 행이 깜빡이지
@@ -46,7 +48,7 @@ export function useDailyBriefSignals(reloadKey, { keepPrevious = false } = {}) {
         const next = await fetchDailyBriefSignals({ signal: controller.signal });
         if (active) setState(next);
       } catch {
-        if (active) setState({ status: 'error', signals: [] });
+        if (active) setState({ status: 'error', signals: [], dailyFocus: null, taskToday: null });
       }
     })();
     return () => { active = false; controller.abort(); };

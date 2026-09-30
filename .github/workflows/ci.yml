@@ -35,8 +35,11 @@ jobs:
       - name: Tests
         run: npm test
 
-      - name: Build
-        run: npm run build
+      - name: Desktop tests
+        run: npm --workspace @com-moon/desktop test
+
+      - name: Hub and Engine build
+        run: npm run build -- --filter=@com-moon/hub --filter=@com-moon/engine
 
       - name: Audit high severity
         run: npm audit --omit=dev --audit-level=high

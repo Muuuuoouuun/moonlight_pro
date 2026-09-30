@@ -16,8 +16,10 @@
 .content-news-title:hover { text-decoration: underline; }
 .content-news-title span { padding-left: 6px; color: var(--fg-muted); }
 .content-news-snippet { margin: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.7; }
+.content-news-research-action { margin-top: 10px; }
 @media (max-width: 600px) {
   .content-news-form > * { flex-basis: 100%; }
   .content-news-form > button { min-height: 44px; }
   .content-news-list li { padding: 12px 14px; }
+  .content-news-research-action { min-height: 44px; }
 }

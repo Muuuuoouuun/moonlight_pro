@@ -110,6 +110,26 @@ test("list order puts money-near stages first and retired ones last", async () =
   assert.deepEqual(sorted, ["growth", "launch", "mvp", "validation", "idea", "maintain", "sunset"]);
 });
 
+test("portfolio order is ops → stage → name, stable across edits", async () => {
+  const { orderProducts } = await import("./product-catalog.js");
+  const list = [
+    { name: "시나리오 허브", opsStatus: "paused", stage: "idea" },
+    { name: "OMR 메이커", opsStatus: "dev", stage: "mvp" },
+    { name: "HWP 메이커", opsStatus: "dev", stage: "mvp" },
+    { name: "옛 제품", opsStatus: "ended", stage: "sunset" },
+    { name: "EDB 메이커", opsStatus: "dev", stage: "mvp" },
+    { name: "탐색 후보", opsStatus: "dev", stage: "idea" },
+    { name: "운영 제품", opsStatus: "live", stage: "growth" },
+    { name: "AIs", opsStatus: "paused", stage: "idea" },
+  ];
+  assert.deepEqual(orderProducts(list).map((p) => p.name),
+    ["운영 제품", "EDB 메이커", "HWP 메이커", "OMR 메이커", "탐색 후보", "시나리오 허브", "AIs", "옛 제품"],
+    "한국어 정렬: 같은 칸에서는 한글 이름이 영문 이름보다 앞");
+  assert.deepEqual(orderProducts(list.slice().reverse()).map((p) => p.name), orderProducts(list).map((p) => p.name),
+    "입력(서버) 순서가 바뀌어도 결과가 같다");
+  assert.equal(list[0].name, "시나리오 허브", "원본 배열은 건드리지 않는다");
+});
+
 test("checklist runs plan → features → dev → launch → operate and counts only actionable items", () => {
   const empty = productChecklist(product());
   assert.deepEqual(empty.groups.map((g) => g.label), ["기획", "기능", "개발", "출시", "운영"]);

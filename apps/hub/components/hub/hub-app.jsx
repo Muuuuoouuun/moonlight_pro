@@ -90,6 +90,8 @@ const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
 const BrandContentLog = lazyPage(() => import("./pages/brand-content-log").then(m => m.BrandContentLog));
 const ContentPerformance = lazyPage(() => import("./pages/content-performance").then(m => m.ContentPerformance));
 const ContentNews = lazyPage(() => import("./pages/content-news").then(m => m.ContentNews));
+const ResearchInbox = lazyPage(() => import("./pages/research-inbox").then(m => m.ResearchInbox));
+const ContentPublishLog = lazyPage(() => import("./pages/content-publish-log").then(m => m.ContentPublishLog));
 const Studio = lazyPage(() => import("./pages/content").then(m => m.Studio));
 const Queue = lazyPage(() => import("./pages/content").then(m => m.Queue));
 const Campaigns = lazyPage(() => import("./pages/content").then(m => m.Campaigns));
@@ -227,6 +229,8 @@ const PAGE_MAP = {
   'dashboard/brands/log': (n) => <BrandContentLog onNavigate={n} />,
   'dashboard/content/performance': () => <ContentPerformance />,
   'dashboard/content/news': () => <ContentNews />,
+  'dashboard/content/research': () => <ResearchInbox />,
+  'dashboard/content/publish': () => <ContentPublishLog />,
   'dashboard/content/studio': () => <Studio />,
   'dashboard/content/queue': (n, _inquiries, _scope, ask) => <Queue onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/content/campaigns': () => <Campaigns />,

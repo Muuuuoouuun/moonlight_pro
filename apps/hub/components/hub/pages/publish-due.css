@@ -1,0 +1,19 @@
+/* 홈 '지금 올릴 글' — 토큰만 쓴다. 빨강은 놓침의 1px 왼쪽 선과 직접 라벨에만(DESIGN §5.2·§5.3). */
+.publish-due { display: flex; flex-direction: column; gap: 12px; }
+.publish-due-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.publish-due-title { margin: 0; font-size: 15px; font-weight: 600; }
+.publish-due-count { font-size: 12px; color: var(--fg-dim); }
+.publish-due-missed-count { color: var(--danger); }
+.publish-due-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.publish-due-item { border: 1px solid var(--line-soft); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.publish-due-item[data-state="missed"] { box-shadow: inset 1px 0 0 var(--danger); }
+.publish-due-item[data-state="now"] { border-color: var(--accent-line); }
+.publish-due-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--fg-muted); }
+.publish-due-time { font-size: 13px; color: var(--fg); }
+.publish-due-state { display: inline-flex; align-items: center; gap: 4px; }
+.publish-due-item[data-state="missed"] .publish-due-state { color: var(--danger); font-weight: 500; }
+.publish-due-item[data-state="now"] .publish-due-state { color: var(--accent); }
+.publish-due-body { font-size: 14px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.publish-due-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.publish-due-note { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 700px) { .publish-due-actions button { min-height: 44px; } }

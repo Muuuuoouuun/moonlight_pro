@@ -91,6 +91,18 @@ test('news discovery stays under Content in every scope', () => {
   assert.ok(navTreePaths().includes(path));
 });
 
+test('research inbox is one Content tab and a direct destination in every scope', () => {
+  const path = 'dashboard/content/research';
+  assert.equal(ownerAnchorKey(path), 'content');
+  for (const scope of ['all', 'classin', 'personal']) {
+    const nav = topNavigationForRoute(path, scope);
+    assert.equal(nav.activeTab?.path, path, scope);
+    assert.ok(nav.tabs.some(tab => tab.path === path), scope);
+  }
+  assert.ok(navTreePaths().includes(path));
+  assert.match(appSource, /'dashboard\/content\/research':.*<ResearchInbox/);
+});
+
 test('overview goals subview has one active child and carries organizational scope', () => {
   const tabs = sidebarChildren('overview', 'classin');
   const goals = tabs.find(tab => tab.key === 'overview-goals');
@@ -320,7 +332,7 @@ test("single-destination anchors render no sub-list and ClassIn Content has its 
       assert.deepEqual(sidebarChildren(key, scope.key), [], `${key} in ${scope.key}`);
     }
   }
-  assert.deepEqual(sidebarChildren("content", "classin").map((child) => child.key), ["ct-queue", "ct-news"]);
+  assert.deepEqual(sidebarChildren("content", "classin").map((child) => child.key), ["ct-queue", "ct-research", "ct-news"]);
   assert.ok(sidebarChildren("content", "all").length > 1);
 });
 

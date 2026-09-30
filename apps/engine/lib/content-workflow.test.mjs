@@ -105,3 +105,9 @@ test("Threads captures use the Threads channel without changing legacy X variant
   assert.equal(normalize(create({ variant: { body: "captured idea", variantType: "threads_post", channel: "x" } })).ok, false);
   assert.equal(normalize(create({ variant: { body: "legacy", variantType: "x_thread", channel: "x" } })).ok, true);
 });
+
+test("keeps research source drafts channel neutral while editing", () => {
+  assert.equal(normalize(update({ variant: { body: "검토 원고", variantType: "base_text", channel: "unassigned" } })).ok, true);
+  assert.equal(normalize(update({ variant: { body: "검토 원고", variantType: "base_text", channel: "threads" } })).ok, false);
+  assert.equal(normalize(update({ variant: { body: "검토 원고", variantType: "threads_post", channel: "unassigned" } })).ok, false);
+});
