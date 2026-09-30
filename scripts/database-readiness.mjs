@@ -125,6 +125,10 @@ export const DATABASE_FEATURES = [
     bodyIncludes: [['research_source_claim_v1(uuid,uuid,jsonb)','research_draft_slot_limits_v1'],['research_source_complete_v1(uuid,uuid,jsonb)','research_validation_diagnostic_v1']] },
   { name: '리서치 모델 응답·복구', migration: '20261001_0060_research_provider_outcomes.sql', tables: [], functions: [],
     bodyIncludes: [['research_source_complete_v1(uuid,uuid,jsonb)','research_provider_outcome_v1'],['research_source_complete_v1(uuid,uuid,jsonb)','research_terminal_response_repair_v1']] },
+  { name: '보고서 판단 한계 보존', migration: '20261001_0061_report_quality_projection.sql', tables: [], functions: [],
+    bodyIncludes: [['report_archive_v1(uuid,text,integer,jsonb,text)',"'uncertainties',o.result"],['report_office_weeklies_v1(uuid,text,integer)',"'sourceCheck',result"]] },
+  { name: '주간 보고서 품질 검토 시간', migration: '20261001_0062_office_weekly_quality_deadline.sql', tables: [], functions: [],
+    bodyIncludes: [['office_request_claim_v1(uuid,text,jsonb,jsonb)','office_weekly_content_deadline_v1']] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

@@ -57,3 +57,28 @@ test('automation log failure is visible without throwing or repeating paid prepa
     assert.equal(JSON.stringify(result).includes('private database exception'),false);
   }
 });
+
+test('Hub allows the two-stage research writer and review to finish before its bounded deadline',async()=>{
+  const {callResearchEngine}=await import('./research-run-service.js');
+  const original=AbortSignal.timeout;let timeoutMs;
+  try{
+    AbortSignal.timeout=milliseconds=>{timeoutMs=milliseconds;return new AbortController().signal;};
+    const result=await callResearchEngine({workspaceId:W,preparationId:B},{env:{COM_MOON_ENGINE_URL:'https://engine.test',COM_MOON_SHARED_WEBHOOK_SECRET:'secret'},fetchImpl:async()=>{
+      if(timeoutMs<45000*2+15000)throw new Error('premature timeout after writer');
+      return {ok:true,json:async()=>({status:'saved',briefId:B})};
+    }});
+    assert.equal(result.status,'saved');assert.equal(timeoutMs,115000);
+  }finally{AbortSignal.timeout=original;}
+});
+test('insufficient remaining run time cannot claim a paid two-stage preparation',async()=>{
+  let current=0,claims=0,reads=0;
+  const deps=dependencies({now:()=>current,discover:async()=>{current=110000;return {candidates:[{url:'https://example.org/a',title:'Release',official:true}],failures:[]};},sourceRead:async()=>{reads++;return {url:'https://example.org/a',body:'<article>A new public release is available. Access requires an active paid subscription and a supported account; broader availability is not announced.</article>',contentType:'text/html'};},prepare:async()=>assert.fail('not enough time for writer and review')});
+  const rpc=deps.rpc;deps.rpc=async(name,params)=>{if(name==='research_source_claim_v1')claims++;return rpc(name,params);};
+  await runResearchPreparation(command,deps);assert.equal(reads,0);assert.equal(claims,0);
+});
+test('source collection time is rechecked before any new paid preparation claim',async()=>{
+  let current=0,claims=0;
+  const deps=dependencies({now:()=>current,sourceRead:async()=>{current=115000;return {url:'https://example.org/release',body:'<article>A new public release is available. Access requires an active paid subscription and a supported account; broader availability is not announced.</article>',contentType:'text/html'};},prepare:async()=>assert.fail('writer must not start after collection consumes its budget')});
+  const rpc=deps.rpc;deps.rpc=async(name,params)=>{if(name==='research_source_claim_v1')claims++;return rpc(name,params);};
+  await runResearchPreparation(command,deps);assert.equal(claims,0);
+});

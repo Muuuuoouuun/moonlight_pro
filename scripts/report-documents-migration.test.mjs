@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -23,6 +23,8 @@ test('report ledger persists immutable facts, replays requests, serializes weekl
       create table public.research_brief_revisions(brief_id uuid,workspace_id uuid,revision integer,payload jsonb);
       create table public.research_promotions(brief_id uuid,workspace_id uuid,content_id uuid,variant_id uuid,destination text);`);
     sql(source);
+    const qualityMigration=new URL('../supabase/migrations/20261001_0061_report_quality_projection.sql',import.meta.url);
+    if(existsSync(qualityMigration))sql(readFileSync(qualityMigration,'utf8'));
     const command={action:'capture-weekly',kind:'weekly',scope:'company',title:'회사 주간',periodStart:'2026-09-24',periodEnd:'2026-09-30',payload:{status:'partial',facts:{stats:{contacts:null}},summary:'실제 집계'}};
     const invoke=(id,input,workspace=W,hash='a'.repeat(64))=>JSON.parse(sql(`set role service_role;select public.report_command_v1('${workspace}','${id}','${hash}',${quote(JSON.stringify(input))}::jsonb);reset role;`));
     const created=invoke(R,command);assert.equal(created.status,'saved');
@@ -48,6 +50,16 @@ test('report ledger persists immutable facts, replays requests, serializes weekl
     const second=page(first.nextCursor);assert.equal(second.items[0].ref,'stored:'+created.reportId);assert.equal(second.nextCursor,null);
     assert.equal(page(null,'stored:'+created.reportId).items[0].row.id,created.reportId);
     assert.deepEqual(page(null,'office:'+W).items,[]);
+    const officeId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const originalResult={summary:'판단은 보류',artifact:{kind:'markdown',body:'## 확인한 기록'},evidence:[],uncertainties:['고객 반응 미확인'],dissent:['활동 감소의 원인은 아직 미확인'],sourceCheck:'traced',nextStep:null,context:{missing:[]},generation:{private:'must not expose'},input:'must not expose'};
+    sql(`insert into public.office_requests values('${officeId}','${W}','operator','weekly_report','classin','{}','generated',${quote(JSON.stringify(originalResult))}::jsonb,now(),now()+interval '1 day');`);
+    const projected=page(null,'office:'+officeId).items[0].row.result;
+    assert.deepEqual(projected.uncertainties,originalResult.uncertainties);
+    assert.deepEqual(projected.dissent,originalResult.dissent);assert.equal(projected.sourceCheck,'traced');
+    assert.equal(projected.generation,undefined);assert.equal(projected.input,undefined);
+    const weeklyOffice=JSON.parse(sql(`set role service_role;select public.report_office_weeklies_v1('${W}','operator',50);reset role;`));
+    assert.deepEqual(weeklyOffice.reports[0].result.uncertainties,originalResult.uncertainties);
+    assert.equal(sql("select has_function_privilege('anon','public.report_archive_v1(uuid,text,integer,jsonb,text)','EXECUTE')"),'f');
     const parallelCommand={...command,periodStart:'2026-09-17',periodEnd:'2026-09-23'};
     const concurrent=await Promise.all(['88888888-8888-4888-8888-888888888888','99999999-9999-4999-8999-999999999999'].map(id=>new Promise((resolve,reject)=>{const child=spawn('psql',args);let output='',error='';child.stdout.on('data',chunk=>output+=chunk);child.stderr.on('data',chunk=>error+=chunk);child.on('error',reject);child.on('close',code=>code?reject(new Error(error)):resolve({stdout:output}));child.stdin.end(`begin;set role service_role;select public.report_command_v1('${W}','${id}','${'c'.repeat(64)}',${quote(JSON.stringify(parallelCommand))}::jsonb);select pg_sleep(0.1);commit;`);}).then(result=>JSON.parse(result.stdout.trim().split('\n')[0]))));
     assert.deepEqual(concurrent.map(row=>row.status).sort(),['duplicate','saved']);assert.equal(concurrent[0].reportId,concurrent[1].reportId);

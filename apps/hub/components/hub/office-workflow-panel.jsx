@@ -8,6 +8,7 @@ import {OfficeDeliberationControls,OfficeDiscussion} from './office-deliberation
 import {officeDeliberationForParticipants} from './office-deliberation-client';
 import styles from './office-workflow-panel.module.css';
 import {WEEKLY_MISSING_LABELS} from '@/lib/weekly-report-fields';
+import {OfficeArtifact} from './office-artifact';
 
 const Sessions=React.createContext(null);
 export function OfficeWorkflowSessionProvider({children}) {
@@ -167,7 +168,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
       </div>}
       {result&&<article className={styles.result}>
         <div className={styles.actions}><strong>{result.summary}</strong><TruthBadge state={receipt.persistence?.persisted===true?'live':'partial'} label={receipt.persistence?.persisted===true?'초안 저장됨':'저장 확인 필요'} />{result.sourceCheck === 'untraced' ? <CertaintyBadge state="unknown" label="근거 확인 안 됨" /> : null}</div>
-        <pre className={styles.body}>{result.artifact.body}</pre>
+        <OfficeArtifact artifact={result.artifact} className={styles.body} />
         <div className={styles.actions}><Button size="xs" onClick={copy}>{state.copied?'복사됨':'복사'}</Button>
           {result.nextStep && !hasApplication && <Button size="xs" onClick={openTask} disabled={!receipt.capabilities?.applyTask || receipt.persistence?.persisted!==true || state.pending || state.applicationUnknown}>할 일로 연결</Button>}
         </div>

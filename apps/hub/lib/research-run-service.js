@@ -11,13 +11,13 @@ export async function callResearchEngine(input,{env=process.env,fetchImpl=fetch}
   const url=env.COM_MOON_ENGINE_URL?.trim().replace(/\/$/,''),secret=env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim();
   if(!url||!secret)return {status:'preview',reason:'research-engine-not-configured'};
   try {
-    const response=await fetchImpl(`${url}/api/research/prepare`,{method:'POST',headers:{'content-type':'application/json','x-com-moon-shared-secret':secret},body:JSON.stringify(input),cache:'no-store',redirect:'error',signal:AbortSignal.timeout(70000)});
+    const response=await fetchImpl(`${url}/api/research/prepare`,{method:'POST',headers:{'content-type':'application/json','x-com-moon-shared-secret':secret},body:JSON.stringify(input),cache:'no-store',redirect:'error',signal:AbortSignal.timeout(115000)});
     const data=await response.json();
     if(!data||typeof data!=='object'||!['saved','duplicate','running','unknown','error','invalid-input','conflict'].includes(data.status)||(data.status==='saved'&&(!response.ok||!isCanonicalUuid(data.briefId))))throw Error('invalid-engine-response');
     return data;
   }catch{return {status:'unknown',reason:'preparation-outcome-unknown'};}
 }
-export async function runResearchPreparation(input,{workspaceId=resolveDefaultWorkspaceId(),env=process.env,read=fetchSupabaseRowsDetailed,rpc=invokeSupabaseRpc,discover=discoverOfficialSources,sourceRead=createResearchSourceReader(),prepare=body=>callResearchEngine(body,{env}),search=searchBraveNews}={}) {
+export async function runResearchPreparation(input,{workspaceId=resolveDefaultWorkspaceId(),env=process.env,read=fetchSupabaseRowsDetailed,rpc=invokeSupabaseRpc,discover=discoverOfficialSources,sourceRead=createResearchSourceReader(),prepare=body=>callResearchEngine(body,{env}),search=searchBraveNews,now=Date.now}={}) {
   const command=normalizeResearchRun(input);
   if(!command)return {status:'invalid-input',reason:'invalid-research-request',httpStatus:400};
   if(!isCanonicalUuid(workspaceId))return {status:'preview',reason:'missing-workspace',httpStatus:503};
@@ -34,7 +34,7 @@ export async function runResearchPreparation(input,{workspaceId=resolveDefaultWo
   if(receipt.status!=='claimed')return {status:receipt.run?.status==='running'?'running':['failed','unknown'].includes(receipt.run?.status)?'error':receipt.run?.status==='partial'?'partial':'ok',reason:receipt.reason||receipt.run?.reason||null,run:receipt.run?projectResearchRun(receipt.run):null,replayed:true,httpStatus:200};
   const runId=receipt.run?.id;if(!isCanonicalUuid(runId))return {status:'error',reason:'invalid-run-claim',httpStatus:502};
   const counts={preparedCount:0,sourceCount:0,duplicateCount:0,failedCount:0,searchCalls:0};
-  const failures=[],deadline=Date.now()+250000;let candidates=[];
+  const failures=[],deadline=now()+250000;let candidates=[];
   try {
     const official=await discover(command.brand,{read:sourceRead,maxCandidates:6});
     candidates=official.candidates||[];failures.push(...(official.failures||[]));counts.failedCount+=(official.failures||[]).length;
@@ -46,11 +46,15 @@ export async function runResearchPreparation(input,{workspaceId=resolveDefaultWo
     else if(found.status==='error'){counts.failedCount++;failures.push({source:'brave-news',reason:found.reason});}
     const urls=new Set();candidates=candidates.filter(candidate=>{const url=canonicalResearchUrl(candidate.url);if(!url||urls.has(url))return false;candidate.url=url;urls.add(url);return true;}).slice(0,8);
     for(const candidate of candidates) {
-      if(counts.preparedCount>=command.limit||Date.now()>deadline-75000)break;
+      if(counts.preparedCount>=command.limit)break;
+      if(now()>deadline-150000){counts.failedCount++;failures.push({source:'pipeline',reason:'research-time-budget-exhausted'});break;}
       let source;
       try{const result=await sourceRead(candidate.url);source={...extractSourceDocument({...result,title:candidate.title}),entryUrl:candidate.url};if(source.text.length<100)throw Error('insufficient-original-text');}
       catch(error){counts.failedCount++;failures.push({source:new URL(candidate.url).hostname,reason:boundedSourceError(error)});continue;}
       counts.sourceCount++;
+      // Leave the source-claim RPC, both model stages and run completion time
+      // after collection; avoid reserving a source whose model cannot finish.
+      if(now()>deadline-140000){counts.failedCount++;failures.push({source:'pipeline',reason:'research-time-budget-exhausted'});break;}
       const sourceClaim=await rpc('research_source_claim_v1',{p_workspace_id:workspaceId,p_run_id:runId,p_source:{...source,adapterUrl:candidate.adapterUrl||new URL(candidate.url).origin,official:candidate.official===true}},{timeoutMs:10000});
       if(!sourceClaim.ok||!sourceClaim.data){counts.failedCount++;failures.push({source:'ledger',reason:'source-claim-unconfirmed'});continue;}
       if(sourceClaim.data.status==='duplicate'){counts.duplicateCount++;continue;}

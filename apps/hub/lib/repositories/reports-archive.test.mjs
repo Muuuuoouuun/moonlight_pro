@@ -26,3 +26,11 @@ test('missing config is preview and failed archive is error; Office partial is p
   const office=await getReportsArchive({workspaceId:W,invokeRpc:async()=>({ok:true,data:{status:'live',items:[{source:'office',row:{id:W,scope:'classin',result:{artifact:{body:'부분 집계'},context:{missing:['연락 미측정']}}}}]}})});
   assert.equal(office.reports[0].status,'partial');assert.equal(office.status,'partial');
 });
+test('Office archive preserves document kind and judgment limits with a typed proposal separate from safe links',async()=>{
+  const nextStep={kind:'create_task',label:'연락 원문 확인',fields:{title:'연락 원문 확인',description:'고객 반응을 먼저 읽는다.'}};
+  const result=await getReportsArchive({workspaceId:W,invokeRpc:async()=>({ok:true,data:{status:'live',items:[{source:'office',row:{id:W,scope:'classin',origin_ref:{periodStart:'2026-09-24',periodEnd:'2026-09-30'},result:{artifact:{kind:'markdown',body:'## 판단\n\n연락 활동 **1건**'},context:{missing:[]},uncertainties:['전주 비교 미확인'],dissent:['활동 부재와 기록 누락은 구별한다.'],sourceCheck:'untraced',nextStep}}}]}})});
+  const report=result.reports[0];
+  assert.equal(report.artifactKind,'markdown');assert.deepEqual(report.uncertainties,['전주 비교 미확인']);
+  assert.deepEqual(report.dissent,['활동 부재와 기록 누락은 구별한다.']);assert.equal(report.sourceCheck,'untraced');
+  assert.deepEqual(report.nextStep,nextStep);assert.deepEqual(report.actions,[]);assert.equal(report.facts,null);
+});
