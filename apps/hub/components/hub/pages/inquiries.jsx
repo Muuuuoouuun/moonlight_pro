@@ -104,7 +104,7 @@ function InquiryProductLink({ inquiryId, onNavigate }) {
     ...(state.productId && !state.products.some(p => p.id === state.productId) ? [{ value: state.productId, label: '종료한 제품' }] : [])];
   return <div className="inquiry-toolbar" aria-label="문의 제품">
     <SelectField label="어떤 제품 문의인가요" value={state.productId || ''} disabled={busy} options={options} onChange={e => choose(e.target.value)} fieldStyle={{ flex: '1 1 220px' }} />
-    {state.productId && <Button onClick={() => onNavigate?.(`dashboard/work/projects?view=products&product=${state.productId}`)}>제품 보기 ↗</Button>}
+    {state.productId && <Button onClick={() => onNavigate?.(`dashboard/products?product=${state.productId}`)}>제품 보기 ↗</Button>}
     {message && <span role="alert" className="inquiry-notice" style={{ color: 'var(--danger)' }}>{message}</span>}
   </div>;
 }

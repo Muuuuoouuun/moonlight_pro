@@ -28,3 +28,9 @@ test("codex draft carries the failing check and log link, not secrets", () => {
   assert.match(draft, /실패한 check: test/);
   assert.match(draft, /actions\/runs\/1/);
 });
+
+test("focus cap rejection keeps the engine's product list in the message", () => {
+  const outcome = readSaveOutcome(400, { status: "invalid-input", error: "focus-cap-reached", limit: 3, focus: [{ name: "OMR" }] });
+  assert.equal(outcome.ok, false);
+  assert.match(outcome.message, /지금: OMR/);
+});

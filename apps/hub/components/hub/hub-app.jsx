@@ -86,6 +86,7 @@ const Memos = lazyPage(() => import("./pages/memos").then(m => m.Memos));
 const Discovery = lazyPage(() => import("./pages/discovery").then(m => m.Discovery));
 const DailyReview = lazyPage(() => import("./pages/daily-review").then(m => m.DailyReview));
 const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects));
+const Products = lazyPage(() => import("./pages/products").then(m => m.Products));
 const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
 const BrandContentLog = lazyPage(() => import("./pages/brand-content-log").then(m => m.BrandContentLog));
 const ContentPerformance = lazyPage(() => import("./pages/content-performance").then(m => m.ContentPerformance));
@@ -221,6 +222,7 @@ const PAGE_MAP = {
   'dashboard/work/daily-review': () => <DailyReview />,
   'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,
+  'dashboard/products': (n) => <Products onNavigate={n} />,
   'dashboard/work/decisions': (n, _inquiries, scope) => <Decisions onNavigate={n} scope={scope} />,
   'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
@@ -501,6 +503,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     if (p.startsWith('dashboard/revenue/accounts')) return 'dashboard/revenue/accounts?new=account';
     if (p.startsWith('dashboard/revenue/cases')) return 'dashboard/revenue/cases?new=case';
     if (p.startsWith('dashboard/work/projects') || p.startsWith('dashboard/work/roadmap')) return 'dashboard/work/projects?new=project';
+    if (p.startsWith('dashboard/products')) return 'dashboard/products?new=product';
     if (p.startsWith('dashboard/work/decisions')) return 'dashboard/work/decisions?new=decision';
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
     if (p.startsWith('dashboard/work/goals')) return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', create: true, base: GOAL_WORK_BASE }).slice(1);
