@@ -4,6 +4,8 @@
 
 **Goal:** Add a concise source-backed morning brief and the existing one-line Guru tip below the Home schedule.
 
+> 2026-09-30 운영자 정정: 이 계획의 카드 내부 Guru 팁 배치는 대체됐다. 최신 위치와 통합 선택 범위는 같은 날짜의 `../specs/2026-09-29-home-morning-brief-design.md` §목적과 위치·§내용 4를 따른다.
+
 **Architecture:** A pure selector forms three factual rows from the existing daily-brief and calendar responses. Home lifts its current calendar read to share it with the schedule and new brief. The existing GuidanceInlineTip renders inside the brief card and retains its own cadence and detail link.
 
 **Tech Stack:** Next.js client React, JavaScript, CSS tokens, Node test runner.

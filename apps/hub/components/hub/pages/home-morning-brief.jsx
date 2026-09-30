@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { Button, Skeleton, TruthBadge } from '../hub-primitives';
-import { GuidanceInlineTip } from '../guidance-inline-tip';
 import { buildHomeMorningBrief } from './home-morning-brief.js';
 import './home-morning-brief.css';
 
@@ -41,9 +40,6 @@ export function HomeMorningBrief({ brief, schedule, onNavigate, now = new Date()
             ))}
           </dl>
         )}
-        <div className="home-morning__tip">
-          <GuidanceInlineTip variant="today" onNavigate={onNavigate} />
-        </div>
         <div className="home-morning__footer">
           <span className="home-morning__source">{sourceNote}</span>
           <div className="home-morning__actions">

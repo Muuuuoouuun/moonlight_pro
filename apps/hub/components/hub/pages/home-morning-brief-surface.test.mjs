@@ -9,8 +9,8 @@ const componentUrl = new URL('./home-morning-brief.jsx', import.meta.url);
 const component = existsSync(componentUrl) ? await import(componentUrl.href) : {};
 const { HomeMorningBrief } = component;
 
-test('Home places its one morning brief after the existing schedule and before shortcuts', () => {
-  assert.match(source, /<TodaySchedule\b[\s\S]*?<HomeMorningBrief\b[\s\S]*?<footer\b/);
+test('Home places its one morning brief below the tip and before shortcuts', () => {
+  assert.match(source, /<TodaySchedule\b[\s\S]*?<GuidanceInlineTip\b[\s\S]*?<HomeMorningBrief\b[\s\S]*?<footer\b/);
   assert.equal((source.match(/<HomeMorningBrief\b/g) || []).length, 1);
 });
 
@@ -35,7 +35,7 @@ test('shared daily brief read passes its real focus and task data to Home', asyn
   assert.deepEqual(failed, { status: 'error', signals: [], dailyFocus: null, taskToday: null });
 });
 
-test('morning brief renders three factual lines, the reused Guru tip, and navigation only', () => {
+test('morning brief card renders three factual lines and navigation without an embedded tip', () => {
   assert.equal(typeof HomeMorningBrief, 'function');
   const html = renderToStaticMarkup(React.createElement(HomeMorningBrief, {
     brief: {
@@ -48,9 +48,9 @@ test('morning brief renders three factual lines, the reused Guru tip, and naviga
     onNavigate: () => {},
   }));
   assert.match(html, /아침 브리핑/);
-  assert.match(html, /먼저 확인[\s\S]*다음 일정[\s\S]*오늘의 진척[\s\S]*GURU[\s\S]*오늘 열기/);
+  assert.match(html, /먼저 확인[\s\S]*다음 일정[\s\S]*오늘의 진척[\s\S]*오늘 열기/);
   assert.match(html, /30초 AI 브리핑 열기/);
-  assert.equal((html.match(/guidance-inline-tip-wrap/g) || []).length, 1);
+  assert.equal((html.match(/guidance-inline-tip-wrap/g) || []).length, 0);
   assert.doesNotMatch(html, /고객 A|고객 미팅/);
 });
 

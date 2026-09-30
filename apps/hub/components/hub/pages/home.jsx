@@ -12,6 +12,7 @@ import { useGuruRecommendations, recommendationForSubject } from '../guru-recomm
 import { readEnvelope, useDailyBriefSignals } from '../daily-brief-signals';
 import { HomeMorningBrief } from './home-morning-brief';
 import { formatHomeClock } from './home-morning-brief.js';
+import { GuidanceInlineTip } from '../guidance-inline-tip';
 
 // Home — Futura 텍스처의 첫 화면 (DESIGN.md §15, 2026-09-18).
 //
@@ -291,7 +292,10 @@ export function Home({ onNavigate, onGuidanceAsk }) {
 
       <TodaySchedule onNavigate={onNavigate} schedule={schedule} onReload={reload} />
 
-      <HomeMorningBrief brief={brief} schedule={schedule} onNavigate={onNavigate} />
+      <div className="home-morning-stack">
+        <GuidanceInlineTip variant="home" onNavigate={onNavigate} />
+        <HomeMorningBrief brief={brief} schedule={schedule} onNavigate={onNavigate} />
+      </div>
 
       <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <Kbd>J</Kbd><Kbd>K</Kbd> 이동 · <Kbd>1</Kbd>–<Kbd>9</Kbd> 결정
