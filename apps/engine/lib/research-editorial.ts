@@ -76,6 +76,48 @@ function eligibleSourceLines(source:Source) {
 export function researchCitationLines(source:Source) {
   return eligibleSourceLines(source).map(line=>line.match(/^(L[1-9][0-9]{0,4}):/)?.[1]).filter((value):value is string=>Boolean(value));
 }
+
+// A single calendar entry cannot support a policy essay. This narrow projection
+// reads the cited original line; it neither repairs references nor adds evidence.
+// The caller validates the reviewed object before and after this projection.
+export function groundResearchScheduleNote(brand:Row,source:Source,reviewed:unknown):unknown {
+  if(!['politicofficer','politic_officer'].includes(brand.slug)||!/^\[오늘의 국회일정\]/.test(source.title)||!reviewed||typeof reviewed!=='object'||Array.isArray(reviewed))return reviewed;
+  const value=reviewed as Row;
+  if(!Array.isArray(value.facts)||value.facts.length!==1)return reviewed;
+  const fact=value.facts[0];
+  if(!fact||typeof fact!=='object'||fact.sourceId!==source.id||typeof fact.locator!=='string'||!/^L[1-9][0-9]{0,4}$/.test(fact.locator)||!researchCitationLines(source).includes(fact.locator)||typeof fact.quote!=='string'||!fact.quote.trim()||fact.quote.length>800)return reviewed;
+  const cited=source.text.split('\n').filter(line=>line.startsWith(`${fact.locator}:`));
+  if(cited.length!==1)return reviewed;
+  const line=cited[0].replace(/^L\d+:\s*/, '');
+  if(!line.includes(fact.quote))return reviewed;
+  // Split at the first host/topic delimiter: the topic itself may have commas.
+  // Multiple venue delimiters or unclear host expressions remain untouched.
+  const entry=line.match(/^([01]\d|2[0-3]):([0-5]\d) ([^,\/\n]{1,100}), (.{1,140}) \/ ([^\/\n]{1,180})$/);
+  if(!entry)return reviewed;
+  const [,hour,minute,rawHost,rawTopic,rawPlace]=entry,host=rawHost.trim(),topic=rawTopic.trim(),place=rawPlace.trim();
+  const hostSuffix=/(?:의원실|위원회|사무처|도서관|예산정책처|입법조사처)(?:\s+등)?$/;
+  if(!host||!topic||!place||/[<>\0]/.test(host+topic+place)||topic.includes(' / ')||!hostSuffix.test(host)||!fact.quote.includes(host)||!fact.quote.includes(topic))return reviewed;
+  // A repeated host after the first comma is not part of the topic. Multiple
+  // hosts in the first segment are likewise outside this single-host grammar.
+  if(hostSuffix.test(topic.split(',')[0].trim())||(host.match(/의원실|위원회|사무처|도서관|예산정책처|입법조사처/g)||[]).length!==1)return reviewed;
+  const title=`국회 예고 일정: ${topic}`;
+  if(title.length>180)return reviewed;
+  const date=source.title.match(/ - (\d{1,2})월 (\d{1,2})일$/);
+  const month=Number(date?.[1]),day=Number(date?.[2]);
+  const validDate=date&&month>=1&&month<=12&&day>=1&&day<=[31,29,31,30,31,30,31,31,30,31,30,31][month-1];
+  const reference=validDate?`${month}월 ${day}일자 언론 일정 기사`:'언론 일정 기사';
+  const change=`기사에는 ${host}의 ‘${topic}’ 일정이 예고돼 있다.`;
+  return {
+    title,change,
+    whyBrand:'예고된 의제와 확인된 결과를 구분하려면 주최 측 후속 발표의 유무와 내용을 확인해야 한다.',
+    facts:[{text:change,sourceId:fact.sourceId,quote:fact.quote,locator:fact.locator}],
+    interpretation:'확인된 범위는 주제·주최자·시간·장소가 실린 예고 일정이다. 실제 개최 여부와 논의 결과는 이 일정 한 줄만으로 판단할 수 없다.',
+    conditions:`${reference}에 실린 예고 기준이다. 시간은 ${hour}:${minute}, 장소는 ${place}로 기재돼 있다. 이 근거에서는 실제 개최·일정 변경 여부가 확인되지 않았다.`,
+    counterevidence:'선택한 일정 근거에는 개최 결과나 논의 내용이 없으므로, 판단에는 별도 후속 자료가 필요하다.',
+    unknown:'선택한 일정 한 줄로는 실제 개최 여부, 논의 내용, 일정 변경 여부, 선택에 필요한 조건을 확인할 수 없다.',
+    draft:`${reference}에는 ${host}의 ‘${topic}’ 일정이 예고돼 있다. 예고만으로 개최 결과나 정책 변화를 판단하기엔 이르다. 확인할 질문은 ‘주최 측 후속 발표가 있는가, 있다면 실제 논의 내용과 선택에 필요한 조건이 확인되는가?’다.`,
+  };
+}
 const citationScope=(source:Source)=>`인용 가능한 단일 줄 번호: ${researchCitationLines(source).join(', ')}. 나머지 줄은 인용 근거로 사용하지 마세요.`;
 export function buildResearchWriterPrompt(brand:Row,source:Source) {
   return `입력 자료 — 승인된 브랜드 편집 정체성: ${JSON.stringify(researchEditorialIdentity(brand))}\n${citationScope(source)}\n${sourcePacket(source)}`;

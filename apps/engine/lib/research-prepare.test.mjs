@@ -135,3 +135,26 @@ test('new generation rejects ranges and excluded citation lines even if a provid
     assert.equal(completion.reason,'invalid-model-evidence');assert.equal(completion.brief,undefined);assert.equal(completion.usage.totalTokenCount,40);assert.equal(calls,2);
   }
 });
+
+test('reviewed thin parliament evidence becomes an unreviewed schedule note after quote validation, with the same two paid usages',async()=>{
+  const scheduleSource={...source,title:'[오늘의 국회일정] 세미나 - 9월 30일',url:'https://www.newspim.com/news/view/20260929001162',text:'L21: 10:00 이인선 의원실 등, 인공지능 시대, 대입제도의 방향은? / 국회 본관 228호'};
+  const raw={...brief,title:'AI 대입제도 개편 논의 시작',change:'기존 평가 대체',whyBrand:'청년 세대의 삶과 직결',interpretation:'정치권이 기술을 교육 제도에 편입하기 시작했다.',conditions:'오늘 토론회 개최',counterevidence:'개편 논의 결과가 아직 없다.',unknown:'수능을 대체할 개편안의 적용 시점',draft:'기존 평가를 대체할 제안이 나타날지 지켜봐야 한다.',facts:[{text:'대입 개편 논의가 시작됐다.',sourceId:P,locator:'L21',quote:'이인선 의원실 등, 인공지능 시대, 대입제도의 방향은?'}],error:'private model error'};
+  let completion,calls=0;
+  await executeResearchPrepare({preparationId:P,workspaceId:W},{workspaceId:W},{rpc:async(name,params)=>{if(name==='research_model_claim_v1')return {ok:true,data:{status:'claimed',source:scheduleSource,brand:{id:W,slug:'politicofficer'}}};completion=params.p_result;return {ok:true,data:completion};},generate:async()=>{calls++;return {ok:true,text:JSON.stringify(raw),model:'gemini-test',usageMetadata:{promptTokenCount:10,candidatesTokenCount:20,thoughtsTokenCount:5,totalTokenCount:35}};}});
+  assert.equal(completion.status,'saved');assert.equal(calls,2);assert.equal(completion.usage.modelCalls,2);assert.equal(completion.usage.totalTokenCount,70);
+  assert.equal(completion.brief.origin,'research-ai');assert.equal(completion.brief.verificationLevel,'unreviewed');assert.equal(completion.brief.factEvidence[0].quote,raw.facts[0].quote);assert.equal(completion.brief.factEvidence[0].locator,'L21');assert.equal(completion.brief.factEvidence[0].sourceId,P);assert.equal(completion.brief.sources[0].documentHash,scheduleSource.documentHash);
+  for(const field of ['title','change','whyBrand','interpretation','conditions','counterevidence','unknown','draft'])assert.notEqual(completion.brief[field],raw[field]);
+  assert.doesNotMatch(JSON.stringify(completion),/개편|대체|시작|편입|청년|오늘 토론회|private model/);
+  assert.equal(completion.brief.facts.length,1);assert.equal(completion.brief.facts[0],'기사에는 이인선 의원실 등의 ‘인공지능 시대, 대입제도의 방향은?’ 일정이 예고돼 있다.');
+});
+test('schedule field narrowing cannot rescue invalid or excluded evidence and still records both paid calls',async()=>{
+  const scheduleSource={...source,title:'[오늘의 국회일정] 세미나 - 9월 30일',url:'https://www.newspim.com/news/view/20260929001162',text:'L21: 10:00 이인선 의원실 등, 인공지능 시대, 대입제도의 방향은? / 국회 본관 228호'};
+  const fact={text:'대입 개편 논의가 시작됐다.',sourceId:P,locator:'L21',quote:'이인선 의원실 등, 인공지능 시대, 대입제도의 방향은?'};
+  for(const change of [{quote:''},{quote:'위조 인용'},{sourceId:W},{locator:'L21-L22'},{locator:'L21:L22'},{locator:'L999'}]){let calls=0,completion;
+    await executeResearchPrepare({preparationId:P,workspaceId:W},{workspaceId:W},{rpc:async(name,params)=>{if(name==='research_model_claim_v1')return {ok:true,data:{status:'claimed',source:scheduleSource,brand:{id:W,slug:'politicofficer'}}};completion=params.p_result;return {ok:true,data:completion};},generate:async()=>{calls++;return {ok:true,text:JSON.stringify({...brief,facts:[{...fact,...change}]}),model:'gemini-test',usageMetadata:{totalTokenCount:20}};}});
+    assert.equal(completion.reason,'invalid-model-evidence');assert.equal(completion.brief,undefined);assert.equal(calls,2);assert.equal(completion.usage.totalTokenCount,40);
+  }
+  const aiSource={...scheduleSource,text:scheduleSource.text+'\nL22: AI summary\nL23: AI summary\nL24: AI가 자동 생성한 요약으로 정확하지 않을 수 있어요.'};let completion;
+  await executeResearchPrepare({preparationId:P,workspaceId:W},{workspaceId:W},{rpc:async(name,params)=>{if(name==='research_model_claim_v1')return {ok:true,data:{status:'claimed',source:aiSource,brand:{id:W,slug:'politicofficer'}}};completion=params.p_result;return {ok:true,data:completion};},generate:async()=>({ok:true,text:JSON.stringify({...brief,facts:[fact]}),model:'gemini-test',usageMetadata:{totalTokenCount:20}})});
+  assert.equal(completion.reason,'invalid-model-evidence');assert.equal(completion.brief,undefined);assert.equal(completion.usage.totalTokenCount,40);
+});

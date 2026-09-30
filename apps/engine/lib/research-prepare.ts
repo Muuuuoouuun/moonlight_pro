@@ -1,6 +1,6 @@
 import { invokeSupabaseRpc } from './supabase-rest.ts';
 import { classifyGeminiFailure, generateGeminiText, getGeminiResponseDiagnostics } from './gemini.ts';
-import { aggregateResearchUsage, buildResearchWriterPrompt, buildResearchReviewPrompt, buildResearchSystemInstruction, researchCitationLines, type ResearchGenerationStage } from './research-editorial.ts';
+import { aggregateResearchUsage, buildResearchWriterPrompt, buildResearchReviewPrompt, buildResearchSystemInstruction, groundResearchScheduleNote, researchCitationLines, type ResearchGenerationStage } from './research-editorial.ts';
 import { contentQualityGeneration } from './content-quality.ts';
 
 type Row=Record<string,any>;
@@ -92,7 +92,11 @@ export async function executeResearchPrepare(input:unknown,config:{workspaceId?:
     if(candidate!==undefined){
       generated=await runStage('review',buildResearchReviewPrompt(brand,source,candidate));
       if(generated.ok)try{
-        const parsed=parsePreparedResearch(JSON.parse(generated.text),[source],brand.id);brief=parsed.brief;validationDiagnostic=parsed.diagnostic;
+        const reviewed=JSON.parse(generated.text),validated=parsePreparedResearch(reviewed,[source],brand.id);
+        // Invalid evidence never enters schedule narrowing. Revalidate the
+        // projected fields and unchanged citation before saving the final brief.
+        const narrowed=validated.brief?groundResearchScheduleNote(brand,source,reviewed):reviewed;
+        const parsed=narrowed===reviewed?validated:parsePreparedResearch(narrowed,[source],brand.id);brief=parsed.brief;validationDiagnostic=parsed.diagnostic;
         // Keep legacy stored-brief parsing compatible, but enforce the tighter
         // negotiated contract on every new generation even if a provider ignores
         // its JSON schema. A reviewed draft must not cite an excluded AI summary.
