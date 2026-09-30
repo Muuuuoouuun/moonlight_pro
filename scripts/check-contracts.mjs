@@ -241,7 +241,7 @@ assert(
 const contentLedger = readText("apps/hub/lib/repositories/content-ledger.js");
 const schema = readText("supabase/schema.sql");
 const contentVariantMigrationPath =
-  "supabase/migrations/20260914_0001_content_threads_post.sql";
+  "supabase/migrations/20260930_0053_research_inbox.sql";
 const contentVariantMigration = existsSync(path.join(root, contentVariantMigrationPath))
   ? readText(contentVariantMigrationPath)
   : "";
