@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { Button, Card, EmptyState, Kbd, Progress, SelectField, Skeleton, TextAreaField, TextField } from './hub-primitives';
+import { Badge, Button, Card, EmptyState, Kbd, Progress, SelectField, Skeleton, TextAreaField, TextField } from './hub-primitives';
 import { goalMetricInput, goalObjectiveInput, goalObservationInput, goalSourceKeysFor, goalWriteErrorMessage, measurementLabel, safeGoalEvidenceHref } from '@/lib/goal-client';
 import { goalPeriodPreset } from '@/lib/goal-input-ux';
 import { useGoalCommand, useGoalDraft } from './use-goals';
@@ -13,7 +13,8 @@ export const GOAL_SOURCE_OPTIONS = [
   { value: 'content_published', label: '발행 기록' },
   { value: 'reviews_completed', label: '하루 리뷰 기록' },
 ];
-const roles = [{ value: 'outcome', label: '결과 · 달성하려는 변화' }, { value: 'driver', label: '선행 활동 · 결과를 돕는 실행' }, { value: 'guardrail', label: '유지 기준 · 지켜야 할 한계' }];
+// 역할이 OKR과 KPI를 가른다(lib/goal-concepts.js): 결과·선행은 이 기간의 KR, 유지 기준은 계속 지킬 KPI.
+const roles = [{ value: 'outcome', label: '결과 KR · 이 기간에 이루려는 변화' }, { value: 'driver', label: '선행 KR · 결과를 움직이는 행동' }, { value: 'guardrail', label: 'KPI · 계속 지킬 선(건강 지표)' }];
 const directions = [{ value: 'increase', label: '늘리기' }, { value: 'decrease', label: '줄이기' }, { value: 'range', label: '범위 유지' }];
 export const goalScopeLabel = value => value === 'company' ? 'ClassIn' : '개인';
 const dateTime = value => value && Number.isFinite(new Date(value).getTime()) ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '확인되지 않음';
@@ -49,11 +50,15 @@ export function GoalMetricSummary({ metric, scope }) {
   const measurement = metric.measurement;
   const progress = metric.progress;
   const value = Number.isFinite(progress?.value) ? progress.value : null;
-  const label = progress?.state === 'achieved' ? '기준 달성' : progress?.state === 'partial' ? '일부 근거 · 달성 판단 보류' : progress?.state === 'target_unset' ? '목표 기준 미설정' : progress?.state === 'unmeasured' || !measurement ? '미측정' : progress?.achieved === false ? '진행 중' : '진척률 산정 전';
+  const isAchieved = progress?.state === 'achieved' || progress?.achieved === true;
+  const label = isAchieved ? '기준 달성' : progress?.state === 'partial' ? '일부 근거 · 달성 판단 보류' : progress?.state === 'target_unset' ? '목표 기준 미설정' : progress?.state === 'unmeasured' || !measurement ? '미측정' : progress?.achieved === false ? '진행 중' : '진척률 산정 전';
   return <div className="goal-metric-summary">
     <div className="goal-actions"><span className="stat goal-measurement">{measurementLabel(metric)}</span><span className="goal-muted">{metric.direction === 'range' ? `기준 ${metric.targetMin ?? '—'}–${metric.targetMax ?? '—'}` : `목표 ${metric.target ?? '—'}`} {metric.unit}</span></div>
-    <div className="goal-actions"><span>{label}</span>{value !== null && <span className="mono">{value}%</span>}</div>
-    {value !== null && measurement?.coverage === 'complete' && <Progress value={value} tone="neutral" />}
+    <div className="goal-actions">
+      <Badge tone="neutral" size="xs">{label}</Badge>
+      {value !== null && <span className="num mono">{value}%</span>}
+    </div>
+    {value !== null && measurement?.coverage === 'complete' && <Progress value={value} tone="moon" />}
     <p className="goal-muted">{GOAL_SOURCE_OPTIONS.find(item => item.value === metric.sourceKey)?.label || '출처 확인 필요'}{measurement?.observedAt ? ` · 관측 ${dateTime(measurement.observedAt)}` : ''}</p>
     {metric.sourceKey !== 'manual' && scope && <p className="goal-muted">{goalScopeLabel(scope)} 전체의 기간 내 기록을 집계합니다. 연결한 업무만의 실적은 아닙니다.</p>}
     {measurement?.reason === 'source-personal-only' ? <p className="goal-muted">하루 리뷰는 개인 기록이라 회사 목표에서 집계하지 않습니다. 이 지표를 보관하고 다른 측정 방법으로 새로 만드세요.</p> : measurement?.coverage !== 'complete' && measurement?.reason && <p className="goal-muted">이 기간의 근거가 부족해 달성을 확정하지 않습니다.</p>}
@@ -99,9 +104,9 @@ export function GoalObjectiveForm({ objective, scope = 'personal', onSaved, onCa
   </form>;
 }
 
-export function GoalMetricForm({ objective, onSaved, onCancel }) {
-  const key = `metric:new:${objective.id}`;
-  const [draft, change, clear] = useGoalDraft(key, { name: '', unit: '', role: 'outcome', direction: 'increase', baseline: '', target: '', targetMin: '', targetMax: '', sourceKey: 'manual' });
+export function GoalMetricForm({ objective, defaultRole = 'outcome', onSaved, onCancel }) {
+  const key = `metric:new:${objective.id}:${defaultRole}`;
+  const [draft, change, clear] = useGoalDraft(key, { name: '', unit: '', role: defaultRole, direction: 'increase', baseline: '', target: '', targetMin: '', targetMax: '', sourceKey: 'manual' });
   const [validation, setValidation] = React.useState('');
   const command = useGoalCommand(key, result => { clear(); onSaved?.(result); });
   async function submit(event) {
@@ -113,10 +118,10 @@ export function GoalMetricForm({ objective, onSaved, onCancel }) {
     await command.submit('create_metric', goalMetricInput(draft, objective.id));
   }
   return <form className="goal-form" onSubmit={submit} onKeyDown={submitShortcut} aria-busy={command.state === 'saving'}>
-    <h3>측정 지표 추가</h3><fieldset disabled={command.locked}>
-      <TextField label="측정할 변화" required maxLength={240} value={draft.name} onChange={event => change('name', event.target.value)} autoFocus />
+    <h3>{defaultRole === 'guardrail' ? 'KPI 추가' : '측정 지표 추가'}</h3><fieldset disabled={command.locked}>
+      <TextField label={draft.role === 'guardrail' ? '지킬 선' : '측정할 변화'} required maxLength={240} value={draft.name} onChange={event => change('name', event.target.value)} autoFocus />
       <div className="goal-fields-two"><SelectField label="역할" value={draft.role} options={roles} onChange={event => change('role', event.target.value)} /><TextField label="단위" required maxLength={40} value={draft.unit} onChange={event => change('unit', event.target.value)} /></div>
-      <SelectField label="측정 방법" value={draft.sourceKey} options={GOAL_SOURCE_OPTIONS.filter(option => goalSourceKeysFor(objective.scope).includes(option.value))} hint={objective.scope === 'company' ? '하루 리뷰는 개인 기록이라 회사 목표의 측정 방법으로 고를 수 없습니다.' : undefined} onChange={event => { change('sourceKey', event.target.value); if (event.target.value !== 'manual') change('role', 'driver'); }} />
+      <SelectField label="측정 방법" value={draft.sourceKey} options={GOAL_SOURCE_OPTIONS.filter(option => goalSourceKeysFor(objective.scope).includes(option.value))} hint={objective.scope === 'company' ? '하루 리뷰는 개인 기록이라 회사 목표의 측정 방법으로 고를 수 없습니다.' : undefined} onChange={event => { change('sourceKey', event.target.value); if (event.target.value !== 'manual' && draft.role === 'outcome') change('role', 'driver'); }} />
       {draft.sourceKey !== 'manual' && <p className="goal-muted">{goalScopeLabel(objective.scope)} 전체의 {objective.periodStart}–{objective.periodEnd} 기록을 집계합니다. 연결한 업무는 목표의 맥락이며 집계 대상을 그 업무로 제한하지 않습니다.</p>}
       <SelectField label="목표 방향" value={draft.direction} options={directions} onChange={event => change('direction', event.target.value)} />
       <TextField label="기준값 · 선택" type="number" step="any" value={draft.baseline} onChange={event => change('baseline', event.target.value)} hint="시작 시점의 값입니다. 모르면 비워두세요." />
@@ -166,8 +171,21 @@ export function GoalMetricCard({ metric, objective, observations = [], onRefresh
   const [archiveConfirm, setArchiveConfirm] = React.useState(false);
   const command = useGoalCommand(`archive:${metric.id}`, () => { setArchiveConfirm(false); onRefresh?.(); });
   const archived = metric.status === 'archived' || Boolean(metric.archivedAt);
+  const roleItem = roles.find(role => role.value === metric.role);
   return <Card className="goal-metric-card">
-    <div className="goal-card-heading"><div><h3>{metric.name}</h3><p className="goal-muted">{roles.find(role => role.value === metric.role)?.label || metric.role}{archived ? ' · 보관됨' : ''}</p></div>{!archived && objective.status !== 'archived' && <Button onClick={() => setArchiveConfirm(value => !value)}>보관</Button>}</div>
+    <div className="goal-card-heading">
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <h3>{metric.name}</h3>
+          <Badge tone={metric.role === 'outcome' ? 'moon' : 'neutral'} variant={metric.role === 'guardrail' ? 'outline' : 'soft'} size="xs">
+            {roleItem?.label?.split(' · ')[0] || metric.role}
+          </Badge>
+          {archived && <Badge tone="neutral" size="xs">보관됨</Badge>}
+        </div>
+        <p className="goal-muted">{roleItem?.label || metric.role}</p>
+      </div>
+      {!archived && objective.status !== 'archived' && <Button size="xs" variant="ghost" onClick={() => setArchiveConfirm(value => !value)}>보관</Button>}
+    </div>
     <GoalMetricSummary metric={metric} scope={objective.scope} />
     <details className="goal-details"><summary>측정 근거</summary><GoalEvidence evidence={metric.measurement?.evidence || []} /></details>
     {observations.length > 0 && <details className="goal-details"><summary>관측 이력 {observations.length}개</summary><ul className="goal-history">{observations.map(item => <li key={item.id}><div className="goal-actions"><span className="mono">{item.value ?? '미측정'} {metric.unit}</span><span>{item.coverage === 'complete' ? '관측 시점까지 확인' : item.coverage === 'partial' ? '일부 확인' : '미측정'}</span></div><span className="mono goal-muted">{dateTime(item.observedAt)} · {item.periodStart}–{item.periodEnd}</span>{item.note && <p>{item.note}</p>}<GoalEvidence evidence={item.evidence} /></li>)}</ul></details>}
