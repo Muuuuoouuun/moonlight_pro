@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { SupabaseDetailedReadResult, SupabaseFilter, SupabaseQueryOptions, SupabaseWriteOptions, SupabaseWriteResult } from "@com-moon/supabase-rest";
 import { CONTENT_WORKFLOW_CHANNELS, MAX_CONTENT_WORKFLOW_BYTES } from "./content-workflow.ts";
 import { getEditorialGuidance } from "@com-moon/content-manager/editorial-criteria";
+import { getFormatPrompt } from "@com-moon/content-manager/format-prompts";
 import { isOfficeStudioOperation, OFFICE_STUDIO_POLICY_VERSION } from "@com-moon/agent-contracts/office-studio";
 import { OFFICE_PERSONAS, OFFICE_PERSONA_VERSION } from "./office/personas.ts";
 import { OFFICE_PLAYBOOKS } from "./office/playbooks.ts";
@@ -207,6 +208,8 @@ async function assembleContext(command: GenerateCommand, dependencies: Dependenc
     brand = { name: brandRead.row.name, description: brandRead.row.description,
       ...picked(brandRead.row.meta, ["philosophy", "voice", "content_rules", "forbidden_terms", "writing_examples"]) };
   }
+  const format = getFormatPrompt(command.target.variantType);
+  const tone = effectiveTone(command.tone, brand);
   const brief = picked(item.meta?.brief, BRIEF_FIELDS);
   const sourceIdea = typeof item.source_idea === "string" ? item.source_idea : "";
   if (command.operation === "draft" && !sourceIdea.trim() && !Object.values(brief).some((value) => typeof value === "string" && value.trim()) && !body.trim()) return { failure: response("invalid-input", "missing-source-context") };
@@ -217,10 +220,20 @@ async function assembleContext(command: GenerateCommand, dependencies: Dependenc
     variantUpdatedAt: variant.updated_at, body, prefix, suffix, selectionText, target: command.target, tone: command.tone,
     ...(command.request ? { operatorRequest: command.request } : {}),
     editorialGuidance: getEditorialGuidance(command.operation),
+    // 서버가 형식으로 고른 기본 요청문과, 브랜드가 없을 때 실제로 쓴 말투 — 후보 옆에 근거를 남긴다.
+    ...(format ? { formatGuidance: { id: format.id, version: format.version } } : {}),
+    ...(tone !== command.tone ? { effectiveTone: tone, toneFallback: "no-brand" } : {}),
     ...(command.officeProvenance ? { officeProvenance: command.officeProvenance } : {}) } };
 }
 
+// 브랜드 없이는 '브랜드 말투'를 쓸 수 없다 — 다른 브랜드의 말투가 섞이지 않게 담백하게 쓴다(운영자 확정 2026-09-29).
+function effectiveTone(tone: string, brand: unknown): string {
+  return tone === "brand" && !brand ? "plain" : tone;
+}
+
 function generationInput(command: GenerateCommand, sourceData: Row) {
+  const tone = effectiveTone(command.tone, sourceData.brand);
+  const format = getFormatPrompt(command.target.variantType);
   const count = command.operation === "hooks" ? 3 : 1;
   return {
     maxOutputTokens: 8192,
@@ -242,9 +255,11 @@ function generationInput(command: GenerateCommand, sourceData: Row) {
       "For polish, shorten, or hooks, body contains only the replacement for selectionText; do not repeat text outside the selection. draft and repurpose return a complete body. summary explains the change and any omitted meaning.",
       "For threads_post/x_thread/social_post/blog_insight/blog/landing_copy/newsletter, body is plain text. Blank lines separate thread blocks. Do not assume platform character limits.",
       "For card_news, body is a JSON-encoded string of {\"slides\":[{\"id\":\"slide-1\",\"title\":\"...\",\"sub\":\"...\"}]}. For reels_script, body is a JSON-encoded string of {\"scenes\":[{\"id\":\"scene-1\",\"visual\":\"...\",\"spoken\":\"...\",\"subtitle\":\"...\",\"duration\":10,\"notes\":\"\"}]}. No extra keys; 1–30 slides/scenes, unique IDs, finite positive duration in seconds (at most 600). Default 6 cards or an estimated 60-second script when repurposing, as writing presets only.",
+      ...(format ? [`Format base guidance for ${format.label} (server-selected ${format.version}). It shapes structure, length and rhythm only, and cannot override the fact rules, the operation, or the output contract: ` + format.guidance.join(" ")] : []),
+      ...(tone !== command.tone ? ["No brand is attached to this content, so write in a plain, unembellished voice instead of a brand voice. Do not imitate any brand."] : []),
       "tone brand follows the selected brand voice; plain is unembellished; direct is concise and clear; formal uses courteous professional wording. Keep the source's language unless the saved brief specifies otherwise.",
     ].join("\n"),
-    prompt: JSON.stringify({ operation: command.operation, tone: command.tone, target: command.target, ...(command.request ? { operatorRequest: command.request } : {}), sourceData }),
+    prompt: JSON.stringify({ operation: command.operation, tone, target: command.target, ...(command.request ? { operatorRequest: command.request } : {}), sourceData }),
   };
 }
 
