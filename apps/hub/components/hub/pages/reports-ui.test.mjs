@@ -5,6 +5,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import * as model from './reports-model.js';
+import { OfficeArtifact } from '../office-artifact.jsx';
 const source = await readFile(new URL('./reports.jsx', import.meta.url), 'utf8').catch(() => '');
 const ast = ts.createSourceFile('reports.jsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
 function component(name, extra = {}) {
@@ -14,7 +15,7 @@ function component(name, extra = {}) {
   const box = ({ children }) => React.createElement('div', null, children);
   const deps = { React, ...model, Card: box, Button: ({ children, onClick, ...props }) => React.createElement('button', props, children), TruthBadge: ({ state, label }) => React.createElement('span', { 'data-state': state }, label || state),
     CertaintyBadge: ({ state, label }) => React.createElement('span', { 'data-certainty': state }, label || state), EmptyState: ({ title, description, action }) => React.createElement('div', null, title, description, action),
-    Skeleton: ({ label }) => React.createElement('div', { role: 'status' }, label), OfficeWorkflowPanel: ({ scope, originRef }) => React.createElement('div', { 'data-office-scope': scope }, JSON.stringify(originRef)), ...extra };
+    Skeleton: ({ label }) => React.createElement('div', { role: 'status' }, label), OfficeArtifact, OfficeWorkflowPanel: ({ scope, originRef }) => React.createElement('div', { 'data-office-scope': scope }, JSON.stringify(originRef)), ...extra };
   return new Function(...Object.keys(deps), `${code}; return ${name};`)(...Object.values(deps));
 }
 test('report loading uses Skeleton and read errors offer retry rather than a live-empty claim', () => {
@@ -45,4 +46,12 @@ test('AI research stays unreviewed and shows quoted evidence and application con
   assert.match(html, /운영자 검토 전/); assert.match(html, /Original source sentence\./); assert.match(html, /L4–L6/);
   assert.match(html, /적용 조건/); assert.match(html, /지역과 제공 상태 확인 필요/);
   assert.doesNotMatch(html, /data-certainty="confirmed"/);
+});
+
+test('Office archive detail reads markdown and retained unknowns, disagreements and proposal without claiming execution',()=>{
+  const Detail=component('ReportDetail',{ReportFacts:component('ReportFacts')});
+  const html=renderToStaticMarkup(React.createElement(Detail,{report:{id:'office:one',kind:'weekly',source:'office',scope:'company',title:'회사 주간 AI 정리',status:'live',artifactKind:'markdown',interpretation:'## 판단\n\n연락 활동 **1건**',facts:null,uncertainties:['고객 반응은 미확인'],dissent:['연락 감소의 원인은 판단 보류'],sourceCheck:'untraced',nextStep:{kind:'create_task',label:'연락 원문 확인',fields:{title:'연락 원문 확인'}},sourceRefs:[],actions:[]},onBack(){}}));
+  assert.match(html,/<h5[^>]*>판단<\/h5>/);assert.match(html,/<strong>1건<\/strong>/);assert.doesNotMatch(html,/\*\*1건\*\*/);
+  assert.match(html,/고객 반응은 미확인/);assert.match(html,/연락 감소의 원인은 판단 보류/);assert.match(html,/다음 행동 제안/);assert.match(html,/연락 원문 확인/);
+  assert.match(html,/근거 확인 안 됨/);assert.doesNotMatch(html,/실행 완료|data-certainty="confirmed"/);
 });

@@ -4,6 +4,7 @@ import React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card, CertaintyBadge, Drawer, EmptyState, Kbd, SegmentedControl, SelectField, Skeleton, TextAreaField, TextField, TruthBadge, useToast } from '../hub-primitives';
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
+import { OfficeArtifact } from '../office-artifact';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { reportScopeForWorkspace } from '../workspace-map';
 import { weeklyPeriods, weeklySourceLabels } from '../../../lib/weekly-report-fields';
@@ -22,7 +23,7 @@ export function ReportFacts({ report }) {
   if (report.kind === 'weekly' && report.facts?.stats) return <><dl className="reports-stats">{weeklyReportFacts(report).map(row => <div key={row.key}><dt>{row.label}</dt><dd className="stat">{row.text === null ? '—' : row.text}<span>{row.text === null ? '미측정' : row.unit}</span></dd></div>)}</dl><p className="reports-muted">‘—’는 0이 아닌 미측정입니다. 이 기간에 저장한 실측입니다.</p>{!!report.facts.failedSources?.length && <p className="reports-muted">확인할 자료: {weeklySourceLabels(report.facts.failedSources).join(' · ')}</p>}</>;
   if (report.kind === 'research' && Array.isArray(report.facts?.facts)) return <>{report.facts.change && <p className="reports-body">{report.facts.change}</p>}<ul className="reports-facts">{report.facts.facts.map((fact, index) => <li key={index}>{fact}{Array.isArray(report.facts.factEvidence) && report.facts.factEvidence.filter(evidence => evidence.text === fact && evidence.quote).map((evidence, evidenceIndex) => <details className="reports-evidence" key={evidenceIndex}><summary>원문 근거 <span className="mono">{evidence.locator || '위치 미확인'}</span></summary><blockquote>{evidence.quote}</blockquote></details>)}</li>)}</ul>{report.facts.whyBrand && <p className="reports-muted">브랜드와의 관련성: {report.facts.whyBrand}</p>}</>;
   if (typeof report.facts?.body === 'string') return <div className="reports-body">{report.facts.body}</div>;
-  return <p className="reports-muted">이 기록에는 별도 실측이 없습니다. 원본의 해석과 자료를 확인해 주세요.</p>;
+  return <p className="reports-muted">{report.source === 'office' ? '이 AI 초안의 근거는 같은 기간의 저장 실측과 원본 Office 기록에서 확인해 주세요.' : '이 기록에는 별도 실측이 없습니다. 원본의 해석과 자료를 확인해 주세요.'}</p>;
 }
 
 export function ReportDetail({ report, onDecision, onBack, onNavigate }) {
@@ -35,10 +36,13 @@ export function ReportDetail({ report, onDecision, onBack, onNavigate }) {
     <h3>{report.title}</h3><p className="reports-period mono">{report.periodStart && report.periodEnd ? `${report.periodStart} — ${report.periodEnd}` : report.createdAt ? new Date(report.createdAt).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) : '기간 미확인'}</p>
     {report.summary && <p className="reports-summary">{report.summary}</p>}
     <section><div className="reports-section-title"><h4>사실 · 저장한 근거</h4>{report.facts?.verificationLevel === 'unreviewed' && <CertaintyBadge state="unknown" label="운영자 검토 전" />}</div><ReportFacts report={report} /></section>
-    <section><div className="reports-section-title"><h4>해석 · AI 초안</h4><CertaintyBadge state="recommended" label="검토용 해석" /></div><div className="reports-body">{typeof report.interpretation === 'string' && report.interpretation ? report.interpretation : '아직 저장된 해석이 없습니다.'}</div>
+    <section><div className="reports-section-title"><h4>해석 · AI 초안</h4><CertaintyBadge state="recommended" label="검토용 해석" />{report.sourceCheck === 'untraced' && <CertaintyBadge state="unknown" label="근거 확인 안 됨" />}</div><OfficeArtifact className="reports-body" artifact={{ kind: report.artifactKind || 'text', body: typeof report.interpretation === 'string' && report.interpretation ? report.interpretation : '아직 저장된 해석이 없습니다.' }} />
       {report.kind === 'weekly' && ['personal', 'company'].includes(report.scope) && report.periodStart && report.periodEnd && <OfficeWorkflowPanel intent="weekly_report" scope={report.scope === 'company' ? 'classin' : 'personal'} originRef={{ periodStart: report.periodStart, periodEnd: report.periodEnd, timezone: 'Asia/Seoul' }} title="이 기간 주간 정리" onNavigate={onNavigate} />}
       {report.facts?.conditions && <p className="reports-body">적용 조건: {report.facts.conditions}</p>}{report.facts?.counterevidence && <p className="reports-body">반대 근거: {report.facts.counterevidence}</p>}{report.facts?.unknown && <p className="reports-body">아직 확인할 것: {report.facts.unknown}</p>}
       {report.facts?.draft && <details className="reports-disclosure"><summary>검토용 원고</summary><div className="reports-body">{report.facts.draft}</div></details>}
+      {!!report.uncertainties?.length && <div><h4>확인 한계</h4><ul className="reports-facts">{report.uncertainties.map((note, index) => <li key={index}>{note}</li>)}</ul></div>}
+      {!!report.dissent?.length && <div><h4>다른 설명 · 남은 이견</h4><ul className="reports-facts">{report.dissent.map((note, index) => <li key={index}>{note}</li>)}</ul></div>}
+      {report.nextStep?.kind === 'create_task' && <div><h4>다음 행동 제안</h4><p className="reports-body">{report.nextStep.label || report.nextStep.fields?.title}</p>{report.nextStep.fields?.description && <p className="reports-muted">{report.nextStep.fields.description}</p>}<p className="reports-muted">실행 여부는 원본 Office 기록에서 확인해 주세요.</p></div>}
     </section>
     <section><div className="reports-section-title"><h4>판단 · 운영자 기록</h4>{report.decision && <CertaintyBadge state="confirmed" label="운영자 기록" />}</div><div className="reports-body">{typeof report.decision === 'string' && report.decision ? report.decision : '아직 기록한 판단이 없습니다.'}</div>{canDecide && <Button variant="outline" size="sm" onClick={() => onDecision(report)}>{report.decision ? '판단 수정' : '판단 기록'}</Button>}</section>
     {!!refs.length && <section><h4>자료와 원본</h4><ul className="reports-sources">{refs.map((ref, index) => { const href = safeReportLink(ref.url || ref.href); return <li key={index}>{href ? <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer">{ref.label || ref.title || ref.explanation || ref.type || '원본 자료'} ↗</a> : <span>{ref.label || ref.title || ref.explanation || ref.type || ref.id || '원본 자료'}</span>}{ref.accessLevel && <span className="reports-muted">{ref.accessLevel} {ref.locator || ''}</span>}</li>; })}</ul></section>}

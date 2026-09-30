@@ -137,3 +137,45 @@ test('a failed workflow names the failing phase and cause without provider text'
     assert.doesNotMatch(JSON.stringify(result), /sensitive provider error/);
   }
 });
+
+const weeklyRequest = () => parseOfficeWorkflowRequest({ ...request, intent:'weekly_report', ownerId:'vaporeon', scope:'personal', originRef:{periodStart:'2026-09-14',periodEnd:'2026-09-20',timezone:'Asia/Seoul'} });
+const weeklyContext = r => parseOfficeWorkflowContext({ ...context, scope:r.scope, originRef:r.originRef, originKey:'weekly:personal:2026-09-14', facts:{}, sourceRefs:[] },r);
+
+test('weekly draft and review use the dedicated quality settings and keep the returned draft model pinned',async t=>{
+  const before=process.env.COM_MOON_CONTENT_QUALITY_MODEL;
+  process.env.COM_MOON_CONTENT_QUALITY_MODEL='gemini-3.1-pro-preview';
+  t.after(()=>{if(before===undefined)delete process.env.COM_MOON_CONTENT_QUALITY_MODEL;else process.env.COM_MOON_CONTENT_QUALITY_MODEL=before;});
+  const r=weeklyRequest(),c=weeklyContext(r),calls=[];
+  const result=await generateOfficeWorkflow(r,c,async input=>{
+    calls.push(input);
+    if(calls.length===1) process.env.COM_MOON_CONTENT_QUALITY_MODEL='changed-after-draft';
+    return {...reply('기록의 범위 안에서 판단합니다.',input),model:'draft-returned-model'};
+  });
+  assert.equal(result.status,'generated');assert.equal(calls.length,2);
+  assert.equal(calls[0].model,'gemini-3.1-pro-preview');assert.equal(calls[1].model,'draft-returned-model');
+  for(const input of calls){assert.equal(input.thinkingLevel,'low');assert.equal(input.thinkingBudget,2048);assert.equal(input.maxOutputTokens,16384);assert.equal(input.retries,0);}
+  assert.equal(calls[0].signal,calls[1].signal);
+});
+
+test('weekly HTTP execution shares a bounded 95-second deadline across draft and review without retry',async t=>{
+  const budgets=[],controller=new AbortController();
+  t.mock.method(AbortSignal,'timeout',milliseconds=>{budgets.push(milliseconds);return controller.signal;});
+  const r=weeklyRequest(),c=weeklyContext(r),calls=[];
+  const result=await generateOfficeWorkflow(r,c,async input=>{calls.push(input);return reply('확인된 기록입니다.',input);});
+  assert.equal(result.status,'generated');assert.deepEqual(budgets,[95_000]);assert.equal(calls.length,2);assert.ok(calls.every(input=>input.signal===controller.signal));
+});
+
+test('weekly deadline retains the active phase and never returns a late draft or review',async t=>{
+  const budgets=[];let controller;
+  t.mock.method(AbortSignal,'timeout',milliseconds=>{budgets.push(milliseconds);return controller.signal;});
+  const r=weeklyRequest(),c=weeklyContext(r);
+  for(const phase of ['draft','review']){
+    controller=new AbortController();let calls=0;
+    const result=await generateOfficeWorkflow(r,c,async input=>{
+      calls++;if((calls===1?'draft':'review')===phase)controller.abort(new DOMException('PRIVATE_TIMEOUT','TimeoutError'));
+      return reply('late-private-report',input);
+    });
+    assert.equal(result.status,'error');assert.deepEqual(result.failure,{phase,category:'deadline'});assert.equal(calls,phase==='draft'?1:2);assert.equal(result.artifact,undefined);assert.doesNotMatch(JSON.stringify(result),/late-private|PRIVATE_TIMEOUT/);
+  }
+  assert.deepEqual(budgets,[95_000,95_000]);
+});

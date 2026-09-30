@@ -8,7 +8,9 @@ const projectResearch = brief => ({ id: `research:${brief.id}`, kind: 'research'
   source: 'research', status: 'live', summary: brief.change || '', facts: { facts: brief.facts || [], factEvidence: brief.factEvidence || [], conditions: brief.conditions, change: brief.change, whyBrand: brief.whyBrand, counterevidence: brief.counterevidence, unknown: brief.unknown, draft: brief.draft, sources: brief.sources || [], state: brief.state, brandId: brief.brandId, origin: brief.origin, verificationLevel: brief.verificationLevel, promotion: brief.promotion },
   interpretation: brief.interpretation || '', decision: '', sourceRefs: (brief.sources || []).map(ref => ({ url: ref.url, label: ref.title })), actions: [{ label: '리서치 검토', href: `/dashboard/content/research?brief=${encodeURIComponent(brief.id)}` }] });
 const projectOffice = row => ({ id: `office:${row.id}`, kind: 'weekly', scope: row.scope === 'classin' ? 'company' : 'personal', title: `${row.scope === 'classin' ? '회사' : '개인'} 주간 AI 정리`, periodStart: row.origin_ref?.periodStart, periodEnd: row.origin_ref?.periodEnd, createdAt: row.created_at,
-  source: 'office', status: row.result?.context?.missing?.length ? 'partial' : 'live', summary: row.result?.summary || '', facts: null, interpretation: row.result?.artifact?.body || '', decision: '', sourceRefs: row.result?.evidence || [], actions: row.result?.nextStep ? [row.result.nextStep] : [] });
+  source: 'office', status: row.result?.context?.missing?.length ? 'partial' : 'live', summary: row.result?.summary || '', facts: null, interpretation: row.result?.artifact?.body || '', artifactKind: row.result?.artifact?.kind || 'text',
+  uncertainties: row.result?.uncertainties || [], dissent: row.result?.dissent || [], sourceCheck: row.result?.sourceCheck || 'none', nextStep: row.result?.nextStep || null,
+  decision: '', sourceRefs: row.result?.evidence || [], actions: [] });
 
 const reportRef = value => typeof value === 'string' && /^(stored|research|office):[0-9a-f-]{36}$/.test(value) && isCanonicalUuid(value.split(':')[1]);
 const validCursor = value => value && typeof value === 'object' && reportRef(value.id) && typeof value.createdAt === 'string'

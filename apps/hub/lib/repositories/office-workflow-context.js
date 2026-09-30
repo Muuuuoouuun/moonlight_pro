@@ -5,6 +5,8 @@ import { fetchSupabaseRowsDetailed } from '../server-read.js';
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from '../server-write.js';
 import { createMetricReader, metricPeriodWindow } from '../metrics/source-adapters.js';
 import { getWeeklyReport } from './weekly-report.js';
+import { shiftDateKey } from '../rhythm-calendar.js';
+import { buildWeeklyMetricEvidence } from '../weekly-report-analysis.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CUSTOMER_TABLES = { lead: 'leads', customer_account: 'customer_accounts', deal: 'deals' };
@@ -57,16 +59,41 @@ export async function getOfficeWorkflowContext(input, {
   const metricScope=input.scope==='classin'?'company':'personal';
   try {
     if (input.intent==='weekly_report') {
-      const report=await weeklyReport({scope:metricScope,...normalized.originRef,workspaceId,now});
+      const previousPeriod={periodStart:shiftDateKey(normalized.originRef.periodStart,-7),periodEnd:shiftDateKey(normalized.originRef.periodEnd,-7),timezone:normalized.originRef.timezone,scope:metricScope};
+      const [currentRead,previousRead]=await Promise.allSettled([
+        weeklyReport({scope:metricScope,...normalized.originRef,workspaceId,now}),
+        weeklyReport({...previousPeriod,workspaceId,now,includeGoals:false}),
+      ]);
+      const report=currentRead.status==='fulfilled'?currentRead.value:null;
       if (!report || report.source==='error' || !report.stats) return fail('weekly-report-read-failed');
+      const candidate=previousRead.status==='fulfilled'?previousRead.value:null;
+      const previous=candidate&&candidate.source!=='error'&&candidate.stats?candidate:null;
+      // Current definitions are already in facts. Retain only prior differences
+      // to leave room for real record evidence inside the fixed context budget.
+      const definitionKeys=new Set([...Object.keys(report.definitions||{}),...Object.keys(previous?.definitions||{})]);
+      const priorDefinitions=Object.fromEntries([...definitionKeys].filter(key=>report.definitions?.[key]!==previous?.definitions?.[key]).map(key=>[key,previous?.definitions?.[key]??null]));
+      const comparison=previous?{status:previous.partial||previous.failedSources?.length?'partial':'live',period:previousPeriod,stats:previous.stats,definitions:priorDefinitions,definitionRelation:Object.keys(priorDefinitions).length?'changed':'same',failedSources:previous.failedSources||[]}:
+        {status:'unavailable',period:previousPeriod,stats:{},definitions:{},failedSources:[],reason:'previous-week-read-failed'};
+      const metricEvidence=buildWeeklyMetricEvidence(report,previous,metricScope);
       const measurements=(report.measurements||[]).map(item=>({sourceKey:item.sourceKey,value:item.value,coverage:item.coverage,reason:item.reason||null,
-        evidence:(item.evidence||[]).map(({asOf,observedAt,...ref})=>ref)}));
+        evidence:(item.evidence||[]).map(({asOf,observedAt,...ref})=>{
+          // The server period and scope are carried once above the records.
+          // Keep a query's different constraints and every ledger record intact.
+          if(ref.type==='query'){
+            if(ref.periodStart===normalized.originRef.periodStart)delete ref.periodStart;
+            if(ref.periodEnd===normalized.originRef.periodEnd)delete ref.periodEnd;
+            if(ref.scope===metricScope)delete ref.scope;
+          }
+          return ref;
+        })}));
       const goals=(report.goals?.objectives||[]).map(item=>({id:item.id,title:item.title,status:item.status,revision:item.revision??null,updatedAt:item.updatedAt??item.updated_at??null}));
       const sourceRefs=[{id:'weekly:report',type:'aggregate',label:'선택 기간의 주간 기록'},
+        ...metricEvidence.map(item=>({id:item.sourceRefId,type:'metric',label:`${item.label} (${item.unit})`})),
+        ...(previous?[{id:'weekly:comparison',type:'aggregate',label:`직전 주 ${previousPeriod.periodStart}~${previousPeriod.periodEnd} (${metricScope})`}]:[]),
         ...measurements.map(item=>({id:`weekly:${item.sourceKey}`,type:'metric',label:item.sourceKey})),
         ...goals.map(item=>({id:`goal:${item.id}`,type:'objective',entityId:item.id,...(item.updatedAt?{updatedAt:item.updatedAt}:{}),label:item.title||'연결 목표'})),
       ];
-      const facts={definitionVersion:1,period:normalized.originRef,stats:report.stats,definitions:report.definitions||{},measurements,goals};
+      const facts={definitionVersion:2,period:normalized.originRef,stats:report.stats,definitions:report.definitions||{},metricEvidence,comparison,measurements,goals};
       return finishContext(input,normalized,{facts,sourceRefs,missing:[...(report.failedSources||[])]},now);
     }
     const {entityType,entityId}=normalized.originRef;
