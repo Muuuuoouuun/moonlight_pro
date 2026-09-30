@@ -110,7 +110,11 @@ export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null
   const createdFromQueryRef = React.useRef(false);
   const wantsCreate = searchParams.get("new") === "product";
   React.useEffect(() => {
-    if (!wantsCreate || !canCreate || createdFromQueryRef.current) return;
+    if (!wantsCreate) {
+      createdFromQueryRef.current = false;
+      return;
+    }
+    if (!canCreate || createdFromQueryRef.current) return;
     createdFromQueryRef.current = true;
     openCreate();
     navigate({ new: null });
