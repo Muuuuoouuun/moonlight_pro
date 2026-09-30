@@ -9,6 +9,8 @@ import { migrationCallSql } from './apply-migrations.mjs';
 
 const filename = '20260930_0053_research_inbox.sql';
 const source = readFileSync(new URL(`../supabase/migrations/${filename}`, import.meta.url), 'utf8');
+const repairFilename = '20260930_0054_research_promotion_fixes.sql';
+const repairSource = readFileSync(new URL(`../supabase/migrations/${repairFilename}`, import.meta.url), 'utf8');
 const available = process.getuid?.() !== 0 && ['initdb','pg_ctl','psql'].every(bin => spawnSync(bin,['--version'],{stdio:'ignore'}).status === 0);
 const W = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -37,6 +39,7 @@ test('research migration provides scoped, replayable, atomic promotion on Postgr
     const bootstrap = readFileSync(new URL('../supabase/migrations/20260923_0044_migration_history.sql',import.meta.url),'utf8');
     sql(bootstrap);
     assert.equal(sql(migrationCallSql(source,filename,createHash('sha256').update(source).digest('hex'))),'applied');
+    assert.equal(sql(migrationCallSql(repairSource,repairFilename,createHash('sha256').update(repairSource).digest('hex'))),'applied');
     assert.equal(sql("select has_function_privilege('anon','public.research_command_v1(uuid,uuid,text,jsonb)','EXECUTE')"),'f');
     assert.equal(sql("select has_function_privilege('service_role','public.research_command_v1(uuid,uuid,text,jsonb)','EXECUTE')"),'t');
     assert.equal(sql("select has_table_privilege('service_role','public.research_brief_revisions','SELECT')"),'t');
@@ -54,11 +57,20 @@ test('research migration provides scoped, replayable, atomic promotion on Postgr
     assert.equal(promoted.status,'saved');
     assert.equal(sql(`select status from public.content_items where id='${promoted.contentId}'`),'draft');
     assert.equal(sql(`select source_type from public.content_items where id='${promoted.contentId}'`),'research');
+    assert.equal(sql(`select meta->'brief'->>'evidence' from public.content_items where id='${promoted.contentId}'`),'공식문서 확인');
+    assert.equal(sql(`select meta->'research'->>'prepared_draft' from public.content_items where id='${promoted.contentId}'`),'검토할 원고');
     assert.equal(sql(`select variant_type || '/' || channel || '/' || body from public.content_variants where id='${promoted.variantId}'`),'base_text/unassigned/검토할 원고');
     assert.equal(invoke('55555555-5555-4555-8555-555555555555',{action:'promote-draft',briefId:created.briefId,expectedRevision:1,expectedStateVersion:2}).status,'duplicate');
     const later = invoke('66666666-6666-4666-8666-666666666666',{action:'promote-idea',briefId:created.briefId,expectedRevision:1,expectedStateVersion:2});
-    assert.equal(later.error,'stale-state');
+    assert.equal(later.status,'duplicate');
+    assert.equal(later.contentId,promoted.contentId);
+    assert.equal(later.destination,'draft');
     assert.equal(sql(`select count(*) from public.content_items where workspace_id='${W}'`),'1');
+    const ideaBrief = invoke('99999999-9999-4999-8999-999999999999',{action:'create',brief:{...brief,eventKey:'c'.repeat(40)}});
+    const idea = invoke('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',{action:'promote-idea',briefId:ideaBrief.briefId,expectedRevision:1,expectedStateVersion:1});
+    assert.equal(idea.destination,'idea');
+    assert.equal(sql(`select status || '/' || (meta->'research'->>'prepared_draft') from public.content_items where id='${idea.contentId}'`),'idea/검토할 원고');
+    assert.equal(sql(`select body from public.content_variants where id='${idea.variantId}'`),'');
   } finally {
     if (started) spawnSync('pg_ctl',['-D',data,'-m','immediate','stop'],{stdio:'ignore',env});
     rmSync(directory,{recursive:true,force:true});

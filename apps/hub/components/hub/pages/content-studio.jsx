@@ -27,6 +27,7 @@ const BLOCKERS = [
 const QUIET_SAVE = { idle: '', editing: '입력 중', saving: '저장 중…', saved: '저장됨' };
 const LOUD_SAVE = { local: '서버 미연결', error: '서버 저장 미확인', conflict: '최신 내용 확인 필요' };
 const REASONS = { checkpoint: '직접 저장한 버전', before_apply: 'AI 적용 전', after_apply: 'AI 적용 후', before_restore: '복원 전', branch_source: '채널 변형에 사용한 원본', branch: '파생 결과물' };
+const RESEARCH_ACCESS = { 'full-text': '원문 본문 확인', 'official-document': '공식 문서 확인', attachment: '첨부 문서 확인', excerpt: '발췌만 확인' };
 const AI_REQUEST_KEY = 'mlp.studio.aiRequest';
 const PUBLISHED_NOTICE = '발행을 기록했습니다. 다음 글로 넘어갈까요?';
 const dateLabel = (value) => value ? new Date(value).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
@@ -61,6 +62,9 @@ export function ContentStudio({ workspace, ledger }) {
   if (draft.brandId && !brandOptions.some((brand) => brand.value === draft.brandId)) brandOptions.push({ value: draft.brandId, label: selectedBrand?.name || '저장된 브랜드' });
   const disabled = !studio.ready || studio.busy || !!studio.recovery || !!studio.pendingMutation;
   const isResearchSource = draft.variantType === 'base_text' && draft.channel === 'unassigned';
+  const research = studio.detail?.item?.meta?.research;
+  const preparedResearchDraft = typeof research?.prepared_draft === 'string' ? research.prepared_draft : '';
+  const canImportResearch = research?.brief_id && studio.detail?.item?.status === 'idea' && isResearchSource && !studio.pendingSave && !draft.body.trim() && preparedResearchDraft.trim();
   const revisions = studio.history?.revisions || [];
   const variants = studio.detail?.variants || [];
   const briefCount = BRIEF_FIELDS.filter(({ key }) => draft.brief[key]?.trim()).length;
@@ -84,6 +88,13 @@ export function ContentStudio({ workspace, ledger }) {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success('결과물 파일을 내보냈습니다.');
     } catch (error) { toast.error(error.message); }
+  };
+  const importResearchDraft = async () => {
+    if (disabled || !canImportResearch) return;
+    studio.edit({ body: preparedResearchDraft });
+    const saved = await studio.save(true);
+    if (saved?.body === preparedResearchDraft) toast.success('검토용 원고를 같은 콘텐츠에 저장했습니다.');
+    else toast.error('원고 저장을 확인하지 못했습니다. 현재 글에서 저장 상태를 확인해 주세요.');
   };
   const openHistory = async () => { setDrawer('history'); await studio.refreshHistory(); };
   // 발행 일시는 보통 '방금'이므로 지금 시각을 미리 채운다(로컬 datetime-local 형식).
@@ -270,6 +281,17 @@ export function ContentStudio({ workspace, ledger }) {
             <span className="studio-actions"><Button size="xs" onClick={() => { setDrawer(null); editTemplate(template); }}>편집</Button><Button size="xs" variant="ghost" onClick={() => deleteTemplate(template)}>삭제</Button></span>
           </div>)}
         </section>
+        {research?.brief_id && <details className="studio-more-section">
+          <summary>리서치 근거 · v{research.revision}</summary>
+          <div className="studio-stack studio-source-fields">
+            <p className="studio-muted studio-small">검증 범위: {research.verification_level === 'operator-submitted' ? '운영자 제출 · 자동 사실 검증 아님' : '기록된 검증 상태 확인 필요'} · 리서치 revision {research.revision}</p>
+            {(Array.isArray(research.sources) ? research.sources : []).map((source, index) =>
+              <a key={`${source.url}:${index}`} className="hub-row" href={source.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', minHeight: 44, color: 'var(--fg)', overflowWrap: 'anywhere' }}>
+                {source.title || source.url} ↗ · {RESEARCH_ACCESS[source.accessLevel] || '확인 범위 미기록'}{source.locator ? ` · ${source.locator}` : ''}
+              </a>)}
+            {canImportResearch && <Button variant="primary" disabled={disabled} onClick={importResearchDraft}>검토용 원고 가져와 저장</Button>}
+          </div>
+        </details>}
         <details className="studio-more-section">
           <summary>기획 구체화 <span className="studio-summary-count"><span className="num">{briefCount} / 6</span></span></summary>
           <div className="studio-stack studio-source-fields">

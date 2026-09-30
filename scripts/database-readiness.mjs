@@ -106,6 +106,10 @@ export const DATABASE_FEATURES = [
     bodyIncludes: [['content_workflow_channel_v1(text,text)', "p_type = 'base_text'"],
       ['research_command_v1(uuid,uuid,text,jsonb)', "insert into public.research_promotions"]],
     constraintIncludes: [['content_variants', 'content_variants_variant_type_check', "'base_text'"]] },
+  { name: '리서치 전환 보정', migration: '20260930_0054_research_promotion_fixes.sql', tables: [],
+    functions: ['research_command_v1(uuid,uuid,text,jsonb)'],
+    bodyIncludes: [['research_command_v1(uuid,uuid,text,jsonb)', "'prepared_draft'"],
+      ['research_command_v1(uuid,uuid,text,jsonb)', 'string_agg(fact']], },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

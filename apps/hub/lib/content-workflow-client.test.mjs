@@ -35,6 +35,13 @@ test('research draft opens as editable channel-unassigned base text', () => {
   assert.equal(c.buildStudioSave(draft,'request-1').variant.variantType,'base_text');
   assert.equal(c.buildStudioSave(draft,'request-1').variant.channel,'unassigned');
 });
+test('legacy research evidence arrays open as editable text and satisfy Studio save contract', () => {
+  const c = api();
+  const legacy = { ...item, meta: { ...item.meta, brief: { message: '확인된 변화', evidence: ['첫 근거', '둘째 근거'] } } };
+  const draft = c.draftFromDetail({ item: legacy, variants });
+  assert.equal(draft.brief.evidence, '첫 근거\n둘째 근거');
+  assert.equal(c.buildStudioSave(draft, 'request-1').item.brief.evidence, '첫 근거\n둘째 근거');
+});
 test('selection offsets preserve the second identical phrase after an emoji', () => {
   const c=api(),body='같은 말\n🙂 같은 말';
   const start=body.lastIndexOf('같은 말');

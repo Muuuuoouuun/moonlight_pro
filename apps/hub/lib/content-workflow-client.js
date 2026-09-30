@@ -34,11 +34,17 @@ export function draftFromDetail({ item, variants }, variantId) {
     [...candidates].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)) || a.id.localeCompare(b.id))[0];
   if (!variant && (variantId || candidates.length)) throw new Error('선택한 결과물을 찾을 수 없습니다. 콘텐츠 큐에서 다시 열어주세요.');
   const selected = variant || { id: null, variant_type: 'threads_post', channel: 'threads' };
+  const savedBrief = item.meta?.brief || {};
+  const brief = Object.fromEntries(BRIEF_FIELDS.map(({ key }) => {
+    const value = savedBrief[key];
+    return [key, typeof value === 'string' ? value : key === 'evidence' && Array.isArray(value)
+      ? value.filter((fact) => typeof fact === 'string').join('\n') : ''];
+  }));
   return {
     ...emptyStudioDraft(), contentId: item.id, workspaceId: item.workspace_id, variantId: selected.id,
     itemUpdatedAt: item.updated_at, variantUpdatedAt: selected.updated_at || null,
     title: item.title || '', variantTitle: selected.title || '', sourceIdea: item.source_idea || '',
-    brandId: item.brand_id || '', brief: { ...emptyStudioDraft().brief, ...item.meta?.brief },
+    brandId: item.brand_id || '', brief,
     nextAction: item.next_action || '', blocker: item.meta?.blocker || '', body: selected.body || '',
     variantType: selected.variant_type, channel: selected.channel || channelForType(selected.variant_type),
     status: selected.status || 'draft', sourceRefs: selected.meta?.source_refs || [],

@@ -172,7 +172,9 @@ export function ResearchInbox() {
               <a key={index} href={source.url} target="_blank" rel="noopener noreferrer"><strong>{source.title} ↗</strong>
                 <span>{ACCESS.find(level => level.value === source.accessLevel)?.label || '확인 범위 미정'}{source.locator ? ` · ${source.locator}` : ''}</span></a>)}</div></section>
           </div><div className="research-actions">
-            {selected.promotion ? <><span>콘텐츠로 전환됨</span><Button variant="primary" onClick={() => router.push(`/dashboard/content/studio?item=${selected.promotion.content_id}`)}>저장된 콘텐츠 열기</Button></> : <>
+            {selected.promotion ? <><span>콘텐츠로 전환됨</span><Button variant="primary" onClick={() => router.push(selected.promotion.destination === 'idea'
+              ? `/dashboard/content/queue?brand=${encodeURIComponent(selected.brandId)}&tab=idea&item=${encodeURIComponent(selected.promotion.content_id)}`
+              : `/dashboard/content/studio?item=${encodeURIComponent(selected.promotion.content_id)}`)}>{selected.promotion.destination === 'idea' ? '소재함에서 보기' : 'Studio 초안 열기'}</Button></> : <>
               <div className="research-secondary"><Button variant="outline" disabled={busy} onClick={() => decide(selected.state === 'discarded' || selected.state === 'deferred' ? 'restore' : 'defer')}>{selected.state === 'discarded' || selected.state === 'deferred' ? '다시 검토' : '나중에'}</Button>
                 {selected.state !== 'discarded' && <Button variant="ghost" disabled={busy} onClick={() => decide('discard')}>버리기</Button>}</div>
               {selected.state !== 'discarded' && <div className="research-promote"><Button variant="outline" disabled={busy} onClick={() => decide('promote-idea')}>콘텐츠 후보로 담기</Button><Button variant="primary" disabled={busy} onClick={() => decide('promote-draft')}>Studio 초안으로 보내기</Button></div>}
