@@ -220,7 +220,11 @@ export const SIDEBAR_PRIMARY = [
     label: '홈',
     icon: 'navHome',
     scopeAware: false,
-    owns: ['dashboard/home'],
+    owns: ['dashboard/home', 'dashboard/reports'],
+    children: Object.fromEntries(SIDEBAR_SCOPES.map(({ key }) => [key, [
+      { key: 'home-desk', label: '홈', path: 'dashboard/home' },
+      { key: 'home-reports', label: '보고서', path: 'dashboard/reports' },
+    ]])),
     paths: {
       all: 'dashboard/home',
       classin: 'dashboard/home',

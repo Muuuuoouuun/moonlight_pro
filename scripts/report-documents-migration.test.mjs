@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import {spawn} from 'node:child_process';
+let source='';try { source=readFileSync(new URL('../supabase/migrations/20261001_0056_report_documents.sql',import.meta.url),'utf8'); } catch {}
+const available=process.getuid?.()!==0&&['initdb','pg_ctl','psql'].every(bin=>spawnSync(bin,['--version'],{stdio:'ignore'}).status===0);
+const W='11111111-1111-4111-8111-111111111111',R='22222222-2222-4222-8222-222222222222';
+const quote=value=>`'${String(value).replaceAll("'","''")}'`;
+test('report ledger persists immutable facts, replays requests, serializes weekly identity and scopes decisions',{skip:available?false:'local PostgreSQL unavailable'},async()=>{
+  assert.ok(source,'report migration exists');
+  const dir=mkdtempSync(join(tmpdir(),'reports-pg-')),data=join(dir,'data'),port=String(54000+process.pid%2000),env={...process.env,LC_ALL:'C'};
+  const args=['-X','-qAt','-v','ON_ERROR_STOP=1','-h',dir,'-p',port,'-U','reports_test','-d','postgres'];
+  const sql=input=>execFileSync('psql',args,{input,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();let started=false;
+  try {
+    execFileSync('initdb',['-D',data,'-U','reports_test','-A','trust','--no-locale','--encoding=UTF8'],{stdio:'pipe',env});
+    execFileSync('pg_ctl',['-D',data,'-l',join(dir,'postgres.log'),'-o',`-F -k ${dir} -p ${port} -c listen_addresses=''`,'-w','start'],{stdio:'pipe',env});started=true;
+    sql(`create role anon nologin;create role authenticated nologin;create role service_role nologin bypassrls;create table public.workspaces(id uuid primary key);insert into public.workspaces values('${W}'),('${R}');
+    create table public.office_requests(id uuid,workspace_id uuid,actor_id text,intent text,scope text,origin_ref jsonb,state text,result jsonb,created_at timestamptz,expires_at timestamptz);`);
+    sql(`create table public.research_briefs(id uuid primary key,workspace_id uuid,brand_id uuid,latest_revision integer,state text,created_at timestamptz,updated_at timestamptz);
+      create table public.research_brief_revisions(brief_id uuid,workspace_id uuid,revision integer,payload jsonb);
+      create table public.research_promotions(brief_id uuid,workspace_id uuid,content_id uuid,variant_id uuid,destination text);`);
+    sql(source);
+    const command={action:'capture-weekly',kind:'weekly',scope:'company',title:'회사 주간',periodStart:'2026-09-24',periodEnd:'2026-09-30',payload:{status:'partial',facts:{stats:{contacts:null}},summary:'실제 집계'}};
+    const invoke=(id,input,workspace=W,hash='a'.repeat(64))=>JSON.parse(sql(`set role service_role;select public.report_command_v1('${workspace}','${id}','${hash}',${quote(JSON.stringify(input))}::jsonb);reset role;`));
+    const created=invoke(R,command);assert.equal(created.status,'saved');
+    assert.equal(invoke(R,command).status,'duplicate');
+    assert.equal(invoke(R,command,W,'b'.repeat(64)).status,'conflict');
+    assert.equal(invoke(R,command,R).status,'conflict');
+    const another=invoke('33333333-3333-4333-8333-333333333333',{...command,payload:{facts:{stats:{contacts:99}}}});
+    assert.equal(another.status,'duplicate');assert.equal(another.reportId,created.reportId);
+    assert.equal(sql(`select count(*) from public.report_documents`),'1');
+    assert.equal(sql(`select payload->'facts'->'stats'->'contacts' from public.report_documents`),'null');
+    const edit={action:'record-decision',reportId:created.reportId,expectedRevision:1,decision:'다음 주 재확인'};
+    assert.equal(invoke('44444444-4444-4444-8444-444444444444',edit).revision,2);
+    assert.equal(invoke('55555555-5555-4555-8555-555555555555',edit).error,'stale-revision');
+    assert.equal(invoke('66666666-6666-4666-8666-666666666666',{...edit,expectedRevision:2},R).status,'not-found');
+    assert.equal(sql("select has_table_privilege('service_role','public.report_documents','UPDATE')"),'f');
+    assert.equal(sql("select has_function_privilege('anon','public.report_command_v1(uuid,uuid,text,jsonb)','EXECUTE')"),'f');
+    sql(`insert into public.office_requests values('${W}','${W}','operator','weekly_report','personal','{}','generated','{"artifact":{"body":"expired"}}',now(),now()-interval '1 day'),('${R}','${W}','other','weekly_report','personal','{}','generated','{"artifact":{"body":"other actor"}}',now(),now()+interval '1 day');`);
+    const office=JSON.parse(sql(`set role service_role;select public.report_office_weeklies_v1('${W}','operator',50);reset role;`));assert.deepEqual(office.reports,[]);
+    const page=(before=null,ref=null)=>JSON.parse(sql(`set role service_role;select public.report_archive_v1('${W}','operator',1,${before?quote(JSON.stringify(before))+'::jsonb':'null'},${ref?quote(ref):'null'});reset role;`));
+    assert.equal(page().items.length,1);
+    const extra=invoke('77777777-7777-4777-8777-777777777777',{action:'save-document',kind:'qa',scope:'content',title:'QA 검증',payload:{facts:{body:'실제 검증'},status:'live'}});
+    const first=page();assert.equal(first.items[0].ref,'stored:'+extra.reportId);assert.ok(first.nextCursor);
+    const second=page(first.nextCursor);assert.equal(second.items[0].ref,'stored:'+created.reportId);assert.equal(second.nextCursor,null);
+    assert.equal(page(null,'stored:'+created.reportId).items[0].row.id,created.reportId);
+    assert.deepEqual(page(null,'office:'+W).items,[]);
+    const parallelCommand={...command,periodStart:'2026-09-17',periodEnd:'2026-09-23'};
+    const concurrent=await Promise.all(['88888888-8888-4888-8888-888888888888','99999999-9999-4999-8999-999999999999'].map(id=>new Promise((resolve,reject)=>{const child=spawn('psql',args);let output='',error='';child.stdout.on('data',chunk=>output+=chunk);child.stderr.on('data',chunk=>error+=chunk);child.on('error',reject);child.on('close',code=>code?reject(new Error(error)):resolve({stdout:output}));child.stdin.end(`begin;set role service_role;select public.report_command_v1('${W}','${id}','${'c'.repeat(64)}',${quote(JSON.stringify(parallelCommand))}::jsonb);select pg_sleep(0.1);commit;`);}).then(result=>JSON.parse(result.stdout.trim().split('\n')[0]))));
+    assert.deepEqual(concurrent.map(row=>row.status).sort(),['duplicate','saved']);assert.equal(concurrent[0].reportId,concurrent[1].reportId);
+    assert.equal(sql(`select count(*) from public.report_documents where period_start='2026-09-17'`),'1');
+  } finally {if(started)spawnSync('pg_ctl',['-D',data,'-m','immediate','stop'],{stdio:'ignore',env});rmSync(dir,{recursive:true,force:true});}
+});

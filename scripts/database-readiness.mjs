@@ -112,6 +112,19 @@ export const DATABASE_FEATURES = [
     functions: ['research_command_v1(uuid,uuid,text,jsonb)'],
     bodyIncludes: [['research_command_v1(uuid,uuid,text,jsonb)', "'prepared_draft'"],
       ['research_command_v1(uuid,uuid,text,jsonb)', 'string_agg(fact']], },
+  { name: '보고서 보관·수신', migration: '20261001_0056_report_documents.sql',
+    tables: ['report_documents','report_command_receipts'], functions: ['report_command_v1(uuid,uuid,text,jsonb)','report_office_weeklies_v1(uuid,text,integer)','report_receipt_v1(uuid,uuid,text)','report_archive_v1(uuid,text,integer,jsonb,text)'],
+    tableNoWrite: [['report_documents','service_role'],['report_command_receipts','service_role']] },
+  { name: '브랜드 자동 리서치', migration: '20261001_0057_research_runs.sql',
+    tables: ['research_runs','research_source_documents','research_source_preparations','research_source_cursors'],
+    functions: ['research_run_claim_v1(uuid,uuid,text,jsonb)','research_source_claim_v1(uuid,uuid,jsonb)','research_model_claim_v1(uuid,uuid)','research_source_complete_v1(uuid,uuid,jsonb)','research_run_finish_v1(uuid,uuid,jsonb)'],
+    tableNoWrite: [['research_runs','service_role'],['research_source_documents','service_role'],['research_source_preparations','service_role'],['research_source_cursors','service_role']] },
+  { name: '리서치 복구·원문 위치 검증', migration: '20261001_0058_research_pending_recovery.sql', tables: [], functions: [],
+    bodyIncludes: [['research_source_claim_v1(uuid,uuid,jsonb)','pending_run_recovery_v1'],['research_source_complete_v1(uuid,uuid,jsonb)','source_locator_lines_v1']] },
+  { name: '리서치 초안 수량·실패 진단', migration: '20261001_0059_research_draft_slots.sql', tables: [], functions: [],
+    bodyIncludes: [['research_source_claim_v1(uuid,uuid,jsonb)','research_draft_slot_limits_v1'],['research_source_complete_v1(uuid,uuid,jsonb)','research_validation_diagnostic_v1']] },
+  { name: '리서치 모델 응답·복구', migration: '20261001_0060_research_provider_outcomes.sql', tables: [], functions: [],
+    bodyIncludes: [['research_source_complete_v1(uuid,uuid,jsonb)','research_provider_outcome_v1'],['research_source_complete_v1(uuid,uuid,jsonb)','research_terminal_response_repair_v1']] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

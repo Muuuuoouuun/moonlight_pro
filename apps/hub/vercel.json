@@ -1,10 +1,32 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["icn1"],
+  "regions": [
+    "icn1"
+  ],
   "crons": [
-    { "path": "/api/cron/recompute-scores", "schedule": "0 15 * * *" },
-    { "path": "/api/cron/inquiries-sync", "schedule": "0 21 * * *" },
-    { "path": "/api/cron/github-sync", "schedule": "0 0 * * *" },
-    { "path": "/api/cron/schedule-sweep", "schedule": "0 13 * * *" }
+    {
+      "path": "/api/cron/recompute-scores",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/inquiries-sync",
+      "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron/github-sync",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/schedule-sweep",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/research-sweep",
+      "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/reports-sweep",
+      "schedule": "30 23 * * *"
+    }
   ]
 }

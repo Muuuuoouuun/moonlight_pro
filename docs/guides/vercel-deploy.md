@@ -74,6 +74,21 @@ Set-Location apps\hub;    npx vercel deploy --prod --yes --archive=tgz --scope m
 - **검증:** 루트 `npm test` 3,707건 중 통과 3,694·실패 0·조건부 건너뜀 13, `check:contracts`와 Hub·Engine 빌드 통과. 운영자 세션으로 본 리서치함·발행 로그 화면과 22:00 KST 크론 실행 결과는 이 기록 시점에 확인하지 않았다.
 - **교훈:** `main`에 없는 브랜치를 CLI로 프로덕션에 올리면 다음 `main` 병합이 조용히 덮어쓴다. CLI `--prod` 배포를 했다면 같은 날 `main`에 병합한다.
 
+### 2026-10-01 리서치·보고서 연결 완성
+
+- 보고서 `/dashboard/reports`를 홈의 보조 진입점에 연결했다. 개인·회사 완료 7일 스냅샷, Office 주간 AI 정리, 리서치 근거, QA·평가 문서를 한 목록에서 조회하며 개별 링크·커서 페이지·판단 revision 저장을 지원한다. 실측 누락은 `null`이고 재시도는 먼저 요청 receipt를 읽는다.
+- 브랜드 자동 리서치는 공개 원문 확보 → 출처 줄·직접 인용 검증 → AI 초안 → 검토 대기 원장에 연결됐다. 서버가 workspace·브랜드를 정하고 같은 원문 버전의 유료 claim을 재발급하지 않는다. 전송 결과가 불확실하면 `unknown`을 유지하고, 확정 실패만 다음 원문의 준비 수량을 허용한다. 0058~0060은 초기 실사용에서 발견한 복구·인용 범위·실패 분류를 보강한다.
+- 서울 DB `ncgpnqfulnlshegalmbd`에 `20261001_0056`~`0060` 다섯 파일을 적용하고 각 ledger 해시를 검증했다. `db:check`는 이력 포함 **38개 항목 전부 통과**했다. 이미 적용한 파일의 내용은 바꾸지 않았다.
+- 기존 운영자 자격을 유지해 Hub 로그인 설정 누락을 해결했다. Hub·Engine의 공유 비밀과 서버 전용 설정을 맞추고 `COM_MOON_RESEARCH_ENABLED=true`, `COM_MOON_REPORTS_AI_ENABLED=true`를 프로덕션에 반영했다. 실제 토큰·비밀·비밀번호는 문서나 로그에 남기지 않는다.
+- 코드 `59dc2268`을 Engine → Hub 순서로 CLI 프로덕션에 배포했다. Engine `moonlight-pro-engine-fy1a2p8dr-muuuuoouuuns-projects.vercel.app`, Hub `moonlight-pro-100e438ng-muuuuoouuuns-projects.vercel.app`이 `Ready`이며 고정 운영 URL에 연결됐다. Git 연동 배포로 다음 `main` 변경이 덮어쓰지 않도록 같은 날 기능 브랜치를 `main`에 통합한다.
+- 운영 API 확인: 양쪽 health 200, 로그인 configured, 비로그인 보고서 화면 307 → 로그인, 인증 보고서 200·`live`·읽기 실패 0, 리서치 실행 200·`enabled=true`·`costCapUsd=null`, 무인증 조회 401, 인증한 두 크론 200. 야간 확인은 due slot 밖이므로 유료 생성을 요청하지 않았다.
+- 실제 생성: politic_officer `522e385d-081c-4929-87fa-4b381d85073d`, class.moon `46db7856-9b22-4f69-a685-932f758aa5de`, 22nomad `ab8245eb-4d78-478f-a94d-71c407ad1e1a`를 저장하고 근거·조건·AI/미검토 표시를 브라우저로 확인했다. 회사 완료 주간(09-24~09-30)의 스냅샷 `e18e39f4-03b8-41a1-acc9-2e77d505380d`와 Office AI 정리 `a6862b57-3846-5586-baf3-024d2a8f4bc2`도 실제 생성했다. 초기 실패한 Nomad 원문은 재과금하지 않고 다른 원문에서 성공했다. source failure가 있는 실행은 성공 초안이 있어도 `partial`로 보인다.
+- 비용은 운영자 결정에 따라 **현재 월 상한 없음**이다. 검증 모델 6회(확정 실패 2회 포함)의 토큰 기반 추정 합계는 **$0.0809925**, Brave 검색은 **8회**다. 모델 추정은 thinking을 출력에 포함하고 검색 요금·무료 할당량·청구서 조정은 포함하지 않는다. 근거: [Gemini 공식 가격](https://ai.google.dev/gemini-api/docs/pricing). 검색과 원문 실패에 모델 비용 0을 만들어 넣지 않는다.
+- 실행 주기: politic_officer KST 08~22시 2시간 간격(최대 8개/일), class.moon 매일 08시 최대 3개, 22nomad 매일 08시 최대 1개. 개인 주간 월요일·회사 주간 목요일 08시 이후에 직전 완료 7일을 보관·해석한다. Vercel Hobby의 일일 크론을 두고, Mac `com.moonlight.research-reports` launchd가 15분마다 서버의 due slot을 확인한다. runner는 worktree 밖 `~/Library/Application Support/Moonlight`에 복사하고 env는 0600으로 보호했다. 최초 launchd 실행은 두 엔드포인트 정상 응답·새 생성 0건을 확인했다.
+- **실행 조건:** Mac이 꺼지거나 잠들면 당일 2시간 간격 확인은 쉬며 Vercel의 일일 실행이 남는다. 원문 robots·권한·읽기 실패는 공개 원문 근거로 저장하지 않는다. Office AI receipt와 원문 근거는 기존 30일 보관 정책을 따르고, 주간 사실 스냅샷·등록 문서는 별도 원장에 남는다. AI 초안이 자동 승인·발행·업무 생성되지는 않는다.
+- 실제 운영 화면 확인에서 상단 시계의 UTC 서버/KST 브라우저 초기 텍스트 차이(React hydration418)를 발견했다. 동일한 초기 표시 후 마운트에서 명시적으로 한국 시각을 갱신하도록 고쳤으며 경고를 숨기지 않는다. 재조회만 하는 리서치 sweep은 자동화 행을 추가하지 않고 기록 실패는 응답에 표시한다. 후속 수정은 [PR #20](https://github.com/Muuuuoouuun/moonlight_pro/pull/20)에 포함한다.
+- 검증: root **3,848 tests · 통과 3,835 · 실패 0 · 조건부 건너뜀 13**, Desktop **345/345**; typecheck, contracts, ClassIn 체크, Next 16.3.8 Hub·Engine build, high-severity audit 통과. Next 보안 패치를 적용했으며 기존 moderate 2건은 이 작업 범위에서 임의 수정하지 않았다. 모델 claim·동시성·복구·RLS는 실제 로컬 PostgreSQL 테스트, 화면은 1440/390px·light/dark로 검증했다.
+
 ## 5. 확인
 
 1. `https://<hub>/login` 이 **로그인 화면**을 보여야 한다. 503이면 운영자 로그인 3값 중 하나가 빠진 것이다.
