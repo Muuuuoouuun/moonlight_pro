@@ -84,3 +84,10 @@ test('a KR row splits the period target into a weekly pace line without storing 
   // 늦음은 글로만 말한다 — 색·경고 톤 없음.
   assert.doesNotMatch(cssSource, /goal-kr-row__pace[^}]*(danger|warning)/);
 });
+
+test('score track marks the 0.7 floor and the objective compares with floor pace', () => {
+  assert.match(goalsSource, /goal-score-bar__floor/);
+  assert.match(goalsSource, /floorPaceScore\(period\)/);
+  assert.match(goalsSource, /바닥 달성 · 천장 미등록/);
+  assert.match(cssSource, /\.goal-score-bar__floor\s*\{[^}]*left:70%/);
+});

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  daysSinceObservation, goalConcept, hasTarget, keyResultPace, paceSuggestion, keyResultScore, kpiHealth, kpiSummary, kpiThresholdLabel, kpiTrend,
+  FLOOR_SCORE, daysSinceObservation, floorPaceScore, goalConcept, hasTarget, keyResultPace, paceSuggestion, keyResultScore, kpiHealth, kpiSummary, kpiThresholdLabel, kpiTrend,
   objectivePace, objectivePeriod, objectiveScore, objectiveSuggestion, sortKpis, splitObjectiveMetrics,
 } from './goal-concepts.js';
 
@@ -35,9 +35,10 @@ test('a metric without a target line is a reference reading, not a KR', () => {
   assert.equal(split.healthIndicators.length, 1);
 });
 
-test('KR score is progress toward the registered target, and unmeasured KRs are not scored as zero', () => {
-  assert.equal(keyResultScore({ progress: { state: 'achieved', achieved: true, value: 100 } }), 1);
-  assert.equal(keyResultScore({ progress: { state: 'in_progress', achieved: false, value: 40 } }), 0.4);
+test('KR score follows the floor 0.7 grading, and unmeasured KRs are not scored as zero', () => {
+  assert.equal(FLOOR_SCORE, 0.7);
+  assert.equal(keyResultScore({ progress: { state: 'achieved', achieved: true, value: 100 } }), 0.7);
+  assert.ok(Math.abs(keyResultScore({ progress: { state: 'in_progress', achieved: false, value: 40 } }) - 0.28) < 1e-9);
   assert.equal(keyResultScore({ progress: { state: 'in_progress', achieved: false, value: null } }), null);
   assert.equal(keyResultScore({ progress: { state: 'unmeasured', achieved: null, value: null } }), null);
   const result = objectiveScore([
@@ -45,7 +46,7 @@ test('KR score is progress toward the registered target, and unmeasured KRs are 
     { progress: { state: 'in_progress', achieved: false, value: 50 } },
     { progress: { state: 'unmeasured', achieved: null, value: null } },
   ]);
-  assert.equal(result.score, 0.75);
+  assert.ok(Math.abs(result.score - 0.525) < 1e-9);
   assert.equal(result.scored, 2);
   assert.equal(result.unscored, 1);
   assert.equal(objectiveScore([]).score, null);
@@ -59,9 +60,11 @@ test('period elapsed counts both end days and pace speaks in words only', () => 
   assert.equal(mid.daysLeft, 15);
   assert.ok(Math.abs(mid.elapsed - 16 / 31) < 1e-9);
   assert.equal(objectivePeriod(objective, '2026-11-01').phase, 'ended');
-  assert.equal(objectivePace(0.8, mid), '기간보다 앞서 있음');
-  assert.equal(objectivePace(0.5, mid), '기간과 비슷함');
-  assert.equal(objectivePace(0.2, mid), '기간보다 늦음');
+  // 바닥 페이스 = 0.7 × 16/31 ≈ 0.361, 허용폭 0.07
+  assert.ok(Math.abs(floorPaceScore(mid) - 0.7 * 16 / 31) < 1e-9);
+  assert.equal(objectivePace(0.45, mid), '바닥 페이스보다 앞섬');
+  assert.equal(objectivePace(0.36, mid), '바닥 페이스와 비슷함');
+  assert.equal(objectivePace(0.25, mid), '바닥 페이스보다 늦음');
   assert.equal(objectivePace(null, mid), null);
   assert.equal(objectivePace(0.5, { phase: 'ended', elapsed: 1 }), null);
 });
@@ -158,4 +161,10 @@ test('the pace suggestion names the most-behind KR only', () => {
   assert.match(paceSuggestion(rows), /^가격 제시이\(가\) 기준선보다 1\.2건 늦습니다/);
   assert.equal(paceSuggestion([rows[2]]), null);
   assert.equal(paceSuggestion([]), null);
+});
+
+test('a KR under one per week is not judged behind until its last week', () => {
+  assert.equal(keyResultPace(count(1, 0, { name: '결제' }), october, [], '2026-10-16').state, 'unknown');
+  assert.equal(keyResultPace(count(1, 0, { name: '결제' }), october, [], '2026-10-27').state, 'behind');
+  assert.equal(keyResultPace(count(1, 1, { name: '결제' }), october, [], '2026-10-27').state, 'ahead');
 });

@@ -6,7 +6,7 @@ import { Iconed } from '../hub-icons';
 import { Badge, Button, CertaintyBadge, Drawer, EmptyState, Kbd, SegmentedControl, SelectField, Skeleton, Sparkline, TextField, TruthBadge } from '../hub-primitives';
 import { GOAL_WORK_BASE, goalHref, goalScope, goalSectionState, goalLinkedEntityHref, goalView, measurementLabel } from '@/lib/goal-client';
 import { goalCheckRows } from '@/lib/goal-input-ux';
-import { GOAL_CONCEPT_BY_ROLE, KPI_HEALTH_LABEL, daysSinceObservation, formatPaceNumber, keyResultPace, paceSuggestion, isHealthIndicator, keyResultScore, kpiHealth, kpiSummary, kpiThresholdLabel, kpiTrend, objectivePace, objectivePeriod, objectiveScore, objectiveSuggestion, sortKpis, splitObjectiveMetrics } from '@/lib/goal-concepts';
+import { GOAL_CONCEPT_BY_ROLE, KPI_HEALTH_LABEL, daysSinceObservation, floorPaceScore, formatPaceNumber, reachedFloor, keyResultPace, paceSuggestion, isHealthIndicator, keyResultScore, kpiHealth, kpiSummary, kpiThresholdLabel, kpiTrend, objectivePace, objectivePeriod, objectiveScore, objectiveSuggestion, sortKpis, splitObjectiveMetrics } from '@/lib/goal-concepts';
 import { useGoals, useGoalCommand } from '../use-goals';
 import { GOAL_SOURCE_OPTIONS, GoalCommandFeedback, GoalMetricCard, GoalMetricForm, GoalObjectiveForm, GoalObservationForm, GoalReadFeedback, goalScopeLabel } from '../goal-components';
 import { GoalWeeklyActuals } from '../goal-weekly-actuals';
@@ -85,10 +85,10 @@ const KPI_GLYPH = { inside: '✓', outside: '▲', partial: '◐', unmeasured: '
 // 붉은 줄은 한 화면에 세 곳까지만. 넘으면 머리말 집계와 행마다 ▲ 기호로만 알린다(DESIGN.md §5.3 red budget).
 const OUTSIDE_RAIL_BUDGET = 3;
 
-// 점수·진척을 그리는 1px 트랙. `Progress`는 100%에서 축하 연출이 붙어 KR 점수에는 쓰지 않는다.
+// 점수 트랙(0~1.0). 0.7 눈금이 바닥(약속)이다. `Progress`는 100%에서 축하 연출이 붙어 KR 점수에는 쓰지 않는다.
 function ScoreBar({ value, label }) {
   const known = Number.isFinite(value);
-  return <div className={`goal-score-bar${known ? '' : ' goal-score-bar--empty'}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={known ? Math.round(value) : undefined} aria-valuetext={known ? undefined : '점수 없음'}><span style={{ width: `${known ? Math.max(0, Math.min(100, value)) : 0}%` }} /></div>;
+  return <div className={`goal-score-bar${known ? '' : ' goal-score-bar--empty'}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={known ? Math.round(value) : undefined} aria-valuetext={known ? undefined : '점수 없음'}><span style={{ width: `${known ? Math.max(0, Math.min(100, value)) : 0}%` }} /><i className="goal-score-bar__floor" aria-hidden="true" /></div>;
 }
 
 function periodLabel(period) {
@@ -130,7 +130,7 @@ function KeyResultRow({ metric, objective, pace, hrefFor, onOpen, onRecord }) {
       <ScoreBar value={score === null ? null : score * 100} label={`${metric.name} 점수`} />
       {paceLine(pace, metric.unit) && <span className="mono goal-kr-row__pace">{paceLine(pace, metric.unit)}</span>}
     </div>
-    <div className="goal-kr-row__score"><span className="stat goal-kr-row__score-num">{formatScore(score)}</span><span className="goal-muted">{score === null ? (metric.progress?.state === 'in_progress' ? '기준값 없음' : '점수 전') : '점수'}</span></div>
+    <div className="goal-kr-row__score"><span className="stat goal-kr-row__score-num">{formatScore(score)}</span><span className="goal-muted">{score === null ? (metric.progress?.state === 'in_progress' ? '기준값 없음' : '점수 전') : reachedFloor(metric) ? '바닥 달성 · 천장 미등록' : '점수'}</span></div>
     <div className="goal-kr-row__action">{activeManual(metric, objective) ? <Button size="xs" variant={needsEvidence ? 'primary' : 'outline'} data-record-metric={metric.id} onClick={event => onRecord(event, objective, metric)} aria-label={`${metric.name} 실제값 기록`}>기록</Button> : <Link className="goal-kr-row__evidence hub-row" onClick={onOpen} href={hrefFor(objective)}>근거 →</Link>}</div>
   </div>;
 }
@@ -170,9 +170,9 @@ function GoalObjectiveCard({ objective, model, hrefFor, onOpen, onRecord, onAddM
           </div>
           <div className="goal-objective__score">
             <span className="stat goal-objective__score-num" aria-label={`목표 점수 ${formatScore(score)}`}>{formatScore(score)}</span>
-            <span className="goal-muted">KR 평균 · 약속선 대비</span>
+            <span className="goal-muted">진행 점수 · 바닥 0.7 · 천장 1.0</span>
             {scored > 0 && <ScoreBar value={score * 100} label={`${objective.title} 점수`} />}
-            <span className="goal-muted">{keyResults.length ? `KR ${scored}/${keyResults.length} 측정${unscored ? ` · 미측정 ${unscored}` : ''}` : 'KR 없음'}{period.phase === 'running' ? ` · 기간 ${Math.round(period.elapsed * 100)}% 경과` : ''}</span>
+            <span className="goal-muted">{keyResults.length ? `KR ${scored}/${keyResults.length} 측정${unscored ? ` · 미측정 ${unscored}` : ''}` : 'KR 없음'}{period.phase === 'running' ? ` · 기간 ${Math.round(period.elapsed * 100)}% 경과 · 지금쯤 ${formatScore(floorPaceScore(period))}` : ''}</span>
             {pace && <span className="goal-muted">{pace}</span>}
           </div>
         </div>
@@ -389,7 +389,7 @@ export function Goals() {
         />
       </div>
       <span className="goal-toolbar-caption">
-        {weekly ? '지난 주들의 실제 기록을 같은 정의로 비교하세요.' : kpi ? '점수 없이 선 안·밖과 추이로 봅니다. 선 밖인 것부터 보입니다.' : checking ? '숫자와 근거를 훑고 바로 실제값을 기록하세요. KR과 KPI를 함께 봅니다.' : '목표마다 KR의 약속선 대비 점수와 기간 경과를 나란히 봅니다.'}
+        {weekly ? '지난 주들의 실제 기록을 같은 정의로 비교하세요.' : kpi ? '점수 없이 선 안·밖과 추이로 봅니다. 선 밖인 것부터 보입니다.' : checking ? '숫자와 근거를 훑고 바로 실제값을 기록하세요. KR과 KPI를 함께 봅니다.' : '바닥 0.7 · 천장 1.0으로 채점하고 바닥 페이스와 나란히 봅니다.'}
       </span>
     </div>
 

@@ -25,14 +25,20 @@ export const isReferenceMetric = metric => goalConcept(metric) === 'kr' && !hasT
 
 const activeMetric = metric => metric.status !== 'archived' && !metric.archivedAt;
 
-// KR 점수 0~1. 약속선 달성이면 1, 진척률이 산정되면 그 값, 아니면 null(점수 낼 근거 없음).
+// 채점은 약속(바닥) + 도전(천장) 이중선이다(개인 사업 OKR v3 §4, 2026-09-30 운영자 확정 Q1).
+//   바닥 미만 0.7 × 실제/바닥 · 바닥~천장 0.7→1.0 · 천장 이상 1.0
+// 저장된 목표값(target)은 바닥이다. 천장은 아직 저장하지 않으므로(마이그레이션 0053 전) 점수는 0.7에서 멈춘다.
+export const FLOOR_SCORE = 0.7;
+
+// KR 점수 0~0.7. 바닥 달성이면 0.7, 진척률이 산정되면 0.7 × 진척, 아니면 null(점수 낼 근거 없음).
 export function keyResultScore(metric) {
   const progress = metric?.progress;
   if (!progress) return null;
-  if (progress.state === 'achieved' || progress.achieved === true) return 1;
-  if (Number.isFinite(progress.value)) return Math.round(Math.max(0, Math.min(100, progress.value))) / 100;
+  if (progress.state === 'achieved' || progress.achieved === true) return FLOOR_SCORE;
+  if (Number.isFinite(progress.value)) return FLOOR_SCORE * Math.max(0, Math.min(100, progress.value)) / 100;
   return null;
 }
+export const reachedFloor = metric => metric?.progress?.state === 'achieved' || metric?.progress?.achieved === true;
 
 // 목표 점수 = 점수가 나온 KR의 평균. 측정 못 한 KR을 0점으로 세지 않고 몇 개가 비었는지 따로 말한다.
 export function objectiveScore(keyResults) {
@@ -57,11 +63,17 @@ export function objectivePeriod(objective, todayKey) {
   return { phase: 'running', elapsed: (today - start + 1) / total, daysLeft: end - today };
 }
 
-// 점수와 기간 경과율을 나란히 놓는 한마디. 색이 아니라 글로만 말한다.
+// 바닥 페이스라면 지금 있어야 할 점수 = 0.7 × 기간 경과율. 기간 경과율(0~1)과 바로 비교하면
+// 천장 페이스가 기준이 돼 늘 늦어 보인다.
+export const floorPaceScore = period => period?.phase === 'running' ? FLOOR_SCORE * period.elapsed : null;
+
+// 점수와 바닥 페이스를 나란히 놓는 한마디. 색이 아니라 글로만 말한다. 허용폭은 바닥의 10%.
 export function objectivePace(score, period) {
-  if (score === null || period.phase !== 'running') return null;
-  const gap = score - period.elapsed;
-  return gap >= 0.1 ? '기간보다 앞서 있음' : gap <= -0.1 ? '기간보다 늦음' : '기간과 비슷함';
+  const expected = floorPaceScore(period);
+  if (score === null || expected === null) return null;
+  const gap = score - expected;
+  const tolerance = FLOOR_SCORE * 0.1;
+  return gap >= tolerance ? '바닥 페이스보다 앞섬' : gap <= -tolerance ? '바닥 페이스보다 늦음' : '바닥 페이스와 비슷함';
 }
 
 // KPI 건강 상태 — 점수가 아니라 선 안/밖.
@@ -152,7 +164,9 @@ export function keyResultPace(metric, objective, observations, todayKey) {
   const actual = measured ? metric.measurement.value : null;
   const gap = actual === null ? null : actual - expected;
   const tolerance = span * 0.1;
-  const state = gap === null ? 'unknown' : gap < -tolerance ? 'behind' : gap > tolerance ? 'ahead' : 'on';
+  // 주 1건도 안 되는 KR(월 결제 1건 등)은 중간에 늦음을 판정하면 소음이다 — 마지막 주에만 판정한다.
+  const tooEarly = weeklyPace === null && period.phase === 'running' && period.daysLeft >= 7;
+  const state = gap === null || tooEarly ? 'unknown' : gap < -tolerance ? 'behind' : gap > tolerance ? 'ahead' : 'on';
   let weekDone = null;
   if (actual !== null && period.phase === 'running') {
     const monday = mondayOf(todayKey);

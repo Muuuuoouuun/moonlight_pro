@@ -113,9 +113,10 @@
 .goal-card-footer .num { color:var(--fg); font-weight:600; }
 
 /* 점수·진척 트랙 — 1px 선이 아니라 4px 캡슐이지만 색은 moonstone 한 줄뿐 */
-.goal-score-bar { height:4px; border-radius:2px; background-color:var(--surface-3); overflow:hidden; }
-.goal-score-bar > span { display:block; height:100%; background-color:var(--moon-300); transition:width var(--dur-enter) var(--ease-hub); }
-.goal-score-bar--empty { background:none; border:1px dashed var(--line); height:4px; box-sizing:border-box; }
+.goal-score-bar { position:relative; height:4px; border-radius:2px; background-color:var(--surface-3); }
+.goal-score-bar > span { display:block; height:100%; border-radius:2px; background-color:var(--moon-300); transition:width var(--dur-enter) var(--ease-hub); }
+.goal-score-bar__floor { position:absolute; left:70%; top:-3px; bottom:-3px; width:1px; background-color:var(--fg-muted); }
+.goal-score-bar--empty { background:none; border:1px dashed var(--line); box-sizing:border-box; }
 
 /* ── 4. KPI — 계속 지킬 선의 건강 상태 ───────────────────────────────────── */
 .goal-kpi-list { list-style:none; margin:0; padding:0; border:1px solid var(--line-soft); border-radius:var(--r-lg); background-color:var(--surface); box-shadow:var(--shadow-soft); overflow:hidden; }
