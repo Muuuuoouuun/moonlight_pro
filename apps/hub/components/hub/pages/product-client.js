@@ -13,7 +13,7 @@ export function readSaveOutcome(httpStatus, data) {
     return { ok: false, status: "error", message: "Engine·Supabase 연결이 없어 저장되지 않았어요." };
   }
   if (status === "conflict") return { ok: false, status: "conflict", message: productErrorText(data?.error), entity: data?.entity || null };
-  return { ok: false, status: "error", message: productErrorText(data?.error || (httpStatus ? `http-${httpStatus}` : null)) };
+  return { ok: false, status: "error", message: productErrorText(data?.error || (httpStatus ? `http-${httpStatus}` : null), data) };
 }
 
 async function send(url, method, body) {

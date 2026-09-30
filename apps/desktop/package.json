@@ -7,10 +7,10 @@
   "author": "Moonlight",
   "main": "main.js",
   "scripts": {
-    "predev": "node scripts/build-mac-glass.mjs",
+    "predev": "node scripts/build-mac-pet.mjs",
     "dev": "electron .",
     "build": "electron-builder --win --x64",
-    "build:mac": "node scripts/build-mac-glass.mjs --arch=arm64 && electron-builder --mac --arm64",
+    "build:mac": "node scripts/build-mac-pet.mjs && node scripts/build-mac-glass.mjs --arch=arm64 && electron-builder --mac --arm64",
     "build:mac-glass": "node scripts/build-mac-glass.mjs",
     "install:mac": "node scripts/install-mac.mjs",
     "icons:generate": "node scripts/generate-icons.mjs",
@@ -36,6 +36,7 @@
       "widget-window.js",
       "widget-preload.js",
       "menu-template.js",
+      "pet-runtime.js",
       "pet/**",
       "!pet/native/**",
       "!pet/**/*.test.js",
@@ -69,6 +70,7 @@
     },
     "mac": {
       "extraResources": [
+        { "from": "../../prototypes/moonlight-pet-macos/dist/MoonlightPetPreview.app", "to": "native/MoonlightPetPreview.app" },
         { "from": "pet/native/build/mac-glass-${arch}.node", "to": "native/mac-glass.node" },
         { "from": "pet/native/build/GlassOptics.metal", "to": "native/GlassOptics.metal" }
       ],

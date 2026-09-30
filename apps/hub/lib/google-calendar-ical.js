@@ -45,7 +45,8 @@ function mapInstance(instance, event) {
   const end = asDate(instance.end || source.end || start);
   if (!start || !end) return null;
 
-  const uid = normalizeText(source.uid || event.uid) || `ical-${start.getTime()}`;
+  const iCalUID = normalizeText(source.uid || event.uid);
+  const uid = iCalUID || `ical-${start.getTime()}`;
   const isRecurring = Boolean(event.rrule || source.recurrenceid);
   const allDay = Boolean(instance.isFullDay || source.start?.dateOnly || source.datetype === "date");
   // RECURRENCE-ID names the original slot even when this occurrence moves.
@@ -56,6 +57,8 @@ function mapInstance(instance, event) {
 
   return {
     id: isRecurring ? `${uid}:${occurrenceKey}` : uid,
+    iCalUID: iCalUID || undefined,
+    ...(isRecurring ? { originalStartTime: toCalendarPoint(occurrence, occurrenceAllDay) } : {}),
     summary: normalizeText(instance.summary || source.summary) || "(제목 없음)",
     description: normalizeText(source.description) || undefined,
     location: normalizeText(source.location) || undefined,

@@ -1,8 +1,10 @@
 "use client";
-// 프로젝트 탭 > 제품 — 제품 운영실 B안 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0).
+// 제품 탭(사이드바 `제품`, `dashboard/products`) — 제품 운영실 B안 (docs/superpowers/specs/2026-09-25-product-operations-room-design.md §0).
+// 2026-09-30 운영자 "별도 탭 ㄱㄱ"로 프로젝트 탭의 한 보기(`?view=products`)에서 독립 탭으로 옮겼다(제품 렌즈 §14.2).
 // URL이 화면을 고른다: 기본은 포트폴리오, `?product=<id>`는 그 제품의 흐름 페이지, `?pview=inbox`는 문의함
-// (`&inquiry=<id>`로 한 건 선택). 카드 편집(EditDrawer)과 설정(저장소·GitHub·단계, ProductDetailDrawer)은
-// 여기서 여는 드로어다. 동시 진행 상한은 운영자 미정이라 막거나 경고하지 않는다(§12-5).
+// (`&inquiry=<id>`로 한 건 선택), `?new=product`는 새 제품 드로어를 한 번 연다. 카드 편집(EditDrawer)과
+// 설정(저장소·GitHub·단계, ProductDetailDrawer)은 여기서 여는 드로어다. 동시 진행 상한(MVP·출시·성장 3개,
+// 2026-09-30 확정 §12-5)은 Engine이 거절하고 여기는 그 이유를 그대로 보여 준다.
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -50,7 +52,7 @@ export function productFormFields({ creating }) {
   ];
 }
 
-export function ProjectProductsView({ onOpenProject }) {
+export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -104,6 +106,19 @@ export function ProjectProductsView({ onOpenProject }) {
   const canCreate = ledger.status !== "loading" && ledger.status !== "preview" && ledger.error !== "products-table-missing";
   // 포트폴리오의 N = 제품 등록. 제품 페이지는 자기 N(＋ 일)을 가진다.
   usePageCreateHotkey(openCreate, { enabled: canCreate && !productId && !inboxOpen && !editing });
+  // 탑바 새로 만들기 딥링크 — 기록 로드 뒤 한 번 열고 쿼리를 지운다(DESIGN §8.1 딥링크).
+  const createdFromQueryRef = React.useRef(false);
+  const wantsCreate = searchParams.get("new") === "product";
+  React.useEffect(() => {
+    if (!wantsCreate) {
+      createdFromQueryRef.current = false;
+      return;
+    }
+    if (!canCreate || createdFromQueryRef.current) return;
+    createdFromQueryRef.current = true;
+    openCreate();
+    navigate({ new: null });
+  }, [wantsCreate, canCreate, openCreate, navigate]);
 
   const openEdit = React.useCallback((product) => {
     setEditing({ creating: false, product, record: productToForm(product) });
@@ -171,7 +186,7 @@ export function ProjectProductsView({ onOpenProject }) {
         onBack={openPortfolio}
         onOpenProject={onOpenProject}
         onOpenInquiry={(id) => openInbox(id)}
-        onOpenBoard={() => router.push(`${pathname}?view=board&taskProduct=${encodeURIComponent(current.id)}`)}
+        onOpenBoard={() => onOpenBoard?.(current.id)}
         onOpenSettings={() => setSettingsOpen(true)}
         onEditCard={() => openEdit(current)}
         onChanged={() => load()}
@@ -207,6 +222,7 @@ export function ProjectProductsView({ onOpenProject }) {
   const newInquiries = (ledger.inquiries || []).filter((inquiry) => inquiry.status === "new").length;
   return (
     <div className={styles.room}>
+      {!productId && heading}
       {!productId && (
         <div className={styles.bar}>
           <SegmentedControl label="제품 화면" value={inboxOpen ? "inbox" : "portfolio"} onChange={(key) => (key === "inbox" ? openInbox() : openPortfolio())}

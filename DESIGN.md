@@ -316,8 +316,9 @@ system serif. Do not introduce serif display type.
   follow-ups, sheets sync, settings, project timeline). The public web is detached (§1, §12).
 - The expanded sidebar is 232px by default and resizable from 200 to 360px (`mlp.sidebarWidth`); collapsed it is
   a 56px icon rail (`mlp.sidebarCollapsed`). Both are desktop-only (§15 2026-09-22, 2026-09-23).
-- Shell navigation is one level deep: 9 primary + 2 utility anchors in the sidebar (`hub-nav.js`, pinned by
-  `hub-nav.test.mjs`; 10 + 2 until 2026-09-24, when the 고객 연락 anchor became 영업·매출's first tab, §15). An
+- Shell navigation is one level deep: 10 primary + 2 utility anchors in the sidebar (`hub-nav.js`, pinned by
+  `hub-nav.test.mjs`; 9 + 2 from 2026-09-24, when the 고객 연락 anchor became 영업·매출's first tab, until 2026-09-30,
+  when 제품 joined between 프로젝트 and 브랜드, §15). An
   anchor's second-level destinations render as the top-bar tab row (`topNavigationForRoute`), not as a sidebar
   accordion — since 2026-08-04 (`5a3d506`), guarded by the test "sidebar is one level deep and the top bar owns
   contextual tabs". Pages in `PAGE_OWNS_TABS` draw those tabs in their own header instead.
@@ -643,7 +644,7 @@ Do not ship:
 | Theme mode + sidebar width/collapse preferences | `apps/hub/lib/hub-preferences.js` (`mlp.*` keys)  |
 | Keyboard (global `C` `⌘K` `?` `⌘J`; page `N`) | `hub-app.jsx`; `apps/hub/components/hub/use-crm-keyboard.js` |
 | ⌘K catalog (`NAV_TREE`, `LEGACY_REDIRECTS`) | `apps/hub/components/hub/hub-data.js`                 |
-| Sidebar anchors (visible IA — 9 primary + 2 utility) and tab role aliases (`REVENUE_ROUTE_TABS`) | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs` |
+| Sidebar anchors (visible IA — 10 primary + 2 utility) and tab role aliases (`REVENUE_ROUTE_TABS`) | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs` |
 | Workspace membership (`org_scope`) | `apps/hub/components/hub/workspace-map.js`                   |
 | Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette}.jsx` |
 | Pages + `PAGE_MAP`                 | `apps/hub/components/hub/pages/*.jsx`, `hub-app.jsx`         |
@@ -669,7 +670,7 @@ Build order when adding a new surface:
 | §8.2/§5.3 state primitives, truth labels, rails, lifecycle danger | `state-primitives.test.mjs`, `state-usage.test.mjs` |
 | §11 `Skeleton` contract | `skeleton.test.mjs` |
 | Form field contract | `form-fields.test.mjs` |
-| Sidebar anchors (9 + 2) and icons in both states; 영업·매출 4 tabs + legacy route aliases; width handle | `hub-nav.test.mjs`; `sidebar-resizer.test.mjs` |
+| Sidebar anchors (10 + 2) and icons in both states; 영업·매출 4 tabs + legacy route aliases; width handle | `hub-nav.test.mjs`; `sidebar-resizer.test.mjs` |
 | Toast a11y and tokens | `hub-toast.test.mjs` |
 | No mock/demo work records in code | `scripts/no-mock-data.test.mjs` |
 
@@ -686,7 +687,7 @@ Build order when adding a new surface:
    `celebration-fx.jsx`, `hub-tokens.css`, `pages/overview.jsx` and `pages/revenue-heatmap.jsx`.
 6. Mobile floor: Calendar has no phone agenda (§7 Responsive). The input size floor is now global at ≤720px or coarse pointer.
 7. Stale code comments: the `hub-futura.css` header ("only inside `.hub-futura`") and `hub-tokens.css`
-    ("eight-anchor nav") — the pinned count is 9 + 2 since 2026-09-24 (`hub-nav.js`'s "Nine primary" is accurate
+    ("eight-anchor nav") — the pinned count is 10 + 2 since 2026-09-30 (`hub-nav.js`'s "Ten primary" is accurate
     again); and `motion.test.mjs`'s opening comment
     still says `s` units are not checked, though the test now checks them.
 8. Focus-ring color is mixed (`--moon-300`, `--accent`, raw rgba) and breakpoints drift — both open in `TODOS.md`.
@@ -751,4 +752,5 @@ Build order when adding a new surface:
 | 2026-09-26 | 거래 탭의 보기를 **돈 · 단계** 둘로 줄인다. 돈 보기는 매출·현금흐름만 — 머리 카드 한 장(월 매출/목표 + KPI 넷 + 확실성 띠), 현금흐름 주·월 차트, 들어올 돈 목록. 지난 달은 그리지 않는다. 확실(계약)·가능(계약 전)은 §5.3 선 모양으로, 빨강은 계약됐는데 늦은 돈에만. 시간축 막대·입금 달력·결제 표·언제 레인은 넣지 않는다(프로젝트 타임라인·오늘 연락과 겹침) | confirmed | 운영자가 목업 다섯 안을 비교한 뒤 "더 컴팩트하고 본질(매출·현금흐름)에만 집중한 버전"을 골랐다(2026-09-26). 2026-09-24 행의 거래 탭 "언제" 기본 보기와 2026-09-25 결제 보기를 대체한다. 상세 `docs/superpowers/specs/2026-09-24-revenue-four-tabs-design.md` §14 |
 | 2026-09-26 | 거래 돈 보기의 패널 처리 = **먹색 머리 + 한 장**: 월 매출 카드만 반전 면(`--moon-50` 면, 글자는 `--surface` 쪽 — 라이트에선 먹색 카드, 다크에선 밝은 카드)이고, 새 색 없이 카드 범위에서 `--fg`·`--line*`·`--danger` 등을 `color-mix`로 다시 묶는다. 현금흐름과 들어올 돈은 한 장(`.deals-money-sheet`) 안에서 1px 선으로만 나뉜다. 이 반전 면은 거래 돈 보기 머리 카드 한 곳 한정 | confirmed | 운영자가 패널 처리 시안 A(층 나누기)·B(먹색 머리 + 한 장) 중 B를 골랐다(2026-09-26). 세 덩어리가 모두 같은 흰 카드라 위계가 없던 문제를 톤으로 푼다 |
 | 2026-09-26 | 데스크톱 빠른 입력 위젯 페이지 `/widget`(`components/hub/quick-widget.jsx`, `app/widget/widget.css`) — Windows 앱의 380×200 위젯 창(`apps/desktop/widget-window.js`)이 띄운다. 380px 창은 `hub-tokens.css`의 `(pointer: coarse), (max-width: 720px)` 터치 플로어에 **폭만으로** 걸리므로, 위젯 스코프(`.hub-app.quick-widget-page`) 안에서 `(pointer: fine)`일 때만 44px 버튼·16px 입력 플로어를 되돌린다(거친 포인터는 플로어 유지). 앱 안에서는 창 모서리를 OS가 둥글리고 페이지는 1px `--line` 선만 긋는다(`--shadow-pop`·`--r-lg` 없음, 브라우저 탭에서는 카드로 그린다). 입력 칸 포커스 링은 §11 1px `--moon-300` 그대로 `outline-offset: -1px`(§15 2026-09-15 선례) | recommended | 운영자가 2026-09-26 위젯 목업을 그대로 승인했다. §7 Responsive·§11 터치 플로어의 위젯 한정 예외라 결정 로그에 남기고, 실사용으로 확인하기 전까지 권장으로 둔다. `quick-widget.test.mjs`가 스코프·고정 높이·포커스 규칙을 고정한다 |
+| 2026-09-30 | 사이드바에 `제품` 앵커를 `프로젝트`와 `브랜드` 사이에 추가한다(주요 10 + 유틸리티 2). 착지는 `dashboard/products` 하나이고 소속(scope) 쿼리를 붙이지 않으며 탑바 탭도 없다 — 포트폴리오·문의함 전환은 페이지 안 `SegmentedControl`이다. 화면은 제품 운영실 B안(`ProjectProductsView`)을 그대로 옮겼고, 프로젝트 탭의 `?view=products` 보기는 없앴다(옛 링크는 같은 쿼리로 새 탭에 넘긴다). 아이콘 `navProducts`는 상자 윤곽 한 가지 선 아이콘으로 펼친 행과 56px 레일에 같이 쓴다. §5.2 색 규칙·§7 고정 밀도·§11 20px/500 제목 그대로(Futura 페이지 텍스처 아님) | confirmed | 운영자 "09-28 기준으로 확정, 별도 탭 ㄱㄱ"(2026-09-30). 제품은 끝나는 일이 아니라 계속 사는 운영 대상이라 프로젝트의 한 보기로 담기지 않는다 — 브랜드 탭 분리(2026-08-29)와 같은 이유. 같은 답으로 MVP·출시·성장 동시 3개 상한(Engine이 거절, 거절 문구가 칸을 차지한 제품 이름을 말한다)과 고객 적합 후보의 같은 소속 한정도 확정됐다. `hub-nav.test.mjs`가 앵커 수·순서·경로를 고정한다. 상세 `docs/superpowers/specs/2026-09-24-product-dev-projects-draft.md` §12·§14 |
 | 2026-09-30 | 고객 기록을 **넓은 기록창**에서 쓴다. 그릇은 같은 Drawer이고 폭만 바뀐다. 고객 탭의 R · `연락 기록` · `했어요 · 기록` · `메모`는 480px 드로어를 `min(960px, calc(100% - 56px))`로 넓힌다. 오늘 연락의 `기록` · `e` · `N` · 기록 후보는 같은 넓은 창을 연다. 거래 독 · 첫 화면 · 에이전트는 compact 그대로다. 새 presentation · 라우트 · Futura 확장은 없고, Drawer에 선택 prop `bodyStyle` · `sheet="full"` · `headerAction`만 더했다(§8). **쓰기 칸**: 요약 한 줄(필수, 16px)과 늘 펼친 자세히(글쓰기 칸 16px · 1.8 · 16px 여백 · `--r-sm`, 10줄에서 40줄까지 자람). 어떻게 · 반응 · 다음 약속 · 언제 · 저장 줄로 된 아래 띠는 제자리에 있고 그 위만 스크롤된다. **읽기 칸**(`clamp(280px, 33.4%, 320px)`): 약속 · 제안 팁 이유 · 최근 기록 5줄. `연락 기록 \| 메모` 두 모드가 한 줄기를 쓰고, 연락은 원, 메모는 네모 + `메모 · 연락 아님`이다. 모양과 글자로만 나누고 색은 쓰지 않는다. **좁은 화면**: 900px 이하는 `쓰기 \| 이 고객` 탭, 600px 이하는 전체 높이 시트(저장은 머리, 키보드 위는 칩 줄). **저장 글자**: `초안 · 이 탭` → `기록 중 · 되돌리기` → `저장 중` → `저장됨 hh:mm`(`.mono`, 서버가 확인한 뒤에만). `일부 저장`은 반만 찬 원 표식이고 빨강이 아니다. 빨강은 실패 한 곳, 1px 위급 레일 + `저장 못 함`뿐이고, 글은 지우지 않는다. primary는 하나다(`저장`, 오늘 연락에서는 `저장하고 다음 ⌘↵`). 중단점은 900 · 600만 쓴다 | recommended | 운영자가 목업 v2와 권장 답(Q-CR1·2·3·5·6·8·11)을 검토한 뒤 "ㄱㄱ 이어서"(2026-09-30)라고 진행을 지시했다. 권장 답이므로 화면을 확인한 뒤 확정한다. 한 줄 기록용 compact 창에서 긴 미팅 기록을 쓰면 읽던 약속과 기록이 가려졌다. 메모를 쓰는 길은 셋이었고, 그중 `메모만`은 마지막 연락일을 바꿨다. 휴대폰에서는 키보드가 저장 버튼을 가렸다. 새 Drawer 종류(focus)나 고객 페이지 대신 폭만 바꾼 것은 ESC 층 · 포커스 가둠 · 바깥 클릭이 그대로 남고 §8의 "오버레이는 Drawer/EditDrawer뿐" 계약을 건드리지 않아서다. 오늘 연락 페이지 배치와 Futura 범위는 바뀌지 않는다. 초안 `이 기기`(Q-CR4) · AI 비교(Q-CR7) · RPC v2(Q-CR9) · 날짜 칩(Q-CR10) · 잇는 키는 미결이라 만들지 않았다. 상세와 알려진 빈틈은 `docs/superpowers/specs/2026-09-30-customer-record-wide-composer.md` |

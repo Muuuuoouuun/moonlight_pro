@@ -8,6 +8,14 @@ enum MoonlightPetPreviewMain {
             exit(passed ? 0 : 1)
         }
         let application = NSApplication.shared
+        if !CommandLine.arguments.contains("--glass-lab"),
+           let existing = NSRunningApplication.runningApplications(withBundleIdentifier: "app.moonlight.pet-preview")
+            .first(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier && !$0.isTerminated }) {
+            // Worktree builds share the installed app identity and must not create
+            // a second pet, polling loop, or competing global shortcut.
+            existing.activate(options: [])
+            return
+        }
         let delegate = PetAppDelegate()
         application.delegate = delegate
         application.setActivationPolicy(.accessory)
