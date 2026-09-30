@@ -16,6 +16,7 @@ import {
   localDateKey,
   matchesCustomerFocus,
   matchesCustomerSearch,
+  promiseReadout,
   sortCaption,
   sortCustomers,
 } from "./customer-list.js";
@@ -76,6 +77,29 @@ test("promise labels: 오늘 · 내일 · M/D, and overdue says N일 지남", ()
   assert.equal(dormant.state, "dormant");
   assert.equal(customerPromise(lead({ stage: "Lost", nextActionAt: "2026-09-01" }), TODAY).state, "closed");
   assert.equal(countOpenWithoutPromise([lead(), lead({ nextActionAt: TODAY }), { kind: "account" }], TODAY), 1);
+});
+
+// 드로어의 [다음 약속] 카드와 넓은 기록창의 읽기 칸이 같은 문장을 쓴다(2026-09-30).
+test("the promise readout is one sentence set for the card and the record window's context column", () => {
+  const read = (patch) => promiseReadout(customerPromise(lead(patch), TODAY));
+  // 놓친 약속 — 위급 글자는 lateLabel 한 곳, 나머지는 날짜 줄.
+  assert.deepEqual(read({ nextAction: "견적서 보내기", nextActionAt: "2026-09-22" }), { what: "견적서 보내기", muted: false, late: true, lateLabel: "2일 지남", when: "9/22 약속" });
+  // 오늘 · 내일은 상대 라벨 + 날짜, 그 밖은 날짜만.
+  assert.deepEqual(read({ nextAction: "데모", nextActionAt: TODAY }), { what: "데모", muted: false, late: false, lateLabel: "", when: "오늘 · 9/24" });
+  assert.equal(read({ nextAction: "데모", nextActionAt: "2026-09-25" }).when, "내일 · 9/25");
+  assert.equal(read({ nextAction: "데모", nextActionAt: "2026-10-02" }).when, "10/2 약속");
+  // 날짜만 있는 약속은 이름이 비어도 약속이다.
+  assert.equal(read({ nextActionAt: "2026-10-02" }).what, "다음 약속");
+  assert.deepEqual(read({ nextAction: "소개서 보내기" }), { what: "소개서 보내기", muted: false, late: false, lateLabel: "", when: "날짜를 아직 안 정했어요" });
+  // 약속이 아닌 말 — 흐리게, 날짜 줄 없이.
+  assert.deepEqual(read({}), { what: "아직 정하지 않았어요", muted: true, late: false, lateLabel: "", when: "" });
+  assert.equal(read({ dormant: true, dormantSince: "2026-09-14" }).what, "기약 없음 · 10일째");
+  assert.equal(read({ dormant: true }).what, "기약 없음");
+  assert.equal(read({ stage: "Lost", nextAction: "재접촉", nextActionAt: "2026-09-01" }).what, "종료된 고객");
+  // 템플릿 문구는 약속으로 읽지 않는다 — 문구는 제안 팁의 몫이다.
+  const template = read({ nextAction: "리드 출처 확인 후 다음 접촉 채널 정하기", nextActionIsTemplate: true });
+  assert.deepEqual([template.what, template.muted, template.when], ["다음 약속 없음", true, ""]);
+  assert.deepEqual(promiseReadout(), { what: "아직 정하지 않았어요", muted: true, late: false, lateLabel: "", when: "" });
 });
 
 // 2026-09-24: 이관·시트 동기화 문구는 운영자의 약속이 아니다(CRM 스펙 §4.1 결정 C, DESIGN.md

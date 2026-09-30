@@ -12,6 +12,12 @@
 // 기약 없음). 다음 약속이 비면 한 번 알리고 기약 없음으로 저장한다. ⌘↵ 저장, 닫아도 입력은
 // 남는다(같은 탭). 모든 새 prop은 선택이다 — 기존 호출처(고객 상세·첫 화면·에이전트)는 그대로다.
 //
+// 2026-09-30 넓은 기록창 ②(권장 · 화면 확인 뒤 확정): layout="wide"는 같은 상태 · 같은 저장 계약을
+// 넓은 그릇에 다시 놓는다 — 요약 한 줄(필수) + 늘 펼친 자세히(선택)가 흐르는 칸에, 그 아래 제자리 띠
+// (어떻게 · 반응 · 다음 약속 · 언제 · 저장). 기본("compact")은 지금 시트 그대로라 다른 호출처는 바뀌지
+// 않는다. ⌘↵는 넓은 기록창 어디서나 저장이고(읽기 칸 · 발판 포함), 일부 저장(요약은 됐고 자세히는
+// 아직) 동안에는 이미 저장된 요약 · 띠를 잠그고 자세히만 다시 보낸다.
+//
 // 드로어 껍데기는 ContactRecordDrawer가 씌운다. 상세 안에서는 오버레이를 겹치지 않으려고
 // 폼만 인라인으로 쓴다(CRM 지침 §6.2 — 활성 오버레이는 언제나 하나).
 //
@@ -31,13 +37,18 @@ import {
   buildContactRecordPayload,
   buildRawNoteWrite,
   channelLabel,
+  detailFieldHeight,
   draftHintCopy,
   draftRestoredCopy,
+  isPlainEnter,
+  isSaveChord,
   reactionRequired,
   recordSaveLine,
+  saveChordReachesRecord,
   validateContactRecord,
 } from "@/lib/sales-os/contact-record";
 import { createRecordDraftStore, openRecordDraft } from "@/lib/sales-os/contact-record-draft";
+import "./record-window.css";
 
 const EMPTY_FORM = {
   kind: "call",
@@ -101,9 +112,31 @@ function baseForm(presetForm) {
 }
 
 // 드로어가 닫혀 폼이 언마운트돼도, 현재 열린 앱에서 미저장 원문을 다시 보여 준다.
+// 값: { activityId, optimisticId, summary, body } — summary는 이미 저장된 요약(넓은 기록창이 잠가 보인다).
 const rawNoteRecoveries = new Map();
 const rawNoteKey = (target) => JSON.stringify([target?.kind || "lead", target?.id || ""]);
+// 자세히 칸의 높이 맞춤은 그리기 전에 끝나야 한 줄 늘 때마다 스크롤 막대가 번쩍이지 않는다.
+// 서버 렌더(테스트 포함)에는 레이아웃 효과가 없으므로 그때만 일반 효과로 내려간다.
+const useLayoutEffectOnClient = typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect;
 const RAW_NOTE_ERROR = "요약은 저장됐지만 원문은 저장하지 못했습니다. 원문만 다시 저장하거나 복사해 두세요.";
+// 긴 글 칸의 이름은 배치마다 다르다 — 좁은 시트는 접어 둔 '원문 붙여넣기', 넓은 기록창은 늘 펼친
+// '자세히'다. 같은 일부 저장(요약은 됐고 긴 글은 아직)을 그 화면의 칸 이름으로 말한다.
+const RAW_NOTE_COPY = {
+  compact: {
+    failed: RAW_NOTE_ERROR,
+    empty: "다시 저장할 원문을 입력하세요.",
+    kept: "원문은 이 창에 남아 있습니다.",
+    retry: "원문 저장 재시도",
+    skip: "원문 저장 건너뛰기",
+  },
+  wide: {
+    failed: "요약은 저장됐고 자세히는 저장하지 못했어요. 자세히만 다시 저장하거나 복사해 두세요.",
+    empty: "다시 저장할 자세히 내용을 입력하세요.",
+    kept: "자세히는 이 창에 남아 있어요.",
+    retry: "자세히 다시 저장",
+    skip: "건너뛰기",
+  },
+};
 
 // 쓰던 입력 — 닫아도 같은 탭에서 되살린다(스펙 §4.3 신뢰 계약 ②, 키 crm-record:<종류>:<id>).
 // sessionStorage가 막힌 창(사생활 보호 등)에서는 이 앱이 열려 있는 동안만 기억한다.
@@ -126,6 +159,25 @@ function sameDraft(a, b) {
 const readDraft = (target) => (target?.id ? recordDraftStore.read(draftKey(target)) : null);
 const writeDraft = (target, form) => (target?.id ? recordDraftStore.write(draftKey(target), pickDraft(form)) : null);
 const clearDraft = (target) => { if (target?.id) recordDraftStore.clear(draftKey(target)); };
+
+// 일부 저장 뒤 아직 못 보낸 긴 글(원문 · 자세히). 요청이 가는 동안은 메모리에만 들고, 실패가 확인되면
+// (durable) 초안과 같은 탭 저장소에도 둔다 — 그 상태에서 새로고침해도 긴 글이 남는다. 요청이 가는
+// 중에는 탭에 두지 않는다: 저장됐는데 새로고침 뒤 "일부 저장"이라고 말하면 같은 글을 두 번 보내게 된다.
+const rawNoteDraftKey = (target) => `${draftKey(target)}:rawnote`;
+function recallRawNote(target) {
+  const held = rawNoteRecoveries.get(rawNoteKey(target));
+  if (held) return held;
+  const stored = target?.id ? recordDraftStore.read(rawNoteDraftKey(target))?.value : null;
+  return stored && typeof stored.body === "string" && stored.body.trim() ? stored : null;
+}
+function holdRawNote(target, value, { durable = false } = {}) {
+  rawNoteRecoveries.set(rawNoteKey(target), value);
+  if (durable && target?.id) recordDraftStore.write(rawNoteDraftKey(target), value);
+}
+function dropRawNote(target) {
+  rawNoteRecoveries.delete(rawNoteKey(target));
+  if (target?.id) recordDraftStore.clear(rawNoteDraftKey(target));
+}
 
 // 토스트 되돌리기(undoMode="toast")의 지연 저장. 시트는 저장을 누르는 즉시 닫히므로 폼의
 // 언마운트 flush(useUndoableAction)에 기대면 되돌리기 창이 사라진다 — 모듈 스코프 타이머로
@@ -269,9 +321,13 @@ const SAVE_NOTE_TONE = {
   hint: { role: undefined, color: "var(--fg-dim)" },
 };
 
+// 실패 원인에 제목(note.title — 넓은 기록창의 "저장 못 함" · "일부 저장")이 있으면 1px 위급 레일 +
+// 제목 글자 한 곳으로 그린다. 원인 문장은 본문색이다(빨강은 레일과 제목뿐, DESIGN §5.2).
+// 제목이 없으면 지금처럼 원인 문장이 위급 색 한 줄이다.
 export function RecordSaveLine({ line, onUndo }) {
   const { progress, note } = line || {};
   const tone = SAVE_NOTE_TONE[note?.tone] || SAVE_NOTE_TONE.hint;
+  const railed = note?.tone === "error" && Boolean(note.title) && Boolean(note.text);
   return (
     <div style={{ flex: "1 1 200px", minWidth: 0, fontSize: 12, lineHeight: 1.45, minHeight: 18, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
       {progress && (
@@ -280,7 +336,12 @@ export function RecordSaveLine({ line, onUndo }) {
           {progress.canUndo && onUndo && <Button variant="ghost" size="xs" onClick={onUndo}>되돌리기</Button>}
         </span>
       )}
-      {note?.text && <span role={tone.role} style={{ color: tone.color }}>{note.text}</span>}
+      {railed ? (
+        <span role="alert" style={{ display: "flex", flexWrap: "wrap", gap: "0 8px", paddingLeft: 10, boxShadow: "inset 1px 0 0 var(--danger)", color: "var(--fg)" }}>
+          <span style={{ color: "var(--danger)", fontWeight: 500 }}>{note.title}</span>
+          <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{note.text}</span>
+        </span>
+      ) : note?.text && <span role={tone.role} style={{ color: tone.color }}>{note.text}</span>}
     </div>
   );
 }
@@ -294,10 +355,16 @@ export function RecordSaveLine({ line, onUndo }) {
 // 미리 채운 씨앗이다 — 같은 고객에 쓰던 초안이 있으면 초안이 이기고 씨앗은 빈 칸만 채운다.
 // 모든 콜백은 두 번째 인자로 target을 받는다(선택) — 고른 고객으로 연 기록창에서도 부모가 누구의
 // 기록인지 안다. undoMode="toast"면 저장을 누르는 즉시 창을 닫고 되돌리기를 토스트로 준다.
-export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onSummaryPersisted, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "", undoMode = "inline" }) {
+// onSending({ optimisticId }): 되돌리기 창이 닫혀 요청이 나가는 순간. onPartial({ activityId,
+// optimisticId }): 요약은 저장됐고 긴 글(원문 · 자세히)만 실패했을 때 — 둘 다 부모의 기록 줄
+// 영수증(기록 중 → 저장 중 → 저장됨 · 일부 저장)을 위한 것이고 선택이다.
+// layout="wide"(넓은 기록창): children은 자세히 아래 흐르는 칸에 놓인다(호출처의 보조 입력).
+export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onSending, onSummaryPersisted, onPartial, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "", undoMode = "inline", layout = "compact", children = null }) {
   const toast = useToast();
+  const wide = layout === "wide";
+  const noteCopy = wide ? RAW_NOTE_COPY.wide : RAW_NOTE_COPY.compact;
   const { form: presetForm, capture } = React.useMemo(() => splitPreset(preset), [preset]);
-  const [recoveredRawNote] = React.useState(() => rawNoteRecoveries.get(rawNoteKey(target)) || null);
+  const [recoveredRawNote] = React.useState(() => recallRawNote(target));
   // 쓰던 입력 — 실패 뒤 다시 연 창(draft + initialError)은 그 입력이 이긴다. 그 밖의 draft는
   // 호출처가 미리 채운 씨앗(했어요 · 기록의 약속 문구)이라, 쓰던 초안이 있으면 초안이 이긴다.
   const [opening] = React.useState(() => {
@@ -312,7 +379,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   // 씨앗만 얹은 첫 폼 — 운영자가 쓴 글이 아니므로 그대로면 초안으로 두지 않는다.
   const [seedForm] = React.useState(() => (opening.seeded ? form : null));
   const [state, setState] = React.useState(initialError || recoveredRawNote ? "error" : "idle"); // idle | warn | error
-  const [errorMsg, setErrorMsg] = React.useState(recoveredRawNote ? RAW_NOTE_ERROR : initialError || "");
+  const [errorMsg, setErrorMsg] = React.useState(recoveredRawNote ? noteCopy.failed : initialError || "");
   // 저장할 때마다 올린다 — AI 채우기 상자(자식 상태)를 새 기록에 맞게 비운다.
   const [recordSeq, setRecordSeq] = React.useState(0);
   // AI 응답은 몇 초 뒤에 온다. 그 사이 운영자가 고친 값을 클릭 시점 스냅샷으로 덮지 않도록
@@ -324,17 +391,21 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   const [attempted, setAttempted] = React.useState(false);
   const [pendingUndo, setPendingUndo] = React.useState(null);
   // 요약 RPC 성공 뒤 원문 note만 실패하면, 같은 연락을 두 번 만들지 않고 note만 재시도한다.
+  // summary는 이미 저장된 요약이다 — 넓은 기록창이 잠긴 칸에 그대로 보인다.
   const [pendingRawNote, setPendingRawNote] = React.useState(() => recoveredRawNote && {
     activityId: recoveredRawNote.activityId,
     optimisticId: recoveredRawNote.optimisticId,
+    summary: recoveredRawNote.summary || "",
   });
   const [rawNoteSaving, setRawNoteSaving] = React.useState(false);
   // "언제"를 운영자가 직접 골랐는지 — 기본값(3일 뒤)만 남은 채 무엇이 비면 기약 없음으로 저장하고,
   // 직접 고른 날짜는 무엇이 비어도 날짜만 약속으로 남긴다(목업 경고 문구가 둘을 나눠 말한다).
   const [whenTouched, setWhenTouched] = React.useState(() => Boolean(draft || storedDraft || presetForm.at));
   const [datePicking, setDatePicking] = React.useState(false);
+  const rootRef = React.useRef(null);
   const reactionRef = React.useRef(null);
   const summaryRef = React.useRef(null);
+  const detailRef = React.useRef(null);
   const atRef = React.useRef(null);
   // 기록 소요 시간 — 시트는 연 순간부터, 인라인 폼은 첫 입력부터 잰다. 되살린 입력은 재지 않는다.
   const startedAtRef = React.useRef(null);
@@ -361,9 +432,9 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     if (startedAtRef.current == null) startedAtRef.current = Date.now();
     setForm((f) => ({ ...f, ...patch }));
     if (pendingRawNote && Object.hasOwn(patch, "body")) {
-      const key = rawNoteKey(target);
-      const recovery = rawNoteRecoveries.get(key);
-      if (recovery) rawNoteRecoveries.set(key, { ...recovery, body: patch.body });
+      // 못 보낸 긴 글을 고치면 되살릴 사본도 따라간다(메모리 + 탭).
+      const recovery = recallRawNote(target);
+      if (recovery) holdRawNote(target, { ...recovery, body: patch.body }, { durable: true });
     }
     if (state === "warn") setState("idle");
   };
@@ -449,6 +520,8 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   };
 
   const persist = async (payload, snapshot) => {
+    // 요청이 나간다 — 부모의 기록 줄이 "기록 중"(보내기 전)에서 "저장 중"으로 넘어간다.
+    onSending?.({ optimisticId: snapshot.optimisticId }, target);
     try {
       const resp = await fetch("/api/hub/revenue/contact-outcome", {
         method: "POST",
@@ -467,12 +540,15 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       // 붙여넣은 원문은 요약이 저장된 뒤에 별도 note로 남긴다. 아직 원자 저장이 아니라
       // (RPC v2는 1b) 이 단계가 실패해도 요약 기록은 이미 남아 있다 — 그 사실을 말해 준다.
       const note = buildRawNoteWrite(snapshot.form, target);
+      let savedNote = null;
       if (note) {
-        rawNoteRecoveries.set(rawNoteKey(target), {
+        const held = {
           activityId: data.activityId || null,
           optimisticId: snapshot.optimisticId,
+          summary: snapshot.form.summary,
           body: snapshot.form.body,
-        });
+        };
+        holdRawNote(target, held);
         const noteResp = await fetch("/api/hub/revenue/activity", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -480,9 +556,13 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
         }).catch(() => null);
         const noteData = await noteResp?.json().catch(() => ({})) ?? {};
         if (!noteResp?.ok || noteData.status !== "saved") {
-          setPendingRawNote({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId });
+          // 실패가 확인됐다 — 이제 탭에도 둔다(새로고침해도 긴 글이 남는다).
+          holdRawNote(target, held, { durable: true });
+          setPendingRawNote({ activityId: held.activityId, optimisticId: held.optimisticId, summary: held.summary });
+          // 기록은 생겼고 긴 글만 빠졌다 — 부모의 기록 줄은 "일부 저장"이다(저장됨이 아니다).
+          onPartial?.({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId }, target);
           setState("error");
-          setErrorMsg(RAW_NOTE_ERROR);
+          setErrorMsg(noteCopy.failed);
           setForm((f) => ({ ...f, body: snapshot.form.body }));
           setShowBody(true);
           // 시트가 이미 닫혔으면(토스트 되돌리기) 여기서 말한다 — 같은 고객 기록창을 다시 열면 원문이 남아 있다.
@@ -490,9 +570,11 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
           // 원문을 되살려 보여 줘야 하므로 창을 닫지 않는다.
           return false;
         }
-        rawNoteRecoveries.delete(rawNoteKey(target));
+        dropRawNote(target);
+        savedNote = { id: noteData.id || null, body: note.body };
       }
-      onPersisted?.({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId }, target);
+      // note: 자세히가 따로 저장됐으면 그 줄(서버 ID · 본문)도 넘긴다 — 부모가 기록 줄기에 세운다.
+      onPersisted?.({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId, ...(savedNote ? { note: savedNote } : {}) }, target);
       return true;
     } catch (err) {
       fail(snapshot, `${err instanceof Error ? err.message : String(err)} — 입력을 복원했습니다.`);
@@ -505,13 +587,12 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     const note = buildRawNoteWrite(form, target);
     if (!note) {
       setState("error");
-      setErrorMsg("다시 저장할 원문을 입력하세요.");
+      setErrorMsg(noteCopy.empty);
       return;
     }
     setRawNoteSaving(true);
-    const key = rawNoteKey(target);
-    const recovery = rawNoteRecoveries.get(key);
-    if (recovery) rawNoteRecoveries.set(key, { ...recovery, body: form.body });
+    const recovery = recallRawNote(target);
+    if (recovery) holdRawNote(target, { ...recovery, body: form.body }, { durable: true });
     try {
       const response = await fetch("/api/hub/revenue/activity", {
         method: "POST",
@@ -520,15 +601,15 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.status !== "saved") throw new Error(data.error || data.reason || "원문 저장 실패");
-      rawNoteRecoveries.delete(key);
-      onPersisted?.(pendingRawNote, target);
+      dropRawNote(target);
+      onPersisted?.({ activityId: pendingRawNote.activityId, optimisticId: pendingRawNote.optimisticId, note: { id: data.id || null, body: note.body } }, target);
       setPendingRawNote(null);
       clearDraft(target);
       reset();
       onDone?.();
     } catch (error) {
       setState("error");
-      setErrorMsg(`${error instanceof Error ? error.message : String(error)} — 원문은 이 창에 남아 있습니다.`);
+      setErrorMsg(`${error instanceof Error ? error.message : String(error)} — ${noteCopy.kept}`);
     } finally {
       setRawNoteSaving(false);
     }
@@ -536,8 +617,9 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
 
   const skipRawNote = () => {
     if (!pendingRawNote) return;
-    rawNoteRecoveries.delete(rawNoteKey(target));
-    onPersisted?.(pendingRawNote, target);
+    dropRawNote(target);
+    // 긴 글 없이 끝낸다 — 요약은 이미 저장돼 있으므로 기록 줄은 "저장됨"으로 풀린다(note 없음).
+    onPersisted?.({ activityId: pendingRawNote.activityId, optimisticId: pendingRawNote.optimisticId }, target);
     setPendingRawNote(null);
     clearDraft(target);
     reset();
@@ -648,13 +730,73 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
 
   const primaryAction = () => (pendingRawNote ? retryRawNote() : save({ ignoreWarning: state === "warn" }));
 
-  // ⌘↵ / Ctrl+↵ 저장 — 한글 조합 중이면 조합을 끝내는 Enter이므로 무시한다.
+  // ⌘↵ / Ctrl+↵ 저장 — 한글 조합 중이면 조합을 끝내는 Enter이므로 무시한다(isSaveChord).
   const onKeyDown = (e) => {
-    if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey) || e.nativeEvent?.isComposing) return;
+    if (!isSaveChord(e)) return;
+    // 호출처가 끼운 보조 입력(넓은 기록창의 children)의 ⌘↵는 그 입력의 것이다 — 연락 기록을 저장하지 않는다.
+    if (e.target?.closest?.("[data-record-slot]")) return;
     if (rawNoteSaving) return;
     e.preventDefault();
     primaryAction();
   };
+
+  // 넓은 기록창의 ⌘↵는 어디서나 저장이다 — 읽기 칸의 기록 줄, 발판의 '고객 정보로', 빈 곳을 누른 뒤에도.
+  // 폼 안에서 난 것은 위 onKeyDown이 이미 받았고, 위에 뜬 다른 창(⌘K 등)의 ⌘↵는 받지 않는다
+  // (saveChordReachesRecord). 좁은 시트는 포커스 가둠 안이 전부 폼이라 창 리스너가 필요 없다.
+  const saveChordRef = React.useRef(onKeyDown);
+  saveChordRef.current = onKeyDown;
+  React.useEffect(() => {
+    if (!wide) return undefined;
+    const onWindowKey = (e) => {
+      const root = rootRef.current;
+      if (!root || e.defaultPrevented) return;
+      const shell = root.closest('[role="dialog"]');
+      const reaches = saveChordReachesRecord({
+        inForm: root.contains(e.target),
+        inShell: Boolean(shell?.contains(e.target)),
+        onBody: e.target === document.body,
+      });
+      if (reaches) saveChordRef.current(e);
+    };
+    window.addEventListener("keydown", onWindowKey);
+    return () => window.removeEventListener("keydown", onWindowKey);
+  }, [wide]);
+
+  // 요약 칸의 Enter는 저장이 아니라 자세히로 내려간다(넓은 기록창). 조합 중 Enter는 isPlainEnter가 거른다.
+  const onSummaryKeyDown = (e) => {
+    if (!isPlainEnter(e)) return;
+    e.preventDefault();
+    detailRef.current?.focus();
+  };
+
+  // 넓은 기록창의 자세히 — 쓰는 만큼 길어지고(CSS의 최소 · 최대 높이 안에서), 그 뒤로는 칸 안에서 흐른다.
+  // 높이는 detailFieldHeight(순수)가 정한다. 재는 동안 칸이 잠깐 최소 높이로 줄어 흐르는 칸의 스크롤
+  // 위치가 따라 당겨지므로(글자 하나에 화면이 튄다) 재기 전 위치를 잡아 두었다가 되돌린다.
+  useLayoutEffectOnClient(() => {
+    const el = detailRef.current;
+    if (!wide || !el) return;
+    const region = el.closest(".record-wide__scroll");
+    const top = region ? region.scrollTop : 0;
+    el.style.height = "auto";
+    el.style.height = `${detailFieldHeight(el)}px`;
+    if (!region) return;
+    if (region.scrollTop !== top) region.scrollTop = top;
+    // 글 끝에서 쓰는 중이면 새로 자란 줄이 흐르는 칸 아래에 걸리지 않게 칸 끝까지 따라 내려간다.
+    if (document.activeElement === el && el.selectionStart >= el.value.length) {
+      const under = el.getBoundingClientRect().bottom - region.getBoundingClientRect().bottom;
+      if (under > 0) region.scrollTop += under + 12;
+    }
+  }, [wide, form.body]);
+
+  // 일부 저장 — 넓은 기록창은 이미 저장된 것(요약 · 어떻게 · 반응 · 약속)을 잠그고 자세히만 남긴다.
+  // 여기서 새로 쓴 요약은 어디에도 가지 않으므로 받지 않는다. 커서는 다시 보낼 자세히로 옮긴다
+  // (읽기 칸 등 기록 칸 밖을 보고 있었다면 건드리지 않는다).
+  const locked = wide && Boolean(pendingRawNote);
+  React.useEffect(() => {
+    if (!locked) return;
+    const active = document.activeElement;
+    if (!active || active === document.body || rootRef.current?.contains(active)) detailRef.current?.focus();
+  }, [locked]);
 
   const captureLine = describeCapture(capture);
   const warnCopy = dateOnlyPromise
@@ -668,33 +810,179 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     state,
     warnCopy,
     errorMsg,
+    // 넓은 기록창은 실패를 레일 + 제목 한 곳으로 그린다 — 기록은 생겼고 긴 글만 빠졌으면 "일부 저장"이다.
+    errorTitle: wide ? (pendingRawNote ? "일부 저장" : "저장 못 함") : "",
     draftHint: autoFocus ? draftHintCopy(draftPlace, { dirty: !untouched }) : "",
   });
 
+  // 두 배치가 같이 쓰는 조각 — 배치가 달라도 글자와 동작은 하나다.
+  const restoredLine = storedDraft && (
+    <div role="status" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--fg-muted)" }}>
+      <Iconed name="edit" size={12} />
+      <span style={{ flex: 1 }}>{draftRestoredCopy(draftPlace)}</span>
+      <Button variant="ghost" size="xs" onClick={() => { clearDraft(target); reset(); }}>지우기</Button>
+    </div>
+  );
+  const captureNote = captureLine && (
+    <span style={{ fontSize: 11.5, color: "var(--fg-dim)" }}>
+      <span className="mono">{captureLine}</span> · 이 시각으로 기록돼요
+    </span>
+  );
+  const pickChannel = (kind) => edit({ kind, ...(reactionRequired(kind) ? {} : { replied: false }) });
+  // 발신 채널은 회신을 받았을 때만 반응을 묻는다 — 보낸 사실에 통화 결과를 붙이지 않는다.
+  const replyToggle = channel?.promptsReply && (
+    <CheckboxRow
+      checked={form.replied}
+      onChange={(replied) => edit({ replied, ...(replied ? {} : { reaction: null }) })}
+      text="회신을 받았어요"
+    />
+  );
+  const reactionMissing = attempted && !form.reaction;
+  const dateError = attempted && !form.at ? "날짜를 고르거나 기약 없음을 선택하세요." : null;
+  // 저장 줄 — 비활성 대신 항상 눌린다(왜 안 되는지 말하지 않는 죽은 버튼을 두지 않는다).
+  const saveControls = (
+    <>
+      <RecordSaveLine line={saveLine} onUndo={pendingUndo?.undo} />
+      {pendingRawNote && <Button variant="ghost" size="xs" onClick={skipRawNote} disabled={rawNoteSaving}>{noteCopy.skip}</Button>}
+      <Button variant="primary" size={wide ? "md" : "sm"} disabled={rawNoteSaving} onClick={primaryAction}>
+        {pendingRawNote ? noteCopy.retry : "저장"}
+        {!pendingRawNote && <Kbd style={{ background: "transparent", color: "inherit", borderColor: "currentColor", boxShadow: "none", opacity: 0.7 }}>⌘↵</Kbd>}
+      </Button>
+    </>
+  );
+
+  // 넓은 기록창 — 아래 띠(어떻게 · 반응 · 다음 약속 · 언제 · 저장)는 제자리에 있고, 그 위(요약 한 줄 +
+  // 자세히)만 흐른다. 자세히가 아무리 길어져도 저장 줄이 화면 밖으로 밀리지 않는다.
+  if (wide) {
+    return (
+      <div ref={rootRef} className="record-wide" onKeyDown={onKeyDown}>
+        <div className="record-wide__scroll">
+          {restoredLine}
+          {captureNote}
+          {locked ? (
+            // 일부 저장 — 요약은 이미 기록에 남았다. 고칠 수 없는 칸으로 보이고, 새 글을 받지 않는다.
+            <TextField
+              label="요약 · 한 줄"
+              readOnly
+              value={pendingRawNote.summary || ""}
+              placeholder="요약은 이미 기록에 남았어요"
+              className="record-wide__summary"
+              hint="이 요약은 이미 기록에 남았어요 · 자세히만 다시 저장하면 돼요"
+            />
+          ) : (
+            <TextField
+              ref={summaryRef}
+              label="요약 · 한 줄"
+              required
+              autoFocus={autoFocus}
+              value={form.summary}
+              onChange={(e) => edit({ summary: e.target.value })}
+              onKeyDown={onSummaryKeyDown}
+              placeholder="예) 견적 받아보고 다음 주 원장회의에서 결정"
+              maxLength={500}
+              showCount
+              className="record-wide__summary"
+              hint="ClassIn에 옮길 수 있는 줄은 이것뿐이에요"
+              error={attempted && !form.summary.trim() ? "요약이 없으면 나중에 이 기록을 읽을 수 없습니다." : null}
+            />
+          )}
+          {/* 숨어 있던 '원문 붙여넣기'를 늘 펼친 칸이다 — 같은 form.body, 같은 저장(요약 뒤 별도 note). */}
+          <TextAreaField
+            ref={detailRef}
+            label="자세히"
+            autoFocus={autoFocus && locked}
+            value={form.body}
+            rows={10}
+            onChange={(e) => edit({ body: e.target.value })}
+            placeholder={"대화 내용, 상대가 중요하게 보는 것, 우려, 다음에 할 일.\n카톡 · 통화 받아쓰기를 붙여 넣어도 돼요. 비워 둬도 되고, 쓰는 만큼 칸이 길어져요."}
+            maxLength={20000}
+            showCount
+            className="record-wide__detail"
+            hint={locked ? "아직 저장되지 않았어요 · 고친 뒤 다시 저장할 수 있어요" : "선택 · Moonlight에만 남아요 · 비워 두면 요약만 저장돼요"}
+          />
+          {aiContext && !locked && <ContactAiAutofill key={recordSeq} target={target} aiContext={aiContext} onApply={applyExtraction} />}
+          {children && <div data-record-slot="">{children}</div>}
+        </div>
+
+        <div className="record-wide__band" role="group" aria-label={locked ? "자세히 다시 저장" : "어떻게 · 반응 · 다음 약속 · 저장"}>
+          {!locked && (
+            <>
+              <div className="record-wide__row">
+                <span className="record-wide__k" aria-hidden="true">어떻게</span>
+                <div className="record-wide__ctl">
+                  <SegmentedControl label="어떻게 연락했나" options={channelOptions} value={form.kind} onChange={pickChannel} style={{ flexWrap: "wrap" }} />
+                  {replyToggle}
+                  {wantsReaction && (
+                    <span ref={reactionRef} className="record-wide__pair">
+                      <span className="record-wide__k record-wide__k--in">반응 <small>필수</small></span>
+                      <SegmentedControl
+                        label="고객 반응"
+                        options={REACTIONS.map((r) => ({ key: r.key, label: r.label }))}
+                        value={form.reaction}
+                        onChange={(reaction) => edit({ reaction })}
+                        invalid={reactionMissing}
+                        style={{ flexWrap: "wrap" }}
+                      />
+                      {reactionMissing && <span className="hub-field-msg hub-field-msg--error record-wide__msg" role="alert">반응을 하나 고르세요.</span>}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="record-wide__row">
+                <span className="record-wide__k" aria-hidden="true">다음 약속</span>
+                <div className="record-wide__ctl">
+                  <TextField
+                    aria-label="다음 약속 · 무엇을"
+                    value={form.nextAction}
+                    onChange={(e) => edit({ nextAction: e.target.value })}
+                    placeholder="무엇을 — 예) 견적서 보내기"
+                    className="record-wide__field"
+                    fieldClassName="record-wide__grow"
+                  />
+                </div>
+              </div>
+              <div className="record-wide__row">
+                <span className="record-wide__k" aria-hidden="true">언제</span>
+                <div className="record-wide__ctl">
+                  <SegmentedControl label="언제" options={WHEN_OPTIONS} value={whenKey} onChange={pickWhen} style={{ flexWrap: "wrap" }} />
+                  {whenKey === "date" && (
+                    <TextField
+                      ref={atRef}
+                      aria-label="날짜"
+                      required
+                      type="date"
+                      value={form.at}
+                      onChange={(e) => edit({ at: e.target.value })}
+                      className="mono record-wide__field"
+                      fieldStyle={{ flex: "0 1 190px" }}
+                      style={{ padding: "0 10px" }}
+                      error={dateError}
+                    />
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+          <div className="record-wide__save">{saveControls}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div onKeyDown={onKeyDown} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {storedDraft && (
-        <div role="status" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--fg-muted)" }}>
-          <Iconed name="edit" size={12} />
-          <span style={{ flex: 1 }}>{draftRestoredCopy(draftPlace)}</span>
-          <Button variant="ghost" size="xs" onClick={() => { clearDraft(target); reset(); }}>지우기</Button>
-        </div>
-      )}
+      {restoredLine}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <SegmentedControl
           label="어떻게 연락했나"
           options={channelOptions}
           value={form.kind}
-          onChange={(kind) => edit({ kind, ...(reactionRequired(kind) ? {} : { replied: false }) })}
+          onChange={pickChannel}
           size="md"
           style={{ flexWrap: "wrap", alignSelf: "flex-start" }}
         />
-        {captureLine && (
-          <span style={{ fontSize: 11.5, color: "var(--fg-dim)" }}>
-            <span className="mono">{captureLine}</span> · 이 시각으로 기록돼요
-          </span>
-        )}
+        {captureNote}
       </div>
 
       <TextField
@@ -728,14 +1016,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
 
       {aiContext && <ContactAiAutofill key={recordSeq} target={target} aiContext={aiContext} onApply={applyExtraction} />}
 
-      {/* 발신 채널은 회신을 받았을 때만 반응을 묻는다 — 보낸 사실에 통화 결과를 붙이지 않는다. */}
-      {channel?.promptsReply && (
-        <CheckboxRow
-          checked={form.replied}
-          onChange={(replied) => edit({ replied, ...(replied ? {} : { reaction: null }) })}
-          text="회신을 받았어요"
-        />
-      )}
+      {replyToggle}
 
       {wantsReaction && (
         <div ref={reactionRef}>
@@ -746,10 +1027,10 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
             value={form.reaction}
             onChange={(reaction) => edit({ reaction })}
             size="md"
-            invalid={attempted && !form.reaction}
+            invalid={reactionMissing}
             style={{ flexWrap: "wrap" }}
           />
-          {attempted && !form.reaction && (
+          {reactionMissing && (
             <p className="hub-field-msg hub-field-msg--error" role="alert">반응을 하나 고르세요.</p>
           )}
         </div>
@@ -781,7 +1062,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
             className="mono"
             fieldStyle={{ maxWidth: 220 }}
             style={{ padding: "0 10px" }}
-            error={attempted && !form.at ? "날짜를 고르거나 기약 없음을 선택하세요." : null}
+            error={dateError}
           />
         )}
       </div>
@@ -789,13 +1070,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       {/* 메시지 줄은 높이를 예약한다 — 경고가 나타날 때 저장 버튼이 튀면 오조작난다.
           앞선 저장의 진행과 지금 폼에 대한 말이 겹칠 때만 두 줄이 된다(RecordSaveLine). */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", borderTop: "1px solid var(--line-soft)", paddingTop: 15 }}>
-        <RecordSaveLine line={saveLine} onUndo={pendingUndo?.undo} />
-        {/* 비활성 대신 항상 눌린다 — 왜 안 되는지 말하지 않는 죽은 버튼을 두지 않는다. */}
-        {pendingRawNote && <Button variant="ghost" size="xs" onClick={skipRawNote} disabled={rawNoteSaving}>원문 저장 건너뛰기</Button>}
-        <Button variant="primary" size="sm" disabled={rawNoteSaving} onClick={primaryAction}>
-          {pendingRawNote ? "원문 저장 재시도" : "저장"}
-          {!pendingRawNote && <Kbd style={{ background: "transparent", color: "inherit", borderColor: "currentColor", boxShadow: "none", opacity: 0.7 }}>⌘↵</Kbd>}
-        </Button>
+        {saveControls}
       </div>
     </div>
   );

@@ -159,6 +159,27 @@ export function customerPromise(row = {}, today = new Date()) {
   return { state: "none", what: "", at: null, offset: null, late: 0, whenLabel: "" };
 }
 
+// 약속을 읽는 말 — 드로어의 [다음 약속] 카드와 넓은 기록창의 읽기 칸이 같은 문장을 쓴다.
+//   what      — 약속 한 줄(없으면 없는 이유).        muted — 약속이 아닌 말(없음 · 기약 없음 · 종료).
+//   late      — 놓친 약속인가.                       lateLabel — "N일 지남"(위급 색은 이 글자 한 곳).
+//   when      — 날짜 줄. 놓친 약속이면 lateLabel 뒤에 붙는 나머지("9/26 약속")만 담는다.
+export function promiseReadout(promise = {}) {
+  const dated = promise.state === "dated";
+  const late = dated && promise.late > 0;
+  if (dated || promise.state === "undated") {
+    const when = !dated ? "날짜를 아직 안 정했어요"
+      : late || promise.whenLabel === promise.dateLabel ? `${promise.dateLabel} 약속`
+      : `${promise.whenLabel} · ${promise.dateLabel}`;
+    return { what: promise.what || "다음 약속", muted: false, late, lateLabel: late ? `${promise.late}일 지남` : "", when };
+  }
+  const what = promise.state === "dormant" ? (promise.days != null ? `기약 없음 · ${promise.days}일째` : "기약 없음")
+    : promise.state === "closed" ? "종료된 고객"
+    // 이관 · 시트 템플릿 문구는 약속이 아니다 — 문구는 제안 팁이 대신 낸다.
+    : promise.state === "template" ? "다음 약속 없음"
+    : "아직 정하지 않았어요";
+  return { what, muted: true, late: false, lateLabel: "", when: "" };
+}
+
 // 진행 중인데 날짜 있는 약속이 없는 사람 — 히어로 eyebrow의 "약속 없는 진행 중". state가
 // "dated"가 아니면 전부 센다 — template(이관 문구뿐)도 여기 포함된다: 문구가 있어도 운영자의
 // 약속이 아니므로 "약속 없는 진행 중"에서 빠지면 안 된다(2026-09-24).

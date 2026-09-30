@@ -1034,7 +1034,9 @@ const DRAWER_FOCUSABLE = 'input, select, textarea, button, a[href], [tabindex]:n
 // scrollable body + optional footer bar. Owns ESC-to-close, focus-in-on-mount +
 // focus-restore-on-unmount, and a light Tab focus trap — not field rendering or
 // save/delete semantics. EditDrawer and the Guru diagnosis drawer compose on top.
-export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
+// `bodyStyle` mirrors `footerStyle`: a caller whose content owns its own scroll regions (the wide
+// record window's two columns) drops the body padding/scroll instead of fighting it with margins.
+export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyle, initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
   const asideRef = React.useRef(null);
   const bodyRef = React.useRef(null);
   const compact = presentation === 'compact';
@@ -1112,7 +1114,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
           </div>
           <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: -10 }} />
         </div>
-        <div ref={bodyRef} className="hub-drawer__body scroll-y" style={{ flex: 1, padding: compact ? undefined : 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div ref={bodyRef} className="hub-drawer__body scroll-y" style={{ flex: 1, padding: compact ? undefined : 16, display: 'flex', flexDirection: 'column', gap: 14, ...bodyStyle }}>
           {children}
         </div>
         {footer && (

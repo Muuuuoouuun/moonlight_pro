@@ -12,10 +12,20 @@ import {
   draftHintCopy,
   draftPlaceLabel,
   draftRestoredCopy,
+  RECORD_DRAWER_WIDTH,
+  addSavedNoteRow,
+  applyReceiptEvent,
+  detailFieldHeight,
   isContactChannel,
+  isPlainEnter,
+  isSaveChord,
   reactionRequired,
+  receiptTimeLabel,
+  recordReceipt,
   recordSaveLabel,
   recordSaveLine,
+  recordWindowLayout,
+  saveChordReachesRecord,
   validateContactRecord,
 } from "./contact-record.js";
 
@@ -278,4 +288,161 @@ test("draft copy names where the draft actually lives", () => {
       assert.doesNotMatch(copy, /기록됨|저장됨|저장했/, copy);
     }
   }
+});
+
+// ── 2026-09-30 넓은 기록창 ②(권장 · 화면 확인 뒤 확정) ─────────────────────────────
+
+test("the record window is the same drawer — only the width changes, and only while writing on a desktop", () => {
+  assert.deepEqual(RECORD_DRAWER_WIDTH, { rest: "min(480px, 96vw)", wide: "min(960px, calc(100% - 56px))" });
+  // 읽을 땐 좁게.
+  assert.deepEqual(recordWindowLayout({ recording: false, mobile: false }), { width: RECORD_DRAWER_WIDTH.rest, form: "compact", context: false });
+  assert.deepEqual(recordWindowLayout(), { width: RECORD_DRAWER_WIDTH.rest, form: "compact", context: false });
+  // 쓸 때만 넓게 — 요약 · 자세히 두 칸 + 오른쪽 읽기 칸.
+  assert.deepEqual(recordWindowLayout({ recording: true, mobile: false }), { width: RECORD_DRAWER_WIDTH.wide, form: "wide", context: true });
+  // 휴대폰은 지금 바닥 시트 그대로(전체 높이 시트는 다음 조각).
+  assert.deepEqual(recordWindowLayout({ recording: true, mobile: true }), { width: RECORD_DRAWER_WIDTH.rest, form: "compact", context: false });
+  assert.deepEqual(recordWindowLayout({ recording: false, mobile: true }), { width: RECORD_DRAWER_WIDTH.rest, form: "compact", context: false });
+});
+
+test("Enter in the summary moves on only when it is a plain Enter — never mid-composition, never a save chord", () => {
+  assert.equal(isPlainEnter({ key: "Enter" }), true);
+  assert.equal(isPlainEnter({ key: "Enter", nativeEvent: { isComposing: false }, keyCode: 13 }), true);
+  // ⌘↵ · Ctrl+↵는 저장이고, Shift · Alt 조합은 건드리지 않는다.
+  for (const mod of ["metaKey", "ctrlKey", "shiftKey", "altKey"]) assert.equal(isPlainEnter({ key: "Enter", [mod]: true }), false, mod);
+  // 한글 조합을 끝내는 Enter — 브라우저마다 알리는 방식이 다르다(isComposing · nativeEvent · keyCode 229).
+  assert.equal(isPlainEnter({ key: "Enter", isComposing: true }), false);
+  assert.equal(isPlainEnter({ key: "Enter", nativeEvent: { isComposing: true } }), false);
+  assert.equal(isPlainEnter({ key: "Enter", keyCode: 229 }), false);
+  assert.equal(isPlainEnter({ key: "a" }), false);
+  assert.equal(isPlainEnter(), false);
+});
+
+test("⌘↵ · Ctrl+↵ is the save chord — never a plain Enter, never the Enter that ends a Hangul composition", () => {
+  assert.equal(isSaveChord({ key: "Enter", metaKey: true }), true);
+  assert.equal(isSaveChord({ key: "Enter", ctrlKey: true }), true);
+  assert.equal(isSaveChord({ key: "Enter" }), false, "그냥 Enter는 저장이 아니다");
+  assert.equal(isSaveChord({ key: "s", metaKey: true }), false);
+  assert.equal(isSaveChord(), false);
+  // 조합을 끝내는 Enter — React 합성 이벤트(nativeEvent)와 창에서 받은 원래 이벤트(isComposing) 둘 다.
+  assert.equal(isSaveChord({ key: "Enter", metaKey: true, nativeEvent: { isComposing: true } }), false);
+  assert.equal(isSaveChord({ key: "Enter", metaKey: true, isComposing: true }), false);
+  assert.equal(isSaveChord({ key: "Enter", ctrlKey: true, keyCode: 229 }), false);
+  assert.equal(isSaveChord({ key: "Enter", metaKey: true, nativeEvent: { isComposing: false }, keyCode: 13 }), true);
+});
+
+test("the wide window takes ⌘↵ from anywhere inside its own drawer, and from nowhere else", () => {
+  // 폼 안에서 난 것은 폼의 onKeyDown이 이미 받았다 — 창 리스너가 한 번 더 저장하지 않는다.
+  assert.equal(saveChordReachesRecord({ inForm: true, inShell: true }), false);
+  // 읽기 칸의 기록 줄 · 발판의 '고객 정보로' — 같은 드로어 안.
+  assert.equal(saveChordReachesRecord({ inForm: false, inShell: true }), true);
+  // 빈 곳을 누른 뒤(포커스가 body).
+  assert.equal(saveChordReachesRecord({ inForm: false, inShell: false, onBody: true }), true);
+  // 위에 뜬 다른 창(⌘K · 토스트)의 ⌘↵는 그 창의 것이다.
+  assert.equal(saveChordReachesRecord({ inForm: false, inShell: false, onBody: false }), false);
+  assert.equal(saveChordReachesRecord(), false);
+});
+
+test("the 자세히 field height is its content plus its own border — no phantom scrollbar, no negative height", () => {
+  // border-box 높이 = 글 높이(scrollHeight) + 위아래 테두리(offsetHeight − clientHeight).
+  assert.equal(detailFieldHeight({ scrollHeight: 320, offsetHeight: 322, clientHeight: 320 }), 322);
+  assert.equal(detailFieldHeight({ scrollHeight: 1184, offsetHeight: 342, clientHeight: 340 }), 1186, "글이 길어지면 그만큼 자란다");
+  // 테두리가 없거나 값이 비어도 던지지 않고, 음수를 내지 않는다.
+  assert.equal(detailFieldHeight({ scrollHeight: 200, offsetHeight: 200, clientHeight: 200 }), 200);
+  assert.equal(detailFieldHeight({ scrollHeight: 200, offsetHeight: 100, clientHeight: 120 }), 200);
+  assert.equal(detailFieldHeight({ scrollHeight: -5 }), 0);
+  assert.equal(detailFieldHeight(), 0);
+});
+
+test("a saved 자세히 joins the record stream as its own row — the long text is on screen right after 저장됨", () => {
+  const at = "2026-09-30T01:42:00Z";
+  const rows = [{ id: "srv-9", type: "call", msg: "요약 한 줄", receipt: "saved", savedAt: at }, { id: "old", msg: "지난 통화" }];
+  const next = addSavedNoteRow(rows, { id: "note-1", body: "  [결정사항]\n- 시범 채점  " }, at);
+  assert.equal(next.length, 3);
+  assert.deepEqual(next[0], { id: "note-1", type: "note", msg: "[결정사항]\n- 시범 채점", at: "방금", occurredAt: at, receipt: "saved", savedAt: at });
+  assert.equal(recordReceipt(next[0]).label, "저장됨");
+  assert.equal(recordReceipt(next[0]).time, "10:42");
+  assert.equal(next[1], rows[0], "요약 줄은 그대로(같은 객체) — 서버에 생긴 그대로 두 줄이다");
+  // 자세히가 없던 저장 · 건너뛴 저장(note 없음)은 줄을 만들지 않는다.
+  assert.equal(addSavedNoteRow(rows, null, at), rows);
+  assert.equal(addSavedNoteRow(rows, { id: "note-2", body: "   " }, at), rows);
+  assert.equal(addSavedNoteRow(rows, undefined), rows);
+  // 다시 읽기가 먼저 닿아 같은 note가 이미 있으면 두 번 세우지 않는다.
+  assert.equal(addSavedNoteRow(next, { id: "note-1", body: "[결정사항]" }, at), next);
+  // 서버 ID를 못 받은 줄은 local- ID다 — 다시 읽기 전에는 삭제가 닿지 않는다(고객 드로어의 규칙).
+  const idless = addSavedNoteRow(rows, { id: null, body: "긴 글" }, at);
+  assert.match(String(idless[0].id), /^local-note-/);
+  assert.equal(addSavedNoteRow(idless, { id: null, body: "긴 글" }, at), idless);
+});
+
+test("the receipt says 저장됨 with a time only after the server answered", () => {
+  // 영수증이 없는 줄(읽어 온 기록)은 영수증을 달지 않는다.
+  assert.equal(recordReceipt({ id: "a1", msg: "통화" }), null);
+  assert.equal(recordReceipt(), null);
+  assert.equal(recordReceipt({ receipt: "done" }), null, "모르는 단계를 끝난 말로 읽지 않는다");
+
+  // 되돌리기 창 — 아직 보내지 않았다.
+  assert.deepEqual(recordReceipt({ pending: true }), { phase: "pending", label: "기록 중", detail: "아직 보내지 않았어요", time: "", settled: false });
+  // 보낸 뒤 — 답을 기다린다. 시각은 아직 없다(savedAt이 있어도 달지 않는다).
+  assert.deepEqual(recordReceipt({ pending: true, receipt: "sending", savedAt: "2026-09-30T01:42:00Z" }), { phase: "sending", label: "저장 중", detail: "", time: "", settled: false });
+  // 요약이 확인돼 pending이 풀려도, 자세히까지 확인되기 전에는 "저장 중"이다.
+  assert.equal(recordReceipt({ pending: false, receipt: "sending" }).label, "저장 중");
+  // 서버가 답했다 — 시각은 답을 받은 시각(KST hh:mm).
+  assert.deepEqual(recordReceipt({ receipt: "saved", savedAt: "2026-09-30T01:42:00Z" }), { phase: "saved", label: "저장됨", detail: "", time: "10:42", settled: true });
+  // 요약만 저장됐다 — 저장됨이라고 하지 않는다.
+  const partial = recordReceipt({ receipt: "partial", savedAt: "2026-09-30T01:42:00Z" });
+  assert.deepEqual([partial.phase, partial.label, partial.time, partial.settled], ["partial", "일부 저장", "10:42", true]);
+  assert.match(partial.detail, /요약만 저장/);
+  // 긴 글 칸의 이름은 배치마다 다르다(자세히 · 원문) — 같은 줄이 두 배치의 기록 줄에 서므로 어느 쪽 이름도 쓰지 않는다.
+  assert.equal(partial.detail, "요약만 저장됐어요 · 긴 글은 아직");
+  assert.doesNotMatch(partial.detail, /자세히|원문/);
+  // 확인 전 단계는 끝난 말을 쓰지 않는다.
+  for (const row of [{ pending: true }, { receipt: "sending" }, { receipt: "partial", savedAt: "2026-09-30T01:42:00Z" }]) {
+    assert.doesNotMatch(recordReceipt(row).label, /저장됨|기록됨|완료/);
+  }
+
+  // 시각은 KST 24시간제 — 자정 직후가 24:05로 나오지 않고, 못 읽는 값은 지어내지 않는다.
+  assert.equal(receiptTimeLabel("2026-09-29T15:05:00Z"), "00:05");
+  assert.equal(receiptTimeLabel("2026-09-30T09:07:00Z"), "18:07");
+  for (const bad of [null, undefined, "", "not a date"]) assert.equal(receiptTimeLabel(bad), "");
+  assert.equal(recordReceipt({ receipt: "saved" }).time, "");
+});
+
+test("receipt events find their row by the optimistic or the server id and never touch other rows", () => {
+  const other = { id: "other", msg: "지난 통화" };
+  const rows = [{ id: "local-1", msg: "새 기록", pending: true }, other];
+
+  const sending = applyReceiptEvent(rows, { type: "sending", optimisticId: "local-1" });
+  assert.deepEqual(sending[0], { id: "local-1", msg: "새 기록", pending: true, receipt: "sending" });
+  assert.equal(sending[1], other, "다른 줄은 그대로(같은 객체)");
+  assert.equal(recordReceipt(sending[0]).label, "저장 중");
+
+  // 요약이 저장되면 줄의 ID가 서버 ID로 바뀐다 — 그 뒤의 사건은 서버 ID로 찾는다.
+  const swapped = sending.map((row) => (row.id === "local-1" ? { ...row, id: "srv-9", pending: false } : row));
+  const saved = applyReceiptEvent(swapped, { type: "saved", optimisticId: "local-1", activityId: "srv-9", at: "2026-09-30T01:42:00Z" });
+  assert.deepEqual(saved[0], { id: "srv-9", msg: "새 기록", pending: false, receipt: "saved", savedAt: "2026-09-30T01:42:00Z" });
+  assert.equal(recordReceipt(saved[0]).time, "10:42");
+  // 서버 ID를 못 받은 저장은 낙관 ID로 찾는다.
+  assert.equal(applyReceiptEvent(sending, { type: "saved", optimisticId: "local-1", activityId: null, at: "2026-09-30T01:42:00Z" })[0].receipt, "saved");
+
+  const partial = applyReceiptEvent(swapped, { type: "partial", optimisticId: "local-1", activityId: "srv-9", at: "2026-09-30T01:42:00Z" });
+  assert.equal(recordReceipt(partial[0]).label, "일부 저장");
+  // 다시 저장이 되면 같은 줄이 저장됨으로 넘어간다.
+  assert.equal(recordReceipt(applyReceiptEvent(partial, { type: "saved", activityId: "srv-9", at: "2026-09-30T01:50:00Z" })[0]).time, "10:50");
+
+  // 모르는 사건 · 대상 없는 사건은 아무것도 바꾸지 않는다(id 없는 줄에 붙지 않는다).
+  assert.equal(applyReceiptEvent(rows, { type: "done", optimisticId: "local-1" }), rows);
+  assert.equal(applyReceiptEvent(rows, { type: "saved", at: "2026-09-30T01:42:00Z" }), rows);
+  const idless = [{ msg: "id 없는 줄" }];
+  assert.deepEqual(applyReceiptEvent(idless, { type: "saved", activityId: "srv-9", at: "2026-09-30T01:42:00Z" }), idless);
+});
+
+test("a titled failure keeps its cause — the wide window names 저장 못 함 · 일부 저장 without changing the rule order", () => {
+  assert.deepEqual(
+    recordSaveLine({ state: "error", errorMsg: "서버에 닿지 않았어요.", errorTitle: "저장 못 함" }).note,
+    { tone: "error", text: "서버에 닿지 않았어요.", title: "저장 못 함" },
+  );
+  // 제목은 실패 원인에만 붙는다 — 빠진 항목 · 경고 · 초안 글자에는 붙지 않는다.
+  assert.equal(recordSaveLine({ showMissing: true, state: "error", errorMsg: "x", errorTitle: "저장 못 함" }).note.title, undefined);
+  assert.equal(recordSaveLine({ state: "warn", warnCopy: "w", errorTitle: "저장 못 함" }).note.title, undefined);
+  assert.equal(recordSaveLine({ draftHint: "초안", errorTitle: "저장 못 함" }).note.title, undefined);
 });

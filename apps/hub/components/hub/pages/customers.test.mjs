@@ -125,8 +125,11 @@ test("the promise card records or reschedules without faking a contact", () => {
   const card = slice("function PromiseCard", "// 전화·카톡·메일");
   assert.match(card, /했어요 · 기록/);
   assert.match(card, /날짜 다시/);
-  assert.match(card, /아직 정하지 않았어요/);
   assert.match(card, /약속 정하기/);
+  // 약속을 읽는 말은 promiseReadout이 정한다 — 넓은 기록창의 읽기 칸과 같은 문장이다
+  // (문장 자체는 customer-list.test.mjs가 고정).
+  assert.match(card, /const \{ what, muted, late, lateLabel, when: whenText \} = promiseReadout\(promise\);/);
+  assert.doesNotMatch(card, /아직 정하지 않았어요|종료된 고객|날짜를 아직 안 정했어요/, "문장을 카드 안에 다시 쓰지 않는다");
   assert.match(card, /data-late=\{late \? "true" : undefined\}/);
   // 날짜만 옮기는 쓰기는 연락 RPC가 아니라 update 라우트의 스네이크 키다(customer-promise.js).
   const save = slice("const savePromise = async", "// R — 연락 기록");
@@ -143,6 +146,13 @@ test("record mode swaps the same drawer to the shared capture form (one overlay)
   assert.match(drawer, /<ContactRecordForm[\s\S]*?aiContext=\{/);
   assert.match(drawer, /title=\{record \? "연락 기록" : displayName\}/);
   assert.match(drawer, /onClose=\{record \? \(\) => setRecord\(null\) : onClose\}/);
+  // 그릇은 같은 Drawer다 — 폭만 순수 규칙(recordWindowLayout)에서 받고, 새 presentation은 없다(Q-CR1).
+  assert.match(drawer, /const recordLayout = recordWindowLayout\(\{ recording: Boolean\(record\), mobile \}\);/);
+  assert.match(drawer, /presentation=\{mobile \? "compact" : "side"\}\s*width=\{recordLayout\.width\}/);
+  assert.doesNotMatch(drawer, /presentation="(focus|wide)"/);
+  // 기록 모드를 떠나면 포커스를 같은 드로어의 '연락 기록' 버튼으로 돌려놓는다(문서 밖으로 떨어지지 않게).
+  assert.match(drawer, /if \(wasRecordingRef\.current && !record\) recordButtonRef\.current\?\.focus\(\);/);
+  assert.match(drawer, /<Button ref=\{recordButtonRef\} variant="primary"/);
   // 늦은 실패는 폼이 사라졌어도 부모가 입력 그대로 다시 연다.
   assert.match(customersSource, /setRecordRequest\(\{ key: row\.key, draft: form, error: message \}\)/);
 });
@@ -242,6 +252,7 @@ const customerLabels = await import("../../../lib/sales-os/customer-labels.js");
 const deleteContract = await import("../../../lib/sales-os/customer-delete-contract.js");
 const followupScoring = await import("../../../lib/sales-os/followup-scoring.js");
 const contactRecord = await import("../../../lib/sales-os/contact-record.js");
+const recordContext = await import("../../../lib/sales-os/record-context.js");
 const uuid = await import("../../../lib/uuid.js");
 const workspaceMap = await import("../workspace-map.js");
 const { guidanceRequest } = await import("../guidance-advice-client.js");
@@ -261,14 +272,17 @@ const HOST_COMPONENTS = [
   "Avatar", "EmptyState", "TruthBadge", "Kbd", "Drawer", "SegmentedControl", "CheckboxRow", "TextField", "TextAreaField",
   "SelectField", "Skeleton", "CertaintyBadge", "ChipToggle", "LifecycleBadge", "DateQuickPresets", "ContactRecordForm",
   "LeadEnrichmentPanel", "SortHead", "FloatingMentorWidget", "GuruGuidanceCard", "ContextMentorRail", "SuggestionTip",
-  "GuidanceQuestionDrawer", "GuruRecommendation",
+  "GuidanceQuestionDrawer", "GuruRecommendation", "RecordContextColumn", "RecordReceipt",
 ];
 
-function mountCustomers({ state = "live", leads = [], accounts = [], params = "", guruRecommendations = [] } = {}) {
+// memoSearch · nudges · fetch: 드로어가 읽는 것들을 바꿔 끼운다(기본은 읽기 성공 · 넛지 없음 · 네트워크 없음).
+function mountCustomers({ state = "live", leads = [], accounts = [], params = "", guruRecommendations = [], memoSearch = null, nudges = null, fetch: fetchImpl = null } = {}) {
   // 훅 상태는 컴포넌트 경로별로 둔다 — 드로어가 기록 모드로 바뀌면 자식 구성이 달라지므로
   // 전역 인덱스 하나로는 React처럼 인스턴스별 상태를 흉내 낼 수 없다.
   const slots = new Map();
   const saves = [];
+  // 효과는 저절로 돌지 않는다(읽기 · 창 리스너가 섞여 있다) — 그린 뒤 runEffects로 골라 돌린다.
+  let effects = [];
   let path = "root";
   let index = 0;
   let tree;
@@ -285,7 +299,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     useRef: (initial) => { const key = slot(); if (!slots.has(key)) slots.set(key, { current: initial }); return slots.get(key); },
     useMemo: (fn) => fn(),
     useCallback: (fn) => fn,
-    useEffect: () => {},
+    useEffect: (fn) => { effects.push(fn); },
   };
   const ledger = { leads, accounts, deals: [], contacts: [], stages: [] };
   const deps = {
@@ -299,7 +313,9 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     useCrmSelection: () => ({ selectedId: null, moveSelection() {}, setSelectedId() {}, clearSelected() {} }),
     useRevenueLedger: () => ({ ledger, syncState: state, reload() {} }),
     saveRevenueRecord: async (...args) => { saves.push(args); return { ok: true, status: "saved" }; },
-    useMemoSearch: () => ({ status: "live", entries: [], refresh() {} }),
+    useMemoSearch: memoSearch || (() => ({ status: "live", entries: [], refresh() {} })),
+    // 페이지 안의 fetch(드로어의 활동 읽기)를 가린다 — 시험이 네트워크로 나가지 않는다.
+    fetch: fetchImpl || (async () => { throw new Error("no network in tests"); }),
     requestPersonaChat: async () => ({ state: "done", text: "" }),
     brandInWorkspace: workspaceMap.brandInWorkspace,
     filterLeadsByWorkspace: workspaceMap.filterLeadsByWorkspace,
@@ -310,7 +326,13 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     LEAD_SUBJECTS: leadLabels.LEAD_SUBJECTS, subjectLabels: leadLabels.subjectLabels,
     ...customerLabels,
     REACTION_LABEL: followupScoring.REACTION_LABEL,
-    recordSaveLabel: contactRecord.recordSaveLabel,
+    addSavedNoteRow: contactRecord.addSavedNoteRow,
+    applyReceiptEvent: contactRecord.applyReceiptEvent,
+    recordReceipt: contactRecord.recordReceipt,
+    recordWindowLayout: contactRecord.recordWindowLayout,
+    ACT_ICON: recordContext.ACTIVITY_ICON,
+    ACT_LABEL: recordContext.ACTIVITY_LABEL,
+    recordContextTruth: recordContext.recordContextTruth,
     adviceScopeForRecord,
     useGuruRecommendations: ({ enabled } = {}) => ({ status: enabled ? "live" : "idle", recommendations: enabled ? guruRecommendations : [], reload() {} }),
     recommendationForSubject,
@@ -320,7 +342,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     nudgeTipReason: crmNudge.nudgeTipReason,
     // 실제 훅은 fetch로 넛지를 읽는다 — 이 렌더 스모크는 이 화면의 목록·드로어 그리기만
     // 확인하므로 넛지 없는 정적 상태로 둔다(넛지 자체 계약은 crm-nudge.test.mjs가 고정).
-    useCrmNudges: () => ({ status: "preview", nudges: [], unrecordedMeetings: [], failedSources: [], busyKey: null, suppress: async () => ({ ok: true }), refresh() {} }),
+    useCrmNudges: () => ({ status: nudges ? "live" : "preview", nudges: nudges || [], unrecordedMeetings: [], failedSources: [], busyKey: null, suppress: async () => ({ ok: true }), refresh() {} }),
   };
   for (const name of HOST_COMPONENTS) deps[name] = name;
   const { Customers, ActivityTimeline } = new Function(...Object.keys(deps), `${pageJs}; return { Customers, ActivityTimeline };`)(...Object.values(deps));
@@ -346,7 +368,9 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     if (props.footer) props.footer = expand(props.footer, `${at}~footer`); // Drawer 발판도 트리의 일부다
     return { ...node, props };
   };
-  const render = () => { tree = expand(call(Customers, { onNavigate() {} }, "root"), "root"); return tree; };
+  const render = () => { effects = []; tree = expand(call(Customers, { onNavigate() {} }, "root"), "root"); return tree; };
+  // 마지막으로 그린 트리의 효과 중 고른 것만 돌린다 → 돌린 개수.
+  const runEffects = (pick) => { const picked = effects.filter(pick); picked.forEach((fn) => fn()); return picked.length; };
   const findAll = (predicate, node = tree) => {
     if (Array.isArray(node)) return node.flatMap((child) => findAll(predicate, child));
     if (!node || typeof node !== "object") return [];
@@ -360,7 +384,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
   render();
   // 기록 타임라인은 활동 읽기(effect)가 끝나야 드로어에 보인다 — 그리기 계약은 따로 세워 본다.
   const renderTimeline = (props) => expand({ type: ActivityTimeline, props }, "timeline");
-  return { render, findAll, text, saves, renderTimeline };
+  return { render, findAll, text, saves, renderTimeline, runEffects };
 }
 
 const dayKey = (offset) => helpers.addDaysKey(new Date(), offset);
@@ -442,29 +466,329 @@ test("render: opening a row shows the promise first and one primary record actio
   assert.equal(app.findAll((n) => n.type === "Drawer")[0].props.title, "연락 기록");
 });
 
-test("render: an unacknowledged record row says 기록 중 until the server confirms it", () => {
+// ── 2026-09-30 넓은 기록창 ② — 읽던 드로어가 넓어진다(권장 · 화면 확인 뒤 확정) ─────────────
+
+const REST_WIDTH = "min(480px, 96vw)";
+const WIDE_WIDTH = "min(960px, calc(100% - 56px))";
+const openLeadA = (app) => {
+  rowsOf(app).find(row => row.props["data-customer-row"] === "lead:11111111-1111-4111-8111-111111111111").props.onClick();
+  app.render();
+};
+const drawerOf = (app) => app.findAll((n) => n.type === "Drawer")[0];
+
+test("render: 연락 기록 widens the same drawer — composer on the left, read-only context on the right, two ESCs to close", () => {
+  const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+  openLeadA(app);
+  assert.equal(drawerOf(app).props.width, REST_WIDTH, "읽을 땐 좁게");
+  assert.equal(drawerOf(app).props.bodyStyle, undefined);
+  assert.equal(app.findAll((n) => n.type === "RecordContextColumn").length, 0);
+
+  app.findAll((n) => n.type === "Button" && n.props.variant === "primary" && /연락 기록/.test(app.text(n)))[0].props.onClick();
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "Drawer").length, 1, "같은 드로어 — 오버레이는 하나");
+  assert.equal(drawerOf(app).props.width, WIDE_WIDTH);
+  assert.equal(drawerOf(app).props.presentation, "side");
+  // 두 칸이 각자 흐른다 — 본문 여백과 본문 스크롤은 걷는다.
+  assert.deepEqual(drawerOf(app).props.bodyStyle, { padding: 0, gap: 0, overflow: "hidden" });
+
+  const win = app.findAll((n) => n.props?.className === "record-window")[0];
+  assert.ok(win, "두 칸 그릇");
+  const [main, column] = win.props.children;
+  assert.equal(main.props["aria-label"], "기록 쓰기");
+  const form = app.findAll((n) => n.type === "ContactRecordForm", main)[0];
+  assert.equal(form.props.layout, "wide");
+  assert.equal(form.props.autoFocus, true, "커서는 요약 칸에");
+  assert.equal(column.type, "RecordContextColumn");
+
+  // 읽기 칸은 드로어가 이미 아는 것만 받는다 — 약속 · 기록 줄기 · 읽기 상태. 쓰기 콜백은 없다.
+  assert.equal(column.props.promise.what, "견적서 보내기");
+  assert.equal(column.props.promise.late, 2);
+  assert.deepEqual(column.props.truth, { state: "loading", reason: "", retry: null }, "활동 읽기가 끝나기 전");
+  assert.equal(column.props.tipReason, "", "이 사람에게 고른 팁이 없으면 지어내지 않는다");
+  assert.deepEqual(column.props.rows, []);
+  assert.deepEqual(Object.keys(column.props).filter((key) => /^on[A-Z]/.test(key)), ["onRetry"]);
+
+  // 쓰는 동안 쉬는 드로어의 본문(약속 카드 · 거래 · 정보)은 자리를 비키고, primary는 폼의 저장 하나다.
+  assert.equal(app.findAll((n) => n.props?.className === "customer-focus").length, 0);
+  assert.equal(app.findAll((n) => n.type === "Button" && n.props.variant === "primary" && /연락 기록/.test(app.text(n))).length, 0);
+  // 연락이 아닌 한 줄 메모는 메모 모드가 합쳐질 때까지 폼의 흐르는 칸에 남는다(아래 띠가 맨 아래여야 해서).
+  assert.equal(app.findAll((n) => n.type === "details", form).length, 1);
+  assert.match(app.text(form), /연락이 아닌 한 줄 메모/);
+
+  // 첫 ESC(= Drawer의 onClose) → 480px로 돌아오고 폼이 사라진다. 드로어는 열려 있다.
+  drawerOf(app).props.onClose();
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "Drawer").length, 1);
+  assert.equal(drawerOf(app).props.width, REST_WIDTH);
+  assert.equal(drawerOf(app).props.title, "테스트학원 A");
+  assert.equal(app.findAll((n) => n.type === "ContactRecordForm").length, 0);
+  // 두 번째 ESC → 닫힌다.
+  drawerOf(app).props.onClose();
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "Drawer").length, 0);
+});
+
+test("render: the context column shows the one tip this customer already has — reason only", () => {
+  const TEMPLATE = "고객 활성 상태 확인 → 갱신·휴면 여부 정리";
+  const templated = { id: "66666666-6666-4666-8666-666666666666", name: "템플릿학원 F", stage: "Contact", nextAction: TEMPLATE, nextActionIsTemplate: true, createdAt: ago(10), lastContactAt: ago(10) };
+  const app = mountCustomers({ leads: [templated] });
+  rowsOf(app)[0].props.onClick();
+  app.render();
+  app.findAll((n) => n.type === "Button" && n.props.variant === "primary" && /연락 기록/.test(app.text(n)))[0].props.onClick();
+  app.render();
+  const column = app.findAll((n) => n.type === "RecordContextColumn")[0];
+  assert.equal(column.props.promise.state, "template");
+  assert.equal(column.props.tipReason, TEMPLATE, "[다음 약속] 카드가 보이던 같은 제안");
+});
+
+const openWide = (app) => {
+  app.findAll((n) => n.type === "Button" && n.props.variant === "primary" && /연락 기록/.test(app.text(n)))[0].props.onClick();
+  app.render();
+};
+const formOf = (app) => app.findAll((n) => n.type === "ContactRecordForm")[0];
+const columnOf = (app) => app.findAll((n) => n.type === "RecordContextColumn")[0];
+const phasesOf = (app) => columnOf(app).props.rows.map((row) => contactRecord.recordReceipt(row)?.phase || null);
+
+// 읽기 칸의 맨 윗줄이 영수증이다 — 기록창(폼)이 알리는 저장 사건이 드로어를 거쳐 그 줄에 닿는지를 끝까지 돌려 본다.
+test("render: the form's save events drive the newest context row — 기록 중 → 저장 중 → 일부 저장 → 저장됨, and the saved 자세히 stays on screen", () => {
+  const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+  openLeadA(app);
+  openWide(app);
+  assert.deepEqual(columnOf(app).props.rows, []);
+
+  // 저장을 눌렀다(되돌리기 창) — 새 줄이 맨 위에 "기록 중"으로 선다.
+  formOf(app).props.onSaved({ activityId: "local-7", kind: "call", summary: "견적 검토 통화", reaction: "positive" });
+  app.render();
+  const [optimistic] = columnOf(app).props.rows;
+  assert.deepEqual([optimistic.id, optimistic.type, optimistic.msg, optimistic.reaction], ["local-7", "call", "견적 검토 통화", "positive"]);
+  assert.deepEqual(phasesOf(app), ["pending"]);
+
+  // 되돌리기 창이 닫혀 요청이 나갔다.
+  formOf(app).props.onSending({ optimisticId: "local-7" });
+  app.render();
+  assert.deepEqual(phasesOf(app), ["sending"]);
+
+  // 요약이 확인됐다 — 줄의 ID가 서버 ID로 바뀐다. 아직 "저장됨"이 아니다(자세히가 남았다).
+  formOf(app).props.onSummaryPersisted({ activityId: "srv-1", optimisticId: "local-7" });
+  app.render();
+  assert.deepEqual(columnOf(app).props.rows.map((row) => row.id), ["srv-1"]);
+  assert.deepEqual(phasesOf(app), ["sending"]);
+
+  // 자세히(note)가 실패했다 — 같은 줄이 "일부 저장"이다(저장됨이 아니다).
+  formOf(app).props.onPartial({ activityId: "srv-1", optimisticId: "local-7" });
+  app.render();
+  assert.deepEqual(phasesOf(app), ["partial"]);
+  assert.match(contactRecord.recordReceipt(columnOf(app).props.rows[0]).time, /^\d{2}:\d{2}$/);
+
+  // 다시 저장이 됐다 — 요약 줄은 "저장됨", 그리고 자세히가 제 줄로 줄기에 선다(다시 열지 않아도 보인다).
+  formOf(app).props.onPersisted({ activityId: "srv-1", optimisticId: "local-7", note: { id: "note-1", body: "[결정사항]\n- 10월 셋째 주 시범 채점" } });
+  app.render();
+  const rows = columnOf(app).props.rows;
+  assert.deepEqual(rows.map((row) => [row.id, row.type]), [["note-1", "note"], ["srv-1", "call"]]);
+  assert.equal(rows[0].msg, "[결정사항]\n- 10월 셋째 주 시범 채점");
+  assert.deepEqual(phasesOf(app), ["saved", "saved"]);
+  assert.deepEqual(recordContext.recordContextRows(rows).map((row) => [row.shape, row.lineCount, row.receipt.label]), [["memo", 2, "저장됨"], ["contact", 1, "저장됨"]]);
+
+  // 저장이 확인되면 폼이 닫아 달라고 한다(onDone) — 같은 드로어가 480px로 돌아온다.
+  formOf(app).props.onDone();
+  app.render();
+  assert.equal(drawerOf(app).props.width, REST_WIDTH);
+  assert.equal(app.findAll((n) => n.type === "ContactRecordForm").length, 0);
+});
+
+test("render: undo removes the optimistic row, and a save without 자세히 (or a skipped one) adds no note row", () => {
+  const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+  openLeadA(app);
+  openWide(app);
+  formOf(app).props.onSaved({ activityId: "local-8", kind: "meeting", summary: "되돌릴 기록", reaction: "neutral" });
+  app.render();
+  assert.deepEqual(phasesOf(app), ["pending"]);
+  formOf(app).props.onUndone("local-8");
+  app.render();
+  assert.deepEqual(columnOf(app).props.rows, [], "되돌리면 줄이 사라진다 — 보내지 않았다");
+
+  // 요약만 있는 저장: 요청 하나, 줄 하나.
+  formOf(app).props.onSaved({ activityId: "local-9", kind: "call", summary: "한 줄 기록", reaction: "positive" });
+  formOf(app).props.onSending({ optimisticId: "local-9" });
+  formOf(app).props.onSummaryPersisted({ activityId: "srv-2", optimisticId: "local-9" });
+  formOf(app).props.onPersisted({ activityId: "srv-2", optimisticId: "local-9" });
+  app.render();
+  assert.deepEqual(columnOf(app).props.rows.map((row) => row.id), ["srv-2"]);
+  assert.deepEqual(phasesOf(app), ["saved"]);
+
+  // 일부 저장 뒤 건너뛰기: 폼은 note 없이 저장 확인을 넘긴다 — 줄은 "저장됨"으로 풀리고 note 줄은 없다.
+  formOf(app).props.onSaved({ activityId: "local-10", kind: "call", summary: "건너뛴 기록", reaction: "positive" });
+  formOf(app).props.onSummaryPersisted({ activityId: "srv-3", optimisticId: "local-10" });
+  formOf(app).props.onPartial({ activityId: "srv-3", optimisticId: "local-10" });
+  app.render();
+  assert.equal(phasesOf(app)[0], "partial");
+  formOf(app).props.onPersisted({ activityId: "srv-3", optimisticId: "local-10" });
+  app.render();
+  assert.deepEqual(columnOf(app).props.rows.map((row) => row.id), ["srv-3", "srv-2"]);
+  assert.deepEqual(phasesOf(app), ["saved", "saved"]);
+});
+
+const isActivityRead = (fn) => /^\(\) => \{ reload\(\); \}$/.test(String(fn));
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test("render: the context column mirrors the drawer's reads — partial when linked memos fail, and each retry re-reads the right source", async () => {
+  const reads = [];
+  let memoRefreshes = 0;
+  const app = mountCustomers({
+    leads: renderLeads(),
+    accounts: renderAccounts(),
+    memoSearch: () => ({ status: "error", entries: [], refresh() { memoRefreshes += 1; } }),
+    fetch: async (url) => {
+      reads.push(String(url));
+      return { ok: true, json: async () => ({ status: "live", activities: [{ id: "a1", type: "call", msg: "지난 통화", reaction: "positive", occurredAt: ago(2) }] }) };
+    },
+  });
+  openLeadA(app);
+  // 드로어가 열리면 활동을 읽는다 — 읽기가 끝나기 전에는 loading이다.
+  assert.equal(app.runEffects(isActivityRead), 1);
+  await settle();
+  app.render();
+  assert.equal(reads.length, 1);
+  assert.match(reads[0], /^\/api\/hub\/revenue\/activity\?leadId=11111111-1111-4111-8111-111111111111$/);
+
+  openWide(app);
+  const column = columnOf(app);
+  // 활동은 읽었고 연결 메모만 못 읽었다 — 읽은 줄은 보이고, 빠진 출처를 이름으로 말한다.
+  assert.deepEqual(column.props.truth, { state: "partial", reason: "연결 메모를 읽지 못했어요", retry: "memos" });
+  assert.deepEqual(column.props.rows.map((row) => row.id), ["a1"]);
+  // 다시 읽기는 못 읽은 그 출처를 다시 읽는다.
+  column.props.onRetry("memos");
+  assert.deepEqual([memoRefreshes, reads.length], [1, 1]);
+  column.props.onRetry("activities");
+  await settle();
+  assert.deepEqual([memoRefreshes, reads.length], [1, 2]);
+
+  // 활동 읽기가 실패하면 읽기 칸은 error다 — "기록 없음"으로 읽히지 않는다.
+  const failing = mountCustomers({ leads: renderLeads(), fetch: async () => ({ ok: false, status: 502, json: async () => ({}) }) });
+  openLeadA(failing);
+  failing.runEffects(isActivityRead);
+  await settle();
+  failing.render();
+  openWide(failing);
+  assert.deepEqual(columnOf(failing).props.truth, { state: "error", reason: "활동 기록을 읽지 못했어요", retry: "activities" });
+});
+
+test("render: a nudge for this customer wins the context column's one tip over the template suggestion", () => {
+  const TEMPLATE = "고객 활성 상태 확인 → 갱신·휴면 여부 정리";
+  const id = "66666666-6666-4666-8666-666666666666";
+  const templated = { id, name: "템플릿학원 F", stage: "Contact", nextAction: TEMPLATE, nextActionIsTemplate: true, createdAt: ago(10), lastContactAt: ago(10) };
+  const nudge = { ruleId: "reaction_open", subject: { id }, title: "우려 반응 뒤 정리 없음", reason: "5일째", action: { label: "정리 기록" }, escape: [] };
+  const app = mountCustomers({ leads: [templated], nudges: [nudge] });
+  rowsOf(app)[0].props.onClick();
+  app.render();
+  openWide(app);
+  // [다음 약속] 카드와 같은 우선순위(넛지 > 템플릿 제안) — 이유 한 줄만, 행동은 없다.
+  assert.equal(columnOf(app).props.tipReason, "우려 반응 뒤 정리 없음 · 5일째");
+  assert.equal(columnOf(app).props.promise.state, "template");
+  // 팁 대상이 아닌 규칙의 넛지는 읽기 칸으로 오지 않는다 — 템플릿 제안으로 내려간다.
+  const other = mountCustomers({ leads: [templated], nudges: [{ ...nudge, ruleId: "something_else" }] });
+  rowsOf(other)[0].props.onClick();
+  other.render();
+  openWide(other);
+  assert.equal(columnOf(other).props.tipReason, TEMPLATE);
+});
+
+test("render: leaving record mode hands focus back to 연락 기록 — once, and never on first open", () => {
+  const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+  openLeadA(app);
+  const isFocusReturn = (fn) => /wasRecordingRef/.test(String(fn));
+  let focused = 0;
+  const recordButton = app.findAll((n) => n.type === "Button" && n.props.ref && /연락 기록/.test(app.text(n)))[0];
+  assert.ok(recordButton, "쉬는 드로어의 연락 기록 버튼이 ref를 받는다");
+  recordButton.props.ref.current = { focus() { focused += 1; } };
+
+  // 드로어를 처음 열었을 때 — 포커스를 가로채지 않는다.
+  assert.equal(app.runEffects(isFocusReturn), 1);
+  assert.equal(focused, 0);
+  // 기록 모드로 들어갔다 — 커서는 폼의 것이다.
+  openWide(app);
+  app.runEffects(isFocusReturn);
+  assert.equal(focused, 0);
+  // 첫 ESC(= onClose)로 기록 모드를 떠났다 — 폼이 사라져 떨어진 포커스를 같은 드로어의 버튼으로 돌려놓는다.
+  drawerOf(app).props.onClose();
+  app.render();
+  app.runEffects(isFocusReturn);
+  assert.equal(focused, 1);
+  // 그대로 다시 그려져도(기록 모드가 아닌 채) 포커스를 또 옮기지 않는다.
+  app.render();
+  app.runEffects(isFocusReturn);
+  assert.equal(focused, 1);
+});
+
+test("render: on a phone the record mode keeps today's bottom sheet — no wide window yet", () => {
+  const had = Object.hasOwn(globalThis, "window");
+  const before = globalThis.window;
+  globalThis.window = { matchMedia: (query) => ({ matches: query === "(max-width: 600px)", addEventListener() {}, removeEventListener() {} }) };
+  try {
+    const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+    openLeadA(app);
+    app.findAll((n) => n.type === "Button" && n.props.variant === "primary" && /연락 기록/.test(app.text(n)))[0].props.onClick();
+    app.render();
+    assert.equal(drawerOf(app).props.presentation, "compact");
+    assert.equal(drawerOf(app).props.width, REST_WIDTH);
+    assert.equal(drawerOf(app).props.bodyStyle, undefined);
+    assert.equal(app.findAll((n) => n.type === "ContactRecordForm")[0].props.layout, "compact");
+    assert.equal(app.findAll((n) => n.type === "RecordContextColumn").length, 0);
+    // 한 줄 메모는 지금처럼 폼 아래(폼 밖)에 있다.
+    const focus = app.findAll((n) => n.props?.className === "customer-focus")[0];
+    assert.deepEqual(focus.props.children.map((child) => child.type), ["ContactRecordForm", "details"]);
+  } finally {
+    if (had) globalThis.window = before;
+    else delete globalThis.window;
+  }
+});
+
+test("render: a just-saved record row carries a receipt — 기록 중 → 저장 중 → 저장됨 only after the server answers", () => {
   const app = mountCustomers();
   const today = new Date();
   const row = { id: "local-1", source: "activity", type: "call", msg: "견적 검토 통화", reaction: "positive", at: "방금", occurredAt: today.toISOString() };
   const deleteButtons = (tree) => app.findAll((n) => n.type === "IconButton" && n.props["aria-label"] === "기록 삭제", tree);
+  const receiptOf = (tree) => app.findAll((n) => n.type === "RecordReceipt", tree).map((n) => n.props.receipt);
 
-  // 저장을 눌렀지만 서버가 아직 답하지 않았다 — 되돌리기 창이거나 답을 기다리는 중이다.
+  // 저장을 눌렀지만 되돌리기 창이다 — 아직 보내지 않았다. 시각 자리에 영수증이 선다.
   const pending = app.renderTimeline({ rows: [{ ...row, pending: true }], today, onDeleteActivity() {} });
-  assert.match(app.text(pending), /견적 검토 통화.*통화.*긍정.*기록 중$/);
+  assert.deepEqual(receiptOf(pending).map((r) => [r.phase, r.label, r.detail]), [["pending", "기록 중", "아직 보내지 않았어요"]]);
+  assert.match(app.text(pending), /견적 검토 통화.*통화.*긍정$/);
   assert.doesNotMatch(app.text(pending), /오늘|방금|기록됨|저장됨/, "확인되지 않은 기록에 시각·완료 문구를 달지 않는다");
   assert.equal(deleteButtons(pending).length, 0);
 
-  // 서버가 저장을 확인하면 시각으로 돌아오고 삭제할 수 있게 된다.
-  const saved = app.renderTimeline({ rows: [{ ...row, id: "99999999-9999-4999-8999-999999999999", pending: false }], today, onDeleteActivity() {} });
-  assert.match(app.text(saved), /긍정오늘$/);
-  assert.doesNotMatch(app.text(saved), /기록 중/);
+  // 되돌리기 창이 닫혀 요청이 나갔다 — 같은 줄이 "저장 중"이 된다(아직 시각 없음).
+  const sending = app.renderTimeline({ rows: contactRecord.applyReceiptEvent([{ ...row, pending: true }], { type: "sending", optimisticId: "local-1" }), today, onDeleteActivity() {} });
+  assert.deepEqual(receiptOf(sending).map((r) => [r.phase, r.label, r.time]), [["sending", "저장 중", ""]]);
+  assert.doesNotMatch(app.text(sending), /오늘|방금|저장됨/);
+
+  // 서버가 저장을 확인한 뒤에만 "저장됨 hh:mm"이 서고 삭제할 수 있게 된다.
+  const savedRows = contactRecord.applyReceiptEvent(
+    [{ ...row, id: "99999999-9999-4999-8999-999999999999", pending: false, receipt: "sending" }],
+    { type: "saved", activityId: "99999999-9999-4999-8999-999999999999", optimisticId: "local-1", at: "2026-09-30T01:42:00.000Z" },
+  );
+  const saved = app.renderTimeline({ rows: savedRows, today, onDeleteActivity() {} });
+  assert.deepEqual(receiptOf(saved).map((r) => [r.phase, r.label, r.time]), [["saved", "저장됨", "10:42"]]);
   assert.equal(deleteButtons(saved).length, 1);
 
-  // 낙관 행은 폼이 저장을 누른 순간 pending으로 들어오고, 빠른 메모는 요청이 나갈 때만 pending이다.
+  // 읽어 온 기록(영수증 없음)은 지금처럼 시각을 보인다.
+  const stored = app.renderTimeline({ rows: [{ ...row, id: "99999999-9999-4999-8999-999999999999" }], today, onDeleteActivity() {} });
+  assert.equal(receiptOf(stored).length, 0);
+  assert.match(app.text(stored), /긍정오늘$/);
+
+  // 낙관 행은 폼이 저장을 누른 순간 pending으로 들어오고(되돌리기 창 = 기록 중), 빠른 메모는 되돌리기
+  // 창 없이 바로 보내므로 "저장 중"으로 들어와 서버가 답하면 "저장됨"으로 풀린다.
   const drawer = slice("function Customer360Drawer", "// ── 새 고객 등록");
   assert.match(drawer, /onSaved=\{\(o\) => \{[\s\S]*?occurredAt: new Date\(\)\.toISOString\(\), pending: true \},/);
-  assert.match(drawer, /const temp = \{ id: `local-\$\{Date\.now\(\)\}`, type, msg: body, at: "방금", pending: Boolean\(row\.id\) \};/);
-  assert.match(drawer, /a\.id === temp\.id \? \{ \.\.\.a, id: r\.id, pending: false \} : a/);
+  assert.match(drawer, /const temp = \{ id: `local-\$\{Date\.now\(\)\}`, type, msg: body, at: "방금", pending: Boolean\(row\.id\), receipt: row\.id \? "sending" : null \};/);
+  assert.match(drawer, /a\.id === temp\.id \? \{ \.\.\.a, id: r\.id, pending: false, receipt: "saved", savedAt: new Date\(\)\.toISOString\(\) \} : a/);
+  // 기록창의 저장 사건이 기록 줄 영수증으로 이어진다 — 저장됨은 onPersisted(자세히까지 확인) 뒤에만.
+  assert.match(drawer, /onSending=\{\(\{ optimisticId \}\) => setActivities\(prev => applyReceiptEvent\(prev, \{ type: "sending", optimisticId \}\)\)\}/);
+  assert.match(drawer, /onPartial=\{[\s\S]*?applyReceiptEvent\(prev, \{ type: "partial", activityId, optimisticId, at: stamp\(\) \}\)/);
+  const persisted = drawer.slice(drawer.indexOf("onPersisted={"), drawer.indexOf("onFailed={"));
+  assert.match(persisted, /const at = stamp\(\);\s*setActivities\(prev => addSavedNoteRow\(applyReceiptEvent\(prev, \{ type: "saved", activityId, optimisticId, at \}\), note, at\)\);/);
+  assert.match(persisted, /onRecordPersisted\?\.\(row\);/);
+  assert.doesNotMatch(drawer.slice(drawer.indexOf("onSummaryPersisted={"), drawer.indexOf("onPartial={")), /receipt: "saved"|type: "saved"/, "요약만 확인된 시점에 저장됨을 말하지 않는다");
 });
 
 test("render: a stored-fact recommendation takes the rotating card's place and asks through this drawer's own question", () => {
