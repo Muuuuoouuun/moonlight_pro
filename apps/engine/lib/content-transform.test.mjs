@@ -521,3 +521,26 @@ test('brand tone falls back to plain when no brand is attached, and says so', as
   await explicit.execute(command({ tone: 'formal' }));
   assert.equal(JSON.parse(explicit.calls.find(call => call.kind === 'generate').input.prompt).tone, 'formal', 'only the brand tone falls back');
 });
+
+test('openers returns five candidates that change only the cover; anything else is discarded', async () => {
+  const slides = [{ id: 'slide-1', title: '표지', sub: '핵심' }, { id: 'slide-2', title: '둘째', sub: '본문' }];
+  const source = JSON.stringify({ slides });
+  const target = { variantType: 'card_news', channel: 'instagram' };
+  const variant = { body: source, variant_type: 'card_news', channel: 'instagram' };
+  const make = (mutate) => [1, 2, 3, 4, 5].map((n) => candidate({ ...target, id: `candidate-${n}`, body: JSON.stringify({ slides: mutate(n) }) }));
+  const cmd = command({ operation: 'openers', selection: { start: 0, end: source.length }, target });
+  const cover = (n) => [{ id: 'slide-1', title: `표지 ${n}안`, sub: '핵심' }, slides[1]];
+  const good = fixture({ variant, candidates: make(cover) });
+  const result = await good.execute(cmd);
+  assert.equal(result.status, 'generated');
+  assert.match(good.calls.find((call) => call.kind === 'generate').input.systemInstruction, /ONLY the first slide/);
+  // 둘째 장을 건드린 후보가 하나라도 있으면 전부 버린다.
+  const bad = fixture({ variant, candidates: make((n) => (n === 3 ? [cover(n)[0], { ...slides[1], title: '바뀜' }] : cover(n))) });
+  assert.equal((await bad.execute(cmd)).error, 'invalid-provider-output');
+  // 후보 수가 5가 아니면 거절.
+  const few = fixture({ variant, candidates: make(cover).slice(0, 3) });
+  assert.equal((await few.execute(cmd)).error, 'invalid-provider-output');
+  // 구조형이 아닌 형식에는 쓸 수 없다.
+  const plain = fixture({ candidates: [candidate()] });
+  assert.equal((await plain.execute(command({ operation: 'openers' }))).status, 'invalid-input');
+});
