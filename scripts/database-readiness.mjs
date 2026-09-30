@@ -123,6 +123,8 @@ export const DATABASE_FEATURES = [
     bodyIncludes: [['research_source_claim_v1(uuid,uuid,jsonb)','pending_run_recovery_v1'],['research_source_complete_v1(uuid,uuid,jsonb)','source_locator_lines_v1']] },
   { name: '리서치 초안 수량·실패 진단', migration: '20261001_0059_research_draft_slots.sql', tables: [], functions: [],
     bodyIncludes: [['research_source_claim_v1(uuid,uuid,jsonb)','research_draft_slot_limits_v1'],['research_source_complete_v1(uuid,uuid,jsonb)','research_validation_diagnostic_v1']] },
+  { name: '리서치 모델 응답·복구', migration: '20261001_0060_research_provider_outcomes.sql', tables: [], functions: [],
+    bodyIncludes: [['research_source_complete_v1(uuid,uuid,jsonb)','research_provider_outcome_v1'],['research_source_complete_v1(uuid,uuid,jsonb)','research_terminal_response_repair_v1']] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

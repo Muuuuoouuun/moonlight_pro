@@ -1,5 +1,5 @@
 import { invokeSupabaseRpc } from './supabase-rest.ts';
-import { generateGeminiText } from './gemini.ts';
+import { classifyGeminiFailure, generateGeminiText, getGeminiResponseDiagnostics } from './gemini.ts';
 
 type Row=Record<string,any>;
 type Evidence={id:string;url:string;title:string;text:string;documentHash:string};
@@ -7,6 +7,19 @@ const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[0-9a-f]{
 const text=(value:unknown,max:number,required=false)=>typeof value==='string'&&value.length<=max&&!value.includes('\0')&&(!required||value.trim())?value.trim():null;
 const space=(value:string)=>value.replace(/\s+/g,' ').trim();
 export const MAX_RESEARCH_PREPARE_BYTES=4096;
+
+function providerFailure(generated:Row) {
+  const diagnostics=getGeminiResponseDiagnostics(generated),failureCategory=classifyGeminiFailure(generated);
+  // A received rejection or unusable completed response is definitive. A
+  // transport error can happen after HTTP headers, so status alone must never
+  // release a draft slot when the helper reports timeout/network/abort.
+  const invalidResponse=['invalid-json','blocked-prompt','blocked-output','incomplete-output','empty-output'].includes(failureCategory);
+  const rejectedRequest=['missing-api-key','authentication','rate-limit','provider-unavailable','invalid-request','http-error'].includes(failureCategory);
+  return {reason:invalidResponse?'model-response-invalid':rejectedRequest?'model-request-rejected':'model-outcome-unknown',providerDiagnostic:{failureCategory,
+    ...(diagnostics.finishReason?{finishReason:diagnostics.finishReason}:{}),
+    ...(diagnostics.promptFeedback?{blockReason:diagnostics.promptFeedback.blockReason}:{}),
+    ...(Number.isInteger(generated.status)&&generated.status>=100&&generated.status<=599?{httpStatus:generated.status}:{})}};
+}
 
 type ValidationDiagnostic={code:string;field:string;factIndex?:number;lineStart?:number;lineEnd?:number};
 export function parsePreparedResearch(input:unknown,sources:Evidence[],brandId:string):{brief:Row|null;diagnostic:ValidationDiagnostic|null} {
@@ -59,11 +72,12 @@ export async function executeResearchPrepare(input:unknown,config:{workspaceId?:
   const source=data.source as Evidence,brand=data.brand as Row;
   if(!source?.text||source.text.length>18000||!uuid(brand?.id))return {status:'error',reason:'invalid-claimed-evidence'};
   let generated:Row;
-  try {generated=await generate({prompt:buildResearchPrompt(brand,source),systemInstruction:'공개 원문에 근거한 편집 보조자. 근거 없이 사실을 단정하지 말고, 해석과 미확인을 분리한다.',responseMimeType:'application/json',responseJsonSchema:RESEARCH_RESPONSE_SCHEMA,maxOutputTokens:5500,temperature:0.2,retries:0});}
+  try {generated=await generate({prompt:buildResearchPrompt(brand,source),systemInstruction:'공개 원문에 근거한 편집 보조자. 근거 없이 사실을 단정하지 말고, 해석과 미확인을 분리한다.',responseMimeType:'application/json',responseJsonSchema:RESEARCH_RESPONSE_SCHEMA,maxOutputTokens:8192,thinkingLevel:'low',thinkingBudget:512,temperature:0.2,retries:0});}
   catch {generated={ok:false,reason:'model-outcome-unknown'};}
   let brief:Row|null=null,validationDiagnostic:ValidationDiagnostic|null=null;
   if(generated.ok)try{const parsed=parsePreparedResearch(JSON.parse(generated.text),[source],brand.id);brief=parsed.brief;validationDiagnostic=parsed.diagnostic;}catch{validationDiagnostic={code:'invalid-json',field:'body'};}
-  const result:Row={status:brief?'saved':'error',reason:brief?'ok':generated.ok?'invalid-model-evidence':'model-outcome-unknown',model:typeof generated.model==='string'?generated.model:null,usage:generated.usageMetadata||null,estimatedCostUsd:null,...(brief?{brief}:validationDiagnostic?{validationDiagnostic}:{})};
+  const failure=generated.ok?null:providerFailure(generated);
+  const result:Row={status:brief?'saved':'error',reason:brief?'ok':generated.ok?'invalid-model-evidence':failure?.reason,model:typeof generated.model==='string'&&/^[a-zA-Z0-9._:/@-]{1,100}$/.test(generated.model)?generated.model:null,usage:getGeminiResponseDiagnostics(generated).usageMetadata,estimatedCostUsd:null,...(brief?{brief}:validationDiagnostic?{validationDiagnostic}:{}),...(failure?{providerDiagnostic:failure.providerDiagnostic}:{})};
   const finish=await rpc('research_source_complete_v1',{...params,p_result:result},{timeoutMs:15000});
   if(!finish.ok||!finish.data)return {status:'unknown',reason:'preparation-save-unconfirmed',model:result.model,usage:result.usage};
   return finish.data as Row;

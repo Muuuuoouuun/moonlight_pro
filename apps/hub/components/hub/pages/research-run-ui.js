@@ -10,6 +10,8 @@ const RUN_REASONS = {
   'no-new-source': '새로 준비할 원문이 없습니다. 이미 확보한 자료를 확인해 주세요.',
   'no-readable-source': '본문을 확인할 수 있는 원문이 없어 저장하지 않았어요.',
   'model-outcome-unknown': 'AI 생성 결과를 확인하지 못했습니다. 같은 입력으로 실행 결과를 다시 확인해 주세요.',
+  'model-response-invalid': 'AI 응답을 검토용 원고로 읽지 못해 저장하지 않았어요.',
+  'model-request-rejected': 'AI 제공자가 준비 요청을 처리하지 못했습니다. 연결 상태를 확인해 주세요.',
   'preparation-outcome-unknown': '준비 결과를 확인하지 못했습니다. 같은 입력으로 실행 결과를 다시 확인해 주세요.',
   'run-save-unconfirmed': '실행 기록의 저장을 확인하지 못했습니다. 같은 입력으로 결과를 다시 확인해 주세요.',
   'invalid-preparation': '준비 요청을 확인하지 못했습니다. 같은 입력으로 다시 확인해 주세요.',

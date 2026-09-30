@@ -27,6 +27,7 @@ test('research PostgreSQL claims serialize and replay model results without muta
     sql(readFileSync(new URL('../supabase/migrations/20260930_0053_research_inbox.sql',import.meta.url),'utf8'));sql(readFileSync(path,'utf8'));
     const recovery=new URL('../supabase/migrations/20261001_0058_research_pending_recovery.sql',import.meta.url);if(existsSync(recovery))sql(readFileSync(recovery,'utf8'));
     const slots=new URL('../supabase/migrations/20261001_0059_research_draft_slots.sql',import.meta.url);if(existsSync(slots))sql(readFileSync(slots,'utf8'));
+    const outcomes=new URL('../supabase/migrations/20261001_0060_research_provider_outcomes.sql',import.meta.url);if(existsSync(outcomes))sql(readFileSync(outcomes,'utf8'));
     assert.equal(sql("select has_function_privilege('anon','public.research_run_claim_v1(uuid,uuid,text,jsonb)','EXECUTE')"),'f');assert.equal(sql("select has_table_privilege('service_role','public.research_source_documents','UPDATE')"),'f');
     const command={brand:'class.moon',dbSlug:'classmoon',brandId:B,topic:'education-office',limit:3};
     const claimSql=id=>`set role service_role;select public.research_run_claim_v1('${W}','${id}','${'a'.repeat(64)}',${quote(JSON.stringify(command))}::jsonb);`;
@@ -75,5 +76,38 @@ test('research PostgreSQL claims serialize and replay model results without muta
     const next=invoke('research_source_claim_v1',`'${W}','${nomadRun}',${quote(JSON.stringify(changed))}::jsonb`);assert.equal(next.status,'claimed','a definitively rejected draft does not consume the completed-draft quota');
     invoke('research_model_claim_v1',`'${W}','${next.preparationId}'`);
     const reserved=invoke('research_source_claim_v1',`'${W}','${nomadRun}',${quote(JSON.stringify(newSource))}::jsonb`);assert.equal(reserved.reason,'daily-quantity-reached','generating and unknown claims continue reserving the draft slot');
+    const providerUsage={promptTokenCount:1235,candidatesTokenCount:208,thoughtsTokenCount:5278,totalTokenCount:6721};
+    const providerDiagnostic={failureCategory:'incomplete-output',finishReason:'MAX_TOKENS',httpStatus:200,rawText:'private provider output',blockReason:'private provider prompt'};
+    const terminal=invoke('research_source_complete_v1',`'${W}','${next.preparationId}',${quote(JSON.stringify({status:'error',reason:'model-response-invalid',model:'gemini-3-flash-preview',usage:providerUsage,providerDiagnostic}))}::jsonb`);
+    assert.equal(terminal.reason,'model-response-invalid');assert.deepEqual(terminal.providerDiagnostic,{failureCategory:'incomplete-output',finishReason:'MAX_TOKENS',httpStatus:200});assert.deepEqual(terminal.usage,providerUsage);assert.doesNotMatch(JSON.stringify(terminal),/private provider/);
+    assert.equal(sql(`select status from public.research_source_preparations where id='${next.preparationId}'`),'failed');
+    assert.equal(invoke('research_model_claim_v1',`'${W}','${next.preparationId}'`).status,'error','a completed unusable reply never gets a second paid claim');
+    const transport=invoke('research_source_claim_v1',`'${W}','${nomadRun}',${quote(JSON.stringify(newSource))}::jsonb`);assert.equal(transport.status,'claimed','MAX_TOKENS releases only the draft slot');
+    invoke('research_model_claim_v1',`'${W}','${transport.preparationId}'`);
+    const uncertain=invoke('research_source_complete_v1',`'${W}','${transport.preparationId}',${quote(JSON.stringify({status:'error',reason:'model-response-invalid',model:'gemini-3-flash-preview',usage:providerUsage,providerDiagnostic:{failureCategory:'timeout',httpStatus:200}}))}::jsonb`);assert.equal(uncertain.reason,'model-outcome-unknown','SQL rejects a definitive reason inconsistent with transport diagnostics');
+    const newer={...source,text:raw+'\nL3: Another public source version.'};newer.documentHash=createHash('sha256').update(newer.text).digest('hex');
+    assert.equal(invoke('research_source_claim_v1',`'${W}','${nomadRun}',${quote(JSON.stringify(newer))}::jsonb`).reason,'daily-quantity-reached');
+    // Simulate the old catch-all classifier: metadata proves the provider
+    // replied, while the new transport diagnostic must never be overwritten by repair.
+    sql(`update public.research_source_preparations set status='unknown',reason='model-outcome-unknown',result=(result-'providerDiagnostic')||'{"reason":"model-outcome-unknown"}'::jsonb where id='${next.preparationId}';`);
+    const paidClaimBefore=sql(`select model_started_at::text||'/'||usage::text||'/'||model from public.research_source_preparations where id='${next.preparationId}'`);
+    const unknownRun=invoke('research_run_finish_v1',`'${W}','${nomadRun}',${quote(JSON.stringify({counts:{sourceCount:3,searchCalls:1,failedCount:3},reason:'model-outcome-unknown',failures:[{source:'engine',reason:'model-outcome-unknown'}]}))}::jsonb`);assert.equal(unknownRun.run.status,'unknown');
+    const D='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';sql(`insert into public.brands values('${D}','${W}','politicofficer','Politics','active','{}');`);
+    const legacyRun=invoke('research_run_claim_v1',`'${W}','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','${'d'.repeat(64)}',${quote(JSON.stringify({brand:'politic_officer',dbSlug:'politicofficer',brandId:D,topic:'policy-releases',limit:1}))}::jsonb`).run.id;
+    const legacy=invoke('research_source_claim_v1',`'${W}','${legacyRun}',${quote(JSON.stringify(newer))}::jsonb`);invoke('research_model_claim_v1',`'${W}','${legacy.preparationId}'`);
+    invoke('research_source_complete_v1',`'${W}','${legacy.preparationId}',${quote(JSON.stringify({status:'error',reason:'model-outcome-unknown',model:'gemini-3-flash-preview',usage:providerUsage}))}::jsonb`);
+    invoke('research_run_finish_v1',`'${W}','${legacyRun}',${quote(JSON.stringify({counts:{sourceCount:1,searchCalls:1,failedCount:1},reason:'model-outcome-unknown',failures:[{source:'engine',reason:'model-outcome-unknown'}]}))}::jsonb`);
+    assert.ok(existsSync(outcomes),'provider outcome migration is required');sql(readFileSync(outcomes,'utf8'));
+    assert.equal(sql(`select status||'/'||reason from public.research_source_preparations where id='${next.preparationId}'`),'failed/model-response-invalid');
+    assert.equal(sql(`select model_started_at::text||'/'||usage::text||'/'||model from public.research_source_preparations where id='${next.preparationId}'`),paidClaimBefore,'repair retains paid claim and every token count');
+    assert.equal(sql(`select status from public.research_source_preparations where id='${transport.preparationId}'`),'unknown','a genuine timeout remains reserved');
+    assert.equal(sql(`select status from public.research_runs where id='${nomadRun}'`),'unknown','an unresolved transport outcome keeps the run unknown');
+    assert.equal(sql(`select status||'/'||reason from public.research_runs where id='${legacyRun}'`),'failed/model-response-invalid','legacy run reconciliation retains a definitive failed receipt');
+    assert.deepEqual(JSON.parse(sql(`select usage from public.research_runs where id='${legacyRun}'`)),providerUsage);
+    assert.equal(invoke('research_model_claim_v1',`'${W}','${legacy.preparationId}'`).status,'error','legacy repairs never reissue the paid claim');
+    const terminalTimeout=invoke('research_source_complete_v1',`'${W}','${transport.preparationId}',${quote(JSON.stringify({status:'error',reason:'model-request-rejected',model:'gemini-3-flash-preview',usage:providerUsage,providerDiagnostic:{failureCategory:'rate-limit',httpStatus:429}}))}::jsonb`);assert.equal(terminalTimeout.reason,'model-request-rejected');
+    assert.equal(sql(`select status from public.research_runs where id='${nomadRun}'`),'failed','late definitive rejection reconciles the unknown run');
+    const finalRun=invoke('research_run_claim_v1',`'${W}','cccccccc-cccc-4ccc-8ccc-cccccccccccc','${'e'.repeat(64)}',${quote(JSON.stringify({brand:'22nomad',dbSlug:'22nomad',brandId:N,topic:'ai-labs',limit:1}))}::jsonb`).run.id;
+    const last=invoke('research_source_claim_v1',`'${W}','${finalRun}',${quote(JSON.stringify(newer))}::jsonb`);assert.equal(last.status,'claimed');
   }finally{if(started)spawnSync('pg_ctl',['-D',data,'-m','immediate','stop'],{stdio:'ignore',env});rmSync(dir,{recursive:true,force:true});}
 });

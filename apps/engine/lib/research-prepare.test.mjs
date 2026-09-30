@@ -38,3 +38,30 @@ test('future invalid output retains field-only diagnostic with billed usage in c
   assert.equal(result.validationDiagnostic.code,'quote-not-in-cited-lines');assert.equal(completion.usage.totalTokenCount,100);assert.doesNotMatch(JSON.stringify(completion),/private generated claim/);
   assert.match(buildResearchPrompt({id:W,slug:'22nomad'},source),/quote.*원문 언어.*번역하지/);
 });
+test('research bounds thinking and output while retaining a single paid attempt',async()=>{
+  let request;
+  await executeResearchPrepare({preparationId:P,workspaceId:W},{workspaceId:W},{rpc:async(name)=>({ok:true,data:name==='research_model_claim_v1'?{status:'claimed',source,brand:{id:W,slug:'22nomad'}}:{status:'saved',briefId:P}}),generate:async(input)=>{request=input;return {ok:true,text:JSON.stringify(brief),model:'gemini-test'};}});
+  assert.equal(request.thinkingLevel,'low');assert.equal(request.thinkingBudget,512);assert.equal(request.maxOutputTokens,8192);assert.equal(request.retries,0);
+});
+test('terminal provider replies fail definitively but transport and crash outcomes retain their draft slot',async()=>{
+  const cases=[
+    [{ok:false,reason:'max_tokens',failureCategory:'incomplete-output',status:200,finishReason:'MAX_TOKENS',usageMetadata:{promptTokenCount:1235,candidatesTokenCount:208,thoughtsTokenCount:5278,totalTokenCount:6721}},'model-response-invalid','incomplete-output'],
+    [{ok:false,failureCategory:'blocked-output',status:200,finishReason:'SAFETY'},'model-response-invalid','blocked-output'],
+    [{ok:false,status:200,promptFeedback:{blockReason:'SAFETY'}},'model-response-invalid','blocked-prompt'],
+    [{ok:false,status:401},'model-request-rejected','authentication'],
+    [{ok:false,status:429},'model-request-rejected','rate-limit'],
+    [{ok:false,status:503},'model-request-rejected','provider-unavailable'],
+    [{ok:false,failureCategory:'invalid-json',status:200},'model-response-invalid','invalid-json'],
+    [{ok:false,failureCategory:'empty-output',status:200,finishReason:'STOP'},'model-response-invalid','empty-output'],
+    [{ok:false,failureCategory:'timeout',status:200},'model-outcome-unknown','timeout'],
+    [{ok:false,failureCategory:'network-error',status:200},'model-outcome-unknown','network-error'],
+    [{ok:false,failureCategory:'aborted'},'model-outcome-unknown','aborted'],
+    [{ok:false,reason:'model-outcome-unknown'},'model-outcome-unknown','provider-error'],
+  ];
+  for(const [generated,reason,category] of cases){let completion;
+    await executeResearchPrepare({preparationId:P,workspaceId:W},{workspaceId:W},{rpc:async(name,params)=>{if(name==='research_model_claim_v1')return {ok:true,data:{status:'claimed',source,brand:{id:W,slug:'22nomad'}}};completion=params.p_result;return {ok:true,data:completion};},generate:async()=>({...generated,model:'gemini-3-flash-preview',text:'private provider output',error:{message:'private provider error'},promptFeedback:{...generated.promptFeedback,safetyExplanation:'private prompt'}})});
+    assert.equal(completion.reason,reason);assert.equal(completion.providerDiagnostic.failureCategory,category);assert.doesNotMatch(JSON.stringify(completion),/private provider|private prompt/);
+    if(generated.usageMetadata)assert.deepEqual(completion.usage,generated.usageMetadata);
+    if(generated.finishReason)assert.equal(completion.providerDiagnostic.finishReason,generated.finishReason);
+  }
+});

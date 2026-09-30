@@ -30,7 +30,7 @@ test('run status never describes partial/error/running as completed and unknown 
 test('preparation skips and uncertain model results give readable operator actions without losing their reason code', () => {
   assert.equal(ui.researchRunSummary({ reason: 'invalid-model-evidence' }).reason, 'AI 근거를 원문에서 확인하지 못해 저장하지 않았어요.');
   assert.equal(ui.researchRunSummary({ reason: 'robots-disallowed' }).reason, '원문 사이트의 접근 정책으로 건너뛰었어요.');
-  for (const reason of ['daily-quantity-reached', 'run-quantity-reached', 'no-new-source', 'model-outcome-unknown', 'invalid-preparation']) {
+  for (const reason of ['daily-quantity-reached', 'run-quantity-reached', 'no-new-source', 'model-outcome-unknown', 'model-response-invalid', 'model-request-rejected', 'invalid-preparation']) {
     const summary = ui.researchRunSummary({ reason });
     assert.equal(summary.reasonCode, reason); assert.ok(summary.reason && summary.reason !== reason && !summary.reason.includes('준비 상태를 확인'));
   }
