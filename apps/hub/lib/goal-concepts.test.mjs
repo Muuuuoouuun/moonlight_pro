@@ -168,3 +168,78 @@ test('a KR under one per week is not judged behind until its last week', () => {
   assert.equal(keyResultPace(count(1, 0, { name: '결제' }), october, [], '2026-10-27').state, 'behind');
   assert.equal(keyResultPace(count(1, 1, { name: '결제' }), october, [], '2026-10-27').state, 'ahead');
 });
+
+const obs = (value, day) => ({ coverage: 'complete', value, observedAt: `${day}T03:00:00Z` });
+
+test('the period splits into Monday weeks with a short first week', async () => {
+  const { periodWeeks } = await import('./goal-concepts.js');
+  const weeks = periodWeeks(october, '2026-10-08');
+  assert.deepEqual(weeks.map(week => [week.label, week.days, week.phase]), [['10/1–4', 4, 'past'], ['10/5', 7, 'now'], ['10/12', 7, 'future'], ['10/19', 7, 'future'], ['10/26', 6, 'future']]);
+});
+
+test('weekly cells turn cumulative observations into each week\'s share, and stay unknown without records', async () => {
+  const { weeklyCells } = await import('./goal-concepts.js');
+  const metric = count(6, 2);
+  const cells = weeklyCells(metric, october, [obs(1, '2026-10-03'), obs(2, '2026-10-07')], '2026-10-08', 2);
+  assert.deepEqual(cells.map(cell => cell.done), [1, 1, null, null, null]);
+  assert.deepEqual(weeklyCells(metric, october, [], '2026-10-08', 2).map(cell => cell.done), [null, null, null, null, null]);
+});
+
+test('zero-keep weeks need a check inside the week and count the kept streak', async () => {
+  const { isZeroKeep, zeroKeepWeeks } = await import('./goal-concepts.js');
+  const metric = { direction: 'decrease', target: 0, baseline: 0 };
+  assert.equal(isZeroKeep(metric), true);
+  assert.equal(isZeroKeep({ direction: 'decrease', target: 2 }), false);
+  const kept = zeroKeepWeeks(metric, october, [obs(0, '2026-10-02'), obs(0, '2026-10-06'), obs(0, '2026-10-13')], '2026-10-14');
+  assert.deepEqual(kept.cells.map(cell => cell.state), ['kept', 'kept', 'kept', 'future', 'future']);
+  assert.equal(kept.streak, 3);
+  const broken = zeroKeepWeeks(metric, october, [obs(0, '2026-10-02'), obs(1, '2026-10-08')], '2026-10-14');
+  assert.deepEqual(broken.cells.map(cell => cell.state), ['kept', 'broken', 'pending', 'future', 'future']);
+  assert.equal(broken.streak, 0);
+  assert.equal(zeroKeepWeeks(metric, october, [], '2026-10-14').cells[0].state, 'unknown');
+});
+
+test('bullet scale keeps percent on 0–100 and pads other units around the line', async () => {
+  const { bulletScale } = await import('./goal-concepts.js');
+  const share = bulletScale({ direction: 'range', targetMin: 60, targetMax: 100, unit: '%' }, [52, 66]);
+  assert.deepEqual([share.min, share.max, share.band], [0, 100, [60, 100]]);
+  assert.equal(share.at(52), 52);
+  const energy = bulletScale({ direction: 'range', targetMin: 3, targetMax: 5, unit: '점' }, [3.4]);
+  assert.ok(energy.min < 3 && energy.max > 5);
+  assert.equal(bulletScale({ direction: 'range', targetMin: null, targetMax: 5 }), null);
+});
+
+test('milestones pick the nearest open task and the two latest finished ones', async () => {
+  const { milestoneSummary } = await import('./goal-concepts.js');
+  const link = (title, dueAt, taskStatus, extra = {}) => ({ entityType: 'tasks', entityTitle: title, dueAt, taskStatus, ...extra });
+  const summary = milestoneSummary([
+    link('모집 오픈', '2026-10-09T09:00:00Z', 'todo'),
+    link('가격', '2026-10-03T09:00:00Z', 'todo'),
+    link('규칙', '2026-10-02T09:00:00Z', 'done'),
+    link('끊긴 연결', '2026-10-01T09:00:00Z', 'todo', { stale: true }),
+    link('기한 없음', null, 'todo'),
+  ], '2026-10-04');
+  assert.equal(summary.next.entityTitle, '가격');
+  assert.equal(summary.next.daysLeft, -1);
+  assert.deepEqual(summary.done.map(row => row.entityTitle), ['규칙']);
+  assert.equal(summary.openCount, 2);
+});
+
+test('the month-end verdict reads only floor reach of outcome and driver KRs', async () => {
+  const { objectiveVerdict, floorStatus } = await import('./goal-concepts.js');
+  const kr = (role, state) => ({ role, progress: state === 'reached' ? { state: 'achieved', achieved: true } : state === 'missed' ? { state: 'in_progress', achieved: false } : { state: 'partial' } });
+  assert.equal(floorStatus(kr('outcome', 'reached')), 'reached');
+  assert.equal(objectiveVerdict([kr('outcome', 'missed'), kr('driver', 'reached'), kr('driver', 'reached')]).key, 'change-one');
+  assert.equal(objectiveVerdict([kr('outcome', 'reached'), kr('driver', 'reached')]).key, 'repeat');
+  assert.equal(objectiveVerdict([kr('outcome', 'reached'), kr('driver', 'missed')]).key, 'redefine');
+  assert.equal(objectiveVerdict([kr('outcome', 'missed'), kr('driver', 'missed')]).key, 'volume');
+  assert.deepEqual(objectiveVerdict([kr('outcome', 'missed'), kr('driver', 'unknown')]), { key: null, reason: 'unmeasured', unknown: 1 });
+  assert.equal(objectiveVerdict([kr('driver', 'reached')]).reason, 'needs-both');
+});
+
+test('the next period draft rolls a monthly objective to the next whole month', async () => {
+  const { nextPeriodDraft } = await import('./goal-concepts.js');
+  assert.deepEqual(nextPeriodDraft({ title: '10월 · 가진 것을 돈으로', periodStart: '2026-10-01', periodEnd: '2026-10-31' }), { title: '11월 · 가진 것을 돈으로', periodStart: '2026-11-01', periodEnd: '2026-11-30', monthly: true });
+  assert.deepEqual(nextPeriodDraft({ title: '12월 결산', periodStart: '2026-12-01', periodEnd: '2026-12-31' }).periodEnd, '2027-01-31');
+  assert.deepEqual(nextPeriodDraft({ title: '스프린트', periodStart: '2026-10-05', periodEnd: '2026-10-18' }), { title: '스프린트', periodStart: '2026-10-19', periodEnd: '2026-11-01', monthly: false });
+});

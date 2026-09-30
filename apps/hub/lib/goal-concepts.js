@@ -188,3 +188,137 @@ export function paceSuggestion(rows) {
   const unit = behind.metric.unit ? behind.metric.unit : '';
   return `${behind.metric.name}이(가) 기준선보다 ${fmt(Math.abs(behind.pace.gap))}${unit} 늦습니다. 이번 주 첫 판매 시간을 이 KR에 쓰세요.`;
 }
+
+// ── 목업 ①·③·④ 구현 (2026-10-01) ─────────────────────────────────────────────
+const keyOfDay = n => new Date(n * DAY).toISOString().slice(0, 10);
+const shortDay = key => `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}`;
+const confirmed = observations => observations.filter(item => item.coverage === 'complete' && Number.isFinite(item.value) && Number.isFinite(Date.parse(item.observedAt)));
+
+// 목표 기간을 월요일 시작 주로 나눈다. 첫 주·마지막 주는 기간 안 날짜만 담는다.
+export function periodWeeks(objective, todayKey) {
+  const start = dayNumber(objective.periodStart), end = dayNumber(objective.periodEnd), today = dayNumber(todayKey);
+  if (![start, end].every(Number.isFinite) || end < start) return [];
+  const weeks = [];
+  for (let s = start; s <= end;) {
+    const e = Math.min(end, mondayOf(keyOfDay(s)) + 6);
+    const phase = !Number.isFinite(today) ? 'future' : today > e ? 'past' : today >= s ? 'now' : 'future';
+    weeks.push({ start: keyOfDay(s), end: keyOfDay(e), days: e - s + 1, phase, label: e - s < 6 && s === start ? `${shortDay(keyOfDay(s))}–${Number(keyOfDay(e).slice(8, 10))}` : shortDay(keyOfDay(s)) });
+    s = e + 1;
+  }
+  return weeks;
+}
+
+// 누적 관측값을 주별 몫으로 바꾼다. 확인된 관측이 하나도 없으면 몫을 모른다(null) — 0으로 세지 않는다.
+function valueBefore(rows, dayNum, fallback) {
+  const before = rows.filter(item => seoulDayNumber(item.observedAt) < dayNum).sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt))[0];
+  return before ? before.value : fallback;
+}
+
+export function weeklyCells(metric, objective, observations, todayKey, quota) {
+  const rows = confirmed(observations);
+  const baseline = Number.isFinite(metric?.baseline) ? metric.baseline : 0;
+  const today = dayNumber(todayKey);
+  return periodWeeks(objective, todayKey).map(week => {
+    if (week.phase === 'future' || !rows.length) return { ...week, quota, done: null };
+    const endDay = Math.min(dayNumber(week.end), today) + 1;
+    return { ...week, quota, done: Math.max(0, valueBefore(rows, endDay, baseline) - valueBefore(rows, dayNumber(week.start), baseline)) };
+  });
+}
+
+// 0 유지형(줄이기 · 목표 0) — 신규 개발 0, 회사 고객 대상 개인 판매 0 같은 "하지 않을 것".
+export const isZeroKeep = metric => metric?.direction === 'decrease' && metric?.target === 0;
+
+// 0 유지형의 주별 상태. 그 주에 확인한 관측이 있어야 판정한다(없으면 unknown).
+export function zeroKeepWeeks(metric, objective, observations, todayKey) {
+  const rows = confirmed(observations);
+  const baseline = Number.isFinite(metric?.baseline) ? metric.baseline : 0;
+  const today = dayNumber(todayKey);
+  const cells = periodWeeks(objective, todayKey).map(week => {
+    if (week.phase === 'future') return { ...week, state: 'future' };
+    const s = dayNumber(week.start), e = Math.min(dayNumber(week.end), today);
+    const checked = rows.some(item => { const d = seoulDayNumber(item.observedAt); return d >= s && d <= e; });
+    if (!checked) return { ...week, state: week.phase === 'now' ? 'pending' : 'unknown' };
+    const increment = valueBefore(rows, e + 1, baseline) - valueBefore(rows, s, baseline);
+    return { ...week, state: increment > 0 ? 'broken' : 'kept' };
+  });
+  let streak = 0;
+  for (const cell of [...cells].reverse()) {
+    if (cell.state === 'future' || cell.state === 'pending') continue;
+    if (cell.state !== 'kept') break;
+    streak += 1;
+  }
+  return { cells, streak };
+}
+
+// 범위·문턱형 KPI의 불릿 차트 눈금. % 단위는 0~100 고정, 나머지는 선과 값을 모두 담도록 여백을 둔다.
+export function bulletScale(metric, values = []) {
+  const numbers = values.filter(Number.isFinite);
+  const lineLo = metric.direction === 'range' ? metric.targetMin : metric.target;
+  const lineHi = metric.direction === 'range' ? metric.targetMax : metric.target;
+  if (!Number.isFinite(lineLo) || !Number.isFinite(lineHi)) return null;
+  let min, max;
+  if (metric.unit === '%') { min = 0; max = Math.max(100, ...numbers); }
+  else {
+    const lo = Math.min(lineLo, ...numbers), hi = Math.max(lineHi, ...numbers);
+    const pad = (hi - lo || Math.abs(hi) || 1) * 0.25;
+    min = lo - pad; max = hi + pad;
+    if (lo >= 0 && min < 0) min = 0;
+  }
+  const band = metric.direction === 'range' ? [lineLo, lineHi] : metric.direction === 'decrease' ? [min, lineHi] : [lineLo, max];
+  const at = value => Number.isFinite(value) ? Math.max(0, Math.min(100, (value - min) / (max - min) * 100)) : null;
+  return { min, max, band: [at(band[0]), at(band[1])], at };
+}
+
+// 목표에 연결한 할 일 중 기한이 있는 것 — 다음 하나와 최근에 끝낸 둘.
+export function milestoneSummary(links, todayKey) {
+  const today = dayNumber(todayKey);
+  const rows = (links || []).filter(link => link.entityType === 'tasks' && !link.stale && link.dueAt && Number.isFinite(Date.parse(link.dueAt)))
+    .map(link => { const dueKey = new Date(link.dueAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }); return { ...link, dueKey, daysLeft: dayNumber(dueKey) - today, done: link.taskStatus === 'done' }; });
+  const open = rows.filter(row => !row.done).sort((a, b) => a.dueKey.localeCompare(b.dueKey));
+  const done = rows.filter(row => row.done).sort((a, b) => b.dueKey.localeCompare(a.dueKey));
+  return { next: open[0] || null, openCount: open.length, done: done.slice(0, 2), total: rows.length };
+}
+
+// ── 월말 채점 ─────────────────────────────────────────────────────────────
+// 바닥 달성 여부: reached · missed · unknown(미측정·일부 근거·마감 값 없음)
+export function floorStatus(metric) {
+  const state = metric?.progress?.state;
+  if (state === 'achieved' || metric?.progress?.achieved === true) return 'reached';
+  if (state === 'in_progress' && metric?.progress?.achieved === false) return 'missed';
+  return 'unknown';
+}
+
+export const VERDICTS = {
+  repeat: { title: '반복', text: '같은 오퍼를 반복하고 약속선을 올린다' },
+  redefine: { title: '정의 점검', text: '운이 좋았거나 행동 KR이 틀렸다 — 행동 정의를 다시 본다' },
+  'change-one': { title: '하나만 바꾸기', text: '활동은 충분했다. 오퍼 · 가격 · 고객군 중 하나만 바꾼다' },
+  volume: { title: '실행량', text: '오퍼는 두고 시간 배분부터 고친다' },
+};
+
+// 2×2 판정 — 결과 KR과 선행 KR의 바닥 달성만 본다(개인 사업 OKR v3 §7을 지표 이름 없이 일반화).
+export function objectiveVerdict(keyResults) {
+  const outcomes = keyResults.filter(metric => metric.role === 'outcome');
+  const drivers = keyResults.filter(metric => metric.role === 'driver');
+  if (!outcomes.length || !drivers.length) return { key: null, reason: 'needs-both' };
+  const unknown = [...outcomes, ...drivers].filter(metric => floorStatus(metric) === 'unknown').length;
+  if (unknown) return { key: null, reason: 'unmeasured', unknown };
+  const result = outcomes.every(metric => floorStatus(metric) === 'reached');
+  const action = drivers.every(metric => floorStatus(metric) === 'reached');
+  return { key: result ? (action ? 'repeat' : 'redefine') : (action ? 'change-one' : 'volume'), result, action };
+}
+
+// 다음 기간 초안 — 달 단위 목표면 다음 달 전체, 아니면 같은 길이. 제목의 "N월"만 바꾼다.
+export function nextPeriodDraft(objective) {
+  const start = dayNumber(objective.periodStart), end = dayNumber(objective.periodEnd);
+  if (![start, end].every(Number.isFinite)) return null;
+  const startKey = objective.periodStart, endKey = objective.periodEnd;
+  const monthly = startKey.endsWith('-01') && keyOfDay(end + 1).endsWith('-01');
+  let nextStart = keyOfDay(end + 1), nextEnd;
+  if (monthly) {
+    const [y, m] = nextStart.split('-').map(Number);
+    nextEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  } else nextEnd = keyOfDay(end + 1 + (end - start));
+  const nextMonth = Number(nextStart.slice(5, 7));
+  const title = monthly ? objective.title.replace(/^(\s*)\d{1,2}월/, `$1${nextMonth}월`) : objective.title;
+  return { title, periodStart: nextStart, periodEnd: nextEnd, monthly };
+}
