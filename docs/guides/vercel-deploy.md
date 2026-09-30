@@ -65,6 +65,15 @@ Set-Location apps\hub;    npx vercel deploy --prod --yes --archive=tgz --scope m
 - 배포 뒤 Hub·Engine `/api/health`는 HTTP 200·`status: ok`이며 DB와 Hub→Engine 연결을 보고했다. Hub `/login`은 HTTP 200, 비로그인 `/dashboard/home`·`/dashboard/content/publish`는 `/login`으로 이동했다. 운영자 세션을 이용한 예약 저장·발행 로그 화면 왕복과 22:00 KST 크론 실행 결과는 아직 확인하지 않았다.
 - 배포 직전 전체 테스트는 3,679건 중 통과 3,666·실패 0·조건부 건너뜀 13이었다. Vercel 빌드의 Turbo 환경 변수 경고는 있었으나 양쪽 프로덕션 빌드와 런타임 헬스는 통과했다.
 
+### 2026-09-30 `main` ↔ `09.bigmac2.0` 통합 기록
+
+- **경위:** 위 CLI 배포는 `main`에 병합하지 않은 브랜치에서 나갔다. 같은 날 오전 리서치함(#13·#14)이 `main`에 병합되면서 Git 연동이 `main`을 다시 프로덕션에 올렸고, `09.bigmac2.0`에만 있던 예약·발행 로그·Studio 형식 탭·홈 아침 브리핑이 운영에서 빠졌다. 2026-09-30 16:40 KST 실측: 운영 `/api/cron/schedule-sweep`가 404(같은 접두사의 `/api/cron/github-sync`는 401), `main`의 `vercel.json`에도 `schedule-sweep` 크론이 없었다.
+- **조치:** `origin/main`에서 `claude/integrate-main-bigmac-0930`을 만들어 `origin/09.bigmac2.0`을 병합했다(충돌 4파일 — `hub-app.jsx`·`content-studio.jsx`·`database-readiness.mjs`·`ai-usage-log-migration.test.mjs`, 양쪽 기능 모두 유지). 함수 리전 `icn1`(아래)과 고객 목록 정렬 수정도 같은 PR에 담았다.
+- **함수 리전:** 운영 응답 헤더가 `x-vercel-id: icn1::iad1::…`로, 함수가 미국 동부에서 돌며 서울 DB를 왕복하고 있었다. `apps/hub/vercel.json`·`apps/engine/vercel.json`에 `"regions": ["icn1"]`을 넣었다.
+- **마이그레이션:** 번호 0053·0054가 두 파일씩 겹친다(브랜드 `20260929_*`, 리서치함 `20260930_*`). 다섯 파일 모두 이 파일명으로 서울 DB에 적용돼 있어 이름을 바꾸지 않았다. 다음 번호는 0056이다. 병합 트리의 `db:check`는 서울 DB에서 33개 항목 전부 통과했다(브랜드 0053·0054는 `DATABASE_FEATURES`에 등록돼 있지 않아 이 검사 범위 밖이고, 적용 근거는 위 09-29~30 기록의 ledger 해시 재조회다).
+- **검증:** 루트 `npm test` 3,707건 중 통과 3,694·실패 0·조건부 건너뜀 13, `check:contracts`와 Hub·Engine 빌드 통과. 운영자 세션으로 본 리서치함·발행 로그 화면과 22:00 KST 크론 실행 결과는 이 기록 시점에 확인하지 않았다.
+- **교훈:** `main`에 없는 브랜치를 CLI로 프로덕션에 올리면 다음 `main` 병합이 조용히 덮어쓴다. CLI `--prod` 배포를 했다면 같은 날 `main`에 병합한다.
+
 ## 5. 확인
 
 1. `https://<hub>/login` 이 **로그인 화면**을 보여야 한다. 503이면 운영자 로그인 3값 중 하나가 빠진 것이다.
