@@ -66,7 +66,7 @@ export function PublishLogList({ rows, selectedId, onSelect }) {
   );
 }
 
-export function PublishLogDetail({ row, onOpenDraft, onOpenPerformance }) {
+export function PublishLogDetail({ row, onOpenDraft, onOpenPerformance, onFollowUp, followUpBusy = false }) {
   if (!row) return <aside className="pl-detail" aria-label="선택한 글의 이력"><p className="pl-muted">글을 고르면 이력이 여기에 나옵니다.</p></aside>;
   return (
     <aside className="pl-detail" aria-label="선택한 글의 이력">
@@ -84,12 +84,13 @@ export function PublishLogDetail({ row, onOpenDraft, onOpenPerformance }) {
       <div className="pl-detail-actions">
         {row.contentId && <Button size="xs" variant="outline" onClick={() => onOpenDraft(row)}>원고 열기</Button>}
         {row.state === 'published' && <Button size="xs" variant="outline" onClick={onOpenPerformance}>{row.metrics ? '성과에서 수정' : '성과 기록'}</Button>}
+        {row.state === 'published' && row.contentId && onFollowUp && <Button size="xs" variant="outline" disabled={followUpBusy} onClick={() => onFollowUp(row)}>{followUpBusy ? '만드는 중…' : '후속편 쓰기'}</Button>}
       </div>
     </aside>
   );
 }
 
-export function PublishLogView({ rows, allRows, counts, filter, onFilter, week, selectedId, onSelect, onOpenDraft, onOpenPerformance }) {
+export function PublishLogView({ rows, allRows, counts, filter, onFilter, week, selectedId, onSelect, onOpenDraft, onOpenPerformance, onFollowUp, followUpBusy }) {
   const selected = allRows.find((row) => row.variantId === selectedId) || null;
   const options = LOG_FILTERS.map(({ key, label }) => ({ key, label: `${label} ${counts[key] ?? 0}` }));
   return (
@@ -100,7 +101,7 @@ export function PublishLogView({ rows, allRows, counts, filter, onFilter, week, 
         <div className="pl-main">
           {rows.length ? <PublishLogList rows={rows} selectedId={selectedId} onSelect={onSelect} /> : <p className="pl-muted pl-empty">이 조건의 기록이 없습니다.</p>}
         </div>
-        <PublishLogDetail row={selected} onOpenDraft={onOpenDraft} onOpenPerformance={onOpenPerformance} />
+        <PublishLogDetail row={selected} onOpenDraft={onOpenDraft} onOpenPerformance={onOpenPerformance} onFollowUp={onFollowUp} followUpBusy={followUpBusy} />
       </div>
     </>
   );
