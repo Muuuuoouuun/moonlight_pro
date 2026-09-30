@@ -1012,7 +1012,8 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     if (!wide) return undefined;
     const onWindowKey = (e) => {
       const root = rootRef.current;
-      if (!root || e.defaultPrevented) return;
+      // 창(window) 자체로 보낸 키 이벤트는 target이 Node가 아니다 — contains()가 던지지 않게 거른다.
+      if (!root || e.defaultPrevented || !(e.target instanceof Node)) return;
       const shell = root.closest('[role="dialog"]');
       const reaches = saveChordReachesRecord({
         inForm: root.contains(e.target),

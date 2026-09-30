@@ -492,7 +492,8 @@ test("넓은 배치에서 요약의 Enter는 자세히로 내려가고, ⌘↵�
   const listener = source.slice(source.indexOf("const saveChordRef = React.useRef(onKeyDown);"), source.indexOf("// 요약 칸의 Enter는 저장이 아니라"));
   assert.match(listener, /saveChordRef\.current = onKeyDown;/);
   assert.match(listener, /if \(!wide\) return undefined;/);
-  assert.match(listener, /if \(!root \|\| e\.defaultPrevented\) return;/);
+  // window로 직접 보낸 키 이벤트(target이 Node가 아님)에서 contains()가 던지지 않는다.
+  assert.match(listener, /if \(!root \|\| e\.defaultPrevented \|\| !\(e\.target instanceof Node\)\) return;/);
   assert.match(listener, /const shell = root\.closest\('\[role="dialog"\]'\);/);
   assert.match(listener, /saveChordReachesRecord\(\{\s*inForm: root\.contains\(e\.target\),\s*inShell: Boolean\(shell\?\.contains\(e\.target\)\),\s*onBody: e\.target === document\.body,\s*\}\)/);
   assert.match(listener, /if \(reaches\) saveChordRef\.current\(e\);/);
