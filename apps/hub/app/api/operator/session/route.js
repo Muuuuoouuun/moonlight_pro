@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server.js";
 
+import { areEquivalentLoopbackOrigins } from "@/lib/hub-write-guard";
 import {
   OPERATOR_SESSION_COOKIE,
   createOperatorSessionToken,
@@ -62,7 +63,11 @@ export async function POST(req) {
   } catch {
     browserOrigin = null;
   }
-  if (browserOrigin !== requestOrigin) {
+  // NextRequest normalizes 127.0.0.1 to localhost; accept that alias only in development.
+  const equivalentDevelopmentLoopback = process.env.NODE_ENV !== "production" &&
+    process.env.VERCEL_ENV !== "production" &&
+    areEquivalentLoopbackOrigins(browserOrigin, requestOrigin);
+  if (browserOrigin !== requestOrigin && !equivalentDevelopmentLoopback) {
     return NextResponse.json({ status: "forbidden", error: "same-origin-required" }, { status: 403 });
   }
 
