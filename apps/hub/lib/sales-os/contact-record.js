@@ -171,6 +171,13 @@ export function recordSaveLine({ pending = null, showMissing = false, state = "i
   return { progress, note };
 }
 
+// 저장 줄이 쉬고 있는가 — 앞선 저장의 진행도, 지금 폼에 대해 할 말(빠진 칸 · 경고 · 실패 원인)도 없다.
+// 남은 것은 쉬는 초안 글자뿐이다. 휴대폰 시트는 이때 키보드 위의 줄을 비우고 칩 줄 하나만 남긴다
+// (초안이 놓인 곳은 머리의 둘째 줄이 말한다) — 글 쓸 높이를 상태 없는 줄에 쓰지 않는다.
+export function recordSaveLineResting(line = {}) {
+  return !line?.progress && (!line?.note || line.note.tone === "hint");
+}
+
 // 초안이 놓인 곳을 그대로 말한다 — 연락 기록 초안은 서버에 없고, 어디까지 살아남는지는 곳마다 다르다.
 //   tab    — sessionStorage. 같은 탭에서만 살고(새로고침은 견딘다) 탭을 닫으면 사라진다.
 //   memory — 저장소가 막힌 창(사생활 보호 등)의 메모리 사본. 새로고침하면 사라진다.
@@ -199,21 +206,117 @@ export function draftHintCopy(place, { dirty = false } = {}) {
 // ── 넓은 기록창(2026-09-30 · 권장, 화면 확인 뒤 확정) ────────────────────────────────
 
 // 기록창의 그릇 — 같은 Drawer이고 폭만 바뀐다(Q-CR1 · Q-CR3). 읽을 땐 좁게, 쓸 때만 넓게.
-//   form    — 기록 폼의 배치. "wide"는 요약 한 줄 + 늘 펼친 자세히 + 제자리 아래 띠.
-//   context — 오른쪽 읽기 칸(약속 · 최근 기록)을 둘지. 900px 이하에서는 CSS가 접는다.
-// 휴대폰(≤600px)은 지금의 바닥 시트 그대로다 — 전체 높이 시트는 다음 조각(Q-CR11).
 export const RECORD_DRAWER_WIDTH = {
   rest: "min(480px, 96vw)",
   wide: "min(960px, calc(100% - 56px))",
 };
 
-export function recordWindowLayout({ recording = false, mobile = false } = {}) {
-  const wide = Boolean(recording) && !mobile;
+// 화면 폭으로 고르는 배치는 셋이다(Q-CR3 · Q-CR11). 중단점은 §7 Responsive의 둘(900 · 600)만 쓴다 —
+// 새 폭을 만들지 않는다.
+//   wide  — 901px 이상. 쓰기 칸과 읽기 칸이 나란히 선다.
+//   tabs  — 601–900px. 같은 넓은 드로어(폭은 화면이 자른다)에 두 칸이 '쓰기 | 이 고객' 탭으로 선다.
+//   sheet — 600px 이하. 전체 높이 바닥 시트 · 저장은 머리에 · 같은 탭 · 키보드 위 칩 줄.
+// 폭은 화면이 미디어 쿼리로 잰다 — 스타일시트(드로어의 바닥 시트 · 이 기록창의 탭)와 같은 자로 재야
+// 소수 폭(확대 · 분할 화면)에서도 두 쪽이 어긋나지 않는다. 그래서 폭 숫자를 직접 받는 함수는 두지 않는다.
+// 쿼리를 아직 못 들었으면(서버 렌더 · 첫 그리기) 데스크톱 기본인 wide다.
+export const RECORD_LAYOUT_BREAKPOINTS = { sheet: 600, tabs: 900 };
+export const RECORD_LAYOUT_QUERIES = {
+  sheet: `(max-width: ${RECORD_LAYOUT_BREAKPOINTS.sheet}px)`,
+  tabs: `(max-width: ${RECORD_LAYOUT_BREAKPOINTS.tabs}px)`,
+};
+
+// 드로어가 듣는 두 미디어 쿼리(RECORD_LAYOUT_QUERIES)의 답에서 배치를 고른다 — mobile은 sheet
+// 쿼리, narrow는 tabs 쿼리가 맞았는지다. 600px 이하에서는 둘 다 맞으므로 sheet가 이긴다.
+export function recordLayoutModeFromMedia({ mobile = false, narrow = false } = {}) {
+  return mobile ? "sheet" : narrow ? "tabs" : "wide";
+}
+
+// 기록 모드의 그릇 — 쓰는 동안에만 넓다. 쉬는 드로어는 어느 폭에서든 지금 그대로다.
+//   mode    — 위의 배치(쓰지 않을 때도 화면 폭이 고른 값을 돌려준다).
+//   form    — 기록 폼의 배치. "wide"는 요약 한 줄 + 늘 펼친 자세히 + 제자리 아래 띠, "sheet"는 같은 두 칸에
+//             아래 띠 대신 칩 줄(누르면 칸이 펼쳐진다). "compact"는 쓰지 않을 때의 값이다(폼이 없다).
+//   context — 읽기 칸(약속 · 최근 기록)을 둘지.   tabs — 두 칸을 '쓰기 | 이 고객' 탭으로 나눌지.
+//   headerSave — 저장을 드로어 머리에 둘지(휴대폰: 키보드가 몇 px이든 가리지 않는다).
+export function recordWindowLayout({ recording = false, mobile = false, narrow = false } = {}) {
+  const mode = recordLayoutModeFromMedia({ mobile, narrow });
+  const on = Boolean(recording);
+  const sheet = on && mode === "sheet";
   return {
-    width: wide ? RECORD_DRAWER_WIDTH.wide : RECORD_DRAWER_WIDTH.rest,
-    form: wide ? "wide" : "compact",
-    context: wide,
+    mode,
+    width: on && !sheet ? RECORD_DRAWER_WIDTH.wide : RECORD_DRAWER_WIDTH.rest,
+    form: !on ? "compact" : sheet ? "sheet" : "wide",
+    context: on,
+    tabs: on && mode !== "wide",
+    headerSave: sheet,
   };
+}
+
+// 좁은 화면의 두 탭 — 쓰기(기록 칸) | 이 고객(읽기 칸). 탭을 바꿔도 기록 칸은 그대로 서 있다(가려질 뿐):
+// 쓰던 글 · 앞선 저장의 되돌리기 · 실패 원인이 사라지지 않는다.
+export const RECORD_TABS = [
+  { key: "write", label: "쓰기" },
+  { key: "context", label: "이 고객" },
+];
+
+// 지금 보이는 탭 — 탭이 없는 배치(wide)에서는 언제나 쓰기다(넓은 화면으로 돌아오면 두 칸이 다시 나란히 선다).
+export function recordTab(tab, { tabs = false } = {}) {
+  return tabs && tab === "context" ? "context" : "write";
+}
+
+// '이 고객' 탭을 보는 동안 아래 줄이 말하는 것 — 쓰던 글이 몇 자 남아 있는지. 글자는 글쓰기 칸의 것만 센다
+// (앞뒤 빈칸 제외). 글은 없어도 고쳐 둔 것이 있으면(dirty — 다음 약속 · 반응 · 날짜만 만진 폼) 남아 있다고
+// 말한다: 저장 안 된 입력이 가려진 칸에 있는데 "쓴 게 없다"고 하지 않는다. 아무것도 안 만졌을 때만 없다고 한다.
+export function recordAwayLabel({ mode = "contact", chars = 0, dirty = false } = {}) {
+  const memo = normalizeRecordMode(mode) === "memo";
+  const count = Math.max(0, Math.floor(Number(chars) || 0));
+  if (count) return `${memo ? "쓰던 메모" : "쓰던 기록"} · ${count.toLocaleString("en-US")}자`;
+  if (dirty) return memo ? "쓰던 메모가 남아 있어요" : "쓰던 기록이 남아 있어요";
+  return memo ? "아직 쓴 메모가 없어요" : "아직 쓴 기록이 없어요";
+}
+
+// 연락 기록에서 운영자가 쓴 글자 수 — 요약 + 자세히(글쓰기 칸 둘).
+export function recordDraftChars(form = {}) {
+  return ["summary", "body"].reduce((sum, key) => sum + String(form?.[key] || "").trim().length, 0);
+}
+
+// 접힌 자세히 한 줄이 말하는 줄 수 — 앞뒤 빈 줄은 세지 않는다. 비었으면 0.
+export function recordDetailLines(body = "") {
+  const text = String(body || "").trim();
+  return text ? text.split(/\r?\n/).length : 0;
+}
+
+// 휴대폰 시트의 칩 줄 — 키보드 바로 위에서 어떻게 · 반응과 다음 약속을 한 줄씩 요약한다. 누르면 그 칸들이
+// 펼쳐진다(칩은 요약일 뿐 값을 바꾸지 않는다). 글자는 아래 칸들이 보이는 것과 같은 말이다.
+//   how     — 종류 · 반응. 반응을 묻는 채널인데 아직 안 골랐으면 '반응 필수'라고 말한다.
+//   promise — 무엇을 · 언제. 날짜는 M/D(date — 화면은 mono로 그린다). 날짜가 비면 '날짜 필요'.
+// kindLabel · whenLabel은 폼이 고른 칸의 글자(시트 채널 이름 · 내일 · 3일 뒤 · 다음 주)다.
+const REACTION_LABELS = Object.fromEntries(REACTIONS.map((r) => [r.key, r.label]));
+const DATE_KEY = /^\d{4}-(\d{2})-(\d{2})$/;
+const PROMISE_CHIP_MAX = 14;
+
+function clipChars(text, max) {
+  const chars = Array.from(text);
+  return chars.length > max ? `${chars.slice(0, max).join("")}…` : text;
+}
+
+export function recordSheetChips(form = {}, { kindLabel = "", whenLabel = "" } = {}) {
+  const channel = CHANNEL_BY_KEY.get(String(form.kind || ""));
+  const asks = reactionRequired(form.kind, { replied: form.replied });
+  const reaction = asks ? REACTION_LABELS[form.reaction] || "" : "";
+  const how = [kindLabel || channelLabel(form.kind)];
+  if (channel?.promptsReply && form.replied) how.push("회신 받음");
+  if (asks) how.push(reaction || "반응 필수");
+
+  const what = String(form.nextAction || "").trim();
+  const day = form.followup === "dated" ? DATE_KEY.exec(String(form.at || "")) : null;
+  const date = day ? `${Number(day[1])}/${Number(day[2])}` : "";
+  const when = form.followup === "dormant" ? "기약 없음"
+    : form.followup === "none" ? "후속 없음"
+    : date ? whenLabel : "날짜 필요";
+  return [
+    { key: "how", label: how.join(" · "), date: "" },
+    { key: "promise", label: [what ? clipChars(what, PROMISE_CHIP_MAX) : "약속", when].filter(Boolean).join(" · "), date },
+  ];
 }
 
 // 같은 칸의 두 모드(Q-CR6 · 권장, 화면 확인 뒤 확정) — 연락 기록 | 메모. 모드가 다르면 저장되는 곳이

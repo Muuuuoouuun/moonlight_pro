@@ -51,7 +51,8 @@ test("the column is a read-only aside — a promise card and the record list, no
 test("a missed promise is one danger label, not a rail; a muted promise shows no date line", () => {
   const late = render({ promise: promiseOf({ nextAction: "OMR 시안 보내기", nextActionAt: "2026-09-27" }) });
   assert.match(late, /<p class="record-ctx__when"><span class="record-ctx__late">3일 지남<\/span> · 9\/27 약속<\/p>/);
-  // 빨강은 글자 한 곳 — 쓰는 동안의 레일은 실패 원인 줄 몫이다.
+  // 빨강은 글자 한 곳 — 쓰는 동안의 레일은 실패 원인 줄 몫이다. 좁은 화면의 약속 한 줄도 이 글자를 쓴다
+  // (읽기 칸과 그 줄은 한 번에 하나만 보인다 — 새 빨강 규칙을 만들지 않는다).
   assert.match(css, /\.hub-app \.record-ctx__late \{ color: var\(--danger\); font-weight: 500; \}/);
   assert.equal((css.match(/var\(--danger\)/g) || []).length, 1);
   assert.doesNotMatch(css, /inset 1px 0 0/);
@@ -196,7 +197,7 @@ test("the newest row is the receipt — 기록 중 → 저장 중 → 저장됨 
   assert.match(css, /\.record-ctx__item\[data-receipt\] \.record-ctx__title \{ font-weight: 500; \}/);
 });
 
-test("the two columns scroll on their own and fold to the composer alone at 900px", () => {
+test("the two columns scroll on their own and become tabs at 900px — one column at a time", () => {
   assert.match(css, /\.hub-app \.record-window \{ flex: 1; min-height: 0; display: grid; grid-template-columns: minmax\(0, 1fr\) clamp\(280px, 33\.4%, 320px\); \}/);
   assert.match(css, /\.hub-app \.record-ctx \{[^}]*overflow-y: auto;/);
   // 쓰기 칸 — 아래 띠는 제자리, 그 위(요약 + 자세히)만 흐른다.
@@ -210,11 +211,15 @@ test("the two columns scroll on their own and fold to the composer alone at 900p
   assert.match(wideRule, /--record-scroll-floor: 16rem;/);
   assert.match(wideRule, /overflow-y: auto; overscroll-behavior: contain;/);
   assert.doesNotMatch(css.match(/\n\.hub-app \.record-wide__scroll \{[^}]*\}/)?.[0] || "x overscroll-behavior", /overscroll-behavior/);
-  // 중단점은 900 하나(600 이하는 이 배치를 쓰지 않는다) — 새 중단점을 만들지 않는다.
+  // 이 파일의 중단점은 900 하나다(600 이하의 시트는 폼의 배치가 맡는다) — 새 중단점을 만들지 않는다.
   assert.deepEqual([...css.matchAll(/@media \(([^)]+)\)/g)].map((m) => m[1]), ["max-width: 900px"]);
   const narrow = css.slice(css.indexOf("@media (max-width: 900px)"));
-  assert.match(narrow, /\.hub-app \.record-window \{ grid-template-columns: minmax\(0, 1fr\); \}/);
-  assert.match(narrow, /\.hub-app \.record-ctx \{ display: none; \}/);
+  // 900px 이하 — 두 칸이 '쓰기 | 이 고객' 탭이 된다(2026-09-30 ③). 읽기 칸은 사라지지 않고 탭 뒤에 선다:
+  // 쓰기 탭에서만 비키고, '이 고객' 탭에서는 본문을 채우며 흐른다(옆 선 없이).
+  assert.match(narrow, /\.hub-app \.record-window \{ display: flex; flex-direction: column; \}/);
+  assert.match(narrow, /\.hub-app \.record-window\[data-tab="write"\] \.record-ctx \{ display: none; \}/);
+  assert.match(narrow, /\.hub-app \.record-ctx \{ flex: 1 1 auto; padding-inline: 16px; border-left: 0; \}/);
+  assert.doesNotMatch(narrow, /\.hub-app \.record-ctx \{ display: none; \}/, "읽기 칸을 통째로 없애지 않는다");
   // 토큰만 — 원색 · raw 시간 · 굵은 선이 없다.
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b|rgba?\(|oklch\(/);
   assert.doesNotMatch(css, /\d+ms\b|cubic-bezier\(/);
@@ -292,6 +297,56 @@ test("the same Drawer carries the record window — width through the existing p
   assert.match(asideOf(wide), /role="dialog" aria-modal="true" aria-label="연락 기록"/);
   assert.match(asideOf(wide), /width:min\(960px, calc\(100% - 56px\)\)/);
   assert.match(bodyOf(wide), /style="flex:1;padding:0;display:flex;flex-direction:column;gap:0;overflow:hidden"/);
+});
+
+// 휴대폰의 전체 높이 시트도 같은 Drawer다(Q-CR11) — 새 presentation이 아니라 선택 prop 둘(sheet · headerAction).
+test("the Drawer's full-height sheet and header action are opt-in — every other drawer renders as before", () => {
+  const asideOf = (html) => html.match(/<aside[^>]*>/)?.[0] || "";
+  const headerOf = (html) => html.match(/<div class="hub-drawer__header"[^>]*>.*?<div class="hub-drawer__body/s)?.[0] || "";
+  const draw = (props) => renderToStaticMarkup(React.createElement(Drawer, { title: "연락 기록", subtitle: "기록 대상", onClose() {}, ...props }, "본문"));
+  const closeAt = (html) => headerOf(html).indexOf('aria-label="닫기"');
+
+  // 기본 — 시트 표식 없음, 머리는 제목 뒤에 닫기 하나.
+  for (const plain of [draw({}), draw({ presentation: "compact" })]) {
+    assert.doesNotMatch(asideOf(plain), /data-sheet/);
+    assert.doesNotMatch(headerOf(plain), /data-action|hub-drawer__action/);
+    assert.equal((headerOf(plain).match(/aria-label="닫기"/g) || []).length, 1);
+    assert.ok(closeAt(plain) > headerOf(plain).indexOf("연락 기록"), "닫기는 제목 뒤(오른쪽 끝)");
+  }
+  // sheet="full"은 바닥 시트(compact)에서만 뜻이 있다 — 옆 드로어에 줘도 아무것도 바뀌지 않는다.
+  assert.doesNotMatch(asideOf(draw({ sheet: "full" })), /data-sheet/);
+  const full = draw({ presentation: "compact", sheet: "full" });
+  assert.match(asideOf(full), /data-presentation="compact" data-sheet="full"/);
+  assert.match(asideOf(full), /role="dialog" aria-modal="true" aria-label="연락 기록"/, "같은 대화상자 — 이름 · ESC · 포커스 가둠이 그대로다");
+
+  // 머리의 행동 — 오른쪽 끝에 하나. 닫기는 왼쪽 끝으로 옮겨 두 누르는 곳이 이웃하지 않는다. 닫기는 여전히 하나다.
+  const action = draw({ presentation: "compact", sheet: "full", headerAction: React.createElement("button", { type: "button" }, "저장") });
+  const header = headerOf(action);
+  assert.match(header, /^<div class="hub-drawer__header" data-action=""/);
+  assert.equal((header.match(/aria-label="닫기"/g) || []).length, 1);
+  assert.ok(closeAt(action) < header.indexOf("연락 기록"), "닫기가 먼저");
+  assert.ok(header.indexOf("연락 기록") < header.indexOf('class="hub-drawer__action"'), "행동은 제목 뒤");
+  assert.match(header, /<div class="hub-drawer__action"[^>]*><button type="button">저장<\/button><\/div>/);
+  // 닫기는 어디에 서든 44px 누르는 곳이다.
+  for (const html of [draw({}), action]) assert.match(headerOf(html), /<button[^>]*aria-label="닫기"[^>]*width:44px;height:44px/);
+
+  // 전체 높이 · 키보드 따라가기는 600px 이하의 스타일시트가 한다 — 값은 Drawer가 적는 두 변수(없으면 100dvh · 바닥 0).
+  const sheetCss = readFileSync(new URL("./hub-compact-drawer.css", import.meta.url), "utf8");
+  const phone = sheetCss.slice(sheetCss.indexOf("@media (max-width: 600px)"), sheetCss.indexOf("@keyframes hubCompactSheetIn"));
+  const rule = phone.match(/\.hub-app \.hub-drawer\[data-presentation="compact"\]\[data-sheet="full"\] \{[^}]*\}/)?.[0] || "";
+  assert.match(rule, /bottom: var\(--hub-sheet-keyboard, 0px\);/);
+  assert.match(rule, /height: calc\(var\(--hub-sheet-viewport, 100dvh\) - 16px\);/);
+  assert.match(rule, /max-height: none;/);
+  assert.doesNotMatch(rule, /transition|animation/, "키보드를 따라 곧바로 — 높이에 전이를 걸지 않는다");
+  assert.doesNotMatch(sheetCss.slice(0, sheetCss.indexOf("@media (max-width: 600px)")), /data-sheet/, "600px 위에서는 아무것도 바뀌지 않는다");
+  // 새 중단점 · 원색 · raw 시간 없음.
+  assert.deepEqual([...new Set([...sheetCss.matchAll(/@media \(([^)]+)\)/g)].map((m) => m[1]))], ["max-width: 600px", "prefers-reduced-motion: reduce"]);
+  assert.doesNotMatch(phone, /#[0-9a-fA-F]{3,8}\b|rgba?\(|oklch\(|\d+ms\b/);
+  // Drawer가 두 변수를 적는 것은 전체 높이 시트일 때만이다.
+  const primitives = readFileSync(new URL("./hub-primitives.jsx", import.meta.url), "utf8");
+  assert.match(primitives, /const fullSheet = compact && sheet === 'full';/);
+  assert.match(primitives, /data-sheet=\{fullSheet \? 'full' : undefined\}/);
+  assert.match(primitives, /headerAction = null, sheet = 'auto'/);
 });
 
 test("an empty place never reads as 'no memos' while linked memos are loading or unread", () => {

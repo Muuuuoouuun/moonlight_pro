@@ -180,6 +180,15 @@ export function promiseReadout(promise = {}) {
   return { what, muted: true, late: false, lateLabel: "", when: "" };
 }
 
+// 좁은 기록창의 약속 한 줄 — 같은 약속을 말줄임 한 줄에 놓는다. 잘리는 것은 줄의 끝이므로 '언제'가 앞에
+// 선다: [N일 지남] · 날짜(M/D — 화면은 mono) · 무엇을. 쓰는 동안 칩 줄의 새 약속 날짜와 견주는 값이
+// 날짜라서다. 날짜 없는 약속은 그 사실(tail)이 뒤에 붙는다. 전체 문장은 '이 고객' 탭의 약속 카드가 말한다.
+export function promisePeek(promise = {}) {
+  const { what, late, lateLabel, when } = promiseReadout(promise);
+  const date = promise.state === "dated" ? promise.dateLabel || "" : "";
+  return { what, late, lateLabel, date, tail: date ? "" : when };
+}
+
 // 진행 중인데 날짜 있는 약속이 없는 사람 — 히어로 eyebrow의 "약속 없는 진행 중". state가
 // "dated"가 아니면 전부 센다 — template(이관 문구뿐)도 여기 포함된다: 문구가 있어도 운영자의
 // 약속이 아니므로 "약속 없는 진행 중"에서 빠지면 안 된다(2026-09-24).

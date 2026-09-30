@@ -20,13 +20,14 @@
 import React from "react";
 import { Button, Kbd, Skeleton, TextAreaField, TruthBadge } from "./hub-primitives";
 import { Iconed } from "./hub-icons";
-import { RecordSaveLine, useGrowingDetail } from "./contact-record-form";
+import { RecordAwayBar, RecordPrimarySlot, RecordSaveLine, useGrowingDetail } from "./contact-record-form";
 import { RecordReceipt } from "./record-context-column";
 import { fetchJournal, useMemoDocument } from "./pages/use-memos";
 import { claimContextMemoId, contextMemoKey, contextMemoStorageKey, releaseContextMemoId } from "@/lib/project-customer-context";
 import { createJournalStore, journalTabId, rememberJournalWorkspace } from "@/lib/journal-browser-store";
 import { MEMO_CHANGED_EVENT } from "@/lib/journal-search-client";
 import { isCanonicalUuid } from "@/lib/uuid";
+import { recordAwayLabel } from "@/lib/sales-os/contact-record";
 import { memoRestoredCopy, nextMemoSeed, recordMemoLine } from "@/lib/sales-os/record-memo";
 import "./record-window.css";
 
@@ -38,7 +39,15 @@ const useLayoutEffectOnClient = typeof window !== "undefined" ? React.useLayoutE
 // savedAt: 방금 저장이 확인된 시각(빈 칸일 때 영수증으로 선다). contactLine: 앞서 누른 연락 기록의 진행 줄.
 // handoff: 저장 확인 직후 다음 메모의 작성기가 서는 중 — 준비 전에도 칸(빈 칸 · 아직 받지 않음)과 영수증이 선다.
 // saveRef.current에 저장 함수를 둔다 — 기록창의 ⌘↵가 부른다.
-export function RecordMemoView({ boot = "ready", bootMessage = "", onBootRetry, model = null, savedAt = null, handoff = false, contactLine = null, saveRef = null, onSettled }) {
+// 휴대폰 시트 · 좁은 화면(2026-09-30 넓은 기록창 ③)에서 폼이 더 넘기는 것 — 전부 선택이고, 없으면 지금 그대로다:
+//   sheet    — 휴대폰 시트인가. 글쓰기 칸이 여섯 줄에서 시작한다(키보드 위에 남는 높이).
+//   head     — 흐르는 칸 맨 위에 놓을 것(시트의 '연락 기록 | 메모' 전환 칸).
+//   saveSlot — 주 버튼이 설 머리 자리(RecordPrimarySlot). 주 버튼은 여전히 하나다.
+//   away     — '이 고객' 탭을 보는 중. 메모 칸은 가려진 채 서 있고, 아래 줄이 '쓰던 메모 · N자'와 돌아갈 길을 보인다.
+//   contactProgress · onContactUndo — 앞서 누른 연락 기록의 진행(기록 중 · 되돌리기 → 저장 중). 띠의 contactLine과
+//              같은 것이다: 가려진 동안에는 아래 줄이 대신 보인다 — 탭을 옮겼다고 3.5초 되돌리기가 사라지지 않는다.
+//   onReturn · onAttention — 쓰기로 돌아가기 / 저장이 막혔거나 실패해 메모 칸을 봐야 할 때.
+export function RecordMemoView({ boot = "ready", bootMessage = "", onBootRetry, model = null, savedAt = null, handoff = false, contactLine = null, saveRef = null, onSettled, sheet = false, head = null, saveSlot, away = false, onReturn, onAttention, contactProgress = null, onContactUndo }) {
   const [attempted, setAttempted] = React.useState(false);
   const [dismissed, setDismissed] = React.useState(false);
   const bodyRef = React.useRef(null);
@@ -61,7 +70,8 @@ export function RecordMemoView({ boot = "ready", bootMessage = "", onBootRetry, 
     empty, attempted, savedAt, handoff: standing && !ready,
   });
 
-  useGrowingDetail(bodyRef, ready, body);
+  // 가려진 동안('이 고객' 탭)은 재지 않고, 돌아온 순간과 배치가 바뀔 때 다시 잰다(연락 기록의 자세히와 같은 규칙).
+  useGrowingDetail(bodyRef, ready && !away, body, sheet);
 
   // 메모 칸이 서면 커서를 둔다 — 모드를 바꿨거나(전환 칸을 누른 직후) 저장 뒤 빈 칸이 다시 섰을 때.
   // 저장 뒤에는 작성기가 준비되기를 기다리지 않고(standing), 그리기 전에 둔다(레이아웃 효과): 앞 메모의 칸이
@@ -86,7 +96,14 @@ export function RecordMemoView({ boot = "ready", bootMessage = "", onBootRetry, 
     if (action === "confirm") { model.retry(); return; }
     if (action === "overwrite") { model.chooseConflict(true); model.save(); return; }
     setAttempted(true);
-    if (empty) { bodyRef.current?.focus(); return; }
+    // '이 고객' 탭에서 누른 저장이 막혔으면(빈 메모 · 연결 전) 쓰기로 돌아와 저장 줄의 이유를 보인다.
+    if (empty || model.source !== "live") onAttention?.();
+    // 가려져 있던 칸은 쓰기 탭이 다시 선 다음 프레임에야 커서를 받는다(연락 기록의 빠진 칸과 같은 규칙).
+    if (empty) {
+      if (away) requestAnimationFrame(() => bodyRef.current?.focus());
+      else bodyRef.current?.focus();
+      return;
+    }
     if (model.source !== "live") return;
     // 기록 시각은 저장을 누른 지금이다 — 빈 칸이 열려 있던 시각이 아니라. 이미 저장된 메모를 고쳐 쓰는
     // 길(충돌 뒤 내 글로 저장)은 그 메모의 시각을 그대로 둔다.
@@ -99,10 +116,23 @@ export function RecordMemoView({ boot = "ready", bootMessage = "", onBootRetry, 
   // 저장 확인이 아니다(entry 없이 끝낸다) — 다음 메모의 문맥은 그 저장본이 든 것(서버가 확인한 것)을 넘긴다.
   const keepStored = () => { const stored = model.conflict; model.chooseConflict(false); onSettled?.(null, stored?.contexts); };
 
+  // 실패 · 미확인 · 충돌은 저장 줄의 레일 줄이 말한다 — 가려진 탭에서 생기면 쓰기로 돌린다.
+  const issue = plan.line.note?.tone === "error" ? plan.line.note.title || "" : "";
+  React.useEffect(() => {
+    if (issue) onAttention?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 원인이 새로 섰을 때만 알린다(호출처는 매 렌더 새 함수를 넘긴다)
+  }, [issue]);
+
+  const returnToWriting = () => {
+    onReturn?.();
+    requestAnimationFrame(() => bodyRef.current?.focus());
+  };
+
   const booting = plan.phase === "booting";
   return (
     <>
       <div className="record-wide__scroll">
+        {head}
         {booting ? (
           <Skeleton lines={4} height={16} width={["18%", "100%", "100%", "62%"]} gap={10} label="메모 칸 준비 중" />
         ) : plan.phase === "boot-error" ? (
@@ -127,7 +157,7 @@ export function RecordMemoView({ boot = "ready", bootMessage = "", onBootRetry, 
               ref={bodyRef}
               label="메모"
               value={body}
-              rows={10}
+              rows={sheet ? 6 : 10}
               readOnly={!ready || model.locked}
               onChange={(e) => edit(e.target.value)}
               placeholder={"연락은 아니지만 이 고객에 대해 기억해 둘 것.\n성향, 결정하는 사람, 다음에 조심할 점 — 쓰는 만큼 칸이 길어져요."}
@@ -147,12 +177,15 @@ export function RecordMemoView({ boot = "ready", bootMessage = "", onBootRetry, 
             ? <div className="record-wide__saved"><RecordReceipt receipt={plan.receipt} /></div>
             : <RecordSaveLine line={plan.line} />}
           {plan.phase === "conflict" && <Button variant="ghost" size="xs" onClick={keepStored}>저장본 그대로 두기</Button>}
-          <Button variant="primary" size="md" disabled={plan.primary.disabled} onClick={save}>
-            {plan.primary.label}
-            {!plan.primary.disabled && plan.primary.action !== "reload" && <Kbd style={{ background: "transparent", color: "inherit", borderColor: "currentColor", boxShadow: "none", opacity: 0.7 }}>⌘↵</Kbd>}
-          </Button>
+          <RecordPrimarySlot slot={saveSlot}>
+            <Button variant="primary" size="md" disabled={plan.primary.disabled} onClick={save}>
+              {plan.primary.label}
+              {saveSlot === undefined && !plan.primary.disabled && plan.primary.action !== "reload" && <Kbd style={{ background: "transparent", color: "inherit", borderColor: "currentColor", boxShadow: "none", opacity: 0.7 }}>⌘↵</Kbd>}
+            </Button>
+          </RecordPrimarySlot>
         </div>
       </div>
+      {away && <RecordAwayBar label={recordAwayLabel({ mode: "memo", chars: body.trim().length })} progress={contactProgress} onUndo={onContactUndo} onReturn={returnToWriting} />}
     </>
   );
 }
@@ -195,7 +228,9 @@ const sameSession = (session, ledger, identity) => session.status === "ready" &&
 // contexts: [{ type: "lead" | "account", id, label }] — 이 메모가 붙을 고객(호출처가 uuid임을 확인해 준다).
 // onSaved(entry): 서버가 저장을 확인한 메모 — 호출처가 기록 줄기에 영수증과 함께 세운다.
 // saveRef · contactLine: ContactRecordForm의 memo 자리가 넘긴다.
-export function RecordMemoPane({ contexts = [], saveRef = null, contactLine = null, onSaved }) {
+// 그 밖에 폼이 넘긴 자리(sheet · head · saveSlot · away · onReturn · onAttention · contactProgress · onContactUndo)는
+// 그리는 쪽(RecordMemoView)에 그대로 건넨다.
+export function RecordMemoPane({ contexts = [], saveRef = null, contactLine = null, onSaved, ...slot }) {
   const identity = contextMemoKey(contexts);
   // 작성기는 contexts의 동일성으로 다시 읽을지 정한다 — 호출처가 매 렌더 새 배열을 넘겨도 같은 고객이면 같은 값.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 고객이 같으면(identity) 같은 문맥이다
@@ -248,6 +283,7 @@ export function RecordMemoPane({ contexts = [], saveRef = null, contactLine = nu
         onBootRetry={() => setReload((n) => n + 1)}
         contactLine={contactLine}
         saveRef={saveRef}
+        {...slot}
       />
     );
   }
@@ -263,6 +299,7 @@ export function RecordMemoPane({ contexts = [], saveRef = null, contactLine = nu
       handoff={Boolean(session.seeded)}
       contactLine={contactLine}
       saveRef={saveRef}
+      {...slot}
     />
   );
 }

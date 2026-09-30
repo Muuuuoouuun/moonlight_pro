@@ -3,6 +3,7 @@
 import React from "react";
 import { Iconed } from "./hub-icons";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
+import { useKeyboardInset } from "./use-keyboard-inset";
 import './hub-compact-drawer.css';
 import './hub-edit-drawer.css';
 export { useToast, ToastProvider } from './hub-toast';
@@ -1036,10 +1037,19 @@ const DRAWER_FOCUSABLE = 'input, select, textarea, button, a[href], [tabindex]:n
 // save/delete semantics. EditDrawer and the Guru diagnosis drawer compose on top.
 // `bodyStyle` mirrors `footerStyle`: a caller whose content owns its own scroll regions (the wide
 // record window's two columns) drops the body padding/scroll instead of fighting it with margins.
-export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyle, initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
+// Two optional props serve long writing on a phone (2026-09-30 넓은 기록창 ③ · Q-CR11) — same overlay,
+// no new presentation:
+//   `sheet="full"` — the compact bottom sheet (≤600px) takes the full visible height and follows the
+//     on-screen keyboard (visualViewport → --hub-sheet-keyboard / --hub-sheet-viewport, read by
+//     hub-compact-drawer.css). Above 600px it changes nothing.
+//   `headerAction` — one action at the trailing end of the header (the sheet's 저장, so the keyboard
+//     never covers it). Close moves to the leading end so the two targets are not neighbours.
+export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyle, headerAction = null, sheet = 'auto', initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
   const asideRef = React.useRef(null);
   const bodyRef = React.useRef(null);
   const compact = presentation === 'compact';
+  const fullSheet = compact && sheet === 'full';
+  useKeyboardInset(asideRef, { enabled: fullSheet, keyboardVar: '--hub-sheet-keyboard', viewportVar: '--hub-sheet-viewport' });
 
   // ESC는 이 드로어가 최상위 레이어일 때만 닫는다 — 드로어 위에 ⌘K 팔레트가 열려 있으면
   // 팔레트가 먼저 닫혀야 한다(esc-layers.js). onClose는 ref로 읽어 부모 리렌더가 레이어
@@ -1097,6 +1107,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
         onKeyDown={handleKeyDown}
         className="hub-drawer"
         data-presentation={presentation}
+        data-sheet={fullSheet ? 'full' : undefined}
         data-exiting={exiting}
         style={{
           position: 'fixed', zIndex: 'var(--z-drawer)', background: 'var(--surface)', color: 'var(--fg)',
@@ -1107,12 +1118,15 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, bodyStyl
           }),
         }}
       >
-        <div className="hub-drawer__header" style={{ padding: compact ? undefined : '14px 16px', borderBottom: compact ? undefined : '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="hub-drawer__header" data-action={headerAction ? '' : undefined} style={{ padding: compact ? undefined : '14px 16px', borderBottom: compact ? undefined : '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {headerAction && <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: '-10px 0 -10px -10px' }} />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
             {subtitle && <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
           </div>
-          <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: -10 }} />
+          {headerAction
+            ? <div className="hub-drawer__action" style={{ flex: 'none', display: 'flex', alignItems: 'center' }}>{headerAction}</div>
+            : <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: -10 }} />}
         </div>
         <div ref={bodyRef} className="hub-drawer__body scroll-y" style={{ flex: 1, padding: compact ? undefined : 16, display: 'flex', flexDirection: 'column', gap: 14, ...bodyStyle }}>
           {children}

@@ -14,7 +14,10 @@ import {
   draftPlaceLabel,
   draftRestoredCopy,
   RECORD_DRAWER_WIDTH,
+  RECORD_LAYOUT_BREAKPOINTS,
+  RECORD_LAYOUT_QUERIES,
   RECORD_MODES,
+  RECORD_TABS,
   addSavedNoteRow,
   applyReceiptEvent,
   detailFieldHeight,
@@ -25,12 +28,19 @@ import {
   normalizeRecordMode,
   reactionRequired,
   receiptTimeLabel,
+  recordAwayLabel,
   recordChannelOptions,
+  recordDetailLines,
+  recordDraftChars,
+  recordLayoutModeFromMedia,
   recordModeOptions,
   recordModeSentence,
   recordReceipt,
   recordSaveLabel,
   recordSaveLine,
+  recordSaveLineResting,
+  recordSheetChips,
+  recordTab,
   recordWindowLayout,
   saveChordReachesRecord,
   validateContactRecord,
@@ -299,16 +309,177 @@ test("draft copy names where the draft actually lives", () => {
 
 // ── 2026-09-30 넓은 기록창 ②(권장 · 화면 확인 뒤 확정) ─────────────────────────────
 
-test("the record window is the same drawer — only the width changes, and only while writing on a desktop", () => {
+test("the record window is the same drawer — only the width changes, and only while writing", () => {
   assert.deepEqual(RECORD_DRAWER_WIDTH, { rest: "min(480px, 96vw)", wide: "min(960px, calc(100% - 56px))" });
-  // 읽을 땐 좁게.
-  assert.deepEqual(recordWindowLayout({ recording: false, mobile: false }), { width: RECORD_DRAWER_WIDTH.rest, form: "compact", context: false });
-  assert.deepEqual(recordWindowLayout(), { width: RECORD_DRAWER_WIDTH.rest, form: "compact", context: false });
+  const REST = { width: RECORD_DRAWER_WIDTH.rest, form: "compact", context: false, tabs: false, headerSave: false };
+  // 읽을 땐 좁게 — 어느 화면 폭에서든 쉬는 드로어는 그대로다(탭 · 머리 저장 없음).
+  assert.deepEqual(recordWindowLayout({ recording: false, mobile: false }), { mode: "wide", ...REST });
+  assert.deepEqual(recordWindowLayout(), { mode: "wide", ...REST });
+  assert.deepEqual(recordWindowLayout({ recording: false, narrow: true }), { mode: "tabs", ...REST });
+  assert.deepEqual(recordWindowLayout({ recording: false, mobile: true, narrow: true }), { mode: "sheet", ...REST });
   // 쓸 때만 넓게 — 요약 · 자세히 두 칸 + 오른쪽 읽기 칸.
-  assert.deepEqual(recordWindowLayout({ recording: true, mobile: false }), { width: RECORD_DRAWER_WIDTH.wide, form: "wide", context: true });
-  // 휴대폰은 지금 바닥 시트 그대로(전체 높이 시트는 다음 조각).
-  assert.deepEqual(recordWindowLayout({ recording: true, mobile: true }), { width: RECORD_DRAWER_WIDTH.rest, form: "compact", context: false });
-  assert.deepEqual(recordWindowLayout({ recording: false, mobile: true }), { width: RECORD_DRAWER_WIDTH.rest, form: "compact", context: false });
+  assert.deepEqual(recordWindowLayout({ recording: true, mobile: false }), { mode: "wide", width: RECORD_DRAWER_WIDTH.wide, form: "wide", context: true, tabs: false, headerSave: false });
+});
+
+// ── 2026-09-30 넓은 기록창 ③ — 좁은 화면(Q-CR3 · Q-CR11, 권장 · 화면 확인 뒤 확정) ─────────────────
+
+// 드로어가 matchMedia에 건네는 바로 그 쿼리 문장을 읽어 그 폭에서의 답을 낸다(브라우저가 하는 일) — 상수를
+// 다시 비교하지 않는다: 쿼리 문장이 바뀌면(min-width · 다른 폭) 아래 표가 깨진다.
+const mediaAnswer = (query, width) => {
+  const max = /^\(max-width: (\d+)px\)$/.exec(query);
+  assert.ok(max, `읽을 수 있는 max-width 쿼리여야 한다: ${query}`);
+  return width <= Number(max[1]);
+};
+
+test("the layout mode follows the viewport width — wide above 900, tabs to 601, a sheet at 600 and below", () => {
+  // 중단점은 §7 Responsive의 둘뿐이다 — 새 폭을 만들지 않는다.
+  assert.deepEqual(RECORD_LAYOUT_BREAKPOINTS, { sheet: 600, tabs: 900 });
+  assert.deepEqual(RECORD_LAYOUT_QUERIES, { sheet: "(max-width: 600px)", tabs: "(max-width: 900px)" });
+  // 폭 → (드로어가 듣는 두 쿼리의 답) → 배치. 화면이 실제로 타는 길이다: 폭 숫자를 직접 받는 함수는 없다
+  // (스타일시트와 같은 자로 재야 소수 폭에서 두 쪽이 어긋나지 않는다). 600 이하는 둘 다 맞고 sheet가 이긴다.
+  const modeAt = (width) => recordLayoutModeFromMedia({
+    mobile: mediaAnswer(RECORD_LAYOUT_QUERIES.sheet, width),
+    narrow: mediaAnswer(RECORD_LAYOUT_QUERIES.tabs, width),
+  });
+  const cases = [
+    [320, "sheet"], [390, "sheet"], [600, "sheet"],
+    [601, "tabs"], [768, "tabs"], [900, "tabs"],
+    [901, "wide"], [1280, "wide"], [1440, "wide"], [2560, "wide"],
+    // 소수 폭(확대 · 분할 화면)도 같은 경계를 쓴다 — max-width는 600.4px을 600px 이하로 보지 않는다.
+    [600.4, "tabs"], [900.5, "wide"],
+  ];
+  for (const [width, mode] of cases) {
+    assert.equal(modeAt(width), mode, `${width}px`);
+    assert.equal(recordWindowLayout({
+      recording: true,
+      mobile: mediaAnswer(RECORD_LAYOUT_QUERIES.sheet, width),
+      narrow: mediaAnswer(RECORD_LAYOUT_QUERIES.tabs, width),
+    }).mode, mode, `${width}px (layout)`);
+  }
+  // 쿼리를 아직 못 들었으면(서버 렌더 · 첫 그리기) 데스크톱 기본이다 — 빈 값으로 휴대폰 배치를 고르지 않는다.
+  assert.equal(recordLayoutModeFromMedia(), "wide");
+  assert.equal(recordLayoutModeFromMedia({}), "wide");
+  assert.equal(recordLayoutModeFromMedia({ mobile: true }), "sheet", "sheet 쿼리만 맞았다고 알려 와도 휴대폰이다");
+});
+
+test("each layout mode decides the drawer's width, the form's layout, the tabs and where save lives", () => {
+  // 601–900px — 같은 넓은 드로어(폭은 화면이 자른다)에 같은 넓은 폼. 두 칸은 탭이 되고 저장은 아래 띠 그대로다.
+  assert.deepEqual(recordWindowLayout({ recording: true, narrow: true }),
+    { mode: "tabs", width: RECORD_DRAWER_WIDTH.wide, form: "wide", context: true, tabs: true, headerSave: false });
+  // 600px 이하 — 바닥 시트(폭은 시트가 정한다)에 시트 배치의 폼. 같은 탭, 저장은 머리에.
+  assert.deepEqual(recordWindowLayout({ recording: true, mobile: true, narrow: true }),
+    { mode: "sheet", width: RECORD_DRAWER_WIDTH.rest, form: "sheet", context: true, tabs: true, headerSave: true });
+  // 어느 배치든 읽기 칸은 있다(좁은 화면에서는 탭 뒤에) — 쓰는 동안 읽던 약속 · 기록이 한 번에 닿는다.
+  for (const media of [{}, { narrow: true }, { mobile: true, narrow: true }]) assert.equal(recordWindowLayout({ recording: true, ...media }).context, true);
+  // 넓은 폭의 '화면이 자르는' 값 — 900px 화면에서 844px, 1440px 화면에서 960px.
+  assert.match(RECORD_DRAWER_WIDTH.wide, /^min\(960px, calc\(100% - 56px\)\)$/);
+});
+
+test("the narrow tabs are 쓰기 | 이 고객 — and the tab only exists where the layout has tabs", () => {
+  assert.deepEqual(RECORD_TABS, [{ key: "write", label: "쓰기" }, { key: "context", label: "이 고객" }]);
+  assert.equal(recordTab("context", { tabs: true }), "context");
+  assert.equal(recordTab("write", { tabs: true }), "write");
+  // 탭이 없는 배치(넓은 화면)에서는 언제나 쓰기다 — '이 고객'을 보다가 창을 넓히면 두 칸이 다시 나란히 선다.
+  assert.equal(recordTab("context", { tabs: false }), "write");
+  assert.equal(recordTab("context"), "write");
+  // 모르는 값은 쓰기다.
+  for (const odd of [undefined, null, "", "memo", "읽기"]) assert.equal(recordTab(odd, { tabs: true }), "write", String(odd));
+  // 배치가 그대로 넘어온다(recordWindowLayout의 결과).
+  assert.equal(recordTab("context", recordWindowLayout({ recording: true, narrow: true })), "context");
+  assert.equal(recordTab("context", recordWindowLayout({ recording: true })), "write");
+});
+
+test("the line under 이 고객 says how much writing is waiting — the draft is kept, not counted as saved", () => {
+  assert.equal(recordDraftChars({ summary: "시범 채점 합의", body: "[결정사항]\n- 10월 셋째 주" }), 8 + 17);
+  // 앞뒤 빈칸은 세지 않고, 쓴 글만 센다(다음 약속 · 채널 · 반응은 글쓰기 칸이 아니다).
+  assert.equal(recordDraftChars({ summary: "  통화  ", body: "\n\n", nextAction: "견적서 보내기", kind: "call" }), 2);
+  assert.equal(recordDraftChars(), 0);
+  assert.equal(recordDraftChars({ summary: null, body: undefined }), 0);
+
+  assert.equal(recordAwayLabel({ mode: "contact", chars: 366 }), "쓰던 기록 · 366자");
+  assert.equal(recordAwayLabel({ mode: "memo", chars: 42 }), "쓰던 메모 · 42자");
+  assert.equal(recordAwayLabel({ mode: "contact", chars: 12480 }), "쓰던 기록 · 12,480자");
+  // 쓴 게 없으면 세지 않는다 — '0자'라고 하지 않고, 저장됐다는 말도 하지 않는다.
+  assert.equal(recordAwayLabel({ mode: "contact", chars: 0 }), "아직 쓴 기록이 없어요");
+  assert.equal(recordAwayLabel({ mode: "memo" }), "아직 쓴 메모가 없어요");
+  assert.equal(recordAwayLabel(), "아직 쓴 기록이 없어요");
+  for (const label of [recordAwayLabel({ chars: 5 }), recordAwayLabel({ mode: "memo", chars: 5 }), recordAwayLabel()]) assert.doesNotMatch(label, /저장됨|기록됨|완료/);
+  // 모르는 모드는 연락 기록으로, 이상한 수는 0으로 읽는다.
+  assert.equal(recordAwayLabel({ mode: "draft", chars: 3 }), "쓰던 기록 · 3자");
+  assert.equal(recordAwayLabel({ chars: -4 }), "아직 쓴 기록이 없어요");
+  assert.equal(recordAwayLabel({ chars: "abc" }), "아직 쓴 기록이 없어요");
+  // 글은 없어도 고쳐 둔 것(다음 약속 · 반응 · 날짜)이 가려진 칸에 있으면 "쓴 게 없다"고 하지 않는다 — 몇 자라고
+  // 지어내지도 않는다. 아무것도 안 만진 폼만 없다고 말한다.
+  const onlyPromise = { summary: "", body: "", nextAction: "견적서 보내기" };
+  assert.equal(recordDraftChars(onlyPromise), 0);
+  assert.equal(recordAwayLabel({ mode: "contact", chars: recordDraftChars(onlyPromise), dirty: true }), "쓰던 기록이 남아 있어요");
+  assert.equal(recordAwayLabel({ mode: "memo", chars: 0, dirty: true }), "쓰던 메모가 남아 있어요");
+  assert.equal(recordAwayLabel({ mode: "contact", chars: 0, dirty: false }), "아직 쓴 기록이 없어요");
+  assert.equal(recordAwayLabel({ mode: "contact", chars: 12, dirty: true }), "쓰던 기록 · 12자", "글이 있으면 글자 수가 이긴다");
+  assert.doesNotMatch(recordAwayLabel({ chars: 0, dirty: true }), /저장됨|기록됨|완료|\d/);
+});
+
+test("the save line is resting only when it has nothing to say — then the phone sheet gives its row back to writing", () => {
+  const hint = draftHintCopy("tab", { dirty: true });
+  // 쉬는 중 — 할 말이 없거나 쉬는 초안 글자뿐이다(그 글자는 시트에서 머리의 둘째 줄로 간다).
+  assert.equal(recordSaveLineResting(recordSaveLine({})), true);
+  assert.equal(recordSaveLineResting(recordSaveLine({ draftHint: hint })), true);
+  assert.equal(recordSaveLineResting(), true);
+  // 할 말이 있으면 줄이 선다 — 앞선 저장의 진행(되돌리기 · 저장 중), 빠진 칸, 빈 약속 경고, 실패 원인.
+  assert.equal(recordSaveLineResting(recordSaveLine({ pending: { phase: "pending" }, draftHint: hint })), false);
+  assert.equal(recordSaveLineResting(recordSaveLine({ pending: { phase: "sending" } })), false);
+  assert.equal(recordSaveLineResting(recordSaveLine({ showMissing: true, draftHint: hint })), false);
+  assert.equal(recordSaveLineResting(recordSaveLine({ state: "warn", warnCopy: "다음 약속이 비어 있어요", draftHint: hint })), false);
+  assert.equal(recordSaveLineResting(recordSaveLine({ state: "error", errorMsg: "서버에 닿지 않았어요", errorTitle: "저장 못 함" })), false);
+  // 머리에 서는 말은 초안이 놓인 곳의 짧은 이름이다 — 저장됐다는 말이 아니다.
+  assert.equal(draftPlaceLabel("tab"), "초안 · 이 탭");
+  assert.doesNotMatch(draftPlaceLabel("tab") + draftPlaceLabel("memory"), /저장됨|기록됨|이 기기/);
+});
+
+test("the folded 자세히 line counts the lines that were written", () => {
+  assert.equal(recordDetailLines("[결정사항]\n- 10월 셋째 주\n- 답안지 양식 유지"), 3);
+  assert.equal(recordDetailLines("한 줄"), 1);
+  // 앞뒤 빈 줄은 세지 않고, 가운데 빈 줄은 쓴 그대로 센다.
+  assert.equal(recordDetailLines("\n\n첫 줄\n\n셋째 줄\n\n"), 3);
+  assert.equal(recordDetailLines("윈도우 줄바꿈\r\n둘째 줄"), 2);
+  for (const empty of ["", "   ", "\n\n", null, undefined]) assert.equal(recordDetailLines(empty), 0);
+});
+
+test("the sheet's chips summarise 어떻게 · 반응 and the promise in the words the fields use", () => {
+  const base = { kind: "meeting", reaction: null, replied: false, nextAction: "", followup: "dated", at: "2026-10-03" };
+  const labels = (form, options) => recordSheetChips(form, options).map((chip) => [chip.key, chip.label, chip.date]);
+
+  // 대화 채널은 반응이 필수다 — 아직 안 골랐으면 칩이 그렇게 말한다(색이 아니라 글자로).
+  assert.deepEqual(labels(base, { kindLabel: "미팅", whenLabel: "3일 뒤" }), [["how", "미팅 · 반응 필수", ""], ["promise", "약속 · 3일 뒤", "10/3"]]);
+  assert.deepEqual(labels({ ...base, reaction: "positive" }, { kindLabel: "미팅", whenLabel: "3일 뒤" })[0], ["how", "미팅 · 긍정", ""]);
+  assert.deepEqual(labels({ ...base, kind: "call", reaction: "no_response" }, { kindLabel: "통화" })[0], ["how", "통화 · 무응답", ""]);
+  // 발신 채널은 회신을 받았을 때만 반응을 말한다 — 보낸 사실에 반응을 붙이지 않는다.
+  assert.deepEqual(labels({ ...base, kind: "kakao" }, { kindLabel: "카톡·문자" })[0], ["how", "카톡·문자", ""]);
+  assert.deepEqual(labels({ ...base, kind: "kakao", replied: true }, { kindLabel: "카톡·문자" })[0], ["how", "카톡·문자 · 회신 받음 · 반응 필수", ""]);
+  assert.deepEqual(labels({ ...base, kind: "email", replied: true, reaction: "concern" }, { kindLabel: "메일" })[0], ["how", "메일 · 회신 받음 · 우려", ""]);
+  // 남아 있던 반응 값은 묻지 않는 채널에서 말하지 않는다.
+  assert.deepEqual(labels({ ...base, kind: "kakao", reaction: "positive" }, { kindLabel: "카톡·문자" })[0], ["how", "카톡·문자", ""]);
+  assert.deepEqual(labels({ ...base, kind: "note", reaction: "positive" }, { kindLabel: "메모만" })[0], ["how", "메모만", ""]);
+  // 칸 이름을 넘기지 않으면 저장 어휘의 이름으로 말한다.
+  assert.deepEqual(labels({ ...base, kind: "visit", reaction: "neutral" })[0], ["how", "방문 · 중립", ""]);
+
+  // 약속 — 무엇을(길면 자른다) · 언제. 날짜는 M/D로 따로 준다(화면은 mono).
+  assert.deepEqual(labels({ ...base, nextAction: "견적서 보내기" }, { whenLabel: "3일 뒤" })[1], ["promise", "견적서 보내기 · 3일 뒤", "10/3"]);
+  assert.deepEqual(labels({ ...base, nextAction: "  채점 기능 써 보시게 전달하고 원장회의 일정 확인  " }, { whenLabel: "다음 주" })[1], ["promise", "채점 기능 써 보시게 전달… · 다음 주", "10/3"]);
+  // 직접 고른 날짜(프리셋 아님)는 날짜만.
+  assert.deepEqual(labels({ ...base, at: "2026-12-25" })[1], ["promise", "약속", "12/25"]);
+  // 기약 없음 · 후속 없음은 날짜를 달지 않는다(남아 있던 날짜 값을 말하지 않는다).
+  assert.deepEqual(labels({ ...base, followup: "dormant", at: "2026-10-03" })[1], ["promise", "약속 · 기약 없음", ""]);
+  assert.deepEqual(labels({ ...base, followup: "none", nextAction: "추후 연락" })[1], ["promise", "추후 연락 · 후속 없음", ""]);
+  // 날짜가 비었거나 못 읽는 값이면 지어내지 않고 필요하다고 말한다.
+  assert.deepEqual(labels({ ...base, at: "" })[1], ["promise", "약속 · 날짜 필요", ""]);
+  assert.deepEqual(labels({ ...base, at: "10월 3일" }, { whenLabel: "3일 뒤" })[1], ["promise", "약속 · 날짜 필요", ""]);
+  // 칩은 늘 둘이다 — 빈 폼에서도 던지지 않는다.
+  assert.deepEqual(recordSheetChips().map((chip) => chip.key), ["how", "promise"]);
+  // 칩은 요약일 뿐이다 — 폼을 바꾸지 않는다.
+  const frozen = Object.freeze({ ...base });
+  recordSheetChips(frozen, { kindLabel: "미팅" });
+  assert.deepEqual(frozen, base);
 });
 
 test("Enter in the summary moves on only when it is a plain Enter — never mid-composition, never a save chord", () => {

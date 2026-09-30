@@ -14,12 +14,16 @@
 // 2026-09-30 넓은 기록창 ②(권장 · 화면 확인 뒤 확정): 기록 모드에서는 그 드로어의 폭만 넓어진다
 // (480 → 960px, 새 Drawer 종류 · 새 라우트 없음). 왼쪽은 쓰기(요약 한 줄 + 자세히 + 제자리 아래 띠),
 // 오른쪽은 읽던 약속 · 최근 기록(RecordContextColumn, 읽기만). 첫 ESC는 480px로, 두 번째는 닫기.
-// 휴대폰(≤600px)은 지금 바닥 시트 그대로다(전체 높이 시트는 다음 조각).
 //
 // 2026-09-30 넓은 기록창 ⑥(Q-CR6 · 권장): 넓은 기록창 맨 위에 '연락 기록 | 메모'가 선다. 메모 모드는 같은
 // 칸에서 일지 메모(journal, 이 고객 문맥)를 쓴다 — 기록 머리의 '메모' 버튼도 데스크톱에서는 드로어를 바꾸지
-// 않고 이 모드로 넓힌다. 연락이 아닌 한 줄 메모(QuickLog)는 넓은 기록창에서 빠진다. 휴대폰과, 메모를 붙일
-// 수 없는 고객(uuid 아님)은 지금 길 그대로다(QuickLog · 메모 창).
+// 않고 이 모드로 넓힌다. 연락이 아닌 한 줄 메모(QuickLog)는 넓은 기록창에서 빠진다. 메모를 붙일 수 없는
+// 고객(저장 전이거나 uuid가 아닌 id)만 지금 길 그대로다(QuickLog · 메모 창).
+//
+// 2026-09-30 넓은 기록창 ③(Q-CR3 · Q-CR11 · 권장): 좁은 화면도 같은 드로어 · 같은 기록 칸이다. 601–900px는
+// 두 칸이 '쓰기 | 이 고객' 탭이 되고(폭은 화면이 자른다), 600px 이하는 바닥 시트가 전체 높이로 서고 저장이
+// 머리에 선다(Drawer sheet="full" · headerAction — 새 오버레이 없음). 탭을 바꿔도 기록 칸은 가려질 뿐 서 있다.
+// 메모 모드는 휴대폰에서도 같다.
 
 import React from "react";
 import { OfficeWorkflowPanel } from '../office-workflow-panel';
@@ -55,13 +59,13 @@ import { LEAD_SUBJECTS, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { CUSTOMER_LABEL_MISSING, customerGenreOptions, customerRegionOptions, matchesCustomerLabels, normalizeGenreLabels } from "@/lib/sales-os/customer-labels";
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { isTemplateNextAction } from "@/lib/sales-os/lead-enrichment";
-import { addSavedNoteRow, applyReceiptEvent, recordReceipt, recordWindowLayout } from "@/lib/sales-os/contact-record";
+import { RECORD_LAYOUT_QUERIES, RECORD_TABS, addSavedNoteRow, applyReceiptEvent, recordReceipt, recordTab, recordWindowLayout } from "@/lib/sales-os/contact-record";
 import { ACTIVITY_ICON as ACT_ICON, memoStreamRows, recordContextTruth, recordRowKind, upsertSavedMemo } from "@/lib/sales-os/record-context";
 import {
   CUSTOMER_FOCUS_FILTERS, CUSTOMER_PHASES, CUSTOMER_SEGMENTS, DEFAULT_CUSTOMER_SEGMENT,
   channelFromPromise, countOpenWithoutPromise, customerDisplayName, customerLastContact,
   customerOrgLabel, customerPhase, customerPromise, customerSegmentCounts, inCustomerSegment,
-  localDateKey, matchesCustomerFocus, matchesCustomerSearch, promiseReadout, recordTimeLabel,
+  localDateKey, matchesCustomerFocus, matchesCustomerSearch, promisePeek, promiseReadout, recordTimeLabel,
   shortDateLabel, sortCaption, sortCustomers,
 } from "@/lib/sales-os/customer-list";
 import './customer-focus.css';
@@ -728,7 +732,8 @@ function QuickContactActions({ row, onCopied }) {
 
 function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordRequestConsumed, onClose, onNavigate, onDelete, onFocusChange, onLabelsSaved, onPromiseSaved, onRecordPersisted, onRecordFailed, nudge, onNudgeEscape }) {
   const toast = useToast();
-  const mobile = useMediaQuery("(max-width: 600px)");
+  const mobile = useMediaQuery(RECORD_LAYOUT_QUERIES.sheet);
+  const narrow = useMediaQuery(RECORD_LAYOUT_QUERIES.tabs);
   const [memoState, setMemoState] = React.useState(null);
   const memoContexts = React.useMemo(() => [{ type: row.kind, id: row.id, label: row.person || row.name }], [row.kind, row.id, row.person, row.name]);
   const [activities, setActivities] = React.useState([]);
@@ -742,6 +747,13 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   const [recordSeq, setRecordSeq] = React.useState(0);
   const recordRef = React.useRef(record);
   recordRef.current = record;
+  // 좁은 화면(≤900px)의 탭 — 쓰기 | 이 고객. 기록 모드를 열 때마다 쓰기에서 시작한다.
+  const [tabChoice, setTabChoice] = React.useState("write");
+  const tabsRef = React.useRef(null);
+  // 휴대폰 시트의 머리 자리 — 폼이 주 버튼(저장)을 여기에 그린다(키보드가 가리지 않는다). 둘째 줄의 자리
+  // (statusSlot)에는 초안이 놓인 곳('초안 · 이 탭')이 선다 — 키보드 위의 줄을 쉬는 글자에 쓰지 않는다.
+  const [saveSlot, setSaveSlot] = React.useState(null);
+  const [statusSlot, setStatusSlot] = React.useState(null);
   const mountedRef = React.useRef(true);
   React.useEffect(() => {
     mountedRef.current = true;
@@ -750,6 +762,7 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   const startRecord = React.useCallback((preset = {}, draft = null, error = "", mode = "contact") => {
     setRecord({ preset: Object.fromEntries(Object.entries(preset || {}).filter(([, v]) => v != null && v !== "")), draft, error, mode });
     setRecordSeq((n) => n + 1);
+    setTabChoice("write");
   }, []);
   // 기록 모드를 떠나면(첫 ESC · '고객 정보로' · 저장 확인) 폼이 사라져 포커스가 문서 밖으로 떨어진다 —
   // 같은 드로어의 '연락 기록' 버튼으로 돌려놓아 Tab 가둠과 R이 그대로 이어지게 한다.
@@ -974,16 +987,18 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   const recordTarget = { kind: row.kind === "account" ? "account" : "lead", id: row.id, companyId: row.companyId, name: displayName };
   const dealTotal = (row.deals || []).filter(d => d.stage !== "lost").reduce((sum, d) => sum + (Number(d.value) || 0), 0);
 
-  // 기록 모드의 그릇 — 같은 드로어, 폭만(recordWindowLayout). 휴대폰은 지금 바닥 시트 그대로다.
-  const recordLayout = recordWindowLayout({ recording: Boolean(record), mobile });
-  const wideRecord = Boolean(record) && recordLayout.form === "wide";
+  // 기록 모드의 그릇 — 같은 드로어이고 화면 폭이 배치를 고른다(recordWindowLayout): 넓으면 두 칸이 나란히,
+  // 900px 이하는 '쓰기 | 이 고객' 탭, 600px 이하는 전체 높이 시트(저장은 머리에). 어느 배치든 기록 칸은 하나다.
+  const recordLayout = recordWindowLayout({ recording: Boolean(record), mobile, narrow });
+  const recording = Boolean(record);
+  const tab = recordTab(tabChoice, recordLayout);
   const stamp = () => new Date().toISOString(); // 영수증 시각 = 서버의 답을 받은 시각
-  // 메모 모드(Q-CR6) — 넓은 기록창에서, 메모를 이 고객에 붙일 수 있을 때만(일지 메모 문맥은 uuid).
-  const memoModeAvailable = wideRecord && memoEnabled;
+  // 메모 모드(Q-CR6) — 기록창에서, 메모를 이 고객에 붙일 수 있을 때만(일지 메모 문맥은 uuid). 휴대폰도 같다.
+  const memoModeAvailable = recording && memoEnabled;
   const memoMode = memoModeAvailable && record.mode === "memo";
 
-  // 연락이 아닌 한 줄 메모(활동 note) — 넓은 기록창에서는 메모 모드가 대신한다. 남는 곳은 둘이다:
-  // 휴대폰의 바닥 시트(전체 높이 시트 조각까지)와, 메모 모드를 열 수 없는 고객(uuid 아님)의 넓은 기록창.
+  // 연락이 아닌 한 줄 메모(활동 note) — 메모 모드가 대신한다. 남는 곳은 메모 모드를 열 수 없는 고객
+  // (저장 전이거나 uuid가 아닌 id — 일지 메모를 붙일 문맥이 없다)의 기록창 하나다.
   const quickMemo = record && !memoModeAvailable && (
     <details className="customer-sec">
       <summary><h4 className="fx-eyebrow customer-eyebrow">연락이 아닌 한 줄 메모</h4><span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span></summary>
@@ -1018,8 +1033,9 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   ) : null;
 
   // 상세 안에서는 드로어를 겹치지 않고 폼만 인라인으로 쓴다(CRM 지침 §6.2 — 활성 오버레이는
-  // 언제나 하나). 껍데기가 필요한 진입점은 ContactRecordDrawer. 메모 모드를 열 수 없는 넓은 배치에서는
-  // 한 줄 메모가 폼의 흐르는 칸(자세히 아래)에 놓인다 — 아래 띠가 맨 아래 제자리에 있어야 해서다.
+  // 언제나 하나). 껍데기가 필요한 진입점은 ContactRecordDrawer. 메모 모드를 열 수 없는 고객의 한 줄 메모는
+  // 폼의 흐르는 칸(자세히 아래)에 놓인다 — 아래 띠 · 칩 줄이 맨 아래 제자리에 있어야 해서다.
+  // 좁은 화면에서 '이 고객' 탭을 보는 동안(away) 폼은 가려질 뿐 그대로 서 있다 — 쓰던 글이 남는다.
   const recordForm = record && (
     <ContactRecordForm
       key={recordSeq}
@@ -1069,24 +1085,51 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
         formMounted: mountedRef.current && Boolean(recordRef.current),
       })}
       onDone={() => { if (mountedRef.current) setRecord(null); }}
+      // 휴대폰 시트는 주 버튼을 드로어 머리의 자리에 그린다(자리가 서기 전에는 null — 제자리에 그리지 않는다).
+      saveSlot={recordLayout.headerSave ? saveSlot : undefined}
+      statusSlot={recordLayout.headerSave ? statusSlot : undefined}
+      away={tab === "context"}
+      onReturn={() => setTabChoice("write")}
+      // 저장이 막혔거나 실패했다 — 이유는 기록 칸에 있으므로 쓰기 탭으로 돌린다.
+      onAttention={() => setTabChoice("write")}
     >
-      {wideRecord ? quickMemo : null}
+      {quickMemo}
     </ContactRecordForm>
   );
+
+  // 쓰기 탭 맨 위의 약속 한 줄 — 누르면 '이 고객' 탭으로 간다. 줄이 사라지므로 커서는 탭의 고른 칸으로 옮긴다.
+  // 말줄임 한 줄이라 '언제'가 앞에 선다(promisePeek) — 잘리는 것은 줄 끝의 무엇이지 날짜가 아니다.
+  const peek = recordLayout.tabs && tab === "write" ? promisePeek(promise) : null;
+  const openContextTab = () => {
+    setTabChoice("context");
+    requestAnimationFrame(() => tabsRef.current?.querySelector('button[aria-pressed="true"]')?.focus());
+  };
 
   // 넓은 기록창의 읽기 칸이 보일 팁 — [다음 약속] 카드와 같은 우선순위(넛지 > 템플릿 제안)의 이유만.
   const contextTipReason = promiseTip?.reason || (promise.state === "template" ? promise.suggestion : "");
 
+  const recordWho = `${displayName}${org ? ` · ${org}` : ""}`;
+
   return (
     <Drawer
       title={record ? (memoMode ? "메모" : "연락 기록") : displayName}
-      subtitle={record ? `${displayName}${org ? ` · ${org}` : ""}` : [org, phase.label].filter(Boolean).join(" · ")}
+      // 휴대폰 시트의 둘째 줄은 한 줄이다: 누구(길면 줄인다) + 초안이 놓인 곳의 자리(폼이 그린다).
+      subtitle={recordLayout.headerSave ? (
+        <span className="record-window__sub">
+          <span className="record-window__sub-who">{recordWho}</span>
+          <span ref={setStatusSlot} className="record-window__status-slot" />
+        </span>
+      ) : record ? recordWho : [org, phase.label].filter(Boolean).join(" · ")}
       onClose={record ? () => setRecord(null) : onClose}
       presentation={mobile ? "compact" : "side"}
       width={recordLayout.width}
-      // 넓은 기록창은 두 칸이 각자 흐른다 — 본문 여백과 본문 스크롤을 걷는다.
-      bodyStyle={wideRecord ? { padding: 0, gap: 0, overflow: "hidden" } : undefined}
-      footer={record ? (
+      // 휴대폰에서 쓰는 동안은 같은 바닥 시트가 전체 높이로 서고(키보드를 따라 줄어든다) 저장이 머리에 선다.
+      sheet={recordLayout.headerSave ? "full" : "auto"}
+      headerAction={recordLayout.headerSave ? <span ref={setSaveSlot} className="record-window__save-slot" /> : null}
+      // 기록창은 칸마다 따로 흐른다 — 본문 여백과 본문 스크롤을 걷는다.
+      bodyStyle={recording ? { padding: 0, gap: 0, overflow: "hidden" } : undefined}
+      // 휴대폰 시트는 머리의 닫기가 '고객 정보로'다 — 발판을 두지 않는다(맨 아래는 키보드 위 칩 줄 자리).
+      footer={recordLayout.headerSave ? null : record ? (
         <div className="customer-focus-footer">
           <Button variant="ghost" size="sm" icon="chevronL" onClick={() => setRecord(null)}>고객 정보로 <Kbd>ESC</Kbd></Button>
         </div>
@@ -1097,8 +1140,25 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
         </div>
       )}
     >
-      {wideRecord ? (
-        <div className="record-window">
+      {recording ? (
+        <div className="record-window" data-layout={recordLayout.mode} data-tab={tab}>
+          {recordLayout.tabs && (
+            <div ref={tabsRef} className="record-window__tabs">
+              <SegmentedControl label="보기" size="md" fill options={RECORD_TABS} value={tab} onChange={setTabChoice} />
+            </div>
+          )}
+          {peek && (
+            <button type="button" className="hub-row record-window__peek" onClick={openContextTab}>
+              <span className="record-window__peek-text">
+                <b>약속</b>
+                {peek.late && <><span className="record-ctx__late">{peek.lateLabel}</span> · </>}
+                {peek.date && <><span className="mono">{peek.date}</span> </>}
+                {peek.what}{peek.tail ? ` · ${peek.tail}` : ""}
+              </span>
+              {contextTipReason && <CertaintyBadge state="recommended" label="제안" />}
+              <span className="record-window__peek-mark" aria-hidden="true"><Iconed name="chevronR" size={12} /></span>
+            </button>
+          )}
           <section className="record-window__main" aria-label="기록 쓰기">{recordForm}</section>
           <RecordContextColumn
             name={displayName}
@@ -1109,11 +1169,6 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
             truth={recordContextTruth({ actSync, memoEnabled, memoStatus: memos.status })}
             onRetry={(which) => (which === "memos" ? memos.refresh() : reload())}
           />
-        </div>
-      ) : record ? (
-        <div className="customer-focus">
-          {recordForm}
-          {quickMemo}
         </div>
       ) : (
         <div className="customer-focus">
@@ -1162,9 +1217,9 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
               <h3 className="fx-eyebrow customer-eyebrow">기록</h3>
               {actSync !== "live" && actSync !== "loading" && actSync !== "error" && <TruthBadge state={actSync} />}
               <div style={{ flex: 1 }} />
-              {/* 데스크톱은 같은 드로어가 넓어져 메모 모드로 열린다(드로어를 바꾸지 않는다). 휴대폰과 메모를
-                  붙일 수 없는 고객은 지금처럼 메모 창이다. */}
-              <Button variant="ghost" size="xs" icon="pencil" onClick={() => (memoEnabled && !mobile ? startRecord({}, null, "", "memo") : setMemoState({}))}>메모</Button>
+              {/* 같은 드로어가 메모 모드로 열린다(드로어를 바꾸지 않는다 — 휴대폰도 같은 시트). 메모를 붙일 수
+                  없는 고객만 지금처럼 메모 창이다. */}
+              <Button variant="ghost" size="xs" icon="pencil" onClick={() => (memoEnabled ? startRecord({}, null, "", "memo") : setMemoState({}))}>메모</Button>
             </div>
             {actNotice && (
               <div role="status" aria-live="polite" className="fade-up customer-inline-notice">

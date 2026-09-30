@@ -4,7 +4,7 @@ import { test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { ContactRecordForm, RecordSaveLine, recordDraftStore } from "./contact-record-form.jsx";
+import { ContactRecordForm, RecordAwayBar, RecordPrimarySlot, RecordSaveLine, RecordSheetFields, recordDraftStore } from "./contact-record-form.jsx";
 import { recordSaveLine } from "../../lib/sales-os/contact-record.js";
 
 const source = readFileSync(new URL("./contact-record-form.jsx", import.meta.url), "utf8");
@@ -41,7 +41,8 @@ test("원문 저장 실패 뒤 재시도는 연락 RPC를 다시 보내지 않�
   assert.match(source, /const retryRawNote = async \(\) =>/);
   assert.match(source, /pendingRawNote \? retryRawNote\(\) : save\(\{/);
   // 버튼 글자는 배치의 칸 이름을 따른다 — 좁은 시트는 '원문', 넓은 기록창은 '자세히'(같은 재시도 길).
-  assert.match(source, /\{pendingRawNote \? noteCopy\.retry : "저장"\}/);
+  // 휴대폰 시트의 머리 버튼만 실패 뒤 '다시 저장'이라고 말한다(원인 줄이 버튼과 떨어져 있다 — 2026-09-30 ③).
+  assert.match(source, /\{pendingRawNote \? noteCopy\.retry : sheet && state === "error" \? "다시 저장" : "저장"\}/);
   assert.match(source, /retry: "원문 저장 재시도",\s*skip: "원문 저장 건너뛰기",/);
   assert.match(source, /retry: "자세히 다시 저장",\s*skip: "건너뛰기",/);
   assert.match(source, /const noteCopy = wide \? RAW_NOTE_COPY\.wide : RAW_NOTE_COPY\.compact;/);
@@ -335,7 +336,8 @@ test("기본 배치는 지금 시트 그대로다 — 넓은 배치는 layout=\"
   // 다른 호출처(오늘 연락 · 거래 독 · 첫 화면의 ContactRecordDrawer)는 배치를 넘기지 않는다 — 작은 창 그대로.
   const shell = source.slice(source.indexOf("export function ContactRecordDrawer"));
   assert.doesNotMatch(shell, /layout=/);
-  assert.match(source, /undoMode = "inline", layout = "compact", children = null, mode = "contact", onModeChange, memo = null \}\) \{/);
+  // 좁은 화면의 것(머리 저장 자리 · 머리의 초안 자리 · 가려진 동안의 줄 · 쓰기로 돌리기)은 전부 선택이고 기본은 '없음'이다.
+  assert.match(source, /undoMode = "inline", layout = "compact", children = null, mode = "contact", onModeChange, memo = null, saveSlot, statusSlot, away = false, onReturn, onAttention \}\) \{/);
 });
 
 test("넓은 배치는 요약 한 줄(필수) + 늘 펼친 자세히(선택) 두 칸이다", () => {
@@ -385,11 +387,20 @@ test("자세히는 쓰는 만큼 실제로 길어진다 — 상한은 화면 높
   assert.match(rule, /resize: none;/);
   // 높이를 실제로 맞추는 것은 레이아웃 효과다(값은 순수 detailFieldHeight — contact-record.test.mjs).
   // 자세히와 메모 모드의 메모 칸이 같은 규칙(useGrowingDetail)을 쓴다 — 넓은 배치의 연락 기록에서만 자세히를 잰다.
-  const effect = source.slice(source.indexOf("export function useGrowingDetail(ref, active, value) {"), source.indexOf("const RAW_NOTE_ERROR"));
+  const effect = source.slice(source.indexOf("export function useGrowingDetail(ref, active, value, shape = \"\") {"), source.indexOf("const RAW_NOTE_ERROR"));
   assert.match(effect, /useLayoutEffectOnClient\(\(\) => \{\s*const el = ref\.current;\s*if \(!active \|\| !el\) return;/);
   assert.match(effect, /el\.style\.height = "auto";\s*el\.style\.height = `\$\{detailFieldHeight\(el\)\}px`;/);
-  assert.match(effect, /\}, \[ref, active, value\]\);/);
-  assert.match(source, /useGrowingDetail\(detailRef, wide && !memoMode, form\.body\);/);
+  // 가려진 칸(display: none 안 — '이 고객' 탭 · 접힌 자세히)은 상자가 없다. 재면 0이 나오고, 그걸 높이로 적으면
+  // 돌아왔을 때 긴 글이 최소 높이 칸에 갇힌다 — 높이를 건드리기 전에 그만둔다.
+  assert.match(effect, /if \(!el\.getClientRects\(\)\.length\) return;/);
+  assert.ok(effect.indexOf("if (!el.getClientRects().length) return;") < effect.indexOf('el.style.height = "auto";'), "0을 적기 전에 그만둔다");
+  // 다시 재는 때 — 글이 바뀔 때, 가려졌다 다시 보일 때(active), 배치가 바뀔 때(shape: 시트 ↔ 넓은 기록창은 최소 높이가 다르다).
+  assert.match(effect, /\}, \[ref, active, value, shape\]\);/);
+  // 가려진 동안에는 재지 않는다: '이 고객' 탭(away)과 칩 뒤 칸을 펼쳐 접힌 자세히(folded). 그 사이 되돌리기가 글을
+  // 되살려도 높이는 그대로이고, 돌아오는 순간 다시 잰다.
+  assert.match(source, /useGrowingDetail\(detailRef, wide && !memoMode && !away && !folded, form\.body, layout\);/);
+  assert.match(source, /const folded = sheet && fieldsOpen && !locked;/);
+  assert.ok(source.indexOf("const folded = sheet && fieldsOpen && !locked;") < source.indexOf("useGrowingDetail(detailRef,"), "접힘은 재기 전에 정해진다");
   // 재는 동안 칸이 최소 높이로 줄어 흐르는 칸의 위치가 당겨진다 — 재기 전 위치를 잡아 두었다가 되돌린다.
   assert.ok(effect.indexOf("const top = region ? region.scrollTop : 0;") < effect.indexOf('el.style.height = "auto";'));
   assert.match(effect, /if \(region\.scrollTop !== top\) region\.scrollTop = top;/);
@@ -455,7 +466,10 @@ test("넓은 배치에서 요약의 Enter는 자세히로 내려가고, ⌘↵�
   assert.match(wide, /onKeyDown=\{onSummaryKeyDown\}/);
   assert.match(wide, /<TextAreaField\s*ref=\{detailRef\}/);
   // ⌘↵는 폼 뿌리가 받는다 — 띠 · 자세히 · 요약 어디에 있든. 조합 중 Enter는 기존 규칙이 거른다.
-  assert.match(wide, /<div ref=\{rootRef\} className="record-wide" onKeyDown=\{onKeyDown\}>/);
+  // (data-away는 좁은 화면의 '이 고객' 탭에서만 붙는다 — 뿌리는 그대로 서 있다.)
+  // 뿌리는 넓은 기록창과 휴대폰 시트가 같이 쓴다(rootClass — 시트면 record-sheet가 덧붙는다).
+  assert.match(wide, /<div ref=\{rootRef\} className=\{rootClass\} data-away=\{away \? "true" : undefined\} onKeyDown=\{onKeyDown\}>/);
+  assert.match(source, /const rootClass = sheet \? "record-wide record-sheet" : "record-wide";/);
   // 폼 밖(읽기 칸의 기록 줄 · 발판의 '고객 정보로' · 빈 곳)에서 난 ⌘↵도 저장이다 — 넓은 배치에서만 창이
   // 듣고, 같은 드로어 안이거나 포커스가 없을 때만 받는다(규칙은 saveChordReachesRecord — 순수).
   const listener = source.slice(source.indexOf("const saveChordRef = React.useRef(onKeyDown);"), source.indexOf("// 요약 칸의 Enter는 저장이 아니라"));
@@ -468,7 +482,7 @@ test("넓은 배치에서 요약의 Enter는 자세히로 내려가고, ⌘↵�
   assert.match(listener, /window\.addEventListener\("keydown", onWindowKey\);\s*return \(\) => window\.removeEventListener\("keydown", onWindowKey\);\s*\}, \[wide\]\);/);
   // 호출처가 끼운 보조 입력(한 줄 메모)의 ⌘↵는 연락 기록을 저장하지 않는다.
   assert.match(source, /if \(e\.target\?\.closest\?\.\("\[data-record-slot\]"\)\) return;/);
-  assert.match(wide, /\{children && <div data-record-slot="">\{children\}<\/div>\}/);
+  assert.match(wide, /const slotted = children && <div data-record-slot="">\{children\}<\/div>;/);
   const slotted = renderWide({ children: React.createElement("p", null, "보조 입력 자리") });
   assert.match(slotted, /<div data-record-slot="">.*보조 입력 자리.*<\/div>/s);
   assert.ok(slotted.indexOf("보조 입력 자리") < slotted.indexOf('class="record-wide__band"'), "보조 입력은 흐르는 칸 안, 띠 위");
@@ -617,9 +631,13 @@ test("메모 모드는 같은 칸에서 어떻게 · 반응 · 다음 약속을 
   assert.doesNotMatch(html, /어떻게 연락했나|고객 반응|다음 약속 · 무엇을|aria-label="언제"|요약 · 한 줄|대화·메모에서 폼 자동 채우기/);
   assert.doesNotMatch(html, /hub-btn--primary/, "주 버튼은 메모 칸의 것 하나다 — 폼은 연락 기록의 저장을 그리지 않는다");
   // 메모 칸이 받는 것 — ⌘↵가 부를 저장 자리(saveRef)와, 앞서 누른 연락 기록의 진행 줄(없으면 null).
-  assert.deepEqual(Object.keys(slot).sort(), ["contactLine", "saveRef"]);
+  // 좁은 화면의 자리(머리 저장 · 흐르는 칸 맨 위 · 가려진 동안의 줄)도 함께 넘어가지만, 넓은 배치에서는 전부 비어 있다.
+  assert.deepEqual(Object.keys(slot).sort(), ["away", "contactLine", "contactProgress", "head", "onAttention", "onContactUndo", "onReturn", "saveRef", "saveSlot", "sheet"]);
   assert.deepEqual(slot.saveRef, { current: null });
   assert.equal(slot.contactLine, null);
+  // 앞서 누른 연락 기록이 없으면 진행도 되돌리기도 없다.
+  assert.deepEqual([slot.contactProgress, slot.onContactUndo], [null, undefined]);
+  assert.deepEqual([slot.sheet, slot.head, slot.saveSlot, slot.away, slot.onReturn, slot.onAttention], [false, null, undefined, false, undefined, undefined]);
   // 이 파일은 일지 메모 코드를 끌고 오지 않는다 — 메모 칸은 호출처가 넘긴다.
   assert.doesNotMatch(source, /from "\.\/record-memo-pane"|use-memos|journal/);
 
@@ -702,10 +720,401 @@ test("메모 모드의 ⌘↵는 메모 저장이다 — 보이지 않는 연락
   assert.match(source, /const memoAvailable = wide && typeof memo === "function";\s*const memoMode = memoAvailable && normalizeRecordMode\(mode\) === "memo";/);
   // 앞서 누른 연락 기록이 가는 중이면 그 진행(되돌리기 포함)을 메모 칸의 띠 위에 넘긴다 — 어느 기록의 것인지 이름을 붙여서.
   const branch = source.slice(source.indexOf("if (memoMode) {\n    const contactNote"), source.indexOf("// 넓은 기록창 — 아래 띠(어떻게"));
-  assert.match(branch, /const contactLine = pendingUndo && saveLine\.progress/);
+  assert.match(branch, /const contactProgress = pendingUndo && saveLine\.progress \? \{ \.\.\.saveLine\.progress, label: `연락 기록 · \$\{saveLine\.progress\.label\}` \} : null;/);
+  assert.match(branch, /const contactLine = contactProgress\s*\? <div className="record-wide__save"><RecordSaveLine line=\{\{ progress: contactProgress, note: null \}\} onUndo=\{pendingUndo\.undo\} \/><\/div>/);
   // 진행 중인 줄이 없을 때만 실패 줄이 선다(둘이 같이 서지 않는다).
   assert.match(branch, /: contactNote\s*\? <div className="record-wide__save"><RecordSaveLine line=\{\{ progress: null, note: contactNote \}\} \/><\/div>\s*: null;/);
-  assert.match(branch, /label: `연락 기록 · \$\{saveLine\.progress\.label\}`/);
-  assert.match(branch, /onUndo=\{pendingUndo\.undo\}/);
-  assert.match(branch, /\{memo\(\{ saveRef: memoSaveRef, contactLine \}\)\}/);
+  // 같은 진행과 되돌리기를 메모 칸에도 따로 넘긴다 — '이 고객' 탭에서는 띠가 가려져 있어 돌아가기 줄이 대신 보인다.
+  assert.match(branch, /\{memo\(\{ saveRef: memoSaveRef, contactLine, contactProgress, onContactUndo: pendingUndo\?\.undo, sheet, head: sheet \? modeBar : null, saveSlot: sheet \? saveSlot : undefined, away, onReturn, onAttention \}\)\}/);
+});
+
+// ── 2026-09-30 넓은 기록창 ③ — 휴대폰 전체 높이 시트 · 좁은 화면의 탭(Q-CR3 · Q-CR11, 권장 · 화면 확인 뒤 확정) ──
+
+const renderSheet = (props = {}) => withWindow(tabStorage(), () => renderForm({ layout: "sheet", ...props }));
+const primariesOf = (html) => html.match(/<button[^>]*hub-btn--primary[^>]*>.*?<\/button>/gs) || [];
+const chipsOf = (html) => [...(html.match(/<div class="record-sheet__chips">.*?<\/div>/s)?.[0] || "").matchAll(/<button[^>]*record-sheet__chip[^>]*>(.*?)<\/button>/gs)]
+  .map((m) => m[1].replace(/<svg.*?<\/svg>/gs, "").replace(/<[^>]+>/g, "|").replace(/\|+/g, "|").replace(/^\||\|$/g, ""));
+
+test("휴대폰 시트는 같은 두 칸이다 — 아래 띠 대신 키보드 위 칩 줄, 어떻게 · 반응 · 약속은 칩 뒤에 접혀 있다", () => {
+  const html = renderSheet();
+  assert.match(html, /^<div class="record-wide record-sheet">/);
+  // 요약(필수 · 16px 칸 · 커서)과 늘 펼친 자세히 — 넓은 기록창과 같은 칸 · 같은 글자 수.
+  const summary = tagOf(html, /<input[^>]*record-wide__summary[^>]*>/);
+  assert.match(summary, /aria-required="true"/);
+  assert.match(summary, /autofocus=""/, "R · 연락 기록 · 했어요로 열면 커서가 요약에 선다");
+  assert.match(summary, /maxLength="500"/);
+  const detail = tagOf(html, /<textarea[^>]*record-wide__detail[^>]*>/);
+  assert.match(detail, /maxLength="20000"/);
+  assert.match(detail, /rows="6"/, "키보드 위에 남는 높이에 맞춰 여섯 줄에서 시작한다(넓은 기록창은 열 줄)");
+  assert.doesNotMatch(detail, /autofocus/);
+  assert.ok(html.indexOf("record-wide__summary") < html.indexOf("record-wide__detail"));
+  assert.doesNotMatch(html, />무슨 얘기<|>원문 붙여넣기</);
+  // 아래 띠(이름표 + 칸 줄)가 없다 — 그 칸들은 칩을 누르기 전에는 그려지지 않는다.
+  assert.doesNotMatch(html, /record-wide__band|record-wide__row|record-sheet__fields/);
+  assert.doesNotMatch(html, /aria-label="어떻게 연락했나"|aria-label="고객 반응"|aria-label="언제"|다음 약속 · 무엇을/);
+  // 맨 아래 줄 — 흐르는 칸 밖(뒤)의 제자리. 저장 상태 한 줄 + 칩 둘.
+  const scrollAt = html.indexOf('class="record-wide__scroll"');
+  const barAt = html.indexOf('class="record-sheet__bar"');
+  assert.ok(scrollAt > 0 && barAt > scrollAt);
+  const bar = html.slice(barAt);
+  assert.match(bar, /^class="record-sheet__bar" role="group" aria-label="저장 · 어떻게 · 반응 · 약속 요약"/);
+  assert.match(bar, /닫아도 이 탭에 초안으로 남아요/);
+  assert.equal(chipsOf(html).length, 2);
+  assert.equal(chipsOf(html)[0], "통화 · 반응 필수");
+  assert.match(chipsOf(html)[1], /^약속 · 3일 뒤\|\d{1,2}\/\d{1,2}$/, "날짜는 M/D");
+  assert.match(bar, /<span class="mono">\d{1,2}\/\d{1,2}<\/span>/, "날짜는 mono");
+  // 칩은 Button이다(새 알약을 만들지 않는다) — 누르면 칸이 펼쳐진다고 알린다.
+  for (const chip of bar.match(/<button[^>]*record-sheet__chip[^>]*>/g)) {
+    assert.match(chip, /class="hub-btn hub-btn--outline record-sheet__chip"/);
+    assert.match(chip, /aria-expanded="false"/);
+  }
+  // 칩의 글자는 폼의 값에서 나온다(순수 규칙 — contact-record.test.mjs). 칸 이름은 시트의 채널 이름이다.
+  assert.deepEqual(chipsOf(renderSheet({ preset: { kind: "kakao" } }))[0], "카톡·문자");
+  assert.deepEqual(chipsOf(renderSheet({ preset: { kind: "meeting", reaction: "positive" } }))[0], "미팅 · 긍정");
+  assert.match(source, /const chips = recordSheetChips\(form, \{\s*kindLabel: channelOptions\.find\(\(c\) => c\.key === form\.kind\)\?\.label,\s*whenLabel: WHEN_PRESETS\.find\(\(p\) => p\.key === whenKey\)\?\.label,\s*\}\);/);
+  // 되살린 초안은 같은 두 칸에 그대로 들어온다(같은 폼 상태 · 같은 초안 키).
+  const draft = { kind: "meeting", reaction: null, replied: false, summary: "단원평가 채점 상담", body: "[결정사항]\n- 10월 셋째 주 시범 채점", nextAction: "", at: "", followup: "dated" };
+  const restored = withWindow(tabStorage({ "crm-record:lead:lead-1": JSON.stringify(draft) }), () => renderForm({ layout: "sheet" }));
+  assert.match(restored, /value="단원평가 채점 상담"/);
+  assert.match(restored, /<textarea[^>]*record-wide__detail[^>]*>\[결정사항\]\n- 10월 셋째 주 시범 채점<\/textarea>/);
+  assert.match(restored, /초안 · 이 탭 · 쓰던 내용을 불러왔어요/);
+  assert.doesNotMatch(restored, /이 기기/, "아직 약속하지 않은 곳을 말하지 않는다(Q-CR4)");
+});
+
+test("휴대폰 시트의 주 버튼은 하나이고 머리 자리에 선다 — 자리가 서기 전에는 제자리에 그리지 않는다", () => {
+  // 머리 자리를 주지 않은 호출처(saveSlot 없음) — 저장 줄 끝 제자리에 하나. 휴대폰이라 ⌘↵ 글자는 없다.
+  const inline = renderSheet();
+  assert.equal(primariesOf(inline).length, 1);
+  assert.match(primariesOf(inline)[0], />저장<\/button>$/);
+  assert.doesNotMatch(primariesOf(inline)[0], /disabled|⌘↵/);
+  assert.ok(inline.indexOf("hub-btn--primary") > inline.indexOf('class="record-sheet__line"'));
+  // 머리 자리를 받기로 했고 아직 서지 않았다(null) — 주 버튼을 제자리에 그리지 않는다(번쩍임 없음). 나머지는 그대로다.
+  const waiting = renderSheet({ saveSlot: null });
+  assert.equal(primariesOf(waiting).length, 0);
+  assert.equal(chipsOf(waiting).length, 2);
+  assert.match(waiting, /닫아도 이 탭에 초안으로 남아요/);
+  // 넓은 기록창 · 좁은 시트는 머리 자리를 받지 않는다 — saveSlot을 줘도 제자리다.
+  assert.equal(primariesOf(renderWide({ saveSlot: null })).length, 1);
+  assert.equal(primariesOf(withWindow(tabStorage(), () => renderForm({ saveSlot: null }))).length, 1);
+  assert.match(source, /<RecordPrimarySlot slot=\{sheet \? saveSlot : undefined\}>/);
+
+  // 자리 규칙 — 없음(undefined)은 제자리, null은 그리지 않음, 요소는 그 자리(포털).
+  const child = React.createElement("button", { type: "button" }, "저장");
+  assert.equal(renderToStaticMarkup(React.createElement(RecordPrimarySlot, { slot: undefined }, child)), '<button type="button">저장</button>');
+  assert.equal(renderToStaticMarkup(React.createElement(RecordPrimarySlot, { slot: null }, child)), "");
+  assert.match(source, /if \(slot === undefined\) return children;\s*return slot \? createPortal\(children, slot\) : null;/);
+
+  // 실패 뒤 다시 연 시트 — 글은 그대로, 원인은 칩 줄 위의 레일 줄에, 머리 버튼은 '다시 저장'.
+  const failed = renderSheet({ draft: { summary: "다시 열린 입력", body: "긴 글은 그대로" }, initialError: "서버에 닿지 않았어요 — 입력을 복원했습니다." });
+  assert.match(failed, /value="다시 열린 입력"/);
+  assert.match(failed, />긴 글은 그대로<\/textarea>/);
+  assert.match(failed, />저장 못 함<\/span>/);
+  assert.equal((failed.match(/var\(--danger\)/g) || []).length, 2, "빨강은 레일과 제목 글자 한 곳뿐");
+  assert.equal(primariesOf(failed).length, 1);
+  assert.match(primariesOf(failed)[0], />다시 저장<\/button>$/);
+  // 넓은 기록창의 버튼은 원인 줄 바로 옆이라 '저장' 그대로다.
+  assert.match(primariesOf(renderWide({ draft: { summary: "다시 열린 입력" }, initialError: "서버에 닿지 않았어요." }))[0], />저장<kbd/);
+});
+
+test("휴대폰 시트의 일부 저장도 요약을 잠그고 자세히만 남긴다 — 칩 · 칸 없이 저장 줄만", () => {
+  const held = { activityId: "act-1", optimisticId: "local-1", summary: "단원평가 채점 상담", body: "[결정사항]\n- 10월 셋째 주 시범 채점" };
+  const html = withWindow(tabStorage({ "crm-record:lead:lead-1:rawnote": JSON.stringify(held) }), () => renderForm({ layout: "sheet" }));
+  const summary = tagOf(html, /<input[^>]*record-wide__summary[^>]*>/);
+  assert.match(summary, /readonly=""/);
+  assert.match(summary, /value="단원평가 채점 상담"/);
+  assert.match(tagOf(html, /<textarea[^>]*record-wide__detail[^>]*>/), /autofocus=""/);
+  assert.doesNotMatch(html, /record-sheet__chips|record-sheet__fields/);
+  const bar = html.slice(html.indexOf('class="record-sheet__bar"'));
+  assert.match(bar, /role="group" aria-label="자세히 다시 저장"/);
+  assert.match(bar, />일부 저장<\/span>/);
+  assert.match(bar, />건너뛰기<\/button>/);
+  assert.equal(primariesOf(html).length, 1);
+  assert.match(primariesOf(html)[0], />자세히 다시 저장<\/button>$/);
+});
+
+test("칩을 누르면 어떻게 · 반응 · 다음 약속 · 언제가 펼쳐진다 — 같은 값, 세그먼트는 가로로, 자세히는 접힐 뿐 걷히지 않는다", () => {
+  const form = { kind: "meeting", reaction: null, replied: false, summary: "", body: "", nextAction: "견적서 보내기", at: "2026-10-03", followup: "dated" };
+  const channelOptions = [{ key: "call", label: "통화" }, { key: "meeting", label: "미팅" }, { key: "kakao", label: "카톡·문자" }, { key: "email", label: "메일" }];
+  const render = (props = {}) => renderToStaticMarkup(React.createElement(RecordSheetFields, { form, channelOptions, wantsReaction: true, reactionMissing: false, whenKey: "d3", onEdit() {}, onChannel() {}, onWhen() {}, ...props }));
+  const html = render();
+  assert.match(html, /^<div class="record-sheet__fields" role="group" aria-label="어떻게 · 반응 · 다음 약속">/);
+  const pressed = (label) => [...(html.match(new RegExp(`<div class="hub-seg" role="group" aria-label="${label}"[^>]*>.*?</div>`, "s"))?.[0] || "").matchAll(/aria-pressed="(true|false)"[^>]*>([^<]+)</g)].map((m) => [m[2], m[1]]);
+  assert.deepEqual(pressed("어떻게 연락했나"), [["통화", "false"], ["미팅", "true"], ["카톡·문자", "false"], ["메일", "false"]]);
+  assert.deepEqual(pressed("고객 반응").map(([label]) => label), ["긍정", "중립", "우려", "거절", "무응답"]);
+  assert.deepEqual(pressed("언제"), [["내일", "false"], ["3일 뒤", "true"], ["다음 주", "false"], ["날짜…", "false"], ["기약 없음", "false"]]);
+  assert.match(html, /<label class="hub-label"[^>]*>다음 약속<\/label>/);
+  assert.match(html, /value="견적서 보내기"/);
+  assert.match(html, />반응<span class="hub-label__req"> · 필수<\/span>/);
+  // 반응 세그먼트는 좁은 화면에서도 가로 한 줄이다(칸이 폭을 나눠 가진다 — 자식을 100%로 세우지 않는다).
+  const reaction = html.match(/<div class="hub-seg" role="group" aria-label="고객 반응"[^>]*>.*?<\/div>/s)?.[0] || "";
+  for (const button of reaction.match(/<button[^>]*>/g)) assert.match(button, /flex:1 1 0;min-width:0/);
+  assert.doesNotMatch(html, /flex-basis:100%|flex:1 0 100%/);
+  // 아직 눌러 보지 않았으면 붉히지 않는다 — 저장을 눌러 본 뒤 빠진 반응만 위급 색 한 줄.
+  assert.doesNotMatch(html, /data-invalid|role="alert"/);
+  const missing = render({ reactionMissing: true });
+  assert.match(missing, /data-invalid=""/);
+  assert.match(missing, /<p class="hub-field-msg hub-field-msg--error record-wide__msg" role="alert">반응을 하나 고르세요\.<\/p>/);
+  // 반응을 묻지 않는 채널은 반응 칸이 없다 — 보낸 사실에 반응을 붙이지 않는다.
+  assert.doesNotMatch(render({ form: { ...form, kind: "kakao" }, wantsReaction: false }), /고객 반응|반응<span/);
+  // 날짜를 직접 고를 때만 날짜 칸이 선다(mono).
+  assert.doesNotMatch(html, /type="date"/);
+  const dated = render({ whenKey: "date", dateError: "날짜를 고르거나 기약 없음을 선택하세요." });
+  assert.match(tagOf(dated, /<input[^>]*type="date"[^>]*>/), /class="hub-input mono"/);
+  assert.match(dated, /role="alert"[^>]*>날짜를 고르거나 기약 없음을 선택하세요\./);
+
+  // 폼은 칩을 눌렀을 때만 이 칸들을 그리고, 자세히는 접힌 한 줄이 된다 — 칸을 걷지 않고 가린다(글 · 커서 자리가 남는다).
+  const sheet = source.slice(source.indexOf("if (wide) {\n    const summaryField"), source.indexOf("<div onKeyDown={onKeyDown} style"));
+  assert.ok(sheet.length > 0);
+  assert.match(source, /const folded = sheet && fieldsOpen && !locked;/);
+  assert.match(sheet, /\{folded && \(\s*<RecordSheetFields\s+form=\{form\}\s+channelOptions=\{wideChannelOptions\}/);
+  assert.match(sheet, /fieldStyle=\{folded \? \{ display: "none" \} : undefined\}/, "자세히는 걷히지 않고 가려진다");
+  assert.match(sheet, /const showChips = !locked && !fieldsOpen;/);
+  assert.match(sheet, /\{showChips && \(\s*<div className="record-sheet__chips">/);
+  // 칩을 누르면 글 칸이 아닌 곳(고른 세그먼트)에 커서를 둔다 — 키보드가 다시 오르지 않는다. 접힌 줄을 누르면 자세히로.
+  assert.match(sheet, /const openFields = \(key\) => \{\s*setFieldsOpen\(true\);\s*requestAnimationFrame\(\(\) => \{\s*const group = \(key === "promise" \? whenRef : howRef\)\.current;\s*\(group\?\.querySelector\('button\[aria-pressed="true"\]'\) \|\| group\?\.querySelector\("button"\)\)\?\.focus\(\);/);
+  assert.match(sheet, /const closeFields = \(\) => \{\s*setFieldsOpen\(false\);\s*requestAnimationFrame\(\(\) => detailRef\.current\?\.focus\(\)\);\s*\};/);
+  assert.match(sheet, /onClick=\{\(\) => openFields\(chip\.key\)\}/);
+  // 접힌 자세히 한 줄은 쓴 줄 수를 말한다(순수 규칙 recordDetailLines).
+  assert.match(sheet, /\{lines \? <>자세히 <span className="num">\{lines\}<\/span>줄 · 펼치기<\/> : "자세히 · 비어 있음 · 쓰기"\}/);
+  // 저장한 뒤에는 다시 접힌 채(칩 줄)로 돌아간다.
+  assert.match(source, /setStoredDraft\(null\); setFieldsOpen\(false\);/);
+});
+
+test("빠진 칸이 접혀 있거나 가려져 있으면 저장이 그 칸을 먼저 드러낸다 — 눌러도 아무 일 없는 저장을 두지 않는다", () => {
+  const save = source.slice(source.indexOf("const save = ("), source.indexOf("const showMissing"));
+  // 시트의 반응 · 날짜는 칩 뒤에 있다 — 빠졌으면 칸을 펼치고, 드러난 다음 프레임에 커서를 둔다.
+  assert.match(save, /const folded = sheet && !fieldsOpen && check\.missing\.some\(\(key\) => key !== "summary"\);\s*if \(folded\) setFieldsOpen\(true\);/);
+  assert.match(save, /if \(folded \|\| away\) requestAnimationFrame\(focusMissing\);\s*else focusMissing\(\);/);
+  // '이 고객' 탭에서 누른 저장이 막히면(빠진 칸 · 빈 약속 경고) 호출처가 쓰기로 돌린다 — 이유는 기록 칸에 있다.
+  const missing = save.slice(save.indexOf("if (!check.ok) {"), save.indexOf("if ((promiseEmpty"));
+  assert.match(missing, /onAttention\?\.\(\);/);
+  const warn = save.slice(save.indexOf("if ((promiseEmpty"), save.indexOf("const optimisticId"));
+  assert.match(warn, /setState\("warn"\);[\s\S]*?onAttention\?\.\(\);\s*return;/);
+  // 늦은 실패 · 일부 저장도 같다 — 가려진 탭에서 실패가 조용히 묻히지 않는다.
+  const fail = source.slice(source.indexOf("const fail = (snapshot, message) => {"), source.indexOf("const save = ("));
+  assert.match(fail, /setErrorMsg\(message\);\s*onAttention\?\.\(\);/);
+  const persist = source.slice(source.indexOf("const persist = async"), source.indexOf("const retryRawNote"));
+  assert.ok(persist.indexOf("onAttention?.();") > persist.indexOf("setErrorMsg(noteCopy.failed);"));
+  // 저장이 잘 나가면 돌리지 않는다 — 읽던 '이 고객' 탭에 그대로 머문다.
+  assert.equal((save.match(/onAttention\?\.\(\)/g) || []).length, 2);
+  // 일부 저장 뒤 머리의 '자세히 다시 저장'도 같다 — '이 고객' 탭에서 눌렀는데 또 실패했거나(서버) 보낼 글이
+  // 없으면(빈 자세히) 원인은 가려진 기록 칸에 선다. 쓰기로 돌리지 않으면 눌러도 아무 일 없는 버튼이 된다.
+  const retry = source.slice(source.indexOf("const retryRawNote = async () => {"), source.indexOf("const skipRawNote"));
+  assert.match(retry, /if \(!note\) \{\s*setState\("error"\);\s*setErrorMsg\(noteCopy\.empty\);[\s\S]*?onAttention\?\.\(\);\s*return;\s*\}/);
+  assert.match(retry, /\} catch \(error\) \{\s*setState\("error"\);\s*setErrorMsg\(`[^`]*noteCopy\.kept\}`\);[\s\S]*?onAttention\?\.\(\);\s*\} finally \{/);
+  // 돌아와 읽는 원인도 그 화면의 칸 이름으로 말한다 — 넓은 기록창 · 시트에는 '원문'이라는 칸이 없다.
+  assert.match(retry, /throw new Error\(data\.error \|\| data\.reason \|\| noteCopy\.again\);/);
+  assert.match(source, /again: "원문 저장 실패",/);
+  assert.match(source, /again: "자세히를 저장하지 못했어요",/);
+  // 다시 저장이 된 길에서는 돌리지 않는다(창이 닫힌다) — 실패한 두 길뿐이다.
+  assert.equal((retry.match(/onAttention\?\.\(\)/g) || []).length, 2);
+  const ok = retry.slice(retry.indexOf("dropRawNote(target);"), retry.indexOf("} catch (error) {"));
+  assert.doesNotMatch(ok, /onAttention/);
+});
+
+// 글 칸(요약 input · 자세히 textarea)까지 내려가는 조상들 — 태그와 class. 두 배치의 나무 모양을 견준다.
+const VOID_TAGS = new Set(["input", "br", "hr", "img"]);
+function ancestorsOf(html, pattern) {
+  const stack = [];
+  for (const m of html.matchAll(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:"[^"]*"|[^>"])*?)(\/?)>/g)) {
+    const [whole, closing, tag, attrs, selfClosing] = m;
+    if (closing) { stack.pop(); continue; }
+    if (pattern.test(whole)) return [...stack];
+    if (!selfClosing && !VOID_TAGS.has(tag)) stack.push(`${tag}${/ class="([^"]*)"/.exec(attrs)?.[1] ? `.${/ class="([^"]*)"/.exec(attrs)[1]}` : ""}`);
+  }
+  return null;
+}
+
+test("휴대폰 시트와 넓은 기록창은 한 나무다 — 쓰는 중에 600px를 넘나들어도 글 칸이 다시 서지 않는다", () => {
+  // 화면을 돌리면 배치가 sheet ↔ wide로 바뀐다. 두 배치가 다른 나무를 돌려주면 React가 글 칸을 걷고 다시 세워
+  // 커서가 요약으로 튀고(autoFocus가 다시 선다) 자란 칸 높이가 사라진다 — 글 칸은 두 배치에서 같은 자리에 선다.
+  const draft = { kind: "meeting", reaction: "positive", replied: false, summary: "시범 채점 합의", body: "[결정사항]\n- 10월 셋째 주", nextAction: "", at: "", followup: "dated" };
+  const at = (layout, props = {}) => withWindow(tabStorage({ "crm-record:lead:lead-1": JSON.stringify(draft) }), () => renderForm({ layout, ...props }));
+  const shape = (html) => ({
+    summary: ancestorsOf(html, /record-wide__summary/).slice(1),
+    detail: ancestorsOf(html, /<textarea[^>]*record-wide__detail/).slice(1),
+  });
+  for (const props of [{}, { memo: memoSlot }, { aiContext: "기록 대상 · 리드" }, { away: true }]) {
+    const [sheet, wide] = [at("sheet", props), at("wide", props)];
+    assert.deepEqual(shape(sheet), shape(wide), JSON.stringify(Object.keys(props)));
+    // 글 칸은 흐르는 칸의 바로 아래 자식(칸 껍데기 하나)이다 — 배치마다 다른 감싸개가 끼지 않는다.
+    assert.deepEqual(shape(sheet).summary, ["div.record-wide__scroll", "div"]);
+    assert.deepEqual(shape(sheet).detail, ["div.record-wide__scroll", "div"]);
+    // 뿌리만 다르다(시트면 record-sheet가 덧붙는다).
+    assert.deepEqual([ancestorsOf(sheet, /record-wide__summary/)[0], ancestorsOf(wide, /record-wide__summary/)[0]], ["div.record-wide record-sheet", "div.record-wide"]);
+  }
+  // 나무는 하나다 — 넓은 배치(시트 포함)의 그리기는 return 하나이고, 배치마다 다른 것은 같은 자리에 놓이는 것뿐이다.
+  const wide = source.slice(source.indexOf("if (wide) {\n    const summaryField"), source.indexOf("  return (\n    <div onKeyDown={onKeyDown} style"));
+  assert.ok(wide.length > 0);
+  assert.equal((wide.match(/\n\s*return \(\n/g) || []).length, 1, "시트라고 따로 돌려주지 않는다");
+  assert.doesNotMatch(wide, /if \(sheet\) \{\s*(?:const [^\n]*\n\s*)*return \(/);
+  assert.equal((wide.match(/className="record-wide__scroll"/g) || []).length, 1);
+  // 자리 순서 — 전환 칸은 넓은 기록창에서는 뿌리에, 시트에서는 흐르는 칸 맨 위에(둘 다 자리는 늘 있다).
+  assert.match(wide, /\{!sheet && modeBar\}\s*<div className="record-wide__scroll">\s*\{\/\*[^*]*\*\/\}\s*\{sheet && modeBar\}\s*\{restoredLine\}\s*\{captureNote\}\s*\{summaryField\}\s*\{folded && \(/);
+  assert.match(wide, /\)\}\s*\{detailField\}\s*\{folded && \(\s*<RecordSheetFields/);
+  assert.match(wide, /\{autofill\}\s*\{slotted\}\s*<\/div>\s*\{bottom\}/);
+  // 아래 제자리는 배치마다 다른 것이라 이름(key)으로 갈아 끼운다 — 띠가 칩 줄로 '변하지' 않는다.
+  assert.match(wide, /<div key="bar" className="record-sheet__bar"/);
+  assert.match(wide, /<div key="band" className="record-wide__band"/);
+  // 커서는 폼이 처음 설 때만 요약에 선다(autoFocus는 세울 때만 듣는다) — 칸이 다시 서지 않으니 다시 튀지 않는다.
+  assert.equal((wide.match(/autoFocus=\{autoFocus\}/g) || []).length, 1);
+  // 배치가 바뀌면 자세히의 최소 높이가 달라진다(여섯 줄 ↔ 열 줄) — 그때 다시 잰다(useGrowingDetail의 shape).
+  assert.match(source, /useGrowingDetail\(detailRef, [^;]*, form\.body, layout\);/);
+});
+
+test("휴대폰 시트의 키보드 위는 칩 줄 하나다 — 저장 줄은 할 말이 있을 때만 서고, 쉬는 초안 자리는 머리가 말한다", () => {
+  // 머리에 두 자리(저장 · 둘째 줄)를 받은 시트 — 자리가 서기 전(null)이든 선 뒤든 쉬는 저장 줄은 그리지 않는다.
+  const headed = (props = {}) => renderSheet({ saveSlot: null, statusSlot: null, ...props });
+  const resting = headed();
+  assert.doesNotMatch(resting, /record-sheet__line/, "쉬는 글자에 키보드 위의 한 줄을 쓰지 않는다");
+  assert.doesNotMatch(resting, /닫아도 이 탭에 초안으로 남아요|서버에는 아직 없어요/);
+  assert.equal(chipsOf(resting).length, 2);
+  assert.match(resting, /<div class="record-sheet__bar" role="group" aria-label="저장 · 어떻게 · 반응 · 약속 요약"><div class="record-sheet__chips">/);
+  assert.equal(primariesOf(resting).length, 0, "주 버튼은 머리 자리의 것이다");
+  // 쓰던 초안이 있어도 같다 — 그 사실('초안 · 이 탭')은 머리의 둘째 줄에 선다(포털이라 여기엔 없다).
+  const draft = { kind: "meeting", reaction: "positive", replied: false, summary: "시범 채점 합의", body: "", nextAction: "", at: "", followup: "dated" };
+  const dirty = withWindow(tabStorage({ "crm-record:lead:lead-1": JSON.stringify(draft) }), () => renderForm({ layout: "sheet", saveSlot: null, statusSlot: null }));
+  assert.doesNotMatch(dirty, /record-sheet__line/);
+  assert.match(source, /const headStatus = statusInHead && autoFocus && !untouched \? draftPlaceLabel\(draftPlace\) : "";/);
+  assert.match(source, /\{headStatus && statusSlot \? createPortal\(<span> · \{headStatus\}<\/span>, statusSlot\) : null\}/);
+  // 쓰기 전에는 머리에도 말하지 않는다(아직 초안이 없다) — 쓰기 시작한 뒤에만 '초안 · 이 탭'.
+  assert.match(source, /const statusInHead = primaryInHead && statusSlot !== undefined && !pendingRawNote && recordSaveLineResting\(saveLine\);/);
+
+  // 할 말이 있으면 줄이 선다 — 실패 원인(레일 + 제목) · 일부 저장(건너뛰기 포함). 글은 그대로다.
+  const failed = headed({ draft: { summary: "다시 열린 입력", body: "긴 글은 그대로" }, initialError: "서버에 닿지 않았어요 — 입력을 복원했습니다." });
+  assert.match(failed, /<div class="record-sheet__line">/);
+  assert.match(failed.slice(failed.indexOf('class="record-sheet__line"')), />저장 못 함<\/span>/);
+  assert.equal(chipsOf(failed).length, 2);
+  const held = { activityId: "act-1", optimisticId: "local-1", summary: "단원평가 채점 상담", body: "[결정사항]" };
+  const partial = withWindow(tabStorage({ "crm-record:lead:lead-1:rawnote": JSON.stringify(held) }), () => renderForm({ layout: "sheet", saveSlot: null, statusSlot: null }));
+  assert.match(partial.slice(partial.indexOf('class="record-sheet__line"')), />일부 저장<\/span>[\s\S]*>건너뛰기<\/button>/);
+  assert.doesNotMatch(partial, /record-sheet__chips/);
+
+  // 머리 자리를 받지 않은 호출처는 지금 그대로다 — 저장 줄(쉬는 글자 포함)과 주 버튼이 키보드 위 제자리에 선다.
+  const inline = renderSheet();
+  assert.match(inline, /<div class="record-sheet__line">/);
+  assert.match(inline, /닫아도 이 탭에 초안으로 남아요/);
+  assert.equal(primariesOf(inline).length, 1);
+  // 둘째 줄 자리만 받고 저장 자리는 받지 않았으면 줄을 비우지 않는다(주 버튼이 그 줄에 있다).
+  const half = renderSheet({ statusSlot: null });
+  assert.match(half, /<div class="record-sheet__line">/);
+  assert.equal(primariesOf(half).length, 1);
+  assert.match(source, /const primaryInHead = sheet && saveSlot !== undefined;/);
+
+  // 머리의 주 버튼은 저장 줄 안이 아니라 뿌리의 제자리에서 그린다 — 경고 · 실패로 줄이 섰다 걷혀도 버튼이
+  // 다시 서지 않는다(방금 누른 버튼에서 커서가 떨어지지 않는다).
+  assert.match(source, /<div className="record-sheet__line">\{saveStatus\}\{!primaryInHead && savePrimary\}<\/div>/);
+  assert.match(source, /\{bottom\}\s*\{\/\*[^*]*\*\/\}\s*\{primaryInHead && savePrimary\}/);
+  // 줄도 칩도 없으면(쉬는 중에 칸을 펼친 동안) 빈 띠를 남기지 않는다.
+  assert.match(source, /bottom = \(!statusInHead \|\| showChips\) && \(/);
+
+  // 스타일 — 머리의 둘째 줄은 한 줄이다: 이름이 줄고 초안 자리는 잘리지 않는다. 칩의 포커스 링은 안쪽에 그린다
+  // (칩 줄은 가로로 흐르는 칸이라 바깥 링이 잘린다 — DESIGN §11 · §15 2026-09-15).
+  const css = readFileSync(new URL("./record-window.css", import.meta.url), "utf8");
+  assert.match(css, /\.hub-app \.record-window__sub-who \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/);
+  assert.match(css, /\.hub-app \.record-window__status-slot \{ flex: none; white-space: pre; color: var\(--fg-muted\); \}/);
+  assert.match(css, /\.hub-app \.record-sheet__chips \{[^}]*overflow-x: auto;/);
+  const ring = css.match(/\.hub-app \.record-sheet__chip:focus-visible \{[^}]*\}/)?.[0] || "";
+  assert.match(ring, /\{ outline-offset: -2px; \}$/, "링의 굵기 · 색 · 모서리는 전역 규칙 그대로 — 자리만 안쪽으로");
+  // 약속 한 줄의 날짜는 mono — 무엇보다 앞에 서서 말줄임에 먹히지 않는다.
+  assert.match(css, /\.hub-app \.record-window__peek-text \.mono \{ font-size: 12px; color: var\(--fg\); \}/);
+});
+
+test("'이 고객' 탭을 보는 동안 기록 칸은 가려질 뿐 서 있다 — 쓰던 글이 남고, 아래 줄이 몇 자인지와 돌아갈 길을 보인다", () => {
+  const draft = { kind: "meeting", reaction: "positive", replied: false, summary: "시범 채점 합의", body: "[결정사항]\n- 10월 셋째 주", nextAction: "", at: "", followup: "dated" };
+  const stored = () => tabStorage({ "crm-record:lead:lead-1": JSON.stringify(draft) });
+  for (const layout of ["sheet", "wide"]) {
+    const shown = withWindow(stored(), () => renderForm({ layout }));
+    const away = withWindow(stored(), () => renderForm({ layout, away: true }));
+    assert.doesNotMatch(shown, /data-away|record-wide__away/, `${layout}: 쓰기 탭에는 돌아가기 줄이 없다`);
+    assert.match(away, new RegExp(`^<div class="${layout === "sheet" ? "record-wide record-sheet" : "record-wide"}" data-away="true">`));
+    // 쓰던 글은 그대로 서 있다 — 같은 값, 같은 칸(가리는 것은 스타일시트다).
+    assert.match(away, /value="시범 채점 합의"/, layout);
+    assert.match(away, /<textarea[^>]*record-wide__detail[^>]*>\[결정사항\]\n- 10월 셋째 주<\/textarea>/, layout);
+    // 돌아가기 줄 — 뿌리의 마지막 자식. 요약 8자 + 자세히 17자.
+    assert.match(away, /<div class="record-wide__away"><span class="record-wide__away-text num">쓰던 기록 · 25자<\/span><button[^>]*hub-btn--secondary[^>]*>쓰기로 돌아가기<\/button><\/div><\/div>$/, layout);
+    assert.doesNotMatch(away.slice(away.indexOf('class="record-wide__away"')), /저장됨|기록됨/);
+  }
+  // 아직 쓴 게 없으면 세지 않는다.
+  assert.match(renderSheet({ away: true }), />아직 쓴 기록이 없어요<\/span>/);
+  // 가리는 것은 스타일시트다 — 돌아가기 줄만 남기고 나머지 자식을 감춘다. 폼을 걷거나 다시 세우지 않는다.
+  const css = readFileSync(new URL("./record-window.css", import.meta.url), "utf8");
+  assert.match(css, /\.hub-app \.record-wide\[data-away="true"\] > :not\(\.record-wide__away\) \{ display: none; \}/);
+  assert.match(css, /\.hub-app \.record-wide\[data-away="true"\] \{ flex: none; overflow: visible; \}/);
+  // 돌아오면 쓰던 자리에 커서를 둔다 — 칸이 다시 선 다음 프레임에.
+  assert.match(source, /const returnToWriting = \(\) => \{\s*onReturn\?\.\(\);\s*requestAnimationFrame\(/);
+  // 글자 수는 글쓰기 칸의 것이고, 글 없이 고쳐 둔 것(다음 약속 · 반응 · 날짜)이 있는지도 함께 넘긴다 —
+  // 저장 안 된 입력이 가려진 칸에 있는데 "쓴 게 없다"고 하지 않는다(규칙은 recordAwayLabel — contact-record.test.mjs).
+  assert.match(source, /label=\{recordAwayLabel\(\{ mode: "contact", chars: recordDraftChars\(form\), dirty: !untouched \}\)\}/);
+  // 다음 약속만 적어 둔 초안 — 글은 0자이지만 남아 있다고 말한다.
+  const onlyPromise = { kind: "call", reaction: null, replied: false, summary: "", body: "", nextAction: "견적서 보내기", at: "", followup: "dated" };
+  const promised = withWindow(tabStorage({ "crm-record:lead:lead-1": JSON.stringify(onlyPromise) }), () => renderForm({ layout: "sheet", away: true }));
+  assert.match(promised, /<span class="record-wide__away-text num">쓰던 기록이 남아 있어요<\/span>/);
+  assert.doesNotMatch(promised, /아직 쓴 기록이 없어요/);
+
+  // 돌아가기 줄 — 앞서 누른 저장이 가는 중이면 그 진행과 되돌리기를 대신 보인다(탭을 옮겼다고 되돌리기가 사라지지 않는다).
+  const bar = (props) => renderToStaticMarkup(React.createElement(RecordAwayBar, { label: "쓰던 기록 · 25자", onReturn() {}, ...props }));
+  assert.match(bar(), /쓰던 기록 · 25자/);
+  const pending = bar({ progress: { label: "기록 중", canUndo: true }, onUndo() {} });
+  assert.match(pending, /role="status"[^>]*>기록 중<button[^>]*>되돌리기<\/button>/);
+  assert.doesNotMatch(pending, /쓰던 기록/);
+  assert.match(pending, />쓰기로 돌아가기<\/button>/);
+  assert.doesNotMatch(bar({ progress: { label: "저장 중", canUndo: false } }), /되돌리기/);
+  assert.equal((bar().match(/<button/g) || []).length, 1);
+  assert.doesNotMatch(bar(), /hub-btn--primary/, "주 버튼은 저장 하나다");
+});
+
+test("휴대폰 시트의 메모 모드 — 전환 칸은 메모 칸의 흐르는 칸 맨 위로, 주 버튼 자리 · 가려진 동안의 줄도 메모 칸에 넘긴다", () => {
+  let slot = null;
+  const saveSlot = null;
+  const html = withWindow(tabStorage(), () => renderForm({ layout: "sheet", mode: "memo", saveSlot, away: true, onReturn() {}, onAttention() {}, memo: (given) => { slot = given; return React.createElement("div", { "data-memo-slot": "" }, given.head); } }));
+  assert.match(html, /^<div class="record-wide record-sheet" data-record-mode="memo" data-away="true"><div data-memo-slot=""><div class="record-wide__mode">/, "전환 칸은 뿌리에 따로 서지 않고 메모 칸이 받은 head다");
+  assert.equal((html.match(/record-wide__mode/g) || []).length, 1);
+  assert.deepEqual(pressedOf(modeBarOf(html)), [["연락 기록", "false"], ["메모", "true"]]);
+  assert.equal(slot.saveSlot, null);
+  assert.equal(slot.sheet, true);
+  assert.equal(slot.away, true);
+  assert.deepEqual([typeof slot.onReturn, typeof slot.onAttention], ["function", "function"]);
+  assert.doesNotMatch(html, /hub-btn--primary|record-sheet__chips|record-wide__summary/);
+  // 시트의 전환 칸은 폭을 나눠 가진다(가로 유지).
+  for (const button of modeBarOf(html).match(/<button[^>]*>/g)) assert.match(button, /flex:1 1 0;min-width:0/);
+  // 넓은 기록창은 지금 그대로 — 전환 칸은 뿌리의 제자리, head는 없다.
+  let wideSlot = null;
+  const wide = renderWide({ mode: "memo", memo: (given) => { wideSlot = given; return memoSlot(); } });
+  assert.match(wide, /^<div class="record-wide" data-record-mode="memo"><div class="record-wide__mode">/);
+  assert.equal(wideSlot.head, null);
+  // 시트에서도 메모 칸을 준 호출처만 전환 칸이 선다(연락 기록 모드에서는 흐르는 칸 맨 위).
+  const contact = renderSheet({ memo: memoSlot });
+  assert.match(contact, /^<div class="record-wide record-sheet"><div class="record-wide__scroll"><div class="record-wide__mode">/);
+  assert.doesNotMatch(renderSheet(), /record-wide__mode/);
+});
+
+test("좁은 화면의 스타일 — 탭은 900px, 시트는 폼의 배치가 맡는다(600을 다시 재지 않는다), 누르는 곳 44px · 입력 16px", () => {
+  const css = readFileSync(new URL("./record-window.css", import.meta.url), "utf8");
+  // 이 파일의 미디어 쿼리는 900 하나다 — 시트 규칙(.record-sheet)은 드로어가 고른 배치에만 붙는다.
+  assert.deepEqual([...css.matchAll(/@media \(([^)]+)\)/g)].map((m) => m[1]), ["max-width: 900px"]);
+  const narrow = css.slice(css.indexOf("@media (max-width: 900px)"));
+  // 한 번에 한 칸 — 쓰기 탭에서는 읽기 칸이, '이 고객' 탭에서는 기록 칸(돌아가기 줄만 남기고)이 비킨다.
+  assert.match(narrow, /\.hub-app \.record-window\[data-tab="write"\] \.record-ctx \{ display: none; \}/);
+  assert.match(narrow, /\.hub-app \.record-window\[data-tab="context"\] \.record-window__main \{ flex: none; order: 1; \}/);
+  assert.doesNotMatch(css.slice(0, css.indexOf("@media (max-width: 900px)")), /\[data-tab=/, "넓은 화면은 탭 값을 읽지 않는다 — 두 칸이 늘 나란히 선다");
+  // 칩 줄 · 돌아가기 줄 · 약속 한 줄은 선 하나로 나뉜다. 누르는 줄은 44px.
+  assert.match(css, /\.hub-app \.record-sheet__bar \{[^}]*border-top: 1px solid var\(--line-soft\);/);
+  assert.match(css, /\.hub-app \.record-wide__away \{[^}]*border-top: 1px solid var\(--line-soft\);/);
+  assert.match(css, /\.hub-app \.record-window__peek \{[^}]*min-height: 44px;[^}]*border-bottom: 1px solid var\(--line-soft\);/);
+  assert.match(css, /\.hub-app \.record-window__save-slot \{[^}]*min-height: 44px;/);
+  // 시트의 흐르는 칸은 바닥이 낮다 — 키보드가 오른 높이에서도 칩 줄이 제자리에 남는다.
+  assert.match(css, /\.hub-app \.record-sheet \{ --record-scroll-floor: 8rem; \}/);
+  // 긴 글쓰기 칸은 시트에서도 16px · 1.8 · 16px 여백 그대로다 — 시작 줄 수만 다르다(글자 크기를 다시 정하지 않는다).
+  const sheetDetail = css.match(/\.hub-app \.record-sheet textarea\.hub-input\.record-wide__detail \{[^}]*\}/)?.[0] || "";
+  assert.match(sheetDetail, /^[^{]*\{ --record-detail-min: calc\(6 \* 1\.8em \+ 34px\); \}$/);
+  assert.doesNotMatch(css.slice(css.indexOf("/* ── 휴대폰 시트")), /font-size: (?:\d|1[0-1])(?:\.\d+)?px/, "시트에 12px 아래 글자는 없다");
+  // 토큰만 · 1px 선만 · raw 시간 없음 · 그림자 · 색 채움 없음(새 규칙 전부).
+  const added = css.slice(css.indexOf("/* ── 가려진 기록 칸"));
+  assert.doesNotMatch(added, /#[0-9a-fA-F]{3,8}\b|rgba?\(|oklch\(|\d+ms\b|cubic-bezier\(|box-shadow|transition|animation/);
+  assert.doesNotMatch(added, /border(?:-(?:top|right|bottom|left))?(?:-width)?: (?:[2-9]|\d{2,})px/);
+  assert.doesNotMatch(added, /var\(--(danger|success|warning|info|accent|personal|company)/, "좁은 화면의 새 줄은 색으로 말하지 않는다");
+  // 전역 터치 플로어(≤720px: 버튼 44px · 입력 16px)를 시트가 되돌리지 않는다.
+  assert.doesNotMatch(added, /min-height: (?:[0-3]?\d|4[0-3])px/);
+  assert.doesNotMatch(added, /(?:input|textarea)[^{]*\{[^}]*font-size/, "입력 글자 크기를 다시 정하지 않는다(16px 플로어 그대로)");
 });

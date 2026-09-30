@@ -148,9 +148,15 @@ test("record mode swaps the same drawer to the shared capture form (one overlay)
   assert.match(drawer, /title=\{record \? \(memoMode \? "메모" : "연락 기록"\) : displayName\}/);
   assert.match(drawer, /onClose=\{record \? \(\) => setRecord\(null\) : onClose\}/);
   // 그릇은 같은 Drawer다 — 폭만 순수 규칙(recordWindowLayout)에서 받고, 새 presentation은 없다(Q-CR1).
-  assert.match(drawer, /const recordLayout = recordWindowLayout\(\{ recording: Boolean\(record\), mobile \}\);/);
+  // 화면 폭이 배치(나란히 · 탭 · 시트)를 고른다 — 두 미디어 쿼리의 답을 그대로 넘긴다(2026-09-30 ③).
+  assert.match(drawer, /const mobile = useMediaQuery\(RECORD_LAYOUT_QUERIES\.sheet\);\s*const narrow = useMediaQuery\(RECORD_LAYOUT_QUERIES\.tabs\);/);
+  assert.match(drawer, /const recordLayout = recordWindowLayout\(\{ recording: Boolean\(record\), mobile, narrow \}\);/);
   assert.match(drawer, /presentation=\{mobile \? "compact" : "side"\}\s*width=\{recordLayout\.width\}/);
-  assert.doesNotMatch(drawer, /presentation="(focus|wide)"/);
+  assert.doesNotMatch(drawer, /presentation="(focus|wide|sheet|full)"/);
+  // 휴대폰의 전체 높이와 머리 저장도 같은 Drawer의 선택 prop이다 — 새 오버레이가 아니다(Q-CR11).
+  assert.match(drawer, /sheet=\{recordLayout\.headerSave \? "full" : "auto"\}/);
+  assert.match(drawer, /headerAction=\{recordLayout\.headerSave \? <span ref=\{setSaveSlot\} className="record-window__save-slot" \/> : null\}/);
+  assert.equal((drawer.match(/<Drawer\b/g) || []).length, 1, "고객 드로어는 Drawer 하나다");
   // 기록 모드를 떠나면 포커스를 같은 드로어의 '연락 기록' 버튼으로 돌려놓는다(문서 밖으로 떨어지지 않게).
   assert.match(drawer, /if \(wasRecordingRef\.current && !record\) recordButtonRef\.current\?\.focus\(\);/);
   assert.match(drawer, /<Button ref=\{recordButtonRef\} variant="primary"/);
@@ -331,6 +337,9 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     applyReceiptEvent: contactRecord.applyReceiptEvent,
     recordReceipt: contactRecord.recordReceipt,
     recordWindowLayout: contactRecord.recordWindowLayout,
+    recordTab: contactRecord.recordTab,
+    RECORD_TABS: contactRecord.RECORD_TABS,
+    RECORD_LAYOUT_QUERIES: contactRecord.RECORD_LAYOUT_QUERIES,
     ACT_ICON: recordContext.ACTIVITY_ICON,
     recordRowKind: recordContext.recordRowKind,
     recordContextTruth: recordContext.recordContextTruth,
@@ -743,27 +752,230 @@ test("render: leaving record mode hands focus back to 연락 기록 — once, an
   assert.equal(focused, 1);
 });
 
-test("render: on a phone the record mode keeps today's bottom sheet — no wide window yet", () => {
-  const had = Object.hasOwn(globalThis, "window");
-  const before = globalThis.window;
-  globalThis.window = { matchMedia: (query) => ({ matches: query === "(max-width: 600px)", addEventListener() {}, removeEventListener() {} }) };
-  try {
+// ── 2026-09-30 넓은 기록창 ③ — 좁은 화면: 탭(≤900px) · 전체 높이 시트(≤600px) (Q-CR3 · Q-CR11, 권장) ────────
+
+// 화면 폭을 세운다 — 드로어가 듣는 미디어 쿼리(max-width)에 그 폭으로 답한다. 커서 옮기기(rAF)는 모아 둔다.
+function atWidth(width, run) {
+  const had = { window: Object.hasOwn(globalThis, "window"), raf: Object.hasOwn(globalThis, "requestAnimationFrame") };
+  const before = { window: globalThis.window, raf: globalThis.requestAnimationFrame };
+  const frames = [];
+  globalThis.window = {
+    matchMedia: (query) => ({ matches: width <= Number(/max-width: (\d+)px/.exec(query)?.[1] ?? -1), addEventListener() {}, removeEventListener() {} }),
+  };
+  globalThis.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
+  try { return run(frames); } finally {
+    if (had.window) globalThis.window = before.window; else delete globalThis.window;
+    if (had.raf) globalThis.requestAnimationFrame = before.raf; else delete globalThis.requestAnimationFrame;
+  }
+}
+const windowOf = (app) => app.findAll((n) => n.props?.className === "record-window")[0];
+const tabsOf = (app) => app.findAll((n) => n.type === "SegmentedControl" && n.props.label === "보기")[0];
+const peekOf = (app) => app.findAll((n) => n.type === "button" && /record-window__peek/.test(n.props.className || ""))[0];
+const recordFooterOf = (app) => app.findAll((n) => n.type === "Button" && /고객 정보로/.test(app.text(n)))[0];
+
+test("render: on a phone the record window is the same bottom sheet at full height — save in the header, no footer", () => {
+  atWidth(390, () => {
     const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
     openLeadA(app);
-    app.findAll((n) => n.type === "Button" && n.props.variant === "primary" && /연락 기록/.test(app.text(n)))[0].props.onClick();
-    app.render();
+    // 행을 눌러 연 쉬는 드로어 — 지금 바닥 시트 그대로다. 글쓰기 칸이 없어 키보드가 오르지 않는다.
     assert.equal(drawerOf(app).props.presentation, "compact");
-    assert.equal(drawerOf(app).props.width, REST_WIDTH);
-    assert.equal(drawerOf(app).props.bodyStyle, undefined);
-    assert.equal(app.findAll((n) => n.type === "ContactRecordForm")[0].props.layout, "compact");
-    assert.equal(app.findAll((n) => n.type === "RecordContextColumn").length, 0);
-    // 한 줄 메모는 지금처럼 폼 아래(폼 밖)에 있다.
-    const focus = app.findAll((n) => n.props?.className === "customer-focus")[0];
-    assert.deepEqual(focus.props.children.map((child) => child.type), ["ContactRecordForm", "details"]);
-  } finally {
-    if (had) globalThis.window = before;
-    else delete globalThis.window;
-  }
+    assert.equal(drawerOf(app).props.sheet, "auto");
+    assert.equal(drawerOf(app).props.headerAction, null);
+    assert.equal(app.findAll((n) => n.type === "ContactRecordForm").length, 0);
+    // Drawer는 본문의 첫 조작에 커서를 둔다 — 그게 버튼이다(글 칸은 접힌 칸 안에만 있다).
+    const controls = app.findAll((n) => ["Button", "IconButton", "TextField", "TextAreaField", "SelectField", "input", "textarea", "select", "button"].includes(n.type), drawerOf(app).props.children);
+    assert.equal(controls[0].type, "Button", "행을 눌러 열 때 커서가 글 칸에 서지 않는다");
+
+    openWide(app);
+    // 같은 Drawer(오버레이 하나) — 바닥 시트가 전체 높이로 서고, 저장 자리가 머리에 생긴다. 발판은 없다.
+    assert.equal(app.findAll((n) => n.type === "Drawer").length, 1);
+    const drawer = drawerOf(app);
+    assert.equal(drawer.props.presentation, "compact");
+    assert.equal(drawer.props.sheet, "full");
+    assert.equal(drawer.props.width, REST_WIDTH);
+    assert.deepEqual(drawer.props.bodyStyle, { padding: 0, gap: 0, overflow: "hidden" });
+    assert.equal(drawer.props.title, "연락 기록");
+    assert.equal(drawer.props.footer, null, "맨 아래는 키보드 위 칩 줄의 자리다 — 머리의 닫기가 '고객 정보로'다");
+    assert.equal(recordFooterOf(app), undefined);
+    const slot = drawer.props.headerAction;
+    assert.equal(slot.type, "span");
+    assert.equal(slot.props.className, "record-window__save-slot");
+    // 머리의 둘째 줄 — 누구(길면 줄어든다) + 초안이 놓인 곳의 자리. 폼이 그 자리에 '초안 · 이 탭'을 그린다:
+    // 쉬는 저장 줄이 키보드 위의 글 쓸 높이를 차지하지 않는다.
+    const sub = drawer.props.subtitle;
+    assert.equal(sub.props.className, "record-window__sub");
+    const [who, statusAt] = sub.props.children;
+    assert.deepEqual([who.props.className, app.text(who)], ["record-window__sub-who", "테스트학원 A"]);
+    assert.equal(statusAt.props.className, "record-window__status-slot");
+
+    // 폼은 시트 배치다 — R · 연락 기록으로 열면 커서가 요약에 선다(autoFocus).
+    const form = formOf(app);
+    assert.equal(form.props.layout, "sheet");
+    assert.equal(form.props.autoFocus, true);
+    assert.equal(form.props.away, false);
+    // 머리 자리가 서기 전 한 박자 — 제자리에 그리지 않게 null을 받는다(undefined가 아니다).
+    assert.equal(form.props.saveSlot, null);
+    assert.equal(form.props.statusSlot, null);
+    // 자리가 서면(ref) 그 요소를 받는다 — 주 버튼은 폼이 거기에 그린다(버튼 · 상태는 하나).
+    const el = { nodeType: 1 };
+    const statusEl = { nodeType: 1 };
+    slot.props.ref(el);
+    statusAt.props.ref(statusEl);
+    app.render();
+    assert.equal(formOf(app).props.saveSlot, el);
+    assert.equal(formOf(app).props.statusSlot, statusEl);
+    assert.equal(formOf(app).props.key, form.props.key, "자리가 섰다고 폼을 다시 세우지 않는다");
+    // 드로어가 직접 그리는 주 버튼은 없다 — 기록창의 주 버튼은 폼의 것 하나다.
+    assert.equal(app.findAll((n) => n.type === "Button" && n.props.variant === "primary", drawerOf(app)).length, 0);
+
+    // 두 칸은 탭이 된다 — 읽기 칸도 같은 시트 안에 있다.
+    assert.deepEqual([windowOf(app).props["data-layout"], windowOf(app).props["data-tab"]], ["sheet", "write"]);
+    assert.equal(app.findAll((n) => n.type === "RecordContextColumn").length, 1);
+
+    // 첫 닫기(머리의 닫기 · ESC)는 쉬는 시트로, 자리는 걷힌다.
+    slot.props.ref(null);
+    drawerOf(app).props.onClose();
+    app.render();
+    assert.equal(drawerOf(app).props.sheet, "auto");
+    assert.equal(drawerOf(app).props.headerAction, null);
+    assert.equal(drawerOf(app).props.title, "테스트학원 A");
+    assert.equal(app.findAll((n) => n.type === "ContactRecordForm").length, 0);
+  });
+});
+
+test("render: 했어요 · 기록 on a phone opens the same sheet with the promise as the summary seed", () => {
+  atWidth(390, () => {
+    const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+    openLeadA(app);
+    app.findAll((n) => n.type === "Button" && /했어요 · 기록/.test(app.text(n)))[0].props.onClick();
+    app.render();
+    const form = formOf(app);
+    assert.equal(form.props.layout, "sheet");
+    assert.equal(form.props.autoFocus, true, "커서는 요약에");
+    assert.equal(form.props.draft.summary, "견적서 보내기");
+    assert.equal(form.props.mode, "contact");
+    assert.equal(drawerOf(app).props.sheet, "full");
+  });
+});
+
+test("render: the narrow tabs switch 쓰기 | 이 고객 without remounting the form — the draft stays", () => {
+  atWidth(390, (frames) => {
+    const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+    openLeadA(app);
+    openWide(app);
+    const opened = formOf(app);
+    const tabs = tabsOf(app);
+    assert.deepEqual(tabs.props.options, [{ key: "write", label: "쓰기" }, { key: "context", label: "이 고객" }]);
+    assert.equal(tabs.props.value, "write");
+    assert.equal(tabs.props.fill, true, "세그먼트는 좁은 화면에서도 가로로 선다");
+    // 탭 → (약속 한 줄) → 기록 칸 → 읽기 칸 순서. 기록 칸과 읽기 칸은 둘 다 서 있다.
+    const kinds = () => windowOf(app).props.children.map((child) => child.props.className || child.type);
+    assert.deepEqual(kinds(), ["record-window__tabs", "hub-row record-window__peek", "record-window__main", "RecordContextColumn"]);
+
+    // '이 고객'으로 — 폼은 같은 폼(key · 받은 값 그대로)이고 가려질 뿐이다(away). 다시 세우면 쓰던 글 · 되돌리기가 사라진다.
+    tabs.props.onChange("context");
+    app.render();
+    assert.equal(windowOf(app).props["data-tab"], "context");
+    assert.equal(tabsOf(app).props.value, "context");
+    assert.equal(app.findAll((n) => n.type === "ContactRecordForm").length, 1, "기록 칸을 걷지 않는다");
+    assert.equal(formOf(app).props.key, opened.props.key);
+    assert.equal(formOf(app).props.preset, opened.props.preset);
+    assert.equal(formOf(app).props.draft, opened.props.draft);
+    assert.equal(formOf(app).props.away, true);
+    assert.equal(peekOf(app), undefined, "약속 한 줄은 쓰기 탭에서만 — 이 고객 탭에는 약속 카드가 있다");
+    assert.deepEqual(kinds(), ["record-window__tabs", "record-window__main", "RecordContextColumn"]);
+    assert.equal(drawerOf(app).props.sheet, "full");
+    assert.equal(app.findAll((n) => n.type === "Drawer").length, 1);
+
+    // 아래 줄의 '쓰기로 돌아가기'(폼이 알린다) → 쓰기 탭, 같은 폼.
+    formOf(app).props.onReturn();
+    app.render();
+    assert.equal(windowOf(app).props["data-tab"], "write");
+    assert.equal(formOf(app).props.away, false);
+    assert.equal(formOf(app).props.key, opened.props.key);
+
+    // 저장이 막혔거나 실패했다(폼이 알린다) → 이유가 있는 쓰기 탭으로 돌린다.
+    tabsOf(app).props.onChange("context");
+    app.render();
+    formOf(app).props.onAttention();
+    app.render();
+    assert.equal(windowOf(app).props["data-tab"], "write");
+    assert.equal(formOf(app).props.away, false);
+
+    // 약속 한 줄 — 읽던 약속이 쓰는 동안에도 남는다. 누르면 '이 고객'으로 가고 커서는 탭의 고른 칸으로.
+    const peek = peekOf(app);
+    // 말줄임 한 줄이라 '언제'가 앞에 선다 — 놓친 날수 · 날짜(mono) · 무엇을. 좁은 폭에서 잘리는 것은 끝의 무엇이다.
+    const due = helpers.shortDateLabel(dayKey(-2));
+    assert.equal(app.text(peek), `약속2일 지남 · ${due} 견적서 보내기`);
+    assert.equal(app.findAll((n) => n.props?.className === "record-ctx__late", peek).length, 1, "놓친 약속은 글자 한 곳");
+    const date = app.findAll((n) => n.props?.className === "mono", peek);
+    assert.deepEqual(date.map((n) => app.text(n)), [due], "날짜는 mono 한 곳");
+    const line = app.findAll((n) => n.props?.className === "record-window__peek-text", peek)[0].props.children;
+    assert.ok(line.indexOf(date[0]) < line.indexOf("견적서 보내기"), "날짜가 무엇보다 앞이다");
+    frames.length = 0;
+    peek.props.onClick();
+    app.render();
+    assert.equal(windowOf(app).props["data-tab"], "context");
+    assert.equal(frames.length, 1, "사라진 줄 대신 탭으로 커서를 옮긴다");
+
+    // 모드를 바꿔도(연락 기록 → 메모) 탭은 그대로이고 폼도 같은 폼이다.
+    formOf(app).props.onModeChange("memo");
+    app.render();
+    assert.equal(windowOf(app).props["data-tab"], "context");
+    assert.equal(formOf(app).props.key, opened.props.key);
+    assert.equal(formOf(app).props.away, true);
+
+    // 기록 모드를 새로 열면 쓰기 탭에서 시작한다.
+    drawerOf(app).props.onClose();
+    app.render();
+    openWide(app);
+    assert.equal(windowOf(app).props["data-tab"], "write");
+    assert.equal(formOf(app).props.away, false);
+  });
+});
+
+test("render: between 601 and 900px the wide side drawer keeps its form and gets the same tabs — save stays in the band", () => {
+  atWidth(768, () => {
+    const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+    openLeadA(app);
+    openWide(app);
+    const drawer = drawerOf(app);
+    // 옆 드로어 그대로 — 폭은 화면이 자른다(min(960px, 100% − 56px)). 전체 높이 시트 · 머리 저장은 휴대폰만.
+    assert.equal(drawer.props.presentation, "side");
+    assert.equal(drawer.props.width, WIDE_WIDTH);
+    assert.equal(drawer.props.sheet, "auto");
+    assert.equal(drawer.props.headerAction, null);
+    assert.ok(recordFooterOf(app), "발판의 '고객 정보로'는 그대로다");
+    const form = formOf(app);
+    assert.equal(form.props.layout, "wide");
+    assert.equal(form.props.saveSlot, undefined, "주 버튼은 아래 띠 제자리에");
+    assert.equal(form.props.statusSlot, undefined, "저장 줄도 아래 띠 제자리에");
+    assert.equal(drawer.props.subtitle, "테스트학원 A", "머리의 둘째 줄은 글자 그대로다");
+    assert.equal(typeof form.props.memo, "function", "메모 모드도 같다");
+    assert.deepEqual([windowOf(app).props["data-layout"], windowOf(app).props["data-tab"]], ["tabs", "write"]);
+    assert.ok(tabsOf(app));
+    assert.ok(peekOf(app));
+    tabsOf(app).props.onChange("context");
+    app.render();
+    assert.equal(formOf(app).props.away, true);
+    assert.equal(formOf(app).props.key, form.props.key);
+  });
+});
+
+test("render: above 900px there are no tabs — both columns stand side by side and the form is never tucked away", () => {
+  atWidth(1440, () => {
+    const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
+    openLeadA(app);
+    openWide(app);
+    assert.equal(tabsOf(app), undefined);
+    assert.equal(peekOf(app), undefined);
+    assert.deepEqual([windowOf(app).props["data-layout"], windowOf(app).props["data-tab"]], ["wide", "write"]);
+    assert.equal(formOf(app).props.layout, "wide");
+    assert.equal(formOf(app).props.away, false);
+    assert.equal(formOf(app).props.saveSlot, undefined);
+    assert.equal(drawerOf(app).props.headerAction, null);
+    assert.equal(windowOf(app).props.children.length, 2, "쓰기 칸 · 읽기 칸 둘뿐");
+  });
 });
 
 // ── 2026-09-30 넓은 기록창 ⑥ — 같은 칸에서 메모 쓰기(Q-CR6 · 권장, 화면 확인 뒤 확정) ──────────────
@@ -1011,36 +1223,64 @@ test("render: a customer a memo cannot be linked to keeps today's paths — Quic
   assert.equal(app.findAll((n) => n.type === "ContactRecordForm").length, 0);
 });
 
-test("render: on a phone 메모 still opens the memo drawer and the bottom sheet keeps QuickLog — memo mode is desktop-only for now", () => {
-  const had = Object.hasOwn(globalThis, "window");
-  const before = globalThis.window;
-  globalThis.window = { matchMedia: (query) => ({ matches: query === "(max-width: 600px)", addEventListener() {}, removeEventListener() {} }) };
-  try {
+test("render: on a phone 메모 opens the same sheet in memo mode — the memo drawer and QuickLog are gone for linkable customers", () => {
+  atWidth(390, () => {
     const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
     openLeadA(app);
+    memoButtonOf(app).props.onClick();
+    app.render();
+    // 드로어를 메모 창으로 바꾸지 않는다 — 같은 시트가 메모 모드로 선다.
+    assert.equal(app.findAll((n) => n.type === "ContextMemoDrawer").length, 0);
+    assert.equal(app.findAll((n) => n.type === "Drawer").length, 1);
+    assert.equal(drawerOf(app).props.title, "메모");
+    assert.equal(drawerOf(app).props.sheet, "full");
+    assert.equal(formOf(app).props.layout, "sheet");
+    assert.equal(formOf(app).props.mode, "memo");
+    assert.equal(typeof formOf(app).props.memo, "function");
+    // 메모 칸은 폼이 넘긴 자리(머리 저장 · 흐르는 칸 맨 위 · 가려진 동안의 줄)를 그대로 받는다.
+    const given = { saveRef: { current: null }, contactLine: null, sheet: true, head: "전환 칸", saveSlot: { nodeType: 1 }, away: true, onReturn() {}, onAttention() {} };
+    const pane = memoPaneOf(app, given);
+    assert.equal(pane.type, "RecordMemoPane");
+    for (const key of ["sheet", "head", "saveSlot", "away", "onReturn", "onAttention", "saveRef"]) assert.equal(pane.props[key], given[key], key);
+    assert.deepEqual(pane.props.contexts, [{ type: "lead", id: LEAD_A, label: "테스트학원 A" }]);
+    // 연락이 아닌 한 줄 메모(QuickLog)는 없다 — 메모 모드가 대신한다.
+    assert.equal(app.findAll((n) => n.type === "details" && /연락이 아닌 한 줄 메모/.test(app.text(n))).length, 0);
+    // 연락 기록으로 열어도 같은 시트에 전환 칸이 선다.
+    drawerOf(app).props.onClose();
+    app.render();
     openWide(app);
-    // 바닥 시트의 폼에는 메모 칸을 넘기지 않는다 — 전환 칸이 없고, 한 줄 메모는 폼 아래 그대로다.
-    assert.equal(formOf(app).props.layout, "compact");
-    assert.equal(formOf(app).props.memo, null);
     assert.equal(formOf(app).props.mode, "contact");
-    assert.equal(drawerOf(app).props.title, "연락 기록");
-    assert.equal(app.findAll((n) => n.type === "details" && /연락이 아닌 한 줄 메모/.test(app.text(n))).length, 1);
+    assert.equal(typeof formOf(app).props.memo, "function");
+    assert.equal(app.findAll((n) => n.type === "details" && /연락이 아닌 한 줄 메모/.test(app.text(n))).length, 0);
+  });
+});
+
+test("render: on a phone a customer a memo cannot be linked to keeps QuickLog inside the form's flow and the memo drawer", () => {
+  atWidth(390, () => {
+    const legacy = { id: "lead-legacy-7", name: "옛날학원 G", stage: "Contact", nextAction: "안부 전화", nextActionAt: dayKey(2), createdAt: ago(20), lastContactAt: ago(4) };
+    const app = mountCustomers({ leads: [legacy] });
+    rowsOf(app)[0].props.onClick();
+    app.render();
+    openWide(app);
+    const form = formOf(app);
+    assert.equal(form.props.layout, "sheet");
+    assert.equal(form.props.memo, null);
+    // 한 줄 메모는 폼의 자식(흐르는 칸 안)이다 — 폼 밖에 따로 서지 않는다(맨 아래는 칩 줄 자리).
+    assert.equal(app.findAll((n) => n.type === "details", form).length, 1);
+    assert.equal(app.findAll((n) => n.type === "details").length, 1);
     drawerOf(app).props.onClose();
     app.render();
     memoButtonOf(app).props.onClick();
     app.render();
     assert.equal(app.findAll((n) => n.type === "ContextMemoDrawer").length, 1);
-    assert.equal(app.findAll((n) => n.type === "ContactRecordForm").length, 0);
-  } finally {
-    if (had) globalThis.window = before;
-    else delete globalThis.window;
-  }
+  });
 });
 
 test("memo mode writes through the journal only and QuickLog stays for the paths that still need it", () => {
   const drawer = slice("function Customer360Drawer", "// ── 새 고객 등록");
-  // 메모 모드는 넓은 기록창 + 메모를 붙일 수 있는 고객에서만.
-  assert.match(drawer, /const memoModeAvailable = wideRecord && memoEnabled;\s*const memoMode = memoModeAvailable && record\.mode === "memo";/);
+  // 메모 모드는 기록창(어느 화면 폭이든) + 메모를 붙일 수 있는 고객에서만.
+  assert.match(drawer, /const recording = Boolean\(record\);/);
+  assert.match(drawer, /const memoModeAvailable = recording && memoEnabled;\s*const memoMode = memoModeAvailable && record\.mode === "memo";/);
   assert.match(drawer, /const quickMemo = record && !memoModeAvailable && \(/);
   assert.match(drawer, /memo=\{memoPane\}/);
   // 메모 칸의 저장 확인은 기록 줄기에 줄을 세울 뿐이다 — 활동 · 고객 행 · 연락 확인 토스트를 건드리지 않는다.
@@ -1049,8 +1289,11 @@ test("memo mode writes through the journal only and QuickLog stays for the paths
   assert.doesNotMatch(pane, /setActivities|saveRevenueRecord|logActivity|onRecordPersisted|onPromiseSaved|next_action/);
   // 줄기는 읽어 온 메모 + 방금 저장이 확인된 메모 — 메모 읽기가 실패해도 방금 저장한 메모는 선다.
   assert.match(drawer, /const notes = memoEnabled \? memoStreamRows\(memos\.status === "live" \? memos\.entries : \[\], savedMemos\) : \[\];/);
-  // 메모 버튼 — 데스크톱은 같은 드로어가 넓어지고, 휴대폰과 uuid 아닌 고객은 메모 창.
-  assert.match(drawer, /onClick=\{\(\) => \(memoEnabled && !mobile \? startRecord\(\{\}, null, "", "memo"\) : setMemoState\(\{\}\)\)\}>메모<\/Button>/);
+  // 메모 버튼 — 같은 드로어가 메모 모드로 열린다(휴대폰도 같은 시트). 메모를 붙일 수 없는 고객만 메모 창.
+  assert.match(drawer, /onClick=\{\(\) => \(memoEnabled \? startRecord\(\{\}, null, "", "memo"\) : setMemoState\(\{\}\)\)\}>메모<\/Button>/);
+  // 한 줄 메모는 폼의 흐르는 칸에만 놓인다 — 폼 밖에 따로 서던 자리(옛 바닥 시트)는 없다.
+  assert.match(drawer, />\s*\{quickMemo\}\s*<\/ContactRecordForm>/);
+  assert.equal((drawer.match(/\{quickMemo\}/g) || []).length, 1);
 });
 
 test("render: a just-saved record row carries a receipt — 기록 중 → 저장 중 → 저장됨 only after the server answers", () => {

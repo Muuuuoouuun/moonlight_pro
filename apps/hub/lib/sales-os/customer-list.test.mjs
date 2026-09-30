@@ -16,6 +16,7 @@ import {
   localDateKey,
   matchesCustomerFocus,
   matchesCustomerSearch,
+  promisePeek,
   promiseReadout,
   sortCaption,
   sortCustomers,
@@ -100,6 +101,28 @@ test("the promise readout is one sentence set for the card and the record window
   const template = read({ nextAction: "리드 출처 확인 후 다음 접촉 채널 정하기", nextActionIsTemplate: true });
   assert.deepEqual([template.what, template.muted, template.when], ["다음 약속 없음", true, ""]);
   assert.deepEqual(promiseReadout(), { what: "아직 정하지 않았어요", muted: true, late: false, lateLabel: "", when: "" });
+});
+
+// 좁은 기록창의 약속 한 줄(2026-09-30 넓은 기록창 ③) — 말줄임 한 줄이라 '언제'가 앞에 선다.
+test("the promise peek puts the date before the text — the ellipsis eats the tail, never the when", () => {
+  const peek = (patch) => promisePeek(customerPromise(lead(patch), TODAY));
+  // 날짜 있는 약속 — 날짜(M/D)가 따로 나오고 뒤에 붙는 말이 없다(화면: 약속 · 10/2 · 무엇을…).
+  assert.deepEqual(peek({ nextAction: "채점 기능 써 보시게 전달하고 원장님 일정 확인", nextActionAt: "2026-10-02" }),
+    { what: "채점 기능 써 보시게 전달하고 원장님 일정 확인", late: false, lateLabel: "", date: "10/2", tail: "" });
+  // 오늘 · 내일도 날짜로 말한다 — 칩 줄의 새 약속 날짜(M/D)와 같은 자로 견준다.
+  assert.equal(peek({ nextAction: "데모", nextActionAt: TODAY }).date, "9/24");
+  assert.equal(peek({ nextAction: "데모", nextActionAt: "2026-09-25" }).date, "9/25");
+  // 놓친 약속 — 위급 글자(N일 지남)가 맨 앞, 그다음 날짜. 둘 다 무엇보다 앞이다.
+  assert.deepEqual(peek({ nextAction: "견적서 보내기", nextActionAt: "2026-09-22" }),
+    { what: "견적서 보내기", late: true, lateLabel: "2일 지남", date: "9/22", tail: "" });
+  // 날짜 없는 약속 — 앞세울 날짜가 없으니 그 사실이 뒤에 붙는다.
+  assert.deepEqual(peek({ nextAction: "소개서 보내기" }), { what: "소개서 보내기", late: false, lateLabel: "", date: "", tail: "날짜를 아직 안 정했어요" });
+  // 약속이 아닌 말(없음 · 기약 없음 · 종료 · 템플릿)은 날짜도 꼬리도 없다 — 읽는 말은 카드와 같다.
+  for (const patch of [{}, { dormant: true, dormantSince: "2026-09-14" }, { stage: "Lost", nextAction: "재접촉", nextActionAt: "2026-09-01" }, { nextAction: "리드 출처 확인 후 다음 접촉 채널 정하기", nextActionIsTemplate: true }]) {
+    const row = customerPromise(lead(patch), TODAY);
+    assert.deepEqual(promisePeek(row), { what: promiseReadout(row).what, late: false, lateLabel: "", date: "", tail: "" }, JSON.stringify(patch));
+  }
+  assert.deepEqual(promisePeek(), { what: "아직 정하지 않았어요", late: false, lateLabel: "", date: "", tail: "" });
 });
 
 // 2026-09-24: 이관·시트 동기화 문구는 운영자의 약속이 아니다(CRM 스펙 §4.1 결정 C, DESIGN.md

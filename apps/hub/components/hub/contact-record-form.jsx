@@ -23,6 +23,15 @@
 // 작성기)을 같은 자리에 놓는다. 이 파일은 일지 메모 코드를 import하지 않는다 — 메모를 쓰지 않는 호출처
 // (오늘 연락 · 첫 화면 · 에이전트)가 그 코드를 끌고 오지 않게. 연락 기록의 상태는 모드를 오가도 남는다.
 //
+// 2026-09-30 넓은 기록창 ③(Q-CR3 · Q-CR11 · 권장): layout="sheet"는 휴대폰의 전체 높이 시트에 놓이는 같은 두 칸
+// (요약 + 자세히)이다. 아래 띠 대신 키보드 바로 위의 칩 줄(종류 · 반응, 약속)이 서고, 칩을 누르면 그 칸들이
+// 펼쳐진다(자세히는 한 줄로 접힌다). 저장은 호출처가 준 머리 자리(saveSlot)에 선다 — 키보드가 가리지 않는다.
+// 키보드 위의 저장 줄은 할 말(진행 · 되돌리기 · 빠진 칸 · 경고 · 실패)이 있을 때만 서고, 쉬는 동안 초안이 놓인 곳은
+// 머리의 둘째 줄 자리(statusSlot)가 말한다. 시트와 넓은 기록창은 한 나무다 — 화면을 돌려 배치가 바뀌어도 글 칸이
+// 다시 서지 않는다(커서 · 칸 높이가 남는다).
+// 좁은 화면에서 '이 고객' 탭을 보는 동안(away) 기록 칸은 가려질 뿐 그대로 서 있다: 쓰던 글 · 되돌리기 · 실패
+// 원인이 남고, 아래 줄이 '쓰던 기록 · N자'와 돌아갈 길을 보인다.
+//
 // 드로어 껍데기는 ContactRecordDrawer가 씌운다. 상세 안에서는 오버레이를 겹치지 않으려고
 // 폼만 인라인으로 쓴다(CRM 지침 §6.2 — 활성 오버레이는 언제나 하나).
 //
@@ -30,6 +39,7 @@
 // Leads/Deals/Accounts 전체를 이 청크로 끌고 온다(followups.jsx가 같은 이유로 상수를 복제).
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { Button, CheckboxRow, Drawer, Kbd, SegmentedControl, Skeleton, TextAreaField, TextField, TruthBadge, useToast } from "./hub-primitives";
 import { UNDO_WINDOW_MS, useUndoableAction } from "./use-undoable-action";
 import { Iconed } from "./hub-icons";
@@ -44,16 +54,22 @@ import {
   channelLabel,
   detailFieldHeight,
   draftHintCopy,
+  draftPlaceLabel,
   draftRestoredCopy,
   isPlainEnter,
   isSaveChord,
   memoModeContactNote,
   normalizeRecordMode,
   reactionRequired,
+  recordAwayLabel,
   recordChannelOptions,
+  recordDetailLines,
+  recordDraftChars,
   recordModeOptions,
   recordModeSentence,
   recordSaveLine,
+  recordSaveLineResting,
+  recordSheetChips,
   saveChordReachesRecord,
   validateContactRecord,
 } from "@/lib/sales-os/contact-record";
@@ -133,10 +149,16 @@ const useLayoutEffectOnClient = typeof window !== "undefined" ? React.useLayoutE
 // 안에서 흐른다. 높이는 detailFieldHeight(순수)가 정한다. 재는 동안 칸이 잠깐 최소 높이로 줄어 흐르는 칸의
 // 스크롤 위치가 따라 당겨지므로(글자 하나에 화면이 튄다) 재기 전 위치를 잡아 두었다가 되돌린다.
 // 연락 기록의 자세히와 메모 모드의 메모 칸이 같은 규칙을 쓴다(record-memo-pane.jsx).
-export function useGrowingDetail(ref, active, value) {
+// 가려진 칸은 재지 않는다 — '이 고객' 탭을 보는 동안이나 칩 뒤 칸을 펼쳐 자세히가 접힌 동안 칸은 그려지지
+// 않아 높이가 0으로 읽힌다(그대로 적으면 돌아왔을 때 긴 글이 최소 높이 칸에 갇힌다). 호출처가 그동안
+// active를 끄고, 다시 보이면 켠다 — 켜지는 순간 다시 잰다. shape는 배치처럼 글은 그대로인데 칸의 최소
+// 높이가 달라지는 값이다(화면을 돌려 시트 ↔ 넓은 기록창을 오갈 때) — 바뀌면 다시 잰다.
+export function useGrowingDetail(ref, active, value, shape = "") {
   useLayoutEffectOnClient(() => {
     const el = ref.current;
     if (!active || !el) return;
+    // 그려지지 않은 칸(display: none 안)은 상자가 없다 — 0을 높이로 적지 않는다.
+    if (!el.getClientRects().length) return;
     const region = el.closest(".record-wide__scroll");
     const top = region ? region.scrollTop : 0;
     el.style.height = "auto";
@@ -148,7 +170,7 @@ export function useGrowingDetail(ref, active, value) {
       const under = el.getBoundingClientRect().bottom - region.getBoundingClientRect().bottom;
       if (under > 0) region.scrollTop += under + 12;
     }
-  }, [ref, active, value]);
+  }, [ref, active, value, shape]);
 }
 
 const RAW_NOTE_ERROR = "요약은 저장됐지만 원문은 저장하지 못했습니다. 원문만 다시 저장하거나 복사해 두세요.";
@@ -158,6 +180,7 @@ const RAW_NOTE_COPY = {
   compact: {
     failed: RAW_NOTE_ERROR,
     empty: "다시 저장할 원문을 입력하세요.",
+    again: "원문 저장 실패",
     kept: "원문은 이 창에 남아 있습니다.",
     retry: "원문 저장 재시도",
     skip: "원문 저장 건너뛰기",
@@ -165,6 +188,7 @@ const RAW_NOTE_COPY = {
   wide: {
     failed: "요약은 저장됐고 자세히는 저장하지 못했어요. 자세히만 다시 저장하거나 복사해 두세요.",
     empty: "다시 저장할 자세히 내용을 입력하세요.",
+    again: "자세히를 저장하지 못했어요",
     kept: "자세히는 이 창에 남아 있어요.",
     retry: "자세히 다시 저장",
     skip: "건너뛰기",
@@ -379,6 +403,85 @@ export function RecordSaveLine({ line, onUndo }) {
   );
 }
 
+// 휴대폰 시트에서 칩을 누르면 펼쳐지는 칸들 — 어떻게 · 반응 · 다음 약속 · 언제. 넓은 기록창의 아래 띠와 같은
+// 값 · 같은 규칙(반응은 묻는 채널에서만 필수, 발신 채널은 회신 받음)이고 놓이는 모양만 다르다: 한 줄씩 세로로,
+// 세그먼트는 좁은 화면에서도 가로로 선다. 상태는 폼의 것이다 — 여기는 그리기만 한다.
+export function RecordSheetFields({ form, channelOptions, wantsReaction, reactionMissing, replyToggle = null, whenKey, dateError = null, onEdit, onChannel, onWhen, refs = {} }) {
+  return (
+    <div className="record-sheet__fields" role="group" aria-label="어떻게 · 반응 · 다음 약속">
+      <div className="record-sheet__field">
+        <span className="hub-label" aria-hidden="true">어떻게</span>
+        <div ref={refs.how} className="record-sheet__ctl">
+          <SegmentedControl label="어떻게 연락했나" options={channelOptions} value={form.kind} onChange={onChannel} size="md" style={{ flexWrap: "wrap" }} />
+        </div>
+        {replyToggle}
+      </div>
+      {wantsReaction && (
+        <div ref={refs.reaction} className="record-sheet__field">
+          <span className="hub-label">반응<span className="hub-label__req"> · 필수</span></span>
+          <SegmentedControl
+            label="고객 반응"
+            options={REACTIONS.map((r) => ({ key: r.key, label: r.label }))}
+            value={form.reaction}
+            onChange={(reaction) => onEdit({ reaction })}
+            size="md"
+            fill
+            invalid={reactionMissing}
+          />
+          {reactionMissing && <p className="hub-field-msg hub-field-msg--error record-wide__msg" role="alert">반응을 하나 고르세요.</p>}
+        </div>
+      )}
+      <div className="record-sheet__field">
+        <TextField
+          label="다음 약속"
+          value={form.nextAction}
+          onChange={(e) => onEdit({ nextAction: e.target.value })}
+          placeholder="무엇을 — 예) 견적서 보내기"
+        />
+        <div ref={refs.when} className="record-sheet__ctl">
+          <SegmentedControl label="언제" options={WHEN_OPTIONS} value={whenKey} onChange={onWhen} size="md" style={{ flexWrap: "wrap" }} />
+        </div>
+        {whenKey === "date" && (
+          <TextField
+            ref={refs.at}
+            label="날짜"
+            required
+            type="date"
+            value={form.at}
+            onChange={(e) => onEdit({ at: e.target.value })}
+            className="mono"
+            style={{ padding: "0 10px" }}
+            error={dateError}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 주 버튼의 자리 — 연락 기록과 메모 칸이 같이 쓴다(record-memo-pane.jsx).
+//   slot === undefined — 제자리(저장 줄 끝). 넓은 기록창 · 좁은 시트 · 머리 자리를 주지 않은 호출처.
+//   slot === null      — 머리 자리를 받기로 했지만 아직 서지 않았다(첫 그리기 한 박자). 그리지 않는다 —
+//                        제자리에 잠깐 섰다가 머리로 옮겨 가며 번쩍이지 않게.
+//   slot(요소)          — 그 자리(휴대폰 시트의 머리)에 그린다. 버튼은 하나이고 상태도 폼의 것 그대로다.
+export function RecordPrimarySlot({ slot, children }) {
+  if (slot === undefined) return children;
+  return slot ? createPortal(children, slot) : null;
+}
+
+// '이 고객' 탭을 보는 동안 기록 칸 자리에 남는 한 줄 — 쓰던 글이 그대로 있다는 것과 돌아갈 길.
+// 앞서 누른 저장이 아직 가는 중이면(progress) 그 진행과 되돌리기를 대신 보인다.
+export function RecordAwayBar({ label, progress = null, onUndo, onReturn }) {
+  return (
+    <div className="record-wide__away">
+      {progress
+        ? <RecordSaveLine line={{ progress, note: null }} onUndo={onUndo} />
+        : <span className="record-wide__away-text num">{label}</span>}
+      <Button variant="secondary" size="md" onClick={onReturn}>쓰기로 돌아가기</Button>
+    </div>
+  );
+}
+
 // onSummaryPersisted: 연락 요약 RPC가 저장된 즉시 불린다 — 낙관 행을 서버 ID로 바꾼다.
 // onPersisted: 선택 원문까지 저장되거나 운영자가 건너뛴 뒤 불린다 — "기록됨" 확인은 여기서 띄운다.
 // onFailed({ optimisticId, message, form }): 늦은 실패. 폼이 이미 언마운트됐을 수 있으므로
@@ -395,10 +498,18 @@ export function RecordSaveLine({ line, onUndo }) {
 // memo(넓은 기록창만): ({ saveRef, contactLine }) => 메모 칸. 주면 맨 위에 '연락 기록 | 메모'가 서고,
 // mode="memo"일 때 그 칸이 요약 · 자세히 · 띠 자리를 대신한다. 모드는 호출처가 든다(mode · onModeChange) —
 // 드로어 제목처럼 폼 밖의 것도 모드를 따라가야 해서다. saveRef.current에 메모 저장 함수를 두면 ⌘↵가 부른다.
-export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onSending, onSummaryPersisted, onPartial, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "", undoMode = "inline", layout = "compact", children = null, mode = "contact", onModeChange, memo = null }) {
+// layout="sheet"(휴대폰 전체 높이 시트): 넓은 기록창과 같은 두 칸 · 같은 메모 모드에 아래 띠 대신 칩 줄.
+// saveSlot: 주 버튼이 설 머리 자리(RecordPrimarySlot — undefined면 제자리). statusSlot: 쉬는 저장 줄 대신
+// 초안이 놓인 곳('초안 · 이 탭')이 설 머리의 둘째 줄 자리 — 주면 시트의 저장 줄은 할 말(진행 · 빠진 칸 · 경고 ·
+// 실패)이 있을 때만 키보드 위에 선다. away: 좁은 화면에서 '이 고객' 탭을
+// 보는 중 — 기록 칸은 가려진 채 서 있고 아래 줄만 보인다. onReturn(): 그 줄의 '쓰기로 돌아가기'.
+// onAttention(): 저장이 막혔거나(빠진 칸 · 빈 약속 경고) 실패해 기록 칸을 봐야 할 때 — 호출처가 쓰기 탭으로 돌린다.
+export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onSending, onSummaryPersisted, onPartial, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "", undoMode = "inline", layout = "compact", children = null, mode = "contact", onModeChange, memo = null, saveSlot, statusSlot, away = false, onReturn, onAttention }) {
   const toast = useToast();
-  const wide = layout === "wide";
-  // 메모 모드는 넓은 기록창에서, 메모 칸을 준 호출처만 — 좁은 시트는 지금 그대로다.
+  const sheet = layout === "sheet";
+  // 넓은 기록창의 말과 규칙(두 칸 · 메모 모드 · 일부 저장 잠금 · 어디서나 ⌘↵)은 휴대폰 시트도 같다.
+  const wide = layout === "wide" || sheet;
+  // 메모 모드는 넓은 기록창(휴대폰 시트 포함)에서, 메모 칸을 준 호출처만 — 좁은 시트는 지금 그대로다.
   const memoAvailable = wide && typeof memo === "function";
   const memoMode = memoAvailable && normalizeRecordMode(mode) === "memo";
   // 앞서 누른 연락 기록의 답이 메모를 쓰는 중에 올 수 있다 — 그때 어느 모드였는지는 최신 값으로 읽는다.
@@ -445,6 +556,10 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   // 직접 고른 날짜는 무엇이 비어도 날짜만 약속으로 남긴다(목업 경고 문구가 둘을 나눠 말한다).
   const [whenTouched, setWhenTouched] = React.useState(() => Boolean(draft || storedDraft || presetForm.at));
   const [datePicking, setDatePicking] = React.useState(false);
+  // 휴대폰 시트 — 어떻게 · 반응 · 다음 약속 · 언제는 칩 줄 뒤에 접혀 있다가 칩을 누르면 펼쳐진다.
+  const [fieldsOpen, setFieldsOpen] = React.useState(false);
+  const howRef = React.useRef(null);
+  const whenRef = React.useRef(null);
   const rootRef = React.useRef(null);
   const reactionRef = React.useRef(null);
   const summaryRef = React.useRef(null);
@@ -484,7 +599,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   const reset = () => {
     setForm(baseForm(presetForm));
     setShowBody(false); setState("idle"); setErrorMsg(""); setAttempted(false);
-    setWhenTouched(Boolean(presetForm.at)); setDatePicking(false); setStoredDraft(null);
+    setWhenTouched(Boolean(presetForm.at)); setDatePicking(false); setStoredDraft(null); setFieldsOpen(false);
     startedAtRef.current = autoFocus ? Date.now() : null;
     timingValidRef.current = true;
     setRecordSeq((n) => n + 1);
@@ -610,6 +725,8 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
           setErrorMsg(noteCopy.failed);
           setForm((f) => ({ ...f, body: snapshot.form.body }));
           setShowBody(true);
+          // '이 고객' 탭을 보고 있었다면 쓰기로 돌린다 — 원인과 다시 저장은 기록 칸에 있다.
+          onAttention?.();
           // 시트가 이미 닫혔으면(토스트 되돌리기) 여기서 말한다 — 같은 고객 기록창을 다시 열면 원문이 남아 있다.
           if (undoMode === "toast") toast.error(`${RAW_NOTE_ERROR} 같은 고객의 기록창을 다시 열면 원문이 남아 있어요.`);
           // 원문을 되살려 보여 줘야 하므로 창을 닫지 않는다.
@@ -633,6 +750,8 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     if (!note) {
       setState("error");
       setErrorMsg(noteCopy.empty);
+      // '이 고객' 탭에서 누른 다시 저장이면 쓰기로 돌린다 — 이유는 가려진 기록 칸에 있다.
+      onAttention?.();
       return;
     }
     setRawNoteSaving(true);
@@ -645,7 +764,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
         body: JSON.stringify(note),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || data.status !== "saved") throw new Error(data.error || data.reason || "원문 저장 실패");
+      if (!response.ok || data.status !== "saved") throw new Error(data.error || data.reason || noteCopy.again);
       dropRawNote(target);
       onPersisted?.({ activityId: pendingRawNote.activityId, optimisticId: pendingRawNote.optimisticId, note: { id: data.id || null, body: note.body } }, target);
       setPendingRawNote(null);
@@ -655,6 +774,8 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     } catch (error) {
       setState("error");
       setErrorMsg(`${error instanceof Error ? error.message : String(error)} — ${noteCopy.kept}`);
+      // 다시 보낸 자세히도 실패했다 — 가려진 탭에서 조용히 묻히지 않게 쓰기로 돌린다(글은 그대로 있다).
+      onAttention?.();
     } finally {
       setRawNoteSaving(false);
     }
@@ -676,19 +797,31 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     restore(snapshot);
     setState("error");
     setErrorMsg(message);
+    onAttention?.();
     onFailed?.({ optimisticId: snapshot.optimisticId, message, form: snapshot.form, target });
   };
 
   const save = ({ ignoreWarning = false } = {}) => {
     if (!check.ok) {
       setAttempted(true);
-      if (check.missing.includes("reaction")) reactionRef.current?.querySelector("button")?.focus();
-      else if (check.missing.includes("summary")) summaryRef.current?.focus();
-      else if (check.missing.includes("at")) atRef.current?.focus();
+      const focusMissing = () => {
+        if (check.missing.includes("reaction")) reactionRef.current?.querySelector("button")?.focus();
+        else if (check.missing.includes("summary")) summaryRef.current?.focus();
+        else if (check.missing.includes("at")) atRef.current?.focus();
+      };
+      // 빠진 칸이 가려져 있으면 먼저 드러낸다 — 휴대폰 시트의 반응 · 날짜는 칩 줄 뒤에 접혀 있고, '이 고객'
+      // 탭에서는 기록 칸 전체가 가려져 있다. 드러난 다음(한 프레임 뒤)에 커서를 둔다.
+      const folded = sheet && !fieldsOpen && check.missing.some((key) => key !== "summary");
+      if (folded) setFieldsOpen(true);
+      onAttention?.();
+      if (folded || away) requestAnimationFrame(focusMissing);
+      else focusMissing();
       return;
     }
     if ((promiseEmpty || check.warn) && !ignoreWarning) {
       setState("warn");
+      // 경고는 저장 줄에 선다 — '이 고객' 탭에서 누른 저장이면 쓰기로 돌아와 보인다.
+      onAttention?.();
       return;
     }
 
@@ -821,14 +954,18 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     detailRef.current?.focus();
   };
 
-  // 넓은 기록창의 자세히 — 쓰는 만큼 길어진다(useGrowingDetail). 메모 모드에서는 자세히 칸이 없고,
-  // 돌아오면 칸이 다시 서므로 그때 다시 잰다.
-  useGrowingDetail(detailRef, wide && !memoMode, form.body);
-
   // 일부 저장 — 넓은 기록창은 이미 저장된 것(요약 · 어떻게 · 반응 · 약속)을 잠그고 자세히만 남긴다.
   // 여기서 새로 쓴 요약은 어디에도 가지 않으므로 받지 않는다. 커서는 다시 보낼 자세히로 옮긴다
   // (읽기 칸 등 기록 칸 밖을 보고 있었다면 건드리지 않는다).
   const locked = wide && Boolean(pendingRawNote);
+  // 휴대폰 시트에서 칩 뒤 칸을 펼친 동안 자세히는 한 줄로 접힌다(가려질 뿐 — 글은 그대로).
+  const folded = sheet && fieldsOpen && !locked;
+
+  // 넓은 기록창의 자세히 — 쓰는 만큼 길어진다(useGrowingDetail). 메모 모드에서는 자세히 칸이 없고,
+  // 돌아오면 칸이 다시 서므로 그때 다시 잰다. 가려진 동안('이 고객' 탭 · 접힌 자세히)은 재지 않고 —
+  // 그 사이 되돌리기가 글을 되살려도 0을 높이로 적지 않는다 — 다시 보이는 순간과 배치가 바뀔 때 다시 잰다.
+  useGrowingDetail(detailRef, wide && !memoMode && !away && !folded, form.body, layout);
+
   React.useEffect(() => {
     if (!locked) return;
     const active = document.activeElement;
@@ -877,15 +1014,43 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   const reactionMissing = attempted && !form.reaction;
   const dateError = attempted && !form.at ? "날짜를 고르거나 기약 없음을 선택하세요." : null;
   // 저장 줄 — 비활성 대신 항상 눌린다(왜 안 되는지 말하지 않는 죽은 버튼을 두지 않는다).
-  const saveControls = (
+  // 주 버튼은 하나다: 제자리(저장 줄 끝)이거나, 휴대폰 시트에서는 호출처가 준 머리 자리다(RecordPrimarySlot).
+  // 시트의 머리 버튼은 실패 뒤 '다시 저장'이라고 말한다 — 원인 줄이 키보드 위 칩 줄에 있어 버튼과 떨어져 있다.
+  const saveStatus = (
     <>
       <RecordSaveLine line={saveLine} onUndo={pendingUndo?.undo} />
       {pendingRawNote && <Button variant="ghost" size="xs" onClick={skipRawNote} disabled={rawNoteSaving}>{noteCopy.skip}</Button>}
-      <Button variant="primary" size={wide ? "md" : "sm"} disabled={rawNoteSaving} onClick={primaryAction}>
-        {pendingRawNote ? noteCopy.retry : "저장"}
-        {!pendingRawNote && <Kbd style={{ background: "transparent", color: "inherit", borderColor: "currentColor", boxShadow: "none", opacity: 0.7 }}>⌘↵</Kbd>}
-      </Button>
     </>
+  );
+  const savePrimary = (
+    <RecordPrimarySlot slot={sheet ? saveSlot : undefined}>
+      <Button variant="primary" size={wide ? "md" : "sm"} disabled={rawNoteSaving} onClick={primaryAction}>
+        {pendingRawNote ? noteCopy.retry : sheet && state === "error" ? "다시 저장" : "저장"}
+        {!pendingRawNote && !sheet && <Kbd style={{ background: "transparent", color: "inherit", borderColor: "currentColor", boxShadow: "none", opacity: 0.7 }}>⌘↵</Kbd>}
+      </Button>
+    </RecordPrimarySlot>
+  );
+  const saveControls = <>{saveStatus}{savePrimary}</>;
+  // 휴대폰 시트의 쉬는 저장 줄 — 머리에 둘째 줄 자리(statusSlot)를 받았고 할 말이 없으면(진행 · 빠진 칸 ·
+  // 경고 · 실패 · 일부 저장 없음) 키보드 위의 줄을 비운다: 남는 것은 칩 줄 하나다. 초안이 놓인 곳은 쓰기
+  // 시작한 뒤에만 머리에 선다('초안 · 이 탭') — 아직 서버에 없다는 사실은 그 말이 한다.
+  const primaryInHead = sheet && saveSlot !== undefined;
+  const statusInHead = primaryInHead && statusSlot !== undefined && !pendingRawNote && recordSaveLineResting(saveLine);
+  const headStatus = statusInHead && autoFocus && !untouched ? draftPlaceLabel(draftPlace) : "";
+
+  // '이 고객' 탭을 보는 동안 기록 칸 자리에 남는 줄 — 쓰던 글이 몇 자인지와 돌아갈 길. 돌아오면 커서를 쓰던
+  // 자리에 둔다(요약이 비었으면 요약, 아니면 자세히 — 칸이 다시 선 다음 프레임에).
+  const returnToWriting = () => {
+    onReturn?.();
+    requestAnimationFrame(() => ((form.summary.trim() && !fieldsOpen && detailRef.current) || summaryRef.current || detailRef.current)?.focus());
+  };
+  const awayBar = away && (
+    <RecordAwayBar
+      label={recordAwayLabel({ mode: "contact", chars: recordDraftChars(form), dirty: !untouched })}
+      progress={pendingUndo ? saveLine.progress : null}
+      onUndo={pendingUndo?.undo}
+      onReturn={returnToWriting}
+    />
   );
 
   // 모드 전환(Q-CR6) — 쓰기 칸 맨 위 제자리. 머리 문장이 저장의 결과를 미리 말한다(recordModeSentence).
@@ -904,6 +1069,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       <SegmentedControl
         label="무엇을 남기나"
         size="md"
+        fill={sheet}
         options={recordModeOptions({ mode: memoMode ? "memo" : "contact", contactIssue })}
         value={memoMode ? "memo" : "contact"}
         onChange={pickMode}
@@ -911,6 +1077,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       <span className="record-wide__say" aria-live="polite">{recordModeSentence(memoMode ? "memo" : "contact")}</span>
     </div>
   );
+  const rootClass = sheet ? "record-wide record-sheet" : "record-wide";
 
   // 메모 모드 — 같은 칸, 다른 기록. 요약 · 자세히 · 띠 자리를 호출처의 메모 칸이 대신한다(어떻게 · 반응 ·
   // 다음 약속 없음). 앞서 누른 연락 기록이 아직 가는 중이면 그 진행(기록 중 · 되돌리기 → 저장 중)을 메모 칸의
@@ -919,74 +1086,123 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   // 이 분기는 모든 훅 뒤에 있어야 한다 — 같은 폼이 두 모드를 오가므로 분기 아래에 훅을 두면 순서가 어긋난다.
   if (memoMode) {
     const contactNote = memoModeContactNote(contactIssue);
-    const contactLine = pendingUndo && saveLine.progress
-      ? <div className="record-wide__save"><RecordSaveLine line={{ progress: { ...saveLine.progress, label: `연락 기록 · ${saveLine.progress.label}` }, note: null }} onUndo={pendingUndo.undo} /></div>
+    // 같은 진행을 '이 고객' 탭의 돌아가기 줄도 보인다(contactProgress · onContactUndo) — 띠가 가려져 있어도
+    // 3.5초 되돌리기가 닿는다.
+    const contactProgress = pendingUndo && saveLine.progress ? { ...saveLine.progress, label: `연락 기록 · ${saveLine.progress.label}` } : null;
+    const contactLine = contactProgress
+      ? <div className="record-wide__save"><RecordSaveLine line={{ progress: contactProgress, note: null }} onUndo={pendingUndo.undo} /></div>
       : contactNote
         ? <div className="record-wide__save"><RecordSaveLine line={{ progress: null, note: contactNote }} /></div>
         : null;
+    // 휴대폰 시트에서는 전환 칸이 메모 칸의 흐르는 칸 맨 위에 선다(head) — 키보드가 오른 좁은 높이를 제자리
+    // 줄이 하나 더 차지하지 않게. 머리 자리의 주 버튼 · 가려진 동안의 줄 · 돌아가기도 메모 칸이 그린다.
     return (
-      <div ref={rootRef} className="record-wide" data-record-mode="memo" onKeyDown={onKeyDown}>
-        {modeBar}
-        {memo({ saveRef: memoSaveRef, contactLine })}
+      <div ref={rootRef} className={rootClass} data-record-mode="memo" data-away={away ? "true" : undefined} onKeyDown={onKeyDown}>
+        {!sheet && modeBar}
+        {memo({ saveRef: memoSaveRef, contactLine, contactProgress, onContactUndo: pendingUndo?.undo, sheet, head: sheet ? modeBar : null, saveSlot: sheet ? saveSlot : undefined, away, onReturn, onAttention })}
       </div>
     );
   }
 
-  // 넓은 기록창 — 아래 띠(어떻게 · 반응 · 다음 약속 · 언제 · 저장)는 제자리에 있고, 그 위(요약 한 줄 +
-  // 자세히)만 흐른다. 자세히가 아무리 길어져도 저장 줄이 화면 밖으로 밀리지 않는다.
+  // 넓은 기록창 · 휴대폰 시트 — 요약 한 줄 + 자세히만 흐르고 그 아래는 제자리다: 넓은 기록창은 아래 띠
+  // (어떻게 · 반응 · 다음 약속 · 언제 · 저장), 시트는 키보드 바로 위의 칩 줄. 자세히가 아무리 길어져도 저장 줄이
+  // 화면 밖으로 밀리지 않는다. 두 배치는 한 나무다(같은 자리에 같은 칸 — 다른 것은 자리에 놓이는 것뿐이다):
+  // 쓰는 중에 화면을 돌려 600px를 넘나들어도 글 칸이 다시 서지 않아 커서와 칸 높이가 그대로 남는다.
   if (wide) {
-    return (
-      <div ref={rootRef} className="record-wide" onKeyDown={onKeyDown}>
-        {modeBar}
-        <div className="record-wide__scroll">
-          {restoredLine}
-          {captureNote}
-          {locked ? (
-            // 일부 저장 — 요약은 이미 기록에 남았다. 고칠 수 없는 칸으로 보이고, 새 글을 받지 않는다.
-            <TextField
-              label="요약 · 한 줄"
-              readOnly
-              value={pendingRawNote.summary || ""}
-              placeholder="요약은 이미 기록에 남았어요"
-              className="record-wide__summary"
-              hint="이 요약은 이미 기록에 남았어요 · 자세히만 다시 저장하면 돼요"
-            />
-          ) : (
-            <TextField
-              ref={summaryRef}
-              label="요약 · 한 줄"
-              required
-              autoFocus={autoFocus}
-              value={form.summary}
-              onChange={(e) => edit({ summary: e.target.value })}
-              onKeyDown={onSummaryKeyDown}
-              placeholder="예) 견적 받아보고 다음 주 원장회의에서 결정"
-              maxLength={500}
-              showCount
-              className="record-wide__summary"
-              hint="ClassIn에 옮길 수 있는 줄은 이것뿐이에요"
-              error={attempted && !form.summary.trim() ? "요약이 없으면 나중에 이 기록을 읽을 수 없습니다." : null}
-            />
-          )}
-          {/* 숨어 있던 '원문 붙여넣기'를 늘 펼친 칸이다 — 같은 form.body, 같은 저장(요약 뒤 별도 note). */}
-          <TextAreaField
-            ref={detailRef}
-            label="자세히"
-            autoFocus={autoFocus && locked}
-            value={form.body}
-            rows={10}
-            onChange={(e) => edit({ body: e.target.value })}
-            placeholder={"대화 내용, 상대가 중요하게 보는 것, 우려, 다음에 할 일.\n카톡 · 통화 받아쓰기를 붙여 넣어도 돼요. 비워 둬도 되고, 쓰는 만큼 칸이 길어져요."}
-            maxLength={20000}
-            showCount
-            className="record-wide__detail"
-            hint={locked ? "아직 저장되지 않았어요 · 고친 뒤 다시 저장할 수 있어요" : "선택 · Moonlight에만 남아요 · 비워 두면 요약만 저장돼요"}
-          />
-          {aiContext && !locked && <ContactAiAutofill key={recordSeq} target={target} aiContext={aiContext} onApply={applyExtraction} />}
-          {children && <div data-record-slot="">{children}</div>}
-        </div>
+    const summaryField = locked ? (
+      // 일부 저장 — 요약은 이미 기록에 남았다. 고칠 수 없는 칸으로 보이고, 새 글을 받지 않는다.
+      <TextField
+        label="요약 · 한 줄"
+        readOnly
+        value={pendingRawNote.summary || ""}
+        placeholder="요약은 이미 기록에 남았어요"
+        className="record-wide__summary"
+        hint="이 요약은 이미 기록에 남았어요 · 자세히만 다시 저장하면 돼요"
+      />
+    ) : (
+      <TextField
+        ref={summaryRef}
+        label="요약 · 한 줄"
+        required
+        autoFocus={autoFocus}
+        value={form.summary}
+        onChange={(e) => edit({ summary: e.target.value })}
+        onKeyDown={onSummaryKeyDown}
+        placeholder="예) 견적 받아보고 다음 주 원장회의에서 결정"
+        maxLength={500}
+        showCount
+        className="record-wide__summary"
+        hint="ClassIn에 옮길 수 있는 줄은 이것뿐이에요"
+        error={attempted && !form.summary.trim() ? "요약이 없으면 나중에 이 기록을 읽을 수 없습니다." : null}
+      />
+    );
+    // 숨어 있던 '원문 붙여넣기'를 늘 펼친 칸이다 — 같은 form.body, 같은 저장(요약 뒤 별도 note).
+    const detailField = (
+      <TextAreaField
+        ref={detailRef}
+        label="자세히"
+        autoFocus={autoFocus && locked}
+        value={form.body}
+        // 휴대폰 시트는 여섯 줄에서 시작한다(키보드 위에 남는 높이) — 쓰는 만큼 길어지는 것은 같다.
+        rows={sheet ? 6 : 10}
+        onChange={(e) => edit({ body: e.target.value })}
+        placeholder={"대화 내용, 상대가 중요하게 보는 것, 우려, 다음에 할 일.\n카톡 · 통화 받아쓰기를 붙여 넣어도 돼요. 비워 둬도 되고, 쓰는 만큼 칸이 길어져요."}
+        maxLength={20000}
+        showCount
+        className="record-wide__detail"
+        // 시트에서 칩 뒤 칸을 펼친 동안은 가린다 — 칸을 걷지 않으므로 글 · 커서 자리 · 칸 높이가 남는다.
+        fieldStyle={folded ? { display: "none" } : undefined}
+        hint={locked ? "아직 저장되지 않았어요 · 고친 뒤 다시 저장할 수 있어요" : "선택 · Moonlight에만 남아요 · 비워 두면 요약만 저장돼요"}
+      />
+    );
+    const autofill = aiContext && !locked && <ContactAiAutofill key={recordSeq} target={target} aiContext={aiContext} onApply={applyExtraction} />;
+    const slotted = children && <div data-record-slot="">{children}</div>;
 
-        <div className="record-wide__band" role="group" aria-label={locked ? "자세히 다시 저장" : "어떻게 · 반응 · 다음 약속 · 저장"}>
+    // 휴대폰 시트 — 아래 띠 대신 키보드 바로 위의 칩 줄이 어떻게 · 반응과 약속을 요약한다. 칩을 누르면 그
+    // 칸들이 펼쳐지고 자세히는 한 줄로 접힌다(글은 그대로 — 칸을 걷지 않고 가릴 뿐이다). 저장은 머리 자리에
+    // 선다. 일부 저장 중에는 넓은 기록창처럼 요약을 잠그고 자세히만 남긴다(칩 · 칸 없음).
+    const lines = recordDetailLines(form.body);
+    const closeFields = () => {
+      setFieldsOpen(false);
+      requestAnimationFrame(() => detailRef.current?.focus());
+    };
+    let bottom;
+    if (sheet) {
+      const chips = recordSheetChips(form, {
+        kindLabel: channelOptions.find((c) => c.key === form.kind)?.label,
+        whenLabel: WHEN_PRESETS.find((p) => p.key === whenKey)?.label,
+      });
+      // 칩은 버튼이라 누르면 글쓰기 칸에서 커서가 빠진다(키보드가 내려간다). 펼친 칸의 고른 값에 커서를 둔다 —
+      // 글 칸이 아니라 키보드는 다시 오르지 않는다.
+      const openFields = (key) => {
+        setFieldsOpen(true);
+        requestAnimationFrame(() => {
+          const group = (key === "promise" ? whenRef : howRef).current;
+          (group?.querySelector('button[aria-pressed="true"]') || group?.querySelector("button"))?.focus();
+          group?.scrollIntoView?.({ block: "nearest" });
+        });
+      };
+      const showChips = !locked && !fieldsOpen;
+      // 줄은 둘까지다: 저장 줄(할 말이 있을 때만 — 쉬는 동안은 머리의 둘째 줄이 초안 자리를 말한다) + 칩 줄.
+      // 둘 다 없으면(쉬는 중에 칸을 펼친 동안) 빈 띠를 남기지 않는다.
+      bottom = (!statusInHead || showChips) && (
+        <div key="bar" className="record-sheet__bar" role="group" aria-label={locked ? "자세히 다시 저장" : "저장 · 어떻게 · 반응 · 약속 요약"}>
+          {!statusInHead && <div className="record-sheet__line">{saveStatus}{!primaryInHead && savePrimary}</div>}
+          {showChips && (
+            <div className="record-sheet__chips">
+              {chips.map((chip) => (
+                <Button key={chip.key} variant="outline" size="sm" iconRight="chevronD" aria-expanded={false} className="record-sheet__chip" onClick={() => openFields(chip.key)}>
+                  <span className="record-sheet__chip-text">{chip.label}</span>
+                  {chip.date && <span className="mono">{chip.date}</span>}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    } else {
+      bottom = (
+        <div key="band" className="record-wide__band" role="group" aria-label={locked ? "자세히 다시 저장" : "어떻게 · 반응 · 다음 약속 · 저장"}>
           {!locked && (
             <>
               <div className="record-wide__row">
@@ -1047,6 +1263,48 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
           )}
           <div className="record-wide__save">{saveControls}</div>
         </div>
+      );
+    }
+
+    return (
+      <div ref={rootRef} className={rootClass} data-away={away ? "true" : undefined} onKeyDown={onKeyDown}>
+        {!sheet && modeBar}
+        <div className="record-wide__scroll">
+          {/* 전환 칸(연락 기록 | 메모)은 시트에서 흐르는 칸 맨 위에 선다 — 글을 쓰기 시작하면 위로 비킨다. */}
+          {sheet && modeBar}
+          {restoredLine}
+          {captureNote}
+          {summaryField}
+          {folded && (
+            <Button variant="outline" size="md" iconRight="chevronD" aria-expanded={false} onClick={closeFields} style={{ width: "100%", justifyContent: "space-between" }}>
+              <span className="record-sheet__fold-text">{lines ? <>자세히 <span className="num">{lines}</span>줄 · 펼치기</> : "자세히 · 비어 있음 · 쓰기"}</span>
+            </Button>
+          )}
+          {detailField}
+          {folded && (
+            <RecordSheetFields
+              form={form}
+              channelOptions={wideChannelOptions}
+              wantsReaction={wantsReaction}
+              reactionMissing={reactionMissing}
+              replyToggle={replyToggle}
+              whenKey={whenKey}
+              dateError={dateError}
+              onEdit={edit}
+              onChannel={pickChannel}
+              onWhen={pickWhen}
+              refs={{ how: howRef, reaction: reactionRef, when: whenRef, at: atRef }}
+            />
+          )}
+          {autofill}
+          {slotted}
+        </div>
+
+        {bottom}
+        {/* 머리의 주 버튼 · 초안 자리는 제자리(포털)에 선다 — 저장 줄이 섰다 걷혀도 버튼이 다시 서지 않는다(커서가 남는다). */}
+        {primaryInHead && savePrimary}
+        {headStatus && statusSlot ? createPortal(<span> · {headStatus}</span>, statusSlot) : null}
+        {awayBar}
       </div>
     );
   }

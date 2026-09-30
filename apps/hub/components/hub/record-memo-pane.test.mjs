@@ -46,7 +46,8 @@ test("memo mode is one large writing field and a save row — no channel, reacti
   assert.match(field, /rows="10"/);
   assert.match(field, /maxLength="20000"/);
   assert.match(html, />0 \/ 20000</);
-  assert.match(code, /useGrowingDetail\(bodyRef, ready, body\);/);
+  // 가려진 동안('이 고객' 탭)은 재지 않고, 돌아온 순간과 배치가 바뀔 때(시트 ↔ 넓은 기록창) 다시 잰다.
+  assert.match(code, /useGrowingDetail\(bodyRef, ready && !away, body, sheet\);/);
   assert.equal((html.match(/<textarea/g) || []).length, 1);
   assert.equal((html.match(/<input/g) || []).length, 0, "요약 · 다음 약속 · 날짜 칸이 없다");
   assert.doesNotMatch(html, /hub-seg|어떻게|반응|다음 약속|언제|요약 · 한 줄/);
@@ -110,7 +111,8 @@ test("the save key never sends an empty memo or a preview memo, and says why ins
   // 빈 메모는 실패가 아니다 — 칸을 빨갛게 하지 않는다(error 없음). 저장 줄이 한 번 말하고 커서가 칸으로 간다.
   assert.doesNotMatch(code, /error=\{/);
   assert.doesNotMatch(code, /메모가 비어 있어요/);
-  assert.match(code, /if \(empty\) \{ bodyRef\.current\?\.focus\(\); return; \}/);
+  // 빈 메모는 보내지 않고 커서를 칸에 둔다 — 가려져 있던 칸('이 고객' 탭)은 쓰기 탭이 다시 선 다음 프레임에.
+  assert.match(code, /if \(empty\) \{\s*if \(away\) requestAnimationFrame\(\(\) => bodyRef\.current\?\.focus\(\)\);\s*else bodyRef\.current\?\.focus\(\);\s*return;\s*\}/);
 
   const blank = written("   \n  ");
   const blankRef = { current: null };
@@ -331,4 +333,131 @@ test("the memo draft shares its key with the memo drawer and is separate from th
   assert.match(settle, /releaseContextMemoId\(sessionStorage, session\.storageKey\);/);
   assert.match(settle, /if \(!entry\) \{ setSavedAt\(null\); return; \}\s*window\.dispatchEvent\(new Event\(MEMO_CHANGED_EVENT\)\);\s*setSavedAt\(new Date\(\)\.toISOString\(\)\);\s*onSaved\?\.\(entry\);/);
   assert.match(code, /onSaved=\{settle\}/);
+});
+
+// ── 2026-09-30 넓은 기록창 ③ — 휴대폰 시트 · 좁은 화면의 탭에서도 같은 메모 칸(Q-CR3 · Q-CR11) ─────────────
+
+test("on the phone sheet the memo's one primary goes to the header slot — never drawn in place while the slot is pending", () => {
+  const { model } = written("원장님은 숫자로 설명해야 움직이심");
+  // 머리 자리를 받지 않은 넓은 기록창 — 제자리(저장 줄 끝)에 하나, ⌘↵ 글자와 함께.
+  const inPlace = render({ model });
+  assert.equal((inPlace.match(/hub-btn--primary/g) || []).length, 1);
+  assert.match(primaryOf(inPlace), />메모 저장<kbd[^>]*>⌘↵<\/kbd><\/button>$/);
+  // 머리 자리를 받기로 했고 아직 서지 않았다(null) — 제자리에 그리지 않는다. 저장 줄의 글자 · 글쓰기 칸은 그대로다.
+  const pending = render({ model, saveSlot: null });
+  assert.equal((pending.match(/hub-btn--primary/g) || []).length, 0);
+  assert.match(bandOf(pending), /초안 · 이 탭 · 서버에는 아직 없어요/);
+  assert.match(pending, />원장님은 숫자로 설명해야 움직이심<\/textarea>/);
+  // 자리는 연락 기록과 같은 규칙(RecordPrimarySlot)이다 — 버튼은 하나, 머리에서는 ⌘↵ 글자를 달지 않는다.
+  assert.match(code, /<RecordPrimarySlot slot=\{saveSlot\}>\s*<Button variant="primary" size="md" disabled=\{plan\.primary\.disabled\} onClick=\{save\}>/);
+  assert.match(code, /\{saveSlot === undefined && !plan\.primary\.disabled && plan\.primary\.action !== "reload" && <Kbd/);
+  assert.equal((code.match(/variant="primary"/g) || []).length, 1);
+  // 저장은 자리와 무관하게 같은 길이다 — ⌘↵ · 머리 버튼 모두 saveRef의 그 함수.
+  const ref = { current: null };
+  const { model: other, calls } = written("머리 버튼으로 저장");
+  render({ model: other, saveRef: ref, saveSlot: null });
+  ref.current();
+  assert.deepEqual(calls.map(([name]) => name), ["edit", "save"]);
+});
+
+test("the mode switch the form hands over sits at the top of the memo's scrolling column", () => {
+  const head = React.createElement("div", { className: "record-wide__mode", "data-head": "" }, "연락 기록 | 메모");
+  const html = render({ model: memoModel().model, head });
+  assert.match(html, /^<div class="record-wide__scroll"><div class="record-wide__mode" data-head="">연락 기록 \| 메모<\/div>/);
+  assert.ok(html.indexOf("data-head") < html.indexOf("<textarea"), "전환 칸이 먼저, 글쓰기 칸이 다음");
+  // 확인 중 · 열지 못했을 때도 전환 칸은 서 있다 — 연락 기록으로 돌아갈 길이 남는다.
+  assert.match(render({ boot: "loading", head }), /^<div class="record-wide__scroll"><div class="record-wide__mode" data-head="">/);
+  assert.match(render({ boot: "error", head }), /^<div class="record-wide__scroll"><div class="record-wide__mode" data-head="">/);
+  // 넘기지 않으면(넓은 기록창) 지금 그대로다.
+  assert.match(render({ model: memoModel().model }), /^<div class="record-wide__scroll"><div style="min-width:0">/);
+  // 휴대폰 시트의 글쓰기 칸은 여섯 줄에서 시작한다(연락 기록의 자세히와 같다) — 넓은 기록창은 열 줄.
+  assert.match(render({ model: memoModel().model, sheet: true }).match(/<textarea[^>]*>/)[0], /rows="6"/);
+  assert.match(render({ model: memoModel().model }).match(/<textarea[^>]*>/)[0], /rows="10"/);
+});
+
+test("while 이 고객 is showing the memo stays where it is — the line below counts it and leads back", () => {
+  const body = "원장님은 숫자로 설명해야 움직이심\n매일 쓸 사람은 부원장";
+  const shown = render({ model: written(body).model });
+  assert.doesNotMatch(shown, /record-wide__away/);
+  const away = render({ model: written(body).model, away: true, onReturn() {} });
+  // 글쓰기 칸 · 저장 줄은 그대로 서 있다(가리는 것은 스타일시트 — 폼의 뿌리가 data-away를 단다).
+  assert.match(away, />원장님은 숫자로 설명해야 움직이심\n매일 쓸 사람은 부원장<\/textarea>/);
+  assert.match(away, /class="record-wide__band"/);
+  assert.match(away, new RegExp(`<div class="record-wide__away"><span class="record-wide__away-text num">쓰던 메모 · ${body.length}자</span><button[^>]*hub-btn--secondary[^>]*>쓰기로 돌아가기</button></div>$`));
+  assert.match(render({ model: memoModel().model, away: true }), />아직 쓴 메모가 없어요<\/span>/);
+  assert.doesNotMatch(away.slice(away.indexOf('class="record-wide__away"')), /저장됨|기록됨/);
+  assert.match(code, /\{away && <RecordAwayBar label=\{recordAwayLabel\(\{ mode: "memo", chars: body\.trim\(\)\.length \}\)\} progress=\{contactProgress\} onUndo=\{onContactUndo\} onReturn=\{returnToWriting\} \/>\}/);
+
+  // 앞서 누른 연락 기록이 아직 되돌리기 창이면 — 띠(contactLine)는 가려져 있으므로 돌아가기 줄이 그 진행과
+  // 되돌리기를 대신 보인다. 탭을 옮겼다고 3.5초 되돌리기가 닿지 않게 되지 않는다(연락 기록 모드와 같다).
+  let undone = 0;
+  const pending = render({ model: written(body).model, away: true, onReturn() {}, contactProgress: { label: "연락 기록 · 기록 중", canUndo: true }, onContactUndo: () => { undone += 1; } });
+  const bar = pending.slice(pending.indexOf('class="record-wide__away"'));
+  assert.match(bar, /role="status"[^>]*>연락 기록 · 기록 중<button[^>]*>되돌리기<\/button>/);
+  assert.doesNotMatch(bar, /쓰던 메모/, "진행이 글자 수 자리를 대신한다");
+  assert.match(bar, />쓰기로 돌아가기<\/button>/);
+  assert.equal(undone, 0);
+  // 보낸 뒤(저장 중)에는 되돌리기가 없다 — 죽은 버튼을 두지 않는다.
+  const sending = render({ model: written(body).model, away: true, contactProgress: { label: "연락 기록 · 저장 중", canUndo: false }, onContactUndo() {} });
+  assert.match(sending.slice(sending.indexOf('class="record-wide__away"')), /연락 기록 · 저장 중/);
+  assert.doesNotMatch(sending.slice(sending.indexOf('class="record-wide__away"')), /되돌리기/);
+  // 쓰기 탭에서는 돌아가기 줄이 없다 — 진행은 띠의 contactLine이 보인다.
+  assert.doesNotMatch(render({ model: written(body).model, contactProgress: { label: "연락 기록 · 기록 중", canUndo: true }, onContactUndo() {} }), /record-wide__away/);
+  assert.match(code, /const returnToWriting = \(\) => \{\s*onReturn\?\.\(\);\s*requestAnimationFrame\(\(\) => bodyRef\.current\?\.focus\(\)\);\s*\};/);
+});
+
+test("a save that cannot go out from the 이 고객 tab asks to be looked at — a save that does go out does not", () => {
+  // 가려진 칸의 커서는 다음 프레임에 둔다 — 시험은 그 프레임을 세기만 한다(DOM 없음).
+  let frames = 0;
+  const attend = (model, props = {}) => {
+    let asked = 0;
+    const ref = { current: null };
+    const had = Object.hasOwn(globalThis, "requestAnimationFrame");
+    const before = globalThis.requestAnimationFrame;
+    globalThis.requestAnimationFrame = (fn) => { frames += 1; fn(); return frames; };
+    try {
+      render({ model, saveRef: ref, away: true, onAttention: () => { asked += 1; }, ...props });
+      ref.current();
+    } finally {
+      if (had) globalThis.requestAnimationFrame = before; else delete globalThis.requestAnimationFrame;
+    }
+    return asked;
+  };
+  // 빈 메모 — 이유(메모를 한 줄 쓰면 저장돼요)는 저장 줄에 있다. 쓰기로 돌아와야 보인다.
+  const empty = memoModel();
+  assert.equal(attend(empty.model), 1);
+  assert.deepEqual(empty.calls, []);
+  // 커서는 쓰기 탭이 다시 선 다음 프레임에 둔다 — 아직 가려진 칸에 곧바로 두면 커서가 어디에도 서지 않는다.
+  assert.equal(frames, 1);
+  // 쓰기 탭에서 누른 빈 메모는 프레임을 기다리지 않는다(칸이 이미 보인다).
+  assert.equal(attend(memoModel().model, { away: false }), 1);
+  assert.equal(frames, 1);
+  // 쓴 메모는 그대로 나간다 — 읽던 탭에서 끌어내지 않는다.
+  const good = written("결정은 원장님이 직접");
+  assert.equal(attend(good.model), 0);
+  assert.deepEqual(good.calls.map(([name]) => name), ["edit", "save"]);
+  assert.equal(frames, 1, "나가는 저장은 커서를 옮기지 않는다");
+  // 실패 · 미확인 · 충돌(레일 줄이 서는 상태)은 생기는 순간 알린다 — 가려진 탭에서 조용히 묻히지 않는다.
+  assert.match(code, /const issue = plan\.line\.note\?\.tone === "error" \? plan\.line\.note\.title \|\| "" : "";\s*React\.useEffect\(\(\) => \{\s*if \(issue\) onAttention\?\.\(\);\s*\}, \[issue\]\);/);
+  for (const patch of [{ saveState: "error", message: "서버가 거절했어요." }, { pending: { requestId: "r1" } }, { conflict: { id: "note-1", contexts: [] } }]) {
+    assert.equal(recordMemoLine({ ready: true, source: "live", empty: false, saveState: patch.saveState, message: patch.message, pending: Boolean(patch.pending), conflict: Boolean(patch.conflict) }).line.note.tone, "error");
+  }
+  // 빈 메모 · 쓰는 중 · 저장 확인은 실패가 아니다 — 알리지 않는다.
+  for (const input of [{ empty: true, attempted: true }, { empty: false }, { empty: true, savedAt: "2026-09-30T01:00:00.000Z" }]) {
+    assert.notEqual(recordMemoLine({ ready: true, source: "live", ...input }).line.note?.tone, "error");
+  }
+});
+
+test("the pane forwards what the form hands it — the slot props reach the view in every boot state", () => {
+  // 확인 중(첫 그리기)에도 머리 자리 · 전환 칸 · 돌아가기 줄이 선다.
+  const head = React.createElement("div", { "data-head": "" }, "전환 칸");
+  const pane = renderToStaticMarkup(React.createElement(RecordMemoPane, {
+    contexts: [{ type: "lead", id: "11111111-1111-4111-8111-111111111111", label: "메모 대상" }],
+    head, saveSlot: null, away: true, onReturn() {}, onAttention() {},
+  }));
+  assert.match(pane, /^<div class="record-wide__scroll"><div data-head="">전환 칸<\/div>/);
+  assert.equal((pane.match(/hub-btn--primary/g) || []).length, 0, "주 버튼은 머리 자리의 것 — 제자리에 그리지 않는다");
+  assert.match(pane, /class="record-wide__away"/);
+  assert.match(code, /export function RecordMemoPane\(\{ contexts = \[\], saveRef = null, contactLine = null, onSaved, \.\.\.slot \}\) \{/);
+  assert.equal((code.match(/\{\.\.\.slot\}/g) || []).length, 2, "확인 중 · 준비된 뒤 둘 다");
 });
