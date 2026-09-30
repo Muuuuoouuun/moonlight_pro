@@ -16,6 +16,7 @@ const OPERATIONS = [
   { value: 'polish', label: '문장 다듬기' },
   { value: 'shorten', label: '더 짧게 줄이기' },
   { value: 'hooks', label: '도입부 3가지 제안' },
+  { value: 'openers', label: '첫 장·첫 장면 5안' },
   { value: 'repurpose', label: '다른 채널로 변형' },
 ];
 const TONES = [{ value: 'brand', label: '브랜드 말투' }, { value: 'plain', label: '담백하게' }, { value: 'direct', label: '명확하게' }, { value: 'formal', label: '정중하게' }];
@@ -51,8 +52,10 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
   }, [draft.variantId, state.phase]);
   const structured = ['card_news', 'reels_script'].includes(draft.variantType);
   React.useEffect(() => {
-    if (structured && ['hooks', 'shorten'].includes(operation)) setOperation('polish');
+    if ((structured && ['hooks', 'shorten'].includes(operation)) || (!structured && operation === 'openers')) setOperation('polish');
   }, [structured, operation]);
+  const openerOp = structured ? 'openers' : 'hooks';
+  const openerLabel = !structured ? '첫 줄 3안' : draft.variantType === 'card_news' ? '표지 문구 5안' : '훅 5안';
   const activeSelection = !structured && selection?.body === draft.body && selection.end > selection.start ? selection : null;
   const stale = state.run ? isTransformStale(state.run, draft) || studio.dirty : false;
   const generating = state.phase === 'generating';
@@ -99,7 +102,7 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
   const persist = () => dispatch({ action: 'recover', requestId: state.run.id, recoveryToken: state.recoveryToken });
   const canRun = (op) => studio.ready && !recovery && !busy && !generating && !['unknown', 'running', 'unsaved'].includes(state.phase) &&
     (op === 'draft' ? Boolean(draft.sourceIdea.trim() || draft.brief.message.trim()) : Boolean(draft.body.trim()));
-  const moreOperations = OPERATIONS.filter((entry) => !['draft', 'polish'].includes(entry.value) && (!structured || !['hooks', 'shorten'].includes(entry.value)));
+  const moreOperations = OPERATIONS.filter((entry) => !['draft', 'polish'].includes(entry.value) && (structured ? !['hooks', 'shorten'].includes(entry.value) : entry.value !== 'openers'));
   const moreOperation = moreOperations.some((entry) => entry.value === operation) ? operation : moreOperations[0]?.value;
   const moreGuidance = getEditorialGuidance(moreOperation);
   // 원문 메모의 ⌘↵ 같은 바깥 단축키가 버튼과 같은 조건으로 실행하게 한다.
@@ -127,7 +130,7 @@ export function StudioAI({ studio, selection, onOpenHistory, request = '', onReq
       <div className="studio-actions studio-ai-actions">
         <Button variant="outline" icon="sparkle" disabled={!canRun('draft')} onClick={() => generate('draft')}>{generating && operation === 'draft' ? 'AI 초안 작성 중…' : 'AI 초안'}</Button>
         <Button variant="outline" icon="sparkle" disabled={!canRun('polish')} onClick={() => generate('polish')} title="본문에서 문장을 선택하면 그 부분만 다듬습니다.">{generating && operation === 'polish' ? 'AI 다듬는 중…' : activeSelection ? '선택 부분 AI 다듬기' : 'AI 다듬기'}</Button>
-        {!structured && <Button variant="outline" icon="sparkle" disabled={!canRun('hooks')} onClick={() => generate('hooks')} title="첫 줄을 질문·장면·단언 세 가지로 제안합니다.">{generating && operation === 'hooks' ? '첫 줄 만드는 중…' : '첫 줄 3안'}</Button>}
+        <Button variant="outline" icon="sparkle" disabled={!canRun(openerOp)} onClick={() => generate(openerOp)} title={structured ? (draft.variantType === 'card_news' ? '표지 한 장만 다섯 가지로 제안합니다. 나머지 장은 그대로 둡니다.' : '첫 장면(훅)만 다섯 가지로 제안합니다. 나머지 장면은 그대로 둡니다.') : '첫 줄을 질문·장면·단언 세 가지로 제안합니다.'}>{generating && operation === openerOp ? '만드는 중…' : openerLabel}</Button>
         {!draft.sourceIdea.trim() && !draft.brief.message.trim() && <span className="studio-muted studio-small">원문 메모를 적으면 AI 초안을 만들 수 있습니다.</span>}
       </div>
       {!draft.brandId && tone === 'brand' && <p className="studio-muted studio-small" role="note">브랜드 미지정 — '브랜드 말투' 대신 담백한 말투로 씁니다. 브랜드는 더보기에서 고를 수 있습니다.</p>}

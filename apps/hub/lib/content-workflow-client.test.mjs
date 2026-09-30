@@ -106,6 +106,7 @@ test('buildStudioTransformCommand carries the operator request only when non-emp
   const stale = buildStudioTransformCommand({ ...base, operation: 'polish', selection: { start: 0, end: 3, body: 'older body' } });
   assert.deepEqual(stale.selection, { start: 0, end: saved.body.length }, 'a selection from an older body is ignored');
   assert.deepEqual(buildStudioTransformCommand({ ...base, operation: 'hooks', selection: null }).selection, { start: 0, end: 4 }, 'hooks defaults to the first paragraph');
+  assert.deepEqual(buildStudioTransformCommand({ ...base, operation: 'openers', structured: true, selection: null }).selection, { start: 0, end: saved.body.length }, 'openers on card news / shorts sends the whole body');
   assert.deepEqual(buildStudioTransformCommand({ ...base, operation: 'draft', selection: { start: 0, end: 3, body: saved.body } }).selection, { start: 0, end: saved.body.length });
   const repurpose = buildStudioTransformCommand({ ...base, operation: 'repurpose', selection: null });
   assert.deepEqual(repurpose.target, { variantType: 'card_news', channel: 'instagram' });
