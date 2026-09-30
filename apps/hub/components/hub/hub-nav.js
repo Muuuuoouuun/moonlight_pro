@@ -160,9 +160,11 @@ const BRAND_CHILDREN = {
 
 const CONTENT_CHILDREN = [
   { key: 'ct-performance', label: '성과', path: 'dashboard/content/performance' },
+  { key: 'ct-research', label: '리서치함', path: 'dashboard/content/research' },
   { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
   { key: 'ct-queue', label: '소재·제작', path: 'dashboard/content/queue' },
   { key: 'ct-studio', label: '원고 작성', path: 'dashboard/content/studio' },
+  { key: 'ct-publish', label: '발행', path: 'dashboard/content/publish' },
   { key: 'ct-campaigns', label: 'Campaigns', path: 'dashboard/content/campaigns' },
 ];
 
@@ -361,9 +363,11 @@ export const SIDEBAR_PRIMARY = [
       all: CONTENT_CHILDREN,
       classin: [
         { key: 'ct-queue', label: '소재·제작', path: 'dashboard/classin/content' },
+        { key: 'ct-research', label: '리서치함', path: 'dashboard/content/research' },
         { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
       ],
       personal: [
+        { key: 'ct-research', label: '리서치함', path: 'dashboard/content/research' },
         { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
         { key: 'ct-queue', label: '소재·제작', path: 'dashboard/brand/queue' },
         { key: 'ct-studio', label: '원고 작성', path: 'dashboard/brand/studio' },

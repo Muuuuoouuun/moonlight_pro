@@ -4,12 +4,14 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { JournalSources } from '../journal-links';
 import { GoalLinks } from '../goal-links';
-import { Button, Card, Drawer, Kbd, Skeleton, TextField, TextAreaField, SelectField, TruthBadge, useToast } from '../hub-primitives';
+import { Button, Card, Drawer, Kbd, SegmentedControl, Skeleton, TextField, TextAreaField, SelectField, TruthBadge, useToast } from '../hub-primitives';
 import { filterBrandsByWorkspace } from '../workspace-map';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { BRIEF_FIELDS, STUDIO_CHANNELS, channelLabel, channelForType, formatForChannel, exportStudioVariant, studioTextForCopy } from '@/lib/content-workflow-client';
 import { useContentStudio } from './use-content-studio';
 import { useContentTemplates } from './use-content-templates';
+import { useContentSchedule } from './use-content-schedule';
+import { formatKstShort, schedulePresets } from '@/lib/content-schedule';
 import { DraftEditor } from './content-studio-editors';
 import { StudioAI } from './content-studio-ai';
 import { FloatingMentorWidget } from '../floating-mentor-widget';
@@ -27,6 +29,9 @@ const BLOCKERS = [
 const QUIET_SAVE = { idle: '', editing: '입력 중', saving: '저장 중…', saved: '저장됨' };
 const LOUD_SAVE = { local: '서버 미연결', error: '서버 저장 미확인', conflict: '최신 내용 확인 필요' };
 const REASONS = { checkpoint: '직접 저장한 버전', before_apply: 'AI 적용 전', after_apply: 'AI 적용 후', before_restore: '복원 전', branch_source: '채널 변형에 사용한 원본', branch: '파생 결과물' };
+const RESEARCH_ACCESS = { 'full-text': '원문 본문 확인', 'official-document': '공식 문서 확인', attachment: '첨부 문서 확인', excerpt: '발췌만 확인' };
+// 형식 탭 — 기본은 스레드. 채널 7종 전체는 더보기의 '빈 채널 결과물 추가'에 그대로 있다(2026-09-29 확정).
+const FORMAT_TABS = [{ key: 'threads', label: '스레드' }, { key: 'instagram', label: '카드뉴스' }, { key: 'youtube_shorts', label: '유튜브' }];
 const AI_REQUEST_KEY = 'mlp.studio.aiRequest';
 const PUBLISHED_NOTICE = '발행을 기록했습니다. 다음 글로 넘어갈까요?';
 const dateLabel = (value) => value ? new Date(value).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
@@ -43,6 +48,9 @@ export function ContentStudio({ workspace, ledger }) {
   const [mentorMode, setMentorMode] = React.useState('advice');
   const [newChannel, setNewChannel] = React.useState('instagram'), [notice, setNotice] = React.useState('');
   const templates = useContentTemplates();
+  // 예약 — 결과물마다 올릴 시각 하나. 알림 방식이라 올리는 것은 직접 한다(자동 업로드는 보류 결정).
+  const schedules = useContentSchedule('all');
+  const [scheduleAt, setScheduleAt] = React.useState(''), [scheduleError, setScheduleError] = React.useState(''), [scheduleSaving, setScheduleSaving] = React.useState(false);
   // AI 요청은 작업마다 쓰는 지시문이라 콘텐츠에 저장하지 않는다. 실행한 요청은 AI 작업 기록(run)에 남는다.
   // 같은 지시를 매일 다시 쓰므로 이 브라우저에 마지막 요청을 기억한다(편의용 — 실패해도 동작에는 영향 없음).
   const [aiRequest, setAiRequestState] = React.useState(''), [templateId, setTemplateId] = React.useState('');
@@ -60,6 +68,10 @@ export function ContentStudio({ workspace, ledger }) {
   const brandOptions = [{ value: '', label: '브랜드 선택' }, ...brands.map((brand) => ({ value: brand.id, label: brand.name || brand.label || brand.key }))];
   if (draft.brandId && !brandOptions.some((brand) => brand.value === draft.brandId)) brandOptions.push({ value: draft.brandId, label: selectedBrand?.name || '저장된 브랜드' });
   const disabled = !studio.ready || studio.busy || !!studio.recovery || !!studio.pendingMutation;
+  const isResearchSource = draft.variantType === 'base_text' && draft.channel === 'unassigned';
+  const research = studio.detail?.item?.meta?.research;
+  const preparedResearchDraft = typeof research?.prepared_draft === 'string' ? research.prepared_draft : '';
+  const canImportResearch = research?.brief_id && studio.detail?.item?.status === 'idea' && isResearchSource && !studio.pendingSave && !draft.body.trim() && preparedResearchDraft.trim();
   const revisions = studio.history?.revisions || [];
   const variants = studio.detail?.variants || [];
   const briefCount = BRIEF_FIELDS.filter(({ key }) => draft.brief[key]?.trim()).length;
@@ -71,7 +83,7 @@ export function ContentStudio({ workspace, ledger }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(studioTextForCopy(draft));
-      toast.success(`복사했습니다. ${channelLabel(draft.channel)}에 붙여넣으세요.`);
+      toast.success(isResearchSource ? '원본 초안을 복사했습니다.' : `복사했습니다. ${channelLabel(draft.channel)}에 붙여넣으세요.`);
     } catch { toast.error('복사하지 못했습니다. 더보기 → 파일로 내보내기를 쓰거나 본문을 직접 선택해주세요.'); }
   };
   const download = () => {
@@ -83,6 +95,13 @@ export function ContentStudio({ workspace, ledger }) {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success('결과물 파일을 내보냈습니다.');
     } catch (error) { toast.error(error.message); }
+  };
+  const importResearchDraft = async () => {
+    if (disabled || !canImportResearch) return;
+    studio.edit({ body: preparedResearchDraft });
+    const saved = await studio.save(true);
+    if (saved?.body === preparedResearchDraft) toast.success('검토용 원고를 같은 콘텐츠에 저장했습니다.');
+    else toast.error('원고 저장을 확인하지 못했습니다. 현재 글에서 저장 상태를 확인해 주세요.');
   };
   const openHistory = async () => { setDrawer('history'); await studio.refreshHistory(); };
   // 발행 일시는 보통 '방금'이므로 지금 시각을 미리 채운다(로컬 datetime-local 형식).
@@ -103,6 +122,9 @@ export function ContentStudio({ workspace, ledger }) {
     setPublicationError('');
     const result = await studio.recordPublication(publicationUrl, publicationDate);
     if (result.ok) {
+      // 발행을 기록했으면 예약도 끝난 것 — 실패해도 밤 정리가 결과물 상태로 같은 결론에 이른다.
+      const active = schedules.forVariant(draft.variantId);
+      if (active) schedules.complete(active.variantId, active.revision);
       setDrawer(null);
       setPublicationUrl(''); setPublicationDate('');
       setNotice(PUBLISHED_NOTICE);
@@ -155,16 +177,60 @@ export function ContentStudio({ workspace, ledger }) {
     if (result.status === 'deleted') { if (templateId === template.id) setTemplateId(''); toast.success('템플릿을 삭제했습니다.'); }
     else toast.error(result.message || '템플릿을 삭제하지 못했습니다.');
   };
+  const currentSchedule = schedules.forVariant(draft.variantId);
+  const toLocalInput = (iso) => { const t = new Date(iso); return new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+  const openSchedule = () => {
+    setScheduleError('');
+    setScheduleAt(toLocalInput(currentSchedule && currentSchedule.state !== 'missed' ? currentSchedule.scheduledAt : schedulePresets()[1].at));
+    setDrawer('schedule');
+  };
+  const submitSchedule = async () => {
+    setScheduleError('');
+    const when = new Date(scheduleAt);
+    if (!scheduleAt || Number.isNaN(when.getTime())) { setScheduleError('올릴 시각을 확인해 주세요.'); return; }
+    setScheduleSaving(true);
+    const saved = await studio.save(true);
+    if (!saved?.variantId) { setScheduleSaving(false); setScheduleError('글을 먼저 서버에 저장해야 예약할 수 있습니다. 저장이 확인된 뒤 다시 눌러 주세요.'); return; }
+    const result = await schedules.set({ variantId: saved.variantId, contentId: saved.contentId, scheduledAt: when.toISOString(),
+      title: saved.variantTitle || saved.title || '', channel: saved.channel, expectedRevision: schedules.anyForVariant(saved.variantId)?.revision || 0 });
+    setScheduleSaving(false);
+    if (['saved', 'duplicate'].includes(result.status)) { setDrawer(null); toast.success(`${formatKstShort(result.schedule.scheduledAt)}에 알려 드릴게요. 올리는 것은 직접 합니다.`); }
+    else setScheduleError(result.message || '예약을 저장하지 못했습니다.');
+  };
+  const cancelSchedule = async () => {
+    if (!currentSchedule) return;
+    setScheduleSaving(true);
+    const result = await schedules.cancel(currentSchedule.variantId, currentSchedule.revision);
+    setScheduleSaving(false);
+    if (['saved', 'duplicate'].includes(result.status)) { setDrawer(null); toast.success('예약을 해제했습니다.'); }
+    else setScheduleError(result.message || '예약을 해제하지 못했습니다.');
+  };
+  const scheduleLabel = !currentSchedule ? '예약'
+    : currentSchedule.state === 'missed' ? '놓침 · 다시 예약'
+      : `${formatKstShort(currentSchedule.scheduledAt)} 예약`;
   const openMentor = (mode) => { setDrawer(null); setMentorMode(mode); setMentorOpen(true); };
-  const createVariant = async () => {
-    const type = formatForChannel(newChannel);
+  const createVariantFor = async (channel) => {
+    const type = formatForChannel(channel);
     const body = type === 'card_news' ? '{"slides":[]}' : type === 'reels_script' ? '{"scenes":[]}' : '';
-    const result = await studio.mutate({ action: 'create_variant', variant: { title: draft.variantTitle || draft.title, body, variantType: type, channel: newChannel } });
+    const result = await studio.mutate({ action: 'create_variant', variant: { title: draft.variantTitle || draft.title, body, variantType: type, channel } });
     if (result) {
       setDrawer(null);
       setSelection(null);
-      toast.success('새 채널 결과물을 추가했습니다.');
+      setMemoOpen(null);
     }
+    return result;
+  };
+  const createVariant = async () => {
+    if (await createVariantFor(newChannel)) toast.success('새 채널 결과물을 추가했습니다.');
+  };
+  // 형식 탭: 이미 있는 결과물이면 전환, 아직 없으면 빈 결과물을 만든다(원문 메모는 모든 형식이 함께 쓴다).
+  const pickFormat = async (channel) => {
+    if (channel === draft.channel || disabled) return;
+    const existing = variants.find((variant) => (variant.channel || channelForType(variant.variant_type)) === channel);
+    if (existing) return switchVariant(existing.id);
+    if (!draft.contentId && !draft.body.trim()) { studio.edit({ channel, variantType: formatForChannel(channel) }); return; }
+    if (await createVariantFor(channel)) toast.success(`${channelLabel(channel)} 결과물을 만들었습니다. 원문 메모로 AI 초안을 만들 수 있습니다.`);
+    else toast.error(`${channelLabel(channel)} 결과물을 만들지 못했습니다. 저장이 확인된 뒤 다시 눌러주세요. 쓰던 글은 그대로입니다.`);
   };
   const loud = studio.loadError ? '불러오기 실패' : LOUD_SAVE[studio.saveState];
   const quiet = !studio.ready ? '' : studio.saveState === 'saved' && draft.status === 'published' ? '발행 기록됨' : QUIET_SAVE[studio.saveState] ?? '';
@@ -207,22 +273,25 @@ export function ContentStudio({ workspace, ledger }) {
             <Button variant="outline" onClick={() => studio.recover(false)}>{studio.recovery.unavailable ? '서버 다시 불러오기' : '서버 저장본 사용'}</Button>
           </div>
         </Card>}
+        <SegmentedControl label="형식" value={draft.channel} options={FORMAT_TABS} onChange={pickFormat} className="studio-format-tabs" />
         <section className="studio-main" aria-label="원고 작성">
           <Card className="studio-editor-card">
             <div className="studio-stack">
               <TextField aria-label="제목" className="studio-title-input" value={draft.title} onChange={(event) => studio.edit({ title: event.target.value })} disabled={disabled} placeholder="제목 (선택 · 목록에서 찾을 이름)" />
               <details className="studio-memo" open={memoIsOpen} onToggle={(event) => { if (event.currentTarget.open !== memoIsOpen) setMemoOpen(event.currentTarget.open); }}>
                 <summary><span>원문 메모</span><span className="studio-summary-count">{draft.sourceIdea?.trim() ? '있음' : '비어 있음'}</span></summary>
-                <TextAreaField aria-label="원문 메모" hint="떠오른 생각·계기를 적어두면 AI 초안의 재료가 됩니다. ⌘↵로 바로 AI 초안. 복사에는 포함하지 않습니다." placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={4} disabled={disabled} onCmdEnter={() => aiRunRef.current?.('draft')} />
+                <TextAreaField aria-label="원문 메모" hint={isResearchSource ? '출처를 확인한 변화 기록입니다. 복사에는 포함하지 않습니다.' : '떠오른 생각·계기를 적어두면 AI 초안의 재료가 됩니다. ⌘↵로 바로 AI 초안. 복사에는 포함하지 않습니다.'} placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={4} disabled={disabled} onCmdEnter={isResearchSource ? undefined : () => aiRunRef.current?.('draft')} />
               </details>
               {variants.length > 1 && <SelectField label="채널별 결과물" value={draft.variantId || ''} options={channelOptions} onChange={(event) => switchVariant(event.target.value)} disabled={disabled} />}
               <DraftEditor draft={draft} edit={studio.edit} disabled={disabled} onSelect={setSelection} />
-              <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} request={aiRequest} onRequestChange={(value) => { setAiRequest(value); setTemplateId(''); }}
-                templates={templates} templateId={templateId} onPickTemplate={pickTemplate} onSaveAsTemplate={() => editTemplate(null)} runRef={aiRunRef} />
+              {isResearchSource ? <p className="studio-muted studio-small">채널 미지정 원본 초안입니다. 발행할 채널을 정하면 더보기에서 해당 채널 결과물을 추가할 수 있습니다.</p> :
+                <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} request={aiRequest} onRequestChange={(value) => { setAiRequest(value); setTemplateId(''); }}
+                  templates={templates} templateId={templateId} onPickTemplate={pickTemplate} onSaveAsTemplate={() => editTemplate(null)} runRef={aiRunRef} />}
               {/* 본문이 있을 때만 하단에 붙인다 — 빈 초안에서는 비활성 복사 바가 AI 초안 버튼을 가린다. */}
               <div className="studio-export-bar" data-sticky={draft.body.trim() ? 'true' : undefined}>
                 <Button variant="primary" icon="copy" onClick={copy} disabled={!draft.body.trim()}>복사</Button>
-                <Button variant="outline" onClick={openPublication} disabled={disabled || !draft.body.trim()}>발행했음</Button>
+                <Button variant={currentSchedule ? 'secondary' : 'outline'} icon="clock" onClick={openSchedule} disabled={disabled || !draft.body.trim() || isResearchSource} aria-expanded={drawer === 'schedule'}>{scheduleLabel}</Button>
+                <Button variant="outline" onClick={openPublication} disabled={disabled || !draft.body.trim() || isResearchSource}>발행했음</Button>
               </div>
             </div>
           </Card>
@@ -244,7 +313,7 @@ export function ContentStudio({ workspace, ledger }) {
           <div className="studio-actions">
             <Button variant="outline" icon="plus" onClick={() => setDrawer('variant')} disabled={disabled}>빈 채널 결과물 추가</Button>
           </div>
-          <p className="studio-muted studio-small">지금 글을 다른 채널용으로 바꾸려면 AI의 ‘다른 작업 → 다른 채널로 변형’을 쓰세요.</p>
+          {!isResearchSource && <p className="studio-muted studio-small">지금 글을 다른 채널용으로 바꾸려면 AI의 ‘다른 작업 → 다른 채널로 변형’을 쓰세요.</p>}
           {draft.sourceRefs.some((ref) => ref.variant_id) && draft.sourceRefs[0]?.variant_id && <Button variant="outline" disabled={disabled} onClick={() => { setDrawer(null); studio.switchVariant(draft.sourceRefs[0].variant_id); }}>원본 결과물 열기</Button>}
         </section>
         <section className="studio-stack studio-more-section" aria-label="기록">
@@ -268,6 +337,17 @@ export function ContentStudio({ workspace, ledger }) {
             <span className="studio-actions"><Button size="xs" onClick={() => { setDrawer(null); editTemplate(template); }}>편집</Button><Button size="xs" variant="ghost" onClick={() => deleteTemplate(template)}>삭제</Button></span>
           </div>)}
         </section>
+        {research?.brief_id && <details className="studio-more-section">
+          <summary>리서치 근거 · v{research.revision}</summary>
+          <div className="studio-stack studio-source-fields">
+            <p className="studio-muted studio-small">검증 범위: {research.verification_level === 'operator-submitted' ? '운영자 제출 · 자동 사실 검증 아님' : '기록된 검증 상태 확인 필요'} · 리서치 revision {research.revision}</p>
+            {(Array.isArray(research.sources) ? research.sources : []).map((source, index) =>
+              <a key={`${source.url}:${index}`} className="hub-row" href={source.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', minHeight: 44, color: 'var(--fg)', overflowWrap: 'anywhere' }}>
+                {source.title || source.url} ↗ · {RESEARCH_ACCESS[source.accessLevel] || '확인 범위 미기록'}{source.locator ? ` · ${source.locator}` : ''}
+              </a>)}
+            {canImportResearch && <Button variant="primary" disabled={disabled} onClick={importResearchDraft}>검토용 원고 가져와 저장</Button>}
+          </div>
+        </details>}
         <details className="studio-more-section">
           <summary>기획 구체화 <span className="studio-summary-count"><span className="num">{briefCount} / 6</span></span></summary>
           <div className="studio-stack studio-source-fields">
@@ -304,6 +384,23 @@ export function ContentStudio({ workspace, ledger }) {
         <TextField label="이름" value={templateDraft.name} maxLength={60} placeholder="예: 후킹 스레드" onChange={(event) => setTemplateDraft({ ...templateDraft, name: event.target.value })} disabled={templateSaving} />
         <TextAreaField label="AI 요청문" value={templateDraft.request} maxLength={2000} showCount rows={4} placeholder="예: 첫 줄은 질문으로, 세 문단 이내, 반말, 마지막 줄은 한 줄 결론" onChange={(event) => setTemplateDraft({ ...templateDraft, request: event.target.value })} disabled={templateSaving} />
         <TextAreaField label="글 틀" hint="템플릿을 고를 때 본문이 비어 있으면 이 틀을 채웁니다." value={templateDraft.skeleton} maxLength={4000} showCount rows={6} placeholder={'예:\n[훅 — 질문 한 줄]\n\n[공감 — 독자가 겪는 상황]\n\n[사례 — 실제 수업 장면]\n\n[한 줄 결론]'} onChange={(event) => setTemplateDraft({ ...templateDraft, skeleton: event.target.value })} disabled={templateSaving} />
+      </div>
+    </Drawer>}
+    {drawer === 'schedule' && <Drawer title="올릴 시각" subtitle="그 시각에 홈의 '지금 올릴 글'에 뜹니다. 올리는 것은 직접 합니다(자동 업로드는 꺼져 있습니다)." presentation="compact" onClose={() => { if (!scheduleSaving) setDrawer(null); }}
+      footer={<div className="studio-actions">
+        <Button variant="primary" disabled={scheduleSaving || schedules.status === 'preview'} onClick={submitSchedule}>{scheduleSaving ? '저장 중…' : currentSchedule && currentSchedule.state !== 'missed' ? '시각 바꾸기' : '이 시각으로 예약'}</Button>
+        {currentSchedule && <Button variant="outline" disabled={scheduleSaving} onClick={cancelSchedule}>예약 해제</Button>}
+      </div>}>
+      <div className="studio-stack">
+        {schedules.status === 'preview' && <TruthBadge state="preview" label="예약 저장소 연결 필요" />}
+        {schedules.status === 'error' && <div className="studio-actions"><TruthBadge state="error" label="예약 목록 불러오기 실패" /><Button size="xs" onClick={schedules.reload}>다시 불러오기</Button></div>}
+        {currentSchedule?.state === 'missed' && <p className="studio-muted studio-small">이 예약은 시각이 지나 '놓침'으로 정리됐습니다. 새 시각으로 다시 예약할 수 있습니다.</p>}
+        <div className="studio-actions" role="group" aria-label="빠른 선택">
+          {schedulePresets().map((preset) => <Button key={preset.key} size="xs" variant="outline" disabled={scheduleSaving} onClick={() => setScheduleAt(toLocalInput(preset.at))}>{preset.label}</Button>)}
+        </div>
+        <TextField label="직접 정하기" type="datetime-local" value={scheduleAt} onChange={(event) => setScheduleAt(event.target.value)} disabled={scheduleSaving}
+          onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); submitSchedule(); } }} />
+        {scheduleError && <p role="alert" className="studio-error">{scheduleError}</p>}
       </div>
     </Drawer>}
     {drawer === 'publication' && <Drawer title="발행 기록" subtitle="외부 채널에 게시한 URL과 시각을 기록합니다. 운영자 확인이며 외부 게시 여부를 자동 검증하지 않습니다." presentation="compact" onClose={() => { if (!studio.busy) setDrawer(null); }} footer={<Button variant="primary" disabled={disabled} onClick={submitPublication}>{studio.busy ? '확인 중…' : '발행 기록 저장'}</Button>}>

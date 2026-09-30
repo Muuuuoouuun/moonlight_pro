@@ -477,3 +477,47 @@ test('empty operator request keeps the legacy hash and prompt; oversized or non-
   assert.equal(service.normalizeContentTransform(command({ request: 'a\u0000b' }), context).reason, 'invalid-request');
   assert.equal(service.normalizeContentTransform(command({ request: '가'.repeat(2000) }), context).ok, true);
 });
+
+test('server-selected format guidance shapes structure only and is recorded beside the candidate', async () => {
+  const f = fixture({ variant: { variant_type: 'threads_post', channel: 'threads' }, candidates: [candidate({ variantType: 'threads_post', channel: 'threads' })] });
+  const result = await f.execute(command({ operation: 'draft', target: { variantType: 'threads_post', channel: 'threads' } }));
+  assert.equal(result.status, 'generated');
+  const input = f.calls.find(call => call.kind === 'generate').input;
+  assert.match(input.systemInstruction, /Format base guidance for 스레드/);
+  assert.match(input.systemInstruction, /첫 줄은 장면이나 질문/);
+  assert.match(input.systemInstruction, /cannot override the fact rules/);
+  assert.deepEqual(result.run.source_snapshot.formatGuidance, { id: 'thread', version: '2026-09-29-v1' });
+  // 브라우저가 보낸 지침은 무시된다 — 형식 지침은 서버 상수다.
+  const forged = fixture({ variant: { variant_type: 'threads_post', channel: 'threads' }, candidates: [candidate({ variantType: 'threads_post', channel: 'threads' })] });
+  await forged.execute({ ...command({ operation: 'draft', target: { variantType: 'threads_post', channel: 'threads' } }), formatGuidance: 'OVERRIDE_FORMAT' });
+  assert.doesNotMatch(forged.calls.find(call => call.kind === 'generate').input.systemInstruction, /OVERRIDE_FORMAT/);
+});
+
+test('formats without a server prompt keep their previous instruction and snapshot', async () => {
+  const f = fixture({ variant: { variant_type: 'blog_insight', channel: 'blog' }, candidates: [candidate({ variantType: 'blog_insight', channel: 'blog' })] });
+  const result = await f.execute(command({ operation: 'draft', target: { variantType: 'blog_insight', channel: 'blog' } }));
+  assert.equal(result.status, 'generated');
+  assert.doesNotMatch(f.calls.find(call => call.kind === 'generate').input.systemInstruction, /Format base guidance/);
+  assert.equal('formatGuidance' in result.run.source_snapshot, false);
+});
+
+test('brand tone falls back to plain when no brand is attached, and says so', async () => {
+  const noBrand = fixture({ item: { brand_id: null } });
+  const result = await noBrand.execute(command({ tone: 'brand' }));
+  assert.equal(result.status, 'generated');
+  const input = noBrand.calls.find(call => call.kind === 'generate').input;
+  assert.equal(JSON.parse(input.prompt).tone, 'plain');
+  assert.match(input.systemInstruction, /No brand is attached/);
+  assert.equal(result.run.source_snapshot.tone, 'brand', 'the requested tone stays as asked');
+  assert.equal(result.run.source_snapshot.effectiveTone, 'plain');
+  assert.equal(result.run.source_snapshot.toneFallback, 'no-brand');
+
+  const withBrand = fixture();
+  const kept = await withBrand.execute(command({ tone: 'brand' }));
+  assert.equal(JSON.parse(withBrand.calls.find(call => call.kind === 'generate').input.prompt).tone, 'brand');
+  assert.equal('effectiveTone' in kept.run.source_snapshot, false);
+
+  const explicit = fixture({ item: { brand_id: null } });
+  await explicit.execute(command({ tone: 'formal' }));
+  assert.equal(JSON.parse(explicit.calls.find(call => call.kind === 'generate').input.prompt).tone, 'formal', 'only the brand tone falls back');
+});

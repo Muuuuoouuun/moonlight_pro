@@ -31,6 +31,24 @@ test('Overview selects a weekly Legend without claiming to analyze metrics', () 
   assert.doesNotMatch(model.label, /분석|지표|고객|활동 결과/);
 });
 
+test('Home rotates across sales, brand mentor, and Legend sources under one tip label', () => {
+  const domains = new Set();
+  for (let day = 25; day <= 28; day += 1) {
+    for (const hour of ['00:30', '05:30', '10:30']) {
+      const at = new Date(`2026-09-${day}T${hour}:00Z`);
+      const model = guidanceInlineTipModel('home', at);
+      domains.add(model.card.domain);
+      assert.equal(model.kind, '한 줄 팁');
+      assert.equal(model.href, `dashboard/agents/chat?card=${model.card.id}`);
+    }
+  }
+  assert.deepEqual([...domains].sort(), ['content', 'marketing', 'perspective', 'sales']);
+
+  const html = renderToStaticMarkup(React.createElement(GuidanceInlineTip, { variant: 'home', now, onNavigate: () => {} }));
+  assert.match(html, /한 줄 팁/);
+  assert.doesNotMatch(html, />GURU<|>LEGEND</);
+});
+
 test('Today refreshes at the next Seoul 09/14/19 boundary without a midnight replacement', () => {
   assert.equal(typeof nextInlineTipRefreshAt, 'function');
   assert.equal(
@@ -82,16 +100,20 @@ test('the inline tip renders as one source-backed accessible button without requ
   assert.doesNotMatch(css, /#[\da-fA-F]{3,8}\b|rgba?\(|oklch\(/);
 });
 
-test('Today and Overview each place one tip between the named sections', () => {
+test('Home places one unified tip outside and above the morning brief card', () => {
   const today = read('./pages/daily-brief.jsx');
   const overview = read('./pages/overview.jsx');
+  const home = read('./pages/home.jsx');
+  const homeBrief = read('./pages/home-morning-brief.jsx');
   assert.equal((today.match(/<GuidanceInlineTip\b/g) || []).length, 1);
   assert.equal((overview.match(/<GuidanceInlineTip\b/g) || []).length, 1);
+  assert.equal((home.match(/<GuidanceInlineTip\b/g) || []).length, 1);
+  assert.equal((homeBrief.match(/<GuidanceInlineTip\b/g) || []).length, 0);
   assert.match(today, /<TaskToday[\s\S]*?<GuidanceInlineTip\s+variant="today"[\s\S]*?<FocusSlots/);
+  assert.match(home, /<TodaySchedule\b[\s\S]*?<GuidanceInlineTip\s+variant="home"[\s\S]*?<HomeMorningBrief\b/);
   const chartStart = overview.indexOf('작업·기획 활동 추이');
   const tip = overview.indexOf('<GuidanceInlineTip variant="overview"');
   const domainPanels = overview.indexOf('hub-grid--split', chartStart);
   assert.ok(chartStart >= 0 && tip > chartStart && domainPanels > tip);
-  assert.doesNotMatch(read('./pages/home.jsx'), /GuidanceInlineTip/);
   assert.doesNotMatch(read('./pages/content-studio.jsx'), /GuidanceInlineTip/);
 });

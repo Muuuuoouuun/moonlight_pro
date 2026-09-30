@@ -408,6 +408,20 @@ export function productOps(value) {
   return OPS_BY_VALUE[value] || OPS_BY_VALUE.dev;
 }
 
+// 포트폴리오 목록 순서: 운영 상태(사용 중 → 개발 중 → 일시 중지 → 종료) → 단계(productStageOrder) → 이름.
+// 마지막 기준이 이름인 이유 — 서버 순서(updated_at)에 기대면 같은 칸의 제품이 수정할 때마다 자리를 바꾼다.
+const LIST_OPS_RANK = ["live", "dev", "paused", "ended"];
+function opsRank(value) {
+  const index = LIST_OPS_RANK.indexOf(value || "dev");
+  return index < 0 ? LIST_OPS_RANK.length : index;
+}
+export function orderProducts(products) {
+  return [...(products || [])].sort((a, b) =>
+    opsRank(a.opsStatus) - opsRank(b.opsStatus)
+    || productStageOrder(a.stage) - productStageOrder(b.stage)
+    || String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+}
+
 // 제품에 붙는 일(프로젝트)의 종류. 보수는 반복 주기를 가질 수 있다.
 export const WORK_TYPES = [
   { value: "feature", label: "신기능", glyph: "＋" },
