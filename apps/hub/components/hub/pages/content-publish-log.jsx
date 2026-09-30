@@ -6,6 +6,8 @@ import { Button, EmptyState, Skeleton, TruthBadge } from '../hub-primitives';
 import { useContentLedger } from '../use-content-ledger';
 import { useContentSchedule } from './use-content-schedule';
 import { PublishLogView } from './publish-log-view';
+import { createFollowUpStarter } from '@/lib/content-follow-up';
+import { postStudio } from './content-studio-api';
 import { buildPublishLog, countLog, filterLog, weekStrip } from '@/lib/content-publish-log';
 import './content-publish-log.css';
 
@@ -55,6 +57,27 @@ export function ContentPublishLog() {
   const retry = () => { schedules.reload(); window.dispatchEvent(new Event('moonlight:content-saved')); };
   const openDraft = (row) => router.push(`/dashboard/content/studio?item=${encodeURIComponent(row.contentId)}&variant=${encodeURIComponent(row.variantId)}`);
 
+  const [followUp, setFollowUp] = React.useState({ busy: false, message: '' });
+  const followUpStarter = React.useRef(null);
+  if (!followUpStarter.current) followUpStarter.current = createFollowUpStarter({
+    read: async (contentId) => {
+      const response = await fetch('/api/hub/content/workflow?item=' + encodeURIComponent(contentId), { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error('원본 글을 불러오지 못했어요.');
+      return response.json();
+    },
+    save: (command) => postStudio('workflow', command),
+  });
+  // 발행한 글을 인용한 새 글을 서버에 만들고 원고 작성으로 연다. 만들기가 확인되지 않으면 이동하지 않는다.
+  const startFollowUp = async (row) => {
+    if (followUp.busy) return;
+    setFollowUp({ busy: true, message: '' });
+    try {
+      const saved = await followUpStarter.current(row);
+      router.push(`/dashboard/content/studio?item=${encodeURIComponent(saved.item.id)}&variant=${encodeURIComponent(saved.variant.id)}`);
+    } catch (error) { setFollowUp({ busy: false, message: error?.message || '후속편을 만들지 못했어요.' }); return; }
+    setFollowUp({ busy: false, message: '' });
+  };
+
   return (
     <div className="hub-page content-publish-log fade-up">
       <header className="pl-header">
@@ -70,7 +93,8 @@ export function ContentPublishLog() {
         : preview ? <EmptyState icon="content" title="저장소 연결이 필요합니다" description="연결되면 예약과 발행 기록이 여기에 시간 순으로 쌓입니다." />
         : !allRows.length ? <EmptyState icon="content" title="아직 예약·발행 기록이 없습니다" description="원고 작성에서 예약하거나 발행했음을 기록하면 여기에 남습니다." action={<Button variant="outline" onClick={() => router.push('/dashboard/content/studio')}>원고 작성으로</Button>} />
         : <PublishLogView rows={rows} allRows={allRows} counts={counts} filter={filter} onFilter={setFilter} week={week}
-            selectedId={selectedId} onSelect={setSelectedId} onOpenDraft={openDraft} onOpenPerformance={() => router.push('/dashboard/content/performance')} />}
+            selectedId={selectedId} onSelect={setSelectedId} onOpenDraft={openDraft} onOpenPerformance={() => router.push('/dashboard/content/performance')} onFollowUp={startFollowUp} followUpBusy={followUp.busy} />}
+        {followUp.message && <p role="alert" className="pl-muted">{followUp.message}</p>}
     </div>
   );
 }

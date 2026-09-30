@@ -10,7 +10,7 @@ struct CompanionPanelView: View {
     let modeChanged: () -> Void
     let startFocus: () -> Void
     let pin: (() -> Void)?
-    let moveVertically: (CGFloat) -> Void
+    let move: (PanelMove) -> Void
 
     @State private var showsAddress = false
     private var isToday: Bool { mode == .tasks || mode == .calendar }
@@ -18,7 +18,7 @@ struct CompanionPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PanelDragHandle(move: moveVertically).frame(height: 20)
+            PanelDragHandle(move: move).frame(height: 20)
             VStack(spacing: 18) {
                 header
                 if isToday && !showsAddress { todayTabs }

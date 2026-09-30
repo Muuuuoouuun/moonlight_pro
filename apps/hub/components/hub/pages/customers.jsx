@@ -43,6 +43,7 @@ import { LEAD_SUBJECTS, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { CUSTOMER_LABEL_MISSING, customerGenreOptions, customerRegionOptions, matchesCustomerLabels, normalizeGenreLabels } from "@/lib/sales-os/customer-labels";
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { isTemplateNextAction } from "@/lib/sales-os/lead-enrichment";
+import { recordSaveLabel } from "@/lib/sales-os/contact-record";
 import {
   CUSTOMER_FOCUS_FILTERS, CUSTOMER_PHASES, CUSTOMER_SEGMENTS, DEFAULT_CUSTOMER_SEGMENT,
   channelFromPromise, countOpenWithoutPromise, customerDisplayName, customerLastContact,
@@ -262,6 +263,8 @@ const ACT_LABEL = { email: "이메일", meeting: "미팅", call: "통화", note:
 
 // 기록 한 줄기 — 활동(crm_activities)과 이 고객에 연결한 메모(journal)를 시간순으로 섞는다.
 // 메모는 열어 보기만, 활동은 되돌리기 가능한 삭제까지.
+// 서버가 아직 답하지 않은 낙관 행(pending)은 시각 자리에 "기록 중"이라고 말한다 — 저장된
+// 기록의 시각처럼 읽히지 않게(Save envelope). 서버가 저장을 확인하면 시각으로 돌아온다.
 function ActivityTimeline({ rows, today, onDeleteActivity, onOpenMemo }) {
   if (!rows.length) {
     return <p className="customer-tl__empty">아직 기록이 없어요. 연락하고 나서 [연락 기록]으로 30초만 남겨 두세요.</p>;
@@ -280,7 +283,7 @@ function ActivityTimeline({ rows, today, onDeleteActivity, onOpenMemo }) {
               <span>{ACT_LABEL[a.type] || a.type}</span>
               {/* 반응은 중립 뱃지 — 우려·거절도 여기서는 사실 표시일 뿐, 위기 표현은 별도 채널(§5.3). */}
               {a.reaction && <Badge tone="neutral" size="xs" variant="outline">{REACTION_LABEL[a.reaction] || a.reaction}</Badge>}
-              <span className="mono">{when}</span>
+              {a.pending ? <span>{recordSaveLabel("pending")}</span> : <span className="mono">{when}</span>}
             </span>
           </>
         );
@@ -869,13 +872,14 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   }, [activities, memos.status, memos.entries, memoEnabled]);
 
   const logActivity = ({ type, body }) => {
-    const temp = { id: `local-${Date.now()}`, type, msg: body, at: "방금" };
+    // 저장 요청이 나가는 행만 pending이다 — 서버가 답하면 풀리고, 실패하면 아래에서 걷어낸다.
+    const temp = { id: `local-${Date.now()}`, type, msg: body, at: "방금", pending: Boolean(row.id) };
     setActError(null);
     setActivities(prev => [temp, ...prev]);
     if (!row.id) return;
     saveRevenueRecord("activity", "create", { ...linkParam, type, body }).then(r => {
       if (r.ok && r.id) {
-        setActivities(prev => prev.map(a => (a.id === temp.id ? { ...a, id: r.id } : a)));
+        setActivities(prev => prev.map(a => (a.id === temp.id ? { ...a, id: r.id, pending: false } : a)));
         return;
       }
       // 저장 실패한 낙관적 행을 남겨두면 다음 리로드 때 소리 없이 사라진다 — 즉시 걷어내고
@@ -977,7 +981,8 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
             aiContext={`${row.name || "미지정"} · ${row.kind === "account" ? "계약 고객" : `리드 (${phase.label})`}`}
             onSaved={(o) => {
               setActivities(prev => [
-                { id: o.activityId, type: o.kind, msg: o.summary, at: "방금", reaction: o.reaction, occurredAt: new Date().toISOString() },
+                // 아직 서버에 없다 — 되돌리기 창이거나 답을 기다리는 중이다. 요약이 저장되면 풀린다.
+                { id: o.activityId, type: o.kind, msg: o.summary, at: "방금", reaction: o.reaction, occurredAt: new Date().toISOString(), pending: true },
                 ...prev,
               ]);
             }}
@@ -985,10 +990,11 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
               setActivities(prev => prev.filter(a => a.id !== optimisticId));
             }}
             onSummaryPersisted={({ activityId, optimisticId }) => {
-              if (!activityId) { reload(); return; }
+              // 저장은 확인됐다 — "기록 중"을 풀고, 서버 ID를 못 받았으면 다시 읽어 맞춘다.
               setActivities(prev => prev.map(a => (
-                a.id === optimisticId ? { ...a, id: activityId } : a
+                a.id === optimisticId ? { ...a, id: activityId || a.id, pending: false } : a
               )));
+              if (!activityId) reload();
             }}
             onPersisted={() => onRecordPersisted?.(row)}
             onFailed={({ message, form }) => onRecordFailed?.(row, {

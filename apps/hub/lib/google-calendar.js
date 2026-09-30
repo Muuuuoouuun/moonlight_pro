@@ -604,6 +604,17 @@ function combinedCalendarItemSortKey(item) {
   return item.start?.dateTime || (item.start?.date ? `${item.start.date}T00:00:00` : "");
 }
 
+function calendarTransportIdentity(event) {
+  const uid = event.iCalUID?.trim();
+  if (!uid) return null;
+  const original = event.originalStartTime;
+  if (!original) return event.recurringEventId ? null : JSON.stringify([uid]);
+  if (original.date) return JSON.stringify([uid, "date", original.date]);
+  // Compare instants, not the OAuth offset and iCal UTC spellings of the same slot.
+  const instant = Date.parse(original.dateTime);
+  return Number.isFinite(instant) ? JSON.stringify([uid, "instant", instant]) : null;
+}
+
 // The one calendar read every consumer (Calendar tab, Daily Brief, Attention ledger)
 // should call — merges the OAuth-connected calendar (also the only write target) with
 // the Personal/Company public-secret iCal feeds, so a disconnected OAuth account still
@@ -632,10 +643,27 @@ export async function readCombinedGoogleCalendarEvents({
     outcomeKey: event.id ? createHash("sha256").update(JSON.stringify([source, event.id])).digest("hex") : null,
   });
   const oauthSource = oauthResult.source === "ical" ? "ical:default" : `oauth:${oauthResult.calendarId || calendarId || "primary"}`;
-  const items = [
-    ...(oauthResult.ok ? oauthResult.items.map(event => withOutcomeKey(event, oauthSource)) : []),
-    ...mergedResult.items.map(event => withOutcomeKey(event, `ical:${event.source}`)),
-  ].sort(
+  const items = oauthResult.ok ? oauthResult.items.map(event => withOutcomeKey(event, oauthSource)) : [];
+  const connectedEvents = new Map();
+  for (const item of items) {
+    const identity = calendarTransportIdentity(item);
+    if (identity) connectedEvents.set(identity, item);
+  }
+  for (const event of mergedResult.items) {
+    const connected = connectedEvents.get(calendarTransportIdentity(event));
+    if (connected) {
+      // The same calendar may be connected by OAuth (or default iCal) and a feed.
+      // Keep the connected event's write ID/outcome, with the feed's category label.
+      if (typeof connected.source !== "string") {
+        connected.source = event.source;
+        connected.sourceLabel = event.sourceLabel;
+      }
+    } else {
+      // Separate feed histories stay namespaced when no connected copy is present.
+      items.push(withOutcomeKey(event, `ical:${event.source}`));
+    }
+  }
+  items.sort(
     (a, b) => combinedCalendarItemSortKey(a).localeCompare(combinedCalendarItemSortKey(b)),
   );
 

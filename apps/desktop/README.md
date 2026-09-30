@@ -314,7 +314,7 @@ npx electron . --smoke-widget --smoke-hub=http://127.0.0.1:3141 --smoke-theme=da
 
 ## macOS
 
-macOS(Apple Silicon)와 Windows는 별도 플랫폼 계약으로 취급한다(2026-09-29 운영자 지시). Hub 세션·데이터 모델은 공유하되 재질·글꼴·창·조작은 각 OS 기준으로 구현한다. Mac은 `prototypes/moonlight-pet-macos`의 승인 원본, Windows는 Acrylic 이식 스펙이 기준이다.
+macOS(Apple Silicon)와 Windows는 별도 플랫폼 계약으로 취급한다(2026-09-29 운영자 지시). 업무 API는 공유하되 재질·글꼴·창·조작은 각 OS 기준으로 구현한다. Mac은 `prototypes/moonlight-pet-macos`의 승인 원본, Windows는 Acrylic 이식 스펙이 기준이다.
 
 **셸**
 - 메뉴 막대: 첫 메뉴 **Moonlight**(정보·설정…(허브 주소, ⌘,)·빠른 입력·위젯·서비스·숨기기·종료 ⌘Q) + **편집**(실행 취소·오려두기·복사·붙여넣기·모두 선택 역할 — 이 메뉴가 없으면 허브·펫 입력 칸에서 ⌘C/⌘V/⌘A가 동작하지 않는다) + **보기**(뒤로 ⌘[ · 앞으로 ⌘]) + **윈도우**. 메뉴 모양은 `menu-template.js`(순수 함수, `menu-template.test.js`)가 플랫폼별로 만든다.
@@ -331,7 +331,7 @@ npm run app:mac:dev      # 개발 실행
 npm run app:mac:build    # dist/Moonlight-<버전>-arm64.dmg · .zip · mac-arm64/Moonlight.app
 ```
 
-- 네이티브 빌드: Mac 개발 실행·패키징은 `scripts/build-mac-glass.mjs`를 먼저 실행한다. macOS 26+ SDK가 포함된 Xcode Command Line Tools가 필요하다. Node-API 8을 사용해 Electron ABI 재빌드 없이 로드하며, `.node`·원본 셰이더는 Mac 번들의 `Resources/native`에만 포함한다. `npm --workspace @com-moon/desktop run build:mac-glass`로 연결부만 빌드할 수 있다.
+- 네이티브 빌드: Mac 개발 실행·패키징은 `scripts/build-mac-pet.mjs`로 SwiftUI 펫을 `--build-only` 빌드한다. 실행 중인 펫은 종료하지 않는다. 패키징 시 `Resources/native/MoonlightPetPreview.app`에 같은 앱을 포함한다. macOS 26+ SDK가 포함된 Xcode Command Line Tools가 필요하다. Electron 유리 연결부는 비교 스모크용으로 함께 빌드하며 `npm --workspace @com-moon/desktop run build:mac-glass`로 따로 빌드할 수 있다.
 - 아이콘: `npm --workspace @com-moon/desktop run icons:generate`가 `build/icon.icns`(sips + iconutil)·`icon-dock.png`·`trayTemplate*.png`도 만든다. 맥 자산은 `sharp`가 필요하다(루트에 허브 의존성으로 설치돼 있다 — 없으면 경고만 남기고 건너뛴다).
 - 서명: Developer ID가 없어 애드혹 서명(`identity: "-"`, `hardenedRuntime: false`)이다. `codesign --verify --deep --strict`는 통과하고 `spctl`은 거절한다. 직접 빌드해 `/Applications`로 복사한 앱은 바로 열린다. 브라우저로 받은 dmg·zip은 격리 속성이 붙으므로 처음 한 번 오른쪽 클릭 → **열기**(또는 `xattr -dr com.apple.quarantine /Applications/Moonlight.app`).
 - 처음 실행할 때 키체인이 "Moonlight Safe Storage" 접근을 물으면 **항상 허용** — 로그인 쿠키 암호화 키다. 비밀번호를 넣을 필요는 없다.
@@ -339,18 +339,16 @@ npm run app:mac:build    # dist/Moonlight-<버전>-arm64.dmg · .zip · mac-arm6
 - `electronLanguages: ["ko","en"]`로 언어 리소스를 줄였다(약 48MB). x64·universal은 빌드하지 않는다.
 - 스모크: `--smoke-test`·`--smoke-widget`는 그대로 돈다. `--smoke-mac`은 실제 메뉴·메뉴 막대 아이콘·Dock 활성화·빠른 입력·위젯 경로를 확인하고 `smoke:mac ok`를 찍는다(잠시 포커스를 가져간다).
 
-**펫**
-- macOS 26+ 유리: `pet/native/mac-glass.mm`이 공개 `NSGlassEffectView(.clear)` + `darkAqua`를 Chromium 아래 형제 뷰에 연결한다. 원본 최신 커밋 `97794923`의 확산 28%·중앙 음영 5.5%·패널 반경 26pt·말풍선 반경 14pt를 사용한다. 글자와 조작은 위에서 별도로 그려 유리 효과에 들어가지 않는다.
-- 유리 단면: Mac 원본의 `GlassOptics.metal`을 빌드 때 그대로 복사하여 같은 `glassFragment`로 그린다. 네이티브 재질의 바깥 8pt를 마스킹하고 Metal이 9pt 안에서 반사·분광을 맡는다. `MTKView`는 paused이며 크기·포인터·접근성 변경 때만 다시 그린다. ScreenCaptureKit 캡처 경로는 사용하지 않는다.
-- 대체 경로: macOS 26 미만/네이티브 연결 실패는 기존 `hud` 비브런시·CSS 베일(라이트 .48/다크 .24)·10px 모서리로 열린다. Metal만 실패하면 native clear의 기본 윤곽을 쓴다. 투명도 줄이기·대비 증가는 효과를 끄고 둥근 불투명 면으로 전환한다. Windows Acrylic에는 이 Mac 경로를 적용하지 않는다.
-- Mac 조작·글꼴: 시스템 글꼴, 메모를 제외한 헤더의 닫기/위젯 접기, 할 일·일정 하단 새로고침을 원본대로 제공한다. 메모는 걸친 펫이나 더보기·Esc로 접는다. Windows의 기존 헤더·글꼴·조작은 유지한다.
-- 창: 펫·패널·걸친 캐릭터·말풍선은 비활성 패널(`type:'panel'`, `acceptFirstMouse`, `hiddenInMissionControl`) — 패널을 열어도 허브 창이 앞으로 오지 않고, 다른 앱이 앞에 있어도 첫 클릭이 먹는다. 모든 Space와 전체 화면 앱 위에 뜬다(`setVisibleOnAllWorkspaces`, `skipTransformProcessType` — 빼면 Dock 아이콘이 사라진다). 패널은 `showInactive()` → `focus()`로 키 창이 되고, 안 되면 띄우는 유예(0.4초) 안에서 150·300ms 에 다시 잡는다. `app.focus({steal:true})`는 쓰지 않는다 — 다른 앱 뒤에 보이던 허브 창까지 앞으로 올라온다.
-- 집중 화면은 `display.bounds` 그대로 메뉴 막대·Dock까지 덮는다(`enableLargerThanScreen`, 뜬 뒤 자리를 한 번 더 맞춘다). 앱 전환은 막지 않는다.
-- 단축키: 빠른 패널 **⌃⌥M**(Windows Ctrl+Alt+M과 같은 키), 패널 안 **⌘1~7**·**⌘S**·**⌘Return**(Ctrl 대신 ⌘ — 메모에서만 원본의 ⌃Return 대안도 지원). 화면 문구는 `이 PC` 대신 `이 Mac`. 판정은 `pet/renderer/model/platform.js` 하나.
-- 최적화: 맥에서는 걸친 캐릭터·말풍선 창을 처음 쓸 때 만든다 — 대기 상태 프로세스 7→5, 렌더러 4→2, 메모리 약 685→498MB(`app.getAppMetrics()` 실측). 처음 쓰는 걸친 캐릭터는 유리보다 100~200ms 늦게 뜰 수 있다. 패널이 접혀 있는 동안은 할 일·일정·날짜 줄 주기 새로고침을 멈추고 다시 열 때 한 번 따라잡는다(`backgroundThrottling:false`라 숨긴 창도 `visible`로 보여서 `state.panelOpen`으로 가른다).
-- 스모크: `--smoke-pet`은 맥에서 DWM 대신 네이티브 유리/대체 비브런시·모든 Space·집중 창 = `display.bounds`를 보고 `smoke:metrics`를 찍는다. `--smoke-pet-eager`(창을 미리 다 만들기)·`--smoke-pet-hold=<ms>`(띄운 채 기다리기). 화면 캡처는 Electron에 화면 기록 권한이 있어야 찍히고, 없으면 경고로 넘어간다.
+**펫 실행 통합 (2026-09-30)**
+- Mac의 일반 실행은 `pet-runtime.js`에서 SwiftUI 펫만 연다. `Moonlight.app` 안에 Electron 펫 창·조회 루프·펫 단축키를 추가로 만들지 않는다. Windows는 기존 `pet/main/pet-main.js`를 사용한다.
+- 기존 `~/Applications/MoonlightPetPreview.app` → `/Applications/MoonlightPetPreview.app` → 앱 번들에 포함된 펫 → 개발 빌드 순서로 찾는다. 별도 설치본이 있으면 그 업데이트·설정을 그대로 사용한다. `open -g`와 네이티브 앱의 번들 ID 중복 검사로 실행 중인 펫을 재사용한다. 앱을 못 찾거나 실행에 실패하면 오류를 기록하고 Electron 펫으로 바꾸지 않는다.
+- Hub 앱의 트레이 **펫 열기**는 같은 네이티브 앱을 연다. 세부 기능·캐릭터·모니터 이동은 네이티브 펫과 ☾ 메뉴에서 조작한다. Hub 앱을 종료해도 펫은 유지한다.
+- 네이티브 펫의 초안·위치·Hub 주소는 기존 `app.moonlight.pet-preview` UserDefaults를 그대로 사용한다. Hub 셸의 쿠키·허브 주소 설정과는 별개이며, 펫의 더보기 → **Hub 연결 설정**에서 관리한다. 로컬 기록을 자동 이관하거나 덮어쓰지 않는다.
+- 유리·시스템 글꼴·패널 조작·모니터 이동·단축키는 [Mac 원본 README](../../prototypes/moonlight-pet-macos/README.md)가 정본이다.
+- `--smoke-mac`은 운영 중인 네이티브 펫을 실행하지 않는다. `--smoke-pet`은 명시적으로 Electron 이식본을 비교 검증하는 경로로 남긴다.
+- 2026-09-30 검증: 데스크톱 345개 테스트, Mac 패키징·설치본 deep/strict 서명 검사, 포함된 네이티브 펫 자체 점검 통과. 네이티브 먼저 → Hub 열기, Hub만 열어 자동 기동, 포함된 펫을 중복 실행하는 세 경우 모두 실제 창 목록에서 네이티브 펫/패널 1개·Electron 펫 창 0개를 확인했다.
 
-### Mac 원본 복원 검사 (2026-09-29)
+### Electron Mac 이식본 비교 검사 (일반 실행과 별도)
 
 ```bash
 npm --workspace @com-moon/desktop test

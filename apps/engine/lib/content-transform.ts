@@ -32,7 +32,8 @@ const RECOVERY_TTL_MS = 30 * 60 * 1000;
 const CLAIM_LEASE_MS = 2 * 60 * 1000; // Exceeds the provider's 45s timeout plus persistence.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.(\d{1,6}))?(?:Z|[+-]\d{2}:\d{2})$/;
-const OPERATIONS = ["polish", "shorten", "hooks", "draft", "repurpose"];
+const OPERATIONS = ["polish", "shorten", "hooks", "openers", "draft", "repurpose"];
+const candidateCount = (operation: string) => (operation === "openers" ? 5 : operation === "hooks" ? 3 : 1);
 const BRIEF_FIELDS = ["audience", "purpose", "message", "angle", "evidence", "ending"];
 const isRecord = (value: unknown): value is Row => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const isUuid = (value: unknown): value is string => typeof value === "string" && UUID.test(value);
@@ -197,6 +198,7 @@ async function assembleContext(command: GenerateCommand, dependencies: Dependenc
   const end = whole ? body.length : command.selection.end;
   const prefix = body.slice(0, start), selectionText = body.slice(start, end), suffix = body.slice(end);
   if (![prefix, selectionText, suffix].every((text) => isText(text))) return { failure: response("invalid-input", "invalid-selection") };
+  if (command.operation === "openers" && !["card_news", "reels_script"].includes(command.target.variantType)) return { failure: response("invalid-input", "openers-structured-only") };
   if (command.operation !== "draft" && !selectionText.trim()) return { failure: response("invalid-input", "empty-selection") };
   if (["card_news", "reels_script"].includes(command.target.variantType) && (prefix || suffix)) return { failure: response("invalid-input", "structured-selection-requires-whole-body") };
   let brand = null;
@@ -234,7 +236,7 @@ function effectiveTone(tone: string, brand: unknown): string {
 function generationInput(command: GenerateCommand, sourceData: Row) {
   const tone = effectiveTone(command.tone, sourceData.brand);
   const format = getFormatPrompt(command.target.variantType);
-  const count = command.operation === "hooks" ? 3 : 1;
+  const count = candidateCount(command.operation);
   return {
     maxOutputTokens: 8192,
     systemInstruction: [
@@ -252,6 +254,7 @@ function generationInput(command: GenerateCommand, sourceData: Row) {
       "Return raw JSON only, without Markdown fences or additional keys: {\"candidates\":[{\"id\":\"candidate-1\",\"title\":\"...\",\"body\":\"...\",\"variantType\":\"...\",\"channel\":\"...\",\"summary\":\"...\",\"missing\":[]}]}. All fields are required, IDs must be unique, and all textual content must be valid Unicode without NUL characters.",
       `Return exactly ${count} candidate${count === 1 ? "" : "s"}. Every candidate must use variantType=${command.target.variantType} and channel=${command.target.channel}.`,
       "polish preserves meaning and improves wording; shorten condenses without inventing or changing facts; hooks produces question, scene, and assertion opening alternatives for the selected section; draft creates a complete draft from the notes and brief; repurpose creates a complete independent channel variant from the whole saved body.",
+      "openers applies only to card_news and reels_script: return five candidates that each rewrite ONLY the first slide (cover) or the first scene (hook) from a clearly different angle (promise, question, contrast, number-from-source, scene). Every other slide or scene, every id, and every duration must be copied unchanged, and body is still the complete JSON. Never add a figure the source does not contain.",
       "For polish, shorten, or hooks, body contains only the replacement for selectionText; do not repeat text outside the selection. draft and repurpose return a complete body. summary explains the change and any omitted meaning.",
       "For threads_post/x_thread/social_post/blog_insight/blog/landing_copy/newsletter, body is plain text. Blank lines separate thread blocks. Do not assume platform character limits.",
       "For card_news, body is a JSON-encoded string of {\"slides\":[{\"id\":\"slide-1\",\"title\":\"...\",\"sub\":\"...\"}]}. For reels_script, body is a JSON-encoded string of {\"scenes\":[{\"id\":\"scene-1\",\"visual\":\"...\",\"spoken\":\"...\",\"subtitle\":\"...\",\"duration\":10,\"notes\":\"\"}]}. No extra keys; 1–30 slides/scenes, unique IDs, finite positive duration in seconds (at most 600). Default 6 cards or an estimated 60-second script when repurposing, as writing presets only.",
@@ -281,9 +284,20 @@ function validStructuredBody(body: string, variantType: string): boolean {
   } catch { return false; }
 }
 
+// openers는 첫 장·첫 장면만 바꾼다 — 나머지가 한 글자라도 달라지면 후보를 버린다.
+function keepsRest(sourceBody: string, candidateBody: string, variantType: string): boolean {
+  try {
+    const key = variantType === "card_news" ? "slides" : "scenes";
+    const before = JSON.parse(sourceBody)[key], after = JSON.parse(candidateBody)[key];
+    return Array.isArray(before) && Array.isArray(after) && before.length === after.length && before[0]?.id === after[0]?.id
+      && (key !== "scenes" || before[0]?.duration === after[0]?.duration)
+      && stableJson(before.slice(1)) === stableJson(after.slice(1));
+  } catch { return false; }
+}
+
 export function validateContentTransformResult(value: unknown, operation: string, target: Target): value is Row {
   if (!isRecord(value) || !hasExactKeys(value, ["candidates"]) || !Array.isArray(value.candidates)
-    || value.candidates.length !== (operation === "hooks" ? 3 : 1) || Buffer.byteLength(JSON.stringify(value), "utf8") > MAX_RESULT_BYTES) return false;
+    || value.candidates.length !== candidateCount(operation) || Buffer.byteLength(JSON.stringify(value), "utf8") > MAX_RESULT_BYTES) return false;
   const ids = new Set();
   return value.candidates.every((entry: unknown) => {
     if (!isRecord(entry) || !hasExactKeys(entry, ["id", "title", "body", "variantType", "channel", "summary", "missing"])
@@ -389,7 +403,8 @@ export async function executeContentTransform(input: unknown, context: Context, 
   if (generated.ok && typeof generated.text === "string" && Buffer.byteLength(generated.text, "utf8") <= MAX_RESULT_BYTES) {
     try { result = JSON.parse(generated.text); } catch { /* Strict output failure; never call the model to repair it. */ }
   }
-  if (!generated.ok || !validateContentTransformResult(result, command.operation, command.target)) {
+  if (!generated.ok || !validateContentTransformResult(result, command.operation, command.target)
+    || (command.operation === "openers" && !(result as Row).candidates.every((entry: Row) => keepsRest(assembled.snapshot!.body, entry.body, command.target.variantType)))) {
     const unknown = !generated.ok && generated.status == null;
     const error = unknown ? "provider-outcome-unknown" : generated.ok ? "invalid-provider-output" : "provider-failed";
     const patch = { status: unknown ? "unknown" : "failed", usage, error };

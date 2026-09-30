@@ -77,7 +77,7 @@ struct GlassRowSurface: ViewModifier {
 }
 
 struct PanelDragHandle: View {
-    let move: (CGFloat) -> Void
+    let move: (PanelMove) -> Void
     @State private var hovered = false
 
     var body: some View {
@@ -85,15 +85,18 @@ struct PanelDragHandle: View {
             .fill(Palette.glassInk.opacity(hovered ? 0.30 : 0.16))
             .overlay { Capsule().strokeBorder(Palette.glassLight.opacity(0.22), lineWidth: 1) }
             .frame(width: 38, height: 4)
-            .frame(width: 56, height: 20)
+            .frame(maxWidth: .infinity, minHeight: 20)
             .overlay { ScreenDragSurface(move: move) }
             .onHover { hovered = $0 }
             .animation(PetMotion.hover, value: hovered)
-            .help("위아래로 드래그하여 이동")
+            .help("드래그하여 다른 모니터로 이동")
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("위젯 위치 이동")
-            .accessibilityAction(named: Text("위로 이동")) { move(24) }
-            .accessibilityAction(named: Text("아래로 이동")) { move(-24) }
+            .accessibilityAction(named: Text("위로 이동")) { move(.nudge(CGPoint(x: 0, y: 24))) }
+            .accessibilityAction(named: Text("아래로 이동")) { move(.nudge(CGPoint(x: 0, y: -24))) }
+            .accessibilityAction(named: Text("왼쪽으로 이동")) { move(.nudge(CGPoint(x: -24, y: 0))) }
+            .accessibilityAction(named: Text("오른쪽으로 이동")) { move(.nudge(CGPoint(x: 24, y: 0))) }
+            .accessibilityAction(named: Text("다음 모니터로 이동")) { move(.nextDisplay) }
     }
 }
 
@@ -144,20 +147,26 @@ struct GlassSurface: ViewModifier {
     }
 }
 
-private struct ScreenDragSurface: NSViewRepresentable {
-    let move: (CGFloat) -> Void
+struct ScreenDragSurface: NSViewRepresentable {
+    let move: (PanelMove) -> Void
+    var click: (() -> Void)? = nil
+    var pressed: ((Bool) -> Void)? = nil
 
-    func makeNSView(context: Context) -> DragView { DragView(move: move) }
-    func updateNSView(_ view: DragView, context: Context) { view.move = move }
+    func makeNSView(context: Context) -> DragView { DragView(move: move, click: click, pressed: pressed) }
+    func updateNSView(_ view: DragView, context: Context) {
+        view.move = move; view.click = click; view.pressed = pressed
+    }
 
     final class DragView: NSView {
         private let log = Logger(subsystem: "app.moonlight.pet-preview", category: "interaction")
-        var move: (CGFloat) -> Void
+        var move: (PanelMove) -> Void
+        var click: (() -> Void)?
+        var pressed: ((Bool) -> Void)?
         private var drag = ScreenDragTracker()
         private weak var dragWindow: NSWindow?
 
-        init(move: @escaping (CGFloat) -> Void) {
-            self.move = move
+        init(move: @escaping (PanelMove) -> Void, click: (() -> Void)?, pressed: ((Bool) -> Void)?) {
+            self.move = move; self.click = click; self.pressed = pressed
             super.init(frame: .zero)
         }
         required init?(coder: NSCoder) { nil }
@@ -167,19 +176,23 @@ private struct ScreenDragSurface: NSViewRepresentable {
         override func mouseDown(with event: NSEvent) {
             log.info("widget drag began width=\(self.bounds.width) height=\(self.bounds.height)")
             dragWindow = window
+            pressed?(true)
             PetGlassDrag.begin(in: dragWindow)
             drag.begin(at: window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation)
             NSCursor.closedHand.set()
         }
         override func mouseDragged(with event: NSEvent) {
-            if let offset = drag.translation(to: window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation) {
-                log.debug("widget drag delta=\(offset)")
+            let pointer = window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation
+            if let offset = drag.translation(to: pointer) {
                 PetGlassDrag.update(in: dragWindow)
-                move(offset)
+                move(.drag(delta: offset, pointer: pointer))
             }
         }
         override func mouseUp(with event: NSEvent) {
             log.info("widget drag ended activated=\(self.drag.isDragging)")
+            if drag.isDragging { move(.finish(pointer: window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation)) }
+            else if bounds.contains(convert(event.locationInWindow, from: nil)) { click?() }
+            pressed?(false)
             drag.end()
             PetGlassDrag.end(in: dragWindow)
             dragWindow = nil
@@ -188,11 +201,24 @@ private struct ScreenDragSurface: NSViewRepresentable {
 
         override func viewWillMove(toWindow newWindow: NSWindow?) {
             if newWindow !== window {
+                if drag.isDragging { move(.finish(pointer: NSEvent.mouseLocation)) }
+                pressed?(false)
                 PetGlassDrag.end(in: dragWindow)
                 dragWindow = nil
                 drag.end()
             }
             super.viewWillMove(toWindow: newWindow)
         }
+
+        override func rightMouseDown(with event: NSEvent) {
+            guard NSScreen.screens.count > 1 else { return }
+            let menu = NSMenu()
+            let item = NSMenuItem(title: "다음 모니터로 이동", action: #selector(nextDisplay), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+            NSMenu.popUpContextMenu(menu, with: event, for: self)
+        }
+
+        @objc private func nextDisplay() { move(.nextDisplay) }
     }
 }

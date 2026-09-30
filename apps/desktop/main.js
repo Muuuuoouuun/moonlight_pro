@@ -33,6 +33,7 @@ const {
   widgetWorkspaceOptions,
 } = require('./widget-window');
 const { buildAppMenuTemplate, buildDockMenuTemplate, loginItemMenuItem } = require('./menu-template');
+const { installPetRuntime } = require('./pet-runtime');
 
 const IS_MAC = process.platform === 'darwin';
 
@@ -599,7 +600,7 @@ function registerIpc() {
     if (!result.ok) return result;
     writeJson(userFile('settings.json'), { ...readSettings(), hubUrl: result.url });
     hideWidget(); // 위젯은 다음에 열 때 새 주소의 /widget을 다시 불러온다(isWidgetPage가 origin을 본다)
-    if (pet) pet.hubUrlChanged();
+    if (pet && pet.hubUrlChanged) pet.hubUrlChanged();
     loadHub();
     return result;
   });
@@ -1071,7 +1072,7 @@ if (!app.requestSingleInstanceLock()) {
           if (!globalShortcut.register(accelerator, action)) console.warn(`shortcut ${accelerator} is taken by another app`);
         }
       }
-      pet = installPet();
+      pet = installPetRuntime({ smoke: SMOKE_MAC, installElectron: installPet });
       refreshMenus();
       if (SMOKE_MAC) {
         runMacSmoke().catch((error) => {

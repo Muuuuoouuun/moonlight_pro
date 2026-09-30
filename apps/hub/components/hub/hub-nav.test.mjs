@@ -69,15 +69,27 @@ test('goal palette shortcuts stay in the current scope without adding a sidebar 
 // Overview joined 2026-07-15 by direct operator instruction (see hub-nav.js
 // header); brands joined 2026-08-29 (브랜드 탭 설계 §5.2 — 프로젝트 다음, 콘텐츠 앞);
 // home joined 2026-09-18. 2026-09-24 the 고객 연락 anchor folded into 영업·매출
-// as its first tab (오늘 연락) — nine primary + two utility anchors.
-test("sidebar exposes exactly nine primary and two utility anchors", () => {
-  assert.equal(SIDEBAR_PRIMARY.length, 9);
+// as its first tab (오늘 연락); 2026-09-30 제품 joined between 프로젝트 and 브랜드
+// (운영자 "별도 탭 ㄱㄱ") — ten primary + two utility anchors.
+test("sidebar exposes exactly ten primary and two utility anchors", () => {
+  assert.equal(SIDEBAR_PRIMARY.length, 10);
   assert.equal(SIDEBAR_UTILITIES.length, 2);
   assert.deepEqual(
     SIDEBAR_PRIMARY.map((a) => a.key),
-    ["home", "today", "overview", "tasks", "revenue", "discovery", "projects", "brands", "content"],
+    ["home", "today", "overview", "tasks", "revenue", "discovery", "projects", "products", "brands", "content"],
   );
   assert.ok(!SIDEBAR_ANCHORS.some((a) => a.key === "followups" || a.label === "고객 연락"), "고객 연락 is a revenue tab now, not an anchor");
+});
+
+test("제품 is its own anchor and route, no longer a Projects view", () => {
+  assert.equal(ownerAnchorKey("dashboard/products"), "products");
+  for (const scope of ["all", "classin", "personal"]) {
+    assert.equal(resolveSidebarPath("products", scope), "dashboard/products", "제품 화면은 소속을 거르지 않는다 — scope 쿼리 없음");
+  }
+  assert.equal(isSidebarAnchorActive("projects", "dashboard/products"), false);
+  assert.match(appSource, /'dashboard\/products': \(n\) => <Products onNavigate=\{n\} \/>/);
+  assert.ok(navTreePaths().includes("dashboard/products"), "⌘K 제품 항목은 새 탭으로 간다");
+  assert.ok(!navTreePaths().some((path) => path.includes("view=products")));
 });
 
 test('news discovery stays under Content in every scope', () => {

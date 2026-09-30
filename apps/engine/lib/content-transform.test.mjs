@@ -521,3 +521,50 @@ test('brand tone falls back to plain when no brand is attached, and says so', as
   await explicit.execute(command({ tone: 'formal' }));
   assert.equal(JSON.parse(explicit.calls.find(call => call.kind === 'generate').input.prompt).tone, 'formal', 'only the brand tone falls back');
 });
+
+test('openers returns five candidates that change only the cover; anything else is discarded', async () => {
+  const slides = [{ id: 'slide-1', title: '표지', sub: '핵심' }, { id: 'slide-2', title: '둘째', sub: '본문' }];
+  const source = JSON.stringify({ slides });
+  const target = { variantType: 'card_news', channel: 'instagram' };
+  const variant = { body: source, variant_type: 'card_news', channel: 'instagram' };
+  const make = (mutate) => [1, 2, 3, 4, 5].map((n) => candidate({ ...target, id: `candidate-${n}`, body: JSON.stringify({ slides: mutate(n) }) }));
+  const cmd = command({ operation: 'openers', selection: { start: 0, end: source.length }, target });
+  const cover = (n) => [{ id: 'slide-1', title: `표지 ${n}안`, sub: '핵심' }, slides[1]];
+  const good = fixture({ variant, candidates: make(cover) });
+  const result = await good.execute(cmd);
+  assert.equal(result.status, 'generated');
+  assert.match(good.calls.find((call) => call.kind === 'generate').input.systemInstruction, /ONLY the first slide/);
+  // 둘째 장을 건드린 후보가 하나라도 있으면 전부 버린다.
+  const bad = fixture({ variant, candidates: make((n) => (n === 3 ? [cover(n)[0], { ...slides[1], title: '바뀜' }] : cover(n))) });
+  assert.equal((await bad.execute(cmd)).error, 'invalid-provider-output');
+  // 후보 수가 5가 아니면 거절.
+  const few = fixture({ variant, candidates: make(cover).slice(0, 3) });
+  assert.equal((await few.execute(cmd)).error, 'invalid-provider-output');
+  // 구조형이 아닌 형식에는 쓸 수 없다.
+  const plain = fixture({ candidates: [candidate()] });
+  assert.equal((await plain.execute(command({ operation: 'openers' }))).status, 'invalid-input');
+});
+
+test('reels openers keep every scene ID and duration and all later scene content', async () => {
+  const scenes = [
+    { id: 'scene-1', visual: '첫 장면', spoken: '기존 훅', subtitle: '도입', duration: 10, notes: '' },
+    { id: 'scene-2', visual: '둘째 장면', spoken: '본문', subtitle: '설명', duration: 20, notes: '' },
+  ];
+  const source = JSON.stringify({ scenes });
+  const target = { variantType: 'reels_script', channel: 'reels' };
+  const variant = { body: source, variant_type: 'reels_script', channel: 'reels' };
+  const cmd = command({ operation: 'openers', selection: { start: 0, end: source.length }, target });
+  const candidates = (change) => [1, 2, 3, 4, 5].map((n) => candidate({
+    ...target, id: `candidate-${n}`, body: JSON.stringify({ scenes: change([{ ...scenes[0], spoken: `훅 ${n}안` }, scenes[1]]) }),
+  }));
+  assert.equal((await fixture({ variant, candidates: candidates((rows) => rows) }).execute(cmd)).status, 'generated');
+  for (const change of [
+    (rows) => [{ ...rows[0], duration: 600 }, rows[1]],
+    (rows) => [{ ...rows[0], id: 'changed-id' }, rows[1]],
+    (rows) => [rows[0], { ...rows[1], spoken: '바뀐 본문' }],
+  ]) {
+    assert.equal((await fixture({ variant, candidates: candidates(change) }).execute(cmd)).error, 'invalid-provider-output');
+  }
+  const reordered = candidates((rows) => rows.map((row) => Object.fromEntries(Object.entries(row).reverse())));
+  assert.equal((await fixture({ variant, candidates: reordered }).execute(cmd)).status, 'generated', 'JSON key order does not change scene content');
+});

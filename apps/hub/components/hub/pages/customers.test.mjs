@@ -150,7 +150,9 @@ test("record mode swaps the same drawer to the shared capture form (one overlay)
 test("a persisted contact replaces its optimistic timeline ID so delete reaches the saved row", () => {
   const form = customersSource.slice(customersSource.indexOf("<ContactRecordForm"));
   assert.match(form, /onSummaryPersisted=\{\(\{\s*activityId,\s*optimisticId\s*\}\)/);
-  assert.match(form, /a\.id === optimisticId \? \{ \.\.\.a, id: activityId \} : a/);
+  // 서버 ID로 바꾸면서 "기록 중"도 푼다 — ID를 못 받았으면 낙관 ID를 둔 채 다시 읽는다.
+  assert.match(form, /a\.id === optimisticId \? \{ \.\.\.a, id: activityId \|\| a\.id, pending: false \} : a/);
+  assert.match(form, /if \(!activityId\) reload\(\);/);
 });
 
 test("the record stream merges activities with linked memos and keeps local rows undeletable", () => {
@@ -239,6 +241,7 @@ const leadLabels = await import("../../../lib/sales-os/lead-labels.js");
 const customerLabels = await import("../../../lib/sales-os/customer-labels.js");
 const deleteContract = await import("../../../lib/sales-os/customer-delete-contract.js");
 const followupScoring = await import("../../../lib/sales-os/followup-scoring.js");
+const contactRecord = await import("../../../lib/sales-os/contact-record.js");
 const uuid = await import("../../../lib/uuid.js");
 const workspaceMap = await import("../workspace-map.js");
 const { guidanceRequest } = await import("../guidance-advice-client.js");
@@ -307,6 +310,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     LEAD_SUBJECTS: leadLabels.LEAD_SUBJECTS, subjectLabels: leadLabels.subjectLabels,
     ...customerLabels,
     REACTION_LABEL: followupScoring.REACTION_LABEL,
+    recordSaveLabel: contactRecord.recordSaveLabel,
     adviceScopeForRecord,
     useGuruRecommendations: ({ enabled } = {}) => ({ status: enabled ? "live" : "idle", recommendations: enabled ? guruRecommendations : [], reload() {} }),
     recommendationForSubject,
@@ -319,7 +323,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     useCrmNudges: () => ({ status: "preview", nudges: [], unrecordedMeetings: [], failedSources: [], busyKey: null, suppress: async () => ({ ok: true }), refresh() {} }),
   };
   for (const name of HOST_COMPONENTS) deps[name] = name;
-  const { Customers } = new Function(...Object.keys(deps), `${pageJs}; return { Customers };`)(...Object.values(deps));
+  const { Customers, ActivityTimeline } = new Function(...Object.keys(deps), `${pageJs}; return { Customers, ActivityTimeline };`)(...Object.values(deps));
 
   const call = (fn, props, at) => {
     const saved = [path, index];
@@ -354,7 +358,9 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     return text(node.props?.children || []);
   };
   render();
-  return { render, findAll, text, saves };
+  // 기록 타임라인은 활동 읽기(effect)가 끝나야 드로어에 보인다 — 그리기 계약은 따로 세워 본다.
+  const renderTimeline = (props) => expand({ type: ActivityTimeline, props }, "timeline");
+  return { render, findAll, text, saves, renderTimeline };
 }
 
 const dayKey = (offset) => helpers.addDaysKey(new Date(), offset);
@@ -434,6 +440,31 @@ test("render: opening a row shows the promise first and one primary record actio
   assert.equal(form.props.draft.summary, "견적서 보내기");
   assert.equal(app.findAll((n) => n.type === "Drawer").length, 1);
   assert.equal(app.findAll((n) => n.type === "Drawer")[0].props.title, "연락 기록");
+});
+
+test("render: an unacknowledged record row says 기록 중 until the server confirms it", () => {
+  const app = mountCustomers();
+  const today = new Date();
+  const row = { id: "local-1", source: "activity", type: "call", msg: "견적 검토 통화", reaction: "positive", at: "방금", occurredAt: today.toISOString() };
+  const deleteButtons = (tree) => app.findAll((n) => n.type === "IconButton" && n.props["aria-label"] === "기록 삭제", tree);
+
+  // 저장을 눌렀지만 서버가 아직 답하지 않았다 — 되돌리기 창이거나 답을 기다리는 중이다.
+  const pending = app.renderTimeline({ rows: [{ ...row, pending: true }], today, onDeleteActivity() {} });
+  assert.match(app.text(pending), /견적 검토 통화.*통화.*긍정.*기록 중$/);
+  assert.doesNotMatch(app.text(pending), /오늘|방금|기록됨|저장됨/, "확인되지 않은 기록에 시각·완료 문구를 달지 않는다");
+  assert.equal(deleteButtons(pending).length, 0);
+
+  // 서버가 저장을 확인하면 시각으로 돌아오고 삭제할 수 있게 된다.
+  const saved = app.renderTimeline({ rows: [{ ...row, id: "99999999-9999-4999-8999-999999999999", pending: false }], today, onDeleteActivity() {} });
+  assert.match(app.text(saved), /긍정오늘$/);
+  assert.doesNotMatch(app.text(saved), /기록 중/);
+  assert.equal(deleteButtons(saved).length, 1);
+
+  // 낙관 행은 폼이 저장을 누른 순간 pending으로 들어오고, 빠른 메모는 요청이 나갈 때만 pending이다.
+  const drawer = slice("function Customer360Drawer", "// ── 새 고객 등록");
+  assert.match(drawer, /onSaved=\{\(o\) => \{[\s\S]*?occurredAt: new Date\(\)\.toISOString\(\), pending: true \},/);
+  assert.match(drawer, /const temp = \{ id: `local-\$\{Date\.now\(\)\}`, type, msg: body, at: "방금", pending: Boolean\(row\.id\) \};/);
+  assert.match(drawer, /a\.id === temp\.id \? \{ \.\.\.a, id: r\.id, pending: false \} : a/);
 });
 
 test("render: a stored-fact recommendation takes the rotating card's place and asks through this drawer's own question", () => {

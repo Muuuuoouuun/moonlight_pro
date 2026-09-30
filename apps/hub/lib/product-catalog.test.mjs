@@ -282,3 +282,12 @@ test("saveWork: a failed inquiry link keeps the created work id, and the retry l
   const plain = await saveWork({ createWork: async () => ({ ok: true, status: "saved", entity: null }), linkInquiry: async () => { throw new Error("must not link"); } }, { product, draft, seed: undefined, id: "w4" });
   assert.deepEqual(plain, { ok: true, createdId: "w4" });
 });
+
+test("focus cap rejection names the products holding the three slots", async () => {
+  const { productErrorText } = await import("./product-catalog.js");
+  const text = productErrorText("focus-cap-reached", { limit: 3, focus: [{ name: "가" }, { name: "나" }, { name: "다" }] });
+  assert.match(text, /동시에 3개까지/);
+  assert.match(text, /가 · 나 · 다/);
+  assert.match(text, /유지·종료로 내린 뒤/);
+  assert.doesNotMatch(productErrorText("focus-cap-reached"), /지금:/, "이름을 모르면 목록을 지어내지 않는다");
+});
