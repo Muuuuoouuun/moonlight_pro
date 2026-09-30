@@ -254,7 +254,8 @@ test("focus cap: a fourth product cannot enter MVP·출시·성장 (2026-09-30 �
   ];
   const current = { id: PRODUCT, name: "OMR", stage: "validation", ops_status: "dev", version: 1, updated_at: "2026-09-24T00:00:00Z", details: {}, stage_history: [] };
   const { deps, calls } = fakeDeps({
-    products: (options) => (options?.select === "id,name,stage,ops_status" ? [...focus, current] : [current]),
+    products: (options) => (options?.select === "id,name,stage,ops_status" ? [...focus, current]
+      : options?.filters?.some(([key, value]) => key === "id" && value === `eq.${PRODUCT}`) ? [current] : []),
   });
 
   const blocked = await executeProductCommand({ action: "update_product", id: PRODUCT, stage: "mvp" }, ctx, deps);
@@ -296,4 +297,53 @@ test("focus cap never blocks products already inside, or after one leaves", asyn
   const revived = await executeProductCommand({ action: "update_product", id: PRODUCT, opsStatus: "live" }, ctx, revive.deps);
   assert.equal(revived.error, undefined);
   assert.equal(revived.status, "saved", "종료한 제품은 칸을 차지하지 않으므로 3번째 칸이 빈다");
+});
+
+test("create_product replay confirms the stored receipt before a full or unavailable focus read", async () => {
+  const input = { action: "create_product", id: PRODUCT, name: "OMR", summary: "채점", orgScope: "personal", stage: "mvp" };
+  // The original product has since left focus and three other products filled its slot.
+  const stored = { id: PRODUCT, workspace_id: WS, name: input.name, summary: input.summary, org_scope: input.orgScope, stage: "maintain", ops_status: "live" };
+  const focus = [1, 2, 3].map((n) => ({ id: `other-${n}`, name: `집중 ${n}`, stage: "mvp", ops_status: "dev" }));
+  for (const focusRows of [focus, null]) {
+    let focusReads = 0;
+    const { deps, calls } = fakeDeps({
+      products: (options) => {
+        if (options?.select === "id,name,stage,ops_status") { focusReads += 1; return focusRows; }
+        assert.deepEqual(options.filters, [["id", `eq.${PRODUCT}`], ["workspace_id", `eq.${WS}`]]);
+        return [stored];
+      },
+      insertResult: () => ({ persisted: false, reason: "duplicate" }),
+    });
+    const result = await executeProductCommand(input, ctx, deps);
+    assert.deepEqual(result, { status: "duplicate", action: input.action, entity: stored });
+    assert.equal(focusReads, 0, "a receipt replay never enters focus again");
+    assert.equal(calls.insert.length, 0);
+  }
+});
+
+test("create_product ID reuse retains its payload conflict without checking focus or writing", async () => {
+  const stored = { id: PRODUCT, name: "OMR", summary: "채점", org_scope: "personal", stage: "mvp", ops_status: "dev" };
+  const { deps, calls } = fakeDeps({
+    products: (options) => {
+      assert.notEqual(options?.select, "id,name,stage,ops_status", "ID reuse is not a new focus entry");
+      return [stored];
+    },
+    insertResult: () => ({ persisted: false, reason: "duplicate" }),
+  });
+  const result = await executeProductCommand({ action: "create_product", id: PRODUCT, name: "다른 제품", summary: stored.summary, orgScope: "personal", stage: "mvp" }, ctx, deps);
+  assert.deepEqual(result, { status: "conflict", action: "create_product", error: "id-reuse-payload-mismatch", retryable: false, entity: stored });
+  assert.equal(calls.insert.length, 0);
+});
+
+test("create_product does not insert when its ID lookup or a new focus check fails", async () => {
+  const input = { action: "create_product", id: PRODUCT, name: "OMR", summary: "채점", orgScope: "personal", stage: "mvp" };
+  const unreadable = fakeDeps({ products: () => null });
+  const idFailure = await executeProductCommand(input, ctx, unreadable.deps);
+  assert.equal(idFailure.error, "current-entity-read-failed");
+  assert.equal(unreadable.calls.insert.length, 0);
+
+  const newProduct = fakeDeps({ products: (options) => options?.select === "id,name,stage,ops_status" ? null : [] });
+  const focusFailure = await executeProductCommand(input, ctx, newProduct.deps);
+  assert.equal(focusFailure.error, "focus-check-failed");
+  assert.equal(newProduct.calls.insert.length, 0);
 });

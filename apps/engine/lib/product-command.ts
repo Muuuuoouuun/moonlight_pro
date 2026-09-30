@@ -509,9 +509,22 @@ export async function executeProductCommand(input: Row, context: Context, deps: 
       if (products === null) return { status: "error", error: "relationship-check-failed" };
       if (!products[0]) return { status: "invalid-input", error: "invalid-product-reference" };
     }
-    if (command.table === "products" && inFocus(command.record.stage, command.record.ops_status)) {
-      const rejection = await focusCapRejection(command.action, String(command.record.id), workspaceId, deps);
-      if (rejection) return rejection;
+    if (command.table === "products") {
+      // 이미 저장된 생성 요청의 재전송은 새 집중 진입이 아니다 — 상한 조회보다 영수증을 먼저 확인한다.
+      const byId = await deps.fetchRows("products", {
+        filters: [["id", `eq.${command.record.id}`], ["workspace_id", `eq.${workspaceId}`]],
+        limit: 1,
+      });
+      if (byId === null) return { status: "error", error: "current-entity-read-failed" };
+      if (byId[0]) {
+        return canonicalCreate(command.action, byId[0]) === canonicalCreate(command.action, command.record)
+          ? { status: "duplicate", action: command.action, entity: byId[0] }
+          : { status: "conflict", action: command.action, error: "id-reuse-payload-mismatch", retryable: false, entity: byId[0] };
+      }
+      if (inFocus(command.record.stage, command.record.ops_status)) {
+        const rejection = await focusCapRejection(command.action, String(command.record.id), workspaceId, deps);
+        if (rejection) return rejection;
+      }
     }
     const persistence = await deps.insert(command.table, command.record);
     if (persistence.persisted) return { status: "saved", action: command.action, entity: persistence.record || command.record };
