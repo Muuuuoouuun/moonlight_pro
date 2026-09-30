@@ -141,3 +141,55 @@ export function applyContactExtraction(form = {}, extracted = {}) {
   else if (extracted.nextAt) { next.followup = "dated"; next.at = extracted.nextAt; filled++; }
   return { form: next, filled };
 }
+
+// 저장 표시 글자 — 서버가 saved로 답하기 전에는 끝난 말(기록됨·저장됨·완료)을 쓰지 않는다
+// (DESIGN.md §8.1 Save envelope). 확인 문구("기록됨 · 이름")는 onPersisted를 받은 호출처가 띄운다.
+//   pending — 되돌리기 창(3.5초). 요청이 아직 나가지 않았다.
+//   sending — 요청을 보냈고 서버의 답을 기다린다. 되돌릴 수 없다.
+const RECORD_SAVE_LABELS = { pending: "기록 중", sending: "저장 중" };
+
+export function recordSaveLabel(phase) {
+  return RECORD_SAVE_LABELS[phase] || "";
+}
+
+// 저장 줄에 무엇을 보일지 — 두 가지는 서로 다른 말이라 한 문장으로 잇지 않는다.
+//   progress — 앞서 누른 저장의 진행. 되돌리기 창이면 "기록 중" + 되돌리기, 보낸 뒤면 되돌리기
+//              없는 "저장 중"(죽은 버튼을 두지 않는다). 서버가 답하면 사라진다.
+//   note     — 지금 쓰는 폼에 대한 말 하나: 빠진 항목 > 빈 약속 경고 > 실패 원인 > 쉬는 초안 글자.
+//              초안 글자는 진행 중인 저장이 없을 때만 — 방금 비운 폼에 초안이 있다고 하지 않는다.
+// 앞선 저장이 가는 동안 다음 기록을 쓰다 경고를 만나면 둘 다 보인다(각자 자기 줄에).
+export function recordSaveLine({ pending = null, showMissing = false, state = "idle", warnCopy = "", errorMsg = "", draftHint = "" } = {}) {
+  const label = recordSaveLabel(pending?.phase);
+  const progress = label ? { label, canUndo: pending.phase === "pending" } : null;
+  let note = null;
+  if (showMissing) note = { tone: "missing", text: "위 필수 항목을 채우면 저장됩니다." };
+  else if (state === "warn") note = { tone: "warn", text: warnCopy };
+  else if (state === "error") note = { tone: "error", text: errorMsg };
+  else if (!progress && draftHint) note = { tone: "hint", text: draftHint };
+  return { progress, note };
+}
+
+// 초안이 놓인 곳을 그대로 말한다 — 연락 기록 초안은 서버에 없고, 어디까지 살아남는지는 곳마다 다르다.
+//   tab    — sessionStorage. 같은 탭에서만 살고(새로고침은 견딘다) 탭을 닫으면 사라진다.
+//   memory — 저장소가 막힌 창(사생활 보호 등)의 메모리 사본. 새로고침하면 사라진다.
+// "이 기기"(localStorage)는 아직 약속하지 않는다(Q-CR4 결정 전) — 모르는 곳은 빈 문자열이다.
+const DRAFT_PLACE_LABELS = { tab: "초안 · 이 탭", memory: "초안 · 새로고침 전까지" };
+
+export function draftPlaceLabel(place) {
+  return DRAFT_PLACE_LABELS[place] || "";
+}
+
+// 다시 연 기록창이 되살린 초안 — 어디 것을 불러왔는지 함께 말한다.
+export function draftRestoredCopy(place) {
+  const label = draftPlaceLabel(place);
+  return label ? `${label} · 쓰던 내용을 불러왔어요` : "쓰던 내용을 불러왔어요";
+}
+
+// 저장 줄의 쉬는 글자. 아직 쓴 게 없으면 "어디에 남는지"를, 쓰기 시작했으면 "어디에 있고
+// 서버에는 없다"를 말한다. 초안을 둘 곳이 없으면(저장된 고객이 아님) 아무 약속도 하지 않는다.
+export function draftHintCopy(place, { dirty = false } = {}) {
+  const label = draftPlaceLabel(place);
+  if (!label) return "";
+  if (dirty) return `${label} · 서버에는 아직 없어요`;
+  return place === "tab" ? "닫아도 이 탭에 초안으로 남아요" : "닫아도 초안으로 남아요 · 새로고침하면 사라져요";
+}

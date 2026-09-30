@@ -31,9 +31,13 @@ import {
   buildContactRecordPayload,
   buildRawNoteWrite,
   channelLabel,
+  draftHintCopy,
+  draftRestoredCopy,
   reactionRequired,
+  recordSaveLine,
   validateContactRecord,
 } from "@/lib/sales-os/contact-record";
+import { createRecordDraftStore, openRecordDraft } from "@/lib/sales-os/contact-record-draft";
 
 const EMPTY_FORM = {
   kind: "call",
@@ -103,8 +107,11 @@ const RAW_NOTE_ERROR = "요약은 저장됐지만 원문은 저장하지 못했�
 
 // 쓰던 입력 — 닫아도 같은 탭에서 되살린다(스펙 §4.3 신뢰 계약 ②, 키 crm-record:<종류>:<id>).
 // sessionStorage가 막힌 창(사생활 보호 등)에서는 이 앱이 열려 있는 동안만 기억한다.
+// 읽기·쓰기는 초안이 실제로 놓인 곳("tab" | "memory")을 돌려주고, 화면은 그 곳을 그대로 말한다
+// (draftHintCopy) — 메모리 사본뿐인데 "이 탭"이라고 하지 않는다. 저장소 규칙은
+// lib/sales-os/contact-record-draft.js가 소유한다(막힌 창·중간에 막히는 창을 시험으로 고정).
 const DRAFT_FIELDS = ["kind", "reaction", "replied", "summary", "body", "nextAction", "at", "followup"];
-const draftMemory = new Map();
+export const recordDraftStore = createRecordDraftStore(() => window.sessionStorage);
 const draftKey = (target) => `crm-record:${target?.kind || "lead"}:${target?.id || ""}`;
 
 function pickDraft(form) {
@@ -115,40 +122,10 @@ function sameDraft(a, b) {
   return DRAFT_FIELDS.every((key) => (a?.[key] ?? EMPTY_FORM[key]) === (b?.[key] ?? EMPTY_FORM[key]));
 }
 
-function readDraft(target) {
-  if (!target?.id) return null;
-  const key = draftKey(target);
-  try {
-    const raw = window.sessionStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    /* 저장소가 막혀도 메모리 사본으로 계속한다 */
-  }
-  return draftMemory.get(key) || null;
-}
-
-function writeDraft(target, form) {
-  if (!target?.id) return;
-  const key = draftKey(target);
-  const value = pickDraft(form);
-  draftMemory.set(key, value);
-  try {
-    window.sessionStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* 메모리 사본이 남는다 */
-  }
-}
-
-function clearDraft(target) {
-  if (!target?.id) return;
-  const key = draftKey(target);
-  draftMemory.delete(key);
-  try {
-    window.sessionStorage.removeItem(key);
-  } catch {
-    /* 무시 — 메모리 사본은 이미 지웠다 */
-  }
-}
+// 저장된 고객이 아니면(id 없음) 초안 키가 없다 — 아무것도 두지 않고 어디에도 남는다고 말하지 않는다.
+const readDraft = (target) => (target?.id ? recordDraftStore.read(draftKey(target)) : null);
+const writeDraft = (target, form) => (target?.id ? recordDraftStore.write(draftKey(target), pickDraft(form)) : null);
+const clearDraft = (target) => { if (target?.id) recordDraftStore.clear(draftKey(target)); };
 
 // 토스트 되돌리기(undoMode="toast")의 지연 저장. 시트는 저장을 누르는 즉시 닫히므로 폼의
 // 언마운트 flush(useUndoableAction)에 기대면 되돌리기 창이 사라진다 — 모듈 스코프 타이머로
@@ -283,21 +260,57 @@ ${raw}
   );
 }
 
+// 저장 줄의 글자 자리 — 무엇을 보일지는 recordSaveLine(순수)이 정하고 여기는 그리기만 한다.
+// 앞선 저장의 진행과 지금 폼에 대한 말은 각자 자기 줄에 선다(한 문장으로 잇지 않는다).
+const SAVE_NOTE_TONE = {
+  missing: { role: "alert", color: "var(--fg-muted)" },
+  warn: { role: "status", color: "var(--fg-muted)" },
+  error: { role: "alert", color: "var(--danger)" },
+  hint: { role: undefined, color: "var(--fg-dim)" },
+};
+
+export function RecordSaveLine({ line, onUndo }) {
+  const { progress, note } = line || {};
+  const tone = SAVE_NOTE_TONE[note?.tone] || SAVE_NOTE_TONE.hint;
+  return (
+    <div style={{ flex: "1 1 200px", minWidth: 0, fontSize: 12, lineHeight: 1.45, minHeight: 18, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+      {progress && (
+        <span role="status" aria-live="polite" style={{ color: "var(--fg-muted)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          {progress.label}
+          {progress.canUndo && onUndo && <Button variant="ghost" size="xs" onClick={onUndo}>되돌리기</Button>}
+        </span>
+      )}
+      {note?.text && <span role={tone.role} style={{ color: tone.color }}>{note.text}</span>}
+    </div>
+  );
+}
+
 // onSummaryPersisted: 연락 요약 RPC가 저장된 즉시 불린다 — 낙관 행을 서버 ID로 바꾼다.
 // onPersisted: 선택 원문까지 저장되거나 운영자가 건너뛴 뒤 불린다 — "기록됨" 확인은 여기서 띄운다.
 // onFailed({ optimisticId, message, form }): 늦은 실패. 폼이 이미 언마운트됐을 수 있으므로
 // (드로어를 닫았거나 언마운트 flush) 부모가 표시를 되돌리고 입력을 되살릴 책임을 진다.
 // draft·initialError: 실패 뒤 다시 연 기록창이 입력과 원인을 그대로 보여 주게 한다. draft는
-// 첫 상태에만 쓰고 저장 뒤 초기화는 preset 기준이다.
+// 첫 상태에만 쓰고 저장 뒤 초기화는 preset 기준이다. initialError 없이 넘긴 draft는 호출처가
+// 미리 채운 씨앗이다 — 같은 고객에 쓰던 초안이 있으면 초안이 이기고 씨앗은 빈 칸만 채운다.
 // 모든 콜백은 두 번째 인자로 target을 받는다(선택) — 고른 고객으로 연 기록창에서도 부모가 누구의
 // 기록인지 안다. undoMode="toast"면 저장을 누르는 즉시 창을 닫고 되돌리기를 토스트로 준다.
 export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onSummaryPersisted, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "", undoMode = "inline" }) {
   const toast = useToast();
   const { form: presetForm, capture } = React.useMemo(() => splitPreset(preset), [preset]);
   const [recoveredRawNote] = React.useState(() => rawNoteRecoveries.get(rawNoteKey(target)) || null);
-  // 쓰던 입력 — 호출처가 draft를 넘기지 않았을 때만 되살린다(실패 뒤 다시 연 창은 그 draft가 이긴다).
-  const [storedDraft, setStoredDraft] = React.useState(() => (draft || recoveredRawNote ? null : readDraft(target)));
-  const [form, setForm] = React.useState(() => ({ ...baseForm(presetForm), ...(storedDraft || {}), ...(draft || {}), ...(recoveredRawNote ? { body: recoveredRawNote.body } : {}) }));
+  // 쓰던 입력 — 실패 뒤 다시 연 창(draft + initialError)은 그 입력이 이긴다. 그 밖의 draft는
+  // 호출처가 미리 채운 씨앗(했어요 · 기록의 약속 문구)이라, 쓰던 초안이 있으면 초안이 이긴다.
+  const [opening] = React.useState(() => {
+    const failed = Boolean(draft && initialError);
+    const found = failed || recoveredRawNote ? null : readDraft(target);
+    return { place: found?.place || null, ...openRecordDraft({ stored: found?.value || null, draft, failed }) };
+  });
+  const [storedDraft, setStoredDraft] = React.useState(opening.restored ? opening.values : null);
+  // 초안이 놓이는 곳 — 저장된 고객이 아니면(id 없음) 초안을 두지 않으므로 아무 말도 하지 않는다.
+  const [draftPlace, setDraftPlace] = React.useState(() => (target?.id ? opening.place || recordDraftStore.probe() : null));
+  const [form, setForm] = React.useState(() => ({ ...baseForm(presetForm), ...(opening.values || {}), ...(recoveredRawNote ? { body: recoveredRawNote.body } : {}) }));
+  // 씨앗만 얹은 첫 폼 — 운영자가 쓴 글이 아니므로 그대로면 초안으로 두지 않는다.
+  const [seedForm] = React.useState(() => (opening.seeded ? form : null));
   const [state, setState] = React.useState(initialError || recoveredRawNote ? "error" : "idle"); // idle | warn | error
   const [errorMsg, setErrorMsg] = React.useState(recoveredRawNote ? RAW_NOTE_ERROR : initialError || "");
   // 저장할 때마다 올린다 — AI 채우기 상자(자식 상태)를 새 기록에 맞게 비운다.
@@ -330,13 +343,17 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     if (autoFocus && startedAtRef.current == null) startedAtRef.current = Date.now();
   }, [autoFocus]);
 
-  // 쓰던 입력을 탭 안에 남긴다 — 프리셋 그대로면(아무것도 안 썼으면) 남기지 않는다.
+  // 쓰던 입력을 탭 안에 남긴다 — 프리셋(또는 미리 채운 씨앗) 그대로면(아무것도 안 썼으면) 남기지 않는다.
   // 저장한 입력은 reset()이 프리셋으로 되돌리므로 여기서 지워진다(되살아나 두 번 저장되지 않게).
+  const untouched = sameDraft(form, baseForm(presetForm)) || Boolean(seedForm && sameDraft(form, seedForm));
   const targetDraftKey = draftKey(target);
   React.useEffect(() => {
     if (pendingRawNote) return;
-    if (sameDraft(form, baseForm(presetForm))) clearDraft(target);
-    else writeDraft(target, form);
+    if (untouched) clearDraft(target);
+    else {
+      const place = writeDraft(target, form);
+      if (place) setDraftPlace(place);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- target은 키로만 비교한다(호출처가 매 렌더 새 객체를 넘긴다)
   }, [form, presetForm, targetDraftKey, pendingRawNote]);
 
@@ -593,14 +610,21 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
 
     reset();
     scheduleUndoable(key, () => {
-      setPendingUndo((cur) => (cur?.key === key ? null : cur)); // 창 닫힘 — 죽은 버튼 방지
+      // 되돌리기 창이 닫혔다 — 이제야 요청이 나간다. 답이 올 때까지는 "저장 중"이고
+      // 되돌리기 버튼은 없다(죽은 버튼 방지).
+      setPendingUndo((cur) => (cur?.key === key ? { key, phase: "sending", undo: null } : cur));
       // 저장이 확인된 뒤에만 닫는다 — 먼저 닫으면 늦은 실패의 입력 복원·원인 표시가
       // 사라진 컴포넌트에서 일어나 운영자에게 보이지 않는다.
-      persist(payload, snapshot).then((ok) => { if (ok) onDone?.(); });
+      persist(payload, snapshot).then((ok) => {
+        setPendingUndo((cur) => (cur?.key === key ? null : cur));
+        if (ok) onDone?.();
+      });
     });
+    // 문구는 "기록 중"이다 — 이 3.5초 동안은 아무것도 보내지 않았다. "기록됨"은 서버가 saved로
+    // 답한 뒤 호출처(onPersisted)가 말한다(Save envelope, 토스트 모드와 같은 말).
     setPendingUndo({
       key,
-      label: "기록됨",
+      phase: "pending",
       undo: () => {
         // 되돌리기는 진짜 취소다 — 창이 열려 있는 동안은 네트워크가 나가지 않았다.
         if (cancelUndoable(key)) {
@@ -636,13 +660,23 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   const warnCopy = dateOnlyPromise
     ? "무엇을 할지 비어 있어요 — 한 번 더 누르면 날짜만 약속으로 저장돼요."
     : "다음 약속이 비어 있어요 — 한 번 더 누르면 '기약 없음'으로 저장돼요.";
+  // 초안은 운영자가 쓰기 시작한 순간부터 놓인다(위 effect) — 그 전에는 "어디에 남을지"만 말한다.
+  // 쉬는 글자는 기록창으로 연 폼(autoFocus)만 보인다.
+  const saveLine = recordSaveLine({
+    pending: pendingUndo,
+    showMissing,
+    state,
+    warnCopy,
+    errorMsg,
+    draftHint: autoFocus ? draftHintCopy(draftPlace, { dirty: !untouched }) : "",
+  });
 
   return (
     <div onKeyDown={onKeyDown} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {storedDraft && (
         <div role="status" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--fg-muted)" }}>
           <Iconed name="edit" size={12} />
-          <span style={{ flex: 1 }}>쓰던 내용을 불러왔어요</span>
+          <span style={{ flex: 1 }}>{draftRestoredCopy(draftPlace)}</span>
           <Button variant="ghost" size="xs" onClick={() => { clearDraft(target); reset(); }}>지우기</Button>
         </div>
       )}
@@ -752,24 +786,10 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
         )}
       </div>
 
-      {/* 메시지 줄은 높이를 예약한다 — 경고가 나타날 때 저장 버튼이 튀면 오조작난다. */}
+      {/* 메시지 줄은 높이를 예약한다 — 경고가 나타날 때 저장 버튼이 튀면 오조작난다.
+          앞선 저장의 진행과 지금 폼에 대한 말이 겹칠 때만 두 줄이 된다(RecordSaveLine). */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", borderTop: "1px solid var(--line-soft)", paddingTop: 15 }}>
-        <div style={{ flex: "1 1 200px", minWidth: 0, fontSize: 12, lineHeight: 1.45, minHeight: 18 }}>
-          {showMissing && <span role="alert" style={{ color: "var(--fg-muted)" }}>위 필수 항목을 채우면 저장됩니다.</span>}
-          {!showMissing && state === "warn" && (
-            <span role="status" style={{ color: "var(--fg-muted)" }}>{warnCopy}</span>
-          )}
-          {!showMissing && state === "error" && <span role="alert" style={{ color: "var(--danger)" }}>{errorMsg}</span>}
-          {pendingUndo && (
-            <span role="status" aria-live="polite" style={{ color: "var(--fg-muted)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {pendingUndo.label}
-              <Button variant="ghost" size="xs" onClick={pendingUndo.undo}>되돌리기</Button>
-            </span>
-          )}
-          {!showMissing && state === "idle" && !pendingUndo && autoFocus && (
-            <span style={{ color: "var(--fg-dim)" }}>입력은 닫아도 남아요</span>
-          )}
-        </div>
+        <RecordSaveLine line={saveLine} onUndo={pendingUndo?.undo} />
         {/* 비활성 대신 항상 눌린다 — 왜 안 되는지 말하지 않는 죽은 버튼을 두지 않는다. */}
         {pendingRawNote && <Button variant="ghost" size="xs" onClick={skipRawNote} disabled={rawNoteSaving}>원문 저장 건너뛰기</Button>}
         <Button variant="primary" size="sm" disabled={rawNoteSaving} onClick={primaryAction}>
