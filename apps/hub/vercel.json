@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["icn1"],
   "crons": [
     { "path": "/api/cron/recompute-scores", "schedule": "0 15 * * *" },
     { "path": "/api/cron/inquiries-sync", "schedule": "0 21 * * *" },
