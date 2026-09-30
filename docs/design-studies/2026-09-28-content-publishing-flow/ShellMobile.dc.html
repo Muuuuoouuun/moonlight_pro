@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>원고 작성 — 폰</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'SUIT Variable','IBM Plex Sans KR',system-ui,sans-serif;color:#1E2228;background:#F7F8FA}
+button{cursor:pointer}
+button:focus-visible{outline:1px solid #5274A8;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #F7F8FA; font-family: 'SUIT Variable', 'IBM Plex Sans KR', system-ui, sans-serif; color: #1E2228; position: relative; overflow: hidden;">
+
+  <div style="padding: 14px 16px 10px; background: #FFFFFF; border-bottom: 1px solid #E9ECEF; display: flex; flex-direction: column; gap: 10px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 500;">원고 작성</h2>
+      <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #545C66;"><span>저장됨</span><button type="button" aria-label="더보기" style="width: 44px; height: 44px; border: none; background: transparent; font-size: 18px; color: #545C66;">···</button></div>
+    </div>
+    <div role="tablist" aria-label="형식" style="display: flex; gap: 4px; padding: 3px; background: #EEF0F3; border-radius: 10px; overflow-x: auto;">
+      <button type="button" role="tab" aria-selected="true" style="flex-shrink: 0; height: 44px; padding: 0 14px; border-radius: 8px; border: none; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px rgba(20,24,30,0.08);">스레드</button>
+      <button type="button" role="tab" aria-selected="false" style="flex-shrink: 0; height: 44px; padding: 0 14px; border-radius: 8px; border: none; background: transparent; font: inherit; font-size: 13px; color: #545C66;">카드뉴스</button>
+      <button type="button" role="tab" aria-selected="false" style="flex-shrink: 0; height: 44px; padding: 0 14px; border-radius: 8px; border: none; background: transparent; font: inherit; font-size: 13px; color: #545C66;">유튜브</button>
+      <button type="button" role="tab" aria-selected="false" style="flex-shrink: 0; height: 44px; padding: 0 14px; border-radius: 8px; border: none; background: transparent; font: inherit; font-size: 13px; color: #545C66;">카피</button>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-size: 17px; font-weight: 500;">복습이 안 되는 진짜 이유</div>
+    <div style="min-height: 44px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #737C86;"><span>›</span><span>원문 메모</span><span style="margin-left: auto;">있음</span></div>
+
+    <div style="background: #FFFFFF; border: 1px solid #E9ECEF; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; font-size: 15px; line-height: 1.75;">
+      <div style="display: flex; gap: 10px;"><span style="flex-shrink: 0; width: 22px; height: 22px; border: 1px solid #DCE0E5; border-radius: 50%; font-size: 11.5px; color: #737C86; display: flex; align-items: center; justify-content: center;">1</span><span>복습이 어려운 이유는 의지가 아니라 시작점이 없어서다.</span></div>
+      <div style="display: flex; gap: 10px;"><span style="flex-shrink: 0; width: 22px; height: 22px; border: 1px solid #DCE0E5; border-radius: 50%; font-size: 11.5px; color: #737C86; display: flex; align-items: center; justify-content: center;">2</span><span>오늘 수업이 끝나고 한 학생이 물었다. "어디서부터 다시 봐야 해요?"</span></div>
+      <div style="display: flex; gap: 10px;"><span style="flex-shrink: 0; width: 22px; height: 22px; border: 1px solid #DCE0E5; border-radius: 50%; font-size: 11.5px; color: #737C86; display: flex; align-items: center; justify-content: center;">3</span><span>그래서 수업 마지막 3분을 '다음에 볼 한 줄'을 정하는 시간으로 바꿨다.</span></div>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #737C86;"><span>블록 3개</span><span style="font-family: 'JetBrains Mono', monospace;">142자</span></div>
+
+    <div style="display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; color: #545C66;"><span>›</span><span>AI 요청 · 템플릿</span><span style="margin-left: auto; padding: 2px 8px; border-radius: 999px; background: #F1F3F6; font-size: 12px;">후킹 스레드</span></div>
+    <div style="display: flex; gap: 8px; overflow-x: auto;">
+      <button type="button" style="flex-shrink: 0; height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 5 5 1.5-5 1.5L12 16l-1.5-5-5-1.5 5-1.5z"></path></svg>AI 초안</button>
+      <button type="button" style="flex-shrink: 0; height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 5 5 1.5-5 1.5L12 16l-1.5-5-5-1.5 5-1.5z"></path></svg>AI 다듬기</button>
+      <button type="button" style="flex-shrink: 0; height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 5 5 1.5-5 1.5L12 16l-1.5-5-5-1.5 5-1.5z"></path></svg>첫 줄 3안</button>
+    </div>
+  </div>
+
+  <div style="padding: 10px 16px 20px; background: #FFFFFF; border-top: 1px solid #E9ECEF; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center;">
+    <button type="button" style="height: 48px; border-radius: 8px; border: 1px solid #1E2228; background: #1E2228; color: #FFFFFF; font: inherit; font-size: 15px; font-weight: 500;">복사</button>
+    <button type="button" aria-label="예약" style="height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 14px; display: inline-flex; align-items: center; gap: 6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>예약</button>
+    <button type="button" style="height: 48px; padding: 0 14px; border-radius: 8px; border: 1px solid #DCE0E5; background: #FFFFFF; font: inherit; font-size: 14px;">발행했음</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
