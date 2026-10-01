@@ -600,6 +600,38 @@ export async function createOrUpdateGoogleCalendarEvent({
   };
 }
 
+// 잡아 둔 일 취소(확인할 것 스펙 §4.7) — OAuth로 연결된 캘린더(유일한 쓰기 대상)에서 일정 하나를 지운다.
+// 이미 지워진 일정(404·410)은 지운 것으로 본다 — 같은 취소를 다시 눌러도 실패로 보이지 않게.
+export async function deleteGoogleCalendarEvent({
+  workspaceId = resolveDefaultWorkspaceId(),
+  calendarId,
+  eventId,
+}) {
+  if (!eventId) return { ok: false, reason: "missing-event-id" };
+  const access = await ensureGoogleCalendarAccess({ workspaceId, calendarId });
+  if (!access.ok) return { ok: false, reason: access.reason, connection: access.connection };
+
+  const endpoint = `${GOOGLE_CALENDAR_API_BASE}/calendars/${encodeURIComponent(access.calendarId)}/events/${encodeURIComponent(eventId)}`;
+  const response = await fetch(endpoint, {
+    method: "DELETE",
+    signal: AbortSignal.timeout(8000),
+    headers: { authorization: `Bearer ${access.accessToken}` },
+    cache: "no-store",
+  });
+  if (!response.ok && response.status !== 404 && response.status !== 410) {
+    const detail = await response.text().catch(() => "");
+    return { ok: false, reason: detail || `google-delete-${response.status}`, connection: access.connection };
+  }
+
+  await recordGoogleCalendarSync({
+    workspaceId,
+    connectionId: access.connection?.id || null,
+    status: "success",
+    payload: { provider: GOOGLE_CALENDAR_SYNC_SOURCE, action: "delete", eventId, calendarId: access.calendarId },
+  });
+  return { ok: true, reason: response.ok ? "deleted" : "already-gone", connection: access.connection };
+}
+
 function combinedCalendarItemSortKey(item) {
   return item.start?.dateTime || (item.start?.date ? `${item.start.date}T00:00:00` : "");
 }

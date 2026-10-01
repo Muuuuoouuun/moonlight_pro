@@ -254,6 +254,73 @@
 .hub-app .ci-receipt__title { color: var(--fg-dim); text-decoration: line-through; }
 .hub-app .ci-receipt__line { display: block; margin-top: 2px; color: var(--fg-muted); }
 
+/* ── 시간 잡기 띠(§4.7) — 끝내기 아래 점선 1px. 권장은 CertaintyBadge recommended가 말한다 ── */
+.hub-app .ci-band-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hub-app .ci-band {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r);
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.hub-app .ci-band[data-emphasis="true"] { border-style: solid; color: var(--fg); }
+
+.hub-app .ci-band__lead,
+.hub-app .ci-band__slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hub-app .ci-band__slot .mono { font-size: 13px; color: var(--fg); }
+
+.hub-app .ci-band__actions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.hub-app .ci-band__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.hub-app .ci-presets--compact .ci-preset {
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── 레일: 잡아 둔 일 ──────────────────────────────────────── */
+.hub-app .ci-block {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  font-size: 12.5px;
+}
+
+.hub-app .ci-block__title { color: var(--fg); }
+.hub-app .ci-block[data-state="done"] .ci-block__title { color: var(--fg-dim); text-decoration: line-through; }
+.hub-app .ci-block__line { display: block; margin-top: 2px; color: var(--fg-muted); }
+.hub-app .ci-block__actions { display: inline-flex; gap: 2px; }
+.hub-app .ci-block__picker { grid-column: 1 / -1; }
+
 @media (max-width: 900px) {
   .hub-app .ci-focus { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .hub-app .ci-card { padding: 20px; }
@@ -264,4 +331,6 @@
   .hub-app .ci-outcome kbd { display: none; }
   .hub-app .ci-outcome__record { text-align: left; }
   .hub-app .ci-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-app .ci-band__actions { margin-left: 0; width: 100%; }
+  .hub-app .ci-band__actions > button { flex: 1 1 0; }
 }
