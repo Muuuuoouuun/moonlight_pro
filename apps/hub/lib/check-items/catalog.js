@@ -67,11 +67,10 @@ const CATALOG = Object.freeze({
     schedule: { minutes: 45, verb: '이어쓰기' },
   },
   project: {
-    // 막힘 풀기(§5)가 붙기 전까지는 프로젝트를 여는 것이 1번이다 — 단계 3에서 바뀐다.
+    // 계획을 읽지 못한 막힌 프로젝트 — 막힘 풀기 없이 프로젝트를 여는 것이 1번이다(unblockEntry 참고).
     outcomes: [open('프로젝트 열기', 'projects'), TASK('할 일 1건 (이 프로젝트에 연결)'), SNOOZE],
     links: [],
     taskTitle: (name) => `${name} 막힌 점 풀기`,
-    // 병목이 의사결정이면 30분 '정하기'(§4.7) — 병목 분류는 단계 3에서 붙는다.
     schedule: { minutes: 15, verb: '막힌 점 확인' },
   },
   risk: {
@@ -83,13 +82,31 @@ const CATALOG = Object.freeze({
 });
 
 // 시간 잡기 일정 제목 — 카드(toCheckItem)와 레일의 다른 시간(구글 일정 갱신)이 같은 문장을 쓴다.
-export function scheduleTitleFor(type, name) {
-  const verb = CATALOG[type]?.schedule?.verb || '확인';
+export function scheduleTitleFor(type, name, verb = CATALOG[type]?.schedule?.verb || '확인') {
   return `확인할 것 · ${String(name || '').trim()} ${verb}`.slice(0, 200);
 }
 
 export function scheduleMinutesFor(type) {
   return CATALOG[type]?.schedule?.minutes || 30;
+}
+
+// 막힘 풀기(§5.2) — 계획·버전을 함께 읽은 막힌 프로젝트만. 병목이 의사결정이면 결정으로 풀기가 1번이고
+// `병목에 맞춘 권장` 표시를 단다. 다음 버전으로는 같은 입력 칸의 세 번째 갈래다.
+const UNBLOCK_RESOLVED = { key: 'unblock-resolved', label: '이유가 풀렸어요', record: '막힘 이력 1줄, 다시 진행', kind: 'write' };
+const UNBLOCK_DECISION = { key: 'unblock-decision', label: '결정으로 풀기', record: '결정 1건 · 할 일 1건 · 막힘 이력', kind: 'write' };
+
+function unblockEntry(signal) {
+  if (!signal?.unblock?.updatedAt || !signal.unblock.delivery) return null;
+  const decision = signal.subject?.blockerKind === 'decision';
+  return {
+    outcomes: decision
+      ? [{ ...UNBLOCK_DECISION, recommended: true }, UNBLOCK_RESOLVED, TASK('할 일 1건 (이 프로젝트에 연결)'), SNOOZE]
+      : [UNBLOCK_RESOLVED, UNBLOCK_DECISION, TASK('할 일 1건 (이 프로젝트에 연결)'), SNOOZE],
+    links: [{ label: '프로젝트 열기', action: 'projects' }],
+    taskTitle: CATALOG.project.taskTitle,
+    // 병목이 의사결정이면 30분 '정하기', 그 밖은 15분 '막힌 점 확인'(§4.7 표).
+    schedule: decision ? { minutes: 30, verb: '정하기' } : CATALOG.project.schedule,
+  };
 }
 
 // 묶음 키용 짧은 해시(djb2) — 같은 리드 묶음이면 같은 키, 리드가 하나라도 바뀌면 새 키다(Q-CF7).
@@ -115,7 +132,7 @@ export function signalKeyFor(subject) {
 // 억제가 어긋난다. 그런 카드는 기존 링크(decisions)만 쓴다.
 export function toCheckItem(signal) {
   const subject = signal?.subject;
-  const entry = subject ? CATALOG[subject.type] : null;
+  const entry = subject ? (subject.type === 'project' && unblockEntry(signal)) || CATALOG[subject.type] : null;
   const signalKey = signalKeyFor(subject);
   if (!entry || !signalKey) return { ...signal, signalKey: null, kindLabel: signal?.kind || '', outcomes: [], links: [] };
   const name = String(subject.name || signal.title || '').trim();
@@ -127,6 +144,6 @@ export function toCheckItem(signal) {
     links: entry.links,
     taskTitle: entry.taskTitle(name).slice(0, 300),
     // 시간 잡기 기본 소요 시간·동사(§4.7 표, Q-CF10 승인).
-    schedule: { ...entry.schedule, title: scheduleTitleFor(subject.type, name) },
+    schedule: { ...entry.schedule, title: scheduleTitleFor(subject.type, name, entry.schedule.verb) },
   };
 }

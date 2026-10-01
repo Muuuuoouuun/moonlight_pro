@@ -24,9 +24,11 @@ import {
 } from './check-item-actions';
 import { MAX_SNOOZE_DAYS } from '@/lib/check-items/outcome-input';
 import { ScheduleBand, ScheduledNowBand } from './schedule-band';
+import { UnblockPanel } from '../unblock-panel';
 import './check-items.css';
 
-const PANEL_KEYS = new Set(['task', 'reschedule', 'snooze']);
+const PANEL_KEYS = new Set(['task', 'reschedule', 'snooze', 'unblock-resolved', 'unblock-decision']);
+const UNBLOCK_BRANCH = { 'unblock-resolved': 'resolved', 'unblock-decision': 'decision' };
 
 export function outcomeIsPanel(outcome) {
   return outcome?.kind === 'write' && PANEL_KEYS.has(outcome.key);
@@ -231,6 +233,26 @@ function SnoozePanel({ item, onFinished, fetchImpl }) {
   );
 }
 
+// 막힌 프로젝트의 끝내기 1·2 — 프로젝트 상세와 같은 막힘 풀기(§5.4). 풀리면 영수증 한 줄:
+// 막힘이 풀렸으면 unblocked, 결정만 남겼으면 decision_logged(규칙이 여전히 잡으면 카드는 다시 보인다).
+function CardUnblockPanel({ item, branch, onFinished, fetchImpl }) {
+  const project = { id: item.subject.id, name: item.subject.name, delivery: item.unblock?.delivery, updatedAt: item.unblock?.updatedAt };
+  return (
+    <UnblockPanel
+      project={project}
+      initialBranch={branch}
+      signalKey={item.signalKey}
+      fetchImpl={fetchImpl}
+      onUnblocked={async (result) => {
+        const outcome = result.unblocked ? 'unblocked' : 'decision_logged';
+        const recordRef = result.decisionId ? { table: 'decisions', id: result.decisionId } : { table: 'projects', id: project.id };
+        const receipt = await postReceipt(fetchImpl, item, { outcome, recordRef });
+        onFinished?.({ outcome, message: result.message, receiptMissing: !receipt.ok });
+      }}
+    />
+  );
+}
+
 // ── 카드 ─────────────────────────────────────────────────────────
 export function FocusCard({
   item,
@@ -264,6 +286,7 @@ export function FocusCard({
     if (key === 'task') return <TaskPanel key={`task-${item.signalKey}`} {...props} />;
     if (key === 'reschedule') return <ReschedulePanel key={`reschedule-${item.signalKey}`} {...props} />;
     if (key === 'snooze') return <SnoozePanel key={`snooze-${item.signalKey}`} {...props} />;
+    if (UNBLOCK_BRANCH[key] && item.unblock) return <CardUnblockPanel key={`unblock-${item.signalKey}`} branch={UNBLOCK_BRANCH[key]} {...props} />;
     return null;
   };
 
@@ -307,6 +330,8 @@ export function FocusCard({
                       {outcome.kind === 'navigate' ? <Iconed name="arrowRight" size={12} /> : null}
                     </span>
                     <span className="ci-outcome__record">
+                      {/* 권장 표시는 글과 마름모로 — 줄 색을 물려받아 primary 채움 위에서도 읽힌다(§5.3 recommended). */}
+                      {outcome.recommended ? <span data-certainty="recommended">◇ 병목에 맞춘 권장 · </span> : null}
                       {outcome.kind === 'write' ? `남는 기록 · ${outcome.record}` : '화면을 엽니다 · 대상이 바뀌면 빠집니다'}
                     </span>
                   </button>

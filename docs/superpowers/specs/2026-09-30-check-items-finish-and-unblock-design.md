@@ -1,6 +1,6 @@
 # 확인할 것 — 끝내기 버튼과 막힘 풀기
 
-> 상태: **방향 운영자 선택(2026-09-30) · 화면 방향 운영자 선택(2026-10-01) · §12 기본값 운영자 승인(2026-10-01) · 단계 0·1·2 구현(2026-10-01, 0056 운영 DB 적용 전), 단계 3·4 남음**. 운영자가 시안 둘 가운데 "A의 끝내기 버튼 + B의 막힘 풀기"를 골랐고(2026-09-30), 화면 시안 넷 가운데 "2의 한 장씩 + 4의 시간 잡기"를 골랐다(2026-10-01). 이 문서의 이름·버튼 구성·보류·시간 잡기 규칙·데이터 모양은 그 방향을 구체화한 **권장안**이며, §12의 미정 질문과 함께 운영자 확인을 받은 뒤 확정으로 올린다.
+> 상태: **방향 운영자 선택(2026-09-30) · 화면 방향 운영자 선택(2026-10-01) · §12 기본값 운영자 승인(2026-10-01) · 단계 0·1·2·3 구현(2026-10-01, 0056 운영 DB 적용 전), 단계 4 남음**. 운영자가 시안 둘 가운데 "A의 끝내기 버튼 + B의 막힘 풀기"를 골랐고(2026-09-30), 화면 시안 넷 가운데 "2의 한 장씩 + 4의 시간 잡기"를 골랐다(2026-10-01). 이 문서의 이름·버튼 구성·보류·시간 잡기 규칙·데이터 모양은 그 방향을 구체화한 **권장안**이며, §12의 미정 질문과 함께 운영자 확인을 받은 뒤 확정으로 올린다.
 > 작성일: 2026-09-30 (Asia/Seoul)
 > 상위 정본: [`docs/README.md`](../../README.md) 우선순위 → [운영자 프로필](../../operator-workflow-profile.md) → [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md) → 주제별 최신 스펙 → [`DESIGN.md`](../../../DESIGN.md).
 > 관계:
@@ -216,6 +216,8 @@ daily-brief 라우트가 신호를 만든 뒤, 아래 중 하나면 그 신호�
 
 Engine `validateDelivery`/`deliveryDraft`에 `blockerKind` 열거 검증을 더하고, `resume` 처리에서 `blockerHistory`를 쌓는다. 입력 `unblockResolution`(`resolved`·`decision`·`next-version`)과 `decisionId`는 이 이력 한 줄에만 쓰인다.
 
+**구현(2026-10-01)**: 이력은 `resume` 때만이 아니라 **막힌 점이 비는 순간**(다시 진행·프로젝트 편집 어느 쪽이든) 한 줄로 남긴다 — 편집으로 먼저 비운 뒤 다시 진행하면 이력이 사라지던 틈을 막는다. 갈래를 보내지 않으면 `resolved`. 이력 한 줄은 `{ at(=pausedAt), resolvedAt, text, kind, resolution, decisionId?, note? }`이고 최근 50줄만 둔다. `note`는 `이유가 풀렸어요`의 한 줄 메모(입력 `unblockNote`, 300자). `blockerKind`는 선택 키라 보내지 않은 계획(분류를 모르는 예전 화면·MCP)은 저장된 분류를 유지하고, 막힌 점이 비면 서버가 함께 비운다.
+
 ### 5.2 세 갈래
 
 | 갈래 | 운영자가 하는 일 | 저장 |
@@ -246,6 +248,8 @@ Engine `validateDelivery`/`deliveryDraft`에 `blockerKind` 열거 검증을 더�
 - **프로젝트 상세**(`project-detail-panel.jsx` · `project-delivery.jsx`)의 막힌 점 자리에 `막힘 풀기` 섹션: 막힌 점 글 · 병목 칩 · `어떻게 풀까요` 세 갈래 세그먼트(`SegmentedControl`) · 입력 · 막힘 이력 · 이 프로젝트의 결정.
 - **확인할 것 카드**(한 장씩)가 막힌 프로젝트면 끝내기 1·2가 막힘 풀기 갈래이고, 누르면 같은 컴포넌트(`UnblockPanel`)를 그 줄 아래에 펼친다. 결과는 두 곳이 같다.
 - 목록 행에는 `막힘 · 의사결정 · 9일`처럼 병목 라벨을 글로 붙인다(색 없음, blocked 글리프만 danger — §5.3 lifecycle).
+
+**구현(2026-10-01, 단계 3)**: 확인할 것 카드(끝내기 1·2, 병목이 의사결정이면 결정으로 풀기가 1번 + 줄 안의 `◇ 병목에 맞춘 권장`)와 프로젝트 상세(`다음 행동` 아래 `막힌 점` 자리 → `막힘 풀기` 버튼으로 같은 `UnblockPanel`)에 붙였다. 프로젝트 결과·완료 기준 편집기의 막힌 점 아래에 병목 칩 다섯 개(선택)를 두었다. 신호 카드의 메타는 `막힘 · 의사결정 · 9일 · 목표 날짜`. **남은 것**: PMS 목록 행의 병목 라벨, 상세 막힘 자리 안의 `이 프로젝트의 결정`(지금은 기존 `기록·자료` 탭의 결정 목록이 그 역할) — 단계 4 결정 일지와 함께 본다. 계획을 읽지 못한 막힌 프로젝트 카드는 막힘 풀기 없이 `프로젝트 열기`로 돌아간다(지어낸 계획으로 풀지 않는다).
 
 ---
 
@@ -343,6 +347,8 @@ index (workspace_id, signal_key, created_at desc)
 
 ### 8.4 Engine
 
+아래 네 줄은 단계 3에서 구현했다(`apps/engine/lib/project-unblock.test.mjs`). 결정 meta 링크 병합은 저장된 `updated_at`이 있으면 그 값으로 버전 가드를 건다.
+
 - `pms-command-service.ts`: `blockerKind` 검증, `resume` 때 `blockerHistory` 추가, 입력 `unblockResolution`·`decisionId` 수용.
 - `pms-command-service.ts` `canonicalCreatePayload`: `create_decision` 분기 추가(id·workspace_id·project_id·title·rationale·decided_at·meta.source·meta.sourceRef) — 같은 요청 재시도를 `duplicate`로 받기 위해서다. 지금 Decisions 화면도 `duplicate`를 성공으로 읽지만 실제로는 받을 수 없는 상태다.
 - `pms-command.ts` `create_decision`: `meta.sourceRef`(type 열거 + id) 수용. `update_decision`: `meta` 병합(`nextTaskId`, `unblockedProjectId`) — 프로젝트 meta 병합과 같은 읽기 후 병합 규칙.
@@ -355,7 +361,7 @@ index (workspace_id, signal_key, created_at desc)
 - `lib/check-items/catalog.js`·`suppression.js`·`outcome-input.js`, `lib/repositories/signal-outcomes.js`, `app/api/hub/signal-outcomes/route.js`(구현됨).
 - `components/hub/check-items/schedule-band.jsx` — `ScheduleBand`(권장 시간 띠·고르기 칸), `SchedulePicker`, `ScheduledNowBand`, `ScheduledList`(레일의 잡아 둔 일 — 다른 시간·취소)(구현됨). 저장은 `check-item-actions.js`의 `scheduleItem`·`moveScheduled`·`cancelScheduled`. **§7.1·§7.2와 다른 점(단계 2)**: 09–19시 세로 `TimeRail`은 만들지 않았다 — 레일은 기존 `TodaySchedule` 목록(일정 완료·특이사항 기록과 묶여 있다) 아래에 `잡아 둔 일` 목록을 더했다. 모바일도 하단 시트가 아니라 다른 끝내기 입력과 같이 카드 안에 펼친다. 둘 다 운영자 화면 검토 뒤 다시 정한다.
 - `lib/check-items/slots.js` — 권장 시간 계산 순수 함수(§4.7)(구현됨). 소요 시간 고른 값은 종류별로 `mlp.checkScheduleMinutes`에 기억한다.
-- `components/hub/unblock-panel.jsx` — 병목 칩 + 세 갈래 + 결정 입력, 확인할 것 상세와 프로젝트 상세가 함께 쓴다.
+- `components/hub/unblock-panel.jsx` — `UnblockPanel`(세 갈래 + 결정 입력 + 막힘 이력)·`ProjectUnblockSection`(프로젝트 상세 자리), 확인할 것 카드와 프로젝트 상세가 함께 쓴다. 저장 순서는 `components/hub/unblock-actions.js`의 `unblockProject`(§5.3 — 단계별 진행을 들고 있어 다시 누르면 남은 단계만, 충돌이면 최신 기록을 읽어 `막힘만 다시 풀기`)(구현됨). 병목 칩은 결과·완료 기준 편집기(`project-delivery.jsx`)에 있다.
 - 데스크톱 위젯(`quick-widget.jsx`)은 같은 신호를 읽지만 이번 범위에서는 건수·열기만 유지한다.
 
 ---
@@ -387,7 +393,7 @@ index (workspace_id, signal_key, created_at desc)
 | 0 | **끊긴 연결 정리** ✓ 2026-10-01 — `wait`·`Rhythm 보기`·`리마인드 초안`·`work-decision-missing` 제거, `결정 큐`→`확인할 것`, 홈 `결정`→`어떻게 끝낼까요`, 누르는 순간의 "처리함" 제거 | S | 리듬으로 가는 버튼 0개, 이동 버튼을 눌러도 목록이 줄지 않음, `npm test` 통과 |
 | 1 | **끝내기 + 한 장씩** ✓ 2026-10-01 — `signal_outcomes`(0056)·라우트·억제·영수증·보류, 거래·자동화·콘텐츠·리드 묶음의 끝내기, 홈을 한 장씩 카드로(§7.1, 시간표 레일은 기존 `TodaySchedule`을 오른쪽에 그대로 둔다), 오늘 화면은 맨 위 카드 + `홈에서 한 장씩 끝내기` 한 줄 | M | 거래 멈춤 항목을 네 끝내기로 각각 끝내 보고 새로고침·다른 기기에서도 같은 차례, 보류 항목이 날짜에 다시 뜸, 키보드 계약 테스트 통과 |
 | 2 | **시간 잡기** ✓ 2026-10-01 — `slots.js`·`ScheduleBand`·레일 블록 바꾸기/취소, 구글 일정 생성·갱신·`DELETE` 추가, 시간이 되면 맨 앞, 지난 시간 표시 | M | 카드 하나를 권장 시간에 잡고 구글 캘린더에 생긴 것을 확인, 그 시각에 맨 앞으로 돌아옴, 취소하면 구글 일정도 지워짐, 캘린더 미연결이면 `Moonlight에만 잡힙니다` |
-| 3 | **막힘 풀기** — `blockerKind`·`blockerHistory`·`UnblockPanel`, 카드·프로젝트 상세 연결, 결정으로 풀기 | M | 막힌 프로젝트를 세 갈래로 각각 풀어 보고 이력·결정·할 일이 남음, 버전 충돌 시 부분 성공 문구 |
+| 3 | **막힘 풀기** ✓ 2026-10-01 — `blockerKind`·`blockerHistory`·`UnblockPanel`, 카드·프로젝트 상세 연결, 결정으로 풀기 | M | 막힌 프로젝트를 세 갈래로 각각 풀어 보고 이력·결정·할 일이 남음, 버전 충돌 시 부분 성공 문구 |
 | 4 | **결정 일지** (Q-CF3·Q-CF4 답 뒤) — 이름, 출처 칩·필터, 그래서 할 일 줄, 막힘 풀림 칩 | S–M | 막힘 풀기로 만든 결정이 출처·할 일과 함께 보임 |
 
 각 단계는 독립 커밋이고 단계 0만으로도 "누르면 사라지는데 아무것도 안 남는" 문제의 가장 나쁜 부분이 없어진다.
