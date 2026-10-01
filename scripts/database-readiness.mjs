@@ -129,6 +129,10 @@ export const DATABASE_FEATURES = [
     bodyIncludes: [['report_archive_v1(uuid,text,integer,jsonb,text)',"'uncertainties',o.result"],['report_office_weeklies_v1(uuid,text,integer)',"'sourceCheck',result"]] },
   { name: '주간 보고서 품질 검토 시간', migration: '20261001_0062_office_weekly_quality_deadline.sql', tables: [], functions: [],
     bodyIncludes: [['office_request_claim_v1(uuid,text,jsonb,jsonb)','office_weekly_content_deadline_v1']] },
+  { name: '월요일 주말·주간 소식 종합', migration: '20261001_0063_monday_news_roundup.sql', tables: [],
+    functions: ['report_news_roundup_receipt_v1(uuid,date)','report_news_roundup_sources_v1(uuid,date)','report_news_roundup_save_v1(uuid,date,jsonb)'],
+    bodyIncludes: [['report_news_roundup_save_v1(uuid,date,jsonb)', "v_key:='news-weekly:'"]],
+    constraintIncludes: [['report_documents','report_documents_kind_check',"'research'"]] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

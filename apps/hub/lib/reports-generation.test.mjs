@@ -140,3 +140,12 @@ test('run cost includes thinking from aggregate totals and remains unpriced when
     assert.equal((await prepare(generation)).ai.estimatedCostUsd, null);
   }
 });
+
+test('Monday sweep includes the news roundup independently of personal AI and exposes save failures', async () => {
+  let calls=0;
+  const result=await runReportsSweep({identity,enabled:false,env:{COM_MOON_RESEARCH_ENABLED:'true'},now:new Date('2026-10-05T08:30:00+09:00'),
+    capture:async()=>snapshot,newsRoundup:async input=>{calls++;assert.equal(input.workspaceId,W);assert.equal(input.enabled,true);return {status:'saved',reportId:W};}});
+  assert.equal(calls,1);assert.equal(result.news.status,'saved');assert.equal(result.results[0].scope,'personal');
+  const failed=await runReportsSweep({identity,enabled:false,now:new Date('2026-10-05T08:30:00+09:00'),capture:async()=>snapshot,newsRoundup:async()=>({status:'error'})});
+  assert.equal(failed.status,'partial');assert.equal(failed.results[0].snapshot.status,'saved');
+});

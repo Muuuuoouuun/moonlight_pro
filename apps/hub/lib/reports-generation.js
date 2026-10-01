@@ -6,6 +6,7 @@ import { estimateCallCostUsd } from './ai-pricing.js';
 import { runReportCommand } from './reports-service.js';
 import { scheduledWeeklyCaptures } from './reports-schedule.js';
 import { resolveDefaultWorkspaceId } from './server-write.js';
+import { prepareMondayNewsRoundup } from './monday-news-roundup.js';
 
 function officeRequestId(command, identity) {
   const bytes = createHash('sha256').update(JSON.stringify(['report-office-weekly:v1', identity.workspaceId,
@@ -74,12 +75,14 @@ export async function prepareWeeklyReport(command, {
     failedSources: complete ? [...ai.missing] : ['office', ...ai.missing] };
 }
 
-export async function runReportsSweep({ now = new Date(), ...deps } = {}) {
+export async function runReportsSweep({ now = new Date(), newsRoundup = prepareMondayNewsRoundup, ...deps } = {}) {
   const results = [];
   for (const command of scheduledWeeklyCaptures(now)) results.push(await prepareWeeklyReport(command, { ...deps, now }));
+  const news = await newsRoundup({ now, workspaceId: deps.identity?.workspaceId,
+    enabled: (deps.env || process.env).COM_MOON_RESEARCH_ENABLED === 'true' });
   const status = results.length && results.every(row => row.status === 'error') ? 'error'
-    : results.some(row => row.status !== 'live') ? 'partial' : 'live';
-  return { status, results };
+    : results.some(row => row.status !== 'live') || news.status === 'error' ? 'partial' : 'live';
+  return { status, results, news };
 }
 
 export function createReportsSweepHandler({ guard = assertHubWriteAllowed, run = runReportsSweep,
@@ -92,7 +95,7 @@ export function createReportsSweepHandler({ guard = assertHubWriteAllowed, run =
     try { output = await run({ identity: actor, now }); }
     catch { output = { status: 'error', results: [], error: 'report-sweep-unavailable' }; }
     let automationLog = 'not-needed';
-    const changed = output.error || output.results.some(row => row.snapshot?.status !== 'duplicate'
+    const changed = output.error || ['saved','error'].includes(output.news?.status) || output.results.some(row => row.snapshot?.status !== 'duplicate'
       || row.ai?.attempted === true || (row.ai?.replayed !== true && row.ai?.status !== 'disabled'));
     if (changed) {
       const saved = output.results.filter(row => row.snapshot?.status === 'saved').length;
@@ -100,7 +103,7 @@ export function createReportsSweepHandler({ guard = assertHubWriteAllowed, run =
       try {
         const receipt = await record({ workspaceId: actor.workspaceId, key: 'reports-sweep', name: '주간 보고서 준비',
           startedAt: now.toISOString(), status: output.status === 'live' ? 'success' : 'failure', input: {},
-          output: { ...output, summary: `주간 보고서 ${saved}건 보관 · AI ${generated}건 작성` },
+          output: { ...output, summary: `주간 보고서 ${saved}건 보관 · AI ${generated}건 작성${output.news?.status === 'saved' ? ' · 월요일 소식 종합 1건 보관' : ''}` },
           errorMessage: output.status === 'live' ? null : output.status === 'partial' ? 'report-preparation-incomplete' : 'report-preparation-failed' });
         automationLog = receipt?.persisted === true ? 'saved' : 'error';
       } catch { automationLog = 'error'; }

@@ -3,7 +3,12 @@ import { isCanonicalUuid } from '../uuid.js';
 
 const projectStored = row => ({ id: `stored:${row.id}`, kind: row.kind, scope: row.scope, title: row.title, periodStart: row.period_start, periodEnd: row.period_end, createdAt: row.created_at,
   source: 'snapshot', status: row.payload?.status || 'live', summary: row.payload?.summary || '', facts: row.payload?.facts ?? null, interpretation: '', decision: row.decision || '', revision: row.revision,
-  sourceRefs: row.payload?.sourceRefs || [], actions: [] });
+  sourceRefs: row.payload?.sourceRefs || [], actions: [],
+  ...(row.payload?.origin === 'monday-news-roundup' ? {
+    periodStart: row.payload.periodStart, periodEnd: row.payload.periodEnd,
+    interpretation: row.payload.interpretation || '', artifactKind: 'markdown',
+    uncertainties: row.payload.uncertainties || [],
+  } : {}) });
 const projectResearch = brief => ({ id: `research:${brief.id}`, kind: 'research', scope: 'content', title: brief.title, periodStart: null, periodEnd: null, createdAt: brief.createdAt,
   source: 'research', status: 'live', summary: brief.change || '', facts: { facts: brief.facts || [], factEvidence: brief.factEvidence || [], conditions: brief.conditions, change: brief.change, whyBrand: brief.whyBrand, counterevidence: brief.counterevidence, unknown: brief.unknown, draft: brief.draft, sources: brief.sources || [], state: brief.state, brandId: brief.brandId, origin: brief.origin, verificationLevel: brief.verificationLevel, promotion: brief.promotion },
   interpretation: brief.interpretation || '', decision: '', sourceRefs: (brief.sources || []).map(ref => ({ url: ref.url, label: ref.title })), actions: [{ label: '리서치 검토', href: `/dashboard/content/research?brief=${encodeURIComponent(brief.id)}` }] });

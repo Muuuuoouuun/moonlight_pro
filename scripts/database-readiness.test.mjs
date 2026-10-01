@@ -108,7 +108,15 @@ test('readinessSql emits one quoted row per check and stays a single SELECT', ()
 
 // A migration's copy of a function body (last definition in the file) and of a named constraint statement.
 const bodyOf = (sql, signature) => [...sql.matchAll(new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${signature.split('(')[0]}\\s*\\([\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$`, 'gi'))].at(-1)?.[1];
-const constraintOf = (sql, name) => [...sql.matchAll(new RegExp(`alter\\s+table[^;]*?add\\s+constraint\\s+${name}\\b[^;]*;`, 'gi'))].at(-1)?.[0];
+const constraintOf = (sql, name) => {
+  const named=[...sql.matchAll(new RegExp(`alter\\s+table[^;]*?add\\s+constraint\\s+${name}\\b[^;]*;`, 'gi'))].at(-1)?.[0];
+  if(named)return named;
+  // PostgreSQL names an inline kind CHECK <table>_kind_check as well.
+  if(name.endsWith('_kind_check')) {
+    const table=name.slice(0,-'_kind_check'.length);
+    return [...sql.matchAll(new RegExp(`create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?public\\.${table}\\b[^;]*;`,'gi'))].map(match=>match[0]).find(statement=>/kind\s+text[^\n]*check/i.test(statement));
+  }
+};
 
 test('every body marker identifies its migration and holds after all migrations', async () => {
   const files = (await readdir(MIGRATIONS)).filter(n => n.endsWith('.sql')).sort();
