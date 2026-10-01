@@ -164,6 +164,7 @@ export function officePacketRequest(breakdown, key, { agenda, priorResults = {},
   const council = withReviewers && packet.reviewerIds.length > 0;
   const head = [
     `[업무 조각 ${packet.key} · ${OFFICE_WORK_KINDS[packet.kind].label}]`,
+    `범위: ${packet.scope === 'classin' ? '회사(ClassIn)' : '개인'} — 이 조각에서는 다른 범위의 상세를 섞지 않는다.`,
     `요청: ${packet.ask}`,
     packet.inputs.length ? `필요 자료: ${packet.inputs.join(' / ')}` : '',
     `납품물: ${packet.deliverable}`,

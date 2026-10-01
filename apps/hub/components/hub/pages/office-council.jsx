@@ -11,6 +11,8 @@ import { officeDiscussionState } from '../office-deliberation-client';
 import { officeSkillRequestDraft } from '../office-skill-request';
 import { OfficeSkillRequestDrawer } from '../office-skill-request-drawer';
 import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-drawer';
+import { OfficeBreakdownDrawer } from '../office-breakdown-drawer';
+import { fetchOfficeBreakdown, officeBreakdownProgress, officeBreakdowns } from '../office-breakdown-session';
 import { ReviewWaitingList } from '../review-waiting';
 import { OfficeAvatar } from '../office-avatar';
 import { officeMentorSessions } from '../office-mentor-session';
@@ -193,6 +195,8 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const [mentorDrawerId, setMentorDrawerId] = React.useState(null);
   const [selectedTurnId, setSelectedTurnId] = React.useState(null);
   const [mobileView, setMobileView] = React.useState('meet');
+  const [breakdownOpen, setBreakdownOpen] = React.useState(false);
+  const breakdown = React.useSyncExternalStore(officeBreakdowns.subscribe, () => officeBreakdowns.get(scope), () => null);
   const inputRef = React.useRef(null);
   const threadRef = React.useRef(null);
   const latestTurnRef = React.useRef(null);
@@ -211,11 +215,13 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const railTasks = officeRailTasks(taskState.tasks, scope);
   const shownTurn = session.turns.find(turn => turn.id === selectedTurnId) || session.turns[session.turns.length - 1] || null;
   const shownIndex = shownTurn ? session.turns.indexOf(shownTurn) : -1;
+  const packetStates = React.useMemo(() => (breakdown?.breakdown ? officeBreakdowns.states(scope) : {}), [breakdown, scope]);
+  const breakdownProgress = officeBreakdownProgress(breakdown, packetStates);
   React.useEffect(() => {
     assignmentReadRef.current += 1;
     setAssignment(null); setRosterOpen(false); setMoreOpen(false); setTasksOpen(false);
     setCopyStatus(null); setInputNotice(''); setFollowUpMode('chat'); setSkillTurn(null); setMentorDrawerId(null);
-    setSelectedTurnId(null); setMobileView('meet');
+    setSelectedTurnId(null); setMobileView('meet'); setBreakdownOpen(false);
     loadTasks();
     // loadTasks only reads refs and setters; reloading per scope is the intent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -266,6 +272,35 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
     invalidateAssignment();
   }
 
+  // 업무 나누기(2026-10-01 권장, office-harness): 추천만 받는다. 적용·조각 열기·완료 표시는 모두 버튼이다.
+  async function requestBreakdown() {
+    if (busy || breakdown?.status === 'loading') return;
+    setMoreOpen(false);
+    setBreakdownOpen(true);
+    let started;
+    try { started = officeBreakdowns.begin(scope, assignmentMessage); }
+    catch {
+      officeBreakdowns.refuse(scope, assignmentMessage.length > 6000 ? '안건이 6,000자를 넘습니다. 줄여서 다시 나눠 주세요.' : '먼저 안건을 입력해 주세요.');
+      return;
+    }
+    try { officeBreakdowns.resolve(scope, started.readId, await fetchOfficeBreakdown(started.request)); }
+    catch { officeBreakdowns.fail(scope, started.readId); }
+  }
+  function openPacket(key, withReviewers) {
+    if (busy) return;
+    const request = officeBreakdowns.open(scope, key, { turnCount: session.turns.length, withReviewers });
+    if (!request) return;
+    invalidateAssignment();
+    update({ ownerId: request.ownerId, mode: request.mode, reviewers: request.participants.filter(id => id !== request.ownerId), presetId: null, draft: request.message });
+    setFollowUpMode(request.mode === 'council' ? 'council' : 'chat');
+    setBreakdownOpen(false); setMobileView('meet');
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+  function markPacket(key, state) {
+    const latest = session.turns[session.turns.length - 1];
+    officeBreakdowns.mark(scope, key, state, { latestAnswer: latest?.result?.answer ?? null, turnCount: session.turns.length });
+  }
+
   function editAssignment() {
     invalidateAssignment();
     setRosterOpen(true);
@@ -290,11 +325,13 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   // Clearing a meeting also drops its mentor consultations: they are unreachable afterwards.
   function clearMeeting() {
     officeMentorSessions.discard(session.turns.map(turn => turn.id));
+    officeBreakdowns.discard(scope);
     store.reset(scope);
   }
   function importTask(task) {
     if (session.turns.length && !window.confirm('현재 회의를 비우고 새 안건을 올릴까요?')) return;
     if (session.turns.length) clearMeeting();
+    else officeBreakdowns.discard(scope);
     invalidateAssignment();
     setSkillTurn(null);
     setMentorDrawerId(null);
@@ -393,6 +430,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
           <div className={styles.agendaMain}><strong title={agenda.title}>안건: {agenda.title}</strong><span className={styles.sourceChip}>{agenda.source === 'task' ? '할 일에서 가져옴 · 복사본 · ' + importedAt : '직접 입력'}</span><span className={styles.mobileCount}>참석 {1 + reviewers.length}명</span></div>
           <div className={styles.agendaTools}><span className={styles.attendees}>참석: {personName(ownerId)}{reviewers.map(id => ' · ' + personName(id)).join('')}</span>
             <span className={styles.rosterShortcut}><Button variant="ghost" size="sm" disabled={busy} onClick={() => setRosterOpen(true)}>참석자 바꾸기</Button></span>
+            {breakdownProgress ? <Button variant="ghost" size="sm" onClick={() => setBreakdownOpen(true)} aria-label={`업무 조각 ${breakdownProgress.total}개 중 ${breakdownProgress.closed}개 닫힘 · 열기`}>조각 <span className="mono">{breakdownProgress.closed}/{breakdownProgress.total}</span></Button> : null}
             <Button variant="ghost" size="sm" disabled={busy} onClick={() => setMoreOpen(true)}>더보기</Button></div></>
           : <><p>안건을 올리세요 · 할 일을 가져오거나 직접 적어 주세요</p><span className={styles.agendaTools}><Button variant="ghost" size="sm" onClick={() => setMoreOpen(true)}>더보기</Button></span></>}</div>
         <div className={styles.thread} ref={threadRef} tabIndex={-1} aria-live="polite" aria-label="Office 요청 결과">
@@ -461,6 +499,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
       </div>
     </Drawer> : null}
     {skillTurn ? <OfficeSkillRequestDrawer key={skillTurn.id} agenda={session.agenda} officeScope={scope} result={skillTurn.result} onClose={() => setSkillTurn(null)} /> : null}
+    {breakdownOpen ? <OfficeBreakdownDrawer scope={scope} entry={breakdown} states={packetStates} busy={busy} onClose={() => setBreakdownOpen(false)} onRetry={requestBreakdown} onOpen={openPacket} onMark={markPacket} /> : null}
     {mentorDrawerId ? <OfficeMentorDrawer sessionId={mentorDrawerId} onClose={() => setMentorDrawerId(null)} /> : null}
     {rosterOpen ? <Drawer title="참석자 바꾸기" subtitle="주관 한 명과 관점 최대 두 명을 고르세요." onClose={() => setRosterOpen(false)} width="min(480px, 94vw)" footer={<Button variant="primary" onClick={() => setRosterOpen(false)}>완료</Button>}>
       <div className={styles.roster}><strong>주관</strong>{OFFICE_ROSTER.map(person => <button type="button" key={person.id} className={'hub-row ' + styles.member} aria-label={`${person.name} (${person.role}) 주관 선택`} aria-pressed={person.id === ownerId} onClick={() => { invalidateAssignment(); update({ ownerId: person.id, reviewers: reviewers.filter(id => id !== person.id), presetId: null }); }}>
@@ -472,7 +511,8 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
       </div></Drawer> : null}
     {moreOpen ? <Drawer title="회의 설정" subtitle="필요할 때만 응답 방식과 참고 범위를 조정하세요." onClose={() => setMoreOpen(false)} width="min(480px, 94vw)">
       <div className={styles.more}><strong>응답 방식</strong>
-        {assignmentMessage ? <Button variant="outline" size="sm" disabled={busy} onClick={requestAssignment}>담당 추천</Button> : null}
+        {assignmentMessage ? <span className={styles.presets}><Button variant="outline" size="sm" disabled={busy} onClick={requestAssignment}>담당 추천</Button>
+          <Button variant="outline" size="sm" disabled={busy || breakdown?.status === 'loading'} onClick={breakdown && breakdown.status !== 'error' && breakdown.status !== 'preview' ? () => { setMoreOpen(false); setBreakdownOpen(true); } : requestBreakdown}>{breakdown?.status === 'applied' || breakdown?.status === 'recommended' ? '업무 조각 보기' : '업무 나누기'}</Button></span> : null}
         <Button variant="outline" size="sm" onClick={() => { setMoreOpen(false); setRosterOpen(true); }}>참석자 바꾸기</Button>
         {agenda ? <Button variant="ghost" size="sm" onClick={() => { setMoreOpen(false); newAgenda(); }}>새 안건</Button> : null}
         {reviewers.length ? <p className={styles.note}>관점이 있어 회의로 고정됩니다. <Button variant="ghost" size="sm" onClick={() => { invalidateAssignment(); update({ reviewers: [], mode: 'chat', presetId: null }); }}>혼자 쓰기로 전환</Button></p>

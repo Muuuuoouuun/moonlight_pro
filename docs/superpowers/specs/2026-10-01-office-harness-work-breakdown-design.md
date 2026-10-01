@@ -1,9 +1,10 @@
 # Office 하네스 구조와 업무 분할 체계
 
-> 상태: **권장 · 운영자 결정 전 (2026-10-01)**. H0(계약·테스트)만 구현했다. 화면·Engine 호출·DB는 §11 결정 뒤에 만든다.
+> 상태: **권장 · 운영자 결정 전 (2026-10-01)**. H0(계약)과 H1(Engine·Hub 경로·회의실 화면·세션 기억)을 로컬 구현했다(운영자 "구조와 로직 시각화, 추가적인 적용 디벨롭", 같은 날). 실제 모델·브라우저 검증과 DB(H2)는 아직이다. §11은 여전히 운영자 결정 대기이며, 결정이 다르면 H1을 그에 맞춰 고친다.
+> 시각화: 하네스 10층·흐름·종류→담당·인계 그래프·조각 상태 시뮬레이터를 한 장으로 그린 페이지(claude.ai 아티팩트 `Office 하네스 지도`).
 > 요청: 운영자 "이어서 office 의 하네스 구조 심도 깊게 설정, 업무 분할 체계 잡기" (2026-10-01, [Ruflo 적용 방안](2026-10-01-ruflo-adoption-plan.md) 직후)
 > 관계: [에이전트 계층 방향](2026-09-24-agent-layer-direction.md)의 확정 ①~⑧과 §3 경계, [업무 안의 Office 심화 설계](2026-09-21-eevee-office-embedded-workflow-deep-design.md) §3~§5, [회의실 A](2026-09-24-office-meeting-room-layout.md)를 바꾸지 않는다. 역할 카드 v25 본문은 동결 그대로다(P0). 이 문서는 이브이 카드에 적혀만 있던 "회의·프로젝트를 8인 R&R로 분해한 배분안"을 **구조화된 계약**으로 만든다.
-> 코드: `packages/agent-contracts/office-harness.js`(+ `.d.ts`, `.test.mjs`), `apps/engine/lib/office/harness-handoffs.test.mjs`.
+> 코드: 계약 `packages/agent-contracts/office-harness.js`(+ `.d.ts`, `.test.mjs`) · Engine `apps/engine/lib/office/breakdown.ts`, `app/api/ai/office-breakdown`, `harness-handoffs.test.mjs` · Hub `apps/hub/lib/office/breakdown-{engine-client,http}.js`, `app/api/hub/office/breakdown`, `components/hub/office-breakdown-{session,drawer}.*`, `pages/office-council.jsx`.
 
 ## 1. 결론
 
@@ -162,7 +163,8 @@ Ruflo의 정의를 빌리면 "에이전트 = 모델 + 하네스"다. 모델은 �
 - **진입**: 회의실 `더보기` 드로어의 `담당 추천` 옆에 `업무 나누기` 하나. 안건이 비어 있으면 비활성.
 - **분해 카드**: `CertaintyBadge recommended`(점선·빈 마름모). 요약 한 줄 → 정할 것 → 조각 목록 → 보류 → 확인 질문. 버튼은 `적용` · `무시`. 조각 1개면 목록 없이 "나누지 않아도 됩니다 · <담당>에게 바로 열기".
 - **조각 행**: 종류 라벨 · 담당 이름 · `LifecycleBadge`(ready=queued "열 수 있음", waiting=waiting "p1 대기", done=done, skipped=cancelled) · 출구 표지 · `이 조각 열기`. 행 클릭은 담당 바꾸기 드로어(`EditDrawer`). 색은 쓰지 않는다(§5.3 — 상태는 글리프와 글자).
-- **조각 열기**: 안건 바에 조각 본문을 사본으로 넣고 담당·방식을 고정한다. 운영자가 `보내기`를 눌러야 호출한다. 앞선 조각 결과는 결과 카드의 `이 결과를 다음 조각에 넣기` 한 번으로 사본을 만든다(자동 아님).
+- **조각 열기**: 입력창에 조각 본문을 넣고 담당·방식(검토자 체크 시 관점 비교)을 맞춘다. 운영자가 `보내기`를 눌러야 호출한다.
+- **앞선 결과 사본(H1 구현 방식)**: 결과 카드에 버튼을 더하지 않고(표면 예산), 운영자가 조각을 `완료로 표시`하는 순간 **그 조각을 연 뒤에 나온 마지막 결과**만 사본으로 남긴다. 연 뒤 새 결과가 없으면 사본도 없다. 되돌리기·건너뛰기는 사본을 지운다. 드로어가 사본 저장 여부와 1,500자 한도를 말한다.
 - **조각 결과 카드**: 기존 결과 카드 + `완료로 표시` · `건너뛰기`.
 - **390px**: 조각 목록은 세로 한 줄씩, 버튼 44px, 입력 16px.
 - **실패**: 분해 실패·미연결은 기존 담당 추천과 같은 문구("담당자를 직접 선택해 주세요")와 입력 보존.
@@ -187,8 +189,8 @@ Ruflo의 정의를 빌리면 "에이전트 = 모델 + 하네스"다. 모델은 �
 
 | 단계 | 내용 | 상태 |
 |---|---|---|
-| H0 | 계약(`office-harness.js`)·타입·테스트, 인계 표 고정 테스트 | **구현됨(2026-10-01)** — 화면·Engine에서 아직 쓰지 않음 |
-| H1 | Engine·Hub 경로, 회의실 `더보기`의 업무 나누기, 세션 기억, 평가 케이스 | §11 결정 뒤 |
+| H0 | 계약(`office-harness.js`)·타입·테스트, 인계 표 고정 테스트 | **구현됨(2026-10-01)** |
+| H1 | Engine `POST /api/ai/office-breakdown`(사용량 표면 `office-breakdown`), Hub `POST /api/hub/office/breakdown`(쓰기 가드·세션 게이트, 저장 없음 `businessWrites: false`), 회의실 `더보기`의 `업무 나누기`/`업무 조각 보기`, 안건 바의 `조각 n/m`, 메모리 세션 기억 | **로컬 구현(2026-10-01)** · 단위 테스트·Hub 빌드 통과 · 실제 모델·브라우저·390px 확인 전 · 평가 케이스 미작성 |
 | H2 | DB 기억(0056), 조각 단위 7일 지표 | 실사용 뒤 |
 
 OKR v3 확정 12(10월 개발 동결)와의 관계: H0는 제품 동작을 바꾸지 않는다. H1은 새 기능이므로 동결 기간에 넣을지는 운영자가 정한다.
