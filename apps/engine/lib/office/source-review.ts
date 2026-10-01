@@ -35,8 +35,20 @@ function sourceStrings(value: unknown): string[] {
   return [];
 }
 
+// The free-chat Office context carries machine fields next to the text: source ('provided'),
+// scope ('all') and each project's id, status and scope. As catalog entries they let a model mark
+// an answer 'traced' by citing a field value (2026-10-01 council test), so only the note and
+// project names are source text. Workflow facts keep the generic walk.
+function contextStrings(context: unknown): string[] {
+  if (context && typeof context === 'object' && !Array.isArray(context) && typeof (context as { source?: unknown }).source === 'string' && Array.isArray((context as { projects?: unknown }).projects)) {
+    const { note, projects } = context as { note?: unknown; projects: { name?: unknown }[] };
+    return [note, ...projects.map(project => project?.name)].filter((value): value is string => typeof value === 'string');
+  }
+  return sourceStrings(context);
+}
+
 function sourceTexts(request: SourceReviewRequest, context: unknown): string[] {
-  const source = [request.message, ...sourceStrings(context), ...(request.history || request.boundedHistory || []).filter(turn => turn.role === 'user').map(turn => turn.text)];
+  const source = [request.message, ...contextStrings(context), ...(request.history || request.boundedHistory || []).filter(turn => turn.role === 'user').map(turn => turn.text)];
   // The catalog and final validator share exactly this source boundary.
   // Do not widen it to persona examples, drafts or caller-supplied policy strings.
   if (request.scope === 'classin' || request.scope === 'personal' || request.scope === 'all') source.push(buildOfficeOperatingPolicy(request.scope));
