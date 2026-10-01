@@ -89,9 +89,8 @@ function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = 
           meta: "Cross-pillar · deal × project",
           source: { from: "Risk", ref: deal.id },
           decisions: [
-            action("딜 열기", "deals", true),
+            action("거래 열기", "deals", true),
             action("프로젝트 열기", "projects"),
-            action("오늘 보류", "wait"),
           ],
         }];
       }
@@ -149,10 +148,10 @@ function buildRevenueSignals(revenue, staleDealIds = new Set()) {
         summary: `${deal.stage} 단계에서 마지막 활동이 오래됐습니다. 오늘 follow-up을 보내거나 다음 액션을 명확히 정해야 합니다.`,
         meta: `Deal · ${formatMoney(deal.value)} · close ${deal.close}`,
         source: { from: "Deals", ref: deal.id },
+        // `리마인드 초안`은 초안 없이 거래 창만 열었고 `오늘 보류`는 리듬(생활 루틴)으로 갔다 —
+        // 둘 다 이름과 도착지가 어긋나 뺐다(확인할 것 스펙 §1·단계 0). 끝내기는 단계 1에서 붙는다.
         decisions: [
-          action("리마인드 초안", "followup", true),
-          action("딜 보드 열기", "deals"),
-          action("오늘 보류", "wait"),
+          action("거래 열기", "deals", true),
         ],
       });
     });
@@ -235,15 +234,10 @@ function buildAutomationSignals(automations) {
   }));
 }
 
-function buildWorkSignals(projects, work) {
+// "오늘의 결정 기록이 비어 있습니다" 신호는 뺐다 — 오늘이 아니라 결정 기록이 0건일 때 떴고,
+// 업무가 아니라 의례를 만들었다(확인할 것 스펙 §1·단계 0).
+function buildWorkSignals(projects) {
   const projectRows = Array.isArray(projects.projects) ? projects.projects : [];
-  const decisions = Array.isArray(work.decisions) ? work.decisions : [];
-  const decisionState = work?.decisionsState?.state;
-  const decisionComplete = decisionState
-    ? decisionState === "live" || decisionState === "live-empty"
-    : work?.source === "supabase"
-      && !(work.failedSources || []).includes("decisions")
-      && !(work.partialSources || []).includes("decisions");
   const signals = [];
 
   const blocked = projectRows.find((project) => project.status === "Blocked");
@@ -259,22 +253,6 @@ function buildWorkSignals(projects, work) {
       decisions: [
         action("프로젝트 열기", "projects", true),
         action("결정 기록", "decision"),
-      ],
-    });
-  }
-
-  if (decisionComplete && !decisions.length && signals.length < 2) {
-    signals.push({
-      id: "work-decision-missing",
-      tone: "neutral",
-      kind: "Work",
-      title: "오늘의 결정 기록이 비어 있습니다",
-      summary: "브랜드 자산으로 남길 판단을 하나라도 기록하면 주간 회고와 콘텐츠 전환이 쉬워집니다.",
-      meta: "Decision · daily ritual",
-      source: { from: "Decisions", ref: "TODAY" },
-      decisions: [
-        action("결정 기록", "decision", true),
-        action("Rhythm 보기", "rhythm"),
       ],
     });
   }
@@ -380,7 +358,6 @@ export async function GET() {
   };
 
   const projects = readLedger(projectsResult);
-  const work = readLedger(workResult);
   const content = readLedger(contentResult);
   const revenue = readLedger(revenueResult);
   const operatorRevenue = filterOperatorOwnedRevenue(revenue);
@@ -429,7 +406,7 @@ export async function GET() {
       ...buildRevenueSignals(operatorRevenue, staleDealIds),
       ...buildContentSignals(content),
       ...buildAutomationSignals(automations),
-      ...buildWorkSignals(projects, work),
+      ...buildWorkSignals(projects),
     ],
     dailyFocus,
   ).slice(0, 7);

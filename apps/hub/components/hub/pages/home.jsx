@@ -65,7 +65,7 @@ function useTodaySchedule(reloadKey) {
   return state;
 }
 
-function TriageDetail({ signal, onDecide, recommendation = null, onGuidanceAsk, onNavigate }) {
+function TriageDetail({ signal, onOpen, recommendation = null, onGuidanceAsk, onNavigate }) {
   if (!signal) {
     return (
       <div className="fx-card">
@@ -101,22 +101,21 @@ function TriageDetail({ signal, onDecide, recommendation = null, onGuidanceAsk, 
 
       {decisions.length ? (
         <>
-          <div className="fx-eyebrow" style={{ marginTop: 24 }}>결정</div>
+          {/* 이 버튼들은 화면을 여는 링크다 — 누른 것만으로 항목을 지우지 않는다(확인할 것 스펙 §4.1).
+              가짜 `보류`(컴포넌트 상태로만 숨기던 버튼)는 없앴다 — 서버에 남는 보류가 생길 때 돌아온다. */}
+          <div className="fx-eyebrow" style={{ marginTop: 24 }}>다음 행동</div>
           <div className="fx-actions">
             {decisions.map((d, i) => (
               <button
                 key={`${d.action}-${i}`}
                 type="button"
                 className={`fx-pill-btn${d.primary ? ' fx-pill-btn--primary' : ''}`}
-                onClick={() => onDecide(signal, d)}
+                onClick={() => onOpen(signal, d)}
               >
                 {d.label}
                 <kbd>{i + 1}</kbd>
               </button>
             ))}
-            <button type="button" className="fx-pill-btn fx-pill-btn--ghost" onClick={() => onDecide(signal, null)}>
-              보류
-            </button>
           </div>
         </>
       ) : null}
@@ -181,20 +180,16 @@ export function Home({ onNavigate, onGuidanceAsk }) {
   const schedule = useTodaySchedule(reloadKey);
   const { status, signals } = brief;
   const guruRecommendations = useGuruRecommendations();
-  const [resolved, setResolved] = React.useState(() => new Set());
   const [cursor, setCursor] = React.useState(0);
 
-  const queue = React.useMemo(() => signals.filter((s) => !resolved.has(s.id)), [signals, resolved]);
+  const queue = signals;
   const active = queue[Math.min(cursor, Math.max(queue.length - 1, 0))] || null;
-  const total = signals.length;
-  const done = total - queue.length;
 
-  const decide = React.useCallback((signal, decision) => {
-    const target = decision ? SIGNAL_TARGETS[decision.action] : null;
-    if (decision && !target) return;
-    setResolved((prev) => new Set(prev).add(signal.id));
-    setCursor(0);
-    if (target) onNavigate(target);
+  // 다음 행동은 이동만 한다 — 항목은 대상 기록이 바뀌어 규칙이 더는 잡지 않을 때 빠진다.
+  const open = React.useCallback((signal, action) => {
+    const target = action ? SIGNAL_TARGETS[action.action] : null;
+    if (!target) return;
+    onNavigate(target);
   }, [onNavigate]);
 
   // §8.1 페이지 레벨 단축키 — 입력 요소 밖 + 드로어 닫힘일 때만.
@@ -214,12 +209,12 @@ export function Home({ onNavigate, onGuidanceAsk }) {
         setCursor((c) => Math.max(c - 1, 0));
       } else if (/^[1-9]$/.test(e.key)) {
         const d = (active.decisions || [])[Number(e.key) - 1];
-        if (d) { e.preventDefault(); decide(active, d); }
+        if (d) { e.preventDefault(); open(active, d); }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, queue.length, decide]);
+  }, [active, queue.length, open]);
 
   return (
     <div className="hub-futura fade-up">
@@ -229,20 +224,10 @@ export function Home({ onNavigate, onGuidanceAsk }) {
             Daily Brief · {formatEyebrowDate(new Date())}
           </div>
           <h2 className="fx-hero">
-            {status === 'loading' ? '불러오는 중' : status === 'error' ? '신호를 확인하지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : queue.length ? `${queue.length}건 남았습니다` : status === 'partial' ? '일부 신호 확인 필요' : '확인할 신호 없음'}
+            {status === 'loading' ? '불러오는 중' : status === 'error' ? '신호를 확인하지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : queue.length ? `확인할 것 ${queue.length}건` : status === 'partial' ? '일부 기록 확인 필요' : '확인할 것 없음'}
           </h2>
         </div>
 
-        {total ? (
-          <div className="fx-progress-wrap">
-            <div className={`fx-progress${done >= total ? ' fx-progress--completed' : ''}`}>
-              <i style={{ width: `${Math.round((done / total) * 100)}%` }} />
-            </div>
-            <span className="mono" style={{ fontSize: 11, color: done >= total ? 'var(--moon-200)' : 'var(--fg-dim)' }}>
-              {done}/{total}{done >= total ? ' ✦' : ''}
-            </span>
-          </div>
-        ) : null}
       </header>
 
       {/* 저녁·다음 날 아침의 하루 리뷰 한 줄 — 트리아지 큐 밖(2026-09-23 지속 루프 설계 §4.3). */}
@@ -279,7 +264,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
 
           <TriageDetail
             signal={active}
-            onDecide={decide}
+            onOpen={open}
             recommendation={active?.subject?.id ? recommendationForSubject(guruRecommendations, active.subject.id) : null}
             onGuidanceAsk={onGuidanceAsk}
             onNavigate={onNavigate}
@@ -298,7 +283,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       </div>
 
       <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <Kbd>J</Kbd><Kbd>K</Kbd> 이동 · <Kbd>1</Kbd>–<Kbd>9</Kbd> 결정
+        <Kbd>J</Kbd><Kbd>K</Kbd> 이동 · <Kbd>1</Kbd>–<Kbd>9</Kbd> 열기
       </footer>
     </div>
   );
