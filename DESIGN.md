@@ -408,7 +408,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - `Card` (padded / unpadded), `SectionTitle`, `Tabs`
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
 - `Input`, `Checkbox`, `Progress`, `ProgressRing`, `Sparkline`, `Placeholder` (0 call sites), `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
-  - `Checkbox shape="square | diamond | folder"`: default square; the project work list uses diamond for milestones and folder for work groups. Type labels accompany the shapes, checked states keep a check glyph, and all variants retain the same keyboard/ARIA behavior and neutral tokens (operator request 2026-10-01).
+  - `Checkbox shape="square | diamond | folder"`: default square; the project work list uses diamond for milestones and a 24px folder for work groups. The folder outline and front seam remain visible in both states; only its lower-right circular completion marker fills and gains a check. Type labels accompany the shapes, and all variants retain the same keyboard/ARIA behavior and neutral tokens (operator request 2026-10-01).
 - Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` — defined in
   `hub-primitives.jsx` itself (there is no `form-fields.jsx`); the contract lives in `form-fields.test.mjs`
 - `SegmentedControl`, `ChipToggle`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
