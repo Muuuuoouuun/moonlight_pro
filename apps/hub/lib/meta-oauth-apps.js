@@ -1,8 +1,4 @@
-const BRANDS = Object.freeze({
-  bridgemaker: { appKey: "moonlight", handle: "ml_bridgemaker" },
-  politicofficer: { appKey: "politic_officer", handle: "politic_officer" },
-  classmoon: { appKey: "classmoon", handle: "moon.classin" },
-});
+import { SOCIAL_BRAND_REGISTRY as BRANDS, socialBrandSupportsProvider } from './social-brand-registry.js';
 
 const PROVIDERS = Object.freeze({
   instagram_api: {
@@ -40,7 +36,8 @@ function appCredentials(provider, appKey) {
       appSecret: process.env.COM_MOON_META_THREADS_APP_SECRET?.trim() || process.env.META_THREADS_APP_SECRET?.trim() || process.env.THREADS_APP_SECRET?.trim() || "",
     };
   }
-  const suffix = appKey === "politic_officer" ? "POLITIC_OFFICER" : "CLASSMOON";
+  const suffix = Object.values(BRANDS).find(brand => brand.appKey === appKey)?.envSuffix;
+  if (!suffix) return { appId: '', appSecret: '' };
   return {
     appId: process.env[`${prefix}_${suffix}_APP_ID`]?.trim() || "",
     appSecret: process.env[`${prefix}_${suffix}_APP_SECRET`]?.trim() || "",
@@ -51,16 +48,16 @@ export function resolveMetaOAuthApp({ provider, brandKey, brandHandle }) {
   if (!PROVIDERS[provider]) return null;
   const key = brandKey == null ? "bridgemaker" : brandKey;
   const brand = BRANDS[key];
-  if (!brand || normalizeHandle(brandHandle) !== brand.handle) return null;
+  if (!brand || !socialBrandSupportsProvider(key, provider) || normalizeHandle(brandHandle) !== brand.brandHandle) return null;
   const credentials = appCredentials(provider, brand.appKey);
   const duplicateAppId = brand.appKey !== "moonlight" && Boolean(credentials.appId) &&
-    Object.values(BRANDS).some((other) => other.appKey !== brand.appKey &&
+    Object.values(BRANDS).some((other) => socialBrandSupportsProvider(other.brandKey, provider) && other.appKey !== brand.appKey &&
       appCredentials(provider, other.appKey).appId === credentials.appId);
   return {
     ...credentials,
     appKey: brand.appKey,
     brandKey: key,
-    brandHandle: brand.handle,
+    brandHandle: brand.brandHandle,
     scopes: scopesFor(provider, brand.appKey),
     configured: Boolean(credentials.appId && credentials.appSecret && !duplicateAppId),
     hasAppId: Boolean(credentials.appId),
@@ -96,12 +93,12 @@ export function matchesMetaOAuthConnection(row, app, accountId = "") {
 
 export function isValidMetaOAuthAppIdentity(state) {
   return typeof state?.appId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(state.appId) &&
-    typeof state?.appKey === "string" && ["moonlight", "politic_officer", "classmoon"].includes(state.appKey);
+    typeof state?.appKey === "string" && Object.values(BRANDS).some(brand => brand.appKey === state.appKey);
 }
 
 export function configuredMetaOAuthApps(provider) {
   if (!PROVIDERS[provider]) return [];
   return Object.entries(BRANDS).map(([brandKey, brand]) =>
-    resolveMetaOAuthApp({ provider, brandKey, brandHandle: brand.handle }),
-  ).filter((app) => app.configured);
+    resolveMetaOAuthApp({ provider, brandKey, brandHandle: brand.brandHandle }),
+  ).filter((app) => app?.configured);
 }

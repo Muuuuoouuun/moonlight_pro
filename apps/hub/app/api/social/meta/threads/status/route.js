@@ -9,6 +9,7 @@ import {
 } from "@/lib/meta-threads";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { summarizeSocialAccountStatus } from "@/lib/social-account-status";
+import { getMetaTokenStatus } from "@/lib/social-token-health";
 import { matchesMetaOAuthConnection, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
 export const runtime = "nodejs";
@@ -34,6 +35,7 @@ export async function GET(req) {
     available,
     selector: (row) => !accountId || row.account_key === accountId,
     summarize: summarizeMetaThreadsConnection,
+    connectedStatus: (_row, connection) => getMetaTokenStatus(connection),
   });
 
   return NextResponse.json({
@@ -49,6 +51,8 @@ export async function GET(req) {
     hasOAuthStateSecret: hasMetaThreadsOAuthStateSecret(),
     connection: summary.connection,
     connections: summary.connections,
+    verification: "stored-metadata",
+    refreshScheduled: false,
     setup: buildMetaThreadsSetupUrls(origin),
-  });
+  }, { headers: { "cache-control": "no-store" } });
 }

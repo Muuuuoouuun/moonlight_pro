@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import {
@@ -10,6 +10,7 @@ import {
   summarizeYouTubeConnection,
 } from "@/lib/youtube-oauth";
 import { summarizeSocialAccountStatus } from "@/lib/social-account-status";
+import { getYouTubeUploadReadiness } from "@/lib/social-upload-readiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,11 +42,13 @@ export async function GET(req) {
     hasClientSecret: config.hasClientSecret,
     hasOAuthStateSecret: hasStateSecret,
     connection: summary.connection,
-    connections: summary.connections,
+    connections: summary.connections.map((connection) => ({ ...connection, upload: getYouTubeUploadReadiness(connection) })),
+    verification: "stored-metadata",
+    refreshScheduled: false,
     setup: {
       redirectUri: resolveYouTubeRedirectUri(req.nextUrl.origin),
       connectPath: "/api/social/youtube/connect",
       oneChannelPerWorkspace: false,
     },
-  });
+  }, { headers: { "cache-control": "no-store" } });
 }
