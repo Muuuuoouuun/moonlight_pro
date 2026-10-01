@@ -10,6 +10,7 @@ const PROJECT_OTHER_ID = "33333333-3333-4333-8333-333333333333";
 
 const serverReadStub = `
 export function eqFilter(value) { return \`eq.\${value}\`; }
+export function inFilter(values) { return \`in.(\${values.join(',')})\`; }
 export function withWorkspaceFilter(filters = []) {
   const workspaceId = globalThis.__workLedgerTestState.workspaceId;
   return workspaceId ? [["workspace_id", \`eq.\${workspaceId}\`], ...filters] : filters;
@@ -858,4 +859,37 @@ test("a weekly ritual without an explicit target defaults to once a week", async
 
   assert.equal(ledger.rituals[0].category, "general");
   assert.equal(ledger.rituals[0].targetPerWeek, 1);
+});
+
+// 결정 일지(확인할 것 스펙 §6) — 출처를 다섯 갈래로 읽고, 그래서 할 일은 할 일 쪽 decision_id로 찾는다.
+// 막힘 풀림 며칠은 프로젝트 막힘 이력의 같은 결정 줄에서 센다. 할 일을 못 읽으면 "없음"이 아니라 모름(null).
+test("decision journal rows carry source, linked project, follow-up tasks and unblock days", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.projects = [{ id: PROJECT_TARGET_ID, name: "프로젝트 C", status: "active", blocker_history: [
+    { decisionId: "decision-1", at: "2026-09-22T00:00:00Z", resolvedAt: "2026-10-01T00:00:00Z", resolution: "decision" },
+  ] }];
+  state.rows.decisions = [
+    { id: "decision-1", title: "A안", decided_at: "2026-10-01T00:00:00Z", project_id: PROJECT_TARGET_ID,
+      meta: { source: "project-unblock", sourceRef: { type: "project", id: PROJECT_TARGET_ID }, nextTaskId: "task-1", unblockedProjectId: PROJECT_TARGET_ID } },
+    { id: "decision-2", title: "회의 결정", decided_at: "2026-09-30T00:00:00Z", meta: { source: "meeting-review", sourceRef: { type: "meeting", id: "note-1" } } },
+    { id: "decision-3", title: "직접", decided_at: "2026-09-29T00:00:00Z", meta: { source: "hub-work" } },
+  ];
+  state.rows.tasks = [{ id: "task-1", title: "A안 견적 보내기", status: "todo", due_at: "2026-10-03T00:00:00Z", decision_id: "decision-1" }];
+
+  const ledger = await workLedger.getWorkLedger();
+  const [unblock, meeting, manual] = ledger.decisions;
+  assert.equal(unblock.source, "unblock");
+  assert.equal(unblock.projectName, "프로젝트 C");
+  assert.deepEqual(unblock.followups, [{ id: "task-1", title: "A안 견적 보내기", status: "todo", dueAt: "2026-10-03T00:00:00Z" }]);
+  assert.equal(unblock.unblockedDays, 9);
+  assert.equal(meeting.source, "meeting");
+  assert.deepEqual(meeting.sourceRef, { type: "meeting", id: "note-1" });
+  assert.deepEqual(meeting.followups, []);
+  assert.equal(manual.source, "manual");
+  const taskCall = state.calls.find((call) => call.table === "tasks");
+  assert.deepEqual(taskCall.options.filters.at(-1), ["meta->>decision_id", "in.(decision-1,decision-2,decision-3)"]);
+
+  state.rows.tasks = null;
+  const unknown = await workLedger.getWorkLedger();
+  assert.equal(unknown.decisions[0].followups, null);
 });

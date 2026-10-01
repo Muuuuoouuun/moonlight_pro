@@ -35,6 +35,8 @@ const KEY_PREFIX = Object.freeze({
 const TASK = (record) => ({ key: 'task', label: '할 일로 만들기', record, kind: 'write' });
 const SNOOZE = { key: 'snooze', label: '보류 · 다시 볼 날', record: '다시 볼 날과 이유', kind: 'write' };
 const open = (label, action) => ({ key: 'open', label, record: '', kind: 'navigate', action });
+// 그 밖에 — 대상 이름·출처를 채운 결정 입력을 연다(§6). 화면 이동이라 끝낸 것으로 세지 않는다.
+const DECIDE = { label: '결정으로 남기기', action: 'decision' };
 
 const CATALOG = Object.freeze({
   deal: {
@@ -44,7 +46,7 @@ const CATALOG = Object.freeze({
       { key: 'reschedule', label: '날짜 다시 정하기', record: '다음 연락일', kind: 'write' },
       SNOOZE,
     ],
-    links: [{ label: '거래 열기', action: 'deals' }],
+    links: [{ label: '거래 열기', action: 'deals' }, DECIDE],
     taskTitle: (name) => `${name} 다음 연락`,
     schedule: { minutes: 20, verb: '연락 기록' },
   },
@@ -56,20 +58,20 @@ const CATALOG = Object.freeze({
   },
   automation: {
     outcomes: [open('실행 기록에서 원인 보기', 'review'), TASK('할 일 1건'), SNOOZE],
-    links: [{ label: '자동화 확인', action: 'automations' }],
+    links: [{ label: '자동화 확인', action: 'automations' }, DECIDE],
     taskTitle: (name) => `${name} 실패 원인 확인`,
     schedule: { minutes: 15, verb: '원인 보기' },
   },
   content: {
     outcomes: [open('이어쓰기', 'write'), TASK('할 일 1건'), SNOOZE],
-    links: [{ label: '소재·제작 보기', action: 'queue' }],
+    links: [{ label: '소재·제작 보기', action: 'queue' }, DECIDE],
     taskTitle: (name) => `${name} 이어쓰기`,
     schedule: { minutes: 45, verb: '이어쓰기' },
   },
   project: {
     // 계획을 읽지 못한 막힌 프로젝트 — 막힘 풀기 없이 프로젝트를 여는 것이 1번이다(unblockEntry 참고).
     outcomes: [open('프로젝트 열기', 'projects'), TASK('할 일 1건 (이 프로젝트에 연결)'), SNOOZE],
-    links: [],
+    links: [DECIDE],
     taskTitle: (name) => `${name} 막힌 점 풀기`,
     schedule: { minutes: 15, verb: '막힌 점 확인' },
   },
@@ -102,7 +104,7 @@ function unblockEntry(signal) {
     outcomes: decision
       ? [{ ...UNBLOCK_DECISION, recommended: true }, UNBLOCK_RESOLVED, TASK('할 일 1건 (이 프로젝트에 연결)'), SNOOZE]
       : [UNBLOCK_RESOLVED, UNBLOCK_DECISION, TASK('할 일 1건 (이 프로젝트에 연결)'), SNOOZE],
-    links: [{ label: '프로젝트 열기', action: 'projects' }],
+    links: [{ label: '프로젝트 열기', action: 'projects' }, DECIDE],
     taskTitle: CATALOG.project.taskTitle,
     // 병목이 의사결정이면 30분 '정하기', 그 밖은 15분 '막힌 점 확인'(§4.7 표).
     schedule: decision ? { minutes: 30, verb: '정하기' } : CATALOG.project.schedule,

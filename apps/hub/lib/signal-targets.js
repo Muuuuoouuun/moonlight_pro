@@ -46,3 +46,18 @@ export function withEntityRef(target, source) {
   }
   return target;
 }
+
+// 확인할 것 `그 밖에`의 결정으로 남기기 — 대상 이름과 출처를 채운 결정 입력(확인할 것 스펙 §6).
+const DECISION_SOURCE_TYPES = new Set(['project', 'deal', 'lead', 'account', 'automation', 'content']);
+export function decisionDraftTarget(item) {
+  const subject = item?.subject || {};
+  const params = new URLSearchParams({ new: 'decision' });
+  const name = String(subject.name || item?.title || '').trim();
+  if (name) params.set('title', `${name} · `);
+  if (DECISION_SOURCE_TYPES.has(subject.type) && subject.id) {
+    params.set('sourceType', subject.type);
+    params.set('sourceId', String(subject.id));
+  }
+  if (subject.type === 'project' && subject.id) params.set('projectId', String(subject.id));
+  return `dashboard/work/decisions?${params.toString()}`;
+}
