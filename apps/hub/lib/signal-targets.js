@@ -1,4 +1,6 @@
 // Shared destinations for signals from /api/hub/daily-brief.
+// 리듬(2026-09-23부터 생활 루틴 화면)으로 가던 `wait`·`start`·`rhythm`과, 아무 데도 가지 않던
+// `dismiss`·`hold`는 뺐다 — 버튼 이름과 도착지가 어긋났다(확인할 것 스펙 §1·단계 0).
 export const SIGNAL_TARGETS = {
   draft: 'dashboard/content/studio?new=draft',
   escalate: 'dashboard/revenue/deals',
@@ -6,20 +8,15 @@ export const SIGNAL_TARGETS = {
   deals: 'dashboard/revenue/deals',
   leads: 'dashboard/revenue/leads',
   revenue: 'dashboard/revenue/overview',
-  wait: 'dashboard/work/rhythm',
   write: 'dashboard/content/studio',
   queue: 'dashboard/content/queue',
   delay: 'dashboard/content/queue',
   review: 'dashboard/automations/runs',
   flows: 'dashboard/automations/flows',
-  dismiss: 'dashboard/daily-brief',
   accept: 'dashboard/work/roadmap',
   chat: 'dashboard/agents/chat',
-  hold: 'dashboard/work/decisions',
-  start: 'dashboard/work/rhythm',
   projects: 'dashboard/work/projects',
   decision: 'dashboard/work/decisions?new=decision',
-  rhythm: 'dashboard/work/rhythm',
   focus: 'dashboard/work/calendar?focus=15',
   runs: 'dashboard/automations/runs',
   automations: 'dashboard/automations',
