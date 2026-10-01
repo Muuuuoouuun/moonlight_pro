@@ -138,6 +138,10 @@ export const DATABASE_FEATURES = [
       ['gore_threads_test_job_v1(uuid,text,jsonb)', 'expectedVersion'],
       ['gore_threads_test_job_v1(uuid,text,jsonb)', "'leaseExpiresAt',j.lease_expires_at"],
       ['gore_threads_test_job_v1(uuid,text,jsonb)', "'leaseRemainingMs',greatest"]] },
+  { name: '월요일 주말·주간 소식 종합', migration: '20261001_0065_monday_news_roundup.sql', tables: [],
+    functions: ['report_news_roundup_receipt_v1(uuid,date)','report_news_roundup_sources_v1(uuid,date)','report_news_roundup_save_v1(uuid,date,jsonb)'],
+    bodyIncludes: [['report_news_roundup_save_v1(uuid,date,jsonb)', "v_key:='news-weekly:'"]],
+    constraintIncludes: [['report_documents','report_documents_kind_check',"'research'"]] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

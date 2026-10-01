@@ -9,6 +9,9 @@ let source='';try { source=readFileSync(new URL('../supabase/migrations/20261001
 const available=process.getuid?.()!==0&&['initdb','pg_ctl','psql'].every(bin=>spawnSync(bin,['--version'],{stdio:'ignore'}).status===0);
 const W='11111111-1111-4111-8111-111111111111',R='22222222-2222-4222-8222-222222222222';
 const quote=value=>`'${String(value).replaceAll("'","''")}'`;
+test('canonical Monday migration preserves the exact original applied SQL bytes after concurrent numbering reconciliation',()=>{
+  assert.deepEqual(readFileSync(new URL('../supabase/migrations/20261001_0065_monday_news_roundup.sql',import.meta.url)),readFileSync(new URL('../docs/migration-history/20261001_0063_monday_news_roundup.sql',import.meta.url)));
+});
 test('report ledger persists immutable facts, replays requests, serializes weekly identity and scopes decisions',{skip:available?false:'local PostgreSQL unavailable'},async()=>{
   assert.ok(source,'report migration exists');
   const dir=mkdtempSync(join(tmpdir(),'reports-pg-')),data=join(dir,'data'),port=String(54000+process.pid%2000),env={...process.env,LC_ALL:'C'};
@@ -25,8 +28,34 @@ test('report ledger persists immutable facts, replays requests, serializes weekl
     sql(source);
     const qualityMigration=new URL('../supabase/migrations/20261001_0061_report_quality_projection.sql',import.meta.url);
     if(existsSync(qualityMigration))sql(readFileSync(qualityMigration,'utf8'));
+    sql('create table public.brands(id uuid primary key,workspace_id uuid,slug text,status text);');
+    const newsMigration=new URL('../supabase/migrations/20261001_0065_monday_news_roundup.sql',import.meta.url);
+    if(existsSync(newsMigration))sql(readFileSync(newsMigration,'utf8'));
     const command={action:'capture-weekly',kind:'weekly',scope:'company',title:'회사 주간',periodStart:'2026-09-24',periodEnd:'2026-09-30',payload:{status:'partial',facts:{stats:{contacts:null}},summary:'실제 집계'}};
     const invoke=(id,input,workspace=W,hash='a'.repeat(64))=>JSON.parse(sql(`set role service_role;select public.report_command_v1('${workspace}','${id}','${hash}',${quote(JSON.stringify(input))}::jsonb);reset role;`));
+    if(existsSync(newsMigration)) {
+      const start=sql("select (date_trunc('week',now() at time zone 'Asia/Seoul')::date-7)::text"),end=sql(`select ('${start}'::date+6)::text`);
+      const newsId='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',brandId='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+      sql(`insert into public.brands values('${brandId}','${W}','classmoon','active');
+        insert into public.research_briefs values('${newsId}','${W}','${brandId}',1,'new',('${start}'::date+5)::timestamp at time zone 'Asia/Seoul',now());
+        insert into public.research_brief_revisions values('${newsId}','${W}',1,'{"origin":"research-ai","title":"원문 근거"}');`);
+      const newsPayload={origin:'monday-news-roundup',periodStart:start,periodEnd:end,artifactKind:'markdown',status:'partial',facts:{verificationLevel:'unreviewed',facts:['기관 예고']},interpretation:'## 주말 수집 소식',briefIds:[newsId],sourceRefs:[{url:'https://example.com/news',label:'원문'}]};
+      const news=(name,workspace=W,payload=newsPayload,date=start)=>JSON.parse(sql(`set role service_role;select public.${name}('${workspace}','${date}'${name==='report_news_roundup_save_v1'?','+quote(JSON.stringify(payload))+'::jsonb':''});reset role;`));
+      assert.equal(news('report_news_roundup_receipt_v1').status,'not-found');
+      assert.equal(news('report_news_roundup_sources_v1').entries[0].id,newsId);
+      assert.deepEqual(news('report_news_roundup_sources_v1',R).entries,[]);
+      assert.equal(news('report_news_roundup_save_v1',R).status,'invalid-input','another workspace cannot save these references');
+      assert.equal(news('report_news_roundup_save_v1',W,{...newsPayload,periodEnd:start}).status,'invalid-input');
+      const savedNews=news('report_news_roundup_save_v1');assert.equal(savedNews.status,'saved');
+      assert.equal(news('report_news_roundup_save_v1').reportId,savedNews.reportId);
+      assert.equal(news('report_news_roundup_receipt_v1').status,'duplicate');
+      assert.equal(sql(`select kind||':'||scope from public.report_documents where id='${savedNews.reportId}'`),'research:content');
+      assert.equal(invoke('dddddddd-dddd-4ddd-8ddd-dddddddddddd',{action:'record-decision',reportId:savedNews.reportId,expectedRevision:1,decision:'원문 검토 뒤 보류'}).revision,2);
+      assert.equal(news('report_news_roundup_save_v1',W,{...newsPayload,interpretation:'다른 본문'}).revision,2);
+      assert.equal(sql(`select decision from public.report_documents where id='${savedNews.reportId}'`),'원문 검토 뒤 보류');
+      for(const role of ['anon','authenticated'])assert.equal(sql(`select has_function_privilege('${role}','public.report_news_roundup_save_v1(uuid,date,jsonb)','EXECUTE')`),'f');
+      sql(`delete from public.report_documents where id='${savedNews.reportId}';delete from public.research_brief_revisions where brief_id='${newsId}';delete from public.research_briefs where id='${newsId}';`);
+    }
     const created=invoke(R,command);assert.equal(created.status,'saved');
     assert.equal(invoke(R,command).status,'duplicate');
     assert.equal(invoke(R,command,W,'b'.repeat(64)).status,'conflict');

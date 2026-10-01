@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 let getReportsArchive;try { ({getReportsArchive}=await import('./reports-ledger.js')); } catch {}
 const W='11111111-1111-4111-8111-111111111111';
+test('stored Monday news keeps research classification, completed week, markdown and operator decision',async()=>{
+  const result=await getReportsArchive({workspaceId:W,invokeRpc:async()=>({ok:true,data:{status:'live',items:[{source:'snapshot',row:{id:W,kind:'research',scope:'content',decision:'보류',revision:2,payload:{origin:'monday-news-roundup',periodStart:'2026-09-28',periodEnd:'2026-10-04',interpretation:'## 주말 소식',uncertainties:['수집일 기준'],facts:{verificationLevel:'unreviewed',facts:['기관 발표']}}}}]}})});
+  const report=result.reports[0];assert.equal(report.kind,'research');assert.equal(report.scope,'content');assert.equal(report.periodStart,'2026-09-28');assert.equal(report.artifactKind,'markdown');assert.equal(report.interpretation,'## 주말 소식');assert.equal(report.decision,'보류');assert.deepEqual(report.uncertainties,['수집일 기준']);
+});
 test('archive has one transactional read and opaque chronology cursor, with null evidence intact',async()=>{
   assert.equal(typeof getReportsArchive,'function');let calls=0;
   const result=await getReportsArchive({workspaceId:W,actorId:'operator',invokeRpc:async(name,params)=>{
