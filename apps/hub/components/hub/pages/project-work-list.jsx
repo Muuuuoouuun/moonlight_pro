@@ -182,7 +182,7 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
     const pending = pendingIds.has(task.id) || feedback[task.id]?.status === 'saving';
     return <div key={task.id} className={styles.task} data-task-id={task.id} data-done={task.done ? 'true' : 'false'} {...ordering.rowProps(task.done ? 'done' : 'open', task.id)}>
       <div className={`${styles.row} hub-row`}>
-        <span className={styles.checkTarget} title={TYPE_LABEL[type]}><Checkbox className={styles.checkbox} size={type === 'task' ? 18 : 22} shape={TYPE_SHAPE[type]} checked={task.done} disabled={!canWrite || pending}
+        <span className={styles.checkTarget} title={TYPE_LABEL[type]}><Checkbox className={styles.checkbox} size={type === 'task' ? 18 : type === 'subproject' ? 24 : 22} shape={TYPE_SHAPE[type]} checked={task.done} disabled={!canWrite || pending}
           label={`${TYPE_LABEL[type]} ${task.done ? '다시 열기' : '완료'}: ${task.title}`} onChange={(_next, event) => toggle(task, null, event)} /></span>
         <button type="button" data-task-expand className={styles.taskTitle} aria-expanded={isOpen} aria-controls={`project-work-${task.id}`}
           onClick={() => setExpanded(previous => ({ ...previous, [task.id]: !previous[task.id] }))}>

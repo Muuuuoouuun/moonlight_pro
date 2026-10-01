@@ -436,9 +436,17 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
       }}
     >
       {shaped ? <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d={shape === 'diamond' ? 'M12 1 23 12 12 23 1 12Z' : 'M2 5a2 2 0 0 1 2-2h5l3 3h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2Z'}
-          fill={isChecked ? 'var(--moon-300)' : 'none'} stroke={isChecked ? 'var(--moon-300)' : 'var(--line-strong)'} strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-        {isChecked && <path d="m7 12 3.5 3.5 6-6" fill="none" stroke="var(--bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+        {shape === 'folder' ? <>
+          <path d="M2 8V5a2 2 0 0 1 2-2h5l3 3h8a2 2 0 0 1 2 2v5M13 20H4a2 2 0 0 1-2-2V8h20"
+            fill="none" stroke="var(--fg-muted)" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="18" cy="18" r="5" fill={isChecked ? 'var(--moon-300)' : 'var(--surface)'}
+            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-strong)'} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+          {isChecked && <path d="m15.5 18 1.7 1.7 3.5-3.5" fill="none" stroke="var(--bg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
+        </> : <>
+          <path d="M12 1 23 12 12 23 1 12Z" fill={isChecked ? 'var(--moon-300)' : 'none'}
+            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-strong)'} strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+          {isChecked && <path d="m7 12 3.5 3.5 6-6" fill="none" stroke="var(--bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+        </>}
       </svg> : isChecked && (
         <span className="hub-checkbox__icon" aria-hidden="true">
           <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />
