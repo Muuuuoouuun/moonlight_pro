@@ -55,6 +55,16 @@ final class HubStore: ObservableObject {
     }
 
     @discardableResult
+    func signIn(baseURL: String, username: String, password: String) async -> Bool {
+        guard !isConnecting, !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !password.isEmpty else { return false }
+        // connect can return an origin for an anonymous read. A login form must
+        // only close after credentials have been accepted, never on that path.
+        let origin = await connect(baseURL: baseURL, username: username, password: password)
+        return origin != nil && !needsLogin
+    }
+
+    @discardableResult
     func connect(baseURL: String, username: String = "", password: String = "") async -> String? {
         let normalizedURL: URL
         do {
