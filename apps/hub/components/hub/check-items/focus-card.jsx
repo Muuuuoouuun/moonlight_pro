@@ -10,7 +10,7 @@
 import React from 'react';
 import { Iconed } from '../hub-icons';
 import { Kbd, TextField } from '../hub-primitives';
-import { SIGNAL_TARGETS, withEntityRef } from '@/lib/signal-targets';
+import { SIGNAL_TARGETS, decisionDraftTarget, withEntityRef } from '@/lib/signal-targets';
 import {
   createTaskForItem,
   dayAfter,
@@ -361,7 +361,7 @@ export function FocusCard({
         <div className="ci-links">
           <span style={{ marginRight: 6 }}>그 밖에</span>
           {links.map((link) => (
-            <button key={link.label} type="button" className="fx-pill-btn fx-pill-btn--ghost" onClick={() => onNavigate?.(withEntityRef(SIGNAL_TARGETS[link.action], item.source))}>
+            <button key={link.label} type="button" className="fx-pill-btn fx-pill-btn--ghost" onClick={() => onNavigate?.(link.action === 'decision' ? decisionDraftTarget(item) : withEntityRef(SIGNAL_TARGETS[link.action], item.source))}>
               {link.label} <Iconed name="arrowRight" size={11} />
             </button>
           ))}

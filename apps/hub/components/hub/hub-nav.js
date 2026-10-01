@@ -144,7 +144,7 @@ export const REVENUE_ROUTE_LABELS = {
 const PLANNING_TAIL = [
   { key: 'prj-calendar', label: 'Calendar', path: 'dashboard/work/calendar' },
   { key: 'prj-roadmap', label: 'Roadmap', path: 'dashboard/work/roadmap' },
-  { key: 'prj-decisions', label: 'Decisions', path: 'dashboard/work/decisions' },
+  { key: 'prj-decisions', label: '결정 일지', path: 'dashboard/work/decisions' },
   { key: 'prj-rhythm', label: 'Rhythm', path: 'dashboard/work/rhythm' },
 ];
 

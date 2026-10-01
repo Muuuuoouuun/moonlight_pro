@@ -42,7 +42,7 @@ const PRIORITIES = new Set(["low", "medium", "high", "critical"]);
 const PROJECT_GENRES = new Set(["company", "sales", "it", "content", "other"]);
 // 확인할 것(2026-09-30 스펙 §5): 막힘 풀기 갈래 · 결정의 출처 · 할 일의 신호 키.
 const UNBLOCK_RESOLUTIONS = new Set(["resolved", "decision", "next-version"]);
-const DECISION_SOURCE_REF_TYPES = new Set(["project", "deal", "lead", "account", "automation", "content"]);
+const DECISION_SOURCE_REF_TYPES = new Set(["project", "deal", "lead", "account", "automation", "content", "meeting", "memo"]);
 const SIGNAL_KEY = /^[a-z-]+:[^\s]{1,180}$/;
 // 제품에 붙는 일의 종류(제품 운영실 §0): 신기능·보수·연락. 보수는 반복 주기를 가질 수 있다.
 const PROJECT_WORK_TYPES = new Set(["feature", "maintenance", "contact"]);

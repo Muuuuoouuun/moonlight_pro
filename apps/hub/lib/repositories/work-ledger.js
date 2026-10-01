@@ -1,8 +1,10 @@
 import {
   eqFilter,
   fetchSupabaseRows,
+  inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
+import { decisionSourceKey } from "../decision-sources.js";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 import { WORKSPACE_ROW_SELECT } from "@/lib/workspace-row-select";
 import {
@@ -80,8 +82,15 @@ function resolveDecisionLinks(row) {
   return 0;
 }
 
-function mapDecisions(rows, profileById) {
-  return rows.map((row) => ({
+function decisionSourceRef(meta) {
+  const ref = meta.sourceRef && typeof meta.sourceRef === "object" ? meta.sourceRef : null;
+  return ref && typeof ref.type === "string" && typeof ref.id === "string" ? { type: ref.type, id: ref.id } : null;
+}
+
+function mapDecisions(rows, profileById, projectNameById = new Map()) {
+  return rows.map((row) => {
+    const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
+    return {
     id: row.id,
     date: formatDecisionDate(row.decided_at || row.created_at),
     status: resolveDecisionStatus(row),
@@ -95,7 +104,55 @@ function mapDecisions(rows, profileById) {
     projectId: row.project_id || "",
     rationale: row.rationale || "",
     decidedAt: row.decided_at || "",
-  }));
+    // 결정 일지(확인할 것 스펙 §6) — 출처 칩·연결 프로젝트·막힘 풀림 링크.
+    source: decisionSourceKey(meta.source),
+    sourceRef: decisionSourceRef(meta),
+    projectName: row.project_id ? projectNameById.get(row.project_id) || "" : "",
+    nextTaskId: typeof meta.nextTaskId === "string" ? meta.nextTaskId : null,
+    unblockedProjectId: typeof meta.unblockedProjectId === "string" ? meta.unblockedProjectId : null,
+    };
+  });
+}
+
+// 결정 일지의 "그래서 할 일" — 할 일 쪽 meta.decision_id가 정본이다(결정의 nextTaskId는 표시용 링크).
+// 못 읽으면 null(모름) — 빈 배열(없음)과 구분해 "할 일 없음"으로 위장하지 않는다.
+async function readDecisionFollowups(decisions) {
+  const ids = decisions.map((decision) => decision.id).filter(Boolean);
+  const unblockedIds = [...new Set(decisions.map((decision) => decision.unblockedProjectId).filter(Boolean))];
+  if (!ids.length) return { tasksByDecision: new Map(), unblockDays: new Map(), state: "live" };
+  const [taskRows, projectRows] = await Promise.all([
+    fetchSupabaseRows("tasks", {
+      select: "id,title,status,due_at,decision_id:meta->>decision_id",
+      limit: DECISION_ROW_LIMIT * 3,
+      order: "created_at.asc",
+      filters: withWorkspaceFilter([["meta->>decision_id", inFilter(ids)]]),
+    }),
+    unblockedIds.length
+      ? fetchSupabaseRows("projects", {
+          select: "id,blocker_history:meta->delivery->blockerHistory",
+          limit: unblockedIds.length,
+          filters: withWorkspaceFilter([["id", inFilter(unblockedIds)]]),
+        })
+      : Promise.resolve([]),
+  ]);
+  const tasksByDecision = new Map();
+  if (Array.isArray(taskRows)) {
+    for (const task of taskRows) {
+      if (!task?.decision_id) continue;
+      if (!tasksByDecision.has(task.decision_id)) tasksByDecision.set(task.decision_id, []);
+      tasksByDecision.get(task.decision_id).push({ id: task.id, title: task.title || "", status: task.status || "todo", dueAt: task.due_at || null });
+    }
+  }
+  const unblockDays = new Map();
+  for (const project of Array.isArray(projectRows) ? projectRows : []) {
+    for (const entry of Array.isArray(project?.blocker_history) ? project.blocker_history : []) {
+      if (!entry?.decisionId) continue;
+      const from = Date.parse(entry.at || "");
+      const to = Date.parse(entry.resolvedAt || "");
+      unblockDays.set(entry.decisionId, Number.isFinite(from) && Number.isFinite(to) ? Math.max(0, Math.round((to - from) / 86400000)) : null);
+    }
+  }
+  return { tasksByDecision: Array.isArray(taskRows) ? tasksByDecision : null, unblockDays, state: Array.isArray(taskRows) ? "live" : "error" };
 }
 
 function mapDecisionProjectOptions(rows) {
@@ -527,9 +584,16 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
   const roadmap = buildRoadmapState(projectRows, milestoneRows, roadmapBrandRows);
   const profileById = new Map((profileRows || []).map((p) => [p.id, p]));
   const decisionsState = buildDecisionsState(decisionRows, profileRows);
-  const decisions = Array.isArray(decisionRows)
-    ? mapDecisions(decisionRows.slice(0, DECISION_ROW_LIMIT), profileById)
+  const projectNameById = new Map((Array.isArray(projectRows) ? projectRows : []).map((row) => [row.id, row.name || ""]));
+  const mappedDecisions = Array.isArray(decisionRows)
+    ? mapDecisions(decisionRows.slice(0, DECISION_ROW_LIMIT), profileById, projectNameById)
     : [];
+  const followups = await readDecisionFollowups(mappedDecisions).catch(() => ({ tasksByDecision: null, unblockDays: new Map(), state: "error" }));
+  const decisions = mappedDecisions.map((decision) => ({
+    ...decision,
+    followups: followups.tasksByDecision ? followups.tasksByDecision.get(decision.id) || [] : null,
+    unblockedDays: followups.unblockDays.has(decision.id) ? followups.unblockDays.get(decision.id) : null,
+  }));
   const routineRowsTruncated = Array.isArray(routineRows) && routineRows.length > RHYTHM_ROW_LIMIT;
   const visibleRoutineRows = Array.isArray(routineRows)
     ? routineRows.slice(0, RHYTHM_ROW_LIMIT)
