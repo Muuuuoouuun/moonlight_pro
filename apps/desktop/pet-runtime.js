@@ -19,7 +19,11 @@ function nativePetCandidates({ home = os.homedir(), resourcesPath = process.reso
 }
 
 function createNativePetLauncher({ candidates = nativePetCandidates(), exists = fs.existsSync, run = execFile } = {}) {
-  return () => new Promise((resolve, reject) => {
+  return (action = null) => new Promise((resolve, reject) => {
+    if (action !== null && !['memo', 'tasks'].includes(action)) {
+      reject(new Error(`Unknown native pet action: ${action}`));
+      return;
+    }
     const bundle = candidates.find((candidate) => exists(path.join(candidate, 'Contents/MacOS/MoonlightPetPreview')));
     if (!bundle) {
       reject(new Error('Mac 펫을 찾을 수 없습니다. npm run app:mac:build로 네이티브 펫을 포함해 다시 빌드하세요.'));
@@ -27,18 +31,21 @@ function createNativePetLauncher({ candidates = nativePetCandidates(), exists = 
     }
     // LaunchServices reuses a running copy. The companion also rejects another
     // instance with its bundle ID, including copies built in other worktrees.
-    run('/usr/bin/open', ['-g', bundle], (error) => error ? reject(error) : resolve(bundle));
+    const args = action ? ['-g', '-a', bundle, `moonlight-pet://${action}`] : ['-g', bundle];
+    run('/usr/bin/open', args, (error) => error ? reject(error) : resolve(bundle));
   });
 }
 
 function installPetRuntime({ platform = process.platform, smoke = false, installElectron, launchNative = createNativePetLauncher(), onError = console.warn }) {
   if (smoke) return null; // Shell smoke must not start the user's real companion.
   if (platform !== 'darwin') return installElectron();
-  const start = () => Promise.resolve().then(launchNative).catch((error) => onError(`pet:native ${error.message}`));
+  const start = (action = null) => Promise.resolve().then(() => launchNative(action)).catch((error) => onError(`pet:native ${error.message}`));
   const ready = start();
   return {
     ready,
-    trayItems: () => [{ label: '펫 열기', click: start }],
+    quickCapture: () => start('memo'),
+    showWidget: () => start('tasks'),
+    trayItems: () => [{ label: '펫 열기', click: () => start() }],
   };
 }
 

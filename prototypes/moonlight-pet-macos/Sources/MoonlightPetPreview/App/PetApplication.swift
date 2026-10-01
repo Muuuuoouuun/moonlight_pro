@@ -30,6 +30,23 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: WindowCoordinator?
     private var statusItem: NSStatusItem?
     private var glassLab: GlassLabWindowController?
+    private var pendingCommand: PetCommand?
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard !CommandLine.arguments.contains("--glass-lab") else { return }
+        for url in urls {
+            guard let command = PetCommand(url: url) else { continue }
+            open(command)
+        }
+    }
+
+    private func open(_ command: PetCommand) {
+        guard let coordinator else { pendingCommand = command; return }
+        switch command {
+        case .memo: coordinator.openMode(.memo)
+        case .tasks: coordinator.showWidget(mode: .tasks)
+        }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installEditingMenu()
@@ -72,11 +89,15 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         hubItem.target = self
         menu.addItem(hubItem)
         menu.addItem(.separator())
-        let quitItem = NSMenuItem(title: "목업 종료", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "펫 종료", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
         item.menu = menu
         statusItem = item
+        if let command = pendingCommand {
+            pendingCommand = nil
+            open(command)
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -4,16 +4,19 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { nativePetCandidates, createNativePetLauncher, installPetRuntime } = require('./pet-runtime');
 
-test('Mac shell launches only the native pet, also when its tray action is used', async () => {
-  let launches = 0;
+test('Mac shell reuses the native pet for quick capture and the task widget', async () => {
+  const launches = [];
   const pet = installPetRuntime({
     platform: 'darwin',
     installElectron: () => assert.fail('a second Electron pet must never be created on Mac'),
-    launchNative: async () => { launches += 1; },
+    launchNative: async (action) => { launches.push(action); },
   });
   await pet.ready;
   await pet.trayItems()[0].click();
-  assert.equal(launches, 2);
+  await pet.quickCapture();
+  await pet.showWidget();
+  await pet.quickCapture();
+  assert.deepEqual(launches, [null, null, 'memo', 'tasks', 'memo']);
 });
 
 test('native launch failure never silently creates an Electron pet', async () => {
@@ -64,4 +67,18 @@ test('missing bundle and launch failure are reported without hiding the cause', 
     candidates: ['/App with spaces.app'], exists: () => true,
     run: (_command, _args, callback) => callback(new Error('launch denied')),
   })(), /launch denied/);
+});
+
+test('native capture uses an explicit app and URL even when the app is already running', async () => {
+  const calls = [];
+  const launch = createNativePetLauncher({
+    candidates: ['/App with spaces.app'], exists: () => true,
+    run: (command, args, callback) => { calls.push([command, args]); callback(null); },
+  });
+  for (const action of ['memo', 'tasks', 'memo']) await launch(action);
+  assert.deepEqual(calls, ['memo', 'tasks', 'memo'].map((action) => [
+    '/usr/bin/open', ['-g', '-a', '/App with spaces.app', `moonlight-pet://${action}`],
+  ]));
+  await assert.rejects(launch('save'), /Unknown native pet action/);
+  assert.equal(calls.length, 3);
 });

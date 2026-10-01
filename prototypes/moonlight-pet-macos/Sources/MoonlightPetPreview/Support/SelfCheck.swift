@@ -45,6 +45,20 @@ enum SelfCheck {
 
     @MainActor
     static func run() -> Bool {
+        for (raw, expected) in [("moonlight-pet://memo", PetCommand.memo), ("moonlight-pet://tasks", .tasks)] {
+            guard PetCommand(url: URL(string: raw)!) == expected else {
+                fputs("Pet command routing check failed\n", stderr)
+                return false
+            }
+        }
+        for raw in ["https://memo", "moonlight-pet://save", "moonlight-pet://memo/save",
+                    "moonlight-pet://memo?text=ignored", "moonlight-pet://tasks#save",
+                    "moonlight-pet://user@memo", "moonlight-pet://tasks:123"] {
+            guard PetCommand(url: URL(string: raw)!) == nil else {
+                fputs("Pet command validation check failed\n", stderr)
+                return false
+            }
+        }
         guard checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkReadingTone() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
