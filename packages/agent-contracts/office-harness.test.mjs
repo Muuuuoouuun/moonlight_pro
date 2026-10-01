@@ -4,7 +4,7 @@ import { parseOfficeRequest } from './office.js';
 import {
   OFFICE_HARNESS_VERSION, OFFICE_WORK_KINDS, OFFICE_HANDOFFS, officeReviewerCandidates,
   parseOfficeBreakdownRequest, parseOfficeBreakdownProposal, parseOfficeBreakdownResult, officeBreakdownResult,
-  withOfficePacketOwner, officePacketStates, officePacketRequest,
+  withOfficePacketOwner, officePacketStates, officePacketRequest, officeAutoStep, OFFICE_AUTO_LIMITS,
 } from './office-harness.js';
 
 const request = { message: '신규 B2B 패키지 출시를 다음 달 안에 할지 정하고 첫 고객 제안까지 준비', scope: 'all' };
@@ -119,4 +119,17 @@ test('a ready packet becomes a valid Office request with clipped upstream copies
   assert.throws(() => officePacketRequest(result, 'p2', { agenda: request.message, priorResults: { p3: 'x' } }));
   assert.throws(() => officePacketRequest(result, 'p2', { agenda: '' }));
   assert.throws(() => officePacketRequest(result, 'p8', { agenda: request.message }));
+});
+
+test('auto step runs only ready Office-answer packets in order and stops at anything the operator must do', () => {
+  const result = officeBreakdownResult(parseOfficeBreakdownProposal(proposal, request));
+  assert.deepEqual(officeAutoStep(result), { action: 'run', key: 'p1' });
+  assert.deepEqual(officeAutoStep(result, { p1: 'done' }), { action: 'run', key: 'p2' });
+  // p3 is a task packet: the operator calls the customer, so the chain stops there.
+  assert.deepEqual(officeAutoStep(result, { p1: 'done', p2: 'done' }), { action: 'stop', reason: 'needs-operator', keys: ['p3'] });
+  assert.deepEqual(officeAutoStep(result, { p1: 'skipped' }), { action: 'stop', reason: 'blocked', keys: ['p2', 'p3'] });
+  assert.deepEqual(officeAutoStep(result, { p1: 'done', p2: 'done', p3: 'done' }), { action: 'stop', reason: 'complete', keys: [] });
+  assert.deepEqual(officeAutoStep(result, {}, OFFICE_AUTO_LIMITS.runs), { action: 'stop', reason: 'limit', keys: ['p1'] });
+  const skill = { ...proposal, packets: [packet(1, { exit: 'skill_request' }), packet(2)] };
+  assert.deepEqual(officeAutoStep(officeBreakdownResult(parseOfficeBreakdownProposal(skill, request))), { action: 'run', key: 'p2' });
 });

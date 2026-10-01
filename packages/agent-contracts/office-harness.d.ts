@@ -29,3 +29,8 @@ export function officeBreakdownResult(proposal: OfficeBreakdown): OfficeBreakdow
 export function withOfficePacketOwner<T extends OfficeBreakdown>(breakdown: T, key: string, ownerId: OfficeId): T;
 export function officePacketStates(breakdown: OfficeBreakdown, marks?: Record<string, 'done' | 'skipped'>): Record<string, OfficePacketState>;
 export function officePacketRequest(breakdown: OfficeBreakdown, key: string, options: { agenda: string; priorResults?: Record<string, string>; withReviewers?: boolean }): OfficePacketRequest;
+export type OfficeAutoStopReason = 'complete' | 'needs-operator' | 'blocked' | 'failed' | 'limit' | 'stopped' | 'left';
+export const OFFICE_AUTO_EXITS: readonly OfficePacketExit[];
+export const OFFICE_AUTO_LIMITS: Readonly<{ runs: number; modelCallsPerRun: number }>;
+export const OFFICE_AUTO_STOP_REASONS: readonly OfficeAutoStopReason[];
+export function officeAutoStep(breakdown: OfficeBreakdown, marks?: Record<string, 'done' | 'skipped'>, runs?: number): { action: 'run'; key: string } | { action: 'stop'; reason: OfficeAutoStopReason; keys: string[] };

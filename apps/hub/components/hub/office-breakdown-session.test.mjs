@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseOfficeRequest } from '@com-moon/agent-contracts/office';
 import { officeBreakdownResult, parseOfficeBreakdownProposal } from '@com-moon/agent-contracts/office-harness';
-import { createOfficeBreakdownStore, fetchOfficeBreakdown, officeBreakdownProgress } from './office-breakdown-session.js';
+import { createOfficeBreakdownStore, fetchOfficeBreakdown, officeAutoStopText, officeBreakdownProgress, runOfficeAuto } from './office-breakdown-session.js';
+import { createOfficeSessionStore } from './office-session.js';
 
 const agenda = '출시 여부를 정하고 첫 고객 제안까지 준비';
 const body = request => ({ ...officeBreakdownResult(parseOfficeBreakdownProposal({
@@ -74,4 +75,53 @@ test('refused requests explain themselves and the fetch helper keeps preview apa
   let sent;
   await fetchOfficeBreakdown({ message: agenda, scope: 'all' }, async (url, init) => { sent = [url, init.method, JSON.parse(init.body)]; return Response.json({}); });
   assert.deepEqual(sent, ['/api/hub/office/breakdown', 'POST', { message: agenda, scope: 'all' }]);
+});
+
+
+function autoFixture() {
+  const breakdowns = createOfficeBreakdownStore();
+  const sessions = createOfficeSessionStore();
+  const started = breakdowns.begin('classin', agenda);
+  breakdowns.resolve('classin', started.readId, body(started.request));
+  breakdowns.apply('classin');
+  sessions.update('classin', { draft: '보내지 않은 내 메모' });
+  breakdowns.startAuto('classin', { savedDraft: sessions.get('classin').draft });
+  let id = 0;
+  return { breakdowns, sessions, newId: () => `00000000-0000-4000-8000-00000000000${++id}` };
+}
+const generated = request => ({ status: 'generated', answer: `${request.ownerId}의 답`, nextAction: '추가 행동 없음.' });
+
+test('자동 진행 runs Office-answer packets owner-alone, copies results forward, and stops at the operator step', async () => {
+  const { breakdowns, sessions, newId } = autoFixture();
+  const seen = [];
+  const outcome = await runOfficeAuto({ scope: 'classin', sessions, breakdowns, newId, request: async request => { seen.push(request); return generated(request); } });
+  assert.deepEqual(outcome, { ran: ['p1'], savedDraft: '보내지 않은 내 메모' });
+  assert.equal(seen.length, 1);
+  assert.deepEqual([seen[0].ownerId, seen[0].mode, seen[0].participants], ['leafeon', 'review', []], 'auto never opens council even when reviewers exist');
+  const entry = breakdowns.get('classin');
+  assert.deepEqual(entry.marks, { p1: 'done' });
+  assert.deepEqual(entry.autoMarks, { p1: true });
+  assert.equal(entry.priors.p1, 'leafeon의 답');
+  assert.deepEqual([entry.auto.state, entry.auto.reason, entry.auto.keys], ['stopped', 'needs-operator', ['p2']], 'p2 is a task packet: the operator contacts the customer');
+  assert.match(officeAutoStopText(entry.auto), /직접 할 조각에서 멈췄습니다 · p2/);
+  assert.equal(sessions.get('classin').turns.length, 1);
+  breakdowns.mark('classin', 'p1', 'done');
+  assert.deepEqual(breakdowns.get('classin').autoMarks, {}, 'an operator mark replaces the auto label');
+});
+
+test('자동 진행 stops on failure and on the operator stop, leaving the answer unmarked', async () => {
+  const failed = autoFixture();
+  const outcome = await runOfficeAuto({ scope: 'classin', sessions: failed.sessions, breakdowns: failed.breakdowns, newId: failed.newId, request: async () => ({ status: 'error', error: 'x' }) });
+  assert.deepEqual(outcome.ran, []);
+  assert.deepEqual([failed.breakdowns.get('classin').auto.reason, failed.breakdowns.get('classin').marks], ['failed', {}]);
+
+  const stopped = autoFixture();
+  const result = await runOfficeAuto({ scope: 'classin', sessions: stopped.sessions, breakdowns: stopped.breakdowns, newId: stopped.newId, request: async request => {
+    stopped.breakdowns.stopAuto('classin', 'stopped');
+    return generated(request);
+  } });
+  assert.deepEqual(result.ran, []);
+  assert.deepEqual(stopped.breakdowns.get('classin').marks, {}, 'a stop mid-flight leaves marking to the operator');
+  assert.equal(stopped.sessions.get('classin').turns.length, 1);
+  assert.equal(stopped.breakdowns.startAuto('classin') !== null, true, 'it can be started again');
 });

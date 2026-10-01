@@ -4,6 +4,7 @@
 .body p { margin:0; overflow-wrap:anywhere; }
 .muted { color:var(--fg-muted); }
 .decision { border:1px dashed var(--line); border-radius:var(--r-sm); padding:10px 12px; }
+.auto { display:grid; gap:8px; padding:12px; border:1px solid var(--line); border-radius:var(--r-sm); }
 .packets { list-style:none; margin:0; padding:0; display:grid; gap:10px; }
 .packet { display:grid; gap:8px; padding:12px; border:1px solid var(--line-soft); border-radius:var(--r-sm); min-width:0; }
 .packet[data-opened="true"] { box-shadow:inset 1px 0 0 var(--moon-300); }

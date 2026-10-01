@@ -182,3 +182,20 @@ export function officePacketRequest(breakdown, key, { agenda, priorResults = {},
     participants: council ? [packet.ownerId, ...packet.reviewerIds] : [],
   };
 }
+
+// 자동 진행(2026-10-01 운영자 요청 "일부는 자동적으로", 경계는 권장): the operator starts it with
+// one button; it then runs only packets whose exit is an Office answer, owner alone, in order.
+// It never runs a task or skill packet, never opens council, never creates a task or sends anything.
+export const OFFICE_AUTO_EXITS = Object.freeze(['office']);
+export const OFFICE_AUTO_LIMITS = Object.freeze({ runs: OFFICE_BREAKDOWN_LIMITS.packets, modelCallsPerRun: 2 });
+export const OFFICE_AUTO_STOP_REASONS = Object.freeze(['complete', 'needs-operator', 'blocked', 'failed', 'limit', 'stopped', 'left']);
+
+export function officeAutoStep(breakdown, marks = {}, runs = 0) {
+  const states = officePacketStates(breakdown, marks);
+  if (breakdown.packets.every(packet => ['done', 'skipped'].includes(states[packet.key]))) return { action: 'stop', reason: 'complete', keys: [] };
+  const next = breakdown.packets.find(packet => states[packet.key] === 'ready' && OFFICE_AUTO_EXITS.includes(packet.exit));
+  if (next) return runs >= OFFICE_AUTO_LIMITS.runs ? { action: 'stop', reason: 'limit', keys: [next.key] } : { action: 'run', key: next.key };
+  const manual = breakdown.packets.filter(packet => states[packet.key] === 'ready').map(packet => packet.key);
+  if (manual.length) return { action: 'stop', reason: 'needs-operator', keys: manual };
+  return { action: 'stop', reason: 'blocked', keys: breakdown.packets.filter(packet => states[packet.key] === 'waiting').map(packet => packet.key) };
+}
