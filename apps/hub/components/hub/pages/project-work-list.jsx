@@ -1,13 +1,16 @@
 "use client";
 
 import React from 'react';
-import { Button, Checkbox, IconButton, Input, LifecycleBadge } from '../hub-primitives';
+import { Button, Checkbox, Input, LifecycleBadge } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
 import { projectItemType, readTaskChecklist, TASK_CHECKLIST_LIMIT } from '@/lib/task-checklist';
+import { normalizeProjectIndexPreferences, sortProjectIndex, moveProjectIndex } from '@/lib/project-index-order';
+import { useProjectWorkOrder } from './project-work-order';
 import styles from './project-direct-work.module.css';
 
 const TYPE_LABEL = { task: '할 일', subproject: '작업 묶음', milestone: '마일스톤' };
 const TYPE_ICON = { task: 'check', subproject: 'folder', milestone: 'flag' };
+const TYPE_SHAPE = { task: 'square', subproject: 'folder', milestone: 'diamond' };
 const EMPTY_DRAFT = { title: '', itemType: 'task', request: null, status: 'idle', message: '' };
 const dateLabel = value => {
   const date = value ? new Date(value) : null;
@@ -17,12 +20,14 @@ const dateLabel = value => {
 // Drafts belong to project/task IDs, so changing projects or collapsing a row
 // does not discard an input or change the identity of an unresolved save.
 export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
-  projectId, tasks, canWrite, pendingIds, onCreate, onAddChecklist, onToggleTask, onToggleChecklist, onEdit, draftStore,
+  projectId, tasks, canWrite, pendingIds, onCreate, onAddChecklist, onToggleTask, onToggleChecklist, onReorderChecklist, onEdit, draftStore,
 }, ref) {
   const { drafts, setDrafts, draftsRef } = draftStore;
   const [expanded, setExpanded] = React.useState({});
   const [showDone, setShowDone] = React.useState({});
   const [feedback, setFeedback] = React.useState({});
+  const [storedOrder, setStoredOrder] = React.useState({ key: null, order: [] });
+  const [orderNotice, setOrderNotice] = React.useState(null);
   const busy = React.useRef(new Set());
   const inputs = React.useRef(new Map());
   const root = React.useRef(null);
@@ -30,8 +35,55 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
   currentProject.current = projectId;
   const projectKey = `project:${projectId}`;
   const selectedType = drafts[projectKey]?.itemType || 'task';
-  const openTasks = tasks.filter(task => !task.done);
-  const doneTasks = tasks.filter(task => task.done);
+  const storageKey = `mlp.projectWork.${projectId}.v1`;
+  const order = storedOrder.key === storageKey ? storedOrder.order : [];
+  const orderedTasks = sortProjectIndex(tasks, { order });
+  const openTasks = orderedTasks.filter(task => !task.done);
+  const doneTasks = orderedTasks.filter(task => task.done);
+  React.useEffect(() => {
+    setOrderNotice(null);
+    try {
+      const { order: saved } = normalizeProjectIndexPreferences(JSON.parse(localStorage.getItem(storageKey)));
+      setStoredOrder({ key: storageKey, order: saved });
+    } catch { setOrderNotice({ ok: false, message: '표시 순서를 읽지 못했습니다. 기본 순서로 표시합니다.' }); }
+  }, [storageKey]);
+  function moveTask(sourceId, targetId, placement) {
+    const source = orderedTasks.find(task => task.id === sourceId);
+    const visible = source?.done ? doneTasks : openTasks;
+    const base = normalizeProjectIndexPreferences({ order: [...order, ...orderedTasks.map(task => task.id)] }).order;
+    const next = moveProjectIndex(base, visible.map(task => task.id), sourceId, targetId, placement);
+    setStoredOrder({ key: storageKey, order: next });
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ order: next }));
+      return { ok: true, message: '순서 저장됨 · 이 브라우저' };
+    } catch { return { ok: false, message: '순서는 이 화면에만 적용됐습니다. 브라우저에 저장하지 못했습니다.' }; }
+  }
+  async function moveCheck(task, sourceId, targetId, placement) {
+    const key = `toggle:${task.id}`;
+    if (busy.current.has(key)) return { ok: false, message: '진행 중인 저장이 끝난 뒤 다시 시도하세요.' };
+    busy.current.add(key);
+    setFeedback(previous => ({ ...previous, [task.id]: { status: 'saving', message: '순서 저장 중…' } }));
+    try {
+      const result = await onReorderChecklist(task, sourceId, targetId, placement);
+      return result?.ok ? { ok: true, message: '세부 체크 순서 저장됨' } : { ok: false, message: result?.message || '순서를 저장하지 못했습니다.' };
+    } catch {
+      const message = '순서를 저장하지 못했습니다. 다시 시도하세요.';
+      return { ok: false, message };
+    } finally {
+      busy.current.delete(key);
+      setFeedback(previous => ({ ...previous, [task.id]: { status: 'idle', message: '' } }));
+    }
+  }
+  const orderDisabled = !canWrite || pendingIds.size > 0;
+  const groups = {
+    open: { items: openTasks, onMove: moveTask, onEdit, disabled: orderDisabled, editDisabled: pendingIds.size > 0 },
+    done: { items: doneTasks, onMove: moveTask, onEdit, disabled: orderDisabled, editDisabled: pendingIds.size > 0 },
+  };
+  for (const task of tasks) groups[`check:${task.id}`] = {
+    items: readTaskChecklist(task), onMove: (...args) => moveCheck(task, ...args),
+    disabled: orderDisabled || !onReorderChecklist || feedback[task.id]?.status === 'saving',
+  };
+  const ordering = useProjectWorkOrder({ projectId, root, groups, onNotice: setOrderNotice });
   const updateDraft = (key, patch) => {
     const next = { ...draftsRef.current, [key]: { ...(draftsRef.current[key] || EMPTY_DRAFT), ...patch } };
     draftsRef.current = next;
@@ -128,29 +180,30 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
     const type = projectItemType(task);
     const isOpen = Boolean(expanded[task.id]);
     const pending = pendingIds.has(task.id) || feedback[task.id]?.status === 'saving';
-    return <div key={task.id} className={styles.task} data-task-id={task.id} data-done={task.done ? 'true' : 'false'}>
+    return <div key={task.id} className={styles.task} data-task-id={task.id} data-done={task.done ? 'true' : 'false'} {...ordering.rowProps(task.done ? 'done' : 'open', task.id)}>
       <div className={`${styles.row} hub-row`}>
-        <span className={styles.checkTarget}><Checkbox className={styles.checkbox} size={18} checked={task.done} disabled={!canWrite || pending}
-          label={`${task.done ? '다시 열기' : '완료'}: ${task.title}`} onChange={(_next, event) => toggle(task, null, event)} /></span>
+        <span className={styles.checkTarget} title={TYPE_LABEL[type]}><Checkbox className={styles.checkbox} size={type === 'task' ? 18 : 22} shape={TYPE_SHAPE[type]} checked={task.done} disabled={!canWrite || pending}
+          label={`${TYPE_LABEL[type]} ${task.done ? '다시 열기' : '완료'}: ${task.title}`} onChange={(_next, event) => toggle(task, null, event)} /></span>
         <button type="button" data-task-expand className={styles.taskTitle} aria-expanded={isOpen} aria-controls={`project-work-${task.id}`}
           onClick={() => setExpanded(previous => ({ ...previous, [task.id]: !previous[task.id] }))}>
-          {type !== 'task' && <span className={styles.itemType} role="img" aria-label={TYPE_LABEL[type]} title={TYPE_LABEL[type]}><Iconed name={TYPE_ICON[type]} size={13} /></span>}
+          {type !== 'task' && <span className={styles.itemType}>{TYPE_LABEL[type]}</span>}
           <span>{task.title}</span><Iconed name={isOpen ? 'chevronD' : 'chevronR'} size={12} />
         </button>
         {checks.length > 0 && <span className={`${styles.checkCount} num`} aria-label={`세부 체크 ${checks.filter(item => item.done).length}/${checks.length} 완료`}>{checks.filter(item => item.done).length}/{checks.length}</span>}
         {task.status === 'blocked' && <LifecycleBadge label="막힘" state="blocked" />}
         {task.status === 'doing' && <LifecycleBadge label="진행" state="active" />}
         {task.dueAt && <span className={`${styles.due} mono`}>{dateLabel(task.dueAt)}</span>}
-        <IconButton icon="edit" size={30} className={styles.editButton} tooltip={`${task.title} 상세 편집`} onClick={() => onEdit(task)} disabled={pending} />
+        {ordering.handle(task.done ? 'done' : 'open', task)}
       </div>
       <div id={`project-work-${task.id}`} className={styles.details} hidden={!isOpen}>
         {task.description && <p className={styles.description}>{task.description}</p>}
         {task.nextAction && <p className={styles.description}>다음 행동 · {task.nextAction}</p>}
-        {checks.map(item => <div key={item.id} className={styles.checkRow} data-check-id={item.id} data-done={item.done ? 'true' : 'false'}>
+        {checks.map(item => <div key={item.id} className={styles.checkRow} data-check-id={item.id} data-done={item.done ? 'true' : 'false'} {...ordering.rowProps(`check:${task.id}`, item.id)}>
           <span className={styles.checkTarget}><Checkbox className={styles.checkbox} size={16} checked={item.done} disabled={!canWrite || pending}
             label={`${item.title} ${item.done ? '다시 열기' : '완료'}`} onChange={() => toggle(task, item.id)} /></span>
           <span><strong>{item.title}</strong>{item.note && <p>{item.note}</p>}</span>
           {item.dueAt && <span className={`${styles.due} mono`}>{dateLabel(item.dueAt)}</span>}
+          {ordering.handle(`check:${task.id}`, item)}
         </div>)}
         {composer(`check:${task.id}`, task)}
       </div>
@@ -175,6 +228,8 @@ export const ProjectWorkList = React.forwardRef(function ProjectWorkList({
       </button>}
     </div>
     {showDone[projectId] && doneTasks.map(row)}
+    {ordering.menu}
+    {orderNotice?.message && <p className={styles.feedback} role={orderNotice.ok ? 'status' : 'alert'}>{orderNotice.message}</p>}
     {!canWrite && <p className={styles.feedback}>기록을 다시 읽은 뒤 할 일을 추가하거나 변경할 수 있습니다.</p>}
   </section>;
 });

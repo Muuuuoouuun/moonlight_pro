@@ -131,3 +131,32 @@ test('a changed same-ID item is not treated as a replay and malformed capture ne
   assert.equal((await appendProjectChecklistItem({ ...task, updatedAt: null }, check, dependencies)).ok, false);
   assert.equal(writes, 0);
 });
+
+test('checklist reordering preserves every field and writes against the observed task version', async () => {
+  const { reorderProjectChecklist } = await import('./project-direct-work.js');
+  const first = { ...check, note: '근거 메모', dueAt: '2026-10-02', done: true };
+  const second = { ...check, id: otherId, title: '다음 단계' };
+  const observed = { ...task, checklist: [first, second] };
+  const result = await reorderProjectChecklist(observed, otherId, checkId, 'before', { saveChanges: async (rows, patch) => {
+    assert.equal(rows[0], observed);
+    assert.equal(rows[0].updatedAt, version);
+    assert.deepEqual(patch.checklist, [second, first]);
+    return { saved: [{ id: taskId, task: { ...observed, checklist: patch.checklist } }], failed: [] };
+  } });
+  assert.equal(result.ok, true);
+  assert.deepEqual(observed.checklist, [first, second]);
+});
+
+test('reorder conflicts and preview failures never report a saved checklist', async () => {
+  const { reorderProjectChecklist } = await import('./project-direct-work.js');
+  const observed = { ...task, checklist: [check, { ...check, id: otherId }] };
+  for (const status of ['conflict', 'preview', 'error']) {
+    const result = await reorderProjectChecklist(observed, otherId, checkId, 'before', { saveChanges: async () => ({ saved: [], failed: [{ id: taskId, status, message: '저장 확인 필요' }] }) });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, status);
+    assert.equal(result.message, '저장 확인 필요');
+  }
+  const noWrite = { saveChanges: async () => { throw new Error('should not save'); } };
+  assert.equal((await reorderProjectChecklist(observed, checkId, otherId, 'before', noWrite)).status, 'unchanged');
+  assert.equal((await reorderProjectChecklist(observed, taskId, checkId, 'before', noWrite)).ok, false);
+});
