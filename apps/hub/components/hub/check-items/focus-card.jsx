@@ -5,6 +5,7 @@
 // 카드마다 끝내기 1~4가 세로 전폭 줄로 붙는다. 저장하는 끝내기(write)는 서버가 saved/duplicate로 답해야
 // 끝낸 것이고, 화면만 여는 줄(navigate)은 끝낸 것으로 세지 않는다. 입력이 필요한 끝내기(할 일·날짜·보류)는
 // 그 줄 바로 아래에 펼친다. 연락 기록은 공용 기록창(ContactRecordDrawer)을 부모가 연다.
+// 끝내기 아래에는 시간 잡기 띠(schedule-band.jsx, §4.7)가 붙는다 — 끝냄이 아니라 언제 할지 정하는 것.
 
 import React from 'react';
 import { Iconed } from '../hub-icons';
@@ -22,6 +23,7 @@ import {
   todayKey,
 } from './check-item-actions';
 import { MAX_SNOOZE_DAYS } from '@/lib/check-items/outcome-input';
+import { ScheduleBand, ScheduledNowBand } from './schedule-band';
 import './check-items.css';
 
 const PANEL_KEYS = new Set(['task', 'reschedule', 'snooze']);
@@ -239,6 +241,9 @@ export function FocusCard({
   onFinished,
   onSkip,
   onNavigate,
+  onScheduled,
+  calendar = null,
+  blocks = [],
   recommendation = null,
   fetchImpl = globalThis.fetch,
 }) {
@@ -247,7 +252,12 @@ export function FocusCard({
   const outcomes = Array.isArray(item.outcomes) ? item.outcomes : [];
   const links = Array.isArray(item.links) ? item.links : [];
   const panelOpen = PANEL_KEYS.has(panel);
+  const scheduleOpen = panel === 'schedule';
   const returned = item.returnedFromSnooze;
+  // 잡아 둔 시간이 지났으면 `다시 잡기`가 1순위다(Q-CF11 — 자동으로 옮기지 않는다). 고르기 칸이 열려도
+  // 그 칸의 확정 버튼이 화면의 유일한 primary다(§5.2).
+  const schedulePassed = item.scheduled?.state === 'passed';
+  const outcomeLeads = !panelOpen && !scheduleOpen && !schedulePassed;
 
   const renderPanel = (key) => {
     const props = { item, onFinished, fetchImpl };
@@ -265,6 +275,7 @@ export function FocusCard({
           {item.meta ? ` · ${item.meta}` : ''}
         </span>
       </div>
+      <ScheduledNowBand scheduled={item.scheduled} />
       {returned ? (
         <span className="ci-flag"><Iconed name="pause" size={12} />보류했던 것 · {formatDayLabel(returned.until)}에 다시</span>
       ) : null}
@@ -281,7 +292,7 @@ export function FocusCard({
           <div className="ci-outcomes">
             {outcomes.map((outcome, index) => {
               const isPanel = outcomeIsPanel(outcome);
-              const primary = outcome.primary && !panelOpen;
+              const primary = outcome.primary && outcomeLeads;
               return (
                 <React.Fragment key={outcome.key}>
                   <button
@@ -305,6 +316,20 @@ export function FocusCard({
             })}
           </div>
         </>
+      ) : null}
+
+      {item.signalKey && item.schedule ? (
+        <ScheduleBand
+          key={`band-${item.signalKey}`}
+          item={item}
+          calendar={calendar}
+          blocks={blocks}
+          open={scheduleOpen}
+          onToggle={() => onPanel?.(scheduleOpen ? null : 'schedule')}
+          onScheduled={onScheduled}
+          emphasize={schedulePassed}
+          fetchImpl={fetchImpl}
+        />
       ) : null}
 
       {links.length ? (

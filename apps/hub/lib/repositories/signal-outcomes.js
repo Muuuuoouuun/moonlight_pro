@@ -53,6 +53,39 @@ export function finishedTodayFrom(rows, todayKey) {
     .filter(Boolean);
 }
 
+// 잡아 둔 일 — 오늘 이후(KST)에 시작하는 되돌리지 않은 시간 잡기. 시간표 레일과 카드 차례가 같은 값을 쓴다.
+// 같은 항목을 다시 잡았으면 가장 최근 것만 남긴다(억제 규칙과 같은 기준). 잡은 뒤에 끝낸 기록이 있으면 done.
+export function scheduledBlocksFrom(rows, { todayKey, now = Date.now() } = {}) {
+  const list = (Array.isArray(rows) ? rows : []).filter((row) => row && !row.undone_at);
+  const latest = new Map();
+  for (const row of list) {
+    if (row.outcome !== 'scheduled' || !Number.isFinite(Date.parse(row.scheduled_start))) continue;
+    const current = latest.get(row.signal_key);
+    if (!current || Date.parse(row.created_at) > Date.parse(current.created_at)) latest.set(row.signal_key, row);
+  }
+  return [...latest.values()]
+    .filter((row) => kstDayKey(row.scheduled_start) >= todayKey)
+    .sort((a, b) => Date.parse(a.scheduled_start) - Date.parse(b.scheduled_start))
+    .map((row) => {
+      const start = Date.parse(row.scheduled_start);
+      const end = Date.parse(row.scheduled_end);
+      const done = list.some((other) => other.signal_key === row.signal_key
+        && !['scheduled', 'snoozed'].includes(other.outcome)
+        && Date.parse(other.created_at) > Date.parse(row.created_at));
+      return {
+        id: row.id,
+        signalKey: row.signal_key,
+        subject: { type: row.subject_type, id: row.subject_id || null },
+        title: row.title || '',
+        start: new Date(start).toISOString(),
+        end: Number.isFinite(end) ? new Date(end).toISOString() : null,
+        calendarEventId: row.calendar_event_id || null,
+        state: start > now ? 'waiting' : Number.isFinite(end) && end < now ? 'passed' : 'now',
+        done,
+      };
+    });
+}
+
 /** 최근 창의 되돌리지 않은 영수증. */
 export async function readSignalOutcomeWindow({ now = Date.now() } = {}) {
   const workspaceId = workspaceOrNull();
@@ -177,6 +210,26 @@ export async function undoSignalOutcome({ id } = {}, { now = Date.now() } = {}) 
   }
 }
 
+/** 잡아 둔 일의 다른 시간 — 같은 행의 시작·끝만 고친다(§4.7). 구글 일정 갱신은 호출부가 한다. */
+export async function moveScheduledOutcome({ id, scheduledStart, scheduledEnd } = {}) {
+  if (!isCanonicalUuid(String(id || ''))) return { status: 'invalid-input', httpStatus: 400, reason: 'invalid-id' };
+  const start = Date.parse(scheduledStart);
+  const end = Date.parse(scheduledEnd);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return { status: 'invalid-input', httpStatus: 400, reason: 'invalid-schedule' };
+  const workspaceId = workspaceOrNull();
+  if (!workspaceId) return { status: 'preview', httpStatus: 202 };
+  try {
+    const result = await updateSupabaseRecord(TABLE,
+      [['workspace_id', eqFilter(workspaceId)], ['id', eqFilter(id)], ['undone_at', 'is.null'], ['outcome', eqFilter('scheduled')]],
+      { scheduled_start: new Date(start).toISOString(), scheduled_end: new Date(end).toISOString() },
+      { returnRepresentation: true, select: SELECT });
+    if (result.persisted && result.record) return { status: 'saved', httpStatus: 200, receipt: receiptFromRow(result.record) };
+    return { status: 'conflict', httpStatus: 409, reason: 'not-movable' };
+  } catch {
+    return { status: 'failed', httpStatus: 502, reason: 'update-failed' };
+  }
+}
+
 /** 확인할 것 조립 — daily-brief 라우트가 부른다. */
 export async function readCheckItemContext(items, { now = Date.now() } = {}) {
   const outcomes = await readSignalOutcomeWindow({ now });
@@ -190,5 +243,6 @@ export async function readCheckItemContext(items, { now = Date.now() } = {}) {
     openTaskIds: tasks.ids,
     nudgesBySubject: nudges.map,
     finishedToday: finishedTodayFrom(outcomes.rows, todayKey),
+    scheduledBlocks: scheduledBlocksFrom(outcomes.rows, { todayKey, now }),
   };
 }

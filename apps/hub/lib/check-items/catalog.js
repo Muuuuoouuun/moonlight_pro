@@ -46,34 +46,51 @@ const CATALOG = Object.freeze({
     ],
     links: [{ label: '거래 열기', action: 'deals' }],
     taskTitle: (name) => `${name} 다음 연락`,
+    schedule: { minutes: 20, verb: '연락 기록' },
   },
   'lead-group': {
     outcomes: [open('분류하러 가기', 'leads'), TASK('할 일 1건'), SNOOZE],
     links: [],
     taskTitle: (name) => `${name} 분류`,
+    schedule: { minutes: 20, verb: '분류' },
   },
   automation: {
     outcomes: [open('실행 기록에서 원인 보기', 'review'), TASK('할 일 1건'), SNOOZE],
     links: [{ label: '자동화 확인', action: 'automations' }],
     taskTitle: (name) => `${name} 실패 원인 확인`,
+    schedule: { minutes: 15, verb: '원인 보기' },
   },
   content: {
     outcomes: [open('이어쓰기', 'write'), TASK('할 일 1건'), SNOOZE],
     links: [{ label: '소재·제작 보기', action: 'queue' }],
     taskTitle: (name) => `${name} 이어쓰기`,
+    schedule: { minutes: 45, verb: '이어쓰기' },
   },
   project: {
     // 막힘 풀기(§5)가 붙기 전까지는 프로젝트를 여는 것이 1번이다 — 단계 3에서 바뀐다.
     outcomes: [open('프로젝트 열기', 'projects'), TASK('할 일 1건 (이 프로젝트에 연결)'), SNOOZE],
     links: [],
     taskTitle: (name) => `${name} 막힌 점 풀기`,
+    // 병목이 의사결정이면 30분 '정하기'(§4.7) — 병목 분류는 단계 3에서 붙는다.
+    schedule: { minutes: 15, verb: '막힌 점 확인' },
   },
   risk: {
     outcomes: [open('구성 항목 보기', 'revenue'), SNOOZE],
     links: [{ label: '프로젝트 보기', action: 'projects' }],
     taskTitle: (name) => `${name} 정리`,
+    schedule: { minutes: 15, verb: '정리' },
   },
 });
+
+// 시간 잡기 일정 제목 — 카드(toCheckItem)와 레일의 다른 시간(구글 일정 갱신)이 같은 문장을 쓴다.
+export function scheduleTitleFor(type, name) {
+  const verb = CATALOG[type]?.schedule?.verb || '확인';
+  return `확인할 것 · ${String(name || '').trim()} ${verb}`.slice(0, 200);
+}
+
+export function scheduleMinutesFor(type) {
+  return CATALOG[type]?.schedule?.minutes || 30;
+}
 
 // 묶음 키용 짧은 해시(djb2) — 같은 리드 묶음이면 같은 키, 리드가 하나라도 바뀌면 새 키다(Q-CF7).
 export function shortHash(text) {
@@ -109,5 +126,7 @@ export function toCheckItem(signal) {
     outcomes: entry.outcomes.map((outcome, index) => ({ ...outcome, primary: index === 0 })),
     links: entry.links,
     taskTitle: entry.taskTitle(name).slice(0, 300),
+    // 시간 잡기 기본 소요 시간·동사(§4.7 표, Q-CF10 승인).
+    schedule: { ...entry.schedule, title: scheduleTitleFor(subject.type, name) },
   };
 }
