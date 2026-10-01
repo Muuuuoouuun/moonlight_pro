@@ -19,7 +19,7 @@ import {
   buildWeeklySummaryText,
   extractWeeklyExperiment,
 } from "@/lib/ai-workflow-client";
-import { SIGNAL_TARGETS } from '@/lib/signal-targets';
+import { SIGNAL_TARGETS, isSentinelRef, withEntityRef } from '@/lib/signal-targets';
 import { WEEKLY_STAT_FIELDS, weeklySourceLabels, weeklyStatValue } from '@/lib/weekly-report-fields';
 import { goalHref } from '@/lib/goal-client';
 import { BurningStreakBadge, StreakMark, streakLevel } from "../burning-streak";
@@ -94,25 +94,6 @@ const BRIEF_DESTINATIONS = [
   { key: 'followups', label: '오늘 연락', icon: 'bell', target: 'dashboard/revenue/followups' },
   { key: 'content', label: '콘텐츠', icon: 'content', target: 'dashboard/content/queue' },
 ];
-
-// Deep-link a signal decision to the specific record drawer when the target is the
-// deals/leads board and the signal carries a real id — revenue.jsx reads ?deal=/?lead=.
-// Sentinel refs (TODAY/NEW/PROPOSED…) are aggregate signals with no single record.
-const SENTINEL_REFS = new Set(['TODAY', 'NEW', 'PROPOSED', 'QUEUE', '—', '']);
-function withEntityRef(target, source) {
-  if (!target || !source || !source.ref) return target;
-  const ref = String(source.ref).trim();
-  if (SENTINEL_REFS.has(ref.toUpperCase())) return target;
-  const from = String(source.from || '').toLowerCase();
-  const join = target.includes('?') ? '&' : '?';
-  if (target.startsWith('dashboard/revenue/deals') && from.startsWith('deal')) {
-    return `${target}${join}deal=${encodeURIComponent(ref)}`;
-  }
-  if (target.startsWith('dashboard/revenue/leads') && from.startsWith('lead')) {
-    return `${target}${join}lead=${encodeURIComponent(ref)}`;
-  }
-  return target;
-}
 
 // Command Brief priority: the single most urgent signal becomes the full-width command;
 // the rest fall into a triaged queue. danger → warning → info → success → neutral, then
@@ -543,74 +524,6 @@ function useDailyBriefLedger(refreshKey) {
   return { ...state, refreshTasks };
 }
 
-function SignalCard({ s, index = 0, defaultExpanded, onNavigate, onAdvisorOpen }) {
-  // Surface the highest-priority signal first-open (§3.1: <5s).
-  const [expanded, setExpanded] = React.useState(defaultExpanded != null ? defaultExpanded : (index === 0 || s.tone === 'danger'));
-  // §5.2 collision precedence: urgency lives on the left rail + dot (danger only);
-  // ordinary lanes (today/queue/info) stay neutral instead of painting semantic hues.
-  const openContext = () => onNavigate?.(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief');
-
-  return (
-    <div className={`daily-brief__panel${s.tone === 'danger' ? ' daily-brief__panel--danger' : ''}`} style={{
-      background: 'var(--surface)',
-      border: '1px solid var(--line-soft)',
-      borderRadius: 'var(--r-lg)',
-      overflow: 'hidden',
-    }}>
-      <div
-        className="hub-stackable-row"
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        onClick={() => setExpanded(e => !e)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(v => !v); } }}
-        style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'flex-start' }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 3 }}>
-          <Dot tone={s.tone === 'danger' ? 'danger' : 'neutral'} size={8} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-            <Badge tone="neutral" size="xs">{s.kind}</Badge>
-            <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{s.meta}</span>
-            <div style={{ flex: 1 }} />
-            <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>from {s.source.from} · <span className="mono">{s.source.ref}</span></span>
-          </div>
-          <div style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--fg)', marginBottom: 4, letterSpacing: '-0.01em' }}>
-            {s.title}
-          </div>
-          <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5, maxWidth: '70ch' }}>{s.summary}</div>
-        </div>
-        <Iconed name="chevronD" size={14} style={{ color: 'var(--fg-faint)', transform: expanded ? '' : 'rotate(-90deg)', transition: 'transform var(--dur-hover) var(--ease-hub)', flexShrink: 0, marginTop: 3 }} />
-      </div>
-      {expanded && (
-        <div style={{ padding: '0 16px 14px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {s.decisions.map((d, i) => (
-            <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="sm" icon={d.primary ? 'bolt' : null}
-              onClick={() => {
-                const target = SIGNAL_TARGETS[d.action];
-                if (target && target !== 'dashboard/daily-brief') onNavigate?.(withEntityRef(target, s.source));
-              }}>
-              {d.label}
-            </Button>
-          ))}
-          {onAdvisorOpen && (
-            <Button
-              variant="outline"
-              size="sm"
-              icon="sparkle"
-              onClick={() => onAdvisorOpen(s)}
-            >
-              조언 구하기
-            </Button>
-          )}
-          <div style={{ flex: 1 }} />
-          <Button variant="ghost" size="sm" icon="moreV" onClick={openContext}>More context</Button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function MetricCard({ m, onNavigate, compact }) {
   const target = m.target || METRIC_TARGETS[m.label];
@@ -1041,7 +954,7 @@ function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
   // as the top item by position and size alone — warning/info/success rims were reading
   // as a banned warm-gold halo around the hero card.
   const accent = s.tone === 'danger' ? 'var(--danger)' : 'var(--moon-300)';
-  const hasRecord = s.source?.ref && !SENTINEL_REFS.has(String(s.source.ref).trim().toUpperCase());
+  const hasRecord = s.source?.ref && !isSentinelRef(s.source.ref);
   const openRecord = () => onNavigate?.(withEntityRef(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief', s.source));
   return (
     <div className={`daily-brief__panel${s.tone === 'danger' ? ' daily-brief__panel--danger' : ''}`} style={{
@@ -1798,10 +1711,6 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
   );
 }
 
-// The queue is a decision list, not an inbox. Two items keep the first scan
-// calm; the rest stay one click away.
-const QUEUE_LIMIT = 2;
-
 // 60초 시계를 페이지 루트에서 분리 — 분마다 전체 브리핑 트리가 아니라 이 리프만 다시 그린다.
 function BriefClock({ signalCount, urgentCount, todayCount }) {
   const [now, setNow] = React.useState(() => new Date());
@@ -1958,7 +1867,6 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
   const [advisorSignal, setAdvisorSignal] = React.useState(null);
   const ledger = useDailyBriefLedger(refreshKey);
   const guruRecommendations = useGuruRecommendations();
-  const [queueExpanded, setQueueExpanded] = React.useState(false);
   // 기록창 대상 — 집중 고객 행에서 열고, 저장은 공용 폼(contact-record-form)이 소유한다.
   // 늦은 실패면 { draft, error }를 얹어 입력 그대로 다시 연다(드로어를 먼저 닫았어도 무언 소실 금지).
   const [recordTarget, setRecordTarget] = React.useState(null);
@@ -1989,8 +1897,6 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
   const ranked = React.useMemo(() => rankSignals(ledger.signals), [ledger.signals]);
   const command = ranked[0] || null;
   const waiting = ranked.slice(1);
-  const queue = queueExpanded ? waiting : waiting.slice(0, QUEUE_LIMIT);
-  const queueOverflow = waiting.length - queue.length;
   return (
     <div className="hub-page daily-brief" style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: 'var(--section-gap)', maxWidth: 1160, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header daily-brief__intro fade-up" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
@@ -2056,8 +1962,9 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
           )}
         </div>
 
-        {/* 오늘 할 일이 캡처 바로 아래로 올라가면서 왼쪽 칸이 비었다 — 신호 섹션이 전폭을 쓴다. */}
-        <div>
+        {/* 확인할 것은 홈의 한 장씩 카드가 정본이다(2026-09-30 스펙 §7.1, Q-CF2) — 오늘에는 맨 위 카드 한 장
+            요약(위 CommandCard)과 홈으로 가는 한 줄만 둔다. 같은 끝내기를 두 화면에 두 번 펼치지 않는다. */}
+        {waiting.length > 0 && (
           <div>
             <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
               <Badge tone={urgentCount > 0 ? 'danger' : 'neutral'} size="xs">{urgentCount} urgent</Badge>
@@ -2065,30 +1972,15 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
             </div>}>
               확인할 것
             </SectionTitle>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {queue.length ? (
-                queue.map((s) => (
-                  <SignalCard
-                    key={s.id}
-                    s={s}
-                    defaultExpanded={s.tone === 'danger'}
-                    onNavigate={onNavigate}
-                    onAdvisorOpen={setAdvisorSignal}
-                  />
-                ))
-              ) : (
-                <Card className="daily-brief__panel">
-                  <EmptyState icon="check" title={command ? '남은 것 없음' : '확인할 것 없음'} description={command ? '가장 급한 하나만 위에 남았어요.' : '새로 확인할 것이 생기면 맨 위 카드로 가장 먼저 올라옵니다.'} />
-                </Card>
-              )}
-              {queueOverflow > 0 && (
-                <Button variant="ghost" size="sm" icon="chevronD" onClick={() => setQueueExpanded(true)}>
-                  확인할 것 {queueOverflow}건 더 보기
-                </Button>
-              )}
-            </div>
+            <button type="button" className="hub-card-link" onClick={() => onNavigate('dashboard/home')}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 44, padding: '14px 16px', background: 'var(--surface)', borderRadius: 'var(--r-lg)', color: 'var(--fg)', font: 'inherit', textAlign: 'left', cursor: 'pointer' }}>
+              <span style={{ flex: 1, fontSize: 13.5 }}>
+                확인할 것 <span className="num">{waiting.length}</span>건 더 — 홈에서 한 장씩 끝내기
+              </span>
+              <Iconed name="arrowRight" size={14} style={{ color: 'var(--fg-dim)' }} />
+            </button>
           </div>
-        </div>
+        )}
 
         {/* 매출 pulse는 §2 첫 화면 판단축 — 접힌 MoreDetail 뒤가 아니라 "지금 값"으로
             상시 노출한다(2026-07-15 §2.2 QA 결정 B 유지 항목, system-eval B-11). */}

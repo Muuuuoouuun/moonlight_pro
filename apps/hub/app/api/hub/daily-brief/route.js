@@ -16,6 +16,9 @@ import { buildOperatorHomeSummary } from "@/lib/operator-home-summary";
 import { buildTaskToday } from "@/lib/task-today";
 import { filterOperatorOwnedRevenue } from "@/lib/operator-revenue-scope";
 import { buildDailyFocus, withoutFocusDuplicates } from "@/lib/daily-focus";
+import { toCheckItem } from "@/lib/check-items/catalog";
+import { applyCheckItemOutcomes, orderCheckItems } from "@/lib/check-items/suppression";
+import { readCheckItemContext } from "@/lib/repositories/signal-outcomes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,6 +82,7 @@ function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = 
       if (overlap) {
         return [{
           id: `risk-converge-${deal.id}-${project.id}`,
+          subject: { type: "risk", id: `${deal.id}~${project.id}`, name: overlap },
           tone: "danger",
           kind: "Risk",
           title: `${overlap} — 두 전선에서 위험`,
@@ -102,6 +106,7 @@ function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = 
   if (fronts.length >= 2) {
     return [{
       id: "risk-convergence",
+      subject: { type: "risk", id: "convergence", name: "복합 리스크" },
       tone: "danger",
       kind: "Risk",
       title: `복합 리스크 — ${fronts.length}개 전선`,
@@ -138,7 +143,7 @@ function buildRevenueSignals(revenue, staleDealIds = new Set()) {
     .forEach((deal) => {
       signals.push({
         id: `revenue-stale-${deal.id}`,
-        subject: { type: "deal", id: deal.id },
+        subject: { type: "deal", id: deal.id, name: deal.name },
         tone: "danger",
         kind: "Revenue",
         title: `${deal.name} — ${deal.age}일째 정체`,
@@ -157,6 +162,7 @@ function buildRevenueSignals(revenue, staleDealIds = new Set()) {
   if (newLeads.length) {
     signals.push({
       id: "revenue-new-leads",
+      subject: { type: "lead-group", ids: newLeads.map((lead) => lead.id), name: `신규 리드 ${newLeads.length}건` },
       tone: "neutral",
       kind: "Revenue",
       title: `신규 리드 ${newLeads.length}건 분류 대기`,
@@ -181,6 +187,7 @@ function buildContentSignals(content) {
   attention.slice(0, 2).forEach((item) => {
     signals.push({
       id: `content-${item.id}`,
+      subject: { type: "content", id: item.itemId || item.id, name: item.title },
       tone: item.tone || "warning",
       kind: "Content",
       title: item.title,
@@ -198,6 +205,7 @@ function buildContentSignals(content) {
   if (draft && signals.length < 2) {
     signals.push({
       id: `content-draft-${draft.id}`,
+      subject: { type: "content", id: draft.id, name: draft.title },
       tone: "neutral",
       kind: "Content",
       title: `${draft.title} — ${draft.status}`,
@@ -218,6 +226,7 @@ function buildAutomationSignals(automations) {
   const incidents = Array.isArray(automations.incidents) ? automations.incidents : [];
   return incidents.slice(0, 2).map((run) => ({
     id: `automation-failed-${run.id}`,
+    subject: { type: "automation", id: run.automationId || run.automationKey || run.id, name: run.flow },
     tone: "danger",
     kind: "Automation",
     title: `${run.flow} · 확인 필요`,
@@ -241,6 +250,7 @@ function buildWorkSignals(projects) {
   if (blocked) {
     signals.push({
       id: `work-blocked-${blocked.id}`,
+      subject: { type: "project", id: blocked.id, name: blocked.name },
       tone: "danger",
       kind: "Work",
       title: `${blocked.name} blocked`,
@@ -397,7 +407,9 @@ export async function GET() {
       .filter((item) => item.lane === "deal" && item.stalled)
       .map((item) => item.entityId),
   );
-  const signals = withoutFocusDuplicates(
+  // 확인할 것(2026-09-30 스펙 §4.4): 카드 모양을 붙이고, 끝낸 기록·보류·열린 할 일·잡아 둔 일로
+  // 숨긴 뒤 차례를 정한다. 영수증·보류·할 일 상태를 못 읽으면 숨기지 않는다(checkItems.state로 알림).
+  const candidates = withoutFocusDuplicates(
     [
       ...buildUnifiedRiskSignals(operatorRevenue, projects, automations, staleDealIds),
       ...buildRevenueSignals(operatorRevenue, staleDealIds),
@@ -406,7 +418,12 @@ export async function GET() {
       ...buildWorkSignals(projects),
     ],
     dailyFocus,
-  ).slice(0, 7);
+  ).map(toCheckItem);
+  const checkContext = await readCheckItemContext(candidates).catch(() => null);
+  const { visible, suppressed } = checkContext
+    ? applyCheckItemOutcomes(candidates, checkContext)
+    : { visible: candidates, suppressed: [] };
+  const signals = orderCheckItems(visible).slice(0, 7);
   const operatorHome = buildOperatorHomeSummary({
     projects,
     content: filterContentLedgerToBrandLanes(content),
@@ -451,6 +468,13 @@ export async function GET() {
     contentBrands,
     inquiries: attention?.inquiries || { status: 'error', rows: [], unreadCount: null },
     signals,
+    // 확인할 것의 영수증 상태 — state가 error/partial이면 숨기지 못한 카드가 있을 수 있다(누락보다 중복이 낫다).
+    checkItems: {
+      state: checkContext?.status || "error",
+      finishedToday: checkContext?.finishedToday || [],
+      suppressedCount: suppressed.length,
+      scheduled: suppressed.filter((entry) => entry.reason === "scheduled").length,
+    },
     dailyFocus,
     queue,
     morningBrief: morning.brief || null,

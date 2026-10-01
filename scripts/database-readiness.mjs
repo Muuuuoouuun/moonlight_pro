@@ -156,6 +156,9 @@ export const DATABASE_FEATURES = [
     functions: ['finance_import_v1(uuid,jsonb)','finance_review_v1(uuid,text,uuid,integer,jsonb)'],
     bodyIncludes: [['finance_import_v1(uuid,jsonb)', "'contractsOnly'"],
       ['finance_review_v1(uuid,text,uuid,integer,jsonb)', "review||p_changes)) then return"]] },
+  // 확인할 것 영수증 — 끝내기·보류·시간 잡기 한 번이 한 줄(2026-09-30 확인할 것 스펙 §8.1).
+  { name: '확인할 것 영수증', migration: '20261001_0056_signal_outcomes.sql', tables: ['signal_outcomes'], functions: [],
+    indexIncludes: [['signal_outcomes', 'signal_outcomes_request_idx', '(workspace_id, request_id)']] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

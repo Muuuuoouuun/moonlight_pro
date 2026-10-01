@@ -73,6 +73,7 @@ function signalsFromRead(read) {
     signals: failed ? [] : (Array.isArray(data?.signals) ? data.signals : []),
     dailyFocus: failed ? null : data?.dailyFocus || null,
     taskToday: failed ? null : data?.taskToday || null,
+    checkItems: failed ? null : data?.checkItems || null,
   };
 }
 
@@ -81,7 +82,7 @@ export async function fetchDailyBriefSignals({ signal, fetchImpl = globalThis.fe
   return signalsFromRead(await readDailyBrief({ signal, fetchImpl }));
 }
 
-const LOADING = { status: 'loading', signals: [], dailyFocus: null, taskToday: null };
+const LOADING = { status: 'loading', signals: [], dailyFocus: null, taskToday: null, checkItems: null };
 
 // reloadKey가 바뀔 때마다 다시 읽는다. 다른 화면이 5분 안에 읽어 둔 응답이 있으면 그것을 먼저
 // 그리고 조용히 다시 읽는다. keepPrevious: 이미 읽은 신호(live·partial)가 있으면 다시 읽는 동안
@@ -105,7 +106,7 @@ export function useDailyBriefSignals(reloadKey, { keepPrevious = false } = {}) {
         const next = await fetchDailyBriefSignals({ signal: controller.signal });
         if (active) setState(next);
       } catch {
-        if (active) setState({ status: 'error', signals: [], dailyFocus: null, taskToday: null });
+        if (active) setState({ status: 'error', signals: [], dailyFocus: null, taskToday: null, checkItems: null });
       }
     })();
     return () => { active = false; controller.abort(); };
