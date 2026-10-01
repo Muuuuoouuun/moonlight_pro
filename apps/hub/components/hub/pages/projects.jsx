@@ -47,7 +47,7 @@ import { TaskChecklistGauge } from './project-task-checklist';
 import { hasChecklistConflict, readTaskChecklist, validateTaskChecklist } from '@/lib/task-checklist';
 import { ProjectExecutionBacklog, ProjectTaskFilters } from './project-execution-backlog';
 import { buildTaskExecutionModel, mergeSavedTask, readTaskFilters, saveTaskChanges, writeTaskFilters } from '@/lib/pms-work-items';
-import { appendProjectChecklistItem, createProjectTaskWriter } from '@/lib/project-direct-work';
+import { appendProjectChecklistItem, createProjectTaskWriter, reorderProjectChecklist } from '@/lib/project-direct-work';
 import { isCanonicalUuid } from '@/lib/uuid';
 import './project-execution.css';
 import {
@@ -1547,6 +1547,10 @@ export function Projects({ workspace }) {
     return result;
   }, [allProjects, applyTaskChanges, canWriteTasks, todos]);
 
+  const reorderChecklistItems = React.useCallback(async (task, sourceId, targetId, placement) => {
+    return reorderProjectChecklist(task, sourceId, targetId, placement, { saveChanges: applyTaskChanges });
+  }, [applyTaskChanges]);
+
   const toggleChecklistItem = React.useCallback(async (taskId, checkId) => {
     const task = todos.find(item => item.id === taskId);
     const checks = task ? readTaskChecklist(task) : [];
@@ -2201,6 +2205,7 @@ export function Projects({ workspace }) {
               onCreateTodo={createTodo}
               onQuickCreateTodo={quickCreateTodo}
               onAddChecklistItem={addChecklistItem}
+              onReorderChecklist={reorderChecklistItems}
               canWriteTasks={canWriteTasks}
               onEditTodo={editTodo}
               onToggleTodo={toggleTodo}
