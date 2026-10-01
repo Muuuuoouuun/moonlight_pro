@@ -520,6 +520,21 @@ export function renderOfficeRolePersona(id: OfficeId): string {
   ].join('\n');
 }
 
+// Short form for a council participant who is not the lead, used where the lead edits the
+// synthesis. The participant's own words are already in the discussion record, so repeating the
+// full persona and playbook only lengthened the prompt (2026-10-01 운영자 결정 "주관만 전문, 나머지는
+// 요약"). Card data is unchanged; this only selects fields.
+export function renderOfficeRoleBrief(id: OfficeId): string {
+  const card = getOfficeRoleCard(id);
+  return [
+    `역할의 목적: ${card.mission}`,
+    `업무 소유: ${card.ownership}`,
+    `토론 기여: ${card.deliberation.contribution}`,
+    `반대할 조건: ${card.deliberation.challengeWhen}`,
+    `의견을 바꿀 근거: ${card.deliberation.updateWhen}`,
+  ].join('\n');
+}
+
 export function renderOfficeRolePlaybook(id: OfficeId): string {
   const card = getOfficeRoleCard(id);
   return [

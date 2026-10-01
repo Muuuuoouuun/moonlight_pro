@@ -3,6 +3,7 @@ import { buildOfficeOperatingPolicy } from './operating-policy.ts';
 import { OFFICE_PLAYBOOKS, OFFICE_MODE_GUIDANCE } from './playbooks.ts';
 import { OFFICE_PERSONAS } from './personas.ts';
 import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS } from './source-review.ts';
+import { renderOfficeRoleBrief } from './role-cards.ts';
 
 // Same-model second pass, not independent verification or a claim that the answer is correct.
 export function buildOfficeReview(request: OfficeRequest, context: OfficeContext, draft: OfficeAnswer) {
@@ -18,7 +19,9 @@ export function buildOfficeReview(request: OfficeRequest, context: OfficeContext
       '현재 요청이 말하는 선호를 기본 업무 선호보다 우선한다. 확정 기한과 제안 기한을 구분한다. 가용 시간 합계·비용 산식을 다시 계산하고, 아직 예상인 절감 시간을 실제 절약으로 바꾸지 않는다.',
       '구현·스펙·검증 절차를 요청받았을 때는 필요한 성공·오류·불명·복구 조건을 결과물에 포함한다. 성공 응답 계약을 모르면 error가 아니라는 이유나 임의 상태값으로 성공 분기를 만들지 않는다. 저장/재시도 설계에는 재조회·입력 보존·중복 방지 기준을 갖춘다. 다만 이미 정한 범위의 확인·인사·종결만 요청받았다면 검증 절차나 수용 기준을 새 과제로 추가하지 않는다. 전문 판단 기준은 요청의 범위를 넓히는 허가가 아니다.',
       buildOfficeOperatingPolicy(request.scope),
-      ...views.map(id => `${OFFICE_ROSTER.find(p => p.id === id)!.name}의 역할·말투와 산출물 기준:\n${OFFICE_PERSONAS[id]}\n${OFFICE_PLAYBOOKS[id]}`),
+      ...views.map(id => id === request.ownerId
+        ? `${OFFICE_ROSTER.find(p => p.id === id)!.name}의 역할·말투와 산출물 기준:\n${OFFICE_PERSONAS[id]}\n${OFFICE_PLAYBOOKS[id]}`
+        : `${OFFICE_ROSTER.find(p => p.id === id)!.name}의 관점 요약(공개 발언은 회의 기록에 있다):\n${renderOfficeRoleBrief(id)}`),
       OFFICE_MODE_GUIDANCE[request.mode],
       '수정된 답 자체를 반환한다. 검수 절차나 사고 과정, 점수, "검증을 통과했다"는 선언을 출력하지 않는다. 요청한 원고/코드/스펙은 실제 결과물로 남기고, 이미 작업 지시가 있으면 형식적인 재승인 질문으로 끝내지 않는다.',
       `내부 답변은 ${owner.character}의 관심과 판단 차이를 살린다. 자연스러운 존댓말로 대화하듯 답하고 대표님 호칭·자기소개·접수 문장을 매번 붙이지 않는다. 고객/공식 문장은 그 대상의 말투로 쓴다. 사용자가 말하지 않은 조급함·불안·자금난을 추정하지 않는다. 과한 느낌표·이모지·캐릭터 구호를 빼고, 창작 글의 1인칭 경험은 실제 원문에 있는 범위만 쓴다. 추가 업무가 필요 없는 질문·인사·휴식 요청은 짧게 끝내고 nextAction을 '추가 행동 없음.'으로 둔다.`,
