@@ -5,6 +5,7 @@ import {
 } from "@/lib/server-write";
 import { fetchSupabaseRowsDetailed } from "@com-moon/supabase-rest";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { fetchSocialToken } from "./social-token-health.js";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "@/lib/social-account-connections";
 import { configuredMetaOAuthApps, isValidMetaOAuthAppIdentity, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
 
@@ -304,6 +305,18 @@ export function buildMetaThreadsAuthUrl({
   return `${THREADS_AUTH_URL}?${params.toString()}`;
 }
 
+function validateThreadsToken(data, operation, scopes, requireExpiry = false) {
+  const expiryValid = typeof data?.expires_in === "number" && Number.isFinite(data.expires_in) &&
+    data.expires_in > 0 && Number.isFinite(new Date(Date.now() + data.expires_in * 1000).getTime());
+  const granted = typeof data?.scope === "string" ? data.scope.split(/[,\s]+/).filter(Boolean) : [];
+  if (typeof data?.access_token !== "string" || !data.access_token.trim() ||
+    ((requireExpiry || data.expires_in != null) && !expiryValid) ||
+    (data.scope != null && scopes?.some(scope => !granted.includes(scope)))) {
+    throw new Error(`threads-${operation}-invalid-response`);
+  }
+  return data;
+}
+
 async function exchangeThreadsToken(params, app) {
   const config = app;
 
@@ -315,21 +328,17 @@ async function exchangeThreadsToken(params, app) {
     ...params,
   });
 
-  const response = await fetch(THREADS_TOKEN_URL, {
+  const data = await fetchSocialToken(THREADS_TOKEN_URL, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
     },
     body: body.toString(),
     cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(detail || `Threads token exchange failed with ${response.status}`);
-  }
-
-  return await response.json();
+  }, "threads", "token-exchange");
+  // Short-token TTL is not persisted. The verified long-token response below
+  // must supply it; never infer 60 days for a partial response.
+  return validateThreadsToken(data, "token-exchange", config.scopes);
 }
 
 export async function exchangeMetaThreadsCode({ code, redirectUri, app }) {
@@ -351,16 +360,10 @@ export async function exchangeMetaThreadsLongLivedToken(accessToken, app) {
     access_token: accessToken,
   });
 
-  const response = await fetch(`${THREADS_LONG_LIVED_TOKEN_URL}?${params.toString()}`, {
+  const data = await fetchSocialToken(`${THREADS_LONG_LIVED_TOKEN_URL}?${params.toString()}`, {
     cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(detail || `Threads long-lived token exchange failed with ${response.status}`);
-  }
-
-  return await response.json();
+  }, "threads", "long-lived-token-exchange");
+  return validateThreadsToken(data, "long-lived-token-exchange", config.scopes, true);
 }
 
 export async function refreshMetaThreadsAccessToken(accessToken) {
@@ -373,17 +376,10 @@ export async function refreshMetaThreadsAccessToken(accessToken) {
     access_token: accessToken,
   });
 
-  const response = await fetch(
+  return fetchSocialToken(
     `https://graph.threads.net/refresh_access_token?${params.toString()}`,
-    { cache: "no-store" },
+    { cache: "no-store" }, "threads", "token-refresh",
   );
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(detail || `Threads token refresh failed with ${response.status}`);
-  }
-
-  return await response.json();
 }
 
 export async function fetchMetaThreadsProfile(accessToken) {
@@ -599,6 +595,7 @@ export function summarizeMetaThreadsConnection(connection) {
     username: config.username || null,
     profileHandle: config.username ? `@${config.username}` : null,
     expiresAt: config.expiresAt || null,
+    hasAccessToken: Boolean(config.accessToken),
   };
 }
 

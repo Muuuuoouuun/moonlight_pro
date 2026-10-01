@@ -177,7 +177,10 @@ async function supabaseFetch(op, table, url, { method = "GET", headers, body, ti
     return {
       ok: response.ok,
       status: response.status,
-      text,
+      // PostgREST errors can echo rejected credential rows. Keep them out of
+      // logs and caller error envelopes while preserving successful reads.
+      text: !response.ok && table === "integration_connections"
+        ? (isDuplicateViolation(response.status, text) ? '{"code":"23505"}' : "credential-detail-redacted") : text,
       contentRange: response.headers.get("content-range"),
     };
   } catch (error) {
@@ -185,7 +188,7 @@ async function supabaseFetch(op, table, url, { method = "GET", headers, body, ti
     return {
       ok: false,
       status: null,
-      text: String(error),
+      text: table === "integration_connections" ? "credential-detail-redacted" : String(error),
       contentRange: null,
       failureReason: reason,
     };

@@ -129,6 +129,15 @@ export const DATABASE_FEATURES = [
     bodyIncludes: [['report_archive_v1(uuid,text,integer,jsonb,text)',"'uncertainties',o.result"],['report_office_weeklies_v1(uuid,text,integer)',"'sourceCheck',result"]] },
   { name: '주간 보고서 품질 검토 시간', migration: '20261001_0062_office_weekly_quality_deadline.sql', tables: [], functions: [],
     bodyIncludes: [['office_request_claim_v1(uuid,text,jsonb,jsonb)','office_weekly_content_deadline_v1']] },
+  { name: 'Go;Re OAuth 앱 연결', migration: '20261001_0063_gore_oauth_app_binding.sql', tables: [], functions: [],
+    constraintIncludes: [['social_oauth_flows', 'social_oauth_flows_app_key_check', "'gore'"]] },
+  { name: 'Go;Re 단일 Threads 텍스트 작업', migration: '20261001_0064_gore_threads_text_test_job.sql',
+    tables: ['gore_threads_test_jobs'], functions: ['gore_threads_test_job_v1(uuid,text,jsonb)'],
+    tableNoWrite: [['gore_threads_test_jobs','service_role']],
+    bodyIncludes: [['gore_threads_test_job_v1(uuid,text,jsonb)', 'expired-effect-lease'],
+      ['gore_threads_test_job_v1(uuid,text,jsonb)', 'expectedVersion'],
+      ['gore_threads_test_job_v1(uuid,text,jsonb)', "'leaseExpiresAt',j.lease_expires_at"],
+      ['gore_threads_test_job_v1(uuid,text,jsonb)', "'leaseRemainingMs',greatest"]] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

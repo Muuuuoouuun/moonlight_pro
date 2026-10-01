@@ -5,6 +5,7 @@ import {
   updateSupabaseRecord,
 } from "@com-moon/supabase-rest";
 import { isValidSocialBrandKey, listSocialAccountConnections, saveSocialAccountConnection } from "./social-account-connections.js";
+import { fetchSocialToken, isRefreshGrantExpiringSoon } from "./social-token-health.js";
 
 const PROVIDER = "youtube";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -12,6 +13,7 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels";
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 const ACCESS_TOKEN_SAFETY_MS = 60 * 1000;
+const refreshesInFlight = new Map();
 const SCOPES = [
   "https://www.googleapis.com/auth/youtube.readonly",
   "https://www.googleapis.com/auth/youtube.upload",
@@ -113,7 +115,7 @@ export function decodeYouTubeState(value) {
 export async function exchangeYouTubeCode({ code, redirectUri }) {
   const config = resolveYouTubeOAuthConfig();
   if (!config.configured) throw new Error("youtube-client-not-configured");
-  const response = await fetch(TOKEN_URL, {
+  const token = await fetchSocialToken(TOKEN_URL, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -124,12 +126,13 @@ export async function exchangeYouTubeCode({ code, redirectUri }) {
       grant_type: "authorization_code",
     }).toString(),
     cache: "no-store",
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!response.ok) throw new Error("youtube-token-exchange-failed");
-  const token = await response.json();
-  if (!token?.access_token || !token?.refresh_token) {
+  }, "youtube", "token-exchange");
+  if (typeof token?.access_token !== "string" || !token.access_token.trim() ||
+    typeof token?.refresh_token !== "string" || !token.refresh_token.trim()) {
     throw new Error("youtube-offline-grant-missing");
+  }
+  if (!Number.isFinite(Number(token.expires_in)) || Number(token.expires_in) <= 0 || Number(token.expires_in) > 86400) {
+    throw new Error("youtube-token-exchange-invalid-response");
   }
   if (token.scope) {
     const granted = new Set(String(token.scope).split(/\s+/));
@@ -194,6 +197,15 @@ export async function getUsableYouTubeAccessToken({
   now = Date.now(),
 } = {}) {
   if (!workspaceId || !channelId) throw new Error("youtube-channel-id-required");
+  const key = JSON.stringify([workspaceId, channelId]);
+  if (refreshesInFlight.has(key)) return refreshesInFlight.get(key);
+  const pending = getSelectedYouTubeAccessToken({ workspaceId, channelId, now });
+  refreshesInFlight.set(key, pending);
+  try { return await pending; }
+  finally { if (refreshesInFlight.get(key) === pending) refreshesInFlight.delete(key); }
+}
+
+async function getSelectedYouTubeAccessToken({ workspaceId, channelId, now }) {
   const { connections, available } = await readYouTubeConnections(workspaceId, channelId);
   if (!available) throw new Error("youtube-connection-storage-error");
   const row = connections[0];
@@ -212,7 +224,7 @@ export async function getUsableYouTubeAccessToken({
   }
   const oauth = resolveYouTubeOAuthConfig();
   if (!oauth.configured) throw new Error("youtube-client-not-configured");
-  const response = await fetch(TOKEN_URL, {
+  const token = await fetchSocialToken(TOKEN_URL, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -222,26 +234,34 @@ export async function getUsableYouTubeAccessToken({
       grant_type: "refresh_token",
     }).toString(),
     cache: "no-store",
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!response.ok) {
-    const detail = await response.json().catch(() => null);
-    throw new Error(detail?.error === "invalid_grant"
-      ? "youtube-reauthorization-required" : "youtube-token-refresh-failed");
-  }
-  const token = await response.json();
+  }, "youtube", "token-refresh");
   const expiresIn = Number(token?.expires_in);
-  if (!token?.access_token || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+  if (typeof token?.access_token !== "string" || !token.access_token.trim() || !Number.isFinite(expiresIn) || expiresIn <= 0 || expiresIn > 86400) {
     throw new Error("youtube-token-refresh-invalid-response");
   }
+  if (token.refresh_token != null && (typeof token.refresh_token !== "string" || !token.refresh_token.trim())) {
+    throw new Error("youtube-token-refresh-invalid-response");
+  }
+  if (token.scope != null && (typeof token.scope !== "string" ||
+    !SCOPES.every(scope => token.scope.split(/\s+/).includes(scope)))) {
+    throw new Error("youtube-token-refresh-permission-required");
+  }
+  // A refreshed credential must still resolve to the operator-selected channel.
+  const channel = await fetchAuthenticatedYouTubeChannel(token.access_token);
+  if (!isExpectedYouTubeChannel(channel, channelId)) throw new Error("youtube-channel-mismatch");
   const expiresAt = new Date(now + expiresIn * 1000).toISOString();
   const nextConfig = {
     ...config,
     accessToken: token.access_token,
     refreshToken: token.refresh_token || config.refreshToken,
+    scope: token.scope || config.scope,
     expiresAt,
+    ...(Number(token.refresh_token_expires_in) > 0 && Number.isFinite(Number(token.refresh_token_expires_in)) ? {
+      refreshTokenExpiresAt: new Date(now + Number(token.refresh_token_expires_in) * 1000).toISOString(),
+    } : {}),
   };
-  const updatedAt = new Date(now).toISOString();
+  // Always advance the CAS version, including a same-millisecond refresh.
+  const updatedAt = new Date(Math.max(now, (Date.parse(row.last_synced_at) || 0) + 1)).toISOString();
   const updated = await updateSupabaseRecord("integration_connections", [
     ["id", `eq.${row.id}`],
     ["workspace_id", `eq.${workspaceId}`],
@@ -249,12 +269,12 @@ export async function getUsableYouTubeAccessToken({
     ["account_key", `eq.${channelId}`],
     ["status", "eq.connected"],
     ["last_synced_at", row.last_synced_at ? `eq.${row.last_synced_at}` : "is.null"],
-  ], { config: nextConfig, last_synced_at: updatedAt }, { returnRepresentation: true });
+  ], { config: nextConfig, last_synced_at: updatedAt }, { returnRepresentation: true, select: "id" });
   if (!updated.persisted) {
     if (updated.reason === "no-matching-row") {
       const latest = await readYouTubeConnections(workspaceId, channelId);
       const winner = latest.connections[0];
-      if (latest.available && winner?.status === "connected" &&
+      if (latest.available && winner?.status === "connected" && winner.workspace_id === workspaceId && winner.provider === PROVIDER &&
         winner.account_key === channelId && winner.config?.channelId === channelId &&
         getYouTubeConnectionStatus(summarizeYouTubeConnection(winner), now) === "connected") {
         return {
@@ -264,6 +284,9 @@ export async function getUsableYouTubeAccessToken({
         };
       }
     }
+    throw new Error("youtube-token-refresh-not-persisted");
+  }
+  if (updated.record?.id !== row.id || updated.records?.length !== 1) {
     throw new Error("youtube-token-refresh-not-persisted");
   }
   return { accessToken: token.access_token, refreshed: true, expiresAt };
@@ -294,7 +317,7 @@ export async function saveYouTubeConnection({ workspaceId, token, channel, brand
   return { connectionId: persistence.id || null, persistence, config };
 }
 
-export function summarizeYouTubeConnection(connection) {
+export function summarizeYouTubeConnection(connection, now = Date.now()) {
   const config = connection?.config || {};
   return {
     id: connection?.id || null,
@@ -305,6 +328,9 @@ export function summarizeYouTubeConnection(connection) {
     brandKey: config.brandKey || null,
     expiresAt: config.expiresAt || null,
     refreshTokenExpiresAt: config.refreshTokenExpiresAt || null,
+    refreshTokenExpiryKnown: Boolean(config.refreshTokenExpiresAt && Number.isFinite(Date.parse(config.refreshTokenExpiresAt))),
+    reauthorizationDue: isRefreshGrantExpiringSoon(config.refreshTokenExpiresAt, now),
+    scope: typeof config.scope === "string" ? config.scope : "",
     hasAccessToken: Boolean(config.accessToken),
     hasRefreshToken: Boolean(config.refreshToken),
   };
