@@ -89,6 +89,8 @@ test("결정은 출처를 남기고, 같은 id·같은 내용의 재시도는 du
   assert.equal(command.ok, true);
   assert.deepEqual(command.record.meta, { source: "project-unblock", sourceRef: { type: "project", id } });
   assert.equal(normalizePmsCommand({ ...input, sourceRef: { type: "planet", id } }, ctx).reason, "invalid-source-ref");
+  // 회의 리뷰에서 모은 결정은 회의 메모를 가리킨다(Q-CF4).
+  assert.deepEqual(normalizePmsCommand({ ...input, source: "meeting-review", sourceRef: { type: "meeting", id: "note-1" } }, ctx).record.meta.sourceRef, { type: "meeting", id: "note-1" });
 
   const stored = structuredClone(command.record);
   const deps = {
