@@ -25,7 +25,7 @@ for (const [provider, prefix, exchangeCode, exchangeLongLived] of [
     const calls = [];
     globalThis.fetch = async (url, options = {}) => {
       calls.push({ url: new URL(url), body: new URLSearchParams(options.body || "") });
-      return { ok: true, status: 200, json: async () => ({ access_token: "issued-token" }) };
+      return { ok: true, status: 200, json: async () => ({ access_token: "issued-token", expires_in: 5184000 }) };
     };
 
     await exchangeCode({ code: "auth-code", redirectUri: "https://hub.example.com/callback", app });

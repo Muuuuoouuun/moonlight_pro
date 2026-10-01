@@ -260,6 +260,25 @@ test('readinessSql runs read-only on PostgreSQL and tells old and new versions a
       on public.integration_connections(workspace_id, provider, account_key) where provider = 'youtube';`);
     assert.deepEqual(check(social)[0].missingOrUnprotected,
       ['uq_integration_connections_workspace_provider_account 유니크 키 (workspace_id, provider, account_key) 불일치']);
+    const gore = DATABASE_FEATURES.filter(f => f.migration === '20261001_0063_gore_oauth_app_binding.sql');
+    sql(`create table public.social_oauth_flows(app_key text, app_id text,
+      constraint social_oauth_flows_app_key_check check (app_key is null or app_key in ('moonlight','politic_officer','classmoon')),
+      constraint social_oauth_flows_app_id_check check (app_id is null or app_id ~ '^[A-Za-z0-9_-]{1,128}$'),
+      constraint social_oauth_flows_app_identity_pair_check check ((app_key is null) = (app_id is null)));`);
+    assert.equal(check(gore)[0].ready, false);
+    sql(await migration('20261001_0063_gore_oauth_app_binding.sql'));
+    assert.equal(check(gore)[0].ready, true);
+    sql(`insert into public.social_oauth_flows(app_key, app_id) values
+      ('moonlight','synthetic-bridge'),('politic_officer','synthetic-politic'),('classmoon','synthetic-class'),('gore','synthetic-gore');
+      do $$ begin
+        begin insert into public.social_oauth_flows values ('unknown','synthetic-app');
+          raise exception 'unknown app accepted'; exception when check_violation then null; end;
+        begin insert into public.social_oauth_flows values ('gore',null);
+          raise exception 'incomplete app identity accepted'; exception when check_violation then null; end;
+        begin insert into public.social_oauth_flows values ('gore','invalid app id');
+          raise exception 'invalid app identity accepted'; exception when check_violation then null; end;
+      end $$;`);
+    assert.equal(sql('select count(*) from public.social_oauth_flows'), '4');
   } finally {
     if (running) spawnSync(join(bin, 'pg_ctl'), ['-D', join(root, 'data'), '-m', 'fast', '-w', 'stop'], { encoding: 'utf8', timeout: 30000, env });
     await rm(root, { recursive: true, force: true });

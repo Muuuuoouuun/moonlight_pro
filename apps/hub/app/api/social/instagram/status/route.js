@@ -10,6 +10,7 @@ import {
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { summarizeSocialAccountStatus } from "@/lib/social-account-status";
 import { matchesMetaOAuthConnection, resolveMetaOAuthApp } from "@/lib/meta-oauth-apps";
+import { getMetaTokenStatus } from "@/lib/social-token-health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export async function GET(req) {
     available,
     selector: (row) => !accountId || row.account_key === accountId,
     summarize: summarizeInstagramApiConnection,
+    connectedStatus: (_row, selected) => getMetaTokenStatus(selected),
   });
 
   return NextResponse.json({
@@ -50,6 +52,8 @@ export async function GET(req) {
     scopes: config?.scopes || [],
     connection: summary.connection,
     connections: summary.connections,
+    verification: "stored-metadata",
+    refreshScheduled: false,
     setup: buildInstagramApiSetupUrls(origin),
-  });
+  }, { headers: { "cache-control": "no-store" } });
 }

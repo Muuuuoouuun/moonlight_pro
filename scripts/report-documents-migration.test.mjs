@@ -9,6 +9,9 @@ let source='';try { source=readFileSync(new URL('../supabase/migrations/20261001
 const available=process.getuid?.()!==0&&['initdb','pg_ctl','psql'].every(bin=>spawnSync(bin,['--version'],{stdio:'ignore'}).status===0);
 const W='11111111-1111-4111-8111-111111111111',R='22222222-2222-4222-8222-222222222222';
 const quote=value=>`'${String(value).replaceAll("'","''")}'`;
+test('canonical Monday migration preserves the exact original applied SQL bytes after concurrent numbering reconciliation',()=>{
+  assert.deepEqual(readFileSync(new URL('../supabase/migrations/20261001_0065_monday_news_roundup.sql',import.meta.url)),readFileSync(new URL('../docs/migration-history/20261001_0063_monday_news_roundup.sql',import.meta.url)));
+});
 test('report ledger persists immutable facts, replays requests, serializes weekly identity and scopes decisions',{skip:available?false:'local PostgreSQL unavailable'},async()=>{
   assert.ok(source,'report migration exists');
   const dir=mkdtempSync(join(tmpdir(),'reports-pg-')),data=join(dir,'data'),port=String(54000+process.pid%2000),env={...process.env,LC_ALL:'C'};
@@ -26,7 +29,7 @@ test('report ledger persists immutable facts, replays requests, serializes weekl
     const qualityMigration=new URL('../supabase/migrations/20261001_0061_report_quality_projection.sql',import.meta.url);
     if(existsSync(qualityMigration))sql(readFileSync(qualityMigration,'utf8'));
     sql('create table public.brands(id uuid primary key,workspace_id uuid,slug text,status text);');
-    const newsMigration=new URL('../supabase/migrations/20261001_0063_monday_news_roundup.sql',import.meta.url);
+    const newsMigration=new URL('../supabase/migrations/20261001_0065_monday_news_roundup.sql',import.meta.url);
     if(existsSync(newsMigration))sql(readFileSync(newsMigration,'utf8'));
     const command={action:'capture-weekly',kind:'weekly',scope:'company',title:'회사 주간',periodStart:'2026-09-24',periodEnd:'2026-09-30',payload:{status:'partial',facts:{stats:{contacts:null}},summary:'실제 집계'}};
     const invoke=(id,input,workspace=W,hash='a'.repeat(64))=>JSON.parse(sql(`set role service_role;select public.report_command_v1('${workspace}','${id}','${hash}',${quote(JSON.stringify(input))}::jsonb);reset role;`));

@@ -83,6 +83,30 @@ test("fetchSupabaseRowsDetailed surfaces the failure instead of erasing it", asy
   assert.match(result.error.detail, /permission denied/);
 });
 
+test('credential table errors redact echoed rows and network URLs in logs and envelopes', async () => {
+  const originalError = console.error, logs = [];
+  console.error = (...args) => logs.push(args.join(' '));
+  try {
+    for (const fail of [async () => new Response('fake-private-access fake-private-refresh', { status: 500 }),
+      async () => { throw new Error('https://db.example.com/?token=fake-private-access'); }]) {
+      globalThis.fetch = fail;
+      const result = await updateSupabaseRecord('integration_connections', [['id', 'eq.one']],
+        { config: { accessToken: 'fake-private-access' } }, { returnRepresentation: true });
+      assert.equal(result.persisted, false);
+      assert.doesNotMatch(JSON.stringify(result), /fake-private/);
+    }
+    assert.doesNotMatch(logs.join(' '), /fake-private/);
+    assert.match(logs.join(' '), /credential-detail-redacted/);
+  } finally { console.error = originalError; }
+});
+
+test('credential table duplicate classification retains only a stable SQL code', async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({ code: '23505', detail: 'fake-private-token' }), { status: 409 });
+  const result = await insertSupabaseRecord('integration_connections', { config: {} }, { returnRepresentation: true });
+  assert.equal(result.reason, 'duplicate');
+  assert.equal(result.detail, '{"code":"23505"}');
+});
+
 test("concurrent identical reads share one HTTP request but not one rows array", async () => {
   let calls = 0;
   globalThis.fetch = async () => {
