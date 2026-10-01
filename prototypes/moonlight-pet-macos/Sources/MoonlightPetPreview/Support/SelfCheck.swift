@@ -73,6 +73,16 @@ enum SelfCheck {
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(false, forKey: "petHub.enabled")
         let model = AppModel(defaults: defaults)
+        guard model.hubBaseURL == "https://moonlight-pro-hub.vercel.app" else {
+            fputs("Default production Hub URL check failed\n", stderr)
+            return false
+        }
+        defaults.set("http://127.0.0.1:3141", forKey: "petPreview.hubURL")
+        guard AppModel(defaults: defaults).hubBaseURL == "http://127.0.0.1:3141" else {
+            fputs("Explicit Hub URL preference must survive restart\n", stderr)
+            return false
+        }
+        defaults.removeObject(forKey: "petPreview.hubURL")
         guard model.selectedCharacter == .silver else {
             fputs("Default character check failed\n", stderr)
             return false
