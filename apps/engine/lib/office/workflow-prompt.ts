@@ -6,7 +6,7 @@ import { buildOfficeOperatingPolicy } from './operating-policy.ts';
 import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS } from './source-review.ts';
 import { WEEKLY_REPORT_WRITING_POLICY, WEEKLY_REPORT_REVIEW_POLICY } from './weekly-report-policy.ts';
 
-export const OFFICE_WORKFLOW_POLICY_VERSION = `2026-10-01.workflow-v5/${OFFICE_PERSONA_VERSION}`;
+export const OFFICE_WORKFLOW_POLICY_VERSION = `2026-10-01.workflow-v6/${OFFICE_PERSONA_VERSION}`;
 
 const CONTRACT = `
 JSON 객체만 반환한다. 모델 작성 필드는 summary, artifact:{kind,body}, evidence:[{sourceRefId,explanation}], uncertainties, dissent, nextStep이고 council 모드만 council을 추가한다.
