@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Button, Drawer, Skeleton, EmptyState, TruthBadge } from "../hub-primitives";
+import { readYouTubeConnectionFeedback } from "./youtube-connection-feedback";
 
 const STATUS_LABELS = {
   connected: "저장된 접근 권한 유효",
@@ -35,6 +36,11 @@ export function YouTubeConnections() {
   }, []);
   React.useEffect(() => {
     mounted.current = true;
+    const feedback = readYouTubeConnectionFeedback(window.location.href);
+    if (feedback) {
+      setMessage(feedback.message);
+      window.history.replaceState(window.history.state, '', feedback.returnPath);
+    }
     load();
     return () => { mounted.current = false; };
   }, [load]);
