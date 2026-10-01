@@ -2800,6 +2800,7 @@ export function Projects({ workspace }) {
                     onSendOrder={sendProjectOrder}
                     onConsultCouncil={(project) => setCouncilWidgetProject(project)}
                     onManageDelivery={manageDelivery}
+                    onUnblocked={async () => { projectsLedgerCache = null; await loadLedger({ projectId: p.id }); }}
                     onComplete={completeProject}
                     onArchive={archiveProject}
                     onRemove={requestProjectDelete}

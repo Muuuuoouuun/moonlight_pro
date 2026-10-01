@@ -41,7 +41,7 @@ test("builds a project draft with an empty title and a stable client id", () => 
     priority: "medium",
     nextAction: "",
     dueAt: "",
-    delivery: { deliverable: "", plannedStart: "", prototypeDate: "", criteria: [], remainingHours: null, availableHours: null, blocker: "", nextAction: "", nextVersion: "", resultUrl: "" },
+    delivery: { deliverable: "", plannedStart: "", prototypeDate: "", criteria: [], remainingHours: null, availableHours: null, blocker: "", blockerKind: "", nextAction: "", nextVersion: "", resultUrl: "" },
     orgScope: "classin",
   });
   assert.equal("progress" in draft, false, "create drafts must not invent manual progress");
