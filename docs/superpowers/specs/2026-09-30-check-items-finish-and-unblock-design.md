@@ -1,6 +1,6 @@
 # 확인할 것 — 끝내기 버튼과 막힘 풀기
 
-> 상태: **방향 운영자 선택(2026-09-30) · 화면 방향 운영자 선택(2026-10-01) · §12 기본값 운영자 승인(2026-10-01) · 단계 0·1 구현(2026-10-01, 0056 운영 DB 적용 전), 단계 2~4 남음**. 운영자가 시안 둘 가운데 "A의 끝내기 버튼 + B의 막힘 풀기"를 골랐고(2026-09-30), 화면 시안 넷 가운데 "2의 한 장씩 + 4의 시간 잡기"를 골랐다(2026-10-01). 이 문서의 이름·버튼 구성·보류·시간 잡기 규칙·데이터 모양은 그 방향을 구체화한 **권장안**이며, §12의 미정 질문과 함께 운영자 확인을 받은 뒤 확정으로 올린다.
+> 상태: **방향 운영자 선택(2026-09-30) · 화면 방향 운영자 선택(2026-10-01) · §12 기본값 운영자 승인(2026-10-01) · 단계 0·1·2 구현(2026-10-01, 0056 운영 DB 적용 전), 단계 3·4 남음**. 운영자가 시안 둘 가운데 "A의 끝내기 버튼 + B의 막힘 풀기"를 골랐고(2026-09-30), 화면 시안 넷 가운데 "2의 한 장씩 + 4의 시간 잡기"를 골랐다(2026-10-01). 이 문서의 이름·버튼 구성·보류·시간 잡기 규칙·데이터 모양은 그 방향을 구체화한 **권장안**이며, §12의 미정 질문과 함께 운영자 확인을 받은 뒤 확정으로 올린다.
 > 작성일: 2026-09-30 (Asia/Seoul)
 > 상위 정본: [`docs/README.md`](../../README.md) 우선순위 → [운영자 프로필](../../operator-workflow-profile.md) → [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md) → 주제별 최신 스펙 → [`DESIGN.md`](../../../DESIGN.md).
 > 관계:
@@ -194,7 +194,7 @@ daily-brief 라우트가 신호를 만든 뒤, 아래 중 하나면 그 신호�
 **바꾸기·취소**
 
 - 잡아 둔 일을 시간표 레일에서 누르면 `다른 시간`·`취소`. 다른 시간은 같은 행을 고치고 구글 일정은 `eventId`로 갱신한다(기존 경로가 갱신을 지원).
-- 취소는 행의 `undone_at` + 구글 일정 삭제. 지금 경로에는 **삭제가 없다** — `DELETE /api/calendar/google/event { eventId }`를 더한다(§8.2). 삭제가 실패하면 "Moonlight에서는 취소했고 구글 일정은 남아 있습니다"라고 말한다.
+- 취소는 행의 `undone_at` + 구글 일정 삭제 — `DELETE /api/calendar/google/event { eventId }`(§8.2, 단계 2에서 더함). 이미 지워진 일정(404·410)은 지운 것으로 본다. 삭제가 실패하면 "Moonlight에서는 취소했고 구글 일정은 남아 있습니다"라고 말한다.
 
 **시간이 되면**
 
@@ -328,8 +328,8 @@ index (workspace_id, signal_key, created_at desc)
 
 - `GET /api/hub/signal-outcomes?day=YYYY-MM-DD` — 오늘 영수증. 읽기 실패는 HTTP 200 + `status: "error"`.
 - `POST /api/hub/signal-outcomes` — `{ requestId, signalKey, subject, outcome, recordRef?, snoozedUntil?, note? }`, `hub-write-guard` 통과, `{ ok, status }` 봉투(`saved`·`duplicate`·`failed`·`preview`).
-- `PATCH /api/hub/signal-outcomes` — `{ id, action: "undo" }`(보류·잡아 둔 일) · `{ id, action: "move", scheduledStart, scheduledEnd }`(잡아 둔 일의 다른 시간).
-- `DELETE /api/calendar/google/event` — `{ eventId }`. **새로 더한다**(지금은 GET·POST만 있다). 쓰기 가드·`recordGoogleCalendarSync` 실패 기록은 POST와 같다. 잡아 둔 일 취소에만 쓴다.
+- `PATCH /api/hub/signal-outcomes` — `{ id, action: "undo" }`(보류·잡아 둔 일) · `{ id, action: "move", scheduledStart, scheduledEnd }`(잡아 둔 일의 다른 시간)(구현됨). 다른 시간은 행을 먼저 옮기고 구글 일정은 같은 `eventId`로 갱신한다 — 갱신이 실패하면 "Moonlight에서는 옮겼고 구글 일정은 그대로입니다".
+- `DELETE /api/calendar/google/event` — `{ eventId }`(단계 2에서 더함). 쓰기 가드·`recordGoogleCalendarSync` 실패 기록은 POST와 같다. 잡아 둔 일 취소에만 쓴다.
 - 새 경로는 미들웨어 기본(막힘) 그대로 — 세션이 있는 브라우저만 통과한다. `OPEN_PREFIXES`에 올리지 않는다.
 
 ### 8.3 `/api/hub/daily-brief` 변경
@@ -339,7 +339,7 @@ index (workspace_id, signal_key, created_at desc)
 - §4.4 억제를 적용하고, 억제된 수와 보류 복귀 항목(`returnedFromSnooze: { at }`)을 응답에 싣는다.
 - `buildWorkSignals`의 `work-decision-missing` 삭제. 막힌 프로젝트 신호에 `blocker`·`blockerKind`·`pausedAt`을 싣는다.
 - 영수증을 같은 응답에 `finishedToday`로 싣는다(첫 화면 요청 수를 늘리지 않는다). 읽기 실패는 `finishedTodayState: "error"`.
-- 잡아 둔 일을 `scheduled: [{ signalKey, start, end, calendarEventId, state: "waiting" | "now" | "passed" }]`로 싣는다 — 시간표 레일과 카드 차례가 같은 값을 쓴다.
+- 잡아 둔 일을 `checkItems.scheduledBlocks: [{ id, signalKey, subject, title, start, end, calendarEventId, state: "waiting" | "now" | "passed", done }]`로 싣는다(구현됨) — 시간표 레일과 카드 차례가 같은 값을 쓴다. 같은 항목을 다시 잡았으면 가장 최근 것만 싣고, 잡은 뒤에 끝낸 기록이 있으면 `done`이다.
 
 ### 8.4 Engine
 
@@ -353,8 +353,8 @@ index (workspace_id, signal_key, created_at desc)
 - `components/hub/check-items/focus-card.jsx` — 한 장씩 카드(`FocusCard`, 할 일·날짜 다시·보류 입력 칸 포함), 차례(`useCheckItemDeck`), `CheckItemProgress`, `FinishedTodayList`(구현됨). 키보드는 홈(`pages/home.jsx`)이 건다.
 - `components/hub/check-items/check-item-actions.js` — 저장 순서·봉투(`postReceipt`·`createTaskForItem`·`rescheduleItem`·`snoozeSubject`·`undoReceipt`·`snoozePresets`)(구현됨).
 - `lib/check-items/catalog.js`·`suppression.js`·`outcome-input.js`, `lib/repositories/signal-outcomes.js`, `app/api/hub/signal-outcomes/route.js`(구현됨).
-- `components/hub/check-items/schedule.jsx` — `ScheduleBand`(권장 시간 띠·고르기 칸), `TimeRail`(시간표 레일), 모바일은 `Drawer presentation="compact"`로 같은 고르기 칸을 연다.
-- `lib/check-items/slots.js` — 권장 시간 계산 순수 함수(§4.7).
+- `components/hub/check-items/schedule-band.jsx` — `ScheduleBand`(권장 시간 띠·고르기 칸), `SchedulePicker`, `ScheduledNowBand`, `ScheduledList`(레일의 잡아 둔 일 — 다른 시간·취소)(구현됨). 저장은 `check-item-actions.js`의 `scheduleItem`·`moveScheduled`·`cancelScheduled`. **§7.1·§7.2와 다른 점(단계 2)**: 09–19시 세로 `TimeRail`은 만들지 않았다 — 레일은 기존 `TodaySchedule` 목록(일정 완료·특이사항 기록과 묶여 있다) 아래에 `잡아 둔 일` 목록을 더했다. 모바일도 하단 시트가 아니라 다른 끝내기 입력과 같이 카드 안에 펼친다. 둘 다 운영자 화면 검토 뒤 다시 정한다.
+- `lib/check-items/slots.js` — 권장 시간 계산 순수 함수(§4.7)(구현됨). 소요 시간 고른 값은 종류별로 `mlp.checkScheduleMinutes`에 기억한다.
 - `components/hub/unblock-panel.jsx` — 병목 칩 + 세 갈래 + 결정 입력, 확인할 것 상세와 프로젝트 상세가 함께 쓴다.
 - 데스크톱 위젯(`quick-widget.jsx`)은 같은 신호를 읽지만 이번 범위에서는 건수·열기만 유지한다.
 
@@ -386,7 +386,7 @@ index (workspace_id, signal_key, created_at desc)
 |---|---|---|---|
 | 0 | **끊긴 연결 정리** ✓ 2026-10-01 — `wait`·`Rhythm 보기`·`리마인드 초안`·`work-decision-missing` 제거, `결정 큐`→`확인할 것`, 홈 `결정`→`어떻게 끝낼까요`, 누르는 순간의 "처리함" 제거 | S | 리듬으로 가는 버튼 0개, 이동 버튼을 눌러도 목록이 줄지 않음, `npm test` 통과 |
 | 1 | **끝내기 + 한 장씩** ✓ 2026-10-01 — `signal_outcomes`(0056)·라우트·억제·영수증·보류, 거래·자동화·콘텐츠·리드 묶음의 끝내기, 홈을 한 장씩 카드로(§7.1, 시간표 레일은 기존 `TodaySchedule`을 오른쪽에 그대로 둔다), 오늘 화면은 맨 위 카드 + `홈에서 한 장씩 끝내기` 한 줄 | M | 거래 멈춤 항목을 네 끝내기로 각각 끝내 보고 새로고침·다른 기기에서도 같은 차례, 보류 항목이 날짜에 다시 뜸, 키보드 계약 테스트 통과 |
-| 2 | **시간 잡기** — `slots.js`·`ScheduleBand`·레일 블록 바꾸기/취소, 구글 일정 생성·갱신·`DELETE` 추가, 시간이 되면 맨 앞, 지난 시간 표시 | M | 카드 하나를 권장 시간에 잡고 구글 캘린더에 생긴 것을 확인, 그 시각에 맨 앞으로 돌아옴, 취소하면 구글 일정도 지워짐, 캘린더 미연결이면 `Moonlight에만 잡힙니다` |
+| 2 | **시간 잡기** ✓ 2026-10-01 — `slots.js`·`ScheduleBand`·레일 블록 바꾸기/취소, 구글 일정 생성·갱신·`DELETE` 추가, 시간이 되면 맨 앞, 지난 시간 표시 | M | 카드 하나를 권장 시간에 잡고 구글 캘린더에 생긴 것을 확인, 그 시각에 맨 앞으로 돌아옴, 취소하면 구글 일정도 지워짐, 캘린더 미연결이면 `Moonlight에만 잡힙니다` |
 | 3 | **막힘 풀기** — `blockerKind`·`blockerHistory`·`UnblockPanel`, 카드·프로젝트 상세 연결, 결정으로 풀기 | M | 막힌 프로젝트를 세 갈래로 각각 풀어 보고 이력·결정·할 일이 남음, 버전 충돌 시 부분 성공 문구 |
 | 4 | **결정 일지** (Q-CF3·Q-CF4 답 뒤) — 이름, 출처 칩·필터, 그래서 할 일 줄, 막힘 풀림 칩 | S–M | 막힘 풀기로 만든 결정이 출처·할 일과 함께 보임 |
 

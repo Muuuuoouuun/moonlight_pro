@@ -8,7 +8,9 @@ import { PublishDue } from "./publish-due";
 import { SIGNAL_TARGETS, withEntityRef } from '@/lib/signal-targets';
 import { ContactRecordDrawer } from '../contact-record-form';
 import { CheckItemProgress, FinishedTodayList, FocusCard, outcomeIsPanel, useCheckItemDeck } from '../check-items/focus-card';
-import { postReceipt, undoReceipt } from '../check-items/check-item-actions';
+import { cancelScheduled, postReceipt, undoReceipt } from '../check-items/check-item-actions';
+import { ScheduledList } from '../check-items/schedule-band';
+import { formatSlot, nextWorkdayKey } from '@/lib/check-items/slots';
 import { DailyReviewCue } from '../daily-review-cue';
 import { GuruRecommendation, GuruRecommendationList } from '../guru-recommendation';
 import { useGuruRecommendations, recommendationForSubject } from '../guru-recommendations-client';
@@ -38,16 +40,19 @@ function LoginRequired() {
   return <EmptyState title="로그인이 필요합니다" description="세션이 만료되어 기록을 확인하지 못했습니다." action={<Button onClick={() => window.location.assign('/login?next=%2Fdashboard%2Fhome')}>다시 로그인</Button>} />;
 }
 
+// 오늘 시간표 + 시간 잡기의 빈 시간 계산을 한 번에 읽는다(확인할 것 스펙 §4.7 — 요청 수를 늘리지 않는다).
+// `events`는 오늘 것만(시간표·아침 요약이 쓰던 그대로), `all`은 다음 근무일 끝까지(권장 시간 계산용).
 function useTodaySchedule(reloadKey) {
-  const [state, setState] = React.useState({ status: 'loading', events: [] });
+  const [state, setState] = React.useState({ status: 'loading', events: [], all: [], readOnly: true });
 
   React.useEffect(() => {
     let active = true;
     const controller = new AbortController();
-    setState({ status: 'loading', events: [] });
+    setState({ status: 'loading', events: [], all: [], readOnly: true });
     const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
     const start = new Date(`${day}T00:00:00+09:00`);
-    const end = new Date(start.getTime() + 86400000);
+    const todayEnd = new Date(start.getTime() + 86400000);
+    const end = new Date(new Date(`${nextWorkdayKey(day)}T00:00:00+09:00`).getTime() + 86400000);
     const params = new URLSearchParams({ timeMin: start.toISOString(), timeMax: end.toISOString() });
 
     (async () => {
@@ -56,14 +61,17 @@ function useTodaySchedule(reloadKey) {
         const data = await res.json().catch(() => null);
         if (!active) return;
         const status = readEnvelope(res, data);
+        const all = status === 'error' || status === 'unauthorized' ? [] : (Array.isArray(data?.events) ? data.events : [])
+          .filter((e) => !e.allDay)
+          .sort((a, b) => new Date(a.start) - new Date(b.start));
         setState({
           status,
-          events: status === 'error' || status === 'unauthorized' ? [] : (Array.isArray(data?.events) ? data.events : [])
-            .filter((e) => !e.allDay)
-            .sort((a, b) => new Date(a.start) - new Date(b.start)),
+          events: all.filter((e) => new Date(e.start) < todayEnd && new Date(e.end || e.start) > start),
+          all,
+          readOnly: data?.readOnly !== false,
         });
       } catch {
-        if (active) setState({ status: 'error', events: [] });
+        if (active) setState({ status: 'error', events: [], all: [], readOnly: true });
       }
     })();
     return () => { active = false; controller.abort(); };
@@ -146,15 +154,24 @@ export function Home({ onNavigate, onGuidanceAsk }) {
   const recordItemRef = React.useRef(null);
   const activeKey = active?.signalKey || active?.id || null;
 
+  const scheduledBlocks = React.useMemo(() => (Array.isArray(checkItems?.scheduledBlocks) ? checkItems.scheduledBlocks : []), [checkItems]);
+  const waitingCount = scheduledBlocks.filter((block) => block.state === 'waiting' && !block.done).length;
+  // 시간 잡기의 캘린더 — 읽은 일정(다음 근무일까지)과 쓸 수 있는지. 쓰기는 OAuth 캘린더만(iCal은 읽기 전용).
+  const calendar = React.useMemo(() => ({
+    status: schedule.status,
+    events: schedule.all,
+    writable: (schedule.status === 'live' || schedule.status === 'partial') && schedule.readOnly === false,
+  }), [schedule]);
+
   React.useEffect(() => { setPanel(null); }, [activeKey]);
   // 다시 읽은 결과가 오면 저장 중으로 감춰 둔 카드를 푼다 — 규칙이 여전히 잡으면 `stillFlagged`로 다시 보인다.
   React.useEffect(() => { clearPending(); }, [signals, clearPending]);
 
-  const finish = React.useCallback((item, { message, receiptMissing } = {}) => {
+  const finish = React.useCallback((item, { message, receiptMissing, action } = {}) => {
     if (!item) return;
     markPending(item.signalKey || item.id);
     setPanel(null);
-    toast.success(message || '끝냈습니다');
+    toast.success(message || '끝냈습니다', action ? { action } : undefined);
     if (receiptMissing) toast.info('기록은 남았지만 오늘 끝낸 것에는 아직 보이지 않습니다.');
     reload();
   }, [markPending, toast]);
@@ -175,12 +192,34 @@ export function Home({ onNavigate, onGuidanceAsk }) {
     if (outcomeIsPanel(outcome)) setPanel((open) => (open === outcome.key ? null : outcome.key));
   }, [active, onNavigate]);
 
+  // 시간 잡기는 끝냄이 아니다 — 카드는 그 시간까지 빠지고, 토스트에서 바로 되돌릴 수 있다(§4.7 저장 3).
+  const scheduled = React.useCallback((item, { slot, receipt, eventId }) => {
+    finish(item, {
+      message: `${formatSlot(slot)}에 다시 보여 드립니다`,
+      receiptMissing: false,
+      action: receipt?.id ? {
+        label: '되돌리기',
+        onClick: async () => {
+          const result = await cancelScheduled(globalThis.fetch, { id: receipt.id, calendarEventId: eventId || null });
+          if (!result.ok) toast.error(result.message);
+          else { if (result.message) toast.info(result.message); reload(); }
+        },
+      } : undefined,
+    });
+  }, [finish, toast]);
+
+  const scheduleChanged = React.useCallback((message, { warn } = {}) => {
+    if (warn) toast.info(message); else toast.success(message);
+    reload();
+  }, [toast]);
+
   const undo = React.useCallback(async (receipt) => {
     const result = await undoReceipt(globalThis.fetch, receipt);
     if (result.ok) { toast.success('보류를 되돌렸습니다'); reload(); } else toast.error(result.message);
   }, [toast]);
 
-  // §8.1 페이지 레벨 단축키 — 입력 요소 밖 + 드로어·다이얼로그 닫힘일 때만. 1–4 끝내기, J/→ 건너뛰기, K/← 이전.
+  // §8.1 페이지 레벨 단축키 — 입력 요소 밖 + 드로어·다이얼로그 닫힘일 때만. 1–4 끝내기, T 시간 잡기,
+  // J/→ 건너뛰기, K/← 이전.
   React.useEffect(() => {
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -195,6 +234,9 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       } else if (e.key === 'k' || e.key === 'ArrowLeft') {
         e.preventDefault();
         previous();
+      } else if ((e.key === 't' || e.key === 'T') && active.signalKey && active.schedule) {
+        e.preventDefault();
+        setPanel((open) => (open === 'schedule' ? null : 'schedule'));
       } else if (/^[1-4]$/.test(e.key) && active.outcomes?.[Number(e.key) - 1]) {
         e.preventDefault();
         activate(Number(e.key) - 1);
@@ -240,13 +282,17 @@ export function Home({ onNavigate, onGuidanceAsk }) {
             <TruthBadge state="preview" reason="Supabase 연결 필요" />
           ) : (
             <>
-              <CheckItemProgress finished={finishedToday} remaining={deck.length} date={formatEyebrowDate(new Date())} />
+              <CheckItemProgress finished={finishedToday} remaining={deck.length} scheduled={waitingCount} date={formatEyebrowDate(new Date())} />
               {active ? (
                 <FocusCard
                   item={active}
                   nextItem={next}
                   panel={panel}
+                  onPanel={setPanel}
                   onActivate={activate}
+                  onScheduled={(result) => scheduled(active, result)}
+                  calendar={calendar}
+                  blocks={scheduledBlocks}
                   onFinished={(result) => finish(active, result)}
                   onSkip={skip}
                   onNavigate={onNavigate}
@@ -261,8 +307,8 @@ export function Home({ onNavigate, onGuidanceAsk }) {
                   <EmptyState
                     icon="check"
                     title="오늘 확인할 것을 다 봤습니다"
-                    description={finishedToday.length
-                      ? `끝낸 것 ${finishedToday.filter((r) => r.outcome !== 'snoozed').length}건 · 보류 ${finishedToday.filter((r) => r.outcome === 'snoozed').length}건 — 보류한 것은 그날 다시 맨 앞으로 옵니다.`
+                    description={finishedToday.length || waitingCount
+                      ? `끝낸 것 ${finishedToday.filter((r) => r.outcome !== 'snoozed').length}건 · 잡아 둔 것 ${waitingCount}건 · 보류 ${finishedToday.filter((r) => r.outcome === 'snoozed').length}건 — 잡아 둔 일은 그 시간에, 보류한 것은 그날 다시 맨 앞으로 옵니다.`
                       : '새로 확인할 것이 생기면 여기 가장 먼저 올라옵니다.'}
                   />
                 </div>
@@ -271,8 +317,9 @@ export function Home({ onNavigate, onGuidanceAsk }) {
           )}
         </div>
 
-        <aside className="ci-rail" aria-label="오늘의 시간표와 끝낸 것">
+        <aside className="ci-rail" aria-label="오늘의 시간표, 잡아 둔 일과 끝낸 것">
           <TodaySchedule onNavigate={onNavigate} schedule={schedule} onReload={reload} />
+          <ScheduledList blocks={scheduledBlocks} calendar={calendar} onChanged={scheduleChanged} onError={(message) => toast.error(message)} />
           <FinishedTodayList receipts={finishedToday} state={checkItems?.state} onUndo={undo} />
         </aside>
       </div>
@@ -286,7 +333,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       </div>
 
       <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기 · <Kbd>J</Kbd> 건너뛰기 · <Kbd>K</Kbd> 이전
+        <Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기 · <Kbd>T</Kbd> 시간 잡기 · <Kbd>J</Kbd> 건너뛰기 · <Kbd>K</Kbd> 이전
       </footer>
 
       {recordTarget && (

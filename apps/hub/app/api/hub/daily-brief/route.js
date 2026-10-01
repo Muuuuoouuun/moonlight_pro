@@ -477,6 +477,7 @@ export async function GET() {
       finishedToday: checkContext?.finishedToday || [],
       suppressedCount: suppressed.length,
       scheduled: suppressed.filter((entry) => entry.reason === "scheduled").length,
+      scheduledBlocks: checkContext?.scheduledBlocks || [],
     },
     dailyFocus,
     queue,
