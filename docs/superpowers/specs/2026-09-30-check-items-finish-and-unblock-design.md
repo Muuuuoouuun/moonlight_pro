@@ -1,6 +1,6 @@
 # 확인할 것 — 끝내기 버튼과 막힘 풀기
 
-> 상태: **방향 운영자 선택(2026-09-30) · 화면 방향 운영자 선택(2026-10-01) · §12 기본값 운영자 승인(2026-10-01) · 단계 0 구현(2026-10-01), 단계 1~4 진행 중**. 운영자가 시안 둘 가운데 "A의 끝내기 버튼 + B의 막힘 풀기"를 골랐고(2026-09-30), 화면 시안 넷 가운데 "2의 한 장씩 + 4의 시간 잡기"를 골랐다(2026-10-01). 이 문서의 이름·버튼 구성·보류·시간 잡기 규칙·데이터 모양은 그 방향을 구체화한 **권장안**이며, §12의 미정 질문과 함께 운영자 확인을 받은 뒤 확정으로 올린다.
+> 상태: **방향 운영자 선택(2026-09-30) · 화면 방향 운영자 선택(2026-10-01) · §12 기본값 운영자 승인(2026-10-01) · 단계 0·1 구현(2026-10-01, 0056 운영 DB 적용 전), 단계 2~4 남음**. 운영자가 시안 둘 가운데 "A의 끝내기 버튼 + B의 막힘 풀기"를 골랐고(2026-09-30), 화면 시안 넷 가운데 "2의 한 장씩 + 4의 시간 잡기"를 골랐다(2026-10-01). 이 문서의 이름·버튼 구성·보류·시간 잡기 규칙·데이터 모양은 그 방향을 구체화한 **권장안**이며, §12의 미정 질문과 함께 운영자 확인을 받은 뒤 확정으로 올린다.
 > 작성일: 2026-09-30 (Asia/Seoul)
 > 상위 정본: [`docs/README.md`](../../README.md) 우선순위 → [운영자 프로필](../../operator-workflow-profile.md) → [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md) → 주제별 최신 스펙 → [`DESIGN.md`](../../../DESIGN.md).
 > 관계:
@@ -299,7 +299,7 @@ Engine `validateDelivery`/`deliveryDraft`에 `blockerKind` 열거 검증을 더�
 
 ## 8. 데이터·API
 
-### 8.1 새 테이블 — `supabase/migrations/20260930_0056_signal_outcomes.sql`
+### 8.1 새 테이블 — `supabase/migrations/20261001_0056_signal_outcomes.sql`
 
 ```text
 signal_outcomes
@@ -322,7 +322,7 @@ index (workspace_id, signal_key, created_at desc)
 ```
 
 - 선례: `discovery_nudge_states`·`discovery_nudge_receipts`(0031)의 상태+영수증 분리. 이 테이블은 영수증이 주이고 보류는 비CRM 대상만 쓴다.
-- 0044 이후 규칙대로 `begin;`/`commit;` 없음. `scripts/database-readiness.mjs`의 `DATABASE_FEATURES`에 `{ name: '확인할 것 영수증', migration: '20260930_0056_signal_outcomes.sql', tables: ['signal_outcomes'], functions: [] }` 등록.
+- 0044 이후 규칙대로 `begin;`/`commit;` 없음. `scripts/database-readiness.mjs`의 `DATABASE_FEATURES`에 `{ name: '확인할 것 영수증', migration: '20261001_0056_signal_outcomes.sql', tables: ['signal_outcomes'], functions: [], indexIncludes: [['signal_outcomes', 'signal_outcomes_request_idx', '(workspace_id, request_id)']] }` 등록(구현됨). 테이블이 없으면 영수증 API는 `preview`로 답하고 홈은 숨기지 않는다 — 적용은 `npm run db:migrate -- --expect-ref ncgpnqfulnlshegalmbd 20261001_0056_signal_outcomes.sql`.
 
 ### 8.2 Hub 라우트
 
@@ -335,7 +335,7 @@ index (workspace_id, signal_key, created_at desc)
 ### 8.3 `/api/hub/daily-brief` 변경
 
 - 모든 신호에 `signalKey`와 `subject: { type, id }`를 싣는다(지금은 멈춘 거래만 `subject`가 있다).
-- `decisions: [action(...)]` 배열을 `outcomes: [{ key, label, record, kind: "write" | "navigate", primary }]`로 바꾼다 — 클라이언트가 `kind`로 끝냄과 이동을 구분한다. `SIGNAL_TARGETS`는 `navigate` 대상 표로 줄인다(`wait`·`hold`·`decision`·`dismiss` 삭제).
+- 신호마다 `lib/check-items/catalog.js`의 `toCheckItem`이 `signalKey`·`kindLabel`·`outcomes: [{ key, label, record, kind: "write" | "navigate", action?, primary }]`·`links`·`taskTitle`을 붙인다(구현됨). 클라이언트는 `kind`로 끝냄과 이동을 가른다. 기존 `decisions`(이동 링크)는 오늘 화면의 맨 위 카드가 계속 쓰므로 남긴다. `SIGNAL_TARGETS`에서 `wait`·`start`·`rhythm`·`hold`·`dismiss`는 단계 0에서 뺐다.
 - §4.4 억제를 적용하고, 억제된 수와 보류 복귀 항목(`returnedFromSnooze: { at }`)을 응답에 싣는다.
 - `buildWorkSignals`의 `work-decision-missing` 삭제. 막힌 프로젝트 신호에 `blocker`·`blockerKind`·`pausedAt`을 싣는다.
 - 영수증을 같은 응답에 `finishedToday`로 싣는다(첫 화면 요청 수를 늘리지 않는다). 읽기 실패는 `finishedTodayState: "error"`.
@@ -350,8 +350,9 @@ index (workspace_id, signal_key, created_at desc)
 
 ### 8.5 공용 컴포넌트
 
-- `components/hub/check-items/focus-card.jsx` — 한 장씩 카드(`FocusCard`)와 차례·키보드(`useCheckItemDeck`).
-- `components/hub/check-items/outcomes.jsx` — `OutcomeRows`(세로 전폭 끝내기), `SnoozePicker`, `FinishedTodayList`, `useSignalOutcome`(쓰기 순서·봉투·토스트).
+- `components/hub/check-items/focus-card.jsx` — 한 장씩 카드(`FocusCard`, 할 일·날짜 다시·보류 입력 칸 포함), 차례(`useCheckItemDeck`), `CheckItemProgress`, `FinishedTodayList`(구현됨). 키보드는 홈(`pages/home.jsx`)이 건다.
+- `components/hub/check-items/check-item-actions.js` — 저장 순서·봉투(`postReceipt`·`createTaskForItem`·`rescheduleItem`·`snoozeSubject`·`undoReceipt`·`snoozePresets`)(구현됨).
+- `lib/check-items/catalog.js`·`suppression.js`·`outcome-input.js`, `lib/repositories/signal-outcomes.js`, `app/api/hub/signal-outcomes/route.js`(구현됨).
 - `components/hub/check-items/schedule.jsx` — `ScheduleBand`(권장 시간 띠·고르기 칸), `TimeRail`(시간표 레일), 모바일은 `Drawer presentation="compact"`로 같은 고르기 칸을 연다.
 - `lib/check-items/slots.js` — 권장 시간 계산 순수 함수(§4.7).
 - `components/hub/unblock-panel.jsx` — 병목 칩 + 세 갈래 + 결정 입력, 확인할 것 상세와 프로젝트 상세가 함께 쓴다.
@@ -383,8 +384,8 @@ index (workspace_id, signal_key, created_at desc)
 
 | 단계 | 묶음 | 규모 | 완료 기준 |
 |---|---|---|---|
-| 0 | **끊긴 연결 정리** — `wait`·`Rhythm 보기`·`리마인드 초안`·`work-decision-missing` 제거, `결정 큐`→`확인할 것`, 홈 `결정`→`어떻게 끝낼까요`, 누르는 순간의 "처리함" 제거 | S | 리듬으로 가는 버튼 0개, 이동 버튼을 눌러도 목록이 줄지 않음, `npm test` 통과 |
-| 1 | **끝내기 + 한 장씩** — `signal_outcomes`(0056)·라우트·억제·영수증·보류, 거래·자동화·콘텐츠·리드 묶음의 끝내기, 홈을 한 장씩 카드로(§7.1, 시간표 레일은 기존 `useTodaySchedule`로 읽기만) | M | 거래 멈춤 항목을 네 끝내기로 각각 끝내 보고 새로고침·다른 기기에서도 같은 차례, 보류 항목이 날짜에 다시 뜸, 키보드 계약 테스트 통과 |
+| 0 | **끊긴 연결 정리** ✓ 2026-10-01 — `wait`·`Rhythm 보기`·`리마인드 초안`·`work-decision-missing` 제거, `결정 큐`→`확인할 것`, 홈 `결정`→`어떻게 끝낼까요`, 누르는 순간의 "처리함" 제거 | S | 리듬으로 가는 버튼 0개, 이동 버튼을 눌러도 목록이 줄지 않음, `npm test` 통과 |
+| 1 | **끝내기 + 한 장씩** ✓ 2026-10-01 — `signal_outcomes`(0056)·라우트·억제·영수증·보류, 거래·자동화·콘텐츠·리드 묶음의 끝내기, 홈을 한 장씩 카드로(§7.1, 시간표 레일은 기존 `TodaySchedule`을 오른쪽에 그대로 둔다), 오늘 화면은 맨 위 카드 + `홈에서 한 장씩 끝내기` 한 줄 | M | 거래 멈춤 항목을 네 끝내기로 각각 끝내 보고 새로고침·다른 기기에서도 같은 차례, 보류 항목이 날짜에 다시 뜸, 키보드 계약 테스트 통과 |
 | 2 | **시간 잡기** — `slots.js`·`ScheduleBand`·레일 블록 바꾸기/취소, 구글 일정 생성·갱신·`DELETE` 추가, 시간이 되면 맨 앞, 지난 시간 표시 | M | 카드 하나를 권장 시간에 잡고 구글 캘린더에 생긴 것을 확인, 그 시각에 맨 앞으로 돌아옴, 취소하면 구글 일정도 지워짐, 캘린더 미연결이면 `Moonlight에만 잡힙니다` |
 | 3 | **막힘 풀기** — `blockerKind`·`blockerHistory`·`UnblockPanel`, 카드·프로젝트 상세 연결, 결정으로 풀기 | M | 막힌 프로젝트를 세 갈래로 각각 풀어 보고 이력·결정·할 일이 남음, 버전 충돌 시 부분 성공 문구 |
 | 4 | **결정 일지** (Q-CF3·Q-CF4 답 뒤) — 이름, 출처 칩·필터, 그래서 할 일 줄, 막힘 풀림 칩 | S–M | 막힘 풀기로 만든 결정이 출처·할 일과 함께 보임 |

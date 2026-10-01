@@ -28,10 +28,12 @@ export async function fetchDailyBriefSignals({ signal, fetchImpl = globalThis.fe
     signals: status === 'error' || status === 'unauthorized' ? [] : (Array.isArray(data?.signals) ? data.signals : []),
     dailyFocus: status === 'error' || status === 'unauthorized' ? null : data?.dailyFocus || null,
     taskToday: status === 'error' || status === 'unauthorized' ? null : data?.taskToday || null,
+    // 확인할 것 영수증 상태(오늘 끝낸 것·숨긴 수) — 못 읽었으면 null.
+    checkItems: status === 'error' || status === 'unauthorized' ? null : data?.checkItems || null,
   };
 }
 
-const LOADING = { status: 'loading', signals: [], dailyFocus: null, taskToday: null };
+const LOADING = { status: 'loading', signals: [], dailyFocus: null, taskToday: null, checkItems: null };
 
 // reloadKey가 바뀔 때마다 다시 읽는다. keepPrevious: 이미 읽은 신호(live·partial)가 있으면 다시
 // 읽는 동안 그대로 두고 로딩으로 되돌리지 않는다(위젯이 창 포커스마다 다시 읽을 때 행이 깜빡이지
@@ -48,7 +50,7 @@ export function useDailyBriefSignals(reloadKey, { keepPrevious = false } = {}) {
         const next = await fetchDailyBriefSignals({ signal: controller.signal });
         if (active) setState(next);
       } catch {
-        if (active) setState({ status: 'error', signals: [], dailyFocus: null, taskToday: null });
+        if (active) setState({ status: 'error', signals: [], dailyFocus: null, taskToday: null, checkItems: null });
       }
     })();
     return () => { active = false; controller.abort(); };

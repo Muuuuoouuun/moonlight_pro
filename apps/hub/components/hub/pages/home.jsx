@@ -2,10 +2,13 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Button, Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
+import { Button, Skeleton, TruthBadge, EmptyState, Kbd, useToast } from "../hub-primitives";
 import { CalendarOutcome } from "../calendar-outcome";
 import { PublishDue } from "./publish-due";
-import { SIGNAL_TARGETS } from '@/lib/signal-targets';
+import { SIGNAL_TARGETS, withEntityRef } from '@/lib/signal-targets';
+import { ContactRecordDrawer } from '../contact-record-form';
+import { CheckItemProgress, FinishedTodayList, FocusCard, outcomeIsPanel, useCheckItemDeck } from '../check-items/focus-card';
+import { postReceipt, undoReceipt } from '../check-items/check-item-actions';
 import { DailyReviewCue } from '../daily-review-cue';
 import { GuruRecommendation, GuruRecommendationList } from '../guru-recommendation';
 import { useGuruRecommendations, recommendationForSubject } from '../guru-recommendations-client';
@@ -65,64 +68,6 @@ function useTodaySchedule(reloadKey) {
   return state;
 }
 
-function TriageDetail({ signal, onOpen, recommendation = null, onGuidanceAsk, onNavigate }) {
-  if (!signal) {
-    return (
-      <div className="fx-card">
-        <EmptyState
-          title="확인된 신호가 없습니다"
-          description="새 신호는 기록이 갱신되면 여기에 쌓입니다."
-        />
-      </div>
-    );
-  }
-
-  const urgent = signal.tone === 'danger';
-  const decisions = Array.isArray(signal.decisions) ? signal.decisions : [];
-
-  return (
-    <div className="fx-card fx-card--lift">
-      <div className="fx-card-meta">
-        <span>
-          <span data-urgent={urgent ? 'true' : undefined}>{signal.kind}</span>
-          {signal.meta ? ` · ${signal.meta}` : ''}
-        </span>
-        {signal.source?.ref ? <span>{String(signal.source.ref).slice(0, 18)}</span> : null}
-      </div>
-
-      <h3 className="fx-card-title">{signal.title}</h3>
-      {signal.summary ? <p className="fx-card-body">{signal.summary}</p> : null}
-      {/* 이 신호의 거래·고객에 저장된 사실이 있을 때만 — 결정 바로 옆에서 읽는 추천(§2.1 ⑦). */}
-      {recommendation ? (
-        <div style={{ marginTop: 16 }}>
-          <GuruRecommendation recommendation={recommendation} onAsk={onGuidanceAsk} onNavigate={onNavigate} compact />
-        </div>
-      ) : null}
-
-      {decisions.length ? (
-        <>
-          {/* 이 버튼들은 화면을 여는 링크다 — 누른 것만으로 항목을 지우지 않는다(확인할 것 스펙 §4.1).
-              가짜 `보류`(컴포넌트 상태로만 숨기던 버튼)는 없앴다 — 서버에 남는 보류가 생길 때 돌아온다. */}
-          <div className="fx-eyebrow" style={{ marginTop: 24 }}>다음 행동</div>
-          <div className="fx-actions">
-            {decisions.map((d, i) => (
-              <button
-                key={`${d.action}-${i}`}
-                type="button"
-                className={`fx-pill-btn${d.primary ? ' fx-pill-btn--primary' : ''}`}
-                onClick={() => onOpen(signal, d)}
-              >
-                {d.label}
-                <kbd>{i + 1}</kbd>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
 function TodaySchedule({ onNavigate, schedule, onReload }) {
   const { status, events } = schedule;
   const now = Date.now();
@@ -176,23 +121,60 @@ function TodaySchedule({ onNavigate, schedule, onReload }) {
 
 export function Home({ onNavigate, onGuidanceAsk }) {
   const [reloadKey, reload] = React.useReducer(value => value + 1, 0);
-  const brief = useDailyBriefSignals(reloadKey);
+  // keepPrevious: 끝낼 때마다 다시 읽는데, 그동안 카드가 로딩으로 깜빡이지 않게 지난 읽기를 둔다.
+  const brief = useDailyBriefSignals(reloadKey, { keepPrevious: true });
   const schedule = useTodaySchedule(reloadKey);
   const { status, signals } = brief;
+  const checkItems = brief.checkItems;
   const guruRecommendations = useGuruRecommendations();
-  const [cursor, setCursor] = React.useState(0);
+  const toast = useToast();
+  const finishedToday = React.useMemo(() => (Array.isArray(checkItems?.finishedToday) ? checkItems.finishedToday : []), [checkItems]);
+  const finishedKeys = React.useMemo(
+    () => new Set(finishedToday.filter((receipt) => receipt.outcome !== 'snoozed').map((receipt) => receipt.signalKey)),
+    [finishedToday],
+  );
+  // 확인할 것 — 한 장씩(2026-09-30 스펙 §7.1). 건너뛰기는 이번 차례 끝으로, 이전은 마지막 건너뛴 카드를 앞으로.
+  const { deck, current: active, next, skip, previous, markPending, clearPending } = useCheckItemDeck(signals, { finishedKeys });
+  const [panel, setPanel] = React.useState(null);
+  const [recordTarget, setRecordTarget] = React.useState(null);
+  const recordItemRef = React.useRef(null);
+  const activeKey = active?.signalKey || active?.id || null;
 
-  const queue = signals;
-  const active = queue[Math.min(cursor, Math.max(queue.length - 1, 0))] || null;
+  React.useEffect(() => { setPanel(null); }, [activeKey]);
+  // 다시 읽은 결과가 오면 저장 중으로 감춰 둔 카드를 푼다 — 규칙이 여전히 잡으면 `stillFlagged`로 다시 보인다.
+  React.useEffect(() => { clearPending(); }, [signals, clearPending]);
 
-  // 다음 행동은 이동만 한다 — 항목은 대상 기록이 바뀌어 규칙이 더는 잡지 않을 때 빠진다.
-  const open = React.useCallback((signal, action) => {
-    const target = action ? SIGNAL_TARGETS[action.action] : null;
-    if (!target) return;
-    onNavigate(target);
-  }, [onNavigate]);
+  const finish = React.useCallback((item, { message, receiptMissing } = {}) => {
+    if (!item) return;
+    markPending(item.signalKey || item.id);
+    setPanel(null);
+    toast.success(message || '끝냈습니다');
+    if (receiptMissing) toast.info('기록은 남았지만 오늘 끝낸 것에는 아직 보이지 않습니다.');
+    reload();
+  }, [markPending, toast]);
 
-  // §8.1 페이지 레벨 단축키 — 입력 요소 밖 + 드로어 닫힘일 때만.
+  const activate = React.useCallback((index) => {
+    const outcome = active?.outcomes?.[index];
+    if (!outcome) return;
+    if (outcome.kind === 'navigate') {
+      const target = SIGNAL_TARGETS[outcome.action];
+      if (target) onNavigate(withEntityRef(target, active.source));
+      return;
+    }
+    if (outcome.key === 'contact') {
+      recordItemRef.current = { item: active, receipted: false };
+      setRecordTarget({ kind: active.subject?.type, id: active.subject?.id, name: active.subject?.name || active.title });
+      return;
+    }
+    if (outcomeIsPanel(outcome)) setPanel((open) => (open === outcome.key ? null : outcome.key));
+  }, [active, onNavigate]);
+
+  const undo = React.useCallback(async (receipt) => {
+    const result = await undoReceipt(globalThis.fetch, receipt);
+    if (result.ok) { toast.success('보류를 되돌렸습니다'); reload(); } else toast.error(result.message);
+  }, [toast]);
+
+  // §8.1 페이지 레벨 단축키 — 입력 요소 밖 + 드로어·다이얼로그 닫힘일 때만. 1–4 끝내기, J/→ 건너뛰기, K/← 이전.
   React.useEffect(() => {
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -201,20 +183,23 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       if (document.querySelector('[data-drawer-open="true"], [role="dialog"], [data-shortcut-overlay="true"]')) return; // §8.1 다이얼로그 위 발화 금지
       if (!active) return;
 
-      if (e.key === 'j' || e.key === 'ArrowDown') {
+      if (e.key === 'j' || e.key === 'ArrowRight') {
         e.preventDefault();
-        setCursor((c) => Math.min(c + 1, queue.length - 1));
-      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        skip();
+      } else if (e.key === 'k' || e.key === 'ArrowLeft') {
         e.preventDefault();
-        setCursor((c) => Math.max(c - 1, 0));
-      } else if (/^[1-9]$/.test(e.key)) {
-        const d = (active.decisions || [])[Number(e.key) - 1];
-        if (d) { e.preventDefault(); open(active, d); }
+        previous();
+      } else if (/^[1-4]$/.test(e.key) && active.outcomes?.[Number(e.key) - 1]) {
+        e.preventDefault();
+        activate(Number(e.key) - 1);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, queue.length, open]);
+  }, [active, skip, previous, activate]);
+
+  const live = status === 'live' || status === 'partial';
+  const recommendation = active?.subject?.id ? recommendationForSubject(guruRecommendations, active.subject.id) : null;
 
   return (
     <div className="hub-futura fade-up">
@@ -224,58 +209,68 @@ export function Home({ onNavigate, onGuidanceAsk }) {
             Daily Brief · {formatEyebrowDate(new Date())}
           </div>
           <h2 className="fx-hero">
-            {status === 'loading' ? '불러오는 중' : status === 'error' ? '신호를 확인하지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : queue.length ? `확인할 것 ${queue.length}건` : status === 'partial' ? '일부 기록 확인 필요' : '확인할 것 없음'}
+            {status === 'loading' ? '불러오는 중' : status === 'error' ? '확인할 것을 읽지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : deck.length ? `확인할 것 ${deck.length}건` : '확인할 것을 다 봤습니다'}
           </h2>
         </div>
-
       </header>
 
-      {/* 저녁·다음 날 아침의 하루 리뷰 한 줄 — 트리아지 큐 밖(2026-09-23 지속 루프 설계 §4.3). */}
+      {/* 저녁·다음 날 아침의 하루 리뷰 한 줄 — 확인할 것 밖(2026-09-23 지속 루프 설계 §4.3). */}
       <DailyReviewCue className="daily-review-cue--home" />
 
       {status === 'partial' && <div><TruthBadge state="partial" reason="일부 기록만 확인했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>}
-      {status === 'loading' ? (
-        <div className="fx-split">
-          <Skeleton lines={5} />
-          <Skeleton lines={6} />
-        </div>
-      ) : status === 'error' ? (
-        <div><TruthBadge state="error" reason="첫 화면 신호를 불러오지 못했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>
-      ) : status === 'preview' ? (
-        <TruthBadge state="preview" reason="Supabase 연결 필요" />
-      ) : (
-        <div className="fx-split">
-          <ul className="fx-triage">
-            {queue.map((s, i) => (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  className="fx-triage-item"
-                  aria-current={s.id === active?.id ? 'true' : undefined}
-                  data-urgent={s.tone === 'danger' ? 'true' : undefined}
-                  onClick={() => setCursor(i)}
-                >
-                  <span className="fx-triage-kind">{s.kind}</span>
-                  <span className="fx-triage-title">{s.title}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+      {live && checkItems?.state === 'error' ? (
+        <TruthBadge state="partial" reason="끝낸 기록을 읽지 못해 이미 끝낸 카드가 다시 보일 수 있습니다" />
+      ) : null}
 
-          <TriageDetail
-            signal={active}
-            onOpen={open}
-            recommendation={active?.subject?.id ? recommendationForSubject(guruRecommendations, active.subject.id) : null}
-            onGuidanceAsk={onGuidanceAsk}
-            onNavigate={onNavigate}
-          />
+      <div className="ci-focus">
+        <div className="ci-column">
+          {status === 'loading' ? (
+            <Skeleton lines={7} />
+          ) : status === 'error' ? (
+            <div><TruthBadge state="error" reason="첫 화면 신호를 불러오지 못했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>
+          ) : status === 'preview' ? (
+            <TruthBadge state="preview" reason="Supabase 연결 필요" />
+          ) : (
+            <>
+              <CheckItemProgress finished={finishedToday} remaining={deck.length} date={formatEyebrowDate(new Date())} />
+              {active ? (
+                <FocusCard
+                  item={active}
+                  nextItem={next}
+                  panel={panel}
+                  onActivate={activate}
+                  onFinished={(result) => finish(active, result)}
+                  onSkip={skip}
+                  onNavigate={onNavigate}
+                  recommendation={recommendation ? (
+                    <div style={{ marginTop: 16 }}>
+                      <GuruRecommendation recommendation={recommendation} onAsk={onGuidanceAsk} onNavigate={onNavigate} compact />
+                    </div>
+                  ) : null}
+                />
+              ) : (
+                <div className="fx-card">
+                  <EmptyState
+                    icon="check"
+                    title="오늘 확인할 것을 다 봤습니다"
+                    description={finishedToday.length
+                      ? `끝낸 것 ${finishedToday.filter((r) => r.outcome !== 'snoozed').length}건 · 보류 ${finishedToday.filter((r) => r.outcome === 'snoozed').length}건 — 보류한 것은 그날 다시 맨 앞으로 옵니다.`
+                      : '새로 확인할 것이 생기면 여기 가장 먼저 올라옵니다.'}
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
+
+        <aside className="ci-rail" aria-label="오늘의 시간표와 끝낸 것">
+          <TodaySchedule onNavigate={onNavigate} schedule={schedule} onReload={reload} />
+          <FinishedTodayList receipts={finishedToday} state={checkItems?.state} onUndo={undo} />
+        </aside>
+      </div>
 
       <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onNavigate={onNavigate} onRetry={guruRecommendations.reload} />
       <PublishDue />
-
-      <TodaySchedule onNavigate={onNavigate} schedule={schedule} onReload={reload} />
 
       <div className="home-morning-stack">
         <GuidanceInlineTip variant="home" onNavigate={onNavigate} />
@@ -283,8 +278,28 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       </div>
 
       <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <Kbd>J</Kbd><Kbd>K</Kbd> 이동 · <Kbd>1</Kbd>–<Kbd>9</Kbd> 열기
+        <Kbd>1</Kbd>–<Kbd>4</Kbd> 끝내기 · <Kbd>J</Kbd> 건너뛰기 · <Kbd>K</Kbd> 이전
       </footer>
+
+      {recordTarget && (
+        <ContactRecordDrawer
+          target={recordTarget}
+          subtitle="저장하면 이 카드를 끝낸 것으로 남깁니다"
+          onPersisted={async (result) => {
+            const session = recordItemRef.current;
+            if (!session || session.receipted) return; // 원문 저장으로 한 번 더 불려도 영수증은 한 번만.
+            session.receipted = true;
+            const activityId = result && typeof result === 'object' && result.activityId ? String(result.activityId) : null;
+            const receipt = await postReceipt(globalThis.fetch, session.item, {
+              outcome: 'contact_logged',
+              recordRef: activityId ? { table: 'crm_activities', id: activityId } : { table: 'crm_activities' },
+            });
+            finish(session.item, { message: `기록됨 · ${session.item.subject?.name || '고객'}`, receiptMissing: !receipt.ok });
+          }}
+          onFailed={({ message }) => toast.error(`기록하지 못했습니다 — ${message}`)}
+          onClose={() => setRecordTarget(null)}
+        />
+      )}
     </div>
   );
 }
