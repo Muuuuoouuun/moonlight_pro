@@ -23,3 +23,26 @@ export const SIGNAL_TARGETS = {
   content: 'dashboard/content/queue',
   agents: 'dashboard/agents/orders',
 };
+
+// Deep-link a signal action to the specific record drawer when the target is the
+// deals/leads board and the signal carries a real id — revenue.jsx reads ?deal=/?lead=.
+// Sentinel refs (TODAY/NEW/PROPOSED…) are aggregate signals with no single record.
+// (Moved from daily-brief.jsx so Home's check-item card links the same way.)
+const SENTINEL_REFS = new Set(['TODAY', 'NEW', 'PROPOSED', 'QUEUE', '—', '']);
+export function isSentinelRef(ref) {
+  return SENTINEL_REFS.has(String(ref ?? '').trim().toUpperCase());
+}
+export function withEntityRef(target, source) {
+  if (!target || !source || !source.ref) return target;
+  const ref = String(source.ref).trim();
+  if (isSentinelRef(ref)) return target;
+  const from = String(source.from || '').toLowerCase();
+  const join = target.includes('?') ? '&' : '?';
+  if (target.startsWith('dashboard/revenue/deals') && from.startsWith('deal')) {
+    return `${target}${join}deal=${encodeURIComponent(ref)}`;
+  }
+  if (target.startsWith('dashboard/revenue/leads') && from.startsWith('lead')) {
+    return `${target}${join}lead=${encodeURIComponent(ref)}`;
+  }
+  return target;
+}

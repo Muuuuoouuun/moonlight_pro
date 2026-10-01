@@ -10,7 +10,7 @@ import { REACTION_LABEL } from '../../../lib/sales-os/followup-scoring.js';
 // 실제 FocusSlots 본문을 격리된 훅으로 그린다(deals.regression-1과 같은 방식).
 const source = readFileSync(new URL('./daily-brief.jsx', import.meta.url), 'utf8');
 const start = source.indexOf('// §2 확정 슬롯');
-const end = source.indexOf('// The queue is a decision list', start);
+const end = source.indexOf('// 60초 시계를 페이지 루트에서 분리', start);
 assert.ok(start >= 0 && end > start, 'FocusSlots section must stay findable');
 const sectionJs = ts.transpileModule(source.slice(start, end), {
   compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },

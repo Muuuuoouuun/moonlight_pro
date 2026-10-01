@@ -18,7 +18,7 @@ test('both home views consume the shared map and never mark a signal handled by 
   // 오늘 화면의 localStorage "오늘 처리함"(useBriefDecision)은 저장 없이 항목을 지웠다.
   for (const name of ['home', 'daily-brief']) {
     const source = readFileSync(new URL(`../components/hub/pages/${name}.jsx`, import.meta.url), 'utf8');
-    assert.match(source, /import \{ SIGNAL_TARGETS \} from ['"]@\/lib\/signal-targets['"]/);
+    assert.match(source, /import \{[^}]*\bSIGNAL_TARGETS\b[^}]*\} from ['"]@\/lib\/signal-targets['"]/);
     assert.doesNotMatch(source, /const SIGNAL_TARGETS\s*=/);
     assert.doesNotMatch(source, /setResolved|useBriefDecision|hub:brief-decisions|오늘 처리함/);
     assert.doesNotMatch(source, /결정 큐|대기 결정/);
