@@ -60,6 +60,7 @@ function PanelError({ message, children }) {
 // mode: 'create'(새로 잡기 — 구글에도 넣기 선택) · 'move'(레일의 다른 시간 — 구글 일정이 있으면 같이 옮김)
 export function SchedulePicker({
   subjectType,
+  defaultMinutes,
   calendar,
   blocks = [],
   ignoreBlockId = null,
@@ -71,7 +72,7 @@ export function SchedulePicker({
   onConfirm,
   label = '시간 고르기',
 }) {
-  const [minutes, setMinutes] = React.useState(() => rememberedMinutes(subjectType, scheduleMinutesFor(subjectType)));
+  const [minutes, setMinutes] = React.useState(() => rememberedMinutes(subjectType, defaultMinutes || scheduleMinutesFor(subjectType)));
   const [choice, setChoice] = React.useState(0);
   const today = todayKey();
   const [manualDay, setManualDay] = React.useState(today);
@@ -240,6 +241,7 @@ export function ScheduleBand({ item, calendar, blocks = [], open = false, onTogg
         <SchedulePicker
           key={`schedule-${item?.signalKey}`}
           subjectType={subjectType}
+          defaultMinutes={item?.schedule?.minutes}
           calendar={calendar}
           blocks={blocks}
           busy={busy}

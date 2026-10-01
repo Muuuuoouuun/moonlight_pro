@@ -19,6 +19,8 @@ import { buildDailyFocus, withoutFocusDuplicates } from "@/lib/daily-focus";
 import { toCheckItem } from "@/lib/check-items/catalog";
 import { applyCheckItemOutcomes, orderCheckItems } from "@/lib/check-items/suppression";
 import { readCheckItemContext } from "@/lib/repositories/signal-outcomes";
+import { kstDayKey } from "@/lib/kst-day";
+import { BLOCKER_KIND_LABELS } from "../../../../../../packages/project-delivery/index.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -242,21 +244,29 @@ function buildAutomationSignals(automations) {
 
 // "오늘의 결정 기록이 비어 있습니다" 신호는 뺐다 — 오늘이 아니라 결정 기록이 0건일 때 떴고,
 // 업무가 아니라 의례를 만들었다(확인할 것 스펙 §1·단계 0).
-function buildWorkSignals(projects) {
+// 막힌 프로젝트 — 병목 라벨을 글로(확인할 것 스펙 §5.4 `막힘 · 의사결정 · 9일`), 막힘 풀기에 필요한
+// 계획·버전은 `unblock`에 싣는다. 계획을 읽지 못한 행은 `unblock` 없이 — 카드는 프로젝트 열기로 돌아간다.
+function buildWorkSignals(projects, now = Date.now()) {
   const projectRows = Array.isArray(projects.projects) ? projects.projects : [];
   const signals = [];
 
   const blocked = projectRows.find((project) => project.status === "Blocked");
   if (blocked) {
+    const delivery = blocked.delivery && typeof blocked.delivery === "object" ? blocked.delivery : null;
+    const kind = BLOCKER_KIND_LABELS[delivery?.blockerKind] || "";
+    const pausedMs = Date.parse(delivery?.pausedAt || "");
+    const days = Number.isFinite(pausedMs) ? Math.max(0, Math.floor((now - pausedMs) / 86400000)) : null;
+    const due = blocked.dueAt ? kstDayKey(blocked.dueAt) : "";
     signals.push({
       id: `work-blocked-${blocked.id}`,
-      subject: { type: "project", id: blocked.id, name: blocked.name },
+      subject: { type: "project", id: blocked.id, name: blocked.name, blockerKind: delivery?.blockerKind || "" },
       tone: "danger",
       kind: "Work",
-      title: `${blocked.name} blocked`,
-      summary: blocked.nextAction || blocked.summary || "막힌 이유와 다음 액션을 정리해야 합니다.",
-      meta: `Project · due ${blocked.due}`,
+      title: `${blocked.name} — 막힘`,
+      summary: delivery?.blocker || blocked.nextAction || "막힌 이유와 다음 액션을 정리해야 합니다.",
+      meta: ["막힘", kind, days !== null ? `${days}일` : "", due ? `목표 ${due}` : ""].filter(Boolean).join(" · "),
       source: { from: "Projects", ref: blocked.id },
+      ...(delivery && blocked.updatedAt ? { unblock: { delivery, updatedAt: blocked.updatedAt } } : {}),
       decisions: [
         action("프로젝트 열기", "projects", true),
         action("결정 기록", "decision"),

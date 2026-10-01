@@ -33,6 +33,8 @@ type Dependencies = {
   ) => Promise<RowReadResult>;
 };
 
+const BLOCKER_HISTORY_LIMIT = 50;
+
 type CommandContext = {
   workspaceId?: string;
   ownerId?: string | null;
@@ -81,6 +83,8 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
       deal_id: meta.deal_id ?? null,
       item_type: meta.item_type ?? "task",
       // JSONB can reorder object keys; item order itself remains meaningful.
+      decision_id: meta.decision_id ?? null,
+      signal_key: meta.signal_key ?? null,
       checklist: Array.isArray(meta.checklist)
         ? meta.checklist.map((item) => item && typeof item === "object"
           ? { id: item.id, title: item.title, done: item.done, note: item.note ?? "", ...(item.dueAt ? { dueAt: item.dueAt } : {}) }
@@ -93,6 +97,24 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
       next_action: row.next_action ?? null,
       due_at: comparableTimestamp(row.due_at),
       source: meta.source ?? null,
+    };
+  }
+
+  // 결정 재시도(확인할 것 스펙 §5.3) — 같은 id·같은 내용이면 duplicate. actor_id는 요청자 맥락이라 뺀다.
+  if (action === "create_decision") {
+    const sourceRef = meta.sourceRef && typeof meta.sourceRef === "object"
+      ? meta.sourceRef as Record<string, unknown>
+      : null;
+    return {
+      id: row.id,
+      workspace_id: row.workspace_id,
+      project_id: row.project_id ?? null,
+      title: row.title,
+      summary: row.summary ?? null,
+      rationale: row.rationale ?? null,
+      decided_at: comparableTimestamp(row.decided_at),
+      source: meta.source ?? null,
+      source_ref: sourceRef ? { type: sourceRef.type ?? null, id: sourceRef.id ?? null } : null,
     };
   }
 
@@ -314,6 +336,17 @@ export async function executePmsCommand(
       command.patch.updated_at ||= context.now || new Date().toISOString();
       if (!expected) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
     }
+    // 결정 meta(표시용 링크 nextTaskId·unblockedProjectId)는 저장된 meta에 병합한다 — source·sourceRef 보존.
+    if (command.table === "decisions" && command.patch.meta) {
+      const identityFilters = command.filters.filter(([key]) => key === "id" || key === "workspace_id");
+      const rows = await dependencies.fetchRows("decisions", { filters: identityFilters, limit: 1 });
+      if (rows === null) return { status: "error", error: "current-entity-read-failed" };
+      if (!rows[0]) return { status: "error", error: "not-found" };
+      const current = rows[0];
+      const meta = current.meta && typeof current.meta === "object" ? current.meta as Record<string, unknown> : {};
+      command.patch.meta = { ...meta, ...command.patch.meta as Record<string, unknown> };
+      if (current.updated_at && !filterValue(command.filters, "updated_at")) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
+    }
     // Read + compare-and-swap protects the metadata merge and schedule history.
     if (command.table === "projects" && (command.patch.meta || "due_at" in command.patch || "status" in command.patch)) {
       const identityFilters = command.filters.filter(([key]) => key === "id" || key === "workspace_id");
@@ -328,13 +361,35 @@ export async function executePmsCommand(
       const supplied = (command.patch.meta as Record<string, any> | undefined)?.delivery;
       if (previous || supplied || input.deliveryEvent || "status" in command.patch) {
         if (!current.updated_at) return { status: "error", error: "missing-project-version" };
-        const plan = deliveryDraft(supplied || previous);
+        // 병목 분류를 보내지 않은 계획(예전 화면)은 저장된 분류를 유지한다. 막힌 점이 비면 분류도 비운다.
+        const plan = deliveryDraft(supplied && !("blockerKind" in supplied)
+          ? { ...supplied, blockerKind: previous?.blockerKind }
+          : supplied || previous);
+        if (!plan.blocker.trim()) plan.blockerKind = "";
         const dueAt = "due_at" in command.patch ? command.patch.due_at : current.due_at;
         const issue = validateDelivery(plan, dueAt);
         if (issue) return { status: "invalid-input", error: issue };
         const now = String(command.patch.updated_at);
         const delivery = { ...previous, ...plan, originalDueAt: previous?.originalDueAt ?? current.due_at ?? dueAt ?? null,
           history: Array.isArray(previous?.history) ? [...previous.history] : [] };
+        // 막힘 이력(확인할 것 스펙 §5.1) — 서버만 쓴다. 막힌 점이 비는 순간(다시 진행·편집 어느 쪽이든)
+        // 직전 막힌 점을 한 줄로 옮긴다. 클라이언트가 보낸 이력은 parseDelivery가 받지 않는다.
+        const previousBlocker = typeof previous?.blocker === "string" ? previous.blocker.trim() : "";
+        if (previousBlocker && !plan.blocker.trim()) {
+          const resolution = typeof input.unblockResolution === "string" ? input.unblockResolution : "resolved";
+          const note = typeof input.unblockNote === "string" ? input.unblockNote.trim().slice(0, 300) : "";
+          const entry = {
+            at: previous?.pausedAt || null,
+            resolvedAt: String(command.patch.updated_at),
+            text: previousBlocker,
+            kind: previous?.blockerKind || "",
+            resolution,
+            ...(typeof input.decisionId === "string" && resolution === "decision" ? { decisionId: input.decisionId } : {}),
+            ...(note ? { note } : {}),
+          };
+          const kept = Array.isArray(previous?.blockerHistory) ? previous.blockerHistory : [];
+          delivery.blockerHistory = [...kept, entry].slice(-BLOCKER_HISTORY_LIMIT);
+        }
         if (dayKey(dueAt) !== dayKey(current.due_at)) {
           const reason = typeof input.scheduleReason === "string" ? input.scheduleReason.trim().slice(0, 1000) : "";
           if (current.due_at && !reason) return { status: "invalid-input", error: "목표 종료일 변경 이유를 남겨주세요." };
