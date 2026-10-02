@@ -12,12 +12,20 @@ export function reportFiltersFromSearch(params) {
   return { kind: REPORT_KINDS.some(entry => entry.key === kind) ? kind : 'all', scope: reportScopeForWorkspace(params.get('scope')), week: isCalendarDateKey(week) ? week : 'all' };
 }
 export function reportsReadState(data) {
-  const status = ['live', 'partial', 'preview', 'error'].includes(data?.status) && Array.isArray(data?.reports) ? data.status : 'error';
+  const validReports = Array.isArray(data?.reports) && data.reports.every(report => report && typeof report.id === 'string' && report.id.trim());
+  const status = data?.source !== 'error' && validReports && ['live', 'partial', 'preview', 'error'].includes(data?.status) ? data.status : 'error';
   return { status, reports: ['live', 'partial'].includes(status) ? data.reports : [], failedSources: Array.isArray(data?.failedSources) ? data.failedSources : [], ...(data?.nextCursor !== undefined ? { nextCursor: typeof data.nextCursor === 'string' ? data.nextCursor : null } : {}) };
 }
+let reportDateFormatter;
 export function reportWeek(report) {
-  const date = report.periodStart || (report.createdAt ? new Date(report.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }) : null);
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  let date = report.periodStart;
+  if (!date && report.createdAt) {
+    const instant = new Date(report.createdAt);
+    if (!Number.isFinite(instant.getTime())) return null;
+    reportDateFormatter ||= new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' });
+    date = reportDateFormatter.format(instant);
+  }
+  if (!isCalendarDateKey(date)) return null;
   const day = new Date(`${date}T00:00:00Z`).getUTCDay();
   return shiftDateKey(date, -((day + 6) % 7));
 }
@@ -29,7 +37,11 @@ export function filterReports(reports, { kind = 'all', scope = 'all', week = 'al
 }
 export function mergeReportPages(previous, incoming) {
   const unique = new Map(previous.map(report => [report.id, report]));
-  for (const report of incoming) unique.set(report.id, report);
+  for (const report of incoming) {
+    const current = unique.get(report.id);
+    if (Number.isFinite(current?.revision) && Number.isFinite(report.revision) && current.revision > report.revision) continue;
+    unique.set(report.id, report);
+  }
   return [...unique.values()];
 }
 export function groupReportsByWeek(reports) {

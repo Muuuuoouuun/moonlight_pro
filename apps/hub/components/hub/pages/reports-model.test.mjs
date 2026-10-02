@@ -85,3 +85,23 @@ test('weekly capture requires seven completed calendar days while allowing custo
     assert.equal(model.weeklyCaptureError(period, '2026-10-01'), '주간 보고서는 완료된 7일 기간으로 저장해 주세요.');
   }
 });
+
+test('report reads reject source failures and malformed rows without presenting a live archive', () => {
+  for (const data of [{ status: 'live', source: 'error', reports: [] }, { status: 'live', reports: [null] }, { status: 'partial', reports: [{ id: 1 }] }, { status: 'live', reports: [{ id: '' }] }]) {
+    const state = model.reportsReadState(data); assert.equal(state.status, 'error'); assert.deepEqual(state.reports, []);
+  }
+});
+test('an older stored-report snapshot never rolls a current decision revision back', () => {
+  const current = { id: 'stored:one', revision: 3, decision: 'current' };
+  assert.deepEqual(model.mergeReportPages([current], [{ ...current, revision: 2, decision: 'old' }]), [current]);
+  assert.equal(model.mergeReportPages([current], [{ ...current, revision: 4 }])[0].revision, 4);
+});
+test('report week uses Seoul Monday boundaries and preserves saved periods across date zones', () => {
+  for (const [report, week] of [
+    [{ createdAt: '2026-10-04T14:59:59Z' }, '2026-09-28'],
+    [{ createdAt: '2026-10-04T15:00:00Z' }, '2026-10-05'],
+    [{ createdAt: '2026-01-01T00:00:00+09:00' }, '2025-12-29'],
+    [{ periodStart: '2024-02-29', createdAt: '2026-10-05T00:00:00Z' }, '2024-02-26'],
+    [{ createdAt: 'invalid' }, null], [{ periodStart: '2026-02-30' }, null], [{} , null],
+  ]) assert.equal(model.reportWeek(report), week);
+});

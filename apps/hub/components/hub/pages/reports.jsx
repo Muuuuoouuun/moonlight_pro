@@ -68,74 +68,143 @@ export function Reports({ onNavigate }) {
   const [document, setDocument] = React.useState({ kind: 'evaluation', scope: 'personal', title: '', body: '', sourceUrls: '' });
   const [decisionForm, setDecisionForm] = React.useState(null), [decisionConflict, setDecisionConflict] = React.useState(false);
   const [detailState, setDetailState] = React.useState('idle');
+  const [readGeneration, setReadGeneration] = React.useState(0);
   const [moreBusy, setMoreBusy] = React.useState(false), [moreError, setMoreError] = React.useState('');
   const [busy, setBusy] = React.useState(false), [error, setError] = React.useState('');
   const writer = React.useRef(null), readVersion = React.useRef(0), fileInput = React.useRef(null);
+  const lifecycle = React.useRef({ active: false, epoch: 0, list: null, more: null, detail: null, saving: false, fileVersion: 0 });
   if (!writer.current) writer.current = createReportWriter();
-  const openCreate = React.useCallback(() => { setError(''); setDrawer('create'); }, []);
+  const openCreate = React.useCallback(() => { if (!lifecycle.current.saving) { setError(''); setDrawer('create'); } }, []);
   usePageCreateHotkey(openCreate);
   const reload = React.useCallback(async () => {
+    const life = lifecycle.current;
+    if (!life.active) return;
     const version = ++readVersion.current;
-    setState(current => ({ ...current, status: 'loading' }));
-    try { const response = await fetch('/api/hub/reports', { cache: 'no-store', signal: AbortSignal.timeout(15000) }); const data = await response.json(); if (version === readVersion.current) setState(reportsReadState(response.ok ? data : null)); }
-    catch { if (version === readVersion.current) setState(reportsReadState(null)); }
+    setReadGeneration(version);
+    for (const key of ['list', 'more', 'detail']) { life[key]?.abort(); life[key] = null; }
+    const controller = new AbortController();
+    life.list = controller;
+    const current = () => life.active && version === readVersion.current && life.list === controller;
+    setMoreBusy(false); setMoreError(''); setDetailState('idle');
+    setState(previous => ({ ...previous, status: 'loading' }));
+    try {
+      // Let Strict Mode cleanup invalidate its first setup before dispatching transport.
+      await Promise.resolve();
+      if (!current()) return;
+      const response = await fetch('/api/hub/reports', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+      const data = await response.json();
+      if (current()) setState(reportsReadState(response.ok ? data : null));
+    } catch { if (current()) setState(reportsReadState(null)); }
+    finally { if (current()) life.list = null; }
   }, []);
-  React.useEffect(() => { reload(); return () => { readVersion.current++; }; }, [reload]);
+  React.useEffect(() => {
+    const life = lifecycle.current;
+    life.active = true; life.epoch++;
+    reload();
+    return () => {
+      life.active = false; life.epoch++; life.fileVersion++; readVersion.current++;
+      for (const key of ['list', 'more', 'detail']) { life[key]?.abort(); life[key] = null; }
+    };
+  }, [reload]);
+  React.useEffect(() => { lifecycle.current.fileVersion++; }, [drawer, createKind]);
   React.useEffect(() => {
     const nextFilters = reportFiltersFromSearch(searchParams), id = searchParams.get('report');
     setFilters(nextFilters); setSelectedId(id); setMobileDetail(Boolean(id));
     if (searchParams.get('new') === 'report') { openCreate(); router.replace(reportHref(id, nextFilters), { scroll: false }); }
   }, [searchParams, router, openCreate]);
-  const visible = filterReports(state.reports, filters);
+  const visible = React.useMemo(() => filterReports(state.reports, filters), [state.reports, filters]);
   const selected = selectedId ? state.reports.find(report => report.id === selectedId) : visible[0];
   const latestDecision = decisionForm ? state.reports.find(report => report.id === `stored:${decisionForm.reportId}`) : null;
-  const weeks = reportWeekOptions(state.reports);
+  const weeks = React.useMemo(() => reportWeekOptions(state.reports), [state.reports]);
+  const groups = React.useMemo(() => groupReportsByWeek(visible), [visible]);
   React.useEffect(() => {
     if (!selectedId || selected || !['live', 'partial'].includes(state.status)) return;
-    let active = true;
+    const life = lifecycle.current, version = readVersion.current, controller = new AbortController();
+    life.detail = controller;
+    const current = () => life.active && version === readVersion.current && life.detail === controller;
     setDetailState('loading');
-    fetch(`/api/hub/reports?report=${encodeURIComponent(selectedId)}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then(async response => ({ ok: response.ok, data: await response.json() })).then(({ ok, data }) => {
-      if (!active) return;
-      const detail = reportsReadState(ok ? data : null);
-      const record = detail.reports.find(report => report.id === selectedId);
-      if (record) { setState(current => ({ ...current, reports: mergeReportPages(current.reports, [record]) })); setDetailState('idle'); }
-      else setDetailState(detail.status === 'error' ? 'error' : 'missing');
-    }).catch(() => { if (active) setDetailState('error'); });
-    return () => { active = false; };
-  }, [selectedId, selected, state.status]);
+    (async () => {
+      try {
+        await Promise.resolve();
+        if (!current()) return;
+        const response = await fetch(`/api/hub/reports?report=${encodeURIComponent(selectedId)}`, { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+        const data = await response.json();
+        if (!current()) return;
+        const detail = reportsReadState(response.ok ? data : null);
+        const record = detail.reports.find(report => report.id === selectedId);
+        if (record) { setState(previous => ({ ...previous, reports: mergeReportPages(previous.reports, [record]) })); setDetailState('idle'); }
+        else setDetailState(detail.status === 'error' ? 'error' : 'missing');
+      } catch { if (current()) setDetailState('error'); }
+    })();
+    return () => { controller.abort(); if (life.detail === controller) life.detail = null; };
+  }, [selectedId, selected, state.status, readGeneration]);
   async function loadMore() {
-    if (moreBusy || !state.nextCursor) return;
+    const life = lifecycle.current;
+    if (!life.active || life.list || life.more || !state.nextCursor || !['live', 'partial'].includes(state.status)) return;
+    const version = readVersion.current, controller = new AbortController();
+    life.more = controller;
+    const current = () => life.active && version === readVersion.current && life.more === controller;
     setMoreBusy(true); setMoreError('');
-    try { const response = await fetch(`/api/hub/reports?cursor=${encodeURIComponent(state.nextCursor)}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) }); const next = reportsReadState(response.ok ? await response.json() : null);
+    try {
+      const response = await fetch(`/api/hub/reports?cursor=${encodeURIComponent(state.nextCursor)}`, { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+      const next = reportsReadState(response.ok ? await response.json() : null);
+      if (!current()) return;
       if (!['live', 'partial'].includes(next.status)) setMoreError('이전 보고서를 읽지 못했습니다. 다시 시도해 주세요.');
-      else setState(current => ({ ...current, status: current.status === 'partial' || next.status === 'partial' ? 'partial' : 'live', reports: mergeReportPages(current.reports, next.reports), nextCursor: next.nextCursor || null, failedSources: [...new Set([...current.failedSources, ...next.failedSources])] }));
-    } catch { setMoreError('이전 보고서를 읽지 못했습니다. 다시 시도해 주세요.'); } finally { setMoreBusy(false); }
+      else setState(previous => ({ ...previous, status: previous.status === 'partial' || next.status === 'partial' ? 'partial' : 'live', reports: mergeReportPages(previous.reports, next.reports), nextCursor: next.nextCursor || null, failedSources: [...new Set([...previous.failedSources, ...next.failedSources])] }));
+    } catch { if (current()) setMoreError('이전 보고서를 읽지 못했습니다. 다시 시도해 주세요.'); }
+    finally { if (current()) { life.more = null; setMoreBusy(false); } }
   }
   function changeFilter(key, value) { const next = { ...filters, [key]: value }; setFilters(next); setSelectedId(null); setMobileDetail(false); router.replace(reportHref(null, next), { scroll: false }); }
   function openReport(report) { setSelectedId(report.id); setMobileDetail(true); router.replace(reportHref(report.id, filters), { scroll: false }); }
   function back() { setMobileDetail(false); setSelectedId(null); router.replace(reportHref(null, filters), { scroll: false }); }
-  function openDecision(report) { setDecisionConflict(false); setDecisionForm({ reportId: report.id.slice(7), expectedRevision: report.revision, decision: report.decision || '' }); setError(''); setDrawer('decision'); }
+  function openDecision(report) { if (lifecycle.current.saving) return; setDecisionConflict(false); setDecisionForm({ reportId: report.id.slice(7), expectedRevision: report.revision, decision: report.decision || '' }); setError(''); setDrawer('decision'); }
   async function save(event) {
-    event.preventDefault(); if (busy) return;
+    event.preventDefault();
+    const life = lifecycle.current, epoch = life.epoch;
+    if (!life.active || life.saving || !drawer) return;
     if (drawer === 'create' && createKind === 'weekly') { const periodError = weeklyCaptureError(weekly); if (periodError) { setError(periodError); return; } }
+    life.saving = true; life.fileVersion++;
+    const current = () => life.active && life.epoch === epoch;
     setBusy(true); setError('');
     const command = drawer === 'decision' ? { action: 'record-decision', ...decisionForm } : createKind === 'weekly' ? { action: 'capture-weekly', ...weekly } : { action: 'save-document', kind: document.kind, scope: document.scope, title: document.title, body: document.body, sourceRefs: document.sourceUrls.split('\n').map(url => url.trim()).filter(Boolean).map(url => ({ url, label: url.slice(0, 240) })) };
-    try { const result = await writer.current(command); if (['saved', 'duplicate'].includes(result?.status)) {
-      setDrawer(null); const id = result.report?.id || result.reportId; if (id) { const reportId = id.startsWith('stored:') ? id : `stored:${id}`; setSelectedId(reportId); setFilters({ kind: 'all', scope: 'all', week: 'all' }); setMobileDetail(true); router.replace(reportHref(reportId), { scroll: false }); }
-      if (command.action === 'save-document') setDocument(current => ({ ...current, title: '', body: '', sourceUrls: '' })); await reload(); toast.success(command.action === 'record-decision' ? '판단을 저장했습니다.' : '보고서를 저장했습니다.');
-    } else { setError(reportWriteMessage(result)); if (result?.status === 'conflict') { setDecisionConflict(command.action === 'record-decision'); await reload(); } } }
-    catch { setError('저장 응답을 받지 못했습니다. 입력을 유지했으니 같은 내용으로 다시 시도해 주세요.'); } finally { setBusy(false); }
+    try {
+      const result = await writer.current(command);
+      if (!current()) return;
+      if (['saved', 'duplicate'].includes(result?.status)) {
+        setDrawer(null);
+        const id = result.report?.id || result.reportId;
+        if (id) { const reportId = id.startsWith('stored:') ? id : `stored:${id}`; setSelectedId(reportId); setFilters({ kind: 'all', scope: 'all', week: 'all' }); setMobileDetail(true); router.replace(reportHref(reportId), { scroll: false }); }
+        if (command.action === 'save-document') setDocument(previous => ({ ...previous, title: '', body: '', sourceUrls: '' }));
+        await reload();
+        if (current()) toast.success(command.action === 'record-decision' ? '판단을 저장했습니다.' : '보고서를 저장했습니다.');
+      } else {
+        setError(reportWriteMessage(result));
+        if (result?.status === 'conflict') { setDecisionConflict(command.action === 'record-decision'); await reload(); }
+      }
+    } catch { if (current()) setError('저장 응답을 받지 못했습니다. 입력을 유지했으니 같은 내용으로 다시 시도해 주세요.'); }
+    finally { if (current()) { life.saving = false; setBusy(false); } }
   }
   async function importFile(event) {
-    const file = event.target.files?.[0]; if (!file) return;
-    if (file.size > 100000) { setError('문서는 100KB 이내의 텍스트 파일을 선택해 주세요.'); event.target.value = ''; return; }
-    try { const body = await file.text(); if (body.length > 40000) { setError('문서 본문은 40,000자 이내로 등록해 주세요.'); event.target.value = ''; return; } setDocument(current => ({ ...current, title: current.title || file.name.replace(/\.(md|txt)$/i, ''), body })); setError(''); } catch { setError('파일을 읽지 못했습니다. 본문을 붙여넣어 주세요.'); } event.target.value = '';
+    const input = event.target, file = input.files?.[0], life = lifecycle.current;
+    if (!file || !life.active || life.saving || drawer !== 'create' || createKind !== 'document') return;
+    const version = ++life.fileVersion, draft = document;
+    const current = () => life.active && life.fileVersion === version;
+    // Clear immediately so choosing the same file again creates a fresh request.
+    input.value = '';
+    if (file.size > 100000) { setError('문서는 100KB 이내의 텍스트 파일을 선택해 주세요.'); return; }
+    try {
+      const body = await file.text();
+      if (!current()) return;
+      if (body.length > 40000) { setError('문서 본문은 40,000자 이내로 등록해 주세요.'); return; }
+      setDocument(previous => previous === draft ? { ...previous, title: previous.title || file.name.replace(/\.(md|txt)$/i, ''), body } : previous);
+      setError('');
+    } catch { if (current()) setError('파일을 읽지 못했습니다. 본문을 붙여넣어 주세요.'); }
   }
   return <div className="hub-page reports-hub"><header className="reports-head"><div><h2>보고서</h2><p>저장한 사실과 해석을 읽고, 다음 판단을 남깁니다.</p></div><Button variant="primary" icon="plus" onClick={openCreate}>보고서 추가 <Kbd>N</Kbd></Button></header>
     <div className="reports-toolbar"><div className="reports-kind-scroll"><SegmentedControl label="보고서 장르" options={REPORT_KINDS} value={filters.kind} onChange={value => changeFilter('kind', value)} /></div><div className="reports-selects"><SelectField label="범위" options={REPORT_SCOPES} value={filters.scope} onChange={event => changeFilter('scope', event.target.value)} /><SelectField label="주차" options={[{ value: 'all', label: '모든 주차' }, ...weeks]} value={filters.week} onChange={event => changeFilter('week', event.target.value)} /></div></div>
     <ReportsReadNotice state={state} onRetry={reload} />
     {['live', 'partial'].includes(state.status) && <div className={`reports-workspace${mobileDetail ? ' reports-detail-open' : ''}`}><section className="reports-list" aria-label="보고서 목록"><div className="reports-list-head"><strong>보관함 <span className="num">{visible.length}</span></strong><Button variant="ghost" size="xs" onClick={reload}>새로고침</Button></div>
-      {visible.length ? groupReportsByWeek(visible).map(group => <React.Fragment key={group.week || 'unknown'}><div className="reports-week-label mono">{group.week ? `${group.week} 주` : '기간 미확인'}</div>{group.reports.map(report => <button key={report.id} type="button" className={`reports-row hub-row${selected?.id === report.id ? ' reports-row--active' : ''}`} aria-current={selected?.id === report.id ? 'true' : undefined} onClick={() => openReport(report)}><span className="reports-meta">{reportKindLabel(report.kind)} · {reportScopeLabel(report.scope)}{report.status === 'partial' && <TruthBadge state="partial" />}</span><strong>{report.title}</strong><span className="reports-row-summary">{report.summary || '저장한 본문 보기'}</span><span className="reports-row-foot mono">{report.periodStart && report.periodEnd ? `${report.periodStart} — ${report.periodEnd}` : report.createdAt?.slice(0, 10) || '시각 미확인'}</span></button>)}</React.Fragment>) : <EmptyState icon="brief" title="조건에 맞는 보고서가 없어요" description="주간 실측을 저장하거나 평가·QA 문서를 등록해 주세요." action={<Button variant="outline" onClick={filters.kind !== 'all' || filters.scope !== 'all' || filters.week !== 'all' ? () => { setFilters({ kind: 'all', scope: 'all', week: 'all' }); router.replace('/dashboard/reports'); } : openCreate}>{filters.kind !== 'all' || filters.scope !== 'all' || filters.week !== 'all' ? '필터 지우기' : '보고서 추가'}</Button>} />}{state.nextCursor && <div className="reports-more"><Button variant="outline" disabled={moreBusy} onClick={loadMore}>{moreBusy ? '이전 보고서 확인 중…' : '이전 보고서 더 보기'}</Button>{moreError && <p role="alert" className="reports-error">{moreError}</p>}</div>}</section>
+      {visible.length ? groups.map(group => <React.Fragment key={group.week || 'unknown'}><div className="reports-week-label mono">{group.week ? `${group.week} 주` : '기간 미확인'}</div>{group.reports.map(report => <button key={report.id} type="button" className={`reports-row hub-row${selected?.id === report.id ? ' reports-row--active' : ''}`} aria-current={selected?.id === report.id ? 'true' : undefined} onClick={() => openReport(report)}><span className="reports-meta">{reportKindLabel(report.kind)} · {reportScopeLabel(report.scope)}{report.status === 'partial' && <TruthBadge state="partial" />}</span><strong>{report.title}</strong><span className="reports-row-summary">{report.summary || '저장한 본문 보기'}</span><span className="reports-row-foot mono">{report.periodStart && report.periodEnd ? `${report.periodStart} — ${report.periodEnd}` : report.createdAt?.slice(0, 10) || '시각 미확인'}</span></button>)}</React.Fragment>) : <EmptyState icon="brief" title="조건에 맞는 보고서가 없어요" description="주간 실측을 저장하거나 평가·QA 문서를 등록해 주세요." action={<Button variant="outline" onClick={filters.kind !== 'all' || filters.scope !== 'all' || filters.week !== 'all' ? () => { setFilters({ kind: 'all', scope: 'all', week: 'all' }); router.replace('/dashboard/reports'); } : openCreate}>{filters.kind !== 'all' || filters.scope !== 'all' || filters.week !== 'all' ? '필터 지우기' : '보고서 추가'}</Button>} />}{state.nextCursor && <div className="reports-more"><Button variant="outline" disabled={moreBusy} onClick={loadMore}>{moreBusy ? '이전 보고서 확인 중…' : '이전 보고서 더 보기'}</Button>{moreError && <p role="alert" className="reports-error">{moreError}</p>}</div>}</section>
       {selected ? <ReportDetail key={selected.id} report={selected} onBack={back} onDecision={openDecision} onNavigate={onNavigate} /> : detailState === 'loading' ? <Card><Skeleton lines={6} label="이 보고서의 원본 불러오는 중" /></Card> : <Card><EmptyState icon="brief" title={selectedId ? detailState === 'error' ? '이 보고서를 읽지 못했어요' : '이 보고서를 현재 목록에서 찾지 못했어요' : '보고서를 선택해 주세요'} description={selectedId ? '최근 기록의 조회 범위 또는 원본 연결 상태를 확인해 주세요.' : '사실·해석·판단을 나누어 읽습니다.'} action={selectedId ? <Button variant="outline" onClick={back}>목록으로</Button> : undefined} /></Card>}
     </div>}
     {drawer && <Drawer title={drawer === 'decision' ? '운영자 판단' : '보고서 추가'} subtitle={drawer === 'decision' ? '이 보고서에 연결하여 따로 저장합니다.' : '주간 실측을 고정 기간으로 저장하거나 문서를 직접 등록합니다.'} width="min(560px, 94vw)" onClose={() => { if (!busy) setDrawer(null); }}><form className="reports-form" onSubmit={save}><fieldset disabled={busy}>
