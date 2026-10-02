@@ -95,6 +95,7 @@ struct HubDomainTests {
         do {
             try modelChecks()
             try await loginChecks()
+            try await connectionRecoveryChecks()
             try await recoveryChecks()
             try await storeChecks()
             try await captureChecks()
@@ -125,6 +126,45 @@ struct HubDomainTests {
         await api.configure(readError: true)
         let readFailure = await store.signIn(baseURL: "https://example.com", username: "operator", password: "test-only")
         try check(readFailure && !store.taskReady, "A task read error must not misrepresent accepted credentials")
+    }
+
+    @MainActor static func connectionRecoveryChecks() async throws {
+        let suite = "pet-address-recovery-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let oldOrigin = "http://127.0.0.1:3000"
+        defaults.set(oldOrigin, forKey: "petPreview.hubURL")
+        let api = ControlledHub()
+        var requestedOrigins: [String] = []
+        let store = HubStore(defaults: defaults, makeAPI: { url in
+            requestedOrigins.append(url.absoluteString)
+            return api
+        })
+        await api.rejectLogin(true)
+        let denied = await store.signIn(baseURL: "https://hub.test", username: "operator", password: "test-only")
+        try check(!denied && defaults.string(forKey: "petPreview.hubURL") == oldOrigin,
+                  "A failed login at a replacement address must preserve the saved address")
+        try check(requestedOrigins == ["https://hub.test"], "Recovery credentials go to the explicitly submitted address")
+        await api.rejectLogin(false)
+        let accepted = await store.signIn(baseURL: " https://HUB.test:443/ ", username: "operator", password: "test-only")
+        try check(accepted && defaults.string(forKey: "petPreview.hubURL") == "https://hub.test",
+                  "An authenticated replacement address is saved in canonical form")
+        let rejected = await store.signIn(baseURL: "https://hub.test/dashboard", username: "operator", password: "test-only")
+        try check(!rejected && requestedOrigins.count == 2
+                  && defaults.string(forKey: "petPreview.hubURL") == "https://hub.test",
+                  "Recovery must retain origin validation without replacing a working address")
+
+        await api.configure(hold: true)
+        let first = Task { await store.signIn(baseURL: "https://slow.test", username: "operator", password: "test-only") }
+        while !(await api.startedRead) { await Task.yield() }
+        let overlapping = await store.signIn(baseURL: "https://other.test", username: "operator", password: "test-only")
+        try check(!overlapping && requestedOrigins.last == "https://slow.test" && requestedOrigins.count == 3,
+                  "A second submission cannot change the address during sign-in")
+        await api.release()
+        let finished = await first.value
+        try check(finished && defaults.string(forKey: "petPreview.hubURL") == "https://slow.test",
+                  "The first sign-in retains ownership of the saved address")
+        print("PASS: Hub address recovery checks (6)")
     }
 
     @MainActor static func captureChecks() async throws {

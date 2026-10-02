@@ -4,12 +4,15 @@ import SwiftUI
 struct HubConnectionContent: View {
     @ObservedObject var model: AppModel
     let done: () -> Void
+    @State private var address = ""
+    @State private var showsAddressSettings = false
     @State private var username = ""
     @State private var password = ""
     @State private var isSubmitting = false
-    private enum Field: Hashable { case username, password }
+    private enum Field: Hashable { case address, username, password }
     private var canSubmit: Bool {
         !isSubmitting && !model.hub.isConnecting
+            && !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !password.isEmpty
     }
     @FocusState private var focusedField: Field?
@@ -70,15 +73,48 @@ struct HubConnectionContent: View {
                     .keyboardShortcut(.defaultAction)
                     Spacer(minLength: 0)
                     Button("취소", action: done).buttonStyle(GlassQuietStyle())
+                        .disabled(isSubmitting || model.hub.isConnecting)
                 }
-
+                addressSettings
             }
             .padding(10)
         }
         .scrollIndicators(.hidden)
         .foregroundStyle(Palette.glassInk)
-        .onAppear { focusedField = .username }
+        .onAppear {
+            address = model.hubBaseURL
+            focusedField = .username
+        }
         .onDisappear { password = "" }
+    }
+
+    private var addressSettings: some View {
+        DisclosureGroup("Hub 주소 설정", isExpanded: $showsAddressSettings) {
+            VStack(alignment: .leading, spacing: 8) {
+                fieldLabel("Hub 주소")
+                TextField("https://…", text: $address)
+                    .textFieldStyle(.plain)
+                    .modifier(GlassGlyphShadow())
+                    .font(.system(size: 13)).padding(12)
+                    .focused($focusedField, equals: .address)
+                    .modifier(GlassInputSurface(focused: focusedField == .address))
+                    .autocorrectionDisabled()
+                    .onSubmit { focusedField = .username }
+                    .accessibilityLabel("Hub 주소")
+                Button("운영 Hub 주소 사용") {
+                    address = AppModel.defaultHubURL
+                }
+                .buttonStyle(GlassQuietStyle())
+                Text("변경한 주소는 로그인에 성공하면 저장돼요. 취소하면 기존 주소를 유지해요.")
+                    .font(.system(size: 10.5)).foregroundStyle(Palette.glassInkFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .modifier(GlassReadability(radius: 8, inset: 5))
+            }
+            .padding(.top, 8)
+        }
+        .font(.system(size: 11.5))
+        .foregroundStyle(Palette.glassInkMuted)
+        .disabled(isSubmitting || model.hub.isConnecting)
     }
 
     private func fieldLabel(_ text: String) -> some View {
@@ -88,14 +124,17 @@ struct HubConnectionContent: View {
 
     private func connect() {
         guard canSubmit else { return }
+        let submittedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
         let submittedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
         let submittedPassword = password
         isSubmitting = true
         password = ""
         Task {
             defer { isSubmitting = false }
-            if await model.hub.signIn(baseURL: model.hubBaseURL,
+            if await model.hub.signIn(baseURL: submittedAddress,
                                       username: submittedUsername, password: submittedPassword) {
+                model.hubBaseURL = submittedAddress
+                model.saveHubURL()
                 done()
             } else {
                 focusedField = .password
