@@ -305,6 +305,18 @@ export function mapBrands(rows) {
 
 // 서버(UTC) 실행 — 운영자 시간대 고정 없이는 배포 환경에서 라벨이 -9시간 밀린다.
 const TIME_ZONE = "Asia/Seoul";
+// 행마다 생성하지 않고 시간대·표시 형식이 고정된 포매터를 재사용한다.
+const SHORT_DATE_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: TIME_ZONE,
+  month: "numeric",
+  day: "numeric",
+});
+const TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 
 function formatShortDate(value) {
   if (!value) return "미정";
@@ -312,18 +324,9 @@ function formatShortDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "미정";
 
-  const datePart = new Intl.DateTimeFormat("ko-KR", {
-    timeZone: TIME_ZONE,
-    month: "numeric",
-    day: "numeric",
-  }).format(date);
+  const datePart = SHORT_DATE_FORMAT.format(date);
 
-  const timePart = new Intl.DateTimeFormat("ko-KR", {
-    timeZone: TIME_ZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
+  const timePart = TIME_FORMAT.format(date);
 
   return `${datePart} ${timePart}`;
 }
