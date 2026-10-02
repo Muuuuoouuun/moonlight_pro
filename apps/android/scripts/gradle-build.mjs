@@ -6,7 +6,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { HUB_CONFIG_XML_PATH, PLACEHOLDER_HUB_URL, SHORTCUTS_XML_PATH } from "./write-cap-config.mjs";
+import { HUB_CONFIG_XML_PATH, PLACEHOLDER_HUB_URL, SHORTCUTS_XML_PATH, validateSyncedHubConfig } from "./write-cap-config.mjs";
 
 const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ANDROID_DIR = join(APP_DIR, "android");
@@ -19,31 +19,25 @@ if (!existsSync(syncedConfigPath)) {
   console.error("[moonlight-android] 동기화된 설정이 없습니다. 먼저 npm run app:android:sync 를 실행하세요.");
   process.exit(1);
 }
-const serverUrl = JSON.parse(readFileSync(syncedConfigPath, "utf8"))?.server?.url;
-if (!serverUrl || serverUrl === PLACEHOLDER_HUB_URL) {
-  if (!allowPlaceholder) {
-    console.error(
-      "[moonlight-android] 동기화된 허브 주소가 placeholder 입니다. app.config.json 을 고치고 app:android:sync 후 다시 빌드하세요.\n" +
-        "  개발용 APK만 필요하면 --allow-placeholder 를 붙입니다.",
-    );
-    process.exit(1);
-  }
-  console.warn("[moonlight-android] 경고: placeholder 주소로 빌드합니다. 이 APK는 허브에 연결되지 않습니다.");
-}
-// App Links host(hub_config.xml)·바로가기 URL(shortcuts.xml)도 같은 동기화에서 나온 값이어야 한다
-// (주소를 바꾸고 sync 를 빠뜨린 경우를 막는다).
+// Check app.config.json as well as the generated files before invoking Gradle.
+// An old sync may agree with itself while still targeting the wrong Hub.
 const readGenerated = (path) => (existsSync(join(APP_DIR, path)) ? readFileSync(join(APP_DIR, path), "utf8") : "");
-const generatedChecks = [
-  [HUB_CONFIG_XML_PATH, `<string name="hub_origin" translatable="false">${serverUrl}</string>`],
-  [SHORTCUTS_XML_PATH, `android:data="${serverUrl}/`],
-];
-for (const [path, expected] of generatedChecks) {
-  if (serverUrl && !readGenerated(path).includes(expected)) {
-    console.error(
-      `[moonlight-android] ${path} 가 없거나 동기화된 허브 주소(${serverUrl})와 다릅니다. npm run app:android:sync 를 다시 실행하세요.`,
-    );
-    process.exit(1);
-  }
+let serverUrl;
+try {
+  const appConfig = JSON.parse(readFileSync(join(APP_DIR, "app.config.json"), "utf8"));
+  const syncedConfig = JSON.parse(readFileSync(syncedConfigPath, "utf8"));
+  serverUrl = validateSyncedHubConfig({
+    rawHubUrl: appConfig.hubUrl,
+    syncedServerUrl: syncedConfig?.server?.url,
+    hubConfigXml: readGenerated(HUB_CONFIG_XML_PATH),
+    shortcutsXml: readGenerated(SHORTCUTS_XML_PATH),
+  }, { allowPlaceholder });
+} catch (error) {
+  console.error(`[moonlight-android] ${error.message}`);
+  process.exit(1);
+}
+if (serverUrl === PLACEHOLDER_HUB_URL) {
+  console.warn("[moonlight-android] 경고: placeholder 주소로 빌드합니다. 이 APK는 허브에 연결되지 않습니다.");
 }
 if (!existsSync(join(APP_DIR, "keystore.properties"))) {
   console.warn("[moonlight-android] keystore.properties 가 없어 release APK는 서명 없이 만들어집니다.");

@@ -101,6 +101,11 @@ function LoginForm() {
         continueToDestination();
         return;
       }
+      if (response.status === 429 && data.status === "busy") {
+        // Capacity is temporary, not a rejected password. Keep input for a manual retry.
+        setState({ status: "busy", message: "로그인 요청이 많습니다. 잠시 후 다시 시도하세요." });
+        return;
+      }
       setPassword("");
       setState({
         status: "error",

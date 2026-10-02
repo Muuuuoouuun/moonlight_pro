@@ -15,7 +15,8 @@ import {
   resolveOAuthStateSecret,
 } from "@/lib/integration-readiness";
 import { extractGoogleCalendarAccountIdentity } from "@/lib/google-calendar-identity";
-import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { createHash } from "crypto";
+import { decodeState, encodeState, sanitizeReturnPath } from "./google-oauth.js";
 
 const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
 const GOOGLE_CALENDAR_SYNC_SOURCE = "google_calendar";
@@ -92,64 +93,8 @@ export function hasGoogleCalendarOAuthStateSecret() {
   return Boolean(resolveOAuthStateSecret());
 }
 
-function signStatePayload(payload) {
-  const secret = resolveOAuthStateSecret();
-
-  if (!secret) {
-    return "";
-  }
-
-  return createHmac("sha256", secret).update(payload).digest("base64url");
-}
-
-function safeEquals(a, b) {
-  const aBuffer = Buffer.from(String(a || ""));
-  const bBuffer = Buffer.from(String(b || ""));
-
-  return aBuffer.length === bBuffer.length && timingSafeEqual(aBuffer, bBuffer);
-}
-
-function encodeState(value) {
-  const payload = Buffer.from(
-    JSON.stringify({
-      ...value,
-      iat: Date.now(),
-    }),
-    "utf8",
-  ).toString("base64url");
-  const signature = signStatePayload(payload);
-
-  return signature ? `${payload}.${signature}` : payload;
-}
-
 export function decodeGoogleCalendarState(value) {
-  if (!value) {
-    return {};
-  }
-
-  try {
-    const raw = String(value);
-    const [payload, signature] = raw.split(".");
-    const expected = signStatePayload(payload);
-
-    if (!expected || !signature || !safeEquals(expected, signature)) {
-      return { invalid: true };
-    }
-
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-  } catch {
-    return { invalid: true };
-  }
-}
-
-function sanitizeReturnPath(value, fallback) {
-  const path = typeof value === "string" ? value.trim() : "";
-
-  if (!path || !path.startsWith("/") || path.startsWith("//")) {
-    return fallback;
-  }
-
-  return path;
+  return decodeState(value);
 }
 
 export function resolveGoogleCalendarRedirectUri(origin) {

@@ -20,6 +20,7 @@ import { CommandPalette } from "./hub-command-palette";
 import { QuickMemo } from "./quick-memo";
 import { GuidanceQuestionDrawer } from "./guidance-question-drawer";
 import { GlobalQuickCapture } from "./quick-capture";
+import { savedSharedCaptureTarget, snapshotSharedCaptureQuery } from "@/lib/shared-capture-navigation";
 import { OfficeSessionProvider } from "./office-session-provider";
 import { OfficeWorkflowSessionProvider } from "./office-workflow-panel";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
@@ -323,6 +324,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
   const [initialCaptureRaw, setInitialCaptureRaw] = React.useState("");
   const handledShareRef = React.useRef(false);
+  const sharedCaptureQueryRef = React.useRef(null);
 
   React.useEffect(() => {
     if (handledShareRef.current) return;
@@ -332,10 +334,12 @@ export function HubApp({ memoDraftContext = "preview" }) {
     const combined = [shareTitle, shareText, shareUrl].map((s) => s.trim()).filter(Boolean).join("\n");
     if (combined) {
       handledShareRef.current = true;
+      sharedCaptureQueryRef.current = snapshotSharedCaptureQuery(searchParams);
       setInitialCaptureRaw(combined);
       setCaptureOpenRequest((v) => v + 1);
     }
   }, [searchParams]);
+  const sharedCaptureQuery = sharedCaptureQueryRef.current;
 
   const [guidanceQuestion, setGuidanceQuestion] = React.useState(null);
   const rootRef = React.useRef(null);
@@ -661,7 +665,17 @@ export function HubApp({ memoDraftContext = "preview" }) {
           </div>
         </div>
       <GuidanceQuestionDrawer key={`${guidanceQuestion?.card?.id || 'free'}:${guidanceQuestion?.context?.ref || ''}`} card={guidanceQuestion?.card} context={guidanceQuestion?.context} onClose={() => setGuidanceQuestion(null)} />
-      <GlobalQuickCapture openRequest={captureOpenRequest} initialRaw={initialCaptureRaw} onNavigate={navigate} />
+      <GlobalQuickCapture
+        openRequest={captureOpenRequest}
+        initialRaw={initialCaptureRaw}
+        onInitialRawConsumed={(raw) => setInitialCaptureRaw((current) => current === raw ? "" : current)}
+        onSharedDraftSaved={() => {
+          const target = savedSharedCaptureTarget(window.location.href, sharedCaptureQuery);
+          if (sharedCaptureQueryRef.current === sharedCaptureQuery) sharedCaptureQueryRef.current = null;
+          if (target) router.replace(target, { scroll: false });
+        }}
+        onNavigate={navigate}
+      />
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open || Boolean(guidanceQuestion)} openRequest={memoOpenRequest} onNavigate={navigate} />
       <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />

@@ -7,18 +7,32 @@ const ENDPOINT = '/api/hub/content/templates';
 
 export function useContentTemplates() {
   const [state, setState] = React.useState({ status: 'loading', templates: [], message: '' });
+  const readRef = React.useRef(0);
+  const lifecycleRef = React.useRef({ active: true, generation: 0 });
   const load = React.useCallback(async () => {
+    if (!lifecycleRef.current.active) return;
+    const generation = lifecycleRef.current.generation;
+    const readId = ++readRef.current;
+    const isCurrent = () => lifecycleRef.current.active && lifecycleRef.current.generation === generation && readRef.current === readId;
     setState((current) => ({ ...current, status: 'loading', message: '' }));
     try {
       const response = await fetch(ENDPOINT, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
       const data = await response.json();
       if (!data || !['live', 'preview', 'error'].includes(data.status)) throw new Error('invalid');
-      setState({ status: data.status, templates: Array.isArray(data.templates) ? data.templates : [], message: data.message || '' });
+      if (isCurrent()) setState({ status: data.status, templates: Array.isArray(data.templates) ? data.templates : [], message: data.message || '' });
     } catch {
-      setState({ status: 'error', templates: [], message: 'AI 템플릿을 불러오지 못했어요. 다시 시도해 주세요.' });
+      if (isCurrent()) setState({ status: 'error', templates: [], message: 'AI 템플릿을 불러오지 못했어요. 다시 시도해 주세요.' });
     }
   }, []);
-  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    lifecycleRef.current.active = true;
+    load();
+    return () => {
+      lifecycleRef.current.active = false;
+      lifecycleRef.current.generation += 1;
+      readRef.current += 1;
+    };
+  }, [load]);
 
   const post = async (body) => {
     try {
@@ -32,17 +46,25 @@ export function useContentTemplates() {
       return { status: 'error', message: '응답을 확인하지 못했어요. 입력은 유지됩니다. 다시 시도해 주세요.' };
     }
   };
+  const isCurrentMutation = (generation) => lifecycleRef.current.active && lifecycleRef.current.generation === generation;
   // draft: { id?, name, request, skeleton, revision? } — 새 템플릿은 id를 여기서 한 번 만들어 재시도에도 유지한다.
   const save = async (draft) => {
+    const generation = lifecycleRef.current.generation;
     const result = await post({ action: 'save', id: draft.id, name: draft.name, request: draft.request, skeleton: draft.skeleton, expectedRevision: draft.revision || 0 });
-    if (['saved', 'duplicate'].includes(result.status) && result.template) {
-      setState((current) => ({ ...current, templates: [...current.templates.filter((t) => t.id !== result.template.id), result.template].sort((a, b) => a.name.localeCompare(b.name, 'ko')) }));
+    if (isCurrentMutation(generation) && ['saved', 'duplicate'].includes(result.status) && result.template) {
+      // The confirmed mutation is newer than any read already in flight.
+      readRef.current += 1;
+      setState((current) => ({ ...current, status: 'live', message: '', templates: [...current.templates.filter((t) => t.id !== result.template.id), result.template].sort((a, b) => a.name.localeCompare(b.name, 'ko')) }));
     }
     return result;
   };
   const remove = async (id) => {
+    const generation = lifecycleRef.current.generation;
     const result = await post({ action: 'delete', id });
-    if (result.status === 'deleted') setState((current) => ({ ...current, templates: current.templates.filter((t) => t.id !== id) }));
+    if (isCurrentMutation(generation) && result.status === 'deleted') {
+      readRef.current += 1;
+      setState((current) => ({ ...current, status: 'live', message: '', templates: current.templates.filter((t) => t.id !== id) }));
+    }
     return result;
   };
   return { ...state, reload: load, save, remove };
