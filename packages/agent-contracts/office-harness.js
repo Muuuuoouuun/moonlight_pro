@@ -23,7 +23,7 @@ export const OFFICE_WORK_KINDS = Object.freeze({
 });
 export const OFFICE_WORK_KIND_IDS = Object.freeze(Object.keys(OFFICE_WORK_KINDS));
 
-// Who each role may ask for a second view. Copied from the role-card handoffs (v25);
+// Who each role may ask for a second view. Copied from the role-card handoffs (v25, unchanged in v26);
 // the Engine test pins the copy to the cards. 블래키 can review any role's packet.
 export const OFFICE_HANDOFFS = Object.freeze({
   eevee: Object.freeze(['vaporeon', 'espeon']),
