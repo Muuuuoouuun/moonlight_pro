@@ -62,18 +62,36 @@ export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(null); // { creating, product, record }
   const [syncing, setSyncing] = React.useState(false);
+  const mountedRef = React.useRef(false);
+  const loadRef = React.useRef(null);
+  const createAttemptRef = React.useRef(null);
 
-  const load = React.useCallback(async (signal) => {
-    const [products, status] = await Promise.all([readProducts(signal), readGitHubStatus(signal)]);
-    if (signal?.aborted) return;
-    setLedger({ ...EMPTY_LEDGER, ...products });
-    setGithub(status);
+  const load = React.useCallback(async () => {
+    if (!mountedRef.current) return;
+    loadRef.current?.abort();
+    const controller = new AbortController();
+    loadRef.current = controller;
+    const { signal } = controller;
+    const current = () => !signal.aborted && loadRef.current === controller;
+    // GitHub 지연이 제품 표시·저장 후 재조회를 붙잡지 않는다. 각 결과는 최신 조회만 반영한다.
+    readGitHubStatus(signal).then((status) => {
+      if (current()) setGithub(status);
+    }).catch(() => { if (current()) setGithub({ state: "error" }); });
+    try {
+      const products = await readProducts(signal);
+      if (current()) setLedger({ ...EMPTY_LEDGER, ...products });
+    } catch {
+      if (current()) setLedger({ ...EMPTY_LEDGER, status: "error" });
+    }
   }, []);
 
   React.useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal).catch(() => {});
-    return () => controller.abort();
+    mountedRef.current = true;
+    load();
+    return () => {
+      mountedRef.current = false;
+      loadRef.current?.abort();
+    };
   }, [load]);
 
   // 화면 고르기 — URL이 정본(뒤로 가기·새로고침·공유가 그대로 된다).
@@ -99,6 +117,7 @@ export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null
 
   const openCreate = React.useCallback(() => {
     setSettingsOpen(false);
+    createAttemptRef.current = null;
     // EditDrawer는 값이 있는 선택 칸이 하나라도 있으면 묶음을 펼친다 — 기본 가격 모델도
     // "값"으로 읽히므로 새 제품은 비워 두고(formToProductInput이 기본값으로 채운다) 접힌 채 시작한다.
     setEditing({ creating: true, product: null, record: { ...productToForm(null), id: null, pricingModel: "" } });
@@ -126,16 +145,51 @@ export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null
 
   const saveEditing = React.useCallback(async () => {
     if (!editing) return { ok: false, status: "error" };
-    const input = formToProductInput(editing.record, editing.product, { newId });
+    const pending = editing.creating ? createAttemptRef.current : null;
+    const input = pending?.body || formToProductInput(editing.record, editing.product, { newId });
     if (!input.name) return { ok: false, status: "error", message: "이름을 적어 주세요." };
     if (!input.summary) return { ok: false, status: "error", message: "한 줄 설명을 적어 주세요." };
+    // 결과 유실 후 수동 재시도는 항목 ID까지 같은 명령이다. Engine duplicate는 details를 비교하지 않는다.
+    const attempt = editing.creating ? pending || {
+      body: { id: newId(), orgScope: editing.record.orgScope, ...input },
+      form: JSON.stringify(editing.record),
+    } : null;
+    if (attempt) createAttemptRef.current = attempt;
     const outcome = editing.creating
-      ? await createProduct({ id: newId(), orgScope: editing.record.orgScope, ...input })
+      ? await createProduct(attempt.body)
       : await updateProduct({ id: editing.product.id, expectedUpdatedAt: editing.product.updatedAt, ...input });
+    if (!mountedRef.current) return outcome;
+    if (attempt && !outcome.ok) {
+      // 뒤의 재시도가 401·preview로 거절돼도 앞선 미확정 요청의 저장 여부는 달라지지 않는다.
+      if (outcome.unknownOutcome) attempt.unknownOutcome = true;
+      else if (!attempt.unknownOutcome) createAttemptRef.current = null;
+    }
     if (outcome.ok) {
+      if (attempt && attempt.form !== JSON.stringify(editing.record)) {
+        const entity = outcome.entity;
+        if (entity?.id !== attempt.body.id || !entity.updated_at) {
+          return { ok: false, status: "error", message: "이전 등록 결과를 확인하지 못했어요. 입력을 유지한 채 다시 시도해 주세요." };
+        }
+        createAttemptRef.current = null;
+        const scopeChanged = editing.record.orgScope !== entity.org_scope;
+        setEditing({
+          creating: false,
+          product: { ...entity, orgScope: entity.org_scope, updatedAt: entity.updated_at },
+          // EditDrawer의 record identity를 유지해야 미저장 입력·피드백이 초기화되지 않는다.
+          record: { ...editing.record, orgScope: entity.org_scope },
+        });
+        await load();
+        return {
+          ok: false, status: "error",
+          message: scopeChanged
+            ? `처음 전송한 소속(${ORG_SCOPE_LABEL[entity.org_scope] || entity.org_scope})으로 등록을 확인했어요. 소속은 바꿀 수 없어요. 나머지 변경은 카드 저장을 눌러 반영해 주세요.`
+            : "처음 전송한 제품 등록을 확인했어요. 변경한 입력은 그대로예요. 카드 저장을 눌러 반영해 주세요.",
+        };
+      }
+      if (attempt) createAttemptRef.current = null;
       toast.success(editing.creating ? `제품 ‘${input.name}’을 등록했어요.` : `‘${input.name}’ 카드를 저장했어요.`);
       await load();
-      if (editing.creating && outcome.entity?.id) openProduct(outcome.entity.id);
+      if (mountedRef.current && editing.creating && outcome.entity?.id) openProduct(outcome.entity.id);
     }
     return outcome;
   }, [editing, load, openProduct, toast]);
@@ -143,6 +197,7 @@ export function ProjectProductsView({ onOpenProject, onOpenBoard, heading = null
   const syncGitHub = React.useCallback(async () => {
     setSyncing(true);
     const result = await runGitHubSync();
+    if (!mountedRef.current) return;
     setSyncing(false);
     if (result.tone === "danger") toast.error(result.message);
     else toast(result.message);

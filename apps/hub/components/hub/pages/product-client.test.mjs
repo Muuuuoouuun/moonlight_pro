@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildCodexDraft, readSaveOutcome, summarizeSyncResult } from "./product-client.js";
+import { buildCodexDraft, createProduct, readGitHubStatus, readInquiryProduct, readProducts, readSaveOutcome, runGitHubSync, summarizeSyncResult } from "./product-client.js";
 
 test("save envelopes: preview is never a success", () => {
   assert.deepEqual(readSaveOutcome(201, { status: "saved", entity: { id: "p" } }), { ok: true, status: "saved", entity: { id: "p" } });
@@ -34,3 +34,100 @@ test("focus cap rejection keeps the engine's product list in the message", () =>
   assert.equal(outcome.ok, false);
   assert.match(outcome.message, /지금: OMR/);
 });
+
+const readers = [
+  ["products", (signal) => readProducts(signal), { status: "live", products: [] }, "status"],
+  ["inquiry", (signal) => readInquiryProduct("inquiry", signal), { status: "live", products: [], productId: null }, "status"],
+  ["github", (signal) => readGitHubStatus(signal), { status: { configured: true } }, "state"],
+];
+
+for (const [name, read, data, stateKey] of readers) {
+  test(`${name} accepts its live envelope and skips an already cancelled request`, async (t) => {
+    const transport = t.mock.method(globalThis, "fetch", async () => ({ ok: true, status: 200, json: async () => data }));
+    assert.equal((await read())[stateKey], "live");
+    const controller = new AbortController();
+    controller.abort();
+    await assert.rejects(read(controller.signal), { name: "AbortError" });
+    assert.equal(transport.mock.callCount(), 1);
+  });
+
+  test(`${name} rejects unsuccessful HTTP responses even with a live-looking body`, async (t) => {
+    t.mock.method(globalThis, "fetch", async () => ({ ok: false, status: 500, json: async () => data }));
+    assert.equal((await read())[stateKey], "error");
+  });
+
+  for (const phase of ["headers", "body"]) {
+    test(`${name} times out stalled ${phase} even if transport ignores abort`, async (t) => {
+      t.mock.timers.enable({ apis: ["setTimeout"] });
+      let resolveTransport;
+      let signal;
+      const stalled = new Promise((resolve) => { resolveTransport = resolve; });
+      t.mock.method(globalThis, "fetch", async (_url, options) => {
+        signal = options.signal;
+        return phase === "headers" ? stalled : { ok: true, status: 200, json: () => stalled };
+      });
+      let result;
+      const pending = read().then((value) => { result = value; });
+      await new Promise(setImmediate);
+      t.mock.timers.tick(120_000);
+      await new Promise(setImmediate);
+      assert.equal(result?.[stateKey], "error", "deadline must settle the public read");
+      assert.equal(signal?.aborted, true);
+      resolveTransport(phase === "headers" ? { ok: true, status: 200, json: async () => data } : data);
+      await pending;
+    });
+  }
+
+  test(`${name} propagates caller cancellation, including during a stalled body`, async (t) => {
+    t.mock.method(globalThis, "fetch", async () => ({ ok: true, status: 200, json: () => new Promise(() => {}) }));
+    const controller = new AbortController();
+    let result;
+    const pending = read(controller.signal).then(() => { result = "resolved"; }, (error) => { result = error.name; });
+    await new Promise(setImmediate);
+    controller.abort("page-left");
+    await new Promise(setImmediate);
+    assert.equal(result, "AbortError");
+    await pending;
+  });
+}
+
+test("read envelopes reject missing truth, wrong collection shape, and source errors", async (t) => {
+  let data;
+  t.mock.method(globalThis, "fetch", async () => ({ ok: true, status: 200, json: async () => data }));
+  for (data of [{}, [], { status: "live", products: null }, { status: "live", products: [], source: "error" }]) {
+    assert.equal((await readProducts()).status, "error");
+    assert.equal((await readInquiryProduct("id")).status, "error");
+  }
+  data = { status: [] };
+  assert.equal((await readGitHubStatus()).state, "error");
+  data = { status: "error", error: "products-table-missing" };
+  assert.equal((await readProducts()).error, "products-table-missing");
+});
+
+test("HTTP failures cannot acknowledge saved or synced bodies", () => {
+  assert.equal(readSaveOutcome(500, { status: "saved" }).ok, false);
+  assert.equal(readSaveOutcome(500, { status: "duplicate" }).ok, false);
+  assert.equal(summarizeSyncResult(500, { status: "synced" }).ok, false);
+  assert.equal(summarizeSyncResult(500, { status: "partial" }).ok, false);
+});
+
+for (const [name, write] of [["create", () => createProduct({ id: "p" })], ["sync", () => runGitHubSync()]]) {
+  test(`${name} bounds the response body without automatically retrying a write`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let signal;
+    const transport = t.mock.method(globalThis, "fetch", async (_url, options) => {
+      signal = options.signal;
+      return { ok: true, status: 200, json: () => new Promise(() => {}) };
+    });
+    let result;
+    const pending = write().then((value) => { result = value; });
+    await new Promise(setImmediate);
+    t.mock.timers.tick(120_000);
+    await new Promise(setImmediate);
+    assert.equal(result?.ok, false);
+    assert.equal(signal?.aborted, true);
+    assert.equal(transport.mock.callCount(), 1);
+    if (name === "create") assert.equal(result.unknownOutcome, true);
+    await pending;
+  });
+}
