@@ -29,6 +29,8 @@ const RHYTHM_ROW_LIMIT = 240;
 // 씨앗 행(과 PATCH로 편집된 행)의 meta에만 있으므로, 씨앗 행을 따로 소량 읽어 폴백 정본으로 쓴다.
 const RITUAL_DEFINITION_LIMIT = 200;
 
+let decisionDateFormatter;
+
 function formatDecisionDate(value) {
   if (!value) return "";
 
@@ -36,11 +38,11 @@ function formatDecisionDate(value) {
   if (Number.isNaN(date.getTime())) return "";
 
   try {
-    return new Intl.DateTimeFormat("ko-KR", {
+    return (decisionDateFormatter ??= new Intl.DateTimeFormat("ko-KR", {
       timeZone: "Asia/Seoul",
       month: "long",
       day: "numeric",
-    }).format(date);
+    })).format(date);
   } catch {
     return date.toISOString().slice(0, 10);
   }

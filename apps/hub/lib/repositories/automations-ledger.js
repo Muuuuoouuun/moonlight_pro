@@ -47,20 +47,24 @@ const WEBHOOK_STATUS_TONE = {
   failed: "err",
 };
 
+let operatorDayFormatter;
+
 function startOfOperatorDay() {
   // "오늘 실행" 경계는 운영자의 달력일(KST 자정) — UTC 자정이면 오전 9시에 리셋된다.
-  const dayKey = new Intl.DateTimeFormat("en-CA", {
+  const dayKey = (operatorDayFormatter ??= new Intl.DateTimeFormat("en-CA", {
     timeZone: TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
+  })).format(new Date());
   return new Date(`${dayKey}T00:00:00+09:00`);
 }
 
 function last24hThreshold() {
   return new Date(Date.now() - 24 * 60 * 60 * 1000);
 }
+
+let relativeDateFormatter;
 
 function formatRelative(value) {
   if (!value) return "—";
@@ -79,32 +83,36 @@ function formatRelative(value) {
   if (days === 1) return "어제";
   if (days < 7) return `${days}일 전`;
 
-  return new Intl.DateTimeFormat("ko-KR", {
+  return (relativeDateFormatter ??= new Intl.DateTimeFormat("ko-KR", {
     timeZone: TIME_ZONE,
     month: "numeric",
     day: "numeric",
-  }).format(date);
+  })).format(date);
 }
+
+let clockFormatter;
 
 function formatClock(value) {
   if (!value) return "--:--:--";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "--:--:--";
-  return new Intl.DateTimeFormat("ko-KR", {
+  return (clockFormatter ??= new Intl.DateTimeFormat("ko-KR", {
     timeZone: TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
-  }).format(date);
+  })).format(date);
 }
+
+let runDateFormatter;
 
 function formatRunDate(value) {
   if (!value || !Number.isFinite(new Date(value).getTime())) return "—";
-  return new Intl.DateTimeFormat("ko-KR", {
+  return (runDateFormatter ??= new Intl.DateTimeFormat("ko-KR", {
     timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", hour12: false,
-  }).format(new Date(value));
+  })).format(new Date(value));
 }
 
 function computeDurationMs(startedAt, finishedAt) {
