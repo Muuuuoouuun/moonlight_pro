@@ -318,9 +318,9 @@ macOS(Apple Silicon)와 Windows는 별도 플랫폼 계약으로 취급한다(20
 
 **셸**
 - 메뉴 막대: 첫 메뉴 **Moonlight**(정보·설정…(허브 주소, ⌘,)·빠른 입력·위젯·서비스·숨기기·종료 ⌘Q) + **편집**(실행 취소·오려두기·복사·붙여넣기·모두 선택 역할 — 이 메뉴가 없으면 허브·펫 입력 칸에서 ⌘C/⌘V/⌘A가 동작하지 않는다) + **보기**(뒤로 ⌘[ · 앞으로 ⌘]) + **윈도우**. 메뉴 모양은 `menu-template.js`(순수 함수, `menu-template.test.js`)가 플랫폼별로 만든다.
-- 메뉴 막대 아이콘: 템플릿 이미지(`build/trayTemplate.png`·`@2x`, 빌드 때 `assets/`로 복사) — 누르면 메뉴만 연다. Dock 아이콘 오른쪽 클릭에 열기·빠른 입력·위젯.
+- 메뉴 막대 아이콘은 네이티브 펫의 **☾ 하나**다. Hub 셸은 별도 트레이를 만들지 않으며, 앱 메뉴와 Dock 오른쪽 클릭 메뉴는 그대로 제공한다. Dock 메뉴는 열기·빠른 입력·할 일 위젯 열기다.
 - 창을 닫아도 앱은 메뉴 막대·펫과 함께 남는다(`window-all-closed`에서 끝내지 않음). Dock 아이콘을 누르면 허브 창을 다시 띄운다(`activate`). 전체 화면 창은 전체 화면을 푼 뒤 숨겨 빈 Space를 남기지 않는다.
-- 빠른 입력 **⌘⇧Space**, 위젯 **⌘⇧M**. 위젯은 비활성 패널(`type:'panel'`)이라 `showInactive()` → `focus()`(150·300ms 에 다시)로 띄워 허브 창을 앞으로 끌어오지 않고, 모든 Space와 전체 화면 앱 위에 뜬다.
+- 빠른 입력 **⌘⇧Space**는 네이티브 펫의 **메모**, **⌘⇧M**은 같은 펫의 **할 일 위젯**을 연다. 앱·Dock 메뉴도 같은 경로다. 이미 고정 위젯이 열려 있으면 그 창의 내용만 전환한다. Mac 일반 실행에서는 Hub 빠른 입력 팝업이나 별도 `/widget` 창을 추가로 열지 않는다. 펫의 **⌃⌥M** 빠른 기능은 그대로다.
 - 앱 메뉴 **Moonlight**에 **로그인 시 자동 실행**(패키징한 앱만). 미디어 키·Now Playing 가로채기 끄기(`HardwareMediaKeyHandling`·`MediaSessionService`)는 맥에서만 건다.
 - 설정·세션 폴더: `~/Library/Application Support/Moonlight`(`settings.json`·`window-state.json`·`widget-state.json`·`pet-store.json`). `electron .` 개발 실행도 `--user-data-dir`를 주지 않으면 설치본과 같은 폴더를 쓴다.
 
@@ -337,16 +337,18 @@ npm run app:mac:build    # dist/Moonlight-<버전>-arm64.dmg · .zip · mac-arm6
 - 처음 실행할 때 키체인이 "Moonlight Safe Storage" 접근을 물으면 **항상 허용** — 로그인 쿠키 암호화 키다. 비밀번호를 넣을 필요는 없다.
 - 설치본 교체: 앱을 종료(⌘Q)한 뒤 `dist/mac-arm64/Moonlight.app`을 `/Applications`에 덮어쓴다.
 - `electronLanguages: ["ko","en"]`로 언어 리소스를 줄였다(약 48MB). x64·universal은 빌드하지 않는다.
-- 스모크: `--smoke-test`·`--smoke-widget`는 그대로 돈다. `--smoke-mac`은 실제 메뉴·메뉴 막대 아이콘·Dock 활성화·빠른 입력·위젯 경로를 확인하고 `smoke:mac ok`를 찍는다(잠시 포커스를 가져간다).
+- 스모크: `--smoke-test`·`--smoke-widget`는 비교 검사로 남는다. `--smoke-mac`은 앱·Dock 메뉴와 활성화, 셸 트레이가 없다는 것, 메모·할 일 호출이 네이티브 런처로 전달되고 Hub 창·Electron 위젯을 열지 않는 것을 격리 검사한다. 실제 펫은 실행하지 않는다.
 
 **펫 실행 통합 (2026-09-30)**
 - Mac의 일반 실행은 `pet-runtime.js`에서 SwiftUI 펫만 연다. `Moonlight.app` 안에 Electron 펫 창·조회 루프·펫 단축키를 추가로 만들지 않는다. Windows는 기존 `pet/main/pet-main.js`를 사용한다.
 - 기존 `~/Applications/MoonlightPetPreview.app` → `/Applications/MoonlightPetPreview.app` → 앱 번들에 포함된 펫 → 개발 빌드 순서로 찾는다. 별도 설치본이 있으면 그 업데이트·설정을 그대로 사용한다. `open -g`와 네이티브 앱의 번들 ID 중복 검사로 실행 중인 펫을 재사용한다. 앱을 못 찾거나 실행에 실패하면 오류를 기록하고 Electron 펫으로 바꾸지 않는다.
-- Hub 앱의 트레이 **펫 열기**는 같은 네이티브 앱을 연다. 세부 기능·캐릭터·모니터 이동은 네이티브 펫과 ☾ 메뉴에서 조작한다. Hub 앱을 종료해도 펫은 유지한다.
+- 세부 기능·캐릭터·모니터 이동은 네이티브 펫과 ☾ 메뉴에서 조작한다. Hub 앱을 종료해도 펫은 유지한다. Hub 설정·자동 실행 설정은 앱 메뉴 **Moonlight**에 남는다.
 - 네이티브 펫의 초안·위치·Hub 주소는 기존 `app.moonlight.pet-preview` UserDefaults를 그대로 사용한다. Hub 셸의 쿠키·허브 주소 설정과는 별개이며, 펫의 더보기 → **Hub 연결 설정**에서 관리한다. 로컬 기록을 자동 이관하거나 덮어쓰지 않는다.
 - 유리·시스템 글꼴·패널 조작·모니터 이동·단축키는 [Mac 원본 README](../../prototypes/moonlight-pet-macos/README.md)가 정본이다.
-- `--smoke-mac`은 운영 중인 네이티브 펫을 실행하지 않는다. `--smoke-pet`은 명시적으로 Electron 이식본을 비교 검증하는 경로로 남긴다.
+- 2026-10-01 입력 통합: 셸은 `open -g -a <펫 앱> moonlight-pet://memo|tasks`로 같은 네이티브 앱에 화면 선택만 전달한다. 실행 중/첫 실행 모두 지원하며 URL로 업무 저장·초안 교체는 하지 않는다. 별도 펫 설치본을 쓰는 Mac은 `prototypes/moonlight-pet-macos/script/build_and_run.sh --install`로 펫도 함께 갱신한다. `--smoke-pet`은 Electron 이식본 비교 검사로 남는다.
 - 2026-09-30 검증: 데스크톱 345개 테스트, Mac 패키징·설치본 deep/strict 서명 검사, 포함된 네이티브 펫 자체 점검 통과. 네이티브 먼저 → Hub 열기, Hub만 열어 자동 기동, 포함된 펫을 중복 실행하는 세 경우 모두 실제 창 목록에서 네이티브 펫/패널 1개·Electron 펫 창 0개를 확인했다.
+
+- 2026-10-01 검증: 데스크톱 346개 테스트, SwiftPM 빌드·네이티브 자체 점검, `--smoke-mac`의 트레이 없음·메모/할 일 위임·Hub 숨김 유지 검사 통과. Hub와 별도 네이티브 설치본을 교체하고 deep/strict 서명을 확인했다. 실제 앱 메뉴로 메모 → 할 일 위젯 → 메모를 열었을 때 같은 위젯이 전환되는 것을 확인했다.
 
 ### Electron Mac 이식본 비교 검사 (일반 실행과 별도)
 

@@ -59,9 +59,13 @@ const SMOKE_THEME = argValue('smoke-theme'); // light | dark — 찍기 전에 �
 // GPU 합성을 끄지 않는다 — Acrylic 블러는 실제 합성 경로에서만 보인다.
 const SMOKE_PET = argValue('smoke-pet') !== null;
 const SMOKE_PET_PAGE = argValue('smoke-pet-page'); // 펫 페이지 폴더(pet.html·panel.html…) 또는 파일 하나
-// --smoke-mac (macOS 전용): 트레이·앱 메뉴·Dock 활성화·앱 숨김 상태의 빠른 입력·위젯이 허브 창을 앞으로 내지 않는지 확인한다.
+// --smoke-mac: 앱·Dock 메뉴, 중복 트레이 없음, 네이티브 입력 위임을 격리 검사한다.
 // 실제 창을 띄우고 포커스를 옮기므로 운영자 화면에서는 짧게만 돌린다(전역 단축키는 등록하지 않는다).
 const SMOKE_MAC = IS_MAC && argValue('smoke-mac') !== null;
+// Native Mac pet owns the status item and every desktop capture surface.
+// Explicit Electron widget/pet comparison smokes retain their isolated paths.
+const USE_NATIVE_PET = IS_MAC && !SMOKE && !SMOKE_PET;
+const smokeNativeActions = [];
 const userDataDir = argValue('user-data-dir');
 if (userDataDir) {
   app.setPath('userData', path.resolve(userDataDir));
@@ -106,13 +110,6 @@ const currentHubUrl = () => hubUrlOverride || resolveHubUrl(readSettings().hubUr
 function iconPath() {
   const packaged = path.join(__dirname, 'assets', 'icon-192.png');
   return fs.existsSync(packaged) ? packaged : path.join(__dirname, '..', 'hub', 'public', 'icon-192.png');
-}
-
-// macOS 메뉴 막대(트레이) 아이콘: 검은 실루엣 템플릿 이미지 — 시스템이 메뉴 막대 색(라이트·다크)에 맞춰 칠한다.
-// 같은 폴더의 trayTemplate@2x.png는 Electron이 알아서 짝으로 읽는다.
-function trayTemplatePath() {
-  const packaged = path.join(__dirname, 'assets', 'trayTemplate.png');
-  return fs.existsSync(packaged) ? packaged : path.join(__dirname, 'build', 'trayTemplate.png');
 }
 
 // ── 창 ────────────────────────────────────────────────────────────────────
@@ -267,6 +264,7 @@ const OPEN_CAPTURE_SCRIPT = `new Promise((resolve) => {
 })`;
 
 async function quickCapture() {
+  if (USE_NATIVE_PET) return pet?.quickCapture();
   const hubUrl = currentHubUrl();
   if (!hubUrl) return showSettings();
   showWindow();
@@ -489,6 +487,7 @@ function showWidget() {
 }
 
 function toggleWidget() {
+  if (USE_NATIVE_PET) return pet?.showWidget();
   const action = widgetToggleAction({ hubUrl: currentHubUrl(), visible: widgetVisible() });
   if (action === 'settings') return showSettings();
   if (action === 'hide') return hideWidget();
@@ -504,7 +503,7 @@ function quit() {
 // 위젯 항목은 지금 상태(떠 있음/숨김)를 이름으로 보여 주므로 위젯이 뜨고 숨을 때마다 다시 만든다.
 function widgetMenuItem() {
   return {
-    label: widgetVisible() ? '위젯 숨기기' : '위젯 열기',
+    label: USE_NATIVE_PET ? '할 일 위젯 열기' : widgetVisible() ? '위젯 숨기기' : '위젯 열기',
     accelerator: WIDGET_ACCELERATOR,
     registerAccelerator: false,
     click: toggleWidget,
@@ -532,7 +531,6 @@ function setOpenAtLogin(on) {
 const loginMenuItem = () => (LOGIN_ITEM_SUPPORTED ? loginItemMenuItem({ checked: openAtLogin(), onToggle: setOpenAtLogin }) : null);
 
 function refreshMenus() {
-  if (!tray || tray.isDestroyed()) return;
   const loginItem = loginMenuItem();
   const actions = {
     quickCapture,
@@ -556,7 +554,7 @@ function refreshMenus() {
       actions,
     })));
   }
-  tray.setContextMenu(Menu.buildFromTemplate([
+  if (tray && !tray.isDestroyed()) tray.setContextMenu(Menu.buildFromTemplate([
     { label: '열기', click: showWindow },
     { label: '빠른 입력', accelerator: QUICK_CAPTURE_ACCELERATOR, registerAccelerator: false, click: quickCapture },
     widgetMenuItem(),
@@ -569,17 +567,13 @@ function refreshMenus() {
 }
 
 function buildMenus() {
-  if (IS_MAC) {
-    let image = nativeImage.createFromPath(trayTemplatePath());
-    if (image.isEmpty()) image = nativeImage.createFromPath(iconPath()).resize({ width: 16, height: 16, quality: 'best' });
-    else image.setTemplateImage(true);
-    tray = new Tray(image);
-  } else {
+  // macOS has one menu-bar icon, owned by the native companion. Application
+  // and Dock menus must still be built when the shell has no Tray instance.
+  if (!IS_MAC) {
     tray = new Tray(nativeImage.createFromPath(iconPath()).resize({ width: 16, height: 16, quality: 'best' }));
+    tray.setToolTip('Moonlight');
+    tray.on('click', showWindow);
   }
-  tray.setToolTip('Moonlight');
-  // macOS는 컨텍스트 메뉴가 있으면 클릭이 메뉴를 연다 — 창까지 같이 띄우지 않는다.
-  if (!IS_MAC) tray.on('click', showWindow);
   refreshMenus();
 }
 
@@ -905,7 +899,7 @@ async function runWidgetHubSmoke() {
   app.exit(0);
 }
 
-// ── macOS 스모크: 메뉴·트레이·Dock·앱 숨김 복귀·위젯 비활성 패널 ──────────────
+// ── macOS 스모크: 메뉴·Dock·네이티브 입력 경로 ─────────────────────────────
 async function runMacSmoke() {
   const giveUp = setTimeout(() => {
     console.log('smoke:fail timeout');
@@ -916,7 +910,7 @@ async function runMacSmoke() {
   };
   await waitFor(() => win && win.isVisible(), 'main visible', 30000);
 
-  // 1) 앱 메뉴: 첫 메뉴 = 앱 이름, 편집 role 전부, 트레이는 템플릿 이미지.
+  // 1) 앱·Dock 메뉴는 있고, 중복 상태 아이콘은 없다.
   const menu = Menu.getApplicationMenu();
   const top = menu.items.map((item) => item.label);
   const editRoles = menu.items.find((item) => item.label === '편집').submenu.items.map((item) => item.role);
@@ -925,10 +919,7 @@ async function runMacSmoke() {
   for (const role of ['undo', 'redo', 'cut', 'copy', 'paste', 'selectall']) check(editRoles.includes(role), `edit role ${role}`);
   const back = menu.items.find((item) => item.label === '보기').submenu.items.find((item) => item.label === '뒤로');
   check(back.accelerator === 'Command+[', 'back accelerator');
-  check(tray && !tray.isDestroyed(), 'tray');
-  const trayImage = nativeImage.createFromPath(trayTemplatePath());
-  console.log(`smoke:mac-tray template=${trayImage.isTemplateImage()} empty=${trayImage.isEmpty()} size=${JSON.stringify(trayImage.getSize())} scales=${JSON.stringify(trayImage.getScaleFactors())} file=${trayTemplatePath()}`);
-  check(!trayImage.isEmpty() && trayImage.getSize().width === 16, 'tray template image');
+  check(tray === null, 'native pet owns the only menu-bar icon');
   check(Boolean(app.dock && app.dock.getMenu()), 'dock menu');
 
   // 2) ⌘H로 앱이 숨겨진 뒤 Dock 클릭(activate) → 허브 창이 돌아온다.
@@ -940,48 +931,24 @@ async function runMacSmoke() {
   check(!app.isHidden() && win.isVisible(), 'activate shows main window');
   console.log('smoke:mac-activate ok');
 
-  // 3) 창을 닫아(=숨김) 트레이에만 남은 상태에서 빠른 입력이 창을 되살린다.
+  // 3) 메뉴·Dock·단축키가 쓰는 같은 콜백을 실행한다. 허브 창과 Electron
+  // 위젯을 띄우지 않고, 기존 네이티브 펫에 원하는 화면만 전달해야 한다.
+  await pet.ready;
+  smokeNativeActions.length = 0;
   win.close();
-  await sleep(500);
+  await sleep(300);
   check(!win.isVisible() && !win.isDestroyed(), 'close hides');
-  await quickCapture();
-  await sleep(500);
-  check(win.isVisible(), 'quick capture shows closed-to-tray window');
-  // 4) 앱이 숨겨진 상태에서도.
+  const appItems = menu.items[0].submenu.items;
+  await appItems.find((item) => item.label === '빠른 입력').click();
+  await app.dock.getMenu().items.find((item) => item.label === '할 일 위젯 열기').click();
   app.hide();
-  await sleep(500);
-  check(app.isHidden(), 'hidden again');
+  await waitFor(() => app.isHidden(), 'app hidden before native capture', 5000);
   await quickCapture();
-  await sleep(800);
-  check(!app.isHidden() && win.isVisible(), 'quick capture unhides app');
-  console.log('smoke:mac-quick-capture ok');
-
-  // 5) 위젯: 허브 창이 숨은 상태에서 열어도 허브 창이 앞으로 나오지 않는다(비활성 패널).
-  win.hide();
-  await sleep(500);
-  hubUrlOverride = 'https://example.com';
-  toggleWidget();
-  await waitFor(widgetVisible, 'widget visible', 30000);
-  await sleep(1200);
-  console.log(`smoke:mac-widget visible=${widgetVisible()} mainVisible=${win.isVisible()} onAllWorkspaces=${widget.isVisibleOnAllWorkspaces()} pinned=${widget.isAlwaysOnTop()} focused=${widget.isFocused()} docFocus=${await widget.webContents.executeJavaScript('document.hasFocus()')}`);
-  check(!win.isVisible(), 'widget did not bring the main window forward');
-  check(widget.isVisibleOnAllWorkspaces() && widget.isAlwaysOnTop(), 'widget floats on all workspaces');
-  widget.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
-  widget.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-  await waitFor(() => !widgetVisible(), 'esc hides', 5000);
-  check(!win.isVisible(), 'main still hidden after widget hide');
-  // 5b) 허브 창이 보이는 상태에서 열어도 허브 창이 키 창을 가져가지 않는다(앞으로 올라오는지까지는 잴 수 없어 포커스만 본다).
-  showWindow();
-  await sleep(600);
-  toggleWidget();
-  await waitFor(widgetVisible, 'widget visible over hub', 30000);
-  await sleep(800);
-  console.log(`smoke:mac-widget-over-hub widgetFocused=${widget.isFocused()} mainFocused=${win.isFocused()}`);
-  check(win.isFocused() === false, 'widget reveal does not focus the hub window');
-  widget.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
-  widget.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-  await waitFor(() => !widgetVisible(), 'esc hides (over hub)', 5000);
-  console.log('smoke:mac-widget ok');
+  await toggleWidget();
+  check(JSON.stringify(smokeNativeActions) === JSON.stringify(['memo', 'tasks', 'memo', 'tasks']), 'native action routing');
+  check(app.isHidden() && !win.isVisible(), 'capture does not reveal the hub');
+  check(!widgetAlive(), 'no duplicate Electron capture widget');
+  console.log('smoke:mac-native-capture ok (memo/tasks, hidden hub, no shell tray/widget)');
 
   clearTimeout(giveUp);
   console.log('smoke:mac ok');
@@ -1072,7 +1039,15 @@ if (!app.requestSingleInstanceLock()) {
           if (!globalShortcut.register(accelerator, action)) console.warn(`shortcut ${accelerator} is taken by another app`);
         }
       }
-      pet = installPetRuntime({ smoke: SMOKE_MAC, installElectron: installPet });
+      pet = installPetRuntime({
+        installElectron: installPet,
+        // Exercise the same shell routing without touching the user's pet.
+        ...(SMOKE_MAC ? { launchNative: async (action) => { smokeNativeActions.push(action); } } : {}),
+        onError: (message) => {
+          console.warn(message);
+          if (IS_MAC) dialog.showErrorBox('Moonlight 펫을 열 수 없습니다', message);
+        },
+      });
       refreshMenus();
       if (SMOKE_MAC) {
         runMacSmoke().catch((error) => {

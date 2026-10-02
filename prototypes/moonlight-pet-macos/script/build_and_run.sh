@@ -52,6 +52,10 @@ cat > "$APP_CONTENTS/Info.plist" <<PLIST
 <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
 <key>CFBundleName</key><string>$APP_NAME</string>
 <key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleURLTypes</key><array><dict>
+<key>CFBundleURLName</key><string>app.moonlight.pet-command</string>
+<key>CFBundleURLSchemes</key><array><string>moonlight-pet</string></array>
+</dict></array>
 <key>LSMinimumSystemVersion</key><string>$MIN_SYSTEM_VERSION</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>

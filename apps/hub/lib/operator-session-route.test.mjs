@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes, scryptSync } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
+import { NextRequest } from "next/server.js";
 
 import { POST } from "../app/api/operator/session/route.js";
 
@@ -14,6 +15,8 @@ const derived = scryptSync(password, Buffer.from(salt, "hex"), 64, {
 beforeEach(() => {
   process.env = {
     ...originalEnv,
+    NODE_ENV: "development",
+    VERCEL_ENV: "development",
     COM_MOON_OPERATOR_USERNAME: "moonlight",
     COM_MOON_OPERATOR_PASSWORD_HASH: `scrypt$131072$8$1$${salt}$${derived}`,
     COM_MOON_OPERATOR_SESSION_SECRET: "distinct-session-secret",
@@ -70,4 +73,89 @@ test("session changes reject cross-origin requests, while same-origin logout cle
   const loggedOut = await login({ action: "logout" });
   assert.equal(loggedOut.status, 200);
   assert.match(loggedOut.headers.get("set-cookie") || "", /Max-Age=0/);
+});
+
+function localSessionRequest(body, headers = { origin: "http://127.0.0.1:3000" }) {
+  return new NextRequest("http://127.0.0.1:3000/api/operator/session", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+test("development login accepts NextRequest's normalized loopback origin", async () => {
+  const request = localSessionRequest({ username: "moonlight", password });
+  assert.equal(new URL(request.url).origin, "http://localhost:3000");
+  const response = await POST(request);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).status, "authenticated");
+  assert.match(response.headers.get("set-cookie") || "", /com_moon_operator_session=.*HttpOnly/);
+});
+
+test("development logout accepts NextRequest's normalized loopback origin", async () => {
+  const response = await POST(localSessionRequest({ action: "logout" }));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).status, "logged_out");
+  assert.match(response.headers.get("set-cookie") || "", /Max-Age=0/);
+});
+
+test("development session changes accept an equivalent loopback Referer when Origin is absent", async () => {
+  const response = await POST(localSessionRequest({ action: "logout" }, {
+    referer: "http://127.0.0.1:3000/login",
+  }));
+  assert.equal(response.status, 200);
+});
+
+test("either production runtime setting rejects loopback aliases", async () => {
+  for (const productionVariable of ["NODE_ENV", "VERCEL_ENV"]) {
+    process.env.NODE_ENV = "development";
+    process.env.VERCEL_ENV = "development";
+    process.env[productionVariable] = "production";
+    for (const body of [{ username: "moonlight", password }, { action: "logout" }]) {
+      const response = await POST(localSessionRequest(body));
+      assert.equal(response.status, 403, productionVariable);
+      assert.equal((await response.json()).error, "same-origin-required");
+    }
+    const exactOrigin = await POST(localSessionRequest({ action: "logout" }, {
+      origin: "http://localhost:3000",
+    }));
+    assert.equal(exactOrigin.status, 200, productionVariable);
+  }
+});
+
+test("development loopback aliases still reject different ports, protocols and external origins", async () => {
+  for (const origin of [
+    "http://127.0.0.1:3001",
+    "https://127.0.0.1:3000",
+    "https://other.example.com",
+    "http://localhost.evil.example.com:3000",
+    "http://127.0.0.1.evil.example.com:3000",
+  ]) {
+    const response = await POST(localSessionRequest({ action: "logout" }, { origin }));
+    assert.equal(response.status, 403, origin);
+    assert.equal((await response.json()).error, "same-origin-required");
+  }
+});
+
+test("development loopback aliases require valid browser origin evidence", async () => {
+  for (const headers of [
+    {},
+    { origin: "null" },
+    { origin: "invalid", referer: "http://127.0.0.1:3000/login" },
+    { origin: "https://other.example.com", referer: "http://127.0.0.1:3000/login" },
+  ]) {
+    const response = await POST(localSessionRequest({ action: "logout" }, headers));
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).error, "same-origin-required");
+  }
+});
+
+test("development loopback aliases do not authorize a deployed request origin", async () => {
+  const response = await POST(new NextRequest("https://hub.example.com/api/operator/session", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "http://127.0.0.1:3000" },
+    body: JSON.stringify({ action: "logout" }),
+  }));
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error, "same-origin-required");
 });

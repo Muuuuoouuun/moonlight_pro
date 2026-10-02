@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card, CertaintyBadge, Drawer, EmptyState, Kbd, SegmentedControl, SelectField, Skeleton, TextAreaField, TextField, TruthBadge, useToast } from '../hub-primitives';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { createResearchRunWriter, researchContentHref, researchRunSummary } from './research-run-ui';
+import { useContentLedger } from '../use-content-ledger';
 import './research-inbox.css';
 
 const STATUS = [
@@ -29,10 +30,12 @@ const commandMessage = result => ({
   error: '저장 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.',
 })[result?.status] || '저장 결과를 확인하지 못했습니다.';
 
-async function readJson(url) {
-  const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+async function readJson(url, signal, collection = 'briefs') {
+  const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
   const data = await response.json();
-  if (!response.ok || !data || typeof data.status !== 'string') throw Error('read-failed');
+  if (!response.ok || !data || data.source === 'error' || !['live', 'partial', 'preview', 'error'].includes(data.status)
+    || (['live', 'partial'].includes(data.status) && (!Array.isArray(data[collection])
+      || data[collection].some(row => !row || typeof row.id !== 'string')))) throw Error('read-failed');
   return data;
 }
 
@@ -43,7 +46,7 @@ export function ResearchFacts({ brief }) {
 export function ResearchInbox() {
   const router = useRouter(), searchParams = useSearchParams(), toast = useToast();
   const [state, setState] = React.useState({ status: 'loading', briefs: [] });
-  const [catalog, setCatalog] = React.useState({ status: 'loading', brands: [] });
+  const catalog = useContentLedger({ catalogOnly: true });
   const [statusFilter, setStatusFilter] = React.useState(searchParams.get('brief') ? 'all' : 'new');
   const [brandFilter, setBrandFilter] = React.useState(searchParams.get('brief') ? 'all' : searchParams.get('brand') || 'all');
   const [selectedId, setSelectedId] = React.useState(searchParams.get('brief') || null);
@@ -63,30 +66,59 @@ export function ResearchInbox() {
   usePageCreateHotkey(openCreate);
   const pending = React.useRef(new Map());
   const brandPrefillApplied = React.useRef(false);
+  const lifecycle = React.useRef({ active: false, epoch: 0, controller: null, runsController: null }).current;
 
   const reload = React.useCallback(async () => {
+    if (!lifecycle.active) return;
+    lifecycle.controller?.abort();
+    const controller = new AbortController();
+    lifecycle.controller = controller;
+    const current = () => lifecycle.active && lifecycle.controller === controller;
     setState(current => ({ ...current, status: 'loading' }));
+    // Cleanup can cancel the first Strict Mode effect before transport starts.
+    await Promise.resolve();
+    if (!current()) return;
     try {
-      const data = await readJson('/api/hub/research/briefs');
-      setState(data.status === 'error' ? { status: 'error', briefs: [] } : data);
-    } catch { setState({ status: 'error', briefs: [] }); }
-  }, []);
+      const data = await readJson('/api/hub/research/briefs', controller.signal);
+      if (current()) setState({ ...data, briefs: ['live', 'partial'].includes(data.status) ? data.briefs : [] });
+    } catch { if (current()) setState({ status: 'error', briefs: [] }); }
+    finally { if (current()) lifecycle.controller = null; }
+  }, [lifecycle]);
   const reloadRuns = React.useCallback(async () => {
-    try { const data = await readJson('/api/hub/research/runs'); setRunsState(['live', 'partial'].includes(data.status) && Array.isArray(data.runs) ? data : { status: data.status === 'preview' ? 'preview' : 'error', runs: [], settings: null }); }
-    catch { setRunsState({ status: 'error', runs: [], settings: null }); }
-  }, []);
-  React.useEffect(() => { reload(); reloadRuns(); }, [reload, reloadRuns]);
+    if (!lifecycle.active) return;
+    lifecycle.runsController?.abort();
+    const controller = new AbortController();
+    lifecycle.runsController = controller;
+    const current = () => lifecycle.active && lifecycle.runsController === controller;
+    await Promise.resolve();
+    if (!current()) return;
+    try {
+      const data = await readJson('/api/hub/research/runs', controller.signal, 'runs');
+      if (current()) setRunsState(['live', 'partial'].includes(data.status) ? data
+        : { status: data.status === 'preview' ? 'preview' : 'error', runs: [], settings: null });
+    } catch { if (current()) setRunsState({ status: 'error', runs: [], settings: null }); }
+    finally { if (current()) lifecycle.runsController = null; }
+  }, [lifecycle]);
   React.useEffect(() => {
     const first = runsState.settings?.brands?.[0];
     if (first) setRunForm(current => current.brand ? current : { ...current, brand: first.slug, limit: first.maxPerRun || 1 });
   }, [runsState.settings]);
   React.useEffect(() => {
     if (!runDrawer || !runsState.runs.some(run => run.status === 'running')) return;
-    const interval = setInterval(reloadRuns, 10000); return () => clearInterval(interval);
-  }, [runDrawer, runsState.runs, reloadRuns]);
+    // A slow read may outlast the polling interval; let it finish before polling again.
+    const interval = setInterval(() => { if (!lifecycle.runsController) void reloadRuns(); }, 10000);
+    return () => clearInterval(interval);
+  }, [runDrawer, runsState.runs, reloadRuns, lifecycle]);
   React.useEffect(() => {
-    readJson('/api/hub/content/catalog').then(data => setCatalog(data)).catch(() => setCatalog({ status: 'error', brands: [] }));
-  }, []);
+    lifecycle.active = true;
+    void reload();
+    void reloadRuns();
+    return () => {
+      lifecycle.active = false; lifecycle.epoch++;
+      lifecycle.controller?.abort(); lifecycle.controller = null;
+      lifecycle.runsController?.abort(); lifecycle.runsController = null;
+    };
+  }, [reload, reloadRuns, lifecycle]);
   React.useEffect(() => {
     const brand = (catalog.brands || []).find(entry => entry.key === searchParams.get('brandKey'));
     if (brand && !brandPrefillApplied.current) {
@@ -119,15 +151,19 @@ export function ResearchInbox() {
       body: JSON.stringify({ ...command, requestId }), cache: 'no-store', signal: AbortSignal.timeout(20000),
     });
     const result = await response.json().catch(() => null);
+    if (!response.ok && ['saved', 'duplicate'].includes(result?.status)) return { status: 'error' };
     if (result?.status === 'saved' || result?.status === 'duplicate') pending.current.delete(key);
     return result || { status: 'error' };
   }
   async function decide(action) {
     if (!selected || busy) return;
+    const epoch = lifecycle.epoch;
+    const current = () => lifecycle.active && lifecycle.epoch === epoch;
     setBusy(true);
     try {
       const result = await post({ action, briefId: selected.id, expectedRevision: selected.revision,
         expectedStateVersion: selected.stateVersion });
+      if (!current()) return;
       if (['saved','duplicate'].includes(result.status)) {
         if (action.startsWith('promote-')) {
           setStatusFilter('promoted'); setSelectedId(selected.id);
@@ -136,12 +172,14 @@ export function ResearchInbox() {
         else toast.success(action === 'discard' ? '버렸습니다. 버림 필터에서 되돌릴 수 있습니다.' : '검토 상태를 저장했습니다.');
         await reload();
       } else { toast.error(commandMessage(result)); if (result.status === 'conflict') await reload(); }
-    } catch { toast.error('저장 확인에 실패했습니다. 같은 버튼으로 다시 시도해 주세요.'); }
-    finally { setBusy(false); }
+    } catch { if (current()) toast.error('저장 확인에 실패했습니다. 같은 버튼으로 다시 시도해 주세요.'); }
+    finally { if (current()) setBusy(false); }
   }
   async function create(event) {
     event.preventDefault();
     if (busy) return;
+    const epoch = lifecycle.epoch;
+    const current = () => lifecycle.active && lifecycle.epoch === epoch;
     setFormError('');
     const brief = { brandId: form.brandId, title: form.title, change: form.change, whyBrand: form.whyBrand,
       facts: form.facts.split('\n').map(line => line.trim()).filter(Boolean), interpretation: form.interpretation,
@@ -150,24 +188,30 @@ export function ResearchInbox() {
     setBusy(true);
     try {
       const result = await post({ action: 'create', brief });
+      if (!current()) return;
       if (['saved','duplicate'].includes(result.status)) {
         setDrawer(false); setForm(emptyForm()); setSelectedId(result.briefId); setStatusFilter('all'); setBrandFilter(brief.brandId);
-        await reload(); toast.success('검토용 리서치를 저장했습니다.');
+        await reload(); if (current()) toast.success('검토용 리서치를 저장했습니다.');
       } else setFormError(commandMessage(result));
-    } catch { setFormError('저장 응답을 받지 못했습니다. 입력을 유지했으니 다시 시도해 주세요.'); }
-    finally { setBusy(false); }
+    } catch { if (current()) setFormError('저장 응답을 받지 못했습니다. 입력을 유지했으니 다시 시도해 주세요.'); }
+    finally { if (current()) setBusy(false); }
   }
   async function prepare(event) {
-    event.preventDefault(); if (runBusy) return; setRunBusy(true); setRunError('');
+    event.preventDefault(); if (runBusy || !lifecycle.active) return;
+    const epoch = lifecycle.epoch;
+    const current = () => lifecycle.active && lifecycle.epoch === epoch;
+    setRunBusy(true); setRunError('');
     try { const result = await runWriter.current(runForm);
+      if (!current()) return;
       if (['ok', 'partial', 'running'].includes(result?.status) && result.run?.id) {
         await Promise.all([reloadRuns(), reload()]);
+        if (!current()) return;
         if (result.status === 'running') toast.info('같은 준비 요청이 처리 중입니다. 실행 기록에서 확인해 주세요.');
         else if (result.status === 'partial') toast.info('일부 자료를 준비했습니다. 실행 기록과 검토 대기 원고를 확인해 주세요.');
         else toast.success(`검토용 리서치 ${result.run.preparedCount ?? 0}개를 준비했습니다.`);
       } else { setRunError(researchRunSummary({ reason: result?.reason || result?.run?.reason }).reason || '준비 결과를 확인하지 못했습니다. 같은 입력으로 다시 시도해 주세요.'); await reloadRuns(); }
-    } catch { setRunError('준비 응답을 받지 못했습니다. 같은 입력으로 실행 상태를 다시 확인할 수 있습니다.'); await reloadRuns(); }
-    finally { setRunBusy(false); }
+    } catch { if (current()) { setRunError('준비 응답을 받지 못했습니다. 같은 입력으로 실행 상태를 다시 확인할 수 있습니다.'); await reloadRuns(); } }
+    finally { if (current()) setRunBusy(false); }
   }
   const latestRun = runsState.runs[0];
   const field = key => ({ value: form[key], onChange: event => setForm(current => ({ ...current, [key]: event.target.value })) });
@@ -232,7 +276,7 @@ export function ResearchInbox() {
     </Drawer>}
     {drawer && <Drawer title="리서치 추가" subtitle="확인한 원문과 검토용 원고를 저장합니다. 검색 발췌만으로는 등록하지 마세요." width="min(560px, 94vw)" onClose={() => { if (!busy) setDrawer(false); }}>
       <form className="research-form" onSubmit={create}>
-        {catalog.status !== 'live' && <p className="research-form-error" role="status">브랜드 목록을 확인하지 못했습니다. 연결 상태를 확인한 뒤 다시 열어 주세요.</p>}
+        {catalog.syncState !== 'live' && <p className="research-form-error" role="status">브랜드 목록을 확인하지 못했습니다. 연결 상태를 확인한 뒤 다시 열어 주세요.</p>}
         <SelectField label="브랜드" required value={form.brandId} options={[{ value: '', label: '브랜드 선택' }, ...brands.map(brand => ({ value: brand.id, label: brand.name }))]} onChange={field('brandId').onChange} />
         <TextField label="제목" required maxLength={180} {...field('title')} />
         <TextAreaField label="이번에 실제로 바뀐 점" required maxLength={1000} {...field('change')} />
@@ -247,7 +291,7 @@ export function ResearchInbox() {
         <SelectField label="확인 범위" value={form.accessLevel} options={ACCESS} onChange={field('accessLevel').onChange} />
         <TextField label="본문 위치·쪽수" maxLength={500} {...field('locator')} />
         {formError && <p className="research-form-error" role="alert">{formError}</p>}
-        <div className="research-form-actions"><Button variant="outline" disabled={busy} onClick={() => setDrawer(false)}>취소</Button><Button variant="primary" type="submit" disabled={busy || catalog.status !== 'live'}>{busy ? '저장 중…' : '리서치 저장'}</Button></div>
+        <div className="research-form-actions"><Button variant="outline" disabled={busy} onClick={() => setDrawer(false)}>취소</Button><Button variant="primary" type="submit" disabled={busy || catalog.syncState !== 'live'}>{busy ? '저장 중…' : '리서치 저장'}</Button></div>
       </form>
     </Drawer>}
   </div>;

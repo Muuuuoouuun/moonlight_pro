@@ -5,41 +5,84 @@
 import { productErrorText } from "../../../lib/product-catalog.js";
 
 const SAVED = new Set(["saved", "duplicate"]);
+const READ_STATES = new Set(["live", "partial", "preview", "error"]);
+const httpOk = (status) => status >= 200 && status < 300;
+const object = (value) => value && typeof value === "object" && !Array.isArray(value);
+
+// Fetch와 본문 읽기에 같은 마감 시간을 적용한다. 취소를 무시하는 transport도 대기를 끝낸다.
+// 호출자 취소는 AbortError로 전달하고, 자체 timeout은 화면의 오류 봉투로 바꾼다.
+async function requestJson(url, options = {}, timeoutMs = 15_000) {
+  const { signal, ...init } = options;
+  const cancelled = () => new DOMException("Request cancelled", "AbortError");
+  if (signal?.aborted) throw cancelled();
+  const controller = new AbortController();
+  let cancel;
+  let timer;
+  const stopped = new Promise((_, reject) => {
+    const stop = (error) => { reject(error); controller.abort(error); };
+    cancel = () => stop(cancelled());
+    signal?.addEventListener("abort", cancel, { once: true });
+    timer = setTimeout(() => stop(new DOMException("Request timed out", "TimeoutError")), timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await fetch(url, { ...init, cache: "no-store", signal: controller.signal });
+        const data = await response.json().catch(() => null);
+        return { response, data };
+      })(),
+      stopped,
+    ]);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", cancel);
+  }
+}
+
+function readEnvelope(response, data, empty) {
+  if (!response.ok || !object(data) || !READ_STATES.has(data.status)) {
+    return { ...empty, status: "error", error: `http-${response.status}` };
+  }
+  if (data.status === "error" || data.source === "error") {
+    return { ...data, ...empty, status: "error" };
+  }
+  if (data.status === "preview") return { ...data, ...empty };
+  if (!Array.isArray(data.products) || Object.keys(empty).some((key) => Array.isArray(empty[key]) && key in data && !Array.isArray(data[key]))) {
+    return { ...empty, status: "error", error: "invalid-response" };
+  }
+  return { ...empty, ...data };
+}
 
 export function readSaveOutcome(httpStatus, data) {
   const status = data?.status;
-  if (SAVED.has(status)) return { ok: true, status, entity: data.entity || null };
+  if (httpOk(httpStatus) && SAVED.has(status)) return { ok: true, status, entity: data.entity || null };
   if (status === "preview" || data?.error === "missing-config" || data?.error === "engine-not-configured") {
     return { ok: false, status: "error", message: "Engine·Supabase 연결이 없어 저장되지 않았어요." };
   }
   if (status === "conflict") return { ok: false, status: "conflict", message: productErrorText(data?.error), entity: data?.entity || null };
-  return { ok: false, status: "error", message: productErrorText(data?.error || (httpStatus ? `http-${httpStatus}` : null), data) };
+  return { ok: false, status: "error", unknownOutcome: httpStatus >= 500 || (httpOk(httpStatus) && status !== "invalid-input"), message: productErrorText(data?.error || (httpStatus ? `http-${httpStatus}` : null), data) };
 }
 
 async function send(url, method, body) {
   try {
-    const response = await fetch(url, {
+    const { response, data } = await requestJson(url, {
       method,
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-      cache: "no-store",
     });
-    const data = await response.json().catch(() => null);
     return readSaveOutcome(response.status, data);
   } catch {
-    return { ok: false, status: "error", message: "네트워크 오류로 저장하지 못했어요. 입력은 그대로예요." };
+    return { ok: false, status: "error", unknownOutcome: true, message: "저장 결과를 확인하지 못했어요. 입력은 그대로예요. 다시 시도해 주세요." };
   }
 }
 
 export async function readProducts(signal) {
   try {
-    const response = await fetch("/api/hub/products", { cache: "no-store", signal });
-    const data = await response.json().catch(() => null);
-    if (!data || typeof data !== "object") return { status: "error", error: `http-${response.status}`, products: [], candidates: [] };
-    return data;
+    const { response, data } = await requestJson("/api/hub/products", { signal });
+    return readEnvelope(response, data, { products: [], candidates: [], inquiries: [], inquiryCandidates: [], areas: [], missing: [] });
   } catch (error) {
     if (error?.name === "AbortError") throw error;
-    return { status: "error", error: "network", products: [], candidates: [] };
+    return { status: "error", error: error?.name === "TimeoutError" ? "timeout" : "network", products: [], candidates: [] };
   }
 }
 
@@ -47,9 +90,9 @@ export async function readProducts(signal) {
 // Engine이 없으면 Hub 프록시가 { status: "preview" } 문자열 상태를 돌려준다.
 export async function readGitHubStatus(signal) {
   try {
-    const response = await fetch("/api/integrations/github/sync", { cache: "no-store", signal });
-    const data = await response.json().catch(() => null);
-    if (data?.status && typeof data.status === "object") return { state: "live", ...data.status };
+    const { response, data } = await requestJson("/api/integrations/github/sync", { signal });
+    if (!response.ok || data?.source === "error") return { state: "error" };
+    if (object(data?.status) && typeof data.status.configured === "boolean") return { ...data.status, state: "live" };
     return { state: data?.status === "preview" ? "preview" : "error" };
   } catch (error) {
     if (error?.name === "AbortError") throw error;
@@ -59,23 +102,21 @@ export async function readGitHubStatus(signal) {
 
 export async function runGitHubSync() {
   try {
-    const response = await fetch("/api/integrations/github/sync", {
+    const { response, data } = await requestJson("/api/integrations/github/sync", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "{}",
-      cache: "no-store",
-    });
-    const data = await response.json().catch(() => null);
+    }, 60_000);
     return summarizeSyncResult(response.status, data);
   } catch {
-    return { ok: false, tone: "danger", message: "Engine에 연결하지 못했어요." };
+    return { ok: false, tone: "danger", message: "동기화 결과를 확인하지 못했어요. 잠시 뒤 상태를 확인해 주세요." };
   }
 }
 
 export function summarizeSyncResult(httpStatus, data) {
   const status = data?.status;
-  if (status === "synced") return { ok: true, tone: "neutral", message: `저장소 ${data.repositories?.length || 0}개를 동기화했어요.` };
-  if (status === "partial") return { ok: true, tone: "danger", message: `일부 저장소만 동기화했어요 (실패 ${data.failures?.length || 0}개).` };
+  if (httpOk(httpStatus) && status === "synced") return { ok: true, tone: "neutral", message: `저장소 ${data.repositories?.length || 0}개를 동기화했어요.` };
+  if (httpOk(httpStatus) && status === "partial") return { ok: true, tone: "danger", message: `일부 저장소만 동기화했어요 (실패 ${data.failures?.length || 0}개).` };
   if (status === "preview") {
     return { ok: false, tone: "neutral", message: data?.configured === false ? "제품에 연결된 저장소가 없어요." : "Engine 연결이 없어 동기화하지 못했어요." };
   }
@@ -104,9 +145,8 @@ export const updateWork = (body) => send("/api/hub/projects", "PATCH", body);
 
 export async function readInquiryProduct(inquiryId, signal) {
   try {
-    const response = await fetch(`/api/hub/products/inquiries?inquiry=${encodeURIComponent(inquiryId)}`, { cache: "no-store", signal });
-    const data = await response.json().catch(() => null);
-    return data && typeof data === "object" ? data : { status: "error", products: [], productId: null };
+    const { response, data } = await requestJson(`/api/hub/products/inquiries?inquiry=${encodeURIComponent(inquiryId)}`, { signal });
+    return readEnvelope(response, data, { products: [], productId: null });
   } catch (error) {
     if (error?.name === "AbortError") throw error;
     return { status: "error", products: [], productId: null };

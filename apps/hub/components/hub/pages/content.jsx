@@ -12,6 +12,7 @@ import { ContentStudio } from "./content-studio";
 import { businessTruthCompleteness, buildWeeklyScorecard, normalizeCampaignBusinessTruth } from "@/lib/campaign-business-truth";
 import { ContentIdeaCapture } from "./content-idea-capture";
 import { contentQueueScope, contentQueueTabs } from "@/lib/content-workflow";
+import { useContentLedger } from "../use-content-ledger";
 import "./content-workflow.css";
 
 function statusKeyOf(item) {
@@ -30,99 +31,7 @@ function contentQueuePageWindow(current, total) {
   return keep.flatMap((n, i) => (i > 0 && n - keep[i - 1] > 1 ? ['…', n] : [n]));
 }
 
-const EMPTY_CONTENT_LEDGER = {
-  source: "preview",
-  syncState: "preview",
-  brands: [],
-  items: [],
-  variants: [],
-  assets: [],
-  publishLogs: [],
-  campaigns: [],
-  queue: [],
-  pipeline: [],
-  attention: [],
-  summary: null,
-  ideaQueue: [],
-  cadence: null,
-  tagTrends: [],
-};
-
-// 모듈 스코프 stale-while-revalidate — Studio↔Queue↔Campaigns 탭 전환마다 기록을 다시
-// 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
-const CONTENT_CACHE_SERVABLE_MS = 5 * 60 * 1000;
-let catalogCache = null;
-let contentLedgerCache = null; // { at, state }
-
-export function useContentLedger({ catalogOnly = false } = {}) {
-  const cache = catalogOnly ? catalogCache : contentLedgerCache;
-  const servable = cache && Date.now() - cache.at < CONTENT_CACHE_SERVABLE_MS;
-  const [state, setState] = React.useState(servable ? cache.state : EMPTY_CONTENT_LEDGER);
-
-  React.useEffect(() => {
-    let active = true, sequence = 0, controller;
-    const existing = catalogOnly ? catalogCache : contentLedgerCache;
-    const hasServableCache = Boolean(
-      existing && Date.now() - existing.at < CONTENT_CACHE_SERVABLE_MS
-    );
-
-    async function loadLedger() {
-      const request = ++sequence;
-      controller?.abort();
-      controller = new AbortController();
-      if (!hasServableCache) setState((s) => ({ ...s, syncState: "loading" })); // 캐시 서빙 중엔 조용히 재검증
-      try {
-        const response = await fetch(catalogOnly ? "/api/hub/content/catalog" : "/api/hub/content", { cache: "no-store", signal: controller.signal });
-        const data = await response.json().catch(() => null);
-
-        if (!active || request !== sequence) return;
-        if (!response.ok || !data || data.status === "error") {
-          // 라이브 read 실패는 error — preview("미구성")로 뭉개면 큐가 0건이 사실처럼 보인다.
-          if (active) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
-          return;
-        }
-
-        if (data.source === "supabase") {
-          const nextState = {
-            source: data.source,
-            syncState: data.status === "partial" ? "partial" : "live",
-            brands: Array.isArray(data.brands) ? data.brands : [],
-            items: Array.isArray(data.items) ? data.items : [],
-            variants: Array.isArray(data.variants) ? data.variants : [],
-            assets: Array.isArray(data.assets) ? data.assets : [],
-            publishLogs: Array.isArray(data.publishLogs) ? data.publishLogs : [],
-            campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
-            queue: Array.isArray(data.queue) ? data.queue : [],
-            pipeline: Array.isArray(data.pipeline) ? data.pipeline : [],
-            attention: Array.isArray(data.attention) ? data.attention : [],
-            summary: data.summary || null,
-            ideaQueue: Array.isArray(data.ideaQueue) ? data.ideaQueue : [],
-            cadence: data.cadence || null,
-            tagTrends: Array.isArray(data.tagTrends) ? data.tagTrends : [],
-          };
-          if (catalogOnly) catalogCache = { at: Date.now(), state: nextState };
-          else contentLedgerCache = { at: Date.now(), state: nextState };
-          setState(nextState);
-        } else {
-          setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
-        }
-      } catch {
-        if (active && request === sequence) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
-      }
-    }
-
-    loadLedger();
-    const invalidate = () => { contentLedgerCache = null; if (!catalogOnly) loadLedger(); };
-    const events = ["moonlight:content-saved", "moonlight:content-ledger-changed", "hub:brand-updated"];
-    events.forEach(name => window.addEventListener(name, invalidate));
-    return () => {
-      active = false; controller?.abort();
-      events.forEach(name => window.removeEventListener(name, invalidate));
-    };
-  }, [catalogOnly]);
-
-  return state;
-}
+export { useContentLedger };
 
 export function Studio({ workspace }) {
   const ledger = useContentLedger({ catalogOnly: true });

@@ -14,7 +14,7 @@ const ENTITY_TABLES = new Set(['tasks', 'projects', 'brands', 'content_items', '
 // Column names must exist in supabase/schema.sql or a migration; the test file checks this.
 // (content_variants links to its item through content_id — never content_item_id.)
 export const METRIC_SOURCE_SELECTS = {
-  tasks: 'id,workspace_id,title,status,completed_at,project_id,meta',
+  tasks: 'id,workspace_id,title,status,completed_at,due_at,project_id,meta',
   projects: 'id,workspace_id,name,brand_id,meta', brands: 'id,workspace_id,slug,meta',
   content_items: 'id,workspace_id,title,brand_id,meta', content_variants: 'id,workspace_id,content_id,meta',
   publish_logs: 'id,workspace_id,variant_id,channel,status,published_at,external_id,target_url',

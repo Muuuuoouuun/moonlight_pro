@@ -225,7 +225,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, search 
       .find(c => pathnameOf(c.path) === currentPathname && (owner !== 'overview' || (new URLSearchParams(c.path.split('?')[1] || '').get('view') === 'goals') === (view === 'goals')))
       || tabForRouteRole(owner, active, value);
     const target = owner === 'overview' && view === 'goals'
-      ? goalHref(null, value, { check: goalView(new URLSearchParams(search)) === 'check', weekly: goalView(new URLSearchParams(search)) === 'weekly' }).slice(1)
+      ? goalHref(null, value, { check: goalView(new URLSearchParams(search)) === 'check', weekly: goalView(new URLSearchParams(search)) === 'weekly', kpi: goalView(new URLSearchParams(search)) === 'kpi' }).slice(1)
       : sibling ? sibling.path : resolveSidebarPath(owner, value);
     if (target) onNavigate(target);
   }, [active, view, search, onNavigate, setScope]);

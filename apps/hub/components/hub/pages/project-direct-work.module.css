@@ -27,7 +27,7 @@
 .listHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); }
 .listHeader h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--fg); font-size: 13px; font-weight: 600; }
 .listHeader h2 span, .listHeader > span { color: var(--fg-muted); font-size: 12px; font-weight: 400; }
-.task { min-width: 0; }
+.task { min-width: 0; position: relative; }
 .task + .task { border-top: 1px solid var(--line-soft); }
 .row { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 3px 8px; min-width: 0; }
 .checkTarget { display: inline-flex; width: 32px; min-width: 32px; min-height: 34px; align-items: center; justify-content: center; }
@@ -42,7 +42,7 @@
 .details { margin: 0 14px 8px 48px; padding: 4px 0 0; border-top: 1px solid var(--line-soft); }
 .details[hidden] { display: none; }
 .description { margin: 8px 0; font-size: 12px; line-height: 1.6; color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
-.checkRow { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 12px; }
+.checkRow { position: relative; display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 12px; }
 .checkRow > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .checkRow strong { font-weight: 400; color: var(--fg); }
 .checkRow p { margin: 3px 0; color: var(--fg-muted); font-size: 11px; line-height: 1.5; white-space: pre-wrap; }
@@ -66,6 +66,15 @@
 .addOptions > div { left: 0; right: auto; }
 .support { border-top: 1px solid var(--line-soft); }
 .support:empty { display: none; }
+.orderHandle { touch-action: none; cursor: grab; flex-shrink: 0; }
+.orderHandle:active { cursor: grabbing; }
+.task[data-dragging="true"] > .row, .checkRow[data-dragging="true"] { background: var(--surface-3); }
+.task[data-drop]::before, .checkRow[data-drop]::before { content: ''; position: absolute; z-index: 2; inset-inline: 8px; height: 1px; background: var(--moon-300); pointer-events: none; }
+.task[data-drop="before"]::before, .checkRow[data-drop="before"]::before { top: 0; }
+.task[data-drop="after"]::before, .checkRow[data-drop="after"]::before { bottom: 0; }
+.orderMenu { position: fixed; z-index: var(--z-navigation-overlay); display: grid; min-width: 180px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow-pop); }
+.orderMenu > :global(.hub-btn) { justify-content: flex-start; }
+.orderMenu p { margin: 6px 10px; font-size: 10.5px; color: var(--fg-muted); }
 
 @media (max-width: 900px) {
   .mobileOnly { display: inline-flex; }
@@ -80,7 +89,7 @@
   .checkbox::after { inset: -13px; }
   .taskTitle { min-height: 44px; flex-wrap: wrap; column-gap: 5px; }
   .itemType { font-size: 10.5px; }
-  .editButton { min-width: 44px; min-height: 44px; }
+  .orderHandle { min-width: 44px; min-height: 44px; }
   .details { margin-left: 44px; margin-right: 10px; }
   .checkRow { gap: 4px; min-height: 44px; }
   .checkRow .checkTarget { min-width: 32px; width: 32px; }
@@ -106,6 +115,5 @@
   .composer { border-top: 1px solid var(--line-soft); padding-block: 10px; }
   .details .composer { border-top: 0; }
   .task:focus-within { background: var(--surface-2); }
-  .editButton { opacity: 0; }
-  .task:hover .editButton, .task:focus-within .editButton { opacity: 1; }
+  .orderHandle { color: var(--fg-dim); }
 }

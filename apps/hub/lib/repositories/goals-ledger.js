@@ -113,6 +113,8 @@ export async function getGoalsLedger(options = {}, context = {}, dependencies = 
       const linkStatus=!currentScope?'unavailable':currentScope!==objectiveMap.get(link.objectiveId).scope?'scope-mismatch':'current';
       const resolved={...link,linkStatus,stale:linkStatus!=='current',entityScope:currentScope,staleReason:linkStatus==='unavailable'?'entity-source-unavailable':linkStatus==='scope-mismatch'?'entity-scope-mismatch':null};
       if(resolved.stale)return {...resolved,entityHref:null};
+      // 목표 카드의 마일스톤 줄이 기한이 가장 가까운 연결 할 일을 고른다(OKR·KPI 2단계 §2.2).
+      if(table==='tasks')return {...resolved,entityTitle:typeof entity.title==='string'?entity.title:null,dueAt:entity.due_at||null,taskStatus:entity.status||null,itemType:entity.meta?.item_type||null};
       if(table!=='journal_entries')return resolved;
       return {...resolved,entryKind:entity.entry_kind,reviewDate:entity.review_date||null,entityTitle:entity.title||null,
         entityHref:entity.entry_kind==='daily_review'&&/^\d{4}-\d{2}-\d{2}$/.test(entity.review_date)?`/dashboard/work/daily-review?date=${entity.review_date}`:`/dashboard/work/memos?note=${link.entityId}`};

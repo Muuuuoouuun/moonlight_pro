@@ -138,15 +138,17 @@ function normalizeProjectStatus(status) {
   return "In progress";
 }
 
+let kstDayFormatter;
+
 function kstDayKey(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en-CA", {
+  return (kstDayFormatter ??= new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(date);
+  })).format(date);
 }
 
 function resolveDueBucket(value) {

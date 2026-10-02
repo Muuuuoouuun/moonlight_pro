@@ -27,7 +27,7 @@ function isLoopbackOrigin(value) {
   }
 }
 
-function areEquivalentLoopbackOrigins(left, right) {
+export function areEquivalentLoopbackOrigins(left, right) {
   try {
     const leftUrl = new URL(left);
     const rightUrl = new URL(right);
