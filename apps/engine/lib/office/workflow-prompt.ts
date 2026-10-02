@@ -1,12 +1,19 @@
 import { OFFICE_ROSTER } from '@com-moon/agent-contracts/office';
-import type { OfficeWorkflowRequest, OfficeWorkflowContext, OfficeWorkflowAnswer } from '@com-moon/agent-contracts/office-workflow';
+import { OFFICE_CUSTOMER_PREPARATION_VERSION, type OfficeWorkflowRequest, type OfficeWorkflowContext, type OfficeWorkflowAnswer } from '@com-moon/agent-contracts/office-workflow';
 import { OFFICE_PERSONAS, OFFICE_PERSONA_VERSION } from './personas.ts';
 import { OFFICE_PLAYBOOKS, OFFICE_QUALITY_STANDARD, OFFICE_MODE_GUIDANCE } from './playbooks.ts';
 import { buildOfficeOperatingPolicy } from './operating-policy.ts';
 import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS } from './source-review.ts';
+import { renderOfficeRoleBehaviorGuidance } from './role-depth-prompt.ts';
 import { WEEKLY_REPORT_WRITING_POLICY, WEEKLY_REPORT_REVIEW_POLICY } from './weekly-report-policy.ts';
 
-export const OFFICE_WORKFLOW_POLICY_VERSION = `2026-10-01.workflow-v5/${OFFICE_PERSONA_VERSION}`;
+export const OFFICE_WORKFLOW_POLICY_VERSION = `2026-10-02.workflow-v8/${OFFICE_PERSONA_VERSION}`;
+
+const CUSTOMER_PREPARATION_POLICY = `
+고객 한 건의 대응 준비다. 주관 한 명이 답장·자료 후보·다음 행동을 한 묶음으로 작성하고 같은 모델이 원문 대조를 한 번 수행한다. 다른 담당 호출이나 자동 위임은 없다.
+customerPreparation:{purpose,materials:[{title,reason}],questions:[string]}을 추가한다. artifact.body는 보낼 수 있는 추천 답장 한 개다. 중요한 정보가 없으면 확답을 만들지 말고 확인 질문을 담은 답장으로 남긴다. 내부 확인 질문은 questions에 따로 적는다. 자료 조회 경로가 없으므로 materials는 제작·조회할 후보만 추천한다. 존재·첨부·가격·할인·지원·발송 완료를 단정하지 않는다. 후보가 필요 없으면 빈 배열이다.
+evidence는 전달된 sourceRefs만 참조한다. AI의 원문 대조, 사람의 초안 승인, 할 일 등록, 실제 고객 연락은 서로 다른 상태다. 모델은 승인·검수 통과·실행 완료를 작성하거나 추론하지 않는다. 다음 행동은 필요한 것 하나만 create_task로 제안한다.
+`;
 
 const CONTRACT = `
 JSON 객체만 반환한다. 모델 작성 필드는 summary, artifact:{kind,body}, evidence:[{sourceRefId,explanation}], uncertainties, dissent, nextStep이고 council 모드만 council을 추가한다.
@@ -36,7 +43,9 @@ function policy(request: OfficeWorkflowRequest) {
     OFFICE_MODE_GUIDANCE[request.mode],
     INTENT_GUIDANCE[request.intent],
     CONTRACT,
+    ...(request.customerPreparationVersion === OFFICE_CUSTOMER_PREPARATION_VERSION ? [CUSTOMER_PREPARATION_POLICY] : []),
     ...(request.intent === 'weekly_report' ? [WEEKLY_REPORT_WRITING_POLICY] : []),
+    renderOfficeRoleBehaviorGuidance(request.ownerId),
   ].join('\n\n');
 }
 

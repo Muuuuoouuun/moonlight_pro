@@ -13,6 +13,8 @@ import { OfficeSkillRequestDrawer } from '../office-skill-request-drawer';
 import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-drawer';
 import { ReviewWaitingList } from '../review-waiting';
 import { OfficeAvatar } from '../office-avatar';
+import { OfficeCommander } from '../office-commander';
+import { OfficeConnectionBrandPicker, OfficeConnectionSourceAction } from '../office-connection-source';
 import { officeMentorSessions } from '../office-mentor-session';
 import { requestOfficeMentor } from '../office-mentor-client';
 import { GuruRecommendation, guruRecommendationCard } from '../guru-recommendation';
@@ -138,9 +140,10 @@ function ResultTurn({ turn, index, onRevise, onCopy, onSkill, onOpenMentor, onGu
         {result.context?.source && result.context.source !== 'provided' ? <div className={styles.contextState}><TruthBadge state={result.context.source} /></div> : null}
         <p className={styles.note}>{result.context?.note}</p>
         {result.context?.projects?.length ? <details className={styles.request}><summary>참고한 프로젝트 ({result.context.projects.length})</summary><ul className={styles.note}>{result.context.projects.map(project => <li key={project.id}>{project.name} · {project.status}</li>)}</ul></details> : null}
-        {skillAvailable ? <details className={styles.request}><summary>더보기</summary><div className={styles.answerActions}>
-          <Button variant="outline" size="sm" onClick={() => onSkill(turn)}>로컬 스킬 요청서</Button>
-        </div></details> : null}
+        <details className={styles.request}><summary>더보기</summary><div className={styles.answerActions}>
+          {skillAvailable ? <Button variant="outline" size="sm" onClick={() => onSkill(turn)}>로컬 스킬 요청서</Button> : null}
+          <OfficeConnectionSourceAction turn={turn} />
+        </div></details>
       </div>
     </div>
     <ThreadDiscussion result={result} request={turn.request} />
@@ -178,6 +181,11 @@ function OfficeUsageLine({ refreshKey }) {
 }
 
 export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
+  const [surface,setSurface]=React.useState('commander');
+  const [discussionVisited,setDiscussionVisited]=React.useState(false);
+  return <section><div style={{marginBottom:'var(--gap)'}}><SegmentedControl label="Office 업무 화면" options={[{key:'commander',label:'이브이 업무 분담'},{key:'discussion',label:'관점 대화·회의'}]} value={surface} onChange={next=>{setSurface(next);if(next==='discussion')setDiscussionVisited(true);}}/></div><div hidden={surface!=='commander'}><OfficeCommander scope={scope}/></div>{discussionVisited?<div hidden={surface!=='discussion'}><OfficeCouncilDiscussion scope={scope} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></div>:null}</section>;
+}
+function OfficeCouncilDiscussion({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const { session, store, update } = useOfficeSession(scope);
   const { ownerId, mode, reviewers, includeProjects, minimumOnly } = session;
   const [rosterOpen, setRosterOpen] = React.useState(false);
@@ -481,6 +489,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
         {mode === 'council' ? <OfficeDeliberationControls value={session.deliberation} participants={participants} disabled={busy} onChange={deliberation => update({ deliberation })} /> : null}
         <CheckboxRow text="현재 범위의 최근 프로젝트 참고" checked={includeProjects} disabled={busy} onChange={() => update({ includeProjects: !includeProjects })} />
         <CheckboxRow text="오늘은 최소한만" checked={minimumOnly} disabled={busy} onChange={() => update({ minimumOnly: !minimumOnly })} />
+        <OfficeConnectionBrandPicker scope={scope} value={session.brandId} disabled={busy} onChange={update} />
         {includeProjects ? <p className={styles.note}>현재 범위의 최근 프로젝트 최대 8개를 참고합니다. 고객·일정 기록은 이 자유 요청에 자동 연결되지 않습니다.</p> : null}
         {minimumOnly ? <p className={styles.note}>이미 정한 약속을 지키는 데 필요한 내용만 요청합니다. 추가 행동이 필요 없으면 남기지 않습니다.</p> : null}
       </div></Drawer> : null}

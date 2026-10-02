@@ -18,6 +18,14 @@
       "types": "./office-routing.d.ts",
       "default": "./office-routing.js"
     },
+    "./office-commander": {
+      "types": "./office-commander.d.ts",
+      "default": "./office-commander.js"
+    },
+    "./office-role-depth": {
+      "types": "./office-role-depth.d.ts",
+      "default": "./office-role-depth.js"
+    },
     "./office-workflow": {
       "types": "./office-workflow.d.ts",
       "default": "./office-workflow.js"
@@ -25,6 +33,10 @@
     "./office-studio": {
       "types": "./office-studio.d.ts",
       "default": "./office-studio.js"
+    },
+    "./office-connection": {
+      "types": "./office-connection.d.ts",
+      "default": "./office-connection.js"
     }
   }
 }
