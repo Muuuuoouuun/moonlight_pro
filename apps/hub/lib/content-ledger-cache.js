@@ -6,6 +6,16 @@ export const EMPTY_CONTENT_LEDGER = Object.freeze({
   summary: null, ideaQueue: [], cadence: null,
 });
 
+const READ_TIMEOUT_MS = 15_000;
+const SERVABLE_MS = 5 * 60 * 1000;
+
+function readableEnvelope(data) {
+  if (data?.source === "preview" && data.status === "preview") return true;
+  return data?.source === "supabase"
+    && ["live", "partial"].includes(data.status)
+    && ["brands", "items", "variants"].every((key) => Array.isArray(data[key]));
+}
+
 // Shared by the editor, queue and brand log. An invalidated read cannot overwrite a
 // newer post-save read, and simultaneous consumers share one request.
 export function createContentLedgerCache(fetcher = (...args) => fetch(...args)) {
@@ -15,16 +25,24 @@ export function createContentLedgerCache(fetcher = (...args) => fetch(...args)) 
   let refreshedAt = 0;
   const listeners = new Set();
   const publish = (next) => { snapshot = next; listeners.forEach((fn) => fn()); };
+  const hasRecentLive = () => snapshot.source === "supabase" && Date.now() - refreshedAt < SERVABLE_MS;
   const refresh = () => {
-    if (pending) return pending;
+    if (pending) return pending.promise;
     const current = generation;
-    const hadLive = snapshot.source === "supabase" && Date.now() - refreshedAt < 5 * 60 * 1000;
-    if (!hadLive) publish({ ...EMPTY_CONTENT_LEDGER, syncState: "loading" });
-    pending = (async () => {
+    const controller = new AbortController();
+    const request = { controller, promise: null };
+    // Register before notifying subscribers or calling transport. Either can
+    // re-enter refresh, and a synchronous transport failure must release pending.
+    request.promise = Promise.resolve().then(async () => {
+      let deadline;
       try {
-        const response = await fetcher("/api/hub/content", { cache: "no-store" });
+        if (current !== generation) return snapshot;
+        if (!hasRecentLive()) publish({ ...EMPTY_CONTENT_LEDGER, syncState: "loading" });
+        if (current !== generation) return snapshot;
+        deadline = setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+        const response = await fetcher("/api/hub/content", { cache: "no-store", signal: controller.signal });
         const data = await response.json();
-        if (!response.ok || !data || data.status === "error") throw new Error("Content read failed");
+        if (controller.signal.aborted || !response.ok || !readableEnvelope(data)) throw new Error("Content read failed");
         if (current !== generation) return snapshot;
         if (data.source !== "supabase") {
           publish(EMPTY_CONTENT_LEDGER);
@@ -39,19 +57,28 @@ export function createContentLedgerCache(fetcher = (...args) => fetch(...args)) 
           publish(next);
         }
       } catch {
-        if (current === generation) publish({ ...snapshot, syncState: hadLive ? "partial" : "error" });
+        if (current === generation) publish(hasRecentLive()
+          ? { ...snapshot, syncState: "partial" }
+          : { ...EMPTY_CONTENT_LEDGER, syncState: "error" });
       } finally {
-        if (current === generation) pending = null;
+        clearTimeout(deadline);
+        if (pending === request) pending = null;
       }
       return snapshot;
-    })();
-    return pending;
+    });
+    pending = request;
+    return request.promise;
   };
   return {
     getSnapshot: () => snapshot,
     subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
     refresh,
-    invalidate: () => { generation += 1; pending = null; return refresh(); },
+    invalidate: () => {
+      generation += 1;
+      pending?.controller.abort();
+      pending = null;
+      return refresh();
+    },
   };
 }
 
