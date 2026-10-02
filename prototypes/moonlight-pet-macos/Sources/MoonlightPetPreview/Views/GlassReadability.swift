@@ -60,7 +60,7 @@ private struct ReadingBackground: View {
         ReadingMaterial(radius: radius, feather: feather, withinWindow: withinWindow)
             .overlay {
                 ZStack {
-                    Color(nsColor: PetGlassTheme.color(for: state.character))
+                    Color(nsColor: PetGlassTheme.color(for: state.character, accessibility: state.solidForAccessibility))
                         .opacity(state.solidForAccessibility ? 1 : PetGlassTheme.opacity(for: state.character))
                         .opacity(state.opacity)
                         .animation(PetMotion.hover, value: state.opacity)

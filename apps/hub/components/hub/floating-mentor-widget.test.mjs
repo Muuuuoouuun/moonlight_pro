@@ -31,7 +31,8 @@ function mountWidget({
     if (!(index in refs)) refs[index] = { current: initial };
     return refs[index];
   };
-  const lensMap = Object.fromEntries(['jobs', 'bezos', 'chouinard', 'voss', 'ogilvy', 'carnegie', 'hill']
+  // 대화 렌즈는 Guru 방법론만 둔다(agent-layer-direction §2.1 ⑧).
+  const lensMap = Object.fromEntries(['voss', 'ogilvy', 'godin', 'rackham', 'goldratt']
     .map(key => [key, { label: key, name: key }]));
   const dependencies = {
     React, useState, useRef, useEffect: () => {},
@@ -39,9 +40,9 @@ function mountWidget({
     requestGuruCoaching: async input => { requests.push(input); return guruResponses[requests.length - 1] || { state: 'done', text: '코칭' }; },
     requestCouncilAdvice: async input => { councilRequests.push(input); return { state: 'done', text: '자문' }; },
     requestPersonaChat: async input => { personaRequests.push(input); return { state: 'done', text: '답변' }; },
-    LEGEND_LENS_MAP: lensMap, renderAdviceWithCallouts: text => text,
+    GURU_LENS_MAP: lensMap, GURU_LENS_CHIPS: ['voss', 'ogilvy'], renderAdviceWithCallouts: text => text,
     collectGuruConversationHistory,
-    Badge: 'Badge', Button: 'Button', IconButton: 'IconButton', Dot: 'Dot', Iconed: 'Iconed',
+    Badge: 'Badge', Button: 'Button', IconButton: 'IconButton', Dot: 'Dot', Iconed: 'Iconed', TruthBadge: 'TruthBadge',
   };
   const Widget = new Function(...Object.keys(dependencies), `${code}; return FloatingMentorWidget;`)(...Object.values(dependencies));
   const props = {
@@ -118,7 +119,7 @@ test('Council chat keeps its existing draft conversation path', async () => {
 
 test('Guru persona lens requests are conversation only in critique and chat', async () => {
   const app = mountWidget({ guidanceId: 'sales-gap', initialTab: 'critique' });
-  const lens = app.find(node => node.type === 'button' && node.props.children.includes('jobs'));
+  const lens = app.find(node => node.type === 'button' && node.props.children.includes('voss'));
   assert.ok(lens);
   lens.props.onClick(); app.render();
   const button = app.find(node => node.type === 'Button' && node.props.children.includes('냉철 평가 재실행'));
@@ -127,7 +128,7 @@ test('Guru persona lens requests are conversation only in critique and chat', as
   assert.equal(app.personaRequests[0].conversationOnly, true);
 
   const chat = mountWidget({ guidanceId: 'sales-gap' });
-  const chatLens = chat.find(node => node.type === 'button' && node.props.children.includes('jobs'));
+  const chatLens = chat.find(node => node.type === 'button' && node.props.children.includes('voss'));
   chatLens.props.onClick(); chat.render();
   await submitChat(chat);
   assert.equal(chat.personaRequests[0].conversationOnly, true);
@@ -140,14 +141,14 @@ test('Guru persona lens requests are conversation only in critique and chat', as
   assert.deepEqual(chat.requests[0].history, [], 'persona lens answer is not attributed to Guru history');
 });
 
-test('Guru quick actions retain their named mode after switching away from a legend lens', async () => {
+test('Guru quick actions retain their named mode after switching away from a lens', async () => {
   const app = mountWidget({ initialTab: 'chat', contextType: 'deal', id: 'deal-classin' });
-  const lens = app.find(node => node.type === 'button' && node.props.children.includes('jobs'));
+  const lens = app.find(node => node.type === 'button' && node.props.children.includes('voss'));
   assert.ok(lens);
   lens.props.onClick(); app.render();
   const quick = app.find(node => node.type === 'button' && node.props.children.includes('⚡ 조언'));
   quick.props.onClick(); app.render();
-  assert.equal(app.find(node => node.type === 'button' && node.props.children.includes('jobs')), null);
+  assert.equal(app.find(node => node.type === 'button' && node.props.children.includes('voss')), null);
   const button = app.find(node => node.type === 'Button' && node.props.children.includes('딜 진단 (Keenan 4층)'));
   await button.props.onClick();
   assert.equal(app.requests[0].mode, 'deal-review');

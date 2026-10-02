@@ -70,6 +70,7 @@ struct FocusClock: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
+    static let defaultHubURL = "https://moonlight-pro-hub.vercel.app"
     @Published var activeCompanion: CompanionSurface? {
         didSet {
             if activeCompanion != oldValue { updateHubRefresh() }
@@ -107,7 +108,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var focusTotalSeconds = 0
     @Published var isFocused = false
     @Published var showStopConfirmation = false
-    @Published var hubBaseURL = "http://127.0.0.1:3000"
+    @Published var hubBaseURL = AppModel.defaultHubURL
     @Published var selectedCharacter: PetCharacter = .silver {
         didSet {
             defaults.set(selectedCharacter.rawValue, forKey: "petPreview.character")
@@ -142,7 +143,7 @@ final class AppModel: ObservableObject {
         memoDraft = savedMemo
         capturedMemos = defaults.stringArray(forKey: "petPreview.capturedMemos") ?? []
         taskDraft = defaults.string(forKey: "petPreview.taskDraft") ?? ""
-        hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? "http://127.0.0.1:3000"
+        hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? Self.defaultHubURL
         selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
         chat.agent = selectedCharacter.officeAgent
         completionFeedback.objectWillChange.sink { [weak self] _ in

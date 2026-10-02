@@ -204,6 +204,7 @@ export function ProjectPortfolioWorkspace({
   onCreateContent,
   onQuickCreateTodo,
   onAddChecklistItem,
+  onReorderChecklist,
   canWriteTasks,
   onEditTodo,
   onToggleTodo,
@@ -532,6 +533,7 @@ export function ProjectPortfolioWorkspace({
                 draftStore={{ drafts: workDrafts, setDrafts: setWorkDrafts, draftsRef: workDraftsRef }}
                 canWrite={canWriteTasks && project.statusKey !== 'archived'} pendingIds={pendingTodoIds}
                 onCreate={onQuickCreateTodo} onAddChecklist={onAddChecklistItem}
+                onReorderChecklist={onReorderChecklist}
                 onToggleTask={onToggleTodo} onToggleChecklist={onToggleChecklist} onEdit={onEditTodo} />
 
               <ProjectDeliverySummary project={project} onManage={onManageDelivery} compact />

@@ -10,6 +10,7 @@ const I = {
   navFollowup: (<><path d="M5 5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7l-5 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="M7.5 10h7m-7 4h5m2-2 2 2 2.5-3"/></>),
   navDiscovery: (<><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8 4.8-2.2Z"/><circle cx="12" cy="12" r=".7" fill="currentColor" stroke="none"/></>),
   navProjects: (<><rect x="4" y="7" width="14" height="13" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v10h-2M8 12h6m-6 4h4"/></>),
+  navProducts: (<><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9Z"/><path d="M3 5h18v4H3zM10 13h4"/></>),
   navBrand: (<><path d="m12 3 9 5v8l-9 5-9-5V8l9-5Z"/><path d="m12 7 5 5-5 5-5-5 5-5Z"/></>),
   navContent: (<><path d="M5 3h10l4 4v14H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M15 3v5h4M8 12h8m-8 4h6"/></>),
   navAI: (<><path d="m12 3 1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3Z"/><path d="m19 17 .7 1.8L21.5 19.5l-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7L19 17Z"/></>),
@@ -63,6 +64,8 @@ const I = {
   moreV:     (<><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></>),
   menu:      (<><path d="M4 6h16M4 12h16M4 18h16"/></>),
   star:      (<><path d="M12 3l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18l-5.9 3 1.2-6.5L2.5 9.9 9.1 9z"/></>),
+  // 고정 핀 — 첫 path가 머리다. 눌린 상태는 CSS가 머리만 채운다(.quick-widget__pin[aria-pressed="true"]).
+  pin:       (<><path d="M9 3.5h6l-1 5.5 3.5 3.5V14h-11v-1.5L10 9 9 3.5Z"/><path d="M12 14v6.5"/></>),
   bolt:      (<><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></>),
   signal:    (<><path d="M3 18v-3M9 18V9M15 18V5M21 18v-2"/></>),
   clock:     (<><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>),

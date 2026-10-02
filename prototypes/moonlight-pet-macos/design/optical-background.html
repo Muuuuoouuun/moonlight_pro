@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Moonlight · 광학 검증 배경</title>
+<style>
+  *{box-sizing:border-box}html,body{margin:0;min-height:100%;font:14px system-ui}
+  body{background:#fff;color:#17191d;transition:none}
+  nav{position:fixed;z-index:2;top:24px;left:24px;display:flex;gap:8px;padding:10px;border:1px solid #aaa;border-radius:14px;background:#eee;color:#111}
+  button{font:inherit;min-height:36px;border:1px solid #aaa;border-radius:8px;padding:0 14px;background:#fff;cursor:pointer}
+  button[aria-pressed=true]{background:#333;color:#fff}
+  .note{position:fixed;z-index:2;left:24px;bottom:20px;padding:10px;background:#eee;border-radius:8px;color:#333}
+  .scene{position:fixed;inset:0;overflow:hidden;pointer-events:none}
+  .ruler{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 42px,#8882 42px 44px,transparent 44px 62px)}
+  .letters{position:absolute;right:32px;top:150px;width:340px;font-size:24px;line-height:2.7;opacity:.18;word-spacing:18px}
+  body[data-scene=dark]{background:#080a10;color:#eee}
+  body[data-scene=mixed]{background:linear-gradient(130deg,#162b4d,#759dc9);color:#fff}
+  .pane{display:none;position:absolute;right:0;width:430px;height:45%;border-radius:26px 0 0 26px}
+  [data-scene=mixed] .pane{display:block}
+  .light{background:#f8f9fb;top:8%;transform:rotate(-7deg);transform-origin:right center}
+  .dark{background:#12151b;top:57%;width:540px;transform:rotate(7deg);transform-origin:right center}
+</style>
+<body data-scene="white">
+<div class="scene" aria-hidden="true"><div class="pane light"></div><div class="pane dark"></div><div class="ruler"></div><div class="letters">Aa 0123456789<br>가나다라 ABC<br>0123456789<br>Aa 가나다라<br>0123456789</div></div>
+<nav aria-label="광학 배경 선택">
+  <button data-value="white" aria-pressed="true">흰색 배경</button>
+  <button data-value="mixed" aria-pressed="false">혼합 배경</button>
+  <button data-value="dark" aria-pressed="false">검은 배경</button>
+</nav>
+<div class="note">실제 데스크톱 굴절 검증용 배경 · 업무 데이터 없음</div>
+<script>
+for(const button of document.querySelectorAll('button')) button.onclick=()=>{
+  document.body.dataset.scene=button.dataset.value;
+  for(const item of document.querySelectorAll('button')) item.setAttribute('aria-pressed',String(item===button));
+};
+</script>
+</body>
+</html>

@@ -86,10 +86,13 @@ const Memos = lazyPage(() => import("./pages/memos").then(m => m.Memos));
 const Discovery = lazyPage(() => import("./pages/discovery").then(m => m.Discovery));
 const DailyReview = lazyPage(() => import("./pages/daily-review").then(m => m.DailyReview));
 const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects));
+const Products = lazyPage(() => import("./pages/products").then(m => m.Products));
 const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
 const BrandContentLog = lazyPage(() => import("./pages/brand-content-log").then(m => m.BrandContentLog));
 const ContentPerformance = lazyPage(() => import("./pages/content-performance").then(m => m.ContentPerformance));
 const ContentNews = lazyPage(() => import("./pages/content-news").then(m => m.ContentNews));
+const ResearchInbox = lazyPage(() => import("./pages/research-inbox").then(m => m.ResearchInbox));
+const ContentPublishLog = lazyPage(() => import("./pages/content-publish-log").then(m => m.ContentPublishLog));
 const Studio = lazyPage(() => import("./pages/content").then(m => m.Studio));
 const Queue = lazyPage(() => import("./pages/content").then(m => m.Queue));
 const Campaigns = lazyPage(() => import("./pages/content").then(m => m.Campaigns));
@@ -210,8 +213,8 @@ function LegacyPlaceholder({ path, onNavigate }) {
 }
 
 const PAGE_MAP = {
-  'dashboard/home': (n) => <Home onNavigate={n} />,
-  'dashboard/daily-brief': (n, inquiries) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} />,
+  'dashboard/home': (n, _inquiries, _scope, ask) => <Home onNavigate={n} onGuidanceAsk={ask} />,
+  'dashboard/daily-brief': (n, inquiries, _scope, ask) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} onGuidanceAsk={ask} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
   'dashboard/work/memos': () => <Memos />,
@@ -219,6 +222,7 @@ const PAGE_MAP = {
   'dashboard/work/daily-review': () => <DailyReview />,
   'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,
+  'dashboard/products': (n) => <Products onNavigate={n} />,
   'dashboard/work/decisions': (n, _inquiries, scope) => <Decisions onNavigate={n} scope={scope} />,
   'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
@@ -227,6 +231,8 @@ const PAGE_MAP = {
   'dashboard/brands/log': (n) => <BrandContentLog onNavigate={n} />,
   'dashboard/content/performance': () => <ContentPerformance />,
   'dashboard/content/news': () => <ContentNews />,
+  'dashboard/content/research': () => <ResearchInbox />,
+  'dashboard/content/publish': () => <ContentPublishLog />,
   'dashboard/content/studio': () => <Studio />,
   'dashboard/content/queue': (n, _inquiries, _scope, ask) => <Queue onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/content/campaigns': () => <Campaigns />,
@@ -237,7 +243,7 @@ const PAGE_MAP = {
   'dashboard/revenue/heatmap': (n) => <RevenueHeatmap onNavigate={n} />,
   'dashboard/revenue/leads': () => <Leads />,
   'dashboard/revenue/inquiries': (n) => <Inquiries onNavigate={n} />,
-  'dashboard/revenue/deals': (n) => <Deals onNavigate={n} />,
+  'dashboard/revenue/deals': (n, _inquiries, _scope, ask) => <Deals onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/revenue/cases': () => <Cases />,
   'dashboard/revenue/accounts': (n) => <Accounts onNavigate={n} />,
   'dashboard/revenue/followups': (n) => <Followups onNavigate={n} />,
@@ -247,7 +253,7 @@ const PAGE_MAP = {
   'dashboard/automations/webhooks': (n) => <Webhooks onNavigate={n} />,
   'dashboard/automations/runs': (n) => <Runs onNavigate={n} />,
   'dashboard/automations/sheets': () => <SheetsSync />,
-  'dashboard/agents/office-council': (n, notifications, scope) => <OfficeCouncil scope={scope} />,
+  'dashboard/agents/office-council': (n, notifications, scope, ask) => <OfficeCouncil scope={scope} onGuidanceAsk={ask} onNavigate={n} />,
   'dashboard/agents/chat': (n, _inquiries, _scope, ask, query) => <MentorShelf onNavigate={n} onGuidanceAsk={ask} requestedCardId={query?.get('card')} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
@@ -255,7 +261,7 @@ const PAGE_MAP = {
   'dashboard/settings': (n) => <Settings onNavigate={n} />,
 
   // ── real_v1.1 workspaces → existing pages scoped by org_scope ──
-  'dashboard/classin/pipeline': (n) => <Deals workspace="classin" onNavigate={n} />,
+  'dashboard/classin/pipeline': (n, _inquiries, _scope, ask) => <Deals workspace="classin" onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/classin/revenue': () => <Leads workspace="classin" />,
   'dashboard/classin/segments': (n) => <Segments workspace="classin" onNavigate={n} />,
   'dashboard/classin/accounts': (n) => <Accounts workspace="classin" onNavigate={n} />,
@@ -497,6 +503,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     if (p.startsWith('dashboard/revenue/accounts')) return 'dashboard/revenue/accounts?new=account';
     if (p.startsWith('dashboard/revenue/cases')) return 'dashboard/revenue/cases?new=case';
     if (p.startsWith('dashboard/work/projects') || p.startsWith('dashboard/work/roadmap')) return 'dashboard/work/projects?new=project';
+    if (p.startsWith('dashboard/products')) return 'dashboard/products?new=product';
     if (p.startsWith('dashboard/work/decisions')) return 'dashboard/work/decisions?new=decision';
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
     if (p.startsWith('dashboard/work/goals')) return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', kpi: goalView(searchParams) === 'kpi', create: true, base: GOAL_WORK_BASE }).slice(1);

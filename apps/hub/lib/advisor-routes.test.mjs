@@ -5,7 +5,13 @@ import { beforeEach, test } from "node:test";
 const state = globalThis.__advisorRouteTest = {};
 const stubs = {
   "@/lib/hub-write-guard": `export function assertHubWriteAllowed() { return null; }
-    export async function readHubWriteJson(req) { return { data: await req.json() }; }`,
+    export async function readHubWriteJson(req, options = {}) {
+      globalThis.__advisorRouteTest.readOptions = options;
+      const text = await req.text();
+      const byteLength = new TextEncoder().encode(text).length;
+      if (byteLength > (options.maxBytes ?? 65536)) return { error: Response.json({ status: 'payload-too-large' }, { status: 413 }) };
+      return { data: text ? JSON.parse(text) : {}, byteLength };
+    }`,
   "@/lib/sales-os/brand-context": `export async function assembleBrandContext() { globalThis.__advisorRouteTest.contextRead = true; return globalThis.__advisorRouteTest.contextResult || { source: 'supabase' }; }`,
   "@/lib/sales-os/context-assembler": `export async function assembleSalesContext(args) { globalThis.__advisorRouteTest.contextRead = true; globalThis.__advisorRouteTest.salesContextArgs = args; return globalThis.__advisorRouteTest.salesContextResult || { source: 'supabase' }; }`,
   "@/lib/sales-os/agent-runs": `
@@ -252,7 +258,7 @@ test('personal Office review rejects ambiguous lanes, malformed provenance and w
     { scope: 'all' }, { scope: 'classin' }, { scope: undefined },
     { officeSource: undefined }, { officeSource: { requestId: 'bad', runId: null } },
     { officeSource: { requestId: officeSource.requestId, runId: 'bad' } },
-    { draft: ' ' }, { draft: '가'.repeat(6001) },
+    { draft: ' ' }, { draft: '가'.repeat(25001) },
     { guidanceId: 'marketing-research' }, { createWorkOrder: true }, { createWorkOrder: undefined },
   ]) {
     const response = await POST(request({ ...valid, ...patch }));
@@ -392,3 +398,86 @@ for (const [name, handler] of [['Council', POST], ['Guru', guruPOST]]) {
     }
   });
 }
+
+const officeRequestId = '10000000-0000-4000-8000-000000000001';
+const officeRunId = '20000000-0000-4000-8000-000000000002';
+const salesRequest = (body) => new Request('http://hub.test/api/hub/sales-mentor', { method: 'POST', body: JSON.stringify(body) });
+const companyEscalation = (patch = {}) => ({
+  mode: 'open-question', scope: 'classin', createWorkOrder: false,
+  officeSource: { requestId: officeRequestId, runId: officeRunId },
+  draft: 'Office 결과 원문과 이번 질문', ...patch,
+});
+const echoOfficeSource = () => {
+  globalThis.fetch = async (url, options) => {
+    const body = options?.body ? JSON.parse(options.body) : null;
+    state.lastFetch = { url, options, body };
+    return Response.json({ status: 'generated', text: 'advice', ...(body?.officeSource ? { officeSource: body.officeSource } : {}) });
+  };
+};
+
+test('personal Office review accepts the verbatim 25,000-character Office draft', async () => {
+  const draft = '가'.repeat(25000);
+  const response = await POST(request({
+    mode: 'office-review', scope: 'personal', draft, createWorkOrder: false,
+    officeSource: { requestId: officeRequestId, runId: null },
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(state.lastFetch.body.draft, draft);
+  assert.ok(state.readOptions.maxBytes >= 25000 * 6);
+});
+
+test('company Office escalation forwards, records and echoes its Office source like the personal lane', async () => {
+  echoOfficeSource();
+  const draft = '나'.repeat(25000);
+  const response = await guruPOST(salesRequest(companyEscalation({ draft })));
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.deepEqual(data.officeSource, { requestId: officeRequestId, runId: officeRunId });
+  assert.equal(data.runId, 'run-1');
+  assert.equal(state.lastFetch.url, 'http://engine.test/api/ai/sales-mentor');
+  assert.equal(state.lastFetch.body.mode, 'open-question');
+  assert.equal(state.lastFetch.body.scope, 'classin');
+  assert.equal(state.lastFetch.body.createWorkOrder, false);
+  assert.deepEqual(state.lastFetch.body.officeSource, { requestId: officeRequestId, runId: officeRunId });
+  assert.equal(state.lastFetch.body.guidanceId, undefined);
+  assert.equal(state.lastFetch.body.draft, draft);
+  assert.equal(state.run.agent, 'guru');
+  assert.equal(state.run.mode, 'open-question');
+  assert.match(state.run.inputSummary, new RegExp(`office-request=${officeRequestId} office-run=${officeRunId}$`));
+  assert.ok(state.readOptions.maxBytes >= 25000 * 6);
+});
+
+test('company Office escalation rejects a malformed source or lane before reading the sales ledger', async () => {
+  for (const patch of [
+    { scope: 'all' }, { scope: 'personal' }, { scope: undefined },
+    { officeSource: null }, { officeSource: { requestId: 'bad', runId: null } },
+    { officeSource: { requestId: officeRequestId, runId: 'bad' } },
+    { officeSource: { requestId: officeRequestId, runId: null, taskId: 'extra' } },
+    { mode: 'deal-review' }, { draft: ' ' }, { draft: '가'.repeat(25001) },
+    { createWorkOrder: true }, { createWorkOrder: undefined },
+    { guidanceId: 'sales-meddic' }, { directives: { values: { coreValues: ['사실'] } } },
+  ]) {
+    const response = await guruPOST(salesRequest(companyEscalation(patch)));
+    assert.equal(response.status, 400, JSON.stringify(patch));
+    assert.equal((await response.json()).error, 'invalid-office-review');
+    assert.equal(state.contextRead, undefined);
+    assert.equal(state.lastFetch, undefined);
+    assert.equal(state.run, undefined);
+  }
+});
+
+test('sales callers without an Office source keep the same Engine body, run summary and body cap', async () => {
+  const response = await guruPOST(salesRequest({ mode: 'open-question', guidanceId: 'sales-meddic', draft: '고객에게 무엇을 확인할까요?' }));
+  assert.equal(response.status, 200);
+  for (const key of ['officeSource', 'scope', 'createWorkOrder']) assert.equal(Object.hasOwn(state.lastFetch.body, key), false, key);
+  assert.equal(state.run.inputSummary, 'src=supabase deals=0 leads=0 outcomes=0 missing=0');
+  assert.equal((await response.json()).officeSource, undefined);
+
+  for (const key of Object.keys(state)) delete state[key];
+  const oversized = await guruPOST(salesRequest({ mode: 'open-question', guidanceId: 'sales-meddic', draft: '가'.repeat(22000) }));
+  assert.equal(oversized.status, 413);
+  assert.equal(state.contextRead, undefined);
+  const brandOversized = await POST(request({ mode: 'brand-strategy', draft: '가'.repeat(22000) }));
+  assert.equal(brandOversized.status, 413);
+  assert.equal(state.contextRead, undefined);
+});

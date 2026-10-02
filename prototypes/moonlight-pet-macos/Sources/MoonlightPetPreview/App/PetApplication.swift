@@ -8,6 +8,14 @@ enum MoonlightPetPreviewMain {
             exit(passed ? 0 : 1)
         }
         let application = NSApplication.shared
+        if !CommandLine.arguments.contains("--glass-lab"),
+           let existing = NSRunningApplication.runningApplications(withBundleIdentifier: "app.moonlight.pet-preview")
+            .first(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier && !$0.isTerminated }) {
+            // Worktree builds share the installed app identity and must not create
+            // a second pet, polling loop, or competing global shortcut.
+            existing.activate(options: [])
+            return
+        }
         let delegate = PetAppDelegate()
         application.delegate = delegate
         application.setActivationPolicy(.accessory)
@@ -22,9 +30,32 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: WindowCoordinator?
     private var statusItem: NSStatusItem?
     private var glassLab: GlassLabWindowController?
+    private var pendingCommand: PetCommand?
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard !CommandLine.arguments.contains("--glass-lab") else { return }
+        for url in urls {
+            guard let command = PetCommand(url: url) else { continue }
+            open(command)
+        }
+    }
+
+    private func open(_ command: PetCommand) {
+        guard let coordinator else { pendingCommand = command; return }
+        switch command {
+        case .memo: coordinator.openMode(.memo)
+        case .tasks: coordinator.showWidget(mode: .tasks)
+        }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installEditingMenu()
+        if CommandLine.arguments.contains("--glass-lab") {
+            let lab = GlassLabWindowController()
+            glassLab = lab
+            lab.present()
+            return
+        }
         let coordinator = WindowCoordinator(model: model)
         self.coordinator = coordinator
         coordinator.showPet()
@@ -32,11 +63,6 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--desktop-refraction") {
             model.usesDesktopRefraction = true
             coordinator.showBar()
-        }
-        if CommandLine.arguments.contains("--glass-lab") {
-            let lab = GlassLabWindowController()
-            glassLab = lab
-            lab.present()
         }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -63,11 +89,19 @@ final class PetAppDelegate: NSObject, NSApplicationDelegate {
         hubItem.target = self
         menu.addItem(hubItem)
         menu.addItem(.separator())
-        let quitItem = NSMenuItem(title: "목업 종료", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "펫 종료", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
         item.menu = menu
         statusItem = item
+        if let command = pendingCommand {
+            pendingCommand = nil
+            open(command)
+        }
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        CommandLine.arguments.contains("--glass-lab")
     }
 
     // Accessory apps still need an Edit menu for Cocoa text-command routing.

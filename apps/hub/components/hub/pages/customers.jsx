@@ -3,8 +3,8 @@
 // 고객 — 영업·매출의 사람 목록 하나 (2026-09-24 운영자 승인 재설계, 목업 02 · Futura).
 // Leads(영업 중)·Accounts(계약)·고객 DB가 같은 기록을 세 번 보여 주던 것을 한 목록으로 합쳤다.
 // "리드냐 계정이냐"는 사람이 바뀌는 게 아니라 단계가 바뀌는 것이라 단계 열 하나로 읽는다.
-// 이 화면은 대부분 검색창으로 쓴다 — 그래서 검색이 제일 크다. 기본 정렬은 "다음 약속이 급한
-// 순"이라 목록이 곧 할 일 순서다. 판정(세그먼트·약속·마지막 연락·정렬·검색)은 전부
+// 이 화면은 대부분 검색창으로 쓴다 — 그래서 검색이 제일 크다. 기본 정렬은 최근 연락 →
+// 최근 컨택·문의 → 구매 고객 순이다. 판정(세그먼트·약속·마지막 연락·정렬·검색)은 전부
 // lib/sales-os/customer-list.js가 소유한다 — 이 파일은 그리기와 저장 계약만 가진다.
 //
 // 한 사람 = 한 드로어(Customer 360). 맨 위는 프로필이 아니라 '약속'이고, 그다음 기록(활동 +
@@ -29,10 +29,13 @@ import { TIP_RULE_IDS, nudgeTipReason, useCrmNudges } from "../crm-nudge";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
 import { useMemoSearch } from "./use-memo-search";
-import { FloatingMentorWidget } from "../floating-mentor-widget";
+import { GuidanceQuestionDrawer } from '../guidance-question-drawer';
 import { GuruGuidanceCard } from '../guru-guidance-card';
+import { GuruRecommendation } from '../guru-recommendation';
+import { useGuruRecommendations, recommendationForSubject } from '../guru-recommendations-client';
 import { ContextMentorRail } from '../context-mentor-rail';
-import { brandInWorkspace, filterLeadsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
+import { adviceScopeForRecord } from "@/lib/sales-os/advice-scope";
+import { filterLeadsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import { isCanonicalUuid } from "@/lib/uuid";
 import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
@@ -40,6 +43,7 @@ import { LEAD_SUBJECTS, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { CUSTOMER_LABEL_MISSING, customerGenreOptions, customerRegionOptions, matchesCustomerLabels, normalizeGenreLabels } from "@/lib/sales-os/customer-labels";
 import { REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { isTemplateNextAction } from "@/lib/sales-os/lead-enrichment";
+import { recordSaveLabel } from "@/lib/sales-os/contact-record";
 import {
   CUSTOMER_FOCUS_FILTERS, CUSTOMER_PHASES, CUSTOMER_SEGMENTS, DEFAULT_CUSTOMER_SEGMENT,
   channelFromPromise, countOpenWithoutPromise, customerDisplayName, customerLastContact,
@@ -84,18 +88,29 @@ const MAX_DANGER_RAILS = 3;
 
 const SCOPE_LABEL = { classin: "ClassIn", personal: "개인" };
 
-function customerAdviceScope(row) {
-  const workspaceScope = row.workspace === 'classin' ? 'classin' : row.workspace === 'brand' ? 'personal' : null;
-  const typeScope = row.type === 'company' ? 'classin' : row.type === 'personal' ? 'personal' : null;
-  const hasBrand = row.brand && row.brand !== 'all' && row.brand?.key !== 'all';
-  const brandScope = hasBrand
-    ? brandInWorkspace(row.brand, 'classin') ? 'classin' : brandInWorkspace(row.brand, 'brand') ? 'personal' : null
-    : null;
-  // Unknown explicit workspace values and conflicting labels cannot choose a ledger.
-  const unsupportedWorkspace = row.workspace != null && row.workspace !== '' && !workspaceScope;
-  const knownScopes = [workspaceScope, typeScope, brandScope].filter(Boolean);
-  const blocked = unsupportedWorkspace || new Set(knownScopes).size > 1;
-  return { scope: blocked ? null : knownScopes[0] || null, blocked };
+// 레인 판정은 기록 기반 추천과 같은 공용 판정을 쓴다(lib/sales-os/advice-scope.js).
+const customerAdviceScope = adviceScopeForRecord;
+
+// Sales Guru 질문의 대상 — 열린 고객의 기록 id와 이 화면이 이미 보여 준 사실만 싣는다
+// (2026-09-25 경계 교정: 이름으로 거래를 찾지 않는다). 연락처(전화·메일)는 조언에 필요 없어
+// 싣지 않고, 회사 id로 붙인 거래 목록은 소속을 증명하지 못해 싣지 않는다.
+function customerGuruContext(row, { displayName, org, phase, promise, lastContact }) {
+  const promiseLabel = promise.what
+    ? [promise.what, promise.whenLabel].filter(Boolean).join(" · ")
+    : promise.state === "dormant" ? "기약 없음" : "없음";
+  return {
+    ref: row.id,
+    label: [displayName, org].filter(Boolean).join(" · "),
+    facts: [
+      `고객: ${displayName}`,
+      org ? `소속: ${org}` : null,
+      `구분: ${row.kind === "account" ? "계약 고객" : "리드"}`,
+      `단계: ${phase.label}`,
+      `다음 약속: ${promiseLabel}`,
+      `마지막 연락: ${lastContact.label}`,
+      row.sub ? `분류: ${row.sub}` : null,
+    ].filter(Boolean),
+  };
 }
 
 // 통합 행 모델: 리드와 계정을 같은 컬럼 계약으로 투영
@@ -248,6 +263,8 @@ const ACT_LABEL = { email: "이메일", meeting: "미팅", call: "통화", note:
 
 // 기록 한 줄기 — 활동(crm_activities)과 이 고객에 연결한 메모(journal)를 시간순으로 섞는다.
 // 메모는 열어 보기만, 활동은 되돌리기 가능한 삭제까지.
+// 서버가 아직 답하지 않은 낙관 행(pending)은 시각 자리에 "기록 중"이라고 말한다 — 저장된
+// 기록의 시각처럼 읽히지 않게(Save envelope). 서버가 저장을 확인하면 시각으로 돌아온다.
 function ActivityTimeline({ rows, today, onDeleteActivity, onOpenMemo }) {
   if (!rows.length) {
     return <p className="customer-tl__empty">아직 기록이 없어요. 연락하고 나서 [연락 기록]으로 30초만 남겨 두세요.</p>;
@@ -266,7 +283,7 @@ function ActivityTimeline({ rows, today, onDeleteActivity, onOpenMemo }) {
               <span>{ACT_LABEL[a.type] || a.type}</span>
               {/* 반응은 중립 뱃지 — 우려·거절도 여기서는 사실 표시일 뿐, 위기 표현은 별도 채널(§5.3). */}
               {a.reaction && <Badge tone="neutral" size="xs" variant="outline">{REACTION_LABEL[a.reaction] || a.reaction}</Badge>}
-              <span className="mono">{when}</span>
+              {a.pending ? <span>{recordSaveLabel("pending")}</span> : <span className="mono">{when}</span>}
             </span>
           </>
         );
@@ -737,9 +754,7 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
 
   const { schedule: scheduleActUndo, cancel: cancelActUndo } = useUndoableAction();
   const [actNotice, setActNotice] = React.useState(null);
-  const [guruOpen, setGuruOpen] = React.useState(false);
-  const [guruGuidanceId, setGuruGuidanceId] = React.useState(null);
-  const [guruQuestion, setGuruQuestion] = React.useState('');
+  const [guruCard, setGuruCard] = React.useState(null);
 
   const [promiseBusy, setPromiseBusy] = React.useState(false);
   const [promiseError, setPromiseError] = React.useState("");
@@ -763,8 +778,13 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   }, [nudge, onNudgeEscape, startRecord]);
   const advice = customerAdviceScope(row);
   // Sales Guru reads the ClassIn ledger; both the selected page scope and this
-  // customer's ownership must agree before forwarding customer details.
-  const canAskGuru = scopeKey === 'classin' && advice.scope === 'classin';
+  // customer's ownership must agree before forwarding customer details. The question
+  // names this record by its stored id, so a record without one stays read-only.
+  const canAskGuru = scopeKey === 'classin' && advice.scope === 'classin' && Boolean(row.id);
+  // 기록 기반 추천(agent-layer-direction §2.1 ⑦) — 이 고객의 저장된 사실이 있을 때만 원문 기법을
+  // 순환 카드보다 먼저 보인다. 로컬 행(id 없음)은 원장 사실이 없어 읽지 않는다.
+  const guruRecommendations = useGuruRecommendations({ enabled: Boolean(row.id) && !String(row.id).startsWith('local-') });
+  const customerRecommendation = row.id ? recommendationForSubject(guruRecommendations, row.id) : null;
 
   const [actError, setActError] = React.useState(null);
   const deleteActivity = React.useCallback((activity) => {
@@ -852,13 +872,14 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
   }, [activities, memos.status, memos.entries, memoEnabled]);
 
   const logActivity = ({ type, body }) => {
-    const temp = { id: `local-${Date.now()}`, type, msg: body, at: "방금" };
+    // 저장 요청이 나가는 행만 pending이다 — 서버가 답하면 풀리고, 실패하면 아래에서 걷어낸다.
+    const temp = { id: `local-${Date.now()}`, type, msg: body, at: "방금", pending: Boolean(row.id) };
     setActError(null);
     setActivities(prev => [temp, ...prev]);
     if (!row.id) return;
     saveRevenueRecord("activity", "create", { ...linkParam, type, body }).then(r => {
       if (r.ok && r.id) {
-        setActivities(prev => prev.map(a => (a.id === temp.id ? { ...a, id: r.id } : a)));
+        setActivities(prev => prev.map(a => (a.id === temp.id ? { ...a, id: r.id, pending: false } : a)));
         return;
       }
       // 저장 실패한 낙관적 행을 남겨두면 다음 리로드 때 소리 없이 사라진다 — 즉시 걷어내고
@@ -896,7 +917,7 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
 
   // R — 연락 기록. 입력 중이거나 이 드로어 위에 다른 대화상자가 있으면 양보한다.
   React.useEffect(() => {
-    if (record || memoState || guruOpen) return undefined;
+    if (record || memoState || guruCard) return undefined;
     const onKey = (e) => {
       if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key !== "r" && e.key !== "R") return;
@@ -907,7 +928,7 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [record, memoState, guruOpen, startRecord]);
+  }, [record, memoState, guruCard, startRecord]);
 
   // 이 드로어는 접촉 기록용 360 뷰 — 이름·연락처·단계의 원본 편집은 리드 정식 편집기
   // (?lead= 딥링크)가 담당한다. 계약 고객(account)은 아직 ?account= 딥링크가 없어
@@ -917,6 +938,13 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
     : null;
 
   if (memoState) return <ContextMemoDrawer contexts={memoContexts} noteId={memoState.noteId || null} onClose={() => setMemoState(null)} />;
+  // Guru 질문도 같은 규칙 — 질문 드로어가 이 드로어를 대신하고(활성 오버레이 하나), 닫으면
+  // 같은 고객으로 돌아온다. 요청은 open-question이다: 예전 딜 진단 위젯은 리드·계정 id를 거래
+  // 초점으로 풀지 못했고, 매 턴 Engine이 project_updates 행을 남겼다(2026-09-25).
+  if (guruCard && canAskGuru) {
+    const guruContext = customerGuruContext(row, { displayName, org, phase, promise, lastContact: customerLastContact(row, today) });
+    return <GuidanceQuestionDrawer card={guruCard} context={guruContext} onClose={() => setGuruCard(null)} />;
+  }
 
   const recordTarget = { kind: row.kind === "account" ? "account" : "lead", id: row.id, companyId: row.companyId, name: displayName };
   const dealTotal = (row.deals || []).filter(d => d.stage !== "lost").reduce((sum, d) => sum + (Number(d.value) || 0), 0);
@@ -953,7 +981,8 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
             aiContext={`${row.name || "미지정"} · ${row.kind === "account" ? "계약 고객" : `리드 (${phase.label})`}`}
             onSaved={(o) => {
               setActivities(prev => [
-                { id: o.activityId, type: o.kind, msg: o.summary, at: "방금", reaction: o.reaction, occurredAt: new Date().toISOString() },
+                // 아직 서버에 없다 — 되돌리기 창이거나 답을 기다리는 중이다. 요약이 저장되면 풀린다.
+                { id: o.activityId, type: o.kind, msg: o.summary, at: "방금", reaction: o.reaction, occurredAt: new Date().toISOString(), pending: true },
                 ...prev,
               ]);
             }}
@@ -961,10 +990,11 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
               setActivities(prev => prev.filter(a => a.id !== optimisticId));
             }}
             onSummaryPersisted={({ activityId, optimisticId }) => {
-              if (!activityId) { reload(); return; }
+              // 저장은 확인됐다 — "기록 중"을 풀고, 서버 ID를 못 받았으면 다시 읽어 맞춘다.
               setActivities(prev => prev.map(a => (
-                a.id === optimisticId ? { ...a, id: activityId } : a
+                a.id === optimisticId ? { ...a, id: activityId || a.id, pending: false } : a
               )));
+              if (!activityId) reload();
             }}
             onPersisted={() => onRecordPersisted?.(row)}
             onFailed={({ message, form }) => onRecordFailed?.(row, {
@@ -1168,15 +1198,15 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
           <details className="customer-sec">
             <summary>
               <h3 className="fx-eyebrow customer-eyebrow">도움 받기</h3>
-              <span className="customer-sec__hint">답장 초안 · 코칭</span>
+              <span className="customer-sec__hint">{customerRecommendation ? '기록 기반 추천 있음 · 답장 초안' : '답장 초안 · 코칭'}</span>
               <span className="customer-sec__chev" aria-hidden="true"><Iconed name="chevronR" size={13} /></span>
             </summary>
             <div className="customer-sec__in">
-              <GuruGuidanceCard domain="sales" compact onAsk={canAskGuru ? card => {
-                setGuruGuidanceId(card.id);
-                setGuruQuestion('');
-                setGuruOpen(true);
-              } : undefined} />
+              {customerRecommendation ? (
+                <GuruRecommendation recommendation={customerRecommendation} onAsk={canAskGuru ? card => setGuruCard(card) : undefined} onNavigate={onNavigate} compact />
+              ) : (
+                <GuruGuidanceCard domain="sales" compact onAsk={canAskGuru ? card => setGuruCard(card) : undefined} />
+              )}
               {advice.blocked ? (
                 <div role="status" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                   <CertaintyBadge state="unknown" label="고객 소속 확인 필요" />
@@ -1195,32 +1225,6 @@ function Customer360Drawer({ row, scopeKey, today, recordRequest, onRecordReques
             </div>
           </details>
         </div>
-      )}
-
-      {guruOpen && canAskGuru && (
-        <FloatingMentorWidget
-          isOpen={guruOpen}
-          onClose={() => { setGuruOpen(false); setGuruGuidanceId(null); }}
-          agent="guru"
-          guidanceId={guruGuidanceId}
-          initialTab="chat"
-          initialQuestion={guruQuestion}
-          contextType="customer"
-          contextTitle={row.person || row.name || "고객 전략 코칭"}
-          contextData={{
-            id: row.id,
-            name: row.person || row.name,
-            company: row.name,
-            stage: phase.label,
-            health: row.health,
-            nextAction: row.nextAction,
-            notes: row.notes || row.sub,
-          }}
-          onApplyText={(text) => {
-            // 표시 모델 키(nextAction)는 라우트가 무시한다 — 약속 쓰기 계약의 next_action으로 보낸다.
-            savePromise({ what: text.slice(0, 100) });
-          }}
-        />
       )}
     </Drawer>
   );
@@ -1523,7 +1527,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
   const [subjectFilter, setSubjectFilter] = React.useState("");
   const [genreFilter, setGenreFilter] = React.useState("");
   const [sourceFilter, setSourceFilter] = React.useState("");
-  const [sort, setSort] = React.useState({ key: "promise", dir: "asc" });
+  const [sort, setSort] = React.useState({ key: "recent", dir: "desc" });
   const [openKey, setOpenKey] = React.useState(null);
   const [createError, setCreateError] = React.useState(null);
   const [focusOverrides, setFocusOverrides] = React.useState({});
@@ -1688,7 +1692,7 @@ export function Customers({ onNavigate, onGuidanceAsk }) {
   ), [allRows, segment, focusFilter, regionFilter, subjectFilter, genreFilter, sourceFilter, term]);
 
   // 정렬: 헤더 클릭 asc → desc → 해제 3단 (DESIGN §8.1). 해제 시 기록 순서.
-  // 기본은 다음 약속 오름차순(날짜 없는 약속은 방향과 무관하게 뒤).
+  // 기본은 최근 연락 → 최근 컨택·문의 → 구매 고객 순.
   const cycleSort = (key) => {
     setSort(prev => {
       if (prev.key !== key) return { key, dir: "asc" };

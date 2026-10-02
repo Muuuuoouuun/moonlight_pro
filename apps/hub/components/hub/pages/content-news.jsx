@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card, EmptyState, SelectField, Skeleton, TruthBadge } from '../hub-primitives';
 import { NEWS_SEARCH_TOPICS } from '@/lib/research-news-topics';
 import './content-news.css';
@@ -37,6 +37,7 @@ function formatTime(value) {
 }
 
 export function ContentNews() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [brand, setBrand] = React.useState(() => initialBrand(searchParams.get('brand')));
   const [topic, setTopic] = React.useState(() => NEWS_SEARCH_TOPICS[initialBrand(searchParams.get('brand'))][0].id);
@@ -123,8 +124,12 @@ export function ContentNews() {
             <div className="content-news-meta"><span>{entry.source}</span>{entry.publishedAt && <span className="mono">{formatTime(entry.publishedAt)} · Brave 제공 시각</span>}{entry.breaking && <span>Brave 속보 표시</span>}</div>
             <a href={entry.url} target="_blank" rel="noopener noreferrer" className="content-news-title">{entry.title} <span aria-hidden="true">↗</span></a>
             {entry.snippet && <p className="content-news-snippet">검색 발췌 · {entry.snippet}</p>}
+            <Button variant="outline" size="xs" className="content-news-research-action" onClick={() => {
+              const params = new URLSearchParams({ intake: '1', brandKey: brand, sourceUrl: entry.url, sourceTitle: entry.title });
+              router.push(`/dashboard/content/research?${params}`);
+            }}>원문 확인 후 리서치 작성</Button>
           </li>)}</ol></Card>}
-        <p className="content-news-footer">콘텐츠 후보로 쓰기 전 원문·발표 시각·적용 대상을 확인하세요. 원문 확인 뒤 소재·제작에서 기록할 수 있습니다.</p>
+        <p className="content-news-footer">원문·발표 시각·적용 대상을 확인한 뒤 리서치함에서 사실과 검토용 원고를 작성하세요.</p>
       </section>}
     </div>
   );

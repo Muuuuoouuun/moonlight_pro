@@ -316,8 +316,9 @@ system serif. Do not introduce serif display type.
   follow-ups, sheets sync, settings, project timeline). The public web is detached (§1, §12).
 - The expanded sidebar is 232px by default and resizable from 200 to 360px (`mlp.sidebarWidth`); collapsed it is
   a 56px icon rail (`mlp.sidebarCollapsed`). Both are desktop-only (§15 2026-09-22, 2026-09-23).
-- Shell navigation is one level deep: 9 primary + 2 utility anchors in the sidebar (`hub-nav.js`, pinned by
-  `hub-nav.test.mjs`; 10 + 2 until 2026-09-24, when the 고객 연락 anchor became 영업·매출's first tab, §15). An
+- Shell navigation is one level deep: 10 primary + 2 utility anchors in the sidebar (`hub-nav.js`, pinned by
+  `hub-nav.test.mjs`; 9 + 2 from 2026-09-24, when the 고객 연락 anchor became 영업·매출's first tab, until 2026-09-30,
+  when 제품 joined between 프로젝트 and 브랜드, §15). An
   anchor's second-level destinations render as the top-bar tab row (`topNavigationForRoute`), not as a sidebar
   accordion — since 2026-08-04 (`5a3d506`), guarded by the test "sidebar is one level deep and the top bar owns
   contextual tabs". Pages in `PAGE_OWNS_TABS` draw those tabs in their own header instead.
@@ -407,6 +408,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - `Card` (padded / unpadded), `SectionTitle`, `Tabs`
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
 - `Input`, `Checkbox`, `Progress`, `ProgressRing`, `Sparkline`, `Placeholder` (0 call sites), `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
+  - `Checkbox shape="square | diamond | folder"`: default square; the project work list uses diamond for milestones and a 24px folder for work groups. The folder outline and front seam remain visible in both states; only its lower-right circular completion marker fills and gains a check. Type labels accompany the shapes, and all variants retain the same keyboard/ARIA behavior and neutral tokens (operator request 2026-10-01).
 - Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` — defined in
   `hub-primitives.jsx` itself (there is no `form-fields.jsx`); the contract lives in `form-fields.test.mjs`
 - `SegmentedControl`, `ChipToggle`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
@@ -642,11 +644,11 @@ Do not ship:
 | Theme mode + sidebar width/collapse preferences | `apps/hub/lib/hub-preferences.js` (`mlp.*` keys)  |
 | Keyboard (global `C` `⌘K` `?` `⌘J`; page `N`) | `hub-app.jsx`; `apps/hub/components/hub/use-crm-keyboard.js` |
 | ⌘K catalog (`NAV_TREE`, `LEGACY_REDIRECTS`) | `apps/hub/components/hub/hub-data.js`                 |
-| Sidebar anchors (visible IA — 9 primary + 2 utility) and tab role aliases (`REVENUE_ROUTE_TABS`) | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs` |
+| Sidebar anchors (visible IA — 10 primary + 2 utility) and tab role aliases (`REVENUE_ROUTE_TABS`) | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs` |
 | Workspace membership (`org_scope`) | `apps/hub/components/hub/workspace-map.js`                   |
 | Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette}.jsx` |
 | Pages + `PAGE_MAP`                 | `apps/hub/components/hub/pages/*.jsx`, `hub-app.jsx`         |
-| Route mount                        | `apps/hub/app/dashboard/layout.jsx` mounts `HubApp` once; `dashboard/[[...path]]` and `content/{studio,queue}` pages render `null`; `content/publish` redirects to `queue`. `lazyPage` keeps `ssr: false` (CLAUDE.md) |
+| Route mount                        | `apps/hub/app/dashboard/layout.jsx` mounts `HubApp` once; `dashboard/[[...path]]` and `content/{studio,queue,publish}` pages render `null`. `content/publish` is the 발행 로그 screen. `lazyPage` keeps `ssr: false` (CLAUDE.md). The desktop quick-capture widget page `app/widget/{layout,page}.jsx` (+ `widget.css`, `components/hub/quick-widget.jsx`) sits outside `/dashboard`, so `HubApp` does not mount; it stays behind the session gate |
 
 Build order when adding a new surface:
 1. Confirm tokens cover every color / size needed — do not hardcode hex values.
@@ -668,7 +670,7 @@ Build order when adding a new surface:
 | §8.2/§5.3 state primitives, truth labels, rails, lifecycle danger | `state-primitives.test.mjs`, `state-usage.test.mjs` |
 | §11 `Skeleton` contract | `skeleton.test.mjs` |
 | Form field contract | `form-fields.test.mjs` |
-| Sidebar anchors (9 + 2) and icons in both states; 영업·매출 4 tabs + legacy route aliases; width handle | `hub-nav.test.mjs`; `sidebar-resizer.test.mjs` |
+| Sidebar anchors (10 + 2) and icons in both states; 영업·매출 4 tabs + legacy route aliases; width handle | `hub-nav.test.mjs`; `sidebar-resizer.test.mjs` |
 | Toast a11y and tokens | `hub-toast.test.mjs` |
 | No mock/demo work records in code | `scripts/no-mock-data.test.mjs` |
 
@@ -685,7 +687,7 @@ Build order when adding a new surface:
    `celebration-fx.jsx`, `hub-tokens.css`, `pages/overview.jsx` and `pages/revenue-heatmap.jsx`.
 6. Mobile floor: Calendar has no phone agenda (§7 Responsive). The input size floor is now global at ≤720px or coarse pointer.
 7. Stale code comments: the `hub-futura.css` header ("only inside `.hub-futura`") and `hub-tokens.css`
-    ("eight-anchor nav") — the pinned count is 9 + 2 since 2026-09-24 (`hub-nav.js`'s "Nine primary" is accurate
+    ("eight-anchor nav") — the pinned count is 10 + 2 since 2026-09-30 (`hub-nav.js`'s "Ten primary" is accurate
     again); and `motion.test.mjs`'s opening comment
     still says `s` units are not checked, though the test now checks them.
 8. Focus-ring color is mixed (`--moon-300`, `--accent`, raw rgba) and breakpoints drift — both open in `TODOS.md`.
@@ -749,5 +751,7 @@ Build order when adding a new surface:
 | 2026-09-25 | 넛지는 별도 섹션이 아니라 **대상에 붙는 제안 팁**이다 — 공용 `SuggestionTip`(`components/hub/suggestion-tip.jsx`) 한 줄 `◇ 제안 · <이유> [행동 하나]`, `CertaintyBadge state="recommended"`의 점선·빈 마름모와 직접 라벨만 쓰고 채움·빨강·영속 모션을 쓰지 않는다. 대상(고객·거래) 하나에 팁 하나, 팁은 저장하지 않고 기존 시트·흐름을 미리 채워 연다. 이관 템플릿 다음 행동도 약속이 아니라 같은 팁으로 보인다. 위치: 오늘 연락 행·고객 목록(정보 전용)·고객 드로어 약속 카드 | confirmed | 운영자 "넛지는 디자인 요소나 추천 팁 혹은 제안 같은 쪽으로" + 템플릿 약속 구분 동의(2026-09-24). §5.3 권장 확실성 문법을 그대로 쓰므로 새 색·모양 어휘가 없다. 옛 `CrmNudgeSection` 패널은 제거. 상세 `docs/superpowers/specs/2026-09-24-revenue-four-tabs-design.md` §12 |
 | 2026-09-26 | 거래 탭의 보기를 **돈 · 단계** 둘로 줄인다. 돈 보기는 매출·현금흐름만 — 머리 카드 한 장(월 매출/목표 + KPI 넷 + 확실성 띠), 현금흐름 주·월 차트, 들어올 돈 목록. 지난 달은 그리지 않는다. 확실(계약)·가능(계약 전)은 §5.3 선 모양으로, 빨강은 계약됐는데 늦은 돈에만. 시간축 막대·입금 달력·결제 표·언제 레인은 넣지 않는다(프로젝트 타임라인·오늘 연락과 겹침) | confirmed | 운영자가 목업 다섯 안을 비교한 뒤 "더 컴팩트하고 본질(매출·현금흐름)에만 집중한 버전"을 골랐다(2026-09-26). 2026-09-24 행의 거래 탭 "언제" 기본 보기와 2026-09-25 결제 보기를 대체한다. 상세 `docs/superpowers/specs/2026-09-24-revenue-four-tabs-design.md` §14 |
 | 2026-09-26 | 거래 돈 보기의 패널 처리 = **먹색 머리 + 한 장**: 월 매출 카드만 반전 면(`--moon-50` 면, 글자는 `--surface` 쪽 — 라이트에선 먹색 카드, 다크에선 밝은 카드)이고, 새 색 없이 카드 범위에서 `--fg`·`--line*`·`--danger` 등을 `color-mix`로 다시 묶는다. 현금흐름과 들어올 돈은 한 장(`.deals-money-sheet`) 안에서 1px 선으로만 나뉜다. 이 반전 면은 거래 돈 보기 머리 카드 한 곳 한정 | confirmed | 운영자가 패널 처리 시안 A(층 나누기)·B(먹색 머리 + 한 장) 중 B를 골랐다(2026-09-26). 세 덩어리가 모두 같은 흰 카드라 위계가 없던 문제를 톤으로 푼다 |
+| 2026-09-26 | 데스크톱 빠른 입력 위젯 페이지 `/widget`(`components/hub/quick-widget.jsx`, `app/widget/widget.css`) — Windows 앱의 380×200 위젯 창(`apps/desktop/widget-window.js`)이 띄운다. 380px 창은 `hub-tokens.css`의 `(pointer: coarse), (max-width: 720px)` 터치 플로어에 **폭만으로** 걸리므로, 위젯 스코프(`.hub-app.quick-widget-page`) 안에서 `(pointer: fine)`일 때만 44px 버튼·16px 입력 플로어를 되돌린다(거친 포인터는 플로어 유지). 앱 안에서는 창 모서리를 OS가 둥글리고 페이지는 1px `--line` 선만 긋는다(`--shadow-pop`·`--r-lg` 없음, 브라우저 탭에서는 카드로 그린다). 입력 칸 포커스 링은 §11 1px `--moon-300` 그대로 `outline-offset: -1px`(§15 2026-09-15 선례) | recommended | 운영자가 2026-09-26 위젯 목업을 그대로 승인했다. §7 Responsive·§11 터치 플로어의 위젯 한정 예외라 결정 로그에 남기고, 실사용으로 확인하기 전까지 권장으로 둔다. `quick-widget.test.mjs`가 스코프·고정 높이·포커스 규칙을 고정한다 |
 | 2026-09-29 | OKR·KPI 화면을 개념별로 나눈다 — 보기는 **OKR · KPI · 체크인 · 주간 실측** 넷(옛 3열 매트릭스·펄스 스트립 제거). 스키마는 그대로 두고 role로 가른다: `outcome`·`driver` + 약속선(target) 있음 = **KR**(점수 0~1 = 약속선 대비 진척, 목표 점수 = 점수 난 KR의 평균, 측정 못 한 KR은 0점이 아니라 "미측정 n"), 약속선 없는 outcome·driver = **기록만 하는 지표**(접힘, 점수 없음), `guardrail` = **KPI**(점수 없이 선 안·선 밖 + 추이 + 마지막 관측 경과일). 상태는 색이 아니라 글리프+글(✓ 선 안 · ▲ 선 밖 · ◐ 일부 근거 · ○ 미측정), 빨강은 선 밖에만이고 붉은 좌측 1px 줄은 3곳까지(넘으면 머리말 집계와 행 기호만, §5.3 red budget). `Progress`·`ProgressRing`·success/warning 색은 이 화면에서 쓰지 않는다(점수 트랙은 moonstone 한 줄). 목표 카드는 기간 경과율과 점수를 나란히 놓고 글로만 페이스를 말한다. KR이 없거나 5개 초과이거나 결과 KR이 없을 때만 `CertaintyBadge recommended` 제안 한 줄. 2026-09-30 추가: 늘리기 KR 행 아래에 월 목표를 주 단위로 쪼갠 한 줄(`지금쯤 N · 기준선보다 늦음 · 이번 주 a/b`, 저장 없이 기간 경과율로 계산, 늦음도 색 없이 글로만) — 근거는 `docs/superpowers/specs/2026-09-30-okr-kpi-third-party-evaluation.md`. 2026-09-30 운영자 확정(Q1·Q2): 채점은 스펙대로 **바닥 0.7 · 천장 1.0** — 천장을 저장하기 전(0053)엔 바닥 0.7에서 멈추고 `바닥 달성 · 천장 미등록`, 점수 트랙에 0.7 눈금, 목표 페이스는 0.7 × 기간 경과(바닥 페이스)와 비교, 주 1건 미만 KR은 마지막 주에만 늦음 판정. 안티 골은 기간 중 진행 점수에서 빼고 채점지에서만 KR로 넣는다 | recommended | 운영자 "OKR, KPI 이어서 구성·내용 더 쪼개기 — 각 개념의 본질에 부합하게". OKR은 기간이 있는 목표+점수, KPI는 기간 없이 계속 지킬 건강 지표라는 본질이 한 목록의 role 배지로 뭉개져 있었다. 규칙 정본은 `lib/goal-concepts.js`(테스트 `goal-concepts.test.mjs`)이고 도전값(천장)은 저장하지 않아 점수는 등록된 약속선 대비다. 링크 계약은 `?kpi=1`(옛 `?matrix=1`은 OKR로 열림). 운영자가 화면을 보고 확정하기 전까지 `recommended` |
+| 2026-09-30 | 사이드바에 `제품` 앵커를 `프로젝트`와 `브랜드` 사이에 추가한다(주요 10 + 유틸리티 2). 착지는 `dashboard/products` 하나이고 소속(scope) 쿼리를 붙이지 않으며 탑바 탭도 없다 — 포트폴리오·문의함 전환은 페이지 안 `SegmentedControl`이다. 화면은 제품 운영실 B안(`ProjectProductsView`)을 그대로 옮겼고, 프로젝트 탭의 `?view=products` 보기는 없앴다(옛 링크는 같은 쿼리로 새 탭에 넘긴다). 아이콘 `navProducts`는 상자 윤곽 한 가지 선 아이콘으로 펼친 행과 56px 레일에 같이 쓴다. §5.2 색 규칙·§7 고정 밀도·§11 20px/500 제목 그대로(Futura 페이지 텍스처 아님) | confirmed | 운영자 "09-28 기준으로 확정, 별도 탭 ㄱㄱ"(2026-09-30). 제품은 끝나는 일이 아니라 계속 사는 운영 대상이라 프로젝트의 한 보기로 담기지 않는다 — 브랜드 탭 분리(2026-08-29)와 같은 이유. 같은 답으로 MVP·출시·성장 동시 3개 상한(Engine이 거절, 거절 문구가 칸을 차지한 제품 이름을 말한다)과 고객 적합 후보의 같은 소속 한정도 확정됐다. `hub-nav.test.mjs`가 앵커 수·순서·경로를 고정한다. 상세 `docs/superpowers/specs/2026-09-24-product-dev-projects-draft.md` §12·§14 |
 | 2026-10-01 | OKR·KPI 목업 ①·③·④ 구현(마이그레이션 없음). ① 목표 카드 머리는 **겹친 트랙**(점선 영역 = 바닥 페이스 0.7 × 기간 경과, 채움 = 진행 점수, 1px 눈금 = 0.7 바닥), 선행 KR은 기간을 월요일 주로 나눈 **주간 칸**(이번 주만 Moonstone 테두리, 앞으로 올 주는 점선, 못 채운 칸도 빨강 없음), 주 1건 미만 KR은 눈금 한 줄 + `기간 안 N · 마지막 주에 판정`, 목표에 연결한 기한 있는 할 일로 **마일스톤 줄**(기한 지난 것만 빨강 글자), `지키는 약속` 줄(줄이기·목표 0 유지 기준), `마지막 기록 n일 전`. ③ KPI는 선의 모양으로 **지킬 범위**(불릿 차트: 옅은 띠 = 허용 범위, 짙은 막대 = 이번 값, 세로 선 = 지난 관측)와 **0 유지**(주별 ✓ 칸 + `N주째 유지`) 두 묶음, 스파크라인은 행에서 뺐다. ④ 기간이 끝난 진행 중 목표는 카드가 제자리에서 **채점지**가 된다 — KR 표(최종·바닥·달성·점수·마감 값 기록), 2×2 판정(해당 칸만 Moonstone 테두리), 하나만 바꾸기 선택, KPI 한 달·기록만 한 지표, 회고(메모 decision, 개인 목표에 연결), `채점 저장` = 회고 + 목표 보관, `다음 기간으로 이어가기` = 같은 정의로 새 목표 + 지표를 순서대로 만들고 실패하면 남은 것만 재시도 | confirmed | 운영자가 목업 ①·③·④를 보고 구현을 지시(2026-10-01). 10월 개발 동결(개인 사업 OKR v3 확정 12)과 부딪히는 것을 알고 "지금 구현, 안티 골 KR4에 1건 기록"을 골랐다. 목업과 다른 점 두 가지는 스키마가 없어서다 — KPI의 `매주/월말` 묶음과 안티 골을 평균에 넣는 채점(Q2)은 지표별 표시 칸이 필요해 0053으로 미루고, 대신 모양 기준 묶음과 `지키는 약속` 줄로 둔다. 규칙은 `lib/goal-concepts.js`, 채점지는 `components/hub/goal-scorecard.jsx` |

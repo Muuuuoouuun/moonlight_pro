@@ -5,11 +5,14 @@ import SwiftUI
 @MainActor
 final class GlassLabWindowController: NSWindowController {
     init() {
-        let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 1040,height: 660),
+        let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 1160,height: 740),
                               styleMask: [.titled,.closable,.resizable,.miniaturizable], backing: .buffered, defer: false)
         window.title = "Moonlight · Glass Lab"
-        window.minSize = NSSize(width: 860,height: 600)
-        window.contentView = NSHostingView(rootView: GlassLabView())
+        window.minSize = NSSize(width: 1100,height: 700)
+        window.contentView = NSHostingView(rootView: TabView {
+            GlassQualityAuditView().tabItem { Text("배경·테마 평가") }
+            GlassLabView().tabItem { Text("광학 비교") }
+        })
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.center()

@@ -4,8 +4,15 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Button, Skeleton, TruthBadge, EmptyState, Kbd } from "../hub-primitives";
 import { CalendarOutcome } from "../calendar-outcome";
+import { PublishDue } from "./publish-due";
 import { SIGNAL_TARGETS } from '@/lib/signal-targets';
 import { DailyReviewCue } from '../daily-review-cue';
+import { GuruRecommendation, GuruRecommendationList } from '../guru-recommendation';
+import { useGuruRecommendations, recommendationForSubject } from '../guru-recommendations-client';
+import { readEnvelope, useDailyBriefSignals } from '../daily-brief-signals';
+import { HomeMorningBrief } from './home-morning-brief';
+import { formatHomeClock } from './home-morning-brief.js';
+import { GuidanceInlineTip } from '../guidance-inline-tip';
 
 // Home — Futura 텍스처의 첫 화면 (DESIGN.md §15, 2026-09-18).
 //
@@ -22,48 +29,7 @@ function formatEyebrowDate(date) {
   }).format(date);
 }
 
-function formatClock(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '--:--';
-  return new Intl.DateTimeFormat('ko-KR', {
-    timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false,
-  }).format(d);
-}
-
-// 허브 read 봉투(CLAUDE.md): read 실패는 5xx가 아니라 HTTP 200 + status:"error"로 온다.
-// `!r.ok`만 보면 read 실패가 빈 상태("대기 없음")로 위장된다.
-function readEnvelope(res, data) {
-  if (!res.ok || !data) return 'error';
-  if (data.status === 'error' || data.source === 'error') return 'error';
-  return data.status || 'preview';
-}
-
-function useDailyBriefSignals(reloadKey) {
-  const [state, setState] = React.useState({ status: 'loading', signals: [] });
-
-  React.useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-    setState({ status: 'loading', signals: [] });
-    (async () => {
-      try {
-        const res = await fetch('/api/hub/daily-brief', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]) });
-        const data = await res.json().catch(() => null);
-        if (!active) return;
-        const status = readEnvelope(res, data);
-        setState({
-          status,
-          signals: status === 'error' ? [] : (Array.isArray(data?.signals) ? data.signals : []),
-        });
-      } catch {
-        if (active) setState({ status: 'error', signals: [] });
-      }
-    })();
-    return () => { active = false; controller.abort(); };
-  }, [reloadKey]);
-
-  return state;
-}
+// 허브 read 봉투 해석과 daily-brief 신호 읽기는 데스크톱 위젯과 공유한다(daily-brief-signals.js).
 
 function useTodaySchedule(reloadKey) {
   const [state, setState] = React.useState({ status: 'loading', events: [] });
@@ -99,7 +65,7 @@ function useTodaySchedule(reloadKey) {
   return state;
 }
 
-function TriageDetail({ signal, onDecide }) {
+function TriageDetail({ signal, onDecide, recommendation = null, onGuidanceAsk, onNavigate }) {
   if (!signal) {
     return (
       <div className="fx-card">
@@ -126,6 +92,12 @@ function TriageDetail({ signal, onDecide }) {
 
       <h3 className="fx-card-title">{signal.title}</h3>
       {signal.summary ? <p className="fx-card-body">{signal.summary}</p> : null}
+      {/* 이 신호의 거래·고객에 저장된 사실이 있을 때만 — 결정 바로 옆에서 읽는 추천(§2.1 ⑦). */}
+      {recommendation ? (
+        <div style={{ marginTop: 16 }}>
+          <GuruRecommendation recommendation={recommendation} onAsk={onGuidanceAsk} onNavigate={onNavigate} compact />
+        </div>
+      ) : null}
 
       {decisions.length ? (
         <>
@@ -152,8 +124,8 @@ function TriageDetail({ signal, onDecide }) {
   );
 }
 
-function TodaySchedule({ onNavigate, reloadKey, onReload }) {
-  const { status, events } = useTodaySchedule(reloadKey);
+function TodaySchedule({ onNavigate, schedule, onReload }) {
+  const { status, events } = schedule;
   const now = Date.now();
 
   return (
@@ -191,7 +163,7 @@ function TodaySchedule({ onNavigate, reloadKey, onReload }) {
                 compact
                 eventKey={e.outcomeKey}
                 title={e.title}
-                whenLabel={formatClock(e.start)}
+                whenLabel={formatHomeClock(e.start)}
                 past={past}
                 aside={live ? <span className="fx-now">NOW</span> : null}
               />
@@ -203,9 +175,12 @@ function TodaySchedule({ onNavigate, reloadKey, onReload }) {
   );
 }
 
-export function Home({ onNavigate }) {
+export function Home({ onNavigate, onGuidanceAsk }) {
   const [reloadKey, reload] = React.useReducer(value => value + 1, 0);
-  const { status, signals } = useDailyBriefSignals(reloadKey);
+  const brief = useDailyBriefSignals(reloadKey);
+  const schedule = useTodaySchedule(reloadKey);
+  const { status, signals } = brief;
+  const guruRecommendations = useGuruRecommendations();
   const [resolved, setResolved] = React.useState(() => new Set());
   const [cursor, setCursor] = React.useState(0);
 
@@ -302,11 +277,25 @@ export function Home({ onNavigate }) {
             ))}
           </ul>
 
-          <TriageDetail signal={active} onDecide={decide} />
+          <TriageDetail
+            signal={active}
+            onDecide={decide}
+            recommendation={active?.subject?.id ? recommendationForSubject(guruRecommendations, active.subject.id) : null}
+            onGuidanceAsk={onGuidanceAsk}
+            onNavigate={onNavigate}
+          />
         </div>
       )}
 
-      <TodaySchedule onNavigate={onNavigate} reloadKey={reloadKey} onReload={reload} />
+      <GuruRecommendationList result={guruRecommendations} onAsk={onGuidanceAsk} onNavigate={onNavigate} onRetry={guruRecommendations.reload} />
+      <PublishDue />
+
+      <TodaySchedule onNavigate={onNavigate} schedule={schedule} onReload={reload} />
+
+      <div className="home-morning-stack">
+        <GuidanceInlineTip variant="home" onNavigate={onNavigate} />
+        <HomeMorningBrief brief={brief} schedule={schedule} onNavigate={onNavigate} />
+      </div>
 
       <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <Kbd>J</Kbd><Kbd>K</Kbd> 이동 · <Kbd>1</Kbd>–<Kbd>9</Kbd> 결정

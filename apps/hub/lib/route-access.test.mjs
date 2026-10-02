@@ -18,6 +18,16 @@ test("배포 호스트에서 세션 없이 화면을 열면 로그인으로 보�
   }
 });
 
+test("데스크톱 위젯 화면(/widget)은 다른 화면과 같이 세션을 요구한다", () => {
+  // 위젯은 /dashboard 밖(HubApp 없이)에 있지만 공개 경로가 아니다. 앱 창은 로그인으로 가면
+  // 스스로 숨고 메인 창에서 로그인한다(apps/desktop/main.js) — 게이트를 열 이유가 없다.
+  assert.equal(isOpenPath("/widget"), false);
+  assert.equal(deployed({ pathname: "/widget" }).action, "login");
+  assert.equal(deployed({ pathname: "/widget", hasSession: true }).action, "allow");
+  assert.equal(deployed({ pathname: "/widget", secretConfigured: false }).action, "not-configured");
+  assert.equal(resolveRouteAccess({ pathname: "/widget", host: "localhost:3141", hasSession: false, secretConfigured: true, allowLoopback: false }).action, "login");
+});
+
 test("유효한 세션이 있으면 통과한다", () => {
   assert.equal(deployed({ pathname: "/api/hub/revenue", hasSession: true }).action, "allow");
   assert.equal(deployed({ pathname: "/dashboard", hasSession: true }).action, "allow");
@@ -66,6 +76,24 @@ test("공개 법률·앱 소개 페이지만 비로그인 접근을 허용한다
   }
 });
 
+test("Android App Links 검증 파일만 세션 없이 열고 .well-known 의 다른 경로는 닫는다", async () => {
+  const path = "/.well-known/assetlinks.json";
+  assert.equal(deployed({ pathname: path }).action, "allow");
+  // 로그인 설정이 불완전해도 앱 링크 검증은 막히지 않는다(공개 지문뿐이다).
+  assert.equal(deployed({ pathname: path, secretConfigured: false }).action, "allow");
+  for (const closed of ["/.well-known", "/.well-known/", "/.well-known/other.json", `${path}/x`, "/.well-known/assetlinks.json.bak"]) {
+    assert.notEqual(deployed({ pathname: closed }).action, "allow", closed);
+  }
+  // 파일이 실제로 있고, 앱 패키지와 대문자·콜론 구분 SHA-256 지문을 담는다.
+  const links = JSON.parse(await readFile(new URL("../public/.well-known/assetlinks.json", import.meta.url), "utf8"));
+  const target = links.find((entry) => entry.target?.namespace === "android_app")?.target;
+  assert.equal(target?.package_name, "app.moonlight.hub");
+  assert.ok(target.sha256_cert_fingerprints.length >= 1);
+  for (const fingerprint of target.sha256_cert_fingerprints) {
+    assert.match(fingerprint, /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/, fingerprint);
+  }
+});
+
 test("로컬(loopback)은 세션 없이 통과한다", () => {
   for (const host of ["localhost:3000", "127.0.0.1:3010", "[::1]:3000", "LOCALHOST:3000"]) {
     assert.equal(resolveRouteAccess({ pathname: "/api/hub/revenue", host, secretConfigured: true, hasSession: false }).action, "allow", host);
@@ -107,10 +135,13 @@ test("matcher 가 확장자 캐치올로 게이트를 끄지 않는다", async (
   for (const path of [
     "/_next/static/chunk.js", "/fonts/SUIT-Variable.woff2", "/favicon.ico", "/manifest.json",
     "/icon.svg", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/apple-touch-icon.png",
+    // Android App Links 검증 파일 — Google 검증 서버의 요청이 미들웨어를 거치며 리다이렉트됐다
+    // (2026-09-26 실측, 국내 curl 은 200). 다른 공개 자산처럼 매처 밖에 둔다.
+    "/.well-known/assetlinks.json",
   ]) {
     assert.ok(!pattern.test(path), `${path} 는 정적 자산이라 통과해야 한다`);
   }
-  for (const path of ["/icon-512.png/private", "/icon-512.png.evil", "/api/hub/icon-512.png"]) {
+  for (const path of ["/icon-512.png/private", "/icon-512.png.evil", "/api/hub/icon-512.png", "/.well-known/other.json", "/api/.well-known/assetlinks.json"]) {
     assert.ok(pattern.test(path), `${path} 는 자산 이름을 흉내 내도 인증을 거쳐야 한다`);
   }
 });

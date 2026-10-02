@@ -7,3 +7,21 @@
 .saved p { margin:0; }
 .saved > button { justify-self:start; }
 .actions { display:flex; justify-content:flex-end; }
+.history { display:grid; gap:12px; padding:16px; border-top:1px solid var(--line-soft); }
+.historyHead { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.historyHead strong { font-size:13px; font-weight:600; }
+.historyList { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.historyRow { display:grid; gap:8px; padding:12px; border:1px solid var(--line-soft); border-radius:var(--r-sm); font-size:12px; line-height:1.6; overflow-wrap:anywhere; min-width:0; }
+.historyMeta { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:var(--fg-muted); font-size:12px; }
+.historyInstruction { margin:0; color:var(--fg); font-size:13px; line-height:1.6; white-space:pre-wrap; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.receipt { display:grid; gap:6px; padding-top:8px; border-top:1px solid var(--line-soft); }
+.receipt p { margin:0; white-space:pre-wrap; }
+.evidence { margin:0; padding-left:18px; display:grid; gap:4px; }
+.evidenceKind { color:var(--fg-dim); }
+.original summary { cursor:pointer; color:var(--fg-muted); font-size:12px; line-height:1.6; }
+.original p { margin:8px 0 0; white-space:pre-wrap; }
+.original strong { font-weight:500; }
+.original summary:focus-visible { outline:1px solid var(--moon-300); outline-offset:2px; }
+@media (pointer: coarse) {
+  .original summary { min-height:44px; padding-top:10px; box-sizing:border-box; }
+}

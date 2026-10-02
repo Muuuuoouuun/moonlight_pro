@@ -29,17 +29,23 @@ test("Studio header keeps only 새 글 + 더보기 (plus a save retry that appea
 
 test("Studio main surface stays within its control budget", () => {
   const main = between(studio, '<section className="studio-main"', "</section>");
-  // 제목 · 원문 메모 · (채널 2개 이상일 때) 결과물 전환 · 복사 · 발행했음
-  assert.ok(count(main, CONTROLS) <= 5, `main surface controls ${count(main, CONTROLS)} > 5`);
+  // 제목 · 원문 메모 · (채널 2개 이상일 때) 결과물 전환 · 복사 · 예약 · 발행했음 — 예약은 2026-09-29 확정으로 +1
+  assert.ok(count(main, CONTROLS) <= 6, `main surface controls ${count(main, CONTROLS)} > 6`);
   for (const moved of ["GoalLinks", "JournalSources", "BRIEF_FIELDS", "BLOCKERS", "다음 행동", "검수 게이트", "내보내기"]) {
     assert.ok(!main.includes(moved), `${moved} belongs in the 더보기 drawer, not the main surface`);
   }
   assert.doesNotMatch(studio, /<aside\b/, "Studio has no side panel — secondary tools live in the 더보기 drawer");
 });
 
-test("Studio AI exposes exactly two direct actions; request, templates and other operations are folded", () => {
-  const row = between(ai, '<div className="studio-actions studio-ai-actions">', "</div>");
-  assert.equal(count(row, /<Button\b/g), 2, "AI 초안 · AI 다듬기");
+test("Studio format tabs are one SegmentedControl above the card, defaulting to the channel list of 3", () => {
+  assert.equal(count(studio, /<SegmentedControl\b/g), 1, "형식 탭 하나");
+  assert.ok(studio.indexOf("<SegmentedControl") < studio.indexOf('<section className="studio-main"'), "탭은 본문 카드 밖(내비)에 둔다");
+  assert.match(studio, /FORMAT_TABS = \[[^\]]*threads[^\]]*instagram[^\]]*youtube_shorts/);
+});
+
+test("Studio AI exposes at most three direct actions (초안 · 다듬기 · 형식별 1개); request, templates and other operations are folded", () => {
+  const row = between(ai, '<div className="studio-actions studio-ai-actions">', "</div>\n      {!draft.brandId");
+  assert.equal(count(row, /<Button\b/g), 3, "AI 초안 · AI 다듬기 · 첫 줄 3안(스레드만)");
   assert.equal(count(row, /<(SelectField|TextField|TextAreaField)\b/g), 0);
   // 요청문·템플릿·기타 작업은 접힌 <details> 안에만 있다.
   const request = between(ai, '<details className="studio-ai-request">', "</details>");

@@ -1,0 +1,4 @@
+# 저장소 기본은 LF 지만, cmd 배치 파일은 CRLF 여야 레이블 점프가 안전하다(gradlew.bat).
+*.bat text eol=crlf
+*.jar binary
+*.jks binary

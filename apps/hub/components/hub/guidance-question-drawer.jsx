@@ -182,7 +182,7 @@ function QuestionChat({ card, context = {}, onClose }) {
     <div className="guidance-chat__scroll" ref={logRef}>
       {card ? <section className="guidance-chat__lens" aria-label="선택한 멘토 관점">
         <span className="guidance-chat__eyebrow">{DOMAIN_LABELS[card.domain]} · 선택한 관점</span>
-        {context?.label && <span className="guidance-chat__context">대상 브랜드 · {context.label}</span>}
+        {context?.label && <span className="guidance-chat__context">{card.domain === 'sales' ? '대상 고객' : '대상 브랜드'} · {context.label}</span>}
         <h3>{card.person}</h3>
         <p>{card.frame}</p>
         <p className="guidance-chat__sample">생각해 볼 질문 · {card.question}</p>

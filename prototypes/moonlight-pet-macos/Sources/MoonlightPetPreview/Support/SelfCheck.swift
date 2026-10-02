@@ -45,7 +45,21 @@ enum SelfCheck {
 
     @MainActor
     static func run() -> Bool {
-        guard checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkReadingTone() else { return false }
+        for (raw, expected) in [("moonlight-pet://memo", PetCommand.memo), ("moonlight-pet://tasks", .tasks)] {
+            guard PetCommand(url: URL(string: raw)!) == expected else {
+                fputs("Pet command routing check failed\n", stderr)
+                return false
+            }
+        }
+        for raw in ["https://memo", "moonlight-pet://save", "moonlight-pet://memo/save",
+                    "moonlight-pet://memo?text=ignored", "moonlight-pet://tasks#save",
+                    "moonlight-pet://user@memo", "moonlight-pet://tasks:123"] {
+            guard PetCommand(url: URL(string: raw)!) == nil else {
+                fputs("Pet command validation check failed\n", stderr)
+                return false
+            }
+        }
+        guard checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkReadingTone() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,
@@ -59,6 +73,16 @@ enum SelfCheck {
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(false, forKey: "petHub.enabled")
         let model = AppModel(defaults: defaults)
+        guard model.hubBaseURL == "https://moonlight-pro-hub.vercel.app" else {
+            fputs("Default production Hub URL check failed\n", stderr)
+            return false
+        }
+        defaults.set("http://127.0.0.1:3141", forKey: "petPreview.hubURL")
+        guard AppModel(defaults: defaults).hubBaseURL == "http://127.0.0.1:3141" else {
+            fputs("Explicit Hub URL preference must survive restart\n", stderr)
+            return false
+        }
+        defaults.removeObject(forKey: "petPreview.hubURL")
         guard model.selectedCharacter == .silver else {
             fputs("Default character check failed\n", stderr)
             return false
@@ -224,6 +248,37 @@ enum SelfCheck {
         return true
     }
 
+    @MainActor private static func checkPetClicks() -> Bool {
+        let suite = "pet-click-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let view = PetClickView(frame: CGRect(x: 0, y: 0, width: 56, height: 56), model: AppModel(defaults: defaults))
+        var singles = 0, doubles = 0
+        view.onClick = { singles += 1 }
+        view.onDoubleClick = { doubles += 1 }
+        func click(_ count: Int) {
+            let down = NSEvent.mouseEvent(with: .leftMouseDown, location: CGPoint(x: 20, y: 20), modifierFlags: [],
+                timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: count, pressure: 1)!
+            let up = NSEvent.mouseEvent(with: .leftMouseUp, location: CGPoint(x: 20, y: 20), modifierFlags: [],
+                timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: count, pressure: 0)!
+            view.mouseDown(with: down); view.mouseUp(with: up)
+        }
+        func settle() {
+            let deadline = Date().addingTimeInterval(NSEvent.doubleClickInterval + 0.1)
+            while Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
+        }
+        click(1)
+        guard singles == 0 else { fputs("Single click hid the pet before the double-click deadline\n", stderr); return false }
+        click(2)
+        settle()
+        guard singles == 0, doubles == 1 else { fputs("Double click also opened a transient panel\n", stderr); return false }
+        click(1)
+        settle()
+        guard singles == 1, doubles == 1 else { fputs("Single click must still open the quick panel\n", stderr); return false }
+        print("PASS: pet single/double click arbitration, including perched quick memo")
+        return true
+    }
+
     private static func checkPanelInteraction() -> Bool {
         var glass = GlassPressState()
         guard !glass.showsTint(accessibilityRequiresSolid: false) else { return false }
@@ -257,18 +312,18 @@ enum SelfCheck {
         drag.begin(at: CGPoint(x: 100, y: 100))
         guard drag.translation(to: CGPoint(x: 101, y: 101)) == nil,
               !drag.isDragging,
-              drag.translation(to: CGPoint(x: 100, y: 104)) == 4 else {
+              drag.translation(to: CGPoint(x: 100, y: 104)) == CGPoint(x: 0, y: 4) else {
             fputs("Drag threshold check failed\n", stderr)
             return false
         }
         // Subpixel events must not be discarded after the gesture activates.
         for step in 1...12 {
-            guard drag.translation(to: CGPoint(x: 100, y: 104 + Double(step) * 0.5)) == 0.5 else {
+            guard drag.translation(to: CGPoint(x: 100, y: 104 + Double(step) * 0.5)) == CGPoint(x: 0, y: 0.5) else {
                 fputs("Slow continuous drag check failed\n", stderr)
                 return false
             }
         }
-        guard drag.translation(to: CGPoint(x: 100, y: 109)) == -1 else { return false }
+        guard drag.translation(to: CGPoint(x: 100, y: 109)) == CGPoint(x: 0, y: -1) else { return false }
         drag.end()
         guard !drag.isDragging, drag.translation(to: .zero) == nil else { return false }
 

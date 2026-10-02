@@ -21,6 +21,21 @@ test('card keeps browsing separate from advice generation and lets the reader hi
   assert.doesNotMatch(card, /fetch\(|requestGuruCoaching\(|createWorkOrder\(/);
 });
 
+// 홈·오늘은 큰 순환 카드를 두지 않는다. 2026-09-30 정정으로 홈도 분류 없는 한 줄 팁 하나를 둔다.
+// 기록 기반 추천 목록은 그와 별도로 act 추천이 있을 때만 그린다.
+test('Home and Today keep one-line tips and record-based recommendations without a rotating Guru card', () => {
+  const home = read('./pages/home.jsx');
+  const today = read('./pages/daily-brief.jsx');
+  for (const [name, source] of [['home', home], ['today', today]]) {
+    assert.doesNotMatch(source, /<GuruGuidanceCard/, name);
+    assert.match(source, /<GuruRecommendationList result=\{guruRecommendations\}/, name);
+  }
+  assert.equal((today.match(/<GuidanceInlineTip\b/g) || []).length, 1);
+  assert.equal((home.match(/<GuidanceInlineTip\b/g) || []).length, 1);
+  // 홈의 신호 상세는 그 신호가 가리키는 기록의 추천만 붙인다.
+  assert.match(home, /recommendationForSubject\(guruRecommendations, active\.subject\.id\)/);
+});
+
 test('Guru cards take existing surface space and stay out of Home and Today triage', () => {
   const chat = read('./pages/agents.jsx');
   const revenue = read('./pages/revenue.jsx');

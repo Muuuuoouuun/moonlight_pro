@@ -4,7 +4,7 @@ import React from "react";
 import { useSearchParams } from 'next/navigation';
 import { CodexJobsPanel } from "./codex-jobs";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState, SegmentedControl, TruthBadge, Skeleton, LifecycleBadge, Checkbox, TextAreaField } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState, SegmentedControl, TruthBadge, Skeleton, LifecycleBadge, Checkbox, TextAreaField, useToast } from "../hub-primitives";
 import { useUndoableAction } from '../use-undoable-action';
 import { ContactRecordDrawer } from '../contact-record-form';
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE, guruUiModeForRequestMode, shouldAutoRunGuruOnOpen } from "../guru-client";
@@ -14,7 +14,7 @@ import { GuruGuidanceCard } from '../guru-guidance-card';
 import { requestCouncilAdvice, councilChatPath } from "../council-client";
 import { COUNCIL_HANDOFF_DRAFT_LIMIT, consumeCouncilDesktopHandoff, createCouncilDraftState, reduceCouncilDraft } from '../council-desktop-handoff';
 import { RECOMMENDED_TRIADS } from "../council-legends";
-import { requestPersonaChat, PERSONA_MODE_LABEL, LEGEND_LENS_MAP } from "../persona-client";
+import { requestPersonaChat, PERSONA_MODE_LABEL, GURU_LENS_MAP, GURU_LENS_CHIPS } from "../persona-client";
 import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
 
 const DEFAULT_PERSONA_KEY = PERSONA_CONTRACT[0]?.id || 'order';
@@ -501,8 +501,8 @@ export function AgentsChat({ onNavigate }) {
               >
                 기본
               </button>
-              {['jobs', 'bezos', 'chouinard', 'voss', 'ogilvy', 'carnegie', 'hill'].map((lid) => {
-                const l = LEGEND_LENS_MAP[lid];
+              {GURU_LENS_CHIPS.map((lid) => {
+                const l = GURU_LENS_MAP[lid];
                 const active = activeLens === lid;
                 return (
                   <button
@@ -933,7 +933,10 @@ function WorkOrdersQueue({ status, onStatusChange }) {
   const [locked, setLocked] = React.useState(new Set());
   const [notices, setNotices] = React.useState([]);
   const [copiedId, setCopiedId] = React.useState(null);
+  // 연락 기록창 대상 — 확인 토스트는 서버가 saved로 답한 뒤에만 띄우고(폼은 그 전까지 "기록 중"·
+  // "저장 중"이라고만 말한다), 늦은 실패면 { draft, error }를 얹어 입력 그대로 다시 연다.
   const [recordTarget, setRecordTarget] = React.useState(null);
+  const toast = useToast();
   const lockedRef = React.useRef(new Set());
   const readSeq = React.useRef(0);
   const statusRef = React.useRef(status);
@@ -1116,7 +1119,20 @@ function WorkOrdersQueue({ status, onStatusChange }) {
             </div>;
           })}
       </Card>
-      {recordTarget && <ContactRecordDrawer target={recordTarget} onClose={() => setRecordTarget(null)} />}
+      {recordTarget && (
+        <ContactRecordDrawer
+          target={recordTarget}
+          draft={recordTarget.draft || null}
+          initialError={recordTarget.error || ''}
+          onPersisted={() => toast.success(`기록됨 · ${recordTarget.name || '고객'}`)}
+          onFailed={({ message, form }) => {
+            const { draft: _draft, error: _error, ...target } = recordTarget;
+            toast.error(`기록하지 못했습니다 · ${target.name || '고객'} — ${message}`);
+            setRecordTarget((cur) => cur || { ...target, draft: form, error: message });
+          }}
+          onClose={() => setRecordTarget(null)}
+        />
+      )}
     </div>
   );
 }

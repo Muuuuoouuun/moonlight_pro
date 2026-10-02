@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.moonlight.hub",
+      "sha256_cert_fingerprints": [
+        "A2:C4:EC:CE:49:A8:34:90:A0:A0:6A:1B:D5:1F:A9:6E:EF:98:81:5D:75:AD:B0:7D:A9:F7:30:C6:BC:A0:1A:D7",
+        "61:73:16:8E:18:B1:23:7E:0C:A1:47:0A:F7:48:DD:FA:10:D5:5E:B4:57:A7:67:5A:39:DE:93:91:4A:74:57:38"
+      ]
+    }
+  }
+]

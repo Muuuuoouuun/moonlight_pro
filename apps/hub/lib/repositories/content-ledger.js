@@ -32,6 +32,7 @@ const VARIANT_TYPES = [
   "reels_script",
   "landing_copy",
   "threads_post",
+  "base_text",
 ];
 
 const ITEM_STATUS_LABEL = {
@@ -44,6 +45,7 @@ const ITEM_STATUS_LABEL = {
 };
 
 const VARIANT_KIND_LABEL = {
+  base_text: "원본 초안",
   card_news: "Carousel",
   blog: "Blog",
   blog_insight: "Insight",
@@ -56,6 +58,7 @@ const VARIANT_KIND_LABEL = {
 };
 
 const VARIANT_CHANNEL_LABEL = {
+  base_text: "채널 미지정",
   card_news: "Instagram",
   blog: "Web",
   blog_insight: "Web",
@@ -67,6 +70,7 @@ const VARIANT_CHANNEL_LABEL = {
   landing_copy: "Web",
 };
 const CHANNEL_LABEL = {
+  unassigned: "채널 미지정",
   threads: "Threads", x: "X", instagram: "Instagram", youtube_shorts: "YouTube Shorts",
   reels: "Reels", blog: "Web", email: "Email",
 };

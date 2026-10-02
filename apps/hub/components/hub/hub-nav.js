@@ -8,11 +8,12 @@
 // in both, so the operator had to answer "where does this live?" before
 // "what am I doing?".
 //
-// Nine primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
+// Ten primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
 // hub-nav.test.mjs pins both counts). Overview was added 2026-07-15 per direct
 // operator instruction; the anchor set is not a fixed contract and may change —
 // 2026-09-24 the separate 고객 연락 anchor folded into 영업·매출 as its first tab
-// (오늘 연락), taking the count from ten back to nine. Organizational context
+// (오늘 연락), taking the count from ten back to nine; 2026-09-30 제품 joined
+// between 프로젝트 and 브랜드, taking it back to ten. Organizational context
 // moves into one scope control.
 
 export const DEFAULT_SCOPE = 'all';
@@ -160,9 +161,11 @@ const BRAND_CHILDREN = {
 
 const CONTENT_CHILDREN = [
   { key: 'ct-performance', label: '성과', path: 'dashboard/content/performance' },
+  { key: 'ct-research', label: '리서치함', path: 'dashboard/content/research' },
   { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
   { key: 'ct-queue', label: '소재·제작', path: 'dashboard/content/queue' },
   { key: 'ct-studio', label: '원고 작성', path: 'dashboard/content/studio' },
+  { key: 'ct-publish', label: '발행', path: 'dashboard/content/publish' },
   { key: 'ct-campaigns', label: 'Campaigns', path: 'dashboard/content/campaigns' },
 ];
 
@@ -325,6 +328,22 @@ export const SIDEBAR_PRIMARY = [
     },
   },
   {
+    // 제품 — 파는 것(products 테이블)의 포트폴리오·흐름·문의함. 2026-09-30 운영자 "별도 탭 ㄱㄱ"로
+    // 프로젝트 탭의 한 보기(?view=products)에서 나왔다(제품 렌즈 §14.2 — 브랜드 탭 분리와 같은 이유:
+    // 끝나는 일이 아니라 계속 사는 운영 대상). 화면 안에서 소속을 거르지 않으므로 scope 쿼리를 붙이지
+    // 않는다(과약속 금지). 하위 목적지는 없다 — 포트폴리오·문의함 전환은 페이지 안 SegmentedControl이다.
+    key: 'products',
+    label: '제품',
+    icon: 'navProducts',
+    scopeAware: false,
+    owns: ['dashboard/products'],
+    paths: {
+      all: 'dashboard/products',
+      classin: 'dashboard/products',
+      personal: 'dashboard/products',
+    },
+  },
+  {
     // 브랜드 — 정체성·리듬·기록을 소유한다. 콘텐츠 바로 앞에 두어 제작 흐름과
     // 인접하게 하되 표면은 분리한다 (2026-08-29 브랜드 탭 설계 §3·§5.2).
     // 앵커 세트는 고정 계약이 아니다 (2026-07-15 스펙 §3.1) — 비효율이 파악되면 추가한다.
@@ -361,9 +380,11 @@ export const SIDEBAR_PRIMARY = [
       all: CONTENT_CHILDREN,
       classin: [
         { key: 'ct-queue', label: '소재·제작', path: 'dashboard/classin/content' },
+        { key: 'ct-research', label: '리서치함', path: 'dashboard/content/research' },
         { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
       ],
       personal: [
+        { key: 'ct-research', label: '리서치함', path: 'dashboard/content/research' },
         { key: 'ct-news', label: '뉴스 탐색', path: 'dashboard/content/news' },
         { key: 'ct-queue', label: '소재·제작', path: 'dashboard/brand/queue' },
         { key: 'ct-studio', label: '원고 작성', path: 'dashboard/brand/studio' },

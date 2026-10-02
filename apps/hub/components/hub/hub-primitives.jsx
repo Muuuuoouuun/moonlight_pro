@@ -409,14 +409,16 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
 // `label` names the checkbox for screen readers (the visual label usually sits in a
 // sibling cell, so SRs would otherwise announce an unnamed 14px button). Always pass it
 // on new call sites — e.g. the row's title.
-export function Checkbox({ checked, onChange, size = 14, label, disabled = false, className = '', style }) {
+export function Checkbox({ checked, onChange, size = 14, label, disabled = false, className = '', style, shape = 'square' }) {
   const isChecked = Boolean(checked);
+  const shaped = shape === 'diamond' || shape === 'folder';
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={isChecked}
       aria-label={label || '선택'}
+      data-shape={shaped ? shape : undefined}
       aria-busy={disabled ? 'true' : undefined}
       disabled={disabled}
       className={`hub-checkbox${isChecked ? ' hub-checkbox--checked' : ''}${className ? ` ${className}` : ''}`}
@@ -426,14 +428,26 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
       style={{
         position: 'relative',
         width: size, height: size, borderRadius: 4,
-        border: `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
-        background: isChecked ? 'var(--moon-300)' : 'transparent',
+        border: shaped ? 'none' : `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
+        background: !shaped && isChecked ? 'var(--moon-300)' : 'transparent',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0, opacity: disabled ? 0.55 : 1,
         ...style,
       }}
     >
-      {isChecked && (
+      {shaped ? <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        {shape === 'folder' ? <>
+          <path d="M2 8V5a2 2 0 0 1 2-2h5l3 3h8a2 2 0 0 1 2 2v5M13 20H4a2 2 0 0 1-2-2V8h20"
+            fill="none" stroke="var(--fg-muted)" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="18" cy="18" r="5" fill={isChecked ? 'var(--moon-300)' : 'var(--surface)'}
+            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-strong)'} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+          {isChecked && <path d="m15.5 18 1.7 1.7 3.5-3.5" fill="none" stroke="var(--bg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
+        </> : <>
+          <path d="M12 1 23 12 12 23 1 12Z" fill={isChecked ? 'var(--moon-300)' : 'none'}
+            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-strong)'} strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+          {isChecked && <path d="m7 12 3.5 3.5 6-6" fill="none" stroke="var(--bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+        </>}
+      </svg> : isChecked && (
         <span className="hub-checkbox__icon" aria-hidden="true">
           <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />
         </span>

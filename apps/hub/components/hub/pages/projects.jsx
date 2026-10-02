@@ -5,7 +5,6 @@ import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, SyncBadge, SegmentedControl, SelectField, EditDrawer, Drawer, Kbd, Skeleton } from "../hub-primitives";
-import { ProjectProductsView } from "./project-products-view";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
@@ -48,7 +47,7 @@ import { TaskChecklistGauge } from './project-task-checklist';
 import { hasChecklistConflict, readTaskChecklist, validateTaskChecklist } from '@/lib/task-checklist';
 import { ProjectExecutionBacklog, ProjectTaskFilters } from './project-execution-backlog';
 import { buildTaskExecutionModel, mergeSavedTask, readTaskFilters, saveTaskChanges, writeTaskFilters } from '@/lib/pms-work-items';
-import { appendProjectChecklistItem, createProjectTaskWriter } from '@/lib/project-direct-work';
+import { appendProjectChecklistItem, createProjectTaskWriter, reorderProjectChecklist } from '@/lib/project-direct-work';
 import { isCanonicalUuid } from '@/lib/uuid';
 import './project-execution.css';
 import {
@@ -112,6 +111,18 @@ export function Projects({ workspace }) {
   // setView's identity stable so the existing createProject/createTodo callbacks
   // don't need it in their dependency lists.
   const view = normalizeProjectView(searchParams.get('view'));
+  // 제품은 2026-09-30 별도 탭(dashboard/products)으로 나갔다 — 옛 `?view=products` 북마크는 그 탭의 같은 화면으로 보낸다.
+  const legacyProductView = searchParams.get('view') === 'products';
+  React.useEffect(() => {
+    if (!legacyProductView) return;
+    const params = new URLSearchParams();
+    for (const key of ['product', 'pview', 'inquiry']) {
+      const value = searchParams.get(key);
+      if (value) params.set(key, value);
+    }
+    const query = params.toString();
+    router.replace(query ? `/dashboard/products?${query}` : '/dashboard/products');
+  }, [legacyProductView, router, searchParams]);
   const selectedProjectId = searchParams.get('project');
   const focusedProjectItemId = searchParams.get('item');
   const focusedProjectCheckId = searchParams.get('check');
@@ -1536,6 +1547,10 @@ export function Projects({ workspace }) {
     return result;
   }, [allProjects, applyTaskChanges, canWriteTasks, todos]);
 
+  const reorderChecklistItems = React.useCallback(async (task, sourceId, targetId, placement) => {
+    return reorderProjectChecklist(task, sourceId, targetId, placement, { saveChanges: applyTaskChanges });
+  }, [applyTaskChanges]);
+
   const toggleChecklistItem = React.useCallback(async (taskId, checkId) => {
     const task = todos.find(item => item.id === taskId);
     const checks = task ? readTaskChecklist(task) : [];
@@ -1595,8 +1610,6 @@ export function Projects({ workspace }) {
 
   React.useEffect(() => {
     const onKey = (event) => {
-      // 제품 보기의 N은 그 보기가 소유한다(usePageCreateHotkey — 제품 등록).
-      if (view === 'products') return;
       if (!shouldOpenGlobalProjectCreate(event, { drawerOpen })) return;
       // 첫 기록 로드 전에는 areas가 비어 "업무 분야가 없습니다" 오탐 에러가 뜬다 —
       // ?new=project 딥링크 이펙트와 같은 로드 완료 가드를 공유한다.
@@ -2019,7 +2032,7 @@ export function Projects({ workspace }) {
           </div>
           <div style={{ flex: 1 }} />
           {/* 검색 — `/`로 포커스(useCrmKeyboard), ESC는 검색어가 있을 때만 지우고 소비. */}
-          {view !== 'tree' && view !== 'memos' && view !== 'products' && <span
+          {view !== 'tree' && view !== 'memos' && <span
             className="hub-project-search"
             style={{ display: 'contents' }}
             onKeyDown={(e) => {
@@ -2068,8 +2081,8 @@ export function Projects({ workspace }) {
           {taskView && (
             <Button className="hub-project-task-create" variant="primary" size="sm" icon="plus" disabled={!canWriteTasks || pendingTaskIds.size > 0} onClick={() => createTodo(null, view === 'backlog' ? 'inbox' : 'todo')}>작업 추가 <Kbd>N</Kbd></Button>
           )}
-          <Button className="hub-project-primary-control" variant={taskView || view === 'tree' || view === 'products' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
-            Project {!taskView && view !== 'products' && <Kbd>N</Kbd>}
+          <Button className="hub-project-primary-control" variant={taskView || view === 'tree' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
+            Project {!taskView && <Kbd>N</Kbd>}
           </Button>
         </div>
 
@@ -2109,8 +2122,6 @@ export function Projects({ workspace }) {
             )}
           />
         )}
-
-        {view === 'products' && <ProjectProductsView onOpenProject={openProjectDetail} />}
 
         {view === 'memos' && <MemoWorkspace
           projects={projects}
@@ -2194,6 +2205,7 @@ export function Projects({ workspace }) {
               onCreateTodo={createTodo}
               onQuickCreateTodo={quickCreateTodo}
               onAddChecklistItem={addChecklistItem}
+              onReorderChecklist={reorderChecklistItems}
               canWriteTasks={canWriteTasks}
               onEditTodo={editTodo}
               onToggleTodo={toggleTodo}
@@ -2817,7 +2829,7 @@ export function Projects({ workspace }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px var(--section-gap) 0', fontSize: 12.5, color: 'var(--fg-muted)' }}>
             <span>제품 하나의 일만 보는 중</span>
             <Button variant="ghost" size="sm" onClick={() => { const params = new URLSearchParams(searchParams.toString()); params.delete('taskProduct'); router.replace(`${pathname}?${params.toString()}`, { scroll: false }); }}>거르기 풀기</Button>
-            <Button variant="ghost" size="sm" onClick={() => router.push(`${pathname}?view=products&product=${encodeURIComponent(productFilter)}`)}>← 제품으로</Button>
+            <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/products?product=${encodeURIComponent(productFilter)}`)}>← 제품으로</Button>
           </div>
         )}
         {view === 'board' && canWriteTasks && (

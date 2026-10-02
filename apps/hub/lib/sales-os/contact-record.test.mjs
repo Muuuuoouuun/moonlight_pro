@@ -9,8 +9,13 @@ import {
   buildContactRecordPayload,
   buildRawNoteWrite,
   channelLabel,
+  draftHintCopy,
+  draftPlaceLabel,
+  draftRestoredCopy,
   isContactChannel,
   reactionRequired,
+  recordSaveLabel,
+  recordSaveLine,
   validateContactRecord,
 } from "./contact-record.js";
 
@@ -181,4 +186,96 @@ test("AI extraction preserves fields it did not extract", () => {
   assert.equal(form.body, "원문");
   assert.equal(form.nextAction, "운영자가 고친 후속");
   assert.equal(form.at, "2026-10-01");
+});
+
+// 저장 정직성(DESIGN.md §8.1 Save envelope) — 서버가 saved로 답하기 전의 글자는 끝난 말이 아니다.
+const COMPLETION_WORD = /기록됨|저장됨|완료|됐|했어요/;
+
+test("labels shown before the server acknowledges never claim completion", () => {
+  assert.equal(recordSaveLabel("pending"), "기록 중");
+  assert.equal(recordSaveLabel("sending"), "저장 중");
+  for (const phase of ["pending", "sending"]) {
+    assert.doesNotMatch(recordSaveLabel(phase), COMPLETION_WORD, phase);
+    assert.match(recordSaveLabel(phase), / 중$/, `${phase} reads as in progress`);
+  }
+  // 되돌리기 창(아직 안 보냄)과 보낸 뒤는 다른 상태다 — 같은 글자로 뭉개지 않는다.
+  assert.notEqual(recordSaveLabel("pending"), recordSaveLabel("sending"));
+  // 모르는 단계는 아무 말도 하지 않는다 — 기본값이 완료 문구가 되는 일은 없다.
+  for (const phase of ["saved", "done", "", undefined, null]) assert.equal(recordSaveLabel(phase), "");
+});
+
+test("the save line walks 기록 중 → 저장 중 → idle and offers undo only before the request leaves", () => {
+  const hint = "닫아도 이 탭에 초안으로 남아요";
+  // 되돌리기 창 — 아직 보내지 않았다.
+  assert.deepEqual(recordSaveLine({ pending: { phase: "pending" }, draftHint: hint }), {
+    progress: { label: "기록 중", canUndo: true },
+    note: null,
+  });
+  // 보낸 뒤 — 답을 기다리는 동안에도 줄은 비지 않고, 되돌리기는 없다(죽은 버튼 금지).
+  assert.deepEqual(recordSaveLine({ pending: { phase: "sending" }, draftHint: hint }), {
+    progress: { label: "저장 중", canUndo: false },
+    note: null,
+  });
+  // 서버가 답했다 — 진행 글자를 걷고 쉬는 초안 글자로 돌아온다.
+  assert.deepEqual(recordSaveLine({ pending: null, draftHint: hint }), { progress: null, note: { tone: "hint", text: hint } });
+  assert.deepEqual(recordSaveLine({}), { progress: null, note: null });
+  assert.deepEqual(recordSaveLine(), { progress: null, note: null });
+  // 모르는 단계는 진행으로 치지 않는다 — 끝난 말이 기본값으로 새지 않는다.
+  assert.equal(recordSaveLine({ pending: { phase: "saved" } }).progress, null);
+  for (const phase of ["pending", "sending"]) {
+    assert.doesNotMatch(recordSaveLine({ pending: { phase } }).progress.label, COMPLETION_WORD);
+  }
+});
+
+test("the save line keeps an in-flight save and a note about the current form apart", () => {
+  const warnCopy = "다음 약속이 비어 있어요 — 한 번 더 누르면 '기약 없음'으로 저장돼요.";
+  // 앞선 기록이 가는 동안 다음 기록에서 경고를 만났다 — 둘은 다른 말이라 각자 자기 자리에 선다.
+  for (const phase of ["pending", "sending"]) {
+    const line = recordSaveLine({ pending: { phase }, state: "warn", warnCopy, draftHint: "초안 · 이 탭 · 서버에는 아직 없어요" });
+    assert.equal(line.progress.label, recordSaveLabel(phase));
+    assert.deepEqual(line.note, { tone: "warn", text: warnCopy });
+  }
+  // 되돌리기 창에 빈 폼에서 저장을 한 번 더 눌러도(⌘↵ 두 번) 앞선 기록의 진행과 되돌리기는 남는다.
+  const doubled = recordSaveLine({ pending: { phase: "pending" }, showMissing: true });
+  assert.deepEqual(doubled.progress, { label: "기록 중", canUndo: true });
+  assert.deepEqual(doubled.note, { tone: "missing", text: "위 필수 항목을 채우면 저장됩니다." });
+
+  // 폼에 대한 말은 하나만 — 빠진 항목 > 빈 약속 경고 > 실패 원인 > 쉬는 초안 글자.
+  const all = { showMissing: true, state: "warn", warnCopy, errorMsg: "저장에 실패했습니다.", draftHint: "초안" };
+  assert.equal(recordSaveLine(all).note.tone, "missing");
+  assert.equal(recordSaveLine({ ...all, showMissing: false }).note.tone, "warn");
+  assert.deepEqual(recordSaveLine({ ...all, showMissing: false, state: "error" }).note, { tone: "error", text: "저장에 실패했습니다." });
+  assert.equal(recordSaveLine({ ...all, showMissing: false, state: "idle" }).note.tone, "hint");
+  // 실패 원인을 말하는 중에는 초안 글자가 그 자리를 덮지 않는다.
+  assert.doesNotMatch(recordSaveLine({ state: "error", errorMsg: "저장에 실패했습니다.", draftHint: "초안" }).note.text, /초안/);
+});
+
+test("draft copy names where the draft actually lives", () => {
+  assert.equal(draftPlaceLabel("tab"), "초안 · 이 탭");
+  assert.equal(draftPlaceLabel("memory"), "초안 · 새로고침 전까지");
+  // localStorage("이 기기")는 Q-CR4 결정 전이다 — 약속하지 않은 곳을 말하지 않는다.
+  assert.equal(draftPlaceLabel("device"), "");
+  assert.equal(draftPlaceLabel(undefined), "");
+
+  assert.equal(draftRestoredCopy("tab"), "초안 · 이 탭 · 쓰던 내용을 불러왔어요");
+  assert.equal(draftRestoredCopy("memory"), "초안 · 새로고침 전까지 · 쓰던 내용을 불러왔어요");
+
+  // 아직 쓴 게 없으면 "어디에 남을지", 쓰기 시작했으면 "어디에 있고 서버에는 없다".
+  assert.equal(draftHintCopy("tab"), "닫아도 이 탭에 초안으로 남아요");
+  assert.equal(draftHintCopy("tab", { dirty: true }), "초안 · 이 탭 · 서버에는 아직 없어요");
+  assert.equal(draftHintCopy("memory"), "닫아도 초안으로 남아요 · 새로고침하면 사라져요");
+  assert.equal(draftHintCopy("memory", { dirty: true }), "초안 · 새로고침 전까지 · 서버에는 아직 없어요");
+  // 메모리 사본뿐인데 "이 탭"에 남는다고 하지 않는다(탭 저장소는 새로고침을 견디지만 메모리는 아니다).
+  for (const dirty of [false, true]) assert.doesNotMatch(draftHintCopy("memory", { dirty }), /이 탭|이 기기/);
+  // 초안을 둘 곳이 없으면(저장된 고객이 아님) 남는다는 약속을 하지 않는다.
+  for (const place of [null, undefined, "", "device"]) {
+    assert.equal(draftHintCopy(place), "");
+    assert.equal(draftHintCopy(place, { dirty: true }), "");
+  }
+  // 초안 글자는 어디서도 서버 저장을 뜻하는 말을 쓰지 않는다.
+  for (const place of ["tab", "memory"]) {
+    for (const copy of [draftRestoredCopy(place), draftHintCopy(place), draftHintCopy(place, { dirty: true })]) {
+      assert.doesNotMatch(copy, /기록됨|저장됨|저장했/, copy);
+    }
+  }
 });

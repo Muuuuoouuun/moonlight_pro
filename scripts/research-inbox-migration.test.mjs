@@ -1,0 +1,78 @@
+import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import { migrationCallSql } from './apply-migrations.mjs';
+
+const filename = '20260930_0053_research_inbox.sql';
+const source = readFileSync(new URL(`../supabase/migrations/${filename}`, import.meta.url), 'utf8');
+const repairFilename = '20260930_0054_research_promotion_fixes.sql';
+const repairSource = readFileSync(new URL(`../supabase/migrations/${repairFilename}`, import.meta.url), 'utf8');
+const available = process.getuid?.() !== 0 && ['initdb','pg_ctl','psql'].every(bin => spawnSync(bin,['--version'],{stdio:'ignore'}).status === 0);
+const W = '11111111-1111-4111-8111-111111111111';
+const B = '22222222-2222-4222-8222-222222222222';
+const R = '33333333-3333-4333-8333-333333333333';
+const quote = value => `'${String(value).replaceAll("'", "''")}'`;
+
+test('research migration provides scoped, replayable, atomic promotion on PostgreSQL', { skip: available ? false : 'PostgreSQL binaries and non-root user required' }, () => {
+  const directory = mkdtempSync(join(tmpdir(), 'research-inbox-pg-'));
+  const data = join(directory, 'data');
+  const port = String(57000 + process.pid % 7000);
+  const args = ['-X','-qAt','-v','ON_ERROR_STOP=1','-h',directory,'-p',port,'-U','research_test','-d','postgres'];
+  const env = { ...process.env, LC_ALL: process.env.LC_ALL || 'C' };
+  const sql = input => execFileSync('psql', args, { input, encoding:'utf8', stdio:['pipe','pipe','pipe'] }).trim();
+  let started = false;
+  try {
+    execFileSync('initdb',['-D',data,'-U','research_test','-A','trust','--no-locale','--encoding=UTF8'],{stdio:'pipe',env});
+    execFileSync('pg_ctl',['-D',data,'-l',join(directory,'postgres.log'),'-o',`-F -k ${directory} -p ${port} -c listen_addresses=''`,'-w','start'],{stdio:'pipe',env});
+    started = true;
+    sql(`create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
+      create table public.workspaces(id uuid primary key);
+      create table public.brands(id uuid primary key,workspace_id uuid not null references public.workspaces(id),status text not null);
+      create table public.content_items(id uuid primary key,workspace_id uuid not null,brand_id uuid,title text,source_idea text,source_type text,status text,meta jsonb);
+      create table public.content_variants(id uuid primary key,workspace_id uuid not null,content_id uuid not null references public.content_items(id),title text,body text,variant_type text,channel text,status text,meta jsonb);
+      alter table public.content_variants add constraint content_variants_variant_type_check check (variant_type in ('threads_post'));
+      insert into public.workspaces values('${W}'); insert into public.brands values('${B}','${W}','active');`);
+    const bootstrap = readFileSync(new URL('../supabase/migrations/20260923_0044_migration_history.sql',import.meta.url),'utf8');
+    sql(bootstrap);
+    assert.equal(sql(migrationCallSql(source,filename,createHash('sha256').update(source).digest('hex'))),'applied');
+    assert.equal(sql(migrationCallSql(repairSource,repairFilename,createHash('sha256').update(repairSource).digest('hex'))),'applied');
+    assert.equal(sql("select has_function_privilege('anon','public.research_command_v1(uuid,uuid,text,jsonb)','EXECUTE')"),'f');
+    assert.equal(sql("select has_function_privilege('service_role','public.research_command_v1(uuid,uuid,text,jsonb)','EXECUTE')"),'t');
+    assert.equal(sql("select has_table_privilege('service_role','public.research_brief_revisions','SELECT')"),'t');
+    assert.equal(sql("select has_table_privilege('service_role','public.research_brief_revisions','UPDATE')"),'f');
+    const brief = { brandId:B,eventKey:'a'.repeat(40),title:'검증한 변화',change:'새 적용 범위',whyBrand:'독자와 관련',facts:['공식문서 확인'],interpretation:'해석',counterevidence:'',unknown:'시행 안내',draft:'검토할 원고',sources:[{url:'https://example.org/a',title:'공식문서',accessLevel:'full-text',locator:''}] };
+    const invoke = (request,command) => JSON.parse(sql(`set role service_role; select public.research_command_v1('${W}','${request}','${'b'.repeat(64)}',${quote(JSON.stringify(command))}::jsonb); reset role;`));
+    const created = invoke(R,{action:'create',brief});
+    assert.equal(created.status,'saved');
+    assert.equal(invoke(R,{action:'create',brief}).status,'duplicate');
+    const stale = invoke('44444444-4444-4444-8444-444444444444',{action:'promote-draft',briefId:created.briefId,expectedRevision:2,expectedStateVersion:1});
+    assert.equal(stale.error,'stale-revision');
+    assert.equal(invoke('77777777-7777-4777-8777-777777777777',{action:'defer',briefId:created.briefId,expectedRevision:1,expectedStateVersion:1}).state,'deferred');
+    assert.equal(invoke('88888888-8888-4888-8888-888888888888',{action:'discard',briefId:created.briefId,expectedRevision:1,expectedStateVersion:1}).error,'stale-state');
+    const promoted = invoke('55555555-5555-4555-8555-555555555555',{action:'promote-draft',briefId:created.briefId,expectedRevision:1,expectedStateVersion:2});
+    assert.equal(promoted.status,'saved');
+    assert.equal(sql(`select status from public.content_items where id='${promoted.contentId}'`),'draft');
+    assert.equal(sql(`select source_type from public.content_items where id='${promoted.contentId}'`),'research');
+    assert.equal(sql(`select meta->'brief'->>'evidence' from public.content_items where id='${promoted.contentId}'`),'공식문서 확인');
+    assert.equal(sql(`select meta->'research'->>'prepared_draft' from public.content_items where id='${promoted.contentId}'`),'검토할 원고');
+    assert.equal(sql(`select variant_type || '/' || channel || '/' || body from public.content_variants where id='${promoted.variantId}'`),'base_text/unassigned/검토할 원고');
+    assert.equal(invoke('55555555-5555-4555-8555-555555555555',{action:'promote-draft',briefId:created.briefId,expectedRevision:1,expectedStateVersion:2}).status,'duplicate');
+    const later = invoke('66666666-6666-4666-8666-666666666666',{action:'promote-idea',briefId:created.briefId,expectedRevision:1,expectedStateVersion:2});
+    assert.equal(later.status,'duplicate');
+    assert.equal(later.contentId,promoted.contentId);
+    assert.equal(later.destination,'draft');
+    assert.equal(sql(`select count(*) from public.content_items where workspace_id='${W}'`),'1');
+    const ideaBrief = invoke('99999999-9999-4999-8999-999999999999',{action:'create',brief:{...brief,eventKey:'c'.repeat(40)}});
+    const idea = invoke('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',{action:'promote-idea',briefId:ideaBrief.briefId,expectedRevision:1,expectedStateVersion:1});
+    assert.equal(idea.destination,'idea');
+    assert.equal(sql(`select status || '/' || (meta->'research'->>'prepared_draft') from public.content_items where id='${idea.contentId}'`),'idea/검토할 원고');
+    assert.equal(sql(`select body from public.content_variants where id='${idea.variantId}'`),'');
+  } finally {
+    if (started) spawnSync('pg_ctl',['-D',data,'-m','immediate','stop'],{stdio:'ignore',env});
+    rmSync(directory,{recursive:true,force:true});
+  }
+});

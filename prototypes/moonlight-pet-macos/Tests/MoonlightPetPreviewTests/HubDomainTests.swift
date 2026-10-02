@@ -6,6 +6,8 @@ private func check(_ value: @autoclosure () -> Bool, _ message: String) throws {
 }
 
 private actor ControlledHub: HubServing {
+    var rejectsLogin = false
+    func rejectLogin(_ value: Bool) { rejectsLogin = value }
     var failsRead = false
     var failToggle = false
     var holdToggle = false
@@ -39,7 +41,9 @@ private actor ControlledHub: HubServing {
     func holdWritesAndCalendar() { holdCreate = true; holdCalendar = true }
     func releaseWrite() { holdCreate = false; releaseCreate?.resume(); releaseCreate = nil }
     func releaseEvents() { holdCalendar = false; releaseCalendar?.resume(); releaseCalendar = nil }
-    func login(username: String, password: String) async throws {}
+    func login(username: String, password: String) async throws {
+        if rejectsLogin { throw HubTransportError.unauthorized }
+    }
     func tasks() async throws -> HubTaskPage {
         if holdRead { startedRead = true; await withCheckedContinuation { releaseRead = $0 } }
         if failsRead { throw HubTransportError.offline }
@@ -90,6 +94,7 @@ struct HubDomainTests {
     @MainActor static func main() async {
         do {
             try modelChecks()
+            try await loginChecks()
             try await recoveryChecks()
             try await storeChecks()
             try await captureChecks()
@@ -100,6 +105,26 @@ struct HubDomainTests {
             fputs("FAIL: \(error)\n", stderr)
             exit(1)
         }
+    }
+
+    @MainActor static func loginChecks() async throws {
+        let suite = "pet-login-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let api = ControlledHub()
+        let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+        let empty = await store.signIn(baseURL: "https://example.com", username: "", password: "")
+        try check(!empty && !store.hasConnection, "Empty credentials must not dismiss the login form")
+        await api.rejectLogin(true)
+        let denied = await store.signIn(baseURL: "https://example.com", username: "operator", password: "test-only")
+        try check(!denied && store.needsLogin, "Rejected login must remain on the form")
+        await api.rejectLogin(false)
+        let accepted = await store.signIn(baseURL: "https://example.com", username: "operator", password: "test-only")
+        try check(accepted && !store.needsLogin && store.taskReady, "Accepted login returns to the content screen")
+        // Data availability is shown by the content screen, independently of login.
+        await api.configure(readError: true)
+        let readFailure = await store.signIn(baseURL: "https://example.com", username: "operator", password: "test-only")
+        try check(readFailure && !store.taskReady, "A task read error must not misrepresent accepted credentials")
     }
 
     @MainActor static func captureChecks() async throws {

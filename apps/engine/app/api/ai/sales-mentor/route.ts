@@ -41,6 +41,20 @@ const DRAFT_SYSTEM_INSTRUCTION = [
   "context.missing[]에 적힌 소스는 데이터 공백이므로 그 슬라이스의 사실은 추정하지 않습니다.",
 ].join("\n");
 
+// A company-scope Office escalation: an open question that names its Office source and
+// carries the Office result verbatim. Mirrors the Hub's OFFICE_MENTOR_DRAFT_LIMIT and the
+// personal lane's office-review limit in brand-mentor.
+const OFFICE_SOURCE_DRAFT_LIMIT = 25000;
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function parseOfficeSource(value: any) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some(key => !["requestId", "runId"].includes(key))
+    || typeof value.requestId !== "string" || !UUID.test(value.requestId)
+    || (value.runId != null && (typeof value.runId !== "string" || !UUID.test(value.runId)))) return null;
+  return { requestId: value.requestId, runId: value.runId ?? null };
+}
+
 async function readJson(req: Request) {
   const text = await req.text();
   return text ? JSON.parse(text) : {};
@@ -110,6 +124,26 @@ export async function POST(req: Request) {
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const context = payload.context ?? {};
   const guidanceId = typeof payload.guidanceId === "string" ? payload.guidanceId : null;
+  // Callers without an Office source keep the existing behavior exactly.
+  const fromOffice = payload.officeSource !== undefined;
+  const officeSource = fromOffice ? parseOfficeSource(payload.officeSource) : null;
+  if (fromOffice && (
+    mode !== "open-question" || payload.scope !== "classin" || !officeSource
+    || !draft?.trim() || draft.length > OFFICE_SOURCE_DRAFT_LIMIT
+    || payload.createWorkOrder !== false || payload.guidanceId != null
+    || payload.history != null
+    || (Array.isArray(payload.legendIds) && payload.legendIds.length > 0)
+    || payload.directives != null || payload.values != null || payload.knowledge != null
+    || [context?.scope, context?.orgScope].some((scope: unknown) => scope === "personal" || scope === "brand")
+  )) {
+    return NextResponse.json({ status: "invalid-input", error: "invalid-office-review" }, { status: 400 });
+  }
+  if (officeSource && ["preview", "error"].includes(context.source)) {
+    return NextResponse.json(
+      { status: context.source, mode, officeSource, error: "sales-ledger-unavailable" },
+      { status: context.source === "preview" ? 202 : 502 },
+    );
+  }
   const history = mode === "open-question" ? payload.history : null;
   const explicitDirectives = payload.directives ?? (payload.values || payload.knowledge ? { values: payload.values, knowledge: payload.knowledge } : null);
   const maxOutputTokens =
@@ -147,9 +181,11 @@ export async function POST(req: Request) {
   // recorded as the failure it is, instead of showing the integration as healthy.
   const parsedDraft = isDraftMode && result.ok ? parseFollowupDraft(result.text) : null;
   const draftOk = isDraftMode ? Boolean(parsedDraft) : false;
-  const generationOk = isDraftMode ? draftOk : result.ok;
+  // An Office escalation with an empty answer is a failure, as in brand-mentor office-review.
+  const emptyOfficeAnswer = Boolean(officeSource) && result.ok && !result.text?.trim();
+  const generationOk = isDraftMode ? draftOk : result.ok && !emptyOfficeAnswer;
   const failureReason =
-    isDraftMode && result.ok && !draftOk ? "invalid-draft-json" : result.reason;
+    isDraftMode && result.ok && !draftOk ? "invalid-draft-json" : emptyOfficeAnswer ? "empty-office-review" : result.reason;
 
   const connection = await upsertIntegrationConnection({
     provider: "guru",
@@ -170,6 +206,7 @@ export async function POST(req: Request) {
       finishedAt,
       mode,
       ref,
+      ...(officeSource ? { officeSource } : {}),
       model: result.model,
       usageMetadata: result.usageMetadata || null,
     },
@@ -195,16 +232,20 @@ export async function POST(req: Request) {
 
   // Mentor advice belongs to the requested conversation. Persist telemetry and
   // the Hub agent_run, but never turn a coaching reply into a Home update.
+  // For advisory modes generationOk/failureReason equal result.ok/result.reason unless the
+  // request came from Office (an empty Office answer is a failure), so other callers see
+  // the same envelope as before.
   return NextResponse.json(
     {
-      status: result.ok ? "generated" : "error",
+      status: generationOk ? "generated" : "error",
       mode,
       ref,
+      ...(officeSource ? { officeSource } : {}),
       model: result.model,
       text: result.text,
-      reason: result.reason,
+      reason: failureReason,
       persistence: { connection, syncRun, mentorUpdate: null },
     },
-    { status: result.ok ? 200 : 502 },
+    { status: generationOk ? 200 : 502 },
   );
 }

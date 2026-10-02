@@ -82,6 +82,8 @@ struct PetVisual: View {
 struct PanelPetOrnament: View {
     @ObservedObject var model: AppModel
     let close: () -> Void
+    let move: (PanelMove) -> Void
+    @State private var pointerPressed = false
 
     var body: some View {
         Button(action: close) {
@@ -89,7 +91,11 @@ struct PanelPetOrnament: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(PetPressStyle())
+        .scaleEffect(pointerPressed && !PetMotion.reduceMotion ? 0.96 : 1)
+        .opacity(pointerPressed ? 0.84 : 1)
+        .animation(pointerPressed ? PetMotion.petPress : PetMotion.petRelease, value: pointerPressed)
+        .overlay { ScreenDragSurface(move: move, click: close, pressed: { pointerPressed = $0 }) }
         .accessibilityLabel("펫으로 접기")
-        .help("펫으로 접기")
+        .help("누르면 접기 · 드래그하면 모니터 사이 이동")
     }
 }

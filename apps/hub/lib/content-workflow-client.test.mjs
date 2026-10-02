@@ -26,6 +26,22 @@ test('saved draft carries original source and shared brief independently of titl
   assert.equal(request.variant.title,'새 결과물 제목');
   assert.equal(request.expectedVariantUpdatedAt,variants[1].updated_at);
 });
+test('research draft opens as editable channel-unassigned base text', () => {
+  const c = api();
+  const neutral = { id:'base-1', content_id:item.id, variant_type:'base_text', channel:'unassigned', title:'검토용 원고', body:'근거를 보존한 원고', updated_at:'2026-09-30T00:00:00Z' };
+  const draft = c.draftFromDetail({ item:{ ...item, meta:{ ...item.meta, primary_variant_id:neutral.id } }, variants:[neutral] });
+  assert.equal(draft.channel,'unassigned');
+  assert.equal(c.channelLabel(draft.channel),'채널 미지정');
+  assert.equal(c.buildStudioSave(draft,'request-1').variant.variantType,'base_text');
+  assert.equal(c.buildStudioSave(draft,'request-1').variant.channel,'unassigned');
+});
+test('legacy research evidence arrays open as editable text and satisfy Studio save contract', () => {
+  const c = api();
+  const legacy = { ...item, meta: { ...item.meta, brief: { message: '확인된 변화', evidence: ['첫 근거', '둘째 근거'] } } };
+  const draft = c.draftFromDetail({ item: legacy, variants });
+  assert.equal(draft.brief.evidence, '첫 근거\n둘째 근거');
+  assert.equal(c.buildStudioSave(draft, 'request-1').item.brief.evidence, '첫 근거\n둘째 근거');
+});
 test('selection offsets preserve the second identical phrase after an emoji', () => {
   const c=api(),body='같은 말\n🙂 같은 말';
   const start=body.lastIndexOf('같은 말');
@@ -106,6 +122,7 @@ test('buildStudioTransformCommand carries the operator request only when non-emp
   const stale = buildStudioTransformCommand({ ...base, operation: 'polish', selection: { start: 0, end: 3, body: 'older body' } });
   assert.deepEqual(stale.selection, { start: 0, end: saved.body.length }, 'a selection from an older body is ignored');
   assert.deepEqual(buildStudioTransformCommand({ ...base, operation: 'hooks', selection: null }).selection, { start: 0, end: 4 }, 'hooks defaults to the first paragraph');
+  assert.deepEqual(buildStudioTransformCommand({ ...base, operation: 'openers', structured: true, selection: null }).selection, { start: 0, end: saved.body.length }, 'openers on card news / shorts sends the whole body');
   assert.deepEqual(buildStudioTransformCommand({ ...base, operation: 'draft', selection: { start: 0, end: 3, body: saved.body } }).selection, { start: 0, end: saved.body.length });
   const repurpose = buildStudioTransformCommand({ ...base, operation: 'repurpose', selection: null });
   assert.deepEqual(repurpose.target, { variantType: 'card_news', channel: 'instagram' });

@@ -53,11 +53,11 @@ test("deep links are consumed once and keep ?scope=", () => {
   assert.match(customersSource, /scopeKey === "classin"[\s\S]*filterLeadsByWorkspace\(ledger\.leads, "classin"\)/);
 });
 
-test("the table has exactly five 3-state sortable columns, next promise ascending by default", () => {
+test("the table has exactly five 3-state sortable columns, recent customer activity by default", () => {
   const head = slice('className="customers-grid customers-head"', "</div>");
   const heads = [...head.matchAll(/<SortHead k="(\w+)"[^>]*>([^<]+)<\/SortHead>/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(heads, [["name", "고객"], ["phase", "단계"], ["promise", "다음 약속"], ["last", "마지막 연락"], ["value", "금액"]]);
-  assert.match(customersSource, /React\.useState\(\{ key: "promise", dir: "asc" \}\)/);
+  assert.match(customersSource, /React\.useState\(\{ key: "recent", dir: "desc" \}\)/);
   assert.match(customersSource, /if \(prev\.dir === "asc"\) return \{ key, dir: "desc" \};\s*return \{ key: null, dir: "asc" \};/);
   assert.match(customersSource, /정렬: \{sortCaption\(sort\)\}/);
   assert.match(cssSource, /grid-template-columns: minmax\(0, 1\.5fr\) minmax\(96px, 0\.7fr\) minmax\(0, 1\.4fr\) minmax\(0, 1fr\) 96px;/);
@@ -150,7 +150,9 @@ test("record mode swaps the same drawer to the shared capture form (one overlay)
 test("a persisted contact replaces its optimistic timeline ID so delete reaches the saved row", () => {
   const form = customersSource.slice(customersSource.indexOf("<ContactRecordForm"));
   assert.match(form, /onSummaryPersisted=\{\(\{\s*activityId,\s*optimisticId\s*\}\)/);
-  assert.match(form, /a\.id === optimisticId \? \{ \.\.\.a, id: activityId \} : a/);
+  // 서버 ID로 바꾸면서 "기록 중"도 푼다 — ID를 못 받았으면 낙관 ID를 둔 채 다시 읽는다.
+  assert.match(form, /a\.id === optimisticId \? \{ \.\.\.a, id: activityId \|\| a\.id, pending: false \} : a/);
+  assert.match(form, /if \(!activityId\) reload\(\);/);
 });
 
 test("the record stream merges activities with linked memos and keeps local rows undeletable", () => {
@@ -176,18 +178,13 @@ test("Customer360Drawer keeps the 1-click VIP toggle and the 3-step focus contro
   assert.doesNotMatch(customersSource, /inset 1px 0 0 var\(--moon-300\)/);
 });
 
-test("Customer360Drawer lets a reader request Guru after seeing a source-backed card", () => {
+test("Customer360Drawer asks Guru through the source-card question drawer, never the deal-review widget", () => {
   assert.match(customersSource, /<GuruGuidanceCard domain="sales" compact onAsk=/);
-  assert.match(customersSource, /setGuruQuestion\(''\)/, 'a card must open a blank operator question');
-  assert.doesNotMatch(customersSource, /setGuruQuestion\(card\.question\)/);
-  assert.match(customersSource, /guidanceId=\{guruGuidanceId\}/);
-  assert.match(customersSource, /initialQuestion=\{guruQuestion\}/);
+  assert.match(customersSource, /<GuidanceQuestionDrawer card=\{guruCard\}/);
   assert.doesNotMatch(customersSource, /Guru 전략 코칭 \(⌘J\)/);
-  assert.match(customersSource, /FloatingMentorWidget/);
-  assert.match(customersSource, /agent="guru"/);
-  assert.match(customersSource, /contextType="customer"/);
-  // 적용한 문장은 표시 모델 키가 아니라 약속 쓰기 계약(next_action)으로 저장된다.
-  assert.match(customersSource, /onApplyText=\{\(text\) => \{[\s\S]*?savePromise\(\{ what: text\.slice\(0, 100\) \}\)/);
+  // 2026-09-25: 위젯의 대화는 deal-review로 보내져 레코드와 무관한 거래 초점을 찾았고, 매 턴
+  // Engine이 project_updates 행을 남겼다. 고객 상세는 open-question 질문 경로만 쓴다.
+  assert.doesNotMatch(customersSource, /FloatingMentorWidget|deal-review|initialQuestion=/);
 });
 
 test("customer help has one scope-aware reply draft and no unscoped sales persona generator", () => {
@@ -244,8 +241,13 @@ const leadLabels = await import("../../../lib/sales-os/lead-labels.js");
 const customerLabels = await import("../../../lib/sales-os/customer-labels.js");
 const deleteContract = await import("../../../lib/sales-os/customer-delete-contract.js");
 const followupScoring = await import("../../../lib/sales-os/followup-scoring.js");
+const contactRecord = await import("../../../lib/sales-os/contact-record.js");
 const uuid = await import("../../../lib/uuid.js");
 const workspaceMap = await import("../workspace-map.js");
+const { guidanceRequest } = await import("../guidance-advice-client.js");
+const { GURU_CARDS } = await import("@com-moon/guru-guidance");
+const { adviceScopeForRecord } = await import("../../../lib/sales-os/advice-scope.js");
+const { recommendationForSubject } = await import("../guru-recommendations-client.js");
 const leadEnrichment = await import("../../../lib/sales-os/lead-enrichment.js");
 const crmNudge = await import("../crm-nudge.jsx");
 
@@ -259,9 +261,10 @@ const HOST_COMPONENTS = [
   "Avatar", "EmptyState", "TruthBadge", "Kbd", "Drawer", "SegmentedControl", "CheckboxRow", "TextField", "TextAreaField",
   "SelectField", "Skeleton", "CertaintyBadge", "ChipToggle", "LifecycleBadge", "DateQuickPresets", "ContactRecordForm",
   "LeadEnrichmentPanel", "SortHead", "FloatingMentorWidget", "GuruGuidanceCard", "ContextMentorRail", "SuggestionTip",
+  "GuidanceQuestionDrawer", "GuruRecommendation",
 ];
 
-function mountCustomers({ state = "live", leads = [], accounts = [], params = "" } = {}) {
+function mountCustomers({ state = "live", leads = [], accounts = [], params = "", guruRecommendations = [] } = {}) {
   // 훅 상태는 컴포넌트 경로별로 둔다 — 드로어가 기록 모드로 바뀌면 자식 구성이 달라지므로
   // 전역 인덱스 하나로는 React처럼 인스턴스별 상태를 흉내 낼 수 없다.
   const slots = new Map();
@@ -307,6 +310,10 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     LEAD_SUBJECTS: leadLabels.LEAD_SUBJECTS, subjectLabels: leadLabels.subjectLabels,
     ...customerLabels,
     REACTION_LABEL: followupScoring.REACTION_LABEL,
+    recordSaveLabel: contactRecord.recordSaveLabel,
+    adviceScopeForRecord,
+    useGuruRecommendations: ({ enabled } = {}) => ({ status: enabled ? "live" : "idle", recommendations: enabled ? guruRecommendations : [], reload() {} }),
+    recommendationForSubject,
     ...helpers,
     isTemplateNextAction: leadEnrichment.isTemplateNextAction,
     TIP_RULE_IDS: crmNudge.TIP_RULE_IDS,
@@ -316,7 +323,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     useCrmNudges: () => ({ status: "preview", nudges: [], unrecordedMeetings: [], failedSources: [], busyKey: null, suppress: async () => ({ ok: true }), refresh() {} }),
   };
   for (const name of HOST_COMPONENTS) deps[name] = name;
-  const { Customers } = new Function(...Object.keys(deps), `${pageJs}; return { Customers };`)(...Object.values(deps));
+  const { Customers, ActivityTimeline } = new Function(...Object.keys(deps), `${pageJs}; return { Customers, ActivityTimeline };`)(...Object.values(deps));
 
   const call = (fn, props, at) => {
     const saved = [path, index];
@@ -351,7 +358,9 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     return text(node.props?.children || []);
   };
   render();
-  return { render, findAll, text, saves };
+  // 기록 타임라인은 활동 읽기(effect)가 끝나야 드로어에 보인다 — 그리기 계약은 따로 세워 본다.
+  const renderTimeline = (props) => expand({ type: ActivityTimeline, props }, "timeline");
+  return { render, findAll, text, saves, renderTimeline };
 }
 
 const dayKey = (offset) => helpers.addDaysKey(new Date(), offset);
@@ -367,24 +376,24 @@ const renderAccounts = () => [
 ];
 const rowsOf = (app) => app.findAll((n) => n.props?.["data-customer-row"]);
 
-test("render: 진행 중 lists open customers by next promise, rails the overdue one, counts every segment", () => {
+test("render: 진행 중 lists open customers by recent contact, rails the overdue one, counts every segment", () => {
   const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
   const rows = rowsOf(app);
   assert.deepEqual(rows.map((r) => r.props["data-customer-row"]), [
+    "lead:33333333-3333-4333-8333-333333333333",
     "lead:11111111-1111-4111-8111-111111111111",
     "lead:22222222-2222-4222-8222-222222222222",
-    "lead:33333333-3333-4333-8333-333333333333",
   ]);
-  assert.equal(rows[0].props["data-urgent"], "true");
-  assert.equal(rows[1].props["data-urgent"], undefined);
-  assert.match(app.text(rows[0]), /2일 지남/);
-  assert.match(app.text(rows[0]), /긍정5일 전/);
-  assert.match(app.text(rows[1]), /오늘/);
-  assert.match(app.text(rows[2]), /다음 약속 없음/);
+  assert.equal(rows[1].props["data-urgent"], "true");
+  assert.equal(rows[0].props["data-urgent"], undefined);
+  assert.match(app.text(rows[1]), /2일 지남/);
+  assert.match(app.text(rows[1]), /긍정5일 전/);
+  assert.match(app.text(rows[2]), /오늘/);
+  assert.match(app.text(rows[0]), /다음 약속 없음/);
   const seg = app.findAll((n) => n.type === "SegmentedControl" && n.props.label === "고객 구분")[0];
   assert.deepEqual(seg.props.options.map((o) => [o.key, o.count]), [["active", 3], ["won", 1], ["new", 1], ["dormant", 0], ["all", 5]]);
   assert.match(app.text(), /3명 표시/);
-  assert.match(app.text(), /정렬: 다음 약속이 급한 순/);
+  assert.match(app.text(), /정렬: 최근 연락 · 최근 컨택·문의 · 구매 고객 순/);
 });
 
 test("render: typing switches to 전체, and a miss offers clear and create", () => {
@@ -409,7 +418,7 @@ test("render: a failed read with no rows is an error state, not an empty list", 
 
 test("render: opening a row shows the promise first and one primary record action", () => {
   const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
-  rowsOf(app)[0].props.onClick();
+  rowsOf(app).find(row => row.props["data-customer-row"] === "lead:11111111-1111-4111-8111-111111111111").props.onClick();
   app.render();
   const drawer = app.findAll((n) => n.type === "Drawer")[0];
   assert.ok(drawer, "drawer opens");
@@ -431,6 +440,66 @@ test("render: opening a row shows the promise first and one primary record actio
   assert.equal(form.props.draft.summary, "견적서 보내기");
   assert.equal(app.findAll((n) => n.type === "Drawer").length, 1);
   assert.equal(app.findAll((n) => n.type === "Drawer")[0].props.title, "연락 기록");
+});
+
+test("render: an unacknowledged record row says 기록 중 until the server confirms it", () => {
+  const app = mountCustomers();
+  const today = new Date();
+  const row = { id: "local-1", source: "activity", type: "call", msg: "견적 검토 통화", reaction: "positive", at: "방금", occurredAt: today.toISOString() };
+  const deleteButtons = (tree) => app.findAll((n) => n.type === "IconButton" && n.props["aria-label"] === "기록 삭제", tree);
+
+  // 저장을 눌렀지만 서버가 아직 답하지 않았다 — 되돌리기 창이거나 답을 기다리는 중이다.
+  const pending = app.renderTimeline({ rows: [{ ...row, pending: true }], today, onDeleteActivity() {} });
+  assert.match(app.text(pending), /견적 검토 통화.*통화.*긍정.*기록 중$/);
+  assert.doesNotMatch(app.text(pending), /오늘|방금|기록됨|저장됨/, "확인되지 않은 기록에 시각·완료 문구를 달지 않는다");
+  assert.equal(deleteButtons(pending).length, 0);
+
+  // 서버가 저장을 확인하면 시각으로 돌아오고 삭제할 수 있게 된다.
+  const saved = app.renderTimeline({ rows: [{ ...row, id: "99999999-9999-4999-8999-999999999999", pending: false }], today, onDeleteActivity() {} });
+  assert.match(app.text(saved), /긍정오늘$/);
+  assert.doesNotMatch(app.text(saved), /기록 중/);
+  assert.equal(deleteButtons(saved).length, 1);
+
+  // 낙관 행은 폼이 저장을 누른 순간 pending으로 들어오고, 빠른 메모는 요청이 나갈 때만 pending이다.
+  const drawer = slice("function Customer360Drawer", "// ── 새 고객 등록");
+  assert.match(drawer, /onSaved=\{\(o\) => \{[\s\S]*?occurredAt: new Date\(\)\.toISOString\(\), pending: true \},/);
+  assert.match(drawer, /const temp = \{ id: `local-\$\{Date\.now\(\)\}`, type, msg: body, at: "방금", pending: Boolean\(row\.id\) \};/);
+  assert.match(drawer, /a\.id === temp\.id \? \{ \.\.\.a, id: r\.id, pending: false \} : a/);
+});
+
+test("render: a stored-fact recommendation takes the rotating card's place and asks through this drawer's own question", () => {
+  const company = { ...renderLeads()[0], workspace: "classin", type: "company" };
+  const recommendation = {
+    id: `positive-no-date:lead:${company.id}`, ruleId: "positive-no-date", cardId: "sales-voss-feasibility", severity: "act", basis: "record",
+    subject: { type: "lead", id: company.id, name: company.name, lane: "classin", laneBlocked: false },
+    facts: ["9/20 통화 · 긍정 반응", "날짜 정한 다음 단계 없음"],
+  };
+  const app = mountCustomers({ leads: [company], params: "scope=classin", guruRecommendations: [recommendation] });
+  rowsOf(app)[0].props.onClick();
+  app.render();
+  const shown = app.findAll((n) => n.type === "GuruRecommendation");
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0].props.recommendation.id, recommendation.id);
+  assert.equal(app.findAll((n) => n.type === "GuruGuidanceCard").length, 0, "the rotating card is the fallback only");
+  assert.match(app.text(), /기록 기반 추천 있음/);
+  shown[0].props.onAsk(GURU_CARDS.find((card) => card.id === "sales-voss-feasibility"));
+  app.render();
+  const question = app.findAll((n) => n.type === "GuidanceQuestionDrawer")[0];
+  assert.equal(question.props.card.id, "sales-voss-feasibility");
+  assert.equal(question.props.context.ref, company.id);
+
+  // 다른 고객의 추천은 이 드로어에 붙지 않고, 순환 카드가 그대로 남는다.
+  const other = mountCustomers({ leads: [company], params: "scope=classin", guruRecommendations: [{ ...recommendation, subject: { ...recommendation.subject, id: "someone-else" } }] });
+  rowsOf(other)[0].props.onClick();
+  other.render();
+  assert.equal(other.findAll((n) => n.type === "GuruRecommendation").length, 0);
+  assert.equal(other.findAll((n) => n.type === "GuruGuidanceCard").length, 1);
+
+  // ClassIn 범위 화면이 아니면 추천을 읽을 수만 있다(질문은 ClassIn 화면·ClassIn 고객일 때만).
+  const allApp = mountCustomers({ leads: [company], params: "scope=all", guruRecommendations: [recommendation] });
+  rowsOf(allApp)[0].props.onClick();
+  allApp.render();
+  assert.equal(allApp.findAll((n) => n.type === "GuruRecommendation")[0].props.onAsk, undefined);
 });
 
 // 2026-09-24: 이관·시트 템플릿 문구는 운영자의 약속이 아니다 — 목록·드로어 둘 다 "다음 약속
@@ -483,6 +552,7 @@ test("render: customer Guru is readable across scopes but asks only for a ClassI
   assert.equal(personalCard.props.onAsk, undefined);
   assert.equal(personalApp.findAll((n) => n.type === "OfficeWorkflowPanel")[0].props.scope, "personal");
   assert.equal(personalApp.findAll((n) => n.type === "FloatingMentorWidget").length, 0);
+  assert.equal(personalApp.findAll((n) => n.type === "GuidanceQuestionDrawer").length, 0);
 
   const company = { ...renderLeads()[0], workspace: "classin", type: "company" };
   const allApp = mountCustomers({ leads: [company], params: "scope=all" });
@@ -496,12 +566,13 @@ test("render: customer Guru is readable across scopes but asks only for a ClassI
   const classinCard = classinApp.findAll((n) => n.type === "GuruGuidanceCard")[0];
   assert.equal(typeof classinCard.props.onAsk, "function");
   assert.equal(classinApp.findAll((n) => n.type === "OfficeWorkflowPanel")[0].props.scope, "classin");
-  classinCard.props.onAsk({ id: "sales-gap" });
+  classinCard.props.onAsk(GURU_CARDS.find((card) => card.id === "sales-gap"));
   classinApp.render();
-  const mentor = classinApp.findAll((n) => n.type === "FloatingMentorWidget")[0];
-  assert.ok(mentor);
-  assert.equal(mentor.props.agent, "guru");
-  assert.equal(mentor.props.guidanceId, "sales-gap");
+  const question = classinApp.findAll((n) => n.type === "GuidanceQuestionDrawer")[0];
+  assert.ok(question);
+  assert.equal(question.props.card.id, "sales-gap");
+  assert.equal(question.props.context.ref, company.id);
+  assert.equal(classinApp.findAll((n) => n.type === "FloatingMentorWidget").length, 0);
 
   const mislabeledPersonal = { ...personal, workspace: "classin" };
   const inconsistentApp = mountCustomers({ leads: [mislabeledPersonal], params: "scope=classin" });
@@ -570,6 +641,66 @@ test("render: explicit brand ownership must agree with company type before custo
   assert.equal(office.props.scope, "classin");
 });
 
+// 2026-09-25: 고객 상세의 Guru는 deal-review 위젯이었다. 리드·계정 id는 거래 초점으로 풀리지
+// 않았고(focus 없음), 대화 매 턴 Engine이 project_updates 행을 남겼다(open-question 외 모드).
+test("render: customer Guru asks the open-question path with this record's id and visible facts", () => {
+  const company = {
+    ...renderLeads()[0], workspace: "classin", type: "company", region: "서울",
+    contactName: "김원장", contactPhone: "010-1234-5678", contactEmail: "kim@academy.kr",
+  };
+  const app = mountCustomers({ leads: [company], params: "scope=classin" });
+  rowsOf(app)[0].props.onClick();
+  app.render();
+  const card = GURU_CARDS.find((item) => item.id === "sales-gap");
+  app.findAll((n) => n.type === "GuruGuidanceCard")[0].props.onAsk(card);
+  app.render();
+
+  assert.equal(app.findAll((n) => n.type === "FloatingMentorWidget").length, 0, "no deal-review widget from customer detail");
+  const questions = app.findAll((n) => n.type === "GuidanceQuestionDrawer");
+  assert.equal(questions.length, 1);
+  // 활성 오버레이는 하나 — 질문 드로어가 고객 드로어를 대신하고, 닫으면 같은 고객으로 돌아온다.
+  assert.equal(app.findAll((n) => n.type === "Drawer").length, 0);
+  const { card: asked, context } = questions[0].props;
+  assert.equal(asked.id, "sales-gap");
+  assert.equal(context.ref, company.id);
+  assert.equal(context.label, "김원장 · 테스트학원 A");
+  assert.deepEqual(context.facts, [
+    "고객: 김원장",
+    "소속: 테스트학원 A",
+    "구분: 리드",
+    "단계: 연락 중",
+    "다음 약속: 견적서 보내기 · 2일 지남",
+    "마지막 연락: 긍정 · 5일 전",
+    "분류: 서울",
+  ]);
+
+  // 실제 질문 경로로 보낼 요청 — open-question(Engine이 project_updates를 쓰지 않는 모드),
+  // 레코드 id를 ref로, 화면의 사실만. 연락처는 조언에 필요 없어 보내지 않는다.
+  const request = guidanceRequest(asked, "무엇을 먼저 확인할까?", context);
+  assert.equal(request.endpoint, "/api/hub/sales-mentor");
+  assert.equal(request.body.mode, "open-question");
+  assert.equal(request.body.ref, company.id);
+  assert.equal(request.body.guidanceId, "sales-gap");
+  assert.match(request.body.draft, /- 다음 약속: 견적서 보내기 · 2일 지남/);
+  assert.match(request.body.draft, /무엇을 먼저 확인할까\?$/);
+  assert.doesNotMatch(request.body.draft, /010-1234-5678|kim@academy\.kr/);
+
+  questions[0].props.onClose();
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "GuidanceQuestionDrawer").length, 0);
+  assert.equal(app.findAll((n) => n.type === "Drawer")[0].props.title, "김원장");
+});
+
+test("render: customer Guru closes without a stored record id", () => {
+  const unsaved = { ...renderAccounts()[0], id: null, workspace: "classin", type: "company" };
+  const app = mountCustomers({ accounts: [unsaved], params: "scope=classin" });
+  app.findAll((n) => n.type === "SegmentedControl" && n.props.label === "고객 구분")[0].props.onChange("won");
+  app.render();
+  rowsOf(app)[0].props.onClick();
+  app.render();
+  assert.equal(app.findAll((n) => n.type === "GuruGuidanceCard")[0].props.onAsk, undefined);
+});
+
 test("render: an unsupported explicit workspace blocks customer advice despite company type", () => {
   for (const [kind, record] of [
     ["lead", { ...renderLeads()[0], workspace: "personal", type: "company" }],
@@ -594,7 +725,7 @@ test("render: an unsupported explicit workspace blocks customer advice despite c
 
 test("render: 날짜 다시 moves only the promise date through the lead update route", async () => {
   const app = mountCustomers({ leads: renderLeads(), accounts: renderAccounts() });
-  rowsOf(app)[0].props.onClick();
+  rowsOf(app).find(row => row.props["data-customer-row"] === "lead:11111111-1111-4111-8111-111111111111").props.onClick();
   app.render();
   const button = (label) => app.findAll((n) => n.type === "Button" && app.text(n).trim() === label)[0];
   button("날짜 다시").props.onClick();

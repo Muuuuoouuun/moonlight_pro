@@ -15,6 +15,27 @@ test('sales question keeps the ClassIn Guru route and selected source ID', () =>
   });
 });
 
+// 2026-09-25: the customer-detail Guru moved off the deal-review widget onto this question
+// path. A question about one open record names that record by id and carries only the facts
+// the screen supplied; it never becomes a name lookup.
+test('a sales question about one open record carries its id and supplied facts', () => {
+  const context = { ref: 'lead-7', label: '김원장 · 테스트학원 A', facts: ['고객: 김원장', ' 단계: 연락 중 ', ''] };
+  assert.deepEqual(guidanceRequest(sales, '무엇을 먼저 확인할까?', context), {
+    endpoint: '/api/hub/sales-mentor',
+    target: '영업 Guru',
+    body: {
+      mode: 'open-question',
+      draft: '[질문 대상 기록 — 화면에서 확인된 사실]\n- 고객: 김원장\n- 단계: 연락 중\n\n[운영자 질문]\n무엇을 먼저 확인할까?',
+      guidanceId: sales.id,
+      ref: 'lead-7',
+    },
+  });
+  // A ref without facts, or facts without a ref, keeps the general question unchanged.
+  for (const partial of [{ ref: 'lead-7' }, { facts: ['고객: 김원장'] }, { ref: '  ', facts: ['고객: 김원장'] }, { ref: 'lead-7', facts: [] }, { ref: 'sinabro', label: '시나브로' }]) {
+    assert.deepEqual(guidanceRequest(sales, '선택 기준은?', partial).body, { mode: 'open-question', draft: '선택 기준은?', guidanceId: sales.id }, JSON.stringify(partial));
+  }
+});
+
 test('marketing and content questions use the personal brand mentor without work orders', () => {
   for (const card of [marketing, content]) {
     assert.deepEqual(guidanceRequest(card, '어떤 관점이 필요한가?'), {

@@ -33,6 +33,10 @@ export const OPEN_EXACT = [
   "/legal/privacy",
   "/legal/terms",
   "/legal/data-deletion",
+  // Android App Links 검증 파일(public/.well-known/assetlinks.json) — 공개 서명 지문뿐이다.
+  // Google 검증기는 쿠키 없이 리다이렉트도 따르지 않고 읽으므로 로그인으로 보내면 검증이 실패한다.
+  // `/.well-known/` 접두사가 아니라 이 파일 하나만 연다(fail-closed).
+  "/.well-known/assetlinks.json",
 ];
 
 export function isOpenPath(pathname) {

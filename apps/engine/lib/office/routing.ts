@@ -5,6 +5,10 @@ import { generateGeminiText } from '../gemini.ts';
 
 const failure = { status: 'error', error: '담당 추천을 확인하지 못했습니다. 담당자를 직접 선택해 주세요.' };
 const preview = { status: 'preview', error: 'AI 연결이 필요합니다. 담당자를 직접 선택해 주세요.' };
+// The routing contract bounds the agenda at 6,000 characters. JSON may spend up to 6 bytes
+// per UTF-16 unit (\uXXXX escapes; Korean needs 3), so the byte guard fits any
+// contract-valid agenda and the contract's character check decides. Mirrors the Hub route.
+export const OFFICE_ROUTING_MAX_BODY_BYTES = 6000 * 6 + 1024;
 
 export async function generateOfficeRouting(request: OfficeRoutingRequest, generate: typeof generateGeminiText = input => generateGeminiText({ ...input, usageSurface: input.usageSurface || 'office-routing' })) {
   const input = parseOfficeRoutingRequest(request);
@@ -42,7 +46,7 @@ export function createOfficeRoutingEngineHandler(auth: (request: Request) => { o
     if (!auth(req).ok) return Response.json({ status: 'error', error: 'Office 인증에 실패했습니다.' }, { status: 401 });
     try {
       const body = await req.text();
-      if (Buffer.byteLength(body) > 24000) return Response.json({ status: 'error', error: '요청이 너무 큽니다.' }, { status: 413 });
+      if (Buffer.byteLength(body) > OFFICE_ROUTING_MAX_BODY_BYTES) return Response.json({ status: 'error', error: '요청이 너무 큽니다.' }, { status: 413 });
       const request = parseOfficeRoutingRequest(JSON.parse(body));
       const result = await generate(request);
       if (result.status === 'recommended') return Response.json(parseOfficeRoutingResult(result, request));

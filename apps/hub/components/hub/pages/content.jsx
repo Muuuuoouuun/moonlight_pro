@@ -127,8 +127,9 @@ export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
   const ws = getWorkspace(workspace);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [tab, setTab] = React.useState('all');
+  const [tab, setTab] = React.useState(() => searchParams.get('tab') === 'idea' ? 'idea' : 'all');
   const [brandFilter, setBrandFilter] = React.useState(() => searchParams.get('brand') || 'all');
+  const focusItemId = searchParams.get('item');
   const [page, setPage] = React.useState(1);
   const [sidePanel, setSidePanel] = React.useState('cadence');
   const ledger = useContentLedger();
@@ -137,6 +138,7 @@ export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
   const filteredByBrand = contentQueueScope(queue, brandFilter);
   const tabs = contentQueueTabs(filteredByBrand);
   const visibleQueue = tab === 'all' ? filteredByBrand : filteredByBrand.filter((item) => statusKeyOf(item) === tab);
+  const focusIndex = focusItemId ? visibleQueue.findIndex((item) => item.id === focusItemId) : -1;
   const activeLabel = tabs.find((entry) => entry.key === tab)?.label || '전체';
   const totalPages = Math.max(1, Math.ceil(visibleQueue.length / CONTENT_QUEUE_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -148,8 +150,9 @@ export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
   }, [brandFilter, router]);
   const createDraft = React.useCallback(() => openStudio(), [openStudio]);
   usePageCreateHotkey(createDraft);
-  React.useEffect(() => { setBrandFilter(searchParams.get('brand') || 'all'); }, [searchParams]);
+  React.useEffect(() => { setBrandFilter(searchParams.get('brand') || 'all'); setTab(searchParams.get('tab') === 'idea' ? 'idea' : 'all'); }, [searchParams]);
   React.useEffect(() => { setPage(1); }, [tab, brandFilter]);
+  React.useEffect(() => { if (focusIndex >= 0) setPage(Math.floor(focusIndex / CONTENT_QUEUE_PAGE_SIZE) + 1); }, [focusIndex]);
   return (
     <div className="hub-page content-queue" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: "wrap" }}>
@@ -201,7 +204,7 @@ export function Queue({ workspace, onNavigate, onGuidanceAsk }) {
       {visibleQueue.length === 0 && <EmptyState icon="queue" title={`${activeLabel}에 표시할 콘텐츠가 없습니다`} description={ledger.syncState === 'error' || ledger.syncState === 'partial' ? '기록 읽기가 완료되지 않았습니다. 실제 콘텐츠가 비어 있다는 뜻은 아닙니다.' : ledger.syncState === 'preview' ? '저장소가 연결되면 저장한 소재와 원고가 여기에 표시됩니다.' : '떠오른 문장이나 링크를 소재함에 담아보세요.'} />}
       {pageItems.length > 0 && (
         <div>
-          {pageItems.map((item, index) => <div key={item.id} className="hub-row hub-content-queue-row" role="button" tabIndex={0} onClick={() => openStudio(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudio(item.id); } }} style={{ display: 'grid', padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', gap: 12, cursor: 'pointer', borderBottom: index < pageItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+          {pageItems.map((item, index) => <div key={item.id} className="hub-row hub-content-queue-row" role="button" tabIndex={0} aria-current={item.id === focusItemId ? 'true' : undefined} onClick={() => openStudio(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudio(item.id); } }} style={{ display: 'grid', padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', gap: 12, cursor: 'pointer', boxShadow: item.id === focusItemId ? 'inset 1px 0 0 var(--line-strong)' : undefined, borderBottom: index < pageItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
             <div style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
               <span style={{ flex: '1 1 auto', minWidth: 0, fontSize: 13, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</span>
               <span style={{ flexShrink: 0, fontSize: 11.5, color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>{item.channel} · {item.brandName === 'No brand' ? '브랜드 미지정' : item.brandName || '브랜드 미지정'}</span>
