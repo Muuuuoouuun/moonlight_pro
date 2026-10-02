@@ -153,3 +153,23 @@ test('a snapshot expiring during a failed refresh cannot remain visible as recen
   assert.equal(cache.getSnapshot().syncState, 'error');
   assert.deepEqual(cache.getSnapshot().items, []);
 });
+
+test('the Studio catalog uses the lightweight endpoint and accepts brands without full ledgers', async () => {
+  const urls = [];
+  const cache = createContentLedgerCache(async (url) => {
+    urls.push(url);
+    return dataResponse({ source: 'supabase', status: 'live', brands: [{ id: 'brand', name: 'Brand' }] });
+  }, { catalogOnly: true });
+  await cache.refresh();
+  assert.deepEqual(urls, ['/api/hub/content/catalog']);
+  assert.equal(cache.getSnapshot().syncState, 'live');
+  assert.equal(cache.getSnapshot().brands[0].id, 'brand');
+  assert.deepEqual(cache.getSnapshot().items, []);
+});
+
+test('the full content snapshot preserves tag trends for Queue and Campaign consumers', async () => {
+  const tagTrends = [{ tag: 'writing', count: 3, trend: 'up' }];
+  const cache = createContentLedgerCache(async () => dataResponse({ ...live(), tagTrends }));
+  await cache.refresh();
+  assert.deepEqual(cache.getSnapshot().tagTrends, tagTrends);
+});
