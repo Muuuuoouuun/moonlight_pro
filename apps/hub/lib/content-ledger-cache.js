@@ -71,7 +71,7 @@ export function createContentLedgerCache(fetcher = (...args) => fetch(...args), 
     return request.promise;
   };
   return {
-    getSnapshot: () => snapshot.source === "supabase" && !hasRecentLive() ? LOADING_CONTENT_LEDGER : snapshot,
+    getSnapshot: () => snapshot,
     subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
     refresh,
     invalidate: () => {

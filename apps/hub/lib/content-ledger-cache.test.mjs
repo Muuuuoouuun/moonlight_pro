@@ -154,6 +154,28 @@ test('a snapshot expiring during a failed refresh cannot remain visible as recen
   assert.deepEqual(cache.getSnapshot().items, []);
 });
 
+test('elapsed time alone cannot strand a mounted consumer in loading without a read', async (t) => {
+  let now = 1000;
+  t.mock.method(Date, 'now', () => now);
+  const { cache, requests } = deferredReads();
+  const first = cache.refresh();
+  await tick();
+  requests[0].resolve(live([{ id: 'known' }]));
+  await first;
+  const displayed = cache.getSnapshot();
+  now += 5 * 60_000 + 1;
+  assert.equal(cache.getSnapshot(), displayed, 'rendering must not invent a loading transition');
+  assert.equal(requests.length, 1);
+
+  const refresh = cache.refresh();
+  await tick();
+  assert.equal(cache.getSnapshot().syncState, 'loading', 'expired data clears when a read actually starts');
+  assert.equal(requests.length, 2);
+  requests[1].resolve(live([{ id: 'fresh' }]));
+  await refresh;
+  assert.equal(cache.getSnapshot().items[0].id, 'fresh');
+});
+
 test('the Studio catalog uses the lightweight endpoint and accepts brands without full ledgers', async () => {
   const urls = [];
   const cache = createContentLedgerCache(async (url) => {
