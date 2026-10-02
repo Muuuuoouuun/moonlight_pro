@@ -73,3 +73,21 @@ CMac 통합·보안 패치 검증을 마친 `90ed9be2`에서 이어서 점검했
 - `de7e68e3`: 제품 I/O 제한·조회 독립화·미확정 생성 요청 보존과 회귀 테스트.
 
 이전 CMac 통합 원본 `42d12e4c`는 계속 통합 브랜치의 조상이다. 결과는 `/Users/bigmac_moon/dev/moonlight_pro-speed-stability-1002`의 `codex/speed-stability-1002`에 보존한다. 메인 `10.bigmac2.0`의 `6ed72d09`와 기존 미커밋 파일은 그대로다. 병합한 보조 작업 트리 3개는 정리했고, 브랜치·커밋은 남겼다. 임시 브라우저와 검증 서버를 종료했다. push·배포·운영 마이그레이션은 수행하지 않았다.
+
+## 후속 요청: 메인 작업 폴더에 병합
+
+운영자의 “끝나면 워크트리도 병합 시켜줘” 요청에 따라 `/Users/bigmac_moon/dev/moonlight_pro`의 `10.bigmac2.0`을 `6ed72d09`에서 `4fa0b3af`로 fast-forward했다. 이 절은 위의 작업 트리 보존 상태를 대체하는 후속 기록이다.
+
+병합 전에 메인의 미커밋 15파일과 미추적 2파일을 별도 백업하고, 파일별 3-way 결과를 사전 확인했다. `DESIGN.md`는 기존 프로젝트 완료 묶음 결정과 새 위젯 결정을 모두 보존했다. `daily-brief.jsx`는 기존 navigation prop·컴팩트 일정 구성과 새 ClassIn Guru 판정·추천 목록을 함께 보존했다. 나머지 파일은 자동 복원됐고, 17파일 전부 검토한 합본과 일치함을 바이트 단위로 확인했다. 기존 변경은 커밋하지 않고 모두 원래처럼 unstaged/untracked 상태로 남겼다. 충돌과 staged 항목은 없다.
+
+`npm install --ignore-scripts`로 메인 의존성을 갱신했으며 package-lock 변경은 없다. 병합된 코드와 기존 미커밋 수정이 함께 있는 메인 작업 폴더에서 다시 검증했다:
+
+- Root: **3,929 tests / 3,916 pass / 0 fail / 13 DB 연결 의존 skip**. 기존 미커밋 테스트 두 건도 포함된다.
+- Desktop: **346 pass / 0 fail**.
+- Typecheck: 4 successful tasks(Engine 새 실행, 나머지 입력 캐시).
+- Hub·Engine build: 2 successful tasks, 모두 새 빌드.
+- Contract 검사 통과, production dependency audit 0 vulnerabilities.
+- 로그: `/tmp/moonlight-main-merge-{install,test,desktop,typecheck,build,contracts,audit}.log`.
+- 기존 `project-index-order.test.mjs`의 EOF 빈 줄 경고는 원본에도 있으며 이 병합에서 수정하지 않았다.
+
+원본·패치·복원 합본·파일 해시는 `/var/folders/l6/tx5c_hw97452y83gkpgpnxcr0000gn/T/moonlight-main-merge-20261002-b_0amlbn`에 보관했다. 최종 기록까지 메인에 병합한 뒤 완료된 speed-stability 작업 트리와 작업 브랜치를 정리한다. 원격 push·배포는 수행하지 않는다.
