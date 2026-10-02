@@ -25,7 +25,7 @@ import { buildMoneyModel } from "@/lib/deal-money";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
-import { readRevenueCache, writeRevenueCache, clearRevenueCache } from "../revenue-shared-cache";
+import { revenueLedgerCache } from "../revenue-shared-cache";
 import { resolveScopeFilter, scopeFilterForQuery } from "@/lib/revenue-scope-filter";
 import { BulkBar } from "../crm-bulk-bar";
 import { PersonalRevenueRoadmap } from "./personal-revenue";
@@ -206,97 +206,24 @@ function buildRevenueAttention(leads, deals) {
   return items.slice(0, 4);
 }
 
-const EMPTY_REVENUE_LEDGER = {
-  source: 'preview',
-  leads: [],
-  deals: [],
-  stages: [],
-  accounts: [],
-  cases: [],
-  contacts: [],
-  companies: [],
-  // null = 아직 읽지 않음/읽기 실패(§8.1 read 봉투) — 월별 목표 미정({})과 구분해야
-  // 거래 히어로가 "이번 달 목표가 없다"를 "아직 모른다"로 잘못 말하지 않는다.
-  revenueTargets: null,
-  summary: null,
-};
-
-// 모듈 스코프 stale-while-revalidate 캐시 — Leads↔Deals↔Accounts↔Cases↔Customers 탭
-// 전환은 훅을 리마운트하므로, 캐시 없이는 전환마다 동일한 6콜 기록을 다시 받고 스켈레톤을
-// 보였다(re-audit 속도 #3). 캐시는 즉시 서빙하고 항상 배경 재검증하므로 신선도는 1 RTT다.
-// 저장소는 revenue-shared-cache 공유 모듈 — ⌘K 레코드 검색이 같은 스냅샷을 재사용한다.
-
+// Revenue 탭과 ⌘K가 같은 상태·요청을 구독한다. 탭 전환은 최근 스냅샷을
+// 즉시 보여주고 배경 재검증하며, 저장 후 reload는 모든 소비자를 갱신한다.
 export function useRevenueLedger() {
-  const servableCache = readRevenueCache();
-  const [ledger, setLedger] = React.useState(servableCache ? servableCache.ledger : EMPTY_REVENUE_LEDGER);
-  const [syncState, setSyncState] = React.useState(servableCache ? servableCache.syncState : 'loading');
-  const [refreshKey, setRefreshKey] = React.useState(0);
-
-  React.useEffect(() => {
-    let active = true;
-    let retryTimer = null;
-    const hasServableCache = Boolean(readRevenueCache());
-    // dev 리컴파일·순간 네트워크 실패로 첫 fetch가 죽으면 preview에 고착됐다 —
-    // 실패 1회는 1.2초 뒤 재시도하고, 그래도 실패하면 error로 표시한다(preview는
-    // "미구성"의 뜻 — 라이브 read 거부를 preview로 라벨하면 0건이 사실처럼 보인다).
-    async function load(attempt = 0) {
-      if (!hasServableCache) setSyncState('loading'); // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증
-      try {
-        const response = await fetch('/api/hub/revenue', { cache: 'no-store' });
-        const data = await response.json().catch(() => null);
-        if (!active) return;
-        if (!response.ok || !data || data.status === 'error') {
-          if (attempt === 0) {
-            retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
-          } else if (!hasServableCache) {
-            setSyncState('error');
-          } else {
-            // 캐시를 계속 보여주되 live로 위장하지 않는다 — 재검증 실패는 partial(오래된 데이터).
-            setSyncState('partial');
-          }
-          return;
-        }
-        const nextLedger = {
-          source: data.source === 'supabase' ? 'supabase' : 'preview',
-          leads: Array.isArray(data.leads) ? data.leads : [],
-          deals: Array.isArray(data.deals) ? data.deals : [],
-          stages: Array.isArray(data.stages) ? data.stages : [],
-          accounts: Array.isArray(data.accounts) ? data.accounts : [],
-          cases: Array.isArray(data.cases) ? data.cases : [],
-          contacts: Array.isArray(data.contacts) ? data.contacts : [],
-          companies: Array.isArray(data.companies) ? data.companies : [],
-          // 서버가 워크스페이스 meta를 못 읽었으면 null 그대로 넘어온다 — 여기서 {}로 뭉개지 않는다.
-          revenueTargets: data.revenueTargets && typeof data.revenueTargets === 'object' ? data.revenueTargets : null,
-          summary: data.summary || null,
-        };
-        const nextState = data.source === 'supabase'
-          ? data.status === 'partial' ? 'partial' : 'live'
-          : 'preview';
-        writeRevenueCache({ at: Date.now(), ledger: nextLedger, syncState: nextState });
-        setLedger(nextLedger);
-        setSyncState(nextState);
-      } catch {
-        if (!active) return;
-        if (attempt === 0) {
-          retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
-        } else if (!hasServableCache) {
-          setSyncState('error');
-        } else {
-          setSyncState('partial');
-        }
-      }
-    }
-    load();
-    return () => { active = false; clearTimeout(retryTimer); };
-  }, [refreshKey]);
-
-  const reload = React.useCallback(() => {
-    // 모듈 캐시를 무효화하고 재조회 — 명함 스캔 승격 등 쓰기 직후 목록 갱신용.
-    clearRevenueCache();
-    setRefreshKey((k) => k + 1);
+  const getSnapshot = React.useMemo(() => {
+    // 신규 mount는 만료/실패 기록으로 딥링크를 먼저 소비하면 안 된다. 이 판정은
+    // mount 때만 고정하고, 이미 열린 화면은 시간 경과만으로 loading에 빠뜨리지 않는다.
+    const beforeRead = revenueLedgerCache.getSnapshot();
+    const initial = revenueLedgerCache.getServableSnapshot() || revenueLedgerCache.getServerSnapshot();
+    return () => {
+      const current = revenueLedgerCache.getSnapshot();
+      return current === beforeRead ? initial : current;
+    };
   }, []);
-
-  return { ledger, syncState, reload };
+  const { ledger, syncState } = React.useSyncExternalStore(
+    revenueLedgerCache.subscribe, getSnapshot, revenueLedgerCache.getServerSnapshot,
+  );
+  React.useEffect(() => { void revenueLedgerCache.refresh(); }, []);
+  return { ledger, syncState, reload: revenueLedgerCache.invalidate };
 }
 
 // 기록 read 실패 공용 빈 상태 — Leads·Deals·Accounts의 wsEmpty 분기가 error에서도

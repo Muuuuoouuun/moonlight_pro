@@ -1,4 +1,4 @@
-import { readRevenueCache } from './revenue-shared-cache.js';
+import { revenueLedgerCache } from './revenue-shared-cache.js';
 
 const SOURCES = ['revenue', 'tasks'];
 const CACHE_MS = 60_000;
@@ -55,59 +55,71 @@ function sourceResult(source, data) {
   return { status: data.status, items: recordItems(source, data) };
 }
 
-// Two small source caches keep a slow ledger from blocking the other one. Closing
-// a palette removes only its listener; the bounded request can warm the next open.
+// Revenue has one authoritative cache shared with its pages. Only tasks have a
+// palette-owned cache; either source can finish without waiting for the other.
 export function createCommandPaletteRecordLoader({
-  fetcher = (...args) => fetch(...args), readShared = readRevenueCache, now = Date.now,
+  fetcher = (...args) => fetch(...args), revenueCache = revenueLedgerCache, now = Date.now,
 } = {}) {
-  const cache = new Map(), pending = new Map();
-  function cached(source) {
-    const hit = cache.get(source);
-    if (hit && now() - hit.at < CACHE_MS) return hit.result;
-    if (source === 'revenue') {
-      const shared = readShared();
-      if (shared && ['live', 'preview'].includes(shared.syncState)) {
-        try { return sourceResult(source, { ...shared.ledger, status: shared.syncState }); } catch {}
-      }
+  let taskCache = null, taskPending = null;
+  let indexedSnapshot = null, indexedRevenue = null;
+  function revenueResult() {
+    const snapshot = revenueCache.getSnapshot();
+    if (snapshot !== indexedSnapshot) {
+      indexedSnapshot = snapshot;
+      indexedRevenue = ['loading', 'error'].includes(snapshot.syncState)
+        ? { status: snapshot.syncState, items: [] }
+        : sourceResult('revenue', { ...snapshot.ledger, status: snapshot.syncState });
     }
-    return null;
+    return indexedRevenue;
   }
-  function read(source) {
-    if (pending.has(source)) return pending.get(source);
+  function readTasks() {
+    if (taskPending) return taskPending;
     const promise = Promise.resolve().then(async () => {
+      const controller = new AbortController();
+      let timer;
+      const deadline = new Promise((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(Error('record-read-timeout')); }, 15_000);
+      });
       try {
-        const response = await fetcher(`/api/hub/${source}`, {
-          cache: 'no-store', signal: AbortSignal.timeout(15_000),
-        });
-        if (!response.ok) throw Error('record-read-failed');
-        const result = sourceResult(source, await response.json());
+        const result = await Promise.race([deadline, (async () => {
+          const response = await fetcher('/api/hub/tasks', { cache: 'no-store', signal: controller.signal });
+          if (!response.ok || controller.signal.aborted) throw Error('record-read-failed');
+          return sourceResult('tasks', await response.json());
+        })()]);
         // A partial result remains usable now, but a retry must read it again.
-        if (result.status !== 'partial') cache.set(source, { at: now(), result });
+        if (result.status !== 'partial') taskCache = { at: now(), result };
         return result;
       } catch {
         return { status: 'error', items: [] };
       } finally {
-        pending.delete(source);
+        clearTimeout(timer);
+        if (taskPending === promise) taskPending = null;
       }
     });
-    pending.set(source, promise);
+    taskPending = promise;
     return promise;
   }
   return function load(onChange) {
     let active = true;
-    const states = Object.fromEntries(SOURCES.map((source) => [source, cached(source) || { status: 'loading', items: [] }]));
+    const shared = revenueCache.getServableSnapshot();
+    if (!shared || shared.syncState === 'partial') void revenueCache.refresh();
+    const states = {
+      revenue: revenueResult(),
+      tasks: taskCache && now() - taskCache.at < CACHE_MS ? taskCache.result : { status: 'loading', items: [] },
+    };
     const emit = () => {
       if (active) onChange({
         items: SOURCES.flatMap((source) => states[source].items),
         sources: Object.fromEntries(SOURCES.map((source) => [source, states[source].status])),
       });
     };
+    const unsubscribe = revenueCache.subscribe(() => { states.revenue = revenueResult(); emit(); });
     emit();
-    for (const source of SOURCES) {
-      if (states[source].status !== 'loading') continue;
-      read(source).then((result) => { states[source] = result; emit(); });
+    if (states.tasks.status === 'loading') {
+      readTasks().then((result) => { states.tasks = result; emit(); });
     }
-    return () => { active = false; };
+    // Closing removes only listeners. Bounded reads can still warm the next open.
+    return () => { active = false; unsubscribe(); };
   };
 }
 
