@@ -59,11 +59,14 @@ export function schedulePresets(now = Date.now()) {
   ];
 }
 
+// Fixed locale/time zone: reuse the formatter across schedule and publish-log rows.
+const kstShortFormatter = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+
 /** "9/29 19:30" — 한국 시간. */
 export function formatKstShort(iso) {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return '';
-  const parts = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(t));
+  const parts = kstShortFormatter.formatToParts(new Date(t));
   const get = (type) => parts.find((part) => part.type === type)?.value || '';
   return `${get('month')}/${get('day')} ${get('hour')}:${get('minute')}`;
 }
