@@ -28,18 +28,28 @@ export function ContentPublishLog() {
   React.useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(timer); }, []);
   React.useEffect(() => {
     let active = true;
-    const reload = () => fetch(`/api/hub/content/performance?year=${new Date().getFullYear()}`, { cache: 'no-store', signal: AbortSignal.timeout(30000) })
-      .then((response) => response.json())
-      .then((result) => {
-        if (!active) return;
-        if (result?.status !== 'live' || !Array.isArray(result.publications)) throw new Error('metrics-unavailable');
+    let pending;
+    const reload = async () => {
+      pending?.abort();
+      const controller = new AbortController();
+      pending = controller;
+      const current = () => active && pending === controller;
+      await Promise.resolve();
+      if (!current()) return;
+      try {
+        // The server owns the Seoul reporting year, including year-boundary days.
+        const response = await fetch('/api/hub/content/performance', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]) });
+        const result = await response.json();
+        if (!current()) return;
+        if (!response.ok || result?.source === 'error' || result?.status !== 'live' || !Array.isArray(result.publications)) throw new Error('metrics-unavailable');
         setMetricsById(Object.fromEntries(result.publications.filter((row) => row.metrics?.capturedAt).map((row) => [row.id, row.metrics])));
         setMetricsFailed(false);
-      })
-      .catch(() => { if (active) setMetricsFailed(true); });
+      } catch { if (current()) setMetricsFailed(true); }
+      finally { if (pending === controller) pending = null; }
+    };
     reload();
     window.addEventListener('moonlight:content-saved', reload);
-    return () => { active = false; window.removeEventListener('moonlight:content-saved', reload); };
+    return () => { active = false; pending?.abort(); window.removeEventListener('moonlight:content-saved', reload); };
   }, []);
 
   const allRows = React.useMemo(
