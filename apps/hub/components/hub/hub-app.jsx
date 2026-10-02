@@ -91,6 +91,7 @@ const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
 const BrandContentLog = lazyPage(() => import("./pages/brand-content-log").then(m => m.BrandContentLog));
 const ContentPerformance = lazyPage(() => import("./pages/content-performance").then(m => m.ContentPerformance));
 const ContentNews = lazyPage(() => import("./pages/content-news").then(m => m.ContentNews));
+const Reports = lazyPage(() => import("./pages/reports").then(m => m.Reports));
 const ResearchInbox = lazyPage(() => import("./pages/research-inbox").then(m => m.ResearchInbox));
 const ContentPublishLog = lazyPage(() => import("./pages/content-publish-log").then(m => m.ContentPublishLog));
 const Studio = lazyPage(() => import("./pages/content").then(m => m.Studio));
@@ -214,6 +215,7 @@ function LegacyPlaceholder({ path, onNavigate }) {
 
 const PAGE_MAP = {
   'dashboard/home': (n, _inquiries, _scope, ask) => <Home onNavigate={n} onGuidanceAsk={ask} />,
+  'dashboard/reports': (n) => <Reports onNavigate={n} />,
   'dashboard/daily-brief': (n, inquiries, _scope, ask) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} onGuidanceAsk={ask} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
@@ -495,6 +497,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
     if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return goalHref(null, queryScope || 'all', { check: goalView(searchParams) === 'check', weekly: goalView(searchParams) === 'weekly', kpi: goalView(searchParams) === 'kpi', create: true }).slice(1);
+    if (p === 'dashboard/reports') { const params = new URLSearchParams(searchParams.toString()); params.set('new', 'report'); return `dashboard/reports?${params}`; }
     if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
     if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
     if (p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/customers?new=customer';

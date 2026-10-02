@@ -14,6 +14,7 @@ const json = value => `${quote(JSON.stringify(value))}::jsonb`;
 const rootUrl = new URL('../../../../', import.meta.url);
 const migration = new URL('supabase/migrations/20260921_0038_office_requests.sql', rootUrl);
 const retryMigration = new URL('supabase/migrations/20260922_0040_office_apply_transient_retry.sql', rootUrl);
+const qualityDeadlineMigration = new URL('supabase/migrations/20261001_0062_office_weekly_quality_deadline.sql', rootUrl);
 
 test('Office PostgreSQL receipts, retention and task application share real command transaction rules', async t => {
   let bin;
@@ -69,8 +70,22 @@ test('Office PostgreSQL receipts, retention and task application share real comm
     for (const file of ['20260716_0018_record_contact_outcome.sql', '20260913_0032_agent_commands.sql', '20260921_0036_operating_goals.sql']) sql(await readFile(new URL(`supabase/migrations/${file}`, rootUrl), 'utf8'));
     const source = await readFile(migration, 'utf8'); sql(source); sql(source);
     const retrySource = await readFile(retryMigration, 'utf8'); sql(retrySource); sql(retrySource);
+    try { const deadlineSource = await readFile(qualityDeadlineMigration, 'utf8'); sql(deadlineSource); sql(deadlineSource); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     sql(`INSERT INTO workspaces(id,slug,name) VALUES(${quote(w)},${quote(w)},'Office'),(${quote(other)},${quote(other)},'Other');`);
 
+    await t.test('weekly draft quality review stays running through its budget; other flows keep their deadline', () => {
+      for (const changes of [{}, { mode: 'answer' }, { mode: 'council', participants: ['espeon'] }, { intent: 'customer_reply', originRef: { entityType: 'contacts', entityId: randomUUID() } }]) {
+        const r = request(changes), first = claim(r);
+        assert.equal(first.claimed, true);
+        const weeklyQuality = r.intent === 'weekly_report' && r.mode !== 'council';
+        const seconds = Number(sql(`SELECT extract(epoch FROM deadline_at-created_at) FROM office_requests WHERE id=${quote(r.requestId)}`));
+        assert.ok(Math.abs(seconds - (weeklyQuality ? 120 : 60)) < 2, `${r.intent}/${r.mode}: ${seconds}`);
+        const originalDeadline = first.request.deadline_at;
+        assert.equal(claim(r).claimed, false);
+        assert.equal(receipt(r).request.deadline_at, originalDeadline, 'replay never extends a paid attempt');
+        assert.equal(sql(`SELECT has_function_privilege('anon','public.office_request_claim_v1(uuid,text,jsonb,jsonb)','EXECUTE') OR has_function_privilege('authenticated','public.office_request_claim_v1(uuid,text,jsonb,jsonb)','EXECUTE')`), 'f');
+      }
+    });
     await t.test('concurrent claims have one owner; actor, workspace and changed inputs cannot reuse receipts', async () => {
       const r = request(), claimed = await Promise.all(Array.from({ length: 6 }, () => asyncSql(claimStatement(r)).then(JSON.parse)));
       assert.equal(claimed.filter(item => item.claimed).length, 1);

@@ -5,6 +5,8 @@
 > 운영 적용 추가: 2026-09-29~30 `09.bigmac2.0`의 브랜드 0053·0054와 콘텐츠 예약 0055를 서울 DB에 적용하고 Hub·Engine을 Vercel에 배포했다. 세부 검증과 남은 실사용 확인은 [배포 기록](guides/vercel-deploy.md#2026-09-2930-운영-적용-기록)을 따른다. 이 배포는 같은 날 `main`(리서치함) 재배포에 덮였고, 2026-09-30 두 브랜치를 `main`에서 통합했다 — 번호가 겹치는 브랜드 `20260929_0053·0054`와 리서치함 `20260930_0053·0054`는 서로 다른 파일이다([통합 기록](guides/vercel-deploy.md#2026-09-30-main--09bigmac20-통합-기록)).
 > 2026-09-30 Git 통합: Mac 펫·캘린더·연락 기록·제품·Studio와 설계 문서를 모은 범위, 회귀 수정 및 검증은 [전체 작업 통합 기록](branch-integration-2026-09-30.md)을 따른다. 운영 배포 상태는 위 배포 기록과 각 주제 문서에 따로 표시한다.
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
+> 2026-10-01 보고서·인사이트 내용 개선: [실행 설계](superpowers/specs/2026-10-01-report-insight-content-quality-design.md)와 [구현·검증 계획](superpowers/plans/2026-10-01-report-insight-content-quality.md). 전주 비교·지표 의미·브랜드 원문 대조·서술 한계 보존을 개선했다. 실제 모델 결과와 사람이 편집한 검토용 예시를 구분하며, 운영 적용 기록은 [배포 안내](guides/vercel-deploy.md)를 따른다.
+> 2026-10-01 월요일 소식 정리: [주말·지난 한 주 종합 설계](superpowers/specs/2026-10-01-monday-news-roundup-design.md). 월요일 KST 08:30 이후 직전 월~일의 저장된 출처 기반 리서치를 보고서함의 리서치/콘텐츠 범위에 한 번 보관한다. 핵심 소식→주말 수집→평일 주요 소식→이번 주 확인할 점으로 구성하며 수집일/발표일을 구분한다. 추가 AI 호출 없이 원문·조건·반대 근거·미검토 상태를 보존한다.
 
 ## 1. 읽는 순서와 우선순위
 
@@ -179,6 +181,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md`](superpowers/specs/2026-09-23-daily-review-sustainable-loop-design.md) — **Phase 1~3 승인·구현(2026-09-23) / Phase 4 보류**. R0 입력·원장은 그대로 두고 진입(저녁 18시·다음 날 정오 전 cue, 셸 공용 팝업, `?review=` 딥링크, ⌘K)·입력(숫자 키 1~5, 오늘 3개 권장 카드, AI 코칭은 저장 후)·되돌아보기(월 캘린더·이번 주 k/5)·회복(어제 메우기)을 구현. 마이그레이션 0. 구현 기록은 문서 §10. 2차(원탭 에너지 저장·주간 5칸·지난주 비교·에너지 막대·⌘Enter)는 §11, 3차(GitHub식 16주 활동 흐름·캘린더 활동 농담·상단바 하루 리뷰 버튼)는 §12, 4차(리뷰 팝업: 오늘 한 일·에너지 막대 칸·메모 머리말·푸터 주간 5칸)는 §13.
 
 **콘텐츠 제작 (2026-09-12)**
+
+- [`superpowers/specs/2026-10-01-research-reports-completion-design.md`](superpowers/specs/2026-10-01-research-reports-completion-design.md) — **연결 완성·개발·최적화 / 서울 DB·운영 배포·실제 생성 검증(10-01)**. 보고서 허브(홈 보조 탭), 개인·회사 7일 스냅샷과 AI 주간 해석, QA·평가 문서 등록, 커서·개별 링크, 브랜드 공개 원문 → AI → 검토 대기 리서치를 연결했다. 세 브랜드의 실제 근거 인용 초안과 회사 AI 보고서를 저장·재조회했다. 반복 API 비용은 현재 상한 없이 관찰하며, 모델 usage와 비용 추정치를 표시한다. 기존 09-21·09-23 문서의 자동 수집·AI 후속 범위와 비용 사전 결정 상태를 이 실행에 한해 대체한다. [실행 계획](superpowers/plans/2026-10-01-research-reports-completion.md), [운영 검증·스케줄 제약](guides/vercel-deploy.md#2026-10-01-리서치보고서-연결-완성).
 
 - [`superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md`](superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md) — **방향 승인 · Studio 1차 구현**. 원문·기획·채널별 초안·AI 후보 비교/적용·버전 복원을 연결. 구현·로컬 검증 범위는 문서 §0과 [실행 기록](superpowers/plans/2026-09-12-content-workflow.md)을 따른다. [후속 검증·운영 적용 준비](superpowers/plans/2026-09-12-content-release.md)에서 통합 테스트 오류를 해결했다. 2026-09-14 인증 갱신 및 0026 운영 DB 적용 완료. 일지 신설·기간 회고·자동 콘텐츠 크론과 코드 배포는 후속 범위다.
 - [`superpowers/specs/2026-09-23-research-inbox-content-promotion-design.md`](superpowers/specs/2026-09-23-research-inbox-content-promotion-design.md) — **Studio 전 검토와 두 목적지 운영자 확인 / 수동 리서치함 코드 구현·서울 운영 DB 0053·0054 적용·Hub/Engine 배포 성공(2026-09-30)**. 운영자가 확인한 출처·사실·검토용 원고를 저장하고 개별 보류·버림·복구 후 기존 콘텐츠 후보(`idea`) 또는 채널 미지정 Studio 초안(`draft`)으로 원자 전환한다. 소재 후보의 준비된 원고는 같은 content item의 Studio에서 명시적으로 가져와 저장한다. 세 브랜드의 공식 출처 기반 시범 브리프를 각 1건씩 `new`로 저장·재조회했고 로컬 Hub 화면·API에서 확인했다. 운영 Vercel의 인증된 화면에서 데이터 로딩 확인은 별도다. 정기 수집·AI 선별/생성·브랜드 상세 카드·다건 선택은 후속 범위다. [구현·검증 계획](superpowers/plans/2026-09-30-research-inbox-first-flow.md).

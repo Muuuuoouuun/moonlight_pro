@@ -7,6 +7,8 @@ import { OFFICE_DISCUSSION_VERSION, parseOfficeDiscussion, officeFailureMessage 
 import { runOfficeDiscussion, discussionSynthesisPrompt, OfficeDiscussionError, type OfficeDiagnosticEvent } from './deliberation.ts';
 import { buildOfficeSourceCatalog, officeSourceReviewPrompt, officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
 import { usageFor } from './usage.ts';
+import { groundWeeklyReport } from './weekly-report-policy.ts';
+import { contentQualityGeneration } from '../content-quality.ts';
 
 function parseModel(text: string, request: OfficeWorkflowRequest, context: OfficeWorkflowContext) {
   const raw = text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1');
@@ -37,7 +39,7 @@ export async function runOfficeWorkflow(request: OfficeWorkflowRequest, context:
   const parseReviewed = (text: string) => {
     const reviewed = readSourceReviewedOutput(JSON.parse(text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/, '$1')), request, reviewSource, sourceCatalog);
     // The contract upgrades this to 'untraced' when every returned evidence ref falls outside the sources.
-    return parseOfficeWorkflowAnswer({ ...reviewed.answer, sourceCheck: reviewed.sourceCheck }, request, context);
+    return groundWeeklyReport(parseOfficeWorkflowAnswer({ ...reviewed.answer, sourceCheck: reviewed.sourceCheck }, request, context), request, context);
   };
   const call = async (input: Parameters<typeof generateGeminiText>[0]) => {
     signal.throwIfAborted();
@@ -74,13 +76,14 @@ export async function runOfficeWorkflow(request: OfficeWorkflowRequest, context:
       }, request, context);
     }
     const prompt = buildOfficeWorkflowPrompt(request, context);
-    const result = await call({ ...prompt, signal, maxOutputTokens: 8192, responseJsonSchema });
+    const quality = request.intent === 'weekly_report' ? contentQualityGeneration() : null;
+    const result = await call({ ...prompt, maxOutputTokens: 8192, ...quality, signal, responseJsonSchema });
     if (!result.ok) return result.reason === 'missing-api-key' ? failure('preview', 'AI 연결이 필요합니다. 입력은 보존됩니다.') : failed('draft', signal.aborted ? 'deadline' : 'provider');
     signal.throwIfAborted();
     const draft = parseModel(result.text, request, context);
     phase = 'review';
     const review = officeSourceReviewPrompt(buildOfficeWorkflowReview(request, context, draft), sourceCatalog);
-    const reviewed = await call({ ...review, model: result.model, signal, maxOutputTokens: 8192, responseJsonSchema: reviewSchema, thinkingLevel: 'high' });
+    const reviewed = await call({ ...review, maxOutputTokens: 8192, thinkingLevel: 'high', ...quality, model: result.model, signal, responseJsonSchema: reviewSchema });
     if (!reviewed.ok || reviewed.model !== result.model) return failed('review', signal.aborted ? 'deadline' : !reviewed.ok ? 'provider' : 'model-mismatch');
     signal.throwIfAborted();
     const answer = parseReviewed(reviewed.text);

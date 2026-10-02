@@ -203,6 +203,20 @@ test('Engine transport treats network and malformed policy responses as unknown'
   assert.equal(projectOfficeReceipt({ status: 'expired', request: { id: r.requestId, state: 'generated', result: generated(r, c), application: { state: 'pending', command: { secret: true }, commandId: r.requestId } } }).result, null);
 });
 
+test('only weekly non-council transport gets the longer bounded quality-model deadline',async t=>{
+  const budgets=[],controller=new AbortController();
+  t.mock.method(AbortSignal,'timeout',milliseconds=>{budgets.push(milliseconds);return controller.signal;});
+  const weekly=request();
+  for(const r of [weekly,{...weekly,intent:'customer_reply',originRef:{entityType:'lead',entityId:randomUUID()}},{...weekly,mode:'council',participants:['vaporeon','umbreon']}]){
+    const result=await callOfficeWorkflowEngine(r,resolved(r),{engineUrl:'https://engine.example.test',secret:'test-only',fetcher:async(_url,input)=>{
+      assert.equal(input.signal,controller.signal);
+      return Response.json({version:OFFICE_WORKFLOW_VERSION,requestId:r.requestId,status:'error',ownerId:r.ownerId,mode:r.mode,participants:r.participants,scope:r.scope,error:'제한 시간 안에 생성하지 못했습니다.',failure:{phase:'review',category:'deadline'}});
+    }});
+    assert.equal(result.status,'error');assert.equal(result.failure.category,'deadline');
+  }
+  assert.deepEqual(budgets,[105_000,55_000,55_000]);
+});
+
 test('run logging records attribution independently; failure keeps the generated result', async () => {
   const h = harness(), r = request(), actor = identity();
   assert.equal((await h.service.execute(r, actor)).logState, 'saved'); assert.ok(h.rows.get(r.requestId).run_id);

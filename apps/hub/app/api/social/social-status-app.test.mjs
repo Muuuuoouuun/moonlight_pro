@@ -26,6 +26,7 @@ for (const [name, route, prefix] of [
     const rows = [{ id: "other-app", status: "connected", account_key: "account-1", config: {
       brandHandle: "moon.classin", username: "moon.classin", brandKey: "classmoon",
       oauthAppId: "wrong-app-id", oauthAppKey: "classmoon",
+      accessToken: "synthetic-access", expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
     } }];
     globalThis.fetch = async () => ({
       ok: true, status: 200, text: async () => JSON.stringify(rows),
@@ -56,6 +57,7 @@ for (const [name, route, prefix] of [
       ok: true, status: 200,
       text: async () => JSON.stringify([{ id: "bridge-row", status: "connected", account_key: "bridge-id", config: {
         brandHandle: "ml_bridgemaker", username: "ml_bridgemaker", brandKey: null,
+        accessToken: "synthetic-access", expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
       } }]),
       headers: { get: () => null },
     });
@@ -64,5 +66,41 @@ for (const [name, route, prefix] of [
     ))).json();
     assert.equal(result.status, "connected");
     assert.equal(result.connection?.id, "bridge-row");
+  });
+
+  test(`${name} every brand remains eligible and expiry checks never refresh or expose tokens`, async () => {
+    process.env.SUPABASE_URL = 'https://db.example.com';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'fake-key';
+    process.env.COM_MOON_DEFAULT_WORKSPACE_ID = '11111111-1111-1111-1111-111111111111';
+    process.env.COM_MOON_OAUTH_STATE_SECRET = 'fake-state';
+    for (const [brandKey, brandHandle, suffix, appKey] of [
+      ['classmoon', 'moon.classin', '_CLASSMOON', 'classmoon'],
+      ['politicofficer', 'politic_officer', '_POLITIC_OFFICER', 'politic_officer'],
+      ['bridgemaker', 'ml_bridgemaker', '', 'moonlight'],
+    ]) {
+      process.env[`${prefix}${suffix}_APP_ID`] = `fake-${appKey}-id`;
+      process.env[`${prefix}${suffix}_APP_SECRET`] = 'fake-secret';
+      for (const [expiresAt, expected] of [
+        [new Date(Date.now() + 30 * 86400000).toISOString(), 'connected'],
+        [new Date(Date.now() - 1000).toISOString(), 'reauthorization-required'],
+        [null, 'expiry-unknown'],
+      ]) {
+        globalThis.fetch = async (url, options) => {
+          assert.equal(new URL(url).hostname, 'db.example.com');
+          assert.equal(options.method, 'GET');
+          return new Response(JSON.stringify([{ id: `fake-${brandKey}`, status: 'connected', account_key: 'fake-account', config: {
+            brandKey, brandHandle, username: brandHandle, oauthAppKey: appKey, oauthAppId: `fake-${appKey}-id`,
+            accessToken: 'fake-private-token', expiresAt,
+          } }]));
+        };
+        const response = await route(new NextRequest(`https://hub.example.com/status?brand=${brandHandle}&brandKey=${brandKey}`));
+        const result = await response.json();
+        assert.equal(result.status, expected, `${name} ${brandKey}`);
+        assert.equal(result.verification, 'stored-metadata');
+        assert.equal(result.refreshScheduled, false);
+        assert.doesNotMatch(JSON.stringify(result), /fake-private-token/);
+        assert.equal(response.headers.get('cache-control'), 'no-store');
+      }
+    }
   });
 }

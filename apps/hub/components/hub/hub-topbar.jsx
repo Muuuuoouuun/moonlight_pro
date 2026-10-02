@@ -6,6 +6,7 @@ import { IconButton, Button } from "./hub-primitives";
 import { DailyReviewTopButton } from "./daily-review-cue";
 import { pageOwnsTabs, topNavigationForRoute } from "./hub-nav";
 import { InquiryBell } from './inquiry-notifications';
+import { formatHubClock } from './hub-clock';
 
 const LABELS = {
   'dashboard': 'Moonlight',
@@ -25,6 +26,7 @@ const LABELS = {
 
 export function TopBar({ path, view, scope, onNavigate, theme, themePreference, onTheme, onSidebarOpen, onNew, onQuickCapture, navOpen, menuButtonRef, inquiryNotifications, onOfficeOpen }) {
   const [deferredMenuOpen, setDeferredMenuOpen] = React.useState(false);
+  const [clock, setClock] = React.useState(null);
   const deferredMenuRef = React.useRef(null);
   const segments = path.split('/').filter(Boolean);
   const navigation = topNavigationForRoute(path, scope, view);
@@ -36,11 +38,12 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
     || LABELS[segments[segments.length - 1]]
     || segments[segments.length - 1];
   const sectionLabel = (navigation.activeTab || navigation.routeLabel) ? navigation.anchor?.label : 'Moonlight';
-  const now = new Date();
-  const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
-  const m = now.getMonth() + 1, d = now.getDate();
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
+  React.useEffect(() => {
+    const updateClock = () => setClock(formatHubClock(new Date()));
+    updateClock();
+    const interval = setInterval(updateClock, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   React.useEffect(() => {
     if (!deferredMenuOpen) return;
@@ -95,12 +98,12 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
 
         <div style={{ flex: 1 }} />
 
-        <div className="hub-topbar__meta" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 10px',
+        <div className="hub-topbar__meta" title="한국 시각 (KST)" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 10px',
           background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
           borderRadius: 999, fontSize: 11.5, color: 'var(--fg-muted)',
         }}>
           <Iconed name="clock" size={12} style={{ color: 'var(--moon-300)' }} />
-          <span className="mono" style={{ color: 'var(--fg)' }}>{weekday} · {m}/{d} · {hh}:{mm}</span>
+          <span className="mono" aria-busy={!clock} style={{ color: 'var(--fg)' }}>{clock || '— · —/— · —:—'}</span>
         </div>
 
         {/* 하루 리뷰 — 어느 화면에서든 오늘 기록 열기(2026-09-23 지속 루프 설계 §12) */}

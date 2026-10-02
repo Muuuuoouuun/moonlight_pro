@@ -74,6 +74,39 @@ Set-Location apps\hub;    npx vercel deploy --prod --yes --archive=tgz --scope m
 - **검증:** 루트 `npm test` 3,707건 중 통과 3,694·실패 0·조건부 건너뜀 13, `check:contracts`와 Hub·Engine 빌드 통과. 운영자 세션으로 본 리서치함·발행 로그 화면과 22:00 KST 크론 실행 결과는 이 기록 시점에 확인하지 않았다.
 - **교훈:** `main`에 없는 브랜치를 CLI로 프로덕션에 올리면 다음 `main` 병합이 조용히 덮어쓴다. CLI `--prod` 배포를 했다면 같은 날 `main`에 병합한다.
 
+### 2026-10-01 리서치·보고서 연결 완성
+
+- 보고서 `/dashboard/reports`를 홈의 보조 진입점에 연결했다. 개인·회사 완료 7일 스냅샷, Office 주간 AI 정리, 리서치 근거, QA·평가 문서를 한 목록에서 조회하며 개별 링크·커서 페이지·판단 revision 저장을 지원한다. 실측 누락은 `null`이고 재시도는 먼저 요청 receipt를 읽는다.
+- 브랜드 자동 리서치는 공개 원문 확보 → 출처 줄·직접 인용 검증 → AI 초안 → 검토 대기 원장에 연결됐다. 서버가 workspace·브랜드를 정하고 같은 원문 버전의 유료 claim을 재발급하지 않는다. 전송 결과가 불확실하면 `unknown`을 유지하고, 확정 실패만 다음 원문의 준비 수량을 허용한다. 0058~0060은 초기 실사용에서 발견한 복구·인용 범위·실패 분류를 보강한다.
+- 서울 DB `ncgpnqfulnlshegalmbd`에 `20261001_0056`~`0060` 다섯 파일을 적용하고 각 ledger 해시를 검증했다. `db:check`는 이력 포함 **38개 항목 전부 통과**했다. 이미 적용한 파일의 내용은 바꾸지 않았다.
+- 기존 운영자 자격을 유지해 Hub 로그인 설정 누락을 해결했다. Hub·Engine의 공유 비밀과 서버 전용 설정을 맞추고 `COM_MOON_RESEARCH_ENABLED=true`, `COM_MOON_REPORTS_AI_ENABLED=true`를 프로덕션에 반영했다. 실제 토큰·비밀·비밀번호는 문서나 로그에 남기지 않는다.
+- 코드 `59dc2268`을 Engine → Hub 순서로 CLI 프로덕션에 배포했다. Engine `moonlight-pro-engine-fy1a2p8dr-muuuuoouuuns-projects.vercel.app`, Hub `moonlight-pro-100e438ng-muuuuoouuuns-projects.vercel.app`이 `Ready`이며 고정 운영 URL에 연결됐다. Git 연동 배포로 다음 `main` 변경이 덮어쓰지 않도록 같은 날 기능 브랜치를 `main`에 통합한다.
+- 운영 API 확인: 양쪽 health 200, 로그인 configured, 비로그인 보고서 화면 307 → 로그인, 인증 보고서 200·`live`·읽기 실패 0, 리서치 실행 200·`enabled=true`·`costCapUsd=null`, 무인증 조회 401, 인증한 두 크론 200. 야간 확인은 due slot 밖이므로 유료 생성을 요청하지 않았다.
+- 실제 생성: politic_officer `522e385d-081c-4929-87fa-4b381d85073d`, class.moon `46db7856-9b22-4f69-a685-932f758aa5de`, 22nomad `ab8245eb-4d78-478f-a94d-71c407ad1e1a`를 저장하고 근거·조건·AI/미검토 표시를 브라우저로 확인했다. 회사 완료 주간(09-24~09-30)의 스냅샷 `e18e39f4-03b8-41a1-acc9-2e77d505380d`와 Office AI 정리 `a6862b57-3846-5586-baf3-024d2a8f4bc2`도 실제 생성했다. 초기 실패한 Nomad 원문은 재과금하지 않고 다른 원문에서 성공했다. source failure가 있는 실행은 성공 초안이 있어도 `partial`로 보인다.
+- 비용은 운영자 결정에 따라 **현재 월 상한 없음**이다. 검증 생성 receipt 6건/실제 모델 API 7회(확정 실패 2회 포함)의 토큰 기반 추정 합계는 **$0.0809925**, Brave 검색은 **8회**다. Office 한 receipt는 초안·검수 2회의 토큰을 합산하며 비용을 다시 더하지 않는다. 모델 추정은 thinking을 출력에 포함하고 검색 요금·무료 할당량·청구서 조정은 포함하지 않는다. 근거: [Gemini 공식 가격](https://ai.google.dev/gemini-api/docs/pricing). 검색과 원문 실패에 모델 비용 0을 만들어 넣지 않는다.
+- 실행 주기: politic_officer KST 08~22시 2시간 간격(최대 8개/일), class.moon 매일 08시 최대 3개, 22nomad 매일 08시 최대 1개. 개인 주간 월요일·회사 주간 목요일 08시 이후에 직전 완료 7일을 보관·해석한다. Vercel Hobby의 일일 크론을 두고, Mac `com.moonlight.research-reports` launchd가 15분마다 서버의 due slot을 확인한다. runner는 worktree 밖 `~/Library/Application Support/Moonlight`에 복사하고 env는 0600으로 보호했다. 최초 launchd 실행은 두 엔드포인트 정상 응답·새 생성 0건을 확인했다.
+- **실행 조건:** Mac이 꺼지거나 잠들면 당일 2시간 간격 확인은 쉬며 Vercel의 일일 실행이 남는다. 원문 robots·권한·읽기 실패는 공개 원문 근거로 저장하지 않는다. Office AI receipt와 원문 근거는 기존 30일 보관 정책을 따르고, 주간 사실 스냅샷·등록 문서는 별도 원장에 남는다. AI 초안이 자동 승인·발행·업무 생성되지는 않는다.
+- 실제 운영 화면 확인에서 상단 시계의 UTC 서버/KST 브라우저 초기 텍스트 차이(React hydration418)를 발견했다. 동일한 초기 표시 후 마운트에서 명시적으로 한국 시각을 갱신하도록 고쳤으며 경고를 숨기지 않는다. 재조회만 하는 리서치 sweep은 자동화 행을 추가하지 않고 기록 실패는 응답에 표시한다. 후속 수정은 [PR #20](https://github.com/Muuuuoouuun/moonlight_pro/pull/20)에 포함한다.
+- 검증: root **3,848 tests · 통과 3,835 · 실패 0 · 조건부 건너뜀 13**, Desktop **345/345**; typecheck, contracts, ClassIn 체크, Next 16.3.8 Hub·Engine build, high-severity audit 통과. Next 보안 패치를 적용했으며 기존 moderate 2건은 이 작업 범위에서 임의 수정하지 않았다. 모델 claim·동시성·복구·RLS는 실제 로컬 PostgreSQL 테스트, 화면은 1440/390px·light/dark로 검증했다.
+
+### 2026-10-01 월요일 주말·주간 소식 종합
+
+- 운영자 요청으로 기존 일간 리서치를 월요일 아침에도 모아 읽는다. KST 월요일 08:30 이후 직전 월~일 수집 자료를 한 보고서로 보관한다. 핵심 소식, 토·일 수집 소식, 평일 주요 소식, 브랜드별 후속 확인, 자료 범위/한계 순서다. 브랜드별 최대 5건을 주말 우선·최근 수집 순으로 선정하며 전체 뉴스 중요도 순위로 인증하지 않는다.
+- 보고서함(`/dashboard/reports`)의 리서치·콘텐츠 범위에서 조회한다. 원본 브리프는 리서치함에 남고 링크로 대조한다. 주말은 수집일 기준이며 발표일과 다를 수 있다. AI 검토 전 상태와 원문의 적용 조건·반대 근거를 유지한다. 인용은 잘라 붙이지 않고 저장 본문 상한이 필요하면 항목 수를 줄인다. 기존 유효한 6줄 이내 범위 인용도 보존하며 신규 생성의 단일 줄 계약은 유지한다.
+- 서울 DB `20261001_0065_monday_news_roundup.sql`을 적용하고 해시 이력을 확인했다. 워크스페이스/주간 회차 검증과 advisory lock으로 재실행·동시 실행 때 한 문서만 보관하고 운영자 판단을 덮어쓰지 않는다. service_role만 새 RPC를 실행할 수 있고 기존 테이블의 직접 쓰기 권한은 늘리지 않았다. 별도 모델 호출은 0이다.
+- 병렬 작업의 Go;Re 0063·0064가 먼저 main에 들어온 번호 충돌은 월요일 SQL을 정식 0065로 등록해 정리한다. 이미 적용된 월요일 0063의 원문은 [이력 보관](../migration-history/README.md)에 바이트 변경 없이 보존하고 기존 DB 이력도 유지한다. 0065는 같은 SQL을 재등록하며 기존 데이터·판단을 변경하지 않는다.
+- 실제 DB의 읽기/미래 기간 거절과 목요일 `idle`을 확인했다. 첫 실제 회차는 2026-10-05 08:30 이후이며 미래 회차를 미리 생성하거나 과거 뉴스로 가짜 보고서를 저장하지 않았다. Mac 스케줄러와 Vercel의 기존 보고서 08:30 일일 fallback을 함께 사용한다.
+
+### 2026-10-01 보고서·인사이트 내용 품질
+
+- 같은 범위·시간대의 직전 7일을 비교하고, 연락 활동/사람 수·딜/리드·계약/입금·개인/전체 집계를 구별하는 근거표를 전달한다. 주간 글은 핵심 판단→근거→해석·다른 설명→다음 확인→한계를 연결한다. 브랜드 원고에는 단일 줄 직접 인용·발표자/조건·반대 경우를 유지하며, 알려진 AI 요약·광고 꼬리와 허위 저자 경험을 제외한다.
+- 주간/리서치 전용 `COM_MOON_CONTENT_QUALITY_MODEL`의 기본은 `gemini-3.1-pro-preview`·thinking low·최대 출력 16,384다. 기존 다른 AI의 기본 모델은 유지한다. 초안/검토 2회와 자동 재시도 없음, 동일 paid claim 재발급 없음은 그대로다. Office 신규 비 Council 주간만 Engine 95초·Hub 105초·DB claim 120초이며 그 외 업무의 기존 예산은 유지한다.
+- 서울 DB 0061(판단 한계의 조회 보존)·0062(신규 주간 claim 기한)를 적용하고 해시 이력을 확인했다. readiness는 이력 포함 40개 항목 전부 통과했다. 이미 적용한 0056 이하 파일을 바꾸지 않았다.
+- 실제 고정 원문/완료 주간 5건의 최종 자동 조합은 독립 검토에서 **4/5 채택 가능**했다. 정치 일정의 의도·원인·논의 시작 이력은 명확한 단일 일정일 때 서버가 예정 사실 범위로 축소한다. v6 실제 provider 응답을 재생해 보정후 일정형 검토 자료가 채택 가능함을 독립 대조했으며 추가 유료 호출은 0이다. 모호한 복수 주최·다른 브랜드·일정형이 아닌 기사·복수 근거 초안에는 이 보정을 적용하지 않는다. 위조/빈 인용은 보정으로 구제하지 않는다. 자동 결과와 [원문 대조 검토](../evaluations/2026-10-01-report-insight-content-quality/README.md), [사람이 편집한 5건](../evaluations/2026-10-01-report-insight-content-quality/examples.md)을 구분한다.
+- 추가 평가 42 provider 요청 중 usage·단가가 있는 36회의 알려진 비용은 **$0.7018135**다. HTTP 404 6회는 usage가 없어 비용 불명이다. 실패 검수와 thinking은 알려진 합계에 포함했다. 실제 5건을 완성한 v4 한 묶음은 $0.307608이며 다른 입력의 고정 비용이나 청구액을 보장하지 않는다. 이전 파일럿 $0.0809925·7 provider 요청과 별개다. 현재 월 상한은 없고 실행별 사용량을 기록한다.
+- 구현 `80e731ed`을 Engine `moonlight-pro-engine-67fmujtus-muuuuoouuuns-projects.vercel.app`→Hub `moonlight-pro-lom3f6ugz-muuuuoouuuns-projects.vercel.app` 순서로 배포했고 둘 다 Ready·고정 운영 URL alias를 확인했다. 인증 보고서 `live`·실패 출처 0, 월 비용 상한 `null`, 비로그인 차단·양쪽 health·야간 due 밖 크론 응답을 확인했다. 새 편집본은 [실제 보고서함](https://moonlight-pro-hub.vercel.app/dashboard/reports?report=stored%3A8654547f-3e9e-41a9-803f-d75609426d4b)에 새 문서로 보관했고 원문 본문·동일 receipt·빈 운영자 판단을 확인했다. 기존 기록을 덮어쓰지 않았다.
+- 검증: root **3,890 tests · 3,877 pass · 13 conditional skips · 0 failures**, typecheck/contracts/ClassIn/Hub·Engine build 통과. 최종 정치 일정 축소·복수 주최 모호성·위조 인용 회귀 25/25, migration·Office 실제 PostgreSQL 23/23 통과. 독립 코드 리뷰의 복수 주최자 추출 P2를 회귀 테스트로 수정했다. 서버 원문 축소 전 CI와 양쪽 Vercel preview도 통과했으며 최종 commit은 다시 CI를 확인한다. 운영 이후 `main` Git 배포가 이 코드를 보존하는지는 [PR #21](https://github.com/Muuuuoouuun/moonlight_pro/pull/21)의 합병 후 확인한다.
+
 ## 5. 확인
 
 1. `https://<hub>/login` 이 **로그인 화면**을 보여야 한다. 503이면 운영자 로그인 3값 중 하나가 빠진 것이다.

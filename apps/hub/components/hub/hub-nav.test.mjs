@@ -340,7 +340,7 @@ test("every child resolves and is owned by its parent anchor in every scope", ()
 
 test("single-destination anchors render no sub-list and ClassIn Content has its discovery tab", () => {
   for (const scope of SIDEBAR_SCOPES) {
-    for (const key of ["home", "today"]) {
+    for (const key of ["today"]) {
       assert.deepEqual(sidebarChildren(key, scope.key), [], `${key} in ${scope.key}`);
     }
   }
@@ -873,4 +873,15 @@ test('AI utility anchor lands on Office in every scope and Office is findable in
   for (const scope of SIDEBAR_SCOPES) assert.equal(ai.paths[scope.key], 'dashboard/agents/office-council');
   const office = NAV_TREE.find(node => node.key === 'agents').children.find(child => child.key === 'office-council');
   for (const word of ['오피스', '이브이', '비서']) assert.ok(office.keywords.includes(word), word);
+});
+
+test('report hub is a Home secondary tab, reachable through command catalog with no new anchor', () => {
+  const path = 'dashboard/reports';
+  assert.equal(ownerAnchorKey(path), 'home');
+  assert.equal(SIDEBAR_PRIMARY.length, 10);
+  for (const scope of ['all', 'classin', 'personal']) {
+    assert.equal(topNavigationForRoute(path, scope).activeTab?.label, '보고서');
+  }
+  assert.ok(navTreePaths().includes(path));
+  assert.match(appSource, /'dashboard\/reports':.*<Reports/);
 });

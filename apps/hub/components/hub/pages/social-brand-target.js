@@ -1,8 +1,7 @@
-const TARGETS = Object.freeze({
-  bridgemaker: { brandKey: "bridgemaker", brandHandle: "ml_bridgemaker", label: "BridgeMaker" },
-  politicofficer: { brandKey: "politicofficer", brandHandle: "politic_officer", label: "Politic Officer" },
-  classmoon: { brandKey: "classmoon", brandHandle: "moon.classin", label: "Class.Moon" },
-});
+import { SOCIAL_BRAND_REGISTRY, socialBrandSupportsProvider } from '../../../lib/social-brand-registry.js';
+const TARGETS = Object.fromEntries(Object.values(SOCIAL_BRAND_REGISTRY).map(({ brandKey, brandHandle, label }) =>
+  [brandKey, { brandKey, brandHandle, label }],
+));
 
 const PROVIDER_PATHS = Object.freeze({
   instagram_api: "/api/social/instagram",
@@ -24,7 +23,7 @@ export function socialBrandTarget(brandKey) {
 export function socialBrandUrl(action, provider, brandKey) {
   const target = socialBrandTarget(brandKey);
   const path = PROVIDER_PATHS[provider];
-  if (!target || !path || !["status", "connect"].includes(action)) return null;
+  if (!target || !path || !socialBrandSupportsProvider(brandKey, provider) || !["status", "connect"].includes(action)) return null;
   const params = new URLSearchParams({
     brand: target.brandHandle,
     brandKey: target.brandKey,
