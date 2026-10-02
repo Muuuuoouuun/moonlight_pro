@@ -1068,7 +1068,7 @@ export function Decisions({ onNavigate, scope }) {
                       <span className="fx-tl-date">{d.date}</span>
                       <CertaintyBadge
                         state={d.status === 'Committed' ? 'confirmed' : 'unknown'}
-                        label={d.status === 'Committed' ? '확정' : '미정 · Draft'}
+                        label={d.status === 'Committed' ? '확정' : '미정'}
                         style={FX_CERTAINTY_CHROME}
                       />
                       <span className="fx-tl-by">by {d.by}</span>
@@ -1104,8 +1104,8 @@ export function Decisions({ onNavigate, scope }) {
 
       {editingDecision && (
         <EditDrawer
-          title={editingDecision.isNew ? '결정 기록하기' : '결정 편집'}
-          subtitle={editingDecision.decidedAt ? 'Committed' : 'Draft · 결정일을 정하면 Committed로 바뀝니다'}
+          title={editingDecision.isNew ? '결정 남기기' : '결정 편집'}
+          subtitle={editingDecision.decidedAt ? '확정' : '미정 · 결정일을 정하면 확정으로 바뀝니다'}
           record={editingDecision}
           fields={[
             { key: 'title', label: '제목', placeholder: '어떤 결정인가요?' },
