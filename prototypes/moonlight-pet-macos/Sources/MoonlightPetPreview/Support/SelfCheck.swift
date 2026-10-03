@@ -59,7 +59,7 @@ enum SelfCheck {
                 return false
             }
         }
-        guard checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkReadingTone() else { return false }
+        guard checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkReadingTone(), checkCompanionWindows() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,
@@ -245,6 +245,47 @@ enum SelfCheck {
             fputs("Reading tint must clear when the accessibility override ends\n", stderr)
             return false
         }
+        return true
+    }
+
+    // Regression: ISSUE-002 — utility surfaces must replace, never overlap, one another.
+    // Found by /qa on 2026-10-03; see docs/qa/widget-pet-connectivity-2026-10-03.md.
+    @MainActor private static func checkCompanionWindows() -> Bool {
+        let application = NSApplication.shared
+        let previousWindows = Set(application.windows.map(ObjectIdentifier.init))
+        let suite = "pet-window-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.set(false, forKey: "petHub.enabled")
+        let model = AppModel(defaults: defaults)
+        let coordinator = WindowCoordinator(model: model, defaults: defaults)
+        let windows = application.windows.filter { !previousWindows.contains(ObjectIdentifier($0)) }
+        defer {
+            for window in windows { window.orderOut(nil); window.close() }
+            defaults.removePersistentDomain(forName: suite)
+        }
+        func visibleCompanions() -> [NSWindow] { windows.filter { $0.isVisible && $0.frame.height > 200 } }
+        coordinator.showWidget()
+        guard let widget = visibleCompanions().first, visibleCompanions().count == 1 else { return false }
+        coordinator.openMode(.memo)
+        coordinator.showWidget(mode: .tasks)
+        guard visibleCompanions().count == 1, visibleCompanions().first === widget else {
+            fputs("Memo and task entrypoints must reuse the same pet widget\n", stderr); return false
+        }
+        coordinator.showBar()
+        guard visibleCompanions().count == 1, model.activeCompanion == .quick else {
+            fputs("Quick panel overlaps the outgoing pet widget\n", stderr); return false
+        }
+        coordinator.showWidget()
+        guard visibleCompanions().count == 1, model.activeCompanion == .widget else {
+            fputs("Pet widget overlaps the outgoing quick panel\n", stderr); return false
+        }
+        let deadline = Date().addingTimeInterval(PetMotion.overlayDuration + PetMotion.hoverDuration + 0.1)
+        while Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
+        guard visibleCompanions().count == 1, visibleCompanions().first === widget,
+              widget.alphaValue > 0.99, model.activeCompanion == .widget else {
+            fputs("An outgoing animation changed the reopened pet widget\n", stderr); return false
+        }
+        print("PASS: companion window exclusivity and shared memo/task widget (5)")
         return true
     }
 

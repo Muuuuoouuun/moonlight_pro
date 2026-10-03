@@ -450,6 +450,12 @@ final class WindowCoordinator: NSObject {
     }
 
     private func present(_ window: KeyPanel, activate: Bool = true) {
+        // Utility surfaces share one workflow. Finish any outgoing fade before
+        // showing its replacement, including a panel already marked dismissed.
+        for other in [previewWindow, barWindow, widgetWindow]
+            where other !== window && (other.isVisible || isRequestedVisible(other)) {
+            hideNow(other)
+        }
         if window === barWindow { model.activeCompanion = .quick }
         else if window === widgetWindow { model.activeCompanion = .widget }
         advanceRevision(for: window)
