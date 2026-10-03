@@ -1,6 +1,7 @@
 import {parseOfficeWorkflowOrigin,parseOfficeWorkflowRequest,OFFICE_CUSTOMER_PREPARATION_VERSION} from '@com-moon/agent-contracts/office-workflow';
 import {OFFICE_IDS,parseOfficeDeliberation,parseOfficeDiscussion,parseOfficeFailure,officeFailureMessage} from '@com-moon/agent-contracts/office';
 import {officeDeliberationForParticipants} from './office-deliberation-client.js';
+import {isAgentUuid} from '@com-moon/agent-contracts';
 
 export function officeWorkflowQuery({intent,scope,originRef}) {
   if (!['personal','classin'].includes(scope)) throw new Error('범위를 선택해 주세요.');
@@ -44,8 +45,14 @@ export async function readOfficeWorkflow(path, {fetcher=fetch}={}) {
   } catch { return {status:'error',error:'office-read-failed'}; }
 }
 
-export function validWorkflowReceipt(data, {requestId,scope,request}) {
+export function validWorkflowReceipt(data, {requestId,scope,intent,originRef,request}) {
   if (!data || typeof data!=='object' || data.requestId!==requestId) return false;
+  if(intent!==undefined || originRef!==undefined) {
+    try { if(officeWorkflowKey({intent:data.intent,scope:data.scope,originRef:data.originRef})!==officeWorkflowKey({intent,scope,originRef}))return false; }
+    catch { return false; }
+  }
+  if(data.status==='expired' && data.result)return false;
+  if(data.source==='error' && (data.status!=='error' || data.result || data.persistence?.persisted!==true))return false;
   if (data.result && (data.result.requestId!==requestId || data.result.scope!==scope || typeof data.result.artifact?.body!=='string' || typeof data.result.summary!=='string')) return false;
   if(data.status==='generated' && (!data.result || data.persistence?.persisted!==true))return false;
   if(data.status==='unsaved' && !data.result)return false;
@@ -67,6 +74,36 @@ export function validWorkflowReceipt(data, {requestId,scope,request}) {
     }
   }
   return ['running','generated','saved','error','unknown','expired','conflict','preview','unsaved'].includes(data.status);
+}
+
+export async function readOfficeWorkflowSelection(requestId,input,options={}) {
+  if(!isAgentUuid(requestId))return {status:'error',error:'invalid-workflow-receipt'};
+  const data=await readOfficeWorkflow(`requests/${encodeURIComponent(requestId)}`,options);
+  return validWorkflowReceipt(data,{requestId,...input,request:options.request})?data:{status:'error',error:'invalid-workflow-receipt'};
+}
+
+// Restore the source from the authenticated receipt, never from link parameters.
+// A persisted generation error has metadata; a failed read does not.
+export async function readOfficeRequestLink(requestId,{fetcher=fetch}={}) {
+  if(!isAgentUuid(requestId))return {status:'invalid'};
+  const id=requestId.toLowerCase();
+  try {
+    const response=await fetcher(`/api/hub/office/requests/${id}`,{cache:'no-store'}),data=await response.json();
+    if(response.status===401)return {status:'unauthorized'};
+    if(!response.ok)return {status:'error'};
+    if(data?.status==='preview' && !data.requestId)return {status:'preview'};
+    if(!['weekly_report','customer_reply'].includes(data?.intent) || data.persistence?.persisted!==true)return {status:'error'};
+    const input={intent:data.intent,scope:data.scope,originRef:parseOfficeWorkflowOrigin(data.originRef,data.intent)};
+    if(!validWorkflowReceipt(data,{requestId:id,...input}))return {status:'error'};
+    return {status:'ready',requestId:id,input,receipt:data};
+  } catch {return {status:'error'};}
+}
+
+export async function loadOfficeWorkflowOrigin(input,{requestId,request,fetcher=fetch}={}) {
+  const query=officeWorkflowQuery(input),options={fetcher,request};
+  const [context,list,receipt]=await Promise.all([readOfficeWorkflow(`context?${query}`,options),readOfficeWorkflow(`requests?${query}`,options),
+    requestId?readOfficeWorkflowSelection(requestId,input,options):null]);
+  return {context,list,receipt};
 }
 
 // A failed read or save-only recovery is not permission to discard the only
