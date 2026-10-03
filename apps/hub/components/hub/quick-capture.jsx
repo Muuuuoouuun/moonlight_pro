@@ -166,22 +166,41 @@ export function QuickCaptureForm({
 }
 
 // 어디서든 C 로 열리는 캡처 드로어. openRequest 가 증가할 때마다 열린다.
-export function GlobalQuickCapture({ openRequest = 0, initialRaw = "", onNavigate, onSaved }) {
+export function GlobalQuickCapture({ openRequest = 0, initialRaw = "", onInitialRawConsumed, onSharedDraftSaved, onNavigate, onSaved }) {
   const [open, setOpen] = React.useState(false);
-  const [session] = React.useState(() => createQuickCaptureSession({ initialRaw, createId: createClientId }));
+  const [session] = React.useState(() => createQuickCaptureSession({ createId: createClientId }));
   const inputRef = React.useRef(null);
   const seen = React.useRef(openRequest);
+  const sharedDraftSavedRef = React.useRef(null);
+  const saved = () => {
+    const notifySharedSaved = sharedDraftSavedRef.current;
+    sharedDraftSavedRef.current = null;
+    onSaved?.();
+    notifySharedSaved?.();
+  };
   const close = () => { if (session.canClose()) setOpen(false); };
+
+  React.useEffect(() => session.subscribe(() => {
+    const state = session.snapshot();
+    // Edits and retries belong to the share. Explicitly clearing it starts a new
+    // capture; the successful settle also clears raw, but must retain its receipt.
+    if (!state.raw.trim() && state.status !== 'saved') sharedDraftSavedRef.current = null;
+  }), [session]);
 
   React.useEffect(() => {
     if (openRequest !== seen.current) {
       seen.current = openRequest;
       if (initialRaw && !session.snapshot().raw) {
         session.setRaw(initialRaw);
+        // Freeze the intake callback so a newer URL cannot be consumed by this save.
+        sharedDraftSavedRef.current = onSharedDraftSaved || null;
+        // The session now owns this draft, including failed/uncertain saves.
+        // Consume its parent seed so a later blank capture cannot replay it.
+        onInitialRawConsumed?.(initialRaw);
       }
       setOpen(true);
     }
-  }, [openRequest, initialRaw, session]);
+  }, [openRequest, initialRaw, onInitialRawConsumed, onSharedDraftSaved, session]);
 
   if (!open) return null;
   return (
@@ -198,7 +217,7 @@ export function GlobalQuickCapture({ openRequest = 0, initialRaw = "", onNavigat
         focusRef={inputRef}
         inputId="hub-global-quick-capture"
         onNavigate={onNavigate}
-        onSaved={onSaved}
+        onSaved={saved}
         onDone={close}
       />
     </Drawer>

@@ -28,7 +28,7 @@ async function rpc(name, params) {
   return result.data;
 }
 const invalidTarget = (error, status = 'conflict') => ({ status, error, persistence: { persisted: false }, capabilities: { generate: false, applyTask: false } });
-export async function readOfficeTaskTargets(fields, scope, identity, { read = fetchSupabaseRowsDetailed, resolveScope = resolveMetricEntityScope } = {}) {
+export async function readOfficeTaskTargets(fields, scope, identity, { read = fetchSupabaseRowsDetailed, resolveScope = resolveMetricEntityScope, expectedBrandId } = {}) {
   if (!isAgentUuid(fields?.projectId)) return invalidTarget('office-task-project-required', 'invalid-input');
   if (fields.dealId != null && !isAgentUuid(fields.dealId)) return invalidTarget('invalid-deal-id', 'invalid-input');
   const readOne = async (table, id, select) => {
@@ -39,6 +39,7 @@ export async function readOfficeTaskTargets(fields, scope, identity, { read = fe
   };
   try {
     const project = await readOne('projects', fields.projectId, 'id,workspace_id,brand_id,meta,updated_at');
+    if(expectedBrandId!=null&&(!isAgentUuid(expectedBrandId)||project.brand_id?.toLowerCase()!==expectedBrandId.toLowerCase()))return invalidTarget('office-project-brand-mismatch');
     const refs = [{ type: 'projects', id: project.id, updatedAt: project.updated_at }];
     let brand;
     if (project.brand_id) {

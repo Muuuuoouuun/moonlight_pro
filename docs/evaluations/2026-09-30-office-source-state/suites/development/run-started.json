@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-29T16:13:35.378Z",
+  "head": "c6d1ca8de5ca8e531c145a7f869b1fd85fec16f6",
+  "datasetFileSha256": "2de2e49762faed5e825d3b8dab25c46ddeff8a3a2cb28d6c2661886c79fd1dd7",
+  "suiteHash": "04874ea524c8ba3d67ef2b2d40946d721821c85f3714b94675d031ad882f3018",
+  "runId": "0ee772c2-6475-4b13-8e9c-79c3e12dabbb",
+  "output": "/var/folders/l6/tx5c_hw97452y83gkpgpnxcr0000gn/T/moonlight-office-source-state-f92kwtqi/development/run.jsonl",
+  "model": {
+    "provider": "gemini",
+    "model": "gemini-3-flash-preview"
+  }
+}

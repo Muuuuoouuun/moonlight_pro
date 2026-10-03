@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 
 import {
   decodeGoogleCalendarState,
@@ -27,12 +28,7 @@ export async function GET(req) {
 
   const workspaceId = state.workspaceId || resolveDefaultWorkspaceId();
   const calendarId = state.calendarId || process.env.GOOGLE_CALENDAR_ID?.trim() || "primary";
-  const returnPath =
-    typeof state.returnPath === "string" &&
-    state.returnPath.startsWith("/") &&
-    !state.returnPath.startsWith("//")
-      ? state.returnPath
-      : fallbackReturnPath;
+  const returnPath = sanitizeReturnPath(state.returnPath, fallbackReturnPath);
   const target = new URL(returnPath, origin);
 
   if (error) {

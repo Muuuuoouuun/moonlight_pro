@@ -1,9 +1,9 @@
 # 모바일 캡처 & 폰 연동 아키텍처 스펙 (Mobile Capture & Phone Integration)
 
-> 상태: ACTIVE SPEC · 1단계(Engine `phone-events` + MacroDroid + Hub `record-candidates`) 구현 완료, 2단계(고가용성 엣지 큐·PWA Share Target) 구현 (2026-09-24)
+> 상태: 1단계(Engine `phone-events` 수신 + Hub `record-candidates`) 및 GET Share Target 구현 / 고가용성 엣지 큐·영속 오프라인 전송은 목표 설계, 미구현 (2026-10-02 소스 QA). MacroDroid·Galaxy 실기 검증은 별도다.
 > 상위 정본: [`docs/operator-workflow-profile.md`](../../operator-workflow-profile.md) (인지 에너지 1/3, 누락 0건), [`2026-09-24-revenue-four-tabs-design.md`](2026-09-24-revenue-four-tabs-design.md) (오늘 연락 · 기록 후보)
 > 실행 가이드: [`docs/guides/galaxy-phone-capture.md`](../../guides/galaxy-phone-capture.md)
-> 관계: 텔레그램 등 서드파티 메신저 의존을 완전히 배제하고, 안드로이드(Galaxy) OS 엣지와 상시 가동 Supabase 클라우드 원장 간의 **Local-First WAL(Write-Ahead Log) + 멱등성(Idempotency) 이벤트 버퍼**를 정의한다.
+> 관계: 텔레그램 등 서드파티 메신저 의존을 배제한 **Local-First WAL(Write-Ahead Log) + 멱등성(Idempotency) 이벤트 버퍼**의 목표를 정의한다. 아래 클라우드 직결·로컬 큐는 현재 구현 상태로 해석하지 않는다. 구현 경계와 후속 검토안은 [`2026-09-25-desktop-mobile-capture-continuity-design.md`](2026-09-25-desktop-mobile-capture-continuity-design.md)를 따른다.
 
 ---
 

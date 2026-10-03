@@ -135,6 +135,26 @@ export function buildShortcutsXml(hubUrl) {
   ].join("\n");
 }
 
+// A build must use the current address, not an older internally consistent sync.
+// Compare the complete generated resources so a single matching shortcut cannot
+// hide other stale destinations. This check never writes configuration.
+export function validateSyncedHubConfig(
+  { rawHubUrl, syncedServerUrl, hubConfigXml, shortcutsXml },
+  { allowPlaceholder = false } = {},
+) {
+  const currentHubUrl = parseHubUrl(rawHubUrl, { allowPlaceholder });
+  if (syncedServerUrl !== currentHubUrl) {
+    throw new Error("동기화된 허브 주소가 현재 app.config.json과 다릅니다. npm run app:android:sync 를 다시 실행하세요.");
+  }
+  if (String(hubConfigXml || "").trim() !== buildHubConfigXml(currentHubUrl).trim()) {
+    throw new Error("hub_config.xml 이 현재 허브 주소와 다릅니다. npm run app:android:sync 를 다시 실행하세요.");
+  }
+  if (String(shortcutsXml || "").trim() !== buildShortcutsXml(currentHubUrl).trim()) {
+    throw new Error("shortcuts.xml 이 현재 허브 주소와 다릅니다. npm run app:android:sync 를 다시 실행하세요.");
+  }
+  return currentHubUrl;
+}
+
 const RES_DIR = join("android", "app", "src", "main", "res");
 export const HUB_CONFIG_XML_PATH = join(RES_DIR, "values", "hub_config.xml");
 export const SHORTCUTS_XML_PATH = join(RES_DIR, "xml", "shortcuts.xml");

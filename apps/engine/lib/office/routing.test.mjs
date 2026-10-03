@@ -21,6 +21,23 @@ test('Eevee routing uses structured generation without tools or side effects', a
   assert.match(input.prompt, /고객 견적 답장/);
 });
 
+test('routing includes shared responsibilities, supported requests and handoff boundaries for all nine roles', async () => {
+  const { OFFICE_ROLE_CATALOG } = await import('@com-moon/agent-contracts/office-role-catalog').catch(error => {
+    assert.fail(`Routing needs the shared role catalog: ${error.code}`);
+  });
+  let prompt;
+  await generateOfficeRouting(request, async input => {
+    prompt = input.prompt;
+    return { ok: true, text: JSON.stringify(recommendation), model: 'test-model' };
+  });
+  for (const role of Object.values(OFFICE_ROLE_CATALOG)) {
+    assert.ok(prompt.includes(`${role.id}: ${role.name} · ${role.role}`));
+    assert.ok(prompt.includes(role.responsibility), `${role.id} responsibility is missing`);
+    assert.ok(prompt.includes(role.handoff), `${role.id} handoff boundary is missing`);
+    for (const starter of role.starters) assert.ok(prompt.includes(starter));
+  }
+});
+
 test('missing provider is preview; malformed or scope-drifting model output is an error, never a fabricated recommendation', async () => {
   assert.equal((await generateOfficeRouting(request, async () => ({ ok: false, reason: 'missing-api-key' }))).status, 'preview');
   for (const text of ['{', JSON.stringify({ ...recommendation, ownerId: 'guru' }), JSON.stringify({ ...recommendation, scope: 'personal' })]) {

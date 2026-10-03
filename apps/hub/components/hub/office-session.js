@@ -2,6 +2,7 @@
 // They are deliberately never serialized to localStorage or sent across scopes.
 import { officeHistory } from './office-client.js';
 import { officeDeliberationForParticipants } from './office-deliberation-client.js';
+import { officeConnectionBoundary } from './office-connection-inbox.js';
 
 export const OFFICE_MINIMUM_INSTRUCTION = '[오늘은 최소한만: 이미 정한 약속을 지키는 데 필요한 내용만 남겨 주세요. 추가 과제가 필요 없으면 추가 행동 없음으로 답해 주세요.]\n\n';
 
@@ -68,7 +69,7 @@ export function officeMessageLength(session) {
 }
 
 function blankSession() {
-  return { ownerId: 'eevee', mode: 'chat', reviewers: [], includeProjects: false,
+  return { ownerId: 'eevee', mode: 'chat', reviewers: [], includeProjects: false, brandId: null,
     minimumOnly: false, presetId: null, deliberation: officeDeliberationForParticipants(undefined, ['eevee']), agenda: null, draft: '', turns: [], pending: null, error: null };
 }
 
@@ -114,7 +115,8 @@ export function createOfficeSessionStore() {
       }
       if (request.mode === 'council' && request.participants.length < 2) return null;
       if (request.mode === 'council') request.deliberation = officeDeliberationForParticipants(session.deliberation, request.participants);
-      const pending = { id: requestId, rawDraft: session.draft, request };
+      const officeBoundary = officeConnectionBoundary(scope, session.brandId);
+      const pending = { id: requestId, rawDraft: session.draft, request, officeBoundary };
       // Do not pin a manual agenda here — a failed first request must not leave a stale
       // agenda/block behind (see complete()'s generated branch, which pins it on success only).
       update(scope, { pending, error: null });
@@ -133,7 +135,7 @@ export function createOfficeSessionStore() {
       update(scope, {
         pending: null, error: null, agenda,
         draft: session.draft === pending.rawDraft ? '' : session.draft,
-        turns: [...session.turns, { id: requestId, message: pending.rawDraft.trim(), request: pending.request, result }],
+        turns: [...session.turns, { id: requestId, message: pending.rawDraft.trim(), request: pending.request, result, officeBoundary: pending.officeBoundary }],
       });
       return true;
     },

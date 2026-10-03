@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "codex/full-qa-20261002": false
+    }
+  },
   "regions": [
     "icn1"
   ],
@@ -28,5 +33,11 @@
       "path": "/api/cron/reports-sweep",
       "schedule": "30 23 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "codex/full-qa-20261002": false,
+      "codex/office-connection-20261002": false
+    }
+  }
 }

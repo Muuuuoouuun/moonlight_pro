@@ -25,7 +25,7 @@ test('the actual Office result view chooses markdown or literal code while keepi
   const compiled=ts.transpileModule(`function OfficeResult(){return (${resultNode.getText(ast)});}`,{compilerOptions:{jsx:ts.JsxEmit.React,target:ts.ScriptTarget.ES2022}}).outputText;
   const button=({children})=>React.createElement('button',null,children), badge=()=>null;
   function renderResult(artifact){
-    const deps={React,OfficeArtifact,result:{summary:'판단',artifact,uncertainties:[],dissent:[],evidence:[],nextStep:null},styles:{},receipt:{persistence:{persisted:true}},state:{copied:false},Button:button,TruthBadge:badge,CertaintyBadge:badge,OfficeDiscussion:badge,copy(){},openTask(){},hasApplication:false};
+    const deps={React,OfficeArtifact,result:{summary:'판단',artifact,uncertainties:[],dissent:[],evidence:[],nextStep:null},styles:{},receipt:{persistence:{persisted:true}},state:{copied:false},Button:button,TruthBadge:badge,CertaintyBadge:badge,OfficeDiscussion:badge,copy(){},openTask(){},hasApplication:false,isCustomer:false};
     const View=new Function(...Object.keys(deps),`${compiled};return OfficeResult;`)(...Object.values(deps));
     return renderToStaticMarkup(React.createElement(View));
   }

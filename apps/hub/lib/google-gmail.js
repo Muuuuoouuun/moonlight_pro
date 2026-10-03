@@ -5,7 +5,11 @@ import {
   updateSupabaseRecord,
 } from "@/lib/server-write";
 import { assertOperatorEmail, resolveOperatorEmail } from "@/lib/sales-os/operator-scope";
-import { createHmac, timingSafeEqual } from "crypto";
+import {
+  decodeState as decodeGoogleOAuthState,
+  encodeState as encodeGoogleOAuthState,
+  sanitizeReturnPath,
+} from "./google-oauth.js";
 import { isGoogleOAuthProviderEnabled } from "./integration-readiness.js";
 import { fetchSupabaseRowsDetailed } from "./server-read.js";
 
@@ -58,64 +62,12 @@ export function hasGoogleGmailOAuthStateSecret() {
   return Boolean(resolveOAuthStateSecret());
 }
 
-function signStatePayload(payload) {
-  const secret = resolveOAuthStateSecret();
-
-  if (!secret) {
-    return "";
-  }
-
-  return createHmac("sha256", secret).update(payload).digest("base64url");
-}
-
-function safeEquals(a, b) {
-  const aBuffer = Buffer.from(String(a || ""));
-  const bBuffer = Buffer.from(String(b || ""));
-
-  return aBuffer.length === bBuffer.length && timingSafeEqual(aBuffer, bBuffer);
-}
-
 function encodeState(value) {
-  const payload = Buffer.from(
-    JSON.stringify({
-      ...value,
-      iat: Date.now(),
-    }),
-    "utf8",
-  ).toString("base64url");
-  const signature = signStatePayload(payload);
-
-  return signature ? `${payload}.${signature}` : payload;
+  return encodeGoogleOAuthState(value, { secret: resolveOAuthStateSecret() });
 }
 
 export function decodeGoogleGmailState(value) {
-  if (!value) {
-    return {};
-  }
-
-  try {
-    const raw = String(value);
-    const [payload, signature] = raw.split(".");
-    const expected = signStatePayload(payload);
-
-    if (!expected || !signature || !safeEquals(expected, signature)) {
-      return { invalid: true };
-    }
-
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-  } catch {
-    return { invalid: true };
-  }
-}
-
-function sanitizeReturnPath(value, fallback) {
-  const path = typeof value === "string" ? value.trim() : "";
-
-  if (!path || !path.startsWith("/") || path.startsWith("//")) {
-    return fallback;
-  }
-
-  return path;
+  return decodeGoogleOAuthState(value, { secret: resolveOAuthStateSecret() });
 }
 
 export function resolveGoogleGmailRedirectUri(origin) {

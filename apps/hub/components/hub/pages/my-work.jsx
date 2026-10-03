@@ -195,6 +195,13 @@ function useAttentionLedger() {
       const res = await fetch('/api/hub/attention', { cache: 'no-store' });
       const json = await res.json().catch(() => null);
       if (!isCurrent()) return null;
+      if (res.status === 401 || json?.status === 'unauthorized') {
+        // A lost session must not serve a previous session's cache as current work.
+        attentionLedgerCache = null;
+        setData({ items: [], sources: { tasks: 'error', deals: 'error', calendar: 'error' }, calendarReason: '', projects: [], focusToday: null });
+        setState('unauthorized');
+        return null;
+      }
       if (!res.ok || !json || json.status === 'error') {
         // 캐시 서빙 중이면 error로 화면을 비우지 않고 오래된 데이터임을 표시한다.
         // 단, 신선도 게이트를 통과한(=실제로 서빙 중인) 캐시만 — 만료 캐시 위에서
@@ -204,7 +211,11 @@ function useAttentionLedger() {
         setState(servingCache ? 'stale' : 'error');
         return null;
       }
-      const nextData = { items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '', projects: json.projects || [], focusToday: json.focusToday || null };
+      // A settled response without source evidence is not still loading or a live empty read.
+      const sources = json.status === 'preview'
+        ? { tasks: 'preview', deals: 'preview', calendar: 'preview' }
+        : { tasks: 'error', deals: 'error', calendar: 'error', ...json.sources };
+      const nextData = { items: Array.isArray(json.items) ? json.items : [], sources, calendarReason: json.calendarReason || '', projects: json.projects || [], focusToday: json.focusToday || null };
       attentionLedgerCache = { at: Date.now(), data: nextData, state: 'ready' };
       setData(nextData);
       setState('ready');
@@ -1662,6 +1673,18 @@ export function MyWork({ onNavigate }) {
     return counts;
   }, [items, hiddenIds, lane, mutedIds, showMuted]);
 
+  // The ledger omits completed tasks. Only today's nonempty focus summary proves completion;
+  // an empty/filtered/optimistically hidden list and a stale or partial read do not.
+  const focusDayComplete = state === 'ready' && sources.tasks === 'live'
+    && !['error', 'partial'].includes(sources.deadlineAlerts)
+    && focusToday?.date === todayKey
+    && Number.isSafeInteger(focusToday?.picked) && focusToday.picked > 0
+    && Number.isSafeInteger(focusToday?.done) && focusToday.done === focusToday.picked
+    && !items.some((item) => item.lane === 'task')
+    && hiddenIds.size === 0 && Object.keys(itemPatches).length === 0
+    && !search.trim() && lane === 'all' && bucketFilter === 'all' && mutedCount === 0;
+  const tasksUnavailable = (lane === 'all' || lane === 'task') && sources.tasks !== 'live';
+
   // 리스트 렌즈 그룹 섹션 — 전체 기한 보기일 때만. rows는 프로젝트·일정 아코디언까지
   // 반영된 렌더 구조 (item 행 + project 그룹 행 + events 그룹 행).
   // 일정 묶기는 전체/할 일/딜 레인 + 비검색 상태에서만 — '일정' 레인이나 검색 결과에서는
@@ -1684,9 +1707,9 @@ export function MyWork({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>내 작업</h2>
           {lens !== 'watch' && <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span>할 일<SyncBadge state={sources.tasks || 'loading'} /></span>
-            <span>딜<SyncBadge state={sources.deals || 'loading'} /></span>
-            <span>일정<SyncBadge state={sources.calendar || 'loading'} /></span>
+            <span>할 일<SyncBadge state={sources.tasks || (state === 'loading' ? 'loading' : 'error')} /></span>
+            <span>딜<SyncBadge state={sources.deals || (state === 'loading' ? 'loading' : 'error')} /></span>
+            <span>일정<SyncBadge state={sources.calendar || (state === 'loading' ? 'loading' : 'error')} /></span>
           </div>}
         </div>
         <div style={{ flex: 1 }} />
@@ -1855,6 +1878,11 @@ export function MyWork({ onNavigate }) {
       {state === 'loading' && (
         <Card><div style={{ fontSize: 12.5, color: 'var(--fg-muted)', padding: 8 }}>기록을 읽는 중…</div></Card>
       )}
+      {state === 'unauthorized' && (
+        <Card>
+          <EmptyState icon="lock" title="로그인이 필요합니다" description="내 작업 기록을 확인하려면 다시 로그인해 주세요." action={<Button variant="outline" size="sm" onClick={() => window.location.assign('/login?next=%2Fdashboard%2Fwork%2Fmy')}>다시 로그인</Button>} />
+        </Card>
+      )}
       {state === 'error' && (
         <Card>
           <EmptyState icon="alert" title="읽기 실패" description="attention 기록을 불러오지 못했습니다." action={<Button variant="outline" size="sm" onClick={reload}>다시 시도</Button>} />
@@ -1870,7 +1898,7 @@ export function MyWork({ onNavigate }) {
       {['ready', 'stale'].includes(state) && lens === 'list' && (
         <Card pad={false} style={{ overflow: 'hidden' }}>
           {visible.length === 0 ? (
-            !search.trim() && (lane === 'all' || lane === 'task') && bucketCounts.today === 0 && bucketCounts.overdue === 0 && mutedCount === 0 ? (
+            focusDayComplete ? (
               <div
                 className="hub-celebration-card"
                 style={{
@@ -1890,10 +1918,10 @@ export function MyWork({ onNavigate }) {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--moon-100)' }}>
-                    오늘의 모든 할 일 완료!
+                    오늘 고른 할 일 완료!
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', maxWidth: 360, lineHeight: 1.5 }}>
-                    계획된 모든 작업을 완수했습니다. 남은 시간을 여유롭게 보내거나 새로운 할 일을 계획해 보세요.
+                    오늘 고른 할 일 {focusToday.done}개를 모두 완료했습니다. 남은 시간을 여유롭게 보내거나 새로운 할 일을 계획해 보세요.
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
@@ -1913,10 +1941,14 @@ export function MyWork({ onNavigate }) {
               </div>
             ) : (
               <EmptyState
-                icon="check"
-                title={search.trim() ? `"${search.trim()}" 검색 결과가 없습니다` : '표시할 항목이 없습니다'}
+                icon={tasksUnavailable ? (sources.tasks === 'preview' ? 'link' : 'alert') : 'check'}
+                title={tasksUnavailable
+                  ? sources.tasks === 'preview' ? '할 일 연결이 필요합니다' : sources.tasks === 'partial' ? '할 일 기록이 일부만 확인되었습니다' : '할 일 기록을 확인하지 못했습니다'
+                  : search.trim() ? `"${search.trim()}" 검색 결과가 없습니다` : '표시할 항목이 없습니다'}
                 description={
-                  search.trim()
+                  tasksUnavailable
+                    ? sources.tasks === 'preview' ? 'Preview · 연결 필요 — 연결한 뒤 실제 할 일 기록을 확인할 수 있습니다.' : '기록이 있어도 표시되지 않을 수 있습니다. 다시 읽어 확인해 주세요.'
+                    : search.trim()
                     ? '다른 검색어를 시도하거나 검색을 지워보세요.'
                     : (lane !== 'all' || bucketFilter !== 'all')
                       ? `${lane !== 'all' ? LANE_LABEL[lane] : ''}${lane !== 'all' && bucketFilter !== 'all' ? ' · ' : ''}${bucketFilter !== 'all' ? BUCKETS.find((b) => b.key === bucketFilter)?.label : ''} 조건에 항목이 없습니다.`
@@ -1925,7 +1957,9 @@ export function MyWork({ onNavigate }) {
                         : '할 일을 추가하거나 딜·일정이 생기면 여기에 모입니다.'
                 }
                 action={
-                  search.trim()
+                  tasksUnavailable
+                    ? <Button variant="outline" size="sm" onClick={reload}>다시 읽기</Button>
+                    : search.trim()
                     ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
                     : (lane !== 'all' || bucketFilter !== 'all')
                       ? <Button variant="outline" size="sm" onClick={() => { setLane('all'); setBucketFilter('all'); }}>필터 초기화</Button>

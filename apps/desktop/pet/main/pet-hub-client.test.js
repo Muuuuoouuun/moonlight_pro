@@ -313,12 +313,30 @@ test('실제 http: 307 리다이렉트는 다른 서버로 요청을 옮기지 �
   }
 });
 
-test('실제 http: 응답이 없으면 예산 안에서 timeout (재시도 없음)', async () => {
-  const hanging = await startServer(() => { /* 응답하지 않는다 */ });
+test('실제 http: 응답이 없으면 예산 안에서 timeout (재시도 없음)', { timeout: 5000 }, async (t) => {
+  let received;
+  const arrival = new Promise(resolve => { received = resolve; });
+  const hanging = await startServer(() => { received(); /* 응답하지 않는다 */ });
+  t.after(() => {
+    hanging.server.closeAllConnections();
+    hanging.server.close();
+  });
   try {
-    const client = createHubClient({ origin: hanging.origin, setTimeout: (fn, ms) => setTimeout(fn, ms / 1000), clearTimeout });
-    await rejects(client.request('/api/hub/tasks', { method: 'POST', body: {} }), 'error', 'timeout');
+    const timers = new Set();
+    const client = createHubClient({ origin: hanging.origin,
+      setTimeout: (fn, ms) => { const timer = { fn, ms }; timers.add(timer); return timer; },
+      clearTimeout: timer => timers.delete(timer),
+    });
+    const pending = rejects(client.request('/api/hub/tasks', { method: 'POST', body: {} }), 'error', 'timeout');
+    // Exercise an unanswered request rather than a cold socket failing a 20ms
+    // accelerated deadline before it can reach the local server under load.
+    await arrival;
+    const deadline = [...timers].find(timer => timer.ms === timeoutsFor('/api/hub/tasks', 'POST').request);
+    assert.ok(deadline);
+    deadline.fn();
+    await pending;
     assert.equal(hanging.seen.length, 1);
+    assert.equal(timers.size, 0);
   } finally {
     hanging.server.closeAllConnections();
     hanging.server.close();

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanitizeReturnPath } from "@/lib/google-oauth";
 
 import {
   buildGoogleSheetsAuthUrl,
@@ -18,7 +19,7 @@ export async function GET(req) {
     searchParams.get("spreadsheetId") ||
     resolvePersonalLeadsSpreadsheetId() ||
     "";
-  const returnPath = searchParams.get("returnPath") || RETURN_PATH;
+  const returnPath = sanitizeReturnPath(searchParams.get("returnPath"), RETURN_PATH);
 
   if (!hasGoogleSheetsOAuthStateSecret()) {
     const target = new URL(returnPath, origin);
