@@ -6,7 +6,7 @@ struct PreviewView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            PetPortrait(character: model.selectedCharacter, size: 42, pose: .portrait)
+            PetPortrait(character: model.presentationCharacter, size: 42, pose: .portrait)
                 .overlay(alignment: .topTrailing) {
                     NotificationCountBadge(count: model.activity.unreadCount)
                         .offset(x: 4, y: -4)
@@ -28,7 +28,7 @@ struct PreviewView: View {
     private func bannerContent(_ notice: PetNotice) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 4) {
-                Text(notice.title)
+                Text((notice.owner.map { $0.title + " · " } ?? "") + notice.title)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Palette.glassInk)
                     .lineLimit(1)
@@ -43,8 +43,11 @@ struct PreviewView: View {
             Text(notice.detail)
                 .font(.system(size: 12)).foregroundStyle(Palette.glassInkMuted)
                 .lineLimit(2)
-            Button { model.openNotification(notice) } label: {
-                Label("내용 보기", systemImage: "arrow.up.right")
+            HStack(spacing: 12) {
+                Button(notice.kind == .agent ? "대화 이어서" : "이 내용으로 묻기") { model.openNotification(notice) }
+                if model.originalURL(for: notice) != nil {
+                    Button("Hub 원문") { model.openNotificationOriginal(notice) }
+                }
             }
             .buttonStyle(.plain)
             .font(.system(size: 11.5, weight: .medium))

@@ -1,0 +1,9 @@
+{
+  "scripts/office-evaluation/runner.mjs": "5ab3b529f8c036618d934a81cff463253845074b39309d946bb8bbab4f1bafc2",
+  "scripts/office-evaluation/trace.mjs": "f82e8c1fda05dce1e8000cd185e3a14f782361d876126696aed4d95d37cdf368",
+  "scripts/office-evaluation/scenarios.mjs": "5d8ef826fadbbea1641b6bb250ebd9fd783080e681ed9778c87785e5452a56b0",
+  "scripts/office-evaluation/rubric.mjs": "f6d782ef3e92cfcdcdf90502ad80dd5276a9d0a58a490b17796ec94debdd74d3",
+  "scripts/register-hub-alias.mjs": "f00e7f04a4e4f50cf91e1c090e8335de59c959fa27cfb2d8dd5b9ee4b9e2240c",
+  "package.json": "5c8916772617d62a440e3e9896a78e7851a7691fd627b68d0485fcf7a29ddcf1",
+  "package-lock.json": "bfe2982ff3c778563ad1d2ddfa5032c2d042599e72978015d73dd2b462933e5b"
+}

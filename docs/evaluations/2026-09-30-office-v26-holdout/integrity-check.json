@@ -1,0 +1,8 @@
+{
+  "candidateCommit": "15101f5c59bc011090f1e7d9670c57bbdf9aa9fd",
+  "all26RuntimeSourceHashesMatchCandidateCommit": true,
+  "declaredRoleVersionConfirmedInCandidate": true,
+  "credentialScan": "No exact sensitive env-value matches in evidence; values never printed.",
+  "sourceEditsPerformedByReviewer": false,
+  "providerReplayPerformed": false
+}

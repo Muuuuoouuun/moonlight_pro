@@ -1,0 +1,72 @@
+{
+  "formatVersion": 1,
+  "dataset": "holdout",
+  "datasetStatus": "independent-holdout",
+  "baseCommit": "c6d1ca8de5ca8e531c145a7f869b1fd85fec16f6",
+  "roleVersion": "2026-09-30.v26-role-proportionality",
+  "sourcePolicyVersion": "source-state-v1",
+  "runId": "1a471673-e2dd-4808-bd61-4e48f48f2ad2",
+  "startedAt": "2026-09-29T16:16:17.491Z",
+  "endedAt": "2026-09-29T16:17:56.277Z",
+  "modelConfiguration": {
+    "provider": "gemini",
+    "model": "gemini-3-flash-preview"
+  },
+  "runtimeBundleHash": "b4b9fbefdc974e0c3c4d91f03a4e654f90ebd66e55286b1bbc1e8eec4ed7b253",
+  "sourceCount": 26,
+  "datasetFileSha256": "9936863af8e559e28887a6c433ba8b172fe20ea650b853913ef9ad49db28c19f",
+  "suiteHash": "1a3bb6975d554044d2577fc9343b096de542c6c4f2c6341b01c8840be11419de",
+  "fingerprint": "afca75f81fa78743aab33cf48c21c5bf710544318ff4c8d2178c678ebc450653",
+  "journalSha256": "d69ad45902a527d1f043004ba12e95c61a9b0419c2d5f17db4e857a9f93aacfc",
+  "runtimeIntegrity": "verified",
+  "actualConcurrency": 1,
+  "retries": 0,
+  "splicing": false,
+  "coverage": {
+    "scenarios": 2,
+    "planned": 5,
+    "recorded": 5,
+    "statuses": {
+      "generated": 5
+    },
+    "interrupted": 0,
+    "subjects": [
+      "eevee",
+      "vaporeon",
+      "jolteon",
+      "flareon",
+      "umbreon",
+      "sylveon"
+    ],
+    "nineRoleOverallCertification": false
+  },
+  "provider": {
+    "calls": 35,
+    "outcomes": {
+      "ok": 35
+    },
+    "actualModelVersions": {
+      "gemini-3-flash-preview": 35
+    }
+  },
+  "generationLatencyMs": {
+    "min": 16200,
+    "median": 19667,
+    "max": 22701
+  },
+  "semanticReview": {
+    "frozenCriteria": 8,
+    "statuses": {
+      "met": 5,
+      "partially-met": 2,
+      "not-met": 1,
+      "unassessed": 0
+    },
+    "validatedQuoteAnchors": 34,
+    "scenarioVerdicts": {
+      "partially-met": 1,
+      "not-met": 1
+    },
+    "countsAreIndependentScores": false
+  }
+}
