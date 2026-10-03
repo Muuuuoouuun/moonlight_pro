@@ -12,7 +12,7 @@ enum QuickMode: String, CaseIterable, Identifiable {
         case .tasks: return "할 일"
         case .memo: return "메모"
         case .calendar: return "일정"
-        case .office: return "Office 회의실"
+        case .office: return "Office"
         case .council: return "담당자에게 묻기"
         case .focus: return "집중"
         case .notifications: return "알림"
