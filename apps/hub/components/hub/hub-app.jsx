@@ -115,6 +115,7 @@ const Runs = lazyPage(() => import("./pages/automations").then(m => m.Runs));
 const Flows = lazyPage(() => import("./pages/automations").then(m => m.Flows));
 const SheetsSync = lazyPage(() => import("./pages/sheets-sync").then(m => m.SheetsSync));
 const OfficeCouncil = lazyPage(() => import("./pages/office-council").then(m => m.OfficeCouncil));
+const OfficeRequest = lazyPage(() => import("./pages/office-request").then(m => m.OfficeRequest));
 const AgentsChat = lazyPage(() => import("./pages/agents").then(m => m.AgentsChat));
 const MentorShelf = lazyPage(() => import("./pages/mentor-shelf").then(m => m.MentorShelf));
 const AgentsCouncil = lazyPage(() => import("./pages/agents").then(m => m.AgentsCouncil));
@@ -257,6 +258,7 @@ const PAGE_MAP = {
   'dashboard/automations/runs': (n) => <Runs onNavigate={n} />,
   'dashboard/automations/sheets': () => <SheetsSync />,
   'dashboard/agents/office-council': (n, notifications, scope, ask) => <OfficeCouncil scope={scope} onGuidanceAsk={ask} onNavigate={n} />,
+  'dashboard/agents/office-request': (n, _inquiries, _scope, _ask, query) => <OfficeRequest requestId={query?.get('request')} onNavigate={n} />,
   'dashboard/agents/chat': (n, _inquiries, _scope, ask, query) => <MentorShelf onNavigate={n} onGuidanceAsk={ask} requestedCardId={query?.get('card')} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,

@@ -3,7 +3,7 @@
 import React from 'react';
 import {OFFICE_ROSTER} from '@com-moon/agent-contracts/office';
 import {Button,CertaintyBadge,CheckboxRow,EditDrawer,SegmentedControl,SelectField,Skeleton,TextAreaField,TruthBadge} from './hub-primitives';
-import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowQuery,officeWorkflowNote,readOfficeWorkflow,sendOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowReviewers,officeWorkflowGenerationRequest} from './office-workflow-client';
+import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowQuery,officeWorkflowNote,readOfficeWorkflow,sendOfficeWorkflow,writeOfficeWorkflow,readOfficeWorkflowSelection,loadOfficeWorkflowOrigin,mergeOfficeWorkflowReceipt,officeWorkflowReviewers,officeWorkflowGenerationRequest} from './office-workflow-client';
 import {OfficeDeliberationControls,OfficeDiscussion} from './office-deliberation-controls';
 import {officeDeliberationForParticipants} from './office-deliberation-client';
 import styles from './office-workflow-panel.module.css';
@@ -28,17 +28,18 @@ const WORKFLOW_MODES=[{key:'draft',label:'초안'},{key:'council',label:'관점 
 const initialMessage={weekly_report:'선택한 7일의 확인된 기록으로 주간 정리를 작성해 주세요. 확인된 활동, 변화와 막힘, 다음 주 남길 행동을 구분하고 미측정 값은 그대로 표시해 주세요.',customer_reply:'선택한 고객의 실제 기록과 약속을 참고해 보낼 답장 초안 한 개와 이번 접촉 목적을 작성해 주세요. 자료에 없는 약속이나 고객 발언을 만들지 마세요.'};
 const missingLabels={...WEEKLY_MISSING_LABELS,'recorded-customer-words-unavailable':'직접 연결된 발언 기록 없음','activities-limited-to-latest-five':'최근 기록 5건만 참고','contacts_recorded':'고객 연락 미측정','tasks_completed':'완료 할 일 미측정','content_published':'발행 미측정','goals':'목표 조회 미완료','deals':'거래 조회 미완료','deal-win-timestamps':'성사일 일부 미확인'};
 
-export function OfficeWorkflowPanel({intent,scope,originRef,title,onTaskCreated,onNavigate}) {
+export function OfficeWorkflowPanel({intent,scope,originRef,title,initialRequestId,onTaskCreated,onNavigate}) {
   const [pickedScope,setPickedScope]=React.useState('');
   const effectiveScope=scope||pickedScope;
   if (!effectiveScope) return <div className={styles.panel}><SelectField label={`${title} · 업무 범위`} value={pickedScope} onChange={event=>setPickedScope(event.target.value)} options={[{value:'',label:'범위 확인 후 선택'},{value:'classin',label:'회사'},{value:'personal',label:'개인'}]} /></div>;
   let key;
   try { key=officeWorkflowKey({intent,scope:effectiveScope,originRef}); }
   catch { return <p className={styles.note}>업무 대상이나 보고 기간을 확인해야 Office를 사용할 수 있습니다.</p>; }
-  return <WorkflowForOrigin key={key} sessionKey={key} intent={intent} scope={effectiveScope} originRef={originRef} title={intent==='customer_reply'?'고객 대응 준비':title} onTaskCreated={onTaskCreated} onNavigate={onNavigate} />;
+  const sessionKey=initialRequestId?`${key}:request:${initialRequestId}`:key;
+  return <WorkflowForOrigin key={sessionKey} sessionKey={sessionKey} intent={intent} scope={effectiveScope} originRef={originRef} initialRequestId={initialRequestId} title={intent==='customer_reply'?'고객 대응 준비':title} onTaskCreated={onTaskCreated} onNavigate={onNavigate} />;
 }
 
-function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreated,onNavigate}) {
+function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,initialRequestId,onTaskCreated,onNavigate}) {
   const shared=React.useContext(Sessions);
   const [local]=React.useState(createOfficeWorkflowSessions);
   const store=shared||local;
@@ -88,22 +89,33 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,onTaskCreate
   const inspect=async id=>{
     const inspectToken=crypto.randomUUID();
     patch({inspectToken});
-    const data=await readOfficeWorkflow(`requests/${encodeURIComponent(id)}`);
-    if(store.get(sessionKey).inspectToken!==inspectToken)return;
     const request=store.get(sessionKey).request;
-    if(!validWorkflowReceipt(data,{requestId:id,scope,request:request?.requestId===id?request:undefined})){patch({note:officeWorkflowNote({status:'error'})});return;}
+    const data=await readOfficeWorkflowSelection(id,input,{request:request?.requestId===id?request:undefined});
+    if(store.get(sessionKey).inspectToken!==inspectToken)return;
+    if(data.error==='invalid-workflow-receipt'){patch({note:'이 요청의 범위나 출처를 확인하지 못했습니다. 다시 확인해 주세요.'});return;}
     store.selectReceipt(sessionKey,data);
     return data;
   };
   const load=async()=>{
     const ticket=++loadTicket.current;
-    patch({open:true,loading:true,note:''});
-    const [context,list]=await Promise.all([readOfficeWorkflow(`context?${query}`),readOfficeWorkflow(`requests?${query}`)]);
+    const before=store.get(sessionKey);
+    const selectedRequestId=initialRequestId?(before.receipt?.requestId||before.request?.requestId||initialRequestId):null;
+    const inspectToken=selectedRequestId?crypto.randomUUID():null;
+    const sameSelection=current=>current.inspectToken===inspectToken&&current.receipt?.requestId===before.receipt?.requestId&&current.request?.requestId===before.request?.requestId;
+    patch({open:true,loading:true,note:'',...(selectedRequestId?{inspectToken}:{})});
+    const {context,list,receipt:selected}=await loadOfficeWorkflowOrigin(input,{requestId:selectedRequestId,request:before.request?.requestId===selectedRequestId?before.request:undefined});
     if(ticket!==loadTicket.current)return;
     patch(current=>({loading:false,...(isCustomer?officeCustomerContextUpdate(current,context):{context}),requests:Array.isArray(list.requests)?list.requests:[],nextCursor:list.nextCursor||null,
-      note:context.status==='ready'?officeWorkflowNote(list):officeWorkflowNote(context)}));
-    if(!store.get(sessionKey).receipt && !store.get(sessionKey).pending && list.requests?.length) await inspect(list.requests[0].requestId);
+      note:selectedRequestId&&!sameSelection(current)?current.note:context.status==='ready'?officeWorkflowNote(list):officeWorkflowNote(context)}));
+    if(selectedRequestId && sameSelection(store.get(sessionKey)) && !store.get(sessionKey).pending) {
+      if(selected?.error==='invalid-workflow-receipt')patch({note:'지정한 요청의 범위나 출처를 확인하지 못했습니다. 다시 확인해 주세요.'});
+      else if(selected)store.selectReceipt(sessionKey,selected);
+    } else if(!initialRequestId && !store.get(sessionKey).receipt && !store.get(sessionKey).pending && list.requests?.length) await inspect(list.requests[0].requestId);
   };
+  React.useEffect(()=>{
+    if(initialRequestId)load();
+    return ()=>{loadTicket.current++;store.update(sessionKey,{inspectToken:null});};
+  },[initialRequestId,sessionKey,store]);
   const generate=async()=>{
     const current=store.get(sessionKey);
     if(current.pending||!current.context?.capabilities?.generate)return;
