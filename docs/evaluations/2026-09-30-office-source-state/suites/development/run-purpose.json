@@ -1,0 +1,14 @@
+{
+  "preparedAt": "2026-09-29T16:13:35.228709+00:00",
+  "datasetStatus": "development",
+  "reason": "The previously heldout six-case suite was disclosed after v26 execution and used to develop source-state-v1. This authorized replay is development, not fresh holdout.",
+  "expectedCommit": "c6d1ca8de5ca8e531c145a7f869b1fd85fec16f6",
+  "sourceRunnerSha256": "4956f0438946af5caa769d623ee0316f78a3bb2abb083a97d08a5b9e51994fac",
+  "replayRunnerSha256": "7f47c06f393b0d5709ad573235d1db74c465ee1de59f21ecfc4d0198feba4528",
+  "adapterChanges": [
+    "Run datasetStatus is development.",
+    "Printed qualityClaim identifies unscored development replay."
+  ],
+  "plannedGenerations": 8,
+  "retriesAllowed": false
+}

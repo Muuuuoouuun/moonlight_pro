@@ -11,6 +11,7 @@ import { RhythmToday } from "../rhythm-today";
 import { RhythmHistory } from "../rhythm-history";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
+import { calendarEventWhenLabel, mapGoogleEventsToGrid } from "@/lib/calendar-event-view";
 import {
   buildRoadmapItemAriaLabel,
   buildRoadmapProjection,
@@ -312,31 +313,6 @@ function useWorkLedger(projectId = null) {
   return { ...state, retry: load };
 }
 
-// Google's event.start is an ISO datetime (or an all-day date) — plot it onto the
-// currently viewed week's grid. Events outside `days` are dropped (paginated by week).
-function mapGoogleEventsToGrid(events, days) {
-  return events.map((e) => {
-    const start = new Date(e.start);
-    const end = new Date(e.end || e.start);
-    if (Number.isNaN(start.getTime())) return null;
-    const day = days.findIndex((d) => sameDate(d, start));
-    if (day === -1) return null;
-    const startHour = e.allDay ? 8 : start.getHours() + start.getMinutes() / 60;
-    const rawEndHour = e.allDay ? 9 : end.getHours() + end.getMinutes() / 60;
-    return {
-      id: e.id,
-      outcomeKey: e.outcomeKey,
-      allDay: e.allDay,
-      day,
-      start: startHour,
-      end: Math.max(startHour + 0.25, rawEndHour),
-      title: e.title,
-      tone: e.source === 'personal' ? 'personal' : e.source === 'company' ? 'company' : 'moon',
-      sourceLabel: e.source === 'personal' ? '개인' : e.source === 'company' ? '회사' : '',
-    };
-  }).filter(Boolean);
-}
-
 // Real read/write path against Google Calendar (apps/hub/lib/google-calendar.js +
 // /api/calendar/google/event). Was previously 100% local React state with zero
 // persistence — every "새 일정" vanished on reload regardless of connection status.
@@ -594,7 +570,13 @@ export function Calendar({ onNavigate }) {
     ? mapGoogleEventsToGrid(calendarData.events, visibleDays)
     : [];
   const gridTasks = mapTasksToCalendar(taskData.tasks, visibleDays);
-  const columnTemplate = `56px repeat(${visibleDays.length}, minmax(${viewMode === 'day' ? '320px' : '120px'}, 1fr))`;
+  const baseDayWidth = viewMode === 'day' ? 320 : 120;
+  // Keep each overlapping card at least 44px wide, plus 4px gaps/insets and the day border.
+  const dayWidths = visibleDays.map((_, day) => Math.max(baseDayWidth,
+    gridEvents.filter(event => event.day === day).reduce((width, event) => Math.max(width, event.overlapColumns * 48 + 5), 0)));
+  const columnTemplate = dayWidths.every(width => width === baseDayWidth)
+    ? `56px repeat(${visibleDays.length}, minmax(${baseDayWidth}px, 1fr))`
+    : `56px ${dayWidths.map(width => `minmax(${width}px, 1fr)`).join(' ')}`;
   const calBadge = calendarCapabilities.isLive
     ? { label: calendarCapabilities.badge, color: 'var(--fg-muted)' }
     : calendarData.status === 'loading'
@@ -744,7 +726,7 @@ export function Calendar({ onNavigate }) {
             );
           })}
         </div>
-        <div className="scroll-y" style={{ flex: 1 }}>
+        <div className="scroll-y" style={{ flex: 1, minWidth: 56 + dayWidths.reduce((width, dayWidth) => width + dayWidth, 0) }}>
           <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, position: 'relative' }}>
             <div>
               {hours.map(h => (
@@ -754,13 +736,20 @@ export function Calendar({ onNavigate }) {
             {visibleDays.map((date, di) => (
               <div key={date.toISOString()} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
                 {hours.map(h => <div key={h} style={{ height: 52, borderBottom: '1px solid var(--line-soft)' }} />)}
-                {gridEvents.filter(e => e.day === di).map((e, ei) => {
-                  const top = (e.start - 8) * 52;
-                  const height = (e.end - e.start) * 52 - 2;
+                {gridEvents.filter(e => e.day === di).map((e) => {
+                  // Multi-day segments may cover midnight to midnight; keep them inside this grid's 08–20 window.
+                  const start = e.multiDay ? Math.max(8, e.start) : e.start;
+                  const end = e.multiDay ? Math.min(20, e.end) : e.end;
+                  if (end <= start) return null;
+                  const top = (start - 8) * 52;
+                  const height = (end - start) * 52 - 2;
+                  const columns = e.overlapColumns || 1;
+                  const width = columns === 1 ? 'calc(100% - 8px)' : `calc(${100 / columns}% - ${4 + 4 / columns}px)`;
+                  const left = !e.overlapColumn ? 4 : `calc(${100 * e.overlapColumn / columns}% + ${4 - 4 * e.overlapColumn / columns}px)`;
                   return (
-                    <button key={e.outcomeKey || ei} type="button" className="hub-card-link" aria-label={`일정 기록: ${e.title}`} onClick={() => setSelectedEvent(e)} style={{
-                      textAlign: 'left', width: 'calc(100% - 8px)',
-                      position: 'absolute', top, left: 4, right: 4, height,
+                    <button key={e.segmentKey} type="button" className="hub-card-link" aria-label={`일정 기록: ${e.title}`} onClick={() => setSelectedEvent(e)} style={{
+                      textAlign: 'left', width,
+                      position: 'absolute', top, left, right: 4, height,
                       background: toneBg[e.tone], color: toneFg[e.tone],
                       border: `1px solid ${toneBd[e.tone]}`,
                       borderLeft: `1px solid ${toneBd[e.tone]}`,
@@ -782,7 +771,7 @@ export function Calendar({ onNavigate }) {
       </Card>
       {selectedEvent && (
         <Drawer title="일정 기록" subtitle="완료와 특이사항을 Moonlight에 남깁니다." onClose={() => { if (!outcomeSaving) setSelectedEvent(null); }} width="min(440px, 94vw)">
-          <CalendarOutcome key={selectedEvent.outcomeKey || selectedEvent.id} eventKey={selectedEvent.outcomeKey} title={selectedEvent.title} whenLabel={selectedEvent.allDay ? '종일' : `${formatHour(selectedEvent.start)} – ${formatHour(selectedEvent.end)}`} expanded onSavingChange={setOutcomeSaving} />
+          <CalendarOutcome key={selectedEvent.outcomeKey || selectedEvent.id} eventKey={selectedEvent.outcomeKey} title={selectedEvent.title} whenLabel={calendarEventWhenLabel(selectedEvent)} expanded onSavingChange={setOutcomeSaving} />
         </Drawer>
       )}
     </div>

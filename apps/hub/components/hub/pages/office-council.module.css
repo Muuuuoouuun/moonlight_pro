@@ -39,7 +39,7 @@
 .orderList { margin:0; padding-left:18px; display:grid; gap:4px; font-size:12.5px; color:var(--fg-muted); line-height:1.5; }
 
 .main { display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--surface); }
-.agendaBar { padding:12px 20px; border-bottom:1px solid var(--line-soft); display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+.agendaBar { padding:12px 20px; border-bottom:1px solid var(--line-soft); display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; flex-shrink:0; }
 .agendaBar > p { margin:0; color:var(--fg-muted); font-size:13px; line-height:1.5; }
 .agendaMain { display:flex; align-items:center; gap:8px; min-width:0; flex:1 1 240px; }
 .agendaMain strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; font-weight:550; }
@@ -168,7 +168,9 @@
   .header p { display:none; }
   /* 탑바 + 제목 + 보기 탭 + 아래 여백. 탭이 없던 A보다 탭 한 줄(44px + 12px)만큼 줄어든다 */
   .room { min-height:min(480px,calc(100dvh - 252px)); height:calc(100dvh - 252px); }
-  .agendaBar { padding:8px 12px; min-height:48px; }
+  .agendaBar { padding:8px 12px; min-height:48px; flex-wrap:wrap; row-gap:4px; }
+  /* 업무 조각·자동 진행 멈추기가 붙으면 안건 문구 아래로 내려간다 */
+  .agendaBar > p { flex:1 1 180px; }
   .agendaMain { flex:1 1 auto; }
   .agendaMain strong { max-width:42vw; }
   .mobileCount { display:inline; white-space:nowrap; font-size:12px; color:var(--fg-muted); }

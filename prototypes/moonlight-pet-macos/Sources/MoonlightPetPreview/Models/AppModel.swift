@@ -12,8 +12,8 @@ enum QuickMode: String, CaseIterable, Identifiable {
         case .tasks: return "할 일"
         case .memo: return "메모"
         case .calendar: return "일정"
-        case .office: return "Office"
-        case .council: return "Council"
+        case .office: return "Office 회의실"
+        case .council: return "담당자에게 묻기"
         case .focus: return "집중"
         case .notifications: return "알림"
         }
@@ -116,6 +116,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    var presentationCharacter: PetCharacter {
+        if let owner = activity.banner?.owner { return PetCharacter.forAgent(owner) }
+        if isReadingCouncil { return PetCharacter.forAgent(chat.agent) }
+        return selectedCharacter
+    }
+    private var memoTopicIDs: [String: String] = [:]
+
     var onFocusFinished: (() -> Void)?
     let hub: HubStore
     let activity: PetActivityStore
@@ -180,10 +187,10 @@ final class AppModel: ObservableObject {
         }
         chat.onReply = { [weak self] turn in
             guard let self else { return }
-            if !self.isReadingCouncil {
+            if !self.isReadingCouncil || self.chat.conversationKey != turn.conversation {
                 self.activity.addAgentReply(id: turn.id.uuidString, agentID: turn.agent.rawValue,
-                    scope: turn.scope.rawValue, title: "\(turn.agent.title)의 답변이 왔어요",
-                    detail: String(turn.reply.answer.prefix(80)))
+                    conversation: turn.conversation, title: "\(turn.agent.title)의 답변이 왔어요",
+                    detail: String(turn.reply.answer.prefix(80)), path: self.chat.topicSource?.path ?? "")
             }
         }
         guard hub.isEnabled else { activity.configure(service: nil, origin: nil); return }
@@ -307,11 +314,19 @@ final class AppModel: ObservableObject {
 
     func prepareCouncilFromMemo() {
         saveMemo()
-        chat.draft = memoDraft; chat.source = .memo
+        let text = memoDraft
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let id = memoTopicIDs[text] ?? "memo:" + UUID().uuidString
+        memoTopicIDs[text] = id
+        _ = chat.selectTopic(id, scope: .all, owner: selectedCharacter.officeAgent,
+                             source: .init(title: "가져온 메모", detail: text, date: Date(), path: nil, isNoticeSummary: false),
+                             draft: text, sourceKind: .memo)
         onOpenMode?(.council)
     }
     func prepareCouncilFromTask(_ task: LocalTask) {
-        chat.draft = task.title; chat.source = .task
+        _ = chat.selectTopic("task:" + task.id.uuidString, scope: .all, owner: selectedCharacter.officeAgent,
+                             source: .init(title: "가져온 할 일", detail: task.title, date: Date(), path: nil, isNoticeSummary: false),
+                             draft: task.title, sourceKind: .task)
         onOpenMode?(.council)
     }
     var canSendCouncil: Bool {
@@ -340,28 +355,36 @@ final class AppModel: ObservableObject {
     }
     func markCouncilRepliesRead() {
         guard isReadingCouncil else { return }
-        activity.acknowledgeAgentReplies(agentID: chat.agent.rawValue, scope: chat.scope.rawValue)
+        activity.acknowledgeAgentReplies(conversation: chat.conversationKey)
     }
     func showNotifications() { onOpenMode?(.notifications) }
     func openNotification(_ notice: PetNotice) {
-        if notice.kind == .agent {
-            guard let id = notice.agentID, let agent = OfficeAgent(rawValue: id),
-                  let scope = notice.scope, let scopeValue = OfficeChatScope(rawValue: scope) else { return }
-            chat.agent = agent; chat.scope = scopeValue
-            activity.dismiss(id: notice.id)
-            onOpenMode?(.council)
-        } else if notice.kind == .calendar {
-            hub.selectedDate = notice.eventDate ?? Date()
-            onOpenMode?(.calendar)
-            activity.acknowledge(id: notice.id)
-        } else {
-            guard let base = URL(string: hubBaseURL), let origin = try? HubTransport.validatedBaseURL(base),
-                  notice.path.hasPrefix("/dashboard/revenue/inquiries?"),
-                  let url = URL(string: notice.path, relativeTo: origin)?.absoluteURL else { return }
-            guard NSWorkspace.shared.open(url) else { return }
-            activity.acknowledge(id: notice.id)
+        guard let owner = notice.owner, let key = notice.topicKey,
+              key.origin == chat.conversationKey.origin else { return }
+        let opened: Bool
+        if notice.kind == .agent { opened = chat.restoreConversation(key) }
+        else {
+            opened = chat.selectTopic(key.topicID, scope: key.scope, owner: owner, source: notice.topicSource)
         }
+        // A refused in-flight change explains itself beside the existing pending question.
+        onOpenMode?(.council)
+        guard opened else { return }
+        activity.acknowledge(id: notice.id)
         activity.dismissBanner()
+        markCouncilRepliesRead()
+    }
+    func originalURL(for notice: PetNotice) -> URL? {
+        notice.originalURL(currentOrigin: chat.conversationKey.origin)
+    }
+    func openNotificationOriginal(_ notice: PetNotice) {
+        guard let url = originalURL(for: notice), NSWorkspace.shared.open(url) else { return }
+        activity.acknowledge(id: notice.id)
+    }
+    func openTopicOriginal() {
+        guard let path = chat.topicSource?.path else { return }
+        let origin = chat.conversationKey.origin
+        let notice = PetNotice(id: "source", title: "", detail: "", kind: .agent, createdAt: Date(), path: path, origin: origin)
+        if let url = notice.originalURL(currentOrigin: origin) { NSWorkspace.shared.open(url) }
     }
 
     func saveHubURL() {

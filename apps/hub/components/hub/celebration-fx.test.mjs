@@ -50,10 +50,10 @@ test("celebration-fx implements particle pooling, throttling, haptic feedback, a
   assert.match(celebrationSource, /className=["']sr-only["']/);
 });
 
-test("my-work triggers celebration fireworks on completing all tasks and provides celebratory empty state", () => {
+test("my-work triggers celebration fireworks for completed selected tasks and provides celebratory empty state", () => {
   assert.match(myWorkSource, /import \{[^}]*triggerCelebration[^}]*\} from ["']\.\.\/celebration-fx["']/);
   assert.match(myWorkSource, /triggerCelebration\(\{\s*mode:\s*['"]fireworks['"]\s*\}\)/);
-  assert.match(myWorkSource, /오늘의 모든 할 일 완료!/);
+  assert.match(myWorkSource, /오늘 고른 할 일 완료!/);
   assert.match(myWorkSource, /폭죽 다시 터뜨리기/);
 });
 

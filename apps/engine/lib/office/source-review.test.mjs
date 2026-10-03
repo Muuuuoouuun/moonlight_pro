@@ -4,8 +4,11 @@ import { createHash } from 'node:crypto';
 import { parseOfficeRequest } from '@com-moon/agent-contracts/office';
 import { parseOfficeWorkflowRequest, parseOfficeWorkflowContext } from '@com-moon/agent-contracts/office-workflow';
 import { buildOfficeSourceCatalog, officeSourceReviewPrompt, officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
+import * as sourceReview from './source-review.ts';
 import { generateOfficeResponse } from './service.ts';
 import { generateOfficeWorkflow } from './workflow-service.ts';
+import { officeResponseSchema } from './response-schema.ts';
+import { officeWorkflowResponseSchema } from './workflow-response-schema.ts';
 import { buildOfficeOperatingPolicy } from './operating-policy.ts';
 import { OFFICE_WORKFLOW_POLICY_VERSION } from './workflow-prompt.ts';
 import { OFFICE_ROLE_CARDS } from './role-cards.ts';
@@ -57,6 +60,14 @@ test('source catalogs contain only original context, current and previous user t
     assert.ok(candidates.every(quote => !quote.includes('[ClassIn 업무에만 적용할 기준]')));
     for (const { index } of catalog) assert.deepEqual(readReviewed({ answer: '공개 답변', sourceIndexes: [index], corrections: [] }, request, context, catalog), { answer: '공개 답변' });
   }
+});
+
+test('machine values in the context (source, scope, ids, statuses) are not citable catalog entries', () => {
+  const request = { message: '현재 사용자 원문', scope: 'all' };
+  const context = { source: 'live', scope: 'all', projects: [{ id: '9f0e1c2a-1b2c-4d3e-8f90-1234567890ab', name: 'Moonlight 제품 탭', status: 'active', scope: 'personal' }], note: '최근 프로젝트 최대 8개' };
+  const candidates = buildOfficeSourceCatalog(request, context).map(entry => entry.quote);
+  for (const value of ['live', 'all', 'active', 'personal', '9f0e1c2a-1b2c-4d3e-8f90-1234567890ab']) assert.ok(!candidates.includes(value), value);
+  for (const text of ['현재 사용자 원문', 'Moonlight 제품 탭', '최근 프로젝트 최대 8개']) assert.ok(candidates.includes(text), text);
 });
 
 test('catalog chunks preserve text, line boundaries, surrogate pairs and CRLF without duplication', () => {
@@ -229,6 +240,73 @@ function assertWorkflowPromptHash(result, calls, council = false) {
 }
 
 for (const [surface, generate] of [['chat', generateOfficeResponse], ['workflow', generateOfficeWorkflow]]) {
+  for (const mode of ['chat', 'council']) {
+    test(`${surface} ${mode} sends shared source-state guidance through every real service phase without changing call contracts`, async t => {
+      const { request, context } = inputs(surface, mode);
+      const deadline = new AbortController(), budgets = [], calls = [];
+      t.mock.method(AbortSignal, 'timeout', milliseconds => { budgets.push(milliseconds); return deadline.signal; });
+      const result = await generate(request, context, async input => {
+        calls.push(input);
+        const data = JSON.parse(input.prompt);
+        return providerReply({
+          ...(data.phase ? turn(data) : answer(surface, request)),
+          ...(data.sourceCatalog ? { sourceIndexes: indexesFor(data.sourceCatalog, [message]), corrections: [] } : {}),
+        });
+      });
+      assert.equal(result.status, 'generated');
+      assert.deepEqual(budgets, [48_000]);
+      assert.equal(calls.length, mode === 'chat' ? 2 : 5);
+      const phases = calls.map(input => JSON.parse(input.prompt).phase ?? (mode === 'council' ? 'synthesis' : input.responseJsonSchema.properties.sourceIndexes ? 'review' : 'draft'));
+      assert.deepEqual(phases, mode === 'chat' ? ['draft', 'review'] : ['position', 'position', 'response', 'response', 'synthesis']);
+      for (const [index, input] of calls.entries()) {
+        const phase = phases[index], data = JSON.parse(input.prompt);
+        // This checks delivery and isolation of an instruction, not the semantic
+        // correctness of a provider's answer. Live evaluation remains separate.
+        const marker = '[근거 상태 보존 · 2026-09-30.source-state-v1]';
+        assert.equal(input.systemInstruction.split(marker).length - 1, 1, `${surface}/${mode}/${phase}: missing shared source-state guidance`);
+        assert.equal(sourceReview.OFFICE_SOURCE_STATE_VERSION, '2026-09-30.source-state-v1');
+        assert.equal(input.systemInstruction.split(sourceReview.OFFICE_SOURCE_STATE_INSTRUCTIONS).length - 1, 1);
+        for (const text of [message, contextText, previousUserText, assistantText]) assert.equal(input.systemInstruction.includes(text), false);
+        assert.equal(data.userRequest, request.message);
+        assert.deepEqual(data.untrustedRecentConversation, conversation);
+        assert.equal(input.tools, undefined);
+        assert.equal(input.model, ['draft', 'position'].includes(phase) ? undefined : model);
+        assert.equal(input.maxOutputTokens, data.phase ? 4096 : 8192);
+        assert.equal(input.thinkingLevel, data.phase ? 'low' : phase === 'draft' ? undefined : 'high');
+        assert.equal(input.signal, data.phase ? calls[0].signal : deadline.signal);
+        if (phase === 'draft') {
+          assert.equal(data.sourceCatalog, undefined);
+          assert.equal(input.responseJsonSchema.properties.sourceIndexes, undefined);
+          assert.equal(input.responseJsonSchema.properties.corrections, undefined);
+          assert.equal(input.systemInstruction.includes(sourceReview.OFFICE_SOURCE_REVIEW_INSTRUCTIONS), false, 'drafts must not request private review fields');
+        } else {
+          assertSourceChoiceBoundary(input, request, context);
+          assert.ok(data.sourceCatalog.every(entry => !entry.quote.includes(marker)));
+        }
+        if (data.phase) {
+          assert.deepEqual(Object.keys(input.responseJsonSchema.properties).sort(), ['sourceIndexes', 'corrections', 'position', 'evidence', 'objection', 'revisionCondition', 'changed', 'replyTo', 'changeReason'].sort());
+        } else {
+          const schema = surface === 'chat' ? officeResponseSchema(mode) : officeWorkflowResponseSchema(mode);
+          assert.deepEqual(input.responseJsonSchema, phase === 'draft' ? schema : officeSourceReviewSchema(schema, data.sourceCatalog));
+        }
+      }
+      assertPrivateFieldsAbsent(result);
+      if (surface === 'workflow') assertWorkflowPromptHash(result, calls, mode === 'council');
+    });
+  }
+
+  test(`${surface} source tracing remains citation checking and does not certify a dependent claim`, async () => {
+    const { request, context } = inputs(surface);
+    const unsupported = '제공 여부가 확인되어 바로 사용할 수 있습니다.';
+    const result = await generate(request, context, async input => {
+      const data = JSON.parse(input.prompt);
+      return providerReply({ ...answer(surface, request, unsupported), ...(data.sourceCatalog ? { sourceIndexes: indexesFor(data.sourceCatalog, [message]), corrections: [] } : {}) });
+    });
+    assert.equal(result.status, 'generated');
+    assert.equal(result.sourceCheck, 'traced');
+    assert.equal(surface === 'chat' ? result.answer : result.artifact.body, unsupported);
+  });
+
   test(`${surface} keeps the initial contract and strips valid editing fields from the final response`, async () => {
     const { request, context } = inputs(surface);
     const calls = [];

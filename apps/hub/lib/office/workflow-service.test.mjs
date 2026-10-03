@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { agentHash } from '@com-moon/agent-contracts';
-import { OFFICE_WORKFLOW_VERSION } from '@com-moon/agent-contracts/office-workflow';
+import { OFFICE_WORKFLOW_VERSION, OFFICE_CUSTOMER_PREPARATION_VERSION, createOfficeCustomerApproval } from '@com-moon/agent-contracts/office-workflow';
 import { OFFICE_DISCUSSION_VERSION, parseOfficeDeliberation } from '@com-moon/agent-contracts/office';
 import { createOfficeWorkflowService, projectOfficeReceipt } from './workflow-service.js';
 import { createOfficeWorkflowHandler } from './workflow-http.js';
@@ -303,4 +303,82 @@ test('a generated workflow run records latency and usage from the engine result'
   await h.service.execute(request(), identity());
   assert.equal(runs[0].recommendation.elapsedMs, 21000);
   assert.deepEqual(runs[0].recommendation.usage, { promptTokens: 10, outputTokens: 5, totalTokens: 15 });
+});
+
+const customerRequest = () => ({...request(),intent:'customer_reply',scope:'classin',ownerId:'flareon',originRef:{entityType:'lead',entityId:randomUUID()},customerPreparationVersion:OFFICE_CUSTOMER_PREPARATION_VERSION});
+const customerGenerated = (r,c) => ({...generated(r,c),customerPreparation:{purpose:'사용 목적을 확인합니다.',materials:[{title:'소개 자료',reason:'실제 존재와 범위를 먼저 확인합니다.'}],questions:['대상 수업을 확인해 주세요.']},execution:{modelCalls:2,providerRetries:0,costStatus:'unknown'}});
+
+test('customer task linking requires review and approval bound to the exact stored result before any target read or effect',async()=>{
+  let targets=0,effects=0;
+  const h=harness({generate:async(r,c)=>customerGenerated(r,c),readTargets:async()=>{targets++;return {status:'ready',sourceRefs:[]};},apply:async()=>{effects++;throw Error('should not execute');}});
+  const r=customerRequest(),actor=identity(),receipt=await h.service.execute(r,actor),fields={title:'목적 확인',projectId:randomUUID()};
+  assert.equal(receipt.status,'generated');assert.equal(receipt.execution.modelCalls,2);
+  for(const approval of [undefined,{},await createOfficeCustomerApproval({...receipt.result,artifact:{...receipt.result.artifact,body:'다른 결과'}},{sourcesReviewed:true,questionsReviewed:true})]){
+    const result=await h.service.apply(r.requestId,{resultRevision:1,fields,...(approval?{customerApproval:approval}: {})},actor);
+    assert.equal(result.error,'office-customer-approval-required');
+  }
+  assert.equal(targets,0);assert.equal(effects,0);
+});
+
+test('approved customer preparation rechecks context and binds one existing create_task command with separately confirmed entity',async()=>{
+  let effects=0,confirmed=false;
+  const h=harness({generate:async(r,c)=>customerGenerated(r,c),readTargets:async()=>({status:'ready',sourceRefs:[]}),confirmTask:async()=>confirmed});
+  const r=customerRequest(),actor=identity(),receipt=await h.service.execute(r,actor),fields={title:'목적 확인',projectId:randomUUID()};
+  const approval=await createOfficeCustomerApproval(receipt.result,{sourcesReviewed:true,questionsReviewed:true});
+  const entityId=randomUUID(),commandId=randomUUID();
+  h.deps.apply=async input=>{effects++;const row=h.rows.get(r.requestId);if(!row.application)row.application={state:'saved',commandId,entityId};assert.equal(input.requestId,r.requestId);return {status:'saved',persisted:true,commandId,entity:{id:entityId}};};
+  const first=await h.service.apply(r.requestId,{resultRevision:1,fields,customerApproval:approval},actor);
+  assert.equal(first.status,'saved');assert.equal(first.application.action,'create_task');assert.equal(first.application.entityConfirmed,false);
+  confirmed=true;
+  const second=await h.service.apply(r.requestId,{resultRevision:999,fields:{title:'cannot replace'}},actor);
+  assert.equal(second.application.commandId,commandId);assert.equal(second.application.entityId,entityId);assert.equal(second.application.entityConfirmed,true);
+  assert.equal(h.counts.run,2);assert.equal(effects,2); // Reconfirmation queries the same command; it never receives new fields.
+});
+
+test('customer approval does not bypass changed context, scope, operator ownership or stale result revision',async()=>{
+  let effects=0;
+  const h=harness({generate:async(r,c)=>customerGenerated(r,c),readTargets:async()=>({status:'ready',sourceRefs:[]}),apply:async()=>{effects++;return {status:'unknown'};}});
+  const r=customerRequest(),actor=identity(),receipt=await h.service.execute(r,actor),fields={title:'목적 확인',projectId:randomUUID()};
+  const approval=await createOfficeCustomerApproval(receipt.result,{sourcesReviewed:true,questionsReviewed:true});
+  h.deps.readContext=async input=>({...resolved({...input,expectedContextHash:'c'.repeat(64)}),contextHash:'c'.repeat(64)});
+  assert.equal((await h.service.apply(r.requestId,{resultRevision:1,fields,customerApproval:approval},actor)).error,'office-context-changed');
+  assert.equal((await h.service.apply(r.requestId,{resultRevision:2,fields,customerApproval:approval},actor)).error,'office-result-not-applicable');
+  assert.notEqual((await h.service.apply(r.requestId,{resultRevision:1,fields,customerApproval:approval},{...actor,actorId:'other-operator'})).status,'saved');
+  assert.equal(effects,0);
+  const acknowledged=await h.service.apply(r.requestId,{resultRevision:1,fields,customerApproval:approval,acknowledgeContextChange:true},actor);
+  assert.equal(acknowledged.status,'unknown');assert.equal(effects,1);
+});
+
+test('customer failure receipts and activity logs retain validated attempted-call counts without provider detail',async()=>{
+  const logs=[];
+  const h=harness({generate:async()=>({status:'error',error:'원문 대조 실패',failure:{phase:'review',category:'provider'},execution:{modelCalls:2,providerRetries:0,costStatus:'unknown'}}),recordRun:async input=>{logs.push(input);return {persisted:true,id:randomUUID()};}});
+  const receipt=await h.service.execute(customerRequest(),identity());
+  assert.equal(receipt.status,'error');assert.deepEqual(receipt.execution,{modelCalls:2,providerRetries:0,costStatus:'unknown'});assert.equal(receipt.result,null);
+  assert.deepEqual(logs[0].recommendation.execution,receipt.execution);
+  const projected=projectOfficeReceipt({status:'error',request:{state:'error',result:{execution:{modelCalls:1,providerRetries:0,costStatus:'unknown',secret:'must-not-project'}}}});
+  assert.equal(projected.execution,undefined);assert.doesNotMatch(JSON.stringify(projected),/must-not-project/);
+});
+
+test('approval of a different last-reviewed snapshot is blocked until current records are checked or explicitly acknowledged',async()=>{
+  let effects=0;
+  const h=harness({generate:async(r,c)=>customerGenerated(r,c),readTargets:async()=>({status:'ready',sourceRefs:[]}),apply:async()=>{effects++;return {status:'unknown'};}});
+  const r=customerRequest(),actor=identity(),receipt=await h.service.execute(r,actor),fields={title:'목적 확인',projectId:randomUUID()};
+  const approval=await createOfficeCustomerApproval(receipt.result,{sourcesReviewed:true,questionsReviewed:true,reviewedContextHash:'c'.repeat(64)});
+  assert.equal((await h.service.apply(r.requestId,{resultRevision:1,fields,customerApproval:approval},actor)).error,'office-customer-review-stale');assert.equal(effects,0);
+  const tampered={...approval,reviewedContextHash:'a'.repeat(64)};
+  assert.equal((await h.service.apply(r.requestId,{resultRevision:1,fields,customerApproval:tampered},actor)).error,'office-customer-approval-required');assert.equal(effects,0);
+  const currentApproval=await createOfficeCustomerApproval(receipt.result,{sourcesReviewed:true,questionsReviewed:true,reviewedContextHash:'a'.repeat(64)});
+  assert.equal((await h.service.apply(r.requestId,{resultRevision:1,fields,customerApproval:currentApproval},actor)).status,'unknown');assert.equal(effects,1);
+});
+
+test('a known customer source brand reaches target validation and cannot be acknowledged into a different current brand',async()=>{
+ const brandA=randomUUID(),brandB=randomUUID(),targetOptions=[];let effects=0;
+ const h=harness({readContext:async r=>({...resolved({...r,expectedContextHash:'a'.repeat(64)}),facts:{customer:{brandId:brandA}}}),generate:async(r,c)=>customerGenerated(r,c),readTargets:async(fields,scope,identity,opts)=>{targetOptions.push(opts);return {status:'conflict',error:'office-project-brand-mismatch'};},apply:async()=>{effects++;return {status:'saved'};}});
+ const r=customerRequest(),actor=identity(),receipt=await h.service.execute(r,actor),approval=await createOfficeCustomerApproval(receipt.result,{sourcesReviewed:true,questionsReviewed:true}),input={resultRevision:1,fields:{title:'자료 확인',projectId:randomUUID()},customerApproval:approval};
+ assert.equal((await h.service.apply(r.requestId,input,actor)).error,'office-project-brand-mismatch');assert.equal(targetOptions[0].expectedBrandId,brandA);assert.equal(effects,0);
+ h.deps.readContext=async()=>({...resolved(r),facts:{customer:{brandId:brandB}},contextHash:'c'.repeat(64)});assert.equal((await h.service.apply(r.requestId,{...input,acknowledgeContextChange:true},actor)).error,'office-customer-brand-changed');assert.equal(effects,0);
+});
+test('project target rejects a different known brand before reading its brand row or applying anything',async()=>{
+ const actor=identity(),projectId=randomUUID(),brandA=randomUUID(),brandB=randomUUID();let reads=0;
+ const target=await readOfficeTaskTargets({projectId},'personal',actor,{expectedBrandId:brandA,read:async table=>{reads++;assert.equal(table,'projects');return {rows:[{id:projectId,workspace_id:actor.workspaceId,brand_id:brandB,meta:{org_scope:'personal'},updated_at:'2026-10-02T00:00:00Z'}]};},resolveScope:async()=>({scope:'personal'})});assert.equal(target.error,'office-project-brand-mismatch');assert.equal(reads,1);
 });

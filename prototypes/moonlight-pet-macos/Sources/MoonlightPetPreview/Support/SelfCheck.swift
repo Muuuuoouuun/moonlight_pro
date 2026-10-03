@@ -177,7 +177,7 @@ enum SelfCheck {
         }
         recovered.stopFocus()
         recovered.activity.addAgentReply(id: "visibility-check", agentID: recovered.chat.agent.rawValue,
-            scope: recovered.chat.scope.rawValue, title: "표시 상태 검증", detail: "")
+            conversation: recovered.chat.conversationKey, title: "표시 상태 검증", detail: "")
         recovered.markCouncilRepliesRead()
         guard recovered.activity.unreadCount == 1 else {
             fputs("Hidden Council views must not consume unread replies\n", stderr)
@@ -191,7 +191,7 @@ enum SelfCheck {
         }
         recovered.connectionSurface = .quick
         recovered.activity.addAgentReply(id: "settings-check", agentID: recovered.chat.agent.rawValue,
-            scope: recovered.chat.scope.rawValue, title: "설정 표시 검증", detail: "")
+            conversation: recovered.chat.conversationKey, title: "설정 표시 검증", detail: "")
         recovered.markCouncilRepliesRead()
         guard recovered.activity.unreadCount == 1, recovered.isConnectionVisible else { return false }
         recovered.connectionSurface = nil
