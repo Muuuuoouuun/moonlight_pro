@@ -62,6 +62,14 @@ test('source catalogs contain only original context, current and previous user t
   }
 });
 
+test('machine values in the context (source, scope, ids, statuses) are not citable catalog entries', () => {
+  const request = { message: '현재 사용자 원문', scope: 'all' };
+  const context = { source: 'live', scope: 'all', projects: [{ id: '9f0e1c2a-1b2c-4d3e-8f90-1234567890ab', name: 'Moonlight 제품 탭', status: 'active', scope: 'personal' }], note: '최근 프로젝트 최대 8개' };
+  const candidates = buildOfficeSourceCatalog(request, context).map(entry => entry.quote);
+  for (const value of ['live', 'all', 'active', 'personal', '9f0e1c2a-1b2c-4d3e-8f90-1234567890ab']) assert.ok(!candidates.includes(value), value);
+  for (const text of ['현재 사용자 원문', 'Moonlight 제품 탭', '최근 프로젝트 최대 8개']) assert.ok(candidates.includes(text), text);
+});
+
 test('catalog chunks preserve text, line boundaries, surrogate pairs and CRLF without duplication', () => {
   const original = `첫 줄\r\n${'가'.repeat(285)}\r\n${'😀'.repeat(160)}끝\r\n마지막 줄`;
   const request = { message: original };

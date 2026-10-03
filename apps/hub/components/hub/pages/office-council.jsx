@@ -11,6 +11,8 @@ import { officeDiscussionState } from '../office-deliberation-client';
 import { officeSkillRequestDraft } from '../office-skill-request';
 import { OfficeSkillRequestDrawer } from '../office-skill-request-drawer';
 import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-drawer';
+import { OfficeBreakdownDrawer } from '../office-breakdown-drawer';
+import { fetchOfficeBreakdown, officeAutoStopText, officeBreakdownProgress, officeBreakdowns, runOfficeAuto } from '../office-breakdown-session';
 import { ReviewWaitingList } from '../review-waiting';
 import { OfficeAvatar } from '../office-avatar';
 import { officeMentorSessions } from '../office-mentor-session';
@@ -193,6 +195,8 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const [mentorDrawerId, setMentorDrawerId] = React.useState(null);
   const [selectedTurnId, setSelectedTurnId] = React.useState(null);
   const [mobileView, setMobileView] = React.useState('meet');
+  const [breakdownOpen, setBreakdownOpen] = React.useState(false);
+  const breakdown = React.useSyncExternalStore(officeBreakdowns.subscribe, () => officeBreakdowns.get(scope), () => null);
   const inputRef = React.useRef(null);
   const threadRef = React.useRef(null);
   const latestTurnRef = React.useRef(null);
@@ -201,6 +205,10 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const assignmentReadRef = React.useRef(0);
   const composing = React.useRef(false);
   const busy = Boolean(session.pending);
+  const autoRunning = breakdown?.auto?.state === 'running';
+  // 자동 진행 중에는 사람이 같은 입력창을 건드리지 못하게 잠근다 — 다음 조각이 입력창을 채운다.
+  const locked = busy || autoRunning;
+  const autoAbortRef = React.useRef(null);
   const owner = OFFICE_ROSTER.find(person => person.id === ownerId) || OFFICE_ROSTER[0];
   const participants = mode === 'council' ? [ownerId, ...reviewers] : [];
   const preset = COMPARISON_PRESETS.find(item => item.id === session.presetId);
@@ -211,12 +219,15 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const railTasks = officeRailTasks(taskState.tasks, scope);
   const shownTurn = session.turns.find(turn => turn.id === selectedTurnId) || session.turns[session.turns.length - 1] || null;
   const shownIndex = shownTurn ? session.turns.indexOf(shownTurn) : -1;
+  const packetStates = React.useMemo(() => (breakdown?.breakdown ? officeBreakdowns.states(scope) : {}), [breakdown, scope]);
+  const breakdownProgress = officeBreakdownProgress(breakdown, packetStates);
   React.useEffect(() => {
     assignmentReadRef.current += 1;
     setAssignment(null); setRosterOpen(false); setMoreOpen(false); setTasksOpen(false);
     setCopyStatus(null); setInputNotice(''); setFollowUpMode('chat'); setSkillTurn(null); setMentorDrawerId(null);
-    setSelectedTurnId(null); setMobileView('meet');
+    setSelectedTurnId(null); setMobileView('meet'); setBreakdownOpen(false);
     loadTasks();
+    return () => { officeBreakdowns.stopAuto(scope, 'left'); autoAbortRef.current?.abort(); };
     // loadTasks only reads refs and setters; reloading per scope is the intent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope]);
@@ -266,6 +277,58 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
     invalidateAssignment();
   }
 
+  // 업무 나누기(2026-10-01 권장, office-harness): 추천만 받는다. 적용·조각 열기·완료 표시는 모두 버튼이다.
+  async function requestBreakdown() {
+    if (locked || breakdown?.status === 'loading') return;
+    setMoreOpen(false);
+    setBreakdownOpen(true);
+    let started;
+    try { started = officeBreakdowns.begin(scope, assignmentMessage); }
+    catch {
+      officeBreakdowns.refuse(scope, assignmentMessage.length > 6000 ? '안건이 6,000자를 넘습니다. 줄여서 다시 나눠 주세요.' : '먼저 안건을 입력해 주세요.');
+      return;
+    }
+    try { officeBreakdowns.resolve(scope, started.readId, await fetchOfficeBreakdown(started.request)); }
+    catch { officeBreakdowns.fail(scope, started.readId); }
+  }
+  function openPacket(key, withReviewers) {
+    if (locked) return;
+    const request = officeBreakdowns.open(scope, key, { turnCount: session.turns.length, withReviewers });
+    if (!request) return;
+    invalidateAssignment();
+    update({ ownerId: request.ownerId, mode: request.mode, reviewers: request.participants.filter(id => id !== request.ownerId), presetId: null, draft: request.message });
+    setFollowUpMode(request.mode === 'council' ? 'council' : 'chat');
+    setBreakdownOpen(false); setMobileView('meet');
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+  function restoreDraft(savedDraft) {
+    if (savedDraft && !store.get(scope).draft.trim()) update({ draft: savedDraft });
+  }
+  // 자동 진행(권장): 버튼 한 번으로 시작해, Office 답으로 끝나는 조각만 담당 혼자 순서대로 돈다.
+  // 직접 할 조각·실패·멈추기에서 서고, 할 일을 만들거나 밖으로 보내지 않는다.
+  async function startAuto() {
+    // 상태는 저장소에서 바로 읽는다 — '적용하고 자동 진행'은 같은 클릭 안에서 적용 직후 부른다.
+    if (locked || officeBreakdowns.get(scope)?.status !== 'applied') return;
+    if (!officeBreakdowns.startAuto(scope, { savedDraft: session.draft })) return;
+    invalidateAssignment();
+    setBreakdownOpen(false); setMobileView('meet'); setSelectedTurnId(null);
+    const controller = new AbortController();
+    autoAbortRef.current = controller;
+    const outcome = await runOfficeAuto({ scope, sessions: store, request: requestOffice, signal: controller.signal });
+    if (autoAbortRef.current === controller) autoAbortRef.current = null;
+    restoreDraft(outcome.savedDraft);
+    if (outcome.ran.length) scrollToLatest(latestTurnRef);
+  }
+  function stopAuto() {
+    const stopped = officeBreakdowns.stopAuto(scope, 'stopped');
+    autoAbortRef.current?.abort();
+    if (stopped) restoreDraft(stopped.savedDraft);
+  }
+  function markPacket(key, state) {
+    const latest = session.turns[session.turns.length - 1];
+    officeBreakdowns.mark(scope, key, state, { latestAnswer: latest?.result?.answer ?? null, turnCount: session.turns.length });
+  }
+
   function editAssignment() {
     invalidateAssignment();
     setRosterOpen(true);
@@ -290,11 +353,14 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   // Clearing a meeting also drops its mentor consultations: they are unreachable afterwards.
   function clearMeeting() {
     officeMentorSessions.discard(session.turns.map(turn => turn.id));
+    autoAbortRef.current?.abort();
+    officeBreakdowns.discard(scope);
     store.reset(scope);
   }
   function importTask(task) {
     if (session.turns.length && !window.confirm('현재 회의를 비우고 새 안건을 올릴까요?')) return;
     if (session.turns.length) clearMeeting();
+    else officeBreakdowns.discard(scope);
     invalidateAssignment();
     setSkillTurn(null);
     setMentorDrawerId(null);
@@ -315,7 +381,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   }
   async function submit(event) {
     event.preventDefault();
-    if (composing.current || tooLong) return;
+    if (composing.current || tooLong || autoRunning) return;
     const override = session.turns.length && followUpMode === 'chat' && session.mode === 'council' ? { mode: 'chat' } : undefined;
     const pending = store.begin(scope, crypto.randomUUID(), override);
     if (!pending) return;
@@ -352,6 +418,11 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
     requestAnimationFrame(() => { field.focus(); field.setSelectionRange(start + text.length, start + text.length); });
   }
   const agenda = session.agenda;
+  // 업무 조각 진행·자동 진행 멈추기는 안건이 아직 고정되지 않은 첫 판에도 보여야 한다.
+  const breakdownTools = <>
+    {breakdownProgress ? <Button variant="ghost" size="sm" onClick={() => setBreakdownOpen(true)} aria-label={`업무 조각 ${breakdownProgress.total}개 중 ${breakdownProgress.closed}개 닫힘${autoRunning ? ` · 자동 진행 중 ${breakdown.auto.current || ''}` : ''} · 열기`}>{autoRunning ? '자동 진행 ' : '조각 '}{autoRunning && breakdown.auto.current ? <span className="mono">{breakdown.auto.current} · </span> : null}<span className="mono">{breakdownProgress.closed}/{breakdownProgress.total}</span></Button> : null}
+    {autoRunning ? <Button variant="outline" size="sm" onClick={stopAuto}>자동 진행 멈추기</Button> : null}
+  </>;
   const importedAt = agenda?.importedAt ? new Date(agenda.importedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
   const followUpCouncil = session.turns.length > 0 && followUpMode === 'council' && reviewers.length > 0;
   const showTurn = id => {
@@ -375,26 +446,27 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
           {session.turns.length ? <ol className={styles.rounds} aria-label="회의 판">{session.turns.map((turn, index) => <li key={turn.id}>
             <button type="button" className={'hub-row ' + styles.roundButton} aria-pressed={!busy && turn.id === shownTurn?.id} onClick={() => showTurn(turn.id)}>
               <span className="mono">{index + 1}</span><span className={styles.roundText}>{MODE_LABEL(turn.result.mode)} · {roundTitle(turn)}</span></button></li>)}</ol> : null}
-          {agenda ? <Button variant="ghost" size="sm" disabled={busy} onClick={newAgenda}>새 안건</Button> : null}
+          {agenda ? <Button variant="ghost" size="sm" disabled={locked} onClick={newAgenda}>새 안건</Button> : null}
         </section>
         <section className={styles.railSection}><SectionTitle subtitle="완료 전 · 막힘 먼저, 오래 그대로인 순">오래 멈춘 할 일</SectionTitle>
           {railStatus === 'loading' ? <Skeleton lines={3} label="할 일 불러오는 중" /> : null}
           {railStatus === 'error' ? <div className={styles.notice} role="alert"><TruthBadge state="error" /><p>할 일 읽기 실패 · {taskState.error}</p><Button variant="ghost" size="sm" onClick={loadTasks}>다시 시도</Button></div> : null}
           {railStatus === 'preview' ? <div className={styles.notice}><TruthBadge state="preview" /><p>Preview · 연결 필요</p></div> : null}
           {railStatus === 'partial' ? <p className={styles.note}><TruthBadge state="partial" /> 일부 할 일만 확인됐습니다.</p> : null}
-          {['live', 'partial'].includes(railStatus) ? (railTasks.length ? <div className={styles.railList}>{railTasks.map(({ task, staleDays }) => <button type="button" key={task.id} className={'hub-row ' + styles.railItem} aria-label={`안건으로 가져오기: ${task.title}`} disabled={busy} onClick={() => importTask(task)}>
+          {['live', 'partial'].includes(railStatus) ? (railTasks.length ? <div className={styles.railList}>{railTasks.map(({ task, staleDays }) => <button type="button" key={task.id} className={'hub-row ' + styles.railItem} aria-label={`안건으로 가져오기: ${task.title}`} disabled={locked} onClick={() => importTask(task)}>
             <strong>{task.title}</strong><span>{[task.status === 'blocked' ? '막힘' : null, staleDays == null ? null : staleDays === 0 ? '오늘 수정' : `${staleDays}일째 그대로`, task.due ? '마감 ' + task.due : null].filter(Boolean).join(' · ') || '다음 행동 미정'}</span></button>)}</div>
             : <p className={styles.note}>이 범위에 완료 전 할 일이 없습니다.</p>) : null}
-          <Button variant="outline" size="sm" disabled={busy} onClick={openTasks}>할 일 검색</Button>
+          <Button variant="outline" size="sm" disabled={locked} onClick={openTasks}>할 일 검색</Button>
         </section>
       </aside>
       <div className={styles.main}>
         <div className={styles.agendaBar}>{agenda ? <>
           <div className={styles.agendaMain}><strong title={agenda.title}>안건: {agenda.title}</strong><span className={styles.sourceChip}>{agenda.source === 'task' ? '할 일에서 가져옴 · 복사본 · ' + importedAt : '직접 입력'}</span><span className={styles.mobileCount}>참석 {1 + reviewers.length}명</span></div>
           <div className={styles.agendaTools}><span className={styles.attendees}>참석: {personName(ownerId)}{reviewers.map(id => ' · ' + personName(id)).join('')}</span>
-            <span className={styles.rosterShortcut}><Button variant="ghost" size="sm" disabled={busy} onClick={() => setRosterOpen(true)}>참석자 바꾸기</Button></span>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setMoreOpen(true)}>더보기</Button></div></>
-          : <><p>안건을 올리세요 · 할 일을 가져오거나 직접 적어 주세요</p><span className={styles.agendaTools}><Button variant="ghost" size="sm" onClick={() => setMoreOpen(true)}>더보기</Button></span></>}</div>
+            <span className={styles.rosterShortcut}><Button variant="ghost" size="sm" disabled={locked} onClick={() => setRosterOpen(true)}>참석자 바꾸기</Button></span>
+            {breakdownTools}
+            <Button variant="ghost" size="sm" disabled={locked} onClick={() => setMoreOpen(true)}>더보기</Button></div></>
+          : <><p>안건을 올리세요 · 할 일을 가져오거나 직접 적어 주세요</p><span className={styles.agendaTools}>{breakdownTools}<Button variant="ghost" size="sm" onClick={() => setMoreOpen(true)}>더보기</Button></span></>}</div>
         <div className={styles.thread} ref={threadRef} tabIndex={-1} aria-live="polite" aria-label="Office 요청 결과">
           {session.turns.length === 0 && !busy ? <EmptyState icon="chat" title="회의할 안건을 올려 주세요" description="할 일을 안건으로 가져오거나 아래에 직접 적어 주세요." /> : null}
           {busy ? <div ref={pendingRef}><PendingTurn pending={session.pending} /></div>
@@ -402,17 +474,17 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
               onRevise={revise} onCopy={copy} onSkill={setSkillTurn} onOpenMentor={setMentorDrawerId} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}
               skillAvailable={Boolean(officeSkillRequestDraft({ agenda: session.agenda, officeScope: scope, result: shownTurn.result }))} copyStatus={copyStatus} /> : null}
           {otherTurns.length ? <div className={styles.otherRounds}><SectionTitle>{busy ? '앞 판' : '다른 판'}</SectionTitle>
-            {otherTurns.map(turn => <button type="button" key={turn.id} className={'hub-row ' + styles.otherRound} disabled={busy} onClick={() => showTurn(turn.id)}>
+            {otherTurns.map(turn => <button type="button" key={turn.id} className={'hub-row ' + styles.otherRound} disabled={locked} onClick={() => showTurn(turn.id)}>
               <span className="mono">{session.turns.indexOf(turn) + 1}판</span><span>{turn.result.answer.split('\n').find(line => line.trim()) || '결론 없음'}</span></button>)}</div> : null}
         </div>
         <form onSubmit={submit} className={styles.composer} aria-busy={busy}>
-          <div className={styles.composerTop}><Button variant="outline" size="sm" disabled={busy} onClick={openTasks}>안건 가져오기</Button>
-            {!agenda ? <span className={styles.agendaTools + ' ' + styles.rosterShortcut}><Button variant="ghost" size="sm" disabled={busy} onClick={() => setRosterOpen(true)}>참석: {personName(ownerId)}{reviewers.length ? ' +' + reviewers.length : ''}</Button></span> : null}
+          <div className={styles.composerTop}><Button variant="outline" size="sm" disabled={locked} onClick={openTasks}>안건 가져오기</Button>
+            {!agenda ? <span className={styles.agendaTools + ' ' + styles.rosterShortcut}><Button variant="ghost" size="sm" disabled={locked} onClick={() => setRosterOpen(true)}>참석: {personName(ownerId)}{reviewers.length ? ' +' + reviewers.length : ''}</Button></span> : null}
             {session.turns.length > 0 ? <div className={styles.followUp}><SegmentedControl label="이어서 묻기 대상" options={[{ key: 'chat', label: '주관에게' }, { key: 'council', label: '다시 회의' }]} value={followUpMode} onChange={setFollowUpMode} />
               {followUpCouncil ? <span className={styles.note}>역할 {participants.length}명 · 발언 {officeDiscussionRounds(session.deliberation)}단계</span> : null}</div> : null}
           </div>
           <TextAreaField ref={inputRef} label={session.turns.length ? '이어서 묻기' : '안건 또는 질문'} value={session.draft} onChange={event => { invalidateAssignment(); update({ draft: event.target.value }); }}
-            maxLength={6000} rows={2} autoResize disabled={busy} className={styles.input}
+            maxLength={6000} rows={2} autoResize disabled={locked} className={styles.input}
             error={tooLong ? '안건과 최소 업무 지침을 포함해 6,000자 안으로 줄여 주세요.' : null}
             onPaste={handlePaste} onDrop={handleDrop} onDragOver={event => { if (event.dataTransfer?.types?.includes('text/plain') || event.dataTransfer?.types?.includes('Files')) event.preventDefault(); }}
             onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
@@ -428,7 +500,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
         <section className={styles.railSection}><SectionTitle>참석자</SectionTitle>
           <div className={styles.seats}>{[ownerId, ...reviewers].map(id => <div key={id} className={styles.seat + (id === ownerId ? ' ' + styles.ownerSeat : '')}>
             <OfficeAvatar agentId={id} /><span><strong>{personName(id)}{id === ownerId ? ' · 주관' : ''}</strong><small>{OFFICE_ROSTER.find(person => person.id === id)?.pitch}</small></span></div>)}</div>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => setRosterOpen(true)}>{reviewers.length < 2 && !['draft', 'review'].includes(mode) ? '+ 관점 더하기' : '참석자 바꾸기'}</Button>
+          <Button variant="ghost" size="sm" disabled={locked} onClick={() => setRosterOpen(true)}>{reviewers.length < 2 && !['draft', 'review'].includes(mode) ? '+ 관점 더하기' : '참석자 바꾸기'}</Button>
         </section>
         <section className={styles.railSection}><SectionTitle>{busy ? '진행' : '진행 방식'}</SectionTitle>
           {busy ? <><ol className={styles.orderList}>{[...speakingOrder(session.pending.request), '종합'].map((step, index) => <li key={index}>{step}</li>)}</ol><p className={styles.note}>순서 예고 · 실제 진행률 아님</p></>
@@ -438,7 +510,8 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
               <div><dt>프로젝트 참고</dt><dd>{includeProjects ? '켬' : '끔'}</dd></div>
               <div><dt>오늘은 최소한만</dt><dd>{minimumOnly ? '켬' : '끔'}</dd></div>
             </dl>}
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => setMoreOpen(true)}>회의 설정</Button>
+          <Button variant="outline" size="sm" disabled={locked} onClick={() => setMoreOpen(true)}>회의 설정</Button>
+          {breakdownProgress ? <div className={styles.presets}>{breakdownTools}</div> : null}
         </section>
       </aside>
     </div>
@@ -461,6 +534,7 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
       </div>
     </Drawer> : null}
     {skillTurn ? <OfficeSkillRequestDrawer key={skillTurn.id} agenda={session.agenda} officeScope={scope} result={skillTurn.result} onClose={() => setSkillTurn(null)} /> : null}
+    {breakdownOpen ? <OfficeBreakdownDrawer scope={scope} entry={breakdown} states={packetStates} busy={locked} autoRunning={autoRunning} autoStopText={officeAutoStopText(breakdown?.auto)} onClose={() => setBreakdownOpen(false)} onRetry={requestBreakdown} onOpen={openPacket} onMark={markPacket} onStartAuto={startAuto} onStopAuto={stopAuto} /> : null}
     {mentorDrawerId ? <OfficeMentorDrawer sessionId={mentorDrawerId} onClose={() => setMentorDrawerId(null)} /> : null}
     {rosterOpen ? <Drawer title="참석자 바꾸기" subtitle="주관 한 명과 관점 최대 두 명을 고르세요." onClose={() => setRosterOpen(false)} width="min(480px, 94vw)" footer={<Button variant="primary" onClick={() => setRosterOpen(false)}>완료</Button>}>
       <div className={styles.roster}><strong>주관</strong>{OFFICE_ROSTER.map(person => <button type="button" key={person.id} className={'hub-row ' + styles.member} aria-label={`${person.name} (${person.role}) 주관 선택`} aria-pressed={person.id === ownerId} onClick={() => { invalidateAssignment(); update({ ownerId: person.id, reviewers: reviewers.filter(id => id !== person.id), presetId: null }); }}>
@@ -472,15 +546,16 @@ export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
       </div></Drawer> : null}
     {moreOpen ? <Drawer title="회의 설정" subtitle="필요할 때만 응답 방식과 참고 범위를 조정하세요." onClose={() => setMoreOpen(false)} width="min(480px, 94vw)">
       <div className={styles.more}><strong>응답 방식</strong>
-        {assignmentMessage ? <Button variant="outline" size="sm" disabled={busy} onClick={requestAssignment}>담당 추천</Button> : null}
+        {assignmentMessage ? <span className={styles.presets}><Button variant="outline" size="sm" disabled={locked} onClick={requestAssignment}>담당 추천</Button>
+          <Button variant="outline" size="sm" disabled={busy || breakdown?.status === 'loading'} onClick={breakdown && breakdown.status !== 'error' && breakdown.status !== 'preview' ? () => { setMoreOpen(false); setBreakdownOpen(true); } : requestBreakdown}>{breakdown?.status === 'applied' || breakdown?.status === 'recommended' ? '업무 조각 보기' : '업무 나누기'}</Button></span> : null}
         <Button variant="outline" size="sm" onClick={() => { setMoreOpen(false); setRosterOpen(true); }}>참석자 바꾸기</Button>
         {agenda ? <Button variant="ghost" size="sm" onClick={() => { setMoreOpen(false); newAgenda(); }}>새 안건</Button> : null}
         {reviewers.length ? <p className={styles.note}>관점이 있어 회의로 고정됩니다. <Button variant="ghost" size="sm" onClick={() => { invalidateAssignment(); update({ reviewers: [], mode: 'chat', presetId: null }); }}>혼자 쓰기로 전환</Button></p>
           : <SegmentedControl label="Office 응답 방식" options={MODES.slice(0, 3)} value={mode} onChange={next => { invalidateAssignment(); update({ mode: next, reviewers: [], presetId: null }); }} />}
         <strong>추천 조합</strong><div className={styles.presets}>{COMPARISON_PRESETS.map(item => <Button key={item.id} variant="outline" size="sm" active={mode === 'council' && session.presetId === item.id} aria-pressed={mode === 'council' && session.presetId === item.id} onClick={() => selectPreset(item)}>{item.label}</Button>)}</div>
-        {mode === 'council' ? <OfficeDeliberationControls value={session.deliberation} participants={participants} disabled={busy} onChange={deliberation => update({ deliberation })} /> : null}
-        <CheckboxRow text="현재 범위의 최근 프로젝트 참고" checked={includeProjects} disabled={busy} onChange={() => update({ includeProjects: !includeProjects })} />
-        <CheckboxRow text="오늘은 최소한만" checked={minimumOnly} disabled={busy} onChange={() => update({ minimumOnly: !minimumOnly })} />
+        {mode === 'council' ? <OfficeDeliberationControls value={session.deliberation} participants={participants} disabled={locked} onChange={deliberation => update({ deliberation })} /> : null}
+        <CheckboxRow text="현재 범위의 최근 프로젝트 참고" checked={includeProjects} disabled={locked} onChange={() => update({ includeProjects: !includeProjects })} />
+        <CheckboxRow text="오늘은 최소한만" checked={minimumOnly} disabled={locked} onChange={() => update({ minimumOnly: !minimumOnly })} />
         {includeProjects ? <p className={styles.note}>현재 범위의 최근 프로젝트 최대 8개를 참고합니다. 고객·일정 기록은 이 자유 요청에 자동 연결되지 않습니다.</p> : null}
         {minimumOnly ? <p className={styles.note}>이미 정한 약속을 지키는 데 필요한 내용만 요청합니다. 추가 행동이 필요 없으면 남기지 않습니다.</p> : null}
       </div></Drawer> : null}

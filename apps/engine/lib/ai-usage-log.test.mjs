@@ -90,6 +90,7 @@ test('every Engine Gemini entry point tags its calls with a surface key', async 
     '../app/api/content/transform/route.ts': 'content-transform',
     './office/service.ts': 'office-chat',
     './office/routing.ts': 'office-routing',
+    './office/breakdown.ts': 'office-breakdown',
     './office/workflow-service.ts': 'office-workflow',
     './office/deliberation.ts': 'office-council',
     './multimodal-intake.ts': 'multimodal-intake',

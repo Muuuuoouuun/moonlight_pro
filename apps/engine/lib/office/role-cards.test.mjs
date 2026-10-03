@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { OFFICE_IDS, parseOfficeRequest } from '@com-moon/agent-contracts/office';
 import { OFFICE_PERSONAS, OFFICE_PERSONA_VERSION } from './personas.ts';
 import { OFFICE_PLAYBOOKS } from './playbooks.ts';
-import { OFFICE_ROLE_CARDS, OFFICE_ROLE_CARD_VERSION, getOfficeRoleCard, renderOfficeRolePersona, renderOfficeRolePlaybook } from './role-cards.ts';
+import { OFFICE_ROLE_CARDS, OFFICE_ROLE_CARD_VERSION, getOfficeRoleCard, renderOfficeRoleBrief, renderOfficeRolePersona, renderOfficeRolePlaybook } from './role-cards.ts';
 import { buildOfficePrompt } from './prompt.ts';
 import { buildOfficeReview } from './review.ts';
 
@@ -87,4 +87,19 @@ test('evidence rules removed in v24 stay in the runtime playbooks', () => {
   assert.match(OFFICE_PLAYBOOKS.espeon, /근거가 없는 장기 수익·소요시간을 숫자로 채우지 않는다/);
   assert.match(OFFICE_PLAYBOOKS.espeon, /인지 에너지 1\/3은 목표이지 현재 달성률/);
   assert.match(OFFICE_PLAYBOOKS.eevee, /결과물 주관 하나를 보존한다/);
+});
+
+test('council synthesis carries the full card only for the lead and a brief for other participants', async () => {
+  const { buildOfficeReview } = await import('./review.ts');
+  const request = parseOfficeRequest({ ownerId: 'glaceon', mode: 'council', scope: 'all', message: '제품 2~3개 고르는 기준', participants: ['glaceon', 'leafeon', 'jolteon'], deliberation: { profile: 'balanced' } });
+  const draft = { answer: '초안', nextAction: '추가 행동 없음.', recommendation: '추천', evidence: [], dissent: [] };
+  const system = buildOfficeReview(request, { source: 'provided', scope: 'all', projects: [], note: '메모' }, draft).systemInstruction;
+  assert.ok(system.includes(OFFICE_PLAYBOOKS.glaceon), 'lead keeps the full playbook');
+  for (const id of ['leafeon', 'jolteon']) {
+    assert.ok(!system.includes(OFFICE_PLAYBOOKS[id]), `${id} playbook is not repeated`);
+    assert.ok(system.includes(renderOfficeRoleBrief(id)), `${id} brief is present`);
+    assert.ok(renderOfficeRoleBrief(id).includes(OFFICE_ROLE_CARDS[id].deliberation.updateWhen));
+  }
+  const single = buildOfficeReview(parseOfficeRequest({ ownerId: 'leafeon', mode: 'review', scope: 'all', message: '비용 비교' }), { source: 'provided', scope: 'all', projects: [], note: '메모' }, { answer: '초안', nextAction: '추가 행동 없음.' }).systemInstruction;
+  assert.ok(single.includes(OFFICE_PLAYBOOKS.leafeon));
 });

@@ -5,6 +5,7 @@ import { buildOfficePrompt } from './prompt.ts';
 import { buildOfficeReview } from './review.ts';
 import { generateOfficeResponse } from './service.ts';
 import { OFFICE_PLAYBOOKS } from './playbooks.ts';
+import { renderOfficeRoleBrief } from './role-cards.ts';
 import { OFFICE_EVALUATION_CASES } from './evaluation-cases.mjs';
 import { evaluationInput, runOfficeEvaluation } from '../../../../scripts/eval-office.mjs';
 
@@ -30,7 +31,9 @@ test('only selected expertise enters bounded prompts and user content cannot bec
     const views = request.mode === 'council' ? request.participants : [request.ownerId];
     for (const id of OFFICE_IDS) {
       assert.equal(systemInstruction.includes(OFFICE_PLAYBOOKS[id]), views.includes(id));
-      assert.equal(review.systemInstruction.includes(OFFICE_PLAYBOOKS[id]), views.includes(id));
+      // 2026-10-01 운영자 결정: 종합 검수에는 주관만 전문, 다른 참석자는 관점 요약.
+      assert.equal(review.systemInstruction.includes(OFFICE_PLAYBOOKS[id]), id === request.ownerId);
+      assert.equal(review.systemInstruction.includes(renderOfficeRoleBrief(id)), views.includes(id) && id !== request.ownerId);
     }
     assert.ok(systemInstruction.length < 24000, `${scenario.id}: unbounded prompt`);
     assert.ok(review.systemInstruction.length < 24000, `${scenario.id}: unbounded review`);

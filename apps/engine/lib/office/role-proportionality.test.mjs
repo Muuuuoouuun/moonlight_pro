@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { OFFICE_IDS, parseOfficeRequest } from '@com-moon/agent-contracts/office';
 import { parseOfficeWorkflowRequest, parseOfficeWorkflowContext } from '@com-moon/agent-contracts/office-workflow';
-import { OFFICE_ROLE_CARDS, OFFICE_ROLE_CARD_VERSION } from './role-cards.ts';
+import { OFFICE_ROLE_CARDS, OFFICE_ROLE_CARD_VERSION, renderOfficeRoleBrief } from './role-cards.ts';
 import { OFFICE_PERSONAS } from './personas.ts';
 import { OFFICE_PLAYBOOKS } from './playbooks.ts';
 import { buildOfficePrompt } from './prompt.ts';
@@ -46,8 +46,8 @@ function assertAssembly(input, ids) {
   assert.equal(input.tools, undefined);
 }
 
-test('v26 retires contradictory role defaults without changing the nine role identities', () => {
-  assert.equal(OFFICE_WORKFLOW_POLICY_VERSION, `2026-09-23.workflow-v3/${OFFICE_ROLE_CARD_VERSION}`);
+test('integrated cards retire contradictory role defaults without changing the nine role identities', () => {
+  assert.equal(OFFICE_WORKFLOW_POLICY_VERSION, `2026-10-01.workflow-v7/${OFFICE_ROLE_CARD_VERSION}`);
   assert.deepEqual(Object.keys(OFFICE_ROLE_CARDS), OFFICE_IDS);
   // Configuration regressions, not evidence of model response quality. These are
   // superseded imperative/example defaults, not prohibited words for responses.
@@ -63,7 +63,7 @@ test('v26 retires contradictory role defaults without changing the nine role ide
     sylveon: /화면이 바로 뜬다|두 편 다 완성해 뒀어요/,
   };
   for (const id of OFFICE_IDS) assert.doesNotMatch(JSON.stringify(OFFICE_ROLE_CARDS[id]), retiredDefaults[id], id);
-  assert.equal(OFFICE_ROLE_CARD_VERSION, '2026-09-30.v26-role-proportionality');
+  assert.equal(OFFICE_ROLE_CARD_VERSION, '2026-10-03.v27-integrated-role-guards');
 });
 
 test('all nine role artifacts reach chat and workflow generation/review with source and authority boundaries intact', () => {
@@ -111,7 +111,10 @@ test('council invokes every role with its own artifact and synthesizes only sele
       assert.ok(discussion.turns.every(turn => !turn.changed));
     }
     assertAssembly(buildOfficePrompt(request, context), participants);
-    assertAssembly(buildOfficeWorkflowPrompt(workflow, sourceContext), participants);
+    for (const input of [buildOfficeWorkflowPrompt(workflow, sourceContext), buildOfficeWorkflowReview(workflow, sourceContext, { summary: '종결', artifact: { kind: 'text', body: '종결' }, evidence: [], uncertainties: [], dissent: [], nextStep: null })]) {
+      assertAssembly(input, [workflow.ownerId]);
+      for (const id of participants.filter(id => id !== workflow.ownerId)) assert.ok(input.systemInstruction.includes(renderOfficeRoleBrief(id)), `${id} synthesis brief`);
+    }
   }
   assert.deepEqual([...invoked].sort(), [...OFFICE_IDS].sort());
 });

@@ -21,7 +21,7 @@
 - 최초 이관 뒤 Moonlight가 개인 업무 정본이고 ClassIn은 회사 공식 객체·공식 활동 요약의 정본이다. 개인 상세 메모를 ClassIn으로 복제하지 않는다.
 - 제작 기획과 Phase 1 작업 전 `docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`를 읽는다. 전제 1~7과 접근안 B는 승인됐고, Phase 0·1A는 완료, Phase 1B·1C는 부분 작동 상태다. 현재 상태표는 `docs/README.md` §3이 정본이다.
 - 이 문서는 전체 제품 구조의 기준선일 뿐, 개별 주제의 최신 확정 스펙을 대신하지 않는다. 사이드바·내비게이션·PMS 분류·브랜드 탭처럼 자주 갱신되는 주제는 작업 전에 `docs/README.md` §4 "제품·운영 정본"에서 해당 주제의 가장 최근 스펙(파일명 날짜 기준)을 먼저 확인한다. 스펙 상단의 "관계" 헤더가 이전 스펙의 어느 절을 대체했는지 명시한다.
-- 에이전트(Office·Guru·브랜드 Council·Legend·MCP·로컬 스킬) 작업 전 `docs/superpowers/specs/2026-09-24-agent-layer-direction.md`를 읽는다(2026-09-24 운영자 확정 5건). Office는 도구 없이 판단·초안·검토만 하고, 스킬 실행은 운영자 Mac의 Claude Code·Codex가 맡으며 Moonlight는 요청서와 receipt만 기록한다. 어느 계층도 자동으로 일을 만들거나 밖으로 보내지 않는다. Office 역할 카드(v25)의 말투 튜닝은 독립 재채점 전까지 동결이다.
+- 에이전트(Office·Guru·브랜드 Council·Legend·MCP·로컬 스킬) 작업 전 `docs/superpowers/specs/2026-09-24-agent-layer-direction.md`를 읽는다(2026-09-24 운영자 확정 5건). Office는 도구 없이 판단·초안·검토만 하고, 스킬 실행은 운영자 Mac의 Claude Code·Codex가 맡으며 Moonlight는 요청서와 receipt만 기록한다. 어느 계층도 자동으로 일을 만들거나 밖으로 보내지 않는다. Office 역할 카드(v26 — 2026-10-02 운영자 지시로 예시 대사의 지어낸 상품명·고객·조항·시간 수치만 자리표시로 바꿈)의 말투 튜닝은 독립 재채점 전까지 동결이다. 어미는 역할 카드의 '말투'를 따른다(2026-10-01 운영자 결정).
 
 ## 디자인 시스템
 @DESIGN.md

@@ -29,6 +29,10 @@
     "./office-studio": {
       "types": "./office-studio.d.ts",
       "default": "./office-studio.js"
+    },
+    "./office-harness": {
+      "types": "./office-harness.d.ts",
+      "default": "./office-harness.js"
     }
   }
 }
