@@ -47,7 +47,7 @@ function assertAssembly(input, ids) {
 }
 
 test('integrated cards retire contradictory role defaults without changing the nine role identities', () => {
-  assert.equal(OFFICE_WORKFLOW_POLICY_VERSION, `2026-10-01.workflow-v7/${OFFICE_ROLE_CARD_VERSION}`);
+  assert.equal(OFFICE_WORKFLOW_POLICY_VERSION, `2026-10-02.workflow-v8/${OFFICE_ROLE_CARD_VERSION}`);
   assert.deepEqual(Object.keys(OFFICE_ROLE_CARDS), OFFICE_IDS);
   // Configuration regressions, not evidence of model response quality. These are
   // superseded imperative/example defaults, not prohibited words for responses.

@@ -1,5 +1,7 @@
 // Browser-safe workflow contract. Keep the existing Office v2 chat contract independent.
 import { OFFICE_IDS, OFFICE_MODES, OfficeInputError, parseOfficeDeliberation, parseOfficeDiscussion, parseOfficeFailure } from './office.js';
+import { OFFICE_CUSTOMER_PREPARATION_VERSION, parseOfficeCustomerPreparation, parseOfficeCustomerExecution } from './office-customer-preparation.js';
+export { OFFICE_CUSTOMER_PREPARATION_VERSION, parseOfficeCustomerPreparation, officeCustomerApprovalPayload, createOfficeCustomerApproval, parseOfficeCustomerApproval, parseOfficeCustomerExecution } from './office-customer-preparation.js';
 
 export const OFFICE_WORKFLOW_VERSION = '2026-09-21.v1';
 export const OFFICE_WORKFLOW_INTENTS = Object.freeze(['weekly_report', 'customer_reply', 'freeform']);
@@ -56,7 +58,7 @@ export function parseOfficeWorkflowOrigin(value, intent) {
 }
 
 export function parseOfficeWorkflowRequest(value) {
-  keys(value, ['requestId', 'intent', 'ownerId', 'mode', 'participants', 'scope', 'originRef', 'expectedContextHash', 'message', 'boundedHistory', 'parentRequestId', 'deliberation']);
+  keys(value, ['requestId', 'intent', 'ownerId', 'mode', 'participants', 'scope', 'originRef', 'expectedContextHash', 'message', 'boundedHistory', 'parentRequestId', 'deliberation', 'customerPreparationVersion']);
   check(OFFICE_WORKFLOW_INTENTS.includes(value.intent), '지원하지 않는 workflow입니다.');
   const ownerId = value.ownerId ?? ({ weekly_report: 'vaporeon', customer_reply: 'flareon', freeform: 'eevee' }[value.intent]);
   const mode = value.mode ?? (value.intent === 'freeform' ? 'chat' : 'draft');
@@ -75,6 +77,10 @@ export function parseOfficeWorkflowRequest(value) {
   check(JSON.stringify(boundedHistory).length <= OFFICE_WORKFLOW_LIMITS.historyChars, '대화 문맥이 너무 깁니다.');
   const requestId = uuid(value.requestId);
   const result = { requestId, intent: value.intent, ownerId, mode, participants: [...participants], scope: value.scope, originRef: parseOfficeWorkflowOrigin(value.originRef, value.intent), expectedContextHash: hash(value.expectedContextHash), message: text(value.message, OFFICE_WORKFLOW_LIMITS.message), boundedHistory };
+  if (value.customerPreparationVersion !== undefined) {
+    check(value.customerPreparationVersion === OFFICE_CUSTOMER_PREPARATION_VERSION && value.intent === 'customer_reply' && mode === 'draft', '고객 대응 준비는 고객 한 건과 담당 한 명으로 요청해 주세요.');
+    result.customerPreparationVersion = OFFICE_CUSTOMER_PREPARATION_VERSION;
+  }
   check(value.deliberation === undefined || mode === 'council', '토론 조절은 관점 비교에서 사용해 주세요.');
   if (value.deliberation !== undefined) result.deliberation = parseOfficeDeliberation(value.deliberation, participants);
   if (value.parentRequestId !== undefined && value.parentRequestId !== null) {
@@ -143,7 +149,7 @@ function nextStep(value, context, notes) {
 }
 
 export function parseOfficeWorkflowAnswer(value, request, context) {
-  keys(value, ['summary', 'artifact', 'evidence', 'uncertainties', 'dissent', 'council', 'nextStep', 'sourceCheck']);
+  keys(value, ['summary', 'artifact', 'evidence', 'uncertainties', 'dissent', 'council', 'nextStep', 'sourceCheck', 'customerPreparation']);
   check(byteLength(value) <= OFFICE_WORKFLOW_LIMITS.resultBytes, '결과가 너무 큽니다. 요청 범위를 줄여 주세요.');
   keys(value.artifact, ['kind', 'body']);
   check(['text', 'markdown', 'code'].includes(value.artifact.kind), '결과물 종류가 올바르지 않습니다.');
@@ -164,6 +170,10 @@ export function parseOfficeWorkflowAnswer(value, request, context) {
   const uncertainties = [...strings(value.uncertainties).slice(0, Math.max(0, 12 - notes.length)), ...notes];
   const sourceCheck = value.evidence.length > 0 && evidence.length === 0 ? 'untraced' : value.sourceCheck;
   const result = { summary: text(value.summary, 1800), artifact: { kind: value.artifact.kind, body: text(value.artifact.body, 24000) }, evidence, uncertainties, dissent: strings(value.dissent, 8), nextStep: step, ...(sourceCheck ? { sourceCheck } : {}) };
+  if (request.customerPreparationVersion === OFFICE_CUSTOMER_PREPARATION_VERSION) {
+    check(value.artifact.kind !== 'code', '고객 대응 준비에는 실행 코드를 넣을 수 없습니다.');
+    result.customerPreparation = parseOfficeCustomerPreparation(value.customerPreparation);
+  } else check(value.customerPreparation === undefined, '요청하지 않은 고객 대응 계약입니다.');
   if (request.mode === 'council') {
     keys(value.council, ['perspectives', 'recommendation']);
     const rows = value.council.perspectives;
@@ -180,13 +190,17 @@ export function parseOfficeWorkflowAnswer(value, request, context) {
 
 // Only Engine output enters here. Persistence, application and permissions belong to Hub.
 export function parseOfficeWorkflowResult(value, request, context) {
-  const metadata = ['version', 'requestId', 'resultRevision', 'status', 'ownerId', 'mode', 'participants', 'scope', 'context', 'generation', 'discussion'];
-  const answerKeys = ['summary', 'artifact', 'evidence', 'uncertainties', 'dissent', 'council', 'nextStep', 'sourceCheck'];
+  const metadata = ['version', 'requestId', 'resultRevision', 'status', 'ownerId', 'mode', 'participants', 'scope', 'context', 'generation', 'discussion', 'execution'];
+  const answerKeys = ['summary', 'artifact', 'evidence', 'uncertainties', 'dissent', 'council', 'nextStep', 'sourceCheck', 'customerPreparation'];
   keys(value, [...metadata, ...answerKeys, 'error', 'failure']);
   check(byteLength(value) <= OFFICE_WORKFLOW_LIMITS.resultBytes, '결과가 너무 큽니다. 요청 범위를 줄여 주세요.');
   check(value.version === OFFICE_WORKFLOW_VERSION && value.requestId === request.requestId && value.ownerId === request.ownerId && value.mode === request.mode && value.scope === request.scope && stable(value.participants) === stable(request.participants), '생성 결과의 요청 정보가 일치하지 않습니다.');
   check(['generated', 'preview', 'error'].includes(value.status), '생성 상태가 올바르지 않습니다.');
   const base = { version: value.version, requestId: value.requestId, ownerId: value.ownerId, mode: value.mode, participants: [...value.participants], scope: value.scope, status: value.status };
+  if (value.execution !== undefined) {
+    check(request.customerPreparationVersion === OFFICE_CUSTOMER_PREPARATION_VERSION, '요청하지 않은 고객 대응 호출 기록입니다.');
+    base.execution = parseOfficeCustomerExecution(value.execution);
+  }
   if (value.status !== 'generated') {
     check(answerKeys.every(key => value[key] === undefined) && value.generation === undefined && value.resultRevision === undefined && value.context === undefined && value.discussion === undefined, '실패한 결과에 생성 본문을 넣을 수 없습니다.');
     const failure = parseOfficeFailure(value.failure);

@@ -1,6 +1,7 @@
 import { OFFICE_ROSTER, type OfficeRequest, type OfficeContext, type OfficeAnswer } from '@com-moon/agent-contracts/office';
 import { buildOfficeOperatingPolicy } from './operating-policy.ts';
 import { OFFICE_PLAYBOOKS, OFFICE_MODE_GUIDANCE } from './playbooks.ts';
+import { renderOfficeRoleBehaviorGuidance } from './role-depth-prompt.ts';
 import { OFFICE_PERSONAS } from './personas.ts';
 import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS } from './source-review.ts';
 import { renderOfficeRoleBrief } from './role-cards.ts';
@@ -42,6 +43,7 @@ nextAction은 answer에서 추천한 첫 동작과 일치시킨다. 별도의 �
 초안의 관측과 원인 가설을 분리한다. 로그인 HTML이 왔다는 관측만으로 인증 만료 원인을 확정하지 않는다. 성공 계약 미제공 상황에서 응답의 id 존재만 보고 SUCCESS로 처리하는 코드도 임의 계약이다. 그 분기는 제거하고 확인된 계약을 받아 판정하는 자리로 남긴다. 재시도 키와 원문은 확인된 완료 결과 전까지 보존한다. 버튼 잠금은 서버 중복 방지의 근거가 아니다.
 고객의 요청·문의·관심은 자료 존재·계정 발급·시범 접속·온보딩·맞춤 지원의 증거가 아니다. 제공 범위가 미정이면 고객 문구에서 제공·준비 중·반영 약속을 제거하고 확인이 필요한 범위로 한정한다. 효과 수치를 지운 자리에 쉬운 적응이나 맞춤 도입 같은 새 효과를 쓰지 않는다. 정정 문장도 사실 근거가 있어야 하며 리스크 없음·무조건 안전을 선언하지 않는다.
 추정 소요시간은 추정으로 유지하며 최소 시간·확정 완료 가능성으로 바꾸지 않는다. 권고를 바꿀 조건은 원래 권고를 실제로 약화시키는 조건이어야 한다. JSON은 한 번만 인코딩한다. 본문 줄바꿈을 보이는 역슬래시+n 문자로 출력하지 않는다.`,
+      ...views.map(renderOfficeRoleBehaviorGuidance),
     ].join('\n\n'),
     prompt: JSON.stringify({ scope: request.scope, mode: request.mode, sourceContext: context, untrustedRecentConversation: request.history, userRequest: request.message, untrustedDraft: draft }),
   };

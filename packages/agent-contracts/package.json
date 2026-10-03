@@ -22,6 +22,14 @@
       "types": "./office-role-catalog.d.ts",
       "default": "./office-role-catalog.js"
     },
+    "./office-commander": {
+      "types": "./office-commander.d.ts",
+      "default": "./office-commander.js"
+    },
+    "./office-role-depth": {
+      "types": "./office-role-depth.d.ts",
+      "default": "./office-role-depth.js"
+    },
     "./office-workflow": {
       "types": "./office-workflow.d.ts",
       "default": "./office-workflow.js"
@@ -33,6 +41,10 @@
     "./office-harness": {
       "types": "./office-harness.d.ts",
       "default": "./office-harness.js"
+    },
+    "./office-connection": {
+      "types": "./office-connection.d.ts",
+      "default": "./office-connection.js"
     }
   }
 }

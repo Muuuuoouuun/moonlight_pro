@@ -4,6 +4,7 @@ import { OFFICE_PERSONAS } from './personas.ts';
 import { OFFICE_PLAYBOOKS, OFFICE_QUALITY_STANDARD } from './playbooks.ts';
 import { buildOfficeOperatingPolicy } from './operating-policy.ts';
 import { OFFICE_SOURCE_REVIEW_INSTRUCTIONS, buildOfficeSourceCatalog, officeSourceReviewPrompt, officeSourceReviewSchema, readSourceReviewedOutput } from './source-review.ts';
+import { renderOfficeRoleBehaviorGuidance } from './role-depth-prompt.ts';
 
 type DiscussionRequest = Pick<OfficeRequest, 'ownerId'|'scope'|'participants'|'message'|'deliberation'> & { history?: OfficeRequest['history']; boundedHistory?: OfficeRequest['history'] };
 
@@ -109,6 +110,7 @@ export async function runOfficeDiscussion(request: DiscussionRequest, context: u
           : '다른 역할의 공개 첫 의견을 읽고 실제 쟁점에 답한다. replyTo에는 실제로 답한 다른 참여자 ID를 1~2개 둔다. 새 사실·논거가 자신의 초기 판단을 바꾸면 changed=true로 인정하고 무엇을 수정했는지 changeReason에 쓴다. 유지해도 반론을 고려한 이유를 쓴다. 직함·비중·동료의 확신만으로 따르거나 억지 합의를 만들지 않는다. 해결된 쟁점과 남은 이견을 구분한다.',
         OFFICE_SOURCE_REVIEW_INSTRUCTIONS,
         '지정 JSON 객체만 반환한다. 기록용 ownerId와 round는 서버가 붙이므로 출력하지 않는다.',
+        renderOfficeRoleBehaviorGuidance(ownerId),
       ].join('\n\n');
       const prompt = JSON.stringify({ phase: kind, roleId: ownerId, scope: request.scope, settings, sourceContext: context, userRequest: request.message,
         untrustedRecentConversation: request.history || request.boundedHistory || [], ...(kind === 'response' ? { untrustedPositions: positions } : {}) });

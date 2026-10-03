@@ -23,6 +23,26 @@ test('meeting-room rail lists open in-scope tasks, recorded blockers first, then
 
 const generated = (request, answer = '요청한 결과입니다.') => ({ status: 'generated', ...request, answer, nextAction: '추가 행동 없음' });
 
+test('a pending and completed turn keeps the scope and brand captured at begin, never later selection', () => {
+  const store = createOfficeSessionStore();
+  const firstBrand = '11111111-1111-4111-8111-111111111111';
+  const secondBrand = '22222222-2222-4222-8222-222222222222';
+  store.update('personal', { draft: '이 브랜드에서 시작한 원문', brandId: firstBrand });
+  const pending = store.begin('personal', 'brand-a');
+  assert.deepEqual(pending.officeBoundary, { scope: 'personal', brandId: firstBrand });
+  assert.ok(Object.isFrozen(pending.officeBoundary));
+  assert.equal(pending.request.brandId, undefined);
+  store.update('personal', { brandId: secondBrand });
+  store.update('classin', { draft: '회사에서 편집한 별도 원문' });
+  store.complete('personal', pending.id, generated(pending.request));
+  assert.deepEqual(store.get('personal').turns[0].officeBoundary, { scope: 'personal', brandId: firstBrand });
+  assert.equal(store.get('personal').brandId, secondBrand);
+  store.update('personal', { draft: '새 브랜드의 요청' });
+  assert.deepEqual(store.begin('personal', 'brand-b').officeBoundary, { scope: 'personal', brandId: secondBrand });
+  store.update('all', { draft: '전체 범위의 원문' });
+  assert.deepEqual(store.begin('all', 'all-turn').officeBoundary, { scope: 'all', brandId: null });
+});
+
 test('one editor preserves original text across owner, mode, participants and preset changes', () => {
   const store = createOfficeSessionStore();
   store.update('personal', { draft: '  사용자가 쓴 원문\n그대로 보존  ' });

@@ -1,4 +1,4 @@
-import {parseOfficeWorkflowOrigin,parseOfficeWorkflowRequest} from '@com-moon/agent-contracts/office-workflow';
+import {parseOfficeWorkflowOrigin,parseOfficeWorkflowRequest,OFFICE_CUSTOMER_PREPARATION_VERSION} from '@com-moon/agent-contracts/office-workflow';
 import {OFFICE_IDS,parseOfficeDeliberation,parseOfficeDiscussion,parseOfficeFailure,officeFailureMessage} from '@com-moon/agent-contracts/office';
 import {officeDeliberationForParticipants} from './office-deliberation-client.js';
 
@@ -30,6 +30,8 @@ export function officeWorkflowNote(receipt) {
   if (receipt?.error==='context-too-large') return '참고 자료가 길어 이 요청으로 처리할 수 없습니다. 필요한 부분을 Office 자유 요청에서 선택해 주세요.';
   if (receipt?.error==='office-result-expired') return '결과 보관 기간이 끝나 저장을 복구할 수 없습니다. 현재 본문을 복사한 뒤 새 요청을 준비해 주세요.';
   if (receipt?.error==='office-result-storage-rejected') return '결과는 생성됐지만 저장이 거절됐습니다. 본문을 복사하거나 연결을 확인한 뒤 저장을 복구해 주세요.';
+  if (receipt?.error==='office-customer-approval-required') return '현재 고객 대응 결과의 원문과 확인 질문을 검토하고 초안을 다시 승인해 주세요.';
+  if (receipt?.error==='office-customer-review-stale') return '마지막으로 검토한 고객 자료가 바뀌었습니다. 자료를 새로 확인하고 초안을 다시 승인해 주세요.';
   return messages[receipt?.status]||'';
 }
 
@@ -57,6 +59,7 @@ export function validWorkflowReceipt(data, {requestId,scope,request}) {
     } catch { return false; }
   }
   if(data.result) {
+    if(request?.customerPreparationVersion === OFFICE_CUSTOMER_PREPARATION_VERSION && (data.result.customerPreparation?.version !== OFFICE_CUSTOMER_PREPARATION_VERSION || data.result.context?.contextHash !== request.expectedContextHash))return false;
     if(request && (data.result.ownerId!==request.ownerId || data.result.mode!==request.mode || JSON.stringify(data.result.participants)!==JSON.stringify(request.participants)))return false;
     if(data.result.discussion!==undefined || request?.deliberation!==undefined) {
       try { parseOfficeDiscussion(data.result.discussion,request||{ownerId:data.result.ownerId,mode:data.result.mode,participants:data.result.participants,deliberation:data.deliberation??data.result.discussion?.settings}); }
@@ -123,7 +126,8 @@ function settingsFromReceipt(receipt) {
   } catch { return {}; }
 }
 
-const initial = () => ({open:false,ownerId:null,mode:'draft',reviewers:null,deliberation:officeDeliberationForParticipants(undefined,[]),draft:'',sentDraft:'',sourceExcerpt:'',sentExcerpt:'',sourceExcerpts:{},context:null,loading:false,requests:[],nextCursor:null,receipt:null,request:null,inspectToken:null,pending:false,note:'',taskFields:null,applyInput:null,applicationUnknown:false,projects:[],copied:false});
+const customerReviewReset = () => ({reviewedSources:false,reviewedQuestions:false,customerApproval:null,customerApprovalKey:null,approvalBusy:false});
+const initial = () => ({open:false,ownerId:null,mode:'draft',reviewers:null,deliberation:officeDeliberationForParticipants(undefined,[]),draft:'',sentDraft:'',sourceExcerpt:'',sentExcerpt:'',sourceExcerpts:{},context:null,loading:false,requests:[],nextCursor:null,receipt:null,request:null,inspectToken:null,pending:false,operation:null,note:'',taskFields:null,applyInput:null,applicationUnknown:false,projects:[],copied:false,openingTask:false,cancelledRequestId:null,rejectedRequestId:null,lastCustomerInputKey:null,...customerReviewReset()});
 export function createOfficeWorkflowSessions() {
   const entries=new Map(), listeners=new Set();
   return {
@@ -136,14 +140,14 @@ export function createOfficeWorkflowSessions() {
         const switched=current.receipt?.requestId!==receipt.requestId;
         const sourceExcerpts=switched&&current.receipt?.requestId?{...current.sourceExcerpts,[current.receipt.requestId]:current.sourceExcerpt}:current.sourceExcerpts;
         return {receipt:mergeOfficeWorkflowReceipt(current.receipt,receipt),note:officeWorkflowNote(receipt),copied:false,
-          ...(switched?{sourceExcerpts,sourceExcerpt:sourceExcerpts[receipt.requestId]||'',taskFields:null,applyInput:null,...settingsFromReceipt(receipt)}:{}),
+          ...(switched?{sourceExcerpts,sourceExcerpt:sourceExcerpts[receipt.requestId]||'',taskFields:null,applyInput:null,cancelledRequestId:null,rejectedRequestId:null,...customerReviewReset(),...settingsFromReceipt(receipt)}:{}),
           ...(['saved','rejected'].includes(receipt.application?.state)?{applicationUnknown:false,applyInput:null,taskFields:null}:{})};
       });
     },
     accept(key,requestId,receipt) {
       if(this.get(key).request?.requestId!==requestId)return false;
       const current=this.get(key);
-      this.update(key,{receipt,pending:false,note:officeWorkflowNote(receipt),...(receipt.status==='generated'&&current.draft===current.sentDraft?{draft:''}:{}),...(receipt.status==='generated'&&current.sourceExcerpt===current.sentExcerpt?{sourceExcerpt:''}:{}),copied:false});return true;
+      this.update(key,{receipt,pending:false,operation:null,note:officeWorkflowNote(receipt),...(receipt.status==='generated'&&current.draft===current.sentDraft?{draft:''}:{}),...(receipt.status==='generated'&&current.sourceExcerpt===current.sentExcerpt?{sourceExcerpt:''}:{}),copied:false,...customerReviewReset()});return true;
     },
   };
 }

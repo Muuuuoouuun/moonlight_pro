@@ -14,4 +14,5 @@
 .truth { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .historyTime { font-size:12px; }
 .changeNotice { display:grid; gap:8px; padding:12px; border:1px solid var(--line); border-radius:var(--r-sm); margin-bottom:12px; }
+.sourceQuote { margin:0; padding:12px; border-left:1px solid var(--line); background:var(--surface-2); min-width:0; }
 @media (max-width: 600px) { .result { padding: 12px; } .actions { align-items: flex-start; } }
