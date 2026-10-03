@@ -59,7 +59,7 @@ enum SelfCheck {
                 return false
             }
         }
-        guard checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkReadingTone(), checkCompanionWindows() else { return false }
+        guard checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkPetOpeningHandoff(), checkReadingTone(), checkCompanionWindows() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,
@@ -294,8 +294,11 @@ enum SelfCheck {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let view = PetClickView(frame: CGRect(x: 0, y: 0, width: 56, height: 56), model: AppModel(defaults: defaults))
+        let host = KeyPanel(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        host.contentView = view
+        defer { host.close() }
         var singles = 0, doubles = 0
-        view.onClick = { singles += 1 }
+        view.onClick = { _ in singles += 1 }
         view.onDoubleClick = { doubles += 1 }
         func click(_ count: Int) {
             let down = NSEvent.mouseEvent(with: .leftMouseDown, location: CGPoint(x: 20, y: 20), modifierFlags: [],
@@ -309,14 +312,73 @@ enum SelfCheck {
             while Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
         }
         click(1)
-        guard singles == 0 else { fputs("Single click hid the pet before the double-click deadline\n", stderr); return false }
+        guard singles == 1 else {
+            fputs("Single click must react on mouse-up, without waiting for the double-click interval\n", stderr)
+            return false
+        }
         click(2)
         settle()
-        guard singles == 0, doubles == 1 else { fputs("Double click also opened a transient panel\n", stderr); return false }
+        guard singles == 1, doubles == 1 else { fputs("Double click must pin once without another quick toggle\n", stderr); return false }
         click(1)
         settle()
-        guard singles == 1, doubles == 1 else { fputs("Single click must still open the quick panel\n", stderr); return false }
-        print("PASS: pet single/double click arbitration, including perched quick memo")
+        guard singles == 2, doubles == 1 else { fputs("Single click must still open the quick panel\n", stderr); return false }
+        let down = NSEvent.mouseEvent(with: .leftMouseDown, location: CGPoint(x: 20, y: 20), modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        let dragged = NSEvent.mouseEvent(with: .leftMouseDragged, location: CGPoint(x: 30, y: 30), modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        let up = NSEvent.mouseEvent(with: .leftMouseUp, location: CGPoint(x: 30, y: 30), modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 0)!
+        view.mouseDown(with: down); view.mouseDragged(with: dragged); view.mouseUp(with: up)
+        guard singles == 2, doubles == 1 else { fputs("Dragging must not activate a pet click\n", stderr); return false }
+        print("PASS: immediate pet single-click, double-click pinning and drag suppression (removed \(Int(NSEvent.doubleClickInterval * 1000))ms wait)")
+        return true
+    }
+
+    @MainActor private static func checkPetOpeningHandoff() -> Bool {
+        let previous = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let suite = "pet-handoff-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.set(false, forKey: "petHub.enabled")
+        let model = AppModel(defaults: defaults)
+        model.mode = .memo
+        let coordinator = WindowCoordinator(model: model, defaults: defaults)
+        let windows = NSApplication.shared.windows.filter { !previous.contains(ObjectIdentifier($0)) }
+        defer {
+            for window in windows { window.orderOut(nil); window.close() }
+            defaults.removePersistentDomain(forName: suite)
+        }
+        coordinator.showPet()
+        guard let pet = windows.first(where: { $0.contentView is PetClickView }),
+              let click = pet.contentView as? PetClickView else { return false }
+        let location = CGPoint(x: 28, y: 28)
+        let pointer = pet.convertPoint(toScreen: location)
+        let time = ProcessInfo.processInfo.systemUptime
+        func event(_ type: NSEvent.EventType, window: NSWindow, location: CGPoint, timestamp: TimeInterval, count: Int) -> NSEvent {
+            NSEvent.mouseEvent(with: type, location: location, modifierFlags: [],
+                timestamp: timestamp, windowNumber: window.windowNumber, context: nil, eventNumber: 0,
+                clickCount: count, pressure: type == .leftMouseDown ? 1 : 0)!
+        }
+        click.mouseDown(with: event(.leftMouseDown, window: pet, location: location, timestamp: time, count: 1))
+        click.mouseUp(with: event(.leftMouseUp, window: pet, location: location, timestamp: time, count: 1))
+        guard model.activeCompanion == .quick,
+              let quick = windows.first(where: { $0.isVisible && $0.frame.height > 200 }) else {
+            fputs("First pet click must open the perched memo immediately\n", stderr); return false
+        }
+        quick.contentView?.layoutSubtreeIfNeeded()
+        func ornament(in view: NSView) -> ScreenDragSurface.DragView? {
+            if let drag = view as? ScreenDragSurface.DragView, drag.clickEvent != nil { return drag }
+            return view.subviews.lazy.compactMap { ornament(in: $0) }.first
+        }
+        guard let root = quick.contentView, let target = ornament(in: root) else {
+            fputs("Perched memo must receive the next physical click\n", stderr); return false
+        }
+        target.clickEvent?(event(.leftMouseUp, window: quick, location: quick.convertPoint(fromScreen: pointer),
+            timestamp: time + min(0.02, NSEvent.doubleClickInterval / 2), count: 2))
+        guard model.activeCompanion == .widget, model.compactMode == .tasks,
+              windows.filter({ $0.isVisible && $0.frame.height > 200 }).count == 1 else {
+            fputs("Second click across pet/memo hosts must pin exactly one widget\n", stderr); return false
+        }
+        print("PASS: immediate memo open and cross-host double-click pinning")
         return true
     }
 

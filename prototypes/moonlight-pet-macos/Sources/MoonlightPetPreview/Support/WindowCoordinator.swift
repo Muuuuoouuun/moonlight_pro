@@ -12,14 +12,13 @@ final class KeyPanel: NSPanel {
 final class PetClickView: NSView {
     private let model: AppModel
     private let interaction = PetInteraction()
-    var onClick: (() -> Void)?
+    var onClick: ((NSEvent) -> Void)?
     var onNotifications: (() -> Void)?
     var onDoubleClick: (() -> Void)?
     var onMove: ((PanelMove) -> Void)?
     var onDragBegan: (() -> Void)?
     var onDragEnded: (() -> Void)?
     private var drag = ScreenDragTracker()
-    private var pendingClick: DispatchWorkItem?
 
     init(frame frameRect: NSRect, model: AppModel) {
         self.model = model
@@ -45,8 +44,6 @@ final class PetClickView: NSView {
     override func mouseExited(with event: NSEvent) { interaction.isHovered = false }
 
     override func rightMouseDown(with event: NSEvent) {
-        pendingClick?.cancel()
-        pendingClick = nil
         let menu = NSMenu(title: "펫 캐릭터")
         let notices = NSMenuItem(title: "알림 보기", action: #selector(openNotifications), keyEquivalent: "")
         notices.target = self
@@ -81,8 +78,6 @@ final class PetClickView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        pendingClick?.cancel()
-        pendingClick = nil
         interactionLog.info("pet mouseDown count=\(event.clickCount)")
         drag.begin(at: window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation)
         interaction.isDragging = false
@@ -99,14 +94,7 @@ final class PetClickView: NSView {
         }
         if !drag.isDragging && bounds.contains(convert(event.locationInWindow, from: nil)) {
             if event.clickCount == 1 {
-                // Opening a perched memo hides this window. Wait for the system's
-                // double-click interval so its first click cannot eat the second.
-                let click = DispatchWorkItem { [weak self] in
-                    self?.pendingClick = nil
-                    self?.onClick?()
-                }
-                pendingClick = click
-                DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: click)
+                onClick?(event)
             } else if event.clickCount == 2 { onDoubleClick?() }
         }
     }
@@ -149,6 +137,7 @@ final class WindowCoordinator: NSObject {
     private var hotKeyHandler: EventHandlerRef?
     private var desiredVisibility: [ObjectIdentifier: Bool] = [:]
     private var transitionRevisions: [ObjectIdentifier: Int] = [:]
+    private var openingPetClick: (time: TimeInterval, point: NSPoint)?
 
     init(model: AppModel, defaults: UserDefaults = .standard) {
         self.model = model
@@ -163,11 +152,19 @@ final class WindowCoordinator: NSObject {
         super.init()
 
         let petClickView = PetClickView(frame: NSRect(origin: .zero, size: petWindow.frame.size), model: model)
-        petClickView.onClick = { [weak self] in self?.toggleBar() }
+        petClickView.onClick = { [weak self] event in
+            guard let self else { return }
+            self.openingPetClick = (event.timestamp, self.petWindow.convertPoint(toScreen: event.locationInWindow))
+            self.toggleBar()
+        }
         petClickView.onNotifications = { [weak self] in self?.openMode(.notifications) }
-        petClickView.onDoubleClick = { [weak self] in self?.showWidget() }
+        petClickView.onDoubleClick = { [weak self] in
+            self?.openingPetClick = nil
+            self?.showWidget()
+        }
         petClickView.onDragBegan = { [weak self] in
             guard let self else { return }
+            self.openingPetClick = nil
             for panel in [self.previewWindow, self.barWindow, self.widgetWindow] where self.isRequestedVisible(panel) {
                 PetGlassDrag.begin(in: panel)
             }
@@ -205,7 +202,7 @@ final class WindowCoordinator: NSObject {
            ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.dismissBar() },
                 move: { [weak self] movement in
                     guard let self else { return }; self.move(self.barWindow, movement)
-                })),
+                }, clickEvent: { [weak self] event in self?.clickQuickPet(with: event) })),
            model: model, protectsText: true, captureSurface: .quick)
         widgetWindow.contentView = GlassPanel.host(CompactWidgetView(
             model: model,
@@ -403,6 +400,23 @@ final class WindowCoordinator: NSObject {
     }
 
     private func dismissBar() { dismiss(barWindow) }
+
+    // A memo replaces the idle pet with its perched hit target on the first
+    // click. Preserve the second click across that host change without holding
+    // the first click for the system's double-click interval.
+    private func clickQuickPet(with event: NSEvent) {
+        let first = openingPetClick
+        openingPetClick = nil
+        let point = barWindow.convertPoint(toScreen: event.locationInWindow)
+        if model.mode == .memo, isRequestedVisible(barWindow), let first,
+           event.timestamp >= first.time,
+           event.timestamp - first.time <= NSEvent.doubleClickInterval,
+           hypot(point.x - first.point.x, point.y - first.point.y) <= 8 {
+            showWidget()
+        } else {
+            dismissBar()
+        }
+    }
 
     func showWidget(mode: QuickMode = .tasks) {
         interactionLog.info("show dedicated widget")
