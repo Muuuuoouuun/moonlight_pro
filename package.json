@@ -40,7 +40,7 @@
     "app:mac:install": "npm --workspace @com-moon/desktop run install:mac --",
     "inventory:project-connections": "node ./scripts/inventory-project-connections.mjs",
     "test": "node --import ./scripts/register-hub-alias.mjs --test --test-concurrency=2 scripts/*.test.mjs apps/hub/lib/*.test.mjs apps/hub/lib/**/*.test.mjs \"apps/hub/app/**/*.test.mjs\" \"apps/hub/components/**/*.test.mjs\" \"apps/engine/**/*.test.mjs\" \"packages/**/*.test.mjs\"",
-    "lint": "turbo run lint",
+    "lint": "node ./scripts/lint-source.mjs",
     "typecheck": "turbo run typecheck",
     "mcp:doctor": "node --env-file-if-exists=apps/hub/.env.local packages/mcp-server/src/doctor.js",
     "mcp:connect": "node packages/mcp-server/src/connect.js",

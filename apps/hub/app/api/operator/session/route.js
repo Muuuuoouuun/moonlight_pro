@@ -14,6 +14,11 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Each scrypt verification needs ~128 MiB. Bound active work per process; do not queue
+// untrusted login attempts or let them allocate one expensive verification each.
+const MAX_CONCURRENT_LOGIN_VERIFICATIONS = 2;
+let loginVerificationsInFlight = 0;
+
 async function readJson(req) {
   const maxBytes = 4096;
   if (Number(req.headers.get("content-length")) > maxBytes) return { error: "too-large" };
@@ -94,7 +99,22 @@ export async function POST(req) {
     return NextResponse.json({ status: "not-configured", error: "operator-login-not-configured" }, { status: 503 });
   }
 
-  if (!await operatorLoginCredentialsMatch(body.username, body.password)) {
+  if (loginVerificationsInFlight >= MAX_CONCURRENT_LOGIN_VERIFICATIONS) {
+    return NextResponse.json(
+      { status: "busy", error: "Login is busy. Please try again shortly." },
+      { status: 429, headers: { "Retry-After": "1" } },
+    );
+  }
+
+  loginVerificationsInFlight += 1;
+  let credentialsMatch;
+  try {
+    credentialsMatch = await operatorLoginCredentialsMatch(body.username, body.password);
+  } finally {
+    loginVerificationsInFlight -= 1;
+  }
+
+  if (!credentialsMatch) {
     return NextResponse.json(
       { status: "unauthorized", error: "invalid-operator-credentials" },
       { status: 401 },

@@ -31,6 +31,10 @@ function formatEyebrowDate(date) {
 
 // 허브 read 봉투 해석과 daily-brief 신호 읽기는 데스크톱 위젯과 공유한다(daily-brief-signals.js).
 
+function LoginRequired() {
+  return <EmptyState title="로그인이 필요합니다" description="세션이 만료되어 기록을 확인하지 못했습니다." action={<Button onClick={() => window.location.assign('/login?next=%2Fdashboard%2Fhome')}>다시 로그인</Button>} />;
+}
+
 function useTodaySchedule(reloadKey) {
   const [state, setState] = React.useState({ status: 'loading', events: [] });
 
@@ -51,7 +55,7 @@ function useTodaySchedule(reloadKey) {
         const status = readEnvelope(res, data);
         setState({
           status,
-          events: status === 'error' ? [] : (Array.isArray(data?.events) ? data.events : [])
+          events: status === 'error' || status === 'unauthorized' ? [] : (Array.isArray(data?.events) ? data.events : [])
             .filter((e) => !e.allDay)
             .sort((a, b) => new Date(a.start) - new Date(b.start)),
         });
@@ -144,6 +148,8 @@ function TodaySchedule({ onNavigate, schedule, onReload }) {
       {status === 'partial' && <div><TruthBadge state="partial" reason="일부 캘린더만 확인했습니다" /><Button onClick={onReload}>다시 불러오기</Button></div>}
       {status === 'loading' ? (
         <Skeleton lines={4} />
+      ) : status === 'unauthorized' ? (
+        <LoginRequired />
       ) : status === 'error' || status === 'preview' ? (
         <div><TruthBadge state={status} reason={status === 'error' ? '일정을 불러오지 못했습니다' : '캘린더 연결 필요'} /><Button onClick={onReload}>다시 불러오기</Button></div>
       ) : !events.length ? (
@@ -229,7 +235,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
             Daily Brief · {formatEyebrowDate(new Date())}
           </div>
           <h2 className="fx-hero">
-            {status === 'loading' ? '불러오는 중' : status === 'error' ? '신호를 확인하지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : queue.length ? `${queue.length}건 남았습니다` : status === 'partial' ? '일부 신호 확인 필요' : '확인할 신호 없음'}
+            {status === 'loading' ? '불러오는 중' : status === 'unauthorized' ? '로그인이 필요합니다' : status === 'error' ? '신호를 확인하지 못했습니다' : status === 'preview' ? '저장소 연결이 필요합니다' : queue.length ? `${queue.length}건 남았습니다` : status === 'partial' ? '일부 신호 확인 필요' : '확인할 신호 없음'}
           </h2>
         </div>
 
@@ -254,6 +260,8 @@ export function Home({ onNavigate, onGuidanceAsk }) {
           <Skeleton lines={5} />
           <Skeleton lines={6} />
         </div>
+      ) : status === 'unauthorized' ? (
+        <LoginRequired />
       ) : status === 'error' ? (
         <div><TruthBadge state="error" reason="첫 화면 신호를 불러오지 못했습니다" /><Button onClick={reload}>다시 불러오기</Button></div>
       ) : status === 'preview' ? (
@@ -294,7 +302,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
 
       <div className="home-morning-stack">
         <GuidanceInlineTip variant="home" onNavigate={onNavigate} />
-        <HomeMorningBrief brief={brief} schedule={schedule} onNavigate={onNavigate} />
+        {status !== 'unauthorized' && schedule.status !== 'unauthorized' ? <HomeMorningBrief brief={brief} schedule={schedule} onNavigate={onNavigate} /> : null}
       </div>
 
       <footer className="fx-eyebrow" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
