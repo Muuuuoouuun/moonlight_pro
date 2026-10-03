@@ -44,6 +44,7 @@ final class HubStore: ObservableObject {
     private var api: (any HubServing)?
     private var connectedOrigin: String?
     private var generation = 0
+    private var authenticationVersion = 0
     private var taskVersion = 0
     private var refreshRequested = false
     private var storageKey: String?
@@ -126,6 +127,7 @@ final class HubStore: ObservableObject {
         if isRefreshing { refreshRequested = true; return }
         let ticket = generation
         let version = taskVersion
+        let authentication = authenticationVersion
         let beganDuringTaskWrite = isSavingTask
         isRefreshing = true
         defer {
@@ -152,7 +154,7 @@ final class HubStore: ObservableObject {
                 taskMessage = page.partial ? "일부 할 일만 불러왔어요. 전체 목록은 Hub에서 확인해 주세요." : nil
             case .failure(let error):
                 taskReady = false; taskMessage = friendly(error)
-                if isUnauthorized(error) { needsLogin = true }
+                if isUnauthorized(error) { requireLogin() }
             }
         }
         let selectedWeek = calendar.dateInterval(of: .weekOfYear, for: selectedDate)!.start
@@ -163,11 +165,13 @@ final class HubStore: ObservableObject {
             calendarMessage = page.partial ? "일부 일정만 불러왔어요. Hub에서 연결 상태를 확인해 주세요." : nil
         case .failure(let error):
             calendarReady = false; calendarMessage = friendly(error)
-            if isUnauthorized(error) { needsLogin = true }
+            if isUnauthorized(error) { requireLogin() }
         }
         }
         if taskReady || calendarReady { lastSyncedAt = Date() }
-        if case .success = taskResponse, case .success = eventResponse { needsLogin = false }
+        // A read begun before a rejected write cannot confirm the current session.
+        if authentication == authenticationVersion,
+           case .success = taskResponse, case .success = eventResponse { needsLogin = false }
     }
 
     /// Returns only the confirmed snapshot, so the caller never clears newer input.
@@ -300,7 +304,11 @@ final class HubStore: ObservableObject {
     }
     private func record(_ error: Error) {
         errorMessage = friendly(error)
-        if isUnauthorized(error) { needsLogin = true }
+        if isUnauthorized(error) { requireLogin() }
+    }
+    private func requireLogin() {
+        authenticationVersion += 1
+        needsLogin = true
     }
     private func isUnauthorized(_ error: Error) -> Bool { (error as? HubTransportError) == .unauthorized }
     private func friendly(_ error: Error) -> String {

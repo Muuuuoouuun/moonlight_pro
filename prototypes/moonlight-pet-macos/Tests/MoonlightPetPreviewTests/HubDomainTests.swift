@@ -8,6 +8,8 @@ private func check(_ value: @autoclosure () -> Bool, _ message: String) throws {
 private actor ControlledHub: HubServing {
     var rejectsLogin = false
     func rejectLogin(_ value: Bool) { rejectsLogin = value }
+    var rejectsWrites = false
+    func rejectWrites(_ value: Bool) { rejectsWrites = value }
     var failsRead = false
     var failToggle = false
     var holdToggle = false
@@ -61,6 +63,7 @@ private actor ControlledHub: HubServing {
     }
     func createTask(_ command: HubTaskCommand) async throws -> HubTask {
         creates.append(command)
+        if rejectsWrites { throw HubTransportError.unauthorized }
         if holdCreate { startedCreate = true; await withCheckedContinuation { releaseCreate = $0 } }
         if conflictCreateOnce { conflictCreateOnce = false; throw HubTransportError.conflict }
         if failCreateOnce { failCreateOnce = false; throw HubTransportError.timeout }
@@ -77,6 +80,7 @@ private actor ControlledHub: HubServing {
     }
     func saveMemo(_ command: HubMemoCommand) async throws -> HubMemoEntry {
         saves.append(command)
+        if rejectsWrites { throw HubTransportError.unauthorized }
         if memoConflict { throw HubDataError.conflict }
         if failMemoOnce { failMemoOnce = false; throw HubTransportError.timeout }
         let saved = HubMemoEntry(id: UUID(uuidString: command.entryId)!, body: command.body, title: command.title, occurredAt: command.occurredAt, revision: command.expectedRevision + 1, noteMeta: command.noteMeta, contexts: command.contexts)
@@ -96,6 +100,7 @@ struct HubDomainTests {
             try modelChecks()
             try await loginChecks()
             try await connectionRecoveryChecks()
+            try await sessionExpiryChecks()
             try await recoveryChecks()
             try await storeChecks()
             try await captureChecks()
@@ -106,6 +111,37 @@ struct HubDomainTests {
             fputs("FAIL: \(error)\n", stderr)
             exit(1)
         }
+    }
+
+    // Regression: ISSUE-001 — an older read must not erase a newer unauthorized write.
+    // Found by /qa on 2026-10-03; see docs/qa/widget-pet-connectivity-2026-10-03.md.
+    @MainActor static func sessionExpiryChecks() async throws {
+        for isMemo in [true, false] {
+            let suite = "pet-session-expiry-check-" + UUID().uuidString
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let api = ControlledHub()
+            let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+            await store.connect(baseURL: "https://expiry.test")
+            await api.configure(hold: true)
+            let refreshing = Task { await store.refresh() }
+            while !(await api.startedRead) { await Task.yield() }
+            await api.rejectWrites(true)
+            if isMemo { _ = await store.saveMemo(body: "세션 만료 후 보존할 메모") }
+            else { _ = await store.createTask(title: "세션 만료 후 보존할 할 일") }
+            try check(store.needsLogin, "An unauthorized write must require login immediately")
+            await api.release()
+            await refreshing.value
+            try check(store.needsLogin && !store.canWriteTasks && !store.canSaveMemo,
+                      "An older successful read must not clear the newer login requirement")
+            try check(isMemo ? store.hasPendingMemo : store.hasPendingTask,
+                      "Session expiry must retain the unconfirmed write for recovery")
+            await api.rejectWrites(false)
+            await store.refresh()
+            try check(!store.needsLogin && store.canSaveMemo && store.canWriteTasks,
+                      "A fresh successful read must allow recovery after authentication")
+        }
+        print("PASS: Session expiry ordering checks (8)")
     }
 
     @MainActor static func loginChecks() async throws {
