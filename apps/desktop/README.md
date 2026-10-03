@@ -8,7 +8,7 @@ Moonlight 허브를 Windows·macOS 앱 창으로 여는 Electron 셸이다(같�
 주소는 코드에 박지 않는다. 앱은 아래 순서로 찾는다.
 
 1. 사용자 설정 `%APPDATA%\Moonlight\settings.json`의 `hubUrl` — 첫 실행 화면이나 메뉴 **허브 주소 바꾸기**에서 저장한 값
-2. 앱 기본값 `apps/desktop/app.config.json`의 `hubUrl` — 저장소에는 빈 값(`""`)으로 둔다. 배포 주소가 정해지면 여기에 넣고 다시 빌드하면 첫 실행 화면 없이 바로 열린다
+2. 앱 기본값 `apps/desktop/app.config.json`의 `hubUrl` — 현재 운영 Hub는 `https://moonlight-pro-hub.vercel.app`이다. 저장한 주소가 없으면 이 배포 주소를 연다
 3. 둘 다 없으면 첫 실행 화면(주소 입력 하나, 저장 버튼)
 
 받는 주소는 `https://…` 전부와 개발용 `http://localhost`·`http://127.0.0.1`뿐이다. 경로는 버리고 origin만 저장하며,
