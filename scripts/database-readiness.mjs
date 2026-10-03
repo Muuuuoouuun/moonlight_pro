@@ -142,6 +142,12 @@ export const DATABASE_FEATURES = [
     functions: ['report_news_roundup_receipt_v1(uuid,date)','report_news_roundup_sources_v1(uuid,date)','report_news_roundup_save_v1(uuid,date,jsonb)'],
     bodyIncludes: [['report_news_roundup_save_v1(uuid,date,jsonb)', "v_key:='news-weekly:'"]],
     constraintIncludes: [['report_documents','report_documents_kind_check',"'research'"]] },
+  { name: 'Office 최근 요청 수신함', migration: '20261003_0066_office_request_inbox.sql', tables: [],
+    functions: ['office_request_inbox_v1(uuid,text,text,integer,jsonb)'],
+    bodyIncludes: [['office_request_inbox_v1(uuid,text,text,integer,jsonb)', 'office_inbox_metadata_v1'],
+      ['office_request_inbox_v1(uuid,text,text,integer,jsonb)', '(r.created_at,r.id)<(v_time,v_id)'],
+      ['office_request_inbox_v1(uuid,text,text,integer,jsonb)', "r.expires_at<=now() then 'expired'"]],
+    tableNoWrite: [['office_requests','service_role']] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {
