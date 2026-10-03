@@ -106,7 +106,7 @@ test('a ready packet becomes a valid Office request with clipped upstream copies
   assert.deepEqual([single.ownerId, single.mode, single.scope, single.participants], ['glaceon', 'draft', 'classin', []]);
   assert.match(single.message, /\[업무 조각 p2 · 완료 기준\]/);
   assert.match(single.message, /범위: 회사\(ClassIn\)/);
-  assert.match(single.message, /앞선 조각 p1 결과 · 운영자가 붙여 넣은 사본/);
+  assert.match(single.message, /앞선 조각 p1 결과 · Office 생성 결과 사본 · 사실\/승인 근거 아님/);
   assert.ok(single.message.length <= 6000);
   assert.ok(!single.message.includes('가'.repeat(1500)));
   assert.equal(parseOfficeRequest(single).ownerId, 'glaceon');

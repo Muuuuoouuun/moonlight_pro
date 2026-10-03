@@ -13,6 +13,7 @@ import { OfficeSkillRequestDrawer } from '../office-skill-request-drawer';
 import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-drawer';
 import { OfficeBreakdownDrawer } from '../office-breakdown-drawer';
 import { fetchOfficeBreakdown, officeAutoStopText, officeBreakdownProgress, officeBreakdowns, runOfficeAuto } from '../office-breakdown-session';
+import { useOfficeAutoLifecycle } from '../office-auto-lifecycle';
 import { ReviewWaitingList } from '../review-waiting';
 import { OfficeAvatar } from '../office-avatar';
 import { OfficeCommander } from '../office-commander';
@@ -185,9 +186,9 @@ function OfficeUsageLine({ refreshKey }) {
 export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const [surface,setSurface]=React.useState('commander');
   const [discussionVisited,setDiscussionVisited]=React.useState(false);
-  return <section><div style={{marginBottom:'var(--gap)'}}><SegmentedControl label="Office 업무 화면" options={[{key:'commander',label:'이브이 업무 분담'},{key:'discussion',label:'관점 대화·회의'}]} value={surface} onChange={next=>{setSurface(next);if(next==='discussion')setDiscussionVisited(true);}}/></div><div hidden={surface!=='commander'}><OfficeCommander scope={scope}/></div>{discussionVisited?<div hidden={surface!=='discussion'}><OfficeCouncilDiscussion scope={scope} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></div>:null}</section>;
+  return <section><div style={{marginBottom:'var(--gap)'}}><SegmentedControl label="Office 업무 화면" options={[{key:'commander',label:'이브이 업무 분담'},{key:'discussion',label:'관점 대화·회의'}]} value={surface} onChange={next=>{setSurface(next);if(next==='discussion')setDiscussionVisited(true);}}/></div><div hidden={surface!=='commander'}><OfficeCommander scope={scope}/></div>{discussionVisited?<div hidden={surface!=='discussion'}><OfficeCouncilDiscussion scope={scope} active={surface === 'discussion'} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></div>:null}</section>;
 }
-function OfficeCouncilDiscussion({ scope = 'all', onGuidanceAsk, onNavigate }) {
+function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, onNavigate }) {
   const { session, store, update } = useOfficeSession(scope);
   const { ownerId, mode, reviewers, includeProjects, minimumOnly } = session;
   const [rosterOpen, setRosterOpen] = React.useState(false);
@@ -217,6 +218,7 @@ function OfficeCouncilDiscussion({ scope = 'all', onGuidanceAsk, onNavigate }) {
   // 자동 진행 중에는 사람이 같은 입력창을 건드리지 못하게 잠근다 — 다음 조각이 입력창을 채운다.
   const locked = busy || autoRunning;
   const autoAbortRef = React.useRef(null);
+  useOfficeAutoLifecycle({ active, scope, store, breakdowns: officeBreakdowns, abortRef: autoAbortRef });
   const owner = OFFICE_ROSTER.find(person => person.id === ownerId) || OFFICE_ROSTER[0];
   const participants = mode === 'council' ? [ownerId, ...reviewers] : [];
   const preset = COMPARISON_PRESETS.find(item => item.id === session.presetId);
@@ -235,7 +237,6 @@ function OfficeCouncilDiscussion({ scope = 'all', onGuidanceAsk, onNavigate }) {
     setCopyStatus(null); setInputNotice(''); setFollowUpMode('chat'); setSkillTurn(null); setMentorDrawerId(null);
     setSelectedTurnId(null); setMobileView('meet'); setBreakdownOpen(false);
     loadTasks();
-    return () => { officeBreakdowns.stopAuto(scope, 'left'); autoAbortRef.current?.abort(); };
     // loadTasks only reads refs and setters; reloading per scope is the intent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope]);
@@ -290,6 +291,10 @@ function OfficeCouncilDiscussion({ scope = 'all', onGuidanceAsk, onNavigate }) {
     if (locked || breakdown?.status === 'loading') return;
     setMoreOpen(false);
     setBreakdownOpen(true);
+    if (!['classin', 'personal'].includes(scope)) {
+      officeBreakdowns.refuse(scope, '회사 또는 개인 범위를 선택한 뒤 안건을 나눠 주세요.');
+      return;
+    }
     let started;
     try { started = officeBreakdowns.begin(scope, assignmentMessage); }
     catch {

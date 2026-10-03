@@ -66,8 +66,11 @@ test('confirmed schedule receipts survive older reads', async (t) => {
       await t.test(`${action} survives late GET ${lateRead}`, async () => {
         const read = deferred();
         const row = schedule(action === 'cancel' ? 'cancelled' : action === 'complete' ? 'published' : 'scheduled', 2);
+        let reads = 0;
         const harness = mountedHook('useContentSchedule', (_path, options = {}) => options.method === 'POST'
-          ? Promise.resolve(response({ status: 'saved', schedule: row })) : read.promise);
+          ? Promise.resolve(response({ status: 'saved', schedule: row }))
+          : ++reads === 1 ? read.promise : Promise.resolve(response({ status: 'live', schedules: [row] })));
+        await settle();
         const view = harness.render();
         const result = action === 'set' ? await view.set({ variantId: row.variantId, expectedRevision: 1 })
           : await view[action](row.variantId, 1);
@@ -86,8 +89,11 @@ test('confirmed schedule receipts survive older reads', async (t) => {
   }
   await t.test('duplicate set is also a confirmed receipt', async () => {
     const read = deferred(), row = schedule();
+    let reads = 0;
     const harness = mountedHook('useContentSchedule', (_path, options = {}) => options.method === 'POST'
-      ? Promise.resolve(response({ status: 'duplicate', schedule: row })) : read.promise);
+      ? Promise.resolve(response({ status: 'duplicate', schedule: row }))
+      : ++reads === 1 ? read.promise : Promise.resolve(response({ status: 'live', schedules: [row] })));
+    await settle();
     await harness.render().set({ variantId: row.variantId, expectedRevision: 0 });
     read.resolve(response({ status: 'live', schedules: [] }));
     await settle();
@@ -105,17 +111,20 @@ test('confirmed template upserts and removals survive older reads', async (t) =>
         const harness = mountedHook('useContentTemplates', (_path, options = {}) => {
           if (options.method === 'POST') return Promise.resolve(response(action === 'save'
             ? { status: 'saved', template: changed } : { status: 'deleted' }));
-          return ++reads === 1 ? Promise.resolve(response({ status: 'live', templates: [old, unrelated] })) : read.promise;
+          reads++;
+          return reads === 1 ? Promise.resolve(response({ status: 'live', templates: [old, unrelated] }))
+            : reads === 2 ? read.promise : Promise.resolve(response({ status: 'live', templates: action === 'save' ? [changed, unrelated] : [unrelated] }));
         });
         await settle();
         const pending = harness.render().reload();
+        await settle();
         const view = harness.render();
         if (action === 'save') await view.save(changed); else await view.remove(old.id);
         const expected = { status: 'live', message: '', templates: action === 'save' ? [changed, unrelated] : [unrelated] };
         assert.deepEqual(harness.render().templates, expected.templates, 'the confirmed change preserves unrelated templates');
         if (lateRead === 'success') read.resolve(response({ status: 'live', templates: [old, unrelated] }));
         else read.reject(new Error('delayed read failure'));
-        await pending;
+        await pending; await settle();
         assert.deepEqual(stateOf(harness.render(), 'templates'), expected);
         harness.unmount();
       });
@@ -123,8 +132,11 @@ test('confirmed template upserts and removals survive older reads', async (t) =>
   }
   await t.test('duplicate template upsert survives initial empty snapshot', async () => {
     const read = deferred(), row = template('alpha');
+    let reads = 0;
     const harness = mountedHook('useContentTemplates', (_path, options = {}) => options.method === 'POST'
-      ? Promise.resolve(response({ status: 'duplicate', template: row })) : read.promise);
+      ? Promise.resolve(response({ status: 'duplicate', template: row }))
+      : ++reads === 1 ? read.promise : Promise.resolve(response({ status: 'live', templates: [row] })));
+    await settle();
     await harness.render().save(row);
     read.resolve(response({ status: 'live', templates: [] }));
     await settle();
@@ -133,7 +145,7 @@ test('confirmed template upserts and removals survive older reads', async (t) =>
   });
 });
 
-test('only the latest read may publish data or failure', async (t) => {
+test('overlapping reloads share one read and a later reload can refresh it', async (t) => {
   for (const name of ['useContentSchedule', 'useContentTemplates']) {
     await t.test(name, async () => {
       const first = deferred(), second = deferred();
@@ -141,11 +153,16 @@ test('only the latest read may publish data or failure', async (t) => {
       const key = name === 'useContentSchedule' ? 'schedules' : 'templates';
       const row = key === 'schedules' ? schedule() : template('alpha');
       const harness = mountedHook(name, () => ++reads === 1 ? first.promise : second.promise);
+      const joined = harness.render().reload();
+      await settle();
+      assert.equal(reads, 1);
+      first.resolve(response({ status: 'live', [key]: [] }));
+      await joined;
       const latest = harness.render().reload();
+      await settle();
+      assert.equal(reads, 2);
       second.resolve(response({ status: 'live', [key]: [row] }));
       await latest;
-      first.reject(new Error('older read failed'));
-      await settle();
       assert.deepEqual(stateOf(harness.render(), key), { status: 'live', message: '', [key]: [row] });
       harness.unmount();
     });
@@ -181,6 +198,7 @@ test('scope changes reject old schedule reads and mutation receipts', async () =
     paths.push(path);
     return path.endsWith('scope=all') ? oldRead.promise : newRead.promise;
   });
+  await settle();
   const mutation = harness.render().set({ variantId: schedule().variantId, expectedRevision: 0 });
   harness.render('action');
   newRead.resolve(response({ status: 'live', schedules: [actionRow] }));
@@ -201,6 +219,7 @@ test('unmounted hooks ignore pending read and write completions', async (t) => {
         const key = name === 'useContentSchedule' ? 'schedules' : 'templates';
         const row = key === 'schedules' ? schedule() : template('alpha');
         const harness = mountedHook(name, (_path, options = {}) => options.method === 'POST' ? write.promise : read.promise);
+        await settle();
         const view = harness.render();
         const mutation = key === 'schedules' ? view.set({ variantId: row.variantId, expectedRevision: 0 }) : view.save(row);
         harness.unmount();

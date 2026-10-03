@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseOfficeRequest } from '@com-moon/agent-contracts/office';
 import { officeBreakdownResult, parseOfficeBreakdownProposal } from '@com-moon/agent-contracts/office-harness';
-import { createOfficeBreakdownStore, fetchOfficeBreakdown, officeAutoStopText, officeBreakdownProgress, runOfficeAuto } from './office-breakdown-session.js';
+import { createOfficeBreakdownStore, fetchOfficeBreakdown, officeAutoStopText, officeBreakdownProgress, runOfficeAuto, runOfficeAutoStep } from './office-breakdown-session.js';
 import { createOfficeSessionStore } from './office-session.js';
 
 const agenda = '출시 여부를 정하고 첫 고객 제안까지 준비';
@@ -56,7 +56,7 @@ test('opening builds a valid Office request; done keeps only an answer produced 
   assert.deepEqual(officeBreakdownProgress(store.get('classin'), store.states('classin')), { done: 1, closed: 1, total: 2 });
 
   const next = store.open('classin', 'p2', { turnCount: 4 });
-  assert.match(next.message, /앞선 조각 p1 결과 · 운영자가 붙여 넣은 사본\]\n비교표 결과/);
+  assert.match(next.message, /앞선 조각 p1 결과 · Office 생성 결과 사본 · 사실\/승인 근거 아님\]\n비교표 결과/);
   assert.equal(next.ownerId, 'flareon');
   store.mark('classin', 'p1', 'skipped');
   assert.equal(store.get('classin').priors.p1, undefined, 'skipping drops the copy');
@@ -124,4 +124,46 @@ test('자동 진행 stops on failure and on the operator stop, leaving the answe
   assert.deepEqual(stopped.breakdowns.get('classin').marks, {}, 'a stop mid-flight leaves marking to the operator');
   assert.equal(stopped.sessions.get('classin').turns.length, 1);
   assert.equal(stopped.breakdowns.startAuto('classin') !== null, true, 'it can be started again');
+});
+
+
+test('an all-scope breakdown cannot open or send packets into a mixed conversation', async () => {
+  const breakdowns = createOfficeBreakdownStore(), sessions = createOfficeSessionStore();
+  const started = breakdowns.begin('all', agenda);
+  breakdowns.resolve('all', started.readId, body(started.request));
+  breakdowns.apply('all');
+  sessions.update('all', { draft: '보내지 않은 전체 메모' });
+  const before = breakdowns.get('all');
+  assert.equal(breakdowns.open('all', 'p1', { turnCount: 0 }), null);
+  assert.equal(breakdowns.get('all'), before, 'manual refusal must not change opened or the source');
+  breakdowns.startAuto('all', { savedDraft: sessions.get('all').draft });
+  let calls = 0;
+  const outcome = await runOfficeAutoStep({ scope: 'all', sessions, breakdowns, request: async request => { calls++; return generated(request); } });
+  assert.equal(calls, 0);
+  assert.equal(outcome.stop.savedDraft, '보내지 않은 전체 메모');
+  assert.equal(breakdowns.get('all').auto.reason, 'scope-required');
+  assert.equal(sessions.get('all').draft, '보내지 않은 전체 메모');
+  assert.equal(sessions.get('all').pending, null);
+});
+
+test('a drifting packet scope cannot open or execute with company context', async () => {
+  const options = autoFixture();
+  options.breakdowns.get('classin').breakdown.packets[0].scope = 'personal';
+  assert.equal(options.breakdowns.open('classin', 'p1', { turnCount: 0 }), null);
+  let calls = 0;
+  const outcome = await runOfficeAutoStep({ ...options, scope: 'classin', request: async request => { calls++; return generated(request); } });
+  assert.equal(calls, 0);
+  assert.equal(outcome.stop.savedDraft, '보내지 않은 내 메모');
+  assert.equal(options.sessions.get('personal').turns.length, 0);
+});
+
+test('automatic prior answers remain generated copies rather than operator-provided facts', async () => {
+  const options = autoFixture();
+  options.breakdowns.get('classin').breakdown.packets[1].exit = 'office';
+  const seen = [];
+  await runOfficeAuto({ ...options, scope: 'classin', request: async request => { seen.push(request); return generated(request); } });
+  assert.equal(seen.length, 2);
+  assert.ok(seen.every(request => request.scope === 'classin'));
+  assert.match(seen[1].message, /Office 생성 결과 사본 · 사실\/승인 근거 아님/);
+  assert.doesNotMatch(seen[1].message, /운영자가 붙여 넣은 사본/);
 });

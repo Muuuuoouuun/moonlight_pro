@@ -58,7 +58,8 @@ export function createOfficeBreakdownStore() {
     // offer the answer that came after it — and only that one.
     open(scope, key, { turnCount, withReviewers = false }) {
       const entry = applied(scope);
-      if (!entry) return null;
+      if (!entry || !['classin', 'personal'].includes(scope) || entry.request.scope !== scope
+        || entry.breakdown.packets.some(packet => packet.scope !== scope)) return null;
       const priorResults = Object.fromEntries(Object.entries(entry.priors).filter(([prior]) => entry.breakdown.packets.find(p => p.key === key)?.dependsOn.includes(prior)));
       const request = officePacketRequest(entry.breakdown, key, { agenda: entry.agenda, priorResults, withReviewers });
       patch(scope, { opened: { key, turnCount } });
@@ -133,6 +134,7 @@ const AUTO_STOP_LABELS = {
   limit: '자동 실행 한도에 닿아 멈췄습니다',
   stopped: '멈추기를 눌러 멈췄습니다.',
   left: '회의실을 떠나 멈췄습니다.',
+  'scope-required': '회사 또는 개인 범위를 선택한 뒤 안건을 다시 나눠 주세요.',
 };
 export function officeAutoStopText(auto) {
   if (!auto || auto.state !== 'stopped') return '';
@@ -149,6 +151,7 @@ export async function runOfficeAutoStep({ scope, sessions, request, breakdowns =
   const session = sessions.get(scope);
   if (session.pending) return { done: true, stop: breakdowns.stopAuto(scope, 'blocked', [step.key]) };
   const packet = breakdowns.open(scope, step.key, { turnCount: session.turns.length, withReviewers: false });
+  if (!packet) return { done: true, stop: breakdowns.stopAuto(scope, 'scope-required', [step.key]) };
   sessions.update(scope, { ownerId: packet.ownerId, mode: packet.mode, reviewers: [], presetId: null, draft: packet.message });
   const pending = sessions.begin(scope, newId());
   if (!pending) return { done: true, stop: breakdowns.stopAuto(scope, 'failed', [step.key]) };

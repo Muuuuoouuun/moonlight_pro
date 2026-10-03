@@ -35,7 +35,7 @@ test('every council position and response receives only its own current behavior
   }
 });
 test('behavioral depth reaches both real prompt and review without changing the frozen voices', () => {
-  assert.equal(OFFICE_ROLE_CARD_VERSION, '2026-09-23.v25-grounding-regression-fix');
+  assert.equal(OFFICE_ROLE_CARD_VERSION, '2026-10-03.v27-integrated-role-guards');
   for (const ownerId of OFFICE_IDS) { const request = parseOfficeRequest({ ownerId, scope: 'classin', message: '이 자료에서 전문 결과를 준비해 주세요.' }); for (const result of [buildOfficePrompt(request, context), buildOfficeReview(request, context, { answer: '원문', nextAction: '추가 행동 없음.' })]) { assert.ok(result.systemInstruction.includes(OFFICE_ROLE_DEPTH_VERSION)); assert.ok(result.systemInstruction.includes(OFFICE_ROLE_DEPTH_REGISTRY[ownerId].behavior.goodJudgment)); assert.ok(result.systemInstruction.includes(OFFICE_ROLE_DEPTH_REGISTRY[ownerId].behavior.badJudgment)); assert.ok(result.systemInstruction.length < 24000); for (const otherId of OFFICE_IDS.filter(id => id !== ownerId)) assert.ok(!result.systemInstruction.includes(OFFICE_ROLE_DEPTH_REGISTRY[otherId].responsibility)); } }
 });
 test('specialist prompt carries only selected inputs, real persona character and explicit no-call limits', () => {

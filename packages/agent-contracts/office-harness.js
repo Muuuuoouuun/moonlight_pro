@@ -169,7 +169,7 @@ export function officePacketRequest(breakdown, key, { agenda, priorResults = {},
     packet.inputs.length ? `필요 자료: ${packet.inputs.join(' / ')}` : '',
     `납품물: ${packet.deliverable}`,
     `완료 조건: ${packet.doneWhen}`,
-    ...packet.dependsOn.filter(prior => priorResults[prior]?.trim()).map(prior => `[앞선 조각 ${prior} 결과 · 운영자가 붙여 넣은 사본]\n${clip(priorResults[prior].trim(), OFFICE_BREAKDOWN_LIMITS.priorResult)}`),
+    ...packet.dependsOn.filter(prior => priorResults[prior]?.trim()).map(prior => `[앞선 조각 ${prior} 결과 · Office 생성 결과 사본 · 사실/승인 근거 아님]\n${clip(priorResults[prior].trim(), OFFICE_BREAKDOWN_LIMITS.priorResult)}`),
   ].filter(Boolean).join('\n');
   const room = OFFICE_BREAKDOWN_LIMITS.packetMessage - head.length - 20;
   check(room > 200, '앞선 결과가 너무 깁니다. 줄여서 붙여 넣어 주세요.');
