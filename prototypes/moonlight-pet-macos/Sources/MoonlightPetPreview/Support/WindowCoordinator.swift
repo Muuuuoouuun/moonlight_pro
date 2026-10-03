@@ -13,6 +13,7 @@ final class PetClickView: NSView {
     private let model: AppModel
     private let interaction = PetInteraction()
     var onClick: ((NSEvent) -> Void)?
+    var onClickCancelled: (() -> Void)?
     var onNotifications: (() -> Void)?
     var onDoubleClick: (() -> Void)?
     var onMove: ((PanelMove) -> Void)?
@@ -44,6 +45,7 @@ final class PetClickView: NSView {
     override func mouseExited(with event: NSEvent) { interaction.isHovered = false }
 
     override func rightMouseDown(with event: NSEvent) {
+        onClickCancelled?()
         let menu = NSMenu(title: "펫 캐릭터")
         let notices = NSMenuItem(title: "알림 보기", action: #selector(openNotifications), keyEquivalent: "")
         notices.target = self
@@ -158,6 +160,7 @@ final class WindowCoordinator: NSObject {
             self.toggleBar()
         }
         petClickView.onNotifications = { [weak self] in self?.openMode(.notifications) }
+        petClickView.onClickCancelled = { [weak self] in self?.openingPetClick = nil }
         petClickView.onDoubleClick = { [weak self] in
             self?.openingPetClick = nil
             self?.showWidget()
@@ -196,12 +199,16 @@ final class WindowCoordinator: NSObject {
                 self.showWidget(mode: self.model.mode)
             },
             move: { [weak self] movement in
-                guard let self else { return }; self.move(self.barWindow, movement)
+                guard let self else { return }
+                self.openingPetClick = nil
+                self.move(self.barWindow, movement)
             }
         ), cornerRadius: CompanionLayout.glassRadius,
            ornament: AnyView(PanelPetOrnament(model: model, close: { [weak self] in self?.dismissBar() },
                 move: { [weak self] movement in
-                    guard let self else { return }; self.move(self.barWindow, movement)
+                    guard let self else { return }
+                    self.openingPetClick = nil
+                    self.move(self.barWindow, movement)
                 }, clickEvent: { [weak self] event in self?.clickQuickPet(with: event) })),
            model: model, protectsText: true, captureSurface: .quick)
         widgetWindow.contentView = GlassPanel.host(CompactWidgetView(

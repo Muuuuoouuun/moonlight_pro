@@ -14,7 +14,7 @@ struct CompanionPanelView: View {
 
     @State private var showsAddress = false
     private var isToday: Bool { mode == .tasks || mode == .calendar }
-    private var title: String { mode == .tasks ? "오늘" : mode == .memo ? "빠른 메모" : mode.title }
+    private var title: String { mode == .tasks ? "오늘" : mode == .memo ? "빠른 메모" : mode == .office ? "Office" : mode.title }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,6 +68,9 @@ struct CompanionPanelView: View {
             if mode == .memo && !showsAddress {
                 captureTabs.frame(width: 166)
             }
+            if mode == .office && model.officeTab == .work && !showsAddress {
+                OfficeRequestScopeMenu(requests: model.officeRequests)
+            }
             modeMenu
             if let pin, mode != .memo {
                 Button(action: pin) { Image(systemName: "pin").modifier(GlassGlyphShadow()).frame(width: 28, height: 32) }
@@ -86,6 +89,13 @@ struct CompanionPanelView: View {
 
     private var modeMenu: some View {
         Menu {
+            if mode == .office && model.officeTab == .work {
+                Button("요청 다시 불러오기") { Task { await model.officeRequests.refresh() } }
+                    .disabled(model.officeRequests.isLoading || !model.officeRequests.hasConnection)
+                Button("이 결과로 후속 질문 준비", action: model.discussOfficeResult)
+                    .disabled(!model.canDiscussOfficeResult)
+                Divider()
+            }
             if mode == .calendar {
                 Button("오늘 일정") { model.hub.selectedDate = Date() }
                 Button("이전 주") { moveCalendarWeek(by: -1) }
@@ -161,31 +171,11 @@ struct CompanionPanelView: View {
         case .memo: MemoCaptureContent(model: model, surface: persistent ? .widget : .quick,
                                       openRevision: openRevision, close: close, openConnection: showConnection)
         case .calendar: CalendarCompanionContent(model: model, openConnection: showConnection)
-        case .office: browserContent
+        case .office: OfficeCompanionContent(model: model, requests: model.officeRequests,
+                                             openRevision: openRevision, openConnection: showConnection)
         case .council: CouncilCompanionContent(model: model, openConnection: showConnection)
         case .notifications: NotificationContent(model: model, openConnection: showConnection)
         case .focus: focusSetup
-        }
-    }
-
-    private var browserContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(mode == .office ? "함께 진행할 작업을 열어요." : "다른 관점이 필요할 때, Council을 불러요.")
-                .font(.system(size: 15))
-                .fixedSize(horizontal: false, vertical: true)
-                .modifier(GlassReadability(inset: 9))
-            Text("브라우저의 기존 Hub에서 이어집니다.")
-                .font(.system(size: 12))
-                .foregroundStyle(Palette.glassInkMuted)
-                .modifier(GlassReadability(inset: 8))
-            Spacer(minLength: 4)
-            HStack {
-                Spacer()
-                Button { model.openHub(mode) } label: {
-                    Label("\(mode.title) 열기", systemImage: "arrow.up.right")
-                }
-                .buttonStyle(GlassActionStyle())
-            }
         }
     }
 

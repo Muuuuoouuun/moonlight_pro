@@ -196,6 +196,20 @@ enum SelfCheck {
         guard recovered.activity.unreadCount == 1, recovered.isConnectionVisible else { return false }
         recovered.connectionSurface = nil
         guard recovered.activity.unreadCount == 0 else { return false }
+        recovered.mode = .office
+        recovered.officeTab = .work
+        recovered.activity.addAgentReply(id: "office-tab-check", agentID: recovered.chat.agent.rawValue,
+            conversation: recovered.chat.conversationKey, title: "Office 표시 검증", detail: "")
+        recovered.markCouncilRepliesRead()
+        guard recovered.activity.unreadCount == 1 else {
+            fputs("Office work tab must not acknowledge conversation replies\n", stderr)
+            return false
+        }
+        recovered.officeTab = .conversation
+        guard recovered.activity.unreadCount == 0 else {
+            fputs("Office conversation tab must acknowledge the visible conversation\n", stderr)
+            return false
+        }
         recovered.activeCompanion = nil
         print("PASS: press/drag tint reset, shared reading tint callback, continuous drag, tall/wide anchors, focus clock/progress, nine original portraits and nine alpha poses, local records, automatic memo save, draft recovery, memo shortcut stays in place and visible-only Council acknowledgments")
         return true
@@ -377,6 +391,19 @@ enum SelfCheck {
         guard model.activeCompanion == .widget, model.compactMode == .tasks,
               windows.filter({ $0.isVisible && $0.frame.height > 200 }).count == 1 else {
             fputs("Second click across pet/memo hosts must pin exactly one widget\n", stderr); return false
+        }
+        coordinator.showPet()
+        let nextTime = time + 2
+        let nextPointer = pet.convertPoint(toScreen: location)
+        click.mouseDown(with: event(.leftMouseDown, window: pet, location: location, timestamp: nextTime, count: 1))
+        click.mouseUp(with: event(.leftMouseUp, window: pet, location: location, timestamp: nextTime, count: 1))
+        quick.contentView?.layoutSubtreeIfNeeded()
+        guard let nextTarget = ornament(in: root) else { return false }
+        nextTarget.move(.nudge(CGPoint(x: 4, y: 0)))
+        nextTarget.clickEvent?(event(.leftMouseUp, window: quick, location: quick.convertPoint(fromScreen: nextPointer),
+            timestamp: nextTime + min(0.02, NSEvent.doubleClickInterval / 2), count: 1))
+        guard model.activeCompanion == nil else {
+            fputs("Moving the perched pet must cancel its opening click before the next single click\n", stderr); return false
         }
         print("PASS: immediate memo open and cross-host double-click pinning")
         return true

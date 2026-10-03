@@ -60,6 +60,12 @@ typealias CompactMode = QuickMode
 
 enum CompanionSurface { case quick, widget }
 
+enum OfficeCompanionTab: String, CaseIterable, Identifiable {
+    case work, conversation
+    var id: String { rawValue }
+    var title: String { self == .work ? "작업" : "대화" }
+}
+
 struct FocusClock: Equatable {
     let endsAt: Date
 
@@ -79,11 +85,15 @@ final class AppModel: ObservableObject {
     }
     @Published var mode: QuickMode = .tasks { didSet { markCouncilRepliesRead() } }
     @Published var compactMode: CompactMode = .tasks { didSet { markCouncilRepliesRead() } }
+    @Published var officeTab: OfficeCompanionTab = .work { didSet { markCouncilRepliesRead() } }
     @Published var connectionSurface: CompanionSurface? { didSet { markCouncilRepliesRead() } }
     var isConnectionVisible: Bool { activeCompanion != nil && activeCompanion == connectionSurface }
     private var isReadingCouncil: Bool {
-        !isFocused && !isConnectionVisible && ((activeCompanion == .quick && mode == .council)
-            || (activeCompanion == .widget && compactMode == .council))
+        !isFocused && !isConnectionVisible && ((activeCompanion == .quick && readsConversation(mode))
+            || (activeCompanion == .widget && readsConversation(compactMode)))
+    }
+    private func readsConversation(_ mode: QuickMode) -> Bool {
+        mode == .council || (mode == .office && officeTab == .conversation)
     }
     @Published var compactOpenRevision = 0
     @Published var quickOpenRevision = 0
@@ -128,6 +138,7 @@ final class AppModel: ObservableObject {
     let activity: PetActivityStore
     let council: CouncilDraftStore
     let chat = OfficeChatStore()
+    let officeRequests = OfficeRequestStore()
     var onOpenMode: ((QuickMode) -> Void)?
     private var featureObservers: Set<AnyCancellable> = []
     private var hubObserver: AnyCancellable?
@@ -180,10 +191,12 @@ final class AppModel: ObservableObject {
         activity.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         council.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         chat.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
+        officeRequests.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         hub.onConnectionChanged = { [weak self] service, origin in
             self?.completionFeedback.reset()
             self?.activity.configure(service: service as? any HubActivityServing, origin: origin)
             self?.chat.configure(service: service as? any HubOfficeServing, origin: origin)
+            self?.officeRequests.configure(service: service as? any HubOfficeRequestsServing, origin: origin)
         }
         chat.onReply = { [weak self] turn in
             guard let self else { return }
@@ -306,6 +319,10 @@ final class AppModel: ObservableObject {
         case .memo:
             saveMemoToHub()
         case .council: sendCouncilMessage()
+        case .office:
+            if officeTab == .conversation { sendCouncilMessage() }
+            else if officeRequests.detail != nil { copyOfficeResult() }
+            else if canReadOfficeResult { Task { await officeRequests.readSelected() } }
         default: openHub(mode)
         }
     }
@@ -356,6 +373,40 @@ final class AppModel: ObservableObject {
     func markCouncilRepliesRead() {
         guard isReadingCouncil else { return }
         activity.acknowledgeAgentReplies(conversation: chat.conversationKey)
+    }
+    var canReadOfficeResult: Bool {
+        officeRequests.hasConnection && !officeRequests.needsLogin && !officeRequests.isStale
+            && !officeRequests.isLoading && !officeRequests.isReading && officeRequests.errorMessage == nil
+            && officeRequests.selected?.isReadable == true
+    }
+    func officeRequestURL(_ request: OfficeRequestSummary) -> URL? {
+        guard let base = URL(string: hubBaseURL), let validated = try? HubTransport.validatedBaseURL(base),
+              var components = URLComponents(url: validated, resolvingAgainstBaseURL: false) else { return nil }
+        components.path = "/dashboard/agents/office-request"
+        components.queryItems = [URLQueryItem(name: "request", value: request.id.uuidString.lowercased())]
+        return components.url
+    }
+    func openOfficeRequest(_ request: OfficeRequestSummary) {
+        if let url = officeRequestURL(request) { NSWorkspace.shared.open(url) }
+    }
+    @discardableResult func copyOfficeResult() -> Bool {
+        guard !officeRequests.needsLogin, !officeRequests.isStale, let body = officeRequests.detail?.body else { return false }
+        NSPasteboard.general.clearContents()
+        return NSPasteboard.general.setString(body, forType: .string)
+    }
+    var canDiscussOfficeResult: Bool {
+        officeRequests.detail?.body != nil && !officeRequests.needsLogin && !officeRequests.isStale
+            && !chat.isSending && chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    func discussOfficeResult() {
+        guard canDiscussOfficeResult, let detail = officeRequests.detail else { return }
+        let scope: OfficeChatScope = detail.request.scope == .personal ? .personal : .classin
+        let opened = chat.selectTopic("office-request:" + detail.request.id.uuidString.lowercased(), scope: scope,
+            owner: detail.request.owner,
+            source: .init(title: detail.request.title, detail: detail.body ?? "", date: detail.request.createdAt,
+                          path: officeRequestURL(detail.request)?.path.appending("?request=" + detail.request.id.uuidString.lowercased()),
+                          isNoticeSummary: false))
+        if opened { officeTab = .conversation }
     }
     func showNotifications() { onOpenMode?(.notifications) }
     func openNotification(_ notice: PetNotice) {
