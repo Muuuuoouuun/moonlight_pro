@@ -61,9 +61,9 @@ function ProjectNotes({ notes, partial, failed }) {
   const visible = expanded || normalizedQuery ? matching : matching.slice(0, 4);
 
   return (
-    <section aria-label="연결 메모">
+    <section aria-label="기존 연결 메모 이력">
       <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 8 }}>
-        연결 메모 · {notes.length}{partial ? "+" : ""}건
+        기존 메모 이력 · {notes.length}{partial ? "+" : ""}건
       </div>
       {(partial || failed) && (
         <p role="status" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>
@@ -93,7 +93,7 @@ function ProjectNotes({ notes, partial, failed }) {
         ))}
         {visible.length === 0 && (
           <div role="status" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>
-            {normalizedQuery ? "불러온 메모에서 검색 결과가 없습니다." : failed ? "연결 메모를 확인할 수 없습니다." : "이 프로젝트에 연결된 메모가 없습니다."}
+            {normalizedQuery ? "불러온 메모에서 검색 결과가 없습니다." : failed ? "기존 메모 이력을 확인할 수 없습니다." : "이 프로젝트의 기존 메모 이력이 없습니다."}
           </div>
         )}
       </div>
@@ -208,7 +208,7 @@ export function ProjectDetailPanel({
             {content.map(item => <ActivityRow key={item.id} title={item.title} body={[item.kind, item.channel].filter(Boolean).join(' · ')} meta={item.when} badge={item.statusLabel} tone={contentTone[item.status] || 'neutral'} />)}
           </DetailSection>
           <ProjectNotes key={project.id} notes={notes} partial={notesPartial} failed={failed.has('notes')} />
-          <a className="hub-row project-focus-link" href={`/dashboard/work/projects?view=memos&project=${encodeURIComponent(project.id)}`}>메모 작업대 · 업무에 연결 →</a>
+          <a className="hub-row project-focus-link" href={`/dashboard/work/projects?view=memos&project=${encodeURIComponent(project.id)}`}>기존 메모 작업대 · 업무에 연결 →</a>
           <DetailSection title="루틴 체크" count={checks.length} empty={failedEmpty('routine_checks', '루틴 체크가 없어요.')}>
             {checks.map(check => <ActivityRow key={check.id} title={check.checkType} body={check.note} meta={check.checkedAtLabel} badge={check.status} tone={checkTone[check.status] || 'neutral'} />)}
           </DetailSection>

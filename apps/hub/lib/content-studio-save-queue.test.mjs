@@ -26,6 +26,16 @@ test('retry sends the identical creation receipt before saving later edits', asy
   assert.equal(draft.body, '두 번째');
   assert.equal(dirty, false);
 });
+test('opening or selecting a format on an empty draft creates no server receipt, even on checkpoint', async () => {
+  for (const patch of [{}, { channel: 'instagram', variantType: 'card_news', brandId: 'brand' }, { body: '  ', title: '\n' }]) {
+    const draft = { ...emptyStudioDraft(), ...patch };
+    const queue = createStudioSaveQueue({ get: () => ({ draft, dirty: true }),
+      send: () => assert.fail('empty creation must not reach the server'),
+      persistPending: () => assert.fail('empty creation must not create a receipt'),
+      commit: () => assert.fail('no save to acknowledge') });
+    assert.deepEqual(await queue.flush(true), draft);
+  }
+});
 test('concurrent flushes serialize and retain typing during an in-flight save', async () => {
   assert.ok(createStudioSaveQueue);
   let draft = { ...emptyStudioDraft(), body: '첫 번째' }, dirty = true, resolve;
@@ -119,7 +129,7 @@ test('changing documents during a request prevents adoption and further saves', 
 
 test('storage failure prevents sending a creation without a durable receipt', async () => {
   const queue = createStudioSaveQueue({
-    get: () => ({ draft: emptyStudioDraft(), dirty: true }), commit: () => assert.fail('must not adopt'),
+    get: () => ({ draft: { ...emptyStudioDraft(), body: '저장할 원고' }, dirty: true }), commit: () => assert.fail('must not adopt'),
     persistPending: async () => { throw Error('storage full'); }, send: () => assert.fail('must not send'),
   });
   await assert.rejects(queue.flush(), /storage full/);

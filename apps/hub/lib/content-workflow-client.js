@@ -81,6 +81,11 @@ export function studioFingerprint(draft) {
   const { item, variant } = buildStudioSave(draft, '');
   return JSON.stringify({ item, variant });
 }
+// Classification and format selection alone are local preferences, not a new work item.
+export function hasStudioContent(draft) {
+  return [draft.title, draft.variantTitle, draft.sourceIdea, draft.body, draft.nextAction, draft.blocker,
+    ...Object.values(draft.brief || {})].some(value => typeof value === 'string' && value.trim());
+}
 export const isDurableStudioSave = (result) => Boolean(['saved', 'duplicate'].includes(result?.status) && result.item?.id && result.variant?.id);
 export function acknowledgeStudioSave(current, sent, result) {
   if (!isDurableStudioSave(result)) throw new Error('저장이 확인되지 않았습니다.');

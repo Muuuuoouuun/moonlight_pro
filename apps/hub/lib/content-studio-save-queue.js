@@ -1,4 +1,4 @@
-import { acknowledgeStudioSave, buildStudioSave, isDurableStudioSave, studioErrorMessage } from './content-workflow-client.js';
+import { acknowledgeStudioSave, buildStudioSave, hasStudioContent, isDurableStudioSave, studioErrorMessage } from './content-workflow-client.js';
 
 export function isDefinitiveStudioRejection(result) {
   if (['invalid-input', 'payload-too-large', 'invalid-json', 'forbidden', 'unauthorized'].includes(result?.status)) return true;
@@ -16,6 +16,7 @@ export function createStudioSaveQueue({ get, commit, send, requestId = () => cry
     while (pending || get().dirty || checkpoint) {
       assertCurrent();
       if (!pending) {
+        if (!get().draft.contentId && !hasStudioContent(get().draft)) return get().draft;
         const sent = structuredClone(get().draft);
         pending = { sent, request: buildStudioSave(sent, requestId(), checkpoint) };
       }
