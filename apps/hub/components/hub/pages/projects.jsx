@@ -1757,12 +1757,12 @@ export function Projects({ workspace }) {
   // 매번 호출하던 buildProjectTimeline을 memo로 이동.
   const projectTimeline = React.useMemo(() => buildProjectTimeline(queriedProjects), [queriedProjects]);
 
-  // j/k 순회 대상 — tree 뷰는 접힌 브랜드 섹션 제외 평탄화, board 뷰는 컬럼 순서 평탄화
-  // (Deals 칸반과 동일 문법). 다른 뷰(todos·timeline)는 각자 문법이 있어 비활성.
+  // j/k 순회 대상 — tree는 workspace가 공표한 실제 표시 순서(접힌 완료 묶음 제외),
+  // table은 접힌 브랜드 섹션 제외, board는 컬럼 순서. 다른 뷰는 각자 문법이 있어 비활성.
   const kbRows = React.useMemo(() => {
     if (view === 'tree') {
       const rank = new Map(indexKeyboardOrder.map((id, index) => [id, index]));
-      return visibleProjects.slice().sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)).map(p => ({ id: p.id }));
+      return visibleProjects.filter(p => rank.has(p.id)).sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)).map(p => ({ id: p.id }));
     }
     if (view === 'table') {
       return listSections
@@ -1777,13 +1777,14 @@ export function Projects({ workspace }) {
 
   const kbSelection = useCrmSelection(kbRows);
   const openKbSelected = React.useCallback((id) => {
+    if (view === 'tree' && !kbRows.some(row => row.id === id)) return;
     if (view === 'board' && !String(id).startsWith('project-')) {
       const t = todos.find(x => x.id === id);
       if (t) { editTodo(t); return; }
     }
     const projectId = String(id).startsWith('project-') ? String(id).slice('project-'.length) : id;
     openProjectDetail(projectId);
-  }, [view, todos, editTodo, openProjectDetail]);
+  }, [view, kbRows, todos, editTodo, openProjectDetail]);
   useCrmKeyboard({
     enabled: (view === 'tree' || view === 'table' || view === 'board') && !drawerOpen,
     selection: kbSelection,
