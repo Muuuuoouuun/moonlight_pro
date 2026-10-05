@@ -6,6 +6,11 @@ private func check(_ value: @autoclosure () -> Bool, _ message: String) throws {
 }
 
 private actor ControlledHub: HubServing {
+    var credentialFailure = false
+    var disconnectCount = 0
+    func setCredentialFailure(_ value: Bool) { credentialFailure = value }
+    var anonymous = false
+    func setAnonymous(_ value: Bool) { anonymous = value }
     var rejectsLogin = false
     func rejectLogin(_ value: Bool) { rejectsLogin = value }
     var rejectsWrites = false
@@ -46,7 +51,11 @@ private actor ControlledHub: HubServing {
     func login(username: String, password: String) async throws {
         if rejectsLogin { throw HubTransportError.unauthorized }
     }
+    func clearSession() async throws { anonymous = true }
+    func disconnect() async { disconnectCount += 1 }
     func tasks() async throws -> HubTaskPage {
+        if credentialFailure { throw HubTransportError.credentialStorage }
+        if anonymous { throw HubTransportError.unauthorized }
         if holdRead { startedRead = true; await withCheckedContinuation { releaseRead = $0 } }
         if failsRead { throw HubTransportError.offline }
         return HubTaskPage(tasks: [row] + (confirmedTask.map { [$0] } ?? []), partial: partial)
@@ -58,6 +67,8 @@ private actor ControlledHub: HubServing {
     }
     func release() { holdRead = false; releaseRead?.resume(); releaseRead = nil }
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage {
+        if credentialFailure { throw HubTransportError.credentialStorage }
+        if anonymous { throw HubTransportError.unauthorized }
         if holdCalendar { startedCalendar = true; await withCheckedContinuation { releaseCalendar = $0 } }
         return HubCalendarPage(events: [], partial: partial)
     }
@@ -99,6 +110,7 @@ struct HubDomainTests {
         do {
             try modelChecks()
             try await loginChecks()
+            try await anonymousMemoNoticeChecks()
             try await connectionRecoveryChecks()
             try await sessionExpiryChecks()
             try await recoveryChecks()
@@ -162,6 +174,35 @@ struct HubDomainTests {
         await api.configure(readError: true)
         let readFailure = await store.signIn(baseURL: "https://example.com", username: "operator", password: "test-only")
         try check(readFailure && !store.taskReady, "A task read error must not misrepresent accepted credentials")
+    }
+
+    @MainActor static func anonymousMemoNoticeChecks() async throws {
+        let suite = "pet-anonymous-memo-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("보존할 메모 초안", forKey: "petPreview.memo")
+        let api = ControlledHub()
+        await api.setAnonymous(true)
+        let store = HubStore(defaults: defaults, makeAPI: { _ in api })
+        await store.connect(baseURL: "https://example.com")
+        try check(store.needsLogin && !store.canSaveMemo, "Anonymous pet must block Hub save")
+        try check(store.errorMessage?.contains("로그인") == true, "Memo must explain why Hub save is disabled")
+        try check(defaults.string(forKey: "petPreview.memo") == "보존할 메모 초안", "Login failure must keep the local memo")
+        await api.setAnonymous(false)
+        await store.refresh()
+        try check(!store.needsLogin && store.canSaveMemo && store.errorMessage == nil, "Recovered authentication must clear stale login notice")
+        await api.setCredentialFailure(true)
+        await store.refresh()
+        try check(store.needsLogin && store.errorMessage?.contains("키체인") == true && !store.canSaveMemo, "Memo must show Keychain access failure")
+        await api.setCredentialFailure(false)
+        await store.refresh()
+        try check(store.canSaveMemo && store.errorMessage == nil, "Recovered Keychain access clears its notice")
+        await store.connect(baseURL: "https://other.example.com")
+        let disconnected = await api.disconnectCount
+        try check(disconnected == 1, "Changing origin must invalidate the old transport before replacement")
+        let signedOut = await store.signOut()
+        try check(signedOut && store.needsLogin && !store.canSaveMemo, "Signing out disables saving and automatic login")
+        try check(defaults.string(forKey: "petPreview.memo") == "보존할 메모 초안", "Sign-out must preserve the draft")
     }
 
     @MainActor static func connectionRecoveryChecks() async throws {

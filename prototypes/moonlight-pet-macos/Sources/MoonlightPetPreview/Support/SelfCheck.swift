@@ -485,6 +485,8 @@ private actor CaptureCheckService: HubServing {
     private var continuation: CheckedContinuation<Bool, Never>?
     func release(fail: Bool) { started = false; continuation?.resume(returning: fail); continuation = nil }
     func login(username: String, password: String) async throws {}
+    func clearSession() async {}
+    func disconnect() async {}
     func tasks() async throws -> HubTaskPage { HubTaskPage(tasks: [], partial: false) }
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage { HubCalendarPage(events: [], partial: false) }
     func createTask(_ command: HubTaskCommand) async throws -> HubTask { throw HubDataError.invalidResponse }

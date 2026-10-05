@@ -215,6 +215,7 @@ struct MemoCaptureContent: View {
                         }
                         .buttonStyle(GlassQuietStyle()).font(.system(size: 11))
                         .help(message + " · Hub 연결 확인")
+                        .accessibilityLabel(model.hub.needsLogin ? "Hub 로그인 · " + message : "Hub 연결 확인 · " + message)
                     } else if model.memoDraft.isEmpty, let receipt = model.memoCaptureReceipt {
                         Text(receipt).font(.system(size: 11)).lineLimit(2)
                     } else if let receipt = model.hub.memoReceipt {
