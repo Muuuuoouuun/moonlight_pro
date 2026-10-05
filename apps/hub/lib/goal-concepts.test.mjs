@@ -118,11 +118,11 @@ test('at most one suggestion, and only for a real deviation from OKR practice', 
 });
 
 const october = { periodStart: '2026-10-01', periodEnd: '2026-10-31' };
-const count = (target, value, extra = {}) => ({ direction: 'increase', target, baseline: 0, unit: '건', name: '가격 제시', measurement: value === null ? { coverage: 'unmeasured' } : { coverage: 'complete', value }, ...extra });
+const count = (target, value, extra = {}) => ({ sourceKey: 'manual', direction: 'increase', target, baseline: 0, unit: '건', name: '가격 제시', measurement: value === null ? { coverage: 'unmeasured' } : { coverage: 'complete', value }, ...extra });
 
 test('weekly pace splits the period target and stays silent below one per week', () => {
-  assert.equal(keyResultPace(count(6, null), october, [], '2026-10-01').weeklyPace, 2);
-  assert.equal(keyResultPace(count(8, null), october, [], '2026-10-01').weeklyPace, 2);
+  assert.equal(keyResultPace(count(6, null), october, [], '2026-10-01').weeklyPace, 42 / 31);
+  assert.equal(keyResultPace(count(8, null), october, [], '2026-10-01').weeklyPace, 56 / 31);
   assert.equal(keyResultPace(count(1, null), october, [], '2026-10-01').weeklyPace, null);
   assert.equal(keyResultPace(count(6, null), october, [], '2026-09-30').phase, 'upcoming');
   assert.equal(keyResultPace(count(6, null), october, [], '2026-11-01'), null);
@@ -148,7 +148,7 @@ test('this-week share is measured from the last confirmed value before Monday', 
   ];
   // 2026-10-14 is a Wednesday; its Monday is 10-12. Last value before that is 2 (10-11 Sunday).
   assert.equal(keyResultPace(count(6, 4), october, observations, '2026-10-14').weekDone, 2);
-  assert.equal(keyResultPace(count(6, 3), october, [], '2026-10-14').weekDone, 3);
+  assert.equal(keyResultPace(count(6, 3), october, [], '2026-10-14').weekDone, null);
   assert.equal(keyResultPace(count(6, null), october, [], '2026-10-14').weekDone, null);
 });
 
@@ -158,7 +158,7 @@ test('the pace suggestion names the most-behind KR only', () => {
     { metric: { name: '가격 제시', unit: '건' }, pace: { state: 'behind', gap: -1.2, target: 6 } },
     { metric: { name: '결제', unit: '건' }, pace: { state: 'on', gap: 0, target: 1 } },
   ];
-  assert.match(paceSuggestion(rows), /^가격 제시이\(가\) 기준선보다 1\.2건 늦습니다/);
+  assert.match(paceSuggestion(rows), /^가격 제시이\(가\) 관측 기준으로 균등 페이스보다 1\.2건 늦습니다/);
   assert.equal(paceSuggestion([rows[2]]), null);
   assert.equal(paceSuggestion([]), null);
 });
@@ -180,9 +180,9 @@ test('the period splits into Monday weeks with a short first week', async () => 
 test('weekly cells turn cumulative observations into each week\'s share, and stay unknown without records', async () => {
   const { weeklyCells } = await import('./goal-concepts.js');
   const metric = count(6, 2);
-  const cells = weeklyCells(metric, october, [obs(1, '2026-10-03'), obs(2, '2026-10-07')], '2026-10-08', 2);
+  const cells = weeklyCells(metric, october, [obs(1, '2026-10-03'), obs(2, '2026-10-07')], '2026-10-08');
   assert.deepEqual(cells.map(cell => cell.done), [1, 1, null, null, null]);
-  assert.deepEqual(weeklyCells(metric, october, [], '2026-10-08', 2).map(cell => cell.done), [null, null, null, null, null]);
+  assert.deepEqual(weeklyCells(metric, october, [], '2026-10-08').map(cell => cell.done), [null, null, null, null, null]);
 });
 
 test('zero-keep weeks need a check inside the week and count the kept streak', async () => {

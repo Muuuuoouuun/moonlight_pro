@@ -35,8 +35,8 @@ test('an objective card reads as Objective → KR groups → score, and points a
 
 test('KPI rows show line, trend, staleness and inside/outside — never a score', () => {
   assert.match(goalsSource, /kpiThresholdLabel\(metric\)/);
-  assert.match(goalsSource, /kpiTrend\(observations\)/);
-  assert.match(goalsSource, /daysSinceObservation\(observations, today\)/);
+  assert.match(goalsSource, /kpiBulletReading\(metric, observations\)/);
+  assert.match(goalsSource, /metricFreshnessLabel\(metric, today, objective\.timezone\)/);
   assert.match(goalsSource, /sortKpis\(/);
   assert.match(goalsSource, /OUTSIDE_RAIL_BUDGET/);
   assert.match(cssSource, /\.goal-kpi-row--outside\s*\{\s*box-shadow:inset 1px 0 0 var\(--danger\)/);
@@ -98,7 +98,7 @@ test('mockup ①: objective track, weekly cells, milestone line and kept promise
   assert.match(goalsSource, /function ObjectiveTrack/);
   assert.match(goalsSource, /goal-otrack__pace/);
   assert.match(goalsSource, /function WeekCells/);
-  assert.match(goalsSource, /weeklyCells\(metric, objective, observationsOf\(metric\), today, p\.weeklyPace\)/);
+  assert.match(goalsSource, /metric\.sourceKey === 'manual' \? weeklyCells\(metric, objective, observationsOf\(metric\), today\)/);
   assert.match(goalsSource, /milestoneSummary\(model\.links\.filter/);
   assert.match(goalsSource, /aria-label="지키는 약속"/);
   assert.match(cssSource, /\.goal-weeks__cell--now \.goal-weeks__box\s*\{\s*border-color:var\(--accent\)/);

@@ -2,10 +2,11 @@
 
 import React from "react";
 import Link from "next/link";
-import { Card, EmptyState, Progress, Skeleton, TruthBadge } from "./hub-primitives";
+import { Card, EmptyState, Skeleton, TruthBadge } from "./hub-primitives";
 import { useGoals } from "./use-goals";
 import { GOAL_WORK_BASE, goalHref, measurementLabel } from "@/lib/goal-client";
 import { goalCheckRows } from "@/lib/goal-input-ux";
+import { goalMetricReading, kpiThresholdLabel, metricFreshnessLabel } from "@/lib/goal-concepts";
 import "./okr-summary-card.css";
 
 /**
@@ -18,17 +19,12 @@ import "./okr-summary-card.css";
 
 const MAX_ROWS = 4;
 
-function progressLabel(metric) {
-  const state = metric.progress?.state;
-  if (state === "achieved") return "기준 달성";
-  if (state === "partial") return "일부 근거";
-  if (state === "target_unset") return "목표 미설정";
-  if (state === "unmeasured" || !metric.measurement) return "미측정";
-  return "진행 중";
-}
-
 export function OkrSummaryCard() {
   const model = useGoals("");
+  return <OkrSummaryView model={model} />;
+}
+
+export function OkrSummaryView({ model }) {
   const openHref = goalHref(null, "all", { base: GOAL_WORK_BASE });
   const checkHref = goalHref(null, "all", { base: GOAL_WORK_BASE, check: true });
   const readable = model.status === "live" || model.status === "partial";
@@ -66,8 +62,8 @@ export function OkrSummaryCard() {
       {readable && rows.length === 0 && (
         <EmptyState
           icon="signal"
-          title={activeObjectives ? "측정 지표를 정해 주세요" : "진행 중인 목표가 없습니다"}
-          description="목표와 결과 지표를 정하면 이번 기간의 값이 여기에 뜹니다."
+          title={model.status === "partial" ? "목표·지표 목록을 모두 확인하지 못했습니다" : activeObjectives ? "측정 지표를 정해 주세요" : "진행 중인 목표가 없습니다"}
+          description={model.status === "partial" ? "읽기 상태를 확인한 뒤 지표를 추가하세요." : "목표와 결과 지표를 정하면 이번 기간의 값이 여기에 뜹니다."}
           action={<Link className="hub-row okr-summary__link" href={openHref}>목표 만들러 가기 →</Link>}
           style={{ minHeight: 140 }}
         />
@@ -76,22 +72,24 @@ export function OkrSummaryCard() {
       {rows.length > 0 && (
         <ul className="okr-summary__list">
           {rows.slice(0, MAX_ROWS).map(({ objective, metric, needsEvidence: missing }) => {
-            const value = Number.isFinite(metric.progress?.value) ? metric.progress.value : null;
+            const { concept, label, score, achievementPercent } = goalMetricReading(metric);
+            const today = new Intl.DateTimeFormat('en-CA', { timeZone: objective.timezone || 'Asia/Seoul' }).format(new Date());
             return (
               <li key={metric.id} className="okr-summary__row">
                 <div className="okr-summary__identity">
                   <span className="okr-summary__metric">{metric.name}</span>
-                  <span className="okr-summary__objective">{objective.title}</span>
+                  <span className="okr-summary__objective">{objective.scope === "company" ? "ClassIn" : "개인"} · {objective.title} · {objective.periodStart}–{objective.periodEnd} · {metric.sourceKey === 'manual' ? '직접 기록' : '자동 집계'} · {metricFreshnessLabel(metric, today, objective.timezone)}</span>
                 </div>
                 <div className="okr-summary__value">
                   <span className="stat">{measurementLabel(metric)}</span>
                   <span className="okr-summary__target">
-                    {metric.direction === "range" ? `기준 ${metric.targetMin ?? "—"}–${metric.targetMax ?? "—"}` : `목표 ${metric.target ?? "—"}`} {metric.unit}
+                    {concept === "kpi" ? kpiThresholdLabel(metric) : concept === "reference" ? "약속선 없음" : metric.direction === "range" ? `바닥 기준 ${metric.targetMin ?? "—"}–${metric.targetMax ?? "—"} ${metric.unit}` : `바닥 ${metric.target ?? "—"} ${metric.unit}`}
                   </span>
                 </div>
                 <div className="okr-summary__state">
-                  <span>{missing ? "근거 확인 필요" : progressLabel(metric)}</span>
-                  {value !== null && !missing && <Progress value={value} tone="neutral" />}
+                  <span>{label}{missing ? " · 근거 확인 필요" : ""}</span>
+                  {score !== null && <span className="mono">KR 점수 {score.toFixed(2)} · 바닥 0.7</span>}
+                  {achievementPercent !== null && <span className="mono">바닥 달성률 {achievementPercent}%</span>}
                 </div>
               </li>
             );

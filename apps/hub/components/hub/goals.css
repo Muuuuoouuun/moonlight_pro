@@ -331,7 +331,7 @@
 /* 주간 칸 — 기간을 월요일 주로 나눈 행동 KR의 주별 몫 */
 .goal-weeks { display:flex; gap:4px; list-style:none; margin:0; padding:0; }
 .goal-weeks__cell { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
-.goal-weeks__box { position:relative; height:18px; overflow:hidden; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:3px; font-size:10.5px; color:var(--fg-muted); }
+.goal-weeks__box { position:relative; min-height:24px; padding:2px; overflow-wrap:anywhere; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:3px; font-size:12px; color:var(--fg-muted); }
 .goal-weeks__box > i { position:absolute; left:0; top:0; bottom:0; background-color:color-mix(in oklch, var(--moon-300) 32%, transparent); }
 .goal-weeks__box > b { position:relative; font-weight:500; }
 .goal-weeks__cell--full .goal-weeks__box > i { background-color:var(--moon-300); }

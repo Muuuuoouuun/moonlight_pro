@@ -3,9 +3,9 @@
 // 저장소는 목표(objective) 아래 지표(metric)의 role 셋(outcome·driver·guardrail)만 안다. 스키마를 바꾸지
 // 않고 role로 개념을 가른다:
 //   · KR(핵심 결과)  = outcome·driver + 약속선(target)이 있는 것 — 이 기간 안에 그 선까지 움직여야 한다.
-//                      점수(0~1)로 읽고 기간이 끝나면 닫힌다.
+//                      현재 점수(0~0.7)와 바닥 달성률(0~100%)을 구분하고 기간이 끝나면 닫힌다.
 //   · 참고 지표      = outcome·driver인데 약속선이 없는 것 — "기록만" 하는 값. 목표가 없으니 KR이 아니고 점수도 없다.
-//   · KPI(건강 지표) = guardrail     — 기간과 상관없이 계속 지켜볼 선. 점수가 아니라 "선 안/선 밖"과 추이로 읽는다.
+//   · KPI(건강 지표) = guardrail     — 지켜볼 건강선. 현재 모델은 목표 기간에 붙고, "선 안/선 밖"으로 읽는다.
 // 점수는 등록된 약속선(target) 대비 진척이다. 천장(도전값)은 저장하지 않는다.
 
 export const GOAL_CONCEPT_BY_ROLE = {
@@ -33,7 +33,7 @@ export const FLOOR_SCORE = 0.7;
 // KR 점수 0~0.7. 바닥 달성이면 0.7, 진척률이 산정되면 0.7 × 진척, 아니면 null(점수 낼 근거 없음).
 export function keyResultScore(metric) {
   const progress = metric?.progress;
-  if (!progress) return null;
+  if (!progress || isHealthIndicator(metric) || !['achieved', 'in_progress'].includes(progress.state) || (metric.measurement && metric.measurement.coverage !== 'complete')) return null;
   if (progress.state === 'achieved' || progress.achieved === true) return FLOOR_SCORE;
   if (Number.isFinite(progress.value)) return FLOOR_SCORE * Math.max(0, Math.min(100, progress.value)) / 100;
   return null;
@@ -51,12 +51,16 @@ export function objectiveScore(keyResults) {
 }
 
 const DAY = 86400000;
-const dayNumber = key => Date.parse(`${key}T00:00:00Z`) / DAY;
+const dayNumber = key => {
+  if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return NaN;
+  const value = Date.parse(`${key}T00:00:00Z`);
+  return Number.isFinite(value) && new Date(value).toISOString().slice(0, 10) === key ? value / DAY : NaN;
+};
 
 // 기간 경과율(0~1)과 남은 일수. 시작일·종료일을 모두 포함한다.
 export function objectivePeriod(objective, todayKey) {
   const start = dayNumber(objective.periodStart), end = dayNumber(objective.periodEnd), today = dayNumber(todayKey);
-  if (![start, end, today].every(Number.isFinite)) return { phase: 'unknown', elapsed: null, daysLeft: null };
+  if (![start, end, today].every(Number.isFinite) || end < start) return { phase: 'unknown', elapsed: null, daysLeft: null };
   const total = end - start + 1;
   if (today < start) return { phase: 'upcoming', elapsed: 0, daysLeft: end - today + 1 };
   if (today > end) return { phase: 'ended', elapsed: 1, daysLeft: 0 };
@@ -79,6 +83,8 @@ export function objectivePace(score, period) {
 // KPI 건강 상태 — 점수가 아니라 선 안/밖.
 //   inside=선 안, outside=선 밖, partial=일부 근거, unmeasured=아직 못 잼, unset=선 미설정
 export function kpiHealth(metric) {
+  if (metric?.measurement?.coverage === 'partial') return 'partial';
+  if (metric?.measurement && (metric.measurement.coverage !== 'complete' || !Number.isFinite(metric.measurement.value))) return 'unmeasured';
   const state = metric?.progress?.state;
   if (state === 'achieved' || metric?.progress?.achieved === true) return 'inside';
   if (state === 'in_progress' && metric?.progress?.achieved === false) return 'outside';
@@ -89,6 +95,16 @@ export function kpiHealth(metric) {
 
 export const KPI_HEALTH_LABEL = { inside: '선 안', outside: '선 밖', partial: '일부 근거', unmeasured: '미측정', unset: '선 미설정' };
 const HEALTH_ORDER = { outside: 0, unmeasured: 1, partial: 2, unset: 3, inside: 4 };
+
+// 본체·상세·현황은 같은 의미로 읽는다. 점수 0.35와 바닥 달성률 50%는 다른 척도다.
+export function goalMetricReading(metric) {
+  if (isHealthIndicator(metric)) return { concept: 'kpi', label: `KPI · ${KPI_HEALTH_LABEL[kpiHealth(metric)]}`, score: null, achievementPercent: null };
+  if (!hasTarget(metric)) return { concept: 'reference', label: '참고값 · 점수 없음', score: null, achievementPercent: null };
+  const score = keyResultScore(metric);
+  const achievementPercent = score === null ? null : Number.isFinite(metric.progress?.value) ? Math.max(0, Math.min(100, metric.progress.value)) : reachedFloor(metric) ? 100 : null;
+  const label = metric.measurement?.coverage === 'partial' || metric.progress?.state === 'partial' ? 'KR · 일부 근거 · 점수 보류' : score === null ? 'KR · 점수 전' : reachedFloor(metric) ? 'KR · 바닥 달성' : 'KR · 진행 중';
+  return { concept: 'kr', label, score, achievementPercent };
+}
 
 export function kpiThresholdLabel(metric) {
   const unit = metric.unit ? ` ${metric.unit}` : '';
@@ -124,6 +140,27 @@ export function daysSinceObservation(observations, todayKey) {
   return Math.max(0, Math.round(dayNumber(todayKey) - dayNumber(last)));
 }
 
+// 자동 observedAt은 원천 발생 시각이 아닌 집계 조회 시각이다. 수동 관측과 이름을 섞지 않는다.
+export function metricFreshnessLabel(metric, todayKey, timezone = 'Asia/Seoul') {
+  if (metric.measurement?.reason === 'invalid-observation-time') return '관측 시각 확인 필요';
+  const time = Date.parse(metric.measurement?.observedAt);
+  if (!Number.isFinite(time)) return metric.sourceKey === 'manual' ? '관측 시각 미확인' : '집계 조회 시각 미확인';
+  const last = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(time));
+  const days = Math.max(0, dayNumber(todayKey) - dayNumber(last));
+  const when = days === 0 ? '오늘' : `${days}일 전`;
+  return metric.sourceKey === 'manual' ? `${when} 관측` : `${when} 집계 조회 · 원천 최신일 미확인`;
+}
+
+// 차트의 이번 값은 숫자와 같은 measurement. 최근 확정 관측은 별도 눈금으로만 비교한다.
+export function kpiBulletReading(metric, observations = []) {
+  const measurement = metric.measurement;
+  const now = ['complete', 'partial'].includes(measurement?.coverage) && Number.isFinite(measurement.value) ? measurement.value : null;
+  const time = Date.parse(measurement?.observedAt);
+  const previous = observations.filter(item => (!item.metricId || !metric.id || item.metricId === metric.id) && (!measurement?.periodStart || item.periodStart === measurement.periodStart) && (!measurement?.periodEnd || item.periodEnd === measurement.periodEnd) && item.coverage === 'complete' && Number.isFinite(item.value) && Number.isFinite(Date.parse(item.observedAt)) && Number.isFinite(time) && Date.parse(item.observedAt) < time)
+    .sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt))[0] || null;
+  return { now, partial: measurement?.coverage === 'partial', previous: previous?.value ?? null, previousAt: previous?.observedAt ?? null };
+}
+
 // 목표 한 장에 붙일 제안 한 줄 — OKR 기본 원칙에서 벗어난 것만, 최대 하나.
 export function objectiveSuggestion(keyResults, healthIndicators) {
   const outcomes = keyResults.filter(metric => metric.role === 'outcome');
@@ -142,23 +179,26 @@ export function splitObjectiveMetrics(metrics, objectiveId) {
 // ── 월 KR을 주 단위로 쪼개기 (2026-09-30) ─────────────────────────────────────
 // 저장소에는 기간 목표(target) 하나뿐이다. 주간 기준선은 저장하지 않고 기간 경과율로 계산한다.
 //   · 기대 진행선 = 기준값 + (목표 − 기준값) × 기간 경과율
-//   · 주간 페이스 = (목표 − 기준값) ÷ 기간의 주 수  (1 미만이면 "기간 안 N"으로만 말한다)
-//   · 이번 주 몫 = 지금 값 − 이번 주 월요일 이전 마지막 확인 관측값(없으면 기준값)
+//   · 7일 페이스 = (목표 − 기준값) × 7 ÷ 기간 일수 (올림하지 않는다)
+//   · 주별 균등 몫 = (목표 − 기준값) × 그 주의 기간 안 일수 ÷ 기간 일수
+//   · 주별 관측 차이 = 그 주의 마지막 확인값 − 주 시작 전 마지막 확인값
+//     첫 주만 등록된 기준값을 쓴다. 그 밖에 경계 관측이 없으면 미측정이다.
 // 늘리기(increase) KR만 대상이다 — 줄이기·범위형은 "지금쯤 얼마"가 뜻을 갖지 않는다.
 
-const mondayOf = key => { const n = dayNumber(key); return n - ((n + 3) % 7); };
-const seoulDayNumber = iso => dayNumber(new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }));
+const mondayOf = key => { const n = dayNumber(key); return n - (((n + 3) % 7 + 7) % 7); };
+const observationDay = (iso, objective) => dayNumber(new Intl.DateTimeFormat('en-CA', { timeZone: objective.timezone || 'Asia/Seoul' }).format(new Date(iso)));
 
 export function keyResultPace(metric, objective, observations, todayKey) {
   if (metric?.direction !== 'increase' || !Number.isFinite(metric.target)) return null;
-  const baseline = Number.isFinite(metric.baseline) ? metric.baseline : 0;
+  if (!Number.isFinite(metric.baseline)) return null;
+  const baseline = metric.baseline;
   const span = metric.target - baseline;
   if (!(span > 0)) return null;
   const period = objectivePeriod(objective, todayKey);
   if (period.phase === 'unknown' || period.phase === 'ended') return null;
-  const weeks = (dayNumber(objective.periodEnd) - dayNumber(objective.periodStart) + 1) / 7;
-  const perWeek = span / weeks;
-  const weeklyPace = perWeek >= 1 ? Math.ceil(perWeek - 1e-9) : null;
+  const totalDays = dayNumber(objective.periodEnd) - dayNumber(objective.periodStart) + 1;
+  const perWeek = span * 7 / totalDays;
+  const weeklyPace = perWeek >= 1 ? perWeek : null;
   const expected = baseline + span * period.elapsed;
   const measured = metric.measurement?.coverage === 'complete' && Number.isFinite(metric.measurement?.value);
   const actual = measured ? metric.measurement.value : null;
@@ -167,15 +207,9 @@ export function keyResultPace(metric, objective, observations, todayKey) {
   // 주 1건도 안 되는 KR(월 결제 1건 등)은 중간에 늦음을 판정하면 소음이다 — 마지막 주에만 판정한다.
   const tooEarly = weeklyPace === null && period.phase === 'running' && period.daysLeft >= 7;
   const state = gap === null || tooEarly ? 'unknown' : gap < -tolerance ? 'behind' : gap > tolerance ? 'ahead' : 'on';
-  let weekDone = null;
-  if (actual !== null && period.phase === 'running') {
-    const monday = mondayOf(todayKey);
-    const before = observations
-      .filter(item => item.coverage === 'complete' && Number.isFinite(item.value) && Number.isFinite(Date.parse(item.observedAt)) && seoulDayNumber(item.observedAt) < monday)
-      .sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt))[0];
-    weekDone = Math.max(0, actual - (before ? before.value : baseline));
-  }
-  return { phase: period.phase, weeklyPace, expected, actual, gap, weekDone, state, target: metric.target };
+  const week = weeklyCells(metric, objective, observations, todayKey).find(cell => cell.phase === 'now');
+  const weekDone = actual !== null && metric.sourceKey === 'manual' ? week?.done ?? null : null;
+  return { phase: period.phase, weeklyPace, weekQuota: week?.quota ?? null, expected, actual, gap, weekDone, state, target: metric.target };
 }
 
 const fmt = value => Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -186,13 +220,20 @@ export function paceSuggestion(rows) {
   const behind = rows.filter(row => row.pace?.state === 'behind').sort((a, b) => a.pace.gap / a.pace.target - b.pace.gap / b.pace.target)[0];
   if (!behind) return null;
   const unit = behind.metric.unit ? behind.metric.unit : '';
-  return `${behind.metric.name}이(가) 기준선보다 ${fmt(Math.abs(behind.pace.gap))}${unit} 늦습니다. 이번 주 첫 판매 시간을 이 KR에 쓰세요.`;
+  return `${behind.metric.name}이(가) 관측 기준으로 균등 페이스보다 ${fmt(Math.abs(behind.pace.gap))}${unit} 늦습니다. 이 KR의 다음 행동을 확인하세요.`;
 }
 
 // ── 목업 ①·③·④ 구현 (2026-10-01) ─────────────────────────────────────────────
 const keyOfDay = n => new Date(n * DAY).toISOString().slice(0, 10);
 const shortDay = key => `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}`;
-const confirmed = observations => observations.filter(item => item.coverage === 'complete' && Number.isFinite(item.value) && Number.isFinite(Date.parse(item.observedAt)));
+const periodObservations = (metric, objective, observations, todayKey) => observations.filter(item => {
+  if (!Number.isFinite(Date.parse(item.observedAt)) || item.metricId && metric.id && item.metricId !== metric.id) return false;
+  if (item.periodStart && item.periodStart !== objective.periodStart || item.periodEnd && item.periodEnd !== objective.periodEnd) return false;
+  const day = observationDay(item.observedAt, objective);
+  return day >= dayNumber(objective.periodStart) && day <= Math.min(dayNumber(objective.periodEnd), dayNumber(todayKey));
+}).sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.id || '').localeCompare(String(b.id || '')));
+const completeValue = row => row?.coverage === 'complete' && Number.isFinite(row.value) ? row.value : null;
+const uncertainHistory = metric => ['observation-history-incomplete', 'invalid-observation-time'].includes(metric.measurement?.reason);
 
 // 목표 기간을 월요일 시작 주로 나눈다. 첫 주·마지막 주는 기간 안 날짜만 담는다.
 export function periodWeeks(objective, todayKey) {
@@ -209,19 +250,30 @@ export function periodWeeks(objective, todayKey) {
 }
 
 // 누적 관측값을 주별 몫으로 바꾼다. 확인된 관측이 하나도 없으면 몫을 모른다(null) — 0으로 세지 않는다.
-function valueBefore(rows, dayNum, fallback) {
-  const before = rows.filter(item => seoulDayNumber(item.observedAt) < dayNum).sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt))[0];
-  return before ? before.value : fallback;
+function valueBefore(rows, objective, dayNum, fallback = null) {
+  const before = rows.filter(item => observationDay(item.observedAt, objective) < dayNum).at(-1);
+  return before ? completeValue(before) : fallback;
 }
 
-export function weeklyCells(metric, objective, observations, todayKey, quota) {
-  const rows = confirmed(observations);
-  const baseline = Number.isFinite(metric?.baseline) ? metric.baseline : 0;
+export function weeklyCells(metric, objective, observations, todayKey) {
+  const weeks = periodWeeks(objective, todayKey);
+  const baseline = Number.isFinite(metric?.baseline) ? metric.baseline : null;
+  const span = metric?.direction === 'increase' && Number.isFinite(metric.target) && baseline !== null ? metric.target - baseline : null;
+  if (!(span > 0) || !weeks.length) return [];
+  const rows = periodObservations(metric, objective, observations, todayKey);
+  const totalDays = weeks.reduce((sum, week) => sum + week.days, 0);
   const today = dayNumber(todayKey);
-  return periodWeeks(objective, todayKey).map(week => {
-    if (week.phase === 'future' || !rows.length) return { ...week, quota, done: null };
+  let allocated = 0;
+  return weeks.map((week, index) => {
+    const quota = index === weeks.length - 1 ? span - allocated : span * week.days / totalDays;
+    allocated += quota;
+    if (metric.sourceKey !== 'manual' || uncertainHistory(metric) || week.phase === 'future') return { ...week, quota, done: null };
     const endDay = Math.min(dayNumber(week.end), today) + 1;
-    return { ...week, quota, done: Math.max(0, valueBefore(rows, endDay, baseline) - valueBefore(rows, dayNumber(week.start), baseline)) };
+    const startDay = dayNumber(week.start);
+    const checked = rows.filter(item => observationDay(item.observedAt, objective) >= startDay && observationDay(item.observedAt, objective) < endDay).at(-1);
+    const value = completeValue(checked);
+    const before = valueBefore(rows, objective, startDay, startDay === dayNumber(objective.periodStart) ? baseline : null);
+    return { ...week, quota, done: value === null || before === null ? null : value - before };
   });
 }
 
@@ -230,16 +282,14 @@ export const isZeroKeep = metric => metric?.direction === 'decrease' && metric?.
 
 // 0 유지형의 주별 상태. 그 주에 확인한 관측이 있어야 판정한다(없으면 unknown).
 export function zeroKeepWeeks(metric, objective, observations, todayKey) {
-  const rows = confirmed(observations);
-  const baseline = Number.isFinite(metric?.baseline) ? metric.baseline : 0;
+  const rows = periodObservations(metric, objective, observations, todayKey);
   const today = dayNumber(todayKey);
   const cells = periodWeeks(objective, todayKey).map(week => {
     if (week.phase === 'future') return { ...week, state: 'future' };
     const s = dayNumber(week.start), e = Math.min(dayNumber(week.end), today);
-    const checked = rows.some(item => { const d = seoulDayNumber(item.observedAt); return d >= s && d <= e; });
-    if (!checked) return { ...week, state: week.phase === 'now' ? 'pending' : 'unknown' };
-    const increment = valueBefore(rows, e + 1, baseline) - valueBefore(rows, s, baseline);
-    return { ...week, state: increment > 0 ? 'broken' : 'kept' };
+    const own = rows.filter(item => { const d = observationDay(item.observedAt, objective); return d >= s && d <= e; });
+    if (metric.sourceKey && metric.sourceKey !== 'manual' || uncertainHistory(metric) || completeValue(own.at(-1)) === null) return { ...week, state: week.phase === 'now' ? 'pending' : 'unknown' };
+    return { ...week, state: own.some(item => completeValue(item) > 0) ? 'broken' : 'kept' };
   });
   let streak = 0;
   for (const cell of [...cells].reverse()) {
@@ -257,7 +307,7 @@ export function bulletScale(metric, values = []) {
   const lineHi = metric.direction === 'range' ? metric.targetMax : metric.target;
   if (!Number.isFinite(lineLo) || !Number.isFinite(lineHi)) return null;
   let min, max;
-  if (metric.unit === '%') { min = 0; max = Math.max(100, ...numbers); }
+  if (metric.unit === '%') { min = Math.min(0, lineLo, lineHi, ...numbers); max = Math.max(100, lineLo, lineHi, ...numbers); }
   else {
     const lo = Math.min(lineLo, ...numbers), hi = Math.max(lineHi, ...numbers);
     const pad = (hi - lo || Math.abs(hi) || 1) * 0.25;

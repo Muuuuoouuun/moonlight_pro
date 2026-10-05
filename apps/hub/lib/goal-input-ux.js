@@ -1,4 +1,5 @@
 import { shiftDateKey, toZonedDateKey } from './rhythm-calendar.js';
+import { isHealthIndicator } from './goal-concepts.js';
 
 // Calendar presets are explicit user choices, never inferred business targets.
 export function goalPeriodPreset(preset, now = new Date(), timezone = 'Asia/Seoul') {
@@ -27,4 +28,9 @@ export function goalCheckRows(model, { status = 'active', search = '', filter = 
     if (filter === 'manual' && !manual || filter === 'unmeasured' && !needsEvidence) return [];
     return [{ objective, metric, manual, needsEvidence }];
   });
+}
+
+// KPI 이름 검색은 목표 제목에 먼저 거르지 않는다. 선택한 소속의 model과 목표 상태를 그대로 보존한다.
+export function goalKpiRows(model, options = {}) {
+  return goalCheckRows(model, options).filter(row => isHealthIndicator(row.metric));
 }

@@ -5,8 +5,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Iconed } from '../hub-icons';
 import { Badge, Button, CertaintyBadge, Drawer, EmptyState, Kbd, SegmentedControl, SelectField, Skeleton, TextField, TruthBadge } from '../hub-primitives';
 import { GOAL_WORK_BASE, goalHref, goalScope, goalSectionState, goalLinkedEntityHref, goalView, measurementLabel } from '@/lib/goal-client';
-import { goalCheckRows } from '@/lib/goal-input-ux';
-import { FLOOR_SCORE, GOAL_CONCEPT_BY_ROLE, KPI_HEALTH_LABEL, bulletScale, daysSinceObservation, floorPaceScore, formatPaceNumber, isZeroKeep, milestoneSummary, reachedFloor, weeklyCells, zeroKeepWeeks, keyResultPace, paceSuggestion, isHealthIndicator, keyResultScore, kpiHealth, kpiSummary, kpiThresholdLabel, kpiTrend, objectivePace, objectivePeriod, objectiveScore, objectiveSuggestion, sortKpis, splitObjectiveMetrics } from '@/lib/goal-concepts';
+import { goalCheckRows, goalKpiRows } from '@/lib/goal-input-ux';
+import { FLOOR_SCORE, GOAL_CONCEPT_BY_ROLE, KPI_HEALTH_LABEL, bulletScale, daysSinceObservation, floorPaceScore, formatPaceNumber, isZeroKeep, milestoneSummary, reachedFloor, weeklyCells, zeroKeepWeeks, keyResultPace, paceSuggestion, isHealthIndicator, keyResultScore, kpiBulletReading, kpiHealth, kpiSummary, kpiThresholdLabel, metricFreshnessLabel, objectivePace, objectivePeriod, objectiveScore, objectiveSuggestion, sortKpis, splitObjectiveMetrics } from '@/lib/goal-concepts';
 import { useGoals, useGoalCommand } from '../use-goals';
 import { GOAL_SOURCE_OPTIONS, GoalCommandFeedback, GoalMetricCard, GoalMetricForm, GoalObjectiveForm, GoalObservationForm, GoalReadFeedback, goalScopeLabel } from '../goal-components';
 import { GoalWeeklyActuals } from '../goal-weekly-actuals';
@@ -78,7 +78,7 @@ function GoalQuickRecord({ objectiveId, metricId, onClose, onSaved }) {
   </Drawer>;
 }
 
-const seoulToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+const objectiveToday = objective => new Intl.DateTimeFormat('en-CA', { timeZone: objective.timezone || 'Asia/Seoul' }).format(new Date());
 const formatScore = score => score === null ? '—' : score.toFixed(2);
 const activeManual = (metric, objective) => metric.sourceKey === 'manual' && objective?.status !== 'archived';
 const sourceName = metric => GOAL_SOURCE_OPTIONS.find(item => item.value === metric.sourceKey)?.label?.split(' · ')[0] || metric.sourceKey;
@@ -90,7 +90,7 @@ const OUTSIDE_RAIL_BUDGET = 3;
 // paceAt을 주면 "지금쯤"(바닥 페이스) 눈금을 하나 더 그린다 — 주 1건 미만 KR의 눈금 한 줄.
 function ScoreBar({ value, label, paceAt = null }) {
   const known = Number.isFinite(value);
-  return <div className={`goal-score-bar${known ? '' : ' goal-score-bar--empty'}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={known ? Math.round(value) : undefined} aria-valuetext={known ? undefined : '점수 없음'}><span style={{ width: `${known ? Math.max(0, Math.min(100, value)) : 0}%` }} /><i className="goal-score-bar__floor" aria-hidden="true" />{Number.isFinite(paceAt) && <i className="goal-score-bar__pace" style={{ left: `${paceAt}%` }} aria-hidden="true" />}</div>;
+  return <div className={`goal-score-bar${known ? '' : ' goal-score-bar--empty'}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={1} aria-valuenow={known ? value : undefined} aria-valuetext={known ? `점수 ${formatScore(value)} · 바닥 0.7 · 천장 미등록` : '점수 없음'}><span style={{ width: `${known ? Math.max(0, Math.min(1, value)) * 100 : 0}%` }} /><i className="goal-score-bar__floor" aria-hidden="true" />{Number.isFinite(paceAt) && <i className="goal-score-bar__pace" style={{ left: `${paceAt * 100}%` }} aria-hidden="true" />}</div>;
 }
 const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
 const shortDate = key => `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}(${WEEKDAY[new Date(`${key}T12:00:00Z`).getUTCDay()]})`;
@@ -110,13 +110,13 @@ const PACE_STATE_LABEL = { behind: '기준선보다 늦음', on: '기준선과 �
 function paceLine(pace, unit) {
   if (!pace) return null;
   const u = unit ? unit : '';
-  const weekly = pace.weeklyPace ? `주 ${pace.weeklyPace}${u} 페이스` : `기간 안 ${formatPaceNumber(pace.target)}${u}`;
+  const weekly = pace.weeklyPace ? `7일당 약 ${formatPaceNumber(pace.weeklyPace)}${u} 균등 페이스` : `기간 안 ${formatPaceNumber(pace.target)}${u}`;
   if (pace.phase === 'upcoming') return `시작하면 ${weekly}`;
   // 주 1건도 안 되는 KR(월 결제 1건)은 "지금쯤 0.3건" 같은 소수 대신 기간 몫과 판정 시점만 말한다.
   if (!pace.weeklyPace) return [weekly, pace.state === 'unknown' ? '마지막 주에 판정' : PACE_STATE_LABEL[pace.state]].join(' · ');
   const parts = [`지금쯤 ${formatPaceNumber(pace.expected)}${u}`];
   if (pace.state !== 'unknown') parts.push(PACE_STATE_LABEL[pace.state]);
-  if (pace.weeklyPace && pace.weekDone !== null) parts.push(`이번 주 ${formatPaceNumber(pace.weekDone)}/${pace.weeklyPace}${u}`);
+  if (pace.weeklyPace && pace.weekDone !== null) parts.push(`이번 주 관측 차이 ${formatPaceNumber(pace.weekDone)}${u} · 균등 몫 약 ${formatPaceNumber(pace.weekQuota)}${u}`);
   else if (pace.weeklyPace) parts.push(weekly);
   return parts.join(' · ');
 }
@@ -124,9 +124,9 @@ function paceLine(pace, unit) {
 function WeekCells({ cells, unit, label }) {
   return <ol className="goal-weeks" aria-label={label}>{cells.map(cell => {
     const full = cell.done !== null && cell.quota && cell.done >= cell.quota;
-    const fill = cell.done !== null && cell.quota ? Math.min(100, (cell.done / cell.quota) * 100) : 0;
-    const text = cell.done === null ? `·/${cell.quota}` : `${formatPaceNumber(cell.done)}/${cell.quota}`;
-    return <li key={cell.start} className={`goal-weeks__cell goal-weeks__cell--${cell.phase}${full ? ' goal-weeks__cell--full' : ''}`} aria-label={`${cell.label} 주 ${cell.done === null ? '기록 없음' : `${formatPaceNumber(cell.done)}${unit || ''}`} · 주 기준 ${cell.quota}${unit || ''}${cell.phase === 'now' ? ' · 이번 주' : ''}`}>
+    const fill = cell.done !== null && cell.quota ? Math.max(0, Math.min(100, (cell.done / cell.quota) * 100)) : 0;
+    const text = cell.done === null ? `·/≈${formatPaceNumber(cell.quota)}` : `${formatPaceNumber(cell.done)}/≈${formatPaceNumber(cell.quota)}`;
+    return <li key={cell.start} className={`goal-weeks__cell goal-weeks__cell--${cell.phase}${full ? ' goal-weeks__cell--full' : ''}`} aria-label={`${cell.label} 주 ${cell.done === null ? '주별 실적 미측정' : `관측 차이 ${formatPaceNumber(cell.done)}${unit || ''}`} · 기간 안 ${cell.days}일의 균등 페이스 몫 ${cell.quota}${unit || ''}${cell.phase === 'now' ? ' · 이번 주' : ''}`}>
       <span className="goal-weeks__box"><i style={{ width: `${fill}%` }} /><b className="mono">{text}</b></span>
       <span className="mono goal-weeks__label">{cell.phase === 'now' ? `${cell.label} 이번 주` : cell.label}</span>
     </li>;
@@ -138,8 +138,8 @@ function KeyResultRow({ metric, objective, pace, cells, hrefFor, onOpen, onRecor
   const needsEvidence = metric.sourceKey === 'manual' && (metric.measurement?.coverage !== 'complete' || !Number.isFinite(metric.measurement?.value));
   const targetText = metric.direction === 'range' ? `기준 ${metric.targetMin ?? '—'}–${metric.targetMax ?? '—'}` : `바닥 ${metric.target ?? '—'}`;
   const partial = metric.progress?.state === 'partial';
-  const period = objectivePeriod(objective, seoulToday());
-  const paceAt = period.phase === 'running' ? floorPaceScore(period) * 100 : null;
+  const period = objectivePeriod(objective, objectiveToday(objective));
+  const paceAt = floorPaceScore(period);
   return <div className="goal-kr-row">
     <div className="goal-kr-row__identity">
       <span className="goal-kr-row__name">{metric.name}</span>
@@ -147,7 +147,7 @@ function KeyResultRow({ metric, objective, pace, cells, hrefFor, onOpen, onRecor
     </div>
     <div className="goal-kr-row__value"><strong className="stat goal-kr-row__now">{measurementLabel(metric)}</strong><span className="mono goal-kr-row__target">{targetText} · 천장 미등록</span></div>
     <div className="goal-kr-row__reading">
-      {cells?.length ? <WeekCells cells={cells} unit={metric.unit} label={`${metric.name} 주간 칸`} /> : <ScoreBar value={score === null ? null : score * 100} paceAt={paceAt} label={`${metric.name} 점수`} />}
+      {cells?.length ? <><WeekCells cells={cells} unit={metric.unit} label={`${metric.name} 주별 균등 페이스 · 활동 발생 주가 아닌 누적 관측 차이`} /><span className="goal-muted">기간 내 일수로 나눈 페이스 · 주별 목표와 다릅니다.</span></> : <ScoreBar value={score} paceAt={paceAt} label={`${metric.name} 점수`} />}
       {paceLine(pace, metric.unit) && <span className="mono goal-kr-row__pace">{paceLine(pace, metric.unit)}</span>}
     </div>
     <div className="goal-kr-row__score"><span className="stat goal-kr-row__score-num">{formatScore(score)}</span><span className="goal-muted">{score === null ? (metric.progress?.state === 'in_progress' ? '기준값 없음' : '점수 전') : reachedFloor(metric) ? '바닥 달성' : '점수'}</span></div>
@@ -160,7 +160,7 @@ function ObjectiveTrack({ score, period }) {
   const pace = floorPaceScore(period);
   const scorePct = score === null ? 0 : Math.min(100, score * 100);
   return <div className="goal-otrack-wrap">
-    <div className="goal-otrack" role="meter" aria-label="진행 점수" aria-valuemin={0} aria-valuemax={100} aria-valuenow={score === null ? undefined : Math.round(scorePct)} aria-valuetext={score === null ? '점수 없음' : `${formatScore(score)}${pace !== null ? `, 바닥 페이스 ${formatScore(pace)}` : ''}`}>
+    <div className="goal-otrack" role="meter" aria-label="진행 점수" aria-valuemin={0} aria-valuemax={1} aria-valuenow={score === null ? undefined : score} aria-valuetext={score === null ? '점수 없음' : `${formatScore(score)} · 바닥 0.7 · 천장 미등록${pace !== null ? `, 바닥 페이스 ${formatScore(pace)}` : ''}`}>
       {pace !== null && <span className="goal-otrack__pace" style={{ width: `${pace * 100}%` }} />}
       {score !== null && <span className="goal-otrack__fill" style={{ width: `${scorePct}%` }} />}
       <i className="goal-otrack__tick" style={{ left: `${FLOOR_SCORE * 100}%` }} aria-hidden="true" />
@@ -178,7 +178,7 @@ function zeroKeepState(metric) {
 
 function GoalObjectiveCard({ objective, model, hrefFor, onOpen, onRecord, onAddMetric, kpiHref, onContinue }) {
   const { keyResults, references, healthIndicators } = splitObjectiveMetrics(model.metrics, objective.id);
-  const today = seoulToday();
+  const today = objectiveToday(objective);
   const period = objectivePeriod(objective, today);
   if (period.phase === 'ended' && objective.status === 'active') return <li><GoalScorecard objective={objective} model={model} hrefFor={hrefFor} onOpen={onOpen} onRecord={onRecord} onRefresh={model.refresh} onContinue={onContinue} /></li>;
   const metricState = goalSectionState(model, 'operating_metrics');
@@ -187,12 +187,13 @@ function GoalObjectiveCard({ objective, model, hrefFor, onOpen, onRecord, onAddM
   const observationsOf = metric => model.observations.filter(item => item.metricId === metric.id);
   const paceRows = keyResults.map(metric => ({ metric, pace: keyResultPace(metric, objective, observationsOf(metric), today) }));
   const paceOf = metric => paceRows.find(row => row.metric.id === metric.id)?.pace || null;
-  const cellsOf = metric => { const p = paceOf(metric); return p?.weeklyPace ? weeklyCells(metric, objective, observationsOf(metric), today, p.weeklyPace) : null; };
+  const cellsOf = metric => { const p = paceOf(metric); return p?.weeklyPace && metric.sourceKey === 'manual' ? weeklyCells(metric, objective, observationsOf(metric), today) : null; };
   const suggestion = paceSuggestion(paceRows) || objectiveSuggestion(keyResults, healthIndicators);
   const outside = healthIndicators.filter(metric => kpiHealth(metric) === 'outside').length;
   const zeroKeeps = healthIndicators.filter(isZeroKeep);
   const ownMetricIds = new Set(model.metrics.filter(metric => metric.objectiveId === objective.id).map(metric => metric.id));
   const lastRecord = daysSinceObservation(model.observations.filter(item => ownMetricIds.has(item.metricId)), today);
+  const lastAggregate = [...keyResults, ...references, ...healthIndicators].filter(metric => metric.sourceKey !== 'manual' && Number.isFinite(Date.parse(metric.measurement?.observedAt))).sort((a, b) => Date.parse(b.measurement.observedAt) - Date.parse(a.measurement.observedAt))[0];
   const milestones = milestoneSummary(model.links.filter(link => link.objectiveId === objective.id), today);
   const groups = ['outcome', 'driver'].map(role => ({ role, ...GOAL_CONCEPT_BY_ROLE[role], rows: keyResults.filter(metric => metric.role === role) })).filter(group => group.rows.length);
   const archived = objective.status === 'archived';
@@ -204,7 +205,7 @@ function GoalObjectiveCard({ objective, model, hrefFor, onOpen, onRecord, onAddM
             <Badge tone="neutral" variant="outline" size="xs">{goalScopeLabel(objective.scope)}</Badge>
             {archived && <Badge tone="neutral" size="xs">보관됨</Badge>}
             <span className="mono goal-period-chip"><Iconed name="calendar" size={12} />{objective.periodStart}–{objective.periodEnd}{periodLabel(period) && <span className="goal-dday"> · {periodLabel(period)}</span>}</span>
-            {period.phase === 'running' && <span className="goal-muted goal-last-record">{lastRecord === null ? '○ 아직 기록 없음' : lastRecord === 0 ? '오늘 기록함' : `○ 마지막 기록 ${lastRecord}일 전`}</span>}
+            {period.phase === 'running' && <span className="goal-muted goal-last-record">{lastRecord === null ? lastAggregate ? metricFreshnessLabel(lastAggregate, today, objective.timezone) : '○ 아직 기록 없음' : lastRecord === 0 ? '오늘 수동 기록함' : `○ 마지막 수동 기록 ${lastRecord}일 전`}</span>}
           </div>
           <div className="goal-card-header__actions">
             {!archived && <Button size="xs" variant="outline" icon="plus" onClick={() => onAddMetric(objective)}>KR 추가</Button>}
@@ -218,7 +219,7 @@ function GoalObjectiveCard({ objective, model, hrefFor, onOpen, onRecord, onAddM
             {objective.description && <p className="goal-card-desc">{objective.description}</p>}
           </div>
           <div className="goal-objective__score">
-            <div className="goal-objective__score-head"><span className="stat goal-objective__score-num" aria-label={`진행 점수 ${formatScore(score)}`}>{formatScore(score)}</span><span className="goal-muted">진행 점수 · 바닥 0.7 · 천장 1.0</span></div>
+            <div className="goal-objective__score-head"><span className="stat goal-objective__score-num" aria-label={`진행 점수 ${formatScore(score)}`}>{formatScore(score)}</span><span className="goal-muted">진행 점수 · 바닥 0.7 · 천장 미등록</span></div>
             <ObjectiveTrack score={score} period={period} />
             <span className="goal-muted">{keyResults.length ? `KR ${scored}/${keyResults.length} 측정${unscored ? ` · 미측정 ${unscored}` : ''}` : 'KR 없음'}{period.phase === 'running' ? ` · 기간 ${Math.round(period.elapsed * 100)}% 경과` : ''}</span>
             {pace && <span className="goal-objective__pace">{pace}</span>}
@@ -267,20 +268,20 @@ function OkrView({ model, objectives, hrefFor, kpiHref, onOpen, onRecord, onAddM
   </>;
 }
 
-function BulletChart({ metric, trend }) {
-  const now = trend.length ? trend[trend.length - 1] : (Number.isFinite(metric.measurement?.value) ? metric.measurement.value : null);
-  const previous = trend.length >= 2 ? trend[trend.length - 2] : null;
+function BulletChart({ metric, observations, timezone = 'Asia/Seoul' }) {
+  const { now, previous, previousAt, partial } = kpiBulletReading(metric, observations);
   const scale = bulletScale(metric, [now, previous]);
   if (!scale) return <span className="goal-muted">선 미설정</span>;
   const [lo, hi] = scale.band;
-  const fmt = value => formatPaceNumber(Math.round(value * 10) / 10);
+  const fmt = value => new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 4 }).format(value);
+  const previousDate = previousAt ? new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(previousAt)) : null;
   return <div className="goal-bullet-wrap">
-    <div className="goal-bullet" role="img" aria-label={`${metric.name}: 허용 ${kpiThresholdLabel(metric)}, 이번 ${now === null ? '기록 없음' : fmt(now)}${previous !== null ? `, 지난 관측 ${fmt(previous)}` : ''}`}>
+    <div className="goal-bullet" role="img" aria-label={`${metric.name}: 허용 ${kpiThresholdLabel(metric)}, 이번 ${now === null ? '미측정' : fmt(now)}${partial ? ' · 일부 근거 · 선 안/밖 판단 보류' : ''}${previous !== null ? `, 이전 확정 ${fmt(previous)} · ${previousDate}` : ''}`}>
       <span className="goal-bullet__band" style={{ left: `${Math.min(lo, hi)}%`, width: `${Math.abs(hi - lo)}%` }} />
       {now !== null && <span className="goal-bullet__bar" style={{ width: `${scale.at(now)}%` }} />}
       {previous !== null && <i className="goal-bullet__last" style={{ left: `${scale.at(previous)}%` }} />}
     </div>
-    <div className="goal-otrack__scale mono" aria-hidden="true"><span style={{ left: 0 }}>{fmt(scale.min)}</span>{previous !== null && <span style={{ left: `${scale.at(previous)}%` }}>지난 {fmt(previous)}</span>}<span style={{ right: 0 }}>{fmt(scale.max)}</span></div>
+    <div className="goal-otrack__scale mono" aria-hidden="true"><span style={{ left: 0 }}>{fmt(scale.min)}</span>{previous !== null && <span style={{ left: `${scale.at(previous)}%` }}>확정 {fmt(previous)}</span>}<span style={{ right: 0 }}>{fmt(scale.max)}</span></div>
   </div>;
 }
 
@@ -293,27 +294,30 @@ function ZeroKeepCells({ metric, objective, observations, today }) {
   </div>;
 }
 
-function KpiRow({ metric, objective, health, trend, since, railed, today, observations, hrefFor, onOpen, onRecord }) {
+function KpiRow({ metric, objective, health, railed, observations, hrefFor, onOpen, onRecord }) {
+  const today = objectiveToday(objective);
   const zero = isZeroKeep(metric);
   return <li className={`goal-kpi-row${health === 'outside' && railed ? ' goal-kpi-row--outside' : ''}`}>
     <div className="goal-kpi-row__identity">
       <Link className="hub-row goal-kpi-row__name" data-goal-id={objective.id} onClick={onOpen} href={hrefFor(objective)}>{metric.name}</Link>
-      <span className="goal-muted goal-kpi-row__meta">{goalScopeLabel(objective.scope)} · {objective.title} · <span className="mono">{sourceName(metric)}</span> · {since === null ? '관측 없음' : since === 0 ? '오늘 관측' : `${since}일 전 관측`}</span>
+      <span className="goal-muted goal-kpi-row__meta">{goalScopeLabel(objective.scope)} · {objective.title} · <span className="mono">{sourceName(metric)} · {objective.periodStart}–{objective.periodEnd}</span> · {metricFreshnessLabel(metric, today, objective.timezone)}</span>
     </div>
     <div className="goal-kpi-row__reading"><strong className="stat goal-kpi-row__now">{measurementLabel(metric)}</strong><span className="mono goal-kpi-row__line">{kpiThresholdLabel(metric)}</span></div>
-    <div className="goal-kpi-row__chart">{zero ? <ZeroKeepCells metric={metric} objective={objective} observations={observations} today={today} /> : <BulletChart metric={metric} trend={trend} />}</div>
+    <div className="goal-kpi-row__chart">{zero ? <ZeroKeepCells metric={metric} objective={objective} observations={observations} today={today} /> : <BulletChart metric={metric} observations={observations} timezone={objective.timezone} />}</div>
     <KpiHealthMark health={health} />
     <div className="goal-kpi-row__action">{activeManual(metric, objective) ? <Button size="xs" variant="outline" data-record-metric={metric.id} onClick={event => onRecord(event, objective, metric)} aria-label={`${metric.name} 실제값 기록`}>기록</Button> : <span className="goal-muted">자동</span>}</div>
   </li>;
 }
 
-function KpiView({ model, objectives, hrefFor, onOpen, onRecord, onAdd }) {
-  const today = seoulToday();
-  const objectiveById = new Map(objectives.map(objective => [objective.id, objective]));
-  const rows = sortKpis(model.metrics.filter(metric => objectiveById.has(metric.objectiveId) && isHealthIndicator(metric) && metric.status !== 'archived' && !metric.archivedAt).map(metric => {
+function KpiView({ model, objectives, search, onClearSearch, hrefFor, onOpen, onRecord, onAdd }) {
+  const scopedModel = { ...model, objectives };
+  const available = goalKpiRows(scopedModel, { status: 'all' });
+  const rows = sortKpis(goalKpiRows(scopedModel, { status: 'all', search }).map(({ metric, objective }) => {
     const observations = model.observations.filter(item => item.metricId === metric.id);
-    return { metric, objective: objectiveById.get(metric.objectiveId), observations, health: kpiHealth(metric), trend: kpiTrend(observations), since: daysSinceObservation(observations, today) };
+    return { metric, objective, observations, health: kpiHealth(metric) };
   }));
+  const metricState = goalSectionState(model, 'operating_metrics');
+  const objectiveState = goalSectionState(model, 'operating_objectives');
   const summary = kpiSummary(rows);
   const railed = summary.outside > 0 && summary.outside <= OUTSIDE_RAIL_BUDGET;
   // 묶음은 선의 모양으로 나눈다 — 범위·문턱형은 불릿 차트, 0 유지형은 주별 ✓ 칸. 읽는 주기(매주·월말) 칸은 0053 뒤.
@@ -323,12 +327,12 @@ function KpiView({ model, objectives, hrefFor, onOpen, onRecord, onAdd }) {
   ].filter(group => group.rows.length);
   return <>
     <div className="goal-view-head">
-      <p className="goal-view-summary">{rows.length ? <>지킬 선 <span className="num">{summary.total}</span> · ✓ 선 안 <span className="num">{summary.inside}</span> · <span className={summary.outside ? 'goal-outside-count' : undefined}>▲ 선 밖 <span className="num">{summary.outside}</span></span> · ○ 확인 전 <span className="num">{summary.unmeasured}</span></> : 'KPI는 기간이 끝나도 계속 지켜볼 건강 지표입니다.'}</p>
+      <p className="goal-view-summary">{rows.length ? <>지킬 선 <span className="num">{summary.total}</span> · ✓ 선 안 <span className="num">{summary.inside}</span> · <span className={summary.outside ? 'goal-outside-count' : undefined}>▲ 선 밖 <span className="num">{summary.outside}</span></span> · ○ 확인 전 <span className="num">{summary.unmeasured}</span></> : 'KPI는 지킬 건강 지표이며, 현재는 목표 기간 단위로 집계합니다.'}</p>
       <Button size="xs" variant="outline" icon="plus" onClick={onAdd}>KPI 추가</Button>
     </div>
-    {!rows.length ? <EmptyState title="지킬 선(KPI)이 아직 없습니다" description="에너지 평균, 판매 시간 비중처럼 목표를 이루면서도 무너지면 안 되는 선을 정해 두세요. 점수를 내지 않고 선 안·밖과 추이로 봅니다." action={<Button variant="outline" onClick={onAdd}>KPI 추가</Button>} /> : <div className="goal-kpi-card">{groups.map(group => <section key={group.key} className="goal-kpi-group" aria-label={group.title}>
+    {!rows.length ? metricState !== 'live' || objectiveState !== 'live' ? <EmptyState title="KPI 목록을 모두 확인하지 못했습니다" description="읽기 상태를 확인한 뒤 검색하거나 지표를 추가하세요." action={<Button onClick={model.refresh}>다시 불러오기</Button>} /> : available.length ? <EmptyState title="검색에 맞는 KPI가 없습니다" description="목표 또는 지표 이름으로 다시 검색하세요." action={<Button onClick={onClearSearch}>검색 지우기</Button>} /> : <EmptyState title="이 조건에 등록된 KPI가 없습니다" description="목표 상태를 바꾸거나 지킬 선을 추가하세요. KPI는 점수 대신 선 안·밖으로 봅니다." action={<Button variant="outline" onClick={onAdd}>KPI 추가</Button>} /> : <div className="goal-kpi-card">{groups.map(group => <section key={group.key} className="goal-kpi-group" aria-label={group.title}>
       <h4 className="goal-kr-group__title"><span>{group.title}</span><span className="goal-muted">{group.hint}</span></h4>
-      <ul className="goal-kpi-list">{group.rows.map(row => <KpiRow key={row.metric.id} {...row} railed={railed} today={today} hrefFor={hrefFor} onOpen={onOpen} onRecord={onRecord} />)}</ul>
+      <ul className="goal-kpi-list">{group.rows.map(row => <KpiRow key={row.metric.id} {...row} railed={railed} hrefFor={hrefFor} onOpen={onOpen} onRecord={onRecord} />)}</ul>
     </section>)}</div>}
   </>;
 }
@@ -358,7 +362,7 @@ function GoalCheckList({ rows, onRecord, onOpen, hrefFor, model }) {
       <div className="goal-check-value">
         <strong className="stat">{measurementLabel(metric)}</strong>
         <span className="goal-muted mono">{targetStr}</span>
-        {kpi ? <KpiHealthMark health={kpiHealth(metric)} /> : <div className="goal-check-progress-wrap"><ScoreBar value={score === null ? null : score * 100} label={`${metric.name} 점수`} /><span className="num mono goal-muted">{score === null ? '점수 전' : formatScore(score)}</span></div>}
+        {kpi ? <KpiHealthMark health={kpiHealth(metric)} /> : <div className="goal-check-progress-wrap"><ScoreBar value={score} label={`${metric.name} 점수`} /><span className="num mono goal-muted">{score === null ? '점수 전' : `${formatScore(score)} · 바닥 0.7`}</span></div>}
         <span className="goal-muted">{needsEvidence ? '○ 근거 확인 필요' : manual ? '직접 기록 지표' : '자동 집계'}{metric.progress?.state === 'partial' ? ' · ◐ 일부 근거' : ''}</span>
       </div>
 
@@ -380,7 +384,7 @@ function GoalCheckList({ rows, onRecord, onOpen, hrefFor, model }) {
 function KpiAddDrawer({ objectives, onClose, onSaved }) {
   const [objectiveId, setObjectiveId] = React.useState(objectives[0]?.id || '');
   const objective = objectives.find(item => item.id === objectiveId);
-  return <Drawer title="KPI 추가" subtitle="기간이 끝나도 계속 지킬 선 — 점수 대신 선 안·밖으로 봅니다." presentation="compact" width="min(560px, 96vw)" onClose={onClose}>
+  return <Drawer title="KPI 추가" subtitle="현재 목표 기간의 지킬 선 — 점수 대신 선 안·밖으로 봅니다." presentation="compact" width="min(560px, 96vw)" onClose={onClose}>
     {!objectives.length ? <EmptyState title="먼저 목표를 만드세요" description="KPI는 진행 중인 목표에 붙습니다. 목표를 만든 뒤 지킬 선을 추가할 수 있습니다." action={<Button onClick={onClose}>닫기</Button>} /> : <>
       <SelectField label="붙일 목표" value={objectiveId} options={objectives.map(item => ({ value: item.id, label: `${goalScopeLabel(item.scope)} · ${item.title}` }))} onChange={event => setObjectiveId(event.target.value)} />
       {objective && <GoalMetricForm key={objective.id} objective={objective} defaultRole="guardrail" onSaved={onSaved} onCancel={onClose} />}
@@ -415,7 +419,8 @@ export function Goals() {
   const focusAfterClose = React.useRef(null);
   const creating = params.get('new') === 'goal';
   const selectedId = params.get('goal');
-  const filtered = model.objectives.filter(item => (status === 'all' || item.status === status) && `${item.title} ${item.description || ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const statusObjectives = model.objectives.filter(item => status === 'all' || item.status === status);
+  const filtered = statusObjectives.filter(item => `${item.title} ${item.description || ''}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const base = goalHref(null, scope, { check: checking, weekly, kpi, base: routeBase });
   const hrefFor = objective => goalHref(objective.id, scope, { check: checking, weekly, kpi, base: routeBase });
   const openRecord = (event, objective, metric) => { opener.current = event.currentTarget; setNotice(''); router.push(`${hrefFor(objective)}&record=${metric.id}`, {scroll:false}); };
@@ -462,7 +467,7 @@ export function Goals() {
           {!weekly && <TruthBadge state={model.status} />}
           {model.refreshing && <span className="mono goal-muted">갱신 중…</span>}
         </div>
-        <p className="goal-header-desc"><strong>OKR</strong>은 이 기간에 이루려는 변화와 그것을 재는 핵심 결과(KR)입니다. <strong>KPI</strong>는 기간이 끝나도 계속 지킬 건강 지표입니다.</p>
+        <p className="goal-header-desc"><strong>OKR</strong>은 이 기간에 이루려는 변화와 그것을 재는 핵심 결과(KR)입니다. <strong>KPI</strong>는 지킬 건강 지표이며, 현재는 목표 기간 단위로 기록하고 집계합니다.</p>
       </div>
       <div className="goal-actions">
         <Button disabled={model.refreshing} onClick={model.refresh} icon="refresh">새로고침</Button>
@@ -544,7 +549,7 @@ export function Goals() {
     ) : checking ? (
       <GoalCheckList rows={rows} onRecord={openRecord} onOpen={event => { opener.current = event.currentTarget; }} hrefFor={hrefFor} model={model} />
     ) : kpi ? (
-      <KpiView model={model} objectives={filtered} hrefFor={hrefFor} onOpen={event => { opener.current = event.currentTarget; }} onRecord={openRecord} onAdd={() => setKpiAdding(true)} />
+      <KpiView model={model} objectives={statusObjectives} search={search} onClearSearch={() => setSearch('')} hrefFor={hrefFor} onOpen={event => { opener.current = event.currentTarget; }} onRecord={openRecord} onAdd={() => setKpiAdding(true)} />
     ) : !filtered.length ? (
       <EmptyState title="조건에 맞는 목표가 없습니다" action={<Button onClick={() => { setSearch(''); setStatus('all'); }}>검색·필터 지우기</Button>} />
     ) : (
