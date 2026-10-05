@@ -35,7 +35,6 @@ export async function GET(req) {
           retryable: ledger.retryable !== false,
           tasks: [],
         },
-        { status: 502 },
       );
     }
 
@@ -67,9 +66,12 @@ export async function GET(req) {
     return NextResponse.json(
       {
         status: "error",
+        source: "error",
         error: "task-ledger-unexpected-error",
+        failedSources: ["tasks"],
+        retryable: true,
+        tasks: [],
       },
-      { status: 500 },
     );
   }
 }

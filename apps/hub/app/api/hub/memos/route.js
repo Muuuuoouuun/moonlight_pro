@@ -13,10 +13,14 @@ export async function GET(req) {
     (noteId && !isCanonicalUuid(noteId))
   )
     return NextResponse.json({ status: "invalid-input" }, { status: 400 });
-  const data = await getMemoLedger({ taskId, noteId });
-  return NextResponse.json(data, {
-    status: data.status === "error" ? 502 : 200,
-  });
+  try {
+    const data = await getMemoLedger({ taskId, noteId });
+    return NextResponse.json(data.status === "error" || data.source === "error"
+      ? { ...data, status: "error", source: "error", retryable: data.retryable !== false }
+      : data);
+  } catch {
+    return NextResponse.json({ status: "error", source: "error", error: "memo-ledger-read-failed", retryable: true, memos: [] });
+  }
 }
 export async function POST(req) {
   const guard = assertHubWriteAllowed(req);
