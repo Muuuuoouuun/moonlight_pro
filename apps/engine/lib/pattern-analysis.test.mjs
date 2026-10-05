@@ -211,3 +211,73 @@ test("executePatternAnalysis supports weekly_synthesis goal and up to 25 records
   assert.equal(result.patterns[0].kind, "weekly_synthesis");
   assert.equal(result.recordCount, 15);
 });
+
+const analysisInput = () => ({
+  workspaceId: "00000000-0000-4000-8000-000000000001",
+  requestId: "44444444-4444-4444-8444-444444444444",
+  goal: "general",
+  records: [{ id: "11111111-1111-4111-8111-111111111111", body: "주어진 기록에만 있는 근거 문장입니다." }],
+});
+
+test("malformed model JSON is a failed analysis, distinct from a valid empty result", async () => {
+  for (const text of ["not-json", "{", "```json\n{\n```", "  "]) {
+    const input = analysisInput(), before = structuredClone(input);
+    const parsed = processAndVerifyPatternOutput(text, input.records, input.goal);
+    assert.equal(parsed.error, "invalid-analysis-json");
+    const result = await executePatternAnalysis(input, { generate: async () => ({ ok: true, text }) });
+    assert.equal(result.status, "failed");
+    assert.equal(result.error, "invalid-analysis-json");
+    assert.deepEqual(result.patterns, []);
+    assert.equal(result.unverifiedQuotesFiltered, 0);
+    assert.equal(result.requestId, input.requestId);
+    assert.equal(result.goal, input.goal);
+    assert.equal(result.recordCount, 1);
+    assert.deepEqual(input, before);
+  }
+});
+
+test("missing or invalid candidates envelopes cannot appear as successful empty analyses", async () => {
+  for (const value of [null, [], {}, { candidates: null }, { candidates: {} }, { candidates: "" },
+    { candidates: [null] }, { candidates: ["candidate"] }, { candidates: [[]] }]) {
+    const input = analysisInput(), text = JSON.stringify(value);
+    assert.equal(processAndVerifyPatternOutput(text, input.records, input.goal).error, "invalid-analysis-output");
+    const result = await executePatternAnalysis(input, { generate: async () => ({ ok: true, text }) });
+    assert.equal(result.status, "failed");
+    assert.equal(result.error, "invalid-analysis-output");
+    assert.deepEqual(result.patterns, []);
+  }
+});
+
+test("a valid empty envelope remains successful, including the supported JSON fence", async () => {
+  for (const text of ['{"candidates":[]}', '```json\n{"candidates":[]}\n```']) {
+    const input = analysisInput();
+    const result = await executePatternAnalysis(input, { generate: async () => ({ ok: true, text }) });
+    assert.equal(result.status, "succeeded");
+    assert.equal(result.error, undefined);
+    assert.deepEqual(result.patterns, []);
+    assert.equal(result.unverifiedQuotesFiltered, 0);
+  }
+});
+
+test("output failure handling preserves the five-candidate cap and exact quote filtering", async () => {
+  const input = analysisInput();
+  const candidate = (quote, journalId = input.records[0].id) => ({
+    title: "기록에서 확인한 후보", evidenceQuotes: [{ journalId, quote }],
+  });
+  const result = await executePatternAnalysis(input, { generate: async () => ({ ok: true,
+    text: JSON.stringify({ candidates: Array.from({ length: 6 }, () => candidate(input.records[0].body)) }),
+  }) });
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.patterns.length, 5);
+  assert.equal(result.error, undefined);
+  for (const evidence of result.patterns.map(pattern => pattern.evidenceQuotes)) {
+    assert.equal(evidence[0].journalId, input.records[0].id);
+    assert.equal(evidence[0].quote, input.records[0].body);
+  }
+  const filtered = await executePatternAnalysis(input, { generate: async () => ({ ok: true,
+    text: JSON.stringify({ candidates: [candidate("원문에 없는 지어낸 근거입니다."), candidate(input.records[0].body, "missing-record")] }),
+  }) });
+  assert.equal(filtered.status, "succeeded");
+  assert.deepEqual(filtered.patterns, []);
+  assert.equal(filtered.unverifiedQuotesFiltered, 2);
+});

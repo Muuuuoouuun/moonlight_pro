@@ -163,16 +163,20 @@ export function processAndVerifyPatternOutput(
   rawJsonText: string,
   records: InputRecord[],
   goal: PatternGoal
-): { patterns: PatternCandidate[]; unverifiedQuotesFiltered: number } {
+): { patterns: PatternCandidate[]; unverifiedQuotesFiltered: number; error?: "invalid-analysis-json" | "invalid-analysis-output" } {
   let parsed: any;
   try {
     const cleaned = rawJsonText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
     parsed = JSON.parse(cleaned);
   } catch {
-    return { patterns: [], unverifiedQuotesFiltered: 0 };
+    return { patterns: [], unverifiedQuotesFiltered: 0, error: "invalid-analysis-json" };
   }
 
-  const rawCandidates = Array.isArray(parsed?.candidates) ? parsed.candidates : [];
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray(parsed.candidates)
+    || parsed.candidates.some((candidate: unknown) => !candidate || typeof candidate !== "object" || Array.isArray(candidate))) {
+    return { patterns: [], unverifiedQuotesFiltered: 0, error: "invalid-analysis-output" };
+  }
+  const rawCandidates = parsed.candidates;
   const recordsMap = new Map(records.map(r => [r.id, r]));
   let unverifiedQuotesFiltered = 0;
 
@@ -305,19 +309,20 @@ export async function executePatternAnalysis(
       };
     }
 
-    const { patterns, unverifiedQuotesFiltered } = processAndVerifyPatternOutput(
+    const { patterns, unverifiedQuotesFiltered, error } = processAndVerifyPatternOutput(
       genResult.text,
       input.records,
       input.goal
     );
 
     return {
-      status: "succeeded",
+      status: error ? "failed" : "succeeded",
       requestId: input.requestId,
       goal: input.goal,
       recordCount: input.records.length,
       patterns,
       unverifiedQuotesFiltered,
+      ...(error ? { error } : {}),
     };
   } catch (err: any) {
     return {
