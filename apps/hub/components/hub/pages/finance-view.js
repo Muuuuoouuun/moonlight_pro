@@ -78,3 +78,43 @@ export function financeSortRows(rows,sort) {
     return sort.dir==='desc' ? -order : order;
   });
 }
+
+const paymentEvidence = (entries,group) => group ? entries.filter(entry=>entry.group===group && entry.type==='expense' && !entry.duplicateOf && entry.grossAmount>0) : [];
+
+export function financeSubscriptionPayments(entries,subscriptions,months,selectedMonth='') {
+  const periods=selectedMonth ? [selectedMonth] : [...new Set(months)].sort();
+  const groups=new Map();
+  for (const record of subscriptions) {
+    const group=record.group || record.id || record.sourceKey || record.name;
+    const row=groups.get(group) || {group,names:[],contracts:[],cells:[]};
+    row.names.push(record.name);row.contracts.push(record);groups.set(group,row);
+  }
+  const rows=[...groups.values()].map(row=>{
+    const evidence=paymentEvidence(entries,row.contracts[0].group);
+    return {...row,cells:periods.map(month=>{
+      const payments=evidence.filter(entry=>entry.date?.startsWith(month));
+      return {month,net:payments.length ? payments.reduce((sum,entry)=>sum+entry.netAmount,0) : null,dates:[...new Set(payments.map(entry=>entry.date))].sort(),entries:payments};
+    })};
+  });
+  const totals=periods.map((month,index)=>{
+    const known=rows.map(row=>row.cells[index]).filter(cell=>cell.net!=null);
+    return {month,net:known.length ? known.reduce((sum,cell)=>sum+cell.net,0) : null,observedGroups:known.length,missingGroups:rows.length-known.length};
+  });
+  return {months:periods,rows,totals};
+}
+
+export function financeSubscriptionDates(record,entries) {
+  const payments=paymentEvidence(entries,record.group);
+  const lastPaymentDate=payments.map(entry=>entry.date).sort().at(-1) || null;
+  const lastActivePayment=payments.filter(entry=>entry.netAmount>0).map(entry=>entry.date).sort().at(-1);
+  const period=Number(record.statedCycle?.match(/(\d+)\s*개월(?:치|분)/)?.[1]);
+  let renewalReviewDate=null;
+  if (lastActivePayment && Number.isInteger(period) && period>0 && period<=24) {
+    const [year,month,day]=lastActivePayment.split('-').map(Number);
+    const first=new Date(Date.UTC(year,month-1+period,1));
+    const finalDay=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate();
+    first.setUTCDate(Math.min(day,finalDay));
+    renewalReviewDate=first.toISOString().slice(0,10);
+  }
+  return {...record,lastPaymentDate,nextScheduleDate:record.nextDate || renewalReviewDate,scheduleKind:record.nextDate ? 'planned' : renewalReviewDate ? 'review' : 'unknown'};
+}
