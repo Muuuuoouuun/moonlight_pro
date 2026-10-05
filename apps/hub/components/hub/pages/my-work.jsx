@@ -944,6 +944,29 @@ export function MyWork({ onNavigate }) {
   // 낙관적 기한 변경 오버레이 — PATCH 응답을 기다리지 않고 카드가 즉시 버킷을 옮긴다.
   // 배경 reload가 서버 진실로 덮으면 해당 패치를 걷어낸다.
   const [itemPatches, setItemPatches] = React.useState({});
+  const [quickRecovery, setQuickRecovery] = React.useState({ status: 'loading', recoverable: false });
+  const quickSurfaceRef = React.useRef(null);
+  React.useEffect(() => {
+    const surface = { active: true };
+    quickSurfaceRef.current = surface;
+    const writer = quickTaskWriter.current;
+    writer.activate(next => {
+      if (!surface.active || quickSurfaceRef.current !== surface) return;
+      setQuickRecovery(next);
+      if (['unauthorized', 'changed'].includes(next.status)) setQuickDraft({ title: '', dueAt: '', priority: 'medium' });
+      if (next.message) setNotice({ tone: next.status === 'ready' ? 'info' : 'err', label: next.message,
+        action: next.status === 'expired' ? { label: '새 입력으로 시작', onClick: () => { if (writer.startAfterExpiry()) setNotice(null); } }
+          : ['blocked', 'changed', 'unauthorized'].includes(next.status) ? { label: '다시 확인', onClick: () => writer.initialize() } : undefined });
+    });
+    const revalidate = () => { if (document.visibilityState !== 'hidden') writer.initialize(); };
+    window.addEventListener('focus', revalidate);
+    document.addEventListener('visibilitychange', revalidate);
+    return () => {
+      surface.active = false; writer.deactivate();
+      window.removeEventListener('focus', revalidate);
+      document.removeEventListener('visibilitychange', revalidate);
+    };
+  }, []);
   // 공유 되돌리기 훅 — 언마운트 시 clear가 아니라 **flush**한다. 이전 구현은 타이머만
   // 지워서 "완료됨" 영수증 후 3.5초 내 페이지 이탈 시 PATCH가 조용히 증발했다.
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
@@ -999,14 +1022,16 @@ export function MyWork({ onNavigate }) {
   // Durable quick-add task: POST /api/hub/tasks (Phase 1A write path). 상세 토글을 열면
   // 기한·우선순위도 한 번에 저장 — 기본은 제목만(빠른 경로) 그대로 유지.
   const createTask = async () => {
+    const surface = quickSurfaceRef.current;
+    if (!surface?.active || quickRecovery.status !== 'ready') return;
     if ((!quickTitle.trim() && !quickTaskWriter.current.getPending()) || quickSavingRef.current) return;
     quickSavingRef.current = true;
     setSaving(true);
     try {
       const data = await quickTaskWriter.current.submit(quickDraft, { details: showQuickDetail });
+      if (!surface.active || quickSurfaceRef.current !== surface || data.status === 'stale') return;
       if (['saved', 'duplicate'].includes(data.status)) {
         const createdId = data.task.id;
-        const title = data.title;
         const submittedDraft = data.submittedDraft;
         // Saving one item must not erase the next item typed during the request.
         setQuickDraft(current => clearSubmittedQuickTaskDraft(current, submittedDraft));
@@ -1017,12 +1042,9 @@ export function MyWork({ onNavigate }) {
         if (lane !== 'all' && lane !== 'task') setLane('all');
         if (bucketFilter !== 'all') setBucketFilter('all');
         const fresh = await reload();
+        if (!surface.active || quickSurfaceRef.current !== surface) return;
         const freshTasks = (fresh?.items || []).filter((i) => i.lane === 'task');
-        const created = (createdId && freshTasks.find((i) => i.entityId === createdId))
-          || freshTasks
-            .filter((i) => i.title === title)
-            .sort((a, b) => new Date(b.recencyAt || 0) - new Date(a.recencyAt || 0))[0]
-          || null;
+        const created = (createdId && freshTasks.find((i) => i.entityId === createdId)) || null;
         if (created) {
           setJustAddedId(created.id);
           scrollToRow(created.id);
@@ -1030,7 +1052,8 @@ export function MyWork({ onNavigate }) {
         // 연속 입력이 기본값이다 — 버튼 클릭으로 저장하면 포커스가 버튼에 남아 다음
         // 한 줄을 바로 못 친다(Enter 저장 경로만 우연히 동작했다). 입력창으로 되돌린다.
         quickRef.current?.focus();
-        const label = created?.bucket === 'later' ? '할 일 저장됨 · "나중"에 추가' : '할 일 저장됨';
+        const label = data.cleanupWarning ? '할 일 저장 확인됨 · 브라우저 복구 기록 정리 필요'
+          : created?.bucket === 'later' ? '할 일 저장됨 · "나중"에 추가' : '할 일 저장됨';
         setNotice({
           tone: 'ok',
           label,
@@ -1045,12 +1068,12 @@ export function MyWork({ onNavigate }) {
         toast.error(errMsg);
       }
     } catch (error) {
+      if (!surface.active || quickSurfaceRef.current !== surface) return;
       const errMsg = error instanceof Error ? error.message : String(error);
       setNotice({ tone: 'err', label: errMsg });
       toast.error(errMsg);
     } finally {
-      quickSavingRef.current = false;
-      setSaving(false);
+      if (surface.active && quickSurfaceRef.current === surface) { quickSavingRef.current = false; setSaving(false); }
     }
   };
 
@@ -1750,6 +1773,8 @@ export function MyWork({ onNavigate }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             ref={quickRef}
+            aria-label="새 할 일 제목"
+            maxLength={300}
             value={quickTitle}
             onChange={(e) => setQuickTitle(e.target.value)}
             onKeyDown={(e) => { if (shouldSubmitQuickTask(e, quickSavingRef.current)) { e.preventDefault(); createTask(); } }}
@@ -1766,8 +1791,8 @@ export function MyWork({ onNavigate }) {
             tooltip={showQuickDetail ? '상세 닫기' : '기한·우선순위 추가'}
             onClick={() => setShowQuickDetail((v) => !v)}
           />
-          <Button variant="primary" size="sm" icon="plus" onClick={createTask} disabled={saving || !quickTitle.trim()}>
-            할 일 <Kbd>N</Kbd>
+          <Button variant="primary" size="sm" icon="plus" onClick={createTask} disabled={saving || quickRecovery.status !== 'ready' || (!quickTitle.trim() && !quickRecovery.recoverable)}>
+            {quickRecovery.recoverable ? '이전 요청 확인' : quickRecovery.status === 'loading' ? '범위 확인 중' : '할 일'} <Kbd>N</Kbd>
           </Button>
         </div>
         {showQuickDetail && (
@@ -1805,7 +1830,7 @@ export function MyWork({ onNavigate }) {
         <span
           role={notice.tone === 'err' ? 'alert' : 'status'}
           aria-live="polite"
-          style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%', overflowWrap: 'anywhere', gap: 8 }}
         >
           {notice.label}
           {notice.action && (

@@ -6,6 +6,7 @@ import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd, EmptyState, 
 import { SOCIAL_BRAND_OPTIONS, socialBrandTarget, socialBrandUrl } from "./social-brand-target";
 import { AiUsageSection } from "./ai-usage-section";
 import { YouTubeConnections } from "./youtube-connections";
+import { resetQuickTasks } from '@/lib/quick-task-recovery';
 
 const EVOLUTION_EVENTS = [];
 
@@ -534,6 +535,10 @@ export function Settings({ onNavigate }) {
     setLogoutBusy(true);
     setLogoutError('');
     try {
+      // Invalidate pending requests before the cookie changes. Storage failures
+      // stay visible; never claim the capture text was removed when it was not.
+      try { resetQuickTasks(); }
+      catch { throw new Error('브라우저 복구 입력을 정리하지 못했습니다. 저장 공간을 확인하고 다시 로그아웃하세요.'); }
       const response = await fetch('/api/operator/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

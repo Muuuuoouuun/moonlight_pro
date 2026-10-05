@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 import { randomUUID } from "crypto";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
@@ -6,6 +6,7 @@ import { eqFilter, withWorkspaceFilter } from "@/lib/server-read";
 import { forwardPmsCommand } from "@/lib/pms-engine-client";
 import { getTaskLedger } from "@/lib/repositories/operating-ledger";
 import { isCanonicalUuid } from "@/lib/uuid.js";
+import { taskRecoveryAssertion } from '@/lib/operator-session';
 import {
   deleteSupabaseRecord,
   resolveDefaultWorkspaceId,
@@ -88,12 +89,20 @@ export async function POST(req) {
   if (parsed.error) {
     return parsed.error;
   }
+  if (!parsed.data || typeof parsed.data !== 'object' || Array.isArray(parsed.data)) {
+    return NextResponse.json({ status: 'invalid-input', error: 'task-command-must-be-object' }, { status: 400 });
+  }
 
+  const workspaceId = resolveDefaultWorkspaceId();
+  if (!taskRecoveryAssertion(req, parsed.data, workspaceId)) {
+    return NextResponse.json({ status: 'conflict', error: 'quick-task-owner-changed', retryable: false }, { status: 409 });
+  }
+  const { recoveryOwner, expectedWorkspaceId, ...command } = parsed.data;
   const result = await forwardPmsCommand({
-    ...parsed.data,
+    ...command,
     action: "create_task",
     id: parsed.data.id || randomUUID(),
-    workspaceId: resolveDefaultWorkspaceId(),
+    workspaceId,
   });
   return NextResponse.json(
     { ...result.data, task: result.data?.entity || null },
