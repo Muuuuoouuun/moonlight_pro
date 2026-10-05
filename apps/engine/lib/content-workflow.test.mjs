@@ -17,6 +17,8 @@ function normalize(input) {
 
 const reelScene = (patch = {}) => ({ id: "scene-1", visual: "화면", spoken: "대사", subtitle: "자막", duration: 10, notes: "", ...patch });
 const reelVariant = (body) => ({ body, variantType: "reels_script", channel: "youtube_shorts" });
+const withoutReceipt = (read = async () => assert.fail("unexpected variant read")) => async (table, options) =>
+  table === "content_workflow_receipts" ? { configured: true, rows: [] } : read(table, options);
 
 test("manual reel saves reject malformed JSON and invalid scene durations before persistence", async () => {
   for (const [body, reason] of [
@@ -30,7 +32,7 @@ test("manual reel saves reject malformed JSON and invalid scene durations before
     assert.equal(result.ok, false);
     assert.equal(result.reason, reason);
     let calls = 0;
-    const response = await workflow.executeContentWorkflow(input, { workspaceId }, { rpc: async () => { calls += 1; } });
+    const response = await workflow.executeContentWorkflow(input, { workspaceId }, { read: withoutReceipt(), rpc: async () => { calls += 1; } });
     assert.equal(response.status, "invalid-input");
     assert.equal(response.error, reason);
     assert.equal(calls, 0);
@@ -55,16 +57,16 @@ test("partial body updates use the saved scoped variant type instead of bypassin
   const input = update({ variant: { body: invalidBody } });
   const dependencies = {
     rpc: async () => { writes += 1; return { ok: true, data: { status: "saved" } }; },
-    read: async (table, options) => {
+    read: withoutReceipt(async (table, options) => {
       assert.equal(table, "content_variants");
       assert.deepEqual(options.filters, [["id", `eq.${variantId}`], ["workspace_id", `eq.${workspaceId}`], ["content_id", `eq.${contentId}`]]);
       return { configured: true, rows: [savedVariant()] };
-    },
+    }),
   };
   assert.deepEqual(await workflow.executeContentWorkflow(input, { workspaceId }, dependencies),
     { status: "invalid-input", error: "invalid-reels-script-duration", sceneNumber: 1 });
   assert.equal(writes, 0);
-  const plain = { ...dependencies, read: async () => ({ configured: true, rows: [savedVariant({ variant_type: "blog_insight" })] }) };
+  const plain = { ...dependencies, read: withoutReceipt(async () => ({ configured: true, rows: [savedVariant({ variant_type: "blog_insight" })] })) };
   assert.equal((await workflow.executeContentWorkflow(update({ variant: { body: "보통 글" } }), { workspaceId }, plain)).status, "saved");
   assert.equal(writes, 1);
 });
@@ -74,7 +76,7 @@ test("branching or changing to reels validates an inherited body without convert
   const before = structuredClone(saved);
   for (const action of ["save", "create_variant"]) {
     const result = await workflow.executeContentWorkflow(update({ action, variant: { variantType: "reels_script", channel: "reels" } }), { workspaceId }, {
-      read: async () => ({ configured: true, rows: [saved] }), rpc: async () => assert.fail("must not persist an inherited invalid body"),
+      read: withoutReceipt(async () => ({ configured: true, rows: [saved] })), rpc: async () => assert.fail("must not persist an inherited invalid body"),
     });
     assert.equal(result.error, "invalid-reels-script-json");
     assert.deepEqual(saved, before);
@@ -99,7 +101,7 @@ test("branching an inherited reel validates the copy and preserves the original 
     const saved = savedVariant({ body });
     let writes = 0;
     const result = await workflow.executeContentWorkflow(update({ action: "create_variant", variant: { title: "복사본" } }), { workspaceId }, {
-      read: async () => ({ configured: true, rows: [saved] }),
+      read: withoutReceipt(async () => ({ configured: true, rows: [saved] })),
       rpc: async () => { writes += 1; return { ok: true, data: { status: "saved" } }; },
     });
     assert.equal(result.status, body.startsWith("old") ? "invalid-input" : "saved");
@@ -120,7 +122,7 @@ test("failed or foreign partial-update reads never reach persistence", async () 
     async () => ({ configured: true, rows: [savedVariant(), savedVariant()] }),
     async () => ({ configured: true, rows: [savedVariant({ variant_type: undefined })] }),
   ]) {
-    const result = await workflow.executeContentWorkflow(input, { workspaceId }, { read, rpc: async () => assert.fail("must not write") });
+    const result = await workflow.executeContentWorkflow(input, { workspaceId }, { read: withoutReceipt(read), rpc: async () => assert.fail("must not write") });
     assert.ok(["error", "preview"].includes(result.status));
   }
 });
@@ -129,7 +131,7 @@ test("stale partial updates preserve the RPC's version check and idempotent rece
   const input = update({ variant: { body: "not JSON" } });
   for (const status of ["duplicate", "conflict"]) {
     const result = await workflow.executeContentWorkflow(input, { workspaceId }, {
-      read: async () => ({ configured: true, rows: [savedVariant({ updated_at: "2026-09-12T10:20:30.123457+00:00" })] }),
+      read: withoutReceipt(async () => ({ configured: true, rows: [savedVariant({ updated_at: "2026-09-12T10:20:30.123457+00:00" })] })),
       rpc: async (_name, params) => {
         assert.equal(params.p_command.expectedVariantUpdatedAt, timestamp);
         assert.equal(params.p_command.variant.body, "not JSON");

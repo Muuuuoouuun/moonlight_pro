@@ -33,10 +33,18 @@ test("rejects oversized UTF-8 and non-object JSON before persistence", async () 
   });
 });
 
-test("rejects invalid reel bodies with a scene-specific HTTP 400 without any database call", async () => {
+test("checks the scoped receipt before rejecting new invalid reel bodies, without an RPC", async () => {
   await withEnv(async () => {
     let calls = 0;
-    globalThis.fetch = async () => { calls += 1; throw new Error("must not fetch"); };
+    globalThis.fetch = async (url, init) => {
+      calls += 1;
+      const parsed = new URL(url);
+      assert.match(parsed.pathname, /\/content_workflow_receipts$/);
+      assert.equal(init.method || "GET", "GET");
+      assert.equal(parsed.searchParams.get("workspace_id"), `eq.${workspaceId}`);
+      assert.equal(parsed.searchParams.get("request_id"), `eq.${requestId}`);
+      return new Response("[]", { status: 200 });
+    };
     const scenes = [{ id: "scene-1", visual: "화면", spoken: "대사", subtitle: "", duration: 0, notes: "" }];
     const response = await route.POST(request({ ...body, variant: { body: JSON.stringify({ scenes }), variantType: "reels_script", channel: "youtube_shorts" } }));
     assert.equal(response.status, 400);
@@ -44,7 +52,7 @@ test("rejects invalid reel bodies with a scene-specific HTTP 400 without any dat
     const malformed = await route.POST(request({ ...body, variant: { body: "not JSON", variantType: "reels_script", channel: "reels" } }));
     assert.equal(malformed.status, 400);
     assert.equal((await malformed.json()).error, "invalid-reels-script-json");
-    assert.equal(calls, 0);
+    assert.equal(calls, 2);
   });
 });
 
@@ -56,6 +64,11 @@ test("a body-only update reads its scoped saved type and rejects invalid scenes 
       const parsed = new URL(url);
       calls.push(parsed);
       assert.equal(init.method || "GET", "GET");
+      if (parsed.pathname.endsWith("/content_workflow_receipts")) {
+        assert.equal(parsed.searchParams.get("request_id"), `eq.${requestId}`);
+        assert.equal(parsed.searchParams.get("workspace_id"), `eq.${workspaceId}`);
+        return new Response("[]", { status: 200 });
+      }
       assert.equal(parsed.searchParams.get("id"), `eq.${variantId}`);
       assert.equal(parsed.searchParams.get("workspace_id"), `eq.${workspaceId}`);
       assert.equal(parsed.searchParams.get("content_id"), `eq.${contentId}`);
@@ -66,8 +79,8 @@ test("a body-only update reads its scoped saved type and rejects invalid scenes 
       variant: { body: "not JSON" } }));
     assert.equal(response.status, 400);
     assert.equal((await response.json()).error, "invalid-reels-script-json");
-    assert.equal(calls.length, 1);
-    assert.match(calls[0].pathname, /\/content_variants$/);
+    assert.equal(calls.length, 2);
+    assert.match(calls[1].pathname, /\/content_variants$/);
   });
 });
 

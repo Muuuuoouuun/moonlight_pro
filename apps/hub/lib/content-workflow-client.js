@@ -147,6 +147,7 @@ const STUDIO_ERRORS = {
   'not-found': '콘텐츠를 찾을 수 없습니다. 콘텐츠 큐에서 다시 열어주세요.',
   'invalid-channel-format': '결과물 형식과 채널이 맞지 않습니다.',
   'payload-too-large': '내용이 너무 깁니다. 콘텐츠를 나누어 저장해주세요.',
+  'workflow-receipt-unconfirmed': '이전 저장 결과를 확인하지 못했습니다. 작성한 내용은 유지하며 같은 요청으로 다시 확인합니다.',
   'invalid-reels-script-json': '대본 JSON을 읽을 수 없습니다. 원본 JSON을 확인하고 수정해주세요.',
   'invalid-reels-script-scenes': '대본 JSON은 scenes 배열만 포함해야 하며, 장면은 최대 30개까지 담을 수 있습니다.',
   'invalid-reels-script-fields': '장면의 화면·대사·자막·길이·제작 메모 형식을 확인해주세요.',
