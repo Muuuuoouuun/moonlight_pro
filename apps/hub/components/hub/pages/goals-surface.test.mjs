@@ -6,6 +6,7 @@ const goalsSource = readFileSync(new URL('./goals.jsx', import.meta.url), 'utf8'
 const cssSource = readFileSync(new URL('../goals.css', import.meta.url), 'utf8');
 const componentsSource = readFileSync(new URL('../goal-components.jsx', import.meta.url), 'utf8');
 const scorecardSource = readFileSync(new URL('../goal-scorecard.jsx', import.meta.url), 'utf8');
+const scorecardSaveSource = readFileSync(new URL('../../../lib/scorecard-save.js', import.meta.url), 'utf8');
 
 test('OKR and KPI are separate views, not one mixed list', () => {
   assert.match(goalsSource, /function OkrView/);
@@ -117,8 +118,10 @@ test('mockup ③: KPI rows split by line shape into bullet charts and zero-keep 
 test('mockup ④: an ended active objective flips into the scorecard in place', () => {
   assert.match(goalsSource, /period\.phase === 'ended' && objective\.status === 'active'\) return <li><GoalScorecard/);
   assert.match(scorecardSource, /objectiveVerdict\(keyResults\)/);
-  assert.match(scorecardSource, /noteMeta: \{ kind: 'decision'/);
-  assert.match(scorecardSource, /command\('update_objective', \{[^}]*status: 'archived'/);
+  assert.match(scorecardSource, /createScorecardSaver/);
+  assert.match(scorecardSaveSource, /noteMeta: \{ kind: 'decision'/);
+  assert.match(scorecardSaveSource, /action: step === 'link' \? 'link_entity' : 'update_objective'/);
+  assert.match(scorecardSaveSource, /id: objective.id, status: 'archived'/);
   assert.match(scorecardSource, /export function GoalContinueDrawer/);
   assert.match(scorecardSource, /command\('create_metric'/);
   // 판정 칸은 색이 아니라 현재 위치 테두리로.

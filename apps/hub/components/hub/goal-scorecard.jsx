@@ -5,6 +5,7 @@ import { Badge, Button, CheckboxRow, Drawer, SegmentedControl, TextAreaField, Te
 import { createGoalCommandClient, goalSourceKeysFor, goalWriteErrorMessage, measurementLabel, readGoalLocal, writeGoalLocal } from '@/lib/goal-client';
 import { FLOOR_SCORE, VERDICTS, floorStatus, isZeroKeep, keyResultScore, nextPeriodDraft, objectiveScore, objectiveVerdict, periodWeeks, splitObjectiveMetrics } from '@/lib/goal-concepts';
 import { goalScopeLabel } from './goal-components';
+import { createScorecardSaver, readScorecardSave, scorecardSaveMessage, writeScorecardSave } from '@/lib/scorecard-save';
 
 // 월말 채점지 — 기간이 끝난 목표 카드가 제자리에서 채점 모드로 바뀐다(OKR·KPI 2단계 목업 ④, 2026-10-01).
 // 새 화면을 만들지 않는다. 점수는 관측에서 다시 계산되므로 따로 저장하지 않고, 채점 저장은
@@ -41,15 +42,11 @@ async function command(action, input, expectedRevision) {
   return result;
 }
 
-async function objectiveRevision(id) {
-  const response = await fetch(`/api/hub/goals?objectiveId=${encodeURIComponent(id)}`, { cache: 'no-store' });
-  const data = await response.json().catch(() => null);
-  const revision = data?.objectives?.find(item => item.id === id)?.revision;
-  if (!Number.isFinite(revision)) throw Object.assign(new Error('read'), { result: { error: 'goal-storage-unavailable' } });
-  return revision;
+export function GoalScorecard(props) {
+  return <ScorecardBody key={`${props.objective.scope}:${props.objective.id}`} {...props} />;
 }
 
-export function GoalScorecard({ objective, model, onRecord, onRefresh, onContinue }) {
+function ScorecardBody({ objective, model, onRecord, onRefresh, onContinue }) {
   const { keyResults, references, healthIndicators } = splitObjectiveMetrics(model.metrics, objective.id);
   const zeroKeeps = healthIndicators.filter(isZeroKeep);
   const lines = healthIndicators.filter(metric => !isZeroKeep(metric));
@@ -58,32 +55,34 @@ export function GoalScorecard({ objective, model, onRecord, onRefresh, onContinu
   const verdict = objectiveVerdict(keyResults);
   const brokenPromise = zeroKeeps.some(metric => (confirmedValue(metric) || 0) > 0);
   const draftKey = `scorecard:${objective.id}`;
-  const [draft, setDraft] = React.useState(() => readGoalLocal(draftKey, { retro: '', change: '' }));
+  const [recovery] = React.useState(() => {
+    try { return { saved: readScorecardSave(objective), error: false }; }
+    catch { return { saved: null, error: true }; }
+  });
+  const [draft, setDraft] = React.useState(() => recovery.saved?.draft || readGoalLocal(draftKey, { retro: '', change: '' }));
   const update = patch => setDraft(current => { const next = { ...current, ...patch }; writeGoalLocal(draftKey, next); return next; });
-  const [saving, setSaving] = React.useState('idle');
-  const [message, setMessage] = React.useState('');
+  const [saving, setSaving] = React.useState(recovery.error ? 'error' : recovery.saved?.state === 'saved' ? 'saved' : recovery.saved ? 'unknown' : 'idle');
+  const [message, setMessage] = React.useState(recovery.error ? '저장 복구 기록을 읽지 못했습니다. 회고를 복사하고 브라우저 저장 공간을 확인하세요.' : recovery.saved ? scorecardSaveMessage({ ...recovery.saved, state: recovery.saved.state === 'saved' ? 'saved' : 'unknown' }) : '');
   const [confirming, setConfirming] = React.useState(false);
-  const retroRequired = brokenPromise && !draft.retro.trim();
+  const pending = React.useRef(recovery.saved);
+  const active = React.useRef(true);
+  React.useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  const [saver] = React.useState(() => createScorecardSaver({
+    get: () => { if (recovery.error) throw new Error('recovery-unavailable'); return pending.current; },
+    persist: value => { writeScorecardSave(objective, value); pending.current = value; },
+    isCurrent: () => active.current,
+    update: value => { setSaving(value.state); setMessage(value.version ? scorecardSaveMessage(value) : value.message); },
+  }));
+  const retroRequired = objective.scope === 'personal' && brokenPromise && !draft.retro.trim();
+  const frozen = Boolean(pending.current) || recovery.error;
 
   async function save() {
     if (retroRequired) { setMessage('지키는 약속을 어긴 달은 "무엇을 만들었고 왜 팔기보다 급했는지"를 회고에 적어야 채점을 저장할 수 있습니다.'); return; }
-    setSaving('saving'); setMessage('');
-    try {
-      if (draft.retro.trim()) {
-        const entryId = crypto.randomUUID();
-        const body = [draft.retro.trim(), '', `최종 점수 ${formatScore(score)} · 바닥 달성 KR ${reached}/${keyResults.length}`, verdict.key ? `판정: ${VERDICTS[verdict.key].title} — ${VERDICTS[verdict.key].text}` : '', draft.change ? `다음 기간에 바꿀 하나: ${CHANGE_ONE_LABEL[draft.change]}` : ''].filter(Boolean).join('\n');
-        const response = await fetch('/api/hub/journal', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'save', requestId: crypto.randomUUID(), entryId, expectedRevision: 0, body, title: `${objective.title} · 채점 회고`, occurredAt: new Date().toISOString(), noteMeta: { kind: 'decision', enhancement: '' }, contexts: [] }) });
-        const data = await response.json().catch(() => null);
-        if (!response.ok || data?.entry?.id !== entryId) throw Object.assign(new Error('journal'), { result: { message: data?.message || '회고 메모를 저장하지 못했습니다.' } });
-        // 하루 리뷰·메모는 개인 기록이라 개인 목표에만 연결된다.
-        if (objective.scope === 'personal') await command('link_entity', { objectiveId: objective.id, entityType: 'journal_entries', entityId }, await objectiveRevision(objective.id));
-      }
-      await command('update_objective', { id: objective.id, title: objective.title, description: objective.description || '', status: 'archived' }, await objectiveRevision(objective.id));
+    const body = [draft.retro, `최종 점수 ${formatScore(score)} · 바닥 달성 KR ${reached}/${keyResults.length}`, verdict.key ? `판정: ${VERDICTS[verdict.key].title} — ${VERDICTS[verdict.key].text}` : '', draft.change ? `다음 기간에 바꿀 하나: ${CHANGE_ONE_LABEL[draft.change]}` : ''].filter(Boolean).join('\n');
+    const result = await saver.run({ objective, draft, body, retroRequired: objective.scope === 'personal' && brokenPromise });
+    if (active.current && result.state === 'saved') {
       writeGoalLocal(draftKey, null);
       setSaving('saved'); setConfirming(false); onRefresh?.();
-    } catch (error) {
-      setSaving('error');
-      setMessage(error?.result?.message || (error?.result?.state === 'conflict' ? '다른 변경이 먼저 저장됐습니다. 새로고침한 뒤 다시 저장하세요. 회고는 이 창에 남아 있습니다.' : error?.result?.state === 'unknown' ? '저장 여부를 확인하지 못했습니다. 새로고침해 목표 상태를 확인하세요. 회고는 이 창에 남아 있습니다.' : goalWriteErrorMessage(error?.result?.error)));
     }
   }
 
@@ -140,7 +139,7 @@ export function GoalScorecard({ objective, model, onRecord, onRefresh, onContinu
           <span className="goal-verdict__axis">결과 KR 달성</span>{['repeat', 'redefine'].map(key => <VerdictCell key={key} id={key} current={verdict.key} />)}
           <span className="goal-verdict__axis">결과 KR 미달</span>{['change-one', 'volume'].map(key => <VerdictCell key={key} id={key} current={verdict.key} />)}
         </div>
-        {verdict.key === 'change-one' && <div className="goal-actions"><span className="goal-muted">다음 기간에 바꿀 하나</span><SegmentedControl label="다음 기간에 바꿀 하나" value={draft.change || ''} options={CHANGE_ONE} onChange={value => update({ change: value })} /><span className="goal-muted">셋 중 하나만 고릅니다</span></div>}
+        {verdict.key === 'change-one' && <div className="goal-actions"><span className="goal-muted">다음 기간에 바꿀 하나</span>{frozen ? <span>{CHANGE_ONE_LABEL[draft.change] || '선택 없음'}</span> : <SegmentedControl label="다음 기간에 바꿀 하나" value={draft.change || ''} options={CHANGE_ONE} onChange={value => update({ change: value })} />}<span className="goal-muted">셋 중 하나만 고릅니다</span></div>}
       </> : <p className="goal-muted">{verdict.reason === 'unmeasured' ? `마감 값이 없는 KR ${verdict.unknown}개가 있어 판정을 보류합니다. 위 표에서 마감 값을 기록하세요.` : '결과 KR과 선행 KR이 모두 있어야 판정할 수 있습니다.'}</p>}
     </section>
 
@@ -154,14 +153,14 @@ export function GoalScorecard({ objective, model, onRecord, onRefresh, onContinu
     </div>
 
     <section className="goal-score-block" aria-label="회고">
-      <TextAreaField label={brokenPromise ? '회고 한 단락 · 필수 — 무엇을 만들었고 왜 팔기보다 급했나' : '회고 한 단락 · 선택'} value={draft.retro} maxLength={4000} rows={4} placeholder="무엇이 통했고, 무엇이 결과까지 가지 못했나" onChange={event => update({ retro: event.target.value })} hint="메모(결정)로 저장하고 이 목표에 연결합니다. 저장 전까지 이 창에 남습니다." />
+      <TextAreaField label={objective.scope === 'personal' && brokenPromise ? '회고 한 단락 · 필수 — 무엇을 만들었고 왜 팔기보다 급했나' : '회고 한 단락 · 선택'} value={draft.retro} readOnly={frozen} maxLength={4000} rows={4} placeholder="무엇이 통했고, 무엇이 결과까지 가지 못했나" onChange={event => { if (!frozen) update({ retro: event.target.value }); }} hint={frozen ? '저장 중인 회고는 유지됩니다. 재시도하면 저장되지 않은 단계만 이어서 확인합니다.' : objective.scope === 'personal' ? '개인 메모(결정)로 저장하고 이 목표에 연결합니다. 저장 전까지 이 창에 남습니다.' : '회사 메모(결정)로 저장합니다. 회고는 개인 기록에 섞이지 않습니다.'} />
     </section>
 
-    {message && <p className={saving === 'error' ? 'goal-error' : 'goal-muted'} role={saving === 'error' ? 'alert' : 'status'}>{message}</p>}
-    {confirming && <div className="goal-feedback"><p>채점을 저장하면 회고를 메모로 남기고 이 목표를 보관합니다. 점수와 관측 이력은 그대로 남습니다.</p><div className="goal-actions"><Button variant="primary" disabled={saving === 'saving'} onClick={save}>{saving === 'saving' ? '저장하는 중…' : '보관하고 저장'}</Button><Button disabled={saving === 'saving'} onClick={() => setConfirming(false)}>취소</Button></div></div>}
+    {message && <p className={['error', 'conflict'].includes(saving) ? 'goal-error' : 'goal-muted'} role={['error', 'conflict'].includes(saving) ? 'alert' : 'status'}>{message}</p>}
+    {confirming && <div className="goal-feedback"><p>채점을 저장하면 회고를 메모로 남기고 이 목표를 보관합니다. 점수와 관측 이력은 그대로 남습니다.</p><div className="goal-actions"><Button variant="primary" disabled={saving === 'saving' || saving === 'saved' || recovery.error} onClick={save}>{saving === 'saving' ? '저장하는 중…' : frozen ? '남은 저장 다시 확인' : '보관하고 저장'}</Button><Button disabled={saving === 'saving'} onClick={() => setConfirming(false)}>취소</Button></div></div>}
     <footer className="goal-card-footer">
       <span>{saving === 'saved' ? '채점을 저장했습니다.' : '채점 저장 = 회고 메모 + 목표 보관'}</span>
-      <div className="goal-actions"><Button variant="outline" onClick={() => onContinue?.(objective, { change: draft.change, verdict: verdict.key })}>다음 기간으로 이어가기 →</Button><Button variant="primary" disabled={saving === 'saving' || confirming} onClick={() => { if (retroRequired) { setMessage('지키는 약속을 어긴 달은 회고를 먼저 적어야 합니다.'); return; } setConfirming(true); }}>채점 저장</Button></div>
+      <div className="goal-actions"><Button variant="outline" disabled={saving === 'saving'} onClick={() => onContinue?.(objective, { change: draft.change, verdict: verdict.key })}>다음 기간으로 이어가기 →</Button><Button variant="primary" disabled={saving === 'saving' || saving === 'saved' || confirming || recovery.error} onClick={() => { if (retroRequired) { setMessage('지키는 약속을 어긴 달은 회고를 먼저 적어야 합니다.'); return; } setConfirming(true); }}>{frozen ? '남은 저장 확인' : '채점 저장'}</Button></div>
     </footer>
   </article>;
 }
