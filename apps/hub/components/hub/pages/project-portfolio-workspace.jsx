@@ -15,6 +15,9 @@ import { projectGenreLabel, projectGenreTint } from "./project-view-constants";
 import { classifyProjectPortfolio, portfolioWindow } from "./project-pms-metrics";
 import { selectUrgentProjectItems } from '@/lib/project-urgent-items';
 import { buildCurrentMonthProjectPreview } from '@/lib/project-monthly-preview';
+import { projectIndexDoneState } from '@/lib/project-index-order';
+
+const DONE_SPARKS = 6;
 
 const METRIC_FILTERS = [
   { key: "active", label: "진행 중" },
@@ -101,14 +104,25 @@ function computeDDay(dueAt) {
   return { text: `D-${diff}`, tone: "neutral" };
 }
 
-function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, onSelect, controls }) {
+function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, onSelect, controls, done = false, celebrating = false, onCelebrationEnd }) {
   const progress = progressValue(project);
+  const rowRef = React.useRef(null);
+  const previousDone = React.useRef(done);
+  // The same keyed row remains mounted while moving between groups. Scroll a
+  // selected/focused row into view even when reduced motion skips celebration.
+  React.useLayoutEffect(() => {
+    const newlyDone = done && !previousDone.current; previousDone.current = done;
+    if (newlyDone && (selected || rowRef.current?.contains?.(globalThis.document?.activeElement)))
+      rowRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [done, selected]);
 
   const risk = projectRisk(project, window);
   const dday = project.deadlineAlertSuppressed ? null : computeDDay(project.dueAt);
   const genreLabel = projectGenreLabel(project.genre);
   return (
-    <div className={indexStyles.row} data-project-index-id={project.id} data-selected={selected ? "true" : undefined}
+    <div ref={rowRef} className={indexStyles.row} data-project-index-id={project.id} data-selected={selected ? "true" : undefined}
+      data-done={done ? 'true' : undefined} data-celebrate={celebrating ? 'true' : undefined}
+      onAnimationEnd={event => { if (event.animationName === 'projectDoneGlow') onCelebrationEnd?.(project.id); }}
       data-dragging={controls.drag?.id === project.id ? 'true' : undefined}
       {...controls.rowEvents(project.id)}>
     <button
@@ -125,6 +139,11 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
         <span className={indexStyles.mark} title={genreLabel || undefined}><BrandMark brand={brand} size={19} active={selected} tint={projectGenreTint(project.genre)} /></span>
         <strong title={project.name}>{project.name}</strong>
         {genreLabel && <span className={indexStyles.srOnly}>{`장르 ${genreLabel}`}</span>}
+        {done && <span className={indexStyles.doneMark} title="할 일 모두 처리 · 결과 확인 전">
+          <Iconed name="check" size={13} />
+          <span className={indexStyles.srOnly}>완료됨</span>
+          {celebrating && Array.from({ length: DONE_SPARKS }, (_, index) => <i key={index} className={indexStyles.spark} aria-hidden="true" />)}
+        </span>}
         <span className="mono">{progress === null ? "—" : `${progress}%`}</span>
       </span>
       <span className="hub-project-portfolio-index-row__progress" aria-hidden="true">
@@ -139,9 +158,9 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
       </span>
       <span className={indexStyles.compactMeta}>
         <span title={formatLongDate(project.dueAt)} data-risk={risk.risky ? 'true' : undefined}>
-          <Iconed name={risk.risky ? 'flag' : 'calendar'} size={12} />
+          <Iconed name={risk.risky ? 'flag' : done ? 'clock' : 'calendar'} size={12} />
           {risk.risky ? (dday?.tone === 'danger' && risk.label !== '막힘' ? dday.text : risk.label)
-            : project.deadlineAlertSuppressed ? '기한 알림 해제' : dday ? dday.text : '기한 없음'}
+            : done ? '결과 확인 전' : project.deadlineAlertSuppressed ? '기한 알림 해제' : dday ? dday.text : '기한 없음'}
         </span>
         <span className={indexStyles.miniProgress} aria-hidden="true"><span style={{ width: `${progress ?? 0}%` }} /></span>
         <span className="mono" title={project.displayProgress?.label}>{progress === null ? '—' : `${progress}%`}</span>
@@ -222,7 +241,48 @@ export function ProjectPortfolioWorkspace({
   createSurface = null,
 }) {
   const indexControls = useProjectIndexControls(projects, indexStorageKey, indexProjects);
-  const indexOrderKey = indexControls.ordered.map(item => item.id).join(',');
+  const indexControlsRef = React.useRef(indexControls);
+  indexControlsRef.current = indexControls;
+  // A completed checklist is still awaiting result review; grouping never writes status.
+  const doneStateRef = React.useRef(null), completionSequence = React.useRef(0);
+  const [celebration, setCelebratingIds] = React.useState(() => ({ key: indexStorageKey, ids: new Set() }));
+  const celebratingIds = celebration.key === indexStorageKey ? celebration.ids : new Set();
+  const [completionNotice, setCompletionNotice] = React.useState(null);
+  const trackedProjects = indexProjects || projects;
+  React.useEffect(() => {
+    if (!['live', 'partial'].includes(sourceState)) return;
+    const next = new Map(trackedProjects.map(item => [item.id, projectIndexDoneState(item)]));
+    const previous = doneStateRef.current;
+    doneStateRef.current = { key: indexStorageKey, values: next };
+    if (!previous || previous.key !== indexStorageKey) { setCelebratingIds({ key: indexStorageKey, ids: new Set() }); setCompletionNotice(null); return; }
+    const fresh = [...next].filter(([id, done]) => done === true && previous.values.get(id) === false).map(([id]) => id);
+    if (!fresh.length) return;
+    if (indexControlsRef.current?.doneCollapsed) indexControlsRef.current.setDoneCollapsed(false);
+    setCompletionNotice({ scopeKey: indexStorageKey, key: ++completionSequence.current, message: `프로젝트 ${fresh.length}개 할 일 모두 처리 · 결과 확인 전` });
+    const reduced = globalThis.window?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    setCelebratingIds({ key: indexStorageKey, ids: new Set(reduced ? [] : fresh) });
+  }, [trackedProjects, indexStorageKey, sourceState]);
+  React.useEffect(() => {
+    const query = globalThis.window?.matchMedia?.('(prefers-reduced-motion: reduce)');
+    const stop = event => { if (event.matches) setCelebratingIds(previous => ({ ...previous, ids: new Set() })); };
+    query?.addEventListener?.('change', stop);
+    return () => query?.removeEventListener?.('change', stop);
+  }, []);
+  const finishCelebration = id => setCelebratingIds(previous => {
+    if (previous.key !== indexStorageKey || !previous.ids.has(id)) return previous;
+    const next = new Set(previous.ids); next.delete(id); return { ...previous, ids: next };
+  });
+  React.useEffect(() => {
+    const visible = new Set(projects.map(item => item.id));
+    setCelebratingIds(previous => {
+      if (previous.key !== indexStorageKey || [...previous.ids].every(id => visible.has(id))) return previous;
+      return { ...previous, ids: new Set([...previous.ids].filter(id => visible.has(id))) };
+    });
+  }, [projects, indexStorageKey]);
+  const openProjects = React.useMemo(() => indexControls.ordered.filter(item => !projectIndexDoneState(item)), [indexControls.ordered]);
+  const doneProjects = React.useMemo(() => indexControls.ordered.filter(item => projectIndexDoneState(item)), [indexControls.ordered]);
+  const visibleProjects = indexControls.doneCollapsed ? openProjects : indexControls.ordered;
+  const indexOrderKey = visibleProjects.map(item => item.id).join(',');
   React.useEffect(() => { onIndexOrderChange?.(indexOrderKey ? indexOrderKey.split(',') : []); }, [indexOrderKey, onIndexOrderChange]);
   const [focusProjectId, setFocusProjectId] = React.useState(null);
   const [showFilterPicker, setShowFilterPicker] = React.useState(false);
@@ -356,6 +416,8 @@ export function ProjectPortfolioWorkspace({
           </div>}
         </div>
 
+        <span className={indexStyles.srOnly} role="status" aria-live="polite" aria-atomic="true"
+          key={completionNotice?.scopeKey === indexStorageKey ? completionNotice.key : 'initial-completion'}>{completionNotice?.scopeKey === indexStorageKey ? completionNotice.message : ''}</span>
         {indexControls.notice && <div className={indexStyles.notice}>
           <span role="status">{indexControls.notice}</span>
           <IconButton icon="x" size={24} tooltip="목록 알림 닫기" onClick={indexControls.dismissNotice} />
@@ -369,18 +431,38 @@ export function ProjectPortfolioWorkspace({
                 ? <Button variant="outline" size="xs" onClick={() => { onQueryChange(''); onFilterChange(null); }}>검색·필터 해제</Button>
                 : <Button variant="outline" size="xs" onClick={onCreateProject}>프로젝트 추가</Button>}
               style={{ padding: '24px 12px' }} />
-          ) : indexControls.ordered.map((item) => (
-            <ProjectIndexRow
-              key={item.id}
-              project={item}
-              brand={brandByKey.get(item.brand) || brands[0] || null}
-              selected={project?.id === item.id}
-              keyboardSelected={keyboardSelectedId === item.id}
-              window={window}
-              onSelect={selectProject}
-              controls={indexControls}
-            />
-          ))}
+          ) : (
+            [
+              ...openProjects.map((item) => (
+                <ProjectIndexRow key={item.id} project={item}
+                  brand={brandByKey.get(item.brand) || brands[0] || null}
+                  selected={project?.id === item.id} keyboardSelected={keyboardSelectedId === item.id}
+                  window={window} onSelect={selectProject} controls={indexControls} done={false} />
+              )),
+              ...(doneProjects.length > 0 ? [
+                <button key="done-group-heading" type="button" className={indexStyles.doneHead}
+                  data-celebrate={celebratingIds.size ? 'true' : undefined}
+                  aria-label={`완료됨 ${doneProjects.length}개 · 할 일 모두 처리 · 결과 확인 전`}
+                  aria-expanded={!indexControls.doneCollapsed} onClick={() => {
+                    if (!indexControls.doneCollapsed) setCelebratingIds({ key: indexStorageKey, ids: new Set() });
+                    indexControls.toggleDoneCollapsed();
+                  }}>
+                  <span className={indexStyles.doneChevron} style={{ transform: indexControls.doneCollapsed ? 'rotate(-90deg)' : 'none' }}>
+                    <Iconed name="chevronD" size={12} />
+                  </span>
+                  <span>완료됨</span><span className="num">{doneProjects.length}</span>
+                  <span className={indexStyles.doneHint}>할 일 모두 처리 · 결과 확인 전</span>
+                </button>
+              ] : []),
+              ...(!indexControls.doneCollapsed ? doneProjects.map((item) => (
+                <ProjectIndexRow key={item.id} project={item}
+                  brand={brandByKey.get(item.brand) || brands[0] || null}
+                  selected={project?.id === item.id} keyboardSelected={keyboardSelectedId === item.id}
+                  window={window} onSelect={selectProject} controls={indexControls} done
+                  celebrating={celebratingIds.has(item.id)} onCelebrationEnd={finishCelebration} />
+              )) : []),
+            ]
+          )}
 
           {terminalProjects.length > 0 && (
             <div className="hub-project-portfolio-terminal">
