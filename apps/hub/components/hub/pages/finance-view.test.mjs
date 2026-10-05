@@ -44,3 +44,27 @@ test('company review includes newly classified expenses and keeps wallet movemen
  const rows=Array.from({length:4},(_,i)=>({id:String(i),type:i===2?'movement':'expense',claimCandidate:i===0,duplicateOf:i===3?'0':null,review:{purpose:i?'company':'unclassified'}}));
  assert.deepEqual(financeClaimEntries(rows).map(row=>row.id),['0','1']);
 });
+
+test('finance header sort cycles ascending, descending and original order',async()=>{
+ const {financeNextSort}=await import('./finance-view.js');
+ let sort={key:'',dir:''};
+ sort=financeNextSort(sort,'net');assert.deepEqual(sort,{key:'net',dir:'asc'});
+ sort=financeNextSort(sort,'net');assert.deepEqual(sort,{key:'net',dir:'desc'});
+ sort=financeNextSort(sort,'net');assert.deepEqual(sort,{key:'',dir:''});
+ assert.deepEqual(financeNextSort({key:'net',dir:'desc'},'date'),{key:'date',dir:'asc'});
+});
+test('finance numeric sorting preserves zero, puts unknown last in both directions and keeps ties stable',async()=>{
+ const {financeSortRows}=await import('./finance-view.js');
+ const rows=[null,9,100,0,9].map((value,index)=>({id:index,netAmount:value}));
+ assert.deepEqual(financeSortRows(rows,{key:'net',dir:'asc'}).map(r=>r.id),[3,1,4,2,0]);
+ assert.deepEqual(financeSortRows(rows,{key:'net',dir:'desc'}).map(r=>r.id),[2,1,4,3,0]);
+ assert.deepEqual(rows.map(r=>r.id),[0,1,2,3,4]);
+ assert.deepEqual(financeSortRows(rows,{key:'',dir:''}),rows);
+});
+test('finance contract dates and recovery remainder sort from their actual values',async()=>{
+ const {financeSortRows}=await import('./finance-view.js');
+ const dates=[null,'2099-02-01','2099-01-01'].map((nextDate,id)=>({id,nextDate}));
+ assert.deepEqual(financeSortRows(dates,{key:'nextDate',dir:'asc'}).map(r=>r.id),[2,1,0]);
+ const claims=[{id:0,review:{approvedAmount:0,recoveredAmount:null}},{id:1,review:{approvedAmount:5,recoveredAmount:6}},{id:2,review:{approvedAmount:5,recoveredAmount:2}}];
+ assert.deepEqual(financeSortRows(claims,{key:'remaining',dir:'asc'}).map(r=>r.id),[1,2,0]);
+});
