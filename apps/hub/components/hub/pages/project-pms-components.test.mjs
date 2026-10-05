@@ -330,7 +330,8 @@ test("project detail distinguishes failed optional ledgers from successful empty
   assert.match(detailPanelSource, /failedEmpty\(["']project_updates["']/);
   assert.match(detailPanelSource, /failedEmpty\(["']decisions["']/);
   assert.match(detailPanelSource, /<ProjectNotes[^\n]*failed=\{failed\.has\(["']notes["']\)\}/);
-  assert.match(detailPanelSource, /연결 메모를 확인할 수 없습니다/);
+  assert.match(detailPanelSource, /failed \? "기존 메모 이력을 확인할 수 없습니다\." : "이 프로젝트의 기존 메모 이력이 없습니다\."/);
+  assert.match(detailPanelSource, /기존 연결 메모 이력/);
   assert.match(detailPanelSource, /검색은 불러온 기록 안에서만 진행됩니다/);
   assert.match(detailPanelSource, /failedEmpty\(["']routine_checks["']/);
   assert.match(detailPanelSource, /failedSources\.length > 0/);
