@@ -30,20 +30,20 @@ export function MemoSearchControls({ filters, context, onApply }) {
         <SelectField label="메모 기록 범위" value={draft.noteScope} options={[{ value: '', label: '모든 범위' }, { value: 'personal', label: '개인' }, { value: 'company', label: '회사 업무' }, { value: 'unclassified', label: '범위 미분류' }]} onChange={(event) => {
           const next = { ...draft, noteScope: event.target.value }; setDraft(next); onApply(next);
         }} />
-        <Button variant="primary" type="submit">찾기</Button>
+        <Button variant="primary" type="submit" icon="search">찾기</Button>
         {draft.q && <Button aria-label="입력한 검색어 지우기" onClick={() => update({ q: '' })}>지우기</Button>}
         <Button variant="outline" aria-expanded={open} aria-controls="memo-search-details" onClick={() => setOpen((value) => !value)}>조건 {open ? '접기' : '열기'}</Button>
       </div>
       {open && <div id="memo-search-details" className="memo-search-details">
-        <div className="memo-actions" aria-label="빠른 기간 선택">{[[1, '오늘'], [7, '최근 7일'], [30, '최근 30일']].map(([days, label]) => <Button variant="outline" key={days} onClick={() => {
+        <div className="memo-actions memo-search-presets" aria-label="빠른 기간 선택">{[[1, '오늘'], [7, '최근 7일'], [30, '최근 30일']].map(([days, label]) => <Button variant="outline" key={days} onClick={() => {
           const next = { ...draft, ...memoPeriod(days) }; setDraft(next); onApply(next);
         }}>{label}</Button>)}</div>
-        <div className="memo-fields"><TextField label="시작일 · 한국 시간" type="date" value={draft.dateFrom} onChange={(event) => update({ dateFrom: event.target.value })} />
-          <TextField label="종료일 · 한국 시간" type="date" value={draft.dateTo} onChange={(event) => update({ dateTo: event.target.value })} /></div>
-        <div className="memo-fields"><SelectField label="메모 종류" value={draft.kind} options={[{ value: '', label: '모든 종류' }, ...NOTE_QUESTIONS]} onChange={(event) => update({ kind: event.target.value })} />
+        <div className="memo-search-filter-grid"><TextField label="시작일 · 한국 시간" type="date" value={draft.dateFrom} onChange={(event) => update({ dateFrom: event.target.value })} />
+          <TextField label="종료일 · 한국 시간" type="date" value={draft.dateTo} onChange={(event) => update({ dateTo: event.target.value })} />
+          <SelectField label="메모 종류" value={draft.kind} options={[{ value: '', label: '모든 종류' }, ...NOTE_QUESTIONS]} onChange={(event) => update({ kind: event.target.value })} />
           <SelectField label="활용 여부" value={draft.used} options={[{ value: 'all', label: '모두' }, { value: 'used', label: '할 일·콘텐츠에 활용함' }, { value: 'unused', label: '아직 활용하지 않음' }]} onChange={(event) => update({ used: event.target.value })} /></div>
         <MemoContextPicker single selected={selected} onChange={(rows) => { setChosen(rows[0] || null); update({ contextType: rows[0]?.type || '', contextId: rows[0]?.id || '' }); }} />
-        <Button variant="primary" type="submit">조건 적용</Button>
+        <div className="memo-search-footer"><Button variant="primary" type="submit">조건 적용</Button></div>
       </div>}
     </form>
     {chips.length > 0 && <div className="memo-search-chips" aria-label="적용한 검색 조건">

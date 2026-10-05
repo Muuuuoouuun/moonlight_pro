@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Button, Card, EmptyState, Kbd, TruthBadge } from '../hub-primitives';
+import { Button, Card, Checkbox, EmptyState, Kbd, SelectField, Skeleton, TruthBadge } from '../hub-primitives';
 import { journalScopeLabel } from '@/lib/journal';
 import { isCanonicalUuid } from '@/lib/uuid';
 import { createJournalStore, journalTabId, lastJournalWorkspace, rememberJournalWorkspace } from '@/lib/journal-browser-store';
@@ -31,6 +31,10 @@ const PATTERN_ERROR_COPY = {
   'records-not-found': '분석할 메모를 찾지 못했어요. 메모가 저장됐는지 확인해 주세요.',
   'invalid-input': '분석 요청이 올바르지 않아요. 메모를 다시 선택해 주세요.',
   'engine-unreachable': '분석 엔진에 연결하지 못했어요. 엔진이 실행 중인지 확인한 뒤 다시 실행해 주세요.',
+  'invalid-analysis-json': '분석 응답을 읽지 못했어요. 메모 선택은 유지했습니다. 같은 요청으로 다시 확인해 주세요.',
+  'invalid-analysis-output': '분석 응답의 형식이 올바르지 않아요. 같은 요청으로 다시 확인해 주세요.',
+  'generation-failed': '분석 결과를 생성하지 못했어요. 같은 요청으로 다시 확인해 주세요.',
+  'no-usable-records': '분석할 본문이 없어요. 저장한 메모 내용을 확인해 주세요.',
   network: '분석 요청을 보내지 못했어요. 연결을 확인한 뒤 다시 실행해 주세요.',
 };
 export function readPatternEnvelope(response, data) {
@@ -234,19 +238,14 @@ export function Memos() {
       <div style={{ padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--line-strong)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <strong style={{ fontSize: 13 }}>선택한 메모 {selectedIds.length}개</strong>
-          <select
-            value={patternGoal}
-            onChange={(e) => setPatternGoal(e.target.value)}
-            className="hub-input"
-            style={{ height: 32, fontSize: 12, padding: '0 8px' }}
-          >
-            <option value="weekly_synthesis">주간 신경망 종합 보고서</option>
-            <option value="sales_insight">영업 인사이트 도출</option>
-            <option value="content_hook">콘텐츠 훅 도출</option>
-            <option value="operational_rule">운영 체크리스트 도출</option>
-            <option value="decision_rationale">의사결정 배경 분석</option>
-            <option value="general">종합 패턴 분석</option>
-          </select>
+          <SelectField label="분석 목적" value={patternGoal} onChange={(e) => setPatternGoal(e.target.value)} options={[
+            { value: 'weekly_synthesis', label: '주간 종합 보고서' },
+            { value: 'sales_insight', label: '영업 인사이트 도출' },
+            { value: 'content_hook', label: '콘텐츠 훅 도출' },
+            { value: 'operational_rule', label: '운영 체크리스트 도출' },
+            { value: 'decision_rationale', label: '의사결정 배경 분석' },
+            { value: 'general', label: '종합 패턴 분석' },
+          ]} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Button variant="primary" size="xs" icon="sparkle" onClick={runPatternAnalysis} disabled={patternLoading || !analysisReady}>
@@ -289,19 +288,15 @@ export function Memos() {
     {error && <div className="memo-feedback" role="alert"><p>{error}</p><Button onClick={() => setReload((n) => n + 1)}>다시 불러오기</Button></div>}
     {search.error && <div className="memo-feedback" role="alert"><p>{search.error}</p><Button onClick={search.refresh}>다시 찾기</Button></div>}
     {['live', 'partial'].includes(search.status) && search.entries.length > 0 && <p className="memo-muted" role="status">불러온 메모 <span className="num">{search.entries.length}</span>개{search.nextCursor ? ' · 더 볼 수 있어요' : ''}</p>}
-    {search.status === 'loading' ? <p role="status" className="memo-muted">메모를 찾고 있어요…</p> : search.status === 'preview' ? <EmptyState icon="content" title="메모 저장소 연결이 필요해요" description="작성한 내용은 현재 탭에 임시 보관합니다. 탭을 닫기 전 연결해 저장하거나 입력을 복사해 주세요." action={<Button onClick={create} disabled={Boolean(id)}>메모 남기기</Button>} />
+    {search.status === 'loading' ? <div className="memo-loading"><span className="memo-muted">메모를 찾고 있어요…</span><Skeleton lines={2} width="100%" height={72} label="메모를 찾고 있어요" /></div> : search.status === 'preview' ? <EmptyState icon="content" title="메모 저장소 연결이 필요해요" description="작성한 내용은 현재 탭에 임시 보관합니다. 탭을 닫기 전 연결해 저장하거나 입력을 복사해 주세요." action={<Button onClick={create} disabled={Boolean(id)}>메모 남기기</Button>} />
       : ['live', 'partial'].includes(search.status) && (search.entries.length === 0 && search.nextCursor ? <div className="memo-feedback" role="status"><p>{search.message}</p><Button onClick={search.more} disabled={search.moreBusy}>범위 기록 더 찾기</Button></div> : search.entries.length === 0 ? <EmptyState icon="content" title={searchQuery ? '조건에 맞는 메모가 없어요' : '기억하고 싶은 일부터 한 줄'} description={searchQuery ? '검색어를 짧게 바꾸거나 조건을 해제해 보세요.' : '제목이나 분류 없이 바로 남겨보세요. 필요할 때 보강하고 활용할 수 있어요.'} action={searchQuery ? <Button onClick={() => applyFilters({})}>조건 모두 해제</Button> : <Button onClick={create} disabled={Boolean(id)}>첫 메모 남기기</Button>} />
-        : <Card pad={false} className="memo-list"><ol>{search.entries.map((row) => <li key={row.id} style={{ display: 'flex', alignItems: 'flex-start' }}>
-          <div style={{ padding: '24px 0 0 16px', display: 'flex', alignItems: 'center' }}>
-            <input
-              type="checkbox"
-              checked={selectedIds.includes(row.id)}
-              onChange={(e) => toggleSelect(row.id, e)}
-              aria-label="메모 선택"
-              style={{ cursor: 'pointer', width: 16, height: 16 }}
-            />
+        : <Card pad={false} className="memo-list"><ol>{search.entries.map((row) => <li key={row.id} className="memo-list-item">
+          <div className="memo-row-selection">
+            <Checkbox size={18} checked={selectedIds.includes(row.id)} disabled={!analysisReady}
+              label={`${row.title || row.excerpt.split('\n')[0] || '제목 없는 메모'} · ${journalScopeLabel(row.noteMeta?.scope)} 메모 선택`}
+              onChange={(_checked, event) => toggleSelect(row.id, event)} />
           </div>
-          <button className="hub-row memo-list-row" style={{ flex: 1 }} onClick={() => router.push(memoDocumentHref(params, { note: row.id }), { scroll: false })}>
+          <button className="hub-row memo-list-row" onClick={() => router.push(memoDocumentHref(params, { note: row.id }), { scroll: false })}>
             <div className="memo-row-top"><span className="mono memo-muted">{memoTime(row.occurredAt)}</span><span className="memo-muted">{NOTE_QUESTIONS.find((item) => item.value === row.noteMeta?.kind)?.label || '메모'}{row.used ? ' · 활용함' : ''} · {journalScopeLabel(row.noteMeta?.scope)}</span></div>
             <strong><MatchText text={row.title || row.excerpt.split('\n')[0]} query={filters.q} /></strong><p><MatchText text={row.match?.text || row.excerpt} query={row.match ? Array.from(filters.q.trim()).slice(0, 180).join('') : filters.q} /></p>
             {row.match && <span className="memo-muted">{({ title: '제목', body: '본문', enhancement: '보강 내용', tags: '태그' })[row.match.field]}에서 찾음</span>}
