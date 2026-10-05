@@ -41,7 +41,7 @@ async function command(action, input, expectedRevision) {
   return result;
 }
 
-async function objectiveRevision(id) {
+export async function objectiveRevision(id) {
   const response = await fetch(`/api/hub/goals?objectiveId=${encodeURIComponent(id)}`, { cache: 'no-store' });
   const data = await response.json().catch(() => null);
   const revision = data?.objectives?.find(item => item.id === id)?.revision;

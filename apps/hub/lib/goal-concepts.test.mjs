@@ -243,3 +243,23 @@ test('the next period draft rolls a monthly objective to the next whole month', 
   assert.deepEqual(nextPeriodDraft({ title: '12월 결산', periodStart: '2026-12-01', periodEnd: '2026-12-31' }).periodEnd, '2027-01-31');
   assert.deepEqual(nextPeriodDraft({ title: '스프린트', periodStart: '2026-10-05', periodEnd: '2026-10-18' }), { title: '스프린트', periodStart: '2026-10-19', periodEnd: '2026-11-01', monthly: false });
 });
+
+test('glance view: bar = progress to floor, tone follows pace or progress vs elapsed', async () => {
+  const { keyResultProgress, objectiveProgress, keyResultTone, objectivePaceState } = await import('./goal-concepts.js');
+  assert.equal(keyResultProgress(metric('outcome', { state: 'achieved' })), 100);
+  assert.equal(keyResultProgress(metric('outcome', { state: 'in_progress', value: 140 })), 100);
+  assert.equal(keyResultProgress(metric('outcome', { state: 'in_progress', value: 38 })), 38);
+  assert.equal(keyResultProgress(metric('outcome', { state: 'unmeasured' })), null);
+  assert.equal(objectiveProgress([metric('outcome', { value: 50 }), metric('driver', { value: 20 }), metric('driver', null)]), 35);
+  assert.equal(objectiveProgress([]), null);
+  const running = { phase: 'running', elapsed: 0.45 };
+  // 늘리기 KR은 주 단위 페이스 판정을 그대로 쓴다(마지막 주 전 판정 보류 포함).
+  assert.equal(keyResultTone(metric('driver', { value: 10 }), { state: 'behind' }, running), 'late');
+  assert.equal(keyResultTone(metric('driver', { value: 10 }), { state: 'unknown' }, running), 'wait');
+  assert.equal(keyResultTone(metric('driver', { value: 60 }), null, running), 'ahead');
+  assert.equal(keyResultTone(metric('driver', { value: 40 }), null, running), 'on');
+  assert.equal(keyResultTone(metric('driver', { value: 30 }), null, running), 'late');
+  assert.equal(keyResultTone(metric('driver', { value: 30 }), null, { phase: 'upcoming' }), 'wait');
+  assert.equal(objectivePaceState(0.20, running), 'late');
+  assert.equal(objectivePaceState(null, running), null);
+});
