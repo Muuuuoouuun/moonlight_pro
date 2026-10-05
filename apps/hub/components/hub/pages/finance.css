@@ -39,8 +39,11 @@
 .finance-entry-source { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .finance-entry-value, .finance-entry-approved, .finance-entry-recovered, .finance-entry-remaining { text-align: right; font-size: 12px; white-space: nowrap; }
 .finance-cell-label { display: none; color: var(--fg-muted); font-family: var(--font-sans); }
-.finance-subscription-grid { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(160px, 1.15fr) minmax(110px, 1fr) 110px 165px minmax(160px, 1fr); align-items: center; gap: 16px; }
+.finance-subscription-grid { display: grid; grid-template-columns: minmax(190px, 1.3fr) minmax(140px, 1.1fr) minmax(110px, 1fr) 110px 165px minmax(120px, 1fr); align-items: center; gap: 16px; }
 .finance-subscription-title { display: flex; flex-direction: column; min-width: 0; }
+.finance-subscription-label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.finance-subscription-label > strong { min-width: 0; }
+.finance-subscription-label > :last-child { flex-shrink: 0; }
 .finance-subscription-stated, .finance-subscription-contract { text-align: right; }
 .finance-subscription-stated, .finance-subscription-contract, .finance-subscription-next, .finance-subscription-paid, .finance-subscription-usage, .finance-subscription-title .finance-muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
 .finance-payments tbody th { min-width: 130px; color: var(--fg); }
@@ -92,6 +95,7 @@
   .finance-subscription-next-unknown { display: none; }
   .finance-subscription-usage { grid-column: 1; grid-row: 2; }
   .finance-subscriptions .finance-cell-label { display: inline; }
+  .finance-subscription-label { flex-wrap: wrap; }
 }
 @media (max-width: 600px) {
   .finance-page { gap: 12px; }

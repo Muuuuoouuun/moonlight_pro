@@ -6,6 +6,7 @@
 
 - 원구매·환불·명시적으로 대조한 중복을 분리한 월별 순소비와 네이버 머니 이동.
 - 자술 구독과 실제 결제 관측, 확인된 약정, 계정 별칭·사용 근거의 구분. 공동 관측 그룹은 한 번만 합산한다.
+- 계약 이름 옆 현재 이용 상태(이용 중·일시중지·해지·확인 필요)와 상세의 재개 예정일. 중단한 계약도 과거 결제는 유지하고 예정일에 자동 재개하지 않는다. 통신비도 같은 고정비 계약으로 관리한다.
 - 회사 목적·신청 상태·승인액·실제 회수액·검토 메모. 모르는 금액은 빈칸(null), 확인한 0원은 0이다. 확인된 일부 승인·회수 합계를 전체 정산 완료로 해석하지 않는다.
 - 더보기의 수집 범위와 CFO 리피아 검토 자료. Office에는 운영자가 필요한 자료를 제공하며 자동 요청·도구 실행은 없다.
 - 원본 관측은 수정하지 않는다. 검토 변경은 버전 충돌 시 입력을 보존하고 최신 기록과 비교한 뒤 재저장한다.
@@ -20,6 +21,8 @@
 
 구독 계약 자체는 모든 기간의 목록이다. 긴 자술 원문·계정·사용 메모는 행을 눌러 기존 검토 드로어에서 확인한다. 모바일은 구독 세 줄, 회사 청구 세 줄로 재배치하고 월별 표만 가로로 스크롤한다. [UI 설계](../superpowers/specs/2026-10-05-finance-compact-list-design.md).
 
+이용 상태는 운영자 입력 기준이며 결제만으로 판단하지 않는다. 계약 행에서 상태를 바꾸고, 일시중지·해지에는 재개 예정일을 입력할 수 있다. 다른 상태로 바꾸면 재개 예정일을 비운다. 중단한 계약의 다음 일정은 재개 예정만 표시한다. 검색에 상태 이름도 사용할 수 있고 CFO 더보기에서 상태별 계약 수를 확인한다. [상태·통신비 설계](../superpowers/specs/2026-10-06-finance-service-status-design.md).
+
 ## 가져오기
 
 금융 원본은 저장소 밖 비공개 위치에 두고, 검토한 표준 JSON bundle만 가져온다. 임의 은행 CSV 열 매핑은 아직 제공하지 않는다. `scripts/import-finance.mjs`는 기본이 검증 전용이고 원문·시크릿을 출력하지 않는다.
@@ -30,6 +33,8 @@ node scripts/import-finance.mjs /absolute/private/finance-bundle.json --apply --
 ```
 
 `version:1`, `importKey`, `from`, `through`, `coverage`, `entries`, `subscriptions`를 받는다. entry는 sourceKey/source/type/date/merchant/currency와 grossAmount/refundAmount/netAmount/movementAmount를 갖는다. type=expense의 net은 gross−refund, movement는 소비 금액이 0이며 walletKind와 이동액의 부호를 검증한다. duplicateOf는 같은 batch의 대조된 다른 출처 관측만 연결한다.
+
+결제 근거 없이 고정비 계약만 등록하려면 `entries:[]`, 하나 이상의 `subscriptions`, `coverage.contractsOnly:true`를 사용한다. 계약 등록은 결제 수집 범위를 변경하지 않으며 가짜 거래를 요구하지 않는다. 약정·현재 이용 상태는 import 원문으로 확정하지 않고 별도 review에서 입력한다.
 
 같은 importKey와 동일 입력은 duplicate로 재시도할 수 있다. 같은 키의 다른 입력이나 기존 sourceKey가 섞인 새 batch는 conflict로 멈춘다. 부분 취소 갱신·이미 검토한 자료의 교체·가져오기 되돌리기는 이 버전에서 자동 처리하지 않는다. 새 기간 자료는 기존 키와 겹치지 않는 검토된 batch로 가져온다.
 

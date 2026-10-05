@@ -1,6 +1,7 @@
 export const FINANCE_PURPOSES = ['unclassified', 'personal', 'business', 'company'];
 export const FINANCE_CLAIM_STATES = ['unknown', 'preparing', 'submitted', 'approved', 'partial', 'rejected', 'on_hold'];
 export const FINANCE_CYCLES = ['monthly', 'quarterly', 'annual'];
+export const FINANCE_SERVICE_STATES = ['unknown', 'active', 'paused', 'cancelled'];
 const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const money = v => Number.isSafeInteger(v) && Math.abs(v) <= 1e12;
 const key = v => typeof v === 'string' && /^[a-zA-Z0-9_:-]{1,120}$/.test(v);
@@ -10,7 +11,7 @@ const text = (v, max) => typeof v === 'string' && v.length <= max;
 export function validateFinanceImport(p) {
  const bad = reason => ({ok:false,reason});
  if (!object(p) || p.version !== 1 || !key(p.importKey) || !financeDate(p.from) || !financeDate(p.through) || p.from > p.through || !object(p.coverage)) return bad('invalid-period');
- if (!Array.isArray(p.entries) || !p.entries.length || p.entries.length>5000 || !Array.isArray(p.subscriptions) || p.subscriptions.length>100) return bad('invalid-size');
+ if (!Array.isArray(p.entries) || p.entries.length>5000 || !Array.isArray(p.subscriptions) || p.subscriptions.length>100 || (!p.entries.length && (!p.subscriptions.length || p.coverage.contractsOnly!==true)) || (p.entries.length && p.coverage.contractsOnly===true)) return bad('invalid-size');
  const rows=new Map();
  for (const r of p.entries) {
   if (!object(r) || !key(r.sourceKey) || rows.has(r.sourceKey) || !text(r.source,80) || !r.source || !financeDate(r.date) || r.date<p.from || r.date>p.through || !text(r.merchant,300) || !r.merchant || r.currency!=='KRW') return bad('invalid-observation');
@@ -28,7 +29,7 @@ export function validateFinanceImport(p) {
  }
  const subs=new Set();
  for(const s of p.subscriptions) {
-  if(!object(s)||!key(s.sourceKey)||subs.has(s.sourceKey)||!text(s.name,120)||!s.name||s.amount!=null||s.currency!=null||s.cycle!=null||s.nextDate!=null) return bad('invalid-contract');
+  if(!object(s)||!key(s.sourceKey)||subs.has(s.sourceKey)||!text(s.name,120)||!s.name||s.amount!=null||s.currency!=null||s.cycle!=null||s.nextDate!=null||s.serviceStatus!=null||s.resumeDate!=null) return bad('invalid-contract');
   if(s.statedAmount!=null&&(!money(s.statedAmount)||s.statedAmount<0))return bad('invalid-contract');
   subs.add(s.sourceKey);
  }
@@ -37,7 +38,8 @@ export function validateFinanceImport(p) {
 
 export function validateFinanceChanges(entity,changes) {
  if(!object(changes)||!Object.keys(changes).length) return {ok:false,reason:'empty-review'};
- const allowed=entity==='entry' ? ['purpose','claimStatus','approvedAmount','recoveredAmount','note'] : entity==='subscription' ? ['amount','currency','cycle','nextDate','accountAlias','usageNote','purpose'] : [];
+ const allowed=entity==='entry' ? ['purpose','claimStatus','approvedAmount','recoveredAmount','note'] : entity==='subscription' ? ['amount','currency','cycle','nextDate','accountAlias','usageNote','purpose','serviceStatus','resumeDate'] : [];
+ if(changes.resumeDate!=null && !['paused','cancelled'].includes(changes.serviceStatus)) return {ok:false,reason:'invalid-resume-state'};
  for(const [k,v] of Object.entries(changes)) {
   if(!allowed.includes(k)) return {ok:false,reason:'immutable-observation'};
   if(k==='purpose'&&!FINANCE_PURPOSES.includes(v))return {ok:false,reason:'invalid-purpose'};
@@ -45,7 +47,8 @@ export function validateFinanceChanges(entity,changes) {
   if(['amount','approvedAmount','recoveredAmount'].includes(k)&&v!==null&&(!money(v)||v<0))return {ok:false,reason:'invalid-amount'};
   if(k==='currency'&&v!==null&&v!=='KRW')return {ok:false,reason:'unsupported-currency'};
   if(k==='cycle'&&v!==null&&!FINANCE_CYCLES.includes(v))return {ok:false,reason:'invalid-cycle'};
-  if(k==='nextDate'&&v!==null&&!financeDate(v))return {ok:false,reason:'invalid-date'};
+  if(k==='serviceStatus'&&!FINANCE_SERVICE_STATES.includes(v))return {ok:false,reason:'invalid-service-state'};
+  if(['nextDate','resumeDate'].includes(k)&&v!==null&&!financeDate(v))return {ok:false,reason:'invalid-date'};
   if(['accountAlias','usageNote','note'].includes(k)&&v!==null&&!text(v,k==='accountAlias'?120:4000))return {ok:false,reason:'invalid-note'};
  }
  return {ok:true};
@@ -78,6 +81,7 @@ export function projectFinance(entries,subscriptions,imports) {
   months.set(month,m);
  }
  const ordered = map=>[...map.values()].sort((a,b)=>a.month.localeCompare(b.month));
- const last=[...imports].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||'')).at(-1);
- return {entries,subscriptions,imports,monthly:ordered(months),totals,groups:[...grouped.values()],wallet:ordered(wallets),coverage:last ? {...last.coverage,from:imports.map(r=>r.from).sort()[0],through:imports.map(r=>r.through).sort().at(-1),bankAccountCollected:imports.every(r=>r.coverage?.bankAccountCollected===true),periods:imports.map(r=>({from:r.from,through:r.through,coverage:r.coverage}))}:null};
+ const observations=imports.filter(record=>record.coverage?.contractsOnly!==true);
+ const last=[...observations].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||'')).at(-1);
+ return {entries,subscriptions,imports,monthly:ordered(months),totals,groups:[...grouped.values()],wallet:ordered(wallets),coverage:last ? {...last.coverage,from:observations.map(r=>r.from).sort()[0],through:observations.map(r=>r.through).sort().at(-1),bankAccountCollected:observations.every(r=>r.coverage?.bankAccountCollected===true),periods:observations.map(r=>({from:r.from,through:r.through,coverage:r.coverage}))}:null};
 }

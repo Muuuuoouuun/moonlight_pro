@@ -3,6 +3,7 @@ export const FINANCE_VIEWS = [{key:'flow',label:'흐름'},{key:'subscriptions',l
 export const PURPOSE_OPTIONS = [{value:'unclassified',label:'미분류'},{value:'personal',label:'개인'},{value:'business',label:'개인 사업'},{value:'company',label:'회사 업무'}];
 export const CLAIM_OPTIONS = [{value:'unknown',label:'미확인'},{value:'preparing',label:'준비'},{value:'submitted',label:'제출'},{value:'approved',label:'승인'},{value:'partial',label:'일부 승인'},{value:'rejected',label:'반려'},{value:'on_hold',label:'보류'}];
 export const CYCLE_OPTIONS = [{value:'',label:'주기 미확인'},{value:'monthly',label:'매월'},{value:'quarterly',label:'분기'},{value:'annual',label:'매년'}];
+export const SERVICE_OPTIONS = [{value:'unknown',label:'확인 필요'},{value:'active',label:'이용 중'},{value:'paused',label:'일시중지'},{value:'cancelled',label:'해지'}];
 export function financeMoney(amount) {
   return typeof amount === 'number' && Number.isFinite(amount) ? `${amount.toLocaleString('ko-KR')}원` : '미확인';
 }
@@ -32,7 +33,7 @@ export function financeObservedGroups(groups, subscriptions, month) {
   });
 }
 export function financeChanges(entity, draft) {
-  const fields=entity==='entry'?['purpose','claimStatus','approvedAmount','recoveredAmount','note']:['amount','currency','cycle','nextDate','accountAlias','usageNote','purpose'];
+  const fields=entity==='entry'?['purpose','claimStatus','approvedAmount','recoveredAmount','note']:['amount','currency','cycle','nextDate','accountAlias','usageNote','purpose','serviceStatus','resumeDate'];
   const numeric=new Set(['amount','approvedAmount','recoveredAmount']);
   const changes={};
   for (const key of fields) {
@@ -106,6 +107,7 @@ export function financeSubscriptionPayments(entries,subscriptions,months,selecte
 export function financeSubscriptionDates(record,entries) {
   const payments=paymentEvidence(entries,record.group);
   const lastPaymentDate=payments.map(entry=>entry.date).sort().at(-1) || null;
+  if(['paused','cancelled'].includes(record.serviceStatus)) return {...record,lastPaymentDate,nextScheduleDate:record.resumeDate||null,scheduleKind:record.resumeDate?'resume':'unknown'};
   const lastActivePayment=payments.filter(entry=>entry.netAmount>0).map(entry=>entry.date).sort().at(-1);
   const period=Number(record.statedCycle?.match(/(\d+)\s*개월(?:치|분)/)?.[1]);
   let renewalReviewDate=null;

@@ -152,6 +152,10 @@ export const DATABASE_FEATURES = [
     tables: ['finance_imports','finance_entries','finance_subscriptions'],
     functions: ['finance_import_v1(uuid,jsonb)','finance_review_v1(uuid,text,uuid,integer,jsonb)'],
     tableNoWrite: ['finance_imports','finance_entries','finance_subscriptions'].map(name=>[name,'service_role']) },
+  { name: '고정비 이용 상태·계약 등록', migration: '20261006_0068_finance_service_status.sql', tables: [],
+    functions: ['finance_import_v1(uuid,jsonb)','finance_review_v1(uuid,text,uuid,integer,jsonb)'],
+    bodyIncludes: [['finance_import_v1(uuid,jsonb)', "'contractsOnly'"],
+      ['finance_review_v1(uuid,text,uuid,integer,jsonb)', "review||p_changes)) then return"]] },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {

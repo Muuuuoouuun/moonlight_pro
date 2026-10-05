@@ -19,6 +19,8 @@ test('finance import is atomic/idempotent, review uses revisions, and public rol
   sql(`create role anon;create role authenticated;create role service_role bypassrls;create table public.workspaces(id uuid primary key);insert into public.workspaces values('${w}');`);
   sql(readFileSync(new URL('../supabase/migrations/20261005_0067_personal_finance.sql',import.meta.url),'utf8'));
   sql(readFileSync(new URL('../supabase/migrations/20261005_0067_personal_finance.sql',import.meta.url),'utf8'));
+  const nextMigration=new URL('../supabase/migrations/20261006_0068_finance_service_status.sql',import.meta.url);
+  sql(readFileSync(nextMigration,'utf8'));sql(readFileSync(nextMigration,'utf8'));
   const invoke=(name,args)=>JSON.parse(sql(`set role service_role;select public.${name}(${args});`));
   assert.equal(invoke('finance_import_v1',`'${w}',${quote({...p,entries:[{...entry,netAmount:99}]})}`).status,'error');
   assert.equal(sql('select count(*) from public.finance_imports'),'0');
@@ -33,5 +35,19 @@ test('finance import is atomic/idempotent, review uses revisions, and public rol
   assert.equal(sql("select has_table_privilege('anon','public.finance_entries','SELECT')"),'f');
   assert.equal(sql("select has_table_privilege('service_role','public.finance_entries','UPDATE')"),'f');
   assert.equal(sql("select has_function_privilege('authenticated','public.finance_import_v1(uuid,jsonb)','EXECUTE')"),'f');
+  const contracts={...p,importKey:'contract:only',entries:[],subscriptions:[{sourceKey:'contract:1',name:'고정비'}],coverage:{contractsOnly:true}};
+  assert.equal(invoke('finance_import_v1',`'${w}',${quote(contracts)}`).status,'imported');
+  assert.equal(invoke('finance_import_v1',`'${w}',${quote(contracts)}`).status,'duplicate');
+  assert.equal(sql('select count(*) from public.finance_entries'),'1');
+  const contractId=sql('select id from public.finance_subscriptions');
+  const review=changes=>invoke('finance_review_v1',`'${w}','subscription','${contractId}',1,${quote(changes)}`);
+  assert.equal(review({serviceStatus:'active',resumeDate:'2099-03-01'}).status,'error');
+  assert.equal(review({serviceStatus:'paused',resumeDate:'2099-02-31'}).status,'error');
+  assert.equal(review({serviceStatus:'paused',resumeDate:'2099-03-01'}).status,'saved');
+  assert.equal(review({serviceStatus:'cancelled'}).status,'conflict');
+  assert.equal(invoke('finance_review_v1',`'${w}','subscription','${contractId}',2,${quote({serviceStatus:'active'})}`).status,'error');
+  assert.equal(invoke('finance_review_v1',`'${w}','subscription','${contractId}',2,${quote({serviceStatus:'active',resumeDate:null})}`).status,'saved');
+  assert.equal(invoke('finance_import_v1',`'${w}',${quote({...contracts,importKey:'contract:empty',subscriptions:[]})}`).status,'error');
+  assert.equal(invoke('finance_import_v1',`'${w}',${quote({...contracts,importKey:'contract:no-marker',coverage:{}})}`).status,'error');
  }finally{spawnSync('pg_ctl',['-D',data,'-m','immediate','-w','stop'],{env,stdio:'ignore'});rmSync(dir,{recursive:true,force:true});}
 });
