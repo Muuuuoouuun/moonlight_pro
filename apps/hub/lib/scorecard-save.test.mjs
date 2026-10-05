@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { buildScorecardSave, createScorecardSaver, readScorecardObjective, readScorecardSave, scorecardSaveMessage, writeScorecardSave } from './scorecard-save.js';
 import { validateGoalCommand } from '@com-moon/goal-contracts';
+import { validateJournalInput } from './journal.js';
 
 function harness(options = {}) {
   const objective = { id: randomUUID(), scope: 'personal', title: '합성 목표', description: '기존 설명', status: 'active', revision: 1, ...options.objective };
@@ -18,6 +19,7 @@ function harness(options = {}) {
     if (controls.hold) await controls.hold;
     const failed = controls.fail?.(step, request);
     if (failed) return { ok: false, status: 409, json: async () => failed };
+    if (step === 'journal' && !validateJournalInput(request).ok) return { ok: false, status: 400, json: async () => ({ status: 'invalid-input', error: 'invalid-input' }) };
     const id = step === 'journal' ? request.requestId : request.commandId;
     let data = receipts.get(id);
     if (!data) {
@@ -195,7 +197,7 @@ test('goal revision read rejects error, preview, malformed and foreign scope bef
 
 test('recovery store separates company and personal IDs and reports unreadable storage', () => {
   const rows = new Map(), storage = { getItem: key => rows.get(key), setItem: (key, value) => rows.set(key, value) };
-  const objective = { id: randomUUID(), scope: 'personal' }, input = { objective, draft: { retro: '원문', change: '' }, body: '원문' };
+  const objective = { id: randomUUID(), scope: 'personal', title: '복구 목표' }, input = { objective, draft: { retro: '원문', change: '' }, body: '원문' };
   const value = buildScorecardSave(input);
   writeScorecardSave(objective, value, storage);
   assert.deepEqual(readScorecardSave(objective, storage), value);
@@ -219,4 +221,83 @@ test('scorecard UI keeps frozen text selectable, retry visible and foreign respo
   assert.match(source, /readOnly=\{frozen\}/);
   assert.match(source, /남은 저장 다시 확인/);
   assert.doesNotMatch(source, /entityType: 'journal_entries', entityId \}/);
+});
+
+for (const length of [200, 240, 300]) {
+  test(`${length}-unit goal titles save a bounded journal title, full original name and original link`, async () => {
+    const title = '가'.repeat(length), h = harness({ objective: { title } });
+    assert.equal((await h.create().run(h.input)).state, 'saved');
+    const journal = h.sent[0].request;
+    assert.equal(journal.title.length, 200); assert.match(journal.title, /… · 채점 회고$/);
+    assert.equal(journal.body, `목표: ${title}\n\n${h.input.body}`);
+    assert.equal(h.stored().draft.retro, h.input.draft.retro);
+    assert.equal(h.sent[1].request.input.objectiveId, h.objective.id);
+    assert.deepEqual(h.counts, { journal: 1, link: 1, archive: 1 });
+  });
+}
+
+for (const grapheme of ['😀', 'e\u0301', '👩🏽‍💻']) {
+  test(`journal title truncation keeps the ${grapheme} grapheme whole at the UTF-16 limit`, async () => {
+    const title = '가'.repeat(190) + grapheme + '마'.repeat(30), h = harness({ objective: { title } });
+    assert.equal((await h.create().run(h.input)).state, 'saved');
+    const journal = h.sent[0].request;
+    assert.equal(journal.title, '가'.repeat(190) + '… · 채점 회고');
+    assert.equal(journal.title.isWellFormed(), true); assert.ok(journal.title.length <= 200);
+    assert.equal(journal.body, `목표: ${title}\n\n${h.input.body}`);
+    const fits = '가'.repeat(191 - grapheme.length) + grapheme;
+    const boundary = harness({ objective: { title: fits + '마'.repeat(30) } });
+    assert.equal((await boundary.create().run(boundary.input)).state, 'saved');
+    assert.equal(boundary.sent[0].request.title, fits + '… · 채점 회고');
+    assert.equal(boundary.sent[0].request.title.length, 200);
+  });
+}
+
+test('a long company goal keeps its full name and company scope without creating a personal link', async () => {
+  const h = harness({ objective: { title: '회사'.repeat(150), scope: 'company' } });
+  assert.equal((await h.create().run(h.input)).state, 'saved');
+  assert.equal(h.sent[0].request.noteMeta.scope, 'company');
+  assert.equal(h.sent[0].request.body, `목표: ${h.objective.title}\n\n${h.input.body}`);
+  assert.deepEqual(h.counts, { journal: 1, link: 0, archive: 1 });
+});
+
+test('invalid fresh input never freezes a durable intent and corrected input can save', async () => {
+  for (const input of [{ body: '가'.repeat(20001) }, { body: '  ' }, { draft: { retro: '가'.repeat(4001), change: '' } },
+    { draft: { retro: '원문', change: 'unknown' } }, { objective: { id: 'invalid', scope: 'personal', title: '목표' } }]) {
+    const h = harness({ input });
+    assert.equal((await h.create().run(h.input)).state, 'error');
+    assert.equal(h.stored(), null); assert.equal(h.sent.length, 0);
+    const corrected = { ...h.input, objective: { ...h.objective }, draft: { retro: '원문', change: '' }, body: '원문' };
+    assert.equal((await h.create().run(corrected)).state, 'saved');
+  }
+  const h = harness();
+  assert.equal(buildScorecardSave(h.input, { makeId: () => 'invalid' }).state, 'error');
+  assert.equal(buildScorecardSave(h.input, { now: () => 'invalid' }).state, 'error');
+  assert.equal(buildScorecardSave({ ...h.input, objective: { ...h.objective, title: '가'.repeat(300) }, body: '  ' }).state, 'error');
+});
+
+test('a definitively rejected legacy title is repaired with its original IDs, name and retrospective', async () => {
+  const h = harness({ objective: { title: '가'.repeat(240) } }), legacy = buildScorecardSave(h.input);
+  legacy.requests.journal.title = h.objective.title + ' · 채점 회고'; legacy.requests.journal.body = h.input.body;
+  Object.assign(legacy, { state: 'error', step: 'journal', error: 'invalid-input', uncertain: { journal: false } });
+  const restored = harness({ objective: h.objective, stored: legacy });
+  assert.equal((await restored.create().run({ ...restored.input, body: '새 본문', objective: { ...h.objective, title: '새 목표명' } })).state, 'saved');
+  const journal = restored.sent[0].request;
+  assert.equal(journal.requestId, legacy.requests.journal.requestId); assert.equal(journal.entryId, legacy.requests.journal.entryId);
+  assert.equal(journal.body, `목표: ${h.objective.title}\n\n${h.input.body}`);
+  assert.equal(restored.stored().draft.retro, legacy.draft.retro);
+});
+
+test('an uncertain legacy title remains immutable after invalid-input and reconstructed retries', async () => {
+  const h = harness({ objective: { title: '가'.repeat(300) } }), legacy = buildScorecardSave(h.input);
+  legacy.requests.journal.title = h.objective.title + ' · 채점 회고'; legacy.requests.journal.body = h.input.body;
+  Object.assign(legacy, { state: 'unknown', step: 'journal', uncertain: { journal: true } });
+  const restored = harness({ objective: h.objective, stored: legacy });
+  let conflicts = 0;
+  restored.controls.fail = step => step === 'journal' && conflicts++ === 0 ? { status: 'conflict', error: 'request-id-reused' } : null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    assert.equal((await restored.create().run({ ...restored.input, body: '변경 불가' })).state, 'unknown');
+    assert.deepEqual(restored.sent[attempt].request, legacy.requests.journal);
+    assert.equal(restored.stored().uncertain.journal, true);
+  }
+  assert.deepEqual(restored.counts, { journal: 0, link: 0, archive: 0 });
 });

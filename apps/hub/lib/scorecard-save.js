@@ -1,8 +1,39 @@
 import { createGoalCommandClient, goalReadState, goalWriteErrorMessage } from './goal-client.js';
 import { isJournalEntry } from './journal-client.js';
+import { validateJournalInput } from './journal.js';
+import { isGoalUuid, validateGoalCommand } from '@com-moon/goal-contracts';
 
 const STEP_LABEL = { journal: '회고 메모', link: '목표 연결', archive: '목표 보관' };
 const storageKey = objective => `moonlight.scorecard-save.v1:${objective.scope}:${objective.id}`;
+const RETROSPECTIVE_SUFFIX = ' · 채점 회고';
+const invalidInput = () => ({ state: 'error', message: '목표 이름·회고 입력을 확인해 주세요. 회고는 그대로 남아 있습니다.' });
+
+function journalText(objectiveTitle, body) {
+  const complete = objectiveTitle + RETROSPECTIVE_SUFFIX;
+  if (complete.length <= 200) return { title: complete, body };
+  let prefix = '';
+  // The journal limit counts UTF-16 units; stop before a whole grapheme would
+  // cross it so emoji sequences and combining marks stay intact.
+  for (const { segment } of new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(objectiveTitle)) {
+    if (prefix.length + segment.length + 1 + RETROSPECTIVE_SUFFIX.length > 200) break;
+    prefix += segment;
+  }
+  return { title: prefix + '…' + RETROSPECTIVE_SUFFIX, body: `목표: ${objectiveTitle}\n\n${body}` };
+}
+
+function repairRejectedTitle(state) {
+  const request = state.requests.journal;
+  // Only the first definitive invalid-input response proves no journal write.
+  // An earlier lost response keeps the exact request, even if it now rejects.
+  if (state.state !== 'error' || state.error !== 'invalid-input' || state.uncertain.journal !== false
+    || state.done.journal || state.done.archive || state.requests.link || state.requests.archive
+    || typeof request?.title !== 'string' || typeof request.body !== 'string' || request.title.length <= 200 || !request.title.endsWith(RETROSPECTIVE_SUFFIX)) return state;
+  const originalTitle = request.title.slice(0, -RETROSPECTIVE_SUFFIX.length);
+  if (!originalTitle.trim() || originalTitle.length > 300) return state;
+  const repaired = { ...request, ...journalText(originalTitle, request.body) };
+  if (!validateJournalInput(repaired).ok) return state;
+  return { ...state, requests: { ...state.requests, journal: repaired }, error: '' };
+}
 
 // Unlike an ordinary draft, these IDs must survive a reload before any write.
 export function readScorecardSave(objective, storage = window.sessionStorage) {
@@ -17,11 +48,15 @@ export function writeScorecardSave(objective, value, storage = window.sessionSto
   storage.setItem(storageKey(objective), JSON.stringify(value));
 }
 
-export function buildScorecardSave({ objective, draft, body, retroRequired = false }, { makeId = () => crypto.randomUUID(), now = () => new Date().toISOString() } = {}) {
+export function buildScorecardSave({ objective, draft, body, retroRequired = false } = {}, { makeId = () => crypto.randomUUID(), now = () => new Date().toISOString() } = {}) {
+  if (!isGoalUuid(objective?.id) || typeof objective.title !== 'string' || !objective.title.trim() || objective.title.length > 300
+    || typeof draft?.retro !== 'string' || draft.retro.length > 4000 || !['', 'offer', 'price', 'segment'].includes(draft.change)
+    || typeof body !== 'string' || body.length > 20000 || (draft.retro.trim() && !body.trim())) return invalidInput();
   if (retroRequired && !draft.retro.trim()) return { state: 'error', message: '지키는 약속을 어긴 달은 회고를 먼저 적어야 합니다.' };
   if (!['personal', 'company'].includes(objective.scope)) return { state: 'error', message: '목표 소속을 확인한 뒤 다시 저장하세요.' };
   const journal = draft.retro.trim() ? { action: 'save', requestId: makeId(), entryId: makeId(), expectedRevision: 0,
-    body, title: `${objective.title} · 채점 회고`, occurredAt: now(), noteMeta: { kind: 'decision', enhancement: '', scope: objective.scope }, contexts: [] } : null;
+    ...journalText(objective.title, body), occurredAt: now(), noteMeta: { kind: 'decision', enhancement: '', scope: objective.scope }, contexts: [] } : null;
+  if (journal && !validateJournalInput(journal).ok) return invalidInput();
   return { version: 1, objective: { id: objective.id, scope: objective.scope }, draft: { ...draft },
     requests: { journal, link: null, archive: null }, done: { journal: !journal, link: !journal || objective.scope !== 'personal', archive: false },
     uncertain: {}, state: 'idle', step: journal ? 'journal' : 'archive', message: '' };
@@ -61,6 +96,7 @@ export function createScorecardSaver({ get, persist, update = () => {}, isCurren
       if (state.objective.id !== input.objective.id || state.objective.scope !== input.objective.scope) throw new Error('wrong-scorecard');
       if (!isCurrent()) return { state: 'stale' };
       if (state.state === 'saved') { publish(state); return state; }
+      state = repairRejectedTitle(state);
       state = checkpoint({ ...state, state: 'saving', message: '' });
       for (const step of ['journal', 'link', 'archive']) {
         if (!isCurrent()) return { state: 'stale' };
@@ -75,6 +111,7 @@ export function createScorecardSaver({ get, persist, update = () => {}, isCurren
           request = { commandId: makeId(), expectedRevision: objective.revision,
             action: step === 'link' ? 'link_entity' : 'update_objective',
             input: step === 'link' ? { objectiveId: objective.id, entityType: 'journal_entries', entityId: state.requests.journal.entryId } : { id: objective.id, status: 'archived' } };
+          if (objective.id !== state.objective.id || objective.scope !== state.objective.scope || !validateGoalCommand(request).ok) return failed(state, invalidInput());
           state = checkpoint({ ...state, requests: { ...state.requests, [step]: request } });
         }
         // Store an uncertain outcome before sending. Reloads and lost responses
@@ -87,7 +124,7 @@ export function createScorecardSaver({ get, persist, update = () => {}, isCurren
           const data = await response.json().catch(() => null);
           result = ['saved', 'duplicate'].includes(data?.status) && response.ok && isJournalEntry(data.entry, request.entryId) && data.entry.noteMeta?.scope === state.objective.scope
             ? { state: 'saved' }
-            : { state: data?.status === 'conflict' ? 'conflict' : ['invalid-input', 'forbidden', 'unauthorized', 'payload-too-large'].includes(data?.status) && !previouslyUncertain ? 'error' : 'unknown', error: data?.error };
+            : { state: data?.status === 'conflict' && !previouslyUncertain ? 'conflict' : ['invalid-input', 'forbidden', 'unauthorized', 'payload-too-large'].includes(data?.status) && !previouslyUncertain ? 'error' : 'unknown', error: data?.error };
         } else {
           const client = createGoalCommandClient({ fetchImpl, pending: previouslyUncertain ? request : null, makeId: () => request.commandId });
           result = previouslyUncertain ? await client.retry() : await client.submit(request.action, request.input, request.expectedRevision);
