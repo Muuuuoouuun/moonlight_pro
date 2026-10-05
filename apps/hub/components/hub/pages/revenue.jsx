@@ -1931,12 +1931,18 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
   // 방금 추가·완료한 항목이 보드에 바로 반영되게 한다.
   const [dealTaskStats, setDealTaskStats] = React.useState(new Map());
+  const [dealTaskStatsState, setDealTaskStatsState] = React.useState('loading');
   const loadDealTaskStats = React.useCallback(async () => {
     try {
       const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
       const data = await res.json().catch(() => null);
+      if (!res.ok || !['live', 'partial'].includes(data?.status) || !Array.isArray(data?.tasks)
+        || data.source === 'error' || data.failedSources?.includes('tasks') || data.partialSources?.includes('tasks')) {
+        setDealTaskStatsState(data?.status === 'preview' ? 'preview' : data?.status === 'partial' ? 'partial' : 'error');
+        return;
+      }
       const stats = new Map();
-      (Array.isArray(data?.tasks) ? data.tasks : []).forEach((t) => {
+      data.tasks.forEach((t) => {
         if (!t.dealId) return;
         const s = stats.get(t.dealId) || { done: 0, total: 0 };
         s.total += 1;
@@ -1944,7 +1950,8 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
         stats.set(t.dealId, s);
       });
       setDealTaskStats(stats);
-    } catch { /* board count is decorative — the drawer keeps its own live list */ }
+      setDealTaskStatsState('live');
+    } catch { setDealTaskStatsState('error'); }
   }, []);
   // 마운트 + 드로어 닫힘 재조회를 한 이펙트로 — 마운트 시 editDealId가 null이라 이펙트가
   // 둘이면 동일 요청이 2번 나간다(첫 진입 비용 2배).
@@ -2355,9 +2362,13 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
                       <div style={{ flex: 1 }} />
                       {(() => {
                         const stat = dealTaskStats.get(d.id);
-                        return stat?.total ? (
-                          <span className="mono" style={{ fontSize: 10.5, color: stat.done === stat.total ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>
-                            ✓{stat.done}/{stat.total}
+                        const unverified = dealTaskStatsState !== 'live';
+                        const label = unverified
+                          ? stat?.total ? `이전 ✓${stat.done}/${stat.total} · 미확인` : '할 일 미확인'
+                          : stat?.total ? `✓${stat.done}/${stat.total}` : '';
+                        return label && (stat?.total || dealTaskStatsState !== 'loading') ? (
+                          <span className="mono" title={unverified ? '현재 할 일 집계를 확인하지 못했습니다. 거래를 다시 열어 확인하세요.' : '확인한 할 일 완료/전체'} style={{ fontSize: 10.5, color: !unverified && stat.done === stat.total ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>
+                            {label}
                           </span>
                         ) : null;
                       })()}
