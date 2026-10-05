@@ -1,7 +1,7 @@
 import { JOURNAL_CONTEXT_TYPES, JOURNAL_NOTE_KINDS } from './journal.js';
 import { isCanonicalUuid } from './uuid.js';
 
-export const JOURNAL_SEARCH_DEFAULTS = Object.freeze({ q: '', dateFrom: '', dateTo: '', kind: '', contextType: '', contextId: '', used: 'all' });
+export const JOURNAL_SEARCH_DEFAULTS = Object.freeze({ q: '', dateFrom: '', dateTo: '', kind: '', noteScope: '', contextType: '', contextId: '', used: 'all' });
 const invalid = () => ({ ok: false, error: 'invalid-input', message: '검색어와 기간, 연결 조건을 확인해 주세요.' });
 function dateBoundary(value, nextDay = false) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000-')) return null;
@@ -18,8 +18,9 @@ export function normalizeJournalSearch(input = {}) {
     if (typeof value !== 'string') return invalid();
     filters[key] = key === 'q' ? value.trim() : value;
   }
-  const { q, dateFrom, dateTo, kind, contextType, contextId, used } = filters;
+  const { q, dateFrom, dateTo, kind, noteScope, contextType, contextId, used } = filters;
   if (q.length > 200 || (kind && !JOURNAL_NOTE_KINDS.includes(kind)) || !['all', 'used', 'unused'].includes(used)
+    || !['', 'personal', 'company', 'unclassified'].includes(noteScope)
     || Boolean(contextType) !== Boolean(contextId) || (contextType && (!JOURNAL_CONTEXT_TYPES.includes(contextType) || !isCanonicalUuid(contextId)))) return invalid();
   filters.contextId = contextId.toLowerCase();
   const dateFromAt = dateFrom ? dateBoundary(dateFrom) : null;

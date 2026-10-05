@@ -10,6 +10,7 @@ import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
 import { clearSubmittedQuickTaskDraft, shouldSubmitQuickTask } from "@/lib/quick-task-capture";
+import { createMyWorkQuickTask } from "@/lib/my-work-quick-task";
 import { freezeTaskCommand, saveTaskCommand, TASK_OUTCOME } from "@/lib/memo-intake-tasks";
 import { applyMute, clearMute, mutedIdSet, readMuteStore, seoulDayKey, writeMuteStore } from "./my-work-mute.js";
 import { requestPersonaChat } from "../persona-client";
@@ -915,6 +916,8 @@ export function MyWork({ onNavigate }) {
   const [showQuickDetail, setShowQuickDetail] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const quickSavingRef = React.useRef(false);
+  const quickTaskWriter = React.useRef(null);
+  if (!quickTaskWriter.current) quickTaskWriter.current = createMyWorkQuickTask();
   const [notice, setNotice] = React.useState(null); // { tone, label, action?: { label, onClick } }
   const [taskDraft, setTaskDraft] = React.useState(null);
   const [checklistSavingId, setChecklistSavingId] = React.useState(null);
@@ -996,25 +999,15 @@ export function MyWork({ onNavigate }) {
   // Durable quick-add task: POST /api/hub/tasks (Phase 1A write path). 상세 토글을 열면
   // 기한·우선순위도 한 번에 저장 — 기본은 제목만(빠른 경로) 그대로 유지.
   const createTask = async () => {
-    const title = quickTitle.trim();
-    if (!title || quickSavingRef.current) return;
-    const submittedDraft = quickDraft;
+    if ((!quickTitle.trim() && !quickTaskWriter.current.getPending()) || quickSavingRef.current) return;
     quickSavingRef.current = true;
     setSaving(true);
     try {
-      const payload = { title };
-      if (showQuickDetail) {
-        if (quickDue) payload.dueAt = quickDue;
-        if (quickPriority && quickPriority !== 'medium') payload.priority = quickPriority;
-      }
-      const res = await fetch('/api/hub/tasks', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.status === 'saved') {
-        const createdId = data.task?.id || data.id || null;
+      const data = await quickTaskWriter.current.submit(quickDraft, { details: showQuickDetail });
+      if (['saved', 'duplicate'].includes(data.status)) {
+        const createdId = data.task.id;
+        const title = data.title;
+        const submittedDraft = data.submittedDraft;
         // Saving one item must not erase the next item typed during the request.
         setQuickDraft(current => clearSubmittedQuickTaskDraft(current, submittedDraft));
         // 새 할 일이 무조건 화면에 보이도록: 리스트 렌즈로, 그리고 방금 만든 (대개 기한 없는)
@@ -1047,7 +1040,7 @@ export function MyWork({ onNavigate }) {
         });
         toast.success(label);
       } else {
-        const errMsg = data.error || `저장 실패 (${data.status || res.status})`;
+        const errMsg = data.message || '저장을 확인하지 못했어요. 입력을 유지했으니 다시 추가하세요.';
         setNotice({ tone: 'err', label: errMsg });
         toast.error(errMsg);
       }

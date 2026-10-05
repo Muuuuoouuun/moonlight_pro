@@ -3,6 +3,8 @@ import { normalizeJournalTags } from './journal-tags.js';
 import { validateTaskChecklist } from './task-checklist.js';
 
 export const JOURNAL_NOTE_KINDS = Object.freeze(['note', 'conversation', 'idea', 'learning', 'blocked', 'decision']);
+export const JOURNAL_SCOPES = Object.freeze(['personal', 'company']);
+export const journalScopeLabel = (scope) => ({ personal: '개인', company: '회사 업무' })[scope] || '범위 미분류';
 export const JOURNAL_CONTEXT_TYPES = Object.freeze(['project', 'lead', 'account', 'brand']);
 export const JOURNAL_CONTENT_CHANNELS = Object.freeze(['threads', 'x', 'blog', 'instagram', 'reels', 'youtube_shorts', 'email']);
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -43,10 +45,10 @@ export function validateJournalInput(payload) {
       || !Array.isArray(contexts) || contexts.length > 20
       || contexts.some((context) => !object(context) || !JOURNAL_CONTEXT_TYPES.includes(context.type) || !isCanonicalUuid(context.id))) return invalid();
     const tags = normalizeJournalTags(noteMeta.tags);
-    if (tags === null) return invalid();
+    if (tags === null || (noteMeta.scope !== undefined && !JOURNAL_SCOPES.includes(noteMeta.scope))) return invalid();
     const normalized = contexts.map(({ type, id }) => ({ type, id: id.toLowerCase() }));
     if (new Set(normalized.map(({ type, id }) => `${type}:${id}`)).size !== normalized.length) return invalid();
-    return { ok: true, value: { ...common, body, title, occurredAt, noteMeta: { kind: noteMeta.kind, enhancement: noteMeta.enhancement, ...(tags === undefined ? {} : { tags }) }, contexts: normalized } };
+    return { ok: true, value: { ...common, body, title, occurredAt, noteMeta: { kind: noteMeta.kind, enhancement: noteMeta.enhancement, ...(noteMeta.scope === undefined ? {} : { scope: noteMeta.scope }), ...(tags === undefined ? {} : { tags }) }, contexts: normalized } };
   }
   const { selection, target } = payload;
   if (payload.expectedRevision < 1 || !object(selection) || !text(selection.prefix, 20000)

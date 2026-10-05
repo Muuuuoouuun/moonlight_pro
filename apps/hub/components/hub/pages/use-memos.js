@@ -12,7 +12,7 @@ export async function fetchJournal(path = '') {
   return data;
 }
 
-export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, entry, source, context, contexts, fromPreview = false, onSaved }) {
+export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, entry, source, context, contexts, initialScope = 'personal', fromPreview = false, onSaved }) {
   const [state, setState] = React.useState({ draft: null, entry: null, pending: null, ready: false, dirty: false,
     localError: false, loadError: '', message: '', saveState: 'idle', conflict: null, reuseDraft: null, target: null });
   const ref = React.useRef(state), mounted = React.useRef(true), initialized = React.useRef(false);
@@ -44,7 +44,7 @@ export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, en
         }
         if (local?.volatile) localError = true;
       } catch { localError = true; }
-      let draft = local?.draft || (entry ? noteToDraft(entry) : isNew ? noteToDraft({ id, occurredAt: new Date().toISOString() }) : null);
+      let draft = local?.draft || (entry ? noteToDraft(entry) : isNew ? noteToDraft({ id, occurredAt: new Date().toISOString(), noteMeta: { scope: initialScope } }) : null);
       let message = local?.pending ? '이전 저장 결과를 확인해야 해요. 같은 요청으로 확인하면 중복 생성되지 않아요.'
         : local?.dirty ? '작성 중이던 내용을 불러왔어요.' : '';
       const seeds = initialMemoContexts(context, contexts);

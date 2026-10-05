@@ -2,6 +2,7 @@
 import React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card, EmptyState, Kbd, TruthBadge } from '../hub-primitives';
+import { journalScopeLabel } from '@/lib/journal';
 import { isCanonicalUuid } from '@/lib/uuid';
 import { createJournalStore, journalTabId, lastJournalWorkspace, rememberJournalWorkspace } from '@/lib/journal-browser-store';
 import { NOTE_QUESTIONS } from '@/lib/journal-client';
@@ -45,7 +46,7 @@ export function Memos() {
   const search = useMemoSearch(searchQuery);
   const noteId = params.get('note'), isNew = params.get('new') === 'note', draftId = params.get('draft');
   const id = isNew ? draftId : noteId;
-  const requestKey = `${isNew ? 'new' : 'note'}:${id || ''}`;
+  const requestKey = `${isNew ? 'new' : 'note'}:${id || ''}:${filters.noteScope}`;
   const fromPreview = params.get('from') === 'preview';
   const contextType = params.get('contextType'), contextId = params.get('contextId');
   const context = React.useMemo(() => contextId ? { type: contextType, id: contextId } : null, [contextType, contextId]);
@@ -105,7 +106,10 @@ export function Memos() {
   React.useEffect(() => {
     const ticket = ++generation.current; let active = true;
     setLedger((previous) => ({ ...previous, status: 'loading', entry: null })); setError('');
-    const query = noteId && !isNew ? '?note=' + encodeURIComponent(noteId) : '';
+    const queryParams = new URLSearchParams();
+    if (noteId && !isNew) queryParams.set('note', noteId);
+    if (filters.noteScope) queryParams.set('scope', filters.noteScope);
+    const query = queryParams.size ? '?' + queryParams : '';
     async function load() {
       try {
         const response = await fetch('/api/hub/journal' + query, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
@@ -122,7 +126,7 @@ export function Memos() {
       }
     }
     load(); return () => { active = false; generation.current++; };
-  }, [noteId, isNew, draftId, reload]);
+  }, [noteId, isNew, draftId, filters.noteScope, reload]);
 
   // 빠른 메모(M·⌘K)도 2026-09-20부터 같은 journal 저장소를 쓴다. 저장 이벤트를 듣지 않으면
   // 이 화면에서 메모를 남겨도 새로고침 전까지 목록에 뜨지 않는다(실측). memo-workspace 는
@@ -190,7 +194,7 @@ export function Memos() {
         <Button variant="primary" icon="plus" onClick={create} disabled={Boolean(id) || ledger.status === 'loading'}>메모 남기기 <Kbd>N</Kbd></Button>
       </div>
     </header>
-    <div className="memos-state"><TruthBadge state={search.status} /><span className="memo-muted">하루 리뷰와 함께 보관하는 개인 기록</span></div>
+    <div className="memos-state"><TruthBadge state={search.status} /><span className="memo-muted">개인·회사 업무 범위를 확인해 이어 쓰는 기록</span></div>
     <MemoSearchControls filters={filters} context={search.context} onApply={applyFilters} />
     {selectedIds.length > 0 && (
       <div style={{ padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--line-strong)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -250,9 +254,9 @@ export function Memos() {
     {localError && <p role="alert" className="memo-feedback">브라우저에 보관된 메모를 확인하지 못했어요. 열려 있는 입력은 복사해 보관해 주세요.</p>}
     {error && <div className="memo-feedback" role="alert"><p>{error}</p><Button onClick={() => setReload((n) => n + 1)}>다시 불러오기</Button></div>}
     {search.error && <div className="memo-feedback" role="alert"><p>{search.error}</p><Button onClick={search.refresh}>다시 찾기</Button></div>}
-    {search.status === 'live' && search.entries.length > 0 && <p className="memo-muted" role="status">불러온 메모 <span className="num">{search.entries.length}</span>개{search.nextCursor ? ' · 더 볼 수 있어요' : ''}</p>}
+    {['live', 'partial'].includes(search.status) && search.entries.length > 0 && <p className="memo-muted" role="status">불러온 메모 <span className="num">{search.entries.length}</span>개{search.nextCursor ? ' · 더 볼 수 있어요' : ''}</p>}
     {search.status === 'loading' ? <p role="status" className="memo-muted">메모를 찾고 있어요…</p> : search.status === 'preview' ? <EmptyState icon="content" title="메모 저장소 연결이 필요해요" description="작성한 내용은 현재 탭에 임시 보관합니다. 탭을 닫기 전 연결해 저장하거나 입력을 복사해 주세요." action={<Button onClick={create} disabled={Boolean(id)}>메모 남기기</Button>} />
-      : search.status === 'live' && (search.entries.length === 0 ? <EmptyState icon="content" title={searchQuery ? '조건에 맞는 메모가 없어요' : '기억하고 싶은 일부터 한 줄'} description={searchQuery ? '검색어를 짧게 바꾸거나 조건을 해제해 보세요.' : '제목이나 분류 없이 바로 남겨보세요. 필요할 때 보강하고 활용할 수 있어요.'} action={searchQuery ? <Button onClick={() => applyFilters({})}>조건 모두 해제</Button> : <Button onClick={create} disabled={Boolean(id)}>첫 메모 남기기</Button>} />
+      : ['live', 'partial'].includes(search.status) && (search.entries.length === 0 && search.nextCursor ? <div className="memo-feedback" role="status"><p>{search.message}</p><Button onClick={search.more} disabled={search.moreBusy}>범위 기록 더 찾기</Button></div> : search.entries.length === 0 ? <EmptyState icon="content" title={searchQuery ? '조건에 맞는 메모가 없어요' : '기억하고 싶은 일부터 한 줄'} description={searchQuery ? '검색어를 짧게 바꾸거나 조건을 해제해 보세요.' : '제목이나 분류 없이 바로 남겨보세요. 필요할 때 보강하고 활용할 수 있어요.'} action={searchQuery ? <Button onClick={() => applyFilters({})}>조건 모두 해제</Button> : <Button onClick={create} disabled={Boolean(id)}>첫 메모 남기기</Button>} />
         : <Card pad={false} className="memo-list"><ol>{search.entries.map((row) => <li key={row.id} style={{ display: 'flex', alignItems: 'flex-start' }}>
           <div style={{ padding: '24px 0 0 16px', display: 'flex', alignItems: 'center' }}>
             <input
@@ -264,7 +268,7 @@ export function Memos() {
             />
           </div>
           <button className="hub-row memo-list-row" style={{ flex: 1 }} onClick={() => router.push(memoDocumentHref(params, { note: row.id }), { scroll: false })}>
-            <div className="memo-row-top"><span className="mono memo-muted">{memoTime(row.occurredAt)}</span><span className="memo-muted">{NOTE_QUESTIONS.find((item) => item.value === row.noteMeta?.kind)?.label || '메모'}{row.used ? ' · 활용함' : ''}</span></div>
+            <div className="memo-row-top"><span className="mono memo-muted">{memoTime(row.occurredAt)}</span><span className="memo-muted">{NOTE_QUESTIONS.find((item) => item.value === row.noteMeta?.kind)?.label || '메모'}{row.used ? ' · 활용함' : ''} · {journalScopeLabel(row.noteMeta?.scope)}</span></div>
             <strong><MatchText text={row.title || row.excerpt.split('\n')[0]} query={filters.q} /></strong><p><MatchText text={row.match?.text || row.excerpt} query={row.match ? Array.from(filters.q.trim()).slice(0, 180).join('') : filters.q} /></p>
             {row.match && <span className="memo-muted">{({ title: '제목', body: '본문', enhancement: '보강 내용', tags: '태그' })[row.match.field]}에서 찾음</span>}
             {search.context && <span className="memo-muted">{search.context.label}에 연결됨</span>}
@@ -274,7 +278,7 @@ export function Memos() {
     {id && !validId && <p role="alert">메모 주소가 올바르지 않아요. <Button onClick={close}>목록으로</Button></p>}
     {validId && (
       <>
-        <MemoDocument key={id} id={id} isNew={isNew} workspaceId={ledger.workspaceId} workspaceConfirmed={ledger.workspaceConfirmed} source={ledger.requestKey === requestKey ? ledger.status : 'loading'} entry={ledger.entry?.id === id ? ledger.entry : null} context={context} fromPreview={fromPreview} onSaved={saved} onClose={close} onReload={() => setReload((n) => n + 1)} />
+        <MemoDocument key={id} id={id} isNew={isNew} initialScope={['personal', 'company'].includes(filters.noteScope) ? filters.noteScope : 'personal'} workspaceId={ledger.workspaceId} workspaceConfirmed={ledger.workspaceConfirmed} source={ledger.requestKey === requestKey ? ledger.status : 'loading'} entry={ledger.entry?.id === id ? ledger.entry : null} context={context} fromPreview={fromPreview} onSaved={saved} onClose={close} onReload={() => setReload((n) => n + 1)} />
         {relatedMemos.length > 0 && (
           <aside className="memo-network-panel" aria-label="연관된 이전 메모">
             <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>

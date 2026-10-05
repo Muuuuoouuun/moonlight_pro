@@ -4,6 +4,7 @@ import { Button, TextField, SelectField } from '../hub-primitives';
 import { NOTE_QUESTIONS } from '@/lib/journal-client';
 import { MEMO_SEARCH_DEFAULTS, memoPeriod } from '@/lib/journal-search-client';
 import { MemoContextPicker } from './memo-context-picker';
+import { journalScopeLabel } from '@/lib/journal';
 
 export function MemoSearchControls({ filters, context, onApply }) {
   const [draft, setDraft] = React.useState(filters), [open, setOpen] = React.useState(false);
@@ -16,6 +17,7 @@ export function MemoSearchControls({ filters, context, onApply }) {
     filters.q && { label: `검색: ${filters.q}`, patch: { q: '' } },
     (filters.dateFrom || filters.dateTo) && { label: `${filters.dateFrom || '처음'} ~ ${filters.dateTo || '오늘 이후'}`, patch: { dateFrom: '', dateTo: '' } },
     filters.kind && { label: NOTE_QUESTIONS.find((item) => item.value === filters.kind)?.label || filters.kind, patch: { kind: '' } },
+    filters.noteScope && { label: journalScopeLabel(filters.noteScope), patch: { noteScope: '' } },
     filters.contextId && { label: context?.label || '연결된 업무', patch: { contextType: '', contextId: '' } },
     filters.used !== 'all' && { label: filters.used === 'used' ? '활용한 메모' : '아직 활용하지 않은 메모', patch: { used: 'all' } },
   ].filter(Boolean);
@@ -23,6 +25,9 @@ export function MemoSearchControls({ filters, context, onApply }) {
   return <section className="memo-search" aria-label="메모 검색">
     <form onSubmit={(event) => { event.preventDefault(); apply(); }}>
       <div className="memo-search-bar">
+        <SelectField label="메모 기록 범위" value={draft.noteScope} options={[{ value: '', label: '모든 범위' }, { value: 'personal', label: '개인' }, { value: 'company', label: '회사 업무' }, { value: 'unclassified', label: '범위 미분류' }]} onChange={(event) => {
+          const next = { ...draft, noteScope: event.target.value }; setDraft(next); onApply(next);
+        }} />
         <TextField label="메모 검색" value={draft.q} maxLength={200} placeholder="기억나는 단어로 찾기" onChange={(event) => update({ q: event.target.value })}
           onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
         <Button variant="primary" type="submit">찾기</Button>
