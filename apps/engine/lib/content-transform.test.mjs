@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
 import { isOfficeStudioOperation, OFFICE_STUDIO_POLICY_VERSION } from '@com-moon/agent-contracts/office-studio';
+import { normalizeContentWorkflow } from './content-workflow.ts';
 
 let service;
 try { service = await import('./content-transform.ts'); } catch {}
@@ -16,6 +17,17 @@ const sourceBody = '앞🙂같은 말\n뒤🙂같은 말!';
 const candidate = (patch = {}) => ({ id: 'candidate-1', title: '수정안', body: '고친 말', variantType: 'x_thread', channel: 'threads', summary: '뜻을 유지하고 정리했습니다.', missing: [], ...patch });
 const command = (patch = {}) => ({ requestId, contentId, variantId, expectedVariantUpdatedAt: updatedAt, operation: 'polish', selection: { start: sourceBody.lastIndexOf('같은 말'), end: sourceBody.length - 1 }, tone: 'brand', target: { variantType: 'x_thread', channel: 'threads' }, ...patch });
 const context = { workspaceId, recoverySecret: 'test-recovery-secret' };
+
+test('manual and AI reel bodies agree on malformed JSON and the existing duration bounds', () => {
+  const target = { variantType: 'reels_script', channel: 'youtube_shorts' };
+  for (const [body, accepted] of [
+    ['not JSON', false],
+    ...[0, -1, 601, 0.5, 600].map(duration => [JSON.stringify({ scenes: [{ id: 'scene-1', visual: '화면', spoken: '대사', subtitle: '', duration, notes: '' }] }), duration > 0 && duration <= 600]),
+  ]) {
+    assert.equal(normalizeContentWorkflow({ action: 'save', requestId, item: {}, variant: { body, ...target } }, context).ok, accepted);
+    assert.equal(service.validateContentTransformResult({ candidates: [{ id: 'candidate-1', title: '대본', body, ...target, summary: '', missing: [] }] }, 'draft', target), accepted);
+  }
+});
 const copy = (value) => structuredClone(value);
 
 test('editorial criteria are selected by the server and recorded with the saved candidate', async () => {

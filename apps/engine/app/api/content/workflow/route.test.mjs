@@ -33,6 +33,44 @@ test("rejects oversized UTF-8 and non-object JSON before persistence", async () 
   });
 });
 
+test("rejects invalid reel bodies with a scene-specific HTTP 400 without any database call", async () => {
+  await withEnv(async () => {
+    let calls = 0;
+    globalThis.fetch = async () => { calls += 1; throw new Error("must not fetch"); };
+    const scenes = [{ id: "scene-1", visual: "화면", spoken: "대사", subtitle: "", duration: 0, notes: "" }];
+    const response = await route.POST(request({ ...body, variant: { body: JSON.stringify({ scenes }), variantType: "reels_script", channel: "youtube_shorts" } }));
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { status: "invalid-input", error: "invalid-reels-script-duration", sceneNumber: 1 });
+    const malformed = await route.POST(request({ ...body, variant: { body: "not JSON", variantType: "reels_script", channel: "reels" } }));
+    assert.equal(malformed.status, 400);
+    assert.equal((await malformed.json()).error, "invalid-reels-script-json");
+    assert.equal(calls, 0);
+  });
+});
+
+test("a body-only update reads its scoped saved type and rejects invalid scenes without an RPC", async () => {
+  await withEnv(async () => {
+    const contentId = "33333333-3333-3333-3333-333333333333", variantId = "44444444-4444-4444-4444-444444444444";
+    const version = "2026-09-12T10:20:30.123456+00:00", calls = [];
+    globalThis.fetch = async (url, init) => {
+      const parsed = new URL(url);
+      calls.push(parsed);
+      assert.equal(init.method || "GET", "GET");
+      assert.equal(parsed.searchParams.get("id"), `eq.${variantId}`);
+      assert.equal(parsed.searchParams.get("workspace_id"), `eq.${workspaceId}`);
+      assert.equal(parsed.searchParams.get("content_id"), `eq.${contentId}`);
+      return new Response(JSON.stringify([{ id: variantId, workspace_id: workspaceId, content_id: contentId,
+        variant_type: "reels_script", body: "이전 원문", updated_at: version }]), { status: 200 });
+    };
+    const response = await route.POST(request({ ...body, contentId, variantId, expectedItemUpdatedAt: version, expectedVariantUpdatedAt: version,
+      variant: { body: "not JSON" } }));
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "invalid-reels-script-json");
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].pathname, /\/content_variants$/);
+  });
+});
+
 test("uses server workspace, sends one RPC, and propagates conflict", async () => {
   assert.ok(route);
   await withEnv(async () => {

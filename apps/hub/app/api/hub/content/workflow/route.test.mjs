@@ -45,3 +45,20 @@ test("exact GET reports read failures with HTTP 200 and an error envelope", asyn
     assert.equal((await response.json()).status, "error");
   });
 });
+
+test("forwards scene-specific validation failures without changing the submitted draft", async () => {
+  assert.ok(route);
+  await withEnv(async () => {
+    const draft = { action: "save", variant: { body: "original invalid JSON", variantType: "reels_script", channel: "reels" } };
+    const before = structuredClone(draft);
+    const rejection = { status: "invalid-input", error: "invalid-reels-script-duration", sceneNumber: 2 };
+    globalThis.fetch = async (_url, init) => {
+      assert.deepEqual(JSON.parse(init.body).variant, draft.variant);
+      return new Response(JSON.stringify(rejection), { status: 400 });
+    };
+    const response = await route.POST(request(draft));
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), rejection);
+    assert.deepEqual(draft, before);
+  });
+});

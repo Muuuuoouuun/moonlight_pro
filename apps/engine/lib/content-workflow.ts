@@ -1,9 +1,14 @@
 import { createHash } from "node:crypto";
+import type { SupabaseDetailedReadResult, SupabaseQueryOptions } from "@com-moon/supabase-rest";
+import { validateReelsScriptBody } from "@com-moon/content-manager/reels-script";
 
 type JsonRecord = Record<string, unknown>;
 type Context = { workspaceId?: string };
 type RpcResult = { ok: boolean; data?: unknown; error?: string; detail?: string };
-type Dependencies = { rpc: (name: string, params: JsonRecord) => Promise<RpcResult> };
+type Dependencies = {
+  rpc: (name: string, params: JsonRecord) => Promise<RpcResult>;
+  read?: (table: string, options: SupabaseQueryOptions) => Promise<SupabaseDetailedReadResult<JsonRecord>>;
+};
 
 export const MAX_CONTENT_WORKFLOW_BYTES = 256 * 1024;
 export const CONTENT_WORKFLOW_CHANNELS: Record<string, readonly string[]> = {
@@ -15,7 +20,7 @@ export const CONTENT_WORKFLOW_CHANNELS: Record<string, readonly string[]> = {
   newsletter: ["email"],
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.(\d{1,6}))?(?:Z|[+-]\d{2}:\d{2})$/;
 const BRIEF_FIELDS = ["audience", "purpose", "message", "angle", "evidence", "ending"];
 const own = (object: JsonRecord, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 const isRecord = (value: unknown): value is JsonRecord => Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -29,7 +34,7 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-type Normalized = { ok: false; reason: string } | {
+type Normalized = { ok: false; reason: string; sceneNumber?: number } | {
   ok: true; workspaceId: string; requestId: string; requestHash: string; command: JsonRecord;
 };
 
@@ -93,6 +98,10 @@ export function normalizeContentWorkflow(input: unknown, context: Context = {}):
     if (own(patch, "variantType") && !CONTENT_WORKFLOW_CHANNELS[String(patch.variantType)]) return invalid("invalid-variant-type");
     if (own(patch, "channel") && !Object.values(CONTENT_WORKFLOW_CHANNELS).some((channels) => channels.includes(String(patch.channel)))) return invalid("invalid-channel");
     if (patch.variantType && patch.channel && !CONTENT_WORKFLOW_CHANNELS[String(patch.variantType)].includes(String(patch.channel))) return invalid("invalid-channel-format");
+    if (patch.variantType === "reels_script" && own(patch, "body")) {
+      const validation = validateReelsScriptBody(patch.body as string, { allowEmptyDraft: true });
+      if (!validation.ok) return validation;
+    }
     command.variant = patch;
   }
 
@@ -111,9 +120,52 @@ export function normalizeContentWorkflow(input: unknown, context: Context = {}):
   return { ok: true, workspaceId, requestId: input.requestId, requestHash, command };
 }
 
+function timestampMicros(value: string): bigint {
+  const fraction = value.match(TIMESTAMP)?.[1] || "";
+  return BigInt(Date.parse(value)) * 1000n + BigInt(fraction.padEnd(6, "0").slice(3));
+}
+
+async function validatePartialVariant(normalized: Extract<Normalized, { ok: true }>, dependencies: Dependencies): Promise<JsonRecord | null> {
+  const command = normalized.command;
+  if (!["save", "create_variant"].includes(String(command.action)) || !isRecord(command.variant) || !command.variantId) return null;
+  const patch = command.variant;
+  const needsSavedVariant = (own(patch, "body") && !own(patch, "variantType"))
+    || (patch.variantType === "reels_script" && !own(patch, "body"))
+    || (command.action === "create_variant" && !own(patch, "body") && !own(patch, "variantType"));
+  if (!needsSavedVariant) return null;
+  if (!dependencies.read) return { status: "error", error: "workflow-variant-read-unavailable" };
+  try {
+    const result = await dependencies.read("content_variants", {
+      select: "id,workspace_id,content_id,variant_type,body,updated_at", limit: 1, dedupe: false,
+      filters: [["id", `eq.${command.variantId}`], ["workspace_id", `eq.${normalized.workspaceId}`], ["content_id", `eq.${command.contentId}`]],
+    });
+    if (!result.configured) return { status: "preview", error: "missing-config" };
+    if (result.error || !Array.isArray(result.rows) || result.rows.length > 1) return { status: "error", error: "workflow-variant-read-failed" };
+    const saved = result.rows[0];
+    // Let the atomic RPC resolve missing/stale rows and existing request receipts.
+    // Its version check prevents a changed type/body from passing this preflight.
+    if (!saved) return null;
+    if (String(saved.id).toLowerCase() !== String(command.variantId).toLowerCase()
+      || String(saved.workspace_id).toLowerCase() !== normalized.workspaceId.toLowerCase()
+      || String(saved.content_id).toLowerCase() !== String(command.contentId).toLowerCase()
+      || !validTimestamp(saved.updated_at) || !CONTENT_WORKFLOW_CHANNELS[String(saved.variant_type)]) return { status: "error", error: "workflow-variant-read-failed" };
+    if (timestampMicros(saved.updated_at) !== timestampMicros(command.expectedVariantUpdatedAt as string)) return null;
+    if ((patch.variantType ?? saved.variant_type) !== "reels_script") return null;
+    const body = own(patch, "body") ? patch.body : saved.body;
+    if (typeof body !== "string") return { status: "invalid-input", error: "invalid-reels-script-json" };
+    const validation = validateReelsScriptBody(body, { allowEmptyDraft: true });
+    if (!validation.ok) return { status: "invalid-input", error: validation.reason,
+      ...(validation.sceneNumber === undefined ? {} : { sceneNumber: validation.sceneNumber }) };
+    return null;
+  } catch { return { status: "error", error: "workflow-variant-read-failed" }; }
+}
+
 export async function executeContentWorkflow(input: unknown, context: Context, dependencies: Dependencies): Promise<JsonRecord> {
   const normalized = normalizeContentWorkflow(input, context);
-  if (!normalized.ok) return { status: "invalid-input", error: normalized.reason };
+  if (!normalized.ok) return { status: "invalid-input", error: normalized.reason,
+    ...(normalized.sceneNumber === undefined ? {} : { sceneNumber: normalized.sceneNumber }) };
+  const validationFailure = await validatePartialVariant(normalized, dependencies);
+  if (validationFailure) return validationFailure;
   try {
     const result = await dependencies.rpc("content_workflow_v1", {
       p_workspace_id: normalized.workspaceId,
