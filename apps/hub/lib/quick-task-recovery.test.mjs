@@ -156,15 +156,40 @@ test('confirmed saved receipt survives cleanup denial and leaves a text-free set
   let calls=0;await value.submit(DRAFT,{fetchImpl:async()=>{calls++;}});assert.equal(calls,0);
 });
 
-for(const patch of [{payload:{id:ID,title:'too long'.repeat(50)}},{id:'wrong'},{createdAt:5000},{version:2},{payload:{title:'bad\0text'}},{unexpected:'sensitive'}]) test(`invalid recovery shape is cleared and never submitted: ${Object.keys(patch)[0]}`,async()=>{
+for(const patch of [{payload:{id:ID,title:'too long'.repeat(50)}},{id:'wrong'},{createdAt:5000000},{version:2},{payload:{title:'bad\0text'}},{unexpected:'sensitive'}]) test(`invalid recovery shape is cleared and never submitted: ${Object.keys(patch)[0]}`,async()=>{
   const storage=memory(),first=writer(storage);await first.submit(DRAFT,{fetchImpl:lost});first.deactivate();
   storage.setItem(QUICK_TASK_RECOVERY_KEY,JSON.stringify({...stored(storage),...patch}));const restored=writer(storage);
   await restored.initialize();assert.equal(restored.snapshot().status,'blocked');assert.equal(storage.getItem(QUICK_TASK_RECOVERY_KEY),null);
 });
 
-test('invalid clock reversal clears the record and reports failed recovery',async()=>{
-  const storage=memory(),first=writer(storage);await first.submit(DRAFT,{fetchImpl:lost});
-  assert.throws(()=>readQuickTaskRecovery(storage,CONTEXT,999),/invalid/);assert.equal(storage.getItem(QUICK_TASK_RECOVERY_KEY),null);
+test('clock rollback protects an uncertain UUID with a text-free marker and never inserts twice',async()=>{
+  const storage=memory(),rows=new Map();let inserts=0,posts=0,ids=0;
+  const fetchImpl=async(_url,{body})=>{
+    posts++;const payload=JSON.parse(body);
+    const result=await executePmsCommand({...payload,action:'create_task'},{workspaceId:WORK,now:'2026-10-05T00:00:00Z'}, {
+      insert:async(_table,row)=>{if(rows.has(row.id))return{persisted:false,reason:'duplicate'};rows.set(row.id,row);inserts++;return{persisted:true,record:row};},
+      update:async()=>{throw Error('unexpected update');},fetchRows:async()=>[rows.get(payload.id)],
+    });
+    if(posts===1)throw Error('synthetic lost ACK');return Response.json({...result,task:result.entity});
+  };
+  const first=writer(storage);await first.submit(DRAFT,{fetchImpl});first.deactivate();
+  const restored=writer(storage,{now:()=>999,createId:()=>{ids++;return NEXT;}});
+  await restored.initialize();assert.equal(restored.snapshot().status,'expired');
+  assert.equal(stored(storage).id,ID);assert.equal(stored(storage).state,'expired');assert.equal(stored(storage).expiresAt,1000+QUICK_TASK_RECOVERY_TTL);
+  assert.doesNotMatch(storage.getItem(QUICK_TASK_RECOVERY_KEY),/payload|합성 다음 행동/);
+  await restored.initialize();assert.equal(restored.snapshot().status,'expired');
+  assert.equal((await restored.submit(DRAFT,{fetchImpl})).status,'expired');assert.equal(inserts,1);assert.equal(posts,1);assert.equal(ids,0);
+});
+
+test('blocked sessionStorage access still invalidates an in-flight intent before logout cleanup throws',async()=>{
+  const storage=memory(),value=writer(storage);await value.activate();let resolve;
+  const request=value.submit(DRAFT,{fetchImpl:async(_url,{body})=>new Promise(r=>{resolve=()=>r(saved(JSON.parse(body)));})});await tick();
+  const previous=globalThis.window;
+  try {
+    globalThis.window={};Object.defineProperty(window,'sessionStorage',{get(){throw new DOMException('blocked','SecurityError');}});
+    assert.throws(()=>resetQuickTasks(),/blocked/);assert.equal(value.getPending(),null);
+    resolve();assert.equal((await request).status,'stale');
+  } finally {globalThis.window=previous;}
 });
 
 for(const field of ['id','workspace','title','priority','dueAt']) test(`wrong ${field} acknowledgement retains the immutable pending ID`,async()=>{

@@ -534,20 +534,26 @@ export function Settings({ onNavigate }) {
     if (logoutBusy) return;
     setLogoutBusy(true);
     setLogoutError('');
+    let cleanupWarning = '';
     try {
       // Invalidate pending requests before the cookie changes. Storage failures
-      // stay visible; never claim the capture text was removed when it was not.
+      // must not prevent server logout, or claim capture text was removed.
       try { resetQuickTasks(); }
-      catch { throw new Error('브라우저 복구 입력을 정리하지 못했습니다. 저장 공간을 확인하고 다시 로그아웃하세요.'); }
+      catch {
+        cleanupWarning = '브라우저 복구 입력을 정리하지 못했습니다.';
+        setLogoutError(`${cleanupWarning} 서버 로그아웃을 진행합니다.`);
+      }
       const response = await fetch('/api/operator/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'logout' }),
       });
       if (!response.ok) throw new Error('로그아웃하지 못했습니다. 다시 시도해 주세요.');
-      window.location.replace('/login');
+      // Carry only a fixed warning flag; no capture text, owner or task ID.
+      window.location.replace(cleanupWarning ? '/login?recoveryCleanup=failed' : '/login');
     } catch (error) {
-      setLogoutError(error instanceof Error ? error.message : '로그아웃하지 못했습니다.');
+      const message = error instanceof Error ? error.message : '로그아웃하지 못했습니다.';
+      setLogoutError(cleanupWarning ? `${message} ${cleanupWarning}` : message);
       setLogoutBusy(false);
     }
   };

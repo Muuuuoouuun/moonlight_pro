@@ -67,7 +67,7 @@ export function readQuickTaskRecovery(storage, context, now = Date.now(), clock 
     && value.version === 1 && ['pending', 'expired', 'settled'].includes(value.state) && isCanonicalUuid(value.id)
     && typeof value.ownerKey === 'string' && /^[a-f0-9]{64}$/.test(value.ownerKey) && isCanonicalUuid(value.workspaceId)
     && Number.isSafeInteger(value.createdAt) && Number.isSafeInteger(value.expiresAt) && Number.isSafeInteger(value.sessionExpiresAt)
-    && value.createdAt <= now && value.expiresAt > value.createdAt && value.expiresAt <= value.createdAt + QUICK_TASK_RECOVERY_TTL
+    && value.expiresAt > value.createdAt && value.expiresAt <= value.createdAt + QUICK_TASK_RECOVERY_TTL
     && value.expiresAt <= value.sessionExpiresAt
     && (value.state === 'pending' ? validQuickTaskPayload(value.payload) && value.payload.id === value.id
       && value.payload.expectedWorkspaceId === value.workspaceId && value.payload.recoveryOwner === value.ownerKey
@@ -79,7 +79,9 @@ export function readQuickTaskRecovery(storage, context, now = Date.now(), clock 
     removeQuickTaskRecovery(storage);
     return null;
   }
-  if (value.state === 'pending' && now >= value.expiresAt) {
+  // A wall-clock rollback is not proof that a valid uncertain write never
+  // happened. Scrub text but retain its ID fence until an explicit restart.
+  if (value.state === 'pending' && (now < value.createdAt || now >= value.expiresAt)) {
     value = recoveryMarker(value, 'expired');
     checkpointQuickTask(storage, value, clock);
   }
@@ -89,13 +91,14 @@ export function readQuickTaskRecovery(storage, context, now = Date.now(), clock 
 }
 
 // Notify before clearing storage; other tabs receive no capture text or IDs.
-export function resetQuickTasks(storage = window.sessionStorage) {
+export function resetQuickTasks(storage) {
   for (const listener of resetListeners) listener();
   if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
     try { const channel = new BroadcastChannel(CHANNEL); channel.postMessage('logout'); channel.close(); }
     catch { /* Session validation and the server assertion remain the fences. */ }
   }
-  removeQuickTaskRecovery(storage);
+  // Accessing sessionStorage itself can throw; invalidate generations first.
+  removeQuickTaskRecovery(storage === undefined ? window.sessionStorage : storage);
 }
 
 export function subscribeQuickTaskReset(listener) {

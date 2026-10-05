@@ -68,7 +68,7 @@ test('actual MyWork owner change clears prior input and suppresses a late saved 
   assert.equal(view.input().props.value,'');assert.equal(view.nodes().some(n=>typeof n.props.children==='string'&&/할 일 저장됨/.test(n.props.children)),false);
 });
 
-function logout(storage,fetchImpl){globalThis.window={sessionStorage:storage,location:{replace:href=>{redirect=href;}}};globalThis.BroadcastChannel=undefined;let redirect='',error='',busy=false;
+function logout(storage,fetchImpl,{blockedAccess=false}={}){globalThis.window={sessionStorage:storage,location:{replace:href=>{redirect=href;}}};if(blockedAccess)Object.defineProperty(window,'sessionStorage',{get(){throw new DOMException('blocked','SecurityError');}});globalThis.BroadcastChannel=undefined;let redirect='',error='',busy=false;
   const settings=readFileSync(new URL('./evolution-settings.jsx',import.meta.url),'utf8');const start=settings.indexOf('  const logout = async () => {'),end=settings.indexOf('  const loadDeadlineAlerts',start);
   const action=new Function('logoutBusy','setLogoutBusy','setLogoutError','resetQuickTasks','fetch','window',`${settings.slice(start,end)}\nreturn logout;`)(false,value=>{busy=value;},value=>{error=value;},resetQuickTasks,fetchImpl,window);
   return {run:action,get:()=>({redirect,error,busy})};}
@@ -79,7 +79,17 @@ test('actual logout handler deletes only QuickTask recovery before logout POST',
   assert.equal(calls,1);assert.equal(view.get().redirect,'/login');assert.equal(storage.getItem('other'),'preserved');
 });
 
-test('actual logout handler leaves deletion failures visible and sends no logout POST',async()=>{
-  const storage=memory();storage.setItem(QUICK_TASK_RECOVERY_KEY,'private capture');storage.removeItem=()=>{};let calls=0;
-  const view=logout(storage,async()=>{calls++;});await view.run();assert.equal(calls,0);assert.equal(view.get().redirect,'');assert.match(view.get().error,/복구 입력을 정리하지 못했습니다/);
+for(const failure of ['remove','read','access']) test(`actual logout revokes the cookie despite ${failure} cleanup denial and carries a text-free warning`,async()=>{
+  const storage=memory();storage.setItem(QUICK_TASK_RECOVERY_KEY,'private capture');
+  if(failure==='remove')storage.removeItem=()=>{};if(failure==='read')storage.getItem=()=>{throw new DOMException('blocked','SecurityError');};let calls=0;
+  const view=logout(storage,async()=>{calls++;return Response.json({status:'logged_out'});},{blockedAccess:failure==='access'});await view.run();
+  assert.equal(calls,1);assert.equal(view.get().redirect,'/login?recoveryCleanup=failed');assert.match(view.get().error,/복구 입력을 정리하지 못했습니다/);
+  assert.doesNotMatch(view.get().redirect,/private capture/);
+});
+
+test('actual logout preserves both cleanup and server failure information without claiming session revocation',async()=>{
+  const storage=memory();storage.removeItem=()=>{throw Error('denied');};let calls=0;
+  const view=logout(storage,async()=>{calls++;return Response.json({status:'error'},{status:503});});await view.run();
+  assert.equal(calls,1);assert.equal(view.get().redirect,'');assert.equal(view.get().busy,false);
+  assert.match(view.get().error,/로그아웃하지 못했습니다/);assert.match(view.get().error,/복구 입력을 정리하지 못했습니다/);
 });

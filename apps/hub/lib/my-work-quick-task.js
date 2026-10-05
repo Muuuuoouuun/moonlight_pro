@@ -2,7 +2,7 @@ import { checkpointQuickTask, isQuickTaskContext, readQuickTaskRecovery, recover
   subscribeQuickTaskReset, QUICK_TASK_RECOVERY_TTL, validQuickTaskPayload } from './quick-task-recovery.js';
 
 export const QUICK_TASK_UNKNOWN = '저장 응답을 확인하지 못했어요. 이전 요청 확인을 누르면 같은 요청으로 확인합니다. 다음 입력은 유지합니다.';
-const EXPIRED = '이전 요청의 복구 기간이 지났습니다. 이미 저장됐을 수 있으니 내 작업에서 확인한 뒤 새 입력을 시작하세요.';
+const EXPIRED = '복구 시간이 지났거나 기기 시계가 바뀌어 이전 요청을 다시 보내지 않았습니다. 이미 저장됐을 수 있으니 내 작업에서 확인한 뒤 새 입력을 시작하세요.';
 const STORAGE_ERROR = '브라우저 복구 기록을 확인하거나 정리하지 못해 이번 요청은 전송하지 않았습니다. 이전 요청은 이미 저장됐을 수 있으니 입력을 보관하고 저장 공간을 확인하세요.';
 const sameContext = (a, b) => a?.ownerKey === b?.ownerKey && a?.workspaceId === b?.workspaceId && a?.expiresAt === b?.expiresAt;
 const sameDue = (actual, requested) => requested ? typeof actual === 'string' && Number.isFinite(Date.parse(actual)) && new Date(actual).toISOString() === new Date(requested).toISOString() : actual === null;
