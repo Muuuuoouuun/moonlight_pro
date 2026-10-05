@@ -120,3 +120,42 @@ test('stopped contracts retain payment history but show only an explicit resume 
  assert.equal(financeSubscriptionDates({...record,serviceStatus:'unknown'},[entry]).scheduleKind,'planned');
  assert.deepEqual(financeChanges('subscription',{serviceStatus:'paused',resumeDate:'2099-05-01'}).changes,{serviceStatus:'paused',resumeDate:'2099-05-01'});
 });
+
+test('active contracts estimate a calendar month after the last positive payment without editing the contract',async()=>{
+ const {financeSubscriptionDates}=await import('./finance-view.js');
+ const record={group:'provider',serviceStatus:'active',nextDate:null,cycle:null};
+ const entry={group:'provider',type:'expense',date:'2099-01-31',grossAmount:10,netAmount:10};
+ const result=financeSubscriptionDates(record,[entry]);
+ assert.equal(result.nextScheduleDate,'2099-02-28');assert.equal(result.scheduleKind,'estimate');assert.equal(result.estimatedCycle,'monthly');
+ assert.equal(record.nextDate,null);assert.equal(record.cycle,null);
+ assert.equal(financeSubscriptionDates(record,[{...entry,date:'2096-01-31'}]).nextScheduleDate,'2096-02-29');
+ assert.equal(financeSubscriptionDates(record,[{...entry,date:'2099-12-31'}]).nextScheduleDate,'2100-01-31');
+ const refunded=financeSubscriptionDates(record,[entry,{...entry,date:'2099-02-01',netAmount:0}]);
+ assert.equal(refunded.lastPaymentDate,'2099-02-01');assert.equal(refunded.nextScheduleDate,'2099-02-28');
+});
+test('explicit plans and known longer cycles take priority over the monthly assumption',async()=>{
+ const {financeSubscriptionDates}=await import('./finance-view.js');
+ const record={group:'provider',serviceStatus:'active'};
+ const entries=[{group:'provider',type:'expense',date:'2099-01-31',grossAmount:10,netAmount:10}];
+ const planned=financeSubscriptionDates({...record,nextDate:'2099-03-10'},entries);
+ assert.equal(planned.nextScheduleDate,'2099-03-10');assert.equal(planned.scheduleKind,'planned');
+ assert.equal(financeSubscriptionDates({...record,cycle:'quarterly'},entries).nextScheduleDate,'2099-04-30');
+ assert.equal(financeSubscriptionDates({...record,cycle:'annual'},entries).nextScheduleDate,'2100-01-31');
+ assert.equal(financeSubscriptionDates({...record,statedCycle:'1년 이용'},entries).nextScheduleDate,'2100-01-31');
+});
+test('the initial multi-month term is preserved while a later payment gets a monthly estimate',async()=>{
+ const {financeSubscriptionDates}=await import('./finance-view.js');
+ const record={group:'provider',serviceStatus:'active',statedCycle:'3개월치 — 이후 주기 확인 필요'};
+ const first={group:'provider',type:'expense',date:'2099-01-31',grossAmount:10,netAmount:10};
+ const initial=financeSubscriptionDates(record,[first]);
+ assert.equal(initial.nextScheduleDate,'2099-04-30');assert.equal(initial.scheduleKind,'review');
+ const later=financeSubscriptionDates(record,[first,{...first,date:'2099-04-30'}]);
+ assert.equal(later.nextScheduleDate,'2099-05-30');assert.equal(later.scheduleKind,'estimate');
+});
+test('monthly estimates need active status and positive nonduplicate expense evidence',async()=>{
+ const {financeSubscriptionDates}=await import('./finance-view.js');
+ const record={group:'provider',serviceStatus:'active'};
+ const entry={group:'provider',type:'expense',date:'2099-01-01',grossAmount:10,netAmount:10};
+ for(const serviceStatus of ['unknown','paused','cancelled',undefined]) assert.equal(financeSubscriptionDates({...record,serviceStatus},[entry]).nextScheduleDate,null);
+ for(const rows of [[],[{...entry,netAmount:0}],[{...entry,duplicateOf:'another'}],[{...entry,type:'movement'}]]) assert.equal(financeSubscriptionDates(record,rows).nextScheduleDate,null);
+});
