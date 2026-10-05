@@ -2,7 +2,8 @@
 import React from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {Button, Drawer, EditDrawer, EmptyState, SegmentedControl, SelectField, Skeleton, TextAreaField, TextField, TruthBadge, useToast} from '../hub-primitives';
-import {FINANCE_VIEWS, PURPOSE_OPTIONS, CLAIM_OPTIONS, CYCLE_OPTIONS, financeMoney, financeReadState, financeFilters, financeEntries, financePeriodTotals, financeObservedGroups, financeChanges, financeSaveResult, financeOptionLabel, financeClaimEntries} from './finance-view';
+import {FINANCE_VIEWS, PURPOSE_OPTIONS, CLAIM_OPTIONS, CYCLE_OPTIONS, financeMoney, financeReadState, financeFilters, financeEntries, financePeriodTotals, financeObservedGroups, financeChanges, financeSaveResult, financeOptionLabel, financeClaimEntries, financeNextSort, financeSortRows, financeClaimRemaining} from './finance-view';
+import {SortHead} from './revenue';
 import './finance.css';
 
 const GROUP_LABELS = {gpt:'GPT',claude:'Claude 공동 관측',grok:'Grok',naver_plus:'Naver Plus',youtube:'YouTube',gabia:'Gabia'};
@@ -14,16 +15,47 @@ const MOVEMENT_LABELS = {topup:'머니 충전',payment:'머니 지급',refund:'�
 const reviewDraft = (entity,record) => entity === 'entry'
   ? {id:record.id,purpose:record.review?.purpose || 'unclassified',note:record.review?.note || '',...(record.type==='expense' && !record.duplicateOf ? {claimStatus:record.review?.claimStatus || 'unknown',approvedAmount:record.review?.approvedAmount ?? '',recoveredAmount:record.review?.recoveredAmount ?? ''}: {})}
   : {id:record.id,amount:record.amount ?? '',currency:record.currency || '',cycle:record.cycle || '',nextDate:record.nextDate || '',accountAlias:record.accountAlias || '',usageNote:record.usageNote || '',purpose:record.purpose || 'unclassified'};
-const contractMoney = (record) => record.amount == null ? '약정 미확인' : record.currency === 'KRW' ? financeMoney(record.amount) : `${record.amount.toLocaleString('ko-KR')} · 통화 미확인`;
-const remainingClaim = (record) => typeof record.review?.approvedAmount === 'number' && typeof record.review?.recoveredAmount === 'number' ? record.review.approvedAmount-record.review.recoveredAmount : null;
+const contractMoney = (record) => record.amount == null ? '미확인' : record.currency === 'KRW' ? financeMoney(record.amount) : `${record.amount.toLocaleString('ko-KR')} · 통화 미확인`;
+const remainingClaim = financeClaimRemaining;
 
 function FinanceRows({entries,claims=false,onReview,onClear}) {
-  if (!entries.length) return <EmptyState icon="search" title={claims?'표시할 청구 후보가 없습니다':'표시할 거래가 없습니다'} description="월·검색 조건과 수집 범위를 확인해 주세요. 조회 밖의 거래는 여기에서 알 수 없습니다." action={<Button variant="outline" onClick={onClear}>필터 지우기</Button>} />;
-  return <div className="finance-entries">{entries.map(entry=><button type="button" className="hub-row finance-entry" key={entry.id} onClick={()=>onReview('entry',entry)}>
-    <span className="finance-entry-main"><strong>{entry.merchant || '거래명 미확인'}</strong><span className="finance-muted"><span className="mono">{entry.date}</span> · {sourceLabel(entry.source)} {entry.duplicateOf?'· 중복 제외':''}</span></span>
-    <span className="finance-entry-value"><span className="mono">{entry.type === 'movement' ? financeMoney(entry.movementAmount) : financeMoney(entry.netAmount)}</span><span className="finance-muted">{entry.type==='movement'?MOVEMENT_LABELS[entry.walletKind]||'자금 이동': '순소비'}</span></span>
-    {claims ? <span className="finance-entry-meta"><span>{financeOptionLabel(PURPOSE_OPTIONS,entry.review?.purpose)} · 신청 {financeOptionLabel(CLAIM_OPTIONS,entry.review?.claimStatus)}</span><span>승인 <span className="mono">{financeMoney(entry.review?.approvedAmount)}</span> · 회수 <span className="mono">{financeMoney(entry.review?.recoveredAmount)}</span></span><span>남은 회수 <span className="mono">{financeMoney(remainingClaim(entry))}</span>{remainingClaim(entry)<0?' · 과다 회수 확인':''}</span></span> : <span className="finance-entry-meta">{financeOptionLabel(PURPOSE_OPTIONS,entry.review?.purpose)} · 검토하기</span>}
-  </button>)}</div>;
+  const [sort,setSort]=React.useState({key:'',dir:''});
+  const toggle=key=>setSort(current=>financeNextSort(current,key));
+  if (!entries.length) return <EmptyState icon="search" title={claims?'표시할 청구 후보가 없습니다':'표시할 거래가 없습니다'} description="월·검색 조건과 수집 범위를 확인해 주세요." action={<Button variant="outline" onClick={onClear}>필터 지우기</Button>} />;
+  return <div className={`finance-entries ${claims?'finance-claims':''}`}>
+    <div className="finance-list-head finance-entry-grid">
+      <SortHead k="date" sort={sort} onToggle={toggle}>날짜</SortHead><SortHead k="merchant" sort={sort} onToggle={toggle}>거래</SortHead>
+      {!claims && <span>출처</span>}<span>목적</span>{claims && <span>신청</span>}
+      <SortHead k="net" sort={sort} onToggle={toggle} align="right">{claims?'순소비':'금액'}</SortHead>
+      {claims && <><SortHead k="approved" sort={sort} onToggle={toggle} align="right">승인</SortHead><SortHead k="recovered" sort={sort} onToggle={toggle} align="right">회수</SortHead><SortHead k="remaining" sort={sort} onToggle={toggle} align="right">남은 회수</SortHead></>}
+    </div>
+    {financeSortRows(entries,sort).map(entry=><button type="button" className="hub-row finance-entry finance-entry-grid" key={entry.id} onClick={()=>onReview('entry',entry)}>
+      <span className="finance-entry-date mono">{entry.date}</span>
+      <strong className="finance-entry-name" title={entry.merchant}>{entry.merchant || '거래명 미확인'}{entry.duplicateOf && <span className="finance-muted"> · 중복 제외</span>}</strong>
+      {!claims && <span className="finance-entry-source finance-muted">{entry.type==='movement'?MOVEMENT_LABELS[entry.walletKind]||'자금 이동':sourceLabel(entry.source)}</span>}
+      <span className="finance-entry-purpose finance-muted">{financeOptionLabel(PURPOSE_OPTIONS,entry.review?.purpose)}</span>
+      {claims && <span className="finance-entry-status finance-muted">{financeOptionLabel(CLAIM_OPTIONS,entry.review?.claimStatus)}</span>}
+      <span className="finance-entry-value mono"><span className="finance-cell-label">{claims?'소비':'금액'} </span>{entry.type==='movement'?financeMoney(entry.movementAmount):financeMoney(entry.netAmount)}</span>
+      {claims && <><span className="finance-entry-approved mono"><span className="finance-cell-label">승인 </span>{financeMoney(entry.review?.approvedAmount)}</span><span className="finance-entry-recovered mono"><span className="finance-cell-label">회수 </span>{financeMoney(entry.review?.recoveredAmount)}</span><span className="finance-entry-remaining mono" title={remainingClaim(entry)<0?'과다 회수 확인':undefined}><span className="finance-cell-label">남음 </span>{financeMoney(remainingClaim(entry))}{remainingClaim(entry)<0?' · 확인':''}</span></>}
+    </button>)}
+  </div>;
+}
+
+function SubscriptionRows({records,onReview,onClear}) {
+  const [sort,setSort]=React.useState({key:'',dir:''});
+  const toggle=key=>setSort(current=>financeNextSort(current,key));
+  if (!records.length) return <EmptyState icon="search" title="표시할 계약이 없습니다" description="수집 범위와 검색 조건을 확인해 주세요." action={<Button variant="outline" onClick={onClear}>필터 지우기</Button>} />;
+  return <div className="finance-subscriptions">
+    <div className="finance-list-head finance-subscription-grid"><SortHead k="name" sort={sort} onToggle={toggle}>계약</SortHead><SortHead k="statedAmount" sort={sort} onToggle={toggle} align="right">자술</SortHead><SortHead k="amount" sort={sort} onToggle={toggle} align="right">약정</SortHead><SortHead k="nextDate" sort={sort} onToggle={toggle}>다음 청구</SortHead><span>목적</span><span>사용 근거</span></div>
+    {financeSortRows(records,sort).map(record=><button type="button" className="hub-row finance-subscription finance-subscription-grid" key={record.id} onClick={()=>onReview('subscription',record)}>
+      <span className="finance-subscription-title"><strong title={record.name}>{record.name}</strong>{record.accountAlias && <span className="finance-muted" title={record.accountAlias}>{record.accountAlias}</span>}</span>
+      <span className="finance-subscription-stated" title={`${financeMoney(record.statedAmount)} · ${record.statedCycle||'주기 미확인'}`}><span className="finance-cell-label">자술 </span><span className="mono">{financeMoney(record.statedAmount)}</span> <span className="finance-muted">· 주기 확인</span></span>
+      <span className="finance-subscription-contract"><span className="finance-cell-label">약정 </span><span className="mono">{contractMoney(record)}</span>{record.cycle && <span className="finance-muted"> · {financeOptionLabel(CYCLE_OPTIONS,record.cycle)}</span>}</span>
+      <span className={`finance-subscription-next mono ${record.nextDate?'':'finance-subscription-next-unknown'}`}><span className="finance-cell-label">청구 </span>{record.nextDate||'미확인'}</span>
+      <span className="finance-subscription-purpose finance-muted">{financeOptionLabel(PURPOSE_OPTIONS,record.purpose)}</span>
+      <span className="finance-subscription-usage finance-muted" title={record.usageNote||undefined}><span className="finance-cell-label">{financeOptionLabel(PURPOSE_OPTIONS,record.purpose)} · </span>{record.usageNote||'사용 미확인'}</span>
+    </button>)}
+  </div>;
 }
 
 function MonthlyTable({rows,wallet=false}) {
@@ -105,28 +137,28 @@ export function Finance({onNavigate}) {
   const draft=edit?.draft;
   const errorFor=key=>fieldError?.field===key?fieldError.message:undefined;
   return <div className="finance-page fade-up">
-    <header className="finance-header"><div><h2>개인 현금 흐름</h2><p>수집한 소비와 구독·회사 청구를 검토해요.</p></div><Button variant="ghost" onClick={()=>setMoreOpen(true)}>더보기</Button></header>
-    <SegmentedControl label="금융 보기" options={FINANCE_VIEWS} value={filters.view} onChange={value=>changeFilter('view',value)} />
-    <div className="finance-filters"><SelectField label="관측 월" value={filters.month} onChange={event=>changeFilter('month',event.target.value)} options={[{value:'',label:'수집한 전체 기간'},...months.map(month=>({value:month,label:month}))]} /><TextField label="검색" type="search" value={filters.q} placeholder="거래·계약 이름" onChange={event=>changeFilter('q',event.target.value)} /></div>
+    <header className="finance-header"><div className="finance-heading"><h2>개인 현금 흐름</h2><p>수집한 소비와 구독·회사 청구를 검토해요.</p></div><Button variant="ghost" onClick={()=>setMoreOpen(true)}>더보기</Button></header>
+    <div className="finance-toolbar"><SegmentedControl label="금융 보기" options={FINANCE_VIEWS} value={filters.view} onChange={value=>changeFilter('view',value)} />
+    <div className="finance-filters"><SelectField label="관측 월" value={filters.month} onChange={event=>changeFilter('month',event.target.value)} options={[{value:'',label:'수집한 전체 기간'},...months.map(month=>({value:month,label:month}))]} /><TextField label="검색" type="search" value={filters.q} placeholder="거래·계약 이름" onChange={event=>changeFilter('q',event.target.value)} /></div></div>
     <div className="finance-read-notice"><TruthBadge state={data.status} />{available && <><span className="mono">{period}</span><span>은행 원장 미조회 · 은행 잔액 미확인</span>{data.status==='partial' && <Button variant="ghost" size="sm" onClick={reload}>다시 읽기</Button>}</>}</div>
     {data.status==='loading' && <Skeleton lines={6} height={24} label="개인 금융 장부 불러오는 중" />}
     {data.status==='error' && <EmptyState icon="x" title="금융 장부를 읽지 못했어요" description="읽기 실패를 빈 장부로 표시하지 않습니다. 연결 상태를 확인하고 다시 읽어 주세요." action={<Button variant="outline" onClick={reload}>다시 읽기</Button>} />}
     {data.status==='preview' && <EmptyState icon="link" title="개인 금융 장부 연결 필요" description="연결 후 가져온 내역과 계약을 볼 수 있습니다." action={<Button variant="outline" onClick={reload}>연결 다시 확인</Button>} />}
     {available && filters.view==='flow' && <>
       <section className="finance-summary" aria-label="수집한 소비 합계"><div><span>수집한 순소비</span><strong className="stat">{financeMoney(totals.net)}</strong></div><div><span>원구매</span><strong className="mono">{financeMoney(totals.gross)}</strong></div><div><span>환불</span><strong className="mono">{financeMoney(totals.refund)}</strong></div><div><span>중복 제외</span><strong className="mono">{financeMoney(totals.duplicate)}</strong></div></section>
-      <p className="finance-muted">합계는 선택한 관측 월 기준입니다. 검색은 거래 목록에 적용됩니다. 전체 가계 지출·은행 현금 흐름은 아직 확인하지 않았습니다.</p>
-      <section className="finance-section"><h3>월별 소비</h3><MonthlyTable rows={monthly} /></section>
-      <section className="finance-section"><h3>머니 이동</h3><p className="finance-muted">충전·지급·환불은 이동으로 분리합니다. 지급은 양수로 표시하며 관측 증감은 은행 잔액이 아닙니다.</p><MonthlyTable rows={wallet} wallet /></section>
-      <section className="finance-section"><h3>거래 검토</h3><FinanceRows entries={visibleEntries} onReview={openReview} onClear={clearFilters} /></section>
+      <p className="finance-muted">합계는 선택 월 기준 · 검색은 목록에만 적용 · 순소비는 은행 출금과 다릅니다.</p>
+      <div className="finance-monthly-grid"><section className="finance-section"><div className="finance-section-head"><h3>월별 소비</h3><span className="finance-muted">원구매 − 환불 − 중복</span></div><MonthlyTable rows={monthly} /></section>
+      <section className="finance-section"><div className="finance-section-head"><h3>머니 이동</h3><span className="finance-muted">소비 합계에서 제외 · 잔액 아님</span></div><MonthlyTable rows={wallet} wallet /></section></div>
+      <section className="finance-section"><div className="finance-section-head"><h3>거래 검토</h3><span className="finance-muted num">{visibleEntries.length}건 · 행을 눌러 검토</span></div><FinanceRows entries={visibleEntries} onReview={openReview} onClear={clearFilters} /></section>
     </>}
     {available && filters.view==='subscriptions' && <>
-      <p className="finance-muted">자술·약정·관측·사용을 따로 봅니다. 관측 결제는 향후 약정액이 아닙니다. 계약 목록은 모든 기간, 결제 관측은 선택한 월 기준입니다.</p>
-      <section className="finance-section"><h3>사용 중 계약</h3>{subscriptions.length?<div className="finance-subscriptions">{subscriptions.map(record=><button type="button" className="hub-row finance-subscription" key={record.id} onClick={()=>openReview('subscription',record)}><span className="finance-subscription-title"><strong>{record.name}</strong><span className="finance-muted">{financeOptionLabel(PURPOSE_OPTIONS,record.purpose)} · 검토하기</span></span><span><span className="finance-muted">자술</span> <span className="mono">{financeMoney(record.statedAmount)}</span> · {record.statedCycle||'주기 미확인'}</span><span><span className="finance-muted">약정</span> <span className="mono">{contractMoney(record)}</span> · {financeOptionLabel(CYCLE_OPTIONS,record.cycle||'')}</span><span><span className="finance-muted">사용</span> {record.usageNote||'사용 미확인'}</span><span className="finance-muted">다음 청구 {record.nextDate||'미확인'} · 계정 {record.accountAlias||'미확인'}</span></button>)}</div>:<EmptyState icon="search" title="표시할 계약이 없습니다" description="수집 범위와 검색 조건을 확인해 주세요." action={<Button variant="outline" onClick={clearFilters}>필터 지우기</Button>} />}</section>
-      <section className="finance-section"><h3>계약 그룹별 결제 관측</h3><p className="finance-muted">Claude Pro/Max는 별도 계약이며 같은 Claude 관측을 두 비용으로 합산하지 않습니다. 관측만으로 플랜·반복 주기·사용을 확정하지 않습니다.</p>{observed.length?<dl className="finance-observed">{observed.map(group=><div key={group.group}><dt>{GROUP_LABELS[group.group]||group.group}</dt><dd className="mono">{financeMoney(group.net)}</dd></div>)}</dl>:<p className="finance-muted">이 계약 그룹의 결제 관측이 없습니다.</p>}</section>
+      <p className="finance-muted">계약은 전체 기간 · 결제 관측은 선택 월 · 관측 결제와 다음 약정액은 별개입니다.</p>
+      <section className="finance-section"><div className="finance-section-head"><h3>사용 중 계약</h3><span className="finance-muted num">{subscriptions.length}개 · 행을 눌러 검토</span></div><SubscriptionRows records={subscriptions} onReview={openReview} onClear={clearFilters} /></section>
+      <section className="finance-section"><h3>계약 그룹별 결제 관측</h3><p className="finance-muted">Claude 공동 결제는 한 번만 합산 · 플랜·주기·사용은 별도 확인</p>{observed.length?<dl className="finance-observed">{observed.map(group=><div key={group.group}><dt>{GROUP_LABELS[group.group]||group.group}</dt><dd className="mono">{financeMoney(group.net)}</dd></div>)}</dl>:<p className="finance-muted">이 계약 그룹의 결제 관측이 없습니다.</p>}</section>
     </>}
     {available && filters.view==='claims' && <>
-      <p className="finance-muted">회사 청구 후보입니다. 목적·신청·승인·실제 회수는 별도로 검토합니다. 승인만으로 회수나 개인 부담 감소를 확정하지 않습니다.</p>
-      <FinanceRows entries={financeClaimEntries(visibleEntries)} claims onReview={openReview} onClear={clearFilters} />
+      <p className="finance-muted">목적·신청·승인·실제 회수를 따로 확인합니다. 미확인 금액은 0원으로 계산하지 않습니다.</p>
+      <div className="finance-section-head"><h3>회사 청구 후보</h3><span className="finance-muted num">{financeClaimEntries(visibleEntries).length}건 · 행을 눌러 검토</span></div><FinanceRows key="claims" entries={financeClaimEntries(visibleEntries)} claims onReview={openReview} onClear={clearFilters} />
     </>}
     {edit && <EditDrawer title={edit.entity==='entry'?'거래 검토':'구독·고정비 검토'} subtitle={edit.original.merchant||edit.original.name} record={draft} fields={[]} onChange={changeDraft} onClose={()=>setEdit(null)} onSave={save} width="min(480px, 96vw)">
       <fieldset className="finance-review-fields" disabled={writeBusy} aria-label="금융 기록 검토">

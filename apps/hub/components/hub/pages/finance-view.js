@@ -55,3 +55,26 @@ export function financeOptionLabel(options,value) { return options.find(o=>o.val
 export function financeClaimEntries(entries) {
  return entries.filter(entry=>entry.type==='expense' && !entry.duplicateOf && (entry.claimCandidate || entry.review?.purpose==='company'));
 }
+
+export function financeNextSort(sort,key) {
+  return sort.key !== key ? {key,dir:'asc'} : sort.dir === 'asc' ? {key,dir:'desc'} : {key:'',dir:''};
+}
+export function financeClaimRemaining(record) {
+  const {approvedAmount,recoveredAmount}=record.review||{};
+  return typeof approvedAmount==='number' && typeof recoveredAmount==='number' ? approvedAmount-recoveredAmount : null;
+}
+export function financeSortRows(rows,sort) {
+  if (!sort.key) return rows;
+  const value = row => {
+    if (sort.key==='net') return row.type==='movement' ? row.movementAmount : row.netAmount;
+    if (sort.key==='approved' || sort.key==='recovered') return row.review?.[`${sort.key}Amount`];
+    if (sort.key==='remaining') return financeClaimRemaining(row);
+    return row[sort.key];
+  };
+  return [...rows].sort((a,b)=>{
+    const left=value(a),right=value(b),leftUnknown=left==null||left==='',rightUnknown=right==null||right==='';
+    if (leftUnknown || rightUnknown) return leftUnknown===rightUnknown ? 0 : leftUnknown ? 1 : -1;
+    const order=typeof left==='number' && typeof right==='number' ? left-right : String(left).localeCompare(String(right),'ko',{numeric:true});
+    return sort.dir==='desc' ? -order : order;
+  });
+}
