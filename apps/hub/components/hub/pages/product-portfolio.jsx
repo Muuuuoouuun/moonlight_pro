@@ -50,14 +50,14 @@ export function ProductPortfolio({ products, inquiries, month, onOpenProduct, on
           <span className={styles.dim}>개발 중 {summary.byOps.dev} · 일시 중지 {summary.byOps.paused}</span>
         </div>
         <div className={styles.cell}>
-          <span className="eyebrow">주간 사용자</span>
+          <span className="eyebrow">{summary.usersMissing > 0 && summary.users !== null ? "확인된 주간 사용자" : "주간 사용자"}</span>
           <span className={`stat ${styles.cellValue}`}>{summary.users ?? "—"}</span>
           <span className={styles.dim}>{summary.usersMissing > 0 ? `${summary.usersMissing}개 제품 미입력` : "최근 7일 활성"}</span>
         </div>
         <div className={styles.cell}>
-          <span className="eyebrow">{monthLabel(month)} 순이익</span>
+          <span className="eyebrow">{monthLabel(month)} {summary.moneyMissing > 0 && summary.moneyKnown > 0 ? "확인된 순이익" : "순이익"}</span>
           <span className={`stat ${styles.cellValue}`}>{won(summary.net)}</span>
-          <span className={styles.dim}>{summary.moneyKnown ? `매출 ${won(summary.revenue)} · 비용 ${won(summary.cost)}` : "매출·비용 입력 전"}</span>
+          <span className={styles.dim}>{summary.moneyMissing > 0 ? `${summary.moneyMissing}개 제품 매출·비용 확인 필요` : summary.moneyKnown ? `매출 ${won(summary.revenue)} · 비용 ${won(summary.cost)}` : "매출·비용 입력 전"}</span>
         </div>
         <div className={styles.cell}>
           <span className="eyebrow">열린 문의</span>
