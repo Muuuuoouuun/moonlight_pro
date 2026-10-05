@@ -126,7 +126,7 @@ function WeekCells({ cells, unit, label }) {
     const full = cell.done !== null && cell.quota && cell.done >= cell.quota;
     const fill = cell.done !== null && cell.quota ? Math.max(0, Math.min(100, (cell.done / cell.quota) * 100)) : 0;
     const text = cell.done === null ? `·/≈${formatPaceNumber(cell.quota)}` : `${formatPaceNumber(cell.done)}/≈${formatPaceNumber(cell.quota)}`;
-    return <li key={cell.start} className={`goal-weeks__cell goal-weeks__cell--${cell.phase}${full ? ' goal-weeks__cell--full' : ''}`} aria-label={`${cell.label} 주 ${cell.done === null ? '주별 실적 미측정' : `관측 차이 ${formatPaceNumber(cell.done)}${unit || ''}`} · 기간 안 ${cell.days}일의 균등 페이스 몫 ${cell.quota}${unit || ''}${cell.phase === 'now' ? ' · 이번 주' : ''}`}>
+    return <li key={cell.start} className={`goal-weeks__cell goal-weeks__cell--${cell.phase}${full ? ' goal-weeks__cell--full' : ''}`} aria-label={`${cell.label} 주 ${cell.done === null ? '주별 실적 미측정' : `관측 차이 ${formatPaceNumber(cell.done)}${unit || ''}`} · 기간 안 ${cell.days}일의 균등 페이스 몫 약 ${formatPaceNumber(cell.quota)}${unit || ''}${cell.phase === 'now' ? ' · 이번 주' : ''}`}>
       <span className="goal-weeks__box"><i style={{ width: `${fill}%` }} /><b className="mono">{text}</b></span>
       <span className="mono goal-weeks__label">{cell.phase === 'now' ? `${cell.label} 이번 주` : cell.label}</span>
     </li>;

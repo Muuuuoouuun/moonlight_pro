@@ -24,7 +24,7 @@ async function components(path, names) {
   for (const name of declared) delete dependencies[name];
   return new Function(...Object.keys(dependencies), `${code}; return { ${names.join(', ')} };`)(...Object.values(dependencies));
 }
-const { BulletChart, KpiView, ScoreBar } = await components('./pages/goals.jsx', ['BulletChart', 'KpiView', 'ScoreBar']);
+const { BulletChart, KpiView, ScoreBar, WeekCells } = await components('./pages/goals.jsx', ['BulletChart', 'KpiView', 'ScoreBar', 'WeekCells']);
 const { OkrSummaryView } = await components('./okr-summary-card.jsx', ['OkrSummaryView']);
 const { GoalMetricSummary } = goalComponents;
 
@@ -99,6 +99,17 @@ test('KR meter exposes the same decimal score as the visible number, and disting
   const missing = render(ScoreBar, { value: null, label: 'KR 점수' });
   assert.match(missing, /점수 없음/);
   assert.doesNotMatch(missing, /aria-valuenow=/);
+});
+
+test('weekly accessible pace amounts match the rounded visible amounts for measured and unmeasured weeks', () => {
+  const kr = { ...metric, role: 'driver', target: 12, measurement: { value: 2, coverage: 'complete' } };
+  const cells = concepts.weeklyCells(kr, objective, [{ metricId: metric.id, value: 2, coverage: 'complete', observedAt: '2026-10-03T03:00:00Z' }], '2026-10-05');
+  const html = render(WeekCells, { cells, unit: '건', label: '주별 관측 차이' });
+  assert.match(html, /관측 차이 2건 · 기간 안 4일의 균등 페이스 몫 약 1\.5건/);
+  assert.match(html, /주별 실적 미측정 · 기간 안 7일의 균등 페이스 몫 약 2\.7건/);
+  assert.match(html, />2\/≈1\.5</);
+  assert.match(html, />·\/≈2\.7</);
+  for (const cell of cells) assert.doesNotMatch(html, new RegExp(String(cell.quota).replaceAll('.', '\\.')));
 });
 
 test('available automatic zero renders a measured zero and a read timestamp rather than no observations', () => {
