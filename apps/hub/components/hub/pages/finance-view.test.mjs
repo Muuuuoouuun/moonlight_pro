@@ -108,3 +108,15 @@ test('review dates require positive payment evidence and never infer a cycle fro
  assert.equal(financeSubscriptionDates({group:'provider',statedCycle:'미확인'},[{...entry,netAmount:10}]).nextScheduleDate,null);
  assert.equal(financeSubscriptionDates({group:'provider',statedCycle:'3개월치'},[{...entry,type:'movement',netAmount:10}]).nextScheduleDate,null);
 });
+test('stopped contracts retain payment history but show only an explicit resume plan',async()=>{
+ const {financeSubscriptionDates,financeChanges}=await import('./finance-view.js');
+ const entry={group:'provider',type:'expense',date:'2099-01-01',grossAmount:20,netAmount:20};
+ const record={group:'provider',statedCycle:'3개월치',nextDate:'2099-04-01',serviceStatus:'paused',resumeDate:null};
+ assert.equal(financeSubscriptionDates(record,[entry]).lastPaymentDate,'2099-01-01');
+ assert.equal(financeSubscriptionDates(record,[entry]).nextScheduleDate,null);
+ const resumed=financeSubscriptionDates({...record,resumeDate:'2099-05-01'},[entry]);
+ assert.equal(resumed.scheduleKind,'resume');assert.equal(resumed.nextScheduleDate,'2099-05-01');
+ assert.equal(financeSubscriptionDates({...record,serviceStatus:'cancelled'},[entry]).nextScheduleDate,null);
+ assert.equal(financeSubscriptionDates({...record,serviceStatus:'unknown'},[entry]).scheduleKind,'planned');
+ assert.deepEqual(financeChanges('subscription',{serviceStatus:'paused',resumeDate:'2099-05-01'}).changes,{serviceStatus:'paused',resumeDate:'2099-05-01'});
+});
