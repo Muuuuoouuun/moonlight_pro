@@ -234,7 +234,7 @@ test('inquiry read failure does not erase readable task data', async () => {
   assert.equal(body.taskToday.items.length, 1);
 });
 
-test("tasks API returns 502 instead of flattening a configured task read error", async () => {
+test("tasks API preserves a configured read error in the HTTP 200 read envelope", async () => {
   state.tasksLedger = {
     source: "error",
     configured: true,
@@ -246,11 +246,13 @@ test("tasks API returns 502 instead of flattening a configured task read error",
   const response = await tasksRoute.GET(new Request("http://hub.test/api/hub/tasks"));
   const body = await response.json();
 
-  assert.equal(response.status, 502);
+  assert.equal(response.status, 200);
   assert.equal(body.status, "error");
   assert.equal(body.source, "error");
   assert.equal(body.error, "project-ledger-core-read-failed");
   assert.deepEqual(body.failedSources, ["tasks"]);
+  assert.deepEqual(body.tasks, []);
+  assert.equal(body.retryable, true);
 });
 
 test("tasks API stays live when unrelated full-ledger sources are partial", async () => {
@@ -307,8 +309,10 @@ test("tasks API catch logs server-side and returns a fixed safe error", async ()
     const response = await tasksRoute.GET(new Request("http://hub.test/api/hub/tasks"));
     const body = await response.json();
 
-    assert.equal(response.status, 500);
+    assert.equal(response.status, 200);
     assert.equal(body.status, "error");
+    assert.equal(body.source, "error");
+    assert.equal(body.retryable, true);
     assert.equal(body.error, "task-ledger-unexpected-error");
     assert.equal(JSON.stringify(body).includes("private-service-key"), false);
     assert.equal(logged.length, 1);
