@@ -151,10 +151,11 @@ export function Memos() {
         const preview = createJournalStore({ storage: sessionStorage, workspaceId: null, tabId: journalTabId() });
         docs.push(...preview.list().filter((doc) => !store.read(doc.draft.id)).map((doc) => ({ ...doc, fromPreview: true })));
       }
-      setRecoveries(docs); setLocalError(docs.some((doc) => doc.volatile));
+      const visible = docs.filter(doc => !filters.noteScope || (filters.noteScope === 'unclassified' ? doc.draft.noteMeta?.scope === undefined : doc.draft.noteMeta?.scope === filters.noteScope));
+      setRecoveries(visible); setLocalError(visible.some((doc) => doc.volatile));
     } catch { setLocalError(true); }
   }
-  React.useEffect(() => { if (ledger.status !== 'loading') readRecoveries(); }, [ledger.workspaceId, ledger.status, id, reload]);
+  React.useEffect(() => { if (ledger.status !== 'loading') readRecoveries(); }, [ledger.workspaceId, ledger.status, id, filters.noteScope, reload]);
   function create() {
     if (id || ledger.status === 'loading') return;
     router.push(memoDocumentHref(params, { new: 'note', draft: crypto.randomUUID() }), { scroll: false });
@@ -278,7 +279,7 @@ export function Memos() {
     {id && !validId && <p role="alert">메모 주소가 올바르지 않아요. <Button onClick={close}>목록으로</Button></p>}
     {validId && (
       <>
-        <MemoDocument key={id} id={id} isNew={isNew} initialScope={['personal', 'company'].includes(filters.noteScope) ? filters.noteScope : 'personal'} workspaceId={ledger.workspaceId} workspaceConfirmed={ledger.workspaceConfirmed} source={ledger.requestKey === requestKey ? ledger.status : 'loading'} entry={ledger.entry?.id === id ? ledger.entry : null} context={context} fromPreview={fromPreview} onSaved={saved} onClose={close} onReload={() => setReload((n) => n + 1)} />
+        <MemoDocument key={`${id}:${filters.noteScope}`} id={id} isNew={isNew} requestedScope={filters.noteScope} initialScope={['personal', 'company'].includes(filters.noteScope) ? filters.noteScope : 'personal'} workspaceId={ledger.workspaceId} workspaceConfirmed={ledger.workspaceConfirmed} source={ledger.requestKey === requestKey ? ledger.status : 'loading'} entry={ledger.entry?.id === id ? ledger.entry : null} context={context} fromPreview={fromPreview} onSaved={saved} onClose={close} onReload={() => setReload((n) => n + 1)} />
         {relatedMemos.length > 0 && (
           <aside className="memo-network-panel" aria-label="연관된 이전 메모">
             <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>

@@ -13,7 +13,7 @@ function server(draft, overrides = {}) {
   const target = { type: "content", id: contentId, variantId, title: "메모 원문", href: `/dashboard/content/studio?item=${contentId}&variant=${variantId}` };
   const link = { id: crypto.randomUUID(), targetType: "content", targetId: contentId, href: target.href, excerpt: draft.body, sourceRevision: 1 };
   const sourceRef = { type: "journal", journal_id: draft.id, revision: 1, excerpt: draft.body, href: `/dashboard/work/memos?note=${draft.id}` };
-  const entry = () => ({ id: draft.id, body: draft.body, revision: 1, occurredAt: draft.occurredAt, links: created ? [link] : [] });
+  const entry = () => ({ id: draft.id, body: draft.body, revision: 1, occurredAt: draft.occurredAt, noteMeta: { scope: draft.scope }, links: created ? [link] : [] });
   const ledger = () => ({
     status: "live", source: "supabase",
     items: [{ id: contentId, sourceIdea: draft.body, sourceRefs: [sourceRef] }],

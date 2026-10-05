@@ -12,7 +12,7 @@ export async function fetchJournal(path = '') {
   return data;
 }
 
-export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, entry, source, context, contexts, initialScope = 'personal', fromPreview = false, onSaved }) {
+export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, entry, source, context, contexts, initialScope = 'personal', requestedScope = '', fromPreview = false, onSaved }) {
   const [state, setState] = React.useState({ draft: null, entry: null, pending: null, ready: false, dirty: false,
     localError: false, loadError: '', message: '', saveState: 'idle', conflict: null, reuseDraft: null, target: null });
   const ref = React.useRef(state), mounted = React.useRef(true), initialized = React.useRef(false);
@@ -25,7 +25,7 @@ export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, en
 
   React.useEffect(() => {
     if (entry && entry.id !== id) return;
-    const loadKey = `${workspaceId || 'preview'}:${source}`;
+    const loadKey = `${workspaceId || 'preview'}:${source}:${requestedScope}`;
     if (initialized.current === loadKey || source === 'loading') return;
     const epoch = ++documentEpoch.current;
     let cancelled = false;
@@ -63,13 +63,21 @@ export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, en
       if (cancelled || !mounted.current || documentEpoch.current !== epoch) return;
       initialized.current = loadKey;
       priorWorkspace.current = workspaceId;
-      const conflict = local?.dirty && entry && local.draft.expectedRevision !== entry.revision ? entry : null;
+      let conflict = local?.dirty && entry && local.draft.expectedRevision !== entry.revision ? entry : null;
       const useLocal = local && (local.dirty || local.pending);
       if (entry && !useLocal) draft = noteToDraft(entry);
+      const matchesScope = value => !requestedScope || (requestedScope === 'unclassified' ? value?.noteMeta?.scope === undefined : value?.noteMeta?.scope === requestedScope);
+      // Keep other-scope local input in its recovery store, but never render it as
+      // the selected scope's remote document after changing a filter/deep link.
+      if (!isNew && ((!entry && source === 'live' && !useLocal) || !matchesScope(draft))) {
+        draft = null; local = null;
+        conflict = null;
+        message = '선택한 범위에서 이 메모를 확인하지 못했어요. 작성 중 내용은 원래 범위의 복구 목록에 남아 있습니다.';
+      }
       const next = { draft, entry: entry || local?.entry || null, pending: local?.pending || null,
         dirty: local ? Boolean(local.dirty) : Boolean(isNew), ready: true, localError,
         reuseDraft: local?.reuseDraft || null, conflict, saveState: conflict ? 'conflict' : 'idle', message,
-        loadError: !draft ? '이 메모를 확인하지 못했어요. 목록을 다시 불러오거나 주소를 확인해 주세요.' : '' };
+        loadError: !draft ? message || '이 메모를 확인하지 못했어요. 목록을 다시 불러오거나 주소를 확인해 주세요.' : '' };
       update(next);
       if (draft && !localError) {
         try { documentStore.write(id, next); previewStore?.remove(id); } catch { update({ localError: true }); }
@@ -88,7 +96,7 @@ export function useMemoDocument({ id, isNew, workspaceId, workspaceConfirmed, en
     }
     initialize();
     return () => { cancelled = true; };
-  }, [id, isNew, workspaceId, source, entry, context, contexts, fromPreview, update]);
+  }, [id, isNew, workspaceId, source, entry, context, contexts, initialScope, requestedScope, fromPreview, update]);
 
   function keep(patch) {
     const next = { ...ref.current, ...patch };

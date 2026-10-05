@@ -21,6 +21,8 @@ export function createMyWorkQuickTask({ createId = () => crypto.randomUUID() } =
         pending = { payload: Object.freeze(payload), draft };
       }
       const attempt = pending;
+      const previouslyUncertain = Boolean(attempt.uncertain);
+      attempt.uncertain = true;
       inFlight = (async () => {
         try {
           const response = await fetchImpl('/api/hub/tasks', {
@@ -35,7 +37,7 @@ export function createMyWorkQuickTask({ createId = () => crypto.randomUUID() } =
           }
           // A definitive rejection did not create this task. Conflict retains its
           // ID: a payload mismatch must never be sidestepped with a fresh UUID.
-          if (['invalid-input', 'forbidden', 'unauthorized'].includes(data?.status) || [400, 401, 403].includes(response.status)) pending = null;
+          if (!previouslyUncertain && (['invalid-input', 'forbidden', 'unauthorized'].includes(data?.status) || [400, 401, 403].includes(response.status))) pending = null;
           return { status: data?.status === 'preview' ? 'preview' : 'error',
             message: data?.status === 'conflict' ? '이 요청 ID에 다른 할 일이 있어요. 입력을 보관하고 기존 기록을 확인해 주세요.'
               : data?.status === 'preview' ? '서버 저장이 연결되지 않았어요. 입력을 유지했으니 연결 후 다시 추가하세요.' : QUICK_TASK_UNKNOWN };

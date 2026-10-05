@@ -59,3 +59,19 @@ test('a request that never returns is bounded by its abort signal', async () => 
   assert.equal((await writer.submit(draft,{fetchImpl,timeoutMs:5})).status,'error');
   assert.equal(writer.getPending().payload.id,ID);
 });
+
+
+test('an auth rejection after unknown receipt never releases the original dedup ID', async () => {
+  let ids=0,calls=0; const rows=new Map(), sent=[];
+  const writer=createMyWorkQuickTask({createId:()=>{ids++;return ID;}});
+  const fetchImpl=async(_url,{body})=>{
+    const payload=JSON.parse(body);sent.push(payload); calls++;
+    if(calls===1){rows.set(payload.id,payload);throw new TypeError('lost');}
+    if(calls===2)return Response.json({status:'unauthorized'},{status:401});
+    return Response.json({status:'duplicate',task:{id:payload.id}});
+  };
+  await writer.submit(draft,{fetchImpl});await writer.submit(draft,{fetchImpl});
+  assert.equal(writer.getPending().payload.id,ID);
+  assert.equal((await writer.submit(draft,{fetchImpl})).status,'duplicate');
+  assert.equal(ids,1);assert.equal(rows.size,1);assert.deepEqual(sent[0],sent[2]);
+});

@@ -25,11 +25,11 @@ export function MemoSearchControls({ filters, context, onApply }) {
   return <section className="memo-search" aria-label="메모 검색">
     <form onSubmit={(event) => { event.preventDefault(); apply(); }}>
       <div className="memo-search-bar">
+        <TextField label="메모 검색" value={draft.q} maxLength={200} placeholder="기억나는 단어로 찾기" onChange={(event) => update({ q: event.target.value })}
+          onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
         <SelectField label="메모 기록 범위" value={draft.noteScope} options={[{ value: '', label: '모든 범위' }, { value: 'personal', label: '개인' }, { value: 'company', label: '회사 업무' }, { value: 'unclassified', label: '범위 미분류' }]} onChange={(event) => {
           const next = { ...draft, noteScope: event.target.value }; setDraft(next); onApply(next);
         }} />
-        <TextField label="메모 검색" value={draft.q} maxLength={200} placeholder="기억나는 단어로 찾기" onChange={(event) => update({ q: event.target.value })}
-          onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
         <Button variant="primary" type="submit">찾기</Button>
         {draft.q && <Button aria-label="입력한 검색어 지우기" onClick={() => update({ q: '' })}>지우기</Button>}
         <Button variant="outline" aria-expanded={open} aria-controls="memo-search-details" onClick={() => setOpen((value) => !value)}>조건 {open ? '접기' : '열기'}</Button>
