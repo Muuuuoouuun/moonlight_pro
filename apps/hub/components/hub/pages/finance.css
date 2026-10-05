@@ -27,6 +27,7 @@
 .finance-table th, .finance-table td { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
 .finance-table tr:last-child th, .finance-table tr:last-child td { border-bottom: 0; }
 .finance-entries, .finance-subscriptions { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.finance-subscriptions { container-name: finance-contracts; container-type: inline-size; }
 .finance-page .finance-entry, .finance-page .finance-subscription { width: 100%; min-height: 44px; padding: 10px 12px; text-align: left; border: 0; border-bottom: 1px solid var(--line-soft); background: var(--surface); color: var(--fg); cursor: pointer; font-family: inherit; font-size: 13px; line-height: 1.5; }
 .finance-entry:last-child, .finance-subscription:last-child { border-bottom: 0; }
 .finance-list-head { padding: 0 12px; min-height: 40px; border-bottom: 1px solid var(--line); background: var(--surface-2); color: var(--fg-muted); font-size: 11px; }
@@ -38,14 +39,15 @@
 .finance-entry-source { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .finance-entry-value, .finance-entry-approved, .finance-entry-recovered, .finance-entry-remaining { text-align: right; font-size: 12px; white-space: nowrap; }
 .finance-cell-label { display: none; color: var(--fg-muted); font-family: var(--font-sans); }
-.finance-subscription-grid { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(160px, 1.25fr) minmax(120px, 1fr) 110px 70px minmax(100px, 1fr); align-items: center; gap: 16px; }
+.finance-subscription-grid { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(160px, 1.15fr) minmax(110px, 1fr) 110px 165px minmax(160px, 1fr); align-items: center; gap: 16px; }
 .finance-subscription-title { display: flex; flex-direction: column; min-width: 0; }
 .finance-subscription-stated, .finance-subscription-contract { text-align: right; }
-.finance-subscription-stated, .finance-subscription-contract, .finance-subscription-next, .finance-subscription-usage, .finance-subscription-title .finance-muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
-.finance-observed { margin: 12px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 24px; font-size: 12px; }
-.finance-observed > div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
-.finance-observed dt { color: var(--fg-muted); }
-.finance-observed dd { margin: 0; text-align: right; white-space: nowrap; }
+.finance-subscription-stated, .finance-subscription-contract, .finance-subscription-next, .finance-subscription-paid, .finance-subscription-usage, .finance-subscription-title .finance-muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.finance-payments tbody th { min-width: 130px; color: var(--fg); }
+.finance-payments tfoot th, .finance-payments tfoot td { border-top: 1px solid var(--line); background: var(--surface-2); font-weight: 500; }
+.finance-page .finance-payment-cell { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--fg); font-family: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.finance-payment-dates { color: var(--fg-muted); }
+.finance-payments td:has(.finance-payment-cell) { padding-top: 0; padding-bottom: 0; }
 .finance-review-facts { margin: 12px 0 0; display: grid; gap: 12px; font-size: 12px; }
 .finance-review-facts > div { display: flex; justify-content: space-between; gap: 12px; }
 .finance-review-facts dd { margin: 0; text-align: right; }
@@ -78,13 +80,16 @@
   .finance-entry-approved, .finance-entry-recovered, .finance-entry-remaining { grid-row: 3; text-align: left; }
   .finance-entry-remaining { text-align: right; }
   .finance-claims .finance-cell-label { display: inline; }
+}
+@container finance-contracts (max-width: 940px) {
   .finance-subscription-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 12px; }
   .finance-subscriptions .finance-list-head > :nth-child(n+3) { display: none !important; }
   .finance-subscription-title { grid-column: 1; grid-row: 1; }
   .finance-subscription-stated { grid-column: 2; grid-row: 1; }
   .finance-subscription-contract { grid-column: 2; grid-row: 2; }
+  .finance-subscription-paid { grid-column: 1; grid-row: 3; }
   .finance-subscription-next { grid-column: 2; grid-row: 3; text-align: right; }
-  .finance-subscription-purpose, .finance-subscription-next-unknown { display: none; }
+  .finance-subscription-next-unknown { display: none; }
   .finance-subscription-usage { grid-column: 1; grid-row: 2; }
   .finance-subscriptions .finance-cell-label { display: inline; }
 }
@@ -116,7 +121,6 @@
   .finance-entry-status { grid-column: 3; text-align: right; }
   .finance-claims .finance-list-head > :nth-child(1) { display: none !important; }
   .finance-claims .finance-list-head > :nth-child(2) { grid-column: 1 / 3; }
-  .finance-observed { grid-template-columns: minmax(0, 1fr); }
   .finance-page button, .finance-page .hub-input, .finance-review-fields .hub-input { min-height: 44px; }
   .finance-page .hub-input, .finance-review-fields .hub-input { font-size: 16px; }
 }

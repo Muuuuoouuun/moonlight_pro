@@ -2,11 +2,11 @@
 import React from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {Button, Drawer, EditDrawer, EmptyState, SegmentedControl, SelectField, Skeleton, TextAreaField, TextField, TruthBadge, useToast} from '../hub-primitives';
-import {FINANCE_VIEWS, PURPOSE_OPTIONS, CLAIM_OPTIONS, CYCLE_OPTIONS, financeMoney, financeReadState, financeFilters, financeEntries, financePeriodTotals, financeObservedGroups, financeChanges, financeSaveResult, financeOptionLabel, financeClaimEntries, financeNextSort, financeSortRows, financeClaimRemaining} from './finance-view';
+import {FINANCE_VIEWS, PURPOSE_OPTIONS, CLAIM_OPTIONS, CYCLE_OPTIONS, financeMoney, financeReadState, financeFilters, financeEntries, financePeriodTotals, financeSubscriptionDates, financeSubscriptionPayments, financeChanges, financeSaveResult, financeOptionLabel, financeClaimEntries, financeNextSort, financeSortRows, financeClaimRemaining} from './finance-view';
 import {SortHead} from './revenue';
 import './finance.css';
 
-const GROUP_LABELS = {gpt:'GPT',claude:'Claude 공동 관측',grok:'Grok',naver_plus:'Naver Plus',youtube:'YouTube',gabia:'Gabia'};
+const GROUP_LABELS = {gpt:'GPT',claude:'Claude 공동 관측',grok:'Grok',naver_plus:'Naver Plus',youtube:'YouTube',gemini:'Gemini',gabia:'Gabia'};
 const REVIEW_LABELS = {purpose:"사용 목적",claimStatus:"신청 상태",approvedAmount:"승인액",recoveredAmount:"실제 회수액",note:"검토 메모",amount:"약정액",currency:"통화",cycle:"주기",nextDate:"다음 청구일",accountAlias:"계정 별칭",usageNote:"사용 근거"};
 const compareValue = (key,value) => value === "" || value == null ? "미확인" : key === "purpose" ? financeOptionLabel(PURPOSE_OPTIONS,value) : key === "claimStatus" ? financeOptionLabel(CLAIM_OPTIONS,value) : key === "cycle" ? financeOptionLabel(CYCLE_OPTIONS,value) : String(value);
 const SOURCE_LABELS = {'shinhan-card-settled':'신한카드 확정 거래','naverpay-purchase':'네이버페이 결제','naverpay-money':'네이버 머니 이동'};
@@ -17,6 +17,8 @@ const reviewDraft = (entity,record) => entity === 'entry'
   : {id:record.id,amount:record.amount ?? '',currency:record.currency || '',cycle:record.cycle || '',nextDate:record.nextDate || '',accountAlias:record.accountAlias || '',usageNote:record.usageNote || '',purpose:record.purpose || 'unclassified'};
 const contractMoney = (record) => record.amount == null ? '미확인' : record.currency === 'KRW' ? financeMoney(record.amount) : `${record.amount.toLocaleString('ko-KR')} · 통화 미확인`;
 const remainingClaim = financeClaimRemaining;
+const scheduleLabel = record => record.scheduleKind==='review' ? '재확인' : '예정';
+const scheduleTitle = record => record.scheduleKind==='review' ? '최근 관측 결제일 + 자술 이용 기간으로 계산한 재결제 확인 기준입니다. 실제 정기 청구일·금액·주기는 미확인입니다.' : '검토에서 입력한 다음 청구 예정일입니다.';
 
 function FinanceRows({entries,claims=false,onReview,onClear}) {
   const [sort,setSort]=React.useState({key:'',dir:''});
@@ -46,16 +48,28 @@ function SubscriptionRows({records,onReview,onClear}) {
   const toggle=key=>setSort(current=>financeNextSort(current,key));
   if (!records.length) return <EmptyState icon="search" title="표시할 계약이 없습니다" description="수집 범위와 검색 조건을 확인해 주세요." action={<Button variant="outline" onClick={onClear}>필터 지우기</Button>} />;
   return <div className="finance-subscriptions">
-    <div className="finance-list-head finance-subscription-grid"><SortHead k="name" sort={sort} onToggle={toggle}>계약</SortHead><SortHead k="statedAmount" sort={sort} onToggle={toggle} align="right">자술</SortHead><SortHead k="amount" sort={sort} onToggle={toggle} align="right">약정</SortHead><SortHead k="nextDate" sort={sort} onToggle={toggle}>다음 청구</SortHead><span>목적</span><span>사용 근거</span></div>
+    <div className="finance-list-head finance-subscription-grid"><SortHead k="name" sort={sort} onToggle={toggle}>계약</SortHead><SortHead k="statedAmount" sort={sort} onToggle={toggle} align="right">자술</SortHead><SortHead k="amount" sort={sort} onToggle={toggle} align="right">약정</SortHead><SortHead k="lastPaymentDate" sort={sort} onToggle={toggle}>최근 결제일</SortHead><SortHead k="nextScheduleDate" sort={sort} onToggle={toggle}>다음 일정</SortHead><span>목적·사용 근거</span></div>
     {financeSortRows(records,sort).map(record=><button type="button" className="hub-row finance-subscription finance-subscription-grid" key={record.id} onClick={()=>onReview('subscription',record)}>
       <span className="finance-subscription-title"><strong title={record.name}>{record.name}</strong>{record.accountAlias && <span className="finance-muted" title={record.accountAlias}>{record.accountAlias}</span>}</span>
       <span className="finance-subscription-stated" title={`${financeMoney(record.statedAmount)} · ${record.statedCycle||'주기 미확인'}`}><span className="finance-cell-label">자술 </span><span className="mono">{financeMoney(record.statedAmount)}</span> <span className="finance-muted">· 주기 확인</span></span>
       <span className="finance-subscription-contract"><span className="finance-cell-label">약정 </span><span className="mono">{contractMoney(record)}</span>{record.cycle && <span className="finance-muted"> · {financeOptionLabel(CYCLE_OPTIONS,record.cycle)}</span>}</span>
-      <span className={`finance-subscription-next mono ${record.nextDate?'':'finance-subscription-next-unknown'}`}><span className="finance-cell-label">청구 </span>{record.nextDate||'미확인'}</span>
-      <span className="finance-subscription-purpose finance-muted">{financeOptionLabel(PURPOSE_OPTIONS,record.purpose)}</span>
-      <span className="finance-subscription-usage finance-muted" title={record.usageNote||undefined}><span className="finance-cell-label">{financeOptionLabel(PURPOSE_OPTIONS,record.purpose)} · </span>{record.usageNote||'사용 미확인'}</span>
+      <span className="finance-subscription-paid mono" title="수집한 전체 기간에서 마지막으로 관측한 결제일입니다. 플랜을 특정하지 못한 공동 관측일 수 있습니다."><span className="finance-cell-label">결제 </span>{record.lastPaymentDate||'미관측'}</span>
+      <span className={`finance-subscription-next ${record.nextScheduleDate?'':'finance-subscription-next-unknown'}`} title={record.nextScheduleDate?scheduleTitle(record):undefined}><span className="finance-cell-label">다음 </span><span className="mono">{record.nextScheduleDate||'미확인'}</span>{record.nextScheduleDate && <span className="finance-muted"> · {scheduleLabel(record)}</span>}</span>
+      <span className="finance-subscription-usage finance-muted" title={record.usageNote||undefined}><span>{financeOptionLabel(PURPOSE_OPTIONS,record.purpose)} · </span>{record.usageNote||'사용 미확인'}</span>
     </button>)}
   </div>;
+}
+
+function SubscriptionPaymentTable({table,onReview}) {
+  if (!table.rows.length || !table.months.length) return <p className="finance-muted">이 조건의 결제 관측이 없습니다.</p>;
+  return <div className="finance-table-scroll" tabIndex={0} role="region" aria-label="결제일 기준 월별 구독 결제"><table className="finance-table finance-payments">
+    <thead><tr><th scope="col">계약 그룹</th>{table.months.map(month=><th scope="col" className="mono" key={month}>{month}</th>)}</tr></thead>
+    <tbody>{table.rows.map(row=><tr key={row.group}>
+      <th scope="row" title={row.names.join(' · ')}>{GROUP_LABELS[row.group]||row.names.join(' · ')}</th>
+      {row.cells.map(cell=><td key={cell.month}>{cell.entries.length?<button type="button" className="hub-row finance-payment-cell" onClick={()=>onReview(cell,row)} aria-label={`${row.names.join(' · ')} ${cell.month} 결제 ${cell.dates.join(', ')} 순소비 ${financeMoney(cell.net)} 보기`}><span className="finance-payment-dates mono">{cell.dates.map(date=>date.slice(5)).join(' · ')}</span><span className="mono">{financeMoney(cell.net)}</span></button>:<span className="finance-muted">미관측</span>}</td>)}
+    </tr>)}</tbody>
+    <tfoot><tr><th scope="row">관측 합계</th>{table.totals.map(total=><td key={total.month} className="mono" title={`${total.observedGroups}개 그룹 관측 · ${total.missingGroups}개 그룹 미관측`}>{financeMoney(total.net)}</td>)}</tr></tfoot>
+  </table></div>;
 }
 
 function MonthlyTable({rows,wallet=false}) {
@@ -67,7 +81,7 @@ function MonthlyTable({rows,wallet=false}) {
 export function Finance({onNavigate}) {
   const router=useRouter(), params=useSearchParams(), toast=useToast();
   const filters=financeFilters(params);
-  const [data,setData]=React.useState({status:'loading'}),[moreOpen,setMoreOpen]=React.useState(false),[edit,setEdit]=React.useState(null),[fieldError,setFieldError]=React.useState(null),[conflict,setConflict]=React.useState(false),[latest,setLatest]=React.useState(null),[comparisonError,setComparisonError]=React.useState(''),[writeBusy,setWriteBusy]=React.useState(false);
+  const [data,setData]=React.useState({status:'loading'}),[paymentDetail,setPaymentDetail]=React.useState(null),[moreOpen,setMoreOpen]=React.useState(false),[edit,setEdit]=React.useState(null),[fieldError,setFieldError]=React.useState(null),[conflict,setConflict]=React.useState(false),[latest,setLatest]=React.useState(null),[comparisonError,setComparisonError]=React.useState(''),[writeBusy,setWriteBusy]=React.useState(false);
   const life=React.useRef({active:false,controller:null,version:0});
   const reload=React.useCallback(async()=>{
     const currentLife=life.current;
@@ -123,12 +137,12 @@ export function Finance({onNavigate}) {
     if (record) setLatest(record);else setComparisonError('최신 기록을 읽지 못했습니다. 입력은 유지했습니다. 다시 읽어 주세요.');
   };
   const visibleEntries=financeEntries(data.entries||[],filters);
-  const subscriptions=(data.subscriptions||[]).filter(record=>!filters.q.trim() || [record.name,record.accountAlias,record.usageNote].filter(Boolean).join(' ').toLocaleLowerCase().includes(filters.q.trim().toLocaleLowerCase()));
-  const observed=financeObservedGroups(data.groups||[],subscriptions,filters.month);
+  const subscriptions=(data.subscriptions||[]).map(record=>financeSubscriptionDates(record,data.entries||[])).filter(record=>!filters.q.trim() || [record.name,record.accountAlias,record.usageNote].filter(Boolean).join(' ').toLocaleLowerCase().includes(filters.q.trim().toLocaleLowerCase()));
   const totals=financePeriodTotals(data,filters.month);
   const monthly=(data.monthly||[]).filter(row=>!filters.month||row.month===filters.month);
   const wallet=(data.wallet||[]).filter(row=>!filters.month||row.month===filters.month);
   const months=[...new Set([...(data.monthly||[]).map(row=>row.month),...(data.wallet||[]).map(row=>row.month),...(data.entries||[]).map(row=>row.date?.slice(0,7)).filter(Boolean),...(filters.month?[filters.month]:[])])].sort().reverse();
+  const payments=financeSubscriptionPayments(data.entries||[],subscriptions,months,filters.month);
   const available=['live','partial'].includes(data.status);
   const coverage=data.coverage||{};
   const from=coverage.from||coverage.lastFrom||coverage.lastfrom||(data.imports||[]).map(row=>row.from).filter(Boolean).sort()[0];
@@ -152,14 +166,16 @@ export function Finance({onNavigate}) {
       <section className="finance-section"><div className="finance-section-head"><h3>거래 검토</h3><span className="finance-muted num">{visibleEntries.length}건 · 행을 눌러 검토</span></div><FinanceRows entries={visibleEntries} onReview={openReview} onClear={clearFilters} /></section>
     </>}
     {available && filters.view==='subscriptions' && <>
-      <p className="finance-muted">계약은 전체 기간 · 결제 관측은 선택 월 · 관측 결제와 다음 약정액은 별개입니다.</p>
-      <section className="finance-section"><div className="finance-section-head"><h3>사용 중 계약</h3><span className="finance-muted num">{subscriptions.length}개 · 행을 눌러 검토</span></div><SubscriptionRows records={subscriptions} onReview={openReview} onClear={clearFilters} /></section>
-      <section className="finance-section"><h3>계약 그룹별 결제 관측</h3><p className="finance-muted">Claude 공동 결제는 한 번만 합산 · 플랜·주기·사용은 별도 확인</p>{observed.length?<dl className="finance-observed">{observed.map(group=><div key={group.group}><dt>{GROUP_LABELS[group.group]||group.group}</dt><dd className="mono">{financeMoney(group.net)}</dd></div>)}</dl>:<p className="finance-muted">이 계약 그룹의 결제 관측이 없습니다.</p>}</section>
+      <p className="finance-muted">결제일 기준 월별 · 환불·중복 차감 · 같은 Claude 공동 결제는 한 번만 합산</p>
+      <section className="finance-section"><div className="finance-section-head"><h3>월별 구독 결제</h3><span className="finance-muted">날짜 · 순소비 / 눌러서 내역 확인</span></div><SubscriptionPaymentTable table={payments} onReview={(cell,row)=>setPaymentDetail({...cell,label:GROUP_LABELS[row.group]||row.names.join(' · ')})} /></section>
+      <section className="finance-section"><div className="finance-section-head"><h3>사용 중 계약</h3><span className="finance-muted num">{subscriptions.length}개 · 최근 결제일은 수집 전체 기간 기준</span></div><SubscriptionRows records={subscriptions} onReview={openReview} onClear={clearFilters} /></section>
+      <p className="finance-muted">재확인 = 관측 결제일 + 자술 이용 기간 · 정기 청구일·금액 확정 아님 · 상세에서 근거 확인</p>
     </>}
     {available && filters.view==='claims' && <>
       <p className="finance-muted">목적·신청·승인·실제 회수를 따로 확인합니다. 미확인 금액은 0원으로 계산하지 않습니다.</p>
       <div className="finance-section-head"><h3>회사 청구 후보</h3><span className="finance-muted num">{financeClaimEntries(visibleEntries).length}건 · 행을 눌러 검토</span></div><FinanceRows key="claims" entries={financeClaimEntries(visibleEntries)} claims onReview={openReview} onClear={clearFilters} />
     </>}
+    {paymentDetail && <Drawer title="월별 구독 결제 내역" subtitle={`${paymentDetail.label} · ${paymentDetail.month}`} onClose={()=>setPaymentDetail(null)} width="min(800px, 96vw)"><p className="finance-muted">원본의 결제일 기준입니다. 같은 결제의 중복과 머니 이동은 제외했습니다.</p><FinanceRows entries={financeEntries(paymentDetail.entries,{month:'',q:''})} onReview={(entity,entry)=>{setPaymentDetail(null);openReview(entity,entry);}} onClear={()=>setPaymentDetail(null)} /></Drawer>}
     {edit && <EditDrawer title={edit.entity==='entry'?'거래 검토':'구독·고정비 검토'} subtitle={edit.original.merchant||edit.original.name} record={draft} fields={[]} onChange={changeDraft} onClose={()=>setEdit(null)} onSave={save} width="min(480px, 96vw)">
       <fieldset className="finance-review-fields" disabled={writeBusy} aria-label="금융 기록 검토">
         {edit.entity==='entry'?<>
@@ -172,6 +188,7 @@ export function Finance({onNavigate}) {
           <TextField label="실제 회수액 (원)" inputMode="numeric" value={draft.recoveredAmount} hint="입금·정산 근거로 확인한 금액" error={errorFor('recoveredAmount')} onChange={event=>changeDraft('recoveredAmount',event.target.value)} /></>}
           <TextAreaField label="검토 메모" value={draft.note} maxLength={4000} onChange={event=>changeDraft('note',event.target.value)} />
         </>:<>
+          {edit.original.lastPaymentDate && <dl className="finance-review-facts"><div><dt>최근 관측 결제일</dt><dd className="mono">{edit.original.lastPaymentDate}</dd></div>{edit.original.scheduleKind==='review' && <div><dt>이용 기간 뒤 재확인</dt><dd className="mono">{edit.original.nextScheduleDate}</dd></div>}</dl>}{edit.original.scheduleKind==='review' && <p className="finance-muted">{scheduleTitle(edit.original)} 다음 청구일로 자동 저장하지 않습니다.</p>}
           <p className="finance-muted">자술 {financeMoney(edit.original.statedAmount)} · {edit.original.statedCycle||'주기 미확인'}. 결제 관측과 사용 근거를 약정으로 자동 복제하지 않습니다.</p>
           <TextField label="약정액" inputMode="numeric" value={draft.amount} hint="미확인은 빈칸, 확인한 0은 0" error={errorFor('amount')} onChange={event=>changeDraft('amount',event.target.value)} />
           <SelectField label="약정 통화" options={[{value:'',label:'통화 미확인'},{value:'KRW',label:'원 (KRW)'}]} value={draft.currency} onChange={event=>changeDraft('currency',event.target.value)} />

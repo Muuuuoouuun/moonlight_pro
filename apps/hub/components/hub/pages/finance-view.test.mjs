@@ -68,3 +68,43 @@ test('finance contract dates and recovery remainder sort from their actual value
  const claims=[{id:0,review:{approvedAmount:0,recoveredAmount:null}},{id:1,review:{approvedAmount:5,recoveredAmount:6}},{id:2,review:{approvedAmount:5,recoveredAmount:2}}];
  assert.deepEqual(financeSortRows(claims,{key:'remaining',dir:'asc'}).map(r=>r.id),[1,2,0]);
 });
+
+test('monthly subscription payments use payment dates, exclude wallet and duplicates, and share one provider row',async()=>{
+ const {financeSubscriptionPayments}=await import('./finance-view.js');
+ const contracts=['A','B'].map(name=>({name,group:'provider'}));
+ const entries=Array.from({length:4},(_,id)=>({id,group:'provider',date:id===3?'2099-02-03':'2099-01-10',type:id===1?'movement':'expense',duplicateOf:id===2?'0':null,grossAmount:10,netAmount:id===3?0:10}));
+ const table=financeSubscriptionPayments(entries,contracts,['2099-01','2099-02','2099-03']);
+ assert.equal(table.rows.length,1);
+ assert.deepEqual(table.rows[0].names,['A','B']);
+ assert.deepEqual(table.rows[0].cells.map(c=>c.net),[10,0,null]);
+ assert.deepEqual(table.rows[0].cells[0].dates,['2099-01-10']);
+ assert.deepEqual(table.rows[0].cells[1].dates,['2099-02-03']);
+ assert.deepEqual(table.totals.map(c=>c.net),[10,0,null]);
+});
+test('monthly subscription table keeps unobserved contracts and respects the selected payment month',async()=>{
+ const {financeSubscriptionPayments}=await import('./finance-view.js');
+ const table=financeSubscriptionPayments([],[{name:'A',group:'a'}],['2099-01','2099-02'],'2099-02');
+ assert.deepEqual(table.months,['2099-02']);
+ assert.equal(table.rows[0].cells[0].net,null);
+ assert.deepEqual(table.rows[0].cells[0].dates,[]);
+ assert.equal(table.totals[0].net,null);assert.equal(table.totals[0].missingGroups,1);
+});
+test('subscription dates distinguish a stated multi-month review date from a confirmed future bill',async()=>{
+ const {financeSubscriptionDates}=await import('./finance-view.js');
+ const entries=[{group:'provider',type:'expense',date:'2099-01-31',grossAmount:20,netAmount:20}];
+ const record={group:'provider',statedCycle:'3개월치 — 이후 주기 확인 필요',nextDate:null};
+ const projected=financeSubscriptionDates(record,entries);
+ assert.equal(projected.lastPaymentDate,'2099-01-31');
+ assert.equal(projected.nextScheduleDate,'2099-04-30');
+ assert.equal(projected.scheduleKind,'review');
+ assert.equal(record.nextDate,null);
+ assert.equal(financeSubscriptionDates({...record,nextDate:'2099-05-01'},entries).scheduleKind,'planned');
+ assert.equal(financeSubscriptionDates({...record,nextDate:'2099-05-01'},entries).nextScheduleDate,'2099-05-01');
+});
+test('review dates require positive payment evidence and never infer a cycle from repeated charges',async()=>{
+ const {financeSubscriptionDates}=await import('./finance-view.js');
+ const entry={group:'provider',type:'expense',date:'2099-01-01',grossAmount:10,netAmount:0};
+ assert.equal(financeSubscriptionDates({group:'provider',statedCycle:'3개월치'},[entry]).nextScheduleDate,null);
+ assert.equal(financeSubscriptionDates({group:'provider',statedCycle:'미확인'},[{...entry,netAmount:10}]).nextScheduleDate,null);
+ assert.equal(financeSubscriptionDates({group:'provider',statedCycle:'3개월치'},[{...entry,type:'movement',netAmount:10}]).nextScheduleDate,null);
+});
