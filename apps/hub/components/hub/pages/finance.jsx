@@ -17,8 +17,8 @@ const reviewDraft = (entity,record) => entity === 'entry'
   : {id:record.id,amount:record.amount ?? '',currency:record.currency || '',cycle:record.cycle || '',nextDate:record.nextDate || '',accountAlias:record.accountAlias || '',usageNote:record.usageNote || '',purpose:record.purpose || 'unclassified',serviceStatus:record.serviceStatus||'unknown',resumeDate:record.resumeDate||''};
 const contractMoney = (record) => record.amount == null ? '미확인' : record.currency === 'KRW' ? financeMoney(record.amount) : `${record.amount.toLocaleString('ko-KR')} · 통화 미확인`;
 const remainingClaim = financeClaimRemaining;
-const scheduleLabel = record => record.scheduleKind==='resume' ? '재개 예정' : record.scheduleKind==='review' ? '재확인' : '예정';
-const scheduleTitle = record => record.scheduleKind==='resume' ? '운영자가 입력한 재개 예정일입니다. 날짜가 지나도 이용 상태를 자동으로 바꾸지 않습니다.' : record.scheduleKind==='review' ? '최근 관측 결제일 + 자술 이용 기간으로 계산한 재결제 확인 기준입니다. 실제 정기 청구일·금액·주기는 미확인입니다.' : '검토에서 입력한 다음 청구 예정일입니다.';
+const scheduleLabel = record => record.scheduleKind==='resume' ? '재개 예정' : record.scheduleKind==='review' ? '재확인' : record.scheduleKind==='estimate' ? '예상' : '예정';
+const scheduleTitle = record => record.scheduleKind==='estimate' ? `전액 환불되지 않은 최근 결제일에 ${record.estimatedCycle==='annual'?'1년':record.estimatedCycle==='quarterly'?'3개월':'1개월'}을 더한 예상 결제일입니다.${!record.cycle && record.estimatedCycle==='monthly'?' 월결제 가정입니다.':!record.cycle?' 자술 이용 기간 기준입니다.':''} 공동 관측은 플랜별 확정일이 아닙니다.` : record.scheduleKind==='resume' ? '운영자가 입력한 재개 예정일입니다. 날짜가 지나도 이용 상태를 자동으로 바꾸지 않습니다.' : record.scheduleKind==='review' ? '최근 관측 결제일 + 자술 이용 기간으로 계산한 재결제 확인 기준입니다. 실제 정기 청구일·금액·주기는 미확인입니다.' : '검토에서 입력한 다음 청구 예정일입니다.';
 
 function ServiceBadge({record}) {
   const state={active:'active',paused:'waiting',cancelled:'cancelled'}[record.serviceStatus];
@@ -175,7 +175,7 @@ export function Finance({onNavigate}) {
       <p className="finance-muted">결제일 기준 월별 · 환불·중복 차감 · 같은 Claude 공동 결제는 한 번만 합산</p>
       <section className="finance-section"><div className="finance-section-head"><h3>월별 구독 결제</h3><span className="finance-muted">날짜 · 순소비 / 눌러서 내역 확인</span></div><SubscriptionPaymentTable table={payments} onReview={(cell,row)=>setPaymentDetail({...cell,label:GROUP_LABELS[row.group]||row.names.join(' · ')})} /></section>
       <section className="finance-section"><div className="finance-section-head"><h3>구독·고정비 계약</h3><span className="finance-muted num">{subscriptions.length}개 · 최근 결제일은 수집 전체 기간 기준</span></div><SubscriptionRows records={subscriptions} onReview={openReview} onClear={clearFilters} /></section>
-      <p className="finance-muted">이용 상태는 운영자 입력 기준 · 행에서 수정 · 중단·해지는 과거 결제 유지 · 재개 예정은 직접 입력</p>
+      <p className="finance-muted">이용 상태는 운영자 입력 기준 · 행에서 수정 · 중단·해지는 과거 결제 유지 · 재개 예정은 직접 입력 · 월결제 예상은 최근 결제 +1개월</p>
     </>}
     {available && filters.view==='claims' && <>
       <p className="finance-muted">목적·신청·승인·실제 회수를 따로 확인합니다. 미확인 금액은 0원으로 계산하지 않습니다.</p>
@@ -196,7 +196,7 @@ export function Finance({onNavigate}) {
         </>:<>
           <SelectField label="이용 상태" options={SERVICE_OPTIONS} value={draft.serviceStatus} hint="운영자 입력 기준입니다. 결제 기록만으로 자동 판단하지 않습니다." onChange={event=>changeDraft('serviceStatus',event.target.value)} />
           {['paused','cancelled'].includes(draft.serviceStatus) && <TextField label="재개 예정일" type="date" value={draft.resumeDate} hint="미정이면 빈칸. 실제 재개 후 이용 상태를 바꿔 주세요." onChange={event=>changeDraft('resumeDate',event.target.value)} />}
-          {edit.original.lastPaymentDate && <dl className="finance-review-facts"><div><dt>최근 관측 결제일</dt><dd className="mono">{edit.original.lastPaymentDate}</dd></div>{edit.original.scheduleKind==='review' && <div><dt>이용 기간 뒤 재확인</dt><dd className="mono">{edit.original.nextScheduleDate}</dd></div>}</dl>}{edit.original.scheduleKind==='review' && <p className="finance-muted">{scheduleTitle(edit.original)} 다음 청구일로 자동 저장하지 않습니다.</p>}
+          {edit.original.lastPaymentDate && <dl className="finance-review-facts"><div><dt>최근 관측 결제일</dt><dd className="mono">{edit.original.lastPaymentDate}</dd></div>{['review','estimate'].includes(edit.original.scheduleKind) && <div><dt>{edit.original.scheduleKind==='estimate'?'예상 결제일':'이용 기간 뒤 재확인'}</dt><dd className="mono">{edit.original.nextScheduleDate}</dd></div>}</dl>}{['review','estimate'].includes(edit.original.scheduleKind) && <p className="finance-muted">{scheduleTitle(edit.original)} 다음 청구일로 자동 저장하지 않습니다.</p>}
           <p className="finance-muted">자술 {financeMoney(edit.original.statedAmount)} · {edit.original.statedCycle||'주기 미확인'}. 결제 관측과 사용 근거를 약정으로 자동 복제하지 않습니다.</p>
           <TextField label="약정액" inputMode="numeric" value={draft.amount} hint="미확인은 빈칸, 확인한 0은 0" error={errorFor('amount')} onChange={event=>changeDraft('amount',event.target.value)} />
           <SelectField label="약정 통화" options={[{value:'',label:'통화 미확인'},{value:'KRW',label:'원 (KRW)'}]} value={draft.currency} onChange={event=>changeDraft('currency',event.target.value)} />

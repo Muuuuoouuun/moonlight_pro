@@ -104,19 +104,29 @@ export function financeSubscriptionPayments(entries,subscriptions,months,selecte
   return {months:periods,rows,totals};
 }
 
+function addCalendarMonths(date,months) {
+  const target=new Date(`${date}T00:00:00Z`),day=target.getUTCDate();
+  target.setUTCDate(1);target.setUTCMonth(target.getUTCMonth()+months);
+  const end=new Date(target);end.setUTCMonth(end.getUTCMonth()+1);end.setUTCDate(0);
+  target.setUTCDate(Math.min(day,end.getUTCDate()));
+  return target.getUTCFullYear()>9999 ? null : target.toISOString().slice(0,10);
+}
 export function financeSubscriptionDates(record,entries) {
   const payments=paymentEvidence(entries,record.group);
   const lastPaymentDate=payments.map(entry=>entry.date).sort().at(-1) || null;
   if(['paused','cancelled'].includes(record.serviceStatus)) return {...record,lastPaymentDate,nextScheduleDate:record.resumeDate||null,scheduleKind:record.resumeDate?'resume':'unknown'};
-  const lastActivePayment=payments.filter(entry=>entry.netAmount>0).map(entry=>entry.date).sort().at(-1);
+  if(record.nextDate) return {...record,lastPaymentDate,nextScheduleDate:record.nextDate,scheduleKind:'planned'};
+  const paidDates=payments.filter(entry=>entry.netAmount>0).map(entry=>entry.date).sort();
+  const lastActivePayment=paidDates.at(-1),firstActivePayment=paidDates[0];
   const period=Number(record.statedCycle?.match(/(\d+)\s*개월(?:치|분)/)?.[1]);
-  let renewalReviewDate=null;
-  if (lastActivePayment && Number.isInteger(period) && period>0 && period<=24) {
-    const [year,month,day]=lastActivePayment.split('-').map(Number);
-    const first=new Date(Date.UTC(year,month-1+period,1));
-    const finalDay=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate();
-    first.setUTCDate(Math.min(day,finalDay));
-    renewalReviewDate=first.toISOString().slice(0,10);
+  const initialTerm=Number.isInteger(period) && period>0 && period<=24;
+  const statedAnnual=/(?:\d+\s*년|매년|연간)/.test(record.statedCycle||'');
+  const cycleMonths={monthly:1,quarterly:3,annual:12};
+  if(lastActivePayment && record.serviceStatus==='active' && (record.cycle || statedAnnual || !initialTerm || firstActivePayment!==lastActivePayment)) {
+    const estimatedCycle=record.cycle || (statedAnnual?'annual':'monthly');
+    const nextScheduleDate=addCalendarMonths(lastActivePayment,cycleMonths[estimatedCycle]);
+    return {...record,lastPaymentDate,nextScheduleDate,scheduleKind:nextScheduleDate?'estimate':'unknown',estimatedCycle};
   }
-  return {...record,lastPaymentDate,nextScheduleDate:record.nextDate || renewalReviewDate,scheduleKind:record.nextDate ? 'planned' : renewalReviewDate ? 'review' : 'unknown'};
+  const renewalReviewDate=lastActivePayment && initialTerm ? addCalendarMonths(lastActivePayment,period) : null;
+  return {...record,lastPaymentDate,nextScheduleDate:renewalReviewDate,scheduleKind:renewalReviewDate?'review':'unknown'};
 }
