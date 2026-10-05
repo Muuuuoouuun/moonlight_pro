@@ -148,6 +148,10 @@ export const DATABASE_FEATURES = [
       ['office_request_inbox_v1(uuid,text,text,integer,jsonb)', '(r.created_at,r.id)<(v_time,v_id)'],
       ['office_request_inbox_v1(uuid,text,text,integer,jsonb)', "r.expires_at<=now() then 'expired'"]],
     tableNoWrite: [['office_requests','service_role']] },
+  { name: '개인 현금 흐름', migration: '20261005_0067_personal_finance.sql',
+    tables: ['finance_imports','finance_entries','finance_subscriptions'],
+    functions: ['finance_import_v1(uuid,jsonb)','finance_review_v1(uuid,text,uuid,integer,jsonb)'],
+    tableNoWrite: ['finance_imports','finance_entries','finance_subscriptions'].map(name=>[name,'service_role']) },
 ];
 // One row per check: kind + name (table or function signature) + subject (constraint or role) + detail (marker).
 export function featureChecks(feature) {
