@@ -23,6 +23,7 @@ function MemoDocument({ onClose, onReload, ...props }) {
 }
 function MatchText({ text, query }) { return memoMatchSegments(text, query).map((part, index) => part.match ? <mark key={index}>{part.text}</mark> : <React.Fragment key={index}>{part.text}</React.Fragment>); }
 const initial = { status: 'loading', workspaceId: null, entries: [], entry: null, nextCursor: null, workspaceConfirmed: false };
+const idlePattern = () => ({ status: 'idle', patterns: [], error: null, code: null, request: null });
 // 메모 분석 봉투 판정. 성공은 엔진이 결과를 만든 succeeded(또는 같은 요청의 duplicate)뿐이다.
 // 202 preview는 엔진·저장소 연결 전이라는 뜻이고, 그때 오는 patterns는 연결 안내용 자리표시라
 // 결과 행으로 그리지 않는다(§5.3 "never show mock work rows beside it"). 나머지는 전부 error.
@@ -52,50 +53,82 @@ export function Memos() {
   const context = React.useMemo(() => contextId ? { type: contextType, id: contextId } : null, [contextType, contextId]);
   const [ledger, setLedger] = React.useState(() => ({ ...initial, workspaceId: lastJournalWorkspace() })), [reload, setReload] = React.useState(0), [error, setError] = React.useState('');
   const [recoveries, setRecoveries] = React.useState([]), [localError, setLocalError] = React.useState(false);
-  const [selectedIds, setSelectedIds] = React.useState([]);
+  const analysisReady = ledger.status === 'live' && ledger.workspaceConfirmed && ledger.requestKey === requestKey;
+  // A fresh owner object also distinguishes company -> personal -> company.
+  const analysisOwner = React.useMemo(() => ({ scope: filters.noteScope, workspaceId: ledger.workspaceId, ready: analysisReady }), [filters.noteScope, ledger.workspaceId, analysisReady]);
+  const latestAnalysisOwner = React.useRef(analysisOwner); latestAnalysisOwner.current = analysisOwner;
+  const patternControl = React.useRef({ active: false, owner: null, ticket: 0, controller: null }).current;
+  const [selection, setSelection] = React.useState({ owner: null, ids: [] });
+  const selectedIds = selection.owner === analysisOwner ? selection.ids : [];
   const [patternGoal, setPatternGoal] = React.useState('sales_insight');
   // status: idle | loading | live | preview | error — 분석 라우트의 202 preview를 성공으로 읽지 않는다(§5.3).
-  const [patternState, setPatternState] = React.useState({ status: 'idle', patterns: [], error: null, code: null, request: null });
+  const [patternResult, setPatternState] = React.useState(idlePattern);
+  // Hide retired results in the first render, before effect cleanup runs.
+  const patternState = patternResult.owner === analysisOwner ? patternResult : idlePattern();
   const patternLoading = patternState.status === 'loading';
   const generation = React.useRef(0), currentLedger = React.useRef(ledger); currentLedger.current = ledger;
 
+  React.useEffect(() => {
+    patternControl.owner = analysisOwner; patternControl.active = analysisReady;
+    setSelection({ owner: analysisOwner, ids: [] }); setPatternState({ ...idlePattern(), owner: analysisOwner });
+    setPatternGoal('sales_insight');
+    return () => {
+      patternControl.active = false; patternControl.ticket++;
+      patternControl.controller?.abort(); patternControl.controller = null;
+    };
+  }, [analysisOwner, analysisReady, patternControl]);
+
   const toggleSelect = React.useCallback((memoId, e) => {
     e.stopPropagation();
-    setSelectedIds((prev) =>
-      prev.includes(memoId) ? prev.filter((x) => x !== memoId) : prev.length < 10 ? [...prev, memoId] : prev
-    );
-  }, []);
+    if (!patternControl.active || patternControl.owner !== analysisOwner || latestAnalysisOwner.current !== analysisOwner
+      || !search.entries.some(row => row.id === memoId)) return;
+    setSelection((previous) => {
+      const ids = previous.owner === analysisOwner ? previous.ids : [];
+      return { owner: analysisOwner, ids: ids.includes(memoId) ? ids.filter(id => id !== memoId) : ids.length < 10 ? [...ids, memoId] : ids };
+    });
+  }, [analysisOwner, patternControl, search.entries]);
 
   // 선택 분석과 최근 7일 종합이 같은 라우트·같은 봉투를 쓴다. request를 보관해 preview·error에서
   // 같은 조건으로 다시 실행할 수 있게 한다.
-  // 닫은 뒤(또는 새 실행 뒤) 도착한 옛 응답이 패널을 다시 열지 않게 실행마다 번호를 붙인다.
-  const patternTicket = React.useRef(0);
+  // 닫기·범위/workspace 전환·언마운트는 transport와 응답 ownership을 함께 취소한다.
   const runAnalysis = React.useCallback(async (request) => {
-    const ticket = ++patternTicket.current;
-    setPatternState({ status: 'loading', patterns: [], error: null, code: null, request });
+    if (!patternControl.active || patternControl.owner !== analysisOwner || latestAnalysisOwner.current !== analysisOwner
+      || request?.scope !== analysisOwner.scope || request?.workspaceId !== analysisOwner.workspaceId) return;
+    patternControl.controller?.abort();
+    const controller = new AbortController(), ticket = ++patternControl.ticket;
+    patternControl.controller = controller;
+    const current = () => patternControl.active && patternControl.owner === analysisOwner && latestAnalysisOwner.current === analysisOwner
+      && patternControl.ticket === ticket && patternControl.controller === controller;
+    const command = { ...request, requestId: request.requestId || crypto.randomUUID() };
+    setPatternState({ status: 'loading', patterns: [], error: null, code: null, request: command, owner: analysisOwner });
     let outcome;
     try {
       const res = await fetch('/api/hub/journal/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ requestId: crypto.randomUUID(), ...request }),
+        body: JSON.stringify(command),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60000)]),
       });
       outcome = readPatternEnvelope(res, await res.json().catch(() => null));
     } catch {
       outcome = readPatternEnvelope(null, { error: 'network' });
     }
-    if (ticket === patternTicket.current) setPatternState({ ...outcome, request });
-  }, []);
+    if (current()) { setPatternState({ ...outcome, request: command, owner: analysisOwner }); patternControl.controller = null; }
+  }, [analysisOwner, patternControl]);
 
   const runPatternAnalysis = React.useCallback(() => {
     if (selectedIds.length === 0) return;
-    runAnalysis({ goal: patternGoal, noteIds: selectedIds });
-  }, [selectedIds, patternGoal, runAnalysis]);
+    runAnalysis({ goal: patternGoal, noteIds: selectedIds, scope: analysisOwner.scope, workspaceId: analysisOwner.workspaceId });
+  }, [selectedIds, patternGoal, runAnalysis, analysisOwner]);
 
   const runWeeklySynthesis = React.useCallback(() => {
-    runAnalysis({ goal: 'weekly_synthesis', range: '7d' });
-  }, [runAnalysis]);
-  const closePattern = () => { patternTicket.current++; setPatternState((prev) => ({ ...prev, status: 'idle' })); };
+    runAnalysis({ goal: 'weekly_synthesis', range: '7d', scope: analysisOwner.scope, workspaceId: analysisOwner.workspaceId });
+  }, [runAnalysis, analysisOwner]);
+  const closePattern = () => {
+    if (latestAnalysisOwner.current !== analysisOwner) return;
+    patternControl.ticket++; patternControl.controller?.abort(); patternControl.controller = null;
+    setPatternState({ ...idlePattern(), owner: analysisOwner });
+  };
 
   React.useEffect(() => {
     if (!isNew || draftId) return;
@@ -189,7 +222,7 @@ export function Memos() {
   return <div className="hub-page memos-page fade-up">
     <header className="memos-header"><div><h2>메모</h2><p>남긴 생각을 다음 할 일과 콘텐츠에 이어 쓰세요.</p></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Button variant="outline" size="sm" onClick={runWeeklySynthesis} disabled={patternLoading}>
+        <Button variant="outline" size="sm" onClick={runWeeklySynthesis} disabled={patternLoading || !analysisReady} title="현재 범위의 최근 7일 메모를 최대 25개 종합합니다.">
           최근 7일 종합 보고서
         </Button>
         <Button variant="primary" icon="plus" onClick={create} disabled={Boolean(id) || ledger.status === 'loading'}>메모 남기기 <Kbd>N</Kbd></Button>
@@ -216,10 +249,10 @@ export function Memos() {
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Button variant="primary" size="xs" icon="sparkle" onClick={runPatternAnalysis} disabled={patternLoading}>
+          <Button variant="primary" size="xs" icon="sparkle" onClick={runPatternAnalysis} disabled={patternLoading || !analysisReady}>
             {patternLoading ? '분석 중…' : '패턴 분석 실행'}
           </Button>
-          <Button variant="ghost" size="xs" onClick={() => setSelectedIds([])}>
+          <Button variant="ghost" size="xs" onClick={() => setSelection({ owner: analysisOwner, ids: [] })}>
             선택 취소
           </Button>
         </div>
