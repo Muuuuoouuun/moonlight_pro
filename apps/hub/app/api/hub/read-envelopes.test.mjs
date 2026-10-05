@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { NextResponse } from 'next/server.js';
 import { isCanonicalUuid } from '../../../lib/uuid.js';
+import { taskRecoveryAssertion } from '../../../lib/operator-session.js';
 
 const id = '11111111-1111-4111-8111-111111111111';
 const workspaceId = '22222222-2222-4222-8222-222222222222';
@@ -15,7 +16,7 @@ function route(path, dependencies = {}) {
   const source = readFileSync(new URL(`./${path}/route.js`, import.meta.url), 'utf8')
     .replace(/^import[\s\S]*?;\s*$/gm, '').replace(/\bexport /g, '');
   const bindings = {
-    NextResponse, randomUUID, isCanonicalUuid, console: { error() {} },
+    NextResponse, randomUUID, isCanonicalUuid, taskRecoveryAssertion, console: { error() {} },
     resolveDefaultWorkspaceId: () => workspaceId, resolveSupabaseConfig: () => ({}),
     withWorkspaceFilter: filters => [['workspace_id', `eq.${workspaceId}`], ...filters],
     eqFilter: value => `eq.${value}`, assertHubWriteAllowed: () => null,
