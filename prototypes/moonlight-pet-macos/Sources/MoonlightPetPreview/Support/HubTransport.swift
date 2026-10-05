@@ -18,17 +18,21 @@ struct HubSessionStatus: Sendable {
     let reason: String?
 }
 
+private struct HubAuthenticationRejection: Error {}
+
 protocol HubTransporting: Sendable {
     func request(path: String, method: String, body: Data?) async throws -> HubResponse
     func sessionStatus() async throws -> HubSessionStatus
     func login(username: String, password: String) async throws
     func logout() async throws
-    func clearSession() async
+    func clearSession() async throws
+    func disconnect() async
 }
 
 enum HubTransportError: Error, Equatable, LocalizedError {
     case unauthorized, unconfigured, offline, timeout, rejectedURL, redirectRejected, invalidResponse, conflict
     case server(statusCode: Int)
+    case credentialStorage
     var errorDescription: String? {
         switch self {
         case .unauthorized: return "Hub 로그인이 필요합니다. 계정과 비밀번호를 확인해 주세요."
@@ -39,24 +43,32 @@ enum HubTransportError: Error, Equatable, LocalizedError {
         case .redirectRejected: return "Hub가 다른 주소로 이동을 요청했습니다. 설정에서 최종 Hub 주소를 확인해 주세요."
         case .invalidResponse: return "Hub 응답을 확인하지 못했습니다. 저장 완료로 처리하지 않았습니다."
         case .conflict: return "Hub에서 내용이 바뀌었습니다. 현재 입력을 보관했으니 최신 내용을 확인해 주세요."
+        case .credentialStorage: return "macOS 키체인의 자동 로그인 정보를 확인하지 못했어요. 키체인 접근을 허용한 뒤 다시 로그인해 주세요."
         case .server(let statusCode): return "Hub 요청을 처리하지 못했습니다. (응답 \(statusCode))"
         }
     }
 }
 
 /// A fixed-origin client. Authentication belongs to the Hub operator session;
-/// credentials and session cookies are never placed in defaults, disk, or logs.
+/// accepted credentials belong only to Keychain; cookies stay in private memory.
 actor HubTransport: HubTransporting {
     private let baseURL: URL
     private let origin: String
     private let session: URLSession
     private let officeChatSession: URLSession
     private let cookies: HTTPCookieStorage
+    private let credentialStore: any HubCredentialStoring
+    private var automaticLogin: (id: UUID, task: Task<Void, Error>)?
+    private var automaticLoginAllowed = true
+    private var authenticationRevision = 0
+    private var sessionGeneration = 0
 
-    init(baseURL: URL, configuration: URLSessionConfiguration = .ephemeral) throws {
+    init(baseURL: URL, configuration: URLSessionConfiguration = .ephemeral,
+         credentialStore: any HubCredentialStoring = KeychainHubCredentialStore()) throws {
         let validated = try Self.validatedBaseURL(baseURL)
         self.baseURL = validated
         self.origin = validated.absoluteString
+        self.credentialStore = credentialStore
 
         // Start fresh even when the caller injects a test protocol. A supplied
         // configuration must not introduce shared credentials, cookies or cache.
@@ -70,6 +82,10 @@ actor HubTransport: HubTransporting {
         privateConfiguration.httpShouldSetCookies = true
         guard let privateCookies = privateConfiguration.httpCookieStorage else { throw HubTransportError.invalidResponse }
         self.cookies = privateCookies
+        // Process Set-Cookie only after the generation check below. Foundation
+        // must not accept a late response into the jar after a local logout.
+        privateConfiguration.httpCookieStorage = nil
+        privateConfiguration.httpShouldSetCookies = false
         self.session = URLSession(configuration: privateConfiguration, delegate: HubSessionDelegate(), delegateQueue: nil)
 
         // Office runs generation and review before returning one response (Hub: 60 seconds).
@@ -79,7 +95,7 @@ actor HubTransport: HubTransporting {
         }
         officeConfiguration.timeoutIntervalForRequest = 60
         officeConfiguration.timeoutIntervalForResource = 70
-        officeConfiguration.httpCookieStorage = privateCookies
+        officeConfiguration.httpCookieStorage = nil
         self.officeChatSession = URLSession(configuration: officeConfiguration, delegate: HubSessionDelegate(), delegateQueue: nil)
     }
 
@@ -99,6 +115,30 @@ actor HubTransport: HubTransporting {
     }
 
     func request(path: String, method: String = "GET", body: Data? = nil) async throws -> HubResponse {
+        let url = try requestURL(path)
+        let revision = authenticationRevision
+        let generation = sessionGeneration
+        let canReplay = method.uppercased() == "GET"
+            || (url.path == "/api/hub/journal" && method.uppercased() == "POST")
+            || (url.path == "/api/hub/tasks" && ["POST", "PATCH"].contains(method.uppercased()))
+        do { return try await requestOnce(path: path, method: method, body: body, classifyAuthentication: canReplay) }
+        catch is HubAuthenticationRejection {
+            // Auth endpoints never recursively authenticate. Only an explicit
+            // rejection can replay a request, once, with the identical payload.
+            guard url.path != "/api/operator/session", generation == sessionGeneration else {
+                throw HubTransportError.unauthorized
+            }
+            if revision == authenticationRevision {
+                guard try await restoreLogin() else { throw HubTransportError.unauthorized }
+            }
+            guard generation == sessionGeneration else { throw CancellationError() }
+            return try await requestOnce(path: path, method: method, body: body)
+        }
+    }
+
+    private func requestOnce(path: String, method: String = "GET", body: Data? = nil,
+                             classifyAuthentication: Bool = false) async throws -> HubResponse {
+        let generation = sessionGeneration
         let url = try requestURL(path)
         let method = method.uppercased()
         guard ["GET", "POST", "PATCH", "DELETE"].contains(method) else { throw HubTransportError.rejectedURL }
@@ -130,6 +170,7 @@ actor HubTransport: HubTransporting {
             default: throw HubTransportError.offline
             }
         }
+        guard generation == sessionGeneration else { throw CancellationError() }
         guard let http = response as? HTTPURLResponse, let responseURL = http.url,
               Self.sameOrigin(responseURL, baseURL) else { throw HubTransportError.invalidResponse }
         guard !(300..<400).contains(http.statusCode) else { throw HubTransportError.redirectRejected }
@@ -140,6 +181,9 @@ actor HubTransport: HubTransporting {
             throw HubTransportError.unconfigured
         }
         if [401, 403].contains(http.statusCode) || status == "unauthorized" || status == "forbidden" {
+            if classifyAuthentication, [401, 403].contains(http.statusCode), ["unauthorized", "forbidden"].contains(status ?? "") {
+                throw HubAuthenticationRejection()
+            }
             throw HubTransportError.unauthorized
         }
         if http.statusCode == 409 { throw HubTransportError.conflict }
@@ -157,7 +201,10 @@ actor HubTransport: HubTransporting {
     }
 
     func sessionStatus() async throws -> HubSessionStatus {
-        let response = try await request(path: "/api/operator/session")
+        var response = try await requestOnce(path: "/api/operator/session")
+        if response.status == "anonymous", try await restoreLogin() {
+            response = try await requestOnce(path: "/api/operator/session")
+        }
         guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
               let configured = object["configured"] as? Bool,
               response.status == "authenticated" || response.status == "anonymous" else {
@@ -167,19 +214,77 @@ actor HubTransport: HubTransporting {
     }
 
     func login(username: String, password: String) async throws {
-        let body = try JSONSerialization.data(withJSONObject: ["username": username, "password": password])
-        let response = try await request(path: "/api/operator/session", method: "POST", body: body)
+        let credentials = HubCredentials(username: username, password: password)
+        guard !username.isEmpty, !password.isEmpty else { throw HubTransportError.unauthorized }
+        let generation = sessionGeneration
+        try await authenticate(credentials, generation: generation)
+        guard generation == sessionGeneration else { throw CancellationError() }
+        try Task.checkCancellation()
+        // Save only credentials that the server actually accepted.
+        try credentialStore.save(credentials, origin: origin)
+        automaticLoginAllowed = true
+    }
+
+    private func authenticate(_ credentials: HubCredentials, generation: Int) async throws {
+        try Task.checkCancellation()
+        guard generation == sessionGeneration else { throw CancellationError() }
+        clearCookies()
+        let response = try await requestOnce(path: "/api/operator/session", method: "POST", body: JSONEncoder().encode(credentials))
+        try Task.checkCancellation()
+        guard generation == sessionGeneration else { throw CancellationError() }
         guard response.status == "authenticated", !response.isPreview else { throw HubTransportError.invalidResponse }
+        guard cookies.cookies(for: baseURL)?.contains(where: { $0.name == "com_moon_operator_session" && !$0.value.isEmpty }) == true else {
+            throw HubTransportError.invalidResponse
+        }
+        authenticationRevision += 1
+    }
+
+    private func restoreLogin() async throws -> Bool {
+        guard automaticLoginAllowed else { return false }
+        if let running = automaticLogin { try await running.task.value; return true }
+        guard let credentials = try credentialStore.load(origin: origin) else { return false }
+        let id = UUID()
+        let generation = sessionGeneration
+        let task = Task { try await self.authenticate(credentials, generation: generation) }
+        automaticLogin = (id, task)
+        defer { if automaticLogin?.id == id { automaticLogin = nil } }
+        do { try await task.value; return true }
+        catch HubTransportError.unauthorized {
+            // A changed password needs human input. Avoid retrying it on every
+            // refresh, and never erase another transport's newer credentials.
+            automaticLoginAllowed = false
+            throw HubTransportError.unauthorized
+        }
     }
 
     func logout() async throws {
-        // Erase local authentication even if the server is temporarily offline.
-        defer { clearSession() }
-        let response = try await request(path: "/api/operator/session", method: "POST", body: Data("{\"action\":\"logout\"}".utf8))
+        // Disable automatic login before logout, including offline logout.
+        invalidateAuthentication()
+        defer { clearCookies() }
+        try credentialStore.remove(origin: origin)
+        let response = try await requestOnce(path: "/api/operator/session", method: "POST", body: Data("{\"action\":\"logout\"}".utf8))
         guard response.status == "logged_out", !response.isPreview else { throw HubTransportError.invalidResponse }
     }
 
-    func clearSession() {
+    func disconnect() {
+        invalidateAuthentication()
+        clearCookies()
+    }
+
+    func clearSession() throws {
+        invalidateAuthentication()
+        clearCookies()
+        try credentialStore.remove(origin: origin)
+    }
+
+    private func invalidateAuthentication() {
+        sessionGeneration += 1
+        automaticLoginAllowed = false
+        automaticLogin?.task.cancel()
+        automaticLogin = nil
+    }
+
+    private func clearCookies() {
         for cookie in cookies.cookies ?? [] { cookies.deleteCookie(cookie) }
     }
 

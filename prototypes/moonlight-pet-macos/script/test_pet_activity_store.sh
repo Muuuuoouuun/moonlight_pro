@@ -17,7 +17,7 @@ SWIFT
 src=Sources/MoonlightPetPreview
 swiftc -parse-as-library -o "$output_dir/check" \
   "$src/Models/LocalTask.swift" "$src/Models/HubModels.swift" "$src/Models/HubActivityModels.swift" \
-  "$src/Support/HubTransport.swift" "$src/Support/HubAPI.swift" "$src/Support/HubActivityAPI.swift" \
+  "$src/Support/HubCredentials.swift" "$src/Support/HubTransport.swift" "$src/Support/HubAPI.swift" "$src/Support/HubActivityAPI.swift" \
   "$src/Models/TaskCompletionFeedback.swift" "$src/Models/PetActivityStore.swift" "$src/Models/CouncilDraftStore.swift" \
   Tests/MoonlightPetPreviewTests/TaskCompletionFeedbackTests.swift Tests/MoonlightPetPreviewTests/PetActivityStoreTests.swift "$output_dir/Runner.swift"
 "$output_dir/check"

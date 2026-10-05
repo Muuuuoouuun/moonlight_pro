@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Credentials live only in this settings view and the in-flight sign-in request.
+/// Only successfully accepted credentials are saved in the macOS Keychain.
 struct HubConnectionContent: View {
     @ObservedObject var model: AppModel
     let done: () -> Void
@@ -53,7 +53,7 @@ struct HubConnectionContent: View {
                         .onSubmit(connect)
                         .disabled(isSubmitting || model.hub.isConnecting)
                         .accessibilityLabel("Hub 비밀번호")
-                    Text("비밀번호는 이 Mac에 저장하지 않아요.")
+                    Text("한 번 로그인하면 macOS 키체인으로 자동 로그인해요.")
                         .font(.system(size: 10.5)).foregroundStyle(Palette.glassInkFaint)
                         .modifier(GlassReadability(radius: 8, inset: 5))
                 }
@@ -109,6 +109,11 @@ struct HubConnectionContent: View {
                     .font(.system(size: 10.5)).foregroundStyle(Palette.glassInkFaint)
                     .fixedSize(horizontal: false, vertical: true)
                     .modifier(GlassReadability(radius: 8, inset: 5))
+                Button("로그아웃 · 자동 로그인 해제") {
+                    Task { await model.hub.signOut() }
+                }
+                .buttonStyle(GlassQuietStyle())
+                .disabled(!model.hub.hasConnection)
             }
             .padding(.top, 8)
         }

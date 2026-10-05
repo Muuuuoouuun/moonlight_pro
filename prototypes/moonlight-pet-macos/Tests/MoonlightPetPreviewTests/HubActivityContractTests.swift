@@ -33,6 +33,7 @@ private actor ActivityScript: HubTransporting {
     func login(username: String, password: String) async throws {}
     func logout() async throws {}
     func clearSession() async {}
+    func disconnect() async {}
 }
 
 private func inquiryRow(id: UUID = UUID(), sequence: Int64 = 4) -> [String: Any] {
