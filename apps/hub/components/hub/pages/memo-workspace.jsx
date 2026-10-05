@@ -88,7 +88,7 @@ export function MemoWorkspace({
           { cache: "no-store", signal: AbortSignal.timeout(10000) },
         );
         const next = await response.json();
-        if (!response.ok || !Array.isArray(next.memos))
+        if (!response.ok || next?.status === "error" || next?.source === "error" || !Array.isArray(next?.memos))
           throw new Error("read-failed");
         if (request === requestRef.current) setData(next);
         return next;
