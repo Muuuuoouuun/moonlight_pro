@@ -1,0 +1,57 @@
+// UI projection only: all costs and contracts come from the personal finance ledger.
+export const FINANCE_VIEWS = [{key:'flow',label:'흐름'},{key:'subscriptions',label:'구독·고정비'},{key:'claims',label:'회사 청구'}];
+export const PURPOSE_OPTIONS = [{value:'unclassified',label:'미분류'},{value:'personal',label:'개인'},{value:'business',label:'개인 사업'},{value:'company',label:'회사 업무'}];
+export const CLAIM_OPTIONS = [{value:'unknown',label:'미확인'},{value:'preparing',label:'준비'},{value:'submitted',label:'제출'},{value:'approved',label:'승인'},{value:'partial',label:'일부 승인'},{value:'rejected',label:'반려'},{value:'on_hold',label:'보류'}];
+export const CYCLE_OPTIONS = [{value:'',label:'주기 미확인'},{value:'monthly',label:'매월'},{value:'quarterly',label:'분기'},{value:'annual',label:'매년'}];
+export function financeMoney(amount) {
+  return typeof amount === 'number' && Number.isFinite(amount) ? `${amount.toLocaleString('ko-KR')}원` : '미확인';
+}
+export function financeReadState(data) {
+  const status = data?.source === 'error' ? 'error' : ['private_preview','privatepreview'].includes(data?.status) ? 'preview' : data?.status;
+  return ['live','partial'].includes(status)
+    ? {...data,status,entries: Array.isArray(data.entries)?data.entries:[],subscriptions:Array.isArray(data.subscriptions)?data.subscriptions:[],monthly:Array.isArray(data.monthly)?data.monthly:[],groups:Array.isArray(data.groups)?data.groups:[],wallet:Array.isArray(data.wallet)?data.wallet:[],imports:Array.isArray(data.imports)?data.imports:[]}
+    : {status:status === 'preview' ? 'preview':'error'};
+}
+export function financeFilters(params) {
+  const month=params.get('month') || '';
+  return {view:FINANCE_VIEWS.some(v=>v.key===params.get('view'))?params.get('view'):'flow',month:/^\d{4}-(0[1-9]|1[0-2])$/.test(month)?month:'',q:params.get('q')||''};
+}
+export function financeEntries(entries, {month,q}) {
+  const query=q.trim().toLocaleLowerCase();
+  return entries.filter(e=>(!month || e.date?.startsWith(month)) && (!query || [e.merchant,e.source,e.group,e.review?.note].filter(Boolean).join(' ').toLocaleLowerCase().includes(query))).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (a.sourceKey||'').localeCompare(b.sourceKey||''));
+}
+export function financePeriodTotals(data, month) {
+  const unknown={gross:null,refund:null,duplicate:null,net:null,count:null};
+  return (month ? data.monthly?.find(row=>row.month===month) : data.totals) || unknown;
+}
+export function financeObservedGroups(groups, subscriptions, month) {
+  const wanted=new Set(subscriptions.map(s=>s.group).filter(Boolean));
+  return groups.filter(g=>wanted.has(g.group)).map(g=>{
+    const row=month?g.monthly?.find(m=>m.month===month):g;
+    return {...g,net:row?.net ?? null,count:row?.count ?? null};
+  });
+}
+export function financeChanges(entity, draft) {
+  const fields=entity==='entry'?['purpose','claimStatus','approvedAmount','recoveredAmount','note']:['amount','currency','cycle','nextDate','accountAlias','usageNote','purpose'];
+  const numeric=new Set(['amount','approvedAmount','recoveredAmount']);
+  const changes={};
+  for (const key of fields) {
+    if (!(key in draft)) continue;
+    const value=draft[key];
+    if (numeric.has(key)) {
+      if (value === '' || value === null || value === undefined) changes[key]=null;
+      else if (/^\d+$/.test(String(value)) && Number.isSafeInteger(Number(value))) changes[key]=Number(value);
+      else return {ok:false,field:key,message:'금액은 0 이상의 정수로 입력해 주세요. 모르는 금액은 비워 두세요.'};
+    } else changes[key]=entity==='subscription' && value==='' ? null:value;
+  }
+  return {ok:true,changes};
+}
+export function financeSaveResult(httpOk, data) {
+  if (httpOk && data?.status === 'saved' && data.record) return {ok:true,status:'saved'};
+  if (data?.status === 'conflict') return {ok:false,status:'conflict',message:'다른 변경이 먼저 저장됐습니다. 입력을 유지했습니다. 최신 기록과 비교한 뒤 다시 저장해 주세요.'};
+  return {ok:false,status:'failed',message:data?.status==='preview'?'연결이 필요해 저장하지 못했습니다. 입력은 유지했습니다.':'저장하지 못했습니다. 입력을 유지했으니 다시 시도해 주세요.'};
+}
+export function financeOptionLabel(options,value) { return options.find(o=>o.value===value)?.label || '미확인'; }
+export function financeClaimEntries(entries) {
+ return entries.filter(entry=>entry.type==='expense' && !entry.duplicateOf && (entry.claimCandidate || entry.review?.purpose==='company'));
+}

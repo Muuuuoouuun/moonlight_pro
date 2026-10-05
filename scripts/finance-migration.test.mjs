@@ -1,0 +1,37 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {execFileSync,spawnSync} from 'node:child_process';
+import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+const available=process.getuid?.()!==0&&['initdb','pg_ctl','psql'].every(x=>spawnSync(x,['--version']).status===0);
+const quote=v=>"'"+JSON.stringify(v).replaceAll("'","''")+"'::jsonb";
+test('finance import is atomic/idempotent, review uses revisions, and public roles cannot read',{skip:!available},()=>{
+ const dir=mkdtempSync(join(tmpdir(),'finance-pg-')),data=join(dir,'data'),port=String(56000+process.pid%7000),env={...process.env,LC_ALL:'C'};
+ const run=(c,a)=>execFileSync(c,a,{env,encoding:'utf8',stdio:['pipe','pipe','pipe']});
+ const sql=s=>run('psql',['-X','-qAt','-v','ON_ERROR_STOP=1','-h',dir,'-p',port,'-U','finance_test','-d','postgres','-c',s]).trim();
+ const w='00000000-0000-4000-8000-000000000001';
+ const entry={sourceKey:'card:1',source:'card',type:'expense',date:'2026-07-01',merchant:'거래처',currency:'KRW',grossAmount:100,refundAmount:0,netAmount:100,movementAmount:0};
+ const p={version:1,importKey:'import:1',from:'2026-07-01',through:'2026-07-02',coverage:{bankAccountCollected:false},entries:[entry],subscriptions:[]};
+ try{
+  run('initdb',['-D',data,'-U','finance_test','-A','trust','--no-locale','--encoding=UTF8']);
+  run('pg_ctl',['-D',data,'-l',join(dir,'postgres.log'),'-o',`-F -p ${port} -k ${dir} -h ''`,'-w','start']);
+  sql(`create role anon;create role authenticated;create role service_role bypassrls;create table public.workspaces(id uuid primary key);insert into public.workspaces values('${w}');`);
+  sql(readFileSync(new URL('../supabase/migrations/20261005_0067_personal_finance.sql',import.meta.url),'utf8'));
+  sql(readFileSync(new URL('../supabase/migrations/20261005_0067_personal_finance.sql',import.meta.url),'utf8'));
+  const invoke=(name,args)=>JSON.parse(sql(`set role service_role;select public.${name}(${args});`));
+  assert.equal(invoke('finance_import_v1',`'${w}',${quote({...p,entries:[{...entry,netAmount:99}]})}`).status,'error');
+  assert.equal(sql('select count(*) from public.finance_imports'),'0');
+  assert.equal(invoke('finance_import_v1',`'${w}',${quote(p)}`).status,'imported');
+  assert.equal(invoke('finance_import_v1',`'${w}',${quote(p)}`).status,'duplicate');
+  assert.equal(invoke('finance_import_v1',`'${w}',${quote({...p,coverage:{changed:true}})}`).status,'conflict');
+  const id=sql('select id from public.finance_entries');
+  assert.equal(invoke('finance_review_v1',`'${w}','entry','${id}',1,${quote({purpose:'company',approvedAmount:0})}`).status,'saved');
+  assert.equal(invoke('finance_review_v1',`'${w}','entry','${id}',1,${quote({purpose:'personal'})}`).status,'conflict');
+  assert.equal(invoke('finance_review_v1',`'${w}','entry','${id}',2,${quote({netAmount:0})}`).status,'error');
+  assert.equal(sql('select data->>\'netAmount\' from public.finance_entries'),'100');
+  assert.equal(sql("select has_table_privilege('anon','public.finance_entries','SELECT')"),'f');
+  assert.equal(sql("select has_table_privilege('service_role','public.finance_entries','UPDATE')"),'f');
+  assert.equal(sql("select has_function_privilege('authenticated','public.finance_import_v1(uuid,jsonb)','EXECUTE')"),'f');
+ }finally{spawnSync('pg_ctl',['-D',data,'-m','immediate','-w','stop'],{env,stdio:'ignore'});rmSync(dir,{recursive:true,force:true});}
+});

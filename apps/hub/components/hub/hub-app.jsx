@@ -98,6 +98,7 @@ const ContentPublishLog = lazyPage(() => import("./pages/content-publish-log").t
 const Studio = lazyPage(() => import("./pages/content").then(m => m.Studio));
 const Queue = lazyPage(() => import("./pages/content").then(m => m.Queue));
 const Campaigns = lazyPage(() => import("./pages/content").then(m => m.Campaigns));
+const Finance = lazyPage(() => import("./pages/finance").then(m => m.Finance));
 const RevenueOverview = lazyPage(() => import("./pages/revenue").then(m => m.RevenueOverview));
 const Leads = lazyPage(() => import("./pages/revenue").then(m => m.Leads));
 const Inquiries = lazyPage(() => import('./pages/inquiries').then(m => m.Inquiries));
@@ -242,6 +243,7 @@ const PAGE_MAP = {
   'dashboard/content/campaigns': () => <Campaigns />,
   // 영업·매출 탭은 오늘 연락·고객·거래·문의 넷이다(2026-09-24). 개요·히트맵·Leads·Accounts·Cases는
   // 탭에서 내려왔지만 라우트는 그대로 남아 ⌘K·북마크·딥링크로 열린다(hub-nav.js REVENUE_ROUTE_TABS).
+  'dashboard/revenue/cashflow': (n) => <Finance onNavigate={n} />,
   'dashboard/revenue/overview': (n) => <RevenueOverview onNavigate={n} />,
   'dashboard/revenue/customers': (n, _inquiries, _scope, ask) => <Customers onNavigate={n} onGuidanceAsk={ask} />,
   'dashboard/revenue/heatmap': (n) => <RevenueHeatmap onNavigate={n} />,
