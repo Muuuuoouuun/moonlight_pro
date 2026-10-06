@@ -41,7 +41,7 @@ test("authenticated legacy execution returns 410 and directs requests to Office"
   const body = await response.json();
   assert.equal(body.status, "disabled");
   assert.equal(body.reason, "automation-retired");
-  assert.match(body.message, /Office/);
+  assert.match(body.message, /오피스/);
   assert.match(body.message, /요청/);
   assert.equal(network.mock.callCount(), 0, "no model, database, or run-record requests");
 });

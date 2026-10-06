@@ -1,11 +1,12 @@
 // UI projection only: all costs and contracts come from the personal finance ledger.
+import { formatWon } from '@/lib/won-format';
 export const FINANCE_VIEWS = [{key:'flow',label:'흐름'},{key:'subscriptions',label:'구독·고정비'},{key:'claims',label:'회사 청구'}];
 export const PURPOSE_OPTIONS = [{value:'unclassified',label:'미분류'},{value:'personal',label:'개인'},{value:'business',label:'개인 사업'},{value:'company',label:'회사 업무'}];
 export const CLAIM_OPTIONS = [{value:'unknown',label:'미확인'},{value:'preparing',label:'준비'},{value:'submitted',label:'제출'},{value:'approved',label:'승인'},{value:'partial',label:'일부 승인'},{value:'rejected',label:'반려'},{value:'on_hold',label:'보류'}];
 export const CYCLE_OPTIONS = [{value:'',label:'주기 미확인'},{value:'monthly',label:'매월'},{value:'quarterly',label:'분기'},{value:'annual',label:'매년'}];
 export const SERVICE_OPTIONS = [{value:'unknown',label:'확인 필요'},{value:'active',label:'이용 중'},{value:'paused',label:'일시중지'},{value:'cancelled',label:'해지'}];
 export function financeMoney(amount) {
-  return typeof amount === 'number' && Number.isFinite(amount) ? `${amount.toLocaleString('ko-KR')}원` : '미확인';
+  return typeof amount === 'number' && Number.isFinite(amount) ? formatWon(amount) : '미확인';
 }
 export function financeReadState(data) {
   const status = data?.source === 'error' ? 'error' : ['private_preview','privatepreview'].includes(data?.status) ? 'preview' : data?.status;

@@ -415,7 +415,7 @@ test("AI·자동화 children all carry a group label for the two-eyebrow layout"
 
 test('Office, work execution, coaching and brand advice keep four distinct existing destinations', () => {
   const expected = [
-    ['Office', 'dashboard/agents/office-council'],
+    ['오피스', 'dashboard/agents/office-council'],
     ['작업·실행', 'dashboard/agents/orders'],
     ['코칭·대화', 'dashboard/agents/chat'],
     ['브랜드 자문', 'dashboard/agents/council'],

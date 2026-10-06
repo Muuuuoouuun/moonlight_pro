@@ -91,7 +91,7 @@ export async function generateOfficeBreakdown(request: OfficeBreakdownRequest, g
 
 export function createOfficeBreakdownEngineHandler(auth: (request: Request) => { ok: boolean }, generate = generateOfficeBreakdown) {
   return async (req: Request) => {
-    if (!auth(req).ok) return Response.json({ status: 'error', error: 'Office 인증에 실패했습니다.' }, { status: 401 });
+    if (!auth(req).ok) return Response.json({ status: 'error', error: '오피스 인증에 실패했습니다.' }, { status: 401 });
     try {
       const body = await req.text();
       if (Buffer.byteLength(body) > OFFICE_BREAKDOWN_MAX_BODY_BYTES) return Response.json({ status: 'error', error: '요청이 너무 큽니다.' }, { status: 413 });

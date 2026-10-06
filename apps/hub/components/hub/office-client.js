@@ -12,7 +12,7 @@ export async function requestOffice(input,{fetcher=fetch,signal}={}) {
    return data;
   }
   return {status:data?.status==='preview'?'preview':'error',error:data?.error||'응답을 받지 못했습니다. 입력은 보존됩니다.'};
- }catch(error){return {status:'error',error:error?.name==='AbortError'?'요청을 중단했습니다. 입력은 보존됩니다.':'Office 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.'};}
+ }catch(error){return {status:'error',error:error?.name==='AbortError'?'요청을 중단했습니다. 입력은 보존됩니다.':'오피스 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.'};}
 }
 export function officeHistory(turns) {
  return turns.slice(-4).flatMap(turn=>[{role:'user',text:turn.message.slice(0,2000)},{role:'assistant',text:turn.result.answer.slice(0,2000)}]);

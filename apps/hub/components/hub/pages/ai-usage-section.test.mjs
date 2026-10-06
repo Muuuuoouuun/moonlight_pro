@@ -43,7 +43,7 @@ test("live view shows both months, estimated cost as a stat, per-model rows and 
   assert.match(html, /이번 달 · 9월/);
   assert.match(html, /지난달 · 8월/);
   assert.match(html, /class="stat"[^>]*>\$0\.02</);
-  assert.match(html, /≈ ₩33/);
+  assert.match(html, /≈ 33원/);
   assert.match(html, /기록된 호출 없음/);
   assert.match(html, /gemini-3\.5-flash/);
   assert.match(html, /단가 미확인/);

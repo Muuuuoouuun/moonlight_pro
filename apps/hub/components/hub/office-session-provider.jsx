@@ -19,7 +19,7 @@ export function OfficeSessionProvider({ children, mentorStore = officeMentorSess
 
 export function useOfficeSession(scope) {
   const store = React.useContext(OfficeSessionContext);
-  if (!store) throw new Error('Office는 Hub 세션 안에서 열어 주세요.');
+  if (!store) throw new Error('오피스는 Hub 세션 안에서 열어 주세요.');
   const getSnapshot = React.useCallback(() => store.get(scope), [store, scope]);
   const session = React.useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);
   return { session, store, update: patch => store.update(scope, patch) };

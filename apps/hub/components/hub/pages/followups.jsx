@@ -25,6 +25,7 @@ import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
 import { MAX_DANGER_RAILS, groupFollowups } from "@/lib/sales-os/followup-groups";
 import { diffKstDays, kstDayKey } from "@/lib/kst-day";
+import { formatWonShort } from "@/lib/won-format";
 import "./today-contact.css";
 
 // Small, duplicated on purpose (not imported from ./revenue): that page is its own lazy-loaded
@@ -77,10 +78,7 @@ function shortDate(value, { weekday = false } = {}) {
 }
 function formatWon(amount) {
   const n = Number(amount) || 0;
-  if (n <= 0) return null;
-  if (n >= 1e6) return `₩${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `₩${Math.round(n / 1e3)}K`;
-  return `₩${n}`;
+  return n > 0 ? formatWonShort(n) : null;
 }
 
 // ── 데이터 ───────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ import styles from './office-breakdown-drawer.module.css';
 
 const personName = id => OFFICE_ROSTER.find(person => person.id === id)?.name || id;
 const SCOPE = { classin: '회사', personal: '개인' };
-const EXIT = { office: 'Office 답으로 끝남', task: '내가 할 행동 · 할 일 연결', skill_request: 'Mac 실행 · 스킬 요청서' };
+const EXIT = { office: '오피스 답으로 끝남', task: '내가 할 행동 · 할 일 연결', skill_request: 'Mac 실행 · 스킬 요청서' };
 const OWNER_OPTIONS = OFFICE_ROSTER.map(person => ({ value: person.id, label: `${person.name} · ${person.role}` }));
 
 // Packet states read as lifecycle, never color (DESIGN §5.3): ready=open circle, waiting=pause + named dependency.
@@ -64,11 +64,11 @@ function AutoPanel({ entry, busy, autoRunning, autoStopText, onStartAuto, onStop
   if (!officeCount) return null;
   return <div className={styles.auto}>
     <div className={styles.head}><strong>자동 진행</strong>{autoRunning ? <LifecycleBadge state="active" label={`진행 중 · ${entry.auto.current || '준비'}`} /> : null}</div>
-    <p className={styles.muted}>Office 답으로 끝나는 조각을 순서대로 담당 혼자 답하게 하고, 결과를 다음 조각에 넘깁니다. 조각당 모델 호출 {OFFICE_AUTO_LIMITS.modelCallsPerRun}회, 이번 나누기에서 최대 {Math.min(officeCount, OFFICE_AUTO_LIMITS.runs)}조각. 직접 할 조각·스킬 조각·실패·멈추기에서 섭니다. 할 일을 만들거나 밖으로 보내지 않습니다.</p>
+    <p className={styles.muted}>오피스 답으로 끝나는 조각을 순서대로 담당 혼자 답하게 하고, 결과를 다음 조각에 넘깁니다. 조각당 모델 호출 {OFFICE_AUTO_LIMITS.modelCallsPerRun}회, 이번 나누기에서 최대 {Math.min(officeCount, OFFICE_AUTO_LIMITS.runs)}조각. 직접 할 조각·스킬 조각·실패·멈추기에서 섭니다. 할 일을 만들거나 밖으로 보내지 않습니다.</p>
     {autoStopText && !autoRunning ? <p role="status">{autoStopText}</p> : null}
     <div className={styles.actions}>
       {autoRunning ? <Button variant="outline" size="sm" onClick={onStopAuto}>멈추기</Button>
-        : next.action === 'run' ? <Button variant="primary" size="sm" disabled={busy} onClick={onStartAuto}>{entry.auto?.state === 'stopped' ? '자동 진행 다시 시작' : 'Office 조각 자동 진행'}</Button>
+        : next.action === 'run' ? <Button variant="primary" size="sm" disabled={busy} onClick={onStartAuto}>{entry.auto?.state === 'stopped' ? '자동 진행 다시 시작' : '오피스 조각 자동 진행'}</Button>
         : <span className={styles.muted}>지금 자동으로 이어 갈 조각이 없습니다.</span>}
     </div>
   </div>;

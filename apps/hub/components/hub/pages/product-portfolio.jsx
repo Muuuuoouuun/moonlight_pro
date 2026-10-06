@@ -3,6 +3,7 @@
 // 요약 4칸 · 지금 볼 것(깨졌거나 기한 닥친 것만) · 제품 표. 행을 누르면 제품 페이지로 간다.
 // 모르는 숫자는 0이 아니라 "—"다(월 숫자 미입력).
 import React from "react";
+import { formatWon } from "@/lib/won-format";
 
 import {
   monthNumbers,
@@ -18,7 +19,7 @@ import {
 } from "../../../lib/product-catalog.js";
 import styles from "./product-room.module.css";
 
-const won = (value) => (value === null || value === undefined ? "—" : `${value < 0 ? "−" : ""}₩${Math.abs(value).toLocaleString("ko-KR")}`);
+const won = (value) => formatWon(value);
 const monthLabel = (month) => `${Number(String(month).slice(5, 7))}월`;
 
 export function OpsLabel({ value }) {

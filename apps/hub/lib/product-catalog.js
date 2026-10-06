@@ -3,6 +3,7 @@
 // 제품 = 오래 사는 것(단계만 바뀐다). 프로젝트 = 끝나는 것(projects.product_id로 제품 아래에 붙는다).
 
 import { projectCustomerRef } from "./project-customer-context.js";
+import { formatWon } from "./won-format.js";
 
 export const PRODUCT_STAGES = [
   { key: "idea", label: "아이디어" },
@@ -48,7 +49,7 @@ export function formatPricing(pricing) {
   const model = pricing?.model || "undecided";
   if (model === "undecided") return "가격 미정";
   if (model === "free") return "무료";
-  const amount = Number.isFinite(pricing?.amount) ? `${Number(pricing.amount).toLocaleString("ko-KR")}원` : "금액 미정";
+  const amount = Number.isFinite(pricing?.amount) ? formatWon(pricing.amount) : "금액 미정";
   return `${PRICING_LABEL[model] || model} ${amount}`;
 }
 

@@ -299,8 +299,8 @@ Hub는 규칙(DESIGN.md)과 가드 테스트가 촘촘하지만, **화면 단위
 
 ## 6. 운영자 안건 — 확정 결정과 맞닿아 있어 결정이 필요한 것
 
-1. **영문 탭·제목 한국어화**: `Projects·Calendar·Roadmap·Decisions·Rhythm`, `Campaigns`, `Runs·Webhooks`, `Settings·Evolution`, `New`, `Board·Timeline·To-dos`. 고유명사(Office·Guru·Legend)는 유지할지.
-2. **금액 표기**: `₩1.2M`(M/K) vs `120만`(만/억). 행 전체형은 `1,200,000원` vs `₩1,200,000`.
+1. **영문 탭·제목 한국어화**: `Projects·Calendar·Roadmap·Decisions·Rhythm`, `Campaigns`, `Runs·Webhooks`, `Settings·Evolution`, `New`, `Board·Timeline·To-dos`. 고유명사(Office·Guru·Legend)는 유지할지. — **부분 답(2026-10-06)**: `Office` → `오피스`로 확정·반영(DESIGN.md §15). 나머지 탭은 미정.
+2. **금액 표기**: `₩1.2M`(M/K) vs `120만`(만/억). 행 전체형은 `1,200,000원` vs `₩1,200,000`. — **답(2026-10-06)**: 만·억 단위로 확정·반영. 정확한 금액 `120만원`·`123만 4,567원`, 반올림 `1,235만원`·`1.2억원`(DESIGN.md §8.1·§15).
 3. **AI·자동화 착지면**: 지금은 이브이 업무 분담(모델 호출 0인 수동 기록 폼). agent-layer §5는 "⌘J → 회의실". 10-02 변경(`b1b66da`)이 §15에 기록되지 않았다.
 4. **홈·오늘·현황 역할 분리**: §4.1 권장 방향(A안)으로 갈지, 접근안 C를 다시 볼지.
 5. **영업·매출 안 Futura 범위**: 44px 탭 ↔ 20px 탭 점프(09-24 결정이 예고한 재결정 시점).

@@ -19,12 +19,10 @@ import {
   dateInputValue,
   dealCustomerKey,
   dealDockItem,
-  formatSignedWon,
-  formatWon,
   isoFromDateInput,
 } from "@/lib/deal-timeline";
 import { PAID_NOTE_MAX, markPaid, markRecurringPaid, scheduleLumpSum } from "@/lib/deal-payments";
-import { formatShortWon } from "@/lib/deal-money";
+import { formatSignedWon, formatWon, formatWonShort } from "@/lib/won-format";
 import { paymentMonthKey } from "@/lib/deal-payment-plan";
 import { DealDock, RecurringForm, isLocalId, shouldYieldKeys } from "./deals-dock";
 import "./deals-money.css";
@@ -34,17 +32,15 @@ const FLOW_UNITS = [
   { key: "month", label: "월" },
 ];
 
-const fullWon = (n) => `₩${Math.round(Number(n) || 0).toLocaleString("ko-KR")}`;
-
-// "₩0.6M + 4.8M?" — 확실 합 + 가능 합(물음표). 둘 다 0이면 null.
+// "60만원 + 480만원?" — 확실 합 + 가능 합(물음표). 둘 다 0이면 null.
 function sumNotation(sure, maybe) {
-  if (sure > 0 && maybe > 0) return `${formatWon(sure)} + ${formatShortWon(maybe)}?`;
-  if (sure > 0) return formatWon(sure);
-  if (maybe > 0) return `${formatWon(maybe)}?`;
+  if (sure > 0 && maybe > 0) return `${formatWonShort(sure)} + ${formatWonShort(maybe)}?`;
+  if (sure > 0) return formatWonShort(sure);
+  if (maybe > 0) return `${formatWonShort(maybe)}?`;
   return null;
 }
 
-// ── 목표 — "/ 목표 ₩6M"(눌러서 고치기) 또는 "목표 정하기" ─────────────────────────
+// ── 목표 — "/ 목표 600만원"(눌러서 고치기) 또는 "목표 정하기" ─────────────────────────
 // 저장은 Deals(revenue.jsx)가 소유한 onSave(amount) 프라미스({ok} 계약). 목표를 읽지 못했으면
 // (targetsKnown=false) 아무것도 그리지 않는다 — 미정처럼 보이게 하지 않는다.
 export function MoneyTarget({ targetsKnown, target, monthLabel, saving, onSave }) {
@@ -54,7 +50,7 @@ export function MoneyTarget({ targetsKnown, target, monthLabel, saving, onSave }
   if (!open) {
     return target ? (
       <button type="button" className="deals-money-target" onClick={() => { setValue(String(target)); setOpen(true); }}>
-        / 목표 <span className="mono">{formatWon(target)}</span>
+        / 목표 <span className="mono">{formatWonShort(target)}</span>
         <Iconed name="edit" size={11} />
       </button>
     ) : (
@@ -74,7 +70,6 @@ export function MoneyTarget({ targetsKnown, target, monthLabel, saving, onSave }
         if (ok) setOpen(false);
       }}
     >
-      <span aria-hidden="true">₩</span>
       <input
         type="text"
         inputMode="numeric"
@@ -85,6 +80,7 @@ export function MoneyTarget({ targetsKnown, target, monthLabel, saving, onSave }
         placeholder="5000000"
         aria-label={`${monthLabel} 목표 금액`}
       />
+      <span className="mono" aria-hidden="true">{value ? formatWon(Number(value)) : "원"}</span>
       <Button type="submit" size="xs" variant="secondary" disabled={saving}>{saving ? "저장 중…" : "저장"}</Button>
       <Button type="button" size="xs" variant="ghost" onClick={() => setOpen(false)}>취소</Button>
     </form>
@@ -119,7 +115,7 @@ function MoneyRibbon({ model, target }) {
             data-edge={ribbon.targetPct > 85 ? "end" : ribbon.targetPct < 15 ? "start" : undefined}
             style={{ left: `${ribbon.targetPct}%` }}
           >
-            <span>목표 {formatWon(target)}</span>
+            <span>목표 {formatWonShort(target)}</span>
           </span>
         )}
       </div>
@@ -128,11 +124,11 @@ function MoneyRibbon({ model, target }) {
           <li key={segment.key}>
             <i className="deals-money-swatch" data-kind={segment.key} aria-hidden="true" />
             {segment.label}
-            <span className="mono deals-money-legend__amt">{formatWon(segment.amount)}</span>
+            <span className="mono deals-money-legend__amt">{formatWonShort(segment.amount)}</span>
           </li>
         )))}
         {undatedMaybe > 0 && (
-          <li className="deals-money-legend__note">날짜 없는 가능 <span className="mono">{formatWon(undatedMaybe)}</span>은 목록 맨 아래</li>
+          <li className="deals-money-legend__note">날짜 없는 가능 <span className="mono">{formatWonShort(undatedMaybe)}</span>은 목록 맨 아래</li>
         )}
         {header.target == null && drawn.length === 0 && <li className="deals-money-legend__note">이번 달에 잡힌 돈이 아직 없어요</li>}
       </ul>
@@ -156,7 +152,7 @@ export function MoneyHeader({ model, unknown, syncState, targetsKnown, targetSav
               {unknown ? "거래" : (
                 <>
                   <span className="deals-money-sr">{monthLabel}에 들어온 매출 </span>
-                  <span className="stat">{formatWon(header.paid)}</span>
+                  <span className="stat">{formatWonShort(header.paid)}</span>
                 </>
               )}
             </h2>
@@ -175,14 +171,14 @@ export function MoneyHeader({ model, unknown, syncState, targetsKnown, targetSav
           <dl className="deals-money-kpis">
             <Kpi label="늦은 입금" kind={header.late > 0 ? "late" : "calm"}>
               {header.late > 0
-                ? <span className="stat"><Iconed name="clock" size={13} /> {formatWon(header.late)}</span>
+                ? <span className="stat"><Iconed name="clock" size={13} /> {formatWonShort(header.late)}</span>
                 : <span className="deals-money-kpi__none">없음</span>}
             </Kpi>
-            <Kpi label="월말 확실" kind="sure"><span className="stat">{formatWon(header.monthEndSure)}</span></Kpi>
-            <Kpi label="가능까지" kind="maybe"><span className="stat">{formatWon(header.withMaybe)}</span></Kpi>
+            <Kpi label="월말 확실" kind="sure"><span className="stat">{formatWonShort(header.monthEndSure)}</span></Kpi>
+            <Kpi label="가능까지" kind="maybe"><span className="stat">{formatWonShort(header.withMaybe)}</span></Kpi>
             <Kpi label="매달 정기" kind="recurring">
               {header.recurringMonthly > 0
-                ? <span className="stat">{formatWon(header.recurringMonthly)}</span>
+                ? <span className="stat">{formatWonShort(header.recurringMonthly)}</span>
                 : <span className="deals-money-kpi__none">없음</span>}
             </Kpi>
           </dl>
@@ -229,13 +225,13 @@ function FlowAxis({ col }) {
   const firm = col.paid + col.late + col.sure;
   return (
     <div className="deals-money-axis__cell" data-current={col.current ? "true" : undefined} data-carry={col.carry ? "true" : undefined}>
-      {firm > 0 && <span className="mono deals-money-axis__v">{formatShortWon(firm)}</span>}
-      {col.maybe > 0 && <span className="mono deals-money-axis__v" data-kind="maybe">{formatShortWon(col.maybe)}?</span>}
+      {firm > 0 && <span className="mono deals-money-axis__v">{formatWonShort(firm, { unit: false })}</span>}
+      {col.maybe > 0 && <span className="mono deals-money-axis__v" data-kind="maybe">{formatWonShort(col.maybe, { unit: false })}?</span>}
       {firm === 0 && col.maybe === 0 && <span className="mono deals-money-axis__v" data-kind="none">—</span>}
       <span className="deals-money-axis__l">
         {col.current && <span className="deals-money-now" />}
         {col.label}
-        {col.target ? <span className="deals-money-axis__goal"> · 목표 {formatShortWon(col.target)}</span> : null}
+        {col.target ? <span className="deals-money-axis__goal"> · 목표 {formatWonShort(col.target, { unit: false })}</span> : null}
       </span>
     </div>
   );
@@ -258,7 +254,7 @@ export function CashflowChart({ model }) {
           <div className="deals-money-chart__plot">
             {floorPct != null && (
               <span className="deals-money-floor" style={{ bottom: `${floorPct}%` }}>
-                <span>매달 정기 바닥 · 주당 ≈ {formatWon(model.weeklyFloor)}</span>
+                <span>매달 정기 바닥 · 주당 ≈ {formatWonShort(model.weeklyFloor)}</span>
               </span>
             )}
             {cols.map((col) => <FlowColumn key={col.key} col={col} max={max} />)}
@@ -421,7 +417,7 @@ function MoneyRow({ row, org, rail, selected, form, onOpen, onForm, onConfirm, o
         {!sure && <span className="deals-money-tag" data-certainty="maybe">가능</span>}
       </span>
       <span className="mono deals-money-row__amt" data-certainty={row.certainty} data-unknown={row.hasAmount ? undefined : "true"}>
-        {row.hasAmount ? fullWon(row.amount) : "금액 미정"}
+        {row.hasAmount ? formatWon(row.amount) : "금액 미정"}
       </span>
       <span className="deals-money-row__act" onClick={stop}>{action}</span>
       {form && (

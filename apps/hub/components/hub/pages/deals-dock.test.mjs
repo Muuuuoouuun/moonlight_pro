@@ -7,6 +7,7 @@ import * as timelineLib from "../../../lib/deal-timeline.js";
 import * as paymentsLib from "../../../lib/deal-payments.js";
 import * as recurringLib from "../../../lib/deal-recurring.js";
 import * as planLib from "../../../lib/deal-payment-plan.js";
+import * as wonLib from "../../../lib/won-format.js";
 import { DEAL_STAGES } from "../../../lib/deal-stages.js";
 
 // 거래 탭의 하단 독(목업 3, 2026-09-24 — 2026-09-26부터 돈 보기의 행이 연다). 실제 컴포넌트 코드를
@@ -49,7 +50,7 @@ function createHarness() {
 
 function mountDock(props) {
   const harness = createHarness();
-  const deps = { React: harness.React, ...timelineLib, ...paymentsLib, ...recurringLib, ...planLib };
+  const deps = { React: harness.React, ...timelineLib, ...paymentsLib, ...recurringLib, ...planLib, ...wonLib };
   for (const name of ["Button", "CertaintyBadge", "IconButton", "Kbd", "LifecycleBadge", "Iconed"]) deps[name] = name;
   const { DealDock } = new Function(...Object.keys(deps), `${javascript}; return { DealDock };`)(...Object.values(deps));
   let tree;
@@ -158,7 +159,7 @@ test("입금 확인 — 금액이 예상과 다를 때만 차이 이유 한 줄�
   app.findAll((n) => n.type === "input" && n.props.type === "number")[0].props.onChange({ target: { value: "1600000" } });
   app.render();
   assert.equal(noteInput().length, 1);
-  assert.match(text(app.findAll((n) => n.type === "label" && n.props.className === "deals-pay-row__note")[0]), /차이 이유\(선택\) · 예상보다 −₩200K/);
+  assert.match(text(app.findAll((n) => n.type === "label" && n.props.className === "deals-pay-row__note")[0]), /차이 이유\(선택\) · 예상보다 −20만원/);
   noteInput()[0].props.onChange({ target: { value: "첫 달 할인" } });
   app.render();
   app.findAll((n) => n.type === "Button" && text(n) === "확인")[0].props.onClick();
@@ -175,7 +176,7 @@ test("매달 정기 한 줄 — 계획을 말하고, 고치면 정규화된 계�
   const current = planLib.paymentMonthKey(new Date());
   const deal = { id: "r", stage: "closing", value: 600000, companyName: "유진", recurring: { amount: 600000, day: 3, startMonth: current } };
   const app = mountDock(dockProps(deal, { onUpdateRecurring: (...args) => updates.push(args) }));
-  assert.match(text(app.findAll((n) => n.props?.className === "deals-pay-rec")[0]), /매달 3일 · ₩600K/);
+  assert.match(text(app.findAll((n) => n.props?.className === "deals-pay-rec")[0]), /매달 3일 · 60만원/);
   assert.match(text(app.findAll((n) => n.props?.className === "deals-pay__summary")[0]), /매달 정기로 들어와요/);
   buttons(app).find((b) => text(b) === "이번 달로 끝내기").props.onClick();
   assert.deepEqual(updates.pop()[0], { amount: 600000, day: 3, startMonth: current, endMonth: current });

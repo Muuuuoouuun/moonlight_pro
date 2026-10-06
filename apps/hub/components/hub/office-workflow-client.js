@@ -28,7 +28,7 @@ export function officeWorkflowNote(receipt) {
   if (receipt?.status==='error' && parseOfficeFailure(receipt.failure)) return officeFailureMessage(receipt.failure);
   if (receipt?.error==='customer-scope-mismatch') return '선택한 범위와 고객의 범위가 다릅니다. 고객의 회사·개인 분류를 확인해 주세요.';
   if (receipt?.error==='customer-scope-unavailable') return '고객의 회사·개인 분류를 먼저 확인해 주세요.';
-  if (receipt?.error==='context-too-large') return '참고 자료가 길어 이 요청으로 처리할 수 없습니다. 필요한 부분을 Office 자유 요청에서 선택해 주세요.';
+  if (receipt?.error==='context-too-large') return '참고 자료가 길어 이 요청으로 처리할 수 없습니다. 필요한 부분을 오피스 자유 요청에서 선택해 주세요.';
   if (receipt?.error==='office-result-expired') return '결과 보관 기간이 끝나 저장을 복구할 수 없습니다. 현재 본문을 복사한 뒤 새 요청을 준비해 주세요.';
   if (receipt?.error==='office-result-storage-rejected') return '결과는 생성됐지만 저장이 거절됐습니다. 본문을 복사하거나 연결을 확인한 뒤 저장을 복구해 주세요.';
   if (receipt?.error==='office-customer-approval-required') return '현재 고객 대응 결과의 원문과 확인 질문을 검토하고 초안을 다시 승인해 주세요.';

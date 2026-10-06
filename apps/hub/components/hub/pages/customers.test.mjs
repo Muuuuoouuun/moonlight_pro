@@ -249,6 +249,7 @@ const { GURU_CARDS } = await import("@com-moon/guru-guidance");
 const { adviceScopeForRecord } = await import("../../../lib/sales-os/advice-scope.js");
 const { recommendationForSubject } = await import("../guru-recommendations-client.js");
 const leadEnrichment = await import("../../../lib/sales-os/lead-enrichment.js");
+const wonFormat = await import("../../../lib/won-format.js");
 const crmNudge = await import("../crm-nudge.jsx");
 
 const pageJs = ts.transpileModule(
@@ -315,6 +316,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     useGuruRecommendations: ({ enabled } = {}) => ({ status: enabled ? "live" : "idle", recommendations: enabled ? guruRecommendations : [], reload() {} }),
     recommendationForSubject,
     ...helpers,
+    ...wonFormat,
     isTemplateNextAction: leadEnrichment.isTemplateNextAction,
     TIP_RULE_IDS: crmNudge.TIP_RULE_IDS,
     nudgeTipReason: crmNudge.nudgeTipReason,

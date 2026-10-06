@@ -18,7 +18,7 @@ test('a mentor answer written from a cut Office source says so in its summary an
   const html = card({ sourceTruncation: [{ label: '본문', total: 30000, sent: 24704 }, { label: '근거 2', total: 1000, sent: 600 }] });
   assert.match(html, /다른 관점 · 브랜드 멘토 답변 보기 · 원문 일부 전달<\/summary>/);
   assert.match(html, /data-truth="partial"[^>]*>.*?원문 일부 전달<\/span>/);
-  assert.match(html, /멘토는 Office 원문 일부만 받았습니다 · 본문 30,000자 중 24,704자 · 근거 2 1,000자 중 600자\. 전체 원문은 Office 결과 카드에 있습니다\./);
+  assert.match(html, /멘토는 오피스 원문 일부만 받았습니다 · 본문 30,000자 중 24,704자 · 근거 2 1,000자 중 600자\. 전체 원문은 오피스 결과 카드에 있습니다\./);
   assert.match(html, /다른 관점의 답변/);
 });
 

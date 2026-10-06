@@ -99,7 +99,7 @@ test("form round-trips product details", () => {
 });
 
 test("pricing reads as one short phrase", () => {
-  assert.equal(formatPricing({ model: "monthly", amount: 29000 }), "월 구독 29,000원");
+  assert.equal(formatPricing({ model: "monthly", amount: 29000 }), "월 구독 2만 9,000원");
   assert.equal(formatPricing({ model: "undecided" }), "가격 미정");
   assert.equal(formatPricing({ model: "per_use", amount: null }), "건당 금액 미정");
 });

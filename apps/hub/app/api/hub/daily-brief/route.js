@@ -5,6 +5,7 @@ import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
 import { getMorningBrief } from "@/lib/repositories/brief-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
+import { formatWonShort } from "@/lib/won-format";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
 import { getWorkOrderCounts } from "@/lib/sales-os/work-order-counts";
 import {
@@ -31,11 +32,7 @@ function readLedger(result, fallback = {}) {
 }
 
 function formatMoney(amount) {
-  const n = Number(amount);
-  if (!Number.isFinite(n) || n === 0) return "₩0";
-  if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
-  return `₩${n}`;
+  return formatWonShort(Number(amount) || 0);
 }
 
 // spark는 실측 시계열이 있을 때만 채운다 — 합성 기본값을 넣으면 라이브 지표 옆에 지어낸

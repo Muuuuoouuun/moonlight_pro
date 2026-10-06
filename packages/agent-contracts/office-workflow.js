@@ -62,7 +62,7 @@ export function parseOfficeWorkflowRequest(value) {
   check(OFFICE_WORKFLOW_INTENTS.includes(value.intent), '지원하지 않는 workflow입니다.');
   const ownerId = value.ownerId ?? ({ weekly_report: 'vaporeon', customer_reply: 'flareon', freeform: 'eevee' }[value.intent]);
   const mode = value.mode ?? (value.intent === 'freeform' ? 'chat' : 'draft');
-  check(OFFICE_IDS.includes(ownerId) && OFFICE_MODES.includes(mode), 'Office 담당과 방식을 확인해 주세요.');
+  check(OFFICE_IDS.includes(ownerId) && OFFICE_MODES.includes(mode), '오피스 담당과 방식을 확인해 주세요.');
   check(['classin', 'personal'].includes(value.scope), 'workflow는 회사 또는 개인 범위를 선택해 주세요.');
   const participants = value.participants ?? [];
   check(Array.isArray(participants) && new Set(participants).size === participants.length && participants.every(id => OFFICE_IDS.includes(id)), '참여 관점을 확인해 주세요.');
