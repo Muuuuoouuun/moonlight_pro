@@ -18,14 +18,9 @@ import {
   projectActivityAvailability,
   recentActivityAvailability,
 } from "./overview-truth";
+import { formatWonShort } from "@/lib/won-format";
 
-const fmtMoney = (v) => {
-  const n = Number(v);
-  if (!Number.isFinite(n) || n === 0) return '₩0';
-  if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
-  return `₩${n}`;
-};
+const fmtMoney = (v) => formatWonShort(Number(v) || 0);
 
 const PERIOD_OPTIONS = [
   { key: '7', label: '7일' },

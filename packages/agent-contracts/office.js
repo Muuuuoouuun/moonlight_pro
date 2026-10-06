@@ -89,10 +89,10 @@ function text(x, max) { check(typeof x === 'string' && x.trim().length > 0 && x.
 export function parseOfficeRequest(value) {
   keys(value, ['ownerId','mode','scope','message','participants','lens','history','includeProjects','deliberation']);
   const {ownerId = 'eevee', mode = 'chat', scope = 'all', lens = null} = value;
-  check(OFFICE_IDS.includes(ownerId), '등록되지 않은 Office 담당입니다.');
-  check(OFFICE_MODES.includes(mode), '지원하지 않는 Office 모드입니다.');
+  check(OFFICE_IDS.includes(ownerId), '등록되지 않은 오피스 담당입니다.');
+  check(OFFICE_MODES.includes(mode), '지원하지 않는 오피스 모드입니다.');
   check(OFFICE_SCOPES.includes(scope), '지원하지 않는 업무 범위입니다.');
-  check(lens === null, 'Legend 관점은 아직 Office에 연결되지 않았습니다.');
+  check(lens === null, 'Legend 관점은 아직 오피스에 연결되지 않았습니다.');
   const participants = value.participants ?? [];
   check(Array.isArray(participants) && new Set(participants).size === participants.length && participants.every(p => OFFICE_IDS.includes(p)), '회의 참여자를 확인해 주세요.');
   check(mode === 'council' ? participants.includes(ownerId) && participants.length >= 2 && participants.length <= 3 : participants.length === 0, '회의는 주관을 포함해 2~3개의 관점을 선택해 주세요.');

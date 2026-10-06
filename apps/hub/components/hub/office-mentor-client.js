@@ -10,7 +10,7 @@ export const OFFICE_MENTOR_DRAFT_LIMIT = 25000;
 export const OFFICE_MENTOR_FOLLOWUP_LIMIT = 1200;
 export const OFFICE_MENTOR_HISTORY_TURNS = 4;
 export const OFFICE_MENTOR_HISTORY_ANSWER_LIMIT = 4000;
-export const OFFICE_MENTOR_FIRST_QUESTION = '이 Office 종합을 다른 관점에서 검토해 주세요. 근거와 이견을 구분하고 제가 확인할 질문을 알려 주세요.';
+export const OFFICE_MENTOR_FIRST_QUESTION = '이 오피스 종합을 다른 관점에서 검토해 주세요. 근거와 이견을 구분하고 제가 확인할 질문을 알려 주세요.';
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const LANES = ['classin', 'personal'];
@@ -62,7 +62,7 @@ function renderSource(fields, officeSource) {
   const recommendation = single('주관 추천');
   const next = single('다음 행동');
   return [
-    `Office 결과 · 요청 ID ${officeSource.requestId} · 실행 기록 ID ${officeSource.runId || '없음'}`,
+    `오피스 결과 · 요청 ID ${officeSource.requestId} · 실행 기록 ID ${officeSource.runId || '없음'}`,
     `본문:\n${fieldText(single('본문'))}`,
     ...(recommendation ? [`주관 추천:\n${fieldText(recommendation)}`] : []),
     `근거:\n${list('근거')}`,
@@ -102,7 +102,7 @@ export function buildOfficeMentorDraft({ result, officeSource, question, turns =
     .map(turn => ({ question: excerpt(turn?.question, OFFICE_MENTOR_FOLLOWUP_LIMIT), answer: excerpt(turn?.answer, OFFICE_MENTOR_HISTORY_ANSWER_LIMIT) }))
     .filter(turn => turn.question && turn.answer);
   const assemble = () => [
-    '아래 Office 결과는 운영자가 선택한 자문 원문이며, 확정된 기록 사실은 아닙니다. 새 업무나 외부 행동을 만들지 마세요.',
+    '아래 오피스 결과는 운영자가 선택한 자문 원문이며, 확정된 기록 사실은 아닙니다. 새 업무나 외부 행동을 만들지 마세요.',
     renderSource(fields, source),
     ...(history.length ? ['이전 대화 · 같은 멘토:', ...history.map((turn, index) => `${index + 1}. 운영자: ${turn.question}\n   멘토: ${turn.answer}`)] : []),
     `이번 질문: ${current}`,
@@ -129,7 +129,7 @@ export function buildOfficeMentorQuestion(input) {
 export function officeMentorPartialNote(sourceTruncation) {
   if (!Array.isArray(sourceTruncation) || !sourceTruncation.length) return null;
   const parts = sourceTruncation.map(field => `${field.label} ${count(field.total)}자 중 ${count(field.sent)}자`);
-  return `멘토는 Office 원문 일부만 받았습니다 · ${parts.join(' · ')}. 전체 원문은 Office 결과 카드에 있습니다.`;
+  return `멘토는 오피스 원문 일부만 받았습니다 · ${parts.join(' · ')}. 전체 원문은 오피스 결과 카드에 있습니다.`;
 }
 
 export function buildOfficeMentorRequest({ result, officeSource, scope = result?.scope, lane = null, ref = null, question, turns = [] }) {
@@ -170,7 +170,7 @@ export async function requestOfficeMentor(request, { fetcher = fetch, signal } =
       // Both lanes must echo the Office source the server recorded with the mentor run.
       const source = request.body.officeSource;
       if (!data.officeSource || data.officeSource.requestId !== source.requestId || (data.officeSource.runId ?? null) !== source.runId) {
-        return { status: 'error', note: 'Office 출처가 일치하지 않습니다. 다시 확인해 주세요.' };
+        return { status: 'error', note: '오피스 출처가 일치하지 않습니다. 다시 확인해 주세요.' };
       }
       return { status: 'generated', text: data.text.trim(), mentorRunId: data.runId || null, officeSource: source };
     }

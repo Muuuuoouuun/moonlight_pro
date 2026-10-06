@@ -8,7 +8,7 @@ function generationRecord(value) {
  return {elapsedMs:value.elapsedMs,modelCalls:value.modelCalls,usage:usage===null?null:{promptTokens:usage.promptTokens,outputTokens:usage.outputTokens,totalTokens:usage.totalTokens}};
 }
 export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=process.env.COM_MOON_ENGINE_URL,secret=process.env.COM_MOON_SHARED_WEBHOOK_SECRET,retries=0}={}) {
- if(!engineUrl?.trim()||!secret?.trim()) return {status:'preview',error:'Office Engine 연결이 필요합니다. 입력은 보존됩니다.'};
+ if(!engineUrl?.trim()||!secret?.trim()) return {status:'preview',error:'오피스 Engine 연결이 필요합니다. 입력은 보존됩니다.'};
  const attempts=Math.max(0,Math.min(retries,2));
  for(let attempt=0;attempt<=attempts;attempt++) {
   try {
@@ -39,8 +39,8 @@ export async function callOfficeEngine(request,context,{fetcher=fetch,engineUrl=
     await new Promise(r=>setTimeout(r,600));
     continue;
    }
-   return {status:'error',error:'Office 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.'};
+   return {status:'error',error:'오피스 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.'};
   }
  }
- return {status:'error',error:'Office 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.'};
+ return {status:'error',error:'오피스 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.'};
 }

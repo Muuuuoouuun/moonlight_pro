@@ -31,8 +31,9 @@ import { INQUIRY_STATUSES } from "../inquiry-view-state";
 import { createWork, linkInquiry, recordMonth, updateProduct } from "./product-client.js";
 import { OpsLabel } from "./product-portfolio";
 import styles from "./product-room.module.css";
+import { formatWon } from "@/lib/won-format";
 
-const won = (value) => (value === null || value === undefined ? "—" : `${value < 0 ? "−" : ""}₩${Math.abs(value).toLocaleString("ko-KR")}`);
+const won = (value) => formatWon(value);
 const monthLabel = (month) => `${Number(String(month).slice(5, 7))}월`;
 const shortDay = (value) => (value ? seoulDay(value)?.slice(5) : "");
 

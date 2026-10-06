@@ -30,6 +30,7 @@ import { QuickCaptureForm } from "../quick-capture";
 import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS_PER_DAY } from "@/lib/task-today";
 import { DailyReviewCue } from "../daily-review-cue";
 import { REVIEW_EVENING_HOUR } from "@/lib/daily-review-rhythm";
+import { formatWonShort } from "@/lib/won-format";
 import {
   beginRhythmCheck,
   buildRhythmCheckPayload,
@@ -59,15 +60,9 @@ function greetingFor(date) {
 }
 
 
-// Matches the daily-brief API's money formatter so the KPI cards and the pipeline card
-// read in the same ₩M/₩K units — no drift between server-formatted and client-formatted money.
-function formatMoney(amount) {
-  const n = Number(amount);
-  if (!Number.isFinite(n) || n === 0) return '₩0';
-  if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
-  return `₩${n}`;
-}
+// The daily-brief API formats with the same helper, so the KPI cards and the pipeline card
+// read in the same 만·억 units — no drift between server-formatted and client-formatted money.
+const formatMoney = amount => formatWonShort(Number(amount) || 0);
 
 const CONTEXT_TARGETS = {
   Revenue: 'dashboard/revenue/deals',

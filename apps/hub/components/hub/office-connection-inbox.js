@@ -55,7 +55,7 @@ export function officeCouncilConnectionSource(turn) {
     || (turn.result.resultRevision !== undefined && turn.result.resultRevision !== 1)
     || typeof turn.message !== 'string' || typeof turn.result.answer !== 'string') return needsUser('같은 업무 범위에서 생성된 원본 회의 결론을 먼저 확인해 주세요. 대화·초안·검토 결과는 회의 결론으로 연결할 수 없습니다.');
   return envelope('office_council', boundary, turn.id, 1,
-    `Office 결론 · ${turn.message.trim().split('\n')[0].slice(0, 80) || '원문'}`,
+    `오피스 결론 · ${turn.message.trim().split('\n')[0].slice(0, 80) || '원문'}`,
     { turn: { id: turn.id, message: turn.message, request: turn.request, result: turn.result, officeBoundary: turn.officeBoundary } });
 }
 

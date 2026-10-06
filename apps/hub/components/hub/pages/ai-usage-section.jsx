@@ -4,6 +4,7 @@
 // 운영자 Mac의 로컬 스킬이 다른 계정으로 쓰는 API 비용은 이 기록 밖이다. 경고선·한도는 미정이라 두지 않는다.
 import React from "react";
 import { Button, Card, SectionTitle, Skeleton, TruthBadge } from "../hub-primitives";
+import { formatWon } from "@/lib/won-format";
 
 const MONTH_LABEL = { current: "이번 달", previous: "지난달" };
 
@@ -45,7 +46,7 @@ function MonthSummary({ slot, month }) {
           {month.calls === 0 ? "$0.00" : hasCost ? formatUsd(month.estimatedUsd) : "—"}
         </span>
         {hasCost && month.calls > 0 && (
-          <span className="mono" style={{ fontSize: 12, color: "var(--fg-muted)" }}>≈ ₩{Number(month.estimatedKrw || 0).toLocaleString("ko-KR")}</span>
+          <span className="mono" style={{ fontSize: 12, color: "var(--fg-muted)" }}>≈ {formatWon(Number(month.estimatedKrw || 0))}</span>
         )}
       </div>
       <div className="mono" style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 6 }}>
@@ -133,7 +134,7 @@ export function AiUsageView({ view, data, onRetry }) {
             <ModelRows current={data.current} previous={data.previous} />
             <div style={{ fontSize: 11, color: "var(--fg-faint)", marginTop: 12, lineHeight: 1.6 }}>
               추정 비용 = 모델별 공개 단가 × 토큰(출력에 생각 토큰 포함). 단가 확인 <span className="mono">{pricing?.checkedAt}</span>
-              {Number.isFinite(pricing?.usdKrw) && <> · 환율 <span className="mono">₩{pricing.usdKrw.toLocaleString("ko-KR")}/$</span> (<span className="mono">{pricing.usdKrwCheckedAt}</span>)</>}
+              {Number.isFinite(pricing?.usdKrw) && <> · 환율 <span className="mono">{pricing.usdKrw.toLocaleString("ko-KR")}원/$</span> (<span className="mono">{pricing.usdKrwCheckedAt}</span>)</>}
               {" "}· 운영자 Mac의 로컬 스킬이 쓰는 API 비용은 포함하지 않습니다.
             </div>
           </>

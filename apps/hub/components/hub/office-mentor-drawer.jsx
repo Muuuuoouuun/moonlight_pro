@@ -73,7 +73,7 @@ export function OfficeMentorReferenceCard({ answer, target = '멘토', onContinu
 function OfficeResultSource({ session, summaryRef }) {
   const result = session.result;
   return <details className="office-mentor__source">
-    <summary ref={summaryRef} tabIndex={0}>Office 원문과 출처</summary>
+    <summary ref={summaryRef} tabIndex={0}>오피스 원문과 출처</summary>
     <div className="office-mentor__source-body">
       <div className="office-mentor__source-ids">요청 <span className="mono">{session.officeSource.requestId}</span>
         {' · '}실행 기록 <span className="mono">{session.officeSource.runId || '없음'}</span></div>
@@ -111,7 +111,7 @@ export function OfficeMentorDrawer({ sessionId, store = officeMentorSessions, on
 
   return <Drawer
     title={`${target}와 상담`}
-    subtitle="Office 결과를 바탕으로 다른 관점을 묻습니다. 전송할 때만 멘토가 응답합니다."
+    subtitle="오피스 결과를 바탕으로 다른 관점을 묻습니다. 전송할 때만 멘토가 응답합니다."
     onClose={onClose}
     initialFocusRef={session.scope === 'all' && !session.lane ? undefined : hasAnswer ? inputRef : sourceRef}
     width="min(540px, 100vw)"
@@ -124,7 +124,7 @@ export function OfficeMentorDrawer({ sessionId, store = officeMentorSessions, on
     </>}
   >
     {session.scope === 'all' && !hasAnswer ? <section className="office-mentor__lane" aria-label="멘토 범위">
-      <p>전체 Office 결과입니다. 상담할 회사 또는 개인 범위를 먼저 고르세요. 다른 범위의 내용이 섞여 있다면 원문을 확인해 주세요.</p>
+      <p>전체 오피스 결과입니다. 상담할 회사 또는 개인 범위를 먼저 고르세요. 다른 범위의 내용이 섞여 있다면 원문을 확인해 주세요.</p>
       <SegmentedControl label="멘토 범위 선택" options={[{ key: 'classin', label: '회사' }, { key: 'personal', label: '개인' }]}
         value={session.lane} onChange={lane => store.chooseLane(sessionId, lane)} invalid={session.error?.code === 'lane-required'} fill />
     </section> : null}

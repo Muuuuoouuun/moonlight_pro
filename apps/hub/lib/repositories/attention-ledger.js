@@ -1,4 +1,5 @@
 import { getInquiriesLedger } from './inquiries-ledger.js';
+import { formatWonShort } from '../won-format.js';
 
 // Cross-lane attention read model — the TODOS.md P1 "Today Actions" contract, assembled
 // per request from the existing ledgers (deep-design premise 3: no new universal table).
@@ -64,9 +65,7 @@ function timeLabel(value) {
 
 function moneyLabel(amount) {
   const n = Number(amount) || 0;
-  if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
-  return n > 0 ? `₩${n}` : "";
+  return n > 0 ? formatWonShort(n) : "";
 }
 
 function mapTaskItems(todos, projects, todayKey, weekEndKey) {

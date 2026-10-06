@@ -24,7 +24,7 @@ export function parseOfficeRoutingRequest(value) {
 
 export function parseOfficeRoutingRecommendation(value, request) {
   exactKeys(value, ['ownerId', 'reviewerIds', 'reason', 'scope']);
-  check(OFFICE_IDS.includes(value.ownerId), '등록되지 않은 Office 담당입니다.');
+  check(OFFICE_IDS.includes(value.ownerId), '등록되지 않은 오피스 담당입니다.');
   check(Array.isArray(value.reviewerIds) && value.reviewerIds.length <= 2 && new Set(value.reviewerIds).size === value.reviewerIds.length && value.reviewerIds.every(id => OFFICE_IDS.includes(id) && id !== value.ownerId), '검토 관점은 담당 외 최대 두 명입니다.');
   check(value.scope === request.scope && OFFICE_SCOPES.includes(value.scope), '업무 범위가 일치하지 않습니다.');
   return { ownerId: value.ownerId, reviewerIds: [...value.reviewerIds], reason: boundedText(value.reason, 400, '추천 이유를 확인해 주세요.'), scope: value.scope };

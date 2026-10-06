@@ -29,18 +29,12 @@ import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { revenueLedgerCache } from "../revenue-shared-cache";
 import { resolveScopeFilter, scopeFilterForQuery } from "@/lib/revenue-scope-filter";
+import { formatWon, formatWonShort, parseWon } from "@/lib/won-format";
 import { BulkBar } from "../crm-bulk-bar";
 import { PersonalRevenueRoadmap } from "./personal-revenue";
 
-// HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
-// revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
-const fmt = v => {
-  const n = Number(v);
-  if (!Number.isFinite(n) || n === 0) return '₩0';
-  if (n >= 1000000) return '₩' + (n / 1000000).toFixed(1) + 'M';
-  if (n >= 1000) return '₩' + Math.round(n / 1000) + 'K';
-  return '₩' + n;
-};
+// 금액 표기는 lib/won-format 하나로 — 만·억 단위(2026-10-06 운영자 확정).
+const fmt = v => formatWonShort(Number(v) || 0);
 
 // 다음 미팅은 방금 만든 직후(서버 왕복 전)에도 그려야 해서 클라이언트에서 포맷한다 —
 // 다른 날짜 필드가 전부 repository에서 포맷돼 오는 것과 다른 이유다.
@@ -90,17 +84,9 @@ function useScopeFilter(searchParams) {
   return [filter, setFilter];
 }
 
-// Parse a display amount ("₩1.2M", "₩900K", "₩0", or a raw number) to a comparable number,
-// so the Leads table can sort by value even though the display model stores a string.
-function parseAmount(v) {
-  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-  const s = String(v || '').replace(/[₩,\s]/g, '');
-  const m = /([0-9.]+)\s*([MmKk]?)/.exec(s);
-  if (!m) return 0;
-  const n = parseFloat(m[1]) || 0;
-  const unit = (m[2] || '').toLowerCase();
-  return unit === 'm' ? n * 1e6 : unit === 'k' ? n * 1e3 : n;
-}
+// Parse a display amount ("120만원", "1억 2,000만원", legacy "₩1.2M", or a raw number) to a
+// comparable number, so the Leads table can sort by value even though the display model stores a string.
+const parseAmount = v => parseWon(v) ?? 0;
 
 // Funnel order so "Stage" sorts by pipeline position, not alphabetically.
 const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Customer: 3, Lost: 4 };
@@ -706,7 +692,7 @@ export function Leads({ workspace }) {
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       source: 'Manual',
       stage: 'New',
-      value: '₩0',
+      value: '—',
       last: '방금',
       // Stamped so the default sort cascade (last contact -> added -> orders) still floats a
       // brand-new row to the top instead of sinking it for lacking server timestamps.
@@ -1100,9 +1086,9 @@ export function Leads({ workspace }) {
           { key: 'subjects', label: '과목', type: 'chips', labelBadge: labelCertainty('subjects'),
             options: LEAD_SUBJECTS.map(s => ({ value: s.key, label: s.label })) },
           { key: 'situation', label: '현재 상황', placeholder: '검토중 · 경쟁사 사용 · 예산확보…' },
-          // 딜과 달리 텍스트 입력이 의도: 리드 value는 "₩1.2M" 표시 문자열로 읽혀 오고
-          // parseMoneyLabel이 축약형(₩1.2M · 1.2M · 1200000)을 그대로 받는다.
-          { key: 'value', label: '금액', placeholder: '₩1.2M · 1200000' },
+          // 딜과 달리 텍스트 입력이 의도: 리드 value는 "120만원" 표시 문자열로 읽혀 오고
+          // parseMoneyLabel이 만·억 표기(120만 · 1억 2,000만 · 1200000)와 옛 "₩1.2M"을 그대로 받는다.
+          { key: 'value', label: '금액', placeholder: '120만 · 1200000' },
         ]}
         onChange={(key, val) => setLeadEdits(prev => {
           const patch = { ...prev[editLeadId], [key]: val };
@@ -1157,7 +1143,7 @@ function DealOutreachDrafter({ deal, onApplyNextAction }) {
       const res = await requestPersonaChat({
         personaId: "sales",
         mode: "outreach-draft",
-        draft: `[영업 딜 고객 연락 맥락]\n딜/고객명: ${deal.name || deal.account}\n소속 회사: ${deal.account || "미지정"}\n진행 단계: ${deal.stage || "초기"}\n예상 금액: ${deal.value ? deal.value + "원" : "미정"}\n현재 다음 행동: ${deal.nextAction || "미정"}\n메모: ${deal.notes || "없음"}\n\n위 고객에게 발송할 3~4문장의 부담 없는 카카오톡/문자 연락 초안을 작성해줘.`,
+        draft: `[영업 딜 고객 연락 맥락]\n딜/고객명: ${deal.name || deal.account}\n소속 회사: ${deal.account || "미지정"}\n진행 단계: ${deal.stage || "초기"}\n예상 금액: ${deal.value ? formatWon(deal.value) : "미정"}\n현재 다음 행동: ${deal.nextAction || "미정"}\n메모: ${deal.notes || "없음"}\n\n위 고객에게 발송할 3~4문장의 부담 없는 카카오톡/문자 연락 초안을 작성해줘.`,
       });
       setLoading(false);
       if (res.state === "done") {
@@ -2423,7 +2409,7 @@ export function Deals({ workspace, onNavigate, onGuidanceAsk }) {
             ...DEAL_STAGES.map(s => ({ value: s.key, label: s.label })),
             ...(DEAL_STAGES.some(s => s.key === LOST_STAGE.key) ? [] : [{ value: LOST_STAGE.key, label: LOST_STAGE.label }]),
           ] },
-          { key: 'value', row: 'primary', label: '금액 (₩)', inputType: 'number', placeholder: '0' },
+          { key: 'value', row: 'primary', label: '금액 (원)', inputType: 'number', placeholder: '0' },
           { key: 'closeAt', row: 'meta', label: '예상 마감', inputType: 'date' },
           { key: 'type', row: 'meta', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
         ]}

@@ -11,14 +11,9 @@ import {
   KOREA_PROVINCE_WIDTH,
   KOREA_PROVINCE_HEIGHT,
 } from "@/lib/korea-province-map";
+import { formatWonShort } from "@/lib/won-format";
 
-export const fmtMoney = v => {
-  const n = Number(v) || 0;
-  if (n >= 100_000_000) return `₩${(n / 100_000_000).toFixed(1)}억`;
-  if (n >= 1_000_000) return `₩${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `₩${(n / 1_000).toFixed(0)}K`;
-  return n ? `₩${n}` : "₩0";
-};
+export const fmtMoney = v => formatWonShort(Number(v) || 0);
 
 // 문스톤 단색 히트 램프 — 값이 클수록 moon-300 비중 상승 (토큰만 사용)
 export function heatFill(value, max) {

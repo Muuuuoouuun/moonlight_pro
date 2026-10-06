@@ -28,7 +28,7 @@ export function createOfficeBreakdownStore() {
     resolve(scope, readId, body) {
       const entry = get(scope);
       if (!entry || entry.status !== 'loading' || entry.readId !== readId) return null;
-      if (body?.status === 'preview') return patch(scope, { status: 'preview', error: body.error || 'Office Engine 연결이 필요합니다. 안건을 직접 나눠 담당을 골라 주세요.' });
+      if (body?.status === 'preview') return patch(scope, { status: 'preview', error: body.error || '오피스 Engine 연결이 필요합니다. 안건을 직접 나눠 담당을 골라 주세요.' });
       try {
         if (body?.status !== 'recommended' || body.businessWrites !== false) throw new Error('invalid-breakdown');
         const { businessWrites, ...result } = body;
@@ -130,7 +130,7 @@ const AUTO_STOP_LABELS = {
   complete: '모든 조각을 닫았습니다.',
   'needs-operator': '직접 할 조각에서 멈췄습니다',
   blocked: '선행 조각이 건너뛰어졌거나 직접 할 조각이 끝나지 않아 멈췄습니다',
-  failed: 'Office 응답을 받지 못해 멈췄습니다',
+  failed: '오피스 응답을 받지 못해 멈췄습니다',
   limit: '자동 실행 한도에 닿아 멈췄습니다',
   stopped: '멈추기를 눌러 멈췄습니다.',
   left: '회의실을 떠나 멈췄습니다.',
@@ -158,7 +158,7 @@ export async function runOfficeAutoStep({ scope, sessions, request, breakdowns =
   breakdowns.autoRunning(scope, step.key);
   let result;
   try { result = await request(pending.request, { signal }); }
-  catch { result = { status: 'error', error: 'Office 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.' }; }
+  catch { result = { status: 'error', error: '오피스 응답을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.' }; }
   sessions.complete(scope, pending.id, result);
   // Stopped while waiting: the answer stays in the thread, the operator decides whether it is done.
   if (!breakdowns.isAutoRunning(scope)) return { done: true };

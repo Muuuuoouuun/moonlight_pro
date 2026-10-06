@@ -34,7 +34,7 @@ export function OfficeWorkflowPanel({intent,scope,originRef,title,initialRequest
   if (!effectiveScope) return <div className={styles.panel}><SelectField label={`${title} · 업무 범위`} value={pickedScope} onChange={event=>setPickedScope(event.target.value)} options={[{value:'',label:'범위 확인 후 선택'},{value:'classin',label:'회사'},{value:'personal',label:'개인'}]} /></div>;
   let key;
   try { key=officeWorkflowKey({intent,scope:effectiveScope,originRef}); }
-  catch { return <p className={styles.note}>업무 대상이나 보고 기간을 확인해야 Office를 사용할 수 있습니다.</p>; }
+  catch { return <p className={styles.note}>업무 대상이나 보고 기간을 확인해야 오피스를 사용할 수 있습니다.</p>; }
   const sessionKey=initialRequestId?`${key}:request:${initialRequestId}`:key;
   return <WorkflowForOrigin key={sessionKey} sessionKey={sessionKey} intent={intent} scope={effectiveScope} originRef={originRef} initialRequestId={initialRequestId} title={intent==='customer_reply'?'고객 대응 준비':title} onTaskCreated={onTaskCreated} onNavigate={onNavigate} />;
 }
@@ -189,7 +189,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,initialReque
     </div>
     {state.open&&<div className={styles.stack} onKeyDown={event=>{if(event.key==='Escape'&&!state.taskFields){event.stopPropagation();patch({open:false});trigger.current?.focus();}}}>
       {isCustomer&&<OfficeCustomerProgress state={state} />}
-      {state.loading?<Skeleton lines={2} label="Office 자료와 이전 결과 확인 중" />:state.context?.status!=='ready'?<div className={styles.truth} role={state.context?.status==='preview'?'status':'alert'}>
+      {state.loading?<Skeleton lines={2} label="오피스 자료와 이전 결과 확인 중" />:state.context?.status!=='ready'?<div className={styles.truth} role={state.context?.status==='preview'?'status':'alert'}>
         {/* DESIGN §5.3: 연결 전·오류는 '비어 있음'(EmptyState)이 아니라 truth 상태 + 원인 + 재시도다. */}
         <TruthBadge state={state.context?.status==='preview'?'preview':'error'} /><p className={styles.note}>{officeWorkflowNote(state.context)||'자료를 확인할 수 없습니다.'}</p><Button size="xs" onClick={load}>다시 확인</Button></div>:null}
       {state.context?.status==='ready'&&<>
@@ -246,7 +246,7 @@ function WorkflowForOrigin({sessionKey,intent,scope,originRef,title,initialReque
       </details>}
       <p className={styles.meta}>초안 생성·복사는 실제 연락이나 업무 완료를 기록하지 않습니다.</p>
     </div>}
-    {state.taskFields&&<EditDrawer title="Office 제안을 할 일로 연결" subtitle="같은 범위의 프로젝트에 저장합니다." record={state.taskFields} presentation="compact" onChange={(field,value)=>patch(current=>({taskFields:{...current.taskFields,[field]:value}}))} onClose={()=>patch({taskFields:null})} onSave={saveTask} saveLabel="할 일 등록" fields={[
+    {state.taskFields&&<EditDrawer title="오피스 제안을 할 일로 연결" subtitle="같은 범위의 프로젝트에 저장합니다." record={state.taskFields} presentation="compact" onChange={(field,value)=>patch(current=>({taskFields:{...current.taskFields,[field]:value}}))} onClose={()=>patch({taskFields:null})} onSave={saveTask} saveLabel="할 일 등록" fields={[
       {key:'title',label:'할 일',type:'text',required:true},{key:'projectId',label:'프로젝트',type:'select',options:[{value:'',label:'프로젝트 선택'},...state.projects.map(project=>({value:project.id,label:project.name}))]},
       {key:'dueAt',label:'기한',inputType:'date',optional:true},{key:'nextAction',label:'다음 행동',type:'text',optional:true},{key:'description',label:'상세',type:'textarea',optional:true},
     ]}>{state.contextChange&&<div className={styles.changeNotice} role="status"><p className={styles.note}>{officeWorkflowNote({error:'office-context-changed',contextChange:state.contextChange})}</p>

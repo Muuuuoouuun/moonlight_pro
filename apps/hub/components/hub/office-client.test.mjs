@@ -127,7 +127,7 @@ test('⌘J and the top-bar sparkle open the Office page instead of the legacy gl
   const topbar = fs.readFileSync(new URL('./hub-topbar.jsx', import.meta.url), 'utf8');
   assert.match(app, /navigate\('dashboard\/agents\/office-council'\)/);
   assert.doesNotMatch(app, /FloatingMentorWidget/);
-  assert.match(topbar, /tooltip="Office \(⌘J\)"/);
+  assert.match(topbar, /tooltip="오피스 \(⌘J\)"/);
 });
 
 test('an untraced result carries an explicit certainty badge on both Office surfaces', () => {
@@ -150,7 +150,7 @@ test('Office surfaces follow the truth, selection and announcement contracts', (
   const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
   const panel = fs.readFileSync(new URL('./office-workflow-panel.jsx', import.meta.url), 'utf8');
   assert.match(page, /role=\{session\.error\.status === 'error' \? 'alert' : 'status'\}/);
-  assert.match(page, /aria-live="polite" aria-label="Office 요청 결과"/);
+  assert.match(page, /aria-live="polite" aria-label="오피스 요청 결과"/);
   assert.match(page, /threadRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(css, /\.member\[aria-pressed="true"\][^}]*--accent-line/);
   assert.match(css, /\.thread:focus-visible \{ outline:1px solid var\(--moon-300\); outline-offset:-2px; \}/);
