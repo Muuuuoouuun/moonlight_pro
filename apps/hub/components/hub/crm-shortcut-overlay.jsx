@@ -42,7 +42,7 @@ export function ShortcutOverlay({ open, onClose }) {
       position: "fixed", inset: 0, zIndex: 100,
       background: "oklch(0 0 0 / 0.6)", backdropFilter: "blur(6px)",
       display: "flex", justifyContent: "center", paddingTop: "16vh",
-      animation: "mlFadeUp .15s ease-out",
+      animation: "mlFadeUp var(--dur-overlay) var(--ease-hub)",
     }}>
       <div
         role="dialog"

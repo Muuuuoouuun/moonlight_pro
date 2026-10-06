@@ -99,6 +99,7 @@ overrides it.
   --line:          oklch(0.30 0.008 250 / 0.6);
   --line-soft:     oklch(0.30 0.008 250 / 0.3);
   --line-strong:   oklch(0.40 0.009 250 / 0.8);
+  --line-control:  oklch(0.50 0.008 250);   /* input · checkbox edge, 3:1 (2026-10-06) */
 
   /* Moonstone accent stack (cool blue-silver) */
   --moon-50:       oklch(0.96 0.004 250);
@@ -112,9 +113,10 @@ overrides it.
 
   /* Text */
   --fg:            var(--moon-100);
-  --fg-muted:      var(--moon-400);
-  --fg-dim:        var(--moon-500);
-  --fg-faint:      var(--moon-600);
+  /* Not the moon ramp since 2026-10-06 — the ramp gave dim 3.7–4.3:1 and faint 2.4–3.0:1 (§15) */
+  --fg-muted:      oklch(0.72 0.009 250);
+  --fg-dim:        oklch(0.65 0.010 250);
+  --fg-faint:      oklch(0.60 0.009 250);
 
   /* Semantic — muted on purpose */
   --success:       oklch(0.74 0.11 155);
@@ -136,8 +138,9 @@ overrides it.
   /* Text is set with literals here, not through the moon ramp */
   --fg:         oklch(0.20 0.008 250);
   --fg-muted:   oklch(0.42 0.008 250);
-  --fg-dim:     oklch(0.50 0.008 250);
-  --fg-faint:   oklch(0.55 0.007 250);
+  --fg-dim:     oklch(0.47 0.008 250);
+  --fg-faint:   oklch(0.52 0.007 250);
+  --line-control: oklch(0.66 0.007 250);
   /* The moon ramp runs the other way (--moon-50 ≈ L 0.22 … --moon-700 ≈ L 0.88), so
      "--moon-200 fill" stays high-contrast against the surface in both themes.
      Semantic stacks shift accordingly — read hub-tokens.css for the exact values. */
@@ -152,7 +155,10 @@ Also defined in `hub-tokens.css` (names verbatim, both themes):
   (compact banners only, never full cards or rows).
 - Layering: `--z-quick-memo: 60`, `--z-project-detail: 61`, `--z-navigation-overlay: 64`, `--z-navigation: 65`,
   `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100` (defined once on the base block).
-- Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-pop`.
+- Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-pop`. `--shadow-card` carries lift only (no `0 0 0 1px` ring) —
+  every card already draws its own 1px border, and the ring made it read as 2px (§15 2026-10-06).
+- Control edge: `--line-control` / `--line-control-hover` — resting and hover border of text inputs (`.hub-input`,
+  `.hub-field`) and the unchecked `Checkbox`, 3:1 against the surface. Decorative dividers keep `--line*`.
 - Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7). Call sites use `--r` for the middle step; the undefined `--r-md` references were removed (§15 2026-09-24).
 - Motion: `--dur-hover`, `--dur-enter`, `--dur-panel`, `--dur-overlay`, `--dur-celebrate`, `--dur-gauge`, `--ease-hub`, `--ease-gauge`, `--stagger-step` (§9).
 - Selected project gauge only (§5.2 exception): `--project-gauge-0/25/50/75/100` (hue 255 → 218 → 190 → 280 → 325,
@@ -415,7 +421,9 @@ truth. Do not recreate them ad-hoc inside pages.
 - Toast: `useToast` / `ToastProvider` (re-exported from `hub-toast.jsx`, provided once in `hub-app.jsx`). One
   `aria-live="polite"` viewport; danger items get `role="alert"`, others `role="status"`; tones neutral (bell) ·
   success (check glyph in `--moon-200`, never green) · danger (x in `--danger`); optional ghost-`Button` action; at
-  most three visible. Use it for save/undo receipts instead of ad-hoc
+  most three visible. Neutral/success stay 3.5s, danger 7s; pointer or keyboard focus on the viewport pauses every
+  toast without an action and resumes from the time left. A toast with an action (되돌리기) never pauses — its
+  action expires with the caller's own window. Use it for save/undo receipts instead of ad-hoc
   banners. A toast never announces `완료` for a write that was not persisted (§8.1 Save envelope).
 - `Drawer`, `EditDrawer` — the only overlay / edit surfaces (§8.1)
   - `Drawer presentation="compact"` is the short capture variant: centered on desktop, bottom sheet at ≤600px, with the same ESC and focus handling. Default `side` remains the edit drawer. New task capture uses `compact`; optional description/next-action fields are disclosed on demand. Compact capture uses a 6px backdrop blur. Callers preserve drafts and guard dismissal while saving.
@@ -564,6 +572,8 @@ Deliberate, never playful. Since 2026-07-29 the only sanctioned durations and cu
 - Page reveal: `.fade-up` (opacity + 4px translateY). Card lists cascade with `.stagger-up`; do not hand-roll delays.
 - Hover travel: no more than `4px`.
 - Compact capture: enter/exit and disclosure use `--dur-panel`, backdrop enters with `--dur-overlay`. A successful save closes only after the server acknowledgement; reduced-motion skips the exit delay.
+- Bar charts enter with `.hub-bar-rise` (`hubBarRise`: `scaleY(0→1)` from the baseline, `--dur-enter`) — animate
+  transform, never `height`/`width` (layout work every frame). Overview's activity chart uses it since 2026-10-06.
 - Live indicators: `mlMoonPulse 1.4s ease-in-out infinite` — one duration everywhere. Loading skeletons (`Skeleton`) reuse it as-is, with no per-line phase offset (a wave reads as playful).
 - `motion.test.mjs` sweeps every hub stylesheet and page for raw `ms` **and `s`** literals and inline `cubic-bezier(` inside transition/animation values — the §9 token rule is enforced, not advisory (2026-09-16, `s` added 2026-09-22). Allowed without a token: `mlMoonPulse 1.4s` and `0s`.
 - Recorded debt, not precedent: the completed `Progress` bar loops `hubProgressShimmer 2.4s ease-in-out infinite`, and `hubSparklePop` still appears once with an inline `0.8s` next to a gold glyph (`overview.jsx`). The motion guard exempts exactly these two names until the celebration question (Q134, `2026-09-21-home-screen-design-development.md`) is decided. New work uses `--dur-celebrate` one-shots instead.
@@ -694,8 +704,8 @@ Build order when adding a new surface:
 6. Mobile floor: Calendar has no phone agenda (§7 Responsive). The input size floor is now global at ≤720px or coarse pointer.
 7. Stale code comments: the `hub-futura.css` header ("only inside `.hub-futura`") and `hub-tokens.css`
     ("eight-anchor nav") — the pinned count is 10 + 2 since 2026-09-30 (`hub-nav.js`'s "Ten primary" is accurate
-    again); and `motion.test.mjs`'s opening comment
-    still says `s` units are not checked, though the test now checks them.
+    again). (`motion.test.mjs`'s stale opening comment was corrected 2026-10-06, when the guard also learned to read
+    `.15s`-style values without a leading zero.)
 8. Focus-ring color is mixed (`--moon-300`, `--accent`, raw rgba) and breakpoints drift — both open in `TODOS.md`.
 9. ~~Unsanctioned title scale: `.personal-revenue-header h2` used `clamp(22px, 2.5vw, 28px)`~~ — resolved 2026-09-24
     (20px/500 per §11, revenue P0 pass).
@@ -763,3 +773,6 @@ Build order when adding a new surface:
 | 2026-10-01 | OKR·KPI 목업 ①·③·④ 구현(마이그레이션 없음). ① 목표 카드 머리는 **겹친 트랙**(점선 영역 = 바닥 페이스 0.7 × 기간 경과, 채움 = 진행 점수, 1px 눈금 = 0.7 바닥), 선행 KR은 기간을 월요일 주로 나눈 **주간 칸**(이번 주만 Moonstone 테두리, 앞으로 올 주는 점선, 못 채운 칸도 빨강 없음), 주 1건 미만 KR은 눈금 한 줄 + `기간 안 N · 마지막 주에 판정`, 목표에 연결한 기한 있는 할 일로 **마일스톤 줄**(기한 지난 것만 빨강 글자), `지키는 약속` 줄(줄이기·목표 0 유지 기준), `마지막 기록 n일 전`. ③ KPI는 선의 모양으로 **지킬 범위**(불릿 차트: 옅은 띠 = 허용 범위, 짙은 막대 = 이번 값, 세로 선 = 지난 관측)와 **0 유지**(주별 ✓ 칸 + `N주째 유지`) 두 묶음, 스파크라인은 행에서 뺐다. ④ 기간이 끝난 진행 중 목표는 카드가 제자리에서 **채점지**가 된다 — KR 표(최종·바닥·달성·점수·마감 값 기록), 2×2 판정(해당 칸만 Moonstone 테두리), 하나만 바꾸기 선택, KPI 한 달·기록만 한 지표, 회고(메모 decision, 개인 목표에 연결), `채점 저장` = 회고 + 목표 보관, `다음 기간으로 이어가기` = 같은 정의로 새 목표 + 지표를 순서대로 만들고 실패하면 남은 것만 재시도 | confirmed | 운영자가 목업 ①·③·④를 보고 구현을 지시(2026-10-01). 10월 개발 동결(개인 사업 OKR v3 확정 12)과 부딪히는 것을 알고 "지금 구현, 안티 골 KR4에 1건 기록"을 골랐다. 목업과 다른 점 두 가지는 스키마가 없어서다 — KPI의 `매주/월말` 묶음과 안티 골을 평균에 넣는 채점(Q2)은 지표별 표시 칸이 필요해 0053으로 미루고, 대신 모양 기준 묶음과 `지키는 약속` 줄로 둔다. 규칙은 `lib/goal-concepts.js`, 채점지는 `components/hub/goal-scorecard.jsx` |
 | 2026-10-06 | 금액 표기를 만·억 단위로 통일한다 — 정확한 금액 `formatWon`(`120만원`·`123만 4,567원`)과 반올림 `formatWonShort`(`1,235만원`·`1.2억원`, 차트 축은 `원` 생략)를 `lib/won-format.js` 하나가 소유하고, `₩` 기호·M/K 축약은 쓰지 않는다. 옛 `₩1.2M`·`900K` 저장 문자열은 `parseWon`이 계속 읽는다. 리드 금액은 편집 필드로 돌아가 다시 저장되므로 반올림하지 않는다(이전 `₩1.2M` 표기는 저장할 때 원 단위를 잃었다) | confirmed | 운영자 "금액은 ~만으로 해줘"(2026-10-06 디자인 감사 §6 안건 2에 대한 답). 화면·API·저장소 계층에 흩어져 있던 포맷터 15곳과 `₩1.2M`/`₩1,200,000`/`1,200,000원` 등 6가지 표기를 한 벌로 정리했다. `won-format.test.mjs`가 표기·반올림·되읽기를 고정한다 |
 | 2026-10-06 | 화면에 보이는 `Office`를 `오피스`로 쓴다 — 탭·⌘K·탑바 툴팁·단축키 안내·버튼·상태 문구·화면에 뜨는 오류 문구(Hub, agent-contracts 검증 문구, Engine 인증 오류). 라우트(`dashboard/agents/office-*`)·코드 식별자·모델에 보내는 역할 카드와 시스템 프롬프트(말투 튜닝 동결 대상)·데스크톱 펫은 바꾸지 않았다 | confirmed | 운영자 "오피스로 바꿔줘"(2026-10-06 디자인 감사 §6 안건 1의 고유명사 항목에 대한 답). 한 화면을 부르는 이름이 Office·AGENTS / OFFICE·이브이 오피스 등으로 갈려 있던 것 중 영문 표기를 걷어 낸다. 다른 영문 탭(`Projects`·`Calendar` 등)은 아직 미정이다 |
+| 2026-10-06 | 디자인 감사 후속 — 가독성 토큰: 다크 보조 글자를 moon 램프에서 떼어 `--fg-muted 0.72 / --fg-dim 0.65 / --fg-faint 0.60`(dim은 모든 면에서, faint는 bg·surface에서 AA 4.5:1 이상), 라이트 `--fg-dim 0.47 / --fg-faint 0.52`. 입력칸·체크박스 경계는 새 `--line-control`(면 대비 3:1, hover는 `--line-control-hover`)로 그린다. 한글은 `.hub-app`에서 `word-break: keep-all`로 어절 단위 줄바꿈. 다크에서만 사이드바 현재 항목 pill·인디케이터·검색/사용자 카드를 `--surface-3` + 1px `--line` 윤곽으로 띄운다(09-19 "떠 있는 pill" 문법은 그대로, 다크에서 파인 홈처럼 보이던 것을 바로잡음) | recommended | 운영자 "속도, 애니메이션, ui 디자인 디벨롭"(2026-10-06). 같은 날 감사(`docs/evaluations/2026-10-06-hub-design-audit/README.md`)의 대비 실측(다크 dim 3.7~4.3, faint 2.4~3.0, 입력 경계 1.1~1.2)이 근거다. 화면을 운영자가 직접 보고 확정하기 전까지 권장 |
+| 2026-10-06 | 디자인 감사 후속 — 위계·상태: 탑바 `New`를 primary에서 outline으로 낮춘다(§5.2 전역·페이지 생성 버튼 경쟁 금지 — 페이지마다 자기 생성 primary가 있다). 비활성 primary는 채움을 걷어 `--surface-3` 면 + `--fg-dim` 글자. `--shadow-card`의 1px 링을 빼 카드 테두리를 1px로 되돌리고, 정의되지 않은 `--shadow-md`는 `--shadow-card`로. 홈의 진행 중 일정 표시(`.fx-now`)는 `--danger` 대문자 `NOW`에서 시계 글리프 + `진행 중` 중립 글자로. 프로젝트 우선순위 `높음` 점은 빨강이 아니라 중립(빨강은 `긴급`만), 포트폴리오의 D-7 이내 Moonstone 칠도 중립. 키보드 힌트(`Kbd`)는 `(hover: none) and (pointer: coarse)`에서 숨긴다 | recommended | 같은 감사의 §3.1·§3.4·§3.5·§3.6·§4.7 항목. 모두 §5.2·§5.3 기존 규칙에 코드를 맞춘 것이고 새 시각 어휘는 없다. `New`의 이름(영문)과 생성 대상은 감사 §6 안건 1·10으로 그대로 남는다 |
+| 2026-10-06 | 디자인 감사 후속 — 모션·피드백: 막대 차트 진입은 `height` 전이 대신 `.hub-bar-rise`(transform `scaleY`, §9). 내 작업의 "오늘 할 일 다 끝" 폭죽은 되돌리기 창 안이 아니라 서버 저장이 확인된 뒤에만 터진다(§8.1 저장 봉투). 로딩을 글자 한 줄이나 `EmptyState`로 그리던 6곳(자동화·내 작업·메모·기회 탐색·Roadmap·프로젝트 백로그)은 `Skeleton`. 토스트는 오류 7초, 가리키거나 포커스하면 행동 없는 알림이 멈춘다. `motion.test`가 앞자리 0 없는 `.15s`도 잡도록 고쳐 그 틈으로 통과하던 5곳을 토큰으로 바꿨다 | recommended | 같은 감사의 §3.7·§4.5·§4.6·부록. 축하 연출 자체의 존폐(Q134)는 건드리지 않았다 — 시점만 저장 뒤로 옮겼다 |

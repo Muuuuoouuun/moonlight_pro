@@ -1586,7 +1586,8 @@ export function Projects({ workspace }) {
 
   // 프로젝트 상태 칩은 ProjectStatusBadge(→ LifecycleBadge) 하나가 소유한다(§8.2).
   // 색 이름 맵을 여기에 되살리지 않는다 — state-usage.test.mjs가 고정한다.
-  const prioTone = { critical: 'danger', high: 'danger', med: 'neutral', medium: 'neutral', low: 'neutral' };
+  // 빨강은 '긴급'에만 — '높음'은 점수일 뿐 손실 상태가 아니다(§5.2 no warning-by-default). 순위는 라벨이 말한다.
+  const prioTone = { critical: 'danger', high: 'neutral', med: 'neutral', medium: 'neutral', low: 'neutral' };
   const updateTone = { reported: 'neutral', active: 'neutral', blocked: 'danger', done: 'neutral' };
   const checkTone = { pending: 'neutral', done: 'neutral', skipped: 'neutral', blocked: 'danger' };
   // 콘텐츠 lifecycle은 §5.3 중립 — statusLabel이 상태를 말한다.

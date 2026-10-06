@@ -13,6 +13,14 @@ const nextConfig = {
     // /api/hub/*로 따로 받으므로, 셸 RSC를 5분 재사용해도 데이터 신선도와 무관하다.
     staleTimes: { dynamic: 300 },
   },
+  // 글꼴은 파일 이름이 바뀔 때만 내용이 바뀐다 — 매 방문마다 재검증 왕복을 하지 않게 30일 캐시한다.
+  // 같은 이름으로 글꼴 파일을 교체하면 이 기간 동안 옛 파일이 남을 수 있으니 이름을 바꿔 올린다.
+  async headers() {
+    return [{
+      source: "/fonts/:path*",
+      headers: [{ key: "Cache-Control", value: "public, max-age=2592000, stale-while-revalidate=604800" }],
+    }];
+  },
   // QA/secondary dev instances set NEXT_DIST_DIR (e.g. ".next.qa") so they
   // never fight the primary dev server over .next. Unset → default ".next".
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),

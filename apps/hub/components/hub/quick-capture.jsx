@@ -170,7 +170,8 @@ export function GlobalQuickCapture({ openRequest = 0, initialRaw = "", onInitial
   const [open, setOpen] = React.useState(false);
   const [session] = React.useState(() => createQuickCaptureSession({ createId: createClientId }));
   const inputRef = React.useRef(null);
-  const seen = React.useRef(openRequest);
+  // 0부터 센다: 셸은 이 창을 처음 열 때 지연 마운트하므로, 마운트 시점에 이미 들어온 요청도 열기다.
+  const seen = React.useRef(0);
   const sharedDraftSavedRef = React.useRef(null);
   const saved = () => {
     const notifySharedSaved = sharedDraftSavedRef.current;

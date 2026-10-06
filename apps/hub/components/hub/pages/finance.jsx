@@ -3,7 +3,7 @@ import React from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {Button, CertaintyBadge, Drawer, EditDrawer, EmptyState, LifecycleBadge, SegmentedControl, SelectField, Skeleton, TextAreaField, TextField, TruthBadge, useToast} from '../hub-primitives';
 import {FINANCE_VIEWS, PURPOSE_OPTIONS, CLAIM_OPTIONS, CYCLE_OPTIONS, SERVICE_OPTIONS, financeMoney, financeReadState, financeFilters, financeEntries, financePeriodTotals, financeSubscriptionDates, financeSubscriptionPayments, financeChanges, financeSaveResult, financeOptionLabel, financeClaimEntries, financeNextSort, financeSortRows, financeClaimRemaining} from './finance-view';
-import {SortHead} from './revenue';
+import {SortHead} from './revenue-core';
 import './finance.css';
 
 const GROUP_LABELS = {gpt:'GPT',claude:'Claude 공동 관측',grok:'Grok',naver_plus:'Naver Plus',youtube:'YouTube',gemini:'Gemini',gabia:'Gabia',telecom:'통신비'};

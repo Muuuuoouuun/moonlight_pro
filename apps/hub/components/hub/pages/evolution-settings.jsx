@@ -408,7 +408,7 @@ function CopyRow({ value, mono }) {
         color: copied ? 'var(--fg)' : 'var(--fg-muted)',
         border: '1px solid var(--line)', borderRadius: 4,
         fontSize: 11, fontFamily: 'var(--font-sans)',
-        transition: 'background .15s, color .15s',
+        transition: 'background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub)',
       }}>
         <Iconed name={copied ? 'check' : 'copy'} size={11} />
         {copied ? 'Copied' : 'Copy'}
@@ -498,7 +498,7 @@ function KeyRow({ item, last, kind }) {
           background: copied ? 'var(--moon-300)' : 'var(--surface-2)',
           color: copied ? 'var(--bg)' : 'var(--fg-muted)',
           border: '1px solid var(--line-soft)', borderRadius: 6,
-          fontSize: 11, transition: 'background .15s, color .15s',
+          fontSize: 11, transition: 'background var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub)',
         }}>
           <Iconed name={copied ? 'check' : 'copy'} size={11} />
           {copied ? 'Copied' : 'Copy'}

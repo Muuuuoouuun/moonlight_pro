@@ -15,7 +15,7 @@ test('the retained discussion receives whether its surface is visible', () => {
   for (const surface of ['discussion', 'commander']) {
     let slot = 0;
     const hooks = { ...React, useState: () => [[surface, true][slot++], () => {}] };
-    const council = new Function('React', 'SegmentedControl', 'OfficeCommander', 'OfficeCouncilDiscussion', `${code};return OfficeCouncil;`)(hooks, 'segmented', 'commander', Discussion);
+    const council = new Function('React', 'SegmentedControl', 'OfficeCommander', 'OfficeCouncilDiscussion', 'styles', `${code};return OfficeCouncil;`)(hooks, 'segmented', 'commander', Discussion, { shell: 'shell' });
     const tree = council({ scope: 'classin' });
     function find(node) {
       if (node?.type === Discussion) return node;

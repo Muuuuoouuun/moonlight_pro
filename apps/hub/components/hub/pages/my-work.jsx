@@ -654,7 +654,7 @@ function DealOutreachSection({ deal }) {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
+              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10.5 }}
             >
               접기
             </button>
@@ -1066,7 +1066,9 @@ export function MyWork({ onNavigate }) {
   // The actual persist — only ever called after the undo window closes (or never, if the
   // user hits 되돌리기 first). Kept separate from scheduleComplete so board-lens drags and
   // the drawer's own status field can still complete a task immediately if they need to.
-  const persistComplete = async (item) => {
+  // celebrate: 이 완료로 오늘 목록이 비었을 때만 — 연출은 저장이 확인된 뒤에 낸다(§8.1 저장 봉투:
+  // 저장되지 않은 일을 끝난 것처럼 축하하지 않는다). 되돌리기 창 안에서 터지던 것을 옮겼다.
+  const persistComplete = async (item, { celebrate = false } = {}) => {
     try {
       const res = await fetch('/api/hub/tasks', {
         method: 'PATCH',
@@ -1076,6 +1078,7 @@ export function MyWork({ onNavigate }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status !== 'saved') throw new Error(data.error || `완료 저장 실패 ${res.status}`);
       setNotice({ tone: 'ok', label: '할 일 완료됨' });
+      if (celebrate) triggerCelebration({ mode: 'fireworks' });
       await reload();
     } catch (error) {
       setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
@@ -1108,11 +1111,9 @@ export function MyWork({ onNavigate }) {
       setHiddenIds((s) => new Set(s).add(id));
     }, STRIKE_MS);
 
-    // 모든 할 일이 완료되었는지 확인 → 축하 불꽃놀이/폭죽 발사
+    // 이 완료로 남은 할 일이 없어지면 저장 확인 뒤 축하한다(persistComplete).
     const remainingTasks = visible.filter((i) => i.lane === 'task' && !hiddenIds.has(i.id) && !completingIds.has(i.id) && i.id !== id);
-    if (remainingTasks.length === 0) {
-      triggerCelebration({ mode: 'fireworks' });
-    }
+    const celebrate = remainingTasks.length === 0;
 
     setNotice({ key: `complete-${id}`, tone: 'ok', label: '할 일 완료됨', action: { label: '되돌리기', onClick: () => undoComplete(item) } });
     toast.success('할 일을 완료했습니다.', { action: { label: '되돌리기', onClick: () => undoComplete(item) } });
@@ -1121,7 +1122,7 @@ export function MyWork({ onNavigate }) {
       // 창이 닫히면 알림을 통째로 걷는다 — 버튼만 지우면 "완료됨" 라벨이 다음 액션까지
       // 영구 표시된다(7차 UIUX — revenue 활동 삭제·daily-brief 보류의 전체 소거 패턴으로 통일).
       setNotice((cur) => (cur?.key === `complete-${id}` ? null : cur));
-      persistComplete(item);
+      persistComplete(item, { celebrate });
     }, UNDO_WINDOW_MS);
   };
 
@@ -1876,7 +1877,7 @@ export function MyWork({ onNavigate }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
 
       {state === 'loading' && (
-        <Card><div style={{ fontSize: 12.5, color: 'var(--fg-muted)', padding: 8 }}>기록을 읽는 중…</div></Card>
+        <Card><Skeleton lines={5} height={14} gap={14} label="내 작업 기록을 읽는 중" /></Card>
       )}
       {state === 'unauthorized' && (
         <Card>

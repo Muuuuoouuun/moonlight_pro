@@ -2586,7 +2586,7 @@ button {
   align-items: center;
   padding: 1px 5px;
   border-radius: var(--r-xs);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 600;
   font-family: var(--font-mono);
   line-height: 1.2;
@@ -2594,7 +2594,7 @@ button {
 }
 
 .hub-app .hub-project-dday-badge--danger {
-  background: rgba(239, 68, 68, 0.15);
+  background: var(--danger-bg);
   color: var(--danger);
   border: 1px solid var(--danger-line);
 }

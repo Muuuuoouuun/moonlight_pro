@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Button, Card, EmptyState, Kbd, TruthBadge } from '../hub-primitives';
+import { Button, Card, EmptyState, Kbd, Skeleton, TruthBadge } from '../hub-primitives';
 import { isCanonicalUuid } from '@/lib/uuid';
 import { createJournalStore, journalTabId, lastJournalWorkspace, rememberJournalWorkspace } from '@/lib/journal-browser-store';
 import { NOTE_QUESTIONS } from '@/lib/journal-client';
@@ -251,7 +251,7 @@ export function Memos() {
     {error && <div className="memo-feedback" role="alert"><p>{error}</p><Button onClick={() => setReload((n) => n + 1)}>다시 불러오기</Button></div>}
     {search.error && <div className="memo-feedback" role="alert"><p>{search.error}</p><Button onClick={search.refresh}>다시 찾기</Button></div>}
     {search.status === 'live' && search.entries.length > 0 && <p className="memo-muted" role="status">불러온 메모 <span className="num">{search.entries.length}</span>개{search.nextCursor ? ' · 더 볼 수 있어요' : ''}</p>}
-    {search.status === 'loading' ? <p role="status" className="memo-muted">메모를 찾고 있어요…</p> : search.status === 'preview' ? <EmptyState icon="content" title="메모 저장소 연결이 필요해요" description="작성한 내용은 현재 탭에 임시 보관합니다. 탭을 닫기 전 연결해 저장하거나 입력을 복사해 주세요." action={<Button onClick={create} disabled={Boolean(id)}>메모 남기기</Button>} />
+    {search.status === 'loading' ? <Skeleton lines={4} height={14} gap={14} label="메모를 찾는 중" /> : search.status === 'preview' ? <EmptyState icon="content" title="메모 저장소 연결이 필요해요" description="작성한 내용은 현재 탭에 임시 보관합니다. 탭을 닫기 전 연결해 저장하거나 입력을 복사해 주세요." action={<Button onClick={create} disabled={Boolean(id)}>메모 남기기</Button>} />
       : search.status === 'live' && (search.entries.length === 0 ? <EmptyState icon="content" title={searchQuery ? '조건에 맞는 메모가 없어요' : '기억하고 싶은 일부터 한 줄'} description={searchQuery ? '검색어를 짧게 바꾸거나 조건을 해제해 보세요.' : '제목이나 분류 없이 바로 남겨보세요. 필요할 때 보강하고 활용할 수 있어요.'} action={searchQuery ? <Button onClick={() => applyFilters({})}>조건 모두 해제</Button> : <Button onClick={create} disabled={Boolean(id)}>첫 메모 남기기</Button>} />
         : <Card pad={false} className="memo-list"><ol>{search.entries.map((row) => <li key={row.id} style={{ display: 'flex', alignItems: 'flex-start' }}>
           <div style={{ padding: '24px 0 0 16px', display: 'flex', alignItems: 'center' }}>

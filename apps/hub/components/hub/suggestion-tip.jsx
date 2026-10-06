@@ -37,7 +37,7 @@ export function SuggestionTip({ reason, action, onAction, onSnooze, onDismiss, c
           ...style,
         }}
       >
-        <CertaintyBadge state="recommended" label="제안" style={{ padding: "1px 5px", fontSize: 10 }} />
+        <CertaintyBadge state="recommended" label="제안" style={{ padding: "1px 5px", fontSize: 10.5 }} />
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{reason}</span>
       </div>
     );

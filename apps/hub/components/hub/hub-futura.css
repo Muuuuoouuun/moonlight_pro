@@ -366,11 +366,14 @@
   .hub-app .fx-time-item .fx-time-row { padding-block: 0; }
 }
 
+/* 지금 진행 중인 일정 — 위치 표시일 뿐 긴급이 아니다(§5.2 danger는 손실 상태 전용). 색 대신 글리프 + 직접 라벨. */
 .hub-app .fx-now {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  color: var(--danger);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg);
 }
 
 /* ── 반응형 — 모바일 우선 축소 ────────────────────────────────── */
@@ -565,6 +568,16 @@
   background: var(--surface);
   border-left-color: transparent;
   box-shadow: var(--fx-shadow);
+}
+
+/* 다크에서는 사이드바 면(--surface-2)보다 --surface가 어두워 "떠 있는 pill"이 파인 홈처럼 보였고,
+ * 검정 위의 검정 그림자는 보이지 않았다(2026-10-06 감사, 대비 1.07:1). 다크에서만 한 단계 밝은 면 +
+ * 1px 윤곽으로 같은 "떠 있다"를 말한다. 아래 indicator 규칙이 행의 pill을 걷는 순서는 그대로다. */
+.hub-app:not([data-theme="light"]) .hub-nav-item[aria-current="page"],
+.hub-app:not([data-theme="light"]) .hub-nav-indicator,
+.hub-app:not([data-theme="light"]) .fx-shell-card {
+  background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--line), var(--fx-shadow);
 }
 
 /* 미끄러지는 현재 항목 pill — 영역당 하나(hub-sidebar.jsx useNavIndicator). JS가 자리를
