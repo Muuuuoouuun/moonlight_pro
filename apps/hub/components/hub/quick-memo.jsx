@@ -9,11 +9,13 @@ import { quickMemoDraftKey, readQuickMemoDraft, writeQuickMemoDraft } from "@/li
 import { MEMO_SAVED_EVENT, memoHref, saveMemoAndVerify } from "@/lib/memo-save";
 import { contentIdeaHref, prepareMemoIdea, saveMemoAsIdeaAndVerify } from "@/lib/quick-memo-content";
 import { notifyContentLedgerChanged } from "@/lib/content-ledger-cache";
-import { requestPersonaChat } from "./persona-client";
-import { createAdviceTaskWriter, parseExtractedActions } from "@/lib/ai-workflow-client";
 import styles from "./quick-memo.module.css";
 
 const FOCUSABLE = 'button:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href]';
+// AI 실행 항목 추출과 그 저장은 누를 때만 쓰므로, 그 코드(페르소나 요청·주간 리포트 필드)는 그때 불러와
+// 늘 떠 있는 빠른 메모가 셸 첫 번들을 키우지 않게 한다.
+const loadPersonaClient = () => import("./persona-client");
+const loadAdviceClient = () => import("@/lib/ai-workflow-client");
 
 export function QuickMemo({ draftContext, openRequest = 0, blocked = false, route, onNavigate, fetchImpl = fetch }) {
   const [draft, setDraft] = React.useState(null);
@@ -23,7 +25,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
   const [aiAnalyzing, setAiAnalyzing] = React.useState(false);
   const [extractedActions, setExtractedActions] = React.useState(null);
   const [savingActions, setSavingActions] = React.useState(() => new Set());
-  const taskWriter = React.useMemo(() => createAdviceTaskWriter({ fetchImpl }), [fetchImpl]);
+  const taskWriter = React.useRef(null);
   const extractionRequest = React.useRef(0);
   const extractionController = React.useRef(null);
   const pendingActions = React.useRef(new Set());
@@ -309,6 +311,8 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
     setAiAnalyzing(true);
     setError("");
     try {
+      const [{ requestPersonaChat }, { parseExtractedActions }] = await Promise.all([loadPersonaClient(), loadAdviceClient()]);
+      if (!isCurrent()) return;
       const res = await requestPersonaChat({
         personaId: "order",
         mode: "extract-actions",
@@ -338,11 +342,18 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
     setSavingActions(new Set(pendingActions.current));
     setError("");
     try {
-      const result = await taskWriter.save({ key: action.id, title: action.title });
+      if (!taskWriter.current) {
+        const { createAdviceTaskWriter } = await loadAdviceClient();
+        // One writer per mount keeps its retry identity, so a second tap never makes a second task.
+        taskWriter.current ??= createAdviceTaskWriter({ fetchImpl });
+      }
+      const result = await taskWriter.current.save({ key: action.id, title: action.title });
       if (!alive.current || current.current?.id !== sourceId) return;
       if (result.state === "saved") {
         setExtractedActions(prev => prev && ({ ...prev, actions: prev.actions.map(item => item.id === action.id ? { ...item, saved: true } : item) }));
       } else setError(result.note);
+    } catch {
+      if (alive.current && current.current?.id === sourceId) setError("할 일로 저장하지 못했어요. 다시 시도해 주세요.");
     } finally {
       pendingActions.current.delete(action.id);
       if (alive.current) setSavingActions(new Set(pendingActions.current));

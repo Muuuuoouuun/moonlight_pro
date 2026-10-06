@@ -275,12 +275,28 @@ test('one leave-page guard covers Office drafts and unsent mentor follow-ups', (
   assert.equal(officeUnloadGuard([])(event()), false);
 });
 
-test('the Hub shell installs the shared guard with the mentor session store', () => {
+test('the Hub shell installs the shared guard with the mentor session store', async () => {
   const provider = fs.readFileSync(new URL('./office-session-provider.jsx', import.meta.url), 'utf8');
-  assert.match(provider, /mentorStore = officeMentorSessions/);
-  assert.match(provider, /officeUnloadGuard\(\[store, mentorStore\]\)/);
+  assert.match(provider, /officeUnloadGuard\(\[holder\.store, \.\.\.loadedOfficeUnloadStores\(\)\]\)/);
   assert.match(provider, /addEventListener\('beforeunload', guard\)/);
   assert.match(provider, /removeEventListener\('beforeunload', guard\)/);
+  // The shell must not pull the Office stores into the first bundle — they register themselves on load.
+  assert.doesNotMatch(provider, /from '\.\/office-(session|mentor-session)'/);
+
+  const { loadedOfficeUnloadStores } = await import('./office-unload.js');
+  const { officeMentorSessions } = await import('./office-mentor-session.js');
+  assert.ok(loadedOfficeUnloadStores().includes(officeMentorSessions));
+  const id = officeMentorSessions.open({
+    result: { status: 'generated', scope: 'personal', answer: 'Office 종합', evidence: [], dissent: [], nextAction: '' },
+    officeSource: { requestId: '10000000-0000-4000-8000-000000000099', runId: null },
+    scope: 'personal',
+  });
+  officeMentorSessions.setDraft(id, '셸이 지켜야 할 질문');
+  const leaving = { prevented: 0, preventDefault() { this.prevented += 1; } };
+  assert.equal(officeUnloadGuard([null, ...loadedOfficeUnloadStores()])(leaving), true);
+  assert.equal(leaving.prevented, 1);
+  officeMentorSessions.discard([id]);
+  assert.equal(officeUnloadGuard([null, ...loadedOfficeUnloadStores()])({ preventDefault() {} }), false);
 });
 
 test('task read errors map known internal codes to short Korean copy and never leak a raw code', async () => {
