@@ -9,6 +9,10 @@
   --line:          oklch(0.30 0.008 250 / 0.6);
   --line-soft:     oklch(0.30 0.008 250 / 0.3);
   --line-strong:   oklch(0.40 0.009 250 / 0.8);
+  /* 입력칸·체크박스의 경계 — 하이라인(1.1:1)으로는 다크에서 입력칸이 면에 녹는다. 면 대비 3:1(WCAG
+     1.4.11)을 맞춘 1px 선이고, 장식 구분선이 아니라 "여기에 쓸 수 있다"를 말하는 곳에만 쓴다. */
+  --line-control:  oklch(0.50 0.008 250);
+  --line-control-hover: oklch(0.60 0.009 250);
 
   --moon-50:       oklch(0.96 0.004 250);
   --moon-100:      oklch(0.92 0.005 250);
@@ -44,9 +48,12 @@
   --z-palette: 1100; /* ⌘K — 내비게이션·편집 드로어 위 */
 
   --fg:            var(--moon-100);
-  --fg-muted:      var(--moon-400);
-  --fg-dim:        var(--moon-500);
-  --fg-faint:      var(--moon-600);
+  /* 보조 글자 단계 — moon 램프(0.68/0.58/0.48)를 그대로 쓰면 dim이 3.7~4.3:1, faint가 2.4~3.0:1로
+     라벨·안내·빈 상태 설명이 AA(4.5:1)에 못 미쳤다(2026-10-06 감사). dim은 모든 면에서, faint는
+     bg·surface에서 4.5:1을 넘긴다. faint는 여전히 가장 옅은 글자 — 18px 이상이나 장식 글리프에 남긴다. */
+  --fg-muted:      oklch(0.72 0.009 250);
+  --fg-dim:        oklch(0.65 0.010 250);
+  --fg-faint:      oklch(0.60 0.009 250);
 
   --success:       oklch(0.74 0.11 155);
   --success-bg:    oklch(0.30 0.05 155 / 0.25);
@@ -78,9 +85,10 @@
   --genre-content-bg: oklch(0.31 0.045 310); --genre-content-fg: oklch(0.84 0.07 310); --genre-content-line: oklch(0.46 0.06 310 / 0.6);
 
   --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 0 0 1px var(--line-soft);
+  /* 카드는 자기 1px 테두리를 가진다 — 그림자에 링(0 0 0 1px)을 또 그리면 테두리 바깥에 선이 한 겹
+     더 생겨 2px로 보였다(2026-10-06 감사, §5.2 "보더는 항상 1px"). 그림자는 들림만 맡는다. */
   --shadow-card:
     0 1px 0 0 oklch(1 0 0 / 0.04) inset,
-    0 0 0 1px var(--line-soft),
     0 8px 24px -12px oklch(0 0 0 / 0.4);
   --shadow-pop:
     0 1px 0 0 oklch(1 0 0 / 0.06) inset,
@@ -126,6 +134,8 @@
   --line:          oklch(0.82 0.006 250 / 0.9);
   --line-soft:     oklch(0.88 0.005 250 / 0.8);
   --line-strong:   oklch(0.72 0.007 250 / 0.9);
+  --line-control:  oklch(0.66 0.007 250);
+  --line-control-hover: oklch(0.56 0.008 250);
 
   --moon-50:       oklch(0.22 0.008 250);
   --moon-100:      oklch(0.30 0.008 250);
@@ -155,8 +165,8 @@
   --fg-muted:      oklch(0.42 0.008 250);
   /* 라이트 강조 사다리: 밝을수록 옅다 — dim(0.50) < faint(0.55). 이전엔 dim(0.54)이
      faint(0.52)보다 옅어 위계가 뒤집혀 있었다(2026-08-05 재감사 §11). */
-  --fg-dim:        oklch(0.50 0.008 250);
-  --fg-faint:      oklch(0.55 0.007 250);
+  --fg-dim:        oklch(0.47 0.008 250);
+  --fg-faint:      oklch(0.52 0.007 250);
 
   --success:       oklch(0.48 0.14 155);
   --success-bg:    oklch(0.94 0.04 155 / 0.6);
@@ -190,7 +200,6 @@
   --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.6) inset, 0 0 0 1px var(--line-soft);
   --shadow-card:
     0 1px 0 0 oklch(1 0 0 / 0.8) inset,
-    0 0 0 1px var(--line-soft),
     0 8px 24px -14px oklch(0.3 0.01 250 / 0.1);
   --shadow-pop:
     0 1px 0 0 oklch(1 0 0 / 0.9) inset,
@@ -208,12 +217,21 @@
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   letter-spacing: 0;
+  /* 한글은 어절 단위로 줄을 바꾼다 — 기본값은 음절 중간에서 꺾여 좁은 칩·390px 칸에서 "0일 대기"가
+     세로로 쪼개졌다. 한 어절이 칸보다 길 때만 그 어절 안에서 꺾는다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
   height: 100dvh;
   width: 100%;
   overflow: hidden;
   transition: background var(--dur-enter) var(--ease-hub), color var(--dur-enter) var(--ease-hub);
 }
 .hub-app button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
+/* 키보드 힌트(N · / · ⌘K)는 키보드가 있을 때만 보인다 — 터치 화면에서는 누를 키가 없는 소음이다. */
+.hub-app .hub-kbd { display: inline-flex; }
+@media (hover: none) and (pointer: coarse) {
+  .hub-app .hub-kbd { display: none; }
+}
 .hub-app input, .hub-app textarea { font-family: inherit; color: inherit; }
 .hub-app a { color: inherit; text-decoration: none; }
 .hub-app .mono { font-family: var(--font-mono); font-feature-settings: 'ss02'; letter-spacing: 0; font-variant-numeric: tabular-nums; }
@@ -355,6 +373,14 @@
 .hub-app .hub-btn--primary:hover:not(:disabled) {
   background: var(--moon-100);
   border-color: var(--moon-50);
+}
+/* 비활성 primary는 채움을 걷는다 — 반투명한 moon 채움(인라인 opacity)이 활성 secondary보다 진해 보여
+   "지금 누를 버튼"으로 읽혔고, 다크에서는 화면에서 가장 밝은 면이었다(2026-10-06 감사). */
+.hub-app .hub-btn--primary:disabled {
+  color: var(--fg-dim);
+  background: var(--surface-3);
+  border-color: var(--line);
+  box-shadow: none;
 }
 
 /* Secondary rests filled at --surface-3, and no surface step from there is symmetric across
@@ -592,12 +618,12 @@
   align-items: center;
   gap: 8px;
   background: var(--surface-2);
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line-control);
   border-radius: var(--r-sm);
   transition: border-color var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub);
 }
 .hub-app .hub-field:hover:not(:focus-within) {
-  border-color: var(--line-strong);
+  border-color: var(--line-control-hover);
 }
 .hub-app .hub-field:focus-within {
   border-color: var(--moon-300);
@@ -707,7 +733,7 @@
   line-height: 1.45;
   color: var(--fg);
   background: var(--surface-2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-control);
   border-radius: var(--r-sm);
   transition: border-color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
@@ -727,7 +753,7 @@
 .hub-app .hub-field--md { height: 36px; padding: 0 12px; font-size: 13.5px; }
 .hub-app .hub-field--lg { height: 42px; padding: 0 14px; font-size: 14.5px; }
 .hub-app .hub-input::placeholder { color: var(--fg-faint); }
-.hub-app .hub-input:hover:not(:disabled) { border-color: var(--line-strong); }
+.hub-app .hub-input:hover:not(:disabled) { border-color: var(--line-control-hover); }
 .hub-app .hub-input:focus { border-color: var(--moon-300); background: var(--surface-3); }
 .hub-app .hub-input[aria-invalid="true"] { border-color: var(--danger); }
 .hub-app .hub-input:disabled {
@@ -829,6 +855,10 @@
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .hub-app .fade-up { animation: mlFadeUp var(--dur-enter) var(--ease-hub); }
+/* 막대 차트의 1회 진입 — 바닥을 기준으로 자란다. 높이·너비를 전이하면 매 프레임 레이아웃을 다시
+   계산하므로 transform만 쓴다(감소 모션은 hub 전역 안전망이 끈다). */
+@keyframes hubBarRise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.hub-app .hub-bar-rise { transform-origin: 50% 100%; animation: hubBarRise var(--dur-enter) var(--ease-hub) both; }
 /* Skeleton — §11 로딩 상태. 펄스는 라이브 인디케이터와 같은 mlMoonPulse 1.4s 하나(§9 "one duration
    everywhere"), 줄마다 위상 지연 없음(물결은 playful). 전역 reduced-motion 안전망이 자동 적용. */
 .hub-app .hub-skeleton__line {
@@ -1264,7 +1294,8 @@
   .hub-app .daily-brief__metric-card:hover {
     transform: translateY(-1px);
     border-color: var(--line);
-    box-shadow: var(--shadow-md);
+    /* 정의되지 않은 --shadow-md를 가리켜 들림 그림자가 한 번도 그려지지 않았다. */
+    box-shadow: var(--shadow-card);
   }
 }
 
@@ -1366,9 +1397,10 @@
 .hub-topbar__section {
   overflow: hidden;
   color: var(--fg-faint);
-  font-size: 10px;
+  /* 모든 화면에 보이는 위치 라벨 — 10px은 보조 메타 하한(10.5px) 밖이었다. 한글 어절에는 넓은 자간이 음절만 벌린다. */
+  font-size: 10.5px;
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.04em;
   line-height: 1.2;
   text-overflow: ellipsis;
   text-transform: uppercase;
@@ -1416,6 +1448,10 @@
   color: var(--fg);
   background: var(--surface-2);
 }
+
+/* 탭 줄은 가로 스크롤(overflow-x) 때문에 세로도 잘린다 — 바깥으로 그리는 링은 위·아래 변이 사라진다.
+   §15 2026-09-15 선례대로 안쪽에 그린다. */
+.hub-topbar__tabs button:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
 
 .hub-topbar__tabs button[aria-current="page"] {
   color: var(--fg);
@@ -2361,7 +2397,7 @@
 .personal-revenue-confirmed-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 600;
   padding: 0 5px;
   border-radius: 3px;

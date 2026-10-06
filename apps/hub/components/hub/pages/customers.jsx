@@ -27,7 +27,7 @@ import { ContactRecordForm } from "../contact-record-form";
 import { SuggestionTip } from "../suggestion-tip";
 import { TIP_RULE_IDS, nudgeTipReason, useCrmNudges } from "../crm-nudge";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
-import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
+import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue-core";
 import { useMemoSearch } from "./use-memo-search";
 import { GuidanceQuestionDrawer } from '../guidance-question-drawer';
 import { GuruGuidanceCard } from '../guru-guidance-card';

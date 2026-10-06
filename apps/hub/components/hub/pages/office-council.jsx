@@ -186,7 +186,7 @@ function OfficeUsageLine({ refreshKey }) {
 export function OfficeCouncil({ scope = 'all', onGuidanceAsk, onNavigate }) {
   const [surface,setSurface]=React.useState('commander');
   const [discussionVisited,setDiscussionVisited]=React.useState(false);
-  return <section><div style={{marginBottom:'var(--gap)'}}><SegmentedControl label="오피스 업무 화면" options={[{key:'commander',label:'이브이 업무 분담'},{key:'discussion',label:'관점 대화·회의'}]} value={surface} onChange={next=>{setSurface(next);if(next==='discussion')setDiscussionVisited(true);}}/></div><div hidden={surface!=='commander'}><OfficeCommander scope={scope}/></div>{discussionVisited?<div hidden={surface!=='discussion'}><OfficeCouncilDiscussion scope={scope} active={surface === 'discussion'} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></div>:null}</section>;
+  return <section className={styles.shell}><div style={{marginBottom:'var(--gap)'}}><SegmentedControl label="오피스 업무 화면" options={[{key:'commander',label:'이브이 업무 분담'},{key:'discussion',label:'관점 대화·회의'}]} value={surface} onChange={next=>{setSurface(next);if(next==='discussion')setDiscussionVisited(true);}}/></div><div hidden={surface!=='commander'}><OfficeCommander scope={scope}/></div>{discussionVisited?<div hidden={surface!=='discussion'}><OfficeCouncilDiscussion scope={scope} active={surface === 'discussion'} onGuidanceAsk={onGuidanceAsk} onNavigate={onNavigate}/></div>:null}</section>;
 }
 function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, onNavigate }) {
   const { session, store, update } = useOfficeSession(scope);

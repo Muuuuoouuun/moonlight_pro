@@ -31,6 +31,7 @@ import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS
 import { DailyReviewCue } from "../daily-review-cue";
 import { REVIEW_EVENING_HOUR } from "@/lib/daily-review-rhythm";
 import { formatWonShort } from "@/lib/won-format";
+import { peekDailyBrief, readDailyBrief } from "../daily-brief-signals";
 import {
   beginRhythmCheck,
   buildRhythmCheckPayload,
@@ -469,53 +470,63 @@ const EMPTY_DAILY_BRIEF_STATE = {
 const DAILY_BRIEF_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let dailyBriefCache = null; // { at, state }
 
+// /api/hub/daily-brief 응답 → 이 화면의 상태. 공유 캐시에서 첫 그림을 만들 때도 같은 함수를 쓴다.
+function briefStateFromData(data) {
+  const liveCount = Number(data.summary?.liveCount || 0);
+  const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
+  const nextSyncState = data.status === 'partial'
+    ? 'partial'
+    : data.status === 'live'
+      ? 'live'
+      : liveCount > 0 && liveCount < sourceCount
+        ? 'mixed'
+        : 'preview';
+
+  return {
+    inquiries: data.inquiries || { status: 'error', rows: [], unreadCount: null },
+    syncState: nextSyncState,
+    generatedAt: data.generatedAt || null,
+    sources: Array.isArray(data.sources) ? data.sources : [],
+    summary: data.summary || null,
+    metrics: Array.isArray(data.metrics) ? data.metrics : [],
+    operatorHome: data.operatorHome || null,
+    taskToday: data.taskToday || { state: 'preview', items: [], counts: {}, hiddenCount: 0 },
+    contentBrands: data.contentBrands || null,
+    signals: Array.isArray(data.signals) ? data.signals : [],
+    dailyFocus: data.dailyFocus || null,
+    queue: data.queue || null,
+    morningBrief: data.morningBrief || null,
+  };
+}
+
+// 이 화면의 캐시가 없어도 홈·위젯이 5분 안에 같은 응답을 읽어 뒀으면 그것으로 먼저 그린다.
+function servableBriefState() {
+  if (dailyBriefCache && Date.now() - dailyBriefCache.at < DAILY_BRIEF_CACHE_SERVABLE_MS) return dailyBriefCache.state;
+  const shared = peekDailyBrief();
+  return shared?.ok && shared.data ? briefStateFromData(shared.data) : null;
+}
+
 function useDailyBriefLedger(refreshKey) {
-  const servable = dailyBriefCache && Date.now() - dailyBriefCache.at < DAILY_BRIEF_CACHE_SERVABLE_MS;
-  const [state, setState] = React.useState(servable ? dailyBriefCache.state : EMPTY_DAILY_BRIEF_STATE);
+  const [state, setState] = React.useState(() => servableBriefState() || EMPTY_DAILY_BRIEF_STATE);
 
   React.useEffect(() => {
     let active = true;
-    const hasServableCache = Boolean(
-      dailyBriefCache && Date.now() - dailyBriefCache.at < DAILY_BRIEF_CACHE_SERVABLE_MS
-    );
+    const hasServableCache = Boolean(servableBriefState());
 
     async function load() {
       if (!hasServableCache) setState((prev) => ({ ...prev, syncState: 'syncing' })); // 캐시 서빙 중엔 조용히 재검증
       try {
-        const response = await fetch('/api/hub/daily-brief', { cache: 'no-store' });
-        const data = await response.json().catch(() => null);
-        if (!active || !response.ok || !data) {
+        // 홈과 동시에 열려도 서버 팬아웃은 한 번 — 요청은 daily-brief-signals가 합친다.
+        const read = await readDailyBrief();
+        const data = read.data;
+        if (!active || !read.ok || !data) {
           // transport 실패는 error — preview로 뭉개면 첫 화면이 "Supabase 연결 후 live
           // 전환"이라는 거짓 안내와 함께 신호 0건으로 렌더된다(re-audit S5).
           if (active) setState((prev) => ({ ...prev, syncState: hasServableCache ? 'partial' : 'error' }));
           return;
         }
 
-        const liveCount = Number(data.summary?.liveCount || 0);
-        const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
-        const nextSyncState = data.status === 'partial'
-          ? 'partial'
-          : data.status === 'live'
-            ? 'live'
-            : liveCount > 0 && liveCount < sourceCount
-              ? 'mixed'
-              : 'preview';
-
-        const nextState = {
-          inquiries: data.inquiries || { status: 'error', rows: [], unreadCount: null },
-          syncState: nextSyncState,
-          generatedAt: data.generatedAt || null,
-          sources: Array.isArray(data.sources) ? data.sources : [],
-          summary: data.summary || null,
-          metrics: Array.isArray(data.metrics) ? data.metrics : [],
-          operatorHome: data.operatorHome || null,
-          taskToday: data.taskToday || { state: 'preview', items: [], counts: {}, hiddenCount: 0 },
-          contentBrands: data.contentBrands || null,
-          signals: Array.isArray(data.signals) ? data.signals : [],
-          dailyFocus: data.dailyFocus || null,
-          queue: data.queue || null,
-          morningBrief: data.morningBrief || null,
-        };
+        const nextState = briefStateFromData(data);
         dailyBriefCache = { at: Date.now(), state: nextState };
         setState(nextState);
       } catch {
@@ -611,7 +622,7 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate, onAdvisorOpen }
             </div>
           )}
         </div>
-        <Iconed name="chevronD" size={14} style={{ color: 'var(--fg-faint)', transform: expanded ? '' : 'rotate(-90deg)', transition: 'transform .15s', flexShrink: 0, marginTop: 3 }} />
+        <Iconed name="chevronD" size={14} style={{ color: 'var(--fg-faint)', transform: expanded ? '' : 'rotate(-90deg)', transition: 'transform var(--dur-hover) var(--ease-hub)', flexShrink: 0, marginTop: 3 }} />
       </div>
       {expanded && !decided && (
         <div style={{ padding: '0 16px 14px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

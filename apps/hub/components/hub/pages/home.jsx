@@ -171,7 +171,7 @@ function TodaySchedule({ onNavigate, schedule, onReload }) {
                 title={e.title}
                 whenLabel={formatHomeClock(e.start)}
                 past={past}
-                aside={live ? <span className="fx-now">NOW</span> : null}
+                aside={live ? <span className="fx-now"><Iconed name="clock" size={11} />진행 중</span> : null}
               />
             );
           })}

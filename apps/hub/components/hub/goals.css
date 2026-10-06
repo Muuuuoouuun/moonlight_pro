@@ -1,5 +1,5 @@
 .goals-page { display:flex; flex-direction:column; gap:24px; padding:24px; min-width:0; }
-.goals-page h2 { font-size:22px; font-weight:600; margin:0; letter-spacing:-0.02em; color:var(--fg); }
+.goals-page h2 { font-size:20px; font-weight:500; margin:0; color:var(--fg); }
 .goals-page h3,.goal-form h3,.goal-metric-card h3,.goal-links h3,.goal-detail h3 { margin:0; font-size:14px; font-weight:500; }
 .goal-header,.goal-card-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
 .goal-header p,.goal-metric-card p,.goal-form p,.goal-feedback p,.goal-links p,.goal-detail p { margin:0; line-height:1.6; }

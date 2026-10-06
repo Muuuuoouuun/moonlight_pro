@@ -1219,7 +1219,7 @@ export function Roadmap({ onNavigate }) {
 
       <Card pad={false} className="hub-table-card">
         {roadmap.state === 'loading' && (
-          <EmptyState icon="roadmap" title="로드맵을 읽는 중입니다" description="프로젝트와 마일스톤 기록을 확인하고 있습니다." style={{ minHeight: 220 }} />
+          <div style={{ padding: 16 }}><Skeleton lines={5} height={16} gap={14} label="로드맵을 읽는 중" /></div>
         )}
         {roadmap.state === 'preview' && (
           <EmptyState icon="roadmap" title="로드맵 기록이 연결되지 않았습니다" description="Supabase 연결 후 실제 프로젝트 일정만 표시됩니다." style={{ minHeight: 220 }} />

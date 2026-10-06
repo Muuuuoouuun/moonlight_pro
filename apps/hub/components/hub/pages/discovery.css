@@ -1,7 +1,7 @@
 .discovery-page { max-width: 1180px; margin: 0 auto; padding: 28px 24px 64px; color: var(--fg); }
 .discovery-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
 .discovery-eyebrow { font-size: 11px; color: var(--fg-muted); letter-spacing: .06em; }
-.discovery-header h2 { margin: 8px 0; font-size: 26px; font-weight: 600; letter-spacing: -.03em; }
+.discovery-header h2 { margin: 8px 0; font-size: 20px; font-weight: 500; }
 .discovery-header p { margin: 0; font-size: 13px; color: var(--fg-muted); line-height: 1.6; }
 .discovery-toolbar, .discovery-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .discovery-toolbar > label { flex: 0 1 320px; }
@@ -18,7 +18,6 @@
 .discovery-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 10.5px; color: var(--fg-muted); }
 .discovery-row-end { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; gap: 6px; color: var(--fg-muted); font-size: 10.5px; }
 .discovery-row-end time { font-size: 12px; }
-.discovery-loading { padding: 64px 20px; color: var(--fg-muted); text-align: center; font-size: 13px; }
 .discovery-editor { display: flex; flex-direction: column; gap: 16px; }
 .discovery-editor fieldset { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .discovery-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

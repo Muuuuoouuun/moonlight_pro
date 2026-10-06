@@ -11,7 +11,7 @@ import React from "react";
 import { Badge, Card, Button, TruthBadge, SegmentedControl, EmptyState, IconButton, ScrollShadowX, Skeleton } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 import { KoreaHeatmap, fmtMoney, heatFill } from "../heatmap-map";
-import { useRevenueLedger } from "./revenue";
+import { useRevenueLedger } from "./revenue-core";
 // 지도 shape·뷰박스는 heatmap-map.jsx가 소유 — 페이지는 canonical 라벨 → shape 조회 맵만 집계에 주입한다.
 import { KOREA_PROVINCE_BY_LABEL } from "@/lib/korea-province-map";
 

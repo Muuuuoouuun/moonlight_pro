@@ -121,7 +121,9 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
         />
         <InquiryBell className="hub-topbar__secondary" state={inquiryNotifications} onNavigate={onNavigate} />
         <Button variant="ghost" size="sm" title="빠른 입력 · C" onClick={onQuickCapture}>빠른 입력</Button>
-        {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>}
+        {/* 전역 생성은 primary가 아니다 — 화면마다 자기 생성 버튼(연락 기록·거래·브랜드…)이 primary라
+            탑바까지 primary면 한 화면에 검은 버튼이 둘 선다(§5.2 "전역·페이지 생성 버튼 경쟁 금지"). */}
+        {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="outline" size="sm" icon="plus" onClick={onNew}>New</Button>}
       </div>
 
       {navigation.tabs.length > 0 && !pageOwnsTabs(path) && (
@@ -219,7 +221,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-muted)'; }}
                     >
                       <span>{dt.label}</span>
-                      <span style={{ fontSize: 10, color: 'var(--fg-faint)' }}>준비 중</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>준비 중</span>
                     </button>
                   ))}
                 </div>

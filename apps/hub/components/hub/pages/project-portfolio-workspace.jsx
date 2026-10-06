@@ -98,9 +98,9 @@ function computeDDay(dueAt) {
   today.setHours(0, 0, 0, 0);
   d.setHours(0, 0, 0, 0);
   const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  // 임박은 색이 아니라 글자로 말한다 — Moonstone은 현재·선택 전용(§5.2), 공용 computeDDay와 같은 톤.
   if (diff < 0) return { text: `D+${Math.abs(diff)} 지연`, tone: "danger" };
-  if (diff === 0) return { text: "D-Day", tone: "moon" };
-  if (diff <= 7) return { text: `D-${diff}`, tone: "moon" };
+  if (diff === 0) return { text: "D-Day", tone: "neutral" };
   return { text: `D-${diff}`, tone: "neutral" };
 }
 

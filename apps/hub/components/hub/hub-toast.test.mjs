@@ -26,3 +26,15 @@ test("toast conforms to accessibility and DESIGN.md tokens", () => {
   assert.match(toastCss, /var\(--dur-panel\)/);
   assert.match(toastCss, /var\(--ease-hub\)/);
 });
+
+test("errors stay longer, and reading pauses only toasts whose action does not expire", () => {
+  assert.match(toastSource, /DANGER_DURATION = 7000/);
+  assert.match(toastSource, /options\.duration \?\? \(tone === "danger" \? DANGER_DURATION : DEFAULT_DURATION\)/);
+  // 되돌리기처럼 행동이 붙은 알림은 그 행동의 유효 시간과 맞물려 멈추지 않는다.
+  assert.match(toastSource, /startTimer\(id, duration, !action\)/);
+  for (const handler of ["onMouseEnter={pauseTimers}", "onMouseLeave={resumeTimers}", "onFocus={pauseTimers}", "onBlur={resumeTimers}"]) {
+    assert.ok(toastSource.includes(handler), handler);
+  }
+  // 손으로 닫은 알림의 타이머는 남지 않는다.
+  assert.match(toastSource, /const dismiss = React\.useCallback\(\(id\) => \{\s*clearTimer\(id\);/);
+});

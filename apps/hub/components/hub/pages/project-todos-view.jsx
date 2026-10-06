@@ -5,6 +5,9 @@ import { Button, Card, Checkbox, Dot, EmptyState } from "../hub-primitives";
 import { TaskChecklistGauge } from "./project-task-checklist";
 import { EMPTY_ALL_BRAND, TODO_TIME_SECTIONS, seoulDayKey, todoTimeSection } from "./project-view-constants";
 
+// 저장된 우선순위 키(med·high…)를 화면에 그대로 찍지 않는다 — 목록 보기와 같은 한국어 라벨.
+const PRIORITY_LABEL = { low: '낮음', med: '보통', medium: '보통', high: '높음', critical: '긴급' };
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // 구간 헤더의 빠른 생성 — 그 구간의 기한을 드로어에 미리 채워 달력을 다시 여는 단계를
@@ -117,7 +120,7 @@ export function ProjectTodosView({
                       </div>
                       <span className="hub-project-todo-assignee">{t.assignee}</span>
                       <span className="hub-project-todo-priority">
-                        <Dot tone={prioTone[t.priority]} />{t.priority}
+                        <Dot tone={prioTone[t.priority]} />{PRIORITY_LABEL[t.priority] || '보통'}
                       </span>
                       <span className="mono hub-project-todo-due">{t.due}</span>
                     </div>

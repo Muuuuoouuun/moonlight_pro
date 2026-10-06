@@ -334,12 +334,13 @@ function ActivityChart({ series, days, sources, status }) {
                   <div
                     style={{
                       position: 'absolute', inset: 0,
-                      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 1.5,
                       opacity: dimmed ? 0.45 : 1,
                       transform: active ? 'translateY(-2px)' : 'none',
                       transition: 'opacity var(--dur-hover) ease, transform var(--dur-hover) ease',
                     }}
                   >
+                  {/* 막대는 바닥에서 한 번 자란다 — 높이(레이아웃)가 아니라 transform만 움직인다. */}
+                  <div className="hub-bar-rise" style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 1.5 }}>
                     {total > 0 ? (
                       // Bottom → top; render reversed so 'work' sits at the base.
                       [...ACTIVITY_SEGMENTS].reverse().map((seg) => {
@@ -355,7 +356,6 @@ function ActivityChart({ series, days, sources, status }) {
                               background: seg.color,
                               borderRadius: isTop ? '3px 3px 1.5px 1.5px' : 1.5,
                               boxShadow: isTop ? 'inset 0 1px 0 0 oklch(1 0 0 / 0.18)' : undefined,
-                              transition: 'height var(--dur-enter) var(--ease-hub)',
                             }}
                           />
                         );
@@ -363,6 +363,7 @@ function ActivityChart({ series, days, sources, status }) {
                     ) : (
                       <div style={{ width: 4, height: 4, margin: '0 auto', borderRadius: 999, background: 'var(--line-strong)' }} />
                     )}
+                  </div>
                   </div>
                 </div>
               );

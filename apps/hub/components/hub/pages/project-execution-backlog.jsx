@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Button, Checkbox, EmptyState, SegmentedControl, SelectField, TextField, TruthBadge } from '../hub-primitives';
+import { Button, Checkbox, EmptyState, SegmentedControl, SelectField, Skeleton, TextField, TruthBadge } from '../hub-primitives';
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from '@/lib/pms-ui';
 import { TASK_EXECUTION_LENSES, taskDay, taskProjectId } from '@/lib/pms-work-items';
 import { TaskChecklistGauge } from './project-task-checklist';
@@ -81,11 +81,13 @@ export function ProjectExecutionBacklog({ model, projects, sourceState, partial 
     const state = taskReadFailed ? 'error' : sourceState;
     return (
       <div className="hub-pms-backlog scroll-y">
+        {state === 'loading' ? <Skeleton lines={5} height={14} gap={14} label="작업을 불러오는 중" /> : <>
         <TruthBadge state={state} />
-        <EmptyState icon="tasks" title={state === 'loading' ? '작업을 불러오는 중입니다' : state === 'preview' ? '작업 기록을 연결해 주세요' : '작업을 확인하지 못했습니다'}
+        <EmptyState icon="tasks" title={state === 'preview' ? '작업 기록을 연결해 주세요' : '작업을 확인하지 못했습니다'}
           description={state === 'preview' ? '연결된 작업이 있어야 백로그와 실행 상태를 관리할 수 있습니다.' : '확인되지 않은 작업을 빈 목록으로 표시하지 않습니다.'}
-          action={state !== 'loading' ? <Button variant="outline" size="sm" onClick={onRetry}>다시 불러오기</Button> : null}
+          action={<Button variant="outline" size="sm" onClick={onRetry}>다시 불러오기</Button>}
         />
+        </>}
       </div>
     );
   }

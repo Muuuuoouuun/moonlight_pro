@@ -9,7 +9,7 @@ import { test } from "node:test";
 // - hub-tokens.css의 토큰 정의 줄(--dur-*, --ease-hub, --stagger-step)은 정의 자체라 예외.
 // - globals.css는 public web과 hub를 섞어 담으므로 `.hub-app`이 셀렉터에 든 규칙만 본다
 //   (public `.button`은 hub 토큰 스코프 밖이라 var()가 풀리지 않는다).
-// - `s` 단위(mlMoonPulse 1.4s 등 §9가 명시한 라이브 인디케이터 루프)는 대상이 아니다.
+// - `s` 단위도 잡는다 — §9가 명시한 라이브 인디케이터 루프 mlMoonPulse 1.4s만 예외다(아래 SEC).
 // - JS 숫자 상수(STRIKE_MS = 180)와 주석은 선언 값이 아니라 대상이 아니다.
 async function collect(dir, acc = []) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -23,12 +23,14 @@ async function collect(dir, acc = []) {
   return acc;
 }
 const sources = await collect(new URL("../../", import.meta.url));
-const MS = /(?<![\w.-])\d+(?:\.\d+)?ms\b/;
+// 앞자리 0을 뺀 `.15s`·`.2ms`도 같은 값이다 — 2026-10-06 감사 때 4곳이 이 틈으로 가드를 통과했다.
+const NUM = String.raw`(?:\d+(?:\.\d+)?|\.\d+)`;
+const MS = new RegExp(String.raw`(?<![\w.-])${NUM}ms\b`);
 // `ms`만 잡던 시절 `mlFlameFlicker 1.8s`·`mlBurnGlow 2.4s`가 가드를 그대로 통과했다
 // (2026-09-21 발견). §9가 허용하는 `s` 단위 duration은 라이브 인디케이터의 mlMoonPulse 1.4s
 // 하나뿐이므로, 그 이름이 없는 `s` 값은 ms와 같은 부채로 본다.
 // `0s`는 duration 선택이 아니라 "전이 없음"이므로 부채가 아니다.
-const SEC = /(?<![\w.-])(?!0s\b|0\.0+s\b)\d+(?:\.\d+)?s\b/;
+const SEC = new RegExp(String.raw`(?<![\w.-])(?!0s\b|0?\.0+s\b)${NUM}s\b`);
 const BEZIER = /cubic-bezier\(/;
 
 // 축하 연출 2종은 §9의 단일 duration 규칙 밖에 있고, 유지 여부가 운영자 결정(Q134)에 걸려 있다.
@@ -67,6 +69,11 @@ function jsxOffenders(path, src) {
   }
   return out;
 }
+
+test("the motion literal guard also reads values written without a leading zero", () => {
+  for (const value of ["transform .15s", "opacity .2ms ease", "all 0.15s", "width 2s"]) assert.equal(violatesMotion(value), true, value);
+  for (const value of ["0s", ".0s", "mlMoonPulse 1.4s ease-in-out infinite", "var(--dur-hover) var(--ease-hub)"]) assert.equal(violatesMotion(value), false, value);
+});
 
 test("hub motion uses only the §9 tokens — no raw ms/s literals or inline cubic-bezier in transition/animation values", () => {
   assert.ok(sources.length > 50, `sweep must reach the tree, saw ${sources.length}`);
