@@ -320,7 +320,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   return (
     <div aria-label="오늘 할 일">
       <SectionTitle right={(
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
           <BurningStreakBadge
             compact
             streak={currentStreak}

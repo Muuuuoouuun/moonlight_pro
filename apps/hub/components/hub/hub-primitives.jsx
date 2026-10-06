@@ -82,9 +82,11 @@ export function Card({ children, style, pad = true, interactive = false, classNa
   );
 }
 
+// Wraps instead of squeezing: when the right slot is wider than the row (390px phones), it drops below the
+// title rather than crushing the title to one word per line.
 export function SectionTitle({ children, right, style, subtitle }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 'var(--gap)', ...style }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 'var(--gap)', ...style }}>
       <div>
         <h3 style={{ margin: 0, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-dim)', fontWeight: 500 }}>{children}</h3>
         {subtitle && <div style={{ fontSize: 12, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}

@@ -5,7 +5,7 @@ import { parseOfficeRoutingRequest, parseOfficeRoutingResult } from '@com-moon/a
 import { Button, CheckboxRow, Drawer, EmptyState, SectionTitle, SegmentedControl, Skeleton, TextAreaField, TextField, TruthBadge, CertaintyBadge } from '../hub-primitives';
 import { requestOffice } from '../office-client';
 import { copyOfficeText, loadOfficeTasks, officeMessageLength, officeRailTasks, officeTaskAgendaBlock, officeTasksForScope, shouldSubmitOfficeKey } from '../office-session';
-import { useOfficeSession } from '../office-session-provider';
+import { useOfficeSession } from '../use-office-session';
 import { OfficeDeliberationControls } from '../office-deliberation-controls';
 import { officeDiscussionState } from '../office-deliberation-client';
 import { officeSkillRequestDraft } from '../office-skill-request';

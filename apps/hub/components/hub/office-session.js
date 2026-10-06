@@ -156,13 +156,4 @@ export async function copyOfficeText(text, clipboard) {
   } catch { return false; }
 }
 
-// One leave-page guard for every in-memory Office input: the composer drafts and the
-// mentor follow-up questions. Returns true when it asked the browser to confirm leaving.
-export function officeUnloadGuard(stores) {
-  return event => {
-    if (!(Array.isArray(stores) ? stores : []).some(store => store?.hasUnsentDrafts?.())) return false;
-    event.preventDefault();
-    event.returnValue = '';
-    return true;
-  };
-}
+export { officeUnloadGuard } from './office-unload.js';

@@ -412,6 +412,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - `Badge` — soft / outline, 8 tones (neutral · moon · success · warning · danger · info · personal · company)
 - `Dot`, `Kbd`, `Avatar`, `Divider`
 - `Card` (padded / unpadded), `SectionTitle`, `Tabs`
+  - `SectionTitle` wraps: when its `right` slot is wider than the row (390px phones), the slot drops below the title instead of squeezing the title to one word per line (2026-10-06). A `right` group of several badges should itself use `flexWrap: 'wrap'`.
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
 - `Input`, `Checkbox`, `Progress`, `ProgressRing`, `Sparkline`, `Placeholder` (0 call sites), `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
   - `Checkbox shape="square | diamond | folder"`: default square; the project work list uses diamond for milestones and a 24px folder for work groups. The folder outline and front seam remain visible in both states; only its lower-right circular completion marker fills and gains a check. Type labels accompany the shapes, and all variants retain the same keyboard/ARIA behavior and neutral tokens (operator request 2026-10-01).
@@ -436,7 +437,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - `StreakMark` — `burning-streak.jsx` (neutral ascending bars, §15 2026-09-22)
 - `CalendarOutcome` (`calendar-outcome.jsx`, compact mode on Home), `ContactRecordForm` / `ContactRecordDrawer`
   (`contact-record-form.jsx`), `GlobalQuickCapture` (`quick-capture.jsx`), `GoalLinks` (`goal-links.jsx`)
-- `SortHead` — exported from `pages/revenue.jsx`, reused by `customers.jsx` (§8.1 Table sort)
+- `SortHead` — defined in `pages/revenue-core.jsx` with the shared revenue ledger hook (re-exported by `pages/revenue.jsx`), reused by `customers.jsx` (§8.1 Table sort)
 
 **Hub-specific composites** (page-level, see `components/hub/pages/*`)
 - Signal card (Daily Brief)
