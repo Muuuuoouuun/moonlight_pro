@@ -178,7 +178,10 @@ async function actualHooks(brief) {
     .replaceAll("export async function ", "async function ").replaceAll("export function ", "function ");
   const useSignals = new Function("React", "peekDailyBrief", "readDailyBrief", "briefEnvelope", `${signalBody}\nreturn useDailyBriefSignals;`)(runtime.React, brief.peekDailyBrief, brief.readDailyBrief, brief.briefEnvelope);
   const todaySource = await readFile(new URL("./pages/daily-brief.jsx", import.meta.url), "utf8");
-  const todayBody = todaySource.slice(todaySource.indexOf("const EMPTY_DAILY_BRIEF_STATE ="), todaySource.indexOf("function SignalCard("));
+  const todayStart = todaySource.indexOf("const EMPTY_DAILY_BRIEF_STATE =");
+  const todayEnd = todaySource.indexOf("function MetricCard(", todayStart);
+  assert.ok(todayStart >= 0 && todayEnd > todayStart, "DailyBrief ledger hook section must stay findable");
+  const todayBody = todaySource.slice(todayStart, todayEnd);
   const useToday = new Function("React", "peekDailyBrief", "readDailyBrief", "briefEnvelope", "getDailyBriefAuthVersion", "invalidateDailyBriefAuth", "buildTaskToday", `${todayBody}\nreturn useDailyBriefLedger;`)(runtime.React, brief.peekDailyBrief, brief.readDailyBrief, brief.briefEnvelope, brief.getDailyBriefAuthVersion, brief.invalidateDailyBriefAuth, buildTaskToday);
   return { ...runtime, useSignals, useToday };
 }

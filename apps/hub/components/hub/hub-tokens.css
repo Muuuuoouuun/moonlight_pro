@@ -1081,15 +1081,21 @@
 .hub-app .daily-brief__panel--danger {
   border-left-color: var(--danger-line) !important;
 }
-/* 빠른 이동 칩은 사이드바가 숨는 모바일 전용 — 데스크톱에서는 사이드바 앵커와 완전
-   중복이라 첫 fold만 밀어냈다(2026-08-05 re-audit). */
-@media (min-width: 901px) {
-  .hub-app .daily-brief__nav { display: none; }
+/* 데스크톱 및 모바일 공용 우측 사이드 덱 & 빠른 바로가기 패널 */
+.hub-app .daily-brief__side-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.hub-app .daily-brief__nav-card {
+  display: flex;
+  flex-direction: column;
 }
 .hub-app .daily-brief__nav {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  min-width: 0;
 }
 .hub-app .daily-brief__nav-label {
   display: flex;
@@ -1107,12 +1113,12 @@
 }
 .hub-app .daily-brief__nav-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 7px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 .hub-app .daily-brief__jump {
   min-width: 0;
-  min-height: 52px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1133,9 +1139,9 @@
     transform var(--dur-hover) var(--ease-hub);
 }
 .hub-app .daily-brief__jump-icon {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1149,14 +1155,14 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 .hub-app .daily-brief__jump-copy strong {
   overflow: hidden;
   color: var(--fg);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1168,6 +1174,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.hub-app .daily-brief__jump-arrow {
+  color: var(--fg-faint);
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: transform var(--dur-hover) var(--ease-hub), opacity var(--dur-hover) var(--ease-hub);
+}
 @media (hover: hover) and (pointer: fine) {
   .hub-app .daily-brief__jump:hover {
     color: var(--fg);
@@ -1177,8 +1189,10 @@
     box-shadow: var(--brief-panel-shadow-hover);
     transform: translateY(-1px);
   }
+  .hub-app .daily-brief__jump:hover .daily-brief__jump-arrow,
   .hub-app .daily-brief__jump:hover > svg:last-child {
     transform: translateX(2px);
+    opacity: 1;
   }
 }
 .hub-app .daily-brief__jump > svg:last-child {

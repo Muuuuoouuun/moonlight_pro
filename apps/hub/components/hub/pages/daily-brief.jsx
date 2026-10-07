@@ -958,30 +958,39 @@ function BriefNavigation({ taskToday, onNavigate }) {
   };
 
   return (
-    <nav aria-label="Daily Brief 빠른 이동" className="daily-brief__nav">
-      <div className="daily-brief__nav-label">
-        <span>빠른 이동</span>
-        <span>핵심 탭 바로가기</span>
-      </div>
-      <div className="daily-brief__nav-grid">
-        {BRIEF_DESTINATIONS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className="daily-brief__jump"
-            aria-label={`${item.label}: ${detailByKey[item.key]}`}
-            onClick={() => onNavigate?.(item.target)}
-          >
-            <span className="daily-brief__jump-icon"><Iconed name={item.icon} size={15} /></span>
-            <span className="daily-brief__jump-copy">
-              <strong>{item.label}</strong>
-              <small>{detailByKey[item.key]}</small>
-            </span>
-            <Iconed name="chevronR" size={13} style={{ color: 'var(--fg-faint)' }} />
-          </button>
-        ))}
-      </div>
-    </nav>
+    <Card pad={false} className="daily-brief__panel daily-brief__nav-card" aria-label="빠른 바로가기">
+      <nav aria-label="Daily Brief 빠른 이동" className="daily-brief__nav">
+        <div className="daily-brief__card-head" style={{ borderBottom: '1px solid var(--line-soft)' }}>
+          <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Iconed name="lightning" size={13} style={{ color: 'var(--moon-300)' }} />
+            <span>빠른 바로가기</span>
+          </span>
+          <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            핵심 탭
+          </span>
+        </div>
+        <div style={{ padding: '8px' }}>
+          <div className="daily-brief__nav-grid">
+            {BRIEF_DESTINATIONS.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className="daily-brief__jump"
+                aria-label={`${item.label}: ${detailByKey[item.key]}`}
+                onClick={() => onNavigate?.(item.target)}
+              >
+                <span className="daily-brief__jump-icon"><Iconed name={item.icon} size={14} /></span>
+                <span className="daily-brief__jump-copy">
+                  <strong>{item.label}</strong>
+                  <small>{detailByKey[item.key]}</small>
+                </span>
+                <Iconed name="chevronR" size={12} className="daily-brief__jump-arrow" />
+              </button>
+            ))}
+          </div>
+        </div>
+      </nav>
+    </Card>
   );
 }
 
@@ -1502,10 +1511,11 @@ function guruFocusOf(item, kind, extra) {
   };
 }
 
-function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
-  if (!dailyFocus) return null;
+function FocusSlots({ dailyFocus, onNavigate, onRecord, navigation }) {
   const [guruFocusItem, setGuruFocusItem] = React.useState(null);
   const [showAllCustomers, setShowAllCustomers] = React.useState(false);
+  // 데이터가 없었다가 도착해도 같은 순서로 상태 훅을 호출한다.
+  if (!dailyFocus) return null;
   const ka = dailyFocus.urgentKa || {};
   const focus = dailyFocus.focusCustomers || {};
   const agenda = dailyFocus.todayAgenda || {};
@@ -1687,43 +1697,63 @@ function FocusSlots({ dailyFocus, onNavigate, onRecord }) {
         )}
       </Card>
 
-      <Card pad={false} className="daily-brief__panel" aria-label="오늘 일정" style={{ display: 'flex', flexDirection: 'column' }}>
-        {eyebrow('오늘 일정', agenda.state !== 'live' ? <SyncBadge state={agenda.state} /> : null)}
-        {/* 카드당 CTA 1개(§3) — 상태별 인라인 버튼과 푸터 버튼이 같은 목적지로 2개 렌더되던
-            것을 푸터 하나로 통합하고, 라벨만 상태를 따라간다(사용성 재감사 F). */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {agenda.state === 'error' ? (
-            <div role="alert" style={{ padding: '16px', fontSize: 12, color: 'var(--danger)' }}>
-              캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.
-            </div>
-          ) : agenda.state !== 'live' ? (
-            <div style={{ padding: '24px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 6 }}>
-              <Iconed name="calendar" size={20} style={{ color: 'var(--fg-faint)' }} />
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-muted)' }}>Google Calendar 미연결</div>
-              <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>오늘 일정을 표시하려면 연결하세요.</div>
-            </div>
-          ) : agendaItems.length === 0 ? (
-            <div style={{ padding: '24px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 6 }}>
-              <Iconed name="calendar" size={20} style={{ color: 'var(--fg-faint)' }} />
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-muted)' }}>오늘 일정 없음</div>
-              <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>오늘 하루 예정된 캘린더 일정이 없습니다.</div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {agendaItems.map((event, i) => (
-                <div key={event.outcomeKey || event.id} style={{ padding: '10px 16px', borderBottom: i < agendaItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
-                  <CalendarOutcome eventKey={event.outcomeKey} title={event.title} whenLabel={event.whenLabel} />
-                </div>
-              ))}
-            </div>
+      {/* 우측 패널: 오늘 일정 + 빠른 바로가기 (컴팩트 사이드 덱) */}
+      <div className="daily-brief__side-deck" style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+        <Card pad={false} className="daily-brief__panel" aria-label="오늘 일정" style={{ display: 'flex', flexDirection: 'column' }}>
+          {eyebrow(
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Iconed name="calendar" size={13} style={{ color: 'var(--fg-dim)' }} />
+              <span>오늘 일정</span>
+              {agendaItems.length > 0 && (
+                <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>
+                  {agendaItems.length}
+                </span>
+              )}
+            </div>,
+            agenda.state !== 'live' ? <SyncBadge state={agenda.state} /> : null
           )}
-        </div>
-        <div style={{ padding: '8px 12px', borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', borderBottomLeftRadius: 'var(--r-lg)', borderBottomRightRadius: 'var(--r-lg)', marginTop: 'auto' }}>
-          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/calendar')} style={{ width: '100%', justifyContent: 'center' }}>
-            {agenda.state === 'live' || agenda.state === 'error' ? '캘린더 열기' : 'Google Calendar 연결'}
-          </Button>
-        </div>
-      </Card>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {agenda.state === 'error' ? (
+              <div role="alert" style={{ padding: '12px 14px', fontSize: 12, color: 'var(--danger)' }}>
+                캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.
+              </div>
+            ) : agenda.state !== 'live' ? (
+              <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
+                  <Iconed name="calendar" size={14} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />
+                  <span>Google Calendar 미연결</span>
+                </div>
+              </div>
+            ) : agendaItems.length === 0 ? (
+              <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
+                <Iconed name="check" size={13} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />
+                <span>오늘 예정된 일정이 없습니다 · 몰입 집중 가능</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {agendaItems.slice(0, 3).map((event, i) => (
+                  <div key={event.outcomeKey || event.id} style={{ padding: '8px 14px', borderBottom: i < Math.min(agendaItems.length, 3) - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                    <CalendarOutcome eventKey={event.outcomeKey} title={event.title} whenLabel={event.whenLabel} />
+                  </div>
+                ))}
+                {agendaItems.length > 3 && (
+                  <div style={{ padding: '6px 14px', borderTop: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textAlign: 'center' }}>
+                    외 {agendaItems.length - 3}건 더 있음
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {/* 카드당 CTA 1개 — 미연결·읽기 실패·실시간 상태별 라벨은 푸터 하나가 맡는다. */}
+          <div style={{ padding: '8px 12px', borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', borderBottomLeftRadius: 'var(--r-lg)', borderBottomRightRadius: 'var(--r-lg)', marginTop: 'auto' }}>
+            <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/calendar')} style={{ width: '100%', justifyContent: 'center' }}>
+              {agenda.state === 'live' || agenda.state === 'error' ? '캘린더 열기' : 'Google Calendar 연결'}
+            </Button>
+          </div>
+        </Card>
+
+        {navigation}
+      </div>
 
       <FloatingMentorWidget
         isOpen={Boolean(guruFocusItem && isClassInGuruFocus(guruFocusItem))}
@@ -1974,7 +2004,14 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
         {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
             tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다. */}
-        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} onRecord={setRecordTarget} />
+        <FocusSlots
+          dailyFocus={ledger.dailyFocus}
+          onNavigate={onNavigate}
+          onRecord={setRecordTarget}
+          navigation={<BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />}
+        />
+        {/* 집중 데이터가 아직 없거나 읽지 못해도 같은 바로가기를 한 번 보여 준다. */}
+        {!ledger.dailyFocus && <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />}
         {/* 저장된 사실이 있는 고객·거래에만 원문 기법을 잇는다(agent-layer-direction §2.1 ⑦).
             시간대로 도는 Guru 관점은 위의 한 줄 팁(GuidanceInlineTip)만 두고 카드로 늘리지 않는다 —
             이 목록은 act 추천이 있을 때만 그려지고, 없으면 아무것도 그리지 않는다. */}
@@ -1987,8 +2024,6 @@ export function DailyBrief({ onNavigate, inquiryNotifications, onGuidanceAsk }) 
           onNavigate={onNavigate}
           onAdvisorOpen={setAdvisorSignal}
         />
-
-        <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
 
         <InquirySummary state={inquiryNotifications && inquiryNotifications.status !== 'loading' ? inquiryNotifications : ledger.inquiries} onNavigate={onNavigate} />
 
