@@ -41,6 +41,68 @@ private final class TransportURLProtocol: URLProtocol {
 
 struct HubTransportTests {
 
+    func testDesktopSessionImportsLoginAndExplicitSignOutWithoutReauthenticating() async throws {
+        let origin = "https://hub.example.test"
+        let store = MemoryHubCredentials()
+        try store.save(HubCredentials(username: "operator", password: "test-password"), origin: origin)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportURLProtocol.self]
+        let bridge = MemoryDesktopSession()
+        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration, credentialStore: store, desktopSession: bridge)
+        let saved = HubSavedSession(value: "desktop.signature", expiresAt: Date().timeIntervalSince1970 + 86400)
+        await bridge.set(HubDesktopSession(origin: origin, session: saved))
+        TransportURLProtocol.handler = { request, response in
+            expectEqual(request.value(forHTTPHeaderField: "Cookie"), "com_moon_operator_session=desktop.signature")
+            response.respond(json: "{\"status\":\"live\"}")
+        }
+        _ = try await client.request(path: "/api/hub/tasks")
+        await bridge.set(nil)
+        _ = try await client.request(path: "/api/hub/tasks")
+        await bridge.set(HubDesktopSession(origin: "https://other.example.test", session: nil, signedOut: true))
+        _ = try await client.request(path: "/api/hub/tasks")
+        await bridge.set(HubDesktopSession(origin: origin, session: nil, signedOut: true))
+        TransportURLProtocol.handler = { request, response in
+            expectNil(request.value(forHTTPHeaderField: "Cookie"))
+            expectEqual(request.url?.path, "/api/hub/tasks") // Never POST saved credentials after explicit shell logout.
+            response.respond(status: 401, json: "{\"status\":\"unauthorized\"}")
+        }
+        do { _ = try await client.request(path: "/api/hub/tasks"); recordFailure("Signed-out shell must require login") }
+        catch { expectEqual(error as? HubTransportError, .unauthorized) }
+        expectNil(try store.load(origin: origin))
+        TransportURLProtocol.handler = { _, response in
+            response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=native.signature; Path=/; Max-Age=2592000; Secure; HttpOnly"])
+        }
+        try await client.login(username: "operator", password: "test-password")
+        let exported = await bridge.read(origin: origin)
+        expectEqual(exported?.session?.value, "native.signature")
+        try await client.clearSession()
+        let cleared = await bridge.read(origin: origin)
+        expectNil(cleared?.session)
+    }
+
+    func testDesktopNaturalExpiryKeepsKeychainAutoLogin() async throws {
+        let origin = "https://hub.example.test"
+        let store = MemoryHubCredentials()
+        try store.save(HubCredentials(username: "operator", password: "test-password"), origin: origin)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportURLProtocol.self]
+        let bridge = MemoryDesktopSession()
+        let client = try HubTransport(baseURL: URL(string: origin)!, configuration: configuration, credentialStore: store, desktopSession: bridge)
+        await bridge.set(HubDesktopSession(origin: origin, session: nil, signedOut: false))
+        var logins = 0
+        TransportURLProtocol.handler = { request, response in
+            if request.httpMethod == "POST" && request.url?.path == "/api/operator/session" {
+                logins += 1
+                response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=renewed.signature; Path=/; Max-Age=2592000; Secure; HttpOnly"])
+            } else if request.value(forHTTPHeaderField: "Cookie") == "com_moon_operator_session=renewed.signature" {
+                response.respond(json: "{\"status\":\"live\"}")
+            } else { response.respond(status: 401, json: "{\"status\":\"unauthorized\"}") }
+        }
+        _ = try await client.request(path: "/api/hub/tasks")
+        expectEqual(logins, 1)
+        expectTrue(try store.load(origin: origin) != nil)
+    }
+
     func testRestartRestoresLoginOnlyForTheSavedOrigin() async throws {
         let store = MemoryHubCredentials()
         let first = try transport(store: store)
@@ -545,6 +607,13 @@ private final class TestFailures: @unchecked Sendable {
     var all: [String] { lock.lock(); defer { lock.unlock() }; return messages }
 }
 private let testFailures = TestFailures()
+
+private actor MemoryDesktopSession: HubDesktopSessionSharing {
+    private var snapshot: HubDesktopSession?
+    func set(_ value: HubDesktopSession?) { snapshot = value }
+    func read(origin: String) -> HubDesktopSession? { snapshot }
+    func write(_ session: HubSavedSession?, origin: String) { snapshot = HubDesktopSession(origin: origin, session: session, signedOut: session == nil) }
+}
 private func recordFailure(_ message: String, file: StaticString = #fileID, line: UInt = #line) {
     testFailures.add("\(file):\(line): \(message)")
 }
@@ -572,6 +641,8 @@ private struct HubTransportTestRunner {
     static func main() async {
         let tests = HubTransportTests()
         let cases: [(String, () async throws -> Void)] = [
+            ("desktop login import and sign-out without reauthentication", tests.testDesktopSessionImportsLoginAndExplicitSignOutWithoutReauthenticating),
+            ("desktop natural expiry preserves Keychain auto login", tests.testDesktopNaturalExpiryKeepsKeychainAutoLogin),
             ("restart restores only the saved origin", tests.testRestartRestoresLoginOnlyForTheSavedOrigin),
             ("rejected credentials are neither saved nor retried forever", tests.testRejectedLoginNeverReplacesAcceptedCredentialsOrLoops),
             ("uncertain writes and model generation never replay", tests.testUncertainWritesAndModelGenerationAreNeverAutomaticallyReplayed),

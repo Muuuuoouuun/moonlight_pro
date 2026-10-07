@@ -12,6 +12,8 @@
 
 ## 1. 읽는 순서와 우선순위
 
+2026-10-07 로그인 후속: [자동 로그인과 위젯 세션 연결](superpowers/specs/2026-10-07-automatic-login-and-widget-session.md)은 기존 로그인 스펙의 12시간 고정 만료를 선택형 30일로 확장하고, 10-05 Mac 키체인 자동 로그인에 앱·위젯 세션 공유를 추가한다. 30일 자동 로그인·앱/위젯 세션 공유를 로컬 구현·검증했으며 운영 배포는 별도다.
+
 문서가 충돌하면 아래 순서가 우선한다.
 
 1. [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 인터뷰 Q1~Q115의 사실·권장·미정

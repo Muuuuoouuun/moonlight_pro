@@ -15,8 +15,9 @@ test('Mac shell reuses the native pet for quick capture and the task widget', as
   await pet.trayItems()[0].click();
   await pet.quickCapture();
   await pet.showWidget();
+  await pet.sessionChanged();
   await pet.quickCapture();
-  assert.deepEqual(launches, [null, null, 'memo', 'tasks', 'memo']);
+  assert.deepEqual(launches, [null, null, 'memo', 'tasks', 'session-changed', 'memo']);
 });
 
 test('native launch failure never silently creates an Electron pet', async () => {

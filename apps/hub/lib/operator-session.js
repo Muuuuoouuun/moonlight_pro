@@ -4,6 +4,11 @@ import { isCanonicalUuid } from './uuid.js';
 
 export const OPERATOR_SESSION_COOKIE = "com_moon_operator_session";
 const DEFAULT_TTL_SECONDS = 12 * 60 * 60;
+export const REMEMBERED_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+export function operatorLoginTtl(rememberMe) {
+  return rememberMe === true ? REMEMBERED_SESSION_TTL_SECONDS : DEFAULT_TTL_SECONDS;
+}
 const derivePassword = promisify(scrypt);
 const SCRYPT_OPTIONS = { N: 1 << 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 const PASSWORD_HASH_PATTERN = /^scrypt\$131072\$8\$1\$([a-f0-9]{32})\$([a-f0-9]{128})$/;

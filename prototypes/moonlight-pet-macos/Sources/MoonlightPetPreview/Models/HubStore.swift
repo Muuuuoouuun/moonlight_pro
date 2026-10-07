@@ -50,7 +50,7 @@ final class HubStore: ObservableObject {
     private var storageKey: String?
     private var pending = HubPendingState()
 
-    init(defaults: UserDefaults = .standard, makeAPI: @escaping (URL) throws -> any HubServing = { HubAPI(transport: try HubTransport(baseURL: $0)) }) {
+    init(defaults: UserDefaults = .standard, makeAPI: @escaping (URL) throws -> any HubServing = { HubAPI(transport: try HubTransport(baseURL: $0, desktopSession: HubDesktopSessionBridge())) }) {
         self.defaults = defaults; self.makeAPI = makeAPI
         isEnabled = defaults.object(forKey: "petHub.enabled") as? Bool ?? true
     }

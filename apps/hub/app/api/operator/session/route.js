@@ -7,6 +7,7 @@ import {
   hasOperatorLoginCredentials,
   hasOperatorSessionSecret,
   operatorLoginCredentialsMatch,
+  operatorLoginTtl,
   operatorSessionCookieOptions,
   verifyOperatorSessionRequest,
   operatorRecoveryContext,
@@ -124,7 +125,8 @@ export async function POST(req) {
     );
   }
 
-  const token = createOperatorSessionToken({ subject: "operator" });
+  const ttlSeconds = operatorLoginTtl(body.rememberMe);
+  const token = createOperatorSessionToken({ subject: "operator", ttlSeconds });
   if (!token) {
     return NextResponse.json(
       { status: "not-configured", error: "Operator session secret is not configured." },
@@ -133,6 +135,6 @@ export async function POST(req) {
   }
 
   const response = NextResponse.json({ status: "authenticated" });
-  response.cookies.set(OPERATOR_SESSION_COOKIE, token, operatorSessionCookieOptions());
+  response.cookies.set(OPERATOR_SESSION_COOKIE, token, operatorSessionCookieOptions({ maxAge: ttlSeconds }));
   return response;
 }

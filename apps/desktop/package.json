@@ -33,6 +33,7 @@
       "main.js",
       "preload.js",
       "hub-url.js",
+      "hub-session-bridge.js",
       "widget-window.js",
       "widget-preload.js",
       "menu-template.js",

@@ -1,5 +1,26 @@
 import Foundation
 
+struct HubSavedSession: Codable, Sendable, Equatable {
+    let value: String
+    let expiresAt: TimeInterval
+    var isValid: Bool {
+        value.utf8.count < 4096 && value.range(of: "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$", options: .regularExpression) != nil
+            && expiresAt.isFinite && expiresAt > Date().timeIntervalSince1970
+    }
+}
+
+struct HubDesktopSession: Codable, Sendable {
+    let origin: String
+    let session: HubSavedSession?
+    var signedOut: Bool? = nil
+}
+
+protocol HubDesktopSessionSharing: Sendable {
+    // nil is an unavailable shell; session:nil is an anonymous shell.
+    func read(origin: String) async -> HubDesktopSession?
+    func write(_ session: HubSavedSession?, origin: String) async
+}
+
 struct HubResponse: Sendable {
     let data: Data
     let status: String?
@@ -58,17 +79,21 @@ actor HubTransport: HubTransporting {
     private let officeChatSession: URLSession
     private let cookies: HTTPCookieStorage
     private let credentialStore: any HubCredentialStoring
+    private let desktopSession: (any HubDesktopSessionSharing)?
+    private var hasDesktopSession = false
     private var automaticLogin: (id: UUID, task: Task<Void, Error>)?
     private var automaticLoginAllowed = true
     private var authenticationRevision = 0
     private var sessionGeneration = 0
 
     init(baseURL: URL, configuration: URLSessionConfiguration = .ephemeral,
-         credentialStore: any HubCredentialStoring = KeychainHubCredentialStore()) throws {
+         credentialStore: any HubCredentialStoring = KeychainHubCredentialStore(),
+         desktopSession: (any HubDesktopSessionSharing)? = nil) throws {
         let validated = try Self.validatedBaseURL(baseURL)
         self.baseURL = validated
         self.origin = validated.absoluteString
         self.credentialStore = credentialStore
+        self.desktopSession = desktopSession
 
         // Start fresh even when the caller injects a test protocol. A supplied
         // configuration must not introduce shared credentials, cookies or cache.
@@ -119,6 +144,7 @@ actor HubTransport: HubTransporting {
 
     func request(path: String, method: String = "GET", body: Data? = nil) async throws -> HubResponse {
         let url = try requestURL(path)
+        try await syncDesktopSession()
         let revision = authenticationRevision
         let generation = sessionGeneration
         let canReplay = method.uppercased() == "GET"
@@ -199,11 +225,16 @@ actor HubTransport: HubTransporting {
         for (key, value) in http.allHeaderFields {
             if let key = key as? String, let value = value as? String { headers[key] = value }
         }
-        cookies.setCookies(HTTPCookie.cookies(withResponseHeaderFields: headers, for: url), for: url, mainDocumentURL: baseURL)
+        let received = HTTPCookie.cookies(withResponseHeaderFields: headers, for: url)
+        cookies.setCookies(received, for: url, mainDocumentURL: baseURL)
+        if received.contains(where: { $0.name == "com_moon_operator_session" }) {
+            await desktopSession?.write(savedSession(), origin: origin)
+        }
         return HubResponse(data: data, status: status, source: source)
     }
 
     func sessionStatus() async throws -> HubSessionStatus {
+        try await syncDesktopSession()
         var response = try await requestOnce(path: "/api/operator/session")
         if response.status == "anonymous", try await restoreLogin() {
             response = try await requestOnce(path: "/api/operator/session")
@@ -232,7 +263,9 @@ actor HubTransport: HubTransporting {
         try Task.checkCancellation()
         guard generation == sessionGeneration else { throw CancellationError() }
         clearCookies()
-        let response = try await requestOnce(path: "/api/operator/session", method: "POST", body: JSONEncoder().encode(credentials))
+        let body = try JSONSerialization.data(withJSONObject: ["username": credentials.username,
+            "password": credentials.password, "rememberMe": true])
+        let response = try await requestOnce(path: "/api/operator/session", method: "POST", body: body)
         try Task.checkCancellation()
         guard generation == sessionGeneration else { throw CancellationError() }
         guard response.status == "authenticated", !response.isPreview else { throw HubTransportError.invalidResponse }
@@ -263,6 +296,8 @@ actor HubTransport: HubTransporting {
     func logout() async throws {
         // Disable automatic login before logout, including offline logout.
         invalidateAuthentication()
+        hasDesktopSession = false
+        await desktopSession?.write(nil, origin: origin)
         defer { clearCookies() }
         try credentialStore.remove(origin: origin)
         let response = try await requestOnce(path: "/api/operator/session", method: "POST", body: Data("{\"action\":\"logout\"}".utf8))
@@ -274,10 +309,47 @@ actor HubTransport: HubTransporting {
         clearCookies()
     }
 
-    func clearSession() throws {
+    func clearSession() async throws {
         invalidateAuthentication()
         clearCookies()
+        hasDesktopSession = false
+        await desktopSession?.write(nil, origin: origin)
         try credentialStore.remove(origin: origin)
+    }
+
+    private func syncDesktopSession() async throws {
+        let generation = sessionGeneration
+        guard let shared = await desktopSession?.read(origin: origin), shared.origin == origin else { return }
+        guard generation == sessionGeneration else { throw CancellationError() }
+        if let saved = shared.session, saved.isValid {
+            if cookies.cookies(for: baseURL)?.first(where: { $0.name == "com_moon_operator_session" })?.value != saved.value {
+                clearCookies()
+                if let cookie = HTTPCookie(properties: [.name: "com_moon_operator_session", .value: saved.value,
+                    .domain: baseURL.host ?? "", .path: "/", .secure: baseURL.scheme == "https" ? "TRUE" : "FALSE",
+                    .expires: Date(timeIntervalSince1970: saved.expiresAt)]) { cookies.setCookie(cookie) }
+                authenticationRevision += 1
+            }
+            hasDesktopSession = true
+        } else if shared.signedOut == true {
+            if hasDesktopSession || automaticLoginAllowed {
+                invalidateAuthentication()
+                clearCookies()
+                hasDesktopSession = false
+                try credentialStore.remove(origin: origin)
+            }
+        } else if hasDesktopSession {
+            // Natural expiry may still renew from this origin's accepted Keychain
+            // credentials. Explicit sign-out above must never do that.
+            clearCookies()
+            hasDesktopSession = false
+        }
+    }
+
+    private func savedSession() -> HubSavedSession? {
+        guard let cookie = cookies.cookies(for: baseURL)?.first(where: { $0.name == "com_moon_operator_session" }),
+              let expiry = cookie.expiresDate else { return nil }
+        let saved = HubSavedSession(value: cookie.value, expiresAt: expiry.timeIntervalSince1970)
+        return saved.isValid ? saved : nil
     }
 
     private func invalidateAuthentication() {
