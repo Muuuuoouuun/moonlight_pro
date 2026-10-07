@@ -69,6 +69,7 @@ import {
   draftHintCopy,
   draftPlaceLabel,
   draftRestoredCopy,
+  firstRecordSentence,
   isPlainEnter,
   isSaveChord,
   memoModeContactNote,
@@ -248,6 +249,8 @@ const clearDraft = (target, scope) => { if (target?.id) recordDraftStore.clear(d
 // 않는다. 고객 창(scope 없음)은 색인으로 후보의 실패한 글도 찾는다: 요약이 저장되면 후보는 목록에서 사라진다.
 // 기존 고객 창의 :rawnote 키와 값은 그대로 읽는다.
 export function createRawNoteRecoveryStore(store, memory = new Map()) {
+  const listeners = new Map();
+  const notify = (target, scope) => listeners.get(rawNoteKey(target, scope))?.forEach((listener) => listener());
   const key = (target, scope = "") => `${draftKey(target, scope)}:rawnote`;
   const indexKey = (target) => `${key(target)}:scopes`;
   const scopes = (target) => {
@@ -256,7 +259,11 @@ export function createRawNoteRecoveryStore(store, memory = new Map()) {
   };
   const read = (target, scope) => {
     const value = memory.get(rawNoteKey(target, scope)) || (target?.id ? store.read(key(target, scope))?.value : null);
-    return value && typeof value.body === "string" && value.body.trim() ? { ...value, scope } : null;
+    // 실패한 글을 모두 지워도 저장된 요약의 일부 저장은 남는다. 명시적인 요청 ID·단계가
+    // 있는 빈 편집만 복구하고, 과거의 내용 없는 저장소 찌꺼기는 계속 무시한다.
+    const tracked = (value?.phase === "pending" || value?.phase === "failed") && Boolean(value.optimisticId);
+    return value && typeof value.body === "string" && (value.body.trim() || tracked)
+      ? { ...value, scope, phase: value.phase === "pending" ? "pending" : "failed" } : null;
   };
   const recall = (target, scope = "") => {
     const own = read(target, scope);
@@ -273,27 +280,44 @@ export function createRawNoteRecoveryStore(store, memory = new Map()) {
     return null;
   };
   const hold = (target, value, { durable = false, scope = "" } = {}) => {
-    const held = { ...value, scope };
+    const held = { ...value, scope, phase: value.phase === "pending" ? "pending" : "failed" };
     memory.set(rawNoteKey(target, scope), held);
-    if (!durable || !target?.id) return;
-    store.write(key(target, scope), held);
-    if (scope) store.write(indexKey(target), [...new Set([...scopes(target), scope])]);
+    if (durable && target?.id) {
+      store.write(key(target, scope), held);
+      if (scope) store.write(indexKey(target), [...new Set([...scopes(target), scope])]);
+    }
+    notify(target, scope);
   };
   const drop = (target, { scope = "", optimisticId } = {}) => {
     const current = read(target, scope);
     if (optimisticId && current?.optimisticId !== optimisticId) return;
     memory.delete(rawNoteKey(target, scope));
-    if (!target?.id) return;
+    if (!target?.id) { notify(target, scope); return; }
     store.clear(key(target, scope));
     if (scope) {
       const remaining = scopes(target).filter((heldScope) => heldScope !== scope);
       if (remaining.length) store.write(indexKey(target), remaining);
       else store.clear(indexKey(target));
     }
+    notify(target, scope);
   };
-  return { recall, hold, drop };
+  // 구독은 복원한 요청의 자리와 ID에 묶인다. 렌더와 효과 사이에 끝난 요청도 즉시 확인한다.
+  const subscribe = (target, recovery, listener) => {
+    const scope = recovery.scope || "";
+    const at = rawNoteKey(target, scope);
+    const update = () => {
+      const current = read(target, scope);
+      listener(current?.optimisticId === recovery.optimisticId ? current : null);
+    };
+    if (!listeners.has(at)) listeners.set(at, new Set());
+    const set = listeners.get(at);
+    set.add(update);
+    update();
+    return () => { set.delete(update); if (!set.size) listeners.delete(at); };
+  };
+  return { recall, hold, drop, subscribe };
 }
-const { recall: recallRawNote, hold: holdRawNote, drop: dropRawNote } = createRawNoteRecoveryStore(recordDraftStore, rawNoteRecoveries);
+const { recall: recallRawNote, hold: holdRawNote, drop: dropRawNote, subscribe: subscribeRawNote } = createRawNoteRecoveryStore(recordDraftStore, rawNoteRecoveries);
 
 // 토스트 되돌리기(undoMode="toast")의 지연 저장. 시트는 저장을 누르는 즉시 닫히므로 폼의
 // 언마운트 flush(useUndoableAction)에 기대면 되돌리기 창이 사라진다 — 모듈 스코프 타이머로
@@ -572,6 +596,11 @@ export function RecordAwayBar({ label, progress = null, onUndo, onReturn }) {
 // draftScope: 초안 자리를 고객 안에서 한 번 더 나눈다(draftKey) — 같은 고객의 다른 기록(기록 후보)과 글이 섞이지 않게.
 export function ContactRecordForm({ target, preset, draft = null, onSaved, onUndone, onSending, onSummaryPersisted, onPartial, onPersisted, onFailed, onDone, autoFocus = false, aiContext = null, initialError = "", undoMode = "inline", layout = "compact", children = null, mode = "contact", onModeChange, memo = null, saveSlot, statusSlot, away = false, onReturn, onAttention, next = null, secondarySlot, onQueued, onAdvance, onNotice, handoff = false, draftScope = "" }) {
   const toast = useToast();
+  const mountedRef = React.useRef(false);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   // 이 폼이 선 시각 — 넘어와 선 폼의 첫 한 박자를 재는 기준이다(armed).
   const [openedAt] = React.useState(() => Date.now());
   const sheet = layout === "sheet";
@@ -603,8 +632,8 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   const [form, setForm] = React.useState(() => ({ ...baseForm(presetForm), ...(opening.values || {}), ...(recoveredRawNote ? { body: recoveredRawNote.body } : {}) }));
   // 씨앗만 얹은 첫 폼 — 운영자가 쓴 글이 아니므로 그대로면 초안으로 두지 않는다.
   const [seedForm] = React.useState(() => (opening.seeded ? form : null));
-  const [state, setState] = React.useState(initialError || recoveredRawNote ? "error" : "idle"); // idle | warn | error
-  const [errorMsg, setErrorMsg] = React.useState(recoveredRawNote ? noteCopy.failed : initialError || "");
+  const [state, setState] = React.useState(initialError || (recoveredRawNote && recoveredRawNote.phase !== "pending") ? "error" : "idle"); // idle | warn | error
+  const [errorMsg, setErrorMsg] = React.useState(recoveredRawNote?.phase === "failed" ? noteCopy.failed : initialError || "");
   // 저장할 때마다 올린다 — AI 채우기 상자(자식 상태)를 새 기록에 맞게 비운다.
   const [recordSeq, setRecordSeq] = React.useState(0);
   // AI 응답은 몇 초 뒤에 온다. 그 사이 운영자가 고친 값을 클릭 시점 스냅샷으로 덮지 않도록
@@ -622,8 +651,36 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
     optimisticId: recoveredRawNote.optimisticId,
     summary: recoveredRawNote.summary || "",
     scope: recoveredRawNote.scope || "",
+    phase: recoveredRawNote.phase,
+    body: recoveredRawNote.body,
   });
   const [rawNoteSaving, setRawNoteSaving] = React.useState(false);
+  const rawNotePending = pendingRawNote?.phase === "pending";
+  const rawNoteBusy = rawNoteSaving || rawNotePending;
+  React.useEffect(() => {
+    if (!pendingRawNote) return;
+    let watched = pendingRawNote;
+    return subscribeRawNote(target, pendingRawNote, (current) => {
+      if (current) {
+        watched = current;
+        // 가는 동안 새로 쓴 본문은 다음 초안이다. 앞선 실패의 재시도에 그 글을 붙이지 않는다.
+        const nextDraftShowing = current.phase === "failed" && formRef.current.body !== current.body;
+        setPendingRawNote(nextDraftShowing ? null : current);
+        setState(current.phase === "pending" ? "idle" : "error");
+        setErrorMsg(current.phase === "pending" ? "" : noteCopy.failed);
+      } else {
+        setPendingRawNote(null);
+        setState("idle"); setErrorMsg("");
+        // 앞선 요청의 본문만 비운다. 기다리는 사이 새로 쓴 글은 다음 기록의 초안이다.
+        const parked = readDraft(target, draftScope)?.value;
+        setForm((f) => f.body !== watched.body ? f
+          : parked && !sameDraft(parked, baseForm(presetForm)) ? { ...baseForm(presetForm), ...parked }
+            : { ...f, body: "" });
+      }
+    });
+    // 같은 요청은 phase가 바뀌어도 같은 구독이다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.kind, target?.id, pendingRawNote?.scope, pendingRawNote?.optimisticId]);
   // "언제"를 운영자가 직접 골랐는지 — 기본값(3일 뒤)만 남은 채 무엇이 비면 기약 없음으로 저장하고,
   // 직접 고른 날짜는 무엇이 비어도 날짜만 약속으로 남긴다(목업 경고 문구가 둘을 나눠 말한다).
   const [whenTouched, setWhenTouched] = React.useState(() => Boolean(draft || storedDraft || presetForm.at));
@@ -649,7 +706,11 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   const untouched = sameDraft(form, baseForm(presetForm)) || Boolean(seedForm && sameDraft(form, seedForm));
   const targetDraftKey = draftKey(target, draftScope);
   React.useEffect(() => {
-    if (pendingRawNote) return;
+    if (pendingRawNote) {
+      // 전송 중인 본문과 다른 글은 다음 기록이다. 닫아도 원래 요청의 복구 사본과 따로 남는다.
+      if (rawNotePending && form.body !== pendingRawNote.body) writeDraft(target, form, draftScope);
+      return;
+    }
     if (untouched) clearDraft(target, draftScope);
     else {
       const place = writeDraft(target, form, draftScope);
@@ -660,8 +721,9 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
 
   const edit = (patch) => {
     if (startedAtRef.current == null) startedAtRef.current = Date.now();
+    formRef.current = { ...formRef.current, ...patch };
     setForm((f) => ({ ...f, ...patch }));
-    if (pendingRawNote && Object.hasOwn(patch, "body")) {
+    if (pendingRawNote && !rawNotePending && Object.hasOwn(patch, "body")) {
       // 못 보낸 긴 글을 고치면 되살릴 사본도 따라간다(메모리 + 탭).
       const scope = pendingRawNote.scope;
       const recovery = recallRawNote(target, scope);
@@ -778,13 +840,17 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       const note = buildRawNoteWrite(snapshot.form, target);
       let savedNote = null;
       if (note) {
+        // 같은 자리의 앞선 실패는 다음 기록을 저장해도 남는다. 충돌할 때만 내부 복구 자리를 나눈다.
+        const recoveryScope = recallRawNote(target, draftScope)
+          ? `${draftScope}${draftScope ? ":" : ""}raw:${snapshot.optimisticId}` : draftScope;
         const held = {
           activityId: data.activityId || null,
           optimisticId: snapshot.optimisticId,
           summary: snapshot.form.summary,
           body: snapshot.form.body,
+          phase: "pending",
         };
-        holdRawNote(target, held, { scope: draftScope });
+        holdRawNote(target, held, { scope: recoveryScope });
         const noteResp = await fetch("/api/hub/revenue/activity", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -793,13 +859,16 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
         const noteData = await noteResp?.json().catch(() => ({})) ?? {};
         if (!noteResp?.ok || noteData.status !== "saved") {
           // 실패가 확인됐다 — 이제 탭에도 둔다(새로고침해도 긴 글이 남는다).
-          holdRawNote(target, held, { durable: true, scope: draftScope });
-          setPendingRawNote({ activityId: held.activityId, optimisticId: held.optimisticId, summary: held.summary, scope: draftScope });
+          holdRawNote(target, { ...held, phase: "failed" }, { durable: true, scope: recoveryScope });
+          // 되돌리기 뒤 새 기록을 쓰고 있었다면 그 입력은 그대로 둔다. 앞선 원문은 복구 사본에
+          // 남고 다시 연 창에서 다룬다 — 새 본문을 앞선 요약의 재시도에 붙이지 않는다.
+          const hasNewDraft = !sameDraft(formRef.current, baseForm(presetForm));
+          if (!hasNewDraft) setPendingRawNote({ ...held, phase: "failed", scope: recoveryScope });
           // 기록은 생겼고 긴 글만 빠졌다 — 부모의 기록 줄은 "일부 저장"이다(저장됨이 아니다).
           onPartial?.({ activityId: data.activityId || null, optimisticId: snapshot.optimisticId }, target);
           setState("error");
           setErrorMsg(noteCopy.failed);
-          setForm((f) => ({ ...f, body: snapshot.form.body }));
+          if (!hasNewDraft) setForm((f) => ({ ...f, body: snapshot.form.body }));
           setShowBody(true);
           // '이 고객' 탭을 보고 있었다면 쓰기로 돌린다 — 원인과 다시 저장은 기록 칸에 있다. '저장하고 다음'으로
           // 보낸 기록은 돌리지 않는다: 창은 이미 다른 사람의 것이고 '이전' 줄이 말한다.
@@ -810,7 +879,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
           // 원문을 되살려 보여 줘야 하므로 창을 닫지 않는다.
           return false;
         }
-        dropRawNote(target, { scope: draftScope, optimisticId: snapshot.optimisticId });
+        dropRawNote(target, { scope: recoveryScope, optimisticId: snapshot.optimisticId });
         savedNote = { id: noteData.id || null, body: note.body };
       }
       // note: 자세히가 따로 저장됐으면 그 줄(서버 ID · 본문)도 넘긴다 — 부모가 기록 줄기에 세운다.
@@ -823,7 +892,10 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   };
 
   const retryRawNote = async () => {
-    if (!pendingRawNote || rawNoteSaving) return;
+    if (!pendingRawNote || rawNoteBusy) return;
+    const scope = pendingRawNote.scope;
+    const recovery = recallRawNote(target, scope);
+    if (!recovery || recovery.optimisticId !== pendingRawNote.optimisticId || recovery.phase !== "failed") return;
     const note = buildRawNoteWrite(form, target);
     if (!note) {
       setState("error");
@@ -833,9 +905,8 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       return;
     }
     setRawNoteSaving(true);
-    const scope = pendingRawNote.scope;
-    const recovery = recallRawNote(target, scope);
-    if (recovery) holdRawNote(target, { ...recovery, body: form.body }, { durable: true, scope });
+    const held = { ...recovery, body: form.body, phase: "pending" };
+    holdRawNote(target, held, { scope });
     try {
       const response = await fetch("/api/hub/revenue/activity", {
         method: "POST",
@@ -847,10 +918,15 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       dropRawNote(target, pendingRawNote);
       onPersisted?.({ activityId: pendingRawNote.activityId, optimisticId: pendingRawNote.optimisticId, note: { id: data.id || null, body: note.body } }, target);
       setPendingRawNote(null);
-      clearDraft(target, draftScope);
-      reset();
-      onDone?.();
+      // 재시도 중 새로 친 본문도 다음 기록의 입력이다. 성공한 원문과 같을 때만 비운다.
+      const parked = readDraft(target, draftScope)?.value;
+      if (formRef.current.body === held.body && (!parked || sameDraft(parked, baseForm(presetForm)))) {
+        clearDraft(target, draftScope);
+        reset();
+        if (mountedRef.current) onDone?.();
+      }
     } catch (error) {
+      holdRawNote(target, { ...held, phase: "failed" }, { durable: true, scope });
       setState("error");
       setErrorMsg(`${error instanceof Error ? error.message : String(error)} — ${noteCopy.kept}`);
       // 다시 보낸 자세히도 실패했다 — 가려진 탭에서 조용히 묻히지 않게 쓰기로 돌린다(글은 그대로 있다).
@@ -861,14 +937,19 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   };
 
   const skipRawNote = () => {
-    if (!pendingRawNote) return;
+    if (!pendingRawNote || rawNoteBusy) return;
+    const recovery = recallRawNote(target, pendingRawNote.scope);
+    if (!recovery || recovery.optimisticId !== pendingRawNote.optimisticId || recovery.phase !== "failed") return;
     dropRawNote(target, pendingRawNote);
     // 긴 글 없이 끝낸다 — 요약은 이미 저장돼 있으므로 기록 줄은 "저장됨"으로 풀린다(note 없음).
     onPersisted?.({ activityId: pendingRawNote.activityId, optimisticId: pendingRawNote.optimisticId }, target);
     setPendingRawNote(null);
-    clearDraft(target, draftScope);
-    reset();
-    onDone?.();
+    const parked = readDraft(target, draftScope)?.value;
+    if (!parked || sameDraft(parked, baseForm(presetForm))) {
+      clearDraft(target, draftScope);
+      reset();
+      if (mountedRef.current) onDone?.();
+    }
   };
 
   const fail = (snapshot, message) => {
@@ -984,7 +1065,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       persist(payload, snapshot).then((ok) => {
         setPendingUndo((cur) => (cur?.key === key ? null : cur));
         // 그 사이 메모 모드로 옮겨 쓰고 있으면 창을 닫지 않는다 — 쓰던 메모 밑에서 창이 접히지 않게.
-        if (ok && !memoModeRef.current) onDone?.();
+        if (ok && mountedRef.current && !memoModeRef.current && sameDraft(formRef.current, baseForm(presetForm))) onDone?.();
       });
     });
     // 문구는 "기록 중"이다 — 이 3.5초 동안은 아무것도 보내지 않았다. "기록됨"은 서버가 saved로
@@ -1034,7 +1115,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
       memoSaveRef.current?.();
       return;
     }
-    if (rawNoteSaving) return;
+    if (rawNoteBusy) return;
     e.preventDefault();
     primaryAction();
   };
@@ -1094,7 +1175,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   // 초안은 운영자가 쓰기 시작한 순간부터 놓인다(위 effect) — 그 전에는 "어디에 남을지"만 말한다.
   // 쉬는 글자는 기록창으로 연 폼(autoFocus)만 보인다.
   const saveLine = recordSaveLine({
-    pending: pendingUndo,
+    pending: rawNotePending ? { phase: "sending" } : pendingUndo,
     showMissing,
     state,
     warnCopy,
@@ -1134,25 +1215,25 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
   // 시트의 머리 버튼은 실패 뒤 '다시 저장'이라고 말한다 — 원인 줄이 키보드 위 칩 줄에 있어 버튼과 떨어져 있다.
   // 버튼의 글자는 순수 규칙이 정한다(recordSaveButtons): 일부 저장 뒤에는 그 칸의 '다시 저장', 오늘 연락에서 연
   // 창은 '저장하고 다음' + 보조 '저장만', 그 밖은 '저장'(휴대폰 시트는 실패 뒤 '다시 저장').
-  const buttons = recordSaveButtons({ retry: pendingRawNote ? noteCopy.retry : "", queued, sheet, failed: state === "error" });
+  const buttons = recordSaveButtons({ retry: rawNotePending ? "저장 중" : pendingRawNote ? noteCopy.retry : "", queued, sheet, failed: state === "error" });
   // 보조 버튼('저장만') — 넘어가지 않고 저장한 뒤 창을 닫는다(지금의 토스트 되돌리기 그대로). 넓은 기록창은 저장 줄의
   // 주 버튼 앞 제자리, 휴대폰 시트는 호출처가 준 자리(secondarySlot — 창 머리 아래의 줄)에만 선다: 키보드 위의
   // 쉬는 줄을 버튼 하나 때문에 세우지 않는다(자리를 주지 않은 시트에는 주 버튼뿐이다).
   const saveSecondary = buttons.secondary && (!sheet || secondarySlot !== undefined) && (
     <RecordPrimarySlot slot={sheet ? secondarySlot : undefined}>
-      <Button variant="ghost" size={sheet ? "sm" : "md"} disabled={rawNoteSaving} onClick={() => { if (armed()) save({ ignoreWarning: state === "warn" }); }}>{buttons.secondary}</Button>
+      <Button variant="ghost" size={sheet ? "sm" : "md"} disabled={rawNoteBusy} onClick={() => { if (armed()) save({ ignoreWarning: state === "warn" }); }}>{buttons.secondary}</Button>
     </RecordPrimarySlot>
   );
   const saveStatus = (
     <>
       <RecordSaveLine line={saveLine} onUndo={pendingUndo?.undo} />
-      {pendingRawNote && <Button variant="ghost" size="xs" onClick={skipRawNote} disabled={rawNoteSaving}>{noteCopy.skip}</Button>}
+      {pendingRawNote && <Button variant="ghost" size="xs" onClick={skipRawNote} disabled={rawNoteBusy}>{noteCopy.skip}</Button>}
       {!sheet && saveSecondary}
     </>
   );
   const savePrimary = (
     <RecordPrimarySlot slot={sheet ? saveSlot : undefined}>
-      <Button variant="primary" size={wide ? "md" : "sm"} disabled={rawNoteSaving} onClick={primaryAction}>
+      <Button variant="primary" size={wide ? "md" : "sm"} disabled={rawNoteBusy} onClick={primaryAction}>
         {buttons.primary}
         {buttons.chord && <Kbd style={{ background: "transparent", color: "inherit", borderColor: "currentColor", boxShadow: "none", opacity: 0.7 }}>⌘↵</Kbd>}
       </Button>
@@ -1245,7 +1326,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
         value={pendingRawNote.summary || ""}
         placeholder="요약은 이미 기록에 남았어요"
         className="record-wide__summary"
-        hint="이 요약은 이미 기록에 남았어요 · 자세히만 다시 저장하면 돼요"
+        hint={rawNotePending ? "이 요약은 이미 기록에 남았어요 · 자세히를 저장하고 있어요" : "이 요약은 이미 기록에 남았어요 · 자세히만 다시 저장하면 돼요"}
       />
     ) : (
       <TextField
@@ -1260,8 +1341,17 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
         maxLength={500}
         showCount
         className="record-wide__summary"
-        hint="ClassIn에 옮길 수 있는 줄은 이것뿐이에요"
-        error={attempted && !form.summary.trim() ? "요약이 없으면 나중에 이 기록을 읽을 수 없습니다." : null}
+        hint={
+          <span>
+            {attempted && !form.summary.trim() ? "요약 한 줄을 넣으면 저장할 수 있어요" : "ClassIn에 옮길 수 있는 줄은 이것뿐이에요"}
+            {!form.summary.trim() && form.body.trim() && <>{" · "}<Button variant="ghost" size="xs" onClick={() => {
+              if (formRef.current.summary.trim()) return;
+              const summary = firstRecordSentence(formRef.current.body);
+              if (summary) edit({ summary });
+              summaryRef.current?.focus();
+            }}>요약 첫 문장 넣기</Button></>}
+          </span>
+        }
       />
     );
     // 숨어 있던 '원문 붙여넣기'를 늘 펼친 칸이다 — 같은 form.body, 같은 저장(요약 뒤 별도 note).
@@ -1280,7 +1370,7 @@ export function ContactRecordForm({ target, preset, draft = null, onSaved, onUnd
         className="record-wide__detail"
         // 시트에서 칩 뒤 칸을 펼친 동안은 가린다 — 칸을 걷지 않으므로 글 · 커서 자리 · 칸 높이가 남는다.
         fieldStyle={folded ? { display: "none" } : undefined}
-        hint={locked ? "아직 저장되지 않았어요 · 고친 뒤 다시 저장할 수 있어요" : "선택 · Moonlight에만 남아요 · 비워 두면 요약만 저장돼요"}
+        hint={rawNotePending ? "저장 중이에요 · 답을 기다리고 있어요" : locked ? "아직 저장되지 않았어요 · 고친 뒤 다시 저장할 수 있어요" : "선택 · Moonlight에만 남아요 · 비워 두면 요약만 저장돼요"}
       />
     );
     const autofill = aiContext && !locked && <ContactAiAutofill key={recordSeq} target={target} aiContext={aiContext} onApply={applyExtraction} />;

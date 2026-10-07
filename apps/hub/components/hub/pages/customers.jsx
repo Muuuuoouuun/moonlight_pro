@@ -119,8 +119,12 @@ function customerGuruContext(row, { displayName, org, phase, promise, lastContac
 
 // 통합 행 모델: 리드와 계정을 같은 컬럼 계약으로 투영
 function toRows(ledger) {
+  const contactsById = new Map();
   const contactsByCompany = new Map();
   (ledger.contacts || []).forEach(c => {
+    const id = c.id;
+    // 같은 id가 섞여 와도 기존 find()처럼 먼저 온 연락처를 유지한다.
+    if (!contactsById.has(id)) contactsById.set(id, c);
     if (c.companyId && !contactsByCompany.has(c.companyId)) contactsByCompany.set(c.companyId, c);
   });
 
@@ -140,7 +144,7 @@ function toRows(ledger) {
 
   const leadRows = (ledger.leads || []).map(l => {
     const contact = l.contactId
-      ? (ledger.contacts || []).find(c => c.id === l.contactId)
+      ? contactsById.get(l.contactId)
       : (l.companyId ? contactsByCompany.get(l.companyId) : null);
     // crm_activities/deals는 대부분 company_id로만 연결된다 (lead_id는 극소수) — lead 자신의
     // id로만 조인하면 Customer 360 드로어의 활동·딜이 항상 비어 보인다. leadId 매칭에

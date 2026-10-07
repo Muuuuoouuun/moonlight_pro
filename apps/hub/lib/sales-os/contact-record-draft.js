@@ -12,7 +12,7 @@ const PROBE_KEY = "crm-record:probe";
 // 브라우저가 있어 부를 때마다 감싼다 — 던지거나 없으면 메모리 사본만 쓴다.
 export function createRecordDraftStore(getStorage) {
   const memory = new Map();
-  // 탭 저장소에 닿지 못한 키 — 탭에 옛 값이 남아 있어도 메모리 사본이 최신이다.
+  // 탭 저장소에 닿지 못한 키 — 메모리 사본이 최신이고, 삭제한 키는 옛 탭 값을 되살리지 않는다.
   const stranded = new Set();
   const storage = () => {
     try {
@@ -53,11 +53,14 @@ export function createRecordDraftStore(getStorage) {
 
     clear(key) {
       memory.delete(key);
-      stranded.delete(key);
+      stranded.add(key);
       try {
-        storage()?.removeItem(key);
+        const tab = storage();
+        if (!tab) return;
+        tab.removeItem(key);
+        stranded.delete(key);
       } catch {
-        /* 무시 — 메모리 사본은 이미 지웠다 */
+        /* 삭제가 막혔으면 이 페이지에서는 탭에 남은 옛 값을 읽지 않는다 */
       }
     },
 

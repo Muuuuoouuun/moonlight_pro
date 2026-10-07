@@ -284,7 +284,7 @@ const HOST_COMPONENTS = [
 ];
 
 // memoSearch · nudges · fetch: 드로어가 읽는 것들을 바꿔 끼운다(기본은 읽기 성공 · 넛지 없음 · 네트워크 없음).
-function mountCustomers({ state = "live", leads = [], accounts = [], params = "", guruRecommendations = [], memoSearch = null, nudges = null, fetch: fetchImpl = null } = {}) {
+function mountCustomers({ state = "live", leads = [], accounts = [], contacts = [], deals = [], params = "", guruRecommendations = [], memoSearch = null, nudges = null, fetch: fetchImpl = null } = {}) {
   // 훅 상태는 컴포넌트 경로별로 둔다 — 드로어가 기록 모드로 바뀌면 자식 구성이 달라지므로
   // 전역 인덱스 하나로는 React처럼 인스턴스별 상태를 흉내 낼 수 없다.
   const slots = new Map();
@@ -309,7 +309,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     useCallback: (fn) => fn,
     useEffect: (fn) => { effects.push(fn); },
   };
-  const ledger = { leads, accounts, deals: [], contacts: [], stages: [] };
+  const ledger = { leads, accounts, deals, contacts, stages: [] };
   const deps = {
     React,
     useSearchParams: () => new URLSearchParams(params),
@@ -359,7 +359,7 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
     useCrmNudges: () => ({ status: nudges ? "live" : "preview", nudges: nudges || [], unrecordedMeetings: [], failedSources: [], busyKey: null, suppress: async () => ({ ok: true }), refresh() {} }),
   };
   for (const name of HOST_COMPONENTS) deps[name] = name;
-  const { Customers, ActivityTimeline } = new Function(...Object.keys(deps), `${pageJs}; return { Customers, ActivityTimeline };`)(...Object.values(deps));
+  const { Customers, ActivityTimeline, toRows } = new Function(...Object.keys(deps), `${pageJs}; return { Customers, ActivityTimeline, toRows };`)(...Object.values(deps));
 
   const call = (fn, props, at) => {
     const saved = [path, index];
@@ -398,8 +398,41 @@ function mountCustomers({ state = "live", leads = [], accounts = [], params = ""
   render();
   // 기록 타임라인은 활동 읽기(effect)가 끝나야 드로어에 보인다 — 그리기 계약은 따로 세워 본다.
   const renderTimeline = (props) => expand({ type: ActivityTimeline, props }, "timeline");
-  return { render, findAll, text, saves, renderTimeline, runEffects };
+  return { render, findAll, text, saves, renderTimeline, runEffects, toRows };
 }
+
+const joinContact = (index, extra = {}) => ({ id: `contact-${index}`, companyId: `company-${index}`, name: `contact name ${index}`, ...extra });
+const joinLead = (index, extra = {}) => ({ id: `lead-${index}`, name: `lead name ${index}`, contactId: `contact-${index}`, ...extra });
+
+test("customer joins preserve the first contact, explicit-id precedence, and lead fallback fields", () => {
+  const { toRows } = mountCustomers();
+  const contacts = Array.from({ length: 3 }, (_, index) => joinContact(index));
+  contacts.push(joinContact(0, { name: "later duplicate" }));
+  const leads = Array.from({ length: 4 }, (_, index) => joinLead(index));
+  leads[1] = joinLead(1, { contactId: null, companyId: "company-0" });
+  leads[2] = joinLead(2, { contactId: "missing", companyId: "company-0", contactName: "lead fallback" });
+  leads[3] = joinLead(3, { companyId: "company-0", contactName: "own fallback" });
+  const accounts = Array.from({ length: 1 }, (_, index) => ({ id: `account-${index}`, companyId: "company-0", name: "account name" }));
+  const rows = toRows({ contacts, leads, accounts });
+  assert.deepEqual(rows.map(row => row.person), [contacts[0].name, contacts[0].name, "lead fallback", "own fallback", contacts[0].name]);
+  assert.deepEqual(rows.map(row => row.key), ["lead:lead-0", "lead:lead-1", "lead:lead-2", "lead:lead-3", "account:account-0"]);
+});
+
+test("customer contact joins read each contact id once instead of rescanning for every lead", () => {
+  const { toRows } = mountCustomers();
+  const count = 256;
+  let idReads = 0;
+  const contacts = Array.from({ length: count }, (_, index) => {
+    const contact = joinContact(index);
+    Object.defineProperty(contact, "id", { get() { idReads += 1; return `contact-${index}`; } });
+    return contact;
+  });
+  const leads = Array.from({ length: count }, (_, index) => joinLead(count - index - 1));
+  const rows = toRows({ contacts, leads });
+  assert.equal(rows.length, count);
+  rows.forEach((row, index) => assert.equal(row.person, `contact name ${count - index - 1}`));
+  assert.ok(idReads <= count * 2, `${idReads} contact id reads for ${count} joins`);
+});
 
 const dayKey = (offset) => helpers.addDaysKey(new Date(), offset);
 const ago = (days) => new Date(Date.now() - days * 86400000).toISOString();

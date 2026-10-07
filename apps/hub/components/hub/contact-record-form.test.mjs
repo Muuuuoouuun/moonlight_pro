@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { ContactRecordDrawer, ContactRecordForm, RecordAwayBar, RecordPrimarySlot, RecordSaveLine, RecordSheetFields, recordDraftStore, createRawNoteRecoveryStore } from "./contact-record-form.jsx";
 import { RecordQueueStrip } from "./record-queue-strip.jsx";
-import { Button } from "./hub-primitives.jsx";
+import { Button, TextField, TextAreaField } from "./hub-primitives.jsx";
 import { RECORD_DRAWER_WIDTH, RECORD_TOUCH_QUERY, recordSaveButtons, recordSaveLine } from "../../lib/sales-os/contact-record.js";
 import { applyTrailEvent, recordNextStop, trailItems } from "../../lib/sales-os/record-queue.js";
 
@@ -46,8 +46,8 @@ test("원문 저장 실패 뒤 재시도는 연락 RPC를 다시 보내지 않�
   // 버튼 글자는 배치의 칸 이름을 따른다 — 좁은 시트는 '원문', 넓은 기록창은 '자세히'(같은 재시도 길).
   // 휴대폰 시트의 머리 버튼만 실패 뒤 '다시 저장'이라고 말한다(원인 줄이 버튼과 떨어져 있다 — 2026-09-30 ③).
   // 글자를 고르는 것은 순수 규칙이다(recordSaveButtons — 2026-09-30 ④에서 '저장하고 다음'이 같은 규칙에 들어왔다).
-  assert.match(source, /const buttons = recordSaveButtons\(\{ retry: pendingRawNote \? noteCopy\.retry : "", queued, sheet, failed: state === "error" \}\);/);
-  assert.match(source, /<Button variant="primary" size=\{wide \? "md" : "sm"\} disabled=\{rawNoteSaving\} onClick=\{primaryAction\}>\s*\{buttons\.primary\}/);
+  assert.match(source, /const buttons = recordSaveButtons\(\{ retry: rawNotePending \? "저장 중" : pendingRawNote \? noteCopy\.retry : "", queued, sheet, failed: state === "error" \}\);/);
+  assert.match(source, /<Button variant="primary" size=\{wide \? "md" : "sm"\} disabled=\{rawNoteBusy\} onClick=\{primaryAction\}>\s*\{buttons\.primary\}/);
   assert.equal(recordSaveButtons({ retry: "자세히 다시 저장" }).primary, "자세히 다시 저장");
   assert.equal(recordSaveButtons({ sheet: true, failed: true }).primary, "다시 저장");
   assert.equal(recordSaveButtons({ failed: true }).primary, "저장");
@@ -72,8 +72,8 @@ test("원문 저장 중 창이 닫혀도 같은 고객의 원문 재시도 상�
   assert.match(source, /const \[pendingRawNote, setPendingRawNote\] = React\.useState\(\(\) => recoveredRawNote/);
   const persist = source.slice(source.indexOf("const persist = async"), source.indexOf("const retryRawNote"));
   // 요청을 보내기 전에 메모리에 든다(창이 닫혀도 남게) — 탭에는 아직 두지 않는다.
-  assert.ok(persist.indexOf("holdRawNote(target, held, { scope: draftScope });") > 0);
-  assert.ok(persist.indexOf("holdRawNote(target, held, { scope: draftScope });") < persist.indexOf('fetch("/api/hub/revenue/activity"'));
+  assert.ok(persist.indexOf("holdRawNote(target, held, { scope: recoveryScope });") > 0);
+  assert.ok(persist.indexOf("holdRawNote(target, held, { scope: recoveryScope });") < persist.indexOf('fetch("/api/hub/revenue/activity"'));
   assert.match(source, /memory\.delete\(rawNoteKey\(target, scope\)\)/);
 });
 
@@ -84,13 +84,13 @@ test("못 보낸 긴 글은 실패가 확인된 뒤 탭에도 남고, 다시 저
   const persist = source.slice(source.indexOf("const persist = async"), source.indexOf("const retryRawNote"));
   // 탭에 두는 것은 note 요청의 실패가 확인된 다음이다 — 가는 중에 두면 새로고침 뒤 저장된 글을 "일부 저장"이라고 말한다.
   const failedAt = persist.indexOf('if (!noteResp?.ok || noteData.status !== "saved") {');
-  assert.ok(failedAt > 0 && persist.indexOf("holdRawNote(target, held, { durable: true, scope: draftScope });") > failedAt);
+  assert.ok(failedAt > 0 && persist.indexOf('holdRawNote(target, { ...held, phase: "failed" }, { durable: true, scope: recoveryScope });') > failedAt);
   assert.equal((persist.match(/durable: true/g) || []).length, 1);
   // 잠긴 요약에 보일 글(이미 저장된 요약)도 함께 든다.
   assert.match(persist, /summary: snapshot\.form\.summary,\s*body: snapshot\.form\.body,/);
   // 끝나면(저장 · 다시 저장 · 건너뛰기) 두 곳 모두에서 지운다.
   assert.equal((source.match(/dropRawNote\(target,/g) || []).length, 3);
-  assert.match(source, /memory\.delete\(rawNoteKey\(target, scope\)\);\s*if \(!target\?\.id\) return;\s*store\.clear\(key\(target, scope\)\);/);
+  assert.match(source, /memory\.delete\(rawNoteKey\(target, scope\)\);\s*if \(!target\?\.id\) \{ notify\(target, scope\); return; \}\s*store\.clear\(key\(target, scope\)\);/);
 
   // 새로고침 뒤(메모리 없음 · 탭에만 있음) 같은 고객의 기록창 — 긴 글과 재시도가 그대로 돌아온다.
   const held = { activityId: "act-1", optimisticId: "local-1", summary: "단원평가 채점 상담", body: "[결정사항]\n- 10월 셋째 주 시범 채점" };
@@ -326,9 +326,9 @@ test("인라인 되돌리기 창은 '기록 중'이다 — 서버가 답하기 �
   assert.ok(run.indexOf('phase: "sending"') < run.indexOf("persist(payload, snapshot)"), "보내기 전에 단계를 바꾼다");
   // 답이 오면(성공·실패 모두) 진행 글자를 걷고, 성공일 때만 닫는다 — 그 사이 메모 모드로 옮겨 쓰고 있으면
   // 닫지 않는다(쓰던 메모 밑에서 창이 접히지 않게, 2026-09-30 ⑥).
-  assert.match(run, /persist\(payload, snapshot\)\.then\(\(ok\) => \{\s*setPendingUndo\(\(cur\) => \(cur\?\.key === key \? null : cur\)\);\s*\/\/[^\n]*\n\s*if \(ok && !memoModeRef\.current\) onDone\?\.\(\);/);
+  assert.match(run, /persist\(payload, snapshot\)\.then\(\(ok\) => \{\s*setPendingUndo\(\(cur\) => \(cur\?\.key === key \? null : cur\)\);\s*\/\/[^\n]*\n\s*if \(ok && mountedRef\.current && !memoModeRef\.current && sameDraft\(formRef\.current, baseForm\(presetForm\)\)\) onDone\?\.\(\);/);
   // 저장 줄은 그 단계를 순수 규칙(recordSaveLine)에 넘겨 글자를 받고, 그리기는 RecordSaveLine이 한다.
-  assert.match(source, /const saveLine = recordSaveLine\(\{\s*pending: pendingUndo,\s*showMissing,\s*state,\s*warnCopy,\s*errorMsg,/);
+  assert.match(source, /const saveLine = recordSaveLine\(\{\s*pending: rawNotePending \? \{ phase: "sending" \} : pendingUndo,\s*showMissing,\s*state,\s*warnCopy,\s*errorMsg,/);
   assert.match(source, /<RecordSaveLine line=\{saveLine\} onUndo=\{pendingUndo\?\.undo\} \/>/);
   // 주석은 빼고 운영자가 보는 문자열만 — 폼 어디에도 확인 문구를 직접 쓰지 않는다(호출처의 onPersisted가 띄운다).
   const visible = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
@@ -986,7 +986,7 @@ test("빠진 칸이 접혀 있거나 가려져 있으면 저장이 그 칸을 �
   // 없으면(빈 자세히) 원인은 가려진 기록 칸에 선다. 쓰기로 돌리지 않으면 눌러도 아무 일 없는 버튼이 된다.
   const retry = source.slice(source.indexOf("const retryRawNote = async () => {"), source.indexOf("const skipRawNote"));
   assert.match(retry, /if \(!note\) \{\s*setState\("error"\);\s*setErrorMsg\(noteCopy\.empty\);[\s\S]*?onAttention\?\.\(\);\s*return;\s*\}/);
-  assert.match(retry, /\} catch \(error\) \{\s*setState\("error"\);\s*setErrorMsg\(`[^`]*noteCopy\.kept\}`\);[\s\S]*?onAttention\?\.\(\);\s*\} finally \{/);
+  assert.match(retry, /\} catch \(error\) \{\s*holdRawNote\(target, \{ \.\.\.held, phase: "failed" \}, \{ durable: true, scope \}\);\s*setState\("error"\);\s*setErrorMsg\(`[^`]*noteCopy\.kept\}`\);[\s\S]*?onAttention\?\.\(\);\s*\} finally \{/);
   // 돌아와 읽는 원인도 그 화면의 칸 이름으로 말한다 — 넓은 기록창 · 시트에는 '원문'이라는 칸이 없다.
   assert.match(retry, /throw new Error\(data\.error \|\| data\.reason \|\| noteCopy\.again\);/);
   assert.match(source, /again: "원문 저장 실패",/);
@@ -1664,4 +1664,324 @@ test("이어 쓰기 줄의 스타일 — 자리와 글자만, 토큰 · 1px 선 
   assert.doesNotMatch(renderStrip(trailOf(queuedEvent("a", "앞 사람"))), /data-inset/);
   // 위급 표식은 줄이 직접(인라인) 그린다 — 이 파일의 빨강은 여전히 읽기 칸의 '지남' 글자 한 곳뿐이다.
   assert.equal((css.match(/var\(--danger\)/g) || []).length, 1);
+});
+
+// 실제 폼의 훅과 이벤트를 돌린다. 호스트 DOM은 필요 없고, 언마운트 정리는 실제 undo 훅을 flush한다.
+function mountRecordForm(props) {
+  const slots = [];
+  let cursor = 0;
+  let effects = [];
+  let tree;
+  const toast = Object.assign(() => {}, { error() {}, info() {}, success() {} });
+  const sameDeps = (a, b) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
+  const useEffect = (effect, deps) => {
+    const at = cursor++;
+    const old = slots[at];
+    if (!old || !sameDeps(old.deps, deps)) {
+      effects.push(() => { old?.cleanup?.(); slots[at] = { deps, cleanup: effect() }; });
+    }
+  };
+  const dispatcher = {
+    useState(initial) {
+      const at = cursor++;
+      if (!(at in slots)) slots[at] = { value: typeof initial === "function" ? initial() : initial };
+      return [slots[at].value, (next) => { slots[at].value = typeof next === "function" ? next(slots[at].value) : next; }];
+    },
+    useRef(initial) { const at = cursor++; if (!(at in slots)) slots[at] = { current: initial }; return slots[at]; },
+    useMemo(fn, deps) { const at = cursor++; if (!slots[at] || !sameDeps(slots[at].deps, deps)) slots[at] = { value: fn(), deps }; return slots[at].value; },
+    useCallback(fn, deps) { return dispatcher.useMemo(() => fn, deps); },
+    useContext() { return toast; },
+    useEffect, useLayoutEffect: useEffect,
+  };
+  const render = () => {
+    cursor = 0; effects = [];
+    const current = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher;
+    const before = current.current;
+    current.current = dispatcher;
+    try { tree = ContactRecordForm({ target: recordTarget, layout: "wide", ...props }); }
+    finally { current.current = before; }
+    effects.forEach((effect) => effect());
+    return tree;
+  };
+  const find = (predicate, node = tree) => {
+    if (Array.isArray(node)) return node.flatMap((child) => find(predicate, child ?? null));
+    if (!node || typeof node !== "object") return [];
+    return [...(predicate(node) ? [node] : []), ...find(predicate, node.props?.children ?? null), ...find(predicate, node.props?.hint ?? null)];
+  };
+  const field = (label) => find((node) => (node.type === TextField || node.type === TextAreaField) && node.props.label === label)[0];
+  const primary = () => find((node) => node.type === Button && node.props.variant === "primary")[0];
+  const unmount = () => slots.forEach((slot) => slot?.cleanup?.());
+  render();
+  return { render, find, field, primary, unmount };
+}
+const settleRecordRequests = async () => { for (let i = 0; i < 12; i += 1) await Promise.resolve(); };
+
+for (const { succeeds, editWhilePending } of [{ succeeds: true, editWhilePending: false }, { succeeds: true, editWhilePending: true }, { succeeds: false, editWhilePending: false }, { succeeds: false, editWhilePending: true }]) test(`원문 전송 중 닫고 다시 열면 기다리고 원래 요청 ${succeeds ? "성공" : "실패"}를 반영한다 · 새 입력 ${editWhilePending}`, async () => {
+  const before = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = { sessionStorage: tabStorage(), addEventListener() {}, removeEventListener() {} };
+  globalThis.document = { activeElement: null, body: {} };
+  let complete;
+  let posts = 0;
+  const pending = new Promise((resolve) => { complete = resolve; });
+  const response = (data, ok = true) => ({ ok, json: async () => data });
+  globalThis.fetch = async (url) => {
+    if (url.endsWith("/activity")) { posts += 1; return posts === 1 ? pending : response({ status: "saved", id: "retry-note" }); }
+    return response({ status: "saved", activityId: "summary-record" });
+  };
+  const target = { kind: "lead", id: `inflight-${succeeds}-${editWhilePending}` };
+  let first, reopened;
+  let closes = 0;
+  try {
+    first = mountRecordForm({ target, preset: { kind: "note", summary: "저장할 요약", body: "보낸 원문", followup: "dormant" }, onDone: () => { closes += 1; } });
+    first.primary().props.onClick();
+    first.unmount(); // 되돌리기 창을 떠나면 실제 POST가 시작된다.
+    await settleRecordRequests();
+    assert.equal(posts, 1);
+    reopened = mountRecordForm({ target });
+    assert.equal(reopened.primary().props.disabled, true, "원래 요청이 가는 동안 두 번째 POST를 허용하지 않는다");
+    const skip = reopened.find((node) => node.type === Button && node.props.children === "건너뛰기")[0];
+    assert.equal(skip.props.disabled, true);
+    reopened.primary().props.onClick(); // 오래된 핸들러를 직접 불러도 guard가 막는다.
+    await settleRecordRequests();
+    assert.equal(posts, 1);
+    if (editWhilePending) reopened.field("자세히").props.onChange({ target: { value: "새로 쓰는 별도 글" } });
+    complete(succeeds ? response({ status: "saved", id: "original-note" }) : response({ status: "error" }, false));
+    await settleRecordRequests();
+    reopened.render();
+    assert.equal(reopened.primary().props.disabled, false);
+    if (succeeds) {
+      assert.equal(reopened.field("요약 · 한 줄").props.readOnly, undefined, "완료된 원문의 잠금을 푼다");
+      assert.equal(reopened.field("자세히").props.value, editWhilePending ? "새로 쓰는 별도 글" : "", "성공한 원문만 비우고 그 사이 쓴 글은 지우지 않는다");
+      assert.equal(posts, 1);
+      assert.equal(closes, 0, "이미 닫힌 원래 폼이 다시 열린 창을 닫지 않는다");
+    } else {
+      if (editWhilePending) {
+        assert.equal(reopened.field("자세히").props.value, "새로 쓰는 별도 글");
+        assert.equal(reopened.field("요약 · 한 줄").props.readOnly, undefined, "다음 글을 실패한 앞선 요약에 묶지 않는다");
+        reopened.unmount();
+        reopened = mountRecordForm({ target });
+      }
+      assert.equal(reopened.field("자세히").props.value, "보낸 원문");
+      assert.equal(reopened.primary().props.children[0], "자세히 다시 저장");
+      reopened.primary().props.onClick();
+      await settleRecordRequests();
+      reopened.render();
+      assert.equal(posts, 2, "실패가 확인된 뒤에만 원문을 한 번 다시 보낸다");
+      assert.equal(reopened.field("요약 · 한 줄").props.readOnly, undefined);
+    }
+  } finally {
+    reopened?.unmount();
+    for (const [key, value] of Object.entries(before)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+  }
+});
+
+test("넓은 기록창은 요약이 빈 이유를 중립 안내하고 명시적 클릭으로만 첫 문장을 넣는다", () => withWindow(tabStorage(), () => {
+  window.addEventListener = () => {}; window.removeEventListener = () => {};
+  const app = mountRecordForm({ preset: { kind: "note", body: "첫 문장입니다. 다음 문장입니다.", followup: "dormant" } });
+  assert.equal(app.field("요약 · 한 줄").props.value, "", "자세히 입력으로 요약을 자동 변경하지 않는다");
+  app.primary().props.onClick();
+  app.render();
+  assert.equal(app.field("요약 · 한 줄").props.error, undefined, "빈 요약은 저장 실패가 아니다");
+  const helper = app.find((node) => node.type === Button && node.props.children === "요약 첫 문장 넣기")[0];
+  assert.ok(helper);
+  helper.props.onClick();
+  app.render();
+  assert.equal(app.field("요약 · 한 줄").props.value, "첫 문장입니다.");
+  assert.equal(app.field("자세히").props.value, "첫 문장입니다. 다음 문장입니다.");
+  app.field("요약 · 한 줄").props.onChange({ target: { value: "직접 고친 요약" } });
+  app.render();
+  helper.props.onClick();
+  app.render();
+  assert.equal(app.field("요약 · 한 줄").props.value, "직접 고친 요약", "이전 버튼 콜백도 새 요약을 덮지 않는다");
+  app.unmount();
+}));
+
+
+for (const { succeeds, resolution } of [{ succeeds: true, resolution: "success" }, { succeeds: false, resolution: "retry" }, { succeeds: false, resolution: "skip" }]) test(`앞선 원문 요청 ${succeeds ? "성공" : "실패"}가 아직 열린 창의 다음 초안을 덮지 않는다 · ${resolution}`, async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const before = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = { sessionStorage: tabStorage(), addEventListener() {}, removeEventListener() {} };
+  globalThis.document = { activeElement: null, body: {} };
+  let complete;
+  let posts = 0;
+  let closes = 0;
+  const pending = new Promise((resolve) => { complete = resolve; });
+  const response = (data, ok = true) => ({ ok, json: async () => data });
+  globalThis.fetch = async (url) => {
+    if (url.endsWith("/activity")) { posts += 1; return posts === 1 ? pending : response({ status: "saved", id: "note-retry" }); }
+    return response({ status: "saved", activityId: "summary-record" });
+  };
+  const target = { kind: "lead", id: `mounted-inflight-${succeeds}-${resolution}` };
+  let app, reopened;
+  try {
+    app = mountRecordForm({ target, preset: { kind: "note", followup: "dormant" }, onDone: () => { closes += 1; } });
+    app.field("요약 · 한 줄").props.onChange({ target: { value: "앞선 요약" } });
+    app.field("자세히").props.onChange({ target: { value: "앞선 원문" } });
+    app.render();
+    app.primary().props.onClick();
+    app.render();
+    t.mock.timers.tick(3500);
+    await settleRecordRequests();
+    assert.equal(posts, 1);
+    app.field("요약 · 한 줄").props.onChange({ target: { value: "다음 기록 요약" } });
+    app.field("자세히").props.onChange({ target: { value: "다음 기록 본문" } });
+    app.render();
+    complete(succeeds ? response({ status: "saved", id: "original-note" }) : response({ status: "error" }, false));
+    await settleRecordRequests();
+    app.render();
+    assert.equal(app.field("요약 · 한 줄").props.value, "다음 기록 요약");
+    assert.equal(app.field("자세히").props.value, "다음 기록 본문");
+    assert.equal(app.field("요약 · 한 줄").props.readOnly, undefined, "앞선 실패 재시도를 다음 글에 묶지 않는다");
+    assert.equal(closes, 0, "새 글을 쓰는 창은 성공해도 닫지 않는다");
+    if (!succeeds) {
+      app.unmount();
+      reopened = mountRecordForm({ target, preset: { kind: "note", followup: "dormant" } });
+      assert.equal(reopened.field("자세히").props.value, "앞선 원문", "실패한 앞선 원문은 별도로 복구한다");
+      if (resolution === "skip") reopened.find((node) => node.type === Button && node.props.children === "건너뛰기")[0].props.onClick();
+      else reopened.primary().props.onClick();
+      await settleRecordRequests();
+      reopened.render();
+      assert.equal(reopened.field("요약 · 한 줄").props.value, "다음 기록 요약");
+      assert.equal(reopened.field("자세히").props.value, "다음 기록 본문", "복구가 끝나면 보관한 다음 초안을 돌려준다");
+      assert.equal(posts, resolution === "skip" ? 1 : 2);
+    }
+  } finally {
+    app?.unmount(); reopened?.unmount();
+    t.mock.timers.reset();
+    for (const [key, value] of Object.entries(before)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+  }
+});
+
+
+test("같은 자리의 새 기록 저장이 앞선 실패 원문의 복구 사본을 바꾸지 않는다", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const before = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = { sessionStorage: tabStorage(), addEventListener() {}, removeEventListener() {} };
+  globalThis.document = { activeElement: null, body: {} };
+  let complete;
+  const bodies = [];
+  const pending = new Promise((resolve) => { complete = resolve; });
+  const response = (data, ok = true) => ({ ok, json: async () => data });
+  globalThis.fetch = async (url, options) => {
+    if (url.endsWith("/activity")) {
+      bodies.push(JSON.parse(options.body).body);
+      return bodies.length === 1 ? pending : response({ status: "saved", id: "saved-note" });
+    }
+    return response({ status: "saved", activityId: "summary-record" });
+  };
+  const target = { kind: "lead", id: "same-slot-raw-failure" };
+  let app, reopened;
+  try {
+    app = mountRecordForm({ target, preset: { kind: "note", followup: "dormant" } });
+    const write = (summary, body) => {
+      app.field("요약 · 한 줄").props.onChange({ target: { value: summary } });
+      app.field("자세히").props.onChange({ target: { value: body } });
+      app.render();
+    };
+    write("앞선 요약", "앞선 실패 원문");
+    app.primary().props.onClick(); app.render();
+    t.mock.timers.tick(3500); await settleRecordRequests();
+    write("뒤의 요약", "뒤의 성공 원문");
+    complete(response({ status: "error" }, false)); await settleRecordRequests(); app.render();
+    app.primary().props.onClick(); app.render();
+    t.mock.timers.tick(3500); await settleRecordRequests();
+    app.unmount();
+    reopened = mountRecordForm({ target, preset: { kind: "note", followup: "dormant" } });
+    assert.equal(reopened.field("요약 · 한 줄").props.value, "앞선 요약");
+    assert.equal(reopened.field("자세히").props.value, "앞선 실패 원문");
+    reopened.primary().props.onClick(); await settleRecordRequests(); reopened.render();
+    assert.deepEqual(bodies, ["앞선 실패 원문", "뒤의 성공 원문", "앞선 실패 원문"]);
+    assert.equal(reopened.field("요약 · 한 줄").props.readOnly, undefined);
+  } finally {
+    app?.unmount(); reopened?.unmount(); t.mock.timers.reset();
+    for (const [key, value] of Object.entries(before)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+  }
+});
+
+
+for (const succeeds of [true, false]) test(`전송 중인 복구창에 쓴 다음 본문은 닫아도 남는다 · ${succeeds ? "성공" : "실패"}`, async () => {
+  const before = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = { sessionStorage: tabStorage(), addEventListener() {}, removeEventListener() {} };
+  globalThis.document = { activeElement: null, body: {} };
+  let complete;
+  let posts = 0;
+  const pending = new Promise((resolve) => { complete = resolve; });
+  const response = (data, ok = true) => ({ ok, json: async () => data });
+  globalThis.fetch = async (url) => {
+    if (url.endsWith("/activity")) { posts += 1; return posts === 1 ? pending : response({ status: "saved", id: "retry-note" }); }
+    return response({ status: "saved", activityId: "summary-record" });
+  };
+  const target = { kind: "lead", id: `recovery-next-close-${succeeds}` };
+  let first, reopened, again;
+  try {
+    first = mountRecordForm({ target, preset: { kind: "note", summary: "앞선 요약", body: "앞선 원문", followup: "dormant" } });
+    first.primary().props.onClick(); first.unmount(); await settleRecordRequests();
+    reopened = mountRecordForm({ target });
+    reopened.field("자세히").props.onChange({ target: { value: "다음 본문" } });
+    reopened.render(); reopened.unmount();
+    again = mountRecordForm({ target });
+    assert.equal(again.primary().props.disabled, true);
+    complete(succeeds ? response({ status: "saved", id: "original-note" }) : response({ status: "error" }, false));
+    await settleRecordRequests(); again.render();
+    if (!succeeds) {
+      assert.equal(again.field("자세히").props.value, "앞선 원문");
+      again.primary().props.onClick(); await settleRecordRequests(); again.render();
+    }
+    assert.equal(again.field("자세히").props.value, "다음 본문");
+    assert.equal(again.field("요약 · 한 줄").props.readOnly, undefined);
+    assert.equal(posts, succeeds ? 1 : 2);
+  } finally {
+    reopened?.unmount(); again?.unmount();
+    for (const [key, value] of Object.entries(before)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+  }
+});
+
+test("실패한 원문을 비워도 복구는 완료되지 않고 다시 열어 건너뛸 수 있다", async () => {
+  const before = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+  globalThis.window = { sessionStorage: tabStorage(), addEventListener() {}, removeEventListener() {} };
+  globalThis.document = { activeElement: null, body: {} };
+  let writes = 0;
+  const receipts = [];
+  globalThis.fetch = async () => { writes += 1; throw new Error("빈 원문은 보내지 않는다"); };
+  const target = { kind: "lead", id: "empty-failed-raw-recovery" };
+  const key = `crm-record:lead:${target.id}:rawnote`;
+  recordDraftStore.write(key, { phase: "failed", optimisticId: "failed-original", activityId: "saved-summary", summary: "저장된 요약", body: "지울 원문" });
+  let app, reopened, resolved;
+  try {
+    app = mountRecordForm({ target, onPersisted: (receipt) => receipts.push(receipt) });
+    app.field("자세히").props.onChange({ target: { value: "" } });
+    app.render();
+    assert.equal(app.field("요약 · 한 줄").props.readOnly, true, "빈 본문도 아직 해결하지 않은 일부 저장이다");
+    assert.equal(app.primary().props.children[0], "자세히 다시 저장");
+    app.primary().props.onClick(); await settleRecordRequests(); app.render();
+    assert.equal(writes, 0);
+    assert.equal(app.find((node) => node.type === RecordSaveLine)[0].props.line.note.text, "다시 저장할 자세히 내용을 입력하세요.");
+    assert.equal(receipts.length, 0, "입력을 지운 사실은 저장 완료 영수증이 아니다");
+    app.unmount();
+    reopened = mountRecordForm({ target, onPersisted: (receipt) => receipts.push(receipt) });
+    assert.equal(reopened.field("자세히").props.value, "");
+    assert.equal(reopened.field("요약 · 한 줄").props.readOnly, true);
+    reopened.find((node) => node.type === Button && node.props.children === "건너뛰기")[0].props.onClick();
+    reopened.render();
+    assert.deepEqual(receipts, [{ activityId: "saved-summary", optimisticId: "failed-original" }]);
+    assert.equal(recordDraftStore.read(key), null, "빈 본문이어도 원래 ID로 복구 사본을 지운다");
+    reopened.unmount();
+    resolved = mountRecordForm({ target });
+    assert.equal(resolved.field("요약 · 한 줄").props.readOnly, undefined);
+    assert.equal(writes, 0);
+  } finally {
+    app?.unmount(); reopened?.unmount(); resolved?.unmount();
+    recordDraftStore.clear(key);
+    for (const [name, value] of Object.entries(before)) {
+      if (value === undefined) delete globalThis[name]; else globalThis[name] = value;
+    }
+  }
 });

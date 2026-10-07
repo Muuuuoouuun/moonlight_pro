@@ -23,13 +23,16 @@ import { memoStreamRows, recordActivityQuery, recordContextTruth, recordStream }
 // 이 고객의 활동을 한 번 읽는다 → { sync: "live" | "preview" | "error", activities }. 읽기 실패를 빈 목록으로
 // 돌려주지 않는다: 5xx · 허브 read 봉투의 status:"error" · 네트워크 실패는 전부 error다(§5.3 — "기록 없음"이
 // 아니라 "못 읽음"). 저장된 고객이 아니면(질의 없음) 읽지 않는다.
-export async function readTargetActivities(query, fetchImpl = fetch) {
+export async function readTargetActivities(query, fetchImpl = fetch, { signal } = {}) {
   if (!query) return { sync: "preview", activities: [] };
   try {
-    const response = await fetchImpl(`/api/hub/revenue/activity?${query}`, { cache: "no-store" });
+    const timeout = AbortSignal.timeout(15000);
+    const response = await fetchImpl(`/api/hub/revenue/activity?${query}`, {
+      cache: "no-store", signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
     if (!response.ok) return { sync: "error", activities: [] };
     const data = await response.json();
-    if (!data || data.status === "error") return { sync: "error", activities: [] };
+    if (!data || data.status === "error" || data.source === "error") return { sync: "error", activities: [] };
     return { sync: data.status === "live" ? "live" : "preview", activities: Array.isArray(data.activities) ? data.activities : [] };
   } catch {
     return { sync: "error", activities: [] };
@@ -41,18 +44,24 @@ function useTargetActivities(target) {
   const query = recordActivityQuery(target);
   const [state, setState] = React.useState({ sync: "loading", activities: [] });
   const requestRef = React.useRef(0);
+  const controllerRef = React.useRef(null);
 
   const load = React.useCallback(() => {
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
     setState((prev) => ({ ...prev, sync: "loading" }));
-    // 늦게 온 앞 요청의 답이 새 읽기를 덮지 않게 한다.
-    readTargetActivities(query).then((next) => { if (requestRef.current === requestId) setState(next); });
+    // 취소를 무시하고 늦게 온 앞 요청도 새 읽기를 덮지 못한다. 시간 초과는 현재 읽기의 오류로 보인다.
+    readTargetActivities(query, undefined, { signal: controller.signal }).then((next) => {
+      if (!controller.signal.aborted && requestRef.current === requestId) setState(next);
+    });
   }, [query]);
 
   React.useEffect(() => {
     load();
-    return () => { requestRef.current += 1; };
+    return () => { requestRef.current += 1; controllerRef.current?.abort(); };
   }, [load]);
 
   return { ...state, reload: load };

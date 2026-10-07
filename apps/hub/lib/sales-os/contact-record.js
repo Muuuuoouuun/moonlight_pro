@@ -73,6 +73,15 @@ export function validateContactRecord(form = {}) {
   return { ok: missing.length === 0, missing, warn };
 }
 
+// 운영자가 직접 누를 때만 자세히의 첫 문장을 요약 한 줄로 가져온다.
+// 줄바꿈도 경계다. 소수·URL 안의 점은 뒤에 공백이 없으므로 끊지 않는다.
+export function firstRecordSentence(body = "") {
+  const line = String(body || "").split(/\r?\n/).map((part) => part.trim()).find(Boolean) || "";
+  const sentence = line.match(/^.*?[.!?。！？](?=\s|$)/u)?.[0] || line;
+  // 요약 입력의 500자 한도를 지키되 UTF-16 서로게이트 쌍 중간에서 자르지 않는다.
+  return sentence.slice(0, 500).replace(/[\uD800-\uDBFF]$/u, "").trim();
+}
+
 // RPC(record_contact_outcome_v1) 페이로드. 채널이 반응을 묻지 않았으면 reaction은 빈 문자열이다.
 export function buildContactRecordPayload(form = {}, target = {}) {
   const followup = form.followup === "dormant" || form.followup === "none" ? form.followup : "dated";

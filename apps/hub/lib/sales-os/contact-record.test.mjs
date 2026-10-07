@@ -13,6 +13,7 @@ import {
   draftHintCopy,
   draftPlaceLabel,
   draftRestoredCopy,
+  firstRecordSentence,
   RECORD_DRAWER_WIDTH,
   RECORD_HANDOFF_GUARD_MS,
   RECORD_LAYOUT_BREAKPOINTS,
@@ -742,4 +743,16 @@ test("the save buttons say what happens — 저장하고 다음 only where a nex
   // 일부 저장 뒤에는 긴 글만 다시 보낸다 — 넘어가지 않으므로 '다음'도 '저장만'도 없다.
   assert.deepEqual(recordSaveButtons({ retry: "자세히 다시 저장", queued: true }), { primary: "자세히 다시 저장", secondary: "", chord: false });
   assert.deepEqual(recordSaveButtons({ retry: "원문 저장 재시도" }), { primary: "원문 저장 재시도", secondary: "", chord: false });
+});
+
+
+test("요약 첫 문장은 줄 경계와 문장부호를 따르고 자세히를 변경하지 않는다", () => {
+  assert.equal(firstRecordSentence("  \n 첫 문장입니다. 두 번째입니다.\n셋째입니다."), "첫 문장입니다.");
+  assert.equal(firstRecordSentence("물어봤어요? 답을 기다려요."), "물어봤어요?");
+  assert.equal(firstRecordSentence("https://example.com 견적 1.5배 확인. 다음 문장"), "https://example.com 견적 1.5배 확인.");
+  assert.equal(firstRecordSentence("첫 줄\r\n둘째 줄"), "첫 줄");
+  assert.equal(firstRecordSentence("  \n  "), "");
+  assert.equal(firstRecordSentence("가".repeat(499) + "🌙뒤"), "가".repeat(499));
+  assert.equal(firstRecordSentence("가".repeat(501)).length, 500);
+  assert.equal(validateContactRecord({ kind: "note", body: "본문만 있어요", followup: "dormant" }).ok, false);
 });
