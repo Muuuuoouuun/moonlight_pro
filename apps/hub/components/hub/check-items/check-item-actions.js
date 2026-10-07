@@ -167,8 +167,7 @@ export function rememberedMinutes(subjectType, fallback) {
     const value = Number(map?.[subjectType]);
     return [15, 30, 45, 60].includes(value) ? value : fallback;
   } catch {
-    if (status === 'unknown') return '저장 여부를 확인하지 못했습니다. 입력과 요청 ID를 유지하고 같은 요청으로 다시 확인하세요.';
-  return fallback;
+    return fallback;
   }
 }
 export function rememberMinutes(subjectType, minutes) {

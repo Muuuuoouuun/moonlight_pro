@@ -173,7 +173,24 @@
 
 ### 6.1 브랜치 대조 결과
 
-워크플로(브랜치별 비교 → 반박 검증)의 결과는 아래에 적는다.
+브랜치마다 비교 에이전트 하나가 통합 브랜치에 없는 변경을 찾고, 반박 에이전트가 그 주장을 다시 찾아보는 방식으로 확인했다(7 에이전트, 전부 읽기 전용 git).
+
+| 브랜치 | 결과 | 근거 |
+| --- | --- | --- |
+| `claude/gifted-darwin-de0fsl` (확인할 것 1~4) | **흡수됨** | 커밋 7개가 같은 제목으로 재작성돼 있고(`docs/evaluations/2026-10-07-check-items-integration/README.md`의 대조표), 다른 것은 통합 쪽이 **일부러** 바꾼 것뿐이다 — 확인할 것 → Google 일정 생성 차단, `{status}` 없는 HTTP 200을 저장 성공으로 치던 로직 제거, 마이그레이션 0056 → 0070 번호 변경(내용 동일) |
+| `claude/loving-feynman-cyokq6` (db:usage) | **흡수됨** | `scripts/db-usage-report.mjs`·테스트·`package.json` 스크립트 바이트 동일, 감사 문서는 상위 집합 |
+| `codex/monday-news-roundup` · `codex/report-insight-quality` · `codex/research-reports-completion` | **흡수됨** | 빠진 변경 0 |
+| `claude/zen-shannon-qyu1qn` (지침 숫자 갱신) | 문서 3건 빠짐 | `CLAUDE.md`·`AGENTS.md`의 read 라우트 수·테스트 실측 줄. 10/1 숫자를 그대로 가져오는 대신 **오늘 다시 재서** 아래 §6.2에 반영했다. 마이그레이션 번호 줄은 통합 쪽이 "날짜와 번호를 모두 확인" 규칙으로 바꿨으므로 그대로 둔다 |
+| `claude/inspiring-heisenberg-naw856` (이 세션) | 2건 빠짐 → 병합으로 해소 | 디자인 감사 후속 커밋 하나와 이 문서 |
+
+통합 브랜치에서 **새로 생긴 결함 1건**을 같이 찾았다: `apps/hub/components/hub/check-items/check-item-actions.js`의 `rememberedMinutes()` catch 블록에 바인딩되지 않은 `status`를 읽는 줄이 섞여 있어, Node에서는 로컬 저장소 읽기가 실패하면 기본값 대신 ReferenceError가 났다(브라우저는 `window.status`로 지나간다). 이 줄을 지웠다.
+
+위 다섯 브랜치는 main에 통합이 끝나면 지워도 된다(원격 삭제는 운영자가 확인한 뒤).
+
+### 6.2 지침 파일 실측 (2026-10-07, 통합 트리)
+
+- 허브 read 라우트: `apps/hub/app/api/hub` 아래 `GET`을 내보내는 `route.*` 파일 **73개**(2026-09-25 실측 59개에서 증가). 전체 허브 API 라우트 파일은 179개다.
+- `*.test.mjs` 파일: 저장소 전체 **668개**(`node_modules`·`.next*` 제외, 이번에 더한 `check-item-actions.test.mjs` 포함). 루트 `npm test` 실측 5200 tests · 통과 5164 · 실패 8(전부 환경) · skip 28.
 
 ---
 
