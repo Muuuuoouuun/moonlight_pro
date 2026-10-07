@@ -188,4 +188,3 @@ test("거래가 없으면 hasAny가 거짓 — 화면은 빈 상태를 말한다
   assert.equal(buildMoneyModel([], { now: NOW }).hasAny, false);
   assert.equal(model().hasAny, true);
 });
-
