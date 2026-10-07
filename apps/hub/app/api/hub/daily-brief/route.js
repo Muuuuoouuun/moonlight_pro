@@ -17,6 +17,7 @@ import { buildTaskToday } from "@/lib/task-today";
 import { filterOperatorOwnedRevenue } from "@/lib/operator-revenue-scope";
 import { buildDailyFocus, withoutFocusDuplicates } from "@/lib/daily-focus";
 import { toCheckItem } from "@/lib/check-items/catalog";
+import { FEATURE_GATES } from "@/lib/feature-gates";
 import { applyCheckItemOutcomes, orderCheckItems } from "@/lib/check-items/suppression";
 import { readCheckItemContext } from "@/lib/repositories/signal-outcomes";
 import { kstDayKey } from "@/lib/kst-day";
@@ -428,7 +429,7 @@ export async function GET() {
       ...buildWorkSignals(projects),
     ],
     dailyFocus,
-  ).map(toCheckItem);
+  ).map((signal) => toCheckItem(signal, { gates: FEATURE_GATES }));
   const checkContext = await readCheckItemContext(candidates).catch(() => null);
   const { visible, suppressed } = checkContext
     ? applyCheckItemOutcomes(candidates, checkContext)

@@ -51,17 +51,18 @@ test('확인할 것의 결정으로 남기기는 대상 이름·출처를 채워
   assert.equal(group.get('sourceType'), null);
 });
 
-test('Decisions 화면은 결정 일지 — 이름·버튼·출처 저장·카드 밖 할 일 줄', () => {
+test('Decisions 화면은 결정 일지 — 이름·버튼·출처 저장·카드 밖 할 일 줄 (운영 게이트 뒤)', () => {
   const work = read('./work.jsx');
-  assert.match(work, /<h2 className="fx-page-title">결정 일지<\/h2>/);
-  assert.match(work, /결정 남기기 <Kbd>N<\/Kbd>/);
-  assert.doesNotMatch(work, /Record decision/);
+  // 결정 일지는 운영자 판정 전이라 lib/feature-gates.js 뒤에 있다 — 닫히면 이전 Decisions 이름·문구로 돌아간다.
+  assert.match(work, /const DECISION_JOURNAL = FEATURE_GATES\.decisionJournal/);
+  assert.match(work, /<h2 className="fx-page-title">\{DECISION_JOURNAL \? '결정 일지' : 'Decisions'\}<\/h2>/);
+  assert.match(work, /\{DECISION_JOURNAL \? '결정 남기기' : 'Record decision'\} <Kbd>N<\/Kbd>/);
   // 입력창 안내와 카드의 확실성 라벨은 한국어 직접 라벨만(DESIGN.md §5.3) — 내부 값 Committed/Draft는 화면에 내지 않는다.
   assert.match(work, /subtitle=\{editingDecision\.decidedAt \? '확정' : '미정 · 결정일을 정하면 확정으로 바뀝니다'\}/);
   assert.doesNotMatch(work, /'미정 · Draft'|Committed로 바뀝니다/);
   assert.match(work, /decisionPrefillFromQuery\(searchParams\)/);
   assert.match(work, /sourceRef: editingDecision\.sourceRef/);
   // 할 일 입력은 role=button 카드 밖(형제)에 둔다.
-  assert.match(work, /<\/div>\s*<DecisionFollowups/);
-  assert.match(read('../hub-nav.js'), /label: '결정 일지', path: 'dashboard\/work\/decisions'/);
+  assert.match(work, /<\/div>\s*\{DECISION_JOURNAL \? <DecisionFollowups/);
+  assert.match(read('../hub-nav.js'), /label: FEATURE_GATES\.decisionJournal \? '결정 일지' : 'Decisions', path: 'dashboard\/work\/decisions'/);
 });

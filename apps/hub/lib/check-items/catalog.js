@@ -37,6 +37,9 @@ const SNOOZE = { key: 'snooze', label: '보류 · 다시 볼 날', record: '다�
 const open = (label, action) => ({ key: 'open', label, record: '', kind: 'navigate', action });
 // 그 밖에 — 대상 이름·출처를 채운 결정 입력을 연다(§6). 화면 이동이라 끝낸 것으로 세지 않는다.
 const DECIDE = { label: '결정으로 남기기', action: 'decision' };
+// 순수 함수의 기본값은 모든 끝내기를 싣는다(계약 테스트). 운영 호출처(daily-brief 라우트)만 lib/feature-gates의
+// FEATURE_GATES를 넘겨 판정 전인 끝내기를 뺀다 — 데이터(unblock)는 그대로 두고 카드 모양만 바뀐다.
+const OPEN_GATES = Object.freeze({ checkItemUnblock: true, decisionJournal: true });
 
 const CATALOG = Object.freeze({
   deal: {
@@ -132,9 +135,9 @@ export function signalKeyFor(subject) {
 
 // 신호에 카드 모양을 붙인다. subject가 없거나 모르는 종류면 끝내기 없이 그대로 둔다 — 키 없이 저장하면
 // 억제가 어긋난다. 그런 카드는 기존 링크(decisions)만 쓴다.
-export function toCheckItem(signal) {
+export function toCheckItem(signal, { gates = OPEN_GATES } = {}) {
   const subject = signal?.subject;
-  const entry = subject ? (subject.type === 'project' && unblockEntry(signal)) || CATALOG[subject.type] : null;
+  const entry = subject ? (subject.type === 'project' && gates.checkItemUnblock && unblockEntry(signal)) || CATALOG[subject.type] : null;
   const signalKey = signalKeyFor(subject);
   if (!entry || !signalKey) return { ...signal, signalKey: null, kindLabel: signal?.kind || '', outcomes: [], links: [] };
   const name = String(subject.name || signal.title || '').trim();
@@ -143,7 +146,7 @@ export function toCheckItem(signal) {
     signalKey,
     kindLabel: KIND_LABELS[subject.type],
     outcomes: entry.outcomes.map((outcome, index) => ({ ...outcome, primary: index === 0 })),
-    links: entry.links,
+    links: gates.decisionJournal ? entry.links : entry.links.filter((link) => link.action !== 'decision'),
     taskTitle: entry.taskTitle(name).slice(0, 300),
     // 시간 잡기 기본 소요 시간·동사(§4.7 표, Q-CF10 승인).
     schedule: { ...entry.schedule, title: scheduleTitleFor(subject.type, name, entry.schedule.verb) },

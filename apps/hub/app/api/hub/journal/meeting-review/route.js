@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server.js';
 import { assertHubWriteAllowed, readHubWriteJson } from '@/lib/hub-write-guard';
 import { meetingReviewService } from '@/lib/meeting-review-service';
 import { collectAcceptedDecision } from '@/lib/meeting-decision-log';
+import { FEATURE_GATES } from '@/lib/feature-gates';
 import { forwardPmsCommand } from '@/lib/pms-engine-client';
 import { resolveDefaultWorkspaceId } from '@/lib/server-write';
 
@@ -39,7 +40,7 @@ export async function POST(req) {
         : { status: 'invalid-input', error: 'invalid-action', httpStatus: 400 };
     const { httpStatus = 200, ...body } = result;
     // 수락한 결정은 결정 일지에 참조 행으로 모은다(Q-CF4). 실패해도 리뷰 저장은 그대로 성공이다.
-    const decisionLog = input?.action === 'review'
+    const decisionLog = FEATURE_GATES.decisionJournal && input?.action === 'review'
       ? await collectAcceptedDecision(input, body, { forward: forwardPmsCommand, workspaceId: resolveDefaultWorkspaceId() }).catch(() => ({ status: 'error' }))
       : null;
     return NextResponse.json(decisionLog ? { ...body, decisionLog } : body, { status: httpStatus });

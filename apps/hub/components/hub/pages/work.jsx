@@ -10,6 +10,7 @@ import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { RhythmToday } from "../rhythm-today";
 import { RhythmHistory } from "../rhythm-history";
 import { DecisionFollowups, DecisionMeta, decisionSourceOptions } from "./decision-journal";
+import { FEATURE_GATES } from "@/lib/feature-gates";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
 import { calendarEventWhenLabel, mapGoogleEventsToGrid } from "@/lib/calendar-event-view";
@@ -781,6 +782,8 @@ export function Calendar({ onNavigate }) {
 
 // 확인할 것의 `결정으로 남기기`(lib/signal-targets.js decisionDraftTarget)가 넘기는 값 — 대상 이름과 출처.
 const DECISION_REF_TYPES = new Set(['project', 'deal', 'lead', 'account', 'automation', 'content']);
+// 운영 제외(lib/feature-gates.js): 결정 일지(확인할 것 단계 4)는 운영자 판정 전까지 이름·출처·그래서 할 일을 닫는다.
+const DECISION_JOURNAL = FEATURE_GATES.decisionJournal;
 function decisionPrefillFromQuery(params) {
   const title = String(params.get('title') || '').trim().slice(0, 300);
   const type = String(params.get('sourceType') || '');
@@ -864,7 +867,7 @@ export function Decisions({ onNavigate, scope }) {
 
   React.useEffect(() => {
     if (searchParams.get('new') !== 'decision' || createdFromQueryRef.current) return;
-    createDecision(decisionPrefillFromQuery(searchParams));
+    createDecision(DECISION_JOURNAL ? decisionPrefillFromQuery(searchParams) : null);
     createdFromQueryRef.current = true;
     router.replace(pathname);
   }, [createDecision, searchParams, router, pathname]);
@@ -972,7 +975,7 @@ export function Decisions({ onNavigate, scope }) {
     <div className="hub-futura hub-page fade-up">
       <header>
         <div className="fx-eyebrow">{navigation.anchor?.label || 'Work'}</div>
-        <h2 className="fx-page-title">결정 일지</h2>
+        <h2 className="fx-page-title">{DECISION_JOURNAL ? '결정 일지' : 'Decisions'}</h2>
         <p className="fx-page-sub">일정 · 프로젝트 · 결정</p>
         {navigation.tabs.length > 0 && (
           <nav className="fx-tabs" aria-label={`${navigation.anchor.label} 하위 메뉴`}>
@@ -995,17 +998,17 @@ export function Decisions({ onNavigate, scope }) {
         <div className="fx-section-head">
           <div>
             <h3 className="fx-section-title">
-              결정 일지
+              {DECISION_JOURNAL ? '결정 일지' : 'Decisions'}
               <span className="mono" style={{ marginLeft: 10, fontSize: 11, fontWeight: 400, color: decisionColor }}>{decisionLabel}</span>
             </h3>
             <p className="fx-section-desc">
-              정말 판단한 것의 기록. 어디서 나왔는지와 그래서 할 일이 함께 붙습니다.
+              {DECISION_JOURNAL ? '정말 판단한 것의 기록. 어디서 나왔는지와 그래서 할 일이 함께 붙습니다.' : '실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.'}
             </p>
           </div>
-          <Button variant="primary" size="sm" icon="plus" onClick={newDecision}>결정 남기기 <Kbd>N</Kbd></Button>
+          <Button variant="primary" size="sm" icon="plus" onClick={newDecision}>{DECISION_JOURNAL ? '결정 남기기' : 'Record decision'} <Kbd>N</Kbd></Button>
         </div>
 
-        {sourceOptions.length > 2 && (
+        {DECISION_JOURNAL && sourceOptions.length > 2 && (
           <SegmentedControl label="출처" value={activeSource} onChange={setSourceFilter} options={sourceOptions} style={{ marginBottom: 16, flexWrap: 'wrap' }} />
         )}
 
@@ -1036,7 +1039,7 @@ export function Decisions({ onNavigate, scope }) {
               icon="decisions"
               title="결정 기록이 없습니다"
               description="Supabase decisions 기록에 아직 기록된 결정이 없습니다."
-              action={<Button variant="primary" size="sm" icon="plus" onClick={newDecision}>결정 남기기</Button>}
+              action={<Button variant="primary" size="sm" icon="plus" onClick={newDecision}>{DECISION_JOURNAL ? '결정 남기기' : 'Record decision'}</Button>}
             />
           </Card>
         )}
@@ -1075,15 +1078,15 @@ export function Decisions({ onNavigate, scope }) {
                     </div>
                     <div className="fx-tl-title">{d.title}</div>
                     <div className="fx-tl-reason">{d.reason || '근거가 아직 없습니다.'}</div>
-                    {!d.isNew && <DecisionMeta decision={d} />}
+                    {DECISION_JOURNAL && !d.isNew && <DecisionMeta decision={d} />}
                   </div>
-                  <DecisionFollowups
+                  {DECISION_JOURNAL ? <DecisionFollowups
                     decision={d}
                     onCreated={(decisionId, task) => {
                       setCreatedFollowups(prev => ({ ...prev, [decisionId]: [...(prev[decisionId] || []), task] }));
                       retry?.();
                     }}
-                  />
+                  /> : null}
                 </div>
             ))}
           </div>

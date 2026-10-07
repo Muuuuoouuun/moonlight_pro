@@ -16,6 +16,7 @@ import { OfficeSkillRequestDrawer } from '../office-skill-request-drawer';
 import { OfficeMentorDrawer, OfficeMentorReferenceCard } from '../office-mentor-drawer';
 import { OfficeBreakdownDrawer } from '../office-breakdown-drawer';
 import { fetchOfficeBreakdown, officeAutoStopText, officeBreakdownProgress, officeBreakdowns, runOfficeAuto } from '../office-breakdown-session';
+import { FEATURE_GATES } from '@/lib/feature-gates';
 import { useOfficeAutoLifecycle } from '../office-auto-lifecycle';
 import { ReviewWaitingList } from '../review-waiting';
 import { OfficeAvatar } from '../office-avatar';
@@ -309,8 +310,9 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
   }
 
   // 업무 나누기(2026-10-01 권장, office-harness): 추천만 받는다. 적용·조각 열기·완료 표시는 모두 버튼이다.
+  // 운영 제외(lib/feature-gates.js): 운영자 판정 전까지 업무 나누기·자동 진행의 진입점을 닫는다 — 저장소·API는 그대로다.
   async function requestBreakdown() {
-    if (locked || breakdown?.status === 'loading') return;
+    if (!FEATURE_GATES.officeWorkBreakdown || locked || breakdown?.status === 'loading') return;
     setMoreOpen(false);
     setBreakdownOpen(true);
     if (!['classin', 'personal'].includes(scope)) {
@@ -343,7 +345,7 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
   // 직접 할 조각·실패·멈추기에서 서고, 할 일을 만들거나 밖으로 보내지 않는다.
   async function startAuto() {
     // 상태는 저장소에서 바로 읽는다 — '적용하고 자동 진행'은 같은 클릭 안에서 적용 직후 부른다.
-    if (locked || officeBreakdowns.get(scope)?.status !== 'applied') return;
+    if (!FEATURE_GATES.officeWorkBreakdown || locked || officeBreakdowns.get(scope)?.status !== 'applied') return;
     if (!officeBreakdowns.startAuto(scope, { savedDraft: session.draft })) return;
     invalidateAssignment();
     setBreakdownOpen(false); setMobileView('meet'); setSelectedTurnId(null);
@@ -457,10 +459,10 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
   }
   const agenda = session.agenda;
   // 업무 조각 진행·자동 진행 멈추기는 안건이 아직 고정되지 않은 첫 판에도 보여야 한다.
-  const breakdownTools = <>
+  const breakdownTools = FEATURE_GATES.officeWorkBreakdown ? <>
     {breakdownProgress ? <Button variant="ghost" size="sm" onClick={() => setBreakdownOpen(true)} aria-label={`업무 조각 ${breakdownProgress.total}개 중 ${breakdownProgress.closed}개 닫힘${autoRunning ? ` · 자동 진행 중 ${breakdown.auto.current || ''}` : ''} · 열기`}>{autoRunning ? '자동 진행 ' : '조각 '}{autoRunning && breakdown.auto.current ? <span className="mono">{breakdown.auto.current} · </span> : null}<span className="mono">{breakdownProgress.closed}/{breakdownProgress.total}</span></Button> : null}
     {autoRunning ? <Button variant="outline" size="sm" onClick={stopAuto}>자동 진행 멈추기</Button> : null}
-  </>;
+  </> : null;
   const importedAt = agenda?.importedAt ? new Date(agenda.importedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
   const followUpCouncil = session.turns.length > 0 && followUpMode === 'council' && reviewers.length > 0;
   const showTurn = id => {
@@ -573,7 +575,7 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
       </div>
     </Drawer> : null}
     {skillTurn ? <OfficeSkillRequestDrawer key={skillTurn.id} agenda={session.agenda} officeScope={scope} result={skillTurn.result} onClose={() => setSkillTurn(null)} /> : null}
-    {breakdownOpen ? <OfficeBreakdownDrawer scope={scope} entry={breakdown} states={packetStates} busy={locked} autoRunning={autoRunning} autoStopText={officeAutoStopText(breakdown?.auto)} onClose={() => setBreakdownOpen(false)} onRetry={requestBreakdown} onOpen={openPacket} onMark={markPacket} onStartAuto={startAuto} onStopAuto={stopAuto} /> : null}
+    {breakdownOpen && FEATURE_GATES.officeWorkBreakdown ? <OfficeBreakdownDrawer scope={scope} entry={breakdown} states={packetStates} busy={locked} autoRunning={autoRunning} autoStopText={officeAutoStopText(breakdown?.auto)} onClose={() => setBreakdownOpen(false)} onRetry={requestBreakdown} onOpen={openPacket} onMark={markPacket} onStartAuto={startAuto} onStopAuto={stopAuto} /> : null}
     {mentorDrawerId ? <OfficeMentorDrawer sessionId={mentorDrawerId} onClose={() => setMentorDrawerId(null)} /> : null}
     {rosterOpen ? <Drawer title="참석자 바꾸기" subtitle="주관 한 명과 관점 최대 두 명을 고르세요." onClose={() => setRosterOpen(false)} width="min(480px, 94vw)" footer={<Button variant="primary" onClick={() => setRosterOpen(false)}>완료</Button>}>
       <div className={styles.roster}><strong>주관</strong>{OFFICE_ROSTER.map(person => <button type="button" key={person.id} className={'hub-row ' + styles.member} aria-label={`${person.name} (${person.role}) 주관 선택`} aria-pressed={person.id === ownerId} onClick={() => { invalidateAssignment(); update({ ownerId: person.id, reviewers: reviewers.filter(id => id !== person.id), presetId: null }); }}>
@@ -586,7 +588,7 @@ function OfficeCouncilDiscussion({ scope = 'all', active = true, onGuidanceAsk, 
     {moreOpen ? <Drawer title="회의 설정" subtitle="필요할 때만 응답 방식과 참고 범위를 조정하세요." onClose={() => setMoreOpen(false)} width="min(480px, 94vw)">
       <div className={styles.more}><strong>응답 방식</strong>
         {assignmentMessage ? <span className={styles.presets}><Button variant="outline" size="sm" disabled={locked} onClick={requestAssignment}>담당 추천</Button>
-          <Button variant="outline" size="sm" disabled={busy || breakdown?.status === 'loading'} onClick={breakdown && breakdown.status !== 'error' && breakdown.status !== 'preview' ? () => { setMoreOpen(false); setBreakdownOpen(true); } : requestBreakdown}>{breakdown?.status === 'applied' || breakdown?.status === 'recommended' ? '업무 조각 보기' : '업무 나누기'}</Button></span> : null}
+          {FEATURE_GATES.officeWorkBreakdown ? <Button variant="outline" size="sm" disabled={busy || breakdown?.status === 'loading'} onClick={breakdown && breakdown.status !== 'error' && breakdown.status !== 'preview' ? () => { setMoreOpen(false); setBreakdownOpen(true); } : requestBreakdown}>{breakdown?.status === 'applied' || breakdown?.status === 'recommended' ? '업무 조각 보기' : '업무 나누기'}</Button> : null}</span> : null}
         <Button variant="outline" size="sm" onClick={() => { setMoreOpen(false); setRosterOpen(true); }}>참석자 바꾸기</Button>
         {agenda ? <Button variant="ghost" size="sm" onClick={() => { setMoreOpen(false); newAgenda(); }}>새 안건</Button> : null}
         {reviewers.length ? <p className={styles.note}>관점이 있어 회의로 고정됩니다. <Button variant="ghost" size="sm" onClick={() => { invalidateAssignment(); update({ reviewers: [], mode: 'chat', presetId: null }); }}>혼자 쓰기로 전환</Button></p>

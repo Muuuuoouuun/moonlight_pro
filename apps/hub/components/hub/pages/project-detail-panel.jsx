@@ -12,6 +12,7 @@ import { ProjectDeliverySummary } from "./project-delivery";
 import { BrandMark, ProjectProgressGauge, ProjectStatusBadge } from "./project-pms-components";
 import { TaskChecklistGauge } from './project-task-checklist';
 import { ProjectUnblockSection } from '../unblock-panel';
+import { FEATURE_GATES } from '@/lib/feature-gates';
 
 function DetailSection({ title, count = 0, empty, children }) {
   return (
@@ -162,7 +163,7 @@ export function ProjectDetailPanel({
       {displayNextAction && <section className="project-focus-next">
         <h4>다음 행동</h4><p>{displayNextAction}</p>
       </section>}
-      {onUnblocked && !['completed', 'archived'].includes(project.statusKey) && <ProjectUnblockSection project={project} onUnblocked={onUnblocked} />}
+      {FEATURE_GATES.checkItemUnblock && onUnblocked && !['completed', 'archived'].includes(project.statusKey) && <ProjectUnblockSection project={project} onUnblocked={onUnblocked} />}
       {failedSources.length > 0 && <div role="status"><TruthBadge state="partial" /><p className="project-focus-muted">일부 기록을 확인하지 못했어요.</p></div>}
       <SegmentedControl label="프로젝트 상세 보기" fill value={tab} onChange={setTab} options={[
         { key: 'tasks', label: '할 일' }, { key: 'records', label: '기록·자료' },

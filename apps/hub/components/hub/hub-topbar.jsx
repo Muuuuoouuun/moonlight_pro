@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "./hub-icons";
 import { IconButton, Button } from "./hub-primitives";
 import { DailyReviewTopButton } from "./daily-review-cue";
+import { FEATURE_GATES } from "@/lib/feature-gates";
 import { pageOwnsTabs, topNavigationForRoute } from "./hub-nav";
 import { InquiryBell } from './inquiry-notifications';
 import { formatHubClock } from './hub-clock';
@@ -12,7 +13,7 @@ const LABELS = {
   'dashboard': 'Moonlight',
   'daily-brief': 'Daily Brief',
   'classin': '클래스인', 'brand': '브랜드', 'pipeline': '업무·파이프라인', 'segments': '세그먼트',
-  'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': '결정 일지', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
+  'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': FEATURE_GATES.decisionJournal ? '결정 일지' : 'Decisions', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
   'content': 'Content', 'studio': 'Studio', 'queue': 'Queue', 'campaigns': 'Campaigns',
   'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts', 'followups': '오늘 연락',
   'automations': 'Automations', 'flows': 'Flows', 'email': 'Email', 'webhooks': 'Webhooks', 'runs': 'Runs',

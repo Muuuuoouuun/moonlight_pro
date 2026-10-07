@@ -16,6 +16,7 @@
 // between 프로젝트 and 브랜드, taking it back to ten. Organizational context
 // moves into one scope control.
 
+import { FEATURE_GATES } from '../../lib/feature-gates.js';
 export const DEFAULT_SCOPE = 'all';
 
 // Futura 텍스처 라우트는 페이지 헤더 안에 pill 탭을 직접 그린다(§15 2026-09-18).
@@ -145,7 +146,7 @@ export const REVENUE_ROUTE_LABELS = {
 const PLANNING_TAIL = [
   { key: 'prj-calendar', label: 'Calendar', path: 'dashboard/work/calendar' },
   { key: 'prj-roadmap', label: 'Roadmap', path: 'dashboard/work/roadmap' },
-  { key: 'prj-decisions', label: '결정 일지', path: 'dashboard/work/decisions' },
+  { key: 'prj-decisions', label: FEATURE_GATES.decisionJournal ? '결정 일지' : 'Decisions', path: 'dashboard/work/decisions' },
   { key: 'prj-rhythm', label: 'Rhythm', path: 'dashboard/work/rhythm' },
 ];
 

@@ -8,6 +8,8 @@ for (const key of ['SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE
 const PROJECT = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const stubs = {
   'next/server': `export const NextResponse = {json: body => Response.json(body)};`,
+  // 운영 게이트(lib/feature-gates.js)는 feature-gates.test가 고정한다 — 여기서는 끝내기 계약 전체를 본다.
+  '@/lib/feature-gates': `export const FEATURE_GATES = {officeWorkBreakdown:true, checkItemUnblock:true, decisionJournal:true};`,
   '@/lib/repositories/attention-ledger': `export async function getAttentionLedger() {return {raw: {projectLedger:{source:'supabase',projects:globalThis.__projects,todos:[]},revenue:{source:'supabase',deals:[],leads:[]},calendar:{ok:true,items:[]}},inquiries:{status:'live'}}}`,
   '@/lib/repositories/automations-ledger': `export async function getAutomationsLedger() {return {source:'supabase',summary:{attentionCount:0},automations:[],incidents:[],runs:[]};}`,
   '@/lib/repositories/brief-ledger': `export async function getMorningBrief(){return {source:'supabase',brief:null};}`,
