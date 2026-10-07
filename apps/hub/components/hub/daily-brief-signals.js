@@ -23,7 +23,33 @@ export const DAILY_BRIEF_TIMEOUT_MS = 20000;
 //   (stale-while-revalidate) — 오래된 값을 최신처럼 붙잡아 두지 않는다.
 export const DAILY_BRIEF_FRESH_MS = 5 * 60 * 1000;
 let lastBrief = null; // { at, ok, httpStatus, data } — 성공(읽기 실패·로그인 필요가 아닌) 응답만
-let pendingBrief = null; // { fetchImpl, promise }
+let pendingBrief = null; // { fetchImpl, generation, promise }
+let readGeneration = 0;
+let lastSettled = null; // 최신 세대의 결과(실패도 포함) — 늦은 이전 읽기가 이를 가리지 않는다.
+let authVersion = 0;
+
+export function getDailyBriefAuthVersion() { return authVersion; }
+
+// 좁은 tasks 읽기에서 확인한 401도 같은 캐시를 폐기한다. 이미 열린 이전 읽기는
+// 이 로그인 필요 결과를 따르며, 뒤늦게 성공해도 개인정보를 다시 캐시에 넣지 않는다.
+export function invalidateDailyBriefAuth(read = {
+  at: Date.now(), ok: false, httpStatus: 401, data: { status: 'unauthorized' },
+}) {
+  lastBrief = null;
+  authVersion += 1;
+  readGeneration += 1;
+  pendingBrief = null;
+  lastSettled = { generation: readGeneration, read };
+}
+
+function latestRead() {
+  if (pendingBrief?.generation === readGeneration) return pendingBrief.promise;
+  if (lastSettled?.generation === readGeneration) {
+    if ('error' in lastSettled) throw lastSettled.error;
+    return lastSettled.read;
+  }
+  throw new Error('daily-brief read was superseded');
+}
 
 function untilAborted(promise, signal) {
   if (!signal) return promise;
@@ -39,17 +65,28 @@ function untilAborted(promise, signal) {
 }
 
 // 한 번 읽는다. 호출자의 signal은 기다림만 멈춘다 — 다른 화면이 같은 요청을 기다리고 있을 수 있다.
-export function readDailyBrief({ signal, fetchImpl = globalThis.fetch } = {}) {
-  if (!pendingBrief || pendingBrief.fetchImpl !== fetchImpl) {
-    const entry = { fetchImpl, promise: null };
+export function readDailyBrief({ signal, fetchImpl = globalThis.fetch, force = false } = {}) {
+  if (signal?.aborted) return Promise.reject(signal.reason);
+  // 초기 동시 마운트는 합치고, 저장·재시도 뒤 명시적 새 읽기만 이전 요청에서 분리한다.
+  if (force || !pendingBrief || pendingBrief.fetchImpl !== fetchImpl) {
+    const entry = { fetchImpl, generation: ++readGeneration, promise: null };
     entry.promise = (async () => {
       const res = await fetchImpl('/api/hub/daily-brief', { cache: 'no-store', signal: AbortSignal.timeout(DAILY_BRIEF_TIMEOUT_MS) });
       const data = await res.json().catch(() => null);
       const read = { at: Date.now(), ok: res.ok, httpStatus: res.status, data };
+      if (entry.generation !== readGeneration) return latestRead();
       const status = readEnvelope(res, data);
-      if (status !== 'error' && status !== 'unauthorized') lastBrief = read;
+      if (status === 'unauthorized') invalidateDailyBriefAuth(read);
+      else {
+        if (status !== 'error') lastBrief = read;
+        lastSettled = { generation: entry.generation, read };
+      }
       return read;
-    })().finally(() => { if (pendingBrief === entry) pendingBrief = null; });
+    })().catch((error) => {
+      if (entry.generation !== readGeneration) return latestRead();
+      lastSettled = { generation: entry.generation, error };
+      throw error;
+    }).finally(() => { if (pendingBrief === entry) pendingBrief = null; });
     pendingBrief = entry;
   }
   return untilAborted(pendingBrief.promise, signal);
@@ -77,8 +114,8 @@ function signalsFromRead(read) {
 }
 
 // Home 브리핑은 같은 응답의 집중 고객·할 일도 사용한다.
-export async function fetchDailyBriefSignals({ signal, fetchImpl = globalThis.fetch } = {}) {
-  return signalsFromRead(await readDailyBrief({ signal, fetchImpl }));
+export async function fetchDailyBriefSignals({ signal, fetchImpl = globalThis.fetch, force = false } = {}) {
+  return signalsFromRead(await readDailyBrief({ signal, fetchImpl, force }));
 }
 
 const LOADING = { status: 'loading', signals: [], dailyFocus: null, taskToday: null };
@@ -93,16 +130,19 @@ export function useDailyBriefSignals(reloadKey, { keepPrevious = false } = {}) {
     return cached ? signalsFromRead(cached) : LOADING;
   });
   const firstRun = React.useRef(true);
+  const lastReloadKey = React.useRef(reloadKey);
 
   React.useEffect(() => {
     let active = true;
     const controller = new AbortController();
+    const force = !Object.is(lastReloadKey.current, reloadKey);
+    lastReloadKey.current = reloadKey;
     const keep = keepPrevious || firstRun.current;
     firstRun.current = false;
     setState((prev) => (keep && (prev.status === 'live' || prev.status === 'partial') ? prev : LOADING));
     (async () => {
       try {
-        const next = await fetchDailyBriefSignals({ signal: controller.signal });
+        const next = await fetchDailyBriefSignals({ signal: controller.signal, force });
         if (active) setState(next);
       } catch {
         if (active) setState({ status: 'error', signals: [], dailyFocus: null, taskToday: null });

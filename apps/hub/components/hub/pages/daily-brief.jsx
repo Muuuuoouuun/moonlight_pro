@@ -31,7 +31,7 @@ import { buildTaskToday, focusLimitMessage, isDurableTaskUpdateResult, MAX_FOCUS
 import { DailyReviewCue } from "../daily-review-cue";
 import { REVIEW_EVENING_HOUR } from "@/lib/daily-review-rhythm";
 import { formatWonShort } from "@/lib/won-format";
-import { peekDailyBrief, readDailyBrief } from "../daily-brief-signals";
+import { briefEnvelope, getDailyBriefAuthVersion, invalidateDailyBriefAuth, peekDailyBrief, readDailyBrief } from "../daily-brief-signals";
 import {
   beginRhythmCheck,
   buildRhythmCheckPayload,
@@ -450,6 +450,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
 const EMPTY_DAILY_BRIEF_STATE = {
   inquiries: { status: 'loading', rows: [], unreadCount: null },
   syncState: 'syncing',
+  authRequired: false,
   generatedAt: null,
   sources: [],
   summary: null,
@@ -468,7 +469,17 @@ const EMPTY_DAILY_BRIEF_STATE = {
 // 모듈 스코프 stale-while-revalidate — 탭 복귀마다 ~30콜 팬아웃을 다시 기다리며
 // 슬롯이 비던 것을 제거(4차 재감사 속도 M). 캐시는 즉시 서빙, 항상 배경 재검증.
 const DAILY_BRIEF_CACHE_SERVABLE_MS = 5 * 60 * 1000;
-let dailyBriefCache = null; // { at, state }
+let dailyBriefCache = null; // { at, state, authVersion }
+
+function signedOutBriefState() {
+  return {
+    ...EMPTY_DAILY_BRIEF_STATE,
+    syncState: 'error',
+    authRequired: true,
+    inquiries: { status: 'error', rows: [], unreadCount: null },
+    taskToday: { state: 'error', items: [], counts: {}, hiddenCount: 0 },
+  };
+}
 
 // /api/hub/daily-brief 응답 → 이 화면의 상태. 공유 캐시에서 첫 그림을 만들 때도 같은 함수를 쓴다.
 function briefStateFromData(data) {
@@ -485,6 +496,7 @@ function briefStateFromData(data) {
   return {
     inquiries: data.inquiries || { status: 'error', rows: [], unreadCount: null },
     syncState: nextSyncState,
+    authRequired: false,
     generatedAt: data.generatedAt || null,
     sources: Array.isArray(data.sources) ? data.sources : [],
     summary: data.summary || null,
@@ -501,6 +513,7 @@ function briefStateFromData(data) {
 
 // 이 화면의 캐시가 없어도 홈·위젯이 5분 안에 같은 응답을 읽어 뒀으면 그것으로 먼저 그린다.
 function servableBriefState() {
+  if (dailyBriefCache && dailyBriefCache.authVersion !== getDailyBriefAuthVersion()) dailyBriefCache = null;
   if (dailyBriefCache && Date.now() - dailyBriefCache.at < DAILY_BRIEF_CACHE_SERVABLE_MS) return dailyBriefCache.state;
   const shared = peekDailyBrief();
   return shared?.ok && shared.data ? briefStateFromData(shared.data) : null;
@@ -508,18 +521,28 @@ function servableBriefState() {
 
 function useDailyBriefLedger(refreshKey) {
   const [state, setState] = React.useState(() => servableBriefState() || EMPTY_DAILY_BRIEF_STATE);
+  const lastRefreshKey = React.useRef(refreshKey);
 
   React.useEffect(() => {
     let active = true;
     const hasServableCache = Boolean(servableBriefState());
+    const force = !Object.is(lastRefreshKey.current, refreshKey);
+    lastRefreshKey.current = refreshKey;
+    const authVersion = getDailyBriefAuthVersion();
 
     async function load() {
       if (!hasServableCache) setState((prev) => ({ ...prev, syncState: 'syncing' })); // 캐시 서빙 중엔 조용히 재검증
       try {
         // 홈과 동시에 열려도 서버 팬아웃은 한 번 — 요청은 daily-brief-signals가 합친다.
-        const read = await readDailyBrief();
+        const read = await readDailyBrief({ force });
         const data = read.data;
-        if (!active || !read.ok || !data) {
+        const status = briefEnvelope(read);
+        if (status === 'unauthorized') {
+          dailyBriefCache = null;
+          if (active) setState(signedOutBriefState());
+          return;
+        }
+        if (!active || status === 'error') {
           // transport 실패는 error — preview로 뭉개면 첫 화면이 "Supabase 연결 후 live
           // 전환"이라는 거짓 안내와 함께 신호 0건으로 렌더된다(re-audit S5).
           if (active) setState((prev) => ({ ...prev, syncState: hasServableCache ? 'partial' : 'error' }));
@@ -527,11 +550,16 @@ function useDailyBriefLedger(refreshKey) {
         }
 
         const nextState = briefStateFromData(data);
-        dailyBriefCache = { at: Date.now(), state: nextState };
+        dailyBriefCache = { at: Date.now(), state: nextState, authVersion: getDailyBriefAuthVersion() };
         setState(nextState);
       } catch {
         // 캐시를 보여주는 중이면 live 위장 대신 partial(오래된 데이터) — 없으면 error.
-        if (active) setState((prev) => ({ ...prev, syncState: hasServableCache ? 'partial' : 'error' }));
+        if (active) {
+          if (authVersion !== getDailyBriefAuthVersion()) {
+            dailyBriefCache = null;
+            setState(signedOutBriefState());
+          } else setState((prev) => ({ ...prev, syncState: hasServableCache ? 'partial' : 'error' }));
+        }
       }
     }
 
@@ -547,10 +575,18 @@ function useDailyBriefLedger(refreshKey) {
     // 연속 완료 시 늦은 이전 응답이 최신 목록을 덮지 않게 최신 요청만 반영.
     const requestId = taskRefreshRef.current + 1;
     taskRefreshRef.current = requestId;
+    const authVersion = getDailyBriefAuthVersion();
     try {
       const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
       const data = await res.json().catch(() => null);
       if (taskRefreshRef.current !== requestId) return false;
+      if (res.status === 401 || data?.status === 'unauthorized') {
+        invalidateDailyBriefAuth();
+        dailyBriefCache = null;
+        setState(signedOutBriefState());
+        return false;
+      }
+      if (authVersion !== getDailyBriefAuthVersion()) return false;
       if (!res.ok || !data || data.status === 'error') return false;
       const todos = Array.isArray(data.tasks) ? data.tasks : [];
       setState((prev) => {
@@ -563,7 +599,7 @@ function useDailyBriefLedger(refreshKey) {
         };
         // 캐시도 함께 갱신 — 5분 내 탭 복귀가 캡처/완료 이전 스냅샷을 재서빙해
         // 완료한 일이 되살아나던 회귀 차단(5차 재감사 S, iter-15 회귀).
-        if (dailyBriefCache) dailyBriefCache = { at: dailyBriefCache.at, state: next };
+        if (dailyBriefCache) dailyBriefCache = { ...dailyBriefCache, state: next };
         return next;
       });
       return true;
@@ -988,7 +1024,9 @@ function StatusLine({ state, onRetry }) {
   const liveCount = Number(state.summary?.liveCount || 0);
   const sourceCount = state.sources.length;
   const label = state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} 실시간` : sourceLabel(state.syncState);
-  const detail = state.syncState === 'error'
+  const detail = state.authRequired
+    ? '로그인이 필요합니다 — 로그인 후 브리핑을 다시 읽어 주세요'
+    : state.syncState === 'error'
     ? '브리핑을 읽지 못했습니다 — 지금 화면은 비어 보여도 실제 일이 있을 수 있습니다'
     : state.syncState === 'preview'
     ? 'Supabase 연결 후 실시간 기록으로 전환됩니다'
