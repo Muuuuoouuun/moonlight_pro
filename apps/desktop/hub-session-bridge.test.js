@@ -19,7 +19,7 @@ function exchange(socketPath, value) {
   });
 }
 
-test('Mac session IPC shares login/logout in both directions, scoped to the current Hub', async (t) => {
+test('Mac session IPC shares login/logout in both directions, scoped to the current Hub', { skip: process.platform !== 'darwin' }, async (t) => {
   const directory = await fs.mkdtemp('/tmp/moonlight-bridge-test-');
   let cookie = null;
   let hub = 'https://hub.example.test';
@@ -63,7 +63,7 @@ test('Mac session IPC shares login/logout in both directions, scoped to the curr
   assert.deepEqual(await exchange(bridge.socketPath, read), { error: 'rejected' });
 });
 
-test('Mac session IPC refuses permissive directories and an already active socket', async (t) => {
+test('Mac session IPC refuses permissive directories and an already active socket', { skip: process.platform !== 'darwin' }, async (t) => {
   const directory = await fs.mkdtemp('/tmp/moonlight-bridge-guard-');
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   await fs.chmod(directory, 0o755);

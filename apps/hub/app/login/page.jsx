@@ -215,10 +215,10 @@ function LoginForm() {
             </Button>}
             style={{ width: "100%" }}
           />
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, fontSize: 12, color: "var(--fg-muted)" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, fontSize: 12, color: "var(--fg-muted)", cursor: "pointer" }}>
             <Checkbox label="자동 로그인 · 30일 유지" checked={rememberMe} onChange={setRememberMe} disabled={state.status === "saving" || state.status === "ready"} />
             <span aria-hidden="true">자동 로그인 · 30일 유지</span>
-          </div>
+          </label>
           <Button
             type="submit"
             variant="primary"
