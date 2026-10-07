@@ -4,6 +4,7 @@ import React from "react";
 import { Button } from "./hub-primitives";
 import { Iconed } from "./hub-icons";
 import { pushEscLayer, popEscLayer, isTopEscLayer } from "./esc-layers";
+import { useKeyboardInset } from "./use-keyboard-inset";
 import { MAX_MEMO_CHARS, memoCapturePayload, newMemoDraft } from "@/lib/memo-capture";
 import { quickMemoDraftKey, readQuickMemoDraft, writeQuickMemoDraft } from "@/lib/quick-memo";
 import { MEMO_SAVED_EVENT, memoHref, saveMemoAndVerify } from "@/lib/memo-save";
@@ -123,18 +124,9 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
     return () => media.removeEventListener("change", update);
   }, []);
 
-  // Reserve the visual viewport above the software keyboard, including iOS pan.
-  React.useEffect(() => {
-    const viewport = window.visualViewport;
-    const update = () => {
-      root.current?.style.setProperty("--memo-keyboard", `${Math.max(0, innerHeight - (viewport?.height || innerHeight) - (viewport?.offsetTop || 0))}px`);
-      root.current?.style.setProperty("--memo-viewport", `${viewport?.height || innerHeight}px`);
-    };
-    update();
-    viewport?.addEventListener("resize", update);
-    viewport?.addEventListener("scroll", update);
-    return () => { viewport?.removeEventListener("resize", update); viewport?.removeEventListener("scroll", update); };
-  }, []);
+  // Reserve the visual viewport above the software keyboard, including iOS pan — the shared hook
+  // (use-keyboard-inset.js) that the full-height record sheet also uses.
+  useKeyboardInset(root, { keyboardVar: "--memo-keyboard", viewportVar: "--memo-viewport" });
 
   // Existing page dialogs are independently owned; observe only their presence.
   React.useEffect(() => {

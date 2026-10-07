@@ -11,12 +11,20 @@
 //
 // 예전 이 화면(고객 연락)의 레인 필터(리드/딜/일정)·활동 패널·메시지 초안 드로어는 뺐다 —
 // 레인은 행 안의 단계로, 최근 기록·답장 초안은 이름을 눌러 여는 고객 상세에 이미 있다.
+//
+// 2026-09-30 넓은 기록창 ④(Q-CR2 · Q-CR8, 권장 · 화면 확인 뒤 확정): '기록' · e · N이 여는 창은 고객 탭과 같은
+// 넓은 기록창이다 — 왼쪽에 쓰고(요약 한 줄 + 자세히), 오른쪽에 그 고객의 약속과 최근 기록을 읽는다. 행이나
+// 기록 후보에서 연 창은 '저장하고 다음'이다: 화면에 보이는 순서(놓친 약속 → 기록할까요 → 오늘 약속 → 펼친
+// 나머지)의 다음 사람으로 넘어가고, 앞 사람의 저장은 창 머리의 '이전' 줄이 알린다. 이 화면의 배치와 행 동작은
+// 그대로다. 고객 탭의 창과 아직 다른 점 하나: '연락 기록 | 메모' 전환(Q-CR6)은 이 창에 없다 — 메모 칸을 세우지
+// 않았고(목업의 만드는 순서에서 뒤 단계다), 그래서 '메모만' 채널이 어떻게 칸에 그대로 남는다.
 
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Avatar, Button, DateQuickPresets, EmptyState, Input, Kbd, Skeleton, TextField, TruthBadge, useToast } from "../hub-primitives";
 import { ContactRecordDrawer } from "../contact-record-form";
+import { RecordTargetContext } from "../record-target-context";
 import { RecordCandidates, resolveRecordCandidate } from "../record-candidates";
 import { SuggestionTip } from "../suggestion-tip";
 import { TIP_RULE_IDS, nudgeTipReason, useCrmNudges } from "../crm-nudge";
@@ -24,6 +32,7 @@ import { KIND_LABEL, REACTION_LABEL } from "@/lib/sales-os/followup-scoring";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
 import { MAX_DANGER_RAILS, groupFollowups } from "@/lib/sales-os/followup-groups";
+import { buildRecordQueue, candidateQueueKey, candidateRecordTarget, followupPromise, nextRecordEntry } from "@/lib/sales-os/record-queue";
 import { diffKstDays, kstDayKey } from "@/lib/kst-day";
 import { formatWonShort } from "@/lib/won-format";
 import "./today-contact.css";
@@ -395,7 +404,13 @@ export function Followups({ onNavigate }) {
   const searchRef = React.useRef(null);
   const [query, setQuery] = React.useState("");
   const [leaving, setLeaving] = React.useState(() => new Set()); // rowKey — 방금 기록해 빠지는 행
-  const [recordTarget, setRecordTarget] = React.useState(null); // { target, preset, subtitle, aiContext, candidate, draft?, error?, suggestions?, initialQuery? }
+  const [recordTarget, setRecordTarget] = React.useState(null); // { target, preset, subtitle, aiContext, candidate, queueKey?, draft?, error?, suggestions?, initialQuery? }
+  // 기록할까요에 지금 보이는 후보(화면 순서) — '저장하고 다음'이 다음 사람을 고를 때만 쓴다.
+  const [candidates, setCandidates] = React.useState([]);
+  // 지금 열린 기록창에서 이미 기록한 자리(줄 자리의 키) — '저장하고 다음'이 같은 사람을 다시 부르지 않게 한다.
+  // 저장이 확인되면 행은 leaving에서 풀리고 새 약속으로 목록에 다시 서지만(펼친 '다가오는 약속'), 이 창의 다음은
+  // 아니다. 창이 닫히면 비운다.
+  const [recordedRun, setRecordedRun] = React.useState(() => new Set());
   const [reschedule, setReschedule] = React.useState(null); // { key, busy, error }
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [candidatesKey, setCandidatesKey] = React.useState(0);
@@ -469,6 +484,7 @@ export function Followups({ onNavigate }) {
     setRecordTarget({
       target: targetOf(item),
       preset,
+      queueKey: rowKey(item),
       subtitle: `${item.name}${org ? ` · ${org}` : ""}${promise}`,
       aiContext: `${org || item.name} · ${KIND_TAG[item.kind] || "고객"}${stageLabel(item) ? ` (${stageLabel(item)})` : ""}`,
     });
@@ -479,6 +495,7 @@ export function Followups({ onNavigate }) {
     setRecordTarget({
       target: { kind: nudge.subject.type, id: nudge.subject.id, companyId: nudge.subject.companyId || null, name: nudge.subject.name, org: null },
       preset: nudge.action?.prefill?.kind ? { kind: nudge.action.prefill.kind } : {},
+      queueKey: rowKey({ kind: nudge.subject.type, id: nudge.subject.id }),
       subtitle: `${nudge.subject.name} — ${nudge.title}`,
     });
   };
@@ -506,10 +523,9 @@ export function Followups({ onNavigate }) {
 
   const onCandidateRecord = (candidate) => {
     const customer = candidate?.customer || {};
-    const [keyKind, keyId] = String(customer.key || "").split(":");
-    const kind = ["lead", "deal", "account"].includes(customer.kind) ? customer.kind : ["lead", "account"].includes(keyKind) ? keyKind : null;
-    const id = customer.id || (kind && keyId) || null;
-    const target = kind && id ? { kind, id, companyId: null, name: customer.name || customer.org || "고객", org: customer.org || null } : null;
+    // 후보가 아는 회사를 같이 든다(candidateRecordTarget) — 읽기 칸의 기록 읽기는 회사 우선이고, 자세히(note)도
+    // 행에서 연 창과 같은 회사에 붙는다.
+    const target = candidateRecordTarget(candidate);
     const promiseAt = candidate?.promiseHint?.dueAt ? kstDayKey(candidate.promiseHint.dueAt) : "";
     const preset = {
       kind: CANDIDATE_CHANNEL[candidate?.channel] || "call",
@@ -525,6 +541,7 @@ export function Followups({ onNavigate }) {
       target,
       preset,
       candidate,
+      queueKey: candidateQueueKey(candidate?.id),
       // 고객이 매칭되지 않은 후보는 이름으로 찾기부터 연다.
       initialQuery: target ? "" : customer.name || customer.org || "",
       suggestions,
@@ -638,6 +655,37 @@ export function Followups({ onNavigate }) {
   const moreCount = more.upcoming.length + more.dormant.length + more.open.length;
   const ctx = recordTarget;
 
+  // ── 넓은 기록창(Q-CR2) · 저장하고 다음(Q-CR8) ──
+  // 이어 쓰기의 줄 — 화면에 보이는 순서 그대로다(buildRecordQueue): 놓친 약속 → 기록할까요 → 오늘 약속 → 펼친
+  // 나머지. 방금 기록해 빠지는 행도 제자리에 둔다(지금 사람의 자리를 찾아야 한다) — 건너뛰는 것은 leaving이 한다.
+  const recordQueue = React.useMemo(
+    () => buildRecordQueue({ missed, candidates, today, more: moreOpen ? more : null }),
+    [missed, today, candidates, moreOpen, more],
+  );
+  // 다음 사람(nextRecordEntry) — 지금 자리 뒤에서, 방금 기록해 빠지는 자리(leaving)와 이 창에서 이미 기록한 자리
+  // (recordedRun)를 건너뛰고 고른다. 지금 쓰는 고객의 행도 건너뛴다: 기록 후보에서 연 창을 저장하면 그 고객의 행도
+  // 함께 빠진다(같은 사람을 다음으로 다시 열지 않는다) — 고객과 맞지 않은 후보에서 직접 고른 고객도 같다(t). 고객을
+  // 직접 골라 연 창(N)은 줄에 자리가 없다 — 다음이 없고, 저장하면 닫힌다.
+  const nextAfter = (entry, t) => nextRecordEntry(recordQueue, entry, { leaving, done: recordedRun, target: t });
+  const openQueueEntry = (queued) => (queued.candidate ? onCandidateRecord(queued.candidate) : openRecordFor(queued.item, queued.variant));
+  // 읽기 칸의 약속 — 이 화면이 이미 읽은 목록에서 찾는다. 목록에 없는 고객이면 모른다(null)고 넘긴다.
+  const rowsByKey = new Map([...items, ...upcoming, ...dormant].map((item) => [rowKey(item), item]));
+  const promiseOf = (t) => {
+    const item = t ? rowsByKey.get(rowKey(t)) : null;
+    return item ? followupPromise(item, { todayKey, promiseKey: kstDayKey(item.promisedAt) }) : null;
+  };
+  // 기록한 자리를 줄에서 뺀다 · 되돌린다 — 고객 행과, 기록 후보에서 연 창이면 그 후보도.
+  const markRecorded = (entry, t, on) => {
+    const keys = [t ? rowKey(t) : null, entry?.candidate ? candidateQueueKey(entry.candidate.id) : null].filter(Boolean);
+    keys.forEach((key) => markLeaving(key, on));
+    // 이 창에서 기록한 자리로도 적는다(되돌리기 · 실패면 지운다) — leaving이 풀린 뒤에도 '다음'에서 빠져 있게.
+    setRecordedRun((prev) => {
+      const next = new Set(prev);
+      keys.forEach((key) => (on ? next.add(key) : next.delete(key)));
+      return next;
+    });
+  };
+
   return (
     <div className="hub-futura hub-page fade-up today-contact">
       <header className="fx-head today-contact__head">
@@ -725,7 +773,7 @@ export function Followups({ onNavigate }) {
 
           {/* 기록할까요 — 캘린더·통화에서 찾은 "연락했는데 기록이 없는 것". 섹션 전체(제목·건수·
               읽기 상태)는 그 컴포넌트가 소유하고, 비었으면 스스로 그리지 않는다. */}
-          <RecordCandidates key={candidatesKey} onRecord={onCandidateRecord} onNavigate={onNavigate} />
+          <RecordCandidates key={candidatesKey} onRecord={onCandidateRecord} onNavigate={onNavigate} onVisible={setCandidates} />
 
           {live && (
             <section aria-label="오늘 약속">
@@ -795,22 +843,58 @@ export function Followups({ onNavigate }) {
           suggestions={ctx.suggestions || []}
           initialQuery={ctx.initialQuery || ""}
           undoMode="toast"
-          // 콜백은 연 순간의 ctx를 붙든다 — 시트는 저장과 동시에 닫혀 recordTarget이 비지만,
+          // 넓은 기록창 — 읽기 칸은 고른 고객의 약속(이 화면이 아는 것)과 최근 기록(그 칸이 읽는다)이다.
+          // 고객이 바뀌면 새로 세운다(앞 사람의 기록이 잠깐 남아 보이지 않게).
+          context={(t) => (
+            <RecordTargetContext
+              key={rowKey(t)}
+              target={t}
+              promise={promiseOf(t)}
+              tipReason={nudgesBySubjectId.has(String(t.id)) ? nudgeTipReason(nudgesBySubjectId.get(String(t.id))) : ""}
+              today={todayKey}
+            />
+          )}
+          promiseFor={promiseOf}
+          // 저장하고 다음 — 다음 사람은 화면 순서에서 고른다. 없으면(마지막 · 직접 고른 고객) 저장하고 닫는다.
+          entry={ctx}
+          // 기록 후보의 기록은 그 고객의 행과 초안 자리가 다르다 — 같은 고객의 두 기록이 서로의 글을 덮지 않는다.
+          draftScope={ctx.candidate ? candidateQueueKey(ctx.candidate.id) : ""}
+          // 창이 지금 쓰는 고객(t — 직접 고른 고객일 수 있다)으로 묻는다: 줄이 말하는 '다음'과 넘어가는 곳이 같다.
+          next={(t) => {
+            const upcomingEntry = nextAfter(ctx, t);
+            return upcomingEntry ? { name: upcomingEntry.name } : null;
+          }}
+          onAdvance={(t) => {
+            const upcomingEntry = nextAfter(ctx, t);
+            // 넘길 곳이 없으면 창이 스스로 닫는다(false) — 여기서 창을 걷으면 방금 보낸 기록의 되돌리기가 사라진다.
+            if (!upcomingEntry) return false;
+            openQueueEntry(upcomingEntry);
+            return true;
+          }}
+          // 앞 사람의 기록으로 돌아간다 — 그 창을 열었던 맥락 그대로, 저장하지 못한 글과 원인을 들고.
+          onReturn={(entry, { target: t, draft, error } = {}) => setRecordTarget({ ...(entry || {}), target: t || entry?.target || null, draft: draft || null, error: error || "" })}
+          // 콜백은 연 순간의 ctx를 붙든다 — 창은 저장과 동시에 닫히거나 다음 사람으로 넘어가지만,
           // 되돌리기·저장 확인·늦은 실패는 그 뒤에 온다.
-          onSaved={(_saved, t) => markLeaving(t ? rowKey(t) : null, true)}
-          onUndone={(_id, t) => markLeaving(t ? rowKey(t) : null, false)}
+          onSaved={(_saved, t) => markRecorded(ctx, t, true)}
+          onUndone={(_id, t) => markRecorded(ctx, t, false)}
           onSummaryPersisted={(_ids, t) => {
             if (ctx.candidate) resolveCandidate(ctx.candidate);
             reload().then(() => markLeaving(t ? rowKey(t) : null, false));
           }}
-          onPersisted={(_ids, t) => toast.success(`기록됨 · ${t?.name || "고객"}`)}
-          onFailed={({ message, form, target: t }) => {
-            markLeaving(t ? rowKey(t) : null, false);
+          // 창 머리의 '이전' 줄이 이미 말했으면(shown — 저장됨 hh:mm · 저장 못 함 + 돌아가기) 토스트를 겹치지
+          // 않는다: 아래에 뜨는 토스트는 다음 사람의 저장 줄을 가린다. 창이 닫혀 있으면 지금처럼 토스트다.
+          onPersisted={(_ids, t, receipt) => { if (!receipt?.shown) toast.success(`기록됨 · ${t?.name || "고객"}`); }}
+          onFailed={({ message, form, target: t }, receipt) => {
+            markRecorded(ctx, t, false);
+            if (receipt?.shown) return;
             toast.error(`기록하지 못했습니다 · ${t?.name || "고객"} — ${message}`);
             // 입력을 조용히 잃지 않는다 — 원인과 함께 같은 고객 기록창을 입력 그대로 다시 연다.
             setRecordTarget((cur) => cur || { ...ctx, target: t || ctx.target, draft: form, error: message });
           }}
-          onClose={() => setRecordTarget(null)}
+          onClose={() => {
+            setRecordTarget(null);
+            setRecordedRun(new Set());
+          }}
         />
       )}
     </div>
