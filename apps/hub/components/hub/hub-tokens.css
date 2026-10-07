@@ -39,6 +39,18 @@
   --project-gauge-tip-line: var(--surface);
   --project-gauge-glow: oklch(0.81 0.17 280 / 0.7);
 
+  /* OKR·KPI 한눈에 보기 only — KR 페이스(앞섬·비슷함·늦음·판정 전), not categories (DESIGN.md §15 2026-10-05). */
+  --okr-ahead:     oklch(0.76 0.11 185);
+  --okr-ahead-bg:  oklch(0.30 0.05 185);
+  --okr-on:        oklch(0.74 0.10 255);
+  --okr-on-bg:     oklch(0.30 0.05 255);
+  --okr-late:      oklch(0.76 0.13 45);
+  --okr-late-bg:   oklch(0.32 0.06 40);
+  --okr-wait:      oklch(0.62 0.008 250);
+  --okr-wait-bg:   oklch(0.26 0.008 250);
+  --okr-track:     oklch(0.28 0.008 250);
+  --okr-marker:    oklch(0.95 0.005 250);
+
   --z-quick-memo: 60;
   --z-project-detail: 61;
   --z-navigation-overlay: 64;
@@ -160,6 +172,17 @@
   --project-gauge-spark: oklch(1 0 0);
   --project-gauge-tip-line: var(--surface);
   --project-gauge-glow: oklch(0.58 0.19 280 / 0.45);
+
+  --okr-ahead:     oklch(0.56 0.11 185);
+  --okr-ahead-bg:  oklch(0.95 0.035 185);
+  --okr-on:        oklch(0.53 0.10 255);
+  --okr-on-bg:     oklch(0.94 0.03 255);
+  --okr-late:      oklch(0.60 0.16 40);
+  --okr-late-bg:   oklch(0.95 0.04 40);
+  --okr-wait:      oklch(0.55 0.007 250);
+  --okr-wait-bg:   oklch(0.95 0.004 250);
+  --okr-track:     oklch(0.93 0.006 250);
+  --okr-marker:    oklch(0.25 0.01 250);
 
   --fg:            oklch(0.20 0.008 250);
   --fg-muted:      oklch(0.42 0.008 250);
