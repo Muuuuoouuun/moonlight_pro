@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import ts from 'typescript';
 import * as catalog from '../../../lib/product-catalog.js';
+import { formatWon } from '../../../lib/won-format.js';
 
 const page = readFileSync(new URL('./product-page.jsx', import.meta.url), 'utf8');
 const drawerSource = page.slice(page.indexOf('function MonthDrawer('), page.indexOf('\n// 운영 상태'));
@@ -108,7 +109,7 @@ const portfolioJs = ts.transpileModule(portfolioSource.replace(/^import[\s\S]*?;
   compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
 const portfolioReact = { createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.flat(Infinity).filter(child => child !== null && child !== undefined && child !== false) } }) };
-const portfolioDependencies = { React: portfolioReact, ...catalog, styles: {}, exports: {} };
+const portfolioDependencies = { React: portfolioReact, ...catalog, formatWon, styles: {}, exports: {} };
 const Portfolio = new Function(...Object.keys(portfolioDependencies), `${portfolioJs}; return exports.ProductPortfolio;`)(...Object.values(portfolioDependencies));
 const readText = node => typeof node === 'string' || typeof node === 'number' ? String(node) : (node?.props?.children || []).map(readText).join(' ');
 const product = (id, values, opsStatus = 'live') => ({ id, name: `합성 ${id}`, opsStatus, stage: 'idea', metrics: [{ month: '2026-10', ...values }], projects: [], inquiries: [], repositories: [] });
@@ -117,13 +118,13 @@ test('actual portfolio labels incomplete sums and leaves entirely unknown and em
   const partial = readText(Portfolio({ products: [product('one', { activeUsers: 0, revenue: 100, cost: 20 }), product('two', { activeUsers: null, revenue: 200, cost: null })], inquiries: [], month: '2026-10' }));
   assert.match(partial, /확인된 주간 사용자/);
   assert.match(partial, /확인된 순이익/);
-  assert.match(partial, /₩80/);
+  assert.match(partial, /80원/);
   assert.match(partial, /1개 제품 매출·비용 확인 필요/);
   const unknown = readText(Portfolio({ products: [product('unknown', { revenue: null, cost: 20 })], inquiries: [], month: '2026-10' }));
   assert.match(unknown, /순이익 —/);
   assert.match(unknown, /1개 제품 매출·비용 확인 필요/);
-  assert.doesNotMatch(unknown, /−₩20/);
+  assert.doesNotMatch(unknown, /−20원/);
   const empty = readText(Portfolio({ products: [], inquiries: [], month: '2026-10' }));
   assert.match(empty, /순이익 — 매출·비용 입력 전/);
-  assert.doesNotMatch(empty, /매출 ₩0/);
+  assert.doesNotMatch(empty, /매출 0원/);
 });
