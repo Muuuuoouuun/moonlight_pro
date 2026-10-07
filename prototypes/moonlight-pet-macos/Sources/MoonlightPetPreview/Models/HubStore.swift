@@ -183,7 +183,10 @@ final class HubStore: ObservableObject {
                 taskMessage = page.partial ? "일부 할 일만 불러왔어요. 전체 목록은 Hub에서 확인해 주세요." : nil
             case .failure(let error):
                 taskReady = false; taskMessage = friendly(error)
-                if isAuthenticationError(error) { requireLogin() }
+                if isAuthenticationError(error) {
+                    requireLogin()
+                    errorMessage = friendly(error)
+                }
             }
         }
         let selectedWeek = calendar.dateInterval(of: .weekOfYear, for: selectedDate)!.start
@@ -194,7 +197,10 @@ final class HubStore: ObservableObject {
             calendarMessage = page.partial ? "일부 일정만 불러왔어요. Hub에서 연결 상태를 확인해 주세요." : nil
         case .failure(let error):
             calendarReady = false; calendarMessage = friendly(error)
-            if isAuthenticationError(error) { requireLogin() }
+            if isAuthenticationError(error) {
+                requireLogin()
+                errorMessage = friendly(error)
+            }
         }
         }
         if taskReady || calendarReady { lastSyncedAt = Date() }
