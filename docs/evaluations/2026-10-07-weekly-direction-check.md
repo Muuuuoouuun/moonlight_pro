@@ -192,6 +192,12 @@
 - 허브 read 라우트: `apps/hub/app/api/hub` 아래 `GET`을 내보내는 `route.*` 파일 **73개**(2026-09-25 실측 59개에서 증가). 전체 허브 API 라우트 파일은 179개다.
 - `*.test.mjs` 파일: 저장소 전체 **668개**(`node_modules`·`.next*` 제외, 이번에 더한 `check-item-actions.test.mjs` 포함). 루트 `npm test` 실측 5200 tests · 통과 5164 · 실패 8(전부 환경) · skip 28.
 
+### 6.3 main 반영 전 확인 (운영자 Mac)
+
+- **마이그레이션 2개가 운영 DB에 아직 없다**: `20261007_0069_office_meetings.sql`(저장 회의)과 `20261007_0070_signal_outcomes.sql`(확인할 것 영수증 — 옛 0056의 재번호, 내용 동일). 두 문서 모두 "운영 적용은 실행하지 않았다"고 적혀 있다. main 배포 전에 `npm run db:migrate -- --expect-ref ncgpnqfulnlshegalmbd 20261007_0069_office_meetings.sql 20261007_0070_signal_outcomes.sql` 뒤 `npm run db:check`. 없으면 `저장 회의` 탭은 읽기 실패로, 확인할 것의 끝내기 영수증은 저장 실패로 보인다(화면은 봉투로 알리고 멈추지는 않는다).
+- 새 환경 변수는 테스트 전용 `OFFICE_MEETING_POSTGRES_TEST` 하나뿐이라 Vercel 설정 변경은 없다. 의존성 보안 업데이트는 잠금 파일에 들어 있어 배포 설치에서 반영된다.
+- 검증 범위: 충돌 영역 테스트 284 + 게이트 영역 219, 전체 `npm test` 5200(환경 실패 8), Hub·Engine 프로덕션 빌드, 프로덕션 빌드로 33개 경로 열기(멈춤·오류 0 — `dashboard/agents/mentor`는 등록된 경로가 아니라 셸만 뜬다), 브라우저에서 게이트 확인(Decisions 제목·⌘K 라벨, 오피스 더보기에 업무 나누기 없음, 오늘·홈에 막힘 풀기·결정으로 남기기 없음, `?new=decision&title=…` 딥링크가 출처를 채우지 않음). 병합 결과의 에이전트 적대적 검토는 세션 한도로 **실행되지 못했다** — 사람 검토가 PR에서 한 번 더 필요하다.
+
 ---
 
 ## 부록. 측정 명령
