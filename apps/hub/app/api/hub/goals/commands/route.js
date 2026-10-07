@@ -12,6 +12,14 @@ export async function POST(request) {
   return NextResponse.json(result,{status:httpStatus});
 }
 export async function GET(request) {
-  const {httpStatus=200,...result}=await getGoalCommandReceipt(new URL(request.url).searchParams.get('commandId'));
-  return NextResponse.json(result,{status:httpStatus});
+  const commandId=new URL(request.url).searchParams.get('commandId');
+  try {
+    const {httpStatus=200,...result}=await getGoalCommandReceipt(commandId);
+    if(httpStatus>=500 || (httpStatus===200 && (result.status==='error' || result.source==='error'))) {
+      return NextResponse.json({...result,status:'error',source:'error',retryable:result.retryable!==false});
+    }
+    return NextResponse.json(result,{status:httpStatus});
+  } catch {
+    return NextResponse.json({status:'error',source:'error',error:'receipt-read-unavailable',commandId,persisted:null,nextAction:'get_goal_command_receipt',retryPolicy:'same-command-id-and-input-only',retryable:true});
+  }
 }

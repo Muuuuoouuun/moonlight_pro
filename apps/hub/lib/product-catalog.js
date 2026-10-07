@@ -619,7 +619,7 @@ export function monthNumbers(product, month) {
     activeUsers: row?.activeUsers ?? null,
     revenue,
     cost,
-    net: revenue !== null && cost !== null ? revenue - cost : revenue !== null ? revenue : cost !== null ? -cost : null,
+    net: revenue !== null && cost !== null ? revenue - cost : null,
     known: Boolean(row),
   };
 }
@@ -636,10 +636,10 @@ export function portfolioSummary(products, inquiries, month) {
   for (const product of list) {
     byOps[product.opsStatus || "dev"] = (byOps[product.opsStatus || "dev"] || 0) + 1;
     const numbers = monthNumbers(product, month);
-    if (numbers.activeUsers !== null) { users += numbers.activeUsers; usersKnown += 1; }
-    if (numbers.revenue !== null || numbers.cost !== null) {
-      revenue += numbers.revenue || 0;
-      cost += numbers.cost || 0;
+    if (product.opsStatus !== "ended" && numbers.activeUsers !== null) { users += numbers.activeUsers; usersKnown += 1; }
+    if (numbers.net !== null) {
+      revenue += numbers.revenue;
+      cost += numbers.cost;
       moneyKnown += 1;
     }
   }
@@ -649,7 +649,7 @@ export function portfolioSummary(products, inquiries, month) {
     byOps,
     users: usersKnown ? users : null,
     usersMissing: list.filter((p) => p.opsStatus !== "ended").length - usersKnown,
-    revenue, cost, net: moneyKnown ? revenue - cost : null, moneyKnown,
+    revenue, cost, net: moneyKnown ? revenue - cost : null, moneyKnown, moneyMissing: list.length - moneyKnown,
     openInquiries: open.length,
     newInquiries: open.filter((inquiry) => inquiry.status === "new").length,
     waitingInquiries: open.filter((inquiry) => inquiry.status === "waiting").length,
@@ -690,4 +690,19 @@ export function productNextStep(product, { today = seoulDay() } = {}) {
   const soon = flow.slice(0, 3).flatMap((bucket) => bucket.items).find((item) => item.kind === "work");
   if (soon) return soon.title;
   return productNextAction(product, { repositories: product?.repositories?.length || 0, projects: product?.projects?.length || 0 })?.text || null;
+}
+
+// 월 숫자는 의미를 바꾸지 않고 읽는다. 상한은 Engine record_month 계약과 같다.
+export function parseMonthInput(draft) {
+  const values = {};
+  const fields = [['activeUsers', '주간 사용자', 100_000_000], ['revenue', '매출', 100_000_000_000], ['cost', '비용', 100_000_000_000]];
+  for (const [field, label, max] of fields) {
+    const text = String(draft[field] ?? '').trim();
+    if (!text) { values[field] = null; continue; }
+    if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(text)) return { ok: false, message: `${label}은 0 이상의 정수로 적어 주세요.` };
+    const value = Number(text.replaceAll(',', ''));
+    if (!Number.isSafeInteger(value) || value > max) return { ok: false, message: `${label}은 ${max.toLocaleString('ko-KR')} 이하로 적어 주세요.` };
+    values[field] = value;
+  }
+  return { ok: true, values };
 }

@@ -39,6 +39,18 @@
   --project-gauge-tip-line: var(--surface);
   --project-gauge-glow: oklch(0.81 0.17 280 / 0.7);
 
+  /* OKR·KPI 한눈에 보기 only — KR 페이스(앞섬·비슷함·늦음·판정 전), not categories (DESIGN.md §15 2026-10-05). */
+  --okr-ahead:     oklch(0.76 0.11 185);
+  --okr-ahead-bg:  oklch(0.30 0.05 185);
+  --okr-on:        oklch(0.74 0.10 255);
+  --okr-on-bg:     oklch(0.30 0.05 255);
+  --okr-late:      oklch(0.76 0.13 45);
+  --okr-late-bg:   oklch(0.32 0.06 40);
+  --okr-wait:      oklch(0.62 0.008 250);
+  --okr-wait-bg:   oklch(0.26 0.008 250);
+  --okr-track:     oklch(0.28 0.008 250);
+  --okr-marker:    oklch(0.95 0.005 250);
+
   --z-quick-memo: 60;
   --z-project-detail: 61;
   --z-navigation-overlay: 64;
@@ -160,6 +172,17 @@
   --project-gauge-spark: oklch(1 0 0);
   --project-gauge-tip-line: var(--surface);
   --project-gauge-glow: oklch(0.58 0.19 280 / 0.45);
+
+  --okr-ahead:     oklch(0.56 0.11 185);
+  --okr-ahead-bg:  oklch(0.95 0.035 185);
+  --okr-on:        oklch(0.53 0.10 255);
+  --okr-on-bg:     oklch(0.94 0.03 255);
+  --okr-late:      oklch(0.60 0.16 40);
+  --okr-late-bg:   oklch(0.95 0.04 40);
+  --okr-wait:      oklch(0.55 0.007 250);
+  --okr-wait-bg:   oklch(0.95 0.004 250);
+  --okr-track:     oklch(0.93 0.006 250);
+  --okr-marker:    oklch(0.25 0.01 250);
 
   --fg:            oklch(0.20 0.008 250);
   --fg-muted:      oklch(0.42 0.008 250);
@@ -1081,15 +1104,21 @@
 .hub-app .daily-brief__panel--danger {
   border-left-color: var(--danger-line) !important;
 }
-/* 빠른 이동 칩은 사이드바가 숨는 모바일 전용 — 데스크톱에서는 사이드바 앵커와 완전
-   중복이라 첫 fold만 밀어냈다(2026-08-05 re-audit). */
-@media (min-width: 901px) {
-  .hub-app .daily-brief__nav { display: none; }
+/* 데스크톱 및 모바일 공용 우측 사이드 덱 & 빠른 바로가기 패널 */
+.hub-app .daily-brief__side-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.hub-app .daily-brief__nav-card {
+  display: flex;
+  flex-direction: column;
 }
 .hub-app .daily-brief__nav {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  min-width: 0;
 }
 .hub-app .daily-brief__nav-label {
   display: flex;
@@ -1107,12 +1136,12 @@
 }
 .hub-app .daily-brief__nav-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 7px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 .hub-app .daily-brief__jump {
   min-width: 0;
-  min-height: 52px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1133,9 +1162,9 @@
     transform var(--dur-hover) var(--ease-hub);
 }
 .hub-app .daily-brief__jump-icon {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1149,14 +1178,14 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 .hub-app .daily-brief__jump-copy strong {
   overflow: hidden;
   color: var(--fg);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1168,6 +1197,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.hub-app .daily-brief__jump-arrow {
+  color: var(--fg-faint);
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: transform var(--dur-hover) var(--ease-hub), opacity var(--dur-hover) var(--ease-hub);
+}
 @media (hover: hover) and (pointer: fine) {
   .hub-app .daily-brief__jump:hover {
     color: var(--fg);
@@ -1177,8 +1212,10 @@
     box-shadow: var(--brief-panel-shadow-hover);
     transform: translateY(-1px);
   }
+  .hub-app .daily-brief__jump:hover .daily-brief__jump-arrow,
   .hub-app .daily-brief__jump:hover > svg:last-child {
     transform: translateX(2px);
+    opacity: 1;
   }
 }
 .hub-app .daily-brief__jump > svg:last-child {

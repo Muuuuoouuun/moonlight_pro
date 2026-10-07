@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req) {
   try {
     const params = new URL(req.url).searchParams;
-    return NextResponse.json(await getJournalLedger({ note: params.get('note'), before: params.get('before'), beforeId: params.get('beforeId') }));
+    return NextResponse.json(await getJournalLedger({ note: params.get('note'), before: params.get('before'), beforeId: params.get('beforeId'), scope: params.get('scope') }));
   } catch {
     return NextResponse.json({ status: 'error', configured: Boolean(resolveSupabaseConfig() && resolveDefaultWorkspaceId()), workspaceId: null, entries: [], entry: null, nextCursor: null, error: 'read-failed', message: '메모를 불러오지 못했어요. 다시 시도해 주세요.' });
   }

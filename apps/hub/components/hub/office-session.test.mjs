@@ -1,8 +1,40 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION, officeMessageLength, officeTaskAgendaBlock, officeTasksForScope, officeRailTasks, loadOfficeTasks, officeUnloadGuard } from './office-session.js';
+import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION, officeAssignmentInput, officeMessageLength, officeTaskAgendaBlock, officeTasksForScope, officeRailTasks, loadOfficeTasks, officeUnloadGuard } from './office-session.js';
 import { createOfficeMentorSessionStore } from './office-mentor-session.js';
+
+test('assignment prioritizes the current question while retaining decision context and task snapshot', () => {
+  const session = { draft: '이제 기술 구현 범위를 봐 주세요.', decisionContext: '이번에는 배포하지 않기로 정함', agenda: { block: '고객 견적 답장 검토' } };
+  const input = officeAssignmentInput(session);
+  assert.ok(input.message.startsWith(session.draft));
+  assert.ok(input.message.includes(session.decisionContext));
+  assert.ok(input.message.includes(session.agenda.block));
+  assert.equal(input.truncated, false);
+  assert.notEqual(input.key, officeAssignmentInput({ ...session, meetingId: 'next-meeting' }).key);
+  assert.notEqual(input.key, officeAssignmentInput({ ...session, decisionContext: '다른 기준' }).key);
+  assert.notEqual(input.key, officeAssignmentInput({ ...session, ownerId: 'jolteon' }).key);
+});
+
+test('assignment bounds supporting context honestly without truncating the current question', () => {
+  const session = { draft: '가'.repeat(5900), decisionContext: '나'.repeat(1000), agenda: { block: '다'.repeat(1500) } };
+  const input = officeAssignmentInput(session);
+  assert.ok(input.message.startsWith(session.draft));
+  assert.ok(input.message.length <= 6000);
+  assert.equal(input.truncated, true);
+  assert.match(input.message, /일부 생략/);
+  assert.equal(officeAssignmentInput({ draft: '가'.repeat(6001) }).message.length, 6001);
+  assert.equal(officeAssignmentInput({ draft: '  ', agenda: { block: '할 일 안건' } }).message, '할 일 안건');
+  assert.equal(officeAssignmentInput({ draft: '' }).message, '');
+  assert.equal(officeAssignmentInput({ draft: '최소 요청', minimumOnly: true }).message, OFFICE_MINIMUM_INSTRUCTION + '최소 요청');
+  assert.equal(officeAssignmentInput({ draft: '할 일 안건', agenda: { block: '할 일 안건' } }).message, '할 일 안건');
+  const full = officeAssignmentInput({ draft: '가'.repeat(6000), decisionContext: '추가 맥락' });
+  assert.equal(full.message, '가'.repeat(6000));
+  assert.equal(full.truncated, true);
+  const emoji = officeAssignmentInput({ draft: '가'.repeat(5951), decisionContext: '😀'.repeat(100) });
+  assert.ok(emoji.message.isWellFormed());
+  assert.equal(emoji.truncated, true);
+});
 
 test('meeting-room rail lists open in-scope tasks, recorded blockers first, then the longest untouched', () => {
   const now = Date.parse('2026-09-26T09:00:00+09:00');

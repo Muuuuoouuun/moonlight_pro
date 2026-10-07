@@ -40,11 +40,11 @@ export async function GET(req) {
       filters: withWorkspaceFilter([["id", eqFilter(id)]]),
       limit: 1,
     });
-    if (!rows) return NextResponse.json({ status: "error" }, { status: 502 });
+    if (!rows) return NextResponse.json({ status: "error", source: "error", error: "memo-capture-read-failed", retryable: true });
     if (!rows[0])
       return NextResponse.json({ status: "not-found" }, { status: 404 });
     return NextResponse.json({ status: "live", memo: rows[0] });
   } catch {
-    return NextResponse.json({ status: "error" }, { status: 502 });
+    return NextResponse.json({ status: "error", source: "error", error: "memo-capture-read-failed", retryable: true });
   }
 }

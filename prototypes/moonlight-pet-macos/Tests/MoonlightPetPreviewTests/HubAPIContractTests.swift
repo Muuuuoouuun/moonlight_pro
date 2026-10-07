@@ -49,6 +49,7 @@ private actor ScriptedHubTransport: HubTransporting {
     func login(username: String, password: String) async throws {}
     func logout() async throws {}
     func clearSession() async {}
+    func disconnect() async {}
 }
 
 private func contractResponse(_ json: [String: Any]) throws -> ScriptedHubTransport.Reply {

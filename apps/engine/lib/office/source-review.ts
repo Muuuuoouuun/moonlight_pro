@@ -88,11 +88,12 @@ function sourceQuoteCandidates(source: string[]): string[] {
 }
 
 export type OfficeSourceCheck = 'traced' | 'none' | 'untraced';
+export type OfficeSourceCounts = { selected: number; traced: number; untraced: number };
 
 // Format violations still fail. A cited index that points nowhere (outside the catalog, or at
 // text no longer in the sources) is an untraceable citation: drop it and report the check
 // state instead of discarding a reviewed answer (2026-09-23 운영자 확정).
-export function readSourceReviewedOutput(raw: unknown, request: SourceReviewRequest, context: unknown, catalog: OfficeSourceCatalog): { answer: Record<string, unknown>; sourceCheck: OfficeSourceCheck } {
+export function readSourceReviewedOutput(raw: unknown, request: SourceReviewRequest, context: unknown, catalog: OfficeSourceCatalog): { answer: Record<string, unknown>; corrections: string[]; sourceCheck: OfficeSourceCheck; sourceCounts: OfficeSourceCounts } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('invalid-source-review');
   // This is a private per-call contract, not a persisted public format. Accepting
   // legacy free-text quotes here would bypass the current server catalog.
@@ -100,9 +101,13 @@ export function readSourceReviewedOutput(raw: unknown, request: SourceReviewRequ
   const { sourceIndexes, corrections, ...answer } = raw as Record<string, unknown>;
   const validStrings = (value: unknown, max: number): value is string[] => Array.isArray(value) && value.length <= 5 && value.every(item => typeof item === 'string' && item.trim() && item.length <= max && !item.includes('\0'));
   if (!Array.isArray(sourceIndexes) || sourceIndexes.length > 5 || sourceIndexes.some(index => !Number.isSafeInteger(index)) || !validStrings(corrections, 350)) throw new Error('invalid-source-review');
-  if (!sourceIndexes.length) return { answer, sourceCheck: 'none' };
+  const selected = [...new Set(sourceIndexes as number[])];
+  // Retain the public editing notes for the next synthesis call, separately from
+  // the answer. Validation establishes format only, not that a critique is true.
+  const review = { answer, corrections: [...corrections] };
+  if (!selected.length) return { ...review, sourceCheck: 'none', sourceCounts: { selected: 0, traced: 0, untraced: 0 } };
   const source = sourceTexts(request, context);
-  const traced = sourceIndexes.filter(index => index >= 0 && index < catalog.length && catalog[index].index === index
+  const traced = selected.filter(index => index >= 0 && index < catalog.length && catalog[index].index === index
     && typeof catalog[index].quote === 'string' && catalog[index].quote.trim() !== '' && catalog[index].quote.length <= 300 && source.some(text => text.includes(catalog[index].quote)));
-  return { answer, sourceCheck: traced.length ? 'traced' : 'untraced' };
+  return { ...review, sourceCheck: traced.length ? 'traced' : 'untraced', sourceCounts: { selected: selected.length, traced: traced.length, untraced: selected.length - traced.length } };
 }

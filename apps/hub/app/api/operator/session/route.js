@@ -9,7 +9,9 @@ import {
   operatorLoginCredentialsMatch,
   operatorSessionCookieOptions,
   verifyOperatorSessionRequest,
+  operatorRecoveryContext,
 } from "@/lib/operator-session";
+import { resolveDefaultWorkspaceId } from '@/lib/server-write';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,7 +57,8 @@ export async function GET(req) {
     status: session.ok ? "authenticated" : "anonymous",
     reason: session.reason,
     configured: hasOperatorSessionSecret() && hasOperatorLoginCredentials(),
-  });
+    recovery: session.ok ? operatorRecoveryContext(req, resolveDefaultWorkspaceId()) : null,
+  }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function POST(req) {

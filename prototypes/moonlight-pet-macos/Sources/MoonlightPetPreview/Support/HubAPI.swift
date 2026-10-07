@@ -2,6 +2,8 @@ import Foundation
 
 protocol HubServing: Sendable {
     func login(username: String, password: String) async throws
+    func clearSession() async throws
+    func disconnect() async
     func tasks() async throws -> HubTaskPage
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage
     func createTask(_ command: HubTaskCommand) async throws -> HubTask
@@ -15,6 +17,8 @@ struct HubAPI: HubServing {
     func login(username: String, password: String) async throws {
         try await transport.login(username: username, password: password)
     }
+    func clearSession() async throws { try await transport.clearSession() }
+    func disconnect() async { await transport.disconnect() }
     func tasks() async throws -> HubTaskPage {
         struct Page: Decodable { let status: String; let tasks: [HubTask]; let partial: Bool? }
         let p: Page = try await read("/api/hub/tasks")

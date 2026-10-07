@@ -17,3 +17,15 @@ export async function requestOffice(input,{fetcher=fetch,signal}={}) {
 export function officeHistory(turns) {
  return turns.slice(-4).flatMap(turn=>[{role:'user',text:turn.message.slice(0,2000)},{role:'assistant',text:turn.result.answer.slice(0,2000)}]);
 }
+
+export async function loadOfficeUsage({ fetcher = fetch, signal } = {}) {
+ try {
+  const timeout = AbortSignal.timeout(15000);
+  const response = await fetcher('/api/hub/office/usage', { cache: 'no-store', signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+  const data = await response.json();
+  if (!response.ok || data?.source === 'error') return { status: 'error' };
+  if (data?.status === 'preview') return { status: 'preview' };
+  if (!['live', 'partial'].includes(data?.status) || !['windowDays', 'requests', 'applied', 'failed'].every(key => Number.isFinite(data[key]) && data[key] >= 0)) return { status: 'error' };
+  return data;
+ } catch { return { status: 'error' }; }
+}

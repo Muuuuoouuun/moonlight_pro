@@ -1,6 +1,24 @@
 import AppKit
 
 enum SelfCheck {
+    @MainActor private static func checkOfficeAgendaReplacement() -> Bool {
+        let suite = "pet-office-agenda-check-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = AppModel(defaults: defaults)
+        model.office.sourceTaskID = UUID(); model.office.draft = "이전 Hub 할 일"
+        model.prepareOfficeFromTask(LocalTask(id: UUID(), title: "로컬 할 일", isDone: false))
+        guard model.office.sourceTaskID == nil, model.office.draft == "로컬 할 일" else {
+            fputs("Office local agenda must replace the prior Hub task binding\n", stderr); return false
+        }
+        model.office.sourceTaskID = UUID(); model.memoDraft = "새 메모 안건"
+        model.prepareOfficeFromMemo()
+        guard model.office.sourceTaskID == nil, model.office.draft == "새 메모 안건" else {
+            fputs("Office memo agenda must replace an unsaved task binding\n", stderr); return false
+        }
+        return true
+    }
+
     @MainActor private static func checkHubMemoCapture() -> Bool {
         var result: Bool?
         Task { @MainActor in
@@ -59,7 +77,7 @@ enum SelfCheck {
                 return false
             }
         }
-        guard checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkPetOpeningHandoff(), checkReadingTone(), checkCompanionWindows() else { return false }
+        guard checkOfficeAgendaReplacement(), checkHubMemoCapture(), DesktopRefractionCheck.run(), GlassOpticsCheck.run(), GlassTextCheck.run(), checkPanelInteraction(), checkPetClicks(), checkPetOpeningHandoff(), checkReadingTone(), checkCompanionWindows() else { return false }
         let now = Date(timeIntervalSince1970: 1_000)
         let clock = FocusClock(endsAt: now.addingTimeInterval(90))
         guard clock.remaining(at: now) == 90,
@@ -485,6 +503,8 @@ private actor CaptureCheckService: HubServing {
     private var continuation: CheckedContinuation<Bool, Never>?
     func release(fail: Bool) { started = false; continuation?.resume(returning: fail); continuation = nil }
     func login(username: String, password: String) async throws {}
+    func clearSession() async {}
+    func disconnect() async {}
     func tasks() async throws -> HubTaskPage { HubTaskPage(tasks: [], partial: false) }
     func calendar(from: Date, to: Date) async throws -> HubCalendarPage { HubCalendarPage(events: [], partial: false) }
     func createTask(_ command: HubTaskCommand) async throws -> HubTask { throw HubDataError.invalidResponse }

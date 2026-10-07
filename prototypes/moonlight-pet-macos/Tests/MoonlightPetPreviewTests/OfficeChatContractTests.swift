@@ -38,6 +38,7 @@ private actor OfficeContractTransport: HubTransporting {
     func login(username: String, password: String) async throws {}
     func logout() async throws {}
     func clearSession() async {}
+    func disconnect() async {}
 }
 
 private func officeResponse(owner: OfficeAgent = .sylveon, scope: OfficeChatScope = .personal) -> [String: Any] {

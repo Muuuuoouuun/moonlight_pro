@@ -16,6 +16,11 @@ import { buildOperatorHomeSummary } from "@/lib/operator-home-summary";
 import { buildTaskToday } from "@/lib/task-today";
 import { filterOperatorOwnedRevenue } from "@/lib/operator-revenue-scope";
 import { buildDailyFocus, withoutFocusDuplicates } from "@/lib/daily-focus";
+import { toCheckItem } from "@/lib/check-items/catalog";
+import { applyCheckItemOutcomes, orderCheckItems } from "@/lib/check-items/suppression";
+import { readCheckItemContext } from "@/lib/repositories/signal-outcomes";
+import { kstDayKey } from "@/lib/kst-day";
+import { BLOCKER_KIND_LABELS } from "../../../../../../packages/project-delivery/index.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,6 +84,7 @@ function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = 
       if (overlap) {
         return [{
           id: `risk-converge-${deal.id}-${project.id}`,
+          subject: { type: "risk", id: `${deal.id}~${project.id}`, name: overlap },
           tone: "danger",
           kind: "Risk",
           title: `${overlap} — 두 전선에서 위험`,
@@ -86,9 +92,8 @@ function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = 
           meta: "Cross-pillar · deal × project",
           source: { from: "Risk", ref: deal.id },
           decisions: [
-            action("딜 열기", "deals", true),
+            action("거래 열기", "deals", true),
             action("프로젝트 열기", "projects"),
-            action("오늘 보류", "wait"),
           ],
         }];
       }
@@ -103,6 +108,7 @@ function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = 
   if (fronts.length >= 2) {
     return [{
       id: "risk-convergence",
+      subject: { type: "risk", id: "convergence", name: "복합 리스크" },
       tone: "danger",
       kind: "Risk",
       title: `복합 리스크 — ${fronts.length}개 전선`,
@@ -139,17 +145,17 @@ function buildRevenueSignals(revenue, staleDealIds = new Set()) {
     .forEach((deal) => {
       signals.push({
         id: `revenue-stale-${deal.id}`,
-        subject: { type: "deal", id: deal.id },
+        subject: { type: "deal", id: deal.id, name: deal.name },
         tone: "danger",
         kind: "Revenue",
         title: `${deal.name} — ${deal.age}일째 정체`,
         summary: `${deal.stage} 단계에서 마지막 활동이 오래됐습니다. 오늘 follow-up을 보내거나 다음 액션을 명확히 정해야 합니다.`,
         meta: `Deal · ${formatMoney(deal.value)} · close ${deal.close}`,
         source: { from: "Deals", ref: deal.id },
+        // `리마인드 초안`은 초안 없이 거래 창만 열었고 `오늘 보류`는 리듬(생활 루틴)으로 갔다 —
+        // 둘 다 이름과 도착지가 어긋나 뺐다(확인할 것 스펙 §1·단계 0). 끝내기는 단계 1에서 붙는다.
         decisions: [
-          action("리마인드 초안", "followup", true),
-          action("딜 보드 열기", "deals"),
-          action("오늘 보류", "wait"),
+          action("거래 열기", "deals", true),
         ],
       });
     });
@@ -158,6 +164,7 @@ function buildRevenueSignals(revenue, staleDealIds = new Set()) {
   if (newLeads.length) {
     signals.push({
       id: "revenue-new-leads",
+      subject: { type: "lead-group", ids: newLeads.map((lead) => lead.id), name: `신규 리드 ${newLeads.length}건` },
       tone: "neutral",
       kind: "Revenue",
       title: `신규 리드 ${newLeads.length}건 분류 대기`,
@@ -182,6 +189,7 @@ function buildContentSignals(content) {
   attention.slice(0, 2).forEach((item) => {
     signals.push({
       id: `content-${item.id}`,
+      subject: { type: "content", id: item.itemId || item.id, name: item.title },
       tone: item.tone || "warning",
       kind: "Content",
       title: item.title,
@@ -199,6 +207,7 @@ function buildContentSignals(content) {
   if (draft && signals.length < 2) {
     signals.push({
       id: `content-draft-${draft.id}`,
+      subject: { type: "content", id: draft.id, name: draft.title },
       tone: "neutral",
       kind: "Content",
       title: `${draft.title} — ${draft.status}`,
@@ -219,6 +228,7 @@ function buildAutomationSignals(automations) {
   const incidents = Array.isArray(automations.incidents) ? automations.incidents : [];
   return incidents.slice(0, 2).map((run) => ({
     id: `automation-failed-${run.id}`,
+    subject: { type: "automation", id: run.automationId || run.automationKey || run.id, name: run.flow },
     tone: "danger",
     kind: "Automation",
     title: `${run.flow} · 확인 필요`,
@@ -232,46 +242,34 @@ function buildAutomationSignals(automations) {
   }));
 }
 
-function buildWorkSignals(projects, work) {
+// "오늘의 결정 기록이 비어 있습니다" 신호는 뺐다 — 오늘이 아니라 결정 기록이 0건일 때 떴고,
+// 업무가 아니라 의례를 만들었다(확인할 것 스펙 §1·단계 0).
+// 막힌 프로젝트 — 병목 라벨을 글로(확인할 것 스펙 §5.4 `막힘 · 의사결정 · 9일`), 막힘 풀기에 필요한
+// 계획·버전은 `unblock`에 싣는다. 계획을 읽지 못한 행은 `unblock` 없이 — 카드는 프로젝트 열기로 돌아간다.
+function buildWorkSignals(projects, now = Date.now()) {
   const projectRows = Array.isArray(projects.projects) ? projects.projects : [];
-  const decisions = Array.isArray(work.decisions) ? work.decisions : [];
-  const decisionState = work?.decisionsState?.state;
-  const decisionComplete = decisionState
-    ? decisionState === "live" || decisionState === "live-empty"
-    : work?.source === "supabase"
-      && !(work.failedSources || []).includes("decisions")
-      && !(work.partialSources || []).includes("decisions");
   const signals = [];
 
   const blocked = projectRows.find((project) => project.status === "Blocked");
   if (blocked) {
+    const delivery = blocked.delivery && typeof blocked.delivery === "object" ? blocked.delivery : null;
+    const kind = BLOCKER_KIND_LABELS[delivery?.blockerKind] || "";
+    const pausedMs = Date.parse(delivery?.pausedAt || "");
+    const days = Number.isFinite(pausedMs) ? Math.max(0, Math.floor((now - pausedMs) / 86400000)) : null;
+    const due = blocked.dueAt ? kstDayKey(blocked.dueAt) : "";
     signals.push({
       id: `work-blocked-${blocked.id}`,
+      subject: { type: "project", id: blocked.id, name: blocked.name, blockerKind: delivery?.blockerKind || "" },
       tone: "danger",
       kind: "Work",
-      title: `${blocked.name} blocked`,
-      summary: blocked.nextAction || blocked.summary || "막힌 이유와 다음 액션을 정리해야 합니다.",
-      meta: `Project · due ${blocked.due}`,
+      title: `${blocked.name} — 막힘`,
+      summary: delivery?.blocker || blocked.nextAction || "막힌 이유와 다음 액션을 정리해야 합니다.",
+      meta: ["막힘", kind, days !== null ? `${days}일` : "", due ? `목표 ${due}` : ""].filter(Boolean).join(" · "),
       source: { from: "Projects", ref: blocked.id },
+      ...(delivery && blocked.updatedAt ? { unblock: { delivery, updatedAt: blocked.updatedAt } } : {}),
       decisions: [
         action("프로젝트 열기", "projects", true),
         action("결정 기록", "decision"),
-      ],
-    });
-  }
-
-  if (decisionComplete && !decisions.length && signals.length < 2) {
-    signals.push({
-      id: "work-decision-missing",
-      tone: "neutral",
-      kind: "Work",
-      title: "오늘의 결정 기록이 비어 있습니다",
-      summary: "브랜드 자산으로 남길 판단을 하나라도 기록하면 주간 회고와 콘텐츠 전환이 쉬워집니다.",
-      meta: "Decision · daily ritual",
-      source: { from: "Decisions", ref: "TODAY" },
-      decisions: [
-        action("결정 기록", "decision", true),
-        action("Rhythm 보기", "rhythm"),
       ],
     });
   }
@@ -377,7 +375,6 @@ export async function GET() {
   };
 
   const projects = readLedger(projectsResult);
-  const work = readLedger(workResult);
   const content = readLedger(contentResult);
   const revenue = readLedger(revenueResult);
   const operatorRevenue = filterOperatorOwnedRevenue(revenue);
@@ -420,16 +417,23 @@ export async function GET() {
       .filter((item) => item.lane === "deal" && item.stalled)
       .map((item) => item.entityId),
   );
-  const signals = withoutFocusDuplicates(
+  // 확인할 것(2026-09-30 스펙 §4.4): 카드 모양을 붙이고, 끝낸 기록·보류·열린 할 일·잡아 둔 일로
+  // 숨긴 뒤 차례를 정한다. 영수증·보류·할 일 상태를 못 읽으면 숨기지 않는다(checkItems.state로 알림).
+  const candidates = withoutFocusDuplicates(
     [
       ...buildUnifiedRiskSignals(operatorRevenue, projects, automations, staleDealIds),
       ...buildRevenueSignals(operatorRevenue, staleDealIds),
       ...buildContentSignals(content),
       ...buildAutomationSignals(automations),
-      ...buildWorkSignals(projects, work),
+      ...buildWorkSignals(projects),
     ],
     dailyFocus,
-  ).slice(0, 7);
+  ).map(toCheckItem);
+  const checkContext = await readCheckItemContext(candidates).catch(() => null);
+  const { visible, suppressed } = checkContext
+    ? applyCheckItemOutcomes(candidates, checkContext)
+    : { visible: candidates, suppressed: [] };
+  const signals = orderCheckItems(visible).slice(0, 7);
   const operatorHome = buildOperatorHomeSummary({
     projects,
     content: filterContentLedgerToBrandLanes(content),
@@ -474,6 +478,14 @@ export async function GET() {
     contentBrands,
     inquiries: attention?.inquiries || { status: 'error', rows: [], unreadCount: null },
     signals,
+    // 확인할 것의 영수증 상태 — state가 error/partial이면 숨기지 못한 카드가 있을 수 있다(누락보다 중복이 낫다).
+    checkItems: {
+      state: checkContext?.status || "error",
+      finishedToday: checkContext?.finishedToday || [],
+      suppressedCount: suppressed.length,
+      scheduled: suppressed.filter((entry) => entry.reason === "scheduled").length,
+      scheduledBlocks: checkContext?.scheduledBlocks || [],
+    },
     dailyFocus,
     queue,
     morningBrief: morning.brief || null,

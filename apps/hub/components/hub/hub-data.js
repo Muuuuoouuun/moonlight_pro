@@ -65,7 +65,7 @@ export const NAV_TREE = [
       { key: 'product-catalog', label: '제품', icon: 'projects', path: 'dashboard/products', keywords: ['제품', 'product', '포트폴리오', '수익형', 'GitHub', '제품 문의'] },
       { key: 'calendar', label: 'Calendar', icon: 'calendar', path: 'dashboard/work/calendar', keywords: ['캘린더', '일정'] },
       { key: 'rhythm', label: 'Rhythm', icon: 'rhythm', path: 'dashboard/work/rhythm', keywords: ['리듬', '루틴'] },
-      { key: 'decisions', label: 'Decisions', icon: 'decisions', path: 'dashboard/work/decisions', keywords: ['결정', '의사결정'] },
+      { key: 'decisions', label: '결정 일지', icon: 'decisions', path: 'dashboard/work/decisions', keywords: ['결정', '의사결정', 'decisions', '결정 일지'] },
       { key: 'roadmap', label: 'Roadmap', icon: 'roadmap', path: 'dashboard/work/roadmap', keywords: ['로드맵'] },
     ],
   },

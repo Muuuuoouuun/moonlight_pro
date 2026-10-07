@@ -24,7 +24,7 @@ test('shared daily brief read passes its real focus and task data to Home', asyn
       json: async () => ({ status: 'live', signals: [], dailyFocus, taskToday }),
     }),
   });
-  assert.deepEqual(live, { status: 'live', signals: [], dailyFocus, taskToday });
+  assert.deepEqual(live, { status: 'live', signals: [], dailyFocus, taskToday, checkItems: null });
 
   const failed = await fetchDailyBriefSignals({
     fetchImpl: async () => ({
@@ -32,7 +32,7 @@ test('shared daily brief read passes its real focus and task data to Home', asyn
       json: async () => ({ status: 'error', signals: [{ title: 'stale' }], dailyFocus, taskToday }),
     }),
   });
-  assert.deepEqual(failed, { status: 'error', signals: [], dailyFocus: null, taskToday: null });
+  assert.deepEqual(failed, { status: 'error', signals: [], dailyFocus: null, taskToday: null, checkItems: null });
 });
 
 test('morning brief card renders three factual lines and navigation without an embedded tip', () => {

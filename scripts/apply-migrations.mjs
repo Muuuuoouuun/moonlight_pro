@@ -36,7 +36,7 @@ function parseEnvFile(filepath) {
   return out;
 }
 
-function envSources() {
+export function envSources() {
   return [
     { name: ".env", values: parseEnvFile(path.join(root, ".env")) },
     { name: ".env.local", values: parseEnvFile(path.join(root, ".env.local")) },
@@ -45,8 +45,8 @@ function envSources() {
   ];
 }
 
-export function loadEnv() {
-  return Object.assign({}, ...envSources().map(source => source.values));
+export function loadEnv(sources = envSources()) {
+  return Object.assign({}, ...sources.map(source => source.values));
 }
 
 export function deriveProjectRef(env) {

@@ -75,3 +75,17 @@ test("formatWon round-trips through parseWon without losing won", () => {
     assert.equal(parseWon(formatWon(n)), n);
   }
 });
+
+test("parseWon preserves the signs of legacy currency-prefixed amounts", () => {
+  for (const label of ["₩-1200000", "₩-1.2M", "-₩1,200,000", "₩ −120만원"]) {
+    assert.equal(parseWon(label), -1_200_000, label);
+  }
+  assert.equal(parseWon("₩+900K"), 900_000);
+  assert.equal(parseWon("₩-0.5"), -1, "retain existing signed text rounding");
+});
+
+test("parseWon rejects overflow in plain, legacy and Korean amounts", () => {
+  for (const label of ["9".repeat(309), `${"9".repeat(309)}M`, `${"9".repeat(308)}억`, `-${"9".repeat(308)}만`]) {
+    assert.equal(parseWon(label), null, `overflow ${label.slice(-12)}`);
+  }
+});

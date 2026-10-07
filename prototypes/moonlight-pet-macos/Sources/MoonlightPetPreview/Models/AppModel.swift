@@ -61,9 +61,9 @@ typealias CompactMode = QuickMode
 enum CompanionSurface { case quick, widget }
 
 enum OfficeCompanionTab: String, CaseIterable, Identifiable {
-    case work, conversation
+    case work, conversation, meeting
     var id: String { rawValue }
-    var title: String { self == .work ? "작업" : "대화" }
+    var title: String { self == .work ? "작업" : self == .conversation ? "대화" : "회의" }
 }
 
 struct FocusClock: Equatable {
@@ -123,6 +123,7 @@ final class AppModel: ObservableObject {
         didSet {
             defaults.set(selectedCharacter.rawValue, forKey: "petPreview.character")
             if !chat.isSending { chat.agent = selectedCharacter.officeAgent }
+            if !office.isSending, office.meeting == nil { office.agent = selectedCharacter.officeAgent }
         }
     }
 
@@ -139,6 +140,7 @@ final class AppModel: ObservableObject {
     let council: CouncilDraftStore
     let chat = OfficeChatStore()
     let officeRequests = OfficeRequestStore()
+    let office = OfficeChatStore(durableMeetings: true)
     var onOpenMode: ((QuickMode) -> Void)?
     private var featureObservers: Set<AnyCancellable> = []
     private var hubObserver: AnyCancellable?
@@ -164,6 +166,7 @@ final class AppModel: ObservableObject {
         hubBaseURL = defaults.string(forKey: "petPreview.hubURL") ?? Self.defaultHubURL
         selectedCharacter = PetCharacter(rawValue: defaults.string(forKey: "petPreview.character") ?? "") ?? .silver
         chat.agent = selectedCharacter.officeAgent
+        office.agent = selectedCharacter.officeAgent
         completionFeedback.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }.store(in: &featureObservers)
@@ -191,11 +194,13 @@ final class AppModel: ObservableObject {
         activity.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         council.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         chat.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
+        office.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         officeRequests.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &featureObservers)
         hub.onConnectionChanged = { [weak self] service, origin in
             self?.completionFeedback.reset()
             self?.activity.configure(service: service as? any HubActivityServing, origin: origin)
             self?.chat.configure(service: service as? any HubOfficeServing, origin: origin)
+            self?.office.configure(service: service as? any HubOfficeServing, origin: origin)
             self?.officeRequests.configure(service: service as? any HubOfficeRequestsServing, origin: origin)
         }
         chat.onReply = { [weak self] turn in
@@ -320,11 +325,38 @@ final class AppModel: ObservableObject {
             saveMemoToHub()
         case .council: sendCouncilMessage()
         case .office:
-            if officeTab == .conversation { sendCouncilMessage() }
+            if officeTab == .meeting { office.sendDraft() }
+            else if officeTab == .conversation { sendCouncilMessage() }
             else if officeRequests.detail != nil { copyOfficeResult() }
             else if canReadOfficeResult { Task { await officeRequests.readSelected() } }
         default: openHub(mode)
         }
+    }
+
+    func prepareOfficeFromMemo() {
+        guard !office.isSending else { return }
+        saveMemo()
+        if office.meeting == nil { office.sourceTaskID = nil }
+        office.draft = memoDraft; office.source = .memo
+        officeTab = .meeting
+        onOpenMode?(.office)
+    }
+    func prepareOfficeFromTask(_ task: LocalTask) {
+        guard !office.isSending else { return }
+        office.startNewMeeting()
+        office.sourceTaskID = nil
+        if hub.isEnabled, let remote = hub.tasks.first(where: { $0.id == task.id }),
+           ["classin", "brand"].contains(remote.workspace ?? "") {
+            office.scope = remote.workspace == "classin" ? .classin : .personal
+            office.sourceTaskID = remote.id
+        }
+        office.draft = task.title; office.source = .task
+        officeTab = .meeting
+        onOpenMode?(.office)
+    }
+    func openOfficeMeetingInHub() {
+        guard let meeting = office.meeting, let url = try? meeting.hubURL(baseURL: hubBaseURL) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     func continueMemoInCouncil() { prepareCouncilFromMemo() }

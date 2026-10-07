@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { OFFICE_IDS, parseOfficeRequest } from '@com-moon/agent-contracts/office';
+import { OFFICE_IDS, parseOfficeRequest, officeDiscussionReviewTargets } from '@com-moon/agent-contracts/office';
 import { parseOfficeWorkflowRequest, parseOfficeWorkflowContext } from '@com-moon/agent-contracts/office-workflow';
 import { OFFICE_ROLE_CARDS, OFFICE_ROLE_CARD_VERSION, renderOfficeRoleBrief } from './role-cards.ts';
 import { OFFICE_PERSONAS } from './personas.ts';
@@ -103,7 +103,7 @@ test('council invokes every role with its own artifact and synthesizes only sele
         assert.equal(input.responseJsonSchema.properties.ownerId, undefined);
         return { ok: true, model: 'synthetic-role-assembly', text: JSON.stringify({
           position: '대화를 마칩니다.', evidence: [], objection: '', revisionCondition: '새 요청이 있을 때',
-          changed: false, replyTo: data.phase === 'response' ? [participants.find(id => id !== data.roleId)] : [],
+          changed: false, ...(data.phase === 'response' ? { peerReviewsByOwner: Object.fromEntries(participants.filter(id => id !== data.roleId).map(id => [id, id === officeDiscussionReviewTargets(participants)[data.roleId] ? { quoteIndex: data.peerReviewCatalog.find(item => item.ownerId === id && item.field === 'position').index, assessment: 'supports', reason: '종결 요청을 유지합니다.' } : null])) } : { replyTo: [], peerReviews: [] }),
           changeReason: data.phase === 'response' ? '종결 요청을 유지합니다.' : '', sourceIndexes: [], corrections: [],
         }) };
       });

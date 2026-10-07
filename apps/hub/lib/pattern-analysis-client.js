@@ -47,7 +47,7 @@ export async function forwardPatternAnalysis(
       },
       body: JSON.stringify(payload),
       cache: "no-store",
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(45000),
     });
 
     const result = await response.json().catch(() => null);

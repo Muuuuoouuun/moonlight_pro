@@ -1,8 +1,9 @@
 "use client";
 import React from 'react';
-import { Badge, Button, Card, EmptyState, Kbd, Progress, SelectField, Skeleton, TextAreaField, TextField } from './hub-primitives';
+import { Badge, Button, Card, EmptyState, Kbd, SelectField, Skeleton, TextAreaField, TextField } from './hub-primitives';
 import { goalMetricInput, goalObjectiveInput, goalObservationInput, goalSourceKeysFor, goalWriteErrorMessage, measurementLabel, safeGoalEvidenceHref } from '@/lib/goal-client';
 import { goalPeriodPreset } from '@/lib/goal-input-ux';
+import { goalMetricReading, kpiThresholdLabel } from '@/lib/goal-concepts';
 import { useGoalCommand, useGoalDraft } from './use-goals';
 import './goals.css';
 
@@ -30,6 +31,7 @@ const optionalNumber = value => value === '' || value == null ? null : Number(va
 export function GoalReadFeedback({ model, emptyTitle = '아직 목표가 없습니다', onCreate }) {
   if (model.status === 'loading') return <Skeleton lines={3} height={18} label="목표 원장 불러오는 중" />;
   if (model.status === 'error' || model.status === 'preview') return <EmptyState title={model.status === 'preview' ? '목표 저장소 연결이 필요합니다' : '목표를 불러오지 못했습니다'} description={model.status === 'preview' ? '연결하면 목표와 실제 측정 기록을 관리할 수 있습니다.' : model.error} action={<Button variant="outline" onClick={model.refresh}>다시 불러오기</Button>} />;
+  if (!model.objectives.length && model.status === 'partial') return <EmptyState title="목표 목록을 모두 확인하지 못했습니다" description="읽기 상태를 확인한 뒤 목표를 만들거나 검색하세요." action={<Button onClick={model.refresh}>다시 불러오기</Button>} />;
   if (!model.objectives.length) return <EmptyState title={emptyTitle} description="목표를 만들고, 확인 가능한 지표와 실제 업무를 연결하세요." action={onCreate ? <Button variant="primary" onClick={onCreate}>목표 만들기</Button> : undefined} />;
   return null;
 }
@@ -48,18 +50,16 @@ export function GoalCommandFeedback({ command }) {
 
 export function GoalMetricSummary({ metric, scope }) {
   const measurement = metric.measurement;
-  const progress = metric.progress;
-  const value = Number.isFinite(progress?.value) ? progress.value : null;
-  const isAchieved = progress?.state === 'achieved' || progress?.achieved === true;
-  const label = isAchieved ? '기준 달성' : progress?.state === 'partial' ? '일부 근거 · 달성 판단 보류' : progress?.state === 'target_unset' ? '목표 기준 미설정' : progress?.state === 'unmeasured' || !measurement ? '미측정' : progress?.achieved === false ? '진행 중' : '진척률 산정 전';
+  const { concept, label, score, achievementPercent } = goalMetricReading(metric);
+  const target = concept === 'kpi' ? kpiThresholdLabel(metric) : metric.direction === 'range' ? `바닥 기준 ${metric.targetMin ?? '—'}–${metric.targetMax ?? '—'} ${metric.unit}` : `바닥 ${metric.target ?? '—'} ${metric.unit}`;
   return <div className="goal-metric-summary">
-    <div className="goal-actions"><span className="stat goal-measurement">{measurementLabel(metric)}</span><span className="goal-muted">{metric.direction === 'range' ? `기준 ${metric.targetMin ?? '—'}–${metric.targetMax ?? '—'}` : `목표 ${metric.target ?? '—'}`} {metric.unit}</span></div>
+    <div className="goal-actions"><span className="stat goal-measurement">{measurementLabel(metric)}</span><span className="goal-muted">{concept === 'reference' ? '약속선 없음' : target}</span></div>
     <div className="goal-actions">
       <Badge tone="neutral" size="xs">{label}</Badge>
-      {value !== null && <span className="num mono">{value}%</span>}
+      {score !== null && <span className="num mono">KR 점수 {score.toFixed(2)} · 바닥 0.7 · 천장 미등록</span>}
+      {achievementPercent !== null && <span className="num mono">바닥 달성률 {achievementPercent}%</span>}
     </div>
-    {value !== null && measurement?.coverage === 'complete' && <Progress value={value} tone="moon" />}
-    <p className="goal-muted">{GOAL_SOURCE_OPTIONS.find(item => item.value === metric.sourceKey)?.label || '출처 확인 필요'}{measurement?.observedAt ? ` · 관측 ${dateTime(measurement.observedAt)}` : ''}</p>
+    <p className="goal-muted">{GOAL_SOURCE_OPTIONS.find(item => item.value === metric.sourceKey)?.label || '출처 확인 필요'}{measurement?.observedAt ? ` · ${metric.sourceKey === 'manual' ? '관측' : '집계 조회'} ${dateTime(measurement.observedAt)}` : ''}{metric.sourceKey !== 'manual' ? ' · 원천 최신일 미확인' : ''}</p>
     {metric.sourceKey !== 'manual' && scope && <p className="goal-muted">{goalScopeLabel(scope)} 전체의 기간 내 기록을 집계합니다. 연결한 업무만의 실적은 아닙니다.</p>}
     {measurement?.reason === 'source-personal-only' ? <p className="goal-muted">하루 리뷰는 개인 기록이라 회사 목표에서 집계하지 않습니다. 이 지표를 보관하고 다른 측정 방법으로 새로 만드세요.</p> : measurement?.coverage !== 'complete' && measurement?.reason && <p className="goal-muted">이 기간의 근거가 부족해 달성을 확정하지 않습니다.</p>}
   </div>;

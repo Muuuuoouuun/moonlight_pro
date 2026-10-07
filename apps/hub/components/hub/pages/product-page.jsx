@@ -16,6 +16,7 @@ import {
   flowFilter,
   monthNumbers,
   openInquiries,
+  parseMonthInput,
   previousMonth,
   productFlow,
   productStageLabel,
@@ -120,18 +121,15 @@ function MonthDrawer({ product, month, onClose, onSaved }) {
   }, [product, target]);
   const [state, setState] = React.useState({ saving: false, message: "" });
   if (!draft) return null;
-  const toNumber = (value) => {
-    const digits = String(value).replace(/[^0-9]/g, "");
-    return digits === "" ? null : Number(digits);
-  };
   const save = async () => {
+    if (state.saving) return;
+    const parsed = parseMonthInput(draft);
+    if (!parsed.ok) { setState({ saving: false, message: parsed.message }); return; }
     setState({ saving: true, message: "" });
     const outcome = await recordMonth({
       productId: product.id,
       month: target,
-      activeUsers: toNumber(draft.activeUsers),
-      revenue: toNumber(draft.revenue),
-      cost: toNumber(draft.cost),
+      ...parsed.values,
     });
     if (!outcome.ok) { setState({ saving: false, message: outcome.message }); return; }
     onSaved(`${monthLabel(target)} 숫자를 적었어요.`);
@@ -144,12 +142,12 @@ function MonthDrawer({ product, month, onClose, onSaved }) {
       onClose={state.saving ? undefined : onClose}
       footer={<><span className={styles.spacer} />{state.message && <span role="alert" className={styles.danger} style={{ fontSize: 12 }}>{state.message}</span>}<Button variant="ghost" size="sm" onClick={onClose} disabled={state.saving}>닫기</Button><Button variant="primary" size="sm" onClick={save} disabled={state.saving}>{state.saving ? "저장 중…" : "저장"}</Button></>}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <fieldset disabled={state.saving} style={{ display: "flex", flexDirection: "column", gap: 12, border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         <SegmentedControl label="달" options={[{ key: month, label: `이번 달 · ${monthLabel(month)}` }, { key: previousMonth(month), label: `지난달 · ${monthLabel(previousMonth(month))}` }]} value={target} onChange={setTarget} />
         <TextField label="주간 사용자 · 최근 7일 활성" inputMode="numeric" value={draft.activeUsers} onChange={(event) => setDraft({ ...draft, activeUsers: event.target.value })} placeholder={current.known ? "" : "모름"} />
         <TextField label="매출(원)" inputMode="numeric" value={draft.revenue} onChange={(event) => setDraft({ ...draft, revenue: event.target.value })} placeholder="모름" />
         <TextField label="비용(원) · 서버·도메인·API 등" inputMode="numeric" value={draft.cost} onChange={(event) => setDraft({ ...draft, cost: event.target.value })} placeholder="모름" />
-      </div>
+      </fieldset>
     </Drawer>
   );
 }

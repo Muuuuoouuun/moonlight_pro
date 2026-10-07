@@ -145,7 +145,7 @@ export const REVENUE_ROUTE_LABELS = {
 const PLANNING_TAIL = [
   { key: 'prj-calendar', label: 'Calendar', path: 'dashboard/work/calendar' },
   { key: 'prj-roadmap', label: 'Roadmap', path: 'dashboard/work/roadmap' },
-  { key: 'prj-decisions', label: 'Decisions', path: 'dashboard/work/decisions' },
+  { key: 'prj-decisions', label: '결정 일지', path: 'dashboard/work/decisions' },
   { key: 'prj-rhythm', label: 'Rhythm', path: 'dashboard/work/rhythm' },
 ];
 
@@ -452,6 +452,13 @@ export function resolveSidebarPath(anchorKey, scope) {
   const anchor = SIDEBAR_ANCHORS.find((a) => a.key === anchorKey);
   if (!anchor) return null;
   return anchor.paths[normalizeScope(scope)] || anchor.paths[DEFAULT_SCOPE];
+}
+
+// A selected Office scope replaces the old meeting pointer. The destination
+// session can restore its own meeting and drafts after navigation.
+export function officeScopeSelectionPath(activePath, scope) {
+  if (pathnameOf(activePath) !== 'dashboard/agents/office-council') return null;
+  return `dashboard/agents/office-council?scope=${normalizeScope(scope)}`;
 }
 
 // Anchors expanded when no stored preference exists — the operator's daily

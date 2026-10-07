@@ -4,6 +4,7 @@ import React from 'react';
 import { Button, CertaintyBadge, Drawer, SegmentedControl, TextAreaField, TruthBadge } from './hub-primitives';
 import { OFFICE_MENTOR_FOLLOWUP_LIMIT, officeMentorPartialNote, requestOfficeMentor } from './office-mentor-client';
 import { officeMentorSessions } from './office-mentor-session';
+import { officeRemainingDissent } from './office-deliberation-client';
 import './office-mentor-drawer.css';
 
 const LANE_LABEL = { classin: '영업 멘토', personal: '브랜드 멘토' };
@@ -72,6 +73,7 @@ export function OfficeMentorReferenceCard({ answer, target = '멘토', onContinu
 
 function OfficeResultSource({ session, summaryRef }) {
   const result = session.result;
+  const dissent = officeRemainingDissent(result);
   return <details className="office-mentor__source">
     <summary ref={summaryRef} tabIndex={0}>오피스 원문과 출처</summary>
     <div className="office-mentor__source-body">
@@ -80,7 +82,7 @@ function OfficeResultSource({ session, summaryRef }) {
       <p>{result.answer}</p>
       {result.recommendation ? <p><strong>주관 추천</strong> {result.recommendation}</p> : null}
       <div><strong>근거</strong><ul>{result.evidence?.length ? result.evidence.map((item, index) => <li key={index}>{item}</li>) : <li>제공된 근거 없음</li>}</ul></div>
-      <div><strong>남은 이견</strong><ul>{result.dissent?.length ? result.dissent.map((item, index) => <li key={index}>{item}</li>) : <li>기록된 이견 없음</li>}</ul></div>
+      <div><strong>남은 이견</strong><ul>{dissent.length ? dissent.map((item, index) => <li key={index}>{item}</li>) : <li>기록된 이견 없음</li>}</ul></div>
       <p><strong>다음 행동</strong> {result.nextAction || '제공 없음'}</p>
     </div>
   </details>;

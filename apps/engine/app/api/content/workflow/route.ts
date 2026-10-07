@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server.js";
 import { executeContentWorkflow, MAX_CONTENT_WORKFLOW_BYTES } from "../../../../lib/content-workflow.ts";
 import { validateSharedWebhookRequest } from "../../../../lib/shared-webhook.ts";
-import { invokeSupabaseRpc } from "../../../../lib/supabase-rest.ts";
+import { fetchSupabaseRowsDetailed, invokeSupabaseRpc } from "../../../../lib/supabase-rest.ts";
 
 export const runtime = "nodejs";
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   }
   const workspaceId = process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim();
   if (!workspaceId) return NextResponse.json({ status: "preview", error: "missing-workspace" }, { status: 202 });
-  const result = await executeContentWorkflow(body, { workspaceId }, { rpc: invokeSupabaseRpc });
+  const result = await executeContentWorkflow(body, { workspaceId }, { rpc: invokeSupabaseRpc, read: fetchSupabaseRowsDetailed });
   const status = result.status === "saved" || result.status === "duplicate" ? 200
     : result.status === "conflict" ? 409 : result.status === "invalid-input" ? 400
       : result.status === "preview" ? 202 : 502;

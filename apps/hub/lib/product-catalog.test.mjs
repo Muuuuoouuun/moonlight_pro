@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { normalizeProductCommand } from "../../engine/lib/product-command.ts";
 
 import {
   formToProductInput,
@@ -193,11 +194,11 @@ test("month numbers keep unknown as null and portfolio sums only what is known",
   const b = { id: "b", name: "B", opsStatus: "dev", metrics: [{ month: "2026-09", activeUsers: null, revenue: null, cost: 15000 }] };
   const c = { id: "c", name: "C", opsStatus: "paused", metrics: [] };
   assert.deepEqual(monthNumbers(a, "2026-09"), { month: "2026-09", activeUsers: 18, revenue: 190000, cost: 68000, net: 122000, known: true });
-  assert.equal(monthNumbers(b, "2026-09").net, -15000);
+  assert.equal(monthNumbers(b, "2026-09").net, null);
   assert.equal(monthNumbers(c, "2026-09").net, null);
   const inquiries = [{ status: "new" }, { status: "new", productId: "a" }, { status: "waiting", productId: "a" }, { status: "closed" }];
   const s = portfolioSummary([a, b, c], inquiries, "2026-09");
-  assert.deepEqual([s.byOps.live, s.users, s.usersMissing, s.net, s.openInquiries, s.newInquiries, s.unassignedInquiries], [1, 18, 2, 107000, 3, 2, 1]);
+  assert.deepEqual([s.byOps.live, s.users, s.usersMissing, s.net, s.openInquiries, s.newInquiries, s.unassignedInquiries], [1, 18, 2, 122000, 3, 2, 1]);
   const attention = portfolioAttention([{ ...a, projects: [{ id: "x", name: "키 교체", status: "active", dueAt: "2026-09-20" }] }], inquiries, { today: "2026-09-25" });
   assert.deepEqual(attention.map((i) => i.text), ["기한 지남 · 키 교체", "새 문의 2건 · 제품 미정 1건"]);
   assert.equal(previousMonth("2026-01"), "2025-12");
@@ -290,4 +291,58 @@ test("focus cap rejection names the products holding the three slots", async () 
   assert.match(text, /가 · 나 · 다/);
   assert.match(text, /유지·종료로 내린 뒤/);
   assert.doesNotMatch(productErrorText("focus-cap-reached"), /지금:/, "이름을 모르면 목록을 지어내지 않는다");
+});
+
+test('monthly profit stays unknown until both fields are present; explicit zero is measured', async () => {
+  const { monthNumbers, portfolioSummary } = await import('./product-catalog.js');
+  const product = (values, opsStatus = 'live') => ({ opsStatus, metrics: [{ month: '2026-10', ...values }] });
+  for (const values of [{ revenue: 100, cost: null }, { revenue: null, cost: 100 }, {}]) {
+    assert.equal(monthNumbers(product(values), '2026-10').net, null);
+  }
+  assert.equal(monthNumbers(product({ revenue: 0, cost: 0 }), '2026-10').net, 0);
+  const summary = portfolioSummary([product({ revenue: 100, cost: 20 }), product({ revenue: 200, cost: null }), product({ revenue: null, cost: 500 })], [], '2026-10');
+  assert.deepEqual([summary.revenue, summary.cost, summary.net, summary.moneyKnown, summary.moneyMissing], [100, 20, 80, 1, 2]);
+  assert.equal(portfolioSummary([product({ revenue: null, cost: 500 })], [], '2026-10').net, null);
+  assert.equal(portfolioSummary([product({ revenue: 0, cost: 0 })], [], '2026-10').net, 0);
+});
+
+test('weekly user summary excludes ended products from both known values and missing counts', async () => {
+  const { portfolioSummary } = await import('./product-catalog.js');
+  const product = (opsStatus, activeUsers) => ({ opsStatus, metrics: [{ month: '2026-10', activeUsers }] });
+  const ended = portfolioSummary([product('ended', 10)], [], '2026-10');
+  assert.equal(ended.usersMissing, 0);
+  assert.equal(ended.users, null);
+  const mixed = portfolioSummary([product('ended', 10), product('live', 0), product('paused', null)], [], '2026-10');
+  assert.equal(mixed.users, 0);
+  assert.equal(mixed.usersMissing, 1);
+  const missing = portfolioSummary([product('live', null), product('ended', null)], [], '2026-10');
+  assert.equal(missing.users, null);
+  assert.equal(missing.usersMissing, 1);
+});
+
+test('monthly parser preserves null and zero and rejects characters, signs, decimals and malformed grouping', async () => {
+  const { parseMonthInput } = await import('./product-catalog.js');
+  assert.deepEqual(parseMonthInput({ activeUsers: '', revenue: ' 0 ', cost: '1,200' }), { ok: true, values: { activeUsers: null, revenue: 0, cost: 1200 } });
+  for (const field of ['activeUsers', 'revenue', 'cost']) {
+    for (const value of ['-500', '+500', '1.5', 'abc', '1,2', '1e3', '1 000', '9007199254740992']) {
+      const result = parseMonthInput({ [field]: value });
+      assert.equal(result.ok, false, `${field}: ${value}`);
+      assert.match(result.message, /정수|이하/);
+    }
+  }
+});
+
+test('monthly parser accepted boundaries satisfy the actual Engine record_month contract', async () => {
+  const { parseMonthInput } = await import('./product-catalog.js');
+  const input = { action: 'record_month', productId: '22222222-2222-4222-8222-222222222222', month: '2026-10' };
+  const context = { workspaceId: '11111111-1111-4111-8111-111111111111', now: '2026-10-05T00:00:00Z' };
+  for (const draft of [{}, { activeUsers: '0', revenue: '0', cost: '0' }, { activeUsers: '100,000,000', revenue: '100,000,000,000', cost: '100,000,000,000' }]) {
+    const parsed = parseMonthInput(draft);
+    assert.equal(parsed.ok, true);
+    assert.equal(normalizeProductCommand({ ...input, ...parsed.values }, context).ok, true);
+  }
+  for (const [field, value] of [['activeUsers', '100000001'], ['revenue', '100000000001'], ['cost', '100000000001']]) {
+    assert.equal(parseMonthInput({ [field]: value }).ok, false, field);
+    assert.equal(normalizeProductCommand({ ...input, [field]: value }, context).ok, false);
+  }
 });

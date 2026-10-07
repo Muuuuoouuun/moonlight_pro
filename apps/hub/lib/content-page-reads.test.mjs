@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createResearchRunWriter, researchRunSummary } from '../components/hub/pages/research-run-ui.js';
+import { researchBriefReadHref, selectedResearchBrief } from './research-inbox-navigation.js';
 
 const tick = () => new Promise(setImmediate);
 const brief = (revision) => ({ id: 'research-one', state: 'new', revision, stateVersion: revision });
@@ -51,6 +52,7 @@ function harness(page) {
     usePageCreateHotkey() {},
     createResearchRunWriter: () => createResearchRunWriter({ fetch: dependencies.fetch }),
     researchRunSummary,
+    researchBriefReadHref, selectedResearchBrief,
     useToast: () => ({ success() { toastCount++; }, error() { toastCount++; }, info() { toastCount++; } }),
     useContentLedger: (options) => { catalogReads.push(options); return { syncState: 'live', brands: [], publishLogs: [] }; },
     useContentSchedule: () => ({ status: 'live', schedules: [] }),

@@ -1,7 +1,7 @@
 import { eqFilter, fetchSupabaseRows } from '@/lib/server-read';
 import { invokeSupabaseRpc, resolveDefaultWorkspaceId, resolveSupabaseConfig } from '@/lib/server-write';
 import { isCanonicalUuid } from '../uuid.js';
-import { isJournalTimestamp, journalContextHref, JOURNAL_CONTEXT_TYPES, validateJournalInput } from '../journal.js';
+import { isJournalTimestamp, journalContextHref, JOURNAL_CONTEXT_TYPES, JOURNAL_SCOPES, validateJournalInput } from '../journal.js';
 
 const NOTE_SELECT = 'id,workspace_id,entry_kind,body,title,occurred_at,note_meta,note_revision,updated_at';
 const CONTEXT_TABLES = { project: 'projects', lead: 'leads', account: 'customer_accounts', brand: 'brands' };
@@ -44,7 +44,8 @@ function entryFromRow(row, workspaceId, detail = false) {
     || !Number.isSafeInteger(row.note_revision) || row.note_revision < 1 || !isJournalTimestamp(row.updated_at)) return null;
   const validation = validateJournalInput({ action: 'save', requestId: row.id, entryId: row.id, expectedRevision: 0, body: row.body, title: row.title ?? '', occurredAt: row.occurred_at, noteMeta: row.note_meta, contexts: [] });
   if (!validation.ok) return null;
-  const common = { id: row.id, title: row.title ?? '', occurredAt: row.occurred_at, noteMeta: detail ? validation.value.noteMeta : { kind: validation.value.noteMeta.kind }, revision: row.note_revision, updatedAt: row.updated_at };
+  const meta = validation.value.noteMeta;
+  const common = { id: row.id, title: row.title ?? '', occurredAt: row.occurred_at, noteMeta: detail ? meta : { kind: meta.kind, ...(meta.scope === undefined ? {} : { scope: meta.scope }) }, revision: row.note_revision, updatedAt: row.updated_at };
   if (!detail) return { ...common, excerpt: row.body.slice(0, 180) };
   if (!Array.isArray(row.contexts) || !Array.isArray(row.links)) return null;
   const contexts = row.contexts.map(contextFromValue), links = row.links.map(useLinkFromValue);
@@ -75,9 +76,9 @@ async function readDetail(row, workspaceId) {
   return entryFromRow({ ...row, contexts, links }, workspaceId, true);
 }
 
-export async function getJournalLedger({ note = null, before = null, beforeId = null } = {}) {
+export async function getJournalLedger({ note = null, before = null, beforeId = null, scope = null } = {}) {
   let base = baseEnvelope();
-  if ((note !== null && !isCanonicalUuid(note)) || (before === null) !== (beforeId === null)
+  if ((scope !== null && ![...JOURNAL_SCOPES, 'unclassified'].includes(scope)) || (note !== null && !isCanonicalUuid(note)) || (before === null) !== (beforeId === null)
     || (before !== null && (!isJournalTimestamp(before) || !isCanonicalUuid(beforeId)))) return readError(base);
   try {
     const context = await resolveContext();
@@ -85,6 +86,7 @@ export async function getJournalLedger({ note = null, before = null, beforeId = 
     if (context.status === 'preview') return { ...base, status: 'preview', entries: [], entry: null, nextCursor: null };
     if (context.status !== 'live') return readError(base);
     const filters = [['workspace_id', eqFilter(base.workspaceId)], ['entry_kind', eqFilter('note')]];
+    if (scope) filters.push(['note_meta->>scope', scope === 'unclassified' ? 'is.null' : eqFilter(scope)]);
     const cursor = before === null ? [] : [['or', `(occurred_at.lt.${before},and(occurred_at.eq.${before},id.lt.${beforeId.toLowerCase()}))`]];
     const [rows, selected] = await Promise.all([
       fetchSupabaseRows('journal_entries', { select: NOTE_SELECT, filters: [...filters, ...cursor], order: 'occurred_at.desc,id.desc', limit: 41 }),
@@ -92,12 +94,13 @@ export async function getJournalLedger({ note = null, before = null, beforeId = 
     ]);
     if (!Array.isArray(rows) || rows.length > 41 || !Array.isArray(selected) || selected.length > 1) return readError(base);
     const summaries = rows.map((r) => entryFromRow(r, base.workspaceId));
-    if (summaries.some((v) => !v) || new Set(summaries.map((v) => v.id)).size !== summaries.length) return readError(base);
+    const matchesScope = (entry) => !scope || (scope === 'unclassified' ? entry?.noteMeta?.scope === undefined : entry?.noteMeta?.scope === scope);
+    if (summaries.some((v) => !v || !matchesScope(v)) || new Set(summaries.map((v) => v.id)).size !== summaries.length) return readError(base);
     let entry = null;
     if (selected.length) {
       if (selected[0].id !== note.toLowerCase() || !entryFromRow(selected[0], base.workspaceId)) return readError(base);
       entry = await readDetail(selected[0], base.workspaceId);
-      if (!entry) return readError(base);
+      if (!entry || !matchesScope(entry)) return readError(base);
     }
     const entries = summaries.slice(0, 40), last = entries.at(-1);
     return { ...base, status: 'live', entries, entry, nextCursor: rows.length > 40 ? { before: last.occurredAt, beforeId: last.id } : null };

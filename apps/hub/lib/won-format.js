@@ -77,25 +77,26 @@ export function parseWon(value) {
   if (typeof value === "number") return Number.isFinite(value) ? Math.round(value) : null;
   let text = String(value ?? "").trim();
   if (!text || text === "—") return null;
+  // 기존 원장은 "₩-1200000"도 저장한다. 통화 기호를 먼저 걷어야 부호를 잃지 않는다.
+  text = text.replace(/[₩,\s]/g, "").replace(/원$/, "");
   let sign = 1;
   if (/^[-−]/.test(text)) { sign = -1; text = text.slice(1); }
   else if (text.startsWith("+")) text = text.slice(1);
-  text = text.replace(/[₩,\s]/g, "").replace(/원$/, "");
   if (!/\d/.test(text)) return null;
 
   const legacy = /^(\d*\.?\d+)([mMkK])$/.exec(text);
   if (legacy) {
     const scale = legacy[2].toLowerCase() === "m" ? 1_000_000 : 1_000;
-    return sign * Math.round(Number(legacy[1]) * scale);
+    return toAmount(sign * Math.round(Number(legacy[1]) * scale));
   }
 
   const korean = /^(?:([\d.]+)억)?(?:([\d.]*천?[\d]*)만)?([\d.]*천?[\d]*)$/.exec(text);
   if (!korean || !/[억만천]/.test(text)) {
-    return /^\d*\.?\d+$/.test(text) ? sign * Math.round(Number(text)) : null;
+    return /^\d*\.?\d+$/.test(text) ? toAmount(sign * Math.round(Number(text))) : null;
   }
   const eok = korean[1] ? Number(korean[1]) : 0;
   const man = parseChunk(korean[2]);
   const rest = parseChunk(korean[3]);
   if (![eok, man, rest].every(Number.isFinite)) return null;
-  return sign * Math.round(eok * EOK + man * MAN + rest);
+  return toAmount(sign * Math.round(eok * EOK + man * MAN + rest));
 }

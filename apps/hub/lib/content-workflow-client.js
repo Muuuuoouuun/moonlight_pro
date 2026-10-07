@@ -81,6 +81,11 @@ export function studioFingerprint(draft) {
   const { item, variant } = buildStudioSave(draft, '');
   return JSON.stringify({ item, variant });
 }
+// Classification and format selection alone are local preferences, not a new work item.
+export function hasStudioContent(draft) {
+  return [draft.title, draft.variantTitle, draft.sourceIdea, draft.body, draft.nextAction, draft.blocker,
+    ...Object.values(draft.brief || {})].some(value => typeof value === 'string' && value.trim());
+}
 export const isDurableStudioSave = (result) => Boolean(['saved', 'duplicate'].includes(result?.status) && result.item?.id && result.variant?.id);
 export function acknowledgeStudioSave(current, sent, result) {
   if (!isDurableStudioSave(result)) throw new Error('저장이 확인되지 않았습니다.');
@@ -142,9 +147,19 @@ const STUDIO_ERRORS = {
   'not-found': '콘텐츠를 찾을 수 없습니다. 콘텐츠 큐에서 다시 열어주세요.',
   'invalid-channel-format': '결과물 형식과 채널이 맞지 않습니다.',
   'payload-too-large': '내용이 너무 깁니다. 콘텐츠를 나누어 저장해주세요.',
+  'workflow-receipt-unconfirmed': '이전 저장 결과를 확인하지 못했습니다. 작성한 내용은 유지하며 같은 요청으로 다시 확인합니다.',
+  'invalid-reels-script-json': '대본 JSON을 읽을 수 없습니다. 원본 JSON을 확인하고 수정해주세요.',
+  'invalid-reels-script-scenes': '대본 JSON은 scenes 배열만 포함해야 하며, 장면은 최대 30개까지 담을 수 있습니다.',
+  'invalid-reels-script-fields': '장면의 화면·대사·자막·길이·제작 메모 형식을 확인해주세요.',
+  'invalid-reels-script-id': '장면 ID가 유효하지 않거나 겹칩니다. 원본 JSON에서 확인해주세요.',
+  'invalid-reels-script-text': '화면·대사·자막·제작 메모는 각각 16,000자 이내의 올바른 텍스트여야 합니다.',
+  'invalid-reels-script-content': '화면 설명이나 대사 중 하나를 입력해주세요.',
+  'invalid-reels-script-duration': '장면 길이는 0보다 크고 600초 이하여야 합니다.',
 };
 export function studioErrorMessage(result, fallback = '처리하지 못했습니다. 작성한 내용은 유지됩니다. 다시 시도해주세요.') {
   if (result?.status === 'preview') return '서버 저장이 연결되지 않았습니다. 이 브라우저의 복구 사본으로 보관합니다.';
   if (result?.status === 'conflict') return STUDIO_ERRORS['version-conflict'];
-  return STUDIO_ERRORS[result?.error] || fallback;
+  const message = STUDIO_ERRORS[result?.error] || fallback;
+  return typeof result?.error === 'string' && result.error.startsWith('invalid-reels-script-') && Number.isInteger(result.sceneNumber) && result.sceneNumber > 0
+    ? `${result.sceneNumber}번 장면: ${message}` : message;
 }
