@@ -19,6 +19,7 @@ export function ToastProvider({ children }) {
   // id → { timeout, remaining, start, pausable }. 행동(되돌리기 등)이 붙은 알림은 그 행동의 유효 시간과
   // 맞물려 있으므로 멈추지 않는다 — 멈춘 채 창이 닫히면 눌러도 아무 일도 없는 버튼이 남는다.
   const timers = React.useRef(new Map());
+  const reading = React.useRef({ hovered: false, focused: false });
 
   const clearTimer = React.useCallback((id) => {
     const timer = timers.current.get(id);
@@ -37,7 +38,8 @@ export function ToastProvider({ children }) {
   }, [clearTimer]);
 
   const startTimer = React.useCallback((id, ms, pausable) => {
-    const timeout = setTimeout(() => dismiss(id), ms);
+    const paused = pausable && (reading.current.hovered || reading.current.focused);
+    const timeout = paused ? null : setTimeout(() => dismiss(id), ms);
     timers.current.set(id, { timeout, remaining: ms, start: Date.now(), pausable });
   }, [dismiss]);
 
@@ -51,10 +53,29 @@ export function ToastProvider({ children }) {
     }
   }, []);
   const resumeTimers = React.useCallback(() => {
+    if (reading.current.hovered || reading.current.focused) return;
     for (const [id, timer] of timers.current) {
       if (timer.pausable && !timer.timeout) startTimer(id, Math.max(timer.remaining, RESUME_FLOOR), true);
     }
   }, [startTimer]);
+
+  const enter = React.useCallback(() => {
+    reading.current.hovered = true;
+    pauseTimers();
+  }, [pauseTimers]);
+  const leave = React.useCallback(() => {
+    reading.current.hovered = false;
+    resumeTimers();
+  }, [resumeTimers]);
+  const focus = React.useCallback(() => {
+    reading.current.focused = true;
+    pauseTimers();
+  }, [pauseTimers]);
+  const blur = React.useCallback((event) => {
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    reading.current.focused = false;
+    resumeTimers();
+  }, [resumeTimers]);
 
   const showToast = React.useCallback(
     (message, options = {}) => {
@@ -93,10 +114,10 @@ export function ToastProvider({ children }) {
         className="hub-toast-viewport"
         aria-live="polite"
         aria-atomic="false"
-        onMouseEnter={pauseTimers}
-        onMouseLeave={resumeTimers}
-        onFocus={pauseTimers}
-        onBlur={resumeTimers}
+        onMouseEnter={enter}
+        onMouseLeave={leave}
+        onFocus={focus}
+        onBlur={blur}
       >
         {toasts.map((t) => {
           const isDanger = t.tone === "danger";

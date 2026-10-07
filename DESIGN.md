@@ -437,7 +437,7 @@ truth. Do not recreate them ad-hoc inside pages.
 **Shared composites outside the primitives file** (reuse before rebuilding)
 - `BrandMark`, `ProjectProgressGauge`, `ProjectStatusBadge` — `pages/project-pms-components.jsx`.
   `BrandIcon` (`brand-icons.jsx`) is used by the brand directory, Overview, Revenue and PMS brand references.
-- `StreakMark` — `burning-streak.jsx` (neutral ascending bars, §15 2026-09-22)
+- `StreakMark` — `burning-streak.jsx` (monochrome flame levels 0–5, §15 2026-09-25; replaces the 2026-09-22 ascending bars)
 - `CalendarOutcome` (`calendar-outcome.jsx`, compact mode on Home), `ContactRecordForm` / `ContactRecordDrawer`
   (`contact-record-form.jsx`), `GlobalQuickCapture` (`quick-capture.jsx`), `GoalLinks` (`goal-links.jsx`)
 - `SortHead` — defined in `pages/revenue-core.jsx` with the shared revenue ledger hook (re-exported by `pages/revenue.jsx`), reused by `customers.jsx` (§8.1 Table sort)
@@ -618,7 +618,7 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 - `Checkbox`는 `label` prop으로 스크린리더 이름을 전달한다 (행 제목 등).
 - 각 페이지는 정확히 하나의 `<h2>` 페이지 타이틀(20px/500)을 메인 페인에 가진다 — 브레드크럼만으로 대체 금지. 공용
   PageHeader 프리미티브는 없다: 대부분 인라인 `style={{ margin: 0, fontSize: 20, fontWeight: 500 }}`이거나 페이지 CSS가 같은
-  값을 준다. 승인된 카브아웃은 두 가지다(개인 매출 헤더의 `clamp(22px, 2.5vw, 28px)` h2는 승인되지 않은 이탈 — §14 Known gaps 12).
+  값을 준다. 승인된 카브아웃은 아래 세 가지다. 개인 매출 헤더는 2026-09-24부터 기본 20px/500을 따른다(§14 Known gaps 9).
   - Daily Brief 히어로(`오늘의 실행`): §6 Display 스케일 `clamp(26px, 3.2vw, 32px)`/700 — 첫 화면의 페이지 레벨 모먼트 1곳.
   - Futura 페이지(§7 Futura): `<h2 className="fx-hero">`/`"fx-page-title">` 44px/300(≤900px 30px) — `dashboard/home`(확정
     2026-09-18)·`work/decisions`(확정 2026-09-19)·`work/rhythm`(권장 2026-09-23)·영업·매출의 `revenue/followups`(오늘 연락)·

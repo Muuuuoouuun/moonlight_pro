@@ -128,10 +128,11 @@
 ## 측정 방법
 
 ```bash
-npm run db:usage           # 테이블별 행·죽은 행·seq/idx 스캔·쓰기·크기, 안 쓰인 인덱스
+npm run db:usage           # 테이블별 추정 live/dead 행·seq/idx 스캔·쓰기·크기, 안 쓰인 인덱스
 npm run db:usage -- --json
 ```
 
 `SUPABASE_ACCESS_TOKEN`과 프로젝트 URL이 필요하다(`db:check`와 같은 env). SELECT만 보낸다.
+행 수는 `pg_stat_user_tables`의 `n_live_tup`·`n_dead_tup` 추정치다. 출력의 0만으로 빈 테이블을 확정할 수 없으며 삭제 판단 전에 정확한 행 수를 별도로 확인해야 한다.
 카운터는 마지막 통계 리셋 이후 값이라 출력 맨 위의 리셋 시각을 먼저 본다 — 2026-09-20 서울 이전
 직후라면 "안 쓰인 인덱스"는 아직 근거가 약하다.

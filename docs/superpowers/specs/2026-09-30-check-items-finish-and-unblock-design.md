@@ -329,9 +329,10 @@ signal_outcomes
   scheduled_end   timestamptz
   calendar_event_id text                 -- 구글 일정에도 넣었을 때
   note            text                   -- 보류 이유 등, 200자
-  request_id      uuid not null unique   -- 멱등 키
+  request_id      uuid not null          -- workspace 안의 멱등 키
   created_at      timestamptz not null default now()
   undone_at       timestamptz
+unique index (workspace_id, request_id)
 index (workspace_id, signal_key, created_at desc)
 ```
 

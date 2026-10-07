@@ -15,7 +15,7 @@ import { DailyReviewCue } from '../daily-review-cue';
 import { GuruRecommendation, GuruRecommendationList } from '../guru-recommendation';
 import { useGuruRecommendations, recommendationForSubject } from '../guru-recommendations-client';
 import { readEnvelope, useDailyBriefSignals } from '../daily-brief-signals';
-import { HomeMorningBrief } from './home-morning-brief';
+import { HomeMorningBrief } from './home-morning-brief.jsx';
 import { formatHomeClock } from './home-morning-brief.js';
 import { GuidanceInlineTip } from '../guidance-inline-tip';
 
