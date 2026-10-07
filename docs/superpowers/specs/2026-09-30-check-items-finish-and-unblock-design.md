@@ -1,5 +1,7 @@
 # 확인할 것 — 끝내기 버튼과 막힘 풀기
 
+> 2026-10-07 통합 안전 보정: 원래 0056 영수증 마이그레이션은 `20261007_0070_signal_outcomes.sql`로 재번호만 했으며 운영 적용은 실행하지 않았다. 확인할 것의 새 Google 일정 생성은 안정 생성 ID·응답 유실 재조회 검증 전까지 차단한다. 캘린더 읽기와 Moonlight 내부 시간 잡기는 유지한다. 아래 기본 켬/보상 삭제 설계는 역사 설계이며 현행 실행 계약이 아니다. 저장 재시도는 같은 로그인·작업 범위의 입력/요청 ID를 이 탭에서 15분간 고정하고, 불명 결과를 미저장으로 단정하지 않는다.
+
 > 상태: **방향 운영자 선택(2026-09-30) · 화면 방향 운영자 선택(2026-10-01) · §12 기본값 운영자 승인(2026-10-01) · 단계 0~4 구현(2026-10-01, 0056 운영 DB 적용 전)**. 운영자가 시안 둘 가운데 "A의 끝내기 버튼 + B의 막힘 풀기"를 골랐고(2026-09-30), 화면 시안 넷 가운데 "2의 한 장씩 + 4의 시간 잡기"를 골랐다(2026-10-01). 이 문서의 이름·버튼 구성·보류·시간 잡기 규칙·데이터 모양은 그 방향을 구체화한 **권장안**이며, §12의 미정 질문과 함께 운영자 확인을 받은 뒤 확정으로 올린다.
 > 작성일: 2026-09-30 (Asia/Seoul)
 > 상위 정본: [`docs/README.md`](../../README.md) 우선순위 → [운영자 프로필](../../operator-workflow-profile.md) → [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md) → 주제별 최신 스펙 → [`DESIGN.md`](../../../DESIGN.md).
@@ -311,7 +313,7 @@ Engine `validateDelivery`/`deliveryDraft`에 `blockerKind` 열거 검증을 더�
 
 ## 8. 데이터·API
 
-### 8.1 새 테이블 — `supabase/migrations/20261001_0056_signal_outcomes.sql`
+### 8.1 새 테이블 — `supabase/migrations/20261007_0070_signal_outcomes.sql`
 
 ```text
 signal_outcomes
@@ -334,7 +336,7 @@ index (workspace_id, signal_key, created_at desc)
 ```
 
 - 선례: `discovery_nudge_states`·`discovery_nudge_receipts`(0031)의 상태+영수증 분리. 이 테이블은 영수증이 주이고 보류는 비CRM 대상만 쓴다.
-- 0044 이후 규칙대로 `begin;`/`commit;` 없음. `scripts/database-readiness.mjs`의 `DATABASE_FEATURES`에 `{ name: '확인할 것 영수증', migration: '20261001_0056_signal_outcomes.sql', tables: ['signal_outcomes'], functions: [], indexIncludes: [['signal_outcomes', 'signal_outcomes_request_idx', '(workspace_id, request_id)']] }` 등록(구현됨). 테이블이 없으면 영수증 API는 `preview`로 답하고 홈은 숨기지 않는다 — 적용은 `npm run db:migrate -- --expect-ref ncgpnqfulnlshegalmbd 20261001_0056_signal_outcomes.sql`.
+- 0044 이후 규칙대로 `begin;`/`commit;` 없음. `scripts/database-readiness.mjs`의 `DATABASE_FEATURES`에 `{ name: '확인할 것 영수증', migration: '20261007_0070_signal_outcomes.sql', tables: ['signal_outcomes'], functions: [], indexIncludes: [['signal_outcomes', 'signal_outcomes_request_idx', '(workspace_id, request_id)']] }` 등록(구현됨). 테이블이 없으면 영수증 API는 `preview`로 답하고 홈은 숨기지 않는다 — 적용은 `npm run db:migrate -- --expect-ref ncgpnqfulnlshegalmbd 20261007_0070_signal_outcomes.sql`.
 
 ### 8.2 Hub 라우트
 

@@ -11,6 +11,7 @@ import { Iconed } from './hub-icons';
 import { Button, CertaintyBadge, CheckboxRow, LifecycleBadge, SegmentedControl, TextAreaField, TextField, useToast } from './hub-primitives';
 import { BLOCKER_KIND_LABELS } from '../../../../packages/project-delivery/index.ts';
 import { newUnblockIds, readProjectForUnblock, unblockProject } from './unblock-actions';
+import { useCheckWrite } from './use-check-write';
 import './unblock-panel.css';
 
 const BRANCH_LABELS = { resolved: '이유가 풀렸어요', decision: '결정으로 풀기', 'next-version': '다음 버전으로' };
@@ -54,10 +55,13 @@ export function UnblockPanel({ project, initialBranch = null, signalKey = '', on
   const [note, setNote] = React.useState('');
   const [nextVersionText, setNextVersionText] = React.useState('');
   const [decision, setDecision] = React.useState({ title: '', rationale: '', taskTitle: '', taskDueAt: '', clearBlocker: true });
-  const [busy, setBusy] = React.useState(false);
+  const { run: runWrite, busy, locked } = useCheckWrite(`unblock:${project.id}`, fetchImpl);
   const [error, setError] = React.useState('');
   const [conflict, setConflict] = React.useState(false);
   const progressRef = React.useRef({});
+  const readBusyRef = React.useRef(false);
+  const completedRef = React.useRef(false), mountedRef = React.useRef(true);
+  React.useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const idsRef = React.useRef(null);
   if (!idsRef.current) idsRef.current = newUnblockIds();
 
@@ -65,35 +69,35 @@ export function UnblockPanel({ project, initialBranch = null, signalKey = '', on
   const facts = blockerFacts(delivery);
   const history = Array.isArray(delivery.blockerHistory) ? delivery.blockerHistory.slice(-3).reverse() : [];
   const setField = (key, value) => setDecision((prev) => ({ ...prev, [key]: value }));
-  const locked = Boolean(progressRef.current.decision); // 결정이 남은 뒤에는 결정 내용을 바꾸지 않는다(같은 id).
 
   async function run(target = current) {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    setConflict(false);
-    const result = await unblockProject(fetchImpl, target, { branch, note, nextVersionText, decision }, {
-      ids: idsRef.current, progress: progressRef.current, signalKey,
+    if (completedRef.current) return;
+    setError(''); setConflict(false);
+    const result = await runWrite({ branch, note, nextVersionText, decision }, newUnblockIds, async (ownedFetch, command) => {
+      idsRef.current = command.ids;
+      return unblockProject(ownedFetch, target, command.input, { ids: command.ids, progress: command.progress, signalKey, context: command.context });
     });
+    if (result.stale) return;
+    if (result.restore) { setBranch(result.restore.branch); setNote(result.restore.note); setNextVersionText(result.restore.nextVersionText); setDecision(result.restore.decision); }
     progressRef.current = result.progress || progressRef.current;
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.message);
-      setConflict(Boolean(result.conflict));
-      return;
-    }
-    onUnblocked?.({ branch, decisionId: result.decisionId || null, taskId: result.taskId || null, unblocked: result.unblocked, message: successMessage(branch, result) });
+    if (!result.ok) { setError(result.message); setConflict(Boolean(result.conflict)); return; }
+    completedRef.current = true;
+    await onUnblocked?.({ branch, decisionId: result.decisionId || null, taskId: result.taskId || null, unblocked: result.unblocked,
+      message: result.message || successMessage(branch, result) });
   }
 
   // 다른 곳에서 먼저 바뀌었으면 최신 기록을 읽어 남은 단계(막힘 풀기)만 다시 한다.
   async function retryWithLatest() {
-    setBusy(true);
+    if (busy || readBusyRef.current) return;
+    readBusyRef.current = true;
     const latest = await readProjectForUnblock(fetchImpl, current.id);
-    setBusy(false);
+    readBusyRef.current = false;
+    if (!mountedRef.current) return;
     if (!latest) { setError('최신 프로젝트 기록을 읽지 못했습니다. 잠시 뒤 다시 시도해 주세요.'); return; }
     if (!String(latest.delivery?.blocker || '').trim()) {
       setError('');
       setConflict(false);
+      completedRef.current = true;
       onUnblocked?.({ branch, decisionId: progressRef.current.decision ? idsRef.current.decisionId : null, taskId: null, unblocked: true, message: '다른 곳에서 이미 막힘이 풀렸습니다' });
       return;
     }
@@ -127,28 +131,28 @@ export function UnblockPanel({ project, initialBranch = null, signalKey = '', on
         label="어떻게 풀까요"
         fill
         value={branch}
-        onChange={(key) => { if (!locked) { setBranch(key); setError(''); } }}
+        onChange={(key) => { if (!locked && !busy) { setBranch(key); setError(''); } }}
         options={branchOrder(recommended).map((key) => ({ key, label: BRANCH_LABELS[key] }))}
       />
 
       {branch === 'resolved' ? (
-        <TextField label="한 줄 메모 (선택)" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} placeholder="어떻게 풀렸나요" />
+        <TextField label="한 줄 메모 (선택)" disabled={locked || busy} value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} placeholder="어떻게 풀렸나요" />
       ) : null}
 
       {branch === 'decision' ? (
         <div className="ub-fields">
-          <TextField label="무엇을 정했나" required value={decision.title} maxLength={300} disabled={locked} onChange={(e) => setField('title', e.target.value)} placeholder="예: 범위를 A안으로 줄인다" />
-          <TextAreaField label="왜 (선택)" rows={2} value={decision.rationale} maxLength={4000} disabled={locked} onChange={(e) => setField('rationale', e.target.value)} />
+          <TextField label="무엇을 정했나" required value={decision.title} maxLength={300} disabled={locked || busy} onChange={(e) => setField('title', e.target.value)} placeholder="예: 범위를 A안으로 줄인다" />
+          <TextAreaField label="왜 (선택)" rows={2} value={decision.rationale} maxLength={4000} disabled={locked || busy} onChange={(e) => setField('rationale', e.target.value)} />
           <div className="ub-row">
-            <TextField label="그래서 할 일 (선택)" value={decision.taskTitle} maxLength={300} disabled={Boolean(progressRef.current.task)} onChange={(e) => setField('taskTitle', e.target.value)} fieldStyle={{ flex: '1 1 220px' }} />
-            <TextField label="기한" type="date" value={decision.taskDueAt} disabled={Boolean(progressRef.current.task)} onChange={(e) => setField('taskDueAt', e.target.value)} fieldStyle={{ flex: '0 0 160px' }} />
+            <TextField label="그래서 할 일 (선택)" value={decision.taskTitle} maxLength={300} disabled={locked || busy} onChange={(e) => setField('taskTitle', e.target.value)} fieldStyle={{ flex: '1 1 220px' }} />
+            <TextField label="기한" type="date" value={decision.taskDueAt} disabled={locked || busy} onChange={(e) => setField('taskDueAt', e.target.value)} fieldStyle={{ flex: '0 0 160px' }} />
           </div>
-          <CheckboxRow checked={decision.clearBlocker} onChange={(value) => setField('clearBlocker', value)} text="막힌 점 비우고 진행으로" />
+          <CheckboxRow checked={decision.clearBlocker} onChange={(value) => { if (!locked && !busy) setField('clearBlocker', value); }} text="막힌 점 비우고 진행으로" />
         </div>
       ) : null}
 
       {branch === 'next-version' ? (
-        <TextAreaField label="이번 범위에서 뺄 것" required rows={2} value={nextVersionText} maxLength={1000} onChange={(e) => setNextVersionText(e.target.value)} hint="다음 버전으로 넘길 범위 끝에 덧붙입니다" />
+        <TextAreaField label="이번 범위에서 뺄 것" disabled={locked || busy} required rows={2} value={nextVersionText} maxLength={1000} onChange={(e) => setNextVersionText(e.target.value)} hint="다음 버전으로 넘길 범위 끝에 덧붙입니다" />
       ) : null}
 
       {error ? (
@@ -168,7 +172,7 @@ export function UnblockPanel({ project, initialBranch = null, signalKey = '', on
       ) : null}
 
       <div className="ub-actions">
-        <button type="submit" className="fx-pill-btn fx-pill-btn--primary" disabled={busy}>{submitLabel}</button>
+        <button type="submit" className="fx-pill-btn fx-pill-btn--primary" disabled={busy || completedRef.current}>{submitLabel}</button>
       </div>
 
       {history.length ? (

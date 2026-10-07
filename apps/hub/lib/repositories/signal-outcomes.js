@@ -6,12 +6,13 @@
 
 import { eqFilter, fetchSupabaseRowsDetailed, inFilter } from '@/lib/server-read';
 import { insertSupabaseRecord, resolveDefaultWorkspaceId, resolveSupabaseConfig, updateSupabaseRecord } from '@/lib/server-write';
+import { sameJson } from '../check-write-ack.js';
 import { isCanonicalUuid } from '../uuid.js';
 import { kstDayKey } from '../kst-day.js';
 import { buildSignalOutcomeWrite } from '../check-items/outcome-input.js';
 
 const TABLE = 'signal_outcomes';
-const SELECT = 'id,request_id,signal_key,subject_type,subject_id,title,outcome,record_ref,snoozed_until,scheduled_start,scheduled_end,calendar_event_id,note,created_at,undone_at';
+const SELECT = 'id,workspace_id,request_id,signal_key,subject_type,subject_id,title,outcome,record_ref,snoozed_until,scheduled_start,scheduled_end,calendar_event_id,note,created_at,undone_at';
 // 보류 최대 30일 + 할 일이 열려 있는 기간을 넉넉히 덮는 창. 이보다 오래된 할 일 영수증은 억제하지
 // 않는다 — 카드가 다시 뜨는 쪽이 조용히 사라지는 쪽보다 낫다.
 const WINDOW_DAYS = 45;
@@ -30,6 +31,9 @@ export function receiptFromRow(row) {
   if (!row || !row.signal_key || !row.outcome) return null;
   return {
     id: row.id,
+    requestId: row.request_id,
+    workspaceId: row.workspace_id,
+    undoneAt: row.undone_at || null,
     signalKey: row.signal_key,
     subject: { type: row.subject_type, id: row.subject_id || null },
     title: row.title || '',
@@ -162,24 +166,41 @@ async function readByRequest(workspaceId, requestId) {
     filters: [['workspace_id', eqFilter(workspaceId)], ['request_id', eqFilter(requestId)]],
     limit: 1,
   });
-  if (error || !Array.isArray(rows)) return { ok: false, row: null };
+  if (error || !Array.isArray(rows)) return { ok: false, row: null, error };
   return { ok: true, row: rows[0] || null };
+}
+
+export function matchingOutcome(row, record) {
+  const fields = ['id', 'workspace_id', 'request_id', 'signal_key', 'subject_type', 'subject_id', 'title', 'outcome', 'record_ref', 'snoozed_until', 'scheduled_start', 'scheduled_end', 'calendar_event_id', 'note'];
+  return fields.every(key => key === 'scheduled_start' || key === 'scheduled_end'
+    ? (row?.[key] == null && record[key] == null) || Date.parse(row?.[key]) === Date.parse(record[key])
+    : sameJson(row?.[key] ?? null, record[key] ?? null));
 }
 
 /** 영수증 한 줄. 같은 requestId 재시도는 duplicate. */
 export async function recordSignalOutcome(input, { now = Date.now() } = {}) {
   const todayKey = kstDayKey(new Date(now));
-  const checked = buildSignalOutcomeWrite(input, { todayKey });
+  const checked = buildSignalOutcomeWrite(input);
   if (!checked.ok) return { status: 'invalid-input', httpStatus: 400, reason: checked.reason };
   const workspaceId = workspaceOrNull();
   if (!workspaceId) return { status: 'preview', httpStatus: 202, receipt: null, message: '저장소 연결이 필요합니다. 끝낸 것으로 세지 않았습니다.' };
   const record = { ...checked.row, id: checked.row.request_id, workspace_id: workspaceId };
   try {
+    const previous = await readByRequest(workspaceId, record.request_id);
+    if (!previous.ok) return tableMissing(previous.error)
+      ? { status: 'preview', httpStatus: 202, receipt: null, message: '영수증 테이블이 아직 없습니다. 마이그레이션 적용이 필요합니다.' }
+      : { status: 'failed', httpStatus: 502, reason: 'receipt-read-failed' };
+    if (previous.row?.undone_at) return { status: 'conflict', httpStatus: 409, reason: 'receipt-undone' };
+    if (previous.row) return matchingOutcome(previous.row, record)
+      ? { status: 'duplicate', httpStatus: 200, receipt: receiptFromRow(previous.row) }
+      : { status: 'conflict', httpStatus: 409, reason: 'request-reused' };
+    const timely = buildSignalOutcomeWrite(input, { todayKey });
+    if (!timely.ok) return { status: 'invalid-input', httpStatus: 400, reason: timely.reason };
     const result = await insertSupabaseRecord(TABLE, record, { returnRepresentation: true, select: SELECT });
-    if (result.persisted && result.record) return { status: 'saved', httpStatus: 200, receipt: receiptFromRow(result.record) };
+    if (result.persisted && matchingOutcome(result.record, record)) return { status: 'saved', httpStatus: 200, receipt: receiptFromRow(result.record) };
     if (result.reason === 'duplicate') {
       const existing = await readByRequest(workspaceId, record.request_id);
-      if (existing.row && existing.row.signal_key === record.signal_key && existing.row.outcome === record.outcome) {
+      if (existing.row && matchingOutcome(existing.row, record)) {
         return { status: 'duplicate', httpStatus: 200, receipt: receiptFromRow(existing.row) };
       }
       return { status: 'conflict', httpStatus: 409, reason: 'request-reused' };
@@ -199,6 +220,10 @@ export async function undoSignalOutcome({ id } = {}, { now = Date.now() } = {}) 
   const workspaceId = workspaceOrNull();
   if (!workspaceId) return { status: 'preview', httpStatus: 202 };
   try {
+    const previous = await fetchSupabaseRowsDetailed(TABLE, { select: SELECT, filters: [['workspace_id', eqFilter(workspaceId)], ['id', eqFilter(id)]], limit: 1 });
+    if (previous.error || !Array.isArray(previous.rows)) return { status: 'failed', httpStatus: 502, reason: 'receipt-read-failed' };
+    const row = previous.rows[0];
+    if (row?.undone_at && ['snoozed', 'scheduled'].includes(row.outcome)) return { status: 'duplicate', httpStatus: 200, receipt: receiptFromRow(row) };
     const result = await updateSupabaseRecord(TABLE,
       [['workspace_id', eqFilter(workspaceId)], ['id', eqFilter(id)], ['undone_at', 'is.null'], ['outcome', 'in.(snoozed,scheduled)']],
       { undone_at: new Date(now).toISOString() },

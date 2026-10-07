@@ -1,3 +1,6 @@
+import { normalizePmsCommand } from '../../../engine/lib/pms-command.ts';
+import { buildSignalOutcomeWrite } from '../../lib/check-items/outcome-input.js';
+import { receiptFromRow } from '../../lib/repositories/signal-outcomes.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import React from 'react';
@@ -20,6 +23,23 @@ function fakeFetch(responses = []) {
   const impl = async (url, init) => {
     calls.push({ url, method: init?.method, body: init?.body ? JSON.parse(init.body) : null });
     const next = responses.shift() || { status: 200, body: { status: 'saved' } };
+    const body = JSON.parse(init.body || '{}');
+    if (['saved', 'duplicate'].includes(next.body?.status)) {
+      const workspaceId = '33333333-3333-4333-8333-333333333333';
+      if (url === '/api/hub/tasks' || url === '/api/hub/decisions' && init.method === 'POST') {
+        const action = url.endsWith('/tasks') ? 'create_task' : 'create_decision';
+        const normalized = normalizePmsCommand({ ...body, action }, { workspaceId });
+        assert.equal(normalized.ok, true);
+        next.body = { ...next.body, [action === 'create_task' ? 'task' : 'decision']: normalized.record };
+      } else if (url === '/api/hub/projects') next.body = { ...next.body, project: { id: body.id, workspace_id: workspaceId, status: 'active', meta: { delivery: body.delivery } } };
+      else if (url === '/api/hub/decisions') next.body = { ...next.body, decision: { id: body.id, meta: { nextTaskId: body.nextTaskId, unblockedProjectId: body.unblockedProjectId } } };
+      else if (url === '/api/hub/signal-outcomes' && init.method === 'POST') {
+        const checked = buildSignalOutcomeWrite(body); assert.equal(checked.ok, true);
+        next.body = { ...next.body, receipt: receiptFromRow({ ...checked.row, id: body.requestId, workspace_id: workspaceId }) };
+      } else if (url === '/api/hub/signal-outcomes') next.body = { ...next.body, receipt: { id: body.id, outcome: body.action === 'move' ? 'scheduled' : 'snoozed', undoneAt: body.action === 'undo' ? '2026-10-01T03:00:00Z' : null, scheduledStart: body.scheduledStart, scheduledEnd: body.scheduledEnd } };
+      else if (url === '/api/hub/crm-nudges') next.body = { ...next.body, id: body.subjectId, record: { id: body.subjectId, meta: { nudges: body.action === 'snooze' ? { snoozedUntil: body.until } : {} } } };
+    }
+    if (next.body?.status === 'updated') next.body = { ...next.body, event: { id: body.eventId, start: { dateTime: body.startAt }, end: { dateTime: body.endAt } } };
     return { ok: next.status >= 200 && next.status < 300, status: next.status, json: async () => next.body };
   };
   return { impl, calls };
@@ -79,7 +99,7 @@ test('결정으로 풀기의 부분 실패는 남은 것을 말하고, 다시 �
   const nothing = fakeFetch([{ status: 502, body: { status: 'error' } }]);
   const failed = await unblockProject(nothing.impl, project, input, { ids });
   assert.equal(failed.stage, 'decision');
-  assert.match(failed.message, /아무것도 저장되지 않았습니다/);
+  assert.match(failed.message, /저장 응답을 확인하지 못했습니다/);
   assert.equal(nothing.calls.length, 1);
 
   const taskDown = fakeFetch([{ status: 200, body: { status: 'saved' } }, { status: 502, body: { status: 'error' } }]);

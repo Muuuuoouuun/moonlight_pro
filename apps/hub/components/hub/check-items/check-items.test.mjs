@@ -1,3 +1,6 @@
+import { normalizePmsCommand } from '../../../../engine/lib/pms-command.ts';
+import { buildSignalOutcomeWrite } from '../../../lib/check-items/outcome-input.js';
+import { receiptFromRow } from '../../../lib/repositories/signal-outcomes.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -27,6 +30,23 @@ function fakeFetch(responses) {
   const impl = async (url, init) => {
     calls.push({ url, method: init?.method, body: init?.body ? JSON.parse(init.body) : null });
     const next = responses.shift() || { status: 200, body: { status: 'saved' } };
+    const body = JSON.parse(init.body || '{}');
+    if (['saved', 'duplicate'].includes(next.body?.status)) {
+      const workspaceId = '33333333-3333-4333-8333-333333333333';
+      if (url === '/api/hub/tasks' || url === '/api/hub/decisions' && init.method === 'POST') {
+        const action = url.endsWith('/tasks') ? 'create_task' : 'create_decision';
+        const normalized = normalizePmsCommand({ ...body, action }, { workspaceId });
+        assert.equal(normalized.ok, true);
+        next.body = { ...next.body, [action === 'create_task' ? 'task' : 'decision']: normalized.record };
+      } else if (url === '/api/hub/projects') next.body = { ...next.body, project: { id: body.id, workspace_id: workspaceId, status: 'active', meta: { delivery: body.delivery } } };
+      else if (url === '/api/hub/decisions') next.body = { ...next.body, decision: { id: body.id } };
+      else if (url === '/api/hub/signal-outcomes' && init.method === 'POST') {
+        const checked = buildSignalOutcomeWrite(body); assert.equal(checked.ok, true);
+        next.body = { ...next.body, receipt: receiptFromRow({ ...checked.row, id: body.requestId, workspace_id: workspaceId }) };
+      } else if (url === '/api/hub/signal-outcomes') next.body = { ...next.body, receipt: { id: body.id, outcome: body.action === 'move' ? 'scheduled' : 'snoozed', undoneAt: body.action === 'undo' ? '2026-10-01T03:00:00Z' : null, scheduledStart: body.scheduledStart, scheduledEnd: body.scheduledEnd } };
+      else if (url === '/api/hub/crm-nudges') next.body = { ...next.body, id: body.subjectId, record: { id: body.subjectId, meta: { nudges: body.action === 'snooze' ? { snoozedUntil: body.until } : {} } } };
+    }
+    if (next.body?.status === 'updated') next.body = { ...next.body, event: { id: body.eventId, start: { dateTime: body.startAt }, end: { dateTime: body.endAt } } };
     return { ok: next.status >= 200 && next.status < 300, status: next.status, json: async () => next.body };
   };
   return { impl, calls };
@@ -87,23 +107,23 @@ test('finished-today list offers undo only for snoozes and admits a read failure
 
 test('receipts count only saved/duplicate; preview is not finished', async () => {
   const ok = fakeFetch([{ status: 200, body: { status: 'saved', receipt: { id: 'x' } } }]);
-  const saved = await postReceipt(ok.impl, deal, { outcome: 'contact_logged', recordRef: { table: 'crm_activities' } });
+  const saved = await postReceipt(ok.impl, deal, { requestId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', outcome: 'contact_logged', recordRef: { table: 'crm_activities' } });
   assert.equal(saved.ok, true);
   assert.equal(ok.calls[0].url, '/api/hub/signal-outcomes');
   assert.equal(ok.calls[0].body.signalKey, `revenue-stale:${DEAL}`);
   assert.deepEqual(ok.calls[0].body.subject, { type: 'deal', id: DEAL });
 
   const preview = fakeFetch([{ status: 202, body: { status: 'preview' } }]);
-  const notSaved = await postReceipt(preview.impl, deal, { outcome: 'contact_logged' });
+  const notSaved = await postReceipt(preview.impl, deal, { requestId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', outcome: 'contact_logged' });
   assert.equal(notSaved.ok, false);
   assert.match(notSaved.message, /끝낸 것으로 세지 않았습니다/);
 });
 
 test('tasks hang off the deal or project and keep a client id so retries never duplicate', async () => {
   const dealFetch = fakeFetch([{ status: 200, body: { status: 'saved', task: { id: 'task-1' } } }]);
-  const created = await createTaskForItem(dealFetch.impl, deal, { title: '거래 A 다음 연락', dueAt: '2026-10-01', taskId: 'fixed-id' });
+  const created = await createTaskForItem(dealFetch.impl, deal, { title: '거래 A 다음 연락', dueAt: '2026-10-01', taskId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' });
   assert.equal(created.ok, true);
-  assert.equal(dealFetch.calls[0].body.id, 'fixed-id');
+  assert.equal(dealFetch.calls[0].body.id, 'cccccccc-cccc-4ccc-8ccc-cccccccccccc');
   assert.equal(dealFetch.calls[0].body.dealId, DEAL);
   assert.equal(dealFetch.calls[0].body.source, 'check-items');
 

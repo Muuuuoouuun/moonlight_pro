@@ -1,3 +1,5 @@
+import { resolveDefaultWorkspaceId } from '@/lib/server-write';
+import { taskRecoveryAssertion } from '@/lib/operator-session';
 import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
@@ -36,6 +38,7 @@ export async function POST(req) {
   if (guard) return guard;
   const parsed = await readHubWriteJson(req);
   if (parsed.error) return parsed.error;
+  if (!taskRecoveryAssertion(req, parsed.data, resolveDefaultWorkspaceId())) return NextResponse.json({ status: 'conflict', error: 'check-write-owner-changed' }, { status: 409 });
   const { httpStatus, ...body } = await recordSignalOutcome(parsed.data || {});
   return NextResponse.json(body, { status: httpStatus || 200 });
 }
@@ -45,6 +48,7 @@ export async function PATCH(req) {
   if (guard) return guard;
   const parsed = await readHubWriteJson(req);
   if (parsed.error) return parsed.error;
+  if (!taskRecoveryAssertion(req, parsed.data, resolveDefaultWorkspaceId())) return NextResponse.json({ status: 'conflict', error: 'check-write-owner-changed' }, { status: 409 });
   const action = parsed.data?.action;
   if (action !== "undo" && action !== "move") {
     return NextResponse.json({ status: "invalid-input", reason: "invalid-action" }, { status: 400 });

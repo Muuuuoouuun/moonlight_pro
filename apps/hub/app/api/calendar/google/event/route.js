@@ -237,7 +237,7 @@ export async function DELETE(req) {
       }).catch(() => null);
       return NextResponse.json({ status: "error", error: result.reason || "Google Calendar delete failed." }, { status: 502 });
     }
-    return NextResponse.json({ status: "saved", reason: result.reason });
+    return NextResponse.json({ status: "saved", eventId, reason: result.reason });
   } catch (error) {
     return NextResponse.json({ status: "error", error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }

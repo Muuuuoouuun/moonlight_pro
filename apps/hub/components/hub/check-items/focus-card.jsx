@@ -25,6 +25,7 @@ import {
 import { MAX_SNOOZE_DAYS } from '@/lib/check-items/outcome-input';
 import { ScheduleBand, ScheduledNowBand } from './schedule-band';
 import { UnblockPanel } from '../unblock-panel';
+import { useCheckWrite } from '../use-check-write';
 import './check-items.css';
 
 const PANEL_KEYS = new Set(['task', 'reschedule', 'snooze', 'unblock-resolved', 'unblock-decision']);
@@ -108,44 +109,37 @@ function PanelError({ message }) {
 function TaskPanel({ item, onFinished, fetchImpl }) {
   const [title, setTitle] = React.useState(item.taskTitle || '');
   const [dueAt, setDueAt] = React.useState(todayKey());
-  const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
-  // 할 일은 만들었는데 영수증을 못 남긴 경우 — 다시 누르면 영수증만 다시 시도한다(같은 할 일 id).
+  const { run, busy, locked } = useCheckWrite(`task:${item.signalKey}`, fetchImpl);
   const [createdTaskId, setCreatedTaskId] = React.useState(null);
-  const taskIdRef = React.useRef(globalThis.crypto.randomUUID());
 
   async function submit(event) {
     event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    let taskId = createdTaskId;
-    if (!taskId) {
-      const task = await createTaskForItem(fetchImpl, item, { title, dueAt, taskId: taskIdRef.current });
-      if (!task.ok) { setBusy(false); setError(task.message); return; }
-      taskId = task.taskId;
-      setCreatedTaskId(taskId);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('moonlight:tasks-saved'));
-    }
-    const receipt = await postReceipt(fetchImpl, item, { outcome: 'task_created', recordRef: { table: 'tasks', id: taskId } });
-    setBusy(false);
-    if (!receipt.ok) {
-      setError(`할 일은 만들었지만 이 카드를 숨기지 못했습니다 — ${receipt.message} 다시 누르면 영수증만 다시 남깁니다.`);
-      return;
-    }
+    const input = { item, title: title.trim(), dueAt };
+    const result = await run(input, () => ({ taskId: crypto.randomUUID(), receiptId: crypto.randomUUID() }), async (ownedFetch, command) => {
+      const task = await createTaskForItem(ownedFetch, command.input.item, { title: command.input.title, dueAt: command.input.dueAt, taskId: command.ids.taskId, context: command.context });
+      if (!task.ok) return task;
+      const receipt = await postReceipt(ownedFetch, command.input.item, { outcome: 'task_created', recordRef: { table: 'tasks', id: task.taskId }, requestId: command.ids.receiptId, context: command.context });
+      return { ...receipt, taskId: task.taskId, progress: { task: true } };
+    });
+    if (result.stale) return;
+    if (result.restore) { setTitle(result.restore.title); setDueAt(result.restore.dueAt); }
+    if (result.progress?.task) setCreatedTaskId(result.taskId);
+    if (!result.ok) { setError(result.message); return; }
+    window.dispatchEvent(new Event('moonlight:tasks-saved'));
     onFinished?.({ outcome: 'task_created', message: `할 일을 만들었습니다 · ${title}` });
   }
 
   return (
     <form className="ci-panel" onSubmit={submit} aria-label="할 일로 만들기">
       <div className="ci-panel__row">
-        <TextField label="할 일" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} fieldStyle={{ flex: '1 1 240px' }} disabled={Boolean(createdTaskId)} autoFocus />
-        <TextField label="언제까지" type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} fieldStyle={{ flex: '0 0 160px' }} disabled={Boolean(createdTaskId)} />
+        <TextField label="할 일" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} fieldStyle={{ flex: '1 1 240px' }} disabled={locked || busy} autoFocus />
+        <TextField label="언제까지" type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} fieldStyle={{ flex: '0 0 160px' }} disabled={locked || busy} />
       </div>
       <PanelError message={error} />
       <div className="ci-panel__actions">
         <button type="submit" className="fx-pill-btn fx-pill-btn--primary" disabled={busy || !title.trim()}>
-          {busy ? '저장 중…' : createdTaskId ? '영수증 다시 남기기' : '할 일 만들기'}
+          {busy ? '저장 중…' : createdTaskId ? '같은 영수증 확인' : locked ? '이전 할 일 요청 확인' : '할 일 만들기'}
         </button>
       </div>
     </form>
@@ -154,26 +148,25 @@ function TaskPanel({ item, onFinished, fetchImpl }) {
 
 function ReschedulePanel({ item, onFinished, fetchImpl }) {
   const [at, setAt] = React.useState(dayAfter(todayKey(), 1));
-  const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
-
+  const { run, busy, locked } = useCheckWrite(`reschedule:${item.signalKey}`, fetchImpl);
   async function submit(event) {
     event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    const saved = await rescheduleItem(fetchImpl, item, { at });
-    if (!saved.ok) { setBusy(false); setError(saved.message); return; }
-    // 날짜는 이미 대상에 저장됐다 — 영수증 실패는 카드를 남기지 않는다(대상이 바뀌어 규칙이 잡지 않음).
-    const receipt = await postReceipt(fetchImpl, item, { outcome: 'rescheduled', recordRef: { table: `${item.subject.type}s`.replace('accounts', 'customer_accounts'), id: item.subject.id } });
-    setBusy(false);
-    onFinished?.({ outcome: 'rescheduled', message: `다음 연락일 · ${formatDayLabel(at)}`, receiptMissing: !receipt.ok });
+    const result = await run({ item, at }, () => ({ receiptId: crypto.randomUUID() }), async (ownedFetch, command) => {
+      const saved = await rescheduleItem(ownedFetch, command.input.item, { at: command.input.at });
+      if (!saved.ok) return saved;
+      return postReceipt(ownedFetch, command.input.item, { outcome: 'rescheduled', recordRef: { table: `${item.subject.type}s`.replace('accounts', 'customer_accounts'), id: item.subject.id }, requestId: command.ids.receiptId, context: command.context });
+    });
+    if (result.stale) return;
+    if (result.restore) setAt(result.restore.at);
+    if (!result.ok) { setError(result.message); return; }
+    onFinished?.({ outcome: 'rescheduled', message: `다음 연락일 · ${formatDayLabel(at)}` });
   }
 
   return (
     <form className="ci-panel" onSubmit={submit} aria-label="날짜 다시 정하기">
       <div className="ci-panel__row">
-        <TextField label="다음 연락일" type="date" value={at} min={todayKey()} onChange={(e) => setAt(e.target.value)} fieldStyle={{ flex: '0 0 200px' }} autoFocus />
+        <TextField label="다음 연락일" type="date" disabled={locked || busy} value={at} min={todayKey()} onChange={(e) => setAt(e.target.value)} fieldStyle={{ flex: '0 0 200px' }} autoFocus />
       </div>
       <PanelError message={error} />
       <div className="ci-panel__actions">
@@ -189,21 +182,19 @@ function SnoozePanel({ item, onFinished, fetchImpl }) {
   const [until, setUntil] = React.useState(presets[0]?.until || dayAfter(today, 1));
   const [picking, setPicking] = React.useState(false);
   const [note, setNote] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
-
+  const { run, busy, locked } = useCheckWrite(`snooze:${item.signalKey}`, fetchImpl);
   async function submit(event) {
     event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    const subject = await snoozeSubject(fetchImpl, item, { until });
-    if (!subject.ok) { setBusy(false); setError(subject.message); return; }
-    const receipt = await postReceipt(fetchImpl, item, { outcome: 'snoozed', snoozedUntil: until, note });
-    setBusy(false);
-    // 고객·거래·리드는 대상 쪽 보류가 정본이라 영수증 실패에도 숨겨진다. 그 밖은 영수증이 곧 보류다.
-    if (!receipt.ok && subject.status === 'skipped') { setError(receipt.message); return; }
-    onFinished?.({ outcome: 'snoozed', message: `${formatDayLabel(until)}에 다시 보여 드립니다`, receiptMissing: !receipt.ok });
+    const result = await run({ item, until, note }, () => ({ receiptId: crypto.randomUUID() }), async (ownedFetch, command) => {
+      const subject = await snoozeSubject(ownedFetch, command.input.item, { until: command.input.until });
+      if (!subject.ok) return subject;
+      return postReceipt(ownedFetch, command.input.item, { outcome: 'snoozed', snoozedUntil: command.input.until, note: command.input.note, requestId: command.ids.receiptId, context: command.context });
+    });
+    if (result.stale) return;
+    if (result.restore) { setUntil(result.restore.until); setNote(result.restore.note); }
+    if (!result.ok) { setError(result.message); return; }
+    onFinished?.({ outcome: 'snoozed', message: `${formatDayLabel(until)}에 다시 보여 드립니다` });
   }
 
   return (
@@ -211,19 +202,19 @@ function SnoozePanel({ item, onFinished, fetchImpl }) {
       <div className="fx-eyebrow">언제 다시 볼까요</div>
       <div className="ci-presets" role="group" aria-label="다시 볼 날">
         {presets.map((preset) => (
-          <button key={preset.key} type="button" className="ci-preset" aria-pressed={!picking && until === preset.until} onClick={() => { setPicking(false); setUntil(preset.until); }}>
+          <button key={preset.key} type="button" className="ci-preset" disabled={locked || busy} aria-pressed={!picking && until === preset.until} onClick={() => { setPicking(false); setUntil(preset.until); }}>
             {preset.label}<small>{preset.sub}</small>
           </button>
         ))}
-        <button type="button" className="ci-preset" aria-pressed={picking} onClick={() => setPicking(true)}>
+        <button type="button" className="ci-preset" disabled={locked || busy} aria-pressed={picking} onClick={() => setPicking(true)}>
           날짜 고르기<small>최대 {MAX_SNOOZE_DAYS}일</small>
         </button>
       </div>
       <div className="ci-panel__row">
         {picking ? (
-          <TextField label="다시 볼 날" type="date" value={until} min={dayAfter(today, 1)} max={dayAfter(today, MAX_SNOOZE_DAYS)} onChange={(e) => setUntil(e.target.value)} fieldStyle={{ flex: '0 0 200px' }} />
+          <TextField label="다시 볼 날" type="date" disabled={locked || busy} value={until} min={dayAfter(today, 1)} max={dayAfter(today, MAX_SNOOZE_DAYS)} onChange={(e) => setUntil(e.target.value)} fieldStyle={{ flex: '0 0 200px' }} />
         ) : null}
-        <TextField label="이유 (선택)" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} fieldStyle={{ flex: '1 1 240px' }} />
+        <TextField label="이유 (선택)" disabled={locked || busy} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} fieldStyle={{ flex: '1 1 240px' }} />
       </div>
       <PanelError message={error} />
       <div className="ci-panel__actions">
@@ -236,6 +227,7 @@ function SnoozePanel({ item, onFinished, fetchImpl }) {
 // 막힌 프로젝트의 끝내기 1·2 — 프로젝트 상세와 같은 막힘 풀기(§5.4). 풀리면 영수증 한 줄:
 // 막힘이 풀렸으면 unblocked, 결정만 남겼으면 decision_logged(규칙이 여전히 잡으면 카드는 다시 보인다).
 function CardUnblockPanel({ item, branch, onFinished, fetchImpl }) {
+  const receiptId = React.useRef(crypto.randomUUID());
   const project = { id: item.subject.id, name: item.subject.name, delivery: item.unblock?.delivery, updatedAt: item.unblock?.updatedAt };
   return (
     <UnblockPanel
@@ -246,7 +238,7 @@ function CardUnblockPanel({ item, branch, onFinished, fetchImpl }) {
       onUnblocked={async (result) => {
         const outcome = result.unblocked ? 'unblocked' : 'decision_logged';
         const recordRef = result.decisionId ? { table: 'decisions', id: result.decisionId } : { table: 'projects', id: project.id };
-        const receipt = await postReceipt(fetchImpl, item, { outcome, recordRef });
+        const receipt = await postReceipt(fetchImpl, item, { outcome, recordRef, requestId: receiptId.current });
         onFinished?.({ outcome, message: result.message, receiptMissing: !receipt.ok });
       }}
     />

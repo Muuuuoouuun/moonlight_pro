@@ -185,7 +185,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
       return;
     }
     if (outcome.key === 'contact') {
-      recordItemRef.current = { item: active, receipted: false };
+      recordItemRef.current = { item: active, receipted: false, receiptId: crypto.randomUUID() };
       setRecordTarget({ kind: active.subject?.type, id: active.subject?.id, name: active.subject?.name || active.title });
       return;
     }
@@ -345,6 +345,7 @@ export function Home({ onNavigate, onGuidanceAsk }) {
             const activityId = result && typeof result === 'object' && result.activityId ? String(result.activityId) : null;
             const receipt = await postReceipt(globalThis.fetch, session.item, {
               outcome: 'contact_logged',
+              requestId: session.receiptId,
               recordRef: activityId ? { table: 'crm_activities', id: activityId } : { table: 'crm_activities' },
             });
             finish(session.item, { message: `기록됨 · ${session.item.subject?.name || '고객'}`, receiptMissing: !receipt.ok });

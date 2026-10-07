@@ -1,3 +1,6 @@
+import { normalizePmsCommand } from '../../../../engine/lib/pms-command.ts';
+import { buildSignalOutcomeWrite } from '../../../lib/check-items/outcome-input.js';
+import { receiptFromRow } from '../../../lib/repositories/signal-outcomes.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -39,6 +42,23 @@ function fakeFetch(responses) {
   const impl = async (url, init) => {
     calls.push({ url, method: init?.method, body: init?.body ? JSON.parse(init.body) : null });
     const next = responses.shift() || { status: 200, body: { status: 'saved' } };
+    const body = JSON.parse(init.body || '{}');
+    if (['saved', 'duplicate'].includes(next.body?.status)) {
+      const workspaceId = '33333333-3333-4333-8333-333333333333';
+      if (url === '/api/hub/tasks' || url === '/api/hub/decisions' && init.method === 'POST') {
+        const action = url.endsWith('/tasks') ? 'create_task' : 'create_decision';
+        const normalized = normalizePmsCommand({ ...body, action }, { workspaceId });
+        assert.equal(normalized.ok, true);
+        next.body = { ...next.body, [action === 'create_task' ? 'task' : 'decision']: normalized.record };
+      } else if (url === '/api/hub/projects') next.body = { ...next.body, project: { id: body.id, workspace_id: workspaceId, status: 'active', meta: { delivery: body.delivery } } };
+      else if (url === '/api/hub/decisions') next.body = { ...next.body, decision: { id: body.id } };
+      else if (url === '/api/hub/signal-outcomes' && init.method === 'POST') {
+        const checked = buildSignalOutcomeWrite(body); assert.equal(checked.ok, true);
+        next.body = { ...next.body, receipt: receiptFromRow({ ...checked.row, id: body.requestId, workspace_id: workspaceId }) };
+      } else if (url === '/api/hub/signal-outcomes') next.body = { ...next.body, receipt: { id: body.id, outcome: 'scheduled', undoneAt: body.action === 'undo' ? '2026-10-01T03:00:00Z' : null, scheduledStart: body.scheduledStart, scheduledEnd: body.scheduledEnd } };
+      else if (url === '/api/hub/crm-nudges') next.body = { ...next.body, id: body.subjectId, record: { id: body.subjectId, meta: { nudges: body.action === 'snooze' ? { snoozedUntil: body.until } : {} } } };
+    }
+    if (next.body?.status === 'updated') next.body = { ...next.body, event: { id: body.eventId, start: { dateTime: body.startAt }, end: { dateTime: body.endAt } } };
     return { ok: next.status >= 200 && next.status < 300, status: next.status, json: async () => next.body };
   };
   return { impl, calls };
@@ -76,7 +96,8 @@ test('고르기 칸: 선택지 셋 + 직접 고르기, 소요 시간 칩, 구글
   assert.match(html, /내일 09:00–09:20<\/span><small>다음 근무일 첫 빈 시간/);
   assert.match(html, /직접 고르기/);
   for (const label of ['15분', '30분', '45분', '1시간']) assert.match(html, new RegExp(`>${label}<`));
-  assert.match(html, /구글 캘린더에도 넣기/);
+  assert.match(html, /구글 일정 생성은 중복 방지 검증 전까지 중단/);
+  assert.doesNotMatch(html, /구글 캘린더에도 넣기/);
   assert.match(html, /10:30–10:50에 잡기/);
   assert.equal(count(html, /ci-outcome--primary/g), 0);
   assert.equal(count(html, /fx-pill-btn--primary/g), 1);
@@ -95,46 +116,22 @@ test('잡아 둔 시간이 되면 띠로 말하고, 지나면 다시 잡기가 1
   assert.doesNotMatch(passed, /--danger/);
 });
 
-test('잡기: 구글에 먼저 넣고 그 일정 id로 영수증을 남긴다', async () => {
-  const slot = { start: at(10, 30), end: at(10, 50) };
-  const { impl, calls } = fakeFetch([
-    { status: 200, body: { status: 'saved', event: { id: 'gcal-1' } } },
-    { status: 200, body: { status: 'saved', receipt: { id: BLOCK } } },
-  ]);
-  const result = await scheduleItem(impl, deal, { slot, addToCalendar: true });
-  assert.equal(result.ok, true);
-  assert.equal(result.eventId, 'gcal-1');
-  assert.equal(result.receipt.id, BLOCK);
-  assert.equal(calls[0].url, '/api/calendar/google/event');
-  assert.equal(calls[0].body.title, '확인할 것 · 거래 A 연락 기록');
-  assert.equal(calls[1].body.outcome, 'scheduled');
-  assert.equal(calls[1].body.scheduledStart, slot.start);
-  assert.equal(calls[1].body.calendarEventId, 'gcal-1');
+test('new check-items Google creation is explicitly blocked before any provider or receipt call', async () => {
+  const { impl, calls } = fakeFetch([]);
+  const result = await scheduleItem(impl, deal, { slot: { start: at(10, 30), end: at(10, 50) }, addToCalendar: true, requestId: BLOCK });
+  assert.equal(result.ok, false); assert.equal(result.status, 'blocked'); assert.equal(calls.length, 0);
+  assert.match(result.message, /Moonlight에만 시간을 잡을 수 있습니다/);
 });
 
-test('잡기: 구글 쓰기가 실패하면 잡지 않고 선택지를 남긴다, 영수증이 실패하면 만든 일정을 지운다', async () => {
+test('Moonlight scheduling accepts only an explicit matching receipt; preview keeps the card', async () => {
   const slot = { start: at(10, 30), end: at(10, 50) };
-  const calendarDown = fakeFetch([{ status: 500, body: { status: 'error' } }]);
-  const failed = await scheduleItem(calendarDown.impl, deal, { slot, addToCalendar: true });
-  assert.equal(failed.ok, false);
-  assert.equal(failed.calendarFailed, true);
-  assert.equal(calendarDown.calls.length, 1, '영수증을 남기지 않는다');
-
-  const receiptDown = fakeFetch([
-    { status: 200, body: { status: 'saved', event: { id: 'gcal-2' } } },
-    { status: 502, body: { status: 'failed' } },
-    { status: 200, body: { status: 'saved' } },
-  ]);
-  const rolledBack = await scheduleItem(receiptDown.impl, deal, { slot, addToCalendar: true });
-  assert.equal(rolledBack.ok, false);
-  assert.equal(receiptDown.calls[2].method, 'DELETE');
-  assert.deepEqual(receiptDown.calls[2].body, { eventId: 'gcal-2' });
-  assert.match(rolledBack.message, /구글 일정도 지웠습니다/);
-
-  const moonlightOnly = fakeFetch([{ status: 202, body: { status: 'preview' } }]);
-  const preview = await scheduleItem(moonlightOnly.impl, deal, { slot, addToCalendar: false });
-  assert.equal(preview.ok, false, 'preview는 잡은 것이 아니다');
-  assert.equal(moonlightOnly.calls.length, 1);
+  const saved = fakeFetch([]);
+  const result = await scheduleItem(saved.impl, deal, { slot, requestId: BLOCK });
+  assert.equal(result.ok, true); assert.equal(result.receipt.id, BLOCK);
+  assert.equal(saved.calls.length, 1); assert.equal(saved.calls[0].url, '/api/hub/signal-outcomes');
+  assert.equal(saved.calls[0].body.calendarEventId, null);
+  const preview = fakeFetch([{ status: 202, body: { status: 'preview' } }]);
+  assert.equal((await scheduleItem(preview.impl, deal, { slot, requestId: BLOCK })).ok, false);
 });
 
 test('취소·다른 시간은 Moonlight 행이 정본 — 구글 쪽 실패는 말로 알린다', async () => {
@@ -144,7 +141,7 @@ test('취소·다른 시간은 Moonlight 행이 정본 — 구글 쪽 실패는 
   assert.equal(cancel.ok, true);
   assert.deepEqual(cancelled.calls[0].body, { id: BLOCK, action: 'undo' });
   assert.equal(cancelled.calls[1].method, 'DELETE');
-  assert.equal(cancel.message, 'Moonlight에서는 취소했고 구글 일정은 남아 있습니다.');
+  assert.equal(cancel.message, 'Moonlight 취소는 확인했습니다. 구글 일정의 삭제 여부는 확인하지 못해 캘린더에서 확인이 필요합니다.');
 
   const slot = { start: at(15), end: at(15, 15) };
   const moved = fakeFetch([{ status: 200, body: { status: 'saved' } }, { status: 200, body: { status: 'updated' } }]);

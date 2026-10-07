@@ -6,11 +6,13 @@
 // (빈 시간을 지어내지 않는다), 운영자가 `잡기`를 누르기 전에는 아무것도 저장하지 않는다.
 
 import React from 'react';
+import { useCheckWrite } from '../use-check-write';
 import { Iconed } from '../hub-icons';
 import { CertaintyBadge, CheckboxRow, Kbd, TextField, TruthBadge } from '../hub-primitives';
 import { DURATION_CHOICES, formatSlot, kstDayKeyOf, kstMs, suggestSlots } from '@/lib/check-items/slots';
 import { scheduleMinutesFor } from '@/lib/check-items/catalog';
 import {
+  CHECK_CALENDAR_BLOCKED,
   cancelScheduled,
   dayAfter,
   moveScheduled,
@@ -77,7 +79,7 @@ export function SchedulePicker({
   const today = todayKey();
   const [manualDay, setManualDay] = React.useState(today);
   const [manualTime, setManualTime] = React.useState('');
-  const writable = Boolean(calendar?.writable);
+  const writable = false; // Only this new check-items provider creation path is blocked.
   const [addToCalendar, setAddToCalendar] = React.useState(writable);
   React.useEffect(() => { setAddToCalendar(writable); }, [writable]);
 
@@ -153,7 +155,7 @@ export function SchedulePicker({
         writable ? (
           <CheckboxRow checked={addToCalendar} onChange={setAddToCalendar} text="구글 캘린더에도 넣기" />
         ) : (
-          <p className="ci-note">Moonlight에만 잡힙니다 — 쓸 수 있는 구글 캘린더가 연결되지 않았습니다.</p>
+          <p className="ci-note" role="status">Moonlight에만 잡힙니다 — {CHECK_CALENDAR_BLOCKED}</p>
         )
       ) : hasCalendarEvent ? (
         <p className="ci-note">구글 캘린더 일정도 같은 시간으로 옮깁니다.</p>
@@ -176,24 +178,21 @@ export function ScheduleBand({ item, calendar, blocks = [], open = false, onTogg
   const minutes = rememberedMinutes(subjectType, item?.schedule?.minutes || scheduleMinutesFor(subjectType));
   const suggestions = slotSuggestions({ calendar, blocks, minutes });
   const recommended = suggestions?.recommended || null;
-  const [busy, setBusy] = React.useState(false);
+  const { run, busy } = useCheckWrite(`schedule:${item?.signalKey}`, fetchImpl);
   const [error, setError] = React.useState('');
   const [failedSlot, setFailedSlot] = React.useState(null);
+  const [restoredSlot, setRestoredSlot] = React.useState(null);
 
-  async function schedule(slot, { addToCalendar }) {
+  async function schedule(slot, { addToCalendar = false } = {}) {
     if (busy) return;
-    if (slotPassed(slot)) { setError('그 시간은 이미 지났습니다 — 다시 골라 주세요.'); return; }
-    setBusy(true);
-    setError('');
-    setFailedSlot(null);
-    const result = await scheduleItem(fetchImpl, item, { slot, addToCalendar });
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.message);
-      if (result.calendarFailed) setFailedSlot(slot);
-      return;
-    }
-    onScheduled?.({ slot, receipt: result.receipt, eventId: result.eventId });
+    if (!restoredSlot && slotPassed(slot)) { setError('그 시간은 이미 지났습니다 — 다시 골라 주세요.'); return; }
+    const submitted = restoredSlot || slot;
+    const result = await run({ slot: submitted }, () => ({ receiptId: crypto.randomUUID() }), async (ownedFetch, command) =>
+      scheduleItem(ownedFetch, item, { slot: command.input.slot, addToCalendar, requestId: command.ids.receiptId, context: command.context }));
+    if (result.stale) return;
+    if (result.restore) setRestoredSlot(result.restore.slot);
+    if (!result.ok) { setError(result.message); return; }
+    onScheduled?.({ slot: submitted, receipt: result.receipt, eventId: result.eventId });
   }
 
   // 구글 쓰기가 실패하면 조용히 Moonlight에만 잡지 않는다 — 운영자가 둘 중 하나를 고른다(§4.6).
@@ -226,7 +225,7 @@ export function ScheduleBand({ item, calendar, blocks = [], open = false, onTogg
               type="button"
               className={`fx-pill-btn${emphasize && !open ? ' fx-pill-btn--primary' : ''}`}
               disabled={busy}
-              onClick={() => schedule(recommended, { addToCalendar: Boolean(calendar?.writable) })}
+              onClick={() => schedule(recommended, { addToCalendar: false })}
             >
               {busy && !open ? '잡는 중…' : '잡기'}
             </button>
@@ -236,6 +235,7 @@ export function ScheduleBand({ item, calendar, blocks = [], open = false, onTogg
           </button>
         </span>
       </div>
+      {restoredSlot ? <p className="ci-note">이전 요청 · {formatSlot(restoredSlot)} · 같은 요청으로 확인합니다.</p> : null}
       {!open && error ? <PanelError message={error}>{errorActions}</PanelError> : null}
       {open ? (
         <SchedulePicker
