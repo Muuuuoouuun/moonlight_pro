@@ -253,6 +253,9 @@ export function MemoComposer({ model, isNew, onClose, onReload, focused = false 
     model.save();
   }
   const tagFields = draft ? <>
+          <SelectField label="기록 범위" value={draft.noteMeta.scope || ''} disabled={locked}
+            options={[{ value: '', label: '범위 미분류' }, { value: 'personal', label: '개인' }, { value: 'company', label: '회사 업무' }]}
+            onChange={(event) => { const noteMeta = { ...draft.noteMeta }; if (event.target.value) noteMeta.scope = event.target.value; else delete noteMeta.scope; edit({ noteMeta }); }} />
           <TextField label="태그 · 선택" placeholder="쉼표로 구분해 입력" value={(draft.noteMeta.tags || []).join(',')} disabled={locked}
             hint={`최대 ${JOURNAL_TAG_LIMIT}개 · 태그당 ${JOURNAL_TAG_LENGTH}자 · 검색으로 다시 찾을 수 있어요.`}
             error={invalidTags ? `태그는 ${JOURNAL_TAG_LIMIT}개까지, 각 ${JOURNAL_TAG_LENGTH}자 이내로 입력해 주세요.` : undefined}

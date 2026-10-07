@@ -99,6 +99,7 @@ overrides it.
   --line:          oklch(0.30 0.008 250 / 0.6);
   --line-soft:     oklch(0.30 0.008 250 / 0.3);
   --line-strong:   oklch(0.40 0.009 250 / 0.8);
+  --line-control:  oklch(0.50 0.008 250);   /* input · checkbox edge, 3:1 (2026-10-06) */
 
   /* Moonstone accent stack (cool blue-silver) */
   --moon-50:       oklch(0.96 0.004 250);
@@ -112,9 +113,10 @@ overrides it.
 
   /* Text */
   --fg:            var(--moon-100);
-  --fg-muted:      var(--moon-400);
-  --fg-dim:        var(--moon-500);
-  --fg-faint:      var(--moon-600);
+  /* Not the moon ramp since 2026-10-06 — the ramp gave dim 3.7–4.3:1 and faint 2.4–3.0:1 (§15) */
+  --fg-muted:      oklch(0.72 0.009 250);
+  --fg-dim:        oklch(0.65 0.010 250);
+  --fg-faint:      oklch(0.60 0.009 250);
 
   /* Semantic — muted on purpose */
   --success:       oklch(0.74 0.11 155);
@@ -136,8 +138,9 @@ overrides it.
   /* Text is set with literals here, not through the moon ramp */
   --fg:         oklch(0.20 0.008 250);
   --fg-muted:   oklch(0.42 0.008 250);
-  --fg-dim:     oklch(0.50 0.008 250);
-  --fg-faint:   oklch(0.55 0.007 250);
+  --fg-dim:     oklch(0.47 0.008 250);
+  --fg-faint:   oklch(0.52 0.007 250);
+  --line-control: oklch(0.66 0.007 250);
   /* The moon ramp runs the other way (--moon-50 ≈ L 0.22 … --moon-700 ≈ L 0.88), so
      "--moon-200 fill" stays high-contrast against the surface in both themes.
      Semantic stacks shift accordingly — read hub-tokens.css for the exact values. */
@@ -152,12 +155,18 @@ Also defined in `hub-tokens.css` (names verbatim, both themes):
   (compact banners only, never full cards or rows).
 - Layering: `--z-quick-memo: 60`, `--z-project-detail: 61`, `--z-navigation-overlay: 64`, `--z-navigation: 65`,
   `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100` (defined once on the base block).
-- Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-pop`.
+- Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-pop`. `--shadow-card` carries lift only (no `0 0 0 1px` ring) —
+  every card already draws its own 1px border, and the ring made it read as 2px (§15 2026-10-06).
+- Control edge: `--line-control` / `--line-control-hover` — resting and hover border of text inputs (`.hub-input`,
+  `.hub-field`) and the unchecked `Checkbox`, 3:1 against the surface. Decorative dividers keep `--line*`.
 - Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7). Call sites use `--r` for the middle step; the undefined `--r-md` references were removed (§15 2026-09-24).
 - Motion: `--dur-hover`, `--dur-enter`, `--dur-panel`, `--dur-overlay`, `--dur-celebrate`, `--dur-gauge`, `--ease-hub`, `--ease-gauge`, `--stagger-step` (§9).
 - Selected project gauge only (§5.2 exception): `--project-gauge-0/25/50/75/100` (hue 255 → 218 → 190 → 280 → 325,
   i.e. blue → cyan → teal → violet → magenta), `--project-gauge-spark`, `--project-gauge-glow`, `--project-gauge-tip-line`.
   No other surface may read these tokens.
+- OKR·KPI glance only (§5.2 exception, §15 2026-10-05): `--okr-ahead/-bg` (teal 185) · `--okr-on/-bg` (blue 255) ·
+  `--okr-late/-bg` (coral 40) · `--okr-wait/-bg` (neutral) · `--okr-track` · `--okr-marker`, both themes. They color KR
+  pace (앞섬·비슷함·늦음·판정 전) on `dashboard/work/goals` and always sit next to a glyph + label. No other surface may read them.
 
 Futura layer tokens live in `apps/hub/components/hub/hub-futura.css`, also on `.hub-app` (so they resolve on every
 dashboard page, §7 Futura): spacing `--fx-page-pad: 48px`, `--fx-section-gap: 44px`, `--fx-card-pad: 26px`, `--fx-gap: 16px`;
@@ -406,6 +415,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - `Badge` — soft / outline, 8 tones (neutral · moon · success · warning · danger · info · personal · company)
 - `Dot`, `Kbd`, `Avatar`, `Divider`
 - `Card` (padded / unpadded), `SectionTitle`, `Tabs`
+  - `SectionTitle` wraps: when its `right` slot is wider than the row (390px phones), the slot drops below the title instead of squeezing the title to one word per line (2026-10-06). A `right` group of several badges should itself use `flexWrap: 'wrap'`.
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
 - `Input`, `Checkbox`, `Progress`, `ProgressRing`, `Sparkline`, `Placeholder` (0 call sites), `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
   - `Checkbox shape="square | diamond | folder"`: default square; the project work list uses diamond for milestones and a 24px folder for work groups. The folder outline and front seam remain visible in both states; only its lower-right circular completion marker fills and gains a check. Type labels accompany the shapes, and all variants retain the same keyboard/ARIA behavior and neutral tokens (operator request 2026-10-01).
@@ -415,7 +425,9 @@ truth. Do not recreate them ad-hoc inside pages.
 - Toast: `useToast` / `ToastProvider` (re-exported from `hub-toast.jsx`, provided once in `hub-app.jsx`). One
   `aria-live="polite"` viewport; danger items get `role="alert"`, others `role="status"`; tones neutral (bell) ·
   success (check glyph in `--moon-200`, never green) · danger (x in `--danger`); optional ghost-`Button` action; at
-  most three visible. Use it for save/undo receipts instead of ad-hoc
+  most three visible. Neutral/success stay 3.5s, danger 7s; pointer or keyboard focus on the viewport pauses every
+  toast without an action and resumes from the time left. A toast with an action (되돌리기) never pauses — its
+  action expires with the caller's own window. Use it for save/undo receipts instead of ad-hoc
   banners. A toast never announces `완료` for a write that was not persisted (§8.1 Save envelope).
 - `Drawer`, `EditDrawer` — the only overlay / edit surfaces (§8.1)
   - `Drawer presentation="compact"` is the short capture variant: centered on desktop, bottom sheet at ≤600px, with the same ESC and focus handling. Default `side` remains the edit drawer. New task capture uses `compact`; optional description/next-action fields are disclosed on demand. Compact capture uses a 6px backdrop blur. Callers preserve drafts and guard dismissal while saving.
@@ -425,10 +437,10 @@ truth. Do not recreate them ad-hoc inside pages.
 **Shared composites outside the primitives file** (reuse before rebuilding)
 - `BrandMark`, `ProjectProgressGauge`, `ProjectStatusBadge` — `pages/project-pms-components.jsx`.
   `BrandIcon` (`brand-icons.jsx`) is used by the brand directory, Overview, Revenue and PMS brand references.
-- `StreakMark` — `burning-streak.jsx` (neutral ascending bars, §15 2026-09-22)
+- `StreakMark` — `burning-streak.jsx` (monochrome flame levels 0–5, §15 2026-09-25; replaces the 2026-09-22 ascending bars)
 - `CalendarOutcome` (`calendar-outcome.jsx`, compact mode on Home), `ContactRecordForm` / `ContactRecordDrawer`
   (`contact-record-form.jsx`), `GlobalQuickCapture` (`quick-capture.jsx`), `GoalLinks` (`goal-links.jsx`)
-- `SortHead` — exported from `pages/revenue.jsx`, reused by `customers.jsx` (§8.1 Table sort)
+- `SortHead` — defined in `pages/revenue-core.jsx` with the shared revenue ledger hook (re-exported by `pages/revenue.jsx`), reused by `customers.jsx` (§8.1 Table sort)
 
 **Hub-specific composites** (page-level, see `components/hub/pages/*`)
 - Signal card (Daily Brief)
@@ -478,7 +490,13 @@ truth. Do not recreate them ad-hoc inside pages.
 
 **테이블 정렬.**
 - 헤더 클릭: asc → desc → 해제(기록 순서) 3단 토글, 방향 캐럿은 비활성일 때도 폭 예약.
-- 금액은 표시 문자열(`₩1.2M`/`₩900K`)을 숫자로 파싱해 정렬, 단계는 퍼널 순서로 정렬 (알파벳 금지).
+- 금액은 표시 문자열(`120만원`/`1억 2,000만원`, 옛 `₩1.2M`도)을 `parseWon`으로 숫자로 파싱해 정렬, 단계는 퍼널 순서로 정렬 (알파벳 금지).
+
+**금액 표기 (2026-10-06 확정).** 만·억 단위만 쓴다. `₩` 기호와 M/K 축약은 쓰지 않는다. 정본은 `apps/hub/lib/won-format.js` 하나다.
+- `formatWon` — 원 단위까지 정확한 금액: `120만원` · `123만 4,567원` · `1억 2,000만원` · `9,900원`. 행·독·장부·편집 필드로 돌아가 다시 저장되는 값.
+- `formatWonShort` — 반올림 금액: `1,235만원` · `1.5만원` · `1.2억원`. 머리·KPI·범례·묶음 합계. 차트 축처럼 좁은 곳은 `{ unit: false }`로 `240만`.
+- `formatSignedWon`/`formatSignedWonShort` — 차이 금액(`+3만 4,000원`, `−20만원`). 음수 기호는 U+2212.
+- 페이지 안에서 금액 포맷터를 새로 만들지 않는다.
 
 **상태 표시.**
 - 좌측 액센트 스트라이프는 `inset 1px 0 0` box-shadow — 토큰은 `--*-line`(저채도) 또는 위급 레일에 한해 본색 `--danger`를 쓴다(현행 코드·state-usage 테스트 기준). 배경 fill·두꺼운 보더 금지 (§5.2). **유일한 예외**: 브랜드 컨텐츠 로그(`dashboard/brands/log`)가 `inset 3px 0 0` + 브랜드 아이덴티티 색을 쓴다 (§15 2026-09-01 운영자 확정). 다른 표면으로 확장 금지.
@@ -558,6 +576,8 @@ Deliberate, never playful. Since 2026-07-29 the only sanctioned durations and cu
 - Page reveal: `.fade-up` (opacity + 4px translateY). Card lists cascade with `.stagger-up`; do not hand-roll delays.
 - Hover travel: no more than `4px`.
 - Compact capture: enter/exit and disclosure use `--dur-panel`, backdrop enters with `--dur-overlay`. A successful save closes only after the server acknowledgement; reduced-motion skips the exit delay.
+- Bar charts enter with `.hub-bar-rise` (`hubBarRise`: `scaleY(0→1)` from the baseline, `--dur-enter`) — animate
+  transform, never `height`/`width` (layout work every frame). Overview's activity chart uses it since 2026-10-06.
 - Live indicators: `mlMoonPulse 1.4s ease-in-out infinite` — one duration everywhere. Loading skeletons (`Skeleton`) reuse it as-is, with no per-line phase offset (a wave reads as playful).
 - `motion.test.mjs` sweeps every hub stylesheet and page for raw `ms` **and `s`** literals and inline `cubic-bezier(` inside transition/animation values — the §9 token rule is enforced, not advisory (2026-09-16, `s` added 2026-09-22). Allowed without a token: `mlMoonPulse 1.4s` and `0s`.
 - Recorded debt, not precedent: the completed `Progress` bar loops `hubProgressShimmer 2.4s ease-in-out infinite`, and `hubSparklePop` still appears once with an inline `0.8s` next to a gold glyph (`overview.jsx`). The motion guard exempts exactly these two names until the celebration question (Q134, `2026-09-21-home-screen-design-development.md`) is decided. New work uses `--dur-celebrate` one-shots instead.
@@ -598,11 +618,12 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 - `Checkbox`는 `label` prop으로 스크린리더 이름을 전달한다 (행 제목 등).
 - 각 페이지는 정확히 하나의 `<h2>` 페이지 타이틀(20px/500)을 메인 페인에 가진다 — 브레드크럼만으로 대체 금지. 공용
   PageHeader 프리미티브는 없다: 대부분 인라인 `style={{ margin: 0, fontSize: 20, fontWeight: 500 }}`이거나 페이지 CSS가 같은
-  값을 준다. 승인된 카브아웃은 두 가지다(개인 매출 헤더의 `clamp(22px, 2.5vw, 28px)` h2는 승인되지 않은 이탈 — §14 Known gaps 12).
+  값을 준다. 승인된 카브아웃은 아래 세 가지다. 개인 매출 헤더는 2026-09-24부터 기본 20px/500을 따른다(§14 Known gaps 9).
   - Daily Brief 히어로(`오늘의 실행`): §6 Display 스케일 `clamp(26px, 3.2vw, 32px)`/700 — 첫 화면의 페이지 레벨 모먼트 1곳.
   - Futura 페이지(§7 Futura): `<h2 className="fx-hero">`/`"fx-page-title">` 44px/300(≤900px 30px) — `dashboard/home`(확정
     2026-09-18)·`work/decisions`(확정 2026-09-19)·`work/rhythm`(권장 2026-09-23)·영업·매출의 `revenue/followups`(오늘 연락)·
     `revenue/customers`(고객)·`revenue/deals`(거래)(확정 2026-09-24, 구현 중).
+  - OKR·KPI(`dashboard/work/goals`, 현황 `?view=goals`): `.goal-page-title` 32px/800, 섹션 19px/700(§15 2026-10-05 확정).
   그 밖의 페이지로 확장하지 않는다 — 같은 영업·매출 안의 문의 탭과 탭에서 내려온 화면도 20px/500 그대로다.
 
 ## 12. Public vs Hub Rules
@@ -688,8 +709,8 @@ Build order when adding a new surface:
 6. Mobile floor: Calendar has no phone agenda (§7 Responsive). The input size floor is now global at ≤720px or coarse pointer.
 7. Stale code comments: the `hub-futura.css` header ("only inside `.hub-futura`") and `hub-tokens.css`
     ("eight-anchor nav") — the pinned count is 10 + 2 since 2026-09-30 (`hub-nav.js`'s "Ten primary" is accurate
-    again); and `motion.test.mjs`'s opening comment
-    still says `s` units are not checked, though the test now checks them.
+    again). (`motion.test.mjs`'s stale opening comment was corrected 2026-10-06, when the guard also learned to read
+    `.15s`-style values without a leading zero.)
 8. Focus-ring color is mixed (`--moon-300`, `--accent`, raw rgba) and breakpoints drift — both open in `TODOS.md`.
 9. ~~Unsanctioned title scale: `.personal-revenue-header h2` used `clamp(22px, 2.5vw, 28px)`~~ — resolved 2026-09-24
     (20px/500 per §11, revenue P0 pass).
@@ -751,7 +772,14 @@ Build order when adding a new surface:
 | 2026-09-25 | 넛지는 별도 섹션이 아니라 **대상에 붙는 제안 팁**이다 — 공용 `SuggestionTip`(`components/hub/suggestion-tip.jsx`) 한 줄 `◇ 제안 · <이유> [행동 하나]`, `CertaintyBadge state="recommended"`의 점선·빈 마름모와 직접 라벨만 쓰고 채움·빨강·영속 모션을 쓰지 않는다. 대상(고객·거래) 하나에 팁 하나, 팁은 저장하지 않고 기존 시트·흐름을 미리 채워 연다. 이관 템플릿 다음 행동도 약속이 아니라 같은 팁으로 보인다. 위치: 오늘 연락 행·고객 목록(정보 전용)·고객 드로어 약속 카드 | confirmed | 운영자 "넛지는 디자인 요소나 추천 팁 혹은 제안 같은 쪽으로" + 템플릿 약속 구분 동의(2026-09-24). §5.3 권장 확실성 문법을 그대로 쓰므로 새 색·모양 어휘가 없다. 옛 `CrmNudgeSection` 패널은 제거. 상세 `docs/superpowers/specs/2026-09-24-revenue-four-tabs-design.md` §12 |
 | 2026-09-26 | 거래 탭의 보기를 **돈 · 단계** 둘로 줄인다. 돈 보기는 매출·현금흐름만 — 머리 카드 한 장(월 매출/목표 + KPI 넷 + 확실성 띠), 현금흐름 주·월 차트, 들어올 돈 목록. 지난 달은 그리지 않는다. 확실(계약)·가능(계약 전)은 §5.3 선 모양으로, 빨강은 계약됐는데 늦은 돈에만. 시간축 막대·입금 달력·결제 표·언제 레인은 넣지 않는다(프로젝트 타임라인·오늘 연락과 겹침) | confirmed | 운영자가 목업 다섯 안을 비교한 뒤 "더 컴팩트하고 본질(매출·현금흐름)에만 집중한 버전"을 골랐다(2026-09-26). 2026-09-24 행의 거래 탭 "언제" 기본 보기와 2026-09-25 결제 보기를 대체한다. 상세 `docs/superpowers/specs/2026-09-24-revenue-four-tabs-design.md` §14 |
 | 2026-09-26 | 거래 돈 보기의 패널 처리 = **먹색 머리 + 한 장**: 월 매출 카드만 반전 면(`--moon-50` 면, 글자는 `--surface` 쪽 — 라이트에선 먹색 카드, 다크에선 밝은 카드)이고, 새 색 없이 카드 범위에서 `--fg`·`--line*`·`--danger` 등을 `color-mix`로 다시 묶는다. 현금흐름과 들어올 돈은 한 장(`.deals-money-sheet`) 안에서 1px 선으로만 나뉜다. 이 반전 면은 거래 돈 보기 머리 카드 한 곳 한정 | confirmed | 운영자가 패널 처리 시안 A(층 나누기)·B(먹색 머리 + 한 장) 중 B를 골랐다(2026-09-26). 세 덩어리가 모두 같은 흰 카드라 위계가 없던 문제를 톤으로 푼다 |
+| 2026-09-26 | 프로젝트 선택 목록은 할 일을 모두 처리해 체크리스트가 **실제로 전부 완료된** 프로젝트(`source=tasks`, `total>0`, `done=total`, 일부 집계 제외 — 반올림 100%·보고값만으로 판정하지 않음)를 `완료됨` 묶음으로 맨 아래에 모은다(어떤 정렬에서도, `sinkDoneProjects`). 상태(`completed`)는 바꾸지 않는다 — 묶음 머리가 `할 일 모두 처리 · 결과 확인 전`이라고 말하고, 접기/펼치기 가능한 아코디언 버튼(`chevronD`, `doneCollapsed`, 기본 펼침, 브라우저 `localStorage` 저장)으로 묶음 전체를 접을 수 있다. 새로 100% 달성 시에는 자동으로 펼쳐 축하 연출을 보여준다. 확정된 완료·보관은 기존 접힌 `완료·보관` 구역 그대로다. 완료 행은 체크 글리프 + 이름 명도 한 단계 하강(초록 없음). 이 화면에서 100% 미만 → 100%로 바뀐 순간에만 1회 축하: 행이 묶음으로 미끄러진 뒤 체크 팝 + 불티 여섯 + 행 면이 한 번 밝아졌다 가라앉음(`--dur-panel`·`--dur-celebrate`·`--stagger-step`, `--moon-200`, 반복 없음, 감소 모션 끔) | confirmed | 운영자 지시 "완료된 프로젝트는 완료됨으로 빠짐, 우선순위 내려감, 축하할 것은 축하(애니메이션)"에 이어 "여기 완료된 애들은 접을 수 있도록" 피드백 반영. 결과 확인 뒤 완료 확정이라는 기존 흐름(`완료 검토`)을 건너뛰지 않고, 접힌 상태에서는 진행 중 프로젝트 탐색과 키보드 순회가 집중되도록 처리함 |
 | 2026-09-26 | 데스크톱 빠른 입력 위젯 페이지 `/widget`(`components/hub/quick-widget.jsx`, `app/widget/widget.css`) — Windows 앱의 380×200 위젯 창(`apps/desktop/widget-window.js`)이 띄운다. 380px 창은 `hub-tokens.css`의 `(pointer: coarse), (max-width: 720px)` 터치 플로어에 **폭만으로** 걸리므로, 위젯 스코프(`.hub-app.quick-widget-page`) 안에서 `(pointer: fine)`일 때만 44px 버튼·16px 입력 플로어를 되돌린다(거친 포인터는 플로어 유지). 앱 안에서는 창 모서리를 OS가 둥글리고 페이지는 1px `--line` 선만 긋는다(`--shadow-pop`·`--r-lg` 없음, 브라우저 탭에서는 카드로 그린다). 입력 칸 포커스 링은 §11 1px `--moon-300` 그대로 `outline-offset: -1px`(§15 2026-09-15 선례) | recommended | 운영자가 2026-09-26 위젯 목업을 그대로 승인했다. §7 Responsive·§11 터치 플로어의 위젯 한정 예외라 결정 로그에 남기고, 실사용으로 확인하기 전까지 권장으로 둔다. `quick-widget.test.mjs`가 스코프·고정 높이·포커스 규칙을 고정한다 |
 | 2026-09-29 | OKR·KPI 화면을 개념별로 나눈다 — 보기는 **OKR · KPI · 체크인 · 주간 실측** 넷(옛 3열 매트릭스·펄스 스트립 제거). 스키마는 그대로 두고 role로 가른다: `outcome`·`driver` + 약속선(target) 있음 = **KR**(점수 0~1 = 약속선 대비 진척, 목표 점수 = 점수 난 KR의 평균, 측정 못 한 KR은 0점이 아니라 "미측정 n"), 약속선 없는 outcome·driver = **기록만 하는 지표**(접힘, 점수 없음), `guardrail` = **KPI**(점수 없이 선 안·선 밖 + 추이 + 마지막 관측 경과일). 상태는 색이 아니라 글리프+글(✓ 선 안 · ▲ 선 밖 · ◐ 일부 근거 · ○ 미측정), 빨강은 선 밖에만이고 붉은 좌측 1px 줄은 3곳까지(넘으면 머리말 집계와 행 기호만, §5.3 red budget). `Progress`·`ProgressRing`·success/warning 색은 이 화면에서 쓰지 않는다(점수 트랙은 moonstone 한 줄). 목표 카드는 기간 경과율과 점수를 나란히 놓고 글로만 페이스를 말한다. KR이 없거나 5개 초과이거나 결과 KR이 없을 때만 `CertaintyBadge recommended` 제안 한 줄. 2026-09-30 추가: 늘리기 KR 행 아래에 월 목표를 주 단위로 쪼갠 한 줄(`지금쯤 N · 기준선보다 늦음 · 이번 주 a/b`, 저장 없이 기간 경과율로 계산, 늦음도 색 없이 글로만) — 근거는 `docs/superpowers/specs/2026-09-30-okr-kpi-third-party-evaluation.md`. 2026-09-30 운영자 확정(Q1·Q2): 채점은 스펙대로 **바닥 0.7 · 천장 1.0** — 천장을 저장하기 전(0053)엔 바닥 0.7에서 멈추고 `바닥 달성 · 천장 미등록`, 점수 트랙에 0.7 눈금, 목표 페이스는 0.7 × 기간 경과(바닥 페이스)와 비교, 주 1건 미만 KR은 마지막 주에만 늦음 판정. 안티 골은 기간 중 진행 점수에서 빼고 채점지에서만 KR로 넣는다 | recommended | 운영자 "OKR, KPI 이어서 구성·내용 더 쪼개기 — 각 개념의 본질에 부합하게". OKR은 기간이 있는 목표+점수, KPI는 기간 없이 계속 지킬 건강 지표라는 본질이 한 목록의 role 배지로 뭉개져 있었다. 규칙 정본은 `lib/goal-concepts.js`(테스트 `goal-concepts.test.mjs`)이고 도전값(천장)은 저장하지 않아 점수는 등록된 약속선 대비다. 링크 계약은 `?kpi=1`(옛 `?matrix=1`은 OKR로 열림). 운영자가 화면을 보고 확정하기 전까지 `recommended` |
 | 2026-09-30 | 사이드바에 `제품` 앵커를 `프로젝트`와 `브랜드` 사이에 추가한다(주요 10 + 유틸리티 2). 착지는 `dashboard/products` 하나이고 소속(scope) 쿼리를 붙이지 않으며 탑바 탭도 없다 — 포트폴리오·문의함 전환은 페이지 안 `SegmentedControl`이다. 화면은 제품 운영실 B안(`ProjectProductsView`)을 그대로 옮겼고, 프로젝트 탭의 `?view=products` 보기는 없앴다(옛 링크는 같은 쿼리로 새 탭에 넘긴다). 아이콘 `navProducts`는 상자 윤곽 한 가지 선 아이콘으로 펼친 행과 56px 레일에 같이 쓴다. §5.2 색 규칙·§7 고정 밀도·§11 20px/500 제목 그대로(Futura 페이지 텍스처 아님) | confirmed | 운영자 "09-28 기준으로 확정, 별도 탭 ㄱㄱ"(2026-09-30). 제품은 끝나는 일이 아니라 계속 사는 운영 대상이라 프로젝트의 한 보기로 담기지 않는다 — 브랜드 탭 분리(2026-08-29)와 같은 이유. 같은 답으로 MVP·출시·성장 동시 3개 상한(Engine이 거절, 거절 문구가 칸을 차지한 제품 이름을 말한다)과 고객 적합 후보의 같은 소속 한정도 확정됐다. `hub-nav.test.mjs`가 앵커 수·순서·경로를 고정한다. 상세 `docs/superpowers/specs/2026-09-24-product-dev-projects-draft.md` §12·§14 |
 | 2026-10-01 | OKR·KPI 목업 ①·③·④ 구현(마이그레이션 없음). ① 목표 카드 머리는 **겹친 트랙**(점선 영역 = 바닥 페이스 0.7 × 기간 경과, 채움 = 진행 점수, 1px 눈금 = 0.7 바닥), 선행 KR은 기간을 월요일 주로 나눈 **주간 칸**(이번 주만 Moonstone 테두리, 앞으로 올 주는 점선, 못 채운 칸도 빨강 없음), 주 1건 미만 KR은 눈금 한 줄 + `기간 안 N · 마지막 주에 판정`, 목표에 연결한 기한 있는 할 일로 **마일스톤 줄**(기한 지난 것만 빨강 글자), `지키는 약속` 줄(줄이기·목표 0 유지 기준), `마지막 기록 n일 전`. ③ KPI는 선의 모양으로 **지킬 범위**(불릿 차트: 옅은 띠 = 허용 범위, 짙은 막대 = 이번 값, 세로 선 = 지난 관측)와 **0 유지**(주별 ✓ 칸 + `N주째 유지`) 두 묶음, 스파크라인은 행에서 뺐다. ④ 기간이 끝난 진행 중 목표는 카드가 제자리에서 **채점지**가 된다 — KR 표(최종·바닥·달성·점수·마감 값 기록), 2×2 판정(해당 칸만 Moonstone 테두리), 하나만 바꾸기 선택, KPI 한 달·기록만 한 지표, 회고(메모 decision, 개인 목표에 연결), `채점 저장` = 회고 + 목표 보관, `다음 기간으로 이어가기` = 같은 정의로 새 목표 + 지표를 순서대로 만들고 실패하면 남은 것만 재시도 | confirmed | 운영자가 목업 ①·③·④를 보고 구현을 지시(2026-10-01). 10월 개발 동결(개인 사업 OKR v3 확정 12)과 부딪히는 것을 알고 "지금 구현, 안티 골 KR4에 1건 기록"을 골랐다. 목업과 다른 점 두 가지는 스키마가 없어서다 — KPI의 `매주/월말` 묶음과 안티 골을 평균에 넣는 채점(Q2)은 지표별 표시 칸이 필요해 0053으로 미루고, 대신 모양 기준 묶음과 `지키는 약속` 줄로 둔다. 규칙은 `lib/goal-concepts.js`, 채점지는 `components/hub/goal-scorecard.jsx` |
+| 2026-10-06 | 금액 표기를 만·억 단위로 통일한다 — 정확한 금액 `formatWon`(`120만원`·`123만 4,567원`)과 반올림 `formatWonShort`(`1,235만원`·`1.2억원`, 차트 축은 `원` 생략)를 `lib/won-format.js` 하나가 소유하고, `₩` 기호·M/K 축약은 쓰지 않는다. 옛 `₩1.2M`·`900K` 저장 문자열은 `parseWon`이 계속 읽는다. 리드 금액은 편집 필드로 돌아가 다시 저장되므로 반올림하지 않는다(이전 `₩1.2M` 표기는 저장할 때 원 단위를 잃었다) | confirmed | 운영자 "금액은 ~만으로 해줘"(2026-10-06 디자인 감사 §6 안건 2에 대한 답). 화면·API·저장소 계층에 흩어져 있던 포맷터 15곳과 `₩1.2M`/`₩1,200,000`/`1,200,000원` 등 6가지 표기를 한 벌로 정리했다. `won-format.test.mjs`가 표기·반올림·되읽기를 고정한다 |
+| 2026-10-06 | 화면에 보이는 `Office`를 `오피스`로 쓴다 — 탭·⌘K·탑바 툴팁·단축키 안내·버튼·상태 문구·화면에 뜨는 오류 문구(Hub, agent-contracts 검증 문구, Engine 인증 오류). 라우트(`dashboard/agents/office-*`)·코드 식별자·모델에 보내는 역할 카드와 시스템 프롬프트(말투 튜닝 동결 대상)·데스크톱 펫은 바꾸지 않았다 | confirmed | 운영자 "오피스로 바꿔줘"(2026-10-06 디자인 감사 §6 안건 1의 고유명사 항목에 대한 답). 한 화면을 부르는 이름이 Office·AGENTS / OFFICE·이브이 오피스 등으로 갈려 있던 것 중 영문 표기를 걷어 낸다. 다른 영문 탭(`Projects`·`Calendar` 등)은 아직 미정이다 |
+| 2026-10-06 | 디자인 감사 후속 — 가독성 토큰: 다크 보조 글자를 moon 램프에서 떼어 `--fg-muted 0.72 / --fg-dim 0.65 / --fg-faint 0.60`(dim은 모든 면에서, faint는 bg·surface에서 AA 4.5:1 이상), 라이트 `--fg-dim 0.47 / --fg-faint 0.52`. 입력칸·체크박스 경계는 새 `--line-control`(면 대비 3:1, hover는 `--line-control-hover`)로 그린다. 한글은 `.hub-app`에서 `word-break: keep-all`로 어절 단위 줄바꿈. 다크에서만 사이드바 현재 항목 pill·인디케이터·검색/사용자 카드를 `--surface-3` + 1px `--line` 윤곽으로 띄운다(09-19 "떠 있는 pill" 문법은 그대로, 다크에서 파인 홈처럼 보이던 것을 바로잡음) | recommended | 운영자 "속도, 애니메이션, ui 디자인 디벨롭"(2026-10-06). 같은 날 감사(`docs/evaluations/2026-10-06-hub-design-audit/README.md`)의 대비 실측(다크 dim 3.7~4.3, faint 2.4~3.0, 입력 경계 1.1~1.2)이 근거다. 화면을 운영자가 직접 보고 확정하기 전까지 권장 |
+| 2026-10-06 | 디자인 감사 후속 — 위계·상태: 탑바 `New`를 primary에서 outline으로 낮춘다(§5.2 전역·페이지 생성 버튼 경쟁 금지 — 페이지마다 자기 생성 primary가 있다). 비활성 primary는 채움을 걷어 `--surface-3` 면 + `--fg-dim` 글자. `--shadow-card`의 1px 링을 빼 카드 테두리를 1px로 되돌리고, 정의되지 않은 `--shadow-md`는 `--shadow-card`로. 홈의 진행 중 일정 표시(`.fx-now`)는 `--danger` 대문자 `NOW`에서 시계 글리프 + `진행 중` 중립 글자로. 프로젝트 우선순위 `높음` 점은 빨강이 아니라 중립(빨강은 `긴급`만), 포트폴리오의 D-7 이내 Moonstone 칠도 중립. 키보드 힌트(`Kbd`)는 `(hover: none) and (pointer: coarse)`에서 숨긴다 | recommended | 같은 감사의 §3.1·§3.4·§3.5·§3.6·§4.7 항목. 모두 §5.2·§5.3 기존 규칙에 코드를 맞춘 것이고 새 시각 어휘는 없다. `New`의 이름(영문)과 생성 대상은 감사 §6 안건 1·10으로 그대로 남는다 |
+| 2026-10-06 | 디자인 감사 후속 — 모션·피드백: 막대 차트 진입은 `height` 전이 대신 `.hub-bar-rise`(transform `scaleY`, §9). 내 작업의 "오늘 할 일 다 끝" 폭죽은 되돌리기 창 안이 아니라 서버 저장이 확인된 뒤에만 터진다(§8.1 저장 봉투). 로딩을 글자 한 줄이나 `EmptyState`로 그리던 6곳(자동화·내 작업·메모·기회 탐색·Roadmap·프로젝트 백로그)은 `Skeleton`. 토스트는 오류 7초, 가리키거나 포커스하면 행동 없는 알림이 멈춘다. `motion.test`가 앞자리 0 없는 `.15s`도 잡도록 고쳐 그 틈으로 통과하던 5곳을 토큰으로 바꿨다 | recommended | 같은 감사의 §3.7·§4.5·§4.6·부록. 축하 연출 자체의 존폐(Q134)는 건드리지 않았다 — 시점만 저장 뒤로 옮겼다 |
+| 2026-10-05 | OKR·KPI 기본 보기를 **한눈에**(A안 스코어보드)로 바꾼다 — 맨 위 KPI 줄(값 34/800 · 허용 범위 띠 + 이번 값 막대 + 지난 값 선 · 0 유지형은 주별 칸), 아래 왼쪽 목표 블록(바닥까지 % 40/800 + 16px 게이지, KR 줄마다 10px 게이지·%·페이스 알약·기록), 오른쪽 **이번 주 챙길 것**(선 밖 KPI → 늦은 KR → 일주일 안 마일스톤 → 기록 공백, 최대 5)과 **이번 주 메모**(learning 메모 + 개인 목표 연결, 마이그레이션 없음). 막대 눈금은 점수(0~0.7)가 아니라 **바닥까지 진행률**(막대 끝 = 바닥), 세로선은 기간 경과 — 점수 = 0.7 × 진행률이라 판정은 그대로다. 운영자 확정 예외 3건: ① KR 페이스를 색으로 구분(`--okr-*`, 청록·파랑·코랄 + 선 밖 빨강, 언제나 글리프+글 동반) — §4 웜톤·§5.2 상태 색 분류 금지의 이 화면 한정 예외 ② 페이지 제목 32px/800·섹션 19px/700 — §11 20px/500 예외 ③ 본문 메모 칸 추가 — 표면 예산 예외. 선 밖 표시는 1px 레일 그대로(3px안은 채택 안 함). 주간 칸(`WeekCells`)은 한눈에 보기에서 빠지고 주 몫은 페이스 줄 글("이번 주 a/b")로 남는다. KPI·체크인·주간 실측 보기와 채점지는 그대로 | confirmed | 운영자가 레이아웃 3안(1a·1b·1c) 참고 시안 → 목업 5·6(A·B·C)을 보고 A를 고르고 예외 ①②③을 직접 확정했다(2026-10-05, ④ 3px 레일은 미선택). 1px 선 트랙과 0~1.0 점수 막대가 초반에 거의 비어 읽히지 않았다는 피드백("게이지바 가독성", "폰트 크기·볼드로 위계")이 출발점이다. 색은 09-23 프로젝트 게이지 예외와 같은 형식으로 전용 토큰에 가두고 다른 표면으로의 확장은 별도 결정. `goals-surface.test.mjs`가 토큰 두 테마 정의·페이지 안 토큰 재정의 금지·1px 선 밖 레일을 고정한다 |

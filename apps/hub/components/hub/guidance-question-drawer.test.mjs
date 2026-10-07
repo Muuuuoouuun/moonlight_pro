@@ -76,7 +76,7 @@ test('floating chat opens with a source lens and an empty operator input without
     assert.match(html, /class="guidance-chat/);
     assert.doesNotMatch(html, /hub-drawer-overlay/);
     assert.match(html, /<textarea[^>]*><\/textarea>/);
-    assert.match(html, /생각해 볼 질문 · 이 메시지를 가장 먼저 자기 이야기로 받아들일 사람은 누구인가요/);
+    assert.ok(html.includes(`생각해 볼 질문 · ${card.question}`));
     assert.match(html, /대상 브랜드 · 시나브로/);
     assert.equal(sends, 0);
   } finally {

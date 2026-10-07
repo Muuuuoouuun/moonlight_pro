@@ -35,7 +35,7 @@ test('a recommendation shows the technique, its question and the stored facts as
     const html = render(React.createElement(GuruRecommendation, { recommendation: rec(), onAsk: () => {}, showSubject: true }));
     assert.match(html, /기록 기반 추천/);
     assert.match(html, /Dick Dunkel · MEDDIC/);
-    assert.match(html, /내부에서 이 제안을 판단할 때 기준과 최종 승인 과정은 어떻게 되나요\?/);
+    assert.match(html, /내부 검토에서 아직 확인하지 못한 선택 기준이나 결정 단계는 무엇인가요\?/);
     assert.match(html, /근거<\/span><span>견적 단계 · 내가 정한 9\/20에서 5일 지남 · 그 뒤 연락 기록 없음/);
     assert.match(html, /한빛학원 도입/);
     assert.match(html, /참고 원문/);

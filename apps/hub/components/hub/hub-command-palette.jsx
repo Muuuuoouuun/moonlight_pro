@@ -63,6 +63,11 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
   // independently loaded source inserts record hits above it.
   const idx = Math.max(0, filtered.findIndex((item) => paletteItemKey(item) === selectedKey));
   const loadingRecords = Object.values(recordState.sources).includes('loading');
+  // ↑↓로 고른 행이 목록 밖으로 나가면 따라 내려간다 — 결과가 70개를 넘는데 10행 아래부터는 선택이 보이지 않았다.
+  const listRef = React.useRef(null);
+  React.useEffect(() => {
+    listRef.current?.querySelector('[data-palette-selected="true"]')?.scrollIntoView?.({ block: 'nearest' });
+  }, [idx, open]);
   const incompleteRecords = Object.values(recordState.sources).some((state) => state !== 'live');
 
   React.useEffect(() => {
@@ -128,11 +133,13 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--line-soft)' }}>
           <Iconed name="search" size={15} style={{ color: 'var(--fg-faint)' }} />
           <input ref={inputRef} value={q} onChange={e => { setQ(e.target.value); setSelectedKey(null); }} onKeyDown={handleKey}
+            role="combobox" aria-expanded="true" aria-controls="hub-palette-results" aria-autocomplete="list"
+            aria-activedescendant={filtered[idx] ? `hub-palette-option-${idx}` : undefined}
             placeholder="페이지·액션·고객·딜·할 일 검색…"
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--fg)', fontSize: 14 }} />
           <Kbd>esc</Kbd>
         </div>
-        <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
+        <div ref={listRef} id="hub-palette-results" role="listbox" aria-label="검색 결과" className="scroll-y" style={{ flex: 1, padding: 6 }}>
           {q && incompleteRecords && (
             <div aria-live="polite" style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {Object.entries(recordState.sources).map(([source, state]) => state === 'live' ? null : (
@@ -153,10 +160,13 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
             </div>
           )}
           {filtered.map((it, i) => (
-            <button key={paletteItemKey(it)} data-palette-selected={idx === i} onClick={() => activate(it)} onMouseEnter={() => setSelectedKey(paletteItemKey(it))} style={{
+            <button key={paletteItemKey(it)} id={`hub-palette-option-${i}`} role="option" aria-selected={idx === i} tabIndex={-1}
+              data-palette-selected={idx === i} onClick={() => activate(it)} onMouseEnter={() => setSelectedKey(paletteItemKey(it))} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               padding: '9px 12px', borderRadius: 'var(--r-sm)',
               background: idx === i ? 'var(--surface-3)' : 'transparent',
+              // 선택은 면 차이(1.09:1)만으로는 보이지 않는다 — §5.3 선택 채널(Moonstone 윤곽 1px)을 더한다.
+              boxShadow: idx === i ? 'inset 0 0 0 1px var(--accent-line)' : 'none',
               textAlign: 'left',
             }}>
               <Iconed name={it.icon} size={14} style={{ color: idx === i ? 'var(--fg)' : 'var(--fg-muted)' }} />
@@ -166,8 +176,8 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuick
           ))}
         </div>
         <div style={{ padding: '8px 14px', borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 14, fontSize: 11, color: 'var(--fg-faint)' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Kbd>↑↓</Kbd> navigate</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Kbd>↵</Kbd> open</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Kbd>↑↓</Kbd> 이동</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Kbd>↵</Kbd> 열기</span>
           <div style={{ flex: 1 }} />
           <span>Moonlight Hub</span>
         </div>

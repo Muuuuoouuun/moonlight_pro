@@ -6,11 +6,15 @@ const goalsSource = readFileSync(new URL('./goals.jsx', import.meta.url), 'utf8'
 const cssSource = readFileSync(new URL('../goals.css', import.meta.url), 'utf8');
 const componentsSource = readFileSync(new URL('../goal-components.jsx', import.meta.url), 'utf8');
 const scorecardSource = readFileSync(new URL('../goal-scorecard.jsx', import.meta.url), 'utf8');
+const scorecardSaveSource = readFileSync(new URL('../../../lib/scorecard-save.js', import.meta.url), 'utf8');
+const glanceSource = readFileSync(new URL('../goal-glance.jsx', import.meta.url), 'utf8');
+const weeklyMemoSource = readFileSync(new URL('../../../lib/weekly-memo-save.js', import.meta.url), 'utf8');
+const tokensSource = readFileSync(new URL('../hub-tokens.css', import.meta.url), 'utf8');
 
 test('OKR and KPI are separate views, not one mixed list', () => {
-  assert.match(goalsSource, /function OkrView/);
+  assert.match(goalsSource, /function GlanceView/);
   assert.match(goalsSource, /function KpiView/);
-  assert.match(goalsSource, /\{ key: 'okr', label: 'OKR' \}/);
+  assert.match(goalsSource, /\{ key: 'okr', label: '한눈에' \}/);
   assert.match(goalsSource, /\{ key: 'kpi', label: 'KPI' \}/);
   assert.match(goalsSource, /\{ key: 'check', label: '체크인' \}/);
   assert.match(goalsSource, /\{ key: 'weekly', label: '주간 실측' \}/);
@@ -19,23 +23,45 @@ test('OKR and KPI are separate views, not one mixed list', () => {
   assert.doesNotMatch(cssSource, /goal-matrix|goal-bento|goal-signal/);
 });
 
-test('an objective card reads as Objective → KR groups → score, and points at the KPI view', () => {
+test('glance view (A안): KPI strip on top, objective blocks beside this week\'s attention and memo', () => {
   assert.match(goalsSource, /function GoalObjectiveCard/);
-  assert.match(goalsSource, /Objective · 목표/);
+  assert.match(goalsSource, /function objectiveReading/);
   assert.match(goalsSource, /splitObjectiveMetrics\(model\.metrics, objective\.id\)/);
   assert.match(goalsSource, /objectiveScore\(keyResults\)/);
-  assert.match(goalsSource, /objectivePace\(score, period\)/);
-  assert.match(goalsSource, /KPI 보기 →/);
+  assert.match(goalsSource, /objectivePaceState\(score, period\)/);
+  assert.match(goalsSource, /<KpiStrip rows=\{kpiRows\}/);
+  assert.match(goalsSource, /<GlanceAttention items=\{attentionItems\(readings, kpiRows\)\}/);
+  assert.match(goalsSource, /<WeeklyMemo /);
+  assert.match(goalsSource, /KPI 자세히 →|kpiHref=\{kpiHref\}/);
+  assert.match(glanceSource, /KPI 자세히 →/);
   assert.match(goalsSource, /data-record-metric=\{metric\.id\}/);
   assert.match(goalsSource, /data-goal-id=\{objective\.id\}/);
   assert.match(cssSource, /\.goal-kr-row\s*\{/);
-  assert.match(cssSource, /\.goal-objective__score\s*\{/);
+  assert.match(cssSource, /\.goal-glance\s*\{/);
+  // 이번 주 메모는 learning 메모 + 개인 목표 연결. 마이그레이션 없음.
+  assert.match(weeklyMemoSource, /noteMeta: \{ kind: 'learning'/);
+  assert.match(weeklyMemoSource, /action: 'link_entity'/);
+  assert.match(weeklyMemoSource, /entityId: state\.requests\.journal\.entryId/);
+});
+
+test('glance gauges: progress-to-floor bar, elapsed marker, pace tone always with glyph + label', () => {
+  assert.match(glanceSource, /export function GaugeBar/);
+  assert.match(glanceSource, /role="meter"/);
+  assert.match(goalsSource, /keyResultProgress\(metric\)/);
+  assert.match(goalsSource, /keyResultTone\(metric, pace, period\)/);
+  // 페이스 색은 전용 토큰(--okr-*)뿐이고 두 테마에 모두 있다.
+  for (const token of ['--okr-ahead', '--okr-on', '--okr-late', '--okr-wait', '--okr-track', '--okr-marker']) {
+    assert.equal(tokensSource.split(`${token}:`).length - 1, 2, `${token} must be defined for both themes`);
+  }
+  assert.match(cssSource, /\.goal-pill--late\s*\{[^}]*--okr-late/);
+  assert.match(cssSource, /\.goal-kpi-tile--outside\s*\{\s*box-shadow:inset 1px 0 0 var\(--danger\)/);
+  assert.doesNotMatch(cssSource, /--okr-[a-z-]+:\s/);
 });
 
 test('KPI rows show line, trend, staleness and inside/outside — never a score', () => {
   assert.match(goalsSource, /kpiThresholdLabel\(metric\)/);
-  assert.match(goalsSource, /kpiTrend\(observations\)/);
-  assert.match(goalsSource, /daysSinceObservation\(observations, today\)/);
+  assert.match(goalsSource, /kpiBulletReading\(metric, observations\)/);
+  assert.match(goalsSource, /metricFreshnessLabel\(metric, today, objective\.timezone\)/);
   assert.match(goalsSource, /sortKpis\(/);
   assert.match(goalsSource, /OUTSIDE_RAIL_BUDGET/);
   assert.match(cssSource, /\.goal-kpi-row--outside\s*\{\s*box-shadow:inset 1px 0 0 var\(--danger\)/);
@@ -81,26 +107,23 @@ test('check-in view keeps one-click record for both KRs and KPIs', () => {
 test('a KR row splits the period target into a weekly pace line without storing anything', () => {
   assert.match(goalsSource, /keyResultPace\(metric, objective,/);
   assert.match(goalsSource, /goal-kr-row__pace/);
-  assert.match(goalsSource, /paceSuggestion\(paceRows\) \|\| objectiveSuggestion/);
+  assert.match(goalsSource, /paceSuggestion\(paceRows\)/);
+  assert.match(goalsSource, /objectiveSuggestion\(item\.reading\.keyResults/);
   // 늦음은 글로만 말한다 — 색·경고 톤 없음.
   assert.doesNotMatch(cssSource, /goal-kr-row__pace[^}]*(danger|warning)/);
 });
 
-test('score track marks the 0.7 floor and the objective compares with floor pace', () => {
+test('check-in score track marks the 0.7 floor; the objective still reports score vs floor pace', () => {
   assert.match(goalsSource, /goal-score-bar__floor/);
   assert.match(goalsSource, /floorPaceScore\(period\)/);
   assert.match(goalsSource, /천장 미등록/);
   assert.match(cssSource, /\.goal-score-bar__floor\s*\{[^}]*left:70%/);
 });
 
-test('mockup ①: objective track, weekly cells, milestone line and kept promises', () => {
-  assert.match(goalsSource, /function ObjectiveTrack/);
-  assert.match(goalsSource, /goal-otrack__pace/);
-  assert.match(goalsSource, /function WeekCells/);
-  assert.match(goalsSource, /weeklyCells\(metric, objective, observationsOf\(metric\), today, p\.weeklyPace\)/);
+test('mockup ①: milestone line stays on the objective block; zero-keeps moved to the KPI strip', () => {
   assert.match(goalsSource, /milestoneSummary\(model\.links\.filter/);
-  assert.match(goalsSource, /aria-label="지키는 약속"/);
-  assert.match(cssSource, /\.goal-weeks__cell--now \.goal-weeks__box\s*\{\s*border-color:var\(--accent\)/);
+  assert.match(glanceSource, /zeroKeepWeeks\(metric, objective, observations, today\)/);
+  assert.match(cssSource, /\.goal-kpi-tile__week--now\s*\{[^}]*var\(--accent\)/);
   // 늦은 마일스톤만 빨강 — 늦은 KR은 글로만.
   assert.match(cssSource, /\.goal-milestone__late\s*\{[^}]*--danger/);
 });
@@ -117,8 +140,10 @@ test('mockup ③: KPI rows split by line shape into bullet charts and zero-keep 
 test('mockup ④: an ended active objective flips into the scorecard in place', () => {
   assert.match(goalsSource, /period\.phase === 'ended' && objective\.status === 'active'\) return <li><GoalScorecard/);
   assert.match(scorecardSource, /objectiveVerdict\(keyResults\)/);
-  assert.match(scorecardSource, /noteMeta: \{ kind: 'decision'/);
-  assert.match(scorecardSource, /command\('update_objective', \{[^}]*status: 'archived'/);
+  assert.match(scorecardSource, /createScorecardSaver/);
+  assert.match(scorecardSaveSource, /noteMeta: \{ kind: 'decision'/);
+  assert.match(scorecardSaveSource, /action: step === 'link' \? 'link_entity' : 'update_objective'/);
+  assert.match(scorecardSaveSource, /id: objective.id, status: 'archived'/);
   assert.match(scorecardSource, /export function GoalContinueDrawer/);
   assert.match(scorecardSource, /command\('create_metric'/);
   // 판정 칸은 색이 아니라 현재 위치 테두리로.

@@ -1,6 +1,27 @@
 import Foundation
 import Network
 
+private final class MemoryHubCredentials: HubCredentialStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [String: HubCredentials] = [:]
+    func load(origin: String) throws -> HubCredentials? { lock.lock(); defer { lock.unlock() }; return items[origin] }
+    func save(_ credentials: HubCredentials, origin: String) throws { lock.lock(); defer { lock.unlock() }; items[origin] = credentials }
+    func remove(origin: String) throws { lock.lock(); defer { lock.unlock() }; items[origin] = nil }
+}
+
+private func transportBody(_ request: URLRequest) -> Data? {
+    if let body = request.httpBody { return body }
+    guard let stream = request.httpBodyStream else { return nil }
+    stream.open(); defer { stream.close() }
+    var result = Data(), bytes = [UInt8](repeating: 0, count: 4096)
+    while stream.hasBytesAvailable {
+        let count = stream.read(&bytes, maxLength: bytes.count)
+        guard count > 0 else { break }
+        result.append(contentsOf: bytes.prefix(count))
+    }
+    return result
+}
+
 private final class TransportURLProtocol: URLProtocol {
     static var handler: ((URLRequest, TransportURLProtocol) throws -> Void)?
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -20,10 +41,158 @@ private final class TransportURLProtocol: URLProtocol {
 
 struct HubTransportTests {
 
-    private func transport(_ address: String = "https://hub.example.test") throws -> HubTransport {
+    func testRestartRestoresLoginOnlyForTheSavedOrigin() async throws {
+        let store = MemoryHubCredentials()
+        let first = try transport(store: store)
+        TransportURLProtocol.handler = { _, response in
+            response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=first; Path=/; HttpOnly; Secure"])
+        }
+        try await first.login(username: "test-operator", password: "test-password")
+        let reopened = try transport("https://HUB.example.test:443/", store: store)
+        var logins = 0
+        TransportURLProtocol.handler = { request, response in
+            if request.url!.path == "/api/operator/session" {
+                logins += 1
+                expectEqual(request.url!.host, "hub.example.test")
+                let credentials = try JSONDecoder().decode(HubCredentials.self, from: transportBody(request)!)
+                expectEqual(credentials, HubCredentials(username: "test-operator", password: "test-password"))
+                response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=restored; Path=/; HttpOnly; Secure"])
+            } else if request.value(forHTTPHeaderField: "Cookie") == "com_moon_operator_session=restored" {
+                response.respond(json: "{\"status\":\"live\"}")
+            } else { response.respond(status: 401, json: "{\"status\":\"unauthorized\"}") }
+        }
+        expectEqual(try await reopened.request(path: "/api/hub/tasks").status, "live")
+        let other = try transport("https://other.example.test", store: store)
+        do { _ = try await other.request(path: "/api/hub/tasks"); recordFailure("Another origin must require its own login") }
+        catch { expectEqual(error as? HubTransportError, .unauthorized) }
+        expectEqual(logins, 1)
+    }
+
+    func testRejectedLoginNeverReplacesAcceptedCredentialsOrLoops() async throws {
+        let store = MemoryHubCredentials()
+        let saved = HubCredentials(username: "accepted", password: "test-only")
+        try store.save(saved, origin: "https://hub.example.test")
+        let client = try transport(store: store)
+        var logins = 0
+        TransportURLProtocol.handler = { request, response in
+            if request.url!.path == "/api/operator/session" { logins += 1 }
+            response.respond(status: 401, json: "{\"status\":\"unauthorized\"}")
+        }
+        do { try await client.login(username: "incorrect", password: "wrong"); recordFailure("Rejected credentials must fail") }
+        catch { expectEqual(error as? HubTransportError, .unauthorized) }
+        expectEqual(try store.load(origin: "https://hub.example.test"), saved)
+        for _ in 0..<2 {
+            do { _ = try await client.request(path: "/api/hub/tasks"); recordFailure("Expired saved credentials must fail") }
+            catch { expectEqual(error as? HubTransportError, .unauthorized) }
+        }
+        expectEqual(logins, 2) // one manual login, one automatic attempt
+    }
+
+    func testUncertainWritesAndModelGenerationAreNeverAutomaticallyReplayed() async throws {
+        let store = MemoryHubCredentials()
+        try store.save(HubCredentials(username: "accepted", password: "test-only"), origin: "https://hub.example.test")
+        let client = try transport(store: store)
+        for path in ["/api/hub/journal", "/api/hub/office/chat"] {
+            for code in [URLError.Code.timedOut, .userAuthenticationRequired] {
+                var count = 0
+                TransportURLProtocol.handler = { _, _ in count += 1; throw URLError(code) }
+                do { _ = try await client.request(path: path, method: "POST", body: Data("{}".utf8)); recordFailure("Network error must fail") }
+                catch {}
+                expectEqual(count, 1)
+            }
+        }
+        var count = 0
+        TransportURLProtocol.handler = { _, response in count += 1; response.respond(status: 401, json: "{\"status\":\"unauthorized\"}") }
+        do { _ = try await client.request(path: "/api/hub/office/chat", method: "POST", body: Data("{}".utf8)); recordFailure("Model call must not replay") }
+        catch { expectEqual(error as? HubTransportError, .unauthorized) }
+        expectEqual(count, 1)
+    }
+
+    func testLateResponseCannotRestoreCookiesAfterSignOut() async throws {
+        let client = try transport()
+        let gate = HeldResponseGate()
+        TransportURLProtocol.handler = { _, response in gate.hold(response) }
+        let pending = Task { try await client.request(path: "/api/hub/tasks") }
+        while !gate.started { await Task.yield() }
+        try await client.clearSession()
+        gate.release()
+        do { _ = try await pending.value; recordFailure("A pre-logout response must be discarded") }
+        catch is CancellationError {} catch { recordFailure("Expected cancellation, got \(error)") }
+        TransportURLProtocol.handler = { request, response in
+            expectNil(request.value(forHTTPHeaderField: "Cookie"))
+            response.respond(json: "{\"status\":\"live\"}")
+        }
+        _ = try await client.request(path: "/api/hub/tasks")
+    }
+
+    func testDisconnectCancelsAuthenticationButKeepsAcceptedCredentials() async throws {
+        for forget in [false, true] {
+            let store = MemoryHubCredentials()
+            try store.save(HubCredentials(username: "accepted", password: "test-only"), origin: "https://hub.example.test")
+            let client = try transport(store: store)
+            let gate = HeldLoginGate()
+            TransportURLProtocol.handler = { request, response in gate.handle(request, response) }
+            let pending = Task { try await client.request(path: "/api/hub/journal", method: "POST", body: Data("{}".utf8)) }
+            while !gate.started { await Task.yield() }
+            if forget { try await client.clearSession() } else { await client.disconnect() }
+            do { _ = try await pending.value; recordFailure("Disconnected automatic login must not replay the memo") }
+            catch is CancellationError {} catch { recordFailure("Expected cancellation, got \(error)") }
+            expectEqual(gate.memoRequests, 1)
+            expectEqual(try store.load(origin: "https://hub.example.test") == nil, forget)
+            TransportURLProtocol.handler = { request, response in
+                expectNil(request.value(forHTTPHeaderField: "Cookie"))
+                response.respond(status: 401, json: "{\"status\":\"unauthorized\"}")
+            }
+            do { _ = try await client.request(path: "/api/hub/tasks"); recordFailure("Disconnected transport must stay anonymous") }
+            catch { expectEqual(error as? HubTransportError, .unauthorized) }
+        }
+    }
+
+    func testSimultaneousReadsShareOneAutomaticLogin() async throws {
+        let store = MemoryHubCredentials()
+        try store.save(HubCredentials(username: "accepted", password: "test-only"), origin: "https://hub.example.test")
+        let client = try transport(store: store)
+        let gate = AutomaticLoginGate()
+        TransportURLProtocol.handler = { request, response in gate.handle(request, response) }
+        async let tasks = client.request(path: "/api/hub/tasks")
+        async let calendar = client.request(path: "/api/calendar/google/event")
+        let results = try await (tasks, calendar)
+        expectEqual(results.0.status, "live")
+        expectEqual(results.1.status, "live")
+        expectEqual(gate.loginCount, 1)
+    }
+
+    func testExpiredSessionAuthenticatesOnceAndReplaysIdenticalMemoCommand() async throws {
+        let client = try transport()
+        TransportURLProtocol.handler = { _, response in
+            response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=old; Path=/; HttpOnly; Secure"])
+        }
+        try await client.login(username: "test-operator", password: "test-password")
+        let body = Data("{\"requestId\":\"stable-request\",\"body\":\"보존할 메모\"}".utf8)
+        var paths = [String]()
+        TransportURLProtocol.handler = { request, response in
+            paths.append(request.url!.path)
+            if request.url!.path == "/api/operator/session" {
+                expectEqual(request.value(forHTTPHeaderField: "Origin"), "https://hub.example.test")
+                response.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=new; Path=/; HttpOnly; Secure"])
+            } else {
+                expectEqual(transportBody(request), body)
+                if paths.count == 1 { response.respond(status: 401, json: "{\"status\":\"unauthorized\"}") }
+                else {
+                    expectEqual(request.value(forHTTPHeaderField: "Cookie"), "com_moon_operator_session=new")
+                    response.respond(json: "{\"status\":\"saved\"}")
+                }
+            }
+        }
+        let result = try await client.request(path: "/api/hub/journal", method: "POST", body: body)
+        expectEqual(result.status, "saved")
+        expectEqual(paths, ["/api/hub/journal", "/api/operator/session", "/api/hub/journal"])
+    }
+
+    private func transport(_ address: String = "https://hub.example.test", store: any HubCredentialStoring = MemoryHubCredentials()) throws -> HubTransport {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [TransportURLProtocol.self]
-        return try HubTransport(baseURL: URL(string: address)!, configuration: configuration)
+        return try HubTransport(baseURL: URL(string: address)!, configuration: configuration, credentialStore: store)
     }
 
     func testOnlyHTTPSAndExactHTTPLoopbackOriginsAreAccepted() throws {
@@ -55,6 +224,9 @@ struct HubTransportTests {
         let client = try transport()
         let routes: [(String, String, TimeInterval, TimeInterval)] = [
             ("/api/hub/office/chat", "POST", 60, 70),
+            ("/api/hub/office/meetings/11111111-1111-4111-8111-111111111111/turns", "POST", 60, 70),
+            ("/api/hub/office/meetings/11111111-1111-4111-8111-111111111111/turns", "GET", 20, 45),
+            ("/api/hub/office/meetings/not-a-meeting/turns", "POST", 20, 45),
             ("/api/hub/office/chat", "post", 60, 70),
             ("/api/hub/office/chat", "GET", 20, 45),
             ("/api/hub/office/chat", "PATCH", 20, 45),
@@ -98,7 +270,7 @@ struct HubTransportTests {
             protocolInstance.respond(json: "{\"status\":\"ok\"}")
         }
         _ = try await client.request(path: "/api/hub/tasks")
-        await client.clearSession()
+        try await client.clearSession()
         let otherClient = try transport()
         TransportURLProtocol.handler = { request, protocolInstance in
             expectNil(request.value(forHTTPHeaderField: "Cookie"))
@@ -208,7 +380,7 @@ struct HubTransportTests {
             protocolInstance.respond(json: "{\"status\":\"ok\"}")
         }
         _ = try await otherClient.request(path: "/api/hub/tasks")
-        await client.clearSession()
+        try await client.clearSession()
         _ = try await client.request(path: "/api/hub/tasks")
     }
 
@@ -254,7 +426,8 @@ struct HubTransportTests {
     }
 
     func testLogoutClearsPrivateCookiesEvenWhenServerIsOffline() async throws {
-        let client = try transport()
+        let store = MemoryHubCredentials()
+        let client = try transport(store: store)
         TransportURLProtocol.handler = { _, protocolInstance in
             protocolInstance.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=test-session; Path=/; HttpOnly; Secure"])
         }
@@ -262,11 +435,61 @@ struct HubTransportTests {
         TransportURLProtocol.handler = { _, _ in throw URLError(.notConnectedToInternet) }
         do { try await client.logout(); recordFailure("Expected offline logout") }
         catch { expectEqual(error as? HubTransportError, .offline) }
+        expectNil(try store.load(origin: "https://hub.example.test"))
         TransportURLProtocol.handler = { request, protocolInstance in
             expectNil(request.value(forHTTPHeaderField: "Cookie"))
             protocolInstance.respond(json: "{\"status\":\"ok\"}")
         }
         _ = try await client.request(path: "/api/hub/tasks")
+        _ = try await transport(store: store).request(path: "/api/hub/tasks")
+    }
+}
+
+private final class HeldResponseGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var response: TransportURLProtocol?
+    var started: Bool { lock.lock(); defer { lock.unlock() }; return response != nil }
+    func hold(_ response: TransportURLProtocol) { lock.lock(); self.response = response; lock.unlock() }
+    func release() {
+        lock.lock(); let response = self.response; self.response = nil; lock.unlock()
+        response?.respond(json: "{\"status\":\"live\"}", headers: ["Set-Cookie": "com_moon_operator_session=stale; Path=/; HttpOnly; Secure"])
+    }
+}
+
+private final class HeldLoginGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var login: TransportURLProtocol?
+    private var memos = 0
+    var started: Bool { lock.lock(); defer { lock.unlock() }; return login != nil }
+    var memoRequests: Int { lock.lock(); defer { lock.unlock() }; return memos }
+    func handle(_ request: URLRequest, _ response: TransportURLProtocol) {
+        lock.lock()
+        let isLogin = request.url!.path == "/api/operator/session"
+        if isLogin { login = response } else { memos += 1 }
+        lock.unlock()
+        if !isLogin { response.respond(status: 401, json: "{\"status\":\"unauthorized\"}") }
+    }
+}
+
+private final class AutomaticLoginGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var rejectedReads = 0
+    private var logins = 0
+    private var waitingLogin: TransportURLProtocol?
+    var loginCount: Int { lock.lock(); defer { lock.unlock() }; return logins }
+    func handle(_ request: URLRequest, _ response: TransportURLProtocol) {
+        if request.value(forHTTPHeaderField: "Cookie") == "com_moon_operator_session=restored" {
+            response.respond(json: "{\"status\":\"live\"}"); return
+        }
+        lock.lock()
+        let isLogin = request.url!.path == "/api/operator/session"
+        if isLogin { logins += 1; waitingLogin = response }
+        else { rejectedReads += 1 }
+        let ready = rejectedReads == 2 ? waitingLogin : nil
+        if ready != nil { waitingLogin = nil }
+        lock.unlock()
+        if !isLogin { response.respond(status: 401, json: "{\"status\":\"unauthorized\"}") }
+        ready?.respond(json: "{\"status\":\"authenticated\"}", headers: ["Set-Cookie": "com_moon_operator_session=restored; Path=/; HttpOnly; Secure"])
     }
 }
 
@@ -349,6 +572,13 @@ private struct HubTransportTestRunner {
     static func main() async {
         let tests = HubTransportTests()
         let cases: [(String, () async throws -> Void)] = [
+            ("restart restores only the saved origin", tests.testRestartRestoresLoginOnlyForTheSavedOrigin),
+            ("rejected credentials are neither saved nor retried forever", tests.testRejectedLoginNeverReplacesAcceptedCredentialsOrLoops),
+            ("uncertain writes and model generation never replay", tests.testUncertainWritesAndModelGenerationAreNeverAutomaticallyReplayed),
+            ("late responses cannot restore logout cookies", tests.testLateResponseCannotRestoreCookiesAfterSignOut),
+            ("disconnect cancels authentication without losing origin credentials", tests.testDisconnectCancelsAuthenticationButKeepsAcceptedCredentials),
+            ("concurrent reads share automatic login", tests.testSimultaneousReadsShareOneAutomaticLogin),
+            ("expired session renews without changing memo", tests.testExpiredSessionAuthenticatesOnceAndReplaysIdenticalMemoCommand),
             ("origin validation", { try tests.testOnlyHTTPSAndExactHTTPLoopbackOriginsAreAccepted() }),
             ("write headers", tests.testRequestCarriesOriginOnlyForWritesAndNeverServerCredentials),
             ("exact Office chat timeout budget", tests.testOnlyExactOfficeChatPOSTReceivesLongerTimeouts),

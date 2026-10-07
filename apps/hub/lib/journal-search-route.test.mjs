@@ -14,7 +14,7 @@ test('dynamic GET forwards only supported filters and always preserves HTTP200 r
     const response=await route.GET(new Request('http://localhost/api/hub/journal/search?q=needle&dateFrom=2026-09-13&dateTo=2026-09-14&kind=idea&contextType=project&contextId=id&used=used&cursor=opaque&limit=3&workspaceId=foreign'));
     assert.equal(response.status,200);assert.deepEqual(await response.json(),state.result);
   }
-  assert.deepEqual(state.calls[0],{q:'needle',dateFrom:'2026-09-13',dateTo:'2026-09-14',kind:'idea',contextType:'project',contextId:'id',used:'used',cursor:'opaque',limit:'3'});
+  assert.deepEqual(state.calls[0],{q:'needle',dateFrom:'2026-09-13',dateTo:'2026-09-14',kind:'idea',noteScope:null,contextType:'project',contextId:'id',used:'used',cursor:'opaque',limit:'3'});
 });
 test('unexpected GET errors contain safe error state instead of exposing details',async()=>{
   state.fail=true;

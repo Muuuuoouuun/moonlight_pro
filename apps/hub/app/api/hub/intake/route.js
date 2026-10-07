@@ -20,15 +20,14 @@ export async function GET(req) {
     const source = searchParams.get("source");
 
     const result = await listStagedIntake({ status, source });
+    const failed = result.status === "error" || result.source === "error";
     return NextResponse.json({
-      status: result.source === "supabase" ? "live" : "preview",
-      rows: result.rows,
+      ...result,
+      status: failed ? "error" : result.source === "supabase" ? "live" : result.source,
+      ...(failed ? { source: "error", retryable: result.retryable !== false } : {}),
     });
-  } catch (error) {
-    return NextResponse.json(
-      { status: "error", error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+  } catch {
+    return NextResponse.json({ status: "error", source: "error", error: "intake-read-failed", retryable: true, rows: [] });
   }
 }
 

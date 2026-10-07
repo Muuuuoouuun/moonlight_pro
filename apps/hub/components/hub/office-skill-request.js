@@ -15,7 +15,7 @@ export function officeSkillScope(agenda, officeScope) {
   return officeScope === 'all' || officeScope === taskScope ? taskScope : null;
 }
 
-export function officeSkillRequestDraft({ agenda, officeScope, result } = {}) {
+export function officeSkillRequestDraft({ agenda, officeScope, result, meetingId, officeTurnId } = {}) {
   const scope = officeSkillScope(agenda, officeScope);
   if (!scope) return null;
   const nextAction = typeof result?.nextAction === 'string' ? result.nextAction.trim() : '';
@@ -25,11 +25,14 @@ export function officeSkillRequestDraft({ agenda, officeScope, result } = {}) {
     unscopedTask: !agenda.taskWorkspace,
     instruction: nextAction === '추가 행동 없음' ? '' : nextAction.slice(0, 4000),
     expectedEvidence: '',
+    ...(meetingId !== undefined || officeTurnId !== undefined ? { meetingId, officeTurnId } : {}),
   };
 }
 
 export function validateOfficeSkillRequest(input) {
   if (!UUID.test(input?.requestId || '') || !UUID.test(input?.taskId || '')) return '요청 또는 할 일 ID를 확인해 주세요.';
+  if ((input.meetingId !== undefined || input.officeTurnId !== undefined)
+    && (!UUID.test(input.meetingId || '') || !UUID.test(input.officeTurnId || ''))) return '회의와 회의 판 ID를 확인해 주세요.';
   if (!['classin', 'personal'].includes(input.scope)) return '업무 범위를 확인해 주세요.';
   if (typeof input.instruction !== 'string' || !input.instruction.trim() || input.instruction.length > 4000) return '할 일을 4,000자 이내로 적어 주세요.';
   if (typeof input.expectedEvidence !== 'string' || !input.expectedEvidence.trim() || input.expectedEvidence.length > 500) return '완료를 확인할 증거를 500자 이내로 적어 주세요.';
@@ -42,6 +45,7 @@ export function officeSkillRequestText(request) {
     'Moonlight 로컬 스킬 요청서',
     `요청 ID: ${request.requestId}`,
     `할 일 ID: ${request.taskId}`,
+    ...(request.meetingId && request.officeTurnId ? [`회의 ID: ${request.meetingId}`, `회의 판 ID: ${request.officeTurnId}`] : []),
     `범위: ${request.scope === 'classin' ? '회사' : '개인'}`,
     `수행할 일: ${request.instruction}`,
     `완료 증거: ${request.expectedEvidence}`,
@@ -63,11 +67,14 @@ export async function saveOfficeSkillRequest(input, { fetcher = fetch } = {}) {
       body: JSON.stringify({
         requestId: input.requestId, taskId: input.taskId, scope: input.scope,
         instruction: input.instruction.trim(), expectedEvidence: input.expectedEvidence.trim(),
+        ...(input.meetingId ? { meetingId: input.meetingId, officeTurnId: input.officeTurnId } : {}),
       }),
     });
     const data = await response.json().catch(() => null);
     if (response.ok && data?.status === 'ready' && data.persisted === true
-      && data.request?.requestId === input.requestId && data.request?.taskId === input.taskId) {
+      && data.request?.requestId === input.requestId && data.request?.taskId === input.taskId
+      && (data.request.meetingId || null) === (input.meetingId || null)
+      && (data.request.officeTurnId || null) === (input.officeTurnId || null)) {
       return { status: 'ready', persisted: true, request: data.request, replayed: data.replayed === true };
     }
     if (data?.status === 'preview') return { status: 'preview', persisted: false, error: '저장 연결이 없어 요청서를 만들지 못했습니다.' };
@@ -97,6 +104,8 @@ function skillRequestFrom(item) {
   const text = value => (typeof value === 'string' ? value : '');
   return {
     requestId: item.requestId, taskId: item.taskId, scope: item.scope, state: item.state,
+    meetingId: UUID.test(item.meetingId || '') ? item.meetingId : null,
+    officeTurnId: UUID.test(item.officeTurnId || '') ? item.officeTurnId : null,
     instruction: text(item.instruction), expectedEvidence: text(item.expectedEvidence),
     createdAt: text(item.createdAt) || null, receiptAt: text(item.receiptAt) || null,
     receiptActorId: text(item.receiptActorId) || null,
@@ -104,17 +113,26 @@ function skillRequestFrom(item) {
   };
 }
 
+export function normalizeOfficeSkillRequests(items, { taskId, meetingId } = {}) {
+  return (Array.isArray(items) ? items : []).map(skillRequestFrom).filter(item => item
+    && (!taskId || item.taskId.toLowerCase() === taskId.toLowerCase())
+    && (!meetingId || (item.meetingId?.toLowerCase() === meetingId.toLowerCase() && item.officeTurnId)));
+}
+
 // Read-only: the operator's recent requests narrowed to one task, read on demand.
 // Unconfigured storage is a preview; a failed read is an error, never an empty list.
-export async function loadOfficeSkillRequests(taskId, { fetcher = fetch, signal } = {}) {
+export async function loadOfficeSkillRequests(taskId, { fetcher = fetch, signal, meetingId } = {}) {
   if (!UUID.test(taskId || '')) return { status: 'error', items: [], error: '할 일 ID를 확인해 주세요.' };
+  if (meetingId !== undefined && !UUID.test(meetingId || '')) return { status: 'error', items: [], error: '회의 ID를 확인해 주세요.' };
   try {
-    const response = await fetcher(`/api/hub/skill-requests?limit=${OFFICE_SKILL_REQUEST_WINDOW}`, { cache: 'no-store', signal });
+    const response = await fetcher(meetingId ? `/api/hub/office/meetings/${meetingId}`
+      : `/api/hub/skill-requests?limit=${OFFICE_SKILL_REQUEST_WINDOW}`, { cache: 'no-store', signal });
     const data = await response.json().catch(() => null);
-    if (response.ok && data?.status === 'ready' && Array.isArray(data.items)) {
-      const id = taskId.toLowerCase();
-      const items = data.items.map(skillRequestFrom).filter(item => item && item.taskId.toLowerCase() === id);
-      return { status: 'live', items, windowFull: data.items.length >= OFFICE_SKILL_REQUEST_WINDOW };
+    const rows = meetingId ? data?.skillRequests : data?.items;
+    if (response.ok && data?.status === 'ready' && data.source !== 'error' && Array.isArray(rows)
+      && (!meetingId || data.meeting?.meetingId?.toLowerCase() === meetingId.toLowerCase())) {
+      const items = normalizeOfficeSkillRequests(rows, { taskId, meetingId });
+      return { status: 'live', items, windowFull: !meetingId && rows.length >= OFFICE_SKILL_REQUEST_WINDOW };
     }
     if (data?.status === 'preview' || data?.error === 'skill-storage-not-configured') return { status: 'preview', items: [] };
     return { status: 'error', items: [], error: '요청 기록을 읽지 못했습니다.' };

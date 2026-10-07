@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import React from 'react';
+import ts from 'typescript';
+import { createOfficeSessionStore } from './office-session.js';
+import { loadedOfficeUnloadStores, registerOfficeUnloadStore, officeUnloadGuard } from './office-unload.js';
+
+test('the saved room retains unsent text on remount without mixing the existing conversation or its brand boundary', () => {
+  const source = readFileSync(new URL('./office-meeting-session-provider.jsx', import.meta.url), 'utf8');
+  const code = ts.transpileModule(source, { compilerOptions: { jsx: ts.JsxEmit.React, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText;
+  const context = React.createContext(null), module = { exports: {} };
+  const require = name => ({ react: React, './office-session-provider': { OfficeSessionContext: context }, './office-session': { createOfficeSessionStore }, './office-unload': { registerOfficeUnloadStore } })[name];
+  new Function('require', 'module', 'exports', code)(require, module, module.exports);
+  const Provider = module.exports.OfficeMeetingSessionProvider;
+  const saved = Provider({ children: 'first room' }).props.value.store;
+  const existing = createOfficeSessionStore();
+  existing.update('personal', { draft: '기존 관점 대화 원문', brandId: '11111111-1111-4111-8111-111111111111' });
+  saved.update('personal', { draft: '아직 보내지 않은 저장 회의 원문', decisionContext: '직접 적은 조건' });
+  saved.update('classin', { draft: '다른 레인의 회의 원문' });
+  const remounted = Provider({ children: 'reopened room' }).props.value.store;
+  assert.equal(remounted, saved);
+  assert.equal(remounted.get('personal').draft, '아직 보내지 않은 저장 회의 원문');
+  assert.equal(remounted.get('classin').draft, '다른 레인의 회의 원문');
+  assert.equal(existing.get('personal').draft, '기존 관점 대화 원문');
+  assert.equal(existing.get('personal').brandId, '11111111-1111-4111-8111-111111111111');
+  assert.equal(saved.get('personal').brandId, null);
+  let prevented = false;
+  assert.equal(officeUnloadGuard(loadedOfficeUnloadStores())({ preventDefault() { prevented = true; } }), true);
+  assert.equal(prevented, true);
+  saved.reset('personal'); saved.reset('classin');
+});

@@ -1,8 +1,29 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowNote,readOfficeWorkflow,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowGenerationRequest,sendOfficeWorkflow} from './office-workflow-client.js';
+import {createOfficeWorkflowSessions,officeWorkflowKey,officeWorkflowNote,readOfficeWorkflow,readOfficeRequestLink,readOfficeWorkflowSelection,writeOfficeWorkflow,validWorkflowReceipt,mergeOfficeWorkflowReceipt,officeWorkflowGenerationRequest,sendOfficeWorkflow} from './office-workflow-client.js';
+import {isAgentUuid} from '@com-moon/agent-contracts';
 import {OFFICE_DISCUSSION_VERSION,parseOfficeDeliberation} from '@com-moon/agent-contracts/office';
 const id='11111111-1111-4111-8111-111111111111';
+
+test('browser receipt reads retain the server UUID contract without loading its Node hashing module', async () => {
+  const {readFile} = await import('node:fs/promises');
+  const source = await readFile(new URL('./office-workflow-client.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /from\s+['"]@com-moon\/agent-contracts['"]|node:crypto/);
+  const values = [id, 'ABCDEFAB-CDEF-ABCD-EFAB-CDEFABCDEFAB', '00000000-0000-0000-0000-000000000000',
+    id + '\n', '', null, undefined, 42, {}, ['uuid'], ' ' + id, id + ' ', id.slice(1), id + '1',
+    id.replace('1', 'g'), '../' + id, id + '/apply', id.replaceAll('-', '')];
+  for (const value of values) {
+    const calls = [];
+    const fetcher = async path => { calls.push(path); return {ok:false,status:401,json:async () => ({status:'error'})}; };
+    const link = await readOfficeRequestLink(value, {fetcher});
+    assert.equal(link.status, isAgentUuid(value) ? 'unauthorized' : 'invalid', String(value));
+    assert.equal(calls.length, isAgentUuid(value) ? 1 : 0, 'link: ' + String(value));
+    calls.length = 0;
+    await readOfficeWorkflowSelection(value, {}, {fetcher});
+    assert.equal(calls.length, isAgentUuid(value) ? 1 : 0, 'selection: ' + String(value));
+    if (calls.length) assert.equal(calls[0], '/api/hub/office/requests/' + encodeURIComponent(value));
+  }
+});
 const other='22222222-2222-4222-8222-222222222222';
 const input={intent:'weekly_report',scope:'personal',originRef:{periodStart:'2026-09-14',periodEnd:'2026-09-20',timezone:'Asia/Seoul'}};
 const answer={status:'generated',requestId:id,result:{requestId:id,scope:'personal',summary:'요약',artifact:{body:'본문'}},persistence:{persisted:true}};
@@ -101,7 +122,7 @@ test('workflow generation validates result identity and exact discussion setting
   const participants=['vaporeon','eevee'];
   const deliberation=parseOfficeDeliberation({profile:'urgent',influence:{eevee:3}},participants);
   const request={...input,requestId:id,ownerId:'vaporeon',mode:'council',participants,deliberation,message:'주간 검토',expectedContextHash:'a'.repeat(64),boundedHistory:[]};
-  const discussion={version:OFFICE_DISCUSSION_VERSION,settings:deliberation,modelCalls:3,turns:participants.map(ownerId=>({ownerId,round:'position',position:'확인된 기록으로 판단합니다.',evidence:['제공된 기록'],objection:'',revisionCondition:'미확인 상태가 확인되면 다시 판단합니다.',changed:false,replyTo:[],changeReason:''}))};
+  const discussion={version:OFFICE_DISCUSSION_VERSION,settings:deliberation,modelCalls:3,resolutions:[],turns:participants.map(ownerId=>({ownerId,round:'position',turnRef:`position:${ownerId}`,peerReviews:[],sourceCheck:'none',sourceCounts:{selected:0,traced:0,untraced:0},position:'확인된 기록으로 판단합니다.',evidence:['제공된 기록'],objection:'',revisionCondition:'미확인 상태가 확인되면 다시 판단합니다.',changed:false,replyTo:[],changeReason:''}))};
   const receipt={...answer,result:{...answer.result,status:'generated',ownerId:'vaporeon',mode:'council',participants,discussion}};
   const send=body=>sendOfficeWorkflow(request,{fetcher:async(_,init)=>{assert.deepEqual(JSON.parse(init.body).deliberation,deliberation);return Response.json(body);}});
   assert.equal((await send(receipt)).status,'generated');

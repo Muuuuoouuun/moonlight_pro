@@ -16,6 +16,6 @@ test("OKR·KPI summary keeps read truth honest: loading → Skeleton, error/prev
   assert.match(card, /model\.status === "loading" && <Skeleton/);
   assert.match(card, /model\.status !== "live" && model\.status !== "loading" && <TruthBadge state=\{model\.status\} \/>/);
   // 빈 상태는 읽기가 성공했을 때만(live/partial) — error/preview를 "목표 없음"으로 그리지 않는다.
-  assert.match(card, /\{readable && rows\.length === 0 && \(\s*<EmptyState/);
+  assert.match(card, /\{readable && summary\.activeCount === 0 && <EmptyState/);
   assert.match(card, /const readable = model\.status === "live" \|\| model\.status === "partial";/);
 });

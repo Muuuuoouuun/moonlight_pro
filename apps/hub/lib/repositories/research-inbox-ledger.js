@@ -5,25 +5,33 @@ import { isCanonicalUuid } from '../uuid.js';
 const empty = status => ({ status, briefs: [] });
 
 export async function listResearchBriefs({
-  workspaceId = resolveDefaultWorkspaceId(), fetchRows = fetchSupabaseRowsDetailed,
+  workspaceId = resolveDefaultWorkspaceId(), fetchRows = fetchSupabaseRowsDetailed, briefId = null, brandId = null,
 } = {}) {
+  if ((briefId !== null && !isCanonicalUuid(briefId)) || (brandId !== null && !isCanonicalUuid(brandId))) return empty('invalid-input');
   if (!isCanonicalUuid(workspaceId)) return empty('preview');
   try {
     const scoped = [['workspace_id', `eq.${workspaceId}`]];
+    const rootFilters = [...scoped];
+    if (briefId !== null) rootFilters.push(['id', `eq.${briefId.toLowerCase()}`]);
+    if (brandId !== null) rootFilters.push(['brand_id', `eq.${brandId.toLowerCase()}`]);
     const roots = await fetchRows('research_briefs', {
       select: 'id,workspace_id,brand_id,latest_revision,state,state_version,created_at,updated_at',
-      filters: scoped, order: 'created_at.desc,id.desc', limit: 101, dedupe: false,
+      filters: rootFilters, order: 'created_at.desc,id.desc', limit: briefId === null ? 101 : 1, dedupe: false,
     });
     if (!roots.configured) return empty('preview');
     if (roots.error || !Array.isArray(roots.rows)) return empty('error');
-    if (!roots.rows.length) return empty('live');
+    if (!roots.rows.length) return empty(briefId === null ? 'live' : 'not-found');
     const rows = roots.rows.slice(0, 100);
+    if (briefId !== null && (rows[0].id !== briefId.toLowerCase() || rows[0].workspace_id !== workspaceId
+      || (brandId !== null && rows[0].brand_id !== brandId.toLowerCase()))) return empty('not-found');
+    if (briefId !== null && (!Number.isInteger(rows[0].latest_revision) || rows[0].latest_revision < 1)) return empty('error');
     const filters = [...scoped, ['brief_id', inFilter(rows.map(row => row.id))]];
+    const revisionFilters = briefId === null ? filters : [...filters, ['revision', `eq.${rows[0].latest_revision}`]];
     const [revisions, promotions] = await Promise.all([
-      fetchRows('research_brief_revisions', { select: 'brief_id,revision,payload,created_at', filters, limit: 101, dedupe: false }),
+      fetchRows('research_brief_revisions', { select: 'brief_id,revision,payload,created_at', filters: revisionFilters, limit: briefId === null ? 101 : 1, dedupe: false }),
       fetchRows('research_promotions', { select: 'brief_id,revision,content_id,variant_id,destination,created_at', filters, limit: 101, dedupe: false }),
     ]);
-    if (revisions.error || promotions.error || !Array.isArray(revisions.rows) || !Array.isArray(promotions.rows)) return empty('error');
+    if (revisions.configured === false || promotions.configured === false || revisions.error || promotions.error || !Array.isArray(revisions.rows) || !Array.isArray(promotions.rows)) return empty('error');
     const byRevision = new Map(revisions.rows.map(row => [`${row.brief_id}:${row.revision}`, row]));
     const byPromotion = new Map(promotions.rows.map(row => [row.brief_id, row]));
     const briefs = rows.map(root => {

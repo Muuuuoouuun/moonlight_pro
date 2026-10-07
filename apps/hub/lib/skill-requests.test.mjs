@@ -11,6 +11,20 @@ const commandId = '44444444-4444-4444-8444-444444444444';
 const request = { requestId, taskId, scope: 'personal', instruction: '영수증 폴더를 정리', expectedEvidence: '정리 결과 경로와 검토 메모' };
 const receipt = { state: 'completed', summary: '정리를 마쳤다', evidence: [{ kind: 'path', value: '/local/receipts' }] };
 
+test('meeting requests preserve a validated meeting and turn pair while legacy requests remain valid', async () => {
+  const meetingId = 'a1111111-1111-4111-8111-111111111111';
+  const officeTurnId = 'b2222222-2222-4222-8222-222222222222';
+  const linked = { ...request, meetingId, officeTurnId };
+  assert.deepEqual(validateSkillRequest({ ...linked, meetingId: meetingId.toUpperCase() }), linked);
+  for (const invalid of [{ ...request, meetingId }, { ...request, officeTurnId },
+    { ...linked, meetingId: null }, { ...linked, officeTurnId: 'bad' }]) assert.equal(validateSkillRequest(invalid), null);
+  const service = createSkillRequestService({ workspace: () => workspaceId, rpc: async (_name, params) => {
+    assert.deepEqual(params.p_request, linked);
+    return { ok: true, data: { status: 'ready', persisted: true, request: linked } };
+  } });
+  assert.equal((await service.create(linked)).data.persisted, true);
+});
+
 test('skill request and receipt contracts reject cross-lane and unbounded payloads', () => {
   assert.deepEqual(validateSkillRequest(request), request);
   for (const invalid of [{ ...request, taskId: null }, { ...request, scope: 'all' }, { ...request, instruction: '' },

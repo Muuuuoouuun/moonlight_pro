@@ -145,7 +145,7 @@ export const REVENUE_ROUTE_LABELS = {
 const PLANNING_TAIL = [
   { key: 'prj-calendar', label: 'Calendar', path: 'dashboard/work/calendar' },
   { key: 'prj-roadmap', label: 'Roadmap', path: 'dashboard/work/roadmap' },
-  { key: 'prj-decisions', label: 'Decisions', path: 'dashboard/work/decisions' },
+  { key: 'prj-decisions', label: '결정 일지', path: 'dashboard/work/decisions' },
   { key: 'prj-rhythm', label: 'Rhythm', path: 'dashboard/work/rhythm' },
 ];
 
@@ -178,7 +178,7 @@ const CONTENT_CHILDREN = [
 // 실행 피드백(§1 계약)이라 코어 유지.
 function aiChildren(sheetsPath) {
   return [
-    { key: 'ai-office', label: 'Office', path: 'dashboard/agents/office-council', group: 'Agents', tab: 'office' },
+    { key: 'ai-office', label: '오피스', path: 'dashboard/agents/office-council', group: 'Agents', tab: 'office' },
     { key: 'ai-orders', label: '작업·실행', path: 'dashboard/agents/orders', group: 'Agents', deferred: true },
     { key: 'ai-chat', label: '코칭·대화', path: 'dashboard/agents/chat', group: 'Agents' },
     { key: 'ai-council', label: '브랜드 자문', path: 'dashboard/agents/council', group: 'Agents', deferred: true },
@@ -405,7 +405,7 @@ export const SIDEBAR_UTILITIES = [
     scopeAware: false,
     owns: ['dashboard/agents', 'dashboard/automations', 'dashboard/classin/automations'],
     routeTabs: {'dashboard/agents/office-request':'office'},
-    routeLabels: {'dashboard/agents/office-request':'Office 요청'},
+    routeLabels: {'dashboard/agents/office-request':'오피스 요청'},
     // 대표 경로는 Office — 2026-09-23 운영자 확정. Runs는 하위 탭으로 한 단계 아래에 남고,
     // 보류 스코프(agents/chat·council)는 여전히 착지 지점이 아니다(2026-08-05 re-audit).
     paths: {
@@ -452,6 +452,13 @@ export function resolveSidebarPath(anchorKey, scope) {
   const anchor = SIDEBAR_ANCHORS.find((a) => a.key === anchorKey);
   if (!anchor) return null;
   return anchor.paths[normalizeScope(scope)] || anchor.paths[DEFAULT_SCOPE];
+}
+
+// A selected Office scope replaces the old meeting pointer. The destination
+// session can restore its own meeting and drafts after navigation.
+export function officeScopeSelectionPath(activePath, scope) {
+  if (pathnameOf(activePath) !== 'dashboard/agents/office-council') return null;
+  return `dashboard/agents/office-council?scope=${normalizeScope(scope)}`;
 }
 
 // Anchors expanded when no stored preference exists — the operator's daily

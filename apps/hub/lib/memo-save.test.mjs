@@ -10,8 +10,8 @@ const response = (data, status = 200) => new Response(JSON.stringify(data), { st
 // 2026-09-20 통합: 빠른 메모가 `/api/hub/memo-capture` → notes 가 아니라
 // `/api/hub/journal` → journal_entries 로 간다. 영수증·되읽기 계약의 의도는 그대로이고
 // 와이어 형태만 바뀐다(영수증 `{status, entry}`, 되읽기 `{status:'live', entry}`).
-const ok = (input, status = "saved") => response({ status, entry: { id: input.id, body: input.body } });
-const readOk = (input) => response({ status: "live", entry: { id: input.id, body: input.body } });
+const ok = (input, status = "saved") => response({ status, entry: { id: input.id, body: input.body, noteMeta: { scope: input.scope } } });
+const readOk = (input) => response({ status: "live", entry: { id: input.id, body: input.body, noteMeta: { scope: input.scope } } });
 
 test("successful and duplicate receipts both require an exact ID/body read-back", async () => {
   for (const status of ["saved", "duplicate"]) {
@@ -46,14 +46,14 @@ test("rejected, preview and malformed receipts never trigger read-back or succes
 
 test("a conflict keeps a link to the original receipt without overwriting it", async () => {
   const input = payload();
-  await assert.rejects(saveMemoAndVerify(input, async () => response({ status: "conflict", entry: { id: input.id, body: input.body } }, 409)), error => error.id === input.id);
+  await assert.rejects(saveMemoAndVerify(input, async () => response({ status: "conflict", entry: { id: input.id, body: input.body, noteMeta: { scope: input.scope } } }, 409)), error => error.id === input.id);
 });
 
 test("read-back mismatch, preview, HTTP and transport failure retain the known receipt", async () => {
   const input = payload();
   for (const read of [
     () => response({ status: "live", entry: { id: input.id, body: "different" } }),
-    () => response({ status: "live", entry: { id: "different", body: input.body } }),
+    () => response({ status: "live", entry: { id: "different", body: input.body, noteMeta: { scope: input.scope } } }),
     () => response({ status: "preview" }),
     () => response({}, 502),
     () => { throw new TypeError("offline"); },
@@ -130,5 +130,19 @@ test("invalid or file draft cannot be silently submitted through the quick entry
   const draft = { ...newMemoDraft(), body: "memo" };
   for (const patch of [{ id: "bad" }, { source: { type: "file" } }, { body: "bad\0text" }, { labels: "unexpected" }, { title: "unexpected" }]) {
     assert.equal(readQuickMemoDraft({ getItem: () => JSON.stringify({ version: 1, draft: { ...draft, ...patch } }) }, "quick"), null);
+  }
+});
+
+
+test("scope survives the command and a wrong-scope readback never acknowledges success", async () => {
+  for (const scope of ['personal', 'company']) {
+    const input = { ...payload(), scope };
+    assert.equal(journalSaveCommand(input).noteMeta.scope, scope);
+    await assert.rejects(saveMemoAndVerify(input, async (_url, options) => options.method === 'POST' ? ok(input) : response({ status: 'live', entry: { id: input.id, body: input.body, noteMeta: { scope: scope === 'personal' ? 'company' : 'personal' } } })), /재확인/);
+  }
+  for (const scope of [undefined, null, 'all']) {
+    let calls = 0;
+    await assert.rejects(saveMemoAndVerify({ ...payload(), scope }, async () => { calls++; }), /범위/);
+    assert.equal(calls, 0);
   }
 });

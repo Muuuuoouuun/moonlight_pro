@@ -4,6 +4,8 @@ import React from "react";
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { OkrSummaryCard } from "../okr-summary-card";
+import { activityAxis, activityDateTicks } from "./overview-activity";
+import "./overview-activity.css";
 import { Iconed } from "../hub-icons";
 import { BrandIcon } from "../brand-icons";
 import { GuidanceInlineTip } from "../guidance-inline-tip";
@@ -18,14 +20,9 @@ import {
   projectActivityAvailability,
   recentActivityAvailability,
 } from "./overview-truth";
+import { formatWonShort } from "@/lib/won-format";
 
-const fmtMoney = (v) => {
-  const n = Number(v);
-  if (!Number.isFinite(n) || n === 0) return '₩0';
-  if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
-  return `₩${n}`;
-};
+const fmtMoney = (v) => formatWonShort(Number(v) || 0);
 
 const PERIOD_OPTIONS = [
   { key: '7', label: '7일' },
@@ -34,7 +31,6 @@ const PERIOD_OPTIONS = [
 ];
 
 const KIND_LABEL = { work: '작업', decision: '결정', content: '콘텐츠', automation: '자동화' };
-const CHART_HEIGHT = 120;
 
 // Project-status donut ring colors — categories use a monochrome Moonstone/neutral
 // scale. Only genuinely blocked work receives the danger signal.
@@ -227,164 +223,88 @@ const ACTIVITY_SEGMENTS = [
   { key: 'content', label: '발행', color: 'var(--fg-dim)', get: (d) => d.content },
 ];
 
-const Y_AXIS_W = 24;
+const activityDayLabel = key => key.slice(5).split('-').map(Number).join('/');
 
 function ActivityChart({ series, days, sources, status }) {
-  const [hoverIndex, setHoverIndex] = React.useState(null);
+  const [activeDate, setActiveDate] = React.useState(null);
+  const readoutId = React.useId();
   const data = series.slice(-days);
   const availability = activitySeriesAvailability(data, { sources, status });
   if (!availability.available) {
-    return (
-      <EmptyState
-        icon="signal"
-        title={availability.state === 'preview' ? '활동 기록 미연결' : '활동 기록 일부를 읽지 못했습니다'}
-        description={availability.state === 'preview'
-          ? '프로젝트·콘텐츠 기록을 연결하면 활동 추이가 표시됩니다.'
-          : `${availability.failedSegments.join(', ')} 기록을 다시 읽은 뒤 추이를 표시합니다.`}
-        style={{ minHeight: 160 }}
-      />
-    );
+    return <EmptyState icon="signal" title={availability.state === 'preview' ? '활동 기록 미연결' : '활동 기록 일부를 읽지 못했습니다'}
+      description={availability.state === 'preview' ? '프로젝트·콘텐츠 기록을 연결하면 활동 추이가 표시됩니다.'
+        : `${availability.failedSegments.map(key => ACTIVITY_SEGMENTS.find(segment => segment.key === key)?.label || key).join(' · ')} 기록을 다시 읽은 뒤 추이를 표시합니다.`}
+      style={{ minHeight: 160 }} />;
   }
-  const max = Math.max(1, ...data.map((d) => d.work + d.decisions + d.content));
-  const mid = Math.round(max / 2);
-  const tickEvery = days <= 7 ? 1 : days <= 14 ? 2 : 5;
-  const gap = days <= 7 ? 8 : days <= 14 ? 5 : 3;
-  const hovered = hoverIndex != null ? data[hoverIndex] : null;
+  const totalOf = row => row.work + row.decisions + row.content;
+  const maximum = Math.max(0, ...data.map(totalOf));
+  const axis = activityAxis(maximum);
+  const ticks = activityDateTicks(data.length);
+  const activeIndex = data.findIndex(row => row.date === activeDate);
+  const selected = activeIndex < 0 ? null : data[activeIndex];
+  const values = selected || Object.fromEntries(ACTIVITY_SEGMENTS.map(segment => [segment.key, data.reduce((sum, row) => sum + segment.get(row), 0)]));
+  const dateLabel = selected ? activityDayLabel(selected.date) : data.length ? `${activityDayLabel(data[0].date)}–${activityDayLabel(data[data.length - 1].date)}` : '이 기간';
+  const peakIndex = data.findIndex(row => totalOf(row) === maximum);
+  const selectAtPointer = event => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const index = Math.max(0, Math.min(data.length - 1, Math.floor((event.clientX - rect.left) / rect.width * data.length)));
+    if (data[index]) setActiveDate(data[index].date);
+  };
 
-  return (
-    <div style={{ display: 'flex', gap: 10 }}>
-      {/* Y-axis scale — max / mid / 0, aligned to the gridlines so the bars read
-          against a real scale instead of floating. */}
-      <div
-        className="mono"
-        aria-hidden="true"
-        style={{ width: Y_AXIS_W, height: CHART_HEIGHT, flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: 10.5, color: 'var(--fg-faint)', lineHeight: 1 }}
-      >
-        <span>{max}</span>
-        <span>{mid}</span>
-        <span>0</span>
+  return <div className="activity-chart fade-up" data-dense={data.length > 14 ? 'true' : undefined}>
+    <div id={readoutId} className="activity-chart__readout" aria-live="polite" aria-atomic="true">
+      <div className="activity-chart__date">
+        <span className="mono">{dateLabel}</span>
+        <strong className="activity-chart__total"><span className="activity-chart__total-label">합계 </span><span className="stat">{totalOf(values)}</span><span className="activity-chart__total-unit">건</span><span className="activity-chart__scope">{selected ? ' · 선택한 날짜' : ' · 기간 전체'}</span></strong>
       </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ position: 'relative' }}>
-          {hovered && (
-            <div
-              className="mono"
-              style={{
-                position: 'absolute',
-                bottom: CHART_HEIGHT + 12,
-                left: `${((hoverIndex + 0.5) / data.length) * 100}%`,
-                transform: 'translateX(-50%)',
-                padding: '8px 11px',
-                background: 'var(--elevated)',
-                border: '1px solid var(--line)',
-                borderRadius: 'var(--r-sm)',
-                boxShadow: 'var(--shadow-card)',
-                fontSize: 10.5,
-                whiteSpace: 'nowrap',
-                pointerEvents: 'none',
-                zIndex: 3,
-              }}
-            >
-              <div style={{ color: 'var(--fg-faint)', marginBottom: 5 }}>{dayLabel(hovered.date)}</div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                {ACTIVITY_SEGMENTS.map((seg) => (
-                  <span key={seg.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--fg-muted)' }}>
-                    <span style={{ width: 6, height: 6, borderRadius: 999, background: seg.color }} />
-                    {seg.get(hovered)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Gridlines at mid + top, matched to the y-axis labels. */}
-          <div style={{ position: 'absolute', inset: 0, height: CHART_HEIGHT, pointerEvents: 'none' }}>
-            {[1, 0.5].map((f) => (
-              <div key={f} style={{ position: 'absolute', left: 0, right: 0, bottom: `${f * 100}%`, borderTop: '1px dashed var(--line-soft)' }} />
-            ))}
-          </div>
-
-          <div
-            tabIndex={0}
-            role="group"
-            aria-label="일별 활동 차트 — 좌우 화살표로 날짜 이동"
-            onKeyDown={(e) => {
-              if (!data.length) return;
-              if (e.key === 'ArrowRight') { e.preventDefault(); setHoverIndex((cur) => Math.min((cur == null ? data.length - 1 : cur) + 1, data.length - 1)); }
-              else if (e.key === 'ArrowLeft') { e.preventDefault(); setHoverIndex((cur) => Math.max((cur == null ? data.length - 1 : cur) - 1, 0)); }
-              else if (e.key === 'Home') { e.preventDefault(); setHoverIndex(0); }
-              else if (e.key === 'End') { e.preventDefault(); setHoverIndex(data.length - 1); }
-            }}
-            onFocus={() => setHoverIndex((cur) => (cur == null ? data.length - 1 : cur))}
-            onBlur={() => setHoverIndex(null)}
-            style={{ display: 'flex', alignItems: 'flex-end', gap, height: CHART_HEIGHT, borderBottom: '1px solid var(--line)', position: 'relative' }}
-          >
-            {data.map((d, i) => {
-              const total = d.work + d.decisions + d.content;
-              const dimmed = hoverIndex != null && hoverIndex !== i;
-              const active = hoverIndex === i;
-              const topKey = [...ACTIVITY_SEGMENTS].reverse().find((s) => s.get(d) > 0)?.key;
-              return (
-                <div
-                  key={d.date}
-                  role="img"
-                  aria-label={`${dayLabel(d.date)} · 작업 ${d.work} · 결정 ${d.decisions} · 발행 ${d.content}`}
-                  onMouseEnter={() => setHoverIndex(i)}
-                  onMouseLeave={() => setHoverIndex((cur) => (cur === i ? null : cur))}
-                  style={{ flex: 1, minWidth: 3, height: CHART_HEIGHT, position: 'relative', cursor: 'default' }}
-                >
-                  {/* Hover crosshair — a soft column highlight behind the bar. */}
-                  <div style={{ position: 'absolute', inset: '0 -2px', borderRadius: 3, background: active ? 'var(--surface-2)' : 'transparent', transition: 'background var(--dur-hover) ease' }} />
-                  <div
-                    style={{
-                      position: 'absolute', inset: 0,
-                      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 1.5,
-                      opacity: dimmed ? 0.45 : 1,
-                      transform: active ? 'translateY(-2px)' : 'none',
-                      transition: 'opacity var(--dur-hover) ease, transform var(--dur-hover) ease',
-                    }}
-                  >
-                    {total > 0 ? (
-                      // Bottom → top; render reversed so 'work' sits at the base.
-                      [...ACTIVITY_SEGMENTS].reverse().map((seg) => {
-                        const val = seg.get(d);
-                        if (!val) return null;
-                        const h = Math.max(3, Math.round((val / max) * CHART_HEIGHT));
-                        const isTop = seg.key === topKey;
-                        return (
-                          <div
-                            key={seg.key}
-                            style={{
-                              width: '100%', height: h,
-                              background: seg.color,
-                              borderRadius: isTop ? '3px 3px 1.5px 1.5px' : 1.5,
-                              boxShadow: isTop ? 'inset 0 1px 0 0 oklch(1 0 0 / 0.18)' : undefined,
-                              transition: 'height var(--dur-enter) var(--ease-hub)',
-                            }}
-                          />
-                        );
-                      })
-                    ) : (
-                      <div style={{ width: 4, height: 4, margin: '0 auto', borderRadius: 999, background: 'var(--line-strong)' }} />
-                    )}
-                  </div>
+      <dl className="activity-chart__legend">{ACTIVITY_SEGMENTS.map(segment => <div key={segment.key}>
+        <dt><i className="activity-chart__key" style={{ background: segment.color }} aria-hidden="true" />{segment.label}</dt>
+        <dd><span className="mono">{segment.get(values)}</span><span className="activity-chart__legend-unit" aria-hidden="true">건</span></dd>
+      </div>)}</dl>
+    </div>
+    <div className="activity-chart__layout">
+      <div className="activity-chart__axis mono" aria-hidden="true">{axis.ticks.map(tick => <span key={tick} style={{ bottom: `${tick / axis.max * 100}%` }}>{tick}</span>)}</div>
+      <div>
+        <div className="activity-chart__plot" style={{ '--activity-days': data.length || 1 }} tabIndex={0} role="group"
+          aria-label="일별 활동 차트 — 좌우 화살표로 날짜 이동" aria-describedby={readoutId}
+          onFocus={() => setActiveDate(current => data.some(row => row.date === current) ? current : data[data.length - 1]?.date || null)}
+          onBlur={() => setActiveDate(null)}
+          onPointerMove={event => { if (event.pointerType === 'mouse') selectAtPointer(event); }}
+          onPointerLeave={event => { if (document.activeElement !== event.currentTarget) setActiveDate(null); }}
+          onPointerDown={event => { selectAtPointer(event); event.currentTarget.focus({ preventScroll: true }); }}
+          onKeyDown={event => {
+            if (!data.length) return;
+            const current = activeIndex < 0 ? data.length - 1 : activeIndex;
+            let next;
+            if (event.key === 'ArrowRight') next = Math.min(current + 1, data.length - 1);
+            else if (event.key === 'ArrowLeft') next = Math.max(current - 1, 0);
+            else if (event.key === 'Home') next = 0;
+            else if (event.key === 'End') next = data.length - 1;
+            else if (event.key === 'Escape') { event.preventDefault(); setActiveDate(null); return; }
+            else return;
+            event.preventDefault(); setActiveDate(data[next].date);
+          }}>
+          <div className="activity-chart__grid" aria-hidden="true">{axis.ticks.filter(tick => tick > 0).map(tick => <i key={tick} style={{ bottom: `${tick / axis.max * 100}%` }} />)}</div>
+          {data.map((row, index) => {
+            const total = totalOf(row);
+            const height = total / axis.max * 100;
+            const active = activeIndex === index;
+            return <div key={row.date} className="activity-chart__column" data-active={active ? 'true' : undefined} role="img"
+              aria-label={`${dayLabel(row.date)} · 작업 ${row.work} · 결정 ${row.decisions} · 발행 ${row.content}`}>
+              {total > 0 ? <>
+                {(data.length <= 14 || active || index === peakIndex) && <span className="activity-chart__value mono" aria-hidden="true" style={{ bottom: `calc(${height}% + 6px)` }}>{total}</span>}
+                <div className="activity-chart__bar" style={{ height: `${height}%` }} aria-hidden="true">
+                  {[...ACTIVITY_SEGMENTS].reverse().map(segment => segment.get(row) > 0 ? <div key={segment.key} className="activity-chart__segment" style={{ height: `${segment.get(row) / total * 100}%`, background: segment.color }} /> : null)}
                 </div>
-              );
-            })}
-          </div>
+              </> : <i className="activity-chart__zero" aria-hidden="true" />}
+            </div>;
+          })}
         </div>
-
-        <div style={{ display: 'flex', gap, marginTop: 7 }}>
-          {data.map((d, i) => (
-            <div key={d.date} className="mono" style={{ flex: 1, minWidth: 3, textAlign: 'center', fontSize: 10.5, color: hoverIndex === i ? 'var(--fg-muted)' : 'var(--fg-faint)', transition: 'color var(--dur-hover) ease' }}>
-              {i % tickEvery === 0 || hoverIndex === i ? dayLabel(d.date) : ''}
-            </div>
-          ))}
-        </div>
+        <div className="activity-chart__dates mono" aria-hidden="true">{data.map((row, index) => ticks.has(index) ? <span key={row.date} style={index === 0 ? { left:0 } : index === data.length - 1 ? { right:0 } : { left:`${(index + 0.5) / data.length * 100}%`, transform:'translateX(-50%)' }}>{activityDayLabel(row.date)}</span> : null)}</div>
       </div>
     </div>
-  );
+    <p className="activity-chart__hint">날짜를 누르거나 ← → 키로 확인 · Esc로 기간 전체 보기</p>
+  </div>;
 }
 
 // Compact SVG ring chart — the donut's rotation is applied to the <svg> box
@@ -741,18 +661,7 @@ function OverviewSummary({ onNavigate }) {
       <OkrSummaryCard />
 
       <Card>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 500 }}>작업·기획 활동 추이</div>
-          <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', gap: 12 }}>
-            {ACTIVITY_SEGMENTS.map((segment) => (
-              <span key={segment.key} style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 999, background: segment.color }} />
-                {segment.label}
-              </span>
-            ))}
-          </div>
-        </div>
+        <div className="activity-chart__head"><strong>작업·기획 활동 추이</strong><span className="activity-chart__unit">일별 · 건</span></div>
         {ledger.activitySeries?.length ? (
           <ActivityChart
             series={ledger.activitySeries}

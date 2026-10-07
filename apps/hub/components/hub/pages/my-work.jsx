@@ -10,6 +10,7 @@ import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
 import { clearSubmittedQuickTaskDraft, shouldSubmitQuickTask } from "@/lib/quick-task-capture";
+import { createMyWorkQuickTask } from "@/lib/my-work-quick-task";
 import { freezeTaskCommand, saveTaskCommand, TASK_OUTCOME } from "@/lib/memo-intake-tasks";
 import { applyMute, clearMute, mutedIdSet, readMuteStore, seoulDayKey, writeMuteStore } from "./my-work-mute.js";
 import { requestPersonaChat } from "../persona-client";
@@ -654,7 +655,7 @@ function DealOutreachSection({ deal }) {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10 }}
+              style={{ background: "none", border: "none", color: "var(--fg-faint)", cursor: "pointer", fontSize: 10.5 }}
             >
               접기
             </button>
@@ -915,6 +916,8 @@ export function MyWork({ onNavigate }) {
   const [showQuickDetail, setShowQuickDetail] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const quickSavingRef = React.useRef(false);
+  const quickTaskWriter = React.useRef(null);
+  if (!quickTaskWriter.current) quickTaskWriter.current = createMyWorkQuickTask();
   const [notice, setNotice] = React.useState(null); // { tone, label, action?: { label, onClick } }
   const [taskDraft, setTaskDraft] = React.useState(null);
   const [checklistSavingId, setChecklistSavingId] = React.useState(null);
@@ -941,6 +944,29 @@ export function MyWork({ onNavigate }) {
   // 낙관적 기한 변경 오버레이 — PATCH 응답을 기다리지 않고 카드가 즉시 버킷을 옮긴다.
   // 배경 reload가 서버 진실로 덮으면 해당 패치를 걷어낸다.
   const [itemPatches, setItemPatches] = React.useState({});
+  const [quickRecovery, setQuickRecovery] = React.useState({ status: 'loading', recoverable: false });
+  const quickSurfaceRef = React.useRef(null);
+  React.useEffect(() => {
+    const surface = { active: true };
+    quickSurfaceRef.current = surface;
+    const writer = quickTaskWriter.current;
+    writer.activate(next => {
+      if (!surface.active || quickSurfaceRef.current !== surface) return;
+      setQuickRecovery(next);
+      if (['unauthorized', 'changed'].includes(next.status)) setQuickDraft({ title: '', dueAt: '', priority: 'medium' });
+      if (next.message) setNotice({ tone: next.status === 'ready' ? 'info' : 'err', label: next.message,
+        action: next.status === 'expired' ? { label: '새 입력으로 시작', onClick: () => { if (writer.startAfterExpiry()) setNotice(null); } }
+          : ['blocked', 'changed', 'unauthorized'].includes(next.status) ? { label: '다시 확인', onClick: () => writer.initialize() } : undefined });
+    });
+    const revalidate = () => { if (document.visibilityState !== 'hidden') writer.initialize(); };
+    window.addEventListener('focus', revalidate);
+    document.addEventListener('visibilitychange', revalidate);
+    return () => {
+      surface.active = false; writer.deactivate();
+      window.removeEventListener('focus', revalidate);
+      document.removeEventListener('visibilitychange', revalidate);
+    };
+  }, []);
   // 공유 되돌리기 훅 — 언마운트 시 clear가 아니라 **flush**한다. 이전 구현은 타이머만
   // 지워서 "완료됨" 영수증 후 3.5초 내 페이지 이탈 시 PATCH가 조용히 증발했다.
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
@@ -996,25 +1022,17 @@ export function MyWork({ onNavigate }) {
   // Durable quick-add task: POST /api/hub/tasks (Phase 1A write path). 상세 토글을 열면
   // 기한·우선순위도 한 번에 저장 — 기본은 제목만(빠른 경로) 그대로 유지.
   const createTask = async () => {
-    const title = quickTitle.trim();
-    if (!title || quickSavingRef.current) return;
-    const submittedDraft = quickDraft;
+    const surface = quickSurfaceRef.current;
+    if (!surface?.active || quickRecovery.status !== 'ready') return;
+    if ((!quickTitle.trim() && !quickTaskWriter.current.getPending()) || quickSavingRef.current) return;
     quickSavingRef.current = true;
     setSaving(true);
     try {
-      const payload = { title };
-      if (showQuickDetail) {
-        if (quickDue) payload.dueAt = quickDue;
-        if (quickPriority && quickPriority !== 'medium') payload.priority = quickPriority;
-      }
-      const res = await fetch('/api/hub/tasks', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.status === 'saved') {
-        const createdId = data.task?.id || data.id || null;
+      const data = await quickTaskWriter.current.submit(quickDraft, { details: showQuickDetail });
+      if (!surface.active || quickSurfaceRef.current !== surface || data.status === 'stale') return;
+      if (['saved', 'duplicate'].includes(data.status)) {
+        const createdId = data.task.id;
+        const submittedDraft = data.submittedDraft;
         // Saving one item must not erase the next item typed during the request.
         setQuickDraft(current => clearSubmittedQuickTaskDraft(current, submittedDraft));
         // 새 할 일이 무조건 화면에 보이도록: 리스트 렌즈로, 그리고 방금 만든 (대개 기한 없는)
@@ -1024,12 +1042,9 @@ export function MyWork({ onNavigate }) {
         if (lane !== 'all' && lane !== 'task') setLane('all');
         if (bucketFilter !== 'all') setBucketFilter('all');
         const fresh = await reload();
+        if (!surface.active || quickSurfaceRef.current !== surface) return;
         const freshTasks = (fresh?.items || []).filter((i) => i.lane === 'task');
-        const created = (createdId && freshTasks.find((i) => i.entityId === createdId))
-          || freshTasks
-            .filter((i) => i.title === title)
-            .sort((a, b) => new Date(b.recencyAt || 0) - new Date(a.recencyAt || 0))[0]
-          || null;
+        const created = (createdId && freshTasks.find((i) => i.entityId === createdId)) || null;
         if (created) {
           setJustAddedId(created.id);
           scrollToRow(created.id);
@@ -1037,7 +1052,8 @@ export function MyWork({ onNavigate }) {
         // 연속 입력이 기본값이다 — 버튼 클릭으로 저장하면 포커스가 버튼에 남아 다음
         // 한 줄을 바로 못 친다(Enter 저장 경로만 우연히 동작했다). 입력창으로 되돌린다.
         quickRef.current?.focus();
-        const label = created?.bucket === 'later' ? '할 일 저장됨 · "나중"에 추가' : '할 일 저장됨';
+        const label = data.cleanupWarning ? '할 일 저장 확인됨 · 브라우저 복구 기록 정리 필요'
+          : created?.bucket === 'later' ? '할 일 저장됨 · "나중"에 추가' : '할 일 저장됨';
         setNotice({
           tone: 'ok',
           label,
@@ -1047,17 +1063,17 @@ export function MyWork({ onNavigate }) {
         });
         toast.success(label);
       } else {
-        const errMsg = data.error || `저장 실패 (${data.status || res.status})`;
+        const errMsg = data.message || '저장을 확인하지 못했어요. 입력을 유지했으니 다시 추가하세요.';
         setNotice({ tone: 'err', label: errMsg });
         toast.error(errMsg);
       }
     } catch (error) {
+      if (!surface.active || quickSurfaceRef.current !== surface) return;
       const errMsg = error instanceof Error ? error.message : String(error);
       setNotice({ tone: 'err', label: errMsg });
       toast.error(errMsg);
     } finally {
-      quickSavingRef.current = false;
-      setSaving(false);
+      if (surface.active && quickSurfaceRef.current === surface) { quickSavingRef.current = false; setSaving(false); }
     }
   };
 
@@ -1066,7 +1082,9 @@ export function MyWork({ onNavigate }) {
   // The actual persist — only ever called after the undo window closes (or never, if the
   // user hits 되돌리기 first). Kept separate from scheduleComplete so board-lens drags and
   // the drawer's own status field can still complete a task immediately if they need to.
-  const persistComplete = async (item) => {
+  // celebrate: 이 완료로 오늘 목록이 비었을 때만 — 연출은 저장이 확인된 뒤에 낸다(§8.1 저장 봉투:
+  // 저장되지 않은 일을 끝난 것처럼 축하하지 않는다). 되돌리기 창 안에서 터지던 것을 옮겼다.
+  const persistComplete = async (item, { celebrate = false } = {}) => {
     try {
       const res = await fetch('/api/hub/tasks', {
         method: 'PATCH',
@@ -1076,6 +1094,7 @@ export function MyWork({ onNavigate }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status !== 'saved') throw new Error(data.error || `완료 저장 실패 ${res.status}`);
       setNotice({ tone: 'ok', label: '할 일 완료됨' });
+      if (celebrate) triggerCelebration({ mode: 'fireworks' });
       await reload();
     } catch (error) {
       setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
@@ -1108,11 +1127,9 @@ export function MyWork({ onNavigate }) {
       setHiddenIds((s) => new Set(s).add(id));
     }, STRIKE_MS);
 
-    // 모든 할 일이 완료되었는지 확인 → 축하 불꽃놀이/폭죽 발사
+    // 이 완료로 남은 할 일이 없어지면 저장 확인 뒤 축하한다(persistComplete).
     const remainingTasks = visible.filter((i) => i.lane === 'task' && !hiddenIds.has(i.id) && !completingIds.has(i.id) && i.id !== id);
-    if (remainingTasks.length === 0) {
-      triggerCelebration({ mode: 'fireworks' });
-    }
+    const celebrate = remainingTasks.length === 0;
 
     setNotice({ key: `complete-${id}`, tone: 'ok', label: '할 일 완료됨', action: { label: '되돌리기', onClick: () => undoComplete(item) } });
     toast.success('할 일을 완료했습니다.', { action: { label: '되돌리기', onClick: () => undoComplete(item) } });
@@ -1121,7 +1138,7 @@ export function MyWork({ onNavigate }) {
       // 창이 닫히면 알림을 통째로 걷는다 — 버튼만 지우면 "완료됨" 라벨이 다음 액션까지
       // 영구 표시된다(7차 UIUX — revenue 활동 삭제·daily-brief 보류의 전체 소거 패턴으로 통일).
       setNotice((cur) => (cur?.key === `complete-${id}` ? null : cur));
-      persistComplete(item);
+      persistComplete(item, { celebrate });
     }, UNDO_WINDOW_MS);
   };
 
@@ -1757,6 +1774,8 @@ export function MyWork({ onNavigate }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             ref={quickRef}
+            aria-label="새 할 일 제목"
+            maxLength={300}
             value={quickTitle}
             onChange={(e) => setQuickTitle(e.target.value)}
             onKeyDown={(e) => { if (shouldSubmitQuickTask(e, quickSavingRef.current)) { e.preventDefault(); createTask(); } }}
@@ -1773,8 +1792,8 @@ export function MyWork({ onNavigate }) {
             tooltip={showQuickDetail ? '상세 닫기' : '기한·우선순위 추가'}
             onClick={() => setShowQuickDetail((v) => !v)}
           />
-          <Button variant="primary" size="sm" icon="plus" onClick={createTask} disabled={saving || !quickTitle.trim()}>
-            할 일 <Kbd>N</Kbd>
+          <Button variant="primary" size="sm" icon="plus" onClick={createTask} disabled={saving || quickRecovery.status !== 'ready' || (!quickTitle.trim() && !quickRecovery.recoverable)}>
+            {quickRecovery.recoverable ? '이전 요청 확인' : quickRecovery.status === 'loading' ? '범위 확인 중' : '할 일'} <Kbd>N</Kbd>
           </Button>
         </div>
         {showQuickDetail && (
@@ -1812,7 +1831,7 @@ export function MyWork({ onNavigate }) {
         <span
           role={notice.tone === 'err' ? 'alert' : 'status'}
           aria-live="polite"
-          style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%', overflowWrap: 'anywhere', gap: 8 }}
         >
           {notice.label}
           {notice.action && (
@@ -1876,7 +1895,7 @@ export function MyWork({ onNavigate }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
 
       {state === 'loading' && (
-        <Card><div style={{ fontSize: 12.5, color: 'var(--fg-muted)', padding: 8 }}>기록을 읽는 중…</div></Card>
+        <Card><Skeleton lines={5} height={14} gap={14} label="내 작업 기록을 읽는 중" /></Card>
       )}
       {state === 'unauthorized' && (
         <Card>

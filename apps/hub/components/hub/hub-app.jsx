@@ -16,14 +16,10 @@ import { SidebarResizer } from "./sidebar-resizer";
 import { TopBar } from "./hub-topbar";
 import { ToastProvider } from "./hub-toast";
 import { useInquiryNotifications } from './inquiry-notifications';
-import { CommandPalette } from "./hub-command-palette";
 import { QuickMemo } from "./quick-memo";
-import { GuidanceQuestionDrawer } from "./guidance-question-drawer";
-import { GlobalQuickCapture } from "./quick-capture";
 import { savedSharedCaptureTarget, snapshotSharedCaptureQuery } from "@/lib/shared-capture-navigation";
 import { OfficeSessionProvider } from "./office-session-provider";
-import { OfficeWorkflowSessionProvider } from "./office-workflow-panel";
-import { ShortcutOverlay } from "./crm-shortcut-overlay";
+import { OfficeWorkflowSessionProvider } from "./office-workflow-sessions";
 import { CelebrationCanvas } from "./celebration-fx";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
@@ -73,6 +69,31 @@ function PageChunkFallback() {
 // The hub is a private, client-fetched dashboard behind auth, so it gains nothing
 // from SSRing these pages, and every page carries its own loading/empty state.
 const lazyPage = (loader) => dynamic(loader, { loading: PageChunkFallback, ssr: false });
+
+// 열 때만 쓰는 셸 패널(⌘K 팔레트·빠른 입력·Guru 질문 창·단축키 안내)은 첫 화면 번들에서 뺀다.
+// 처음 열리는 순간 또는 브라우저가 한가해진 뒤(useShellOverlaysReady) 받아 두므로, 첫 그림은 가볍고
+// 여는 순간은 대개 이미 받아 둔 뒤다. 한번 마운트한 패널은 계속 마운트해 초안·대화를 잃지 않는다.
+const lazyOverlay = (loader) => dynamic(loader, { ssr: false });
+const CommandPalette = lazyOverlay(() => import("./hub-command-palette").then(m => m.CommandPalette));
+const GuidanceQuestionDrawer = lazyOverlay(() => import("./guidance-question-drawer").then(m => m.GuidanceQuestionDrawer));
+const GlobalQuickCapture = lazyOverlay(() => import("./quick-capture").then(m => m.GlobalQuickCapture));
+const ShortcutOverlay = lazyOverlay(() => import("./crm-shortcut-overlay").then(m => m.ShortcutOverlay));
+
+function useShellOverlaysReady() {
+  const [ready, setReady] = React.useState(false);
+  React.useEffect(() => {
+    // 터치 기기와 데이터 절약·느린 회선에서는 미리 받지 않는다 — 터치에는 ⌘K·C 같은 단축키가 없고,
+    // 데이터·배터리를 아끼는 편이 낫다. 거기서는 각 패널이 처음 열릴 때 받는다(위 조건부 마운트).
+    if (window.matchMedia?.("(hover: none) and (pointer: coarse)").matches || prefersOnDemandLoading()) return undefined;
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(() => setReady(true), { timeout: 3000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(() => setReady(true), 1500);
+    return () => window.clearTimeout(id);
+  }, []);
+  return ready;
+}
 
 const Home = lazyPage(() => import("./pages/home").then(m => m.Home));
 const DailyBrief = lazyPage(() => import("./pages/daily-brief").then(m => m.DailyBrief));
@@ -127,18 +148,27 @@ const Settings = lazyPage(() => import("./pages/evolution-settings").then(m => m
 // Idle prefetch — the flip side of code splitting is a chunk fetch (and the
 // "불러오는 중…" flash) on first navigation to a page. After the current page
 // settles, warm the daily-loop pages during browser idle time so those
-// navigations render instantly. Everything else (agents, automations,
-// settings, …) stays strictly on-demand to keep the prefetch budget small.
-// import() dedupes against dynamic()'s loader, so this fills the same module
-// cache the router reads from; failures are harmless (navigation just
+// navigations render instantly. The list follows the sidebar anchors' landing
+// screens (hub-nav.js) — 영업·매출 lands on 오늘 연락 (followups.jsx) since
+// 2026-09-24, not on revenue.jsx. Everything else (tabs below an anchor, agents,
+// automations, settings, …) stays strictly on-demand to keep the prefetch budget
+// small. import() dedupes against dynamic()'s loader, so this fills the same
+// module cache the router reads from; failures are harmless (navigation just
 // re-fetches).
 const PREFETCH_PAGES = [
   () => import("./pages/daily-brief"),
+  () => import("./pages/home"),
   () => import("./pages/my-work"),
-  () => import("./pages/revenue"),
+  () => import("./pages/followups"),
   () => import("./pages/projects"),
   () => import("./pages/overview"),
 ];
+
+// Data-saver or a slow link: fetch code only when the operator asks for it.
+function prefersOnDemandLoading() {
+  const connection = typeof navigator === "undefined" ? null : navigator.connection;
+  return Boolean(connection?.saveData) || /(^|-)2g$|^3g$/.test(connection?.effectiveType || "");
+}
 
 const MOBILE_NAV_QUERY = '(max-width: 900px)';
 
@@ -158,6 +188,7 @@ function useMobileViewport() {
 
 function useIdlePagePrefetch() {
   React.useEffect(() => {
+    if (prefersOnDemandLoading()) return undefined;
     let cancelled = false;
     const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
     const cancelIdle = window.cancelIdleCallback || clearTimeout;
@@ -326,6 +357,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
+  const overlaysReady = useShellOverlaysReady();
   const [initialCaptureRaw, setInitialCaptureRaw] = React.useState("");
   const handledShareRef = React.useRef(false);
   const sharedCaptureQueryRef = React.useRef(null);
@@ -668,8 +700,8 @@ export function HubApp({ memoDraftContext = "preview" }) {
             </main>
           </div>
         </div>
-      <GuidanceQuestionDrawer key={`${guidanceQuestion?.card?.id || 'free'}:${guidanceQuestion?.context?.ref || ''}`} card={guidanceQuestion?.card} context={guidanceQuestion?.context} onClose={() => setGuidanceQuestion(null)} />
-      <GlobalQuickCapture
+      {(overlaysReady || guidanceQuestion) && <GuidanceQuestionDrawer key={`${guidanceQuestion?.card?.id || 'free'}:${guidanceQuestion?.context?.ref || ''}`} card={guidanceQuestion?.card} context={guidanceQuestion?.context} onClose={() => setGuidanceQuestion(null)} />}
+      {(overlaysReady || captureOpenRequest > 0 || Boolean(initialCaptureRaw)) && <GlobalQuickCapture
         openRequest={captureOpenRequest}
         initialRaw={initialCaptureRaw}
         onInitialRawConsumed={(raw) => setInitialCaptureRaw((current) => current === raw ? "" : current)}
@@ -679,10 +711,10 @@ export function HubApp({ memoDraftContext = "preview" }) {
           if (target) router.replace(target, { scroll: false });
         }}
         onNavigate={navigate}
-      />
+      />}
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open || Boolean(guidanceQuestion)} openRequest={memoOpenRequest} onNavigate={navigate} />
-      <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
-      <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {(overlaysReady || paletteOpen) && <CommandPalette open={paletteOpen} scope={routeScope || navScope} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />}
+      {(overlaysReady || helpOpen) && <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />}
         <CelebrationCanvas />
           </DailyReviewProvider>
           </OfficeWorkflowSessionProvider>

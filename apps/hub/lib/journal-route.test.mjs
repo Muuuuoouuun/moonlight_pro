@@ -27,9 +27,9 @@ test('journal routes are dynamic and GET forwards allowed query fields without w
     const response = await route.GET(new Request(`${endpoint}?note=id&before=iso&beforeId=cursor&workspaceId=foreign`));
     assert.equal(response.status,200); assert.deepEqual(await response.json(),state.readResult);
   }
-  assert.deepEqual(state.reads[0],{note:'id',before:'iso',beforeId:'cursor'});
+  assert.deepEqual(state.reads[0],{note:'id',before:'iso',beforeId:'cursor',scope:null});
   await route.GET(new Request(endpoint));
-  assert.deepEqual(state.reads.at(-1),{note:null,before:null,beforeId:null});
+  assert.deepEqual(state.reads.at(-1),{note:null,before:null,beforeId:null,scope:null});
   await contexts.GET(new Request(`${endpoint}/contexts?type=account&q=find&id=exact&workspaceId=foreign`));
   assert.deepEqual(state.searches[0],{type:'account',q:'find',id:'exact'});
 });

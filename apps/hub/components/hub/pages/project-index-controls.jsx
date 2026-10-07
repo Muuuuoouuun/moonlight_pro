@@ -3,7 +3,7 @@
 import React from 'react';
 import { Button } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
-import { PROJECT_INDEX_SORT_OPTIONS, normalizeProjectIndexPreferences, sortProjectIndex, moveProjectIndex } from '@/lib/project-index-order';
+import { PROJECT_INDEX_SORT_OPTIONS, normalizeProjectIndexPreferences, sortProjectIndex, moveProjectIndex, sinkDoneProjects, projectIndexDoneState } from '@/lib/project-index-order';
 import styles from './project-index-controls.module.css';
 
 // These are local view preferences, like the existing brand/folder order. Never PATCH
@@ -18,7 +18,8 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
   const listRef = React.useRef(null);
   const flip = React.useRef(null);
   const preferences = stored.key === storageKey ? stored.value : normalizeProjectIndexPreferences(null);
-  const ordered = React.useMemo(() => sortProjectIndex(projects, preferences), [projects, preferences]);
+  // 완료됨(할 일 모두 처리) 묶음은 어떤 정렬에서도 맨 아래 — 키보드 순서·위아래 이동도 이 순서를 따른다.
+  const ordered = React.useMemo(() => sinkDoneProjects(sortProjectIndex(projects, preferences)), [projects, preferences]);
   const latest = React.useRef(null);
   latest.current = { ordered, preferences, storageKey, allProjects };
 
@@ -31,18 +32,23 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
   }, [storageKey]);
 
   function save(value, message) {
+    if (latest.current.storageKey !== storageKey) return;
     setStored({ key: storageKey, value });
-    try { localStorage.setItem(storageKey, JSON.stringify(value)); setNotice(message); }
+    try { localStorage.setItem(storageKey, JSON.stringify(value)); if (message) setNotice(message); }
     catch { setNotice('순서는 이 화면에만 적용됐습니다. 브라우저 설정을 저장하지 못했습니다.'); }
   }
   function move(sourceId, targetId, placement) {
     const current = latest.current;
-    const ids = current.ordered.map(item => item.id);
-    if (!ids.includes(sourceId) || !ids.includes(targetId) || sourceId === targetId) return false;
+    if (current.storageKey !== storageKey || !['before', 'after'].includes(placement)) return false;
+    const visible = current.preferences.doneCollapsed ? current.ordered.filter(item => !projectIndexDoneState(item)) : current.ordered;
+    const source = visible.find(item => item.id === sourceId), target = visible.find(item => item.id === targetId);
+    if (!source || !target || sourceId === targetId
+      || Boolean(projectIndexDoneState(source)) !== Boolean(projectIndexDoneState(target))) return false;
+    const ids = visible.map(item => item.id);
     const base = normalizeProjectIndexPreferences({ order: [...current.preferences.order, ...current.allProjects.map(item => item.id)] }).order;
     const order = moveProjectIndex(base, ids, sourceId, targetId, placement);
     snapshot();
-    save({ sort: 'manual', order }, '순서 저장됨 · 이 브라우저');
+    save({ ...current.preferences, sort: 'manual', order }, '순서 저장됨 · 이 브라우저');
     return true;
   }
   function openMenu(event, kind, project) {
@@ -69,9 +75,16 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
   }
   function activate(state) {
     const list = listRef.current;
-    if (!list) return;
+    const current = latest.current;
+    const source = current.ordered.find(item => item.id === state.id);
+    if (!list || !source || state.key !== current.storageKey
+      || (current.preferences.doneCollapsed && projectIndexDoneState(source))) return;
+    state.group = Boolean(projectIndexDoneState(source));
     const listTop = list.getBoundingClientRect().top - list.scrollTop;
-    state.rows = rowElements().map(el => {
+    state.rows = rowElements().filter(el => {
+      const project = current.ordered.find(item => item.id === el.dataset.projectIndexId);
+      return project && Boolean(projectIndexDoneState(project)) === state.group;
+    }).map(el => {
       const rect = el.getBoundingClientRect();
       return { id: el.dataset.projectIndexId, el, top: rect.top - listTop, height: rect.height };
     });
@@ -85,12 +98,22 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
     const state = gesture.current;
     const list = listRef.current;
     if (!state?.active || !list || state.from < 0) return;
+    const current = latest.current;
+    const source = current.ordered.find(item => item.id === state.id);
+    if (state.key !== current.storageKey || !source
+      || Boolean(projectIndexDoneState(source)) !== state.group
+      || (current.preferences.doneCollapsed && state.group)) { state.target = null; return; }
     const dragged = state.rows[state.from];
-    const dy = state.y - state.startY + (list.scrollTop - state.startScroll);
+    const travel = state.y - state.startY + (list.scrollTop - state.startScroll);
+    const last = state.rows[state.rows.length - 1];
+    // Clamp the lifted preview as well as the drop slot to its own group.
+    const dy = Math.max(state.rows[0].top - dragged.top,
+      Math.min(last.top + last.height - dragged.height - dragged.top, travel));
     dragged.el.style.transform = `translate3d(0, ${dy}px, 0)`;
     const center = dragged.top + dragged.height / 2 + dy;
     const others = state.rows.filter((_, index) => index !== state.from);
-    const slot = others.filter(row => row.top + row.height / 2 < center).length;
+    const slot = others.filter(row => row.top + row.height / 2 < center
+      || (row.top + row.height / 2 === center && dy > 0)).length;
     state.rows.forEach((row, index) => {
       if (index === state.from) return;
       const shift = index > state.from && index <= slot ? -dragged.height : index < state.from && index >= slot ? dragged.height : 0;
@@ -190,7 +213,10 @@ export function useProjectIndexControls(projects, storageKey, allProjects = proj
     return () => { window.removeEventListener('keydown', cancel); window.removeEventListener('blur', blur); finish(); };
   }, [storageKey]);
 
-  return { ordered, preferences, notice, dismissNotice: () => setNotice(''), menu, drag, listRef, move, openMenu, closeMenu,
+  return { ordered, preferences, doneCollapsed: Boolean(preferences.doneCollapsed),
+    toggleDoneCollapsed: () => { finish(); save({ ...preferences, doneCollapsed: !preferences.doneCollapsed }); },
+    setDoneCollapsed: collapsed => { finish(); save({ ...preferences, doneCollapsed: Boolean(collapsed) }); },
+    notice, dismissNotice: () => setNotice(''), menu, drag, listRef, move, openMenu, closeMenu,
     sortLabel: PROJECT_INDEX_SORT_OPTIONS.find(option => option.value === preferences.sort)?.label,
     setSort: sort => { save({ ...preferences, sort }, '정렬 설정 저장됨 · 이 브라우저'); closeMenu(); },
     rowEvents: id => ({
@@ -223,6 +249,12 @@ export function ProjectIndexMenu({ controls, onEdit, onDelete, canWrite, onMonth
   }, [menu]);
   if (!menu) return null;
   const position = controls.ordered.findIndex(item => item.id === menu.project?.id);
+  // 완료됨 묶음 경계는 넘지 않는다 — 넘겨도 묶음 규칙이 제자리로 되돌려 버튼이 헛돈다.
+  const group = item => Boolean(projectIndexDoneState(item));
+  const canMove = direction => {
+    const neighbor = controls.ordered[position + direction];
+    return position >= 0 && Boolean(neighbor) && group(neighbor) === group(controls.ordered[position]);
+  };
   const move = direction => {
     const neighbor = controls.ordered[position + direction];
     if (neighbor) controls.move(menu.project.id, neighbor.id, direction < 0 ? 'before' : 'after');
@@ -266,8 +298,8 @@ export function ProjectIndexMenu({ controls, onEdit, onDelete, canWrite, onMonth
     </> : <>
       <p className={styles.menuHeading}>{menu.project?.name}</p>
       <Button className={styles.menuItem} variant="ghost" role="menuitem" icon="edit" disabled={!canWrite} onClick={() => { closeMenu(); onEdit(menu.project); }}>프로젝트 편집</Button>
-      <Button className={styles.menuItem} variant="ghost" role="menuitem" icon="arrowUp" disabled={position <= 0} onClick={() => move(-1)}>위로 이동</Button>
-      <Button className={styles.menuItem} variant="ghost" role="menuitem" icon="arrowDown" disabled={position < 0 || position === controls.ordered.length - 1} onClick={() => move(1)}>아래로 이동</Button>
+      <Button className={styles.menuItem} variant="ghost" role="menuitem" icon="arrowUp" disabled={!canMove(-1)} onClick={() => move(-1)}>위로 이동</Button>
+      <Button className={styles.menuItem} variant="ghost" role="menuitem" icon="arrowDown" disabled={!canMove(1)} onClick={() => move(1)}>아래로 이동</Button>
       <div className={styles.divider} />
       <Button className={styles.menuItem} variant="danger" role="menuitem" icon="trash" disabled={!canWrite} onClick={() => { closeMenu(); onDelete(menu.project); }}>프로젝트 삭제…</Button>
       <p className={styles.menuHint}>삭제 전 연결 기록과 복원 방법을 확인합니다.</p>

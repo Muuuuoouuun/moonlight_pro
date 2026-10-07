@@ -30,7 +30,7 @@ export function createOfficeWorkflowHandler(action, { service = officeWorkflowSe
       if (read && !['ready', 'preview', 'generated', 'running', 'unknown', 'expired'].includes(result.status)) result = { ...result, status: 'error', source: 'error' };
       return Response.json(result, { status: read ? 200 : officeWorkflowHttpStatus(result), headers: { 'cache-control': 'no-store' } });
     } catch {
-      return Response.json({ status: 'error', source: 'error', error: 'Office 요청을 확인하지 못했습니다. 입력은 보존됩니다.' }, { status: read ? 200 : 502 });
+      return Response.json({ status: 'error', source: 'error', error: '오피스 요청을 확인하지 못했습니다. 입력은 보존됩니다.' }, { status: read ? 200 : 502 });
     }
   };
 }

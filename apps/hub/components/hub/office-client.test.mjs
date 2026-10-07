@@ -87,7 +87,7 @@ test('Eevee assignment is explicit, source-bound, reviewable, and cannot overrid
   assert.match(page, /parseOfficeRoutingRequest\(\{ message, scope \}\)/);
   assert.match(page, /parseOfficeRoutingResult\(/);
   assert.match(page, /businessWrites !== false/);
-  assert.match(page, /session\.agenda\?\.block \|\| session\.draft/);
+  assert.match(page, /officeAssignmentInput\(session\)/);
   assert.match(page, /onClick=\{requestAssignment\}>담당 추천<\/Button>/);
   assert.match(page, /assignmentReadRef\.current/);
   assert.match(page, /invalidateAssignment\(\)/);
@@ -100,7 +100,7 @@ test('council completion requires the requested settings and complete recorded t
  const participants=['eevee','umbreon'];
  const deliberation=parseOfficeDeliberation({profile:'urgent',influence:{umbreon:3}},participants);
  const request={message:'검토해 주세요',ownerId:'eevee',scope:'personal',mode:'council',participants,deliberation};
- const discussion={version:OFFICE_DISCUSSION_VERSION,settings:deliberation,modelCalls:3,turns:participants.map(ownerId=>({ownerId,round:'position',position:'제공한 조건에 한해 검토합니다.',evidence:['입력한 조건'],objection:'',revisionCondition:'추가 근거가 있으면 재검토합니다.',changed:false,replyTo:[],changeReason:''}))};
+ const discussion={version:OFFICE_DISCUSSION_VERSION,settings:deliberation,modelCalls:3,resolutions:[],turns:participants.map(ownerId=>({ownerId,round:'position',turnRef:`position:${ownerId}`,peerReviews:[],sourceCheck:'none',sourceCounts:{selected:0,traced:0,untraced:0},position:'제공한 조건에 한해 검토합니다.',evidence:['입력한 조건'],objection:'',revisionCondition:'추가 근거가 있으면 재검토합니다.',changed:false,replyTo:[],changeReason:''}))};
  const result={status:'generated',version:OFFICE_VERSION,ownerId:'eevee',scope:'personal',mode:'council',lens:null,simulation:true,participants,answer:'조건을 확인한 뒤 진행합니다.',nextAction:'추가 행동 없음',recommendation:'조건을 확인한 뒤 진행합니다.',evidence:['입력한 조건'],dissent:[],context:{source:'provided',scope:'personal',projects:[],note:'제공한 자료만 참고했습니다.'},discussion};
  const call=body=>requestOffice(request,{fetcher:async(_,init)=>{assert.deepEqual(JSON.parse(init.body).deliberation,deliberation);return Response.json(body);}});
  assert.equal((await call(result)).status,'generated');
@@ -127,7 +127,7 @@ test('⌘J and the top-bar sparkle open the Office page instead of the legacy gl
   const topbar = fs.readFileSync(new URL('./hub-topbar.jsx', import.meta.url), 'utf8');
   assert.match(app, /navigate\('dashboard\/agents\/office-council'\)/);
   assert.doesNotMatch(app, /FloatingMentorWidget/);
-  assert.match(topbar, /tooltip="Office \(⌘J\)"/);
+  assert.match(topbar, /tooltip="오피스 \(⌘J\)"/);
 });
 
 test('an untraced result carries an explicit certainty badge on both Office surfaces', () => {
@@ -138,9 +138,9 @@ test('an untraced result carries an explicit certainty badge on both Office surf
 
 test('Office shows a seven-day usage line that honors the read envelope', () => {
   const page = fs.readFileSync(new URL('./pages/office-council.jsx', import.meta.url), 'utf8');
-  assert.match(page, /fetch\('\/api\/hub\/office\/usage'/);
+  assert.match(page, /loadOfficeUsage\(\{ signal: controller\.signal \}\)/);
   assert.match(page, /usage\.status === 'preview'/);
-  assert.match(page, /usage\.status !== 'live'/);
+  assert.match(page, /!\['live', 'partial'\]\.includes\(usage\.status\)/);
   assert.match(page, /<OfficeUsageLine refreshKey=\{session\.turns\.length\} \/>/);
   assert.match(page, /OFFICE_FAILURE_LABELS/);
 });
@@ -150,7 +150,7 @@ test('Office surfaces follow the truth, selection and announcement contracts', (
   const css = fs.readFileSync(new URL('./pages/office-council.module.css', import.meta.url), 'utf8');
   const panel = fs.readFileSync(new URL('./office-workflow-panel.jsx', import.meta.url), 'utf8');
   assert.match(page, /role=\{session\.error\.status === 'error' \? 'alert' : 'status'\}/);
-  assert.match(page, /aria-live="polite" aria-label="Office 요청 결과"/);
+  assert.match(page, /aria-live="polite" aria-label="오피스 요청 결과"/);
   assert.match(page, /threadRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(css, /\.member\[aria-pressed="true"\][^}]*--accent-line/);
   assert.match(css, /\.thread:focus-visible \{ outline:1px solid var\(--moon-300\); outline-offset:-2px; \}/);

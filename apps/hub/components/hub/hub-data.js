@@ -52,7 +52,7 @@ export const NAV_TREE = [
   {
     key: 'agents', label: 'Agents', icon: 'agents', secondary: true,
     children: [
-      { key: 'office-council', label: 'Office', icon: 'agents', path: 'dashboard/agents/office-council', keywords: ['office', '오피스', '이브이', 'eevee', '비서', 'AI', '에이전트', '관점 비교', '초안'] },
+      { key: 'office-council', label: '오피스', icon: 'agents', path: 'dashboard/agents/office-council', keywords: ['office', '오피스', '이브이', 'eevee', '비서', 'AI', '에이전트', '관점 비교', '초안'] },
       { key: 'orders', label: '작업·실행', icon: 'orders', path: 'dashboard/agents/orders', keywords: ['orders', 'codex', '코드 작업', '작업 지시'] },
       { key: 'chat', label: '코칭·대화', icon: 'chat', path: 'dashboard/agents/chat', keywords: ['chat', 'guru', '코칭'] },
       { key: 'council', label: '브랜드 자문', icon: 'council', path: 'dashboard/agents/council', keywords: ['council', '브랜드'] },
@@ -65,7 +65,7 @@ export const NAV_TREE = [
       { key: 'product-catalog', label: '제품', icon: 'projects', path: 'dashboard/products', keywords: ['제품', 'product', '포트폴리오', '수익형', 'GitHub', '제품 문의'] },
       { key: 'calendar', label: 'Calendar', icon: 'calendar', path: 'dashboard/work/calendar', keywords: ['캘린더', '일정'] },
       { key: 'rhythm', label: 'Rhythm', icon: 'rhythm', path: 'dashboard/work/rhythm', keywords: ['리듬', '루틴'] },
-      { key: 'decisions', label: 'Decisions', icon: 'decisions', path: 'dashboard/work/decisions', keywords: ['결정', '의사결정'] },
+      { key: 'decisions', label: '결정 일지', icon: 'decisions', path: 'dashboard/work/decisions', keywords: ['결정', '의사결정', 'decisions', '결정 일지'] },
       { key: 'roadmap', label: 'Roadmap', icon: 'roadmap', path: 'dashboard/work/roadmap', keywords: ['로드맵'] },
     ],
   },
@@ -145,5 +145,5 @@ export const LEGACY_REDIRECTS = {
   'dashboard/projects': { to: 'dashboard/work/projects', label: 'Projects' },
   'dashboard/classin/intake': { to: 'dashboard/classin/revenue', label: '결제·리드' },
   'dashboard/classin/followups': { to: 'dashboard/revenue/followups', label: '오늘 연락' },
-  'dashboard/agents/office': { to: 'dashboard/agents/office-council', label: 'Office' },
+  'dashboard/agents/office': { to: 'dashboard/agents/office-council', label: '오피스' },
 };

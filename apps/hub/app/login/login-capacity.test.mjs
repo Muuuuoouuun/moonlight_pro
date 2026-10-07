@@ -17,7 +17,7 @@ function find(node, predicate) {
   for (const child of kids(node)) { const found = find(child, predicate); if (found) return found; }
   return null;
 }
-function mount(respond) {
+function mount(respond, query = '') {
   let cursor = 0;
   const slots = [];
   const calls = [];
@@ -34,7 +34,7 @@ function mount(respond) {
   };
   const scope = {
     React, Button: 'Button', Card: 'Card', Input: 'Input', TextAreaField: 'TextAreaField',
-    useRouter: () => ({ replace: path => visits.push(path) }), useSearchParams: () => new URLSearchParams(),
+    useRouter: () => ({ replace: path => visits.push(path) }), useSearchParams: () => new URLSearchParams(query),
     window: { location: { origin: 'https://hub.example.invalid' } },
     fetch: async (url, init) => {
       assert.equal(url, '/api/operator/session');
@@ -91,4 +91,18 @@ for (const [label, data, status, message] of [
   assert.equal(form.input(tree, 'password').props.value, '');
   assert.match(text(tree), message);
   assert.deepEqual(form.visits, []);
+});
+
+test('logout cleanup warning survives navigation without claiming browser text was deleted', () => {
+  const form = mount(() => { throw Error('render must not request login'); }, 'recoveryCleanup=failed&title=synthetic-private-input');
+  const tree = form.render(), warning = find(tree, n => n.type === 'p' && n.props.role === 'alert');
+  assert.match(text(warning), /로그아웃했습니다.*복구 입력을 정리하지 못했습니다.*남아 있을 수/);
+  assert.doesNotMatch(text(tree), /synthetic-private-input/);assert.equal(form.calls.length, 0);assert.deepEqual(form.visits, []);
+});
+
+test('normal login shows no cleanup warning for absent or unrelated flags', () => {
+  for (const query of ['', 'recoveryCleanup=other']) {
+    const form = mount(() => { throw Error('render must not request login'); }, query);
+    assert.doesNotMatch(text(form.render()), /복구 입력을 정리하지 못했습니다/);
+  }
 });

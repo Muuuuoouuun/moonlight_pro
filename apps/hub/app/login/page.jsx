@@ -130,6 +130,12 @@ function LoginForm() {
           아이디와 비밀번호로 로그인하세요.
         </p>
 
+        {params.get('recoveryCleanup') === 'failed' && (
+          <p role="alert" style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--danger)', margin: '0 0 16px', overflowWrap: 'anywhere' }}>
+            로그아웃했습니다. 브라우저 복구 입력을 정리하지 못했습니다. 민감한 입력이 남아 있을 수 있으니 이 탭의 사이트 저장 공간을 확인하세요.
+          </p>
+        )}
+
         {(handoff.draft || handoff.error || handoff.pending.length > 0 || handoffNeedsEdit) && (
           <div style={{ marginBottom: 16 }}>
             <p role={handoff.error ? 'alert' : 'status'} style={{ fontSize: 12, lineHeight: 1.5, color: handoff.error ? 'var(--danger)' : 'var(--fg-muted)', margin: '0 0 8px' }}>

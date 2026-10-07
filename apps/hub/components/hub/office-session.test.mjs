@@ -1,8 +1,40 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION, officeMessageLength, officeTaskAgendaBlock, officeTasksForScope, officeRailTasks, loadOfficeTasks, officeUnloadGuard } from './office-session.js';
+import { createOfficeSessionStore, copyOfficeText, shouldSubmitOfficeKey, OFFICE_MINIMUM_INSTRUCTION, officeAssignmentInput, officeMessageLength, officeTaskAgendaBlock, officeTasksForScope, officeRailTasks, loadOfficeTasks, officeUnloadGuard } from './office-session.js';
 import { createOfficeMentorSessionStore } from './office-mentor-session.js';
+
+test('assignment prioritizes the current question while retaining decision context and task snapshot', () => {
+  const session = { draft: '이제 기술 구현 범위를 봐 주세요.', decisionContext: '이번에는 배포하지 않기로 정함', agenda: { block: '고객 견적 답장 검토' } };
+  const input = officeAssignmentInput(session);
+  assert.ok(input.message.startsWith(session.draft));
+  assert.ok(input.message.includes(session.decisionContext));
+  assert.ok(input.message.includes(session.agenda.block));
+  assert.equal(input.truncated, false);
+  assert.notEqual(input.key, officeAssignmentInput({ ...session, meetingId: 'next-meeting' }).key);
+  assert.notEqual(input.key, officeAssignmentInput({ ...session, decisionContext: '다른 기준' }).key);
+  assert.notEqual(input.key, officeAssignmentInput({ ...session, ownerId: 'jolteon' }).key);
+});
+
+test('assignment bounds supporting context honestly without truncating the current question', () => {
+  const session = { draft: '가'.repeat(5900), decisionContext: '나'.repeat(1000), agenda: { block: '다'.repeat(1500) } };
+  const input = officeAssignmentInput(session);
+  assert.ok(input.message.startsWith(session.draft));
+  assert.ok(input.message.length <= 6000);
+  assert.equal(input.truncated, true);
+  assert.match(input.message, /일부 생략/);
+  assert.equal(officeAssignmentInput({ draft: '가'.repeat(6001) }).message.length, 6001);
+  assert.equal(officeAssignmentInput({ draft: '  ', agenda: { block: '할 일 안건' } }).message, '할 일 안건');
+  assert.equal(officeAssignmentInput({ draft: '' }).message, '');
+  assert.equal(officeAssignmentInput({ draft: '최소 요청', minimumOnly: true }).message, OFFICE_MINIMUM_INSTRUCTION + '최소 요청');
+  assert.equal(officeAssignmentInput({ draft: '할 일 안건', agenda: { block: '할 일 안건' } }).message, '할 일 안건');
+  const full = officeAssignmentInput({ draft: '가'.repeat(6000), decisionContext: '추가 맥락' });
+  assert.equal(full.message, '가'.repeat(6000));
+  assert.equal(full.truncated, true);
+  const emoji = officeAssignmentInput({ draft: '가'.repeat(5951), decisionContext: '😀'.repeat(100) });
+  assert.ok(emoji.message.isWellFormed());
+  assert.equal(emoji.truncated, true);
+});
 
 test('meeting-room rail lists open in-scope tasks, recorded blockers first, then the longest untouched', () => {
   const now = Date.parse('2026-09-26T09:00:00+09:00');
@@ -275,12 +307,28 @@ test('one leave-page guard covers Office drafts and unsent mentor follow-ups', (
   assert.equal(officeUnloadGuard([])(event()), false);
 });
 
-test('the Hub shell installs the shared guard with the mentor session store', () => {
+test('the Hub shell installs the shared guard with the mentor session store', async () => {
   const provider = fs.readFileSync(new URL('./office-session-provider.jsx', import.meta.url), 'utf8');
-  assert.match(provider, /mentorStore = officeMentorSessions/);
-  assert.match(provider, /officeUnloadGuard\(\[store, mentorStore\]\)/);
+  assert.match(provider, /officeUnloadGuard\(\[holder\.store, \.\.\.loadedOfficeUnloadStores\(\)\]\)/);
   assert.match(provider, /addEventListener\('beforeunload', guard\)/);
   assert.match(provider, /removeEventListener\('beforeunload', guard\)/);
+  // The shell must not pull the Office stores into the first bundle — they register themselves on load.
+  assert.doesNotMatch(provider, /from '\.\/office-(session|mentor-session)'/);
+
+  const { loadedOfficeUnloadStores } = await import('./office-unload.js');
+  const { officeMentorSessions } = await import('./office-mentor-session.js');
+  assert.ok(loadedOfficeUnloadStores().includes(officeMentorSessions));
+  const id = officeMentorSessions.open({
+    result: { status: 'generated', scope: 'personal', answer: 'Office 종합', evidence: [], dissent: [], nextAction: '' },
+    officeSource: { requestId: '10000000-0000-4000-8000-000000000099', runId: null },
+    scope: 'personal',
+  });
+  officeMentorSessions.setDraft(id, '셸이 지켜야 할 질문');
+  const leaving = { prevented: 0, preventDefault() { this.prevented += 1; } };
+  assert.equal(officeUnloadGuard([null, ...loadedOfficeUnloadStores()])(leaving), true);
+  assert.equal(leaving.prevented, 1);
+  officeMentorSessions.discard([id]);
+  assert.equal(officeUnloadGuard([null, ...loadedOfficeUnloadStores()])({ preventDefault() {} }), false);
 });
 
 test('task read errors map known internal codes to short Korean copy and never leak a raw code', async () => {

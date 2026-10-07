@@ -1,4 +1,4 @@
-.goals-page { display:flex; flex-direction:column; gap:24px; padding:24px; min-width:0; }
+.goals-page { display:flex; flex-direction:column; gap:24px; padding:28px; min-width:0; }
 .goals-page h2 { font-size:22px; font-weight:600; margin:0; letter-spacing:-0.02em; color:var(--fg); }
 .goals-page h3,.goal-form h3,.goal-metric-card h3,.goal-links h3,.goal-detail h3 { margin:0; font-size:14px; font-weight:500; }
 .goal-header,.goal-card-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
@@ -9,13 +9,11 @@
   font-size:11px;
   font-weight:500;
   color:var(--fg-dim);
-  letter-spacing:0.06em;
-  text-transform:uppercase;
+  letter-spacing:0.02em;
   display:inline-flex;
   align-items:center;
   gap:6px;
 }
-.goal-eyebrow__sep { color:var(--line-strong); }
 .goal-header-desc {
   font-size:13px;
   color:var(--fg-muted);
@@ -76,7 +74,7 @@
 .goal-objective { display:grid; grid-template-columns:minmax(0, 1fr) minmax(190px, 240px); gap:24px; align-items:start; }
 .goal-objective__text { display:flex; flex-direction:column; gap:6px; min-width:0; }
 .goal-concept-eyebrow { font-size:11px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; color:var(--fg-dim); }
-.goal-card-title { font-size:18px; font-weight:600; color:var(--fg); text-decoration:none; letter-spacing:-0.015em; line-height:1.4; overflow-wrap:anywhere; }
+.goal-card-title { font-size:18px; font-weight:700; color:var(--fg); text-decoration:none; letter-spacing:-0.015em; line-height:1.4; overflow-wrap:anywhere; }
 .goal-card-desc { font-size:12.5px; line-height:1.6; color:var(--fg-muted); margin:0; overflow-wrap:anywhere; }
 .goal-objective__score { display:flex; flex-direction:column; gap:5px; padding-left:20px; border-left:1px solid var(--line-soft); font-size:12px; }
 .goal-objective__score-num { font-size:34px; line-height:1; font-weight:500; color:var(--fg); letter-spacing:-0.02em; }
@@ -84,20 +82,18 @@
 /* KR 묶음 — 결과 KR / 선행 KR */
 .goal-kr-group { display:flex; flex-direction:column; }
 .goal-kr-group + .goal-kr-group { border-top:1px solid var(--line-soft); }
-.goal-kr-group__title { margin:0; padding:12px 20px 4px; display:flex; align-items:baseline; gap:10px; font-size:11px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; color:var(--fg-dim); }
+.goal-kr-group__title { margin:0; padding:14px 22px 2px; display:flex; align-items:baseline; gap:10px; font-size:11px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; color:var(--fg-dim); }
 .goal-kr-group__title .goal-muted { letter-spacing:0; text-transform:none; font-size:11.5px; }
-.goal-kr-row { display:grid; grid-template-columns:minmax(0, 1.1fr) 132px minmax(230px, 1.3fr) 76px auto; align-items:center; gap:18px; padding:12px 20px; }
+.goal-kr-row { display:grid; grid-template-columns:minmax(0, 1fr) 128px minmax(200px, 1.3fr) 56px 100px 64px; align-items:center; gap:16px; padding:12px 22px; }
 .goal-kr-row + .goal-kr-row { border-top:1px solid var(--line-soft); }
 .goal-kr-row__identity { display:flex; flex-direction:column; gap:3px; min-width:0; }
-.goal-kr-row__name { font-size:13.5px; font-weight:500; color:var(--fg); overflow-wrap:anywhere; }
-.goal-kr-row__source { font-size:11px; color:var(--fg-dim); }
+.goal-kr-row__name { font-size:14.5px; font-weight:600; color:var(--fg); overflow-wrap:anywhere; }
+.goal-kr-row__source { font-size:11.5px; color:var(--fg-dim); }
 .goal-kr-row__reading { display:flex; flex-direction:column; gap:6px; min-width:0; }
 .goal-kr-row__value { display:flex; flex-direction:column; gap:1px; min-width:0; }
-.goal-kr-row__now { font-size:18px; font-weight:600; color:var(--moon-200); letter-spacing:-0.02em; }
-.goal-kr-row__target { font-size:12px; color:var(--fg-muted); }
+.goal-kr-row__now { font-size:17px; font-weight:700; color:var(--fg); letter-spacing:-0.02em; }
+.goal-kr-row__target { font-size:11.5px; color:var(--fg-dim); }
 .goal-kr-row__pace { font-size:11.5px; color:var(--fg-muted); overflow-wrap:anywhere; }
-.goal-kr-row__score { display:flex; flex-direction:column; align-items:flex-end; gap:1px; text-align:right; }
-.goal-kr-row__score-num { font-size:17px; font-weight:500; color:var(--fg); }
 .goal-kr-row__action { display:flex; align-items:center; justify-content:flex-end; min-width:56px; }
 .goal-kr-row__evidence { font-size:12px; color:var(--fg-muted); text-decoration:none; padding:4px 6px; border-radius:var(--r-xs); }
 .goal-card-refs { margin:0; padding:0 20px; border-top:1px solid var(--line-soft); font-size:12px; }
@@ -107,7 +103,6 @@
 .goal-card-refs li { display:grid; grid-template-columns:minmax(0, 1fr) auto auto auto; align-items:center; gap:14px; padding:8px 0; border-top:1px solid var(--line-soft); }
 .goal-card-refs p { margin:0; padding:8px 0 12px; }
 .goal-card-empty { margin:0; padding:16px 20px; font-size:12px; color:var(--fg-muted); }
-.goal-card-suggestion { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 20px 14px; padding:8px 10px; border:1px dashed var(--line); border-radius:var(--r-sm); font-size:12px; color:var(--fg-muted); }
 .goal-card-footer { padding:11px 20px; background-color:var(--surface-2); border-top:1px solid var(--line-soft); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:12px; color:var(--fg-muted); }
 .goal-card-footer a { color:var(--fg-muted); text-decoration:none; }
 .goal-card-footer .num { color:var(--fg); font-weight:600; }
@@ -306,18 +301,15 @@
 .goal-weekly > .goal-actions p { flex:1 1 240px; }
 
 /* ── 7.5 OKR 카드 — 목업 ① (2026-10-01) ─────────────────────────────────────── */
-.goal-last-record { font-size:11.5px; }
 .goal-objective__score-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
 .goal-objective__pace { font-size:12px; color:var(--fg); font-weight:500; }
-.goal-otrack-wrap { display:flex; flex-direction:column; gap:2px; }
 .goal-otrack { position:relative; height:14px; border:1px solid var(--line); border-radius:var(--r-xs); background-color:var(--surface-2); }
-.goal-otrack__pace { position:absolute; left:-1px; top:-1px; bottom:-1px; border:1px dashed var(--fg-dim); border-radius:var(--r-xs) 0 0 var(--r-xs); }
 .goal-otrack__fill { position:absolute; left:3px; top:3px; bottom:3px; max-width:calc(100% - 6px); border-radius:2px; background-color:var(--moon-300); transition:width var(--dur-enter) var(--ease-hub); }
 .goal-otrack__tick { position:absolute; top:-5px; bottom:-5px; width:1px; background-color:var(--fg); }
 .goal-otrack__scale { position:relative; height:16px; font-size:10.5px; color:var(--fg-dim); }
 .goal-otrack__scale > span { position:absolute; top:2px; white-space:nowrap; }
 .goal-score-bar__pace { position:absolute; top:-4px; bottom:-4px; width:1px; background-color:var(--fg); }
-.goal-milestones,.goal-zero-keeps { display:flex; align-items:center; gap:6px 16px; flex-wrap:wrap; padding:10px 20px; border-bottom:1px solid var(--line-soft); font-size:12.5px; }
+.goal-milestones,.goal-zero-keeps { display:flex; align-items:center; gap:6px 16px; flex-wrap:wrap; padding:10px 20px; border-bottom:1px solid var(--line-soft); font-size:13px; }
 .goal-zero-keeps { border-bottom:0; border-top:1px solid var(--line-soft); }
 .goal-milestones__label { font-size:11px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; color:var(--fg-dim); }
 .goal-milestone { display:inline-flex; align-items:center; gap:4px; color:var(--fg); }
@@ -328,18 +320,6 @@
 .goal-zero-keep--unknown { color:var(--fg-muted); }
 .goal-zero-keep--broken { color:var(--danger); font-weight:600; }
 
-/* 주간 칸 — 기간을 월요일 주로 나눈 행동 KR의 주별 몫 */
-.goal-weeks { display:flex; gap:4px; list-style:none; margin:0; padding:0; }
-.goal-weeks__cell { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
-.goal-weeks__box { position:relative; height:18px; overflow:hidden; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:3px; font-size:10.5px; color:var(--fg-muted); }
-.goal-weeks__box > i { position:absolute; left:0; top:0; bottom:0; background-color:color-mix(in oklch, var(--moon-300) 32%, transparent); }
-.goal-weeks__box > b { position:relative; font-weight:500; }
-.goal-weeks__cell--full .goal-weeks__box > i { background-color:var(--moon-300); }
-.goal-weeks__cell--full .goal-weeks__box > b { color:var(--surface); }
-.goal-weeks__cell--now .goal-weeks__box { border-color:var(--accent); }
-.goal-weeks__cell--future .goal-weeks__box { border-style:dashed; border-color:var(--line-soft); color:var(--fg-faint); }
-.goal-weeks__label { font-size:10.5px; color:var(--fg-faint); text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.goal-weeks__cell--now .goal-weeks__label { color:var(--accent); }
 
 /* ── 7.6 월말 채점지 — 목업 ④ ────────────────────────────────────────────── */
 .goal-score-table { width:100%; border-collapse:collapse; font-size:13px; }
@@ -362,11 +342,126 @@
 .goal-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 .goal-continue-metrics { display:flex; flex-direction:column; gap:4px; }
 
+/* ── 7.7 한눈에 보기 — A안 스코어보드 (2026-10-05) ──────────────────────────────
+   글자 위계: 제목 32/800 · 섹션 19/700 · 목표 제목 18/700 · 목표 % 40/800 · KPI 값 34/800 · KR 값 17/700.
+   페이스 색(--okr-*)은 이 화면 전용이고 언제나 글리프+글과 함께. 선 밖 레일은 1px. */
+.goals-page .goal-page-title { font-size:32px; font-weight:800; line-height:1.15; letter-spacing:-0.025em; color:var(--fg); margin:0; }
+.goal-header-sub { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin:0; font-size:14px; color:var(--fg-muted); }
+.goal-header-sub b { font-weight:700; color:var(--fg); }
+.goal-legend-marker { display:inline-block; width:2px; height:13px; margin-right:8px; vertical-align:-2px; border-radius:1px; background-color:var(--okr-marker); }
+.goal-section-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin:0 0 12px; }
+.goals-page .goal-section-title { margin:0; font-size:19px; font-weight:700; letter-spacing:-0.015em; color:var(--fg); }
+.goals-page .goal-panel__title { margin:0; font-size:16px; font-weight:700; letter-spacing:-0.01em; color:var(--fg); }
+.goal-section-head .num { font-size:13px; font-weight:700; color:var(--fg); }
+.goal-section-link { font-size:13px; font-weight:500; color:var(--fg-muted); text-decoration:none; }
+.goal-scope-tag { display:inline-flex; align-items:center; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:700; color:var(--fg); background-color:var(--surface-3); }
+
+/* 페이스 알약 — 앞섬·비슷함·늦음·판정 전 + KPI 선 밖 */
+.goal-pill { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:12.5px; font-weight:700; white-space:nowrap; color:var(--okr-wait); background-color:var(--okr-wait-bg); }
+.goal-pill--sm { padding:2px 8px; font-size:11.5px; }
+.goal-pill--ahead { color:var(--okr-ahead); background-color:var(--okr-ahead-bg); }
+.goal-pill--on { color:var(--okr-on); background-color:var(--okr-on-bg); }
+.goal-pill--late { color:var(--okr-late); background-color:var(--okr-late-bg); }
+.goal-pill--out { color:var(--danger); background-color:var(--danger-bg); }
+
+/* 게이지 — 두꺼운 둥근 트랙 + 페이스 색 채움 + 진한 기대선 */
+.goal-gauge { position:relative; padding:5px 0; }
+.goal-gauge--labeled { padding-top:20px; }
+.goal-gauge__track { height:10px; overflow:hidden; border-radius:999px; background-color:var(--okr-track); }
+.goal-gauge--lg .goal-gauge__track { height:16px; }
+.goal-gauge__fill { display:block; height:100%; border-radius:999px; background-color:var(--okr-wait); transition:width var(--dur-enter) var(--ease-hub); }
+.goal-gauge__fill--ahead { background-color:var(--okr-ahead); }
+.goal-gauge__fill--on { background-color:var(--okr-on); }
+.goal-gauge__fill--late { background-color:var(--okr-late); }
+.goal-gauge__marker { position:absolute; top:0; bottom:0; width:2px; margin-left:-1px; border-radius:1px; background-color:var(--okr-marker); }
+.goal-gauge--labeled .goal-gauge__marker { top:16px; }
+.goal-gauge__marker-label { position:absolute; top:0; transform:translateX(-50%); font-style:normal; font-size:11px; font-weight:600; color:var(--fg); white-space:nowrap; }
+
+/* KPI 줄 */
+.goal-kpi-strip { display:flex; flex-direction:column; min-width:0; }
+.goal-kpi-tiles { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:14px; }
+.goal-kpi-tile { display:flex; flex-direction:column; gap:10px; min-width:0; padding:16px 18px; border:1px solid var(--line-soft); border-radius:var(--r-lg); background-color:var(--surface); box-shadow:var(--shadow-soft); }
+.goal-kpi-tile--outside { box-shadow:inset 1px 0 0 var(--danger), var(--shadow-soft); }
+.goal-kpi-tile__head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.goal-kpi-tile__name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13.5px; font-weight:600; color:var(--fg-muted); }
+.goal-kpi-tile__value { font-size:34px; font-weight:800; line-height:1; letter-spacing:-0.03em; color:var(--fg); }
+.goal-kpi-tile__value small { margin-left:2px; font-size:15px; font-weight:600; letter-spacing:0; color:var(--fg-muted); }
+.goal-kpi-tile__value--empty { color:var(--fg-faint); }
+.goal-kpi-tile__meta { display:flex; justify-content:space-between; gap:8px; font-size:11.5px; color:var(--fg-dim); }
+.goal-kpi-meter { position:relative; padding:4px 0 16px; }
+.goal-kpi-meter__track { position:relative; height:12px; overflow:hidden; border-radius:999px; background-color:var(--okr-track); }
+.goal-kpi-meter__band { position:absolute; top:0; bottom:0; background-color:var(--okr-ahead-bg); box-shadow:inset 0 0 0 1px color-mix(in oklch, var(--okr-ahead) 45%, transparent); }
+.goal-kpi-meter__fill { position:absolute; left:0; top:3px; bottom:3px; border-radius:999px; background-color:var(--okr-wait); transition:width var(--dur-enter) var(--ease-hub); }
+.goal-kpi-meter__fill--ahead { background-color:var(--okr-ahead); }
+.goal-kpi-meter__fill--out { background-color:var(--danger); }
+.goal-kpi-meter__last { position:absolute; top:0; height:20px; width:2px; margin-left:-1px; border-radius:1px; background-color:var(--fg-dim); }
+.goal-kpi-meter__scale { position:absolute; left:0; right:0; bottom:0; height:13px; font-size:10.5px; color:var(--fg-dim); }
+.goal-kpi-meter__scale > span { position:absolute; }
+.goal-kpi-tile__weeks { list-style:none; margin:0; padding:2px 0 4px; display:flex; gap:5px; }
+.goal-kpi-tile__week { flex:1; height:26px; display:flex; align-items:center; justify-content:center; border-radius:var(--r-sm); font-size:13px; font-weight:800; color:var(--okr-ahead); background-color:var(--okr-track); }
+.goal-kpi-tile__week--kept { background-color:var(--okr-ahead-bg); }
+.goal-kpi-tile__week--broken { color:var(--danger); background-color:var(--danger-bg); }
+.goal-kpi-tile__week--future { background:none; box-shadow:inset 0 0 0 1px var(--line); }
+.goal-kpi-tile__week--now { background:none; box-shadow:inset 0 0 0 1px var(--accent); }
+
+/* 목표 블록 + 오른쪽 패널 */
+.goal-glance { display:grid; grid-template-columns:minmax(0, 1fr) 330px; gap:22px; align-items:start; }
+.goal-glance__main { min-width:0; container-type:inline-size; }
+/* 목표 칸이 좁으면(사이드바 + 오른쪽 패널) KR 줄을 두 줄로 — 막대가 아래 줄 전체를 쓴다. */
+@container (max-width:820px) {
+  .goal-kr-row { grid-template-columns:minmax(0, 1fr) auto auto auto auto; gap:8px 14px; }
+  .goal-kr-row__reading { grid-column:1 / -1; grid-row:2; }
+}
+.goal-glance__side { display:flex; flex-direction:column; gap:14px; position:sticky; top:14px; }
+.goal-oblk { border-radius:var(--r-xl); }
+.goal-oblk__head { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:6px 20px; padding:18px 22px 10px; border-bottom:1px solid var(--line-soft); }
+.goal-oblk__identity { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.goal-oblk__meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.goal-oblk__score { display:flex; flex-direction:column; align-items:flex-end; gap:4px; text-align:right; }
+.goal-oblk__big { display:flex; align-items:center; gap:10px; }
+.goal-oblk__pct { font-size:40px; font-weight:800; line-height:1; letter-spacing:-0.035em; color:var(--fg); }
+.goal-oblk__pct.goal-oblk__pct--empty { font-size:18px; font-weight:600; letter-spacing:0; color:var(--fg-dim); }
+.goal-kr-row__pct--empty { font-weight:500; color:var(--fg-faint); }
+.goal-oblk__pct small { margin-left:1px; font-size:18px; font-weight:700; letter-spacing:0; }
+.goal-oblk__track { grid-column:1 / -1; }
+.goal-oblk__foot { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:4px 22px 4px 0; border-top:1px solid var(--line-soft); background-color:var(--surface-2); }
+.goal-oblk__foot > .goal-milestones { border-bottom:0; padding-left:22px; }
+.goal-oblk__actions { display:flex; align-items:center; gap:10px; padding:6px 0 6px 22px; }
+.goal-kr-row__pct { display:flex; align-items:baseline; justify-content:flex-end; font-size:18px; font-weight:800; color:var(--fg); }
+.goal-kr-row__pct small { font-size:12px; font-weight:600; color:var(--fg-muted); }
+.goal-kr-row__tone { display:flex; justify-content:flex-end; }
+
+/* 이번 주 챙길 것 · 이번 주 메모 */
+.goal-panel { padding:18px; border:1px solid var(--line-soft); border-radius:var(--r-xl); background-color:var(--surface); box-shadow:var(--shadow-soft); display:flex; flex-direction:column; gap:10px; }
+.goal-panel .goal-section-head { margin:0; justify-content:flex-start; }
+.goal-weekly-memo .goal-section-head { justify-content:space-between; }
+.goal-attention__list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.goal-attention__item { display:grid; grid-template-columns:26px minmax(0, 1fr); gap:10px; align-items:start; padding:10px 12px; border-radius:var(--r); background-color:var(--surface-2); }
+.goal-attention__glyph { width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:999px; font-size:12px; font-weight:800; color:var(--okr-wait); background-color:var(--okr-wait-bg); }
+.goal-attention__item--out .goal-attention__glyph { color:var(--danger); background-color:var(--danger-bg); }
+.goal-attention__item--late .goal-attention__glyph { color:var(--okr-late); background-color:var(--okr-late-bg); }
+.goal-attention__item b { display:block; font-size:14px; font-weight:700; color:var(--fg); overflow-wrap:anywhere; }
+.goal-attention__item span { display:block; margin-top:2px; font-size:12px; color:var(--fg-muted); overflow-wrap:anywhere; }
+.goal-attention__suggestion { display:flex; flex-direction:column; align-items:flex-start; gap:8px; padding:12px; border:1px dashed var(--line-strong); border-radius:var(--r); font-size:13px; color:var(--fg-muted); }
+.goal-weekly-memo__foot { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+
+@media (max-width:1100px) {
+  .goal-glance { grid-template-columns:minmax(0, 1fr); }
+  .goal-glance__side { position:static; }
+}
+@media (max-width:600px) {
+  .goals-page .goal-page-title { font-size:26px; }
+  .goal-kpi-tiles { grid-template-columns:minmax(0, 1fr); }
+  .goal-oblk__head { grid-template-columns:minmax(0, 1fr); padding:16px 16px 10px; }
+  .goal-oblk__score { align-items:flex-start; text-align:left; }
+  .goal-oblk__pct { font-size:34px; }
+}
+
 /* ── 8. Responsive ────────────────────────────────────────────────────────── */
 @media (max-width:900px) {
   .goal-objective { grid-template-columns:minmax(0, 1fr); gap:14px; }
   .goal-objective__score { padding-left:0; border-left:0; padding-top:12px; border-top:1px solid var(--line-soft); }
-  .goal-kr-row { grid-template-columns:minmax(0, 1fr) 112px 64px auto; gap:12px; }
+  .goal-kr-row { grid-template-columns:minmax(0, 1fr) 112px 52px auto auto; gap:12px; }
   .goal-kr-row__reading { grid-column:1 / -1; grid-row:2; }
   .goal-kpi-row { grid-template-columns:minmax(0, 1fr) 100px 88px auto; }
   .goal-kpi-row__chart { grid-column:1 / -1; grid-row:2; }
@@ -380,10 +475,11 @@
   .goal-header { gap:16px; }
   .goal-toolbar { flex-direction:column; align-items:flex-start; }
   .goal-toolbar-controls { width:100%; }
-  .goal-kr-row { grid-template-columns:minmax(0,1fr) auto; gap:10px; }
+  .goal-kr-row { grid-template-columns:minmax(0,1fr) auto; gap:8px 10px; padding:12px 16px; }
   .goal-kr-row__value { grid-column:1; grid-row:2; }
+  .goal-kr-row__pct { grid-column:2; grid-row:1; }
+  .goal-kr-row__tone { grid-column:2; grid-row:2; }
   .goal-kr-row__reading { grid-column:1 / -1; grid-row:3; }
-  .goal-kr-row__score { grid-row:1 / span 2; grid-column:2; }
   .goal-kr-row__action { grid-column:1 / -1; justify-content:flex-start; }
   .goal-verdict { grid-template-columns:64px repeat(2, minmax(0, 1fr)); }
   .goal-score-table th,.goal-score-table td { padding-left:12px; padding-right:12px; }

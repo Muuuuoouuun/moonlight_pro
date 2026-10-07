@@ -1,10 +1,41 @@
-// Drafts and pending freeform requests live only in the mounted Hub session.
-// They are deliberately never serialized to localStorage or sent across scopes.
+// Unsent drafts stay in the mounted Hub session. Submitted meeting rounds are
+// restored from the server; raw drafts are never serialized to localStorage.
 import { officeHistory } from './office-client.js';
 import { officeDeliberationForParticipants } from './office-deliberation-client.js';
 import { officeConnectionBoundary } from './office-connection-inbox.js';
+import { normalizeOfficeSkillRequests } from './office-skill-request.js';
 
 export const OFFICE_MINIMUM_INSTRUCTION = '[오늘은 최소한만: 이미 정한 약속을 지키는 데 필요한 내용만 남겨 주세요. 추가 과제가 필요 없으면 추가 행동 없음으로 답해 주세요.]\n\n';
+
+// Routing must see the current question even when this meeting began from a task.
+// Never shorten that question. Only supporting context uses the remaining budget.
+export function officeAssignmentInput(session) {
+  const draft = session.draft?.trim() || '';
+  const context = session.decisionContext?.trim() || '';
+  const block = session.agenda?.block?.trim() || '';
+  const key = JSON.stringify([session.meetingId, draft, context, block, session.minimumOnly,
+    session.ownerId, session.reviewers, session.mode]);
+  let message = (session.minimumOnly ? OFFICE_MINIMUM_INSTRUCTION : '') + (draft || block || context);
+  if (!draft && !block && !context) return { message: '', truncated: false, key };
+  let truncated = false;
+  const support = [
+    context && context !== (draft || block || context) ? '[운영자가 적은 결정 맥락]\n' + context : '',
+    draft && block && !draft.includes(block) ? '[회의 시작 시 안건 복사본]\n' + block : '',
+  ].filter(Boolean).join('\n\n');
+  if (support) {
+    const suffix = '\n[부가 맥락 일부 생략]';
+    const remaining = 6000 - message.length - 2;
+    if (support.length <= remaining) message += '\n\n' + support;
+    else {
+      truncated = true;
+      if (remaining >= suffix.length) {
+        const cut = support.slice(0, remaining - suffix.length).replace(/[\uD800-\uDBFF]$/, '');
+        message += '\n\n' + cut + suffix;
+      }
+    }
+  }
+  return { message, truncated, key };
+}
 
 export function officeTasksForScope(tasks, scope) {
   return (Array.isArray(tasks) ? tasks : []).filter(task => task && task.status !== 'done' && task.done !== true
@@ -44,9 +75,9 @@ function taskReadErrorMessage(code) {
   return TASK_READ_ERROR_LABELS[code] || '할 일을 읽지 못했습니다.';
 }
 
-export async function loadOfficeTasks({ fetcher = fetch } = {}) {
+export async function loadOfficeTasks({ fetcher = fetch, signal } = {}) {
   try {
-    const response = await fetcher('/api/hub/tasks', { cache: 'no-store' });
+    const response = await fetcher('/api/hub/tasks', { cache: 'no-store', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) });
     const data = await response.json().catch(() => null);
     if (!response.ok || !data || data.status === 'error') return { status: 'error', tasks: [], error: taskReadErrorMessage(data?.error) };
     if (data.status === 'preview') return { status: 'preview', tasks: [] };
@@ -64,17 +95,19 @@ function officeRequestMessage(session) {
   return (session.minimumOnly ? OFFICE_MINIMUM_INSTRUCTION : '') + prefix + draft;
 }
 
-export function officeMessageLength(session) {
-  return officeRequestMessage(session).length;
+export function officeMessageLength(session, { durable = false } = {}) {
+  return durable ? ((session.minimumOnly ? OFFICE_MINIMUM_INSTRUCTION : '') + session.draft.trim()).length : officeRequestMessage(session).length;
 }
 
 function blankSession() {
-  return { ownerId: 'eevee', mode: 'chat', reviewers: [], includeProjects: false, brandId: null,
+  return { meetingId: null, revision: null, meeting: null, decisionContext: '', skillRequests: [], unresolvedTurns: [], failedTurns: [],
+    ownerId: 'eevee', mode: 'chat', reviewers: [], includeProjects: false, brandId: null,
     minimumOnly: false, presetId: null, deliberation: officeDeliberationForParticipants(undefined, ['eevee']), agenda: null, draft: '', turns: [], pending: null, error: null };
 }
 
 export function createOfficeSessionStore() {
   const sessions = new Map();
+  const meetingDrafts = new Map();
   const listeners = new Set();
   const get = scope => {
     if (!sessions.has(scope)) sessions.set(scope, blankSession());
@@ -87,27 +120,73 @@ export function createOfficeSessionStore() {
     next.mode = next.reviewers.length ? 'council' : (['chat', 'draft', 'review'].includes(next.mode) ? next.mode : 'chat');
     next.deliberation = officeDeliberationForParticipants(next.deliberation, [next.ownerId, ...next.reviewers.filter(id => id !== next.ownerId)]);
     sessions.set(scope, next);
+    meetingDrafts.delete(`${scope}:${next.meetingId || 'new'}`);
     for (const listener of listeners) listener();
     return get(scope);
   };
   return {
     get, update,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-    hasUnsentDrafts() { return [...sessions.values()].some(session => session.draft.trim()); },
+    hasUnsentDrafts() { return [...sessions.values(), ...meetingDrafts.values()].some(session => session.draft.trim()
+      || session.decisionContext !== (session.meeting?.decisionContext || '')); },
     reset(scope) {
       if (get(scope).pending) return false;
-      update(scope, { turns: [], agenda: null, draft: '', error: null });
+      const current = get(scope);
+      if (current.meetingId) meetingDrafts.set(`${scope}:${current.meetingId}`, { ...current, draft: '', decisionContext: current.meeting?.decisionContext || '' });
+      update(scope, { ...blankSession(), ownerId: current.ownerId, reviewers: current.reviewers, mode: current.mode });
       return true;
     },
-    begin(scope, requestId, { mode } = {}) {
+    restoreMeeting(scope, detail, { requestId, keepSettings = false } = {}) {
+      if (!detail?.meeting || detail.meeting.scope !== scope || !Array.isArray(detail.turns)) return false;
+      const current = get(scope);
+      if (requestId && current.pending?.id !== requestId) return false;
+      const meeting = detail.meeting;
+      const switched = current.meetingId !== meeting.meetingId;
+      if (switched) meetingDrafts.set(`${scope}:${current.meetingId || 'new'}`, current);
+      const local = switched ? meetingDrafts.get(`${scope}:${meeting.meetingId}`) : current;
+      const submitted = requestId ? current.pending.rawDraft : null;
+      const draft = requestId ? (current.draft === submitted && detail.status === 'generated' ? '' : current.draft) : local?.draft || '';
+      const source = meeting.sourceTask;
+      const latest = detail.turns.at(-1)?.request;
+      const editable = keepSettings ? current : (switched ? local : null);
+      // Retain edits, but adopt remote changes to fields left untouched locally.
+      // A read must not turn the previous baseline into a new write.
+      const rolesDirty = editable?.meeting && ['ownerId', 'reviewers', 'mode'].some(key =>
+        JSON.stringify(editable[key]) !== JSON.stringify(editable.meeting[key]));
+      const contextDirty = editable && editable.decisionContext !== (editable.meeting?.decisionContext || '');
+      const settings = {
+        ownerId: rolesDirty ? editable.ownerId : meeting.ownerId,
+        reviewers: rolesDirty ? editable.reviewers : meeting.reviewers || [],
+        mode: rolesDirty ? editable.mode : meeting.mode,
+        decisionContext: contextDirty ? editable.decisionContext : meeting.decisionContext || '',
+        includeProjects: editable ? editable.includeProjects : latest?.includeProjects === true,
+        ...(editable?.deliberation ? { deliberation: editable.deliberation }
+          : latest?.deliberation ? { deliberation: latest.deliberation } : {}),
+      };
+      update(scope, { ...blankSession(), ...settings, meetingId: meeting.meetingId, revision: meeting.revision,
+        meeting, draft, minimumOnly: local?.minimumOnly || current.minimumOnly,
+        pending: requestId ? null : (switched ? null : current.pending), error: null,
+        agenda: source ? { title: meeting.title, source: 'task', taskId: source.id, taskWorkspace: source.workspace,
+          importedAt: source.importedAt, block: officeTaskAgendaBlock(source) }
+          : { title: meeting.title, source: 'manual', block: '' },
+        turns: detail.turns.filter(turn => turn.state === 'generated' && turn.result).map(turn => ({
+          ...turn, message: turn.request?.message || '', request: turn.request, result: turn.result,
+        })),
+        unresolvedTurns: detail.turns.filter(turn => ['running', 'unknown'].includes(turn.state)),
+        failedTurns: detail.turns.filter(turn => turn.state === 'error'),
+        skillRequests: normalizeOfficeSkillRequests(detail.skillRequests, { meetingId: meeting.meetingId }),
+      });
+      return true;
+    },
+    begin(scope, requestId, { mode, durable = false } = {}) {
       const session = get(scope);
       if (session.pending || !session.draft.trim()) return null;
       const requestMode = mode === 'chat' ? 'chat' : session.mode;
       const request = {
         ownerId: session.ownerId, mode: requestMode, scope, lens: null,
-        message: officeRequestMessage(session),
+        message: durable ? (session.minimumOnly ? OFFICE_MINIMUM_INSTRUCTION : '') + session.draft.trim() : officeRequestMessage(session),
         participants: requestMode === 'council' ? [session.ownerId, ...session.reviewers.filter(id => id !== session.ownerId)] : [],
-        history: officeHistory(session.turns), includeProjects: session.includeProjects,
+        history: durable ? [] : officeHistory(session.turns), includeProjects: session.includeProjects,
       };
       if (request.message.length > 6000) {
         update(scope, { error: { status: 'error', error: '요청이 깁니다. 안건과 최소 업무 지침을 포함해 6,000자 안으로 줄여 주세요.' } });
@@ -156,13 +235,4 @@ export async function copyOfficeText(text, clipboard) {
   } catch { return false; }
 }
 
-// One leave-page guard for every in-memory Office input: the composer drafts and the
-// mentor follow-up questions. Returns true when it asked the browser to confirm leaving.
-export function officeUnloadGuard(stores) {
-  return event => {
-    if (!(Array.isArray(stores) ? stores : []).some(store => store?.hasUnsentDrafts?.())) return false;
-    event.preventDefault();
-    event.returnValue = '';
-    return true;
-  };
-}
+export { officeUnloadGuard } from './office-unload.js';

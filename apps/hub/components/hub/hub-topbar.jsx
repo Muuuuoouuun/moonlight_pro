@@ -12,7 +12,7 @@ const LABELS = {
   'dashboard': 'Moonlight',
   'daily-brief': 'Daily Brief',
   'classin': '클래스인', 'brand': '브랜드', 'pipeline': '업무·파이프라인', 'segments': '세그먼트',
-  'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': 'Decisions', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
+  'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': '결정 일지', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
   'content': 'Content', 'studio': 'Studio', 'queue': 'Queue', 'campaigns': 'Campaigns',
   'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts', 'followups': '오늘 연락',
   'automations': 'Automations', 'flows': 'Flows', 'email': 'Email', 'webhooks': 'Webhooks', 'runs': 'Runs',
@@ -108,8 +108,8 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
 
         {/* 하루 리뷰 — 어느 화면에서든 오늘 기록 열기(2026-09-23 지속 루프 설계 §12) */}
         <DailyReviewTopButton className="hub-topbar__secondary" />
-        {/* Office (⌘J) — 2026-09-23 운영자 확정 */}
-        <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="Office (⌘J)" onClick={onOfficeOpen} />
+        {/* 오피스 (⌘J) — 2026-09-23 운영자 확정 */}
+        <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="오피스 (⌘J)" onClick={onOfficeOpen} />
         {/* 보류 스코프(Agents) 상시 버튼 제거 — 코어 루프(오늘 연락, 영업·매출 첫 탭)가 그 자리를 갖는다. */}
         <IconButton className="hub-topbar__secondary" icon="signal" tooltip="오늘 연락 열기" onClick={() => onNavigate('dashboard/revenue/followups')} />
         <IconButton
@@ -121,7 +121,9 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
         />
         <InquiryBell className="hub-topbar__secondary" state={inquiryNotifications} onNavigate={onNavigate} />
         <Button variant="ghost" size="sm" title="빠른 입력 · C" onClick={onQuickCapture}>빠른 입력</Button>
-        {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>}
+        {/* 전역 생성은 primary가 아니다 — 화면마다 자기 생성 버튼(연락 기록·거래·브랜드…)이 primary라
+            탑바까지 primary면 한 화면에 검은 버튼이 둘 선다(§5.2 "전역·페이지 생성 버튼 경쟁 금지"). */}
+        {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="outline" size="sm" icon="plus" onClick={onNew}>New</Button>}
       </div>
 
       {navigation.tabs.length > 0 && !pageOwnsTabs(path) && (
@@ -219,7 +221,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, themePreference, 
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-muted)'; }}
                     >
                       <span>{dt.label}</span>
-                      <span style={{ fontSize: 10, color: 'var(--fg-faint)' }}>준비 중</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>준비 중</span>
                     </button>
                   ))}
                 </div>

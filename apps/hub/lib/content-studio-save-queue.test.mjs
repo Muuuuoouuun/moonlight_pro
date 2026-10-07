@@ -26,6 +26,16 @@ test('retry sends the identical creation receipt before saving later edits', asy
   assert.equal(draft.body, '두 번째');
   assert.equal(dirty, false);
 });
+test('opening or selecting a format on an empty draft creates no server receipt, even on checkpoint', async () => {
+  for (const patch of [{}, { channel: 'instagram', variantType: 'card_news', brandId: 'brand' }, { body: '  ', title: '\n' }]) {
+    const draft = { ...emptyStudioDraft(), ...patch };
+    const queue = createStudioSaveQueue({ get: () => ({ draft, dirty: true }),
+      send: () => assert.fail('empty creation must not reach the server'),
+      persistPending: () => assert.fail('empty creation must not create a receipt'),
+      commit: () => assert.fail('no save to acknowledge') });
+    assert.deepEqual(await queue.flush(true), draft);
+  }
+});
 test('concurrent flushes serialize and retain typing during an in-flight save', async () => {
   assert.ok(createStudioSaveQueue);
   let draft = { ...emptyStudioDraft(), body: '첫 번째' }, dirty = true, resolve;
@@ -100,6 +110,26 @@ test('definitive validation rejection releases the receipt so corrected input ca
   assert.equal(requests[1].variant.body, '짧은 글');
 });
 
+test('reel scene rejection preserves the draft and lets a corrected duration save with a fresh receipt', async () => {
+  const scenes = [{ id: 'scene-1', visual: '화면', spoken: '대사', subtitle: '', duration: 0, notes: '' }];
+  let state = { draft: { ...emptyStudioDraft(), variantType: 'reels_script', channel: 'reels', body: JSON.stringify({ scenes }) }, dirty: true }, pending;
+  const original = state.draft.body, requests = [];
+  const queue = createStudioSaveQueue({
+    get: () => state, commit: (next) => { state = next; }, persistPending: async (value) => { pending = value; },
+    requestId: () => `reel-request-${requests.length}`,
+    send: async (request) => { requests.push(request); return requests.length === 1
+      ? { status: 'invalid-input', error: 'invalid-reels-script-duration', sceneNumber: 1 } : success(request); },
+  });
+  await assert.rejects(queue.flush(), /1번 장면.*0보다 크고 600초/);
+  assert.equal(state.draft.body, original);
+  assert.equal(state.dirty, true);
+  assert.equal(pending, null);
+  state = { draft: { ...state.draft, body: JSON.stringify({ scenes: [{ ...scenes[0], duration: 10 }] }) }, dirty: true };
+  await queue.flush();
+  assert.notEqual(requests[0].requestId, requests[1].requestId);
+  assert.equal(JSON.parse(requests[1].variant.body).scenes[0].duration, 10);
+});
+
 test('changing documents during a request prevents adoption and further saves', async () => {
   let active = true, finish;
   const state = { draft: { ...emptyStudioDraft(), body: '이전 문서' }, dirty: true };
@@ -119,7 +149,7 @@ test('changing documents during a request prevents adoption and further saves', 
 
 test('storage failure prevents sending a creation without a durable receipt', async () => {
   const queue = createStudioSaveQueue({
-    get: () => ({ draft: emptyStudioDraft(), dirty: true }), commit: () => assert.fail('must not adopt'),
+    get: () => ({ draft: { ...emptyStudioDraft(), body: '저장할 원고' }, dirty: true }), commit: () => assert.fail('must not adopt'),
     persistPending: async () => { throw Error('storage full'); }, send: () => assert.fail('must not send'),
   });
   await assert.rejects(queue.flush(), /storage full/);

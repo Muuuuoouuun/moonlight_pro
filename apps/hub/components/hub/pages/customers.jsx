@@ -27,7 +27,7 @@ import { ContactRecordForm } from "../contact-record-form";
 import { SuggestionTip } from "../suggestion-tip";
 import { TIP_RULE_IDS, nudgeTipReason, useCrmNudges } from "../crm-nudge";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
-import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
+import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue-core";
 import { useMemoSearch } from "./use-memo-search";
 import { GuidanceQuestionDrawer } from '../guidance-question-drawer';
 import { GuruGuidanceCard } from '../guru-guidance-card';
@@ -52,25 +52,12 @@ import {
   sortCaption, sortCustomers,
 } from "@/lib/sales-os/customer-list";
 import './customer-focus.css';
+import { formatWonShort, parseWon } from "@/lib/won-format";
 
-// "₩1.2M"/"₩900K"/"—" → 정렬용 숫자 (DESIGN.md §8.1: 금액은 표시 문자열을 파싱해 정렬)
-function parseMoney(value) {
-  if (typeof value === "number") return value;
-  const raw = String(value ?? "").replace(/[₩,\s]/g, "");
-  const m = /^(-?\d*\.?\d+)([mMkK]?)$/.exec(raw);
-  if (!m) return 0;
-  let n = Number(m[1]);
-  if (m[2].toLowerCase() === "m") n *= 1_000_000;
-  if (m[2].toLowerCase() === "k") n *= 1_000;
-  return Number.isFinite(n) ? n : 0;
-}
+// "120만원"/"1억 2,000만원"/"—"(옛 "₩1.2M"도) → 정렬용 숫자 (DESIGN.md §8.1: 금액은 표시 문자열을 파싱해 정렬)
+const parseMoney = value => parseWon(value) ?? 0;
 
-const fmtMoney = v => {
-  const n = Number(v) || 0;
-  if (n >= 1_000_000) return `₩${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `₩${(n / 1_000).toFixed(0)}K`;
-  return n ? `₩${n}` : "—";
-};
+const fmtMoney = v => (Number(v) ? formatWonShort(v) : "—");
 
 // lead score(0-100) → 계정 health와 같은 3밴드. '확인 필요' 보조 필터의 원천이다.
 function scoreBand(score) {

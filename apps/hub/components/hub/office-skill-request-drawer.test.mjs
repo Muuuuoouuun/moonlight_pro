@@ -26,6 +26,14 @@ const item = (state, overrides = {}) => ({
   ...overrides,
 });
 
+test('meeting history labels its scope explicitly', () => {
+  const html = render(React.createElement(OfficeSkillRequestHistory, {
+    state: { status: 'live', items: [] }, onRefresh: () => {}, title: '이 회의의 요청 기록',
+  }));
+  assert.match(html, /이 회의의 요청 기록/);
+  assert.doesNotMatch(html, /이 할 일의 요청 기록/);
+});
+
 test('request history shows each receipt state with its label, evidence and recorder', () => {
   const html = history({ status: 'live', windowFull: false, items: [
     item('requested', { requestId: '11111111-1111-4111-8111-111111111111' }),

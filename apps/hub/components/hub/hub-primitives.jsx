@@ -50,8 +50,9 @@ export function Dot({ tone = 'neutral', size = 6, style }) {
 
 export function Kbd({ children, style }) {
   return (
-    <kbd className="mono" style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    // display는 .hub-kbd가 가진다 — 터치 화면에서 숨기려면 인라인이 아니라 클래스여야 한다.
+    <kbd className="mono hub-kbd" style={{
+      alignItems: 'center', justifyContent: 'center',
       minWidth: 18, height: 18, padding: '0 5px',
       fontSize: 10.5, fontWeight: 500,
       color: 'var(--moon-300)',
@@ -81,9 +82,11 @@ export function Card({ children, style, pad = true, interactive = false, classNa
   );
 }
 
+// Wraps instead of squeezing: when the right slot is wider than the row (390px phones), it drops below the
+// title rather than crushing the title to one word per line.
 export function SectionTitle({ children, right, style, subtitle }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 'var(--gap)', ...style }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 'var(--gap)', ...style }}>
       <div>
         <h3 style={{ margin: 0, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-dim)', fontWeight: 500 }}>{children}</h3>
         {subtitle && <div style={{ fontSize: 12, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
@@ -388,7 +391,7 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
             color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
             borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
             marginBottom: -1,
-            transition: 'color .12s ease',
+            transition: 'color var(--dur-hover) var(--ease-hub)',
             display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>
             {t.label}
@@ -428,7 +431,7 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
       style={{
         position: 'relative',
         width: size, height: size, borderRadius: 4,
-        border: shaped ? 'none' : `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
+        border: shaped ? 'none' : `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-control)'}`,
         background: !shaped && isChecked ? 'var(--moon-300)' : 'transparent',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0, opacity: disabled ? 0.55 : 1,
@@ -440,11 +443,11 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
           <path d="M2 8V5a2 2 0 0 1 2-2h5l3 3h8a2 2 0 0 1 2 2v5M13 20H4a2 2 0 0 1-2-2V8h20"
             fill="none" stroke="var(--fg-muted)" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
           <circle cx="18" cy="18" r="5" fill={isChecked ? 'var(--moon-300)' : 'var(--surface)'}
-            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-strong)'} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-control)'} strokeWidth="1" vectorEffect="non-scaling-stroke" />
           {isChecked && <path d="m15.5 18 1.7 1.7 3.5-3.5" fill="none" stroke="var(--bg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
         </> : <>
           <path d="M12 1 23 12 12 23 1 12Z" fill={isChecked ? 'var(--moon-300)' : 'none'}
-            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-strong)'} strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+            stroke={isChecked ? 'var(--moon-300)' : 'var(--line-control)'} strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
           {isChecked && <path d="m7 12 3.5 3.5 6-6" fill="none" stroke="var(--bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
         </>}
       </svg> : isChecked && (
@@ -736,7 +739,7 @@ export function CheckboxRow({ checked, onChange, text, leading = null, disabled 
         // 전이(transition)는 `.hub-app .hub-checkbox`(hub-tokens.css)가 소유한다 — 인라인은 클래스 규칙을 이긴다.
         style={{
           width: size, height: size, borderRadius: 4,
-          border: `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
+          border: `1px solid ${isChecked ? 'var(--moon-300)' : 'var(--line-control)'}`,
           background: isChecked ? 'var(--moon-300)' : 'transparent',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0,
