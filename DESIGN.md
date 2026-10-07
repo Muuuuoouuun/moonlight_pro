@@ -164,6 +164,9 @@ Also defined in `hub-tokens.css` (names verbatim, both themes):
 - Selected project gauge only (§5.2 exception): `--project-gauge-0/25/50/75/100` (hue 255 → 218 → 190 → 280 → 325,
   i.e. blue → cyan → teal → violet → magenta), `--project-gauge-spark`, `--project-gauge-glow`, `--project-gauge-tip-line`.
   No other surface may read these tokens.
+- OKR·KPI glance only (§5.2 exception, §15 2026-10-05): `--okr-ahead/-bg` (teal 185) · `--okr-on/-bg` (blue 255) ·
+  `--okr-late/-bg` (coral 40) · `--okr-wait/-bg` (neutral) · `--okr-track` · `--okr-marker`, both themes. They color KR
+  pace (앞섬·비슷함·늦음·판정 전) on `dashboard/work/goals` and always sit next to a glyph + label. No other surface may read them.
 
 Futura layer tokens live in `apps/hub/components/hub/hub-futura.css`, also on `.hub-app` (so they resolve on every
 dashboard page, §7 Futura): spacing `--fx-page-pad: 48px`, `--fx-section-gap: 44px`, `--fx-card-pad: 26px`, `--fx-gap: 16px`;
@@ -620,6 +623,7 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
   - Futura 페이지(§7 Futura): `<h2 className="fx-hero">`/`"fx-page-title">` 44px/300(≤900px 30px) — `dashboard/home`(확정
     2026-09-18)·`work/decisions`(확정 2026-09-19)·`work/rhythm`(권장 2026-09-23)·영업·매출의 `revenue/followups`(오늘 연락)·
     `revenue/customers`(고객)·`revenue/deals`(거래)(확정 2026-09-24, 구현 중).
+  - OKR·KPI(`dashboard/work/goals`, 현황 `?view=goals`): `.goal-page-title` 32px/800, 섹션 19px/700(§15 2026-10-05 확정).
   그 밖의 페이지로 확장하지 않는다 — 같은 영업·매출 안의 문의 탭과 탭에서 내려온 화면도 20px/500 그대로다.
 
 ## 12. Public vs Hub Rules
@@ -778,3 +782,4 @@ Build order when adding a new surface:
 | 2026-10-06 | 디자인 감사 후속 — 가독성 토큰: 다크 보조 글자를 moon 램프에서 떼어 `--fg-muted 0.72 / --fg-dim 0.65 / --fg-faint 0.60`(dim은 모든 면에서, faint는 bg·surface에서 AA 4.5:1 이상), 라이트 `--fg-dim 0.47 / --fg-faint 0.52`. 입력칸·체크박스 경계는 새 `--line-control`(면 대비 3:1, hover는 `--line-control-hover`)로 그린다. 한글은 `.hub-app`에서 `word-break: keep-all`로 어절 단위 줄바꿈. 다크에서만 사이드바 현재 항목 pill·인디케이터·검색/사용자 카드를 `--surface-3` + 1px `--line` 윤곽으로 띄운다(09-19 "떠 있는 pill" 문법은 그대로, 다크에서 파인 홈처럼 보이던 것을 바로잡음) | recommended | 운영자 "속도, 애니메이션, ui 디자인 디벨롭"(2026-10-06). 같은 날 감사(`docs/evaluations/2026-10-06-hub-design-audit/README.md`)의 대비 실측(다크 dim 3.7~4.3, faint 2.4~3.0, 입력 경계 1.1~1.2)이 근거다. 화면을 운영자가 직접 보고 확정하기 전까지 권장 |
 | 2026-10-06 | 디자인 감사 후속 — 위계·상태: 탑바 `New`를 primary에서 outline으로 낮춘다(§5.2 전역·페이지 생성 버튼 경쟁 금지 — 페이지마다 자기 생성 primary가 있다). 비활성 primary는 채움을 걷어 `--surface-3` 면 + `--fg-dim` 글자. `--shadow-card`의 1px 링을 빼 카드 테두리를 1px로 되돌리고, 정의되지 않은 `--shadow-md`는 `--shadow-card`로. 홈의 진행 중 일정 표시(`.fx-now`)는 `--danger` 대문자 `NOW`에서 시계 글리프 + `진행 중` 중립 글자로. 프로젝트 우선순위 `높음` 점은 빨강이 아니라 중립(빨강은 `긴급`만), 포트폴리오의 D-7 이내 Moonstone 칠도 중립. 키보드 힌트(`Kbd`)는 `(hover: none) and (pointer: coarse)`에서 숨긴다 | recommended | 같은 감사의 §3.1·§3.4·§3.5·§3.6·§4.7 항목. 모두 §5.2·§5.3 기존 규칙에 코드를 맞춘 것이고 새 시각 어휘는 없다. `New`의 이름(영문)과 생성 대상은 감사 §6 안건 1·10으로 그대로 남는다 |
 | 2026-10-06 | 디자인 감사 후속 — 모션·피드백: 막대 차트 진입은 `height` 전이 대신 `.hub-bar-rise`(transform `scaleY`, §9). 내 작업의 "오늘 할 일 다 끝" 폭죽은 되돌리기 창 안이 아니라 서버 저장이 확인된 뒤에만 터진다(§8.1 저장 봉투). 로딩을 글자 한 줄이나 `EmptyState`로 그리던 6곳(자동화·내 작업·메모·기회 탐색·Roadmap·프로젝트 백로그)은 `Skeleton`. 토스트는 오류 7초, 가리키거나 포커스하면 행동 없는 알림이 멈춘다. `motion.test`가 앞자리 0 없는 `.15s`도 잡도록 고쳐 그 틈으로 통과하던 5곳을 토큰으로 바꿨다 | recommended | 같은 감사의 §3.7·§4.5·§4.6·부록. 축하 연출 자체의 존폐(Q134)는 건드리지 않았다 — 시점만 저장 뒤로 옮겼다 |
+| 2026-10-05 | OKR·KPI 기본 보기를 **한눈에**(A안 스코어보드)로 바꾼다 — 맨 위 KPI 줄(값 34/800 · 허용 범위 띠 + 이번 값 막대 + 지난 값 선 · 0 유지형은 주별 칸), 아래 왼쪽 목표 블록(바닥까지 % 40/800 + 16px 게이지, KR 줄마다 10px 게이지·%·페이스 알약·기록), 오른쪽 **이번 주 챙길 것**(선 밖 KPI → 늦은 KR → 일주일 안 마일스톤 → 기록 공백, 최대 5)과 **이번 주 메모**(learning 메모 + 개인 목표 연결, 마이그레이션 없음). 막대 눈금은 점수(0~0.7)가 아니라 **바닥까지 진행률**(막대 끝 = 바닥), 세로선은 기간 경과 — 점수 = 0.7 × 진행률이라 판정은 그대로다. 운영자 확정 예외 3건: ① KR 페이스를 색으로 구분(`--okr-*`, 청록·파랑·코랄 + 선 밖 빨강, 언제나 글리프+글 동반) — §4 웜톤·§5.2 상태 색 분류 금지의 이 화면 한정 예외 ② 페이지 제목 32px/800·섹션 19px/700 — §11 20px/500 예외 ③ 본문 메모 칸 추가 — 표면 예산 예외. 선 밖 표시는 1px 레일 그대로(3px안은 채택 안 함). 주간 칸(`WeekCells`)은 한눈에 보기에서 빠지고 주 몫은 페이스 줄 글("이번 주 a/b")로 남는다. KPI·체크인·주간 실측 보기와 채점지는 그대로 | confirmed | 운영자가 레이아웃 3안(1a·1b·1c) 참고 시안 → 목업 5·6(A·B·C)을 보고 A를 고르고 예외 ①②③을 직접 확정했다(2026-10-05, ④ 3px 레일은 미선택). 1px 선 트랙과 0~1.0 점수 막대가 초반에 거의 비어 읽히지 않았다는 피드백("게이지바 가독성", "폰트 크기·볼드로 위계")이 출발점이다. 색은 09-23 프로젝트 게이지 예외와 같은 형식으로 전용 토큰에 가두고 다른 표면으로의 확장은 별도 결정. `goals-surface.test.mjs`가 토큰 두 테마 정의·페이지 안 토큰 재정의 금지·1px 선 밖 레일을 고정한다 |

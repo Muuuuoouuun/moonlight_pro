@@ -1,0 +1,24 @@
+.goal-otrack-wrap { display:flex; flex-direction:column; gap:2px; }
+.goal-otrack { position:relative; height:14px; border:1px solid var(--line); border-radius:var(--r-xs); background-color:var(--surface-2); }
+.goal-otrack__pace { position:absolute; left:-1px; top:-1px; bottom:-1px; border:1px dashed var(--fg-dim); border-radius:var(--r-xs) 0 0 var(--r-xs); }
+.goal-otrack__fill { position:absolute; left:3px; top:3px; bottom:3px; max-width:calc(100% - 6px); border-radius:2px; background-color:var(--moon-300); transition:width var(--dur-enter) var(--ease-hub); }
+.goal-otrack__tick { position:absolute; top:-5px; bottom:-5px; width:1px; background-color:var(--fg); }
+.goal-otrack__scale { position:relative; height:16px; font-size:10.5px; color:var(--fg-dim); }
+.goal-otrack__scale > span { position:absolute; top:2px; white-space:nowrap; }
+.goal-weeks { display:flex; gap:4px; list-style:none; margin:0; padding:0; }
+.goal-weeks__cell { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.goal-weeks__box { position:relative; height:18px; overflow:hidden; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:3px; font-size:10.5px; color:var(--fg-muted); }
+.goal-weeks__box > i { position:absolute; left:0; top:0; bottom:0; background-color:color-mix(in oklch, var(--moon-300) 32%, transparent); }
+.goal-weeks__box > b { position:relative; font-weight:500; }
+.goal-weeks__cell--full .goal-weeks__box > i { background-color:var(--moon-300); }
+.goal-weeks__cell--full .goal-weeks__box > b { color:var(--surface); }
+.goal-weeks__cell--now .goal-weeks__box { border-color:var(--accent); }
+.goal-weeks__cell--future .goal-weeks__box { border-style:dashed; border-color:var(--line-soft); color:var(--fg-faint); }
+.goal-weeks__label { font-size:10.5px; color:var(--fg-faint); text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.goal-weeks__cell--now .goal-weeks__label { color:var(--accent); }
+
+/* Long periods scroll within the data track, never the page. */
+.goal-weeks { overflow-x:auto; padding-bottom:4px; }
+.goal-weeks:focus-visible { outline:1px solid var(--moon-300); outline-offset:2px; }
+.goal-weeks__cell { min-width:40px; }
+.goal-weeks__box { font-size:12px; }

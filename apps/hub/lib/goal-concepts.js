@@ -72,13 +72,15 @@ export function objectivePeriod(objective, todayKey) {
 export const floorPaceScore = period => period?.phase === 'running' ? FLOOR_SCORE * period.elapsed : null;
 
 // 점수와 바닥 페이스를 나란히 놓는 한마디. 색이 아니라 글로만 말한다. 허용폭은 바닥의 10%.
-export function objectivePace(score, period) {
+export function objectivePaceState(score, period) {
   const expected = floorPaceScore(period);
   if (score === null || expected === null) return null;
   const gap = score - expected;
   const tolerance = FLOOR_SCORE * 0.1;
-  return gap >= tolerance ? '바닥 페이스보다 앞섬' : gap <= -tolerance ? '바닥 페이스보다 늦음' : '바닥 페이스와 비슷함';
+  return gap >= tolerance ? 'ahead' : gap <= -tolerance ? 'late' : 'on';
 }
+const OBJECTIVE_PACE_TEXT = { ahead: '바닥 페이스보다 앞섬', late: '바닥 페이스보다 늦음', on: '바닥 페이스와 비슷함' };
+export const objectivePace = (score, period) => OBJECTIVE_PACE_TEXT[objectivePaceState(score, period)] || null;
 
 // KPI 건강 상태 — 점수가 아니라 선 안/밖.
 //   inside=선 안, outside=선 밖, partial=일부 근거, unmeasured=아직 못 잼, unset=선 미설정
@@ -371,4 +373,30 @@ export function nextPeriodDraft(objective) {
   const nextMonth = Number(nextStart.slice(5, 7));
   const title = monthly ? objective.title.replace(/^(\s*)\d{1,2}월/, `$1${nextMonth}월`) : objective.title;
   return { title, periodStart: nextStart, periodEnd: nextEnd, monthly };
+}
+
+// ── 한눈에 보기 — A안 (2026-10-05) ──────────────────────────────────────────
+// 막대는 점수(0~0.7)가 아니라 "바닥까지 진행률"(0~100%)로 그린다. 세로선은 기간 경과율.
+// 점수 = 0.7 × 진행률, 바닥 페이스 = 0.7 × 경과율이라 판정은 점수 트랙과 같다 — 막대만 읽기 쉬워진다.
+export function keyResultProgress(metric) {
+  if (keyResultScore(metric) === null) return null;
+  return reachedFloor(metric) ? 100 : Math.max(0, Math.min(100, metric.progress.value));
+}
+
+export function objectiveProgress(keyResults) {
+  const values = keyResults.map(keyResultProgress).filter(value => value !== null);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+// 페이스 톤 — ahead(앞섬) · on(비슷함) · late(늦음) · wait(판정 전). 색은 언제나 글리프+글과 함께 쓴다.
+export const PACE_TONE_LABEL = { ahead: '↗ 앞섬', on: '= 비슷함', late: '↘ 늦음', wait: '○ 판정 전' };
+const PACE_STATE_TONE = { ahead: 'ahead', on: 'on', behind: 'late', unknown: 'wait' };
+
+// 늘리기 KR은 keyResultPace(주 1건 미만은 마지막 주에만 판정)를 따르고, 그 밖의 KR은 진행률과 경과율을 바로 비교한다.
+export function keyResultTone(metric, pace, period) {
+  if (pace) return PACE_STATE_TONE[pace.state] || 'wait';
+  const progress = keyResultProgress(metric);
+  if (progress === null || period?.phase !== 'running') return 'wait';
+  const gap = progress - period.elapsed * 100;
+  return gap >= 10 ? 'ahead' : gap <= -10 ? 'late' : 'on';
 }

@@ -8,6 +8,8 @@ import * as concepts from '../../lib/goal-concepts.js';
 import * as inputUx from '../../lib/goal-input-ux.js';
 import * as client from '../../lib/goal-client.js';
 import * as primitives from './hub-primitives.jsx';
+import { goalSummary } from '../../lib/goal-summary.js';
+import * as goalProgress from './goal-progress.jsx';
 import * as goalComponents from './goal-components.jsx';
 
 // Render the actual component declarations with real primitives. Next's router Link is
@@ -18,19 +20,20 @@ async function components(path, names) {
   const declarations = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(node => node.getText(ast).replace(/^export /, '')).join('\n');
   const code = ts.transpileModule(declarations, { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 } }).outputText;
   const Link = ({ children, href, ...props }) => React.createElement('a', { href, ...props }, children);
-  const dependencies = { React, Link, ...primitives, ...concepts, ...inputUx, ...client, ...goalComponents };
+  const dependencies = { React, Link, ...primitives, ...concepts, ...inputUx, ...client, ...goalComponents, goalSummary, ...goalProgress };
   // Local declarations own their names; supply only imported dependencies.
   const declared = new Set(ast.statements.flatMap(node => ts.isFunctionDeclaration(node) ? [node.name?.text] : ts.isVariableStatement(node) ? node.declarationList.declarations.map(item => item.name.getText(ast)) : []));
   for (const name of declared) delete dependencies[name];
   return new Function(...Object.keys(dependencies), `${code}; return { ${names.join(', ')} };`)(...Object.values(dependencies));
 }
-const { BulletChart, KpiView, ScoreBar, WeekCells } = await components('./pages/goals.jsx', ['BulletChart', 'KpiView', 'ScoreBar', 'WeekCells']);
+const { BulletChart, KpiView, ScoreBar } = await components('./pages/goals.jsx', ['BulletChart', 'KpiView', 'ScoreBar']);
 const { OkrSummaryView } = await components('./okr-summary-card.jsx', ['OkrSummaryView']);
+const { WeekCells } = goalProgress;
 const { GoalMetricSummary } = goalComponents;
 
 const objective = { id: 'objective', title: '기간 목표', status: 'active', scope: 'personal', periodStart: '2026-10-01', periodEnd: '2026-10-31', timezone: 'Asia/Seoul' };
 const metric = { id: 'metric', objectiveId: objective.id, name: 'Energy', role: 'guardrail', direction: 'increase', target: 20, baseline: 0, unit: '건', sourceKey: 'manual', measurement: { value: 50, coverage: 'partial', observedAt: '2026-10-05T03:00:00Z' }, progress: { state: 'partial', value: null, achieved: null } };
-const model = { status: 'live', objectives: [objective], metrics: [metric], observations: [{ metricId: metric.id, value: 10, coverage: 'complete', observedAt: '2026-10-01T03:00:00Z' }], refresh() {} };
+const model = { links: [], status: 'live', objectives: [objective], metrics: [metric], observations: [{ metricId: metric.id, value: 10, coverage: 'complete', observedAt: '2026-10-01T03:00:00Z' }], refresh() {} };
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 const view = (extra = {}) => render(KpiView, { model, objectives: model.objectives, search: '', onClearSearch() {}, onAdd() {}, onRecord() {}, onOpen() {}, hrefFor: () => '/dashboard/work/goals', ...extra });
 
@@ -71,17 +74,22 @@ test('latest partial 50 is the bullet current value and old complete 10 is expli
   assert.doesNotMatch(unavailable, /goal-bullet__bar/);
 });
 
-test('detail and overview both show KR score 0.35 and floor achievement 50%, with KPI state-only', () => {
+test('overview score and accessible meter retain the detail floor convention; KPI has state only', () => {
   const kr = { ...metric, role: 'driver', target: 10, measurement: { value: 5, coverage: 'complete' }, progress: { value: 50, state: 'in_progress', achieved: false } };
-  for (const html of [render(GoalMetricSummary, { metric: kr, scope: 'personal' }), render(OkrSummaryView, { model: { ...model, metrics: [kr] } })]) {
-    assert.match(html, /KR 점수 0\.35 · 바닥 0\.7/);
-    assert.match(html, /바닥 달성률 50%/);
-    assert.doesNotMatch(html, /role="progressbar"/);
-  }
-  for (const html of [render(GoalMetricSummary, { metric, scope: 'personal' }), render(OkrSummaryView, { model })]) {
-    assert.match(html, /KPI · 일부 근거/);
-    assert.doesNotMatch(html, /KR 점수|바닥 달성률|role="progressbar"/);
-  }
+  const detail = render(GoalMetricSummary, { metric: kr, scope: 'personal' });
+  assert.match(detail, /KR 점수 0\.35 · 바닥 0\.7/);
+  assert.match(detail, /바닥 달성률 50%/);
+  const summary = render(OkrSummaryView, { model: { ...model, metrics: [kr] } });
+  assert.match(summary, /aria-valuenow="0\.35"/);
+  assert.match(summary, /바닥 0\.7 · 천장 미등록/);
+  assert.match(summary, /직접 기록/);
+  const kpiDetail = render(GoalMetricSummary, { metric, scope: 'personal' });
+  assert.match(kpiDetail, /KPI · 일부 근거/);
+  assert.doesNotMatch(kpiDetail, /KR 점수|바닥 달성률|role="progressbar"/);
+  const kpiSummary = render(OkrSummaryView, { model });
+  assert.match(kpiSummary, /KPI 선 밖/);
+  assert.match(kpiSummary, /확인 필요 1/);
+  assert.doesNotMatch(kpiSummary, /aria-valuenow=|role="progressbar"/);
 });
 
 test('partial empty summary states reading limitations instead of claiming no active goals', () => {
