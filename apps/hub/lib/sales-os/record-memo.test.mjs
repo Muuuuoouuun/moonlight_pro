@@ -157,7 +157,7 @@ test("the next memo's empty draft is seeded from what the server just confirmed 
   const seed = nextMemoSeed({ id: NEXT, contexts: confirmed, seeds, now });
   // 빈 메모, 새 ID, 서버가 확인해 준 문맥 그대로. 쓰던 글이 아니다(dirty 아님) · 보낸 요청도 저장본도 없다.
   assert.deepEqual(seed, {
-    draft: { id: NEXT, body: "", title: "", occurredAt: "2026-09-30T01:52:00.000Z", noteMeta: { kind: "note", enhancement: "" }, contexts: confirmed, expectedRevision: 0 },
+    draft: { id: NEXT, body: "", title: "", occurredAt: "2026-09-30T01:52:00.000Z", noteMeta: { kind: "note", enhancement: "", scope: "personal" }, contexts: confirmed, expectedRevision: 0 },
     entry: null, dirty: false, pending: null, reuseDraft: null,
   });
   // 그 초안으로 만든 요청은 같은 고객에 붙는 새 메모다.
@@ -196,4 +196,25 @@ test("the next memo's empty draft is seeded from what the server just confirmed 
   const shouted = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
   const lower = [{ type: "lead", id: shouted.toLowerCase(), label: "확인된 이름" }];
   assert.deepEqual(nextMemoSeed({ id: NEXT, contexts: lower, seeds: [{ type: "lead", id: shouted }], now }).draft.contexts, lower);
+});
+
+test("consecutive context memo saves keep their personal or company scope through the recovery seed", () => {
+  const lead = "11111111-1111-4111-8111-111111111111";
+  const contexts = [{ type: "lead", id: lead, label: "확인된 고객" }];
+  const data = new Map();
+  const storage = { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, String(value)) };
+  const store = createJournalStore({ storage, workspaceId: "33333333-3333-4333-8333-333333333333", tabId: "scope-regression" });
+  for (const scope of [undefined, "personal", "company"]) {
+    const expectedScope = scope ?? "personal";
+    let savedScope = scope;
+    for (let round = 2; round <= 3; round++) {
+      const id = `22222222-2222-4222-8222-${String(round).padStart(12, "0")}`;
+      const seed = nextMemoSeed({ id, contexts, seeds: contexts, scope: savedScope });
+      store.write(id, seed);
+      const restored = store.read(id);
+      const request = buildNoteSave({ ...restored.draft, body: `메모 ${round}` }, "44444444-4444-4444-8444-444444444444");
+      assert.equal(request.noteMeta.scope, expectedScope, "복구 사본을 읽는 다음 메모도 같은 범위로 저장된다");
+      savedScope = request.noteMeta.scope;
+    }
+  }
 });

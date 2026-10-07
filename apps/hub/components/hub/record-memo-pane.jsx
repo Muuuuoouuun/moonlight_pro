@@ -114,7 +114,7 @@ export function RecordMemoView({ boot = "ready", bootMessage = "", onBootRetry, 
 
   // 충돌에서 저장본을 그대로 두기 — 내 글을 버리고 다음 메모로 넘어간다(저장본은 기록 줄에 이미 있다).
   // 저장 확인이 아니다(entry 없이 끝낸다) — 다음 메모의 문맥은 그 저장본이 든 것(서버가 확인한 것)을 넘긴다.
-  const keepStored = () => { const stored = model.conflict; model.chooseConflict(false); onSettled?.(null, stored?.contexts); };
+  const keepStored = () => { const stored = model.conflict; model.chooseConflict(false); onSettled?.(null, stored?.contexts, stored?.noteMeta?.scope); };
 
   // 실패 · 미확인 · 충돌은 저장 줄의 레일 줄이 말한다 — 가려진 탭에서 생기면 쓰기로 돌린다.
   const issue = plan.line.note?.tone === "error" ? plan.line.note.title || "" : "";
@@ -204,7 +204,7 @@ function seedNextMemo(workspaceId, seed) {
 // 메모 한 건 — 일지 메모 작성기를 이 메모 ID에 묶는다. 저장이 확인되면(onSaved) 부모가 새 ID로 다시 세운다.
 function RecordMemoDocument({ id, ledger, contexts, onSaved, ...view }) {
   const model = useMemoDocument({
-    id, isNew: true, entry: null, contexts,
+    id, isNew: true, entry: null, contexts, fromPreview: Boolean(ledger.fromPreview),
     workspaceId: ledger.workspaceId, workspaceConfirmed: isCanonicalUuid(ledger.workspaceId), source: ledger.status,
     onSaved,
   });
@@ -220,10 +220,29 @@ let knownLedger = null;
 // 메모 칸의 자리 — 확인된 저장소와 고객(identity)에서. 같은 탭 · 같은 고객이면 같은 메모 ID를 다시 받는다.
 function memoSession(ledger, identity) {
   const storageKey = contextMemoStorageKey(ledger.workspaceId, identity);
-  return { status: "ready", identity, ledger, storageKey, id: claimContextMemoId(sessionStorage, storageKey) };
+  const id = claimContextMemoId(sessionStorage, storageKey);
+  return { status: "ready", identity, ledger, storageKey, id, documentKey: `${ledger.workspaceId}:${id}` };
 }
 const sameSession = (session, ledger, identity) => session.status === "ready" && session.identity === identity
   && session.ledger.workspaceId === ledger.workspaceId && session.ledger.status === ledger.status;
+
+// A cached preview can already hold text when the background read confirms a workspace. Keep
+// that writer mounted: its existing carry/fromPreview path moves the recovery document, including
+// any unresolved request, without sending it. Retarget only this context's anchor; other live
+// recovery documents remain in the journal store. Confirmed workspace changes never carry text.
+function reconcileMemoSession(previous, next) {
+  if (sameSession(previous, next.ledger, next.identity)) return previous;
+  if (previous.status !== "ready" || previous.identity !== next.identity
+    || previous.ledger.workspaceId || !isCanonicalUuid(next.ledger.workspaceId)) return next;
+  try {
+    const preview = createJournalStore({ storage: sessionStorage, workspaceId: null, tabId: journalTabId() }).read(previous.id);
+    if (!preview?.draft?.body?.trim() && !preview?.pending) return next;
+  } catch { /* Keep the mounted writer when its recovery copy cannot be inspected. */ }
+  releaseContextMemoId(sessionStorage, next.storageKey);
+  claimContextMemoId(sessionStorage, next.storageKey, () => previous.id);
+  return { ...next, id: previous.id, documentKey: previous.documentKey,
+    ledger: { ...next.ledger, fromPreview: true } };
+}
 
 // contexts: [{ type: "lead" | "account", id, label }] — 이 메모가 붙을 고객(호출처가 uuid임을 확인해 준다).
 // onSaved(entry): 서버가 저장을 확인한 메모 — 호출처가 기록 줄기에 영수증과 함께 세운다.
@@ -252,7 +271,7 @@ export function RecordMemoPane({ contexts = [], saveRef = null, contactLine = nu
       const ledger = { workspaceId: answer.workspaceId || null, status: answer.status };
       knownLedger = ledger;
       const next = memoSession(ledger, identity);
-      setSession((prev) => (sameSession(prev, ledger, identity) ? prev : next));
+      setSession((prev) => reconcileMemoSession(prev, next));
     }).catch((failure) => {
       // 기억한 저장소로 선 자리는 그대로 둔다(쓰던 글을 가리지 않는다) — 닿지 않으면 저장할 때 작성기가 말한다.
       if (active) setSession((prev) => (prev.status === "ready" && prev.identity === identity ? prev : { status: "error", message: failure?.message || "" }));
@@ -262,12 +281,12 @@ export function RecordMemoPane({ contexts = [], saveRef = null, contactLine = nu
 
   // 한 건이 끝났다 — 같은 고객의 다음 메모는 새 ID에서 시작한다. entry가 있으면 방금 저장이 확인된 것이다.
   // contexts는 서버가 확인해 준 문맥(저장된 메모의 것)이다 — 다음 메모의 빈 초안을 그것으로 미리 세운다(seeded).
-  const settle = (entry, contexts = entry?.contexts) => {
+  const settle = (entry, contexts = entry?.contexts, scope = entry?.noteMeta?.scope) => {
     if (session.status === "ready") {
       releaseContextMemoId(sessionStorage, session.storageKey);
       const id = claimContextMemoId(sessionStorage, session.storageKey);
-      const seeded = seedNextMemo(session.ledger.workspaceId, nextMemoSeed({ id, contexts, seeds: stableContexts }));
-      setSession({ ...session, id, seeded });
+      const seeded = seedNextMemo(session.ledger.workspaceId, nextMemoSeed({ id, contexts, seeds: stableContexts, scope }));
+      setSession({ ...session, id, seeded, documentKey: `${session.ledger.workspaceId}:${id}`, ledger: { ...session.ledger, fromPreview: false } });
     }
     if (!entry) { setSavedAt(null); return; }
     window.dispatchEvent(new Event(MEMO_CHANGED_EVENT));
@@ -289,7 +308,7 @@ export function RecordMemoPane({ contexts = [], saveRef = null, contactLine = nu
   }
   return (
     <RecordMemoDocument
-      key={`${session.ledger.workspaceId}:${session.id}`}
+      key={session.documentKey}
       id={session.id}
       ledger={session.ledger}
       contexts={stableContexts}

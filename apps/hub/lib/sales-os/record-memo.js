@@ -95,13 +95,14 @@ export function memoRestoredCopy({ localError = false } = {}) {
 //   id       — 새로 받은 메모 ID.
 //   contexts — 서버가 방금 돌려준 메모의 문맥(entry.contexts: 확인된 이름 그대로).
 //   seeds    — 이 칸이 붙이는 고객(호출처의 contexts).
+//   scope    — 앞 메모의 명시 범위. 새 메모의 기본값은 작성기와 같은 personal이다.
 // 문맥은 서버가 확인해 준 것만 쓴다 — 이 칸의 고객 가운데 하나라도 거기 없으면 null(작성기가 지금처럼 확인한다).
 // 빈 초안이라 dirty가 아니다: 다른 곳(메모 창)에서 이어 열어도 '쓰던 글을 불러왔다'고 말하지 않는다.
-export function nextMemoSeed({ id, contexts = [], seeds = [], now = new Date() } = {}) {
+export function nextMemoSeed({ id, contexts = [], seeds = [], scope = "personal", now = new Date() } = {}) {
   if (!id) return null;
   const key = (value) => `${value?.type}:${String(value?.id || "").toLowerCase()}`;
   const confirmed = new Map((Array.isArray(contexts) ? contexts : []).filter((value) => value?.type && value?.id).map((value) => [key(value), value]));
   const linked = initialMemoContexts(null, seeds).map((seed) => confirmed.get(key(seed)));
   if (!linked.length || linked.some((value) => !value)) return null;
-  return { draft: noteToDraft({ id, occurredAt: now.toISOString(), contexts: linked }), entry: null, dirty: false, pending: null, reuseDraft: null };
+  return { draft: noteToDraft({ id, occurredAt: now.toISOString(), contexts: linked, noteMeta: { scope } }), entry: null, dirty: false, pending: null, reuseDraft: null };
 }

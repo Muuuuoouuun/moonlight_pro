@@ -6,6 +6,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { RecordMemoPane, RecordMemoView } from "./record-memo-pane.jsx";
 import { RecordSaveLine } from "./contact-record-form.jsx";
+import * as journalClient from "../../lib/journal-client.js";
+import { createJournalStore } from "../../lib/journal-browser-store.js";
+import { claimContextMemoId, contextMemoKey, contextMemoStorageKey, releaseContextMemoId } from "../../lib/project-customer-context.js";
+import { isCanonicalUuid } from "../../lib/uuid.js";
+import { nextMemoSeed } from "../../lib/sales-os/record-memo.js";
 import { buildNoteSave, initialMemoContexts } from "../../lib/journal-client.js";
 import { recordMemoLine } from "../../lib/sales-os/record-memo.js";
 
@@ -203,7 +208,7 @@ test("a rejected save and a conflict both keep the text; the conflict offers bot
   assert.equal(settled, "not-called");
   // 저장본 그대로 두기 — 내 글을 버리고 다음 메모로(저장 확인으로 세지 않는다: entry 없이 끝낸다).
   // 다음 메모의 문맥은 그 저장본이 든 것(서버가 확인한 것)을 넘긴다 — 빈 초안을 미리 세워 기다림 없이 넘어간다.
-  assert.match(code, /const keepStored = \(\) => \{ const stored = model\.conflict; model\.chooseConflict\(false\); onSettled\?\.\(null, stored\?\.contexts\); \};/);
+  assert.match(code, /const keepStored = \(\) => \{ const stored = model\.conflict; model\.chooseConflict\(false\); onSettled\?\.\(null, stored\?\.contexts, stored\?\.noteMeta\?\.scope\); \};/);
 });
 
 test("a confirmed save shows a receipt in the save row until the next memo is started", () => {
@@ -294,8 +299,8 @@ test("after a confirmed save the field stays up while the next memo boots — no
 
 test("a confirmed save seeds the next memo's draft, and the memo store is remembered across mode switches", () => {
   // 저장이 확인되면: 새 ID를 받고, 서버가 확인해 준 문맥으로 다음 메모의 빈 초안을 작성기의 탭 사본에 미리 세운다.
-  const settle = code.slice(code.indexOf("const settle = (entry, contexts = entry?.contexts) => {"), code.indexOf("if (session.status !== \"ready\") {\n    return"));
-  assert.match(settle, /const id = claimContextMemoId\(sessionStorage, session\.storageKey\);\s*const seeded = seedNextMemo\(session\.ledger\.workspaceId, nextMemoSeed\(\{ id, contexts, seeds: stableContexts \}\)\);\s*setSession\(\{ \.\.\.session, id, seeded \}\);/);
+  const settle = code.slice(code.indexOf("const settle = (entry, contexts = entry?.contexts, scope = entry?.noteMeta?.scope) => {"), code.indexOf("if (session.status !== \"ready\") {\n    return"));
+  assert.match(settle, /const id = claimContextMemoId\(sessionStorage, session\.storageKey\);\s*const seeded = seedNextMemo\(session\.ledger\.workspaceId, nextMemoSeed\(\{ id, contexts, seeds: stableContexts, scope \}\)\);\s*setSession\(\{ \.\.\.session, id, seeded, documentKey: `\$\{session\.ledger\.workspaceId\}:\$\{id\}`, ledger: \{ \.\.\.session\.ledger, fromPreview: false \} \}\);/);
   assert.match(code, /handoff=\{Boolean\(session\.seeded\)\}/);
   // 세우는 곳은 일지 메모 작성기의 저장소 그대로다(새 저장소 없음) — 막힌 창에서는 그 저장소의 메모리 사본이 남는다.
   const seed = code.slice(code.indexOf("function seedNextMemo"), code.indexOf("function RecordMemoDocument"));
@@ -306,7 +311,7 @@ test("a confirmed save seeds the next memo's draft, and the memo store is rememb
   assert.match(code, /let knownLedger = null;/);
   assert.match(code, /React\.useState\(\(\) => \{\s*try \{ return knownLedger \? memoSession\(knownLedger, identity\) : \{ status: "loading" \}; \} catch \{ return \{ status: "loading" \}; \}\s*\}\);/);
   assert.match(code, /setSession\(\(prev\) => \(prev\.status === "ready" && prev\.identity === identity \? prev : \{ status: "loading" \}\)\);/);
-  assert.match(code, /knownLedger = ledger;\s*const next = memoSession\(ledger, identity\);\s*setSession\(\(prev\) => \(sameSession\(prev, ledger, identity\) \? prev : next\)\);/);
+  assert.match(code, /knownLedger = ledger;\s*const next = memoSession\(ledger, identity\);\s*setSession\(\(prev\) => reconcileMemoSession\(prev, next\)\);/);
   // 기억한 저장소로 선 자리는 다시 확인이 실패해도 쓰던 글을 가리지 않는다(저장할 때 작성기가 말한다).
   assert.match(code, /if \(active\) setSession\(\(prev\) => \(prev\.status === "ready" && prev\.identity === identity \? prev : \{ status: "error", message: failure\?\.message \|\| "" \}\)\);/);
 });
@@ -322,13 +327,13 @@ test("the contact record still in flight keeps its line above the memo save row"
 test("the memo draft shares its key with the memo drawer and is separate from the contact draft", () => {
   // 같은 고객의 새 메모는 드로어의 메모 창과 같은 자리에서 이어진다 — 저장소 · 키를 새로 만들지 않는다.
   assert.match(code, /const storageKey = contextMemoStorageKey\(ledger\.workspaceId, identity\);/);
-  assert.match(code, /id: claimContextMemoId\(sessionStorage, storageKey\)/);
+  assert.match(code, /const id = claimContextMemoId\(sessionStorage, storageKey\)/);
   const drawer = readFileSync(new URL("./context-memo-drawer.jsx", import.meta.url), "utf8");
   assert.match(drawer, /contextMemoStorageKey\(ledger\.workspaceId, identity\)/);
   assert.match(drawer, /claimContextMemoId\(sessionStorage, storageKey\)/);
   assert.doesNotMatch(code, /crm-record|localStorage|createRecordDraftStore/, "연락 기록 초안과 다른 키 · 같은 탭(sessionStorage)");
   // 저장이 확인된 뒤에만: 메모 목록을 다시 읽게 하고, 영수증 시각을 세우고, 호출처에 알린다. 그리고 새 메모 ID로 넘어간다.
-  const settle = code.slice(code.indexOf("const settle = (entry, contexts = entry?.contexts) => {"), code.indexOf("if (session.status !== \"ready\") {\n    return"));
+  const settle = code.slice(code.indexOf("const settle = (entry, contexts = entry?.contexts, scope = entry?.noteMeta?.scope) => {"), code.indexOf("if (session.status !== \"ready\") {\n    return"));
   assert.ok(settle.length > 0);
   assert.match(settle, /releaseContextMemoId\(sessionStorage, session\.storageKey\);/);
   assert.match(settle, /if \(!entry\) \{ setSavedAt\(null\); return; \}\s*window\.dispatchEvent\(new Event\(MEMO_CHANGED_EVENT\)\);\s*setSavedAt\(new Date\(\)\.toISOString\(\)\);\s*onSaved\?\.\(entry\);/);
@@ -460,4 +465,167 @@ test("the pane forwards what the form hands it — the slot props reach the view
   assert.match(pane, /class="record-wide__away"/);
   assert.match(code, /export function RecordMemoPane\(\{ contexts = \[\], saveRef = null, contactLine = null, onSaved, \.\.\.slot \}\) \{/);
   assert.equal((code.match(/\{\.\.\.slot\}/g) || []).length, 2, "확인 중 · 준비된 뒤 둘 다");
+});
+
+// Execute the actual session effects and journal hook with deferred reads. This catches a
+// writer remount even though static rendering cannot run effects or restore browser drafts.
+function memoHookHarness(factory) {
+  const slots = [];
+  let cursor = 0, effects = [], component;
+  const same = (left, right) => left?.length === right?.length && left.every((value, index) => Object.is(value, right[index]));
+  const hooks = {
+    useState(initial) {
+      const index = cursor++, cell = slots[index] ??= { value: typeof initial === "function" ? initial() : initial };
+      return [cell.value, change => { cell.value = typeof change === "function" ? change(cell.value) : change; }];
+    },
+    useRef(initial) { return slots[cursor++] ??= { current: initial }; },
+    useMemo(create, deps) {
+      const index = cursor++;
+      if (!slots[index] || !same(slots[index].deps, deps)) slots[index] = { value: create(), deps };
+      return slots[index].value;
+    },
+    useCallback(callback, deps) { return hooks.useMemo(() => callback, deps); },
+    useEffect(effect, deps) {
+      const index = cursor++;
+      if (!slots[index] || !same(slots[index].deps, deps)) effects.push({ index, effect, deps });
+    },
+  };
+  component = factory(hooks);
+  return {
+    render(props) {
+      cursor = 0; effects = [];
+      const view = component(props);
+      for (const { index, effect, deps } of effects) {
+        slots[index]?.cleanup?.();
+        slots[index] = { deps, cleanup: effect() };
+      }
+      return view;
+    },
+    unmount() { for (const cell of slots) cell?.cleanup?.(); },
+  };
+}
+function memoStorage() {
+  const values = new Map();
+  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
+}
+function cachedMemoPane(storage, cachedLedger, read, seeds = []) {
+  const helpers = source.slice(source.indexOf("function memoSession("), source.indexOf("// contexts: [{ type:"));
+  const start = source.indexOf("export function RecordMemoPane("), end = source.indexOf('  if (session.status !== "ready") {', start);
+  return memoHookHarness(hooks => new Function("React", "sessionStorage", "knownLedger", "fetchJournal", "claimContextMemoId", "contextMemoKey", "contextMemoStorageKey", "releaseContextMemoId", "isCanonicalUuid", "rememberJournalWorkspace", "seedNextMemo", "nextMemoSeed", "window", "MEMO_CHANGED_EVENT", "createJournalStore", "journalTabId",
+    helpers + source.slice(start, end).replace("export function", "function") + '\nreturn { session, settle };\n}\nreturn RecordMemoPane;')(
+      hooks, storage, cachedLedger, read, claimContextMemoId, contextMemoKey, contextMemoStorageKey, releaseContextMemoId, isCanonicalUuid, () => {},
+      (_workspaceId, seed) => { seeds.push(seed); return Boolean(seed); }, nextMemoSeed, new EventTarget(), "synthetic:memo-changed", createJournalStore, () => "integration-tab"));
+}
+function actualMemoWriter(storage, fetchJournal) {
+  const writerSource = readFileSync(new URL("./pages/use-memos.js", import.meta.url), "utf8");
+  const body = writerSource.slice(writerSource.indexOf("export function useMemoDocument")).replace("export function", "function");
+  const dependencies = { ...journalClient, createJournalStore, journalTabId: () => "integration-tab", sessionStorage: storage, fetchJournal,
+    fetch() { throw Error("preview promotion must not send a write"); } };
+  return memoHookHarness(hooks => new Function("React", ...Object.keys(dependencies), body + "\nreturn useMemoDocument;")(hooks, ...Object.values(dependencies)));
+}
+const memoTick = () => new Promise(setImmediate);
+
+test("a deferred preview-to-live refresh preserves the mounted writer, text, and recovery document without saving", async () => {
+  const storage = memoStorage();
+  const contexts = [{ type: "lead", id: "70707070-7070-4070-8070-707070707070", label: "Current customer" }];
+  const workspaceId = "80808080-8080-4080-8080-808080808080";
+  let confirm;
+  const pane = cachedMemoPane(storage, { workspaceId: null, status: "preview" }, () => new Promise(resolve => { confirm = resolve; }));
+  const props = { contexts };
+  pane.render(props);
+  const before = pane.render(props).session;
+  const writer = actualMemoWriter(storage, async () => ({ contexts }));
+  const writerProps = session => ({ id: session.id, isNew: true, entry: null, contexts,
+    workspaceId: session.ledger.workspaceId, workspaceConfirmed: isCanonicalUuid(session.ledger.workspaceId),
+    source: session.ledger.status, fromPreview: Boolean(session.ledger.fromPreview) });
+  writer.render(writerProps(before));
+  await memoTick();
+  writer.render(writerProps(before)).edit({ body: "Keep this unsaved preview text", noteMeta: { scope: "company" } });
+  confirm({ workspaceId, status: "live" });
+  await memoTick();
+  const after = pane.render(props).session;
+  assert.equal(after.id, before.id, "the context must keep the document containing the text");
+  assert.equal(after.documentKey, before.documentKey, "the writer stays mounted so its workspace carry path can run");
+  assert.equal(after.ledger.fromPreview, true);
+  assert.equal(storage.getItem(contextMemoStorageKey(workspaceId, contextMemoKey(contexts))), before.id, "reopening this context resumes the promoted draft");
+  writer.render(writerProps(after));
+  const model = writer.render(writerProps(after));
+  assert.equal(model.draft.body, "Keep this unsaved preview text");
+  assert.equal(model.draft.noteMeta.scope, "company");
+  assert.equal(model.pending, null);
+  assert.equal(model.saveState, "idle", "promotion never auto-saves");
+  assert.equal(createJournalStore({ storage, workspaceId, tabId: "integration-tab" }).read(before.id).draft.body, model.draft.body);
+  writer.unmount(); pane.unmount();
+});
+
+test("confirmed workspace changes do not carry the prior workspace's memo into another workspace", async () => {
+  const storage = memoStorage(), first = "90909090-9090-4090-8090-909090909090", second = "91919191-9191-4191-8191-919191919191";
+  const contexts = [{ type: "lead", id: "92929292-9292-4292-8292-929292929292" }];
+  let confirm;
+  const pane = cachedMemoPane(storage, { workspaceId: first, status: "live" }, () => new Promise(resolve => { confirm = resolve; }));
+  pane.render({ contexts });
+  const before = pane.render({ contexts }).session;
+  confirm({ workspaceId: second, status: "live" }); await memoTick();
+  const after = pane.render({ contexts }).session;
+  assert.notEqual(after.id, before.id);
+  assert.notEqual(after.documentKey, before.documentKey);
+  assert.equal(after.ledger.fromPreview, undefined);
+  pane.unmount();
+});
+
+test("preview promotion carries an unresolved request as a locked recovery document without dispatching it", async () => {
+  const storage = memoStorage(), workspaceId = "93939393-9393-4393-8393-939393939393";
+  const contexts = [{ type: "account", id: "94949494-9494-4494-8494-949494949494" }];
+  let confirm;
+  const pane = cachedMemoPane(storage, { workspaceId: null, status: "preview" }, () => new Promise(resolve => { confirm = resolve; }));
+  pane.render({ contexts });
+  const before = pane.render({ contexts }).session;
+  const pending = { action: "save", entryId: before.id, requestId: "95959595-9595-4595-8595-959595959595", body: "Unconfirmed text" };
+  createJournalStore({ storage, workspaceId: null, tabId: "integration-tab" }).write(before.id, {
+    draft: { id: before.id, body: pending.body, contexts, expectedRevision: 0 }, dirty: true, pending,
+  });
+  const writer = actualMemoWriter(storage, async () => ({ contexts }));
+  const writerProps = session => ({ id: session.id, isNew: true, entry: null, contexts,
+    workspaceId: session.ledger.workspaceId, workspaceConfirmed: isCanonicalUuid(session.ledger.workspaceId),
+    source: session.ledger.status, fromPreview: Boolean(session.ledger.fromPreview) });
+  writer.render(writerProps(before));
+  confirm({ workspaceId, status: "live" }); await memoTick();
+  const after = pane.render({ contexts }).session;
+  writer.render(writerProps(after));
+  const model = writer.render(writerProps(after));
+  assert.deepEqual(model.pending, pending);
+  assert.equal(model.locked, true);
+  assert.equal(model.draft.body, pending.body);
+  assert.deepEqual(createJournalStore({ storage, workspaceId, tabId: "integration-tab" }).read(before.id).pending, pending);
+  writer.unmount(); pane.unmount();
+});
+
+test("confirmed saves and keeping a company conflict forward its scope into the next memo", () => {
+  const storage = memoStorage(), workspaceId = "96969696-9696-4696-8696-969696969696";
+  const contexts = [{ type: "lead", id: "97979797-9797-4797-8797-979797979797" }], seeds = [];
+  const pane = cachedMemoPane(storage, { workspaceId, status: "live" }, () => new Promise(() => {}), seeds);
+  pane.render({ contexts });
+  pane.render({ contexts }).settle({ contexts, noteMeta: { scope: "company" } });
+  assert.equal(seeds.at(-1).draft.noteMeta.scope, "company", "confirmed company memo keeps company as the next draft scope");
+  const stored = { contexts, noteMeta: { scope: "company" } };
+  const body = source.match(/const keepStored = \(\) => \{([\s\S]*?)\};/)[1];
+  new Function("model", "onSettled", body)({ conflict: stored, chooseConflict(mine) { assert.equal(mine, false); } }, pane.render({ contexts }).settle);
+  assert.equal(seeds.at(-1).draft.noteMeta.scope, "company", "accepting the stored conflict carries the stored scope too");
+  pane.unmount();
+});
+
+test("an empty cached preview does not displace the live context's existing draft", async () => {
+  const storage = memoStorage(), workspaceId = "98989898-9898-4898-8898-989898989898";
+  const contexts = [{ type: "lead", id: "99999999-9999-4999-8999-999999999999" }];
+  const key = contextMemoStorageKey(workspaceId, contextMemoKey(contexts));
+  const liveId = claimContextMemoId(storage, key);
+  createJournalStore({ storage, workspaceId, tabId: "integration-tab" }).write(liveId, { draft: { id: liveId, body: "Existing live draft" }, dirty: true });
+  let confirm;
+  const pane = cachedMemoPane(storage, { workspaceId: null, status: "preview" }, () => new Promise(resolve => { confirm = resolve; }));
+  pane.render({ contexts });
+  confirm({ workspaceId, status: "live" }); await memoTick();
+  assert.equal(pane.render({ contexts }).session.id, liveId);
+  assert.equal(storage.getItem(key), liveId);
+  assert.equal(createJournalStore({ storage, workspaceId, tabId: "integration-tab" }).read(liveId).draft.body, "Existing live draft");
+  pane.unmount();
 });

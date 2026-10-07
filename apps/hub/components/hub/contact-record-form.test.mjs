@@ -4,7 +4,7 @@ import { test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { ContactRecordDrawer, ContactRecordForm, RecordAwayBar, RecordPrimarySlot, RecordSaveLine, RecordSheetFields, recordDraftStore } from "./contact-record-form.jsx";
+import { ContactRecordDrawer, ContactRecordForm, RecordAwayBar, RecordPrimarySlot, RecordSaveLine, RecordSheetFields, recordDraftStore, createRawNoteRecoveryStore } from "./contact-record-form.jsx";
 import { RecordQueueStrip } from "./record-queue-strip.jsx";
 import { Button } from "./hub-primitives.jsx";
 import { RECORD_DRAWER_WIDTH, RECORD_TOUCH_QUERY, recordSaveButtons, recordSaveLine } from "../../lib/sales-os/contact-record.js";
@@ -67,30 +67,30 @@ test("연락 저장 확인은 선택 원문까지 저장된 다음 전달한다"
 test("원문 저장 중 창이 닫혀도 같은 고객의 원문 재시도 상태를 복원한다", () => {
   assert.match(source, /const rawNoteRecoveries = new Map\(\)/);
   // 되살릴 곳은 둘이다 — 요청이 가는 동안의 메모리, 실패가 확인된 뒤의 탭 저장소(recallRawNote가 둘 다 읽는다).
-  assert.match(source, /const \[recoveredRawNote\] = React\.useState\(\(\) => recallRawNote\(target\)\)/);
-  assert.match(source, /const held = rawNoteRecoveries\.get\(rawNoteKey\(target\)\);\s*if \(held\) return held;/);
+  assert.match(source, /const \[recoveredRawNote\] = React\.useState\(\(\) => recallRawNote\(target, draftScope\)\)/);
+  assert.match(source, /memory\.get\(rawNoteKey\(target, scope\)\)/);
   assert.match(source, /const \[pendingRawNote, setPendingRawNote\] = React\.useState\(\(\) => recoveredRawNote/);
   const persist = source.slice(source.indexOf("const persist = async"), source.indexOf("const retryRawNote"));
   // 요청을 보내기 전에 메모리에 든다(창이 닫혀도 남게) — 탭에는 아직 두지 않는다.
-  assert.ok(persist.indexOf("holdRawNote(target, held);") > 0);
-  assert.ok(persist.indexOf("holdRawNote(target, held);") < persist.indexOf('fetch("/api/hub/revenue/activity"'));
-  assert.match(source, /rawNoteRecoveries\.delete\(rawNoteKey\(target\)\)/);
+  assert.ok(persist.indexOf("holdRawNote(target, held, { scope: draftScope });") > 0);
+  assert.ok(persist.indexOf("holdRawNote(target, held, { scope: draftScope });") < persist.indexOf('fetch("/api/hub/revenue/activity"'));
+  assert.match(source, /memory\.delete\(rawNoteKey\(target, scope\)\)/);
 });
 
 // 일부 저장 상태에서 새로고침하면 메모리 사본은 사라진다 — 못 보낸 긴 글을 초안과 같은 탭 저장소에 둔다.
 test("못 보낸 긴 글은 실패가 확인된 뒤 탭에도 남고, 다시 저장 · 건너뛰기가 끝나면 지운다", () => {
   const RAW_KEY = "crm-record:lead:lead-1:rawnote";
-  assert.match(source, /const rawNoteDraftKey = \(target\) => `\$\{draftKey\(target\)\}:rawnote`;/);
+  assert.match(source, /const key = \(target, scope = ""\) => `\$\{draftKey\(target, scope\)\}:rawnote`;/);
   const persist = source.slice(source.indexOf("const persist = async"), source.indexOf("const retryRawNote"));
   // 탭에 두는 것은 note 요청의 실패가 확인된 다음이다 — 가는 중에 두면 새로고침 뒤 저장된 글을 "일부 저장"이라고 말한다.
   const failedAt = persist.indexOf('if (!noteResp?.ok || noteData.status !== "saved") {');
-  assert.ok(failedAt > 0 && persist.indexOf("holdRawNote(target, held, { durable: true });") > failedAt);
+  assert.ok(failedAt > 0 && persist.indexOf("holdRawNote(target, held, { durable: true, scope: draftScope });") > failedAt);
   assert.equal((persist.match(/durable: true/g) || []).length, 1);
   // 잠긴 요약에 보일 글(이미 저장된 요약)도 함께 든다.
   assert.match(persist, /summary: snapshot\.form\.summary,\s*body: snapshot\.form\.body,/);
   // 끝나면(저장 · 다시 저장 · 건너뛰기) 두 곳 모두에서 지운다.
-  assert.equal((source.match(/dropRawNote\(target\);/g) || []).length, 3);
-  assert.match(source, /function dropRawNote\(target\) \{\s*rawNoteRecoveries\.delete\(rawNoteKey\(target\)\);\s*if \(target\?\.id\) recordDraftStore\.clear\(rawNoteDraftKey\(target\)\);/);
+  assert.equal((source.match(/dropRawNote\(target,/g) || []).length, 3);
+  assert.match(source, /memory\.delete\(rawNoteKey\(target, scope\)\);\s*if \(!target\?\.id\) return;\s*store\.clear\(key\(target, scope\)\);/);
 
   // 새로고침 뒤(메모리 없음 · 탭에만 있음) 같은 고객의 기록창 — 긴 글과 재시도가 그대로 돌아온다.
   const held = { activityId: "act-1", optimisticId: "local-1", summary: "단원평가 채점 상담", body: "[결정사항]\n- 10월 셋째 주 시범 채점" };
@@ -106,6 +106,69 @@ test("못 보낸 긴 글은 실패가 확인된 뒤 탭에도 남고, 다시 저
 });
 
 // ── 2026-09-24 30초 기록 시트(운영자 승인 목업 01) ────────────────────────────────
+
+test("같은 고객의 후보 둘을 이어 저장해도 성공한 원문이 다른 후보의 실패한 글을 지우지 않는다", () => {
+  const saved = new Map();
+  const store = {
+    read: (key) => saved.has(key) ? { value: saved.get(key) } : null,
+    write: (key, value) => saved.set(key, value),
+    clear: (key) => saved.delete(key),
+  };
+  const first = { optimisticId: "pending-first", activityId: "activity-first", summary: "첫 기록", body: "아직 저장하지 못한 첫 글" };
+  const second = { optimisticId: "pending-second", activityId: "activity-second", summary: "둘째 기록", body: "저장된 둘째 글" };
+  const recovery = createRawNoteRecoveryStore(store);
+  recovery.hold(recordTarget, first, { scope: "cand:first", durable: true });
+  assert.equal(recovery.recall(recordTarget, "cand:second"), null, "다른 후보의 쓰기 칸을 일부 저장 상태로 잠그지 않는다");
+  recovery.hold(recordTarget, second, { scope: "cand:second" });
+  recovery.drop(recordTarget, { scope: "cand:second", optimisticId: second.optimisticId });
+  assert.equal(recovery.recall(recordTarget, "cand:first").body, first.body);
+
+  // 새로고침 뒤 후보가 사라져도 고객 창은 색인으로 그 글을 찾고, 그 원래 자리만 정리한다.
+  const reopened = createRawNoteRecoveryStore(store);
+  const found = reopened.recall(recordTarget);
+  assert.equal(found.scope, "cand:first");
+  assert.equal(found.optimisticId, first.optimisticId);
+  assert.equal(found.body, first.body);
+  reopened.hold(recordTarget, second, { scope: "cand:second", durable: true });
+  reopened.drop(recordTarget, found);
+  assert.equal(reopened.recall(recordTarget, "cand:first"), null);
+  assert.equal(reopened.recall(recordTarget).scope, "cand:second");
+  assert.equal(reopened.recall(recordTarget).body, second.body);
+});
+
+test("원문 성공 콜백은 같은 자리의 더 새 실패를 지우지 않고 기존 고객 원문 키도 읽는다", () => {
+  const saved = new Map();
+  const store = {
+    read: (key) => saved.has(key) ? { value: saved.get(key) } : null,
+    write: (key, value) => saved.set(key, value),
+    clear: (key) => saved.delete(key),
+  };
+  const legacy = { optimisticId: "old", summary: "기존 기록", body: "기존 원문" };
+  saved.set("crm-record:lead:lead-1:rawnote", legacy);
+  const recovery = createRawNoteRecoveryStore(store);
+  assert.equal(recovery.recall(recordTarget).body, legacy.body);
+  recovery.hold(recordTarget, { ...legacy, optimisticId: "new", body: "새 원문" }, { durable: true });
+  recovery.drop(recordTarget, { optimisticId: "old" });
+  assert.equal(recovery.recall(recordTarget).body, "새 원문");
+  recovery.drop(recordTarget, { optimisticId: "new" });
+  assert.equal(recovery.recall(recordTarget), null);
+});
+
+test("탭 저장소가 막혀도 후보별 원문과 고객 창의 돌아갈 길은 메모리에 남는다", () => {
+  withWindow(blockedStorage(), () => {
+    const target = { kind: "lead", id: "rawnote-blocked-storage" };
+    const recovery = createRawNoteRecoveryStore(recordDraftStore);
+    recovery.hold(target, { optimisticId: "blocked-first", body: "남겨 둘 글" }, { scope: "cand:first", durable: true });
+    recovery.hold(target, { optimisticId: "blocked-second", body: "저장된 글" }, { scope: "cand:second" });
+    recovery.drop(target, { scope: "cand:second", optimisticId: "blocked-second" });
+    const reopened = createRawNoteRecoveryStore(recordDraftStore);
+    const found = reopened.recall(target);
+    assert.equal(found.scope, "cand:first");
+    assert.equal(found.body, "남겨 둘 글");
+    reopened.drop(target, found);
+    assert.equal(reopened.recall(target), null);
+  });
+});
 
 test("시트 채널은 다섯 개이고, 다른 진입점이 넘긴 방문·데모 프리셋은 사라지지 않는다", () => {
   const block = source.slice(source.indexOf("const SHEET_CHANNELS"), source.indexOf("];", source.indexOf("const SHEET_CHANNELS")));
